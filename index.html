@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Research Calculator</title>
+<style>
+  :root{
+    --ink:#0d1014; --stone:#151a21; --stone-2:#1c232c; --line:#28313c;
+    --moss:#7fd1a3; --moss-dim:#3f6b56; --amber:#e8b25c; --violet:#a48cf0;
+    --text:#e2e8f0; --muted:#818e9f;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, monospace;
+    --display: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(800px 460px at 15% -10%, #1a2330 0%, transparent 62%), var(--ink);
+    color:var(--text);font-family:var(--mono);font-size:14px;line-height:1.55;padding:26px 18px 70px}
+  .wrap{max-width:900px;margin:0 auto}
+  header{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:20px}
+  h1{font-family:var(--display);font-weight:600;font-size:29px;margin:0 0 3px}
+  h1 span{color:var(--moss)}
+  .sub{color:var(--muted);margin:0;font-size:12.5px}
+  .saved{font-size:11px;color:var(--moss-dim);letter-spacing:.1em;text-transform:uppercase}
+  nav{display:flex;gap:2px;background:var(--stone-2);border:1px solid var(--line);border-radius:7px;padding:3px;margin-bottom:20px}
+  nav button{flex:1;background:none;border:none;color:var(--muted);font-family:var(--mono);font-size:12.5px;
+    letter-spacing:.05em;padding:9px 8px;border-radius:5px;cursor:pointer}
+  nav button:hover{color:var(--text)}
+  nav button.on{background:var(--stone);color:var(--moss);box-shadow:inset 0 0 0 1px var(--line)}
+  .tab{display:none} .tab.on{display:block}
+  .panel{background:var(--stone);border:1px solid var(--line);border-radius:7px;padding:18px;margin-bottom:18px}
+  .eyebrow{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:14px}
+  .grid{display:grid;gap:13px 16px;grid-template-columns:repeat(auto-fit,minmax(155px,1fr))}
+  label{display:block;font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+  input{width:100%;background:var(--ink);border:1px solid var(--line);border-radius:5px;color:var(--text);
+    font-family:var(--mono);font-size:17px;padding:10px 11px}
+  input:focus{outline:2px solid var(--moss-dim);outline-offset:1px;border-color:var(--moss-dim)}
+  .hint{font-size:11.5px;color:var(--muted);margin-top:11px}
+  .band{display:grid;gap:1px;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
+    background:var(--line);border:1px solid var(--line);border-radius:7px;overflow:hidden;margin-bottom:18px}
+  .cell{background:var(--stone-2);padding:13px 15px}
+  .cell .k{font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--muted)}
+  .cell .v{font-family:var(--display);font-size:23px;margin-top:3px;line-height:1.2}
+  .v.moss{color:var(--moss)} .v.amber{color:var(--amber)} .v.violet{color:var(--violet)}
+  .delta{display:grid;grid-template-columns:1fr auto 1fr;gap:14px;align-items:center;
+    background:var(--stone-2);border:1px solid var(--line);border-radius:7px;padding:16px 18px}
+  .side .lb{font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--muted)}
+  .side .big{font-family:var(--display);font-size:26px;line-height:1.15}
+  .side .sm{font-size:12px;color:var(--muted);margin-top:2px}
+  .arrow{font-family:var(--display);font-size:19px;color:var(--amber);text-align:center}
+  .arrow .mult{display:block;font-size:13px;color:var(--moss)}
+  table{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px}
+  th{text-align:right;font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted);
+    font-weight:500;padding:0 8px 8px;border-bottom:1px solid var(--line)}
+  th:first-child,td:first-child{text-align:left}
+  td{padding:7px 8px;border-bottom:1px solid #1e252e;text-align:right;font-variant-numeric:tabular-nums}
+  tr:last-child td{border-bottom:none}
+  tr.first td{box-shadow:inset 3px 0 0 var(--moss)}
+  tr.last td{box-shadow:inset 3px 0 0 var(--amber)}
+  .verdict{border-left:2px solid var(--amber);padding:11px 15px;background:var(--stone-2);border-radius:0 5px 5px 0;margin-top:16px}
+  .verdict b{color:var(--amber);font-weight:600}
+  .fbox{display:grid;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .frow{display:flex;gap:14px;align-items:baseline;background:var(--stone-2);padding:10px 15px;flex-wrap:wrap}
+  .fk{width:54px;flex:none;color:var(--amber);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase}
+  .fv{font-family:var(--display);font-size:16px;flex:1;min-width:200px}
+  .fv sup{font-size:.68em;color:var(--moss)}
+  .frow.live{background:var(--ink)}
+  .frow.live .fv{color:var(--moss);font-family:var(--mono);font-size:12.5px;line-height:1.75}
+  .srcgrid{display:grid;gap:6px 14px;grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}
+  .src{display:flex;align-items:center;gap:9px;padding:6px 10px;border-radius:4px;background:var(--stone-2)}
+  .src input{accent-color:var(--moss);width:15px;height:15px;flex:none;padding:0}
+  .src .gr{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .src .nm{flex:1;font-size:12.5px}
+  .src .vl{font-family:var(--display);font-size:15px;color:var(--moss)}
+  .src.off .nm,.src.off .vl{opacity:.3}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <h1>Research <span>Calculator</span></h1>
+      <p class="sub">infinite research multi &amp; rune luck gain multi &mdash; exact closed-form scaling</p>
+    </div>
+    <div class="saved" id="saved">inputs saved locally</div>
+  </header>
+
+  <nav>
+    <button class="on" data-tab="t1">Research</button>
+    <button data-tab="t2">RLGM</button>
+    <button data-tab="t3">Boosts &amp; formulas</button>
+  </nav>
+
+  <div class="panel">
+    <span class="eyebrow">Your numbers &mdash; used by every tab</span>
+    <div class="grid">
+      <div><label for="ach">Achievement boost</label><input id="ach" type="number" step="0.01" value="2.76"></div>
+      <div><label for="a">Current research level</label><input id="a" type="number" step="1" value="712"></div>
+      <div><label for="bank">Research banked</label><input id="bank" type="number" step="any" value="0"></div>
+      <div><label for="cal">In-game multi (optional)</label><input id="cal" type="number" step="any" value="142367"></div>
+    </div>
+    <p class="hint" id="stack"></p>
+  </div>
+
+  <div class="band">
+    <div class="cell"><div class="k">Total multi</div><div class="v moss" id="o-multi">&mdash;</div></div>
+    <div class="cell"><div class="k">Research / sec</div><div class="v" id="o-rps">&mdash;</div></div>
+    <div class="cell"><div class="k">Next level costs</div><div class="v amber" id="o-next">&mdash;</div></div>
+    <div class="cell"><div class="k">Time per level</div><div class="v" id="o-per">&mdash;</div></div>
+  </div>
+
+  <div class="tab on" id="t1">
+    <div class="panel">
+      <span class="eyebrow">Level a &rarr; level b</span>
+      <div class="grid">
+        <div><label for="b">Target level</label><input id="b" type="number" step="1" value="750"></div>
+      </div>
+      <div class="delta" style="margin-top:16px">
+        <div class="side">
+          <div class="lb">Level <span id="d-a"></span></div>
+          <div class="big" id="d-ba">&mdash;</div>
+          <div class="sm" id="d-ra"></div>
+        </div>
+        <div class="arrow">&rarr;<span class="mult" id="d-mult"></span></div>
+        <div class="side" style="text-align:right">
+          <div class="lb">Level <span id="d-b"></span></div>
+          <div class="big" id="d-bb">&mdash;</div>
+          <div class="sm" id="d-rb"></div>
+        </div>
+      </div>
+      <div class="band" style="margin:16px 0 0">
+        <div class="cell"><div class="k">Levels</div><div class="v" id="o-n">&mdash;</div></div>
+        <div class="cell"><div class="k">Total cost</div><div class="v amber" id="o-cost">&mdash;</div></div>
+        <div class="cell"><div class="k">Total time</div><div class="v moss" id="o-time">&mdash;</div></div>
+        <div class="cell"><div class="k">Gain</div><div class="v violet" id="o-gain">&mdash;</div></div>
+      </div>
+    </div>
+    <div class="panel">
+      <span class="eyebrow">Checkpoints</span>
+      <table>
+        <thead><tr><th>Level</th><th>Cost</th><th>Upg boost</th><th>Research/sec</th><th>Spent</th><th>Elapsed</th></tr></thead>
+        <tbody id="rbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="tab" id="t2">
+    <div class="panel">
+      <span class="eyebrow">Rune luck gain multi &mdash; cost 100,000 &middot; 1.122^level</span>
+      <div class="grid">
+        <div><label for="la">Current RLGM level</label><input id="la" type="number" step="1" value="45"></div>
+        <div><label for="lb">Target RLGM level</label><input id="lb" type="number" step="1" value="60"></div>
+      </div>
+      <div class="band" style="margin:16px 0 0">
+        <div class="cell"><div class="k">Levels</div><div class="v" id="lo-n">&mdash;</div></div>
+        <div class="cell"><div class="k">Total cost</div><div class="v amber" id="lo-cost">&mdash;</div></div>
+        <div class="cell"><div class="k">Luck gain</div><div class="v violet" id="lo-gain">&mdash;</div></div>
+        <div class="cell"><div class="k">Realistic time</div><div class="v moss" id="lo-time">&mdash;</div></div>
+      </div>
+      <div class="verdict" id="lverdict"></div>
+    </div>
+    <div class="panel">
+      <span class="eyebrow">Level by level</span>
+      <table>
+        <thead><tr><th>Level</th><th>Cost</th><th>Luck</th><th>Save at current rate</th><th>Verdict</th></tr></thead>
+        <tbody id="lbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="tab" id="t3">
+    <div class="panel">
+      <span class="eyebrow">Built-in research boosts &mdash; untick anything not maxed</span>
+      <div class="srcgrid" id="srcgrid"></div>
+      <p class="hint" id="srctotal"></p>
+    </div>
+    <div class="panel">
+      <span class="eyebrow">Closed forms &mdash; both sums are geometric</span>
+      <div class="fbox">
+        <div class="frow"><span class="fk">r</span><span class="fv">100,000<sup>0.00087</sup> = 1.0100665756</span></div>
+        <div class="frow"><span class="fk">q</span><span class="fv">r / 1.01 = 1.0000659165</span></div>
+        <div class="frow"><span class="fk">cost</span><span class="fv">10<sup>5</sup> &middot; r<sup>a</sup> &middot; (r<sup>n</sup> &minus; 1) / (r &minus; 1)</span></div>
+        <div class="frow"><span class="fk">time</span><span class="fv">(10<sup>5</sup> / 5M) &middot; q<sup>a</sup> &middot; (q<sup>n</sup> &minus; 1) / (q &minus; 1)</span></div>
+        <div class="frow"><span class="fk">rlgm</span><span class="fv">10<sup>5</sup> &middot; 1.122<sup>a</sup> &middot; (1.122<sup>n</sup> &minus; 1) / 0.122</span></div>
+        <div class="frow live"><span class="fk">yours</span><span class="fv" id="subst"></span></div>
+      </div>
+      <p class="hint" id="approx"></p>
+    </div>
+  </div>
+
+</div>
+<script>
+var $ = function(id){ return document.getElementById(id); };
+var BASE = 5;
+var R = Math.pow(100000, 0.00087);
+var Q = R / 1.01;
+
+var SOURCES = [
+  {g:"Playtime", n:"Minutes",   v:1.15},
+  {g:"Playtime", n:"Hours",     v:1.25},
+  {g:"Playtime", n:"Days",      v:1.5},
+  {g:"Challenge",n:"Researcher",v:1.5},
+  {g:"Board",    n:"Upgrade 1", v:1.15},
+  {g:"Board",    n:"Upgrade 2", v:1.25},
+  {g:"Board",    n:"Upgrade 3", v:1.35},
+  {g:"Board",    n:"Upgrade 4", v:1.45},
+  {g:"Board",    n:"Upgrade 5", v:1.55},
+  {g:"Board",    n:"Upgrade 6", v:1.7},
+  {g:"Board",    n:"Upgrade 7", v:1.8}
+];
+(function(){
+  var h = "";
+  for(var i = 0; i < SOURCES.length; i++){
+    h += '<div class="src" id="src' + i + '"><input type="checkbox" id="chk' + i + '" checked>' +
+         '<span class="gr">' + SOURCES[i].g + '</span><span class="nm">' + SOURCES[i].n + '</span>' +
+         '<span class="vl">' + SOURCES[i].v + '&times;</span></div>';
+  }
+  $("srcgrid").innerHTML = h;
+})();
+
+var SUF = ["","K","M","B","T","Qa","Qi","Sx","Sp","Oc","No","Dc","UDc","DDc"];
+function fmt(n){
+  if(!isFinite(n)) return "\u221e";
+  if(n === 0) return "0";
+  if(n < 1000) return n < 10 ? n.toFixed(2) : Math.round(n).toString();
+  var t = 0;
+  while(n >= 1000 && t < SUF.length - 1){ n /= 1000; t++; }
+  return (n < 10 ? n.toFixed(3) : n < 100 ? n.toFixed(2) : n.toFixed(1)) + SUF[t];
+}
+function comma(n){ return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ","); }
+function dur(s){
+  if(!isFinite(s)) return "never";
+  if(s < 60) return s.toFixed(1) + "s";
+  if(s < 3600) return Math.floor(s/60) + "m " + Math.round(s%60) + "s";
+  if(s < 86400) return Math.floor(s/3600) + "h " + Math.round(s%3600/60) + "m";
+  if(s < 86400*365) return Math.floor(s/86400) + "d " + Math.round(s%86400/3600) + "h";
+  return (s/86400/365).toFixed(1) + "y";
+}
+function geo(k, a, n){
+  if(n <= 0) return 0;
+  return Math.pow(k, a) * (Math.pow(k, n) - 1) / (k - 1);
+}
+function sourceProduct(){
+  var p = 1;
+  for(var i = 0; i < SOURCES.length; i++){
+    var on = $("chk" + i).checked;
+    $("src" + i).className = on ? "src" : "src off";
+    if(on) p *= SOURCES[i].v;
+  }
+  return p;
+}
+
+function simRLGM(M, R0, bank0, La, Lb){
+  var lvl = R0, L = La, bank = bank0, t = 0, guard = 0;
+  var rps = function(x){ return BASE * M * Math.pow(1.01, x); };
+  while(L < Lb && guard++ < 100000){
+    var cr = 1e5 * Math.pow(R, lvl), cl = 1e5 * Math.pow(1.122, L);
+    var need = Math.min(cr, cl);
+    if(bank < need){ t += (need - bank) / rps(lvl); bank = need; }
+    if(cr <= cl){ bank -= cr; lvl++; } else { bank -= cl; L++; }
+  }
+  return {t:t, lvl:lvl};
+}
+
+function render(){
+  var ach  = +$("ach").value || 1;
+  var a    = Math.max(0, Math.floor(+$("a").value || 0));
+  var b    = Math.max(a, Math.floor(+$("b").value || 0));
+  var n    = b - a;
+  var bank = Math.max(0, +$("bank").value || 0);
+  var cal  = +$("cal").value || 0;
+
+  var boost = function(L){ return Math.pow(1.01, L); };
+  var costR = function(L){ return 1e5 * Math.pow(R, L); };
+
+  var prod = sourceProduct();
+  var M = prod * ach, fudge = 1;
+  if(cal > 0){ fudge = cal / (M * boost(a)); M *= fudge; }
+  var rps = function(L){ return BASE * M * boost(L); };
+  var cadence = costR(a) / rps(a);
+
+  $("stack").textContent =
+    "5 base \u00d7 " + prod.toFixed(4) + " upgrades \u00d7 " + ach + " achievement \u00d7 " +
+    comma(boost(a)) + " infinite upgrade" + (cal > 0 ? " \u00d7 " + fudge.toFixed(4) + " calibration" : "") +
+    " = \u00d7" + comma(M * boost(a)) + ", " + fmt(rps(a)) + "/sec.";
+  $("srctotal").textContent = "Ticked sources multiply to " + prod.toFixed(4) + "\u00d7.";
+
+  $("o-multi").textContent = "\u00d7" + fmt(M * boost(a));
+  $("o-rps").textContent   = fmt(rps(a)) + "/s";
+  $("o-next").textContent  = fmt(costR(a));
+  $("o-per").textContent   = dur(cadence);
+
+  var totalCost = 1e5 * geo(R, a, n);
+  var totalTime = (1e5 / (BASE * M)) * geo(Q, a, n);
+  totalTime = Math.max(0, totalTime - Math.min(bank, costR(a)) / rps(a));
+
+  $("d-a").textContent = a; $("d-b").textContent = b;
+  $("d-ba").textContent = "\u00d7" + comma(boost(a));
+  $("d-bb").textContent = "\u00d7" + comma(boost(b));
+  $("d-ra").textContent = fmt(rps(a)) + "/sec";
+  $("d-rb").textContent = fmt(rps(b)) + "/sec";
+  $("d-mult").textContent = n > 0 ? "\u00d7" + Math.pow(1.01, n).toFixed(3) : "";
+  $("o-n").textContent = n;
+  $("o-cost").textContent = fmt(totalCost);
+  $("o-time").textContent = dur(totalTime);
+  $("o-gain").textContent = n > 0 ? "+" + ((Math.pow(1.01, n) - 1) * 100).toFixed(1) + "%" : "\u2014";
+
+  var rows = "";
+  if(n === 0){
+    rows = '<tr><td colspan="6" style="text-align:center;color:#818e9f">set a target above your current level</td></tr>';
+  } else {
+    var steps = Math.min(n, 10);
+    for(var i = 1; i <= steps; i++){
+      var L = a + Math.round(n * i / steps);
+      var cls = i === 1 ? "first" : i === steps ? "last" : "";
+      rows += '<tr class="' + cls + '"><td>' + L + '</td><td>' + fmt(costR(L)) + '</td><td>\u00d7' +
+              comma(boost(L)) + '</td><td>' + fmt(rps(L)) + '/s</td><td>' +
+              fmt(1e5 * geo(R, a, L - a)) + '</td><td>' +
+              dur((1e5 / (BASE * M)) * geo(Q, a, L - a)) + '</td></tr>';
+    }
+  }
+  $("rbody").innerHTML = rows;
+
+  var la = Math.max(0, Math.floor(+$("la").value || 0));
+  var lb = Math.max(la, Math.floor(+$("lb").value || 0));
+  var ln = lb - la;
+  var lcost = 1e5 * geo(1.122, la, ln);
+  var sim = simRLGM(M, a, bank, la, lb);
+  var threshold = 100 * cadence;
+
+  $("lo-n").textContent = ln;
+  $("lo-cost").textContent = fmt(lcost);
+  $("lo-gain").textContent = ln > 0 ? "\u00d7" + Math.pow(1.01, ln).toFixed(3) : "\u2014";
+  $("lo-time").textContent = ln > 0 ? dur(sim.t) : "\u2014";
+
+  var nextSave = (1e5 * Math.pow(1.122, la)) / rps(a);
+  $("lverdict").innerHTML = ln === 0
+    ? "Set a target RLGM level above your current one."
+    : (nextSave <= threshold
+        ? "<b>Buy RLGM " + (la+1) + " now.</b> It costs " + fmt(1e5*Math.pow(1.122,la)) + " \u2014 " +
+          dur(nextSave) + " of saving, under the " + dur(threshold) + " break-even. "
+        : "<b>Hold off on RLGM " + (la+1) + ".</b> " + dur(nextSave) + " of saving is past the " +
+          dur(threshold) + " break-even, so research levels buy more total progress right now. ") +
+      "Reaching " + lb + " takes about <b>" + dur(sim.t) + "</b> while still buying research on sight \u2014 " +
+      "you'd end at research level " + sim.lvl + " (" + fmt(rps(sim.lvl)) + "/sec). " +
+      "Break-even is 100\u00d7 your " + dur(cadence) + " cadence.";
+
+  var lrows = "";
+  if(ln === 0){
+    lrows = '<tr><td colspan="5" style="text-align:center;color:#818e9f">set a target above your current level</td></tr>';
+  } else {
+    var lsteps = Math.min(ln, 12);
+    for(var j = 1; j <= lsteps; j++){
+      var LL = la + Math.round(ln * j / lsteps);
+      var c = 1e5 * Math.pow(1.122, LL - 1);
+      var st = c / rps(a);
+      var cls2 = j === 1 ? "first" : j === lsteps ? "last" : "";
+      lrows += '<tr class="' + cls2 + '"><td>' + LL + '</td><td>' + fmt(c) + '</td><td>\u00d7' +
+               Math.pow(1.01, LL).toFixed(3) + '</td><td>' + dur(st) + '</td><td>' +
+               (st <= threshold ? "buy" : "wait") + '</td></tr>';
+    }
+  }
+  $("lbody").innerHTML = lrows;
+
+  var rt = n > 0 ? (Math.pow(R, n) - 1) / (R - 1) : 0;
+  var qt = n > 0 ? (Math.pow(Q, n) - 1) / (Q - 1) : 0;
+  $("subst").innerHTML =
+    "cost = 10\u2075 \u00b7 " + Math.pow(R, a).toPrecision(6) + " \u00b7 " + rt.toPrecision(6) +
+    " = " + fmt(totalCost) + "<br>time = (10\u2075 / " + (BASE * M).toPrecision(6) + ") \u00b7 " +
+    Math.pow(Q, a).toPrecision(6) + " \u00b7 " + qt.toPrecision(6) + " = " + dur(totalTime) +
+    "<br>rlgm = 10\u2075 \u00b7 " + Math.pow(1.122, la).toPrecision(6) + " \u00b7 " +
+    (ln > 0 ? ((Math.pow(1.122, ln) - 1) / 0.122).toPrecision(6) : "0") + " = " + fmt(lcost);
+  $("approx").textContent =
+    "The q-term is " + qt.toPrecision(6) + " for " + n + " levels \u2014 only " + (qt - n).toFixed(3) +
+    " levels' worth more than " + n + " identical ones, so n \u00d7 " + dur(cadence) +
+    " stays accurate to a fraction of a percent.";
+
+  save();
+}
+
+var KEYS = ["ach","a","b","bank","cal","la","lb"];
+function save(){
+  try{
+    var o = {};
+    for(var i = 0; i < KEYS.length; i++) o[KEYS[i]] = $(KEYS[i]).value;
+    for(var j = 0; j < SOURCES.length; j++) o["chk" + j] = $("chk" + j).checked;
+    localStorage.setItem("rescalc", JSON.stringify(o));
+  }catch(e){}
+}
+function load(){
+  try{
+    var o = JSON.parse(localStorage.getItem("rescalc") || "{}");
+    for(var i = 0; i < KEYS.length; i++) if(o[KEYS[i]] !== undefined) $(KEYS[i]).value = o[KEYS[i]];
+    for(var j = 0; j < SOURCES.length; j++) if(o["chk" + j] !== undefined) $("chk" + j).checked = o["chk" + j];
+  }catch(e){}
+}
+
+var btns = document.querySelectorAll("nav button");
+for(var i = 0; i < btns.length; i++){
+  btns[i].addEventListener("click", function(){
+    for(var k = 0; k < btns.length; k++) btns[k].className = "";
+    this.className = "on";
+    var tabs = document.querySelectorAll(".tab");
+    for(var m = 0; m < tabs.length; m++) tabs[m].className = "tab";
+    $(this.getAttribute("data-tab")).className = "tab on";
+  });
+}
+var ins = document.querySelectorAll("input");
+for(var p = 0; p < ins.length; p++) ins[p].addEventListener("input", render);
+load();
+render();
+</script>
+</body>
+</html>
