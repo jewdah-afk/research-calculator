@@ -101,6 +101,7 @@
   <nav>
     <button class="on" data-tab="t1">Workshop</button>
     <button data-tab="t2">Labs</button>
+    <button data-tab="t6">Coin plan</button>
     <button data-tab="t3">Next best coin</button>
     <button data-tab="t4">Formulas</button>
     <button data-tab="t5">Sources</button>
@@ -222,6 +223,68 @@
     </div>
   </div>
 
+
+  <!-- ─── Coin plan ────────────────────────────────────────────────── -->
+  <div class="tab" id="t6">
+    <div class="panel">
+      <span class="eyebrow">Anchor the model on your account</span>
+      <p class="hint" style="margin:0 0 14px">
+        The plan is <em>relative</em>: it never guesses your absolute coins/hr, it scales the figure you
+        measure. So put in a real number from a real farm run, and the split you actually observe between
+        kill coins and wave coins &mdash; if you are still at Coins/Wave level&nbsp;0 your wave share is
+        near zero, not 20%.
+      </p>
+      <div class="grid">
+        <div><label for="cph">Your coins / hour</label><input id="cph" type="number" step="any" value="1e9"></div>
+        <div><label for="kshare">Coins from kills (0&ndash;1)</label><input id="kshare" type="number" step="0.05" min="0" max="1" value="0.8"></div>
+        <div><label for="gtb">Golden Tower base multi</label><input id="gtb" type="number" step="any" value="5"></div>
+        <div><label for="gtd">GT duration (s)</label><input id="gtd" type="number" step="any" value="15"></div>
+        <div><label for="gtc">GT cooldown (s)</label><input id="gtc" type="number" step="any" value="300"></div>
+        <div><label for="labAssume">Coin lab %/level <em>(assumed)</em></label><input id="labAssume" type="number" step="0.5" value="2"></div>
+        <div><label for="steps">Plan length (steps)</label><input id="steps" type="number" step="10" min="10" max="600" value="120"></div>
+        <div><label for="horizon">Lookahead horizon</label><input id="horizon" type="number" step="1" min="3" max="40" value="12"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <span class="eyebrow">Where you are now &mdash; levels on the tracks that move coin income</span>
+      <div class="grid" id="planLevels"></div>
+    </div>
+
+    <div class="band">
+      <div class="cell"><div class="k">Income at the end</div><div class="v moss" id="p-mult">&mdash;</div></div>
+      <div class="cell"><div class="k">Coins spent</div><div class="v amber" id="p-coins">&mdash;</div></div>
+      <div class="cell"><div class="k">Time to finish</div><div class="v" id="p-time">&mdash;</div></div>
+      <div class="cell"><div class="k">Lab time queued</div><div class="v violet" id="p-lab">&mdash;</div></div>
+    </div>
+
+    <div class="panel">
+      <span class="eyebrow">Doubling checkpoints</span>
+      <div class="tw"><table id="p-marks"></table></div>
+    </div>
+
+    <div class="panel">
+      <span class="eyebrow">The plan, in order</span>
+      <div class="tw"><table id="p-table"></table></div>
+      <p class="hint" id="p-note"></p>
+    </div>
+
+    <div class="panel">
+      <span class="eyebrow">What this plan does not price</span>
+      <div class="fbox">
+        <div class="frow"><span class="fk">wave depth</span><span class="fv">Farming deeper raises coins/hr, but
+          turning stats into a reachable wave needs enemy scaling per tier and wave, which has no source we trust.
+          Re&#8209;anchor your coins/hr after a big push.</span></div>
+        <div class="frow"><span class="fk">other spend</span><span class="fv">Cards, modules, bots, guardians and the
+          Vault are priced in <code>data/tower-extras.js</code>, but they spend gems, medals, stones and keys &mdash;
+          not coins &mdash; so they never compete for this budget.</span></div>
+        <div class="frow"><span class="fk">assumed</span><span class="fv">The Coins/Kill and Coins/Wave <em>labs</em>
+          have exact cost and time in the tables but no published effect curve, so their per&#8209;level gain is the
+          assumption set above. Rows relying on it are marked.</span></div>
+      </div>
+    </div>
+  </div>
+
   <!-- ─── Formulas ─────────────────────────────────────────────────── -->
   <div class="tab" id="t4">
     <div class="panel">
@@ -333,6 +396,8 @@
 </div>
 
 <script src="data/tower-data.js"></script>
+<script src="data/tower-extras.js"></script>
+<script src="js/tower-plan.js"></script>
 <script src="js/tower-planner.js"></script>
 </body>
 </html>

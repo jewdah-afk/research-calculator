@@ -10,14 +10,26 @@ no build step, no server, inputs persist in `localStorage`.
 
 ## Tower Planner
 
-Covers **48 workshop stats** and **217 lab researches** — 36,795 tabulated
-levels in total. Every cost is an exact table read, not a curve fit.
+Covers **48 workshop stats**, **217 lab researches** and **18 workshop
+enhancements** — 42,330 tabulated levels — plus in-run cash curves, UW stone
+costs, modules, bots, cards, guardians and the Vault. Every cost is an exact
+table read, not a curve fit.
+
+> **Data vintage: late June 2026.** Upstream's own stamp puts the workshop
+> tables at `2026-06-27` and its last release at `2026-06-28`. Nothing shipped
+> after that is reflected, and the verifier cannot detect it — it checks against
+> the same tables. See the research notes for the fresher route.
 
 - **Workshop** — coins for any level span, the stat value at each end, what your
   coins actually reach, cost to max, and a level-by-level breakdown. Applies your
   Attack/Defense/Utility discount labs.
 - **Labs** — exact coins, research time and gem rush cost for any span, with your
   Labs Speed lab, relic bonus, Elite Cell boost and parallel lab count folded in.
+- **Coin plan** — an indefinitely long, ordered "buy this next" sequence that
+  maximises coin income. Anchored on *your* measured coins/hr, so it needs no
+  enemy-scaling model. Scores income upgrades and cost-reduction labs in the
+  same unit so they are actually comparable, and marks every step that leans on
+  an assumption rather than a sourced curve.
 - **Next best coin** — ranks every stat's *next* level by coins per 1% gained.
 - **Formulas** — the lab cost/time/gem model transcribed from the game bundle,
   live against your own numbers.
@@ -37,8 +49,13 @@ git clone --depth 1 --filter=blob:none --sparse https://github.com/AngryBrit/tow
 cd tower-smith && git sparse-checkout set tables src/data && cd ..
 node tools/build-tower-data.js ./tower-smith
 
-# verify it (79,576 checks, no dependencies)
+# the rest of the systems (needs the unified-tools checkout too)
+git clone --depth 1 https://github.com/SFleet89/the-tower-unified-tools.git
+node tools/build-tower-extras.js ./tower-smith ./the-tower-unified-tools
+
+# verify both (122,843 checks, no dependencies)
 node tools/verify-tower-data.js ./tower-smith
+node tools/verify-tower-extras.js ./tower-smith ./the-tower-unified-tools
 ```
 
 The verifier checks every per-level cost and duration for byte-identity against

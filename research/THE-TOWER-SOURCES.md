@@ -7,6 +7,22 @@ Everything below is sorted by **how close it sits to the game's own numbers**.
 Tier A is extracted from the game; Tier B is community-maintained and
 cross-checked; Tier C is prose that explains but should not be used as data.
 
+> ### Data vintage: late June 2026 — read this first
+>
+> TowerSmith's own `src/data/wikiDataStamp.json` records when each table was
+> imported: workshop `2026-06-27`, labs `2026-06-09`, modules `2026-06-18`,
+> bots `2026-06-13`. Its `main` branch stops at **2026-06-28 (v3.2.0)**.
+>
+> So this is a **late-June 2026 snapshot**, and that is upstream's staleness,
+> not ours — re-cloning does not help. Any balance change, raised cap or new
+> stat shipped after that date is invisible here, **and the verifier will not
+> catch it**, because it checks us against the same tables.
+>
+> The freshest route to current data is not TowerSmith but the deobfuscated
+> game bundle via mytower, which is what The Tower Unified Tools uses for its
+> newer extractions (its changelog runs to 2026-08-18). Wiring that up is the
+> open task if currency matters more than the June snapshot's exactness.
+
 ---
 
 ## Tier A — primary data (what we actually build on)
@@ -130,6 +146,23 @@ UW% × (1 + core_module%) × Damage × (1 + CritFactor × CritChance)
 - Maps lab names to save-file slots: `d.researchLevel[]` is 0-indexed by key
   insertion order of the `ke={}` object in the Vite bundle.
 
+**What we import from B1** (`data/tower-extras.js`): Ultimate Weapon stone
+costs (`uw-stone-calc.js`), the module catalog and level cost rows plus bot
+ordering (`tower-module-bot-data.js`), the card catalog and slot gem ladder
+(`tower-game-data.js`), and — importantly — **per-level lab effect sizes**
+(`lab-values.js`).
+
+That last one fills a real hole. The GOD lab tables give exact cost and time,
+but their `value` column is only the level index, so the *magnitude* of a lab's
+effect is not in Tier A at all. `lab-values.js` carries it for **161 of 217
+labs**, sourced from the vault-net wiki's Value column — which is Tier C data.
+The block is therefore tagged `sourced:"wiki"` and must not be treated as
+GOD-grade. The 56 uncovered labs include, awkwardly, **Coins / Kill Bonus and
+Coins / Wave** — the two headline coin labs. The planner treats their per-level
+gain as a user-editable assumption (default +2%/level, matching the Cash Bonus
+and Cash / Wave labs, which the wiki does publish) and flags every step that
+leans on it.
+
 ### B2. tower-calculator
 - Repo: <https://github.com/jacoelt/tower-calculator>
 - Scope is narrower: in-run **battle upgrade** tables (cash costs, 13 stats) in
@@ -219,11 +252,62 @@ cd tower-smith && git sparse-checkout set tables src/data && cd ..
 node tools/build-tower-data.js ./tower-smith
 ```
 
+## Coverage
+
+| System | Where | Levels | Sourcing |
+|---|---|---|---|
+| Workshop base stats (48) | `tower-data.js` | 31,260 | Tier A, exact |
+| Labs (217, all 12 categories) | `tower-data.js` | 5,535 | Tier A, exact cost + time |
+| Workshop Enhancements (18) | `tower-extras.js` | 5,535 | Tier A, exact |
+| In-run cash curves (48) | `tower-extras.js` | — | Tier A, exact |
+| Guardian chips (6) + slots | `tower-extras.js` | — | Tier A, exact |
+| UW stone costs (9 weapons) | `tower-extras.js` | — | Tier B |
+| Modules, bots, cards | `tower-extras.js` | — | Tier B |
+| Lab effect magnitudes (161/217) | `tower-extras.js` | — | **Tier C** (`sourced:"wiki"`) |
+| Vault (94 nodes) | `tower-extras.js` | — | **weak** (`sourced:"weak"`) |
+
+The Vault is flagged because upstream has no GOD table for it — its own comment
+says it is transcribed from in-game screenshots and community tables. We cannot
+check it against a source, so `verify-tower-extras.js` instead checks it against
+*itself*: for each of the 92 nodes that publish a cumulative key total, the sum
+of `keyCost` along its parent chain must equal that total. All 92 agree, which
+is decent evidence the transcription is internally sound, and is not the same
+thing as knowing it matches the game.
+
+## The coin-income model (`js/tower-plan.js`)
+
+The planner never models absolute coins/hr, because doing so needs enemy
+scaling per tier and wave — the one area with no source worth trusting. It
+models a *relative* multiplier against your current levels and scales your own
+measured figure:
+
+```
+income(state) = yourMeasuredCoinsPerHour x coinMult(state)
+
+coinMult = ( killShare * K/K0 + waveShare * W/W0 ) * G/G0
+```
+
+`K` is per-kill coin scaling (workshop Coins-Kill Bonus x its lab), `W` is
+per-wave (workshop Coins-Wave x its lab), `G` is the global stack (Coin Bonus +
+enhancement, Golden Tower duty-cycled, Black Hole / Spotlight / Death Wave coin
+labs, Coins Mastery). Golden Tower is taken at `1 + (mult - 1) * min(1,
+duration / cooldown)`, since it only pays while it is up.
+
+Normalising each stream by its value at your current levels is load-bearing:
+Coins/Wave is a flat amount climbing to 150 while Coins-Kill is a x1..x2.49
+multiplier, so without it the wave term swamps the kill term regardless of the
+split you entered.
+
+Two things the plan does not price, and says so in the UI: **wave depth** (the
+"farm deeper" lever, which needs the enemy scaling we lack — re-anchor your
+coins/hr after a push), and everything bought with **gems, medals, stones or
+keys**, which never competes for the coin budget.
+
 ## Known gaps
 
-- Workshop **Enhancements** (18 stats) are extracted upstream but not yet in
-  `data/tower-data.js` — B1's `workshop-enhance-data.js` has them ready.
-- **Module / bot / card** tables likewise exist in B1 but are not imported.
-- The **in-run cash** upgrade curve is present in the GOD tables
-  (`nextCash`, `cashToTarget`) but the tool does not surface it yet.
-- Enemy health/attack scaling per tier/wave is the least well-sourced area.
+- **Currency** — see the vintage warning above. This is the biggest one.
+- **Enemy health/attack scaling** per tier and wave: still the least
+  well-sourced area, and the reason wave depth is unmodelled.
+- **56 labs** have no published effect curve, including both headline coin labs.
+- **Bot stat magnitudes** (durations, bonuses) come from prose, not tables.
+- The **Vault** cannot be checked against any source (see above).

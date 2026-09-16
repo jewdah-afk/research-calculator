@@ -125,12 +125,15 @@ function labVal(lab, level) {
 /* ── tabs & persistence ──────────────────────────────────────────────── */
 var KEY = "towerPlanner.v1";
 var INPUTS = ["coins", "gems", "labSpeed", "labDisc", "relic", "boxes", "wsAtk", "wsDef", "wsUti",
-              "wsStat", "wsFrom", "wsTo", "labCat", "labSel", "labFrom", "labTo", "cell", "labs"];
+              "wsStat", "wsFrom", "wsTo", "labCat", "labSel", "labFrom", "labTo", "cell", "labs",
+              "cph", "kshare", "gtb", "gtd", "gtc", "labAssume", "steps", "horizon"];
 function save() {
   var o = {};
   INPUTS.forEach(function (id) { if ($(id)) o[id] = $(id).value; });
   o.nb = {};
   document.querySelectorAll("[data-nb]").forEach(function (el) { o.nb[el.getAttribute("data-nb")] = el.value; });
+  o.pl = {};
+  document.querySelectorAll("[data-pl]").forEach(function (el) { o.pl[el.getAttribute("data-pl")] = el.value; });
   try { localStorage.setItem(KEY, JSON.stringify(o)); } catch (e) { /* private mode */ }
 }
 function load() {
@@ -195,6 +198,94 @@ if (HAVE_DATA) {
     return '<div><label for="nb-' + k + '">' + s.n + "</label>" +
            '<input id="nb-' + k + '" data-nb="' + k + '" type="number" step="1" min="0" max="' + s.max + '" value="0"></div>';
   }).join("");
+}
+
+/* ── coin plan ───────────────────────────────────────────────────────── */
+var HAVE_PLAN = HAVE_DATA && typeof TOWER_EXTRAS !== "undefined" && typeof buildPlan === "function";
+
+function planTracks() {
+  return COIN_TRACKS.concat(DISCOUNT_TRACKS.map(function (t) {
+    return { id: t.id, kind: t.kind, role: "discount",
+             label: (TOWER_DATA.labs[t.id] || {}).n || t.id };
+  }));
+}
+if (HAVE_PLAN) {
+  $("planLevels").innerHTML = planTracks().map(function (t) {
+    var tb = t.kind === "ws" ? TOWER_DATA.workshop[t.id]
+           : t.kind === "enh" ? TOWER_EXTRAS.enhancements[t.id] : TOWER_DATA.labs[t.id];
+    if (!tb) return "";
+    var tag = t.kind === "ws" ? "workshop" : t.kind === "enh" ? "enhance" : "lab";
+    return '<div><label for="pl-' + t.id + '">' + t.label + " <span style=\"color:var(--muted)\">· " +
+           tag + " · max " + tb.max + "</span></label>" +
+           '<input id="pl-' + t.id + '" data-pl="' + t.id + '" type="number" step="1" min="0" max="' +
+           tb.max + '" value="0"></div>';
+  }).join("");
+}
+
+function renderPlan() {
+  if (!HAVE_PLAN) return;
+  var start = {};
+  document.querySelectorAll("[data-pl]").forEach(function (el) {
+    var v = Math.floor(parseFloat(el.value) || 0);
+    if (v > 0) start[el.getAttribute("data-pl")] = v;
+  });
+
+  var opts = {
+    killShare: Math.max(0, Math.min(1, num("kshare", 0.8))),
+    labCoinPerLevel: num("labAssume", 2) / 100,
+    gtBase: num("gtb", 5),
+    gtDuration: num("gtd", 15),
+    gtCooldown: num("gtc", 300),
+    coinsPerHour: num("cph", 1e9),
+    labSpeed: labSpeedMult(clampInt("labSpeed", 0, 99), num("relic", 0)),
+    maxSteps: clampInt("steps", 10, 600),
+    horizon: clampInt("horizon", 3, 40)
+  };
+
+  var r = buildPlan(start, opts);
+  var last = r.steps[r.steps.length - 1];
+
+  $("p-mult").textContent = r.finalMult.toFixed(2) + "\u00d7";
+  $("p-coins").textContent = last ? fmt(last.coins) : "\u2014";
+  $("p-time").textContent = last ? dur(last.seconds) : "\u2014";
+  $("p-lab").textContent = dur(r.labSeconds);
+
+  // doubling checkpoints
+  var marks = "<tr><th>Income</th><th>Step</th><th>Coins spent</th><th>Elapsed</th><th>Next buy</th></tr>";
+  var targets = [2, 3, 5, 10, 25, 50, 100], ti = 0, hit = 0;
+  for (var i = 0; i < r.steps.length && ti < targets.length; i++) {
+    if (r.steps[i].mult >= targets[ti]) {
+      var st = r.steps[i], nx = r.steps[i + 1];
+      marks += "<tr><td>" + targets[ti] + "\u00d7</td><td>" + st.n + "</td><td>" + fmt(st.coins) +
+               "</td><td>" + dur(st.seconds) + "</td><td>" + (nx ? nx.label : "\u2014") + "</td></tr>";
+      ti++; hit++; i--;
+    }
+  }
+  if (!hit) marks += '<tr><td colspan="5" style="text-align:left;color:var(--muted)">' +
+    "This plan does not reach 2\u00d7 income \u2014 lengthen it, or check your starting levels.</td></tr>";
+  $("p-marks").innerHTML = marks;
+
+  var rows = "<tr><th>#</th><th>Buy</th><th>Level</th><th>Cost</th><th>Coins so far</th><th>Elapsed</th><th>Income</th></tr>";
+  var cap = Math.min(r.steps.length, 150);
+  for (var j = 0; j < cap; j++) {
+    var s2 = r.steps[j];
+    var cls = j === 0 ? "first" : (j === cap - 1 ? "last" : "");
+    rows += '<tr class="' + cls + '"><td>' + s2.n + "</td><td>" + s2.label +
+            (s2.assumed ? ' <span style="color:var(--amber)" title="relies on the assumed coin-lab rate">\u2020</span>' : "") +
+            (s2.role === "discount" ? ' <span style="color:var(--muted)">cheaper, not richer</span>' : "") +
+            "</td><td>" + comma(s2.from) + " \u2192 " + comma(s2.to) + "</td><td>" + fmt(s2.cost) +
+            "</td><td>" + fmt(s2.coins) + "</td><td>" + dur(s2.seconds) + "</td><td>" +
+            s2.mult.toFixed(3) + "\u00d7</td></tr>";
+  }
+  $("p-table").innerHTML = rows;
+
+  var assumed = r.steps.filter(function (x) { return x.assumed; }).length;
+  $("p-note").innerHTML =
+    "Showing " + cap + " of " + r.steps.length + " steps. " +
+    "\u2020 marks the " + assumed + " step" + (assumed === 1 ? "" : "s") +
+    " that rely on the assumed coin-lab rate (" + num("labAssume", 2) + "%/level) rather than a sourced curve. " +
+    "Rows marked <em>cheaper, not richer</em> are discount labs: they add no income, they cut the price of " +
+    "everything after them, which is why they earn a place in the order at all.";
 }
 
 /* ── render ──────────────────────────────────────────────────────────── */
@@ -402,6 +493,7 @@ function render() {
   renderWorkshop();
   renderLab();
   renderNextBest();
+  renderPlan();
   renderFormulas();
   save();
 }
@@ -416,6 +508,10 @@ if (HAVE_DATA) {
   if (saved.nb) Object.keys(saved.nb).forEach(function (k) {
     var el = document.querySelector('[data-nb="' + k + '"]');
     if (el) el.value = saved.nb[k];
+  });
+  if (saved.pl) Object.keys(saved.pl).forEach(function (k) {
+    var el = document.querySelector('[data-pl="' + k + '"]');
+    if (el) el.value = saved.pl[k];
   });
 
   $("labCat").addEventListener("change", function () { fillLabSel(); render(); });
