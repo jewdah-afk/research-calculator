@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Incremental Economy Calculator</title>
+<style>
+  :root{
+    --ink:#0d1014; --stone:#151a21; --stone-2:#1c232c; --line:#28313c;
+    --moss:#7fd1a3; --moss-dim:#3f6b56; --amber:#e8b25c; --violet:#a48cf0; --rose:#e8736c;
+    --text:#e2e8f0; --muted:#818e9f;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, monospace;
+    --display: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(800px 460px at 15% -10%, #1a2330 0%, transparent 62%), var(--ink);
+    color:var(--text);font-family:var(--mono);font-size:14px;line-height:1.55;padding:26px 18px 70px}
+  .wrap{max-width:980px;margin:0 auto}
+  h1{font-family:var(--display);font-weight:600;font-size:29px;margin:0 0 3px}
+  h1 span{color:var(--moss)}
+  .sub{color:var(--muted);margin:0 0 22px;font-size:12.5px}
+  .panel{background:var(--stone);border:1px solid var(--line);border-radius:7px;padding:18px;margin-bottom:18px}
+  .eyebrow{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:14px}
+  .grid{display:grid;gap:13px 16px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+  label{display:block;font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+  input{width:100%;background:var(--ink);border:1px solid var(--line);border-radius:5px;color:var(--text);
+    font-family:var(--mono);font-size:15px;padding:8px 10px}
+  input:focus{outline:2px solid var(--moss-dim);outline-offset:1px;border-color:var(--moss-dim)}
+  table{width:100%;border-collapse:collapse;margin-top:6px;font-size:12.5px}
+  th{text-align:left;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);
+    font-weight:400;padding:6px 8px;border-bottom:1px solid var(--line)}
+  td{padding:6px 8px;border-bottom:1px solid #1f2731}
+  td input{font-size:12.5px;padding:5px 7px}
+  td.num{text-align:right;font-variant-numeric:tabular-nums}
+  .tag{font-size:10px;letter-spacing:.08em;text-transform:uppercase;padding:2px 7px;border-radius:20px;
+    border:1px solid var(--line);color:var(--muted)}
+  .good{color:var(--moss)} .warn{color:var(--amber)} .bad{color:var(--rose)} .rare{color:var(--violet)}
+  .band{display:grid;gap:1px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+    background:var(--line);border:1px solid var(--line);border-radius:7px;overflow:hidden;margin-bottom:18px}
+  .cell{background:var(--stone-2);padding:13px 15px}
+  .cell .k{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+  .cell .v{font-size:19px;margin-top:3px;font-variant-numeric:tabular-nums}
+  .hint{font-size:11.5px;color:var(--muted);margin-top:12px}
+  button{background:var(--stone-2);border:1px solid var(--line);color:var(--text);font-family:var(--mono);
+    font-size:12px;padding:7px 12px;border-radius:5px;cursor:pointer}
+  button:hover{border-color:var(--moss-dim);color:var(--moss)}
+  .row-actions{display:flex;gap:8px;margin-top:10px}
+  .verdict{border-left:2px solid var(--moss-dim);padding-left:12px;margin:14px 0 0;color:var(--muted);font-size:12.5px}
+  .verdict b{color:var(--text);font-weight:400}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Incremental <span>Economy Calculator</span></h1>
+  <p class="sub">Balancing bench for the <code>kit/</code> Roblox kit — rarity odds, grind time, upgrade
+  curves and rebirth pacing. Change a number here before you change it in <code>Config.luau</code>.</p>
+
+  <div class="band">
+    <div class="cell"><div class="k">Rolls / hour</div><div class="v" id="outRolls">—</div></div>
+    <div class="cell"><div class="k">Income after 1h</div><div class="v good" id="outIncome">—</div></div>
+    <div class="cell"><div class="k">Chase pet ETA</div><div class="v rare" id="outChase">—</div></div>
+    <div class="cell"><div class="k">First rebirth</div><div class="v warn" id="outRebirth">—</div></div>
+  </div>
+
+  <div class="panel">
+    <span class="eyebrow">Loop inputs</span>
+    <div class="grid">
+      <div><label>Luck multiplier</label><input id="luck" type="number" value="1" min="1" step="0.25"></div>
+      <div><label>Seconds per run</label><input id="runTime" type="number" value="22" min="1" step="1"></div>
+      <div><label>Pads (placed pets)</label><input id="pads" type="number" value="4" min="1" step="1"></div>
+      <div><label>Rebirth multiplier</label><input id="rebirthMult" type="number" value="1" min="1" step="0.25"></div>
+    </div>
+    <p class="hint">Seconds per run = nest → egg → back to your plot. In the kit this is ~18–26s in the
+    Meadow and grows with biome distance; it is the single biggest lever on early pacing.</p>
+  </div>
+
+  <div class="panel">
+    <span class="eyebrow">Rarity table — one biome</span>
+    <table id="petTable">
+      <thead>
+        <tr><th>Pet</th><th>1 in N</th><th>$ / sec</th><th class="num">At luck</th>
+            <th class="num">Expected rolls</th><th class="num">ETA</th><th class="num">Share of income</th></tr>
+      </thead>
+      <tbody id="petBody"></tbody>
+    </table>
+    <div class="row-actions">
+      <button id="addPet">+ row</button>
+      <button id="resetPets">reset to kit Meadow</button>
+      <button id="fillCurve">fit income to 0.55·N^0.78</button>
+    </div>
+    <p class="hint">"Share of income" is how much of your steady-state $/sec comes from that tier once your
+    pads are full of your best pets — if one tier is over ~70%, the tiers below it are decoration.</p>
+  </div>
+
+  <div class="panel">
+    <span class="eyebrow">Upgrade curve</span>
+    <div class="grid">
+      <div><label>Base cost</label><input id="upBase" type="number" value="120" min="1"></div>
+      <div><label>Growth</label><input id="upGrowth" type="number" value="1.28" min="1.01" step="0.01"></div>
+      <div><label>Levels to show</label><input id="upLevels" type="number" value="10" min="1" max="40"></div>
+      <div><label>Income $/sec</label><input id="upIncome" type="number" value="25" min="0.01" step="1"></div>
+    </div>
+    <table>
+      <thead><tr><th>Level</th><th class="num">Cost</th><th class="num">Cumulative</th><th class="num">Wait at income</th></tr></thead>
+      <tbody id="upBody"></tbody>
+    </table>
+    <p class="hint">Target: 5–8 seconds of waiting per early purchase. Over ~30s and the ladder feels
+    stalled; under ~3s and the upgrade stops being a decision.</p>
+  </div>
+
+  <div class="panel">
+    <span class="eyebrow">Rebirth pacing</span>
+    <div class="grid">
+      <div><label>Base cost</label><input id="rbBase" type="number" value="250000" min="1"></div>
+      <div><label>Growth</label><input id="rbGrowth" type="number" value="6.5" min="1.1" step="0.1"></div>
+      <div><label>Bonus each (%)</label><input id="rbBonus" type="number" value="25" min="1"></div>
+      <div><label>Rebirths to show</label><input id="rbCount" type="number" value="6" min="1" max="20"></div>
+    </div>
+    <table>
+      <thead><tr><th>Rebirth</th><th class="num">Cost</th><th class="num">Income mult</th><th class="num">Time at 1h-income</th></tr></thead>
+      <tbody id="rbBody"></tbody>
+    </table>
+    <p class="verdict" id="verdict"></p>
+  </div>
+</div>
+
+<script>
+const KIT_MEADOW = [
+  { name: "Chick",      oneIn: 1,    income: 1 },
+  { name: "Bunny",      oneIn: 4,    income: 4 },
+  { name: "Fox Cub",    oneIn: 16,   income: 16 },
+  { name: "Stag",       oneIn: 90,   income: 90 },
+  { name: "Sun Hare",   oneIn: 700,  income: 900 },
+  { name: "Meadowborn", oneIn: 9000, income: 14000 },
+];
+
+let pets = KIT_MEADOW.map(p => ({ ...p }));
+
+const $ = id => document.getElementById(id);
+const num = id => parseFloat($(id).value) || 0;
+
+const SUFFIX = ["", "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp"];
+function short(v) {
+  if (!isFinite(v)) return "∞";
+  const sign = v < 0 ? "-" : "";
+  v = Math.abs(v);
+  if (v < 1000) return sign + (v < 10 ? v.toFixed(2).replace(/\.?0+$/, "") : Math.round(v));
+  const i = Math.min(Math.floor(Math.log10(v) / 3), SUFFIX.length - 1);
+  const scaled = v / 1000 ** i;
+  return sign + scaled.toFixed(scaled < 10 ? 2 : scaled < 100 ? 1 : 0) + SUFFIX[i];
+}
+
+function duration(seconds) {
+  if (!isFinite(seconds)) return "never";
+  if (seconds < 60) return Math.round(seconds) + "s";
+  if (seconds < 3600) return Math.round(seconds / 60) + "m";
+  if (seconds < 86400) return (seconds / 3600).toFixed(1) + "h";
+  return (seconds / 86400).toFixed(1) + "d";
+}
+
+// The kit's roller: luck divides N, rarest tier tested first.
+function effectiveOneIn(oneIn, luck) {
+  return Math.max(1, Math.floor(oneIn / luck));
+}
+
+function rollProbabilities(list, luck) {
+  // P(tier) = (1/N_tier) * product over rarer tiers of (1 - 1/N_rarer)
+  const sorted = [...list].sort((a, b) => b.oneIn - a.oneIn);
+  let remaining = 1;
+  const out = new Map();
+  sorted.forEach((pet, index) => {
+    const n = effectiveOneIn(pet.oneIn, luck);
+    const hit = 1 / n;
+    const p = index === sorted.length - 1 ? remaining : remaining * hit;
+    out.set(pet, p);
+    remaining -= p;
+  });
+  return out;
+}
+
+function renderPets() {
+  const luck = Math.max(num("luck"), 1);
+  const runTime = Math.max(num("runTime"), 1);
+  const pads = Math.max(num("pads"), 1);
+  const rebirthMult = Math.max(num("rebirthMult"), 1);
+  const rollsPerHour = 3600 / runTime;
+  const probs = rollProbabilities(pets, luck);
+
+  // Steady state: your pads hold the best pets you can expect to own in an hour.
+  const expected = pets
+    .map(pet => ({ pet, perHour: (probs.get(pet) || 0) * rollsPerHour }))
+    .sort((a, b) => b.pet.income - a.pet.income);
+
+  let slots = pads, income = 0;
+  const contribution = new Map();
+  for (const row of expected) {
+    const owned = Math.min(slots, row.perHour);
+    if (owned > 0) {
+      const add = owned * row.pet.income * rebirthMult;
+      income += add;
+      contribution.set(row.pet, add);
+      slots -= owned;
+    }
+    if (slots <= 0) break;
+  }
+
+  const body = $("petBody");
+  body.innerHTML = "";
+  pets.forEach((pet, index) => {
+    const p = probs.get(pet) || 0;
+    const rolls = p > 0 ? 1 / p : Infinity;
+    const share = income > 0 ? ((contribution.get(pet) || 0) / income) * 100 : 0;
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><input data-i="${index}" data-k="name" value="${pet.name}"></td>
+      <td><input data-i="${index}" data-k="oneIn" type="number" min="1" value="${pet.oneIn}"></td>
+      <td><input data-i="${index}" data-k="income" type="number" min="0" value="${pet.income}"></td>
+      <td class="num">1 in ${short(effectiveOneIn(pet.oneIn, luck))}</td>
+      <td class="num">${short(rolls)}</td>
+      <td class="num">${duration(rolls * runTime)}</td>
+      <td class="num ${share > 70 ? "warn" : share > 0 ? "good" : ""}">${share >= 0.1 ? share.toFixed(1) + "%" : "—"}</td>`;
+    body.appendChild(tr);
+  });
+
+  body.querySelectorAll("input").forEach(input => {
+    input.addEventListener("input", event => {
+      const el = event.target;
+      const key = el.dataset.k;
+      pets[el.dataset.i][key] = key === "name" ? el.value : (parseFloat(el.value) || 0);
+      render();
+    });
+  });
+
+  const chase = [...pets].sort((a, b) => b.oneIn - a.oneIn)[0];
+  const chaseProb = probs.get(chase) || 0;
+  $("outRolls").textContent = short(rollsPerHour) + " /h";
+  $("outIncome").textContent = short(income) + " /s";
+  $("outChase").textContent = chaseProb > 0 ? duration(runTime / chaseProb) : "never";
+
+  return income;
+}
+
+function renderUpgrades() {
+  const base = num("upBase"), growth = num("upGrowth");
+  const levels = Math.min(Math.max(num("upLevels"), 1), 40);
+  const income = Math.max(num("upIncome"), 0.01);
+  const body = $("upBody");
+  body.innerHTML = "";
+
+  let cumulative = 0;
+  for (let level = 0; level < levels; level++) {
+    const cost = Math.floor(base * growth ** level);
+    cumulative += cost;
+    const wait = cost / income;
+    const tone = wait > 45 ? "bad" : wait < 3 ? "warn" : "good";
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${level + 1}</td><td class="num">${short(cost)}</td>
+      <td class="num">${short(cumulative)}</td><td class="num ${tone}">${duration(wait)}</td>`;
+    body.appendChild(tr);
+  }
+}
+
+function renderRebirths(income) {
+  const base = num("rbBase"), growth = num("rbGrowth");
+  const bonus = num("rbBonus") / 100;
+  const count = Math.min(Math.max(num("rbCount"), 1), 20);
+  const body = $("rbBody");
+  body.innerHTML = "";
+
+  let firstEta = Infinity;
+  for (let n = 0; n < count; n++) {
+    const cost = Math.floor(base * growth ** n);
+    const mult = 1 + n * bonus;
+    const eta = income > 0 ? cost / (income * mult) : Infinity;
+    if (n === 0) firstEta = eta;
+    const tone = n === 0 ? (eta > 2400 ? "bad" : eta < 300 ? "warn" : "good") : "";
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${n + 1}</td><td class="num">${short(cost)}</td>
+      <td class="num">×${mult.toFixed(2)}</td><td class="num ${tone}">${duration(eta)}</td>`;
+    body.appendChild(tr);
+  }
+
+  $("outRebirth").textContent = duration(firstEta);
+
+  const verdict = $("verdict");
+  if (firstEta > 2400) {
+    verdict.innerHTML = "<b>Too slow.</b> A first rebirth beyond ~40 minutes loses most players before " +
+      "they ever see the prestige layer. Cut the base cost or raise early income.";
+  } else if (firstEta < 300) {
+    verdict.innerHTML = "<b>Too fast.</b> Under ~5 minutes the reset has no weight — players rebirth on " +
+      "reflex and the upgrade ladder never gets used. Raise the base cost.";
+  } else {
+    verdict.innerHTML = "<b>In the pocket.</b> A first rebirth in the 12–25 minute band gives one full " +
+      "upgrade ladder before the reset, which is where this genre's retention comes from.";
+  }
+}
+
+function render() {
+  const income = renderPets();
+  renderUpgrades();
+  renderRebirths(income);
+}
+
+document.querySelectorAll("input").forEach(input => input.addEventListener("input", render));
+
+$("addPet").addEventListener("click", () => {
+  const last = pets[pets.length - 1] || { oneIn: 1, income: 1 };
+  pets.push({ name: "New Pet", oneIn: last.oneIn * 8, income: Math.round(last.income * 10) });
+  render();
+});
+
+$("resetPets").addEventListener("click", () => {
+  pets = KIT_MEADOW.map(p => ({ ...p }));
+  render();
+});
+
+$("fillCurve").addEventListener("click", () => {
+  pets = pets.map(p => ({ ...p, income: Math.max(1, Math.round(0.55 * p.oneIn ** 0.78)) }));
+  render();
+});
+
+render();
+</script>
+</body>
+</html>
