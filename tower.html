@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tower Planner</title>
+<style>
+  :root{
+    --ink:#0d1014; --stone:#151a21; --stone-2:#1c232c; --line:#28313c;
+    --moss:#7fd1a3; --moss-dim:#3f6b56; --amber:#e8b25c; --violet:#a48cf0; --rose:#e8867c;
+    --text:#e2e8f0; --muted:#818e9f;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, monospace;
+    --display: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(800px 460px at 15% -10%, #1a2330 0%, transparent 62%), var(--ink);
+    color:var(--text);font-family:var(--mono);font-size:14px;line-height:1.55;padding:26px 18px 70px}
+  .wrap{max-width:1000px;margin:0 auto}
+  header{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:20px}
+  h1{font-family:var(--display);font-weight:600;font-size:29px;margin:0 0 3px}
+  h1 span{color:var(--moss)}
+  .sub{color:var(--muted);margin:0;font-size:12.5px}
+  .saved{font-size:11px;color:var(--moss-dim);letter-spacing:.1em;text-transform:uppercase;text-align:right}
+  nav{display:flex;gap:2px;background:var(--stone-2);border:1px solid var(--line);border-radius:7px;padding:3px;margin-bottom:20px;flex-wrap:wrap}
+  nav button{flex:1;min-width:110px;background:none;border:none;color:var(--muted);font-family:var(--mono);font-size:12.5px;
+    letter-spacing:.05em;padding:9px 8px;border-radius:5px;cursor:pointer}
+  nav button:hover{color:var(--text)}
+  nav button.on{background:var(--stone);color:var(--moss);box-shadow:inset 0 0 0 1px var(--line)}
+  .tab{display:none} .tab.on{display:block}
+  .panel{background:var(--stone);border:1px solid var(--line);border-radius:7px;padding:18px;margin-bottom:18px}
+  .eyebrow{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:14px}
+  .grid{display:grid;gap:13px 16px;grid-template-columns:repeat(auto-fit,minmax(155px,1fr))}
+  label{display:block;font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+  input,select{width:100%;background:var(--ink);border:1px solid var(--line);border-radius:5px;color:var(--text);
+    font-family:var(--mono);font-size:15px;padding:10px 11px}
+  input:focus,select:focus{outline:2px solid var(--moss-dim);outline-offset:1px;border-color:var(--moss-dim)}
+  .hint{font-size:11.5px;color:var(--muted);margin-top:11px}
+  .band{display:grid;gap:1px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+    background:var(--line);border:1px solid var(--line);border-radius:7px;overflow:hidden;margin-bottom:18px}
+  .cell{background:var(--stone-2);padding:13px 15px}
+  .cell .k{font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--muted)}
+  .cell .v{font-family:var(--display);font-size:22px;margin-top:3px;line-height:1.2;word-break:break-word}
+  .v.moss{color:var(--moss)} .v.amber{color:var(--amber)} .v.violet{color:var(--violet)} .v.rose{color:var(--rose)}
+  .delta{display:grid;grid-template-columns:1fr auto 1fr;gap:14px;align-items:center;
+    background:var(--stone-2);border:1px solid var(--line);border-radius:7px;padding:16px 18px}
+  .side .lb{font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--muted)}
+  .side .big{font-family:var(--display);font-size:25px;line-height:1.15}
+  .side .sm{font-size:12px;color:var(--muted);margin-top:2px}
+  .arrow{font-family:var(--display);font-size:19px;color:var(--amber);text-align:center}
+  .arrow .mult{display:block;font-size:13px;color:var(--moss)}
+  table{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px}
+  th{text-align:right;font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted);
+    font-weight:500;padding:0 8px 8px;border-bottom:1px solid var(--line)}
+  th:first-child,td:first-child{text-align:left}
+  td{padding:7px 8px;border-bottom:1px solid #1e252e;text-align:right;font-variant-numeric:tabular-nums}
+  tr:last-child td{border-bottom:none}
+  tr.first td{box-shadow:inset 3px 0 0 var(--moss)}
+  tr.last td{box-shadow:inset 3px 0 0 var(--amber)}
+  tr.reach td{color:var(--muted)}
+  .tw{overflow-x:auto}
+  .verdict{border-left:2px solid var(--amber);padding:11px 15px;background:var(--stone-2);border-radius:0 5px 5px 0;margin-top:16px}
+  .verdict b{color:var(--amber);font-weight:600}
+  .fbox{display:grid;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .frow{display:flex;gap:14px;align-items:baseline;background:var(--stone-2);padding:10px 15px;flex-wrap:wrap}
+  .fk{width:96px;flex:none;color:var(--amber);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase}
+  .fv{font-family:var(--display);font-size:15px;flex:1;min-width:220px}
+  .fv sub{color:var(--muted)}
+  .frow.live{background:var(--ink)}
+  .frow.live .fv{color:var(--moss);font-family:var(--mono);font-size:12.5px;line-height:1.75}
+  pre{background:var(--ink);border:1px solid var(--line);border-radius:6px;padding:14px;overflow-x:auto;
+    font-size:12px;line-height:1.65;color:#cbd5e1;margin:0}
+  pre .c{color:var(--muted)}
+  .srclist{display:grid;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .srcrow{background:var(--stone-2);padding:12px 15px;display:grid;gap:3px 14px;grid-template-columns:62px 1fr;align-items:start}
+  .tier{font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--amber);padding-top:3px}
+  .tier.b{color:var(--violet)} .tier.c{color:var(--muted)}
+  .srcrow a{color:var(--moss);text-decoration:none;border-bottom:1px solid var(--moss-dim);font-size:13px}
+  .srcrow a:hover{border-bottom-color:var(--moss)}
+  .srcrow p{margin:2px 0 0;font-size:12px;color:var(--muted);grid-column:2}
+  .warn{background:#2a1f1c;border:1px solid #543a33;color:#e8ae9f;border-radius:6px;padding:12px 15px;margin-bottom:18px;font-size:12.5px}
+  footer{color:var(--muted);font-size:11.5px;margin-top:26px;text-align:center;line-height:1.8}
+  footer a{color:var(--moss-dim);text-decoration:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <h1>Tower <span>Planner</span></h1>
+      <p class="sub">The Tower: Idle Tower Defense &mdash; workshop &amp; lab costs from the game's own upgrade tables</p>
+    </div>
+    <div class="saved" id="saved">inputs saved locally</div>
+  </header>
+
+  <div class="warn" id="dataWarn" style="display:none">
+    <b>data/tower-data.js did not load.</b> Open this page from the project folder
+    (or serve it) so the generated table file sits alongside it &mdash; every tab needs it.
+  </div>
+
+  <nav>
+    <button class="on" data-tab="t1">Workshop</button>
+    <button data-tab="t2">Labs</button>
+    <button data-tab="t3">Next best coin</button>
+    <button data-tab="t4">Formulas</button>
+    <button data-tab="t5">Sources</button>
+  </nav>
+
+  <div class="panel">
+    <span class="eyebrow">Your account &mdash; used by every tab</span>
+    <div class="grid">
+      <div><label for="coins">Coins on hand</label><input id="coins" type="number" step="any" value="1e9"></div>
+      <div><label for="gems">Gems on hand</label><input id="gems" type="number" step="1" value="0"></div>
+      <div><label for="labSpeed">Labs Speed lab (0&ndash;99)</label><input id="labSpeed" type="number" step="1" min="0" max="99" value="0"></div>
+      <div><label for="labDisc">Labs Coin Discount (0&ndash;99)</label><input id="labDisc" type="number" step="1" min="0" max="99" value="0"></div>
+      <div><label for="relic">Relic lab speed %</label><input id="relic" type="number" step="any" min="0" value="0"></div>
+      <div><label for="boxes">Gold boxes opened</label><input id="boxes" type="number" step="1" min="0" value="0"></div>
+      <div><label for="wsAtk">Workshop Attack Disc.</label><input id="wsAtk" type="number" step="1" min="0" max="99" value="0"></div>
+      <div><label for="wsDef">Workshop Defense Disc.</label><input id="wsDef" type="number" step="1" min="0" max="99" value="0"></div>
+      <div><label for="wsUti">Workshop Utility Disc.</label><input id="wsUti" type="number" step="1" min="0" max="99" value="0"></div>
+    </div>
+    <p class="hint" id="stack"></p>
+  </div>
+
+  <!-- ─── Workshop ─────────────────────────────────────────────────── -->
+  <div class="tab on" id="t1">
+    <div class="panel">
+      <span class="eyebrow">Pick a stat, pick a target level</span>
+      <div class="grid">
+        <div><label for="wsStat">Workshop stat</label><select id="wsStat"></select></div>
+        <div><label for="wsFrom">Current level</label><input id="wsFrom" type="number" step="1" min="0" value="0"></div>
+        <div><label for="wsTo">Target level</label><input id="wsTo" type="number" step="1" min="0" value="100"></div>
+      </div>
+      <div class="delta" style="margin-top:16px">
+        <div class="side">
+          <div class="lb">Level <span id="w-la"></span></div>
+          <div class="big" id="w-va">&mdash;</div>
+          <div class="sm" id="w-sa"></div>
+        </div>
+        <div class="arrow">&rarr;<span class="mult" id="w-mult"></span></div>
+        <div class="side" style="text-align:right">
+          <div class="lb">Level <span id="w-lb"></span></div>
+          <div class="big" id="w-vb">&mdash;</div>
+          <div class="sm" id="w-sb"></div>
+        </div>
+      </div>
+      <div class="band" style="margin:16px 0 0">
+        <div class="cell"><div class="k">Levels</div><div class="v" id="w-n">&mdash;</div></div>
+        <div class="cell"><div class="k">Coin cost</div><div class="v amber" id="w-cost">&mdash;</div></div>
+        <div class="cell"><div class="k">You can reach</div><div class="v moss" id="w-afford">&mdash;</div></div>
+        <div class="cell"><div class="k">Cost to max</div><div class="v violet" id="w-max">&mdash;</div></div>
+      </div>
+      <div class="verdict" id="w-verdict"></div>
+    </div>
+    <div class="panel">
+      <span class="eyebrow">Level by level</span>
+      <div class="tw"><table id="w-table"></table></div>
+      <p class="hint">Rows are sampled evenly across the span; the first and last level are always shown.</p>
+    </div>
+  </div>
+
+  <!-- ─── Labs ────────────────────────────────────────────────────── -->
+  <div class="tab" id="t2">
+    <div class="panel">
+      <span class="eyebrow">Lab research &mdash; exact coins, time and rush gems</span>
+      <div class="grid">
+        <div><label for="labCat">Category</label><select id="labCat"></select></div>
+        <div><label for="labSel">Research</label><select id="labSel"></select></div>
+        <div><label for="labFrom">Current level</label><input id="labFrom" type="number" step="1" min="0" value="0"></div>
+        <div><label for="labTo">Target level</label><input id="labTo" type="number" step="1" min="0" value="10"></div>
+        <div><label for="cell">Elite Cell boost</label><select id="cell">
+          <option value="1">none</option><option value="1.5">1.5&times;</option><option value="2">2&times;</option>
+          <option value="3">3&times;</option><option value="4">4&times;</option><option value="5">5&times;</option>
+        </select></div>
+        <div><label for="labs">Labs running in parallel</label><input id="labs" type="number" step="1" min="1" max="5" value="1"></div>
+      </div>
+      <div class="delta" style="margin-top:16px">
+        <div class="side">
+          <div class="lb">Level <span id="l-la"></span></div>
+          <div class="big" id="l-va">&mdash;</div>
+          <div class="sm" id="l-sa"></div>
+        </div>
+        <div class="arrow">&rarr;<span class="mult" id="l-mult"></span></div>
+        <div class="side" style="text-align:right">
+          <div class="lb">Level <span id="l-lb"></span></div>
+          <div class="big" id="l-vb">&mdash;</div>
+          <div class="sm" id="l-sb"></div>
+        </div>
+      </div>
+      <div class="band" style="margin:16px 0 0">
+        <div class="cell"><div class="k">Coin cost</div><div class="v amber" id="l-cost">&mdash;</div></div>
+        <div class="cell"><div class="k">Research time</div><div class="v moss" id="l-time">&mdash;</div></div>
+        <div class="cell"><div class="k">Wall clock</div><div class="v" id="l-wall">&mdash;</div></div>
+        <div class="cell"><div class="k">Gems to rush</div><div class="v violet" id="l-gems">&mdash;</div></div>
+      </div>
+      <div class="verdict" id="l-verdict"></div>
+    </div>
+    <div class="panel">
+      <span class="eyebrow">Level by level</span>
+      <div class="tw"><table id="l-table"></table></div>
+      <p class="hint">Time shown is per level after your Labs Speed lab, relic bonus and Elite Cell boost.
+        Gem rush is priced per level from the remaining duration &mdash; rushing one long level costs less
+        per hour than rushing several short ones.</p>
+    </div>
+  </div>
+
+  <!-- ─── Next best coin ───────────────────────────────────────────── -->
+  <div class="tab" id="t3">
+    <div class="panel">
+      <span class="eyebrow">Cheapest next level, across every workshop stat</span>
+      <p class="hint" style="margin:0 0 14px">
+        Enter the levels you already hold on the stats you care about (blank = level&nbsp;0), then read the
+        ranking: it sorts every stat's <em>next</em> level by coins per 1% of stat gained, so the top row is
+        the most coin-efficient single upgrade available to you right now.
+      </p>
+      <div class="grid" id="nbGrid"></div>
+      <p class="hint" id="nbNote"></p>
+    </div>
+    <div class="panel">
+      <span class="eyebrow">Ranking</span>
+      <div class="tw"><table id="nb-table"></table></div>
+    </div>
+  </div>
+
+  <!-- ─── Formulas ─────────────────────────────────────────────────── -->
+  <div class="tab" id="t4">
+    <div class="panel">
+      <span class="eyebrow">Lab cost model &mdash; transcribed from the game bundle</span>
+      <div class="fbox">
+        <div class="frow"><span class="fk">speed</span><span class="fv">vb(e,t) = (1 + 0.02&middot;e)(1 + t/100)
+          &nbsp;<sub>e = Labs Speed level, t = relic %</sub></span></div>
+        <div class="frow"><span class="fk">time</span><span class="fv">DURATION / vb &middot; (1 &minus; percentComplete)</span></div>
+        <div class="frow"><span class="fk">coins</span><span class="fv">COST &middot; (1 &minus; labDiscount &middot; 0.3 / 100)</span></div>
+        <div class="frow"><span class="fk">gem disc.</span><span class="fv">Cb(o) = 1 / (1 + 0.015&middot;o)
+          &nbsp;<sub>o = gold boxes opened</sub></span></div>
+        <div class="frow"><span class="fk">rush gems</span><span class="fv">&lceil; _b(time) &middot; Cb(o) &rceil;
+          &nbsp;<sub>_b is piecewise linear in seconds remaining</sub></span></div>
+        <div class="frow live"><span class="fk">yours</span><span class="fv" id="f-live"></span></div>
+      </div>
+      <p class="hint">Two exemptions live inside the same function: the Labs Speed lab is not sped up by
+        itself, and the Labs Coin Discount lab is not discounted by itself.</p>
+    </div>
+
+    <div class="panel">
+      <span class="eyebrow">Gem rush curve &mdash; _b(t), verbatim</span>
+      <pre id="f-rush"></pre>
+      <div class="tw"><table id="f-rushtable"></table></div>
+    </div>
+
+    <div class="panel">
+      <span class="eyebrow">Stat combination &mdash; how an upgrade becomes a stat</span>
+      <div class="fbox">
+        <div class="frow"><span class="fk">damage</span><span class="fv">base &times; chassis &times; lab &times; card
+          &times; (1 + relics) &times; (1 + cannon%) &times; enhance &times; perks + berserker</span></div>
+        <div class="frow"><span class="fk">uw damage</span><span class="fv">UW% &times; (1 + core%) &times; Damage
+          &times; (1 + CritFactor &middot; CritChance) &times; (1 + SCMult &middot; SCChance &middot; CritChance)</span></div>
+      </div>
+      <p class="hint">From <code>tables/workshop/formulas/</code>, which names the game function each pipeline
+        mirrors (Damage &rarr; <code>ModuleManager::get_AttackDamage</code>).</p>
+    </div>
+
+    <div class="panel">
+      <span class="eyebrow">Fixed cost ladders</span>
+      <div class="fbox">
+        <div class="frow"><span class="fk">lab slots</span><span class="fv">free, 100, 400, 1400, 3000 gems &nbsp;<sub>4,900 total</sub></span></div>
+        <div class="frow"><span class="fk">uw buy</span><span class="fv">5, 50, 150, 300, 800, 1250, 1750, 2400, 3000 stones</span></div>
+        <div class="frow"><span class="fk">bot levels</span><span class="fv">60 + 40n medals &nbsp;<sub>100 at lvl 1; 9,600 cumulative to 20</sub></span></div>
+        <div class="frow"><span class="fk">elite cells</span><span class="fv">1.5&times;=15, 2&times;=100, 3&times;=840, 4&times;=3360, 5&times;=11900
+          &nbsp;<sub>per hour; +20% per lab already boosted</sub></span></div>
+        <div class="frow"><span class="fk">card slots</span><span class="fv">21 slots, 48,400 gems total &middot; 20 gems per pull</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Sources ──────────────────────────────────────────────────── -->
+  <div class="tab" id="t5">
+    <div class="panel">
+      <span class="eyebrow">Where every number on this page comes from</span>
+      <div class="srclist">
+        <div class="srcrow"><span class="tier">Tier A</span>
+          <a href="https://github.com/AngryBrit/tower-smith" target="_blank" rel="noopener">TowerSmith &mdash; GOD tables</a>
+          <p>The root source. Per-level JSON for 48 workshop stats and 217 lab researches, extracted from the
+            game's own upgrade tables and verified against its upgrade display. Not curve fits &mdash; real tables.
+            <code>tables/workshop/</code>, <code>tables/labs/</code>. CC BY-NC-SA 4.0.</p></div>
+        <div class="srcrow"><span class="tier">Tier A</span>
+          <a href="https://mytower.app/" target="_blank" rel="noopener">The game bundle, via mytower.app</a>
+          <p>The lab cost/time/gem model is code, not a table. Recovered from the deobfuscated Vite bundle and
+            transcribed character-for-character &mdash; that transcription is what the Formulas tab shows.</p></div>
+        <div class="srcrow"><span class="tier b">Tier B</span>
+          <a href="https://github.com/SFleet89/the-tower-unified-tools" target="_blank" rel="noopener">The Tower Unified Tools</a>
+          <p>Best secondary source. Pre-extracted JS tables for workshop costs and values, workshop enhancements,
+            labs, modules, bots, cards, milestones, relics &mdash; plus the regression gates that check the bundle
+            transcription against the published wiki tables. CC BY-NC-SA 4.0.</p></div>
+        <div class="srcrow"><span class="tier b">Tier B</span>
+          <a href="https://github.com/jacoelt/tower-calculator" target="_blank" rel="noopener">tower-calculator</a>
+          <p>Narrower, and useful for it: in-run <em>battle upgrade</em> cash tables for 13 stats, plus 5 lab
+            multiplier curves.</p></div>
+        <div class="srcrow"><span class="tier b">Tier B</span>
+          <a href="https://github.com/Tankietank/The-Tower-Optimizer" target="_blank" rel="noopener">The Tower Optimizer</a>
+          <p>A third independent extraction pipeline. Not imported &mdash; kept as something to diff against.</p></div>
+        <div class="srcrow"><span class="tier c">Tier C</span>
+          <a href="https://the-tower-idle-tower-defense.fandom.com/wiki/Workshop_Upgrades" target="_blank" rel="noopener">Fandom wiki</a>
+          <p>Workshop Upgrades, Lab Upgrades, Workshop Enhancement, Damage. Its published gem-rush and
+            Elite-Cell tables are the reference the bundle transcription is tested against.</p></div>
+        <div class="srcrow"><span class="tier c">Tier C</span>
+          <a href="https://the-tower-idle-tower-defense.game-vault.net/wiki/Workshop" target="_blank" rel="noopener">Game Vault wiki</a>
+          <p>Guide-grade mechanics and upgrade priority. Explains; doesn't supply data.</p></div>
+        <div class="srcrow"><span class="tier c">Tier C</span>
+          <a href="https://www.tower-hub.com/wiki/workshop/workshop-upgrades" target="_blank" rel="noopener">Tower Hub</a>
+          <p>Browsable per-level cost tables &mdash; handy for eyeballing a single stat by hand.</p></div>
+      </div>
+      <p class="hint">Full write-up, including the licensing terms and the known gaps, is in
+        <code>research/THE-TOWER-SOURCES.md</code>.</p>
+    </div>
+    <div class="panel">
+      <span class="eyebrow">What's loaded right now</span>
+      <div class="band" style="margin:0">
+        <div class="cell"><div class="k">Workshop stats</div><div class="v moss" id="s-ws">&mdash;</div></div>
+        <div class="cell"><div class="k">Lab researches</div><div class="v moss" id="s-lab">&mdash;</div></div>
+        <div class="cell"><div class="k">Levels tabulated</div><div class="v amber" id="s-lv">&mdash;</div></div>
+        <div class="cell"><div class="k">Table build</div><div class="v" id="s-gen">&mdash;</div></div>
+      </div>
+      <p class="hint">Regenerate with <code>node tools/build-tower-data.js &lt;tower-smith checkout&gt;</code>.</p>
+    </div>
+  </div>
+
+  <footer>
+    Unofficial fan tool. <em>The Tower: Idle Tower Defense</em> is &copy; Tech Tree Games.<br>
+    Data derived from <a href="https://github.com/AngryBrit/tower-smith" target="_blank" rel="noopener">TowerSmith</a>
+    and <a href="https://github.com/SFleet89/the-tower-unified-tools" target="_blank" rel="noopener">The Tower Unified Tools</a>,
+    both CC BY-NC-SA 4.0 &mdash; this page inherits those terms.
+  </footer>
+</div>
+
+<script src="data/tower-data.js"></script>
+<script src="js/tower-planner.js"></script>
+</body>
+</html>
