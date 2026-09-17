@@ -17,6 +17,7 @@ This chapter is the reference for building that UI without dropping to 12 fps.
 ## TL;DR
 
 - **Never store big values as Luau `number`.** A double loses integer exactness past `2^53` and dies at `~1.8e308`. **Chapter 60 settles the value type for this project: AlyaNum**, a flat 7-field `{sign, multiplicand, exponent, tetrate, pentate, hexate, heptate}` struct that reaches heptation. This chapter takes that as given and concerns itself only with getting those fields onto a screen. (§1.1)
+- **This chapter is the UI layer only.** Chapter 60 owns the number type, chapter 61 owns game state. Everything here assumes both and describes only what happens between a value and a pixel.
 - **Formatting is the hot path, not the maths.** `string.format` plus a table lookup is cheap; doing it 400 times a frame is not. The fix is a two-level cache: a **format cache** keyed on `(quantized value, notation, places)` and a **write guard** that compares the produced string to `label.Text` before assigning. (§1.4, §2.2)
 - **Assigning `TextLabel.Text` is not free.** It invalidates text layout and re-runs measurement/shaping for that label; `ContentText`, `TextBounds` and `TextFits` are all derived from it, and `AutomaticSize`/`TextScaled` make it worse. Guard every write. (§1.4, §10.2)
 - **Decouple UI rate from tick rate.** Simulate at whatever rate you like; repaint text at **10–20 Hz**. Humans cannot read a digit that changes at 60 Hz anyway — above ~15 Hz fast-moving digits become visual noise. Drive UI from a fixed-step accumulator, not `RenderStepped`. (§2.1)
@@ -268,9 +269,12 @@ local NumberFormat = {}
 
 export type Notation = "standard" | "scientific" | "engineering" | "letters" | "logarithm" | "mixed"
 
+-- abbreviateStandard, transcribeLetters and mantissaToSigFigs from
+-- §1.2/§1.3 live in this module, above this point.
+
 local SIG_FIGS = 3
 local SUFFIX_SEPARATOR = ""     -- "" for "1.23K", " " for "1.23 K"
-local MIXED_SCIENTIFIC_ABOVE = 1e33 -- switch Standard -> Scientific past decillion
+local MIXED_SCIENTIFIC_EXP = 33 -- switch Standard -> Scientific past decillion
 
 -- ---------------------------------------------------------------- cache ----
 -- cache[notationId][exponent][quantizedMantissa] = formatted string
@@ -343,10 +347,30 @@ local function formatLogarithm(m: number, e: number): string
     return "e" .. string.format("%.3f", e + math.log10(m))
 end
 
+-- Layered values change slowly (a tetration tier lasts a long time), so a
+-- tiny memo keyed on the library's own string is enough.
+local layeredMemo: { [any]: string } = setmetatable({}, { __mode = "k" }) :: any
+
+function NumberFormat.formatLayered(v: Big): string
+    local cached = layeredMemo[v.big]
+    if cached then return cached end
+    local s = tostring(v.big) -- AlyaNum __tostring escalates automatically
+    layeredMemo[v.big] = s
+    return s
+end
+
 -- --------------------------------------------------------------- entry -----
 --- Format a big value. `v.mantissa` in [1,10), `v.exponent` integral.
 --- Returns the display string. O(1) in the magnitude of the value.
 function NumberFormat.format(v: Big, notation: Notation): string
+    -- Power towers: there is no mantissa to show. Defer to the value library's
+    -- own escalating formatter (AlyaNum: toEChain -> toEnt -> toHyperE) and
+    -- cache the RESULT, because tostring() on a big value is the single most
+    -- expensive thing this module can do.
+    if v.layered then
+        return NumberFormat.formatLayered(v)
+    end
+
     local e = v.exponent
     local m = v.mantissa
 
@@ -368,7 +392,8 @@ function NumberFormat.format(v: Big, notation: Notation): string
 
     local effective: string = notation
     if notation == "mixed" then
-        effective = if 10 ^ e >= MIXED_SCIENTIFIC_ABOVE then "scientific" else "standard"
+        -- Compare EXPONENTS, never 10^e: past e=308 that is `inf`.
+        effective = if e >= MIXED_SCIENTIFIC_EXP then "scientific" else "standard"
     end
 
     -- Layer 0: quantize to what the display can actually show.
@@ -440,6 +465,14 @@ end
 
 --- Returns true if the Instance was written to.
 function NumericBinding.set(self: NumericBinding, v: Big): boolean
+    if v.layered then
+        -- Power towers change rarely; go straight to the guarded string write.
+        local s = NumberFormat.format(v, self.notation)
+        if s == self._text then return false end
+        self._text = s
+        self.label.Text = s
+        return true
+    end
     -- Layer 0/1: quantize and compare. Two float compares, zero allocation.
     local tier = v.exponent // 3
     local qm = math.round(v.mantissa * 10 ^ (v.exponent - tier * 3) * 10)
@@ -1203,6 +1236,8 @@ Whatever you pick, **`--!strict` on every UI module and `--!native` on the forma
 
 ### 8.4 How UI state should observe game state
 
+**Chapter 61 owns the state architecture, the server/client split and the closed-form production maths.** This section covers only the seam: how the UI observes that state without coupling to it.
+
 The rule: **UI depends on a read-only projection of game state; game state knows nothing about UI.**
 
 ```
@@ -1361,11 +1396,11 @@ Base-26 over the engineering exponent (`exponent / 3`), lowercase:
 | Engineering | `1.23e15` | mantissa in `[1,1000)`, exponent ≡ 0 (mod 3) |
 | Letters | `1.23e` | mantissa in `[1,1000)`, base-26 exponent |
 | Logarithm | `e15.091` | `log10` of the whole value |
-| Hyper-E | `E15.091` | `Ex` ≡ `10^x`; `Ex#n` ≡ `n` nested powers of ten |
+| Hyper-E | `E15.091`, `E10#8#3#2` | `Ex` ≡ `10^x`; `#` separates hyperoperation levels. **AlyaNum ships this** as `toHyperE()`, with `toEChain()` (`eee1.5M`) and `toEnt()` (`E(1.5M)2`) below it — see chapter 60. |
 | Arrow | `10↑15.091` | `a↑b` = `a^b`, `a↑↑b` = tetration, `a↑↑↑b` = pentation |
 | Mixed | `1.23 Qa` | Standard below a threshold, Scientific above |
 
-Hyper-E and arrow notations only carry information once the value itself is layered (`{sign, layer, mag}`, §1.1). With a `{mantissa, exponent}` type, `E15.091` and `e15.091` are the same string with a different prefix — ship them only if your number type reaches tetration. `[UNVERIFIED — Hyper-E is Sbiis Saibian's notation; the `Ex#n` nesting convention above is the form used by idle-game implementations such as Eternal Notations, not a formal citation.]`
+Hyper-E and arrow notations only carry information once the value itself is layered (§1.1). With a `{mantissa, exponent}` type, `E15.091` and `e15.091` are the same string with a different prefix. **This project's value type does reach tetration**, so the escalation ladder is real and the UI must render it: below `exponent = 2`, use this chapter's formatter and its cache; at or above it, defer to the library's `toEChain`/`toEnt`/`toHyperE` and memo the result (§1.4). `[UNVERIFIED — Hyper-E is Sbiis Saibian's notation; the `Ex#n` nesting convention above is the form used by idle-game implementations such as Eternal Notations, not a formal citation.]`
 
 ### Display rules cheat sheet
 
@@ -1695,8 +1730,8 @@ All Roblox API and guide citations are to the `Roblox/creator-docs` repository o
 | [ScreenGui.yaml](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/ScreenGui.yaml) | `ScreenInsets` (`CoreUISafeInsets` default), `SafeAreaCompatibility`, `IgnoreGuiInset`, `DisplayOrder` |
 | [GuiService.yaml](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/GuiService.yaml) | `TopbarInset`, `GetInsetArea()`, `GetGuiInset()`, `ViewportDisplaySize`, `PreferredTextSize`, `PreferredTransparency`, `ReducedMotionEnabled`, `IsTenFootInterface()` |
 | [RunService.yaml](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/RunService.yaml) | `PreRender` blocks rendering; `PreRender`/`PreSimulation` supersede `RenderStepped`/`Stepped`; `Heartbeat` semantics |
-| Also read: [Frame](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/Frame.yaml), [TextButton](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/TextButton.yaml), [ImageLabel](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/ImageLabel.yaml), [ImageButton](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/ImageButton.yaml), [UIListLayout](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/UIListLayout.yaml), [UIGridLayout](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/UIGridLayout.yaml), [UIFlexItem](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/UIFlexItem.yaml), [UIPadding](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/UIPadding.yaml), [UICorner](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/UICorner.yaml), [UIStroke](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/UIStroke.yaml), [UIGradient](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/UIGradient.yaml), [UIScale](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/UIScale.yaml), [UIAspectRatioConstraint](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/UIAspectRatioConstraint.yaml) | layout, modifiers | |
-| Datatypes: [UDim2](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/datatypes/UDim2.yaml), [UDim](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/datatypes/UDim.yaml), [NumberSequence](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/datatypes/NumberSequence.yaml), [ColorSequence](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/datatypes/ColorSequence.yaml), [Vector2](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/datatypes/Vector2.yaml) | scale/offset, gradient stops | |
+| Also read: [Frame](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/Frame.yaml), [TextButton](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/TextButton.yaml), [ImageLabel](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/ImageLabel.yaml), [ImageButton](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/ImageButton.yaml), [UIListLayout](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/UIListLayout.yaml), [UIGridLayout](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/UIGridLayout.yaml), [UIFlexItem](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/UIFlexItem.yaml), [UIPadding](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/UIPadding.yaml), [UICorner](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/UICorner.yaml), [UIStroke](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/UIStroke.yaml), [UIGradient](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/UIGradient.yaml), [UIScale](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/UIScale.yaml), [UIAspectRatioConstraint](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/UIAspectRatioConstraint.yaml) | layout and appearance modifiers |
+| Datatypes: [UDim2](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/datatypes/UDim2.yaml), [UDim](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/datatypes/UDim.yaml), [NumberSequence](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/datatypes/NumberSequence.yaml), [ColorSequence](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/datatypes/ColorSequence.yaml), [Vector2](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/datatypes/Vector2.yaml) | scale vs offset, gradient stops, canvas coordinates |
 
 ### Roblox guides (`content/en-us/`)
 
@@ -1717,7 +1752,8 @@ All Roblox API and guide citations are to the `Roblox/creator-docs` repository o
 
 - [antimatter-dimensions/notations](https://github.com/antimatter-dimensions/notations) (MIT) — the canonical notation set. [`src/utils.ts`](https://github.com/antimatter-dimensions/notations/blob/master/src/utils.ts) is the source for `STANDARD_ABBREVIATIONS`, `STANDARD_PREFIXES`, `STANDARD_PREFIXES_2` and `abbreviateStandard`, all transcribed into Luau in §1.2 and verified by execution. [`src/custom.ts`](https://github.com/antimatter-dimensions/notations/blob/master/src/custom.ts) is the source for the base-26 letters transcription. API is `format(value, places, placesUnder1000)`.
 - [Patashu/break_infinity.js](https://github.com/Patashu/break_infinity.js) — the `{mantissa, exponent}` model.
-- [Patashu/break_eternity.js](https://github.com/Patashu/break_eternity.js) — the `{sign, layer, mag}` model, required for hyper-E/arrow notations.
+- [Patashu/break_eternity.js](https://github.com/Patashu/break_eternity.js) — the `{sign, layer, mag}` model.
+- [evilbocchi/alyanum](https://github.com/evilbocchi/alyanum) (MIT) — **this project's value type**. Read in depth in chapter 60; cited here only for its formatting surface (`toSuffix`, `toScientific`, `toEChain`, `toEnt`, `toHyperE`, `toString`) and the fact that its formatting settings are process-global.
 
 ### UI frameworks
 
@@ -1743,11 +1779,20 @@ Both are cited in §7.3 because Roblox publishes no equivalent figure. `[UNVERIF
 
 ### Cross-references within this corpus
 
+These three are load-bearing — this chapter is written to sit on top of them and deliberately does not duplicate them:
+
+- **Chapter 60 — Big-number arithmetic in Luau (AlyaNum)** — *settles the value type.* AlyaNum's 7-field struct, the heptation ceiling, per-operation allocation, `a:log10()` returning an AlyaNum, the process-global formatting settings, and its `toSuffix`/`toScientific`/`toEChain`/`toEnt`/`toHyperE` ladder. §1.1 defers to it entirely; §1.2–§1.5 supply the per-player notation layer AlyaNum's globals cannot.
+- **Chapter 61 — Incremental/idle game architecture on Roblox** — *owns game state.* Core loop, closed-form production, offline progress, multiplier stacking, prestige, persistence, server/client split. §4.8 (offline modal), §4.3 (`maxAffordable`) and §8.4 (the observation seam) are the UI-side views of it.
+- **Chapter 62 — Porting a web incremental game to Luau** — *owns equivalence.* If you are porting an existing game, the notation outputs in §1.2 and the [Number formatting reference](#number-formatting-reference) are exactly the kind of thing to put behind a differential test against the original.
+
+Also relevant:
+
 - **Chapter 20 — EditableImage API** and **chapter 40 — EditableImage technique cookbook**: the permission gate, `WritePixelsBuffer` layout, `Content.fromObject` lifetime, the 1024×1024 ceiling. §6.3 and §9 defer to them rather than duplicating.
 - **Chapter 22 — Luau performance engineering**: `--!native`, `buffer`, the task scheduler. §1.4 and §2.1 assume it.
 - **Chapter 25 — UI construction**: flex layout, 9-slice, ViewportFrame, atlases as general craft. This chapter is the incremental-genre specialisation of it.
 - **Chapter 46 — Code architecture & frameworks**: the general framework argument. §8 is the UI-specific counterpart and reaches a different conclusion for a different reason (fine-grained reactivity fits this workload; a general-purpose game framework does not).
 - **Chapter 50 — Optimization & shipping**: the MicroProfiler in general. §10 is the UI slice of it.
+- **Chapters 64 / 65 — QA and adversarial verification**: §10.4's regression gate and the virtualization checklist are the UI entries for those loops.
 
 ---
 

@@ -209,52 +209,41 @@ get an error.
 
 ### 1.1 Inventory the original
 
-Before a line of Luau is written, produce a written inventory. This is a
-mechanical exercise and it should take one to three days for a mid-sized idle
-game. Do it with grep and a spreadsheet, not from memory.
+Before a line of Luau is written, produce a written inventory. It is a mechanical
+exercise — grep and a spreadsheet, not memory — and it takes one to three days
+for a mid-sized idle game.
 
-**State variables.** Every field that persists across a tick. For each one
-record: name, type, initial value, unit, min/max observed, whether it is derived
-(recomputable) or authoritative (must be saved), and the exact JS expression
-that mutates it. Derived-vs-authoritative is the split that determines your save
-schema. In a typical clicker this is 30–200 fields; if the original keeps them
-on a single `game` object, dump `Object.keys(game)` at runtime and diff against
-your list to catch the ones added dynamically.
-
-**Formulas.** Every pure function from state to a number: production rates, cost
-curves, multiplier stacking order, offline-progress integration, prestige gain,
-RNG draws. Copy the JS expression verbatim into the inventory. Multiplier
-*stacking order* matters and is usually implicit in the original's code order —
-`(base * a) * b` and `base * (a * b)` differ in float64 once the values are not
-powers of two, and an incremental game runs the multiplication millions of times.
-
-**Content tables.** Buildings, upgrades, achievements, tiers, prestige layers.
-For each: the identity key the original uses (index? string id? position in an
-array?), and whether any logic depends on *order*. Array-position identity is
-the single most dangerous thing you can carry across the 0-based/1-based
-boundary; if the original saves "upgrade 7 is bought" as an index into an array,
-you must decide once and document whether the port's `7` means the same upgrade.
-
-**UI screens.** One row per screen/panel: what it displays, what it reads from
-state, what it writes, update frequency, and whether it has any *logic* in it.
-The last column is the important one: incremental games routinely bury a formula
-in a render function.
-
-**Save format.** Capture three real saves (new game, mid game, endgame). Record
-the exact encoding chain — commonly `JSON.stringify` → `LZString` or
-`btoa(unescape(encodeURIComponent(...)))` → `localStorage`. Write down the
-version field and any migration code the original already has; that migration
-code is a specification of the schema's history.
-
-**Assets.** Every image, sprite sheet, font, sound, and — separately — every
-piece of art that is *drawn in CSS* (gradients, border-radius chips, box-shadow
-glows, pseudo-element icons) or delivered as SVG. The CSS and SVG entries are
-work items, not asset entries; they have no Roblox equivalent (§13).
-
-**Non-determinism.** Every use of `Math.random`, `Date.now`, `performance.now`,
-and anything that reads the DOM for a measurement. Each one is a place where the
-port cannot be verified against the original unless you make it deterministic
-first (§15.1).
+- **State variables.** Name, type, initial value, unit, observed min/max, whether
+  **derived** (recomputable) or **authoritative** (must be saved), and the exact
+  JS expression that mutates it. The derived/authoritative split determines the
+  save schema. If the original keeps state on one `game` object, dump
+  `Object.keys(game)` at runtime and diff against your list to catch fields added
+  dynamically.
+- **Formulas.** Every pure state→number function: production rates, cost curves,
+  multiplier stacking, offline integration, prestige gain, RNG draws. Copy the JS
+  verbatim. *Stacking order is part of the formula* — `(base * a) * b` and
+  `base * (a * b)` differ in float64 once the values are not powers of two, and an
+  incremental game runs that multiplication millions of times.
+- **Content tables.** Buildings, upgrades, achievements, tiers, prestige layers.
+  Record the identity key (index? string id? array position?) and whether any
+  logic depends on order. Array-position identity is the most dangerous thing you
+  can carry across the 0-based/1-based boundary: if the original saves "upgrade 7
+  is bought" as an array index, decide once and document whether the port's `7`
+  means the same upgrade.
+- **UI screens.** One row per panel: what it displays, reads, writes, how often —
+  and **whether it contains logic**. Incremental games routinely bury a formula in
+  a render function.
+- **Save format.** Capture three real saves (new / mid / endgame) and the exact
+  encoding chain, commonly `JSON.stringify` → `LZString` or
+  `btoa(unescape(encodeURIComponent(...)))` → `localStorage`. The original's own
+  migration code is a specification of the schema's history — keep it.
+- **Assets.** Every image, sprite sheet, font and sound; and *separately*, every
+  piece of art drawn in CSS (gradients, radii, box-shadow glows, pseudo-element
+  icons) or delivered as SVG. Those are work items, not asset entries — they have
+  no Roblox equivalent (§13).
+- **Non-determinism.** Every `Math.random`, `Date.now`, `performance.now`, and
+  every DOM measurement. Each is a place the port cannot be verified until you
+  make the original deterministic (§15.1).
 
 ### 1.2 Build the behavioural spec
 
@@ -484,19 +473,13 @@ Note that `?? ` (nullish coalescing) maps *exactly* onto Luau's `or` for the
 `false or 1` is `1` in Luau. If the original uses `??` on a boolean, use
 `M.nullish`.
 
-**Shape 3 — the empty-string guard.**
+**Shape 3 — the empty-string guard.** `if (save.playerName) { greet(...) }` skips
+on an empty name in JS and fires in Luau. In save-loading code this is a
+validation hole.
 
-```js
-if (save.playerName) { greet(save.playerName); }
-```
-
-An empty name skips the greet in JS and triggers it in Luau. In save-loading
-code this becomes a validation hole.
-
-**Shape 4 — the NaN sentinel.** Some incremental games use `NaN` as "not yet
-computed". In JS, `if (cache)` is false for `NaN`. In Luau, `NaN` is truthy
-(only `nil`/`false` are falsy). Port `NaN` sentinels to `nil` and check
-`== nil`, or keep them and check `v ~= v`.
+**Shape 4 — the NaN sentinel.** Some games use `NaN` for "not yet computed". JS
+`if (cache)` is false for `NaN`; in Luau `NaN` is truthy. Port `NaN` sentinels to
+`nil` and check `== nil`, or keep them and check `v ~= v`.
 
 ### 2.2 How to find them all
 
@@ -519,13 +502,12 @@ spreadsheet so the reviewer can check it.
 
 ### 2.3 The strict-mode assist
 
-Turn on `--!strict` at the top of every `sim/` file. Luau's type checker will not
-catch truthiness differences (both `number` and `string` are valid conditions),
-but it *will* catch the adjacent class of bugs — passing `nil` where a number is
-expected, forgetting a return, misspelling a field — which otherwise get blamed
-on the truthiness work. Types are also how you document that a field is
-`number?` rather than `number`, which is the real signal about whether a
-`nil` check is needed at all.
+Turn on `--!strict` in every `sim/` file. The type checker will not catch
+truthiness differences (both `number` and `string` are valid conditions), but it
+catches the adjacent class — `nil` where a number is expected, a missing return,
+a misspelled field — that otherwise gets blamed on the truthiness work. Types are
+also how you document `number?` versus `number`, which is the real signal about
+whether a `nil` check is needed at all.
 
 ---
 
@@ -653,22 +635,7 @@ function Arr.includes<T>(t: {T}, v: T): boolean
 	return table.find(t, v) ~= nil
 end
 
-function Arr.some<T>(t: {T}, f: (T, number) -> boolean): boolean
-	for i, v in t do if f(v, i) then return true end end
-	return false
-end
-
-function Arr.every<T>(t: {T}, f: (T, number) -> boolean): boolean
-	for i, v in t do if not f(v, i) then return false end end
-	return true
-end
-
-function Arr.reverse<T>(t: {T}): {T}
-	local n = #t
-	local out = table.create(n)
-	for i = 1, n do out[n - i + 1] = t[i] end
-	return out
-end
+-- some / every / reverse are the obvious loops; write them once here too.
 
 return Arr
 ```
@@ -769,9 +736,8 @@ lastPrestige = { state = "at", t = 1690000000 }
 local NULL = newproxy(false)   -- unique, not equal to anything else
 ```
 
-Option (b) does **not** survive `JSONEncode`, so if the field is persisted you
-have to map it at the save boundary anyway — which is option (a) with extra
-steps.
+Option (b) does not survive `JSONEncode`, so a persisted field has to be mapped
+at the save boundary anyway — which is option (a) with extra steps.
 
 ### 5.1 Sparse arrays and `#t`
 
@@ -1493,13 +1459,12 @@ to be 13+ age-verified **and** ID-verified with Mesh/Image APIs enabled on the
 Creator Dashboard, and almost every mutator is `Unsafe` in the parallel phase —
 compute in parallel, commit in serial.
 
-**Update frequency.** A web idle game typically re-renders the whole number
-display every frame because the DOM diff is cheap enough. In Roblox, every
-`TextLabel.Text` assignment is a property write that can trigger a text re-layout.
-Drive UI updates from a throttled subscription (10 Hz is usually indistinguishable
-from 60 for a counter) and only touch labels whose formatted string actually
-changed. This is presentation, so it cannot affect `sim/` — which is the point of
-the split.
+**Update frequency.** A web idle game re-renders the number display every frame
+because the DOM diff is cheap. In Roblox every `TextLabel.Text` write can trigger
+a text re-layout. Drive UI from a throttled subscription (10 Hz is
+indistinguishable from 60 for a counter) and touch only labels whose formatted
+string actually changed. This is presentation, so it cannot affect `sim/` — which
+is the point of the split.
 
 ---
 
@@ -1632,6 +1597,8 @@ chain, assert the result equals a v4 save captured independently.
 ---
 
 ## The equivalence-testing harness
+
+*(Referred to as §15 elsewhere in this chapter.)*
 
 This is the part that turns "we ported it" into "we can prove it". Everything
 here depends on `sim/` being pure (§1.3).
@@ -2192,11 +2159,16 @@ is green and someone other than the author has said so.
 
 **Related chapters in this corpus**
 
-- 20, 40 — `EditableImage` API and technique cookbook (the canvas replacement).
-- 22 — Luau performance engineering (`buffer`, native codegen, the task scheduler).
-- 25 — UI construction (flex layout, 9-slice, atlases, dense interfaces).
-- 26 — Asset pipeline and tooling (Open Cloud, moderation, Rojo/Wally/Lune).
-- 28 — Networking and data architecture (DataStore limits, replication).
+- 60 — Big numbers and AlyaNum (the magnitude ladder, library comparison,
+  serialization and formatting behind §11).
+- 61 — Incremental architecture (the tick loop, closed-form offline progress,
+  multiplier stacking, persistence — the design this chapter ports *into*).
+- 63 — Incremental UI (number formatting, virtualized lists, the screens, mobile).
+- 64 — QA and verification methodology (the general golden-master/property/CI
+  machinery that §15 specializes for a port).
+- 65 — Adversarial QA loops (critic agents and staged gauntlets over the above).
+- 20, 40 — `EditableImage` API and cookbook (the `<canvas>` replacement).
+- 22 — Luau performance engineering (`buffer`, native codegen, the scheduler).
 - 46 — Code architecture and frameworks (project structure, testing).
 - 47 — Security and anti-exploit (the threat model behind §14.3).
 - 51 — Live ops, analytics and growth.

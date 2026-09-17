@@ -91,13 +91,12 @@
   installs packages, StyLua checks format, Selene lints, `luau-lsp analyze` typechecks against a
   Rojo sourcemap, Lune runs the simulation tests and the golden-master suite, Rojo builds the
   place. A concrete workflow YAML is in [The CI workflow](#the-ci-workflow).
-- **Ship a debug console that cannot ship enabled.** Gate it on a server-side allowlist plus a
-  build-time constant that CI asserts is `false` on the release branch — not on a `RunService`
-  check alone, and never on a client-side flag.
-- **Assume your tests miss things and build the net**: `ScriptContext.Error` and
-  `LogService.MessageOut` piped to an aggregator, staged rollout across place versions, and the
-  Creator Hub crashes chart with out-of-memory snapshots (documented in `creator-docs`) as the
-  backstop for what unit tests structurally cannot see.
+- **Assume your tests miss things and build the net.** Ship a debug console gated on a server-side
+  allowlist *plus* a build-time constant that CI asserts is `false` on the release branch (never a
+  client-side flag); pipe `ScriptContext.Error` and `LogService.MessageOut` to an aggregator; roll
+  out in stages across place versions; and treat the Creator Hub crashes chart with its
+  out-of-memory snapshots (documented in `creator-docs`) as the backstop for what unit tests
+  structurally cannot see.
 - **The review rubric at the end is the deliverable for auditing AI-generated work.** Every API
   claim cites a verifiable source; every signature is verified rather than plausible; every
   performance number is measured rather than asserted; every snippet is actually runnable. Run it
@@ -755,6 +754,12 @@ end
 **Running it:** `lune run tests/run`. Exit code 0/1 is what CI gates on — `@lune/process` exposes
 `process.exit`, verified in the Lune API reference.
 
+`tests/expect` above is the project's own ~80-line matcher module with a Jest-shaped surface
+(`toBe`, `toEqual` deep, `toBeGreaterThan`, `toBeCloseTo` with a **relative** epsilon,
+`toThrow`, `toMatch`, `toBeTruthy`). Writing it yourself rather than importing one is deliberate:
+the tolerance policy in [§3.3](#33-tolerance-policy) has to live inside the matcher, and no
+off-the-shelf matcher implements it correctly for unbounded magnitudes.
+
 ### 2.5 Stubbing the Roblox surface a "pure" module still touches
 
 Even a disciplined L1 tree sometimes wants `Vector2`, `os.clock` for an internal profiler, or a
@@ -915,6 +920,7 @@ structurally:
 
 ```lua
 --!strict
+-- tests/approx.luau (continued — same module, declared before `return Approx`)
 -- Compare two layered big numbers. `sign` and `layer` must match EXACTLY;
 -- only `mag` gets a relative tolerance, and the tolerance tightens as layer rises,
 -- because at layer >= 2 a tiny mag difference is an enormous value difference.
@@ -1623,7 +1629,11 @@ to provide type and lint warnings in CI, with full Rojo resolution and API types
 `luau-lsp analyze` as the entry point, and that "the latest Roblox type definitions and
 documentation are preloaded out of the box". It resolves the DataModel through a Rojo sourcemap
 produced by `rojo sourcemap --watch default.project.json --output sourcemap.json` (drop `--watch`
-in CI).
+in CI). The `analyze` subcommand's arguments, verified from `src/main.cpp` in `luau-lsp`, are
+`--sourcemap PATH`, `--definitions`/`--defs`, `--ignore GLOB` (repeatable), `--base-luaurc PATH`,
+`--platform {standard,roblox}`, `--settings PATH`, `--formatter {default,plain,gnu}`,
+`--no-strict-dm-types`, `--annotate` and `--timetrace`. Pass `--platform=roblox`: without it you
+lose the Roblox-specific analysis the tool exists to provide.
 
 ### 7.4 StyLua
 
@@ -1671,7 +1681,7 @@ jobs:
       - name: Install Rokit
         uses: CompeyDev/setup-rokit@v0.1.2
       - name: Install pinned tools
-        run: rokit install --no-trust-check
+        run: rokit install
 
       - name: Print tool versions (provenance for the build log)
         run: |
@@ -1714,11 +1724,18 @@ jobs:
       - name: Generate Rojo sourcemap
         run: rojo sourcemap default.project.json --output sourcemap.json
 
+      # Flags below are verified against luau-lsp's argument definitions in src/main.cpp:
+      # --sourcemap, --settings, --ignore (repeatable GLOB), --definitions/--defs,
+      # --base-luaurc, --platform {standard,roblox}, --formatter {default,plain,gnu},
+      # --no-strict-dm-types, --annotate, --timetrace.
       - name: Typecheck
         run: |
           luau-lsp analyze \
+            --platform=roblox \
             --sourcemap=sourcemap.json \
             --settings=.vscode/settings.json \
+            --base-luaurc=.luaurc \
+            --formatter=gnu \
             --ignore="Packages/**" \
             --ignore="DevPackages/**" \
             src tests tools
@@ -1760,7 +1777,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: CompeyDev/setup-rokit@v0.1.2
-      - run: rokit install --no-trust-check
+      - run: rokit install
       - run: wally install --locked
       - name: Deep soak (10,000 in-game hours)
         run: lune run tools/soak -- --hours 10000 --report out/soak-nightly.ndjson
@@ -1771,7 +1788,8 @@ jobs:
 ```
 
 Companion `rokit.toml` (Rokit is the Rojo org's toolchain manager, "drop-in compatibility with
-projects that already use Foreman or Aftman"):
+projects that already use Foreman or Aftman"; its README documents `rokit add` — "Adds and installs
+a tool" — and `rokit install` — "Installs all project-specific tools"):
 
 ```toml
 # rokit.toml — pin everything; "latest" is not a version
@@ -2192,6 +2210,10 @@ below was fetched successfully during research unless marked otherwise.
 - `JohnnyMorganz/StyLua` — `README.md` (`--check`, `stylua.toml` discovery, defaults
   `column_width = 120`, `indent_type = "Tabs"`, `indent_width = 4`, `syntax`):
   <https://raw.githubusercontent.com/JohnnyMorganz/StyLua/main/README.md>
+- `JohnnyMorganz/luau-lsp` — `src/main.cpp` (verified `analyze` subcommand arguments used in the CI
+  workflow: `--sourcemap`, `--definitions`/`--defs`, `--ignore`, `--base-luaurc`, `--platform`,
+  `--settings`, `--formatter`, `--no-strict-dm-types`, `--annotate`, `--timetrace`):
+  <https://raw.githubusercontent.com/JohnnyMorganz/luau-lsp/main/src/main.cpp>
 - `JohnnyMorganz/luau-lsp` — `README.md` (`luau-lsp analyze` as the CI entry point; Rojo sourcemap
   via `rojo sourcemap --watch default.project.json --output sourcemap.json`; Roblox definitions
   preloaded): <https://raw.githubusercontent.com/JohnnyMorganz/luau-lsp/main/README.md>

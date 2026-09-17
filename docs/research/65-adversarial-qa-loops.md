@@ -858,3 +858,290 @@ Everything in §6 follows from that one sentence. The design question is never "
 it is **"what is the external signal at this stage, and can I execute it?"**
 
 ---
+
+## The proposed gauntlet for this project
+
+**Situation.** Agents produce (a) Luau game code and (b) technical documentation, both of which
+must be **provably faithful to an original game**. Fidelity is the acceptance bar, and fidelity is
+the one property here that is *mechanically checkable* — which is unusually lucky. Design the
+gauntlet around that.
+
+**The governing principle, restated because every decision below follows from it:** executable
+verification beats any amount of agent opinion. A test that fails is worth more than ten critics
+that approve. Agent judgement is used to *generate candidate defects* and to assess the properties
+nothing can execute; it is never used to *certify* fidelity.
+
+### 6.0 The artifact contract (do this before any stage runs)
+
+Nothing downstream works without these. `[INFERENCE]`
+
+- **Every unit of work is a PR-sized change with a written `INTENT.md`**: what it claims to
+  implement, which original-game behaviour it corresponds to, and which golden vectors it must
+  satisfy. The critic and adversary get `INTENT.md` and the diff; they do **not** get the builder's
+  transcript or reasoning. (§4.3 — role relabeling.)
+- **Directory ownership, as in Claude of Duty's `ARCHITECTURE.md`**: one agent owns one directory
+  for the duration of a task. `[PRIMARY]` — this is a concurrency control, and skipping it is how
+  parallel agents clobber each other.
+- **Golden vectors live in a separate, write-protected tree** (`fixtures/golden/`), extracted from
+  the *original* game, with provenance recorded per vector. **Builder agents have read access to a
+  public subset and no access to the held-out subset.** CI runs the held-out subset from a clean
+  checkout of `fixtures/`, never from the agent's working tree. (§4.9 — reward hacking.)
+- **A CI rule: any diff touching `fixtures/`, `tests/` or CI config is a `test-change` PR** and is
+  reviewed as a change to the oracle, by a human, always. A code PR that modifies its own tests is
+  auto-rejected, no exceptions and no agent discretion.
+
+### 6.1 Stage 0 — Mechanical checks
+
+**Question:** does it parse, conform, typecheck, and run at all? **No agent opinion is involved at
+any point in this stage.**
+
+| Check | Tool | Pass criterion |
+|---|---|---|
+| Format | `stylua --check` | Exit 0 |
+| Lint | `selene` | Zero errors; warnings allowed with an inline justification comment |
+| Typecheck | `luau-lsp analyze` against the Rojo sourcemap | Zero errors; `--!strict` required on all simulation modules |
+| Loads | Lune headless `require` of every changed module | No runtime error, no error output |
+| Smoke run | Lune: instantiate the sim, run 1,000 ticks | Terminates; no NaN/Inf reaches any public accessor |
+| Build | `rojo build` | Exit 0 |
+
+- **Pass → Stage 1.**
+- **Fail → back to the *authoring* agent with the raw tool output, verbatim.** Do not summarize
+  tool output; the error text *is* the feedback signal (§4.1).
+- **Budget: 3 auto-fix attempts.** Stage 0 failures are mechanical; an agent that cannot fix a
+  Selene error in three tries has a conceptual problem, not a typo. **On the 4th failure, reject
+  the work outright** and re-issue the task from scratch to a fresh agent with the failure log
+  attached. Do not keep patching.
+- **Cost: seconds. Run it on every save, not just on PR.**
+
+### 6.2 Stage 1 — Automated tests, including golden-master equivalence
+
+**This is the stage that decides whether the port is faithful. Everything else in the gauntlet is
+commentary.**
+
+Four suites, run in this order:
+
+1. **Golden-master equivalence vectors (public set).** Frozen input→output pairs from the original.
+   Compared with a **relative** epsilon appropriate to the magnitude — absolute epsilon is
+   meaningless at 1e300. (Chapter 64 has the comparison mechanics.)
+2. **Golden-master equivalence vectors (held-out set).** Same format; never visible to builders.
+   This is your reward-hacking detector.
+3. **Property / metamorphic invariants.** No NaN or Inf ever escapes; currency is non-negative;
+   purchase cost strictly increasing; `save → load → save` is a fixed point; offline accrual over a
+   span equals online accrual over the same span; multiplier stacking commutes where the design
+   says it does. These cover the space the vectors do not enumerate (§4.9).
+4. **Mutation check on the tests themselves**, run weekly rather than per-PR. Seed mutants into the
+   simulation modules; a suite that does not kill them is a suite that asserts nothing. This is the
+   only defence against "tests that pass because they assert nothing" — a documented failure mode
+   of LLM-written tests. `[SEARCH-SUMMARY]` Target: ≥80% mutation score on simulation modules;
+   below that, the test suite is the defect.
+
+**Pass criteria.**
+
+- Public vectors: **100%.** A single divergence is a fidelity bug. There is no "mostly faithful."
+- Held-out vectors: **100%.** Public passing + held-out failing = **treat as suspected
+  special-casing**, escalate straight to a human, and do not let the authoring agent "fix" it.
+- Properties: 100%.
+- Coverage of changed lines: ≥90%, as a *hygiene floor only* — coverage is a weak proxy and is
+  never a pass reason on its own.
+
+**Revision vs. rejection.**
+- Vector divergence with a small delta → **revise**; the failing vector, the expected value, the
+  actual value and the input are handed back verbatim.
+- Vector divergence with a structural delta (wrong formula shape, wrong order of operations) →
+  **reject the unit and re-derive the formula from the original**, with a §4.5 vote (below).
+- Held-out-only failure → **reject and escalate to human.** Never revise.
+
+**Budget: 2 revision cycles.** Then a human sees it. Rationale: Self-Refine's gains are front-loaded
+and flatten fast (§4.1); a third cycle on the same failing vector is almost always a sign the
+agent has the wrong model of the original behaviour, which is a human question.
+
+**The cheap high-value addition: k-of-n fact voting (§4.5).** For every numeric constant, formula
+exponent, rate and threshold in the port, have **3 independent agents read the original source and
+report the value**, with a file:line citation each. Unanimous → accept into the spec. Any
+disagreement → **flagged discrepancy, human adjudicates, blocks the PR.** This costs three cheap
+reads and catches the exact class of bug ("1.15 vs 1.115") that survives every other stage because
+the port is internally consistent about being wrong.
+
+### 6.3 Stage 2 — Independent critic agent with a written rubric
+
+**Only reached by work that already passes Stage 0 and Stage 1.** Its job is therefore *not*
+correctness — correctness was decided by execution. Its job is the properties nothing can execute.
+
+**Independence requirements — all mandatory, all mechanical:**
+
+- Different model family from the builder where possible; different instance and fresh context
+  always (§4.2, self-preference).
+- Receives: the diff, `INTENT.md`, the relevant original-game source, the rubric. **Receives
+  nothing about the builder** — no transcript, no reasoning, no "the author says." The artifact is
+  presented as an external file of unknown provenance (§4.3 — this framing alone is worth 23–93
+  points of correction rate).
+- Output is a **structured defect list**, not prose and not a score. Each defect: `location`,
+  `principle violated`, `quoted evidence from the artifact`, `severity ∈ {blocker, major, minor}`,
+  `suggested check`. Prose assessments are rejected by the harness. This kills verbosity bias by
+  construction — you are counting defects, not reading paragraphs (§4.2).
+
+**The rubric is a constitution (§4.7): enumerated, versioned, and written so that violations are
+namable.** A starting set for this project:
+
+| # | Principle (violation must be namable) | Applies to |
+|---|---|---|
+| 1 | Every numeric constant in the code traces to a file:line in the original, recorded in a comment or the spec | Code |
+| 2 | No ambient time source, no `Instance` reference, no service call inside a simulation module | Code |
+| 3 | Every public function has a `--!strict` signature; no `any` without a written reason | Code |
+| 4 | Error paths are handled explicitly; no silent `pcall` swallowing | Code |
+| 5 | No behaviour present in the port that is absent from the original, and none absent that is present | Both |
+| 6 | Every factual claim in prose cites a source that a reader can open | Docs |
+| 7 | Every code snippet in docs is runnable as written | Docs |
+| 8 | Every performance number is measured and the measurement procedure is stated | Docs |
+| 9 | Confidence markers are present and honest; unverified claims are marked | Docs |
+| 10 | No claim is restated in a way the cited source does not support | Docs |
+
+**Pass criteria.** Zero blockers. Majors must be addressed or explicitly waived by a named human
+with a recorded reason. Minors are logged and do not block.
+
+**Position-bias control** for any comparative judgement in this stage (e.g. "is the port's
+behaviour or the original's description correct here"): present both orders, require the same
+answer both times, and treat disagreement as a tie that escalates (§4.2).
+
+**Budget: 2 cycles.** Then human.
+
+**Health metric — this is the anti-rubber-stamp control and it is not optional.** Track the
+critic's **blocker-find rate across all PRs**. Additionally, **seed it**: once per 20 PRs, feed the
+critic a deliberately defective artifact with a known planted blocker. **A critic that misses the
+planted defect is broken and its approvals since the last successful seed are void.** A critic with
+a near-zero find rate over a meaningful sample is not evidence your code is good (§7).
+
+### 6.4 Stage 3 — Adversarial agent
+
+**Different success criterion from every other stage. The adversary does not review. It attacks,
+and its deliverable is a committed artifact of failure.**
+
+**Mandate:** produce an input, sequence, or state that makes the port diverge from the original, or
+violate a stated invariant, or crash. **Output must be a runnable test case that fails**, committed
+to `tests/adversarial/`. A prose claim of a bug with no failing input is not a finding.
+
+**Attack surface, ordered by expected yield for an incremental-game port:**
+
+1. **Magnitude extremes** — values near the representable ceiling, the layer-transition points of
+   the big-number type, denormals, exact powers of two.
+2. **Time** — zero elapsed, negative elapsed (clock skew), enormous elapsed (offline for a year),
+   elapsed spanning a prestige boundary.
+3. **Sequence** — buy/sell/prestige orderings that the vectors do not cover; purchase at exactly
+   the affordability boundary.
+4. **Save/load** — truncated payloads, payloads from every historic schema version, a save from a
+   later version, a save with a field removed.
+5. **Ordering and accumulation** — apply the same multiplier set in different orders and diff;
+   accumulate over 10^6 small ticks vs. one large tick and diff.
+6. **Documentation adversary** — for docs, the attack is: *find a claim whose cited source does not
+   say that.* Deliverable is the claim, the citation, and the quote that contradicts it.
+
+**Pass criterion for the artifact:** the adversary, given a fixed budget, finds **no reproducible
+failure**.
+
+**Pass criterion for the adversary itself — this is the part teams forget.** An adversary that
+reports "found nothing" on an artifact that later fails in production, or that reports "found
+nothing" N rounds in a row, is a failing component. Seed it the same way as the critic: inject a
+known defect periodically and require it to be found. **"Found nothing" is only credible from an
+adversary with a demonstrated ability to find something.**
+
+**Handling findings.**
+- Adversary produces a failing test → **that test is committed permanently** and the work returns
+  to Stage 1. It is now part of the suite forever. This is the ratchet: the gauntlet gets stronger
+  with every artifact that goes through it.
+- Adversary produces a failing input that turns out to be out of spec → the *spec* gets a written
+  clarification, and the input goes into the suite as an explicitly-expected-to-throw case.
+
+**Budget: 1 adversarial pass per artifact**, plus a re-run after any Stage 1 revision it caused.
+
+### 6.5 Stage 4 — Human review
+
+**Only reached by work that parses, lints, typechecks, passes 100% of public and held-out golden
+vectors, passes all invariants, has zero critic blockers, and survived an adversary that has
+recently demonstrated it can find planted defects.** The human's time is now expensive and
+well-spent.
+
+**What the human is actually deciding** — deliberately *not* the things machines decided:
+
+1. **Is this the right thing to have built?** Fidelity to the original is proven; fitness for the
+   product is not.
+2. **Are the golden vectors themselves right?** The whole pipeline's validity rests on the oracle.
+   Spot-check provenance on 3 vectors per PR.
+3. **Any flagged fact-vote discrepancies** (§6.2).
+4. **Any held-out-only failures** — suspected special-casing.
+5. **Architecture and maintainability judgements** that the rubric cannot encode.
+
+**What the human receives**, as a one-page dossier, auto-generated: the diff, `INTENT.md`, the
+vector pass table, the critic's defect list with resolutions, the adversary's attempted attacks and
+their results, the round log, and the total agent-cycle count consumed.
+
+### 6.6 Iteration budgets and loop termination
+
+`[INFERENCE]` The most common way an agentic QA loop fails is that it never ends. Three independent
+stopping rules, all enforced by the harness, not by an agent:
+
+| Rule | Trigger | Action |
+|---|---|---|
+| **Global cycle budget** | **5 total agent-revision cycles** across all stages for one unit of work | Stop. A human reviews it regardless of state. |
+| **No-progress rule** | **2 consecutive rounds with no change in an executable metric** (vectors passing, mutation score, invariants, error count) | Stop and escalate. Adopted from `trilwu/gauntlet-loop-skills`, which adds exactly this to Shumer's original `[PRIMARY]`. Critic prose changing is *not* progress. |
+| **Resource budget** | Token/time cap per unit of work | Stop and escalate. |
+
+**How to kill an infinite critique loop, specifically:**
+
+- **Never let the exit condition be "the critic is satisfied."** The exit is *the executable bar is
+  met and the cycle budget is not exhausted.* The original Gauntlet prompt's "loop until it's
+  utterly perfect" has no fixpoint — and its own demo ran four rounds and never won (§2.4).
+- **Only executable deltas count as progress.** If a round produces no change in an executable
+  metric, it was a wasted round by definition.
+- **Cap critic scope per round.** The critic may raise at most N blockers per round (suggest N=5),
+  ranked. This prevents the endless-new-nitpick pattern where each fix surfaces three fresh
+  opinions.
+- **Freeze the rubric during a loop.** The constitution is versioned; it may not change mid-loop.
+  A critic that invents a new principle in round 3 to justify a rejection is out of contract.
+- **Make blockers cite a principle number.** A blocker that cannot be tied to a numbered principle
+  is downgraded to a minor automatically.
+
+### 6.7 What the loop looks like end to end
+
+```
+                         ┌──────────────────────────────┐
+   builder agent ───────▶│ Stage 0: format/lint/type/   │  3 tries, then REJECT & reassign
+   (owns one dir)        │          load/smoke/build    │  ── no agent opinion here ──
+                         └──────────────┬───────────────┘
+                                        ▼ pass
+                         ┌──────────────────────────────┐
+                         │ Stage 1: golden vectors       │  100% public AND held-out
+                         │  (public + HELD-OUT),         │  2 revision cycles
+                         │  invariants, weekly mutation  │  held-out-only fail ⇒ ESCALATE
+                         │  + 3-agent fact vote on       │  any disagreement ⇒ HUMAN
+                         │    constants                  │
+                         └──────────────┬───────────────┘
+                                        ▼ pass  ◀── THE DECISION HAPPENS HERE
+                         ┌──────────────────────────────┐
+                         │ Stage 2: independent critic   │  different model, fresh context,
+                         │  numbered rubric, defect list │  no builder transcript
+                         │  ≤5 blockers/round            │  2 cycles; seeded every 20 PRs
+                         └──────────────┬───────────────┘
+                                        ▼ zero blockers
+                         ┌──────────────────────────────┐
+                         │ Stage 3: adversary            │  deliverable = a FAILING TEST
+                         │  must produce a committed     │  finding ⇒ commit test, back to S1
+                         │  failing input, or fail       │  "found nothing" needs a track record
+                         └──────────────┬───────────────┘
+                                        ▼ no reproducible failure
+                         ┌──────────────────────────────┐
+                         │ Stage 4: human               │  dossier: diff, vectors, defects,
+                         │  right thing? oracle sound?  │  attacks, round log, cycles used
+                         └──────────────────────────────┘
+
+   Global: 5 agent-revision cycles max · stop on 2 rounds with no executable delta · then a human.
+```
+
+### 6.8 Sequencing note, from the primary source
+
+Claude of Duty's README reports that **sequential single-owner passes beat parallel agent rounds**
+— "three parallel rounds yielded +0.46 score improvement; one sequential pass achieved +1.00."
+`[PRIMARY]` Combined with its directory-ownership rule, the practical guidance is: **parallelize
+across independent units of work, serialize within a unit.** Do not run three builders on the same
+module and pick a winner; run one builder per module and put every module through the full gauntlet.
+
+---
