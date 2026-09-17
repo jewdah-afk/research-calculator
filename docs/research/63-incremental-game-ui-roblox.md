@@ -16,7 +16,7 @@ This chapter is the reference for building that UI without dropping to 12 fps.
 
 ## TL;DR
 
-- **Never store big values as Luau `number`.** A double loses integer exactness past `2^53` and dies at `~1.8e308`. Incremental games routinely exceed both. Store `{mantissa, exponent}` (a `break_infinity`-style `Decimal`) or, at minimum, a `log10` float — and format from the exponent, never from the raw value. (§1)
+- **Never store big values as Luau `number`.** A double loses integer exactness past `2^53` and dies at `~1.8e308`. **Chapter 60 settles the value type for this project: AlyaNum**, a flat 7-field `{sign, multiplicand, exponent, tetrate, pentate, hexate, heptate}` struct that reaches heptation. This chapter takes that as given and concerns itself only with getting those fields onto a screen. (§1.1)
 - **Formatting is the hot path, not the maths.** `string.format` plus a table lookup is cheap; doing it 400 times a frame is not. The fix is a two-level cache: a **format cache** keyed on `(quantized value, notation, places)` and a **write guard** that compares the produced string to `label.Text` before assigning. (§1.4, §2.2)
 - **Assigning `TextLabel.Text` is not free.** It invalidates text layout and re-runs measurement/shaping for that label; `ContentText`, `TextBounds` and `TextFits` are all derived from it, and `AutomaticSize`/`TextScaled` make it worse. Guard every write. (§1.4, §10.2)
 - **Decouple UI rate from tick rate.** Simulate at whatever rate you like; repaint text at **10–20 Hz**. Humans cannot read a digit that changes at 60 Hz anyway — above ~15 Hz fast-moving digits become visual noise. Drive UI from a fixed-step accumulator, not `RenderStepped`. (§2.1)
@@ -64,30 +64,57 @@ Luau numbers are IEEE-754 doubles. Two hard walls follow:
 
 An incremental game crosses ~9e15 within the first hour of a typical curve and crosses 1e308 in the mid-game of anything with a prestige layer. **Decide the value type on day one**, because retrofitting it later means rewriting every formula, every save migration and every UI binding.
 
-Three options, in increasing capability:
+**Chapter 60 of this corpus settles this question for this project and the answer is AlyaNum** — a flat, 7-field `{sign, multiplicand, exponent, tetrate, pentate, hexate, heptate}` struct reaching heptation, with full operator overloading and a float64 fast path below ~1e308. This game reaches `E(4)` (`10^10^10^10`), so a `{mantissa, exponent}` `Decimal` is *not* sufficient. Do not re-litigate it here; see chapter 60 for the library comparison, the aliasing footguns and the serialization story.
 
-1. **`log10` float.** Store `log10(v)` as a double. Multiplication becomes addition, exponentiation becomes multiplication, and the representable range becomes `10^(±1.7e308)` — effectively infinite for a game. Cost: addition is lossy and awkward (`log10(a+b) = log10(a) + log10(1 + 10^(log10(b)-log10(a)))`), and small values lose precision near zero. Good for pure-multiplicative economies. **Formatting is trivial: you already have the exponent.**
-2. **`{mantissa, exponent}` ("`Decimal`", the `break_infinity` model).** Mantissa normalized to `[1, 10)`, exponent a double. Range up to `10^1.79e308`. Exact-ish to ~15 significant digits. This is what Antimatter Dimensions and most of the genre use. ([break_infinity.js](https://github.com/Patashu/break_infinity.js))
-3. **`{sign, layer, mag}` ("`break_eternity`" model).** `layer` counts how many times you have taken a log. `layer=0` → the value is `mag`; `layer=1` → `10^mag`; `layer=2` → `10^10^mag`. This is what you need if your game reaches tetrational scales, and it is the *only* representation for which arrow/hyper-E notations mean anything. ([break_eternity.js](https://github.com/Patashu/break_eternity.js))
+What matters for the UI is narrower, and it is this: **the display layer must never do arithmetic on the value, and must never call `tostring` on it in a hot loop.** Three consequences shape everything below.
 
-> `[COMMUNITY, SECOND-HAND]` Luau ports of both exist (`break_infinity.lua`-style modules circulate on the DevForum and on GitHub). Verify arithmetic against a reference implementation with a property test before shipping — the normalization edge cases around `0`, negative values and `mag` crossing `1e15` are where ports go wrong.
+1. **Format from the fields, not from the value.** A formatter that reads `multiplicand` and `exponent` is `O(1)` no matter how large the number is. One that goes through arithmetic to extract digits is not, and it allocates — chapter 60 records that *every* AlyaNum operation allocates a fresh 7-field table, because `fix()` ends in `setmetatable` on a new table and there is no public mutate-in-place API.
+2. **`a:log10()` returns an AlyaNum, not a `number`** (chapter 60, porting rules). Every `math.log10`-shaped expression in this chapter operates on a plain Luau `number` that you have *already* extracted from the low fields. Extract once per flush, into the view model (§8.4); never inside a row's rebind.
+3. **AlyaNum's own formatting globals are unusable for a per-player setting.** `changeSuffixes`, `changeDecimalPoints` and `changeDefaultAbbreviation` are process-global mutable state (chapter 60). A notation *setting* (§1.5) therefore cannot be implemented by flipping AlyaNum's globals — you need your own formatter, which is what §1.2–§1.4 build. AlyaNum also ships no engineering notation and no `aa/ab/ac` letter notation at all, so those two are yours to write regardless.
 
-**For the rest of this chapter the value type is assumed to expose `v.mantissa` (in `[1,10)`) and `v.exponent`.** Everything in the formatter reads only those two fields, which means it is `O(1)` regardless of how large the number is — this is the single most important property of a good formatter.
+For context, the ladder of representations the genre uses, so the vocabulary below is unambiguous:
+
+| Model | Shape | Ceiling | Notations it can express |
+|---|---|---|---|
+| `log10` float | one double | `10^(±1.7e308)` | standard, scientific, engineering, letters, logarithm |
+| `Decimal` (`break_infinity`) | `{mantissa, exponent}` | `10^1.79e308` | same | 
+| `break_eternity` | `{sign, layer, mag}` | tetrational | + e-chain, `E(n)` |
+| **AlyaNum** (this project) | 7 flat fields | heptation | + hyper-E `E10#8#3#2` |
+
+([break_infinity.js](https://github.com/Patashu/break_infinity.js), [break_eternity.js](https://github.com/Patashu/break_eternity.js), [evilbocchi/alyanum](https://github.com/evilbocchi/alyanum) — and chapter 60 for the verified detail.)
+
+**For the rest of this chapter, UI code sees a two-field adapter, not the value type itself.** The adapter is extracted once per flush from AlyaNum's low fields and carries a `layered` flag for values past `exponent >= 2`, where a mantissa/exponent pair no longer means anything and the formatter must escalate to e-chain / `E(n)` / hyper-E.
 
 ```lua
 --!strict
 -- The minimal surface the UI needs from whatever big-number type you pick.
 export type Big = {
-    mantissa: number, -- normalized to [1, 10), or 0 when the value is 0
-    exponent: number, -- base-10 exponent
+    mantissa: number,  -- normalized to [1, 10), or 0 when the value is 0
+    exponent: number,  -- base-10 exponent
+    layered: boolean,  -- true once the value is a power tower (AlyaNum exponent >= 2)
+    big: any?,         -- the original value, only when `layered`
 }
 
 local function fromNumber(n: number): Big
-    if n == 0 then return { mantissa = 0, exponent = 0 } end
+    if n == 0 then return { mantissa = 0, exponent = 0, layered = false } end
     local e = math.floor(math.log10(math.abs(n)))
-    return { mantissa = n / 10 ^ e, exponent = e }
+    return { mantissa = n / 10 ^ e, exponent = e, layered = false }
+end
+
+-- Extracted ONCE per flush, in the view-model pass (§2.4 / §8.4).
+-- `a.exponent >= 2` means the value is a power tower: there is no mantissa to
+-- show, and the formatter escalates to the library's own toEChain/toEnt/toHyperE.
+local function fromAlyaNum(a): Big
+    if a.exponent >= 2 or a.tetrate ~= 0 then
+        return { mantissa = 0, exponent = 0, layered = true, big = a }
+    end
+    -- exponent 0 or 1: multiplicand carries the value; normalize to [1,10).
+    local v = if a.exponent == 1 then a.multiplicand else math.log10(a.multiplicand)
+    return { mantissa = 10 ^ (v % 1), exponent = math.floor(v), layered = false }
 end
 ```
+
+> `[UNVERIFIED]` The exact `fix()` normalization invariants (when `exponent` is 0 vs 1, and what `multiplicand` holds in each case) are documented in chapter 60 from a direct read of `src/init.luau`. **Take the field semantics from there, not from the sketch above** — this snippet shows the *shape* of the adapter, not verified field semantics.
 
 ### 1.2 The notations players expect
 
@@ -1287,3 +1314,441 @@ end
 
 5. **Regression-gate it.** Log the three counts and the `UI.flush` duration to your analytics on a 1-in-1000 session sample. An upgrade list that quietly stopped virtualizing shows up as a step change in `visible`, weeks before it shows up in a review.
 
+---
+
+## Number formatting reference
+
+### Standard suffix tiers
+
+`tier = floor(exponent / 3)`. Values below verified by executing the transcribed algorithm from [antimatter-dimensions/notations `src/utils.ts`](https://github.com/antimatter-dimensions/notations/blob/master/src/utils.ts).
+
+| tier | magnitude | suffix | | tier | magnitude | suffix |
+|---|---|---|---|---|---|---|
+| 1 | 1e3 | `K` | | 13 | 1e39 | `DDc` |
+| 2 | 1e6 | `M` | | 14 | 1e42 | `TDc` |
+| 3 | 1e9 | `B` | | 15 | 1e45 | `QaDc` |
+| 4 | 1e12 | `T` | | 16 | 1e48 | `QtDc` |
+| 5 | 1e15 | `Qa` | | 17 | 1e51 | `SxDc` |
+| 6 | 1e18 | **`Qt`** | | 18 | 1e54 | `SpDc` |
+| 7 | 1e21 | `Sx` | | 19 | 1e57 | `ODc` |
+| 8 | 1e24 | `Sp` | | 20 | 1e60 | `NDc` |
+| 9 | 1e27 | `Oc` | | 21 | 1e63 | `Vg` |
+| 10 | 1e30 | `No` | | 33 | 1e99 | `DTg` |
+| 11 | 1e33 | `Dc` | | 101 | 1e303 | `Ce` |
+| 12 | 1e36 | `UDc` | | 1001 | 1e3003 | `MI` |
+
+**The trap:** quintillion is **`Qt`**, quadrillion is `Qa`. `Qi` exists but means *quinquagint*- (the tens row, tier 51 → 1e153 territory). Shipping `Qi` for 1e18 is the classic bug; players report it within a day.
+
+### Letters notation
+
+Base-26 over the engineering exponent (`exponent / 3`), lowercase:
+
+| magnitude | letters | | magnitude | letters |
+|---|---|---|---|---|
+| 1e3 | `a` | | 1e81 | `aa` |
+| 1e6 | `b` | | 1e84 | `ab` |
+| 1e78 | `z` | | 1e2106 | `zz` |
+| | | | 1e2109 | `aaa` |
+
+### One value in every notation
+
+`v = 1.23456e15`, three significant figures:
+
+| Notation | Output | Rule |
+|---|---|---|
+| Standard | `1.23 Qa` | mantissa in `[1,1000)`, suffix by tier |
+| Scientific | `1.23e15` | mantissa in `[1,10)` |
+| Engineering | `1.23e15` | mantissa in `[1,1000)`, exponent ≡ 0 (mod 3) |
+| Letters | `1.23e` | mantissa in `[1,1000)`, base-26 exponent |
+| Logarithm | `e15.091` | `log10` of the whole value |
+| Hyper-E | `E15.091` | `Ex` ≡ `10^x`; `Ex#n` ≡ `n` nested powers of ten |
+| Arrow | `10↑15.091` | `a↑b` = `a^b`, `a↑↑b` = tetration, `a↑↑↑b` = pentation |
+| Mixed | `1.23 Qa` | Standard below a threshold, Scientific above |
+
+Hyper-E and arrow notations only carry information once the value itself is layered (`{sign, layer, mag}`, §1.1). With a `{mantissa, exponent}` type, `E15.091` and `e15.091` are the same string with a different prefix — ship them only if your number type reaches tetration. `[UNVERIFIED — Hyper-E is Sbiis Saibian's notation; the `Ex#n` nesting convention above is the form used by idle-game implementations such as Eternal Notations, not a formal citation.]`
+
+### Display rules cheat sheet
+
+| Range | Render as | Example |
+|---|---|---|
+| `v == 0` | `0` | `0` |
+| `0 < v < 1` | 2 decimals | `0.42` |
+| `1 ≤ v < 1000` | integer, no suffix | `1`, `42`, `999` |
+| `1000 ≤ v` | notation-specific, 3 sig figs | `1.23 K` |
+| `v` is negative | prefix `-`, never parentheses | `-1.23 K` |
+| `v` is `inf`/`nan` | `"∞"` / `"—"`, and log an error | your value type has a bug |
+
+- Right-align every numeric column. Split mantissa and suffix into adjacent labels if your font lacks tabular figures.
+- Rates always carry a unit (`/s`), always in a dimmer colour than the balance.
+- Costs the player cannot afford stay legible — dim them, never hide them.
+- Never localise the suffixes. `K`/`M`/`B` are genre vocabulary, not English.
+
+---
+
+## The virtualized list implementation
+
+A complete, working recycling `ScrollingFrame`. Fixed row height, absolute positioning, guarded writes, overscan, and correct handling of momentum scrolling. Drop-in: supply a `createRow` factory and a `bindRow` function.
+
+```lua
+--!strict
+-- VirtualList.luau
+-- A recycling list for a ScrollingFrame with a fixed row height.
+-- Instantiates ceil(viewport / rowHeight) + 2*OVERSCAN rows and re-binds them
+-- as the canvas scrolls. Row count is independent of data count.
+
+local RunService = game:GetService("RunService")
+
+local OVERSCAN = 2 -- extra rows above and below the viewport
+
+export type RowHandle = {
+    root: GuiObject,
+    -- Free-form per-row shadow state for guarded writes (§2.2).
+    shadow: { [string]: any },
+}
+
+export type Config<T> = {
+    scrollingFrame: ScrollingFrame,
+    rowHeight: number,                            -- in OFFSET pixels
+    createRow: () -> RowHandle,                   -- called at most `poolSize` times
+    bindRow: (row: RowHandle, item: T, index: number) -> (),
+    unbindRow: ((row: RowHandle) -> ())?,         -- optional: for hidden slots
+}
+
+local VirtualList = {}
+VirtualList.__index = VirtualList
+
+export type VirtualList<T> = typeof(setmetatable(
+    {} :: {
+        _cfg: Config<T>,
+        _data: { T },
+        _pool: { RowHandle },
+        _boundIndex: { number },  -- pool slot -> data index currently bound (0 = none)
+        _poolSize: number,
+        _firstVisible: number,
+        _conns: { RBXScriptConnection },
+        _heartbeat: RBXScriptConnection?,
+        _dirtyData: boolean,
+    },
+    VirtualList
+))
+
+local function ensurePool<T>(self: VirtualList<T>)
+    local cfg = self._cfg
+    -- AbsoluteWindowSize excludes the scrollbar gutter; AbsoluteSize does not.
+    local viewport = cfg.scrollingFrame.AbsoluteWindowSize.Y
+    local needed = math.ceil(viewport / cfg.rowHeight) + OVERSCAN * 2
+    -- Never shrink the pool: rows are cheap to keep and expensive to churn.
+    if needed <= self._poolSize then
+        return
+    end
+    for _ = self._poolSize + 1, needed do
+        local row = cfg.createRow()
+        row.root.AnchorPoint = Vector2.zero
+        row.root.Size = UDim2.new(1, 0, 0, cfg.rowHeight)
+        row.root.Visible = false
+        row.root.Parent = cfg.scrollingFrame
+        table.insert(self._pool, row)
+        table.insert(self._boundIndex, 0)
+    end
+    self._poolSize = needed
+end
+
+--- The only function that touches Instances during a scroll.
+local function refresh<T>(self: VirtualList<T>, force: boolean)
+    local cfg = self._cfg
+    local data = self._data
+    local n = #data
+
+    local scrollY = cfg.scrollingFrame.CanvasPosition.Y
+    local first = math.max(1, math.floor(scrollY / cfg.rowHeight) + 1 - OVERSCAN)
+
+    -- Fast path: nothing moved far enough to change which rows are bound.
+    if not force and first == self._firstVisible then
+        return
+    end
+    self._firstVisible = first
+
+    debug.profilebegin("UI.virtualList.rebind")
+    for slot = 1, self._poolSize do
+        local row = self._pool[slot]
+        local index = first + slot - 1
+
+        if index < 1 or index > n then
+            -- Off the end of the data: park the slot.
+            if self._boundIndex[slot] ~= 0 then
+                self._boundIndex[slot] = 0
+                row.root.Visible = false
+                if cfg.unbindRow then cfg.unbindRow(row) end
+            end
+            continue
+        end
+
+        -- Position: absolute offset, computed, never laid out.
+        local y = (index - 1) * cfg.rowHeight
+        local pos = UDim2.new(0, 0, 0, y)
+        if row.shadow.__y ~= y then
+            row.shadow.__y = y
+            row.root.Position = pos
+        end
+
+        if row.shadow.__visible ~= true then
+            row.shadow.__visible = true
+            row.root.Visible = true
+        end
+
+        -- Only re-bind content when the data index actually changed.
+        -- Scrolling by one row leaves poolSize-1 slots doing zero content work.
+        if force or self._boundIndex[slot] ~= index then
+            self._boundIndex[slot] = index
+            cfg.bindRow(row, data[index], index)
+        end
+    end
+    debug.profileend()
+end
+
+function VirtualList.new<T>(cfg: Config<T>): VirtualList<T>
+    local self = setmetatable({
+        _cfg = cfg,
+        _data = {},
+        _pool = {},
+        _boundIndex = {},
+        _poolSize = 0,
+        _firstVisible = -1, -- sentinel forces the first refresh
+        _conns = {},
+        _heartbeat = nil,
+        _dirtyData = false,
+    }, VirtualList) :: VirtualList<T>
+
+    local sf = cfg.scrollingFrame
+    sf.AutomaticCanvasSize = Enum.AutomaticSize.None -- we own CanvasSize
+    sf.ScrollingDirection = Enum.ScrollingDirection.Y
+    sf.CanvasSize = UDim2.fromOffset(0, 0)
+
+    table.insert(self._conns, sf:GetPropertyChangedSignal("CanvasPosition"):Connect(function()
+        refresh(self, false)
+    end))
+    -- The viewport can change from a rotation, a window resize, a scrollbar
+    -- appearing, or a UIScale change. All of them move AbsoluteWindowSize.
+    table.insert(self._conns, sf:GetPropertyChangedSignal("AbsoluteWindowSize"):Connect(function()
+        ensurePool(self)
+        refresh(self, true)
+    end))
+
+    -- Momentum scrolling on touch keeps CanvasPosition moving after the finger
+    -- leaves. The property signal covers it, but a coasting frame is also the
+    -- moment a dropped rebind is most visible, so we top up on the UI clock.
+    local acc = 0
+    self._heartbeat = RunService.Heartbeat:Connect(function(dt)
+        acc += dt
+        if acc < 1 / 15 then return end
+        acc = 0
+        if self._dirtyData then
+            self._dirtyData = false
+            refresh(self, true)
+        elseif sf:GetScrollVelocity().Magnitude > 0 then
+            refresh(self, false)
+        end
+    end)
+
+    ensurePool(self)
+    return self
+end
+
+--- Replace the backing data. Cheap: no Instances are created or destroyed.
+function VirtualList.setData<T>(self: VirtualList<T>, data: { T })
+    self._data = data
+    local h = #data * self._cfg.rowHeight
+    local want = UDim2.fromOffset(0, h)
+    if self._cfg.scrollingFrame.CanvasSize ~= want then
+        self._cfg.scrollingFrame.CanvasSize = want
+    end
+    self._firstVisible = -1
+    refresh(self, true)
+end
+
+--- Call when the CONTENT of already-bound rows changed (costs changed, a
+--- purchase landed) but the ordering did not. Deferred to the UI clock.
+function VirtualList.invalidate<T>(self: VirtualList<T>)
+    self._dirtyData = true
+end
+
+--- Re-bind exactly one data index, if it happens to be on screen.
+function VirtualList.invalidateIndex<T>(self: VirtualList<T>, index: number)
+    for slot = 1, self._poolSize do
+        if self._boundIndex[slot] == index then
+            self._cfg.bindRow(self._pool[slot], self._data[index], index)
+            return
+        end
+    end
+end
+
+function VirtualList.scrollToIndex<T>(self: VirtualList<T>, index: number)
+    local y = (index - 1) * self._cfg.rowHeight
+    self._cfg.scrollingFrame.CanvasPosition = Vector2.new(0, y)
+end
+
+function VirtualList.destroy<T>(self: VirtualList<T>)
+    for _, c in self._conns do c:Disconnect() end
+    table.clear(self._conns)
+    if self._heartbeat then self._heartbeat:Disconnect(); self._heartbeat = nil end
+    for _, row in self._pool do row.root:Destroy() end
+    table.clear(self._pool)
+    table.clear(self._boundIndex)
+    self._poolSize = 0
+end
+
+return VirtualList
+```
+
+### Using it for an upgrade list
+
+```lua
+--!strict
+local NumericBinding = require(script.Parent.NumericBinding)
+local NotationSetting = require(script.Parent.NotationSetting)
+
+local list = VirtualList.new({
+    scrollingFrame = upgradesScroll,
+    rowHeight = 64,
+
+    createRow = function()
+        local root = rowTemplate:Clone() -- a prebuilt Frame in ReplicatedStorage
+        local handle = {
+            root = root,
+            shadow = {},
+        }
+        -- Attach per-label numeric bindings ONCE, at pool construction.
+        handle.shadow.costBinding =
+            NumericBinding.new(root.Buy.Cost, NotationSetting.get())
+        handle.shadow.effectBinding =
+            NumericBinding.new(root.Body.Effect, NotationSetting.get())
+        return handle
+    end,
+
+    bindRow = function(row, item, index)
+        local s = row.shadow
+        -- Guarded writes: scrolling one row rebinds one slot, not twelve.
+        if s.name ~= item.name then
+            s.name = item.name
+            row.root.Body.Name.Text = item.name
+        end
+        if s.icon ~= item.iconRect then
+            s.icon = item.iconRect
+            row.root.Icon.ImageRectOffset = item.iconRect.Min
+            row.root.Icon.ImageRectSize = item.iconRect.Max - item.iconRect.Min
+        end
+        if s.owned ~= item.owned then
+            s.owned = item.owned
+            row.root.Body.Owned.Text = "x" .. item.owned
+        end
+        s.costBinding:set(item.cost)     -- own quantize + write guard (§1.4)
+        s.effectBinding:set(item.effect)
+
+        if s.canAfford ~= item.canAfford then
+            s.canAfford = item.canAfford
+            row.root.Buy.BackgroundColor3 = if item.canAfford then AFFORD else DENY
+            row.root.Buy.Interactable = item.canAfford
+            row.root.Buy.Lock.Visible = not item.canAfford -- symbol, not just colour
+        end
+
+        s.dataIndex = index -- so the button handler knows what it is buying
+    end,
+
+    unbindRow = function(row)
+        row.shadow.dataIndex = nil
+    end,
+})
+
+list:setData(viewModel.upgrades)
+
+-- On the UI clock, after the view model is recomputed (§2.4):
+list:invalidate()
+```
+
+### Correctness checklist
+
+- [ ] `AutomaticCanvasSize = None` — you own `CanvasSize`.
+- [ ] No `UIListLayout` inside the canvas. Positions are computed.
+- [ ] Viewport read from **`AbsoluteWindowSize`**, not `AbsoluteSize`.
+- [ ] Pool grows but never shrinks.
+- [ ] `OVERSCAN ≥ 1`; 2 for touch.
+- [ ] Rebind is guarded per property; unchanged slots do zero engine writes.
+- [ ] `GetScrollVelocity()` polled so momentum scrolling keeps rebinding.
+- [ ] Button handlers read `row.shadow.dataIndex`, never a captured index — a recycled row's identity changes.
+- [ ] `ZIndex` untouched: rows never overlap, so there is nothing to order.
+- [ ] On gamepad, `NextSelectionUp/Down` are rebuilt on every rebind, or selection escapes the list.
+
+---
+
+## Sources
+
+All Roblox API and guide citations are to the `Roblox/creator-docs` repository on GitHub, which is the source of truth published at `create.roblox.com`. Fetched and read September 2026.
+
+### Roblox engine reference (`content/en-us/reference/engine/classes/`)
+
+| Class | Used for |
+|---|---|
+| [GuiObject.yaml](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/GuiObject.yaml) | `Interactable`, `GuiState`, `AutomaticSize`, `LayoutOrder`, `NextSelection*`, `SelectionOrder`, touch events |
+| [ScrollingFrame.yaml](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/ScrollingFrame.yaml) | `CanvasPosition`, `CanvasSize`, `AutomaticCanvasSize`, **`AbsoluteWindowSize`** ("AbsoluteSize minus the space occupied by any currently visible scroll bar gutters"), `GetScrollVelocity()`, `ElasticBehavior` |
+| [TextLabel.yaml](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/TextLabel.yaml) | `Text`/`ContentText`/`TextBounds`/`TextFits` derivation, `TextScaled` warning, `OpenTypeFeatures` + `OpenTypeFeaturesError`, `FontFace`, `MaxVisibleGraphemes`, `TextTruncate` |
+| [CanvasGroup.yaml](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/CanvasGroup.yaml) | "consumes extra texture memory", `QualityLevel` cap, "render as a blank texture", "use with static sizes" |
+| [ScreenGui.yaml](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/ScreenGui.yaml) | `ScreenInsets` (`CoreUISafeInsets` default), `SafeAreaCompatibility`, `IgnoreGuiInset`, `DisplayOrder` |
+| [GuiService.yaml](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/GuiService.yaml) | `TopbarInset`, `GetInsetArea()`, `GetGuiInset()`, `ViewportDisplaySize`, `PreferredTextSize`, `PreferredTransparency`, `ReducedMotionEnabled`, `IsTenFootInterface()` |
+| [RunService.yaml](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/RunService.yaml) | `PreRender` blocks rendering; `PreRender`/`PreSimulation` supersede `RenderStepped`/`Stepped`; `Heartbeat` semantics |
+| Also read: [Frame](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/Frame.yaml), [TextButton](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/TextButton.yaml), [ImageLabel](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/ImageLabel.yaml), [ImageButton](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/ImageButton.yaml), [UIListLayout](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/UIListLayout.yaml), [UIGridLayout](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/UIGridLayout.yaml), [UIFlexItem](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/UIFlexItem.yaml), [UIPadding](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/UIPadding.yaml), [UICorner](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/UICorner.yaml), [UIStroke](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/UIStroke.yaml), [UIGradient](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/UIGradient.yaml), [UIScale](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/UIScale.yaml), [UIAspectRatioConstraint](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/UIAspectRatioConstraint.yaml) | layout, modifiers | |
+| Datatypes: [UDim2](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/datatypes/UDim2.yaml), [UDim](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/datatypes/UDim.yaml), [NumberSequence](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/datatypes/NumberSequence.yaml), [ColorSequence](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/datatypes/ColorSequence.yaml), [Vector2](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/datatypes/Vector2.yaml) | scale/offset, gradient stops | |
+
+### Roblox guides (`content/en-us/`)
+
+- [ui/index.md](https://github.com/Roblox/creator-docs/blob/main/content/en-us/ui/index.md), [ui/frames.md](https://github.com/Roblox/creator-docs/blob/main/content/en-us/ui/frames.md), [ui/labels.md](https://github.com/Roblox/creator-docs/blob/main/content/en-us/ui/labels.md), [ui/buttons.md](https://github.com/Roblox/creator-docs/blob/main/content/en-us/ui/buttons.md), [ui/scrolling-frames.md](https://github.com/Roblox/creator-docs/blob/main/content/en-us/ui/scrolling-frames.md)
+- [ui/list-flex-layouts.md](https://github.com/Roblox/creator-docs/blob/main/content/en-us/ui/list-flex-layouts.md) — `HorizontalFlex`/`VerticalFlex`, `ItemLineAlignment`, `UIFlexItem.FlexMode` (`Fill`/`Grow`/`Shrink`/`Custom`), the tab-bar flex use case
+- [ui/grid-table-layouts.md](https://github.com/Roblox/creator-docs/blob/main/content/en-us/ui/grid-table-layouts.md), [ui/page-layouts.md](https://github.com/Roblox/creator-docs/blob/main/content/en-us/ui/page-layouts.md)
+- [ui/size-modifiers.md](https://github.com/Roblox/creator-docs/blob/main/content/en-us/ui/size-modifiers.md) — `UIScale` multiplies `AbsoluteSize`; `UIAspectRatioConstraint` **overrides** a parent layout
+- [ui/position-and-size.md](https://github.com/Roblox/creator-docs/blob/main/content/en-us/ui/position-and-size.md), [ui/on-screen-containers.md](https://github.com/Roblox/creator-docs/blob/main/content/en-us/ui/on-screen-containers.md), [ui/in-experience-containers.md](https://github.com/Roblox/creator-docs/blob/main/content/en-us/ui/in-experience-containers.md)
+- [ui/appearance-modifiers.md](https://github.com/Roblox/creator-docs/blob/main/content/en-us/ui/appearance-modifiers.md), [ui/9-slice.md](https://github.com/Roblox/creator-docs/blob/main/content/en-us/ui/9-slice.md), [ui/styling/index.md](https://github.com/Roblox/creator-docs/blob/main/content/en-us/ui/styling/index.md)
+- [ui/animation.md](https://github.com/Roblox/creator-docs/blob/main/content/en-us/ui/animation.md), [ui/rich-text.md](https://github.com/Roblox/creator-docs/blob/main/content/en-us/ui/rich-text.md), [ui/viewport-frames.md](https://github.com/Roblox/creator-docs/blob/main/content/en-us/ui/viewport-frames.md)
+- [performance-optimization/microprofiler/index.md](https://github.com/Roblox/creator-docs/blob/main/content/en-us/performance-optimization/microprofiler/index.md) — frame time over FPS, consistency, `debug.profilebegin`/`profileend`, the desktop-obscures-problems warning
+- [performance-optimization/microprofiler/tag-table.md](https://github.com/Roblox/creator-docs/blob/main/content/en-us/performance-optimization/microprofiler/tag-table.md) — **`Prepare/Pass2d`**, **`Perform/fillGuiVertices`** (`gui count` = visible `LayerCollector`s; reduce `UIGradient`/`UICorner` on text labels), **`Perform/Scene/UI`** / `Id_Screen` (CanvasGroups trade memory for render cost)
+- [performance-optimization/improve.md](https://github.com/Roblox/creator-docs/blob/main/content/en-us/performance-optimization/improve.md) — sprite sheets via `ImageRectOffset`/`ImageRectSize`; texture memory scales with pixel count
+- [performance-optimization/identify.md](https://github.com/Roblox/creator-docs/blob/main/content/en-us/performance-optimization/identify.md), [performance-optimization/design.md](https://github.com/Roblox/creator-docs/blob/main/content/en-us/performance-optimization/design.md)
+- [production/publishing/accessibility.md](https://github.com/Roblox/creator-docs/blob/main/content/en-us/production/publishing/accessibility.md) — reduced motion, `PreferredTransparency`, contrast, >5% colour-blindness, "different symbols alongside colors"
+
+### Number formatting and big-number libraries
+
+- [antimatter-dimensions/notations](https://github.com/antimatter-dimensions/notations) (MIT) — the canonical notation set. [`src/utils.ts`](https://github.com/antimatter-dimensions/notations/blob/master/src/utils.ts) is the source for `STANDARD_ABBREVIATIONS`, `STANDARD_PREFIXES`, `STANDARD_PREFIXES_2` and `abbreviateStandard`, all transcribed into Luau in §1.2 and verified by execution. [`src/custom.ts`](https://github.com/antimatter-dimensions/notations/blob/master/src/custom.ts) is the source for the base-26 letters transcription. API is `format(value, places, placesUnder1000)`.
+- [Patashu/break_infinity.js](https://github.com/Patashu/break_infinity.js) — the `{mantissa, exponent}` model.
+- [Patashu/break_eternity.js](https://github.com/Patashu/break_eternity.js) — the `{sign, layer, mag}` model, required for hyper-E/arrow notations.
+
+### UI frameworks
+
+- [centau/vide](https://github.com/centau/vide) (MIT) — "a reactive Luau UI library inspired by Solid", "fully Luau typecheckable". Version **0.4.1** per [wally.toml](https://github.com/centau/vide/blob/main/wally.toml). Reactive graph read directly at [`src/graph.luau`](https://github.com/centau/vide/blob/main/src/graph.luau): a single reused `update_queue`, `queue_children_for_update` / `flush_update_queue` / `update_descendants`, and a `flags.batch` deferral.
+- [dphfox/Fusion](https://github.com/dphfox/Fusion) (MIT) — `main` is **`0.4.0-dev1`** per [wally.toml](https://github.com/dphfox/Fusion/blob/main/wally.toml); 0.3 is the shipping API.
+- [jsdotlua/react-lua](https://github.com/jsdotlua/react-lua) (MIT) — "a comprehensive, but not exhaustive, translation of upstream ReactJS 17.x into Lua"; a community fork because "Roblox's repository is a read-only mirror of their internal project".
+
+### Community, second-hand
+
+`[COMMUNITY, SECOND-HAND]` — DevForum returns 403 to this research environment; these were surfaced via web search result summaries only and corroborate the *technique*, not any specific figure:
+
+- ["How do I optimize a scrolling frame for over 1000 frames?"](https://devforum.roblox.com/t/how-do-i-optimize-a-scrolling-frame-for-over-1000-frames/952022)
+- ["Virtual scrolling? (List virtualization)"](https://devforum.roblox.com/t/virtual-scrolling-list-virtualization/2732175)
+- ["VirtualScroller | Infinite ScrollingFrames"](https://devforum.roblox.com/t/virtualscroller-infinite-scrollingframes/3990429)
+- ["How to make a Virtual scrolling system using scrollingframe with over 1k frames"](https://devforum.roblox.com/t/how-to-make-a-virtual-scrolling-system-using-scrollingframe-with-over-1k-frames/3791129)
+
+### Non-Roblox platform guidance
+
+- Apple Human Interface Guidelines: minimum tap target **44×44 pt**.
+- Material Design / Android accessibility: minimum touch target **48×48 dp**.
+
+Both are cited in §7.3 because Roblox publishes no equivalent figure. `[UNVERIFIED — the translation from pt/dp to Roblox offset pixels is approximate and should be validated with Studio's Device Emulator on your target devices.]`
+
+### Cross-references within this corpus
+
+- **Chapter 20 — EditableImage API** and **chapter 40 — EditableImage technique cookbook**: the permission gate, `WritePixelsBuffer` layout, `Content.fromObject` lifetime, the 1024×1024 ceiling. §6.3 and §9 defer to them rather than duplicating.
+- **Chapter 22 — Luau performance engineering**: `--!native`, `buffer`, the task scheduler. §1.4 and §2.1 assume it.
+- **Chapter 25 — UI construction**: flex layout, 9-slice, ViewportFrame, atlases as general craft. This chapter is the incremental-genre specialisation of it.
+- **Chapter 46 — Code architecture & frameworks**: the general framework argument. §8 is the UI-specific counterpart and reaches a different conclusion for a different reason (fine-grained reactivity fits this workload; a general-purpose game framework does not).
+- **Chapter 50 — Optimization & shipping**: the MicroProfiler in general. §10 is the UI slice of it.
+
+---
+
+*End of chapter 63.*

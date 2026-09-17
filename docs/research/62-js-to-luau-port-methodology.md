@@ -878,9 +878,9 @@ have confirmed both operands are non-negative.
 ### 6.2 Integer division and truncation
 
 `Math.floor(a / b)` → `a // b` or `math.floor(a / b)`. Luau's floor division is
-documented with a negative example: `-10 // 4 = -3`
-(`creator-docs`, `luau/operators.md`) — wait, that is Roblox's own table, and it
-is what `floor(-2.5) = -3` gives. Consistent.
+documented with a negative example, `-10 // 4 = -3` (`creator-docs`,
+`luau/operators.md`), matching `floor(-2.5)`; `luai_numidiv(a, b) = floor(a / b)`
+in `VM/src/lnumutils.h` confirms it.
 
 But `(a / b) | 0` and `Math.trunc(a / b)` truncate toward zero, which is a
 *different* function on negatives:
@@ -1630,3 +1630,584 @@ that version, and the chain is testable end to end: load a v1 save, run the
 chain, assert the result equals a v4 save captured independently.
 
 ---
+
+## The equivalence-testing harness
+
+This is the part that turns "we ported it" into "we can prove it". Everything
+here depends on `sim/` being pure (§1.3).
+
+### 15.1 Make the original deterministic, then extract golden data
+
+Before extracting anything, remove every source of non-determinism from the
+*original*, in a branch you never ship:
+
+1. Replace `Math.random` with a seeded PRNG (mulberry32 is four lines) exposed as
+   `game.rng`. Record the seed.
+2. Replace `Date.now()` / `performance.now()` with a virtual clock the harness
+   advances.
+3. Replace the rAF loop with a `stepN(n, dt)` function that calls the game's own
+   update with a fixed `dt`.
+4. Make key iteration order explicit wherever a float sum depends on it (§3.1).
+
+Then extract three kinds of artifact into `tests/golden/`:
+
+**(a) Formula vectors** — for every function in the formula catalogue, a table of
+input→output over a deliberately nasty input set: `0`, `1`, `-1`, `0.5`, `-0.5`,
+`2^53-1`, `2^53`, `2^53+1`, `1e308`, `-1e308`, `1e-308`, `Infinity`,
+`-Infinity`, `NaN`, and then a few thousand log-uniform random values across the
+whole exponent range. Emit as JSON with the numbers in a **lossless** encoding —
+hex float (`Number.prototype.toString(16)` on the bits, or
+`new DataView` + `getBigUint64`) rather than decimal, because a decimal
+round-trip through two different parsers is exactly the kind of drift you are
+trying to measure.
+
+```js
+// tools/extract-formulas.mjs (runs against the instrumented original)
+const bits = (x) => {
+  const b = new DataView(new ArrayBuffer(8));
+  b.setFloat64(0, x);
+  return b.getBigUint64(0).toString(16).padStart(16, "0");
+};
+
+const cases = [];
+for (const owned of SAMPLE_INTS) {
+  for (const def of Object.values(BUILDINGS)) {
+    cases.push({ fn: "buildingCost", args: [def.id, owned], out: bits(buildingCost(def, owned)) });
+  }
+}
+writeFileSync("golden/formulas.json", JSON.stringify({ version: GAME_VERSION, cases }));
+```
+
+**(b) State snapshots** — full serialized state at tick 0, 1, 10, 100, 1 000,
+10 000, 100 000 and 1 000 000, for several scripted play scenarios (idle-only,
+buy-greedily, buy-cheapest-first, prestige-at-threshold, offline-then-return).
+Each scenario is a deterministic script of `(tick, action)` pairs, checked in
+alongside the snapshots.
+
+**(c) Event traces** — the sequence of `(tick, event, accepted, reason)` tuples
+the original produced for each scenario. This catches divergence in *when*
+something becomes affordable, which a snapshot at tick 10 000 can mask.
+
+Regenerate the whole set twice and diff. If the two runs differ, the original is
+not yet deterministic and nothing downstream is meaningful.
+
+### 15.2 The Luau harness
+
+Run it under **Lune**, a standalone Luau runtime with built-in `fs`, `net`,
+`process`, `serde`, `stdio`, `task`, `luau`, `regex`, `datetime` and `roblox`
+libraries ([lune-org/lune](https://github.com/lune-org/lune)). It ships "an
+included 1-to-1 task scheduler port", so `task.*` behaves as it does in-engine —
+which matters if anything in the harness touches the scheduler. Because `sim/`
+requires nothing from Roblox, it loads in Lune unmodified.
+
+```
+tests/
+  harness.luau         -- runner: discovers *.spec.luau, reports, exits non-zero
+  golden/
+    formulas.json
+    snapshots/idle.json  buy-greedy.json  prestige.json  offline.json
+    traces/…
+    saves/v1.txt  v2.txt  v3.txt  endgame.txt
+  formulas.spec.luau
+  snapshots.spec.luau
+  properties.spec.luau
+  fastforward.spec.luau
+  saves.spec.luau
+```
+
+```lua
+-- tests/harness.luau
+local fs = require("@lune/fs")
+local serde = require("@lune/serde")
+local process = require("@lune/process")
+
+local H = {}
+local failures, checks = {}, 0
+
+function H.readJson(path: string): any
+	return serde.decode("json", fs.readFile(path))
+end
+
+-- Losslessly decode the hex-float encoding the extractor emitted.
+function H.fromBits(hex: string): number
+	local b = buffer.create(8)
+	for i = 0, 7 do
+		buffer.writeu8(b, i, tonumber(string.sub(hex, i * 2 + 1, i * 2 + 2), 16))
+	end
+	-- the extractor wrote big-endian; buffer reads are little-endian, so swap
+	local s = buffer.create(8)
+	for i = 0, 7 do buffer.writeu8(s, i, buffer.readu8(b, 7 - i)) end
+	return buffer.readf64(s, 0)
+end
+
+function H.check(name: string, ok: boolean, detail: string?)
+	checks += 1
+	if not ok then
+		table.insert(failures, `{name}: {detail or "failed"}`)
+	end
+end
+
+-- Exact equality on the bit pattern, with NaN treated as equal to NaN.
+function H.bitsEqual(a: number, b: number): boolean
+	if a ~= a and b ~= b then return true end
+	local ba, bb = buffer.create(8), buffer.create(8)
+	buffer.writef64(ba, 0, a); buffer.writef64(bb, 0, b)
+	for i = 0, 7 do
+		if buffer.readu8(ba, i) ~= buffer.readu8(bb, i) then return false end
+	end
+	return true
+end
+
+-- Units in the Last Place between two finite doubles. 0 means bit-identical.
+function H.ulpsApart(a: number, b: number): number
+	if a == b then return 0 end
+	if a ~= a or b ~= b then return math.huge end
+	local ba, bb = buffer.create(8), buffer.create(8)
+	buffer.writef64(ba, 0, a); buffer.writef64(bb, 0, b)
+	local ia, ib = buffer.readi32(ba, 4), buffer.readi32(bb, 4)
+	local fa, fb = buffer.readu32(ba, 0), buffer.readu32(bb, 0)
+	if (ia < 0) ~= (ib < 0) then return math.huge end  -- straddles zero: report loudly
+	return math.abs((ia - ib) * 4294967296 + (fa - fb))
+end
+
+function H.finish()
+	if #failures == 0 then
+		print(`OK  {checks} checks`)
+		return
+	end
+	for _, f in failures do print(`FAIL {f}`) end
+	print(`{#failures} failures / {checks} checks`)
+	process.exit(1)
+end
+
+return H
+```
+
+### 15.3 The five test families
+
+**(1) Formula vectors — exact or near-exact.**
+
+```lua
+-- tests/formulas.spec.luau
+local H = require("./harness")
+local F = require("../src/sim/formulas")
+local Content = require("../src/sim/content/buildings")
+
+local golden = H.readJson("tests/golden/formulas.json")
+local TOL_ULPS = 2
+
+for _, c in golden.cases do
+	local expected = H.fromBits(c.out)
+	local actual
+	if c.fn == "buildingCost" then
+		actual = F.buildingCost(Content.byId[c.args[1]], c.args[2])
+	elseif c.fn == "prestigeGain" then
+		actual = F.prestigeGain(c.args[1])
+	end
+	local ulps = H.ulpsApart(actual, expected)
+	H.check(
+		`{c.fn}({table.concat(c.args, ", ")})`,
+		H.bitsEqual(actual, expected) or ulps <= TOL_ULPS,
+		`expected {expected} got {actual} ({ulps} ULPs)`
+	)
+end
+H.finish()
+```
+
+**(2) State snapshots — structural diff at known ticks.**
+
+```lua
+-- tests/snapshots.spec.luau
+local scenario = H.readJson("tests/golden/snapshots/buy-greedy.json")
+local state = Sim.newState(config, scenario.seed)
+local nextSnapshot, si = scenario.snapshots[1], 1
+
+for tick = 1, scenario.ticks do
+	local act = scenario.actions[tostring(tick)]
+	if act then
+		local ok, reason
+		state, ok, reason = Sim.apply(state, config, act)
+		H.check(`tick {tick} action {act.kind}`, ok == act.expectedOk,
+			`expected ok={act.expectedOk} got {ok} ({reason})`)
+	end
+	state = Sim.step(state, config, scenario.step)
+
+	if nextSnapshot and tick == nextSnapshot.tick then
+		local diffs = H.deepDiff(Sim.serialize(state), nextSnapshot.state, TOL_ULPS)
+		H.check(`snapshot @ tick {tick}`, #diffs == 0, table.concat(diffs, "; "))
+		si += 1; nextSnapshot = scenario.snapshots[si]
+	end
+end
+```
+
+`H.deepDiff` must be order-insensitive for dictionaries (§9), ULP-aware for
+numbers, and must report the **first** divergence with a path
+(`buildings.farm.owned: expected 41 got 40`). The first divergence is the only
+one that matters; everything after it is a consequence.
+
+**(3) Property tests — invariants that hold for all inputs.**
+
+```lua
+-- tests/properties.spec.luau
+local rng = Random.new(20260917)   -- fixed seed: failures must be reproducible
+
+for trial = 1, 500 do
+	local state = Sim.newState(config, rng:NextInteger(1, 2^31 - 1))
+	local prevTotal, prevPrestige = 0, 0
+
+	for tick = 1, 20000 do
+		state = Sim.step(state, config, STEP)
+		if rng:NextNumber() < 0.02 then
+			state = Sim.apply(state, config, randomAffordableAction(state, rng))
+		end
+
+		local d = Sim.derive(state, config)
+
+		-- no NaN, no inf, anywhere
+		for path, v in H.walkNumbers(state) do
+			H.check(`finite {path}`, v == v and v ~= math.huge and v ~= -math.huge)
+		end
+		-- monotonic: lifetime totals never decrease
+		H.check("totalEarned monotonic", d.totalEarned >= prevTotal)
+		H.check("prestige monotonic", state.prestigeCount >= prevPrestige)
+		-- conservation: earned = spent + held (within tolerance)
+		H.check("currency conserved",
+			H.ulpsApart(d.totalEarned, d.totalSpent + state.cookies) <= 64)
+		-- no negative currency, ever
+		H.check("non-negative", state.cookies >= 0)
+		-- purchases are consistent with spend
+		H.check("owned matches history", d.recomputedSpend == d.totalSpent)
+
+		prevTotal, prevPrestige = d.totalEarned, state.prestigeCount
+	end
+end
+```
+
+The conservation check is the workhorse. It catches the entire class of bugs
+where a ported formula loses or invents currency, and unlike a snapshot diff it
+does not need the original to be available.
+
+**(4) Fast-forward — years of simulated time.**
+
+```lua
+-- tests/fastforward.spec.luau
+-- 5 simulated years at 20 Hz = 3,153,600,000 steps: too many.
+-- Assert the batching path equals the stepping path on a tractable window,
+-- then trust the batching path for the long run.
+local YEAR = 365 * 24 * 3600
+
+local a = Sim.newState(config, 1)
+for _ = 1, 60 * 60 * 20 do a = Sim.step(a, config, STEP) end     -- 1 hour, stepped
+local b = Sim.fastForward(Sim.newState(config, 1), config, 3600) -- 1 hour, batched
+H.check("fastForward == step over 1h", #H.deepDiff(Sim.serialize(a), Sim.serialize(b), 1024) == 0)
+
+-- now the long run, for overflow/NaN/precision-collapse only
+local s = Sim.newState(config, 1)
+for year = 1, 5 do
+	s = Sim.fastForward(s, config, YEAR)
+	for path, v in H.walkNumbers(s) do
+		H.check(`year {year} finite {path}`, v == v and math.abs(v) ~= math.huge)
+	end
+	H.check(`year {year} progress`, Sim.derive(s, config).totalEarned > 0)
+end
+```
+
+This is where big-number bugs surface: a mantissa/exponent normalization error
+that is invisible at `1e20` becomes `inf` at `1e5000`.
+
+**(5) Save round-trip and import.**
+
+```lua
+-- tests/saves.spec.luau
+-- (a) round-trip: serialize -> encode -> decode -> deserialize is the identity
+for _, scenario in {"idle", "buy-greedy", "prestige"} do
+	local s = loadSnapshotState(scenario, "final")
+	local round = Deserialize(serde.decode("json", serde.encode("json", Serialize(s))))
+	H.check(`round-trip {scenario}`, #H.deepDiff(Serialize(round), Serialize(s), 0) == 0)
+end
+
+-- (b) every captured real web save imports and lands in a valid state
+for _, file in fs.readDir("tests/golden/saves") do
+	local raw = fs.readFile(`tests/golden/saves/{file}`)
+	local ok, state = pcall(ImportWeb, raw, config)
+	H.check(`import {file}`, ok, tostring(state))
+	if ok then
+		H.check(`import {file} valid`, Sim.invariants(state, config))
+	end
+end
+
+-- (c) fuzz the importer: it must never error out of pcall and never
+--     produce an out-of-schema state
+for trial = 1, 5000 do
+	local mutated = H.mutate(pickRandomSave(), rng)   -- bit flips, truncation, injected keys
+	local ok, res = pcall(ImportWeb, mutated, config)
+	H.check("importer is total", ok or H.isFriendlyError(res))
+	if ok and res ~= nil then
+		H.check("imported state in schema", Schema.validate(res))
+	end
+end
+```
+
+Family (5c) is a security test as much as a correctness test (§14.3).
+
+### 15.4 The tolerance policy
+
+Write this down and put it in the repo, because without it every drift becomes a
+debate.
+
+| Category | Tolerance | Rationale |
+|---|---|---|
+| Pure formula, no accumulation (cost of building N, prestige gain from total) | **0 ULP** — bit-identical | Same IEEE-754 ops in the same order must give the same bits. A difference here is a *transcription error*, not float noise |
+| Formula involving `pow`/`exp`/`log` | **≤ 2 ULP** | `pow` and `log` are libm calls and are not bit-reproducible across platforms; 1–2 ULP is the honest bound |
+| Single-tick state delta | **0 ULP** | See row 1 |
+| Accumulated state after N ticks | **≤ 4·log2(N) ULP**, and relative error ≤ 1e-12 | Error growth in a sum is bounded by the step count; if it grows faster, the *order of operations* differs |
+| Big-number values | relative error ≤ 1e-10 on the mantissa **and** exact equality on the exponent | An exponent mismatch is always a bug |
+| Integer-valued fields (owned counts, prestige count, upgrade flags) | **exact, always** | These come from comparisons and floors. A one-off means a rounding or comparison mismatch, which will diverge further |
+| Display strings | **exact** | The formatter is a spec'd function, not a float |
+| Any `NaN` or `±inf` where the original had a finite value | **always a bug** | No tolerance |
+| Event acceptance (`apply` returns ok) at a given tick | **exact** | An off-by-one-tick affordability is a real gameplay difference |
+
+The rule underneath the table: **float drift is acceptable only where the two
+implementations provably perform different-but-equivalent operations (libm
+transcendentals, or a documented reassociation). Everywhere else, a difference
+means the port does something different, and "it's just floats" is the wrong
+diagnosis.** In practice, nine out of ten "float drift" reports on an incremental
+port turn out to be an operation-order difference in a multiplier chain, which is
+fixable and should be fixed.
+
+Integer fields deserve special emphasis: they are where a tiny float difference
+becomes a *visible* difference, because `math.floor(9.999999999)` and
+`math.floor(10.000000001)` differ by one owned building, which changes the next
+cost, which changes everything after it. Snapshot diffs should sort integer
+mismatches to the top of the report.
+
+### 15.5 Running it in CI
+
+```yaml
+# .github/workflows/sim.yml
+name: simulation equivalence
+on: [push, pull_request]
+jobs:
+  sim:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: CompeyDev/setup-rokit@v0.1.2      # or install lune directly
+      - run: lune run tests/harness.luau
+      - run: lune run tests/fastforward.spec.luau      # slow: nightly only
+        if: github.event_name == 'schedule'
+```
+
+Notes from practice:
+
+- **Split fast and slow.** Formula vectors, snapshots at ≤ 100 k ticks, save
+  round-trips and properties at 500 trials run in seconds and belong on every
+  push. Multi-year fast-forward and 5 000-trial fuzzing belong on a nightly.
+- **Pin the golden data with a hash.** The harness should print the hash of
+  `tests/golden/` and fail if a commit changes both the golden data and the
+  simulation. Changing the spec is legitimate; changing the spec *to make a test
+  pass* is how a port silently stops matching.
+- **Type-check in the same job.** `luau-analyze --mode=strict src/` catches a
+  different class of error than the vectors, and it is free.
+- **Keep the harness itself dependency-free.** If the harness needs Roblox APIs,
+  `sim/` has leaked, and the leak is the bug.
+- **Re-run the extraction on every upstream change.** If the web game is still
+  live and receiving balance patches, the golden data has a version and an
+  expiry. Record the original's commit hash in the golden JSON.
+
+What Lune cannot do: it is not Roblox. It has no `Instance`, no `DataModel`, no
+rendering — "Running full Roblox games outside of Roblox" is an explicit non-goal
+of the project. That is fine, because `sim/` needs none of it. Anything that does
+need the engine — UI layout, DataStore behaviour, replication — is tested in
+Studio with TestEZ/Jest-Lua and is *not* part of the equivalence proof. Keep the
+two suites separate so an engine flake never casts doubt on the numbers.
+
+---
+
+## The port checklist
+
+Ordered. Each stage ends with a gate; do not open the next stage until the gate
+is green and someone other than the author has said so.
+
+### Stage 0 — Inventory
+
+- [ ] Every persisted state field listed with type, unit, default, range, and the JS expression that mutates it
+- [ ] Authoritative vs derived marked for every field
+- [ ] Every formula copied verbatim into the catalogue, including multiplier evaluation order
+- [ ] Every content table listed with its identity key, and array-position identities flagged
+- [ ] Every UI screen listed with its data reads, writes, and any logic hiding in it
+- [ ] Save format decoded by hand, all versions, with three real saves captured
+- [ ] Every asset listed; SVG and CSS-drawn art listed separately as *work items*
+- [ ] Every `Math.random`, `Date.now`, `performance.now`, DOM-measurement call listed
+- [ ] **GATE:** spec reviewed by whoever knows the original best; every "I'm not sure what this does" resolved
+
+### Stage 1 — Determinism and golden extraction (in the original)
+
+- [ ] `Math.random` replaced with a seeded PRNG; seed recorded
+- [ ] Clock virtualized; `stepN(n, dt)` replaces the rAF loop
+- [ ] Order-dependent object iteration made explicit
+- [ ] Formula vectors emitted in lossless hex-float encoding, including the nasty-input set
+- [ ] State snapshots emitted at ticks 0/1/10/100/1k/10k/100k/1M for ≥ 5 scenarios
+- [ ] Event traces emitted per scenario
+- [ ] Original's commit hash and game version recorded inside the golden JSON
+- [ ] **GATE:** two full extraction runs produce byte-identical output
+
+### Stage 2 — The pure simulation
+
+- [ ] `sim/` created; lint rule rejects `game`, `Instance`, `task.`, `os.time`, `RunService`, `math.random` inside it
+- [ ] `jscompat.luau` written: `truthy`, `or_`, `nullish`, `jsRound`, `jsMod`, `jsTrunc`, `toI32`
+- [ ] Every `if (x)` from the truthiness grep triaged and translated, with decisions recorded
+- [ ] Every loop bound converted; no 0-based Luau table survives outside `legacy*` import maps
+- [ ] `Arr` module written; `indexOf`/`-1` sites all converted to `table.find`/`nil`
+- [ ] Every `sort` given an explicit deterministic tiebreak; every comparator strict (`<`, never `<=`)
+- [ ] Every `%` on a possibly-negative operand converted to `math.fmod`
+- [ ] Every `Math.round` converted to `jsRound`; every `| 0` / `Math.trunc` to `jsTrunc`
+- [ ] Every bitwise op converted to `bit32` with explicit sign handling; the PRNG golden-tested on its own
+- [ ] Every regex triaged: translated, rewritten, or escalated
+- [ ] Big-number facade written; `round`, the series closed forms, tolerance compares and the formatter transcribed from the original's source
+- [ ] `State` contains no `nil` values and no arrays with gaps
+- [ ] `--!strict` on every `sim/` file; `luau-analyze` clean
+- [ ] **GATE:** formula vectors pass at the declared tolerance; snapshots match at ticks 1/10/100/1k/10k; event traces match exactly
+
+### Stage 3 — Save layer
+
+- [ ] `schema.luau` declares every field with type, default, min and max
+- [ ] `serialize`/`deserialize` round-trip is the identity on every scenario's final state
+- [ ] No mixed array/dictionary table anywhere in the schema; no possibly-empty ambiguous table
+- [ ] Encoder sanitizes: no `NaN`, no `±inf`
+- [ ] `migrate.luau` is an ordered chain of single-version steps, each unit-tested
+- [ ] Web-save importer written; runs server-side only; decodes inside `pcall`; input size-capped
+- [ ] Every imported field validated against the schema and clamped; unknown ids dropped
+- [ ] Currency cross-validated against claimed purchase history
+- [ ] Import is one-shot per account, recorded before the state is applied; every import logged
+- [ ] **GATE:** all captured real saves import to a valid state; 5 000-case importer fuzz produces no unhandled error and no out-of-schema state; security review signed off
+
+### Stage 4 — Server tick
+
+- [ ] Fixed-step accumulator with `STEP` matching the harness exactly; `dt` clamped
+- [ ] `Sim.step` never sees a variable `dt`
+- [ ] Offline progress goes through `Sim.fastForward`, which uses the same `Sim.step`
+- [ ] Offline elapsed computed from a **server** timestamp
+- [ ] DataStore writes are budgeted, retried and versioned (see chapter 28)
+- [ ] `sim/` still has no upward dependencies (re-run the grep)
+- [ ] **GATE:** `fastForward` equals stepping over a one-hour window; 5-simulated-year run produces no NaN/inf and monotonic progress; property suite green at 500 trials
+
+### Stage 5 — UI
+
+- [ ] Every screen from the inventory exists and reads from the state subscription, never from its own copy
+- [ ] No formula lives in a render function — all of them are in `sim/formulas.luau`
+- [ ] `ScreenGui.ZIndexBehavior = Sibling`
+- [ ] Every rich-text label escapes interpolated dynamic text
+- [ ] Layout rebuilt with `UIListLayout`/constraints; flex cost measured on the longest list
+- [ ] UI updates throttled; labels written only when the formatted string changed
+- [ ] Every `Connect` has a matching `Disconnect` path
+- [ ] Number formatter golden-tested against the original on ≥ 1 000 values
+- [ ] **GATE:** for a scripted scenario, every number on every screen matches the harness's printed state at the same tick
+
+### Stage 6 — Assets
+
+- [ ] Every image uploaded; manifest maps original filename → `rbxassetid://`
+- [ ] SVG rasterized at target sizes, or rebuilt; CSS-drawn art rasterized or rebuilt
+- [ ] Icons atlased; addressed via `ImageRectOffset`/`ImageRectSize`
+- [ ] Runtime-generated art moved to `EditableImage` where it avoids an upload
+- [ ] Editable-API prerequisites confirmed (age + ID verification, dashboard toggle) if used
+- [ ] **GATE:** every asset id resolves in a published test place; nothing still in moderation; no placeholder shipped
+
+### Stage 7 — Presentation
+
+- [ ] Tweens, particles, sound, haptics added
+- [ ] No presentation code imports `sim/` mutably or writes state
+- [ ] Frame-rate independence verified: the same scenario at 15 and 120 FPS produces identical state
+- [ ] **GATE:** the full equivalence suite is still green with presentation enabled
+
+### Stage 8 — Pre-launch
+
+- [ ] Golden data hash pinned in CI; a commit that changes both golden data and `sim/` fails
+- [ ] Fast suite on every push; slow suite nightly
+- [ ] `luau-analyze --mode=strict` clean in CI
+- [ ] Tolerance policy checked into the repo
+- [ ] Rollback plan for a save-schema regression (versioned saves, read-only mode)
+- [ ] Analytics instrumented on the funnel and the economy (chapter 51)
+- [ ] **GATE:** a fresh account played for one hour by a human matches a harness run of the same action sequence, field by field
+
+---
+
+## Sources
+
+**Luau language and VM (primary — `github.com/luau-lang/luau`, `master`)**
+
+- `VM/src/lnumutils.h` — `luai_nummod(a, b) = a - floor(a / b) * b`; `luai_numidiv(a, b) = floor(a / b)`. The ground truth for `%` and `//`.
+- `VM/src/ltable.cpp` — `luaH_getn`: "Try to find a boundary in table `t`. A `boundary` is an integer index such that `t[i]` is non-nil and `t[i+1]` is nil (and 0 if `t[1]` is nil)", implemented as a branchless binary search with a cached-boundary fast path. The ground truth for `#t` with holes.
+- `VM/src/ltablib.cpp` — `table.sort` implementation: quicksort with median-of-three and a heapsort fallback; raises `invalid order function for sorting` and `table modified during sorting`.
+- `VM/src/lstrlib.cpp` — the Lua pattern matcher (`str_find_aux`, `gmatch`, `gsub`); confirms the pattern language has no alternation or counted repetition.
+- <https://github.com/luau-lang/luau> — repository root.
+- <https://github.com/luau-lang/rfcs> — RFC tree, for library additions.
+- *Note:* `luau.org` is unreachable from this environment; the `luau-lang/site` repository is an Astro site whose page sources could not be located by path probing, so Luau library semantics below are cited from the Roblox reference YAML instead.
+
+**Roblox engine reference (primary — `github.com/Roblox/creator-docs`, `main`, `content/en-us/…`)**
+
+- `luau/booleans.md` — "If a value isn't `false` or `nil`, Luau evaluates it as `true` ... Unlike many other languages, Luau considers both zero and the empty string as `true`."
+- `luau/operators.md` — logical, relational, arithmetic and miscellaneous operator tables; `-10 // 4 = -3`; `not 0` → `false`; the `#` length operator.
+- `luau/nil.md` — `nil` is "the only value other than `false` which doesn't evaluate to `true`".
+- `luau/numbers.md` — number is "a double-precision (64-bit) floating-point number ... around 15 digits of precision"; "In Luau, the number `-0` is equivalent to `0`"; int/int64 classifications.
+- `luau/tables.md` — arrays, dictionaries, 1-based iteration, `#array`.
+- `luau/strings.md` — string pattern reference; the 12 magic characters `$ % ^ * ( ) . [ ] + - ?`; captures, frontier and balanced patterns.
+- `reference/engine/libraries/math.yaml` — `math.round` "rounds away from zero such that `0.5` rounds to `1` and `-0.5` rounds to `-1`"; `math.fmod` "rounds the quotient towards zero"; `math.modf`.
+- `reference/engine/libraries/table.yaml` — `table.sort`: "The error `invalid order function for sorting` is thrown if both `comp(a, b)` and `comp(b, a)` return `true`."
+- `reference/engine/libraries/bit32.yaml` — "This library treats numbers as unsigned 32-bit integers"; `arshift` fills "with copies of the higher bit of `x`".
+- `reference/engine/libraries/task.yaml` — `task.spawn`/`defer`/`delay`/`wait`/`cancel`/`synchronize`/`desynchronize`; "no throttling occurs".
+- `reference/engine/classes/HttpService.yaml` — `JSONEncode`/`JSONDecode`: mixed-key tables ("an array takes priority (string keys are ignored)"), `{}` → `[]`, avoid `nil`, cyclic error, `inf`/`nan` permitted, buffers to 50 MiB.
+- `reference/engine/classes/RunService.yaml` — `Heartbeat` "fires every frame, after the physics simulation has completed"; `PreRender`, `PreSimulation`, `PostSimulation`, `RenderStepped`.
+- `reference/engine/classes/UIFlexItem.yaml` — `FlexMode` `Grow` (1:0), `Shrink` (0:1), `Fill` (1:1), `Custom` with `GrowRatio`/`ShrinkRatio`.
+- `reference/engine/classes/ImageLabel.yaml` — `ImageRectOffset` "the pixel offset (from the top-left) of the image area to be displayed"; `ImageRectSize` zero-dimension behaviour; `ScaleType`, `SliceCenter`.
+- `reference/engine/classes/AssetService.yaml` — `CreateAssetAsync` "can only be used in locally loaded plugins"; supported `AssetType`s including `Image` from an `EditableImage`.
+- `ui/position-and-size.md` — `UDim2` Scale ("a percentage of the container's size") vs Offset ("how many pixels"); `AnchorPoint` as "a fraction from 0 to 1".
+- `ui/list-flex-layouts.md` — `UIListLayout` `FillDirection`, `SortOrder`, `Wraps`, `Padding`, `HorizontalFlex`/`VerticalFlex`, `ItemLineAlignment`; the note that flex "adds a slight performance cost above non-flex".
+- `ui/scrolling-frames.md` — `CanvasSize`, `AutomaticCanvasSize`, `CanvasPosition`, scroll-bar insets, `ElasticBehavior`.
+- `ui/rich-text.md` — supported tags and escape forms.
+- `projects/assets/index.md` — asset moderation: "generally happens within a few hours"; "If an asset is still in the moderation queue when you publish your game, users cannot see or interact with the asset until Roblox approves it."
+
+**JavaScript semantics (primary — `github.com/mdn/content`, `main`)**
+
+- `files/en-us/glossary/truthy/index.md` — the falsy set: `false`, `0`, `-0`, `0n`, `""`, `null`, `undefined`, `NaN`, `document.all`.
+- `files/en-us/web/javascript/reference/operators/remainder/index.md` — `%` "always takes the sign of the dividend"; `-13 % 5` → `-3`; the explicit remainder-vs-modulo comparison and the `((n % d) + d) % d` idiom.
+- `files/en-us/web/javascript/reference/global_objects/math/round/index.md` — ties round "in the direction of +∞"; the note that this "differs from many languages' `round()` functions, which often round half-increments away from zero"; `Math.round(-20.5) === -20`; the `Math.floor(x + 0.5)` equivalence and its `-0` exception.
+- `files/en-us/web/javascript/reference/global_objects/array/sort/index.md` — "Since version 10 (or ECMAScript 2019), the specification dictates that `Array.prototype.sort` is stable"; the comparator contract (stable, reflexive, anti-symmetric, transitive); sparse-array slot handling.
+- `files/en-us/web/javascript/reference/global_objects/number/max_safe_integer/index.md` — `9007199254740991` (2^53−1) and why equality lies beyond it.
+- `files/en-us/web/javascript/reference/operators/bitwise_and/index.md` — "it converts both operands to 32-bit integers"; signed results; the `& -1` truncation idiom.
+
+**Big-number libraries**
+
+- <https://github.com/Patashu/break_infinity.js> — README (range, API, benchmarks, ports) and `src/decimal.ts` (the full method list; `round()` delegating to `Math.round(this.toNumber())` with the `e < -1` and `e < MAX_SIGNIFICANT_DIGITS` branches; `affordGeometricSeries`, `sumGeometricSeries`, `affordArithmeticSeries`, `sumArithmeticSeries`, `efficiencyOfPurchase`; the `*_tolerance` family).
+- <https://github.com/Patashu/break_eternity.js> — the tetration-range sequel.
+- <https://github.com/evilbocchi/alyanum> — AlyaNum: Roblox big-number library, "a high-performance fork of OmegaNum", range to `10^^^^^10`; `alya.luau` is the source of the method names in the translation table (`add`, `subtract`, `mul`, `div`, `pow`, `root`, `log10`, `log`, `floor`, `round`, `compare`, `isCloseTo`, `toSuffix`, `toScientific`, `toString`, …).
+- <https://github.com/evilbocchi/serikanum> — SerikaNum: same author, cap `10^(2^1024)`, "4–20x" faster than AlyaNum. The closest range match for a `break_infinity.js` port.
+- <https://github.com/KdudeDev/InfiniteMath> — InfiniteMath, another Roblox option.
+
+**Headless Luau / CI**
+
+- <https://github.com/lune-org/lune> — Lune, "a standalone Luau runtime"; "Fully featured APIs for the filesystem, networking, stdio"; "a familiar runtime environment for Roblox developers, with an included 1-to-1 task scheduler port"; explicit non-goal: "Running full Roblox games outside of Roblox". The `crates/` tree confirms the standard library set: `lune-std-datetime`, `-fs`, `-luau`, `-net`, `-process`, `-regex`, `-roblox`, `-serde`, `-stdio`, `-task`.
+- <https://github.com/n0script22/lune-test> — a Lune test runner that emulates Roblox APIs and globals, for the subset of code that cannot be made engine-free.
+- <https://github.com/Xyraniz/Lumora> — "a self-contained Luau runtime with a headless Roblox API surface for reproducible execution and automated testing".
+
+**Related chapters in this corpus**
+
+- 20, 40 — `EditableImage` API and technique cookbook (the canvas replacement).
+- 22 — Luau performance engineering (`buffer`, native codegen, the task scheduler).
+- 25 — UI construction (flex layout, 9-slice, atlases, dense interfaces).
+- 26 — Asset pipeline and tooling (Open Cloud, moderation, Rojo/Wally/Lune).
+- 28 — Networking and data architecture (DataStore limits, replication).
+- 46 — Code architecture and frameworks (project structure, testing).
+- 47 — Security and anti-exploit (the threat model behind §14.3).
+- 51 — Live ops, analytics and growth.
+
+---
+
+*Verification status: every semantic claim about Luau `%`, `//`, `#t` with holes,
+`table.sort` errors, `math.round`, `math.fmod`, `bit32` signedness, `JSONEncode`
+mixed-key behaviour and the `task`/`RunService` scheduling contract is cited to a
+primary source above. Every JavaScript claim is cited to MDN's source repository.
+Items marked **[unverified]** in the body — the `table.sort` insertion-sort size
+threshold, and the current maximum uploadable UI image dimension — could not be
+confirmed against a primary source in this environment and should be checked
+before they are relied on.*

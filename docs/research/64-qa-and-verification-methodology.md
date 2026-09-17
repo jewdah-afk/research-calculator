@@ -431,7 +431,7 @@ echo "purity gate: OK"
 
 Note `\bscript\b` in the list: a module that references `script` at all cannot be loaded outside a
 `ModuleScript`, which is exactly what we are preventing. That has a consequence for how L1 modules
-require each other — see [§2.4](#24-requires-that-work-in-both-worlds).
+require each other — see [§2.4](#24-running-tests-headlessly-outside-studio-with-lune).
 
 **(b) A load-time gate in the headless runner.** Load every L1 module in a sandboxed environment
 where every Roblox global is a trap, and fail if one is touched. Lune's `@lune/luau` `load`
@@ -1803,3 +1803,462 @@ TestEZ suites that require a DataModel run on a separate, self-hosted Windows ru
 path Studio-free is what keeps the gate fast enough that people do not route around it.
 
 ---
+
+## 8. In-Studio and in-game QA
+
+Headless tests cover the simulation. Everything below covers what they cannot see: replication,
+UI, timing, and players behaving unreasonably.
+
+### 8.1 Playtest checklist (per release candidate)
+
+Studio's testing modes are documented in `creator-docs`: **Test** / **Test Here** run "solo" modes
+where "Studio runs two separate simulations — one client simulation and one server simulation",
+with a **Client/Server** toggle (blue border = client, green = server), a **Pause/Resume** control
+that can act on client or server independently, and a **Step Forward** button that advances
+1/60th of a second. Output messages are colour-labelled blue (client) or green (server).
+
+| # | Check | Mode | Pass condition |
+|---|---|---|---|
+| 1 | Fresh account: first 10 minutes | Test | No errors in Output; first upgrade affordable within the designed window |
+| 2 | Loaded account: paste an endgame save | Test | UI renders every magnitude without overflow or `inf`; no frame hitch on load |
+| 3 | Rejoin immediately after leaving | Local Server 2 players | Progress is exactly what it was; no rollback, no duplicate rewards |
+| 4 | Two clients, same account is impossible — two clients, *different* accounts | Local Server 2+ | No cross-talk; each client sees only its own currencies |
+| 5 | Purchase spam (hold buy-max, 60 s) | Local Server | Server stays authoritative; no negative currency; no remote flood kick |
+| 6 | Offline claim after clock manipulation | Test | Client-side clock changes cannot inflate offline gain (server computes it) |
+| 7 | Shutdown mid-session | Local Server → Stop | `BindToClose` flush completes; rejoin shows the flushed state |
+| 8 | Step-forward through a prestige | Test + Step Forward | No single frame shows a partially-reset state to the player |
+| 9 | Every UI panel at 800×600 and at 3840×1600 | Device emulator | No clipped text, no unreachable buttons |
+| 10 | Errors surfaced | Any | `ScriptContext.Error` count for the session is zero |
+
+Check 4 needs the **multi-client** path: Studio's Local Server mode starts one server process and N
+client processes on your machine. It is the only pre-production way to see replication order bugs,
+and it is where "the client computed the currency and told the server" bugs become obvious — the
+second client will disagree.
+
+### 8.2 A debug console that cannot ship enabled
+
+Three independent conditions, all server-side, all required:
+
+```lua
+--!strict
+-- Server/DebugConsole.luau
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local BuildConfig = require(game.ServerStorage.BuildConfig)  -- generated at build time
+
+-- Condition 1: a build-time constant. CI asserts this is false on release branches.
+local ENABLED_AT_BUILD: boolean = BuildConfig.DEBUG_CONSOLE
+
+-- Condition 2: an explicit allowlist of UserIds. Never a group check, never a name check.
+local ALLOWED: { [number]: true } = { [1234567] = true, [7654321] = true }
+
+-- Condition 3: never in a production place, regardless of the other two.
+local IS_PRODUCTION_PLACE = game.PlaceId == BuildConfig.PRODUCTION_PLACE_ID
+
+local function mayUse(player: Player): boolean
+	if not ENABLED_AT_BUILD then return false end
+	if IS_PRODUCTION_PLACE and not RunService:IsStudio() then return false end
+	return ALLOWED[player.UserId] == true
+end
+
+-- Commands are validated server-side and applied through the SAME Sim functions as normal play,
+-- so a cheat command can never produce a state the simulation could not reach legitimately.
+local function handle(player: Player, command: string, ...)
+	if not mayUse(player) then
+		Telemetry.event("debug_console_denied", { userId = player.UserId, command = command })
+		return
+	end
+	...
+end
+```
+
+The CI gate is three lines and catches the failure that actually happens (someone flips the flag to
+debug something and forgets):
+
+```bash
+# scripts/assert-debug-off.sh
+grep -q 'DEBUG_CONSOLE = false' src/Server/BuildConfig.luau \
+  || { echo "ERROR: DEBUG_CONSOLE must be false on this branch"; exit 1; }
+```
+Additional rule: **the debug RemoteEvent must not exist in the built place when disabled.** Gate it
+in the Rojo project or destroy it at startup — an unreachable-but-present remote is an invitation.
+
+### 8.3 Telemetry and error reporting
+
+Two engine hooks, both with signatures verified from `Roblox/creator-docs`:
+
+- `ScriptContext.Error(message: string, stackTrace: string, script: Instance)` — "Fires when an
+  unhandled error occurs while running a script … passing the error `message`, a formatted
+  `stackTrace` string, and the `script` that was running." Its documentation also notes the
+  gap you must cover another way: **"This event does not fire for errors raised by the watchdog
+  when a script exceeds its execution-time limit"** (see `ScriptContext:SetTimeout()`). An infinite
+  loop in a tick handler is therefore invisible to this hook — catch it with a heartbeat watchdog.
+- `LogService.MessageOut(message: string, messageType: Enum.MessageType, context: table?)` — "Fires
+  whenever a message is logged through the engine's output system, including calls to `print()`,
+  `warn()`, and the structured logging methods on `LogService`." `context` "carries the structured
+  key-value pairs when the message was emitted via a method that accepts a context table; otherwise
+  it is nil."
+
+```lua
+--!strict
+-- Server/ErrorPipe.luau
+local ScriptContext = game:GetService("ScriptContext")
+local HttpService = game:GetService("HttpService")
+
+local seen: { [string]: number } = {}        -- fingerprint -> count, to avoid flooding
+local BUDGET_PER_MINUTE = 20
+local sent = 0
+
+ScriptContext.Error:Connect(function(message: string, stackTrace: string, script: Instance)
+	-- Fingerprint on message + top stack frame only, so one bug is one report.
+	local top = stackTrace:match("^[^\n]*") or ""
+	local fingerprint = message .. "|" .. top
+	seen[fingerprint] = (seen[fingerprint] or 0) + 1
+	if seen[fingerprint] > 1 or sent >= BUDGET_PER_MINUTE then return end
+	sent += 1
+	Telemetry.event("script_error", {
+		message = message,
+		stack = stackTrace,
+		script = script and script:GetFullName() or "<unknown>",
+		placeVersion = game.PlaceVersion,
+		jobId = game.JobId,
+		count = seen[fingerprint],
+	})
+end)
+```
+Ship the aggregate somewhere a human looks daily. Roblox's own backstop is the Creator Hub
+**Crashes** chart, documented in `creator-docs`: it breaks crashes into **out-of-memory** ("high
+memory usage that you can take direct action to fix") and **platform** crashes, and for OOM the
+engine "automatically captures a compact JSON summary of the data model before the server shuts
+down", browsable as a treemap and downloadable as CSV. For an idle game the OOM path is a real
+risk: per-player state that grows without bound (event logs, unpruned purchase history) shows up
+there long before it shows up in a unit test.
+
+### 8.4 Staged rollout
+
+The order that limits blast radius:
+
+1. **Studio** → the checklist above.
+2. **A private test place** built from the same artifact CI produced (never a hand-published
+   build) — 5–10 internal testers, real devices, real DataStore, but a *separate data store name*
+   so a save bug cannot touch production data.
+3. **A copy of production data, read-only.** Load real endgame saves into the test place with
+   writes disabled. This is the single highest-yield pre-launch step for a port, because real saves
+   contain shapes no fixture author imagines.
+4. **Production, gated.** Ship behind a server-side flag read from a config store, defaulted off;
+   enable for a small allowlist, then a percentage, watching the error rate and the crashes chart
+   at each step.
+5. **Full rollout**, with the previous place version kept ready for rollback and a documented
+   rollback procedure that includes *what happens to saves written by the new version* — this is
+   the question teams forget, and the answer must be "old versions can still read them", which is
+   a migration test ([§6](#6-save-system-testing) family b) you should already have.
+
+---
+
+## 9. Device and platform QA
+
+Roblox's own guidance is blunt about why emulation is insufficient: "emulation can't fully
+replicate what happens on real hardware. Frame rates, memory pressure, thermal throttling, and
+input latency all behave differently on physical devices," and "if you're only testing on your
+development machine, you're testing for the minority of your audience."
+
+The audience numbers from the same document, which should drive your device choice: **Android is
+roughly 65% of a typical game's player base; ~60% of those players have 2–4 GB of RAM, ~35% have
+4–8 GB, ~5% more than 8 GB; over 50% of the whole player base plays on devices scoring 10,000–20,000
+on Passmark.** The doc's suggested spread of Android test devices is "an Infinix Smart 9, a Motorola
+Moto G05, an Oppo A18, an Amazon Fire HD 10 (2023), and a Samsung Galaxy S22 Ultra."
+
+**The minimum device matrix for an idle game** (which is UI-heavy and text-heavy, so its failure
+modes differ from an action game's):
+
+| Axis | Test at least | Idle-game-specific failure to look for |
+|---|---|---|
+| Hardware | One 2–4 GB Android phone; one mid Android; one iPhone; one desktop | Number-heavy UI redrawn every frame tanking fps on the low-end device |
+| Graphics quality | Lowest and highest tiers | UI that depends on effects disabled at low quality becoming unreadable |
+| Aspect ratio | 4:3 (Fire HD), 16:9, ~20:9 tall phone, ultrawide desktop | Currency readouts clipped; buy-max buttons off-screen in portrait |
+| Text scale | Largest accessible text size | Big-number strings (`1.79e308`, `ee1.5e12`) overflowing fixed-width labels |
+| Network | Throttled/cellular; forced disconnect | Offline-gain claim firing twice; save lost on an abrupt drop |
+| Session | Rejoin immediately; rejoin after 24 h; join a full server | Session-lock stall showing an infinite "Loading…" with no timeout |
+
+On-device tooling, per the same doc: the **Developer Console** (<kbd>F9</kbd>) has a Memory tab and
+runs on client devices, the **MicroProfiler** (<kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>F6</kbd> /
+<kbd>⌘</kbd><kbd>⌥</kbd><kbd>F6</kbd>) captures frame dumps on device for later analysis, and
+**Performance Stats** gives an FPS/memory/ping overlay. It also flags **thermal throttling** as a
+device-only phenomenon — relevant here because an idle game is frequently left running for hours,
+which is exactly the sustained load that triggers it. Add a 30-minute continuous-play run on the
+low-end phone to the release checklist and record fps at minute 1 and minute 30.
+
+Two specific tests that idle ports routinely fail:
+
+1. **Backgrounded and resumed.** Put the app in the background for 10 minutes, return. Offline gain
+   must be computed once, by the server, from a server-side timestamp — not from the client's
+   elapsed time, and not twice.
+2. **Disconnect during a save.** Kill network mid-session. The correct outcome is that the player
+   loses at most the last save interval; the incorrect outcome is a partial write or a lock the
+   next server cannot break.
+
+Roblox's adaptive-design guidance sets the UI bar: input fluidity (every action reachable by
+gamepad, keyboard and touch, with prompts that reflect the active input), responsive layout,
+dynamic sizing, and legibility. For an idle game, "every action reachable" specifically includes
+buy-max and prestige, which are commonly bound to a modifier key on desktop and then unreachable
+on touch.
+
+---
+
+## The review rubric
+
+This chapter is used to QA code and documentation produced by other agents and by humans. The
+rubric below is written to be **executed mechanically**: every item is a yes/no question with a
+stated verification action, so two reviewers running it on the same artifact should reach the same
+verdict. Score each section; any `FAIL` in section A or B blocks merge regardless of the rest.
+
+### Section A — Source and citation integrity (blocking)
+
+| # | Question | How to verify | Fail if |
+|---|---|---|---|
+| A1 | Does every factual claim about an external API carry a citation to a specific, resolvable source? | For each claim, follow the citation | Any citation is to "the docs" generically, to a URL that 404s, or is absent |
+| A2 | Is each cited source **primary**? | Check the domain/repo: official docs, the tool's own repository, or the engine source | A blog, a forum post, or another LLM's output is cited as authority without a `[COMMUNITY, SECOND-HAND]` marker |
+| A3 | Does the citation actually support the specific claim, not merely the topic? | Open the source, find the sentence | The source discusses the area but not the claim (the most common AI failure) |
+| A4 | Are unverifiable claims marked? | Search for `[UNVERIFIED]` / hedging | A confident claim is made about something the author could not check |
+| A5 | Are version numbers, limits and constants attributed? | Trace each number to its source | A number appears with no origin (e.g. "the limit is 4 MB" with no link) |
+| A6 | Are blocked/unreachable sources disclosed? | Look for a scope/verification note | The doc implies it read sources it could not reach |
+
+### Section B — API and signature accuracy (blocking)
+
+| # | Question | How to verify | Fail if |
+|---|---|---|---|
+| B1 | Is every function signature copied from source, not reconstructed from memory? | Grep the named symbol in the cited repo/doc and compare parameter names, order and count | Any parameter name, order, count or type differs |
+| B2 | Do the *return* values match? | Same check, return section | Returns are omitted, invented, or given in the wrong order |
+| B3 | Are optional parameters and defaults stated correctly? | Compare with source | A default is asserted that the source does not state |
+| B4 | Are the named methods real? | Grep for each method name in the API surface | A method is plausible but absent (e.g. `TestBootstrap:runAll`, `expect(x).toBeCloseTo` in TestEZ) |
+| B5 | Are platform constraints stated? | Check the source's own caveats | A capability is claimed without its documented limitation (e.g. "run Jest Lua under Lune") |
+| B6 | Are deprecations and status honestly reported? | Check README/changelog dates and wording | An unmaintained tool is presented as current, or vice versa |
+
+### Section C — Evidence for performance and behaviour claims
+
+| # | Question | How to verify | Fail if |
+|---|---|---|---|
+| C1 | Is every performance number measured, with the measurement method described? | Look for the benchmark code, the hardware, the N, the units | A number appears with no method ("this is ~10× faster") |
+| C2 | Is the benchmark reproducible from what is written? | Try to reconstruct it from the text alone | Missing input sizes, missing hardware, missing iteration count |
+| C3 | Are comparisons like-for-like? | Check both sides ran the same workload | Different inputs, different optimization levels, or one side includes setup cost |
+| C4 | Are asserted behaviours distinguished from measured ones? | Look for hedging language on unmeasured claims | "This is faster" where the author never ran it and did not mark it |
+| C5 | Are statistical claims accompanied by variance? | Look for range/median/stddev | A single number is presented as the truth for a noisy measurement |
+
+### Section D — Code correctness and runnability
+
+| # | Question | How to verify | Fail if |
+|---|---|---|---|
+| D1 | Does every non-illustrative snippet parse? | Paste into `luau`/`lune run`, or `stylua --check` on the extracted block | A syntax error |
+| D2 | Does it typecheck under `--!strict`? | Run `luau-lsp analyze` on the extracted block with stubs | Type errors that indicate a real mistake (not just missing context) |
+| D3 | Are all identifiers defined or clearly marked as project-specific? | Read for undefined names | A helper is used that is never defined or explained |
+| D4 | Is the code consistent with its own prose? | Compare the description to the code | Prose says one thing, code does another |
+| D5 | Does the code handle its stated edge cases? | Check each edge case named in the prose against the code | An edge case is discussed but not handled |
+| D6 | Is error handling present where the API can fail? | Look for `pcall`/result-tuple handling around I/O and DataStore calls | A fallible call is written as if infallible |
+| D7 | Are floating-point comparisons relative, or justified as absolute? | Grep for `math.abs(a - b) <` | An absolute epsilon is used on unbounded-magnitude values |
+| D8 | Is anything secret, destructive, or irreversible done without a guard? | Look for deletes, overwrites, `SetAsync` without a read | A destructive operation has no precondition check |
+
+### Section E — Edge cases and adversarial inputs
+
+| # | Question | Fail if |
+|---|---|---|
+| E1 | Are zero, one, empty, and maximum inputs considered? | Only the happy path is shown |
+| E2 | Are NaN and ±Infinity considered wherever arithmetic is unbounded? | Not mentioned in numeric code |
+| E3 | Are negative and out-of-order inputs considered (negative `dt`, decreasing timestamps)? | Not mentioned in time-based code |
+| E4 | Is concurrency/reentrancy addressed where state is shared (two servers, rejoin)? | Shared mutable state with no ordering discussion |
+| E5 | Is failure of an external dependency considered (DataStore down, network dropped)? | The dependency is assumed to succeed |
+| E6 | Are limits asserted rather than assumed (size, key length, rate)? | A platform limit is mentioned in prose but never checked in code |
+
+### Section F — Hallucination detection (run this explicitly)
+
+Executable procedure, in order. Stop and fail on the first hit.
+
+1. **Extract every proper noun** — library names, repo names, function names, config keys, CLI
+   flags, file names — into a list.
+2. **For each, confirm it exists** in the cited source. Grep the repo, or fetch the doc page. A name
+   that cannot be found in any primary source is a hallucination until proven otherwise.
+3. **Check every version number** against the project's releases or changelog.
+4. **Check every CLI flag** against `--help` output or the tool's documented CLI page. Invented
+   flags are one of the most common failure modes (`selene --strict`, `rojo test`, `lune test`).
+5. **Check every URL** resolves and is the thing it is described as.
+6. **Look for suspiciously round or convenient numbers** ("3× faster", "handles 1 million entities")
+   and demand the measurement.
+7. **Look for API symmetry that does not exist.** If a doc says `serializeX`/`deserializeX` for one
+   type, confirm both exist for the other types too rather than assuming.
+8. **Check that quoted text is verbatim.** Search the source for the exact quoted string. A
+   paraphrase presented in quotation marks is a citation-integrity failure (A3).
+9. **Check the negative claims too.** "X does not support Y" needs a source as much as "X supports
+   Y", and is more often wrong.
+
+### Section G — Documentation quality (non-blocking, but tracked)
+
+| # | Question | Fail if |
+|---|---|---|
+| G1 | Can a competent engineer act on this without further research? | Key steps are missing or hand-waved |
+| G2 | Are trade-offs stated, not just recommendations? | A single option is presented with no alternatives or costs |
+| G3 | Is the failure mode of each recommendation described? | "Do X" with no "X breaks when…" |
+| G4 | Is it scoped — does it say what it does *not* cover? | Scope is implied to be total |
+| G5 | Are examples specific to this project's domain rather than generic? | `foo`/`bar` examples where domain examples were possible |
+
+### Verdict form
+
+```
+Artifact: ______________________  Reviewer: ____________  Date: __________
+A (citations)   PASS / FAIL   blocking   notes: ______________________
+B (signatures)  PASS / FAIL   blocking   notes: ______________________
+C (evidence)    PASS / FAIL              notes: ______________________
+D (code)        PASS / FAIL              notes: ______________________
+E (edge cases)  PASS / FAIL              notes: ______________________
+F (hallucination sweep)  items extracted: ____  unverifiable: ____
+G (doc quality) score __/5
+Verdict: MERGE / REVISE / REJECT
+```
+
+**Reviewer guidance for AI-generated artifacts specifically.** The failure profile differs from a
+human's. Humans forget edge cases; models produce *fluent, plausible, wrong* specifics. So weight
+your time toward Sections A, B and F — checking that named things exist and that quoted things were
+quoted — and spend less on prose quality, which is usually the artifact's strongest dimension and
+its least informative signal. A document that reads beautifully and cites nothing is a worse
+artifact than a rough one with verifiable references.
+
+---
+
+## Sources
+
+**Research environment note.** `create.roblox.com`, `devforum.roblox.com`, `luau.org` and
+`lune-org.github.io` all returned egress-blocked/403 from the research environment and were not
+retried. Roblox documentation is therefore cited from its GitHub source of record
+(`Roblox/creator-docs`), Luau behaviour from compiler/analysis source in `luau-lang/luau`, and Lune
+documentation from its docs repository (`lune-org/docs`) rather than the rendered site. Every URL
+below was fetched successfully during research unless marked otherwise.
+
+### Test frameworks
+
+- `Roblox/testez` — `README.md` (Lemur/CI statement, internal usage, Apache 2.0):
+  <https://raw.githubusercontent.com/Roblox/testez/master/README.md>
+- `Roblox/testez` — `src/TestBootstrap.lua` (verified `run(roots, reporter, otherOptions)` signature,
+  `otherOptions` keys, `.spec` discovery, `init.spec` handling):
+  <https://raw.githubusercontent.com/Roblox/testez/master/src/TestBootstrap.lua>
+- `Roblox/testez` — `src/init.lua` (exported surface, reporters):
+  <https://raw.githubusercontent.com/Roblox/testez/master/src/init.lua>
+- `Roblox/testez` — `src/Expectation.lua` (verified matcher list: `a`/`an`, `ok`, `equal`, `near`,
+  `throw`, `never`, `extend`):
+  <https://raw.githubusercontent.com/Roblox/testez/master/src/Expectation.lua>
+- `Roblox/testez` — `docs/api-reference.md` (describe/it/expect, lifecycle hooks, FOCUS/SKIP/FIXME,
+  `context`): <https://raw.githubusercontent.com/Roblox/testez/master/docs/api-reference.md>
+- `Roblox/testez` — `docs/getting-started/running-tests.md` ("internals … being reworked" note):
+  <https://raw.githubusercontent.com/Roblox/testez/master/docs/getting-started/running-tests.md>
+- `jsdotlua/jest-lua` — `README.md` ("can currently only run inside of Roblox", issue #2, Jest
+  v27.4.7 alignment, MIT): <https://raw.githubusercontent.com/jsdotlua/jest-lua/main/README.md>
+- `jsdotlua/jest-lua` — `docs/docs/GettingStarted.md` (verified `wally.toml` dev-dependencies,
+  `runCLI` entry point, `jest.config.lua`, `run-in-roblox` requirement):
+  <https://raw.githubusercontent.com/jsdotlua/jest-lua/main/docs/docs/GettingStarted.md>
+- `jsdotlua/jest-lua` — `CHANGELOG.md` (3.10.0 dated 2024-10-02; `spyOn` in 3.6.2; `task.wait` mock
+  in 3.8.0; JestBenchmark in 3.4.0; v28 upgrade):
+  <https://raw.githubusercontent.com/jsdotlua/jest-lua/main/CHANGELOG.md>
+- `rojo-rbx/run-in-roblox` — `README.md` (purpose, stdout piping, `--place`/`--script` usage):
+  <https://raw.githubusercontent.com/rojo-rbx/run-in-roblox/master/README.md>
+
+### Lune
+
+- `lune-org/lune` — `README.md` (standalone Luau runtime; task-scheduler port; optional Roblox
+  place/model library): <https://raw.githubusercontent.com/lune-org/lune/main/README.md>
+- `lune-org/docs` — `api-reference/roblox.md` (verified: `deserializePlace`, `deserializeModel`,
+  `serializePlace`, `serializeModel`, `getAuthCookie`, `getReflectionDatabase`,
+  `implementProperty`, `implementMethod`, `studio*Path`):
+  <https://raw.githubusercontent.com/lune-org/docs/main/src/content/docs/api-reference/roblox.md>
+- `lune-org/docs` — `roblox/4-api-status.md` (verified implemented `Instance`/`DataModel` members
+  and datatype list — the basis for the "no `require`, no signals" finding):
+  <https://raw.githubusercontent.com/lune-org/docs/main/src/content/docs/roblox/4-api-status.md>
+- `lune-org/docs` — `roblox/2-examples.md` (verified `deserializePlace`/`Instance.new("DataModel")`
+  examples): <https://raw.githubusercontent.com/lune-org/docs/main/src/content/docs/roblox/2-examples.md>
+- `lune-org/docs` — `api-reference/luau.md` (verified `compile`/`load`, `CompileOptions`,
+  `LoadOptions` including `environment`, `injectGlobals`, `codegenEnabled`, and the codegen
+  warning): <https://raw.githubusercontent.com/lune-org/docs/main/src/content/docs/api-reference/luau.md>
+- `lune-org/docs` — `api-reference/process.md` (`process.exit`, `args`, `env`):
+  <https://raw.githubusercontent.com/lune-org/docs/main/src/content/docs/api-reference/process.md>
+
+### Static analysis, formatting, toolchain
+
+- `Kampfkarren/selene` — `README.md` (design priorities):
+  <https://raw.githubusercontent.com/Kampfkarren/selene/main/README.md>
+- `Kampfkarren/selene` — `docs/src/SUMMARY.md` (verified complete lint list used in §7.2):
+  <https://raw.githubusercontent.com/Kampfkarren/selene/main/docs/src/SUMMARY.md>
+- `Kampfkarren/selene` — `docs/src/roblox.md` (`std = "roblox"`, 6-hour auto-update,
+  `update-roblox-std`, `std = "roblox+testez"` + `testez.yml`, `roblox-std-source = "pinned"`,
+  `generate-roblox-std`): <https://raw.githubusercontent.com/Kampfkarren/selene/main/docs/src/roblox.md>
+- `Kampfkarren/selene` — `docs/src/cli/usage.md` (verified flags: `--allow-warnings`,
+  `--display-style`, `--config`, `--pattern`, subcommands):
+  <https://raw.githubusercontent.com/Kampfkarren/selene/main/docs/src/cli/usage.md>
+- `JohnnyMorganz/StyLua` — `README.md` (`--check`, `stylua.toml` discovery, defaults
+  `column_width = 120`, `indent_type = "Tabs"`, `indent_width = 4`, `syntax`):
+  <https://raw.githubusercontent.com/JohnnyMorganz/StyLua/main/README.md>
+- `JohnnyMorganz/luau-lsp` — `README.md` (`luau-lsp analyze` as the CI entry point; Rojo sourcemap
+  via `rojo sourcemap --watch default.project.json --output sourcemap.json`; Roblox definitions
+  preloaded): <https://raw.githubusercontent.com/JohnnyMorganz/luau-lsp/main/README.md>
+- `UpliftGames/wally` — `README.md` (`wally install --locked` "Intended for use on CI machines";
+  `wally.toml`, `[dev-dependencies]`, realms):
+  <https://raw.githubusercontent.com/UpliftGames/wally/main/README.md>
+- `rojo-rbx/rojo` — `README.md`: <https://raw.githubusercontent.com/rojo-rbx/rojo/master/README.md>
+- `rojo-rbx/rokit` — `README.md` (toolchain manager; Foreman/Aftman drop-in compatibility;
+  installer script): <https://raw.githubusercontent.com/rojo-rbx/rokit/main/README.md>
+
+### Luau language
+
+- `luau-lang/luau` — `Config/include/Luau/LinterConfig.h` (verified all 29 `LintWarning::Code`
+  values and `kWarningNames`, plus the "disabled in Studio" annotations):
+  <https://raw.githubusercontent.com/luau-lang/luau/master/Config/include/Luau/LinterConfig.h>
+- `luau-lang/luau` — `Analysis/include/Luau/Linter.h` (`LintResult`, `lint()` entry point):
+  <https://raw.githubusercontent.com/luau-lang/luau/master/Analysis/include/Luau/Linter.h>
+- `luau-lang/luau` — repository root, confirming that narrative documentation now lives at
+  `luau.org` rather than in `/docs` (the requested `/docs` type-checking and linting pages do not
+  exist at that path in `master`): <https://github.com/luau-lang/luau>
+
+### Roblox platform documentation (from `Roblox/creator-docs`)
+
+- Type checking (`--!nocheck` / `--!nonstrict` / `--!strict`, `any` by default in nonstrict):
+  `content/en-us/luau/type-checking.md`
+- Data store limits (verified **4,194,304 bytes per key**, 50-character key names, 300-character
+  metadata, throughput budgets, error codes):
+  `content/en-us/cloud-services/data-stores/error-codes-and-limits.md`
+- Data store best practices (one key per player under the 4 MB limit; buffer in memory; save
+  interval shorter than session-lock expiry with the 180 s sample; exponential backoff with jitter;
+  ordered retries per key; prefer `UpdateAsync` over `SetAsync`):
+  `content/en-us/cloud-services/data-stores/best-practices.md`
+- Data stores overview (`RemoveAsync`, metadata, `DataStoreKeyInfo`):
+  `content/en-us/cloud-services/data-stores/index.md`
+- Studio testing modes (Test / Test Here / Local Server, client-server toggle and border colours,
+  Pause/Resume per side, Step Forward at 1/60 s, blue/green output labels):
+  `content/en-us/studio/testing-modes.md`
+- `ScriptContext.Error` (verified parameters `message: string`, `stackTrace: string`,
+  `script: Instance`; verified note that it does **not** fire for watchdog timeouts):
+  `content/en-us/reference/engine/classes/ScriptContext.yaml`
+- `LogService.MessageOut` (verified parameters `message: string`, `messageType: MessageType`,
+  `context: table?`): `content/en-us/reference/engine/classes/LogService.yaml`
+- Server crashes chart and out-of-memory snapshots (OOM vs platform crashes; automatic JSON
+  data-model summary; treemap viewer; CSV download):
+  `content/en-us/production/analytics/crashes.md`
+- Test on hardware (emulation limits; Android ≈65% of player base with the 2–4 GB / 4–8 GB / >8 GB
+  split; Passmark 10,000–20,000 for >50% of players; suggested device spread; Developer Console
+  <kbd>F9</kbd>, MicroProfiler shortcut, Performance Stats; thermal throttling):
+  `content/en-us/performance-optimization/test-on-hardware.md`
+- Adaptive design guidelines (input fluidity, responsive layout, dynamic sizing, legibility):
+  `content/en-us/production/publishing/adaptive-design.md`
+
+Raw-content base for all of the above:
+`https://raw.githubusercontent.com/Roblox/creator-docs/main/`
+
+### Marked-uncertain claims in this chapter
+
+- TestEZ's maintenance status is inferred from its own documentation wording and the absence of
+  recent feature work; no formal deprecation notice was found. `[UNVERIFIED]`
+- Luau `require` alias (`.luaurc`) behaviour inside Roblox differs by context and release; verify
+  against your Studio version. `[UNVERIFIED]`
+- Cross-platform bit-identity of `math.exp`/`math.pow` on the platforms Roblox ships was not
+  confirmed; the tolerance policy in §3.3 assumes it does not hold. `[UNVERIFIED]`
+- Roblox provides no first-party session-lock primitive; the `UpdateAsync`-based pattern in §6 is
+  the community standard. `[UNVERIFIED]`
+- Tool version pins in `rokit.toml` are illustrative and must be resolved against current releases.
+  `[UNVERIFIED]`
+- The `CompeyDev/setup-rokit` GitHub Action and the practice of running `run-in-roblox` on a
+  self-hosted Windows runner are community practice, not first-party.
+  `[COMMUNITY, SECOND-HAND]`

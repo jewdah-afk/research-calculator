@@ -1352,7 +1352,7 @@ The executor is written once and never changes when a layer is added:
 
 ```lua
 --!strict
-local function performReset(state, layer: Layer, defaults)
+local function performReset(state, cache, layer: Layer, defaults)
     -- 1. Advance first: production earned up to this instant must count.
     Economy.advanceTo(state, os.time())
 
@@ -1372,7 +1372,7 @@ local function performReset(state, layer: Layer, defaults)
     for _, id in layer.resets.balances do state.balances[id] = 0 end
     for _, id in layer.resets.earned do state.earned[id] = 0 end
     if layer.resets.generators then
-        for id, g in state.generators do
+        for id in state.generators do
             state.generators[id] = table.clone(defaults.generators[id])
         end
     end
@@ -1888,7 +1888,7 @@ PurchaseRemote.OnServerEvent:Connect(function(player, generatorId, requestedCoun
 
     -- Advance, then price, then charge. All server-side.
     Economy.advanceTo(state, os.time())
-    local affordable = Economy.maxAffordable(state, def)          -- §8.3
+    local affordable = Economy.maxAffordable(state, def)          -- §8.1
     local count = math.min(requestedCount, affordable)
     if count < 1 then return end
     Economy.applyPurchase(state, def, count)
@@ -1976,10 +1976,11 @@ k  =  ⌊ ───────────────────────�
 -- b: base cost, r: growth ratio (> 1), owned: units already owned.
 local function maxAffordableGeometric(budget: number, b: number, r: number, owned: number): number
     if budget <= 0 then return 0 end
-    if r <= 1 then
+    if r == 1 then
         -- Degenerate: constant cost. c = b, so k = floor(budget / b).
         return math.floor(budget / b)
     end
+    assert(r > 1, "geometric cost ratio must be >= 1")
 
     -- Work in log10 to avoid overflow: b·r^owned can exceed 1e308 long before
     -- the player's balance does in a log-space-number game.
@@ -2203,3 +2204,558 @@ this genre's audience prefers `1.23e15` to `1.23Qa`, and the ones who do will te
 you about it.
 
 ---
+
+## 9. Balance and pacing
+
+### 9.1 Cost curve families
+
+| Family | `cost(n)` | `log₁₀ cost` grows | Purchases to 1e100 | Use for |
+|---|---|---|---|---|
+| Linear | `b + d·n` | logarithmically | ~1e100 | Never alone; consumables only |
+| Polynomial | `b·n^p` | logarithmically | ~1e(100/p) | Levels within a generator |
+| **Geometric** | `b·rⁿ` | linearly in `n` | `100/log₁₀r` (e.g. 7,800 at r=1.03) | **The default. Generators.** |
+| Super-exponential | `b·r^(n^q)` | as `n^q` | `(100/log₁₀r)^(1/q)` | Hard-gated unique upgrades |
+| Tetrational | `b·r^(r^n)` | doubly exponentially | <20 | Deep prestige layers only |
+
+The reason geometric is the genre default is that it makes `log(cost)` linear in
+`n`, so the *number of purchases* a player makes is proportional to the *orders of
+magnitude* they traverse. Pick `r` from the purchase count you want:
+
+```
+r = 10^(ΔOOM_target / purchases_target)
+```
+
+For 100 orders of magnitude over 5,000 purchases, `r = 10^0.02 ≈ 1.047`. Typical
+Roblox idle games sit at `r ∈ [1.05, 1.15]`; below 1.05 the numbers move too slowly
+to feel like progress, above 1.15 individual purchases become rare and the game
+feels static.
+
+### 9.2 Time to next purchase
+
+The one metric that predicts churn:
+
+```
+T(n) = cost(n) / production(n)
+```
+
+Plot `T(n)` for every generator across the whole progression, on a log y-axis. The
+shape you want:
+
+- **`T(n)` mildly increasing within a tier** (a few percent per purchase) so each
+  purchase feels earned but the next is always visible.
+- **`T(n)` never exceeding ~5 minutes** for the cheapest available purchase, at any
+  point in the game. If the cheapest thing a player can buy is 20 minutes away,
+  the session has nothing in it.
+- **`T(n)` collapsing by 1–2 orders of magnitude at each prestige.** That collapse
+  *is* the prestige reward, more than the multiplier is.
+- **No spikes.** A spike is a wall. Find them by looking for
+  `T(n+1)/T(n) > 3` anywhere in the curve.
+
+The closed form for geometric costs makes this analytic. If `cost(n) = b·rⁿ` and
+production is `p(n) = p₀ + m·n` (each unit adds `m`):
+
+```
+T(n) = b·rⁿ / (p₀ + m·n)
+```
+
+which grows without bound — every geometric generator eventually stalls. That is
+correct and intended: it is what pushes the player to the next tier, and what makes
+the tier-unlock pacing the real design problem.
+
+### 9.3 Designing across many orders of magnitude
+
+- **Think in `log₁₀`, always.** Your design spreadsheet's primary axis is
+  "orders of magnitude of the main currency", not "hours". Every milestone, unlock
+  and layer gets an OOM number.
+- **Constant OOM-per-hour is the target.** A healthy incremental delivers a roughly
+  constant number of orders of magnitude per hour of *active* play within a layer,
+  and each new prestige layer raises that rate. Flat-lining OOM/hour is where players
+  quit; check it per layer.
+- **Each layer should be 2–5× longer than the previous**, not 50×. Multi-day walls
+  are for the endgame, after the player has demonstrated they want one.
+- **Unlock something new every 2–4 orders of magnitude** early, stretching to every
+  8–10 late. "New" can be small: a generator, an upgrade tab, a cosmetic, a
+  statistic.
+- **Never let two currencies have the same growth rate.** If they do, one of them is
+  redundant and players will notice before you do.
+
+### 9.4 A tuning harness
+
+The economy module must be requireable outside Roblox. That means: no
+`game:GetService` at module scope, no `Instance`, no `task.wait`, and the clock
+injected. Then you can run it under [Lune](https://github.com/lune-org/lune), a
+standalone Luau runtime, and iterate in milliseconds instead of Studio sessions.
+
+```lua
+--!strict
+-- tools/simulate.luau — run with: lune run tools/simulate
+local Economy = require("../src/shared/Economy")
+local Defs    = require("../src/shared/Definitions")
+
+type Policy = (state: any) -> ()
+
+-- A deterministic player model. Swap it to test different playstyles.
+local function greedyPolicy(state)
+    Economy.runAutobuyers(state, Defs)     -- buys best production-per-cost
+    if Economy.prestigeGain(state, "rebirth") >= state.prestige.rebirth.currency * 0.5 then
+        Economy.performReset(state, Defs.layers.rebirth)
+    end
+end
+
+local function simulate(policy: Policy, hours: number, stepSeconds: number)
+    local state = Economy.newState()
+    local clock = 0
+    local samples = {}
+    local nextSample = 0
+
+    while clock < hours * 3600 do
+        clock += stepSeconds
+        Economy.advanceToSimulated(state, clock)   -- injected clock, no os.time()
+        policy(state)
+        if clock >= nextSample then
+            table.insert(samples, {
+                hours = clock / 3600,
+                oom = math.log10(math.max(state.earned.ore, 1)),
+                rebirths = state.prestige.rebirth.resets,
+                production = Economy.production(state, "ore"),
+            })
+            nextSample += 600      -- sample every simulated 10 minutes
+        end
+    end
+    return samples
+end
+
+-- 10,000 simulated hours at 60 s resolution = 600,000 steps. Runs in ~1 s.
+local samples = simulate(greedyPolicy, 10000, 60)
+
+print("hours,oom,rebirths,production")
+for _, s in samples do
+    print(string.format("%.2f,%.3f,%d,%.4g", s.hours, s.oom, s.rebirths, s.production))
+end
+```
+
+Pipe the CSV into a spreadsheet or plotting tool and look at four charts:
+
+1. **OOM vs hours** — should be close to a straight line with a step at each layer.
+2. **OOM/hour vs hours** — the derivative. Flat regions are grinds.
+3. **`T(n)` heatmap** (generator × time) — find the walls.
+4. **Time between prestiges** — should grow, but sub-linearly.
+
+Then vary one constant at a time and re-run. The value of the harness is not the
+first chart; it is that changing `r` from 1.07 to 1.065 takes two seconds to
+evaluate instead of a playtest.
+
+---
+
+## 10. Testing an idle game
+
+### 10.1 Determinism is a design requirement
+
+Everything in this chapter is set up so that the economy is a pure function:
+
+```
+newState + (ordered list of timestamped actions) → state
+```
+
+To keep it that way:
+
+- **Inject the clock.** `Economy.advanceTo(state, now)` takes `now`; it never calls
+  `os.time()` itself. The one place that does is the session layer.
+- **Inject randomness.** If anything in the economy is random (crit chance, lucky
+  boxes), it takes a `Random` object seeded from state, not `math.random`.
+- **No iteration over hash tables in an order-dependent way.** `pairs`/generalised
+  `for` order is not specified. If a computation depends on order, sort the keys
+  first. This is the most common source of "the test passes locally and fails in CI".
+- **No yields inside the economy.** A yield is a place where state can change under
+  you, and it makes every function untestable in isolation.
+
+### 10.2 Fast-forwarding thousands of hours
+
+Because production is closed-form, a test can leap:
+
+```lua
+--!strict
+-- With a fixed-step harness (§9.4), a year of game time is ~525,600 steps at
+-- 60 s. With pure closed-form jumps it is one call.
+it("reaches the second prestige layer within 40 hours of idle play", function()
+    local state = Economy.newState()
+    Economy.advanceToSimulated(state, 40 * 3600)     -- one closed-form jump
+    expect(Economy.prestigeGain(state, "ascend")).to.be.ok()
+end)
+
+it("credits 12 hours offline identically to 12 hours online", function()
+    local a, b = Economy.newState(), Economy.newState()
+
+    Economy.advanceToSimulated(a, 12 * 3600)         -- one jump
+
+    for i = 1, 12 * 3600 / 0.25 do                   -- 4 Hz ticking
+        Economy.advanceToSimulated(b, i * 0.25)
+    end
+
+    -- Relative tolerance, not absolute: these are 1e20-scale numbers.
+    expect(relativeError(a.balances.ore, b.balances.ore) < 1e-9).to.equal(true)
+end)
+```
+
+That second test is the most valuable one in the suite. It is the property that
+makes offline progress correct by construction, and it catches every regression
+where someone adds a term that only the tick path applies.
+
+### 10.3 Golden-master tests on progression
+
+Balance changes should be *visible in a diff*, not discovered by players.
+
+```lua
+--!strict
+-- tests/golden/progression.spec.luau
+-- The golden file records the simulated hours to reach each milestone.
+-- Regenerate deliberately with `lune run tools/regen-golden`, and REVIEW THE DIFF.
+
+local MILESTONES = { 1e6, 1e9, 1e12, 1e18, 1e30, 1e60, 1e120 }
+
+it("matches the recorded progression curve", function()
+    local actual = Simulate.timeToMilestones(greedyPolicy, MILESTONES)
+    local golden = require("./progression.golden")
+    for i, target in MILESTONES do
+        -- 2% tolerance absorbs float noise; anything larger is a real change.
+        expect(relativeError(actual[i], golden[i]) < 0.02).to.equal(true)
+    end
+end)
+```
+
+Two more golden suites worth having:
+
+- **Migration golden.** A corpus of real saves at every historical schema version;
+  assert each migrates to current and passes `validate` (§3.2). Add a new fixture
+  every time you ship a migration.
+- **Save-size golden.** Assert a fully-maxed save stays under a budget (say 200 KB).
+  This is how you catch an unbounded collection the week it is introduced, not the
+  month a player becomes unsaveable.
+
+### 10.4 Property tests on the multiplier system
+
+The effect registry (§4.3) has invariants that are cheap to test and expensive to
+violate:
+
+```lua
+--!strict
+-- 1. Registration order cannot change the result.
+it("is order-independent", function()
+    local effects = randomEffects(50)
+    local a = evaluateWith(shuffle(effects))
+    local b = evaluateWith(shuffle(effects))
+    expect(relativeError(a, b) < 1e-12).to.equal(true)
+end)
+
+-- 2. Adding a non-negative effect never decreases the stat.
+it("is monotonic in effects", function()
+    local base = evaluateWith(effects)
+    local more = evaluateWith(append(effects, positiveEffect()))
+    expect(more >= base).to.equal(true)
+end)
+
+-- 3. Softcaps are monotonic and continuous at the threshold.
+it("softcaps are monotonic", function()
+    local cap = polynomialSoftcap(1e9, 0.5)
+    for _ = 1, 1000 do
+        local x1 = 10 ^ (math.random() * 30)
+        local x2 = x1 * (1 + math.random())
+        expect(cap(x2) >= cap(x1)).to.equal(true)
+    end
+    expect(relativeError(cap(1e9), 1e9) < 1e-12).to.equal(true)
+end)
+
+-- 4. Closed-form buy-max agrees with brute force at small scale.
+it("buy-max matches a loop", function()
+    for _ = 1, 500 do
+        local b = 10 ^ (math.random() * 6)
+        local r = 1 + math.random() * 0.5
+        local owned = math.random(0, 200)
+        local budget = 10 ^ (math.random() * 20)
+
+        local closed = buyMaxGeometric(budget, b, r, owned)
+
+        local brute, spent = 0, 0
+        while brute < 100000 do
+            local next = b * r ^ (owned + brute)
+            if spent + next > budget then break end
+            spent += next
+            brute += 1
+        end
+
+        expect(closed).to.equal(brute)
+    end
+end)
+
+-- 5. No operation ever produces a non-finite number.
+it("never produces NaN or inf", function()
+    local state = randomLateGameState()
+    for _, stat in ALL_STATS do
+        expect(math.isfinite(Effects.evaluate(stat, 1, state))).to.equal(true)
+    end
+end)
+```
+
+### 10.5 Tooling notes
+
+- **Jest Lua** (`jsdotlua/jest-lua`) is what Roblox uses internally for its own apps
+  and core scripts, and its README states it "can currently only run inside of
+  Roblox" — so a Jest Lua suite needs Studio or `run-in-roblox` in CI.
+- **Lune** runs plain Luau outside Roblox with no engine dependency. Pair it with a
+  small hand-rolled `expect` (or any pure-Luau runner) for the economy tests, which
+  is where the vast majority of your logic lives if you followed §10.1.
+- **Mock DataStores.** `ProfileStore.Mock` mirrors the whole ProfileStore API against
+  an in-memory store; Lapis ships `nezuo/data-store-service-mock` as a dev
+  dependency. Use them for the session-locking and migration tests — those are the
+  ones you cannot afford to only test in production.
+- **Split your suite.** Economy + migrations run in Lune on every commit (seconds).
+  Integration (remotes, replication, ProfileStore) runs in `run-in-roblox` on merge.
+
+---
+
+## Reference state schema
+
+A complete, copy-paste starting point. Everything here is JSON-serialisable, free
+of the ProfileStore-documented hazards (no gaps, no mixed tables, no userdata, no
+Instances), and shaped so that adding a currency, a generator or a prestige layer
+is an additive change.
+
+```lua
+--!strict
+-- ReplicatedStorage/Shared/Schema.luau
+
+local Schema = {}
+
+Schema.VERSION = 3   -- must equal #Migrations; asserted at startup
+
+export type GeneratorState = {
+    count: number,          -- units owned
+    level: number,          -- per-generator upgrade level
+    unlocked: boolean,
+}
+
+export type LayerState = {
+    currency: number,       -- spendable layer currency
+    lifetime: number,       -- total ever earned in this layer (drives milestones)
+    resets: number,         -- number of resets performed
+    lastResetAt: number,    -- os.time()
+    upgrades: { [string]: true },
+}
+
+export type PlayerState = {
+    schema: number,
+
+    meta: {
+        firstJoinAt: number,
+        lastAdvancedAt: number,     -- THE offline anchor (§2). Server os.time().
+        lastSaveAt: number,
+        sessionCount: number,
+        totalPlaytime: number,
+        clockAnomalies: number,     -- count of negative-elapsed events (§2.5)
+    },
+
+    balances: { [string]: number },      -- currencyId -> amount
+    earned:   { [string]: number },      -- currencyId -> lifetime earned
+
+    generators: { [string]: GeneratorState },
+    upgrades:   { [string]: true },      -- set; ids prefixed by layer (§5.3)
+
+    prestige: { [string]: LayerState },  -- layerId -> state
+
+    achievements: { [string]: number },  -- achievementId -> completion os.time()
+
+    -- Bounded. Enforce MAX_RECEIPTS in code and assert it at save time.
+    receipts: { string },                -- last N granted PurchaseIds (§7.3)
+
+    settings: {
+        notation: string,                -- "standard" | "scientific" | "engineering"
+        reducedMotion: boolean,
+        confirmPrestige: boolean,
+        autobuy: { [string]: boolean },  -- generatorId -> enabled
+        autobuyReserve: number,
+    },
+
+    permanent: { [string]: number },     -- survives every reset; Robux purchases
+}
+
+Schema.DEFAULT = {
+    schema = Schema.VERSION,
+    meta = {
+        firstJoinAt = 0, lastAdvancedAt = 0, lastSaveAt = 0,
+        sessionCount = 0, totalPlaytime = 0, clockAnomalies = 0,
+    },
+    balances = { ore = 0 },
+    earned   = { ore = 0 },
+    generators = {
+        -- id -> state. Keep ids short and stable; they are in every save forever.
+        g1 = { count = 1, level = 0, unlocked = true },
+    },
+    upgrades = {},
+    prestige = {
+        rebirth = { currency = 0, lifetime = 0, resets = 0, lastResetAt = 0, upgrades = {} },
+        ascend  = { currency = 0, lifetime = 0, resets = 0, lastResetAt = 0, upgrades = {} },
+    },
+    achievements = {},
+    receipts = {},
+    settings = {
+        notation = "standard",
+        reducedMotion = false,
+        confirmPrestige = true,
+        autobuy = {},
+        autobuyReserve = 0,
+    },
+    permanent = {},
+} :: PlayerState
+
+return Schema
+```
+
+**Derived state — never persisted, rebuilt from the above:**
+
+```lua
+export type Derived = {
+    version: number,             -- bumped on every stored mutation
+    computedAtVersion: number,
+
+    -- production.<currencyId>: units per second, after all effects and caps
+    rates: { [string]: number },
+    -- Polynomial coefficients for the closed form (§1.5, §7.2)
+    coeff: { [string]: { number } },
+    -- Evaluated stats with their audit trail (§4.3)
+    stats: { [string]: number },
+    breakdown: { [string]: any },
+
+    -- UI conveniences
+    costOfNext: { [string]: number },
+    maxAffordable: { [string]: number },
+    prestigeGain: { [string]: number },
+    timeToNextPurchase: { [string]: number },   -- the §9.2 metric, live
+}
+```
+
+**Invariants to assert at startup (in Studio) and on a sampled fraction of live
+sessions:**
+
+1. `Schema.VERSION == #Migrations`
+2. Every `generators` id exists in `Definitions.generators`
+3. Every `upgrades` id starts with a known layer prefix
+4. Every `prestige` key exists in `Layers`
+5. `#state.receipts <= MAX_RECEIPTS`
+6. `math.isfinite(v)` for every number in the tree
+7. `state.meta.lastAdvancedAt <= os.time()`
+8. `state.earned[c] >= state.balances[c]` for every currency `c`
+
+---
+
+## Sources
+
+### Roblox official documentation
+Read from the public `Roblox/creator-docs` repository (the source behind
+`create.roblox.com/docs`), September 2026.
+
+- **Data store error codes and limits** —
+  `content/en-us/cloud-services/data-stores/error-codes-and-limits.md`.
+  Source of: the 4,194,304-character per-key limit; 50-character name/key/scope
+  limits; 300-character metadata limit; per-key throughput (25 MB/min read,
+  4 MB/min write, rounded up to the next kilobyte per request); experience-level
+  budgets (`300 + CCU × 40` read, `300 + CCU × 20` write, shared with Open Cloud);
+  per-server defaults (`StandardRead`/`StandardWrite` = `60 + numPlayers × 40`,
+  `OrderedWrite` = `30 + numPlayers × 5`); the 30-request queue limit; the storage
+  formula `500 MB + 1 MB × lifetime users`; and the explicit instruction not to
+  pre-compress data.
+- **Best practices for data stores** —
+  `content/en-us/cloud-services/data-stores/best-practices.md`.
+  Source of: one-key-per-player guidance; static key patterns; buffer-in-memory +
+  periodic save (the official sample uses 180 s, "shorter than any session-lock
+  expiration"); stagger with jitter; retry with backoff and in-order retries per
+  key; prefer `UpdateAsync` over `SetAsync`; hot-key sharding; and the statement
+  that **DataStore2 is legacy and should not be used for new experiences**.
+- **`DataStoreService`** —
+  `reference/engine/classes/DataStoreService.yaml`. Source of
+  `GetRequestBudgetForRequestType` and `SetRateLimitForRequestType`
+  (`rateLimit = baseLimit + perPlayerLimit × numPlayers`, per-request-type
+  constraint table, "call once per request type during server initialization",
+  `UpdateAsync`/`OnUpdate` not configurable).
+- **`GlobalDataStore`** — `reference/engine/classes/GlobalDataStore.yaml`.
+  Source of: the 4-second local read cache; `UpdateAsync` retry-until-saved
+  semantics and `nil`-cancels-write; the UTF-8 validity requirement ("a single byte
+  greater than 127 will not be valid UTF-8 and the `UpdateAsync()` attempt will
+  fail"); Set-vs-Update comparison.
+- **`DataModel:BindToClose`** — `reference/engine/classes/DataModel.yaml`.
+  Source of the 30-second shutdown budget and "bound functions are called in
+  parallel".
+- **`RunService`** — `reference/engine/classes/RunService.yaml`. Source of the
+  frame phase ordering (`PreAnimation → PreSimulation → physics → PostSimulation →
+  Heartbeat`), the `Stepped`→`PreSimulation` and `RenderStepped`→`PreRender`
+  migration notes, and the `deltaTimeSim` caveat.
+- **`os` library** — `reference/engine/libraries/os.yaml`. Source of the
+  `os.time()` warning ("uses the device's local clock… users can easily disable sync
+  behavior and set the system time to anything they want") and the `os.clock()`
+  monotonicity guarantee.
+- **`Workspace:GetServerTimeNow`** — `reference/engine/classes/Workspace.yaml`.
+  Source of: monotonic, within 0.6% of local clock rate, and "not suitable for
+  things like timed rewards, as it is not secure".
+- **`MarketplaceService.ProcessReceipt`** —
+  `reference/engine/classes/MarketplaceService.yaml`. Source of the delivery
+  guarantees (including on join), "set the callback one time in a single server-side
+  Script", no time-based retry, no yield timeout, non-deterministic ordering with
+  multiple pending purchases, and that unresolved purchases are not refunded.
+- **`UnreliableRemoteEvent`** —
+  `reference/engine/classes/UnreliableRemoteEvent.yaml`. Source of the 1000-byte
+  payload drop threshold and the ~500 requests/second/client shared throttle.
+- **Remote events and callbacks** — `content/en-us/scripting/events/remote.md`.
+- **Numbers** — `content/en-us/luau/numbers.md`. Source of the double-precision
+  range (`±1.7e308`, ~15 digits).
+- **`math` library** — `reference/engine/libraries/math.yaml`. Confirms
+  `math.isfinite` / `math.isnan` / `math.isinf` exist and that there is **no**
+  `math.expm1` (hence the series fallback in §1.6).
+
+### Libraries (source read directly)
+
+- **ProfileStore** — `MadStudioRoblox/ProfileStore`, `ProfileStore.luau`
+  (~2,200 lines, single ModuleScript). Source of the API surface, the serialisation
+  warnings quoted in §3.2, and the constants: `AUTO_SAVE_PERIOD = 300`,
+  `LOAD_REPEAT_PERIOD = 10`, `FIRST_LOAD_REPEAT = 5`, `SESSION_STEAL = 40`,
+  `ASSUME_DEAD = 630`, `START_SESSION_TIMEOUT = 120`,
+  `CRITICAL_STATE_ERROR_COUNT = 5`, `MAX_MESSAGE_QUEUE = 1000`, and the
+  autosave-spreading logic (`auto_save_index_speed = AUTO_SAVE_PERIOD /
+  auto_save_list_length`).
+- **Lapis** — `nezuo/lapis`, `README.md`, `docs/Migrations.md`, `wally.toml`
+  (v0.3.4, depends on `evaera/promise@4.0.0`, dev-depends on
+  `nezuo/data-store-service-mock`). Source of the feature list, the declarative
+  `migrations` array, the backwards-compatibility hazard ("a player might join a new
+  server, leave, and then join an old server"), and the README's own caveat that it
+  "has not been battle-tested in a large production game yet".
+- **Jest Lua** — `jsdotlua/jest-lua`. Source of "Roblox uses Jest Lua internally"
+  and "can currently only run inside of Roblox".
+- **Lune** — `lune-org/lune`. Standalone Luau runtime used for the §9.4 harness.
+- **Bnum** — `SillyDev2026/Bnum5`. A current Luau big-number library using
+  `{sign, logMagnitude}` with `Value = sign × 10^logMagnitude`, `--!native`,
+  `--!optimize 2`. `[COMMUNITY, SECOND-HAND]` — cited as an example of the standard
+  representation; not benchmarked or audited here.
+
+### Marked claims
+
+- `[UNVERIFIED]` — `HttpService:JSONEncode` behaviour for `nan`/`±math.huge` is not
+  specified in the documentation. §3.2's advice (validate with `math.isfinite`
+  before saving) is correct regardless; test the specific behaviour in your build if
+  you need to depend on it.
+- `[UNVERIFIED]` — the logistic-growth closed form in §2.3's table is derived here,
+  not taken from a source. Verify numerically against a fine-grained simulation
+  before shipping it.
+- `[INFERENCE]` — "a Roblox game server's clock is Roblox's machine, not the
+  player's" (§2.5). This follows from the architecture but Roblox publishes no
+  accuracy guarantee for server-side `os.time()`.
+- `[COMMUNITY, SECOND-HAND]` — the prestige-curve attributions (Cookie Clicker's
+  cube-root heavenly chips, Antimatter Dimensions' magnitude-exponential infinity
+  points and dilation), the smooth offline-cap curve pattern, and the typical
+  numeric ranges given for `r`, offline caps and efficiency. These are design
+  folklore from the wider incremental-game community, not documented APIs. They are
+  reasonable starting points, not authorities.
+- Roblox DevForum threads were not used as primary sources; where community practice
+  is cited it is marked and traceable to library source code where possible.
+
+---
+
+*Chapter 61. Companion chapters: 46 (code architecture), 47 (security and
+anti-exploit), 28 (networking and data architecture), 51 (liveops and analytics).*
