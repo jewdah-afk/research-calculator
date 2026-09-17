@@ -148,6 +148,24 @@ cost curve — looping is far too slow at scale.
   stingers, preload with ContentProvider, use SoundGroups for mixing.
 - **Pool everything.** At this purchase rate, instantiating effects per event
   will kill the frame.
+- **Impact-stack timing** — stagger, don't fire simultaneously. Audio at t=0,
+  particles at +16 ms, number popup at +80 ms, counter at +150 ms. The popup is
+  the most commonly mistimed element, and the staggering is where the quality
+  actually lives.
+- **`LightInfluence` has an insertion-default trap**: it defaults to **1** when
+  inserted via Studio and **0** via `Instance.new()`. Artist-authored and
+  code-authored emitters will silently differ. Set it explicitly, always.
+- **Log-space spring counters.** A linear lerp between 1e6 and 1e9 is visually
+  invisible — the number appears to jump. Animate counters in log space. This is
+  the genre-specific feel win and most implementations get it wrong.
+- **Deprecated / unusable, confirmed:** `ParticleEmitter.VelocitySpread` and
+  `ContentProvider:Preload` are deprecated; `ParticleEmitter:FastForward`,
+  `Highlight.LineThickness` and `Highlight.ReservedId` are `RobloxScriptSecurity`
+  and unavailable to you.
+- **Decide the audio architecture up front.** Legacy `Sound` and the advanced
+  `AudioPlayer`/`AudioEmitter` system are separate, and several `SoundService`
+  properties explicitly do not affect the advanced one. Mixing them means your
+  global mix tuning applies to only half your sounds. Pick one.
 
 ---
 
@@ -184,6 +202,12 @@ cost curve — looping is far too slow at scale.
   rubric** — rubric scores inflate and stop discriminating by round three.
   Iterate until yours wins, not until a round counter expires.
 - **Profile on a real low-end phone.** Studio lies about performance.
+- **You cannot read the client's graphics quality.**
+  `UserGameSettings.GraphicsQualityLevel` is `RobloxScriptSecurity`, and the one
+  property you *can* read, `SavedQualityLevel`, returns `Automatic` by default
+  and tells you nothing. So "degrade by quality tier" is not implementable as
+  written anywhere — build the fallback on **measured frame time** instead, and
+  do not let an agent claim a quality-tier check that cannot exist.
 - **Check the MicroProfiler `Process GuiEffect` labels specifically.**
 - **Verify every silent-failure surface** — did that sink accept the image, or
   no-op?
