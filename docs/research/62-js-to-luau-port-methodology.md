@@ -741,3 +741,892 @@ false, which is a valid strict weak ordering only by accident, and the resulting
 order is arbitrary. Sanitize before sorting.
 
 ---
+
+## 5. `undefined`, `null`, `nil`, and holes
+
+JavaScript has two absent values. `undefined` means "never assigned / no such
+property"; `null` means "explicitly nothing". `undefined == null` is `true` but
+`undefined === null` is `false`. Luau has one: `nil`.
+
+Most of the time the collapse is harmless. It is not harmless when the original
+uses `null` as a *third state*:
+
+```js
+lastPrestigeAt: undefined   // never prestiged
+lastPrestigeAt: null        // prestige reset was cleared by a migration
+lastPrestigeAt: 1690000000  // a timestamp
+```
+
+If you find this, model it explicitly rather than hoping. Two options, in order
+of preference:
+
+```lua
+-- (a) a discriminated field — always preferred, survives JSON
+lastPrestige = { state = "never" }                  -- | "cleared" | "at"
+lastPrestige = { state = "at", t = 1690000000 }
+
+-- (b) a sentinel, if you must keep the field shape
+local NULL = newproxy(false)   -- unique, not equal to anything else
+```
+
+Option (b) does **not** survive `JSONEncode`, so if the field is persisted you
+have to map it at the save boundary anyway — which is option (a) with extra
+steps.
+
+### 5.1 Sparse arrays and `#t`
+
+A JS array can have holes: `const a = [1, , 3]` has `a.length === 3` with index
+`1` absent. `Array.prototype.sort` even documents that it "preserves empty slots"
+and moves them to the end (MDN).
+
+Luau has nothing equivalent. A table with a `nil` in the middle of its array part
+has an **undefined length**. From `VM/src/ltable.cpp`:
+
+> Try to find a boundary in table `t`. A `boundary` is an integer index such that
+> `t[i]` is non-nil and `t[i+1]` is nil (and 0 if `t[1]` is nil).
+
+`luaH_getn` finds *a* boundary via a branchless binary search over the array
+part, with a cached-boundary fast path. For `{1, nil, 3}` both `1` and `3` are
+valid answers, and which one you get depends on the table's internal array size,
+its allocation history and whether a boundary was cached. It is not random, but
+it is not something you can reason about from the source code of your game.
+
+Consequences for the port:
+
+- **Never write `nil` into an array.** Use `table.remove` (which shifts), or
+  overwrite with a sentinel, or switch to a dictionary keyed by id plus an
+  explicit `count`.
+- **`ipairs` stops at the first `nil`**; the generalized `for _, v in t` iterator
+  and `pairs` do not. Mixing them over a possibly-holed table gives different
+  element counts in different places in your code.
+- **A save round-trip can create holes.** `JSONDecode` of `[1, null, 3]` produces
+  a table where index 2 is `nil`. Validate array fields on load by rebuilding
+  them densely rather than trusting them.
+
+Practical rule for state design: **the simulation's `State` contains no arrays
+with gaps and no `nil` values at all.** Absent means "the key is not present in a
+dictionary", never "there is a hole in a list". This one rule removes an entire
+class of divergence, makes `#` meaningful everywhere, and makes the JSON round
+trip total.
+
+---
+
+## 6. Number semantics
+
+Both languages use IEEE-754 binary64 for all numbers. Roblox documents the number
+type as "a double-precision (64-bit) floating-point number ... around 15 digits
+of precision" and notes that "Luau doesn't distinguish between integers and
+numbers" (`creator-docs`, `luau/numbers.md`). That means the good news first:
+
+- `0.1 + 0.2` is `0.30000000000000004` in both. Identical.
+- Accumulated float error in a per-tick production sum is identical, *provided
+  the operation order is identical*.
+- `Number.MAX_SAFE_INTEGER` (`9007199254740991`, 2^53−1) is the same boundary in
+  Luau. Past it, `x + 1 == x + 2` in both languages
+  ([MDN, *Number.MAX_SAFE_INTEGER*](https://github.com/mdn/content/blob/main/files/en-us/web/javascript/reference/global_objects/number/max_safe_integer/index.md)).
+  An idle game that counts "total clicks" past 2^53 is already lying in the
+  original; the port should lie identically, not "fix" it.
+- Division by zero gives `inf`/`-inf`/`nan` in both, with no exception.
+
+Now the divergences.
+
+### 6.1 `%` — different signs, a real bug source
+
+JS `%` is a **remainder**: "It always takes the sign of the dividend"
+([MDN, *Remainder*](https://github.com/mdn/content/blob/main/files/en-us/web/javascript/reference/operators/remainder/index.md)),
+so `-13 % 5 === -3` and `-4 % 2 === -0`.
+
+Luau `%` is a **floored modulo**. From `VM/src/lnumutils.h`:
+
+```c
+inline double luai_nummod(double a, double b)
+{
+    return a - floor(a / b) * b;
+}
+```
+
+So `-13 % 5 == 2`. MDN even names the distinction: "the modulo result always has
+the same sign as the *divisor*, while the remainder has the same sign as the
+*dividend*, which can make them differ by one unit of `d`."
+
+| Expression | JS | Luau |
+|---|---|---|
+| `13 % 5` | `3` | `3` |
+| `-13 % 5` | `-3` | `2` |
+| `13 % -5` | `3` | `-2` |
+| `-13 % -5` | `-3` | `-3` |
+
+Where this bites in an incremental game: cycle phase (`tick % period` where tick
+can go negative after an offline-time correction), wrap-around tier indices,
+"every Nth" triggers computed from a signed delta, and hash functions ported from
+the original's RNG.
+
+Translation:
+
+```lua
+-- exactly JS `a % b`
+function M.jsMod(a: number, b: number): number
+	return math.fmod(a, b)   -- "rounds the quotient towards zero"
+end
+```
+
+`math.fmod` is documented as returning "the remainder of the division of `x` by
+`y` that rounds the quotient towards zero" (`creator-docs`,
+`libraries/math.yaml`) — i.e. C's `fmod`, i.e. JS's `%`. Use `%` only where you
+have confirmed both operands are non-negative.
+
+### 6.2 Integer division and truncation
+
+`Math.floor(a / b)` → `a // b` or `math.floor(a / b)`. Luau's floor division is
+documented with a negative example: `-10 // 4 = -3`
+(`creator-docs`, `luau/operators.md`) — wait, that is Roblox's own table, and it
+is what `floor(-2.5) = -3` gives. Consistent.
+
+But `(a / b) | 0` and `Math.trunc(a / b)` truncate toward zero, which is a
+*different* function on negatives:
+
+```lua
+function M.jsTrunc(x: number): number
+	return x >= 0 and math.floor(x) or math.ceil(x)
+	-- or: local i = math.modf(x) ; return i
+end
+```
+
+`math.modf` "returns two numbers: the integral part of `x` and the fractional
+part of `x`" and is the cleanest spelling.
+
+### 6.3 Rounding
+
+This one is documented on both sides and they disagree.
+
+MDN, `Math.round`: "If the fractional portion is exactly 0.5, the argument is
+rounded to the next integer in the direction of +∞", with the explicit note:
+"This differs from many languages' `round()` functions, which often round
+half-increments *away from zero*, giving a different result in the case of
+negative numbers with a fractional part of exactly 0.5." Worked examples:
+`Math.round(-20.5) === -20`, `Math.round(20.5) === 21`, `Math.round(-0.1) === -0`.
+
+Roblox, `math.round`: "For values like `0.5` that are equidistant to two
+integers, the value with the greater difference between it and zero is chosen.
+In other words, the function 'rounds away from zero' such that `0.5` rounds to
+`1` and `-0.5` rounds to `-1`."
+
+| x | `Math.round(x)` | `math.round(x)` |
+|---|---|---|
+| `20.5` | `21` | `21` |
+| `-20.5` | `-20` | **`-21`** |
+| `-0.5` | `-0` | **`-1`** |
+| `-2.5` | `-2` | **`-3`** |
+
+Translation:
+
+```lua
+function M.jsRound(x: number): number
+	return math.floor(x + 0.5)
+end
+```
+
+MDN notes the one case where this differs from `Math.round`: "When `x` is -0, or
+-0.5 ≤ x < 0, `Math.round(x)` returns -0, while `Math.floor(x + 0.5)` returns
+0." Since `-0 == 0` in Luau (`creator-docs`, `luau/numbers.md`: "In Luau, the
+number `-0` is equivalent to `0`"), this difference is unobservable in Luau
+arithmetic — but it *is* observable in the sign of a formatted string. If the
+original ever prints a rounded negative-fractional value, check it.
+
+`toFixed` has no Luau equivalent either. `string.format("%.2f", x)` uses C's
+round-half-to-even on the exact binary value, while JS `toFixed` is specified
+over the decimal expansion. They agree on the overwhelming majority of inputs and
+disagree on exact ties. For displayed numbers this rarely matters; for a number
+that is *parsed back* into state, port the formatter explicitly.
+
+### 6.4 Bitwise
+
+JS `&`, `|`, `^`, `~`, `<<`, `>>` "convert both operands to 32-bit integers" —
+**signed** — and return a signed result (MDN, *Bitwise AND*). `>>>` is the
+unsigned right shift.
+
+Luau has no bitwise operators; `bit32` "treats numbers as unsigned 32-bit
+integers; numbers will be converted to this before being used"
+(`creator-docs`, `libraries/bit32.yaml`).
+
+| JS | Luau | Sign note |
+|---|---|---|
+| `a & b` | `bit32.band(a, b)` | result is unsigned; convert if the JS result could be negative |
+| `a \| b` | `bit32.bor(a, b)` | same |
+| `a ^ b` | `bit32.bxor(a, b)` | same |
+| `~a` | `bit32.bnot(a)` | `~0` is `-1` in JS, `4294967295` in Luau |
+| `a << b` | `bit32.lshift(a, b)` | |
+| `a >> b` | `bit32.arshift(a, b)` | arithmetic shift: "Vacant bits on the left are filled with copies of the higher bit of `x`" |
+| `a >>> b` | `bit32.rshift(a, b)` | logical shift |
+| `x \| 0` (truncate idiom) | `M.jsTrunc(x)` — **not** a bit op | `\| 0` also wraps to 32 bits, which `jsTrunc` does not; if the original relies on the wrap, use `M.toI32(bit32.bor(x, 0))` |
+
+```lua
+function M.toI32(u: number): number          -- unsigned bit32 result -> signed JS result
+	return u >= 0x80000000 and u - 0x100000000 or u
+end
+```
+
+The most common place this matters in an incremental port is a hand-rolled PRNG
+(xorshift, mulberry32, LCG) copied from the original. Those are *built* out of
+32-bit wraparound, and a sign mismatch changes the entire random stream — which
+changes every drop, every crit, every procedural name. Port the PRNG first and
+golden-test it on its own (§15.2) before anything that consumes it.
+
+---
+
+## 7. Strings and patterns
+
+`string.sub` is 1-based and **end-inclusive**; `String.prototype.slice` is
+0-based and end-exclusive.
+
+| JavaScript | Luau |
+|---|---|
+| `s.length` | `#s` or `string.len(s)` |
+| `s[i]` | `string.sub(s, i + 1, i + 1)` |
+| `s.slice(a, b)` | `string.sub(s, a + 1, b)` |
+| `s.slice(-3)` | `string.sub(s, -3)` — negative indices work the same |
+| `s.charCodeAt(i)` | `string.byte(s, i + 1)` |
+| `String.fromCharCode(n)` | `string.char(n)` |
+| `s.toUpperCase()` | `string.upper(s)` |
+| `s.indexOf(sub)` | `string.find(s, sub, 1, true)` → returns `nil` or a **1-based** start |
+| `s.includes(sub)` | `string.find(s, sub, 1, true) ~= nil` |
+| `s.startsWith(p)` | `string.sub(s, 1, #p) == p` |
+| `s.repeat(n)` | `string.rep(s, n)` |
+| `s.trim()` | `(string.gsub(s, "^%s*(.-)%s*$", "%1"))` — note the parens to drop the count |
+| `s.padStart(n, "0")` | `string.rep("0", math.max(0, n - #s)) .. s` |
+| `s.split(",")` | see below |
+| `` `${a} and ${b}` `` | `` `{a} and {b}` `` (Luau string interpolation) or `string.format` |
+| `arr.join(",")` | `table.concat(arr, ",")` |
+
+**The fourth argument to `string.find` is not optional in spirit.** `string.find`
+treats its pattern as a *pattern* unless you pass `true` for `plain`. Searching
+for a literal `"1.5x"` without `plain = true` matches `"145x"` too, because `.`
+is a wildcard. Every `indexOf` port must pass `true`.
+
+### 7.1 `split`
+
+```lua
+-- non-empty fields only (like s.split(",").filter(Boolean))
+local function splitNonEmpty(s: string, sep: string): {string}
+	local out = {}
+	for part in string.gmatch(s, "([^" .. sep .. "]+)") do
+		table.insert(out, part)
+	end
+	return out
+end
+
+-- exact JS semantics: preserves empty fields, so "a,,b" -> {"a","","b"}
+-- and ",".split(",") -> {"", ""}
+local function split(s: string, sep: string): {string}
+	local out, start = {}, 1
+	while true do
+		local i, j = string.find(s, sep, start, true)
+		if not i then
+			table.insert(out, string.sub(s, start))
+			return out
+		end
+		table.insert(out, string.sub(s, start, i - 1))
+		start = j + 1
+	end
+end
+```
+
+Use the exact version in save parsing. The `gmatch` version silently drops empty
+fields, and a save format with an empty field is exactly where that bites.
+
+### 7.2 Lua patterns are not regular expressions
+
+This is a language difference, not an API difference. Lua patterns have:
+
+- character classes `%a %d %s %w %l %u %p %c %x` and their negations `%A %D …`
+- sets `[abc]`, ranges `[a-z]`, negated sets `[^abc]`
+- quantifiers `*` (greedy 0+), `+` (greedy 1+), `-` (**lazy** 0+), `?` (0 or 1)
+- anchors `^` and `$`
+- captures `(...)`, position captures `()`, backreferences `%1`–`%9`
+- `%b()` balanced match and `%f[set]` frontier
+
+and they do **not** have: alternation (`|`), grouping for quantification
+(`(ab)+`), counted repetition (`{2,5}`), lookahead/lookbehind, non-greedy `+?`,
+named captures, or Unicode classes. The 12 magic characters are
+``^ $ ( ) % . [ ] * + - ?`` (`creator-docs`, `luau/strings.md`), escaped with
+`%`, and note that `-` is magic (it is the lazy quantifier) while `/` and `{`
+are not.
+
+| Regex | Lua pattern | Verdict |
+|---|---|---|
+| `/\d+/` | `"%d+"` | direct |
+| `/\w+/` | `"%w+"` | close — Lua `%w` excludes `_`, JS `\w` includes it; use `"[%w_]+"` |
+| `/\s*$/` | `"%s*$"` | direct |
+| `/^v(\d+)$/` | `"^v(%d+)$"` | direct |
+| `/[A-Za-z_][A-Za-z0-9_]*/` | `"[%a_][%w_]*"` | direct |
+| `/.+?,/` | `".-,"` | direct (`-` is the lazy star) |
+| `/\d{2,4}/` | none | rewrite: match `"%d+"` and check the length |
+| `/(foo\|bar)/` | none | rewrite: two `string.find` calls, or a loop over alternatives |
+| `/(ab)+/` | none | rewrite as a loop |
+| `/(?<=x)y/` | none | rewrite with an explicit index check |
+| `/\bword\b/` | `"%f[%w]word%f[%W]"` | the frontier pattern is the idiom, and it is not obvious |
+| `s.replace(/a/g, "b")` | `string.gsub(s, "a", "b")` — `gsub` is global by default | note `gsub` returns **two** values; wrap in parens when using it as an expression |
+
+When the original uses a regex you cannot express, do not approximate. Either
+rewrite the logic (usually the right answer — most game regexes are parsing a
+save string or a number format, and hand-written parsing is clearer anyway), or
+vendor a real regex engine. Under Lune you have `@lune/regex`, which is useful
+for the *extraction tooling* even though it is not available in-engine.
+
+One more trap: `gsub`'s replacement string treats `%` specially (`%1` is a
+capture, `%%` is a literal `%`). Any replacement containing a percent sign — a
+number formatter, say — must escape it.
+
+---
+
+## 8. Objects, prototypes, `this`, and `===`
+
+`===` → `==`. Luau's `==` never coerces, so it *is* `===`. Port JS `==` only
+after reading what the coercion was doing; in game code it is almost always
+either `x == null` (meaning "null or undefined", which is `x == nil` in Luau) or
+a latent bug.
+
+Prototype OOP maps onto metatables mechanically:
+
+```js
+class Building {
+  constructor(def, owned) { this.def = def; this.owned = owned; }
+  cost() { return this.def.baseCost * Math.pow(this.def.costMul, this.owned); }
+  static fromSave(def, s) { return new Building(def, s.owned); }
+}
+```
+
+```lua
+local Building = {}
+Building.__index = Building
+
+function Building.new(def, owned)
+	return setmetatable({ def = def, owned = owned }, Building)
+end
+
+function Building:cost()            -- `self` is the implicit first parameter
+	return self.def.baseCost * self.def.costMul ^ self.owned
+end
+
+function Building.fromSave(def, s)  -- `.` not `:` — a static
+	return Building.new(def, s.owned)
+end
+```
+
+| JS | Luau |
+|---|---|
+| `class X { … }` | `local X = {} ; X.__index = X` |
+| `new X(a)` | `X.new(a)` calling `setmetatable({}, X)` |
+| `this` | `self`, the first parameter of a `:` method |
+| `obj.method()` | `obj:method()` |
+| `X.staticMethod()` | `X.staticMethod()` (defined with `.`) |
+| `class Y extends X` | `setmetatable(Y, {__index = X})` plus `Y.__index = Y` |
+| `super.m()` | `X.m(self, …)` |
+| `x instanceof X` | `getmetatable(x) == X`, or an explicit `x.__class == "X"` field |
+| `get`/`set` accessors | `__index`/`__newindex` functions |
+| `toString()` | `__tostring` |
+| `Symbol.iterator` | `__iter` |
+| operator overloading (none) | `__add`, `__mul`, `__lt`, `__eq`, `__unm`, … |
+
+**`this` is the real hazard, and it is a hazard in both directions.** In JS,
+`const f = obj.method; f()` loses `this` (and in strict mode `this` is
+`undefined`). Games work around it with `.bind(this)` or arrow functions in
+constructors. In Luau, `local f = obj.method; f()` passes whatever the first
+argument is as `self` — so `f(5)` silently sets `self = 5` and then errors
+somewhere else, or worse, reads `5.owned` as `nil` and produces a wrong number.
+Every callback you register must be wrapped:
+
+```lua
+button.Activated:Connect(function() controller:onBuy(id) end)
+-- NOT: button.Activated:Connect(controller.onBuy)
+```
+
+Closures are identical in both languages — lexical scope, capture by reference,
+upvalues shared between sibling closures. A closure-heavy original ports
+directly, and closure-based "private state" needs no translation at all.
+`--!strict` plus the `self` type annotation (`function Building.cost(self:
+Building)`) catches most of the `.`/`:` mistakes at analysis time.
+
+One Luau-only fact worth knowing: metatables are also how big-number libraries
+give you `a + b` on `Decimal`-like values (§11). That means the *same expression
+shape* as the JS `Decimal` code is often unavailable (JS has no operator
+overloading, so the original is written as `a.plus(b)`), and you will be
+tempted to "improve" it to `a + b`. Don't, during the port — keep the shape so
+the diff against the original stays readable. Improve it after the gate is green.
+
+---
+
+## 9. JSON
+
+`HttpService:JSONEncode` / `JSONDecode` replace `JSON.stringify` / `JSON.parse`.
+Both are documented as usable "regardless of whether HTTP requests are enabled"
+and are `thread_safety: Safe` (`creator-docs`, `classes/HttpService.yaml`).
+Under Lune, the equivalent is `serde.encode("json", t)` /
+`serde.decode("json", s)` — write a two-line shim so `sim/` code is identical in
+both environments.
+
+The documented encoding rules, verbatim from the reference YAML, and what each
+one costs you:
+
+| Rule (documented) | Consequence for a save schema |
+|---|---|
+| "Keys of the table must be either strings or numbers. If a table contains both, an array takes priority (string keys are ignored)." | **Silent data loss.** A table like `{[1]="a", name="x"}` loses `name`. Never mix. |
+| "An empty Luau table (`{}`) generates an empty JSON array (e.g. `[]`)." | An empty dictionary round-trips as an array. `JSON.stringify({})` is `"{}"`. |
+| "avoid `nil` values for any index" | A `nil` in the middle of an array truncates or holes it, per §5.1. |
+| "Cyclic table references cause an error." | Loud, and fine — but shared sub-tables get *duplicated*, not shared, on decode. |
+| "allows values such as `inf` and `nan` which are not valid JSON" | You can write a save that nothing else can read. `JSON.stringify(NaN)` emits `null`. |
+| buffers up to 50 MiB encode to base64 "(and often compresses)" | A useful escape hatch for packed numeric state. |
+
+Three rules that make the trap go away:
+
+1. **Every table in the save schema is either a pure array (contiguous integer
+   keys from 1) or a pure dictionary (string keys only). Never both, never
+   empty-ambiguous.** Where the original has an object that can be empty, add a
+   constant marker field (`{ _ = 1, … }`) or represent it as an array of
+   `{k, v}` pairs.
+2. **Sanitize before encoding.** Walk the table and assert every number `v`
+   satisfies `v == v` (not NaN) and `v ~= math.huge and v ~= -math.huge`. A
+   single `inf` from an overflowed multiplier poisons the save.
+3. **Never compare serialized saves byte-for-byte.** `JSON.stringify` follows a
+   specified key order for string keys (insertion order); Luau tables have no
+   order and the encoder's output order is unspecified. Compare *decoded
+   structures* with a deep-equal that is order-insensitive for dictionaries. This
+   matters directly for the test harness (§15).
+
+For the *import* direction (§14), `JSONDecode` gives you a Luau table where JSON
+`null` became `nil` — which means a JSON object `{"a": null}` decodes to an empty
+table, and a JSON array `[1, null, 3]` decodes to a table with a hole. Both are
+things the original's save can legitimately contain. Handle them explicitly in
+the importer, not in the simulation.
+
+---
+
+## 10. Time, scheduling and async
+
+### 10.1 The mapping
+
+| Web | Roblox | Notes |
+|---|---|---|
+| `setTimeout(f, ms)` | `task.delay(seconds, f)` | **ms → seconds.** Returns a thread; `task.cancel(thread)` is `clearTimeout`. "no throttling occurs: on the very same Heartbeat step in which enough time has passed, the function is guaranteed to be called" |
+| `setTimeout(f, 0)` | `task.defer(f)` | "defers it until the end of the current resume point within the current frame" — closest to a macrotask |
+| `queueMicrotask(f)` | `task.spawn(f)` | Runs **immediately**, synchronously, until it yields — closer to calling `f()` than to a microtask |
+| `setInterval(f, ms)` | a loop in a `task.spawn`ed thread with `task.wait(s)`, or a `Heartbeat` connection with an accumulator | There is no interval primitive; build it |
+| `clearInterval` | `connection:Disconnect()` or a flag the loop checks | |
+| `requestAnimationFrame` | `RunService.PreRender` (client only) or `RunService.Heartbeat` | `Heartbeat` "fires every frame, after the physics simulation has completed" with a `deltaTime` argument |
+| `performance.now()` | `os.clock()` | Monotonic-ish; use for durations, not wall time |
+| `Date.now()` | `os.time()` (seconds, UTC) / `DateTime.now()` | **Seconds, not ms** |
+| `document.hidden` / visibility change | no equivalent | Roblox keeps running |
+| `await` | any yielding call | |
+| `Promise.all` | spawn N threads, join on a counter or a `BindableEvent` | |
+
+`task.wait(t)` "yields the current thread until the given duration has elapsed,
+then resumes the thread on the next Heartbeat step" and returns the actual
+elapsed time. With no argument it is equivalent to `RunService.Heartbeat:Wait()`.
+
+### 10.2 The tick, and why you should not use the frame event
+
+The most common fidelity bug in a web→Roblox port is driving the simulation
+directly off the frame event, because that is what the original did with
+`requestAnimationFrame`. Three things differ:
+
+- **rAF stops when the tab is hidden.** `Heartbeat` does not. A web player who
+  tabs away accumulates *offline* progress through the game's offline path; a
+  Roblox player accumulates *online* progress through the tick path. If those two
+  paths differ at all — and they almost always do, because offline progress is
+  usually rate-capped — the port diverges from the original for a behaviour the
+  player does constantly.
+- **`dt` distributions differ.** Browser rAF is vsync-locked and capped;
+  `Heartbeat` `deltaTime` can spike arbitrarily on a loading hitch.
+- **Float accumulation depends on step count.** Summing `rate * dt` over 3600
+  small steps and over 60 large steps gives different last-digit results, and in
+  a game that runs for months, "different last digit" compounds.
+
+The fix is the same one that makes the simulation testable: **a fixed-step
+accumulator, with the step size written into the behavioural spec.**
+
+```lua
+-- server/init.server.luau
+local STEP = 1 / 20            -- must match the spec and the harness exactly
+local MAX_CATCHUP = 5          -- seconds of real time processed per frame, max
+
+local acc = 0
+RunService.Heartbeat:Connect(function(dt)
+	acc += math.min(dt, MAX_CATCHUP)
+	while acc >= STEP do
+		acc -= STEP
+		state = Sim.step(state, config, STEP)   -- always the SAME dt
+	end
+end)
+```
+
+Now `Sim.step` only ever sees `STEP`, so the harness can call it 20 million times
+and get exactly what the live server would get. Frame-rate no longer affects
+numbers. The leftover `acc` is presentation-only interpolation, and it lives in
+`client/`, not `sim/`.
+
+Offline progress becomes `Sim.fastForward(state, config, elapsed)`, which runs
+the same `Sim.step` in a loop with a cap and a batching optimization — and
+critically, it is *the same function* the online path uses, so the two cannot
+drift apart.
+
+### 10.3 Promises and coroutines
+
+Luau has no promises in the language; yielding calls suspend the calling
+coroutine and resume it transparently. So:
+
+```js
+async function buyAndSave(id) {
+  const ok = await sim.apply(id);
+  if (ok) await saveToServer();
+  return ok;
+}
+```
+
+```lua
+local function buyAndSave(id)
+	local ok = Sim.apply(state, config, { kind = "buy", id = id })  -- pure, no yield
+	if ok then saveToServer() end                                    -- yields
+	return ok
+end
+```
+
+The `async` keyword disappears. What replaces it is a discipline question: **any
+function that might yield must be documented as yielding**, because a yield in
+the middle of a state mutation is where race conditions come from. Keep `sim/`
+non-yielding by construction (it has no access to anything that can yield) and
+all yielding in `server/`.
+
+`Promise.all` has no primitive:
+
+```lua
+local function all(fns: {() -> any}): {any}
+	local results, remaining = table.create(#fns), #fns
+	local done = Instance.new("BindableEvent")
+	for i, fn in fns do
+		task.spawn(function()
+			results[i] = fn()
+			remaining -= 1
+			if remaining == 0 then done:Fire() end
+		end)
+	end
+	if remaining > 0 then done.Event:Wait() end
+	return results
+end
+```
+
+Some teams vendor a Promise library (evaera's `Promise` is the common one) to
+keep the ported code shaped like the original. That is a reasonable choice for
+the *network* layer and a bad one for `sim/`, which must stay dependency-free.
+
+Error handling: `try/catch` → `pcall`. Note `pcall` returns
+`(ok, resultOrError)` and swallows the traceback; use `xpcall` with
+`debug.traceback` where you care. An unhandled error in a `task.spawn`ed thread
+does not kill the game, it logs and the thread dies — which means a ported
+`Promise` rejection that the original surfaced to the user can vanish silently.
+Log every `pcall` failure in `sim/`-adjacent code.
+
+---
+
+## 11. Big numbers: `break_infinity.js` → Luau
+
+If the original uses `Decimal` (from `break_infinity.js` or `break_eternity.js`),
+the number system *is* the game, and this section is the highest-risk part of the
+port.
+
+`break_infinity.js` stores a number as `mantissa × 10^exponent` with both parts
+as float64, giving a range up to about `1e(9e15)`
+([README](https://github.com/Patashu/break_infinity.js)). On Roblox the mature
+options are **AlyaNum** (a rewrite of OmegaNum, range to `10^^^^^10`,
+[evilbocchi/alyanum](https://github.com/evilbocchi/alyanum)), **SerikaNum**
+(same author, cap `10^(2^1024)`, faster), **EternityNum2**, and
+**InfiniteMath**. For a straight `break_infinity.js` port, SerikaNum's range is
+the closest match and the cheapest; pick AlyaNum only if the original uses
+`break_eternity.js` tetration.
+
+**Wrap the library.** Every `sim/` file imports `sim/bignum.luau`, never the
+library directly. That facade is where you (a) normalise the API to the
+original's method names so the diff stays readable, (b) fix the rounding and
+formatting differences below, and (c) make it possible to swap libraries after
+benchmarking without touching game logic.
+
+### 11.1 Translation table
+
+`D` is the facade; `a`, `b` are big numbers. AlyaNum method names are from
+`alya.luau`; the operator forms come from its metatable.
+
+| `break_infinity.js` | Facade (`sim/bignum.luau`) | AlyaNum underneath | Notes |
+|---|---|---|---|
+| `new Decimal(x)` | `D.new(x)` | `AlyaNum.new(x)` | accepts number or string |
+| `Decimal.fromMantissaExponent(m, e)` | `D.fromME(m, e)` | `AlyaNum.new(m) * AlyaNum.new(10) ^ e` | verify normalization |
+| `a.add(b)` / `.plus` | `D.add(a, b)` | `a + b` / `add` | |
+| `a.sub(b)` / `.minus` | `D.sub(a, b)` | `a - b` / `subtract` | |
+| `a.mul(b)` / `.times` | `D.mul(a, b)` | `a * b` / `mul` | |
+| `a.div(b)` / `.dividedBy` | `D.div(a, b)` | `a / b` / `div` | |
+| `a.recip()` | `D.recip(a)` | `reciprocal` | |
+| `a.neg()` / `.negate` | `D.neg(a)` | `unary` / `-a` | |
+| `a.abs()` | `D.abs(a)` | `abs` | |
+| `a.sgn()` / `.sign` | `D.sign(a)` | derive from `compare(a, 0)` | returns a plain number |
+| `a.pow(n)` | `D.pow(a, n)` | `a ^ n` / `pow` | |
+| `Decimal.pow10(n)` | `D.pow10(n)` | `pow10` | |
+| `a.exp()` | `D.exp(a)` | `AlyaNum.new(math.exp(1)) ^ a` | check the library's own `exp` first |
+| `a.sqrt()` / `.cbrt()` / `.sqr()` / `.cube()` | `D.sqrt` / `D.cbrt` / `D.sqr` / `D.cube` | `root(a, 2)`, `root(a, 3)`, `a^2`, `a^3` | |
+| `a.log10()` | `D.log10(a)` | `log10` | **JS returns a plain `number`**; make the facade do the same |
+| `a.log(base)` / `.logarithm` | `D.log(a, base)` | `log` | plain number |
+| `a.ln()` / `.log2()` | `D.ln(a)` / `D.log2(a)` | `log(a, e)` / `log(a, 2)` | plain number |
+| `a.cmp(b)` / `.compare` | `D.cmp(a, b)` | `compare` | returns −1/0/1 |
+| `a.eq/neq/lt/lte/gt/gte(b)` | `D.eq(a,b)` etc. | `equals`, `lessThan`, `lessEquals`, `moreThan`, `moreEquals` | or the `==`/`<`/`<=` operators |
+| `a.max(b)` / `.min(b)` | `D.max` / `D.min` | `max` / `min` | |
+| `a.clamp(lo, hi)` / `.clampMin` / `.clampMax` | `D.clamp(a, lo, hi)` | compose `max`/`min` | |
+| `a.eq_tolerance(b, t)` (and the whole `*_tolerance` family) | `D.eqTol(a, b, t)` | `isCloseTo(a, b, relTol, absTol)` | **semantics differ** — see below |
+| `a.floor()` / `.ceil()` / `.trunc()` | `D.floor` / `D.ceil` / `D.trunc` | `floor` / `ceil` | |
+| `a.round()` | `D.round(a)` | **do not use the library's `round`** | see below |
+| `a.toNumber()` | `D.toNumber(a)` | `toNumber` | may overflow to `inf` |
+| `a.toString()` | `D.toString(a)` | `toString` | **formats differ** — port the original's formatter |
+| `a.toExponential(p)` / `.toFixed(p)` / `.toStringWithDecimalPlaces(p)` | port explicitly | — | |
+| `Decimal.affordGeometricSeries(res, price, mul, owned)` | `D.affordGeometric(…)` | not present — port the formula | the closed form matters; see below |
+| `Decimal.sumGeometricSeries(n, price, mul, owned)` | `D.sumGeometric(…)` | not present — port the formula | |
+| `Decimal.affordArithmeticSeries` / `sumArithmeticSeries` | port explicitly | not present | |
+| `Decimal.efficiencyOfPurchase(cost, rps, dRps)` | port explicitly | not present | |
+
+### 11.2 The three places fidelity actually breaks
+
+**Rounding.** `break_infinity.js`'s `round()` is:
+
+```ts
+public round(): Decimal {
+  if (this.e < -1) { return ZERO; }
+  if (this.e < MAX_SIGNIFICANT_DIGITS) {
+    return Decimal.fromNumber(Math.round(this.toNumber()));
+  }
+  return this;
+}
+```
+
+(`src/decimal.ts`.) So it inherits `Math.round`'s half-toward-+∞ tie behaviour
+(§6.3), and it silently *floors to zero* for exponents below −1 and becomes the
+identity above 17 significant digits. A Luau library's `round` will not reproduce
+any of that. Implement `D.round` in the facade as a direct transcription of
+those three branches, with `jsRound` in the middle one.
+
+**Bulk-buy closed forms.** `affordGeometricSeries` / `sumGeometricSeries` are the
+functions that answer "how many can I buy with this much currency" and "what does
+buying N more cost". They are logarithm-based closed forms, so they are the most
+float-sensitive code in the game, and they are the most visible — the player sees
+"Buy Max: 137" and any off-by-one is a bug report. Port them from the original's
+source, not from a formula you derive yourself, and golden-test them across the
+full exponent range (§15.2). A single `Math.floor` vs `math.floor` difference at
+a tie produces a one-item discrepancy that shows up in a bulk-buy tooltip.
+
+**Tolerance comparisons.** `break_infinity.js`'s `eq_tolerance(b, t)` compares
+using a tolerance that defaults to a *relative* epsilon; AlyaNum's `isCloseTo`
+takes both a `relativeTolerance` and an `absoluteTolerance` (`alya.luau`). These
+are not the same predicate. If the original uses `eq_tolerance` to decide
+anything — "is this upgrade already maxed", "has the player reached the
+threshold" — transcribe the JS implementation into the facade rather than mapping
+to the nearest-looking Luau function.
+
+**Formatting.** Number formatting in an incremental game is a *feature*, with the
+original's own suffix table ("K, M, B, T, Qa, Qi, …"), its own notation modes
+(scientific, engineering, letters, hyper-E), and its own rounding at each
+threshold. Luau libraries ship their own (`toSuffix`, `toScientific`,
+`toEChain`, `toHyperE` in AlyaNum) and they will not match. Port
+`client/ui/format.luau` from the original's formatter source, treat it as part of
+the behavioural spec, and golden-test it on a few thousand values.
+
+### 11.3 When the original does *not* use a big-number library
+
+Some idle games stay in plain float64 and simply let numbers go to `1e308` and
+`Infinity`. That ports perfectly — both languages are binary64 — and you should
+resist the temptation to "upgrade" to a big-number library during the port,
+because it changes every result at the top end. Do it as a separate, spec'd
+change afterwards, with its own golden vectors.
+
+---
+
+## 12. UI translation
+
+The mapping table above is the reference. This section covers the four places
+where the mapping is *not* mechanical.
+
+**There is no layout engine.** CSS reflows: text wraps, boxes grow to fit
+content, siblings push each other around, and the whole thing re-solves on every
+change. Roblox has `UIListLayout`, `UIGridLayout`, `UITableLayout`, `UIPageLayout`
+and a set of constraints — and that is all. `AutomaticSize` will grow a frame to
+its children, and `UIFlexItem` will distribute slack along one axis, but there is
+no general constraint solver and no content-driven two-dimensional reflow. In
+practice this means: **rebuild the layout, do not translate it.** Take the screen
+inventory, sketch each screen as a tree of `Frame`s with one layout object each,
+and accept that a CSS layout which relied on intrinsic sizing will become an
+explicit size.
+
+**Flex is close enough to be useful and different enough to check.** A
+`UIListLayout` with `FillDirection = Horizontal` is `flex-direction: row`;
+`HorizontalFlex` is `justify-content`; `ItemLineAlignment` is `align-items`;
+`Wraps` is `flex-wrap`. Per-item `flex-grow`/`flex-shrink` is a `UIFlexItem`
+child, where `Grow` gives "an effective `1:0` grow-shrink ratio", `Shrink` gives
+`0:1`, `Fill` gives `1:1`, and `Custom` exposes `GrowRatio`/`ShrinkRatio`
+(`creator-docs`, `classes/UIFlexItem.yaml`). Roblox's own docs warn that flex
+"adds a slight performance cost above non-flex, especially when resizing the
+layout or dynamically adding/removing flex items" — which is exactly what an idle
+game's shop list does, so measure it.
+
+**`ZIndex` is global by default.** Set `ScreenGui.ZIndexBehavior = Sibling` to
+get CSS-like behaviour where a child's `ZIndex` is only compared against its
+siblings. Without it, a `ZIndex = 2` label deep in one panel draws over a
+`ZIndex = 1` modal, which is not how the web version behaved.
+
+**Rich text is a small, escape-sensitive subset.** `TextLabel.RichText = true`
+enables `<b> <i> <u> <s> <br/> <font …> <stroke …> <uppercase> <smallcaps>`
+(`creator-docs`, `ui/rich-text.md`). There is no layout inside it — no floats, no
+inline-block, no per-run line-height. And crucially: **any dynamic text
+interpolated into a rich-text label must be escaped** (`<` → `&lt;`, `>` →
+`&gt;`, `&` → `&amp;`, `"` → `&quot;`, `'` → `&apos;`). An unescaped player name
+or a number formatter emitting `<` breaks the whole label's formatting, and in
+the worst case lets a player inject markup into other players' UI.
+
+**Canvas → `EditableImage`.** A 2D-context canvas becomes an `EditableImage`
+assigned to an `ImageLabel`. This is a full pixel-buffer API, not a drawing API:
+you get `WritePixelsBuffer`/`ReadPixelsBuffer` and a handful of `Draw*`
+operations, and you write your own rasterization for anything else. See chapters
+20 and 40. Two constraints to plan around: the editable APIs require the creator
+to be 13+ age-verified **and** ID-verified with Mesh/Image APIs enabled on the
+Creator Dashboard, and almost every mutator is `Unsafe` in the parallel phase —
+compute in parallel, commit in serial.
+
+**Update frequency.** A web idle game typically re-renders the whole number
+display every frame because the DOM diff is cheap enough. In Roblox, every
+`TextLabel.Text` assignment is a property write that can trigger a text re-layout.
+Drive UI updates from a throttled subscription (10 Hz is usually indistinguishable
+from 60 for a counter) and only touch labels whose formatted string actually
+changed. This is presentation, so it cannot affect `sim/` — which is the point of
+the split.
+
+---
+
+## 13. Asset translation
+
+**Everything must be uploaded, and everything is moderated.** Roblox performs
+"both human and automated asset moderation", generally "within a few hours after
+you import the asset", and — the operationally important line — "If an asset is
+still in the moderation queue when you publish your game, users cannot see or
+interact with the asset until Roblox approves it"
+(`creator-docs`, `projects/assets/index.md`). Upload the whole asset set at the
+start of stage 6, not the day before launch, and keep a manifest mapping the
+original's filenames to `rbxassetid://` ids so a re-upload is a one-line change.
+
+| Web asset | Roblox | Work required |
+|---|---|---|
+| PNG / JPG | uploaded Image asset → `ImageLabel.Image` | Upload + moderation. Note transparent pixels are set to black on upload, so author with premultiplied-safe edges |
+| Sprite sheet + `background-position` | one uploaded image + `ImageRectOffset` / `ImageRectSize` | Direct translation; `ImageRectOffset` is "the pixel offset (from the top-left) of the image area to be displayed", and a zero in either dimension of `ImageRectSize` shows the whole image |
+| CSS sprite with `background-size` scaling | atlas + `ImageRectSize` + `ScaleType` | `ScaleType.Stretch` is the default; use `Slice` + `SliceCenter` for 9-slice |
+| **SVG** | **no equivalent** | Rasterize at the target resolutions (2–3 sizes) and upload, or rebuild as `Frame`s + `UICorner` + `UIGradient`. Rasterize unless the art needs to scale continuously |
+| **CSS-drawn art** (gradients, radii, shadows, pseudo-element icons) | partly `UIGradient` + `UICorner` + `UIStroke`; otherwise rasterize | `box-shadow` has no equivalent — use a 9-sliced shadow image. Multi-stop radial gradients have no equivalent |
+| Icon font | rasterized atlas, or an uploaded font family | `FontFace = Font.new("rbxasset://fonts/families/….json", weight, style)` |
+| Web font | uploaded font family asset | |
+| Animated GIF / CSS keyframe sprite | a sprite-sheet atlas driven by `ImageRectOffset` on a `Heartbeat` timer | |
+| Audio | uploaded Audio asset | Moderated, and subject to its own licensing rules |
+| Procedurally drawn canvas art | `EditableImage`, generated at runtime | **No upload, no moderation** — the reason to prefer it for anything derived from game state |
+
+**Atlasing.** Roblox has a per-image size cap (1024×1024 is the long-standing
+practical limit for UI images) **[unverified — confirm the current cap against
+`art/…/texture-specifications` before committing an atlas layout]**. Pack icons
+into atlases and address them with `ImageRectOffset`/`ImageRectSize`; each
+distinct image is a separate texture and a separate download, so an idle game
+with 200 building icons wants 2–4 atlases, not 200 assets.
+
+**`EditableImage` as the upload escape hatch.** Anything you would have drawn
+with canvas or CSS — a progress ring, a stat sparkline, a tinted variant of a
+base icon, a generated background gradient — can be produced at runtime into an
+`EditableImage` and assigned to an `ImageLabel` with no asset, no upload and no
+moderation. `AssetService:CreateAssetAsync` can also upload an `EditableImage` as
+an `Enum.AssetType.Image`, but it "can only be used in locally loaded plugins"
+(`creator-docs`, `classes/AssetService.yaml`), so runtime generation is a
+*rendering* strategy, not a content-pipeline one.
+
+---
+
+## 14. Save-format migration
+
+### 14.1 Read the original's format exactly
+
+Typical web save chains, in rough order of frequency:
+
+1. `JSON.stringify(state)` → `localStorage`
+2. `btoa(JSON.stringify(state))` → base64 → `localStorage`
+3. `LZString.compressToBase64(JSON.stringify(state))`
+4. A hand-rolled delimited format (`"5|17|0|1|…"`), sometimes with a checksum
+5. Any of the above with a version prefix and an obfuscation XOR
+
+For (1) and (2), `HttpService:JSONDecode` plus a base64 decoder gets you there.
+For (3), you need an LZString decompressor in Luau — port it from the reference
+implementation and golden-test it against a set of real compressed saves before
+you trust it with anyone's progress. For (4), write the parser with the *exact*
+`split` from §7.1 that preserves empty fields.
+
+Capture at least three real saves (new / mid / endgame) plus one save from every
+version the original ever shipped that you intend to support, and check them into
+`tests/golden/saves/`. Those files are the specification.
+
+### 14.2 Map to the new schema
+
+```lua
+-- sim/save/schema.luau
+return table.freeze({
+	VERSION = 4,
+	fields = {
+		-- name            type        default          min        max
+		{ "cookies",       "bignum",   "0",             "0",       nil },
+		{ "totalEarned",   "bignum",   "0",             "0",       nil },
+		{ "prestigeCount", "int",      0,               0,         1e6 },
+		{ "buildings",     "map<id,int>", {},           0,         1e9 },
+		{ "upgrades",      "set<id>",  {},              nil,       nil },
+		{ "lastSeen",      "int",      0,               0,         nil },
+		{ "rngState",      "int",      0,               0,         2^32 - 1 },
+	},
+})
+```
+
+Driving validation from a declared schema rather than hand-written `if`s is the
+difference between "we checked the fields we remembered" and "every field is
+checked". It also gives the harness something to enumerate.
+
+### 14.3 Should you import the player's existing web save?
+
+It is a strong retention play and a real security surface. If you do it:
+
+- **The import runs on the server, never the client.** The client may paste the
+  string; the server decodes and validates it.
+- **Never trust a single field.** Every numeric field is clamped to the schema's
+  min/max. Every id is checked for membership in the content tables — an unknown
+  building id is dropped, not defaulted. Every array is rebuilt densely. Every
+  string is length-capped before it goes anywhere near a `TextLabel`.
+- **Cross-validate derived against authoritative.** If the save claims 10 cursors
+  and `1e40` cookies, check that `1e40` is reachable given the claimed purchase
+  history — or, more practically, clamp the currency to a function of the
+  strongest claim in the save. A save is *the* place to inject an arbitrary
+  number into your economy.
+- **Rate-limit and one-shot it.** One import per account, ever, recorded in the
+  DataStore before the state is applied. Otherwise a valid save becomes a
+  currency faucet.
+- **Log every import** with the raw string, the decoded structure and the
+  clamped result. When (not if) someone finds a hole, the log is how you find
+  every account that used it.
+- **Cap the input size** before decoding. A 50 MB "save" is a denial-of-service,
+  and `JSONDecode` on adversarial input is not free.
+- **Decode inside `pcall`.** Malformed input must produce a friendly error, not
+  a server error.
+
+If the answer is "we are not confident we can validate this", the correct
+decision is to grant a fixed founder bonus instead of importing. That is a
+product decision with a known cost; an unvalidated import is an unbounded one.
+See chapter 47 for the general threat model.
+
+### 14.4 Forward migration
+
+Keep `migrate.luau` as an ordered chain of single-version steps
+(`v1→v2`, `v2→v3`, …), never a big switch. Each step is a pure function over
+plain tables, which means each step is unit-testable against a captured save from
+that version, and the chain is testable end to end: load a v1 save, run the
+chain, assert the result equals a v4 save captured independently.
+
+---

@@ -921,3 +921,369 @@ local function punch(scale: UIScale, amount: number?)
 end
 ```
 
+---
+
+## 6. Progress bars and charts
+
+### 6.1 Log-scale progress
+
+A linear bar toward `1e50` spends 99.999…% of its life visually at zero, then snaps full. It conveys nothing. Fill in **log space**:
+
+```lua
+--!strict
+--- Fraction in [0,1] of progress from `start` to `goal` on a log scale.
+--- All arguments are log10 values — never the raw numbers.
+local function logProgress(logValue: number, logStart: number, logGoal: number): number
+    if logGoal <= logStart then return 1 end
+    return math.clamp((logValue - logStart) / (logGoal - logStart), 0, 1)
+end
+
+--- Quantize to whole pixels so §2.2's guard actually fires.
+local function setBar(fill: Frame, fraction: number, barWidthPx: number, shadow: {n: number})
+    local px = math.round(fraction * barWidthPx)
+    if px == shadow.n then return end
+    shadow.n = px
+    fill.Size = UDim2.new(0, px, 1, 0)
+end
+```
+
+Choosing `logStart` is the design decision. Three good options:
+
+- **Previous milestone.** `logStart = log10(previousGoal)`. The bar resets to 0 on each milestone and fills across one "band". Best for tiered content.
+- **Last order of magnitude.** `logStart = logGoal - 1`. The bar is "how close to the next power of ten" — extremely readable, always moving.
+- **Current value at the moment the goal was set.** Honest, but the bar jumps when the goal changes.
+
+**Always pair the bar with a numeric readout.** A log bar at 60% does not mean "60% of the resource"; it means "60% of the exponent gap". Label it `1.2e37 / 1e50` so nobody is misled.
+
+### 6.2 Time-to-next-milestone
+
+The naive `(goal - current) / rate` is wrong in this genre because `rate` itself is growing. Two tiers of answer:
+
+```lua
+--- Constant-rate ETA, in log space. Valid when production is flat.
+local function etaConstant(logGoal: number, logCurrent: number, logRate: number): number
+    if logCurrent >= logGoal then return 0 end
+    -- (goal - current) / rate ~= goal / rate when goal >> current
+    local logRemaining = logGoal + math.log10(1 - 10 ^ (logCurrent - logGoal))
+    return 10 ^ (logRemaining - logRate)
+end
+
+--- Exponential-growth ETA: if the value multiplies by `growthPerSecond`
+--- each second, time to reach the goal is a ratio of logs.
+local function etaExponential(logGoal: number, logCurrent: number, logGrowthPerSec: number): number
+    if logCurrent >= logGoal then return 0 end
+    if logGrowthPerSec <= 0 then return math.huge end
+    return (logGoal - logCurrent) / logGrowthPerSec
+end
+```
+
+Display rules: `< 1s` → `"now"`; `< 60s` → `"12s"`; `< 1h` → `"4m 20s"`; `< 24h` → `"3h 12m"`; beyond → `"6d"`; non-finite or absurd → `"never"` (do **not** print `1.2e9 years`; it is noise). Recompute ETA at **2 Hz**, not 15 — a jittering countdown is worse than a slightly stale one.
+
+### 6.3 In-UI graphs: frames vs EditableImage
+
+Incremental players love a production-over-time graph. Two implementations:
+
+| | **Frames (bar/step chart)** | **`EditableImage`** |
+|---|---|---|
+| What it is | N thin `Frame`s, one per sample, height = value | One raster you draw into and assign via `ImageLabel.ImageContent` |
+| Instance cost | N GuiObjects (60 samples = 60 objects, plus axes) | **1** `ImageLabel` |
+| Update cost | N guarded `Size` writes per redraw | One buffer write + one upload |
+| Smooth lines | No — steps only, unless you rotate frames (expensive, aliased) | Yes — you control every pixel |
+| Availability | Always | Gated behind the editable-asset permission model |
+| Resolution | Unlimited (vector-ish) | **Max 1024×1024**, `Size` is read-only |
+| Right for | ≤ 60 samples, bar/step style, any platform | Line charts, filled areas, dense histories, sparklines |
+
+**Recommendation for this genre: frames.** A 60-sample step chart of "production per second over the last 60 seconds" is 60 `Frame`s, redrawn at 1 Hz, and it works on every device with no permission story. Reach for `EditableImage` only when you want a genuine line/area chart or a 300-point history.
+
+```lua
+--!strict
+-- 60-sample ring buffer + step chart. Redraw at 1 Hz.
+local SAMPLES = 60
+local ring = table.create(SAMPLES, 0)
+local head = 0
+
+local function push(logValue: number)
+    head = head % SAMPLES + 1
+    ring[head] = logValue
+end
+
+local function redraw(bars: { Frame }, shadow: { number })
+    -- Normalize in log space: charts of exponential growth are unreadable linearly.
+    local lo, hi = math.huge, -math.huge
+    for _, v in ring do
+        if v < lo then lo = v end
+        if v > hi then hi = v end
+    end
+    local span = math.max(hi - lo, 0.5) -- floor the span so a flat line isn't noise
+    for i = 1, SAMPLES do
+        local v = ring[(head + i - 1) % SAMPLES + 1]
+        local frac = math.clamp((v - lo) / span, 0, 1)
+        local q = math.round(frac * 100) -- 1% granularity == 1px on a 100px chart
+        if shadow[i] ~= q then
+            shadow[i] = q
+            bars[i].Size = UDim2.new(1 / SAMPLES, -1, q / 100, 0)
+        end
+    end
+end
+```
+
+For the `EditableImage` path — creation, the permission gate, `WritePixelsBuffer` layout, `Content.fromObject` lifetime and the 1024×1024 ceiling — see **chapter 20 (EditableImage API)** and **chapter 40 (EditableImage technique cookbook)**; this chapter does not duplicate them. The UI-side summary is: create once, keep a strong Luau reference, assign `ImageLabel.ImageContent = Content.fromObject(image)`, and redraw by writing a `buffer` rather than by issuing hundreds of draw calls.
+
+---
+
+## 7. Layout and platform
+
+### 7.1 Scale, offset, and which to use where
+
+`UDim2` mixes a **scale** fraction of the parent with an **offset** in pixels. The genre-specific rule:
+
+- **Scale for structure** — panel widths, column splits, the fraction of the screen a list occupies. These should reflow.
+- **Offset for anything a finger touches, and anything containing text** — row heights, button heights, icon sizes, paddings. These must not shrink on a small screen; a 6%-of-height button is 40 px on a phone and 90 px on a monitor, which is backwards.
+- **Scale text separately** via a type ramp keyed off `GuiService.PreferredTextSize` and the viewport class, not via `TextScaled`.
+
+Roblox explicitly recommends avoiding `TextScaled` for on-screen UI in favour of `AutomaticSize`, warning that "some text may become unreadable if scaled too small," and suggests `UITextSizeConstraint` to bound it when you do use it. For dense numeric UI, `TextScaled` is actively harmful: it makes each label's font size depend on its *content*, so a column of numbers renders at four different sizes. **Fix your `TextSize` per type ramp step and let long values truncate or abbreviate.** ([TextLabel.yaml](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/TextLabel.yaml))
+
+### 7.2 A single `UIScale` at the root beats a thousand tweaks
+
+`UIScale` "multiplies the `AbsoluteSize` of the parent `GuiObject`." Put one on the root frame of each screen and drive it from viewport width. This scales offset pixels too, which is exactly what you want for the desktop→phone transition. ([ui/size-modifiers.md](https://github.com/Roblox/creator-docs/blob/main/content/en-us/ui/size-modifiers.md))
+
+```lua
+--!strict
+-- Reference design width; scale down on narrow screens, up (a little) on wide.
+local DESIGN_WIDTH = 1280
+local function computeScale(viewport: Vector2): number
+    local s = viewport.X / DESIGN_WIDTH
+    -- Never shrink below 0.55 (text becomes illegible) and never blow past 1.25.
+    return math.clamp(s, 0.55, 1.25)
+end
+```
+
+Caveat: `UIScale` scales the *rendered* size, so a 48-offset button under a 0.6 scale is a 29-pixel touch target. **Compute touch-target sizes after the scale**, or clamp the scale so your minimum target survives (§7.3).
+
+`UIAspectRatioConstraint` locks width:height and **overrides** a parent layout when both apply — use it for square icons, avatar thumbnails and fixed-ratio panels so nothing stretches. ([ui/size-modifiers.md](https://github.com/Roblox/creator-docs/blob/main/content/en-us/ui/size-modifiers.md))
+
+### 7.3 Touch targets
+
+Roblox's own documentation does not publish a minimum tap-target size `[UNVERIFIED — I searched the accessibility and UI guides and found none]`. The platform guidelines do, and they agree closely: **Apple HIG specifies 44×44 pt; Android/Material specifies 48×48 dp.** Roblox `ScreenGui` offset pixels are not identical to either unit, but on a typical phone the practical translation is **44–48 offset pixels minimum, 56+ preferred for a primary action**.
+
+Concrete consequences for an incremental UI:
+
+- Buy button: **≥ 48 offset tall, ≥ 88 wide** (it holds a cost string).
+- Bulk-buy segments: 4 segments across a phone's ~360-pt width leaves ~80 each — fine, but only if the bar spans the full width.
+- Tab bar: ≥ 48 tall. Use `UIListLayout.HorizontalFlex = Fill` so tabs divide the width evenly regardless of count — the docs name exactly this as the canonical flex use case. ([ui/list-flex-layouts.md](https://github.com/Roblox/creator-docs/blob/main/content/en-us/ui/list-flex-layouts.md))
+- **Gap between adjacent targets ≥ 8 offset.** Adjacent buy buttons in a dense list are the #1 source of mis-taps and refund requests.
+
+### 7.4 Safe areas and the top bar
+
+Three mechanisms, and you need all three:
+
+1. **`ScreenGui.ScreenInsets`** — defaults to `CoreUISafeInsets`, which "keeps all descendant `GuiObjects` inside the core UI safe area, clear of the Roblox top bar buttons and other screen cutouts like the device's camera notch." Leave it alone for gameplay UI. Setting `IgnoreGuiInset = true` switches it to `DeviceSafeInsets`. ([ScreenGui.yaml](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/ScreenGui.yaml))
+2. **`GuiService.TopbarInset`** — a `Rect` of "the unoccupied area between the Roblox left-most controls and the edge of the device safe area." It is **dynamic**: it changes when core UI controls appear or resize, so the docs recommend detecting and reacting to changes rather than reading it once. If you put a currency header at the top, this is the rectangle you must fit inside. ([GuiService.yaml](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/GuiService.yaml))
+3. **`GuiService:GetInsetArea(insets)`** — returns the usable `Rect` for a given `ScreenInsets` value, relative to `CoreUISafeInsets`; the docs give a real mobile example returning `-59, -58, 792, 334`. Use it when you need a full-bleed background *behind* inset content. ([GuiService.yaml](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/GuiService.yaml))
+
+`ScreenGui.SafeAreaCompatibility` applies automatic compatibility transformations to descendant "fullscreen" objects on cutout displays, where eligibility requires the object to cover the safe area on both axes. Know it exists before you fight it. ([ScreenGui.yaml](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/ScreenGui.yaml))
+
+### 7.5 One-handed reachability
+
+A phone held in one hand has a comfortable thumb arc covering roughly the **bottom 55% and the horizontal centre**. Therefore:
+
+- **Buy buttons on the right edge, vertically centred-to-low.** The list scrolls under the thumb; the thumb never travels.
+- **Bulk-buy bar pinned to the bottom**, above any nav bar, not floating mid-screen.
+- **Tabs at the bottom on phone, at the top on desktop.** This is the one place a layout genuinely differs by platform, and it is worth it.
+- **Nothing important in the top-left**: that is the Roblox top bar's territory and the hardest place for a thumb to reach.
+- **Modals: confirm on the right, dismiss on the left**, both in the bottom third.
+
+### 7.6 Should you ship a distinct mobile layout?
+
+**No — ship one tree with a breakpoint.** A separate mobile layout tree means every feature is built twice, every bug is fixed twice, and the two drift within a month. What actually differs between phone and desktop in this genre is small and parameterisable:
+
+| Parameter | Phone | Desktop |
+|---|---|---|
+| Tab bar position | bottom | top |
+| Upgrade list | 1 column | 2–3 columns |
+| Row height (offset) | 64 | 72 |
+| Simultaneous panels | 1 | 2 (list + detail side by side) |
+| Tooltips | tap-to-open sheet | hover |
+| Header readouts | 3 | 5 |
+
+```lua
+--!strict
+local GuiService = game:GetService("GuiService")
+
+export type Breakpoint = "phone" | "tablet" | "desktop"
+
+local function classify(viewport: Vector2): Breakpoint
+    -- Width in offset pixels is the honest signal; DisplaySize is a coarse hint.
+    if viewport.X < 700 then return "phone" end
+    if viewport.X < 1100 then return "tablet" end
+    return "desktop"
+end
+
+-- GuiService.ViewportDisplaySize is Small (mobile/tablet/handheld),
+-- Medium (laptops/monitors) or Large (TVs), and is watchable for changes.
+local function isTenFoot(): boolean
+    return GuiService:IsTenFootInterface()
+        or GuiService.ViewportDisplaySize == Enum.DisplaySize.Large
+end
+```
+
+`GuiService.ViewportDisplaySize` is documented as `Small` = "most tablet/mobile/handheld devices", `Medium` = "most laptops and monitors", `Large` = "most TVs or larger", and the docs explicitly suggest listening via `GetPropertyChangedSignal` "to adapt UI to various display sizes". On a TV, also turn on gamepad navigation (`GuiService.GuiNavigationEnabled`, `GuiObject.NextSelectionUp/Down/Left/Right`, `SelectionOrder`) — a virtualized list needs its `NextSelection*` links rebuilt on every rebind. ([GuiService.yaml](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/GuiService.yaml), [GuiObject.yaml](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/GuiObject.yaml))
+
+---
+
+## 8. Architecture
+
+### 8.1 The workload, stated precisely
+
+This is not a generic "which UI framework" question. The workload is specific and unusual:
+
+- **~100–300 reactive numeric bindings live at once**, of which **20–60 change every flush**.
+- **Structure is almost static.** Rows are recycled, not created; tabs toggle visibility. Mount/unmount churn is near zero after the first frame.
+- **Updates are pushed, high-frequency and independent.** One currency changing should not touch the achievements grid.
+- **Every wasted Instance write costs on mobile**, which is the majority platform.
+
+That profile inverts the usual trade-offs. Frameworks optimised for *structural* change (VDOM diffing, reconciliation) are paying for something this UI never does, while frameworks with **fine-grained reactivity** — an update touching exactly the effects that read the changed value — map onto it perfectly.
+
+### 8.2 The comparison
+
+| | **Vide** | **Fusion** | **React-Lua** | **Plain OOP + dirty flags** |
+|---|---|---|---|---|
+| Model | Fine-grained, Solid-style: `source` / `derive` / `effect` | Fine-grained: `Value` / `Computed` / `Observer`, inside a `scope` | VDOM: re-run component fn, diff, reconcile | Manual bindings and a dirty set |
+| Update path for one changed number | Push to the source's direct children, flush a queue, run only the affected effects | Recompute dependent `Computed`s, notify `Observer`s | Re-run the owning component (and children unless memoised), diff its tree, commit | Mark one binding dirty; flush writes one property |
+| Per-update allocation | Low — queue is reused | Moderate — scope bookkeeping | Higher — element tables per render | Zero |
+| Cost of 60 independent changes/flush | ~60 effects | ~60 computed+observer chains | 60 component re-renders + diffs, or one big re-render if state is hoisted | 60 guarded property writes |
+| Structural change cost | Manual, explicit | Manual, explicit | Excellent — its whole point | Manual, painful |
+| Version / status (Sep 2026) | **0.4.1** stable, MIT ([wally.toml](https://github.com/centau/vide/blob/main/wally.toml)) | `main` is **0.4.0-dev1** — 0.4 not yet released; 0.3 is the shipping API, MIT ([wally.toml](https://github.com/dphfox/Fusion/blob/main/wally.toml)) | Actively maintained community fork of Roblox's internal React Lua, MIT ([jsdotlua/react-lua](https://github.com/jsdotlua/react-lua)) | Immortal |
+| Typing | "Fully Luau typecheckable" (README claim) | Good | Good (Luau annotations, translated from ReactJS 17.x) | As good as you write |
+| Team ramp-up | Small API, ~half a day | Medium (scopes and destruction semantics) | Low **if** the team knows React | Low, but every project reinvents it |
+| Ecosystem | Small | Medium | Largest (React mental model, hooks, devtools-adjacent tooling) | None |
+
+Vide's update mechanism is worth reading directly, because it is the thing that makes it fit. `src/graph.luau` maintains a single reused `update_queue`; `update_descendants` calls `queue_children_for_update` on the changed source and then drains the queue, re-queueing children only for nodes that actually changed. There is a `flags.batch` short-circuit so a batch defers the flush. That is precisely the architecture §2.3 describes by hand — you get the dirty-set scheduler for free, and correctly. ([centau/vide `src/graph.luau`](https://github.com/centau/vide/blob/main/src/graph.luau))
+
+React-Lua is "a comprehensive, but not exhaustive, translation of upstream ReactJS 17.x into Lua," maintained as a community fork because "Roblox's repository is a read-only mirror of their internal project." It is the strongest choice for *structurally* complex UI — wizards, editors, deeply nested conditional trees. It is the weakest choice for 200 numbers ticking at 15 Hz, because every one of those ticks goes through a component re-run and a diff unless you carefully route it around React with an imperative ref — at which point you have written §2.3 anyway, inside a framework that is charging you for machinery you bypassed. ([jsdotlua/react-lua](https://github.com/jsdotlua/react-lua))
+
+### 8.3 Recommendation
+
+**Use Vide.** Its fine-grained reactivity means an updated source touches exactly the effects that read it — no component re-execution, no tree diff — which is the exact shape of a UI where hundreds of independent numbers change constantly; it is at a stable tagged release (0.4.1), it is small enough to read end to end, and its scheduler is the pattern you would otherwise hand-write.
+
+Three caveats, stated honestly:
+
+1. **Vide is a small project.** Fewer stars, fewer contributors, and a smaller hiring pool than React-Lua. If your studio already runs React-Lua across several games, the consistency is worth more than the per-update efficiency — **use React-Lua and route the hot numeric path through imperative refs** and a §2.3 scheduler, keeping React for structure only. That is a legitimate, defensible architecture.
+2. **Fusion is not a mistake, but time it.** `main` sits at `0.4.0-dev1`; 0.3 is what you would actually ship against, and the 0.3→0.4 scope/destruction changes are significant. Starting a multi-year project on a pre-release API boundary is avoidable risk.
+3. **Even with a framework, keep the virtualized list imperative.** Row recycling wants direct control of ~12 row objects and their `Position`/`Text`/`Visible`. Wrap it as one component with an imperative core; do not express 300 rows as 300 reactive components and hope the framework culls them. It will not.
+
+Whatever you pick, **`--!strict` on every UI module and `--!native` on the formatter**. The formatter is small, hot, numeric and allocation-light — the exact profile native codegen helps.
+
+### 8.4 How UI state should observe game state
+
+The rule: **UI depends on a read-only projection of game state; game state knows nothing about UI.**
+
+```
+ simulation (server-authoritative)
+        │  replicated deltas
+        ▼
+ client economy model  ── pure Luau, no Instances, testable headless
+        │  publishes
+        ▼
+ view models  ── plain tables: { logCost, logEffect, owned, canAfford, ... }
+        │  observed by
+        ▼
+ bindings / reactive sources ── the ONLY layer that touches Instances
+```
+
+- **Never let a UI module reach into the simulation.** It reads view models. This is what makes the economy unit-testable under Lune with no DataModel.
+- **The view model is recomputed on the UI clock (15 Hz), not on every simulation tick.** One pass produces every derived value the screen needs (§2.4), so `canAfford` is computed once and read by four widgets.
+- **Diff at the view-model boundary, not inside widgets.** The view model is where "did anything actually change?" is answered, using the quantization from §1.4. Widgets downstream of an unchanged view model do nothing.
+- **Replication carries state, not text.** The server sends numbers (or `{mantissa, exponent}` pairs); the client formats. Never send pre-formatted strings — you would be sending the player's notation setting to the server and burning bandwidth on ASCII.
+- **One event bus for discrete things** (purchase succeeded, achievement unlocked, prestige completed) so feedback (§5.4) subscribes without the economy knowing feedback exists.
+
+---
+
+## 9. Polish
+
+Polish is cheap here because the UI is flat and mostly static chrome. Five things carry most of the perceived quality:
+
+**`UIGradient`.** A two-stop vertical gradient at 4–8% contrast on every panel reads as "designed" rather than "default Frame". Animate `Offset` (not `Color`) for a sheen sweep on an unlock; one property, one tween. `UIGradient` applies to a `CanvasGroup`'s flattened result as a whole, which is the cleanest way to tint a composed panel. ([CanvasGroup.yaml](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/CanvasGroup.yaml))
+
+**`UIStroke`.** One stroke on the row root, not on each child. `ApplyStrokeMode = Border` keeps it outside the fill; use colour, not thickness, to signal state (thickness changes re-layout perception and reads as jitter in a scrolling list).
+
+**9-slice panels.** One small source image, `ScaleType = Slice`, `SliceCenter` set with Studio's 9-Slice Editor. Every panel in the game can be the same asset at any size, which collapses your texture budget to near zero and keeps corner radii pixel-crisp where `UICorner` would soften them. Note the editor's offsets are expressed as pixels from each edge, not as the `SliceCenter` rect values. ([ui/9-slice.md](https://github.com/Roblox/creator-docs/blob/main/content/en-us/ui/9-slice.md))
+
+**Icon atlases.** One sheet, addressed with `ImageLabel.ImageRectOffset` / `ImageRectSize`. Roblox's performance guidance names this directly: "consider using sprite sheets to load many smaller UI images as a single image. You can then use `ImageLabel.ImageRectOffset` and `ImageRectSize` to display portions of the sheet." For a game with 80 generator icons this is the difference between 80 asset loads with staggered pop-in and one. Keep a generated Luau table mapping icon name → `Rect` so nothing hard-codes pixel offsets. ([performance-optimization/improve.md](https://github.com/Roblox/creator-docs/blob/main/content/en-us/performance-optimization/improve.md))
+
+**Custom fonts.** `FontFace` accepts fonts outside `Enum.Font`. Pick one with unambiguous digits and — ideally — tabular figures (§1.3). Two weights is enough: one for numbers, one for labels. ([TextLabel.yaml](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/TextLabel.yaml))
+
+**Animation, tastefully.** In a UI where everything already moves, animation must be *rare* to mean anything. Animate: purchases (a 200 ms scale punch), unlocks (a sheen sweep), tab changes (120 ms cross-fade), prestige (the one place a big flourish is earned). Do **not** animate: numbers counting up (they are already changing), list scroll (the engine does it), panel entry on every tab press (it becomes latency). Always check `GuiService.ReducedMotionEnabled` first, and for the typewriter-style reveal `MaxVisibleGraphemes` is the built-in mechanism. ([ui/animation.md](https://github.com/Roblox/creator-docs/blob/main/content/en-us/ui/animation.md), [TextLabel.yaml](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/TextLabel.yaml))
+
+**Runtime-generated imagery.** `EditableImage` can produce icon variants (tinted/tiered versions of one base), procedural panel backgrounds and the line charts of §6.3 — see chapters 20 and 40 for the API, the permission gate and the 1024×1024 ceiling. For a *UI* use case the decision rule is: if a static atlas can do it, use the atlas; `EditableImage` earns its place only when the image depends on runtime data.
+
+---
+
+## 10. Performance budget
+
+### 10.1 The frame-time target, not the FPS target
+
+Roblox's MicroProfiler documentation is blunt about this: "The MicroProfiler focuses **entirely on frame time**." 16.67 ms is 60 FPS, 33.3 ms is 30 FPS — and **consistency matters more than the average**: "if 59 frames arrive in 10 milliseconds and one frame in 410 milliseconds, players perceive a huge, jarring stutter, even though the game is running at 60 FPS." ([microprofiler/index.md](https://github.com/Roblox/creator-docs/blob/main/content/en-us/performance-optimization/microprofiler/index.md))
+
+That is the whole argument for the dirty-flag scheduler over a periodic full re-render: a full re-render of 300 rows is exactly the 410 ms frame that ruins the session. **Budget UI work at ≤ 2 ms per frame on your worst target device, and never allow a burst above 8 ms.**
+
+Also note the trap the same doc names: "Powerful devices like gaming desktops can actually obscure performance problems." Profile on a real mid-range Android phone or you are measuring nothing.
+
+### 10.2 The three costs of UI
+
+| Cost | MicroProfiler tag | Roblox's own remedy |
+|---|---|---|
+| **Preparing 2D UI** | `Prepare/Pass2d` — "Readies 2D UI rendering (both player and Roblox UI)." | "Reduce the amount or complexity of UI elements." |
+| **Building UI vertices** | `Perform/fillGuiVertices` — "Fills buffers with UI vertices… **gui count** label indicates the amount of `LayerCollectors` visible in the frame." | "If the cost is high, reduce the amount, density, and space taken by UI elements. **If there are too many `Process GuiEffect` labels, consider reducing the use of `UIGradient` and `UICorner` on text labels.**" |
+| **Drawing UI** | `Perform/Scene/UI` — "In **Id_Screen**, there is a label with the number of batches, materials and triangles used." | "Reduce the number of visible UI elements. **Using `CanvasGroups` can help at the expense of increased memory use.**" |
+
+([microprofiler/tag-table.md](https://github.com/Roblox/creator-docs/blob/main/content/en-us/performance-optimization/microprofiler/tag-table.md))
+
+Three things follow directly, and they are the most actionable facts in this chapter:
+
+1. **`UIGradient` and `UICorner` on `TextLabel`s are explicitly called out as a cost.** In an incremental UI you have hundreds of text labels. Put gradients and corners on *panel* frames, not on every label and not on every row child. If you want rounded rows, one `UICorner` on the row root.
+2. **`CanvasGroup` is a stated trade: rendering cost down, memory up.** Combined with the class documentation — it "consumes extra texture memory", is "limited by the `QualityLevel` of the client", "will render as a blank texture" past the cap, and is "recommended… with static sizes" — the rule is: use a `CanvasGroup` for a *modal or panel you fade as a whole*, at a fixed size. Never for a scrolling list (its size and content change constantly), never one per row. ([CanvasGroup.yaml](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/CanvasGroup.yaml))
+3. **`gui count` counts `LayerCollector`s, not GuiObjects.** Splitting your UI across 20 `ScreenGui`s to manage `DisplayOrder` has a measurable cost. Use **one `ScreenGui` per z-layer that genuinely needs one** (world HUD / main UI / modals / toasts ≈ 4), not one per screen.
+
+### 10.3 A working budget
+
+These are engineering targets to design to and then verify, not published limits. `[UNVERIFIED — Roblox publishes no GuiObject count limit; these come from the budget arithmetic below and should be validated on your own target device.]`
+
+| Metric | Mid-range phone target | Notes |
+|---|---|---|
+| Live `GuiObject`s in the DataModel | **≤ 1,500** | Virtualization is what makes this achievable with 300 upgrades |
+| Visible `GuiObject`s in a frame | **≤ 600** | Hidden panels should be `Visible = false`, not off-screen |
+| `TextLabel`s with *changing* text | **≤ 300 live, ≤ 60 changed per flush** | §1.4's cache is what keeps the second number low |
+| `ScreenGui`s (`LayerCollector`s) | **≤ 5** | `gui count` in `fillGuiVertices` |
+| `UIGradient` + `UICorner` on text labels | **0** | Named remedy in the tag table |
+| `CanvasGroup`s alive | **≤ 3**, fixed size | Texture memory, quality-capped |
+| UI script time per frame | **≤ 2 ms**, burst ≤ 8 ms | Your `debug.profilebegin("UI.flush")` bar |
+
+The arithmetic behind "≤ 1,500": a dense screen is a header (~25 objects) + a virtualized list of 14 visible rows × 12 (~170) + a bulk-buy bar (~15) + a tab bar (~20) + chrome (~60) ≈ **290 objects for the active screen**. Four such screens preloaded and hidden ≈ 1,200. That leaves headroom. Without virtualization, one 300-row list alone is 3,600 and the budget is gone before you have drawn anything else.
+
+### 10.4 Measuring it
+
+1. **Instrument first.** Wrap every UI subsystem in `debug.profilebegin` / `debug.profileend` — the docs describe exactly this: "Wrap code with `debug.profilebegin()` and `debug.profileend()` to time everything done between those function calls and create a label on the MicroProfiler timeline." Use stable names: `UI.flush`, `UI.virtualList.rebind`, `UI.format`, `UI.feedback`. ([microprofiler/index.md](https://github.com/Roblox/creator-docs/blob/main/content/en-us/performance-optimization/microprofiler/index.md))
+2. **Capture on device**, not in Studio. Use the frame-time graph to find a spike, then the detailed timeline to attribute it; right-click a label to zoom to exactly that task's duration.
+3. **Watch the three tags from §10.2** specifically. If `Perform/Scene/UI` dominates, you have too many visible elements. If `fillGuiVertices` dominates with many `Process GuiEffect` labels, you have gradients/corners on text. If `Prepare/Pass2d` dominates, your tree is too complex — usually an un-virtualized list.
+4. **Count your instances in-game**, continuously, in a debug overlay:
+
+```lua
+--!strict
+local function countGui(root: Instance): (number, number, number)
+    local total, visible, text = 0, 0, 0
+    for _, d in root:GetDescendants() do
+        if d:IsA("GuiObject") then
+            total += 1
+            if d.Visible then visible += 1 end
+            if d:IsA("TextLabel") or d:IsA("TextButton") then text += 1 end
+        end
+    end
+    return total, visible, text
+end
+-- Run this once every 5 seconds behind a debug flag; GetDescendants on a large
+-- tree is itself expensive, so never run it on the UI clock.
+```
+
+5. **Regression-gate it.** Log the three counts and the `UI.flush` duration to your analytics on a 1-in-1000 session sample. An upgrade list that quietly stopped virtualizing shows up as a step change in `visible`, weeks before it shows up in a review.
+

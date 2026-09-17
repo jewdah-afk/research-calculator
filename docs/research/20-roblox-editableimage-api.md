@@ -47,10 +47,9 @@
   "it works in Studio but not in-game."
 - **Max resolution is 1024×1024, and `Size` is read-only.** There is no `Resize` and no `Crop`
   method. To resize or crop you create a *new* `EditableImage` and blit into it with
-  `DrawImageTransformed`, then `Destroy()` the old one.
+  `DrawImageTransformed`, then `Destroy()` the old one. The default when you pass no `Size` is
+  **512×512**.
   <sub>[EditableImage.yaml → `Size`](https://raw.githubusercontent.com/Roblox/creator-docs/main/content/en-us/reference/engine/classes/EditableImage.yaml)</sub>
-- **Default size is 512×512** if you pass no `Size` in the options table to `CreateEditableImage`.
-  <sub>[AssetService.yaml → `CreateEditableImage`](https://raw.githubusercontent.com/Roblox/creator-docs/main/content/en-us/reference/engine/classes/AssetService.yaml)</sub>
 - **Pixel I/O is `ReadPixelsBuffer` / `WritePixelsBuffer`, and the layout is RGBA8, one byte per
   channel, row-major, top-left origin.** Index of pixel `(x, y)` inside a region read at
   `(0,0)` with width `W` is `(y * W + x) * 4`. The table-based `ReadPixels`/`WritePixels` are
@@ -75,13 +74,17 @@
   word-for-word identical in both class YAMLs. **No numeric budget is published anywhere in
   creator-docs.** Always nil-check.
 - **Multi-referencing is the memory trick**: point many `Content` properties at *one*
-  `EditableImage` rather than making N copies.
+  `EditableImage` rather than making N copies. But **not every `Content` property accepts an
+  object** — `ImageButton.HoverImageContent`, `Shirt`, `Pants`, `ShirtGraphic` and `ScrollingFrame`
+  bars explicitly reject it, and `ViewportFrame` has no image property at all.
+- **Runtime PBR works, but only by construction.** All `SurfaceAppearance.*MapContent` slots are
+  `PluginSecurity`-write, so a game script cannot assign to them — it must build the instance with
+  `AssetService:CreateSurfaceAppearanceAsync` / `CreateDecalAsync` (both `security: None`), and the
+  maps can never be swapped afterwards.
 - **Uploading generated images to permanent asset IDs works, but only from plugins and Open Cloud
   Luau execution** (`CreateAssetAsync` with `Enum.AssetType.Image`). There is **no** supported
   in-experience path to publish an `EditableImage` as a standalone image asset today:
   `PromptCreatePlatformContentAsync` "currently can only be `Enum.AssetType.Model`."
-- **`DrawTriangle` exists in the live engine but is absent from creator-docs.** Present in the
-  API dump at version `0.739.0.7390687`; treat as real-but-undocumented.
 
 ---
 
@@ -1431,7 +1434,63 @@ about objects. **Treat them as needing an uploaded asset ID until you test other
 | `MaterialVariant`, `TerrainDetail` | all five PBR `*MapContent` slots | `Content`-typed, but **`PluginSecurity` on both read and write** — unusable from game scripts regardless. |
 | `Mouse.IconContent`, `UserInputService.MouseIconContent`, `ClickDetector.CursorIconContent`, `DragDetector`/`UIDragDetector` cursor slots, `ScreenshotHud.CameraButtonIconContent`, `InputBinding.DisplayImage` | No `EditableImage` mention. `[UNVERIFIED]`. |
 
-### 5.5 `ViewportFrame` is not a sink
+### 5.5 Two independent axes — do not conflate them
+
+A property being **writable by a script** and a property **accepting an `EditableImage`** are
+*different questions*, and confusing them is the fastest way to build a feature that silently does
+nothing.
+
+| | Write security `None` | Write security `PluginSecurity` |
+|---|---|---|
+| **Documented to accept `EditableImage`** | Works from a game script: `ImageLabel.ImageContent`, `ImageButton.ImageContent`, `Decal.TextureContent`/`ColorMapContent`, `Texture.*`, `MeshPart.TextureContent`, `FileMesh`/`SpecialMesh.TextureContent`, `AdGui.FallbackImageContent` | Plugin only **by property assignment** — but reachable from a game script via the builder methods: all `SurfaceAppearance.*MapContent` |
+| **Not documented to accept `EditableImage`** | *A script can assign a `Content` here, but only a URI is known to render*: `ParticleEmitter.TextureContent`, `Beam.TextureContent`, `Trail.TextureContent`, all `Sky.Skybox*Content` / `SunTextureContent` / `MoonTextureContent`, `ImageHandleAdornment.ImageContent` | Unusable either way: `MaterialVariant.*MapContent`, `TerrainDetail.*MapContent` (**`PluginSecurity` on read *and* write**) |
+
+Security levels in that table are cross-checked in **both** sources — the `security:` block in each
+class YAML and the `Security` field in the reflection dump — and they agree everywhere.
+
+The bottom-left cell is the trap. `Beam.TextureContent`, `Trail.TextureContent`,
+`ParticleEmitter.TextureContent` and the eight `Sky` content properties are all
+`read: None / write: None`, so **a game script may assign to them without error**. That does not
+make them `EditableImage` sinks. None of their documentation mentions `EditableImage`, and
+`ParticleEmitter.TextureContent`'s own text says "Supports **asset URIs**" and "Assigning
+`TextureContent` updates `Texture`" — writing through to a legacy `ContentId` *string*, which cannot
+represent an object. Expect assignment to succeed and the texture to not appear. `[UNVERIFIED]` —
+test each one you actually need.
+
+### 5.6 The `SurfaceAppearance` documentation contradicts itself — here is the resolution
+
+`SurfaceAppearance.yaml`'s **class-level** description says:
+
+> "Note that **most `SurfaceAppearance` properties cannot be modified by scripts**, as the necessary
+> pre-processing is usually too expensive during runtime."
+
+while the **property-level** description of `ColorMapContent` in the same file says:
+
+> "The content can hold an asset URI or a reference to an `EditableImage` object. … **Assigning an
+> `EditableImage` is useful for dynamically generating or modifying textures at runtime**, such as in
+> avatar customization and other in-experience content creation workflows."
+
+Both are true, and the apparent contradiction resolves cleanly once you separate the two axes above:
+
+- **By property assignment:** plugin-only. `write: PluginSecurity` on all five map slots, in both
+  DOCS and DUMP. A `Script`/`LocalScript` assigning `surfaceAppearance.ColorMapContent = ...` fails.
+- **By construction:** available to any script. `AssetService:CreateSurfaceAppearanceAsync(content)`
+  has `security: None` and capability `Basic` — it is **not** plugin-gated — and its documented
+  contract is that "content only supports `EditableImage`". Same for
+  `AssetService:CreateDecalAsync`, also `security: None` / `Basic`.
+
+**So runtime PBR generation from a game script IS possible** — you build the instance with its maps
+attached rather than attaching maps to an existing instance. What you *cannot* do at runtime is
+retrofit or swap maps on a `SurfaceAppearance` that already exists (DOCS: the assigned
+`EditableImage` "cannot be reassigned or swapped after the `SurfaceAppearance` is created"). Plan for
+**one `SurfaceAppearance` built once per material, with long-lived canvases you keep editing in
+place.**
+
+`MaterialVariant` and `TerrainDetail` have no equivalent builder method and are `PluginSecurity` on
+both read and write, so **runtime-generated `Material` variants and terrain detail maps are genuinely
+out of reach** — those really do need a plugin bake and an uploaded asset ID (§8.6).
+
+### 5.7 `ViewportFrame` is not a sink
 
 **`ViewportFrame` has no `Content`-typed property at all** — it does not appear in the engine-wide
 enumeration of `Content` properties, and `ViewportFrame.yaml` lists `Ambient`, `CurrentCamera`,
@@ -1444,9 +1503,11 @@ of the 3D object. Note that `ViewportFrame.CurrentCamera` is `NotReplicated`, so
 client work anyway — which lines up nicely with the rule that `EditableImage` work belongs on the
 client.
 
-### 5.6 The one-update-per-frame limit
+### 5.8 The one-update-per-frame limit
 
-Quoted from `EditableImage.yaml`:
+This is a **hard, global engine ceiling**, not a per-instance or per-script one, and it governs the
+entire design space more than any other single fact in this chapter. Quoted from
+`EditableImage.yaml`:
 
 > #### Update Limitations
 >
@@ -1473,6 +1534,11 @@ renderer, for images that are **currently being displayed**. Consequences:
 **Architecture that respects the limit:** one visible `EditableImage` per "screen" (per UI panel,
 per painted object), all sub-layers composited into it off-screen, exactly one
 `WritePixelsBuffer`/`DrawImage` into the visible canvas per frame.
+
+Together with the 1024×1024 cap and the read-only `Size`, this is the triple that bounds every
+design: **one image updated per frame, at most one megapixel each, and no resizing.** Any feature
+concept that needs more than that needs a different approach (an atlas, a lower resolution, or a
+baked asset — §8.6).
 
 ---
 
@@ -1791,71 +1857,62 @@ is using a runtime API to solve a build-time problem.
 
 ## Gotchas
 
-A consolidated list. Several of these appear above; they are repeated here because this is the
-section people re-read.
+A consolidated re-read list. Each line restates something established above, with the section that
+proves it.
 
 ### Correctness
 
-1. **Alpha vs transparency inversion.** Buffers use **alpha** (255 = opaque); every `Draw*` method
-   uses **transparency** (0 = opaque). Documented, and still the most common bug.
-2. **`DrawImageTransformed` positions the *pivot*, `DrawImage` positions the *top-left*.** Swapping
-   one for the other shifts your sprite by half its size.
-3. **`DrawImageTransformed` rotation is in DEGREES.**
-4. **`DrawImageTransformed` defaults to `AlphaBlend`; nothing else has a default.** If you expect a
-   hard copy, pass `CombineType = Enum.ImageCombineType.Overwrite` explicitly.
-5. **`DrawRectangle` cannot be positioned outside the canvas; every other method can.** Clamp.
-6. **`DrawLine` is exactly 1 pixel thick.** There is no thickness parameter.
-7. **`Content.fromObject(nil)` throws**, and `Content.fromAssetId(math.huge)` throws. Guard both.
-8. **A blank `EditableImage`'s initial contents are undocumented.** Clear it explicitly.
-9. **`Size` is `ReadOnly`.** Resize = new image + `DrawImageTransformed` + `Destroy` the old one.
-10. **`SurfaceAppearance` maps cannot be swapped after creation.** One canvas per material, forever.
+| # | Gotcha | § |
+|---|---|---|
+| 1 | **Alpha vs transparency inversion.** Buffers use alpha (255 = opaque); every `Draw*` uses transparency (0 = opaque). Documented, and still the most common bug. | 3.7 |
+| 2 | `DrawImageTransformed` positions the **pivot**; `DrawImage` positions the **top-left**. Swapping them shifts your sprite by half its size. | 4.3 |
+| 3 | `DrawImageTransformed` rotation is in **degrees**. | 4.3 |
+| 4 | `DrawImageTransformed` defaults to `AlphaBlend`; nothing else has a default. Pass `Overwrite` explicitly for a hard copy. | 4.3 |
+| 5 | `DrawRectangle` **cannot** be positioned outside the canvas; every other method can. Clamp. | 4.1 |
+| 6 | `DrawLine` is exactly **1 pixel** thick — no thickness parameter. | 4.1 |
+| 7 | `Content.fromObject(nil)` throws; `Content.fromAssetId(math.huge)` throws. | API surface |
+| 8 | A blank `EditableImage`'s initial contents are **undocumented**. Clear it explicitly. | 1.1 |
+| 9 | `Size` is `ReadOnly`. Resize = new image + `DrawImageTransformed` + `Destroy` the old. | 2.1 |
+| 10 | `SurfaceAppearance` maps **cannot be swapped** after creation. One canvas per material, forever. | 5.6 |
 
 ### Filtering and resampling
 
-11. **Bilinear is the default resampler.** Pixel art must pass `SamplingMode = Enum.ResamplerMode.Pixelated`
-    or it will be blurred.
-12. **Alpha bleed matters.** Filtering blends the colour of fully transparent pixels into visible
-    neighbours (straight alpha — see §3.8). Write the intended colour with `alpha = 0` in transparent
-    margins instead of black-with-zero-alpha, or you get dark halos when scaled.
-13. **Normal maps need `NormalMapBlend`.** Any other combine type leaves non-unit normals and flat
-    lighting. Roblox expects **OpenGL-format** tangent-space normals (G channel **not** inverted) —
-    from `SurfaceAppearance.NormalMapContent`'s documentation.
-14. **`Multiply` multiplies RGBA, including alpha.** Multiplying by an opaque white image is not a
-    no-op on alpha unless the source alpha is 255.
+| # | Gotcha | § |
+|---|---|---|
+| 11 | **Bilinear is the default resampler.** Pixel art must pass `SamplingMode = Enum.ResamplerMode.Pixelated`. | 4.3 |
+| 12 | **Alpha bleed matters.** Filtering blends the colour of fully transparent pixels into visible neighbours. Write the intended colour with `alpha = 0` in transparent margins, or you get dark halos when scaled. | 3.8 |
+| 13 | **Normal maps need `NormalMapBlend`.** Anything else leaves non-unit normals and flat lighting. Roblox expects **OpenGL-format** tangent-space normals (G channel *not* inverted). | 4.5, 5.1 |
+| 14 | `Multiply` multiplies **RGBA**, alpha included — not a no-op on alpha even against opaque white. | 4.5 |
 
 ### Memory and leaks
 
-15. **`Content.fromObject` is a strong reference with shared ownership.** An image assigned to a
-    property stays alive as long as that property holds it, even if the instance is `Destroy()`ed but
-    still referenced. Set the property to `Content.none` *before* destroying the image.
-16. **Not calling `Destroy()` is a leak, not a slow collection.** `Destroy()` "immediately reclaims"
-    the memory; the GC does not, deterministically.
-17. **`ReadPixelsBuffer` allocates a new `buffer` every call.** Per-frame full reads are per-frame
-    megabyte allocations. Cache, or read only dirty sub-regions.
-18. **The budget is shared with `EditableMesh` and is device-specific.** Mesh work steals image
-    budget. A pool sized on your dev machine will fail on phones.
-19. **`nil` from `CreateEditableImage` is a normal state, not an exception.** Handle it at every call
-    site.
+| # | Gotcha | § |
+|---|---|---|
+| 15 | `Content.fromObject` is a **strong, shared-ownership reference**. Set the property to `Content.none` *before* destroying the image. | 1.3 |
+| 16 | Not calling `Destroy()` is a **leak**, not a slow collection. `Destroy()` reclaims immediately; the GC does not, deterministically. | 1.4 |
+| 17 | `ReadPixelsBuffer` **allocates a new `buffer` every call.** Per-frame full reads are per-frame megabyte allocations. | 6.2 |
+| 18 | The budget is **shared with `EditableMesh`** and **device-specific**. A pool sized on your dev machine will fail on phones. | 2.3 |
+| 19 | `nil` from `CreateEditableImage` is a **normal state**, not an exception. Handle it at every call site. | Gate |
 
 ### Architecture
 
-20. **Server-side `EditableImage` on replicating instances → cyan/magenta checkerboard.** See
-    [The replication landmine](#the-replication-landmine).
-21. **One display update per frame.** N animated canvases run at `60/N` fps. Composite into one.
-22. **Every mutating method is parallel-`Unsafe`.** Only `ReadPixelsBuffer` (`Safe`) and `Size`
-    (`ReadSafe`) may be touched in a desynchronized phase.
-23. **Shared canvases have no locking.** One writer per image.
-24. **`CreateEditableImageAsync` yields and hits the network.** Never in a loop, never per frame.
-25. **`ImageButton.HoverImageContent` / `PressedImageContent` reject `EditableImage`.** Only
-    `ImageContent` works.
-26. **`Decal.TextureContent` is deprecated** in favour of `ColorMapContent`; `Decal`'s PBR map
-    properties are `PluginSecurity`-write, so use `AssetService:CreateDecalAsync`.
-27. **`ViewportFrame` has no image-content property at all.** Texture a part inside it instead.
+| # | Gotcha | § |
+|---|---|---|
+| 20 | Server-side `EditableImage` on a replicating instance → **cyan/magenta checkerboard**. | Landmine |
+| 21 | **One display update per frame.** N animated canvases run at `60/N` fps. Composite into one. | 5.8 |
+| 22 | Every **mutating** method is parallel-`Unsafe`. Only `ReadPixelsBuffer` (`Safe`) and `Size` (`ReadSafe`) are legal when desynchronized. | 7 |
+| 23 | Shared canvases have **no locking**. One writer per image. | 7.3 |
+| 24 | `CreateEditableImageAsync` **yields and hits the network.** Never in a loop, never per frame. | 1.2 |
+| 25 | `ImageButton.HoverImageContent` / `PressedImageContent` **reject** `EditableImage`. Only `ImageContent` works. | 5.3 |
+| 26 | `Decal.TextureContent` is **deprecated** in favour of `ColorMapContent`; `Decal`'s PBR slots are `PluginSecurity`-write, so use `CreateDecalAsync`. | 5.1, 5.2 |
+| 27 | `ViewportFrame` has **no image-content property at all**. Texture a part inside it instead. | 5.7 |
+| 28 | A property being script-writable does **not** mean it accepts an `EditableImage`. Assignment can succeed and render nothing. | 5.5 |
 
 ### Mobile
 
-28. Smaller budget, slower Luau, and the same 1024² ceiling. Choose a resolution per device class at
-    startup and thread it through every allocation. `[UNVERIFIED]` — no published device tiers.
+| # | Gotcha | § |
+|---|---|---|
+| 29 | Smaller budget, slower Luau, same 1024² ceiling. Choose a resolution per device class at startup and thread it through every allocation. `[UNVERIFIED]` — no published device tiers. | 6.5 |
 
 ---
 
@@ -1962,3 +2019,123 @@ Scan the code for these five tokens. Any hit means the tutorial is stale:
 | `imageLabel.Image = <object>` | Wrong property; use `ImageContent` |
 | `:Resize(` or `:Crop(` | Never existed in the current API |
 
+---
+
+## Sources
+
+Every API claim in this document traces to one of the following. All URLs were fetched
+**2026-09-17** and returned HTTP 200 unless noted.
+
+### Primary — Roblox creator-docs source (`Roblox/creator-docs@main`)
+
+These YAML/Markdown files are the generator input for create.roblox.com. They are higher fidelity
+than the rendered pages because they carry the reflection metadata (tags, `thread_safety`,
+`capabilities`, `security`, `serialization`) that the website does not always render.
+
+Base: `https://raw.githubusercontent.com/Roblox/creator-docs/main/content/en-us/`
+
+**Classes** (`reference/engine/classes/<Name>.yaml`):
+
+- [`EditableImage.yaml`](https://raw.githubusercontent.com/Roblox/creator-docs/main/content/en-us/reference/engine/classes/EditableImage.yaml) — class description (verification gate, permissions, memory limits, update limitation, coordinate system), `Size`, all 11 documented methods.
+- [`AssetService.yaml`](https://raw.githubusercontent.com/Roblox/creator-docs/main/content/en-us/reference/engine/classes/AssetService.yaml) — `CreateEditableImage`, `CreateEditableImageAsync`, `CreateDecalAsync`, `CreateSurfaceAppearanceAsync`, `ComposeDecalAsync`, `CreateDataModelContentAsync`, `CreateAssetAsync`, `CreateAssetVersionAsync`, `CreateMeshPartAsync`, `PromptCreatePlatformContentAsync`.
+- [`EditableMesh.yaml`](https://raw.githubusercontent.com/Roblox/creator-docs/main/content/en-us/reference/engine/classes/EditableMesh.yaml) — identical verification/permissions/memory paragraphs, confirming a shared budget.
+- [`ImageLabel.yaml`](https://raw.githubusercontent.com/Roblox/creator-docs/main/content/en-us/reference/engine/classes/ImageLabel.yaml) · [`ImageButton.yaml`](https://raw.githubusercontent.com/Roblox/creator-docs/main/content/en-us/reference/engine/classes/ImageButton.yaml) — `ImageContent` accepts `EditableImage`; `HoverImageContent`/`PressedImageContent` do not.
+- [`Decal.yaml`](https://raw.githubusercontent.com/Roblox/creator-docs/main/content/en-us/reference/engine/classes/Decal.yaml) — `TextureContent` (deprecated), `ColorMapContent`, PBR slots and their `PluginSecurity` write.
+- [`Texture.yaml`](https://raw.githubusercontent.com/Roblox/creator-docs/main/content/en-us/reference/engine/classes/Texture.yaml) — `inherits: [Decal]`.
+- [`MeshPart.yaml`](https://raw.githubusercontent.com/Roblox/creator-docs/main/content/en-us/reference/engine/classes/MeshPart.yaml) — `TextureContent`, `MeshContent`, `TextureID`.
+- [`SurfaceAppearance.yaml`](https://raw.githubusercontent.com/Roblox/creator-docs/main/content/en-us/reference/engine/classes/SurfaceAppearance.yaml) — all five `*MapContent` slots, `AlphaMode`, OpenGL normal-map format.
+- [`FileMesh.yaml`](https://raw.githubusercontent.com/Roblox/creator-docs/main/content/en-us/reference/engine/classes/FileMesh.yaml) — the only "live-updates with any edits" statement.
+- [`AdGui.yaml`](https://raw.githubusercontent.com/Roblox/creator-docs/main/content/en-us/reference/engine/classes/AdGui.yaml) · [`Shirt.yaml`](https://raw.githubusercontent.com/Roblox/creator-docs/main/content/en-us/reference/engine/classes/Shirt.yaml) · [`Pants.yaml`](https://raw.githubusercontent.com/Roblox/creator-docs/main/content/en-us/reference/engine/classes/Pants.yaml) · [`ShirtGraphic.yaml`](https://raw.githubusercontent.com/Roblox/creator-docs/main/content/en-us/reference/engine/classes/ShirtGraphic.yaml) · [`ScrollingFrame.yaml`](https://raw.githubusercontent.com/Roblox/creator-docs/main/content/en-us/reference/engine/classes/ScrollingFrame.yaml) · [`ParticleEmitter.yaml`](https://raw.githubusercontent.com/Roblox/creator-docs/main/content/en-us/reference/engine/classes/ParticleEmitter.yaml) · [`Sky.yaml`](https://raw.githubusercontent.com/Roblox/creator-docs/main/content/en-us/reference/engine/classes/Sky.yaml) · [`ViewportFrame.yaml`](https://raw.githubusercontent.com/Roblox/creator-docs/main/content/en-us/reference/engine/classes/ViewportFrame.yaml) · [`ImageHandleAdornment.yaml`](https://raw.githubusercontent.com/Roblox/creator-docs/main/content/en-us/reference/engine/classes/ImageHandleAdornment.yaml) · [`Beam.yaml`](https://raw.githubusercontent.com/Roblox/creator-docs/main/content/en-us/reference/engine/classes/Beam.yaml) · [`Trail.yaml`](https://raw.githubusercontent.com/Roblox/creator-docs/main/content/en-us/reference/engine/classes/Trail.yaml) — sink and non-sink determinations in §5.
+
+**Datatypes** (`reference/engine/datatypes/<Name>.yaml`):
+
+- [`Content.yaml`](https://raw.githubusercontent.com/Roblox/creator-docs/main/content/en-us/reference/engine/datatypes/Content.yaml) — the replication warning, `fromUri`/`fromAssetId`/`fromObject`, strong-reference semantics.
+
+**Enums** (`reference/engine/enums/<Name>.yaml`):
+
+- [`ImageCombineType.yaml`](https://raw.githubusercontent.com/Roblox/creator-docs/main/content/en-us/reference/engine/enums/ImageCombineType.yaml) · [`ImageAlphaType.yaml`](https://raw.githubusercontent.com/Roblox/creator-docs/main/content/en-us/reference/engine/enums/ImageAlphaType.yaml) · [`ResamplerMode.yaml`](https://raw.githubusercontent.com/Roblox/creator-docs/main/content/en-us/reference/engine/enums/ResamplerMode.yaml) · [`AntiAliasing.yaml`](https://raw.githubusercontent.com/Roblox/creator-docs/main/content/en-us/reference/engine/enums/AntiAliasing.yaml) · [`ContentSourceType.yaml`](https://raw.githubusercontent.com/Roblox/creator-docs/main/content/en-us/reference/engine/enums/ContentSourceType.yaml) · [`CreateContentResult.yaml`](https://raw.githubusercontent.com/Roblox/creator-docs/main/content/en-us/reference/engine/enums/CreateContentResult.yaml) · [`CreateAssetResult.yaml`](https://raw.githubusercontent.com/Roblox/creator-docs/main/content/en-us/reference/engine/enums/CreateAssetResult.yaml) · [`AssetType.yaml`](https://raw.githubusercontent.com/Roblox/creator-docs/main/content/en-us/reference/engine/enums/AssetType.yaml)
+
+**Guides** (`<path>.md`):
+
+- [`scripting/multithreading.md`](https://raw.githubusercontent.com/Roblox/creator-docs/main/content/en-us/scripting/multithreading.md) — the thread-safety level definitions used in §7.
+- [`projects/assets/privacy.md`](https://raw.githubusercontent.com/Roblox/creator-docs/main/content/en-us/projects/assets/privacy.md) — asset sharing, linked from the permissions text.
+- [`projects/groups.md`](https://raw.githubusercontent.com/Roblox/creator-docs/main/content/en-us/projects/groups.md) — group roles and permissions, linked from the permissions text.
+- [`avatar/in-experience-creation.md`](https://raw.githubusercontent.com/Roblox/creator-docs/main/content/en-us/avatar/in-experience-creation.md) — the canonical worked example combining `EditableImage`, `EditableMesh`, `WrapDeformer` and `AvatarCreationService`.
+- [`studio/optimization/memory-usage.md`](https://raw.githubusercontent.com/Roblox/creator-docs/main/content/en-us/studio/optimization/memory-usage.md) — general memory categories; **contains no editable-asset budget figures**.
+
+**Negative result, recorded deliberately:** there is **no editable-assets guide tree and no
+editable-assets memory-budget guide** in `creator-docs@main`. The following all return **404**:
+`assets/editable/index.md`, `assets/editable/image.md`, `assets/editable/mesh.md`,
+`assets/editable/memory-budgets.md`, `assets/editable-assets.md`,
+`projects/assets/editable-assets.md`, `optimization/editable-assets.md`,
+`optimization/memory-budgets.md`, `performance-optimization/editable-assets.md`,
+`art/modeling/editable-assets.md`, `art/modeling/editable-mesh.md`,
+`art/modeling/in-experience-mesh-editing.md`, `parts/editable-meshes.md`,
+`resources/editable-assets.md`. Neither `EditableImage.yaml` nor `EditableMesh.yaml` links to such a
+page. This was independently confirmed by a sibling agent that cloned the repository and searched
+all 9,368 tracked paths case-insensitively for "editable": the only hits are `EditableImage.yaml`,
+`EditableMesh.yaml` and five images. **The entire published memory-budget guidance is the
+qualitative "Memory limits" paragraph inside those two class files.**
+
+### Primary — live engine reflection
+
+- [`MaximumADHD/Roblox-Client-Tracker@roblox/API-Dump.json`](https://raw.githubusercontent.com/MaximumADHD/Roblox-Client-Tracker/roblox/API-Dump.json) — full reflection dump. Used for: exact signatures, `ThreadSafety`, `Capabilities`, `Security`, `Superclass`, the engine-wide enumeration of all 80 `Content`-typed properties, and the discovery of undocumented `DrawTriangle`.
+- [`.../version.txt`](https://raw.githubusercontent.com/MaximumADHD/Roblox-Client-Tracker/roblox/version.txt) — **`0.739.0.7390687`**, the client version every DUMP claim in this document is pinned to.
+- [`.../FVariables.txt`](https://raw.githubusercontent.com/MaximumADHD/Roblox-Client-Tracker/roblox/FVariables.txt) — fast-flag *names* only (no values). Used strictly as corroboration for gating and feature-age claims: `EnablePermissionCheckOnCreatingEditableAsset`, `SimEnableEditablePermissionCheck`, `EditableSkipPolicyCheckForStudioEditMode`, `BlockEditableTypeReplication`, `BlockUseOfReplicatedEditableX`, `AllowEditableApisInCloudExecution2`, `EditableImageSubtractImageCombineType`, `EditableImageForceRGBA`, `SimRuntimeContentEnforceLocalBudget`.
+- [`.../DeepStrings.txt`](https://raw.githubusercontent.com/MaximumADHD/Roblox-Client-Tracker/roblox/DeepStrings.txt) — client symbol strings. Source of `EditableImageDrawTriangleEnabled`, `CreateEditableImagePermissionFailure`, `CreateEditableImageSuccess`, `CreateEditableImageOriginalSizeAsync`, `EditableMemoryTelemetryEvent`. **Symbol names, not documentation.**
+
+### Secondary — real production Luau using these APIs
+
+- [`Ethanthegrand/FastCanvas` → `FastCanvas.luau`](https://raw.githubusercontent.com/Ethanthegrand/FastCanvas/main/FastCanvas.luau) — persistent `buffer` grid, `GetGridIndex(X, Y) = (X + (Y - 1) * Width) * 4 - 4`, a pre-filled `ClearingGrid` for fast clears, single `WritePixelsBuffer` per `Render()`, and a `nil`-check on `CreateEditableImage` with the message "Failed to create Canvas due to EditableImage memory limit being hit!".
+- [`osgl-rbx/osgl` → `src/bitmap.luau`](https://raw.githubusercontent.com/osgl-rbx/osgl/main/src/bitmap.luau) — `buffer.readu8(self.buffer, (y * self.width + x) * self.channels + (channel - 1))`, the 0-based row-major form of the same index math.
+
+Two independent implementations agreeing on the index formula is what promotes "row-major,
+top-left origin" from *inferred* to *effectively verified*.
+
+### `[COMMUNITY, SECOND-HAND]` — DevForum, via web-search summaries only
+
+The DevForum is not reachable from this environment; the following were surfaced only as search
+result titles and generated summaries and **were not read first-hand**. Every figure below is
+unverified.
+
+- Editable memory budget cited as **≈32 MB** client-side, with reports of exhaustion after ~**5–6**
+  large images. Threads: "Failed to create empty EditableImage that was requested due to reaching
+  memory budget limits error" (t/3490799), "Remove Editable Mesh/Image limit on the client"
+  (t/4219561), "EditableImage higher resolution and memory limit" (t/4389575), "Editable mesh memory
+  budget reached" (t/3469104).
+- Old signature `EditableImage:WritePixels(position: Vector2, size: Vector2, pixels: {any})`.
+- Beta history: "Introducing in-experience Mesh & Image APIs [Studio Beta]" (t/2725284, 2023),
+  "[Studio Beta] Major updates to in-experience Mesh & Image APIs" (t/3225681),
+  "[Client Beta] In-experience Mesh & Image APIs now available in published experiences" (t/3267293,
+  Jan 2025) — the announcement that introduced published-experience availability and noted the team
+  would "be tweaking the memory budget and re-evaluating permissions restrictions."
+
+### Confirmed unreachable from this environment (do not retry)
+
+`create.roblox.com`, `devforum.roblox.com`, `luau.org`, `robloxapi.github.io`, `blog.roblox.com`,
+`en.help.roblox.com`, `roblox.fandom.com`, `data.jsdelivr.com`, `api.github.com` (for this repo),
+and `github.com` via `curl` (403; `WebFetch` works). `raw.githubusercontent.com` is reachable and is
+the basis of everything primary above.
+
+### Index of `[UNVERIFIED]` claims in this document
+
+| § | Claim left unverified |
+|---|---|
+| Verification gate | Whose verification status is checked for a group-owned experience. |
+| 1.1 | Initial contents of a freshly created blank `EditableImage`. |
+| 1.2 | Whether `Content.fromObject(otherEditableImage)` is accepted by `CreateEditableImageAsync`. |
+| 1.2 | Whether a >1024² source is downscaled, cropped or rejected on load. |
+| 1.4 | Behaviour of an `EditableImage` after `Destroy()` (draw/read/display). |
+| 1.6 | Whether `Opaque` `Content` from `CreateDataModelContentAsync` actually replicates; size of the server storage budget. |
+| 2.2 | Real per-image charge against the budget (mips, GPU copy) vs the logical `w·h·4`. |
+| 2.3 | Any numeric memory budget — **none is published**. The ≈32 MB figure is community hearsay. |
+| 3.2 | Premultiplied vs straight alpha; colour space (sRGB vs linear) of the buffer bytes. |
+| 3.5 | Little-endian `writeu32` packing order (arithmetically sound, not documented). |
+| 4.1 | `DrawTriangle` behaviour, winding order, fill rule; which clients have it enabled. |
+| 4.5 | Exact equations for `BlendSourceOver`, `Add`, `AlphaBlend`, `Subtract` (prose only in DOCS). |
+| 5.4 | Whether `ParticleEmitter`, `Sky`, `Beam`, `Trail`, `ImageHandleAdornment`, `CharacterMesh`, `BackpackItem` and the cursor-icon slots accept `EditableImage`. Expect **no** for `ParticleEmitter`. |
+| 6.x | All performance figures — no timings are published; the tables are engineering judgement. |
+| 6.5 | Mobile device tiers and their budgets. |
+| 7.2 | Whether a `buffer` crosses an actor boundary by copy or by reference. |
+| 8.4 | Any Open Cloud REST path for `EditableImage` pixel data (almost certainly none). |
+| Churn 6 | What exactly the removed resize/crop API looked like. |

@@ -1024,3 +1024,782 @@ git diff --name-only "origin/${BASE_REF}...HEAD" | grep -q '^fixtures/frozen/' \
 (Uses git only as a CI gate; the rule is what matters, adapt to your CI's diff mechanism.)
 
 ---
+
+## 4. Property-based testing
+
+Golden masters prove the port matches the original *on the inputs you captured*. Properties cover
+the inputs you did not think of. For an idle game the high-yield invariants are few and specific.
+
+### 4.1 A minimal generator + shrinker in Luau
+
+You do not need a library. ~70 lines gives generation, seeding (so failures reproduce), and naive
+shrinking (so failures are readable).
+
+```lua
+--!strict
+-- tests/prop.luau
+local Prop = {}
+
+-- Deterministic PRNG so a failing seed reproduces exactly. xoshiro-ish; any seeded PRNG works.
+local function rng(seed: number)
+	local s = seed % 2147483647
+	if s <= 0 then s += 2147483646 end
+	return function(): number
+		s = (s * 16807) % 2147483647
+		return (s - 1) / 2147483646
+	end
+end
+
+export type Gen<T> = { gen: (r: () -> number, size: number) -> T, shrink: (T) -> { T } }
+
+function Prop.int(lo: number, hi: number): Gen<number>
+	return {
+		gen = function(r) return lo + math.floor(r() * (hi - lo + 1)) end,
+		-- Shrink toward lo, then halve the distance: 1000 -> {lo, 500, 750, 999}
+		shrink = function(v)
+			local out = {}
+			if v > lo then table.insert(out, lo) end
+			local mid = lo + (v - lo) // 2
+			if mid ~= v and mid ~= lo then table.insert(out, mid) end
+			if v - 1 >= lo and v - 1 ~= mid then table.insert(out, v - 1) end
+			return out
+		end,
+	}
+end
+
+-- Log-uniform magnitudes: the distribution an idle game actually lives in.
+function Prop.magnitude(minExp: number, maxExp: number): Gen<number>
+	return {
+		gen = function(r) return 10 ^ (minExp + r() * (maxExp - minExp)) end,
+		shrink = function(v) return { 1, math.sqrt(math.max(v, 1)) } end,
+	}
+end
+
+function Prop.list<T>(item: Gen<T>, maxLen: number): Gen<{ T }>
+	return {
+		gen = function(r, size)
+			local n, out = math.floor(r() * math.min(size, maxLen)), {}
+			for _ = 1, n do table.insert(out, item.gen(r, size)) end
+			return out
+		end,
+		shrink = function(v)
+			if #v == 0 then return {} end
+			local half = table.move(v, 1, #v // 2, 1, {})
+			local drop1 = table.move(v, 2, #v, 1, {})
+			return { {}, half, drop1 }
+		end,
+	}
+end
+
+-- forAll: run `trials` cases, and on failure shrink greedily until no shrink still fails.
+function Prop.forAll<T>(name: string, g: Gen<T>, predicate: (T) -> (boolean, string?), opts: {
+	trials: number?, seed: number?, size: number?
+}?)
+	local o = opts or {}
+	local trials, seed, size = o.trials or 200, o.seed or 1, o.size or 32
+	local r = rng(seed)
+	for trial = 1, trials do
+		local value = g.gen(r, size)
+		local ok, why = predicate(value)
+		if not ok then
+			local best, bestWhy, guard = value, why, 0
+			while guard < 200 do
+				guard += 1
+				local improved = false
+				for _, candidate in g.shrink(best) do
+					local cok, cwhy = predicate(candidate)
+					if not cok then best, bestWhy, improved = candidate, cwhy, true; break end
+				end
+				if not improved then break end
+			end
+			error(("property %q failed on trial %d (seed=%d)\n  minimal counterexample: %s\n  %s")
+				:format(name, trial, seed, tostring(best), tostring(bestWhy)), 2)
+		end
+	end
+end
+
+return Prop
+```
+
+### 4.2 The invariants worth asserting
+
+```lua
+--!strict
+-- src/Shared/Sim/Invariants.spec.luau
+local Prop   = require("../../../tests/prop")
+local Approx = require("../../../tests/approx")
+local Sim    = require("./init")
+local Save   = require("./Serialize")
+local Fmt    = require("../Format/Notation")
+
+local function freshState(seed: number) return Sim.newState({ rngSeed = seed }) end
+
+return function(t)
+t.describe("simulation invariants", function()
+
+	-- (1) Monotonic growth: with no spending, currency never decreases across a tick.
+	t.it("currency is non-decreasing under pure accrual", function()
+		Prop.forAll("monotone", Prop.list(Prop.magnitude(-2, 4), 200), function(dts)
+			local s = freshState(1)
+			local prev = s.currencies.points
+			for _, dt in dts do
+				s = Sim.step(s, dt)
+				if s.currencies.points < prev then
+					return false, ("dropped from %.17g to %.17g on dt=%.6g"):format(prev, s.currencies.points, dt)
+				end
+				prev = s.currencies.points
+			end
+			return true
+		end)
+	end)
+
+	-- (2) No NaN or Infinity ever reaches the UI. Check the FORMATTER's input and output,
+	--     because that is the exact boundary a player sees.
+	t.it("never emits NaN/Infinity to the UI layer", function()
+		Prop.forAll("finite-ui", Prop.magnitude(0, 8), function(seconds)
+			local s = Sim.step(freshState(7), seconds)
+			for name, v in s.currencies do
+				if v ~= v then return false, ("currency %s is NaN"):format(name) end
+				if v == math.huge or v == -math.huge then return false, ("currency %s is inf"):format(name) end
+				local text = Fmt.short(v)
+				if text:find("nan") or text:find("inf") or text == "" then
+					return false, ("formatter produced %q for %s"):format(text, name)
+				end
+			end
+			return true
+		end)
+	end)
+
+	-- (3) Currency is never negative, including after a purchase that is refused.
+	t.it("currency never goes negative", function()
+		Prop.forAll("non-negative", Prop.list(Prop.int(1, 50), 100), function(buys)
+			local s = freshState(3)
+			for _, n in buys do
+				s = Sim.step(s, 1)
+				local r = Sim.buy(s, "gen1", n)
+				s = r.state
+				for name, v in s.currencies do
+					if v < 0 then return false, ("%s went negative: %.17g"):format(name, v) end
+				end
+			end
+			return true
+		end)
+	end)
+
+	-- (4) Purchase cost is STRICTLY increasing in level. A flat step means a free infinite loop.
+	t.it("cost is strictly increasing in level", function()
+		Prop.forAll("cost-monotone", Prop.int(0, 50000), function(level)
+			local a, b = Sim.costAt("gen1", level), Sim.costAt("gen1", level + 1)
+			if not (b > a) then return false, ("cost(%d)=%.17g >= cost(%d)=%.17g"):format(level, a, level + 1, b) end
+			return true
+		end)
+	end)
+
+	-- (5) Offline gain == online gain over the same span. The classic port bug is that offline
+	--     uses a closed form and online uses integration, and they disagree past some magnitude.
+	t.it("offline accrual equals online accrual over the same span", function()
+		Prop.forAll("offline-parity", Prop.magnitude(0, 6), function(span)
+			local base = freshState(11)
+			local offline = Sim.applyOffline(base, span)
+			local online, remaining, STEP = base, span, 0.25
+			while remaining > 0 do
+				local dt = math.min(STEP, remaining); online = Sim.step(online, dt); remaining -= dt
+			end
+			-- Integration error is expected; it must stay within the declared budget.
+			local ok, why = Approx.close(offline.currencies.points, online.currencies.points, 1e-6)
+			if not ok then return false, ("span=%.6gs: %s"):format(span, why) end
+			return true
+		end)
+	end)
+
+	-- (6) save -> load -> save is a fixed point (byte-identical on the SECOND save).
+	t.it("save/load round-trips to a fixed point", function()
+		Prop.forAll("roundtrip", Prop.magnitude(0, 7), function(seconds)
+			local s = Sim.step(freshState(5), seconds)
+			local blob1 = Save.encode(s)
+			local restored = Save.decode(blob1)
+			local blob2 = Save.encode(restored)
+			if blob1 ~= blob2 then
+				return false, ("save is not idempotent (%d vs %d bytes)"):format(#blob1, #blob2)
+			end
+			return true
+		end)
+	end)
+
+	-- (7) Multiplier stacking commutes where the design says it does (pure multiplicative sets).
+	--     Where it does NOT (additive-then-multiplicative tiers), assert the opposite:
+	--     that a known non-commuting pair really does differ, so nobody "fixes" it later.
+	t.it("multiplicative buffs commute", function()
+		Prop.forAll("commute", Prop.list(Prop.magnitude(-1, 2), 12), function(mults)
+			local forward = Sim.stackMultiplicative(mults)
+			local reversed = {}
+			for i = #mults, 1, -1 do table.insert(reversed, mults[i]) end
+			local backward = Sim.stackMultiplicative(reversed)
+			-- Floating-point reassociation is expected; logic divergence is not.
+			return Approx.close(forward, backward, 1e-12)
+		end)
+	end)
+end)
+end
+```
+
+**Notes on making these useful rather than decorative.** (a) Print the seed on failure and accept
+a `PROP_SEED` env var so CI failures reproduce locally. (b) Run a small `trials` count (200) on
+every PR and a large one (20,000, with seed derived from the date) nightly. (c) Property #7 is the
+place teams most often assert a falsehood: if the design has an additive tier, multiplication is
+*not* commutative across tiers, and asserting that it is will either fail forever or, worse, be
+"fixed" by changing the game. Write the negative test too.
+
+---
+
+## 5. Simulation and soak testing
+
+A soak run is a headless fast-forward that treats the simulation as a batch job. It is cheap
+(seconds of CPU for years of game time) and it finds the class of bug that unit tests structurally
+cannot: *slow* failures.
+
+### 5.1 The harness
+
+```lua
+--!strict
+-- tools/soak.luau — `lune run tools/soak -- --hours 10000 --step 1 --report out/soak.ndjson`
+local process, fs, serde = require("@lune/process"), require("@lune/fs"), require("@lune/serde")
+local Sim, Fmt = require("../src/Shared/Sim/init"), require("../src/Shared/Format/Notation")
+
+local HOURS, STEP = 10000, 1.0   -- parse from process.args in real use
+local state = Sim.newState({ rngSeed = 20260101 })
+local policy = require("./policies/greedy")   -- a scripted "player": buys the best ROI each tick
+local report, breaks = {}, {}
+
+local function isBad(v: number): string?
+	if v ~= v then return "NaN" end
+	if v == math.huge or v == -math.huge then return "Infinity" end
+	if v < 0 then return "negative" end
+	return nil
+end
+
+-- Representability check: the value must survive a round-trip through our own display/save path.
+local function representable(v: number): boolean
+	local text = Fmt.short(v)
+	local back = Fmt.parse(text)
+	if back ~= back then return false end
+	local scale = math.max(math.abs(v), math.abs(back))
+	return scale == 0 or math.abs(v - back) / scale < 1e-3   -- display precision budget
+end
+
+local t0 = os.clock()
+for hour = 1, HOURS do
+	for _ = 1, 3600 / STEP do
+		state = Sim.step(state, STEP)
+		state = policy.act(state)
+	end
+	for name, v in state.currencies do
+		local bad = isBad(v)
+		if bad then table.insert(breaks, { hour = hour, currency = name, kind = bad }) end
+		if not representable(v) then
+			table.insert(breaks, { hour = hour, currency = name, kind = "unrepresentable",
+				value = string.format("%.17g", v), shown = Fmt.short(v) })
+		end
+	end
+	if hour % 10 == 0 or hour <= 24 then
+		table.insert(report, {
+			hour = hour,
+			points = string.format("%.17g", state.currencies.points),
+			shown = Fmt.short(state.currencies.points),
+			prestige = state.prestigeCount,
+			levels = state.levels,
+			rate = string.format("%.17g", Sim.productionRate(state)),
+		})
+	end
+	if #breaks > 0 and #breaks < 5 then
+		print(("first break at hour %d: %s"):format(hour, serde.encode("json", breaks[1])))
+	end
+end
+
+local lines = {}
+for _, row in report do table.insert(lines, serde.encode("json", row)) end
+fs.writeFile("out/soak.ndjson", table.concat(lines, "\n"))
+print(("soak: %d hours in %.1fs wall, %d breaks"):format(HOURS, os.clock() - t0, #breaks))
+process.exit(if #breaks == 0 then 0 else 1)
+```
+
+### 5.2 What to look for, and the assertion for each
+
+| Failure mode | Symptom in the trace | Assertion |
+|---|---|---|
+| **Overflow** | `points` becomes `inf` at some hour | `isBad(v) == nil` for every currency, every hour |
+| **Precision collapse** | Rate stops changing after a purchase because the increment is below one ULP of the total | `Sim.step(s, dt).points > s.points` whenever `rate > 0` and `dt >= 1` |
+| **Representability loss** | Formatter prints `1e+308` or `inf`, or `parse(format(v))` diverges | `representable(v)` every hour (above) |
+| **Softlock** | No purchase becomes affordable for N consecutive hours despite non-zero production | assert "time since last state change" stays under a design-declared cap |
+| **Balance break** | Prestige cadence collapses to < 1 minute, or the first 10 upgrades all unlock in hour 1 | assert hour-of-first-purchase per upgrade against a declared band |
+| **Non-termination** | Wall-clock per game-hour grows superlinearly | assert `os.clock()` delta per hour stays within a factor of the first hour |
+
+**Three-tier schedule:** fast soak (100 h) on every PR, 10,000 h nightly, 1,000,000 h weekly with the
+big-number path. The weekly run is where tetration-scale representation bugs surface; a layer-0
+double-only implementation dies around 1.797e308, and the exact hour it dies is a number your
+design document should contain.
+
+**Finding the representability cliff.** Rather than asserting a magnitude, bisect for it and assert
+the answer moved in the right direction:
+
+```lua
+-- Returns the smallest exponent at which format→parse round-trip fails.
+local function cliff(): number
+	local lo, hi = 0, 4096
+	while lo + 1 < hi do
+		local mid = (lo + hi) // 2
+		if representable(10 ^ mid) then lo = mid else hi = mid end
+	end
+	return hi
+end
+-- Regression guard: this number must never DECREASE between releases.
+assert(cliff() >= EXPECTED_CLIFF, ("representability cliff regressed to 1e%d"):format(cliff()))
+```
+
+---
+
+## 6. Save-system testing
+
+Every other bug costs a player a session. A save bug costs them their account. Test it hardest.
+
+### 6.1 The six test families
+
+**(a) Round-trip fidelity.** `decode(encode(s))` must be *structurally* equal to `s` — not "close".
+Write a deep comparison that reports the first differing path, and run it over golden state
+snapshots plus generated states ([§4.2](#42-the-invariants-worth-asserting) property 6). The
+stronger form, `encode(decode(encode(s))) == encode(s)`, is a byte-level fixed point and catches
+key-ordering nondeterminism, which is the usual cause of "the save grows every session".
+
+**(b) Schema migration — every old version must load.** Keep one committed fixture per historic
+schema version, forever.
+
+```
+fixtures/saves/v1_fresh.json      fixtures/saves/v4_post_prestige.json
+fixtures/saves/v1_maxed.json      fixtures/saves/v5_with_tier7.json
+fixtures/saves/v2_midgame.json    fixtures/saves/v6_bignum.json
+fixtures/saves/v3_corrupt_rate.json   fixtures/saves/v7_current.json
+```
+
+```lua
+t.it("loads every historic save version", function()
+	for _, path in fs.readDir("fixtures/saves") do
+		local blob = fs.readFile("fixtures/saves/" .. path)
+		local ok, state = pcall(Save.decode, blob)
+		expect(ok).toBe(true, ("v-fixture %s failed to decode: %s"):format(path, tostring(state)))
+		expect(state.schemaVersion).toBe(Save.CURRENT_VERSION)   -- migration ran to completion
+		-- Migration must not invent or destroy value.
+		expect(state.currencies.points).toBeGreaterThanOrEqual(0)
+		-- And must be idempotent: migrating an already-current save is a no-op.
+		expect(Save.encode(Save.decode(Save.encode(state)))).toBe(Save.encode(state))
+	end
+end)
+```
+The rule that makes this work: **adding a new schema version requires adding a fixture for the
+previous one in the same PR.** Enforce with a CI check that the count of `fixtures/saves/v{N}_*`
+files is non-zero for every `N < CURRENT_VERSION`.
+
+**(c) Corrupt and truncated data.** Generate systematically rather than by hand: for a valid blob,
+emit every prefix at 10% increments, every single-byte flip at 32 random offsets, an empty string,
+a string of the wrong type, valid JSON of the wrong shape, and a blob whose `schemaVersion` is
+*larger* than `CURRENT_VERSION` (a player rolled back to an older server).
+
+```lua
+t.it("never silently accepts damaged data", function()
+	local good = Save.encode(Sim.step(Sim.newState({ rngSeed = 1 }), 3600))
+	local damaged = { "", "{", "null", "[]", string.rep("A", 1000) }
+	for pct = 10, 90, 10 do table.insert(damaged, string.sub(good, 1, #good * pct // 100)) end
+	for _, blob in damaged do
+		local ok, result = pcall(Save.decode, blob)
+		-- Required behaviour: either a clean error, or a value flagged as recovered.
+		-- FORBIDDEN: returning a state that looks valid but has lost progress.
+		if ok then
+			expect(result.recovered).toBe(true)
+			expect(result.recoveredFrom).toBeTruthy()
+		else
+			expect(tostring(result)).toMatch("save")   -- errors must be identifiable
+		end
+	end
+end)
+```
+The forbidden outcome — decoding a truncated blob into a plausible-looking fresh state and then
+*saving over the good data* — is the single most destructive bug an idle game can ship. Test it
+explicitly, and make the production path refuse to write when the load was `recovered`.
+
+**(d) Session lock under rejoin.** The hazard: a player leaves server A and joins server B before
+A's final save lands, so A overwrites B's newer data. Roblox's data-store best practices document
+the ingredients — prefer `UpdateAsync` over `SetAsync` because it "reads the latest value into your
+callback before it writes, which reduces lost updates"; process retries in order per key because
+"an older request that retries after a newer request succeeds can overwrite newer data"; and choose
+a save interval "shorter than any session-lock expiration" (the official player-data sample uses
+180 seconds). Model the lock in a pure module and test it headlessly:
+
+```lua
+-- Sim/SessionLock.luau is pure: it takes the stored record and a claim, returns a decision.
+t.it("refuses a stale server's write after a rejoin", function()
+	local store = FakeStore.new():port()
+	local A, B = "serverA", "serverB"
+	Session.claim(store, "User_1", A, { now = 0 })
+	local decision = Session.claim(store, "User_1", B, { now = 5 })
+	expect(decision.kind).toBe("locked")          -- B must wait, not steal
+	local stale = Session.write(store, "User_1", A, savedState, { now = 400 })
+	expect(stale.ok).toBe(false)                  -- A's lock expired; its write is rejected
+	expect(stale.reason).toBe("lock_lost")
+end)
+
+t.it("releases the lock after expiry so a crashed server does not brick the account", function()
+	local store = FakeStore.new():port()
+	Session.claim(store, "User_1", "crashedServer", { now = 0 })
+	local decision = Session.claim(store, "User_1", "newServer", { now = 0 + Session.TTL + 1 })
+	expect(decision.kind).toBe("acquired")
+end)
+```
+`[UNVERIFIED]` — Roblox does not provide a first-party session-lock primitive; the pattern above is
+the community-standard `UpdateAsync`-based lock. Whatever implementation you choose, the two tests
+above (steal-prevention and crash-recovery) are the ones that matter.
+
+**(e) DataStore failure injection.** Drive the `FakeStore` from [§1.3](#13-dependency-injection-for-the-parts-that-must-touch-the-datamodel)
+through each failure mode and assert the *player-visible* outcome, not the internal one:
+
+| Injected failure | Required behaviour |
+|---|---|
+| `get` throws on every attempt | Player is **not** given a fresh save; session enters read-only mode and refuses to write |
+| `set` throws once, succeeds on retry | Save succeeds; exactly one extra request consumed |
+| `set` throws always | Retries with exponential backoff and jitter, caps attempts, surfaces a visible warning |
+| Budget exhausted | Writes queue rather than drop; `BindToClose` still flushes |
+| Throttled (`Request was throttled`) | Backs off; does not hot-loop |
+
+**(f) The 4 MB limit as an assertion.** `Roblox/creator-docs` gives the data-store value limit as
+**4,194,304 bytes per key** and the key-name limit as **50 characters**; total user-defined metadata
+is capped at 300 characters. Assert all three, and assert a *headroom* budget well below the hard
+limit so you find growth before players do:
+
+```lua
+t.it("stays within DataStore limits at worst-case progression", function()
+	local s = loadFixture("fixtures/saves/worst_case_endgame.json")
+	local blob = Save.encode(s)
+	expect(#blob).toBeLessThan(4 * 1024 * 1024)          -- hard platform limit
+	expect(#blob).toBeLessThan(512 * 1024)               -- our budget: 1/8 of the limit
+	expect(#("User_" .. 9999999999)).toBeLessThanOrEqual(50)   -- key-name limit
+end)
+```
+Also add a **growth regression test**: record the encoded size of each save fixture in a committed
+`sizes.json` and fail CI if any grows by more than a few percent without the fixture being
+regenerated. Unbounded per-session arrays (event logs, "recent purchases") are the usual culprit,
+and they are invisible until a long-lived account crosses the limit and can never save again.
+
+---
+
+## 7. Static analysis and types
+
+### 7.1 `--!strict` coverage as a QA metric
+
+Roblox's own type-checking documentation lists three modes: `--!nocheck` ("Don't check types"),
+`--!nonstrict` ("Only asserts variable types if they are explicitly annotated"), and `--!strict`
+("Asserts all types based off the inferred or explicitly annotated type"), and notes that in
+`nonstrict` mode "all variables are assigned the type `any`" by default. For a port, `--!nonstrict`
+is barely better than nothing: `any` propagates and the checker goes quiet exactly where a
+transcription bug would live.
+
+Treat strict coverage as a tracked number, not a vibe:
+
+```bash
+# scripts/strict-coverage.sh — prints coverage and fails below the ratchet
+total=$(find src -name '*.luau' ! -name '*.spec.luau' | wc -l)
+strict=$(grep -rl '^--!strict' src --include='*.luau' | grep -v '\.spec\.luau$' | wc -l)
+pct=$(( 100 * strict / total ))
+echo "strict coverage: ${strict}/${total} (${pct}%)"
+[ "$pct" -ge "${STRICT_FLOOR:-85}" ] || { echo "below floor ${STRICT_FLOOR:-85}%"; exit 1; }
+```
+Ratchet the floor upward; never downward. Require 100% in `src/Shared/Sim` and
+`src/Shared/Balance` — those are the files whose correctness *is* the product.
+
+What strict mode actually catches in a port, in rough order of frequency: passing a `string` level
+index where a `number` is expected (the original was JS, where `obj["3"]` and `obj[3]` coincide and
+in Luau they do not); a function that returns a value on one branch and `nil` on another, which
+strict mode reports and `nonstrict` silently types as `any`; misspelled table fields on a typed
+table; `nil`-able results from `FindFirstChild`/table lookups used without a check; and arity
+mismatches after a refactor.
+
+**Type the simulation's data, not just its functions.** The highest-yield annotation in an idle
+game is the state shape itself, because every migration and every fixture decoder has to produce
+it:
+
+```lua
+--!strict
+export type CurrencyId = "points" | "gems" | "shards"
+export type SimState = {
+	schemaVersion: number,
+	elapsed: number,
+	rngSeed: number,
+	currencies: { [CurrencyId]: number },
+	levels: { [string]: number },
+	prestigeCount: number,
+	recovered: boolean?,      -- set only by a damaged-save recovery path
+}
+```
+A string-literal union for `CurrencyId` turns "typo in a currency name" from a silent no-op into a
+compile-time error — which is precisely the bug class that a port introduces when currency keys are
+retyped by hand.
+
+### 7.2 Selene
+
+Selene is "a blazing-fast modern Lua linter written in Rust" whose stated priority is *"It's okay
+to not diagnose every problem, as long as the diagnostics that are made are never wrong."* That
+makes its output safe to gate on.
+
+Setup, verified from Selene's Roblox guide: put `std = "roblox"` in `selene.toml` and a Roblox
+standard library is generated automatically (refreshed every 6 hours; force with
+`selene update-roblox-std`). If you use TestEZ, the guide says to use `std = "roblox+testez"` and
+supply a `testez.yml`. For reproducible CI, pin it: `roblox-std-source = "pinned"` writes
+`roblox.yml` next to your config (also produced by `selene generate-roblox-std`), so the build does
+not depend on a network fetch.
+
+```toml
+# selene.toml
+std = "roblox+testez"
+roblox-std-source = "pinned"
+
+[lints]
+# Real bugs — keep these as errors.
+divide_by_zero = "deny"
+unbalanced_assignments = "deny"
+mismatched_arg_count = "deny"
+undefined_variable = "deny"
+incorrect_standard_library_use = "deny"
+duplicate_keys = "deny"
+almost_swapped = "deny"
+suspicious_reverse_loop = "deny"
+constant_table_comparison = "deny"
+if_same_then_else = "deny"
+ifs_same_cond = "deny"
+type_check_inside_call = "deny"
+shadowing = "warn"            # noisy but catches real capture bugs in tick loops
+global_usage = "deny"         # a global in an idle sim is a cross-server divergence waiting to happen
+unscoped_variables = "deny"
+must_use = "warn"
+high_cyclomatic_complexity = "warn"
+manual_table_clone = "warn"
+```
+The full lint set (verified from Selene's documentation index) is: `almost_swapped`,
+`constant_table_comparison`, `deprecated`, `divide_by_zero`, `duplicate_keys`, `empty_if`,
+`empty_loop`, `global_usage`, `high_cyclomatic_complexity`, `if_same_then_else`, `ifs_same_cond`,
+`incorrect_standard_library_use`, `manual_table_clone`, `mismatched_arg_count`, `mixed_table`,
+`multiple_statements`, `must_use`, `parenthese_conditions`, `restricted_module_paths`,
+`roblox_incorrect_color3_new_bounds`, `roblox_incorrect_roact_usage`,
+`roblox_manual_fromscale_or_fromoffset`, `roblox_suspicious_udim2_new`, `shadowing`,
+`suspicious_reverse_loop`, `type_check_inside_call`, `unbalanced_assignments`,
+`undefined_variable`, `unscoped_variables`, `unused_variable`.
+
+Which ones earn their place in *this* project: `divide_by_zero` (an idle game divides by a rate
+that can be zero before the first generator is bought), `unbalanced_assignments` (a port artifact —
+JS destructuring translated by hand), `mismatched_arg_count` (signature drift during the port),
+`shadowing` (a `local rate` inside a loop shadowing the outer one silently freezes production),
+`global_usage` (an accidental global is shared across every coroutine on the server),
+`suspicious_reverse_loop` (`for i = #t, 1 do` without `-1` never executes — a silent no-op in a
+cleanup path), and `type_check_inside_call` (`assert(type(x == "number"))` — always truthy, a
+whole class of dead assertions).
+
+CI invocation: `selene src` with `--display-style Quiet` for compact logs; `--allow-warnings` makes
+it "pass when only warnings occur" — use it during migration, drop it once clean.
+
+### 7.3 Luau's own linter and `luau-lsp analyze`
+
+Luau's compiler ships a linter with **29 numbered warning codes**, verified from
+`Config/include/Luau/LinterConfig.h` in `luau-lang/luau`: `UnknownGlobal`(1), `DeprecatedGlobal`(2),
+`GlobalUsedAsLocal`(3), `LocalShadow`(4), `SameLineStatement`(5), `MultiLineStatement`(6),
+`LocalUnused`(7), `FunctionUnused`(8), `ImportUnused`(9), `BuiltinGlobalWrite`(10),
+`PlaceholderRead`(11), `UnreachableCode`(12), `UnknownType`(13), `ForRange`(14),
+`UnbalancedAssignment`(15), `ImplicitReturn`(16), `DuplicateLocal`(17), `FormatString`(18),
+`TableLiteral`(19), `UninitializedLocal`(20), `DuplicateFunction`(21), `DeprecatedApi`(22),
+`TableOperations`(23), `DuplicateCondition`(24), `MisleadingAndOr`(25), `CommentDirective`(26),
+`IntegerParsing`(27), `ComparisonPrecedence`(28), `RedundantNativeAttribute`(29). The header notes
+several are "disabled in Studio" (`LocalShadow`, `SameLineStatement`, `LocalUnused`,
+`FunctionUnused`, `ImportUnused`, `ImplicitReturn`) — meaning **Studio will not show you these; CI
+must**. `IntegerParsing` and `FormatString` are directly relevant to a big-number port, and
+`MisleadingAndOr` catches the `a and b or c` idiom silently failing when `b` is `false`/`nil`.
+
+`JohnnyMorganz/luau-lsp` is the CI typechecker: its README states the tool "can run standalone …
+to provide type and lint warnings in CI, with full Rojo resolution and API types support", with
+`luau-lsp analyze` as the entry point, and that "the latest Roblox type definitions and
+documentation are preloaded out of the box". It resolves the DataModel through a Rojo sourcemap
+produced by `rojo sourcemap --watch default.project.json --output sourcemap.json` (drop `--watch`
+in CI).
+
+### 7.4 StyLua
+
+StyLua's `--check` flag checks "whether files require formatting (but not write directly to them)",
+which is the CI mode. Configuration lives in `stylua.toml` / `.stylua.toml` in the project root;
+documented defaults include `column_width = 120`, `indent_type = "Tabs"`, `indent_width = 4`, and
+`syntax = "Style"` disambiguates the dialect. Formatting is not a correctness control, but it is a
+*review* control: a mechanically formatted diff makes a one-character constant change visible
+instead of hiding it inside a reflow.
+
+---
+
+## The CI workflow
+
+A pipeline that gates merges must run without Studio. Everything below runs on `ubuntu-latest`.
+
+```yaml
+# .github/workflows/ci.yml
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  STRICT_FLOOR: "85"
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # needed for the frozen-fixture diff check
+
+      # --- Toolchain -------------------------------------------------------
+      # rokit.toml pins exact versions of rojo, wally, stylua, selene, lune and luau-lsp,
+      # so CI and every developer run the same binaries.
+      - name: Install Rokit
+        uses: CompeyDev/setup-rokit@v0.1.2
+      - name: Install pinned tools
+        run: rokit install --no-trust-check
+
+      - name: Print tool versions (provenance for the build log)
+        run: |
+          rojo --version && wally --version && stylua --version
+          selene --version && lune --version && luau-lsp --version
+
+      # --- Dependencies ----------------------------------------------------
+      - name: Cache Wally packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            Packages
+            DevPackages
+            ~/.cache/wally
+          key: wally-${{ runner.os }}-${{ hashFiles('wally.lock') }}
+      - name: Install packages
+        run: wally install --locked      # --locked errors without an up-to-date lockfile
+
+      # --- Fast gates (fail in seconds, before anything expensive) ---------
+      - name: Format check
+        run: stylua --check src tests tools
+
+      - name: Lint
+        run: selene src tests tools --display-style Quiet
+
+      - name: Simulation purity gate
+        run: bash scripts/check-purity.sh
+
+      - name: Frozen fixtures are immutable
+        run: bash scripts/check-frozen.sh
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+
+      - name: Strict-mode coverage ratchet
+        run: bash scripts/strict-coverage.sh
+
+      # --- Typecheck -------------------------------------------------------
+      # Wally installs packages with a flat layout; sourcemap generation makes luau-lsp
+      # resolve `require(Packages.Foo)` the same way Studio will.
+      - name: Generate Rojo sourcemap
+        run: rojo sourcemap default.project.json --output sourcemap.json
+
+      - name: Typecheck
+        run: |
+          luau-lsp analyze \
+            --sourcemap=sourcemap.json \
+            --settings=.vscode/settings.json \
+            --ignore="Packages/**" \
+            --ignore="DevPackages/**" \
+            src tests tools
+
+      # --- Tests -----------------------------------------------------------
+      - name: Unit + property tests (Lune, headless)
+        run: lune run tests/run
+
+      - name: Golden-master suite
+        run: lune run tests/golden_all
+
+      - name: Fast soak (100 in-game hours)
+        run: lune run tools/soak -- --hours 100 --report out/soak-pr.ndjson
+
+      - name: Upload soak report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: soak-report
+          path: out/
+
+      # --- Build -----------------------------------------------------------
+      - name: Build place file
+        run: rojo build default.project.json --output build/game.rbxl
+
+      - name: Assert the debug console is disabled in this build
+        run: bash scripts/assert-debug-off.sh
+
+      - name: Upload place artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: place
+          path: build/game.rbxl
+
+  nightly-soak:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: CompeyDev/setup-rokit@v0.1.2
+      - run: rokit install --no-trust-check
+      - run: wally install --locked
+      - name: Deep soak (10,000 in-game hours)
+        run: lune run tools/soak -- --hours 10000 --report out/soak-nightly.ndjson
+      - name: Property tests, 20k trials
+        run: PROP_TRIALS=20000 PROP_SEED=${{ github.run_number }} lune run tests/run
+      - uses: actions/upload-artifact@v4
+        with: { name: nightly-soak, path: out/ }
+```
+
+Companion `rokit.toml` (Rokit is the Rojo org's toolchain manager, "drop-in compatibility with
+projects that already use Foreman or Aftman"):
+
+```toml
+# rokit.toml — pin everything; "latest" is not a version
+[tools]
+rojo = "rojo-rbx/rojo@7.5.1"
+wally = "UpliftGames/wally@0.3.2"
+stylua = "JohnnyMorganz/StyLua@2.0.2"
+selene = "Kampfkarren/selene@0.27.1"
+lune = "lune-org/lune@0.8.9"
+luau-lsp = "JohnnyMorganz/luau-lsp@1.32.1"
+```
+`[UNVERIFIED]` — the exact version numbers above are illustrative. Resolve each against the tool's
+current GitHub releases when you create the file; the *practice* (pin, never float) is the point.
+The `CompeyDev/setup-rokit` action is `[COMMUNITY, SECOND-HAND]`; if you prefer no third-party
+action, run Rokit's documented installer script
+(`curl -sSf https://raw.githubusercontent.com/rojo-rbx/rokit/main/scripts/install.sh | bash`) in a
+`run:` step instead.
+
+**Merge gate policy.** Required checks: format, lint, purity, frozen fixtures, strict ratchet,
+typecheck, unit/property, golden-master, fast soak, build, debug-off. Non-required (informational):
+nightly soak, coverage trend. A PR that changes anything under `src/Shared/Sim` or
+`src/Shared/Balance` additionally requires a human reviewer from a `CODEOWNERS` entry, because
+those are the files where a silent constant change is indistinguishable from an intentional
+balance change.
+
+**What is deliberately *not* in this pipeline:** anything that needs Roblox Studio. Jest Lua and
+TestEZ suites that require a DataModel run on a separate, self-hosted Windows runner driven by
+`run-in-roblox`, on a nightly schedule and on release branches — not on every PR. Making the fast
+path Studio-free is what keeps the gate fast enough that people do not route around it.
+
+---

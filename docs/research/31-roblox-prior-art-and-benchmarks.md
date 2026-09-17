@@ -999,3 +999,206 @@ a full 20k-triangle mesh; memory actually consumed by an `EditableMesh` at a giv
 5. Use **Render Stats** (<kbd>Shift</kbd>+<kbd>F2</kbd>) → **Timing** for live draw-call counts.
    `[DOCUMENTED]`
 
+---
+
+## 5. Known limitations, bugs and gaps
+
+### 5.1 What these APIs structurally cannot do
+
+| Limitation | Detail | Confidence |
+| --- | --- | --- |
+| **No GPU compute of any kind** | There is no compute-shader, no fragment-shader and no GPU buffer API. Every pixel and every vertex you generate is computed by Luau on the CPU. The "shader" systems in the community (Lightspeed, OSGL's shader callbacks, `Roblox-Canvas`'s `draw*` shader functions) are **software** shaders — a Luau function called per pixel. | `[INFERRED]` from the absence of any such API in `creator-docs` |
+| **`EditableImage` cannot be resized** | `Size` is `ReadOnly`. To resize or crop you must create a new image and `DrawImageTransformed()` into it, then `Destroy()` the old one. | `[DOCUMENTED]` |
+| **One displayed `EditableImage` updates per frame** | N on-screen canvases refresh at 60/N fps. This is the hardest ceiling in the whole API. | `[DOCUMENTED]` |
+| **No bulk mesh write** | `EditableMesh` has no `WriteVerticesBuffer` analogue to `WritePixelsBuffer`. Geometry is built one call at a time across the Luau↔C++ boundary. | `[DOCUMENTED]` (by absence in `EditableMesh.yaml`) |
+| **No public triangle rasteriser** | `EditableImage` exposes `DrawCircle`, `DrawLine`, `DrawRectangle`, `DrawImage`, `DrawImageTransformed`, `DrawImageProjected`, `SampleImageProjected` — **but no `DrawTriangle`.** A private/undocumented one exists and is reported as slow and un-updated "in years". | `[DOCUMENTED]` + `[SOURCE-READ]` (https://github.com/break-core/DrawTriangle) |
+| **`EditableImage`/`EditableMesh` do not replicate** | Server→client replication of editable content is not supported; you generate on the client, or you send parameters and regenerate. | `[COMMUNITY, SECOND-HAND]` (https://github.com/plainenglishh/remote-image-library README) |
+| **No runtime CSG, no LOD generation, no mesh decimation** | Cloud LOD only runs on *uploaded* assets, so a procedurally generated mesh has no LODs. | `[COMMUNITY, SECOND-HAND]` + `[INFERRED]` |
+| **Collision/fluid geometry only refreshes via `CreateMeshPartAsync` + `ApplyMesh`** | `MeshPart.MeshContent` is not assignable and `ApplyMesh()` does not accept `Content`. The ~22 ms cost is therefore unavoidable today. | `[DOCUMENTED]` + `[COMMUNITY, SECOND-HAND]` |
+| **Gated behind identity verification** | 13+ **and** ID-verified, plus "Enable Mesh / Image APIs" in the Creator Dashboard, or these APIs fail in published experiences. **This gates your whole product on one person's identity verification.** | `[DOCUMENTED]` |
+| **Asset permissions are enforced** | `CreateEditableImageAsync`/`CreateEditableMeshAsync` only load assets owned by, or explicitly shared with, the experience owner / Studio user / logged-in player / a group with edit rights. Otherwise they throw. | `[DOCUMENTED]` |
+
+### 5.2 Commonly reported breakage
+
+| Report | Source | Confidence |
+| --- | --- | --- |
+| **"EditableMesh / EditableImage randomly becomes inaccessible at runtime despite being enabled"** — *"the engine intermittently revokes access to these APIs mid-operation on both the server and client with no configuration change on our end."* Reported June 2026. **This is the most serious reported bug in the space: it is not a code error you can prevent, so every call site needs a failure path.** | https://devforum.roblox.com/t/editablemesh-editableimage-randomly-becomes-inaccessible-at-runtime-despite-being-enabled/4702613 | `[COMMUNITY, SECOND-HAND]` |
+| "EditableMesh is not accessible. Go to the Security Tab in Game Settings to enable this API." raised despite the toggle being on | https://devforum.roblox.com/t/editablemesh-is-not-accessible-go-to-the-security-tab-in-game-settings-to-enable-this-api/3822516 · https://devforum.roblox.com/t/editableimage-giving-error-of-not-being-enabled-despite-being-enabled/3895593 | `[COMMUNITY, SECOND-HAND]` |
+| "Creating 2 or more `EditableImage`s will sometimes cause one not to render" | https://devforum.roblox.com/t/remove-editable-meshimage-limit-on-the-client/4219561 | `[COMMUNITY, SECOND-HAND]` |
+| **`Texture` instances don't work on `EditableMesh`es** | https://devforum.roblox.com/t/texture-instances-dont-work-on-editablemeshes/3635698 | `[COMMUNITY, SECOND-HAND]` |
+| "EditableImage buffer not updating correctly" | https://devforum.roblox.com/t/editableimage-buffer-not-updating-correctly/3275528 | `[COMMUNITY, SECOND-HAND]` |
+| No way to release an `EditableImage`'s CPU-side buffer once the image is static — the memory stays charged against the 32 MB budget | https://devforum.roblox.com/t/add-a-way-to-discard-editableimage-buffer-after-it%E2%80%99s-no-longer-being-edited/3639808 · https://devforum.roblox.com/t/reducing-memory-consumption-of-editableimage-once-static/3639609 | `[COMMUNITY, SECOND-HAND]` |
+| Developer Console / performance stats reported showing **up to 3×** real memory usage | https://devforum.roblox.com/t/dev-console-performance-stats-showing-up-to-3x-the-memory-usage/3581410 | `[COMMUNITY, SECOND-HAND]` |
+| Roblox-owned and Marketplace assets cannot be loaded into editables | https://devforum.roblox.com/t/allow-editableimage-and-editablemesh-to-be-called-on-assets-owned-by-roblox-and-everything-found-in-the-marketplace/4514845 | `[COMMUNITY, SECOND-HAND]` |
+
+**Defensive pattern this implies.** Every editable creation site should be:
+`pcall` **and** `nil`-check **and** a degraded fallback path that keeps the experience playable —
+because creation can fail from budget exhaustion (`nil`), from the security toggle (throw), and,
+per the June 2026 report, spontaneously at runtime. OSGL's `Result` type with
+`NotEnoughMemory` / `APINotEnabled` / `WindowDimensionsOutOfBounds` variants is the right shape.
+`[SOURCE-READ]` + `[DOCUMENTED]` + `[COMMUNITY, SECOND-HAND]`
+
+### 5.3 What stale tutorials get wrong
+
+1. **`EditableImage:WritePixels()` / `ReadPixels()` (table-based) were *removed*, not deprecated.**
+   They vanished between engine versions ~601 (Nov 2023) and ~648 (Oct 2024); calling them errors.
+   **Any tutorial showing a table of numbers instead of a `buffer` is dead code.** Use
+   `WritePixelsBuffer` / `ReadPixelsBuffer`. `[COMMUNITY, SECOND-HAND]`
+2. **`editableImage.Parent = imageLabel` is the old pattern.** The current pattern is
+   `imageLabel.ImageContent = Content.fromObject(editableImage)` — and equivalently
+   `MeshPart.TextureContent`, `Decal.TextureContent`, `SurfaceAppearance.ColorMapContent`.
+   `[DOCUMENTED]` + `[SOURCE-READ]` (all three canvas libraries use `Content.fromObject`)
+3. **Tutorials that create one `EditableImage` per sprite/tile will hit the 8-object budget
+   instantly.** The correct model is one canvas, many sprites blitted into its buffer.
+   `[INFERRED]` from `[COMMUNITY, SECOND-HAND]` budget
+4. **CanvasDraw 1.x/2.x tutorials describe a completely different engine** — v1 used one `Frame`
+   per pixel; v2 used `Frame`s with `UIGradient`s packing ~10 pixels each. Only **v3/v4 use
+   `EditableImage`**. Version-check any CanvasDraw material you find. `[COMMUNITY, SECOND-HAND]`
+5. **"Just use `task.desynchronize()` to make it parallel" is wrong twice over:** scripts in the
+   *same* Actor still run serially, and `require()` is illegal in a parallel phase. You need
+   multiple Actors and all `require`s hoisted into the serial phase. `[DOCUMENTED]`
+6. **`Vector2` "because it's 2D" is a pessimisation** — `Vector3` is ~2.5× faster. `[INFERRED]`
+
+### 5.4 What Roblox has signalled
+
+| Signal | Detail | Confidence |
+| --- | --- | --- |
+| **Shared-asset editing shipped (2026-04-15)** | *"You can now load and edit any asset into EditableMesh / EditableImage if they are explicitly shared with you / your group; you no longer have to be the owner."* Applies at runtime **and** in Studio. This materially widens collaborative and UGC workflows. | https://devforum.roblox.com/t/editablemesh-and-editableimage-now-support-shared-assets/4578818 `[COMMUNITY, SECOND-HAND]` |
+| **Ongoing improvement cadence** | A stream of announcements: "Introducing in-experience Mesh & Image APIs [Studio Beta]" → "[Studio Beta] Updates" → "[Studio Beta] Major updates" → "[Client Beta] now available in published experiences" → "EditableMesh and EditableImage Improvements" (Jul 2025) → shared assets (Apr 2026). **These APIs are actively invested in, not abandoned.** | https://devforum.roblox.com/t/editablemesh-and-editableimage-improvements/3818624 and siblings `[COMMUNITY, SECOND-HAND]` |
+| **Roblox's product framing** | *"Creators can now add Editable Mesh & Image APIs to published experiences. Empowering users to intuitively sculpt, paint, and create assets — all without technical skills or leaving the experience."* — i.e. Roblox's intended use-case is **UGC creation tools**, not software renderers. Budgets are sized for that. | https://x.com/Roblox/status/1859359050326213031 `[COMMUNITY, SECOND-HAND]` |
+| **`DrawImageProjected` / `SampleImageProjected` exist and are underused** | Projects one `EditableImage` through an `EditableMesh` onto another `EditableImage`, with a full projector config (`Direction`, `Position`, `Size`, `Up`) and brush config (`Decal`, `AlphaBlendType`, `ColorBlendType`, `FadeAngle`, `BlendIntensity`). **This is a first-party, engine-side decal/spray-paint/damage-mapping primitive** — no third-party project I found uses it. | `EditableImage.yaml` `[DOCUMENTED]` |
+| **Open feature requests to watch** | Raise the client editable limit (https://devforum.roblox.com/t/remove-editable-meshimage-limit-on-the-client/4219561); raise `WritePixelsBuffer` past 1024² for plugins (https://devforum.roblox.com/t/allow-editableimagewritepixelsbuffer-to-go-up-to-2048x2048-for-plugins/4568767); higher resolution + memory limit (https://devforum.roblox.com/t/editableimage-higher-resolution-and-memory-limit/4389575); apply baked mesh Content without a lag spike (https://devforum.roblox.com/t/allow-applying-baked-mesh-content-to-a-meshpart-without-a-lag-spike/4752538); discard the CPU buffer of a static image (https://devforum.roblox.com/t/add-a-way-to-discard-editableimage-buffer-after-it%E2%80%99s-no-longer-being-edited/3639808). **If any of these land, several conclusions in this chapter change.** | `[COMMUNITY, SECOND-HAND]` |
+
+---
+
+## Reusable libraries table
+
+"Maintained?" is judged on the latest push date I observed (September 2026) and on whether the
+project has CI/tests/packaging. Licences marked **⚠** need a decision before shipping.
+
+| Name | What it does | URL | License | Maintained? |
+| --- | --- | --- | --- | --- |
+| **FastCanvas** | Minimal `buffer`→`EditableImage` canvas; the core under CanvasDraw | https://github.com/Ethanthegrand/FastCanvas | **⚠ none declared** | Yes — header dated 2026-07-09 |
+| **CanvasDraw** | Full 2D graphics lib: shapes, textured triangles, bitmap fonts, image IO, zstd persistence | https://github.com/Ethanthegrand/CanvasDraw | **⚠ "Copyright © 2022–2026", no OSS licence** | Yes — v4.20.2, 2026-07-09 |
+| **OSGL** | Typed, `Result`-returning graphics lib; Window/Texture/Bitmap/Video/Font | https://github.com/osgl-rbx/osgl | **⚠ custom "OSGL LICENSE" (non-OSI)** | Yes — v1.6.x, tests + plugin + docs |
+| **Ro2DEngine (Ro2D)** | 2D software render + physics engine: dirty-region uploads, buffer pooling, Actor-parallel band rasterising, SDF primitives, asset compiler | https://github.com/nrmu9/Ro2DEngine | **MIT** | Yes — 2026-09-14, CI releases |
+| **Roblox-Canvas** | Canvas algorithms with a `draw*` (shader callback) / `fill*` (fast path) split | https://github.com/ElixNoir/Roblox-Canvas | **MIT** | Partly — author calls it WIP |
+| **EditableImageBlur** | In-place Gaussian-approx blur on a pixel `buffer`; never touches `EditableImage` | https://github.com/boatbomber/EditableImageBlur | **MPL-2.0** | Yes — 2026-08-10, Wally |
+| **remote-image-library** | PNG decode from URL / binary string / pixel array → `EditableImage`; HTTP queueing | https://github.com/plainenglishh/remote-image-library | not declared **⚠** | Stale but the PNG decoder is the value |
+| **DrawTriangle** | Fast scanline triangle rasteriser for `EditableImage`, with a published benchmark | https://github.com/break-core/DrawTriangle | **MIT** | Yes — 2026-03-16 |
+| **LuauImageParser** | Strict-Luau pixel-data → `EditableImage` via `WritePixelsBuffer`, with a Cloudflare Worker | https://github.com/Metatable-Games/LuauImageParser | **MIT** | 2025-03-31 |
+| **editable-clothing-util** | Classic Shirt/Pants → `EditableImage`, apply per `BodyPartR15`, skin-tone baking | https://github.com/nightcycle/editable-clothing-util | **Apache-2.0** | 2024-08-12 |
+| **luau_term** | xterm terminal emulator; Roblox-free core, RGBA bitmap output, Lune-tested | https://github.com/mokiros/luau_term | see repo | Yes |
+| **plumber** | N64 emulator in Roblox; software rasteriser → `EditableImage` at 320×240 | https://github.com/yoits9090/plumber | **MIT** | Yes — 2026-08-13 |
+| **DissolveEffect** | Pixel dissolve with glow edges and noise distortion | https://github.com/Y-Workplace/DissolveEffect | **MIT** | 2026-06-18 |
+| **RBLX-EditableMesh-Water-FirstPerson** | Pooled world-aligned `EditableMesh` chunk LOD ocean with shared deterministic wave field | https://github.com/Smurfis/RBLX-EditableMesh-Water-FirstPerson | **⚠ none declared** | Yes — 2026-09-17 |
+| **Liquid-Simulation** | WebGL Water ported to `EditableMesh` | https://github.com/Y-Workplace/Liquid-Simulation | **⚠ none** | 2026-07-01 |
+| **RTerrainGenerator** | Terrain + rivers + lakes + forests from exponentially-distributed Perlin with domain warping | https://github.com/TheArturZh/RTerrainGenerator | **MIT** (attribution expected) | Reference-quality |
+| **Roblox-Terrain-Generator** | Terrain framework; smooth + bloxel; plugin or realtime client-side | https://github.com/tiffany352/Roblox-Terrain-Generator | **MIT** | No — explicit WIP/reference |
+| **Fast-Noise** | 9 noise types (Perlin/Value/FBM/Billow/Ridged/Worley/Voronoi/Turbulence/DomainWarp), 2D+3D, `--!strict --!native --!optimize 2` | https://github.com/writebits/Fast-Noise | **MIT** | Yes |
+| **Squash** | Comprehensive SerDes for bandwidth/space minimisation | https://github.com/Data-Oriented-House/Squash | see repo | Yes — docs site, Wally |
+| **ByteNet** | Buffer-serialising networking library, strict Luau | https://github.com/ffrostfall/ByteNet | **MIT** | 2025-08-01 |
+| **RbxUtil** | ~23 Wally modules: BufferUtil, Stream, Ser, Signal, Concur, Option, Quaternion, Spring, PID, Comm, Component… | https://github.com/Sleitnick/RbxUtil | **MIT** | Yes — CI + docs green |
+| **LuaEncode** | Fast table serialisation for pure Luau / Lua 5.1+ | https://github.com/chadhyatt/LuaEncode | **MIT** | 2026-03-11 |
+| **Janitor** | Cleanup/lifecycle object | https://github.com/howmanysmall/Janitor | **MIT** | Yes — 2026-07-28 |
+| **roblox-lua-promise** | Promise/A+ for Luau | https://github.com/evaera/roblox-lua-promise | see repo | Yes — ecosystem standard |
+| **SignalPlus** | Very fast signal implementation | https://github.com/AlexanderLindholt/SignalPlus | **MIT** | Yes — 2026-09-05 |
+| **ProfileStore** | DataStore wrapper: session locking, auto-save, dupe prevention | https://github.com/MadStudioRoblox/ProfileStore | see repo | Yes |
+| **Lapis** | DataStore abstraction: session locking, validation, migrations, throttling, immutability, save batching | https://github.com/nezuo/lapis | see repo | Yes |
+| **React-lua / core-packages** | React port; used by Roblox internally | https://github.com/jsdotlua/CorePackages | see repo | Yes |
+| **Fusion** | Reactive Luau state/UI, portable beyond Roblox | https://github.com/Elttob/Fusion | see repo | Yes |
+| **Vide** | Fine-grained reactive UI | https://github.com/centau/vide | **MIT** | Yes — 2026-08-05 |
+| **Iris** | Dear-ImGui-style immediate-mode GUI — best pick for procedural-gen debug panels | https://github.com/SirMallard/Iris | **MIT** | Yes — 2026-09-04 |
+| **TextPlus** | Efficient robust text rendering | https://github.com/AlexanderLindholt/TextPlus | **MIT** | Yes — 2026-09-14 |
+| **jecs** | Archetype/SoA ECS; claims 800k entities @ 60 fps | https://github.com/Ukendio/jecs | see repo | Yes |
+| **ecr** | Sparse-set ECS | https://github.com/centau/ecr | **MIT** | Yes — 2026-09-03 |
+| **Matter** | ECS with strong debugger | https://github.com/matter-ecs/matter | see repo | Yes |
+| **Knit** | Game framework, most-starred | https://github.com/Sleitnick/Knit | **MIT** | **No — last push 2024-07-31** |
+| **sift** | Immutable data for Luau | https://github.com/cxmeel/sift | **MIT** | 2026-03-26 |
+| **llama** | Immutable data (predecessor to sift) | https://github.com/freddylist/llama | **MIT** | **No — 2022** |
+| **rbxts-octo-tree** | Octree spatial index (`topRegionSize` 512) | https://github.com/Sleitnick/rbxts-octo-tree | see repo | Yes |
+| **sayhisam1/Octree** | Octree with radius + nearest-neighbour search | https://github.com/sayhisam1/Octree | see repo | Stale |
+| **QuickZone** | Physics-free high-performance spatial queries | https://github.com/LDGerrits/QuickZone | **MIT** | Yes — 2026-09-11 |
+| **Nature2D** | 2D physics engine for Roblox | https://github.com/jaipack17/Nature2D | **MIT** | 2025-12-11 |
+| **Gizmo2D** | Visual debugging for GUIs | https://github.com/jaipack17/Gizmo2D | see repo | — |
+| **orbitlib** | Two-body orbital mechanics | https://github.com/daftcube/orbitlib | **⚠ AGPL-3.0** | **No — 2022** |
+| **Jumper** | Grid pathfinding, pure Lua, multiple algorithms | https://github.com/Yonaba/Jumper | see repo | No — but portable |
+| **a-star-lua** | Minimal dependency-free A* | https://github.com/lance0805/a-star-lua | see repo | No |
+| **jest-lua** | Jest for Luau; used by Roblox internally | https://github.com/jsdotlua/jest-lua | see repo | Yes |
+| **roblox-benchmarks** | CI-driven low-level Luau benchmark suite + data + dashboard | https://github.com/nightcycle/roblox-benchmarks | see repo | Yes |
+| **luau-roblox** | Read/write `.rbxl`/`.rbxm` from Luau | https://github.com/Scythe-Technology/luau-roblox | **MIT** | 2026-08-19 |
+| **VectorFlow** | Real-time Blender ↔ Roblox Studio sync | https://github.com/RullzVyline/VectorFlow | **MIT** | 2026-03-29 |
+| **Wally** | Package manager | https://github.com/UpliftGames/wally | **MIT** | Yes |
+| **Rojo** | Filesystem ↔ Studio sync | https://rojo.space | **MPL-2.0** | Yes |
+| **OpenRoblox** | Curated index of Roblox tools/libraries | https://github.com/officialmmt/OpenRoblox | see repo | Yes |
+
+---
+
+## Benchmark table
+
+| Metric | Value | Confidence | Source |
+| --- | --- | --- | --- |
+| `EditableImage` max size | 1024 × 1024 | `[DOCUMENTED]` | `creator-docs` `EditableImage.yaml` |
+| `EditableImage` displayed updates | 1 per frame, per image | `[DOCUMENTED]` | ″ |
+| `EditableImage` resizable? | No — `Size` is read-only | `[DOCUMENTED]` | ″ |
+| `EditableMesh` max vertices | 60,000 | `[DOCUMENTED]` | `EditableMesh.yaml` |
+| `EditableMesh` max triangles | 20,000 | `[DOCUMENTED]` | ″ |
+| Over-limit behaviour | error thrown | `[DOCUMENTED]` | ″ |
+| Editable creation on budget exhaustion | returns `nil` | `[DOCUMENTED]` | `AssetService.yaml` |
+| Frame budget @ 60 fps | 16.67 ms | `[DOCUMENTED]` | `performance-optimization/design.md` |
+| Draw-call budget, baseline device | < 1,000 | `[DOCUMENTED]` | ″ |
+| Triangle budget, baseline device | < 1,000,000 | `[DOCUMENTED]` | ″ |
+| Max physics step rate | 240 Hz (4× per frame) | `[DOCUMENTED]` | `performance-optimization/improve.md` |
+| Zstd compression levels | −7 … 22 (default 1) | `[DOCUMENTED]` | `EncodingService.yaml` |
+| `EditableImage` total client memory budget | **32 MB** | `[COMMUNITY, SECOND-HAND]` | devforum/4389575 |
+| Memory per 512×512 `EditableImage` | ≈ 1 MB | `[COMMUNITY, SECOND-HAND]` | ″ |
+| Memory per 1024×1024 RGBA buffer | 4 MiB | `[INFERRED]` | 1024·1024·4 |
+| Live editable objects on client | **8** | `[COMMUNITY, SECOND-HAND]` | devforum/3683517, /4219561 |
+| ⇒ 32 MB ÷ 4 MiB | **= 8 — the count limit *is* the memory limit** | `[INFERRED]` | above two rows |
+| `CreateMeshPartAsync` fixed cost | ≈ 22 ms (even `Box` + `CanCollide=false`) | `[COMMUNITY, SECOND-HAND]` | devforum/4752538 |
+| `CreateMeshPartAsync` marginal cost | ≈ 0.27 ms / 1k triangles | `[COMMUNITY, SECOND-HAND]` | ″ |
+| `CreateMeshPartAsync` on a 20k-tri mesh | ≈ 27.4 ms ⇒ 1.6 dropped frames | `[INFERRED]` | ″ |
+| Custom scanline `DrawTriangle` (`--!native`) | **145.65 µs / triangle** (5,000 tris, 512², 0.4369 s) | `[SOURCE-READ]` | github.com/break-core/DrawTriangle |
+| Roblox built-in `DrawTriangle` | **319.02 µs / triangle** (same harness, 0.9571 s) | `[SOURCE-READ]` | ″ |
+| ⇒ community rasteriser speed-up | 2.19× | `[INFERRED]` | ″ |
+| ⇒ textured triangles per frame @ 60 fps | ≈ 114 (custom) / ≈ 52 (built-in) | `[INFERRED]` | ″ |
+| `EditableImage` `DrawRectangle` | median 9.62 µs; mean 25.87 µs; p90 73.2 µs; max 436.8 µs | `[SOURCE-READ]` + `[INFERRED]` unit | roblox-benchmarks-data `summary.csv` |
+| `EditableImage` `DrawLine` | median 0.37 µs; mean 0.49 µs; p90 0.96 µs; max 7.91 µs | ″ | ″ |
+| ⇒ `DrawRectangle` calls per frame | ≈ 1,730 at median; ≈ 228 at p90 | `[INFERRED]` | ″ |
+| ⇒ `DrawLine` calls per frame | ≈ 44,800 at median; ≈ 17,300 at p90 | `[INFERRED]` | ″ |
+| `buffer.write*` (any width) | ≈ 36.9–37.4 ns | `[SOURCE-READ]` + `[INFERRED]` unit | ″ |
+| `buffer.read*` (any width) | ≈ 33.4–34.0 ns | ″ | ″ |
+| ⇒ packed-u32 pixel write vs 4× u8 | ≈ 4× faster | `[INFERRED]` | ″ |
+| `buffer.copy` / `fill` fixed cost | ≈ 60 ns | ″ | ″ |
+| ⇒ doubling span-fill vs naive, 1024 px | 0.6 µs vs 37.8 µs ⇒ **≈ 63×** | `[INFERRED]` | ″ + FastCanvas source |
+| `buffer.writebits` / `readbits` | 61.8 / 58.5 ns (≈1.7× aligned) | ″ | ″ |
+| `buffer.create` | ≈ 168.8 ns | ″ | ″ |
+| `buffer.tostring` / `fromstring` / `readstring` | 205.3 / 177.8 / 114.3 ns | ″ | ″ |
+| `buffer.len` | ≈ 44.1 ns (hoist it) | ″ | ″ |
+| `math.noise` 1D/2D/3D | 62.7 / 62.6 / 64.6 ns | ″ | ″ |
+| ⇒ 1-octave noise over 1024² | ≈ 65.6 ms | `[INFERRED]` | ″ |
+| ⇒ 4-octave FBM over 1024² | ≈ 262 ms | `[INFERRED]` | ″ |
+| `Vector3` add vs `Vector2` add | 22.4 ns vs 56.2 ns ⇒ **2.5× faster** | `[SOURCE-READ]` + `[INFERRED]` | ″ |
+| local function call vs metatable method | 21.1 ns vs 49.4 ns ⇒ **2.3×** | ″ | ″ |
+| table array write vs `buffer.writeu32` (non-native) | 25.6 ns vs 36.9 ns — **tables win without `--!native`** | ″ | ″ |
+| Native codegen effect on `buffer` | *"zero overhead … just as fast, if not faster, than tables"* | `[DOCUMENTED]` | Roblox native-code-gen docs |
+| Full per-pixel repaint, 256² | ≈ 2.4 ms (15% of a frame) | `[INFERRED]` | 65,536 × 36.9 ns |
+| Full per-pixel repaint, 512² | ≈ 9.7 ms (58% of a frame) | `[INFERRED]` | 262,144 × 36.9 ns |
+| Full per-pixel repaint, 1024² | ≈ 38.7 ms (**2.3 frames**) | `[INFERRED]` | 1,048,576 × 36.9 ns |
+| Shipped realtime raytracer resolution | 100 × 100, "well above 60 FPS, mid-range PC" | `[COMMUNITY, SECOND-HAND]` | ethanthegrand.itch.io/retroraster |
+| Shipped N64-emulator framebuffer | 320 × 240 (160 × 120 fast path) | `[SOURCE-READ]` | github.com/yoits9090/plumber |
+| Shipped raycaster resolution | 100 × 100, interlaced | `[COMMUNITY, SECOND-HAND]` | devforum/3609143 |
+| Ro2D example internal resolution | 1024 × 576 (sprite-based, not per-pixel shading) | `[SOURCE-READ]` | github.com/nrmu9/Ro2DEngine |
+| Path tracer claim | 30–60 fps, **resolution unstated** | `[COMMUNITY, SECOND-HAND]` | devforum/3066757 |
+| `WritePixelsBuffer` cap vs creation cap | write ≤ 1024²; creation up to 2048² in Studio/plugin | `[COMMUNITY, SECOND-HAND]` | devforum/4568767 |
+| N on-screen canvases refresh rate | 60 / N fps each | `[DOCUMENTED]` + `[INFERRED]` | `EditableImage.yaml` |
+| Max triangles live in `EditableMesh` form | 8 × 20,000 = 160,000 (16% of scene budget) | `[INFERRED]` | doc limits + community count |
+| Safe voxel chunk size vs 20k cap | 16³ safe; 32³ not | `[INFERRED]` | greedy-mesh arithmetic |
+| `MeshPart` uploaded-asset triangle cap | 21,000 | `[COMMUNITY, SECOND-HAND]` | alpha3d.io |
+| UGC accessory triangle cap | 4,000 | `[COMMUNITY, SECOND-HAND]` | nilo.io |
+| Avatar / environment mesh import caps | 10,000 / 20,000 | `[COMMUNITY, SECOND-HAND]` | nilo.io |
+| Cloud LOD levels / reduction | 3–4 levels, 25–75% reduction (uploaded assets only) | `[COMMUNITY, SECOND-HAND]` | creation.dev |
+| jecs ECS iteration | 800,000 entities @ 60 fps | `[SOURCE-READ]` (self-reported) | github.com/Ukendio/jecs |
+| Octree default top-region size | 512³ | `[COMMUNITY, SECOND-HAND]` | rbxts-octo-tree |
+| Marching-cubes editable terrain (pre-EditableMesh) | 60 fps with neighbour-updating chunks | `[COMMUNITY, SECOND-HAND]` | devforum/602593 |
+

@@ -1429,3 +1429,777 @@ test of whether your layer abstraction is real.
   `state.permanent` (§3.1) and the reset spec structurally cannot touch them.
 
 ---
+
+## 6. Persistence on Roblox
+
+### 6.1 The limits, verified
+
+From `content/en-us/cloud-services/data-stores/error-codes-and-limits.md`
+(September 2026). These numbers have changed more than once; re-check before you
+tune against them.
+
+**Data limits (per key)**
+
+| Component | Maximum |
+|---|---|
+| Data store name | 50 characters |
+| Key name | 50 characters |
+| Scope | 50 characters |
+| Data (key value) | **4,194,304 characters** (4 MB) per key |
+| User-defined metadata | 300 characters total |
+
+**Throughput limits (per key, rolling 60 s window, across all servers)**
+
+| Type | Limit |
+|---|---|
+| Read (`GetAsync`, `GetVersionAsync`, read half of `UpdateAsync`) | 25 MB/min |
+| Write (`SetAsync`, `IncrementAsync`, `RemoveAsync`, write half of `UpdateAsync`) | 4 MB/min |
+
+Roblox "rounds throughput up to the next kilobyte" per request — so 60 saves of
+800 bytes each costs 60 KB, not 48 KB.
+
+**Request budget — per server (defaults; configurable, see below)**
+
+| Request type | Requests per minute |
+|---|---|
+| `StandardRead` | `60 + numPlayers × 40` |
+| `StandardWrite` | `60 + numPlayers × 40` |
+| `StandardList` | `5 + numPlayers × 2` |
+| `StandardRemove` | `60 + numPlayers × 40` |
+| `OrderedRead` | `60 + numPlayers × 40` |
+| `OrderedWrite` | `30 + numPlayers × 5` |
+
+**Request budget — experience-wide (shared with Open Cloud)**
+
+| Request type | Requests per minute |
+|---|---|
+| Standard / Ordered **Read** | `300 + concurrentUsers × 40` |
+| Standard / Ordered **Write** | `300 + concurrentUsers × 20` |
+| List | `300 + concurrentUsers × 2` |
+| Remove | `300 + concurrentUsers × 40` |
+
+Three consequences that bite idle games specifically:
+
+1. **`UpdateAsync` consumes from both the read and write budgets.** The docs state
+   this explicitly: "A single call will decrement both limits." Your effective write
+   budget with `UpdateAsync` is the *minimum* of the two, and `OrderedWrite`
+   (`30 + n×5`) is the tightest — relevant if you keep a currency leaderboard.
+2. **Servers get a startup burst.** "Servers receive a one-time startup burst of
+   additional request budget when they are first created." This is why a mass-join
+   after a server restart works, and why you should still stagger.
+3. **You can now configure the per-server limits.**
+   `DataStoreService:SetRateLimitForRequestType(requestType, baseLimit, perPlayerLimit)`
+   overrides the defaults for the current server (`rateLimit = baseLimit +
+   perPlayerLimit × numPlayers`). The docs say to "call this API **once per request
+   type during server initialization**". `UpdateAsync` and `OnUpdate` cannot be
+   configured and error if you try. `StandardRead`/`StandardWrite` accept
+   `baseLimit ∈ [0,60]` and `perPlayerLimit ∈ [0,40]`. Pair it with
+   `GetRequestBudgetForRequestType` to check remaining budget before a burst.
+
+**Storage limit (experience-wide):** `500 MB + 1 MB × lifetime user count`,
+measured on the *compressed* size of the latest version of each key.
+
+### 6.2 Do not compress your save
+
+This is the finding most likely to contradict what your team believes. Roblox's
+documentation states:
+
+> "Storage usage is measured using the **compressed size** of the latest version of
+> each key. Data stores automatically compress your data before storage, so avoid
+> pre-compressing it yourself. Pre-compression adds unnecessary CPU overhead and may
+> reduce the effectiveness of data stores' built-in compression. By storing
+> uncompressed data, you automatically benefit from improvements to Roblox's
+> compression algorithms and future schema-based optimizations."
+
+There is a second, independent reason on the write path:
+
+> "Any string being stored in a data store must be valid UTF-8. In UTF-8, values
+> greater than 127 are used exclusively for encoding multi-byte codepoints, so a
+> single byte greater than 127 will not be valid UTF-8 and the `UpdateAsync()`
+> attempt will fail."
+
+Raw deflate/LZ4 output is binary and will contain bytes > 127, so a home-grown
+compressor must be base64-ed (+33%) or base91-ed (+23%) before it is storable —
+after which Roblox's own compressor sees high-entropy text and achieves almost
+nothing. Net result: more CPU, worse ratio, new failure modes.
+
+**Shrink the schema instead.** An idle game save is dominated by repeated keys:
+
+```lua
+-- 4.1 KB for 30 generators
+generators = { ironMiner = { count = 1200, level = 14, unlocked = true }, ... }
+
+-- ~600 bytes: positional arrays, a shared id table in code, defaults omitted
+-- g[i] = {count, level} ; unlocked is implied by presence
+g = { [1] = {1200, 14}, [7] = {3, 0}, ... }
+```
+
+Other high-yield schema tricks, in order of payoff:
+
+1. **Omit anything equal to its default.** Reconcile on load (ProfileStore's
+   `Profile:Reconcile()` does exactly this from the template).
+2. **Sets over lists over dictionaries-of-objects** for owned/unowned flags.
+3. **Short stable ids.** `"g14"` not `"ironMinerUpgradeTier3"`. Keep the mapping in
+   code, versioned with the schema.
+4. **Round what doesn't need precision.** `math.floor` on counts;
+   3 significant figures on cosmetic statistics.
+5. **Cap unbounded collections.** Achievement timestamps, per-day statistics and
+   "recent purchases" logs grow forever. Put a hard length on every array in the
+   schema and a startup assertion that checks it.
+
+In practice a well-designed idle-game save is 5–40 KB and never approaches 4 MB. If
+yours does, you have an unbounded collection, not a compression problem.
+
+### 6.3 Session locking is mandatory
+
+Two servers holding the same profile is not a theoretical risk in this genre: idle
+games have high rejoin rates (players hop servers to reset boss timers, chase
+events, or on purpose to duplicate), and the whole value of the save is a single
+number that can be multiplied by joining twice.
+
+`SetAsync` has no defence. `UpdateAsync` is the primitive you need — it "reads the
+current key value (from whatever server last updated it) before making any changes"
+and, if another server wrote in between, "will call the function again, discarding
+the result of the previous call… as many times as needed until the data is saved
+**or** until the callback function returns `nil`". Returning `nil` cancels the write.
+That is exactly the primitive a session lock needs: *read the lock, and only write if
+it is mine or expired.*
+
+Do not implement it yourself. Use a library.
+
+| | **ProfileStore** | **Lapis** | **ProfileService** (legacy) |
+|---|---|---|---|
+| Author / status | loleris / MadStudioRoblox, actively maintained | nezuo, actively maintained | loleris, superseded by ProfileStore |
+| Distribution | Single ModuleScript, ~2,200 lines | Wally `nezuo/lapis` (0.3.4 at time of writing) | Single ModuleScript |
+| API style | Yielding, Roblox-like (`:StartSessionAsync()`) | Promise-based (`evaera/promise@4`) | Yielding (`:LoadProfileAsync()`) |
+| Session locking | Yes — 40 s steal, 630 s dead-server assumption | Yes | Yes |
+| Autosave | 300 s (`AUTO_SAVE_PERIOD`, tunable via `SetConstant`) | 300 s | 30 s |
+| Migrations | Manual (`Profile:Reconcile()` + your own version field) | **First-class** `migrations` array | Manual |
+| Validation | No | **Yes**, `validate` callback | No |
+| Immutability | Mutable `Profile.Data` | Deep-frozen by default, opt-out | Mutable |
+| Cross-server messaging | `:MessageAsync()` (gift/ban while offline) | No | No |
+| Version query / rollback | `:VersionQuery()`, `:GetAsync(key, version)` | Via raw DataStore APIs | Limited |
+| Mock store for tests | `ProfileStore.Mock` | `DataStoreServiceMock` dev dependency | `.Mock` |
+| Caveat | `Profile:IsActive()` guarantee "is only valid until code yields" | README: "has not been battle-tested in a large production game yet" | Use ProfileStore instead for new work |
+
+**Recommendation for an idle game: ProfileStore.** Reasons specific to this genre:
+
+- `Profile.LastSavedData` is exposed specifically for "proper developer product
+  purchase receipt handling" — you need it for §7.4's idempotent `ProcessReceipt`.
+- `ProfileStore:MessageAsync(key, message)` lets you grant a purchase, a gift, or a
+  correction to a player who is offline, which an idle game needs constantly
+  (support refunds, event rewards, compensation after a balance bug).
+- `VersionQuery` gives you rollback without Open Cloud when a player reports lost
+  progress (§6.6).
+- `ProfileStore.OnCriticalToggle` / `IsCriticalState` surfaces DataStore outages, so
+  you can disable purchases and show a banner instead of silently losing saves.
+
+Take Lapis if you value the Promise API, deep-frozen immutability and the
+declarative `migrations` array more than the above — its migration story is genuinely
+better and §6.5 is the section that will hurt you most.
+
+Roblox's own best-practices page now explicitly deprecates the other common choice:
+
+> "DataStore2 is a legacy third-party library and you shouldn't use it for new
+> experiences. If your experience currently uses DataStore2, use Roblox's official
+> beta DataStore2 migration tool to migrate from its one-data-store-per-player
+> pattern."
+
+### 6.4 Save cadence, save-on-leave, and BindToClose
+
+Roblox's guidance: "Load a player's data at the start of a session and keep a
+server-local copy for gameplay… Save it periodically, when the player leaves, when
+the server shuts down, and at critical checkpoints such as purchase processing.
+Choose a periodic save interval that stays within your request limits **and is
+shorter than any session-lock expiration**; the player data and purchasing sample
+uses 180 seconds."
+
+For an idle game specifically:
+
+- **Autosave every 120–300 s is right.** ProfileStore's 300 s default is fine and it
+  already staggers writes internally (it spreads profiles across the interval rather
+  than saving them all at once — `auto_save_index_speed = AUTO_SAVE_PERIOD /
+  auto_save_list_length`).
+- **Force a save at critical checkpoints**: after `ProcessReceipt` grants, after a
+  prestige, after any Robux-adjacent state change. Never after an ordinary purchase —
+  that is what the autosave is for, and an idle game generates purchases constantly.
+- **Jitter anything you schedule yourself.** "Don't start recurring requests from
+  every server on the same schedule. Before starting a fixed-frequency loop, assign
+  each server or player a random initial offset."
+- **`advanceTo(state, os.time())` immediately before every save.** Otherwise the
+  persisted balance is stale relative to the persisted timestamp and the player is
+  quietly credited the same interval twice on the next load (§2.6).
+
+`BindToClose` has a documented 30-second budget:
+
+> "The experience server waits 30 seconds for all bound functions to stop running
+> before it shuts down. After 30 seconds, the server shuts down even if functions are
+> still running." Bound functions "are called in parallel and run at the same time."
+
+ProfileStore and Lapis both bind this for you. If you bind your own, the rules are:
+do not `task.wait` on a fixed timer inside it, do the saves concurrently rather than
+serially, and guard with `RunService:IsStudio()` so your Studio playtests don't sit
+for 30 seconds on stop.
+
+### 6.5 Schema versioning and migration
+
+**Your save format will change.** Budget for it in the architecture, not in a
+hotfix.
+
+```lua
+--!strict
+-- ReplicatedStorage/Shared/Migrations.luau
+-- Index i migrates schema (i-1) -> i. Append only. NEVER edit a shipped entry.
+
+local MIGRATIONS: { (any) -> any } = {
+    -- 0 -> 1: split a single "coins" balance into per-currency balances.
+    function(d)
+        d.balances = { coins = d.coins or 0 }
+        d.coins = nil
+        return d
+    end,
+
+    -- 1 -> 2: introduce lifetime `earned` (prestige needs it). Backfill from the
+    -- current balance: wrong, but monotone and better than zero.
+    function(d)
+        d.earned = { coins = d.balances.coins }
+        return d
+    end,
+
+    -- 2 -> 3: add the second prestige layer.
+    function(d)
+        d.prestige = d.prestige or {}
+        d.prestige.ascend = {
+            currency = 0, lifetime = 0, resets = 0,
+            lastResetAt = 0, upgrades = {},
+        }
+        return d
+    end,
+}
+
+local CURRENT = #MIGRATIONS
+
+local function migrate(data: any): any
+    local from = data.schema or 0
+    if from > CURRENT then
+        -- Data from a NEWER version of the game. See "backwards compatibility".
+        error(`save schema {from} is newer than this server's {CURRENT}`)
+    end
+    for v = from + 1, CURRENT do
+        data = MIGRATIONS[v](data)
+        data.schema = v
+    end
+    return data
+end
+```
+
+Five rules, learned expensively:
+
+1. **Append only.** A migration that has run on live data is frozen forever. If it
+   was wrong, write a *new* migration that corrects it.
+2. **Migrations must be pure and total.** No yields, no DataStore calls, no
+   `os.time()`. Given the same input they must produce the same output, so you can
+   golden-master them (§10.3).
+3. **Handle the newer-than-me case explicitly.** This is Lapis's documented hazard:
+   "a player might join a new server, leave, and then join an old server. This would
+   cause the player's document to fail to load on the old server since the document's
+   version would be ahead." Options are (a) Roblox's *Migrate To Latest Update*
+   feature to drain old servers, or (b) write **backwards-compatible migrations** —
+   add keys freely, but never remove a key until every server that reads it is gone.
+   The safe pattern is *two releases*: release N stops reading the key, release N+1
+   removes it.
+4. **Never destroy on migrate.** When a migration drops a field, move it to
+   `data._archive` for a few releases rather than deleting it. Storage is cheap
+   relative to an unrecoverable mistake at scale.
+5. **Run every migration chain in CI.** Keep a corpus of real (anonymised) saves at
+   every historical schema version and assert that each migrates to the current
+   version and passes validation. This is the single highest-value test in the
+   project.
+
+### 6.6 Handling data loss gracefully
+
+DataStore failures happen. The design goal is that *a failure is visible and
+reversible*, never silent.
+
+- **Never start a session on a failed read.** If the load errors or the session
+  cannot be locked, do not fall back to the default state — that is how a player with
+  1e40 ore gets reset to zero and writes a review about it. Kick with a clear message
+  and a retry prompt. ProfileStore returning `nil` from `StartSessionAsync` is a
+  "do not let this player play" signal, not a "give them a fresh profile" signal.
+- **Distinguish "no data" from "couldn't read data".** New player vs. outage. Only the
+  first gets a default profile.
+- **Detect critical state and degrade.** `ProfileStore.IsCriticalState` flips after 5
+  errors within 120 s. When it is set: disable Robux purchases, disable trading,
+  disable prestige, and show a banner. Taking money during an outage you cannot save
+  is the worst possible outcome.
+- **Keep versions.** `ProfileStore:VersionQuery(key, sortDirection, minDate, maxDate)`
+  walks historical versions; the underlying `DataStore:ListVersionsAsync` /
+  `GetVersionAsync` retain previous versions for a documented retention period.
+  Build a support tool that restores a player to a chosen timestamp, and use it
+  instead of hand-editing values.
+- **Compensate with `MessageAsync`, not with a manual edit.** Grant via the
+  offline-message queue so the grant is idempotent and auditable.
+- **Log a save-size histogram.** Sudden growth is an unbounded collection, and you
+  want to know before a player hits 4 MB and becomes permanently unsaveable.
+
+---
+
+## 7. Server/client split
+
+### 7.1 What lives where
+
+| Concern | Server | Client |
+|---|---|---|
+| Stored state (§3.1) | **Owns it.** Session-locked profile. | Mirror, replicated on join + on change. |
+| `lastAdvancedAt`, offline grants | **Owns it.** | Never sees a writable copy. |
+| Derived multipliers | Computes authoritatively. | Recomputes for display/prediction using the *same shared module*. |
+| Purchase validation | **Owns it.** Cost, affordability, prerequisites, caps. | Predicts, shows the button state. |
+| Prestige | **Owns it.** | Predicts the gain for the confirm dialog. |
+| Autobuyers | **Owns them** (they spend currency). | Owns the *settings* UI only. |
+| The number ticking up on screen | Sends rate, not value. | **Owns the animation entirely.** |
+| Number formatting, notation | Never. | Owns it. |
+| Particle/sound feedback | Never. | Owns it. |
+
+The line to hold: **the client owns everything that is a function of time and
+already-replicated state; the server owns every state transition.**
+
+### 7.2 The bandwidth problem, and the fix
+
+A naive idle game replicates the balance every tick. At 10 Hz with 30 players that
+is 300 messages per second of data that the client could have computed itself, and
+it *looks worse* — the number updates in visible 100 ms steps instead of smoothly.
+
+Replicate the **generating function** instead:
+
+```lua
+--!strict
+-- ReplicatedStorage/Shared/Snapshot.luau
+-- Everything the client needs to draw a smooth, correct number until the next
+-- snapshot. Sent on: join, any purchase, prestige, buff start/end, and a slow
+-- keepalive (~15 s) to correct drift.
+
+export type Snapshot = {
+    t0: number,                      -- server timestamp this snapshot describes
+    value: { [string]: number },     -- balance at t0
+    -- Coefficients of the production polynomial, lowest order first:
+    -- v(t) = value + c[1]·dt + c[2]·dt² + … (see §1.5)
+    coeff: { [string]: { number } },
+    validUntil: number?,             -- next scheduled breakpoint, if any
+}
+```
+
+```lua
+--!strict
+-- Client: evaluate at render rate. No network, no server CPU.
+local Workspace = game:GetService("Workspace")
+
+local function evaluate(snapshot: Snapshot, currency: string, now: number): number
+    local dt = math.max(0, now - snapshot.t0)
+    local acc = snapshot.value[currency] or 0
+    local power = 1
+    for _, c in snapshot.coeff[currency] or {} do
+        power *= dt
+        acc += c * power
+    end
+    return acc
+end
+
+RunService.PreRender:Connect(function()
+    -- GetServerTimeNow() is documented as monotonic and rate-accurate to 0.6%.
+    -- That is exactly the right tool for display extrapolation, and explicitly
+    -- NOT the right tool for deciding a grant.
+    local now = Workspace:GetServerTimeNow()
+    Display.setBalance(evaluate(currentSnapshot, "ore", now))
+end)
+```
+
+Bandwidth falls from `O(players × tickRate)` to `O(players × stateChanges)`, which
+for an idle game is a handful of messages per minute per player.
+
+**Reconciliation.** When a new snapshot arrives, the client's extrapolated value
+will differ slightly (rounding, latency, a buff the client didn't know about).
+Don't snap — it reads as the number jumping backwards, which players interpret as
+lost currency:
+
+```lua
+local function onSnapshot(new: Snapshot)
+    local now = Workspace:GetServerTimeNow()
+    local predicted = evaluate(currentSnapshot, "ore", now)
+    local actual = evaluate(new, "ore", now)
+    local error = actual - predicted
+
+    if math.abs(error) <= math.abs(actual) * 0.001 then
+        -- Within 0.1%: absorb it silently over the next second.
+        Display.blendTo(actual, 1.0)
+    elseif error > 0 then
+        -- Server has more than we showed: jump up. Players never complain.
+        Display.snapTo(actual)
+    else
+        -- Server has less: ease down over ~2 s so it reads as "catching up",
+        -- not as a loss. Log it — a persistent negative error is a real bug.
+        Display.blendTo(actual, 2.0)
+        Telemetry.count("snapshot.negativeDrift")
+    end
+    currentSnapshot = new
+end
+```
+
+**Transport choice.** Use a reliable `RemoteEvent` for snapshots: they are rare,
+ordered matters, and losing one strands the client on a stale rate.
+`UnreliableRemoteEvent` is right for high-frequency cosmetic effects (floating
+"+1e6" text, particle triggers) — but note the documented limits: **payloads larger
+than 1000 bytes are dropped**, and remotes are throttled at "approximately 500
+requests per second, per client… shared among all remote events of the same type."
+
+Batch client→server requests. An autobuy-spamming client firing one remote per
+purchase will hit the 500/s limit; send `{generatorId, count}` instead.
+
+### 7.3 The exploit surface
+
+Idle games are attractive targets because the entire game state is one number and
+the leaderboard makes it visible.
+
+**Currency injection.** The client never sends amounts. Ever. The purchase remote
+carries `(generatorId: string, requestedCount: number)` and nothing else; the server
+computes the cost from its own state, checks affordability against its own balance,
+and applies it. If your remote signature contains a price, a balance, or a
+multiplier, it is already broken.
+
+```lua
+--!strict
+-- Server: the only shape a purchase remote should have.
+local MAX_BULK = 1e9   -- sanity bound; also guards NaN/inf via isfinite below
+
+PurchaseRemote.OnServerEvent:Connect(function(player, generatorId, requestedCount)
+    -- 1. Existence and type.
+    if typeof(generatorId) ~= "string" or typeof(requestedCount) ~= "number" then return end
+    -- 2. Finiteness. NaN passes `typeof(x) == "number"` and defeats every
+    --    subsequent comparison, including `count > MAX_BULK`.
+    if not math.isfinite(requestedCount) then return end
+    -- 3. Range and integrality.
+    requestedCount = math.floor(requestedCount)
+    if requestedCount < 1 or requestedCount > MAX_BULK then return end
+    -- 4. Context: does this generator exist, is it unlocked for this player?
+    local state = Sessions.get(player); if not state then return end
+    local def = GeneratorDefs[generatorId]; if not def then return end
+    if not state.generators[generatorId].unlocked then return end
+    -- 5. Rate limit (token bucket, per player, cleaned up on PlayerRemoving).
+    if not Buckets.take(player, "purchase", 1) then return end
+
+    -- Advance, then price, then charge. All server-side.
+    Economy.advanceTo(state, os.time())
+    local affordable = Economy.maxAffordable(state, def)          -- §8.3
+    local count = math.min(requestedCount, affordable)
+    if count < 1 then return end
+    Economy.applyPurchase(state, def, count)
+    Replication.pushSnapshot(player, state)
+end)
+```
+
+**Time manipulation.** Covered in §2.5. The short version: the elapsed time comes
+from a server-read `os.time()` differenced against a timestamp inside the
+session-locked profile. The client cannot set it, send it, or read it into a form
+that matters. `Workspace:GetServerTimeNow()` is documented as "not secure" and is
+display-only.
+
+**Purchase spoofing.** Robux purchases go through `ProcessReceipt`, which has a hard
+contract. The documented guarantees: it is called "for all unresolved developer
+product purchases" when a purchase completes, when a prompt succeeds, and **when a
+user joins the server**; a purchase is only resolved when the callback returns
+`PurchaseGranted` *and* Roblox records it. Consequences:
+
+- **Idempotency on `PurchaseId` is mandatory**, because the callback will be invoked
+  again on rejoin for anything not yet resolved. Store granted `PurchaseId`s in the
+  profile (a bounded ring of the last ~50 is plenty) and return `PurchaseGranted`
+  immediately for a repeat.
+- **Grant, persist, then return `PurchaseGranted`.** Returning first and saving after
+  loses the grant if the server dies in between — and Roblox will not re-deliver a
+  resolved receipt.
+- **Return `NotProcessedYet` on any failure.** "Unresolved developer product
+  purchases are not removed or refunded after the escrow period expires", and there
+  is "no time-based retry mechanism" — the callback only fires again on another
+  purchase or a rejoin. `NotProcessedYet` is how the player eventually gets their
+  item; swallowing the error is how they don't.
+- **Do not set the callback in more than one script.** "You should only set the
+  `ProcessReceipt` callback one time in a single server-side `Script`."
+- **`Profile.LastSavedData`** exists precisely for this: it tells you what has
+  actually reached the DataStore, so you can decide whether a grant is durable before
+  acknowledging it.
+
+**Other surfaces specific to this genre:**
+
+- **Rejoin farming** — §2.6 (session locking + advance-then-persist).
+- **Server hopping for per-server rewards.** Any "free crate every 10 minutes" that
+  is tracked per-server is farmable by hopping. Track cooldowns in the profile
+  against `os.time()`.
+- **Leaderboard injection.** If you write to an `OrderedDataStore` from the client's
+  reported value you have built a global scoreboard of exploiters. Write from the
+  session-locked server state only, and cap the write rate (`OrderedWrite` is the
+  tightest budget: `30 + numPlayers × 5`).
+- **Information leakage.** Upgrade costs, drop tables and future-layer formulas that
+  live in `ReplicatedStorage` are readable. That's usually fine for an idle game —
+  but do not put unreleased content, event schedules or A/B assignments there.
+
+---
+
+## 8. Automation and lategame
+
+### 8.1 Buy-max in closed form
+
+The lategame breaks looping solutions. A player with 1e200 currency and a cost
+ratio of 1.07 can afford roughly `log(1e200)/log(1.07) ≈ 6,800` of a generator they
+own none of — and with 1e2000 (log-space numbers, §1.8) it is tens of thousands.
+Running a loop per player per autobuy tick is not viable, and it is unnecessary:
+every standard cost curve has an invertible partial sum.
+
+**Geometric costs — `c(n) = b·rⁿ` (the default in this genre).**
+
+The cost of buying `k` units when you already own `owned` is a geometric series:
+
+```
+S(k) = b·r^owned · (rᵏ − 1) / (r − 1)
+```
+
+Invert for the largest `k` with `S(k) ≤ M`:
+
+```
+             ⎡      M (r − 1)   ⎤
+        log ⎢ 1 + ───────────── ⎥
+             ⎣     b · r^owned   ⎦
+k  =  ⌊ ───────────────────────── ⌋
+                  log r
+```
+
+```lua
+--!strict
+-- Largest k such that the cost of k more units is affordable with `budget`.
+-- b: base cost, r: growth ratio (> 1), owned: units already owned.
+local function maxAffordableGeometric(budget: number, b: number, r: number, owned: number): number
+    if budget <= 0 then return 0 end
+    if r <= 1 then
+        -- Degenerate: constant cost. c = b, so k = floor(budget / b).
+        return math.floor(budget / b)
+    end
+
+    -- Work in log10 to avoid overflow: b·r^owned can exceed 1e308 long before
+    -- the player's balance does in a log-space-number game.
+    local logNumer = math.log10(budget) + math.log10(r - 1)
+    local logDenom = math.log10(b) + owned * math.log10(r)
+    local A = logNumer - logDenom          -- log10( M(r-1) / (b·r^owned) )
+
+    local inner: number
+    if A > 15 then
+        -- 1 + 10^A == 10^A to double precision; skip the addition entirely.
+        inner = A
+    elseif A < -15 then
+        return 0                            -- can't even afford the first one
+    else
+        inner = math.log10(1 + 10 ^ A)
+    end
+
+    local k = inner / math.log10(r)
+    -- Floor, then guard the boundary: floating error can put us one over.
+    k = math.floor(k)
+    return math.max(k, 0)
+end
+```
+
+Always follow the closed form with a **verify-and-decrement**: compute `S(k)`
+exactly and, if it exceeds the budget, decrement once. One extra check costs
+nothing and removes an entire class of "I bought 4,001 and went negative" bug.
+
+```lua
+local function costOfGeometric(b: number, r: number, owned: number, k: number): number
+    if k <= 0 then return 0 end
+    if r == 1 then return b * k end
+    return b * r ^ owned * (r ^ k - 1) / (r - 1)
+end
+
+local function buyMaxGeometric(budget, b, r, owned)
+    local k = maxAffordableGeometric(budget, b, r, owned)
+    while k > 0 and costOfGeometric(b, r, owned, k) > budget do
+        k -= 1
+    end
+    return k, costOfGeometric(b, r, owned, k)
+end
+```
+
+**Linear-increment costs — `c(n) = b + d·n`.** The partial sum is arithmetic, so the
+inverse is a quadratic:
+
+```
+S(k) = k(b + d·owned) + d·k(k−1)/2        →       k = ⌊ (−B + √(B² + 2dM)) / d ⌋
+                                                  with B = b + d·owned − d/2
+```
+
+```lua
+local function maxAffordableLinear(budget: number, b: number, d: number, owned: number): number
+    if d == 0 then return math.floor(budget / b) end
+    local B = b + d * owned - d / 2
+    local k = (-B + math.sqrt(B * B + 2 * d * budget)) / d
+    return math.max(math.floor(k), 0)
+end
+```
+
+**Polynomial costs — `c(n) = b·n^p`.** No useful closed form for the partial sum's
+inverse. Binary search, which is O(log k) — ~50 iterations even for `k = 1e15`:
+
+```lua
+local function maxAffordableBisect(budget: number, costOfK: (number) -> number): number
+    if costOfK(1) > budget then return 0 end
+    -- Exponential probe to bracket, then bisect.
+    local hi = 1
+    while costOfK(hi * 2) <= budget and hi < 2 ^ 52 do
+        hi *= 2
+    end
+    local lo = hi
+    hi *= 2
+    while lo < hi do
+        local mid = math.floor((lo + hi + 1) / 2)
+        if costOfK(mid) <= budget then lo = mid else hi = mid - 1 end
+    end
+    return lo
+end
+```
+
+**Super-exponential costs — `c(n) = b·r^(n^q)`, `q > 1`.** Here the final term
+dominates the sum (each is `r^(2n+1)` times the last for `q = 2`), so solve for the
+largest single affordable unit and subtract at most one:
+
+```
+log₁₀ c(n) = log₁₀ b + n^q · log₁₀ r  ≤  log₁₀ M
+        n  ≤  ((log₁₀M − log₁₀b) / log₁₀r)^(1/q)
+```
+
+```lua
+local function maxAffordableSuperExp(budget, b, r, q, owned)
+    local n = ((math.log10(budget) - math.log10(b)) / math.log10(r)) ^ (1 / q)
+    local k = math.floor(n) - owned + 1
+    return math.max(k, 0)   -- then verify-and-decrement as above
+end
+```
+
+### 8.2 Autobuyers
+
+An autobuyer is server-side (it spends currency), runs on the fixed tick from §1.3,
+and needs a **priority policy** because naive "buy the cheapest thing" starves the
+expensive generators that actually matter.
+
+```lua
+--!strict
+-- Runs once per economy tick, per player with autobuy enabled.
+local function runAutobuyers(state, defs)
+    Economy.advanceTo(state, os.time())
+
+    -- Policy: highest "production gained per currency spent" first, recomputed
+    -- each tick. This is the efficiency-maximising greedy and it is what players
+    -- expect "auto" to do.
+    local candidates = {}
+    for id, def in defs do
+        local g = state.generators[id]
+        if not g.unlocked or not state.settings.autobuy[id] then continue end
+        local cost = Economy.costOf(state, def, g.count, 1)
+        local gain = Economy.marginalProduction(state, def, g.count)
+        if cost > 0 and gain > 0 then
+            table.insert(candidates, { id = id, def = def, ratio = gain / cost })
+        end
+    end
+    table.sort(candidates, function(a, b) return a.ratio > b.ratio end)
+
+    -- Reserve: never spend below the player's configured floor. This is the
+    -- setting that stops an autobuyer from blocking a manual prestige.
+    local reserve = state.settings.autobuyReserve or 0
+
+    for _, c in candidates do
+        local budget = state.balances[c.def.currency] - reserve
+        if budget <= 0 then break end
+        local k = Economy.maxAffordable(budget, c.def, state.generators[c.id].count)
+        -- Bulk cap: buying 40,000 in one tick is correct but produces an
+        -- unreadable UI. Cap per tick and let it catch up over a few seconds.
+        k = math.min(k, 1000)
+        if k > 0 then
+            Economy.applyPurchase(state, c.def, k)
+        end
+    end
+end
+```
+
+**Autobuyers and offline progress do not mix.** If autobuyers ran offline, the
+closed form in §1.5 is invalid — the coefficients change every time a purchase
+happens, and the number of purchases over three days is unbounded. Three defensible
+answers, in order of preference:
+
+1. **Autobuyers pause offline.** Simplest, honest, and easy to explain. State it in
+   the UI. Most Roblox idle games do this.
+2. **Sell "offline autobuy" as a separate, capped feature** — e.g. autobuy runs for
+   the first hour of offline time only. Bounded work, clear value.
+3. **Bounded log-spaced simulation.** Divide the offline interval into `N = 128`
+   geometrically-increasing chunks, advance and run autobuyers once per chunk. Cost
+   is O(N) regardless of elapsed time, and the geometric spacing puts the resolution
+   where purchases actually happen (early). Document that it is an approximation, and
+   make it *conservative* — under-granting is forgiven, over-granting is a balance
+   bug you can never claw back.
+
+### 8.3 Keeping the UI responsive
+
+The number on screen changes every frame. Everything else must not.
+
+- **Decouple the value from the label.** The value is computed by `evaluate()` (§7.2)
+  at render rate. The *label* is written at a fixed 10–15 Hz, because updating
+  `TextLabel.Text` is what costs — it invalidates text layout, and inside a
+  `UIListLayout` it can force a re-layout of every sibling.
+- **Only assign `.Text` when the formatted string actually changes.** At 10 Hz with
+  3-significant-digit formatting, a slow-growing number changes its string only a few
+  times a second.
+- **Formatting must not allocate in the hot path.** `string.format` allocates; a
+  suffix-ladder formatter that concatenates three times allocates three times. At
+  60 Hz × 30 visible numbers that is real GC pressure. Format at 10 Hz, cache the
+  result, and reuse.
+- **Fixed-width digits.** Use a monospaced font or set `RichText` with a fixed-width
+  span so the label does not change size every frame. Changing `AbsoluteSize` inside
+  a layout is the expensive case.
+- **Never rebuild the generator list.** Create the rows once, keep a `{[id]: Frame}`
+  map, and update fields. `Instance.new` in a per-frame loop is the number one cause
+  of idle-game UI hitching.
+- **Virtualise long lists.** Beyond ~50 rows, render only the visible window
+  (`ScrollingFrame.CanvasPosition` + a fixed row height makes the index arithmetic
+  trivial).
+- **Throttle the breakdown UI** (§4.5) to when it is open, and recompute it on a
+  timer, not per frame.
+
+```lua
+--!strict
+-- A suffix-ladder formatter. Cache `last` per label and skip the assignment.
+local SUFFIXES = {
+    "", "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc",
+}
+
+local function format(n: number): string
+    if n < 1000 then
+        return string.format("%.1f", n)
+    end
+    local tier = math.floor(math.log10(n) / 3)
+    if tier >= #SUFFIXES then
+        -- Past the ladder, scientific notation is clearer than invented names.
+        return string.format("%.3fe%d", n / 10 ^ math.floor(math.log10(n)),
+            math.floor(math.log10(n)))
+    end
+    return string.format("%.2f%s", n / 10 ^ (tier * 3), SUFFIXES[tier + 1])
+end
+
+local lastText: { [TextLabel]: string } = {}
+
+local function setLabel(label: TextLabel, value: number)
+    local text = format(value)
+    if lastText[label] ~= text then
+        lastText[label] = text
+        label.Text = text
+    end
+end
+```
+
+Offer scientific and engineering notation in settings. A meaningful fraction of
+this genre's audience prefers `1.23e15` to `1.23Qa`, and the ones who do will tell
+you about it.
+
+---
