@@ -1,0 +1,1856 @@
+# Big-Number Arithmetic in Roblox Luau — AlyaNum and the Alternatives
+
+> **Scope.** A reference chapter for a team porting a large incremental/idle game to Roblox Luau,
+> where in-game values reach tetration-level magnitudes (`E(4)` = `eeee1` = 10^10^10^10) and beyond.
+> Every API claim below is traced to source I read; anything I could not verify is marked
+> `[UNVERIFIED]`, and second-hand community claims are marked `[COMMUNITY, SECOND-HAND]`.
+>
+> **Primary source read:** `evilbocchi/alyanum` `src/init.luau` @ `main` (2,839 lines), plus
+> `src/index.d.ts` (568 lines), `wally.toml`, `LICENSE`. See `## Sources` for the full list.
+
+---
+
+## Outline
+
+1. [TL;DR](#tldr)
+2. [The magnitude ladder](#the-magnitude-ladder)
+3. [Notation systems you must understand](#notation-systems-you-must-understand)
+4. [Library comparison table](#library-comparison-table)
+5. [AlyaNum in depth](#alyanum-in-depth)
+6. [The alternatives in depth](#the-alternatives-in-depth)
+7. [Performance engineering for a tick loop](#performance-engineering-for-a-tick-loop)
+8. [Serialization and persistence](#serialization-and-persistence)
+9. [Formatting for display](#formatting-for-display)
+10. [Correctness pitfalls](#correctness-pitfalls)
+11. [Porting guidance](#porting-guidance)
+12. [Sources](#sources)
+
+---
+
+## TL;DR
+
+- **`E(4)` is not a hard problem.** `eeee1` = 10^10^10^10 is a 4-tall power tower. AlyaNum stores it as
+  `{multiplicand = 1e10, exponent = 2}` — two of the seven fields, with the `exponent` field capable of
+  holding up to 9,007,199,254,740,991. AlyaNum reaches `E(4)` with **~15 orders of magnitude of headroom in
+  the exponent field alone**, before tetration is even touched. (Verified by hand-simulating `fix()` from
+  `src/init.luau:168`.)
+- **AlyaNum's real ceiling is heptation**: `10↑↑↑↑↑n`, with `n` up to 2^53−1. Internally it is a flat
+  7-field struct: `{sign, multiplicand, exponent, tetrate, pentate, hexate, heptate}`. Once `heptate`
+  itself would exceed 2^53−1 there is no eighth field — the ladder stops. (`src/init.luau:150-158`, `fix()`.)
+- **AlyaNum is MIT-licensed and actively maintained.** Latest commit 2026-08-24, version 1.2.0,
+  `wally add evilbocchi/alyanum` or `npm i @rbxts/alyanum`. Author: `evilbocchi`. It is a rewrite-fork of
+  OmegaNum (FoundForces / Naruyoko).
+- **It uses metatables for full operator overloading**: `__add __sub __mul __div __pow __mod __eq __lt __le
+  __unm __tostring __concat` are all defined (`src/init.luau:2754-2793`). `a + b`, `a < b`, `a == b`,
+  `tostring(a)` all work. Mixed `AlyaNum + number` works because every metamethod funnels through
+  `metamethodValue()`, which promotes a raw `number` via `newNumber()`.
+- **Every operation allocates.** `fix()` ends in `setmetatable(number, AlyaNum)` on a fresh table, and every
+  public method wraps its arguments in `AlyaNum.new(...)`. There is **no public mutate-in-place API** — the
+  two `mutable*` helpers (`mutablePow10`, `mutableLog10`, `mutableUnary`) are file-locals and are not
+  exported. Budget one 7-field table allocation per arithmetic op and design the tick loop around that.
+- **AlyaNum has a genuine fast path for ordinary magnitudes.** `add`/`sub`/`mul` each begin with a guard that
+  checks all four hyperoperation fields are 0 and `exponent < 2`, and if so does the math in raw float64 and
+  returns `AlyaNum.new(sum)`. Below ~1e308 you pay one table alloc and a branch, not a tower walk.
+- **`AlyaNum.new` on an existing AlyaNum returns the same object** and on a `BaseAlyaNum` table it
+  `setmetatable`s that table **in place**. `toBaseAlya()` strips the metatable **in place** and the source
+  comment says so explicitly. This is the single biggest aliasing footgun in the library.
+- **Serialization is easy because `BaseAlyaNum` is a plain, flat, 7-number table.** `HttpService:JSONEncode`
+  on it round-trips losslessly-ish; the better option for DataStore size is a compact string. There is also
+  `lbencode`/`lbdecode` (`toSingle`/`fromSingle`), a **lossy but order-preserving** encoding into a single
+  float64 designed for `OrderedDataStore` leaderboards — never use it as your save format.
+- **Formatting is first-class and configurable.** `toSuffix`, `toScientific`, `toEChain`, `toEnt`,
+  `toHyperE`, `toString`, plus `changeSuffixes`, `changeDecimalPoints`, `changeDefaultAbbreviation`.
+  `toString` auto-escalates suffix → scientific → e-chain → E(n) → hyper-E as magnitude grows.
+  Note: `changeDecimalPoints` and `changeSuffixes` are **process-global mutable state**.
+- **`buffer` and `vector` are not used by any of these libraries.** AlyaNum's values are Lua tables.
+  A `vector` (3 floats) cannot hold 7 fields; a `buffer`-backed struct-of-arrays pool is possible but you
+  would be writing it yourself. `--!native` and `--!optimize 2` are on in AlyaNum's source, which is the
+  realistic performance lever.
+- **Never mix raw `number` and big-number values in the same variable.** Luau's type solver will not stop
+  `gold = gold + 1` silently producing a float64 once `gold` is typed `any`. Use a branded/opaque type alias
+  and a linted boundary; the concrete recipe is in [Correctness pitfalls](#correctness-pitfalls).
+- **Porting from `break_infinity.js`/`Decimal`:** the mechanical rules are (1) `new Decimal(x)` →
+  `AlyaNum.new(x)`, (2) `a.plus(b)`/`a.times(b)` → `a:add(b)`/`a:mul(b)` **or** `a + b`, (3) `a.gt(b)` →
+  `a:moreThan(b)` or `a > b`, (4) `a.log10()` returns a **number** in break_infinity but an **AlyaNum** in
+  AlyaNum, (5) `Decimal.max(a,b)` is a static in JS but an **instance method** `a:max(b)` in AlyaNum.
+- **DataStore limits that bind you:** 4 MB per value, 260 KB per `SetAsync` key in practice for
+  `DataStoreService` values, and a 50-character key limit. A flat JSON `BaseAlyaNum` is ~110 bytes; a compact
+  string form is ~10-30 bytes. At 10,000 stored big numbers per player the difference is 1.1 MB vs 0.3 MB.
+- **If you don't need tetration, don't pay for it.** SerikaNum (same author, caps at 10^(2^1024)) is claimed
+  4–20x faster than AlyaNum. But your game reaches `E(4)`, so you *do* need tetration — AlyaNum, OmegaNum,
+  ExpantaNum, or break_eternity are your only real choices.
+
+---
+
+## The magnitude ladder
+
+The only question that matters when picking a library is: **what is the largest number your game will ever
+produce, and does the library's representation reach it?** Here is the ladder, rung by rung.
+
+### Rung 0 — float64 (`number` in Luau)
+
+Luau's `number` is an IEEE-754 binary64 double.
+
+| Property | Value |
+|---|---|
+| Largest finite value | `1.7976931348623157e308` |
+| AlyaNum's rounded constant for it | `1.797693015e308` (`FLOAT64_LIMIT`, `src/init.luau:16`) |
+| `log10` of that | `308.2547155309599` (`LOG10_FLOAT64_LIMIT`, `src/init.luau:19`) |
+| Largest **integer-exact** value | `2^53 − 1 = 9007199254740991` (`FLOAT64_SAFE_LIMIT`, `src/init.luau:22`) |
+| `log10` of that | `15.954589770191003` (`LOG10_FLOAT64_SAFE_LIMIT`, `src/init.luau:25`) |
+| Above the max | `math.huge` (`inf`), and all arithmetic is absorbing |
+
+Those four constants reappear everywhere in every library on this list. `2^53−1` is the normalization
+threshold: it is the point above which a float64 can no longer count integers one at a time, so every
+scientific-notation library "carries" into the exponent there rather than at 1e308. This is why you will see
+`9e15` in so many published limits.
+
+An idle game hits 1e308 embarrassingly fast. A single prestige layer with a x2 multiplier per upgrade and
+1,024 upgrade purchases is already past it.
+
+### Rung 1 — scientific libraries: mantissa + exponent
+
+Store `sign * mantissa * 10^exponent` where `exponent` is itself a float64. Now the reachable magnitude is
+`10^(1.8e308)`, and if you insist the exponent stay integer-exact, `10^(9e15)`.
+
+- **`break_infinity.js`** (Patashu): README states *"bigger in magnitude than 1e308, up to as much as
+  **1e9e15**"*. Deliberately trades accuracy for speed vs `decimal.js`.
+- **`decimal.js`**: same `e9e15` ceiling, arbitrary precision, much slower.
+- **SerikaNum** (evilbocchi): *"utilising two number primitives to reach up to **10^(10^308)**"*.
+- **QNum** (notiku): *"a normalized mantissa/exponent pair"*; `[UNVERIFIED]` exact ceiling — the README does
+  not state one, but a float64 exponent implies ~`10^(1.8e308)`.
+- **InfiniteMath** (KdudeDev): *"allows you to surpass the double-precision floating-point number limit of
+  `10^308`"*; the DevForum title quoted in its own README is *"go above 10^308 (1e308)"*.
+  `[UNVERIFIED]` exact ceiling from source.
+
+**This rung cannot represent `E(4)`.** `10^10^10^10` needs an exponent of `10^10^10 = 10^10000000000`, which
+is itself ~1e10000000000 — far past what a float64 exponent field can hold. A mantissa+exponent library
+overflows to infinity here. If your game reaches `E(4)`, **rung 1 is disqualified**, full stop.
+
+### Rung 2 — iterated-exponential ("layer") libraries
+
+Add a **layer count**: how many times to apply `x ↦ 10^x`.
+
+- **`break_eternity.js`** (Patashu): `sign * 10^10^10^...(layer times)...mag`, reaching **`10^^1.8e308`**
+  and as small as `10^-(10^^1.8e308)`. From its README: *"if it is above 9e15, log10(mag) it and increment
+  layer. If it is below log10(9e15) (about 15.954) and layer > 0, Math.pow(10, mag) it and decrement layer."*
+  Three fields: `sign`, `layer`, `mag`.
+- **AlyaNum's `exponent` field alone** is exactly this: apply `10^x` to `multiplicand`, `exponent` times.
+
+`E(n)` in the notation your team uses is precisely the layer count. `E(4)` = layer 4 = `10^10^10^10`.
+**Any rung-2 library represents `E(4)` trivially** — `break_eternity` with `layer = 4`, AlyaNum with
+`exponent = 2` (after normalization folds two of the layers into the mantissa; verified below).
+
+Rung 2's own ceiling is `10↑↑(layer_max)` — tetration with a bounded height. Once your game needs a power
+tower taller than 9e15 (or 1.8e308) levels, you need rung 3.
+
+### Rung 3 — hyperoperation libraries
+
+Add fields for tetration, pentation, hexation, … i.e. `10↑↑`, `10↑↑↑`, `10↑↑↑↑`.
+
+- **AlyaNum**: fixed 7-field struct, ceiling ≈ **`10↑↑↑↑↑(9.007e15)`** (heptation). Hard stop: no 8th field.
+- **OmegaNum.js** (Naruyoko): *"A huge number library holding up to **10{1000}9e15**"*, reaching level
+  f_ω. *"Internally, it is represented as a sign and array. … `[n0,n1,n2,n3...]` … represents
+  `sign*(...(10↑³)^n3 (10↑↑)^n2 (10↑)^n1 n0)`."* The array is **unbounded in length up to 1000 entries**,
+  so arrow-depth is a runtime quantity, not a compile-time one.
+- **ExpantaNum.js** (Naruyoko): *"holding up to **{10,9e15,1,2}**"*, level f_(ω+1). Internally
+  `sign`, an array of `[arrow_index, repeat_count]` **pairs**, and a `layer` counter, where `Jx = 10{x}10`.
+  Sparse representation, so extremely deep arrow counts cost nothing.
+- Naruyoko's roadmap names the next rungs: `OmegaExpantaNum.js` (f_ω2), `MegotaNum.js` (f_(ω²)),
+  `PowiainaNum.js` (f_(ω³)), `GodgahNum.js` (f_(ω^ω)). None are relevant to a shipping Roblox game.
+
+### Where `E(4)` sits — precisely
+
+```
+value                       tower height   float64?  rung-1?  rung-2?  rung-3?
+--------------------------- -------------- --------- -------- -------- --------
+1e308                       ~1             edge      yes      yes      yes
+1e(9e15)      = E2-ish      2              no        yes      yes      yes
+1e(1.8e308)                 2              no        edge     yes      yes
+ee1e308       = E(3)-ish    3              no        NO       yes      yes
+eeee1         = E(4)        4              no        NO       yes      yes
+E(9e15)                     9.007e15       no        NO       AlyaNum  yes
+10^^(1.8e308)               1.8e308        no        NO       b_eternity yes
+10^^^10       (pentation)   —              no        NO       NO       yes
+10↑↑↑↑↑(9e15) (heptation)   —              no        NO       NO       AlyaNum max
+10{1000}9e15                —              no        NO       NO       OmegaNum max
+{10,9e15,1,2}               —              no        NO       NO       ExpantaNum max
+```
+
+**Conclusion for your team: `E(4)` needs at minimum a rung-2 library, and AlyaNum clears it by an
+astronomical margin.** The interesting question is not "can AlyaNum do `E(4)`" (it can, with ~15 orders of
+magnitude of spare capacity in a single field) but "does AlyaNum's *heptation* ceiling hold for your game's
+endgame" — and unless you are designing an explicitly googological game with pentation-tier prestige layers,
+it will.
+
+#### Verification of the `E(4)` claim
+
+I hand-simulated AlyaNum's `fix()` normalizer (`src/init.luau:168-243`) on the raw form of `10^10^10^10`,
+i.e. `multiplicand = 10, exponent = 3`:
+
+```
+input : {sign=1, multiplicand=10,   exponent=3, tetrate=0, pentate=0, hexate=0, heptate=0}
+fix() : multiplicand 10 < LOG10_FLOAT64_SAFE_LIMIT (15.9546) and exponent > 0
+        -> multiplicand = 10^10 = 1e10, exponent = 2
+        -> 1e10 >= 15.9546, stop
+output: {sign=1, multiplicand=1e10,  exponent=2, tetrate=0, pentate=0, hexate=0, heptate=0}
+```
+
+`exponent = 2` against a field ceiling of `FLOAT64_SAFE_LIMIT = 9007199254740991`. `E(4)` uses
+**0.00000000000002%** of AlyaNum's exponent field, and none of `tetrate`, `pentate`, `hexate`, `heptate`.
+
+---
+
+## Notation systems you must understand
+
+Idle games display all of these, sometimes simultaneously, and players switch between them in settings.
+You need to be able to read every one of them off a debug log.
+
+### 1. Standard suffix notation (K / M / B / T / Qd …)
+
+`1.25M`, `9.99Qn`, `3.00Vt`. The most player-friendly, and useless past ~1e3000. AlyaNum ships a
+four-tier suffix table (`src/init.luau:32-141`):
+
+```lua
+suffixes = {
+    beginning = { "K", "M", "B" },
+    first  = { "U","D","T","Qd","Qn","Sx","Sp","Oc","No" },   -- units
+    second = { "De","Vt","Tg","Qdg","Qng","Sxg","Spg","Ocg","Nog" }, -- tens
+    third  = { "Ce","Dce","Tce","Qdce","Qnce","Sxce","Spce","Occe","Noce" }, -- hundreds
+    mult   = { "Mi","Mc","Na","Pi","Fm","At","Zp","Yc","Xo","Ve", ... }, -- ~120 entries
+}
+```
+
+The `first`/`second`/`third` tables compose the Latin -illion names positionally (units + tens + hundreds),
+and `mult` supplies the next tier. AlyaNum's `toString` stops using suffixes above
+`MAX_SUFFIX = {multiplicand = 3000000, exponent = 1}` — i.e. `10^3000000` (`src/init.luau:362`), and
+`serikaNumToSuffix` switches from `getTier1Suffix` to `getTier2Suffix` at `exponent > 3002`.
+
+### 2. Scientific / engineering notation
+
+`1.25e6`. **Engineering** notation is the same thing constrained to exponents that are multiples of 3
+(`1.25e6`, `12.5e6`, `125e6`, `1.25e9`), which lines up with the suffix boundaries and is what players who
+dislike suffixes usually want. AlyaNum has scientific (`toScientific`) but **no built-in engineering mode**;
+you write it yourself (code in [Formatting for display](#formatting-for-display)).
+
+Note AlyaNum's scientific output recursively abbreviates the *exponent* itself:
+`serikaNumToScientific` calls `numberToSuffix(exponent)`, so you get `1.23e1.5M`, not `1.23e1500000`.
+
+### 3. Hyper-E / E-chain notation
+
+Two related forms, both present in AlyaNum:
+
+**E-chain** (`toEChain`): literally repeat the letter `e`. `ee1M` means `10^(10^(1000000))`.
+From the source doc comment: *"An E chain is exactly what it says. `1e(1e1M)` is formatted as `ee1M`.
+E chains place all Es at the start, and have a maximum chain of 10 Es."* Above 10 `e`s it falls through
+to `toEnt`. This is the same input format `break_eternity.js` accepts (`eeX === 10^10^X`).
+
+**E(n) / "Ent" form** (`toEnt`): `E(3)2` = `10^(10^(10^2))`. Doc comment: *"y is the number of times to
+perform 10^x"*. The `y` is itself suffix-formatted, so you will see `E(1.5M)2`. AlyaNum cites
+[Nihilustheabsolutist's E function](https://googology.fandom.com/wiki/Nihilustheabsolutists_E_function).
+**This is your team's `E(4)`.** `E(4)1` = `10^10^10^10^1` = `eeee1`.
+
+**Hyper-E** (`toHyperE`): `Ex#a#b#c#d#e`. AlyaNum's own doc comment defines its fields as:
+*"a is the number of times to perform `10^x`, b is the number of times to perform `10^^x`, c is the number
+of times to perform `10^^^x` and so on."* Reading `toHyperE` (`src/init.luau:1928-1954`), the emitted
+string is:
+
+```
+"E" .. suffix(multiplicand)
+     .. ("#" .. suffix(exponent))      if exponent > 0
+     .. ("#" .. suffix(tetrate + 1))   if tetrate  > 0
+     .. ("#" .. suffix(pentate + 1))   if pentate  > 0
+     .. ("#" .. suffix(hexate  + 1))   if hexate   > 0
+     .. ("#" .. suffix(heptate + 1))   if heptate  > 0
+```
+
+so it is a direct, positional dump of the internal struct. Sbiis Saibian's canonical Hyper-E notation
+(`E100#100` = grangol) uses `#` as a "hyperion" separator with the same escalating-hyperoperator meaning;
+whether AlyaNum's `+1` offsets make its output *numerically identical* to canonical Hyper-E for every input
+is `[UNVERIFIED]` — treat AlyaNum's hyper-E as "AlyaNum's hyper-E", and do not feed it to a third-party
+googology parser without testing.
+
+### 4. Arrow notation (Knuth up-arrows)
+
+`a↑b` = `a^b`. `a↑↑b` = tetration = a power tower of `a`s, `b` tall. `a↑↑↑b` = pentation = repeated
+tetration. And so on. The arrow count maps directly onto AlyaNum's field names:
+
+| Arrows | Name | Hyperoperation index | AlyaNum field |
+|---|---|---|---|
+| `↑` | exponentiation | 4 | `exponent` |
+| `↑↑` | tetration | 5 | `tetrate` |
+| `↑↑↑` | pentation | 6 | `pentate` |
+| `↑↑↑↑` | hexation | 7 | `hexate` |
+| `↑↑↑↑↑` | heptation | 8 | `heptate` |
+
+AlyaNum's README limit of "10^^^^^10" is five carets = five arrows = **heptation**, consistent with the
+`heptate` field being the last one. The ASCII `^^` convention (caret-doubling for arrows) is what you'll see
+in incremental-game UIs because `↑` is not in every font Roblox ships.
+
+`10{n}m` is shorthand for `10↑ⁿm` — OmegaNum's quoted limit `10{1000}9e15` means 1000 arrows.
+
+### 5. Bowers-style / BEAF array notation
+
+Jonathan Bowers' Exploding Array Function. `{a,b}` = `a^b`, `{a,b,c}` = `a↑^c b`, and adding entries
+escalates further. ExpantaNum's quoted limit `{10,9e15,1,2}` is a BEAF linear array. **You will almost
+certainly never display this to a player**, but it appears in library documentation as the canonical way to
+state a ceiling, and it is the reason OmegaNum/ExpantaNum describe themselves in terms of fast-growing
+hierarchy levels (f_ω, f_(ω+1)). Note that BEAF only has an agreed-upon definition up to tetrational arrays
+`[COMMUNITY, SECOND-HAND]`, so treat these ceilings as "so large it does not matter" rather than as exact.
+
+### Escalation order in AlyaNum's `toString`
+
+`toString` (`src/init.luau:1955-1997`) picks a notation by magnitude, and this is the default a player sees:
+
+```
+value < 1e-9 (MAX_FRACTIONAL)         -> "1 / " .. toSuffix(1/x)
+DEFAULT_ABBREVIATION == "suffix"
+  and no hyperops and x < 10^3000000  -> toSuffix   e.g. "1.25M"
+x < MAX_SCIENTIFIC {m=300008, e=4}    -> toScientific e.g. "1.23e1.5M"
+x < MAX_E_CHAIN {m=1e10, e=8, tet=1}  -> toEChain    e.g. "eee1.5M"
+x < MAX_ENT {m=306, e=1, tet=2}       -> toEnt       e.g. "E(1.5M)2"
+otherwise                             -> toHyperE    e.g. "E10#8#3#2"
+```
+
+That cascade is a good default. It is also **global, not per-player** — see
+[Formatting for display](#formatting-for-display) for how to give players a choice without mutating
+library state.
+
+---
+
+## Library comparison table
+
+### The libraries that actually matter for a Luau port
+
+| | **AlyaNum** | **OmegaNum (Luau)** | **ExpantaNum.js** | **break_infinity.js** | **plain float64 (`number`)** |
+|---|---|---|---|---|---|
+| **Max magnitude** | `10↑↑↑↑↑(2^53−1)` (heptation) | `10{1000}9e15` (1000 arrows) | `{10,9e15,1,2}` (BEAF) | `1e(9e15)` | `1.7976931348623157e308` |
+| **Reaches `E(4)`?** | **Yes**, trivially (`exponent = 2`) | Yes | Yes | **No** | No |
+| **Representation** | flat 7-field table `{sign, multiplicand, exponent, tetrate, pentate, hexate, heptate}` | `{sign, {n0, n1, n2, …}}` — outer table + inner array | `sign`, `[[a,b],[a,b],…]`, `layer` — nested pair arrays | `{sign, mantissa, exponent}` (3 fields) | 8 bytes, a register |
+| **Tables allocated per value** | **1** | **2** | **2 + one per array pair** | n/a (JS object) | **0** |
+| **Est. bytes per value (Luau)** | ~300 (hash part, 8 node slots) `[ESTIMATE]` | ~350–600 | n/a (no Luau port) | n/a (no Luau port) | 8 (unboxed) |
+| **Operator overloading** | **Yes** — `+ - * / ^ % == < <= unary- tostring ..` | **No** — function-table API only, verified: zero `setmetatable`/`__add` in source | No (JS methods) | No (JS methods) | native |
+| **Method API** | `a:add(b)`, `a:mul(b)`, `a:moreThan(b)`, `a:tet(b)` … | `OmegaNum.add(a, b)` only | `a.add(b)` | `a.plus(b)` / `a.add(b)` | `+` |
+| **Mixed `bignum <op> number`** | Yes, metamethods promote via `newNumber` | No — you must convert | Yes (constructor coercion) | Yes | n/a |
+| **Luau / Roblox** | **Native.** `--!native`, `--!optimize 2`, Wally + roblox-ts, `default.project.json` | Yes (a Lua file you drop in) | **No port** | **No port** | native |
+| **Distribution** | `wally add evilbocchi/alyanum`; `npm i @rbxts/alyanum` | copy-paste `.lua` from a fork | npm only | npm only | n/a |
+| **License** | **MIT** (`Copyright (c) 2024 evil bocchi`) | `[UNVERIFIED]` — the FoundForces original has no license file in the forks I read | MIT `[UNVERIFIED — not read]` | MIT `[UNVERIFIED — not read]` | n/a |
+| **Maintained?** | **Yes** — v1.2.0, latest commit 2026-08-24, CI green, tests + benches in-repo | Forks only; `Bry10022/OmegaNum-Lua` updated 2026-09-08, 0 stars | Yes (Naruyoko) | Yes (Patashu) | n/a |
+| **Typed API** | Yes — Luau `export type AlyaNum`, plus a 568-line `index.d.ts` for roblox-ts | `--!nocheck` at the top of the file | TS defs | TS defs | yes |
+| **Relative speed** | Fast for a hyperop library; author claims faster than EternityNum and InfiniteMath `[COMMUNITY]` | Slower (Patashu's README: OmegaNum/ExpantaNum "have low performance") | Slowest | ~2.5–400x faster than decimal.js | ~100–1000x faster than any of them |
+
+### Secondary Luau options (for completeness)
+
+| Library | Ceiling | Repr | Reaches `E(4)`? | Notes |
+|---|---|---|---|---|
+| **SerikaNum** (`evilbocchi/serikanum`) | `10^(10^308)` per README; `10^(2^1024)` per AlyaNum's README | two number primitives | **No** | Same author as AlyaNum. Claimed **4–20x faster than AlyaNum** `[COMMUNITY]`. Wally + roblox-ts. |
+| **OnoeNum** (`evilbocchi`) | wraps SerikaNum | wrapper | No | "balance performance and development speed". AlyaNum has `AlyaNum.fromOnoe()` for interop. |
+| **EternityNum** (`wienco123/EternityNum`) | `10↑↑(2^1024)` | `EN.new(sign, layer, mag)` — same shape as break_eternity | **Yes** | Rung 2. AlyaNum benchmarks against it directly (`bench/EternityNum.luau`). |
+| **InfiniteMath** (`KdudeDev/InfiniteMath`) | "above 1e308" — exact ceiling `[UNVERIFIED]` | `[UNVERIFIED]` | Probably not | Popular on the DevForum; has docs site + demo game. |
+| **QNum** (`notiku/qnum`) | mantissa/exponent, ceiling `[UNVERIFIED]` | 2 fields | **No** | Clean metamethod API, Wally. New (2026), 2 stars. |
+
+### Selection verdict for a game that reaches `E(4)` and beyond
+
+1. **AlyaNum** is the right default. It is the only actively-maintained, MIT-licensed, Wally-published,
+   Luau-native, metatable-overloaded library with a hyperoperation ceiling. Its heptation limit is ~10^100
+   times more headroom than "unreachable".
+2. **EternityNum** is a reasonable lighter alternative *if* your endgame stops below `10↑↑(2^1024)` — it has
+   3 fields instead of 7, so less allocation. But it gives you no pentation, and AlyaNum already has a
+   float64 fast path for the range where EternityNum would win.
+3. **OmegaNum (Luau)** only if you genuinely need >5 arrows. You pay with 2 tables per value, no operator
+   overloading, `--!nocheck`, and unclear licensing.
+4. **break_infinity.js has no Luau port and is disqualified by magnitude anyway.** If your existing codebase
+   is written against `Decimal`, see [Porting guidance](#porting-guidance) — the translation target is
+   AlyaNum, not a port of break_infinity.
+
+---
+
+## AlyaNum in depth
+
+**Repo:** <https://github.com/evilbocchi/alyanum> — 18 stars, 4 forks, 109 commits, MIT,
+`Copyright (c) 2024 evil bocchi`. Version **1.2.0**. Latest commit **2026-08-24**
+("chore(ci): migrate workflows from npm to Bun"). Topics: `bignum`, `lua`, `luau`, `roblox`, `roblox-ts`.
+
+**Everything below was read from `src/init.luau` @ `main` (2,839 lines).** Line numbers refer to that file.
+
+### Install
+
+```toml
+# wally.toml
+[dependencies]
+AlyaNum = "evilbocchi/alyanum@1.2.0"
+```
+
+```sh
+wally add evilbocchi/alyanum   # Luau / Rojo
+npm install @rbxts/alyanum     # roblox-ts
+```
+
+The Wally package `realm` is `shared`, so it can live in `ReplicatedStorage` and be required from both
+client and server — which matters, because you will be sending these values across the network.
+
+### Internal representation
+
+```lua
+export type BaseAlyaNum = {
+    sign: number,          -- -1, 0, or 1
+    multiplicand: number,  -- the mantissa-ish base value
+    exponent: number,      -- how many times to apply x -> 10^x
+    tetrate: number,       -- how many times to apply x -> 10^^x
+    pentate: number,       -- how many times to apply x -> 10^^^x
+    hexate: number,        -- how many times to apply x -> 10^^^^x
+    heptate: number,       -- how many times to apply x -> 10^^^^^x
+}
+export type Number = BaseAlyaNum | number | AlyaNum
+export type AlyaNum = setmetatable<BaseAlyaNum, typeof(AlyaNum)>
+```
+
+The doc comment gives the canonical worked example (`src/init.luau:148-149`):
+
+> `{sign: -1, multiplicand: 4, exponent: 2, tetrate: 1, pentate: 0, hexate: 0, heptate: 0}`
+> This represents `-1 * 10 ^^ (10 ^ (10 ^ 4))`.
+
+Read it **outward**: start with `multiplicand`, apply `10^x` `exponent` times, then `10^^x` `tetrate`
+times, then `10^^^x` `pentate` times, and so on. It is a flat, fixed-arity encoding of the hyperoperation
+ladder — structurally the same idea as break_eternity's `(sign, layer, mag)` but with four extra layer
+counters above the exponent layer.
+
+**This is the most important design fact about AlyaNum:** the arity is *fixed at 7*. There is no array, no
+allocation-per-arrow-level, no loop over an unbounded structure. Every comparison is at most 6 float
+compares. Every value is exactly one table. That is where the speed comes from, and it is also the hard
+ceiling.
+
+### Normalization — `fix()` (`src/init.luau:168-243`)
+
+`fix()` is the invariant-restorer that every constructor and most operations funnel through. Its rules:
+
+1. `sign == 0` ⇒ zero out all six magnitude fields.
+2. Negative `multiplicand` ⇒ move the sign into `sign`, take `abs`.
+3. `multiplicand >= 2^53−1` ⇒ `multiplicand = log10(multiplicand)`, `exponent += 1`. *(carry up)*
+4. `exponent == 0` and `multiplicand == 1` and exactly one hyperop field is 1 ⇒ collapse to `10`.
+5. `multiplicand < 15.9546` and `exponent > 0` ⇒ `multiplicand = 10^multiplicand`, `exponent -= 1`.
+   **Applied up to twice** (the source comment: *"do it twice for cherry on top(??)"*). *(carry down)*
+6. Each of `hexate`, `pentate`, `tetrate`, `exponent` (checked in that order, `elseif` chain):
+   if `>= 2^53−1`, take `log10` of it into `multiplicand`, increment the next-higher field,
+   set `exponent = 1`, and zero the fields below. *(carry up the hyperoperation ladder)*
+
+Note rule 6 is an `elseif` chain and `heptate` has no successor — once `heptate` saturates at 2^53−1 there
+is nothing above it. That is AlyaNum's absolute ceiling.
+
+Note also the commented-out block right after rule 6:
+
+```lua
+-- floor all hyperoperations
+--number.exponent = math.floor(number.exponent)
+--number.tetrate = math.floor(number.tetrate)
+-- ...
+```
+
+The hyperoperation counters are therefore **allowed to hold fractional values** in practice. Treat
+"`tetrate = 1.5`" as an implementation detail you should not rely on the semantics of. `[UNVERIFIED]` what
+a fractional `tetrate` is defined to mean.
+
+### Maximum representable magnitude
+
+| Bound | Value | Where |
+|---|---|---|
+| Absolute maximum | ~`10↑↑↑↑↑(9007199254740991)` | `heptate` saturates at `FLOAT64_SAFE_LIMIT` |
+| README's phrasing | `10^^^^^10` (heptation) | `README.md` |
+| Largest with `exponent` only | ~`E(9007199254740991)` — a tower of 10s ~9.007 quadrillion tall | `MAX_POW`, `src/init.luau:325` |
+| `MAX_ADD` | `{m=9.007e15, e=1}` = `10^(9.007e15)` | `src/init.luau:307` |
+| `MAX_MUL` | `{m=9.007e15, e=2}` = `10^10^(9.007e15)` | `src/init.luau:316` |
+| `MAX_POW` | `{m=1, e=9.007e15}` | `src/init.luau:325` |
+| `MAX_TETRATE` | `{m=1e10, e=8, tetrate=9.007e15}` | `src/init.luau:334` |
+| `MAX_PENTATE` | `{m=1e10, e=8, tet=8, pentate=9.007e15}` | `src/init.luau:343` |
+| `MAX_HEXATE` | `{m=1e10, e=8, tet=8, pent=8, hexate=9.007e15}` | `src/init.luau:352` |
+
+**`E(4)` = `{multiplicand = 1e10, exponent = 2}`.** Verified by simulation above.
+
+### Full API surface
+
+All of the following are read directly from the `-- exports` block (`src/init.luau:2425-2680`) and the
+metamethod block (`src/init.luau:2754-2793`).
+
+#### Construction and conversion
+
+| Call | Signature | Notes |
+|---|---|---|
+| `AlyaNum.new(x)` | `number \| BaseAlyaNum -> AlyaNum` | **If `x` is a plain table it is `setmetatable`d in place.** If `x` is already an AlyaNum it is returned **as-is, not copied.** |
+| `AlyaNum.fromString(s)` | `string -> AlyaNum` | Accepts `"1.5e9"`, e-chains `"ee1000"`, `"e4.6e6"`-style, suffix strings `"1.25M"`, and `"[sign, n0, n1, …]"` OmegaNum arrays. |
+| `AlyaNum.fromScientific(s)` | `string -> AlyaNum` | |
+| `AlyaNum.fromSuffix(s)` | via `fromString` | `getSuffixExponent` reverses the suffix table. |
+| `AlyaNum.fromOmega(t)` | OmegaNum `{sign, {n0..n5}}` -> AlyaNum | **Direct migration path from OmegaNum saves.** |
+| `AlyaNum.fromOnoe(t)` | OnoeNum/SerikaNum -> AlyaNum | Handles both `{sign,…}` and `{mantissa, exponent}` shapes. |
+| `AlyaNum.toBaseAlya(self)` | `AlyaNum -> BaseAlyaNum` | **Mutates in place** — `setmetatable(self, nil)`. Source comment: *"This is mutable, so be careful when using it."* |
+| `AlyaNum.toNumber(self)` / `:revert()` | `-> number` | Returns `math.huge * sign` past 2^1024. |
+| `AlyaNum.toSerika(self)` | `-> (number, number)` | `(mantissa, exponent)` pair; returns `(10, math.huge)` if any hyperop field is set. |
+| `AlyaNum.lbencode(self)` / `:toSingle()` | `-> number` | **Lossy**, order-preserving, for OrderedDataStore. |
+| `AlyaNum.lbdecode(n)` / `.fromSingle(n)` | `number -> AlyaNum` | Inverse of the above, also lossy. |
+
+#### Arithmetic (all return **new** AlyaNums; none mutate `self`)
+
+`add` `sub` `mul` `div` `pow` `mod` `root` `reciprocal`/`recip` `abs` `unary`/`unm`
+`floor` `round` `ceil` `factorial` `random`
+
+#### Logarithms, hyperoperations, special functions
+
+`log10` `log(base)` `lambertw` `slog(base)` `pentlog(base)` `hextlog(base)`
+`tet(height)` `pent(height)` `hext(height)`
+
+Note there is **no `exp`, no `ln`, no `sqrt`, no `cbrt`** as named methods — use `AlyaNum.new(math.exp(1)):pow(x)`,
+`x:log(AlyaNum.new(math.exp(1)))`, and `x:root(2)` / `x:root(3)`.
+
+Note also there is **no `hept()` constructor method** even though the `heptate` field exists — the highest
+hyperoperation you can *construct* directly is hexation (`hext`). `heptate` is only ever populated by
+`fix()` carrying up out of a saturated `hexate`. `[UNVERIFIED]` whether this is intentional.
+
+`slog`, `pentlog`, and `hextlog` return `AlyaNum?` — **they can return `nil`**, and the internals `error()`
+when they fail (`"slog failed to compute for tetrate"`, `"result is nil in pentate"`, etc.).
+Wrap them in `pcall` if you call them on player-facing input.
+
+#### Comparison
+
+| Method | Alias | Metamethod |
+|---|---|---|
+| `equals` | `eq` | `==` |
+| `lessThan` | `lt` | `<` |
+| `lessEquals` | `le` | `<=` |
+| `moreThan` | `mt` | *(derived — Luau maps `a > b` to `b < a`)* |
+| `moreEquals` | `me` | *(derived)* |
+| `compare` | — | returns `-1 / 0 / 1` |
+| `isCloseTo(n, relTol?, absTol?)` | — | default `relTol = 1e-9` |
+| `min` `max` `minmax` | — | **instance methods**, not statics |
+
+`equals` is a **strict field-by-field comparison** of all 7 fields (`src/init.luau:1417`). `compare` is
+lexicographic from `heptate` down to `multiplicand` (`absCompare`, `src/init.luau:1399`), which is correct
+and O(1) — at most 6 float compares, never an allocation.
+
+#### Formatting
+
+`toString` `toSuffix` `toScientific` `toEChain` `toEnt` `toHyperE`
+plus configuration: `changeSuffixes(table)` `changeDecimalPoints(n)` `changeDefaultAbbreviation("suffix"|"scientific")`
+
+#### Constants
+
+`AlyaNum.GOOGOL` (1e100), `AlyaNum.GOOGOLPLEX`, `AlyaNum.GOOGOLPLEXPLEX`,
+`AlyaNum.TRITRI` (3↑↑↑3), `AlyaNum.TRITET` (4↑↑↑↑4), `AlyaNum.GRAHAM1` (3↑↑↑↑3).
+
+These are excellent smoke-test fixtures. `GRAHAM1` is stored as
+`{m = 3638334640023.778, e = 7625597484984, pentate = 1}` — note it *fits in three fields*.
+
+### Operator overloading — verified
+
+```lua
+AlyaNum.__add  = addMetamethod       -- src/init.luau:2754
+AlyaNum.__sub  = subMetamethod
+AlyaNum.__mul  = mulMetamethod
+AlyaNum.__div  = divMetamethod
+AlyaNum.__pow  = powMetamethod
+AlyaNum.__mod  = modMetamethod
+AlyaNum.__eq   = equalsMetamethod
+AlyaNum.__lt   = lessThanMetamethod
+AlyaNum.__le   = lessEqualsMetamethod
+AlyaNum.__unm  = unary
+AlyaNum.__tostring = toString
+AlyaNum.__concat   = function(self, value) ... end
+```
+
+Each binary metamethod is:
+
+```lua
+local function metamethodValue(value: any): AlyaNum
+    if type(value) == "number" then
+        return newNumber(value)
+    end
+    return value
+end
+
+local function addMetamethod(self: any, number: any): AlyaNum
+    return add(metamethodValue(self), metamethodValue(number))
+end
+```
+
+So `alyaValue + 5` and `5 + alyaValue` both work (Lua tries the metamethod of either operand). **But
+`metamethodValue` does not call `fix()` on a raw `BaseAlyaNum`** — it returns it unchanged. If you pull a
+`BaseAlyaNum` straight out of a DataStore and do `saved + 1`, you are doing arithmetic on a table with no
+metatable, whose fields have not been normalized. It will *mostly* work because `add` only reads fields —
+but the result's `sign`/field invariants are whatever the save had. **Always `AlyaNum.new()` on the
+deserialization boundary.**
+
+> **`__eq` caveat, inherited from Lua semantics:** Luau only invokes `__eq` when *both* operands are tables
+> with the same primitive type. `alyaValue == 5` is `false` without ever calling `equalsMetamethod`.
+> Use `alyaValue:equals(5)`. This is the #1 silent bug in ported code.
+
+> **`__lt`/`__le` caveat:** `alyaValue < 5` **does** work in Luau (comparison metamethods fire for
+> table-vs-number in Luau? — `[UNVERIFIED]`; in stock Lua 5.1 a table-vs-number comparison raises
+> "attempt to compare"). **Test this explicitly before relying on it.** The safe form is
+> `alyaValue:lessThan(5)`.
+
+### Arithmetic behaviour at scale — read this before designing your economy
+
+Every core operation has a **float64 fast path** and a **saturating slow path**.
+
+**`add` / `sub` fast path** (`src/init.luau:389-409`): if both operands have all four hyperop fields zero,
+`exponent < 2`, and (when `exponent == 1`) `multiplicand <= 308.2547`, it reconstitutes both as plain
+doubles, adds them, and returns `AlyaNum.new(sum)` if the result is finite. **Below 1e308 you get raw
+float64 addition plus one table allocation.**
+
+**`add` saturation** (`src/init.luau:417-425`):
+
+```lua
+if maxAbsNum.heptate ~= 0 or maxAbsNum.hexate ~= 0 or maxAbsNum.pentate ~= 0
+   or maxAbsNum.tetrate ~= 0 or maxAbsNum.exponent > 1 then
+    -- number too big to matter
+    return maxAbsNum
+end
+```
+
+**Above `10^(9.007e15)`, `a + b` returns `max(|a|,|b|)`.** At `E(4)` this means
+`E(4) + E(4) == E(4)`. That is not a bug — the doubling would change the stored exponent by
+`log10(2) ≈ 0.301`, and at an exponent field value of `1e10` the ULP is ~`1.9e-6`… but at
+`exponent = 2` the true change is to `10^(10^10)`, whose representable resolution is astronomically
+coarser than `0.301`. Saturation is the mathematically honest answer. **But it means additive income
+formulas stop working past this point and you must design multiplicatively.**
+
+**`mul` / `div` saturation** (`src/init.luau:539-541`, `593-595`):
+
+```lua
+local maxNum = absMax(abs(self), abs(number))
+if absMoreThan(maxNum, MAX_MUL) then
+    return self.sign == number.sign and maxNum or unary(maxNum) -- just dont bother
+end
+```
+
+`MAX_MUL = 10^10^(9.007e15)`. Below that, `mul` is exact-ish via
+`10^(log10(x) + log10(y))`. **At `E(4)`, multiplication still works correctly** — I traced it:
+`log10(E(4)) = {m=1e10, e=1}`, the two logs add to `{m=1e10 + log10(2), e=1}` (representable, since the ULP
+at `1e10` is ~`1.9e-6`), and `pow10` lifts it back. So `E(4) * 2` is *not* lost, while `E(4) + E(4)` *is*.
+**This asymmetry is the single most surprising behaviour in the library** and you should write a test for it.
+
+**`pow` saturation** (`src/init.luau:661-663`): `if moreEquals(max(self, number), MAX_POW) then return max(self, number)`.
+
+### NaN and Infinity
+
+**AlyaNum has no NaN and no Infinity.** There is no `isNaN`, no `isFinite`, and no infinite value in the
+type. Instead:
+
+- `AlyaNum.new(math.huge)` **throws**: `error("cannot parse math.huge")` (`src/init.luau:245-247`).
+- `toNumber()` on a too-large value returns `math.huge * sign` — so `toNumber` is a one-way door.
+- `AlyaNum.new(0/0)`: `newNumber` does `sign = math.sign(number)`. Luau's `math.sign` returns `0` for NaN
+  (it is `v > 0 ? 1 : v < 0 ? -1 : 0`), and the `sign == 0` branch then sets `multiplicand = 0`.
+  **A NaN therefore becomes a silent zero.** `[UNVERIFIED — not executed]`; write a test for it on day one.
+- `factorial` errors on negatives and non-integers.
+- `pow` with a negative base and a fractional exponent returns `ZERO` (source comment:
+  *"produces imaginary numbers, not supported"*) rather than NaN.
+
+**Practical rule: validate at the boundary.** Never let a `math.huge` or a NaN reach `AlyaNum.new`.
+
+### Mutability and aliasing — the biggest footgun
+
+Three separate in-place behaviours:
+
+1. `AlyaNum.new(tbl)` on a plain table **attaches the metatable to your table**. Your table *becomes* the
+   AlyaNum. If two systems hold that table, they now share one AlyaNum.
+2. `AlyaNum.new(alyaValue)` returns **the same object** — not a copy.
+3. `toBaseAlya(self)` **removes the metatable from `self`**, breaking every other reference to it.
+
+Additionally, several operations **return an operand directly** rather than a fresh value:
+`add` returns `number`/`self` when either sign is 0; `mul`/`div` return `self` when the other operand is 1;
+`add`/`mul`/`div`/`pow` return `maxAbsNum`/`maxNum` in the saturation paths; `min`/`max` return one of the
+inputs.
+
+So `local b = a:add(0)` gives you `b == a` (same table). Since the public API never mutates, this is safe —
+**until you reach for `toBaseAlya`.** Rule: `toBaseAlya` only on a value you just constructed for the
+express purpose of serializing, and never on a value stored anywhere.
+
+```lua
+-- WRONG: destroys playerData.gold as an AlyaNum
+local payload = AlyaNum.toBaseAlya(playerData.gold)
+
+-- RIGHT: serialize through an explicit copy
+local function toPlain(v: AlyaNum): BaseAlyaNum
+    return {
+        sign = v.sign, multiplicand = v.multiplicand, exponent = v.exponent,
+        tetrate = v.tetrate, pentate = v.pentate, hexate = v.hexate, heptate = v.heptate,
+    }
+end
+```
+
+### Global mutable configuration
+
+```lua
+AlyaNum.changeDecimalPoints(3)                -- sets file-local DECIMAL_POINTS + DP_OFFSET
+AlyaNum.changeDefaultAbbreviation("scientific") -- sets DEFAULT_ABBREVIATION
+AlyaNum.changeSuffixes(myTable)               -- replaces the whole suffix table
+```
+
+All three write to **file-local upvalues**, i.e. process-global state shared by every consumer of the
+module. On the server this is fine (one setting for the whole game). On the client, **you cannot use this
+to give two different UI elements different formats**, and you cannot use it for a per-player setting on the
+server at all. Write your own formatter (see [Formatting for display](#formatting-for-display)).
+
+### How AlyaNum differs from OmegaNum and ExpantaNum
+
+| | AlyaNum | OmegaNum | ExpantaNum |
+|---|---|---|---|
+| Arity | Fixed 7 fields | Variable array, up to ~1000 entries | Sparse `[arrow, count]` pairs + a layer counter |
+| Ceiling | heptation (5 arrows) | 1000 arrows | BEAF `{10,9e15,1,2}` |
+| Tables per value | 1 | 2 | 2 + pairs |
+| Comparison cost | ≤6 float compares, no loop | array walk | pair walk |
+| Operator overloading | full metatable set | **none** (verified: no `setmetatable` anywhere in the Luau source) | n/a (JS) |
+| Type checking | typed Luau, `--!optimize 2 --!native` | `--!nocheck` | TS |
+| Lineage | rewrite-fork of OmegaNum | FoundForces original, Naruyoko's JS line | Naruyoko successor to OmegaNum |
+
+AlyaNum's whole thesis is: **trade unbounded arrow depth for a fixed-size struct**, because no shipping
+Roblox game reaches 6 arrows, and a fixed-size struct lets you write branch-heavy fast paths and O(1)
+comparison. Reading both sources, that thesis holds.
+
+`AlyaNum.fromOmega()` accepts OmegaNum's `{sign, {n0, n1, n2, n3, n4, n5}}` array directly, so **migrating
+an existing OmegaNum save to AlyaNum is a one-liner** (it silently drops array entries beyond `n5`, which
+is exactly the heptation cutoff).
+
+### Testing and benchmarking in-repo
+
+- `test/` — run with `lune run test` (`package.json`).
+- `bench/init.luau` — 18,953 bytes; benchmarks AlyaNum against **EternityNum** (`bench/EternityNum.luau`)
+  and **OmegaNum** (`bench/OmegaNum.luau`), at 20,000 iterations with 1,000 warmup iterations, reporting
+  ns/op and ops/sec, across `small` (~1e2), `medium` (~1e15–1e25) and `large` (~1e100–1e300) buckets, plus
+  negatives and string parsing. **No published benchmark numbers are committed to the repo**, so the
+  README's "faster than EternityNum and InfiniteMath" claim is `[COMMUNITY, SECOND-HAND]` — but the harness
+  is there and you can run it yourself with `npm run bench`.
+- CI: `.github/workflows/ci.yml`, badge green on `main`.
+
+---
+
+## The alternatives in depth
+
+Short notes on each, for the record. None of them displaces AlyaNum for a game that reaches `E(4)`.
+
+**OmegaNum (Luau, by FoundForces).** The library AlyaNum forked from. Header comment:
+*"Limit will be 10↑↑↑…↑↑↑10 with 1e3? ↑'s"*, `ArrowLimit = 1000`, `maxInt = 2^53-1`. Values are
+`{sign, {n0, n1, …}}`. `--!nocheck`. **No metatables at all** — I grepped the whole file for
+`setmetatable`, `__add`, `__lt`, `__index`: zero hits. Every operation is `OmegaNum.add(a, b)`.
+Its function list (from the header comment) is broad: `correct fromNumber toNumber toDisplay toString
+fromString eq le me meeq leeq abs neg cmp max min log10 isint recip pow mod root mul floor ceil div add sub
+sqrt log exp maxabs eternitytoOmega pow10 gamma fact rand exporand toBigNum toScientific toShortScientific
+short toEnt toShortEnt toEs toShortEs toHyperE toShortHyperE lambertw slog tetrate pentate hexate hyper
+lbencode lbdecode`. Note `hyper(n)` — arbitrary arrow count — which AlyaNum does not have.
+The `Bry10022/OmegaNum-Lua` fork's README warns: *"please don't use hyperoperations that are more than
+hyper-100, it can get slow."* Licensing of the FoundForces original is `[UNVERIFIED]` — the forks I read
+ship no LICENSE file.
+
+**ExpantaNum.js (Naruyoko).** No Luau port exists. Sparse `[arrow, count]` pairs plus a `layer` counter,
+reaching BEAF `{10,9e15,1,2}` (f_(ω+1)). Its own README, and Patashu's, both describe this family as
+*"low performance"*. Only relevant if you plan to write your own Luau port, and you shouldn't.
+
+**break_infinity.js / break_eternity.js (Patashu).** `break_infinity` is `{sign, mantissa, exponent}`
+capped at `1e(9e15)` — **cannot reach `E(4)`**. `break_eternity` is `{sign, layer, mag}` reaching
+`10^^1.8e308` — **can** reach `E(4)`, with the *exact* same normalization constants AlyaNum uses
+(`9e15` up-carry, `log10(9e15) ≈ 15.954` down-carry). **Neither has a Lua or Luau port.** I searched
+GitHub for Luau/Lua big-number repos and for `break_infinity extension:lua`: the Luau-language results are
+`alyanum`, `serikanum`, `qnum`, `HyperDigits`, `roblox-big-numbers`, `Letty` — no break_infinity port.
+break_eternity's README doubles as the best available explanation of the layered representation, and is
+worth reading before you touch AlyaNum's `fix()`.
+
+**EternityNum (`wienco123/EternityNum`).** `EN.new(sign, layer, mag)`, ceiling `10↑↑(2^1024)`.
+Structurally identical to break_eternity. Reaches `E(4)`. AlyaNum benchmarks against it directly.
+A reasonable "lighter" choice if you are certain you never need pentation.
+
+**SerikaNum / OnoeNum (evilbocchi).** Same author as AlyaNum. SerikaNum uses *"two number primitives"*
+for `10^(10^308)` and is claimed **4–20x faster than AlyaNum** `[COMMUNITY, SECOND-HAND]`.
+**Cannot reach `E(4)`.** AlyaNum provides `fromOnoe()` for interop, so a hybrid ("SerikaNum for
+per-item values, AlyaNum for totals") is mechanically possible — but do not do it. Two number types in one
+economy is the fastest way to ship a dupe bug.
+
+---
+
+## Performance engineering for a tick loop
+
+An idle game's server tick does thousands of big-number operations per frame. Here is what each one costs
+and how to keep it off the critical path.
+
+### What an operation actually costs
+
+Reading AlyaNum's `add`, there are four cost tiers:
+
+| Tier | Condition | Work |
+|---|---|---|
+| **0 — early out** | one operand is 0, or the multiplier is 1 | 1–2 field reads, returns an existing table. **Zero allocation.** |
+| **1 — float fast path** | both operands `< 1e308`, no hyperops | ~10 field reads, 2 `math.pow`, 1 float add, **1 table alloc** via `AlyaNum.new` |
+| **2 — log-space path** | `1e308 <= |x| <= MAX_MUL` | `absMinmax` + `math.log10` + `math.pow` + `fix()`, **1–3 table allocs** |
+| **3 — saturating** | above `MAX_ADD`/`MAX_MUL`/`MAX_POW` | comparison only, returns an operand. **Zero allocation.** |
+
+The pathological tier is **2**, and the middle of your game sits in it. `mul` at tier 2 is
+`mutablePow10(add(mutableLog10(abs(self)), mutableLog10(abs(number))))` — that is `abs` ×2 (2 allocs),
+`mutableLog10` ×2 (in-place on those copies), `add` (1 alloc), `mutablePow10` (`fix`, may allocate).
+**Call it 3–5 table allocations for one multiply at tetration scale.**
+
+> There are no committed benchmark numbers in the AlyaNum repo, only the harness. Any ns/op figure I gave
+> you would be invented. **Run `npm run bench` (or port `bench/init.luau` into Studio) on your target
+> hardware and measure.** The harness already does 20,000 iterations with 1,000 warmup across small/medium/
+> large buckets, and compares against EternityNum and OmegaNum.
+
+### Allocation pressure is the real problem
+
+Every AlyaNum value is **one Luau table with 7 string keys**. From the value representation
+(see `22-luau-performance-engineering.md` §1.1): a `TValue` is 16 bytes, and a hash node (`LuaNode`) is a
+`TValue` value plus a `TKey` key = **32 bytes**. Seven keys rounds up to a **hash part of 8 nodes = 256
+bytes**, plus the `Table` header (~48–56 bytes).
+
+**Estimate: ~300 bytes of GC-tracked memory per AlyaNum value.** `[ESTIMATE — derived from the struct
+layout, not measured]`
+
+At 5,000 multiplies per tick × 4 allocations × 300 bytes = **6 MB/tick of garbage**. At 60 Hz that is
+360 MB/s of allocation. Luau's incremental GC will keep up, but you will see GC steps in your frame time
+and it will show as stutter.
+
+### Seven mitigations, in order of payoff
+
+**1. Don't tick per-entity. Tick per-rate.**
+The single biggest win, and it is a design change, not an optimization. Instead of
+
+```lua
+for _, generator in playerData.generators do
+    playerData.gold = playerData.gold + generator.output * dt   -- N big-number ops per tick
+end
+```
+
+do
+
+```lua
+-- recompute only when the set of generators or their multipliers CHANGES
+playerData.goldPerSecond = recomputeRate(playerData)  -- N ops, but rarely
+
+-- every tick: exactly ONE multiply and ONE add
+playerData.gold = playerData.gold + playerData.goldPerSecond * dt
+```
+
+An idle game's rates change on purchase, prestige, or buff expiry — a handful of times per minute, not
+60 times per second. **This turns O(entities) per tick into O(1) per tick.** Everything below is a rounding
+error compared to getting this right.
+
+**2. Accumulate in float64 and only promote on overflow.**
+Most of the time the *delta* is small even when the *total* is enormous. But note AlyaNum's saturation:
+above `10^(9e15)` addition is a no-op anyway, so once a currency crosses that threshold you can stop
+ticking it entirely and just recompute it from its multiplicative sources.
+
+```lua
+-- Hybrid accumulator: cheap while small, correct while large
+local function tickCurrency(state, dt: number)
+    if state.big == nil then
+        local next = state.small + state.ratePerSecond * dt
+        if next < 1e300 then          -- still comfortably inside float64
+            state.small = next
+            return
+        end
+        state.big = AlyaNum.new(state.small)  -- promote once
+    end
+    state.big = state.big + state.bigRate * dt
+end
+```
+
+**3. Batch, then reduce.** Never `total = total + x` inside a loop over N items. Sum the *rates* once into
+a single value, then do one operation.
+
+**4. Cache and reuse immutable constants.** AlyaNum already caches `ZERO ONE TWO THREE TEN` internally, but
+your game constants are yours to cache:
+
+```lua
+-- module scope, built once
+local COST_BASE  = AlyaNum.new(100)
+local COST_GROWTH = AlyaNum.new(1.15)
+
+-- hot path: no construction
+local cost = COST_BASE * COST_GROWTH ^ level
+```
+
+`AlyaNum.new(100)` inside a loop allocates every iteration. `AlyaNum.fromString("1e500")` inside a loop is
+far worse — it does string splitting and `tonumber` too.
+
+**5. Exploit the identity early-outs.** `a:mul(ONE)` returns `a` with no allocation. `a:add(ZERO)` returns
+`a`. If your multiplier stack often contains 1.0, order the folds so the identity cases hit first.
+
+**6. Compare, don't subtract.** `a:moreThan(b)` is ≤6 float compares and **zero allocations**.
+`a:sub(b):moreThan(ZERO)` allocates and loses precision. Affordability checks should always be `>=`.
+
+**7. Turn on native codegen for your own hot modules.** AlyaNum's source already starts with
+`--!optimize 2` and `--!native`. Put the same on the module that owns your tick loop. (See
+`22-luau-performance-engineering.md` §3 for what compiles and what falls back.)
+
+### Mutation-in-place: not available, and here is what to do instead
+
+AlyaNum has `mutablePow10`, `mutableLog10`, `mutableUnary` — but they are **file-locals and are not
+exported**. There is no public `a:addInPlace(b)`.
+
+Two options if allocation genuinely dominates your profile:
+
+**Option A — fork it.** MIT license, one file. Add mutating variants that write into `self` and call
+`fix(self)`. This is ~50 lines of work and is the pragmatic answer. Keep the immutable API for everything
+outside the tick loop.
+
+**Option B — a buffer-backed struct-of-arrays pool.** If you have thousands of *simultaneously live* big
+numbers (e.g. one per tile in a large grid), stop using tables:
+
+```lua
+-- 7 float64 fields x 8 bytes = 56 bytes per value, zero GC objects,
+-- vs ~300 bytes per value and one GC object as a table.
+local STRIDE = 56
+local pool = buffer.create(STRIDE * capacity)
+
+local function poolRead(i: number): AlyaNum
+    local o = i * STRIDE
+    return AlyaNum.new({
+        sign         = buffer.readf64(pool, o + 0),
+        multiplicand = buffer.readf64(pool, o + 8),
+        exponent     = buffer.readf64(pool, o + 16),
+        tetrate      = buffer.readf64(pool, o + 24),
+        pentate      = buffer.readf64(pool, o + 32),
+        hexate       = buffer.readf64(pool, o + 40),
+        heptate      = buffer.readf64(pool, o + 48),
+    })
+end
+
+local function poolWrite(i: number, v: AlyaNum)
+    local o = i * STRIDE
+    buffer.writef64(pool, o + 0,  v.sign)
+    buffer.writef64(pool, o + 8,  v.multiplicand)
+    buffer.writef64(pool, o + 16, v.exponent)
+    buffer.writef64(pool, o + 24, v.tetrate)
+    buffer.writef64(pool, o + 32, v.pentate)
+    buffer.writef64(pool, o + 40, v.hexate)
+    buffer.writef64(pool, o + 48, v.heptate)
+end
+```
+
+This is a **storage** optimization, not an arithmetic one: `poolRead` still allocates the table that the
+arithmetic needs. It wins when most values are cold (stored, compared, displayed) and only a few are hot.
+It is also the right shape for a network payload or a save blob.
+
+### Can AlyaNum use `buffer` or the native `vector` type?
+
+**No, and neither can any of the alternatives. Verified by grep:** `buffer`, `vector`, `table.freeze` and
+`table.clone` appear **zero times** in `alyanum/src/init.luau`, in `alyanum/bench/OmegaNum.luau`, and in
+`Bry10022/OmegaNum-Lua/OmegaNum.lua`.
+
+For `vector` specifically there is a hard structural reason, not just an omission:
+
+- A Luau `vector` is stored **inside** the `TValue` — `float v[2]` in the `Value` union plus one `int extra`
+  slot. Its components are **32-bit floats**, i.e. ~7 decimal digits of mantissa.
+- AlyaNum's `multiplicand` must carry a full float64 mantissa. Rounding it to float32 destroys the value.
+- A `vector` holds **3** components. AlyaNum needs **7**.
+
+So a `vector`-backed big number is not "unimplemented", it is **impossible without changing what the number
+means**. The one place `vector` could help is a *display* cache (mantissa-as-float32 + exponent + tier for
+a UI label that is rounded to 2 decimals anyway), and even that is not worth the complexity.
+
+`buffer` is viable, as Option B above, and is the only route to zero-GC big-number storage in Luau today.
+
+### Structuring the loop
+
+```lua
+--!optimize 2
+--!native
+local AlyaNum = require(ReplicatedStorage.Packages.AlyaNum)
+local RunService = game:GetService("RunService")
+
+local ACCUMULATE_HZ = 10        -- economy ticks per second (NOT per frame)
+local SAVE_EVERY    = 60        -- seconds
+
+local accumulator = 0
+local budget      = 0.0015      -- 1.5 ms per frame for economy work
+
+RunService.Heartbeat:Connect(function(dt: number)
+    accumulator += dt
+    local step = 1 / ACCUMULATE_HZ
+    if accumulator < step then return end
+
+    local frameStart = os.clock()
+    while accumulator >= step do
+        accumulator -= step
+        -- ONE multiply + ONE add per player, using a cached rate
+        for _, state in activePlayers do
+            state.gold = state.gold + state.goldPerSecond * step
+        end
+        -- time-slice: never blow the frame budget catching up
+        if os.clock() - frameStart > budget then
+            accumulator = math.min(accumulator, step)   -- drop the backlog
+            break
+        end
+    end
+end)
+```
+
+Three things that matter here:
+
+1. **Economy ticks at 10 Hz, not 60 Hz.** Players cannot perceive the difference, and you cut big-number
+   work by 6x.
+2. **`state.goldPerSecond` is cached**, recomputed only on a purchase/prestige/buff event.
+3. **The catch-up loop is time-sliced** with `os.clock()`. Without this, a server hitch turns into a
+   death spiral where the catch-up loop causes the next hitch.
+
+Offline progress is the same computation with a huge `dt` — do it **once**, in closed form, not by
+looping the tick:
+
+```lua
+-- WRONG: 8 hours offline at 10 Hz = 288,000 iterations of big-number math
+-- RIGHT:
+state.gold = state.gold + state.goldPerSecond * math.min(offlineSeconds, MAX_OFFLINE_SECONDS)
+```
+
+If your rate itself compounds offline (rate grows with gold), you need the closed form of the recurrence,
+not a loop. For `gold' = gold * (1 + r)^t`, that is `state.gold * AlyaNum.new(1 + r):pow(t)` — one `pow`.
+
+---
+
+## Serialization and persistence
+
+### What you must preserve
+
+An AlyaNum is seven float64s. Six of them (`sign`, `exponent`, `tetrate`, `pentate`, `hexate`, `heptate`)
+are conceptually integers in `[0, 2^53−1]` and round-trip exactly through any decimal representation with
+≥16 significant digits. The seventh, **`multiplicand`, is a full-precision float64 and is the one that can
+lose fidelity**.
+
+**The rule: `multiplicand` needs 17 significant decimal digits.** `%.17g` is the shortest format guaranteed
+to round-trip every IEEE-754 double. `%.15g` is *not* — it will silently change values.
+
+Why this matters more than it looks: at `exponent >= 1`, `multiplicand` **is the log10 of the value**.
+Dropping it from 17 digits to 15 at `multiplicand = 1e10` changes the exponent by ~`1e-5`, which multiplies
+the stored value by `10^1e-5 ≈ 1.000023`. **A 15-digit save format inflates a player's balance by 0.002%
+every save/load cycle.** Over 500 sessions that compounds to +1%. It is the exact class of bug that ends up
+on r/roblox as "my currency keeps drifting".
+
+### The DataStore constraints you are working inside
+
+| Limit | Value | Source |
+|---|---|---|
+| Max value size | **4 MB (4,194,304 bytes) per key** | Roblox `create.roblox.com` docs; blocked here, confirmed via `[COMMUNITY, SECOND-HAND]` DevForum announcement "DataStore Data Limit Increase" |
+| Max key name length | 50 characters | `[UNVERIFIED]` — commonly cited, verify against current docs |
+| Values must be | valid UTF-8 strings, or JSON-encodable tables | `[COMMUNITY, SECOND-HAND]` |
+| Request budget | historically `60 + numPlayers*10` per server per minute; **as of early 2026 this became a per-experience shared pool** | `[COMMUNITY, SECOND-HAND]` — verify before shipping |
+| OrderedDataStore values | must be **integers** (int64), not floats | `[COMMUNITY, SECOND-HAND]` |
+
+The UTF-8 requirement is the one that bites: **you cannot `buffer.tostring()` seven `writef64`s straight
+into a DataStore.** Raw float bytes are not valid UTF-8. You must base64/base91 it (which costs you the
+33% you just saved) or use a text format. Use a text format.
+
+### Encode / decode — the format I recommend
+
+Two-tier. Most values in a save are small; pay for the big form only when needed.
+
+```lua
+--!strict
+local AlyaNum = require(ReplicatedStorage.Packages.AlyaNum)
+type AlyaNum = AlyaNum.AlyaNum
+
+local BigNumCodec = {}
+
+-- Bump this when the wire format changes. Stored alongside the payload.
+BigNumCodec.VERSION = 2
+
+local function f(n: number): string
+    -- %.17g round-trips every float64 exactly. Do not lower this.
+    return string.format("%.17g", n)
+end
+
+--- Encode an AlyaNum to a compact, UTF-8-safe, DataStore-legal string.
+--- Small values encode as plain decimal ("1234.5"), which is both shortest
+--- and human-readable in a support ticket.
+function BigNumCodec.encode(v: AlyaNum): string
+    if v.sign == 0 then
+        return "0"
+    end
+    -- Tier 1: fits in a float64 with no hyperoperations -> plain number text.
+    if v.tetrate == 0 and v.pentate == 0 and v.hexate == 0 and v.heptate == 0 and v.exponent == 0 then
+        return f(v.sign * v.multiplicand)
+    end
+    -- Tier 2: structural form. Trailing zero fields are dropped.
+    local parts = {
+        f(v.sign), f(v.multiplicand), f(v.exponent),
+        f(v.tetrate), f(v.pentate), f(v.hexate), f(v.heptate),
+    }
+    local last = #parts
+    while last > 3 and parts[last] == "0" do
+        last -= 1
+    end
+    return "A|" .. table.concat(parts, "|", 1, last)
+end
+
+--- Decode a string produced by encode(). Never trusts its input.
+function BigNumCodec.decode(s: string): AlyaNum
+    if type(s) ~= "string" then
+        -- legacy v1 saves stored raw numbers
+        if type(s) == "number" then
+            return AlyaNum.new(s)
+        end
+        error("BigNumCodec.decode: expected string, got " .. typeof(s))
+    end
+    if string.sub(s, 1, 2) ~= "A|" then
+        local n = tonumber(s)
+        if n == nil or n ~= n or n == math.huge or n == -math.huge then
+            error("BigNumCodec.decode: malformed scalar " .. s)
+        end
+        return AlyaNum.new(n)
+    end
+
+    local fields = string.split(string.sub(s, 3), "|")
+    local function at(i: number): number
+        local n = tonumber(fields[i])
+        if n == nil or n ~= n or n == math.huge or n == -math.huge then
+            return 0
+        end
+        return n
+    end
+    -- AlyaNum.new() on a plain table attaches the metatable in place, but does
+    -- NOT normalize. fix() is exported precisely for this boundary.
+    return AlyaNum.fix({
+        sign         = at(1),
+        multiplicand = at(2),
+        exponent     = at(3),
+        tetrate      = at(4),
+        pentate      = at(5),
+        hexate       = at(6),
+        heptate      = at(7),
+    })
+end
+
+return BigNumCodec
+```
+
+**Sizes.** `"0"` = 1 byte. `"1234.5"` = 6 bytes. A tier-2 value at `E(4)` is
+`"A|1|10000000000|2"` = **17 bytes**. A worst-case value with all seven fields at 17 digits is ~130 bytes.
+Compare: `HttpService:JSONEncode(AlyaNum.toBaseAlya(v))` produces
+`{"sign":1,"multiplicand":10000000000,"exponent":2,"tetrate":0,"pentate":0,"hexate":0,"heptate":0}` =
+**97 bytes**, and it destroys `v` in the process (see the mutability note). The compact form is ~6x smaller
+on typical values and does not mutate.
+
+**At the 4 MB ceiling:** the compact form gives you room for ~240,000 stored big numbers per key at 17 bytes
+each, or ~32,000 at worst case. JSON gives you ~43,000. If you are anywhere near either number, your save
+schema is the problem, not the encoding.
+
+### Version migration
+
+Store the codec version *in the save*, never infer it:
+
+```lua
+type SaveV3 = {
+    version: number,
+    gold: string,        -- BigNumCodec
+    gems: string,
+    generators: { { level: number, owned: string } },
+}
+
+local MIGRATIONS: { [number]: (any) -> any } = {
+    -- v1: gold was a raw Lua number
+    [1] = function(save)
+        save.gold = BigNumCodec.encode(AlyaNum.new(save.gold or 0))
+        save.gems = BigNumCodec.encode(AlyaNum.new(save.gems or 0))
+        save.version = 2
+        return save
+    end,
+    -- v2: generators stored `owned` as a number; promote to big
+    [2] = function(save)
+        for _, g in save.generators or {} do
+            if type(g.owned) == "number" then
+                g.owned = BigNumCodec.encode(AlyaNum.new(g.owned))
+            end
+        end
+        save.version = 3
+        return save
+    end,
+}
+
+local CURRENT = 3
+
+local function migrate(save: any): SaveV3
+    save.version = save.version or 1
+    while save.version < CURRENT do
+        local step = MIGRATIONS[save.version]
+        if step == nil then
+            error(("no migration from save version %d"):format(save.version))
+        end
+        save = step(save)
+    end
+    if save.version > CURRENT then
+        -- A newer server wrote this. DO NOT downgrade-write. Refuse and kick.
+        error(("save version %d is newer than this server (%d)"):format(save.version, CURRENT))
+    end
+    return save
+end
+```
+
+Three rules that are non-negotiable for an idle game:
+
+1. **Migrations are forward-only and idempotent-per-step.** Each step bumps exactly one version.
+2. **Never write a save whose version is lower than the one you read.** A rolled-back server that
+   downgrade-writes will erase progress for everyone who played on the new build.
+3. **Migrating a big number is the one place where you may legitimately lose precision.** Log it. If a v1
+   raw-number `gold` was `math.huge` (which it will be, for someone), `AlyaNum.new` **throws**. Guard it:
+   `AlyaNum.new(if save.gold == math.huge then 1e308 else (save.gold or 0))`.
+
+### Round-trip fidelity test
+
+Run this in CI. It is 40 lines and it will catch every format regression you ever ship.
+
+```lua
+local function randomAlya(): AlyaNum
+    local r = math.random()
+    if r < 0.4 then
+        return AlyaNum.new((math.random() - 0.5) * math.pow(10, math.random(-30, 300)))
+    elseif r < 0.7 then
+        return AlyaNum.new(10):pow(AlyaNum.new(math.random() * 1e15))
+    elseif r < 0.9 then
+        return AlyaNum.new(10):tet(AlyaNum.new(math.random(2, 100)))
+    else
+        return AlyaNum.new(10):pent(AlyaNum.new(math.random(2, 10)))
+    end
+end
+
+local FIXTURES = {
+    AlyaNum.new(0), AlyaNum.new(1), AlyaNum.new(-1),
+    AlyaNum.new(1e308), AlyaNum.new(-1e-308),
+    AlyaNum.new(9007199254740991),          -- 2^53 - 1, the carry boundary
+    AlyaNum.new(9007199254740992),          -- just past it
+    AlyaNum.fromString("eeee1"),            -- E(4) -- the case that motivated all of this
+    AlyaNum.GOOGOL, AlyaNum.GOOGOLPLEX, AlyaNum.GOOGOLPLEXPLEX,
+    AlyaNum.TRITRI, AlyaNum.TRITET, AlyaNum.GRAHAM1,
+}
+
+local function assertRoundTrip(v: AlyaNum)
+    local back = BigNumCodec.decode(BigNumCodec.encode(v))
+    -- Field-exact equality, NOT isCloseTo. A save format must be bit-exact.
+    assert(back.sign == v.sign, "sign")
+    assert(back.multiplicand == v.multiplicand,
+        ("multiplicand %.17g -> %.17g"):format(v.multiplicand, back.multiplicand))
+    assert(back.exponent == v.exponent, "exponent")
+    assert(back.tetrate == v.tetrate, "tetrate")
+    assert(back.pentate == v.pentate, "pentate")
+    assert(back.hexate  == v.hexate,  "hexate")
+    assert(back.heptate == v.heptate, "heptate")
+end
+
+for _, v in FIXTURES do assertRoundTrip(v) end
+for _ = 1, 100000 do assertRoundTrip(randomAlya()) end
+```
+
+**Use `==` on fields, not `isCloseTo`.** A save format that is "close enough" is a save format that drifts.
+Note `AlyaNum.equals` already does exactly this field-by-field comparison, so `back:equals(v)` is
+equivalent — but the per-field asserts give you a usable failure message.
+
+### Leaderboards: `lbencode` / `lbdecode`
+
+AlyaNum ships a **lossy, order-preserving** projection of the full 7-field value into a **single float64**,
+for `OrderedDataStore` (which cannot store a table):
+
+```lua
+local encoded = value:lbencode()    -- alias: value:toSingle()
+local decoded = AlyaNum.lbdecode(encoded)   -- alias: AlyaNum.fromSingle(encoded)
+```
+
+Reading the implementation (`src/init.luau:2193-2402`), it partitions the float64 range into twelve
+"modes" by magnitude tier — mode 0 is `< 1e308`, modes 1–5 escalate through `exponent`, 6–9 through
+`tetrate`, 10 `pentate`, 11 `hexate`, and a twelfth band at `1.2e17` for `heptate` — and within each mode
+it packs a `log10`-compressed position. The source comment for the top band reads
+`-- good until 916 arrays`.
+
+Three things you must know:
+
+1. **It is lossy and irreversible in detail.** `lbdecode(lbencode(x))` is *not* `x`. Never use it as a save
+   format. It exists so `OrderedDataStore` can sort players correctly.
+2. **The output is a non-integer float.** `OrderedDataStore:SetAsync` requires an integer.
+   You must `math.floor` it — and flooring *slightly* perturbs ordering between near-identical values, which
+   is fine for a leaderboard and fatal for anything else.
+3. **The mode boundaries are magic constants** (`1e16`, `4e16`, `6.26775e14`, …). If you ever fork AlyaNum
+   and change `FLOAT64_SAFE_LIMIT`, `lbencode` silently breaks.
+
+```lua
+-- Leaderboard write
+local ok, err = pcall(function()
+    leaderboardStore:SetAsync(tostring(userId), math.floor(playerData.gold:lbencode()))
+end)
+
+-- Leaderboard read (display only -- never write this back into player data)
+local pages = leaderboardStore:GetSortedAsync(false, 100)
+for _, entry in pages:GetCurrentPage() do
+    local approx = AlyaNum.lbdecode(entry.value)
+    print(entry.key, approx:toSuffix())
+end
+```
+
+### Networking big numbers to the client
+
+Roblox remotes serialize plain tables fine, but **a metatable does not survive the boundary** — the client
+receives a bare `BaseAlyaNum`. The doc comment on `BaseAlyaNum` says exactly this:
+*"This type commonly appears when sending AlyaNum objects over the client-server boundary or saving it in
+datastores."*
+
+So on the client you must re-attach:
+
+```lua
+-- Server
+remote:FireClient(player, {
+    sign = v.sign, multiplicand = v.multiplicand, exponent = v.exponent,
+    tetrate = v.tetrate, pentate = v.pentate, hexate = v.hexate, heptate = v.heptate,
+})
+
+-- Client
+remote.OnClientEvent:Connect(function(base)
+    local v = AlyaNum.new(base)   -- setmetatable in place; base IS now the AlyaNum
+    label.Text = v:toString()
+end)
+```
+
+**Cheaper alternative for pure display:** send `v:toString()` and skip the arithmetic entirely. A UI label
+does not need to do math. This is 10–20 bytes instead of a 7-field table, and removes an entire class of
+client-side desync.
+
+---
+
+## Formatting for display
+
+Number formatting is a much larger part of an idle game's feel than it sounds. Players form opinions about
+"how big a number is" from the *shape* of the string, and they have strong, tribal preferences about which
+notation is correct. **Ship a setting.**
+
+### What AlyaNum gives you
+
+| Method | Example output | Ceiling before it defers |
+|---|---|---|
+| `toSuffix()` | `1.25M`, `3.00Vt`, `9.99NoNoce` | tier-1 to `e3002`, tier-2 beyond; falls back to `toScientific` |
+| `toScientific()` | `1.23e1.5M` (note: the **exponent** is itself suffixed) | defers to `toEChain` above `exponent > 2` |
+| `toEChain()` | `eee1.5M` | max 10 `e`s, then `toEnt` |
+| `toEnt()` | `E(1.5M)2` | defers to `toHyperE` when any of pentate/hexate/heptate is set |
+| `toHyperE()` | `E10#8#3#2` | the top of the ladder |
+| `toString()` | auto-escalates through all of the above | — |
+
+Plus `changeSuffixes`, `changeDecimalPoints`, `changeDefaultAbbreviation` — all **process-global**, so
+unusable for a per-player setting. Note also `toString` renders values below `1e-9` as
+`"1 / " .. toSuffix(1/x)` — e.g. `1 / 1.00M` — which is a nice touch for cost-reduction upgrades but will
+surprise you if you weren't expecting it.
+
+**AlyaNum has no engineering notation and no `aa/ab/ac` letter notation.** Both are listed below.
+
+### The formatter you should actually ship
+
+Per-player notation choice, no global state, all five notations, ~90 lines.
+
+```lua
+--!strict
+--!optimize 2
+local AlyaNum = require(ReplicatedStorage.Packages.AlyaNum)
+type AlyaNum = AlyaNum.AlyaNum
+
+export type Notation = "standard" | "scientific" | "engineering" | "letters" | "hyper"
+
+local Format = {}
+
+-- `toSerika` gives us (mantissa, exponent) for anything below tetration,
+-- and (10, math.huge) above it. That is the hook every notation below hangs on.
+local function decompose(v: AlyaNum): (number, number, boolean)
+    local m, e = v:toSerika()
+    return m, e, e ~= math.huge
+end
+
+local function round(n: number, dp: number): string
+    local mult = 10 ^ dp
+    return string.format("%." .. dp .. "f", math.floor(n * mult + 0.5) / mult)
+end
+
+-- "standard": defer to AlyaNum's Latin -illion suffix table.
+local function standard(v: AlyaNum): string
+    return v:toSuffix()
+end
+
+-- "scientific": 1.23e456. Unlike AlyaNum's toScientific, the exponent is NOT
+-- abbreviated -- some players specifically want the raw digits.
+local function scientific(v: AlyaNum, dp: number): string
+    local m, e, ok = decompose(v)
+    if not ok then return v:toEChain() end
+    if e < 3 and e > -3 then return round(m * 10 ^ e, dp) end
+    return round(m, dp) .. "e" .. tostring(math.floor(e))
+end
+
+-- "engineering": exponent snapped to a multiple of 3, mantissa in [1, 1000).
+local function engineering(v: AlyaNum, dp: number): string
+    local m, e, ok = decompose(v)
+    if not ok then return v:toEChain() end
+    local e3 = math.floor(e / 3) * 3
+    local shifted = m * 10 ^ (e - e3)
+    if e3 == 0 then return round(shifted, dp) end
+    return round(shifted, dp) .. "e" .. tostring(e3)
+end
+
+-- "letters": a, b, ... z, aa, ab, ... az, ba, ... (bijective base-26).
+-- Index 1 = "a" = 1e3 (thousand). This is the "Antimatter Dimensions" style.
+local LETTERS = "abcdefghijklmnopqrstuvwxyz"
+local function letterFor(index: number): string
+    local out = ""
+    while index > 0 do
+        local rem = (index - 1) % 26
+        out = string.sub(LETTERS, rem + 1, rem + 1) .. out
+        index = (index - 1 - rem) // 26
+    end
+    return out
+end
+
+local function letters(v: AlyaNum, dp: number): string
+    local m, e, ok = decompose(v)
+    if not ok then return v:toEChain() end
+    if e < 3 then return round(m * 10 ^ e, dp) end
+    local tier = math.floor(e / 3)           -- 1 => "a" (1e3)
+    local shifted = m * 10 ^ (e - tier * 3)
+    return round(shifted, dp) .. letterFor(tier)
+end
+
+-- "hyper": always the structural form, for players who want to see the ladder.
+local function hyper(v: AlyaNum): string
+    return v:toHyperE()
+end
+
+--- The one entry point. Pure: no global mutation, safe to call per-frame per-label.
+function Format.value(v: AlyaNum, notation: Notation?, decimals: number?): string
+    local dp = decimals or 2
+    if v.sign == 0 then return "0" end
+    if v.sign == -1 then
+        return "-" .. Format.value(v:abs(), notation, dp)
+    end
+    local n = notation or "standard"
+    if     n == "scientific"  then return scientific(v, dp)
+    elseif n == "engineering" then return engineering(v, dp)
+    elseif n == "letters"     then return letters(v, dp)
+    elseif n == "hyper"       then return hyper(v)
+    else                           return standard(v) end
+end
+
+return Format
+```
+
+Worked examples (`[UNVERIFIED — not executed]`, derived by reading the code):
+
+| value | `standard` | `scientific` | `engineering` | `letters` | `hyper` |
+|---|---|---|---|---|---|
+| `1234` | `1.23K` | `1.23e3` | `1.23e3` | `1.23a` | `1234` |
+| `4.56e10` | `45.6B` | `4.56e10` | `45.60e9` | `45.60c` | `4.56e10` |
+| `1e100` | `10.00Dt` | `1.00e100` | `100.00e99` | `1.00ii` | `1e100` |
+| `E(4)` | `eeee1`-class | `eeee1`-class | `eeee1`-class | `eeee1`-class | `E10#2` |
+
+### Formatting-specific gotchas
+
+1. **`toSerika()` returns `(10, math.huge)` for anything with a hyperoperation field set.** Every
+   mantissa-based notation must check for that and fall back — the `ok` flag above. Forget it and your UI
+   prints `10einf`.
+2. **Don't format in a render loop.** `toSuffix` does `math.log10`, `math.floor`, several `math.pow` and
+   string concatenation — it allocates strings. Update labels on a **change event or a 5–10 Hz timer**, not
+   on `RenderStepped`. A currency label that updates 60 times a second is the #1 source of client GC churn
+   in idle games.
+3. **Cache the formatted string next to the value.** If `gold` didn't change, don't re-render it.
+4. **Negative zero.** `AlyaNum` normalizes `sign == 0` and zeroes the fields, so you won't get `-0` — but a
+   raw `BaseAlyaNum` from a remote might. The `v.sign == 0` early-out above handles it.
+5. **Suffix tables are a localization decision.** `suffixes.first` is `U D T Qd Qn Sx Sp Oc No`, which is
+   the short-scale Latin convention. Long-scale locales (much of Europe) use "milliard" where you print
+   "B". `AlyaNum.changeSuffixes` exists for this, but it is global — if you localize, do it in *your*
+   formatter, not in AlyaNum.
+6. **Decide `1.00K` vs `1K` once, globally.** Trailing zeros make numbers look "precise" and idle players
+   like that. `string.format("%.2f", …)` keeps them; `tostring(math.round(…))` does not. AlyaNum's own
+   `serikaNumEnforceDP` uses `math.round(m * 10^dp) / 10^dp` then `tostring`, which **drops** trailing
+   zeros (`1.5K`, not `1.50K`). If you want them, use the `round()` helper above.
+
+---
+
+## Correctness pitfalls
+
+### 1. Precision is a function of magnitude, and it collapses fast
+
+At `exponent >= 1`, `multiplicand` **is** `log10(value)`. Its float64 ULP therefore sets the *relative*
+precision of the value:
+
+| `multiplicand` | ULP of the field | Smallest representable relative change in the value |
+|---|---|---|
+| `100` | `1.4e-14` | ×`10^1.4e-14` ≈ 1 part in 3e13 |
+| `1e6` | `2.3e-10` | ≈ 1 part in 2e9 |
+| `1e10` | `1.9e-6` | ≈ 1 part in 230,000 |
+| `1e15` | `0.125` | ×`10^0.125` = **×1.33** — you cannot represent anything finer than a 33% change |
+| `>= 9e15` | `2` | ×100 — the field carries up and `exponent` increments |
+
+**Above `exponent = 1, multiplicand ≈ 1e15` your currency is quantized in steps of ~33%.** This is not an
+AlyaNum flaw, it is what float64 log-space costs, and every library on this list has it. Design your late
+game so that *displayed* progress comes from a counter (prestige level, layer number), not from the raw
+magnitude.
+
+### 2. Addition saturates; multiplication does not (at the same threshold)
+
+Restating the finding from the AlyaNum section, because it will bite you:
+
+```lua
+local x = AlyaNum.fromString("eeee1")   -- E(4) = 10^10^10^10
+print((x + x):equals(x))   --> true      addition saturates above 10^(9e15)
+print((x * 2):equals(x))   --> false     multiplication still works here
+```
+
+`add` returns `max(|a|,|b|)` as soon as `maxAbsNum.exponent > 1`. `mul` only gives up above
+`MAX_MUL = 10^10^(9.007e15)`. **So at `E(4)`, additive income is silently dropped and multiplicative
+income is preserved.** If your economy is `gold += rate * dt`, it freezes at `10^(9e15)`. If it is
+`gold *= (1 + r)^dt`, it keeps going to heptation.
+
+**Action item: write the test above and put it in CI**, then audit every `+` in your economy code.
+
+### 3. Catastrophic cancellation
+
+`a - b` where `a ≈ b` at large magnitude. AlyaNum's `subtract` fast-path does raw float64 subtraction below
+1e308 (fine), and above that routes to `add(self, unary(number))`, which computes
+`10^(x + log10(10^(y-x) - 1))`. When `y - x` is tiny, `10^(y-x) - 1` is a subtraction of nearly-equal
+values in float64 and loses most of its significant digits.
+
+```lua
+-- Don't do this:
+local remaining = totalCost:sub(paidSoFar)
+if remaining:lessEquals(ZERO) then ... end
+
+-- Do this:
+if paidSoFar:moreEquals(totalCost) then ... end
+```
+
+**Rule: never subtract to compare. Compare to compare.** `compare` is exact, allocation-free, and has no
+cancellation because it never does arithmetic — it is a lexicographic field comparison.
+
+### 4. Equality at extreme magnitudes
+
+`AlyaNum.equals` compares all 7 fields with `==`. Two values that are mathematically equal but arrived by
+different routes can differ in the last bit of `multiplicand` and compare unequal. Conversely, two values
+that are mathematically *different* by less than one ULP compare **equal**.
+
+- For **gameplay gates** (can afford, has reached milestone) use `>=`, never `==`.
+- For **tests and save round-trips** use exact `equals`.
+- For **"did this change?"** checks use `isCloseTo(v, 1e-12)`, which does the comparison in log space above
+  `exponent > 1` (`src/init.luau:1627-1631`) and is therefore magnitude-safe.
+- **Never use an AlyaNum as a table key.** `__eq` does not affect table indexing — Lua hashes by identity
+  for tables. `t[AlyaNum.new(5)]` and `t[AlyaNum.new(5)]` are different keys.
+
+### 5. Error accumulation over millions of ticks
+
+A 10 Hz tick over an 8-hour session is 288,000 operations. Each `add` in the float64 fast path carries
+≤0.5 ULP of relative error, so a naive random-walk bound is `sqrt(288000) * 1.1e-16 ≈ 6e-14` relative — 
+negligible. **But the log-space path is different**: `10^(x + log10(10^(y-x) + 1))` does an exp, a log, and
+an add per operation, each contributing ~1 ULP *to the exponent*, and an error in the exponent is a
+*multiplicative* error in the value.
+
+Two defenses:
+
+1. **Fewer, bigger operations.** One `gold + rate * 3600` beats 36,000 `gold + rate * 0.1`. This is the
+   same advice as the performance section, for a different reason.
+2. **Recompute, don't accumulate, wherever there is a closed form.** Total lifetime earnings, prestige
+   currency from a formula, generator output from level — all of these should be *derived* each time from
+   integer inputs, not accumulated. An integer level is exact forever; an accumulated big number is not.
+
+### 6. NaN and Infinity
+
+Covered above, restated as rules:
+
+- `AlyaNum.new(math.huge)` **throws**. Guard every boundary that can produce `math.huge`: division by a
+  float zero, `math.pow` overflow, `tonumber` on `"inf"`, a corrupt save.
+- `AlyaNum.new(0/0)` appears to produce **zero, silently** `[UNVERIFIED — not executed]`. Test it.
+- `toNumber()` returns `math.huge` above 2^1024 — so `v:toNumber() * 2` is `inf`, and feeding that back to
+  `AlyaNum.new` throws. **`toNumber` is a one-way door; use it only at the display/telemetry boundary.**
+- `slog`, `pentlog`, `hextlog` return `AlyaNum?` and `error()` internally. `pcall` them.
+
+```lua
+local function safeBig(n: number): AlyaNum
+    if n ~= n then return ZERO end                 -- NaN
+    if n == math.huge then return MAX_SAFE_BIG end -- clamp, don't throw
+    if n == -math.huge then return MIN_SAFE_BIG end
+    return AlyaNum.new(n)
+end
+```
+
+### 7. Never mix raw `number` and big-number types — the typed-Luau recipe
+
+The danger is real and quiet: `AlyaNum`'s metamethods and methods both accept
+`Number = BaseAlyaNum | number | AlyaNum`, so `gold:add(1)` and `gold + 1` both type-check *and work*. The
+failure mode is the reverse: `local gold = 0` somewhere, then `gold = gold + rate` where `rate` is an
+AlyaNum, and now `gold` is an AlyaNum — or worse, `gold:toNumber()` sneaks in and the whole balance becomes
+`inf`.
+
+**The fix is a fully opaque branded type in a wrapper module.** Because the exported type has *no* fields
+and *no* metamethods, the Luau solver rejects `a + b`, `a.multiplicand`, `a:add(b)` and
+`Big.add(gold, 1)` alike. Every operation must go through the module.
+
+```lua
+--!strict
+-- Big.luau -- the ONLY module in the codebase allowed to require AlyaNum.
+local AlyaNum = require(script.Parent.AlyaNum)
+
+--- Fully opaque. The field does not exist at runtime; it exists to make the
+--- type nominal, so `number` is never assignable to `Big` and vice versa.
+export type Big = { read __big: "Big" }
+
+local Big = {}
+
+local function wrap(v: AlyaNum.AlyaNum): Big
+    return (v :: any) :: Big
+end
+local function raw(v: Big): AlyaNum.AlyaNum
+    return (v :: any) :: AlyaNum.AlyaNum
+end
+
+-- === the only two ways a number becomes a Big ===
+function Big.fromNumber(n: number): Big
+    if n ~= n or n == math.huge or n == -math.huge then
+        error(`Big.fromNumber: non-finite input {n}`)
+    end
+    return wrap(AlyaNum.new(n))
+end
+function Big.fromSaved(s: string): Big
+    return wrap(BigNumCodec.decode(s))
+end
+
+-- === arithmetic: Big x Big -> Big. A raw number will not type-check. ===
+function Big.add(a: Big, b: Big): Big return wrap(raw(a) + raw(b)) end
+function Big.sub(a: Big, b: Big): Big return wrap(raw(a) - raw(b)) end
+function Big.mul(a: Big, b: Big): Big return wrap(raw(a) * raw(b)) end
+function Big.div(a: Big, b: Big): Big return wrap(raw(a) / raw(b)) end
+function Big.pow(a: Big, b: Big): Big return wrap(raw(a) ^ raw(b)) end
+
+-- Scaling by a plain number is common and legitimate -- give it its OWN name
+-- so it is visible in review and greppable.
+function Big.scale(a: Big, k: number): Big
+    return wrap(raw(a) * AlyaNum.new(k))
+end
+
+-- === comparison: returns booleans, so it is safe to expose freely ===
+function Big.lt(a: Big, b: Big): boolean  return raw(a):lessThan(raw(b)) end
+function Big.le(a: Big, b: Big): boolean  return raw(a):lessEquals(raw(b)) end
+function Big.gt(a: Big, b: Big): boolean  return raw(a):moreThan(raw(b)) end
+function Big.ge(a: Big, b: Big): boolean  return raw(a):moreEquals(raw(b)) end
+function Big.eq(a: Big, b: Big): boolean  return raw(a):equals(raw(b)) end
+
+-- === the one-way doors, named so they are obvious in a diff ===
+function Big.toDisplayString(a: Big, notation: Format.Notation?): string
+    return Format.value(raw(a), notation)
+end
+function Big.toSaveString(a: Big): string return BigNumCodec.encode(raw(a)) end
+--- LOSSY. Only for analytics and leaderboards. Returns math.huge above 2^1024.
+function Big.unsafeToNumber(a: Big): number return raw(a):toNumber() end
+
+Big.ZERO = Big.fromNumber(0)
+Big.ONE  = Big.fromNumber(1)
+
+return Big
+```
+
+What this buys you, under `--!strict`:
+
+```lua
+local gold: Big = Big.fromNumber(100)
+gold = Big.add(gold, 1)        -- TYPE ERROR: number is not Big          <-- caught
+gold = gold + 1                -- TYPE ERROR: Big has no '+'             <-- caught
+gold = Big.add(gold, rate)     -- ok
+local n: number = gold         -- TYPE ERROR                             <-- caught
+print(gold.multiplicand)       -- TYPE ERROR: no such field              <-- caught
+```
+
+Enforce the "only Big.luau requires AlyaNum" rule with a one-line CI grep. It is the cheapest static
+guarantee you will ever buy.
+
+---
+
+## Porting guidance
+
+### From `break_infinity.js` / `Decimal` to AlyaNum
+
+`break_infinity.js` is API-compatible with `decimal.js`, so it has several aliases per operation. The
+translation table below covers all of them.
+
+| JS (`Decimal` / break_infinity) | Luau (AlyaNum) | Notes |
+|---|---|---|
+| `new Decimal(123.4)` | `AlyaNum.new(123.4)` | |
+| `new Decimal("1.5e900")` | `AlyaNum.fromString("1.5e900")` | `AlyaNum.new` takes **number or table only**, not string |
+| `new Decimal(other)` | `AlyaNum.new(other)` | **returns the SAME object, not a copy** |
+| `a.plus(b)` / `a.add(b)` | `a:add(b)` or `a + b` | |
+| `a.minus(b)` / `a.sub(b)` | `a:sub(b)` or `a - b` | |
+| `a.times(b)` / `a.mul(b)` | `a:mul(b)` or `a * b` | |
+| `a.dividedBy(b)` / `a.div(b)` | `a:div(b)` or `a / b` | |
+| `a.pow(b)` / `a.toPower(b)` | `a:pow(b)` or `a ^ b` | |
+| `a.recip()` | `a:reciprocal()` / `a:recip()` | |
+| `a.neg()` / `a.negate()` | `a:unary()` / `-a` | |
+| `a.abs()` | `a:abs()` | |
+| `a.floor()` `.ceil()` `.round()` | same | doc: *"unsafe for numbers beyond 2^1024"* |
+| `a.mod(b)` | `a:mod(b)` or `a % b` | |
+| `a.cmp(b)` / `a.compareTo(b)` | `a:compare(b)` | `-1 / 0 / 1` both ways |
+| `a.eq(b)` / `a.equals(b)` | `a:equals(b)` / `a:eq(b)` | **`a == b` only works table-vs-table** |
+| `a.gt(b)` | `a:moreThan(b)` / `a:mt(b)` | |
+| `a.gte(b)` | `a:moreEquals(b)` / `a:me(b)` | |
+| `a.lt(b)` / `a.lte(b)` | `a:lessThan(b)` / `a:lessEquals(b)` | |
+| `Decimal.max(a, b)` | `a:max(b)` | **static in JS, instance method in Luau** |
+| `Decimal.min(a, b)` | `a:min(b)` | same |
+| `a.log10()` | `a:log10()` | **JS returns a `number`; Luau returns an `AlyaNum`** |
+| `a.log(base)` / `a.logBase(base)` | `a:log(base)` | same return-type change |
+| `a.ln()` | `a:log(AlyaNum.new(math.exp(1)))` | **no `ln`** |
+| `a.exp()` | `AlyaNum.new(math.exp(1)):pow(a)` | **no `exp`** |
+| `a.sqrt()` | `a:root(2)` | **no `sqrt`** |
+| `a.cbrt()` | `a:root(3)` | **no `cbrt`** |
+| `a.factorial()` | `a:factorial()` | errors on negative/non-integer |
+| `a.tetrate(h)` | `a:tet(h)` | |
+| `a.pentate(h)` | `a:pent(h)` | |
+| `a.slog(base)` | `a:slog(base)` | **returns `AlyaNum?`** — can be nil |
+| `a.lambertw()` | `a:lambertw()` | |
+| `a.toNumber()` | `a:toNumber()` / `a:revert()` | `math.huge` above 2^1024 |
+| `a.toString()` | `a:toString()` / `tostring(a)` | |
+| `a.toExponential(d)` | `a:toScientific()` + `AlyaNum.changeDecimalPoints(d)` | no per-call decimals |
+| `a.toFixed(d)` / `a.toPrecision(d)` | **no equivalent** | write your own (see Formatting) |
+| `a.mantissa` / `a.m` | `select(1, a:toSerika())` | **NOT `a.multiplicand`** — see below |
+| `a.exponent` / `a.e` | `select(2, a:toSerika())` | **NOT `a.exponent`** — see below |
+| `Decimal.affordGeometricSeries(...)` | **not present** | OmegaNum has it; AlyaNum does not |
+| `Decimal.sumGeometricSeries(...)` | **not present** | ditto |
+| `a.isNaN()` / `a.isFinite()` | **not present** | AlyaNum has no NaN/Inf |
+
+#### The one trap that will cost you a day
+
+**`Decimal.mantissa`/`Decimal.exponent` are NOT `AlyaNum.multiplicand`/`AlyaNum.exponent`.**
+
+In break_infinity, `value == mantissa * 10^exponent`, with `mantissa` normalized to `[1, 10)`.
+In AlyaNum, `exponent` is a **layer count** (how many times to apply `10^x`) and `multiplicand` is
+`log10(value)` once `exponent >= 1`. They mean completely different things and have completely different
+ranges.
+
+```lua
+-- WRONG (direct field translation from JS):
+local exp = bigValue.exponent        -- this is 1, or 2, or 3... a LAYER COUNT
+
+-- RIGHT:
+local mantissa, exponent = bigValue:toSerika()   -- the break_infinity-shaped pair
+```
+
+`toSerika` returns `(10, math.huge)` for anything with a hyperoperation field set, so **guard it**.
+
+### From raw floats to big numbers
+
+The mechanical procedure, in the order that minimises breakage:
+
+1. **Introduce `Big.luau`** (the opaque wrapper from the previous section) with everything stubbed to
+   delegate to AlyaNum. Nothing else changes yet.
+2. **Convert the leaves first: your save schema and your constants.** Add the codec, add a migration,
+   ship it. Saves now carry strings; runtime still uses floats.
+3. **Convert one currency end-to-end** — declaration, tick, purchase check, display, save. Not two. One.
+   This surfaces every boundary you forgot.
+4. **Turn on `--!strict` in the modules you converted.** The opaque `Big` type now finds every remaining
+   `number`/`Big` crossing for you.
+5. **Grep for the one-way doors** — `toNumber`, `unsafeToNumber`, `tonumber(`, `math.floor(` applied to a
+   currency, `string.format("%d"`, `%.2f` on a currency, `Instance.Value` assignments (a `NumberValue`
+   holds a float64 and will silently clamp to `inf`).
+6. **Replace every `IntValue`/`NumberValue` used for currency with a `StringValue`** holding
+   `BigNumCodec.encode`, or better, drop them and use a typed remote + client-side state.
+7. **Repeat per currency.**
+
+Specific patterns to search for and fix:
+
+| Pattern | Why it breaks | Replacement |
+|---|---|---|
+| `if gold >= cost then` | works via `__le`… probably. Table-vs-table is fine; table-vs-number is `[UNVERIFIED]` | `Big.ge(gold, cost)` |
+| `gold == 0` | `__eq` never fires for table-vs-number | `Big.eq(gold, Big.ZERO)` |
+| `math.max(a, b)` | `math.max` is a fastcall on numbers; it will error or coerce | `a:max(b)` |
+| `gold * 0.1` | works, but allocates an AlyaNum for `0.1` every call | cache the constant |
+| `tostring(gold)` | works via `__tostring`, gives you AlyaNum's default cascade | `Big.toDisplayString(gold, playerSetting)` |
+| `#tostring(gold)` | string length of `"E10#8#3#2"` is not a digit count | don't |
+| `gold // 1` / `gold % 1` | `__idiv` is **not defined** (only `__mod`) | `gold:floor()` |
+| `NumberValue.Value = gold` | implicit `tonumber`, becomes `inf` | `StringValue` + codec |
+| `table.sort(t, function(a,b) return a.gold < b.gold end)` | fine (table-vs-table `__lt`) | fine, but prefer `Big.lt` |
+
+Note `__idiv` (`//`) is **absent** from AlyaNum's metamethod list. `gold // 1` on an AlyaNum will error
+in Luau. `__len`, `__call`, `__newindex`, `__iter` are also absent.
+
+### The operator-overloading question, answered
+
+**Yes, AlyaNum uses metatables for `+ - * / ^ % == < <=`, unary `-`, `tostring` and `..`.** Verified in
+source at `src/init.luau:2754-2793`.
+
+**What does dispatch cost?** Counting Lua-level calls from the source:
+
+- `a + b` → VM `ADD` opcode sees two non-numbers → metatable `__add` lookup → **1 Lua call**
+  (`addMetamethod`), which calls `metamethodValue` ×2 (each a single `type()` check) and `add` ×1.
+- `a:add(b)` → `NAMECALL` → `__index` → `AlyaNum.add` wrapper → **that wrapper calls `AlyaNum.new` on
+  *both* arguments**, and `AlyaNum.new` does `type()` **and** `getmetatable()` — then calls the local `add`.
+
+So the method form does **strictly more work** than the operator form: an extra function call per operand,
+and a `getmetatable` per operand. **Counter to the usual folklore, `a + b` is the faster path in AlyaNum,
+not the slower one.** `[DERIVED FROM SOURCE]` — not benchmarked; measure with `bench/init.luau` before
+optimizing on this.
+
+Both are far slower than a raw float `+`, which is a single VM opcode with no call at all. The real
+optimization is never the operator choice — it is doing fewer operations (see
+[Performance](#performance-engineering-for-a-tick-loop)).
+
+**Recommendation:** use the **explicit `Big.*` functions** in game logic (for the static typing), and let
+those functions use the **operator form** internally. You get type safety at the call site and the cheaper
+dispatch at the implementation site.
+
+---
+
+## Sources
+
+### Primary — source code I read directly
+
+| What | URL | What I took from it |
+|---|---|---|
+| **AlyaNum `src/init.luau`** (2,839 lines, `main`) | <https://raw.githubusercontent.com/evilbocchi/alyanum/main/src/init.luau> | Representation, `fix()`, all arithmetic, all metamethods, all formatting, `lbencode`/`lbdecode`, `fromString`, constants. **Every AlyaNum API claim in this chapter comes from here.** |
+| AlyaNum `src/index.d.ts` (568 lines) | <https://raw.githubusercontent.com/evilbocchi/alyanum/main/src/index.d.ts> | roblox-ts surface: `BaseAlyaNum`, `AlyaNum`, `AlyaNumConstructor` interfaces |
+| AlyaNum `wally.toml` | <https://raw.githubusercontent.com/evilbocchi/alyanum/main/wally.toml> | `evilbocchi/alyanum@1.2.0`, `realm = "shared"`, `license = "MIT"` |
+| AlyaNum `package.json` | <https://raw.githubusercontent.com/evilbocchi/alyanum/main/package.json> | `@rbxts/alyanum@1.2.0`, MIT, build/test/bench scripts (`lune run test`, `lune run bench`) |
+| AlyaNum `LICENSE` | <https://raw.githubusercontent.com/evilbocchi/alyanum/main/LICENSE> | MIT, `Copyright (c) 2024 evil bocchi` |
+| AlyaNum `README.md` | <https://raw.githubusercontent.com/evilbocchi/alyanum/main/README.md> | `10^^^^^10` heptation limit, fork-of-OmegaNum lineage, SerikaNum comparison |
+| AlyaNum `bench/init.luau` | <https://raw.githubusercontent.com/evilbocchi/alyanum/main/bench/init.luau> | Benchmark methodology: 20,000 iters / 1,000 warmup, vs EternityNum and OmegaNum, small/medium/large buckets |
+| AlyaNum `bench/OmegaNum.luau` | <https://raw.githubusercontent.com/evilbocchi/alyanum/main/bench/OmegaNum.luau> | FoundForces OmegaNum header, `ArrowLimit`, **zero metatables** |
+| **OmegaNum (Lua)** | <https://raw.githubusercontent.com/Bry10022/OmegaNum-Lua/main/OmegaNum.lua> | `{sign, {array}}` representation, `maxInt = 2^53-1`, `ArrowLimit = 1000`, full function list, **zero metatables** |
+| SerikaNum README | <https://raw.githubusercontent.com/evilbocchi/serikanum/main/README.md> | `10^(10^308)` ceiling, "two number primitives", OnoeNum pointer |
+| InfiniteMath README | <https://raw.githubusercontent.com/KdudeDev/InfiniteMath/main/README.md> | "surpass the double-precision limit of 10^308" |
+| QNum README | <https://raw.githubusercontent.com/notiku/qnum/main/README.md> | mantissa/exponent pair, metamethod API, Wally `notiku/qnum@0.2.1` |
+| EternityNum README | <https://raw.githubusercontent.com/wienco123/EternityNum/main/README.md> | `EN.new(sign, layer, mag)` layered representation |
+| **OmegaNum.js README** | <https://raw.githubusercontent.com/Naruyoko/OmegaNum.js/master/README.md> | `10{1000}9e15` ceiling, f_ω, array representation, full function list, the library-ladder list |
+| **ExpantaNum.js README** | <https://raw.githubusercontent.com/Naruyoko/ExpantaNum.js/master/README.md> | `{10,9e15,1,2}` ceiling, f_(ω+1), `[a,b]`-pair + layer representation |
+| **break_infinity.js README** | <https://raw.githubusercontent.com/Patashu/break_infinity.js/master/README.md> | `1e9e15` ceiling, `Decimal` API, decimal.js benchmark table, port list (**no Lua/Luau port**) |
+| **break_eternity.js README** | <https://raw.githubusercontent.com/Patashu/break_eternity.js/master/README.md> | `10^^1e308` ceiling, `(sign, layer, mag)` representation, the `9e15` / `15.954` normalization rules, `eeX` input format, full function list |
+
+### Secondary — pages fetched
+
+- <https://github.com/evilbocchi/alyanum> — repo metadata: 18 stars, 4 forks, 109 commits, MIT, topics
+- <https://github.com/evilbocchi/alyanum/commits/main> — latest commit **2026-08-24**
+  ("chore(ci): migrate workflows from npm to Bun"); v1.2.0 tagged 2026-08-08
+- <https://github.com/evilbocchi/alyanum/tree/main/src> and `/bench` — file listings
+- GitHub repository search (`language:Luau` + bignum terms) — established that the Luau big-number
+  universe is: `alyanum`, `serikanum`, `qnum`, `HyperDigits`, `roblox-big-numbers`, `Letty`,
+  plus non-Luau-tagged `OmegaNum-Lua`, `InfiniteMath`, `EternityNum`. **No break_infinity Lua port exists.**
+
+### Cross-references within this repo
+
+- `docs/research/22-luau-performance-engineering.md` §1.1 (the 16-byte `TValue`, float32 `vector`
+  components), §3 (native codegen), §4 (the `buffer` library), §7.2 (array part vs hash part).
+  All memory figures in this chapter are derived from that document's struct layouts.
+
+### Blocked / not consulted
+
+- `create.roblox.com` — **403, blocked.** All DataStore limit figures are therefore
+  `[COMMUNITY, SECOND-HAND]` or `[UNVERIFIED]` and must be checked against the official docs before you
+  ship a save system.
+- `devforum.roblox.com` — **403, blocked.** Referenced only through search-result summaries, marked
+  `[COMMUNITY, SECOND-HAND]`: EternityNum's `10^^2^1024` ceiling, InfiniteMath's DevForum thread, the 2026
+  per-experience DataStore quota change, the 4 MB per-key limit.
+- `luau.org` — **403, blocked.** Luau language claims are cross-referenced from
+  `22-luau-performance-engineering.md` in this repo instead.
+- `evilbocchi.github.io/alyanum/documents/Introduction.html` (AlyaNum's TypeDoc site) — **blocked by the
+  egress proxy.** This is the only AlyaNum documentation I could not read; the `src/init.luau` doc comments
+  are the same content, so the loss is small, but if you want prose docs, that is where they are.
+- `wally.run` — **blocked by the egress proxy.** Wally package metadata was read from `wally.toml` instead.
+
+### Claims explicitly marked unverified in this chapter
+
+1. The exact ceilings of **InfiniteMath** and **QNum** (READMEs do not state them; source not read).
+2. Whether **AlyaNum's `toHyperE` output is numerically identical to canonical Sbiis Saibian Hyper-E**.
+3. The licence of the original **FoundForces OmegaNum** (no LICENSE file in the forks I read).
+4. Whether **`alyaValue < 5` (table-vs-number comparison) works in Luau** — the metamethod is defined but
+   Lua 5.1 semantics would reject the mixed comparison. **Test this first; it is a one-line test.**
+5. Whether **`AlyaNum.new(0/0)` silently yields zero** — strongly implied by `math.sign(NaN) == 0` plus the
+   `sign == 0` branch in `newNumber`, but not executed.
+6. The semantics of a **fractional `tetrate`/`pentate`** (the flooring code is commented out).
+7. Why there is a `heptate` field but **no `hept()` method**.
+8. **Per-value memory in bytes** — derived from Luau's `Table`/`LuaNode` layout, not measured.
+9. **All ns/op performance figures** — I gave none, deliberately. The repo ships a harness and no results.
+10. **All Roblox DataStore limits** — the official docs are blocked from this environment.
