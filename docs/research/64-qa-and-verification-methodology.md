@@ -816,3 +816,211 @@ Roblox Studio" and "pipes output from inside Roblox Studio back to stdout/stderr
 self-hosted Windows runner; I could not verify a first-party Roblox-supported hosted option.
 
 ---
+
+## 3. Golden-master / characterization testing
+
+This is the technique that makes "provably faithful" a checkable claim rather than a hope. You do
+not try to re-derive the original game's intent; you **freeze its observed behaviour** and require
+the port to reproduce it.
+
+### 3.1 What to capture
+
+Capture at three granularities, because each catches a different class of drift:
+
+| Fixture kind | Shape | Catches |
+|---|---|---|
+| **Formula tables** | `input → output` for every pure function, swept across the magnitude range | Transcription errors in exponents/coefficients; off-by-one in level indexing |
+| **State snapshots** | Full `SimState` at tick counts `{0, 1, 10, 100, 1e3, 1e4, 1e5, 1e6, 1e7}` | Accumulated drift; wrong update order; integer/float divergence |
+| **Progression traces** | A scripted action script (`buy gen1 @t=30s`, `prestige @t=3600s`, …) plus the state after each action | Interaction bugs between subsystems; wrong reset semantics |
+
+The action-script trace is the highest-value fixture and the one most teams skip. It is the only
+one that exercises *ordering*.
+
+### 3.2 Fixture format
+
+Use **newline-delimited JSON (NDJSON)**, one record per line, rather than one big JSON document.
+Reasons: it diffs line-by-line in review, it streams (a 10M-row formula sweep does not have to fit
+in memory), and a regeneration that changes one row produces a one-line diff.
+
+```
+# fixtures/formula/upgrade_cost.ndjson   (schema line first, then records)
+{"$schema":1,"fn":"Upgrades.costAt","source":"original-v4.2.1","generated":"2026-02-11T08:14:02Z","tolerance":{"kind":"relative","eps":1e-12}}
+{"in":{"id":"gen1","level":0},"out":"10"}
+{"in":{"id":"gen1","level":1},"out":"11.5"}
+{"in":{"id":"gen1","level":250},"out":"1.3780e15"}
+{"in":{"id":"gen1","level":100000},"out":"e6069.7534"}
+```
+
+Rules that pay for themselves:
+
+- **Numbers are strings.** A JSON number round-trips through the encoder's float formatter and can
+  lose the last bits; a string is exactly what the source produced. Parse it in the test.
+- **Every file carries a header record** with `$schema`, the source build identifier, the
+  generation timestamp, and the tolerance policy that applies to it. A fixture without provenance
+  is not evidence.
+- **One file per function / per trace.** Never one giant `golden.json`.
+- **Sweep log-uniformly, not linearly.** An idle game spends most of its life between 1e12 and
+  1e300; a linear sweep of levels 1–1000 tests almost none of the interesting range. Sample
+  `level = round(10^(k/8))` for `k = 0 … 8*log10(maxLevel)`, plus every boundary the design names
+  (soft-cap thresholds, tier transitions, the first level where a formula switches branch).
+- **Always include the pathological inputs**: `0`, `1`, `-0`, the largest level reachable in a
+  year of play, the level at which the original itself produced `Infinity`.
+
+### 3.3 Tolerance policy
+
+**Absolute epsilon is wrong for this domain.** IEEE-754 doubles have 53 bits of mantissa, so the
+gap between adjacent representable values near a magnitude `m` is about `m * 2^-52 ≈ m * 2.2e-16`.
+Near 1e300 that gap is roughly **2e284**. A test written as `math.abs(a - b) < 1e-9` is therefore:
+
+- **Vacuous** above ~1e7, where `1e-9` is far below one ULP — it passes for any two values that are
+  merely close-ish, and it *cannot fail* for two values that differ by less than one representable
+  step, which is fine, but it also cannot distinguish 1e300 from 1.000000001e300.
+- **Absurdly strict** below ~1e-9, where two correct results differing in the last bit fail.
+
+Use relative error, with an absolute floor only for values genuinely near zero:
+
+```lua
+--!strict
+-- tests/approx.luau
+local Approx = {}
+
+-- Relative comparison. `relEps` is a fraction (1e-12 == "agree to ~12 significant digits").
+-- `absFloor` handles the neighbourhood of zero, where relative error is undefined.
+function Approx.close(a: number, b: number, relEps: number?, absFloor: number?): (boolean, string?)
+	local rel = relEps or 1e-12
+	local floor = absFloor or 1e-300
+
+	if a ~= a or b ~= b then                      -- NaN never compares equal, including to itself
+		return false, ("NaN encountered (a=%s b=%s)"):format(tostring(a), tostring(b))
+	end
+	if a == b then return true end                -- also handles ±inf == ±inf
+	if a == math.huge or b == math.huge or a == -math.huge or b == -math.huge then
+		return false, ("infinity mismatch (a=%s b=%s)"):format(tostring(a), tostring(b))
+	end
+
+	local diff = math.abs(a - b)
+	if diff <= floor then return true end
+	local scale = math.max(math.abs(a), math.abs(b))
+	local err = diff / scale
+	if err <= rel then return true end
+	return false, ("relative error %.3e exceeds %.3e (a=%.17g b=%.17g)"):format(err, rel, a, b)
+end
+
+return Approx
+```
+
+For a **big-number type** (layered/tetrational representations such as `{sign, layer, mag}`), do
+*not* convert to `number` and compare — that throws away everything above 1e308. Compare
+structurally:
+
+```lua
+--!strict
+-- Compare two layered big numbers. `sign` and `layer` must match EXACTLY;
+-- only `mag` gets a relative tolerance, and the tolerance tightens as layer rises,
+-- because at layer >= 2 a tiny mag difference is an enormous value difference.
+function Approx.closeBig(a, b, relEps: number?): (boolean, string?)
+	if a.sign ~= b.sign then return false, "sign mismatch" end
+	if a.layer ~= b.layer then
+		return false, ("layer mismatch (%d vs %d)"):format(a.layer, b.layer)
+	end
+	-- At layer 0 the value IS mag. At layer 1 the value is 10^mag, so a relative error of e in
+	-- mag becomes a relative error of ~ln(10)*mag*e in the value: scale the budget down.
+	local budget = (relEps or 1e-12)
+	if a.layer >= 1 then budget = budget / math.max(1, math.abs(a.mag)) end
+	return Approx.close(a.mag, b.mag, budget)
+end
+```
+
+Policy, written down once and referenced by every fixture header:
+
+| Quantity | Tolerance | Rationale |
+|---|---|---|
+| Integer counts (levels, purchases, prestige count) | **exact** | Any drift is a bug, full stop |
+| Currency / production at layer 0 | `relEps = 1e-12` | ~12 significant digits; absorbs reassociation, not logic drift |
+| Layered big numbers | exact `sign`+`layer`; `mag` at `1e-12 / max(1,|mag|)` | See above |
+| Values derived from `math.exp`/`math.log`/`^` chains | `relEps = 1e-9` | Transcendental implementations differ across platforms |
+| Anything reaching the UI as a formatted string | **exact string equality** | Formatting is deterministic; a diff here is user-visible |
+
+`[UNVERIFIED]` — the claim that `math.exp`/`math.pow` results are bit-identical across the
+platforms Roblox ships on is one I could not confirm. Assume they are not, and set the
+transcendental tolerance accordingly; if your golden-master suite is green at `1e-15` on every
+platform you test, tighten it.
+
+### 3.4 The comparison harness
+
+```lua
+--!strict
+-- tests/golden.luau
+local fs = require("@lune/fs")
+local serde = require("@lune/serde")
+local Approx = require("./approx")
+
+local Golden = {}
+
+function Golden.load(path: string): ({ [string]: any }, { any })
+	local lines = string.split(fs.readFile(path), "\n")
+	local header, records = nil, {}
+	for _, line in lines do
+		if line == "" then continue end
+		local rec = serde.decode("json", line)
+		if rec["$schema"] then header = rec else table.insert(records, rec) end
+	end
+	assert(header, ("fixture %s has no header record"):format(path))
+	return header, records
+end
+
+-- Verify `fn` against a formula fixture. Returns a failure list, capped for readability,
+-- plus the total count so a report can say "3 of 41,802 rows differ".
+function Golden.verify(path: string, fn: (any) -> any, encode: (any) -> string)
+	local header, records = Golden.load(path)
+	local tol = header.tolerance or { kind = "relative", eps = 1e-12 }
+	local failures, checked = {}, 0
+	for i, rec in records do
+		checked += 1
+		local actual = fn(rec["in"])
+		local expected = rec.out
+		local ok, why
+		if tol.kind == "exact" then
+			ok = (encode(actual) == expected)
+			why = ok and nil or ("expected %s got %s"):format(expected, encode(actual))
+		else
+			ok, why = Approx.close(tonumber(encode(actual)) :: number, tonumber(expected) :: number, tol.eps)
+		end
+		if not ok and #failures < 20 then
+			table.insert(failures, ("row %d (%s): %s"):format(i, serde.encode("json", rec["in"]), why))
+		end
+	end
+	return failures, checked
+end
+
+return Golden
+```
+
+### 3.5 Regenerating fixtures safely
+
+Regeneration is the single most dangerous operation in this whole methodology, because a
+regenerated fixture **silently blesses whatever the port currently does**. Controls:
+
+1. **Fixtures are generated from the original, never from the port.** The generator is a separate
+   script that runs against the source game (its JS/whatever build), committed under
+   `tools/capture/`. There is no code path that writes a fixture from Luau. If your original is no
+   longer runnable, capture once, archive the capture tool and its inputs, and treat the fixtures
+   as a read-only artifact from then on.
+2. **`--regenerate` is not a flag on the test runner.** Make it a separate command in a separate
+   directory so it cannot be reached by muscle memory or by an agent "fixing the failing test".
+3. **Every regeneration is its own PR, touching only fixtures.** No source changes in the same
+   commit. The diff is then reviewable: "12,004 rows changed" is a red flag; "3 rows changed, all
+   in the new tier-7 range" is a reviewable claim.
+4. **Record provenance in the header** (source build id + timestamp + capture-tool commit) and have
+   CI assert the header exists and its `source` matches an allowlist of known original builds.
+5. **Keep a `frozen/` subtree** for fixtures that must never change — the level-0 through level-1000
+   cost table, the v1 save format. CI fails on any diff under `frozen/`, regardless of PR contents.
+
+```bash
+# scripts/check-frozen.sh
+git diff --name-only "origin/${BASE_REF}...HEAD" | grep -q '^fixtures/frozen/' \
+  && { echo "ERROR: fixtures/frozen/ is immutable"; exit 1; } || echo "frozen fixtures untouched"
+```
+(Uses git only as a CI gate; the rule is what matters, adapt to your CI's diff mechanism.)
+
+---

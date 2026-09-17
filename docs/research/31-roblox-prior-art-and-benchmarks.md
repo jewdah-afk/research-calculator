@@ -741,3 +741,261 @@ Roblox ships `PathfindingService` (navmesh-based) for the common case. Beyond it
 | **Scythe-Technology/luau-roblox** (https://github.com/Scythe-Technology/luau-roblox) | MIT, ~30 stars. Luau library to read/write Roblox place and model files — useful for offline asset pipelines. `[SOURCE-READ]` (metadata) |
 | **officialmmt/OpenRoblox** (https://github.com/officialmmt/OpenRoblox) | A maintained index of Roblox tools and libraries — a good place to look next. `[COMMUNITY, SECOND-HAND]` |
 
+---
+
+## 4. Benchmarks — every concrete number I could find
+
+This is the section the chapter exists for. Read the confidence markers; they are load-bearing.
+
+### 4.0 The single best benchmark source found: `nightcycle/roblox-benchmarks`
+
+- Repo: https://github.com/nightcycle/roblox-benchmarks
+- Data: https://github.com/nightcycle/roblox-benchmarks-data (`src/summary.csv`, ~18 KB; `src/all.csv`, ~40 MB)
+- Dashboard: https://nightcycle.github.io/roblox-benchmarks/
+- Confidence: `[SOURCE-READ]` — **I downloaded and analysed `summary.csv` directly.**
+
+**Why it is credible:** it is CI-driven, not hand-rolled. Benchmarks are Luau modules declaring
+typed parameters, a body, a repeat count and a sample count; a GitHub Action builds an `.rbxl`,
+publishes it, runs **50 separate Luau execution sessions** to de-skew, appends per-sample rows to
+CSV, and a Lune script summarises. It credits boatbomber's `Benchmarker` plugin as its ancestor.
+
+**Its own caveat, which I am repeating because it matters:** *"these benchmarks ought to be used
+for their **comparative** value (X is faster than Y) rather than as an exact speed (X takes 20
+microseconds)."* They also run **on a Roblox server**, not on a player device, and — importantly
+for us — **the benchmark modules are `--!strict` but not `--!native`.**
+
+**Unit inference.** The CSV does not document its unit. Across ~60 rows the only internally
+consistent reading is that **the value divided by 1,000 is nanoseconds per operation**
+(e.g. `math.noise(x,y)` → 62.6 ns; `buffer.writeu32` → 36.9 ns; an `EditableImage` rectangle draw
+→ 9.6 µs median). Any other scaling produces physically impossible results. I use that reading
+below and mark every derived figure `[INFERRED]`.
+
+#### 4.0.1 Measured Luau primitive costs (mean, ns/op under the inference above)
+
+| Operation | ns/op | Confidence |
+| --- | --- | --- |
+| `local` variable write | 18.9 | `[SOURCE-READ]` + `[INFERRED]` unit |
+| `local` variable read | 19.5 | ″ |
+| `if`-based max / min | 19.8 / 19.8 | ″ |
+| call a local function | 21.1 | ″ |
+| float add / integer add | 21.4 / 21.5 | ″ |
+| divide / subtract / multiply (number) | 21.4 / 21.5 / 21.8 | ″ |
+| `math.exp` | 22.1 | ″ |
+| **Vector3 add / sub / mul / div** | **22.4 / 22.9 / 23.0 / 22.5** | ″ |
+| `if`-based clamp | 23.3 | ″ |
+| comparison operators (`<`,`>`,`<=`,`>=`) | 23.6 | ″ |
+| table array read | 24.2 | ″ |
+| `math.round` / `math.sqrt` / `math.ceil` / `math.floor` | 25.0 / 25.2 / 25.2 / 25.2 | ″ |
+| `math.max` / `math.min` (function form) | 25.4 / 25.5 | ″ |
+| table array write | 25.6 | ″ |
+| `==` / `~=` | 26.5 / 26.2 | ″ |
+| `typeof` / `type` | 27.3 / 27.3 | ″ |
+| all `bit32` ops (`band`, `bor`, `bxor`, shifts, rotates, counts) | 27.4 – 28.8 | ″ |
+| `math.clamp` (function form) | 27.8 | ″ |
+| `bit32.extract` | 32.0 | ″ |
+| `Vector3.new` | 32.1 | ″ |
+| `assert` | 33.3 | ″ |
+| **`buffer.read*` — u8, u16, u32, i8, i16, i32, f32, f64** | **33.4 – 34.0 (flat)** | ″ |
+| **`buffer.write*` — u8, u16, u32, i16, f32, f64, i8, i32** | **36.9 – 37.4 (flat)** | ″ |
+| default-argument function call | 37.8 | ″ |
+| function stored in a table | 44.1 | ″ |
+| `buffer.len` | 44.1 | ″ |
+| method call on a class | 42.7 | ″ |
+| **metatable method dispatch** | **49.4** | ″ |
+| **`math.noise` 1D / 2D / 3D** | **62.7 / 62.6 / 64.6** | ″ |
+| `buffer.readbits` / `writebits` | 58.5 / 61.8 | ″ |
+| `buffer.copy` / `buffer.fill` / `buffer.writestring` | 60.0 / 60.0 / 59.4 | ″ |
+| **`Vector2` add** | **56.2** | ″ |
+| `buffer.readstring` | 114.3 | ″ |
+| `buffer.create` | 168.8 | ″ |
+| `buffer.fromstring` | 177.8 | ″ |
+| `buffer.tostring` | 205.3 | ″ |
+
+#### 4.0.2 The seven conclusions that fall out of that table
+
+1. **`buffer` read/write cost is flat across widths.** A `writeu8` costs the same ~37 ns as a
+   `writeu32`. **Therefore packing RGBA into one u32 write is a straight ~4× win over four u8
+   writes** — which is exactly what FastCanvas, CanvasDraw and OSGL all do. This is the numeric
+   justification for the convergent architecture in §1.1. `[INFERRED]` from `[SOURCE-READ]`
+2. **`Vector3` is ~2.5× faster than `Vector2`** (22.4 ns vs 56.2 ns per add). `Vector3` is a
+   native Luau value type; `Vector2` is not. **In hot loops, use `Vector3` with `z = 0` instead of
+   `Vector2`.** `[INFERRED]` from `[SOURCE-READ]`
+3. **Metatable dispatch costs ~2.3× a local function call** (49.4 vs 21.1 ns). This is why both
+   major canvas libraries build closure-based objects instead of `setmetatable` classes.
+   `[INFERRED]` from `[SOURCE-READ]`
+4. **`buffer.copy` has a ~60 ns fixed cost.** Combined with the ~37 ns per-pixel write, FastCanvas's
+   doubling span-fill for a 1024-pixel scanline costs ≈ 10 × 60 ns = **0.6 µs** versus
+   1024 × 36.9 ns = **37.8 µs** for the naive loop — a **~63× speed-up**, and the gap widens with
+   span length. `[INFERRED]` from `[SOURCE-READ]`
+5. **Bit-packed buffer fields cost ~1.7× aligned ones** (`writebits` 61.8 vs `writeu32` 36.9).
+   Don't bit-pack in the inner loop; pack at the serialisation boundary instead.
+6. **`buffer.create` (169 ns) and the string conversions (114–205 ns) are 3–6× a scalar op.**
+   Allocate buffers once and pool them; never `buffer.tostring` per frame.
+7. **`math.noise` costs ~63 ns regardless of dimension** — roughly 1.7× a `buffer.write`. A
+   1024×1024 single-octave noise field is ≈ 1M × 63 ns = **66 ms**; 4 octaves ≈ **264 ms**.
+   Noise generation is not a per-frame operation at image resolution. `[INFERRED]`
+
+#### 4.0.3 Measured `EditableImage` draw costs — the only real EditableImage benchmark found
+
+These rows are `client/instance/editable-image/...`, run with `repeats = 1` over ~9,990 samples
+across 10 runs. They measure Roblox's **built-in** `EditableImage` draw methods.
+
+| Metric | min | p10 | **median** | mean | p90 | p99 | max | Confidence |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `EditableImage` **DrawRectangle** | 0.042 µs | 0.44 µs | **9.62 µs** | 25.87 µs | 73.2 µs | 172.6 µs | 436.8 µs | `[SOURCE-READ]` + `[INFERRED]` unit |
+| `EditableImage` **DrawLine** | 0.015 µs | 0.10 µs | **0.37 µs** | 0.49 µs | 0.96 µs | 2.33 µs | 7.91 µs | ″ |
+
+**The distribution is the finding, not the median.** DrawRectangle's standard deviation
+(37.4 µs) is **larger than its mean** (25.9 µs) and its max is **10,500× its min**. Cost scales
+with the rectangle's area and the parameters were randomised, so this is a cost *curve*, not a
+cost. Any "EditableImage is fast/slow" claim that quotes a single number is meaningless.
+
+**Frame budgets derived from those medians** (60 fps ⇒ 16.67 ms/frame), assuming nothing else
+runs in the frame:
+
+| Budget | At median | At p90 | Confidence |
+| --- | --- | --- | --- |
+| Built-in `DrawRectangle` calls per frame | ≈ **1,730** | ≈ **228** | `[INFERRED]` |
+| Built-in `DrawLine` calls per frame | ≈ **44,800** | ≈ **17,300** | `[INFERRED]` |
+| Raw `buffer.writeu32` pixel writes per frame | ≈ **451,000** | — | `[INFERRED]` (16.67 ms ÷ 36.9 ns) |
+| ⇒ full-canvas repaints per frame at 256×256 (65,536 px) | ≈ **6.9** | — | `[INFERRED]` |
+| ⇒ full-canvas repaints per frame at 512×512 (262,144 px) | ≈ **1.7** | — | `[INFERRED]` |
+| ⇒ full-canvas repaints per frame at 1024×1024 (1,048,576 px) | ≈ **0.43** | — | `[INFERRED]` |
+
+**Read the last three rows carefully.** Writing every pixel of a 1024×1024 canvas *once*, with
+zero shading maths and nothing else in the frame, takes roughly **2.3 frames** at the measured
+non-native `buffer.write` rate. A 512×512 full repaint consumes **~58% of a 60 fps frame** before
+you compute a single colour. **512×512 is the outer limit for a full per-pixel repaint per frame,
+and 256×256 is the comfortable one.** That is independently consistent with every shipped project
+in §1.5 (100×100 … 320×240). `[INFERRED]`
+
+*Caveat that cuts the other way:* the benchmark suite is **not `--!native`**. Roblox's own native
+codegen docs state that *"with native code generation, there is zero overhead to using the buffer
+library, making it just as fast, if not faster, than tables."* Real canvas libraries all set
+`--!native`, so their per-pixel cost is plausibly lower than 36.9 ns. **Re-measure with
+`--!native` on your target device before trusting the ceilings above.** `[DOCUMENTED]` +
+`[INFERRED]`
+
+---
+
+### 4.1 `[DOCUMENTED]` — Roblox's own numbers
+
+| Metric | Value | Source |
+| --- | --- | --- |
+| `EditableImage` maximum size | **1024 × 1024**, read-only, cannot be resized | `EditableImage.yaml` §`Size` |
+| `EditableImage` displayed-update rate | **1 per frame**. "If you update three `EditableImage` objects which are currently being displayed, it will take three frames for all of them to be updated." | `EditableImage.yaml` §Update Limitations |
+| `EditableImage` coordinate origin | top-left `(0,0)`; bottom-right `(Size.X-1, Size.Y-1)` | `EditableImage.yaml` |
+| `EditableMesh` maximum vertices | **60,000** | `EditableMesh.yaml` §Limitations |
+| `EditableMesh` maximum triangles | **20,000** | `EditableMesh.yaml` §Limitations |
+| Behaviour on exceeding either | **throws an error** | `EditableMesh.yaml` |
+| `CreateEditableImage` / `CreateEditableMesh` on budget exhaustion | **returns `nil`** (does not throw) | `AssetService.yaml` |
+| `CreateMeshPartAsync` on server-storage-budget exhaustion | **creation fails** | `AssetService.yaml` |
+| Editable memory budget scope | **client-side budget is strict; server, Studio and plugins have unlimited memory** | `EditableImage.yaml` / `EditableMesh.yaml` §Memory Limits |
+| Frame budget at 60 FPS | **16.67 ms** ("Even seemingly minor per-frame calculations can use a significant portion of that budget.") | `performance-optimization/design.md` |
+| **Draw-call budget, baseline device** | **< 1,000 draw calls** | `performance-optimization/design.md` |
+| **Triangle budget, baseline device** | **< 1,000,000 triangles** | `performance-optimization/design.md` |
+| Physics step rate at max | `240 Hz` — "forces all physics assemblies to step at 240 Hz (four times per frame)" | `performance-optimization/improve.md` |
+| Zstd compression levels | **−7 … 22 inclusive**, default 1 | `EncodingService.yaml` |
+| Instancing rule (draw-call batching) | Meshes collapse into one draw call when `MeshContent` matches **and** `SurfaceAppearance`s are identical, or (absent those) `TextureContent`s are identical, or (absent both) materials are identical | `performance-optimization/improve.md` §Draw calls |
+| Objects that batch badly | decals, textures, particles — *"don't batch well and introduce additional draw calls"* | `performance-optimization/improve.md` |
+| `CollisionFidelity` memory | `Box` lowest; `Default` and `Precise` *"consume significantly more memory"* | `performance-optimization/improve.md` §Physics memory usage |
+| Parallel Luau: `require()` in a parallel phase | **not allowed** — require in serial first | `scripting/multithreading.md` |
+| Parallel Luau: actors on one script | scripts in the *same* Actor always run serially w.r.t. each other — **you need multiple Actors** | `scripting/multithreading.md` |
+| Parallel Luau: default thread-safety | **Unsafe** if an API member does not declare a level | `scripting/multithreading.md` |
+| Parallel Luau: data-model writes | scripts in parallel *generally cannot write to the data model* | `scripting/multithreading.md` |
+| `SharedTable` semantics | no copy on send; **atomic, immediately visible to all actors**; clone uses structural sharing | `scripting/multithreading.md` |
+| Actor count guidance | *"For the best performance, use more Actors. Even if the device has fewer cores than Actors, the granularity allows for more efficient load balancing."* | `scripting/multithreading.md` |
+| `EncodingService` thread safety | `Safe` — callable from parallel code | `EncodingService.yaml` |
+| Dev-console memory categories relevant here | `GraphicsTexture`, `GraphicsMeshParts`, `GraphicsParts`, `GraphicsTerrain`, `GraphicsSpatialHash`, `LuaHeap`, `InstanceCount`, `PlaceScriptMemory`, `PhysicsParts` | `studio/optimization/memory-usage.md`, `performance-optimization/improve.md` |
+| Studio device emulator accuracy | **not accurate for memory** — Studio runs client *and* server | `performance-optimization/design.md` |
+
+All of the above were read from the `Roblox/creator-docs` GitHub mirror at
+https://github.com/Roblox/creator-docs (the `create.roblox.com` rendering of the same content is
+403-blocked from this environment).
+
+---
+
+### 4.2 `[COMMUNITY, SECOND-HAND]` — developer-reported numbers
+
+**Treat every row as a claim.** These reached me only via web-search result summaries; the
+DevForum is 403-blocked here, so I could not read the original posts, verify the device, the
+Roblox version, or the methodology.
+
+| Metric | Reported value | Source thread |
+| --- | --- | --- |
+| **`EditableImage` total client memory budget** | **32 MB** | https://devforum.roblox.com/t/editableimage-higher-resolution-and-memory-limit/4389575 |
+| **Memory per 512×512 `EditableImage`** | **≈ 1 MB** uncompressed buffer | ″ |
+| **Live editable objects on client** | **8** (reported for both `EditableImage` *and* `EditableMesh`) | https://devforum.roblox.com/t/bypassing-8-editablemesh-limit-on-client/3683517 · https://devforum.roblox.com/t/remove-editable-meshimage-limit-on-the-client/4219561 |
+| **`CreateMeshPartAsync` fixed cost** | **≈ 22 ms**, even with `CollisionFidelity.Box` and `CanCollide = false` | https://devforum.roblox.com/t/allow-applying-baked-mesh-content-to-a-meshpart-without-a-lag-spike/4752538 |
+| **`CreateMeshPartAsync` marginal cost** | **≈ 0.27 ms per 1,000 triangles** | ″ |
+| **Custom `DrawTriangle` (scanline, `--!native`)** | **145.65 µs per triangle** — 5,000 random triangles on a 512×512 `EditableImage` in 0.4369 s | https://github.com/break-core/DrawTriangle `[SOURCE-READ]` — README states the method in full |
+| **Roblox's built-in/private `DrawTriangle`** | **319.02 µs per triangle** — same harness, 0.9571 s | ″ |
+| ⇒ speed-up of the community implementation | **2.19×** | `[INFERRED]` |
+| **Author's note on why** | *"To make this function extremely fast, native codegen was used. **Without it, it would actually run slower than the original.**"* | ″ |
+| **`WritePixelsBuffer` size cap vs creation cap** | `EditableImage` can be *created* up to **2048×2048 in Studio via command bar / plugin code**, but **`WritePixelsBuffer` is limited to 1024×1024** | https://devforum.roblox.com/t/allow-editableimagewritepixelsbuffer-to-go-up-to-2048x2048-for-plugins/4568767 |
+| **Multi-canvas refresh** | *"Roblox limits updates to 1 redraw per frame, so 10 images take 10 frames to render"* | https://devforum.roblox.com/t/osgl-editableimage-graphics-library/3066757 |
+| **Real-time raytracer, textured, multi-threaded** | *"well above 60 FPS on a mid-range computer at **100×100**"* (RetroRaster) | https://ethanthegrand.itch.io/retroraster |
+| **Path tracer with real-time reflections** | *"30–60 FPS"*, **resolution not stated** | https://devforum.roblox.com/t/osgl-editableimage-graphics-library/3066757 |
+| **N64 emulator framebuffer** | **320×240**, with a **160×120 fast path** | https://github.com/yoits9090/plumber `[SOURCE-READ]` |
+| **Raycaster renderer** | **100×100** with adjustable interlacing | https://devforum.roblox.com/t/a-renderer-using-raycasting-open-source/3609143 |
+| **Ro2D example fixed internal resolution** | **1024×576** (sprite/tile 2D, not per-pixel shading) | https://github.com/nrmu9/Ro2DEngine `[SOURCE-READ]` |
+| **Marching-cubes editable terrain** | *"60 fps"* with neighbour-updating chunks (pre-`EditableMesh`) | https://devforum.roblox.com/t/marching-cubes-voxel-terrain-with-tools/602593 |
+| **`MeshPart` hard triangle limit (uploaded assets)** | **21,000** triangles per `MeshPart` in Studio | https://www.alpha3d.io/knowledge-base/roblox-meshpart-polygon-limit |
+| **UGC accessory triangle cap** | **4,000** triangles per mesh (hats, hair, gear) | ″ · https://nilo.io/articles/roblox-polygon-limits-accessories |
+| **Avatar / character mesh import limit** | **10,000** triangles; **environment meshes up to 20,000** | https://nilo.io/articles/advanced-roblox-custom-meshes |
+| **Cloud LOD generation** | **3–4** progressively simpler versions per uploaded `MeshPart`, **25–75%** polygon reduction, preserving silhouette/UVs/material boundaries | https://www.creation.dev/learn/roblox-mesh-streaming-cloud-lod-optimization-guide |
+| **ECS iteration throughput (jecs)** | *"Iterate **800,000 entities at 60 frames per second**"* | https://github.com/Ukendio/jecs `[SOURCE-READ]` (self-reported) |
+| **Octree default top region** | `topRegionSize = 512` ⇒ 512×512×512 top-level regions | https://github.com/Sleitnick/rbxts-octo-tree |
+| **Dev-console memory over-reporting bug** | dev console / performance stats reported showing **up to 3×** actual memory usage | https://devforum.roblox.com/t/dev-console-performance-stats-showing-up-to-3x-the-memory-usage/3581410 |
+
+---
+
+### 4.3 `[INFERRED]` — arithmetic on the above
+
+Every input is cited; the arithmetic is mine.
+
+| Derived figure | Working | Value |
+| --- | --- | --- |
+| Bytes in a 1024×1024 RGBA buffer | 1024 × 1024 × 4 | **4,194,304 B = 4 MiB** |
+| Bytes in a 512×512 RGBA buffer | 512 × 512 × 4 | **1 MiB** — matches the community "≈1 MB per 512×512" report exactly, which **cross-validates both figures** |
+| **Why the "8 editable objects" limit exists** | 32 MB budget ÷ 4 MiB per 1024² image | **= 8.** The reported 32 MB budget and the reported count-of-8 are **the same fact**. The limit is a *memory* limit that presents as a count limit when every object is max-size. **⇒ Smaller canvases should buy you more of them.** |
+| FastCanvas memory overhead | `Grid` + `ClearingGrid`, both `W*H*4` | **2× framebuffer**, i.e. **8 MiB** at 1024² — **one-quarter of the entire 32 MB editable budget for a single canvas** |
+| Naive vs doubling scanline fill, 1024 px | 1024 × 36.9 ns vs ⌈log₂1024⌉ × 60 ns | **37.8 µs vs 0.6 µs ⇒ ~63×** |
+| Full-repaint cost, 256×256 | 65,536 × 36.9 ns | **2.4 ms — 15% of a 60 fps frame** |
+| Full-repaint cost, 512×512 | 262,144 × 36.9 ns | **9.7 ms — 58% of a frame** |
+| Full-repaint cost, 1024×1024 | 1,048,576 × 36.9 ns | **38.7 ms — 2.3 frames** |
+| Single-octave `math.noise` over 1024² | 1,048,576 × 62.6 ns | **65.6 ms** |
+| 4-octave FBM over 1024² | 4 × 65.6 ms | **262 ms — a quarter-second hitch** |
+| `CreateMeshPartAsync` on a max-size mesh | 22 ms + 20 × 0.27 ms | **27.4 ms ⇒ 1.6 frames dropped per bake** |
+| Mesh bakes affordable per second at 60 fps, using ≤ 25% of frame time | (16.67 × 0.25) ms/frame ÷ 27.4 ms | **≈ 0.15 bakes/frame ⇒ ~9 per second, and every one of them is still a visible hitch** |
+| Max triangles addressable across the client editable budget | 8 objects × 20,000 tri | **160,000 triangles live in `EditableMesh` form at once** — 16% of the 1,000,000-triangle scene budget |
+| Voxel chunk sizing against the 20k-triangle cap | fully-exposed 16³ chunk ≈ 16·16·6 = 1,536 quads = 3,072 tri (best case); pathological interiors 4–6× | **16³ is safe; 32³ is not** |
+| Built-in `DrawTriangle` triangles per frame | 16.67 ms ÷ 319 µs | **≈ 52** |
+| `break-core/DrawTriangle` triangles per frame | 16.67 ms ÷ 145.6 µs | **≈ 114** |
+| ⇒ software 3D at 60 fps | ~100 textured triangles per frame is the built-in-rasteriser ceiling | **a software 3D scene must be ≲ 100 triangles, or you must write your own rasteriser into a `buffer`** |
+| Multi-canvas refresh rate | 1 displayed update/frame, N canvases | **each canvas refreshes at 60/N fps**; 4 canvases ⇒ 15 fps each |
+
+---
+
+### 4.4 What is *not* measured anywhere — build your own harness
+
+Nobody has published: `WritePixelsBuffer` throughput as a function of region size; `ReadPixelsBuffer`
+cost; `EditableMesh` `AddVertex`/`AddTriangle` per-call cost; `EditableMesh` construction time for
+a full 20k-triangle mesh; memory actually consumed by an `EditableMesh` at a given vertex count;
+`FixedSize = true` vs `false` memory delta; per-device-tier variation for any of it; or the
+`--!native` speed-up factor for a real pixel loop.
+
+**Build this before you commit to an architecture.** The shape that works:
+
+1. Copy `nightcycle/roblox-benchmarks`' method — N repeats inside a sample, many samples, several
+   sessions, report percentiles not means.
+2. Run on **at least one low-end mobile device**, because Roblox's own docs warn that *"PCs are
+   affected by these budgets much less than mobile and console, so developers often get surprised
+   when they take their game to device."* `[DOCUMENTED]`
+3. Measure with `--!native` **on and off** — `break-core/DrawTriangle` reports that native codegen
+   is the difference between beating and losing to Roblox's built-in. `[SOURCE-READ]`
+4. Watch `GraphicsTexture`, `GraphicsMeshParts`, `LuaHeap` and `InstanceCount` in the Developer
+   Console, and remember the reported **3× over-reporting bug**. `[DOCUMENTED]` + `[COMMUNITY]`
+5. Use **Render Stats** (<kbd>Shift</kbd>+<kbd>F2</kbd>) → **Timing** for live draw-call counts.
+   `[DOCUMENTED]`
+

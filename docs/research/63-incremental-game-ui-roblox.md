@@ -693,3 +693,231 @@ The whole point collapses if rebinding a row is expensive. A rebind touches ~6 p
 
 The full, working implementation is in [The virtualized list implementation](#the-virtualized-list-implementation).
 
+---
+
+## 4. The standard screens
+
+Genre conventions exist for a reason: players arrive already knowing how to use them. Deviate on theme, not on structure.
+
+### 4.1 Currency header bar
+
+Always visible, top of screen, inside the Core UI safe area. Contents: 2–5 currency readouts, each `[icon][amount][rate]`, plus a prestige-currency slot that only appears once unlocked.
+
+```lua
+-- Header row: icons fixed-size, amounts flexible, rate right-aligned.
+-- Horizontal UIListLayout + UIFlexItem(Fill) on the amount label lets the
+-- amount absorb all slack without any width maths.
+local layout = Instance.new("UIListLayout")
+layout.FillDirection = Enum.FillDirection.Horizontal
+layout.HorizontalFlex = Enum.UIFlexMode.None
+layout.VerticalAlignment = Enum.VerticalAlignment.Center
+layout.Padding = UDim.new(0, 8)
+
+local flex = Instance.new("UIFlexItem")
+flex.FlexMode = Enum.UIFlexMode.Fill
+flex.Parent = amountLabel
+```
+
+`UIFlexItem.FlexMode` supports `Fill`, `Grow`, `Shrink` and `Custom`; `UIListLayout.HorizontalFlex`/`VerticalFlex` distribute slack across the whole line. ([ui/list-flex-layouts.md](https://github.com/Roblox/creator-docs/blob/main/content/en-us/ui/list-flex-layouts.md))
+
+Rules: the header is the one place where a **rate** readout (`+1.23 Qa/s`) earns its screen space; make it a different, dimmer colour than the balance so the eye separates "how much" from "how fast". Never animate the header's *position* — it is the player's anchor.
+
+### 4.2 The generator / upgrade row
+
+The densest object in the game, and the one you virtualize. A survivable layout at phone width:
+
+| Zone | Width | Content |
+|---|---|---|
+| Icon | 48 offset (square, `UIAspectRatioConstraint` 1:1) | `ImageLabel`, atlas rect |
+| Body | flex `Fill` | line 1: name + `xN` owned · line 2: effect (`+1.23 M/s`) |
+| Buy | 96–120 offset | cost (top), bulk label `x10` (bottom) |
+
+Row height 64 offset on phone, 72 on desktop. Two text lines, not three — the third line is where mobile legibility dies.
+
+```lua
+export type RowView = {
+    root: Frame, icon: ImageLabel, name: TextLabel, owned: TextLabel,
+    effect: TextLabel, cost: TextLabel, buy: TextButton,
+    -- shadow state for guarded writes (§2.2)
+    shadow: { [string]: any },
+    boundIndex: number?,
+}
+```
+
+`UIAspectRatioConstraint` **overrides** the layout when both apply, which is exactly what you want for the icon: it stays square no matter what the list does to it. ([ui/size-modifiers.md](https://github.com/Roblox/creator-docs/blob/main/content/en-us/ui/size-modifiers.md))
+
+### 4.3 Bulk-buy controls (x1 / x10 / x100 / Max)
+
+A four-segment control, persistent, near the thumb. Its UI states are the part teams get wrong:
+
+| State | Meaning | Rendering |
+|---|---|---|
+| Selected | active multiplier | filled, high-contrast |
+| Unselected | available | outline only |
+| Selected + unaffordable | you picked x100, you can afford 7 | selected chrome, but rows show **partial** cost in amber and the button reads `Buy 7` |
+| `Max` with 0 affordable | nothing to buy | whole row disabled, not the segment |
+
+**`Max` must show what it will actually do.** A `Max` button that says `Max` is a gamble; one that says `Max (37) — 1.23 Qa` is information. Compute the affordable count in closed form, never in a loop:
+
+For a geometric cost curve `cost(n) = base * ratio^n` with `owned` already purchased and budget `B`, the number affordable is
+
+```lua
+-- Sum of a geometric series: base*r^owned * (r^k - 1)/(r - 1) <= B
+-- =>  k <= log_r( 1 + B*(r-1) / (base*r^owned) )
+local function maxAffordable(logBudget: number, logBase: number, ratio: number, owned: number): number
+    local logR = math.log10(ratio)
+    local logUnit = logBase + owned * logR           -- log10 of the next single cost
+    local inner = 1 + 10 ^ (logBudget - logUnit) * (ratio - 1)
+    if inner <= 1 then return 0 end
+    return math.floor(math.log10(inner) / logR)
+end
+```
+
+Working entirely in `log10` here is not an optimisation, it is a correctness requirement: `base * ratio^owned` overflows a double long before the player notices.
+
+### 4.4 Prestige screen
+
+One screen, one decision, three numbers: **what you gain**, **what you lose**, **when it becomes worth it**.
+
+- Projected gain, large and central, with the delta since you last looked (`+3 since you opened this`).
+- A log-scale bar to the *next* +1 of prestige currency, with a time-to-next readout (§6.2). This is the number that decides "reset now or in ten minutes".
+- An explicit, scrollable "what is kept / what is reset" list. Never make this a tooltip.
+- A confirmation that can be disabled in settings, and **must** be disabled by default after the first five prestiges — veteran players prestige constantly and a modal every time is hostile.
+
+### 4.5 Achievements grid
+
+`UIGridLayout` with square cells, `CellSize` in offset (not scale) so the cell count reflows with width instead of the tiles shrinking to illegibility. Three states: locked (greyscale + silhouette), in-progress (a thin bottom fill bar), unlocked (full colour + a subtle `UIGradient` sheen). **Virtualize it too** past ~60 tiles — a grid is a list with a stride.
+
+### 4.6 Stats page
+
+Pure text, two columns, right-aligned values, `UIListLayout` with section headers. Update at **1 Hz**, not 15 — nobody is watching "total time played" tick. Group as: this run / this prestige / all time. Include the unglamorous ones (total clicks, fastest prestige, offline time claimed); completionists read this page more than any other.
+
+### 4.7 Settings page
+
+Minimum viable set for this genre:
+
+| Setting | Why it exists |
+|---|---|
+| **Notation** (§1.5) | The single most requested setting in every incremental game. |
+| **Autosave interval** | Trust. Show "last saved 12s ago". |
+| **Reduced effects** | Wire to `GuiService.ReducedMotionEnabled` as the *default*, but let players override. Roblox's accessibility guidance: set animation time to 0 or swap movement for fades. |
+| **Background transparency** | Multiply your panel `BackgroundTransparency` by `GuiService.PreferredTransparency`. |
+| **Text size** | Read `GuiService.PreferredTextSize` (`Medium`/`Large`/`Larger`/`Largest`) and scale your type ramp. |
+| **Confirm prestige** | See §4.4. |
+| **Offline progress popup** | Veterans want it suppressed. |
+
+```lua
+local GuiService = game:GetService("GuiService")
+
+local function applyAccessibility(panel: Frame, baseTransparency: number)
+    panel.BackgroundTransparency = baseTransparency * GuiService.PreferredTransparency
+end
+GuiService:GetPropertyChangedSignal("PreferredTransparency"):Connect(refreshAll)
+GuiService:GetPropertyChangedSignal("PreferredTextSize"):Connect(refreshTypeRamp)
+GuiService:GetPropertyChangedSignal("ReducedMotionEnabled"):Connect(refreshMotion)
+```
+
+All three properties are documented as mapping directly to the player's Roblox **Settings** menu and are intended to be watched with `GetPropertyChangedSignal`. ([GuiService.yaml](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/GuiService.yaml), [accessibility.md](https://github.com/Roblox/creator-docs/blob/main/content/en-us/production/publishing/accessibility.md))
+
+### 4.8 Offline-progress "welcome back" modal
+
+The most important retention surface in the genre. It must:
+
+1. State the **elapsed time** in human units ("7 hours 12 minutes"), not seconds.
+2. Show **what was earned**, itemised by currency, formatted in the player's notation.
+3. Show the **cap** honestly if you cap offline earnings ("capped at 8h — upgrade to extend").
+4. Offer a **doubling** or **claim** action if that is your monetisation, but never block dismissal behind it.
+5. Appear **once**, after assets load, and never steal input from a player who is already tapping.
+
+Compute offline gain **server-side** from the saved timestamp; the modal is a report, not a calculation. A client-computed offline reward is a duplication exploit with extra steps.
+
+---
+
+## 5. Affordability and feedback
+
+### 5.1 Affordability as a first-class state
+
+Four states, and you need all four:
+
+| State | Colour | Button | Notes |
+|---|---|---|---|
+| Affordable | accent green | enabled | The default "go" state |
+| Affordable soon (< ~10s away) | amber | enabled-looking, disabled | Gives the player a reason to wait instead of leaving |
+| Unaffordable | muted grey | `Interactable = false` | Text dimmed, not hidden |
+| Maxed / locked | outline only | `Interactable = false` | Distinct from unaffordable |
+
+Use `GuiObject.Interactable` rather than reparenting or `Active`: it disables input while leaving the object visible and hoverable, and `GuiObject.GuiState` lets you read back the `Idle`/`Hover`/`Press` state the engine has assigned. ([GuiObject.yaml](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/GuiObject.yaml))
+
+**Never signal affordability with colour alone** — Roblox's accessibility guidance notes that over 5% of people are colour-blind and asks for "different symbols alongside colors." Pair the colour with a lock glyph, a check, or a filled-vs-outline button. ([accessibility.md](https://github.com/Roblox/creator-docs/blob/main/content/en-us/production/publishing/accessibility.md))
+
+### 5.2 Hold-to-buy
+
+```lua
+--!strict
+local HOLD_DELAY = 0.35   -- before repeat starts
+local HOLD_MIN = 0.06     -- fastest repeat interval
+local HOLD_RAMP = 0.85    -- interval multiplier per repeat
+
+local function bindHoldToBuy(button: TextButton, buy: () -> boolean)
+    local held = false
+    button.InputBegan:Connect(function(input)
+        if input.UserInputType ~= Enum.UserInputType.MouseButton1
+            and input.UserInputType ~= Enum.UserInputType.Touch then return end
+        held = true
+        if not buy() then return end                 -- first purchase is instant
+        task.spawn(function()
+            local interval = HOLD_DELAY
+            while held do
+                task.wait(interval)
+                if not held then break end
+                if not buy() then break end          -- stop the moment it fails
+                interval = math.max(HOLD_MIN, interval * HOLD_RAMP)
+            end
+        end)
+    end)
+    local function release() held = false end
+    button.InputEnded:Connect(release)
+    button.MouseLeave:Connect(release)               -- finger slid off the button
+end
+```
+
+Three details that matter: the **first press buys immediately** (a 350 ms delay on a single tap feels broken); the repeat **accelerates** rather than firing at a fixed rate; and the loop **stops on the first failed purchase** rather than hammering the server with rejections.
+
+Server-side, hold-to-buy is a rate-limited batch: the client sends "buy N of X", the server validates affordability itself and replies with the count actually granted. Never send one remote per purchase.
+
+### 5.3 Buy-max
+
+`Max` uses §4.3's closed form, then issues **one** request. The UI updates optimistically (the local economy model already knows the answer) and reconciles when the server confirms. If the server grants fewer than requested — a race with an offline tick, say — snap the display to the authoritative value without an animation; a correcting animation reads as a bug.
+
+### 5.4 Micro-feedback at 20 purchases per second
+
+Purchases must feel good. At the rate a hold-to-buy produces them, naive feedback is a frame-rate crime: 20 `Instance.new` popups a second, 20 `Sound` instances, 20 tweens.
+
+The rules:
+
+1. **Pool the popups.** Pre-create 12 number-popup labels; take from a free list, return on completion. If the pool is empty, *aggregate into the oldest live popup* instead of allocating.
+2. **Aggregate within a window.** Collapse purchases within ~120 ms into a single popup whose text is the sum and whose scale is bumped: `+12 x Miner` reads better than twelve overlapping `+1`s.
+3. **Rate-limit sound.** One `Sound` per feedback class, replayed by setting `TimePosition = 0` and `:Play()`, with a minimum 60–80 ms gap; add a small `PlaybackSpeed` jitter (±4%) so repeats do not machine-gun. Beyond ~8 plays/second, drop to every third.
+4. **Tween the cheap property.** A `UIScale.Scale` punch on one object is one tween. Scaling ten children is ten tweens and a layout invalidation. Put a `UIScale` on the row root and tween that.
+5. **Particles are a desktop-only luxury.** Gate them behind the reduced-effects setting and default them off on `Enum.DisplaySize.Small` viewports.
+6. **Honour reduced motion.** `GuiService.ReducedMotionEnabled` → skip the tween, apply the end state, keep the sound.
+
+```lua
+--!strict
+local TweenService = game:GetService("TweenService")
+local GuiService = game:GetService("GuiService")
+
+local PUNCH_IN  = TweenInfo.new(0.06, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local PUNCH_OUT = TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
+local function punch(scale: UIScale, amount: number?)
+    if GuiService.ReducedMotionEnabled then return end
+    scale.Scale = 1
+    local up = TweenService:Create(scale, PUNCH_IN, { Scale = 1 + (amount or 0.08) })
+    up.Completed:Once(function()
+        TweenService:Create(scale, PUNCH_OUT, { Scale = 1 }):Play()
+    end)
+    up:Play()
+end
+```
+
