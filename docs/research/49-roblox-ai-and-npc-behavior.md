@@ -1027,3 +1027,828 @@ end
 
 **On Roblox specifically:** `WaypointSpacing = math.huge` already gives you corner-only waypoints from the engine's own smoothing, so funnel is only relevant for *your own* pathfinder. But `smoothPath` above is still worth running over `ComputeAsync` output when you want to shorten conservative navmesh detours — three raycasts per test is cheap and the visual improvement is large.
 
+---
+
+## 3. Steering and local movement
+
+Craig Reynolds' framework (GDC 1999) decomposes autonomous movement into three layers: **action selection** (where do I want to go — §4), **steering** (produce a desired force), and **locomotion** (turn force into animation). Steering behaviours each return a *desired velocity*; the steering force is `desired - currentVelocity`, truncated to a max force. **[lit — not re-verified 2026-09; Craig W. Reynolds, "Steering Behaviors For Autonomous Characters", GDC 1999, red3d.com/cwr/steer/gdc99/]**
+
+### 3.1 The formulas
+
+Given agent position `P`, velocity `V`, `maxSpeed`, `maxForce`:
+
+| Behaviour | Desired velocity | Notes |
+|---|---|---|
+| **Seek(T)** | `(T − P).Unit * maxSpeed` | Overshoots the target and orbits. Never use alone for a destination. |
+| **Flee(T)** | `(P − T).Unit * maxSpeed` | Optionally zero outside a panic radius. |
+| **Arrive(T, r)** | `(T − P).Unit * maxSpeed * min(1, d/r)` where `d = ‖T − P‖` | The fix for Seek's overshoot. `r` = slowing radius. |
+| **Pursue(Q)** | `Seek(Q.P + Q.V * τ)`, `τ = ‖Q.P − P‖ / maxSpeed` | Lead the target. Cap `τ` or the agent aims at the horizon. |
+| **Evade(Q)** | `Flee(Q.P + Q.V * τ)`, same `τ` | |
+| **Wander** | Project a circle `d` ahead of radius `r`; jitter a point on it by `j` each tick; seek it | Jitter the *angle*, not the point, to keep it on the circle. |
+| **ObstacleAvoid** | Cast ahead by `lookahead = ‖V‖ * t`; if blocked, steer along the surface normal, scaled by `1 − hitDistance/lookahead` | Roblox: use `Spherecast` with the agent radius, not `Raycast`. |
+| **Separation** | `Σ (P − Nᵢ) / ‖P − Nᵢ‖²` over neighbours within `rₛ`, normalized | Inverse-square is the key — near neighbours dominate. |
+| **Cohesion** | `Seek(mean(Nᵢ.P))` | |
+| **Alignment** | `mean(Nᵢ.V)` normalized × maxSpeed | |
+
+Boids = separation + cohesion + alignment, classically weighted roughly 1.5 : 1.0 : 1.0 with separation dominant. Reynolds' original flocking used exactly these three. **[lit]**
+
+### 3.2 A complete steering module
+
+```lua
+--!strict
+--!native
+-- Steering.lua — pure functions. No Instances, no yields: Actor-safe.
+
+local Steering = {}
+
+export type Agent = {
+    position: Vector3,
+    velocity: Vector3,
+    maxSpeed: number,
+    maxForce: number,
+}
+
+local function truncate(v: Vector3, maxLen: number): Vector3
+    local m = v.Magnitude
+    if m > maxLen and m > 0 then return v * (maxLen / m) end
+    return v
+end
+
+local function flat(v: Vector3): Vector3
+    return Vector3.new(v.X, 0, v.Z)
+end
+
+function Steering.seek(a: Agent, target: Vector3): Vector3
+    local d = flat(target - a.position)
+    if d.Magnitude < 1e-4 then return Vector3.zero end
+    return truncate(d.Unit * a.maxSpeed - a.velocity, a.maxForce)
+end
+
+function Steering.flee(a: Agent, threat: Vector3, panicRadius: number?): Vector3
+    local d = flat(a.position - threat)
+    local dist = d.Magnitude
+    if dist < 1e-4 then return Vector3.zero end
+    if panicRadius and dist > panicRadius then return Vector3.zero end
+    return truncate(d.Unit * a.maxSpeed - a.velocity, a.maxForce)
+end
+
+function Steering.arrive(a: Agent, target: Vector3, slowRadius: number, stopRadius: number?): Vector3
+    local d = flat(target - a.position)
+    local dist = d.Magnitude
+    local stop = stopRadius or 1
+    if dist < stop then
+        return truncate(-a.velocity, a.maxForce)   -- actively brake
+    end
+    local speed = a.maxSpeed * math.min(1, (dist - stop) / math.max(slowRadius, 1e-3))
+    return truncate(d.Unit * speed - a.velocity, a.maxForce)
+end
+
+function Steering.pursue(a: Agent, targetPos: Vector3, targetVel: Vector3, maxLead: number?): Vector3
+    local toTarget = flat(targetPos - a.position)
+    local tau = math.min(toTarget.Magnitude / math.max(a.maxSpeed, 1e-3), maxLead or 2)
+    return Steering.seek(a, targetPos + targetVel * tau)
+end
+
+function Steering.evade(a: Agent, threatPos: Vector3, threatVel: Vector3, maxLead: number?): Vector3
+    local toThreat = flat(threatPos - a.position)
+    local tau = math.min(toThreat.Magnitude / math.max(a.maxSpeed, 1e-3), maxLead or 2)
+    return Steering.flee(a, threatPos + threatVel * tau)
+end
+
+-- Wander keeps state: the current angle on the projection circle.
+export type WanderState = { angle: number }
+
+function Steering.wander(
+    a: Agent, state: WanderState, dt: number,
+    distance: number, radius: number, jitterRate: number
+): Vector3
+    -- Jitter the ANGLE (bounded), not the point (unbounded random walk).
+    state.angle += (math.random() * 2 - 1) * jitterRate * dt
+    local heading = a.velocity.Magnitude > 0.1 and flat(a.velocity).Unit or Vector3.xAxis
+    local centre = a.position + heading * distance
+    local offset = Vector3.new(math.cos(state.angle), 0, math.sin(state.angle)) * radius
+    return Steering.seek(a, centre + offset)
+end
+
+--- Obstacle avoidance via spherecast. `params` should be a cached OverlapParams-
+--- style RaycastParams; building one per call allocates.
+function Steering.avoidObstacles(
+    a: Agent, agentRadius: number, lookaheadTime: number, params: RaycastParams
+): Vector3
+    local speed = a.velocity.Magnitude
+    if speed < 0.1 then return Vector3.zero end
+    local dir = flat(a.velocity).Unit
+    local lookahead = math.max(speed * lookaheadTime, agentRadius * 2)
+
+    local hit = workspace:Spherecast(a.position, agentRadius, dir * lookahead, params)
+    if not hit then return Vector3.zero end
+
+    -- Steer along the surface, away from it. Urgency scales with closeness.
+    local n = flat(hit.Normal)
+    if n.Magnitude < 1e-3 then n = Vector3.new(-dir.Z, 0, dir.X) end
+    local urgency = 1 - (hit.Distance / lookahead)
+    local lateral = n.Unit
+    return truncate(lateral * a.maxSpeed * urgency - a.velocity * 0, a.maxForce) * 1.5
+end
+
+--- Neighbour-based behaviours. `neighbours` comes from the spatial hash (§7.5).
+function Steering.separation(a: Agent, neighbours: { Agent }, radius: number): Vector3
+    local steer = Vector3.zero
+    local count = 0
+    for _, other in neighbours do
+        local offset = flat(a.position - other.position)
+        local d = offset.Magnitude
+        if d > 1e-4 and d < radius then
+            steer += offset.Unit / d      -- inverse-distance weighting
+            count += 1
+        end
+    end
+    if count == 0 then return Vector3.zero end
+    steer /= count
+    if steer.Magnitude < 1e-4 then return Vector3.zero end
+    return truncate(steer.Unit * a.maxSpeed - a.velocity, a.maxForce)
+end
+
+function Steering.cohesion(a: Agent, neighbours: { Agent }, radius: number): Vector3
+    local centre, count = Vector3.zero, 0
+    for _, other in neighbours do
+        local d = (other.position - a.position).Magnitude
+        if d > 1e-4 and d < radius then centre += other.position; count += 1 end
+    end
+    if count == 0 then return Vector3.zero end
+    return Steering.seek(a, centre / count)
+end
+
+function Steering.alignment(a: Agent, neighbours: { Agent }, radius: number): Vector3
+    local sum, count = Vector3.zero, 0
+    for _, other in neighbours do
+        local d = (other.position - a.position).Magnitude
+        if d > 1e-4 and d < radius then sum += other.velocity; count += 1 end
+    end
+    if count == 0 then return Vector3.zero end
+    sum = flat(sum / count)
+    if sum.Magnitude < 1e-4 then return Vector3.zero end
+    return truncate(sum.Unit * a.maxSpeed - a.velocity, a.maxForce)
+end
+
+return Steering
+```
+
+### 3.3 Combining behaviours: weights, priority, truncation
+
+Three approaches, each with a real failure mode.
+
+**Weighted sum.** `F = Σ wᵢ Fᵢ`, then truncate to `maxForce`. Simple, smooth, and **the cause of most "my AI walks into walls" bugs**: a strong seek can swamp avoidance, and opposing forces can cancel to zero, leaving an agent frozen between two equally attractive options.
+
+**Prioritized truncation (recommended).** Evaluate behaviours in strict priority order, accumulate into a force budget, and stop once the budget is spent. Safety behaviours (avoidance, separation) go first and can consume the whole budget; goal-seeking gets whatever is left. This *guarantees* avoidance is never drowned out.
+
+```lua
+--!strict
+-- Prioritized truncated accumulation. Returns the final steering force.
+local function accumulate(a: Agent, behaviours: { { force: Vector3, weight: number } }): Vector3
+    local total = Vector3.zero
+    local remaining = a.maxForce
+    for _, b in behaviours do
+        local f = b.force * b.weight
+        local mag = f.Magnitude
+        if mag < 1e-5 then continue end
+        if mag < remaining then
+            total += f
+            remaining -= mag
+        else
+            total += f.Unit * remaining
+            break                      -- budget spent; lower priorities ignored
+        end
+    end
+    return total
+end
+
+-- Priority order for a melee chaser. Order IS the design.
+local force = accumulate(agent, {
+    { force = Steering.avoidObstacles(agent, 2, 0.6, rayParams), weight = 2.0 },
+    { force = Steering.separation(agent, neighbours, 6),          weight = 1.5 },
+    { force = Steering.arrive(agent, nextCorner, 8, 1.5),         weight = 1.0 },
+    { force = Steering.wander(agent, wanderState, dt, 6, 3, 4),   weight = 0.2 },
+})
+```
+
+**Priority dithering.** Reynolds' cheapest option: each behaviour has a probability of being the *only* one evaluated this tick; roll once and use that behaviour alone. O(1) instead of O(behaviours) per agent. Produces slightly jittery motion but is a genuine option at 500+ agents where you cannot afford to evaluate nine behaviours per agent per frame.
+
+### 3.4 Local avoidance: RVO / ORCA
+
+Separation stops agents from overlapping but produces the classic "two agents mirror each other and deadlock in a doorway" failure, because each reacts to where the other *is*, not where it's *going*. **Reciprocal Velocity Obstacles** (van den Berg et al., 2008) and its refinement **ORCA** (Optimal Reciprocal Collision Avoidance, 2011) fix this by having each agent choose a velocity outside the set of velocities that would collide within a time horizon `τ` — and, crucially, assume the other agent takes *half* the responsibility for avoidance. That reciprocity assumption is what eliminates oscillation. **[lit — not re-verified 2026-09; van den Berg, Lin & Manocha, "Reciprocal Velocity Obstacles for Real-Time Multi-Agent Navigation", ICRA 2008; van den Berg et al., ORCA, ISRR 2011; reference implementation: RVO2, gamma.cs.unc.edu/RVO2/]**
+
+Full ORCA is a linear program per agent per frame (solve for the velocity closest to preferred, subject to N half-plane constraints). That is real work, and on Roblox it is usually **not worth it**. The 90% version that is:
+
+```lua
+--!strict
+-- Poor man's reciprocal avoidance. O(neighbours), no LP.
+-- Predicts closest approach; if a collision is imminent, steer perpendicular,
+-- with a deterministic tie-break so both agents pick OPPOSITE sides.
+local function reciprocalAvoid(
+    a: Agent, aId: number, neighbours: { { agent: Agent, id: number } },
+    radiusSum: number, horizon: number
+): Vector3
+    local steer = Vector3.zero
+    for _, entry in neighbours do
+        local b = entry.agent
+        local relP = Vector3.new(b.position.X - a.position.X, 0, b.position.Z - a.position.Z)
+        local relV = Vector3.new(a.velocity.X - b.velocity.X, 0, a.velocity.Z - b.velocity.Z)
+        local vv = relV:Dot(relV)
+        if vv < 1e-6 then continue end
+
+        -- Time of closest approach.
+        local t = relP:Dot(relV) / vv
+        if t < 0 or t > horizon then continue end
+
+        local closest = relP - relV * t
+        local dist = closest.Magnitude
+        if dist >= radiusSum then continue end
+
+        -- Perpendicular escape direction; deterministic side by id comparison.
+        local side = (aId < entry.id) and 1 or -1
+        local perp = Vector3.new(-relV.Z, 0, relV.X).Unit * side
+        -- Urgency: closer in time AND space = stronger.
+        local urgency = (1 - t / horizon) * (1 - dist / radiusSum)
+        steer += perp * a.maxSpeed * urgency * 0.5   -- 0.5 = reciprocity share
+    end
+    return steer
+end
+```
+
+The `aId < entry.id` tie-break is the whole trick: it guarantees two agents on a head-on course pick opposite sides instead of mirroring. Without it you get the doorway deadlock.
+
+**When you actually need real ORCA:** dense crowds (>10 agents/100 studs²) that must not interpenetrate, in a game where clipping is visible and harmful. Otherwise: separation + reciprocal perpendicular + letting agents softly overlap at distance (players don't notice) is the better trade.
+
+### 3.5 Making movement look natural
+
+Raw steering output looks robotic. Four cheap fixes, in order of impact:
+
+**1. Turn-rate limiting.** Nothing living snaps its facing. Clamp the yaw change per frame.
+
+```lua
+local MAX_TURN_RATE = math.rad(220)   -- deg/s; humans ~180–360, tanks ~45
+
+local function limitTurn(currentLook: Vector3, desiredLook: Vector3, dt: number): Vector3
+    local a = Vector3.new(currentLook.X, 0, currentLook.Z)
+    local b = Vector3.new(desiredLook.X, 0, desiredLook.Z)
+    if a.Magnitude < 1e-4 or b.Magnitude < 1e-4 then return currentLook end
+    a, b = a.Unit, b.Unit
+    local dot = math.clamp(a:Dot(b), -1, 1)
+    local angle = math.acos(dot)
+    local maxStep = MAX_TURN_RATE * dt
+    if angle <= maxStep then return b end
+    -- Rotate a toward b by maxStep around Y.
+    local sign = (a.X * b.Z - a.Z * b.X) >= 0 and 1 or -1
+    local c, s = math.cos(maxStep * sign), math.sin(maxStep * sign)
+    return Vector3.new(a.X * c - a.Z * s, 0, a.X * s + a.Z * c)
+end
+```
+
+Couple it to speed: an agent turning hard should slow down. `effectiveSpeed = maxSpeed * (0.35 + 0.65 * math.max(0, currentLook:Dot(desiredLook)))` reads as weight and momentum for one line.
+
+**2. Acceleration, not teleportation.** `velocity += (force / mass) * dt`, then clamp to `maxSpeed`. Separate `maxAccel` from `maxDecel` — things stop faster than they start, and a higher decel makes `arrive` crisp without making starts twitchy.
+
+**3. Anticipation.** Begin the turn/slow *before* the corner. Sample the path one waypoint ahead and blend: `aimPoint = lerp(nextWaypoint, waypointAfter, clamp(1 - distToNext / anticipationDist, 0, 1))`. This single change is the difference between "follows a path" and "drives a racing line".
+
+**4. Desynchronized noise.** Give every agent a per-instance random phase and slightly different `maxSpeed` (±8%), turn rate, and wander jitter. Identical agents moving identically is the strongest "these are robots" signal there is, and it costs one `math.random()` at spawn.
+
+---
+
+## 4. Decision architectures
+
+### 4.1 Finite state machines, and hierarchical FSMs
+
+An FSM is a set of states, each with `enter`/`update`/`exit`, plus transitions. It is the right answer more often than the internet admits: it is trivially debuggable (one string tells you everything), has zero per-frame allocation, and every programmer on your team understands it instantly.
+
+Its documented failure mode is **transition explosion**: N states need up to N(N−1) transitions, and adding "flee when low health" means touching every state. Nystrom's *Game Programming Patterns* covers the standard escapes — concurrent state machines (one FSM for movement, one for weapons), pushdown automata (a state stack, so "reload" can return to whatever you were doing), and hierarchical states (a state inherits its parent's transitions). **[lit — not re-verified 2026-09; Robert Nystrom, *Game Programming Patterns*, "State", gameprogrammingpatterns.com/state.html]**
+
+```lua
+--!strict
+-- FSM.lua — hierarchical, allocation-free per frame.
+
+local FSM = {}
+FSM.__index = FSM
+
+export type State = {
+    name: string,
+    parent: string?,                            -- HFSM: inherit parent transitions
+    enter: ((ctx: any) -> ())?,
+    update: ((ctx: any, dt: number) -> ())?,
+    exit: ((ctx: any) -> ())?,
+    -- Transitions are checked in array order: first true wins.
+    transitions: { { to: string, when: (ctx: any) -> boolean } },
+}
+
+function FSM.new(states: { [string]: State }, initial: string, ctx: any)
+    local self = setmetatable({
+        states = states, current = initial, ctx = ctx,
+        timeInState = 0, history = table.create(16),
+    }, FSM)
+    local s = states[initial]
+    if s and s.enter then s.enter(ctx) end
+    return self
+end
+
+function FSM:_transitionsFor(name: string)
+    -- Walk up the parent chain so child states inherit parent transitions.
+    local out = {}
+    local s = self.states[name]
+    while s do
+        for _, t in s.transitions do table.insert(out, t) end
+        s = s.parent and self.states[s.parent] or nil
+    end
+    return out
+end
+
+function FSM:changeTo(name: string)
+    if name == self.current then return end
+    local from = self.states[self.current]
+    if from and from.exit then from.exit(self.ctx) end
+    table.insert(self.history, { from = self.current, to = name, t = os.clock() })
+    if #self.history > 16 then table.remove(self.history, 1) end
+    self.current = name
+    self.timeInState = 0
+    local to = self.states[name]
+    if to and to.enter then to.enter(self.ctx) end
+end
+
+function FSM:update(dt: number)
+    self.timeInState += dt
+    for _, t in self:_transitionsFor(self.current) do
+        if t.when(self.ctx) then
+            self:changeTo(t.to)
+            break
+        end
+    end
+    local s = self.states[self.current]
+    if s and s.update then s.update(self.ctx, dt) end
+end
+
+return FSM
+```
+
+The `history` ring buffer is not decoration: it is the debug tool that makes FSM bugs solvable (§9.2).
+
+Use an FSM when: behaviours are genuinely mutually exclusive modes (Idle / Patrol / Chase / Attack / Flee / Dead), and there are ≤10 of them. Stop using one when you find yourself adding boolean flags to states to remember what you were doing.
+
+### 4.2 Behavior trees
+
+A behavior tree is a tree re-evaluated (fully or from a remembered point) each tick; every node returns `Success`, `Failure`, or `Running`. `Running` is the whole point — it's what lets a tree express multi-frame actions without an explicit state machine. **[lit — not re-verified 2026-09; the standard modern treatment is Chris Simpson, "Behavior trees for AI: How they work", Game Developer, 2014; and Isla's Halo 2 behavior-DAG work, GDC 2005]**
+
+**Node taxonomy:**
+
+| Category | Node | Semantics |
+|---|---|---|
+| Composite | **Sequence** | Tick children in order. First `Failure` → `Failure`. First `Running` → `Running`. All `Success` → `Success`. (Logical AND / "do these in order".) |
+| Composite | **Selector** (Fallback) | Tick children in order. First `Success` → `Success`. First `Running` → `Running`. All `Failure` → `Failure`. (Logical OR / "try these until one works".) |
+| Composite | **Parallel** | Tick all children each tick. Succeed/fail on a policy (e.g. succeed when M of N succeed; fail on first failure). |
+| Composite | **RandomSelector** | Selector with weighted-random child order. Cheap variety. |
+| Decorator | **Inverter** | Flip Success ↔ Failure; pass Running. |
+| Decorator | **Succeeder / Failer** | Force a result (pass Running). |
+| Decorator | **Repeat(n) / RepeatUntilFail** | Loop a child. |
+| Decorator | **Cooldown(t)** | `Failure` if the child succeeded less than `t` ago. |
+| Decorator | **TimeLimit(t)** | `Failure` if the child stays Running past `t`. |
+| Decorator | **Condition / Guard** | Run the child only if a blackboard predicate holds. |
+| Leaf | **Action** | Do the thing; may return Running across frames. |
+| Leaf | **Condition** | Pure test → Success/Failure. |
+
+**Blackboard**: a shared key-value store per agent (and often a second one per squad). Nodes never talk to each other directly; they read and write the blackboard. This is what keeps subtrees reusable.
+
+```lua
+--!strict
+-- BehaviorTree.lua — a complete, small, fast BT. No per-tick allocation.
+
+local BT = {}
+
+export type Status = "success" | "failure" | "running"
+export type Node = { tick: (self: Node, bb: any, dt: number) -> Status, reset: ((self: Node) -> ())? }
+
+-- ---------- Composites ----------
+
+function BT.Sequence(children: { Node }): Node
+    local node = { children = children, index = 1 }
+    function node:reset()
+        self.index = 1
+        for _, c in self.children do if c.reset then c:reset() end end
+    end
+    function node:tick(bb, dt): Status
+        while self.index <= #self.children do
+            local status = self.children[self.index]:tick(bb, dt)
+            if status == "running" then return "running" end
+            if status == "failure" then self:reset(); return "failure" end
+            self.index += 1
+        end
+        self:reset()
+        return "success"
+    end
+    return node :: any
+end
+
+function BT.Selector(children: { Node }): Node
+    local node = { children = children, index = 1 }
+    function node:reset()
+        self.index = 1
+        for _, c in self.children do if c.reset then c:reset() end end
+    end
+    function node:tick(bb, dt): Status
+        while self.index <= #self.children do
+            local status = self.children[self.index]:tick(bb, dt)
+            if status == "running" then return "running" end
+            if status == "success" then self:reset(); return "success" end
+            self.index += 1
+        end
+        self:reset()
+        return "failure"
+    end
+    return node :: any
+end
+
+--- Parallel with an explicit success policy.
+function BT.Parallel(children: { Node }, successCount: number, failureCount: number): Node
+    local node = { children = children }
+    function node:reset() for _, c in self.children do if c.reset then c:reset() end end end
+    function node:tick(bb, dt): Status
+        local s, f = 0, 0
+        for _, c in self.children do
+            local r = c:tick(bb, dt)
+            if r == "success" then s += 1 elseif r == "failure" then f += 1 end
+        end
+        if s >= successCount then self:reset(); return "success" end
+        if f >= failureCount then self:reset(); return "failure" end
+        return "running"
+    end
+    return node :: any
+end
+
+--- Priority Selector that re-evaluates from the top every tick. This is the
+--- "reactive" selector — use it at the ROOT so high-priority branches
+--- (flee, react to damage) can interrupt a running low-priority branch.
+function BT.ReactiveSelector(children: { Node }): Node
+    local node = { children = children, running = nil }
+    function node:reset()
+        self.running = nil
+        for _, c in self.children do if c.reset then c:reset() end end
+    end
+    function node:tick(bb, dt): Status
+        for i, c in self.children do
+            local status = c:tick(bb, dt)
+            if status ~= "failure" then
+                -- A higher-priority branch took over: reset the interrupted one.
+                if self.running and self.running ~= i then
+                    local prev = self.children[self.running]
+                    if prev.reset then prev:reset() end
+                end
+                self.running = (status == "running") and i or nil
+                return status
+            end
+        end
+        self.running = nil
+        return "failure"
+    end
+    return node :: any
+end
+
+-- ---------- Decorators ----------
+
+function BT.Inverter(child: Node): Node
+    local node = { child = child }
+    function node:reset() if self.child.reset then self.child:reset() end end
+    function node:tick(bb, dt): Status
+        local r = self.child:tick(bb, dt)
+        if r == "success" then return "failure" elseif r == "failure" then return "success" end
+        return "running"
+    end
+    return node :: any
+end
+
+function BT.Cooldown(child: Node, seconds: number): Node
+    local node = { child = child, readyAt = 0 }
+    function node:reset() if self.child.reset then self.child:reset() end end
+    function node:tick(bb, dt): Status
+        local now = os.clock()
+        if now < self.readyAt then return "failure" end
+        local r = self.child:tick(bb, dt)
+        if r == "success" then self.readyAt = now + seconds end
+        return r
+    end
+    return node :: any
+end
+
+function BT.TimeLimit(child: Node, seconds: number): Node
+    local node = { child = child, startedAt = nil }
+    function node:reset() self.startedAt = nil; if self.child.reset then self.child:reset() end end
+    function node:tick(bb, dt): Status
+        self.startedAt = self.startedAt or os.clock()
+        if os.clock() - self.startedAt > seconds then self:reset(); return "failure" end
+        local r = self.child:tick(bb, dt)
+        if r ~= "running" then self:reset() end
+        return r
+    end
+    return node :: any
+end
+
+function BT.Guard(predicate: (bb: any) -> boolean, child: Node): Node
+    local node = { child = child }
+    function node:reset() if self.child.reset then self.child:reset() end end
+    function node:tick(bb, dt): Status
+        if not predicate(bb) then return "failure" end
+        return self.child:tick(bb, dt)
+    end
+    return node :: any
+end
+
+-- ---------- Leaves ----------
+
+function BT.Action(fn: (bb: any, dt: number) -> Status, name: string?): Node
+    return { name = name, tick = function(_, bb, dt) return fn(bb, dt) end } :: any
+end
+
+function BT.Condition(fn: (bb: any) -> boolean, name: string?): Node
+    return {
+        name = name,
+        tick = function(_, bb) return fn(bb) and "success" or "failure" end,
+    } :: any
+end
+
+function BT.Wait(seconds: number): Node
+    local node = { until_ = nil }
+    function node:reset() self.until_ = nil end
+    function node:tick(): Status
+        self.until_ = self.until_ or (os.clock() + seconds)
+        if os.clock() >= self.until_ then self.until_ = nil; return "success" end
+        return "running"
+    end
+    return node :: any
+end
+
+return BT
+```
+
+A real guard tree, showing the shape that works:
+
+```lua
+--!strict
+local tree = BT.ReactiveSelector({
+    -- Priority 1: survive.
+    BT.Guard(function(bb) return bb.health / bb.maxHealth < 0.25 end,
+        BT.Sequence({
+            BT.Action(function(bb) bb.alertLevel = "panic"; return "success" end),
+            BT.Action(fleeToNearestCover, "FleeToCover"),
+        })),
+
+    -- Priority 2: fight what we can see.
+    BT.Guard(function(bb) return bb.visibleTarget ~= nil end,
+        BT.Selector({
+            BT.Sequence({
+                BT.Condition(function(bb) return bb.distanceToTarget <= bb.attackRange end, "InRange"),
+                BT.Cooldown(BT.Action(attack, "Attack"), 1.4),
+            }),
+            BT.Action(chaseTarget, "Chase"),
+        })),
+
+    -- Priority 3: investigate a lost target for 12 s, then give up.
+    BT.Guard(function(bb) return bb.lastKnownPosition ~= nil end,
+        BT.TimeLimit(BT.Sequence({
+            BT.Action(moveToLastKnown, "MoveToLastKnown"),
+            BT.Wait(2),
+            BT.Action(searchAround, "SearchAround"),
+            BT.Action(function(bb) bb.lastKnownPosition = nil; return "success" end),
+        }), 12)),
+
+    -- Priority 4: the default.
+    BT.Action(patrol, "Patrol"),
+})
+```
+
+**Roblox-specific BT notes.** Ticking a BT every `Heartbeat` for 200 agents is wasteful — decisions rarely need 60 Hz. Tick at 5–10 Hz via the time-slicing scheduler in §7.4 and keep steering at full rate. Build trees **once per archetype and share the structure**, but note the implementation above keeps per-node state (`index`, `readyAt`) — so either instantiate one tree per agent (a few KB, fine) or refactor node state into the blackboard keyed by node id. Instantiating per agent is simpler and almost always the right call.
+
+### 4.3 Utility AI — the one that feels most alive
+
+Utility AI replaces "which branch is true" with "which action scores highest". Each action has a set of **considerations**; each consideration maps a normalized input to a score in [0,1] through a **response curve**; the action's utility is the (usually compensated) product of its considerations. Pick the max, or sample from the top K for variety. **[lit — not re-verified 2026-09; Dave Mark, *Behavioral Mathematics for Game AI* (2009), and Mark & Dill, "Improving AI Decision Modeling Through Utility Theory", GDC 2010 — the Infinite Axis Utility System]**
+
+**Why it feels better than a BT:** a BT gives you "if X then A else B", which reads as a rule. Utility gives you "A is a bit better than B right now", which reads as a preference — and preferences shift smoothly as the world changes, so the agent looks like it's *weighing* things. It also degrades gracefully: add a new action and it competes without you rewriting any conditionals.
+
+**The formulation.**
+
+```
+score(action) = compensate( Π  curve_i( normalize_i( input_i ) ) )
+```
+
+The naive product has a known problem: with many considerations each < 1, scores collapse toward zero and an action with 6 considerations can never beat one with 2. Dave Mark's **compensation factor** corrects it:
+
+```
+modification = 1 − 1/n           (n = number of considerations)
+makeUpValue  = (1 − rawScore) * modification
+finalScore   = rawScore + (makeUpValue * rawScore)
+```
+
+**Response curves** — four shapes cover nearly everything:
+
+| Curve | Formula | Use for |
+|---|---|---|
+| Linear | `m*(x − c) + b` | "More is proportionally better." |
+| Quadratic / polynomial | `m*(x − c)^k + b` | `k>1`: only matters when high (ammo). `k<1`: matters immediately then plateaus. |
+| Logistic (sigmoid) | `1 / (1 + e^(−k*(x − c)))` | Thresholds with soft edges — "low health" without a cliff. |
+| Logit | `c + (1/k) * ln(x/(1−x))` | Inverse S; strong pull at both extremes. |
+
+```lua
+--!strict
+--!native
+-- Utility.lua — Infinite-Axis-style scoring.
+
+local Utility = {}
+
+export type Curve = (x: number) -> number
+
+function Utility.linear(m: number, c: number, b: number): Curve
+    return function(x) return math.clamp(m * (x - c) + b, 0, 1) end
+end
+
+function Utility.polynomial(m: number, k: number, c: number, b: number): Curve
+    return function(x)
+        local v = x - c
+        local p = (v < 0 and k % 2 == 0) and -math.abs(v) ^ k or (v >= 0 and v ^ k or -(-v) ^ k)
+        return math.clamp(m * p + b, 0, 1)
+    end
+end
+
+function Utility.logistic(k: number, c: number): Curve
+    return function(x) return math.clamp(1 / (1 + math.exp(-k * (x - c))), 0, 1) end
+end
+
+export type Consideration = {
+    name: string,
+    input: (ctx: any) -> number,   -- MUST return normalized [0,1]
+    curve: Curve,
+}
+
+export type UtilityAction = {
+    name: string,
+    weight: number,                              -- static priority multiplier
+    considerations: { Consideration },
+    isValid: ((ctx: any) -> boolean)?,           -- hard gate, evaluated first
+    execute: (ctx: any) -> (),
+}
+
+--- Score one action, with Dave Mark's compensation factor and early-out.
+function Utility.score(action: UtilityAction, ctx: any, cutoff: number): number
+    if action.isValid and not action.isValid(ctx) then return 0 end
+    local n = #action.considerations
+    if n == 0 then return action.weight end
+    local modification = 1 - 1 / n
+    local result = action.weight
+
+    for _, c in action.considerations do
+        -- EARLY-OUT: a running product can only go down, so bail as soon as it
+        -- cannot beat the best score so far. This is the single biggest
+        -- performance win in utility AI and costs one comparison.
+        if result <= cutoff then return 0 end
+        local raw = c.curve(math.clamp(c.input(ctx), 0, 1))
+        local makeUp = (1 - raw) * modification
+        result *= (raw + makeUp * raw)
+    end
+    return result
+end
+
+--- Pick the best action. `topK > 1` samples among the K best for variety.
+function Utility.select(actions: { UtilityAction }, ctx: any, topK: number?): UtilityAction?
+    local best, bestScore = nil, 0
+    local k = topK or 1
+    if k <= 1 then
+        for _, a in actions do
+            local s = Utility.score(a, ctx, bestScore)
+            if s > bestScore then best, bestScore = a, s end
+        end
+        return best
+    end
+    local scored = {}
+    for _, a in actions do
+        local s = Utility.score(a, ctx, 0)
+        if s > 0 then table.insert(scored, { a = a, s = s }) end
+    end
+    table.sort(scored, function(x, y) return x.s > y.s end)
+    local pool = math.min(k, #scored)
+    if pool == 0 then return nil end
+    return scored[math.random(1, pool)].a
+end
+
+return Utility
+```
+
+A guard's action set, which is where the expressiveness shows:
+
+```lua
+local actions: { Utility.UtilityAction } = {
+    {
+        name = "AttackTarget", weight = 1.0,
+        isValid = function(ctx) return ctx.visibleTarget ~= nil end,
+        considerations = {
+            { name = "HasTarget", input = function(ctx) return ctx.visibleTarget and 1 or 0 end,
+              curve = Utility.linear(1, 0, 0) },
+            { name = "InRange",   input = function(ctx) return 1 - math.min(ctx.distanceToTarget / 60, 1) end,
+              curve = Utility.logistic(12, 0.55) },     -- sharp-ish falloff past range
+            { name = "MyHealth",  input = function(ctx) return ctx.health / ctx.maxHealth end,
+              curve = Utility.polynomial(1, 0.5, 0, 0) }, -- willing to fight even hurt
+            { name = "AmmoLeft",  input = function(ctx) return ctx.ammo / ctx.maxAmmo end,
+              curve = Utility.polynomial(1, 2, 0, 0) },   -- only matters when it gets low
+        },
+        execute = function(ctx) ctx:fireAt(ctx.visibleTarget) end,
+    },
+    {
+        name = "TakeCover", weight = 1.1,
+        isValid = function(ctx) return ctx.nearestCover ~= nil end,
+        considerations = {
+            { name = "LowHealth",   input = function(ctx) return 1 - ctx.health / ctx.maxHealth end,
+              curve = Utility.logistic(14, 0.62) },       -- kicks in hard below ~38% hp
+            { name = "UnderFire",   input = function(ctx) return math.min(ctx.recentDamage / 40, 1) end,
+              curve = Utility.linear(1, 0, 0) },
+            { name = "CoverIsNear", input = function(ctx) return 1 - math.min(ctx.coverDistance / 40, 1) end,
+              curve = Utility.polynomial(1, 2, 0, 0) },
+        },
+        execute = function(ctx) ctx:moveTo(ctx.nearestCover) end,
+    },
+    {
+        name = "Reload", weight = 1.0,
+        isValid = function(ctx) return ctx.ammo < ctx.maxAmmo end,
+        considerations = {
+            { name = "AmmoLow",  input = function(ctx) return 1 - ctx.ammo / ctx.maxAmmo end,
+              curve = Utility.polynomial(1, 3, 0, 0) },
+            { name = "Safe",     input = function(ctx) return ctx.visibleTarget and 0.2 or 1 end,
+              curve = Utility.linear(1, 0, 0) },
+        },
+        execute = function(ctx) ctx:reload() end,
+    },
+    { name = "Patrol", weight = 0.3, considerations = {}, execute = function(ctx) ctx:patrol() end },
+}
+```
+
+Two production details: **hysteresis** (give the currently-running action a ×1.15 bonus so the agent doesn't flip-flop between two near-equal choices every tick), and **the early-out cutoff** in `score` — with 20 actions × 4 considerations that's 80 curve evaluations per decision without it, and typically ~20 with it.
+
+### 4.4 GOAP, and whether it's worth it
+
+Goal-Oriented Action Planning (Jeff Orkin, *F.E.A.R.*, 2005) gives each action **preconditions** and **effects** as symbolic world-state predicates, gives the agent a **goal** (a desired world state), and runs **A\* backwards through action space** — from the goal, finding actions whose effects satisfy unmet conditions — to produce a plan: an ordered action sequence. The agent executes it, and re-plans when the plan is invalidated. **[lit — not re-verified 2026-09; Jeff Orkin, "Three States and a Plan: The AI of F.E.A.R.", GDC 2006]**
+
+What it buys: emergent action sequences you never authored. An F.E.A.R. soldier that wants `TargetDead` discovers, on its own, "I have no ammo → Reload requires ammo → I have no ammo → so: MoveToCover, then Reload, then Attack" — from action definitions alone.
+
+```lua
+--!strict
+-- GOAP action shape. The planner is A* over sets of world-state predicates.
+export type GoapAction = {
+    name: string,
+    cost: number,
+    preconditions: { [string]: boolean },
+    effects: { [string]: boolean },
+    checkProceduralPrecondition: ((agent: any) -> boolean)?,   -- e.g. "cover exists"
+    perform: (agent: any) -> boolean,
+}
+
+local actions = {
+    { name = "Attack", cost = 1,
+      preconditions = { weaponLoaded = true, targetVisible = true },
+      effects = { targetDead = true } },
+    { name = "Reload", cost = 2,
+      preconditions = { hasAmmo = true },
+      effects = { weaponLoaded = true } },
+    { name = "MoveToCover", cost = 3,
+      preconditions = {},
+      effects = { inCover = true, targetVisible = false } },
+    { name = "Flank", cost = 5,
+      preconditions = { inCover = false },
+      effects = { targetVisible = true } },
+}
+-- Plan for goal { targetDead = true } from state { hasAmmo = true, targetVisible = false }
+-- → MoveToCover? no... → Flank, Reload, Attack.
+```
+
+**The honest verdict: usually not worth it on Roblox.** The costs are real — planning is an A* search per re-plan (and re-plans are frequent in dynamic games), the symbolic world state is fiddly to keep accurate, and the emergent behaviour is *hard to debug and harder to design against*, because you cannot easily answer "why did it do that?" Ship GOAP when: the *ordering* of actions genuinely cannot be authored (a survival/crafting sim, a heist sim, an immersive sim with many interacting verbs), and you have the tooling budget for a plan visualizer. For a shooter, a tower defence, an obby, a simulator or a fighting game, utility AI gives you 90% of the perceived intelligence for 20% of the complexity, and you can actually reason about it.
+
+### 4.5 Priority-list AI
+
+The one everyone under-rates:
+
+```lua
+--!strict
+-- The first rule that fires, wins. That's the entire architecture.
+local RULES = {
+    { when = function(s) return s.health <= 0 end,                 act = die },
+    { when = function(s) return s.health < 0.2 * s.maxHealth end,  act = flee },
+    { when = function(s) return s.canAttack and s.inRange end,     act = attack },
+    { when = function(s) return s.visibleTarget ~= nil end,        act = chase },
+    { when = function(s) return s.lastKnownPosition ~= nil end,    act = investigate },
+    { when = function(s) return true end,                          act = patrol },
+}
+
+local function think(s)
+    for _, rule in RULES do
+        if rule.when(s) then return rule.act(s) end
+    end
+end
+```
+
+Ten lines, zero allocation, trivially debuggable, and genuinely sufficient for the majority of shipped Roblox NPCs. Start here. Graduate when the rule list exceeds ~8 entries, when you need multi-frame actions (→ BT), or when the rules start needing "sort of" (→ utility).
+
+### 4.6 The decision table
+
+See **[Architecture decision table](#architecture-decision-table)** below.
+

@@ -904,3 +904,695 @@ Anything else — "generate A, then look at A while generating B" — reintroduc
 dependence and will produce seams the moment streaming loads chunks in a different
 order for a different player.
 
+---
+
+## 3. Dungeon and level generation
+
+The catalogue, ordered roughly by how often it is the right answer.
+
+### 3.1 The modern default: scatter → separate → Delaunay → MST → extra edges
+
+This is what most shipped roguelikes and roguelites do now. Popularised by the
+TinyKeep developer's 2013 write-up and reproduced in dozens of tutorials. It gives
+you rooms of controlled size, guaranteed connectivity, and a tunable amount of
+looping — which is exactly the set of properties you want.
+
+**Step 1 — scatter.** Place `N` rectangles at random points inside an ellipse.
+Sampling inside an ellipse rather than a rectangle is what gives dungeons an organic
+silhouette; a wide flat ellipse gives a horizontal "strip" dungeon.
+
+```lua
+local function randomPointInEllipse(rw: number, rh: number, rng): (number, number)
+    local t = rng:NextNumber() * math.pi * 2
+    local u = rng:NextNumber() + rng:NextNumber()
+    local r = (u > 1) and (2 - u) or u
+    return rw * r * math.cos(t), rh * r * math.sin(t)
+end
+```
+
+Room dimensions should be drawn from a distribution skewed toward small — the
+TinyKeep write-up uses a Park–Miller normal distribution for this. A cheap
+equivalent that works well: `size = minSize + math.floor((maxSize - minSize) * rng:NextNumber()^2)`.
+Squaring biases toward the minimum; use `^3` for a stronger bias.
+
+`N = 150` is the reference value for a full dungeon floor.
+
+**Step 2 — separate.** The rooms overlap heavily. Push them apart with separation
+steering until none overlap, keeping the packing tight:
+
+```lua
+local function separate(rooms, rng, maxIters: number)
+    for _ = 1, maxIters or 200 do
+        local moved = false
+        for i = 1, #rooms do
+            local a = rooms[i]
+            local vx, vy, n = 0, 0, 0
+            for j = 1, #rooms do
+                if i ~= j then
+                    local b = rooms[j]
+                    local ox = (a.w + b.w) * 0.5 - math.abs(a.x - b.x)
+                    local oy = (a.h + b.h) * 0.5 - math.abs(a.y - b.y)
+                    if ox > 0 and oy > 0 then
+                        -- push along the axis of least penetration
+                        if ox < oy then
+                            vx += (a.x < b.x) and -ox or ox
+                        else
+                            vy += (a.y < b.y) and -oy or oy
+                        end
+                        n += 1
+                    end
+                end
+            end
+            if n > 0 then
+                a.x += vx / n; a.y += vy / n
+                moved = true
+            end
+        end
+        if not moved then break end
+    end
+    for _, r in rooms do r.x = math.floor(r.x + 0.5); r.y = math.floor(r.y + 0.5) end
+end
+```
+
+Naive separation is O(N²) per iteration. At N = 150 and 200 iterations that is
+4.5 M distance tests — around 40 ms in Luau, acceptable once per floor, not
+acceptable per frame. Above N ≈ 300, bucket the rooms into a spatial grid first.
+
+*Alternative:* give every room a physics body and let the engine's solver separate
+them. On Roblox this means anchored-then-unanchored parts and a `RunService` wait
+for sleep, which is non-deterministic — **do not do this** if determinism matters.
+
+**Step 3 — select main rooms.** Keep only rooms above a size threshold (a common
+rule: `w > 1.25 * meanW and h > 1.25 * meanH`). The rest become candidate corridor
+filler in step 6.
+
+**Step 4 — Delaunay-triangulate the main room centres.** Bowyer–Watson, ~70 lines:
+
+```lua
+-- Returns a list of {a, b, c} index triples into `pts` ({x, y} each).
+local function delaunay(pts)
+    local n = #pts
+    -- Super-triangle enclosing everything
+    local minx, miny, maxx, maxy = math.huge, math.huge, -math.huge, -math.huge
+    for _, p in pts do
+        minx = math.min(minx, p.x); maxx = math.max(maxx, p.x)
+        miny = math.min(miny, p.y); maxy = math.max(maxy, p.y)
+    end
+    local dx, dy = maxx - minx, maxy - miny
+    local dmax = math.max(dx, dy) * 10
+    local mx, my = (minx + maxx) / 2, (miny + maxy) / 2
+    local work = table.clone(pts)
+    work[n + 1] = { x = mx - dmax, y = my - dmax }
+    work[n + 2] = { x = mx,        y = my + dmax }
+    work[n + 3] = { x = mx + dmax, y = my - dmax }
+
+    local function circum(a, b, c)
+        local ax, ay, bx, by, cx, cy = work[a].x, work[a].y, work[b].x, work[b].y, work[c].x, work[c].y
+        local d = 2 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by))
+        if math.abs(d) < 1e-12 then return nil end
+        local a2, b2, c2 = ax*ax + ay*ay, bx*bx + by*by, cx*cx + cy*cy
+        local ux = (a2 * (by - cy) + b2 * (cy - ay) + c2 * (ay - by)) / d
+        local uy = (a2 * (cx - bx) + b2 * (ax - cx) + c2 * (bx - ax)) / d
+        local r2 = (ax - ux)^2 + (ay - uy)^2
+        return { ux = ux, uy = uy, r2 = r2 }
+    end
+
+    local tris = { { a = n + 1, b = n + 2, c = n + 3, cc = nil } }
+    tris[1].cc = circum(n + 1, n + 2, n + 3)
+
+    for i = 1, n do
+        local p = work[i]
+        local edges = {}
+        for t = #tris, 1, -1 do
+            local tri = tris[t]
+            local cc = tri.cc
+            if cc and (p.x - cc.ux)^2 + (p.y - cc.uy)^2 < cc.r2 then
+                -- edges of a "bad" triangle: keep only those appearing once
+                local e = { {tri.a, tri.b}, {tri.b, tri.c}, {tri.c, tri.a} }
+                for _, ed in e do
+                    local key = math.min(ed[1], ed[2]) .. ":" .. math.max(ed[1], ed[2])
+                    edges[key] = edges[key] and false or ed
+                end
+                table.remove(tris, t)
+            end
+        end
+        for _, ed in edges do
+            if ed then
+                local tri = { a = ed[1], b = ed[2], c = i }
+                tri.cc = circum(tri.a, tri.b, tri.c)
+                if tri.cc then table.insert(tris, tri) end
+            end
+        end
+    end
+
+    local out = {}
+    for _, tri in tris do
+        if tri.a <= n and tri.b <= n and tri.c <= n then
+            table.insert(out, { tri.a, tri.b, tri.c })
+        end
+    end
+    return out
+end
+```
+
+Two determinism hazards in that function, both real: the `edges` table is iterated
+with `pairs` (order not guaranteed — but here order does not affect the *set* of
+triangles produced, only their order in `tris`, which is then re-sorted downstream, so
+it is safe *provided* you sort `out`); and `math.abs(d) < 1e-12` is a float
+comparison on collinear points. Snap your room centres to an integer grid before
+triangulating and both problems disappear.
+
+**Step 5 — minimum spanning tree, then add edges back.** Kruskal with union-find:
+
+```lua
+local function mst(nodeCount: number, edges)  -- edges: {{u, v, w}}
+    table.sort(edges, function(p, q)
+        if p[3] ~= q[3] then return p[3] < q[3] end
+        if p[1] ~= q[1] then return p[1] < q[1] end
+        return p[2] < q[2]                    -- total order => deterministic
+    end)
+    local parent = table.create(nodeCount)
+    for i = 1, nodeCount do parent[i] = i end
+    local function find(x) while parent[x] ~= x do parent[x] = parent[parent[x]]; x = parent[x] end return x end
+
+    local tree, extra = {}, {}
+    for _, e in edges do
+        local ru, rv = find(e[1]), find(e[2])
+        if ru ~= rv then parent[ru] = rv; table.insert(tree, e)
+        else table.insert(extra, e) end
+    end
+    return tree, extra
+end
+```
+
+The tie-breaking in that comparator is not optional. `table.sort` in Luau is an
+introsort and is **not stable**; with equal weights, two runs can order edges
+differently, and then the MST differs. Make the comparator a *total order* on
+`(weight, u, v)` and the MST is unique and reproducible.
+
+Then add back a fraction of the discarded edges to create loops:
+
+```lua
+local EXTRA_EDGE_CHANCE = 0.125     -- 12.5%: the widely-used reference value
+for _, e in extra do
+    if rng:NextNumber() < EXTRA_EDGE_CHANCE then table.insert(tree, e) end
+end
+```
+
+**What the loop fraction controls.** 0% = a pure tree, every room a cul-de-sac,
+players backtrack constantly — this is what makes MST-only dungeons feel bad.
+8–15% = the sweet spot: mostly branching, occasional shortcut, players feel clever
+when they find a loop. Above ~30% the map stops reading as a structure and becomes a
+mesh; stealth and chase gameplay break because every pursuit has three escape routes.
+
+**Step 6 — carve corridors.** For each surviving edge, carve an L-shaped or Z-shaped
+path between room centres, then promote any of the discarded small rooms that the
+corridor passes through into real rooms. This is the TinyKeep trick that makes
+corridors feel like they have incident geometry rather than being bare hallways.
+
+```lua
+local function carveL(grid, ax, ay, bx, by, rng)
+    local horizontalFirst = rng:NextNumber() < 0.5
+    if horizontalFirst then
+        for x = math.min(ax,bx), math.max(ax,bx) do grid[ay][x] = FLOOR end
+        for y = math.min(ay,by), math.max(ay,by) do grid[y][bx] = FLOOR end
+    else
+        for y = math.min(ay,by), math.max(ay,by) do grid[y][ax] = FLOOR end
+        for x = math.min(ax,bx), math.max(ax,bx) do grid[by][x] = FLOOR end
+    end
+end
+```
+
+**Failure modes.** Separation can fail to converge if the ellipse is too small for the
+total room area — cap iterations and re-scatter with a larger ellipse rather than
+looping forever. Delaunay degenerates on collinear or coincident centres — snap to a
+grid and de-duplicate. Very long MST edges produce absurd corridors across the whole
+map — reject edges longer than some multiple of the median and re-run MST on the
+filtered graph (check connectivity after filtering).
+
+### 3.2 BSP partitioning
+
+Split the rectangle recursively, put a room in each leaf, connect siblings on the way
+back up the tree. The virtue is that it *cannot* produce overlapping rooms and gives
+you a natural hierarchy (useful for "wings" of a building). The vice is that it looks
+like it: everything is axis-aligned and rooms are suspiciously evenly spread.
+
+```lua
+local MIN_LEAF, MAX_LEAF = 8, 20
+local SPLIT_RATIO = 0.4          -- split point in [0.4, 0.6] of the span
+
+local function bspSplit(node, rng, depth, out)
+    local w, h = node.w, node.h
+    local canSplitH = h >= MIN_LEAF * 2
+    local canSplitV = w >= MIN_LEAF * 2
+    if depth <= 0 or (not canSplitH and not canSplitV) or
+       (w <= MAX_LEAF and h <= MAX_LEAF and rng:NextNumber() < 0.25) then
+        table.insert(out, node); return
+    end
+    -- split the longer axis, unless the aspect ratio is near 1 (then choose randomly)
+    local vertical
+    if canSplitV and canSplitH then
+        if w / h >= 1.25 then vertical = true
+        elseif h / w >= 1.25 then vertical = false
+        else vertical = rng:NextNumber() < 0.5 end
+    else vertical = canSplitV end
+
+    local span = vertical and w or h
+    local lo = math.floor(span * SPLIT_RATIO)
+    local hi = span - lo
+    local cut = rng:NextInteger(lo, hi)
+
+    local a, b
+    if vertical then
+        a = { x = node.x,       y = node.y, w = cut,     h = h }
+        b = { x = node.x + cut, y = node.y, w = w - cut, h = h }
+    else
+        a = { x = node.x, y = node.y,       w = w, h = cut }
+        b = { x = node.x, y = node.y + cut, w = w, h = h - cut }
+    end
+    node.a, node.b = a, b
+    bspSplit(a, rng, depth - 1, out)
+    bspSplit(b, rng, depth - 1, out)
+end
+```
+
+Then inset a room inside each leaf (`rng:NextInteger(1, leaf.w - roomW - 1)` for the
+offset) and, walking back up, connect the room nearest the split line in `a` to the
+one in `b`.
+
+`SPLIT_RATIO` is the key parameter: 0.5 gives perfectly even quadrants (very
+artificial), 0.3 gives strong size variety at the cost of occasionally tiny leaves.
+0.4 is a good default. `MIN_LEAF` must be at least `minRoomSize + 2` or you get
+leaves with no room in them.
+
+**Use BSP for:** building interiors, office blocks, ship decks, anything that should
+read as architected. **Avoid for:** caves, ruins, anything organic.
+
+### 3.3 Cellular-automata caves
+
+The right tool for organic caverns. The rules, the initial fill and the iteration
+count are all well-established from the RogueBasin write-up and its descendants.
+
+```lua
+local FILL = 0.45        -- probability a cell starts as WALL
+local BIRTH = 5          -- a FLOOR cell becomes WALL if >= 5 of its 8 neighbours are WALL
+local SURVIVE = 4        -- a WALL cell stays WALL if >= 4 of its 8 neighbours are WALL
+local ITERATIONS = 4     -- 4-5; the map stops changing much after 4
+
+local function caves(w: number, h: number, rng)
+    local g = {}
+    for y = 1, h do
+        g[y] = table.create(w)
+        for x = 1, w do
+            -- hard border keeps the cave enclosed
+            local border = (x == 1 or y == 1 or x == w or y == h)
+            g[y][x] = (border or rng:NextNumber() < FILL) and 1 or 0
+        end
+    end
+
+    for _ = 1, ITERATIONS do
+        local n = {}
+        for y = 1, h do
+            n[y] = table.create(w)
+            for x = 1, w do
+                local count = 0
+                for dy = -1, 1 do for dx = -1, 1 do
+                    if dx ~= 0 or dy ~= 0 then
+                        local yy, xx = y + dy, x + dx
+                        -- out of bounds counts as WALL: keeps edges solid
+                        if yy < 1 or yy > h or xx < 1 or xx > w or g[yy][xx] == 1 then
+                            count += 1
+                        end
+                    end
+                end end
+                if g[y][x] == 1 then n[y][x] = (count >= SURVIVE) and 1 or 0
+                else                 n[y][x] = (count >= BIRTH)   and 1 or 0 end
+            end
+        end
+        g = n
+    end
+    return g
+end
+```
+
+**What each parameter does.**
+
+- `FILL` is the dominant knob. 0.40 → large open caverns, risk of one giant blob.
+  0.45 → the reference value, balanced caves with passages. 0.50 → tight, maze-like,
+  many disconnected pockets. Above 0.55 the map mostly fills in.
+- `BIRTH`/`SURVIVE` at 5/4 is the "4-5 rule". Dropping `SURVIVE` to 3 erodes walls
+  aggressively and opens everything up; raising `BIRTH` to 6 makes the CA almost
+  inert.
+- `ITERATIONS`: 1–2 gives craggy, noisy caves with lots of small debris (sometimes
+  desirable for rubble); 4–5 is smooth; past 5 nothing changes.
+
+**The defining failure mode is disconnection.** The CA does not know about
+connectivity and routinely produces 3–10 separate caverns. You must post-process:
+
+```lua
+-- Flood fill into labelled regions; keep the largest, tunnel the rest to it.
+local function regions(g, w, h)
+    local label, regs = {}, {}
+    for y = 1, h do label[y] = table.create(w, 0) end
+    for y = 1, h do for x = 1, w do
+        if g[y][x] == 0 and label[y][x] == 0 then
+            local id = #regs + 1
+            local cells, stack = {}, { {x, y} }
+            label[y][x] = id
+            while #stack > 0 do
+                local c = table.remove(stack)
+                table.insert(cells, c)
+                for _, d in { {1,0}, {-1,0}, {0,1}, {0,-1} } do
+                    local nx, ny = c[1] + d[1], c[2] + d[2]
+                    if nx >= 1 and nx <= w and ny >= 1 and ny <= h
+                       and g[ny][nx] == 0 and label[ny][nx] == 0 then
+                        label[ny][nx] = id
+                        table.insert(stack, {nx, ny})
+                    end
+                end
+            end
+            regs[id] = cells
+        end
+    end end
+    return regs, label
+end
+```
+
+Then either (a) keep only the largest region and fill the rest — simple, wastes map
+area, and can produce a cave much smaller than requested; or (b) connect regions by
+finding, for each pair, the closest cell pair and carving a 1–2 tile tunnel. Option (b)
+is what shipped games do. If you keep only the largest region, *check its area* and
+regenerate with a different seed if it is under ~35% of the map — that is a cheap and
+effective quality gate (§10.2).
+
+**Genres:** caves, mines, asteroid interiors, organic alien hives, destructible
+terrain seeds, island coastlines (run the CA on a masked region).
+
+### 3.4 Drunkard's walk
+
+The simplest generator that produces a guaranteed-connected map. A walker starts at
+the centre, carves its current tile, and steps in a random direction, repeating until
+a target fraction of the map is floor.
+
+```lua
+local function drunkardsWalk(w, h, targetFraction, rng)
+    local g = {}
+    for y = 1, h do g[y] = table.create(w, 1) end
+    local x, y = w // 2, h // 2
+    local target = math.floor(w * h * targetFraction)
+    local carved, dx, dy = 0, 0, 0
+    local MOMENTUM = 0.7                -- chance of continuing in the same direction
+    while carved < target do
+        if g[y][x] == 1 then g[y][x] = 0; carved += 1 end
+        if dx == 0 and dy == 0 or rng:NextNumber() > MOMENTUM then
+            local d = ({ {1,0}, {-1,0}, {0,1}, {0,-1} })[rng:NextInteger(1, 4)]
+            dx, dy = d[1], d[2]
+        end
+        x = math.clamp(x + dx, 2, w - 1)
+        y = math.clamp(y + dy, 2, h - 1)
+    end
+    return g
+end
+```
+
+`targetFraction` 0.35–0.45 is usable. `MOMENTUM` is the quality knob: at 0 you get a
+blobby amoeba centred on the start; at 0.7–0.85 you get sprawling winding tunnels; at
+0.95 you get near-straight corridors that clip the walls.
+
+**Strengths:** trivially connected, trivially chunk-safe if you seed the walker per
+chunk, very cheap. **Weaknesses:** no structure, no rooms, no control over shape, and
+the walker spends most of its time re-carving already-carved tiles (the "target
+fraction" loop can run 5–10× the number of carved tiles). Use multiple walkers from
+different starts, joined by a final connectivity pass, for larger maps.
+
+### 3.5 Maze algorithms, chosen by texture
+
+All of these produce a spanning tree of the grid (a "perfect maze" — exactly one path
+between any two cells). They differ in the *statistics* of that tree, and that is what
+the player feels.
+
+| Algorithm | Texture | Dead ends | Memory | Use when |
+|---|---|---|---|---|
+| **Recursive backtracker** (DFS) | Long, winding corridors; low branching | Few (~10%) | O(cells) + stack | Default. Feels like a dungeon, not a puzzle. |
+| **Prim's (randomised)** | Short stubby branches radiating from the start | Many (~30%) | O(frontier) | You *want* the player frustrated; cave-ish rooms |
+| **Kruskal's (randomised)** | Uniform, no directional bias, medium runs | Medium | O(cells) | Neutral texture; easy to weight specific edges |
+| **Wilson's** (loop-erased random walk) | Unbiased *uniform* spanning tree | Medium | O(cells) | Research-grade unbiasedness; slow to start |
+| **Aldous–Broder** | Also uniform | Medium | O(cells) | Never — Wilson's dominates it |
+| **Eller's** | Slight horizontal bias, tunable | Tunable | **O(one row)** | **Infinite / streamed mazes.** The only one that generates row by row without holding the maze. |
+| **Recursive division** | Rectangular rooms-within-rooms | Few | O(log n) stack | Architectural, "walls" feel |
+
+**Recursive backtracker** (iterative, no stack-overflow risk):
+
+```lua
+local function recursiveBacktracker(w, h, rng)
+    -- cells[y][x] = bitmask of open directions: 1=N 2=E 4=S 8=W
+    local cells = {}
+    for y = 1, h do cells[y] = table.create(w, 0) end
+    local visited = {}
+    for y = 1, h do visited[y] = table.create(w, false) end
+
+    local DIRS = { {0,-1,1,4}, {1,0,2,8}, {0,1,4,1}, {-1,0,8,2} }  -- dx,dy,bit,oppositeBit
+    local stack = { { rng:NextInteger(1, w), rng:NextInteger(1, h) } }
+    visited[stack[1][2]][stack[1][1]] = true
+
+    while #stack > 0 do
+        local cur = stack[#stack]
+        local cx, cy = cur[1], cur[2]
+        -- collect unvisited neighbours
+        local options = {}
+        for _, d in DIRS do
+            local nx, ny = cx + d[1], cy + d[2]
+            if nx >= 1 and nx <= w and ny >= 1 and ny <= h and not visited[ny][nx] then
+                table.insert(options, d)
+            end
+        end
+        if #options == 0 then
+            table.remove(stack)
+        else
+            local d = options[rng:NextInteger(1, #options)]
+            local nx, ny = cx + d[1], cy + d[2]
+            cells[cy][cx] = bit32.bor(cells[cy][cx], d[3])
+            cells[ny][nx] = bit32.bor(cells[ny][nx], d[4])
+            visited[ny][nx] = true
+            table.insert(stack, { nx, ny })
+        end
+    end
+    return cells
+end
+```
+
+**Eller's algorithm** — the one nobody implements and everybody should, because it is
+the only maze algorithm that streams. It processes one row at a time, maintaining only
+a set id per cell in the current row:
+
+```
+for each row except the last:
+  1. assign any cell without a set id a fresh unique set id
+  2. for each horizontal neighbour pair in the row:
+       if they are in different sets, randomly (p = horizontalBias) join them:
+         carve the wall and union the two sets
+  3. for each set present in the row:
+       choose at least one cell (and each other cell with p = verticalBias)
+       to carve downward; the chosen cells carry their set id into the next row
+  4. cells not carried down start the next row with no set id
+final row:
+  join every horizontally adjacent pair that is in a different set
+```
+
+`horizontalBias` and `verticalBias` are the texture knobs and they are *independent*:
+high horizontal / low vertical gives long east–west halls; the reverse gives vertical
+shafts. Memory is one row, so an infinite scrolling maze costs O(width).
+
+**Post-processing every maze needs:** *braiding* (removing dead ends by carving one
+extra wall at each) converts a perfect maze into one with loops. Braid 100% and the
+maze becomes fully connected with no cul-de-sacs (good for chase gameplay); braid
+30–50% for a mix. Also *sparsification* — repeatedly erase dead-end cells entirely —
+turns a full-grid maze into a sparser corridor network, which is what Nystrom's
+generator (§3.6) does at the end.
+
+### 3.6 Rooms and mazes (Nystrom)
+
+Bob Nystrom's 2014 generator, used in Hauberk, and the cleanest way to get a dungeon
+that has *both* proper rooms *and* proper corridors:
+
+1. **Place rooms** by rejection sampling: pick a random odd-sized room at a random odd
+   position, reject if it overlaps an existing room, repeat a fixed number of attempts.
+   Odd sizes and positions keep everything on the same parity lattice as the maze.
+2. **Flood the remaining solid space with maze** using a growing-tree algorithm,
+   starting from every unvisited odd cell. The `windingPercent` parameter controls
+   whether the growing tree prefers to continue in its current direction (low winding →
+   long straight corridors) or pick randomly (high winding → twisty). Reference
+   implementations use a low value (~10%).
+3. **Find connectors** — every solid tile that is adjacent to exactly two different
+   regions (a room and a maze, or two mazes).
+4. **Merge regions**: pick a random connector, carve it, union the two regions. Repeat
+   until one region remains. This is a spanning tree over regions. Every other
+   connector that touched those two regions is now redundant and is *discarded*, except
+   with probability `extraConnectorChance` (~4% in the reference) in which case it is
+   also carved, creating a loop.
+5. **Remove dead ends**: repeatedly find any open tile with exactly one open neighbour
+   and fill it. Run to fixpoint. This deletes all the maze's cul-de-sacs and leaves
+   only corridors that actually connect rooms.
+
+Step 5 is the magic. Without it you have a room-and-maze hybrid that is 60% pointless
+maze; with it you have a dungeon where every corridor goes somewhere.
+
+*(Parameter values `windingPercent ≈ 0.1` and `extraConnectorChance ≈ 0.04` are
+**[unverified]** — reported by implementations of Nystrom's Dart original; the
+source article was unreachable from this session.)*
+
+### 3.7 Prefab stitching with connection sockets
+
+When you want hand-authored quality and procedural variety, stitch authored modules.
+This is how most Roblox horror/backrooms/liminal games and most "dungeon crawler"
+titles actually build their spaces.
+
+**Data model.** Each prefab is a `Model` with a folder of `Attachment`s (or invisible
+parts) tagged as sockets. A socket carries:
+
+- `CFrame` (position + the direction the doorway faces — by convention, `LookVector`
+  points *out* of the module)
+- `SocketType: string` — `"corridor_2x3"`, `"door_1x2"`, `"stairs_down"`
+- `Tags: {string}` — semantic constraints (`"combat"`, `"dead_end_ok"`)
+
+**Placement.** To attach module B's socket `sb` to an already-placed socket `sa`, the
+required CFrame is:
+
+```lua
+-- Align sb to face sa: rotate B 180° about its socket's up axis so the two
+-- LookVectors oppose.
+local function dockCFrame(sa: CFrame, sb_local: CFrame): CFrame
+    local flip = CFrame.Angles(0, math.pi, 0)
+    return sa * flip * sb_local:Inverse()
+end
+```
+
+Then the module's world CFrame is `dockCFrame(socketWorldCFrame, socketLocalCFrame)`.
+
+**The algorithm** is a depth-first walk with rejection:
+
+```
+open = { the start module's free sockets }
+while #open > 0 and placed < budget:
+    socket = pop a socket (random, or nearest-to-goal for directed growth)
+    candidates = modules with a matching socket type, filtered by tags and budget
+    shuffle candidates
+    for each candidate, for each of its matching sockets:
+        cf = dockCFrame(socket, candidateSocket)
+        if not overlapsAnything(candidate, cf):        -- see below
+            place it; push its other sockets onto `open`; break
+    if nothing fit: cap the socket with a wall/dead-end prefab
+```
+
+**Overlap testing** is the whole difficulty. Options, in increasing order of cost and
+quality:
+
+1. **Grid occupancy.** Require every module to occupy whole cells of a coarse 3-D grid
+   (e.g. 4×4×4 studs) and keep a hash set of occupied cells. O(cells per module). This
+   is what you should do — it is fast, exact, and deterministic.
+2. **AABB overlap** against all placed modules with a spatial hash. Cheap but rejects
+   legitimate interlocking geometry (an L-shaped module's bounding box).
+3. `Workspace:GetPartBoundsInBox` / `GetPartsInPart` with an `OverlapParams` filter.
+   Accurate but touches the DataModel, so it cannot run in a parallel Actor and it is
+   slow enough to matter at hundreds of modules.
+
+**Failure modes.** *Dead-end explosion* — a purely random walk terminates early;
+weight candidate selection by socket count to keep growing. *Loops never close* — two
+branches that grow toward each other will not merge unless you explicitly test, at each
+placement, whether a free socket of the new module aligns with an existing free socket
+within a tolerance; if so, fuse them. *Budget overrun* — always cap total modules and
+have a "cap" prefab for every socket type.
+
+### 3.8 Graph grammars: missions, locks and keys
+
+This is the section that separates designed-feeling levels from noise. Everything above
+generates *space*. None of it generates *structure* — a reason to go left before right,
+a key that must be found before a door, a boss that is gated behind three trials.
+
+The approach is Joris Dormans' (with Sander Bakkes), published as "Generating Missions
+and Spaces for Adaptable Play Experiences" (IEEE TCIAIG, 2011): **generate the mission
+graph first, then embed it into space.** Two grammars, two steps.
+
+**Step 1 — the mission graph.** Start from a trivial graph and rewrite it with
+production rules. Nodes are *tasks* (`entrance`, `obtain`, `use`, `lock`, `goal`,
+`fight`, `explore`); edges are *dependencies* (you must do A before B).
+
+A minimal but genuinely useful rule set:
+
+```
+R1 (seed):        [entrance] -> [goal]
+                     ==>  [entrance] -> [explore] -> [goal]
+
+R2 (lock & key):  A -> B
+                     ==>  A -> [obtain key_i] -> [lock_i] -> B
+                     (the key node must be reachable without passing the lock)
+
+R3 (branch):      A -> B
+                     ==>  A -> [fork] -> {B, [side: treasure]}
+
+R4 (gauntlet):    [lock_i] -> B
+                     ==>  [lock_i] -> [fight] -> [fight] -> B
+
+R5 (hidden key):  [obtain key_i]
+                     ==>  [explore] -> [secret] -> [obtain key_i]
+```
+
+Apply rules N times, choosing a rule and a matching site with weighted random
+selection. The critical invariant, which you enforce by construction rather than by
+checking: **R2 only ever inserts the key node on the path *before* the lock node**, so
+the graph is solvable by construction. If you ever add a rule that could violate this,
+you must run a topological sort afterwards and reject any graph with a cycle in the
+dependency edges.
+
+```lua
+-- Solvability proof by simulation: can a player holding nothing reach the goal?
+local function isSolvable(nodes, edges, startId, goalId): boolean
+    local have, doneSet = {}, {}
+    local progress = true
+    while progress do
+        progress = false
+        for id, node in nodes do
+            if not doneSet[id] then
+                local ready = true
+                for _, e in edges do
+                    if e.to == id and not doneSet[e.from] then ready = false; break end
+                end
+                if ready and node.kind == "lock" and not have[node.keyId] then ready = false end
+                if ready then
+                    doneSet[id] = true
+                    if node.kind == "obtain" then have[node.keyId] = true end
+                    progress = true
+                end
+            end
+        end
+    end
+    return doneSet[goalId] == true
+end
+```
+
+That function is short enough that you should simply run it on every generated graph
+and regenerate on failure. It is the cheapest solvability proof in this chapter.
+
+**Step 2 — embed the mission into space.** Now walk the mission graph and allocate
+rooms. The rules are:
+
+- Each mission node becomes one or more rooms. `fight` nodes want arenas; `secret`
+  nodes want a hidden or awkward connection; `lock` nodes become a door between two
+  rooms.
+- The *dependency* edges become spatial *adjacency* constraints, but not one-to-one:
+  a dependency `A -> B` only requires that a path from A to B exists that does not pass
+  through any lock whose key is obtained after A.
+- Extra spatial edges (loops, shortcuts) are free to add — they cannot break
+  solvability, only shorten it. This is where §3.1's extra-edge pass belongs.
+
+The practical implementation is: run §3.1 to get a room graph, then assign mission
+nodes to rooms by walking the mission graph in topological order and placing each node
+in a room at increasing graph distance from the entrance, with locks placed on the
+edges that separate the "before" set from the "after" set. Verify with `isSolvable`
+against the *spatial* graph, not just the mission graph, and regenerate on failure.
+
+**Genres this unlocks:** Zelda-likes, Metroidvanias, immersive sims, escape rooms,
+any game where the level is a puzzle rather than a battlefield. Amid Moradi's
+`GraphDungeonGenerator` is a public implementation of exactly this Dormans pipeline
+for Zelda-1-style dungeons.
+
