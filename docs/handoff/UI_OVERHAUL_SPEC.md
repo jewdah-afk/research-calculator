@@ -333,3 +333,128 @@ than only in a separate header.
   never visibly disagree.
 - Give the button the §8 chromatic treatment at rest so it reads as the primary
   action on screen.
+
+---
+
+# Round 3 — material language, bars, and the overhead nameplate
+
+## 12. The banner is the reference finish — apply it everywhere
+
+The **UPGRADES header banner** is the quality bar for the whole game. Read what
+actually makes it work, then rebuild every other surface to the same standard
+with its own hue:
+
+- A **glossy ribbon** with angled ends, not a rectangle
+- A **specular sweep** running across it — one bright diagonal highlight, not a
+  uniform gradient
+- A **dark defined outline** that separates it cleanly from the background
+- A **circular icon badge** overlapping the left edge, breaking the silhouette
+- Two-tier type: large title, small caps subtitle beneath
+
+**Rule: every header, border and bar derives from this finish**, changing only
+hue. Upgrades purple · Resets orange · Stats green · Rarities gold · and one
+assigned hue per new board. Same geometry, same highlight angle, same outline
+weight, same badge treatment. The consistency *is* the polish.
+
+**Generate these as images, don't stack live effects.** A banner is a
+gradient + sweep + outline + noise baked into one texture, 9-sliced so it
+stretches to any board width. That kills the per-label `UIGradient`/`UICorner`
+cost and looks better than layered UI objects.
+
+## 13. Borders, foundations and bars — kill the arbitrary lines
+
+**The bars currently carry random tick marks that mean nothing.** Segmenting a
+bar is only allowed when the segments *are* the data — a bar that fills toward
+one goal is a single continuous fill. If segments represent something (levels,
+tiers), space them by that value and label them; otherwise remove them entirely.
+
+**Progress bar spec:**
+- Track: dark inset, subtle inner shadow at the top edge so it reads recessed
+- Fill: the row's hue with a gloss highlight along its upper third, and a
+  defined leading cap rather than a flat cut-off
+- Text centred **over** the fill with a contrasting outline so it stays legible
+  at 0% and 100% alike
+- **Ready state** gets the §8 chromatic sweep; in-progress does not
+- Fill animates with a spring, not a linear tween — and never re-animates from
+  zero on a refresh
+
+**Borders and foundations:**
+- One border weight across the game. Pick it once and never vary it per panel.
+- Panel backgrounds are a generated image — base tone, soft vignette, faint
+  noise — never a flat colour fill.
+- Consistent internal margin on every panel. Measure it once, apply everywhere.
+- Rounded corners baked into the panel image, not `UICorner` on live elements.
+
+**Still shipping:** the **placeholder checkerboard** is visible again at the
+bottom of the Upgrades panel. Third sighting. A transparent or missing texture
+is rendering as the panel foundation — fix it before any polish work, because
+it undermines everything above it.
+
+## 14. Overhead nameplate — "Luck#N", hero quality, fixed screen size
+
+**Content.** Above the player's name, on its own line:
+
+```
+Luck#100
+```
+
+The index is the real measure of progress, so it leads. Show the rarity *name*
+secondarily — smaller, beneath or after — since names lap past 10,000 while the
+number never does.
+
+**Treatment:**
+- Heavy weight, tight tracking, **bold outline** (`UIStroke`, contrasting, thick
+  enough to hold against any background — this room is dark and busy)
+- A soft drop shadow beneath the stroke for separation from bright VFX
+- Colour driven by the rarity band (§15)
+- Top-tier bands get the chromatic sweep on the text itself
+
+**The zoom problem, and the fix.** The plate currently shrinks as you zoom out
+because `BillboardGui.Size` is expressed in **Scale**, which is world-space
+studs — so it behaves like a physical object and recedes with distance.
+
+Express the size in **Offset** instead. Offset is screen pixels, so the plate
+holds a constant on-screen size no matter how far the camera pulls back. Set
+`Size = UDim2.fromOffset(w, h)` and size children in offset too, or they will
+reintroduce the scaling.
+
+Also set:
+- `AlwaysOnTop = true` so it never clips into geometry or VFX
+- `MaxDistance` so distant players' plates cull rather than clutter
+- `LightInfluence = 0` so the room's lighting can't dim it
+
+*Verify in-engine* — I can't test here, but Scale-vs-Offset is the mechanism
+behind exactly this symptom.
+
+**Performance:** a plate per player with live effects gets expensive fast. Bake
+the frame into an image, keep only the text live, and update the text only when
+the value actually changes.
+
+## 15. Luck colour coding and spike transitions
+
+**Every luck/rarity value is colour-coded by its band** — the same ten bands as
+the naming scheme (§5) and the rarity list (§10). One source of truth: band →
+hue. The nameplate, the rarity card, the Recent Rolls entries, the Roll Rarities
+list and the Your Luck board all read from it, so a colour means the same thing
+everywhere.
+
+**Make the spike feel good.** When a roll jumps several bands at once, do not
+hard-cut the colour:
+
+- **Tween through the intermediate band hues** rather than jumping straight to
+  the destination. The eye reads the sweep as "I climbed a long way."
+- **Scale duration to the size of the jump** — a one-band step is near-instant;
+  a six-band leap earns a longer, more dramatic sweep.
+- **Escalate the treatment with the jump, not just the destination**: a big
+  climb adds a brightness overshoot that settles back, so the plate visibly
+  flares before resting at its new colour.
+- Pair it with the §6 reveal tier so the colour sweep and the reveal share one
+  timing source and never disagree.
+
+**Colour is never the only signal** — the index number is always present, so
+nothing is lost to a colour-blind player.
+
+**Generate the ramp, don't hand-pick it.** With 10,000 rarities, per-rarity
+colours are impossible to author and impossible to keep consistent. Define ten
+band anchors and interpolate within each band by position, in a perceptually
+uniform space (OKLCH) so steps feel even rather than clumping in the blues.
