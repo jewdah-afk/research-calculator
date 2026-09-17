@@ -1295,3 +1295,92 @@ numbers not surviving independent replication `[SEARCH-SUMMARY]`.
 find rate from day one. Including for everything in this chapter.
 
 ---
+
+## Sources
+
+### Tier A — primary artifacts I read directly `[PRIMARY]`
+
+| Source | What it established |
+|---|---|
+| [`mshumer/Claude-of-Duty` — `prompt.md`](https://github.com/mshumer/Claude-of-Duty/blob/main/prompt.md) (read raw) | The original ~150-word Gauntlet Loop prompt, quoted in full in §2.2 |
+| [`mshumer/Claude-of-Duty` — `README.md`](https://github.com/mshumer/Claude-of-Duty) (read raw) | 55k lines / 11 subsystems; critic scores 3.59 → 4.14 → 4.05 → 5.05; "every critic in every round picked the real Call of Duty frame"; sequential (+1.00) beat parallel (+0.46); fps p50 12–17 → 28–30; worst frame 728–1236 → 66–82 ms; shader compiles 34–35 → 0; pixel-diff verification; capture non-reproducibility from state leakage |
+| [`mshumer/Claude-of-Duty` — `ARCHITECTURE.md`](https://github.com/mshumer/Claude-of-Duty/blob/main/ARCHITECTURE.md) (read raw) | The merge gate ("npm run build must pass and node tools/capture.mjs must produce a frame"); directory-ownership rule |
+| `mshumer/Claude-of-Duty` — repo tree + `tools/verify-live.mjs` (read raw / GitHub tree API) | The executable instrument set: capture, shotset, crop, imagediff, perf, profile, baseline, playtest, probe, analyze, verify-live; per-subsystem selftests. Playwright harness details |
+| [`robonuggets/gauntlet-loop`](https://github.com/robonuggets/gauntlet-loop) (README read raw) | Attribution to Shumer; "bar not rubric"; the Named/Fetchable/Comparable test; the four "what breaks it" failure modes |
+| [`trilwu/gauntlet-loop-skills` — `SKILL.md`](https://github.com/trilwu/gauntlet-loop-skills/blob/main/skills/gauntlet-loop/SKILL.md) (read raw) | Seven-phase formalization; PASS/FAIL with evidence; budget and two-rounds-no-improvement exit conditions |
+| [`NathanMaine/gauntletx`](https://github.com/NathanMaine/gauntletx) (README read) | Small-model replication; "What degrades is self-assessment"; "a smaller model builds almost as well and judges far worse"; the 100%-accuracy string-comparison bug |
+| [`mshumer/gpt-prompt-engineer`](https://github.com/mshumer/gpt-prompt-engineer) (README read raw) | ELO-1200 pairwise prompt tournament; Claude 3 variant; cost caveat |
+| [`mshumer/OpenReasoningEngine`](https://github.com/mshumer/OpenReasoningEngine) (README read raw) | Self-reflection + executed Python assertions; Mixture-of-Agents; beam search; memory-based planning; stated limitations |
+| [`mshumer/OpenDeepResearcher`](https://github.com/mshumer/OpenDeepResearcher) (README read raw) | LLM-terminated research loop with a max-iteration cap of 10; no stated accuracy limits |
+| `github.com/mshumer` profile | Repo inventory; no gauntlet-named repo on his account |
+
+### Tier B — papers cited from search summaries `[SEARCH-SUMMARY]`
+
+**arXiv was blocked from this environment. I did not read these PDFs. IDs are given so you can.**
+
+| ID | Paper | Used for |
+|---|---|---|
+| 2310.01798 | Huang et al., *Large Language Models Cannot Self-Correct Reasoning Yet* (ICLR 2024) | Intrinsic self-correction degrades; the oracle-label critique |
+| 2303.17651 | Madaan et al., *Self-Refine: Iterative Refinement with Self-Feedback* (NeurIPS 2023) | ~20% absolute average gain over 7 tasks; diminishing returns |
+| 2303.11366 | Shinn et al., *Reflexion: Language Agents with Verbal Reinforcement Learning* (NeurIPS 2023) | 91% HumanEval pass@1 vs 80%; +8% for verbal reflection over trajectory memory |
+| 2306.05685 | Zheng et al., *Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena* (NeurIPS 2023) | >80% judge–human agreement; position / verbosity / self-enhancement bias taxonomy |
+| 2404.13076 | Panickssery et al., *LLM Evaluators Recognize and Favor Their Own Generations* (NeurIPS 2024) | Self-recognition ↔ self-preference linear correlation |
+| 2606.05976 | Chen et al., *The Self-Correction Illusion: Role Relabeling Gates Explicit Error Flagging* | Byte-identical claim, role relabeled: +23 to +93 pp correction rate, 10/12 settings |
+| 2309.11495 | Dhuliawala et al., *Chain-of-Verification Reduces Hallucination* (Findings ACL 2024) | The 4 steps; Joint / 2-Step / Factored variants |
+| 2212.08073 | Bai et al., *Constitutional AI: Harmlessness from AI Feedback* | Principle-driven critique→revision; RLAIF |
+| 2304.05128 | Chen et al., *Teaching Large Language Models to Self-Debug* (ICLR 2024) | +12% with unit-test execution feedback; rubber-duck as the no-tests fallback |
+| 2207.10397 | Chen et al., *CodeT: Code Generation with Generated Tests* | Dual execution agreement; beats AlphaCode-style clustering |
+| 2408.03314 | Snell et al., *Scaling LLM Test-Time Compute Optimally…* | >4× efficiency over a best-of-N baseline |
+| 2506.18203 | *Shrinking the Generation-Verification Gap with Weak Verifiers* (Weaver, Stanford) | Gap = Pass@K − Success Rate; 14.5% average shrink |
+| 2502.08788 / ICML 2024 (Smit et al.) | *Should we be going MAD?* / *If Multi-Agent Debate is the Answer…* | Debate does not reliably beat self-consistency |
+| 2510.20963 | *When and Why Does Multi-Agent Debate Fail…* | Debate fails to beat single-agent CoT/SC even with extra compute |
+| 2502.19559 | *Stay Focused: Problem Drift in Multi-Agent Debate* | Problem drift over rounds |
+| 2311.17311 | *Universal Self-Consistency* | Voting extended to free-form outputs (reintroduces a judge) |
+| 2511.21654 | *EvilGenie: A Reward Hacking Benchmark* | Hardcoding / test-file edits; held-out tests + edit detection |
+| ImpossibleBench | (see LessWrong writeup) | Tests that contradict the spec make pass rate a reward-hacking measure |
+| 2605.22175 / 2607.22880 | *SWE-Mutation*; coverage-vs-mutation replicability study | LLM test suites assert weakly; coverage is a poor proxy |
+| — | Wang et al. 2022, *Self-Consistency Improves CoT* | Majority voting over sampled reasoning chains |
+| dl.acm.org/10.1145/3728963 | *Can LLMs Replace Human Evaluators? LLM-as-a-Judge in SE* | "<50% accuracy on code generation"; unusable on code summarization |
+| Springer 10.1007/978-3-032-09318-9_24 | *LLMs as Code Review Agents* | κ ≈ 0.82–0.88 on civility/type/relevance; over-scoring on deep design principles |
+| — | FrugalGPT (Chen, Zaharia, Zou, Stanford) | Cascade economics: match GPT-4 at up to 98% cost reduction |
+| — | OpenAI, *Finding GPT-4's mistakes with GPT-4* (CriticGPT, 2024) | Human+CriticGPT preferred >60%; critiques preferred ~80%; model-alone hallucinates more bugs |
+| — | Li et al., *Competition-level code generation with AlphaCode* (Science, 2022) | Filtering on example tests removes ~99% of samples |
+| — | Metamorphic testing / differential testing (standard SE literature) | The test-oracle problem; invariants under input transformation |
+
+### Tier C — second-hand, unread primaries `[SECOND-HAND]` / `[SEARCH-SUMMARY]`
+
+- **Matt Shumer's X posts** naming the Gauntlet Loop (`x.com/mattshumer_/status/2081830214384886228`,
+  `/2081857631254372509`, `/2081859491121758215`) and his guide at `somethingbig.ai/gauntlet-loop`.
+  **All blocked.** Every claim about their wording is search-summary only.
+- **Coverage** (Decrypt, BigGo, WotAI, explainx.ai, Rise.sk, daily.dev, thepromptindex.com,
+  rogerwong.me, stork.ai, wikiprompt.org, agenticworkers.com) — all blocked. Used only for the
+  existence and rough shape of the narrative.
+- **Reflection 70B (§3.5)** — VentureBeat, Techzine, CO/AI, asimovaddendum. All via search summary.
+  Verify before repeating.
+- **`anthropic.com/engineering/building-effective-agents`** — cited by the `robonuggets` README as
+  the evaluator-optimizer pattern the loop is built on. Domain blocked; I could not read it. It is
+  worth reading directly, since it is the closest thing to a vendor-documented statement of this
+  pattern.
+
+### Reachability log
+
+Reachable: `github.com`, `raw.githubusercontent.com`, `api.github.com`, and the WebSearch index.
+Blocked by the egress proxy: `x.com`, `xcancel.com`, `arxiv.org`, `ar5iv.labs.arxiv.org`,
+`aclanthology.org`, `openreview.net`, `proceedings.neurips.cc`, `semanticscholar.org`,
+`huggingface.co`, `anthropic.com`, `openai.com`, `decrypt.co`, `learnprompting.org`, and most
+independent blogs. This is why the confidence tiers are distributed the way they are: the
+Shumer-specific material is unusually well-evidenced (it lives on GitHub) and the academic material
+is unusually weakly-evidenced (it lives on arXiv). Anyone re-running this research from an
+unrestricted network should be able to upgrade every Tier B row to `[PRIMARY]` in an afternoon.
+
+### Related chapters in this corpus
+
+- **[64 — QA and verification methodology](64-qa-and-verification-methodology.md)** — the Luau
+  mechanics for everything in §6.1–6.2: TestEZ vs Jest Lua vs Lune, golden-master fixtures,
+  relative-epsilon comparison at extreme magnitudes, property tests, soak tests, save-system
+  testing, Selene/StyLua/`luau-lsp` in CI. Chapter 64 is *how to build the instruments*; chapter 65
+  is *how to sequence agents against them*.
+- **[62 — JS → Luau port methodology](62-js-to-luau-port-methodology.md)** — semantic gotchas and
+  equivalence testing, which is where the golden vectors of §6.2 come from.
+- **[60 — Big numbers & AlyaNum](60-luau-bignum-and-alyanum.md)** — the magnitude ladder that
+  defines the adversary's highest-yield attack surface (§6.4, item 1).

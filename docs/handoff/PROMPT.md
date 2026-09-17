@@ -106,23 +106,117 @@ Self-review does not count. The QA rubric is in the handout.
 
 ## Non-negotiables
 
-1. **The simulation is a pure Luau module.** No `Instance` references, no
-   `game.`, no services. It must run headlessly under Lune in CI. If the
-   simulation cannot be tested without Studio, the architecture is wrong.
-2. **Equivalence is proven, not asserted.** Extract golden-master vectors from
-   the original — state snapshots at known tick counts, input→output for every
-   formula — and assert the port reproduces them within a stated relative
-   tolerance. "It looks right" is not a result.
-3. **Every agent writes its output file incrementally**, appending sections as
+1. **The simulation is a pure Luau module.** No `Instance`, no `game`, no
+   services, no `task.*`, no `os.time`, no `math.random` — time and RNG are
+   injected. If the simulation cannot run without Studio, the architecture is
+   wrong and everything downstream becomes unverifiable.
+   Enforce it mechanically: `luau.load(source, { environment = ... })` with
+   every Roblox global replaced by a trap turns the convention into a build
+   failure. (Note this deoptimizes the chunk, so use it as a gate, not in the
+   soak hot path.)
+
+2. **Equivalence is proven, not asserted.** Golden-master vectors extracted
+   from the original, diffed against the port. "It looks right" is not a
+   result.
+
+3. **Make the ORIGINAL deterministic first — before porting.** Seeded PRNG,
+   virtual clock, `stepN(n, dt)` replacing requestAnimationFrame, explicit key
+   iteration order. Prove it by regenerating the golden data twice to a
+   byte-identical result. Do this *before* the port exists, so you cannot
+   unconsciously write vectors that match your own implementation.
+
+4. **Tolerance is relative, never absolute.** One ULP near 1e300 is ~2e284, so
+   `math.abs(a-b) < 1e-9` is vacuous above ~1e7. Write a tolerance policy into
+   the repo: 0 ULP for pure non-accumulating formulas, ≤2 ULP where `pow`/`log`
+   is involved, exact for integer-valued fields, NaN/Inf always a bug. For
+   big-number values require exact sign and layer match and scale the mantissa
+   budget by magnitude. TestEZ's only approximate matcher is absolute and is
+   unusable here — write your own comparator.
+   When a diff appears, "it's just floats" is the wrong diagnosis nine times
+   out of ten. It is usually an operation-order difference in a multiplier
+   chain, and it is fixable.
+
+5. **Fixture governance — the control that stops an agent cheating.** Fixtures
+   are generated from the original, NEVER from the port. `--regenerate` is not
+   a runner flag; regeneration is its own fixtures-only pull request. Keep a
+   `frozen/` subtree that CI treats as immutable. Without this, a failing
+   golden-master test gets "fixed" by blessing the wrong output, and the entire
+   verification story silently becomes theatre.
+
+6. **Test stack — verified, and not what you would assume.** Jest Lua **cannot
+   run under Lune** (its own README says so; it requires `run-in-roblox`).
+   Lune's `roblox` library is a **file manipulator, not a DataModel emulator** —
+   no `require` of ModuleScripts, no signals, no scheduler — so TestEZ's
+   `TestBootstrap:run` cannot work under it unaltered. The workable path is
+   plain Luau spec files plus a small Lune runner you own. Chapter 64 ships one.
+
+7. **Lint in CI, not Studio.** Luau's linter has 29 codes and Studio hides six
+   of them, including `LocalShadow`, `LocalUnused` and `ImplicitReturn`.
+   `IntegerParsing`, `FormatString` and `MisleadingAndOr` are directly
+   load-bearing for a big-number port. Playtesting structurally cannot surface
+   these.
+
+8. **Every agent writes its output file incrementally**, appending sections as
    it completes them. Agents that compose a whole document and save at the end
-   lose everything when they hit a limit. This has already happened.
-4. **Verify APIs against source, never memory.** `create.roblox.com`,
-   `devforum.roblox.com` and `luau.org` are blocked. Use the GitHub mirrors
-   listed in the handout. Mark `[UNVERIFIED]` rather than inventing a
-   signature — a plausible-looking wrong signature costs more than an admission.
-5. **Stagger agent launches** in batches of ~5. Launching 16 at once hit an
-   account rate limit and killed every one of them mid-work.
-6. **Commit and push after every batch lands.** Do not accumulate.
+   lose everything when they hit a limit. This happened three times in the
+   research session that produced this handout.
+
+9. **Verify APIs against source, never memory.** `create.roblox.com`,
+   `devforum.roblox.com` and `luau.org` are blocked. Use the mirrors in the
+   handout. Mark `[UNVERIFIED]` rather than inventing a signature.
+
+10. **Stagger agent launches** in batches of ~5. Launching 16 at once hit an
+    account rate limit and killed every one of them mid-work.
+
+11. **Commit and push after every batch lands.** Do not accumulate.
+
+## What the research already settled — do not re-litigate
+
+Read the handout, but these are the decisions:
+
+- **AlyaNum is the number library.** It reaches `E(4)` with enormous headroom;
+  its real ceiling is heptation. MIT, maintained, full operator overloading.
+- **AlyaNum's addition saturates above `10^(9e15)`** — `a + b` returns
+  `max(|a|,|b|)` while multiplication keeps working. At `E(4)`, `x + x == x`.
+  **An additive income loop silently freezes.** Audit every income path in the
+  original for this, express the economy multiplicatively where it matters, and
+  put a test in CI that asserts it.
+- **Offline progress is not a feature.** One `advanceTo(state, now)` that
+  closed-form-integrates and re-anchors the timestamp in a single mutation.
+  Online and offline become provably identical. The headline test: 12 hours in
+  one jump equals 12 hours of 4Hz ticks.
+- **`balance += rate*dt` silently no-ops at scale** in float64. Closed-form
+  integration removes the bug class.
+- **Generate art at edit time in a Studio plugin, upload, ship asset IDs.**
+  This clears the verification gate, the memory budget, the replication
+  landmine, the one-update-per-frame throttle and the mobile risk at once.
+  Runtime generation only where content must genuinely change live.
+- **`CreateMeshPartAsync` costs ~22 ms before a single triangle.** Streaming
+  destructible geometry is not viable.
+- **Vide for UI** — fine-grained reactivity suits hundreds of independent
+  numbers updating at ~15 Hz. If the studio already runs React-Lua, keep it for
+  structure and route the hot numeric path through imperative refs.
+- **ProfileStore for persistence.** DataStore2 is officially deprecated.
+- **Do not pre-compress saves** — Roblox compresses automatically, and bytes
+  >127 fail `UpdateAsync` anyway. `EncodingService` provides native Zstd if you
+  do need it.
+
+## Resolve these in a scratch place before committing to an architecture
+
+Eight questions could not be settled from documentation and are load-bearing.
+A few hours here de-risks months:
+
+1. Does `Opaque` DataModel-scoped `Content` replicate server→client?
+2. Do `Beam`/`Trail`/`ParticleEmitter`/`Sky` sinks accept an EditableImage, or
+   silently no-op?
+3. What is the real editable-assets memory budget in MB — and do smaller
+   canvases buy more of them?
+4. Are removed `EditableMesh` IDs reused?
+5. UV origin convention — V=0 top or bottom?
+6. Do vertex colours render alongside `SurfaceAppearance`?
+7. Does `RenderFidelity.Automatic` generate LODs for an EditableMesh-backed
+   `MeshPart`?
+8. Premultiplied or straight alpha in the `EditableImage` pixel buffer?
 
 ## Build order
 
