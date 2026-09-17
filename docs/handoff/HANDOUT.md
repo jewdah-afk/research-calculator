@@ -39,6 +39,28 @@ able to hold up to 2^53−1. The library's real ceiling is **heptation**
   order-preserving encoding for `OrderedDataStore` leaderboards — never use it
   as a save format.
 
+**THE CRITICAL FINDING — addition saturates, multiplication does not.**
+Above `10^(9e15)`, `a + b` returns `max(|a|, |b|)` (`init.luau:417-425`, with
+the source comment "number too big to matter"), while `mul` keeps working to
+`10^10^(9e15)`. **At `E(4)`, `x + x == x`, but `x * 2 ≠ x`.**
+
+An additive income loop *silently freezes* at high magnitude; a multiplicative
+one does not. This is a game-design constraint, not just an implementation
+detail — it should shape how the economy is expressed, and it belongs in CI as
+an explicit test. If Shark Incremental's lategame income is additive anywhere,
+that code path stops producing and nothing errors.
+
+**Other AlyaNum specifics worth knowing up front:**
+- **No NaN, no Infinity, no `isNaN`/`isFinite`.** `AlyaNum.new(math.huge)`
+  throws; `toNumber()` returns `math.huge` past 2^1024 — a one-way door.
+- **`a + b` is cheaper than `a:add(b)`** — the metamethod is one call, the
+  public method wraps both arguments in `AlyaNum.new` first. Counter to folklore.
+- **`AlyaNum.fromOmega()` accepts an OmegaNum save directly**, and `fromOnoe()`
+  handles SerikaNum/OnoeNum — a one-line migration if the original uses either.
+- `__idiv`, `__len` and `__iter` are absent, so `gold // 1` errors.
+- **No break_infinity port to Luau exists.** The target is AlyaNum, not a port
+  of the JS library.
+
 **Two footguns.** `AlyaNum.new` on an existing AlyaNum returns *the same
 object*, and `toBaseAlya()` strips the metatable **in place** — the library's
 own source comment says so. Aliasing bugs here are silent. And never let a raw
@@ -119,6 +141,62 @@ Most code handles this wrong:
 
 `CanEditAssetAsync` is `RobloxScriptSecurity`, so there is **no pre-check
 available**. `pcall` plus a nil check is mandatory on every creation call.
+
+## 2b. Measured performance — the real ceilings
+
+A CI-driven benchmark dataset (`nightcycle/roblox-benchmarks-data`) provides
+the only real `EditableImage` measurements in existence. Note the suite is
+**not** `--!native`, while shipping libraries are, so re-measure on a low-end
+phone before committing.
+
+| Measurement | Value |
+|---|---|
+| `DrawRectangle` | median 9.62 µs, p90 73.2 µs |
+| `DrawLine` | median 0.37 µs |
+| `buffer` read/write | **flat across widths** — so packed-u32 pixels are a 4× win |
+| `Vector3` vs `Vector2` | Vector3 is **2.5× faster** |
+| Metatable dispatch | **2.3×** the cost of a local call |
+| `CreateMeshPartAsync` | **~22 ms fixed + ~0.27 ms per 1k triangles** |
+
+**That `CreateMeshPartAsync` figure is a wall.** 22 ms exceeds a 60 fps frame
+*before a single triangle*, and it holds even with `CollisionFidelity.Box` and
+`CanCollide = false`. Streaming destructible geometry is not viable. It also
+reinforces the core mesh rule: mutate for visuals, bake only when you must.
+
+**Per-pixel software rendering tops out at 100×100 to ~256×256 at 60 fps**,
+with 512×512 the absolute outer limit — a bare full repaint at 512² is 9.7 ms,
+58% of a frame; 1024² is 38.7 ms, or 2.3 frames, before any shading. Every
+shipped project independently lands in this band. Sprite-blit workloads reach
+1024×576 because most pixels are `buffer.copy`d rather than computed.
+
+**The hardest wall is not throughput but the one-update-per-frame rule:** N
+displayed canvases refresh at 60/N fps.
+
+**The "8 editable objects" limit appears to really be a 32 MB byte budget** —
+1024²×4 = 4 MiB, and 32÷4 = 8 exactly. If so, **smaller canvases buy more of
+them**. This is the highest-leverage unknown in the whole corpus; verify it first.
+
+**Two under-advertised first-party capabilities**, neither used by any project
+found: `EncodingService` provides **native Zstd** (levels −7…22, plus Base64
+and hashing, `thread_safety: Safe`) — no compression library needed. And
+`DrawImageProjected`/`SampleImageProjected` is an engine-side decal and
+damage-projection primitive.
+
+**Reliability caveat:** a June 2026 report describes the engine *intermittently
+revoking access to these APIs mid-operation, on both server and client, with no
+configuration change*. Creation sites need `pcall` **and** a nil-check **and** a
+degraded fallback.
+
+**Licence risk:** the two best canvas libraries are not OSI-licensed —
+CanvasDraw has no licence file, OSGL uses a custom non-OSI licence, FastCanvas
+declares nothing. Write the pixel layer against a bare `buffer` so any canvas
+library is a swappable adapter.
+
+**The `EditableMesh` ecosystem is effectively empty** — no marching-cubes or
+greedy-meshing library, no runtime CSG, no LOD/decimation, no chunk streamer,
+no destruction library, no benchmarks at all. The likely cause is that
+`EditableMesh` has **no bulk-write analogue to `WritePixelsBuffer`**. Anything
+mesh-side will be built from scratch.
 
 ## 3. The recommended art pipeline
 
