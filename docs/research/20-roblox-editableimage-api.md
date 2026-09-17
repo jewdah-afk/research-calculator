@@ -1220,3 +1220,166 @@ FastCanvas keeps a second, pre-filled `ClearingGrid` buffer and does `buffer.cop
 for its `Clear()`, which is faster than re-filling byte patterns and lets the clear colour be
 arbitrary. That is the pattern to copy if you clear every frame.
 
+---
+
+## 5. Display sinks: where an `EditableImage` can actually appear
+
+The mechanism is always the same:
+
+```lua
+someInstance.SomeContentProperty = Content.fromObject(editableImage)
+```
+
+But **not every `Content`-typed property accepts an `EditableImage`.** Several are `Content`-typed
+purely as a modern wrapper around a legacy `ContentId` string and explicitly reject objects. The
+table below was built by enumerating every `Content`-typed property in the engine reflection dump
+(80 of them) and then reading each one's documentation text. **Do not assume; this is the list.**
+
+### 5.1 Confirmed sinks — the property text explicitly names `EditableImage`
+
+| Class | Property | Exact supporting language | Write security |
+|---|---|---|---|
+| `ImageLabel` | `ImageContent` | "Supports asset URIs and `EditableImage` objects." | None |
+| `ImageButton` | `ImageContent` | "Supports asset URIs and `EditableImage` objects." | None |
+| `Decal` | `TextureContent` | "Supports asset URIs and `EditableImage` objects." — **but the property is deprecated**, "Use `ColorMapContent` for future work." | None |
+| `Decal` | `ColorMapContent` | The modern replacement; `Content` "that determines the color and opacity of the surface". `NotReplicated`. | None |
+| `Texture` | inherited from `Decal` | `Texture` inherits `Decal` (DOCS `inherits: [Decal]`) and adds only `OffsetStudsU/V` and `StudsPerTileU/V`. So `TextureContent` / `ColorMapContent` work identically. | None |
+| `MeshPart` | `TextureContent` | "Supports asset URIs and `EditableImage` objects." "the `MeshContent` property cannot be directly changed during runtime **but the texture can**." | None |
+| `SurfaceAppearance` | `ColorMapContent` | "The content can hold an asset URI **or a reference to an `EditableImage` object**. … Assigning an `EditableImage` is useful for dynamically generating or modifying textures at runtime." | **`PluginSecurity`** |
+| `SurfaceAppearance` | `NormalMapContent` | "…or a reference to an `EditableImage` object." | **`PluginSecurity`** |
+| `SurfaceAppearance` | `RoughnessMapContent` | "…or a reference to an `EditableImage` object." | **`PluginSecurity`** |
+| `SurfaceAppearance` | `MetalnessMapContent` | "…or a reference to an `EditableImage` object." | **`PluginSecurity`** |
+| `SurfaceAppearance` | `EmissiveMaskContent` | PBR slot; `Content`-typed, grayscale mask. | **`PluginSecurity`** |
+| `FileMesh` / `SpecialMesh` | `TextureContent` | "accepts `Content` values including asset URIs and `EditableImage` objects. … **When `TextureContent` references an `EditableImage`, the texture live-updates with any edits to that object.** This property is inherited by `SpecialMesh`." | None |
+| `AdGui` | `FallbackImageContent` | "Unlike `FallbackImage`, this property accepts asset URIs **and references to `EditableImage` objects**." | None |
+
+`FileMesh.TextureContent` is the only place in the entire documentation set that states outright
+that **the texture live-updates when the `EditableImage` is edited**. That is almost certainly the
+general behaviour for all object-content sinks (it is the entire point of the API and matches the
+"one image update per frame" throttle), but it is documented in exactly one place.
+
+### 5.2 The `PluginSecurity` wall on `SurfaceAppearance` and `Decal` PBR slots
+
+This is the single biggest structural gotcha in the whole feature.
+
+**`SurfaceAppearance.ColorMapContent`, `NormalMapContent`, `RoughnessMapContent`,
+`MetalnessMapContent` and `EmissiveMaskContent` all have `security: { read: None, write:
+PluginSecurity }`.** So does `Decal.NormalMapContent`, `Decal.RoughnessMapContent`,
+`Decal.MetalnessMapContent` and `Decal.EmissiveMaskContent`. **A normal game script cannot write
+them.** Only plugins can.
+
+The engine's answer is the two builder methods, which construct the instance with its maps already
+attached:
+
+```lua
+-- PBR material, generated at runtime, from a game script.
+local surface = AssetService:CreateSurfaceAppearanceAsync({
+    ColorMap     = Content.fromObject(albedo),
+    NormalMap    = Content.fromObject(normals),
+    RoughnessMap = Content.fromObject(rough),
+    MetalnessMap = Content.fromObject(metal),
+    EmissiveMask = Content.fromObject(emissive),
+})
+surface.Parent = meshPart
+```
+
+```lua
+-- PBR decal, generated at runtime, from a game script.
+local decal = AssetService:CreateDecalAsync({
+    TextureContent     = Content.fromObject(albedo),
+    NormalMapContent   = Content.fromObject(normals),
+    RoughnessMapContent= Content.fromObject(rough),
+    MetalnessMapContent= Content.fromObject(metal),
+})
+decal.Face = Enum.NormalId.Front
+decal.Parent = part
+```
+
+Both yield. Note the **different key names** between the two calls (`ColorMap` vs `TextureContent`)
+— see §"Option tables". And critically, from DOCS on `CreateSurfaceAppearanceAsync`:
+
+> "Note that the `EditableImage` assigned to each map **cannot be reassigned or swapped after the
+> `SurfaceAppearance` is created**."
+
+So: you cannot hot-swap which image a `SurfaceAppearance` points at. You can only keep editing the
+*contents* of the image it already has. Design for one long-lived canvas per material, mutated over
+time — not a carousel of images. `CreateDecalAsync` additionally: "Unrecognized keys are ignored
+with a warning"; "raises an error if no supported maps are provided, or if any supported key has a
+value that is not `Content` containing an `EditableImage`"; asset IDs, URI content and
+`Content.none` are **not accepted**.
+
+### 5.3 Confirmed NON-sinks — the docs explicitly say no
+
+| Class | Property | Exact wording |
+|---|---|---|
+| `ImageButton` | `HoverImageContent` | "**Only asset URIs are supported for this property.**" |
+| `ImageButton` | `PressedImageContent` | "**Only asset URIs are supported for this property.**" |
+| `Shirt` | `ShirtTemplateContent` | "Although this property uses `Content`, **it does not support `EditableImage`**" |
+| `Pants` | `PantsTemplateContent` | "Although this property uses `Content`, **it does not support `EditableImage`**" |
+| `ShirtGraphic` | `TextureContent` | "Although this property uses `Content`, **it does not support `EditableImage`**" |
+| `ScrollingFrame` | `TopImageContent`, `MidImageContent`, `BottomImageContent` | "**Only supports asset URIs as textures.**" |
+
+The `ImageButton` case is the one that will bite a UI programmer: `ImageContent` accepts your
+generated image, the hover and pressed variants silently do not. Implement hover/press states by
+*redrawing* the single `ImageContent` canvas, or by stacking two `ImageLabel`s.
+
+### 5.4 Sinks that still need a real asset ID (no `EditableImage` support documented)
+
+These are `Content`-typed but their documentation says only "supports asset URIs" or says nothing
+about objects. **Treat them as needing an uploaded asset ID until you test otherwise.**
+
+| Class | Property | Status |
+|---|---|---|
+| `ParticleEmitter` | `TextureContent` | DOCS: "Supports **asset URIs**." and "This property is the `Content` equivalent of `Texture`. **Assigning `TextureContent` updates `Texture`**" — the write-through to a legacy `ContentId` strongly implies objects are not representable. `[UNVERIFIED]` but expect **no**. |
+| `Sky` | `SkyboxUp/Down/Left/Right/Front/BackContent`, `SunTextureContent`, `MoonTextureContent` | DOCS describes them only as "The `Content` image displayed…". No `EditableImage` mention. `[UNVERIFIED]`. |
+| `Beam` | `TextureContent` | No `EditableImage` mention in `Beam.yaml`. `[UNVERIFIED]`. |
+| `Trail` | `TextureContent` | No `EditableImage` mention in `Trail.yaml`. `[UNVERIFIED]`. |
+| `ImageHandleAdornment` | `ImageContent` | DOCS: "Sets the image displayed by this adornment as a `Content` value." No `EditableImage` mention. `[UNVERIFIED]`. |
+| `CharacterMesh` | `BaseTextureContent`, `OverlayTextureContent`, `MeshContent` | No `EditableImage` mention. `[UNVERIFIED]`. |
+| `BackpackItem` | `TextureContent` | No mention. `[UNVERIFIED]`. |
+| `MaterialVariant`, `TerrainDetail` | all five PBR `*MapContent` slots | `Content`-typed, but **`PluginSecurity` on both read and write** — unusable from game scripts regardless. |
+| `Mouse.IconContent`, `UserInputService.MouseIconContent`, `ClickDetector.CursorIconContent`, `DragDetector`/`UIDragDetector` cursor slots, `ScreenshotHud.CameraButtonIconContent`, `InputBinding.DisplayImage` | No `EditableImage` mention. `[UNVERIFIED]`. |
+
+### 5.5 `ViewportFrame` is not a sink
+
+**`ViewportFrame` has no `Content`-typed property at all** — it does not appear in the engine-wide
+enumeration of `Content` properties, and `ViewportFrame.yaml` lists `Ambient`, `CurrentCamera`,
+`LightColor`, `LightDirection`, `ImageColor3`, `ImageTransparency` and so on, but nothing that takes
+an image. You cannot assign an `EditableImage` to a `ViewportFrame`.
+
+What you *can* do is put a `Part`/`MeshPart` inside the `ViewportFrame` whose `TextureContent` (or
+`Decal.ColorMapContent`) is your `EditableImage`. The image then appears inside the viewport by way
+of the 3D object. Note that `ViewportFrame.CurrentCamera` is `NotReplicated`, so viewport setup is
+client work anyway — which lines up nicely with the rule that `EditableImage` work belongs on the
+client.
+
+### 5.6 The one-update-per-frame limit
+
+Quoted from `EditableImage.yaml`:
+
+> #### Update Limitations
+>
+> **Only a single `EditableImage` can be updated per frame on the display side.** For example, if
+> you update three `EditableImage` objects which are currently being displayed, it will take three
+> frames for all of them to be updated.
+
+Read this carefully — it is a limit on *display-side* updates, i.e. pushing edited pixels to the
+renderer, for images that are **currently being displayed**. Consequences:
+
+- **A 4-image composite takes 4 frames to fully appear**, at best. At 60 fps that is 67 ms of
+  visible tearing between layers. If you are building something where all parts must appear at
+  once (a card that flips, a loading screen), composite into **one** displayed image with
+  `DrawImage`, and keep the other canvases off-screen.
+- **Never drive N simultaneous animated textures.** An 8-panel animated dashboard updates each
+  panel at 7.5 fps on a 60 fps client. Merge them into one atlas image and update that.
+- **Off-screen work is not throttled by this rule** — the limit is on the display side. You can
+  freely draw into images that are not referenced by any visible property, then blit the finished
+  result into the single displayed canvas.
+- This composes badly with the CPU cost of drawing: if your generation step already takes 8 ms, the
+  display throttle is not your bottleneck, but as soon as you optimise the CPU side you hit this
+  wall and stop getting faster.
+
+**Architecture that respects the limit:** one visible `EditableImage` per "screen" (per UI panel,
+per painted object), all sub-layers composited into it off-screen, exactly one
+`WritePixelsBuffer`/`DrawImage` into the visible canvas per frame.
+

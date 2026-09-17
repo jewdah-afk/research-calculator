@@ -1384,3 +1384,341 @@ shader and no cost you control beyond the terrain itself. If your scene can use 
 **use it** — nothing you build out of parts and beams will match it. Its limitation is that it
 is terrain-bound and globally uniform per place.
 
+---
+
+## 6. Rendering performance
+
+All quoted text in this section is from `performance-optimization/improve.md` unless noted.
+
+### 6.1 Draw calls and what breaks batching
+
+> *"A draw call is a set of instructions from the engine to the GPU to render something. Draw
+> calls have significant overhead. Generally, the fewer draw calls per frame, the less
+> computational time is spent rendering a frame."*
+
+**Measure it:** Studio → **Render Stats → Timing**; in the client, **Shift+F2**.
+
+**The exact instancing rule**, stated by Roblox:
+
+> *"Multiple meshes with the same `MeshPart.MeshContent` are handled in a single draw call when:
+> — `SurfaceAppearance`s are identical if present, otherwise when `MeshPart.TextureContent`s are
+> identical. — Materials are identical when both `SurfaceAppearance` and `MeshPart.TextureID`
+> don't exist."*
+
+So instancing requires **same mesh asset** *and* **same texture/`SurfaceAppearance` identity**.
+That yields the definitive list of **what breaks batching**:
+
+1. **Different `MeshId`/`MeshContent`** — even for visually identical meshes. This is the
+   #1 real-world cause and it comes from a specific mistake: *"A common cause of this problem
+   is when an entire scene is imported at once, rather than individual assets being imported
+   into Roblox and then duplicated post-import to assemble the scene."* Roblox ships a
+   diagnostic script for it; the ideal output is `LargeRock, rbxassetid://… (x144)` on one line.
+2. **Different `SurfaceAppearance` instances** on otherwise identical meshes.
+3. **Different `TextureID`/`TextureContent`**.
+4. **Mixed presence** — one copy with a `SurfaceAppearance`, one without.
+5. **`Decal`s, `Texture`s and particles**: *"Objects like decals, textures, and particles don't
+   batch well and introduce additional draw calls."*
+6. **Transparency** — transparent surfaces are sorted and drawn separately from opaque ones.
+7. **High object density**: *"If a large number of objects are concentrated with a high density,
+   then rendering this area of the scene requires more draw calls. If you are finding your frame
+   rate drops when looking at a certain part of the map, this can be a good signal that object
+   density in this area is too high."*
+
+Note what does **not** break batching: **`BasePart.Color` / `MeshPart.Color` /
+`SurfaceAppearance.Color` tinting.** Colour is per-instance. This is why the tint-a-grayscale-
+texture pattern (§4.4) is doubly good — it saves memory *and* preserves instancing.
+
+**Mitigations Roblox names:** upload each mesh once and duplicate in Studio; use **Packages**
+for reuse; import maps asset-by-asset rather than whole.
+
+### 6.2 Culling
+
+> *"By default, the engine skips draw calls for objects outside the camera's field of view
+> (frustum culling) and parts, meshes, and terrain occluded from view by other objects
+> (occlusion culling). In certain scenarios, such as indoor environments, you might be able to
+> implement a room or portal system and manually cull objects."*
+
+Frustum **and** occlusion culling are automatic. Manual room/portal culling (parenting a room's
+model in and out of `Workspace`, or toggling `Model` visibility) still pays off for dense
+interiors, and is the same mechanism you use to turn local lights on and off per room.
+
+### 6.3 `RenderFidelity` and LOD
+
+`MeshPart.RenderFidelity : Enum.RenderFidelity`, with the distance table from
+`enums/RenderFidelity.yaml`:
+
+| `Automatic` (0) — distance-driven | Fidelity |
+|---|---|
+| < 250 studs | Highest |
+| 250–500 studs | Medium |
+| ≥ 500 studs | Lowest |
+
+`Precise` (1) — *"rendered in the highest fidelity regardless of its distance from the camera."*
+`Performance` (2) — *"Push performance as much as possible... the performance will always be
+excellent, but mesh visuals may be affected negatively."*
+
+> *"Scenes with the `MeshPart.RenderFidelity` property set to `Precise` on too many meshes"* is
+> called out as a common problem.
+
+**Rule:** `Automatic` by default. `Precise` only for hero assets the player inspects up close
+(a held weapon, a shop display, a boss). `Performance` for background set dressing, distant
+terrain props, and anything repeated hundreds of times.
+
+**Beyond `RenderFidelity`, Roblox now exposes SLIM LOD:**
+> *"Enable instance streaming and set your world models' `Model.LevelOfDetail` property to
+> `Enum.ModelLevelOfDetail.SLIM` to render optimized lightweight SLIM meshes for models as
+> distance from the camera increases."* And for characters: *"set `Workspace.EnableSLIMAvatars`
+> to render platform avatars as optimized lightweight SLIM representations with full animation
+> support as distance from the camera increases."*
+
+Also: *"Although not as important as the number of draw calls, the number of triangles in a
+scene does influence how long a frame takes to render."* Draw calls first, triangles second.
+
+### 6.4 Transparency and sort cost
+
+> *"**High transparency overdraw** — Placing objects with partial transparency near each other
+> forces the engine to render the overlapping pixels multiple times, which can hurt performance."*
+
+Why it is worse than it sounds: a transparent surface (a) cannot be rejected by the depth test,
+so every pixel it covers is shaded; (b) must be **sorted back-to-front**, which costs CPU and
+produces visible sorting errors when surfaces intersect; (c) multiplies with every other
+transparent layer over the same pixels.
+
+Practical rules:
+- **Count layers along the view ray, not objects.** Two overlapping transparent walls, a
+  particle system, a `Beam` and a `SurfaceGui` in the same line of sight is 5× fill.
+- **Prefer alpha-test to alpha-blend.** `SurfaceAppearance.AlphaMode = Transparency` with
+  `MeshPart.Transparency = 0` gives cutout behaviour that is depth-correct and cheap, and
+  *"works better with depth-based effects and occlusion"* (§4.4). Foliage, fences, grates.
+- **Use `ZOffset`** on `Beam`/`ParticleEmitter`/`SurfaceGui` to resolve sorting fights rather
+  than nudging geometry.
+- **Budget particles by screen area covered**, not by count.
+
+### 6.5 Shadow cost
+
+> *"**Excessive shadow casting** — Handling shadows is an expensive process, and maps that
+> contain a high number and density of light objects that cast shadows (or a high number and
+> density of small parts influenced by shadows) can have performance issues."*
+
+Roblox's own mitigation list, verbatim in substance:
+
+- *"The Roblox engine automatically degrades shadow quality as client graphics quality level
+  decreases, **eventually disabling shadows altogether at quality levels below 4**."*
+- *"Use the `BasePart.CastShadow` property to disable shadow casting on small parts where
+  shadows are unlikely to be visible. This strategy is particularly effective when applied to
+  parts that are far away from the user's camera."* (With the warning: *"This might result in
+  visual artifacts on shadows."*)
+- *"Disable shadows on moving objects when possible."*
+- *"Disable `Light.Shadows` on light instances where the object does not need to cast shadows."*
+- *"**Limit the range and angle** of light instances."*
+- *"**Use fewer light instances.**"*
+- *"Consider **disabling lights that are outside of a specific range or on a room-by-room
+  basis** for indoor environments."*
+
+The "quality level below 4 disables shadows" fact is load-bearing for art direction: **if your
+look depends on shadows, a meaningful fraction of your players will never see it.** Design a
+scene that still reads with shadows off — usually by ensuring value separation comes from
+`Ambient`/`OutdoorAmbient` and material choice, not only from shadowing.
+
+### 6.6 Other engine-level traps Roblox calls out
+
+- **Skinned `MeshPart` movement:** *"Skinned MeshParts that are part of a Model without a
+  Humanoid are grouped using spatially-organized FastClusters. When these MeshParts move, they
+  must be continually added to and removed from these spatial clusters, forcing the clusters to
+  be rebuilt."* The documented workaround is to **embed a `Humanoid` in the Model**, which
+  *"mandates the use of a single, unified FastCluster for the entire Model"* — but *"this
+  technique should be reserved exclusively for MeshParts with expected movement, as it may
+  introduce memory overhead."*
+- **Too many parts in one `Model`:** *"could cause rebuilds more often due to the potential for
+  a part's property to change leading to requiring a full rebuild."*
+- **Avatar hierarchy churn:** *"For custom procedural animations, don't update the
+  `JointInstance.C0`/`C1` properties. Instead, update the `Motor6D.Transform` property."* And
+  *"if you need to attach any `BasePart` objects to the avatar, do so **outside** the hierarchy
+  of the avatar `Model`."*
+
+### 6.7 MicroProfiler scopes worth knowing
+
+| Scope | What it measures |
+|---|---|
+| `Prepare and Perform` | Overall rendering |
+| `Perform/Scene/computeLightingPerform` | Light grid and shadow updates |
+| `LightGridCPU` | Voxel light grid updates |
+| `ShadowMapSystem` | Shadow mapping |
+| `Perform/Scene/UpdateView` | Render preparation and **particle updates** |
+| `Perform/Scene/RenderView` | Rendering and **post-processing** |
+
+If `LightGridCPU` is hot, you have too much moving geometry invalidating the voxel grid. If
+`ShadowMapSystem` is hot, you have too many shadow-casting lights. If `UpdateView` is hot, it is
+your particles. These map one-to-one onto the levers above.
+
+### 6.8 Graphics quality levels and what they disable
+
+`Enum.SavedQualitySetting` runs `Automatic` (0) plus `QualityLevel1` … `QualityLevel10`, with
+*"level 1 — the lowest explicit quality setting"* and *"level 10 — the highest."*
+`UserGameSettings.SavedQualityLevel` is *"saved across sessions and applied as the initial
+quality setting on next launch."* The related `Enum.QualityLevel` is the runtime rendering level.
+
+The only degradation threshold Roblox states numerically is the shadow one: **shadows are
+disabled entirely below quality level 4.** Beyond that, as quality drops the engine reduces
+render distance, shadow resolution, texture resolution, post-processing effects, particle
+counts and mesh detail — and `Lighting.PrioritizeLightingQuality` (§1.3) is the property that
+tells it *which* of those to sacrifice first.
+
+`[UNVERIFIED — a precise per-level table of exactly which features are disabled at each of
+levels 1–10 is not published by Roblox. Treat level-specific claims found in community posts
+with suspicion and test on real low-end hardware instead.]`
+
+**The practical consequence:** you should have a client-side quality-response system.
+
+```lua
+-- LocalScript. Scale your own effects in sympathy with the device's level.
+local UserSettings = UserSettings():GetService("UserGameSettings")
+local Lighting = game:GetService("Lighting")
+
+local function applyQuality()
+    local q = UserSettings.SavedQualityLevel.Value  -- 0 = Automatic, 1..10
+    local low = (q ~= 0 and q <= 4)
+    for _, fx in ipairs(Lighting:GetChildren()) do
+        if fx:IsA("DepthOfFieldEffect") or fx:IsA("SunRaysEffect") then
+            fx.Enabled = not low                      -- most expensive first
+        end
+    end
+    local clouds = workspace.Terrain:FindFirstChildOfClass("Clouds")
+    if clouds then clouds.Enabled = not low end
+end
+
+UserSettings:GetPropertyChangedSignal("SavedQualityLevel"):Connect(applyQuality)
+applyQuality()
+```
+
+### 6.9 `StreamingEnabled`'s role
+
+`Workspace.StreamingEnabled` makes the server send only the region of `Workspace` near each
+player, and reclaim it as they move away. It is primarily a **memory and load-time** feature,
+but it has direct rendering consequences:
+
+- Fewer instances resident ⇒ fewer candidates for draw calls, less light-grid work, less
+  physics.
+- It is the **prerequisite for SLIM LOD**: *"Enable instance streaming and set your world
+  models' `Model.LevelOfDetail` property to `SLIM`."* No streaming, no SLIM.
+- `Model.ModelStreamingMode` (`Default`, `Atomic`, `Persistent`, `PersistentPerPlayer`,
+  `Nonatomic`) controls per-model streaming behaviour — `Atomic` keeps a model together,
+  `Persistent` never streams it out (use for the things that must always exist).
+- Tuning knobs: `StreamingTargetRadius` (the distance the client tries to keep loaded),
+  `StreamingMinRadius` (the always-loaded core) and `StreamOutBehavior`.
+
+**The rendering trap:** streaming causes **pop-in** at the streaming radius. The art-direction
+fix is `Atmosphere` — set `Density` high enough and `Offset` low enough that the streaming
+boundary sits inside the fog. This is the clearest example in the engine of an art tool solving
+a technical problem, and it is why large open-world Roblox games are almost always foggy.
+
+---
+
+## 7. Texture memory
+
+### 7.1 The bytes-per-texture math
+
+Roblox states the shape of the rule precisely:
+
+> *"Graphics memory consumption for a texture is unrelated to the size of the texture on the
+> disk; **the number of pixels in the texture determines memory usage**. For example, a
+> 1024×1024 pixel texture consumes **four times** the graphics memory of a 512×512 texture."*
+>
+> *"Images uploaded to Roblox are **transcoded to a fixed format**, so there is **no memory
+> benefit to uploading images in a color model associated with fewer bytes per pixel**.
+> Similarly, compressing images prior to upload or **removing the alpha channel from images that
+> don't need it can decrease image size on disk, but doesn't improve memory usage**."*
+
+That second paragraph kills three common "optimisations": uploading JPEG instead of PNG,
+stripping alpha, and pre-compressing. None of them help GPU memory. **Only pixel count does.**
+
+The working model (4 bytes/pixel uncompressed-equivalent, plus a full mip chain which adds
+1/3 more):
+
+```
+bytes ≈ width × height × 4 × 4/3
+```
+
+| Resolution | Pixels | ≈ bytes (4bpp + mips) |
+|---|---|---|
+| 128×128 | 16 K | ~87 KB |
+| 256×256 | 65 K | ~350 KB |
+| 512×512 | 262 K | ~1.4 MB |
+| 1024×1024 | 1.05 M | ~5.6 MB |
+| 2048×2048 | 4.19 M | ~22.4 MB |
+
+`[UNVERIFIED — the 4 bytes/pixel figure and the ×4/3 mip factor are the standard RGBA8 + full
+mip chain model, and match Roblox's stated "4× for 2× resolution" relationship. Roblox does not
+publish the exact transcoded on-GPU format, which on most platforms will be a block-compressed
+format (BC/ASTC/ETC) using materially fewer bytes. Use the table for **relative** budgeting,
+which is what it is good for, not as an absolute byte count.]*
+
+**A PBR set multiplies this.** A `SurfaceAppearance` with ColorMap + NormalMap + RoughnessMap +
+MetalnessMap at 1024² is **four textures**, ~22 MB by the model above. This is why PBR is a
+hero-asset technique on Roblox, not a universal one.
+
+### 7.2 Resolution discipline
+
+Roblox's own guidance is unusually concrete and you should adopt it as policy:
+
+> *"**Limit the pixels of images** to no more than the necessary amount. Unless an image is
+> occupying a large amount of physical space on the screen, it usually needs **at most 512×512
+> pixels. Most minor images should be smaller than 256×256 pixels.**"*
+
+A working budget table:
+
+| Asset class | Resolution |
+|---|---|
+| Hero asset the player inspects up close (weapon, boss, shop item) | 1024² (and only the ColorMap; share normal/roughness) |
+| Standard environment prop | 512² |
+| Small prop, background set dressing | 256² |
+| UI icon | 128²–256², atlased into a sprite sheet |
+| Tiling material / trim sheet | 512²–1024² (shared across dozens of assets — worth the budget) |
+| Particle sprite | 128²–256² |
+| Flipbook (8×8 = 64 frames @128²) | 1024² |
+| Skybox face | 1024²–2048² (six of them; this is the biggest single memory item in most places) |
+
+### 7.3 Mipmapping and streaming
+
+> *"As a game loads, the engine automatically starts with lower quality textures and then ramps
+> up quality based on available device memory, distance from the camera, amount of screen-space
+> that the texture takes up, and other factors."*
+
+Mipmaps are generated and used automatically — you do not control them, but you must **author
+for them**:
+
+- **Pad flipbook and atlas frames.** *"When you create a flipbook texture, include spacing
+  between each of the particle frames. In some cases, mip filtering might require even more
+  spacing."* At low mip levels, adjacent atlas cells bleed into each other. Padding is the fix.
+- **Expect thin high-contrast detail to vanish at distance.** Wires, text, fine trim: they mip
+  away to grey. If a detail must read at range, put it in the silhouette (geometry) or in a
+  large-scale value change, not in a fine texture pattern.
+- **`SurfaceAppearance.ResampleMode = Pixelated`** disables the smoothing filter — the correct
+  and only choice for deliberate pixel-art looks.
+
+### 7.4 The mobile ceiling
+
+Roblox is a majority-mobile platform. The relevant engine behaviours:
+
+- **The engine deactivates features under memory pressure without telling you.**
+  *"Clients automatically deactivate flipbooks when they are low on memory, which is likely for
+  older mobile phones."* Your effect simply will not appear.
+- **Shadows are off below quality level 4.**
+- Texture quality is scaled down automatically based on *"available device memory, distance
+  from the camera, amount of screen-space."*
+
+**Therefore:** design so that removing shadows, post-processing, clouds and flipbooks still
+leaves a coherent image. That means the look must be carried by **albedo values, palette and
+silhouette** — which is exactly the §8 argument.
+
+**Mitigations Roblox names**, all of which are texture-memory strategies:
+*"Only upload assets once"*; *"Find and fix duplicate assets"*; *"Instead of using separate
+textures for different colors, upload a single texture and use the `SurfaceAppearance.Color`
+property to apply various tints"*; *"Import assets in map separately"*; *"Use trim sheets"*;
+*"consider using sprite sheets... with `ImageRectOffset` and `ImageRectSize`."*
+
+And on preloading: *"a common mistake is overutilizing `ContentProvider:PreloadAsync()` to
+preload more assets than are actually required. An example of a bad practice is loading the
+entire `Workspace`."* Preload only *"images in the loading screen, important images in your game
+menu, important assets in the starting or spawning area."*
+

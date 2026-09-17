@@ -423,8 +423,8 @@ for this genre:
 - **1e308 is a hard wall.** Beyond it every value is `math.huge`, every comparison
   degenerates, and `inf - inf = nan`. A `nan` balance propagates through every
   formula and, critically, **cannot be JSON-encoded**, so it will also break your
-  save. Add `assert(x == x and x ~= math.huge)` at the boundary of your economy
-  module in Studio builds.
+  save. Luau ships `math.isfinite`, `math.isnan` and `math.isinf` — assert
+  `math.isfinite(x)` at the boundary of your economy module in Studio builds.
 - **If your design targets 1e1000+, adopt a log-space number type before launch.**
   The standard representation across the genre is `{sign, log10magnitude}` (or
   `{mantissa, exponent}`): multiplication becomes addition, exponentiation becomes

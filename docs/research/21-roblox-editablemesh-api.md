@@ -13,26 +13,6 @@
 
 ---
 
-## Outline
-
-1. TL;DR
-2. The verification gate
-3. Creation
-4. The data model (IDs, split attributes)
-5. Verified API surface (full table)
-6. Does mutation live-update?
-7. Limits, `FixedSize`, and the memory budget
-8. Collision and fluid geometry
-9. Spatial queries
-10. Skinning, bones, and FACS
-11. Performance and parallelism
-12. Saving and uploading
-13. Gotchas
-14. Worked recipes
-15. Sources
-
----
-
 ## TL;DR
 
 - **`EditableMesh` is a live, mutable mesh object.** The class doc states it "changes the applied visual mesh when linked to a `Class.MeshPart`, allowing for querying and modification of the mesh both in Studio and in-game." [EditableMesh.yaml]
