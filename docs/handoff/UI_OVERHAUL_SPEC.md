@@ -22,30 +22,45 @@ moves toward it. Stats needs work.
   fire.** The proximity trigger is bound to the wrong panel id and the confirm
   path is broken. See §3.
 
-## 2. HUD scope — informational only
+## 2. HUD scope — read-only reference, actions at stations
 
-The on-screen HUD shows **only** what the player reads passively:
+**Resolved from two rounds of feedback, which appeared to conflict:** all four
+tabs stay reachable from the HUD, but **Upgrades and Resets become read-only
+reference panels.** You can look up anything from anywhere; you can only *act*
+at the station. That satisfies both "you have to walk to them" and "move the
+four icons".
 
-**Keep on HUD:** Settings · Stats · currency/points · Current Rarity card ·
-Luck / Randomizer multipliers · roll progress bar · Luck Trend · Recent Rolls.
+| Surface | Shows | Can act? |
+|---|---|---|
+| Stats tab | Progress, gauges, history | n/a |
+| Settings tab | Options | yes |
+| **Upgrades tab** | Every upgrade, level, cost, effect, locked state | **no — view only** |
+| **Resets tab** | Every layer, required **rarity index**, progress, projected gain | **no — view only** |
+| Upgrade station | Same data | **yes — purchase here** |
+| Reset pad | Layer status | **yes — reset here** |
 
-**Remove from HUD:** Upgrades · Resets. These become **physical stations you
-walk to**. The buttons come off the top-left cluster entirely.
+Each read-only panel ends each row with a location hint instead of a button —
+*"Purchase at the Upgrade Terminal"* — so the panel teaches the room.
 
-Rationale: it makes the room matter. A roller game where every action is a
-screen button has no reason to be 3D.
+**Button cluster moves to bottom-left**, beside the ROLL button:
+- One horizontal row of four, all **identical size**, evenly spaced
+- Baseline-aligned with the ROLL button so the bottom edge reads as one bar
+- Larger than the current top-left icons — these are primary navigation
+- Top-left corner clears entirely
 
-**Interaction model** — one shared pattern for every station:
-1. Approach → `ProximityPrompt` (or a region check) highlights the station and
-   shows a floating label.
-2. Interact → that station's panel opens, and **only** that panel.
-3. Walk away → panel closes.
+**Reset pad behaviour (the bug).** Stepping on a ready pad must perform that
+layer's reset — a confirm step if the reset is destructive — and must **never**
+open the Upgrades tab. Root cause is a station firing another station's panel
+id. Fix it structurally: each station instance carries an attribute naming its
+own action, resolved at runtime. A station then cannot reference another's id,
+so the two can never drift apart again.
 
-Each station owns exactly one panel id. The bug in §1 is a station firing
-another station's id; make the binding data-driven (station instance holds an
-attribute naming its panel) so the two can never diverge again.
+Pad states: **Locked** (dim, no prompt) · **Not yet** (visible, shows what's
+required) · **Ready** (full chromatic treatment, "step on" prompt, the reward
+figure). The existing "READY — step on!" pad label is the right pattern; give
+every station the same language.
 
-## 3. Boards — flush to the wall, AAA finish
+## 3. Boards## 3. Boards — flush to the wall, AAA finish
 
 Currently the boards float at arbitrary angles, visibly detached.
 
@@ -215,3 +230,106 @@ falling back to its tier default when unspecified.
   `UserGameSettings.GraphicsQualityLevel` is `RobloxScriptSecurity`, and
   `SavedQualityLevel` returns `Automatic` by default. Build effect degradation
   on **measured frame time**.
+
+
+---
+
+# Round 2 — board craft, colour system, and the chromatic language
+
+Supersedes anything above that conflicts.
+
+## 8. The chromatic treatment is the design language
+
+The holographic sheen on the Transcend button is the house style. Promote it
+from a one-off to a system.
+
+**How to build it:** a `UIGradient` over the button's base fill, with a narrow
+bright band in its `ColorSequence`, animated by driving `Offset` (and slightly
+`Rotation`) on a loop. Keep the band narrow and the peak just above the base
+value — a wide or blown-out sweep looks cheap. Mask to the button shape.
+
+**Make it carry state**, so the sheen is information, not decoration:
+
+| State | Treatment |
+|---|---|
+| Locked | Desaturated, **no sweep**, flat |
+| Not yet | Slow, dim sweep — alive but not calling you |
+| Ready | Full-brightness sweep, faster cycle, subtle outer glow |
+| Hover / focus | Sweep speeds up, bezel brightens |
+| Just purchased | One bright pulse, then settle |
+
+Same treatment on reset buttons, station prompts, ready pads, and the roll
+button. A player should learn "shimmer means available" in the first minute.
+
+**Cost note:** animated `UIGradient` on a handful of large buttons is fine.
+Animated gradients on *hundreds of list rows* are not — Roblox's own profiler
+guidance calls out `UIGradient` and `UICorner` on text labels as the dominant
+GUI cost. Buttons get live sheen; rows get it baked into their background image.
+
+## 9. Board dimensions — wide, not tall
+
+Current boards read as tall columns (the Prestige Upgrades board especially).
+Tall boards force scrolling, shrink type, and read as cramped.
+
+**Rules:**
+- Target aspect between **16:9 and 2:1**. Never taller than wide.
+- **Reset layers:** all layers visible at once with no scrolling. Three layers
+  today, so three full-width rows — wide rows, generous vertical padding,
+  large type. If layers exceed five, paginate rather than growing the board.
+- **Upgrade boards:** multi-column grid (2 or 3 columns by board width), not a
+  single long column. A 3×4 grid of twelve upgrades in one glance beats a
+  twelve-row scroll.
+- **One idea per row.** Name, effect delta, cost, state. Nothing else.
+- **Readability gate:** stand at the interaction pad and read every value
+  without zooming. If you can't, the board is too dense. Split it.
+
+**Finish:** real frame depth with a lit bezel, panel background baked as a
+generated image (gradient + subtle noise, not flat colour), consistent internal
+margins, and a single accent hue per board matching its header banner.
+
+## 10. Rarity colour system — make the colours match
+
+The rarity list currently mixes colours without a rule, which is why it reads
+as noisy. Derive every colour from one source instead.
+
+**Bind colour to the rarity band** — the same 10 bands as the naming scheme in
+§5. One hue family per band; within a band, step lightness/saturation by
+position. Then:
+
+- Row label, index chip, icon tint and odds text all derive from **that one
+  band colour**. No hand-picked per-row colours anywhere.
+- Rising bands climb in visual energy: early bands muted and low-chroma, later
+  bands saturated, top bands prismatic/animated.
+- Keep contrast ratios legible on the dark panel — check the lightest and
+  darkest band against the background, not just the mid ones.
+- **Colour is never the only signal.** Every row also carries its numeric
+  index, so a colour-blind player loses nothing.
+
+Store the band palette as data and generate the swatches — with 10,000
+rarities, hand-authoring colour per rarity is impossible, and a generated ramp
+is the only thing that stays consistent.
+
+**Rarity list layout:** the two-column numbered list is good. Keep the index
+prominent (it is the real currency of progress), right-align odds with tabular
+figures so the column scans, and mark the player's current best inline rather
+than only in a separate header.
+
+## 11. Roll button and the auto-roll flame
+
+- **The flame is off-centre because it is positioned by a fixed offset.**
+  Anchor it to the button's true centre instead: `AnchorPoint = (0.5, 0.5)` and
+  `Position = UDim2.fromScale(0.5, 0.5)` within the button, so it re-centres
+  automatically at every resolution. If it is a world-space emitter, derive the
+  attachment from `AbsolutePosition + AbsoluteSize/2` rather than a constant.
+- **Make it layered rather than one sprite:** a bright core, a soft outer glow,
+  and sparse rising sparks. Tie intensity to auto-roll speed so holding R
+  visibly spins the button up.
+- **Set `LightInfluence` explicitly** on every emitter — it defaults to 1 via
+  Studio insert and 0 via `Instance.new()`, so hand-placed and code-made
+  emitters silently differ.
+- **Pool the particles.** At auto-roll rates, creating them per roll costs
+  frames.
+- The fill/progress bar and the flame should share one timing source, so they
+  never visibly disagree.
+- Give the button the §8 chromatic treatment at rest so it reads as the primary
+  action on screen.
