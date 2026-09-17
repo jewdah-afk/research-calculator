@@ -316,3 +316,50 @@ That cascade is a good default. It is also **global, not per-player** — see
 [Formatting for display](#formatting-for-display) for how to give players a choice without mutating
 library state.
 
+---
+
+## Library comparison table
+
+### The libraries that actually matter for a Luau port
+
+| | **AlyaNum** | **OmegaNum (Luau)** | **ExpantaNum.js** | **break_infinity.js** | **plain float64 (`number`)** |
+|---|---|---|---|---|---|
+| **Max magnitude** | `10↑↑↑↑↑(2^53−1)` (heptation) | `10{1000}9e15` (1000 arrows) | `{10,9e15,1,2}` (BEAF) | `1e(9e15)` | `1.7976931348623157e308` |
+| **Reaches `E(4)`?** | **Yes**, trivially (`exponent = 2`) | Yes | Yes | **No** | No |
+| **Representation** | flat 7-field table `{sign, multiplicand, exponent, tetrate, pentate, hexate, heptate}` | `{sign, {n0, n1, n2, …}}` — outer table + inner array | `sign`, `[[a,b],[a,b],…]`, `layer` — nested pair arrays | `{sign, mantissa, exponent}` (3 fields) | 8 bytes, a register |
+| **Tables allocated per value** | **1** | **2** | **2 + one per array pair** | n/a (JS object) | **0** |
+| **Est. bytes per value (Luau)** | ~300 (hash part, 8 node slots) `[ESTIMATE]` | ~350–600 | n/a (no Luau port) | n/a (no Luau port) | 8 (unboxed) |
+| **Operator overloading** | **Yes** — `+ - * / ^ % == < <= unary- tostring ..` | **No** — function-table API only, verified: zero `setmetatable`/`__add` in source | No (JS methods) | No (JS methods) | native |
+| **Method API** | `a:add(b)`, `a:mul(b)`, `a:moreThan(b)`, `a:tet(b)` … | `OmegaNum.add(a, b)` only | `a.add(b)` | `a.plus(b)` / `a.add(b)` | `+` |
+| **Mixed `bignum <op> number`** | Yes, metamethods promote via `newNumber` | No — you must convert | Yes (constructor coercion) | Yes | n/a |
+| **Luau / Roblox** | **Native.** `--!native`, `--!optimize 2`, Wally + roblox-ts, `default.project.json` | Yes (a Lua file you drop in) | **No port** | **No port** | native |
+| **Distribution** | `wally add evilbocchi/alyanum`; `npm i @rbxts/alyanum` | copy-paste `.lua` from a fork | npm only | npm only | n/a |
+| **License** | **MIT** (`Copyright (c) 2024 evil bocchi`) | `[UNVERIFIED]` — the FoundForces original has no license file in the forks I read | MIT `[UNVERIFIED — not read]` | MIT `[UNVERIFIED — not read]` | n/a |
+| **Maintained?** | **Yes** — v1.2.0, latest commit 2026-08-24, CI green, tests + benches in-repo | Forks only; `Bry10022/OmegaNum-Lua` updated 2026-09-08, 0 stars | Yes (Naruyoko) | Yes (Patashu) | n/a |
+| **Typed API** | Yes — Luau `export type AlyaNum`, plus a 568-line `index.d.ts` for roblox-ts | `--!nocheck` at the top of the file | TS defs | TS defs | yes |
+| **Relative speed** | Fast for a hyperop library; author claims faster than EternityNum and InfiniteMath `[COMMUNITY]` | Slower (Patashu's README: OmegaNum/ExpantaNum "have low performance") | Slowest | ~2.5–400x faster than decimal.js | ~100–1000x faster than any of them |
+
+### Secondary Luau options (for completeness)
+
+| Library | Ceiling | Repr | Reaches `E(4)`? | Notes |
+|---|---|---|---|---|
+| **SerikaNum** (`evilbocchi/serikanum`) | `10^(10^308)` per README; `10^(2^1024)` per AlyaNum's README | two number primitives | **No** | Same author as AlyaNum. Claimed **4–20x faster than AlyaNum** `[COMMUNITY]`. Wally + roblox-ts. |
+| **OnoeNum** (`evilbocchi`) | wraps SerikaNum | wrapper | No | "balance performance and development speed". AlyaNum has `AlyaNum.fromOnoe()` for interop. |
+| **EternityNum** (`wienco123/EternityNum`) | `10↑↑(2^1024)` | `EN.new(sign, layer, mag)` — same shape as break_eternity | **Yes** | Rung 2. AlyaNum benchmarks against it directly (`bench/EternityNum.luau`). |
+| **InfiniteMath** (`KdudeDev/InfiniteMath`) | "above 1e308" — exact ceiling `[UNVERIFIED]` | `[UNVERIFIED]` | Probably not | Popular on the DevForum; has docs site + demo game. |
+| **QNum** (`notiku/qnum`) | mantissa/exponent, ceiling `[UNVERIFIED]` | 2 fields | **No** | Clean metamethod API, Wally. New (2026), 2 stars. |
+
+### Selection verdict for a game that reaches `E(4)` and beyond
+
+1. **AlyaNum** is the right default. It is the only actively-maintained, MIT-licensed, Wally-published,
+   Luau-native, metatable-overloaded library with a hyperoperation ceiling. Its heptation limit is ~10^100
+   times more headroom than "unreachable".
+2. **EternityNum** is a reasonable lighter alternative *if* your endgame stops below `10↑↑(2^1024)` — it has
+   3 fields instead of 7, so less allocation. But it gives you no pentation, and AlyaNum already has a
+   float64 fast path for the range where EternityNum would win.
+3. **OmegaNum (Luau)** only if you genuinely need >5 arrows. You pay with 2 tables per value, no operator
+   overloading, `--!nocheck`, and unclear licensing.
+4. **break_infinity.js has no Luau port and is disqualified by magnitude anyway.** If your existing codebase
+   is written against `Decimal`, see [Porting guidance](#porting-guidance) — the translation target is
+   AlyaNum, not a port of break_infinity.
+

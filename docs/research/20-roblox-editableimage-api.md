@@ -1383,3 +1383,174 @@ renderer, for images that are **currently being displayed**. Consequences:
 per painted object), all sub-layers composited into it off-screen, exactly one
 `WritePixelsBuffer`/`DrawImage` into the visible canvas per frame.
 
+---
+
+## 6. Performance and the cost model
+
+Roblox publishes no timings for these methods. What follows is a structural cost model derived from
+the documented API shape plus the architecture of the community libraries that ship at scale. Any
+specific number is marked.
+
+### 6.1 The three cost axes
+
+1. **Boundary crossings (Luau ↔ C++).** Every method call marshals arguments and re-enters engine
+   code. `ReadPixelsBuffer`/`WritePixelsBuffer` are explicitly `CustomLuaState`, meaning bespoke
+   marshalling, but a call is still a call. **This dominates naive code.** A 256×256 image written
+   one pixel at a time is 65,536 crossings; written as one buffer it is 1.
+2. **Pixels touched.** `O(w·h)` for a full write, `O(regionArea)` for a partial one, `O(πr²)` for a
+   circle, `O(length)` for a line. Halving a dimension quarters the work.
+3. **Display-side upload.** Capped at **one image per frame** regardless of how much you drew.
+
+The optimisation order that follows from this is: *collapse calls* → *shrink regions* → *shrink
+resolution* → *reduce the number of displayed images*.
+
+### 6.2 Read vs write vs draw
+
+| Operation | Shape | Where the work happens | Notes |
+|---|---|---|---|
+| `ReadPixelsBuffer(pos, size)` | `O(w·h)` copy out | Engine → new `buffer` | **Allocates a fresh `buffer` every call.** There is no in-place/reuse overload, so a per-frame full read creates per-frame garbage of `w·h·4` bytes. This is the most GC-hostile call in the API. |
+| `WritePixelsBuffer(pos, size, buf)` | `O(w·h)` copy in | `buffer` → engine | Takes your buffer, so the buffer itself can be reused forever. Prefer this as your single per-frame sync point. |
+| `DrawRectangle` | `O(area)` | Entirely engine-side | Cheapest fill. No per-pixel Luau. |
+| `DrawLine` | `O(length)` | Engine-side | 1px only. AA costs extra; pass `Enum.AntiAliasing.Disabled` when you do not need it. |
+| `DrawCircle` | `O(r²)` | Engine-side | AA on by default. |
+| `DrawImage` | `O(area)` straight blit | Engine-side | The fast blit. No resampling. |
+| `DrawImageTransformed` | `O(destArea)` with a filter tap per pixel | Engine-side | `Pixelated` (nearest) is 1 tap; `Default` (bilinear) is 4 taps. Measurably cheaper with `Pixelated`. |
+| `DrawImageProjected` / `SampleImageProjected` | `O(meshTris + projectedArea)` | Engine-side, includes a depth test | The most expensive calls in the API. Keep the projector volume tight — DOCS specifically suggests brush-sized regions. |
+
+**The single most important consequence:** if your per-pixel logic can be expressed as rectangles,
+circles, lines or blits, do it with the draw methods and never touch a `buffer`. The draw methods
+run entirely in engine code at native speed. `buffer` loops run in Luau. A full-canvas gradient
+written pixel-by-pixel in Luau is orders of magnitude more expensive than a `DrawImage` of a
+pre-made 2×2 gradient scaled up with bilinear filtering.
+
+### 6.3 Practical resolution ceiling
+
+Per-frame Luau pixel loops, ordered by whether they are viable at 60 fps on a mid-range device.
+**These are engineering judgements, not measurements** — measure on your target hardware.
+
+| Resolution | Pixels | Full Luau `buffer` loop each frame | Verdict |
+|---:|---:|---|---|
+| 64 × 64 | 4,096 | trivial | Fine every frame. |
+| 128 × 128 | 16,384 | comfortable | Fine every frame. |
+| 256 × 256 | 65,536 | tight | Viable at 60 fps with a simple inner loop; budget carefully. |
+| 512 × 512 | 262,144 | expensive | Not every frame. Update on change, or update a sub-region. |
+| 1024 × 1024 | 1,048,576 | do not | Generate once (or amortise over many frames); never regenerate per frame in Luau. |
+
+Engine-side draw calls scale far better — a full-canvas `DrawRectangle` at 1024² is cheap. The table
+above is specifically about **Luau loops over a `buffer`**.
+
+### 6.4 Techniques that actually move the needle
+
+- **Dirty rectangles.** Track the bounding box of what changed and call
+  `WritePixelsBuffer(dirtyPos, dirtySize, subBuffer)` instead of the whole canvas. This is usually a
+  10–100× win for UI-style content where only a small region changes.
+- **Amortise generation across frames.** Split a 1024² generation into 16 slices of 64 rows and do
+  one slice per frame. The display throttle means you cannot show more than one update per frame
+  anyway.
+- **Render at low resolution and upscale.** A 128² canvas on an `ImageLabel` stretched to 512 px
+  with `ResampleMode` set appropriately is a quarter of the memory and a sixteenth of the pixel work.
+  For stylised or blurred content nobody can tell.
+- **Precompute lookup tables in `buffer`s.** Sine tables, palettes, distance fields — compute once
+  at load, index at runtime. `buffer.readu8` is far cheaper than `math.sin`.
+- **Use `buffer.copy` for row and block moves.** Scrolling a canvas (waveform, minimap, terminal) is
+  a single `buffer.copy` of the retained region plus a small fill, not a per-pixel loop.
+- **`buffer.writeu32` for whole pixels.** One 32-bit write beats four 8-bit writes when you have the
+  packed value (mind the little-endian ordering in §3.5).
+- **Cache `image.Size` in a local.** It is a property read across the boundary; hoist it out of
+  loops. Same for the methods themselves (`local write = image.WritePixelsBuffer`).
+- **Never call `CreateEditableImageAsync` in a loop.** It yields and hits the network. Load once,
+  cache the `EditableImage`, blit from it.
+
+### 6.5 Mobile
+
+`[UNVERIFIED]` as to specifics — DOCS says only that the budget is "device-specific" and
+"client-side". What follows from that:
+
+- The budget on a low-end phone is smaller than on desktop, by an unpublished factor. A feature
+  that allocates four 1024² canvases may simply return `nil` on a third of your players.
+- Therefore **`nil` from `CreateEditableImage` is a normal runtime state on mobile**, not an
+  exceptional one. Every allocation site needs a fallback path, and the fallback should be chosen
+  at design time, not bolted on.
+- Scale resolution by device class at startup: a single `TEXTURE_SIZE` constant chosen from a
+  device heuristic, threaded through every allocation, is the cheapest possible insurance.
+- Luau pixel loops are CPU-bound, and phone CPUs are 3–5× slower than desktop for scalar code. The
+  resolution table in §6.3 should be shifted down one row for mobile.
+
+---
+
+## 7. Parallel Luau and thread safety
+
+The engine's own thread-safety metadata is unambiguous, and it is bad news for anyone hoping to
+render on worker actors.
+
+| Member | `thread_safety` | Meaning in parallel code |
+|---|---|---|
+| `EditableImage.Size` | `ReadSafe` (shown as "Read Parallel") | **Can be read** in parallel. Cannot be written — it is `ReadOnly` anyway. |
+| `EditableImage:ReadPixelsBuffer` | **`Safe`** | **Can be called** in parallel. |
+| `EditableImage:WritePixelsBuffer` | `Unsafe` | **Cannot be called** in parallel. |
+| `EditableImage:Destroy` | `Unsafe` | Cannot be called in parallel. |
+| every `Draw*` method | `Unsafe` | **Cannot be called** in parallel. |
+| `AssetService:CreateEditableImage` | `Unsafe` | Cannot be called in parallel. |
+| `AssetService:CreateEditableImageAsync` | `Unsafe` | Cannot be called in parallel (and yields). |
+
+Definitions, from the multithreading guide:
+
+> **Unsafe** — properties: "Cannot be read or written in parallel." functions: "**Cannot be called in
+> parallel.**"
+> **Read Parallel** — properties: "Can be read but not written in parallel."
+> **Safe** — "Can be read and written." / "Can be called."
+>
+> "If an API member doesn't specify a thread safety level, by default its thread safety level is
+> **Unsafe**."
+> <sub>[scripting/multithreading.md](https://raw.githubusercontent.com/Roblox/creator-docs/main/content/en-us/scripting/multithreading.md)</sub>
+
+### 7.1 The only correct parallel architecture
+
+Exactly one engine call — `ReadPixelsBuffer` — is legal in parallel. Everything that *mutates* an
+image must run in serial. So the pattern is:
+
+**Parallel phase:** do the maths. Read source pixels (`ReadPixelsBuffer` is `Safe`), run your
+generator over a plain Luau `buffer`, fill it.
+**Serial phase (`task.synchronize()`):** one `WritePixelsBuffer`, or one `Draw*` call sequence.
+
+```lua
+-- Inside an Actor-parented script.
+local px = buffer.create(W * H * 4)          -- owned by this actor, reused every frame
+
+RunService.Heartbeat:Connect(function(dt)
+    task.desynchronize()
+        -- LEGAL in parallel: pure Luau + ReadPixelsBuffer.
+        local src = sourceImage:ReadPixelsBuffer(Vector2.zero, sourceImage.Size)
+        computeFrameInto(px, src, dt)        -- your generator, no engine calls
+    task.synchronize()
+        -- ILLEGAL in parallel; must be here.
+        canvas:WritePixelsBuffer(Vector2.zero, CANVAS_SIZE, px)
+end)
+```
+
+This is genuinely useful: for a generator where the arithmetic dominates (Perlin noise, ray
+marching, cellular automata, physics-driven distortion), the expensive part is exactly the part that
+parallelises. What you cannot do is fan out the *drawing* across actors.
+
+### 7.2 Sharing buffers between actors
+
+Actors do not share Luau state. A `buffer` created in one actor is not visible in another. Options:
+
+- **`SharedTable`** — the guide notes "Sending a shared table to another actor doesn't make a copy of
+  the data… shared tables allow safe and atomic updates by multiple scripts simultaneously." Viable
+  for coordination and small payloads.
+- **Partition by region.** Give each actor a disjoint horizontal band of the image, have each
+  produce its own `buffer`, and in the serial phase issue one `WritePixelsBuffer` per band with the
+  band's `position`/`size`. Since `WritePixelsBuffer` takes an arbitrary rectangle, N actors can
+  each own N/1 of the canvas with no shared state at all. **This is the scaling pattern.**
+- `[UNVERIFIED]` — whether passing a `buffer` across an actor boundary via `BindableEvent`/`SharedTable`
+  copies or shares the underlying memory. Assume it copies and size your messages accordingly.
+
+### 7.3 Race hazards even in serial code
+
+`Content.fromObject` hands out a **strong, shared-ownership reference**. If two systems both hold
+the same `EditableImage` and both draw into it, the result is interleaved by call order, with no
+locking and no dirty tracking. Because multi-referencing is the *recommended* memory optimisation,
+this is a realistic hazard. Give every shared canvas exactly one writer, and route all edits through
+it.
+

@@ -12,9 +12,12 @@ Studio, in Luau**, at 1:1 behavioural fidelity — same formulas, same
 progression, same content, same feel — then make it better than the original
 using Roblox-native capabilities.
 
-**Rights: the person you are working with owns this game / is on its
-development team.** This is their own work being ported to a new platform. Do
-not stall on copyright; it is settled.
+**Rights: settled — the person you are working with is working alongside
+Mr Red Shark, the developer himself, with his rights and involvement.** This is
+their own project being ported to a new platform. Do not stall on copyright, do
+not re-litigate it, and do not ask them to prove it again. If a question of
+scope or permission genuinely arises later, ask them directly — they have the
+developer on hand to answer it.
 
 ## The two hard technical constraints
 

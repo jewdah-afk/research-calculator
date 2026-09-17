@@ -588,3 +588,156 @@ and never call it in a loop over chunks. Pool `MeshPart`s and `EditableMesh`es. 
 edits (which are free and immediate) as often as you like; re-bake collision rarely.
 `[INFERRED]` from `[DOCUMENTED]` + `[COMMUNITY, SECOND-HAND]`
 
+---
+
+## 3. Reusable Luau libraries
+
+The infrastructure layer of the Roblox ecosystem is genuinely mature. The *procedural-generation*
+layer is not. This section separates the two so you know where to shop and where to build.
+
+> **Sourcing note:** `wally.run` is **egress-blocked** from this environment, so I could not read
+> the registry directly. Wally package coordinates below come from the libraries' own READMEs,
+> which is a stronger source anyway. Install with Wally
+> (https://github.com/UpliftGames/wally) unless noted.
+
+### 3.1 The one platform capability nobody advertises: native compression and hashing
+
+`EncodingService` is a first-party Roblox service that most developers do not know exists, and it
+removes the need for a third-party compression library entirely. `[DOCUMENTED]`
+
+- `EncodingService:CompressBuffer(input: buffer, algorithm, compressionLevel: int = 1): buffer`
+  — *"For `Enum.CompressionAlgorithm.Zstd`, the allowed compression values are **from −7 to 22
+  inclusive**."* `Zstd` is currently the **only** member of `Enum.CompressionAlgorithm`.
+- `EncodingService:DecompressBuffer(...)`
+- `EncodingService:Base64Encode` / `Base64Decode`
+- `EncodingService:ComputeBufferHash` / `ComputeStringHash` (cryptographic hashes)
+- **`thread_safety: Safe`** — usable from parallel code.
+
+Source: https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/EncodingService.yaml
+and `.../enums/CompressionAlgorithm.yaml` `[DOCUMENTED]`
+
+CanvasDraw already relies on this for DataStore-friendly image persistence. `[SOURCE-READ]`
+**Take:** for any binary payload — heightmaps, chunk data, saved canvases, replay buffers — use
+`EncodingService` + `buffer` and do not write or import an LZW/deflate module.
+
+### 3.2 Procedural generation — thin, but one strong find
+
+**writebits/Fast-Noise** — https://github.com/writebits/Fast-Noise — **MIT** — `[SOURCE-READ]`
+
+The best noise library found, and the only one with an architecture worth documenting:
+
+- **9 noise types**: Perlin, Value, FBM, Billow, Ridged (multifractal), Worley/cellular, Voronoi,
+  Turbulence, Domain Warp. 2D **and** 3D for all of them.
+- **Built with `--!strict`, `--!native` *and* `--!optimize 2`** — the same triple that OSGL uses.
+- One module per noise type (`Perlin.lua`, `Worley.lua`, `DomainWarp.lua`, …) plus an
+  `Examples/TerrainGenerator.lua`.
+- Fully typed, fully seedable, configurable octaves/lacunarity/persistence.
+- Its own performance guidance: **use `.create()` to pre-configure a generator; cache samplers
+  rather than constructing per frame; reduce octaves; prefer Value noise over Perlin when quality
+  is not critical.** `[SOURCE-READ]`
+
+Worth knowing that **`math.noise`** is built into Roblox (Perlin, 1D/2D/3D) and needs no library
+at all for simple cases. `[DOCUMENTED]`
+
+Beyond noise, procedural generation is a build-it-yourself area. The two terrain projects in §2.4
+(`TheArturZh/RTerrainGenerator`, MIT; `tiffany352/Roblox-Terrain-Generator`, MIT) are *reference
+implementations*, not dependencies. `RTerrainGenerator`'s technique — **exponentially-distributed
+Perlin noise with domain warping**, yielding rivers/lakes/forests, not just a heightfield — is the
+most transferable idea in either. `[SOURCE-READ]`
+
+**No maintained Luau library was found for:** marching cubes, dual contouring, greedy meshing,
+Poisson-disc sampling, wave-function collapse, Delaunay/Voronoi *meshing* (as opposed to Voronoi
+*noise*), convex hulls, or mesh boolean operations. `[INFERRED]` from absence.
+
+### 3.3 Spatial partitioning and queries
+
+| Library | Note |
+| --- | --- |
+| **Sleitnick/rbxts-octo-tree** (https://github.com/Sleitnick/rbxts-octo-tree) | Octree. `topRegionSize` defaults to **512** (512×512×512 top-level regions). Has `ChangeNodePosition`, but the docs warn it is *"a fairly expensive operation ... usually beneficial to keep most nodes as static as possible."* Explicit framing: Roblox's own `GetPartBoundsInRadius` is generalised; a purpose-built octree beats it for specific use-cases. `[COMMUNITY, SECOND-HAND]` |
+| **sayhisam1/Octree** (https://github.com/sayhisam1/Octree) | Pure-Lua octree for Roblox with radius search and nearest-neighbour queries. `[COMMUNITY, SECOND-HAND]` |
+| **Quenty/NevermoreEngine `Octree`** (https://quenty.github.io/NevermoreEngine/api/Octree/) | Octree inside the large Nevermore monorepo. `[COMMUNITY, SECOND-HAND]` |
+| **LDGerrits/QuickZone** (https://github.com/LDGerrits/QuickZone) | *"High-performance, physics-free spatial query library."* MIT, Luau, ~51 stars, pushed 2026-09-11. The freshest option. `[SOURCE-READ]` (metadata) |
+| **`EditableMesh:FindVerticesWithinSphere()`** | Built into the engine — check this before importing a spatial structure for mesh work. `[DOCUMENTED]` |
+
+### 3.4 Serialization, buffers and networking
+
+| Library | Note |
+| --- | --- |
+| **Data-Oriented-House/Squash** (https://github.com/Data-Oriented-House/Squash) | *"A simple but comprehensive SerDes library for Roblox, aimed at minimizing bandwidth and saving space."* Docs at https://data-oriented-house.github.io/Squash/ . Wally: `data-oriented-house/squash`. Single-file `src/init.lua` copy-paste also supported. **The most complete SerDes library found.** `[SOURCE-READ]` |
+| **ffrostfall/ByteNet** (https://github.com/ffrostfall/ByteNet) | MIT, Luau, ~181 stars. Networking library that serialises Luau data into `buffer`s and deserialises at the far end. Strict Luau, roblox-ts support. Last push 2025-08-01. `[SOURCE-READ]` (metadata) |
+| **Sleitnick/RbxUtil → `BufferUtil`, `Stream`, `Ser`** | `BufferUtil = "sleitnick/buffer-util@0.3.2"`; `Stream = "sleitnick/stream@0.1.1"` (*"Stream abstraction wrapper around buffers"*); `Ser = "sleitnick/ser@1.0.5"`. `[SOURCE-READ]` |
+| **chadhyatt/LuaEncode** (https://github.com/chadhyatt/LuaEncode) | MIT. *"Fast table serialization library for pure Luau/Lua 5.1+."* Human-readable/table-literal output rather than binary. `[SOURCE-READ]` (metadata) |
+| **YetAnotherNet** (https://yetanotherclown.github.io/YetAnotherNet/) | Auto-compresses into buffers; internal Ser/Des for all Luau datatypes and most Roblox datatypes. `[COMMUNITY, SECOND-HAND]` |
+
+### 3.5 Lifecycle, signals, promises, async
+
+| Library | Note |
+| --- | --- |
+| **howmanysmall/Janitor** (https://github.com/howmanysmall/Janitor) | MIT, Luau, ~149 stars, pushed 2026-07-28. The de-facto cleanup object. `[SOURCE-READ]` (metadata) |
+| **Sleitnick/Trove** (in RbxUtil) | The other common cleanup helper; ships as an RbxUtil module. `[SOURCE-READ]` |
+| **evaera/roblox-lua-promise** (https://github.com/evaera/roblox-lua-promise) | Promise/A+-style promises. Docs: https://eryn.io/roblox-lua-promise/ . Wally: `evaera/promise`. The ecosystem standard; Lapis and others are built on it. `[SOURCE-READ]` |
+| **AlexanderLindholt/SignalPlus** (https://github.com/AlexanderLindholt/SignalPlus) | MIT, *"exceptionally fast signal library for Luau"*, ~37 stars, pushed 2026-09-05. `[SOURCE-READ]` (metadata) |
+| **Sleitnick/RbxUtil → `Signal`, `Concur`, `Option`, `Sequent`** | `Signal = "sleitnick/signal@2.0.3"`, `Concur = "sleitnick/concur@0.1.2"` (concurrent task handler), `Option = "sleitnick/option@1.0.5"`. `[SOURCE-READ]` |
+| **ActorGroup2** (https://devforum.roblox.com/t/actorgroup2-asynchronous-parallel-luau-made-easy/3412330) | *"Asynchronous parallel Luau made easy."* The only parallel-Luau worker-pool helper surfaced. `[COMMUNITY, SECOND-HAND]` |
+
+### 3.6 Data and persistence
+
+| Library | Note |
+| --- | --- |
+| **MadStudioRoblox/ProfileStore** (https://github.com/MadStudioRoblox/ProfileStore) | The successor to ProfileService, by loleris. Single ModuleScript. **Session locking** across servers via DataStore + MessagingService, auto-save, dupe prevention. Author is explicit: *"ProfileStore is not designed (and never will be) for in-game leaderboards or any kind of global state."* Wally: `2jammers/profilestore`. `[SOURCE-READ]` |
+| **nezuo/lapis** (https://github.com/nezuo/lapis) | The strongest alternative and arguably the better-engineered one: session locking, **schema validation**, **migrations**, retries, DataStore budget throttling, Promise-based API, **deep-frozen immutable documents by default**, **save batching** (pending `save()`/`close()` merged into one request), 5-minute auto-save, `BindToClose`. `[SOURCE-READ]` |
+
+### 3.7 UI frameworks
+
+| Library | Note |
+| --- | --- |
+| **jsdotlua / core-packages React-lua** (https://github.com/jsdotlua/CorePackages · Wally `core-packages/react-roblox`) | A real port of React. **Roblox itself ships it in their apps and core scripts.** The safest large-project choice. `[COMMUNITY, SECOND-HAND]` |
+| **Elttob/Fusion** (https://github.com/Elttob/Fusion) | *"Futuristic Luau for every universe"* — reactive state/UI, batteries-included on Roblox but portable to plain Luau. `[SOURCE-READ]` |
+| **centau/vide** (https://github.com/centau/vide) | MIT, ~324 stars, pushed 2026-08-05. *"A reactive Luau library for creating UI."* Solid-style fine-grained reactivity. `[SOURCE-READ]` (metadata) |
+| **SirMallard/Iris** (https://github.com/SirMallard/Iris) | MIT, ~349 stars, pushed 2026-09-04. **Immediate-mode GUI based on Dear ImGui.** For a procedural-generation team this is the highest-value UI pick: debug panels and parameter sliders in three lines, no state plumbing. `[SOURCE-READ]` (metadata) |
+| **AlexanderLindholt/TextPlus** (https://github.com/AlexanderLindholt/TextPlus) | MIT, ~31 stars, pushed 2026-09-14. Efficient text rendering. `[SOURCE-READ]` (metadata) |
+| **latte-soft/lucide-roblox** (https://github.com/latte-soft/lucide-roblox) | Lucide icon set for Roblox. `[SOURCE-READ]` (metadata) |
+
+### 3.8 Architecture: ECS, frameworks, immutable data
+
+| Library | Note |
+| --- | --- |
+| **Ukendio/jecs** (https://github.com/Ukendio/jecs) | *"Just a stupidly fast Entity Component System."* Archetype/SoA column-major storage, entity relationships as first-class, type-safe Luau, zero dependencies, unit-tested in CI. **Claims: "Iterate 800,000 entities at 60 frames per second."** `[SOURCE-READ]` — self-reported benchmark. |
+| **centau/ecr** (https://github.com/centau/ecr) | MIT, ~60 stars, pushed 2026-09-03. Sparse-set ECS for Luau. `[SOURCE-READ]` (metadata) |
+| **matter-ecs/matter** (https://github.com/matter-ecs/matter) | ECS with a strong debugger; CI + docs workflows. `[SOURCE-READ]` |
+| **Sleitnick/Knit** (https://github.com/Sleitnick/Knit) | MIT, ~630 stars — the most-starred Roblox framework — but **last pushed 2024-07-31**. Widely used, effectively in maintenance. Treat as legacy. `[SOURCE-READ]` (metadata) |
+| **cxmeel/sift** (https://github.com/cxmeel/sift) | MIT, ~92 stars. Immutable data library for Luau. Successor in spirit to `freddylist/llama` (MIT, last pushed **2022** — dead). `[SOURCE-READ]` (metadata) |
+| **Sleitnick/RbxUtil** (https://github.com/Sleitnick/RbxUtil) | A monorepo of ~23 independently-Wally-published modules: `Comm`, `Component`, `Concur`, `EnumList`, `Input`, `Loader`, `Net`, `Option`, `PID`, **`Quaternion`**, `Query`, `Ser`, `Shake`, `Signal`, `Silo`, **`Spring`** (critically-damped), `Stream`, `Streamable`, `Symbol`, `BufferUtil`, `Find`, `Log`, `Sequent`. CI and docs badges green. **Best single source for small utilities.** `[SOURCE-READ]` |
+
+### 3.9 Maths, physics, geometry
+
+| Library | Note |
+| --- | --- |
+| **RbxUtil `Quaternion`** (https://github.com/Sleitnick/RbxUtil/blob/main/modules/quaternion/init.luau) | `sleitnick/quaternion@0.2.3`. The only maintained quaternion type found. `[SOURCE-READ]` |
+| **RbxUtil `Spring`** | `sleitnick/spring@1.0.0`, critically-damped spring. `[SOURCE-READ]` |
+| **jaipack17/Nature2D** (https://github.com/jaipack17/Nature2D) | MIT, Lua, ~182 stars, pushed 2025-12-11. 2D physics engine for Roblox (verlet/constraint style, UI-space). `[SOURCE-READ]` (metadata) |
+| **daftcube/orbitlib** (https://github.com/daftcube/orbitlib) | Two-body orbital mechanics. **AGPL-3.0** — viral licence, last pushed 2022. Probably unusable commercially. `[SOURCE-READ]` (metadata) |
+| **Ro2DEngine built-ins** | AABB collision, radial/orbital physics, gravity, SDF circles/lines — MIT, see §1.5/§4. `[SOURCE-READ]` |
+| **Nothing found** | No maintained general 3D geometry kernel (plane/ray/triangle intersection, convex hull, polygon triangulation, mesh boolean). This is the biggest single gap in the maths ecosystem. `[INFERRED]` |
+
+### 3.10 Pathfinding
+
+Roblox ships `PathfindingService` (navmesh-based) for the common case. Beyond it:
+
+| Library | Note |
+| --- | --- |
+| **Yonaba/Jumper** (https://github.com/Yonaba/Jumper) | Grid-based pathfinding in **pure Lua**, framework-agnostic, multiple search algorithms, chaining API. Not Roblox-specific and not recently maintained, but it ports cleanly. `[COMMUNITY, SECOND-HAND]` |
+| **lance0805/a-star-lua** (https://github.com/lance0805/a-star-lua) | Minimal dependency-free A* taking a node table, start/goal and a `valid neighbour` function. Good starting point for a custom graph. `[COMMUNITY, SECOND-HAND]` |
+| **EZ Pathfinding V5** (https://devforum.roblox.com/t/ez-pathfinding-v5/1533902) | OOP Roblox pathfinding module. `[COMMUNITY, SECOND-HAND]` |
+
+### 3.11 Testing and tooling
+
+| Tool | Note |
+| --- | --- |
+| **jsdotlua/jest-lua** (https://github.com/jsdotlua/jest-lua) | *"Roblox uses Jest Lua internally for testing their apps, in-game core scripts, built-in Roblox Studio plugins, as well as libraries like Roact Navigation. This library should be considered battle-tested and ready for production use."* Wally dev-dependency `jsdotlua/jest-globals`. **Roblox-only today** — it cannot yet run under Lune. `[SOURCE-READ]` |
+| **Lune** (used by `mokiros/luau_term` for its test suite) | Standalone Luau runtime. If you keep your generation code free of Roblox globals, you can unit-test it **outside Studio** — luau_term proves this is practical. `[SOURCE-READ]` |
+| **Rojo** (https://rojo.space) + **rokit**/**aftman** | Filesystem↔Studio sync and toolchain pinning. Every serious project in this chapter uses them. `[SOURCE-READ]` |
+| **Wally** (https://github.com/UpliftGames/wally) | Cargo-inspired package manager. Registry front-end `wally.run` was unreachable from here. `[COMMUNITY, SECOND-HAND]` |
+| **Scythe-Technology/luau-roblox** (https://github.com/Scythe-Technology/luau-roblox) | MIT, ~30 stars. Luau library to read/write Roblox place and model files — useful for offline asset pipelines. `[SOURCE-READ]` (metadata) |
+| **officialmmt/OpenRoblox** (https://github.com/officialmmt/OpenRoblox) | A maintained index of Roblox tools and libraries — a good place to look next. `[COMMUNITY, SECOND-HAND]` |
+

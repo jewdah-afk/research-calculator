@@ -1475,3 +1475,513 @@ takes 40 ms, you dropped the frame on every core simultaneously. **Time-slicing
 
 ---
 
+## 6. The task scheduler and time-slicing
+
+### 6.1 The frame pipeline
+
+The task scheduler runs a fixed sequence of categories each frame
+(`performance-optimization/microprofiler/task-scheduler.md`). The Luau-visible
+hooks, in order:
+
+```
+  input processing
+  ├─ RunService:BindToRenderStep()      (ordered by your priority value)
+  └─ RunService.PreRender               ("RenderStepped" of old)
+  ─── render ───
+  RunService.PreAnimation
+  RunService.PreSimulation              ("Stepped")   ← write physics inputs here
+  ─── physics simulation (may run 0..N substeps) ───
+  RunService.PostSimulation             ("Heartbeat"-adjacent)  ← read physics here
+  RunService.Heartbeat                  ← everything else
+```
+
+Roblox's own best-practice list, condensed:
+
+- Do not bind to the render step unless the work must happen after input and
+  before rendering. Camera movement qualifies; almost nothing else does.
+- Use `BindToRenderStep` rather than `PreRender` when you need deterministic
+  ordering relative to other render-step work (it takes an explicit priority).
+- `PreSimulation` is **before** physics — set `Velocity`, apply forces here.
+- `PostSimulation` is **after** physics — read `Position`, detect zone entry here.
+- `Motor6D.Transform` changes must be made on `PreSimulation`, or `Animator`
+  will overwrite them next frame. `PreSimulation` is the last Luau event before
+  `Motor6D.Transform` is applied to part positions.
+
+For generation work, **`Heartbeat` is the right place**. It is last, it runs
+once per frame, and yielding there gives the rest of the frame back.
+
+### 6.2 Deferred events
+
+`Workspace.SignalBehavior = Enum.SignalBehavior.Deferred` (recommended, and the
+default for new places) changes when handlers run: instead of firing
+immediately, they are queued and resumed at the next **resumption point**. The
+documented set:
+
+- input processing (once per input event)
+- `RunService.PreRender`
+- legacy `wait()`/`spawn()`/`delay()` resumption
+- `RunService.PreAnimation`
+- `RunService.PreSimulation`
+- `RunService.PostSimulation`
+- `task.wait()`/`task.spawn()`/`task.delay()` resumption
+- `RunService.Heartbeat`
+- `DataModel.BindToClose`
+
+Two consequences that break naive code: a handler you connect and then trigger
+in the same tick has **not run yet** when the next statement executes, and
+`Disconnect()` drops all pending invocations of that handler.
+
+### 6.3 `task.*` semantics, precisely
+
+| Call | When it runs | Use for |
+|---|---|---|
+| `task.spawn(fn, ...)` | **immediately**, synchronously, through the scheduler | starting a coroutine that may yield without blocking the caller |
+| `task.defer(fn, ...)` | at the end of the current resume point, this frame | "soon, but not now"; the modern replacement for `spawn` |
+| `task.delay(n, fn, ...)` | after `n` seconds elapse, on the next `Heartbeat` step | timers |
+| `task.wait(n?)` | yields; resumes on the next `Heartbeat` step after `n` seconds (default 0 → next step) | frame pacing |
+| `task.cancel(thread)` | cancels a scheduled thread | cleanup |
+
+`task.wait()` returns the *actual* elapsed time, which is what you should use
+for dt, not the requested time. `task.delay` can be given the scheduling time as
+an argument to measure real drift:
+
+```lua
+task.delay(2, function(scheduledAt) print(os.clock() - scheduledAt) end, os.clock())
+--> 2.038702
+```
+
+Never use the legacy globals. `wait()`, `spawn()`, `delay()` are throttled and
+less configurable; the docs table maps each one to its `task` replacement.
+`spawn(f)` in particular is **not** `task.spawn(f)` — its closest equivalent is
+`task.defer(f)`.
+
+### 6.4 Time-slicing with `os.clock()`
+
+The watchdog: `ScriptContext:SetTimeout(seconds)` sets a "per-resumption
+execution budget: if a thread runs for longer than `seconds` since it was last
+resumed without yielding, the watchdog aborts it with the runtime error
+`Script timeout: exhausted allowed execution time`". The property defaults to
+`0` (disabled) but live servers enforce their own limit. More importantly, long
+before the watchdog fires you have already dropped frames.
+
+The canonical time-slicer:
+
+```lua
+--!strict
+local FRAME_BUDGET = 1 / 240      -- ~4.2 ms of work per frame; tune per platform
+
+-- Run `work(i)` for i = 1..n, spending at most FRAME_BUDGET seconds per frame.
+local function sliced(n: number, work: (number) -> ())
+	local deadline = os.clock() + FRAME_BUDGET
+	for i = 1, n do
+		work(i)
+		-- Check the clock only every 64 items: os.clock() is cheap but not free,
+		-- and a branch per item pollutes the loop.
+		if i % 64 == 0 and os.clock() > deadline then
+			task.wait()
+			deadline = os.clock() + FRAME_BUDGET
+		end
+	end
+end
+```
+
+Four details that separate this from the version people usually write:
+
+1. **Use `os.clock()`, not `tick()` or `os.time()`.** `os.clock` is a
+   high-resolution monotonic process clock. `os.time` has one-second
+   granularity.
+2. **Amortise the clock check.** `i % 64 == 0` costs a modulo; `if band(i, 63) == 0`
+   costs an AND. For truly hot loops, hoist the check out to an outer chunk
+   loop entirely (see §10).
+3. **Reset the deadline after the yield**, not before. The yield itself
+   consumes wall-clock time.
+4. **Budget below the frame time, not at it.** At 60 fps a frame is 16.6 ms and
+   the engine needs most of it. 4–6 ms of script work per frame is a realistic
+   ceiling on mid-tier hardware; on low-end mobile, 2 ms.
+
+The chunked form, which is faster because the inner loop has no per-item check:
+
+```lua
+local function slicedChunked(n: number, chunk: number, work: (number, number) -> ())
+	local i = 1
+	while i <= n do
+		local last = math.min(i + chunk - 1, n)
+		work(i, last)                      -- tight inner loop, no clock checks
+		i = last + 1
+		if i <= n then task.wait() end
+	end
+end
+```
+
+Choosing `chunk` adaptively is better than a constant — measure the last chunk
+and scale:
+
+```lua
+local function adaptiveSlicer(budget: number)
+	local chunk = 256
+	return function(): number
+		local t0 = os.clock()
+		return chunk, function()
+			local dt = os.clock() - t0
+			if dt > budget * 1.2 then
+				chunk = math.max(32, chunk // 2)
+			elseif dt < budget * 0.6 then
+				chunk = math.min(65536, chunk * 2)
+			end
+		end
+	end
+end
+```
+
+### 6.5 Yield points and the parallel phase
+
+`task.wait()` inside a parallel (desynchronized) worker yields back to the
+scheduler and the thread resumes **in the parallel phase of a later frame**.
+`task.synchronize()` is itself a yield: the thread resumes in the next serial
+phase. Neither is free — expect roughly one frame of latency per yield. Batch
+your synchronizations: one `task.synchronize()` and one commit per work unit,
+not one per element.
+
+---
+
+## 7. Numeric idioms
+
+### 7.1 Presizing with `table.create`
+
+`table.create(n)` allocates an array part of exactly `n` slots;
+`table.create(n, v)` fills them with `v` (RFC `function-table-create-find.md`).
+Without it, a table growing by `t[#t+1] = x` reallocates and rehashes on a
+doubling schedule — for 1,000,000 appends, ~20 reallocations and ~2M element
+copies.
+
+```lua
+local heights = table.create(4096, 0)     -- one allocation, 4096 slots, all 0
+for i = 1, 4096 do heights[i] = sample(i) end
+```
+
+`table.clear(t)` (RFC `function-table-clear.md`) empties a table **without
+freeing its capacity** — exactly what you want for a per-frame scratch table:
+
+```lua
+local scratch = table.create(1024)
+local function perFrame()
+	table.clear(scratch)      -- keeps the 1024-slot array part
+	-- ... fill scratch ...
+end
+```
+
+### 7.2 Array part versus hash part
+
+A Luau table has two storage regions. Keys `1..n` with no holes live in the
+**array part** (contiguous `TValue`s, O(1) indexed access). Everything else —
+string keys, negative keys, non-integer keys, and integer keys past a hole —
+lives in the **hash part**.
+
+Rules:
+
+- **Never mix.** `{ 1, 2, 3, name = "x" }` allocates both parts. Split it into
+  two tables, or put the metadata in fields of a wrapper.
+- **Never leave holes.** Setting `t[5] = nil` in a 10-element array can force
+  the rest into the hash part on the next rehash. To remove, swap-with-last:
+  `t[i] = t[#t]; t[#t] = nil`.
+- **`#t` on a table with holes is undefined** (it is a binary search for *a*
+  boundary, not *the* boundary). Track the count yourself if holes are possible.
+- **Do not use a table as a sparse 2D grid** with `t[y * w + x]`. If most cells
+  are empty you get a huge hash part. Use a buffer, or a table of row buffers.
+
+### 7.3 Localizing globals and fields
+
+Every `math.sqrt(x)` is: a global table lookup for `math`, then a field lookup
+for `sqrt`, then a call. Luau's compiler recognises many builtin calls and
+emits `FASTCALL`, which skips all of that — the fastcall table in
+`VM/src/lbuiltins.cpp` covers `assert`, `math.*` (all of it), `bit32.*`,
+`string.byte/char/len/sub`, `table.insert/unpack`, `rawset/rawget/rawequal`,
+`select`, `type`, `typeof`, `tonumber`, `tostring`, `vector` and all the
+`vector.*` functions, `buffer.read*`/`buffer.write*`, `math.lerp`,
+`math.isnan/isinf/isfinite`, and more.
+
+So `local sqrt = math.sqrt` is **not** always a win any more — and it can be a
+*loss*, because assigning the builtin to a local can defeat the compiler's
+recognition of the call site in some versions. `[UNVERIFIED]` for current Luau;
+the safe guidance is:
+
+- **Do** localize things the compiler cannot see through: module fields
+  (`local fbm = Noise.fbm`), service references
+  (`local RunService = game:GetService("RunService")`), and any table field
+  read inside a loop.
+- **Don't** bother localizing `math.*`/`bit32.*`/`buffer.*` for speed. Do it
+  for brevity if you like.
+- **Do** localize across an Actor/VM boundary — each VM pays its own lookups.
+
+### 7.4 Closure allocation in hot loops
+
+Every evaluation of a `function() ... end` expression that captures an upvalue
+allocates a closure object. In a loop over a million vertices that is a million
+allocations and a million GC objects.
+
+```lua
+-- BAD: allocates a closure per vertex
+for i = 0, n - 1 do
+	local p = getPosition(vb, i)
+	applyToNeighbors(i, function(j) accumulate(j, p) end)
+end
+
+-- GOOD: hoist the closure, pass state explicitly
+local function accumulateNeighbor(j: number, p: vector) accumulate(j, p) end
+for i = 0, n - 1 do
+	applyToNeighbors(i, accumulateNeighbor, getPosition(vb, i))
+end
+```
+
+Luau *does* cache closures that capture nothing (a non-capturing
+`function() end` in a loop is hoisted), but the moment you capture a loop
+variable, it allocates. Assume it allocates.
+
+The same applies to:
+
+- **`{ ... }` table constructors** in a loop — each is an allocation.
+- **Varargs collected with `{...}`** — allocates; use `select("#", ...)` and
+  `select(i, ...)` if you must, or better, fixed parameters.
+- **Multiple returns packed into a table** — return them as a tuple and consume
+  them directly.
+
+### 7.5 `table.concat` and string building
+
+`s = s .. x` in a loop is quadratic: each `..` allocates a new string of the
+combined length. Correct forms:
+
+```lua
+-- For a known-size join:
+local parts = table.create(n)
+for i = 1, n do parts[i] = tostring(values[i]) end
+local s = table.concat(parts, ",")
+
+-- For binary output, skip strings entirely:
+local b = buffer.create(n * 4)
+for i = 0, n - 1 do buffer.writef32(b, i * 4, values[i + 1]) end
+local blob = buffer.tostring(b)   -- one allocation, at the end
+```
+
+`string.format` allocates once per call; `string.pack`/`string.unpack` are the
+structured-binary equivalents, but for anything large a `buffer` is both faster
+and mutable.
+
+### 7.6 `bit32`
+
+`bit32` operates on 32-bit unsigned values represented as doubles. All of it is
+fastcall'd. Present: `band bor bxor bnot btest lshift rshift arshift lrotate
+rrotate extract replace countlz countrz byteswap`.
+
+Uses that actually come up in generation code:
+
+```lua
+-- Pack RGBA into one 32-bit value for a single buffer.writeu32
+local rgba = bit32.bor(r, bit32.lshift(g, 8), bit32.lshift(b, 16), bit32.lshift(a, 24))
+
+-- Unpack
+local r = bit32.band(rgba, 0xFF)
+local g = bit32.band(bit32.rshift(rgba, 8), 0xFF)
+
+-- Morton / Z-order interleave for cache-friendly 2D traversal
+-- Fast power-of-two modulo and division
+local i = bit32.band(counter, 63)        -- counter % 64
+local page = bit32.rshift(counter, 6)    -- counter // 64
+
+-- Round up to the next power of two (countlz = count leading zeros)
+local function nextPow2(x: number): number
+	if x <= 1 then return 1 end
+	return bit32.lshift(1, 32 - bit32.countlz(x - 1))
+end
+
+-- Endian conversion when talking to an external format
+local be = bit32.byteswap(le)
+```
+
+Note `//` (floor division) and `%` are often clearer and roughly as fast for
+non-power-of-two cases; use `bit32` where the bit semantics are the point.
+
+### 7.7 Instance property access
+
+Reading `part.Position` is not a table lookup. It is: a Luau→C++ boundary
+crossing, a property-name resolution, a type check, a value marshal back into a
+`TValue`, and possibly a change-signal check. It is orders of magnitude more
+expensive than a local read and it cannot be specialised by native codegen.
+
+```lua
+-- BAD: 3n property reads + n property writes, each a C++ round trip
+for i = 1, n do
+	parts[i].CFrame = parts[i].CFrame * CFrame.Angles(0, dt, 0)
+end
+
+-- BETTER: read once, compute in Luau, write once
+local rot = CFrame.Angles(0, dt, 0)
+for i = 1, n do
+	local p = parts[i]
+	p.CFrame = p.CFrame * rot
+end
+
+-- BEST for bulk transforms: use the engine's batch APIs
+Workspace:BulkMoveTo(parts, cframes, Enum.BulkMoveMode.FireAllEvents)
+```
+
+Rules:
+
+- Cache `game:GetService(...)` at module scope, once.
+- Cache any Instance you touch more than once in a loop into a local.
+- Cache property *values* you read more than once, and write back once.
+- Prefer batch APIs (`BulkMoveTo`, `EditableMesh:BatchSetValues`,
+  `WritePixelsBuffer`) over per-element property writes. One call that moves
+  100,000 values beats 100,000 calls.
+- Attribute access (`inst:GetAttribute("x")`) is *more* expensive than a
+  property. Do not use attributes as hot-loop storage.
+
+---
+
+## 8. Memory and garbage collection
+
+### 8.1 The collector
+
+Luau uses an **incremental, non-moving mark-and-sweep** collector with a
+tri-colour invariant. States, from `VM/src/lgc.h`:
+
+```
+GCSpause → GCSpropagate → GCSpropagateagain → GCSatomic → GCSsweep → GCSpause
+```
+
+Default tunables, same file:
+
+```c
+#define LUAI_GCGOAL    200 // 200% (allow heap to double compared to live heap size)
+#define LUAI_GCSTEPMUL 200 // GC runs 'twice the speed' of memory allocation
+#define LUAI_GCSTEPSIZE 1  // GC runs every KB of memory allocation
+```
+
+Read those three lines carefully, because they tell you exactly how the GC will
+behave in your generator:
+
+- **The heap is allowed to grow to 2× the live set** before a cycle completes.
+  Allocate 200 MB of transient garbage and your process briefly holds 400 MB.
+- **The collector does work proportional to allocation.** `GCSTEPSIZE 1` means
+  a GC step is triggered roughly every kilobyte allocated; `GCSTEPMUL 200`
+  means each step tries to collect twice as fast as you allocate. **Allocation
+  *is* the GC cost.** If you allocate nothing, the GC does nothing.
+- Because it is incremental, the cost is spread across frames — but the
+  `GCSatomic` phase is *not* incremental. A large live set means a long atomic
+  pause. This is the spike you see in the MicroProfiler as a `GC` label.
+
+The single most effective GC tuning available to you is **not allocating**.
+
+### 8.2 Allocation pressure from `Vector3` and `CFrame`
+
+This is the dominant memory problem in runtime-geometry code.
+
+- A `vector` allocates **nothing** (§1.1, §1.4).
+- A `Vector3` is a heap object. `[UNVERIFIED]` for its exact byte size on
+  Roblox; the important property is that it is a *GC object with a header* that
+  the collector must mark and sweep.
+- A `CFrame` is much larger — a position plus a 3×3 rotation basis, so ~48
+  bytes of payload plus header, and it is also heap-allocated.
+
+Generating a mesh with a million vertices as `Vector3`s creates a million GC
+objects in a burst. The collector then has a million objects to trace, the
+atomic phase lengthens, and you get a visible hitch *after* your generation
+finishes.
+
+Countermeasures, in order of effectiveness:
+
+1. **Store in a `buffer`.** Zero GC objects.
+2. **Use `vector` instead of `Vector3`** for intermediate math.
+3. **Reuse objects.** A pool of scratch tables beats allocating new ones.
+4. **Convert to `Vector3` only at the boundary** where the engine demands it,
+   one at a time, inside the loop that consumes it — so each is short-lived and
+   dies in the young generation.
+5. **Avoid `CFrame` chains in loops.** `a * b * c * d` allocates three
+   intermediate `CFrame`s. If you only need the position, compute it with
+   vectors.
+
+### 8.3 Memory categories
+
+`debug.setmemorycategory(tag: string): string` "assigns a custom tag name to the
+current thread's memory category in the Developer Console […] Useful for
+analyzing memory usage of multiple threads in the same script which would
+otherwise be grouped together under the same tag/name. Returns the name of the
+current thread's previous memory category."
+`debug.resetmemorycategory()` restores the automatic tag (normally the script
+name). `debug.getmemorycategory()` reads it.
+
+Wrap every distinct subsystem:
+
+```lua
+local function generateChunk(id: number)
+	local prev = debug.setmemorycategory("ChunkGen")
+	-- ... allocate ...
+	debug.setmemorycategory(prev)
+end
+```
+
+There are `LUA_MEMORY_CATEGORIES = 256` slots (`luaconf.h`), so you can afford
+to be granular, but the categories are per-*thread*, not per-call — set it at
+the top of a coroutine, not around every allocation.
+
+In the Developer Console → **Memory**, the tree is `CoreMemory` (engine-owned,
+not yours) and `PlaceMemory` (yours). Inside `PlaceMemory` the categories that
+matter for this chapter:
+
+| Category | What it holds |
+|---|---|
+| `LuaHeap` | all Luau heap memory, core and custom scripts |
+| `Script` | Luau scripts themselves |
+| `Instances` | Instances in the place |
+| `Signals` | signals firing between instances |
+| `GraphicsMeshParts` | GPU-side data for `MeshPart`s |
+| `HttpCache` | downloaded images/meshes held in memory |
+
+Your custom `setmemorycategory` tags appear under the Luau heap breakdown.
+
+### 8.4 Finding leaks
+
+Symptoms and causes, in the order they actually occur:
+
+1. **Connections never disconnected.** Every `:Connect` keeps the closure — and
+   everything it captures — alive. Keep a list and disconnect on teardown, or
+   use `Instance:Destroy()` on an object whose connections are all to itself.
+2. **Instances `:Destroy()`'d but still referenced by a Luau table.** `Destroy`
+   parents to nil and locks the instance, but a strong Luau reference keeps the
+   Luau-side wrapper alive. Nil out your references.
+3. **Growing caches.** A memoization table keyed by chunk id that is never
+   evicted. Bound it, or use weak values (§8.5).
+4. **Per-Actor duplication.** Each Actor has its own copy of every module it
+   requires (§5.1), so a 10 MB lookup table in a module becomes 320 MB across
+   32 Actors. Put shared bulk data in a `SharedTable`, or recompute it, or
+   accept the cost deliberately.
+5. **Buffers held by closures.** A buffer is only 1 GC object but it can be
+   64 MB. Losing track of one is expensive.
+
+Tooling: Developer Console → Memory for the live breakdown and the per-category
+time series; **Luau Heap** (Studio → Developer Console → Memory → Luau heap) to
+take snapshots and diff them. A leak shows as a category whose line climbs and
+never returns to baseline across repeated cycles of the same operation.
+
+### 8.5 Weak tables
+
+`__mode = "k"`, `"v"`, or `"kv"` is supported (`VM/src/lgc.cpp` reads the
+`__mode` metafield and sets `weakkey`/`weakvalue`). Caveats:
+
+- There is **no `__gc`**. You cannot run a finalizer.
+- Weak references only help for **GC objects**. Numbers, booleans and `vector`s
+  are not collectable, so a weak-valued table holding numbers never shrinks.
+- The classic correct use is an ephemeron map from `Instance` → per-instance
+  state, so state disappears when the instance does:
+
+```lua
+local stateByPart = setmetatable({}, { __mode = "k" })
+stateByPart[part] = { lastHit = os.clock() }
+```
+
+- Do **not** use weak tables as a cache-eviction policy for expensive computed
+  data. The collector will drop entries at unpredictable times, and you will
+  pay the recompute cost in the middle of a frame. Use an explicit LRU with a
+  size bound.
+
+---
+

@@ -438,3 +438,237 @@ A log-space type is contagious: every cost curve, every multiplier, every
 comparison, every UI format function changes. Decide in week one.
 
 ---
+
+## 2. Offline progress
+
+Offline progress is the genre's defining feature and, on Roblox specifically, its
+most exploitable one. Get three things right: it must be O(1), it must be
+server-authoritative, and it must be idempotent.
+
+### 2.1 The recommended architecture: there is no offline progress
+
+The single best decision you can make is to **not implement offline progress as a
+feature**. Implement §1.2's `advanceTo(state, now)` and let offline progress be an
+emergent consequence of a large `now - lastAdvancedAt`.
+
+```lua
+--!strict
+-- ServerScriptService/Economy/Session.luau
+local Players = game:GetService("Players")
+
+local OFFLINE_CAP_SECONDS = 12 * 3600      -- design decision, see §2.4
+local OFFLINE_EFFICIENCY  = 0.5            -- offline earns 50% of online rate
+local MIN_OFFLINE_SECONDS = 60             -- below this, no "welcome back" popup
+
+type OfflineReport = {
+    elapsedRaw: number,          -- true wall-clock seconds away
+    elapsedCredited: number,     -- after clamping to the cap
+    wasCapped: boolean,
+    gains: { [string]: number },
+}
+
+local function resumeSession(state, now: number): OfflineReport?
+    local elapsedRaw = now - state.meta.lastAdvancedAt
+
+    -- Defensive clamp. elapsedRaw can be negative if the profile was written by a
+    -- server whose clock was ahead, or if a save from the future was restored.
+    if elapsedRaw < 0 then
+        state.meta.lastAdvancedAt = now
+        state.meta.clockAnomalies += 1     -- log it; investigate if it trends up
+        return nil
+    end
+
+    local credited = math.min(elapsedRaw, OFFLINE_CAP_SECONDS)
+
+    local before = table.clone(state.balances)
+    -- Exactly the same integrator used online, with an efficiency factor folded
+    -- into the rates. No second code path.
+    Economy.integrate(state, credited, OFFLINE_EFFICIENCY)
+    state.meta.lastAdvancedAt = now
+
+    if elapsedRaw < MIN_OFFLINE_SECONDS then
+        return nil
+    end
+
+    local gains = {}
+    for currency, after in state.balances do
+        local delta = after - (before[currency] or 0)
+        if delta > 0 then
+            gains[currency] = delta
+        end
+    end
+
+    return {
+        elapsedRaw = elapsedRaw,
+        elapsedCredited = credited,
+        wasCapped = elapsedRaw > OFFLINE_CAP_SECONDS,
+        gains = gains,
+    }
+end
+```
+
+Note what is *not* here: no separate "offline simulation" function, no loop over
+hours, no special-casing. `Economy.integrate` is §1.4–1.6's closed form. A
+three-week absence costs exactly the same CPU as a three-second one.
+
+### 2.2 The O(1) requirement, concretely
+
+A player returning after 30 days is 2,592,000 seconds. At a 4 Hz tick that is
+10.4 million iterations. Even at an optimistic 20 ns per iteration that is 0.2 s of
+server time — *per returning player*, on the join path, while `ProfileStore` is
+holding a session lock and the player is staring at a loading screen. On a server
+that just restarted after an update, 30 players do this simultaneously.
+
+Closed form makes this ~2 µs. There is no argument for simulating.
+
+The failure mode people reach for instead — "simulate in coarse buckets of one
+hour" — is worse than it looks: it is still O(hours), it is *not* the same numbers
+the online path produces (so your golden-master tests diverge), and it introduces
+a second implementation of every multiplier. Don't.
+
+### 2.3 Closed form for the standard growth curves
+
+Reusing §1: for each currency, offline gain over `Δt` is whichever of these
+matches your design.
+
+| Production shape | Offline gain over Δt | Notes |
+|---|---|---|
+| Constant rate `r` | `r · Δt` | The overwhelming majority of Roblox idle games. |
+| Tiered chain, *n* tiers | `Σⱼ x_{k+j}(0) · (Π m) · Δtʲ / j!` | §1.5. Exact; O(n²). Watch overflow past ~1e308. |
+| Exponential compounding `r₀e^{λt}` | `r₀(e^{λΔt} − 1)/λ` | §1.6. Use the series fallback for small `λΔt`. |
+| Polynomial `r₀(1+at)^p` | `r₀[(1+aΔt)^{p+1} − 1] / (a(p+1)) ` | `p = −1` → `r₀ ln(1+aΔt)/a`. |
+| Capacity-limited (storage fills) | `min(r · Δt, capacity − current)` | Classic "your barn is full" design; O(1) and self-capping. |
+| Logistic / saturating `r·C/(1+ke^{−λt})` | `(rC/λ)·ln((1+ke^{−λt₀})/(1+ke^{−λt₁}))` | Rare, but the closed form exists. `[UNVERIFIED]` — derived here, verify numerically before shipping. |
+
+**The capacity-limited shape deserves a mention**, because it is the cleanest way
+to bound offline progress without a visible timer: give every generator a storage
+capacity, have offline production fill storage, and require the player to collect.
+The cap emerges from the design rather than from a rule, players understand it
+immediately, and it gives them a reason to come back on a schedule.
+
+### 2.4 Capping, efficiency, and the design of "away time"
+
+Three separate knobs, frequently conflated:
+
+- **Hard cap** (`OFFLINE_CAP_SECONDS`): the maximum credited elapsed time.
+  Typical Roblox values are 2–12 hours at launch, extended by gamepass to 24 h.
+- **Efficiency** (`OFFLINE_EFFICIENCY`): offline rate as a fraction of online rate.
+  Typical 25–100%. Below ~25% players feel punished for sleeping.
+- **Curve on the elapsed time itself**: instead of a hard cliff, credit
+  `f(Δt) = cap · (1 − e^{−Δt/τ})` so returns diminish smoothly and there is no
+  "I logged in 20 minutes too late" cliff. `[COMMUNITY, SECOND-HAND]` — this is a
+  design pattern, not a documented API.
+
+Two anti-patterns worth naming:
+
+- **Selling the cap and the efficiency as separate products.** Players read this as
+  two paywalls on the same feature.
+- **Making the cap a hard cliff with no in-game display.** If the cap is 8 h, show a
+  filling meter with the time remaining. Otherwise the player's mental model is
+  "offline earns nothing after a while" and they stop caring.
+
+### 2.5 Clock-tampering resistance
+
+Roblox's documentation for `os.time()` is unusually explicit, and it is the
+security argument in one paragraph:
+
+> "Note that the returned time uses the device's local clock. Most operating
+> systems automatically sync their local time against online time servers, so this
+> should be within a few hundred milliseconds. **However, users can easily disable
+> sync behavior and set the system time to anything they want**; for synchronized
+> time between client and server, use `Workspace:GetServerTimeNow()` instead."
+
+And `Workspace:GetServerTimeNow()` itself carries a warning that matters here:
+
+> "…this method is not suitable for things like timed rewards, as it is not
+> secure."
+
+Put together, the rules are:
+
+1. **The offline timestamp is written and read on the server only.** It lives in the
+   session-locked profile (`state.meta.lastAdvancedAt`), never in an attribute, never
+   in a `RemoteEvent` argument, never in `player:SetAttribute`.
+2. **The server uses server-side `os.time()`.** A Roblox game server's clock is
+   Roblox's machine, not the player's. It is not perfect — servers can drift — but it
+   is not attacker-controlled. `[INFERENCE]` — the docs do not state a server clock
+   accuracy guarantee.
+3. **`GetServerTimeNow()` is for display only.** It is a *client's approximation* of
+   server time, documented as monotonic and rate-accurate to 0.6%, and explicitly
+   labelled not secure. Use it to animate a countdown; never to decide a grant.
+4. **Clamp elapsed to `[0, cap]` before doing anything with it.** Negative elapsed is
+   not an exception to handle, it is a number to floor at zero. Count the occurrences
+   and alert if the rate rises — that is your tamper signal.
+5. **`DateTime` for anything human-facing.** `DateTime.fromUnixTimestamp(t)` plus
+   `:FormatLocalTime(...)` renders "you were away since Tuesday 9:14 PM" in the
+   player's own locale without you doing timezone arithmetic.
+
+### 2.6 Idempotency: the rejoin-farm exploit
+
+The attack: join, get the offline grant, leave immediately, rejoin. If the grant is
+computed from a timestamp that was not persisted *before* the grant, or if two
+servers can hold the profile at once, the player farms the same interval repeatedly.
+
+Two defences, both required:
+
+- **Session locking** (§6.3) makes "two servers at once" impossible.
+- **Advance-then-persist ordering** makes a crash-during-grant safe. Because
+  `lastAdvancedAt` is moved to `now` *in the same table mutation* as the balance
+  increase, any save — autosave, save-on-leave, `BindToClose` — writes both or
+  neither. There is no window where the balance went up but the timestamp did not.
+
+```lua
+-- CORRECT: one mutation, atomically persisted together.
+state.balances.coins += gain
+state.meta.lastAdvancedAt = now
+
+-- WRONG: two calls, with a yield between them, is a duplication bug.
+grantCoins(player, gain)         -- fires a remote, yields
+saveTimestamp(player, now)       -- may never run if the player leaves here
+```
+
+A third, cheap belt-and-braces measure is a monotonic guard:
+
+```lua
+if now <= state.meta.lastAdvancedAt then
+    return nil  -- already credited through this instant
+end
+```
+
+### 2.7 The welcome-back summary
+
+The report is a UI problem, but it is also a retention feature — it is the first
+thing a returning player sees and the moment where they decide whether the session
+was worth opening. What works:
+
+- **Lead with time, not the number.** "You were away 7 h 12 m" anchors the
+  expectation before the number lands.
+- **Itemise by source when there are multiple currencies**, one row each, with the
+  generator that produced the most called out. Aggregate everything below 1% into
+  "other".
+- **Show the cap honestly.** If they were away 40 hours and the cap is 12, say
+  "credited 12 h (maximum)" with a clear upsell, not a silently smaller number.
+  Players compute the rate and notice.
+- **Make the button grant, not dismiss.** Deferring the credit until the player taps
+  "Collect" costs you nothing and gives the moment weight. (If you do this, the
+  balance change must still be committed server-side at load; the button reveals a
+  grant that already happened, it does not authorise it.)
+- **Suppress it below a threshold.** `MIN_OFFLINE_SECONDS` above. A popup for
+  45 seconds of earnings is noise.
+
+```lua
+--!strict
+-- Formatting the elapsed time. DateTime handles the locale; this handles the span.
+local function formatSpan(seconds: number): string
+    local d = math.floor(seconds / 86400)
+    local h = math.floor(seconds % 86400 / 3600)
+    local m = math.floor(seconds % 3600 / 60)
+    if d > 0 then
+        return string.format("%dd %dh", d, h)
+    elseif h > 0 then
+        return string.format("%dh %dm", h, m)
+    end
+    return string.format("%dm", math.max(m, 1))
+end
+```
+
+---
