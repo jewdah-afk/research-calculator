@@ -1554,3 +1554,116 @@ locking and no dirty tracking. Because multi-referencing is the *recommended* me
 this is a realistic hazard. Give every shared canvas exactly one writer, and route all edits through
 it.
 
+---
+
+## 8. Saving and uploading generated images
+
+There are **three** distinct ways to persist an `EditableImage`, with very different constraints.
+
+### 8.1 `CreateAssetAsync` — a real, permanent asset ID (plugins / Open Cloud only)
+
+```lua
+AssetService:CreateAssetAsync(object: Object, assetType: Enum.AssetType, requestParameters: Dictionary?)
+    : (Enum.CreateAssetResult, number)
+```
+
+DOCS states the supported pairing explicitly:
+
+> - `Enum.AssetType.Image` – with `object` as any valid `EditableImage` root.
+
+and the hard restriction:
+
+> "Currently, this method can only be used in **locally loaded plugins** and uploads assets without
+> prompting first."
+
+`requestParameters`: `{ Name, Description, CreatorId, CreatorType, IsPackage }`. `CreatorId` and
+`CreatorType` "Default to the logged in Roblox Studio user for Plugin context. **Required for Open
+Cloud Luau Execution context.**" — so Open Cloud Luau execution is the second supported context even
+though the prose sentence only names plugins. The client also carries a flag literally named
+`AllowEditableApisInCloudExecution`, consistent with that.
+
+```lua
+-- Plugin context.
+local ok, idOrErr = pcall(function()
+    return AssetService:CreateAssetAsync(generated, Enum.AssetType.Image, {
+        Name = "GeneratedTileset",
+        Description = "Built by the tileset tool",
+    })
+end)
+-- returns (Enum.CreateAssetResult, assetId)
+```
+
+`CreateAssetVersionAsync(object, assetType, assetId, requestParameters)` updates an existing asset in
+place, same contexts, returning `(Enum.CreateAssetResult, versionNumber)`.
+
+**Result codes:** `Success`, `PermissionDenied`, `UploadFailed`, `Unknown`. Both methods carry the
+`AssetCreateUpdate` capability.
+
+**What this means in practice:** this is a *tooling* API, not a runtime one. It is how you build a
+Studio plugin that bakes procedural textures into your place's assets at build time. It is **not**
+how a player saves their painted skin.
+
+### 8.2 `PromptCreatePlatformContentAsync` — the in-experience UGC path (models only, today)
+
+```lua
+AssetService:PromptCreatePlatformContentAsync(player: Player, object: Object, assetType: Enum.AssetType)
+    : (Enum.PromptCreateAssetResult, number)
+```
+
+> "Allows in-experience asset creation for users by prompting a publish dialog. … Upon submitting,
+> it saves the asset to the user's inventory. **Can only be invoked on the server side.**"
+> `assetType`: "The asset type. **Currently can only be `Enum.AssetType.Model`.**"
+
+So you **cannot** publish an `EditableImage` as a standalone `Image` asset from inside an experience
+today. But `EditableImage.yaml` documents an indirect route:
+
+> "When you use `AssetService:PromptCreatePlatformContentAsync()` to publish an object that has a
+> `Content` property which references an `EditableImage`, **the editable image is published as an
+> image and the property is set to a new asset ID**."
+
+That is the working pattern: wrap your generated texture in a `Model` (a `MeshPart` with
+`TextureContent = Content.fromObject(image)`, or a part with a `Decal`), publish the **Model**, and
+the engine uploads the referenced image as a side effect and rewrites the property to the new asset
+ID. This is exactly how in-experience avatar creation works.
+
+Caveats from DOCS: the object "Currently can't contain scripts or nest non-public assets." Result
+codes include `UGCValidationFailed`, `ModeratedName`, `PurchaseFailure`, `TokenInvalid`,
+`NoUserInput`, `Timeout` — plan a real error-handling UI, because most of these are user-visible
+outcomes rather than programmer errors.
+
+**Server-side only**, and the `EditableImage` must be reachable from the published object. Note the
+tension with the replication rule (§1.5): the object is on the server, but you must not let it
+replicate to clients while it holds an `Object`-content property. Build it under `ServerStorage`,
+publish, then use the returned asset ID.
+
+### 8.3 `CreateDataModelContentAsync` — ephemeral, not permanent
+
+Covered in §1.6. It produces a `DataModel`-scoped `Opaque` `Content` — usable while this server
+instance lives, gone afterwards, not an asset ID, subject to a "server storage budget" that reports
+`Enum.CreateContentResult.StorageLimitExceeded`. Use it for "this round's generated textures", not
+for anything a player expects to keep.
+
+### 8.4 Open Cloud
+
+`[UNVERIFIED]` for anything beyond the two sentences above. DOCS mentions "Open Cloud Luau Execution
+context" only as a place where `CreatorId`/`CreatorType` become required in
+`CreateAssetAsync`/`CreateAssetVersionAsync`. There is no documented Open Cloud *REST* endpoint that
+takes `EditableImage` pixel data — the Open Cloud assets API takes image *files*, which is a
+different thing entirely. If you need a pipeline that generates textures outside Roblox and uploads
+them, that is the Open Cloud Assets API with a PNG, not `EditableImage`.
+
+### 8.5 Decision table
+
+| You want to… | Use | Context | Permanent? |
+|---|---|---|---|
+| Bake procedural textures into your place at build time | `CreateAssetAsync` | Plugin / Open Cloud Luau | Yes, real asset ID |
+| Let a player save a customised item to their inventory | `PromptCreatePlatformContentAsync` with a **Model** wrapping the image | Server | Yes, real asset ID |
+| Share a generated texture with all clients this round | `CreateDataModelContentAsync` | Server | No, `DataModel`-scoped |
+| Show a generated texture to one player | `Content.fromObject` directly | Client | No |
+| Persist a generated texture across sessions | Store the **recipe** (seed/params) in a DataStore and regenerate | Either | n/a — and this is usually the right answer |
+
+**The last row is the one most teams should take.** A 1024² image is 4 MB; a seed and a parameter
+table is 200 bytes. Store the recipe, regenerate on the client at load. It is cheaper, it replicates
+trivially, it dodges every permission gate, and it lets you change the art later by shipping new
+generation code instead of re-uploading assets.
+

@@ -101,3 +101,106 @@ Claims that could not be verified against a primary source are marked
   do not open the next stage until the current gate is green.
 
 ---
+
+## JS→Luau semantic gotchas table
+
+The table is ordered by how often it bites in practice on an incremental-game
+port. "Silent" means the port runs and produces wrong numbers; "loud" means you
+get an error.
+
+| # | Topic | JavaScript | Luau | Failure mode | Correct translation |
+|---|-------|-----------|------|--------------|---------------------|
+| 1 | Truthiness | `0`, `-0`, `""`, `NaN`, `null`, `undefined` are falsy | only `nil` and `false` are falsy | **Silent** — `if (count)` guards stop guarding | `if count ~= 0 then`, `if s ~= "" then`, `if v ~= nil then` — never bare `if v then` on a number or string |
+| 2 | Default-value idiom | `const n = opts.n \|\| 10` gives `10` when `opts.n === 0` | `local n = opts.n or 10` gives `0` when `opts.n == 0` | **Silent** — and it silently *fixes* a latent JS bug, which is still a divergence | Decide per site. To match JS exactly: `local n = (opts.n == nil or opts.n == 0 or opts.n ~= opts.n) and 10 or opts.n` |
+| 3 | Array indexing | 0-based; `a[0]` first, `a.length - 1` last | 1-based; `t[1]` first, `t[#t]` last | **Silent** — off-by-one in tier/level lookups | Shift every literal index and every loop bound; see §3 |
+| 4 | `for` bounds | `for (let i = 0; i < n; i++)` | `for i = 1, n do` | **Silent** — `for i = 0, n` runs `n+1` times | `for i = 1, n do` and `for i = 0, n - 1 do` for a genuinely 0-based table |
+| 5 | `%` sign | remainder; sign of the **dividend**: `-13 % 5 === -3` | floored modulo `a - floor(a/b)*b`: `-13 % 5 == 2` | **Silent** — wrap-around indices, cycle phases | JS-identical remainder: `local function jsMod(a,b) local r = math.fmod(a,b) return r end` (`math.fmod` "rounds the quotient towards zero") |
+| 6 | Integer division | `Math.floor(a / b)` or `(a / b) \| 0` (truncates!) | `a // b` is `floor(a / b)` | **Silent** on negatives: `(-7/2)\|0 === -3` but `-7 // 2 == -4` | `Math.floor` → `//` or `math.floor`; `\| 0` / `Math.trunc` → a `trunc` helper |
+| 7 | `Math.round` ties | ties go toward **+∞**: `Math.round(-20.5) === -20` | ties go **away from zero**: `math.round(-0.5) == -1` | **Silent** on negatives and on offline-progress halves | `local function jsRound(x) return math.floor(x + 0.5) end` (matches JS except at `-0`) |
+| 8 | Bitwise | coerces to **signed** int32; result signed | `bit32.*` treats numbers as **unsigned** 32-bit | **Silent** — a negative JS result becomes `x + 2^32` | Wrap: `local function toI32(u) return u >= 0x80000000 and u - 0x100000000 or u end` |
+| 9 | `>>>` | unsigned right shift | `bit32.rshift` (already unsigned) | Mostly fine | `x >>> n` → `bit32.rshift(x, n)`; `x >> n` → `bit32.arshift(x, n)` |
+| 10 | Sparse arrays | holes are allowed; `length` is the highest index + 1 | `#t` returns *a* boundary found by binary search | **Silent and non-deterministic** | Never write `nil` into an array; use a sentinel value or a keyed dictionary + explicit `count` field |
+| 11 | `undefined` vs `null` | two distinct absent values; `undefined == null` is `true`, `===` is `false` | one `nil` | **Silent** — a JS `null` used as "explicitly cleared" collapses into "never set" | If the original distinguishes them, model it explicitly (`NULL = newproxy()` sentinel or a `{ set = true, value = nil }` box) |
+| 12 | `==` vs `===` | `==` coerces; `===` does not | `==` never coerces; `~=` is "not equal" | **Silent** only where the original relied on coercion (`"5" == 5`) | Port `===` → `==`. Port `==` only after reading what it was coercing |
+| 13 | `sort` stability | stable since ES2019 | not stable (quicksort/heapsort hybrid) | **Silent** — ties reorder, changing display order and any index-dependent logic | Add an explicit tiebreak key (id, then index) to the comparator |
+| 14 | `sort` comparator | returns a **number**; sloppy comparators just sort oddly | returns a **boolean** (strict less-than); a non-strict-weak-order comparator **errors** | **Loud** — `invalid order function for sorting` | `cmp(a,b) < 0` → `return cmp(a,b) < 0`; never `<=` |
+| 15 | `Array` methods | `map/filter/reduce/slice/splice/find/some/every/includes` | none of them; `table.*` has `insert/remove/sort/concat/find/move/clone/create/pack/unpack/freeze` | **Loud** — missing method | Write a tiny `Arr` module once (§4) rather than inlining loops everywhere |
+| 16 | String indexing | 0-based; `s[0]`, `s.slice(a, b)` end-exclusive | 1-based; `string.sub(s, i, j)` end-**inclusive** | **Silent** — truncated or over-long substrings | `s.slice(a, b)` → `string.sub(s, a + 1, b)` |
+| 17 | `split` | `s.split(",")` | does not exist | **Loud** | `for part in string.gmatch(s, "([^,]*)") do` — note the `*` vs `+` distinction for empty fields |
+| 18 | Regex | full ECMAScript regex | **Lua patterns are not regex** — no alternation, no grouping quantifiers, no lookaround, 12 magic characters `^$()%.[]*+-?` | **Silent or loud** depending on the pattern | Translate simple patterns (§7); for anything with `\|`, `{n,m}`, backrefs or lookaround, rewrite the logic or vendor a regex library |
+| 19 | JSON key order | `JSON.stringify` follows insertion order for string keys | unspecified; Luau tables have no ordering | **Silent** — any hash-of-save or byte-comparison breaks | Never compare serialized saves byte-for-byte; compare decoded structures |
+| 20 | JSON empty object | `JSON.stringify({})` → `"{}"` | `JSONEncode({})` → `"[]"` | **Silent** — a round-trip turns a dictionary into an array | Encode a marker field, or never allow an empty sub-table in the schema |
+| 21 | JSON mixed table | JS objects and arrays are distinct types | "If a table contains both [string and number keys], an array takes priority (string keys are ignored)" | **Silent data loss** | Enforce: every table in the save schema is *either* a pure array *or* a pure dictionary |
+| 22 | `NaN`/`Infinity` in JSON | `JSON.stringify(NaN)` → `"null"` | `JSONEncode` "allows values such as `inf` and `nan` which are not valid JSON" | **Silent** — produces a save no other parser can read | Sanitize before encoding; assert `v == v and v ~= math.huge` |
+| 23 | `this` | dynamically bound; needs `bind`/arrow capture | `self` is just the first argument of `:` calls | **Loud** usually, **silent** if a method is stored and called as a plain function | `obj.method` → `function() return obj:method() end`; keep `:` vs `.` consistent |
+| 24 | Prototypes | `class`/`prototype` chain, `instanceof` | `setmetatable` + `__index` | **Loud** | Standard `local C = {} C.__index = C` pattern; `instanceof` → an explicit `ClassName` field |
+| 25 | Closures | lexical, capture by reference | identical | None | Direct port |
+| 26 | `setTimeout`/`setInterval` | ms; returns a handle; `clearTimeout` | `task.delay(seconds, fn)` returns a thread; `task.cancel(thread)` | **Silent** — ms vs seconds is a 1000× error | `setTimeout(f, 250)` → `task.delay(0.25, f)` |
+| 27 | `requestAnimationFrame` | per-frame callback with a DOMHighResTimeStamp | `RunService.PreRender` (client) / `Heartbeat` | **Silent** — rAF pauses in a background tab, Roblox does not | Do not drive the simulation from the frame event at all; see §10 |
+| 28 | `Date.now()` | ms since epoch, **client clock** | `os.time()` (seconds), `os.clock()` (monotonic-ish CPU time), `DateTime.now()` | **Silent** — unit mismatch, and client clocks lie | Offline progress must use a *server* timestamp; never trust a client clock |
+| 29 | Promises/`async` | microtask queue; `await` suspends | coroutines; yielding calls suspend implicitly | **Silent** — ordering differences around "resolved immediately" | `await p` → a direct yielding call; `Promise.all` → spawn N threads and join on a counter |
+| 30 | Errors | `try/catch`, exceptions are values | `pcall`/`xpcall`, errors are values | **Loud** | `try { a } catch (e) { b }` → `local ok, e = pcall(a) if not ok then b end` |
+| 31 | `0.1 + 0.2` | `0.30000000000000004` | **identical** — both are IEEE-754 binary64 | None | Direct port; this is one of the few places you get exact parity for free |
+| 32 | `Number.MAX_SAFE_INTEGER` | `9007199254740991` (2^53−1); beyond it, integer equality lies | identical representation, same limit | **Silent** — but identically silent in both, so it *preserves* fidelity | Match the original's behaviour, including its bugs, unless the spec says otherwise |
+| 33 | Numeric `for` with float step | `for (let x = 0; x < 1; x += 0.1)` accumulates error | `for x = 0, 1, 0.1 do` — Luau computes the trip count | **Silent** — different iteration counts | Port float-stepped loops as integer loops with a multiply |
+| 34 | String concat in a loop | `+=` on strings is optimized by engines | `..` allocates every time | Performance, not correctness | `table.concat` or a `buffer` |
+| 35 | Shadowing / globals | `var` hoists; undeclared assignment creates a global (non-strict) | undeclared assignment creates a global; `--!strict` + `local` everywhere catches it | **Silent** — a stray global is shared state | Turn on `--!strict`, ban implicit globals in lint |
+
+---
+
+## DOM→Roblox UI mapping table
+
+| Web concept | Roblox equivalent | Notes and gotchas |
+|-------------|-------------------|-------------------|
+| `<div>` container | `Frame` | `BackgroundTransparency = 1` for a layout-only div |
+| `<span>` / text node | `TextLabel` | No inline flow; each label is a box |
+| `<button>` | `TextButton` / `ImageButton` | Fires `Activated`, `MouseButton1Click`, plus touch |
+| `<img>` | `ImageLabel` | Source must be an uploaded `rbxassetid://` or an `EditableImage` `Content` |
+| `<input type="text">` | `TextBox` | `FocusLost` gives `enterPressed` |
+| `<progress>` / bar div | `Frame` with a child `Frame` sized by Scale | Animate with `TweenService` on `Size` |
+| Box model: `width`/`height` | `Size = UDim2.new(scaleX, offsetX, scaleY, offsetY)` | Scale is "a percentage of the container's size"; Offset is "how many pixels" (`creator-docs`, `ui/position-and-size.md`) |
+| `padding` | `UIPadding` (`PaddingTop/Bottom/Left/Right`, each a `UDim`) | Padding is a child instance, not a property |
+| `margin` | **no equivalent** | Use `UIListLayout.Padding` for between-item spacing, or a wrapper `Frame` |
+| `border` | `UIStroke` | `Thickness`, `Color`, `ApplyStrokeMode` |
+| `border-radius` | `UICorner` | `CornerRadius` is a `UDim` (Scale + Offset) |
+| `box-sizing: border-box` | implicit — `Size` is always the border box | `UIPadding` shrinks the *content* area, matching `border-box` |
+| `display: flex` | `UIListLayout` | `FillDirection` = `Horizontal`/`Vertical` |
+| `flex-direction` | `UIListLayout.FillDirection` | |
+| `justify-content` | `UIListLayout.HorizontalFlex` / `VerticalFlex` (the axis matching `FillDirection`) | "specifies how to distribute extra horizontal space in the parent container" |
+| `align-items` | `UIListLayout.ItemLineAlignment` | "defines the cross-directional alignment of siblings within a line"; `Stretch` ≈ `align-items: stretch` |
+| `flex-wrap: wrap` | `UIListLayout.Wraps = true` | |
+| `flex-grow` / `flex-shrink` | `UIFlexItem` on the child | `FlexMode` `Grow` = 1:0 ratio, `Shrink` = 0:1, `Fill` = 1:1, `Custom` enables `GrowRatio`/`ShrinkRatio` (`creator-docs`, `classes/UIFlexItem.yaml`) |
+| `order` | `GuiObject.LayoutOrder` + `SortOrder = LayoutOrder` | Default `SortOrder` may be `Name` — set it explicitly |
+| `display: grid` | `UIGridLayout` | Fixed `CellSize`/`CellPadding` only; no named areas, no `fr` units, no spanning |
+| `position: absolute` | plain `Position` + `AnchorPoint` (no layout object on the parent) | `AnchorPoint` is "a fraction from 0 to 1, relative to the size of the object" |
+| `top/left/right/bottom` | `Position` + `AnchorPoint` | `right: 0` → `AnchorPoint = Vector2.new(1,0)`, `Position = UDim2.new(1,0,0,0)` |
+| `transform: translate(-50%,-50%)` | `AnchorPoint = Vector2.new(0.5, 0.5)` | The canonical centering idiom |
+| `px` | `UDim.Offset` | Roblox offsets are in *screen pixels*, already DPI-scaled by the engine |
+| `%` | `UDim.Scale` | |
+| `em` / `rem` | **no equivalent** | Compute a pixel value from a base font size at build time, or drive it with `UIScale` |
+| `vw` / `vh` | `Scale` against a root frame sized `UDim2.fromScale(1,1)` | |
+| `min-width` / `max-width` | `UISizeConstraint` | `MinSize`/`MaxSize` in pixels |
+| `aspect-ratio` | `UIAspectRatioConstraint` | |
+| `z-index` | `GuiObject.ZIndex` | Set `ScreenGui.ZIndexBehavior = Sibling` to get CSS-like sibling stacking rather than global |
+| `overflow: scroll` | `ScrollingFrame` | `CanvasSize`, or `AutomaticCanvasSize` to size from children; `CanvasPosition` is the current scroll offset in pixels |
+| `overflow: hidden` | `ClipsDescendants = true` | |
+| `transition` / `animation` | `TweenService:Create(instance, TweenInfo.new(...), {prop = target})` | Easing style/direction enums replace cubic-bezier; no keyframe timeline |
+| `@keyframes` multi-step | chained tweens or a `RunService` driver | |
+| `:hover` | `MouseEnter` / `MouseLeave` | Does not exist on touch — always provide a non-hover affordance |
+| `:active` | `MouseButton1Down` / `Up`, or `GuiButton.Activated` | |
+| `onclick` | `Activated` (preferred: covers mouse, touch and gamepad) | |
+| `onchange` on an input | `TextBox.FocusLost` / `GetPropertyChangedSignal("Text")` | |
+| `addEventListener` | `instance.Event:Connect(fn)` returning an `RBXScriptConnection` | Must `:Disconnect()`; there is no automatic GC of connections to live instances |
+| `innerHTML` with markup | `TextLabel.RichText = true` and a subset of tags (`<b> <i> <u> <s> <font color size face family weight transparency> <stroke> <br/> <uppercase> <smallcaps>`) | Escape `<`, `>`, `&`, `"` , `'` in user/dynamic text or your formatting breaks (`creator-docs`, `ui/rich-text.md`) |
+| `textContent` | `TextLabel.Text` | |
+| `document.createElement` | `Instance.new("Frame")` | Prefer cloning a template from `ReplicatedStorage` |
+| `<canvas>` 2D context | `EditableImage` + an `ImageLabel` | Pixel buffer work; see chapters 20 and 40 |
+| CSS gradient | `UIGradient` | Linear only; `Color` is a `ColorSequence`, `Transparency` a `NumberSequence` |
+| Sprite sheet + `background-position` | `ImageLabel.ImageRectOffset` / `ImageRectSize` | "the pixel offset (from the top-left) of the image area to be displayed"; a zero in either dimension of `ImageRectSize` shows the whole image |
+| 9-slice background | `ScaleType = Slice` + `SliceCenter` | |
+| `<table>` | `UIListLayout` of row `Frame`s, each with a `UIListLayout` of cells | No column auto-sizing |
+| Web font (`@font-face`) | `TextLabel.FontFace = Font.new("rbxasset://fonts/families/....json", weight, style)` | Custom fonts must be uploaded as font-family assets |
+| `title` attribute / tooltip | a manually positioned `Frame` shown on `MouseEnter` | |
+| `localStorage` | `DataStoreService` (server) / `plr:SetAttribute` for ephemeral | See §14 |
+
+---

@@ -1985,3 +1985,334 @@ stateByPart[part] = { lastHit = os.clock() }
 
 ---
 
+## 9. Profiling
+
+### 9.1 The MicroProfiler
+
+Open it with <kbd>Ctrl</kbd>+<kbd>F6</kbd> (<kbd>⌘</kbd>+<kbd>F6</kbd>) in Studio
+or on the desktop client. <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F5</kbd> shows
+the lighter **Performance Summary** overlay first — use that to confirm you
+actually have a problem before diving in.
+
+**Reading the frame-time graph.** Each bar is one frame. The shape tells you the
+class of problem before you look at a single label:
+
+- **Consistent bars above your target** → something runs *every frame* and is
+  too expensive. Look at per-frame connections.
+- **Mostly fine with periodic spikes** → something runs occasionally and does
+  too much at once. Look for generation bursts, `GC`, asset loads, and
+  un-time-sliced work. *This is the failure mode of naive geometry generation.*
+- **Sawtooth growth** → a leak or an unbounded queue.
+
+<kbd>Ctrl</kbd>+<kbd>P</kbd> pauses and opens **detailed mode**; then drag to
+pan. Stacked bars are a call hierarchy — keep hovering down the stack until the
+label names something you wrote.
+
+**Threads.** The left-hand column names the thread:
+
+- **RBX Main** — CPU rendering prep, input, `Humanoid`s, animation/tweening,
+  physics ownership, sound, waiting-script resumes, and coordination of
+  everything else. Your `RunService` callbacks are here.
+- **RBX Worker** — networking, physics, pathfinding, and **parallel Luau**.
+  Most worker threads sleep most of the time; if your Actors are working you
+  will see them light up here.
+- **GPU** — prepare / perform / present.
+
+**Labels worth memorising** (`performance-optimization/microprofiler/tag-table.md`):
+
+| Label | Meaning | What to do |
+|---|---|---|
+| `Heartbeat/RunService.Heartbeat` | your `Heartbeat` connections | reduce work, spread across frames |
+| `Render/PreRender/RunService.RenderStepped` | `PreRender` connections | do as little as possible here |
+| `Render/PreRender/fireBindToRenderSteppedCallbacks` | `BindToRenderStep` callbacks | same |
+| `Simulation/gameStepped/RunService.Stepped` | `PreSimulation` connections | same |
+| `GC` | a Luau collection cycle | *"Pool tables and other collectable objects or try to reduce creating temporary tables"* |
+| `WaitingHybridScriptJob` | resuming scripts blocked on `WaitForChild`/`wait()`; has its own **execution time budget** and runs ~30×/s | too many waiters, or long non-yielding runtimes, throttle this step |
+| `Prepare/UpdatePrepare/updateInvalidParts` | re-preparing changed parts for render | you are touching too many part properties |
+| `Perform/Scene/computeLightingPerform` | lighting | see the rendering chapter |
+
+Seeing `GC` as a tall bar right after your generator finishes is the signature
+of §8.2 — too many short-lived `Vector3`/`CFrame`/table allocations.
+
+**Dumping frames.** The **Save to file** button writes
+`microprofile-<date>-<time>.html`, a standalone file you can reopen in the web
+UI or share. Note the caveat from the docs: a dump contains only the selected
+number of frames, **not** the whole session (counters mode is the exception —
+it covers from process start). The web UI additionally offers flame-graph
+export, and **drag-and-drop of a second dump to produce a diff flame graph**
+(*Combine & Compare*) — this is the correct way to prove an optimisation
+worked. Do not combine dumps from different places.
+
+**Server profiling**: Developer Console (<kbd>Ctrl</kbd>+<kbd>F9</kbd>) can
+capture brief server dumps and gives you the file path.
+
+### 9.2 `debug.profilebegin` / `debug.profileend`
+
+These create your own labels on the MicroProfiler timeline.
+
+```lua
+local function onPreSimulation()
+	debug.profilebegin("ChunkGen")
+	generateChunk()
+	debug.profileend()
+end
+```
+
+Rules of use:
+
+- They **must be balanced**. An early `return` between them corrupts the stack.
+  Wrap the body in a local function, or be disciplined.
+- They nest, and the nesting shows as stacked bars — label the phases of a
+  pipeline (`"ChunkGen/noise"`, `"ChunkGen/mesh"`, `"ChunkGen/commit"`) and you
+  can read the split directly off the timeline.
+- The overhead is small but not zero — do not put a pair *inside* a
+  million-iteration loop. Put it around the loop.
+- **Leave them in shipped code.** They are how you diagnose a live server.
+
+A reusable wrapper that is exception-safe:
+
+```lua
+local function profiled<T...>(name: string, fn: (T...) -> ()): (T...) -> ()
+	return function(...)
+		debug.profilebegin(name)
+		local ok, err = pcall(fn, ...)
+		debug.profileend()
+		if not ok then error(err, 0) end
+	end
+end
+```
+
+(Note the `pcall` — acceptable here because it wraps a whole phase, not a loop
+iteration; see §3.7.)
+
+### 9.3 The Script Profiler and the Developer Console
+
+- **Script Profiler** (Developer Console → Script Profiler): sampling profiler
+  that attributes time to individual Luau functions. This is where the
+  `<native>` annotation appears (§3.4) and it is the correct tool for
+  "which of my functions is slow", as opposed to the MicroProfiler's "which
+  engine phase is slow".
+- **Memory** (Developer Console → Memory): the category breakdown from §8.3,
+  with per-category time series.
+- **Luau Heap**: snapshot and diff the Luau heap; native code appears as
+  `[native]`.
+- **Log / Server Stats**: the `Stats` service exposes `Stats.HeartbeatTimeMs`,
+  `Stats.PhysicsStepTimeMs`, `Stats:GetTotalMemoryUsageMb()` and the
+  `PerformanceStats` tree for programmatic monitoring — useful for shipping an
+  in-game perf HUD rather than eyeballing Studio. `[UNVERIFIED]` for the exact
+  member list on your engine version; check `Stats.yaml`.
+
+### 9.4 Sound benchmarking methodology
+
+Micro-benchmarks lie. A methodology that does not:
+
+1. **Benchmark the real workload, not a proxy.** "Sum a million floats" tells
+   you nothing about a mesh generator that is memory-bound.
+2. **Warm up.** Run the workload once and discard it. First-run costs include
+   native compilation, string interning, table growth, and cold caches.
+3. **Repeat and take the minimum, not the mean.** Noise is one-sided: nothing
+   makes code run faster than it can, but anything can make it run slower. The
+   minimum of 20 runs is the closest estimate of the true cost.
+4. **Measure with `os.clock()`**, which is monotonic and high resolution.
+5. **Isolate GC.** Allocation-heavy variants pay for the collector *later*.
+   Measure total frame time over the whole operation plus a settling period,
+   not just the loop.
+6. **Change one thing.** Buffer-vs-table and native-vs-interpreted are separate
+   experiments.
+7. **Verify the output is identical** between variants. Most "10× speedups" are
+   bugs.
+
+```lua
+--!strict
+local function bench(name: string, iterations: number, fn: () -> ())
+	fn()                                  -- warm-up, discarded
+	local best = math.huge
+	for _ = 1, iterations do
+		local t0 = os.clock()
+		fn()
+		local dt = os.clock() - t0
+		if dt < best then best = dt end
+	end
+	print(string.format("%-28s %8.3f ms (best of %d)", name, best * 1000, iterations))
+end
+```
+
+### 9.5 Why Studio measurements mislead
+
+Studio is not a client. Concretely:
+
+- **Studio runs the server and the client in one process**, on one machine,
+  sharing one CPU and one memory budget. Cross-boundary costs (replication
+  latency, serialization) are absent or distorted.
+- **Your development machine is not your player's device.** A large share of
+  Roblox sessions are on phones and low-end laptops. A generator that takes
+  4 ms on your desktop can take 40 ms on a mid-range Android.
+- **Native codegen does not exist on the client** (§3.1), so a `--!native`
+  script tested in Studio's server view tells you nothing about client speed.
+- **Studio has debug instrumentation live**: breakpoints disable native
+  execution; the script editor holds analysis state; the Explorer updates on
+  every instance change.
+- **Asset loading is warm in Studio** (local cache) and cold on a real client.
+- **Actor/core counts differ.** Your 16-core desktop runs 32 Actors truly in
+  parallel; a 4-core phone does not.
+
+The discipline: profile in Studio to *find* problems, and confirm on a real
+client — ideally the worst device you intend to support — before believing a
+number. Roblox's own guidance on this is in
+`performance-optimization/test-on-hardware.md`. Use **Play Solo** vs **Team
+Test** vs a published place deliberately; only the published place exercises
+real replication.
+
+---
+
+## The performance playbook
+
+The task: generate a large amount of geometry or pixel data at runtime without
+dropping a frame. Here is the whole method, in order.
+
+### Step 0 — Decide where the work runs
+
+| Work | Where | Why |
+|---|---|---|
+| Deterministic world/chunk generation | **Server**, `--!native` | native codegen exists there; the result replicates once |
+| Per-player cosmetic / UI imagery | **Client** | no replication cost, no server CPU |
+| `EditableImage` painting | **Client** | `EditableImage` lives where it is drawn |
+| `EditableMesh` deformation | **Client**, or server if the mesh is shared | `CreateMeshPartAsync` is Unsafe and slow — do it rarely |
+
+If the data can be generated on the server and shipped as a `buffer`, do that:
+you get native codegen *and* you do the work once for all players.
+
+### Step 1 — Choose the data layout first
+
+Before writing a line of generation code, decide the buffer layout. Write it
+down as a comment. Everything else follows from it.
+
+```lua
+-- Pixel canvas:   RGBA8, row-major, top-left origin, stride = w*4
+-- Vertex buffer:  interleaved, stride 32: pos f32x3 @0, nrm f32x3 @12, uv f32x2 @24
+-- Index buffer:   u32x3 per triangle (u16 if vertexCount <= 65535)
+-- Height field:   f32, row-major, stride = w*4
+```
+
+Never build the intermediate representation as tables of `Vector3` "and convert
+later". The conversion is the expensive part.
+
+### Step 2 — Chunk the work
+
+Pick a unit small enough that one unit fits in a frame budget on your *worst*
+target device. Empirically:
+
+- pixels: a **64×64 tile** (4096 px) of moderate per-pixel math
+- vertices: a **chunk of ~2,000–8,000 vertices**
+- voxels: a **16³ region**
+
+Make the chunk index the only state the worker needs, so chunks are
+independent and reorderable.
+
+### Step 3 — Parallelize with Actors, if it is on the client
+
+```
+serial:    create EditableImage / EditableMesh, create N Actors, dispatch chunk ids
+parallel:  per chunk — read inputs (ReadPixelsBuffer / EditableMesh getters are Safe),
+           compute into a private buffer
+serial:    task.synchronize(); one WritePixelsBuffer / BatchSetValues per chunk
+```
+
+`N` should be **well above** the core count (Roblox: "it's reasonable to use 64
+Actors and more instead of just 4, even if you're targeting 4-core systems").
+Dispatch chunks round-robin or via an atomic `SharedTable.increment` work
+queue.
+
+Remember: every mutator on both editable APIs is `Unsafe` (§5.3, §5.4). The
+parallel phase produces bytes; the serial phase commits them.
+
+### Step 4 — Time-slice, even in parallel
+
+The parallel phase still lives inside a frame. Inside each worker:
+
+```lua
+local deadline = os.clock() + BUDGET
+for c = firstChunk, lastChunk do
+	computeChunk(c)
+	if os.clock() > deadline then
+		task.wait()                       -- resumes in a later parallel phase
+		deadline = os.clock() + BUDGET
+	end
+end
+```
+
+And on the serial side, commit at most a bounded number of chunks per frame so
+that `WritePixelsBuffer` calls do not pile up in one `Heartbeat`.
+
+### Step 5 — Eliminate allocation from the inner loop
+
+Checklist, applied to the innermost loop only:
+
+- [ ] no `table.insert` — presized `table.create`, or a buffer
+- [ ] no `{ ... }` constructors
+- [ ] no `Vector3.new` / `CFrame.new` — use `vector.create`
+- [ ] no closures created per iteration
+- [ ] no string concatenation
+- [ ] no `Instance` property reads or writes
+- [ ] no `pcall` per iteration
+- [ ] offsets computed once, hoisted out of expressions
+- [ ] batch 4 byte writes into one `writeu32` where the layout allows
+
+### Step 6 — Turn on native codegen (server only) and annotate
+
+```lua
+--!strict
+--!native
+```
+
+Annotate every parameter of every hot function, especially `buffer`, `vector`,
+`Vector3` and `number`. Verify with the Script Profiler's `<native>` annotation
+and `debug.dumpcodesize()`. If a function is missing the annotation, check the
+de-optimisation list in §3.3.
+
+### Step 7 — Commit with the batch APIs
+
+One call per chunk, never one call per element:
+
+```lua
+-- Images
+image:WritePixelsBuffer(Vector2.new(ox, oy), Vector2.new(w, h), tile)
+
+-- Meshes: one BatchSetValues for a whole chunk of vertex positions
+mesh:BatchSetValues(...)                 -- see the EditableMesh chapter for the exact shape
+
+-- Parts
+Workspace:BulkMoveTo(parts, cframes, Enum.BulkMoveMode.FireCFrameChanged)
+```
+
+### Step 8 — Measure, with labels
+
+```lua
+debug.profilebegin("Gen/compute"); computeChunk(c); debug.profileend()
+task.synchronize()
+debug.profilebegin("Gen/commit");  commitChunk(c);  debug.profileend()
+```
+
+Then: MicroProfiler → find your labels → confirm the per-frame cost is under
+budget → save a dump → make one change → save another dump → diff them in the
+web UI. Then repeat on the worst device you support.
+
+### Step 9 — Watch the GC
+
+After generation completes, look for a `GC` spike in the MicroProfiler. If one
+is there, you are still allocating inside the loop. Go back to Step 5. Tag the
+generator with `debug.setmemorycategory("Gen")` and watch that category in the
+Developer Console across repeated generations — it must return to baseline.
+
+### The condensed version
+
+> Lay the data out as buffers. Cut it into frame-sized chunks. Compute the
+> chunks in parallel Actors, because every read on the editable APIs is
+> parallel-safe. Commit them serially, because every write is not. Allocate
+> nothing in the inner loop. Use `vector`, not `Vector3`. Turn on `--!native`
+> if you are on the server, and annotate your types so it can specialise.
+> Label everything with `debug.profilebegin` and believe only the numbers you
+> measured on a real device.
+
+---
+

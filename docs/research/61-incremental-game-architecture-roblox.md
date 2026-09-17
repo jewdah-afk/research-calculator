@@ -672,3 +672,229 @@ end
 ```
 
 ---
+
+## 3. State architecture
+
+### 3.1 The canonical shape
+
+An idle game's persisted state has a shape that barely varies between titles. Write
+it down as a type on day one, because every system in the game reads it.
+
+```lua
+--!strict
+-- ReplicatedStorage/Shared/Schema.luau
+-- The ONLY thing that is persisted. Plain data. No metatables, no Instances.
+
+export type GeneratorState = {
+    count: number,        -- how many owned
+    level: number,        -- per-generator upgrade level
+    unlocked: boolean,
+}
+
+export type PlayerState = {
+    -- Version first, always. See §6.5.
+    schema: number,
+
+    meta: {
+        firstJoinAt: number,       -- os.time()
+        lastAdvancedAt: number,    -- the offline anchor, §2
+        sessionCount: number,
+        totalPlaytime: number,     -- seconds
+        clockAnomalies: number,
+    },
+
+    -- Currencies: a flat map. Never nest currency under the thing that produces it.
+    balances: { [string]: number },
+
+    -- Lifetime totals, needed by prestige formulas and achievements.
+    earned: { [string]: number },
+
+    generators: { [string]: GeneratorState },
+
+    -- Upgrades are a set, not a list: O(1) lookup, and order-independent saves.
+    upgrades: { [string]: true },
+
+    -- Prestige layers, keyed by layer id. See §5.
+    prestige: {
+        [string]: {
+            currency: number,
+            lifetime: number,
+            resets: number,
+            lastResetAt: number,
+            upgrades: { [string]: true },
+        }
+    },
+
+    achievements: { [string]: number },   -- id -> completion timestamp
+
+    settings: {
+        notation: string,      -- "standard" | "scientific" | "engineering"
+        reducedMotion: boolean,
+        autobuyEnabled: boolean,
+        confirmPrestige: boolean,
+    },
+
+    -- Anything that must survive a prestige but isn't a prestige currency.
+    permanent: { [string]: number },
+}
+```
+
+Design notes that are load-bearing:
+
+- **`schema` is the first field and it is a number.** §6.5 depends on it.
+- **`upgrades` is a set (`{[string]: true}`), not an array.** Arrays serialise fine
+  but make "do I own X?" O(n) and make diffs order-dependent. Sets also merge
+  cleanly across migrations.
+- **`earned` is separate from `balances`.** Prestige formulas are almost always
+  functions of *lifetime earned*, not current balance, so that spending doesn't
+  reduce your prestige gain. Forgetting this is a design bug that surfaces after
+  launch and is painful to retrofit.
+- **`prestige` is keyed by layer id, not a flat set of fields.** Adding layer 3 is
+  adding a key, not rewriting the schema (§5.4).
+- **`permanent` is an explicit escape hatch.** Every idle game eventually has "this
+  thing survives everything"; give it a home before it starts leaking into
+  `settings`.
+
+### 3.2 Serialisation constraints you must design around
+
+The save is a plain table that goes through Roblox's serialiser. ProfileStore's
+header states the constraints bluntly, and they apply to any DataStore value:
+
+> - Do not create numeric tables with gaps — attempting to store such tables will
+>   result in an error.
+> - Do not create mixed tables (some values indexed by number and others by a string
+>   key) — only numerically indexed data will be stored.
+> - Do not index tables by anything other than numbers and strings.
+> - Do not reference Roblox Instances.
+> - Do not reference userdata (Vector3, Color3, CFrame…) — serialize userdata before
+>   referencing.
+> - Do not reference functions.
+
+Add two of your own:
+
+- **No `nan`, no `±math.huge`.** They are not representable in JSON, and a `nan`
+  that reaches the save turns a recoverable balance bug into an unloadable profile.
+  `[UNVERIFIED]` — the `HttpService:JSONEncode` documentation does not specify
+  behaviour for non-finite numbers; test it in your own build. Regardless, validate
+  with `math.isfinite` before saving and you never have to find out.
+- **No `nil` holes in what you think is a dictionary.** Setting `upgrades.x = nil`
+  removes the key, which is correct; setting `generators[3] = nil` in an array is
+  the "gaps" error above.
+
+A save-time validator is ten lines and pays for itself the first week:
+
+```lua
+--!strict
+local MAX_DEPTH = 8
+
+local function validate(value: any, path: string, depth: number): (boolean, string?)
+    if depth > MAX_DEPTH then
+        return false, `{path}: exceeds max depth`
+    end
+    local t = typeof(value)
+    if t == "number" then
+        if not math.isfinite(value) then
+            return false, `{path}: non-finite number ({value})`
+        end
+    elseif t == "boolean" or t == "string" then
+        -- fine
+    elseif t == "table" then
+        local sawArray, sawHash = false, false
+        for k, v in value do
+            local kt = typeof(k)
+            if kt == "number" then sawArray = true
+            elseif kt == "string" then sawHash = true
+            else return false, `{path}: key of type {kt}` end
+            local ok, err = validate(v, `{path}.{tostring(k)}`, depth + 1)
+            if not ok then return false, err end
+        end
+        if sawArray and sawHash then
+            return false, `{path}: mixed array/hash table`
+        end
+    else
+        return false, `{path}: unserialisable type {t}`
+    end
+    return true
+end
+```
+
+Run it in Studio and on a sampled fraction of live saves. Never let it *block* a
+live save — log loudly and save anyway, because refusing to save is worse than
+saving something slightly wrong.
+
+### 3.3 Stored vs derived: the most important split
+
+Stored state is small and boring. Derived state is large, expensive and entirely a
+function of stored state:
+
+| Stored | Derived |
+|---|---|
+| `generators.miner.count = 1200` | `miner.productionPerSecond` |
+| `upgrades.doubleOre = true` | `multipliers.ore.total` |
+| `prestige.rebirth.currency = 40` | `prestige.rebirth.gainOnReset` |
+| `balances.ore = 3.2e14` | `nextAffordableAt` (a timestamp) |
+| `earned.ore = 9.1e14` | every number the UI displays |
+
+**Derived state is never saved and never trusted across a mutation.** It is a cache
+keyed by a version counter.
+
+```lua
+--!strict
+-- ReplicatedStorage/Shared/Derived.luau
+
+export type Cache = {
+    version: number,               -- bumped on every stored-state mutation
+    computedAtVersion: number,     -- version the cache was built from
+    multipliers: { [string]: number },
+    rates: { [string]: number },
+    breakdown: { [string]: any },  -- §4.5
+}
+
+local Derived = {}
+
+function Derived.invalidate(cache: Cache)
+    cache.version += 1
+end
+
+function Derived.get(state, cache: Cache): Cache
+    if cache.computedAtVersion == cache.version then
+        return cache                        -- hit
+    end
+    Derived.recompute(state, cache)         -- miss: rebuild everything
+    cache.computedAtVersion = cache.version
+    return cache
+end
+```
+
+This is deliberately the *coarsest possible* dirty system: one counter, full
+rebuild. Resist the urge to do fine-grained per-stat invalidation until you have
+profiled and found it matters. Reasons:
+
+- A full rebuild for a typical Roblox idle game (30 generators, 200 upgrades, 4
+  prestige layers) is a few hundred multiplications — tens of microseconds.
+- Mutations are *rare*: a purchase, a prestige, a buff change. Not per frame.
+- Fine-grained invalidation is where correctness bugs live. A stale multiplier that
+  only appears when you buy upgrade B after upgrade A is the single hardest class of
+  bug in this genre, and the coarse version cannot have it.
+
+If you do need finer granularity later, the shape that scales is a dependency
+graph: each stat declares the stats it reads, invalidating a stat marks its
+dependents dirty, and `get(stat)` recomputes lazily. Build it *behind the same
+`Derived.get` API* so the swap is local.
+
+### 3.4 Where derived state lives
+
+Two caches, not one:
+
+- **Server cache**, authoritative, rebuilt on mutation. Used to compute grants,
+  validate purchases, and produce the replication snapshot.
+- **Client cache**, a mirror, rebuilt from replicated stored state using *the exact
+  same module*. Shared code in `ReplicatedStorage` means the client can predict a
+  purchase's effect instantly and the numbers always agree.
+
+The rule that keeps this honest: **the client's derived values are only ever used
+for display and prediction; the server recomputes independently and its answer
+wins.** Shipping the same code to both sides is a UX optimisation, never a trust
+decision (§7.3).
+
+---
