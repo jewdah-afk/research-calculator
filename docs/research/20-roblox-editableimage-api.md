@@ -18,18 +18,19 @@
 
 1. [TL;DR for builders](#tldr-for-builders)
 2. [The verification gate](#the-verification-gate)
-3. [Verified API surface](#verified-api-surface)
-4. [Creation and lifecycle](#1-creation-and-lifecycle)
-5. [Size and memory](#2-size-and-memory)
-6. [Pixel access: the buffer format](#3-pixel-access-the-buffer-format)
-7. [The drawing API](#4-the-drawing-api)
-8. [Display sinks: where an EditableImage can actually appear](#5-display-sinks-where-an-editableimage-can-actually-appear)
-9. [Performance and the cost model](#6-performance-and-the-cost-model)
-10. [Parallel Luau and thread safety](#7-parallel-luau-and-thread-safety)
-11. [Saving and uploading generated images](#8-saving-and-uploading-generated-images)
-12. [Gotchas](#gotchas)
-13. [Version churn: what changed and what stale tutorials get wrong](#version-churn-what-changed-and-what-stale-tutorials-get-wrong)
-14. [Sources](#sources)
+3. [The replication landmine](#the-replication-landmine)
+4. [Verified API surface](#verified-api-surface)
+5. [Creation and lifecycle](#1-creation-and-lifecycle)
+6. [Size and memory](#2-size-and-memory)
+7. [Pixel access: the buffer format](#3-pixel-access-the-buffer-format)
+8. [The drawing API](#4-the-drawing-api)
+9. [Display sinks: where an EditableImage can actually appear](#5-display-sinks-where-an-editableimage-can-actually-appear)
+10. [Performance and the cost model](#6-performance-and-the-cost-model)
+11. [Parallel Luau and thread safety](#7-parallel-luau-and-thread-safety)
+12. [Saving and uploading generated images](#8-saving-and-uploading-generated-images)
+13. [Gotchas](#gotchas)
+14. [Version churn: what changed and what stale tutorials get wrong](#version-churn-what-changed-and-what-stale-tutorials-get-wrong)
+15. [Sources](#sources)
 
 ---
 
@@ -69,7 +70,10 @@
   `AssetService:CreateDataModelContentAsync()`.
   <sub>[Content.yaml → Warning](https://raw.githubusercontent.com/Roblox/creator-docs/main/content/en-us/reference/engine/datatypes/Content.yaml)</sub>
 - **Client memory is budgeted; server/Studio/plugins are not.** If the device budget is exhausted,
-  `CreateEditableImage` returns **`nil`** rather than throwing. Always nil-check.
+  `CreateEditableImage` returns **`nil`** rather than throwing (whereas a *permission* failure
+  **throws**). The budget is **shared with `EditableMesh`** — the "Memory limits" paragraph is
+  word-for-word identical in both class YAMLs. **No numeric budget is published anywhere in
+  creator-docs.** Always nil-check.
 - **Multi-referencing is the memory trick**: point many `Content` properties at *one*
   `EditableImage` rather than making N copies.
 - **Uploading generated images to permanent asset IDs works, but only from plugins and Open Cloud
@@ -180,6 +184,93 @@ local editable = imageOrErr
   can lose the capability.
   `[UNVERIFIED]` — the YAML does not specify which account's verification is checked for
   group-owned experiences; it says only "you must be 13+ age verified and ID verified."
+
+---
+
+## The replication landmine
+
+**Read this before you write a line of server code.** It is not mentioned in `EditableImage.yaml`
+at all; it lives only in the `Content` datatype documentation, which is why so many teams ship it
+broken.
+
+Quoted verbatim from `content/en-us/reference/engine/datatypes/Content.yaml`:
+
+> ##### Warning
+>
+> Replication is not yet supported for `Content.Object` values. When an `Instance` with a `Content`
+> property containing a `Content.Object` value is replicated, **an unusable placeholder `Object` of
+> the same type will be used instead of the `Object` itself**, and any attempt to read or write the
+> contents of that placeholder object will throw. **These placeholder objects will render as a cyan
+> and magenta checkerboard pattern.**
+>
+> This will be replaced with standard replication behavior in the future. For now, **do not use
+> `EditableImage` or `EditableMesh` as `Content` on the server on an `Instance` that can replicate
+> to clients.**
+>
+> <sub>[Content.yaml](https://raw.githubusercontent.com/Roblox/creator-docs/main/content/en-us/reference/engine/datatypes/Content.yaml)</sub>
+
+### What this actually means
+
+**Runtime-generated imagery on Roblox is a client-side feature.** Not "should preferably be";
+*is*. The engine has no path today for an `EditableImage` created on the server to arrive intact on
+a client through ordinary property replication.
+
+The three symptoms, in the order teams hit them:
+
+1. **Cyan and magenta checkerboards in the live game, but not in Studio.** In Studio play-solo the
+   server and client share a process, so the object reference survives and everything looks right.
+   In a real server/client split it does not. This is the same class of bug as the verification
+   gate: *works on my machine, fails for everyone.*
+2. **Errors on the client when anything reads the property.** "Any attempt to read or write the
+   contents of that placeholder object will throw." So client code that does
+   `part.Decal.ColorMapContent.Object:ReadPixelsBuffer(...)` throws, not returns `nil`.
+3. **Silent divergence.** A server that keeps drawing into its own copy sees changes no client ever
+   sees.
+
+### The rule
+
+> **Replicate parameters, seeds and recipes. Never replicate images.**
+
+```lua
+-- SERVER — send the recipe, not the pixels.
+GenerateBanner:FireAllClients({
+    seed      = 8172634,
+    palette   = "crimson",
+    crestId   = guild.CrestIndex,
+    tier      = guild.Tier,
+})
+
+-- CLIENT — build the image locally from the recipe.
+GenerateBanner.OnClientEvent:Connect(function(spec)
+    local image = buildBanner(spec)              -- AssetService:CreateEditableImage(...) etc.
+    if image then
+        bannerLabel.ImageContent = Content.fromObject(image)
+    else
+        bannerLabel.ImageContent = FALLBACK      -- budget exhausted: degrade, do not error
+    end
+end)
+```
+
+This is not a workaround, it is a better design: a recipe is a few hundred bytes versus megabytes,
+every client pays only for what it can see, and the server never spends memory on pixels nobody
+looks at.
+
+### The one documented exception
+
+`AssetService:CreateDataModelContentAsync()` converts an `EditableImage` into a `DataModel`-scoped
+`Enum.ContentSourceType.Opaque` `Content`, which is a *different source type* from `Object`. See
+[§1.6](#16-the-two-sanctioned-patterns-for-server-authored-imagery). `[UNVERIFIED]` — the docs do
+not state in so many words that `Opaque` content replicates; they state only that `Object` content
+does not. Prototype it before you depend on it.
+
+### Related guardrails visible in the engine
+
+The shipping client carries flags named `BlockEditableTypeReplication`,
+`BlockUseOfReplicatedEditableX` and `DebugEditableMeshBasicReplicationEnabled`
+<sub>([FVariables.txt](https://raw.githubusercontent.com/MaximumADHD/Roblox-Client-Tracker/roblox/FVariables.txt))</sub>,
+which is consistent with the engine actively blocking use of replicated editable objects rather than
+merely failing to send them, and with replication being a feature under active development. Flag
+names are not documentation; they are corroboration.
 
 ---
 
@@ -1666,4 +1757,208 @@ them, that is the Open Cloud Assets API with a PNG, not `EditableImage`.
 table is 200 bytes. Store the recipe, regenerate on the client at load. It is cheaper, it replicates
 trivially, it dodges every permission gate, and it lets you change the art later by shipping new
 generation code instead of re-uploading assets.
+
+### 8.6 The bake-at-edit-time pipeline (the strongest production pattern)
+
+Because `CreateAssetAsync` accepts an `EditableImage` root but only from plugins and Open Cloud Luau
+execution, there is a pipeline available that most teams overlook and that **eliminates every
+constraint in this document**:
+
+1. Write your texture generator as a **module** that takes parameters and returns an
+   `EditableImage`.
+2. Wrap it in a **Studio plugin** that calls the module over your parameter matrix and uploads each
+   result with `AssetService:CreateAssetAsync(image, Enum.AssetType.Image, {...})`.
+3. Ship the resulting **asset IDs** as ordinary `rbxassetid://` content in your place.
+
+What this buys you, item by item against the rest of this chapter:
+
+- **No verification gate at runtime.** The shipped game uses plain asset IDs; the Mesh/Image API
+  toggle is irrelevant to players.
+- **No editable memory budget at runtime.** Zero. The images are ordinary compressed textures
+  streamed by the engine.
+- **No replication landmine.** Asset IDs replicate natively.
+- **No one-image-per-frame throttle.** Nothing is being edited.
+- **No mobile risk.** Standard texture streaming handles device tiers for you.
+- **Better compression.** Uploaded images get the engine's texture compression; an `EditableImage`
+  is uncompressed RGBA in memory.
+
+Use runtime `EditableImage` only for content that genuinely *cannot* be enumerated ahead of time —
+player-authored painting, per-match procedural variation, live data visualisation, avatar
+composition. Everything that can be baked, should be. The single most common mistake in this space
+is using a runtime API to solve a build-time problem.
+
+---
+
+## Gotchas
+
+A consolidated list. Several of these appear above; they are repeated here because this is the
+section people re-read.
+
+### Correctness
+
+1. **Alpha vs transparency inversion.** Buffers use **alpha** (255 = opaque); every `Draw*` method
+   uses **transparency** (0 = opaque). Documented, and still the most common bug.
+2. **`DrawImageTransformed` positions the *pivot*, `DrawImage` positions the *top-left*.** Swapping
+   one for the other shifts your sprite by half its size.
+3. **`DrawImageTransformed` rotation is in DEGREES.**
+4. **`DrawImageTransformed` defaults to `AlphaBlend`; nothing else has a default.** If you expect a
+   hard copy, pass `CombineType = Enum.ImageCombineType.Overwrite` explicitly.
+5. **`DrawRectangle` cannot be positioned outside the canvas; every other method can.** Clamp.
+6. **`DrawLine` is exactly 1 pixel thick.** There is no thickness parameter.
+7. **`Content.fromObject(nil)` throws**, and `Content.fromAssetId(math.huge)` throws. Guard both.
+8. **A blank `EditableImage`'s initial contents are undocumented.** Clear it explicitly.
+9. **`Size` is `ReadOnly`.** Resize = new image + `DrawImageTransformed` + `Destroy` the old one.
+10. **`SurfaceAppearance` maps cannot be swapped after creation.** One canvas per material, forever.
+
+### Filtering and resampling
+
+11. **Bilinear is the default resampler.** Pixel art must pass `SamplingMode = Enum.ResamplerMode.Pixelated`
+    or it will be blurred.
+12. **Alpha bleed matters.** Filtering blends the colour of fully transparent pixels into visible
+    neighbours (straight alpha — see §3.8). Write the intended colour with `alpha = 0` in transparent
+    margins instead of black-with-zero-alpha, or you get dark halos when scaled.
+13. **Normal maps need `NormalMapBlend`.** Any other combine type leaves non-unit normals and flat
+    lighting. Roblox expects **OpenGL-format** tangent-space normals (G channel **not** inverted) —
+    from `SurfaceAppearance.NormalMapContent`'s documentation.
+14. **`Multiply` multiplies RGBA, including alpha.** Multiplying by an opaque white image is not a
+    no-op on alpha unless the source alpha is 255.
+
+### Memory and leaks
+
+15. **`Content.fromObject` is a strong reference with shared ownership.** An image assigned to a
+    property stays alive as long as that property holds it, even if the instance is `Destroy()`ed but
+    still referenced. Set the property to `Content.none` *before* destroying the image.
+16. **Not calling `Destroy()` is a leak, not a slow collection.** `Destroy()` "immediately reclaims"
+    the memory; the GC does not, deterministically.
+17. **`ReadPixelsBuffer` allocates a new `buffer` every call.** Per-frame full reads are per-frame
+    megabyte allocations. Cache, or read only dirty sub-regions.
+18. **The budget is shared with `EditableMesh` and is device-specific.** Mesh work steals image
+    budget. A pool sized on your dev machine will fail on phones.
+19. **`nil` from `CreateEditableImage` is a normal state, not an exception.** Handle it at every call
+    site.
+
+### Architecture
+
+20. **Server-side `EditableImage` on replicating instances → cyan/magenta checkerboard.** See
+    [The replication landmine](#the-replication-landmine).
+21. **One display update per frame.** N animated canvases run at `60/N` fps. Composite into one.
+22. **Every mutating method is parallel-`Unsafe`.** Only `ReadPixelsBuffer` (`Safe`) and `Size`
+    (`ReadSafe`) may be touched in a desynchronized phase.
+23. **Shared canvases have no locking.** One writer per image.
+24. **`CreateEditableImageAsync` yields and hits the network.** Never in a loop, never per frame.
+25. **`ImageButton.HoverImageContent` / `PressedImageContent` reject `EditableImage`.** Only
+    `ImageContent` works.
+26. **`Decal.TextureContent` is deprecated** in favour of `ColorMapContent`; `Decal`'s PBR map
+    properties are `PluginSecurity`-write, so use `AssetService:CreateDecalAsync`.
+27. **`ViewportFrame` has no image-content property at all.** Texture a part inside it instead.
+
+### Mobile
+
+28. Smaller budget, slower Luau, and the same 1024² ceiling. Choose a resolution per device class at
+    startup and thread it through every allocation. `[UNVERIFIED]` — no published device tiers.
+
+---
+
+## Version churn: what changed and what stale tutorials get wrong
+
+`EditableImage` has been reworked repeatedly since its 2023 Studio beta. Because the API was in beta
+for roughly two years, **the majority of tutorial content that ranks well is written against an API
+that no longer exists.** Here is the changelog as it can be reconstructed from the live reflection
+dump versus what tutorials show.
+
+### Change 1 — pixel APIs: tables → buffers
+
+- **Then:** `EditableImage:ReadPixels(position, size)` returned an array of numbers, and
+  `EditableImage:WritePixels(position, size, pixels)` took one. `[COMMUNITY, SECOND-HAND]` The
+  signature is reported as `WritePixels(position: Vector2, size: Vector2, pixels: {any})` — a Luau
+  table with four entries per pixel as floats in `0..1`.
+- **Now:** `ReadPixelsBuffer` / `WritePixelsBuffer`, taking a `buffer` of **u8** bytes.
+- **Status:** the table-based methods are **absent from the engine reflection dump at
+  `0.739.0.7390687`** and absent from `creator-docs@main`. They are removed, not merely deprecated.
+- **What tutorials get wrong:** they iterate `#pixels` with `pixels[i]` and multiply by `255` at the
+  wrong end. Two range changes happened at once — table floats in `0..1` became buffer bytes in
+  `0..255`. Code that survived a naive port produces a black or white image.
+
+### Change 2 — attachment: `Parent` → `Content.fromObject`
+
+- **Then:** an `EditableImage` was parented to the instance that displayed it
+  (`editableImage.Parent = imageLabel`), because it behaved like an `Instance`.
+- **Now:** `EditableImage` inherits from `Object`, **has no `Parent`**, and is attached by assigning
+  `Content.fromObject(image)` to a `*Content` property.
+- **Status:** `inherits: [Object]` in DOCS, `Superclass: Object` in DUMP. Confirmed.
+- **What tutorials get wrong:** `image.Parent = imageLabel` — which now errors, because the property
+  does not exist.
+
+### Change 3 — the `Content` rollout
+
+The engine grew a parallel `*Content` property for nearly every legacy `ContentId` string property:
+`ImageLabel.Image` → `ImageLabel.ImageContent`, `Decal.Texture` → `Decal.TextureContent`,
+`MeshPart.TextureID` → `MeshPart.TextureContent`, and so on. **Only the `Content` variants accept
+objects.** The legacy string properties read and write through to them (DOCS on `ImageLabel.Image`:
+"Reads and writes to `ImageContent`"), but a string can only ever hold a URI.
+
+Then a **second** wave renamed some of them again: `Decal.TextureContent` is now itself deprecated in
+favour of `Decal.ColorMapContent`, as `Decal` grew a full PBR slot set (`NormalMapContent`,
+`RoughnessMapContent`, `MetalnessMapContent`, `EmissiveMaskContent`).
+
+- **What tutorials get wrong:** setting `imageLabel.Image = image` (a string property, with an
+  object). Also: assuming any `Content`-typed property takes an object — §5.3 lists six that
+  explicitly do not.
+
+### Change 4 — the verification gate
+
+- **Then:** during the Studio beta there was no creator-verification requirement; the APIs simply
+  did not work in published experiences at all.
+- **Now:** published-experience use requires **13+ age verification AND ID verification** plus the
+  **Enable Mesh / Image APIs** dashboard toggle, and `CreateEditableImageAsync` enforces asset
+  ownership/sharing.
+- **Corroboration:** the shipping client carries flags named
+  `EnablePermissionCheckOnCreatingEditableAsset`, `SimEnableEditablePermissionCheck`,
+  `EditablePolicyCheckChained`, `EditableSkipPolicyCheckForStudioEditMode` and
+  `EditableAssetPermissionCheckErrorCounter`.
+  <sub>[FVariables.txt](https://raw.githubusercontent.com/MaximumADHD/Roblox-Client-Tracker/roblox/FVariables.txt)</sub>
+  `EditableSkipPolicyCheckForStudioEditMode` is the mechanical reason Studio behaves differently.
+- **What tutorials get wrong:** almost all of them predate the gate and say nothing about it. A
+  tutorial that "works" and then does not work in your published game is usually this.
+
+### Change 5 — `CreateEditableImageAsync` signature
+
+- **Then:** took an asset ID string directly.
+- **Now:** takes a `Content` (`CreateEditableImageAsync(content: Content, editableImageOptions: Dictionary?)`).
+- **What tutorials get wrong:** `CreateEditableImageAsync("rbxassetid://123")`. Wrap it:
+  `Content.fromUri("rbxassetid://123")` or `Content.fromAssetId(123)`.
+
+### Change 6 — resize/crop removal
+
+`EditableImage.Size` is now `ReadOnly`, and DOCS spells out the replacement recipe
+("create a new `EditableImage` and use `DrawImageTransformed()` … then call `Destroy()`"), which
+strongly implies a writable `Size` or a `Resize`/`Crop` method existed before. `[UNVERIFIED]` as to
+what exactly was removed — neither DOCS nor the current DUMP records the old members, and
+`CreateEditableImageAsync`'s option table still carries a note explaining its emptiness by reference
+to resizing ("Currently no options are available since resizing via `Size` is not supported").
+
+### Change 7 — additions still landing
+
+New members visible in the live dump and/or DOCS that older material cannot mention:
+
+- `EditableImage:DrawTriangle` — **in DUMP, not in DOCS**, behind a client flag named
+  `EditableImageDrawTriangleEnabled`.
+- `Enum.ImageCombineType.Subtract` (value 7) — flag `EditableImageSubtractImageCombineType`.
+- `EditableImage:SampleImageProjected` — the inverse of `DrawImageProjected`.
+- `AssetService:CreateDataModelContentAsync` and `Enum.CreateContentResult`.
+- `AssetService:CreateDecalAsync`, `AssetService:CreateSurfaceAppearanceAsync`,
+  `AssetService:ComposeDecalAsync`.
+- `Enum.AntiAliasing` parameters on `DrawLine` and `DrawCircle`.
+
+### How to sanity-check any tutorial in 10 seconds
+
+Scan the code for these five tokens. Any hit means the tutorial is stale:
+
+| Token | Verdict |
+|---|---|
+| `:WritePixels(` or `:ReadPixels(` without `Buffer` | Removed API |
+| `.Parent =` on an `EditableImage` | Removed; `EditableImage` is an `Object` |
+| `CreateEditableImageAsync("rbxassetid://` | Old string signature |
+| `imageLabel.Image = <object>` | Wrong property; use `ImageContent` |
+| `:Resize(` or `:Crop(` | Never existed in the current API |
 

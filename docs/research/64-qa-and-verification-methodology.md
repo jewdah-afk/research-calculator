@@ -482,3 +482,337 @@ have a convention" into "the build fails". That is the difference between a QA p
 page.
 
 ---
+
+## 2. Test frameworks: TestEZ, Jest Lua, and running headless with Lune
+
+### 2.1 TestEZ — current status and verified API
+
+`Roblox/testez` is a BDD-style framework. Its README states it "can run within Roblox itself, as
+well as inside [Lemur](https://github.com/LPGhatguy/Lemur) for testing on CI systems", and that
+Roblox uses it internally for apps, core scripts, Studio plugins, Roact and Rodux. Two caveats
+matter for a new port:
+
+- The **"Running Tests"** doc page says: *"The internals of TestEZ are being reworked, so accessing
+  other APIs at this time isn't recommended."* That text has been in the repo for a long time; treat
+  TestEZ as **stable but in maintenance**, not as the growing option. `[UNVERIFIED]` — I could not
+  confirm any formal deprecation announcement, only the absence of recent feature work.
+- Its CI story points at **Lemur**, a Lua 5.1 Roblox-API shim. Lemur has not kept pace with Luau
+  (no `task`, no modern `string`/`table` additions, no type syntax). Do not plan a 2026 pipeline
+  around it.
+
+Verified entry point, read from `src/TestBootstrap.lua` at `master`:
+
+```lua
+-- Signature verified in Roblox/testez @ master, src/TestBootstrap.lua
+function TestBootstrap:run(roots, reporter, otherOptions)
+-- roots        : table (array of Instances to scan for `*.spec` ModuleScripts) — errors if not a table
+-- reporter     : defaults to Reporters.TextReporter
+-- otherOptions : { showTimingInfo: boolean?, testNamePattern: string?, extraEnvironment: table? }
+-- returns      : the TestResults object
+```
+
+Discovery is `Instance`-based: `isSpecScript` requires `aScript:IsA("ModuleScript")` and
+`aScript.Name:match("%.spec$")`, and `init.spec` files attach to their parent folder's `describe`
+block rather than creating their own. The public surface (verified from `docs/api-reference.md`):
+`describe`, `it`, `expect`, `beforeAll`/`beforeEach`/`afterEach`/`afterAll`, `FOCUS`/`SKIP`/`FIXME`,
+`describeFOCUS`/`describeSKIP` (aliases `fdescribe`/`xdescribe`), `itFOCUS`/`itSKIP`/`itFIXME`
+(aliases `fit`/`xit`), and a write-once `context` table passed to hooks and `it` callbacks.
+
+Matchers, verified from `src/Expectation.lua`: `:a(typeName)` / `:an(...)`, `:ok()`,
+`:equal(value)`, `:near(value, limit?)`, `:throw(messageSubstring?)`, the `never` modifier, and
+`Expectation:extend(matchers)` for custom matchers. **That is the whole matcher set.** There is no
+`toMatchSnapshot`, no deep-equality matcher, no mocking. For a port you will write your own deep
+comparison (which you want anyway, for tolerance policy — see [§3.3](#33-tolerance-policy)).
+
+`:near(a, b, limit)` uses an **absolute** limit. That makes it unusable for big numbers; see
+[§3.3](#33-tolerance-policy) for why and what to use instead.
+
+### 2.2 Jest Lua — current status and verified API
+
+`jsdotlua/jest-lua` is a port of JavaScript Jest, aligned to upstream Jest v27.4.7 per its README
+(the CHANGELOG records an upgrade to v28.0.0 semantics in 3.4.0). Roblox uses it internally; the
+README calls it "battle-tested and ready for production use". Latest version referenced in the
+repository's own docs and README is **3.10.0** (2024-10-02 in `CHANGELOG.md`).
+
+The decisive constraint, quoted from the README: **"Jest Lua can currently only run inside of
+Roblox. Help is wanted to get it running in other Lua environments, such as Lune or Luvit. See
+issue #2."** The Getting Started page repeats it: *"Jest Lua currently requires `run-in-roblox` to
+run from the command line."*
+
+Install and entry point, verified from `docs/docs/GettingStarted.md`:
+
+```toml
+# wally.toml
+[dev-dependencies]
+Jest = "jsdotlua/jest@3.10.0"
+JestGlobals = "jsdotlua/jest-globals@3.10.0"
+```
+
+```lua
+-- run-tests.lua (verified shape from Jest Lua's Getting Started page)
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local runCLI = require("@DevPackages/Jest").runCLI
+
+local processServiceExists, ProcessService = pcall(function()
+	return game:GetService("ProcessService")
+end)
+
+local status, result = runCLI(ReplicatedStorage.Packages.Project, {
+	verbose = false,
+	ci = false,
+}, { ReplicatedStorage.Packages.Project }):awaitStatus()
+
+if status == "Resolved" and result.results.numFailedTestSuites == 0
+	and result.results.numFailedTests == 0 then
+	if processServiceExists then ProcessService:ExitAsync(0) end
+end
+if processServiceExists then ProcessService:ExitAsync(1) end
+```
+
+```lua
+-- src/jest.config.lua
+return { testMatch = { "**/*.spec" } }
+```
+
+What you get over TestEZ: `expect` with the full Jest matcher family, `toMatchSnapshot`,
+`jest.fn()`/`jest.mock`/`jest.spyOn` (`spyOn` added in 3.6.2; spying on Lua globals in 3.9.0), fake
+timers including a mocked `task.wait` (3.8.0) and a configurable engine frame time (3.3.0),
+`redactStackTrace` for stable snapshots (3.10.0), and `JestBenchmark` (3.4.0).
+
+### 2.3 Which to choose
+
+| Situation | Choose |
+|---|---|
+| Greenfield port, CI must gate merges, most tests are pure simulation | **Plain Luau + your own Lune runner** for L1/L2; Jest Lua for the Studio-only slice |
+| You need snapshots, mocks or fake timers for UI/adapters | **Jest Lua** (accept `run-in-roblox` in CI, or run it as a nightly/manual job) |
+| You already have thousands of TestEZ specs | **Keep TestEZ**; do not rewrite. Add a Lune path for new pure tests |
+| You want one framework everywhere and can afford Studio in CI | **Jest Lua** |
+
+For an incremental-game port the recommendation is unambiguous: **the golden-master, property and
+soak suites — the ones that actually prove fidelity — should not depend on any Roblox-aware
+framework at all.** They are pure functions over pure data. Making them depend on Studio is
+self-inflicted.
+
+### 2.4 Running tests headlessly outside Studio with Lune
+
+**What Lune is and is not.** Lune is "a standalone Luau runtime" (README). Its Roblox library is
+described as APIs "for manipulating Roblox place files and model files". The verified function
+list is `deserializePlace`, `deserializeModel`, `serializePlace`, `serializeModel`, `getAuthCookie`,
+`getReflectionDatabase`, `implementProperty`, `implementMethod`, `studioApplicationPath`,
+`studioContentPath`, `studioPluginPath`, `studioBuiltinPluginPath`, plus `roblox.Instance.new`.
+
+The API-status page lists exactly which `Instance` members exist: `new` (no second `parent`
+argument), `AddTag`, `Clone`, `Destroy`, `ClearAllChildren`, the `FindFirstAncestor*`/
+`FindFirstChild*` family, `GetAttribute(s)`, `GetChildren`, `GetDescendants`, `GetFullName`,
+`GetTags`, `HasTag`, `IsA`, `IsAncestorOf`, `IsDescendantOf`, `RemoveTag`, `SetAttribute`; and for
+`DataModel` only `GetService` and `FindService`.
+
+> **The consequence teams miss:** there is **no `require` for a `ModuleScript`**, no
+> `RBXScriptSignal`, no `Changed`, no `task` bound to instances, and no script execution. Lune
+> cannot *run* a Roblox place. So **TestEZ's `TestBootstrap:run` cannot work under Lune
+> unaltered** — its discovery calls `require(current)` on `ModuleScript` instances, which Lune does
+> not implement. Any claim that you can "just point TestEZ at Lune" is wrong.
+
+**The architecture that does work:** L1 modules live on disk as `.luau` files, require each other
+by *path*, and the runner is Lune-native.
+
+```lua
+-- Sim/Purchase.luau — requires that work in BOTH worlds
+-- Under Lune: relative-path require. Under Roblox: Rojo maps the same file, and a small
+-- `require` shim (below) resolves the same string to the ModuleScript.
+local Balance = require("../Balance/Upgrades")
+```
+
+Two workable strategies for dual-world requires:
+
+1. **Luau aliases (`.luaurc`) + Rojo path parity.** Declare aliases so both runtimes resolve the
+   same string:
+   ```json
+   // .luaurc
+   { "languageMode": "strict",
+     "aliases": { "sim": "./src/Shared/Sim", "balance": "./src/Shared/Balance" } }
+   ```
+   `[UNVERIFIED]` — alias support in Roblox's own `require` has shipped in stages and behaviour
+   differs by context; verify against your current Studio version before relying on it, and keep
+   strategy 2 as a fallback.
+2. **A single `Require.luau` indirection** that L1 modules call, implemented twice (Lune version
+   uses `require(path)`, Roblox version walks `ReplicatedStorage`). One file differs between
+   worlds; everything else is identical. This is boring and always works.
+
+**The runner.** Roughly 120 lines, and you own it:
+
+```lua
+--!strict
+-- tests/run.luau — invoked as `lune run tests/run`
+local fs = require("@lune/fs")
+local process = require("@lune/process")
+local stdio = require("@lune/stdio")
+
+type Case = { name: string, fn: () -> (), only: boolean, skip: boolean }
+local stack: { string } = {}
+local cases: { Case } = {}
+local befores: { { depth: number, fn: () -> () } } = {}
+local afters: { { depth: number, fn: () -> () } } = {}
+local anyOnly = false
+
+local function join(): string return table.concat(stack, " › ") end
+
+local G: { [string]: any } = {}
+function G.describe(name: string, body: () -> ())
+	table.insert(stack, name); body(); table.remove(stack)
+end
+function G.it(name: string, fn: () -> ())
+	table.insert(stack, name)
+	table.insert(cases, { name = join(), fn = fn, only = false, skip = false })
+	table.remove(stack)
+end
+function G.itOnly(name: string, fn: () -> ())
+	anyOnly = true
+	G.it(name, fn); cases[#cases].only = true
+end
+function G.itSkip(name: string, fn: () -> ())
+	G.it(name, fn); cases[#cases].skip = true
+end
+function G.beforeEach(fn: () -> ()) table.insert(befores, { depth = #stack, fn = fn }) end
+function G.afterEach(fn: () -> ()) table.insert(afters, { depth = #stack, fn = fn }) end
+
+-- Collect spec files.
+local function collect(dir: string, out: { string })
+	for _, entry in fs.readDir(dir) do
+		local p = dir .. "/" .. entry
+		if fs.isDir(p) then
+			collect(p, out)
+		elseif entry:match("%.spec%.luau$") then
+			table.insert(out, p)
+		end
+	end
+	return out
+end
+
+local specFiles = collect("src", {})
+table.sort(specFiles)
+
+-- Register: each spec file returns a function that calls describe/it.
+for _, path in specFiles do
+	local mod = require("../" .. path:gsub("%.luau$", ""))
+	-- Inject the DSL by passing it in; avoids global mutation and keeps specs pure.
+	mod(G)
+end
+
+local passed, failed, skipped = 0, 0, 0
+local failures: { { name: string, err: string } } = {}
+local t0 = os.clock()
+
+for _, case in cases do
+	if case.skip or (anyOnly and not case.only) then
+		skipped += 1
+		continue
+	end
+	for _, b in befores do b.fn() end
+	local ok, err = xpcall(case.fn, function(e)
+		return tostring(e) .. "\n" .. debug.traceback("", 2)
+	end)
+	for _, a in afters do a.fn() end
+	if ok then
+		passed += 1
+		stdio.write(stdio.color("green") .. "." .. stdio.color("reset"))
+	else
+		failed += 1
+		failures[#failures + 1] = { name = case.name, err = err :: string }
+		stdio.write(stdio.color("red") .. "F" .. stdio.color("reset"))
+	end
+end
+
+print(("\n\n%d passed, %d failed, %d skipped in %.2fs")
+	:format(passed, failed, skipped, os.clock() - t0))
+for _, f in failures do
+	print(stdio.color("red") .. "FAIL " .. f.name .. stdio.color("reset") .. "\n" .. f.err)
+end
+process.exit(if failed == 0 then 0 else 1)
+```
+
+A spec file is then a plain module that takes the DSL:
+
+```lua
+--!strict
+-- src/Shared/Sim/Purchase.spec.luau
+local Purchase = require("./Purchase")
+local expect = require("../../../tests/expect")
+
+return function(t)
+	t.describe("Purchase.buy", function()
+		t.it("refuses when the player cannot afford it", function()
+			local state = { currencies = { points = 10 }, levels = { gen1 = 0 } }
+			local r = Purchase.buy(state, "gen1", 1)
+			expect(r.ok).toBe(false)
+			expect(r.reason).toBe("insufficient_funds")
+			expect(r.state).toBe(state)  -- identity: no mutation on failure
+		end)
+	end)
+end
+```
+
+**Running it:** `lune run tests/run`. Exit code 0/1 is what CI gates on — `@lune/process` exposes
+`process.exit`, verified in the Lune API reference.
+
+### 2.5 Stubbing the Roblox surface a "pure" module still touches
+
+Even a disciplined L1 tree sometimes wants `Vector2`, `os.clock` for an internal profiler, or a
+`Random`. Three tiers, cheapest first:
+
+**Tier 1 — inject it.** Preferred. Pass a `ClockPort`, not a global.
+
+**Tier 2 — supply a tiny pure-Luau implementation.** For datatypes, Lune already ships many
+(`CFrame`, `Color3`, `UDim2`, `Vector2`, `Vector3`, `NumberSequence`, `Enum`, and others — full list
+verified on the API-status page) via `require("@lune/roblox")`. Bind them into the test's globals:
+
+```lua
+local roblox = require("@lune/roblox")
+local shim = {
+	Vector2 = roblox.Vector2, Vector3 = roblox.Vector3, Color3 = roblox.Color3,
+	UDim2 = roblox.UDim2, Enum = roblox.Enum, Instance = roblox.Instance,
+}
+```
+
+**Tier 3 — load the module in a controlled environment.** Use `luau.load` with `environment` to
+give a module a bespoke global table. This is the only mechanism that also lets you *detect*
+accidental reliance on a global (make the entry a trap, as in [§1.5](#15-enforcing-the-boundary-mechanically)):
+
+```lua
+--!strict
+local luau = require("@lune/luau")
+local fs = require("@lune/fs")
+
+local function loadWithEnv(path: string, env: { [string]: any })
+	local chunk = luau.load(fs.readFile(path), {
+		debugName = path,
+		environment = env,
+		injectGlobals = true,  -- keep the standard Luau globals; env entries win
+	})
+	return chunk()
+end
+```
+
+`CompileOptions` (`optimizationLevel`, `coverageLevel`, `debugLevel`) and `LoadOptions`
+(`debugName`, `environment`, `injectGlobals`, `codegenEnabled`) are verified from Lune's `luau`
+API reference. Note its own warning: *"Setting a custom environment will deoptimize the chunk and
+forcefully disable codegen."* Use it for purity gates and targeted stubbing, not for the hot path
+of a 10,000-hour soak run.
+
+**The honest trade-off table:**
+
+| Approach | Fidelity to Roblox | Speed | CI-able without Studio |
+|---|---|---|---|
+| Pure Luau + Lune runner | N/A (no Roblox needed) | Fastest | Yes |
+| Lune + `@lune/roblox` datatypes | Datatypes only; no engine behaviour | Fast | Yes |
+| Jest Lua + `run-in-roblox` | Full engine | Slow (Studio boot per run) | Only on a runner with Studio installed (Windows/macOS) |
+| TestEZ in Studio, run by hand | Full engine | Human-speed | No |
+
+`run-in-roblox` (`rojo-rbx/run-in-roblox`) "runs a place, a model, or an individual script inside
+Roblox Studio" and "pipes output from inside Roblox Studio back to stdout/stderr"; usage is
+`run-in-roblox --place MyPlace.rbxlx --script starter-script.lua`, with `--script` required and
+`--place` optional. Because it drives Studio, it needs a machine with Studio — GitHub's
+`ubuntu-latest` runners cannot do it. `[COMMUNITY, SECOND-HAND]` Teams that need it typically use a
+self-hosted Windows runner; I could not verify a first-party Roblox-supported hosted option.
+
+---

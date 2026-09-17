@@ -2067,3 +2067,120 @@ progress — which the `Threshold 2.0` bloom will then catch and nothing else wi
 The `Color`-warm / `Decay`-cool split is doing most of the work here, exactly as in the docs'
 own `[255,255,255]` vs `[255,90,80]` comparison.
 
+---
+
+## Appendix A — Gotchas index
+
+Facts that are cheap to know and expensive to rediscover.
+
+| Gotcha | Source |
+|---|---|
+| `Lighting.Technology` is **non-scriptable** — Studio only. | `Lighting.yaml` |
+| `Technology` is **superseded** by `LightingStyle` + `PrioritizeLightingQuality`. | `Technology.yaml` |
+| Turning off `GlobalShadows` also **disables `OutdoorAmbient`** entirely. | `Lighting.yaml` |
+| `OutdoorAmbient` is clamped to be ≥ `Ambient` in every channel. | `Lighting.yaml` |
+| `EnvironmentDiffuseScale` / `EnvironmentSpecularScale` **default to 0.** | `Lighting.yaml` |
+| `ShadowSoftness` does nothing under `Voxel`. | `Lighting.yaml` |
+| `Lighting.ShadowColor` *"currently doesn't do anything."* | `Lighting.yaml` |
+| Local light `Range` is **hard-clamped to 120 studs.** | `Lighting.ExtendLightRangeTo120` |
+| Voxel shadows need objects **> 4×4×4 studs** to read. | `Lighting.GlobalShadows` |
+| Adding an `Atmosphere` **hides** the legacy Fog properties. | `Atmosphere.yaml` |
+| `Atmosphere.Glare` needs `Haze > 0`; `Decay` needs **both** `Haze > 0` and `Glare > 0`. | `Atmosphere.yaml` |
+| `Clouds` renders **only under `Terrain`**, not under `Lighting`. | `environment/clouds.md` |
+| Cloud motion comes from `Workspace.GlobalWind`, not from `Clouds`. | `environment/clouds.md` |
+| `Sky.MoonAngularSize` is clamped to `[0, 60]`; default `11`. | `Sky.yaml` |
+| `SunAngularSize`/`MoonAngularSize = 0` hides sun/moon but **keeps stars**. | `environment/skybox.md` |
+| `SkyboxOrientation` rotation order is **Y, then X, then Z**. | `environment/skybox.md` |
+| Post effects in `Lighting` are global; in `Camera` they are per-player and don't replicate. | `environment/post-processing-effects.md` |
+| `BloomEffect.Size = 0` disables the bleed but **not** the colour adjustment. | `BloomEffect.yaml` |
+| `ColorCorrectionEffect.TintColor` is a **multiply**, not an overlay. | `ColorCorrectionEffect.yaml` |
+| `ExposureCompensation` is in **stops**, range −5…5, applied **before** tonemapping. | `Lighting.yaml` |
+| Normal maps: tangent space only, **OpenGL** (+Y) format, flat = **(127,127,255)**, mesh must carry **tangents**. | `MaterialVariant.NormalMap` |
+| Bumps look like dents ⇒ invert the **green** channel. Normal map does nothing ⇒ **no tangents**. | `MaterialVariant.NormalMap` |
+| `AlphaMode.Transparency` + `MeshPart.Transparency = 0` = cheap cutout; `≥ 0.02` = soft blend that *"does not support all effects and occlusion may not be perfect."* | `SurfaceAppearance.yaml` |
+| `SurfaceAppearance`/`MaterialVariant` `*MapContent` are **`PluginSecurity`** — not runtime-scriptable. | API dump + YAML |
+| `EditableImage`: **max 1024², not resizable, one display-side update per frame, account verification required.** | `EditableImage.yaml` |
+| Terrain materials are **global per place** — one variant per base material. | `parts/materials.md` |
+| Material overrides are the **only** way to give terrain a custom material. | `parts/materials.md` |
+| `Highlight` has a **255-instance client cap**; disabled instances still occupy a slot — **delete, don't disable.** | `Highlight.yaml` |
+| Instancing requires same `MeshContent` **and** identical `SurfaceAppearance`/`TextureContent`. | `performance-optimization/improve.md` |
+| Colour tinting does **not** break instancing and does **not** add texture memory. | `improve.md` + `surface-appearance.md` |
+| **Shadows are disabled entirely below graphics quality level 4.** | `improve.md` |
+| Texture memory depends on **pixel count only** — not format, not alpha, not disk compression. | `improve.md` |
+| Roblox's own budget: *"at most 512×512... most minor images should be smaller than 256×256."* | `improve.md` |
+| Flipbook frames need **padding** or mip filtering bleeds them together. | `effects/particle-emitters.md` |
+| Flipbooks are **auto-disabled on low-memory clients.** Max **30 fps**. | `effects/particle-emitters.md` |
+| `Trail:Clear()` before teleporting, or you get a streak across the map. | `Trail.yaml` |
+| `TextureMode.Static` is **not supported on `Beam`** (behaves as `Wrap`). | `TextureMode.yaml` |
+| SLIM LOD requires **instance streaming** to be enabled. | `improve.md` |
+| Moving skinned MeshParts without a `Humanoid` force FastCluster rebuilds. | `improve.md` |
+| Procedural animation: update `Motor6D.Transform`, **not** `JointInstance.C0`/`C1`. | `improve.md` |
+
+## Appendix B — Unverified and community claims in this chapter
+
+| Claim | Status |
+|---|---|
+| Per-light shadow cost under `Future` scales roughly per shadow-casting light in view | `[COMMUNITY, SECOND-HAND]` — consistent with forward shadow mapping; Roblox publishes no figure. |
+| A per-cluster cap on simultaneous local lights exists | `[UNVERIFIED]` — no primary-source number found. Profile, don't assume. |
+| `Atmosphere` numeric value tables in §2.4 | `[COMMUNITY, SECOND-HAND + practitioner synthesis]` — Roblox publishes comparison images only, no recommended ranges. |
+| `Clouds` is volumetric/raymarched and the most expensive environment object | `[UNVERIFIED]` — inferred from behaviour; no published cost figure. |
+| `bytes ≈ w × h × 4 × 4/3` texture memory model | `[UNVERIFIED as absolute]` — matches Roblox's stated "4× per 2× resolution" relationship, but the actual on-GPU transcoded format is unpublished and is very likely block-compressed. Use for **relative** budgeting. |
+| Whether the `PluginSecurity` gate on `SurfaceAppearance.*MapContent` will be lifted for runtime scripts | `[UNVERIFIED]` — the property *descriptions* describe runtime EditableImage use while the *security flags* forbid it. Re-check `API-Dump.json` before designing around it. |
+| A per-quality-level (1–10) table of exactly which features are disabled | `[UNVERIFIED]` — only the "shadows off below level 4" threshold is published. |
+| Named community visual benchmarks (Frontlines, Hellreaver Arena, Livetopia, Afternoon Glow, Mist, The Beach Cave) | `[COMMUNITY, SECOND-HAND]` — press/aggregator listings; no property values published. |
+
+## Sources
+
+**Primary — Roblox engine reference YAML** (`https://raw.githubusercontent.com/Roblox/creator-docs/main/content/en-us/reference/engine/…`):
+
+- Classes: `Lighting`, `Atmosphere`, `Clouds`, `Sky`, `SurfaceAppearance`, `MaterialService`,
+  `MaterialVariant`, `BloomEffect`, `ColorCorrectionEffect`, `ColorGradingEffect`,
+  `DepthOfFieldEffect`, `SunRaysEffect`, `BlurEffect`, `PostEffect`, `Highlight`, `Beam`,
+  `Trail`, `ParticleEmitter`, `Light`, `PointLight`, `SpotLight`, `SurfaceLight`, `BasePart`,
+  `MeshPart`, `Decal`, `Texture`, `EditableImage`, `ViewportFrame`, `SurfaceGui`,
+  `BillboardGui`, `SelectionBox`, `ImageLabel`, `Terrain`, `Workspace`, `Attachment`, `Model`.
+- Enums: `Technology`, `LightingStyle`, `TonemapperPreset`, `Material`, `MaterialPattern`,
+  `AlphaMode`, `RenderFidelity`, `MeshPartDetailLevel`, `TextureMode`, `HighlightDepthMode`,
+  `ParticleFlipbookLayout`, `ParticleFlipbookMode`, `ParticleOrientation`, `ResamplerMode`,
+  `QualityLevel`, `SavedQualitySetting`, `ModelStreamingMode`, `GraphicsMode`, `NormalId`.
+
+**Primary — Roblox guides** (`https://raw.githubusercontent.com/Roblox/creator-docs/main/content/en-us/…`):
+
+- `environment/lighting.md`, `environment/atmosphere.md`, `environment/skybox.md`,
+  `environment/clouds.md`, `environment/post-processing-effects.md`, `environment/index.md`
+- `art/modeling/surface-appearance.md` (PBR textures, alpha modes, tinting)
+- `parts/materials.md` (custom materials, Material Manager, overrides, TerrainDetail,
+  physical-property resolution order)
+- `effects/beams.md` (the cubic-Bézier control-point definition), `effects/trails.md`,
+  `effects/particle-emitters.md` (flipbooks, squash)
+- `performance-optimization/improve.md` (draw calls, the exact instancing rule, culling,
+  shadow mitigation, texture memory, MicroProfiler scopes),
+  `performance-optimization/identify.md`
+- `tutorials/curriculums/environmental-art/index.md` and `…/optimize-your-experience.md`
+  (layered-transparency case study)
+- `resources/beyond-the-dark/index.md`, `resources/beyond-the-dark/building-architecture.md`
+  (trim sheets, modular architecture)
+
+**Primary — live client API surface** (used to verify security levels and member existence):
+
+- `https://raw.githubusercontent.com/MaximumADHD/Roblox-Client-Tracker/roblox/API-Dump.json`
+
+**Official reference places (editable in Studio):**
+
+- Beyond the Dark — Vistech Showcase: `https://www.roblox.com/games/7208091524/`
+- Environment Art — Greyboxing: `https://www.roblox.com/games/14447721254/`
+- Environment Art — Optimizing: `https://www.roblox.com/games/14447845297/`
+
+**Secondary / community (marked as such in text):**
+
+- [Best looking Roblox games in 2025 — Pocket Gamer](https://www.pocketgamer.com/roblox/best-looking-games/)
+- [Best high graphics Roblox games — TheSpike.gg](https://www.thespike.gg/roblox/best-roblox-games/most-realistic-games-with-best-graphics)
+- [Best Realistic Roblox Games — Outsider Gaming](https://outsidergaming.com/best-realistic-roblox-games/)
+
+**Blocked and not used:** `create.roblox.com`, `devforum.roblox.com`, `luau.org`,
+`robloxapi.github.io` (all 403 in this environment). DevForum material is therefore cited only
+second-hand and marked `[COMMUNITY, SECOND-HAND]`.
+
+*Chapter verified against `Roblox/creator-docs@main` and `Roblox-Client-Tracker` as of
+2026-09-17. The `PluginSecurity` status of `SurfaceAppearance`/`MaterialVariant` `*MapContent`
+is the claim most likely to change; re-verify against `API-Dump.json` before building on it.*

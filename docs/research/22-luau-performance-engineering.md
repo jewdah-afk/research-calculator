@@ -1414,10 +1414,14 @@ Legal (verified `Safe` or `ReadSafe` in the YAML, or pure Luau):
 - All pure Luau: arithmetic, `buffer.*`, `vector.*`, `math.*`, `table.*`,
   `string.*`, `bit32.*`, `os.clock`.
 - Creating and mutating local tables and buffers inside the Actor's own VM.
-- `Workspace:Raycast`, `Workspace:GetPartBoundsInBox` and friends
-  (spatial queries are `Safe` — verify the specific member's `thread_safety`
-  before relying on it).
-- Reading `ReadSafe` properties of Instances (most geometric properties are).
+- **Spatial queries** — verified `Safe` in `WorldRoot.yaml`: `Raycast`,
+  `Blockcast`, `Spherecast`, `GetPartBoundsInBox`, `GetPartBoundsInRadius`,
+  `GetPartsInPart`. Note that `Shapecast`, `ArePartsTouchingOthers` and
+  `IKMoveTo` are **Unsafe** — the family is not uniform, so check each one.
+- **Reading `ReadSafe` properties.** `BasePart.CFrame`, `.Position`, `.Size`,
+  `Instance.Name`, `Instance.Parent` are all `ReadSafe`. `Instance:GetChildren`,
+  `:FindFirstChild` and `:GetAttribute` are `Safe`.
+- `Terrain:ReadVoxels` is `Safe`.
 - `EditableMesh` getters and queries (§5.4).
 - `EditableImage:ReadPixelsBuffer` and `.Size`.
 - `Actor:SendMessage`, and all `SharedTable` operations.
@@ -1431,11 +1435,15 @@ Illegal (and the engine will detect and error):
 - `EditableImage:WritePixelsBuffer` and every `Draw*`.
 - Every `EditableMesh` mutator, including the `Batch*Set*` family.
 - `AssetService:CreateEditableImage/Mesh/MeshPartAsync`.
-- `Terrain:WriteVoxels` (Roblox's own sample calls `task.synchronize()` before
-  it, with the comment "Currently, `WriteVoxels()` must be called in the serial
-  phase").
-- Firing `RemoteEvent`s. `[UNVERIFIED]` — check
-  `RemoteEvent.yaml`'s `thread_safety` for your engine version before assuming.
+- `Terrain:WriteVoxels`, `Terrain:FillBlock`, `Terrain:FillRegion` — all
+  **Unsafe**. Roblox's own sample calls `task.synchronize()` before
+  `WriteVoxels` with the comment "Currently, `WriteVoxels()` must be called in
+  the serial phase".
+- **Firing remotes.** `RemoteEvent:FireServer`, `:FireClient`,
+  `:FireAllClients` are all **Unsafe**, and so are all three on
+  `UnreliableRemoteEvent`. Verified in `RemoteEvent.yaml` /
+  `UnreliableRemoteEvent.yaml`. A parallel worker cannot talk to the network;
+  synchronize first.
 
 ### 5.8 How many Actors?
 
@@ -2096,11 +2104,24 @@ iteration; see §3.7.)
   with per-category time series.
 - **Luau Heap**: snapshot and diff the Luau heap; native code appears as
   `[native]`.
-- **Log / Server Stats**: the `Stats` service exposes `Stats.HeartbeatTimeMs`,
-  `Stats.PhysicsStepTimeMs`, `Stats:GetTotalMemoryUsageMb()` and the
-  `PerformanceStats` tree for programmatic monitoring — useful for shipping an
-  in-game perf HUD rather than eyeballing Studio. `[UNVERIFIED]` for the exact
-  member list on your engine version; check `Stats.yaml`.
+- **The `Stats` service** — programmatic monitoring, so you can ship an in-game
+  perf HUD instead of eyeballing Studio. Verified members in `Stats.yaml`:
+  `FrameTime`, `HeartbeatTime`, `HeartbeatTimeMs`, `PhysicsStepTime`,
+  `PhysicsStepTimeMs`, `RenderCPUFrameTime`, `RenderGPUFrameTime`,
+  `SceneDrawcallCount`, `SceneTriangleCount`, `ShadowsDrawcallCount`,
+  `ShadowsTriangleCount`, `UI2D/UI3D DrawcallCount` and `TriangleCount`,
+  `InstanceCount`, `PrimitivesCount`, `MovingPrimitivesCount`, `ContactsCount`,
+  `DataSendKbps`/`DataReceiveKbps`, `PhysicsSendKbps`/`PhysicsReceiveKbps`,
+  `MemoryTrackingEnabled`.
+
+  **The three that close the loop with `debug.setmemorycategory` are the
+  important ones**: `Stats:GetMemoryCategoryNames()`,
+  `Stats:GetMemoryUsageMbForTag(tag)` and
+  `Stats:GetMemoryUsageMbAllCategories()`, plus
+  `Stats:GetTotalMemoryUsageMb()`. Tag your generator with
+  `debug.setmemorycategory("Gen")` and then assert in code that
+  `Stats:GetMemoryUsageMbForTag("Gen")` returns to baseline after a generation
+  cycle — an automated leak test, no console required.
 
 ### 9.4 Sound benchmarking methodology
 
@@ -2316,3 +2337,259 @@ Developer Console across repeated generations — it must return to baseline.
 
 ---
 
+## Appendix A — Quick reference: parallel safety of the editable APIs
+
+Extracted mechanically from the `thread_safety` field in
+`Roblox/creator-docs` @ Studio `0.739.0.7390687`. **This is the authoritative
+source**; the engine enforces exactly these values.
+
+```
+EditableImage        Safe: ReadPixelsBuffer
+                 ReadSafe: Size
+                   Unsafe: WritePixelsBuffer, DrawCircle, DrawImage,
+                           DrawImageProjected, DrawImageTransformed, DrawLine,
+                           DrawRectangle, SampleImageProjected, Destroy
+
+EditableMesh         Safe: all Get*, all BatchGet*, FindClosestPointOnSurface,
+                           FindClosestVertex, FindVerticesWithinSphere,
+                           RaycastLocal
+                 ReadSafe: FixedSize
+                   Unsafe: all Add*, all Set*, all Remove*, BatchAdd,
+                           BatchRemove, BatchSetValues, BatchSetFaceAttributes,
+                           BatchSetVertexFaceAttributes, Clear, Destroy,
+                           MergeVertices, Triangulate, ResetNormal,
+                           IdDebugString
+
+AssetService       Unsafe: CreateEditableImage, CreateEditableImageAsync,
+                           CreateEditableMesh, CreateEditableMeshAsync,
+                           CreateMeshPartAsync   (everything, in fact)
+
+Actor                Safe: SendMessage, BindToMessage, BindToMessageParallel
+SharedTableRegistry  Safe: GetSharedTable, SetSharedTable
+RunService           Safe: IsClient, IsServer, IsStudio, IsEdit, IsRunMode,
+                           IsResimulating
+                   Unsafe: IsRunning, BindToRenderStep, UnbindFromRenderStep,
+                           BindToAnimation, BindToSimulation, Run, Pause, Stop,
+                           Reset, GetPredictionStatus, SetPredictionMode
+```
+
+To re-derive this for any class on a newer Studio version:
+
+```bash
+# from a checkout of Roblox/creator-docs
+python3 - <<'PY'
+import re
+cls = "EditableImage"
+p = f"content/en-us/reference/engine/classes/{cls}.yaml"
+cur = None
+for ln in open(p):
+    m = re.match(r"^  - name: ([\w.:]+)", ln)
+    if m: cur = m.group(1)
+    m2 = re.match(r"^    thread_safety: (\w+)", ln)
+    if m2 and cur: print(f"{m2.group(1):10} {cur}")
+PY
+```
+
+---
+
+## Appendix B — Cheat sheet
+
+```lua
+-- Vectors (no allocation, float32 x3, inline in the TValue)
+local v = vector.create(x, y, z)
+vector.magnitude(v)  vector.normalize(v)  vector.dot(a, b)  vector.cross(a, b)
+vector.angle(a, b, axis?)  vector.lerp(a, b, t)
+vector.floor/ceil/abs/sign/clamp/min/max(...)
+vector.zero  vector.one
+-- field access is case-insensitive; no swizzles
+v.x == v.X
+
+-- Math you do not need to hand-roll
+math.clamp  math.sign  math.round  math.lerp  math.map
+math.isnan  math.isinf  math.isfinite
+math.pi  math.tau  math.phi  math.e  math.sqrt2  math.huge  math.nan
+math.noise(x, y, z)        -- Perlin; period 256/axis; exactly 0 at integers;
+                           -- no seed; typical excursion only about +/-0.5
+
+-- Buffers (0-based offsets, little-endian everywhere, unaligned OK, max 1 GiB)
+local b = buffer.create(bytes)         buffer.fromstring(s)   buffer.tostring(b)
+buffer.len(b)
+buffer.readi8/u8/i16/u16/i32/u32/f32/f64(b, offset)
+buffer.writei8/u8/i16/u16/i32/u32/f32/f64(b, offset, value)
+buffer.readstring(b, offset, count)    buffer.writestring(b, offset, s, count?)
+buffer.readbits(b, bitOffset, bitCount)      -- bitCount in [0, 32]
+buffer.writebits(b, bitOffset, bitCount, v)
+buffer.copy(dst, dstOff, src, srcOff?, count?)   -- memmove, overlap-safe
+buffer.fill(b, offset, byteValue, count?)        -- memset
+
+-- Tables
+table.create(n)  table.create(n, v)  table.clear(t)  table.clone(t)
+table.freeze(t)  table.isfrozen(t)   table.find(t, v)  table.move(a, f, e, t, b)
+table.concat(t, sep)
+
+-- Scheduling
+task.spawn(f, ...)    -- now
+task.defer(f, ...)    -- end of this resume point
+task.delay(n, f, ...) -- after n seconds, next Heartbeat
+task.wait(n?)         -- yields, returns actual elapsed
+task.cancel(thread)
+task.desynchronize()  task.synchronize()     -- Actor descendants only
+signal:ConnectParallel(f)                    -- Actor descendants only
+
+-- Profiling
+debug.profilebegin("Label") ... debug.profileend()
+debug.setmemorycategory("Tag")  debug.resetmemorycategory()
+debug.dumpcodesize()                         -- Studio command bar, Server view
+Stats:GetMemoryUsageMbForTag("Tag")
+
+-- Native codegen (server only)
+--!native                     -- whole script
+@native local function f()    -- one function; does NOT recurse into inner ones
+```
+
+---
+
+## Sources
+
+### Primary — Luau VM source (`github.com/luau-lang/luau`, `master`)
+
+- `VM/include/luaconf.h` — `LUA_VECTOR_SIZE 3`, `LUA_VECTOR_TYPE float`,
+  `LUA_EXTRA_SIZE`, `LUA_MEMORY_CATEGORIES 256`, `LUAI_MAXCSTACK 8000`,
+  `LUAI_MAXCALLS 20000`, `LUA_SIZECLASSES 40`, `LUA_MAXCAPTURES 32`.
+- `VM/src/lobject.h` — `Value` union and `lua_TValue` layout (the 16-byte slot).
+- `VM/src/lbuffer.h` — `MAX_BUFFER_SIZE (1 << 30)`, `sizebuffer` minimum of 8 bytes.
+- `VM/src/lbuflib.cpp` — the whole `buffer` library: `isoutofbounds` single-compare
+  bounds check, `buffer_swapbe` little-endian normalisation, `buffer_copy` =
+  `memmove`, `buffer_fill` = `memset`, `buffer_readbits`/`writebits`, and the
+  registration table.
+- `VM/src/lveclib.cpp` — `vector_index` (case-insensitive, no swizzles),
+  `vector_lerp`, the `vectorlib` registration table, `vector.zero`/`vector.one`.
+- `VM/src/lbuiltins.cpp` — the fastcall builtin table (which library functions
+  bypass generic call dispatch).
+- `VM/src/lgc.h` — `LUAI_GCGOAL 200`, `LUAI_GCSTEPMUL 200`, `LUAI_GCSTEPSIZE 1`,
+  and the GC state machine (`GCSpause`…`GCSsweep`).
+- `VM/src/lgc.cpp` — `__mode` weak-key/weak-value handling; incremental step sizing.
+- `VM/src/lmathlib.cpp`, `ltablib.cpp`, `lstrlib.cpp`, `lbitlib.cpp`,
+  `lcorolib.cpp`, `lbaselib.cpp`, `loslib.cpp`, `ldblib.cpp`, `lutf8lib.cpp` —
+  the exact set of registered standard-library functions.
+
+### Primary — Luau RFCs (`github.com/luau-lang/rfcs`, `master`, `docs/`)
+
+- `type-byte-buffer.md` — the `buffer` design: zero-based offsets, little-endian,
+  unaligned access legal, overlap semantics of `copy`, why tables and strings are
+  inadequate, non-resizeable rationale. **Status: Implemented.**
+- `function-buffer-bits.md` — `buffer.readbits`/`writebits`.
+- `vector-library.md`, `vector-library-vector2-constructor.md`,
+  `function-vector-lerp.md` — the `vector` library.
+- `syntax-attribute-functions-native.md` — `@native`; **explicitly non-recursive**
+  into inner functions. **Status: Implemented.**
+- `syntax-attributes-functions.md`, `syntax-attributes-functions-parameters.md`.
+- `new-nonstrict.md` — convergence of strict/non-strict on local type inference;
+  the defect classes non-strict reports.
+- `function-inlining.md` — compiler inlining of small functions.
+- `function-math-lerp.md`, `function-math-map.md`,
+  `math-isnan-isfinite-isinf.md`, `math-constants.md`.
+- `function-table-create-find.md`, `function-table-clear.md`,
+  `function-table-clone.md`, `function-table-freeze.md`.
+- `function-bit32-byteswap.md`, `function-bit32-countlz-countrz.md`.
+- `function-string-pack-unpack.md`.
+- `generic-functions.md`, `generic-function-subtyping.md`,
+  `explicit-type-parameter-instantiation.md`,
+  `user-defined-type-functions.md`, `keyof-type-operator.md`,
+  `index-type-operator.md`, `rawget-type-operator.md`, `negation-types.md`,
+  `local-type-inference.md`.
+- `syntax-continue-statement.md`, `syntax-compound-assignment.md`,
+  `syntax-if-expression.md`, `syntax-string-interpolation.md`,
+  `syntax-floor-division-operator.md`, `syntax-number-literals.md`,
+  `generalized-iteration.md`, `const-keyword.md`.
+- `deprecate-getfenv-setfenv.md`, `deprecate-table-getn-foreach.md`.
+
+### Primary — Roblox engine reference (`github.com/Roblox/creator-docs`, `main`)
+
+Studio version of this checkout: `0.739.0.7390687`
+(`content/en-us/reference/engine/STUDIO_VERSION`).
+
+- `reference/engine/classes/EditableImage.yaml` — **`thread_safety` per member**.
+- `reference/engine/classes/EditableMesh.yaml` — **`thread_safety` per member**.
+- `reference/engine/classes/Actor.yaml` — per-Actor VM isolation, ModuleScript
+  non-sharing, `GetActor()` semantics, `SendMessage` **pass-by-copy**.
+- `reference/engine/classes/AssetService.yaml` — all `Unsafe`.
+- `reference/engine/classes/RunService.yaml`, `SharedTableRegistry.yaml`,
+  `ScriptContext.yaml` (`SetTimeout`, the
+  `Script timeout: exhausted allowed execution time` watchdog),
+  `Stats.yaml`, `Workspace.yaml` (`LuauTypeCheckMode`, `UseNewLuauTypeSolver`).
+- `reference/engine/datatypes/SharedTable.yaml` — key/value type restrictions,
+  atomicity of `clear`/`increment`/`update`/`clone`, structural sharing, freezing.
+- `reference/engine/datatypes/RBXScriptSignal.yaml` — `ConnectParallel`.
+- `reference/engine/libraries/{buffer,vector,task,debug,math,table,string,bit32}.yaml`
+  — the exact member sets Roblox ships.
+- `reference/engine/enums/{LuauTypeCheckMode,BulkMoveMode}.yaml`.
+
+### Primary — Roblox guides (`github.com/Roblox/creator-docs`, `content/en-us/`)
+
+- `scripting/multithreading.md` — the parallel programming model, the four
+  thread-safety levels and their exact definitions, the "unspecified means
+  Unsafe" default, Actor messaging, SharedTable, the raycast-validation and
+  procedural-terrain examples, and the Actor-count best practices.
+- `scripting/scheduler.md` — `task.spawn/defer/delay/wait` semantics and the
+  legacy-global migration table.
+- `scripting/events/deferred.md` — `SignalBehavior.Deferred` and the complete
+  list of resumption points.
+- `luau/native-code-gen.md` — `--!native`/`@native`, "server-side scripts",
+  code to avoid, type annotations affecting generated code, `<native>` in the
+  Script Profiler, `debug.dumpcodesize()`, and all four hard limits with their
+  verbatim error messages.
+- `luau/type-checking.md` — the three modes, annotations, generics, variadics,
+  unions/intersections, `typeof`, type exports.
+- `performance-optimization/microprofiler/index.md` — opening it, frame-time
+  graph, timeline, thread types, `debug.profilebegin`/`profileend`, saving
+  dumps, flame graphs, diff flame graphs, server dumps.
+- `performance-optimization/microprofiler/task-scheduler.md` — scheduler
+  priority order and the `PreSimulation`/`PostSimulation`/`Motor6D` rules.
+- `performance-optimization/microprofiler/tag-table.md` — the `GC`,
+  `WaitingHybridScriptJob`, `Heartbeat/RunService.Heartbeat` and render-step
+  labels quoted in §9.1.
+- `performance-optimization/microprofiler/{modes,use-microprofiler}.md`.
+- `studio/optimization/memory-usage.md` — `CoreMemory` vs `PlaceMemory`
+  categories, the Luau heap profiler.
+- `studio/optimization/scriptprofiler.md`.
+- `performance-optimization/test-on-hardware.md`.
+
+### Community, second-hand — flagged as such in the text
+
+- `devforum.roblox.com/t/luau-native-code-generation-preview-studio-beta/2572587`
+  (pages 3–4) — the only public measured speedups: ~2.6× Ray→AABB, ~1.3×
+  Ray→OBB, ~1.4–2× Conway step, "2–3× on average" for intersection suites.
+  `[COMMUNITY, SECOND-HAND]`
+- `devforum.roblox.com/t/enable-native-for-clients/3170510` — the open request
+  confirming native codegen is not available on the client.
+  `[COMMUNITY, SECOND-HAND]`
+- `devforum.roblox.com/t/parallel-luau-version-2-release/2399970` — background on
+  the Actor/VM model. `[COMMUNITY, SECOND-HAND]`
+
+### Blocked and not consulted
+
+`create.roblox.com`, `devforum.roblox.com`, `luau.org`, `robloxapi.github.io`
+were unreachable (403) from this environment. The `luau.org` documentation set
+(`performance`, `typecheck`, `library`, `compatibility`) lives in
+`github.com/luau-lang/site`, whose internal path layout could not be resolved
+from the public listing, so those pages were **not** used; everything above is
+sourced from the VM source, the RFC tree, or `Roblox/creator-docs`. DevForum
+content appears only via search-result summaries and is marked
+`[COMMUNITY, SECOND-HAND]`.
+
+### Explicitly unverified in this chapter
+
+- Roblox availability of `buffer.readinteger`/`writeinteger` and the
+  `LuauIntegerLibrary` 64-bit integer type (present on `luau` `master`, absent
+  from Roblox's `buffer.yaml`).
+- Roblox availability of `const` locals and user-defined `type function`.
+- Whether a `buffer` may be stored as a `SharedTable` value (not in the
+  documented value-type list).
+- The precise internal representation and byte size of Roblox's `Vector3`, and
+  the exact coercion rules between `vector` and `Vector3` at engine API
+  boundaries.
+- Whether `local sqrt = math.sqrt` still helps, hurts, or is neutral relative to
+  the compiler's `FASTCALL` recognition in the current Luau revision.
+- The magnitude of any unaligned-access penalty on Roblox's ARM mobile targets.
+- The exact `collectgarbage` restrictions Roblox applies.

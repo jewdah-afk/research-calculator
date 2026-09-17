@@ -898,3 +898,534 @@ wins.** Shipping the same code to both sides is a UX optimisation, never a trust
 decision (§7.3).
 
 ---
+
+## 4. Multiplier stacking
+
+This is where incremental games actually get hard. By month six you will have 300
+upgrades, and forty of them will touch "ore production". If each one is a hand-written
+`if state.upgrades.x then production *= 2 end`, the system is unreadable, untestable
+and undebuggable, and nobody — including you — will be able to answer "why is this
+number 4.7e12?"
+
+### 4.1 The three kinds of source, and why the distinction matters
+
+| Kind | Combines as | Player-facing name | Effect of adding one more |
+|---|---|---|---|
+| **flat** | `Σ vᵢ`, added to the base | "+5 ore/sec" | Constant. Dominant early, irrelevant late. |
+| **add** (additive multiplier) | `1 + Σ vᵢ` | "+50% ore" | *Diminishing.* The tenth +50% takes you from 5.0× to 5.5×: a 10% gain. |
+| **mul** (multiplicative) | `Π (1 + vᵢ)` or `Π vᵢ` | "×2 ore" | *Constant proportional.* Every ×2 doubles, forever. |
+| **pow** (exponential) | `v ^ (Π pᵢ)` | "ore^1.05" | *Explosive.* Applies to the exponent, so it compounds with everything. |
+
+The design lesson embedded in that table: **additive sources self-balance and
+multiplicative ones do not.** Path of Exile's "increased" vs "more" distinction is
+the same idea. Put the bulk of your upgrade count in the `add` bucket, reserve `mul`
+for milestone rewards, and reserve `pow` for late prestige layers where you *want*
+the curve to bend upward.
+
+### 4.2 The order of application
+
+Fix it once, write it down, and never let a feature negotiate it:
+
+```
+   1. base          = declared base value for the stat
+   2. + Σ flat      = base + flat contributions
+   3. × (1 + Σ add) = additive percentage bucket
+   4. × Π mul       = multiplicative bucket
+   5. ^ Π pow       = exponential bucket
+   6. softcap(...)  = smooth compression above a threshold
+   7. clamp(min,max)= hard floor/ceiling
+```
+
+Steps 3 and 4 commute with each other in the sense that multiplication is
+commutative — but *which bucket a source lands in* changes the result enormously,
+which is exactly why the buckets must be declared, not inferred.
+
+### 4.3 A concrete effect registry
+
+```lua
+--!strict
+-- ReplicatedStorage/Shared/Effects.luau
+
+export type Kind = "flat" | "add" | "mul" | "pow"
+
+export type Effect = {
+    id: string,                 -- unique; also the breakdown label key
+    stat: string,               -- e.g. "production.miner", "cost.all", "offline.cap"
+    kind: Kind,
+    -- Value is a function of state so that scaling upgrades ("+1% per rebirth")
+    -- and conditional upgrades are the same mechanism.
+    value: (state: any) -> number,
+    -- nil means "always active".
+    active: ((state: any) -> boolean)?,
+    -- Free-form; shown in the breakdown UI.
+    label: string,
+}
+
+local Effects = {}
+local registry: { [string]: { Effect } } = {}   -- stat -> effects
+
+function Effects.register(effect: Effect)
+    local list = registry[effect.stat]
+    if not list then
+        list = {}
+        registry[effect.stat] = list
+    end
+    table.insert(list, effect)
+end
+
+export type Breakdown = {
+    base: number,
+    flat: { { label: string, value: number } },
+    add: { { label: string, value: number } },
+    mul: { { label: string, value: number } },
+    pow: { { label: string, value: number } },
+    afterFlat: number,
+    afterAdd: number,
+    afterMul: number,
+    afterPow: number,
+    afterSoftcap: number,
+    final: number,
+}
+
+export type Softcap = ((x: number) -> number)?
+
+function Effects.evaluate(
+    stat: string,
+    base: number,
+    state: any,
+    softcap: Softcap,
+    minValue: number?,
+    maxValue: number?
+): (number, Breakdown)
+
+    local bd: Breakdown = {
+        base = base,
+        flat = {}, add = {}, mul = {}, pow = {},
+        afterFlat = base, afterAdd = base, afterMul = base,
+        afterPow = base, afterSoftcap = base, final = base,
+    }
+
+    local sumFlat, sumAdd, prodMul, prodPow = 0, 0, 1, 1
+
+    for _, effect in registry[stat] or {} do
+        if effect.active and not effect.active(state) then
+            continue
+        end
+        local v = effect.value(state)
+        if not math.isfinite(v) then
+            warn(`[Effects] {effect.id} produced non-finite value; skipping`)
+            continue
+        end
+        if effect.kind == "flat" then
+            sumFlat += v
+            table.insert(bd.flat, { label = effect.label, value = v })
+        elseif effect.kind == "add" then
+            sumAdd += v
+            table.insert(bd.add, { label = effect.label, value = v })
+        elseif effect.kind == "mul" then
+            prodMul *= v
+            table.insert(bd.mul, { label = effect.label, value = v })
+        elseif effect.kind == "pow" then
+            prodPow *= v
+            table.insert(bd.pow, { label = effect.label, value = v })
+        end
+    end
+
+    local x = base + sumFlat
+    bd.afterFlat = x
+
+    x *= (1 + sumAdd)
+    bd.afterAdd = x
+
+    x *= prodMul
+    bd.afterMul = x
+
+    if prodPow ~= 1 and x > 0 then
+        x = x ^ prodPow
+    end
+    bd.afterPow = x
+
+    if softcap then
+        x = softcap(x)
+    end
+    bd.afterSoftcap = x
+
+    if minValue then x = math.max(x, minValue) end
+    if maxValue then x = math.min(x, maxValue) end
+    bd.final = x
+
+    return x, bd
+end
+
+return Effects
+```
+
+Registering an upgrade is then declarative, lives next to the upgrade's definition,
+and is the *only* place that upgrade touches the economy:
+
+```lua
+Effects.register({
+    id = "upg_sharper_picks",
+    stat = "production.miner",
+    kind = "add",
+    label = "Sharper Picks",
+    value = function(state) return 0.25 end,
+    active = function(state) return state.upgrades.sharperPicks == true end,
+})
+
+Effects.register({
+    id = "rebirth_scaling",
+    stat = "production.all",
+    kind = "mul",
+    label = "Rebirths",
+    -- Scaling effects are the same mechanism, not a special case.
+    value = function(state) return 1 + 0.10 * state.prestige.rebirth.currency end,
+})
+
+Effects.register({
+    id = "ascension_exponent",
+    stat = "production.all",
+    kind = "pow",
+    label = "Ascension",
+    value = function(state) return 1 + 0.002 * state.prestige.ascend.currency end,
+    active = function(state) return state.prestige.ascend.resets > 0 end,
+})
+```
+
+### 4.4 Softcaps and hardcaps
+
+A **hardcap** is `math.min(x, cap)`. Use it sparingly: it is a wall players see and
+resent, and it makes every upgrade past the cap worthless, which is worse than
+making it weak.
+
+A **softcap** compresses growth above a threshold while keeping progress monotonic.
+Three standard shapes:
+
+```lua
+--!strict
+-- Polynomial softcap: above `threshold`, growth exponent drops to `power`.
+-- The workhorse. Continuous, monotonic, and easy to reason about in log space:
+-- log(y) = log(s) + power · (log(x) − log(s)).
+local function polynomialSoftcap(threshold: number, power: number)
+    return function(x: number): number
+        if x <= threshold then
+            return x
+        end
+        return threshold * (x / threshold) ^ power
+    end
+end
+
+-- Logarithmic softcap: growth becomes logarithmic. Very aggressive — use as a
+-- ceiling on things that must never run away (e.g. offline multipliers).
+local function logarithmicSoftcap(threshold: number)
+    return function(x: number): number
+        if x <= threshold then
+            return x
+        end
+        return threshold * (1 + math.log(x / threshold))
+    end
+end
+
+-- Dilation: compresses in log space. Antimatter Dimensions popularised this shape.
+-- Applies to the ORDER OF MAGNITUDE, so it is brutal and reversible by design.
+local function dilate(power: number)
+    return function(x: number): number
+        if x <= 1 then
+            return x
+        end
+        return 10 ^ (math.log10(x) ^ power)
+    end
+end
+```
+
+Properties worth checking in a property test (§10.4):
+
+- **Monotonic**: `x₁ < x₂ ⟹ softcap(x₁) ≤ softcap(x₂)`. A non-monotonic softcap means
+  buying an upgrade can lower your production. Players find this in hours.
+- **Continuous at the threshold**: all three above satisfy `softcap(threshold) =
+  threshold`. A discontinuity is a visible jump and a balancing nightmare.
+- **Identity below the threshold**: early-game players never touch the softcap and
+  never need to understand it.
+
+Stack softcaps by composing them at increasing thresholds; keep the list sorted and
+apply in ascending threshold order.
+
+### 4.5 Making it debuggable: the breakdown UI
+
+Build this before you need it. It will be used by your designers daily, by your
+support team weekly, and by you at 2 a.m.
+
+```lua
+--!strict
+-- Renders a Breakdown as text. Hook it to a dev command and to a long-press on
+-- any number in the UI.
+local function renderBreakdown(stat: string, bd: Breakdown): string
+    local lines = { `=== {stat} ===`, `base            {bd.base}` }
+
+    if #bd.flat > 0 then
+        table.insert(lines, "-- flat --")
+        for _, e in bd.flat do
+            table.insert(lines, string.format("  %-24s +%s", e.label, fmt(e.value)))
+        end
+        table.insert(lines, string.format("  = %s", fmt(bd.afterFlat)))
+    end
+
+    if #bd.add > 0 then
+        table.insert(lines, "-- additive --")
+        local total = 0
+        for _, e in bd.add do
+            total += e.value
+            table.insert(lines, string.format("  %-24s +%.1f%%", e.label, e.value * 100))
+        end
+        table.insert(lines, string.format("  = x%.3f  -> %s", 1 + total, fmt(bd.afterAdd)))
+    end
+
+    if #bd.mul > 0 then
+        table.insert(lines, "-- multiplicative --")
+        for _, e in bd.mul do
+            table.insert(lines, string.format("  %-24s x%s", e.label, fmt(e.value)))
+        end
+        table.insert(lines, string.format("  = %s", fmt(bd.afterMul)))
+    end
+
+    if #bd.pow > 0 then
+        table.insert(lines, "-- exponential --")
+        for _, e in bd.pow do
+            table.insert(lines, string.format("  %-24s ^%.4f", e.label, e.value))
+        end
+        table.insert(lines, string.format("  = %s", fmt(bd.afterPow)))
+    end
+
+    if bd.afterSoftcap ~= bd.afterPow then
+        table.insert(lines, string.format("softcap         %s -> %s",
+            fmt(bd.afterPow), fmt(bd.afterSoftcap)))
+    end
+    if bd.final ~= bd.afterSoftcap then
+        table.insert(lines, string.format("clamp           %s -> %s",
+            fmt(bd.afterSoftcap), fmt(bd.final)))
+    end
+
+    table.insert(lines, `FINAL           {fmt(bd.final)}`)
+    return table.concat(lines, "\n")
+end
+```
+
+Three refinements that turn this from a debug tool into a shipped feature:
+
+- **Sort each bucket descending by contribution** and collapse the tail into
+  "+ 31 others (+4.2%)". Players want to know what matters, not everything.
+- **Show the counterfactual.** Next to each line, "removing this: −18%". This is one
+  extra `evaluate` call per line with that effect disabled, and it is the single most
+  informative thing you can show.
+- **Expose it on the client**, computed from the client's mirror of stored state
+  (§3.4). It costs no bandwidth and no server CPU.
+
+### 4.6 Common stacking bugs this design prevents
+
+- **Double-application.** An effect registered under two stats, or applied once in
+  the registry and once in hand-written code. The registry being the *only* path
+  makes the second case a lint rule: grep for `*=` in the economy module.
+- **Order-dependent results.** Because the buckets are collected first and applied in
+  a fixed order, registration order cannot change the answer. Property-test it (§10.4).
+- **Silent `nan` propagation.** The `math.isfinite` guard in `evaluate` contains the
+  damage to one warning instead of a corrupted save.
+- **Stale multipliers.** Solved structurally in §3.3, not here.
+- **"Which one is broken?"** The breakdown answers it in one screenshot.
+
+---
+
+## 5. Prestige and reset layers
+
+### 5.1 What a layer is
+
+A prestige layer is three things: a **gain formula** (how much layer currency this
+reset awards), a **reset spec** (what is destroyed, what survives), and an **unlock
+condition**. Everything else — the upgrades it sells, the UI tab — is content.
+
+The mistake that forces a rewrite is hard-coding layer 1 into the reset function and
+then discovering that layer 2 must also reset layer 1's currency but not its
+milestone unlocks. Model the reset as *data* from the start.
+
+### 5.2 The standard gain curves
+
+| Family | Formula | Feel | Used by |
+|---|---|---|---|
+| **Root** | `gain = ⌊k · (E/T)^p⌋`, `p ∈ [0.25, 0.5]` | Steady, legible. Doubling `E` gives `2^p×` gain. | Most Roblox rebirth systems (`p = 0.5`) |
+| **Cube root** | `gain = ⌊(E/T)^(1/3)⌋` | Slower; long layer lifetime. | Cookie Clicker heavenly chips `[COMMUNITY, SECOND-HAND]` |
+| **Logarithmic** | `gain = ⌊k · (log₁₀E − log₁₀T)⌋` | Gain is linear in *orders of magnitude*. Extremely stable across 100+ OOM. | Deep-layer incrementals |
+| **Magnitude-exponential** | `gain = 10^(a·log₁₀E − b)` | Gain itself grows super-linearly in magnitude. The classic "infinity points" shape. | Antimatter Dimensions `[COMMUNITY, SECOND-HAND]` |
+
+```lua
+--!strict
+-- Gain formulas share a signature so a layer can name one in data.
+local GainCurves = {}
+
+function GainCurves.root(k: number, threshold: number, power: number)
+    return function(earned: number): number
+        if earned < threshold then return 0 end
+        return math.floor(k * (earned / threshold) ^ power)
+    end
+end
+
+function GainCurves.logarithmic(k: number, threshold: number)
+    return function(earned: number): number
+        if earned < threshold then return 0 end
+        return math.floor(k * (math.log10(earned) - math.log10(threshold)))
+    end
+end
+
+function GainCurves.magnitude(a: number, b: number, threshold: number)
+    return function(earned: number): number
+        if earned < threshold then return 0 end
+        -- Done entirely in log space: never materialise 10^300 as an intermediate.
+        local logGain = a * math.log10(earned) - b
+        if logGain > 308 then return math.huge end   -- caller must handle; see §1.8
+        return math.floor(10 ^ logGain)
+    end
+end
+
+return GainCurves
+```
+
+**Pick the logarithmic family if your game will span more than ~30 orders of
+magnitude.** Root curves become numerically awkward and design-awkward at that
+range: the difference between `1e80` and `1e100` earned should be meaningful, and
+under `p = 0.5` it is a factor of `1e10` in gain, which no upgrade tree can absorb.
+
+### 5.3 The reset spec
+
+```lua
+--!strict
+-- ReplicatedStorage/Shared/Layers.luau
+
+export type Layer = {
+    id: string,
+    displayName: string,
+    -- Which stored currency drives the gain.
+    sourceCurrency: string,
+    gain: (earned: number) -> number,
+    unlock: (state: any) -> boolean,
+
+    -- Declarative reset. Everything not listed here SURVIVES.
+    resets: {
+        balances: { string },          -- currency ids zeroed
+        earned: { string },            -- lifetime counters zeroed
+        generators: boolean,           -- counts/levels back to defaults
+        upgrades: { string },          -- upgrade id prefixes cleared, e.g. "base_"
+        layers: { string },            -- lower layer ids fully reset
+    },
+}
+
+local Layers: { Layer } = {
+    {
+        id = "rebirth",
+        displayName = "Rebirth",
+        sourceCurrency = "ore",
+        gain = GainCurves.root(1, 1e6, 0.5),
+        unlock = function(state) return state.earned.ore >= 1e6 end,
+        resets = {
+            balances = { "ore" },
+            earned = { "ore" },
+            generators = true,
+            upgrades = { "base_" },
+            layers = {},
+        },
+    },
+    {
+        id = "ascend",
+        displayName = "Ascension",
+        sourceCurrency = "rebirth",
+        gain = GainCurves.logarithmic(1, 1e3),
+        unlock = function(state) return state.prestige.rebirth.lifetime >= 1e3 end,
+        resets = {
+            balances = { "ore" },
+            earned = { "ore" },
+            generators = true,
+            upgrades = { "base_", "rebirth_" },
+            layers = { "rebirth" },       -- wipes rebirth currency, keeps its count
+        },
+    },
+}
+```
+
+The executor is written once and never changes when a layer is added:
+
+```lua
+--!strict
+local function performReset(state, layer: Layer, defaults)
+    -- 1. Advance first: production earned up to this instant must count.
+    Economy.advanceTo(state, os.time())
+
+    -- 2. Award, using LIFETIME EARNED, not current balance.
+    local earned = if layer.sourceCurrency == "ore"
+        then state.earned.ore
+        else state.prestige[layer.sourceCurrency].lifetime
+    local gained = layer.gain(earned)
+
+    local node = state.prestige[layer.id]
+    node.currency += gained
+    node.lifetime += gained
+    node.resets += 1
+    node.lastResetAt = os.time()
+
+    -- 3. Apply the reset spec.
+    for _, id in layer.resets.balances do state.balances[id] = 0 end
+    for _, id in layer.resets.earned do state.earned[id] = 0 end
+    if layer.resets.generators then
+        for id, g in state.generators do
+            state.generators[id] = table.clone(defaults.generators[id])
+        end
+    end
+    for _, prefix in layer.resets.upgrades do
+        for id in state.upgrades do
+            if string.sub(id, 1, #prefix) == prefix then
+                state.upgrades[id] = nil
+            end
+        end
+    end
+    for _, lowerId in layer.resets.layers do
+        local lower = state.prestige[lowerId]
+        lower.currency = 0
+        lower.upgrades = {}
+        -- lower.lifetime and lower.resets deliberately survive: they drive
+        -- milestone rewards and "total rebirths" achievements.
+    end
+
+    -- 4. Re-anchor and invalidate.
+    state.meta.lastAdvancedAt = os.time()
+    Derived.invalidate(cache)
+    return gained
+end
+```
+
+Note the upgrade-id prefix convention (`base_`, `rebirth_`, `ascend_`). It makes
+"what does this layer clear?" a string operation instead of a hand-maintained list
+that drifts. Enforce it in a startup assertion.
+
+### 5.4 Adding a fourth layer without a rewrite
+
+With the above, adding layer *n* is:
+
+1. Append a `Layer` entry with its gain curve, unlock and reset spec.
+2. Add a `prestige[id]` node to the default state and a migration (§6.5) that
+   backfills it for existing players.
+3. Register its effects (§4.3) — they are ordinary effects, `mul` or `pow`.
+4. Add a UI tab.
+
+None of `performReset`, `Economy`, `Effects` or the save code changes. That is the
+test of whether your layer abstraction is real.
+
+### 5.5 Design notes on multi-layer pacing
+
+- **Each layer should make the previous layer's full run take ~1/10 the time it did
+  the first time.** If layer 2's first reward doesn't visibly collapse a layer-1
+  grind, players read it as a treadmill.
+- **The first reset of a new layer should be reachable in one sitting** from the
+  moment it unlocks. The *second* can be long.
+- **Keep the number of simultaneously-relevant layers at 2–3.** Beyond that players
+  cannot hold the interactions in their heads, and your softcap tuning becomes a
+  multi-variable search.
+- **Never reset settings, cosmetics, or anything purchased with Robux.** Put those in
+  `state.permanent` (§3.1) and the reset spec structurally cannot touch them.
+
+---

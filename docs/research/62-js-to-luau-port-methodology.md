@@ -204,3 +204,540 @@ get an error.
 | `localStorage` | `DataStoreService` (server) / `plr:SetAttribute` for ephemeral | See §14 |
 
 ---
+
+## 1. The porting methodology
+
+### 1.1 Inventory the original
+
+Before a line of Luau is written, produce a written inventory. This is a
+mechanical exercise and it should take one to three days for a mid-sized idle
+game. Do it with grep and a spreadsheet, not from memory.
+
+**State variables.** Every field that persists across a tick. For each one
+record: name, type, initial value, unit, min/max observed, whether it is derived
+(recomputable) or authoritative (must be saved), and the exact JS expression
+that mutates it. Derived-vs-authoritative is the split that determines your save
+schema. In a typical clicker this is 30–200 fields; if the original keeps them
+on a single `game` object, dump `Object.keys(game)` at runtime and diff against
+your list to catch the ones added dynamically.
+
+**Formulas.** Every pure function from state to a number: production rates, cost
+curves, multiplier stacking order, offline-progress integration, prestige gain,
+RNG draws. Copy the JS expression verbatim into the inventory. Multiplier
+*stacking order* matters and is usually implicit in the original's code order —
+`(base * a) * b` and `base * (a * b)` differ in float64 once the values are not
+powers of two, and an incremental game runs the multiplication millions of times.
+
+**Content tables.** Buildings, upgrades, achievements, tiers, prestige layers.
+For each: the identity key the original uses (index? string id? position in an
+array?), and whether any logic depends on *order*. Array-position identity is
+the single most dangerous thing you can carry across the 0-based/1-based
+boundary; if the original saves "upgrade 7 is bought" as an index into an array,
+you must decide once and document whether the port's `7` means the same upgrade.
+
+**UI screens.** One row per screen/panel: what it displays, what it reads from
+state, what it writes, update frequency, and whether it has any *logic* in it.
+The last column is the important one: incremental games routinely bury a formula
+in a render function.
+
+**Save format.** Capture three real saves (new game, mid game, endgame). Record
+the exact encoding chain — commonly `JSON.stringify` → `LZString` or
+`btoa(unescape(encodeURIComponent(...)))` → `localStorage`. Write down the
+version field and any migration code the original already has; that migration
+code is a specification of the schema's history.
+
+**Assets.** Every image, sprite sheet, font, sound, and — separately — every
+piece of art that is *drawn in CSS* (gradients, border-radius chips, box-shadow
+glows, pseudo-element icons) or delivered as SVG. The CSS and SVG entries are
+work items, not asset entries; they have no Roblox equivalent (§13).
+
+**Non-determinism.** Every use of `Math.random`, `Date.now`, `performance.now`,
+and anything that reads the DOM for a measurement. Each one is a place where the
+port cannot be verified against the original unless you make it deterministic
+first (§15.1).
+
+### 1.2 Build the behavioural spec
+
+The inventory is a list of facts. The **behavioural spec** is the contract the
+port must satisfy, and it is what the test suite asserts. It has four parts:
+
+1. **The tick contract.** What is a tick? How long is it? Is the original
+   fixed-step, variable-step, or accumulator-based? Does it clamp `dt`? What
+   happens on a long pause? Write this as pseudocode, because it is the single
+   most common place where a "faithful" port silently diverges: a web game
+   driven by `requestAnimationFrame` gets a variable `dt` that is *capped by the
+   browser* when the tab is backgrounded, while a Roblox `Heartbeat` keeps
+   ticking. If the original accumulates fractional production per frame, the
+   port must accumulate identically or it will drift.
+2. **The formula catalogue.** Every formula from the inventory, restated as a
+   pure function signature with its exact expression, plus the evaluation order
+   of any multiplier chain.
+3. **The invariants.** Statements that must hold at every tick regardless of
+   input: currency never negative; total-spent + current-balance equals
+   total-earned; prestige count is monotonic; no field is ever NaN. These become
+   property tests (§15.3).
+4. **The golden vectors.** The concrete input→output pairs extracted from the
+   original (§15.1). This is the part that turns "we think it matches" into
+   "CI says it matches."
+
+### 1.3 Port the pure simulation first — the load-bearing decision
+
+**The simulation must be a module that imports nothing from Roblox.** No
+`game:GetService`, no `Instance`, no `RunService`, no `task.wait`, no
+`Players.LocalPlayer`. It takes data in and returns data out. Everything about
+verifying this port depends on that property, because it is what lets the
+simulation run under Lune in CI (§15.5) at thousands of times real speed, with
+no engine, no renderer, and no player.
+
+The rule to enforce in code review: *if a file in `sim/` contains the string
+`game`, `Instance`, `task.`, `os.time`, `RunService` or `math.random`, it is a
+bug.* Time comes in as a parameter. Randomness comes in as an injected seeded
+generator. Both are then controllable by the test harness.
+
+Concretely, the simulation exposes:
+
+```lua
+-- sim/init.luau
+export type State = { ... }          -- plain data, JSON-serializable
+export type Config = { ... }         -- content tables, frozen
+export type Event  = { kind: string, ... }
+
+local Sim = {}
+
+function Sim.newState(config: Config, seed: number): State
+function Sim.step(state: State, config: Config, dt: number): State
+function Sim.apply(state: State, config: Config, event: Event): (State, boolean, string?)
+function Sim.derive(state: State, config: Config): Derived   -- pure, cached per tick
+function Sim.fastForward(state, config, elapsed: number): State
+
+return Sim
+```
+
+Two design notes that matter for fidelity:
+
+- **`step` should be pure-ish.** Either return a new table, or mutate in place
+  and document it — but pick one and never mix. Returning a new table each tick
+  allocates; for a 30 Hz simulation with a few hundred fields that is fine, and
+  the debuggability is worth it. If profiling says otherwise, mutate in place and
+  add a `Sim.clone(state)` used by the harness for snapshots.
+- **`apply` returns success plus a reason.** All player actions — buy, prestige,
+  claim — go through it. The UI never mutates state directly, and neither does
+  the network layer. This gives you one place to validate, one place to log, and
+  one surface for the golden vectors to exercise.
+
+### 1.4 Recommended module layout
+
+```
+src/
+  sim/                     -- PURE. No Roblox API. Runs under Lune.
+    init.luau              -- the Sim interface above
+    state.luau             -- State type, newState, clone, invariants()
+    formulas.luau          -- every formula from the spec, one function each
+    content/
+      buildings.luau       -- content tables, table.freeze'd
+      upgrades.luau
+      achievements.luau
+      prestige.luau
+    bignum.luau            -- big-number facade (§11) — the ONLY bignum import
+    rng.luau               -- seeded PRNG, explicitly constructed, never global
+    jscompat.luau          -- jsRound, jsMod, jsTrunc, toI32, truthy helpers (§2)
+    save/
+      schema.luau          -- version, field list, defaults
+      serialize.luau       -- State -> plain table
+      deserialize.luau     -- plain table -> State, with validation + clamping
+      migrate.luau         -- v1 -> v2 -> ... -> current
+      importWeb.luau       -- the original web save format -> current (§14)
+
+  shared/                  -- Roblox-aware but side-effect free
+    remotes.luau
+    types.luau
+
+  server/
+    init.server.luau       -- owns the authoritative Sim, drives the tick
+    datastore.luau
+    validate.luau          -- thin: delegates to sim/save/deserialize
+
+  client/
+    init.client.luau
+    ui/
+      app.luau             -- builds the tree, subscribes to state
+      components/          -- one file per screen from the inventory
+      theme.luau           -- the CSS variables, ported
+      format.luau          -- number formatting (ported from the original!)
+    fx/                    -- tweens, particles, sound — presentation only
+
+  tests/                   -- runs under Lune
+    golden/                -- the extracted vectors (JSON)
+    harness.luau
+    formulas.spec.luau
+    snapshots.spec.luau
+    properties.spec.luau
+    fastforward.spec.luau
+    saves.spec.luau
+```
+
+The boundary that matters: **`sim/` has no upward dependencies.** `server/` and
+`client/` require `sim/`; `sim/` requires nothing outside itself. Enforce it with
+a lint rule or a test that greps the tree — it is worth the ten lines.
+
+### 1.5 Order of work
+
+| Stage | Output | Gate before proceeding |
+|-------|--------|------------------------|
+| 0 | Inventory + behavioural spec | Spec reviewed by whoever knows the original best |
+| 1 | Golden-vector extraction harness in the *original* | Vectors regenerate byte-identically twice in a row |
+| 2 | `sim/` ported, no UI | Formula vectors pass; snapshot diff at tick 1/10/100/10k passes |
+| 3 | Save layer | Round-trip test passes; all three captured real saves import |
+| 4 | Server tick + DataStore | Fast-forward over a simulated year matches; no NaN |
+| 5 | UI skeleton (correct data, ugly) | Every screen reads the same numbers the harness prints |
+| 6 | Assets uploaded and wired | All asset ids resolve; nothing still in moderation |
+| 7 | Presentation (tweens, sound, juice) | No presentation code touches `sim/` |
+| 8 | Live-ops, analytics, monetization | Out of scope here; see chapter 51 |
+
+Stage 1 before stage 2 is not negotiable. If you port first and extract vectors
+later, you will unconsciously write vectors that match the port.
+
+---
+
+## 2. Truthiness — the single biggest source of ported-logic bugs
+
+JavaScript's falsy set is `false`, `0`, `-0`, `0n`, `""`, `null`, `undefined`,
+`NaN` and `document.all`
+([MDN, *Truthy*](https://github.com/mdn/content/blob/main/files/en-us/glossary/truthy/index.md)).
+Luau's falsy set is `false` and `nil`. That is the whole difference, and it is
+enough to break an incremental game in a dozen places, because incremental games
+are made of counts that are legitimately zero.
+
+Roblox's own documentation calls this out directly: "If a value isn't `false` or
+`nil`, Luau evaluates it as `true` ... Unlike many other languages, Luau
+considers both zero and the empty string as `true`"
+(`creator-docs`, `content/en-us/luau/booleans.md`, and again in
+`luau/operators.md`). And the `not` examples are explicit:
+
+```lua
+print(not "text") -- false
+print(not 0)      -- false
+```
+
+### 2.1 The four shapes that break
+
+**Shape 1 — the zero guard.**
+
+```js
+// original
+if (player.gems) { spendGems(); }        // skipped when gems === 0
+```
+
+```lua
+-- WRONG: runs when gems == 0
+if player.gems then spendGems() end
+-- RIGHT
+if player.gems ~= 0 then spendGems() end
+```
+
+**Shape 2 — the `||` default.** This is the one that hides best, because it also
+*fixes* a latent bug in the original — and a fix is a divergence.
+
+```js
+const interval = config.interval || 5;   // config.interval === 0 yields 5
+```
+
+```lua
+local interval = config.interval or 5    -- config.interval == 0 yields 0
+```
+
+If `0` is a meaningful value for `interval`, the JS was wrong and the Luau is
+right, and the port now behaves differently from the golden master. Decide
+explicitly, write it in the spec, and if you are preserving the original
+behaviour, say so in a comment with the reason. A `jscompat` helper makes the
+intent legible:
+
+```lua
+-- sim/jscompat.luau
+local M = {}
+
+-- true exactly when JS would consider v truthy
+function M.truthy(v: any): boolean
+	if v == nil or v == false then return false end
+	if v == 0 then return false end          -- covers -0 too: -0 == 0 in Luau
+	if v == "" then return false end
+	if v ~= v then return false end          -- NaN
+	return true
+end
+
+-- exactly `a || b` in JS
+function M.or_(a: any, b: any): any
+	return M.truthy(a) and a or b
+end
+
+-- exactly `a ?? b` in JS (nullish coalescing: only null/undefined fall through)
+function M.nullish(a: any, b: any): any
+	if a == nil then return b end
+	return a
+end
+
+return M
+```
+
+Note that `?? ` (nullish coalescing) maps *exactly* onto Luau's `or` for the
+`nil` case but not for `false`: `false ?? 1` is `false` in JS, while
+`false or 1` is `1` in Luau. If the original uses `??` on a boolean, use
+`M.nullish`.
+
+**Shape 3 — the empty-string guard.**
+
+```js
+if (save.playerName) { greet(save.playerName); }
+```
+
+An empty name skips the greet in JS and triggers it in Luau. In save-loading
+code this becomes a validation hole.
+
+**Shape 4 — the NaN sentinel.** Some incremental games use `NaN` as "not yet
+computed". In JS, `if (cache)` is false for `NaN`. In Luau, `NaN` is truthy
+(only `nil`/`false` are falsy). Port `NaN` sentinels to `nil` and check
+`== nil`, or keep them and check `v ~= v`.
+
+### 2.2 How to find them all
+
+Grep the original for the shapes rather than reading every line:
+
+```bash
+# bare truthiness checks
+rg -n 'if\s*\([A-Za-z_$][\w.$\[\]]*\)\s*[{\n]' src/
+# || defaults
+rg -n '\|\|\s*[0-9"'"'"'\[{]' src/
+# ternaries on a bare value
+rg -n '\b[A-Za-z_$][\w.$]*\s*\?\s*' src/ | rg -v '[=<>!]='
+# negations
+rg -n '!\s*[A-Za-z_$][\w.$\[\]]*\s*[)&|]' src/
+```
+
+Then, for each hit, ask one question: *can this value be `0`, `""` or `NaN` in
+normal play?* If yes, it is a port bug. Record the decision in the inventory
+spreadsheet so the reviewer can check it.
+
+### 2.3 The strict-mode assist
+
+Turn on `--!strict` at the top of every `sim/` file. Luau's type checker will not
+catch truthiness differences (both `number` and `string` are valid conditions),
+but it *will* catch the adjacent class of bugs — passing `nil` where a number is
+expected, forgetting a return, misspelling a field — which otherwise get blamed
+on the truthiness work. Types are also how you document that a field is
+`number?` rather than `number`, which is the real signal about whether a
+`nil` check is needed at all.
+
+---
+
+## 3. Indexing: 0-based to 1-based
+
+Luau arrays conventionally start at index 1: "you can also use a numeric `for`
+loop from `1` to the length of the array (`#array`)"
+(`creator-docs`, `luau/tables.md`). Nothing *prevents* a 0-based table, and that
+is precisely the trap — a 0-based Luau table works fine until something calls
+`#t`, `ipairs`, `table.insert`, `table.sort` or `table.concat` on it, all of
+which start at 1 and will silently skip element `0`.
+
+**Rule: convert to 1-based at the boundary, once, and never keep a 0-based Luau
+table.** The conversion points are (a) content tables, (b) save files, and
+(c) any index stored in state.
+
+### 3.1 Loop translation
+
+| JavaScript | Luau |
+|---|---|
+| `for (let i = 0; i < n; i++)` | `for i = 1, n do` |
+| `for (let i = 0; i <= n; i++)` | `for i = 1, n + 1 do` |
+| `for (let i = n - 1; i >= 0; i--)` | `for i = n, 1, -1 do` |
+| `for (const x of arr)` | `for _, x in arr do` (or `ipairs(arr)`) |
+| `for (const k in obj)` | `for k in obj do` (or `pairs(obj)`) — **order differs** |
+| `arr.forEach((x, i) => …)` | `for i, x in arr do … end` — `i` is now 1-based |
+
+The `for (const k in obj)` case deserves attention: JS object key enumeration
+order is specified (integer-like keys ascending, then string keys in insertion
+order), while Luau's `pairs` order is hash order and is **not** stable across
+runs or across versions. If the original iterates an object and the *order*
+affects the result — applying upgrades, accumulating floats, drawing RNG — you
+must port it to an explicit ordered array of keys. This is a real source of
+non-reproducible drift, and it is invisible until a float sum comes out different
+on the third decimal.
+
+### 3.2 Content tables
+
+Keep the original's identity keys, not its positions:
+
+```lua
+-- content/buildings.luau
+-- `order` preserves the original array order for display and for any
+-- order-dependent logic. `byId` is the identity map. Nothing depends on
+-- the numeric position of an entry in `order`.
+local Buildings = {}
+
+Buildings.byId = {
+	cursor  = { id = "cursor",  baseCost = 15,    baseCps = 0.1,  costMul = 1.15 },
+	grandma = { id = "grandma", baseCost = 100,   baseCps = 1,    costMul = 1.15 },
+	farm    = { id = "farm",    baseCost = 1100,  baseCps = 8,    costMul = 1.15 },
+}
+
+Buildings.order = { "cursor", "grandma", "farm" }
+
+-- the original's numeric ids, for save import only (§14)
+Buildings.legacyIndexToId = { [0] = "cursor", [1] = "grandma", [2] = "farm" }
+
+return table.freeze(Buildings)
+```
+
+`Buildings.legacyIndexToId` is deliberately 0-based, because that is what the
+original's save file contains. Marking it `legacy` and confining it to the import
+path keeps exactly one 0-based table in the codebase, in the one place it
+belongs.
+
+`table.freeze` on content tables is cheap insurance: content is read-only by
+definition, and a frozen table turns "something mutated the config at runtime"
+from a three-day debugging session into an immediate error.
+
+---
+
+## 4. Array methods
+
+Luau's `table` library has `insert`, `remove`, `sort`, `concat`, `find`, `move`,
+`clone`, `create`, `pack`, `unpack`, `freeze` and `isfrozen`. It does not have
+`map`, `filter`, `reduce`, `slice`, `splice`, `some`, `every`, `includes`,
+`indexOf`, `flat`, or `reverse`. Write one small module and use it consistently
+— inlining the loops is fine for performance but makes the port hard to diff
+against the original.
+
+```lua
+-- sim/arr.luau  (1-based throughout)
+local Arr = {}
+
+function Arr.map<T, U>(t: {T}, f: (T, number) -> U): {U}
+	local out = table.create(#t)
+	for i, v in t do out[i] = f(v, i) end
+	return out
+end
+
+function Arr.filter<T>(t: {T}, f: (T, number) -> boolean): {T}
+	local out, n = {}, 0
+	for i, v in t do
+		if f(v, i) then n += 1; out[n] = v end
+	end
+	return out
+end
+
+-- NOTE: JS reduce with no initial value uses t[0] as the seed and starts at 1.
+-- This version requires an explicit seed. Port `arr.reduce(f)` (no seed) as
+-- Arr.reduce(Arr.slice(t, 2), f, t[1]) and assert #t > 0 like JS does.
+function Arr.reduce<T, A>(t: {T}, f: (A, T, number) -> A, seed: A): A
+	local acc = seed
+	for i, v in t do acc = f(acc, v, i) end
+	return acc
+end
+
+-- JS: arr.slice(begin, end) is 0-based, end-exclusive.
+-- This is 1-based, end-INCLUSIVE, matching string.sub and table.move.
+function Arr.slice<T>(t: {T}, i: number, j: number?): {T}
+	local n = #t
+	local last = j or n
+	if i < 1 then i = 1 end
+	if last > n then last = n end
+	if last < i then return {} end
+	return table.move(t, i, last, 1, table.create(last - i + 1))
+end
+
+function Arr.indexOf<T>(t: {T}, v: T): number?   -- nil, not -1
+	return table.find(t, v)
+end
+
+function Arr.includes<T>(t: {T}, v: T): boolean
+	return table.find(t, v) ~= nil
+end
+
+function Arr.some<T>(t: {T}, f: (T, number) -> boolean): boolean
+	for i, v in t do if f(v, i) then return true end end
+	return false
+end
+
+function Arr.every<T>(t: {T}, f: (T, number) -> boolean): boolean
+	for i, v in t do if not f(v, i) then return false end end
+	return true
+end
+
+function Arr.reverse<T>(t: {T}): {T}
+	local n = #t
+	local out = table.create(n)
+	for i = 1, n do out[n - i + 1] = t[i] end
+	return out
+end
+
+return Arr
+```
+
+Two translations that are not one-liners:
+
+**`indexOf` returns `-1`, `table.find` returns `nil`.** Every
+`if (arr.indexOf(x) !== -1)` becomes `if table.find(t, x) ~= nil`, and every
+`arr.indexOf(x) >= 0` likewise. Getting this wrong is loud (`-1` compared to
+`nil` errors) which is the good case; getting `if (arr.indexOf(x))` wrong is
+silent, because `-1` is truthy in JS and `nil` is falsy in Luau — *this specific
+line reverses meaning*.
+
+**`splice` does two jobs.** As a remover, `arr.splice(i, n)` is `n` calls to
+`table.remove(t, i)` (or one `table.move`). As an inserter,
+`arr.splice(i, 0, x)` is `table.insert(t, i, x)`. As both, write it explicitly.
+Remember the index shift: `arr.splice(2, 1)` removes the third element in JS and
+`table.remove(t, 2)` removes the second in Luau.
+
+### 4.1 `table.sort`: stability and the comparator contract
+
+Two differences, both of which can change results.
+
+**Stability.** `Array.prototype.sort` is stable as of ES2019 — "the
+specification dictates that `Array.prototype.sort` is stable"
+([MDN, *Array.prototype.sort*](https://github.com/mdn/content/blob/main/files/en-us/web/javascript/reference/global_objects/array/sort/index.md)).
+Luau's `table.sort` is a quicksort with a heapsort fallback
+(`VM/src/ltablib.cpp`) and is **not** stable. If your shop list sorts by price
+and two items cost the same, JS keeps the original order and Luau does not. Fix
+it in the comparator, not by hoping:
+
+```lua
+table.sort(items, function(a, b)
+	if a.price ~= b.price then
+		return a.price < b.price
+	end
+	return a.index < b.index      -- deterministic tiebreak, matches JS stability
+end)
+```
+
+**The contract is enforced.** Luau's comparator must be a *strict* weak
+ordering. The engine raises `invalid order function for sorting` if it detects
+`comp(a,b)` and `comp(b,a)` both true, and `table modified during sorting` if
+the comparator changes the array's size (both literal strings from
+`VM/src/ltablib.cpp`; the documented behaviour is "The error `invalid order
+function for sorting` is thrown if both `comp(a, b)` and `comp(b, a)` return
+`true`", `creator-docs`, `libraries/table.yaml`). JavaScript, by contrast,
+tolerates a sloppy comparator and just produces a weird order.
+
+So the mechanical translation of a JS numeric comparator is:
+
+```js
+arr.sort((a, b) => a.value - b.value);
+```
+
+```lua
+table.sort(arr, function(a, b) return a.value < b.value end)
+```
+
+and **never** `<=`. A `<=` comparator makes `comp(a,a)` true, which trips the
+check and errors at runtime on a table large enough to reach the quicksort path.
+This is the most common way a ported sort blows up in production and not in
+testing, because small arrays take the insertion-sort path where the check is not
+reached. **[unverified]** — the exact size threshold at which the check fires is
+an implementation detail; do not rely on small arrays being safe.
+
+One more subtlety: if the comparator reads a value that can be `NaN`
+(a big-number `toNumber()` overflowing, say), `NaN < x` and `x < NaN` are both
+false, which is a valid strict weak ordering only by accident, and the resulting
+order is arbitrary. Sanitize before sorting.
+
+---

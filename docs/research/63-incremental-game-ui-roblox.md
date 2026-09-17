@@ -512,3 +512,184 @@ return NotationSetting
 
 Every `NumericBinding` subscribes once and, on change, resets its memo sentinel (`self._qm = math.huge`) so the next flush re-writes. **Do not** loop over every binding writing text immediately; let the normal 10–20 Hz flush do it (§2), and the whole screen re-renders within 100 ms with no spike.
 
+---
+
+## 2. Updating a UI where everything changes
+
+### 2.1 Decouple the repaint rate from the tick rate
+
+Run the economy at whatever rate the design needs. Run the **UI at 10–20 Hz**. Reasons, in order of importance:
+
+1. **Readability.** A digit that changes 60 times a second is not information, it is texture. Players read the *magnitude* and the *trend*; they cannot read the third significant digit at 60 Hz. 12–15 Hz is the sweet spot where a counter reads as "fast" without becoming a blur. `[UNVERIFIED — design judgement, not a measured result; A/B it.]`
+2. **Cost.** Repainting 100 readouts at 15 Hz instead of 60 Hz is a 4× reduction in text work, for free, with no visible loss.
+3. **Frame pacing.** `PreRender` blocks rendering: Roblox states plainly that it "should be used sparingly as the engine cannot start to render the frame until code running in this event has finished executing." UI text work belongs on `Heartbeat` (end of frame, after physics), not `PreRender`. ([RunService.yaml](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/RunService.yaml))
+
+Reserve `PreRender` for things that *must* be frame-perfect: camera, a progress bar's smooth fill, a tween you are driving manually. Everything textual goes on the slow clock.
+
+```lua
+--!strict
+local RunService = game:GetService("RunService")
+
+local UI_HZ = 15
+local UI_DT = 1 / UI_HZ
+local accumulator = 0
+
+RunService.Heartbeat:Connect(function(dt: number)
+    accumulator += dt
+    if accumulator < UI_DT then
+        return
+    end
+    -- Clamp rather than loop: if we were stalled for 2 seconds we want ONE
+    -- repaint, not 30 of them queued up on the frame we recover.
+    accumulator = 0
+    UIScheduler.flush()
+end)
+```
+
+### 2.2 Only write a property when the displayed value changed
+
+This is the same guard as §1.4 generalised. Wrap *every* Instance write in a compare:
+
+```lua
+--!strict
+-- Guarded writes. Each helper is ~3ns of comparison protecting an engine call.
+local function setText(o: TextLabel, cache: { [string]: any }, v: string)
+    if cache.text ~= v then cache.text = v; o.Text = v end
+end
+local function setColor(o: GuiObject, cache: { [string]: any }, v: Color3)
+    -- Color3 has value equality in Luau, so == is a real comparison.
+    if cache.color ~= v then cache.color = v; o.BackgroundColor3 = v end
+end
+local function setSize(o: GuiObject, cache: { [string]: any }, v: UDim2)
+    if cache.size ~= v then cache.size = v; o.Size = v end
+end
+local function setVisible(o: GuiObject, cache: { [string]: any }, v: boolean)
+    if cache.visible ~= v then cache.visible = v; o.Visible = v end
+end
+```
+
+Keep the shadow value in a plain Luau table rather than reading the property back. Reading an Instance property also crosses the Luau↔C++ boundary; a table field does not.
+
+Two genre-specific corollaries:
+
+- **Quantize before comparing, always.** A progress bar whose `Size` you set from a raw float will change on literally every frame. Quantize the fill to the number of *pixels* it can actually occupy: `math.round(fraction * barWidthPx) / barWidthPx`. A 200 px bar has 200 distinguishable states, not 2^53.
+- **Affordability colour is a boolean, not a number.** Recompute `canAfford` at 15 Hz, but only write `TextColor3`/`BackgroundColor3` when the boolean flips. In a 20-row list that is typically 0–2 writes per second, not 300.
+
+### 2.3 The dirty-flag scheduler
+
+The pattern: readouts register as *bindings*. Game state pushes into bindings; bindings mark themselves dirty; the 15 Hz flush drains the dirty set. A binding that nobody dirtied costs nothing at all.
+
+```lua
+--!strict
+-- UIScheduler.luau
+local UIScheduler = {}
+
+export type Binding = {
+    dirty: boolean,
+    flush: (self: any) -> (),
+}
+
+-- Dirty set as an array + membership map: O(1) insert, O(n) drain over ONLY
+-- the dirty entries. Never iterate the full binding list.
+local dirtyList: { Binding } = {}
+local dirtyCount = 0
+
+function UIScheduler.markDirty(b: Binding)
+    if b.dirty then return end
+    b.dirty = true
+    dirtyCount += 1
+    dirtyList[dirtyCount] = b
+end
+
+function UIScheduler.flush()
+    if dirtyCount == 0 then return end
+    debug.profilebegin("UI.flush")
+    -- Snapshot the count: a flush may dirty new bindings (e.g. a tooltip
+    -- reacting to a value). Those are picked up next frame, not recursively.
+    local n = dirtyCount
+    for i = 1, n do
+        local b = dirtyList[i]
+        dirtyList[i] = nil
+        b.dirty = false
+        b:flush()
+    end
+    -- Compact anything added during the drain down to the front.
+    local written = 0
+    for i = n + 1, dirtyCount do
+        written += 1
+        dirtyList[written] = dirtyList[i]
+        dirtyList[i] = nil
+    end
+    dirtyCount = written
+    debug.profileend()
+end
+
+return UIScheduler
+```
+
+`debug.profilebegin`/`debug.profileend` put a named bar in the MicroProfiler. **Label every UI subsystem this way from day one** — §10.4 depends on it.
+
+### 2.4 Batching: one pass per screen, not one pass per widget
+
+Three batching rules that matter at this scale:
+
+1. **Compute once, fan out.** `canAfford`, `nextCost`, `production` are read by the row, the tooltip, the bulk-buy bar and the header. Compute them once per flush into a per-generator "view model" table, then let bindings read the table. Never recompute a `log10` inside a row's flush.
+2. **Never rebuild instance trees to reflect data changes.** Destroying and recreating a row is orders of magnitude more expensive than re-binding an existing one, and it invalidates layout for the whole container. Rows are recycled (§3), never rebuilt.
+3. **Defer the expensive and rare.** Achievements, stats pages and graphs update at 1–2 Hz or only while their tab is open. Gate them on `frame.Visible` — a binding attached to a hidden panel should unregister, not flush into the void.
+
+```lua
+-- A tab that stops costing anything when it is not on screen.
+local function bindPanelLifetime(panel: GuiObject, subscribe: () -> () -> ())
+    local unsubscribe: (() -> ())? = nil
+    local function sync()
+        if panel.Visible and not unsubscribe then
+            unsubscribe = subscribe()
+        elseif not panel.Visible and unsubscribe then
+            unsubscribe(); unsubscribe = nil
+        end
+    end
+    panel:GetPropertyChangedSignal("Visible"):Connect(sync)
+    sync()
+end
+```
+
+---
+
+## 3. Long lists and virtualization
+
+### 3.1 Why the naive list dies
+
+A generator/upgrade row in this genre is typically: a `Frame` + icon `ImageLabel` + name `TextLabel` + owned-count `TextLabel` + effect `TextLabel` + cost `TextLabel` + `TextButton` + `UICorner` + `UIStroke` + `UIPadding` ≈ **9–12 GuiObjects**. Three hundred upgrades is **~3,000 GuiObjects**, all of them laid out by a `UIListLayout`, all of them holding text that must be measured.
+
+Every one of them costs even when scrolled out of view: they are still in the `ScreenGui`'s layout tree, still participating in `UIListLayout` sorting, still holding shaped text in memory. Roblox's own performance guidance frames the general principle for 3D content — the engine culls what is off-*camera*, not what is off-*canvas* — and there is no built-in canvas culling for `ScrollingFrame` children. ([performance-optimization/improve.md](https://github.com/Roblox/creator-docs/blob/main/content/en-us/performance-optimization/improve.md))
+
+> `[COMMUNITY, SECOND-HAND]` The DevForum is full of threads titled variations of "How do I optimize a ScrollingFrame for over 1000 frames?", and the consistent answer across them is virtualization/recycling: instantiate only what is visible and reuse row objects as the canvas scrolls. Community modules such as *VirtualScroller* package this. ([devforum thread 952022](https://devforum.roblox.com/t/how-do-i-optimize-a-scrolling-frame-for-over-1000-frames/952022), [VirtualScroller](https://devforum.roblox.com/t/virtualscroller-infinite-scrollingframes/3990429)) I could not read these directly (403) — treat as corroboration of the technique, not as a source for any specific number.
+
+### 3.2 The recycling model
+
+```
+canvas (CanvasSize = rowCount * rowHeight, absolute offset)
+┌─────────────────────────────┐  <- CanvasPosition.Y
+│  row pool slot 0  (data 14) │  \
+│  row pool slot 1  (data 15) │   |  viewport: AbsoluteWindowSize.Y
+│  row pool slot 2  (data 16) │   |  visible = ceil(viewport / rowH) + 2
+│  row pool slot 3  (data 17) │  /
+└─────────────────────────────┘
+       (pool size is constant; only the *data index* bound to each slot changes)
+```
+
+Key decisions:
+
+- **Fixed row height.** Variable heights require a prefix-sum index and are a different (much harder) problem. In this genre every row is the same shape — take the fixed height and be grateful.
+- **Position rows absolutely.** Do **not** use `UIListLayout` inside a virtualized canvas; you would be fighting the layout engine over positions it thinks it owns. Set `row.Position = UDim2.fromOffset(0, index * rowHeight)` yourself.
+- **Set `CanvasSize` from the data count**, not from `AutomaticCanvasSize`. `AutomaticCanvasSize` sizes the canvas "based on child content" — and your children are a dozen recycled rows, not three hundred. ([ScrollingFrame.yaml](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/ScrollingFrame.yaml))
+- **Use `AbsoluteWindowSize`, not `AbsoluteSize`, for the viewport.** The docs are explicit: `AbsoluteWindowSize` is "the frame's `AbsoluteSize` minus the space occupied by any currently visible scroll bar gutters." Using `AbsoluteSize` under-counts the rows you need by the scrollbar's worth of pixels and produces a one-row gap at the bottom. ([ScrollingFrame.yaml](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/ScrollingFrame.yaml))
+- **Overscan by 1–2 rows** at each end so a fast flick never shows an empty slot before the rebind lands.
+- **Drive rebinds from `CanvasPosition` changes**, via `GetPropertyChangedSignal("CanvasPosition")`, and additionally poll on the UI clock — momentum scrolling on touch keeps `CanvasPosition` moving after the finger leaves, and `ScrollingFrame:GetScrollVelocity()` will tell you the frame is still coasting. ([ScrollingFrame.yaml](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/ScrollingFrame.yaml))
+
+### 3.3 The rebind must be cheap
+
+The whole point collapses if rebinding a row is expensive. A rebind touches ~6 properties on ~10 instances. Apply §2.2's guarded writes *inside the rebind too*: when you scroll by one row, 11 of 12 slots keep the same data index and should do **zero** engine writes.
+
+The full, working implementation is in [The virtualized list implementation](#the-virtualized-list-implementation).
+
