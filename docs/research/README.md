@@ -85,11 +85,57 @@ canvas) are background, not direction.
 
 ---
 
-## Status
+---
 
-38 research agents commissioned. Chapters land as their agents complete.
+## Status (2026-09-17)
 
-**Scope note:** chapters 24, 25, 28, 29, 32, 33 and 34 were commissioned during
-a brief misreading of the goal as a Civilization-style strategy game. Their
-core technique content is general-purpose; read their closing recommendation
-sections with that framing in mind.
+**Written — 18,473 lines across 9 chapters:**
+
+| # | Chapter | Lines |
+|---|---------|-------|
+| 40 | EditableImage technique cookbook | 2,309 |
+| 41 | EditableMesh technique cookbook | 2,714 |
+| 42 | Roblox genre atlas | 937 |
+| 43 | 3D math toolkit | 3,021 |
+| 46 | Code architecture & frameworks | 1,458 |
+| 47 | Security & anti-exploit | 1,104 |
+| 48 | Procedural generation toolkit | 2,480 |
+| 49 | AI & NPC behavior | 2,850 |
+| 51 | Live ops, analytics & growth | 1,505 |
+
+**Pending — 11 chapters.** Their agents were terminated mid-flight by an
+account rate limit, not by any problem with the research:
+
+20 EditableImage API reference · 21 EditableMesh API reference ·
+22 Luau performance engineering · 23 Rendering, lighting & materials ·
+24 World building & budgets · 25 UI construction · 26 Asset pipeline & tooling ·
+31 Prior art & benchmarks · 44 Physics, characters & hit detection ·
+45 VFX & game feel · 50 Optimization & shipping
+
+Chapters 20 and 21 are the two most load-bearing and should be written first.
+
+## Research method notes
+
+`create.roblox.com`, `devforum.roblox.com` and `luau.org` are unreachable from
+this environment's network policy. All API claims were instead verified against
+the authoritative upstream sources, which are reachable:
+
+- **`github.com/Roblox/creator-docs`** — the generated reference YAML that the
+  Creator Hub pages are built from. Higher fidelity than the rendered pages:
+  full parameter lists, defaults, verbatim behavioral prose, and thread-safety
+  metadata.
+- **`github.com/luau-lang/luau`** — the `/docs` and `/rfcs` trees, plus VM
+  headers for ground truth on value representations.
+
+DevForum figures could only be reached through search-result summaries and are
+flagged second-hand throughout. Treat every community performance number as
+unmeasured until reproduced.
+
+## The gate you must clear before any of this ships
+
+`EditableImage` and `EditableMesh` **fail by default in published experiences.**
+The creator must be 13+ age verified **and** ID verified, then enable
+**Mesh / Image APIs** on the Creator Dashboard. Loading an *existing* asset
+additionally requires that the asset be owned by or shared with the game owner,
+the Studio user, or — for client-side use — the logged-in player, or owned by a
+group where one of them holds an edit-permission role.

@@ -2365,3 +2365,486 @@ end
 
 Within a phase, pick attacks with a small utility function (range, cooldown, how recently used, player position relative to the arena) rather than random selection — random produces the same attack three times in a row, which reads as a bug.
 
+---
+
+## 7. Performance at scale — the hard problem
+
+### 7.1 The cost model
+
+Per-NPC cost decomposes into six terms, and they are wildly unequal:
+
+| Term | Where it's paid | Rough share for a default R15 NPC |
+|---|---|---|
+| **Humanoid simulation** (`stepHumanoid`) | server + owning client | **dominant** |
+| **Animation evaluation** (`stepAnimation`) | server (if server-side) + client | large |
+| **Rendering** (draw calls, skinning) | client only | large on client |
+| **Physics** (`physicsStepped`, `worldStep`) | server + owner | large if unanchored |
+| **Replication** | server → all clients | grows with N × update rate |
+| **Your Luau AI** | wherever you run it | usually the *smallest* term |
+
+The last row is the important one. **Developers reliably optimize the wrong thing.** A behavior tree tick is tens of microseconds; a `Humanoid` step is engine C++ that you cannot profile from Luau and cannot make faster except by not having one. Profile with the MicroProfiler and look for `stepHumanoid`, `stepAnimation`, `physicsStepped` and `updateInvalidatedFastClusters` before you micro-optimize your BT.
+
+Budget anchors, verified from Roblox's own performance docs: the frame budget is **16.67 ms** (60 FPS) on both client and server; **server heartbeat is capped at 60 FPS for all games**; and total server memory is **`6.25 GiB + (100 MiB × largest_number_of_connected_players)`**, with a recommendation to stay under 50%.
+
+### 7.2 Why `Humanoid` is the dominant cost, and how to run without one
+
+Roblox states it directly in `performance-optimization/improve.md`: *"`Humanoid` is a class that provides a wide range of functionalities to player and non player characters (NPCs). Although powerful, a `Humanoid` comes with a significant computation cost."*
+
+What a `Humanoid` does every frame, per the `EvaluateStateMachine` documentation:
+
+- Applies **forces** to its parts (a physics controller per NPC).
+- Runs **spatial queries** ("sensors") to detect floors, ladders and auto-jump obstacles. **This is a per-Humanoid, per-frame raycast/overlap workload that you did not write and cannot see.**
+- Mutates **collision state** on character parts.
+- Evaluates **state transitions** and **replicates** them.
+
+**The four levers, in order of payoff:**
+
+**Lever 1 — don't have a Humanoid.** Roblox's own recommendation: *"For static NPCs, use a simple `AnimationController` … For moving NPCs, consider implementing your own movement controller and using an `AnimationController` for animations."* Note that `AnimationController:LoadAnimation()` is deprecated — create an `Animator` and call `Animator:LoadAnimation()` directly; `AnimationController` is documented as "nothing more than an empty shell for a child `Animator`".
+
+**Lever 2 — `Humanoid.EvaluateStateMachine = false`.** The documented middle path. You keep the Humanoid Instance (and therefore `HumanoidDescription`, accessories, layered clothing, the unified FastCluster benefit, and the Animate script receiving state events if you set states manually) but lose all forces, all sensors, all collision-state changes and all automatic transitions. You then drive the rig with CFrames yourself. This is the single best lever for "I want avatar-quality NPCs and hundreds of them".
+
+**Lever 3 — `Humanoid:SetStateEnabled(state, false)`** for every unused state. Roblox: *"There is a performance cost to leaving certain HumanoidStateTypes enabled. Disable any that are not needed."*
+
+```lua
+--!strict
+-- The standard NPC state cull. Keep only what the NPC actually does.
+local KEEP = {
+    [Enum.HumanoidStateType.Running] = true,
+    [Enum.HumanoidStateType.Dead] = true,
+    -- Add Jumping/Freefall/Landed only if the NPC jumps.
+}
+local function cullStates(humanoid: Humanoid)
+    for _, state in Enum.HumanoidStateType:GetEnumItems() do
+        if state ~= Enum.HumanoidStateType.None and not KEEP[state] then
+            pcall(function() humanoid:SetStateEnabled(state, false) end)
+        end
+    end
+    humanoid:ChangeState(Enum.HumanoidStateType.Running)
+end
+```
+(`pcall` because `StrafingNoPhysics` and `None` reject `ChangeState`/`SetStateEnabled` in some engine versions.)
+
+**Lever 4 — play animations on the client.** Roblox: *"In games with a large number of NPCs, consider creating the `Animator` on the client and running the animations locally. This reduces the load on the server and the need for unnecessary replication. It also makes additional optimizations possible (such as only playing animations for NPCs who are near to the character)."*
+
+**A humanoid-less NPC that still looks right:**
+
+```lua
+--!strict
+-- LightNPC — no Humanoid, no physics, anchored root, CFrame-driven.
+-- Animations via a manually created Animator on an AnimationController.
+local LightNPC = {}
+LightNPC.__index = LightNPC
+
+function LightNPC.new(rig: Model)
+    local root = rig.PrimaryPart :: BasePart
+    root.Anchored = true                    -- no physics solver involvement
+    for _, d in rig:GetDescendants() do
+        if d:IsA("BasePart") then
+            d.CanCollide = false            -- no broadphase entries
+            d.CanTouch = false              -- no touch events
+            d.CanQuery = false              -- not hit by other NPCs' rays
+            d.Massless = true
+        end
+    end
+    local controller = Instance.new("AnimationController")
+    controller.Parent = rig
+    local animator = Instance.new("Animator")
+    animator.Parent = controller
+    return setmetatable({
+        rig = rig, root = root, animator = animator,
+        position = root.Position, velocity = Vector3.zero,
+        maxSpeed = 16, maxForce = 60, lookDir = root.CFrame.LookVector,
+        tracks = {},
+    }, LightNPC)
+end
+
+function LightNPC:step(dt: number, steeringForce: Vector3)
+    self.velocity += steeringForce * dt
+    local speed = self.velocity.Magnitude
+    if speed > self.maxSpeed then self.velocity *= self.maxSpeed / speed; speed = self.maxSpeed end
+    self.velocity *= (1 - math.min(dt * 3, 1))          -- damping, no physics
+    self.position += self.velocity * dt
+    if speed > 0.5 then
+        self.lookDir = limitTurn(self.lookDir, self.velocity.Unit, dt)
+    end
+    -- Ground snap: ONE raycast, and only for tiers that need it (see §7.3).
+    -- Cheaper still: sample a precomputed height grid and skip the raycast.
+    return CFrame.lookAlong(self.position, self.lookDir)
+end
+```
+
+Then move every NPC in one call:
+
+```lua
+--!strict
+-- BULK MOVE: one engine call for all NPCs, instead of N property sets.
+local parts, cframes = table.create(1000), table.create(1000)
+local function flushMovement(npcs)
+    table.clear(parts); table.clear(cframes)
+    for i, npc in npcs do
+        parts[i] = npc.root
+        cframes[i] = npc.pendingCFrame
+    end
+    workspace:BulkMoveTo(parts, cframes, Enum.BulkMoveMode.FireCFrameChanged)
+end
+```
+
+`BulkMoveTo` is verified: *"This provides a very fast way to move large numbers of parts, as you don't have to pay the cost of separate property sets for each individual part."* The `FireCFrameChanged` mode fires only the `CFrame` changed signal instead of `Position`, `Orientation` **and** `CFrame` — a 3× reduction in signal dispatch. The docs also, correctly, caution not to reach for it unless part movement is a measured bottleneck; with 500+ NPCs it is.
+
+**Caveat worth knowing (verified):** the docs note a *reverse* case — skinned MeshParts in a Model **without** a Humanoid are grouped into spatially-organized FastClusters, and moving them forces cluster rebuilds; *"a highly effective workaround is to embed a Humanoid within the Model. The presence of a Humanoid overrides the default spatial clustering behavior, mandating the use of a single, unified FastCluster for the entire Model."* So for **skinned-mesh** NPCs that move, a Humanoid with `EvaluateStateMachine = false` may genuinely outperform no Humanoid at all. Profile both. This is the one case where the usual advice inverts.
+
+### 7.3 LOD for AI — tier definitions
+
+Everything below is a design you implement; Roblox provides no AI LOD. Define tiers by distance to the *nearest* player (or camera, client-side) and by whether the agent is on screen.
+
+| Tier | Trigger | AI update rate | Movement | Perception | Animation | Physics/Model |
+|---|---|---|---|---|---|---|
+| **T0 — Hero** | in combat with a player, or scripted-important | 20–30 Hz | Full steering + avoidance, per-agent path | Full: FOV + LOS raycasts, hearing | Full, `Animator.PreferLodEnabled = false` | Full rig, Humanoid if needed |
+| **T1 — Near** | < 120 studs and on screen | 10 Hz decisions, 30 Hz steering | Steering + separation, shared/queued paths | FOV + LOS at 5 Hz | Full rig, engine LOD throttling on | Full rig, no Humanoid |
+| **T2 — Mid** | 120–300 studs, or off screen near | 2–5 Hz | Flow field or straight-line lerp, no avoidance | Distance + FOV only, **no raycasts** | Idle/walk loop only, throttled | Simplified rig or single mesh |
+| **T3 — Far** | 300–800 studs | 0.5–1 Hz | Position extrapolated along a path; teleport-on-arrival is fine | None | None (static pose) | Billboard / impostor, or SLIM composite |
+| **T4 — Statistical** | > 800 studs, or streamed out | event-driven only | **No position at all** — just "is in region X, will arrive at time T" | None | None | **No Instance** |
+
+**T4 is the tier that actually buys you the big numbers.** An NPC nobody can see does not need a position; it needs a *schedule*. A patrol is `{route = 7, phase = 0.62, speedFactor = 1.0}` — three numbers. When a player comes into range, you evaluate the schedule to a position and spawn a real rig from the pool. This is how a world can contain 5,000 "NPCs" and simulate 80.
+
+```lua
+--!strict
+-- LODManager: assigns tiers, hysteresis-banded so NPCs don't thrash at borders.
+local TIER_ENTER = { 0, 120, 300, 800 }     -- distance to enter tier N
+local TIER_EXIT  = { 0, 145, 340, 880 }     -- must exceed this to LEAVE tier N-1
+local Players = game:GetService("Players")
+
+local function nearestPlayerDistanceSq(pos: Vector3): number
+    local best = math.huge
+    for _, plr in Players:GetPlayers() do
+        local char = plr.Character
+        local root = char and char.PrimaryPart
+        if root then
+            local d = (root.Position - pos)
+            local dsq = d:Dot(d)
+            if dsq < best then best = dsq end
+        end
+    end
+    return best
+end
+
+local function assignTier(npc): number
+    local dsq = nearestPlayerDistanceSq(npc.position)
+    local d = math.sqrt(dsq)
+    local current = npc.tier
+    -- Rising: use ENTER thresholds. Falling: use EXIT thresholds. Hysteresis.
+    local t = 4
+    for i = 4, 1, -1 do
+        local threshold = (i > current) and TIER_ENTER[i] or TIER_EXIT[i]
+        if threshold and d < threshold then t = i - 1 end
+    end
+    if npc.isHero then t = 0 end
+    return math.clamp(t, 0, 4)
+end
+```
+
+**Engine-level LOD you get for free**, all verified:
+
+- `Workspace.ClientAnimatorThrottling` (`Enum.ClientAnimatorThrottlingMode` = `Default`/`Disabled`/`Enabled`): *"When enabled, animations on remotely-simulated `Model` instances will begin to throttle. The throttler calculates throttling intensity using: visibility of a `Model` in relation to the `Camera`; in-game FPS; number of active animations."*
+- `Animator.PreferLodEnabled` (default `true`): *"the engine may reduce animation evaluation frequency for remotely-simulated characters based on distance, screen coverage, and frame budget."* Set `false` on hero NPCs only — *"disabling LOD for many animators simultaneously can impact performance."*
+- `Animator.EvaluationThrottled` (read-only, per frame): *"When `true`, the `Animator` reused the pose from the previous frame instead of evaluating fresh animation data."* Use it to skip your procedural animation layer — *"if evaluation was throttled, applying procedural offsets would fight the stale pose and should be skipped."*
+- `Workspace.EnableSLIMAvatars` + `StreamingEnabled` renders platform avatars as lightweight SLIM representations *with full animation support* as camera distance increases. SLIM classifies models into four distance zones, from full part-by-part rendering, through composite rendering with full instances present, to composite-only with the hierarchy streamed out, to not rendered. Roblox ships a demo place, "SLIM Platform Avatars", described as **200 animated avatars rendered with SLIM**. Prerequisites: `StreamingEnabled`, place saved to Roblox (cloud transcoding), and Team Create enabled.
+
+### 7.4 Time-slicing AI updates
+
+The core technique: **do not update every agent every frame.** Partition agents into `N` buckets and update one bucket per frame. With `N = 10` at 60 FPS, every agent thinks at 6 Hz and you pay 1/10 of the per-frame cost. Nobody can tell.
+
+```lua
+--!strict
+-- Scheduler.lua — LOD-aware round-robin with a hard per-frame time budget.
+local RunService = game:GetService("RunService")
+
+local Scheduler = {}
+Scheduler.__index = Scheduler
+
+-- Frames between updates, per LOD tier.
+local TIER_INTERVAL = { [0] = 2, [1] = 6, [2] = 20, [3] = 120, [4] = math.huge }
+
+function Scheduler.new(budgetMs: number)
+    return setmetatable({
+        agents = {}, frame = 0, budget = budgetMs / 1000, cursor = 1,
+        stats = { updated = 0, skipped = 0, overBudgetFrames = 0 },
+    }, Scheduler)
+end
+
+function Scheduler:add(agent) table.insert(self.agents, agent); agent.nextFrame = self.frame end
+function Scheduler:remove(agent)
+    local i = table.find(self.agents, agent)
+    if i then
+        -- Swap-remove: O(1). table.remove is O(n) and shows up at 1000 agents.
+        self.agents[i] = self.agents[#self.agents]
+        self.agents[#self.agents] = nil
+    end
+end
+
+function Scheduler:step(dt: number)
+    self.frame += 1
+    local deadline = os.clock() + self.budget
+    local n = #self.agents
+    if n == 0 then return end
+
+    local updated, examined = 0, 0
+    -- Start where we left off so a budget overrun doesn't starve the tail.
+    while examined < n do
+        local i = ((self.cursor - 1) % n) + 1
+        local agent = self.agents[i]
+        self.cursor = i + 1
+        examined += 1
+
+        if agent and self.frame >= agent.nextFrame then
+            local interval = TIER_INTERVAL[agent.tier] or 20
+            if interval < math.huge then
+                -- Elapsed time SINCE THIS AGENT last thought — not frame dt.
+                local now = os.clock()
+                local agentDt = now - (agent.lastThink or now)
+                agent.lastThink = now
+                agent:think(agentDt)
+                updated += 1
+                -- Jitter the next slot so agents never re-synchronize.
+                agent.nextFrame = self.frame + interval + math.random(0, math.max(1, interval // 4))
+            else
+                agent.nextFrame = self.frame + 600
+            end
+        end
+
+        if os.clock() > deadline then
+            self.stats.overBudgetFrames += 1
+            break
+        end
+    end
+    self.stats.updated += updated
+end
+
+return Scheduler
+```
+
+Three details that make this work rather than merely exist:
+
+1. **Pass the agent's own elapsed time**, not the frame `dt`. An agent that thinks every 20 frames must integrate 20 frames' worth of change, or everything runs at 1/20 speed.
+2. **Jitter the interval.** Without it, agents added in the same frame stay in the same bucket forever, and you get a periodic spike.
+3. **Cursor-based resumption.** If the budget cuts the loop short, the next frame continues from where it stopped. Restarting at index 1 starves the tail of the list — a bug that only shows up under load, which is exactly when it hurts.
+
+Separate **thinking** (5–10 Hz, time-sliced) from **moving** (30–60 Hz, every frame, cheap). Steering integration and `BulkMoveTo` run every frame for T0–T2; decisions do not.
+
+### 7.5 Spatial partitioning for perception
+
+Naive neighbour queries are O(n²): 200 agents = 40,000 distance checks per evaluation. A uniform spatial hash makes it O(n·k) where k is the average occupancy of the queried cells.
+
+```lua
+--!strict
+--!native
+-- SpatialHash.lua — uniform grid, integer keys, no allocation on query when
+-- the caller supplies the output buffer.
+
+local SpatialHash = {}
+SpatialHash.__index = SpatialHash
+
+--- cellSize should be roughly your LARGEST query radius. Too small and a query
+--- touches many cells; too large and each cell holds too many agents.
+function SpatialHash.new(cellSize: number)
+    return setmetatable({ cellSize = cellSize, cells = {} :: { [number]: { any } }, keyOf = {} }, SpatialHash)
+end
+
+local OFFSET = 32768   -- so negative world coords stay non-negative
+local function hashKey(cx: number, cz: number): number
+    return (cx + OFFSET) * 65536 + (cz + OFFSET)
+end
+
+function SpatialHash:_cellCoords(pos: Vector3): (number, number)
+    return math.floor(pos.X / self.cellSize), math.floor(pos.Z / self.cellSize)
+end
+
+function SpatialHash:insert(agent, pos: Vector3)
+    local cx, cz = self:_cellCoords(pos)
+    local k = hashKey(cx, cz)
+    local bucket = self.cells[k]
+    if not bucket then bucket = {}; self.cells[k] = bucket end
+    bucket[#bucket + 1] = agent
+    self.keyOf[agent] = k
+end
+
+function SpatialHash:remove(agent)
+    local k = self.keyOf[agent]
+    if not k then return end
+    local bucket = self.cells[k]
+    if bucket then
+        local i = table.find(bucket, agent)
+        if i then bucket[i] = bucket[#bucket]; bucket[#bucket] = nil end
+        if #bucket == 0 then self.cells[k] = nil end
+    end
+    self.keyOf[agent] = nil
+end
+
+--- Only touches the hash when the agent actually crosses a cell boundary.
+--- This is the difference between "rebuild every frame" and "nearly free".
+function SpatialHash:update(agent, pos: Vector3)
+    local cx, cz = self:_cellCoords(pos)
+    local k = hashKey(cx, cz)
+    if self.keyOf[agent] == k then return end
+    self:remove(agent)
+    self:insert(agent, pos)
+end
+
+--- Query into a caller-supplied buffer: zero allocation per call.
+function SpatialHash:queryRadius(pos: Vector3, radius: number, out: { any }): number
+    table.clear(out)
+    local r = math.ceil(radius / self.cellSize)
+    local cx, cz = self:_cellCoords(pos)
+    local radiusSq = radius * radius
+    local count = 0
+    for dz = -r, r do
+        for dx = -r, r do
+            local bucket = self.cells[hashKey(cx + dx, cz + dz)]
+            if bucket then
+                for _, agent in bucket do
+                    local d = agent.position - pos
+                    if d:Dot(d) <= radiusSq then
+                        count += 1
+                        out[count] = agent
+                    end
+                end
+            end
+        end
+    end
+    return count
+end
+
+return SpatialHash
+```
+
+**Rebuild strategy matters.** Rebuilding the whole hash every frame is O(n) allocations; the `update`-on-cell-change above is nearly free for slow-moving agents. For very dense, very fast crowds, a **double-buffered full rebuild** into two preallocated tables (swap each frame) avoids the per-agent `table.find` in `remove` entirely.
+
+**For world geometry, use the engine's broadphase instead of your own.** `Workspace:GetPartBoundsInRadius(position, radius, overlapParams)` is a documented, `thread_safety: Safe` spatial query against the engine's own structures. Cache the `OverlapParams` (default is `OverlapParams{MaxParts=0, Tolerance=0, BruteForceAllSlow=false, RespectCanCollide=false, CollisionGroup=Default, FilterDescendantsInstances={}}`) and set `MaxParts` to bound the result — an unbounded query in a dense scene returns thousands of parts and allocates a table for all of them. Note the documented caveat: `GetPartBoundsInBox`/`InRadius` test **bounding boxes**, not exact volumes; use `GetPartsInPart` when precision matters, at higher cost.
+
+### 7.6 Pooling
+
+Roblox's own guidance: *"Instead of destroying an NPC completely, send the NPC to a pool of inactive NPCs… This process is called pooling, which minimizes the amount of times characters need to be instantiated."* And the reason it matters so much for NPCs specifically: *"Instantiating, modifying, and respawning models with `Humanoid`s or skinned `MeshPart`s frequently… can be intensive for the engine to process, particularly if these models use layered clothing"*, with *"lengthy `updateInvalidatedFastClusters` tags (over 4 ms)"* as the MicroProfiler signature.
+
+```lua
+--!strict
+-- NPCPool — park rigs far away rather than reparenting to nil, which avoids
+-- the DataModel add/remove churn that triggers FastCluster invalidation.
+local PARK = CFrame.new(0, -5000, 0)
+
+local NPCPool = {}
+NPCPool.__index = NPCPool
+
+function NPCPool.new(template: Model, size: number, parent: Instance)
+    local self = setmetatable({ free = {}, inUse = {}, template = template }, NPCPool)
+    for _ = 1, size do
+        local rig = template:Clone()
+        rig:PivotTo(PARK)
+        rig.Parent = parent
+        table.insert(self.free, rig)
+    end
+    return self
+end
+
+function NPCPool:acquire(cf: CFrame): Model?
+    local rig = table.remove(self.free)
+    if not rig then return nil end          -- pool exhausted: prefer this to growing mid-frame
+    rig:PivotTo(cf)
+    self.inUse[rig] = true
+    return rig
+end
+
+function NPCPool:release(rig: Model)
+    if not self.inUse[rig] then return end
+    self.inUse[rig] = nil
+    -- Reset state WITHOUT touching the hierarchy: no adds, no removes, no
+    -- size/scale changes (all of which invalidate FastClusters).
+    local hum = rig:FindFirstChildOfClass("Humanoid")
+    if hum then hum.Health = hum.MaxHealth end
+    rig:PivotTo(PARK)
+    table.insert(self.free, rig)
+end
+
+return NPCPool
+```
+
+Roblox also warns against **size/scale changes** and **avatar-hierarchy modifications** at runtime for the same FastCluster reason, and recommends: for procedural animation, update `Motor6D.Transform` rather than `JointInstance.C0`/`C1`; and attach extra `BasePart`s **outside** the avatar `Model` hierarchy.
+
+### 7.7 Replicating NPCs as state, not models
+
+The default pattern — server owns full NPC models, everything replicates — costs you server simulation *and* network bandwidth *and* client physics ownership handling. The scalable pattern inverts it.
+
+| Approach | Server holds | Network per NPC per update | Client does | Good for |
+|---|---|---|---|---|
+| **Full server model** | Complete rig + Humanoid | Full CFrame replication, engine-managed | Nothing | ≤50 NPCs, authoritative combat |
+| **Server logic + client visuals** | Invisible root part or no Instance at all; positions in a table | ~8–16 bytes (packed position + state byte) via a batched `RemoteEvent`/`UnreliableRemoteEvent` | Owns the rig, interpolates, animates | 100–1,000 NPCs |
+| **Fully client-simulated ambient** | Nothing (a seed) | 0 | Runs the entire agent | Crowds, birds, fish, traffic |
+
+The middle row is the workhorse. Pack aggressively: quantize position to 0.25 studs as three `int16`s relative to a chunk origin (6 bytes), yaw to one byte (1.4° resolution), animation-state to a 4-bit enum. That's 8 bytes per NPC per update; at 10 Hz for 300 visible NPCs that's 24 KB/s per client before compression — acceptable. Send it as one `buffer` through a single `UnreliableRemoteEvent` per tick, not 300 separate events. (Cross-reference chapter 28 for the bit-packing and remote-batching machinery.)
+
+Client-side interpolation is mandatory with this pattern: buffer two state snapshots and render at `now - interpolationDelay` (100–150 ms), so 10 Hz updates render as smooth 60 Hz motion.
+
+**Authority rule:** anything that affects game outcomes (damage, drops, objectives) stays server-authoritative. The client simulates *appearance*. An exploiter who fakes an NPC's position on their screen has changed nothing that matters. (Cross-reference chapter 47.)
+
+### 7.8 Parallel Luau for AI
+
+Verified facts that determine what can and cannot be parallelized:
+
+| API | Thread safety | Parallel-phase usable? |
+|---|---|---|
+| `workspace:Raycast` | **Safe** | ✅ |
+| `workspace:GetPartBoundsInRadius` / `InBox` / `GetPartsInPart` | **Safe** | ✅ |
+| `Path:ComputeAsync` | **Unsafe** | ❌ |
+| `Path:GetWaypoints` | **Unsafe** | ❌ |
+| `PathfindingService:CreatePath` | **Unsafe** | ❌ |
+| `workspace:BulkMoveTo` | **Unsafe** | ❌ (must `task.synchronize()` first) |
+| Pure Luau (steering, BT, utility, A*, flow fields) | n/a | ✅ |
+
+So the parallel AI architecture is forced into a specific shape: **perceive and decide in parallel; act in serial.**
+
+```lua
+--!strict
+-- AIActor.lua — a Script under an Actor. Clone one per BUCKET of agents.
+local RunService = game:GetService("RunService")
+local actor = script:GetActor()
+
+local myAgents = {}                       -- populated via actor:BindToMessage("Assign", ...)
+local rayParams = RaycastParams.new()     -- built in the serial phase, reused in parallel
+rayParams.FilterType = Enum.RaycastFilterType.Exclude
+
+actor:BindToMessage("Assign", function(agents) myAgents = agents end)
+
+RunService.PostSimulation:ConnectParallel(function(dt)
+    -- PARALLEL PHASE: perception + decision + steering integration.
+    -- Raycasts and GetPartBounds* are Safe here. No Instance writes.
+    for _, agent in myAgents do
+        agent:perceive(rayParams)         -- raycasts: Safe
+        agent:decide(dt)                  -- pure Luau
+        agent:integrate(dt)               -- computes pendingCFrame, writes nothing
+    end
+
+    task.synchronize()
+    -- SERIAL PHASE: the only place we touch the DataModel.
+    -- Collect into module-level buffers and let ONE script call BulkMoveTo.
+    MovementQueue.submit(myAgents)
+end)
+```
+
+Roblox's documented guidance on actor count: *"For the best performance, use more `Actor`s. Even if the device has fewer cores than `Actor`s, the granularity allows for more efficient load balancing between the cores… it's reasonable to use 64 `Actor`s and more instead of just 4, even if you're targeting 4-core systems."* For AI: bucket ~8–16 agents per Actor, and target 32–64 Actors. Also documented: **`require()` cannot be called in a desynchronized parallel phase** — require every module in the serial phase first. And scripts under the *same* Actor always run serially with respect to each other, so one Actor per NPC archetype is not parallelism.
+
+Use `SharedTable` for cross-actor data (the squad blackboard, the flow field) and `Actor:SendMessage`/`BindToMessageParallel` for work dispatch.
+
+**Realistic expectation:** parallel Luau gives you the pure-Luau and raycast portions of your AI across cores. It does **not** touch `stepHumanoid`, `stepAnimation`, physics or replication — which, per §7.1, are the dominant terms. Parallelizing a BT that costs 0.4 ms and leaving 8 ms of `stepHumanoid` alone is not a win. Fix the Humanoid first, *then* parallelize.
+
+### 7.9 What 50, 200, and 1,000 NPCs actually cost
+
+No published Roblox benchmark exists for this, so the table below combines (a) documented engine behaviour, (b) developer-reported figures retrieved via search summaries, and (c) the cost model in §7.1. **Treat the numbers as order-of-magnitude planning figures, not measurements, and benchmark your own rig.**
+
+| NPC count | Naive (full Humanoid, server `MoveTo`, server animations) | Optimized (no Humanoid, CFrame + `BulkMoveTo`, client animation, LOD + time-slicing) |
+|---|---|---|
+| **50** | Fine everywhere. Server heartbeat healthy. This is where most games sit and never need to optimize. | Overkill. Don't bother. |
+| **200** | Server heartbeat degrades; `stepHumanoid` + `stepAnimation` dominate the profile; ping rises. Community reports put the practical wall for Humanoid NPCs around **150** even with all states disabled. **[devforum — via search summary]** | Comfortable. AI thinking ~1–2 ms/frame with 10-bucket slicing; movement dominated by `BulkMoveTo` and rendering. |
+| **1,000** | Not viable. | Achievable on desktop clients: **~40–50 FPS at 1,000 rigs** reported with R6 models, no Humanoid, no Animate script, no collision, TweenService movement and adaptive physics stepping; **~150 FPS at 300 rigs** with the same setup. **[devforum — via search summary]** Multiple developers report **1,000–1,500 total NPCs** in a live game "mostly without lag" when most are LOD'd down. **[devforum — via search summary]** |
+| **5,000+** | — | Only via §7.3 T4 (statistical, no Instance) + pooling: simulate ~100–200, represent the rest as schedule state. |
+
+The gap between the columns is roughly **5–7×**, and essentially all of it comes from three decisions: no Humanoid, client-side animation, and LOD + time-slicing. Nothing else in this chapter moves the number as much.
+

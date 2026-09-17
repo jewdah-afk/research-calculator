@@ -1953,3 +1953,528 @@ Evaluate the *slope from the same height function* you used to build the terrain
 from a raycast — a raycast hits props and gives you nonsense, and it cannot run in a
 parallel Actor.
 
+---
+
+## 6. Terrain and open world
+
+### 6.1 Heightmap composition
+
+The production recipe is layered, not a single fBm call:
+
+```lua
+local function height(x: number, z: number, cfg): number
+    -- 1. Continents: very low frequency, decides land vs sea
+    local cont = fbm2(x, z, cfg.zCont, 3, cfg.contFreq, 2.0, 0.5)        -- ~0.0005
+    -- 2. Mountain mask: where mountains are ALLOWED to exist
+    local mask = math.clamp(fbm2(x, z, cfg.zMask, 2, cfg.maskFreq, 2.0, 0.5) * 0.5 + 0.5, 0, 1)
+    -- 3. Mountains: ridged, gated by the mask
+    local mtn = ridgedMF(x, z, cfg.zMtn, 6, cfg.mtnFreq, 2.0, 0.5) * mask * mask
+    -- 4. Hills/detail
+    local det = fbm2(x, z, cfg.zDet, 4, cfg.detFreq, 2.0, 0.45)
+    local h = cont * cfg.contAmp + mtn * cfg.mtnAmp + det * cfg.detAmp
+    -- 5. Redistribution: push mass toward flat lowlands
+    return redistribute(h, cfg)
+end
+```
+
+Multiplying mountains by a *separate low-frequency mask* is the trick that produces
+mountain *ranges* rather than uniformly bumpy terrain. Squaring the mask sharpens the
+transition between plains and range.
+
+**Redistribution.** Raise the normalised height to a power: `h' = h^e`. `e > 1` (1.5–3)
+flattens lowlands and makes peaks rarer and more dramatic — this is Amit Patel's
+recommended control, and it is far more effective than tuning octaves. `e < 1` raises
+plateaus. Apply it in [0, 1] space and remap afterwards.
+
+**Terracing.** `h' = floor(h * n) / n` gives hard steps; blend toward the original by
+`t` for soft terraces: `h' = lerp(h, floor(h*n)/n, t)`. `n` = 8–20 bands, `t` = 0.6–0.9.
+
+**Island mask.** Multiply by a radial falloff so the map is surrounded by water:
+`h *= 1 - smoothstep(r0, r1, distanceFromCentre / maxRadius)` with `r0 ≈ 0.6`,
+`r1 ≈ 0.95`. Use a *squared Euclidean* or Manhattan-blended distance to avoid a
+perfectly circular island.
+
+### 6.2 Droplet (hydraulic) erosion
+
+The single highest-value post-process on noise terrain. This is the Beyer/Lague
+droplet model, transcribed from Sebastian Lague's `Erosion.cs` with its shipped
+default parameters.
+
+**Defaults (from the reference implementation):**
+
+| Parameter | Default | What it controls |
+|---|---|---|
+| `erosionRadius` | 3 | Width of the erosion brush. Larger = smoother valleys, much slower. |
+| `inertia` | 0.05 | 0 = water instantly follows the gradient; 1 = it never turns. Higher gives straighter, longer channels. |
+| `sedimentCapacityFactor` | 4 | How much a droplet can carry. Higher = deeper canyons. |
+| `minSedimentCapacity` | 0.01 | Floor so flat terrain still erodes a little. |
+| `erodeSpeed` | 0.3 | Fraction of the capacity deficit removed per step. |
+| `depositSpeed` | 0.3 | Fraction of excess sediment dropped per step. |
+| `evaporateSpeed` | 0.01 | Water loss per step; effectively the droplet's range. |
+| `gravity` | 4 | Speed gain per unit of descent. |
+| `maxDropletLifetime` | 30 | Steps before the droplet is abandoned. |
+| `initialWaterVolume` | 1 | — |
+| `initialSpeed` | 1 | — |
+
+**The per-step update, exactly:**
+
+```
+1. h, (gx, gy) = bilinear height and gradient at (posX, posY)
+2. dir = normalize(dir*inertia − gradient*(1 − inertia))
+3. pos += dir                                  -- always ONE unit, regardless of speed
+4. if dir == 0 or pos outside the map: stop
+5. newH = bilinear height at the new pos ;  dh = newH − h
+6. capacity = max(−dh * speed * water * sedimentCapacityFactor, minSedimentCapacity)
+7. if sediment > capacity or dh > 0:           -- flowing uphill, or overloaded
+       deposit = (dh > 0) and min(dh, sediment) or (sediment − capacity) * depositSpeed
+       sediment −= deposit
+       add `deposit` to the 4 nodes of the current cell, bilinearly weighted
+   else:
+       erode = min((capacity − sediment) * erodeSpeed, −dh)
+       subtract `erode`, spread over the erosion brush (radius `erosionRadius`,
+         weights (1 − dist/radius) normalised to sum 1), adding what was removed
+         to `sediment`
+8. speed = sqrt(speed² + dh * gravity)
+9. water *= (1 − evaporateSpeed)
+```
+
+Four details that are easy to get wrong and each of which ruins the result:
+
+- **Deposition is bilinear onto the 4 cell corners; erosion is spread over a brush.**
+  The asymmetry is deliberate — deposition must be able to fill a single pit, erosion
+  must not dig a 1-pixel spike.
+- **`erode` is clamped to `−dh`.** Without this the droplet digs a hole *behind*
+  itself and you get pockmarks.
+- **`deposit` when moving uphill is clamped to `dh`** — fill up to the new height, no
+  more, which is what makes basins fill flat.
+- **Position advances by exactly one grid unit per step**, not by `speed`. `speed` only
+  feeds capacity.
+
+**Iteration count.** Lague's demo uses tens of thousands of droplets for a 512×512 map.
+A workable rule is **`numDroplets ≈ 0.2 × mapCells`** for visible erosion and
+`1.0 × mapCells` for heavy. On a 512² heightmap that is 50 000–260 000 droplets at ~30
+steps each — 1.5–8 M steps. That is 100 ms to several seconds in Luau, so: run it
+offline into a stored heightmap, or run it in a parallel Actor on `buffer`-backed data
+with `--!native`, or time-slice it (§11.3).
+
+**Failure modes.** Droplets spawned at the map edge walk off immediately and do
+nothing — spawn in `[radius, size − radius]`. Erosion on a *chunked* world is not
+chunk-local (droplets cross borders); erode a padded super-chunk and discard the
+padding, or accept that erosion is a whole-map offline step.
+
+### 6.3 Rivers via flow accumulation
+
+Erosion carves valleys; it does not give you a river *network* you can query. For that,
+use D8 flow accumulation on the (post-erosion) heightmap:
+
+```
+1. Fill depressions (priority-flood): process cells from lowest, raising any cell
+   below its already-processed neighbour to that neighbour's height + epsilon.
+   Without this, flow terminates in pits.
+2. Flow direction: each cell points at its steepest downhill neighbour of 8 (D8).
+3. Accumulation: process cells in DECREASING height order; each cell adds its own
+   accumulated value (1 + everything upstream) to its downstream neighbour.
+4. River = any cell with accumulation > threshold.
+   Width ∝ sqrt(accumulation) is the standard hydrological scaling.
+```
+
+Sorting by height gives you the topological order for free and avoids a graph
+traversal. Threshold controls network density: on a 512² map, `threshold ≈ 1000`
+gives major rivers only; `≈ 100` gives a dense dendritic network including creeks.
+
+Then carve: lower the terrain along river cells by `depth * min(1, acc/refAcc)` and
+smooth the banks. Lakes are the depressions you filled in step 1 — keep that record.
+
+### 6.4 Biomes: the Whittaker approach
+
+Robert Whittaker's biome classification plots biomes on two axes: **mean annual
+temperature** and **mean annual precipitation**. For games this becomes a 2-D lookup
+on (temperature, moisture), both derived procedurally:
+
+```lua
+-- Temperature: latitude band + altitude lapse + noise
+local function temperature(x, z, y, cfg)
+    local lat = math.abs(z / cfg.worldHalfDepth)                    -- 0 equator .. 1 pole
+    local t = 1 - lat
+    t -= math.max(0, y - cfg.seaLevel) * cfg.lapseRate              -- ~0.0065 per stud
+    t += fbm2(x, z, cfg.zTemp, 3, cfg.tempFreq, 2, 0.5) * 0.15
+    return math.clamp(t, 0, 1)
+end
+
+-- Moisture: distance from water + rain shadow + noise
+local function moisture(x, z, cfg)
+    local m = fbm2(x, z, cfg.zMoist, 4, cfg.moistFreq, 2, 0.5) * 0.5 + 0.5
+    m -= cfg.rainShadow * windwardBlocked(x, z)   -- see below
+    return math.clamp(m, 0, 1)
+end
+```
+
+The **rain shadow** is what makes biome maps stop looking like two independent noise
+fields: march a ray upwind from each cell; if it crosses a ridge higher than some
+threshold, subtract moisture. Cheap approximation: `moisture -= k * max(0, upwindMaxHeight − h)`.
+
+The lookup table itself is just a matrix. A serviceable 6×6:
+
+```
+                moisture ->  0.0   0.17  0.33  0.5   0.67  1.0
+temp 1.0 (hot)          desert  desert  savanna  tropSeasonal  tropRainforest  tropRainforest
+temp 0.8                desert  savanna savanna  tropSeasonal  tempRainforest  tempRainforest
+temp 0.6                 grass   grass  woodland  tempForest    tempForest     tempRainforest
+temp 0.4                 grass   shrub   taiga     taiga         taiga          taiga
+temp 0.2                 tundra  tundra  tundra    taiga         taiga          taiga
+temp 0.0 (cold)           ice     ice     ice       ice           tundra         tundra
+```
+
+**Blend the borders.** Hard biome boundaries are the number-one tell of procedural
+generation. Either (a) add a small high-frequency noise to temperature and moisture
+*before* the lookup, which produces interlocking fingers rather than clean lines; or
+(b) compute biome *weights* by distance in (t, m) space and blend colours, foliage
+density and material probabilities. Do both.
+
+### 6.5 Chunked infinite worlds
+
+The rules, condensed:
+
+1. Chunk size should be a power of two in studs. 64 or 128 studs is typical for
+   Roblox; match it to your streaming radius, not to your heightmap resolution.
+2. Every chunk generates from `hash3(cx, cz, PURPOSE, worldSeed)` alone (§1.4).
+3. Height is a *global continuous function* of world coordinates — never per-chunk
+   noise (§2.6). Chunk borders then match for free.
+4. Anything with a neighbourhood operator (normals, CA, blur, slope) needs a **1-cell
+   halo** — generate `size + 2` and discard.
+5. Features that span chunks (rivers, roads, large structures) are owned by the chunk
+   containing their *origin*, and every chunk must generate the features of its
+   neighbours within the feature's maximum radius. Cap that radius; a structure larger
+   than one chunk is a design decision with a real cost.
+6. Keep an LRU cache of generated chunk *data* (not instances) so that walking back
+   and forth does not regenerate. Generation is deterministic, so the cache is pure.
+
+### 6.6 LOD
+
+Three mechanisms, use all three:
+
+- **Geometric LOD.** Generate the chunk mesh at `size/1`, `size/2`, `size/4` sample
+  spacing by ring distance. The classic seam problem (a fine chunk next to a coarse
+  one leaves T-junction cracks) is solved by *skirts* — extrude the chunk border
+  downward by a few studs — which is far simpler than stitching and invisible in
+  practice. For `EditableMesh` terrain this is the right call (see ch. 21).
+- **Population LOD.** Scatter density falls off with distance; distant props become
+  billboards or are culled. Roblox's `StreamingEnabled` plus `Model.LevelOfDetail`
+  handles some of this; procedural props you place yourself do not get it automatically.
+- **Generation LOD.** Distant chunks skip erosion, skip detail octaves, skip prop
+  placement entirely and only produce a coarse silhouette. Because generation is a pure
+  function, upgrading a chunk's LOD later is just a regeneration at a finer setting.
+
+---
+
+## 7. Cities, buildings and interiors
+
+### 7.1 Road networks
+
+Three approaches, increasing in cost and quality.
+
+**(a) Grid + organic hybrid — the pragmatic default.** Lay a coarse arterial grid,
+perturb its vertices with noise, then subdivide blocks recursively. You get a city that
+reads as planned but is not literally graph paper.
+
+```
+arterials: a grid at 200-400 stud spacing, each vertex displaced by
+           fbm(x, z) * 40 studs, edges drawn as polylines through the displaced points
+collectors: subdivide each block; split the longest axis at 0.4-0.6, recurse
+           until block area < targetLotArea * lotsPerBlock
+locals:    dead-end or loop streets inside remaining blocks
+```
+
+**(b) L-system roads (Parish & Müller, "Procedural Modeling of Cities", CityGen).**
+Treat road segments as an L-system with *global goals* (population density, water,
+terrain slope) and *local constraints* (snap to nearby intersections, shorten to avoid
+water, reject if too steep). The loop:
+
+```
+queue = { initial segment }
+while queue not empty and count < limit:
+    seg = pop lowest-priority-time segment
+    if localConstraints(seg) fails to fix it up: discard
+    accept seg
+    for each proposal from globalGoals(seg):     -- straight ahead, branch left/right
+        push with delay += 1
+```
+
+`localConstraints` is where all the quality lives: snap the end point to an existing
+intersection within `snapRadius` (~20 studs), snap to a nearby road *segment* by
+splitting it, and truncate the segment at water/cliff boundaries.
+
+**(c) Tensor fields (Chen et al., "Interactive Procedural Street Modeling",
+SIGGRAPH 2008).** Define a tensor field over the map (grid tensors near landmarks,
+radial tensors around centres, heightmap-aligned tensors on slopes), then trace
+*hyperstreamlines* along its two orthogonal eigenvector fields. Major streets follow
+one eigenvector, minor follow the other, so they meet at right angles automatically and
+the network bends coherently around terrain. This is the highest-quality option and the
+most work; it is how commercial city generators do it.
+
+### 7.2 Lot subdivision
+
+Given a block polygon, split it into building lots:
+
+```
+subdivide(poly):
+    if area(poly) <= targetLotArea or poly has no edge >= minFrontage: emit(poly)
+    else:
+        e = longest edge of the oriented bounding box
+        cut perpendicular to e at t in [0.4, 0.6] of its length (jittered)
+        subdivide(left); subdivide(right)
+```
+
+Use the *oriented* bounding box (via rotating calipers or just the longest polygon
+edge's direction), not the axis-aligned one, or every lot ends up axis-aligned
+regardless of the street's angle. Discard or merge slivers: any lot whose
+area/perimeter² falls below a threshold, or whose street frontage is under
+`minFrontage` (6–10 studs), gets merged into a neighbour.
+
+### 7.3 Building mass and facades
+
+**Mass.** Extrude the lot footprint (inset by a setback of 1–4 studs) to a height drawn
+from a distribution keyed to distance-from-centre: `height = base * (1 + k * densityAt(x,z)) * rng`.
+Add setbacks at height thresholds (the "wedding cake" profile) for tall buildings. For
+variety, a building is 1–3 boxes of different footprints and heights, unioned.
+
+**Facades via split grammars** (Wonka et al., "Instant Architecture", SIGGRAPH 2003;
+extended by Müller et al.'s CGA shape, 2006). A split grammar rewrites a *shape* — a
+box with a scope (position, orientation, size) — into smaller shapes. The core
+operators:
+
+```
+Subdiv("Y", 4.0, 3.0~, 0.5) { Ground | Floor* | Cornice }   -- ~ means "relative, stretchy"
+Subdiv("X", 1.0~, 2.0, 1.0~) { Wall | Window | Wall }
+Repeat("X", 3.5) { Bay }
+Comp("faces") { front: Facade | side: BlankWall | top: Roof }
+Inset(0.3) / Extrude(0.2) / S(sx, sy, sz) / T(tx, ty, tz)
+I("window_frame.mesh")                                       -- terminal: place an asset
+```
+
+A minimal Luau shape grammar is a table of rules keyed by symbol, each a function that
+takes a scope and emits child scopes:
+
+```lua
+local rules = {}
+rules.Facade = function(scope, emit, rng)
+    local floors = math.max(1, math.floor(scope.size.Y / 4))
+    local fh = scope.size.Y / floors
+    for i = 0, floors - 1 do
+        emit(i == 0 and "GroundFloor" or "Floor",
+             scope:translate(0, i * fh, 0):resize(scope.size.X, fh, scope.size.Z))
+    end
+end
+rules.Floor = function(scope, emit, rng)
+    local bays = math.max(1, math.round(scope.size.X / 3.5))
+    local bw = scope.size.X / bays
+    for i = 0, bays - 1 do
+        emit(rng:NextNumber() < 0.85 and "WindowBay" or "SolidBay",
+             scope:translate(i * bw, 0, 0):resize(bw, scope.size.Y, scope.size.Z))
+    end
+end
+-- ... terminals emit actual parts / EditableMesh geometry
+```
+
+Drive it with a work queue over `(symbol, scope)` pairs, with a depth cap. The whole
+framework is ~80 lines; the *content* is the rules, and that is where the art
+direction lives.
+
+**Interiors: floor plans.** Two approaches:
+
+- **BSP subdivision** of the floor rectangle (§3.2) with a minimum room size, then
+  door placement on shared walls. Fast, always valid, reads as an office or a hotel.
+- **Graph-based room adjacency.** Author a required adjacency graph (`entry–hall`,
+  `hall–kitchen`, `hall–bed1`, `bed1–bath`), then realise it as a floor plan by
+  **squarified treemap** layout (each room gets an area proportional to its weight,
+  laid out to keep aspect ratios near 1) and fix up adjacencies by swapping siblings.
+  This is what gets you *houses* rather than *cell blocks*.
+
+**Furnishing rules.** Furniture placement is a constraint problem with three rule types:
+*against-wall* (sofas, beds, wardrobes — snap the object's back to a wall segment of
+sufficient length), *free-standing with clearance* (tables — need `clearance` studs of
+free floor on all sides), and *paired/relational* (a chair faces a desk within 1.5
+studs; a rug is centred under a table). Implement it as: mark wall segments and floor
+cells, place large against-wall items first by descending size with rejection, then
+free-standing, then relational children of already-placed anchors, then clutter on
+horizontal surfaces. Always leave a navigable path — run a flood fill from the door
+after furnishing and reject the layout if any door or required cell is unreachable.
+
+---
+
+## 8. Vegetation and organics
+
+### 8.1 L-systems
+
+An L-system is `G = (V, ω, P)`: an alphabet `V`, an axiom `ω`, and production rules
+`P` applied to **every symbol simultaneously** each generation. That parallel rewriting
+is what distinguishes it from a Chomsky grammar and what makes it model growth.
+
+Standard turtle alphabet: `F` draw forward, `f` move without drawing, `+` yaw left,
+`-` yaw right, `&` pitch down, `^` pitch up, `\` roll left, `/` roll right, `|` turn
+180°, `[` push state, `]` pop state.
+
+**Real production rules.** These are the classic bracketed 2-D plants from
+Prusinkiewicz & Lindenmayer, *The Algorithmic Beauty of Plants*, figure 1.24
+(**[unverified]** — the exact figure numbering and angle values are quoted from
+secondary teaching sources, as algorithmicbotany.org was unreachable from this
+session; the rules themselves are reproduced identically across many sources):
+
+```
+(a)  ω: F      δ=25.7°   p: F -> F[+F]F[-F]F
+(b)  ω: F      δ=20°     p: F -> F[+F]F[-F][F]
+(c)  ω: F      δ=22.5°   p: F -> FF-[-F+F+F]+[+F-F-F]
+(d)  ω: X      δ=20°     p: X -> F[+X]F[-X]+X        F -> FF
+(e)  ω: X      δ=25.7°   p: X -> F[+X][-X]FX         F -> FF
+(f)  ω: X      δ=22.5°   p: X -> F-[[X]+X]+F[+FX]-X  F -> FF
+```
+
+(d), (e), (f) use a non-drawing symbol `X` as a growth point, which is the pattern you
+want — it lets the *structure* of branching evolve separately from the *segments*.
+4–6 generations is the usable range; each generation multiplies the string length by
+roughly the rule's expansion factor (3–5), so generation 8 of rule (a) is ~6 500
+symbols and generation 10 is ~60 000.
+
+**Stochastic L-systems** attach probabilities to alternative productions for the same
+symbol. This is mandatory for a forest — without it every tree is identical:
+
+```lua
+local rules = {
+    F = {
+        { p = 0.33, to = "F[+F]F[-F]F" },
+        { p = 0.33, to = "F[+F]F" },
+        { p = 0.34, to = "F[-F]F" },
+    },
+}
+
+local function expand(axiom: string, rules, generations: number, rng): string
+    local s = axiom
+    for _ = 1, generations do
+        local out = {}
+        for i = 1, #s do
+            local c = s:sub(i, i)
+            local alts = rules[c]
+            if alts then
+                local r, acc = rng:NextNumber(), 0
+                for _, alt in alts do
+                    acc += alt.p
+                    if r <= acc then table.insert(out, alt.to); break end
+                end
+            else
+                table.insert(out, c)
+            end
+        end
+        s = table.concat(out)
+    end
+    return s
+end
+```
+
+**Parametric L-systems** carry values on symbols — `F(length, width)` — and rules do
+arithmetic: `F(l, w) -> F(l*0.7, w*0.65) [ +(30) F(l*0.6, w*0.5) ] ...`. This is how
+you get tapering trunks and correct branch thickness. Represent the string as an array
+of `{sym, params}` records rather than as text.
+
+**3-D turtle in Luau**, using `CFrame` (which is exactly the right datatype — it *is* a
+turtle state):
+
+```lua
+local function interpret(s: string, cfg, rng)
+    local stack = {}
+    local cf = CFrame.new(cfg.origin)
+    local len, width = cfg.length, cfg.width
+    local segments = {}
+    for i = 1, #s do
+        local c = s:sub(i, i)
+        if c == "F" then
+            local nextCf = cf * CFrame.new(0, len, 0)
+            table.insert(segments, { a = cf.Position, b = nextCf.Position, w = width })
+            cf = nextCf
+        elseif c == "+" then cf = cf * CFrame.Angles(0, 0,  math.rad(cfg.angle))
+        elseif c == "-" then cf = cf * CFrame.Angles(0, 0, -math.rad(cfg.angle))
+        elseif c == "&" then cf = cf * CFrame.Angles( math.rad(cfg.angle), 0, 0)
+        elseif c == "^" then cf = cf * CFrame.Angles(-math.rad(cfg.angle), 0, 0)
+        elseif c == "/" then cf = cf * CFrame.Angles(0,  math.rad(cfg.angle), 0)
+        elseif c == "\\" then cf = cf * CFrame.Angles(0, -math.rad(cfg.angle), 0)
+        elseif c == "[" then
+            table.insert(stack, { cf = cf, len = len, width = width })
+            len *= cfg.lengthDecay        -- 0.75-0.85
+            width *= cfg.widthDecay       -- 0.6-0.7
+        elseif c == "]" then
+            local st = table.remove(stack)
+            cf, len, width = st.cf, st.len, st.width
+        end
+    end
+    return segments
+end
+```
+
+Add a small random perturbation to every angle (`cfg.angle + rng:NextRange(-5, 5)`) and
+the tree stops looking like a fractal and starts looking like a plant. That one line is
+worth more than three extra generations.
+
+Feed `segments` into tapered cylinders (`EditableMesh`, ch. 21) or, for distant trees,
+into a billboard. Leaves go at every `]` whose branch width is below a threshold.
+
+### 8.2 Space colonization
+
+Runions et al., "Modeling Trees with a Space Colonization Algorithm"
+(Eurographics NPH 2007). Where L-systems grow a tree from rules, space colonization
+grows it toward *available space* — so the tree's silhouette is something you author
+directly (a point cloud) and the branching emerges.
+
+```
+Given: attractors A (points filling the desired crown volume),
+       nodes N (starts as a single root, or a short trunk),
+       influenceRadius di, killDistance dk, segmentLength D
+       (typical: di = 8..20 * D, dk = 1..2 * D)
+
+repeat until no attractor influences any node, or node budget reached:
+  1. for each attractor a in A:
+         n = nearest node to a
+         if dist(a, n) < di: associate a with n
+  2. for each node n with >= 1 associated attractor:
+         v = normalize( Σ normalize(a.pos − n.pos) )       -- average pull
+         v = normalize(v + jitter)                          -- prevents symmetric deadlock
+         newNode = n.pos + v * D, parent = n
+         add newNode to N
+  3. for each attractor a:
+         if dist(a, nearest node) < dk: remove a
+```
+
+**Parameters and what they do.** `D` (segment length) is your geometric resolution.
+`di` (influence radius) controls how far a branch "reaches": large `di` gives long
+sparse branches that sweep across the crown; small `di` gives dense local growth.
+`dk` (kill distance) controls density: small `dk` means attractors survive longer and
+branches keep subdividing, giving a dense twiggy crown; large `dk` prunes fast and
+gives an open structure. The ratio `di/dk` is the real knob — 8–20 is the useful band.
+
+Afterwards, compute branch radii bottom-up with **da Vinci's rule**:
+`r_parent^n = Σ r_child^n` with `n ≈ 2.0`–2.5. This single step is what makes the
+result look like a tree rather than a wire diagram.
+
+**Failure mode:** the classic one is a node with a perfectly symmetric attractor set,
+whose average pull vector is zero — hence the jitter in step 2. Also, without a node
+budget the algorithm can run away on a dense attractor cloud; cap it.
+
+**Where space colonization beats L-systems:** when the silhouette matters (a tree
+shaped to fit a space, a vine growing along a wall, roots spreading around a rock,
+lightning, river deltas, blood vessels, coral). **Where L-systems win:** when you want
+many cheap variations of a known species, and when you need the structure to be
+described compactly (an L-system is 3 lines; an attractor cloud is 2 000 points).
+
+### 8.3 Flowers, coral, crystals
+
+- **Flowers/phyllotaxis.** Place `n` elements at `angle = n * 137.508°` (the golden
+  angle) and `radius = c * sqrt(n)`. That is the entire algorithm for sunflower heads,
+  pinecones, succulents and aloes. Vary `c` for tightness; tilt each element by a
+  function of `radius` for a dome.
+- **Coral.** Space colonization with a *surface* attractor distribution (points on a
+  hemisphere shell rather than filling a volume) and a large `dk`, plus diffusion-limited
+  aggregation for encrusting forms.
+- **Crystals.** Take a convex seed polyhedron and repeatedly clip it with random
+  half-spaces drawn from a small set of plane normals (the crystal's symmetry group);
+  then extrude prisms along the dominant axis. Worley cellId (§2.5) gives you free
+  facet clustering for a druse. Non-uniform scaling along one axis after generation
+  gives the acicular/prismatic habits.
+

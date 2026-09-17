@@ -782,3 +782,156 @@ Patterns that recur regardless of genre. If your game lacks these, you are not c
 
 15. **Cross-platform input parity from day one.** Roblox's audience is majority mobile; a control scheme retrofitted to touch is a control scheme that loses the majority of the funnel.
 
+---
+
+# Cross-cutting: where the genuine white space is
+
+Rules for reading this section: I am only listing gaps where I can point to evidence of (a) demand, and (b) supply scarcity with an identifiable *cause*. "Nobody has made X" is not white space if nobody has made X because nobody wants X.
+
+## 1. Procedural cosmetic economies (highest confidence)
+
+**Evidence of demand:** RIVALS topped Roblox's revenue charts in January 2026 monetizing almost entirely through weapon skins and battle passes, in a genre previously ranked ~#14 by playtime. Cosmetic-led monetization now beats gacha-power monetization at the top of the platform.
+
+**Evidence of scarcity:** every Roblox cosmetic today is a pre-uploaded asset. Finite catalogue, trivially copied, no rarity depth beyond what an artist hand-made.
+
+**Why the gap exists:** generating cosmetics at runtime requires `EditableImage`, which requires a 13+ ID-verified account plus a Creator Dashboard opt-in plus real graphics engineering. That triple gate is why supply is near zero.
+
+**What to build:** a seed-based skin generator (pattern family × palette × wear × rarity tier), producing genuinely unique items with CS:GO-style float/pattern-index semantics. Combine with a trading or marketplace layer for a self-sustaining economy. This is the single most directly monetizable editable-asset application on the platform.
+
+**The risk to state honestly:** the one-EditableImage-update-per-frame display constraint means you must generate to an offscreen image and cache; you cannot render 40 unique skins in an inventory grid in one frame. Design around an atlas + cache, and pre-generate on join.
+
+## 2. Livery / kit / wrap editors in vehicle and sports games
+
+**Demand:** Driving Empire's 300+ licensed vehicles and Volleyball Legends' sports leadership both show collection-and-identity is the monetizable axis. Forza's livery editor and its community economy are the external proof.
+
+**Scarcity:** no Roblox racing or sports game ships a real texture editor. Zero.
+
+**Cause:** same API gate, plus a genuine moderation problem that most teams won't solve.
+
+**What to build:** a constrained livery editor (layers, stamps from a curated library, filtered text, shape primitives) writing to an `EditableImage` on a `SurfaceAppearance`, with sharing, featured liveries, and paid slots/packs. Moderation by construction: the stamp library is your filter.
+
+## 3. Destructible and deformable environments
+
+**Demand:** it is the most consistently requested missing feature in Roblox shooters, anime fighters and survival games, and it is table stakes in equivalent games off-platform.
+
+**Scarcity:** one DevForum resource explicitly documents doing MeshPart destruction *without* EditableMesh, which tells you how new and unexploited the EditableMesh route is.
+
+**Cause:** the 20,000-triangle-per-mesh cap forces chunking; client memory budgets force aggressive release; and doing it server-authoritatively is hard.
+
+**What to build:** chunked, client-side-visual destruction with server-authoritative *gameplay* consequences (a wall is "destroyed" as a boolean the server owns; the geometry is cosmetic). This is the pattern that makes destruction affordable.
+
+## 4. In-experience creation sandboxes
+
+**Demand:** Build a Boat for Treasure and the block-builder cohort prove the appetite; Roblox's own platform thesis is UGC.
+
+**Scarcity:** every existing sandbox builds from a fixed part palette. None let players author geometry or textures.
+
+**Cause:** `EditableMesh` shipped to production recently; shared-asset permissions only in April 2026; and the moderation problem is real.
+
+**Accelerant:** Roblox's in-experience Cube 3D / 4D-functional-object generation API means a player can *describe* an object and get functional geometry inside your game. A sandbox that combines generation + editing + placement + sharing is technically possible for the first time and has no incumbent.
+
+## 5. Sports (the least saturated large-appeal genre)
+
+**Demand:** Volleyball Legends leads its chart category; official league experiences (NFL, NHL, Super League) indicate platform investment.
+
+**Scarcity:** very few high-quality sports games exist relative to audience size.
+
+**Cause:** ball physics under Roblox's network-ownership model is genuinely hard, and sports needs strong animation. Both are engineering problems, not market problems — which is exactly the profile of real white space.
+
+## 6. The 18+ high-fidelity lane
+
+**Demand and incentive are platform-supplied:** Roblox raised the qualifying DevEx rate **42%** for high-fidelity 18+ experiences in April 2026, and age bands now make the 18+ cohort addressable (~26% of daily users by one estimate **[UNVERIFIED]**).
+
+**Scarcity:** the platform's content is overwhelmingly built for under-13s.
+
+**Cause:** the audience wasn't addressable until age verification existed, and the tooling for high-fidelity content (Future lighting, PBR, EditableMesh, the new Audio API) only recently matured.
+
+**Caution:** this is the highest-variance item on the list. The 18+ audience is smaller, has alternatives (Steam), and the DevEx premium is a policy that can change. Treat it as a bet, not a certainty.
+
+## 7. Generative puzzle / mystery content
+
+**Demand:** narrative games retain well but die on content consumption; the 28-day retention algorithm punishes finite content.
+
+**Scarcity:** no Roblox game generates its puzzle artifacts.
+
+**What to build:** a detective/mystery game where the case (suspects, timeline, evidence) is generated per-server and the *documents* — case files, photographs, ledgers, ciphers — are rendered as `EditableImage` composites. This simultaneously fixes "solutions spread instantly" and "content is consumed once," which is a rare two-for-one.
+
+## Where there is *not* white space (be honest)
+
+- **Generic pet-hatching simulators.** Saturated, declining, and the winners have moved to adversarial/social loops.
+- **Plain difficulty-chart obbies.** Growing in engagement, but with essentially no monetization surface.
+- **Single-player story games.** Structurally misaligned with the current discovery algorithm.
+- **Classic dropper tycoons.** A learning project, not a business.
+- **"Anime fighting game with M1 and four abilities."** Hundreds exist. The white space is *quality of netcode*, not the concept.
+- **Anything whose loop depends on unrestricted cross-age chat.** The platform changed underneath that design in January 2026.
+
+## A caution about editable assets generally
+
+Editables are a moat *because* they are gated — 13+, ID-verified, dashboard opt-in, tight client memory budgets, 1024×1024 image cap, one displayed image update per frame, 60k verts / 20k tris per mesh, and an asset-permission model that until April 2026 blocked most third-party content. Developers have publicly argued these restrictions block valid use cases. Two consequences follow: (1) build editables into *differentiating* systems, not core loops that must work for every player on every device; (2) always have a static-asset fallback path, because `CreateEditableMesh` returns `nil` when the budget is exhausted and your game must not break when it does.
+
+---
+
+# Cross-cutting: the universal systems every game needs
+
+One recommendation each, with the reason. Other chapters go deep; this is the shortlist of right answers.
+
+### Save / load
+**Use `ProfileStore`** (MadStudioRoblox), the successor to ProfileService. Reasons: session locking (the only real defence against multi-server duplication exploits), `Reconcile()` for schema evolution, a 300-second autosave with `MessagingService`-assisted lock handoff that cuts DataStore call volume ~10× versus the old 30-second default, and `:BindToClose` handling for free. Non-negotiable rules: always `pcall` and kick gracefully if the profile is `nil` (DataStore outages happen); always `Reconcile()` after load; version your store name (`PlayerData_v2`) rather than deleting old data; and never persist objects with metatables. ([ProfileStore](https://github.com/MadStudioRoblox/ProfileStore), [DevForum thread](https://devforum.roblox.com/t/profilestore-save-your-player-data-easy-datastore-module/3190543))
+
+### Settings
+**A typed section of the player profile, plus a client-side cache, plus a change signal.** Do not build a separate settings service with its own store — it doubles your DataStore traffic for no benefit. Required settings on Roblox specifically: graphics quality tier (your own, not Roblox's), a music/SFX/voice volume triplet, sensitivity, a reduced-motion/flash toggle (accessibility, and it matters for horror), number-format preference (for incremental games), and control layout. Apply on `CharacterAdded` *and* on the change signal, never only at join.
+
+### Audio management
+**Use the new Audio API** (`AudioPlayer` → `Wire` → `AudioEmitter`/`AudioDeviceOutput`, with `AudioFader`, `AudioEqualizer`, `AudioCompressor`, `AudioLimiter`, `AudioEcho`, `AudioAnalyzer`, and `AngleAttenuation` for directional sources) rather than ad-hoc `Sound` instances. It gives you a real mixer graph: buses for music/SFX/UI/voice, per-bus faders wired to the settings, ducking via a compressor sidechain, and a limiter on the master to stop clipping. This is the largest single upgrade to production quality available on Roblox right now, and almost nobody uses it. Use the `Audiophile` plugin for live mixing during development. ([New Audio API](https://devforum.roblox.com/t/new-audio-api-beta-elevate-sound-and-voice-in-your-experiences/2848873), [directional audio & AudioLimiter](https://devforum.roblox.com/t/new-audio-api-features-directional-audio-audiolimiter-and-more/3282100), [Audiophile plugin](https://devforum.roblox.com/t/plugin-audiophile-a-real-time-mixing-console-for-the-new-audio-api/4719764))
+
+### Input abstraction
+**A thin action layer over `ContextActionService` + `UserInputService`.** Gameplay code binds to semantic actions (`"Fire"`, `"Interact"`, `"Sprint"`), never to `Enum.KeyCode.E`. The layer resolves each action to keyboard/gamepad/touch bindings, owns the mobile button layout, and exposes a rebinding table stored in settings. Rationale: Roblox's audience is majority mobile and meaningfully gamepad; retrofitting touch controls onto keyboard-shaped code is a rewrite. `ContextActionService` specifically because it gives you the action stack (so a menu can temporarily capture `"Interact"`) and auto-generated touch buttons for free.
+
+### UI framework
+**`react-lua`** for anything with more than a few screens. It is maintained by Roblox, matches mainline React (function components + hooks), has the largest hiring pool, and its reconciler handles the diff-based updates that keep inventory-heavy games alive. `Roact` is superseded and should not start new work. **`Fusion`** is a legitimate choice for smaller UIs or teams that prefer its simpler reactive-state model — it produces less code for simple screens. Whichever you pick: virtualize long lists, pool frames, and throttle high-frequency label updates to ~10Hz. ([react-lua context](https://devforum.roblox.com/t/how-to-react-roblox/2964543), [Fusion vs react-lua](https://devforum.roblox.com/t/fusion-vs-react-lua-which-one-to-use-for-long-term-development/2781328))
+
+### Analytics
+**Roblox's built-in `AnalyticsService` plus the Creator Dashboard, with funnels defined from day one.** You get D1/D7/D30 retention, session time, payer conversion and ARPPU without writing anything, benchmarked against comparable experiences. Add: onboarding funnels (join → tutorial complete → first reward → first session end), a purchase funnel, and **an economy ledger** (every currency source and sink as an event) because economy diagnosis is impossible retroactively. Use `AnalyticsService:GetPlayerSegmentsAsync()` for in-experience personalization. Only add an external pipeline (Open Cloud → your own warehouse) once you need joins the dashboard can't express. Note that the platform's own discovery signals — Day 1 / Day 2–7 / Day 8–28 retention buckets — are exactly what you should be instrumenting against.
+
+### Anti-exploit
+**A single remote-middleware module, applied to every `RemoteEvent`/`RemoteFunction`, in the order: type check → rate limit → sanity check → act.** Specifics that matter:
+- **Type checking** every argument (a typed schema per remote; reject on mismatch). This alone stops most crash exploits.
+- **Token-bucket rate limiting** per player per remote — one token per call, refill at the legal use rate, reject and flag on empty.
+- **Sanity checks against the server's own world model**: does this player have the coins, is the cooldown elapsed, is the position plausible, is the claimed stage `previous + 1`.
+- **Silent rejection.** Never tell the client which check failed; that is a fingerprinting oracle.
+- **Never trust the client for:** damage numbers, currency deltas, item grants, RNG outcomes, or stage/level indices.
+- Hyperion raised the floor on desktop exploiting, but mobile and paid executors persist; middleware is still mandatory. ([Roblox anti-exploit server authority patterns](https://simplified.media/guides/roblox-anti-exploit), [best way to protect RemoteEvents](https://devforum.roblox.com/t/best-way-to-protect-remoteevents-against-exploiters/1314739))
+
+### Codebase structure
+**Rojo + git + strict Luau + a service/controller split, with an ECS only where entity counts justify it.**
+- **Rojo** so the source of truth is the filesystem and you get git, code review, CI and real editors. Adopt Me built a bespoke tool (Rosync) for exactly this before Rojo was ubiquitous — the need is universal.
+- **`--!strict` Luau** everywhere. Types catch the nil-indexing and wrong-shape-table bugs that dominate Roblox crash logs.
+- **Service/controller organization** (Knit-style, or hand-rolled): server "services" and client "controllers" with explicit lifecycle (`Init` then `Start`), discovered from a folder. This is the boring, correct default for 90% of games. Avoid heavy dependency-injection frameworks in plain Luau — the language doesn't support the interface-based DI that makes them worthwhile.
+- **ECS (`jecs`, or `Matter`) only when you have many similar entities**: tower defense mobs, bullets, survival-world objects, RTS units. `jecs` advertises archetype/SoA storage and iteration of ~800,000 entities at 60fps **[UNVERIFIED — author benchmark]**. For a roleplay game with 30 players and some furniture, an ECS is overhead, not architecture. The honest rule: adopt ECS when your entity update loop is a measured bottleneck, not before.
+- **Parallel Luau (`Actor`s)** for raycast-heavy validation, procedural generation, minimap rasterization and pathfinding batches. Remember the constraints: no `require()` in a desynchronized phase, no instance *writes* in parallel, and use many actors (64+) rather than one per core.
+- **Data-driven content tables** in their own module tree, version-stamped, so live-ops doesn't require code changes.
+
+([Rojo/awesome-roblox ecosystem](https://github.com/awesome-roblox/awesome-roblox), [jecs](https://devforum.roblox.com/t/jecs-optimizing-declarative-scene-graphs-with-ecs/3263203), [Matter](https://github.com/matter-ecs/matter), [Knit history and critique](https://medium.com/@sleitnick/knit-its-history-and-how-to-build-it-better-3100da97b36), [Parallel Luau](https://github.com/Roblox/creator-docs/blob/main/content/en-us/scripting/multithreading.md))
+
+---
+
+## Appendix: quick genre-selection matrix
+
+| Genre | Audience size | Monetization | Technical difficulty | Saturation | Editable-asset leverage | Verdict 2026 |
+| --- | --- | --- | --- | --- | --- | --- |
+| Obby / parkour | Very large | Poor | Low | Extreme | Medium | Enter only as a hybrid |
+| Simulator / incremental | Very large | Good (declining) | Medium | Extreme | **High** | Only with a social/adversarial axis |
+| Tycoon (modern) | Very large | Good | Low–Medium | Extreme | Low | Skeleton is worth reusing; genre is not |
+| FPS / TPS | Large & growing | **Excellent** | **Very high** | Low–Medium | **Very high** | Best risk-adjusted bet if you can build netcode |
+| Survival / crafting | Large & growing | Good | High | Low | **High** | Strong entry |
+| Horror / atmospheric | Medium–Large | Medium | Medium | Medium | **High** | Strong if co-op/asymmetric |
+| RPG / open world | Very large (anime) | Excellent | Very high | High | **High** | Highest content cost on the platform |
+| Roleplay / social | **Largest** | Good | Medium | Extreme | **Very high** | Hours yes, revenue harder post-age-checks |
+| Tower defense | Medium | **Excellent** | Medium | High | Medium–High | Reliable; differentiate mechanically |
+| Racing / vehicles | Medium | Good | High | Low–Medium | **Very high** | Under-served; livery editor is the wedge |
+| Fighting / combat | Very large | **Excellent** | High | Extreme (low end) | **High** | Crowded at the bottom, open at the top |
+| Sports / physics | Medium, growing | Good | High | **Very low** | **High** | Least saturated large-appeal genre |
+| Sandbox / UGC | Medium | Weak today | Very high | Low | **Transformative** | Highest strategic upside, hardest build |
+| Puzzle / story | Small | Poor | Low–Medium | Medium | **High (generative)** | Only as generative or episodic |
+| Party / lobby+round | Large | Good | Medium | High | Medium–High | Most discovery-aligned structure |
+

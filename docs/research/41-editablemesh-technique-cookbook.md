@@ -247,84 +247,57 @@ That harness runs a **33×33 grid (1,089 vertices, 2,048 triangles)** and publis
 `updateMs` per frame as a `Workspace` attribute — copy this methodology; it is the right
 way to get a number for *your* device mix rather than trusting mine.
 
-### 1.2 Bend
+### 1.2 The primitive deformers
 
-Bend maps a straight axis onto a circular arc. For bending around +Y with the bend axis
-along Z, radius `R`, over the object's local X extent:
+All five are pure `f(restPos) -> Vector3` plugged into `Deform.apply`.
 
 ```lua
+-- BEND: map a straight axis onto a circular arc. k = curvature (1/radius);
+-- k -> 0 must degrade to identity or you get a divide-by-zero explosion.
 local function bend(p: Vector3, k: number): Vector3
-    -- k = curvature (1/radius). k -> 0 must degrade to identity.
     if math.abs(k) < 1e-6 then return p end
-    local R = 1 / k
-    local theta = p.X * k              -- arc length -> angle
+    local R, theta = 1 / k, p.X * k
     local r = R - p.Y
     return Vector3.new(r * math.sin(theta), R - r * math.cos(theta), p.Z)
 end
-```
 
-Genres: weapon flex on impact, bending bars in a prison-break game, a deforming bow,
-cartoon anticipation on a melee swing.
-
-### 1.3 Twist
-
-```lua
+-- TWIST: rotate about +Y by an angle proportional to height.
 local function twist(p: Vector3, radPerStud: number): Vector3
     local a = p.Y * radPerStud
     local c, s = math.cos(a), math.sin(a)
     return Vector3.new(p.X * c - p.Z * s, p.Y, p.X * s + p.Z * c)
 end
-```
 
-Genres: obby hazards, wringing-out cartoon physics, corkscrew projectiles, tornado pull.
-
-### 1.4 Squash and stretch
-
-Volume-preserving squash is the single highest-value-per-line game-feel deformation.
-Scale one axis by `s`, the other two by `1/sqrt(s)`:
-
-```lua
+-- SQUASH/STRETCH, volume-preserving: one axis by s, the others by 1/sqrt(s).
 local function squash(p: Vector3, s: number): Vector3
     local inv = 1 / math.sqrt(s)
     return Vector3.new(p.X * inv, p.Y * s, p.Z * inv)
 end
-```
 
-Drive `s` from a spring so a landing impact gives `s = 0.6` then oscillates back to 1.
-Genres: *everything* — platformers, pets, fruit-collection games, tycoon mascots.
-
-### 1.5 Melt
-
-Melting is a height-dependent radial spread plus a downward collapse, gated by a "melt
-front" that rises over time:
-
-```lua
+-- MELT: radial spread + downward collapse below a rising "melt front".
 local function melt(p: Vector3, front: number, spread: number, minY: number): Vector3
     if p.Y >= front then return p end
     local t = math.clamp((front - p.Y) / math.max(front - minY, 1e-3), 0, 1)
     local flat = t * t                          -- ease-in: puddle forms late, fast
-    local radial = Vector3.new(p.X, 0, p.Z) * (1 + spread * flat)
-    local y = p.Y + (minY - p.Y) * flat
-    return Vector3.new(radial.X, y, radial.Z)
+    return Vector3.new(p.X * (1 + spread * flat),
+                       p.Y + (minY - p.Y) * flat,
+                       p.Z * (1 + spread * flat))
 end
-```
 
-Genres: horror (dissolving enemies), survival (ice melting), candy/simulator games.
-
-### 1.6 Inflate (and its correct form)
-
-The naive inflate — `p + p.Unit * k` — inflates about the origin and is wrong for anything
-non-convex. The correct inflate pushes along the **vertex normal**. `EditableMesh` stores
-normals per face-corner, so build a smooth per-vertex normal first (see §10.4), then:
-
-```lua
+-- INFLATE along the VERTEX NORMAL. `p + p.Unit * k` inflates about the origin
+-- and is wrong for anything non-convex. Build smooth normals first (see 10.4).
 local function inflate(p: Vector3, n: Vector3, k: number): Vector3
     return p + n * k
 end
 ```
 
-Genres: balloon/bubble mechanics, "grow" simulators, pufferfish enemies, bloat status
-effects.
+Drive `squash`'s `s` from a spring (landing impact snaps to `s = 0.6`, oscillates back to
+1) — it is the single highest-value-per-line game-feel deformation there is.
+
+Genres: **bend** — weapon flex, bending prison bars, a drawn bow, melee anticipation.
+**twist** — obby hazards, corkscrew projectiles, tornado pull. **squash** — *everything*:
+platformers, pets, tycoon mascots. **melt** — horror dissolves, ice, candy sims.
+**inflate** — balloons, "grow" simulators, pufferfish, bloat status effects.
 
 ### 1.7 Wind sway on foliage
 
@@ -2270,3 +2243,472 @@ you cannot pre-author them. **When it isn't:** almost always. QEM in Luau on a 2
 mesh is hundreds of milliseconds. Generate at the right density instead (adaptive octree
 DC, coarser marching-cubes grid, fewer icosphere subdivisions) — that is strictly cheaper
 than generating fine and decimating.
+
+---
+
+## The rebuild cost model
+
+This is the single most important engineering section in the chapter. Everything above is
+an application of it.
+
+### C1. The four costs
+
+Every runtime-geometry operation is some mix of exactly four costs:
+
+| # | Cost | Scales with | Paid when |
+|---|---|---|---|
+| **A** | Luau geometry generation | triangles produced | you build the arrays |
+| **B** | `EditableMesh` mutation (marshalling into the engine) | elements touched, **and** call count | `AddVertex`/`SetPosition`/`Batch*` |
+| **C** | GPU re-transcode of a dirty mesh | the mesh's **total** vertex count | any frame the mesh changed |
+| **D** | `CreateMeshPartAsync` (collision + fluid + asset build) | **fixed ≫ per-triangle** | only on rebuild |
+
+**A** is yours to optimise (`--!native`, `table.create` presizing, no closures in loops, no
+`Vector3.new` where you can reuse). **B** collapses by an order of magnitude when you move
+from per-element calls to `Batch*`. **C** is why you split deforming geometry into small
+meshes. **D** is the wall.
+
+### C2. Cost D, the wall, quantified
+
+> `CreateMeshPartAsync`, even with `CollisionFidelity.Box` and `CanCollide = false`, adds a
+> fixed **22 ms** cost plus **0.27 ms per 1k triangles**.
+> — DevForum feature request *"Allow applying baked mesh Content to a MeshPart without a lag
+> spike"* (thread 4752538) [secondary]
+
+Read what that implies:
+
+| Triangles | Predicted `CreateMeshPartAsync` cost | Frames dropped at 60 Hz |
+|---|---|---|
+| 500 | 22.1 ms | 2 |
+| 2,000 | 22.5 ms | 2 |
+| 8,000 | 24.2 ms | 2 |
+| 20,000 (cap) | 27.4 ms | 2 |
+
+**The per-triangle term is noise. The fixed term is everything.** Two consequences that
+invert most people's intuition:
+
+1. **Bigger meshes are cheaper per triangle.** Rebuilding one 16,000-triangle chunk costs
+   ~26 ms; rebuilding eight 2,000-triangle chunks costs ~180 ms. Batch your geometry into
+   as few meshes as the caps and the dirty-set allow.
+2. **Collision fidelity is a second-order lever, not a first-order one.** The fixed cost is
+   there even at `Box`. Choosing `Box` over `PreciseConvexDecomposition` still matters a
+   lot for *memory* and for *physics step time* (Roblox's own optimisation guide is explicit
+   that `Box` has the lowest memory overhead and Precise is "the most expensive performance
+   cost"), and presumably for the build too — but it does not rescue you from the 22 ms.
+
+*Caveat: I could not re-measure this. The figure comes from one developer's report
+recovered through a search summary. Measure it on your target devices with
+`os.clock()` around the call before committing an architecture to it. The qualitative
+shape — large fixed cost, small marginal cost — is corroborated by every production
+codebase I read, all of which treat `CreateMeshPartAsync` as a rare, deferred operation.*
+
+### C3. Live vertex edits vs rebuild — the answer
+
+**Live vertex edits are dramatically cheaper.** A `BatchSetValues` over 1,089 vertices plus
+one re-transcode is sub-millisecond territory; a `CreateMeshPartAsync` is ~22 ms. That is
+roughly a **20–50× difference**, and it is why the deformation techniques (§1, §6, §7, §8)
+are all viable at 60 Hz and the destruction techniques (§2) are all "hide it behind a
+hitch".
+
+The per-element cost is what moves. Community reports of the pre-batching era put naive
+per-vertex updates at **">5 ms"** for setting vertex positions, and describe *"huge
+performance overhead of calling `SetPosition()` or `SetUV()` for each and every individual
+vertex/ID"* [secondary]. The batching APIs (Studio Beta announced **6 August 2026**) exist
+specifically to close that gap; the docs state batching is *"typically much more
+performant"*. **Treat per-element setters as a fallback path only.**
+
+### C4. Architecture rules
+
+1. **Never call `CreateMeshPartAsync` in a `RenderStepped`/`Heartbeat` body.** Wrap it in
+   `task.defer` or drain a queue at **one per frame**, maximum.
+2. **Separate "shape changes" from "collision changes" in your data model.** Every system
+   should have an explicit `visualDirty` and `collisionDirty` flag, and they should be
+   serviced by different code paths at different rates.
+3. **Chunk**, for four independent reasons: the 20k-triangle cap, the re-transcode cost
+   (C), culling, and rebuild granularity. 64×64 heightfield cells or 32³ voxels are good
+   defaults.
+4. **Pool `MeshPart`s and `EditableMesh`es.** `CreateEditableMesh()` returns **`nil`** on
+   budget exhaustion; a pool never fails. Pool debris, projectile trails, chunk parts.
+5. **Double-buffer chunk rebuilds.** Build the new mesh fully, *then* `ApplyMesh` — the old
+   geometry stays on screen until the instant of the swap, so there's no one-frame hole.
+6. **Time-slice with a wall-clock budget, not a count:**
+   ```lua
+   local t0 = os.clock()
+   while #queue > 0 and os.clock() - t0 < 0.004 do   -- 4 ms of a 16.6 ms frame
+       step(table.remove(queue))
+   end
+   ```
+7. **Do the maths off the render path.** Every read/query method is `thread_safety: Safe`
+   (parallel queries shipped in the same August 2026 beta as batching), so density
+   sampling, noise, QEF solves, raycasts and nearest-point queries all belong in
+   `Actor`s running `task.desynchronize()`. Only the `Batch*` **writes** must be serial.
+8. **Bake and release.** When geometry stops changing, `CreateDataModelContentAsync` it and
+   `Destroy()` the `EditableMesh`. You keep the visual, you keep collision, you pay zero
+   editable budget, and identical baked `Content` even instances into one draw call.
+9. **Explicitly `Destroy()`. Do not wait for GC.** Production code documents that
+   *"waiting for GC starves the next map's build"*, and that **budget refunds after a
+   teardown take ~15–25 s under sustained allocation pressure**, with *"no API [that]
+   forces or measures reclamation"* [code, `turtlesoupy/robloquake`].
+10. **Restore the CFrame after `CreateMeshPartAsync`** — it re-centres the geometry on the
+    part. Keep your own bounding-box centre and write it back
+    (`part.CFrame = CFrame.new(center)`).
+
+### C5. The retention rule
+
+A `MeshPart` renders **from** the `EditableMesh` object it was created with. If the last
+strong Luau reference to that mesh goes away, your geometry can disappear. Every production
+codebase I read keeps an explicit keep-alive table:
+
+```lua
+local liveMeshes: { [Instance]: { EditableMesh } } = {}
+local function retainMesh(container: Instance, em: EditableMesh)
+    local list = liveMeshes[container]
+    if not list then
+        list = {}; liveMeshes[container] = list
+        container.Destroying:Connect(function()
+            local held = liveMeshes[container]; liveMeshes[container] = nil
+            if held then for _, m in held do m:Destroy() end end
+        end)
+    end
+    table.insert(list, em)
+end
+```
+
+…with the caveat, documented in that same file, that `Destroying` is a **backstop only**:
+Studio defers the signal, so a teardown that relies on it still holds the budget while the
+next build runs. Release explicitly at the teardown site.
+
+**The one exception:** if you baked with `CreateDataModelContentAsync`, the `MeshPart`
+holds opaque `Content`, not an `Object` reference — the `EditableMesh` can be destroyed
+immediately and nothing needs retaining.
+
+---
+
+## Triangle budgets, mesh counts and the limits wall
+
+### L1. Hard engine limits (verified)
+
+| Limit | Value | Source |
+|---|---|---|
+| Vertices per `EditableMesh` | **60,000** | `EditableMesh.yaml` §Limitations |
+| Triangles per `EditableMesh` | **20,000** | `EditableMesh.yaml` §Limitations |
+| Triangles per uploaded mesh asset | **20,000** | `art/modeling/specifications.md` |
+| Bone influences per vertex | **4** | `art/modeling/specifications.md` |
+| Bones per `EditableMesh` | engine-enforced max (unspecified) | `AddBone` description |
+| Bone name length | **100 characters**, unique | `AddBone` description |
+
+`AddTriangle` throws *"Triangle count above limit"* on overflow — it does not silently drop
+[code]. Production code therefore self-caps **below** the engine limit, at **50,000
+vertices / 17,000 triangles per batch**, with this reasoning worth quoting in full [code,
+`turtlesoupy/robloquake`]:
+
+```lua
+local MAX_BATCH_VERTS = 50000 -- stay under the 60k EditableMesh vertex cap
+-- triangles have their OWN, lower cap (~20k: AddTriangle throws
+-- "Triangle count above limit"); fan triangulation of quad-heavy
+-- geometry yields ~1 tri per 2 unshared verts, so the vertex bound
+-- alone can admit ~25k tris (lqdm6 hit this)
+local MAX_BATCH_TRIS = 17000
+```
+
+### L2. How many `EditableMesh`es can you hold?
+
+This is the limit that surprises people, and it has **two different answers**.
+
+- A **non-`FixedSize`** mesh reserves the **60,000-vertex worst case** against the client
+  budget, because it *could* grow to that. Production code states it plainly: *"A dynamic
+  `EditableMesh` reserves the 60k-vertex maximum against the memory budget; a `FixedSize`
+  copy only reserves its actual size"* [code]. A max-complexity mesh is reported at
+  **≈2.8 MB** [secondary], and developers consistently hit a wall at **≈8 dynamic meshes on
+  the client** [secondary] — which implies a client budget somewhere around **20–25 MB**.
+  *(That division is my inference from two secondary numbers, not a documented figure.)*
+- A **`FixedSize`** mesh charges its real size. The same production client holds
+  **81 live `EditableMesh`es totalling 47,000 vertices, alongside 87 `EditableImage`s
+  (6.4 MB)** [code] — an order of magnitude more than the dynamic limit.
+
+**Server, Studio and plugins have unlimited memory**; the budget is client-only. That is
+documented.
+
+### L3. The universal idiom for staying under it
+
+```lua
+-- 1. build dynamically (reserves the 60k worst case, briefly)
+local em = AssetService:CreateEditableMesh()
+if not em then return nil end          -- budget exhausted: back off and retry
+buildGeometry(em)
+em:RemoveUnused()
+if #em:GetFaces() == 0 then em:Destroy(); return nil end   -- CreateMeshPartAsync rejects faceless meshes
+
+-- 2a. keep it editable but shrink the reservation
+local fixed = AssetService:CreateEditableMeshAsync(Content.fromObject(em), { FixedSize = true })
+em:Destroy()
+if #fixed:GetFaces() == 0 then fixed:Destroy(); return nil end  -- the copy CULLS degenerates
+local part = AssetService:CreateMeshPartAsync(Content.fromObject(fixed))
+retainMesh(container, fixed)           -- MUST stay referenced
+
+-- 2b. OR, if it will never be edited again: release the budget entirely
+local res, content = AssetService:CreateDataModelContentAsync(Content.fromObject(em))
+em:Destroy()
+if res ~= Enum.CreateContentResult.Success then return nil end
+local part2 = AssetService:CreateMeshPartAsync(content, { CollisionFidelity = Enum.CollisionFidelity.Box })
+-- nothing to retain; `content` is opaque and replicable
+```
+
+Path **2b** is strictly better whenever the geometry is final. Path **2a** is for geometry
+you will keep deforming.
+
+Add a **retry-with-backoff** around creation, because budget pressure is transient:
+
+```lua
+local em = AssetService:CreateEditableMesh()
+local backoff, deadline = 0.25, os.clock() + 5
+while not em and os.clock() < deadline do
+    task.wait(backoff)
+    backoff = math.min(backoff * 2, 2)
+    em = AssetService:CreateEditableMesh()
+end
+```
+
+### L4. Triangle budgets by device tier
+
+There is no official per-device triangle budget from Roblox; what exists is
+`RenderFidelity` LOD distance guidance (Highest < 250 studs, Medium 250–500, Lowest 500+)
+and a repeated instruction to minimise draw calls. The numbers below are **community
+guidance** [secondary] plus the arithmetic from the caps, and are offered as starting
+points to profile against, not as engine limits.
+
+| Tier | Visible triangles (scene) | Generated MeshParts on screen | Per-object target |
+|---|---|---|---|
+| Low-end mobile / Quest | ~150k–300k | ~50–80 | props 500–2,000 |
+| Mid mobile / low-end PC | ~400k–700k | ~120–200 | props 2,000–5,000 |
+| Desktop | ~1.5M–3M | ~300–600 | props 3,000–10,000; hero 10,000–18,000 |
+
+Community targets cited for authored assets: **2,000–10,000 triangles per prop for
+comfortable mobile performance**, **3,000–8,000 for small props**, **10,000–18,000 for hero
+characters or large environment pieces**, and **~6,000 for hair / ~4,000 for hats** on
+cross-device avatar items [secondary].
+
+**The draw-call ceiling usually binds before the triangle ceiling for procedural
+geometry**, because generated chunks never instance. Watch **Render Stats ▸ Timing**
+(Shift+F2 in-client) and treat the generated-MeshPart count as your primary budget.
+
+### L5. Architecting around the wall
+
+| Wall | Symptom | Architecture |
+|---|---|---|
+| 20k triangles / mesh | `AddTriangle` throws | Chunk. Flush at 17k. Greedy-mesh or decimate. |
+| 60k vertices / mesh | creation refused | Weld with `MergeVertices`; share vertices across faces; flush at 50k. |
+| ~8 dynamic meshes | `CreateEditableMesh()` returns `nil` | `FixedSize` clones; bake to `Content`; pool; creation queue with backoff. |
+| Editable memory budget | creation refused, or objects render **black** | Explicit `Destroy()`; don't churn; poll with a canary allocation. |
+| `CreateMeshPartAsync` ~22 ms | frame hitches on edit | Defer, queue one/frame, double-buffer, hide behind hit-stop. |
+| Draw calls | FPS drops when looking at generated area | Merge geometry into fewer, larger meshes; bake+reuse identical `Content`. |
+| `Object` `Content` doesn't replicate | cyan/magenta checkerboard on clients | Generate client-side, or bake with `CreateDataModelContentAsync`. |
+
+On that fourth row: a production team found objects rendering **black with healthy CPU
+pixel data**, by creation order, while only 81 meshes / 87 images were live — the pool was
+objectively exhausted (a canary `CreateEditableMesh()` was refused) even though live usage
+was modest. Their hypothesis is that the editable budget **leaks or fragments across a
+session** under teardown/rebuild churn, and that late creations *"fail to BIND (render
+black) long before they fail to CREATE"* [code]. The practical defences: don't churn, hold
+map residency, and run a **canary allocation** every few seconds so you can correlate a
+visual bug report with the pool state at that instant:
+
+```lua
+local dyn = AssetService:CreateEditableMesh()   -- reserves the 60k-vert max
+workspace:SetAttribute("PoolCanary", dyn ~= nil)
+if dyn then dyn:Destroy() end
+```
+
+---
+
+## Benchmark table
+
+Everything I could find with a number attached. **[secondary]** = recovered via search
+summary of a DevForum thread I could not fetch directly — re-measure before budgeting.
+**[code]** = a value read directly from open-source code at the cited path (a shipped
+engineering decision, not necessarily a measured time). **[docs]** = Roblox creator-docs.
+**[derived]** = arithmetic from the caps.
+
+| Technique / operation | Tri / vertex count | Cost | Source |
+|---|---|---|---|
+| `CreateMeshPartAsync`, `CollisionFidelity.Box`, `CanCollide=false` | any | **22 ms fixed + 0.27 ms per 1k tris** | DevForum 4752538 [secondary] |
+| `CreateMeshPartAsync` at the triangle cap | 20,000 | ~27.4 ms (from the above model) | [derived] |
+| Per-vertex `SetPosition` loop (pre-batch era) | not stated | *">5 ms"*, *"huge overhead"* | DevForum 2786406 / 4643551 [secondary] |
+| `BatchSetValues` vs per-element setters | — | docs: *"typically much more performant"*; 9 new bulk methods | `EditableMesh.yaml`; DevForum 4779401 [docs/secondary] |
+| EditableMesh ocean, 12 Gerstner waves + custom shader | not stated | **~2 ms** | DevForum 3881535 [secondary] |
+| Ocean benchmark harness grid | 1,089 verts / 2,048 tris | publishes `updateMs`/frame as an attribute | `ng643/Mythic`, `tools/OceanCapabilityLab.client.luau` [code] |
+| Ocean near-field clipmap budget | **12,000 vertices** total | design cap | `ng643/Mythic`, `OceanRenderer.luau` [code] |
+| Ocean horizon | **64** plain Parts | design cap | same [code] |
+| `transcodeVerticesAndCalculateBounds` regression (Aug 2025) | — | **40–70 ms frame time** | DevForum 3904722 [secondary] |
+| WindShake foliage (**CFrame**, not EditableMesh) | **77,750 leaf meshes** | **220+ FPS** | DevForum 1039806 [secondary] |
+| Max-complexity `EditableMesh` memory | 60k verts / 20k tris | **≈2.8 MB** | DevForum 3313112 [secondary] |
+| Dynamic (non-`FixedSize`) meshes on client | — | wall at **≈8** | DevForum 3683517 / 4219561 [secondary] |
+| Implied client editable budget | — | **≈20–25 MB** (8 × 2.8 MB) | [derived, uncertain] |
+| Live `FixedSize` meshes held simultaneously | **81 meshes, 47,000 verts** (+87 EditableImages, 6.4 MB) | sustained on a shipping client | `turtlesoupy/robloquake` [code] |
+| Editable budget refund latency after teardown | — | **~15–25 s** under allocation pressure | `turtlesoupy/robloquake` [code] |
+| Production per-mesh batch caps | **50,000 verts / 17,000 tris** | self-imposed, below engine caps | `turtlesoupy/robloquake` [code] |
+| Voxel meshing time-slice | **500 voxels / frame** | shipped budget | `elokore/roblox-voxel-terrain` [code] |
+| Adaptive octree Dual Contouring | default `triCap = 40000` (**above the 20k engine cap**) | per-stage timings printed: octree / qef / dc / decimate / bake | `MrChickenRocket/sdf-procedural-toolkit` [code] |
+| Heightfield chunk, largest single mesh | **100×100 cells** = 10,201 verts / 20,000 tris | exactly at cap | [derived] |
+| Heightfield chunk, recommended | 64×64 = 4,225 verts / 8,192 tris | — | [derived] |
+| Icosphere subdivision levels | 0:12v/20t · 1:42/80 · 2:162/320 · 3:642/1,280 · 4:2,562/5,120 · **5:10,242/20,480 (over cap)** | — | [derived] |
+| Greedy-meshed 32³ voxel chunk (typical terrain) | ~1,500–5,000 tris | vs ~30k–90k naive | [derived / community practice] |
+| Sword-trail ribbon (§8.1) | 48 verts / 46 tris | 1 `BatchSetValues`/frame, **zero rebuilds** | this chapter |
+| Verlet flag, 16×24 | 384 verts / 690 tris / ~1,150 links | 6 constraint iterations ≈ 7k vec ops/frame | this chapter |
+| Debug-draw overlay (§9.1) | 48,000 verts / 16,000 tris | 3 `BatchSetValues`/frame, **zero rebuilds**, 1 draw call | this chapter |
+| MeshPart triangle cap (upload & runtime) | **20,000** | hard | `art/modeling/specifications.md` [docs] |
+| Mobile-comfortable prop budget | **2,000–10,000 tris** | guidance | community [secondary] |
+| `RenderFidelity.Automatic` LOD bands | Highest <250 studs · Medium 250–500 · Lowest 500+ | engine behaviour | `RenderFidelity.yaml` [docs] |
+
+### Known live issues (verify before shipping)
+
+| Issue | Status |
+|---|---|
+| Runtime-created `MeshPart`s from EditableMesh **snap back to their original position** when a character touches them after settling | Reported 26 July 2026, DevForum 4758588 [secondary] |
+| `DynamicGeometryManager :: transcodeVerticesAndCalculateBounds` frame spikes (Windows) | Reported 28 Aug 2025, DevForum 3904722 [secondary] |
+| Editable memory budget appears to **leak/fragment across a session**; late allocations render black before they fail | Investigated in `turtlesoupy/robloquake` [code], no official acknowledgement found |
+| `RaycastLocal` return order documented one way, used the other way in Roblox's own sample | Both in current sources — sniff at runtime (§10.5) |
+| `CreateDataModelContentAsync` `options` documented as *"currently no controls are surfaced"*, yet Roblox's own `Roblox/resources` sample passes fidelity options to it | `AssetService.yaml` vs `Landmass.luau` [docs/code] |
+| Non-fixed `EditableMesh` reserving the 60k worst case | Documented rationale: *"Roblox takes a conservative approach and assumes the worst-case scenario"* [secondary] |
+
+---
+
+## Cross-references
+
+- **Ch. 21 — EditableMesh API reference**: full method list, ID model, permission model.
+- **Ch. 20 / 40 — EditableImage**: `DrawImageProjected` paints onto a mesh using
+  `RaycastLocal` + `GetFaceUVs` barycentric interpolation (§10.5). Texture and geometry
+  editing are one pipeline for avatar/UGC work.
+- **Ch. 22 — Luau performance**: `--!native`, `buffer`, and parallel Luau `Actor`s. Every
+  `EditableMesh` **query** is `thread_safety: Safe` and belongs in an Actor.
+- **Ch. 43 — 3D math toolkit**: CFrame conventions, splines and the parallel-transport
+  frames §5.5 depends on.
+- **Ch. 24 — World representation & budgets**: Terrain vs Parts vs mesh chunks; the
+  draw-call budget that caps §3 and §4.
+- **Ch. 45 — VFX and game feel**: hit-stop is the frame budget that hides a
+  `CreateMeshPartAsync` (§2.3).
+
+---
+
+## Sources
+
+### Official — Roblox `creator-docs` (read from the repository that generates the Creator Hub)
+
+- `EditableMesh` reference — https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/EditableMesh.yaml
+- `AssetService` reference (`CreateEditableMesh`, `CreateEditableMeshAsync`,
+  `CreateMeshPartAsync`, `CreateDataModelContentAsync`) —
+  https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/AssetService.yaml
+- `MeshPart` reference (`ApplyMesh`, `MeshContent`) — https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/classes/MeshPart.yaml
+- `Content` datatype (incl. the **"do not use EditableMesh as Content on the server on an
+  Instance that can replicate"** warning) —
+  https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/datatypes/Content.yaml
+- `Enum.MeshAttribute` — https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/enums/MeshAttribute.yaml
+- `Enum.CollisionFidelity` / `RenderFidelity` / `FluidFidelity` / `ContentSourceType` /
+  `CreateContentResult` —
+  https://github.com/Roblox/creator-docs/tree/main/content/en-us/reference/engine/enums
+- Modeling specifications (**20,000-triangle cap**, 4 bone influences) — https://github.com/Roblox/creator-docs/blob/main/content/en-us/art/modeling/specifications.md
+- Performance optimisation — draw calls, instancing, collision fidelity — https://github.com/Roblox/creator-docs/blob/main/content/en-us/performance-optimization/improve.md
+- In-experience avatar creation (**`WrapDeformer` + cage `EditableMesh`**, the official
+  body-customization path) —
+  https://github.com/Roblox/creator-docs/blob/main/content/en-us/avatar/in-experience-creation.md
+- Live reference pages (egress-blocked from this session, listed for the reader):
+  https://create.roblox.com/docs/reference/engine/classes/EditableMesh ·
+  https://create.roblox.com/docs/reference/engine/classes/AssetService ·
+  https://create.roblox.com/docs/reference/engine/classes/MeshPart
+
+### Official / first-party open source
+
+- `Roblox/avatar` — `MeshUtils.lua` (mesh-space scale factor, barycentric→UV, raycast
+  conversion) —
+  https://github.com/Roblox/avatar/blob/main/ReferenceBodyCreator/ReplicatedStorage/Modules/MeshManipulation/MeshUtils.lua
+- `Roblox/avatar` — `EditableUtils.luau` (convert a whole model to editables) — https://github.com/Roblox/avatar/blob/main/AvatarAutoSetupDemo/src/ReplicatedStorage/EditableUtils.luau
+- `Roblox/resources` — procedural `Landmass.luau` (ear-clip → two-piece closed solid →
+  `CreateDataModelContentAsync` → `CreateMeshPartAsync`) —
+  https://github.com/Roblox/resources/blob/main/experiences/procedural-models/src/ReplicatedFirst/Generators/Polygonal/Landmass.luau
+- `stravant/roblox-materialflip` — `buildShapeMesh.lua` (sharp vs smooth normals; note on
+  in-memory EditableMeshes not persisting through place save) —
+  https://github.com/stravant/roblox-materialflip/blob/main/src/buildShapeMesh.lua
+
+### Community open source (benchmarks and production patterns)
+
+- `turtlesoupy/robloquake` — `worldmesh.luau` (batch caps, fixed-size clone, retention,
+  re-centring, degenerate culling, budget backoff) —
+  https://github.com/turtlesoupy/robloquake/blob/main/src/client/render/worldmesh.luau
+- `turtlesoupy/robloquake` — `verify_editablepool.luau` (the pool-exhaustion investigation:
+  81 meshes / 47k verts, canary probe, 15–25 s refund latency) —
+  https://github.com/turtlesoupy/robloquake/blob/main/tools/verify_editablepool.luau
+- `elokore/roblox-voxel-terrain` — Transvoxel renderer, incremental face removal, 500
+  voxels/frame —
+  https://github.com/elokore/roblox-voxel-terrain/blob/master/src/shared/Renderer/init.luau
+- `MrChickenRocket/sdf-procedural-toolkit` — adaptive octree Dual Contouring with QEF, QEM
+  decimation, per-stage timings —
+  https://github.com/MrChickenRocket/sdf-procedural-toolkit/blob/main/src/ReplicatedFirst/SdfMesher3.luau
+- `ng643/Mythic` — `OceanRenderer.luau` + `OceanCapabilityLab.client.luau` (clipmap ocean,
+  batch-vs-singular benchmark harness) —
+  https://github.com/ng643/Mythic/blob/main/src/StarterPlayer/StarterPlayerScripts/OceanClient/OceanRenderer.luau
+- `cameronpcampbell/genesis` — `eMeshQueue` (Heartbeat-drained EditableMesh allocation
+  queue) —
+  https://github.com/cameronpcampbell/genesis/blob/main/packages/utils/eMeshQueue/src/init.luau
+- `maragnus/Formex` — `TestEditableMeshCount.client.luau` (documents the ~8 non-fixed-size
+  client limit and the dynamic→fixed→destroy idiom) —
+  https://github.com/maragnus/Formex/blob/main/src/client/TestEditableMeshCount.client.luau
+- `maragnus/DeadCamp` — `EditableMeshBuilder.luau` (chunk→MeshPart with validation and
+  fixed-size fallback) —
+  https://github.com/maragnus/DeadCamp/blob/main/src/shared/Geometry/EditableMeshBuilder.luau
+- `plirt/Softbody-physics` — `mesh_build.luau` (per-frame `SetPosition` with no rebuild;
+  centre-of-mass CFrame trick) —
+  https://github.com/plirt/Softbody-physics/blob/main/src/SoftbodyHandler/mesh_build.luau
+- `ddavness/curve` — `mkmesh.luau` (polyline → road ribbon with thickness) — https://github.com/ddavness/curve/blob/main/dev/mkmesh.luau
+- `GeoCodeCrafter/Cave` — `CaveMeshes.luau` (keep-alive rule) — https://github.com/GeoCodeCrafter/Cave/blob/main/src/CaveMeshes.luau
+- `Y-Workplace/Liquid-Simulation` — WebGL Water ported to Roblox `EditableMesh` — https://github.com/Y-Workplace/Liquid-Simulation
+
+### DevForum threads (egress-blocked; content recovered via search summaries — **[secondary]**)
+
+- *Allow applying baked mesh "Content" to a "MeshPart" without a lag spike* — **the 22 ms +
+  0.27 ms/1k-tri figure** — https://devforum.roblox.com/t/allow-applying-baked-mesh-content-to-a-meshpart-without-a-lag-spike/4752538
+- *[Studio Beta] EditableMesh Batching APIs & Parallel Queries* (announced 6 Aug 2026) — https://devforum.roblox.com/t/studio-beta-editablemesh-batching-apis-parallel-queries/4779401
+- *Bulk API Operations for EditableMesh* (the feature request that drove batching) — https://devforum.roblox.com/t/bulk-api-operations-for-editablemesh/4643551
+- *Ability to set multiple vertex positions at once (EditableMeshes)* — https://devforum.roblox.com/t/ability-to-set-multiple-vertex-positions-at-once-editablemeshes/2786406
+- *EditableMesh and EditableImage Improvements* — https://devforum.roblox.com/t/editablemesh-and-editableimage-improvements/3818624
+- *[Client Beta] In-experience Mesh & Image APIs now available in published experiences* — https://devforum.roblox.com/t/client-beta-in-experience-mesh-image-apis-now-available-in-published-experiences/3267293
+- *Introducing in-experience Mesh & Image APIs [Studio Beta]* — https://devforum.roblox.com/t/introducing-in-experience-mesh-image-apis-studio-beta/2725284
+- *Low FPS due to EditableMesh "transcodeVerticesAndCalculateBounds" (40–70 ms frame time)* — https://devforum.roblox.com/t/low-fps-due-to-editablemesh-transcodeverticesandcalculatebounds-taking-significantly-longer-than-usual-40-70ms-frame-time/3904722
+- *Where to find EditableMesh data limits?* (**≈2.8 MB per max-complexity mesh**) — https://devforum.roblox.com/t/where-to-find-editablemesh-data-limits/3313112
+- *Bypassing 8 EditableMesh limit on client?* — https://devforum.roblox.com/t/bypassing-8-editablemesh-limit-on-client/3683517
+- *Remove Editable Mesh/Image limit on the client* — https://devforum.roblox.com/t/remove-editable-meshimage-limit-on-the-client/4219561
+- *Editable mesh memory budget reached* — https://devforum.roblox.com/t/editable-mesh-memory-budget-reached/3469104
+- *Runtime-created MeshParts snap back to their original position when touched* — https://devforum.roblox.com/t/runtime-created-meshparts-snap-back-to-their-original-position-when-touched/4758588
+- *Calculon™ Episode 6 — Physics Aware Voronoi Fracture Integration (Free + Open Source)* — https://devforum.roblox.com/t/calculon-episode-6-physics-aware-voronoi-fracture-integration-free-open-source/4639585
+- *Calculon™ Episode 2 — Production Ocean Waves using Designed Octave Gerstner* — https://devforum.roblox.com/t/calculon-episode-2-production-ocean-waves-using-designed-octave-gerstner-free-open-source-old/4569839
+- *Simulated Ocean with EditableMesh* (multithreading, frustum culling, vertex lerping) — https://devforum.roblox.com/t/simulated-ocean-with-editablemesh/3562339
+- *Optimized EditableMesh Ocean Project* — https://devforum.roblox.com/t/optimized-editablemesh-ocean-project/3236817
+- *Editable Mesh Ocean* (**~2 ms with 12 Gerstner waves**) — https://devforum.roblox.com/t/editable-mesh-ocean/3881535
+- *Wind Shake: High performance wind effect for leaves and foliage* (**77,750 leaves,
+  220+ FPS, CFrame-based**) —
+  https://devforum.roblox.com/t/wind-shake-high-performance-wind-effect-for-leaves-and-foliage/1039806
+- *SkinnedGrass — Performant interactive foliage* — https://devforum.roblox.com/t/skinnedgrass-performant-interactive-foliage/3364812
+- *Creating a destruction system using Editable Meshes* — https://devforum.roblox.com/t/creating-a-destruction-system-using-editable-meshes/3158370
+- *An crude attempt: Cloth physics using EditableMeshes* — https://devforum.roblox.com/t/an-crude-attempt-cloth-physics-using-editablemeshes/3118362
+- *3D Trail With Editable Mesh* — https://devforum.roblox.com/t/3d-trail-with-editable-mesh/4626964
+- *Procedural terrain generation using EditableMeshes in parallel* — https://devforum.roblox.com/t/procedural-terrain-generation-using-editablemeshes-in-parrallel/4582100
+- *Greedy Meshing Voxels* / *Consume everything — how greedy meshing works* — https://devforum.roblox.com/t/greedy-meshing-voxels/1139881 · https://devforum.roblox.com/t/consume-everything-how-greedy-meshing-works/452717
+- *Editable Collision Mesh During Runtime* (feature request: no runtime collision editing) — https://devforum.roblox.com/t/editable-collision-mesh-during-runtime/4219582
+
+### Algorithms (external references, not Roblox-specific)
+
+- Lorensen & Cline, *Marching Cubes* (1987) — `edgeTable` / `triTable`.
+- Eric Lengyel, *Transvoxel* — LOD-seam-free marching cubes; the `regularCellClass` /
+  `regularCellData` / `regularVertexData` tables.
+- Ju, Losasso, Schaefer & Warren, *Dual Contouring of Hermite Data* (2002) — QEF.
+- Gibson, *Constrained Elastic Surface Nets* (1998) — surface nets.
+- Garland & Heckbert, *Surface Simplification Using Quadric Error Metrics* (1997).
+- Wang, Jüttler, Zheng & Liu, *Computation of Rotation Minimizing Frames* (ACM TOG 2008) —
+  the double-reflection method in §5.5.
+- Runions, Lane & Prusinkiewicz, *Modeling Trees with a Space Colonization Algorithm* (2007).
+- Fournier & Reeves / Tessendorf — Gerstner and trochoidal wave models.
+- Mikkelsen — tangent-space conventions (for §10.5).
+
+---
+
+*Verified against `Roblox/creator-docs@main` on 2026-09-17. `create.roblox.com` and
+`devforum.roblox.com` were unreachable from this session's network policy; every DevForum
+figure is flagged **[secondary]** and should be re-measured before it is used as a budget.*
