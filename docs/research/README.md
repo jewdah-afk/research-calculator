@@ -1,54 +1,95 @@
-# Civ-V-Grade Content in Roblox — Research Corpus
+# Roblox Mastery Corpus — Editable Images & Meshes, and Everything Around Them
 
-Goal: author content inside Roblox `EditableImage` and `EditableMesh` at a
-Sid Meier's Civilization V quality bar — a large, dynamic, editable hex world
-with a dense illustrated UI.
+**Goal:** total command of building things inside Roblox `EditableImage` and
+`EditableMesh` — and of Roblox game development generally — at the highest
+level achievable. Not one genre. Any game, built properly.
 
 Each chapter is a standalone deep reference written by a dedicated research
-agent against live primary sources. Roblox's editable-asset APIs change fast,
-so every chapter flags what it could not verify.
+agent working against live primary sources. Roblox's editable-asset APIs
+change fast, so every chapter is instructed to verify against current
+documentation and to flag explicitly what it could not confirm.
 
-## Part I — Roblox platform (the load-bearing chapters)
+---
 
-| # | Chapter | Covers |
-|---|---------|--------|
-| 20 | [EditableImage API](20-roblox-editableimage-api.md) | Full verified API, buffer layout, permissions, draw ops, Content sinks |
-| 21 | [EditableMesh API](21-roblox-editablemesh-api.md) | Id-based data model, limits, CreateMeshPartAsync, queries, recipes |
-| 22 | [Luau performance](22-luau-performance-engineering.md) | buffers, native codegen, parallel Luau, task scheduler, profiling |
-| 23 | [Rendering, lighting, materials](23-roblox-rendering-lighting-materials.md) | No-shader art direction, SurfaceAppearance, fog of war options |
-| 24 | [World representation & budgets](24-roblox-world-representation-and-budgets.md) | Terrain vs Parts vs EditableMesh chunks; real device budgets |
-| 25 | [UI for strategy games](25-roblox-ui-for-strategy-games.md) | Flex layout, 9-slice, ViewportFrame, tech tree, minimap, atlases |
-| 26 | [Asset pipeline & tooling](26-roblox-asset-pipeline-and-tooling.md) | Open Cloud, moderation, Rojo/Wally/Lune, asset manifests |
-| 27 | [Blender → Roblox](27-blender-to-roblox-mesh-pipeline.md) | Import limits, scale/axis conventions, PBR, skinning, LOD |
-| 28 | [Networking & data architecture](28-roblox-networking-and-data-architecture.md) | Tile bit-packing, DataStore limits, turn loop, fog-of-war replication |
-| 29 | [Camera & input](29-roblox-camera-and-input-for-strategy.md) | RTS camera rig, zoom-to-cursor, pixel→hex picking, mobile gestures |
-| 30 | [Studio plugin development](30-roblox-studio-plugin-development.md) | Custom hex map editor, texture lab, undo contract |
-| 31 | [Prior art & benchmarks](31-roblox-prior-art-and-benchmarks.md) | What the community has already built; real measured numbers |
-| 32 | [Units, animation & crowds](32-roblox-units-animation-and-crowds.md) | Skinned meshes, the 200-unit problem, strategic-view billboards |
-| 33 | [Civ V game systems](33-civ5-game-systems-and-data-model.md) | Real formulas, the XML/SQL data-driven pattern, a minimal ruleset |
-| 34 | [Platform reality & scoping](34-roblox-platform-reality-and-scoping.md) | Device mix, audience, discovery, an honest feasibility call |
+## Part I — The editable-asset core
 
-## Part II — Platform-agnostic foundations
-
-Technique chapters that apply regardless of engine. Written before the Roblox
-target was known, so their API-specific sections (WebGL, three.js, browser
-canvas) are background rather than direction — the algorithms transfer, the
-APIs do not.
+The heart of the corpus: total command of runtime-generated geometry and imagery.
 
 | # | Chapter | Covers |
 |---|---------|--------|
-| 01 | [Raster formats & layered editing](01-raster-image-formats-and-layered-editing.md) | Blend modes, color space, dithering, quantization, pixel algorithms |
-| 02 | [SVG & vector authoring](02-svg-and-vector-authoring.md) | Bézier math, path ops, rasterization, procedural vector art |
-| 03 | [Procedural texture generation](03-procedural-texture-generation.md) | Noise, fBm, domain warping, tiling, PBR map synthesis |
-| 04 | [Mesh data structures](04-mesh-data-structures-and-editable-topology.md) | Half-edge, attributes, normals, subdivision, non-destructive stacks |
-| 05 | [3D file formats](05-3d-file-formats-and-interchange.md) | glTF, FBX, USD, OBJ — what preserves editability |
-| 06 | [Realtime rendering techniques](06-browser-realtime-rendering.md) | Terrain splatting, water, fog of war, LOD (technique reference) |
-| 07 | [Hex grids & tilemaps](07-hex-grids-and-tilemaps.md) | Complete hex math, pathfinding, chunking, autotiling |
-| 08 | [Civ V art pipeline](08-civ5-art-pipeline-and-modding.md) | How Civ V was actually built: GR2, DDS, ArtDefines, atlases |
-| 09 | [Procedural world generation](09-procedural-world-generation.md) | Tectonics, erosion, rivers, biomes, Civ V's map scripts |
-| 10 | [Sprite & atlas pipelines](10-sprite-tileset-and-atlas-pipelines.md) | Bin packing, autotiling, 9-slice, SDF/MSDF, icon sets |
-| 11 | [Mesh generation algorithms](11-mesh-generation-algorithms.md) | Triangulation, extrusion, marching cubes, simplification, trees/buildings |
+| 20 | EditableImage API reference | Verified API surface, buffer layout, permission model, draw ops, every `Content` sink |
+| 21 | EditableMesh API reference | Id-based vertex/face/UV model, limits, `CreateMeshPartAsync`, queries |
+| 40 | EditableImage technique cookbook | Painting, canvases, minimaps, filters, software rendering, texture synthesis |
+| 41 | EditableMesh technique cookbook | Deformation, destruction, voxels, slicing, procedural objects, debug draw |
+
+## Part II — Engine mastery
+
+| # | Chapter | Covers |
+|---|---------|--------|
+| 22 | Luau performance engineering | `buffer`, native codegen, parallel Luau, task scheduler, profiling |
+| 23 | Rendering, lighting, materials | Art direction with no shader access; SurfaceAppearance; post effects |
+| 43 | 3D math toolkit | CFrame, quaternions, splines, geometry queries, springs, easing |
+| 44 | Physics, characters, hit detection | Constraints, network ownership, custom controllers, lag compensation |
+| 45 | VFX and game feel | Particles, beams, trails, screen shake, hit stop, sound, juice |
+| 49 | AI and NPC behavior | Pathfinding, behavior trees, utility AI, steering, crowds at scale |
+| 24 | World representation & budgets | Terrain vs Parts vs mesh chunks; real device budgets |
+| 32 | Units, animation & crowds | Skinned meshes, animation cost, rendering many agents |
+
+## Part III — Pipeline and craft
+
+| # | Chapter | Covers |
+|---|---------|--------|
+| 26 | Asset pipeline & tooling | Open Cloud, moderation, Rojo/Wally/Lune, asset manifests |
+| 27 | Blender → Roblox | Import limits, scale/axis conventions, PBR, skinning, LOD |
+| 30 | Studio plugin development | Building custom authoring tools; the undo contract |
+| 25 | UI construction | Flex layout, 9-slice, ViewportFrame, atlases, dense interfaces |
+| 48 | Procedural generation toolkit | Dungeons, WFC, erosion, L-systems, loot, names, solvability |
+
+## Part IV — Engineering a real game
+
+| # | Chapter | Covers |
+|---|---------|--------|
+| 46 | Code architecture & frameworks | Knit/Matter/Flamework/ECS compared; project structure; testing |
+| 28 | Networking & data architecture | Bit-packing, DataStore limits, replication, filtered state |
+| 47 | Security & anti-exploit | Threat model, server authority, validation, information leakage |
+| 50 | Optimization & shipping | MicroProfiler, budgets, memory leaks, streaming, ship checklist |
+| 29 | Camera & input | Custom camera rigs, picking math, cross-platform input |
+
+## Part V — Platform and business
+
+| # | Chapter | Covers |
+|---|---------|--------|
+| 42 | Genre atlas | What every genre needs technically; where the white space is |
+| 34 | Platform reality | Device mix, audience, performance ceilings, honest scoping |
+| 51 | Live ops, analytics & growth | Discovery algorithm, funnel metrics, monetization, the honest picture |
+
+## Part VI — Platform-agnostic foundations
+
+Technique chapters commissioned before the Roblox target was known. The
+algorithms transfer; the API-specific sections (WebGL, three.js, browser
+canvas) are background, not direction.
+
+| # | Chapter | Covers |
+|---|---------|--------|
+| 01 | Raster formats & layered editing | Blend modes, color space, dithering, quantization, pixel algorithms |
+| 02 | SVG & vector authoring | Bézier math, path ops, rasterization |
+| 03 | Procedural texture generation | Noise, fBm, domain warping, tiling, PBR map synthesis |
+| 04 | Mesh data structures | Half-edge, attributes, normals, subdivision |
+| 05 | 3D file formats | glTF, FBX, USD, OBJ — what preserves editability |
+| 06 | Realtime rendering techniques | Terrain splatting, water, LOD (technique reference) |
+| 07 | Hex grids & tilemaps | Complete hex math, pathfinding, chunking, autotiling |
+| 08 | Civ V art pipeline | A case study in shipping a large art pipeline |
+| 09 | Procedural world generation | Tectonics, erosion, rivers, biomes |
+| 10 | Sprite & atlas pipelines | Bin packing, autotiling, 9-slice, SDF/MSDF |
+| 11 | Mesh generation algorithms | Triangulation, extrusion, marching cubes, simplification |
+
+---
 
 ## Status
 
-Research in progress. Chapters land as their agents complete.
+38 research agents commissioned. Chapters land as their agents complete.
+
+**Scope note:** chapters 24, 25, 28, 29, 32, 33 and 34 were commissioned during
+a brief misreading of the goal as a Civilization-style strategy game. Their
+core technique content is general-purpose; read their closing recommendation
+sections with that framing in mind.
