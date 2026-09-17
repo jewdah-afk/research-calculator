@@ -553,9 +553,10 @@ end)
 ```
 
 Building it as `CFrame.new(center) * CFrame.Angles(0, theta, 0) * CFrame.new(0, 0, -radius)`
-gives you orientation for free: the part's `LookVector` points outward from the centre,
-and `RightVector` points along the direction of travel. If you want the part to *face* the
-centre instead, use `CFrame.new(0, 0, radius)` and it looks inward.
+gives you orientation for free: the part's `LookVector` points radially outward from the
+centre, and its `RightVector` lies along the orbit tangent (anti-parallel to the direction
+of travel for increasing `theta` — negate it if you need the actual velocity direction). If
+you want the part to *face* the centre instead, use `CFrame.new(0, 0, radius)`.
 
 For a **tilted** orbit, rotate the whole plane rather than fighting Euler angles:
 
@@ -2577,3 +2578,444 @@ end
 Guard at every boundary where a computed transform enters the engine. That one habit turns
 "the character teleported to nowhere and the server errored ten seconds later" into a single
 warning with a stack trace pointing at the actual culprit.
+
+---
+
+## Recipes
+
+### R1. A look-at that never flips
+
+The two-line version of §2.2, for the common case where you control the yaw/pitch state:
+
+```lua
+--[[ Yaw/pitch look-at. Cannot gimbal-lock (pitch is clamped) and cannot roll (rz = 0). ]]
+local function aimAt(from: Vector3, to: Vector3, maxPitchDeg: number?): CFrame
+	local d = to - from
+	local flat = Vector3.new(d.X, 0, d.Z)
+	local horiz = flat.Magnitude
+	if horiz < 1e-6 then
+		-- Target is directly above or below: preserve the previous yaw rather than snapping.
+		horiz = 1e-6
+	end
+	local yaw = math.atan2(-d.X, -d.Z)               -- -Z is forward, hence the negations
+	local pitch = math.atan2(d.Y, horiz)
+	local limit = math.rad(maxPitchDeg or 89)
+	pitch = math.clamp(pitch, -limit, limit)
+	return CFrame.new(from) * CFrame.fromEulerAnglesYXZ(pitch, yaw, 0)
+end
+```
+
+For the general case (arbitrary up vectors, surface-relative aiming), use `safeLookAlong`
+from §2.2.
+
+### R2. Smooth follow camera
+
+Exponential damping on position (frame-rate independent, §8.2) and slerp on rotation via
+`CFrame:Lerp` (§4.4). Separate rates, because position and rotation want different feels.
+
+```lua
+local RunService = game:GetService("RunService")
+local camera = workspace.CurrentCamera
+
+local POS_HALFLIFE = 0.10   -- seconds to close half the positional gap
+local ROT_HALFLIFE = 0.06   -- rotation should lead position slightly: snappier
+
+RunService:BindToRenderStep("FollowCam", Enum.RenderPriority.Camera.Value, function(dt)
+	local subject = workspace.CurrentCamera.CameraSubject
+	if not subject or not subject.Parent then return end
+
+	local targetCF = CFrame.lookAt(
+		subject.Position + Vector3.new(0, 4, 0) - camera.CFrame.LookVector * 12,
+		subject.Position + Vector3.new(0, 2, 0)
+	)
+
+	local aPos = 1 - 2 ^ (-dt / POS_HALFLIFE)
+	local aRot = 1 - 2 ^ (-dt / ROT_HALFLIFE)
+
+	local pos = camera.CFrame.Position:Lerp(targetCF.Position, aPos)
+	local rot = camera.CFrame.Rotation:Lerp(targetCF.Rotation, aRot)  -- slerped
+	camera.CFrame = rot + pos
+end)
+```
+
+`rot + pos` works because `CFrame + Vector3` translates in world space and `rot` has zero
+position — so the sum is exactly "this rotation, at that point."
+
+For a springy camera with overshoot, swap the position damp for `TweenService:SmoothDamp`
+(§8.3) and keep the slerp for rotation.
+
+### R3. Arcing projectile: solve for launch velocity
+
+**Given target and flight time** — this is the one you want, because flight time is a
+gameplay parameter you can tune, and the solution is exact and has no failure case.
+
+From `p₁ = p₀ + v·T + ½·a·T²`, solve for **v**:
+
+```
+v = (p₁ − p₀ − ½·a·T²) / T
+```
+
+```lua
+--[[ Velocity that carries a projectile from `from` to `to` in exactly `time` seconds. ]]
+local function launchVelocity(from: Vector3, to: Vector3, time: number, gravity: number?): Vector3
+	assert(time > 0, "flight time must be positive")
+	local g = gravity or workspace.Gravity           -- studs/s², positive magnitude
+	local a = Vector3.new(0, -g, 0)
+	return (to - from - a * (0.5 * time * time)) / time
+end
+
+-- Aim at a MOVING target by predicting where it will be (first-order lead):
+local function launchVelocityLeading(from: Vector3, target: BasePart, time: number): Vector3
+	local predicted = target.Position + target.AssemblyLinearVelocity * time
+	return launchVelocity(from, predicted, time)
+end
+```
+
+**Given a fixed launch speed** — the classic ballistics problem, which *can* fail. With
+horizontal distance `d`, height difference `h`, speed `s`, gravity `g`:
+
+```
+tan θ = ( s² ± √(s⁴ − g(g·d² + 2h·s²)) ) / (g·d)
+```
+
+The `+` root is the **high arc** (lobbed, mortar); the `−` root is the **low arc** (direct,
+fast). A negative discriminant means the target is out of range at that speed.
+
+```lua
+--[[ Returns lowArcVelocity, highArcVelocity — or nil if out of range. ]]
+local function ballisticVelocities(from: Vector3, to: Vector3, speed: number, gravity: number?)
+	local g = gravity or workspace.Gravity
+	local delta = to - from
+	local flat = Vector3.new(delta.X, 0, delta.Z)
+	local d = flat.Magnitude
+	local h = delta.Y
+
+	if d < 1e-6 then                                  -- straight up/down: degenerate
+		return Vector3.new(0, speed, 0), Vector3.new(0, speed, 0)
+	end
+
+	local s2 = speed * speed
+	local disc = s2 * s2 - g * (g * d * d + 2 * h * s2)
+	if disc < 0 then return nil end                   -- unreachable at this speed
+
+	local root = math.sqrt(disc)
+	local dir = flat / d
+	local function build(tanTheta: number): Vector3
+		local theta = math.atan(tanTheta)
+		return dir * (speed * math.cos(theta)) + Vector3.new(0, speed * math.sin(theta), 0)
+	end
+	return build((s2 - root) / (g * d)), build((s2 + root) / (g * d))
+end
+```
+
+To **draw the arc** (a trajectory preview line), just evaluate the closed form — never
+simulate:
+
+```lua
+local function trajectoryPoint(from: Vector3, v: Vector3, t: number, gravity: number?): Vector3
+	local g = gravity or workspace.Gravity
+	return from + v * t + Vector3.new(0, -g, 0) * (0.5 * t * t)
+end
+```
+
+### R4. Homing and steering
+
+Two layers, and the distinction matters: **steering** shapes velocity (Reynolds-style
+forces); a **turn-rate clamp** enforces a physical maximum agility. Real homing needs both.
+
+```lua
+--[[ Seek: accelerate toward the target, capped. Classic Reynolds steering. ]]
+local function seek(position: Vector3, velocity: Vector3, target: Vector3,
+                    maxSpeed: number, maxForce: number): Vector3
+	local toTarget = target - position
+	if toTarget.Magnitude < 1e-6 then return Vector3.zero end
+	local desired = toTarget.Unit * maxSpeed
+	local steering = desired - velocity
+	if steering.Magnitude > maxForce then
+		steering = steering.Unit * maxForce
+	end
+	return steering                        -- an ACCELERATION: integrate it, don't assign it
+end
+
+--[[ Turn-rate clamp: rotate `current` toward `desired` by at most `maxTurnRad`.
+     This is the shortest-arc rotation (§4.5) with the angle limited. ]]
+local function turnToward(current: Vector3, desired: Vector3, maxTurnRad: number): Vector3
+	local a, b = current.Unit, desired.Unit
+	local angle = a:Angle(b)
+	if angle <= maxTurnRad or angle ~= angle then return b end   -- (angle ~= angle catches NaN)
+	local axis = a:Cross(b)
+	if axis.Magnitude < 1e-6 then
+		-- Exactly antiparallel: any perpendicular axis is valid; pick a stable one.
+		axis = a:Cross(Vector3.yAxis)
+		if axis.Magnitude < 1e-6 then axis = a:Cross(Vector3.xAxis) end
+	end
+	return (CFrame.fromAxisAngle(axis.Unit, maxTurnRad) * a).Unit
+end
+
+--[[ A homing missile: constant speed, limited agility, arrives without orbiting. ]]
+local function stepMissile(missile: BasePart, target: Vector3, speed: number,
+                            turnRateRadPerSec: number, dt: number)
+	local dir = turnToward(missile.CFrame.LookVector, target - missile.Position,
+		turnRateRadPerSec * dt)
+	missile.CFrame = CFrame.lookAlong(missile.Position + dir * speed * dt, dir)
+end
+```
+
+The turn-rate clamp is what stops a missile from snapping instantly onto the target (which
+looks wrong and is unfun). It also produces the characteristic "miss and loop back" when
+the target is too agile — emergent, not scripted.
+
+### R5. Surface alignment for a walking creature
+
+One raycast gives you a normal but reacts to every pebble. Sample several points under the
+footprint and average, weighting the centre:
+
+```lua
+local function groundFrame(position: Vector3, facing: Vector3, footprint: number,
+                            params: RaycastParams): CFrame?
+	local half = footprint * 0.5
+	local offsets = {
+		Vector3.zero,
+		Vector3.new( half, 0,  half), Vector3.new(-half, 0,  half),
+		Vector3.new( half, 0, -half), Vector3.new(-half, 0, -half),
+	}
+	local weights = {2, 1, 1, 1, 1}        -- centre counts double: less foot-wobble
+
+	local normalSum, pointSum, total = Vector3.zero, Vector3.zero, 0
+	for i, off in offsets do
+		local hit = workspace:Raycast(position + off + Vector3.new(0, 3, 0),
+			Vector3.new(0, -10, 0), params)
+		if hit then
+			local w = weights[i]
+			normalSum += hit.Normal * w
+			pointSum += hit.Position * w
+			total += w
+		end
+	end
+	if total == 0 then return nil end      -- airborne
+
+	local normal = normalSum / total
+	if normal.Magnitude < 1e-5 then return nil end
+	normal = normal.Unit
+
+	-- Reject the facing onto the ground plane so the creature leans with the slope.
+	local forward = facing - normal * facing:Dot(normal)
+	if forward.Magnitude < 1e-5 then return nil end
+	forward = forward.Unit
+	local right = forward:Cross(normal)
+	return CFrame.fromMatrix(pointSum / total, right, normal, -forward)
+end
+```
+
+Then **damp** toward that frame rather than snapping to it (§8.2) — instant alignment reads
+as robotic, and a 0.08 s half-life reads as a creature adjusting its footing:
+
+```lua
+local aligned = groundFrame(pos, facing, 3, params)
+if aligned then
+	root.CFrame = root.CFrame:Lerp(aligned, 1 - 2 ^ (-dt / 0.08))
+end
+```
+
+Clamp the maximum slope you will align to (`normal:Dot(Vector3.yAxis) > math.cos(math.rad(50))`)
+or the creature will happily stand sideways on a wall.
+
+### R6. Snapping to a grid
+
+```lua
+local function snap(x: number, grid: number): number
+	return math.round(x / grid) * grid
+end
+
+--[[ Snap a position to a world grid, optionally offset (e.g. half-grid for cell centres). ]]
+local function snapVector(v: Vector3, grid: Vector3, offset: Vector3?): Vector3
+	local o = offset or Vector3.zero
+	local shifted = (v - o) / grid                       -- component-wise divide
+	return Vector3.new(math.round(shifted.X), math.round(shifted.Y), math.round(shifted.Z)) * grid + o
+end
+
+--[[ Snap a rotation to the nearest N-th of a turn about Y — the placement-tool standard. ]]
+local function snapYaw(cf: CFrame, divisions: number): CFrame
+	local _, y = cf:ToEulerAnglesYXZ()                   -- YXZ: y is clean yaw
+	local step = (2 * math.pi) / divisions
+	return CFrame.new(cf.Position) * CFrame.fromEulerAnglesYXZ(0, math.round(y / step) * step, 0)
+end
+```
+
+`math.round` is verified to round **away from zero** at midpoints (`0.5 → 1`, `-0.5 → -1`),
+which is what you want for symmetric grids — `math.floor(x + 0.5)` is subtly asymmetric for
+negative coordinates and will misplace objects west/south of the origin.
+
+For a building system, snap the object's **corner or footprint**, not its centre, or
+odd-sized parts will land half-off the grid:
+
+```lua
+local half = part.Size * 0.5
+local snappedMin = snapVector(part.Position - half, Vector3.one * 4)
+part.Position = snappedMin + half
+```
+
+### R7. Orbiting with damping
+
+Damp the *angle*, not the position — that way the object always travels along the orbit
+circle instead of cutting a chord across it.
+
+```lua
+local Orbit = {}
+Orbit.__index = Orbit
+
+function Orbit.new(center: Vector3, radius: number, halfLife: number)
+	return setmetatable({
+		center = center, radius = radius, halfLife = halfLife,
+		yaw = 0, pitch = 0, targetYaw = 0, targetPitch = 0, targetRadius = radius,
+	}, Orbit)
+end
+
+--[[ Shortest-path angular difference, wrapped to (-π, π]. Without this, going from
+     350° to 10° takes the 340° route. ]]
+local function angleDelta(from: number, to: number): number
+	local d = (to - from) % (2 * math.pi)
+	if d > math.pi then d -= 2 * math.pi end
+	return d
+end
+
+function Orbit:step(dt: number): CFrame
+	local a = 1 - 2 ^ (-dt / self.halfLife)
+	self.yaw += angleDelta(self.yaw, self.targetYaw) * a
+	self.pitch += (math.clamp(self.targetPitch, math.rad(-80), math.rad(80)) - self.pitch) * a
+	self.radius += (self.targetRadius - self.radius) * a
+	return CFrame.new(self.center)
+		* CFrame.fromEulerAnglesYXZ(self.pitch, self.yaw, 0)
+		* CFrame.new(0, 0, self.radius)
+end
+```
+
+The `angleDelta` wrap is the whole recipe. Every "my camera spun all the way around when I
+crossed north" bug is a missing modular wrap on an angle difference.
+
+### R8. Screen position to world ray
+
+```lua
+local camera = workspace.CurrentCamera
+
+--[[ Cast from a screen point. `x, y` are in CoreUI-inset coordinates — the ones that
+     match GuiObject.AbsolutePosition and UserInputService mouse position. ]]
+local function castFromScreen(x: number, y: number, range: number, params: RaycastParams)
+	local unitRay = camera:ScreenPointToRay(x, y)        -- UNIT ray: 1 stud long
+	return workspace:Raycast(unitRay.Origin, unitRay.Direction * range, params)
+end
+
+--[[ Cast from the exact centre of the viewport (a crosshair). ]]
+local function castFromCrosshair(range: number, params: RaycastParams)
+	local vp = camera.ViewportSize / 2
+	local unitRay = camera:ViewportPointToRay(vp.X, vp.Y, 0)
+	return workspace:Raycast(unitRay.Origin, unitRay.Direction * range, params)
+end
+```
+
+**The two things that go wrong here.**
+
+*First*, `workspace:Raycast(origin, direction, params)` treats the **magnitude of `direction`
+as the maximum distance** — it is not a unit direction plus a separate range argument. Both
+camera methods return "a unit `Ray`… it is only one stud long", so a raycast with the raw
+`unitRay.Direction` searches exactly one stud and finds nothing. Multiply.
+
+*Second*, the two camera methods use **different coordinate systems**, and the reference is
+emphatic about it:
+
+- `ScreenPointToRay(x, y, depth?)` — **accounts for the GUI inset** (the top bar). `(0,0)` is
+  the top-left *below* the top bar. This is the `CoreUISafeInsets` system, which is what
+  `GuiObject.AbsolutePosition` uses. **Use this for mouse and UI coordinates.**
+- `ViewportPointToRay(x, y, depth?)` — **does not** account for the CoreUI inset (it does
+  account for `DeviceSafeInsets`). `(0,0)` is the top-left *of the Roblox top bar*. This is
+  the system `Camera.ViewportSize` is in. **Use this for viewport-relative math** like a
+  centred crosshair.
+
+Mix them up and everything is offset vertically by the top-bar height — a bug that looks
+like "my aiming is slightly high" and survives a long time because it is small and constant.
+
+Both carry the same caveat: they "only work for the `Workspace.CurrentCamera` camera. Other
+cameras, such as those you create for a `ViewportFrame`, have an initial viewport size of
+`(1, 1)`" and will return wrong directions.
+
+**Going the other way** — world to screen:
+
+```lua
+local screenPos, onScreen = camera:WorldToViewportPoint(worldPosition)
+if onScreen and screenPos.Z > 0 then              -- Z is depth; <= 0 means BEHIND the camera
+	billboard.Position = UDim2.fromOffset(screenPos.X, screenPos.Y)
+end
+```
+
+The `screenPos.Z > 0` check is mandatory: for points behind the camera the projection still
+returns finite X/Y (mirrored through the origin), so without it your marker appears on the
+wrong side of the screen when you turn away. `WorldToScreenPoint` is the GUI-inset twin,
+matching `ScreenPointToRay`.
+
+---
+
+## Sources
+
+All API signatures, parameter defaults, return orders, and quoted behavioral notes were
+verified against the generated reference YAML in `Roblox/creator-docs` (the source the
+Creator Hub reference pages are built from) and, for the Luau VM details, the Luau source.
+
+**Roblox Creator Documentation** (`create.roblox.com/docs`, source of record:
+`github.com/Roblox/creator-docs`):
+
+- CFrame — https://create.roblox.com/docs/reference/engine/datatypes/CFrame
+  ([source YAML](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/datatypes/CFrame.yaml))
+- Vector3 — https://create.roblox.com/docs/reference/engine/datatypes/Vector3
+  ([source YAML](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/datatypes/Vector3.yaml))
+- Vector2 — https://create.roblox.com/docs/reference/engine/datatypes/Vector2
+- Ray — https://create.roblox.com/docs/reference/engine/datatypes/Ray
+- Region3 — https://create.roblox.com/docs/reference/engine/datatypes/Region3
+- Random — https://create.roblox.com/docs/reference/engine/datatypes/Random
+  ([source YAML](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/datatypes/Random.yaml))
+- TweenInfo — https://create.roblox.com/docs/reference/engine/datatypes/TweenInfo
+- `math` library — https://create.roblox.com/docs/reference/engine/libraries/math
+  ([source YAML](https://github.com/Roblox/creator-docs/blob/main/content/en-us/reference/engine/libraries/math.yaml))
+- `vector` library — https://create.roblox.com/docs/reference/engine/libraries/vector
+- TweenService (incl. `GetValue`, `SmoothDamp`) — https://create.roblox.com/docs/reference/engine/classes/TweenService
+- Camera (`ScreenPointToRay`, `ViewportPointToRay`, `WorldToViewportPoint`, `WorldToScreenPoint`) — https://create.roblox.com/docs/reference/engine/classes/Camera
+- WorldRoot (`Raycast`, `Blockcast`, `Spherecast`, `Shapecast`, `GetPartsInPart`) — https://create.roblox.com/docs/reference/engine/classes/WorldRoot
+- BasePart (`CFrame`, `Orientation`, `Rotation`, `Size` limits) — https://create.roblox.com/docs/reference/engine/classes/BasePart
+- `Enum.EasingStyle` — https://create.roblox.com/docs/reference/engine/enums/EasingStyle
+- `Enum.EasingDirection` — https://create.roblox.com/docs/reference/engine/enums/EasingDirection
+- `Enum.RotationOrder` — https://create.roblox.com/docs/reference/engine/enums/RotationOrder
+- CFrames guide — https://create.roblox.com/docs/workspace/cframes
+- Numbers (double vs float, int) — https://create.roblox.com/docs/luau/numbers
+
+**Luau** (`luau.org`; source of record: `github.com/luau-lang`):
+
+- Standard library / `vector` — https://luau.org/library
+- Vector library RFC — https://rfcs.luau.org/vector-library.html
+- `LUA_VECTOR_SIZE` = 3 and `LUA_VECTOR_TYPE` = `float` — https://github.com/luau-lang/luau/blob/master/VM/include/luaconf.h
+- `lua_pushvector` / `lua_tovector` — https://github.com/luau-lang/luau/blob/master/VM/include/lua.h
+
+**Roblox DevForum** (technique threads and community resources):
+
+- Native Luau Vector3 Beta (value type, SIMD, allocation removal) — https://devforum.roblox.com/t/native-luau-vector3-beta/1180548
+- A Couple of Advanced CFrame Tricks — https://devforum.roblox.com/t/a-couple-of-advanced-cframe-tricks/337682
+- Frame rate independent lerp? — https://devforum.roblox.com/t/frame-rate-independent-lerp/352375
+- Creating Framerate-Independent / Discretized Iterative Lerp + Slerp — https://devforum.roblox.com/t/creating-framerate-independentdiscretized-iterative-lerp-slerp/3455078
+- How to actually create frame independant lerping — https://devforum.roblox.com/t/how-to-actually-create-frame-independant-lerping/3228324
+- Catmull-Rom Spline Class (Superior to Bezier Curve) — https://devforum.roblox.com/t/catmull-rom-spline-class-superior-to-bezier-curve/1827910
+- CRSplineModules (smooth curve through control points) — https://devforum.roblox.com/t/catmull-rom-spline-module-smooth-curve-that-goes-through-control-points/1568205
+- `CatRom` (arc-length / unit-speed reparameterization) — https://github.com/ecurtiss/CatRom
+- Loss of precision at distances far from origin — https://devforum.roblox.com/t/loss-of-precision-causes-game-breaking-issues-at-distances-far-from-origin/202782
+- Maximum distance from origin before things get glitchy — https://devforum.roblox.com/t/maximum-distance-from-origin-before-things-get-glitchy/1651347
+- `CFrame.lookAt()` up-vector / twisting threads — https://devforum.roblox.com/t/cframelookat-but-prevent-twisting-and-breaking/1881589 · https://devforum.roblox.com/t/cframelookat-up-value-ant-like-wall-crawling/2925323
+
+**Algorithms** (standard references for the maths, not Roblox-specific):
+
+- Möller & Trumbore, *Fast, Minimum Storage Ray/Triangle Intersection* (1997)
+- Ericson, *Real-Time Collision Detection* (2004) — closest-point-on-triangle regions, slab method, SAT for OBBs
+- Wang, Jüttler, Zheng & Liu, *Computation of Rotation Minimizing Frames* (ACM TOG, 2008) — the double-reflection method in §4.6
+- Yuksel, Schaefer & Keyser, *Parameterization and Applications of Catmull–Rom Curves* (2011) — the centripetal (α = ½) variant and its no-cusp guarantee
+- Shoemake, *Animating Rotation with Quaternion Curves* (SIGGRAPH 1985) — slerp
+- Shepperd, *Quaternion from Rotation Matrix* (1978) — the branch-on-largest-diagonal extraction in §4.3
+- Box & Muller, *A Note on the Generation of Random Normal Deviates* (1958)
+- Vose, *A Linear Algorithm for Generating Random Numbers with a General Distribution* (1991) — the alias method
+- Reynolds, *Steering Behaviors for Autonomous Characters* (1999) — seek/arrive in R4
+- Fernando, *Improved Lerp Smoothing* — https://www.gamedeveloper.com/programming/improved-lerp-smoothing-

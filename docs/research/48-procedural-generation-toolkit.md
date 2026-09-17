@@ -1596,3 +1596,360 @@ any game where the level is a puzzle rather than a battlefield. Amid Moradi's
 `GraphDungeonGenerator` is a public implementation of exactly this Dormans pipeline
 for Zelda-1-style dungeons.
 
+---
+
+## 4. Wave Function Collapse
+
+WFC is a constraint-propagation solver dressed as a texture synthesiser. Maxim Gumin's
+2016 reference implementation (`mxgmn/WaveFunctionCollapse`) is the definition; the
+code below is read directly from `Model.cs`, `OverlappingModel.cs` and
+`SimpleTiledModel.cs`.
+
+### 4.1 The core loop
+
+```
+Init:
+  wave[cell][pattern] = true for all cells, all patterns
+  compatible[cell][pattern][dir] = number of patterns in the OPPOSITE direction
+                                   that are compatible with `pattern`
+Loop:
+  cell = NextUnobservedNode()          -- minimum entropy, or -1 if all decided
+  if cell < 0: done, read out the answer
+  Observe(cell)                        -- collapse to one pattern, weighted
+  if not Propagate(): CONTRADICTION -> abort
+```
+
+**Entropy.** The reference uses Shannon entropy of the *weighted* remaining set, kept
+incrementally:
+
+```
+entropy[i] = log(Σ w_t) − (Σ w_t·log w_t) / (Σ w_t)      over t still possible at i
+```
+
+Both sums are maintained by `Ban()` in O(1). The tie-break is a tiny noise term:
+`min = entropy + 1e-6 * random()`. Without it, large uniform regions collapse in
+scanline order and the output shows directional structure.
+
+Two cheaper heuristics ship in the reference and are worth knowing:
+`MRV` (minimum remaining values — just `sumsOfOnes[i]`, ignoring weights) is faster
+and nearly as good; `Scanline` simply walks in order and is dramatically faster but
+produces visible directional bias. Use `Entropy` for stills, `Scanline` when you are
+generating something the player only sees from one side.
+
+**Observe.** Draw one pattern from the still-possible set, weighted by the pattern's
+frequency in the input, then `Ban()` every other pattern at that cell.
+
+**Propagate — the counter trick.** This is the part people reimplement badly. Do *not*
+recompute compatibility by scanning; maintain, for each `(cell, pattern, direction)`,
+a **count of supporting patterns in the neighbour on that side**. When a pattern is
+banned at cell `i`, decrement the support counter of every pattern it supported in
+each of the four neighbours; when a counter reaches zero, that pattern has lost all
+support and is itself banned, which pushes more work onto the stack.
+
+```
+Ban(i, t):
+    wave[i][t] = false
+    compatible[i][t][d] = 0 for all d
+    push (i, t)
+    sumsOfOnes[i]   -= 1
+    sumsOfWeights[i]-= w[t];  sumsOfWLogW[i] -= w[t]log w[t]
+    entropy[i] = log(sumsOfWeights[i]) − sumsOfWLogW[i]/sumsOfWeights[i]
+
+Propagate():
+    while stack not empty:
+        (i1, t1) = pop
+        for each of the 4 directions d:
+            i2 = neighbour of i1 in direction d   (wrap if periodic, else skip)
+            for each t2 in propagator[d][t1]:      -- patterns t1 supported
+                compatible[i2][t2][d] -= 1
+                if compatible[i2][t2][d] == 0: Ban(i2, t2)
+```
+
+`propagator[d][t]` is precomputed once: the list of patterns that may sit in direction
+`d` from pattern `t`.
+
+### 4.2 The two models
+
+**Simple tiled model** (`N = 1`). You supply tiles and an explicit adjacency list.
+Symmetry classes let you declare one tile and get its rotations for free — the
+reference's cardinalities are:
+
+| symmetry | cardinality | meaning |
+|---|---|---|
+| `X` | 1 | fully symmetric (blank, cross) |
+| `I` | 2 | 180°-symmetric bar |
+| `\` | 2 | diagonal |
+| `T` | 4 | T-junction |
+| `L` | 4 | corner |
+| `F` | 8 | no symmetry |
+
+This is the model to use for 3-D Roblox content: your "tiles" are prefab `Model`s,
+your adjacency is a socket-compatibility table, and the output is a placement grid.
+
+**Overlapping model** (`N = 3` typical). Extract every `N×N` patch of an example
+bitmap, count frequencies, and derive adjacency from patch *overlap*: patterns `p1`
+and `p2` may be offset by `(dx, dy)` iff their overlapping region is pixel-identical.
+Defaults in the reference driver: `N = 3`, `symmetry = 8` (all 8 dihedral
+transforms), `periodicInput = true`, output size 48×48 for overlapping and 24×24
+tiled.
+
+`N` is the key parameter: `N = 2` is fast and mushy, `N = 3` is the sweet spot,
+`N = 4+` reproduces larger input motifs but the pattern count explodes and
+contradictions become common. `symmetry = 1` preserves the input's orientation (use
+for anything with a ground/sky distinction); `symmetry = 8` maximises variety.
+
+`ground = true` forces the bottom row to the last pattern and bans that pattern
+everywhere else — this is how you get a terrain that has a floor.
+
+### 4.3 Contradictions, retries, backtracking
+
+The reference implementation **does not backtrack**. `Run(seed, limit)` returns
+`false` on contradiction and the driver simply retries with a new seed, **up to 10
+times**, then gives up on that sample. Gumin's own note: determining whether a
+constraint set is satisfiable is NP-hard, so nothing can guarantee fast completion —
+but in practice, for well-formed tilesets, "contradictions occur surprisingly rarely".
+
+Retry-with-new-seed is the right default because a full restart is cheap compared to
+maintaining an undo log, and because a tileset that contradicts often is a *tileset
+bug*, not an algorithm problem.
+
+When you do need backtracking (large outputs where a restart is expensive, or
+tilesets with genuinely tight constraints), the standard design is:
+
+- Snapshot the wave before each `Observe` (a bitset copy — `buffer` in Luau, one bit
+  per `(cell, pattern)`).
+- On contradiction, restore the snapshot, ban the pattern you just chose at that cell,
+  and re-propagate. If the cell runs out of options, pop another level.
+- Cap the depth (10–20) and fall back to a full restart.
+
+Memory: `cells × patterns` bits per snapshot. A 64×64 grid with 60 patterns is
+245 760 bits = 30 KB per level — fine. A 256×256 grid with 400 patterns is 3.2 MB per
+level — not fine.
+
+> **A real quirk in the reference:** `Propagate()` ends with `return sumsOfOnes[0] > 0`,
+> which only inspects cell 0. A robust implementation should have `Ban()` set a
+> `contradiction` flag whenever `sumsOfOnes[i]` hits zero, and check that flag. Port
+> the fix, not the line.
+
+### 4.4 Performance and Luau notes
+
+The reference is O(cells × patterns) memory and, empirically, roughly
+O(cells × patterns × log) time. Concretely, for a Luau port:
+
+- Store `wave` as a `buffer` bitset, not a table of tables. A 64×64×64-pattern wave is
+  262 144 bits = 32 KB in a `buffer` versus ~2 MB as nested Luau tables.
+- `compatible` is `cells × patterns × 4` small integers — use a `buffer` of `u8`
+  (counts rarely exceed 255; assert if they do).
+- The propagation stack is the hot loop. Preallocate it as
+  `table.create(cells * patterns)` and use an integer `stacksize`, exactly as the
+  reference does — never `table.insert`/`table.remove`.
+- Enable `--!native` on the model module. This is the archetypal native-codegen win:
+  tight integer loops over buffers.
+- WFC is **not** parallelisable across Actors within one wave (propagation is global).
+  It *is* parallelisable across independent chunks if you accept seams, or if you
+  pre-constrain each chunk's border from the already-solved neighbour (which
+  reintroduces order dependence — see §2.6).
+
+Budget guidance: a 48×48 output over ~60 patterns lands in the tens of milliseconds
+in native Luau. A 200×200 output will hitch; time-slice it (§11.3).
+
+### 4.5 When WFC is the wrong tool
+
+This matters more than the algorithm.
+
+- **When the output must be *solvable*.** WFC has no notion of reachability, of a path
+  from A to B, of a key before a lock. It produces locally plausible texture. A WFC
+  dungeon is frequently disconnected. If the player must traverse it, either
+  post-validate and regenerate (§10.5), or use a graph grammar (§3.8) for the
+  structure and WFC only for the surfaces.
+- **When you need *global* structure.** "Exactly three towers, one per district" is
+  not expressible as a local adjacency constraint. WFC is a local solver.
+- **When the input example is hard to author.** For the overlapping model you must
+  draw a bitmap that contains every motif you want *and no motif you do not want*. In
+  practice this is a fiddly, unintuitive authoring loop; many teams spend more time on
+  the sample image than they would have on a bespoke generator.
+- **When you have fewer than ~20 tiles.** Below that, a hand-rolled constraint pass or
+  simple rule-based tiling is simpler, faster and easier to debug.
+- **When you need it to run every frame.** It does not degrade gracefully.
+
+**Where WFC genuinely wins:** set dressing and surfaces (floor/wall/trim tiling,
+pipe networks, decorative facades), constrained 3-D module assembly where sockets are
+already a clean adjacency relation, and "infinite" texture-like content where local
+plausibility is the whole requirement.
+
+---
+
+## 5. Placement and scattering
+
+### 5.1 Poisson-disk sampling (Bridson)
+
+Bridson's SIGGRAPH 2007 sketch, "Fast Poisson Disk Sampling in Arbitrary Dimensions":
+O(N), trivially implementable, and the right default for scattering anything that
+should look natural but not clumped.
+
+Inputs: domain extent, minimum distance `r`, and `k` = number of candidate darts per
+active sample (the paper's and everyone's value is **k = 30**).
+
+The background grid has cell size **`r / √n`** for `n` dimensions (`r / √2` in 2-D),
+which guarantees at most one sample per cell, so the neighbour test is a fixed small
+window.
+
+```lua
+-- Returns {Vector2}. Points are at least `r` apart, at most ~r*2 apart.
+local function poissonDisk(width: number, height: number, r: number, rng, k: number?)
+    k = k or 30
+    local cell = r / math.sqrt(2)
+    local gw = math.ceil(width / cell)
+    local gh = math.ceil(height / cell)
+    local grid = table.create(gw * gh, 0)          -- 0 = empty, else index into points
+    local points, active = {}, {}
+
+    local function gridIndex(x, y)
+        return math.floor(y / cell) * gw + math.floor(x / cell) + 1
+    end
+
+    local function fits(x, y): boolean
+        if x < 0 or y < 0 or x >= width or y >= height then return false end
+        local gx, gy = math.floor(x / cell), math.floor(y / cell)
+        for yy = math.max(gy - 2, 0), math.min(gy + 2, gh - 1) do
+            for xx = math.max(gx - 2, 0), math.min(gx + 2, gw - 1) do
+                local pi = grid[yy * gw + xx + 1]
+                if pi ~= 0 then
+                    local p = points[pi]
+                    local dx, dy = p.X - x, p.Y - y
+                    if dx * dx + dy * dy < r * r then return false end
+                end
+            end
+        end
+        return true
+    end
+
+    local function emit(x, y)
+        table.insert(points, Vector2.new(x, y))
+        grid[gridIndex(x, y)] = #points
+        table.insert(active, #points)
+    end
+
+    emit(rng:NextNumber() * width, rng:NextNumber() * height)
+
+    while #active > 0 do
+        local ai = rng:NextInteger(1, #active)
+        local p = points[active[ai]]
+        local placed = false
+        for _ = 1, k do
+            -- uniform in the annulus [r, 2r]
+            local ang = rng:NextNumber() * math.pi * 2
+            local rad = r * math.sqrt(1 + 3 * rng:NextNumber())   -- sqrt(r^2 + 3r^2*u)/r
+            local x, y = p.X + math.cos(ang) * rad, p.Y + math.sin(ang) * rad
+            if fits(x, y) then emit(x, y); placed = true; break end
+        end
+        if not placed then
+            active[ai] = active[#active]
+            table.remove(active)
+        end
+    end
+    return points
+end
+```
+
+Two details people get wrong. The annulus radius must be `sqrt(r² + 3r²·u)` (i.e.
+area-uniform between `r` and `2r`), not `r + r·u` — the linear version over-samples
+near `r` and produces a visible hexagonal lattice. And removing the exhausted active
+entry with swap-remove (`active[ai] = active[#active]`) rather than `table.remove(active, ai)`
+keeps the whole thing O(N) instead of O(N²).
+
+**Parameters.** `r` is your density: expected count ≈ `0.7 * area / r²`. `k` trades
+time for packing tightness — `k = 30` is fine; `k = 10` is ~15% faster and slightly
+sparser; above 30 there is no measurable gain.
+
+**Failure modes.** The algorithm is *not* chunk-friendly: it grows from a seed point
+and the result depends on the whole domain, so you cannot generate chunk (5,3)
+independently. For infinite worlds use §5.2 or generate per-chunk with a halo and
+resolve cross-border conflicts by a deterministic rule (lower `(cx, cy)` wins).
+
+### 5.2 Jittered grids and hash-based blue noise
+
+The chunk-safe substitutes. A jittered (stratified) grid is a regular grid with each
+sample displaced randomly within its cell:
+
+```lua
+local function jittered(cx, cy, cellSize, jitter, seed)
+    -- Deterministic per world cell; no state, no ordering.
+    local h = hash2(cx, cy, seed)
+    local jx = ((h % 65536) / 65536 - 0.5) * jitter
+    local jy = ((bit32.rshift(h, 16) % 65536) / 65536 - 0.5) * jitter
+    return (cx + 0.5 + jx) * cellSize, (cy + 0.5 + jy) * cellSize
+end
+```
+
+`jitter` ∈ [0, 1]: 0 is a hard grid (obvious), 1 lets neighbours touch (clumpy),
+**0.6–0.8** looks natural while keeping a minimum separation. Then apply a density
+mask: `if hash2(cx, cy, seed + 1) / 2^32 < density(x, y) then place() end`.
+
+This is the technique for trees, grass, rocks and ore in an infinite world. It is
+stateless, order independent, and both machines compute the same answer — everything
+Poisson-disk is not.
+
+For higher-quality blue noise that is still stateless, sample a precomputed blue-noise
+tile (a 64×64 texture of thresholds) and compare against your density. Void-and-cluster
+generates the tile offline.
+
+### 5.3 Lloyd relaxation
+
+Given a point set, repeatedly (a) compute the Voronoi diagram, (b) move each point to
+its cell's centroid. Converges to a centroidal Voronoi tessellation — very even,
+organic-but-regular spacing. This is what gives Amit Patel's polygon-map-generation
+its characteristic look.
+
+2–3 iterations is what you want. One iteration removes the worst clumping; by 4–5 the
+result is nearly hexagonal and reads as artificial.
+
+If you do not want to implement Voronoi, you can approximate a relaxation step with
+repulsion: move each point away from its k nearest neighbours by a fraction of the
+overlap. Three passes of that is visually close and much less code.
+
+**Uses:** biome region seeds, city district centres, crystal/rock facet centres,
+territory maps, hex-ish irregular grids.
+
+### 5.4 Clustering
+
+Naturally occurring things cluster. Two cheap models:
+
+- **Parent–child (Neyman–Scott).** Scatter `M` cluster centres with Poisson-disk or a
+  jittered grid, then around each drop `Poisson(λ)` children at Gaussian-distributed
+  offsets with standard deviation `σ`. `σ` sets the clump tightness, `λ` the clump
+  size. Trees, mushroom rings, ore veins, enemy camps.
+- **Noise-modulated density.** `density(x, y) = base * smoothstep(t0, t1, fbm(x, y))`.
+  Multiply into the jittered-grid acceptance test. This gives you clusters that are
+  *correlated with the terrain*, which is usually what you actually want (forests in
+  valleys, not forests at random).
+
+### 5.5 Placement rules
+
+Every scattered object should pass a rule stack before it is committed. The standard
+set, in the order you should evaluate it (cheapest rejection first):
+
+| Rule | Test | Typical values |
+|---|---|---|
+| Altitude | `y` within `[minY, maxY]`, with a soft fade band | trees 5–180, snow props > 160 |
+| Slope | `normal:Dot(Vector3.yAxis) >= cos(maxSlope)` | trees ≤ 30°, buildings ≤ 8°, rocks ≤ 60° |
+| Biome | `biomeAt(x, z)` in an allowed set | — |
+| Water | `y > waterLevel + clearance` | clearance 0.5–2 studs |
+| Proximity | no object of an excluding class within `d` | trees–trees 6, buildings–trees 12 |
+| Footprint | the object's AABB fits, and the ground under all 4 corners is within `Δy` | `Δy ≤ 1.5` studs for buildings |
+| Path/POI clearance | distance to any road/spawn/quest volume > `c` | 8–20 studs |
+
+```lua
+local function slopeAt(x: number, z: number, heightFn): number
+    local e = 1.0
+    local hL, hR = heightFn(x - e, z), heightFn(x + e, z)
+    local hD, hU = heightFn(x, z - e), heightFn(x, z + e)
+    local n = Vector3.new(hL - hR, 2 * e, hD - hU).Unit
+    return math.deg(math.acos(math.clamp(n.Y, -1, 1)))
+end
+```
+
+Evaluate the *slope from the same height function* you used to build the terrain, not
+from a raycast — a raycast hits props and gives you nonsense, and it cannot run in a
+parallel Actor.
+

@@ -558,3 +558,227 @@ Saturation read: **the least saturated large-appeal genre on this list.** Very f
 - **Soccer: Touch Football** — the ball-physics-forward branch.
 - **NFL Universe Football / NHL Blast / Super League Soccer** — official league experiences; useful as evidence that the platform is investing in the category.
 
+---
+
+## 13. Sandbox / building / user-generated content games
+
+**(a) What it is & commercial reality.** Games whose content is made by players inside the game. Build a Boat for Treasure, Lumber Tycoon 2, and the block-building cohort. Commercially this is a **small-to-mid genre with outsized strategic importance**, because it is the genre where Roblox's newest APIs change what is possible.
+
+Honest read: **currently under-monetized and under-built, but this is the highest-leverage white space on the platform.** Every existing Roblox sandbox builds from a fixed palette of parts. The APIs to let players author *geometry* and *textures* landed in production only recently and are gated behind verification requirements most developers won't clear. That is a real, temporary moat.
+
+**(b) Core systems.**
+- Part/voxel placement with snapping, rotation, mirroring, group select, copy/paste, undo/redo.
+- A creation serialization format (and versioning for it).
+- Validation: part-count caps, bounding-volume caps, forbidden configurations.
+- Sharing: publish, browse, rate, remix, moderation queue.
+- Simulation of creations (physics for vehicles, function for machines).
+- Economy: part unlocks, save slots, featured creations.
+- Moderation: the hardest requirement, since players are authoring content other players see.
+
+**(c) Hard problems.**
+1. **Moderation of player-authored content is the genre's existential problem.** Roblox requires filtering of user-originated text everywhere; player-authored *geometry and images* have no automatic filter. The only architectures that work: (a) constrain the authoring space so the output set is safe by construction (stamps, palettes, symmetric generators, filtered text only), (b) gate public sharing behind human/automated review with a report-and-takedown path, or (c) keep creations private/friends-only. Do not ship an unconstrained public pixel canvas.
+2. **Serialization and versioning.** A creation format must survive part-table changes for years. Store part definition IDs (never indices), a format version, and write migrations. Quantize transforms. For large builds, store as a `buffer` blob rather than a nested table — it is dramatically smaller and faster to (de)serialize.
+3. **Physics validation of arbitrary creations.** Players will build a 4,000-part 800-constraint monstrosity specifically to crash your server. Enforce hard caps at *placement* time, and simulate creations in an isolated "sandbox zone" with its own collision group.
+4. **Load/replication cost** of instancing a large creation. Creator-docs explicitly advises loading in chunks across frames; do that, and stream creations only to players who are near them.
+5. **Discoverability of UGC** — a sandbox with no browse/rating layer is a diary, not a platform.
+
+**(d) Performance profile — what breaks first.** Instance count, then physics (constraint count in creations), then the editable memory budget if you go the generated-geometry route, then network on creation load.
+
+**(e) Editable-asset edge — this is the genre where editables are genuinely transformative, not incremental.**
+- **Players authoring actual meshes.** `EditableMesh` (vertex/triangle/UV/colour/bone APIs, `RaycastLocal`, `FindVerticesWithinSphere`, `MergeVertices`, `Triangulate`) is a complete in-game modelling toolkit. A sculpting or voxel-to-mesh tool inside a Roblox game was impossible before; it is now merely hard. The 60k-vertex / 20k-triangle per-mesh cap forces chunking, which is a normal engineering constraint, not a blocker.
+- **Players authoring textures.** `EditableImage` + `SurfaceAppearance` support means in-game texture painting that affects PBR maps, not just decals.
+- **Combined with Roblox's Cube/4D generation**, the sandbox thesis becomes: *players describe an object, the platform generates functional geometry, and your game lets them edit and place it.* Roblox shipped Cube 3D (a 1.8B-parameter text-to-3D foundation model trained on ~1.5M assets, available in Studio **and as an in-experience Lua API**), then 4D functional objects in early access (generated cars that drive, planes that fly), then CubePart for part-controllable generation. The in-experience API is the important part: it means generation is a *gameplay mechanic*, not just a Studio feature. ([Cube](https://about.roblox.com/newsroom/2025/03/introducing-roblox-cube), [Cube 3D tools & APIs](https://devforum.roblox.com/t/beta-cube-3d-generation-tools-and-apis-for-creators/3558947), [in-experience 4D functional objects](https://devforum.roblox.com/t/early-access-introducing-in-experience-4d-functional-objects-and-enhanced-3d-generation/4050893), [CubePart](https://about.roblox.com/newsroom/2026/05/cubepart-roblox-open-vocabulary-part-controllable-3d-generator))
+- **The defensibility argument.** Every other Roblox differentiator is copyable: a competitor can reverse-engineer your loop, buy the same assets, and clone your UI in a week. They cannot clone a generator pipeline they cannot legally enable (13+, ID-verified, dashboard opt-in) and do not have the engineering depth to rebuild. Editable-asset sandboxes are the rare Roblox moat.
+
+**(f) Exemplars.**
+- **Build a Boat for Treasure** — block placement + physics + a run that tests the build. The cleanest "build then validate" loop on the platform.
+- **Lumber Tycoon 2** — persistent, player-driven world; still the best study of sandbox economy.
+- **Blocktales / Block Mania-type builders** — the voxel branch.
+- **Roblox Studio itself** — worth studying as a design document for in-game tooling: the selection, snap, and undo affordances players already expect.
+- *(No shipped large-scale `EditableMesh` sandbox is publicly documented as of this writing — which is the point.)* **[UNVERIFIED — absence of evidence]**
+
+---
+
+## 14. Puzzle, story, and narrative games
+
+**(a) What it is & commercial reality.** Small, low-monetizing, high-critical-regard. Story games ("The Mimic", "Apeirophobia"-adjacent narrative horror, escape-room games) sustain modest but stable audiences. Pure puzzle games are rare.
+
+Honest read: **commercially the weakest genre on this list, and you should know that going in.** Narrative content is consumed once. There is no repeat loop, no gacha, no competitive ladder. Story games monetize through chapter unlocks and cosmetics at low rates, and the new discovery algorithm — which rewards Day 8–28 return behaviour — is structurally hostile to a genre where finishing the content is the goal.
+
+Where it *does* work: (i) narrative as a **wrapper** on a replayable loop (DOORS has a story; it is not a story game), (ii) **episodic** releases that reset the 28-day clock, (iii) **co-op** story games where the social experience is the replay value.
+
+**(b) Core systems.**
+- Dialogue graph: nodes with conditions, choices, effects, and localization keys. Community modules (`Advanced Dialogue System V2`, May 2026; `Dialogue Kit for Story Games`) offer typewriter effects with per-node speed, multiple choice, location banners and server-side action hooks.
+- Cutscene system: camera keyframes, timed events, skip handling, and an "everyone is watching" sync for co-op.
+- Flag/state store for narrative branching (a flat `Set<string>` of set flags is almost always the right model).
+- Checkpoint/chapter progression persistence.
+- Puzzle primitives: pressure plates, sequences, inventory-key matching, timed mechanisms.
+- Multiple endings and an ending-collection meta.
+
+**(c) Hard problems.**
+1. **Branching state explosion.** Do not model branches as a tree. Model as a **flag set plus predicate conditions** on nodes — this keeps the state linear in the number of decisions rather than exponential, and makes saves trivially small and migration-safe.
+2. **Co-op narrative sync.** If four players are in a cutscene and one leaves or lags, the server must own scene progression and clients must be able to *rejoin mid-scene*. The pattern: the server broadcasts `sceneId + elapsedTime`, the client seeks to that offset.
+3. **Skip/pace control.** Every player skips; some don't. You need per-player skip that doesn't desync shared state — only the *presentation* is skippable, never the state transition.
+4. **Localization.** Narrative games are the genre most damaged by English-only text, and Roblox's international growth (reported DAU growth of ~67% in Japan and ~64% in India) makes this a real revenue question. Keys, not strings, from day one.
+5. **Puzzle anti-spoiler design.** Solutions spread in 20 minutes. Seeded per-server puzzle variation is the only real answer.
+
+**(d) Performance profile — what breaks first.** Rarely performance-bound. The exceptions: (1) heavily scripted set-pieces that instantiate large scenes at once (chunk the load), (2) cinematic post-processing stacks on mobile, (3) voice/audio asset memory if you ship voiced dialogue.
+
+**(e) Editable-asset edge.**
+- **Generated documents, letters, photographs, and evidence boards** — a detective/mystery game where the case file is *rendered* from the actual procedurally-generated case (names, times, locations composited into a believable document image) is a genre that does not exist on Roblox and cannot be built without `EditableImage`.
+- **Player-drawn journals/maps** as a mechanic.
+- **Procedural puzzle artifacts** — generated circuit diagrams, constellation charts, cipher wheels, each unique per server.
+- This is the genre where editables convert a weak commercial position into a novel one: *the puzzle content itself becomes generative*, which fixes the "solutions spread instantly" problem and the "content is consumed once" problem simultaneously. That is the strongest argument for editables in any genre on this list.
+
+**(f) Exemplars.**
+- **The Mimic** — chapter-based Japanese-horror narrative; the most successful Roblox story-game structure (episodic, co-op, horror-flavoured).
+- **Apeirophobia** — level-based liminal-space progression; narrative delivered environmentally rather than through dialogue.
+- **Escape-room cohort** (various) — the puzzle branch; almost all suffer the spoiler problem.
+- **Break In / Break In 2** — narrative wrapped around a round-based co-op loop; the commercially smartest structure in this space.
+
+---
+
+## 15. Horror/social hybrids and party games ("lobby + round")
+
+**(a) What it is & commercial reality.** Short rounds, rotating roles, a lobby between rounds: Murder Mystery 2, Flee the Facility, Forsaken, Dandy's World, Epic Minigames, Break In, and a long tail. **This is the single most durable structural category on Roblox** — it has produced hits continuously for a decade and continues to (Forsaken and Dandy's World are both recent).
+
+Why it works, stated plainly: the round loop produces exactly the metrics the 2026 discovery algorithm measures. Short sessions with a clear "one more round" hook maximize *play days* and *qualified play sessions*; asymmetric roles maximize *intentional co-play days*; and the between-round lobby is a natural, non-intrusive monetization surface (cosmetics you show off while waiting). If you want to align with discovery rather than fight it, build here.
+
+Saturation read: **crowded but continuously renewing.** The mechanics are cheap to copy; the *feel* and content cadence are not.
+
+**(b) Core systems.** See the cross-cutting section below — this genre *is* the lobby architecture, plus:
+- Role assignment with weighted fairness (players who haven't been the killer recently get priority).
+- Per-round map rotation and voting.
+- Spectating with free-cam and player-follow.
+- Cosmetic economy displayed in the lobby (this is where the money is).
+- Round-result screens, XP, and a battle pass.
+- Late-join and mid-round-leave handling.
+
+**(c) Hard problems.**
+1. **Late joiners.** The default failure is a player joining mid-round into an unwinnable state. Options: hold in lobby until next round (best for competitive), join as spectator (best for social), or join as a "reinforcement" role. Pick explicitly and communicate it.
+2. **Role-assignment fairness.** Pure random produces the "I've been survivor 11 times" complaint that kills retention. Implement a per-player recency-weighted bag draw, persisted across rounds *and* across sessions if possible.
+3. **Round state machine robustness.** The state machine must be crash-safe: a script error mid-round must not soft-lock the server. Wrap each phase in `pcall`, have a global watchdog that force-advances after a phase timeout, and never let a phase transition depend on an event that might not fire.
+4. **Team-based information leakage.** In asymmetric games the client must not receive information about hidden roles. Replicate role data *only* to entitled clients; do not set a `Value` object on the character. This is the most commonly botched security issue in the genre.
+5. **Cosmetic-heavy lobbies** are a rendering problem: 30 players with maximum cosmetics in one small room is the worst-case avatar scene.
+
+**(d) Performance profile — what breaks first.** (1) **Avatar/cosmetic rendering in the lobby** (ironically worse than the round). (2) **Map load/unload churn** between rounds — pool maps or teleport to fresh reserved servers rather than destroying and rebuilding. (3) **Server memory drift** across many rounds from leaked connections — this genre is where `LuaHeap` leaks surface, because the server runs for hours through dozens of round cycles.
+
+**(e) Editable-asset edge.**
+- **Generated cosmetics** for the lobby economy — the same procedural-skin argument, applied to the genre whose monetization surface *is* the lobby.
+- **Per-round generated maps** with `EditableMesh` — the "regeneration replaces content" thesis from obbies, applied to a genre with more room for it.
+- **End-of-round infographics** rendered as images (chase heatmaps, kill timelines, escape routes) — high shareability, effectively zero on the platform today.
+- **Player-decorated lobby spaces** as an expression and monetization axis.
+
+**(f) Exemplars.**
+- **Murder Mystery 2** (Nikilis) — the genre's monetization archetype: rounds are free, knives are the product, and the trading economy for knives is the actual game.
+- **Flee the Facility** — asymmetric hide-and-escape; the cleanest round state machine to study.
+- **Forsaken** — the current wave leader; playable killers with distinct abilities and randomized objectives.
+- **Epic Minigames** — the pure party-game structure; dozens of micro-games in one round loop, which is the most demanding version of the architecture (each minigame is effectively its own game mode).
+
+---
+
+# Cross-cutting: the round-based lobby architecture
+
+This is the most reusable piece of architecture on Roblox. It underpins every party game, every asymmetric horror game, every competitive shooter, most tower defense, and every "raid instance" in an RPG. Learn it once.
+
+## The two topologies
+
+**Topology A — single-place round loop.** One place, one server, a state machine that cycles Intermission → RoleAssign → Playing → Results → Intermission. Players stay in the same server across rounds. Simple, no teleport latency, no reserved-server cost. Used by Murder Mystery 2, Flee the Facility, Epic Minigames. **Choose this unless you need isolation.**
+
+**Topology B — lobby place + match place.** A lobby place holds a queue; matches run in reserved servers of a separate place. Necessary when: matches must be isolated from non-participants, match size differs from server size, you need skill-based matchmaking, or maps are too large to load alongside a lobby. Used by competitive shooters, raid instances, tournament modes.
+
+## The reserved-server pattern (Topology B), step by step
+
+1. **Enqueue.** The lobby server writes the player (userId, MMR, party ID, region hint) into a **MemoryStore queue** or **sorted map**. Sorted map keyed by MMR is better when you want skill banding; a plain queue is fine for casual.
+2. **Match loop.** One server (or every server, using a MemoryStore lock to elect a leader) periodically reads a batch, forms a balanced group, and **removes those entries atomically**. The atomic removal is the critical correctness point — two servers matching the same player is the classic bug.
+3. **Reserve.** `TeleportService:ReserveServer(placeId)` returns an **access code**. The reserved server stays alive as long as it has ≥1 player, plus roughly a 30-second grace after the last player leaves; after that the access code is dead and cannot be reused. **Do not cache access codes.**
+4. **Teleport.** `TeleportService:TeleportAsync(placeId, players, teleportOptions)` with `TeleportOptions.ReservedServerAccessCode` set, plus `SetTeleportData` carrying the match config (mode, map, team assignments, MMR snapshot).
+5. **Register.** On arrival, the match server publishes its `game.JobId` and match metadata back into MemoryStore so the lobby can show it, so late joiners can be routed to it, and so it can be found again for rejoin.
+6. **Report and drain.** At match end, write results (XP, MMR deltas, stats) to DataStore/MemoryStore, then `TeleportAsync` everyone back to the lobby place. Have a fallback: if the teleport fails, retry with backoff, then kick with a clear message rather than stranding players.
+
+([public vs reserved servers](https://devforum.roblox.com/t/public-servers-vs-reserved-servers/3471347), [matchmaking with MemoryStore + TeleportService](https://devforum.roblox.com/t/matchmaking-system-using-only-memory-stores-and-teleportservice/1487240), [teleporting to an existing reserved server](https://devforum.roblox.com/t/teleporting-people-to-an-already-existing-reserved-server/3382607), [ServerTeleport reference implementation](https://github.com/Hollower233/ServerTeleport))
+
+## Budget the quotas before you design
+
+MemoryStore quotas scale with your player count, not your ambition:
+- Memory: `64KB + 1.2KB × [number of users]`, computed game-wide, with an eight-day traceback after users leave.
+- Requests: `1000 + 120 × [CCU]` units/minute. Most calls cost 1; `GetRangeAsync()` is charged **per item returned**; `UpdateAsync()` on a hash map costs **at least 2**.
+- Caps: **1,000,000 items** and **100MB** per sorted map or queue.
+
+The practical implications: (a) a matchmaking loop polling `GetRangeAsync(100)` every second costs ~6,000 units/minute on its own — poll at 2–5 second intervals and read smaller pages; (b) put queue entries in a compact form (userId + one packed number), not a rich table; (c) shard your queue across several keys by region/mode so a single key doesn't hit the item cap.
+
+## The round state machine
+
+Model it explicitly. A minimal robust version:
+
+```
+States: Waiting → Intermission → Preparing → Playing → Ending → (Waiting | Intermission)
+Each state has: onEnter, onExit, a max duration, and a set of legal transitions.
+```
+
+Non-negotiables:
+- **A watchdog.** Every state has a hard timeout that force-transitions. A round that can hang is a round that will hang.
+- **`pcall` every phase body.** One erroring script must not soft-lock the server for everyone.
+- **Idempotent transitions.** `EndRound()` called twice must not double-award.
+- **A single source of truth**, replicated as one state object (`{phase, phaseEndsAt, roundId}`) rather than a dozen booleans. Clients drive all UI from `phaseEndsAt` minus `workspace:GetServerTimeNow()`, which keeps timers synchronized without per-second remotes.
+- **Round ID on everything.** Every score event, damage event and reward carries the round ID so late-arriving packets from the previous round are discarded.
+
+## Spectating
+
+Three implementations, increasing cost:
+1. **Camera-follow:** set `Camera.CameraSubject` to the target's Humanoid. Trivial, and sufficient for most games.
+2. **Free-cam:** custom camera with WASD/drag, `CameraType.Scriptable`. Needed for competitive and for content creators.
+3. **Replay:** record a compressed transform stream and play it back. Expensive; only worth it for esports-flavoured titles.
+
+**The security note everyone gets wrong:** a spectating client has the full replicated data model. If dead players can spectate living ones in a hidden-information game (a mystery, a hider/seeker game), they can wallhack for their team over voice. Either restrict spectating to the player's own team, delay spectator view, or lock spectating until the round ends.
+
+## Rejoining
+
+- Keep a MemoryStore hash-map entry: `userId → {jobId, accessCode, placeId, expiresAt}` written when a player enters a match.
+- On rejoin to the lobby, look it up; if it's live, offer "rejoin match" and teleport with the stored access code.
+- Store the player's in-match state (score, role, position) **server-side in the match server**, keyed by userId, with a grace window; restore on reconnect.
+- If the match server has died, clear the entry and route to lobby. Always have this path — stale entries that teleport players into nothing are the most common rejoin bug.
+
+## Where this architecture breaks
+
+- **Teleport failures at scale.** `TeleportAsync` can fail; you must handle `onFailed` and retry. At 100K CCU, a 0.5% failure rate is 500 stranded players.
+- **Reserved-server cost.** Every reserved server is a server. A 4-player match size at high CCU means enormous server counts; prefer larger matches or Topology A.
+- **The 30-second grace.** If your match "ends" and everyone teleports out simultaneously, the server dies and any async result writes in flight are lost. Write results *before* teleporting, and use `game:BindToClose` with a short wait as a backstop.
+- **Cross-server messaging.** `MessagingService` has its own rate limits and is best-effort, not guaranteed. Never build match correctness on it; use it for notifications only.
+
+---
+
+# Cross-cutting: what the top-100 have in common technically
+
+Patterns that recur regardless of genre. If your game lacks these, you are not competing with the top of the chart.
+
+1. **The server owns all state that matters; the client owns all feel.** Every large game draws this line identically: the client predicts and renders immediately, the server validates and corrects. Where they differ is only *how much* tolerance the server grants (1–2 studs for melee, a 0.5–1.0s rewind window for shooters, an income-rate ceiling for tycoons).
+
+2. **Session-locked, versioned, auto-saving persistence — never raw DataStore.** Effectively all serious games use `ProfileStore`/`ProfileService` or an equivalent. The reasons are concrete: session locking prevents duplication via multi-server login, `Reconcile()` handles schema additions, and ProfileStore's move to a 300-second autosave (from 30s) plus `MessagingService`-assisted lock handoff cuts DataStore call volume ~10× — which matters because DataStore budgets are the first backend limit a hit game hits.
+
+3. **Almost no unanchored parts in steady state.** Physics is the most expensive thing Roblox does per-part and the most expensive thing to replicate. Top games anchor everything and animate by CFrame: tycoon drops, tower defense enemies, projectiles, effects, moving platforms. Physics is reserved for the few places where emergent behaviour *is* the product (vehicles, ragdolls, sandbox creations).
+
+4. **Humanoid avoidance.** Every genre's scaling story ends at the same wall. Top games use `Humanoid` for the player character and almost nothing else; NPCs and enemies are tables with client-rendered visuals.
+
+5. **Object pooling everywhere.** Bullets, particles, enemies, UI rows, drop parts, rooms. `Instance.new`/`Destroy` in a hot loop is the most common self-inflicted stutter on the platform.
+
+6. **Client-side rendering of server-owned simulation.** The universal scaling pattern: server computes a scalar/compact state, replicates a delta, client builds the visuals. This appears in tower defense (path progress), tycoons (income rate), shooters (character history), and survival (base contents).
+
+7. **Batched, throttled, compressed replication.** No top game sends a remote per event per frame. They accumulate into a per-tick payload, quantize numbers, and increasingly pack into `buffer` objects. Creator-docs states the rule plainly: don't replicate every frame, and send only what changed.
+
+8. **`StreamingEnabled` for anything with a world.** With `Atomic` models for gameplay-critical groups and `PauseOutsideLoadedArea` integrity mode. Teams that avoid streaming end up shipping mobile OOM crashes.
+
+9. **Data-driven content.** Weapons, pets, towers, quests, rooms, recipes are all definition tables, not code. This is what makes a weekly live-ops cadence possible, and weekly cadence is what the 28-day retention algorithm rewards. The top games ship content updates on a schedule; the architecture that permits that is the moat.
+
+10. **A real analytics loop.** D1/D7/D30 retention, session time, payer conversion and ARPPU on a dashboard, plus **funnels** for onboarding and purchase, plus `AnalyticsService:GetPlayerSegmentsAsync()` for in-experience personalization. Uplift Games (Adopt Me) publicly describes using Roblox's analytics and experimentation platform for live A/B testing — that capability, not intuition, is how the top 100 tune.
+
+11. **Anti-exploit as middleware, not as scattered checks.** One module wrapping every remote: type check → rate limit (token bucket) → sanity check against the server's world model → act. Silent rejection (never tell the exploiter which check failed).
+
+12. **Mobile-first performance discipline.** Profiling on a real low-end phone, not in Studio. Creator-docs is explicit that Studio "lies" about draw-call cost relative to target devices and that emulators misreport memory.
+
+13. **Cosmetic-led monetization is winning.** The 2026 revenue leaders (RIVALS; anime fighters) sell appearance, not power. Cosmetics are infinitely re-sellable, don't break balance, and align with a skill-based audience. Pay-to-win gamepasses still work in simulators but are the declining branch.
+
+14. **A codebase that a team can work in.** Adopt Me is 50,000+ lines with custom tooling (Rosync) built specifically to let the team use git and normal editors. Every game at scale ends up with an external toolchain — Rojo, a package manager, CI, and typed Luau.
+
+15. **Cross-platform input parity from day one.** Roblox's audience is majority mobile; a control scheme retrofitted to touch is a control scheme that loses the majority of the funnel.
+

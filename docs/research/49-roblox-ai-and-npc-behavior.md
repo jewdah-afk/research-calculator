@@ -1852,3 +1852,516 @@ Ten lines, zero allocation, trivially debuggable, and genuinely sufficient for t
 
 See **[Architecture decision table](#architecture-decision-table)** below.
 
+---
+
+## 5. Perception
+
+Perception is the *other* half of "feels intelligent". An agent with a perfect A* and a brilliant planner that sees through walls reads as a cheater; an agent with a dumb FSM and believable senses reads as alive.
+
+### 5.1 The sensor pipeline
+
+Run perception as an explicit pipeline with early-outs, cheapest test first. This ordering is the whole performance story:
+
+```
+1. Broad phase   — spatial hash bucket lookup (§7.5).  O(k), no engine calls.
+2. Range         — squared distance vs sightRange².    ~1 op. Never use .Magnitude here.
+3. FOV cone      — dot product vs cos(halfAngle).      ~5 ops.
+4. Line of sight — ONE raycast.                        The only expensive step.
+5. Memory update — write to blackboard.
+```
+
+Steps 1–3 eliminate 90–99% of candidates before any raycast happens. Getting this order wrong is the difference between 200 agents and 20.
+
+### 5.2 Field-of-view and line of sight
+
+```lua
+--!strict
+--!native
+local Perception = {}
+
+-- Cache these; constructing RaycastParams per call allocates.
+local losParams = RaycastParams.new()
+losParams.FilterType = Enum.RaycastFilterType.Exclude
+losParams.IgnoreWater = true
+losParams.RespectCanCollide = true   -- ignore CanCollide=false decoration
+
+--- FOV test. `halfAngleCos` is precomputed: math.cos(math.rad(fovDegrees / 2)).
+function Perception.inCone(
+    eyePos: Vector3, lookDir: Vector3, targetPos: Vector3,
+    rangeSq: number, halfAngleCos: number
+): boolean
+    local offset = targetPos - eyePos
+    local distSq = offset:Dot(offset)              -- squared distance, no sqrt
+    if distSq > rangeSq or distSq < 1e-6 then return distSq <= rangeSq end
+    -- Normalize only after the range test passes.
+    local dir = offset / math.sqrt(distSq)
+    return lookDir:Dot(dir) >= halfAngleCos
+end
+
+--- Line of sight with multi-point sampling so a target isn't "invisible"
+--- because one pixel of its torso is behind a lamp post.
+local SAMPLE_OFFSETS = { Vector3.new(0, 1.5, 0), Vector3.new(0, 0, 0), Vector3.new(0, -1.5, 0) }
+
+function Perception.hasLineOfSight(
+    eyePos: Vector3, targetRoot: BasePart, ignoreList: { Instance }
+): (boolean, number)
+    losParams.FilterDescendantsInstances = ignoreList
+    local visibleSamples = 0
+    for _, offset in SAMPLE_OFFSETS do
+        local p = targetRoot.Position + offset
+        local dir = p - eyePos
+        local hit = workspace:Raycast(eyePos, dir, losParams)
+        if not hit or hit.Instance:IsDescendantOf(targetRoot.Parent :: Instance) then
+            visibleSamples += 1
+        end
+    end
+    -- Return a CONFIDENCE, not just a boolean. Partial visibility should
+    -- produce partial confidence, which drives accuracy and reaction time.
+    return visibleSamples > 0, visibleSamples / #SAMPLE_OFFSETS
+end
+
+return Perception
+```
+
+**Roblox specifics that matter here:**
+
+- `RaycastParams.RespectCanCollide` (`true`) makes the ray ignore `CanCollide = false` parts. Without it, every decorative non-colliding leaf blocks sight. This is the most common LOS bug on Roblox.
+- Set `BasePart.CanQuery = false` on anything that should never block a ray (foliage, particles' host parts, UI anchors). It's cheaper than filter lists.
+- `workspace:Raycast` is `thread_safety: Safe` — verified. Perception is the part of your AI stack that parallelizes.
+- Prefer a **single** raycast per target with 3 vertical samples over a full `Blockcast`; `Blockcast`/`Spherecast` are heavier and, per the docs, do not detect parts that already intersect the shape at the start.
+
+### 5.3 Hearing and noise events
+
+Hearing is a push system, not a poll. Anything that makes noise publishes an event; the spatial hash decides who hears it.
+
+```lua
+--!strict
+-- NoiseSystem — push-based; O(agents in radius), not O(all agents).
+local NoiseSystem = {}
+local grid = require(script.Parent.SpatialHash)
+
+export type Noise = {
+    position: Vector3, loudness: number, source: Instance?, kind: string, at: number,
+}
+
+function NoiseSystem.emit(noise: Noise)
+    -- Loudness is a radius in studs; occlusion halves it per wall crossed.
+    for _, agent in grid:queryRadius(noise.position, noise.loudness) do
+        local d = (agent.position - noise.position).Magnitude
+        local occlusionFactor = NoiseSystem.occlusion(noise.position, agent.position)
+        local heardLoudness = noise.loudness * occlusionFactor - d
+        if heardLoudness > 0 then
+            agent.brain:onHeard(noise, heardLoudness / noise.loudness)
+        end
+    end
+end
+
+local occlusionParams = RaycastParams.new()
+occlusionParams.RespectCanCollide = true
+
+function NoiseSystem.occlusion(from: Vector3, to: Vector3): number
+    -- One ray: hit = something between us = muffled. Good enough; 1 ray beats
+    -- a proper acoustic solve by ~1000x and players cannot tell the difference.
+    local hit = workspace:Raycast(from, to - from, occlusionParams)
+    return hit and 0.45 or 1
+end
+
+return NoiseSystem
+```
+
+Standard loudness values that feel right: footstep walking 15 studs, running 35, gunshot 250, suppressed 60, door slam 80, body falling 40, glass breaking 120. Emit them from the systems that cause them, not from the AI.
+
+### 5.4 Memory, last-known-position, and the search behaviour
+
+The single behaviour that most raises perceived intelligence: **the agent goes to where it last saw you, then searches nearby, then gives up.**
+
+```lua
+--!strict
+export type TargetMemory = {
+    target: Model,
+    lastSeenPosition: Vector3,
+    lastSeenVelocity: Vector3,
+    lastSeenTime: number,
+    confidence: number,          -- decays over time
+    investigated: boolean,
+}
+
+local MEMORY_DURATION = 25       -- s before the target is forgotten entirely
+local CONFIDENCE_HALFLIFE = 6    -- s for confidence to halve
+
+local Memory = {}
+Memory.__index = Memory
+
+function Memory.new() return setmetatable({ targets = {} :: { [Model]: TargetMemory } }, Memory) end
+
+function Memory:see(target: Model, position: Vector3, velocity: Vector3, quality: number)
+    local m = self.targets[target]
+    if not m then
+        m = { target = target, confidence = 0, investigated = false } :: any
+        self.targets[target] = m
+    end
+    m.lastSeenPosition = position
+    m.lastSeenVelocity = velocity
+    m.lastSeenTime = os.clock()
+    m.confidence = math.min(1, m.confidence + quality * 0.6)
+    m.investigated = false
+end
+
+function Memory:update()
+    local now = os.clock()
+    for target, m in self.targets do
+        local age = now - m.lastSeenTime
+        if age > MEMORY_DURATION or not target.Parent then
+            self.targets[target] = nil
+        else
+            m.confidence = 0.5 ^ (age / CONFIDENCE_HALFLIFE)
+        end
+    end
+end
+
+--- Where should I look? Extrapolate from last-seen velocity, but decay the
+--- extrapolation with confidence so the guess degrades into a plain "there".
+function Memory:predictedPosition(m: TargetMemory): Vector3
+    local age = os.clock() - m.lastSeenTime
+    local lead = math.min(age, 2.5) * m.confidence
+    return m.lastSeenPosition + m.lastSeenVelocity * lead
+end
+
+--- Search points: a ring of positions around the last known position, ordered
+--- by how plausible an escape route each is (toward last-seen velocity first).
+function Memory:searchPoints(m: TargetMemory, count: number, radius: number): { Vector3 }
+    local pts = {}
+    local bias = m.lastSeenVelocity.Magnitude > 1 and m.lastSeenVelocity.Unit or Vector3.xAxis
+    local baseAngle = math.atan2(bias.Z, bias.X)
+    for i = 0, count - 1 do
+        -- Alternate left/right of the escape direction, widening.
+        local spread = (i // 2 + 1) * (math.pi * 2 / (count + 1))
+        local sign = (i % 2 == 0) and 1 or -1
+        local a = baseAngle + spread * sign
+        pts[i + 1] = m.lastSeenPosition + Vector3.new(math.cos(a), 0, math.sin(a)) * radius
+    end
+    return pts
+end
+
+return Memory
+```
+
+### 5.5 Alertness states
+
+Three or four levels, with **asymmetric transitions** — alertness rises fast and falls slowly. That asymmetry is what makes stealth games tense.
+
+| Level | Enter when | Behaviour | Decay |
+|---|---|---|---|
+| **Unaware** | default | Patrol, normal walk speed, relaxed animation set | — |
+| **Suspicious** | a noise, or a target seen for < reactionDelay | Stop, turn toward stimulus, scan. Speed ×0.7 | → Unaware after 8–12 s |
+| **Searching** | lost a confirmed target, or suspicion maxed | Move to last-known, then `searchPoints`. Calls out to allies | → Suspicious after 20–30 s |
+| **Alert** | confirmed visual for ≥ reactionDelay | Full combat. Shares target with squad | → Searching when LOS lost > 3 s |
+
+Model suspicion as a 0→1 meter that fills at a rate proportional to `stimulusStrength × visibilityQuality / distance`, rather than a boolean — that gives you the Metal Gear "?" moment for free, and lets a player back out of detection.
+
+### 5.6 Group awareness and shared perception
+
+Give every squad a **shared blackboard**. One agent's detection becomes the squad's, after a short, *visible* propagation delay (a shout, a radio callout) — never instantly, or players correctly perceive it as cheating.
+
+```lua
+--!strict
+export type SquadBlackboard = {
+    members: { any },
+    sharedTargets: { [Model]: { position: Vector3, time: number, reportedBy: any } },
+    attackTokens: number,            -- see §6.4
+    claimedCover: { [BasePart]: any },
+    claimedFlankSlots: { [number]: any },
+}
+
+local function reportContact(squad: SquadBlackboard, reporter, target: Model, pos: Vector3)
+    squad.sharedTargets[target] = { position = pos, time = os.clock(), reportedBy = reporter }
+    reporter:playCallout("ContactLeft")              -- telegraph the share
+    task.delay(0.5 + math.random() * 0.6, function()  -- propagation delay
+        for _, m in squad.members do
+            if m ~= reporter and m.alive then
+                m.memory:see(target, pos, Vector3.zero, 0.5)  -- low confidence: hearsay
+                m:setAlertness("Searching")
+            end
+        end
+    end)
+end
+```
+
+Note the low confidence on hearsay: an ally who was *told* about you should search, not snap-aim.
+
+### 5.7 Making AI feel fair
+
+This is engineering, and it's mostly four numbers.
+
+**1. Reaction delay.** Never react on the frame of detection. Humans take 200–300 ms to react to a visual stimulus. Give each agent `reactionDelay = base + random jitter`:
+
+| Difficulty | Reaction delay |
+|---|---|
+| Easy | 0.55–0.90 s |
+| Normal | 0.30–0.55 s |
+| Hard | 0.18–0.30 s |
+| Unfair (bosses only) | 0.08–0.15 s |
+
+**2. Telegraphing.** Every damaging action gets a wind-up that is (a) longer than the player's reaction time, and (b) *visually and audibly distinct per attack*. Heavy attack = 0.8 s wind-up with a distinct pose and a sound cue. A player who dies to an untelegraphed attack blames the game; a player who dies to a telegraphed one blames themselves. This is the highest-leverage single thing in combat AI.
+
+**3. Deliberately imperfect aim.** Perfect hitscan is never fun.
+
+```lua
+--!strict
+-- Aim error that TIGHTENS with time-on-target: missing the first shots and
+-- then converging reads as "it's ranging me in", which players find fair and
+-- also gives them a window to break line of sight.
+local function aimPoint(ctx, targetPos: Vector3): Vector3
+    local timeOnTarget = os.clock() - ctx.acquiredAt
+    local convergence = math.clamp(timeOnTarget / ctx.convergeTime, 0, 1)
+    local spread = ctx.maxSpreadStuds * (1 - convergence) + ctx.minSpreadStuds * convergence
+    -- Movement penalty: a strafing player is genuinely harder to hit.
+    local targetSpeed = ctx.targetVelocity.Magnitude
+    spread *= 1 + math.min(targetSpeed / 16, 1) * 0.8
+    local a = math.random() * math.pi * 2
+    local r = math.sqrt(math.random()) * spread          -- uniform over the disc
+    return targetPos + Vector3.new(math.cos(a) * r, (math.random() - 0.5) * spread, math.sin(a) * r)
+end
+```
+
+**4. Grace rules.** The unwritten ones every good shooter uses: the *first* shot at a newly-acquired target always misses; an enemy never fires within 0.5 s of the player entering its FOV; damage from off-screen enemies is reduced or delayed; if the player's health is below a threshold, enemies briefly reduce their attack-token allotment. None of these are visible, all of them are felt.
+
+---
+
+## 6. Combat AI
+
+### 6.1 Target selection and threat
+
+A threat table beats "nearest target" for anything with more than one attacker.
+
+```lua
+--!strict
+--!native
+-- Threat accumulates from damage, healing (aggro on healers), taunts, and
+-- proximity; it decays so the table doesn't freeze on the first attacker.
+local Threat = {}
+Threat.__index = Threat
+
+local DECAY_PER_SECOND = 0.06        -- 6%/s: ~11 s half-life
+local PROXIMITY_THREAT = 1.5         -- per second within melee range
+local HEAL_THREAT_RATIO = 0.5
+local TAUNT_MULTIPLIER = 1.3         -- must beat the current top by this margin
+
+function Threat.new() return setmetatable({ table_ = {} :: { [Model]: number }, top = nil }, Threat) end
+
+function Threat:add(source: Model, amount: number)
+    self.table_[source] = (self.table_[source] or 0) + amount
+end
+
+function Threat:onDamaged(by: Model, damage: number) self:add(by, damage) end
+function Threat:onHealed(healer: Model, amount: number) self:add(healer, amount * HEAL_THREAT_RATIO) end
+
+function Threat:onTaunt(by: Model)
+    local current = self.table_[self.top or by] or 0
+    self.table_[by] = math.max(self.table_[by] or 0, current * TAUNT_MULTIPLIER + 1)
+end
+
+function Threat:update(dt: number, myPosition: Vector3, meleeRange: number)
+    local decay = (1 - DECAY_PER_SECOND) ^ dt
+    local best, bestValue = nil, -1
+    for target, value in self.table_ do
+        if not target.Parent then self.table_[target] = nil; continue end
+        value *= decay
+        local root = target:FindFirstChild("HumanoidRootPart") :: BasePart?
+        if root and (root.Position - myPosition).Magnitude < meleeRange then
+            value += PROXIMITY_THREAT * dt
+        end
+        if value < 0.5 then self.table_[target] = nil else self.table_[target] = value end
+        if value > bestValue then best, bestValue = target, value end
+    end
+    -- STICKINESS: only switch if the new top beats the current by 10%.
+    -- Without this, two similar attackers make the AI spin in place.
+    if self.top and self.table_[self.top] and best ~= self.top then
+        if bestValue < self.table_[self.top] * 1.1 then best = self.top end
+    end
+    self.top = best
+end
+
+return Threat
+```
+
+For non-MMO genres, score targets with a small utility function instead: `score = w1*(1/distance) + w2*isLowHealth + w3*isHealer + w4*isDamagingMe + w5*hasLineOfSight - w6*alliesAlreadyTargeting`. The last term is what stops five enemies dogpiling one player.
+
+### 6.2 Attack timing
+
+Three timers per attacker, and they are not the same thing:
+
+- **Wind-up** (telegraph): animation plays, no damage yet, cannot be cancelled after a commit point. This is your fairness budget.
+- **Active**: hit window.
+- **Recovery + cooldown**: vulnerability window + the gate before the next attack.
+
+Add a **global attack rhythm** on top of per-agent cooldowns, or a group of enemies with the same 1.5 s cooldown will synchronize into a metronome. Jitter each agent's cooldown by ±20% at spawn, and re-jitter on each use.
+
+### 6.3 Positioning — flanking, kiting, cover
+
+**Flank slots.** Divide the ring around the target into N slots; agents claim one from the squad blackboard. Claiming is what prevents two enemies from standing in the same place.
+
+```lua
+--!strict
+local function claimFlankSlot(squad, agent, targetPos: Vector3, radius: number, slots: number): Vector3
+    -- Free any slot this agent already held.
+    for i, holder in squad.claimedFlankSlots do
+        if holder == agent then squad.claimedFlankSlots[i] = nil end
+    end
+    local best, bestCost = nil, math.huge
+    for i = 1, slots do
+        if squad.claimedFlankSlots[i] == nil then
+            local a = (i - 1) * (math.pi * 2 / slots)
+            local p = targetPos + Vector3.new(math.cos(a), 0, math.sin(a)) * radius
+            local cost = (p - agent.position).Magnitude
+            if cost < bestCost then best, bestCost = i, cost end
+        end
+    end
+    if not best then return targetPos end
+    squad.claimedFlankSlots[best] = agent
+    local a = (best - 1) * (math.pi * 2 / slots)
+    return targetPos + Vector3.new(math.cos(a), 0, math.sin(a)) * radius
+end
+```
+
+**Kiting.** Maintain a distance *band*, not a distance. Move away below `minRange`, toward above `maxRange`, strafe inside the band. A single target distance produces the classic jitter.
+
+```lua
+local function kiteDesire(agent, targetPos: Vector3, minR: number, maxR: number): Vector3
+    local offset = targetPos - agent.position
+    local d = offset.Magnitude
+    local dir = d > 1e-3 and offset.Unit or Vector3.xAxis
+    if d < minR then return -dir                                   -- back off
+    elseif d > maxR then return dir                                -- close in
+    else return Vector3.new(-dir.Z, 0, dir.X) * agent.strafeSign end -- orbit
+end
+```
+Flip `strafeSign` every 1.5–3 s (randomized) so the orbit isn't a perfect circle.
+
+**Cover.** Pre-author cover points as tagged parts with an attachment indicating the protected direction; at runtime score each candidate: `score = protectionFromThreat * w1 + shootingAngleQuality * w2 - distanceToReach * w3 - occupiedPenalty`. Validate `protectionFromThreat` with a single raycast from the threat's eye height to the cover's stand position. Claim cover in the squad blackboard exactly like flank slots.
+
+### 6.4 The attack token pattern
+
+**The problem:** five enemies surround the player, all decide "in range, attack", and the player takes five simultaneous hits and dies without a readable moment. The game feels cheap, and no amount of per-enemy tuning fixes it, because the problem is *coordination*, not individual behaviour.
+
+**The solution**, popularized by Bungie's Halo AI work and now standard: a target owns a small pool of **attack tokens**. An enemy must hold a token to commit to an attack. Everyone else circles, repositions, taunts, and *looks* threatening. **[lit — not re-verified 2026-09; Damian Isla's Halo 2/3 AI talks, GDC 2005 & GDC 2008 "Building a Better Battle"; the pattern is documented across the *Game AI Pro* series]**
+
+```lua
+--!strict
+-- AttackTokens.lua — one pool per target.
+local AttackTokens = {}
+AttackTokens.__index = AttackTokens
+
+function AttackTokens.new(capacity: number, minHoldTime: number, maxHoldTime: number)
+    return setmetatable({
+        capacity = capacity, holders = {} :: { [any]: number },
+        count = 0, minHold = minHoldTime, maxHold = maxHoldTime,
+    }, AttackTokens)
+end
+
+function AttackTokens:request(agent, priority: number): boolean
+    if self.holders[agent] then return true end
+    if self.count < self.capacity then
+        self.holders[agent] = os.clock()
+        self.count += 1
+        return true
+    end
+    -- Pool full: steal from the lowest-priority holder that has held long enough.
+    local now = os.clock()
+    local victim, victimPriority = nil, priority
+    for holder, since in self.holders do
+        if now - since >= self.minHold and holder.attackPriority < victimPriority then
+            victim, victimPriority = holder, holder.attackPriority
+        end
+    end
+    if victim then
+        self:release(victim)
+        self.holders[agent] = now
+        self.count += 1
+        return true
+    end
+    return false
+end
+
+function AttackTokens:release(agent)
+    if self.holders[agent] then
+        self.holders[agent] = nil
+        self.count -= 1
+    end
+end
+
+--- Force-expire long holds so one agent can't camp a token.
+function AttackTokens:update()
+    local now = os.clock()
+    for holder, since in self.holders do
+        if now - since > self.maxHold or not holder.alive then self:release(holder) end
+    end
+end
+
+return AttackTokens
+```
+
+Tuning that works in practice:
+
+| Enemy count around the player | Token capacity |
+|---|---|
+| 1–2 | 1 |
+| 3–4 | 2 |
+| 5–8 | 2–3 |
+| 9+ (horde) | 3–4, plus a short global cooldown between any two attacks landing |
+
+Melee and ranged should use **separate pools** — 2 melee tokens and 2 ranged tokens reads very differently from 4 shared. And the agents *without* a token must not stand still: circling, repositioning, weapon-ready poses and callouts are what sell "they're waiting for an opening" rather than "they're idle".
+
+### 6.5 Difficulty scaling
+
+Scale in this order, because this is the order of "least to most likely to feel cheap":
+
+1. **Reaction delay and attack-token capacity** — invisible, hugely effective.
+2. **Aim spread and convergence time.**
+3. **Attack cooldowns and the number of simultaneous attackers.**
+4. **Perception ranges and FOV angle.**
+5. **Enemy count and composition.**
+6. **Damage and health numbers** — last resort. Raising enemy health is the least satisfying difficulty lever in games and the one players notice most.
+
+Never scale: pathfinding quality, player-position knowledge (an enemy that "just knows" where you are is the #1 cause of "this game cheats" reviews), or movement speed beyond ~15%.
+
+### 6.6 Boss phase machines
+
+A boss is an FSM over *phases*, where each phase swaps the attack set, and transitions are gated on health thresholds with **hysteresis and a mandatory transition state**.
+
+```lua
+--!strict
+local BOSS_PHASES = {
+    { name = "Phase1", healthAbove = 0.66,
+      attacks = { "Slam", "Sweep" }, moveSpeed = 12, tokenCapacity = 1 },
+    { name = "Phase2", healthAbove = 0.33,
+      attacks = { "Slam", "Sweep", "Charge", "SummonAdds" }, moveSpeed = 16, tokenCapacity = 2 },
+    { name = "Phase3", healthAbove = 0.0,
+      attacks = { "Slam", "Charge", "Enrage", "ArenaWide" }, moveSpeed = 20, tokenCapacity = 2 },
+}
+
+-- Three rules that make boss phases read well:
+-- 1. A transition is an EVENT, not a threshold crossing: play a locked,
+--    invulnerable-or-not transition animation so the player SEES the change.
+-- 2. Never transition mid-attack; queue it for the next recovery window.
+-- 3. Phases only go forward. Healing the boss above a threshold must not
+--    regress the phase, or you get flicker.
+local function maybeAdvancePhase(boss)
+    if boss.transitioning or boss.inAttack then return end
+    local frac = boss.humanoid.Health / boss.humanoid.MaxHealth
+    local target = #BOSS_PHASES
+    for i, p in BOSS_PHASES do
+        if frac > p.healthAbove then target = i; break end
+    end
+    if target > boss.phaseIndex then
+        boss.transitioning = true
+        boss:playPhaseTransition(BOSS_PHASES[target], function()
+            boss.phaseIndex = target
+            boss.transitioning = false
+        end)
+    end
+end
+```
+
+Within a phase, pick attacks with a small utility function (range, cooldown, how recently used, player position relative to the arena) rather than random selection — random produces the same attack three times in a row, which reads as a bug.
+

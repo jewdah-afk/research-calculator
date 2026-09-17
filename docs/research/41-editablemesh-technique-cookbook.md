@@ -1839,3 +1839,434 @@ end
 
 Any raycast you do in world space must be converted into mesh space **and scaled** before
 `RaycastLocal`, and the hit point scaled back on the way out.
+
+---
+
+## 8. Trails, ribbons and effects geometry
+
+`Beam` and `Trail` are cheaper than `EditableMesh` and you should use them by default.
+Reach for geometry when you need what they structurally cannot express: **a ribbon with
+real width variation along an arbitrary 3-D path**, **a surface that isn't a flat strip**,
+**per-vertex colour**, **branching**, or **a shape that persists and can be hit-tested**.
+
+### 8.1 Sword trails (the swept-quad ribbon)
+
+The correct sword trail is not a camera-facing strip; it is the **swept surface between the
+blade's tip and hilt** over time. Sample both each frame and stitch:
+
+```lua
+--!strict
+local SEGMENTS = 24                    -- ring buffer length
+local trail = { tip = {}, base = {}, head = 0, count = 0 }
+
+-- Fixed topology: SEGMENTS*2 verts, (SEGMENTS-1)*2 tris. Built ONCE.
+local function buildTrailMesh(em: EditableMesh)
+    local pos = table.create(SEGMENTS * 2, Vector3.zero)
+    local ids = em:BatchAdd(Enum.MeshAttribute.Vertex, pos)
+    local faces = {}
+    for i = 1, SEGMENTS - 1 do
+        local a, b = ids[i * 2 - 1], ids[i * 2]
+        local c, d = ids[i * 2 + 1], ids[i * 2 + 2]
+        table.insert(faces, { a, b, d })
+        table.insert(faces, { a, d, c })
+    end
+    em:BatchAdd(Enum.MeshAttribute.Face, faces)
+    return ids
+end
+
+local function pushSample(em: EditableMesh, ids, tipW: Vector3, baseW: Vector3, partCF: CFrame)
+    trail.head = trail.head % SEGMENTS + 1
+    trail.tip[trail.head]  = partCF:PointToObjectSpace(tipW)
+    trail.base[trail.head] = partCF:PointToObjectSpace(baseW)
+    trail.count = math.min(trail.count + 1, SEGMENTS)
+
+    local out = table.create(SEGMENTS * 2)
+    for i = 1, SEGMENTS do
+        local k = (trail.head - i) % SEGMENTS + 1
+        local valid = i <= trail.count
+        out[i * 2 - 1] = if valid then trail.base[k] else trail.base[trail.head]
+        out[i * 2]     = if valid then trail.tip[k]  else trail.base[trail.head]
+    end
+    em:BatchSetValues(ids, out)
+end
+```
+
+Fade with **vertex alpha**, not transparency: `BatchSetValues(colorIds, alphas)` where
+`alphas` is an array of numbers (the docs explicitly allow a number array for colour IDs to
+set alpha). Newest segment alpha 1, oldest 0. Set `MeshPart.Transparency` to a small
+epsilon (e.g. `0.02`) to force the translucent render queue — a trick a shipped renderer
+uses precisely because the opaque queue alpha-*tests* instead of blending
+[code, `turtlesoupy/robloquake`].
+
+**Cost: zero rebuilds, 48 vertices, one `BatchSetValues` per frame.** This is the cheapest
+non-trivial EditableMesh technique in the chapter and it looks dramatically better than a
+`Trail`.
+
+### 8.2 Motion ribbons and projectile paths
+
+Same ring buffer, but the "base" samples come from a fixed offset rather than a second
+attachment, and the ribbon is oriented by §5.5's rotation-minimizing frames so it doesn't
+flip when the projectile loops. For a homing missile's smoke ribbon, widen with age:
+`width(t) = w0 + (w1 - w0) * t` and taper alpha with the same `t`.
+
+### 8.3 Force fields, shields and portals
+
+- **Force field**: an icosphere (§5.3, subdiv 3 = 1,280 tris) with `DoubleSided = true`,
+  vertex colour driven by `abs(dot(vertexNormal, toCamera))` for a Fresnel rim, and a small
+  radial noise displacement that ripples outward from hit points:
+  `r = R + Σ hits A·sin(k·(d - c·t))·exp(-λ(t - t_hit))`.
+- **Portal**: a disc of `N` ring segments; animate the rim vertices with a rotating
+  multi-frequency sine for the "liquid edge" look, and keep the interior flat with an
+  `EditableImage` texture doing the actual portal render.
+- **Shield impact**: hexagonal tessellation instead of a triangulated sphere — build the
+  hexes as separate face groups so you can pop individual cells' alpha on hit.
+
+### 8.4 What genuinely cannot be done with `Beam`/`Trail`
+
+Branching lightning (a tree of ribbons meeting at forks), a slash that leaves a
+**hit-testable** surface behind, ribbons whose cross-section is not a flat quad (a
+twisting flat *tape* needs real frames), ground-decal geometry that conforms to uneven
+terrain, and anything needing per-vertex colour gradients across the width as well as the
+length.
+
+---
+
+## 9. Utility and debug geometry
+
+A debug-draw library is the highest return-on-investment thing in this chapter, because it
+makes every *other* system in your game debuggable. The design that works: **one persistent
+`EditableMesh` per draw category, rebuilt-free, with a fixed vertex pool and an immediate-mode
+API.**
+
+### 9.1 The immediate-mode debug-draw core
+
+```lua
+--!strict
+local AssetService = game:GetService("AssetService")
+local RunService = game:GetService("RunService")
+
+local MAX_TRIS = 16000
+local MAX_VERTS = MAX_TRIS * 3
+
+local DebugDraw = {}
+local em: EditableMesh, part: MeshPart
+local vids: { number }, cids: { number }
+local posBuf: { Vector3 }, colBuf: { Color3 }, alphaBuf: { number }
+local cursor = 0
+
+function DebugDraw.init()
+    em = AssetService:CreateEditableMesh()
+    assert(em, "editable mesh budget exhausted")
+    posBuf = table.create(MAX_VERTS, Vector3.zero)
+    colBuf = table.create(MAX_VERTS, Color3.new(1, 1, 1))
+    alphaBuf = table.create(MAX_VERTS, 0)
+    vids = em:BatchAdd(Enum.MeshAttribute.Vertex, posBuf)
+    cids = em:BatchAdd(Enum.MeshAttribute.Color, colBuf, alphaBuf)
+    local faces, fcols = {}, {}
+    for i = 1, MAX_TRIS do
+        local a, b, c = vids[i*3-2], vids[i*3-1], vids[i*3]
+        faces[i] = { a, b, c }
+        fcols[i] = { cids[i*3-2], cids[i*3-1], cids[i*3] }
+    end
+    local fids = em:BatchAdd(Enum.MeshAttribute.Face, faces)
+    em:BatchSetFaceAttributes(fids, fcols)
+
+    part = AssetService:CreateMeshPartAsync(Content.fromObject(em), {
+        CollisionFidelity = Enum.CollisionFidelity.Box,
+        RenderFidelity = Enum.RenderFidelity.Precise,
+    })
+    part.Anchored, part.CanCollide, part.CanQuery, part.CanTouch = true, false, false, false
+    part.CastShadow = false
+    part.Transparency = 0.02             -- force the translucent queue
+    part.DoubleSided = true
+    part.Material = Enum.Material.Neon
+    part.Size = Vector3.one              -- geometry is authored in world units
+    part.CFrame = CFrame.identity
+    part.Parent = workspace
+end
+
+local function tri(a: Vector3, b: Vector3, c: Vector3, col: Color3, alpha: number)
+    if cursor + 3 > MAX_VERTS then return end
+    posBuf[cursor+1], posBuf[cursor+2], posBuf[cursor+3] = a, b, c
+    colBuf[cursor+1], colBuf[cursor+2], colBuf[cursor+3] = col, col, col
+    alphaBuf[cursor+1], alphaBuf[cursor+2], alphaBuf[cursor+3] = alpha, alpha, alpha
+    cursor += 3
+end
+
+-- A "line" is a screen-facing quad of a fixed world thickness.
+function DebugDraw.line(a: Vector3, b: Vector3, col: Color3, thickness: number?)
+    local w = (thickness or 0.08) * 0.5
+    local d = b - a
+    if d.Magnitude < 1e-5 then return end
+    local up = if math.abs(d.Unit.Y) > 0.99 then Vector3.xAxis else Vector3.yAxis
+    local side = d.Unit:Cross(up).Unit * w
+    tri(a - side, a + side, b + side, col, 1)
+    tri(a - side, b + side, b - side, col, 1)
+end
+
+function DebugDraw.box(cf: CFrame, size: Vector3, col: Color3)
+    local h = size * 0.5
+    local c = {}
+    for i = 0, 7 do
+        c[i+1] = cf:PointToWorldSpace(Vector3.new(
+            if bit32.band(i,1)==0 then -h.X else h.X,
+            if bit32.band(i,2)==0 then -h.Y else h.Y,
+            if bit32.band(i,4)==0 then -h.Z else h.Z))
+    end
+    local E = {{1,2},{3,4},{5,6},{7,8},{1,3},{2,4},{5,7},{6,8},{1,5},{2,6},{3,7},{4,8}}
+    for _, e in E do DebugDraw.line(c[e[1]], c[e[2]], col) end
+end
+
+-- Call at the END of every frame's debug drawing.
+function DebugDraw.flush()
+    for i = cursor + 1, MAX_VERTS do
+        posBuf[i] = Vector3.zero          -- collapse unused tris to degenerate
+        alphaBuf[i] = 0
+    end
+    em:BatchSetValues(vids, posBuf)
+    em:BatchSetValues(cids, colBuf)
+    em:BatchSetValues(cids, alphaBuf)     -- number array sets alpha
+    cursor = 0
+end
+
+RunService.Heartbeat:Connect(DebugDraw.flush)
+return DebugDraw
+```
+
+**Why this design.** Topology is allocated once and never changes, so there is **never a
+`CreateMeshPartAsync` call after init**. Unused triangles are collapsed to a point
+(degenerate = not rasterised). One mesh = one draw call for your entire debug overlay,
+versus hundreds of Parts. `Material = Neon` makes it readable against any scene.
+
+### 9.2 Built on that core
+
+- **Wireframe of any mesh**: for every face, three `DebugDraw.line` calls between
+  `GetPosition(GetFaceVertices(fid)[k])`. For a 5,000-tri mesh that's 15,000 lines =
+  30,000 debug triangles — over budget, so wireframe only a *selection* or use a second
+  mesh dedicated to it.
+- **Normals**: `line(p, p + normal * 0.5, Color3.new(0,0,1))` per face-corner. Tangent
+  visualisation needs the UV-derived tangent (§10.5).
+- **Hitboxes and collisions**: `DebugDraw.box(part.CFrame, part.Size, col)` over a query
+  result set. For `OverlapParams` debugging, draw the query volume in one colour and each
+  hit in another.
+- **Spatial partitions**: recursively draw octree/quadtree node bounds with per-depth
+  colour. This is where the one-mesh design pays — a 4-level octree is thousands of boxes.
+- **Graphs and node networks in 3-D**: nodes as small icospheres (subdiv 0, 20 tris),
+  edges as lines, and **arrowheads** as a 6-triangle cone for directed edges. Invaluable
+  for pathfinding, dialogue trees, quest DAGs, factory belt networks.
+- **Persistent vs transient**: keep two meshes. One flushed every frame (`DebugDraw`
+  above), one append-only for things you want to *accumulate* (a bullet's whole flight
+  path, every position an NPC has stood in).
+
+### 9.3 Ship it disabled
+
+Guard `init()` behind a flag, and behind `RunService:IsStudio()` or an attribute, because
+that persistent 48,000-vertex mesh holds real editable budget. `Destroy()` it when the flag
+turns off — don't rely on GC (§"budget refunds take 15–25 s", below).
+
+---
+
+## 10. Mesh analysis and repair
+
+### 10.1 Reading an existing asset
+
+```lua
+local ok, em = pcall(function()
+    return AssetService:CreateEditableMeshAsync(Content.fromAssetId(ASSET_ID))
+end)
+-- or from a live part, which is usually what you want:
+local em2 = AssetService:CreateEditableMeshAsync(meshPart.MeshContent)
+em2:Triangulate()   -- docs: currently a no-op, but recommended after CreateEditableMeshAsync
+```
+
+Two rules, both documented. **Permissions:** `CreateEditableMeshAsync` only loads an asset
+owned by / shared with the game owner, the Studio user, or (client-side) the logged-in
+player — otherwise it throws. And the whole API fails by default in published games until
+the creator is 13+ **and** ID-verified **and** has toggled *Enable Mesh / Image APIs* on the
+Creator Dashboard. **Meshes read this way are `FixedSize` by default** — you can move
+vertices but not add or remove them. Pass `{ FixedSize = false }` if you need topology
+edits, and accept the ~2.8 MB worst-case budget charge.
+
+### 10.2 Bounds, surface area and volume
+
+```lua
+local function analyse(em: EditableMesh)
+    local center, size = em:GetCenter(), em:GetSize()   -- both O(1), from the engine
+    local area, vol = 0.0, 0.0
+    local faces = em:GetFaces()
+    for _, fid in faces do
+        local v = em:GetFaceVertices(fid)
+        local a = em:GetPosition(v[1])
+        local b = em:GetPosition(v[2])
+        local c = em:GetPosition(v[3])
+        local cross = (b - a):Cross(c - a)
+        area += cross.Magnitude * 0.5
+        -- signed tetrahedron volume with the origin (divergence theorem).
+        -- Correct only for a closed, consistently-wound manifold.
+        vol += a:Dot(b:Cross(c)) / 6
+    end
+    return { center = center, size = size, area = area,
+             volume = math.abs(vol), triangles = #faces }
+end
+```
+
+`GetCenter()` returns the **bounding-box centre**, not the centroid, and `GetSize()` the
+bounding-box dimensions — both documented that way, both `thread_safety: Safe`. Uses:
+buoyancy from volume, damage scaling from surface area, auto-sizing prompts and
+`ProximityPrompt` offsets from bounds, procedural mass.
+
+### 10.3 Degenerate triangle detection
+
+```lua
+local function findDegenerate(em: EditableMesh, areaEps: number, edgeEps: number)
+    local bad = {}
+    for _, fid in em:GetFaces() do
+        local v = em:GetFaceVertices(fid)
+        local a, b, c = em:GetPosition(v[1]), em:GetPosition(v[2]), em:GetPosition(v[3])
+        local ab, ac = b - a, c - a
+        local twiceArea = ab:Cross(ac).Magnitude
+        local dup = v[1] == v[2] or v[2] == v[3] or v[1] == v[3]
+        local tiny = ab.Magnitude < edgeEps or ac.Magnitude < edgeEps
+                     or (c - b).Magnitude < edgeEps
+        if dup or tiny or twiceArea * 0.5 < areaEps then
+            table.insert(bad, fid)
+        end
+    end
+    return bad
+end
+```
+
+Degenerates matter because they produce NaN normals, break tangent generation, and
+(critically) **`CreateEditableMeshAsync` silently culls zero-area triangles when it makes a
+FixedSize copy** — production code documents a batch that passed a face-count guard on the
+dynamic mesh and then copied to an *empty* mesh, which `CreateMeshPartAsync` then rejected
+[code, `turtlesoupy/robloquake`]. Check the face count **after** the copy, not before.
+
+`MergeVertices(tolerance)` is the engine's welding pass: it merges vertices that touch to a
+single vertex ID *while keeping the other attribute IDs*, and returns an old→new ID map.
+Run it, then `RemoveUnused()`, then re-check for degenerates — welding creates them.
+
+### 10.4 Recomputing normals — the area-weighted formula
+
+The correct smooth normal at a vertex is the **area-weighted** (equivalently,
+cross-product-magnitude-weighted) sum of adjacent face normals:
+
+```
+n_v  =  normalize( Σ_{f ∈ faces(v)}  (b_f − a_f) × (c_f − a_f) )
+```
+
+The un-normalised cross product's magnitude is exactly `2 × area`, so summing the raw
+crosses *is* area weighting — you do not multiply by anything. (Angle weighting, which
+weights by the interior angle at `v`, is the alternative and is better for meshes with
+wildly uneven triangle sizes; area weighting is standard and matches most DCC tools.)
+
+```lua
+local function recomputeNormals(em: EditableMesh, smoothAngleDeg: number)
+    local cosLimit = math.cos(math.rad(smoothAngleDeg))
+    local accum: { [number]: Vector3 } = {}
+    local faceN: { [number]: Vector3 } = {}
+
+    for _, fid in em:GetFaces() do
+        local v = em:GetFaceVertices(fid)
+        local a, b, c = em:GetPosition(v[1]), em:GetPosition(v[2]), em:GetPosition(v[3])
+        local cross = (b - a):Cross(c - a)          -- magnitude == 2*area
+        faceN[fid] = cross
+        for k = 1, 3 do
+            accum[v[k]] = (accum[v[k]] or Vector3.zero) + cross
+        end
+    end
+
+    -- Split at hard edges: a corner uses the smooth normal only if the face
+    -- normal agrees with it; otherwise it keeps the flat face normal.
+    local vertexIds, faceIds, normalIds = {}, {}, {}
+    for fid, cross in faceN do
+        local fn = if cross.Magnitude > 1e-9 then cross.Unit else Vector3.yAxis
+        for _, vid in em:GetFaceVertices(fid) do
+            local s = accum[vid]
+            local sn = if s.Magnitude > 1e-9 then s.Unit else fn
+            local n = if fn:Dot(sn) >= cosLimit then sn else fn
+            table.insert(vertexIds, vid)
+            table.insert(faceIds, fid)
+            table.insert(normalIds, em:AddNormal(n))
+        end
+    end
+    em:BatchSetVertexFaceAttributes(vertexIds, faceIds, normalIds)
+end
+```
+
+`BatchSetVertexFaceAttributes(vertexIds, faceIds, attrIds)` is the right call here — it
+sets the attribute at each `(vertex, face)` **corner**, which is precisely the split-normal
+model `EditableMesh` uses. Alternatively `AddNormal(nil)` lets the engine auto-compute, and
+`ResetNormal(id)` / `BatchSetValues(normalIds, nil)` reverts to auto-computed.
+
+### 10.5 UV inspection and tangents
+
+UVs live per corner. To audit them:
+
+```lua
+local faces = em:GetFaces()
+local uvSets = em:BatchGetFaceAttributes(Enum.MeshAttribute.UV, faces)
+for i, fid in faces do
+    local ids = uvSets[i]
+    local a, b, c = em:GetUV(ids[1]), em:GetUV(ids[2]), em:GetUV(ids[3])
+    -- signed UV area: negative means a mirrored/flipped island
+    local uvArea = ((b - a).X * (c - a).Y - (b - a).Y * (c - a).X) * 0.5
+    -- texel density: 3D area per UV area. Wildly varying values = stretching.
+end
+```
+
+Roblox has no tangent API; if you need one (for your own normal-map maths inside an
+`EditableImage`) derive it per triangle from the UV gradient:
+`T = ((c−a)·Δv_ab − (b−a)·Δv_ac) / (Δu_ab·Δv_ac − Δu_ac·Δv_ab)`, then Gram-Schmidt against
+the vertex normal.
+
+The official avatar sample shows the inverse operation — converting a mesh hit into a UV
+coordinate, which is how you paint on a mesh with an `EditableImage`
+[code, `Roblox/avatar`]:
+
+```lua
+function MeshUtils.GetTextureCoordinate(editableMesh, triangleId, barycentricCoordinate)
+    local faceUVs = editableMesh:GetFaceUVs(triangleId)
+    return (barycentricCoordinate.x * editableMesh:GetUV(faceUVs[1]))
+         + (barycentricCoordinate.y * editableMesh:GetUV(faceUVs[2]))
+         + (barycentricCoordinate.z * editableMesh:GetUV(faceUVs[3]))
+end
+```
+
+**`RaycastLocal` return-order warning.** The reference YAML says it returns *"the point of
+intersection, face ID, and barycentric coordinates"*, but Roblox's own published sample
+destructures it as `local triangleId, hitPoint, barycentricCoordinate =
+editableMesh:RaycastLocal(...)`, and `FindClosestPointOnSurface` is documented as
+*(faceId, point, barycentric)*. **These cannot both be right.** Do not hardcode either —
+sniff it once at startup:
+
+```lua
+local r1, r2 = em:RaycastLocal(origin, dir)
+local faceIdFirst = typeof(r1) == "number"
+```
+
+### 10.6 Runtime simplification (decimation)
+
+Roblox ships no decimation API, so you implement **Quadric Error Metrics** (Garland &
+Heckbert) if you need it:
+
+1. For each vertex, accumulate the 4×4 **quadric** `Q_v = Σ_{f} K_f` where
+   `K_f = p·pᵀ` for the face plane `p = (a, b, c, d)` with `a²+b²+c²=1`.
+2. For each edge `(u, v)`, the collapse cost is `v̄ᵀ (Q_u + Q_v) v̄` minimised over the
+   contraction target `v̄` — solve the 3×3 system from the top-left of `Q_u + Q_v`; if
+   singular, pick the best of `u`, `v`, midpoint.
+3. Push edges into a priority queue by cost; pop, collapse, update the quadrics and costs
+   of the affected 1-ring, repeat until the triangle target or an error threshold.
+4. Reject collapses that flip a face normal by more than ~90° (prevents fold-over) or that
+   would create a non-manifold edge.
+
+`MrChickenRocket/sdf-procedural-toolkit` ships a working QEM pass (`SdfDecimate`) driven by
+`qemMaxError` and a `triCap`, and reports the decimation stage separately in its timing
+line [code].
+
+**When it's worth it:** you generated something that blew the 20,000-triangle cap and
+must fit it into one mesh; or you want distance LODs of a *runtime-generated* object, where
+you cannot pre-author them. **When it isn't:** almost always. QEM in Luau on a 20k-triangle
+mesh is hundreds of milliseconds. Generate at the right density instead (adaptive octree
+DC, coarser marching-cubes grid, fewer icosphere subdivisions) — that is strictly cheaper
+than generating fine and decimating.
