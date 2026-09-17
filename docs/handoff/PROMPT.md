@@ -218,6 +218,37 @@ A few hours here de-risks months:
    `MeshPart`?
 8. Premultiplied or straight alpha in the `EditableImage` pixel buffer?
 
+## How the critics must work
+
+The QA pairing above is only as good as the bar you set the critics. Two design
+choices decide whether it produces real quality or comfortable theatre:
+
+**Compare, do not score.** A critic asked to rate work 1-10 against a rubric
+inflates by round three — the scores drift upward and stop discriminating.
+Instead give the critic two artifacts with labels stripped, one of them a real
+reference (the original game's actual behaviour, a shipped Roblox game's feel,
+a known-good implementation), and ask which is better and why. A blind
+side-by-side against a real bar cannot be gamed the way a self-assigned score
+can.
+
+**Exit on winning, not on a round count.** "Three rounds of review" terminates
+whether or not the work is good. "Iterate until the critic picks our artifact
+over the reference" terminates when it is. Cap the loop to avoid running
+forever, but make the cap the failure case that escalates to a human, not the
+definition of done.
+
+**And weight executable verification above all agent opinion.** A failing test
+is worth more than ten critics that approve. Order the gauntlet cheapest-first:
+does it parse, does it typecheck, does it lint, do the tests pass, do the
+golden-master vectors match — and only send what survives to a critic agent.
+Judgement is for what execution cannot settle.
+
+**Anti-patterns to watch for in your own process:** critics with no ability to
+fail the work; reviewers auditing their own output; tests written by the agent
+that wrote the code; loops that reward verbosity; and a rubric so abstract that
+everything passes. If no QA agent has ever rejected anything, the QA is
+decorative.
+
 ## Build order
 
 1. Ingest source → `SPEC.md` → QA it against the real code

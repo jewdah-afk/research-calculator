@@ -88,12 +88,10 @@
   arXiv:2310.01798): intrinsic self-correction — revising using only the model's own judgement,
   with no external signal — **degrades** reasoning performance, and several headline self-correction
   gains in prior work came from using oracle labels to decide when to stop. `[SEARCH-SUMMARY]`
-  Self-critique without an external signal is not free; it is negative-expected-value.
-- **Everything that works in this family works because it imports an external signal.** Reflexion's
-  91% HumanEval pass@1 rides on test execution; Self-Refine's ~20% average gain rides on
-  task-specific feedback prompts and shows diminishing returns per iteration; Best-of-N works to
-  the extent the verifier is better than the generator. Strip the external signal and the loop
-  becomes an expensive way to make text longer. `[SEARCH-SUMMARY]` for the numbers.
+  The converse is what everything working in this family has in common: it imports an external
+  signal. Reflexion's 91% HumanEval pass@1 rides on test execution; Self-Refine's ~20% average gain
+  rides on task-specific feedback and flattens fast; Best-of-N works only to the extent the verifier
+  beats the generator. Strip the external signal and the loop is an expensive way to lengthen text.
 - **LLM-as-judge is usable but is a biased instrument with named, measurable defects**: position
   bias, verbosity bias, and self-enhancement/self-preference bias (Zheng et al., arXiv:2306.05685;
   Panickssery et al., NeurIPS 2024, arXiv:2404.13076, which shows self-preference scales with
@@ -408,13 +406,7 @@ accuracy." `[PRIMARY]` A self-assessed stopping condition is exactly the thing t
 literature says not to trust (§5.1) — but note that the repo *does* ship a hard iteration cap.
 **Keep the cap; distrust the confidence.** `[INFERENCE]`
 
-### 3.4 Other repos
-
-`gpt-llm-trainer`, `gpt-author`, `autonomous-researcher` — task-specific scaffolds, not
-verification techniques. `[PRIMARY]` on existence and star counts from the profile page; I did not
-read them in depth because they are off-topic for QA.
-
-### 3.5 The Reflection 70B episode — stated neutrally, because it is directly on-topic
+### 3.4 The Reflection 70B episode — stated neutrally, because it is directly on-topic
 
 In September 2024 Shumer announced **Reflection 70B**, claiming benchmark results superior to
 GPT-4o and competitive with or beating Claude on some tests. Independent evaluators could not
@@ -1288,7 +1280,7 @@ which is the community correcting the technique in the right direction.
 
 **Why it matters here specifically:** Huang et al.'s methodological critique shows that headline
 self-correction gains can come from **oracle-label stopping** that you will not have at inference
-time `[SEARCH-SUMMARY]`; and the Reflection 70B episode (§3.5) is a public instance of self-reported
+time `[SEARCH-SUMMARY]`; and the Reflection 70B episode (§3.4) is a public instance of self-reported
 numbers not surviving independent replication `[SEARCH-SUMMARY]`.
 
 **Fix:** adopt the mechanism, re-derive the evidence on your own task, and instrument the stage's
@@ -1355,7 +1347,7 @@ find rate from day one. Including for everything in this chapter.
 - **Coverage** (Decrypt, BigGo, WotAI, explainx.ai, Rise.sk, daily.dev, thepromptindex.com,
   rogerwong.me, stork.ai, wikiprompt.org, agenticworkers.com) — all blocked. Used only for the
   existence and rough shape of the narrative.
-- **Reflection 70B (§3.5)** — VentureBeat, Techzine, CO/AI, asimovaddendum. All via search summary.
+- **Reflection 70B (§3.4)** — VentureBeat, Techzine, CO/AI, asimovaddendum. All via search summary.
   Verify before repeating.
 - **`anthropic.com/engineering/building-effective-agents`** — cited by the `robonuggets` README as
   the evaluator-optimizer pattern the loop is built on. Domain blocked; I could not read it. It is
