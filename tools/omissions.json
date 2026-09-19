@@ -1,0 +1,9 @@
+{
+  "_comment": "Committed OMITTED manifest for tools/check_coverage.py (AC-04). Each entry is a dotted path in the source JSON's `data` object that is deliberately absent from the generated module, with a reason. The generator emits these paths as the module's `omitted` array.",
+  "Characters": [],
+  "CoreLoop": [],
+  "EnemiesWaves": [],
+  "PassivesEvolutions": [],
+  "PickupsMeta": [],
+  "Weapons": []
+}
