@@ -291,4 +291,9 @@ export type HudState = {
 	paused: boolean,
 }
 
-return nil
+-- A ModuleScript must return exactly one non-nil value or Roblox raises
+-- "Module code did not return exactly one value" on require. This module is
+-- types-only, so it returns a frozen empty table as its runtime value. The
+-- plain `luau` CLI tolerates a nil return, which is why this must be asserted
+-- by tools/check_module_returns.py rather than by the headless tests.
+return table.freeze({})

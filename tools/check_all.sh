@@ -31,6 +31,9 @@ else
   echo "OK (${#FILES[@]} files)"
 fi
 
+step "module returns (Roblox requires exactly one non-nil value)"
+if python3 tools/check_module_returns.py src; then :; else rc=1; fi
+
 step "place build (requires resolve in the Roblox tree)"
 # src/ uses filesystem-relative requires so tests and the analyzer work. Roblox
 # splits src/ across three containers, so a path correct on disk can resolve to
