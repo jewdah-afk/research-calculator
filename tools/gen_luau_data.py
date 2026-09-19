@@ -83,9 +83,19 @@ def emit(o, indent):
         return fmt_string(o)
     if is_array(o):
         if not o:
-            return '{}'
+            return '{} :: { any }'
         parts = ['%s%s,' % (inner, emit(v, indent + 1)) for v in o]
-        return '{\n' + '\n'.join(parts) + '\n' + pad + '}'
+        body = '{\n' + '\n'.join(parts) + '\n' + pad + '}'
+        kinds = {(_luau_type(v) or 'Unknown') for v in o}
+        if len(kinds) > 1 or all(isinstance(v, dict) for v in o):
+            # Defeat first-element narrowing. Luau infers an array literal's
+            # element type from element [0] and then rejects every sibling with
+            # a different shape, which is what these heterogeneous metadata
+            # arrays (conflicts, wave events, gem tiers) hit. The record maps
+            # that consumers actually index keep their real `{ [string]: T }`
+            # annotation; the exported types still document every shape.
+            body += ' :: { any }'
+        return body
     if isinstance(o, dict):
         if not o:
             return '{}'
@@ -296,7 +306,15 @@ def _luau_type(v):
         return '{ [string]: any }'
     return 'any'
 
-def derive_record_type(type_name, records, overrides=None):
+def _field_types(records, overrides=None):
+    """Per-key Luau type across a set of records.
+
+    Keys missing from some records are optional; keys whose type varies across
+    records collapse to `any`. Collapsing is what keeps Luau's invariant array
+    literals happy: a heterogeneous array annotated with the collapsed type
+    type-checks, where an unannotated literal would be narrowed to its first
+    element and reject every later one.
+    """
     overrides = overrides or {}
     records = list(records)
     keys, seen = [], set()
@@ -305,7 +323,7 @@ def derive_record_type(type_name, records, overrides=None):
             if k not in seen:
                 seen.add(k)
                 keys.append(k)
-    lines = []
+    out = []
     for k in keys:
         present = [r[k] for r in records if k in r]
         optional = len(present) != len(records)
@@ -323,7 +341,12 @@ def derive_record_type(type_name, records, overrides=None):
             t = '%s | Unknown' % t
         if optional and '|' in t:
             t = '(%s)' % t   # `A | B?` would parse as a union with an optional arm
-        lines.append('\t%s: %s%s,' % (fmt_key(str(k)), t, '?' if optional else ''))
+        out.append((fmt_key(str(k)), t, optional))
+    return out
+
+def derive_record_type(type_name, records, overrides=None):
+    lines = ['\t%s: %s%s,' % (k, t, '?' if opt else '')
+             for k, t, opt in _field_types(records, overrides)]
     return 'export type %s = {\n%s\n}\n' % (type_name, '\n'.join(lines))
 
 # mod_name -> (type name, path to the records inside `data`, per-key type overrides)

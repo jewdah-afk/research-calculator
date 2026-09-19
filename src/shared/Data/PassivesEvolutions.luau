@@ -91,7 +91,7 @@ local PassivesEvolutions = {
 			retrieved = "2026-09-19",
 			note = "Community tool mirroring wiki data; used only to cross-check the evolution recipe list.",
 		},
-	},
+	} :: { any },
 	notes = "Passive percentage bonuses are stored as FRACTIONAL DELTAS per level (e.g. Spinach 0.1 = +10% Might per level); totalAtMax is the arithmetic sum of the per-level values. Armor/Duplicator/Tiragisu are flat integers. All times in SECONDS. 'cooldown' on evolved weapons is the base attack interval in seconds.",
 	conflicts = {
 		{
@@ -105,7 +105,7 @@ local PassivesEvolutions = {
 					0.33,
 				},
 				"+100% pickup radius total (+20%/level, commonly quoted by community guides)",
-			},
+			} :: { any },
 			sourceIds = {
 				"vs-gamefiles-v1.16",
 				"official-wiki",
@@ -117,7 +117,7 @@ local PassivesEvolutions = {
 			values = {
 				1,
 				"x1.2 per level compounding (= +148.8% at level 5)",
-			},
+			} :: { any },
 			sourceIds = {
 				"vs-gamefiles-v1.16",
 				"fandom-wiki",
@@ -170,7 +170,7 @@ local PassivesEvolutions = {
 			},
 			note = "The in-run passive ITEM Armor has 5 levels (+1 each). The meta PowerUp 'Armor' bought with gold has 3 ranks. Do not confuse them; this file documents the in-run item.",
 		},
-	},
+	} :: { any },
 	unknowns = {
 		"data.evolutionRules.chestSpawnTimeSeconds (not present in game data files; value below taken from wiki summaries, not verified against a fetched page)",
 		"data.evolutions.*.levels (evolved weapons other than Vandalier have a single level; per-level growth tables for base weapons are out of scope for this file)",
@@ -576,7 +576,7 @@ local PassivesEvolutions = {
 					"vs-gamefiles-v1.16",
 				},
 			},
-		},
+		} :: { any },
 		evolutions = {
 			{
 				name = "Bloody Tear",
@@ -589,7 +589,7 @@ local PassivesEvolutions = {
 				requiredPassives = {
 					"Hollow Heart",
 				},
-				requiresAtMaxLevel = {},
+				requiresAtMaxLevel = {} :: { any },
 				isUnion = false,
 				baseDamage = 4,
 				cooldown = 1.35,
@@ -612,11 +612,11 @@ local PassivesEvolutions = {
 				baseWeaponIds = {
 					"whip",
 				},
-				unresolvedBaseWeapons = {},
+				unresolvedBaseWeapons = {} :: { any },
 				requiredPassiveIds = {
 					"hollow_heart",
 				},
-				unresolvedRequiredPassives = {},
+				unresolvedRequiredPassives = {} :: { any },
 				baseWeaponId = "whip",
 				requiredPassiveId = "hollow_heart",
 			},
@@ -631,7 +631,7 @@ local PassivesEvolutions = {
 				requiredPassives = {
 					"Empty Tome",
 				},
-				requiresAtMaxLevel = {},
+				requiresAtMaxLevel = {} :: { any },
 				isUnion = false,
 				baseDamage = 3,
 				cooldown = 0.5,
@@ -654,11 +654,11 @@ local PassivesEvolutions = {
 				baseWeaponIds = {
 					"magic_wand",
 				},
-				unresolvedBaseWeapons = {},
+				unresolvedBaseWeapons = {} :: { any },
 				requiredPassiveIds = {
 					"empty_tome",
 				},
-				unresolvedRequiredPassives = {},
+				unresolvedRequiredPassives = {} :: { any },
 				baseWeaponId = "magic_wand",
 				requiredPassiveId = "empty_tome",
 			},
@@ -673,7 +673,7 @@ local PassivesEvolutions = {
 				requiredPassives = {
 					"Bracer",
 				},
-				requiresAtMaxLevel = {},
+				requiresAtMaxLevel = {} :: { any },
 				isUnion = false,
 				baseDamage = 1.65,
 				cooldown = 0.35,
@@ -696,11 +696,11 @@ local PassivesEvolutions = {
 				baseWeaponIds = {
 					"knife",
 				},
-				unresolvedBaseWeapons = {},
+				unresolvedBaseWeapons = {} :: { any },
 				requiredPassiveIds = {
 					"bracer",
 				},
-				unresolvedRequiredPassives = {},
+				unresolvedRequiredPassives = {} :: { any },
 				baseWeaponId = "knife",
 				requiredPassiveId = "bracer",
 			},
@@ -715,7 +715,7 @@ local PassivesEvolutions = {
 				requiredPassives = {
 					"Candelabrador",
 				},
-				requiresAtMaxLevel = {},
+				requiresAtMaxLevel = {} :: { any },
 				isUnion = false,
 				baseDamage = 6,
 				cooldown = 4,
@@ -738,11 +738,11 @@ local PassivesEvolutions = {
 				baseWeaponIds = {
 					"axe",
 				},
-				unresolvedBaseWeapons = {},
+				unresolvedBaseWeapons = {} :: { any },
 				requiredPassiveIds = {
 					"candelabrador",
 				},
-				unresolvedRequiredPassives = {},
+				unresolvedRequiredPassives = {} :: { any },
 				baseWeaponId = "axe",
 				requiredPassiveId = "candelabrador",
 			},
@@ -757,7 +757,7 @@ local PassivesEvolutions = {
 				requiredPassives = {
 					"Clover",
 				},
-				requiresAtMaxLevel = {},
+				requiresAtMaxLevel = {} :: { any },
 				isUnion = false,
 				baseDamage = 7.7,
 				cooldown = 3.3,
@@ -780,11 +780,11 @@ local PassivesEvolutions = {
 				baseWeaponIds = {
 					"cross",
 				},
-				unresolvedBaseWeapons = {},
+				unresolvedBaseWeapons = {} :: { any },
 				requiredPassiveIds = {
 					"clover",
 				},
-				unresolvedRequiredPassives = {},
+				unresolvedRequiredPassives = {} :: { any },
 				baseWeaponId = "cross",
 				requiredPassiveId = "clover",
 			},
@@ -799,7 +799,7 @@ local PassivesEvolutions = {
 				requiredPassives = {
 					"Spellbinder",
 				},
-				requiresAtMaxLevel = {},
+				requiresAtMaxLevel = {} :: { any },
 				isUnion = false,
 				baseDamage = 3,
 				cooldown = 3,
@@ -822,11 +822,11 @@ local PassivesEvolutions = {
 				baseWeaponIds = {
 					"king_bible",
 				},
-				unresolvedBaseWeapons = {},
+				unresolvedBaseWeapons = {} :: { any },
 				requiredPassiveIds = {
 					"spellbinder",
 				},
-				unresolvedRequiredPassives = {},
+				unresolvedRequiredPassives = {} :: { any },
 				baseWeaponId = "king_bible",
 				requiredPassiveId = "spellbinder",
 			},
@@ -841,7 +841,7 @@ local PassivesEvolutions = {
 				requiredPassives = {
 					"Spinach",
 				},
-				requiresAtMaxLevel = {},
+				requiresAtMaxLevel = {} :: { any },
 				isUnion = false,
 				baseDamage = 10,
 				cooldown = 3,
@@ -864,11 +864,11 @@ local PassivesEvolutions = {
 				baseWeaponIds = {
 					"fire_wand",
 				},
-				unresolvedBaseWeapons = {},
+				unresolvedBaseWeapons = {} :: { any },
 				requiredPassiveIds = {
 					"spinach",
 				},
-				unresolvedRequiredPassives = {},
+				unresolvedRequiredPassives = {} :: { any },
 				baseWeaponId = "fire_wand",
 				requiredPassiveId = "spinach",
 			},
@@ -883,7 +883,7 @@ local PassivesEvolutions = {
 				requiredPassives = {
 					"Pummarola",
 				},
-				requiresAtMaxLevel = {},
+				requiresAtMaxLevel = {} :: { any },
 				isUnion = false,
 				baseDamage = 2,
 				cooldown = 1,
@@ -906,11 +906,11 @@ local PassivesEvolutions = {
 				baseWeaponIds = {
 					"garlic",
 				},
-				unresolvedBaseWeapons = {},
+				unresolvedBaseWeapons = {} :: { any },
 				requiredPassiveIds = {
 					"pummarola",
 				},
-				unresolvedRequiredPassives = {},
+				unresolvedRequiredPassives = {} :: { any },
 				baseWeaponId = "garlic",
 				requiredPassiveId = "pummarola",
 			},
@@ -925,7 +925,7 @@ local PassivesEvolutions = {
 				requiredPassives = {
 					"Attractorb",
 				},
-				requiresAtMaxLevel = {},
+				requiresAtMaxLevel = {} :: { any },
 				isUnion = false,
 				baseDamage = 4,
 				cooldown = 4,
@@ -948,11 +948,11 @@ local PassivesEvolutions = {
 				baseWeaponIds = {
 					"santa_water",
 				},
-				unresolvedBaseWeapons = {},
+				unresolvedBaseWeapons = {} :: { any },
 				requiredPassiveIds = {
 					"attractorb",
 				},
-				unresolvedRequiredPassives = {},
+				unresolvedRequiredPassives = {} :: { any },
 				baseWeaponId = "santa_water",
 				requiredPassiveId = "attractorb",
 			},
@@ -967,7 +967,7 @@ local PassivesEvolutions = {
 				requiredPassives = {
 					"Armor",
 				},
-				requiresAtMaxLevel = {},
+				requiresAtMaxLevel = {} :: { any },
 				isUnion = false,
 				baseDamage = 3,
 				cooldown = 1,
@@ -990,11 +990,11 @@ local PassivesEvolutions = {
 				baseWeaponIds = {
 					"runetracer",
 				},
-				unresolvedBaseWeapons = {},
+				unresolvedBaseWeapons = {} :: { any },
 				requiredPassiveIds = {
 					"armor",
 				},
-				unresolvedRequiredPassives = {},
+				unresolvedRequiredPassives = {} :: { any },
 				baseWeaponId = "runetracer",
 				requiredPassiveId = "armor",
 			},
@@ -1009,7 +1009,7 @@ local PassivesEvolutions = {
 				requiredPassives = {
 					"Duplicator",
 				},
-				requiresAtMaxLevel = {},
+				requiresAtMaxLevel = {} :: { any },
 				isUnion = false,
 				baseDamage = 6.5,
 				cooldown = 4.5,
@@ -1032,11 +1032,11 @@ local PassivesEvolutions = {
 				baseWeaponIds = {
 					"lightning_ring",
 				},
-				unresolvedBaseWeapons = {},
+				unresolvedBaseWeapons = {} :: { any },
 				requiredPassiveIds = {
 					"duplicator",
 				},
-				unresolvedRequiredPassives = {},
+				unresolvedRequiredPassives = {} :: { any },
 				baseWeaponId = "lightning_ring",
 				requiredPassiveId = "duplicator",
 			},
@@ -1051,7 +1051,7 @@ local PassivesEvolutions = {
 				requiredPassives = {
 					"Crown",
 				},
-				requiresAtMaxLevel = {},
+				requiresAtMaxLevel = {} :: { any },
 				isUnion = false,
 				baseDamage = 0,
 				cooldown = 60,
@@ -1071,14 +1071,14 @@ local PassivesEvolutions = {
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
-				baseWeaponIds = {},
+				baseWeaponIds = {} :: { any },
 				unresolvedBaseWeapons = {
 					"Pentagram",
 				},
 				requiredPassiveIds = {
 					"crown",
 				},
-				unresolvedRequiredPassives = {},
+				unresolvedRequiredPassives = {} :: { any },
 				requiredPassiveId = "crown",
 			},
 			{
@@ -1090,7 +1090,7 @@ local PassivesEvolutions = {
 					"Peachone",
 					"Ebony Wings",
 				},
-				requiredPassives = {},
+				requiredPassives = {} :: { any },
 				requiresAtMaxLevel = {
 					"Peachone",
 				},
@@ -1113,13 +1113,13 @@ local PassivesEvolutions = {
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
-				baseWeaponIds = {},
+				baseWeaponIds = {} :: { any },
 				unresolvedBaseWeapons = {
 					"Peachone",
 					"Ebony Wings",
 				},
-				requiredPassiveIds = {},
-				unresolvedRequiredPassives = {},
+				requiredPassiveIds = {} :: { any },
+				unresolvedRequiredPassives = {} :: { any },
 			},
 			{
 				name = "Phieraggi",
@@ -1155,7 +1155,7 @@ local PassivesEvolutions = {
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
-				baseWeaponIds = {},
+				baseWeaponIds = {} :: { any },
 				unresolvedBaseWeapons = {
 					"Phiera Der Tuphello",
 					"Eight The Sparrow",
@@ -1163,7 +1163,7 @@ local PassivesEvolutions = {
 				requiredPassiveIds = {
 					"tiragisu",
 				},
-				unresolvedRequiredPassives = {},
+				unresolvedRequiredPassives = {} :: { any },
 				requiredPassiveId = "tiragisu",
 			},
 			{
@@ -1177,7 +1177,7 @@ local PassivesEvolutions = {
 				requiredPassives = {
 					"Stone Mask",
 				},
-				requiresAtMaxLevel = {},
+				requiresAtMaxLevel = {} :: { any },
 				isUnion = false,
 				baseDamage = 3,
 				cooldown = 8,
@@ -1197,14 +1197,14 @@ local PassivesEvolutions = {
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
-				baseWeaponIds = {},
+				baseWeaponIds = {} :: { any },
 				unresolvedBaseWeapons = {
 					"Gatti Amari",
 				},
 				requiredPassiveIds = {
 					"stone_mask",
 				},
-				unresolvedRequiredPassives = {},
+				unresolvedRequiredPassives = {} :: { any },
 				requiredPassiveId = "stone_mask",
 			},
 			{
@@ -1218,7 +1218,7 @@ local PassivesEvolutions = {
 				requiredPassives = {
 					"Skull O'Maniac",
 				},
-				requiresAtMaxLevel = {},
+				requiresAtMaxLevel = {} :: { any },
 				isUnion = false,
 				baseDamage = 4,
 				cooldown = 4.5,
@@ -1238,14 +1238,14 @@ local PassivesEvolutions = {
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
-				baseWeaponIds = {},
+				baseWeaponIds = {} :: { any },
 				unresolvedBaseWeapons = {
 					"Song of Mana",
 				},
 				requiredPassiveIds = {
 					"skull_omaniac",
 				},
-				unresolvedRequiredPassives = {},
+				unresolvedRequiredPassives = {} :: { any },
 				requiredPassiveId = "skull_omaniac",
 			},
 			{
@@ -1283,11 +1283,11 @@ local PassivesEvolutions = {
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
-				baseWeaponIds = {},
+				baseWeaponIds = {} :: { any },
 				unresolvedBaseWeapons = {
 					"Clock Lancet",
 				},
-				requiredPassiveIds = {},
+				requiredPassiveIds = {} :: { any },
 				unresolvedRequiredPassives = {
 					"Silver Ring",
 					"Gold Ring",
@@ -1328,11 +1328,11 @@ local PassivesEvolutions = {
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
-				baseWeaponIds = {},
+				baseWeaponIds = {} :: { any },
 				unresolvedBaseWeapons = {
 					"Laurel",
 				},
-				requiredPassiveIds = {},
+				requiredPassiveIds = {} :: { any },
 				unresolvedRequiredPassives = {
 					"Metaglio Left",
 					"Metaglio Right",
@@ -1349,7 +1349,7 @@ local PassivesEvolutions = {
 				requiredPassives = {
 					"Wings",
 				},
-				requiresAtMaxLevel = {},
+				requiresAtMaxLevel = {} :: { any },
 				isUnion = false,
 				baseDamage = 3.5,
 				cooldown = 6,
@@ -1369,14 +1369,14 @@ local PassivesEvolutions = {
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
-				baseWeaponIds = {},
+				baseWeaponIds = {} :: { any },
 				unresolvedBaseWeapons = {
 					"Shadow Pinion",
 				},
 				requiredPassiveIds = {
 					"wings",
 				},
-				unresolvedRequiredPassives = {},
+				unresolvedRequiredPassives = {} :: { any },
 				requiredPassiveId = "wings",
 			},
 			{
@@ -1413,12 +1413,12 @@ local PassivesEvolutions = {
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
-				baseWeaponIds = {},
+				baseWeaponIds = {} :: { any },
 				unresolvedBaseWeapons = {
 					"Vento Sacro",
 					"Bloody Tear",
 				},
-				requiredPassiveIds = {},
+				requiredPassiveIds = {} :: { any },
 				unresolvedRequiredPassives = {
 					"Bloody Tear",
 				},
@@ -1456,11 +1456,11 @@ local PassivesEvolutions = {
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
-				baseWeaponIds = {},
+				baseWeaponIds = {} :: { any },
 				unresolvedBaseWeapons = {
 					"Bracelet",
 				},
-				requiredPassiveIds = {},
+				requiredPassiveIds = {} :: { any },
 				unresolvedRequiredPassives = {
 					"Bracelet",
 				},
@@ -1498,11 +1498,11 @@ local PassivesEvolutions = {
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
-				baseWeaponIds = {},
+				baseWeaponIds = {} :: { any },
 				unresolvedBaseWeapons = {
 					"Bi-Bracelet",
 				},
-				requiredPassiveIds = {},
+				requiredPassiveIds = {} :: { any },
 				unresolvedRequiredPassives = {
 					"Bi-Bracelet",
 				},
@@ -1540,14 +1540,14 @@ local PassivesEvolutions = {
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
-				baseWeaponIds = {},
+				baseWeaponIds = {} :: { any },
 				unresolvedBaseWeapons = {
 					"Pako Battilia",
 				},
 				requiredPassiveIds = {
 					"hollow_heart",
 				},
-				unresolvedRequiredPassives = {},
+				unresolvedRequiredPassives = {} :: { any },
 				requiredPassiveId = "hollow_heart",
 			},
 			{
@@ -1555,7 +1555,7 @@ local PassivesEvolutions = {
 				id = "sole_solution",
 				vsId = "SOLES",
 				group = "other-base-game",
-				evolvesFrom = {},
+				evolvesFrom = {} :: { any },
 				requiredPassives = {
 					"Victory Sword",
 				},
@@ -1582,9 +1582,9 @@ local PassivesEvolutions = {
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
-				baseWeaponIds = {},
-				unresolvedBaseWeapons = {},
-				requiredPassiveIds = {},
+				baseWeaponIds = {} :: { any },
+				unresolvedBaseWeapons = {} :: { any },
+				requiredPassiveIds = {} :: { any },
 				unresolvedRequiredPassives = {
 					"Victory Sword",
 				},
@@ -1622,11 +1622,11 @@ local PassivesEvolutions = {
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
-				baseWeaponIds = {},
+				baseWeaponIds = {} :: { any },
 				unresolvedBaseWeapons = {
 					"Flames of Misspell",
 				},
-				requiredPassiveIds = {},
+				requiredPassiveIds = {} :: { any },
 				unresolvedRequiredPassives = {
 					"Torrona's Box",
 				},
@@ -1664,14 +1664,14 @@ local PassivesEvolutions = {
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
-				baseWeaponIds = {},
+				baseWeaponIds = {} :: { any },
 				unresolvedBaseWeapons = {
 					"Glass Fandango",
 				},
 				requiredPassiveIds = {
 					"wings",
 				},
-				unresolvedRequiredPassives = {},
+				unresolvedRequiredPassives = {} :: { any },
 				requiredPassiveId = "wings",
 			},
 			{
@@ -1707,14 +1707,14 @@ local PassivesEvolutions = {
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
-				baseWeaponIds = {},
+				baseWeaponIds = {} :: { any },
 				unresolvedBaseWeapons = {
 					"Santa Javelin",
 				},
 				requiredPassiveIds = {
 					"clover",
 				},
-				unresolvedRequiredPassives = {},
+				unresolvedRequiredPassives = {} :: { any },
 				requiredPassiveId = "clover",
 			},
 			{
@@ -1722,9 +1722,9 @@ local PassivesEvolutions = {
 				id = "anima_of_mortaccio",
 				vsId = "BONE2",
 				group = "other-base-game",
-				evolvesFrom = {},
-				requiredPassives = {},
-				requiresAtMaxLevel = {},
+				evolvesFrom = {} :: { any },
+				requiredPassives = {} :: { any },
+				requiresAtMaxLevel = {} :: { any },
 				isUnion = false,
 				baseDamage = 6.5,
 				cooldown = 3,
@@ -1744,19 +1744,19 @@ local PassivesEvolutions = {
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
-				baseWeaponIds = {},
-				unresolvedBaseWeapons = {},
-				requiredPassiveIds = {},
-				unresolvedRequiredPassives = {},
+				baseWeaponIds = {} :: { any },
+				unresolvedBaseWeapons = {} :: { any },
+				requiredPassiveIds = {} :: { any },
+				unresolvedRequiredPassives = {} :: { any },
 			},
 			{
 				name = "Yatta Daikarin",
 				id = "yatta_daikarin",
 				vsId = "CHERRY2",
 				group = "other-base-game",
-				evolvesFrom = {},
-				requiredPassives = {},
-				requiresAtMaxLevel = {},
+				evolvesFrom = {} :: { any },
+				requiredPassives = {} :: { any },
+				requiresAtMaxLevel = {} :: { any },
 				isUnion = false,
 				baseDamage = 2,
 				cooldown = 3,
@@ -1776,19 +1776,19 @@ local PassivesEvolutions = {
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
-				baseWeaponIds = {},
-				unresolvedBaseWeapons = {},
-				requiredPassiveIds = {},
-				unresolvedRequiredPassives = {},
+				baseWeaponIds = {} :: { any },
+				unresolvedBaseWeapons = {} :: { any },
+				requiredPassiveIds = {} :: { any },
+				unresolvedRequiredPassives = {} :: { any },
 			},
 			{
 				name = "Carozza!",
 				id = "carozza!",
 				vsId = "CART2EVO",
 				group = "other-base-game",
-				evolvesFrom = {},
-				requiredPassives = {},
-				requiresAtMaxLevel = {},
+				evolvesFrom = {} :: { any },
+				requiredPassives = {} :: { any },
+				requiresAtMaxLevel = {} :: { any },
 				isUnion = false,
 				baseDamage = 15,
 				cooldown = 12.8,
@@ -1808,19 +1808,19 @@ local PassivesEvolutions = {
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
-				baseWeaponIds = {},
-				unresolvedBaseWeapons = {},
-				requiredPassiveIds = {},
-				unresolvedRequiredPassives = {},
+				baseWeaponIds = {} :: { any },
+				unresolvedBaseWeapons = {} :: { any },
+				requiredPassiveIds = {} :: { any },
+				unresolvedRequiredPassives = {} :: { any },
 			},
 			{
 				name = "Profusione D'Amore",
 				id = "profusione_damore",
 				vsId = "FLOWER2",
 				group = "other-base-game",
-				evolvesFrom = {},
-				requiredPassives = {},
-				requiresAtMaxLevel = {},
+				evolvesFrom = {} :: { any },
+				requiredPassives = {} :: { any },
+				requiresAtMaxLevel = {} :: { any },
 				isUnion = false,
 				baseDamage = 1,
 				cooldown = 6,
@@ -1840,19 +1840,19 @@ local PassivesEvolutions = {
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
-				baseWeaponIds = {},
-				unresolvedBaseWeapons = {},
-				requiredPassiveIds = {},
-				unresolvedRequiredPassives = {},
+				baseWeaponIds = {} :: { any },
+				unresolvedBaseWeapons = {} :: { any },
+				requiredPassiveIds = {} :: { any },
+				unresolvedRequiredPassives = {} :: { any },
 			},
 			{
 				name = "Super Candybox II Turbo",
 				id = "super_candybox_ii_turbo",
 				vsId = "CANDYBOX2",
 				group = "other-base-game",
-				evolvesFrom = {},
-				requiredPassives = {},
-				requiresAtMaxLevel = {},
+				evolvesFrom = {} :: { any },
+				requiredPassives = {} :: { any },
+				requiresAtMaxLevel = {} :: { any },
 				isUnion = false,
 				baseDamage = 0,
 				cooldown = 9007199254740.99,
@@ -1872,12 +1872,12 @@ local PassivesEvolutions = {
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
-				baseWeaponIds = {},
-				unresolvedBaseWeapons = {},
-				requiredPassiveIds = {},
-				unresolvedRequiredPassives = {},
+				baseWeaponIds = {} :: { any },
+				unresolvedBaseWeapons = {} :: { any },
+				requiredPassiveIds = {} :: { any },
+				unresolvedRequiredPassives = {} :: { any },
 			},
-		},
+		} :: { any },
 		evolutionRules = {
 			baseWeaponMustBeMaxLevel = true,
 			baseWeaponMaxLevel = 8,

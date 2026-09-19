@@ -127,7 +127,7 @@ local CoreLoop = {
 			url = "https://steamcommunity.com/app/1794680/discussions/0/3201496371582426598/",
 			retrieved = "2026-09-19",
 		},
-	},
+	} :: { any },
 	notes = "Times in seconds. Growth/Luck percentages stored as multipliers where the game multiplies (growthBase 1.0) and as fractional deltas where additive. All wiki/Steam domains were blocked by the network egress proxy; figures come from search-engine extracts of the cited pages.",
 	conflicts = {
 		{
@@ -153,7 +153,7 @@ local CoreLoop = {
 			},
 			note = "Wikis give ranges; older community posts claim flat 1/5/10. Ranges treated as authoritative.",
 		},
-	},
+	} :: { any },
 	unknowns = {
 		"data.xpGems.tiers[0].xpExact",
 		"data.xpGems.tiers[1].xpExact",
@@ -271,7 +271,7 @@ local CoreLoop = {
 					xpMax = UNKNOWN,
 					xpExact = UNKNOWN,
 				},
-			},
+			} :: { any },
 			merging = {
 				maxGemsOnMap = 400,
 				maxGemsOnMapConfirmedByWiki = UNKNOWN,
@@ -315,7 +315,7 @@ local CoreLoop = {
 					growthBonus = 1,
 					note = "+100% Growth granted at level 40, reverted (-100%) at level 41",
 				},
-			},
+			} :: { any },
 			table = {
 				{
 					level = 1,
@@ -1017,7 +1017,7 @@ local CoreLoop = {
 					cumulativeXp = 68210,
 					xpRequired = 1415,
 				},
-			},
+			} :: { any },
 		},
 	},
 	omitted = {},

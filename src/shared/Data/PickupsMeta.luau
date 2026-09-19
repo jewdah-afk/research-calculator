@@ -198,7 +198,7 @@ local PickupsMeta = {
 			retrieved = "2026-09-19",
 			note = "Community mirror (github.com/SurvivatonsAndMore/VampireSurvivorsFiles) of the game's shipped JSON data files, game version 1.16. Files used: PowerUp.json, Item.json, Stage.json, Props.json. Base-game folder; DLC content lives in sibling folders. Entries additionally carry a contentGroup field ('BASE' vs 'EXTRA') used below to flag non-base-game content.",
 		},
-	},
+	} :: { any },
 	notes = "Percent conventions: where the game treats a stat as a multiplier on a 100% base (Luck, Greed, Might), values are stored as fractional deltas (e.g. +10% -> 0.10) in *Bonus fields, and as explicit multipliers only where a source states a multiplier (e.g. maxHealth PowerUp multiplierPerRank 1.1). All times in seconds. UPDATE 2026-09-19: PowerUp, light-source drop-table and destructible-spawn figures now come from the game's OWN SHIPPED DATA FILES (community rip, game v1.16) via raw.githubusercontent.com, which is reachable; these supersede the wiki summaries and are marked sourceIds ['game-data-v1.16']. ORIGINAL RESEARCH CONSTRAINT: the network egress proxy blocked WebFetch/curl to vampire.survivors.wiki, vampire-survivors.fandom.com, steamcommunity.com and all other hosts; all data below was obtained via WebSearch result summaries of those exact pages. Numbers not surfaced by search are null, not guessed.",
 	conflicts = {
 		{
@@ -226,7 +226,7 @@ local PickupsMeta = {
 						max = 500,
 					},
 				},
-			},
+			} :: { any },
 			sourceIds = {
 				"official-wiki-treasure-chest",
 				"fandom-treasure-chest",
@@ -273,7 +273,7 @@ local PickupsMeta = {
 			},
 			note = "Wiki states Luck raises the weight of every light-source drop except Gold Coin and Coin Bag, which would include Little Clover. Shipped Item.json flags isRare:true (the 'Drop rate affected by Luck' tooltip) on only ROAST, OROLOGION, VACUUM, COINBAGMAX, ROSARY, NFT and SORBETTO - NOT on CLOVER, GILDED or PICKUP_REROLL_DICE. Shipped data is treated as authoritative here (false), wiki claim recorded.",
 		},
-	},
+	} :: { any },
 	unknowns = {
 		"data.floorPickups.littleClover.durationSeconds",
 		"data.goldEconomy.endOfRunPayout.confirmedBaseValue",
@@ -468,7 +468,7 @@ local PickupsMeta = {
 					appearsInTreasureChests = false,
 					inGameDescription = "Pick up to get 10% luckier.",
 				},
-			},
+			} :: { any },
 		},
 		lightSources = {
 			sourceIds = {
@@ -752,7 +752,7 @@ local PickupsMeta = {
 					},
 					baseShareAtZeroLuck = UNKNOWN,
 				},
-			},
+			} :: { any },
 			baseSpawnChance = "see perStageSpawnConfig",
 			maxConcurrentPerStage = "see perStageSpawnConfig",
 			totalPerStage = UNKNOWN,
@@ -841,7 +841,7 @@ local PickupsMeta = {
 						maxHp = 999,
 						destructibleType = "LABORATORYLEVER2",
 					},
-				},
+				} :: { any },
 			},
 			perStageSpawnConfig = {
 				sourceIds = {
@@ -927,7 +927,7 @@ local PickupsMeta = {
 						destructibleChanceMax = 50,
 						maxDestructibles = 10,
 					},
-				},
+				} :: { any },
 			},
 		},
 		treasureChests = {
@@ -956,7 +956,7 @@ local PickupsMeta = {
 					goldMin = 500,
 					goldMax = 1000,
 				},
-			},
+			} :: { any },
 			goldRewardAlternate = {
 				min = 60,
 				max = 500,
@@ -1330,7 +1330,7 @@ local PickupsMeta = {
 								},
 								fixedPrizes = UNKNOWN,
 							},
-						},
+						} :: { any },
 					},
 					{
 						stageKey = "LIBRARY",
@@ -1678,7 +1678,7 @@ local PickupsMeta = {
 								},
 								fixedPrizes = UNKNOWN,
 							},
-						},
+						} :: { any },
 					},
 					{
 						stageKey = "WAREHOUSE",
@@ -1950,7 +1950,7 @@ local PickupsMeta = {
 								},
 								fixedPrizes = UNKNOWN,
 							},
-						},
+						} :: { any },
 					},
 					{
 						stageKey = "TOWER",
@@ -2279,7 +2279,7 @@ local PickupsMeta = {
 								},
 								fixedPrizes = UNKNOWN,
 							},
-						},
+						} :: { any },
 					},
 					{
 						stageKey = "CHAPEL",
@@ -2551,7 +2551,7 @@ local PickupsMeta = {
 								},
 								fixedPrizes = UNKNOWN,
 							},
-						},
+						} :: { any },
 					},
 					{
 						stageKey = "MOLISE",
@@ -2690,7 +2690,7 @@ local PickupsMeta = {
 								},
 								fixedPrizes = UNKNOWN,
 							},
-						},
+						} :: { any },
 					},
 					{
 						stageKey = "SINKING",
@@ -2831,14 +2831,14 @@ local PickupsMeta = {
 								},
 								fixedPrizes = UNKNOWN,
 							},
-						},
+						} :: { any },
 					},
 					{
 						stageKey = "GREENACRES",
 						stageName = "Green Acres",
-						entries = {},
+						entries = {} :: { any },
 					},
-				},
+				} :: { any },
 			},
 		},
 		goldEconomy = {
@@ -3580,7 +3580,7 @@ local PickupsMeta = {
 						"game-data-v1.16",
 					},
 				},
-			},
+			} :: { any },
 			totalRanksAcrossAllPowerUps = 125,
 			totalCostNote = "Derived from shipped data v1.16 using the documented cost formula, buying every rank of all 29 PowerUps. Differs from both wiki figures because v1.16 contains more PowerUps and more ranks than the versions those pages describe.",
 			perRankCostOrderNote = "BASE cost per rank is order-INDEPENDENT: rank i of a PowerUp always costs initialPrice*i. Only the global FEE term is order-dependent in WHICH purchase it lands on, but because the fee depends solely on totalBought (ranks bought so far across all PowerUps) and is additive since v0.7.2, the SUM of fees over a full clear is also order-independent. Therefore the per-rank base table below plus the fee schedule fully determine any purchase order's cost; no assumed order is required for the total.",
@@ -3784,7 +3784,7 @@ local PickupsMeta = {
 						"game-data-v1.16",
 					},
 				},
-			},
+			} :: { any },
 		},
 	},
 	omitted = {},

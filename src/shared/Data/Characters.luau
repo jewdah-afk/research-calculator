@@ -125,7 +125,7 @@ local Characters = {
 			url = "https://vampire.survivors.wiki/w/Characters",
 			retrieved = "2026-09-19",
 		},
-	},
+	} :: { any },
 	notes = "vampire.survivors.wiki, vampire-survivors.fandom.com, GameFAQs and steamcommunity.com are all blocked by this session's egress proxy; direct fetches failed. Primary numbers therefore come from a decompiled/extracted copy of the game's own character table (vst-chardata), cross-checked against a community build planner and against a verbatim mirror of the official wiki's Characters/Achievements pages fetched over raw.githubusercontent.com. CONVENTIONS: multiplier stats (might, area, speed, duration, cooldown, luck, growth, greed, curse, moveSpeed) are stored as MULTIPLIERS (1 = unmodified, 1.3 = +30%). maxHealth is flat HP. recovery is flat HP/sec. armor, amount, revival are flat integers. magnet is an additive fractional bonus (0 = unmodified, 0.25 = +25% pickup radius). levelBonuses values are DELTAS applied to the stat at that level (e.g. {stat:'might', value:0.1} = +0.1 to the might multiplier). Source field names map as: power->might, regen->recovery, maxHp->maxHealth, revivals->revival.",
 	conflicts = {
 		{
@@ -164,7 +164,7 @@ local Characters = {
 			},
 			note = "unlockCost is the BASE price. The wiki states every purchasable character's price rises by 10% additively for each character already bought.",
 		},
-	},
+	} :: { any },
 	unknowns = {
 		"data.arca.unlockCost (base price cross-check from an official source; 500 taken from vs-build-planner only)",
 		"data.porta.unlockCost (same as above)",
@@ -241,7 +241,7 @@ local Characters = {
 					stat = "might",
 					value = 0.1,
 				},
-			},
+			} :: { any },
 			levelBonusCap = {
 				stat = "might",
 				maxTotal = 0.5,
@@ -314,7 +314,7 @@ local Characters = {
 					stat = "growth",
 					value = -1,
 				},
-			},
+			} :: { any },
 			levelBonusCap = {
 				stat = "growth",
 				maxTotal = 0.3,
@@ -386,7 +386,7 @@ local Characters = {
 					stat = "growth",
 					value = -1,
 				},
-			},
+			} :: { any },
 			levelBonusCap = {
 				stat = "speed",
 				maxTotal = 0.3,
@@ -443,7 +443,7 @@ local Characters = {
 					stat = "growth",
 					value = -1,
 				},
-			},
+			} :: { any },
 			levelBonusCap = UNKNOWN,
 			passiveAbility = "Permanent +1 Amount (one extra projectile on all weapons). Also starts with +20 Max Health. No scaling level-up bonus.",
 			sourceIds = {
@@ -511,7 +511,7 @@ local Characters = {
 					stat = "growth",
 					value = -1,
 				},
-			},
+			} :: { any },
 			levelBonusCap = {
 				stat = "cooldown",
 				maxTotal = -0.15,
@@ -584,7 +584,7 @@ local Characters = {
 					stat = "growth",
 					value = -1,
 				},
-			},
+			} :: { any },
 			levelBonusCap = {
 				stat = "cooldown",
 				maxTotal = 0.9,

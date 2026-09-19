@@ -128,7 +128,7 @@ local Weapons = {
 			retrieved = "2026-09-19",
 			note = "Tertiary guide; superseded by the shipped data.",
 		},
-	},
+	} :: { any },
 	notes = "Primary source is the game's own shipped balance file Data/Vampire Survivors/Weapon.json (game v1.16), obtained from a community rip of the game files on GitHub — authoritative but NOT an official page. In that file 'power' is a damage multiplier where displayed damage = power * 10; `baseDamage` below is the DISPLAYED value (power*10) and `rawPower` preserves the shipped multiplier. Level entries are DELTAS applied on top of the previous level, exactly as shipped. Absolute percent stats (area, speed) are multipliers (1.0 = 100%); percent CHANGES are additive fractions (areaDelta 0.1 = +10% Area). All times in seconds (shipped file stores milliseconds). 'interval' maps to cooldown, 'repeatInterval' to projectileInterval, 'penetrating' to pierce. maxLevelTotals is the summed Lv2-Lv8 delta per field. Fields absent from the shipped record are null (the weapon either ignores that stat or uses an engine default) and are listed in unknowns.",
 	conflicts = {
 		{
@@ -222,7 +222,7 @@ local Weapons = {
 			values = {
 				0.3,
 				UNKNOWN,
-			},
+			} :: { any },
 			sourceIds = {
 				"game-data-v1.16",
 				"official-wiki",
@@ -241,7 +241,7 @@ local Weapons = {
 			},
 			note = "Internal id vs display name; not a real disagreement.",
 		},
-	},
+	} :: { any },
 	unknowns = {
 		"data.whip.duration",
 		"data.whip.pierce",
@@ -347,7 +347,7 @@ local Weapons = {
 					},
 					description = "+5 Damage, unlocks evolution (VAMPIRICA).",
 				},
-			},
+			} :: { any },
 			sourceIds = {
 				"game-data-v1.16",
 			},
@@ -434,7 +434,7 @@ local Weapons = {
 					},
 					description = "+10 Damage, unlocks evolution (HOLY_MISSILE).",
 				},
-			},
+			} :: { any },
 			sourceIds = {
 				"game-data-v1.16",
 			},
@@ -527,7 +527,7 @@ local Weapons = {
 					},
 					description = "+1 Pierce, -0.02 s Projectile Interval, unlocks evolution (THOUSAND).",
 				},
-			},
+			} :: { any },
 			sourceIds = {
 				"game-data-v1.16",
 			},
@@ -615,7 +615,7 @@ local Weapons = {
 					},
 					description = "+20 Damage, unlocks evolution (SCYTHE).",
 				},
-			},
+			} :: { any },
 			sourceIds = {
 				"game-data-v1.16",
 			},
@@ -706,7 +706,7 @@ local Weapons = {
 					},
 					description = "+0.5 s Duration, unlocks evolution (ROCHER).",
 				},
-			},
+			} :: { any },
 			sourceIds = {
 				"game-data-v1.16",
 			},
@@ -797,7 +797,7 @@ local Weapons = {
 					},
 					description = "+10 Damage, unlocks evolution (HELLFIRE).",
 				},
-			},
+			} :: { any },
 			sourceIds = {
 				"game-data-v1.16",
 			},
@@ -887,7 +887,7 @@ local Weapons = {
 					},
 					description = "+1 Amount, unlocks evolution (VESPERS).",
 				},
-			},
+			} :: { any },
 			sourceIds = {
 				"game-data-v1.16",
 			},
@@ -983,7 +983,7 @@ local Weapons = {
 					},
 					description = "+2 Damage, +20% Area, unlocks evolution (VORTEX).",
 				},
-			},
+			} :: { any },
 			sourceIds = {
 				"game-data-v1.16",
 			},
@@ -1077,7 +1077,7 @@ local Weapons = {
 					},
 					description = "+5 Damage, +20% Area, unlocks evolution (BORA).",
 				},
-			},
+			} :: { any },
 			sourceIds = {
 				"game-data-v1.16",
 			},
@@ -1168,7 +1168,7 @@ local Weapons = {
 					},
 					description = "+1 Amount, unlocks evolution (LOOP).",
 				},
-			},
+			} :: { any },
 			sourceIds = {
 				"game-data-v1.16",
 			},
@@ -1257,7 +1257,7 @@ local Weapons = {
 					},
 					description = "+10 Damage, unlocks evolution (HEAVENSWORD).",
 				},
-			},
+			} :: { any },
 			sourceIds = {
 				"game-data-v1.16",
 			},
