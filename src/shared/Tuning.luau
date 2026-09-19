@@ -59,7 +59,48 @@ local Tuning = {
 		weaponCritMultiplier = 1,
 		enemyKnockbackTaken = 1,
 		enemyXp = 1,
+		-- NOT from research (sim-waves). Chance for a wave event whose shipped
+		-- entry omits `chance` (enemies_waves.md §4: "Blank cells are fields the
+		-- shipped wave entry omits (the event's own defaults apply)"; the
+		-- default itself is not in the data). 100 = such an event always fires;
+		-- the 300 s FLOWER_WALL ships an explicit 0 and is untouched by this.
+		eventChancePercent = 100,
 	},
+
+	-- --------------------------------------------------------- sim-weapons
+	-- NOT from research. Floor for contact damage after armor (Sim/Damage
+	-- .toPlayer). The research states only "Reduces incoming Damage by 1" per
+	-- Armor point (passives_evolutions.md §1); what happens when armor >= power
+	-- is open question OQ-10. 0 = the hit is fully absorbed. Playtest tunable.
+	contactDamageFloor = 0,
+
+	-- ------------------------------------------------------------ sim-core
+	-- NOT from research. The research has no random number generator, only
+	-- probabilities. Sim/Rng is a Lehmer (MINSTD) linear congruential
+	-- generator, state' = state * multiplier mod modulus, next() = state /
+	-- modulus. Every product stays below 2^53, so the stream is exact in
+	-- doubles and identical on every platform. These pick the stream, never
+	-- a balance value.
+	rng = {
+		multiplier = 48271, -- NOT from research. Park-Miller MINSTD multiplier
+		modulus = 2147483647, -- NOT from research. 2^31 - 1, prime
+	},
+
+	-- ----------------------------------------------------- sim-progression
+	-- Percent <-> fraction scale for shipped percent fields. research/vs/
+	-- pickups_meta.md §3 states the chest roll as
+	-- "successChance = levelChance * totalLuck" with chances shipped as raw
+	-- percents (chances [3, 10, 50]) and "totalLuck = 1 + (displayed Luck % /
+	-- 100)"; research/vs/core_loop.md §2 states the 4th-option roll as
+	-- "Luck / (100 + Luck)" in percentage points. This is that 100: a unit
+	-- conversion, not a balance value.
+	percentScale = 100, -- research/vs/pickups_meta.md §3, research/vs/core_loop.md §2
+	-- NOT from research. research/vs/pickups_meta.md §2: "Luck multiplies
+	-- only their [isRare entries'] weight ... The exact multiplier applied to
+	-- the weight is still unknown." Sim/Pickups uses
+	-- weight * (1 + (luck - 1) * rareDropLuckScale), linear in Luck and
+	-- exactly 1.0 at base Luck (1.0). 1 = the weight scales with Luck itself.
+	rareDropLuckScale = 1, -- NOT from research. Linear Luck scale on isRare weights
 }
 
 return Tuning
