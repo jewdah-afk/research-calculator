@@ -6,7 +6,7 @@ Re-running against unchanged JSON produces byte-identical output.
 
 Usage: gen_luau_data.py <json_dir> <out_dir>
 """
-import json, os, re, sys
+import json, sys, os, re, sys
 from decimal import Decimal
 
 # source json -> module name (no extension). Single source of truth for the
@@ -427,8 +427,45 @@ PROSE_TAIL = ' They otherwise describe the\n\t  SOURCE\'s raw values: where such
 SCALE_CONST = '--- The single global damage/health scale convention (see header).\nlocal DISPLAY_SCALE = 10\n\n'
 
 
+# ---------------------------------------------------------- verbatim text
+# Strings lifted verbatim from the shipped game files. Mechanics, stats and
+# formulas are not copyrightable and are carried through in full; this prose is
+# creative expression and is reference-only, so it stays in research/vs/*.json
+# and never reaches the module that ships into Studio.
+#
+# Deliberately NOT stripped: `targeting` and `passiveAbility` are our own
+# written analysis of behaviour, not shipped strings, and the engine needs them.
+VERBATIM_TEXT_KEYS = ('description', 'inGameDescription', 'tips', 'behavior')
+
+
+def strip_verbatim_text(o):
+    """Recursively drop verbatim shipped prose. Returns (clean, count)."""
+    n = 0
+    if isinstance(o, dict):
+        out = {}
+        for k, v in o.items():
+            if k in VERBATIM_TEXT_KEYS and isinstance(v, str):
+                n += 1
+                continue
+            cv, cn = strip_verbatim_text(v)
+            out[k] = cv
+            n += cn
+        return out, n
+    if isinstance(o, list):
+        out = []
+        for v in o:
+            cv, cn = strip_verbatim_text(v)
+            out.append(cv)
+            n += cn
+        return out, n
+    return o, n
+
+
 def build_module(src_name, mod_name, raw, ctx):
     data = transform(src_name, raw, ctx)
+    data, stripped = strip_verbatim_text(data)
+    if stripped:
+        sys.stderr.write('  %s: stripped %d verbatim text string(s)\n' % (mod_name, stripped))
     payload = {}
     for k in ('schemaVersion', 'game', 'scope', 'sources', 'notes',
               'retrievalStatus', 'conflicts', 'unknowns', 'data'):

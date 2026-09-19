@@ -290,7 +290,6 @@ local CoreLoop = {
 			stacking = "multiplicative",
 			cap = UNKNOWN,
 			unitDefinition = UNKNOWN,
-			description = "Radius within which experience gems and other pickups are collected",
 		},
 		experienceCurve = {
 			sourceIds = {

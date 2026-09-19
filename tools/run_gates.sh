@@ -30,6 +30,9 @@ run "coverage (AC-04: every source value carried through)" \
 run "structure + referential integrity (AC-01,02,05..26)" \
   python3 tools/check_structure.py "$LUAU_DIR" "$JSON_DIR"
 
+run "no verbatim shipped text (AC-29)" \
+  python3 tools/check_no_verbatim_text.py "$LUAU_DIR" "$JSON_DIR"
+
 run "determinism (AC-28: regeneration is byte-identical)" \
   python3 tools/check_determinism.py "$LUAU_DIR" "$JSON_DIR"
 

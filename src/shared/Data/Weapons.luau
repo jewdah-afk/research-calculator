@@ -294,21 +294,18 @@ local Weapons = {
 				{
 					level = 1,
 					changes = {},
-					description = "Base weapon.",
 				},
 				{
 					level = 2,
 					changes = {
 						amount = 1,
 					},
-					description = "+1 Amount.",
 				},
 				{
 					level = 3,
 					changes = {
 						baseDamage = 5,
 					},
-					description = "+5 Damage.",
 				},
 				{
 					level = 4,
@@ -316,14 +313,12 @@ local Weapons = {
 						baseDamage = 5,
 						areaDelta = 0.1,
 					},
-					description = "+5 Damage, +10% Area.",
 				},
 				{
 					level = 5,
 					changes = {
 						baseDamage = 5,
 					},
-					description = "+5 Damage.",
 				},
 				{
 					level = 6,
@@ -331,21 +326,18 @@ local Weapons = {
 						baseDamage = 5,
 						areaDelta = 0.1,
 					},
-					description = "+5 Damage, +10% Area.",
 				},
 				{
 					level = 7,
 					changes = {
 						baseDamage = 5,
 					},
-					description = "+5 Damage.",
 				},
 				{
 					level = 8,
 					changes = {
 						baseDamage = 5,
 					},
-					description = "+5 Damage, unlocks evolution (VAMPIRICA).",
 				},
 			} :: { any },
 			sourceIds = {
@@ -383,56 +375,48 @@ local Weapons = {
 				{
 					level = 1,
 					changes = {},
-					description = "Base weapon.",
 				},
 				{
 					level = 2,
 					changes = {
 						amount = 1,
 					},
-					description = "+1 Amount.",
 				},
 				{
 					level = 3,
 					changes = {
 						cooldown = -0.2,
 					},
-					description = "-0.2 s Cooldown.",
 				},
 				{
 					level = 4,
 					changes = {
 						amount = 1,
 					},
-					description = "+1 Amount.",
 				},
 				{
 					level = 5,
 					changes = {
 						baseDamage = 10,
 					},
-					description = "+10 Damage.",
 				},
 				{
 					level = 6,
 					changes = {
 						amount = 1,
 					},
-					description = "+1 Amount.",
 				},
 				{
 					level = 7,
 					changes = {
 						pierce = 1,
 					},
-					description = "+1 Pierce.",
 				},
 				{
 					level = 8,
 					changes = {
 						baseDamage = 10,
 					},
-					description = "+10 Damage, unlocks evolution (HOLY_MISSILE).",
 				},
 			} :: { any },
 			sourceIds = {
@@ -471,14 +455,12 @@ local Weapons = {
 				{
 					level = 1,
 					changes = {},
-					description = "Base weapon.",
 				},
 				{
 					level = 2,
 					changes = {
 						amount = 1,
 					},
-					description = "+1 Amount.",
 				},
 				{
 					level = 3,
@@ -486,7 +468,6 @@ local Weapons = {
 						baseDamage = 5,
 						amount = 1,
 					},
-					description = "+5 Damage, +1 Amount.",
 				},
 				{
 					level = 4,
@@ -494,14 +475,12 @@ local Weapons = {
 						amount = 1,
 						projectileInterval = -0.02,
 					},
-					description = "+1 Amount, -0.02 s Projectile Interval.",
 				},
 				{
 					level = 5,
 					changes = {
 						pierce = 1,
 					},
-					description = "+1 Pierce.",
 				},
 				{
 					level = 6,
@@ -509,7 +488,6 @@ local Weapons = {
 						amount = 1,
 						projectileInterval = -0.02,
 					},
-					description = "+1 Amount, -0.02 s Projectile Interval.",
 				},
 				{
 					level = 7,
@@ -517,7 +495,6 @@ local Weapons = {
 						baseDamage = 5,
 						amount = 1,
 					},
-					description = "+5 Damage, +1 Amount.",
 				},
 				{
 					level = 8,
@@ -525,7 +502,6 @@ local Weapons = {
 						pierce = 1,
 						projectileInterval = -0.02,
 					},
-					description = "+1 Pierce, -0.02 s Projectile Interval, unlocks evolution (THOUSAND).",
 				},
 			} :: { any },
 			sourceIds = {
@@ -564,56 +540,48 @@ local Weapons = {
 				{
 					level = 1,
 					changes = {},
-					description = "Base weapon.",
 				},
 				{
 					level = 2,
 					changes = {
 						amount = 1,
 					},
-					description = "+1 Amount.",
 				},
 				{
 					level = 3,
 					changes = {
 						baseDamage = 20,
 					},
-					description = "+20 Damage.",
 				},
 				{
 					level = 4,
 					changes = {
 						pierce = 2,
 					},
-					description = "+2 Pierce.",
 				},
 				{
 					level = 5,
 					changes = {
 						amount = 1,
 					},
-					description = "+1 Amount.",
 				},
 				{
 					level = 6,
 					changes = {
 						baseDamage = 20,
 					},
-					description = "+20 Damage.",
 				},
 				{
 					level = 7,
 					changes = {
 						pierce = 2,
 					},
-					description = "+2 Pierce.",
 				},
 				{
 					level = 8,
 					changes = {
 						baseDamage = 20,
 					},
-					description = "+20 Damage, unlocks evolution (SCYTHE).",
 				},
 			} :: { any },
 			sourceIds = {
@@ -651,7 +619,6 @@ local Weapons = {
 				{
 					level = 1,
 					changes = {},
-					description = "Base weapon.",
 				},
 				{
 					level = 2,
@@ -659,7 +626,6 @@ local Weapons = {
 						baseDamage = 5,
 						speedDelta = 0.2,
 					},
-					description = "+5 Damage, +20% Projectile Speed.",
 				},
 				{
 					level = 3,
@@ -667,14 +633,12 @@ local Weapons = {
 						baseDamage = 5,
 						duration = 0.25,
 					},
-					description = "+5 Damage, +0.25 s Duration.",
 				},
 				{
 					level = 4,
 					changes = {
 						amount = 1,
 					},
-					description = "+1 Amount.",
 				},
 				{
 					level = 5,
@@ -682,7 +646,6 @@ local Weapons = {
 						baseDamage = 5,
 						speedDelta = 0.2,
 					},
-					description = "+5 Damage, +20% Projectile Speed.",
 				},
 				{
 					level = 6,
@@ -690,21 +653,18 @@ local Weapons = {
 						baseDamage = 5,
 						duration = 0.25,
 					},
-					description = "+5 Damage, +0.25 s Duration.",
 				},
 				{
 					level = 7,
 					changes = {
 						amount = 1,
 					},
-					description = "+1 Amount.",
 				},
 				{
 					level = 8,
 					changes = {
 						duration = 0.5,
 					},
-					description = "+0.5 s Duration, unlocks evolution (ROCHER).",
 				},
 			} :: { any },
 			sourceIds = {
@@ -743,14 +703,12 @@ local Weapons = {
 				{
 					level = 1,
 					changes = {},
-					description = "Base weapon.",
 				},
 				{
 					level = 2,
 					changes = {
 						baseDamage = 10,
 					},
-					description = "+10 Damage.",
 				},
 				{
 					level = 3,
@@ -758,14 +716,12 @@ local Weapons = {
 						baseDamage = 10,
 						speedDelta = 0.2,
 					},
-					description = "+10 Damage, +20% Projectile Speed.",
 				},
 				{
 					level = 4,
 					changes = {
 						baseDamage = 10,
 					},
-					description = "+10 Damage.",
 				},
 				{
 					level = 5,
@@ -773,14 +729,12 @@ local Weapons = {
 						baseDamage = 10,
 						speedDelta = 0.2,
 					},
-					description = "+10 Damage, +20% Projectile Speed.",
 				},
 				{
 					level = 6,
 					changes = {
 						baseDamage = 10,
 					},
-					description = "+10 Damage.",
 				},
 				{
 					level = 7,
@@ -788,14 +742,12 @@ local Weapons = {
 						baseDamage = 10,
 						speedDelta = 0.2,
 					},
-					description = "+10 Damage, +20% Projectile Speed.",
 				},
 				{
 					level = 8,
 					changes = {
 						baseDamage = 10,
 					},
-					description = "+10 Damage, unlocks evolution (HELLFIRE).",
 				},
 			} :: { any },
 			sourceIds = {
@@ -832,14 +784,12 @@ local Weapons = {
 				{
 					level = 1,
 					changes = {},
-					description = "Base weapon.",
 				},
 				{
 					level = 2,
 					changes = {
 						amount = 1,
 					},
-					description = "+1 Amount.",
 				},
 				{
 					level = 3,
@@ -847,7 +797,6 @@ local Weapons = {
 						areaDelta = 0.25,
 						speedDelta = 0.3,
 					},
-					description = "+25% Area, +30% Projectile Speed.",
 				},
 				{
 					level = 4,
@@ -855,14 +804,12 @@ local Weapons = {
 						baseDamage = 10,
 						duration = 0.5,
 					},
-					description = "+10 Damage, +0.5 s Duration.",
 				},
 				{
 					level = 5,
 					changes = {
 						amount = 1,
 					},
-					description = "+1 Amount.",
 				},
 				{
 					level = 6,
@@ -870,7 +817,6 @@ local Weapons = {
 						areaDelta = 0.25,
 						speedDelta = 0.3,
 					},
-					description = "+25% Area, +30% Projectile Speed.",
 				},
 				{
 					level = 7,
@@ -878,14 +824,12 @@ local Weapons = {
 						baseDamage = 10,
 						duration = 0.5,
 					},
-					description = "+10 Damage, +0.5 s Duration.",
 				},
 				{
 					level = 8,
 					changes = {
 						amount = 1,
 					},
-					description = "+1 Amount, unlocks evolution (VESPERS).",
 				},
 			} :: { any },
 			sourceIds = {
@@ -925,7 +869,6 @@ local Weapons = {
 				{
 					level = 1,
 					changes = {},
-					description = "Base weapon.",
 				},
 				{
 					level = 2,
@@ -933,7 +876,6 @@ local Weapons = {
 						baseDamage = 2,
 						areaDelta = 0.4,
 					},
-					description = "+2 Damage, +40% Area.",
 				},
 				{
 					level = 3,
@@ -941,7 +883,6 @@ local Weapons = {
 						baseDamage = 1,
 						cooldown = -0.1,
 					},
-					description = "+1 Damage, -0.1 s Cooldown.",
 				},
 				{
 					level = 4,
@@ -949,7 +890,6 @@ local Weapons = {
 						baseDamage = 1,
 						areaDelta = 0.2,
 					},
-					description = "+1 Damage, +20% Area.",
 				},
 				{
 					level = 5,
@@ -957,7 +897,6 @@ local Weapons = {
 						baseDamage = 2,
 						cooldown = -0.1,
 					},
-					description = "+2 Damage, -0.1 s Cooldown.",
 				},
 				{
 					level = 6,
@@ -965,7 +904,6 @@ local Weapons = {
 						baseDamage = 1,
 						areaDelta = 0.2,
 					},
-					description = "+1 Damage, +20% Area.",
 				},
 				{
 					level = 7,
@@ -973,7 +911,6 @@ local Weapons = {
 						baseDamage = 1,
 						cooldown = -0.1,
 					},
-					description = "+1 Damage, -0.1 s Cooldown.",
 				},
 				{
 					level = 8,
@@ -981,7 +918,6 @@ local Weapons = {
 						baseDamage = 2,
 						areaDelta = 0.2,
 					},
-					description = "+2 Damage, +20% Area, unlocks evolution (VORTEX).",
 				},
 			} :: { any },
 			sourceIds = {
@@ -1019,7 +955,6 @@ local Weapons = {
 				{
 					level = 1,
 					changes = {},
-					description = "Base weapon.",
 				},
 				{
 					level = 2,
@@ -1027,7 +962,6 @@ local Weapons = {
 						areaDelta = 0.2,
 						amount = 1,
 					},
-					description = "+20% Area, +1 Amount.",
 				},
 				{
 					level = 3,
@@ -1035,7 +969,6 @@ local Weapons = {
 						baseDamage = 10,
 						duration = 0.5,
 					},
-					description = "+10 Damage, +0.5 s Duration.",
 				},
 				{
 					level = 4,
@@ -1043,7 +976,6 @@ local Weapons = {
 						areaDelta = 0.2,
 						amount = 1,
 					},
-					description = "+20% Area, +1 Amount.",
 				},
 				{
 					level = 5,
@@ -1051,7 +983,6 @@ local Weapons = {
 						baseDamage = 10,
 						duration = 0.25,
 					},
-					description = "+10 Damage, +0.25 s Duration.",
 				},
 				{
 					level = 6,
@@ -1059,7 +990,6 @@ local Weapons = {
 						areaDelta = 0.2,
 						amount = 1,
 					},
-					description = "+20% Area, +1 Amount.",
 				},
 				{
 					level = 7,
@@ -1067,7 +997,6 @@ local Weapons = {
 						baseDamage = 5,
 						duration = 0.25,
 					},
-					description = "+5 Damage, +0.25 s Duration.",
 				},
 				{
 					level = 8,
@@ -1075,7 +1004,6 @@ local Weapons = {
 						baseDamage = 5,
 						areaDelta = 0.2,
 					},
-					description = "+5 Damage, +20% Area, unlocks evolution (BORA).",
 				},
 			} :: { any },
 			sourceIds = {
@@ -1114,14 +1042,12 @@ local Weapons = {
 				{
 					level = 1,
 					changes = {},
-					description = "Base weapon.",
 				},
 				{
 					level = 2,
 					changes = {
 						amount = 1,
 					},
-					description = "+1 Amount.",
 				},
 				{
 					level = 3,
@@ -1129,14 +1055,12 @@ local Weapons = {
 						baseDamage = 10,
 						areaDelta = 1,
 					},
-					description = "+10 Damage, +100% Area.",
 				},
 				{
 					level = 4,
 					changes = {
 						amount = 1,
 					},
-					description = "+1 Amount.",
 				},
 				{
 					level = 5,
@@ -1144,14 +1068,12 @@ local Weapons = {
 						baseDamage = 20,
 						areaDelta = 1,
 					},
-					description = "+20 Damage, +100% Area.",
 				},
 				{
 					level = 6,
 					changes = {
 						amount = 1,
 					},
-					description = "+1 Amount.",
 				},
 				{
 					level = 7,
@@ -1159,14 +1081,12 @@ local Weapons = {
 						baseDamage = 20,
 						areaDelta = 1,
 					},
-					description = "+20 Damage, +100% Area.",
 				},
 				{
 					level = 8,
 					changes = {
 						amount = 1,
 					},
-					description = "+1 Amount, unlocks evolution (LOOP).",
 				},
 			} :: { any },
 			sourceIds = {
@@ -1204,14 +1124,12 @@ local Weapons = {
 				{
 					level = 1,
 					changes = {},
-					description = "Base weapon.",
 				},
 				{
 					level = 2,
 					changes = {
 						baseDamage = 10,
 					},
-					description = "+10 Damage.",
 				},
 				{
 					level = 3,
@@ -1219,21 +1137,18 @@ local Weapons = {
 						areaDelta = 0.1,
 						speedDelta = 0.25,
 					},
-					description = "+10% Area, +25% Projectile Speed.",
 				},
 				{
 					level = 4,
 					changes = {
 						amount = 1,
 					},
-					description = "+1 Amount.",
 				},
 				{
 					level = 5,
 					changes = {
 						baseDamage = 10,
 					},
-					description = "+10 Damage.",
 				},
 				{
 					level = 6,
@@ -1241,21 +1156,18 @@ local Weapons = {
 						areaDelta = 0.1,
 						speedDelta = 0.25,
 					},
-					description = "+10% Area, +25% Projectile Speed.",
 				},
 				{
 					level = 7,
 					changes = {
 						amount = 1,
 					},
-					description = "+1 Amount.",
 				},
 				{
 					level = 8,
 					changes = {
 						baseDamage = 10,
 					},
-					description = "+10 Damage, unlocks evolution (HEAVENSWORD).",
 				},
 			} :: { any },
 			sourceIds = {

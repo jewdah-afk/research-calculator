@@ -98,6 +98,10 @@ either silently corrupts balance.
 - **`UNKNOWN` is not zero.** It marks a value genuinely absent from the source. Never
   coerce it to `0` — check it explicitly, or the weapon gets free stats.
 - **Weapon `levels` are deltas**, applied on top of the previous level, not absolutes.
+- **`name` is a reference label, not display text.** All verbatim shipped prose has
+  been stripped from `src/shared/Data/` (it remains in `research/vs/` for reference).
+  Mechanics and numbers are copied deliberately; names, art, audio and player-facing
+  text must be entirely ours. `tools/check_no_verbatim_text.py` gates this.
 
 Per `SUMMARY.md`, the things that actually drive the feel, in order: the **pressure
 curve** (10 → 300 enemies, spawn interval 1.0s → 0.1s), the **XP curve's two stalls**

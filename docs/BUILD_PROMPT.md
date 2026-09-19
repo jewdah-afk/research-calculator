@@ -15,9 +15,20 @@ already exist in this repo — read them before writing any code.
 - `src/shared/Data/*.luau` — the six pure-data ModuleScripts you will consume
 
 ## Non-negotiables
-1. **This game is original.** Original names, art and content. The research is
-   reference for deriving our own balance — never copy Vampire Survivors' names,
-   assets or text into the game. Placeholder art is fine; make it obviously ours.
+1. **Mechanics are copied deliberately; expression is not.** Stat values, formulas,
+   curves, wave tables and weapon behaviour are carried over 1:1 on purpose — those
+   are functional systems, not protected expression, and they are the point of the
+   research. What must be entirely ours: **names, art, audio and any player-facing
+   text.** Never display a Vampire Survivors weapon, character, item or stage name in
+   the game.
+   - The shipping data modules have already had all verbatim shipped prose stripped
+     (221 strings) and `tools/check_no_verbatim_text.py` gates against it returning.
+     Do not reintroduce it, and do not copy prose out of `research/vs/` into the game.
+   - `name` fields in the data modules are **reference labels for correlating with the
+     research**, not display text. Author a separate display-name table of our own
+     names and render from that. A UI that reads `weapon.name` is a bug.
+   - `targeting` and `passiveAbility` are our own written analysis, kept because the
+     engine needs them. Implement the mechanic they describe; do not print them.
 2. **Never invent balance numbers.** Every gameplay constant comes from
    `src/shared/Data/`. If something you need is `UNKNOWN` or absent, surface it and
    ask — do not substitute a plausible value.

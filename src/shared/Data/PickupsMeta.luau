@@ -305,7 +305,6 @@ local PickupsMeta = {
 					note = "Most common light-source drop. Luck does NOT increase its chance (Luck raises the weight of everything else).",
 					baseShareAtZeroLuck = 0.621118,
 					appearsInTreasureChests = false,
-					inGameDescription = "Adds 1 to your Gold coins total.",
 				},
 				{
 					name = "Coin Bag",
@@ -324,7 +323,6 @@ local PickupsMeta = {
 					luckAffectsDropRate = false,
 					baseShareAtZeroLuck = 0.124224,
 					appearsInTreasureChests = false,
-					inGameDescription = "Adds 10 to your Gold coins total.",
 				},
 				{
 					name = "Rich Coin Bag",
@@ -343,7 +341,6 @@ local PickupsMeta = {
 					luckAffectsDropRate = true,
 					baseShareAtZeroLuck = 0.012422,
 					appearsInTreasureChests = true,
-					inGameDescription = "Adds 100 to your Gold coins total.",
 				},
 				{
 					name = "Big Coin Bag",
@@ -377,7 +374,6 @@ local PickupsMeta = {
 					luckAffectsDropRate = true,
 					baseShareAtZeroLuck = 0.149068,
 					appearsInTreasureChests = true,
-					inGameDescription = "Restores 30 Health points.",
 				},
 				{
 					name = "Rosary",
@@ -394,7 +390,6 @@ local PickupsMeta = {
 					luckAffectsDropRate = true,
 					baseShareAtZeroLuck = 0.012422,
 					appearsInTreasureChests = true,
-					inGameDescription = "Destroys all enemies in sight.",
 				},
 				{
 					name = "Orologion",
@@ -412,7 +407,6 @@ local PickupsMeta = {
 					note = "Arcana XII (Out of Bounds) makes Orologions easier to find.",
 					baseShareAtZeroLuck = 0.024845,
 					appearsInTreasureChests = true,
-					inGameDescription = "Freezes all enemies in time for 10 seconds.",
 				},
 				{
 					name = "Vacuum",
@@ -429,7 +423,6 @@ local PickupsMeta = {
 					luckAffectsDropRate = true,
 					baseShareAtZeroLuck = 0.024845,
 					appearsInTreasureChests = true,
-					inGameDescription = "Gathers all Experience gems left on the ground.",
 				},
 				{
 					name = "Nduja Fritta Tanto",
@@ -446,7 +439,6 @@ local PickupsMeta = {
 					luckAffectsDropRate = true,
 					baseShareAtZeroLuck = 0.012422,
 					appearsInTreasureChests = true,
-					inGameDescription = "Temporarily emits cones of flames. Affected by player stats.",
 				},
 				{
 					name = "Little Clover",
@@ -466,7 +458,6 @@ local PickupsMeta = {
 					note = "Described as the second-rarest light-source drop.",
 					baseShareAtZeroLuck = 0.006211,
 					appearsInTreasureChests = false,
-					inGameDescription = "Pick up to get 10% luckier.",
 				},
 			} :: { any },
 		},
@@ -475,7 +466,6 @@ local PickupsMeta = {
 				"game-data-v1.16",
 				"official-wiki-light-source",
 			},
-			description = "Destructible props (braziers/lamps) that spawn randomly on the stage and drop exactly one pickup when destroyed.",
 			dropsPerDestruction = 1,
 			mostCommonDrop = "gold_coin",
 			dropTable = {
@@ -494,7 +484,6 @@ local PickupsMeta = {
 					contentGroup = "BASE",
 					requiresArcana = UNKNOWN,
 					requiresItem = UNKNOWN,
-					inGameDescription = "Adds 1 to your Gold coins total.",
 					sourceIds = {
 						"game-data-v1.16",
 					},
@@ -515,7 +504,6 @@ local PickupsMeta = {
 					contentGroup = "BASE",
 					requiresArcana = UNKNOWN,
 					requiresItem = UNKNOWN,
-					inGameDescription = "Restores 30 Health points.",
 					sourceIds = {
 						"game-data-v1.16",
 					},
@@ -536,7 +524,6 @@ local PickupsMeta = {
 					contentGroup = "BASE",
 					requiresArcana = UNKNOWN,
 					requiresItem = UNKNOWN,
-					inGameDescription = "Adds 10 to your Gold coins total.",
 					sourceIds = {
 						"game-data-v1.16",
 					},
@@ -557,7 +544,6 @@ local PickupsMeta = {
 					contentGroup = "BASE",
 					requiresArcana = UNKNOWN,
 					requiresItem = UNKNOWN,
-					inGameDescription = "Freezes all enemies in time for 10 seconds.",
 					sourceIds = {
 						"game-data-v1.16",
 					},
@@ -578,7 +564,6 @@ local PickupsMeta = {
 					contentGroup = "BASE",
 					requiresArcana = UNKNOWN,
 					requiresItem = UNKNOWN,
-					inGameDescription = "Gathers all Experience gems left on the ground.",
 					sourceIds = {
 						"game-data-v1.16",
 					},
@@ -599,7 +584,6 @@ local PickupsMeta = {
 					contentGroup = "BASE",
 					requiresArcana = UNKNOWN,
 					requiresItem = UNKNOWN,
-					inGameDescription = "Adds 100 to your Gold coins total.",
 					sourceIds = {
 						"game-data-v1.16",
 					},
@@ -620,7 +604,6 @@ local PickupsMeta = {
 					contentGroup = "BASE",
 					requiresArcana = UNKNOWN,
 					requiresItem = UNKNOWN,
-					inGameDescription = "Destroys all enemies in sight.",
 					sourceIds = {
 						"game-data-v1.16",
 					},
@@ -641,7 +624,6 @@ local PickupsMeta = {
 					contentGroup = "BASE",
 					requiresArcana = UNKNOWN,
 					requiresItem = UNKNOWN,
-					inGameDescription = "Temporarily emits cones of flames. Affected by player stats.",
 					sourceIds = {
 						"game-data-v1.16",
 					},
@@ -662,7 +644,6 @@ local PickupsMeta = {
 					contentGroup = "BASE",
 					requiresArcana = UNKNOWN,
 					requiresItem = UNKNOWN,
-					inGameDescription = "Pick up to get 10% luckier.",
 					sourceIds = {
 						"game-data-v1.16",
 					},
@@ -683,7 +664,6 @@ local PickupsMeta = {
 					contentGroup = "BASE",
 					requiresArcana = UNKNOWN,
 					requiresItem = UNKNOWN,
-					inGameDescription = "Gathers all Gold left on the ground and starts a Gold Fever.",
 					sourceIds = {
 						"game-data-v1.16",
 					},
@@ -704,7 +684,6 @@ local PickupsMeta = {
 					contentGroup = "EXTRA",
 					requiresArcana = "T12_OUT_OF_TIME",
 					requiresItem = UNKNOWN,
-					inGameDescription = "Temporarily emits cones of cold. Affected by player stats.",
 					sourceIds = {
 						"game-data-v1.16",
 					},
@@ -725,7 +704,6 @@ local PickupsMeta = {
 					contentGroup = "EXTRA",
 					requiresArcana = UNKNOWN,
 					requiresItem = UNKNOWN,
-					inGameDescription = "Pick up to get +1 Reroll.",
 					sourceIds = {
 						"game-data-v1.16",
 					},
@@ -746,7 +724,6 @@ local PickupsMeta = {
 					contentGroup = "EXTRA",
 					requiresArcana = UNKNOWN,
 					requiresItem = "RELIC_TRISECTION",
-					inGameDescription = "Gives temporary invulnerability, bonus Charm, and minimum Cooldown. Defeat as many enemies as possible to win a prize.",
 					sourceIds = {
 						"game-data-v1.16",
 					},
@@ -2916,7 +2893,6 @@ local PickupsMeta = {
 					effectPerRank = {
 						mightBonus = 0.05,
 					},
-					inGameDescription = "Raises inflicted Damage by 5% per rank (max +25%).",
 					baseCostPerRank = {
 						200,
 						400,
@@ -2940,7 +2916,6 @@ local PickupsMeta = {
 					effectPerRank = {
 						armor = 1,
 					},
-					inGameDescription = "Reduces incoming Damage by 1 per rank (max -3).",
 					baseCostPerRank = {
 						600,
 						1200,
@@ -2962,7 +2937,6 @@ local PickupsMeta = {
 					effectPerRank = {
 						maxHealthBonus = 0.1,
 					},
-					inGameDescription = "Augments Max Health by 10% per rank (max +30%).",
 					baseCostPerRank = {
 						200,
 						400,
@@ -2984,7 +2958,6 @@ local PickupsMeta = {
 					effectPerRank = {
 						recovery = 0.1,
 					},
-					inGameDescription = "Recovers 0.1 HP per rank (max 0.5) per second.",
 					baseCostPerRank = {
 						200,
 						400,
@@ -3008,7 +2981,6 @@ local PickupsMeta = {
 					effectPerRank = {
 						cooldownBonus = -0.025,
 					},
-					inGameDescription = "Uses weapons 2.5% faster per rank (max 5%).",
 					baseCostPerRank = {
 						900,
 						1800,
@@ -3029,7 +3001,6 @@ local PickupsMeta = {
 					effectPerRank = {
 						areaBonus = 0.05,
 					},
-					inGameDescription = "Augments area of attacks by 5% per rank (max +10%).",
 					baseCostPerRank = {
 						300,
 						600,
@@ -3050,7 +3021,6 @@ local PickupsMeta = {
 					effectPerRank = {
 						speedBonus = 0.1,
 					},
-					inGameDescription = "Projectiles move 10% faster per rank (max 20%).",
 					baseCostPerRank = {
 						300,
 						600,
@@ -3071,7 +3041,6 @@ local PickupsMeta = {
 					effectPerRank = {
 						durationBonus = 0.15,
 					},
-					inGameDescription = "Effects from weapons last 15% longer per rank (max +30%).",
 					baseCostPerRank = {
 						300,
 						600,
@@ -3092,7 +3061,6 @@ local PickupsMeta = {
 					effectPerRank = {
 						amount = 1,
 					},
-					inGameDescription = "Fires 1 more projectile (all weapons).",
 					baseCostPerRank = {
 						5000,
 					},
@@ -3112,7 +3080,6 @@ local PickupsMeta = {
 					effectPerRank = {
 						moveSpeedBonus = 0.05,
 					},
-					inGameDescription = "Character moves 5% faster per rank (max 10%).",
 					baseCostPerRank = {
 						300,
 						600,
@@ -3133,7 +3100,6 @@ local PickupsMeta = {
 					effectPerRank = {
 						magnetBonus = 0.25,
 					},
-					inGameDescription = "Items Pickup range +25% per rank (max +50%).",
 					baseCostPerRank = {
 						300,
 						600,
@@ -3154,7 +3120,6 @@ local PickupsMeta = {
 					effectPerRank = {
 						luckBonus = 0.1,
 					},
-					inGameDescription = "Chance to get lucky goes up by 10% per rank (max +30%).",
 					baseCostPerRank = {
 						600,
 						1200,
@@ -3176,7 +3141,6 @@ local PickupsMeta = {
 					effectPerRank = {
 						growthBonus = 0.03,
 					},
-					inGameDescription = "Gains 3% more experience per rank (max 15%).",
 					baseCostPerRank = {
 						900,
 						1800,
@@ -3200,7 +3164,6 @@ local PickupsMeta = {
 					effectPerRank = {
 						greedBonus = 0.1,
 					},
-					inGameDescription = "Gains 10% more Gold per rank (max +50%).",
 					baseCostPerRank = {
 						200,
 						400,
@@ -3224,7 +3187,6 @@ local PickupsMeta = {
 					effectPerRank = {
 						curseBonus = 0.1,
 					},
-					inGameDescription = "Increases enemy speed, health, quantity, and frequency by 10% per rank (max +50%).",
 					baseCostPerRank = {
 						1666,
 						3332,
@@ -3248,7 +3210,6 @@ local PickupsMeta = {
 					effectPerRank = {
 						revival = 1,
 					},
-					inGameDescription = "Revives once with 50% health.",
 					baseCostPerRank = {
 						10000,
 					},
@@ -3271,7 +3232,6 @@ local PickupsMeta = {
 						durationBonus = 0.02,
 						areaBonus = 0.02,
 					},
-					inGameDescription = "Increases Might, Projectile Speed, Duration, and Area by 2% per rank (max +10%).",
 					baseCostPerRank = {
 						1000,
 						2000,
@@ -3295,7 +3255,6 @@ local PickupsMeta = {
 					effectPerRank = {
 						charm = 20,
 					},
-					inGameDescription = "Increases enemies spawn quantity by 20 per rank (max +100).",
 					baseCostPerRank = {
 						10000,
 						20000,
@@ -3319,7 +3278,6 @@ local PickupsMeta = {
 					effectPerRank = {
 						defang = 0.03,
 					},
-					inGameDescription = "Enemies spawn unable to deal damage 3% of the times per rank (max 15%).",
 					baseCostPerRank = {
 						10,
 						20,
@@ -3343,7 +3301,6 @@ local PickupsMeta = {
 					effectPerRank = {
 						rerolls = 2,
 					},
-					inGameDescription = "Twice per rank, allows you to get different choices when leveling up.",
 					baseCostPerRank = {
 						500,
 						1000,
@@ -3367,7 +3324,6 @@ local PickupsMeta = {
 					effectPerRank = {
 						skips = 2,
 					},
-					inGameDescription = "Twice per rank, allows you to skip level up choices and get Experience instead.",
 					baseCostPerRank = {
 						100,
 						200,
@@ -3391,7 +3347,6 @@ local PickupsMeta = {
 					effectPerRank = {
 						banish = 2,
 					},
-					inGameDescription = "Twice per rank, allows you to remove an item from level up choices, for the rest of the run.",
 					baseCostPerRank = {
 						100,
 						200,
@@ -3415,7 +3370,6 @@ local PickupsMeta = {
 					effectPerRank = {
 						recycle = 0.1,
 					},
-					inGameDescription = "Reroll, Skip and Banish actions have a 10% chance to be preserved per rank (max 50%).",
 					baseCostPerRank = {
 						500,
 						1000,
@@ -3439,7 +3393,6 @@ local PickupsMeta = {
 					effectPerRank = {
 						seal = 1,
 					},
-					inGameDescription = "Allows to Banish an item from level up choices, or a pickup from light sources. Use in COLLECTION menu.",
 					baseCostPerRank = {
 						2000,
 						4000,
@@ -3468,7 +3421,6 @@ local PickupsMeta = {
 					effectPerRank = {
 						seal = 1,
 					},
-					inGameDescription = "Allows to Banish two items from level up choices, or pickup from light sources. Use in COLLECTION menu.",
 					baseCostPerRank = {
 						4000,
 						8000,
@@ -3497,7 +3449,6 @@ local PickupsMeta = {
 					effectPerRank = {
 						seal = 1,
 					},
-					inGameDescription = "Allows to Banish three items from level up choices, or pickups from light sources. Use in COLLECTION menu.",
 					baseCostPerRank = {
 						6000,
 						12000,
@@ -3526,7 +3477,6 @@ local PickupsMeta = {
 					effectPerRank = {
 						seal = 1,
 					},
-					inGameDescription = "Allows to Banish four items from level up choices, or pickups from light sources. Use in COLLECTION menu.",
 					baseCostPerRank = {
 						8000,
 						16000,
@@ -3553,7 +3503,6 @@ local PickupsMeta = {
 					unlockedRankField = 0,
 					isAnUnlockable = true,
 					effectPerRank = UNKNOWN,
-					inGameDescription = ".",
 					baseCostPerRank = {
 						500,
 					},
@@ -3571,7 +3520,6 @@ local PickupsMeta = {
 					unlockedRankField = 0,
 					isAnUnlockable = true,
 					effectPerRank = UNKNOWN,
-					inGameDescription = ".",
 					baseCostPerRank = {
 						500,
 					},

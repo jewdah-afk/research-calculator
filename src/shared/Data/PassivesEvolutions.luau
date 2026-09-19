@@ -184,7 +184,6 @@ local PassivesEvolutions = {
 				id = "spinach",
 				vsId = "POWER",
 				stat = "might",
-				description = "Raises inflicted damage by 10%.",
 				maxLevel = 5,
 				valuePerLevel = {
 					0.1,
@@ -209,7 +208,6 @@ local PassivesEvolutions = {
 				id = "armor",
 				vsId = "ARMOR",
 				stat = "armor",
-				description = "Reduces incoming Damage by 1. Increases retaliatory Damage by 10%.",
 				maxLevel = 5,
 				valuePerLevel = {
 					1,
@@ -234,7 +232,6 @@ local PassivesEvolutions = {
 				id = "hollow_heart",
 				vsId = "MAXHEALTH",
 				stat = "maxHealth",
-				description = "Augments Max Health by 20%.",
 				maxLevel = 5,
 				valuePerLevel = {
 					0.2,
@@ -259,7 +256,6 @@ local PassivesEvolutions = {
 				id = "pummarola",
 				vsId = "REGEN",
 				stat = "recovery",
-				description = "Character recovers 0.2 HP per second.",
 				maxLevel = 5,
 				valuePerLevel = {
 					0.2,
@@ -284,7 +280,6 @@ local PassivesEvolutions = {
 				id = "empty_tome",
 				vsId = "COOLDOWN",
 				stat = "cooldown",
-				description = "Reduces weapon cooldown by 8%.",
 				maxLevel = 5,
 				valuePerLevel = {
 					-0.08,
@@ -309,7 +304,6 @@ local PassivesEvolutions = {
 				id = "candelabrador",
 				vsId = "AREA",
 				stat = "area",
-				description = "Augments area of attacks by 10%.",
 				maxLevel = 5,
 				valuePerLevel = {
 					0.1,
@@ -334,7 +328,6 @@ local PassivesEvolutions = {
 				id = "bracer",
 				vsId = "SPEED",
 				stat = "speed",
-				description = "Increases projectile speed by 10%.",
 				maxLevel = 5,
 				valuePerLevel = {
 					0.1,
@@ -359,7 +352,6 @@ local PassivesEvolutions = {
 				id = "spellbinder",
 				vsId = "DURATION",
 				stat = "duration",
-				description = "Increases duration of weapon effects by 10%.",
 				maxLevel = 5,
 				valuePerLevel = {
 					0.1,
@@ -384,7 +376,6 @@ local PassivesEvolutions = {
 				id = "duplicator",
 				vsId = "AMOUNT",
 				stat = "amount",
-				description = "Weapons fire more projectiles.",
 				maxLevel = 2,
 				valuePerLevel = {
 					1,
@@ -406,7 +397,6 @@ local PassivesEvolutions = {
 				id = "wings",
 				vsId = "MOVESPEED",
 				stat = "moveSpeed",
-				description = "Character moves 10% faster.",
 				maxLevel = 5,
 				valuePerLevel = {
 					0.1,
@@ -432,7 +422,6 @@ local PassivesEvolutions = {
 				id = "attractorb",
 				vsId = "MAGNET",
 				stat = "magnet",
-				description = "Character picks up items from further away.",
 				maxLevel = 5,
 				valuePerLevel = {
 					0.5,
@@ -457,7 +446,6 @@ local PassivesEvolutions = {
 				id = "clover",
 				vsId = "LUCK",
 				stat = "luck",
-				description = "Character gets 10% luckier.",
 				maxLevel = 5,
 				valuePerLevel = {
 					0.1,
@@ -483,7 +471,6 @@ local PassivesEvolutions = {
 				id = "crown",
 				vsId = "GROWTH",
 				stat = "growth",
-				description = "Character gains 8% more experience.",
 				maxLevel = 5,
 				valuePerLevel = {
 					0.08,
@@ -508,7 +495,6 @@ local PassivesEvolutions = {
 				id = "stone_mask",
 				vsId = "GREED",
 				stat = "greed",
-				description = "Character earns 10% more Gold coins.",
 				maxLevel = 5,
 				valuePerLevel = {
 					0.1,
@@ -533,7 +519,6 @@ local PassivesEvolutions = {
 				id = "skull_omaniac",
 				vsId = "CURSE",
 				stat = "curse",
-				description = "Increases enemy speed, health, quantity, and frequency by 10%.",
 				maxLevel = 5,
 				valuePerLevel = {
 					0.1,
@@ -558,7 +543,6 @@ local PassivesEvolutions = {
 				id = "tiragisu",
 				vsId = "REVIVAL",
 				stat = "revival",
-				description = "Revives once with 50% Health.",
 				maxLevel = 2,
 				valuePerLevel = {
 					1,
@@ -604,8 +588,6 @@ local PassivesEvolutions = {
 				critMultiplier = 2,
 				poolLimit = 30,
 				maxLevel = 1,
-				behavior = "Evolved Whip. Can deal critical damage and absorb HP.",
-				tips = "Requires: Hollow Heart",
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
@@ -646,8 +628,6 @@ local PassivesEvolutions = {
 				critMultiplier = UNKNOWN,
 				poolLimit = 60,
 				maxLevel = 1,
-				behavior = "Evolved Magic Wand. Fires with no delay.",
-				tips = "Requires: Empty Tome.",
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
@@ -688,8 +668,6 @@ local PassivesEvolutions = {
 				critMultiplier = 3,
 				poolLimit = 70,
 				maxLevel = 1,
-				behavior = "Evolved Knife. Fires with no delay.",
-				tips = "Requires: Bracer.",
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
@@ -730,8 +708,6 @@ local PassivesEvolutions = {
 				critMultiplier = 2,
 				poolLimit = 50,
 				maxLevel = 1,
-				behavior = "Evolved Axe. Passes through enemies.",
-				tips = "Requires: Candelabrador.",
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
@@ -772,8 +748,6 @@ local PassivesEvolutions = {
 				critMultiplier = 2.5,
 				poolLimit = 20,
 				maxLevel = 1,
-				behavior = "Evolved Cross. Can deal critical damage.",
-				tips = "Requires: Clover.",
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
@@ -814,8 +788,6 @@ local PassivesEvolutions = {
 				critMultiplier = UNKNOWN,
 				poolLimit = 50,
 				maxLevel = 1,
-				behavior = "Evolved King Bible. Never ends.",
-				tips = "Requires: Spellbinder.",
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
@@ -856,8 +828,6 @@ local PassivesEvolutions = {
 				critMultiplier = UNKNOWN,
 				poolLimit = 20,
 				maxLevel = 1,
-				behavior = "Evolved Fire Wand. Passes through enemies.",
-				tips = "Requires: Spinach.",
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
@@ -898,8 +868,6 @@ local PassivesEvolutions = {
 				critMultiplier = UNKNOWN,
 				poolLimit = 50,
 				maxLevel = 1,
-				behavior = "Evolved Garlic. Steals hearts. Power increases when recovering HP.",
-				tips = "Requires: Pummarola.",
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
@@ -940,8 +908,6 @@ local PassivesEvolutions = {
 				critMultiplier = UNKNOWN,
 				poolLimit = 30,
 				maxLevel = 1,
-				behavior = "Evolved Santa Water. Damaging zones follow you and grow when they move.",
-				tips = "Requires: Attractorb.",
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
@@ -982,8 +948,6 @@ local PassivesEvolutions = {
 				critMultiplier = UNKNOWN,
 				poolLimit = 50,
 				maxLevel = 1,
-				behavior = "Evolved Runetracer. Explodes when bouncing and in retaliation.",
-				tips = "Requires: Armor",
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
@@ -1024,8 +988,6 @@ local PassivesEvolutions = {
 				critMultiplier = UNKNOWN,
 				poolLimit = 70,
 				maxLevel = 1,
-				behavior = "Evolved Lightning Ring. Projectiles strike twice.",
-				tips = "Requires: Duplicator.",
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
@@ -1066,8 +1028,6 @@ local PassivesEvolutions = {
 				critMultiplier = UNKNOWN,
 				poolLimit = UNKNOWN,
 				maxLevel = 1,
-				behavior = "Evolved Pentagram. Generates extra gems and gathers all of them.",
-				tips = "Requires: Crown.",
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
@@ -1108,8 +1068,6 @@ local PassivesEvolutions = {
 				critMultiplier = UNKNOWN,
 				poolLimit = 100,
 				maxLevel = 8,
-				behavior = "Union of Ebony Wings and Peachone.",
-				tips = "",
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
@@ -1150,8 +1108,6 @@ local PassivesEvolutions = {
 				critMultiplier = 2,
 				poolLimit = 200,
 				maxLevel = 1,
-				behavior = "Union of Phiera Der Tuphello and Eight The Sparrow. Scales with Revivals.",
-				tips = "Requires: Tiragisú.",
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
@@ -1192,8 +1148,6 @@ local PassivesEvolutions = {
 				critMultiplier = UNKNOWN,
 				poolLimit = 60,
 				maxLevel = 1,
-				behavior = "Evolved Gatti Amari. Might turn anything into gold.",
-				tips = "Requires: Stone Mask.",
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
@@ -1233,8 +1187,6 @@ local PassivesEvolutions = {
 				critMultiplier = UNKNOWN,
 				poolLimit = 30,
 				maxLevel = 1,
-				behavior = "Evolved Song of Mana. Might slow enemies down.",
-				tips = "Requires: Skull O'Maniac",
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
@@ -1278,8 +1230,6 @@ local PassivesEvolutions = {
 				critMultiplier = UNKNOWN,
 				poolLimit = 10,
 				maxLevel = 1,
-				behavior = "Evolved Clock Lancet. Halves enemies' health.",
-				tips = "Requires: Gold Ring, Silver Ring.",
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
@@ -1323,8 +1273,6 @@ local PassivesEvolutions = {
 				critMultiplier = UNKNOWN,
 				poolLimit = 50,
 				maxLevel = 1,
-				behavior = "Evolved Laurel. Caps incoming Damage at 10. Retaliates when losing charges.",
-				tips = "Requires: Metaglio Left, Metaglio Right.",
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
@@ -1364,8 +1312,6 @@ local PassivesEvolutions = {
 				critMultiplier = UNKNOWN,
 				poolLimit = 200,
 				maxLevel = 1,
-				behavior = "Evolved Shadow Pinion. Bigger, longer, faster, stronger.",
-				tips = "Requires: Wings.",
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
@@ -1408,8 +1354,6 @@ local PassivesEvolutions = {
 				critMultiplier = 2,
 				poolLimit = 120,
 				maxLevel = 1,
-				behavior = "Union of Vento Sacro and Bloody Tear. Critical hits might generate explosions.",
-				tips = "",
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
@@ -1451,8 +1395,6 @@ local PassivesEvolutions = {
 				critMultiplier = UNKNOWN,
 				poolLimit = 80,
 				maxLevel = 6,
-				behavior = "Fires three projectiles at a random enemy.",
-				tips = "",
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
@@ -1493,8 +1435,6 @@ local PassivesEvolutions = {
 				critMultiplier = UNKNOWN,
 				poolLimit = 80,
 				maxLevel = 6,
-				behavior = "Fires three projectiles at a random enemy.",
-				tips = "",
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
@@ -1535,8 +1475,6 @@ local PassivesEvolutions = {
 				critMultiplier = 2,
 				poolLimit = 100,
 				maxLevel = 1,
-				behavior = "Evolved Pako Battilia. Damage and Amount affected by Max Health.",
-				tips = "Requires Max: Hollow Heart.",
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
@@ -1577,8 +1515,6 @@ local PassivesEvolutions = {
 				critMultiplier = UNKNOWN,
 				poolLimit = 100,
 				maxLevel = 1,
-				behavior = "Gift of Victory Sword. The more enemies are defeated, the stronger it grows.",
-				tips = "Requires Max: Victory Sword, Torrona's Box.",
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
@@ -1617,8 +1553,6 @@ local PassivesEvolutions = {
 				critMultiplier = UNKNOWN,
 				poolLimit = 200,
 				maxLevel = 1,
-				behavior = "Evolved Flames of Misspell. The more enemies are defeated, the stronger it grows.",
-				tips = "Requires Max: Torrona's Box.",
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
@@ -1659,8 +1593,6 @@ local PassivesEvolutions = {
 				critMultiplier = 2,
 				poolLimit = 100,
 				maxLevel = 1,
-				behavior = "Evolved Glass Fandango. Might deal critical damage and freeze enemies. Turns Orologions into Starry Heavens.",
-				tips = "Requires Max: MoveSpeed.",
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
@@ -1702,8 +1634,6 @@ local PassivesEvolutions = {
 				critMultiplier = 2,
 				poolLimit = 200,
 				maxLevel = 1,
-				behavior = "Evolved Santa Javelin. Critical damage affected by Luck. Turns Rosaries into Weird Souls Purifiers.",
-				tips = "Requires Max: Clover.",
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
@@ -1739,8 +1669,6 @@ local PassivesEvolutions = {
 				critMultiplier = UNKNOWN,
 				poolLimit = 80,
 				maxLevel = 1,
-				behavior = "Evolved Bone. Projectiles accelerate when bouncing.",
-				tips = "Requires: Tetraforce.",
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
@@ -1771,8 +1699,6 @@ local PassivesEvolutions = {
 				critMultiplier = UNKNOWN,
 				poolLimit = 80,
 				maxLevel = 1,
-				behavior = "Evolved Cherry Bomb. Generates extra explosions that can deal critical Luck-based damage.",
-				tips = "Requires: Tetraforce.",
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
@@ -1803,8 +1729,6 @@ local PassivesEvolutions = {
 				critMultiplier = UNKNOWN,
 				poolLimit = 50,
 				maxLevel = 1,
-				behavior = "Evolved Carréllo.",
-				tips = "Requires: Tetraforce.",
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
@@ -1835,8 +1759,6 @@ local PassivesEvolutions = {
 				critMultiplier = UNKNOWN,
 				poolLimit = 100,
 				maxLevel = 1,
-				behavior = "Evolved Celestial Dusting. Projectiles generate a chain explosion at fixed intervals.",
-				tips = "Requires: Tetraforce.",
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
@@ -1867,8 +1789,6 @@ local PassivesEvolutions = {
 				critMultiplier = UNKNOWN,
 				poolLimit = 0,
 				maxLevel = 1,
-				behavior = "Gift of Candybox. Allows to choose among a selection of advanced weapons.",
-				tips = "Requires: Candybox.",
 				sourceIds = {
 					"vs-gamefiles-v1.16",
 				},
