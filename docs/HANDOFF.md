@@ -44,13 +44,21 @@ Weapons.conflicts / .unknowns / .sources / .notes   --> provenance
 ### Tooling — `tools/`
 | File | Purpose |
 |---|---|
-| `run_gates.sh` | **The single entrypoint.** Runs all six gates, exits non-zero on any failure |
+| `check_all.sh` | **THE single entrypoint for the whole repo**: data gates + stylua + `luau-lsp analyze` (strict, Roblox defs, cross-file) + headless mechanics tests |
+| `run_gates.sh` | Data gates only (seven), used by `check_all.sh` |
+| `run_tests.sh` | Runs `tests/*.test.luau` under the plain `luau` CLI — no Studio needed |
+| `convert_requires.py` | Fallback: rewrites string requires to Instance paths on a copy, if a place can't resolve them |
 | `gen_luau_data.py` | Regenerates the Luau from the JSON. `python3 tools/gen_luau_data.py research/vs src/shared/Data` |
 | `check_luau_fidelity.py` | Every numeric literal must exist in the source JSON |
 | `check_coverage.py` | Every source value must survive into the module |
 | `check_structure.py` | Shape + referential integrity (ids resolve) |
 | `check_determinism.py` | Regeneration must be byte-identical |
 | `luau_dump.py` | Parses generated Luau back into Python (used by the gates) |
+
+### Game source — `src/`
+See `docs/ARCHITECTURE.md`. `src/shared/Types.luau` is the interface contract;
+`src/shared/Sim/` is pure mechanics (headless-testable); `src/server/` simulation;
+`src/client/` presentation. Requires are string paths (`require("./X")`).
 
 ### Pipeline — `.claude/workflows/build-qa-loop.js`
 Reusable multi-agent build + QA loop. See `research/vs/PIPELINE.md`.

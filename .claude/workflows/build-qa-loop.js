@@ -21,6 +21,13 @@ const MODULES     = cfg.modules     || ['all']
 const MAX_PASSES  = cfg.maxPasses   || 3
 const VERIFIERS   = cfg.verifiers   || 3
 const GATE_CMDS   = cfg.gateCommands || []
+const DECISIONS   = cfg.decisions   || []
+const READ_FIRST  = cfg.readFirst   || []
+const BUILD_EFFORT = cfg.buildEffort || undefined
+const preamble = [
+  READ_FIRST.length ? `Read these first, in order, before anything else:\n${READ_FIRST.map(p => '- ' + p).join('\n')}` : '',
+  DECISIONS.length ? `Binding design decisions (do not relitigate; flag if one is impossible):\n${DECISIONS.map(d => '- ' + d).join('\n')}` : '',
+].filter(Boolean).join('\n\n')
 
 // Distinct rubrics, NOT N agents on the same rubric. Diversity comes from the
 // lens, not the headcount -- correlated reviewers add cost, not coverage.
@@ -65,7 +72,7 @@ const key = f => `${f.file}:${f.line || 0}:${(f.claim||'').slice(0,80)}`
 // acceptance criteria, reviewers argue taste and the loop never converges.
 phase('Contract')
 const contract = await agent(
-  `Read the spec at ${SPEC} and the target ${TARGET}.
+  `${preamble}\n\nRead the spec at ${SPEC} and the target ${TARGET}.
 Write the acceptance criteria this work must meet BEFORE any of it is built or reviewed.
 Prefer criteria a machine can check (value X in file Y equals value X in source Z) over
 subjective ones. Mark each as checkable true/false and say exactly how to check it.
@@ -80,16 +87,24 @@ const contractText = contract.criteria.map(c => `[${c.id}] ${c.statement} -- che
 // ------------------------------------------------------- phase 1: build
 phase('Build')
 await parallel(MODULES.map((m, i) => () => agent(
-  `Build: ${m}
+  `${preamble}
+
+Build: ${m}
 Target: ${TARGET}
 Spec/source data: ${SPEC}
+
+Other build agents are writing sibling modules in parallel against the same
+interface types. Implement exactly the interfaces the architecture doc declares;
+do not invent alternative signatures, and do not edit files that belong to
+another module. If an interface is genuinely insufficient, implement to it
+anyway and report the gap in your final message.
 
 Acceptance criteria you must satisfy:
 ${contractText}
 
 Write the code. Follow existing conventions in the repo. Do not invent values that are
 not in the source data -- if something is missing there, leave it nil and say so.`,
-  { label: `build:${m}`, phase: 'Build' })))
+  { label: `build:${m.split(' ')[0]}`, phase: 'Build', effort: BUILD_EFFORT })))
 
 // ------------------------------------------- the loop: gates -> ... -> QA
 const seen = new Set()
@@ -127,6 +142,7 @@ Deterministic gate output from this pass:
 ${gate || '(none)'}
 ${focus ? `\nThe QA gate asked this pass to focus on: ${focus}` : ''}
 
+${DECISIONS.length ? `Binding decisions (a finding that contradicts one is wrong):\n${DECISIONS.map(d => '- ' + d).join('\n')}\n` : ''}
 Report concrete findings with file, line and the evidence you actually read.
 Do not report anything you have not verified in the file. Empty list is a fine answer.`,
       { label: `review:${r.key}`, phase: 'Review', schema: FINDINGS }),
