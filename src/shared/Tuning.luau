@@ -65,6 +65,13 @@ local Tuning = {
 		-- default itself is not in the data). 100 = such an event always fires;
 		-- the 300 s FLOWER_WALL ships an explicit 0 and is untouched by this.
 		eventChancePercent = 100,
+		-- NOT from research (server-loop). Repeats and spacing for a wave
+		-- event whose shipped entry omits them (enemies_waves.md §4: "Blank
+		-- cells are fields the shipped wave entry omits (the event's own
+		-- defaults apply)"; the defaults themselves are not in the data).
+		-- 1 = the entry happens once; 0 = its repeats are not spaced out.
+		eventRepeatCount = 1,
+		eventDelaySeconds = 0,
 	},
 
 	-- --------------------------------------------------------- sim-weapons
@@ -189,6 +196,36 @@ local Tuning = {
 	lightningRing = {
 		targetRadius = 48, -- NOT from research. "on-screen" random-target radius around the player (studs)
 	},
+	-- ----------------------------------------------------------- server-loop
+	-- NOT from research. Seconds between HUD pushes (server/GameLoop). The
+	-- HUD is a snapshot, not a simulation input, so ~5 Hz is plenty and keeps
+	-- the remote quiet; the run itself steps every Heartbeat regardless.
+	hudPushInterval = 0.2, -- NOT from research. HUD push period (seconds), ~5 Hz
+	-- NOT from research. Invulnerability window (seconds) after the player
+	-- takes contact damage, in server/PlayerSession. server/EnemyManager
+	-- reports a contact EVERY step for every enemy in reach, and the research
+	-- states no hit cadence at all (core_loop.md and enemies_waves.md give
+	-- contact `power` and nothing about how often it lands), so without a
+	-- window a single enemy would deal power x 60 damage per second. Open
+	-- question: the reference's real cadence. Playtest tunable.
+	invulnerabilitySeconds = 0.5,
+	-- research/vs/pickups_meta.md §5 (PowerUp shop, Revival): "Revives once
+	-- with 50% health." Research-stated, but no Data field carries it -- the
+	-- shipped record holds the revival COUNT, not the health restored.
+	revivalHealthFraction = 0.5, -- research/vs/pickups_meta.md §5
+	-- NOT from research. Gem pull speed (studs/s) once a gem is inside the
+	-- magnet radius, in server/PickupManager. The reference pulls gems in
+	-- pixel space; this is its stud equivalent. Comfortably faster than the
+	-- player at baseWalkSpeed so a gem in range is never outrun.
+	gemPullSpeed = 40,
+	-- NOT from research. Distance (studs) at which a pulled gem counts as
+	-- collected. Small enough to look like a pickup, large enough that one
+	-- Heartbeat of gemPullSpeed cannot step over it.
+	gemCollectRadius = 1.5,
+	-- NOT from research. Studs the gem for a kill is offset from the corpse,
+	-- picked uniformly in [-this, this] on each axis, so a stacked swarm does
+	-- not drop every gem on one point. Cosmetic scatter only; no value moves.
+	gemDropScatter = 1,
 	-- NOT from research. Slack on the weapon cooldown comparison in
 	-- server/WeaponRunner. A cooldown counted down by a fixed dt lands on the
 	-- boundary with float residue of either sign (1.35 - 27 x 0.05 evaluates
@@ -198,6 +235,137 @@ local Tuning = {
 	-- below the smallest real interval in the data (0.02 s) and far above
 	-- double-precision noise at these magnitudes.
 	cooldownEpsilon = 1e-9, -- NOT from research. Cooldown boundary tolerance (seconds)
+
+	-- ---------------------------------------------------------------- client
+	-- NOT from research. Everything below is presentation: camera framing, HUD
+	-- geometry and placeholder visual-effect sizes. The reference is a 2D
+	-- pixel-art game with no notion of studs, Roblox GUI units or field of
+	-- view, so none of these can come from research/vs. They are look-and-feel
+	-- tunables and carry no balance meaning. Colours are stored as r/g/b
+	-- components in [0, 1] rather than Color3 so this module stays pure Luau
+	-- and keeps loading under the plain luau CLI.
+
+	-- Fraction used for centring anchor points and midpoints in client layout.
+	-- A unit constant, not a tunable; it lives here only because a bare 0.5
+	-- literal is not permitted outside Data/Tuning.
+	uiHalf = 0.5, -- NOT from research. Centre fraction for UI anchors
+
+	-- Seconds in a minute, for formatting the run clock as mm:ss and for the
+	-- one-Reaper-per-further-minute cadence the research states in
+	-- research/vs/core_loop.md ("At 1800 s a Reaper spawns, +1 each further
+	-- minute"). A unit conversion, not a balance value.
+	secondsPerMinute = 60, -- research/vs/core_loop.md §1 (run structure)
+
+	camera = {
+		-- NOT from research. Top-down locked follow: the camera sits this many
+		-- studs above the player and this many studs back along +Z, looking at
+		-- the player. Height dominates so the view reads as top-down while the
+		-- small setback keeps the character sprite readable.
+		height = 90, -- NOT from research. Camera height above the player (studs)
+		backDistance = 30, -- NOT from research. Camera setback along +Z (studs)
+		fieldOfView = 55, -- NOT from research. Camera FOV (degrees)
+		-- NOT from research. Exponential follow rate (1/s). The camera closes
+		-- this fraction of the remaining gap per second, so it trails the player
+		-- slightly instead of snapping. Higher = stiffer.
+		followRate = 12,
+	},
+
+	hud = {
+		-- NOT from research. Push rate the client assumes for HudState; the
+		-- run timer is interpolated between pushes so it ticks smoothly.
+		updateInterval = 0.2, -- NOT from research. Seconds between HUD refreshes
+		margin = 12, -- NOT from research. Screen-edge margin (pixels)
+		padding = 8, -- NOT from research. Inner padding (pixels)
+		cornerRadius = 6, -- NOT from research. Rounded-corner radius (pixels)
+		textSize = 18, -- NOT from research. Body text size (pixels)
+		titleTextSize = 28, -- NOT from research. Run-timer text size (pixels)
+		barWidth = 420, -- NOT from research. XP / health bar width (pixels)
+		xpBarHeight = 14, -- NOT from research. XP bar height (pixels)
+		healthBarHeight = 18, -- NOT from research. Health bar height (pixels)
+		statRowHeight = 24, -- NOT from research. Height of one stat line (pixels)
+		slotSize = 44, -- NOT from research. Weapon / passive slot edge (pixels)
+		slotGap = 6, -- NOT from research. Gap between slots (pixels)
+		-- research/vs/core_loop.md: 6 weapon + 6 passive slots. The HUD draws one
+		-- box per slot, so the row length is that research value, not a tunable.
+		-- Read from Data.CoreLoop at runtime; this is only the fallback used if
+		-- the field is UNKNOWN there.
+		slotCountFallback = 6, -- research/vs/core_loop.md (6 weapon + 6 passive slots)
+		backgroundTransparency = 0.35, -- NOT from research. Panel transparency
+		barBackgroundTransparency = 0.5, -- NOT from research. Bar trough transparency
+		-- NOT from research. Health fraction below which the health bar turns to
+		-- the low colour. Purely a readability cue; no mechanic reads it.
+		lowHealthFraction = 0.3,
+		colors = {
+			panel = { r = 0.06, g = 0.07, b = 0.1 }, -- NOT from research
+			text = { r = 0.93, g = 0.95, b = 1 }, -- NOT from research
+			dimText = { r = 0.6, g = 0.64, b = 0.72 }, -- NOT from research
+			xp = { r = 0.35, g = 0.72, b = 1 }, -- NOT from research
+			health = { r = 0.35, g = 0.82, b = 0.45 }, -- NOT from research
+			lowHealth = { r = 0.9, g = 0.35, b = 0.32 }, -- NOT from research
+			slotEmpty = { r = 0.13, g = 0.14, b = 0.18 }, -- NOT from research
+			slotWeapon = { r = 0.62, g = 0.45, b = 0.85 }, -- NOT from research
+			slotPassive = { r = 0.85, g = 0.68, b = 0.35 }, -- NOT from research
+		},
+	},
+
+	levelUpUi = {
+		backdropTransparency = 0.4, -- NOT from research. Dim behind the panel
+		panelWidth = 520, -- NOT from research. Panel width (pixels)
+		panelPadding = 16, -- NOT from research. Panel inner padding (pixels)
+		cornerRadius = 8, -- NOT from research. Rounded-corner radius (pixels)
+		titleHeight = 40, -- NOT from research. Title row height (pixels)
+		titleTextSize = 26, -- NOT from research. Title text size (pixels)
+		optionHeight = 64, -- NOT from research. One option button height (pixels)
+		optionGap = 8, -- NOT from research. Gap between options (pixels)
+		optionTextSize = 20, -- NOT from research. Option name text size (pixels)
+		optionSubTextSize = 15, -- NOT from research. Option detail text size (pixels)
+		buttonHeight = 34, -- NOT from research. Reroll / skip / banish button height
+		buttonGap = 8, -- NOT from research. Gap between those buttons (pixels)
+		buttonTextSize = 16, -- NOT from research. Button text size (pixels)
+		-- NOT from research. The footer holds exactly the three research-defined
+		-- level-up actions (core_loop.md: Reroll / Skip / Banish), so the button
+		-- row is divided three ways. A layout divisor, not a balance number.
+		footerButtonCount = 3,
+		colors = {
+			backdrop = { r = 0, g = 0, b = 0 }, -- NOT from research
+			panel = { r = 0.09, g = 0.1, b = 0.14 }, -- NOT from research
+			option = { r = 0.16, g = 0.17, b = 0.23 }, -- NOT from research
+			optionNew = { r = 0.2, g = 0.28, b = 0.2 }, -- NOT from research
+			button = { r = 0.22, g = 0.23, b = 0.3 }, -- NOT from research
+			buttonDisabled = { r = 0.14, g = 0.14, b = 0.17 }, -- NOT from research
+			text = { r = 0.95, g = 0.96, b = 1 }, -- NOT from research
+			dimText = { r = 0.62, g = 0.65, b = 0.72 }, -- NOT from research
+			banishArmed = { r = 0.75, g = 0.3, b = 0.3 }, -- NOT from research
+		},
+	},
+
+	visuals = {
+		-- NOT from research. Pool size for transient effect parts on the client.
+		-- Effects are short-lived; this bounds the worst-case simultaneous count
+		-- so the client never calls Instance.new inside the render loop.
+		poolSize = 256,
+		hiddenY = -500, -- NOT from research. Parking height for unused effect parts
+		groundY = 0.2, -- NOT from research. Height of ground-flat effects (studs)
+		-- NOT from research. Default lifetime (seconds) for an effect whose spec
+		-- carries no duration. Long enough to read, short enough not to stack up.
+		defaultDuration = 0.25,
+		slashThickness = 3, -- NOT from research. Whip slash arc thickness (studs)
+		slashHeight = 3, -- NOT from research. Whip slash arc height (studs)
+		auraThickness = 0.4, -- NOT from research. Garlic aura ring thickness (studs)
+		zoneThickness = 0.3, -- NOT from research. Santa Water zone disc thickness (studs)
+		dropRadius = 0.6, -- NOT from research. Santa Water falling-bottle radius (studs)
+		dropHeight = 24, -- NOT from research. Height a bottle drops from (studs)
+		strikeRadius = 1.2, -- NOT from research. Lightning bolt column radius (studs)
+		strikeHeight = 40, -- NOT from research. Lightning bolt column height (studs)
+		startTransparency = 0.25, -- NOT from research. Effect transparency at spawn
+		colors = {
+			slash = { r = 0.95, g = 0.9, b = 0.55 }, -- NOT from research
+			aura = { r = 0.55, g = 0.95, b = 0.6 }, -- NOT from research
+			zone = { r = 0.5, g = 0.8, b = 1 }, -- NOT from research
+			drop = { r = 0.7, g = 0.9, b = 1 }, -- NOT from research
+			strike = { r = 0.85, g = 0.85, b = 1 }, -- NOT from research
+		},
+	},
 }
 
 return Tuning
