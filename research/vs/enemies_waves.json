@@ -2,80 +2,1558 @@
   "schemaVersion": 1,
   "game": "Vampire Survivors",
   "scope": "base game (no DLC)",
-  "retrievalStatus": "incomplete: all primary sources blocked by network egress proxy; only WebSearch snippets available",
+  "retrievalStatus": "complete for Mad Forest waves and Mad Forest enemy statlines, from the shipped game data; wiki pages themselves remain egress-blocked",
   "sources": [
-    {"id": "official-wiki-madforest", "url": "https://vampire.survivors.wiki/w/Mad_Forest", "retrieved": "2026-09-19", "note": "page blocked; facts below come from search-engine snippets of it"},
-    {"id": "official-wiki-enemies", "url": "https://vampire.survivors.wiki/w/Enemies", "retrieved": "2026-09-19", "note": "blocked; snippets only"},
-    {"id": "official-wiki-chest", "url": "https://vampire.survivors.wiki/w/Treasure_Chest", "retrieved": "2026-09-19", "note": "blocked; snippets only"},
-    {"id": "official-wiki-knockback", "url": "https://vampire.survivors.wiki/w/Knockback", "retrieved": "2026-09-19", "note": "blocked; snippets only"},
-    {"id": "official-wiki-curse", "url": "https://vampire.survivors.wiki/w/Curse", "retrieved": "2026-09-19", "note": "blocked; snippets only"},
-    {"id": "official-wiki-stages", "url": "https://vampire.survivors.wiki/w/Stages", "retrieved": "2026-09-19", "note": "blocked; snippets only"},
-    {"id": "official-wiki-giantbat", "url": "https://vampire.survivors.wiki/w/Giant_Bat", "retrieved": "2026-09-19", "note": "blocked; snippets only"},
-    {"id": "fandom-madforest-enemies", "url": "https://vampire-survivors.fandom.com/wiki/Category:Mad_Forest_enemies", "retrieved": "2026-09-19", "note": "blocked; snippets only"},
-    {"id": "fandom-stages", "url": "https://vampire-survivors.fandom.com/wiki/Stages", "retrieved": "2026-09-19", "note": "blocked; snippets only"},
-    {"id": "fandom-reaper", "url": "https://vampire-survivors.fandom.com/wiki/The_Reaper", "retrieved": "2026-09-19", "note": "blocked; snippets only"},
-    {"id": "namu-stats", "url": "https://en.namu.wiki/w/Vampire%20Survivors/%EB%8A%A5%EB%A0%A5%EC%B9%98", "retrieved": "2026-09-19", "note": "blocked; snippets only"},
-    {"id": "namu-stage", "url": "https://en.namu.wiki/w/Vampire%20Survivors/%EC%8A%A4%ED%85%8C%EC%9D%B4%EC%A7%80", "retrieved": "2026-09-19", "note": "blocked; snippets only"}
+    {
+      "id": "game-data-v1.16",
+      "url": "https://raw.githubusercontent.com/SurvivatonsAndMore/VampireSurvivorsFiles/main/Data/Vampire%20Survivors/Stage.json",
+      "retrieved": "2026-09-19",
+      "note": "Community rip of the SHIPPED game data, Vampire Survivors v1.16, base-game folder (DLC folders are separate). Not an official page. Made with VampireUnpacker."
+    },
+    {
+      "id": "game-data-v1.16-enemy",
+      "url": "https://raw.githubusercontent.com/SurvivatonsAndMore/VampireSurvivorsFiles/main/Data/Vampire%20Survivors/Enemy.json",
+      "retrieved": "2026-09-19",
+      "note": "Same rip, enemy table."
+    },
+    {
+      "id": "official-wiki-enemies",
+      "url": "https://vampire.survivors.wiki/w/Enemies",
+      "retrieved": "2026-09-19",
+      "note": "page egress-blocked; facts from search-engine snippets only"
+    },
+    {
+      "id": "official-wiki-chest",
+      "url": "https://vampire.survivors.wiki/w/Treasure_Chest",
+      "retrieved": "2026-09-19",
+      "note": "page egress-blocked; snippets only"
+    },
+    {
+      "id": "official-wiki-curse",
+      "url": "https://vampire.survivors.wiki/w/Curse",
+      "retrieved": "2026-09-19",
+      "note": "page egress-blocked; snippets only"
+    },
+    {
+      "id": "official-wiki-stages",
+      "url": "https://vampire.survivors.wiki/w/Stages",
+      "retrieved": "2026-09-19",
+      "note": "page egress-blocked; snippets only"
+    },
+    {
+      "id": "fandom-reaper",
+      "url": "https://vampire-survivors.fandom.com/wiki/The_Reaper",
+      "retrieved": "2026-09-19",
+      "note": "page egress-blocked; snippets only"
+    }
   ],
-  "conflicts": [],
+  "conflicts": [
+    {
+      "field": "data.enemies[Zombie].health",
+      "values": [
+        1,
+        10
+      ],
+      "sourceIds": [
+        "game-data-v1.16-enemy",
+        "official-wiki-enemies"
+      ],
+      "note": "Shipped data gives maxHp 1 for ZOMBIE; a wiki snippet gives Health 10. Wiki statboxes appear to show a scaled/display value (roughly 10x) rather than the raw maxHp field. Power 10, speed 100, knockback 0.8 and xp 1 agree exactly between the two, so only the health figure diverges. Which is the in-play number is unresolved."
+    },
+    {
+      "field": "data.enemies[The Reaper].health",
+      "values": [
+        65535,
+        655350
+      ],
+      "sourceIds": [
+        "game-data-v1.16-enemy",
+        "fandom-reaper"
+      ],
+      "note": "Shipped data: maxHp 65535, level 100, skill HP_x_Level. Wiki/community: 655350 multiplied by the player's level at spawn. Same 10x display discrepancy as Zombie. Power 65535 and speed 1200 agree."
+    }
+  ],
   "unknowns": [
-    "data.madForest.waves",
-    "data.madForest.minEnemiesOnScreen",
-    "data.madForest.spawnIntervalSeconds",
-    "data.madForest.perWaveModifiers",
-    "data.madForest.mapEvents",
-    "data.madForest.bossSchedule",
-    "data.enemies (all but zombie and theReaper)",
-    "data.enemies.zombie.knockbackResistance (only a 'knockback 0.8' figure found; convention unverified)",
-    "data.enemies.theReaper.knockbackResistance",
-    "data.enemies.theReaper.xpDropped",
-    "data.scaling.timeScalingFormula",
-    "data.scaling.playerLevelScalingFormula",
+    "data.scaling.hpXLevelFormula",
+    "data.enemies[*].healthDisplayScaleFactor",
+    "data.madForest.waves[*].spawnCountPerTick",
+    "data.madForest.eventDefinitions.BAT_SWARM.spawnCount",
+    "data.madForest.eventDefinitions.GHOST_SWARM.spawnCount",
+    "data.madForest.eventDefinitions.FLOWER_WALL.geometry",
     "data.chests.luckToTierFormula"
   ],
-  "notes": "All times in seconds. Enemy 'speed' is the game's MoveSpeed value (units unverified). 'knockbackResistance' holds the wiki's enemy knockback-taken multiplier (higher = knocked back more), so it is resistance only inversely; flagged because the schema key name implies the opposite.",
+  "notes": "All in-run times in SECONDS. Wave `time` = minute*60 and is the START of that wave; each wave runs until the next. `spawnIntervalSeconds` is the shipped `frequency` field (milliseconds) converted to seconds. `minEnemiesOnScreen` is the shipped `minimum` field: the game tops the field up to at least this many enemies. Event `delay` and `duration` likewise converted from ms to seconds; `chancePercent` is a 0-100 percentage as shipped. Treasure `chances` is shipped as [5-item%, 3-item%, 1-item%] and has been split into named fields. `knockbackResistance` holds the shipped `knockback` field, which is a knockback-TAKEN multiplier (higher = knocked back further), so despite the schema key name a HIGHER number means LESS resistance; GHOST/XLMANTIS/XLMUMMY/XLFLOWER at 0 are immune, and the Reaper's -0.5 is negative. Enemy `health`/`power`/`xpDropped` are the raw shipped values; see conflicts about the ~10x wiki display discrepancy.",
   "data": {
     "madForest": {
       "id": "mad_forest",
-      "waves": null,
-      "minEnemiesOnScreen": null,
-      "spawnIntervalSeconds": null,
-      "perWaveModifiers": null,
-      "mapEvents": null,
-      "knownTimedEvents": [
-        {"time": 60, "event": "Glowing Bat spawns with the wave; its chest can evolve a weapon despite being before the 600s evolution gate", "sourceIds": ["official-wiki-chest"]},
-        {"time": 540, "event": "Silver Bat appears; chest roll 3% for 5-item, else 10% for 3-item, else 50% for 1-item", "sourceIds": ["official-wiki-chest"]},
-        {"time": 1800, "event": "Stage time limit exceeded: The Reaper spawns, and an additional Reaper is added every minute thereafter", "sourceIds": ["namu-stage"]}
+      "internalId": "FOREST",
+      "stageNumber": "Stage 1",
+      "gameVersion": "1.16",
+      "timeLimit": 1800,
+      "startingSpawns": 10,
+      "stageModifiers": {
+        "clockSpeed": 1,
+        "playerPxSpeed": 1.1,
+        "enemySpeed": 1.1,
+        "projectileSpeed": 1,
+        "goldMultiplier": 1,
+        "enemyHealthMultiplier": 1,
+        "luckBonus": 0,
+        "xpBonus": 1
+      },
+      "hyperModifiers": {
+        "timeLimit": 1800,
+        "clockSpeed": 1,
+        "playerPxSpeed": 0.9,
+        "enemySpeed": 0.9,
+        "projectileSpeed": 0.25,
+        "goldMultiplier": 0.5,
+        "enemyHealthMultiplier": 0,
+        "luckBonus": 0,
+        "xpBonus": 0,
+        "startingSpawns": 15,
+        "note": "Shipped hyper values are DELTAS/overrides as stored; goldMultiplier 0.5 corresponds to the in-game '50% Gold bonus' hyper tip."
+      },
+      "inverseModifiers": {
+        "goldMultiplier": 2,
+        "enemyHealthMultiplier": 2,
+        "luckBonus": 0.2,
+        "timeMods": {
+          "start": 0,
+          "hpPerMinute": 0.05,
+          "speedPerMinute": 0.005
+        }
+      },
+      "destructibles": {
+        "type": "BRAZIER",
+        "frequencySeconds": 1,
+        "chancePercent": 10,
+        "chanceMaxPercent": 50,
+        "max": 10
+      },
+      "dayNight": true,
+      "waves": [
+        {
+          "minute": 0,
+          "time": 0,
+          "minEnemiesOnScreen": 15,
+          "spawnIntervalSeconds": 1.0,
+          "enemies": [
+            "BAT3"
+          ],
+          "bosses": [],
+          "arcanaHolder": null,
+          "arcanaTreasure": null,
+          "events": [],
+          "treasure": null
+        },
+        {
+          "minute": 1,
+          "time": 60,
+          "minEnemiesOnScreen": 30,
+          "spawnIntervalSeconds": 1.0,
+          "enemies": [
+            "ZOMBIE",
+            "BAT1"
+          ],
+          "bosses": [
+            "BAT4"
+          ],
+          "arcanaHolder": null,
+          "arcanaTreasure": null,
+          "events": [],
+          "treasure": {
+            "chancePercent5Item": 0,
+            "chancePercent3Item": 0,
+            "chancePercent1Item": 30,
+            "level": 1,
+            "prizeTypes": [
+              "EVOLUTION",
+              "EXISTING_ANY",
+              "EXISTING_ANY",
+              "EXISTING_ANY",
+              "EXISTING_ANY"
+            ],
+            "fixedPrizes": [
+              "AMOUNT"
+            ]
+          }
+        },
+        {
+          "minute": 2,
+          "time": 120,
+          "minEnemiesOnScreen": 50,
+          "spawnIntervalSeconds": 0.5,
+          "enemies": [
+            "BAT1",
+            "BAT2",
+            "BAT3"
+          ],
+          "bosses": [],
+          "arcanaHolder": null,
+          "arcanaTreasure": null,
+          "events": [
+            {
+              "eventType": "BAT_SWARM",
+              "delay": 5.0,
+              "repeat": 2,
+              "chancePercent": null,
+              "duration": null
+            }
+          ],
+          "treasure": null
+        },
+        {
+          "minute": 3,
+          "time": 180,
+          "minEnemiesOnScreen": 40,
+          "spawnIntervalSeconds": 0.25,
+          "enemies": [
+            "SKELETON"
+          ],
+          "bosses": [
+            "BAT4"
+          ],
+          "arcanaHolder": null,
+          "arcanaTreasure": null,
+          "events": [
+            {
+              "eventType": "BAT_SWARM",
+              "delay": 5.0,
+              "repeat": 1,
+              "chancePercent": 10,
+              "duration": null
+            }
+          ],
+          "treasure": {
+            "chancePercent5Item": 0,
+            "chancePercent3Item": 5,
+            "chancePercent1Item": 40,
+            "level": 1,
+            "prizeTypes": [
+              "EXISTING_WEAPON",
+              "EXISTING_ANY",
+              "EXISTING_ANY",
+              "EXISTING_ANY",
+              "EXISTING_ANY"
+            ],
+            "fixedPrizes": null
+          }
+        },
+        {
+          "minute": 4,
+          "time": 240,
+          "minEnemiesOnScreen": 30,
+          "spawnIntervalSeconds": 0.5,
+          "enemies": [
+            "SKELETON",
+            "GHOST"
+          ],
+          "bosses": [],
+          "arcanaHolder": null,
+          "arcanaTreasure": null,
+          "events": [
+            {
+              "eventType": "BAT_SWARM",
+              "delay": 5.0,
+              "repeat": 1,
+              "chancePercent": 10,
+              "duration": null
+            }
+          ],
+          "treasure": null
+        },
+        {
+          "minute": 5,
+          "time": 300,
+          "minEnemiesOnScreen": 10,
+          "spawnIntervalSeconds": 1.0,
+          "enemies": [
+            "MUDMAN2"
+          ],
+          "bosses": [
+            "XLMANTIS"
+          ],
+          "arcanaHolder": null,
+          "arcanaTreasure": null,
+          "events": [
+            {
+              "eventType": "FLOWER_WALL",
+              "delay": null,
+              "repeat": null,
+              "chancePercent": 0,
+              "duration": 30.0
+            }
+          ],
+          "treasure": {
+            "chancePercent5Item": 1,
+            "chancePercent3Item": 5,
+            "chancePercent1Item": 100,
+            "level": 1,
+            "prizeTypes": [
+              "EXISTING_WEAPON",
+              "EXISTING_ANY",
+              "EXISTING_ANY",
+              "EXISTING_ANY",
+              "EXISTING_ANY"
+            ],
+            "fixedPrizes": null
+          }
+        },
+        {
+          "minute": 6,
+          "time": 360,
+          "minEnemiesOnScreen": 20,
+          "spawnIntervalSeconds": 0.5,
+          "enemies": [
+            "ZOMBIE",
+            "MUDMAN2"
+          ],
+          "bosses": [],
+          "arcanaHolder": null,
+          "arcanaTreasure": null,
+          "events": [
+            {
+              "eventType": "BAT_SWARM",
+              "delay": 5.0,
+              "repeat": 1,
+              "chancePercent": 10,
+              "duration": null
+            }
+          ],
+          "treasure": null
+        },
+        {
+          "minute": 7,
+          "time": 420,
+          "minEnemiesOnScreen": 80,
+          "spawnIntervalSeconds": 0.5,
+          "enemies": [
+            "BAT2",
+            "BAT3",
+            "MUDMAN1"
+          ],
+          "bosses": [
+            "BAT4"
+          ],
+          "arcanaHolder": null,
+          "arcanaTreasure": null,
+          "events": [
+            {
+              "eventType": "BAT_SWARM",
+              "delay": 5.0,
+              "repeat": 5,
+              "chancePercent": 80,
+              "duration": null
+            }
+          ],
+          "treasure": {
+            "chancePercent5Item": 3,
+            "chancePercent3Item": 10,
+            "chancePercent1Item": 50,
+            "level": 2,
+            "prizeTypes": [
+              "EXISTING_WEAPON",
+              "EXISTING_ANY",
+              "EXISTING_ANY",
+              "EXISTING_ANY",
+              "EXISTING_ANY"
+            ],
+            "fixedPrizes": null
+          }
+        },
+        {
+          "minute": 8,
+          "time": 480,
+          "minEnemiesOnScreen": 100,
+          "spawnIntervalSeconds": 1.5,
+          "enemies": [
+            "ZOMBIE"
+          ],
+          "bosses": [
+            "XLBAT"
+          ],
+          "arcanaHolder": null,
+          "arcanaTreasure": null,
+          "events": [
+            {
+              "eventType": "BAT_SWARM",
+              "delay": 15.0,
+              "repeat": 2,
+              "chancePercent": 80,
+              "duration": null
+            }
+          ],
+          "treasure": null
+        },
+        {
+          "minute": 9,
+          "time": 540,
+          "minEnemiesOnScreen": 30,
+          "spawnIntervalSeconds": 0.5,
+          "enemies": [
+            "XLBAT",
+            "ZOMBIE"
+          ],
+          "bosses": [
+            "BAT5"
+          ],
+          "arcanaHolder": null,
+          "arcanaTreasure": null,
+          "events": [
+            {
+              "eventType": "BAT_SWARM",
+              "delay": 15.0,
+              "repeat": 2,
+              "chancePercent": 70,
+              "duration": null
+            }
+          ],
+          "treasure": {
+            "chancePercent5Item": 3,
+            "chancePercent3Item": 10,
+            "chancePercent1Item": 50,
+            "level": 1,
+            "prizeTypes": [
+              "EXISTING_WEAPON",
+              "EXISTING_ANY",
+              "EXISTING_ANY",
+              "EXISTING_WEAPON",
+              "EXISTING_WEAPON"
+            ],
+            "fixedPrizes": null
+          }
+        },
+        {
+          "minute": 10,
+          "time": 600,
+          "minEnemiesOnScreen": 10,
+          "spawnIntervalSeconds": 0.5,
+          "enemies": [
+            "MUDMAN1",
+            "MUDMAN2"
+          ],
+          "bosses": [
+            "BOSS_XLMANTIS"
+          ],
+          "arcanaHolder": null,
+          "arcanaTreasure": null,
+          "events": [
+            {
+              "eventType": "FLOWER_WALL",
+              "delay": null,
+              "repeat": null,
+              "chancePercent": null,
+              "duration": null
+            }
+          ],
+          "treasure": {
+            "chancePercent5Item": 3,
+            "chancePercent3Item": 10,
+            "chancePercent1Item": 100,
+            "level": 1,
+            "prizeTypes": [
+              "EVOLUTION",
+              "EXISTING_ANY",
+              "EXISTING_ANY",
+              "EXISTING_WEAPON",
+              "EXISTING_WEAPON"
+            ],
+            "fixedPrizes": null
+          }
+        },
+        {
+          "minute": 11,
+          "time": 660,
+          "minEnemiesOnScreen": 300,
+          "spawnIntervalSeconds": 0.1,
+          "enemies": [
+            "SKELETON"
+          ],
+          "bosses": [],
+          "arcanaHolder": "BAT4",
+          "arcanaTreasure": {
+            "chancePercent5Item": 0,
+            "chancePercent3Item": 0,
+            "chancePercent1Item": 100,
+            "level": 1,
+            "prizeTypes": [
+              "EVO_ARCANA",
+              "EXISTING_ANY",
+              "EXISTING_ANY",
+              "EXISTING_ANY",
+              "EXISTING_ANY"
+            ]
+          },
+          "events": [
+            {
+              "eventType": "BAT_SWARM",
+              "delay": 5.0,
+              "repeat": 1,
+              "chancePercent": 10,
+              "duration": null
+            }
+          ],
+          "treasure": null
+        },
+        {
+          "minute": 12,
+          "time": 720,
+          "minEnemiesOnScreen": 20,
+          "spawnIntervalSeconds": 0.25,
+          "enemies": [
+            "WEREWOLF",
+            "GHOST",
+            "SKELETON"
+          ],
+          "bosses": [
+            "BAT4"
+          ],
+          "arcanaHolder": null,
+          "arcanaTreasure": null,
+          "events": [
+            {
+              "eventType": "BAT_SWARM",
+              "delay": 5.0,
+              "repeat": 1,
+              "chancePercent": 10,
+              "duration": null
+            }
+          ],
+          "treasure": {
+            "chancePercent5Item": 1,
+            "chancePercent3Item": 5,
+            "chancePercent1Item": 50,
+            "level": 1,
+            "prizeTypes": [
+              "EVOLUTION",
+              "EXISTING_ANY",
+              "EXISTING_ANY",
+              "EXISTING_ANY",
+              "EXISTING_ANY"
+            ],
+            "fixedPrizes": null
+          }
+        },
+        {
+          "minute": 13,
+          "time": 780,
+          "minEnemiesOnScreen": 150,
+          "spawnIntervalSeconds": 0.5,
+          "enemies": [
+            "WEREWOLF",
+            "GHOST",
+            "GHOST"
+          ],
+          "bosses": [],
+          "arcanaHolder": null,
+          "arcanaTreasure": null,
+          "events": [
+            {
+              "eventType": "GHOST_SWARM",
+              "delay": 1.2,
+              "repeat": 20,
+              "chancePercent": 70,
+              "duration": null
+            },
+            {
+              "eventType": "GHOST_SWARM",
+              "delay": 2.3,
+              "repeat": 20,
+              "chancePercent": 70,
+              "duration": null
+            }
+          ],
+          "treasure": null
+        },
+        {
+          "minute": 14,
+          "time": 840,
+          "minEnemiesOnScreen": 20,
+          "spawnIntervalSeconds": 0.1,
+          "enemies": [
+            "XLBAT",
+            "WEREWOLF"
+          ],
+          "bosses": [
+            "BAT5"
+          ],
+          "arcanaHolder": null,
+          "arcanaTreasure": null,
+          "events": [],
+          "treasure": {
+            "chancePercent5Item": 3,
+            "chancePercent3Item": 10,
+            "chancePercent1Item": 100,
+            "level": 1,
+            "prizeTypes": [
+              "EVOLUTION",
+              "EXISTING_ANY",
+              "EXISTING_ANY",
+              "EXISTING_ANY",
+              "EXISTING_ANY"
+            ],
+            "fixedPrizes": null
+          }
+        },
+        {
+          "minute": 15,
+          "time": 900,
+          "minEnemiesOnScreen": 100,
+          "spawnIntervalSeconds": 0.1,
+          "enemies": [
+            "WEREWOLF",
+            "XLBAT",
+            "MUDMAN2"
+          ],
+          "bosses": [
+            "BOSS_WEREWOLF"
+          ],
+          "arcanaHolder": null,
+          "arcanaTreasure": null,
+          "events": [
+            {
+              "eventType": "FLOWER_WALL",
+              "delay": null,
+              "repeat": null,
+              "chancePercent": 80,
+              "duration": null
+            }
+          ],
+          "treasure": {
+            "chancePercent5Item": 3,
+            "chancePercent3Item": 10,
+            "chancePercent1Item": 100,
+            "level": 1,
+            "prizeTypes": [
+              "EVOLUTION",
+              "EXISTING_ANY",
+              "EXISTING_ANY",
+              "EXISTING_ANY",
+              "EXISTING_ANY"
+            ],
+            "fixedPrizes": null
+          }
+        },
+        {
+          "minute": 16,
+          "time": 960,
+          "minEnemiesOnScreen": 100,
+          "spawnIntervalSeconds": 0.1,
+          "enemies": [
+            "XLMANTIS",
+            "MUDMAN1",
+            "MUDMAN2"
+          ],
+          "bosses": [
+            "BAT4"
+          ],
+          "arcanaHolder": null,
+          "arcanaTreasure": null,
+          "events": [],
+          "treasure": {
+            "chancePercent5Item": 1,
+            "chancePercent3Item": 5,
+            "chancePercent1Item": 50,
+            "level": 1,
+            "prizeTypes": [
+              "EVOLUTION",
+              "EXISTING_ANY",
+              "EXISTING_ANY",
+              "EXISTING_ANY",
+              "EXISTING_ANY"
+            ],
+            "fixedPrizes": null
+          }
+        },
+        {
+          "minute": 17,
+          "time": 1020,
+          "minEnemiesOnScreen": 20,
+          "spawnIntervalSeconds": 1.0,
+          "enemies": [
+            "XLMUMMY"
+          ],
+          "bosses": [],
+          "arcanaHolder": null,
+          "arcanaTreasure": null,
+          "events": [],
+          "treasure": null
+        },
+        {
+          "minute": 18,
+          "time": 1080,
+          "minEnemiesOnScreen": 60,
+          "spawnIntervalSeconds": 0.5,
+          "enemies": [
+            "XLMUMMY",
+            "MUDMAN1"
+          ],
+          "bosses": [
+            "BAT5"
+          ],
+          "arcanaHolder": null,
+          "arcanaTreasure": null,
+          "events": [],
+          "treasure": {
+            "chancePercent5Item": 3,
+            "chancePercent3Item": 10,
+            "chancePercent1Item": 100,
+            "level": 1,
+            "prizeTypes": [
+              "EVOLUTION",
+              "EXISTING_ANY",
+              "EXISTING_ANY",
+              "EXISTING_ANY",
+              "EXISTING_ANY"
+            ],
+            "fixedPrizes": null
+          }
+        },
+        {
+          "minute": 19,
+          "time": 1140,
+          "minEnemiesOnScreen": 100,
+          "spawnIntervalSeconds": 0.5,
+          "enemies": [
+            "XLMUMMY",
+            "MUDMAN1"
+          ],
+          "bosses": [],
+          "arcanaHolder": null,
+          "arcanaTreasure": null,
+          "events": [],
+          "treasure": null
+        },
+        {
+          "minute": 20,
+          "time": 1200,
+          "minEnemiesOnScreen": 100,
+          "spawnIntervalSeconds": 0.1,
+          "enemies": [
+            "XLMUMMY",
+            "MUDMAN2",
+            "XLBAT"
+          ],
+          "bosses": [
+            "BOSS_XLMUMMY"
+          ],
+          "arcanaHolder": null,
+          "arcanaTreasure": null,
+          "events": [
+            {
+              "eventType": "BAT_SWARM",
+              "delay": 1.2,
+              "repeat": 20,
+              "chancePercent": 70,
+              "duration": null
+            },
+            {
+              "eventType": "BAT_SWARM",
+              "delay": 2.3,
+              "repeat": 20,
+              "chancePercent": 70,
+              "duration": null
+            }
+          ],
+          "treasure": {
+            "chancePercent5Item": 3,
+            "chancePercent3Item": 10,
+            "chancePercent1Item": 100,
+            "level": 1,
+            "prizeTypes": [
+              "EVOLUTION",
+              "EXISTING_ANY",
+              "EXISTING_ANY",
+              "EXISTING_ANY",
+              "EXISTING_ANY"
+            ],
+            "fixedPrizes": null
+          }
+        },
+        {
+          "minute": 21,
+          "time": 1260,
+          "minEnemiesOnScreen": 300,
+          "spawnIntervalSeconds": 0.1,
+          "enemies": [
+            "FLOWER"
+          ],
+          "bosses": [
+            "XLFLOWER"
+          ],
+          "arcanaHolder": "BAT4",
+          "arcanaTreasure": {
+            "chancePercent5Item": 0,
+            "chancePercent3Item": 0,
+            "chancePercent1Item": 100,
+            "level": 1,
+            "prizeTypes": [
+              "EVO_ARCANA",
+              "EXISTING_ANY",
+              "EXISTING_ANY",
+              "EXISTING_ANY",
+              "EXISTING_ANY"
+            ]
+          },
+          "events": [],
+          "treasure": null
+        },
+        {
+          "minute": 22,
+          "time": 1320,
+          "minEnemiesOnScreen": 200,
+          "spawnIntervalSeconds": 0.1,
+          "enemies": [
+            "FLOWER",
+            "XLMUMMY"
+          ],
+          "bosses": [
+            "BAT4"
+          ],
+          "arcanaHolder": null,
+          "arcanaTreasure": null,
+          "events": [],
+          "treasure": {
+            "chancePercent5Item": 3,
+            "chancePercent3Item": 10,
+            "chancePercent1Item": 100,
+            "level": 1,
+            "prizeTypes": [
+              "EVOLUTION",
+              "EXISTING_ANY",
+              "EXISTING_ANY",
+              "EXISTING_ANY",
+              "EXISTING_ANY"
+            ],
+            "fixedPrizes": null
+          }
+        },
+        {
+          "minute": 23,
+          "time": 1380,
+          "minEnemiesOnScreen": 300,
+          "spawnIntervalSeconds": 0.1,
+          "enemies": [
+            "FLOWER",
+            "XLMUMMY"
+          ],
+          "bosses": [
+            "BAT5"
+          ],
+          "arcanaHolder": null,
+          "arcanaTreasure": null,
+          "events": [],
+          "treasure": {
+            "chancePercent5Item": 3,
+            "chancePercent3Item": 10,
+            "chancePercent1Item": 100,
+            "level": 1,
+            "prizeTypes": [
+              "EVOLUTION",
+              "EXISTING_ANY",
+              "EXISTING_ANY",
+              "EXISTING_ANY",
+              "EXISTING_ANY"
+            ],
+            "fixedPrizes": null
+          }
+        },
+        {
+          "minute": 24,
+          "time": 1440,
+          "minEnemiesOnScreen": 300,
+          "spawnIntervalSeconds": 0.1,
+          "enemies": [
+            "FLOWER",
+            "XLMUMMY"
+          ],
+          "bosses": [
+            "XLFLOWER"
+          ],
+          "arcanaHolder": null,
+          "arcanaTreasure": null,
+          "events": [],
+          "treasure": null
+        },
+        {
+          "minute": 25,
+          "time": 1500,
+          "minEnemiesOnScreen": 100,
+          "spawnIntervalSeconds": 0.1,
+          "enemies": [
+            "XLFLOWER"
+          ],
+          "bosses": [
+            "BOSS_XLFLOWER"
+          ],
+          "arcanaHolder": null,
+          "arcanaTreasure": null,
+          "events": [
+            {
+              "eventType": "FLOWER_WALL",
+              "delay": 10.0,
+              "repeat": 5,
+              "chancePercent": null,
+              "duration": 10.0
+            }
+          ],
+          "treasure": {
+            "chancePercent5Item": 3,
+            "chancePercent3Item": 10,
+            "chancePercent1Item": 100,
+            "level": 1,
+            "prizeTypes": [
+              "EVOLUTION",
+              "EXISTING_ANY",
+              "EXISTING_ANY",
+              "EXISTING_ANY",
+              "EXISTING_ANY"
+            ],
+            "fixedPrizes": null
+          }
+        },
+        {
+          "minute": 26,
+          "time": 1560,
+          "minEnemiesOnScreen": 150,
+          "spawnIntervalSeconds": 0.1,
+          "enemies": [
+            "XLFLOWER",
+            "FLOWER"
+          ],
+          "bosses": [],
+          "arcanaHolder": null,
+          "arcanaTreasure": null,
+          "events": [],
+          "treasure": null
+        },
+        {
+          "minute": 27,
+          "time": 1620,
+          "minEnemiesOnScreen": 300,
+          "spawnIntervalSeconds": 0.1,
+          "enemies": [
+            "XLMUMMY",
+            "MUDMAN1",
+            "MUDMAN2"
+          ],
+          "bosses": [
+            "BAT4"
+          ],
+          "arcanaHolder": null,
+          "arcanaTreasure": null,
+          "events": [
+            {
+              "eventType": "GHOST_SWARM",
+              "delay": null,
+              "repeat": null,
+              "chancePercent": null,
+              "duration": null
+            },
+            {
+              "eventType": "GHOST_SWARM",
+              "delay": 3.0,
+              "repeat": 19,
+              "chancePercent": null,
+              "duration": null
+            }
+          ],
+          "treasure": {
+            "chancePercent5Item": 3,
+            "chancePercent3Item": 10,
+            "chancePercent1Item": 100,
+            "level": 1,
+            "prizeTypes": [
+              "EVOLUTION",
+              "EXISTING_ANY",
+              "EXISTING_ANY",
+              "EXISTING_ANY",
+              "EXISTING_ANY"
+            ],
+            "fixedPrizes": null
+          }
+        },
+        {
+          "minute": 28,
+          "time": 1680,
+          "minEnemiesOnScreen": 300,
+          "spawnIntervalSeconds": 0.1,
+          "enemies": [
+            "XLBAT",
+            "BAT4"
+          ],
+          "bosses": [],
+          "arcanaHolder": null,
+          "arcanaTreasure": null,
+          "events": [],
+          "treasure": null
+        },
+        {
+          "minute": 29,
+          "time": 1740,
+          "minEnemiesOnScreen": 300,
+          "spawnIntervalSeconds": 0.1,
+          "enemies": [
+            "BAT4",
+            "BAT5"
+          ],
+          "bosses": [
+            "BAT4"
+          ],
+          "arcanaHolder": null,
+          "arcanaTreasure": null,
+          "events": [
+            {
+              "eventType": "BAT_SWARM",
+              "delay": null,
+              "repeat": null,
+              "chancePercent": null,
+              "duration": null
+            },
+            {
+              "eventType": "BAT_SWARM",
+              "delay": 3.0,
+              "repeat": 19,
+              "chancePercent": null,
+              "duration": null
+            }
+          ],
+          "treasure": {
+            "chancePercent5Item": 3,
+            "chancePercent3Item": 10,
+            "chancePercent1Item": 100,
+            "level": 1,
+            "prizeTypes": [
+              "EVOLUTION",
+              "EXISTING_ANY",
+              "EXISTING_ANY",
+              "EXISTING_ANY",
+              "EXISTING_ANY"
+            ],
+            "fixedPrizes": null
+          }
+        },
+        {
+          "minute": 30,
+          "time": 1800,
+          "minEnemiesOnScreen": 1,
+          "spawnIntervalSeconds": 10.0,
+          "enemies": [],
+          "bosses": [
+            "BOSS_XLDEATH"
+          ],
+          "arcanaHolder": null,
+          "arcanaTreasure": null,
+          "events": [
+            {
+              "eventType": "CYCLE_COMPLETE",
+              "delay": null,
+              "repeat": null,
+              "chancePercent": null,
+              "duration": null
+            }
+          ],
+          "treasure": null
+        }
       ],
-      "destructibles": "braziers / light sources only; drop random pickups when broken",
-      "enemyRoster": ["Bat Dragon", "Bat Drakelet", "Big Mummy", "Boon Marrabbio", "City Atlantean", "Flower Wall", "Ghost", "Giant Bat", "Mantichana", "Moon Atlantean", "Mudman", "Pipeestrello", "Skeleton", "Skelewing", "Sun Atlantean", "The Reaper", "Venus", "Volcano Atlantean", "Werewolf", "Zombie"],
-      "sourceIds": ["official-wiki-madforest", "fandom-madforest-enemies"]
+      "sourceIds": [
+        "game-data-v1.16"
+      ]
     },
     "enemies": [
-      {"name": "Zombie", "id": "zombie", "health": 10, "power": 10, "speed": 100, "knockbackResistance": 0.8, "xpDropped": 1, "isBoss": false, "notes": "Variant/patch version unconfirmed; from a search snippet of the Enemies page.", "sourceIds": ["official-wiki-enemies"]},
-      {"name": "The Reaper", "id": "the_reaper", "health": null, "healthFormula": "655350 * playerLevelAtSpawn", "power": 65535, "speed": 1200, "knockbackResistance": null, "xpDropped": null, "isBoss": true, "notes": "Spawns when the stage time limit is exceeded; teleports to a random location whenever hit.", "sourceIds": ["fandom-reaper", "namu-stats", "namu-stage"]}
+      {
+        "name": "Pipeestrello",
+        "id": "bat1",
+        "internalId": "BAT1",
+        "health": 0.1,
+        "power": 5,
+        "speed": 140,
+        "knockbackResistance": 1,
+        "maxKnockback": 3,
+        "deathKnockback": 2,
+        "xpDropped": 1,
+        "enemyLevel": 1,
+        "skills": [],
+        "scale": null,
+        "isBoss": false,
+        "bestiaryName": "Pipeestrello",
+        "sourceIds": [
+          "game-data-v1.16"
+        ]
+      },
+      {
+        "name": "Pipeestrello (variant)",
+        "id": "bat2",
+        "internalId": "BAT2",
+        "health": 0.5,
+        "power": 5,
+        "speed": 140,
+        "knockbackResistance": 1,
+        "maxKnockback": 3,
+        "deathKnockback": 2,
+        "xpDropped": 1,
+        "enemyLevel": 1,
+        "skills": [],
+        "scale": null,
+        "isBoss": false,
+        "bestiaryName": null,
+        "sourceIds": [
+          "game-data-v1.16"
+        ]
+      },
+      {
+        "name": "Pipeestrello (variant)",
+        "id": "bat3",
+        "internalId": "BAT3",
+        "health": 0.5,
+        "power": 5,
+        "speed": 140,
+        "knockbackResistance": 1,
+        "maxKnockback": 3,
+        "deathKnockback": 2,
+        "xpDropped": 1,
+        "enemyLevel": 1,
+        "skills": [],
+        "scale": null,
+        "isBoss": false,
+        "bestiaryName": null,
+        "sourceIds": [
+          "game-data-v1.16"
+        ]
+      },
+      {
+        "name": "Glowing Bat",
+        "id": "bat4",
+        "internalId": "BAT4",
+        "health": 5,
+        "power": 10,
+        "speed": 140,
+        "knockbackResistance": 1,
+        "maxKnockback": 3,
+        "deathKnockback": 2,
+        "xpDropped": 30,
+        "enemyLevel": 1,
+        "skills": [
+          "HP_x_Level"
+        ],
+        "scale": null,
+        "isBoss": false,
+        "bestiaryName": null,
+        "sourceIds": [
+          "game-data-v1.16"
+        ]
+      },
+      {
+        "name": "Silver Bat",
+        "id": "bat5",
+        "internalId": "BAT5",
+        "health": 5,
+        "power": 10,
+        "speed": 140,
+        "knockbackResistance": 1,
+        "maxKnockback": 3,
+        "deathKnockback": 2,
+        "xpDropped": 30,
+        "enemyLevel": 1,
+        "skills": [
+          "HP_x_Level"
+        ],
+        "scale": null,
+        "isBoss": false,
+        "bestiaryName": null,
+        "sourceIds": [
+          "game-data-v1.16"
+        ]
+      },
+      {
+        "name": "Zombie",
+        "id": "zombie",
+        "internalId": "ZOMBIE",
+        "health": 1,
+        "power": 10,
+        "speed": 100,
+        "knockbackResistance": 0.8,
+        "maxKnockback": 3,
+        "deathKnockback": 4,
+        "xpDropped": 1,
+        "enemyLevel": 1,
+        "skills": [],
+        "scale": null,
+        "isBoss": false,
+        "bestiaryName": "Zombie",
+        "sourceIds": [
+          "game-data-v1.16"
+        ]
+      },
+      {
+        "name": "Skeleton",
+        "id": "skeleton",
+        "internalId": "SKELETON",
+        "health": 1.5,
+        "power": 10,
+        "speed": 100,
+        "knockbackResistance": 1,
+        "maxKnockback": 3,
+        "deathKnockback": 5,
+        "xpDropped": 2,
+        "enemyLevel": 1,
+        "skills": [],
+        "scale": null,
+        "isBoss": false,
+        "bestiaryName": "Skeleton",
+        "sourceIds": [
+          "game-data-v1.16"
+        ]
+      },
+      {
+        "name": "Ghost",
+        "id": "ghost",
+        "internalId": "GHOST",
+        "health": 1,
+        "power": 5,
+        "speed": 200,
+        "knockbackResistance": 0,
+        "maxKnockback": 3,
+        "deathKnockback": 0,
+        "xpDropped": 1.5,
+        "enemyLevel": 1,
+        "skills": [],
+        "scale": null,
+        "isBoss": false,
+        "bestiaryName": "Ghost",
+        "sourceIds": [
+          "game-data-v1.16"
+        ]
+      },
+      {
+        "name": "Mudman",
+        "id": "mudman1",
+        "internalId": "MUDMAN1",
+        "health": 7,
+        "power": 10,
+        "speed": 100,
+        "knockbackResistance": 0.3,
+        "maxKnockback": 3,
+        "deathKnockback": 2,
+        "xpDropped": 2.5,
+        "enemyLevel": 1,
+        "skills": [],
+        "scale": null,
+        "isBoss": false,
+        "bestiaryName": "Mudman",
+        "sourceIds": [
+          "game-data-v1.16"
+        ]
+      },
+      {
+        "name": "Mudman (variant)",
+        "id": "mudman2",
+        "internalId": "MUDMAN2",
+        "health": 15,
+        "power": 10,
+        "speed": 100,
+        "knockbackResistance": 0.3,
+        "maxKnockback": 3,
+        "deathKnockback": 2,
+        "xpDropped": 2.5,
+        "enemyLevel": 1,
+        "skills": [],
+        "scale": null,
+        "isBoss": false,
+        "bestiaryName": null,
+        "sourceIds": [
+          "game-data-v1.16"
+        ]
+      },
+      {
+        "name": "Werewolf",
+        "id": "werewolf",
+        "internalId": "WEREWOLF",
+        "health": 18,
+        "power": 14,
+        "speed": 130,
+        "knockbackResistance": 0.8,
+        "maxKnockback": 3,
+        "deathKnockback": 7,
+        "xpDropped": 2,
+        "enemyLevel": 1,
+        "skills": [],
+        "scale": null,
+        "isBoss": false,
+        "bestiaryName": "Werewolf",
+        "sourceIds": [
+          "game-data-v1.16"
+        ]
+      },
+      {
+        "name": "Giant Bat",
+        "id": "xlbat",
+        "internalId": "XLBAT",
+        "health": 27,
+        "power": 10,
+        "speed": 140,
+        "knockbackResistance": 0.1,
+        "maxKnockback": 3,
+        "deathKnockback": 2,
+        "xpDropped": 2.5,
+        "enemyLevel": 10,
+        "skills": [],
+        "scale": null,
+        "isBoss": false,
+        "bestiaryName": "Giant Bat",
+        "sourceIds": [
+          "game-data-v1.16"
+        ]
+      },
+      {
+        "name": "Mantichana",
+        "id": "xlmantis",
+        "internalId": "XLMANTIS",
+        "health": 50,
+        "power": 20,
+        "speed": 80,
+        "knockbackResistance": 0,
+        "maxKnockback": 3,
+        "deathKnockback": 0,
+        "xpDropped": 3,
+        "enemyLevel": 10,
+        "skills": [],
+        "scale": null,
+        "isBoss": false,
+        "bestiaryName": "Mantichana",
+        "sourceIds": [
+          "game-data-v1.16"
+        ]
+      },
+      {
+        "name": "Big Mummy",
+        "id": "xlmummy",
+        "internalId": "XLMUMMY",
+        "health": 50,
+        "power": 20,
+        "speed": 80,
+        "knockbackResistance": 0,
+        "maxKnockback": 3,
+        "deathKnockback": 0,
+        "xpDropped": 3,
+        "enemyLevel": 10,
+        "skills": [],
+        "scale": null,
+        "isBoss": false,
+        "bestiaryName": "Big Mummy",
+        "sourceIds": [
+          "game-data-v1.16"
+        ]
+      },
+      {
+        "name": "Flower Wall",
+        "id": "flower",
+        "internalId": "FLOWER",
+        "health": 3,
+        "power": 1,
+        "speed": 20,
+        "knockbackResistance": 1,
+        "maxKnockback": 3,
+        "deathKnockback": 2,
+        "xpDropped": 2,
+        "enemyLevel": 1,
+        "skills": [
+          "HP_x_Level"
+        ],
+        "scale": null,
+        "isBoss": false,
+        "bestiaryName": "Flower Wall",
+        "sourceIds": [
+          "game-data-v1.16"
+        ]
+      },
+      {
+        "name": "Venus",
+        "id": "xlflower",
+        "internalId": "XLFLOWER",
+        "health": 50,
+        "power": 20,
+        "speed": 80,
+        "knockbackResistance": 0,
+        "maxKnockback": 3,
+        "deathKnockback": 0,
+        "xpDropped": 3,
+        "enemyLevel": 10,
+        "skills": [],
+        "scale": null,
+        "isBoss": false,
+        "bestiaryName": "Venus",
+        "sourceIds": [
+          "game-data-v1.16"
+        ]
+      },
+      {
+        "name": "Mantichana (boss)",
+        "id": "boss_xlmantis",
+        "internalId": "BOSS_XLMANTIS",
+        "health": 15,
+        "power": 20,
+        "speed": 160,
+        "knockbackResistance": 0,
+        "maxKnockback": 1,
+        "deathKnockback": 5,
+        "xpDropped": 50,
+        "enemyLevel": 15,
+        "skills": [
+          "HP_x_Level"
+        ],
+        "scale": 1.5,
+        "isBoss": true,
+        "bestiaryName": null,
+        "sourceIds": [
+          "game-data-v1.16"
+        ]
+      },
+      {
+        "name": "Werewolf (boss)",
+        "id": "boss_werewolf",
+        "internalId": "BOSS_WEREWOLF",
+        "health": 20,
+        "power": 20,
+        "speed": 130,
+        "knockbackResistance": 0.1,
+        "maxKnockback": 1,
+        "deathKnockback": 7,
+        "xpDropped": 30,
+        "enemyLevel": 1,
+        "skills": [
+          "HP_x_Level"
+        ],
+        "scale": 1.5,
+        "isBoss": true,
+        "bestiaryName": null,
+        "sourceIds": [
+          "game-data-v1.16"
+        ]
+      },
+      {
+        "name": "Big Mummy (boss)",
+        "id": "boss_xlmummy",
+        "internalId": "BOSS_XLMUMMY",
+        "health": 25,
+        "power": 20,
+        "speed": 80,
+        "knockbackResistance": 0,
+        "maxKnockback": 1,
+        "deathKnockback": 5,
+        "xpDropped": 25,
+        "enemyLevel": 15,
+        "skills": [
+          "HP_x_Level"
+        ],
+        "scale": 1.5,
+        "isBoss": true,
+        "bestiaryName": null,
+        "sourceIds": [
+          "game-data-v1.16"
+        ]
+      },
+      {
+        "name": "Venus (boss)",
+        "id": "boss_xlflower",
+        "internalId": "BOSS_XLFLOWER",
+        "health": 15,
+        "power": 30,
+        "speed": 160,
+        "knockbackResistance": 0,
+        "maxKnockback": 1,
+        "deathKnockback": 1,
+        "xpDropped": 50,
+        "enemyLevel": 30,
+        "skills": [
+          "HP_x_Level"
+        ],
+        "scale": 1.5,
+        "isBoss": true,
+        "bestiaryName": null,
+        "sourceIds": [
+          "game-data-v1.16"
+        ]
+      },
+      {
+        "name": "The Reaper",
+        "id": "boss_xldeath",
+        "internalId": "BOSS_XLDEATH",
+        "health": 65535,
+        "power": 65535,
+        "speed": 1200,
+        "knockbackResistance": -0.5,
+        "maxKnockback": 0,
+        "deathKnockback": 0,
+        "xpDropped": 0,
+        "enemyLevel": 100,
+        "skills": [
+          "HP_x_Level"
+        ],
+        "scale": 1.5,
+        "isBoss": true,
+        "bestiaryName": "The Reaper",
+        "sourceIds": [
+          "game-data-v1.16"
+        ]
+      }
     ],
     "scaling": {
-      "normalEnemies": "scale primarily with elapsed run time",
-      "bossesAndMinibosses": "scale with both elapsed time and player level",
-      "hpTimesLevel": "The 'HP x Level' property multiplies enemy health by the player's level, applied once at spawn; it is not updated if the player levels while the enemy lives.",
+      "hpXLevelSkill": "Enemies whose `skills` list contains HP_x_Level have their health multiplied by a level factor at spawn; per the wiki this is the PLAYER's level at the moment of spawn and is not updated afterwards. Among Mad Forest entities this covers BAT4, BAT5, FLOWER and every BOSS_ entry.",
+      "enemyLevelField": "Each enemy record carries its own `level` (1 for most trash, 10 for the XL enemies, 15/30/100 for bosses). Whether this multiplies health directly or only interacts with HP_x_Level is not documented in the data; recorded as unknown.",
+      "normalEnemies": "scale primarily with elapsed run time (wave table), not with player level",
+      "bossesAndMinibosses": "scale with both time and player level",
       "curse": "increases enemy Max Health, MoveSpeed and spawn frequency; health multiplier applies to newly spawned enemies only",
-      "hyperMode": "increases minimum enemies spawned and enemy move speed; may increase max health",
+      "hyperMode": "increases minimum enemies spawned and enemy move speed; see hyperModifiers above for Mad Forest's shipped values",
       "endlessMode": "enemies gain 100% of base Max Health per cycle",
-      "inverseMode": "enemies start at +200% HP and gain +5% HP and +0.5 move speed per minute",
-      "exactFormulas": null,
-      "sourceIds": ["official-wiki-enemies", "official-wiki-curse", "official-wiki-stages", "fandom-stages"]
+      "inverseMode": "Mad Forest inverse: +200% enemy health, +5% HP and +0.005 speed per minute (shipped timeMods)",
+      "sourceIds": [
+        "game-data-v1.16",
+        "official-wiki-enemies",
+        "official-wiki-curse",
+        "official-wiki-stages"
+      ]
     },
     "chests": {
-      "droppedBy": "bosses",
-      "contents": "a random weapon or passive item the player already owns, levelled up by one; plus gold; plus an evolution/union when its requirements are met",
+      "droppedBy": "bosses (the `bosses` list of a wave) and arcana holders",
+      "perWaveChances": "Each wave's `treasure` gives the chest-tier roll for that wave's boss as [5-item%, 3-item%, 1-item%]; see waves[].treasure.",
+      "contents": "a random weapon or passive item the player already owns, levelled up by one; plus gold; plus an evolution/union when its requirements are met. Wave data names the prize slots explicitly (EVOLUTION, EXISTING_WEAPON, EXISTING_ANY, EVO_ARCANA).",
       "evolutionTimeGate": 600,
+      "evolutionTimeGateExceptions": "Mad Forest's minute-1 BAT4 chest has prizeTypes[0] = EVOLUTION, which is why an evolution is possible at 60s on this stage.",
       "evolutionsPerChest": 1,
-      "sizes": [1, 3, 5],
-      "sizeDependsOn": "luck",
-      "firstSixChestSequence": [1, 1, 3, 1, 1, 5],
-      "goldByTier": {"one": {"min": 100, "max": 200}, "three": {"min": 300, "max": 600}, "five": {"min": 500, "max": 1000}},
-      "sourceIds": ["official-wiki-chest"]
+      "sizes": [
+        1,
+        3,
+        5
+      ],
+      "sizeDependsOn": "luck (on top of the per-wave base chances)",
+      "firstSixChestSequence": [
+        1,
+        1,
+        3,
+        1,
+        1,
+        5
+      ],
+      "goldByTier": {
+        "one": {
+          "min": 100,
+          "max": 200
+        },
+        "three": {
+          "min": 300,
+          "max": 600
+        },
+        "five": {
+          "min": 500,
+          "max": 1000
+        }
+      },
+      "sourceIds": [
+        "game-data-v1.16",
+        "official-wiki-chest"
+      ]
     }
   }
 }
