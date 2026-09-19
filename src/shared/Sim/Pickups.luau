@@ -45,6 +45,16 @@
 	Note the drop-table id "clover" (Little Clover) is not the passive id
 	"clover" (Clover); pickups and level-up items are separate vocabularies.
 
+	Integration gap (deferred, verified 2026-09-19): nothing in src/server or
+	src/client calls rollDrop / dropPool / effectKind / floorEffect yet, so
+	destructible light sources never drop anything in the live run loop --
+	only gemTier is wired (PickupManager). The roll and effect halves here are
+	covered by tests/pickups.test.luau and are ready for a caller: a light
+	source's destruction should call rollDrop(playerLevel, luck, rng), then
+	effectKind(id) to split "state" ids (floorEffect(id, state)) from "world"
+	ids (PickupManager:collectAll and friends). Wiring that caller into
+	PickupManager/Spawner is out of scope for this module.
+
 	Pure Luau: no Roblox APIs, no yields. Runs under the plain `luau` CLI.
 	rollDrop allocates nothing; dropPool builds a list for inspection.
 

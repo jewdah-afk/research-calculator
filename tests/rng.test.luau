@@ -77,4 +77,94 @@ T.test("RNG-01 different seeds give different streams", function()
 	T.eq(same, false, "seed 1 vs seed 2")
 end)
 
+-- AC-X02: determinism beyond the raw PRNG stream. A fixed input sequence is
+-- stepped through the seeded mechanics modules, every step appends a line to
+-- an event/damage log, and the serialized log must be byte-identical across
+-- two independent runs. The GOLDEN checksum is committed, so a replay in a
+-- fresh process (or on another machine) that drifts fails here too, not just
+-- a same-process replay.
+local Damage = require("../src/shared/Sim/Damage")
+local Experience = require("../src/shared/Sim/Experience")
+
+-- The fixed input sequence: (dt, base damage, enemy power, player armor).
+local SCENARIO = {
+	{ 0.25, 10, 6, 1 },
+	{ 0.50, 12, 8, 2 },
+	{ 0.75, 7, 5, 0 },
+	{ 1.00, 20, 12, 3 },
+	{ 1.25, 9, 4, 1 },
+	{ 1.50, 15, 10, 5 },
+}
+
+-- Runs the scenario from a fixed seed and returns the serialized log.
+local function runScenario(seed: number): string
+	local rng = Rng.new(seed)
+	local xp = { level = 1, xp = 0, xpToNext = Experience.xpToNext(1) }
+	local lines: { string } = {}
+	local t = 0
+	for step = 1, 40 do
+		local input = SCENARIO[(step - 1) % #SCENARIO + 1]
+		local dt, base, power, armor = input[1], input[2], input[3], input[4]
+		t += dt
+		local hits = rng:int(1, 3)
+		local total = 0
+		local crits = 0
+		for _ = 1, hits do
+			local dmg, wasCrit = Damage.roll(base, 0.25, 2, rng)
+			total += dmg
+			if wasCrit then
+				crits += 1
+			end
+		end
+		local taken = Damage.toPlayer(power, armor)
+		local gems = rng:range(1, 4)
+		local gained = Experience.addXp(xp, Experience.gemValue(gems, 1.5))
+		table.insert(
+			lines,
+			string.format(
+				"%03d t=%.2f hits=%d dmg=%.4f crits=%d taken=%.4f gems=%.6f lvl=%d xp=%.6f up=%d",
+				step,
+				t,
+				hits,
+				total,
+				crits,
+				taken,
+				gems,
+				xp.level,
+				xp.xp,
+				gained
+			)
+		)
+	end
+	return table.concat(lines, "\n")
+end
+
+-- FNV-1a over the log, so the committed golden stays one short constant.
+local function checksum(s: string): string
+	local h = 2166136261
+	for i = 1, #s do
+		h = bit32.bxor(h, string.byte(s, i))
+		h = (h * 16777619) % 4294967296
+	end
+	return string.format("%08x", h)
+end
+
+local GOLDEN_SEED = 20240919
+local GOLDEN_CHECKSUM = "e9afe290"
+
+T.test("RNG-01 AC-X02 seeded scenario: two runs emit byte-identical event logs", function()
+	local a = runScenario(GOLDEN_SEED)
+	local b = runScenario(GOLDEN_SEED)
+	T.eq(#a > 0, true, "log is non-empty")
+	T.eq(a, b, "run 1 vs run 2 event log")
+end)
+
+T.test("RNG-01 AC-X02 seeded scenario: log matches the committed golden checksum", function()
+	T.eq(checksum(runScenario(GOLDEN_SEED)), GOLDEN_CHECKSUM, "golden event-log checksum")
+end)
+
+T.test("RNG-01 AC-X02 seeded scenario: a different seed changes the log", function()
+	T.eq(runScenario(GOLDEN_SEED) ~= runScenario(GOLDEN_SEED + 1), true, "seed affects the log")
+end)
+
 return T.finish()

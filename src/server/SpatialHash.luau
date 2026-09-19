@@ -149,10 +149,9 @@ function SpatialHash.rebuild(self: SpatialHash, originX: number, originZ: number
 	local x = s.x
 	local z = s.z
 
-	for c = 1, cells do
-		cellCount[c] = 0
-	end
-	-- Pass 1: cell of every living handle, and per-cell counts.
+	-- Pass 1: cell of every living handle, and per-cell counts. `cellCount`
+	-- was zeroed by the prefix sweep of the previous rebuild (and by
+	-- table.create in `new`), so no separate clearing pass is needed.
 	for h = 1, s.capacity do
 		if alive[h] then
 			local c = axisCell(s, z[h], originZ) * side + axisCell(s, x[h], originX) + 1
@@ -161,11 +160,13 @@ function SpatialHash.rebuild(self: SpatialHash, originX: number, originZ: number
 		end
 	end
 	-- Prefix sums: cell c owns sorted[cellStart[c] .. cellStart[c + 1] - 1].
+	-- The same sweep zeroes cellCount again, ready for the next rebuild.
 	local run = 1
 	for c = 1, cells do
 		cellStart[c] = run
 		cellFill[c] = run
 		run += cellCount[c]
+		cellCount[c] = 0
 	end
 	cellStart[cells + 1] = run
 	s.sortedCount = run - 1

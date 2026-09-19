@@ -80,7 +80,7 @@ local function colorFor(s: Internal, weaponId: string): Color3
 		end
 	end
 	local hue = if #weaponIds > 0 then (index - 1) / #weaponIds else 0
-	color = Color3.fromHSV(hue, 1, 1)
+	local color = Color3.fromHSV(hue, 1, 1)
 	s.colors[weaponId] = color
 	return color
 end
@@ -168,8 +168,19 @@ function Pool.flush(self: Pool, x: { number }, z: { number }, alive: { boolean }
 			n += 1
 			moveParts[n] = parts[h]
 			-- Heading is atan2(vz, vx) in the XZ plane; a part's look vector
-			-- is -Z, so rotate about Y by -(heading) - pi/2 to face it.
-			moveCFrames[n] = CFrame.new(x[h], FLIGHT_Y, z[h]) * CFrame.Angles(0, -heading[h] - math.pi / 2, 0)
+			-- is -Z, so rotate about Y by -(heading) - pi/2 to face it. With
+			-- t = -heading - pi/2, cos(t) = -sin(heading) and
+			-- sin(t) = -cos(heading), so the Y rotation's columns are
+			-- right = (cos t, 0, -sin t) and back = (sin t, 0, cos t). One
+			-- fromMatrix builds the whole matrix in a single allocation.
+			local f = heading[h]
+			local sf, cf = math.sin(f), math.cos(f)
+			moveCFrames[n] = CFrame.fromMatrix(
+				Vector3.new(x[h], FLIGHT_Y, z[h]),
+				Vector3.new(-sf, 0, cf),
+				Vector3.yAxis,
+				Vector3.new(-cf, 0, -sf)
+			)
 		end
 	end
 	local parked = s.parkedCFrame

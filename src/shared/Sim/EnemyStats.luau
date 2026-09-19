@@ -153,9 +153,17 @@ end
 -- The statline an enemy spawns with at run time `time` (unused: the shipped
 -- base-stage data has no time-based stat growth, see header), at the
 -- player's `playerLevel` (HP_x_Level enemies only) and the player's curse
--- multiplier (1.0 = base; health and speed). A fresh table each call: this
--- runs once per spawn, never per tick.
-function EnemyStats.scaled(enemyId: string, _time: number, playerLevel: number, curse: number): EnemyScaledStats
+-- multiplier (1.0 = base; health and speed). With a caller-owned `out` line
+-- (Sim/Waves.fillBoss's shape) the fields are written into it and it is
+-- returned, so a per-spawn loop allocates nothing; without one a fresh
+-- table is returned. The result is consumed before the next call.
+function EnemyStats.scaled(
+	enemyId: string,
+	_time: number,
+	playerLevel: number,
+	curse: number,
+	out: EnemyScaledStats?
+): EnemyScaledStats
 	local line = byId[enemyId]
 	if line == nil then
 		error(string.format("EnemyStats.scaled: unknown enemy id %q", tostring(enemyId)))
@@ -164,14 +172,23 @@ function EnemyStats.scaled(enemyId: string, _time: number, playerLevel: number, 
 	if line.healthScalesWithPlayerLevel then
 		health *= playerLevel
 	end
-	return {
-		health = health * curse,
-		power = line.power,
-		speed = line.speed * curse,
-		knockbackTaken = line.knockbackTaken,
-		xp = line.xp,
-		isBoss = line.isBoss,
-	}
+	if out == nil then
+		return {
+			health = health * curse,
+			power = line.power,
+			speed = line.speed * curse,
+			knockbackTaken = line.knockbackTaken,
+			xp = line.xp,
+			isBoss = line.isBoss,
+		}
+	end
+	out.health = health * curse
+	out.power = line.power
+	out.speed = line.speed * curse
+	out.knockbackTaken = line.knockbackTaken
+	out.xp = line.xp
+	out.isBoss = line.isBoss
+	return out
 end
 
 return EnemyStats

@@ -205,6 +205,19 @@ local passiveBoxes, passiveTexts = slotRow(screen, UDim2.new(0, HUD.margin, 1, p
 local latest: HudState? = nil
 -- Seconds since `latest` arrived, used only to tick the displayed clock.
 local sinceSnapshot = 0
+-- The clock text only changes once a second, so the whole second last drawn is
+-- remembered and the string is reformatted only when it moves.
+local lastClockSecond: number? = nil
+
+--- Draws the clock, skipping the format and assignment within the same second.
+local function setClock(seconds: number)
+	local whole = math.max(0, math.floor(seconds))
+	if whole == lastClockSecond then
+		return
+	end
+	lastClockSecond = whole
+	clock.Text = formatClock(whole)
+end
 
 --- Two letters of our display name — placeholder art, but never a raw id.
 local function slotGlyph(category: DisplayNames.Category, id: string, level: number): string
@@ -244,7 +257,7 @@ local function fraction(value: number, outOf: number): number
 end
 
 local function render(state: HudState, displayTime: number)
-	clock.Text = formatClock(displayTime)
+	setClock(displayTime)
 	levelText.Text = string.format("Level %d", state.level)
 	killsText.Text = string.format("Kills %d    Gold %d", state.kills, state.gold)
 
@@ -284,7 +297,7 @@ net.runState.OnClientEvent:Connect(function(run: Net.RunStatePayload)
 	if state ~= nil then
 		state.time = run.time
 		sinceSnapshot = 0
-		clock.Text = formatClock(run.time)
+		setClock(run.time)
 	end
 end)
 
@@ -300,5 +313,5 @@ RunService.RenderStepped:Connect(function(dt: number)
 		return
 	end
 	sinceSnapshot += dt
-	clock.Text = formatClock(state.time + sinceSnapshot)
+	setClock(state.time + sinceSnapshot)
 end)

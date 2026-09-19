@@ -54,6 +54,7 @@ Each row is one build agent. Files outside your row are read-only to you.
 | `server-weapons-a` | `server/WeaponRunner`, `server/ProjectilePool`, `Weapons/{Whip,MagicWand,Knife,Axe,Cross,FireWand}` | Types, Sim/WeaponLevels, Sim/Damage |
 | `server-weapons-b` | `Weapons/{KingBible,Garlic,SantaWater,Runetracer,LightningRing}` | Types (WeaponContext only) |
 | `server-loop` | `server/GameLoop.server`, `server/PlayerSession`, `server/PickupManager`, `server/Spawner`, `shared/Net` | everything above, via Types |
+| `server-loop` | `server/Diagnostics.server` (debug overlay; GUI numbers in `Tuning.diagnostics`) | Tuning, Data, Sim/WeaponLevels |
 | `client` | `client/Camera.client`, `client/Hud.client`, `client/LevelUpUi.client`, `client/Visuals.client`, `shared/DisplayNames` | Net, Types |
 
 `sim-core` and `sim-weapons` interfaces are consumed by everyone; they are specified
@@ -106,8 +107,12 @@ Pickups.floorEffect(itemId: string, state: PlayerState): ()
 
 -- Sim/Waves
 Waves.at(time: number): ActiveWave
-Waves.eventsBetween(t0: number, t1: number): { WaveEvent }   -- due in (t0, t1]
-Waves.bossesBetween(t0: number, t1: number): { { enemyId: string, time: number, treasure: TreasureConfig? } }
+Waves.eventsBetween(t0: number, t1: number, out: { WaveEvent }?): ({ WaveEvent }, number)   -- due in (t0, t1]
+Waves.bossesBetween(t0: number, t1: number, out: { BossSpawn }?): ({ BossSpawn }, number)
+-- BossSpawn = { enemyId: string, time: number, treasure: TreasureConfig? }
+-- Both clear and fill a caller-owned `out` list when given (allocation-free for
+-- the spawner) and return the list plus the live entry count -- use the count,
+-- not `#list`.
 Waves.spawnCount(wave: ActiveWave, alive: number, sinceLast: number): number  -- see Spawner note
 
 -- Sim/EnemyStats

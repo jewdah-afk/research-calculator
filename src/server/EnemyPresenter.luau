@@ -44,6 +44,14 @@ type Look = { size: Vector3, color: Color3 }
 type Internal = Presenter & {
 	parts: { BasePart },
 	shown: { boolean },
+	-- Handles currently shown, densely packed, so flush() walks the live
+	-- enemies instead of the whole pool. `slot[handle]` is its index here.
+	shownList: { number },
+	shownCount: number,
+	slot: { number },
+	-- Half of each part's Y size, written in show(); avoids reading the
+	-- engine's part.Size property in the per-enemy flush loop.
+	halfHeights: { number },
 	-- Handles hidden since the last flush; parked by that flush.
 	toPark: { number },
 	toParkCount: number,
@@ -118,6 +126,10 @@ function Presenter.new(capacity: number): Presenter
 		folder = folder,
 		parts = parts,
 		shown = table.create(capacity, false),
+		shownList = table.create(capacity, 0),
+		shownCount = 0,
+		slot = table.create(capacity, 0),
+		halfHeights = table.create(capacity, PART_SIZE / 2),
 		toPark = table.create(capacity, 0),
 		toParkCount = 0,
 		moveParts = table.create(capacity),
@@ -142,7 +154,13 @@ function Presenter.show(self: Presenter, handle: number, typeId: string)
 	local look = lookFor(s, typeId)
 	part.Size = look.size
 	part.Color = look.color
-	s.shown[handle] = true
+	s.halfHeights[handle] = look.size.Y / 2
+	if not s.shown[handle] then
+		s.shown[handle] = true
+		s.shownCount += 1
+		s.shownList[s.shownCount] = handle
+		s.slot[handle] = s.shownCount
+	end
 end
 
 -- Parks part `handle` on the next flush.
@@ -153,6 +171,15 @@ function Presenter.hide(self: Presenter, handle: number)
 	end
 	if s.shown[handle] then
 		s.shown[handle] = false
+		-- Swap-remove from the dense live list.
+		local index = s.slot[handle]
+		local last = s.shownCount
+		local moved = s.shownList[last]
+		s.shownList[index] = moved
+		s.slot[moved] = index
+		s.shownList[last] = 0
+		s.slot[handle] = 0
+		s.shownCount = last - 1
 		s.toParkCount += 1
 		s.toPark[s.toParkCount] = handle
 	end
@@ -163,17 +190,29 @@ end
 -- parts hidden since the last flush, in ONE BulkMoveTo.
 function Presenter.flush(self: Presenter, x: { number }, z: { number }, alive: { boolean }, facing: { number })
 	local s = self :: Internal
-	local parts, shown = s.parts, s.shown
+	local parts, halfHeights = s.parts, s.halfHeights
+	local shownList = s.shownList
 	local moveParts, moveCFrames = s.moveParts, s.moveCFrames
 	local n = 0
-	for h = 1, s.capacity do
-		if shown[h] and alive[h] then
-			local part = parts[h]
+	for i = 1, s.shownCount do
+		local h = shownList[i]
+		if alive[h] then
 			n += 1
-			moveParts[n] = part
+			moveParts[n] = parts[h]
 			-- Heading is atan2(dz, dx) in the XZ plane; a part's look vector
-			-- is -Z, so rotate about Y by -(heading) - pi/2 to face it.
-			moveCFrames[n] = CFrame.new(x[h], part.Size.Y / 2, z[h]) * CFrame.Angles(0, -facing[h] - math.pi / 2, 0)
+			-- is -Z, so rotate about Y by -(heading) - pi/2 to face it. With
+			-- t = -heading - pi/2, cos(t) = -sin(heading) and
+			-- sin(t) = -cos(heading), so the Y rotation's columns are
+			-- right = (cos t, 0, -sin t) and back = (sin t, 0, cos t). One
+			-- fromMatrix builds the whole matrix in a single allocation.
+			local f = facing[h]
+			local sf, cf = math.sin(f), math.cos(f)
+			moveCFrames[n] = CFrame.fromMatrix(
+				Vector3.new(x[h], halfHeights[h], z[h]),
+				Vector3.new(-sf, 0, cf),
+				Vector3.yAxis,
+				Vector3.new(-cf, 0, -sf)
+			)
 		end
 	end
 	local parked = s.parkedCFrame
@@ -199,6 +238,8 @@ function Presenter.destroy(self: Presenter)
 	local s = self :: Internal
 	s.folder:Destroy()
 	table.clear(s.parts)
+	table.clear(s.shownList)
+	s.shownCount = 0
 	table.clear(s.moveParts)
 	table.clear(s.moveCFrames)
 end

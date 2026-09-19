@@ -42,8 +42,10 @@ local Waves = require("../shared/Sim/Waves")
 local LevelUp = require("../shared/Sim/LevelUp")
 local Characters = require("../shared/Data/Characters")
 
+local RunGate = require("./RunGate")
 local EnemyManager = require("./EnemyManager")
 local EnemyPresenter = require("./EnemyPresenter")
+local GemPresenter = require("./GemPresenter")
 local ProjectilePool = require("./ProjectilePool")
 local WeaponRunner = require("./WeaponRunner")
 local Spawner = require("./Spawner")
@@ -91,6 +93,7 @@ type Run = {
 	spawner: Spawner.Spawner,
 	pickups: PickupManager.PickupManager,
 	enemyPresenter: EnemyPresenter.Presenter,
+	gemPresenter: GemPresenter.Presenter,
 	projectilePresenter: ProjectilePool.Pool,
 	time: number,
 	paused: boolean,
@@ -99,14 +102,21 @@ type Run = {
 	offer: LevelUp.LevelUpOffer?,
 	facingX: number,
 	facingZ: number,
+	-- lastX/lastZ are only meaningful once a root position has been
+	-- sampled; before that a delta against 0,0 would be the spawn offset.
+	seeded: boolean,
 	lastX: number,
 	lastZ: number,
 	frame: WeaponRunner.PlayerFrame,
 	-- Treasure owed by a living boss, by enemy handle.
 	bossTreasure: { [number]: Waves.TreasureConfig },
+	-- Set when the session finishes; the Heartbeat tears the run down at
+	-- the end of the frame so the next CharacterAdded starts a fresh one.
+	teardownDue: boolean,
 }
 
 local runs: { [Player]: Run } = {}
+local characterConnections: { [Player]: RBXScriptConnection } = {}
 
 -- ------------------------------------------------------------------ helpers
 
@@ -229,6 +239,7 @@ local function startRun(player: Player): Run
 	local enemies = EnemyManager.new(rng)
 	local pickups = PickupManager.new(rng)
 	local enemyPresenter = EnemyPresenter.new(enemies.capacity)
+	local gemPresenter = GemPresenter.new(pickups.capacity)
 	local projectilePresenter = ProjectilePool.new(Tuning.projectileCapacity)
 
 	local weapons = WeaponRunner.new({
@@ -254,6 +265,7 @@ local function startRun(player: Player): Run
 		spawner = spawner,
 		pickups = pickups,
 		enemyPresenter = enemyPresenter,
+		gemPresenter = gemPresenter,
 		projectilePresenter = projectilePresenter,
 		time = 0,
 		paused = false,
@@ -262,6 +274,7 @@ local function startRun(player: Player): Run
 		offer = nil,
 		facingX = 1,
 		facingZ = 0,
+		seeded = false,
 		lastX = 0,
 		lastZ = 0,
 		frame = {
@@ -274,9 +287,20 @@ local function startRun(player: Player): Run
 			moveZ = 0,
 		},
 		bossTreasure = {},
+		teardownDue = false,
 	}
 
 	-- Wiring. Every hook is a plain closure over `run`; none allocate.
+	pickups.onGemSpawn = function(handle: number, tier: number)
+		gemPresenter:show(handle, tier)
+	end
+	-- A cap-merge can retier a gem already on the floor; show() is idempotent.
+	pickups.onGemTier = function(handle: number, tier: number)
+		gemPresenter:show(handle, tier)
+	end
+	pickups.onGemDespawn = function(handle: number)
+		gemPresenter:hide(handle)
+	end
 	enemies.onSpawn = function(handle: number, typeId: string)
 		enemyPresenter:show(handle, typeId)
 	end
@@ -292,6 +316,24 @@ local function startRun(player: Player): Run
 			-- scales them; Sim/Chests owns the rule and the grants.
 			local result = Chests.roll(treasure, session.state.stats.luck, rng, session.state, run.time)
 			session.state.gold += result.gold
+			-- pickups_meta.md §3: a chest pays gold AND levels items. The
+			-- grants are what makes a boss chest more than coins, so each
+			-- one goes through the same LevelUp.apply the offer uses.
+			-- Chests.roll never emits kind "evolution" (evolutions are out
+			-- of scope for this port); anything that is not a weapon or a
+			-- passive is ignored rather than passed to a function that
+			-- would error on it.
+			for _, grant in result.grants do
+				if grant.kind == "weapon" or grant.kind == "passive" then
+					LevelUp.apply(session.state, {
+						kind = grant.kind :: any,
+						itemId = grant.itemId,
+						toLevel = grant.toLevel,
+						isNew = grant.toLevel == 1,
+					})
+				end
+			end
+			session:refreshStats()
 			syncWeapons(run)
 		end
 	end
@@ -328,6 +370,10 @@ local function startRun(player: Player): Run
 	end
 	session.onFinish = function()
 		finish(run, "dead")
+		-- The run is over: flag it so the Heartbeat disposes of it once
+		-- this frame is done. Tearing it down here would pull the
+		-- presenters out from under the rest of the step.
+		run.teardownDue = true
 	end
 
 	-- The starting weapon comes from the character record.
@@ -351,6 +397,7 @@ local function endRun(run: Run)
 	run.pickups:clear()
 	run.enemies:clear()
 	run.enemyPresenter:destroy()
+	run.gemPresenter:destroy()
 	run.projectilePresenter:destroy()
 end
 
@@ -358,27 +405,50 @@ end
 
 local function stepRun(run: Run, dt: number)
 	local session = run.session
-	if session.finished then
-		return
-	end
 	-- core_loop.md §2: the game pauses on level up. Nothing below this line
-	-- runs while paused, which is what "the run clock stops" means.
-	if run.paused then
+	-- runs while paused, which is what "the run clock stops" means. The
+	-- decision itself lives in Sim-style pure code (server/RunGate) so the
+	-- invariant can be stepped and asserted without the engine.
+	local root = if session.finished then nil else rootOf(run.player)
+	local rootX: number?, rootZ: number? = nil, nil
+	if root ~= nil then
+		local rootPosition = root.Position
+		rootX, rootZ = rootPosition.X, rootPosition.Z
+	end
+	if not RunGate.shouldAdvance(run, session.finished, rootX, rootZ) then
 		return
 	end
-	local root = rootOf(run.player)
 	if root == nil then
 		return
 	end
 	local position = root.Position
 	local px, pz = position.X, position.Z
 
-	-- Facing is the last non-zero movement direction (ARCHITECTURE.md,
-	-- Player); it never becomes zero, so a standing player still aims.
+	-- The root is client-owned, so the raw sample is not trusted. The
+	-- first sample only seeds the reference point, and every later frame
+	-- may move at most what the player's own move speed allows (with a
+	-- margin for frame jitter); anything beyond that is pulled back to
+	-- the reachable point before it becomes position or facing.
+	if not run.seeded then
+		run.seeded = true
+		run.lastX, run.lastZ = px, pz
+	end
 	local moveX = px - run.lastX
 	local moveZ = pz - run.lastZ
-	run.lastX, run.lastZ = px, pz
 	local moveLen = math.sqrt(moveX * moveX + moveZ * moveZ)
+	local maxStep = session:walkSpeed() * dt * Tuning.moveStepMargin
+	if moveLen > maxStep and moveLen > 0 then
+		local scale = maxStep / moveLen
+		moveX *= scale
+		moveZ *= scale
+		moveLen = maxStep
+		px = run.lastX + moveX
+		pz = run.lastZ + moveZ
+	end
+	run.lastX, run.lastZ = px, pz
+
+	-- Facing is the last non-zero movement direction (ARCHITECTURE.md,
+	-- Player); it never becomes zero, so a standing player still aims.
 	if moveLen > 0 then
 		run.facingX = moveX / moveLen
 		run.facingZ = moveZ / moveLen
@@ -410,6 +480,8 @@ local function stepRun(run: Run, dt: number)
 	run.enemyPresenter:flush(enemyCols.x, enemyCols.z, enemyCols.alive, enemyCols.facing)
 	local weaponCols = run.weapons
 	run.projectilePresenter:flush(weaponCols.x, weaponCols.z, weaponCols.alive, weaponCols.heading)
+	local gemCols = run.pickups
+	run.gemPresenter:flush(gemCols.x, gemCols.z, gemCols.alive)
 
 	run.hudDue -= dt
 	if run.hudDue <= 0 then
@@ -459,9 +531,19 @@ net.chooseOption.OnServerEvent:Connect(function(player: Player, payload: any)
 			} :: Net.LevelUpOfferPayload
 		)
 	elseif action == "skip" then
-		LevelUp.skip(session.state, offer, run.rng)
-		session:dropPending()
-		advanceLevelUps(run)
+		-- LevelUp.skip returns 0 when there is no skip left to spend; in
+		-- that case nothing happened, so the queued level-up must NOT be
+		-- consumed -- dropping it would lose the level with no item and no
+		-- XP. Only a skip that actually happened advances the queue.
+		if LevelUp.skip(session.state, offer, run.rng) > 0 then
+			-- LevelUp.skip banks the XP on state.xp only and leaves the
+			-- carry to the caller; addXp(0) runs Experience.addXp so any
+			-- level the skip just bought lands now instead of at the next
+			-- gem.
+			session:addXp(0)
+			session:dropPending()
+			advanceLevelUps(run)
+		end
 	elseif action == "banish" then
 		local index = payload.index
 		if type(index) ~= "number" then
@@ -490,7 +572,7 @@ end)
 -- ------------------------------------------------------------- lifecycle
 
 local function onPlayerAdded(player: Player)
-	player.CharacterAdded:Connect(function()
+	characterConnections[player] = player.CharacterAdded:Connect(function()
 		if runs[player] == nil then
 			runs[player] = startRun(player)
 		end
@@ -506,6 +588,11 @@ for _, player in Players:GetPlayers() do
 end
 
 Players.PlayerRemoving:Connect(function(player: Player)
+	local connection = characterConnections[player]
+	if connection ~= nil then
+		characterConnections[player] = nil
+		connection:Disconnect()
+	end
 	local run = runs[player]
 	if run ~= nil then
 		runs[player] = nil
@@ -514,7 +601,11 @@ Players.PlayerRemoving:Connect(function(player: Player)
 end)
 
 RunService.Heartbeat:Connect(function(dt: number)
-	for _, run in runs do
+	for player, run in runs do
 		stepRun(run, dt)
+		if run.teardownDue then
+			runs[player] = nil
+			endRun(run)
+		end
 	end
 end)

@@ -27,6 +27,14 @@
 	    time, so a Growth passive taken mid-run pays on gems already lying on
 	    the floor -- the same gems the player can still see.
 
+	Presentation: this module exposes the gem columns (x, z, alive, tier) and
+	the onGemSpawn/onGemDespawn/onGemTier hooks, and never touches an
+	Instance itself. server/GemPresenter consumes them -- the same
+	pooled-part + BulkMoveTo seam as server/EnemyPresenter -- and
+	server/GameLoop does the wiring: onGemSpawn/onGemTier -> presenter:show,
+	onGemDespawn -> presenter:hide, and one presenter:flush(x, z, alive) per
+	Heartbeat. Swapping that presenter out changes nothing here.
+
 	Performance: structure-of-arrays columns indexed by handle with a free
 	stack, exactly like server/EnemyManager. 400 gems is small, but the step
 	loop still allocates nothing: no closures, no temporary tables, and the

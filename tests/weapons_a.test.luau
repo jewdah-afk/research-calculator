@@ -22,6 +22,11 @@ local Knife = require("../src/server/Weapons/Knife")
 local Axe = require("../src/server/Weapons/Axe")
 local Cross = require("../src/server/Weapons/Cross")
 local FireWand = require("../src/server/Weapons/FireWand")
+local RunGate = require("../src/server/RunGate")
+local EnemyManager = require("../src/server/EnemyManager")
+local EnemyStats = require("../src/shared/Sim/EnemyStats")
+local Spawner = require("../src/server/Spawner")
+local Waves = require("../src/shared/Sim/Waves")
 
 type Rng = WeaponRunner.Rng
 type EnemyQuery = WeaponRunner.EnemyQuery
@@ -890,5 +895,75 @@ T.test(
 		T.truthy(grown <= 64, "allocation growth (KB) stays small: " .. tostring(grown))
 	end
 )
+
+-- ------------------------------------------------------- AC-X01 pause gate
+-- core_loop.md §2 ("Game pauses on level up"): while the run is paused the
+-- clock stops and NOTHING advances. GameLoop enforces that in one place,
+-- server/RunGate.shouldAdvance; this steps the same gate the Heartbeat calls,
+-- with the real EnemyManager, WeaponRunner and Spawner behind it, and pins
+-- the four things a paused frame must leave alone.
+T.test("PAUSE: 100 ticks with paused = true advance no clock, enemy, cooldown or wave", function()
+	local rng = Rng.new(5)
+	local enemies = EnemyManager.new(rng, 8)
+	local spawner = Spawner.new({ enemies = enemies :: any, rng = rng })
+	local world = newWorld()
+	local runner = newRunner(world, { whip = 1, axe = 1, knife = 1 }, "imelda")
+
+	-- A live world to freeze: enemies off the player, weapons part-way
+	-- through their cooldowns, the spawner a few seconds into wave 1.
+	for i = 1, 4 do
+		enemies:spawn("BAT1", i * 7, -i * 5, EnemyStats.scaled("BAT1", 0, 1, 1))
+	end
+	local unpausedRun = { paused = false, seeded = false, lastX = 0, lastZ = 0 }
+	local time = 0
+	local dt = 1 / 60
+	for _ = 1, 30 do
+		T.truthy(RunGate.shouldAdvance(unpausedRun, false, 0, 0), "an unpaused run advances")
+		time += dt
+		spawner:step(time, 0, 0, 1, 1)
+		enemies:step(dt, 0, 0)
+		runner:step(dt, frameAt(time))
+	end
+
+	-- Snapshot: run time, enemy positions, weapon cooldowns, wave index.
+	local beforeTime = time
+	local beforeX, beforeZ = {}, {}
+	for h = 1, enemies.capacity do
+		beforeX[h], beforeZ[h] = enemies.x[h], enemies.z[h]
+	end
+	local beforeCooldowns: { [string]: number } = {}
+	for _, rt in (runner :: any).runtimes do
+		beforeCooldowns[rt.weaponId] = rt.cooldownRemaining
+	end
+	local beforeWave = Waves.at((spawner :: any).time).index
+	local beforeSpawned = (spawner :: any).spawned
+
+	-- 100 paused ticks. The gate is the ONLY thing the driver calls, exactly
+	-- as GameLoop does: when it says stop, no stepper runs.
+	local pausedRun = { paused = true, seeded = false, lastX = 0, lastZ = 0 }
+	for i = 1, 100 do
+		local px = i * 1.5
+		T.eq(RunGate.shouldAdvance(pausedRun, false, px, -px), false, "a paused run never advances")
+		-- The gate keeps tracking the client-side walk, and nothing else.
+		T.eq(pausedRun.lastX, px, "paused run tracks the player root")
+		T.eq(pausedRun.seeded, true, "paused run is seeded from the root sample")
+	end
+
+	T.eq(time, beforeTime, "run time did not advance")
+	for h = 1, enemies.capacity do
+		T.eq(enemies.x[h], beforeX[h], "enemy " .. h .. " x did not move")
+		T.eq(enemies.z[h], beforeZ[h], "enemy " .. h .. " z did not move")
+	end
+	for _, rt in (runner :: any).runtimes do
+		T.eq(rt.cooldownRemaining, beforeCooldowns[rt.weaponId], rt.weaponId .. " cooldown did not tick")
+	end
+	T.eq(Waves.at((spawner :: any).time).index, beforeWave, "wave index did not advance")
+	T.eq((spawner :: any).spawned, beforeSpawned, "no enemy was spawned while paused")
+
+	-- A finished run does not advance either, and does not track the root.
+	local finishedRun = { paused = false, seeded = false, lastX = 0, lastZ = 0 }
+	T.eq(RunGate.shouldAdvance(finishedRun, true, 9, 9), false, "a finished run never advances")
+	T.eq(finishedRun.seeded, false, "a finished run samples nothing")
+end)
 
 return T.finish()

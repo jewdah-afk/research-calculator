@@ -645,9 +645,18 @@ local function resolveHits(s: Internal, h: ProjectileHandle, time: number): bool
 	local rng = s.deps.rng
 	for i = 1, n do
 		local enemy = out[i]
+		if not query.isAlive(enemy) then
+			-- A dead enemy is still in the grid for the tick between its
+			-- death and EnemyManager freeing its handle. Drop its entry
+			-- now: the handle is about to be recycled, and a stale entry
+			-- would make the next enemy to reuse it immune to this
+			-- projectile for the rest of its life.
+			hits[enemy] = nil
+			continue
+		end
 		local last = hits[enemy]
 		local mayHit = last == nil or (delay > 0 and time - last >= delay)
-		if mayHit and query.isAlive(enemy) then
+		if mayHit then
 			hits[enemy] = time
 			local amount = Damage.roll(s.dmg[h], s.critChance[h], s.critMul[h], rng)
 			damage(enemy, amount, s.kb[h], weaponId)

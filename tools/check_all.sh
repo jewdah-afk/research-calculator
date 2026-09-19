@@ -31,6 +31,21 @@ else
   echo "OK (${#FILES[@]} files)"
 fi
 
+step "place build (requires resolve in the Roblox tree)"
+# src/ uses filesystem-relative requires so tests and the analyzer work. Roblox
+# splits src/ across three containers, so a path correct on disk can resolve to
+# nothing in the place -- invisible to every other gate here. Building the place
+# rewrites and verifies them, and fails on any path no project mapping covers.
+if command -v rojo >/dev/null 2>&1; then
+  if python3 tools/build_place.py >/tmp/place.out 2>&1; then
+    tail -2 /tmp/place.out
+  else
+    tail -20 /tmp/place.out; rc=1
+  fi
+else
+  echo "rojo not installed; cannot verify require resolution"; rc=1
+fi
+
 step "mechanics tests (headless luau)"
 if bash tools/run_tests.sh; then :; else rc=1; fi
 

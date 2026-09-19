@@ -226,31 +226,54 @@ end
 
 -- Every map event of every wave whose start time lies in (t0, t1], in wave
 -- order. `time` is the wave start; delay/repeatCount/duration are as shipped
--- (nil where the entry omits them) and chancePercent is a 0-100 percent.
-function Waves.eventsBetween(t0: number, t1: number): { WaveEvent }
-	local out: { WaveEvent } = {}
+-- (nil where the entry omits them) and chancePercent is a 0-100 percent. A
+-- caller-owned `out` list is cleared and filled in place when given; the
+-- list and the number of entries are both returned.
+function Waves.eventsBetween(t0: number, t1: number, out: { WaveEvent }?): ({ WaveEvent }, number)
+	local result: { WaveEvent } = out or {}
+	if out ~= nil then
+		table.clear(out)
+	end
+	local n = 0
 	for index, wave in WAVES do
 		local t = wave.startTime
 		if t > t0 and t <= t1 then
 			for _, event in WAVE_EVENTS[index] do
-				out[#out + 1] = event
+				n += 1
+				result[n] = event
 			end
 		end
 	end
-	return out
+	return result, n
+end
+
+-- Reuses `entry` (a boss slot left in a caller's scratch list by an earlier
+-- call) instead of allocating, so a per-tick caller allocates nothing.
+local function fillBoss(entry: BossSpawn?, enemyId: string, time: number, treasure: TreasureConfig?): BossSpawn
+	if entry == nil then
+		return { enemyId = enemyId, time = time, treasure = treasure }
+	end
+	entry.enemyId = enemyId
+	entry.time = time
+	entry.treasure = treasure
+	return entry
 end
 
 -- Every boss due in (t0, t1]: each wave's `bosses` at the wave start with
 -- that wave's treasure (nil where the data has no chest entry), then one
 -- more Reaper spawn every spawnIntervalAfterLimit past the time limit,
--- without bound.
-function Waves.bossesBetween(t0: number, t1: number): { BossSpawn }
-	local out: { BossSpawn } = {}
+-- without bound. With a caller-owned `out` list the results are written into
+-- it (reusing its boss tables) and the returned count -- not `#list` -- says
+-- how many of them are live this call; without one a fresh list is returned.
+function Waves.bossesBetween(t0: number, t1: number, out: { BossSpawn }?): ({ BossSpawn }, number)
+	local result: { BossSpawn } = out or {}
+	local n = 0
 	for index, wave in WAVES do
 		local t = wave.startTime
 		if t > t0 and t <= t1 then
 			for _, enemyId in WAVE_BOSSES[index] do
-				out[#out + 1] = { enemyId = enemyId, time = t, treasure = wave.treasure }
+				n += 1
+				result[n] = fillBoss(result[n], enemyId, t, wave.treasure)
 			end
 		end
 	end
@@ -264,14 +287,15 @@ function Waves.bossesBetween(t0: number, t1: number): { BossSpawn }
 		while t <= t1 do
 			if t > t0 then
 				for _, enemyId in limitWave.bosses do
-					out[#out + 1] = { enemyId = enemyId, time = t, treasure = limitWave.treasure }
+					n += 1
+					result[n] = fillBoss(result[n], enemyId, t, limitWave.treasure)
 				end
 			end
 			k += 1
 			t = TIME_LIMIT + k * REAPER_INTERVAL
 		end
 	end
-	return out
+	return result, n
 end
 
 -- Documented spawner model (docs/ARCHITECTURE.md "Spawner note"): nothing

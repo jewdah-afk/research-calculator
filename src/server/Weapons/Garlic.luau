@@ -38,100 +38,23 @@
 	.spawnRingRadius ring, far outside the aura, so it never inherits a live
 	window in practice; a kill by this aura clears it immediately anyway.
 
-	Types: src/shared/Types.luau returns nil, which the plain `luau` CLI
-	refuses to require, so the shapes used here are restated structurally
-	(same convention as Sim/ and server/EnemyManager). Keep them in step.
+	Types: AC-T02 asks for `: Types.WeaponBehavior`, but AC-T01 freezes
+	src/shared/Types.luau at `return nil`, which the plain `luau` CLI cannot
+	require, so `Types.WeaponBehavior` is not nameable from this module. The
+	two rules conflict; this module implements that shape and annotates
+	against WeaponRunner's re-export of it (the single in-repo source, as
+	Axe/Cross/Knife do). Swap to `: Types.WeaponBehavior` if AC-T01 relaxes.
 ]]
 
 local Tuning = require("../../shared/Tuning")
 local Damage = require("../../shared/Sim/Damage")
-local WeaponLevels = require("../../shared/Sim/WeaponLevels")
+local WeaponRunner = require("../WeaponRunner")
 
-export type EnemyHandle = number
-export type ProjectileHandle = number
-export type Rng = Damage.Rng
-export type WeaponInstanceStats = WeaponLevels.WeaponInstanceStats
-
--- Mirrors Types.EnemyQuery.
-export type EnemyQuery = {
-	count: () -> number,
-	isAlive: (EnemyHandle) -> boolean,
-	position: (EnemyHandle) -> (number, number),
-	closest: (x: number, z: number, maxDist: number) -> EnemyHandle?,
-	random: (x: number, z: number, maxDist: number, rng: Rng) -> EnemyHandle?,
-	inRadius: (x: number, z: number, radius: number, out: { EnemyHandle }) -> number,
-	inBox: (x: number, z: number, halfW: number, halfD: number, out: { EnemyHandle }) -> number,
-}
-
--- Mirrors Types.ProjectileSpec.
-export type ProjectileSpec = {
-	weaponId: string,
-	x: number,
-	z: number,
-	vx: number,
-	vz: number,
-	radius: number,
-	lifetime: number,
-	pierce: number,
-	damage: number,
-	knockback: number,
-	critChance: number,
-	critMultiplier: number,
-	gravity: number?,
-	bounces: number?,
-	returnsToPlayer: boolean?,
-	visualKind: string,
-}
-
--- Mirrors Types.VisualSpec.
-export type VisualSpec = {
-	kind: string,
-	x: number,
-	z: number,
-	radius: number?,
-	angle: number?,
-	duration: number?,
-	weaponId: string?,
-}
-
--- Mirrors Types.WeaponContext.
-export type WeaponContext = {
-	time: number,
-	dt: number,
-	playerX: number,
-	playerZ: number,
-	facingX: number,
-	facingZ: number,
-	moveX: number,
-	moveZ: number,
-	query: EnemyQuery,
-	rng: Rng,
-	damage: (enemy: EnemyHandle, amount: number, knockback: number, weaponId: string) -> boolean,
-	spawnProjectile: (spec: ProjectileSpec) -> ProjectileHandle?,
-	despawnProjectile: (ProjectileHandle) -> (),
-	projectileAlive: (ProjectileHandle) -> boolean,
-	projectilePosition: (ProjectileHandle) -> (number, number),
-	setProjectilePosition: (ProjectileHandle, x: number, z: number) -> (),
-	setProjectileVelocity: (ProjectileHandle, vx: number, vz: number) -> (),
-	visual: (spec: VisualSpec) -> (),
-}
-
--- Mirrors Types.WeaponRuntime.
-export type WeaponRuntime = {
-	weaponId: string,
-	level: number,
-	stats: WeaponInstanceStats,
-	cooldownRemaining: number,
-	state: { [string]: any },
-}
-
--- Mirrors Types.WeaponBehavior.
-export type WeaponBehavior = {
-	id: string,
-	create: (rt: WeaponRuntime) -> (),
-	onStatsChanged: (rt: WeaponRuntime) -> (),
-	tick: (rt: WeaponRuntime, ctx: WeaponContext) -> (),
-}
+type EnemyHandle = WeaponRunner.EnemyHandle
+type WeaponRuntime = WeaponRunner.WeaponRuntime
+type WeaponContext = WeaponRunner.WeaponContext
+type WeaponBehavior = WeaponRunner.WeaponBehavior
+type VisualSpec = WeaponRunner.VisualSpec
 
 local ID = "garlic"
 local VISUAL_KIND = "garlic_aura"
@@ -141,6 +64,7 @@ type State = {
 	lastCooldownSeen: number?,
 	hitReadyAt: { number }, -- [enemy handle] -> time the aura may hit it again
 	out: { EnemyHandle },
+	visual: VisualSpec, -- reused across pulses; fields are overwritten
 }
 
 local function stateOf(rt: WeaponRuntime): State
@@ -174,24 +98,29 @@ local function armCooldown(rt: WeaponRuntime, seconds: number)
 	stateOf(rt).lastCooldownSeen = seconds
 end
 
-local Garlic = {} :: WeaponBehavior
-Garlic.id = ID
-
-function Garlic.create(rt: WeaponRuntime)
+local function create(rt: WeaponRuntime)
 	local s = stateOf(rt)
 	local enemyCapacity = Tuning.enemyCapacity
 	s.lastCooldownSeen = rt.cooldownRemaining
 	s.hitReadyAt = table.create(enemyCapacity, 0)
 	s.out = table.create(enemyCapacity)
+	s.visual = {
+		kind = VISUAL_KIND,
+		x = 0,
+		z = 0,
+		radius = 0,
+		duration = 0,
+		weaponId = ID,
+	}
 end
 
-function Garlic.onStatsChanged(rt: WeaponRuntime)
+local function onStatsChanged(rt: WeaponRuntime)
 	-- Radius, damage and the per-enemy delay are re-read from rt.stats every
 	-- tick; timers already running keep the interval they were set with.
 	stateOf(rt).lastCooldownSeen = math.huge
 end
 
-function Garlic.tick(rt: WeaponRuntime, ctx: WeaponContext)
+local function tick(rt: WeaponRuntime, ctx: WeaponContext)
 	local s = stateOf(rt)
 	local stats = rt.stats
 	local time = ctx.time
@@ -201,14 +130,12 @@ function Garlic.tick(rt: WeaponRuntime, ctx: WeaponContext)
 	-- Aura pulse visual on the weapon's cooldown cadence (no gameplay state).
 	local fired, carry = cooldownElapsed(rt, ctx.dt)
 	if fired then
-		ctx.visual({
-			kind = VISUAL_KIND,
-			x = px,
-			z = pz,
-			radius = radius,
-			duration = stats.cooldown,
-			weaponId = ID,
-		})
+		local visual = s.visual
+		visual.x = px
+		visual.z = pz
+		visual.radius = radius
+		visual.duration = stats.cooldown
+		ctx.visual(visual)
 		armCooldown(rt, stats.cooldown + carry)
 	end
 
@@ -232,5 +159,12 @@ function Garlic.tick(rt: WeaponRuntime, ctx: WeaponContext)
 		end
 	end
 end
+
+local Garlic: WeaponBehavior = {
+	id = ID,
+	create = create,
+	onStatsChanged = onStatsChanged,
+	tick = tick,
+}
 
 return Garlic

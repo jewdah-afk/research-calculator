@@ -54,6 +54,10 @@ local Tuning = {
 		weaponPierce = 1, -- hits one enemy unless the record says otherwise
 		weaponKnockback = 1, -- neutral knockback multiplier
 		weaponHitboxDelay = 0,
+		-- Reserved: no DataAccess.num call site passes this defaultKey yet (an
+		-- AC-U02 exception, recorded here). Kept because Tuning is append-only
+		-- under AC-N03 and this entry predates the current pass; 0 = a weapon
+		-- with no shipped projectile interval fires its shots unspaced.
 		weaponProjectileInterval = 0,
 		weaponCritChance = 0,
 		weaponCritMultiplier = 1,
@@ -122,6 +126,14 @@ local Tuning = {
 		partSize = 3, -- NOT from research. Trash enemy part edge (studs)
 		bossPartScale = 2, -- NOT from research. isBoss parts are this many times larger
 		hiddenY = -500, -- NOT from research. Parking height for pooled parts not in use
+	},
+
+	-- NOT from research. Placeholder look of the pooled gem parts in
+	-- server/GemPresenter; parts park at enemyPresenter.hiddenY when unused.
+	gemPresenter = {
+		partSize = 1, -- NOT from research. Gem part edge (studs)
+		floatHeight = 1, -- NOT from research. Height of the part centre (studs)
+		tierHueStep = 0.33, -- NOT from research. Hue difference between gem tiers
 	},
 
 	-- ----------------------------------------------------- server-weapons-a
@@ -201,6 +213,11 @@ local Tuning = {
 	-- HUD is a snapshot, not a simulation input, so ~5 Hz is plenty and keeps
 	-- the remote quiet; the run itself steps every Heartbeat regardless.
 	hudPushInterval = 0.2, -- NOT from research. HUD push period (seconds), ~5 Hz
+	-- NOT from research (server-loop): anti-teleport slack on the per-tick
+	-- move clamp in server/GameLoop. A frame's displacement may exceed
+	-- moveSpeed * dt by this factor -- enough for frame jitter and a
+	-- dash-like burst, tight enough that a teleport never lands.
+	moveStepMargin = 3,
 	-- NOT from research. Invulnerability window (seconds) after the player
 	-- takes contact damage, in server/PlayerSession. server/EnemyManager
 	-- reports a contact EVERY step for every enemy in reach, and the research
@@ -364,6 +381,25 @@ local Tuning = {
 			zone = { r = 0.5, g = 0.8, b = 1 }, -- NOT from research
 			drop = { r = 0.7, g = 0.9, b = 1 }, -- NOT from research
 			strike = { r = 0.85, g = 0.85, b = 1 }, -- NOT from research
+		},
+	},
+
+	-- NOT from research. Presentation-only constants for the on-screen
+	-- diagnostics overlay (src/server/Diagnostics.server.luau). They describe a
+	-- debug label's size and colours, nothing in the simulation.
+	diagnostics = {
+		waitTimeout = 10, -- NOT from research. Seconds to wait for Instances on join
+		widthInset = -40, -- NOT from research. Label width inset from screen edge (px)
+		offsetX = 20, -- NOT from research. Label offset from left edge (px)
+		offsetY = 60, -- NOT from research. Label offset below top inset (px)
+		backgroundTransparency = 0.15, -- NOT from research
+		textSize = 22, -- NOT from research. Label text size (px)
+		paddingY = 14, -- NOT from research. Label vertical padding (px)
+		paddingX = 16, -- NOT from research. Label horizontal padding (px)
+		colors = {
+			ok = { r = 20, g = 60, b = 30 }, -- NOT from research (0-255)
+			fail = { r = 80, g = 25, b = 25 }, -- NOT from research (0-255)
+			text = { r = 255, g = 255, b = 255 }, -- NOT from research (0-255)
 		},
 	},
 }

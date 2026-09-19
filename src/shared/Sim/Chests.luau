@@ -193,6 +193,7 @@ type Working = {
 	weapons: { [string]: number },
 	passives: { [string]: number },
 	passiveCount: number,
+	banished: { [string]: boolean },
 }
 
 local function grantExisting(work: Working, rng: Rng): ChestGrant?
@@ -205,7 +206,7 @@ local function grantExisting(work: Working, rng: Rng): ChestGrant?
 	end
 	table.sort(sortedWeapons)
 	for _, weaponId in sortedWeapons do
-		if work.weapons[weaponId] < WeaponLevels.maxLevel(weaponId) then
+		if not work.banished[weaponId] and work.weapons[weaponId] < WeaponLevels.maxLevel(weaponId) then
 			table.insert(ids, weaponId)
 			table.insert(kinds, "weapon")
 		end
@@ -216,7 +217,7 @@ local function grantExisting(work: Working, rng: Rng): ChestGrant?
 	end
 	table.sort(sortedPassives)
 	for _, passiveId in sortedPassives do
-		if work.passives[passiveId] < passiveMaxLevel[passiveId] then
+		if not work.banished[passiveId] and work.passives[passiveId] < passiveMaxLevel[passiveId] then
 			table.insert(ids, passiveId)
 			table.insert(kinds, "passive")
 		end
@@ -235,10 +236,10 @@ end
 
 -- A fixed prize names a shipped passive vsId. Grants it as a new level-1
 -- passive (while a passive slot is free) or levels it by one; nil when it
--- is maxed, unknown, or would need a slot that is full.
+-- is maxed, unknown, banished, or would need a slot that is full.
 local function grantFixed(work: Working, vsId: string): ChestGrant?
 	local passiveId = passiveIdByVsId[vsId]
-	if passiveId == nil then
+	if passiveId == nil or work.banished[passiveId] then
 		return nil
 	end
 	local current = work.passives[passiveId]
@@ -272,6 +273,7 @@ function Chests.roll(treasure: TreasureConfig, luck: number, rng: Rng, state: Pl
 		weapons = table.clone(state.weapons),
 		passives = table.clone(state.passives),
 		passiveCount = #state.passiveOrder,
+		banished = state.banished,
 	}
 	local grants: { ChestGrant } = {}
 	local fixedIndex = 1

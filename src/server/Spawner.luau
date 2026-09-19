@@ -108,6 +108,13 @@ type Internal = Spawner & {
 	deps: Deps,
 	pending: { PendingEvent },
 	pendingCount: number,
+	-- Scratch lists reused across steps so the per-tick wave queries allocate
+	-- nothing; only the counts they return are meaningful.
+	eventScratch: { Waves.WaveEvent },
+	bossScratch: { Waves.BossSpawn },
+	-- One statline reused for every spawn: EnemyManager.spawn copies the
+	-- fields out before the next call overwrites them.
+	statsScratch: EnemyStats.EnemyScaledStats,
 }
 
 local Spawner = {}
@@ -178,6 +185,9 @@ function Spawner.new(deps: Deps): Spawner
 		eventsFired = 0,
 		pending = {},
 		pendingCount = 0,
+		eventScratch = {},
+		bossScratch = {},
+		statsScratch = EnemyStats.scaled(EnemyStats.ids[1], 0, 1, 1),
 		onBoss = nil,
 		onEvent = nil,
 		step = Spawner.step,
@@ -214,7 +224,9 @@ function Spawner.step(self: Spawner, time: number, playerX: number, playerZ: num
 	local pool = s.deps.enemies
 
 	-- 1. Map events due in (t0, time], chance rolled once per shipped entry.
-	for _, event in Waves.eventsBetween(t0, time) do
+	local events, eventCount = Waves.eventsBetween(t0, time, s.eventScratch)
+	for i = 1, eventCount do
+		local event = events[i]
 		if rng:chance(event.chancePercent / Tuning.percentScale) then
 			queueEvent(s, event)
 		end
@@ -223,8 +235,10 @@ function Spawner.step(self: Spawner, time: number, playerX: number, playerZ: num
 
 	-- 2. Bosses due in (t0, time], the Reaper and its every-60 s repeats
 	--    among them. A boss spawns on the ring like anything else.
-	for _, boss in Waves.bossesBetween(t0, time) do
-		local stats = EnemyStats.scaled(boss.enemyId, boss.time, playerLevel, curse)
+	local bosses, bossCount = Waves.bossesBetween(t0, time, s.bossScratch)
+	for i = 1, bossCount do
+		local boss = bosses[i]
+		local stats = EnemyStats.scaled(boss.enemyId, boss.time, playerLevel, curse, s.statsScratch)
 		local x, z = ringPoint(rng, playerX, playerZ)
 		local handle = pool:spawn(boss.enemyId, x, z, stats)
 		if handle ~= nil then
@@ -252,7 +266,7 @@ function Spawner.step(self: Spawner, time: number, playerX: number, playerZ: num
 		if #roster > 0 then
 			for _ = 1, count do
 				local enemyId = rng:pick(roster)
-				local stats = EnemyStats.scaled(enemyId, time, playerLevel, curse)
+				local stats = EnemyStats.scaled(enemyId, time, playerLevel, curse, s.statsScratch)
 				local x, z = ringPoint(rng, playerX, playerZ)
 				if pool:spawn(enemyId, x, z, stats) ~= nil then
 					s.spawned += 1

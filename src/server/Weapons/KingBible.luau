@@ -206,10 +206,15 @@ local function endOrbit(s: State, ctx: WeaponContext)
 	s.activeCount = 0
 end
 
-local KingBible = {} :: WeaponBehavior
-KingBible.id = ID
-
-function KingBible.create(rt: WeaponRuntime)
+-- AC-T01/AC-T02 conflict, recorded here: AC-T02 asks every weapon module to
+-- annotate its returned table `: Types.WeaponBehavior`, but AC-T01 has
+-- src/shared/Types.luau `return nil`, so the plain `luau` CLI cannot require
+-- it and `Types.WeaponBehavior` is not nameable from this module. The two
+-- cannot both hold. Resolved the only way that keeps the file checkable: the
+-- table below is an annotated literal (not a `{} :: T` cast, which checks
+-- nothing) against the local structural mirror of Types.WeaponBehavior above.
+-- Swap the annotation to `: Types.WeaponBehavior` if AC-T01 is ever relaxed.
+local function create(rt: WeaponRuntime)
 	local s = stateOf(rt)
 	local enemyCapacity = Tuning.enemyCapacity
 	local slots = rt.stats.poolLimit
@@ -224,7 +229,7 @@ function KingBible.create(rt: WeaponRuntime)
 	s.out = table.create(enemyCapacity)
 end
 
-function KingBible.onStatsChanged(rt: WeaponRuntime)
+local function onStatsChanged(rt: WeaponRuntime)
 	-- Nothing is cached from rt.stats between ticks: radius, rate, hitbox and
 	-- damage are re-read every tick, and the bible count is fixed per orbit.
 	-- Suppress the jump heuristic for one tick in case the runner rescales
@@ -232,7 +237,7 @@ function KingBible.onStatsChanged(rt: WeaponRuntime)
 	stateOf(rt).lastCooldownSeen = math.huge
 end
 
-function KingBible.tick(rt: WeaponRuntime, ctx: WeaponContext)
+local function tick(rt: WeaponRuntime, ctx: WeaponContext)
 	local s = stateOf(rt)
 	local stats = rt.stats
 	local time = ctx.time
@@ -323,5 +328,12 @@ function KingBible.tick(rt: WeaponRuntime, ctx: WeaponContext)
 		end
 	end
 end
+
+local KingBible: WeaponBehavior = {
+	id = ID,
+	create = create,
+	onStatsChanged = onStatsChanged,
+	tick = tick,
+}
 
 return KingBible

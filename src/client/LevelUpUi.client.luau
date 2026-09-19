@@ -264,6 +264,8 @@ local skipButton = footerButton(2, "Skip", function()
 	close()
 end)
 
+local layout: (LevelUpOffer) -> ()
+
 -- Index 2 + 1: the third footer slot. Written this way because a bare 3 is
 -- not permitted outside Data/Tuning; UI.footerButtonCount is the count.
 local banishButton = footerButton(UI.footerButtonCount, "Banish", function()
@@ -272,9 +274,10 @@ local banishButton = footerButton(UI.footerButtonCount, "Banish", function()
 		return
 	end
 	banishArmed = not banishArmed
+	layout(offer)
 end)
 
-local function layout(offer: LevelUpOffer)
+function layout(offer: LevelUpOffer)
 	local count = #offer.options
 	local optionsHeight = count * UI.optionHeight + math.max(0, count - 1) * UI.optionGap
 	local height = UI.panelPadding * 2 + UI.titleHeight + optionsHeight + UI.optionGap + UI.buttonHeight
