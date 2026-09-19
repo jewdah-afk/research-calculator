@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "game": "Vampire Survivors",
+  "scope": "base game (no DLC)",
+  "retrievalStatus": "incomplete: all primary sources blocked by network egress proxy; only WebSearch snippets available",
+  "sources": [
+    {"id": "official-wiki-madforest", "url": "https://vampire.survivors.wiki/w/Mad_Forest", "retrieved": "2026-09-19", "note": "page blocked; facts below come from search-engine snippets of it"},
+    {"id": "official-wiki-enemies", "url": "https://vampire.survivors.wiki/w/Enemies", "retrieved": "2026-09-19", "note": "blocked; snippets only"},
+    {"id": "official-wiki-chest", "url": "https://vampire.survivors.wiki/w/Treasure_Chest", "retrieved": "2026-09-19", "note": "blocked; snippets only"},
+    {"id": "official-wiki-knockback", "url": "https://vampire.survivors.wiki/w/Knockback", "retrieved": "2026-09-19", "note": "blocked; snippets only"},
+    {"id": "official-wiki-curse", "url": "https://vampire.survivors.wiki/w/Curse", "retrieved": "2026-09-19", "note": "blocked; snippets only"},
+    {"id": "official-wiki-stages", "url": "https://vampire.survivors.wiki/w/Stages", "retrieved": "2026-09-19", "note": "blocked; snippets only"},
+    {"id": "official-wiki-giantbat", "url": "https://vampire.survivors.wiki/w/Giant_Bat", "retrieved": "2026-09-19", "note": "blocked; snippets only"},
+    {"id": "fandom-madforest-enemies", "url": "https://vampire-survivors.fandom.com/wiki/Category:Mad_Forest_enemies", "retrieved": "2026-09-19", "note": "blocked; snippets only"},
+    {"id": "fandom-stages", "url": "https://vampire-survivors.fandom.com/wiki/Stages", "retrieved": "2026-09-19", "note": "blocked; snippets only"},
+    {"id": "fandom-reaper", "url": "https://vampire-survivors.fandom.com/wiki/The_Reaper", "retrieved": "2026-09-19", "note": "blocked; snippets only"},
+    {"id": "namu-stats", "url": "https://en.namu.wiki/w/Vampire%20Survivors/%EB%8A%A5%EB%A0%A5%EC%B9%98", "retrieved": "2026-09-19", "note": "blocked; snippets only"},
+    {"id": "namu-stage", "url": "https://en.namu.wiki/w/Vampire%20Survivors/%EC%8A%A4%ED%85%8C%EC%9D%B4%EC%A7%80", "retrieved": "2026-09-19", "note": "blocked; snippets only"}
+  ],
+  "conflicts": [],
+  "unknowns": [
+    "data.madForest.waves",
+    "data.madForest.minEnemiesOnScreen",
+    "data.madForest.spawnIntervalSeconds",
+    "data.madForest.perWaveModifiers",
+    "data.madForest.mapEvents",
+    "data.madForest.bossSchedule",
+    "data.enemies (all but zombie and theReaper)",
+    "data.enemies.zombie.knockbackResistance (only a 'knockback 0.8' figure found; convention unverified)",
+    "data.enemies.theReaper.knockbackResistance",
+    "data.enemies.theReaper.xpDropped",
+    "data.scaling.timeScalingFormula",
+    "data.scaling.playerLevelScalingFormula",
+    "data.chests.luckToTierFormula"
+  ],
+  "notes": "All times in seconds. Enemy 'speed' is the game's MoveSpeed value (units unverified). 'knockbackResistance' holds the wiki's enemy knockback-taken multiplier (higher = knocked back more), so it is resistance only inversely; flagged because the schema key name implies the opposite.",
+  "data": {
+    "madForest": {
+      "id": "mad_forest",
+      "waves": null,
+      "minEnemiesOnScreen": null,
+      "spawnIntervalSeconds": null,
+      "perWaveModifiers": null,
+      "mapEvents": null,
+      "knownTimedEvents": [
+        {"time": 60, "event": "Glowing Bat spawns with the wave; its chest can evolve a weapon despite being before the 600s evolution gate", "sourceIds": ["official-wiki-chest"]},
+        {"time": 540, "event": "Silver Bat appears; chest roll 3% for 5-item, else 10% for 3-item, else 50% for 1-item", "sourceIds": ["official-wiki-chest"]},
+        {"time": 1800, "event": "Stage time limit exceeded: The Reaper spawns, and an additional Reaper is added every minute thereafter", "sourceIds": ["namu-stage"]}
+      ],
+      "destructibles": "braziers / light sources only; drop random pickups when broken",
+      "enemyRoster": ["Bat Dragon", "Bat Drakelet", "Big Mummy", "Boon Marrabbio", "City Atlantean", "Flower Wall", "Ghost", "Giant Bat", "Mantichana", "Moon Atlantean", "Mudman", "Pipeestrello", "Skeleton", "Skelewing", "Sun Atlantean", "The Reaper", "Venus", "Volcano Atlantean", "Werewolf", "Zombie"],
+      "sourceIds": ["official-wiki-madforest", "fandom-madforest-enemies"]
+    },
+    "enemies": [
+      {"name": "Zombie", "id": "zombie", "health": 10, "power": 10, "speed": 100, "knockbackResistance": 0.8, "xpDropped": 1, "isBoss": false, "notes": "Variant/patch version unconfirmed; from a search snippet of the Enemies page.", "sourceIds": ["official-wiki-enemies"]},
+      {"name": "The Reaper", "id": "the_reaper", "health": null, "healthFormula": "655350 * playerLevelAtSpawn", "power": 65535, "speed": 1200, "knockbackResistance": null, "xpDropped": null, "isBoss": true, "notes": "Spawns when the stage time limit is exceeded; teleports to a random location whenever hit.", "sourceIds": ["fandom-reaper", "namu-stats", "namu-stage"]}
+    ],
+    "scaling": {
+      "normalEnemies": "scale primarily with elapsed run time",
+      "bossesAndMinibosses": "scale with both elapsed time and player level",
+      "hpTimesLevel": "The 'HP x Level' property multiplies enemy health by the player's level, applied once at spawn; it is not updated if the player levels while the enemy lives.",
+      "curse": "increases enemy Max Health, MoveSpeed and spawn frequency; health multiplier applies to newly spawned enemies only",
+      "hyperMode": "increases minimum enemies spawned and enemy move speed; may increase max health",
+      "endlessMode": "enemies gain 100% of base Max Health per cycle",
+      "inverseMode": "enemies start at +200% HP and gain +5% HP and +0.5 move speed per minute",
+      "exactFormulas": null,
+      "sourceIds": ["official-wiki-enemies", "official-wiki-curse", "official-wiki-stages", "fandom-stages"]
+    },
+    "chests": {
+      "droppedBy": "bosses",
+      "contents": "a random weapon or passive item the player already owns, levelled up by one; plus gold; plus an evolution/union when its requirements are met",
+      "evolutionTimeGate": 600,
+      "evolutionsPerChest": 1,
+      "sizes": [1, 3, 5],
+      "sizeDependsOn": "luck",
+      "firstSixChestSequence": [1, 1, 3, 1, 1, 5],
+      "goldByTier": {"one": {"min": 100, "max": 200}, "three": {"min": 300, "max": 600}, "five": {"min": 500, "max": 1000}},
+      "sourceIds": ["official-wiki-chest"]
+    }
+  }
+}
