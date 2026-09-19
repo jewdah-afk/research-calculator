@@ -15,39 +15,87 @@ Retrieved 2026-09-19. Companion data file: `pickups_meta.json` (authoritative; f
 All drop from destroyed light sources unless noted. Source: https://vampire.survivors.wiki/w/Pickups
 and each item's own page.
 
-| Pickup | Effect | Duration | Level req. | Luck affects drop? | Drop weight | Source |
+| Pickup | Effect | Duration | Level gate | Luck boosts weight? | Weight | Share @ base Luck |
 |---|---|---|---|---|---|---|
-| Gold Coin | +1 Gold, x Greed | — | none | **No** | unknown | [Gold_Coin](https://vampire.survivors.wiki/w/Gold_Coin) |
-| Coin Bag | +10 Gold, x Greed | — | none | **No** | unknown | [Coin_Bag](https://vampire.survivors.wiki/w/Coin_Bag) |
-| Rich Coin Bag | +100 Gold, x Greed | — | **5** | Yes | unknown | [Rich_Coin_Bag](https://vampire.survivors.wiki/w/Rich_Coin_Bag) |
-| Big Coin Bag | +25 Gold, x Greed | — | none | n/a | n/a | [Big_Coin_Bag](https://vampire.survivors.wiki/w/Big_Coin_Bag) |
-| Floor Chicken | Restore **30 HP** | instant | none | Yes | unknown | [Floor_Chicken](https://vampire.survivors.wiki/w/Floor_Chicken) |
-| Rosary | Instantly kills all on-screen enemies | instant | **8** | Yes | unknown | [Rosary](https://vampire.survivors.wiki/w/Rosary) |
-| Orologion | Spinning blue ring; freezes all enemies | **10 s** | **4** | Yes | unknown | [Orologion](https://vampire.survivors.wiki/w/Orologion) |
-| Vacuum | Pulls in and collects every XP Gem on the ground | instant | **12** | Yes | unknown | [Vacuum](https://vampire.survivors.wiki/w/Vacuum) |
-| Nduja Fritta Tanto | Character breathes fire in facing direction | **10 s** | unknown | Yes | unknown | [Nduja](https://vampire.survivors.wiki/w/Nduja_Fritta_Tanto) |
-| Little Clover | **+10% Luck until end of stage** | until stage end | unknown | Yes | 2nd rarest | [Little_Clover](https://vampire.survivors.wiki/w/Little_Clover) |
+| Gold Coin | Increases Gold Coin total by 1, multiplied by the Greed stat. | instant | none | No | 50 | 62.1% |
+| Coin Bag | Increases Gold Coin total by 10, multiplied by the Greed stat. | instant | none | No | 10 | 12.4% |
+| Rich Coin Bag | Increases Gold Coin total by 100, multiplied by the Greed stat. | instant | 5 | **Yes** | 1 | 1.2% |
+| Big Coin Bag | Increases Gold Coin total by 25, multiplied by the Greed stat. | instant | none | No | n/a | n/a |
+| Floor Chicken | Restores 30 Health on pickup. | instant | none | **Yes** | 12 | 14.9% |
+| Rosary | Instantly kills all enemies on screen. | instant | 8 | **Yes** | 1 | 1.2% |
+| Orologion | Creates a spinning blue ring around the player and freezes all enemies for 10 seconds. | 10 s | 4 | **Yes** | 2 | 2.5% |
+| Vacuum | Pulls all Experience Gems lying on the ground toward the character and collects them. | instant | 12 | **Yes** | 2 | 2.5% |
+| Nduja Fritta Tanto | The character breathes fire in the direction they are facing for 10 seconds. | 10 s | none | **Yes** | 1 | 1.2% |
+| Little Clover | Increases Luck by 10% until the end of the stage. | until stage end | none | No | 0.5 | 0.6% |
+
+Weights, level gates (`unlocksAt`) and the Luck flag (`isRare`) are from shipped `Item.json` (v1.16).
+"Share @ base Luck" = weight / total base-pool weight (82.5 with everything unlocked) — a **derived**
+convenience figure, not a shipped number. Real early-run shares are higher because level-gated entries
+are absent from the pool.
 
 Notes:
-- **Big Coin Bag is not a floor pickup.** It appears as one of the two level-up menu options once
-  every owned weapon and passive is maxed (with Limit Break disabled).
-- Exact numeric drop weights ("rarity" values) exist in wiki tables but were not recoverable.
+- **Big Coin Bag is not a floor pickup** — it is a level-up menu option once every owned weapon and
+  passive is maxed (Limit Break disabled), so it has no weight.
+- Two further BASE pool entries outside the original brief: **Gilded Clover** (weight 1, level 30;
+  gathers all gold on the ground and starts a Gold Fever) and **Rerollo** (weight 1, `contentGroup: EXTRA`).
+  **Sorbetto** (weight 1, EXTRA) enters the pool only with Arcana XII.
+- `Gold Coin` and `Coin Bag` carry `inTreasures: false` — they are pool-only, never chest contents.
 
 ## 2. Light sources / destructible props
 
-Source: https://vampire.survivors.wiki/w/Light_source, https://vampire.survivors.wiki/w/Luck
+Source: shipped `Item.json`, `Stage.json`, `Props.json` (v1.16).
 
-- Destructibles that spawn randomly on the stage; each drops **exactly one** pickup when destroyed.
-- **Gold Coin is by far the most common drop.**
-- **Luck rule:** Luck raises the spawn rate of light sources, and multiplies the weight ("rarity") of
-  every pickup in the pool **except Gold Coin and Coin Bag** — so Luck shifts the distribution toward
-  rare drops rather than adding a flat bonus.
-- **Spawn cap caveat:** while the map already holds the maximum number of light sources, spawn
-  attempts stop being influenced by Luck, so they spawn less often.
-- Most DLC stages and Capella Magna raise the light-source maximum above the standard stage value.
+A destroyed light source drops **exactly one** pickup, chosen by weighted random from the pool below,
+restricted to entries the player has unlocked (character level >= `unlocksAt`, plus any
+`requiresArcana` / `requiresItem` condition).
 
-**Unknown:** the numeric drop table / probabilities, base spawn chance, the Luck spawn formula, the
-per-stage maximum, and total light sources per stage.
+### Full drop table
+
+| Pickup | Weight | Level gate | Luck boosts weight (`isRare`) | contentGroup |
+|---|---|---|---|---|
+| Gold Coin | 50 | none | No | BASE |
+| Floor Chicken | 12 | none | Yes | BASE |
+| Coin Bag | 10 | none | No | BASE |
+| Orologion | 2 | 4 | Yes | BASE |
+| Vacuum | 2 | 12 | Yes | BASE |
+| Rich Coin Bag | 1 | 5 | Yes | BASE |
+| Rosary | 1 | 8 | Yes | BASE |
+| Nduja Fritta | 1 | none | Yes | BASE |
+| Little Clover | 0.5 | none | No | BASE |
+| Gilded Clover | 1 | 30 | No | BASE |
+| Sorbetto | 1 | none | Yes | EXTRA |
+| Rerollo | 1 | none | No | EXTRA |
+| Gold Finger | 0.02 | 30 | No | EXTRA |
+
+Total BASE weight with everything unlocked: **82.5**. Gold Coin alone is 50 of it (~60%).
+
+**Luck rule (corrected).** Shipped data flags `isRare: true` on exactly **ROAST, OROLOGION, VACUUM,
+COINBAGMAX, ROSARY, NFT, SORBETTO** — these are the entries whose tooltip reads "Drop rate affected by
+Luck", and Luck multiplies **only** their weight. The wiki's claim that Luck boosts everything except
+Gold Coin and Coin Bag is **contradicted** for Little Clover, Gilded Clover and Rerollo. Recorded as a
+conflict; shipped data treated as authoritative. The exact multiplier applied to the weight is still unknown.
+
+Luck also raises the light-source **spawn** rate, and stops influencing spawns once `maxDestructibles`
+are already alive on the map.
+
+### Per-stage spawn config (base-game stages)
+
+| Stage | Prop | Attempt interval | Start chance | Max chance | Max alive at once |
+|---|---|---|---|---|---|
+| Mad Forest | BRAZIER | 1000 | 10% | 50% | 10 |
+| Inlaid Library | CANDELABRA | 1000 | 7.5% | 50% | 10 |
+| Dairy Plant | LAMPOST | 1000 | 20% | 60% | 12 |
+| Gallo Tower | CANDELABRA | 1000 | 7.5% | 50% | 10 |
+| Cappella Magna | CANDELABRA | 1000 | 20% | 80% | 20 |
+| Il Molise | BRAZIER2 | 1000 | 30% | 60% | 10 |
+| Moongolow | BRAZIER2 | 1000 | 30% | 60% | 10 |
+| Green Acres | BRAZIER2 | 1000 | 10% | 50% | 10 |
+
+`destructibleFreq` is the spawn-attempt interval in ms (1000 = one attempt per second); the per-attempt
+chance ramps from `destructibleChance` toward `destructibleChanceMax`. `Props.json` holds only art/HP
+definitions (braziers, candelabra, lampposts etc. are 1 HP) and carries no drop table.
+
+**Still unknown:** total light sources spawned over a full run, and the numeric Luck weight multiplier.
 
 ## 3. Treasure chests
 
@@ -88,6 +136,43 @@ run to be at **10:00 or later** plus the usual requirements; generally only one 
 chest even at higher tiers, though some chests carry multiple evolutions. If nothing in the
 inventory can be upgraded, the chest pays extra coins instead.
 
+### Base odds are per stage-MINUTE, not per boss (correction)
+
+Shipped `Stage.json` attaches a `treasure` block to each stage-minute entry:
+`chances: [a, b, c]` = raw percent chance of the **5-item**, **3-item** and **1-item** roll
+respectively (checked in that order, with fallthrough), `level` = the base chest level used if all
+three fail, plus `prizeTypes` / `fixedPrizes` for slot contents. Each chance is multiplied by
+`totalLuck` when the chest is opened.
+
+**The wiki's Silver Bat example is confirmed:** Mad Forest minute 9 (boss `BAT5`) reads `[3, 10, 50]`.
+
+Mad Forest, full run:
+
+| Minute | Boss | 5-item | 3-item | 1-item | Base level |
+|---|---|---|---|---|---|
+| 1 | BAT4 | 0% | 0% | 30% | 1 |
+| 3 | BAT4 | 0% | 5% | 40% | 1 |
+| 5 | XLMANTIS | 1% | 5% | 100% | 1 |
+| 7 | BAT4 | 3% | 10% | 50% | 2 |
+| 9 | BAT5 | 3% | 10% | 50% | 1 |
+| 10 | BOSS_XLMANTIS | 3% | 10% | 100% | 1 |
+| 12 | BAT4 | 1% | 5% | 50% | 1 |
+| 14 | BAT5 | 3% | 10% | 100% | 1 |
+| 15 | BOSS_WEREWOLF | 3% | 10% | 100% | 1 |
+| 16 | BAT4 | 1% | 5% | 50% | 1 |
+| 18 | BAT5 | 3% | 10% | 100% | 1 |
+| 20 | BOSS_XLMUMMY | 3% | 10% | 100% | 1 |
+| 22 | BAT4 | 3% | 10% | 100% | 1 |
+| 23 | BAT5 | 3% | 10% | 100% | 1 |
+| 25 | BOSS_XLFLOWER | 3% | 10% | 100% | 1 |
+| 27 | BAT4 | 3% | 10% | 100% | 1 |
+| 29 | BAT4 | 3% | 10% | 100% | 1 |
+
+Full tables for all 8 base-game stages are in `pickups_meta.json` at
+`data.treasureChests.baseOddsPerBoss.stages`. Note minute 1 carries `fixedPrizes: ["AMOUNT"]` — the
+first chest is a guaranteed Amount pickup.
+
+
 ## 4. Gold income
 
 Sources: https://vampire.survivors.wiki/w/Gold_Coin_(currency),
@@ -112,53 +197,87 @@ The precise payout formula (and whether the 500 is universal across base-game st
 
 ## 5. PowerUp shop
 
-Sources: https://vampire.survivors.wiki/w/PowerUps,
-https://vampire.survivors.wiki/w/Calculators/PowerUp_Cost
+Source: shipped `PowerUp.json` (v1.16). **This section is now complete** — the wiki-derived partial
+table it replaced is gone.
 
-**Count:** 27 PowerUps per the official wiki (counting the separate Seal PowerUps); Fandom says 24. Conflict recorded.
+**Count:** 29 distinct entries in v1.16 (Seal I–IV counted separately), 125 total ranks.
+Official wiki says 27, Fandom says 24 — older versions, and/or excluding the Seals and the
+later-update additions (Omni, Charm, Defang, Recycle, Antipiretic, Invul Time). **Scope flag kept:**
+a strict launch-era base game is a notably smaller set than v1.16.
 
-### Cost formula
+### Cost formula (unchanged, wiki-documented, verified consistent with shipped prices)
 
 ```
-price = initialPrice                                             if totalBought == 0
-price = initialPrice * (1 + bought) + floor(20 * 1.1^totalBought) otherwise
+price = initialPrice                                              if totalBought == 0
+price = initialPrice * (1 + bought) + floor(20 * 1.1^totalBought)  otherwise
 ```
 
-- `bought` = ranks already purchased **of this PowerUp**; each rank raises that PowerUp's next base
-  cost by its `initialPrice` (initialPrice 200 -> five ranks cost 200+400+600+800+1000 = 3,000 base).
-- `totalBought` = ranks purchased **across all PowerUps**; this drives a global fee term.
-- No fee is charged while `totalBought == 0`.
-- Since **v0.7.2 (9 June 2022)** the fees are additive, so **purchase order no longer affects the total**.
+- `bought` = ranks already bought **of this PowerUp** -> rank *i* always costs `initialPrice * i` in base.
+- `totalBought` = ranks bought **across all PowerUps** -> drives the global fee.
+- Fees are additive since **v0.7.2 (9 June 2022)**.
 
-### Total cost to max everything
+### On purchase order
 
-| Figure | Base | Fees | Total | Source |
-|---|---|---|---|---|
-| Official wiki | 2,469,640 | 24,678,873 | **27,148,513** | vampire.survivors.wiki |
-| Fandom (older version) | 1,911,240 | 5,907,719 | 7,818,959 | fandom |
+**No assumed order is needed.** Base cost per rank is order-independent (`initialPrice × i`). The fee
+term depends only on `totalBought`, so over a full clear the fee sequence is
+`floor(20 × 1.1^t)` for `t = 1 … 124` regardless of which PowerUp each purchase belonged to — the
+**sum is order-independent too**. Order only changes *which* rank carries *which* fee, never the total.
+(For a partial buy the order still matters for what you can afford when.)
 
-### Per-PowerUp data (partial — the wiki table itself was not retrievable)
+Fee schedule, purchases 1–20: `0, 22, 24, 26, 29, 32, 35, 38, 42, 47, 51, 57, 62, 69, 75, 83, 91, 101, 111, 122`
+Fee at purchase 50: **2,134** · at 100: **250,556** · at the final (125th): **2,714,706**
+Total fees over a full clear: **29,861,494**
 
-| PowerUp | Effect per rank | Max rank | At max | Initial price |
-|---|---|---|---|---|
-| Might | +5% Might | 5 | +25% | 200 |
-| Max Health | **x1.1** Max Health (multiplicative) | 3 | x1.331 | 200 |
-| Armor | unknown | 3 | unknown | 600 |
-| Recovery | +0.1 Recovery | 5 | +0.5 | unknown |
-| Cooldown | −2.5% Cooldown | 2 | −5% | 900 |
-| Growth | +3% Growth | 5 | +15% | 900 |
-| Duration | +15% Duration | 2 | +30% | unknown |
-| Magnet | **x1.25** Magnet (multiplicative) | 2 | x1.5625 | unknown |
-| Curse | +10% Curse | 5 | +50% | unknown |
-| Omni | +2% Might / Proj. Speed / Duration / Area | 5 | +10% each | unknown |
-| Amount | unknown | 1 | unknown | 5,000 |
-| Revival | unknown | 1 | unknown | 10,000 |
-| Greed | unknown | unknown | +50% total | unknown |
-| Area, Speed, Move Speed, Luck | unknown | unknown | unknown | unknown |
-| Reroll, Skip, Banish, Charm, Seal(s) | unknown | unknown | unknown | unknown |
+### Complete per-PowerUp table with per-rank base costs
 
-**A per-rank cost table cannot be produced** without every `initialPrice`/`maxRank` plus a fixed
-purchase order for the global fee term. The formula above reproduces it exactly once those are known.
+| PowerUp | initialPrice | maxRank | Effect per rank | Base cost r1, r2, r3, r4, r5 … | Base total |
+|---|---|---|---|---|---|
+| Might | 200 | 5 | Raises inflicted Damage by 5% per rank (max +25%). | 200, 400, 600, 800, 1,000 | 3,000 |
+| Armor | 600 | 3 | Reduces incoming Damage by 1 per rank (max -3). | 600, 1,200, 1,800 | 3,600 |
+| Max Health | 200 | 3 | Augments Max Health by 10% per rank (max +30%). | 200, 400, 600 | 1,200 |
+| Recovery | 200 | 5 | Recovers 0.1 HP per rank (max 0.5) per second. | 200, 400, 600, 800, 1,000 | 3,000 |
+| Cooldown | 900 | 2 | Uses weapons 2.5% faster per rank (max 5%). | 900, 1,800 | 2,700 |
+| Area | 300 | 2 | Augments area of attacks by 5% per rank (max +10%). | 300, 600 | 900 |
+| Speed | 300 | 2 | Projectiles move 10% faster per rank (max 20%). | 300, 600 | 900 |
+| Duration | 300 | 2 | Effects from weapons last 15% longer per rank (max +30%). | 300, 600 | 900 |
+| Amount | 5,000 | 1 | Fires 1 more projectile (all weapons). | 5,000 | 5,000 |
+| Move Speed | 300 | 2 | Character moves 5% faster per rank (max 10%). | 300, 600 | 900 |
+| Magnet | 300 | 2 | Items Pickup range +25% per rank (max +50%). | 300, 600 | 900 |
+| Luck | 600 | 3 | Chance to get lucky goes up by 10% per rank (max +30%). | 600, 1,200, 1,800 | 3,600 |
+| Growth | 900 | 5 | Gains 3% more experience per rank (max 15%). | 900, 1,800, 2,700, 3,600, 4,500 | 13,500 |
+| Greed | 200 | 5 | Gains 10% more Gold per rank (max +50%). | 200, 400, 600, 800, 1,000 | 3,000 |
+| Curse | 1,666 | 5 | Increases enemy speed, health, quantity, and frequency by 10% per rank (max +50%). | 1,666, 3,332, 4,998, 6,664, 8,330 | 24,990 |
+| Revival | 10,000 | 1 | Revives once with 50% health. | 10,000 | 10,000 |
+| Omni | 1,000 | 5 | Increases Might, Projectile Speed, Duration, and Area by 2% per rank (max +10%). | 1,000, 2,000, 3,000, 4,000, 5,000 | 15,000 |
+| Charm | 10,000 | 5 | Increases enemies spawn quantity by 20 per rank (max +100). | 10,000, 20,000, 30,000, 40,000, 50,000 | 150,000 |
+| Defang | 10 | 5 | Enemies spawn unable to deal damage 3% of the times per rank (max 15%). | 10, 20, 30, 40, 50 | 150 |
+| Reroll | 500 | 5 | Twice per rank, allows you to get different choices when leveling up. | 500, 1,000, 1,500, 2,000, 2,500 | 7,500 |
+| Skip | 100 | 5 | Twice per rank, allows you to skip level up choices and get Experience instead. | 100, 200, 300, 400, 500 | 1,500 |
+| Banish | 100 | 5 | Twice per rank, allows you to remove an item from level up choices, for the rest of the run. | 100, 200, 300, 400, 500 | 1,500 |
+| Recycle | 500 | 5 | Reroll, Skip and Banish actions have a 10% chance to be preserved per rank (max 50%). | 500, 1,000, 1,500, 2,000, 2,500 | 7,500 |
+| Seal I | 2,000 | 10 | Allows to Banish an item from level up choices, or a pickup from light sources. Use in COLLECTION menu. | 2,000, 4,000, 6,000, 8,000, 10,000 … | 110,000 |
+| Seal II | 4,000 | 10 | Allows to Banish two items from level up choices, or pickup from light sources. Use in COLLECTION menu. | 4,000, 8,000, 12,000, 16,000, 20,000 … | 220,000 |
+| Seal III | 6,000 | 10 | Allows to Banish three items from level up choices, or pickups from light sources. Use in COLLECTION menu. | 6,000, 12,000, 18,000, 24,000, 30,000 … | 330,000 |
+| Seal IV | 8,000 | 10 | Allows to Banish four items from level up choices, or pickups from light sources. Use in COLLECTION menu. | 8,000, 16,000, 24,000, 32,000, 40,000 … | 440,000 |
+| Antipiretic | 500 | 1 | *(no description in shipped data)* | 500 | 500 |
+| Invul Time | 500 | 1 | *(no description in shipped data)* | 500 | 500 |
+
+`Reroll`, `Skip` and `Banish` ship with `unlockedRank: 0` (locked until unlocked in-game) but have 5
+ranks each; the Seals have 10 ranks each. `Antipiretic` and `Invul Time` ship with empty description
+strings — their per-rank effect is the one remaining PowerUp unknown.
+
+### Total cost to max everything (re-checked against shipped data)
+
+| Source | Base | Fees | Total |
+|---|---|---|---|
+| **Shipped data v1.16 (derived, authoritative)** | **1,362,240** | **29,861,494** | **31,223,734** |
+| Official wiki (older version) | 2,469,640 | 24,678,873 | 27,148,513 |
+| Fandom (older still) | 1,911,240 | 5,907,719 | 7,818,959 |
+
+Conflict #2 resolved as a **version difference, not an error**: v1.16 has more PowerUps and more ranks
+(125) than either wiki version, so the compounding fee term is larger. Note the shipped **base** total
+is *lower* than both wiki base figures while fees are far higher — consistent with the fee term
+dominating as rank count grows. Use **31,223,734** for v1.16.
 
 **Disable rule:** a maxed PowerUp can be disabled, except Rerolls, Skips, Banishes and Seals.
 
@@ -177,7 +296,7 @@ Sources: https://vampire.survivors.wiki/w/Arcanas, https://vampire-survivors.fan
 
 | # | Name | One-line effect |
 |---|---|---|
-| 0 | Stake to Your Heart | **unknown** (effect text not retrievable) |
+| 0 | Stake to your Heart | Halts XP gain; enemies drop Gold Coins; damage hits your Gold instead of HP; special merchants spawn every minute. |
 | I | Gemini | Certain weapons gain an identical duplicate that levels with them. |
 | II | Twilight Requiem | Listed weapons' expiring projectiles cause a horizontal explosion scaling with Curse. |
 | III | Tragic Princess | Listed weapons get reduced Cooldown while the player is moving. |
@@ -204,7 +323,12 @@ Sources: https://vampire.survivors.wiki/w/Arcanas, https://vampire-survivors.fan
 
 ## Known gaps
 
-Light-source numeric drop table and per-stage counts; floor-pickup drop weights; per-boss chest base
-odds beyond the Silver Bat example; the exact end-of-run payout formula; most PowerUp initial prices,
-max ranks and per-rank effects; the Arcana 0 effect text. All are `null` in the JSON and enumerated
-in its `unknowns` array.
+Closed by the shipped data: the full PowerUp table, per-rank costs, the light-source drop table and
+spawn config, per-stage-minute chest odds, and the Arcana 0 effect.
+
+Still open (all `null` in the JSON, all in `unknowns`):
+
+- Total light sources spawned over a full run, and the numeric multiplier Luck applies to `isRare` weights.
+- The exact end-of-run payout formula (500 + 100/unused Revival is wiki-sourced, not verified in shipped data).
+- Per-rank effects of the `Antipiretic` and `Invul Time` PowerUps (empty descriptions in shipped data).
+- Whether Little Clover's +10% Luck has an internal duration distinct from "until end of stage".

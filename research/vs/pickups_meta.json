@@ -173,62 +173,62 @@
       "field": "data.powerUpShop.totalCostToMaxAll",
       "values": [
         7818959,
-        27148513
+        27148513,
+        31223734
       ],
       "sourceIds": [
         "fandom-powerups",
-        "official-wiki-powerups"
+        "official-wiki-powerups",
+        "game-data-v1.16"
       ],
-      "note": "7,818,959 (base 1,911,240 + fees 5,907,719) vs 27,148,513 (base 2,469,640 + fees 24,678,873). Almost certainly different game versions / different PowerUp counts. Use the official-wiki figure for a current base-game reference."
+      "note": "7,818,959 (base 1,911,240 + fees 5,907,719) vs 27,148,513 (base 2,469,640 + fees 24,678,873). Almost certainly different game versions / different PowerUp counts. Use the official-wiki figure for a current base-game reference. RE-CHECKED against shipped data v1.16: computing the documented formula over all 29 PowerUps / 125 total ranks gives base 1,362,240 + fees 29,861,494 = 31,223,734. This does not match either wiki figure, which is expected - the wiki pages describe earlier versions with fewer PowerUps and ranks. Note the shipped BASE total (1,362,240) is LOWER than both wiki base figures while the fee total is far higher, consistent with the fee term compounding over a larger rank count (125). Use 31,223,734 for v1.16."
     },
     {
       "field": "data.powerUpShop.powerUpCount",
       "values": [
         24,
-        27
+        27,
+        29
       ],
       "sourceIds": [
         "fandom-powerups",
-        "official-wiki-powerups"
+        "official-wiki-powerups",
+        "game-data-v1.16"
       ],
       "note": "27 is stated to include the separate Seal PowerUps."
+    },
+    {
+      "field": "data.floorPickups.littleClover.luckAffectsDropRate",
+      "values": [
+        true,
+        false
+      ],
+      "sourceIds": [
+        "official-wiki-light-source",
+        "game-data-v1.16"
+      ],
+      "note": "Wiki states Luck raises the weight of every light-source drop except Gold Coin and Coin Bag, which would include Little Clover. Shipped Item.json flags isRare:true (the 'Drop rate affected by Luck' tooltip) on only ROAST, OROLOGION, VACUUM, COINBAGMAX, ROSARY, NFT and SORBETTO - NOT on CLOVER, GILDED or PICKUP_REROLL_DICE. Shipped data is treated as authoritative here (false), wiki claim recorded."
     }
   ],
   "unknowns": [
-    "data.floorPickups.floorChicken.dropWeight",
-    "data.floorPickups.rosary.dropWeight",
-    "data.floorPickups.orologion.dropWeight",
-    "data.floorPickups.vacuum.dropWeight",
-    "data.floorPickups.ndujaFrittaTanto.dropWeight",
-    "data.floorPickups.littleClover.dropWeight",
-    "data.floorPickups.goldCoin.dropWeight",
-    "data.floorPickups.coinBag.dropWeight",
-    "data.floorPickups.richCoinBag.dropWeight",
     "data.floorPickups.littleClover.durationSeconds",
-    "data.floorPickups.rosary.levelRequirement",
-    "data.floorPickups.ndujaFrittaTanto.levelRequirement",
-    "data.floorPickups.littleClover.levelRequirement",
-    "data.lightSources.dropTable",
-    "data.lightSources.maxConcurrentPerStage",
-    "data.lightSources.totalPerStage",
-    "data.lightSources.baseSpawnChance",
-    "data.lightSources.luckSpawnFormula",
-    "data.treasureChests.baseOddsPerBoss",
     "data.goldEconomy.endOfRunPayout.confirmedBaseValue",
-    "data.powerUpShop.powerUps[].initialPrice (most entries)",
-    "data.powerUpShop.powerUps[].effectPerRank (several entries)",
-    "data.powerUpShop.perRankCostTable"
+    "data.goldEconomy.endOfRunPayout.formula",
+    "data.lightSources.dropTable[].exactLuckWeightMultiplier (shipped data flags WHICH entries Luck boosts, not the multiplier applied)",
+    "data.lightSources.totalPerStage",
+    "data.powerUpShop.powerUps[].effectPerRank (FEVER/Antipiretic and INVUL/Invul Time carry empty descriptions in shipped data)"
   ],
   "data": {
     "floorPickups": {
-      "notes": "All of these drop from destroyed light sources unless stated otherwise. 'Rarity' on the wiki is the relative weight of the item in the light-source loot pool; Luck multiplies that weight for everything except Gold Coin and Coin Bag. Exact weight values were not retrievable.",
+      "notes": "All of these drop from destroyed light sources unless stated otherwise. 'Rarity' on the wiki is the relative weight of the item in the light-source loot pool; Luck multiplies that weight for everything except Gold Coin and Coin Bag. Exact weight values were not retrievable. Drop weights, level gates and Luck flags below are now taken from the shipped Item.json (v1.16). Two further BASE light-source pickups not in the original brief exist: Gilded Clover (weight 1, unlocks at character level 30) and, with Arcana XII, Sorbetto (weight 1, contentGroup EXTRA). See data.lightSources.dropTable for the full pool.",
       "items": [
         {
           "name": "Gold Coin",
           "id": "gold_coin",
           "sourceIds": [
             "official-wiki-gold-coin-pickup",
-            "official-wiki-light-source"
+            "official-wiki-light-source",
+            "game-data-v1.16"
           ],
           "effect": "Increases Gold Coin total by 1, multiplied by the Greed stat.",
           "goldValue": 1,
@@ -236,15 +236,19 @@
           "durationSeconds": null,
           "levelRequirement": null,
           "dropSource": "light source",
-          "dropWeight": null,
+          "dropWeight": 50,
           "luckAffectsDropRate": false,
-          "note": "Most common light-source drop. Luck does NOT increase its chance (Luck raises the weight of everything else)."
+          "note": "Most common light-source drop. Luck does NOT increase its chance (Luck raises the weight of everything else).",
+          "baseShareAtZeroLuck": 0.621118,
+          "appearsInTreasureChests": false,
+          "inGameDescription": "Adds 1 to your Gold coins total."
         },
         {
           "name": "Coin Bag",
           "id": "coin_bag",
           "sourceIds": [
-            "official-wiki-coin-bag"
+            "official-wiki-coin-bag",
+            "game-data-v1.16"
           ],
           "effect": "Increases Gold Coin total by 10, multiplied by the Greed stat.",
           "goldValue": 10,
@@ -252,14 +256,18 @@
           "durationSeconds": null,
           "levelRequirement": null,
           "dropSource": "light source",
-          "dropWeight": null,
-          "luckAffectsDropRate": false
+          "dropWeight": 10,
+          "luckAffectsDropRate": false,
+          "baseShareAtZeroLuck": 0.124224,
+          "appearsInTreasureChests": false,
+          "inGameDescription": "Adds 10 to your Gold coins total."
         },
         {
           "name": "Rich Coin Bag",
           "id": "rich_coin_bag",
           "sourceIds": [
-            "official-wiki-rich-coin-bag"
+            "official-wiki-rich-coin-bag",
+            "game-data-v1.16"
           ],
           "effect": "Increases Gold Coin total by 100, multiplied by the Greed stat.",
           "goldValue": 100,
@@ -267,8 +275,11 @@
           "durationSeconds": null,
           "levelRequirement": 5,
           "dropSource": "light source",
-          "dropWeight": null,
-          "luckAffectsDropRate": true
+          "dropWeight": 1,
+          "luckAffectsDropRate": true,
+          "baseShareAtZeroLuck": 0.012422,
+          "appearsInTreasureChests": true,
+          "inGameDescription": "Adds 100 to your Gold coins total."
         },
         {
           "name": "Big Coin Bag",
@@ -290,74 +301,95 @@
           "name": "Floor Chicken",
           "id": "floor_chicken",
           "sourceIds": [
-            "official-wiki-floor-chicken"
+            "official-wiki-floor-chicken",
+            "game-data-v1.16"
           ],
           "effect": "Restores 30 Health on pickup.",
           "healAmount": 30,
           "durationSeconds": null,
           "levelRequirement": null,
           "dropSource": "light source",
-          "dropWeight": null,
-          "luckAffectsDropRate": true
+          "dropWeight": 12,
+          "luckAffectsDropRate": true,
+          "baseShareAtZeroLuck": 0.149068,
+          "appearsInTreasureChests": true,
+          "inGameDescription": "Restores 30 Health points."
         },
         {
           "name": "Rosary",
           "id": "rosary",
           "sourceIds": [
-            "official-wiki-rosary"
+            "official-wiki-rosary",
+            "game-data-v1.16"
           ],
           "effect": "Instantly kills all enemies on screen.",
           "durationSeconds": null,
           "levelRequirement": 8,
           "dropSource": "light source",
-          "dropWeight": null,
-          "luckAffectsDropRate": true
+          "dropWeight": 1,
+          "luckAffectsDropRate": true,
+          "baseShareAtZeroLuck": 0.012422,
+          "appearsInTreasureChests": true,
+          "inGameDescription": "Destroys all enemies in sight."
         },
         {
           "name": "Orologion",
           "id": "orologion",
           "sourceIds": [
-            "official-wiki-orologion"
+            "official-wiki-orologion",
+            "game-data-v1.16"
           ],
           "effect": "Creates a spinning blue ring around the player and freezes all enemies for 10 seconds.",
           "durationSeconds": 10,
           "levelRequirement": 4,
           "dropSource": "light source",
-          "dropWeight": null,
+          "dropWeight": 2,
           "luckAffectsDropRate": true,
-          "note": "Arcana XII (Out of Bounds) makes Orologions easier to find."
+          "note": "Arcana XII (Out of Bounds) makes Orologions easier to find.",
+          "baseShareAtZeroLuck": 0.024845,
+          "appearsInTreasureChests": true,
+          "inGameDescription": "Freezes all enemies in time for 10 seconds."
         },
         {
           "name": "Vacuum",
           "id": "vacuum",
           "sourceIds": [
-            "official-wiki-vacuum"
+            "official-wiki-vacuum",
+            "game-data-v1.16"
           ],
           "effect": "Pulls all Experience Gems lying on the ground toward the character and collects them.",
           "durationSeconds": null,
           "levelRequirement": 12,
           "dropSource": "light source",
-          "dropWeight": null,
-          "luckAffectsDropRate": true
+          "dropWeight": 2,
+          "luckAffectsDropRate": true,
+          "baseShareAtZeroLuck": 0.024845,
+          "appearsInTreasureChests": true,
+          "inGameDescription": "Gathers all Experience gems left on the ground."
         },
         {
           "name": "Nduja Fritta Tanto",
           "id": "nduja_fritta_tanto",
           "sourceIds": [
-            "official-wiki-nduja"
+            "official-wiki-nduja",
+            "game-data-v1.16"
           ],
           "effect": "The character breathes fire in the direction they are facing for 10 seconds.",
           "durationSeconds": 10,
           "levelRequirement": null,
           "dropSource": "light source",
-          "dropWeight": null,
-          "luckAffectsDropRate": true
+          "dropWeight": 1,
+          "luckAffectsDropRate": true,
+          "baseShareAtZeroLuck": 0.012422,
+          "appearsInTreasureChests": true,
+          "inGameDescription": "Temporarily emits cones of flames. Affected by player stats."
         },
         {
           "name": "Little Clover",
           "id": "little_clover",
           "sourceIds": [
-            "official-wiki-little-clover"
+            "official-wiki-little-clover",
+            "game-data-v1.16"
           ],
           "effect": "Increases Luck by 10% until the end of the stage.",
           "luckBonus": 0.1,
@@ -365,9 +397,12 @@
           "lastsUntilEndOfStage": true,
           "levelRequirement": null,
           "dropSource": "light source",
-          "dropWeight": null,
-          "luckAffectsDropRate": true,
-          "note": "Described as the second-rarest light-source drop."
+          "dropWeight": 0.5,
+          "luckAffectsDropRate": false,
+          "note": "Described as the second-rarest light-source drop.",
+          "baseShareAtZeroLuck": 0.006211,
+          "appearsInTreasureChests": false,
+          "inGameDescription": "Pick up to get 10% luckier."
         }
       ]
     },
@@ -835,7 +870,8 @@
       "sourceIds": [
         "official-wiki-treasure-chest",
         "fandom-treasure-chest",
-        "official-wiki-luck"
+        "official-wiki-luck",
+        "game-data-v1.16"
       ],
       "levels": [
         {
@@ -874,12 +910,13 @@
       "exampleBaseOdds": {
         "enemy": "Silver Bat (first one in Mad Forest at 9:00)",
         "sourceIds": [
-          "official-wiki-treasure-chest"
+          "official-wiki-treasure-chest",
+          "game-data-v1.16"
         ],
         "fiveItemChance": 0.03,
         "threeItemChance": 0.1,
         "oneItemChance": 0.5,
-        "note": "Rolled in that order; each roll is multiplied by totalLuck."
+        "note": "Rolled in that order; each roll is multiplied by totalLuck. CONFIRMED against shipped data v1.16: Stage.json FOREST minute 9 treasure.chances == [3,10,50]."
       },
       "rollTiming": "Chest contents/level are determined when the chest is OPENED, not when it drops. Leaving chests on the ground until Luck is higher works.",
       "contents": [
@@ -892,7 +929,1853 @@
         "minimumRunTimeSeconds": 600,
         "note": "When evolution/union requirements are met and the run is at 10:00 or later, chests can evolve or unite a weapon. Generally only one weapon evolves per chest, including higher-tier chests, though some chests contain multiple evolutions."
       },
-      "fallbackReward": "If nothing in the player's inventory can be upgraded, chests award extra coins instead."
+      "fallbackReward": "If nothing in the player's inventory can be upgraded, chests award extra coins instead.",
+      "baseOddsPerBoss": {
+        "sourceIds": [
+          "game-data-v1.16"
+        ],
+        "structureNote": "CORRECTION to the wiki framing: the chest configuration is attached to each STAGE-MINUTE entry in Stage.json (field 'treasure'), not to the enemy/boss itself. Each entry has chances:[a,b,c] = the raw percent chances for the 5-item, 3-item and 1-item rolls respectively, checked in that order with fallthrough, plus 'level' = the chest's base level used if all three rolls fail, and prizeTypes/fixedPrizes describing what the slots contain. Chances below are converted to fractions (30 -> 0.30). Each is multiplied by totalLuck at open time.",
+        "verification": "Mad Forest minute 9 (boss BAT5, the Silver Bat) reads chances [3,10,50] in shipped data, exactly matching the wiki's documented 3%/10%/50% example. The wiki example is confirmed.",
+        "stages": [
+          {
+            "stageKey": "FOREST",
+            "stageName": "Mad Forest",
+            "entries": [
+              {
+                "minute": 1,
+                "timeSeconds": 60,
+                "bosses": [
+                  "BAT4"
+                ],
+                "fiveItemChance": 0.0,
+                "threeItemChance": 0.0,
+                "oneItemChance": 0.3,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": [
+                  "AMOUNT"
+                ]
+              },
+              {
+                "minute": 3,
+                "timeSeconds": 180,
+                "bosses": [
+                  "BAT4"
+                ],
+                "fiveItemChance": 0.0,
+                "threeItemChance": 0.05,
+                "oneItemChance": 0.4,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EXISTING_WEAPON",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 5,
+                "timeSeconds": 300,
+                "bosses": [
+                  "XLMANTIS"
+                ],
+                "fiveItemChance": 0.01,
+                "threeItemChance": 0.05,
+                "oneItemChance": 1.0,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EXISTING_WEAPON",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 7,
+                "timeSeconds": 420,
+                "bosses": [
+                  "BAT4"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 0.5,
+                "baseLevel": 2,
+                "prizeTypes": [
+                  "EXISTING_WEAPON",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 9,
+                "timeSeconds": 540,
+                "bosses": [
+                  "BAT5"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 0.5,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EXISTING_WEAPON",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_WEAPON",
+                  "EXISTING_WEAPON"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 10,
+                "timeSeconds": 600,
+                "bosses": [
+                  "BOSS_XLMANTIS"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 1.0,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_WEAPON",
+                  "EXISTING_WEAPON"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 12,
+                "timeSeconds": 720,
+                "bosses": [
+                  "BAT4"
+                ],
+                "fiveItemChance": 0.01,
+                "threeItemChance": 0.05,
+                "oneItemChance": 0.5,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 14,
+                "timeSeconds": 840,
+                "bosses": [
+                  "BAT5"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 1.0,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 15,
+                "timeSeconds": 900,
+                "bosses": [
+                  "BOSS_WEREWOLF"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 1.0,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 16,
+                "timeSeconds": 960,
+                "bosses": [
+                  "BAT4"
+                ],
+                "fiveItemChance": 0.01,
+                "threeItemChance": 0.05,
+                "oneItemChance": 0.5,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 18,
+                "timeSeconds": 1080,
+                "bosses": [
+                  "BAT5"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 1.0,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 20,
+                "timeSeconds": 1200,
+                "bosses": [
+                  "BOSS_XLMUMMY"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 1.0,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 22,
+                "timeSeconds": 1320,
+                "bosses": [
+                  "BAT4"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 1.0,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 23,
+                "timeSeconds": 1380,
+                "bosses": [
+                  "BAT5"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 1.0,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 25,
+                "timeSeconds": 1500,
+                "bosses": [
+                  "BOSS_XLFLOWER"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 1.0,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 27,
+                "timeSeconds": 1620,
+                "bosses": [
+                  "BAT4"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 1.0,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 29,
+                "timeSeconds": 1740,
+                "bosses": [
+                  "BAT4"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 1.0,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              }
+            ]
+          },
+          {
+            "stageKey": "LIBRARY",
+            "stageName": "Inlaid Library",
+            "entries": [
+              {
+                "minute": 3,
+                "timeSeconds": 180,
+                "bosses": [
+                  "XLMUMMY"
+                ],
+                "fiveItemChance": 0.001,
+                "threeItemChance": 0.05,
+                "oneItemChance": 1.0,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 5,
+                "timeSeconds": 300,
+                "bosses": [
+                  "XLMUMMY"
+                ],
+                "fiveItemChance": 0.01,
+                "threeItemChance": 0.05,
+                "oneItemChance": 1.0,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EXISTING_WEAPON",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 8,
+                "timeSeconds": 480,
+                "bosses": [
+                  "BOSS_ECTO"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 0.5,
+                "baseLevel": 2,
+                "prizeTypes": [
+                  "EXISTING_WEAPON",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 10,
+                "timeSeconds": 600,
+                "bosses": [
+                  "BOSS_BUER"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 1.0,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_WEAPON",
+                  "EXISTING_WEAPON"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 11,
+                "timeSeconds": 660,
+                "bosses": [
+                  "BOSS_MEDUSA1"
+                ],
+                "fiveItemChance": 0.0,
+                "threeItemChance": 0.0,
+                "oneItemChance": 1.0,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_WEAPON",
+                  "EXISTING_WEAPON"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 12,
+                "timeSeconds": 720,
+                "bosses": [
+                  "BAT4"
+                ],
+                "fiveItemChance": 0.01,
+                "threeItemChance": 0.05,
+                "oneItemChance": 0.5,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 13,
+                "timeSeconds": 780,
+                "bosses": [
+                  "BOSS_MUD"
+                ],
+                "fiveItemChance": 0.01,
+                "threeItemChance": 0.05,
+                "oneItemChance": 0.5,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 14,
+                "timeSeconds": 840,
+                "bosses": [
+                  "BAT5"
+                ],
+                "fiveItemChance": 0.01,
+                "threeItemChance": 0.05,
+                "oneItemChance": 0.5,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 15,
+                "timeSeconds": 900,
+                "bosses": [
+                  "BOSS_XLMEDUSA"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 1.0,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 16,
+                "timeSeconds": 960,
+                "bosses": [
+                  "BAT4"
+                ],
+                "fiveItemChance": 0.01,
+                "threeItemChance": 0.05,
+                "oneItemChance": 0.5,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 18,
+                "timeSeconds": 1080,
+                "bosses": [
+                  "BOSS_WITCH2"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 1.0,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 20,
+                "timeSeconds": 1200,
+                "bosses": [
+                  "BOSS_COUNT2"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 1.0,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EVOLUTION",
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 22,
+                "timeSeconds": 1320,
+                "bosses": [
+                  "BAT4"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 1.0,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 23,
+                "timeSeconds": 1380,
+                "bosses": [
+                  "BOSS_BUER"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 1.0,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 25,
+                "timeSeconds": 1500,
+                "bosses": [
+                  "BOSS_COUNT1"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 1.0,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 26,
+                "timeSeconds": 1560,
+                "bosses": [
+                  "BOSS_XLMEDUSA"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 0.5,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 27,
+                "timeSeconds": 1620,
+                "bosses": [
+                  "BOSS_XLMEDUSA"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 0.5,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 28,
+                "timeSeconds": 1680,
+                "bosses": [
+                  "BOSS_XLMEDUSA"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 1.0,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              }
+            ]
+          },
+          {
+            "stageKey": "WAREHOUSE",
+            "stageName": "Dairy Plant",
+            "entries": [
+              {
+                "minute": 1,
+                "timeSeconds": 60,
+                "bosses": [
+                  "LIZARD2_3"
+                ],
+                "fiveItemChance": 0.0,
+                "threeItemChance": 0.0,
+                "oneItemChance": 0.3,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 3,
+                "timeSeconds": 180,
+                "bosses": [
+                  "BOSS_MIGNO2_5"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.2,
+                "oneItemChance": 1.0,
+                "baseLevel": null,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 5,
+                "timeSeconds": 300,
+                "bosses": [
+                  "BOSS_MIGNO2_5"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 1.0,
+                "baseLevel": null,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 7,
+                "timeSeconds": 420,
+                "bosses": [
+                  "BOSS_MERMAN"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.2,
+                "oneItemChance": 1.0,
+                "baseLevel": null,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 9,
+                "timeSeconds": 540,
+                "bosses": [
+                  "BOSS_MIGNO2_5"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.2,
+                "oneItemChance": 1.0,
+                "baseLevel": null,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 10,
+                "timeSeconds": 600,
+                "bosses": [
+                  "BOSS_MIGNO2_5_L"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.2,
+                "oneItemChance": 1.0,
+                "baseLevel": null,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EVOLUTION",
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 12,
+                "timeSeconds": 720,
+                "bosses": [
+                  "BOSS_PILE3"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.2,
+                "oneItemChance": 1.0,
+                "baseLevel": null,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 16,
+                "timeSeconds": 960,
+                "bosses": [
+                  "BOSS_XLTRITON"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 1.0,
+                "baseLevel": null,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 18,
+                "timeSeconds": 1080,
+                "bosses": [
+                  "BOSS_ARMOR1"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 1.0,
+                "baseLevel": null,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 20,
+                "timeSeconds": 1200,
+                "bosses": [
+                  "BOSS_XLGOLEM2"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 1.0,
+                "baseLevel": null,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EVOLUTION",
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 22,
+                "timeSeconds": 1320,
+                "bosses": [
+                  "BOSS_XLGOLEM1"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 1.0,
+                "baseLevel": null,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 23,
+                "timeSeconds": 1380,
+                "bosses": [
+                  "BOSS_MIGNO2_5_L"
+                ],
+                "fiveItemChance": 0.0,
+                "threeItemChance": 0.0,
+                "oneItemChance": 0.3,
+                "baseLevel": null,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 25,
+                "timeSeconds": 1500,
+                "bosses": [
+                  "BOSS_XLARMOR"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 1.0,
+                "baseLevel": null,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 27,
+                "timeSeconds": 1620,
+                "bosses": [
+                  "BOSS_XLCOCKATRICE"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 1.0,
+                "baseLevel": null,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              }
+            ]
+          },
+          {
+            "stageKey": "TOWER",
+            "stageName": "Gallo Tower",
+            "entries": [
+              {
+                "minute": 3,
+                "timeSeconds": 180,
+                "bosses": [
+                  "DEVIL3"
+                ],
+                "fiveItemChance": 0.001,
+                "threeItemChance": 0.05,
+                "oneItemChance": 1.0,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 5,
+                "timeSeconds": 300,
+                "bosses": [
+                  "DEVIL3"
+                ],
+                "fiveItemChance": 0.01,
+                "threeItemChance": 0.05,
+                "oneItemChance": 1.0,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EXISTING_WEAPON",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 8,
+                "timeSeconds": 480,
+                "bosses": [
+                  "BOSS_SKULL2"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 0.5,
+                "baseLevel": 2,
+                "prizeTypes": [
+                  "EXISTING_WEAPON",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 10,
+                "timeSeconds": 600,
+                "bosses": [
+                  "BOSS_HARPY"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 1.0,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EVOLUTION",
+                  "EVOLUTION",
+                  "EXISTING_WEAPON",
+                  "EXISTING_WEAPON"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 12,
+                "timeSeconds": 720,
+                "bosses": [
+                  "DEVIL3"
+                ],
+                "fiveItemChance": 0.01,
+                "threeItemChance": 0.05,
+                "oneItemChance": 0.5,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 13,
+                "timeSeconds": 780,
+                "bosses": [
+                  "BOSS_XLDRAGON1"
+                ],
+                "fiveItemChance": 0.01,
+                "threeItemChance": 0.05,
+                "oneItemChance": 0.5,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 14,
+                "timeSeconds": 840,
+                "bosses": [
+                  "DEVIL3"
+                ],
+                "fiveItemChance": 0.01,
+                "threeItemChance": 0.05,
+                "oneItemChance": 0.5,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 15,
+                "timeSeconds": 900,
+                "bosses": [
+                  "BOSS_GALLO"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 1.0,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 16,
+                "timeSeconds": 960,
+                "bosses": [
+                  "DEVIL3"
+                ],
+                "fiveItemChance": 0.01,
+                "threeItemChance": 0.05,
+                "oneItemChance": 0.5,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 18,
+                "timeSeconds": 1080,
+                "bosses": [
+                  "BOSS_XLARMOR2"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 1.0,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 20,
+                "timeSeconds": 1200,
+                "bosses": [
+                  "BOSS_XLDRAGON2"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 1.0,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EVOLUTION",
+                  "EVOLUTION"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 22,
+                "timeSeconds": 1320,
+                "bosses": [
+                  "DEVIL3"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 1.0,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 23,
+                "timeSeconds": 1380,
+                "bosses": [
+                  "BOSS_XLCOCKATRICE"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 1.0,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 25,
+                "timeSeconds": 1500,
+                "bosses": [
+                  "BOSS_XLCRAB"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 1.0,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EVOLUTION",
+                  "EVOLUTION",
+                  "EVOLUTION",
+                  "EVOLUTION"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 26,
+                "timeSeconds": 1560,
+                "bosses": [
+                  "BOSS_XLCOCKATRICE"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 0.5,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 27,
+                "timeSeconds": 1620,
+                "bosses": [
+                  "BOSS_XLCHIMERA"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 0.5,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 28,
+                "timeSeconds": 1680,
+                "bosses": [
+                  "BOSS_XLCHIMERA"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 1.0,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              }
+            ]
+          },
+          {
+            "stageKey": "CHAPEL",
+            "stageName": "Cappella Magna",
+            "entries": [
+              {
+                "minute": 1,
+                "timeSeconds": 60,
+                "bosses": [
+                  "FANGEL3"
+                ],
+                "fiveItemChance": 0.0,
+                "threeItemChance": 0.0,
+                "oneItemChance": 0.3,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 3,
+                "timeSeconds": 180,
+                "bosses": [
+                  "BOSS_EYE2"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.2,
+                "oneItemChance": 1.0,
+                "baseLevel": null,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 5,
+                "timeSeconds": 300,
+                "bosses": [
+                  "BOSS_FANGEL3"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 1.0,
+                "baseLevel": null,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 7,
+                "timeSeconds": 420,
+                "bosses": [
+                  "BOSS_EYE2"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.2,
+                "oneItemChance": 1.0,
+                "baseLevel": null,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 9,
+                "timeSeconds": 540,
+                "bosses": [
+                  "BOSS_EYE2"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.2,
+                "oneItemChance": 1.0,
+                "baseLevel": null,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 10,
+                "timeSeconds": 600,
+                "bosses": [
+                  "BOSS_SUCCUBUS"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.2,
+                "oneItemChance": 1.0,
+                "baseLevel": null,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EVOLUTION",
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 12,
+                "timeSeconds": 720,
+                "bosses": [
+                  "BOSS_EYE2"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.2,
+                "oneItemChance": 1.0,
+                "baseLevel": null,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 15,
+                "timeSeconds": 900,
+                "bosses": [
+                  "BOSS_XLARMOR_GREEN"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 1.0,
+                "baseLevel": null,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 18,
+                "timeSeconds": 1080,
+                "bosses": [
+                  "BOSS_ARMOR1"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 1.0,
+                "baseLevel": null,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 20,
+                "timeSeconds": 1200,
+                "bosses": [
+                  "BOSS_XLARCHDEMON"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 1.0,
+                "baseLevel": null,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EVOLUTION",
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 22,
+                "timeSeconds": 1320,
+                "bosses": [
+                  "BOSS_EYE2"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 1.0,
+                "baseLevel": null,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 23,
+                "timeSeconds": 1380,
+                "bosses": [
+                  "BOSS_EYE2"
+                ],
+                "fiveItemChance": 0.0,
+                "threeItemChance": 0.0,
+                "oneItemChance": 0.3,
+                "baseLevel": null,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 25,
+                "timeSeconds": 1500,
+                "bosses": [
+                  "BOSS_TRINACRIA"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 1.0,
+                "baseLevel": null,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 27,
+                "timeSeconds": 1620,
+                "bosses": [
+                  "BOSS_EYE2"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 1.0,
+                "baseLevel": null,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              }
+            ]
+          },
+          {
+            "stageKey": "MOLISE",
+            "stageName": "Il Molise",
+            "entries": [
+              {
+                "minute": 3,
+                "timeSeconds": 180,
+                "bosses": [
+                  "MOLISANO_ANFORA"
+                ],
+                "fiveItemChance": 0.01,
+                "threeItemChance": 0.02,
+                "oneItemChance": 1.0,
+                "baseLevel": null,
+                "prizeTypes": [
+                  "EXISTING_WEAPON",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 5,
+                "timeSeconds": 300,
+                "bosses": [
+                  "MOLISANO_ANFORA"
+                ],
+                "fiveItemChance": 0.01,
+                "threeItemChance": 0.02,
+                "oneItemChance": 1.0,
+                "baseLevel": null,
+                "prizeTypes": [
+                  "EXISTING_WEAPON",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 7,
+                "timeSeconds": 420,
+                "bosses": [
+                  "MOLISANO_ANFORA"
+                ],
+                "fiveItemChance": 0.01,
+                "threeItemChance": 0.02,
+                "oneItemChance": 1.0,
+                "baseLevel": null,
+                "prizeTypes": [
+                  "EXISTING_WEAPON",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 9,
+                "timeSeconds": 540,
+                "bosses": [
+                  "MOLISANO_ANFORA"
+                ],
+                "fiveItemChance": 0.01,
+                "threeItemChance": 0.02,
+                "oneItemChance": 1.0,
+                "baseLevel": null,
+                "prizeTypes": [
+                  "EXISTING_WEAPON",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 10,
+                "timeSeconds": 600,
+                "bosses": [
+                  "MOLISANO_VECCHIO"
+                ],
+                "fiveItemChance": 0.01,
+                "threeItemChance": 0.02,
+                "oneItemChance": 1.0,
+                "baseLevel": null,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EVOLUTION",
+                  "EVOLUTION",
+                  "EVOLUTION",
+                  "EVOLUTION"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 11,
+                "timeSeconds": 660,
+                "bosses": [
+                  "MOLISANO_VECCHIO"
+                ],
+                "fiveItemChance": 0.01,
+                "threeItemChance": 0.02,
+                "oneItemChance": 1.0,
+                "baseLevel": null,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EVOLUTION",
+                  "EVOLUTION",
+                  "EVOLUTION",
+                  "EVOLUTION"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 13,
+                "timeSeconds": 780,
+                "bosses": [
+                  "MOLISANO_VECCHIO"
+                ],
+                "fiveItemChance": 0.01,
+                "threeItemChance": 0.02,
+                "oneItemChance": 1.0,
+                "baseLevel": null,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EVOLUTION",
+                  "EVOLUTION",
+                  "EVOLUTION",
+                  "EVOLUTION"
+                ],
+                "fixedPrizes": null
+              }
+            ]
+          },
+          {
+            "stageKey": "SINKING",
+            "stageName": "Moongolow",
+            "entries": [
+              {
+                "minute": 3,
+                "timeSeconds": 180,
+                "bosses": [
+                  "MOON_BOSS_CRABBINO"
+                ],
+                "fiveItemChance": 0.001,
+                "threeItemChance": 0.05,
+                "oneItemChance": 1.0,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 5,
+                "timeSeconds": 300,
+                "bosses": [
+                  "MOON_BOSS_CRABBINO"
+                ],
+                "fiveItemChance": 0.01,
+                "threeItemChance": 0.05,
+                "oneItemChance": 1.0,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EXISTING_WEAPON",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 8,
+                "timeSeconds": 480,
+                "bosses": [
+                  "MOON_BOSS_CRABBINO"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 0.5,
+                "baseLevel": 2,
+                "prizeTypes": [
+                  "EXISTING_WEAPON",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 10,
+                "timeSeconds": 600,
+                "bosses": [
+                  "MOON_BOSS_CRABBINO"
+                ],
+                "fiveItemChance": 0.03,
+                "threeItemChance": 0.1,
+                "oneItemChance": 1.0,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_WEAPON",
+                  "EXISTING_WEAPON"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 11,
+                "timeSeconds": 660,
+                "bosses": [
+                  "MOON_BOSS_NIGHTSHADE"
+                ],
+                "fiveItemChance": 0.0,
+                "threeItemChance": 0.0,
+                "oneItemChance": 1.0,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EXISTING_ANY",
+                  "EXISTING_ANY",
+                  "EXISTING_WEAPON",
+                  "EXISTING_WEAPON"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 12,
+                "timeSeconds": 720,
+                "bosses": [
+                  "MOON_EYE2",
+                  "MOON_EYE2"
+                ],
+                "fiveItemChance": 0.01,
+                "threeItemChance": 0.1,
+                "oneItemChance": 1.0,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EVOLUTION",
+                  "EVOLUTION",
+                  "EVOLUTION",
+                  "EVOLUTION"
+                ],
+                "fixedPrizes": null
+              },
+              {
+                "minute": 13,
+                "timeSeconds": 780,
+                "bosses": [
+                  "MOON_EYE3",
+                  "MOON_EYE3"
+                ],
+                "fiveItemChance": 0.01,
+                "threeItemChance": 0.1,
+                "oneItemChance": 1.0,
+                "baseLevel": 1,
+                "prizeTypes": [
+                  "EVOLUTION",
+                  "EVOLUTION",
+                  "EVOLUTION",
+                  "EVOLUTION",
+                  "EVOLUTION"
+                ],
+                "fixedPrizes": null
+              }
+            ]
+          },
+          {
+            "stageKey": "GREENACRES",
+            "stageName": "Green Acres",
+            "entries": []
+          }
+        ]
+      }
     },
     "goldEconomy": {
       "sourceIds": [
@@ -1830,13 +3713,12 @@
         {
           "number": 0,
           "roman": "0",
-          "name": "Stake to Your Heart",
+          "name": "Stake to your Heart",
           "id": "stake_to_your_heart",
-          "effect": null,
+          "effect": "Halts XP gain; enemies drop Gold Coins; damage is dealt to Gold Coins instead of HP; special merchants spawn every minute.",
           "sourceIds": [
-            "official-wiki-arcanas"
-          ],
-          "note": "Numbered 0; effect text not retrieved. Included to reach the stated 22-card base set alongside I-XXI."
+            "game-data-v1.16"
+          ]
         }
       ]
     }
