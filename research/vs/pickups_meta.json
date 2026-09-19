@@ -2,54 +2,195 @@
   "schemaVersion": 1,
   "game": "Vampire Survivors",
   "scope": "base game (no DLC)",
-  "notes": "Percent conventions: where the game treats a stat as a multiplier on a 100% base (Luck, Greed, Might), values are stored as fractional deltas (e.g. +10% -> 0.10) in *Bonus fields, and as explicit multipliers only where a source states a multiplier (e.g. maxHealth PowerUp multiplierPerRank 1.1). All times in seconds. RESEARCH CONSTRAINT: the network egress proxy blocked WebFetch/curl to vampire.survivors.wiki, vampire-survivors.fandom.com, steamcommunity.com and all other hosts; all data below was obtained via WebSearch result summaries of those exact pages. Numbers not surfaced by search are null, not guessed.",
+  "notes": "Percent conventions: where the game treats a stat as a multiplier on a 100% base (Luck, Greed, Might), values are stored as fractional deltas (e.g. +10% -> 0.10) in *Bonus fields, and as explicit multipliers only where a source states a multiplier (e.g. maxHealth PowerUp multiplierPerRank 1.1). All times in seconds. UPDATE 2026-09-19: PowerUp, light-source drop-table and destructible-spawn figures now come from the game's OWN SHIPPED DATA FILES (community rip, game v1.16) via raw.githubusercontent.com, which is reachable; these supersede the wiki summaries and are marked sourceIds ['game-data-v1.16']. ORIGINAL RESEARCH CONSTRAINT: the network egress proxy blocked WebFetch/curl to vampire.survivors.wiki, vampire-survivors.fandom.com, steamcommunity.com and all other hosts; all data below was obtained via WebSearch result summaries of those exact pages. Numbers not surfaced by search are null, not guessed.",
   "sources": [
-    {"id": "official-wiki-pickups", "url": "https://vampire.survivors.wiki/w/Pickups", "retrieved": "2026-09-19"},
-    {"id": "official-wiki-floor-chicken", "url": "https://vampire.survivors.wiki/w/Floor_Chicken", "retrieved": "2026-09-19"},
-    {"id": "official-wiki-rosary", "url": "https://vampire.survivors.wiki/w/Rosary", "retrieved": "2026-09-19"},
-    {"id": "official-wiki-orologion", "url": "https://vampire.survivors.wiki/w/Orologion", "retrieved": "2026-09-19"},
-    {"id": "official-wiki-vacuum", "url": "https://vampire.survivors.wiki/w/Vacuum", "retrieved": "2026-09-19"},
-    {"id": "official-wiki-nduja", "url": "https://vampire.survivors.wiki/w/Nduja_Fritta_Tanto", "retrieved": "2026-09-19"},
-    {"id": "official-wiki-little-clover", "url": "https://vampire.survivors.wiki/w/Little_Clover", "retrieved": "2026-09-19"},
-    {"id": "official-wiki-gold-coin-pickup", "url": "https://vampire.survivors.wiki/w/Gold_Coin", "retrieved": "2026-09-19"},
-    {"id": "official-wiki-coin-bag", "url": "https://vampire.survivors.wiki/w/Coin_Bag", "retrieved": "2026-09-19"},
-    {"id": "official-wiki-rich-coin-bag", "url": "https://vampire.survivors.wiki/w/Rich_Coin_Bag", "retrieved": "2026-09-19"},
-    {"id": "official-wiki-big-coin-bag", "url": "https://vampire.survivors.wiki/w/Big_Coin_Bag", "retrieved": "2026-09-19"},
-    {"id": "official-wiki-light-source", "url": "https://vampire.survivors.wiki/w/Light_source", "retrieved": "2026-09-19"},
-    {"id": "official-wiki-treasure-chest", "url": "https://vampire.survivors.wiki/w/Treasure_Chest", "retrieved": "2026-09-19"},
-    {"id": "official-wiki-luck", "url": "https://vampire.survivors.wiki/w/Luck", "retrieved": "2026-09-19"},
-    {"id": "official-wiki-greed", "url": "https://vampire.survivors.wiki/w/Greed", "retrieved": "2026-09-19"},
-    {"id": "official-wiki-gold-currency", "url": "https://vampire.survivors.wiki/w/Gold_Coin_(currency)", "retrieved": "2026-09-19"},
-    {"id": "official-wiki-powerups", "url": "https://vampire.survivors.wiki/w/PowerUps", "retrieved": "2026-09-19"},
-    {"id": "official-wiki-powerup-cost-calc", "url": "https://vampire.survivors.wiki/w/Calculators/PowerUp_Cost", "retrieved": "2026-09-19"},
-    {"id": "official-wiki-arcanas", "url": "https://vampire.survivors.wiki/w/Arcanas", "retrieved": "2026-09-19"},
-    {"id": "official-wiki-gold-farming", "url": "https://vampire.survivors.wiki/w/Guide:Gold_farming", "retrieved": "2026-09-19"},
-    {"id": "fandom-pickups", "url": "https://vampire-survivors.fandom.com/wiki/Pickups", "retrieved": "2026-09-19"},
-    {"id": "fandom-powerups", "url": "https://vampire-survivors.fandom.com/wiki/PowerUps", "retrieved": "2026-09-19"},
-    {"id": "fandom-treasure-chest", "url": "https://vampire-survivors.fandom.com/wiki/Treasure_Chest", "retrieved": "2026-09-19"},
-    {"id": "fandom-luck", "url": "https://vampire-survivors.fandom.com/wiki/Luck", "retrieved": "2026-09-19"},
-    {"id": "fandom-arcanas", "url": "https://vampire-survivors.fandom.com/wiki/Arcanas", "retrieved": "2026-09-19"}
+    {
+      "id": "official-wiki-pickups",
+      "url": "https://vampire.survivors.wiki/w/Pickups",
+      "retrieved": "2026-09-19"
+    },
+    {
+      "id": "official-wiki-floor-chicken",
+      "url": "https://vampire.survivors.wiki/w/Floor_Chicken",
+      "retrieved": "2026-09-19"
+    },
+    {
+      "id": "official-wiki-rosary",
+      "url": "https://vampire.survivors.wiki/w/Rosary",
+      "retrieved": "2026-09-19"
+    },
+    {
+      "id": "official-wiki-orologion",
+      "url": "https://vampire.survivors.wiki/w/Orologion",
+      "retrieved": "2026-09-19"
+    },
+    {
+      "id": "official-wiki-vacuum",
+      "url": "https://vampire.survivors.wiki/w/Vacuum",
+      "retrieved": "2026-09-19"
+    },
+    {
+      "id": "official-wiki-nduja",
+      "url": "https://vampire.survivors.wiki/w/Nduja_Fritta_Tanto",
+      "retrieved": "2026-09-19"
+    },
+    {
+      "id": "official-wiki-little-clover",
+      "url": "https://vampire.survivors.wiki/w/Little_Clover",
+      "retrieved": "2026-09-19"
+    },
+    {
+      "id": "official-wiki-gold-coin-pickup",
+      "url": "https://vampire.survivors.wiki/w/Gold_Coin",
+      "retrieved": "2026-09-19"
+    },
+    {
+      "id": "official-wiki-coin-bag",
+      "url": "https://vampire.survivors.wiki/w/Coin_Bag",
+      "retrieved": "2026-09-19"
+    },
+    {
+      "id": "official-wiki-rich-coin-bag",
+      "url": "https://vampire.survivors.wiki/w/Rich_Coin_Bag",
+      "retrieved": "2026-09-19"
+    },
+    {
+      "id": "official-wiki-big-coin-bag",
+      "url": "https://vampire.survivors.wiki/w/Big_Coin_Bag",
+      "retrieved": "2026-09-19"
+    },
+    {
+      "id": "official-wiki-light-source",
+      "url": "https://vampire.survivors.wiki/w/Light_source",
+      "retrieved": "2026-09-19"
+    },
+    {
+      "id": "official-wiki-treasure-chest",
+      "url": "https://vampire.survivors.wiki/w/Treasure_Chest",
+      "retrieved": "2026-09-19"
+    },
+    {
+      "id": "official-wiki-luck",
+      "url": "https://vampire.survivors.wiki/w/Luck",
+      "retrieved": "2026-09-19"
+    },
+    {
+      "id": "official-wiki-greed",
+      "url": "https://vampire.survivors.wiki/w/Greed",
+      "retrieved": "2026-09-19"
+    },
+    {
+      "id": "official-wiki-gold-currency",
+      "url": "https://vampire.survivors.wiki/w/Gold_Coin_(currency)",
+      "retrieved": "2026-09-19"
+    },
+    {
+      "id": "official-wiki-powerups",
+      "url": "https://vampire.survivors.wiki/w/PowerUps",
+      "retrieved": "2026-09-19"
+    },
+    {
+      "id": "official-wiki-powerup-cost-calc",
+      "url": "https://vampire.survivors.wiki/w/Calculators/PowerUp_Cost",
+      "retrieved": "2026-09-19"
+    },
+    {
+      "id": "official-wiki-arcanas",
+      "url": "https://vampire.survivors.wiki/w/Arcanas",
+      "retrieved": "2026-09-19"
+    },
+    {
+      "id": "official-wiki-gold-farming",
+      "url": "https://vampire.survivors.wiki/w/Guide:Gold_farming",
+      "retrieved": "2026-09-19"
+    },
+    {
+      "id": "fandom-pickups",
+      "url": "https://vampire-survivors.fandom.com/wiki/Pickups",
+      "retrieved": "2026-09-19"
+    },
+    {
+      "id": "fandom-powerups",
+      "url": "https://vampire-survivors.fandom.com/wiki/PowerUps",
+      "retrieved": "2026-09-19"
+    },
+    {
+      "id": "fandom-treasure-chest",
+      "url": "https://vampire-survivors.fandom.com/wiki/Treasure_Chest",
+      "retrieved": "2026-09-19"
+    },
+    {
+      "id": "fandom-luck",
+      "url": "https://vampire-survivors.fandom.com/wiki/Luck",
+      "retrieved": "2026-09-19"
+    },
+    {
+      "id": "fandom-arcanas",
+      "url": "https://vampire-survivors.fandom.com/wiki/Arcanas",
+      "retrieved": "2026-09-19"
+    },
+    {
+      "id": "game-data-v1.16",
+      "url": "https://raw.githubusercontent.com/SurvivatonsAndMore/VampireSurvivorsFiles/main/Data/Vampire%20Survivors/",
+      "retrieved": "2026-09-19",
+      "note": "Community mirror (github.com/SurvivatonsAndMore/VampireSurvivorsFiles) of the game's shipped JSON data files, game version 1.16. Files used: PowerUp.json, Item.json, Stage.json, Props.json. Base-game folder; DLC content lives in sibling folders. Entries additionally carry a contentGroup field ('BASE' vs 'EXTRA') used below to flag non-base-game content."
+    }
   ],
   "conflicts": [
     {
       "field": "data.treasureChests.goldReward",
       "values": [
-        {"byChestLevel": {"oneItem": {"min": 100, "max": 200}, "threeItem": {"min": 300, "max": 600}, "fiveItem": {"min": 500, "max": 1000}}},
-        {"flatRange": {"min": 60, "max": 500}}
+        {
+          "byChestLevel": {
+            "oneItem": {
+              "min": 100,
+              "max": 200
+            },
+            "threeItem": {
+              "min": 300,
+              "max": 600
+            },
+            "fiveItem": {
+              "min": 500,
+              "max": 1000
+            }
+          }
+        },
+        {
+          "flatRange": {
+            "min": 60,
+            "max": 500
+          }
+        }
       ],
-      "sourceIds": ["official-wiki-treasure-chest", "fandom-treasure-chest"],
+      "sourceIds": [
+        "official-wiki-treasure-chest",
+        "fandom-treasure-chest"
+      ],
       "note": "One source gives per-chest-level gold bands; the other gives a single 60-500 range for any chest. The per-level bands are the more recent/likely-current figures but this was not verifiable without direct page access."
     },
     {
       "field": "data.powerUpShop.totalCostToMaxAll",
-      "values": [7818959, 27148513],
-      "sourceIds": ["fandom-powerups", "official-wiki-powerups"],
+      "values": [
+        7818959,
+        27148513
+      ],
+      "sourceIds": [
+        "fandom-powerups",
+        "official-wiki-powerups"
+      ],
       "note": "7,818,959 (base 1,911,240 + fees 5,907,719) vs 27,148,513 (base 2,469,640 + fees 24,678,873). Almost certainly different game versions / different PowerUp counts. Use the official-wiki figure for a current base-game reference."
     },
     {
       "field": "data.powerUpShop.powerUpCount",
-      "values": [24, 27],
-      "sourceIds": ["fandom-powerups", "official-wiki-powerups"],
+      "values": [
+        24,
+        27
+      ],
+      "sourceIds": [
+        "fandom-powerups",
+        "official-wiki-powerups"
+      ],
       "note": "27 is stated to include the separate Seal PowerUps."
     }
   ],
@@ -83,106 +224,644 @@
       "notes": "All of these drop from destroyed light sources unless stated otherwise. 'Rarity' on the wiki is the relative weight of the item in the light-source loot pool; Luck multiplies that weight for everything except Gold Coin and Coin Bag. Exact weight values were not retrievable.",
       "items": [
         {
-          "name": "Gold Coin", "id": "gold_coin", "sourceIds": ["official-wiki-gold-coin-pickup", "official-wiki-light-source"],
+          "name": "Gold Coin",
+          "id": "gold_coin",
+          "sourceIds": [
+            "official-wiki-gold-coin-pickup",
+            "official-wiki-light-source"
+          ],
           "effect": "Increases Gold Coin total by 1, multiplied by the Greed stat.",
-          "goldValue": 1, "scalesWithGreed": true, "durationSeconds": null,
-          "levelRequirement": null, "dropSource": "light source", "dropWeight": null,
+          "goldValue": 1,
+          "scalesWithGreed": true,
+          "durationSeconds": null,
+          "levelRequirement": null,
+          "dropSource": "light source",
+          "dropWeight": null,
           "luckAffectsDropRate": false,
           "note": "Most common light-source drop. Luck does NOT increase its chance (Luck raises the weight of everything else)."
         },
         {
-          "name": "Coin Bag", "id": "coin_bag", "sourceIds": ["official-wiki-coin-bag"],
+          "name": "Coin Bag",
+          "id": "coin_bag",
+          "sourceIds": [
+            "official-wiki-coin-bag"
+          ],
           "effect": "Increases Gold Coin total by 10, multiplied by the Greed stat.",
-          "goldValue": 10, "scalesWithGreed": true, "durationSeconds": null,
-          "levelRequirement": null, "dropSource": "light source", "dropWeight": null,
+          "goldValue": 10,
+          "scalesWithGreed": true,
+          "durationSeconds": null,
+          "levelRequirement": null,
+          "dropSource": "light source",
+          "dropWeight": null,
           "luckAffectsDropRate": false
         },
         {
-          "name": "Rich Coin Bag", "id": "rich_coin_bag", "sourceIds": ["official-wiki-rich-coin-bag"],
+          "name": "Rich Coin Bag",
+          "id": "rich_coin_bag",
+          "sourceIds": [
+            "official-wiki-rich-coin-bag"
+          ],
           "effect": "Increases Gold Coin total by 100, multiplied by the Greed stat.",
-          "goldValue": 100, "scalesWithGreed": true, "durationSeconds": null,
-          "levelRequirement": 5, "dropSource": "light source", "dropWeight": null,
+          "goldValue": 100,
+          "scalesWithGreed": true,
+          "durationSeconds": null,
+          "levelRequirement": 5,
+          "dropSource": "light source",
+          "dropWeight": null,
           "luckAffectsDropRate": true
         },
         {
-          "name": "Big Coin Bag", "id": "big_coin_bag", "sourceIds": ["official-wiki-big-coin-bag"],
+          "name": "Big Coin Bag",
+          "id": "big_coin_bag",
+          "sourceIds": [
+            "official-wiki-big-coin-bag"
+          ],
           "effect": "Increases Gold Coin total by 25, multiplied by the Greed stat.",
-          "goldValue": 25, "scalesWithGreed": true, "durationSeconds": null,
-          "levelRequirement": null, "dropSource": "level-up menu option", "dropWeight": null,
+          "goldValue": 25,
+          "scalesWithGreed": true,
+          "durationSeconds": null,
+          "levelRequirement": null,
+          "dropSource": "level-up menu option",
+          "dropWeight": null,
           "luckAffectsDropRate": false,
           "note": "Not a floor pickup. Offered as one of the two level-up options once all owned weapons and passives are maxed (with Limit Break disabled)."
         },
         {
-          "name": "Floor Chicken", "id": "floor_chicken", "sourceIds": ["official-wiki-floor-chicken"],
+          "name": "Floor Chicken",
+          "id": "floor_chicken",
+          "sourceIds": [
+            "official-wiki-floor-chicken"
+          ],
           "effect": "Restores 30 Health on pickup.",
-          "healAmount": 30, "durationSeconds": null,
-          "levelRequirement": null, "dropSource": "light source", "dropWeight": null,
+          "healAmount": 30,
+          "durationSeconds": null,
+          "levelRequirement": null,
+          "dropSource": "light source",
+          "dropWeight": null,
           "luckAffectsDropRate": true
         },
         {
-          "name": "Rosary", "id": "rosary", "sourceIds": ["official-wiki-rosary"],
+          "name": "Rosary",
+          "id": "rosary",
+          "sourceIds": [
+            "official-wiki-rosary"
+          ],
           "effect": "Instantly kills all enemies on screen.",
           "durationSeconds": null,
-          "levelRequirement": 8, "dropSource": "light source", "dropWeight": null,
+          "levelRequirement": 8,
+          "dropSource": "light source",
+          "dropWeight": null,
           "luckAffectsDropRate": true
         },
         {
-          "name": "Orologion", "id": "orologion", "sourceIds": ["official-wiki-orologion"],
+          "name": "Orologion",
+          "id": "orologion",
+          "sourceIds": [
+            "official-wiki-orologion"
+          ],
           "effect": "Creates a spinning blue ring around the player and freezes all enemies for 10 seconds.",
           "durationSeconds": 10,
-          "levelRequirement": 4, "dropSource": "light source", "dropWeight": null,
+          "levelRequirement": 4,
+          "dropSource": "light source",
+          "dropWeight": null,
           "luckAffectsDropRate": true,
           "note": "Arcana XII (Out of Bounds) makes Orologions easier to find."
         },
         {
-          "name": "Vacuum", "id": "vacuum", "sourceIds": ["official-wiki-vacuum"],
+          "name": "Vacuum",
+          "id": "vacuum",
+          "sourceIds": [
+            "official-wiki-vacuum"
+          ],
           "effect": "Pulls all Experience Gems lying on the ground toward the character and collects them.",
           "durationSeconds": null,
-          "levelRequirement": 12, "dropSource": "light source", "dropWeight": null,
+          "levelRequirement": 12,
+          "dropSource": "light source",
+          "dropWeight": null,
           "luckAffectsDropRate": true
         },
         {
-          "name": "Nduja Fritta Tanto", "id": "nduja_fritta_tanto", "sourceIds": ["official-wiki-nduja"],
+          "name": "Nduja Fritta Tanto",
+          "id": "nduja_fritta_tanto",
+          "sourceIds": [
+            "official-wiki-nduja"
+          ],
           "effect": "The character breathes fire in the direction they are facing for 10 seconds.",
           "durationSeconds": 10,
-          "levelRequirement": null, "dropSource": "light source", "dropWeight": null,
+          "levelRequirement": null,
+          "dropSource": "light source",
+          "dropWeight": null,
           "luckAffectsDropRate": true
         },
         {
-          "name": "Little Clover", "id": "little_clover", "sourceIds": ["official-wiki-little-clover"],
+          "name": "Little Clover",
+          "id": "little_clover",
+          "sourceIds": [
+            "official-wiki-little-clover"
+          ],
           "effect": "Increases Luck by 10% until the end of the stage.",
-          "luckBonus": 0.10, "durationSeconds": null, "lastsUntilEndOfStage": true,
-          "levelRequirement": null, "dropSource": "light source", "dropWeight": null,
+          "luckBonus": 0.1,
+          "durationSeconds": null,
+          "lastsUntilEndOfStage": true,
+          "levelRequirement": null,
+          "dropSource": "light source",
+          "dropWeight": null,
           "luckAffectsDropRate": true,
           "note": "Described as the second-rarest light-source drop."
         }
       ]
     },
     "lightSources": {
-      "sourceIds": ["official-wiki-light-source", "official-wiki-luck", "fandom-luck"],
+      "sourceIds": [
+        "game-data-v1.16",
+        "official-wiki-light-source"
+      ],
       "description": "Destructible props (braziers/lamps) that spawn randomly on the stage and drop exactly one pickup when destroyed.",
       "dropsPerDestruction": 1,
       "mostCommonDrop": "gold_coin",
-      "dropTable": null,
-      "baseSpawnChance": null,
-      "maxConcurrentPerStage": null,
+      "dropTable": [
+        {
+          "id": "coin",
+          "dataKey": "COIN",
+          "name": "Gold Coin",
+          "rarityWeight": 50,
+          "unlocksAtCharacterLevel": 0,
+          "value": 1,
+          "isRare": false,
+          "luckMultipliesWeight": false,
+          "sealable": false,
+          "appearsInTreasureChests": false,
+          "goldFeverMs": 500,
+          "contentGroup": "BASE",
+          "requiresArcana": null,
+          "requiresItem": null,
+          "inGameDescription": "Adds 1 to your Gold coins total.",
+          "sourceIds": [
+            "game-data-v1.16"
+          ],
+          "baseShareAtZeroLuck": 0.621118
+        },
+        {
+          "id": "roast",
+          "dataKey": "ROAST",
+          "name": "Floor Chicken",
+          "rarityWeight": 12,
+          "unlocksAtCharacterLevel": 0,
+          "value": 30,
+          "isRare": true,
+          "luckMultipliesWeight": true,
+          "sealable": true,
+          "appearsInTreasureChests": true,
+          "goldFeverMs": null,
+          "contentGroup": "BASE",
+          "requiresArcana": null,
+          "requiresItem": null,
+          "inGameDescription": "Restores 30 Health points.",
+          "sourceIds": [
+            "game-data-v1.16"
+          ],
+          "baseShareAtZeroLuck": 0.149068
+        },
+        {
+          "id": "coinbag1",
+          "dataKey": "COINBAG1",
+          "name": "Coin Bag",
+          "rarityWeight": 10,
+          "unlocksAtCharacterLevel": 0,
+          "value": 10,
+          "isRare": false,
+          "luckMultipliesWeight": false,
+          "sealable": false,
+          "appearsInTreasureChests": false,
+          "goldFeverMs": 5000,
+          "contentGroup": "BASE",
+          "requiresArcana": null,
+          "requiresItem": null,
+          "inGameDescription": "Adds 10 to your Gold coins total.",
+          "sourceIds": [
+            "game-data-v1.16"
+          ],
+          "baseShareAtZeroLuck": 0.124224
+        },
+        {
+          "id": "orologion",
+          "dataKey": "OROLOGION",
+          "name": "Orologion",
+          "rarityWeight": 2,
+          "unlocksAtCharacterLevel": 4,
+          "value": 50,
+          "isRare": true,
+          "luckMultipliesWeight": true,
+          "sealable": true,
+          "appearsInTreasureChests": true,
+          "goldFeverMs": null,
+          "contentGroup": "BASE",
+          "requiresArcana": null,
+          "requiresItem": null,
+          "inGameDescription": "Freezes all enemies in time for 10 seconds.",
+          "sourceIds": [
+            "game-data-v1.16"
+          ],
+          "baseShareAtZeroLuck": 0.024845
+        },
+        {
+          "id": "vacuum",
+          "dataKey": "VACUUM",
+          "name": "Vacuum",
+          "rarityWeight": 2,
+          "unlocksAtCharacterLevel": 12,
+          "value": 500,
+          "isRare": true,
+          "luckMultipliesWeight": true,
+          "sealable": true,
+          "appearsInTreasureChests": true,
+          "goldFeverMs": null,
+          "contentGroup": "BASE",
+          "requiresArcana": null,
+          "requiresItem": null,
+          "inGameDescription": "Gathers all Experience gems left on the ground.",
+          "sourceIds": [
+            "game-data-v1.16"
+          ],
+          "baseShareAtZeroLuck": 0.024845
+        },
+        {
+          "id": "coinbagmax",
+          "dataKey": "COINBAGMAX",
+          "name": "Rich Coin Bag",
+          "rarityWeight": 1,
+          "unlocksAtCharacterLevel": 5,
+          "value": 100,
+          "isRare": true,
+          "luckMultipliesWeight": true,
+          "sealable": false,
+          "appearsInTreasureChests": true,
+          "goldFeverMs": 10000,
+          "contentGroup": "BASE",
+          "requiresArcana": null,
+          "requiresItem": null,
+          "inGameDescription": "Adds 100 to your Gold coins total.",
+          "sourceIds": [
+            "game-data-v1.16"
+          ],
+          "baseShareAtZeroLuck": 0.012422
+        },
+        {
+          "id": "rosary",
+          "dataKey": "ROSARY",
+          "name": "Rosary",
+          "rarityWeight": 1,
+          "unlocksAtCharacterLevel": 8,
+          "value": 500,
+          "isRare": true,
+          "luckMultipliesWeight": true,
+          "sealable": true,
+          "appearsInTreasureChests": true,
+          "goldFeverMs": null,
+          "contentGroup": "BASE",
+          "requiresArcana": null,
+          "requiresItem": null,
+          "inGameDescription": "Destroys all enemies in sight.",
+          "sourceIds": [
+            "game-data-v1.16"
+          ],
+          "baseShareAtZeroLuck": 0.012422
+        },
+        {
+          "id": "nft",
+          "dataKey": "NFT",
+          "name": "Nduja Fritta",
+          "rarityWeight": 1,
+          "unlocksAtCharacterLevel": 0,
+          "value": 300,
+          "isRare": true,
+          "luckMultipliesWeight": true,
+          "sealable": true,
+          "appearsInTreasureChests": true,
+          "goldFeverMs": null,
+          "contentGroup": "BASE",
+          "requiresArcana": null,
+          "requiresItem": null,
+          "inGameDescription": "Temporarily emits cones of flames. Affected by player stats.",
+          "sourceIds": [
+            "game-data-v1.16"
+          ],
+          "baseShareAtZeroLuck": 0.012422
+        },
+        {
+          "id": "clover",
+          "dataKey": "CLOVER",
+          "name": "Little Clover",
+          "rarityWeight": 0.5,
+          "unlocksAtCharacterLevel": 0,
+          "value": 0.1,
+          "isRare": false,
+          "luckMultipliesWeight": false,
+          "sealable": true,
+          "appearsInTreasureChests": false,
+          "goldFeverMs": null,
+          "contentGroup": "BASE",
+          "requiresArcana": null,
+          "requiresItem": null,
+          "inGameDescription": "Pick up to get 10% luckier.",
+          "sourceIds": [
+            "game-data-v1.16"
+          ],
+          "baseShareAtZeroLuck": 0.006211
+        },
+        {
+          "id": "gilded",
+          "dataKey": "GILDED",
+          "name": "Gilded Clover",
+          "rarityWeight": 1,
+          "unlocksAtCharacterLevel": 30,
+          "value": 1000,
+          "isRare": false,
+          "luckMultipliesWeight": false,
+          "sealable": true,
+          "appearsInTreasureChests": false,
+          "goldFeverMs": null,
+          "contentGroup": "BASE",
+          "requiresArcana": null,
+          "requiresItem": null,
+          "inGameDescription": "Gathers all Gold left on the ground and starts a Gold Fever.",
+          "sourceIds": [
+            "game-data-v1.16"
+          ],
+          "baseShareAtZeroLuck": 0.012422
+        },
+        {
+          "id": "sorbetto",
+          "dataKey": "SORBETTO",
+          "name": "Sorbetto",
+          "rarityWeight": 1,
+          "unlocksAtCharacterLevel": 0,
+          "value": 300,
+          "isRare": true,
+          "luckMultipliesWeight": true,
+          "sealable": true,
+          "appearsInTreasureChests": true,
+          "goldFeverMs": null,
+          "contentGroup": "EXTRA",
+          "requiresArcana": "T12_OUT_OF_TIME",
+          "requiresItem": null,
+          "inGameDescription": "Temporarily emits cones of cold. Affected by player stats.",
+          "sourceIds": [
+            "game-data-v1.16"
+          ],
+          "baseShareAtZeroLuck": null
+        },
+        {
+          "id": "pickup_reroll_dice",
+          "dataKey": "PICKUP_REROLL_DICE",
+          "name": "Rerollo",
+          "rarityWeight": 1,
+          "unlocksAtCharacterLevel": 0,
+          "value": 1,
+          "isRare": false,
+          "luckMultipliesWeight": false,
+          "sealable": true,
+          "appearsInTreasureChests": false,
+          "goldFeverMs": null,
+          "contentGroup": "EXTRA",
+          "requiresArcana": null,
+          "requiresItem": null,
+          "inGameDescription": "Pick up to get +1 Reroll.",
+          "sourceIds": [
+            "game-data-v1.16"
+          ],
+          "baseShareAtZeroLuck": null
+        },
+        {
+          "id": "goldfinger",
+          "dataKey": "GOLDFINGER",
+          "name": "Gold Finger",
+          "rarityWeight": 0.02,
+          "unlocksAtCharacterLevel": 30,
+          "value": 1000,
+          "isRare": false,
+          "luckMultipliesWeight": false,
+          "sealable": true,
+          "appearsInTreasureChests": false,
+          "goldFeverMs": null,
+          "contentGroup": "EXTRA",
+          "requiresArcana": null,
+          "requiresItem": "RELIC_TRISECTION",
+          "inGameDescription": "Gives temporary invulnerability, bonus Charm, and minimum Cooldown. Defeat as many enemies as possible to win a prize.",
+          "sourceIds": [
+            "game-data-v1.16"
+          ],
+          "baseShareAtZeroLuck": null
+        }
+      ],
+      "baseSpawnChance": "see perStageSpawnConfig",
+      "maxConcurrentPerStage": "see perStageSpawnConfig",
       "totalPerStage": null,
       "luckRules": {
         "increasesSpawnRate": true,
         "increasesRarePickupChance": true,
         "mechanism": "Luck multiplies the weight ('rarity') of every pickup in the light-source pool EXCEPT Gold Coin and Coin Bag, so it shifts the distribution toward rare drops.",
-        "spawnCapCaveat": "While the maximum number of light sources is already on the map, spawn attempts are no longer influenced by Luck, so they spawn less often."
+        "spawnCapCaveat": "While the maximum number of light sources is already on the map, spawn attempts are no longer influenced by Luck, so they spawn less often.",
+        "shippedDataMechanism": "Item.json flags entries with isRare:true; these are exactly the ones whose tooltip reads 'Drop rate affected by Luck.' Luck multiplies the weight of isRare entries only.",
+        "isRareEntries": [
+          "ROAST",
+          "OROLOGION",
+          "VACUUM",
+          "COINBAGMAX",
+          "ROSARY",
+          "NFT",
+          "SORBETTO"
+        ]
       },
-      "stageNotes": "Most DLC stages, and Capella Magna, have a higher maximum light-source count than standard base-game stages. Exact per-stage numbers not retrieved."
+      "stageNotes": "Most DLC stages, and Capella Magna, have a higher maximum light-source count than standard base-game stages. Exact per-stage numbers not retrieved.",
+      "dropTableNotes": "'rarityWeight' is the raw weight from Item.json. A destroyed light source picks ONE entry weighted by rarityWeight, restricted to entries whose unlocksAtCharacterLevel the player has reached (and whose requiresArcana/requiresItem conditions are met). 'baseShareAtZeroLuck' is weight / total-BASE-weight assuming every base entry is eligible and Luck is at base - it is a derived convenience value, not a shipped number, and the real share is higher for early-game pickups because level-gated entries are absent from the pool.",
+      "totalBaseWeightAllUnlocked": 80.5,
+      "propTypes": {
+        "sourceIds": [
+          "game-data-v1.16"
+        ],
+        "note": "Props.json lists the destructible art/HP definitions only; it carries no drop table.",
+        "types": [
+          {
+            "key": "BRAZIER",
+            "maxHp": 1,
+            "destructibleType": "BRAZIER"
+          },
+          {
+            "key": "BRAZIER2",
+            "maxHp": 1,
+            "destructibleType": "BRAZIER"
+          },
+          {
+            "key": "CANDELABRA",
+            "maxHp": 1,
+            "destructibleType": "CANDELABRA"
+          },
+          {
+            "key": "LAMPOST",
+            "maxHp": 1,
+            "destructibleType": "LAMPOST"
+          },
+          {
+            "key": "CANDLE",
+            "maxHp": 1,
+            "destructibleType": "CANDLE"
+          },
+          {
+            "key": "CART",
+            "maxHp": 4,
+            "destructibleType": "CART"
+          },
+          {
+            "key": "WINDOW",
+            "maxHp": 5,
+            "destructibleType": "WINDOW"
+          },
+          {
+            "key": "LANTERN",
+            "maxHp": 1,
+            "destructibleType": "LANTERN"
+          },
+          {
+            "key": "LANTERN_INVERSE",
+            "maxHp": 1,
+            "destructibleType": "LANTERN_INVERSE"
+          },
+          {
+            "key": "WEATHERNODE",
+            "maxHp": 1,
+            "destructibleType": "WEATHERNODE"
+          },
+          {
+            "key": "TRAINLEVER",
+            "maxHp": 999,
+            "destructibleType": "TRAINLEVER"
+          },
+          {
+            "key": "LABORATORYLEVER2",
+            "maxHp": 999,
+            "destructibleType": "LABORATORYLEVER2"
+          }
+        ]
+      },
+      "perStageSpawnConfig": {
+        "sourceIds": [
+          "game-data-v1.16"
+        ],
+        "fields": {
+          "destructibleType": "which prop art/type spawns",
+          "destructibleFreq": "spawn attempt interval in milliseconds",
+          "destructibleChance": "starting spawn chance per attempt (percent)",
+          "destructibleChanceMax": "maximum spawn chance per attempt (percent)",
+          "maxDestructibles": "maximum light sources alive on the map at once"
+        },
+        "stages": [
+          {
+            "stageKey": "FOREST",
+            "stageName": "Mad Forest",
+            "destructibleType": "BRAZIER",
+            "destructibleFreqMs": 1000,
+            "destructibleChance": 10,
+            "destructibleChanceMax": 50,
+            "maxDestructibles": 10
+          },
+          {
+            "stageKey": "LIBRARY",
+            "stageName": "Inlaid Library",
+            "destructibleType": "CANDELABRA",
+            "destructibleFreqMs": 1000,
+            "destructibleChance": 7.5,
+            "destructibleChanceMax": 50,
+            "maxDestructibles": 10
+          },
+          {
+            "stageKey": "WAREHOUSE",
+            "stageName": "Dairy Plant",
+            "destructibleType": "LAMPOST",
+            "destructibleFreqMs": 1000,
+            "destructibleChance": 20,
+            "destructibleChanceMax": 60,
+            "maxDestructibles": 12
+          },
+          {
+            "stageKey": "TOWER",
+            "stageName": "Gallo Tower",
+            "destructibleType": "CANDELABRA",
+            "destructibleFreqMs": 1000,
+            "destructibleChance": 7.5,
+            "destructibleChanceMax": 50,
+            "maxDestructibles": 10
+          },
+          {
+            "stageKey": "CHAPEL",
+            "stageName": "Cappella Magna",
+            "destructibleType": "CANDELABRA",
+            "destructibleFreqMs": 1000,
+            "destructibleChance": 20,
+            "destructibleChanceMax": 80,
+            "maxDestructibles": 20
+          },
+          {
+            "stageKey": "MOLISE",
+            "stageName": "Il Molise",
+            "destructibleType": "BRAZIER2",
+            "destructibleFreqMs": 1000,
+            "destructibleChance": 30,
+            "destructibleChanceMax": 60,
+            "maxDestructibles": 10
+          },
+          {
+            "stageKey": "SINKING",
+            "stageName": "Moongolow",
+            "destructibleType": "BRAZIER2",
+            "destructibleFreqMs": 1000,
+            "destructibleChance": 30,
+            "destructibleChanceMax": 60,
+            "maxDestructibles": 10
+          },
+          {
+            "stageKey": "GREENACRES",
+            "stageName": "Green Acres",
+            "destructibleType": "BRAZIER2",
+            "destructibleFreqMs": 1000,
+            "destructibleChance": 10,
+            "destructibleChanceMax": 50,
+            "maxDestructibles": 10
+          }
+        ]
+      }
     },
     "treasureChests": {
-      "sourceIds": ["official-wiki-treasure-chest", "fandom-treasure-chest", "official-wiki-luck"],
-      "levels": [
-        {"level": 1, "items": 1, "goldMin": 100, "goldMax": 200},
-        {"level": 2, "items": 3, "goldMin": 300, "goldMax": 600},
-        {"level": 3, "items": 5, "goldMin": 500, "goldMax": 1000}
+      "sourceIds": [
+        "official-wiki-treasure-chest",
+        "fandom-treasure-chest",
+        "official-wiki-luck"
       ],
-      "goldRewardAlternate": {"min": 60, "max": 500, "note": "conflicting source; see conflicts"},
+      "levels": [
+        {
+          "level": 1,
+          "items": 1,
+          "goldMin": 100,
+          "goldMax": 200
+        },
+        {
+          "level": 2,
+          "items": 3,
+          "goldMin": 300,
+          "goldMax": 600
+        },
+        {
+          "level": 3,
+          "items": 5,
+          "goldMin": 500,
+          "goldMax": 1000
+        }
+      ],
+      "goldRewardAlternate": {
+        "min": 60,
+        "max": 500,
+        "note": "conflicting source; see conflicts"
+      },
       "rollOrder": "The game checks each treasure level starting from level 3 (5 items), falling through to level 2 (3 items), then level 1 (1 item). If all checks fail, the chest's base level is used.",
       "luckFormula": {
         "expression": "successChance = levelChance * totalLuck",
@@ -194,14 +873,21 @@
       },
       "exampleBaseOdds": {
         "enemy": "Silver Bat (first one in Mad Forest at 9:00)",
-        "sourceIds": ["official-wiki-treasure-chest"],
+        "sourceIds": [
+          "official-wiki-treasure-chest"
+        ],
         "fiveItemChance": 0.03,
-        "threeItemChance": 0.10,
-        "oneItemChance": 0.50,
+        "threeItemChance": 0.1,
+        "oneItemChance": 0.5,
         "note": "Rolled in that order; each roll is multiplied by totalLuck."
       },
       "rollTiming": "Chest contents/level are determined when the chest is OPENED, not when it drops. Leaving chests on the ground until Luck is higher works.",
-      "contents": ["weapons", "passive items", "gold coins", "evolutions/unions (when requirements met)"],
+      "contents": [
+        "weapons",
+        "passive items",
+        "gold coins",
+        "evolutions/unions (when requirements met)"
+      ],
       "evolutionRules": {
         "minimumRunTimeSeconds": 600,
         "note": "When evolution/union requirements are met and the run is at 10:00 or later, chests can evolve or unite a weapon. Generally only one weapon evolves per chest, including higher-tier chests, though some chests contain multiple evolutions."
@@ -209,7 +895,11 @@
       "fallbackReward": "If nothing in the player's inventory can be upgraded, chests award extra coins instead."
     },
     "goldEconomy": {
-      "sourceIds": ["official-wiki-gold-currency", "official-wiki-greed", "official-wiki-gold-farming"],
+      "sourceIds": [
+        "official-wiki-gold-currency",
+        "official-wiki-greed",
+        "official-wiki-gold-farming"
+      ],
       "inRunSources": [
         "Gold Coin pickups from light sources (1 gold x Greed)",
         "Coin Bag from light sources (10 gold x Greed)",
@@ -224,26 +914,32 @@
         "stacking": "Character bonuses, PowerUps and items stack ADDITIVELY into the Greed total. Stage-level gold bonuses stack MULTIPLICATIVELY with that collective total.",
         "cap": null,
         "maxKnownCombo": {
-          "stoneMaskLevel5": 0.50,
-          "greedPowerUps": 0.50,
+          "stoneMaskLevel5": 0.5,
+          "greedPowerUps": 0.5,
           "subtotalMultiplier": 2.0,
           "stageMultiplier": 2.0,
           "note": "The Bone Zone in Hyper mode doubles overall gold gain; combined with +100% Greed this gives 4x base gold.",
-          "sourceIds": ["official-wiki-gold-farming"]
+          "sourceIds": [
+            "official-wiki-gold-farming"
+          ]
         }
       },
       "endOfRunPayout": {
         "completionBonus": 500,
         "perUnusedRevival": 100,
         "note": "Stated as an additional reward on death/run end after completing the stage, +100 per revival left unused. Gold gathered in-run persists to the account whether the run ends in death or completion. Whether the 500 applies to all base-game stages or only to stage completion specifically was not verifiable.",
-        "sourceIds": ["official-wiki-gold-currency"],
+        "sourceIds": [
+          "official-wiki-gold-currency"
+        ],
         "formula": null
       }
     },
     "powerUpShop": {
-      "sourceIds": ["official-wiki-powerups", "official-wiki-powerup-cost-calc", "fandom-powerups"],
-      "powerUpCount": 27,
-      "powerUpCountNote": "27 per the official wiki (including the separate Seal PowerUps); Fandom states 24. See conflicts.",
+      "sourceIds": [
+        "game-data-v1.16"
+      ],
+      "powerUpCount": 29,
+      "powerUpCountNote": "29 distinct PowerUp entries in shipped data v1.16 (counting Seal I-IV separately). Official wiki says 27, Fandom says 24 - those are older game versions and/or exclude the four Seals and the later-update additions (Omni, Charm, Defang, Recycle, Antipiretic, Invul Time). A strict launch-era base game is a smaller set; the scope flag is kept deliberately.",
       "costFormula": {
         "expression": "price = (totalBought == 0) ? initialPrice : initialPrice * (1 + bought) + floor(20 * 1.1^totalBought)",
         "variables": {
@@ -255,39 +951,727 @@
         "feeRule": "The fee term floor(20 * 1.1^totalBought) is a GLOBAL fee driven by the total number of ranks bought across all PowerUps. No fee is applied while totalBought == 0. Since v0.7.2 (9 June 2022) fees are additive, so purchase order no longer affects the total.",
         "orderMatters": false
       },
-      "totalCostToMaxAll": 27148513,
-      "totalCostBreakdown": {"base": 2469640, "fees": 24678873},
-      "totalCostAlternate": {"total": 7818959, "base": 1911240, "fees": 5907719, "note": "older/Fandom figure; see conflicts"},
-      "perRankCostTable": null,
-      "perRankCostTableNote": "Cannot be produced without every PowerUp's initialPrice and maxRank plus a fixed purchase order for the global fee term. The formula above reproduces it exactly once those inputs are known.",
+      "totalCostToMaxAll": 31223734,
+      "totalCostBreakdown": {
+        "base": 1362240,
+        "fees": 29861494
+      },
       "disableRule": "After maxing a PowerUp the player may disable it, except for Rerolls, Skips, Banishes and Seals.",
       "powerUps": [
-        {"name": "Might", "id": "might", "stat": "might", "effectPerRank": {"mightBonus": 0.05}, "maxRank": 5, "atMaxRank": {"mightBonus": 0.25}, "initialPrice": 200, "sourceIds": ["official-wiki-powerups"]},
-        {"name": "Armor", "id": "armor", "stat": "armor", "effectPerRank": null, "maxRank": 3, "atMaxRank": null, "initialPrice": 600, "sourceIds": ["official-wiki-powerups"]},
-        {"name": "Max Health", "id": "max_health", "stat": "maxHealth", "effectPerRank": {"maxHealthMultiplier": 1.1}, "maxRank": 3, "atMaxRank": {"maxHealthMultiplier": 1.331}, "initialPrice": 200, "multiplicative": true, "sourceIds": ["official-wiki-powerups"]},
-        {"name": "Recovery", "id": "recovery", "stat": "recovery", "effectPerRank": {"recovery": 0.1}, "maxRank": 5, "atMaxRank": {"recovery": 0.5}, "initialPrice": null, "sourceIds": ["official-wiki-powerups"]},
-        {"name": "Cooldown", "id": "cooldown", "stat": "cooldown", "effectPerRank": {"cooldownBonus": -0.025}, "maxRank": 2, "atMaxRank": {"cooldownBonus": -0.05}, "initialPrice": 900, "sourceIds": ["official-wiki-powerups"]},
-        {"name": "Area", "id": "area", "stat": "area", "effectPerRank": null, "maxRank": null, "atMaxRank": null, "initialPrice": null, "sourceIds": ["official-wiki-powerups"]},
-        {"name": "Speed", "id": "speed", "stat": "speed", "effectPerRank": null, "maxRank": null, "atMaxRank": null, "initialPrice": null, "sourceIds": ["official-wiki-powerups"]},
-        {"name": "Duration", "id": "duration", "stat": "duration", "effectPerRank": {"durationBonus": 0.15}, "maxRank": 2, "atMaxRank": {"durationBonus": 0.30}, "initialPrice": null, "sourceIds": ["official-wiki-powerups"]},
-        {"name": "Amount", "id": "amount", "stat": "amount", "effectPerRank": null, "maxRank": 1, "atMaxRank": null, "initialPrice": 5000, "sourceIds": ["official-wiki-powerups"]},
-        {"name": "Move Speed", "id": "move_speed", "stat": "moveSpeed", "effectPerRank": null, "maxRank": null, "atMaxRank": null, "initialPrice": null, "sourceIds": ["official-wiki-powerups"]},
-        {"name": "Magnet", "id": "magnet", "stat": "magnet", "effectPerRank": {"magnetMultiplier": 1.25}, "maxRank": 2, "atMaxRank": {"magnetMultiplier": 1.5625}, "initialPrice": null, "multiplicative": true, "sourceIds": ["official-wiki-powerups"]},
-        {"name": "Luck", "id": "luck", "stat": "luck", "effectPerRank": null, "maxRank": null, "atMaxRank": null, "initialPrice": null, "sourceIds": ["official-wiki-powerups"]},
-        {"name": "Growth", "id": "growth", "stat": "growth", "effectPerRank": {"growthBonus": 0.03}, "maxRank": 5, "atMaxRank": {"growthBonus": 0.15}, "initialPrice": 900, "sourceIds": ["official-wiki-powerups"]},
-        {"name": "Greed", "id": "greed", "stat": "greed", "effectPerRank": null, "maxRank": null, "atMaxRank": {"greedBonus": 0.50}, "initialPrice": null, "sourceIds": ["official-wiki-powerups", "official-wiki-gold-farming"], "note": "Greed PowerUps total +50% at max per the gold-farming guide; per-rank split not retrieved."},
-        {"name": "Curse", "id": "curse", "stat": "curse", "effectPerRank": {"curseBonus": 0.10}, "maxRank": 5, "atMaxRank": {"curseBonus": 0.50}, "initialPrice": null, "sourceIds": ["official-wiki-powerups"]},
-        {"name": "Revival", "id": "revival", "stat": "revival", "effectPerRank": null, "maxRank": 1, "atMaxRank": null, "initialPrice": 10000, "sourceIds": ["official-wiki-powerups"]},
-        {"name": "Omni", "id": "omni", "stat": null, "effectPerRank": {"mightBonus": 0.02, "speedBonus": 0.02, "durationBonus": 0.02, "areaBonus": 0.02}, "maxRank": 5, "atMaxRank": {"mightBonus": 0.10, "speedBonus": 0.10, "durationBonus": 0.10, "areaBonus": 0.10}, "initialPrice": null, "sourceIds": ["official-wiki-powerups"]},
-        {"name": "Reroll", "id": "reroll", "stat": null, "effectPerRank": null, "maxRank": null, "atMaxRank": null, "initialPrice": null, "sourceIds": ["official-wiki-powerups"], "note": "Cannot be disabled after maxing."},
-        {"name": "Skip", "id": "skip", "stat": null, "effectPerRank": null, "maxRank": null, "atMaxRank": null, "initialPrice": null, "sourceIds": ["official-wiki-powerups"], "note": "Cannot be disabled after maxing."},
-        {"name": "Banish", "id": "banish", "stat": null, "effectPerRank": null, "maxRank": null, "atMaxRank": null, "initialPrice": null, "sourceIds": ["official-wiki-powerups"], "note": "Cannot be disabled after maxing."},
-        {"name": "Charm", "id": "charm", "stat": null, "effectPerRank": null, "maxRank": null, "atMaxRank": null, "initialPrice": null, "sourceIds": ["official-wiki-powerups"]},
-        {"name": "Seal", "id": "seal", "stat": null, "effectPerRank": null, "maxRank": null, "atMaxRank": null, "initialPrice": null, "sourceIds": ["official-wiki-powerups"], "note": "Counted as several separate Seal PowerUps in the wiki's 27 total. Cannot be disabled after maxing."}
-      ]
+        {
+          "name": "Might",
+          "id": "power",
+          "dataKey": "POWER",
+          "initialPrice": 200,
+          "maxRank": 5,
+          "unlockedRankField": 5,
+          "isAnUnlockable": false,
+          "effectPerRank": {
+            "mightBonus": 0.05
+          },
+          "inGameDescription": "Raises inflicted Damage by 5% per rank (max +25%).",
+          "baseCostPerRank": [
+            200,
+            400,
+            600,
+            800,
+            1000
+          ],
+          "baseCostTotal": 3000,
+          "sourceIds": [
+            "game-data-v1.16"
+          ]
+        },
+        {
+          "name": "Armor",
+          "id": "armor",
+          "dataKey": "ARMOR",
+          "initialPrice": 600,
+          "maxRank": 3,
+          "unlockedRankField": 3,
+          "isAnUnlockable": false,
+          "effectPerRank": {
+            "armor": 1
+          },
+          "inGameDescription": "Reduces incoming Damage by 1 per rank (max -3).",
+          "baseCostPerRank": [
+            600,
+            1200,
+            1800
+          ],
+          "baseCostTotal": 3600,
+          "sourceIds": [
+            "game-data-v1.16"
+          ]
+        },
+        {
+          "name": "Max Health",
+          "id": "maxhealth",
+          "dataKey": "MAXHEALTH",
+          "initialPrice": 200,
+          "maxRank": 3,
+          "unlockedRankField": 3,
+          "isAnUnlockable": false,
+          "effectPerRank": {
+            "maxHealthBonus": 0.1
+          },
+          "inGameDescription": "Augments Max Health by 10% per rank (max +30%).",
+          "baseCostPerRank": [
+            200,
+            400,
+            600
+          ],
+          "baseCostTotal": 1200,
+          "sourceIds": [
+            "game-data-v1.16"
+          ]
+        },
+        {
+          "name": "Recovery",
+          "id": "regen",
+          "dataKey": "REGEN",
+          "initialPrice": 200,
+          "maxRank": 5,
+          "unlockedRankField": 5,
+          "isAnUnlockable": false,
+          "effectPerRank": {
+            "recovery": 0.1
+          },
+          "inGameDescription": "Recovers 0.1 HP per rank (max 0.5) per second.",
+          "baseCostPerRank": [
+            200,
+            400,
+            600,
+            800,
+            1000
+          ],
+          "baseCostTotal": 3000,
+          "sourceIds": [
+            "game-data-v1.16"
+          ]
+        },
+        {
+          "name": "Cooldown",
+          "id": "cooldown",
+          "dataKey": "COOLDOWN",
+          "initialPrice": 900,
+          "maxRank": 2,
+          "unlockedRankField": 2,
+          "isAnUnlockable": false,
+          "effectPerRank": {
+            "cooldownBonus": -0.025
+          },
+          "inGameDescription": "Uses weapons 2.5% faster per rank (max 5%).",
+          "baseCostPerRank": [
+            900,
+            1800
+          ],
+          "baseCostTotal": 2700,
+          "sourceIds": [
+            "game-data-v1.16"
+          ]
+        },
+        {
+          "name": "Area",
+          "id": "area",
+          "dataKey": "AREA",
+          "initialPrice": 300,
+          "maxRank": 2,
+          "unlockedRankField": 2,
+          "isAnUnlockable": false,
+          "effectPerRank": {
+            "areaBonus": 0.05
+          },
+          "inGameDescription": "Augments area of attacks by 5% per rank (max +10%).",
+          "baseCostPerRank": [
+            300,
+            600
+          ],
+          "baseCostTotal": 900,
+          "sourceIds": [
+            "game-data-v1.16"
+          ]
+        },
+        {
+          "name": "Speed",
+          "id": "speed",
+          "dataKey": "SPEED",
+          "initialPrice": 300,
+          "maxRank": 2,
+          "unlockedRankField": 2,
+          "isAnUnlockable": false,
+          "effectPerRank": {
+            "speedBonus": 0.1
+          },
+          "inGameDescription": "Projectiles move 10% faster per rank (max 20%).",
+          "baseCostPerRank": [
+            300,
+            600
+          ],
+          "baseCostTotal": 900,
+          "sourceIds": [
+            "game-data-v1.16"
+          ]
+        },
+        {
+          "name": "Duration",
+          "id": "duration",
+          "dataKey": "DURATION",
+          "initialPrice": 300,
+          "maxRank": 2,
+          "unlockedRankField": 2,
+          "isAnUnlockable": false,
+          "effectPerRank": {
+            "durationBonus": 0.15
+          },
+          "inGameDescription": "Effects from weapons last 15% longer per rank (max +30%).",
+          "baseCostPerRank": [
+            300,
+            600
+          ],
+          "baseCostTotal": 900,
+          "sourceIds": [
+            "game-data-v1.16"
+          ]
+        },
+        {
+          "name": "Amount",
+          "id": "amount",
+          "dataKey": "AMOUNT",
+          "initialPrice": 5000,
+          "maxRank": 1,
+          "unlockedRankField": 1,
+          "isAnUnlockable": false,
+          "effectPerRank": {
+            "amount": 1
+          },
+          "inGameDescription": "Fires 1 more projectile (all weapons).",
+          "baseCostPerRank": [
+            5000
+          ],
+          "baseCostTotal": 5000,
+          "sourceIds": [
+            "game-data-v1.16"
+          ]
+        },
+        {
+          "name": "Move Speed",
+          "id": "movespeed",
+          "dataKey": "MOVESPEED",
+          "initialPrice": 300,
+          "maxRank": 2,
+          "unlockedRankField": 2,
+          "isAnUnlockable": false,
+          "effectPerRank": {
+            "moveSpeedBonus": 0.05
+          },
+          "inGameDescription": "Character moves 5% faster per rank (max 10%).",
+          "baseCostPerRank": [
+            300,
+            600
+          ],
+          "baseCostTotal": 900,
+          "sourceIds": [
+            "game-data-v1.16"
+          ]
+        },
+        {
+          "name": "Magnet",
+          "id": "magnet",
+          "dataKey": "MAGNET",
+          "initialPrice": 300,
+          "maxRank": 2,
+          "unlockedRankField": 2,
+          "isAnUnlockable": false,
+          "effectPerRank": {
+            "magnetBonus": 0.25
+          },
+          "inGameDescription": "Items Pickup range +25% per rank (max +50%).",
+          "baseCostPerRank": [
+            300,
+            600
+          ],
+          "baseCostTotal": 900,
+          "sourceIds": [
+            "game-data-v1.16"
+          ]
+        },
+        {
+          "name": "Luck",
+          "id": "luck",
+          "dataKey": "LUCK",
+          "initialPrice": 600,
+          "maxRank": 3,
+          "unlockedRankField": 3,
+          "isAnUnlockable": false,
+          "effectPerRank": {
+            "luckBonus": 0.1
+          },
+          "inGameDescription": "Chance to get lucky goes up by 10% per rank (max +30%).",
+          "baseCostPerRank": [
+            600,
+            1200,
+            1800
+          ],
+          "baseCostTotal": 3600,
+          "sourceIds": [
+            "game-data-v1.16"
+          ]
+        },
+        {
+          "name": "Growth",
+          "id": "growth",
+          "dataKey": "GROWTH",
+          "initialPrice": 900,
+          "maxRank": 5,
+          "unlockedRankField": 5,
+          "isAnUnlockable": false,
+          "effectPerRank": {
+            "growthBonus": 0.03
+          },
+          "inGameDescription": "Gains 3% more experience per rank (max 15%).",
+          "baseCostPerRank": [
+            900,
+            1800,
+            2700,
+            3600,
+            4500
+          ],
+          "baseCostTotal": 13500,
+          "sourceIds": [
+            "game-data-v1.16"
+          ]
+        },
+        {
+          "name": "Greed",
+          "id": "greed",
+          "dataKey": "GREED",
+          "initialPrice": 200,
+          "maxRank": 5,
+          "unlockedRankField": 5,
+          "isAnUnlockable": false,
+          "effectPerRank": {
+            "greedBonus": 0.1
+          },
+          "inGameDescription": "Gains 10% more Gold per rank (max +50%).",
+          "baseCostPerRank": [
+            200,
+            400,
+            600,
+            800,
+            1000
+          ],
+          "baseCostTotal": 3000,
+          "sourceIds": [
+            "game-data-v1.16"
+          ]
+        },
+        {
+          "name": "Curse",
+          "id": "curse",
+          "dataKey": "CURSE",
+          "initialPrice": 1666,
+          "maxRank": 5,
+          "unlockedRankField": 5,
+          "isAnUnlockable": false,
+          "effectPerRank": {
+            "curseBonus": 0.1
+          },
+          "inGameDescription": "Increases enemy speed, health, quantity, and frequency by 10% per rank (max +50%).",
+          "baseCostPerRank": [
+            1666,
+            3332,
+            4998,
+            6664,
+            8330
+          ],
+          "baseCostTotal": 24990,
+          "sourceIds": [
+            "game-data-v1.16"
+          ]
+        },
+        {
+          "name": "Revival",
+          "id": "revival",
+          "dataKey": "REVIVAL",
+          "initialPrice": 10000,
+          "maxRank": 1,
+          "unlockedRankField": 1,
+          "isAnUnlockable": false,
+          "effectPerRank": {
+            "revival": 1
+          },
+          "inGameDescription": "Revives once with 50% health.",
+          "baseCostPerRank": [
+            10000
+          ],
+          "baseCostTotal": 10000,
+          "sourceIds": [
+            "game-data-v1.16"
+          ]
+        },
+        {
+          "name": "Omni",
+          "id": "pandora",
+          "dataKey": "PANDORA",
+          "initialPrice": 1000,
+          "maxRank": 5,
+          "unlockedRankField": 5,
+          "isAnUnlockable": false,
+          "effectPerRank": {
+            "mightBonus": 0.02,
+            "speedBonus": 0.02,
+            "durationBonus": 0.02,
+            "areaBonus": 0.02
+          },
+          "inGameDescription": "Increases Might, Projectile Speed, Duration, and Area by 2% per rank (max +10%).",
+          "baseCostPerRank": [
+            1000,
+            2000,
+            3000,
+            4000,
+            5000
+          ],
+          "baseCostTotal": 15000,
+          "sourceIds": [
+            "game-data-v1.16"
+          ]
+        },
+        {
+          "name": "Charm",
+          "id": "charm",
+          "dataKey": "CHARM",
+          "initialPrice": 10000,
+          "maxRank": 5,
+          "unlockedRankField": 5,
+          "isAnUnlockable": true,
+          "effectPerRank": {
+            "charm": 20
+          },
+          "inGameDescription": "Increases enemies spawn quantity by 20 per rank (max +100).",
+          "baseCostPerRank": [
+            10000,
+            20000,
+            30000,
+            40000,
+            50000
+          ],
+          "baseCostTotal": 150000,
+          "sourceIds": [
+            "game-data-v1.16"
+          ]
+        },
+        {
+          "name": "Defang",
+          "id": "defang",
+          "dataKey": "DEFANG",
+          "initialPrice": 10,
+          "maxRank": 5,
+          "unlockedRankField": 5,
+          "isAnUnlockable": true,
+          "effectPerRank": {
+            "defang": 0.03
+          },
+          "inGameDescription": "Enemies spawn unable to deal damage 3% of the times per rank (max 15%).",
+          "baseCostPerRank": [
+            10,
+            20,
+            30,
+            40,
+            50
+          ],
+          "baseCostTotal": 150,
+          "sourceIds": [
+            "game-data-v1.16"
+          ]
+        },
+        {
+          "name": "Reroll",
+          "id": "reroll",
+          "dataKey": "REROLL",
+          "initialPrice": 500,
+          "maxRank": 5,
+          "unlockedRankField": 0,
+          "isAnUnlockable": true,
+          "effectPerRank": {
+            "rerolls": 2
+          },
+          "inGameDescription": "Twice per rank, allows you to get different choices when leveling up.",
+          "baseCostPerRank": [
+            500,
+            1000,
+            1500,
+            2000,
+            2500
+          ],
+          "baseCostTotal": 7500,
+          "sourceIds": [
+            "game-data-v1.16"
+          ]
+        },
+        {
+          "name": "Skip",
+          "id": "skip",
+          "dataKey": "SKIP",
+          "initialPrice": 100,
+          "maxRank": 5,
+          "unlockedRankField": 0,
+          "isAnUnlockable": true,
+          "effectPerRank": {
+            "skips": 2
+          },
+          "inGameDescription": "Twice per rank, allows you to skip level up choices and get Experience instead.",
+          "baseCostPerRank": [
+            100,
+            200,
+            300,
+            400,
+            500
+          ],
+          "baseCostTotal": 1500,
+          "sourceIds": [
+            "game-data-v1.16"
+          ]
+        },
+        {
+          "name": "Banish",
+          "id": "banish",
+          "dataKey": "BANISH",
+          "initialPrice": 100,
+          "maxRank": 5,
+          "unlockedRankField": 0,
+          "isAnUnlockable": true,
+          "effectPerRank": {
+            "banish": 2
+          },
+          "inGameDescription": "Twice per rank, allows you to remove an item from level up choices, for the rest of the run.",
+          "baseCostPerRank": [
+            100,
+            200,
+            300,
+            400,
+            500
+          ],
+          "baseCostTotal": 1500,
+          "sourceIds": [
+            "game-data-v1.16"
+          ]
+        },
+        {
+          "name": "Recycle",
+          "id": "recycle",
+          "dataKey": "RECYCLE",
+          "initialPrice": 500,
+          "maxRank": 5,
+          "unlockedRankField": 5,
+          "isAnUnlockable": true,
+          "effectPerRank": {
+            "recycle": 0.1
+          },
+          "inGameDescription": "Reroll, Skip and Banish actions have a 10% chance to be preserved per rank (max 50%).",
+          "baseCostPerRank": [
+            500,
+            1000,
+            1500,
+            2000,
+            2500
+          ],
+          "baseCostTotal": 7500,
+          "sourceIds": [
+            "game-data-v1.16"
+          ]
+        },
+        {
+          "name": "Seal I",
+          "id": "seal",
+          "dataKey": "SEAL",
+          "initialPrice": 2000,
+          "maxRank": 10,
+          "unlockedRankField": 10,
+          "isAnUnlockable": true,
+          "effectPerRank": {
+            "seal": 1
+          },
+          "inGameDescription": "Allows to Banish an item from level up choices, or a pickup from light sources. Use in COLLECTION menu.",
+          "baseCostPerRank": [
+            2000,
+            4000,
+            6000,
+            8000,
+            10000,
+            12000,
+            14000,
+            16000,
+            18000,
+            20000
+          ],
+          "baseCostTotal": 110000,
+          "sourceIds": [
+            "game-data-v1.16"
+          ]
+        },
+        {
+          "name": "Seal II",
+          "id": "seal2",
+          "dataKey": "SEAL2",
+          "initialPrice": 4000,
+          "maxRank": 10,
+          "unlockedRankField": 10,
+          "isAnUnlockable": true,
+          "effectPerRank": {
+            "seal": 1
+          },
+          "inGameDescription": "Allows to Banish two items from level up choices, or pickup from light sources. Use in COLLECTION menu.",
+          "baseCostPerRank": [
+            4000,
+            8000,
+            12000,
+            16000,
+            20000,
+            24000,
+            28000,
+            32000,
+            36000,
+            40000
+          ],
+          "baseCostTotal": 220000,
+          "sourceIds": [
+            "game-data-v1.16"
+          ]
+        },
+        {
+          "name": "Seal III",
+          "id": "seal3",
+          "dataKey": "SEAL3",
+          "initialPrice": 6000,
+          "maxRank": 10,
+          "unlockedRankField": 10,
+          "isAnUnlockable": true,
+          "effectPerRank": {
+            "seal": 1
+          },
+          "inGameDescription": "Allows to Banish three items from level up choices, or pickups from light sources. Use in COLLECTION menu.",
+          "baseCostPerRank": [
+            6000,
+            12000,
+            18000,
+            24000,
+            30000,
+            36000,
+            42000,
+            48000,
+            54000,
+            60000
+          ],
+          "baseCostTotal": 330000,
+          "sourceIds": [
+            "game-data-v1.16"
+          ]
+        },
+        {
+          "name": "Seal IV",
+          "id": "seal4",
+          "dataKey": "SEAL4",
+          "initialPrice": 8000,
+          "maxRank": 10,
+          "unlockedRankField": 10,
+          "isAnUnlockable": true,
+          "effectPerRank": {
+            "seal": 1
+          },
+          "inGameDescription": "Allows to Banish four items from level up choices, or pickups from light sources. Use in COLLECTION menu.",
+          "baseCostPerRank": [
+            8000,
+            16000,
+            24000,
+            32000,
+            40000,
+            48000,
+            56000,
+            64000,
+            72000,
+            80000
+          ],
+          "baseCostTotal": 440000,
+          "sourceIds": [
+            "game-data-v1.16"
+          ]
+        },
+        {
+          "name": "Antipiretic",
+          "id": "fever",
+          "dataKey": "FEVER",
+          "initialPrice": 500,
+          "maxRank": 1,
+          "unlockedRankField": 0,
+          "isAnUnlockable": true,
+          "effectPerRank": null,
+          "inGameDescription": ".",
+          "baseCostPerRank": [
+            500
+          ],
+          "baseCostTotal": 500,
+          "sourceIds": [
+            "game-data-v1.16"
+          ]
+        },
+        {
+          "name": "Invul Time",
+          "id": "invul",
+          "dataKey": "INVUL",
+          "initialPrice": 500,
+          "maxRank": 1,
+          "unlockedRankField": 0,
+          "isAnUnlockable": true,
+          "effectPerRank": null,
+          "inGameDescription": ".",
+          "baseCostPerRank": [
+            500
+          ],
+          "baseCostTotal": 500,
+          "sourceIds": [
+            "game-data-v1.16"
+          ]
+        }
+      ],
+      "totalRanksAcrossAllPowerUps": 125,
+      "totalCostNote": "Derived from shipped data v1.16 using the documented cost formula, buying every rank of all 29 PowerUps. Differs from both wiki figures because v1.16 contains more PowerUps and more ranks than the versions those pages describe.",
+      "perRankCostOrderNote": "BASE cost per rank is order-INDEPENDENT: rank i of a PowerUp always costs initialPrice*i. Only the global FEE term is order-dependent in WHICH purchase it lands on, but because the fee depends solely on totalBought (ranks bought so far across all PowerUps) and is additive since v0.7.2, the SUM of fees over a full clear is also order-independent. Therefore the per-rank base table below plus the fee schedule fully determine any purchase order's cost; no assumed order is required for the total.",
+      "feeSchedule": {
+        "expression": "fee(totalBought) = 0 if totalBought == 0 else floor(20 * 1.1^totalBought)",
+        "firstTwentyPurchases": [
+          0,
+          22,
+          24,
+          26,
+          29,
+          32,
+          35,
+          38,
+          42,
+          47,
+          51,
+          57,
+          62,
+          69,
+          75,
+          83,
+          91,
+          101,
+          111,
+          122
+        ],
+        "feeAtPurchase50": 2134,
+        "feeAtPurchase100": 250556,
+        "feeAtFinalPurchase": 2714706,
+        "totalFeesFullClear": 29861494
+      }
     },
     "arcanas": {
-      "sourceIds": ["official-wiki-arcanas", "fandom-arcanas"],
+      "sourceIds": [
+        "official-wiki-arcanas",
+        "fandom-arcanas"
+      ],
       "overview": {
         "baseSetCount": 22,
         "unlockSystem": "Collecting the Randomazzo relic in Gallo Tower unlocks the Arcana system and the first Arcana, Sarabande of Healing (VI). The remaining base-set Arcanas are unlocked either by reaching level 50 with certain characters, or by surviving to the 31:00 mark on certain stages.",
@@ -296,28 +1680,164 @@
         "theme": "Loosely based on the real-world Major Arcana tarot deck."
       },
       "list": [
-        {"number": 1, "roman": "I", "name": "Gemini", "id": "gemini", "effect": "Certain weapons gain a functionally identical duplicate counterpart that levels up alongside them."},
-        {"number": 2, "roman": "II", "name": "Twilight Requiem", "id": "twilight_requiem", "effect": "Projectiles from listed weapons summon a horizontal explosion when they expire, dealing damage proportional to Curse."},
-        {"number": 3, "roman": "III", "name": "Tragic Princess", "id": "tragic_princess", "effect": "Listed weapons gain reduced Cooldown while the player is moving."},
-        {"number": 4, "roman": "IV", "name": "Awake", "id": "awake", "effect": "Grants 3 Revivals; each revival consumed afterwards also grants 1.1x Max Health, +1 Armor, and +5% Might, Area, Duration and Speed."},
-        {"number": 5, "roman": "V", "name": "Chaos in the Dark Night", "id": "chaos_in_the_dark_night", "effect": "Overall Projectile Speed oscillates between -50% and +50% on 10-second intervals, plus +1% Projectile Speed per character level."},
-        {"number": 6, "roman": "VI", "name": "Sarabande of Healing", "id": "sarabande_of_healing", "effect": "All healing is doubled, and every heal triggers an area damage pulse equal to the amount healed."},
-        {"number": 7, "roman": "VII", "name": "Iron Blue Will", "id": "iron_blue_will", "effect": "Listed weapons' projectiles gain up to three bounces plus the ability to pass through enemies and ignore walls."},
-        {"number": 8, "roman": "VIII", "name": "Mad Groove", "id": "mad_groove", "effect": "On pickup and at every even minute after, all stage items, chests, pickups (including XP gems) and light sources are pulled to the character in a circle."},
-        {"number": 9, "roman": "IX", "name": "Divine Bloodline", "id": "divine_bloodline", "effect": "Listed weapons gain +5 flat damage per Armor (max +250), and all weapons gain +0.1 flat damage per missing HP."},
-        {"number": 10, "roman": "X", "name": "Beginning", "id": "beginning", "effect": "The starting weapon gains +3 Amount; certain other weapons gain +1 Amount if they are not the starting weapon."},
-        {"number": 11, "roman": "XI", "name": "Waltz of Pearls", "id": "waltz_of_pearls", "effect": "Listed weapons' projectiles gain up to three bounces."},
-        {"number": 12, "roman": "XII", "name": "Out of Bounds", "id": "out_of_bounds", "effect": "Freezing an enemy also summons an explosion; Orologions become easier to find and Sorbettos become obtainable from normal pickup sources."},
-        {"number": 13, "roman": "XIII", "name": "Wicked Season", "id": "wicked_season", "effect": "Growth, Luck, Greed and Curse are each temporarily doubled in turn, rotating every 10 seconds in that order."},
-        {"number": 14, "roman": "XIV", "name": "Jail of Crystal", "id": "jail_of_crystal", "effect": "Listed weapons' projectiles gain a 25% chance (multiplied by Luck) to freeze enemies."},
-        {"number": 15, "roman": "XV", "name": "Disco of Gold", "id": "disco_of_gold", "effect": "Collecting gold heals the player for the same amount (scaling with Greed); collecting Coin Bags and Rich Coin Bags triggers Gold Fever."},
-        {"number": 16, "roman": "XVI", "name": "Slash", "id": "slash", "effect": "Certain weapons gain the ability to critically hit, and all critical hits deal double damage."},
-        {"number": 17, "roman": "XVII", "name": "Lost & Found Painting", "id": "lost_and_found_painting", "effect": "Overall Duration oscillates between -50% and +50% on 10-second intervals, plus +1% Duration per character level."},
-        {"number": 18, "roman": "XVIII", "name": "Boogaloo of Illusions", "id": "boogaloo_of_illusions", "effect": "Overall Area oscillates between -25% and +25% on 10-second intervals, plus +1% Area per character level."},
-        {"number": 19, "roman": "XIX", "name": "Heart of Fire", "id": "heart_of_fire", "effect": "Listed weapons' projectiles explode on impact for 50% of base damage; weapons that already explode get +50% instead."},
-        {"number": 20, "roman": "XX", "name": "Silent Old Sanctuary", "id": "silent_old_sanctuary", "effect": "Grants 3 Rerolls, Skips and Banishes; each empty weapon slot grants +20% Might and -8% Cooldown, up to +100% Might and -40% Cooldown."},
-        {"number": 21, "roman": "XXI", "name": "Blood Astronomia", "id": "blood_astronomia", "effect": "Whenever Garlic, Soul Eater, Pentagram, Gorgeous Moon, Song of Mana, Mannajja, Clock Lancet, Laurel, Sonic Dash or Rapidus Fio activates, an additional Blood weapon effect also activates."},
-        {"number": 0, "roman": "0", "name": "Stake to Your Heart", "id": "stake_to_your_heart", "effect": null, "sourceIds": ["official-wiki-arcanas"], "note": "Numbered 0; effect text not retrieved. Included to reach the stated 22-card base set alongside I-XXI."}
+        {
+          "number": 1,
+          "roman": "I",
+          "name": "Gemini",
+          "id": "gemini",
+          "effect": "Certain weapons gain a functionally identical duplicate counterpart that levels up alongside them."
+        },
+        {
+          "number": 2,
+          "roman": "II",
+          "name": "Twilight Requiem",
+          "id": "twilight_requiem",
+          "effect": "Projectiles from listed weapons summon a horizontal explosion when they expire, dealing damage proportional to Curse."
+        },
+        {
+          "number": 3,
+          "roman": "III",
+          "name": "Tragic Princess",
+          "id": "tragic_princess",
+          "effect": "Listed weapons gain reduced Cooldown while the player is moving."
+        },
+        {
+          "number": 4,
+          "roman": "IV",
+          "name": "Awake",
+          "id": "awake",
+          "effect": "Grants 3 Revivals; each revival consumed afterwards also grants 1.1x Max Health, +1 Armor, and +5% Might, Area, Duration and Speed."
+        },
+        {
+          "number": 5,
+          "roman": "V",
+          "name": "Chaos in the Dark Night",
+          "id": "chaos_in_the_dark_night",
+          "effect": "Overall Projectile Speed oscillates between -50% and +50% on 10-second intervals, plus +1% Projectile Speed per character level."
+        },
+        {
+          "number": 6,
+          "roman": "VI",
+          "name": "Sarabande of Healing",
+          "id": "sarabande_of_healing",
+          "effect": "All healing is doubled, and every heal triggers an area damage pulse equal to the amount healed."
+        },
+        {
+          "number": 7,
+          "roman": "VII",
+          "name": "Iron Blue Will",
+          "id": "iron_blue_will",
+          "effect": "Listed weapons' projectiles gain up to three bounces plus the ability to pass through enemies and ignore walls."
+        },
+        {
+          "number": 8,
+          "roman": "VIII",
+          "name": "Mad Groove",
+          "id": "mad_groove",
+          "effect": "On pickup and at every even minute after, all stage items, chests, pickups (including XP gems) and light sources are pulled to the character in a circle."
+        },
+        {
+          "number": 9,
+          "roman": "IX",
+          "name": "Divine Bloodline",
+          "id": "divine_bloodline",
+          "effect": "Listed weapons gain +5 flat damage per Armor (max +250), and all weapons gain +0.1 flat damage per missing HP."
+        },
+        {
+          "number": 10,
+          "roman": "X",
+          "name": "Beginning",
+          "id": "beginning",
+          "effect": "The starting weapon gains +3 Amount; certain other weapons gain +1 Amount if they are not the starting weapon."
+        },
+        {
+          "number": 11,
+          "roman": "XI",
+          "name": "Waltz of Pearls",
+          "id": "waltz_of_pearls",
+          "effect": "Listed weapons' projectiles gain up to three bounces."
+        },
+        {
+          "number": 12,
+          "roman": "XII",
+          "name": "Out of Bounds",
+          "id": "out_of_bounds",
+          "effect": "Freezing an enemy also summons an explosion; Orologions become easier to find and Sorbettos become obtainable from normal pickup sources."
+        },
+        {
+          "number": 13,
+          "roman": "XIII",
+          "name": "Wicked Season",
+          "id": "wicked_season",
+          "effect": "Growth, Luck, Greed and Curse are each temporarily doubled in turn, rotating every 10 seconds in that order."
+        },
+        {
+          "number": 14,
+          "roman": "XIV",
+          "name": "Jail of Crystal",
+          "id": "jail_of_crystal",
+          "effect": "Listed weapons' projectiles gain a 25% chance (multiplied by Luck) to freeze enemies."
+        },
+        {
+          "number": 15,
+          "roman": "XV",
+          "name": "Disco of Gold",
+          "id": "disco_of_gold",
+          "effect": "Collecting gold heals the player for the same amount (scaling with Greed); collecting Coin Bags and Rich Coin Bags triggers Gold Fever."
+        },
+        {
+          "number": 16,
+          "roman": "XVI",
+          "name": "Slash",
+          "id": "slash",
+          "effect": "Certain weapons gain the ability to critically hit, and all critical hits deal double damage."
+        },
+        {
+          "number": 17,
+          "roman": "XVII",
+          "name": "Lost & Found Painting",
+          "id": "lost_and_found_painting",
+          "effect": "Overall Duration oscillates between -50% and +50% on 10-second intervals, plus +1% Duration per character level."
+        },
+        {
+          "number": 18,
+          "roman": "XVIII",
+          "name": "Boogaloo of Illusions",
+          "id": "boogaloo_of_illusions",
+          "effect": "Overall Area oscillates between -25% and +25% on 10-second intervals, plus +1% Area per character level."
+        },
+        {
+          "number": 19,
+          "roman": "XIX",
+          "name": "Heart of Fire",
+          "id": "heart_of_fire",
+          "effect": "Listed weapons' projectiles explode on impact for 50% of base damage; weapons that already explode get +50% instead."
+        },
+        {
+          "number": 20,
+          "roman": "XX",
+          "name": "Silent Old Sanctuary",
+          "id": "silent_old_sanctuary",
+          "effect": "Grants 3 Rerolls, Skips and Banishes; each empty weapon slot grants +20% Might and -8% Cooldown, up to +100% Might and -40% Cooldown."
+        },
+        {
+          "number": 21,
+          "roman": "XXI",
+          "name": "Blood Astronomia",
+          "id": "blood_astronomia",
+          "effect": "Whenever Garlic, Soul Eater, Pentagram, Gorgeous Moon, Song of Mana, Mannajja, Clock Lancet, Laurel, Sonic Dash or Rapidus Fio activates, an additional Blood weapon effect also activates."
+        },
+        {
+          "number": 0,
+          "roman": "0",
+          "name": "Stake to Your Heart",
+          "id": "stake_to_your_heart",
+          "effect": null,
+          "sourceIds": [
+            "official-wiki-arcanas"
+          ],
+          "note": "Numbered 0; effect text not retrieved. Included to reach the stated 22-card base set alongside I-XXI."
+        }
       ]
     }
   }
