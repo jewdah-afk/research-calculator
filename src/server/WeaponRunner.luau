@@ -66,6 +66,9 @@ local Weapons = require("../shared/Data/Weapons")
 local WeaponLevels = require("../shared/Sim/WeaponLevels")
 local Damage = require("../shared/Sim/Damage")
 
+-- Cooldown boundary tolerance; see Tuning.cooldownEpsilon.
+local EPSILON = Tuning.cooldownEpsilon
+
 export type EnemyHandle = number
 export type ProjectileHandle = number
 
@@ -679,20 +682,27 @@ function WeaponRunner.step(self: WeaponRunner, dt: number, frame: PlayerFrame)
 	ctx.moveX = frame.moveX
 	ctx.moveZ = frame.moveZ
 	for _, rt in s.runtimes do
-		rt.cooldownRemaining -= dt
-		local fire = rt.cooldownRemaining <= 0
+		-- The timer is TESTED before this tick's dt is spent, so a weapon
+		-- fires on the frame whose time has reached its cycle, not one frame
+		-- early: a cooldown 1.35 whip cast at t = 0 fires again at t = 1.35,
+		-- never at 1.35 - dt (weapons.md base table: Whip cooldown 1.35 s).
+		-- The comparison carries Tuning.cooldownEpsilon so the tick that
+		-- exactly consumes the cooldown fires whichever way the accumulated
+		-- subtraction rounded; see the constant's note in Tuning.
+		local fire = rt.cooldownRemaining <= EPSILON
 		rt.state.fire = fire
 		s.behaviours[rt.weaponId].tick(rt, ctx)
 		if fire then
 			rt.state.fire = false
-			if rt.cooldownRemaining <= 0 then
+			if rt.cooldownRemaining <= EPSILON then
 				local cycle = s:cycleOf(rt)
 				rt.cooldownRemaining += cycle
-				if rt.cooldownRemaining <= 0 then
+				if rt.cooldownRemaining <= EPSILON then
 					rt.cooldownRemaining = cycle
 				end
 			end
 		end
+		rt.cooldownRemaining -= dt
 	end
 
 	-- 2. Return the handles despawned since the last tick to the free stack.

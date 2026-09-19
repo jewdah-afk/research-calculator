@@ -158,7 +158,6 @@ local Cross: WeaponBehavior = {
 	onStatsChanged = function(_rt: WeaponRuntime) end,
 	tick = function(rt: WeaponRuntime, ctx: WeaponContext)
 		local st = rt.state
-		steer(rt, ctx)
 		if st.fire then
 			if st.pending == 0 then
 				st.shot = 0
@@ -172,6 +171,10 @@ local Cross: WeaponBehavior = {
 			st.shot += 1
 			st.nextShotAt += rt.stats.projectileInterval
 		end
+		-- AFTER this tick's throws, so a cross launched on this frame has
+		-- already spent one tick of deceleration when the runner moves it:
+		-- v(t) = v0 - a t from the first simulated frame onward.
+		steer(rt, ctx)
 	end,
 }
 

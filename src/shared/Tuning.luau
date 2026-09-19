@@ -189,6 +189,15 @@ local Tuning = {
 	lightningRing = {
 		targetRadius = 48, -- NOT from research. "on-screen" random-target radius around the player (studs)
 	},
+	-- NOT from research. Slack on the weapon cooldown comparison in
+	-- server/WeaponRunner. A cooldown counted down by a fixed dt lands on the
+	-- boundary with float residue of either sign (1.35 - 27 x 0.05 evaluates
+	-- to -5.4e-16, 1.0 - 10 x 0.1 to +1.1e-16), so an exact comparison lets
+	-- rounding, not the data, decide whether the tick that exactly consumes
+	-- the cooldown fires. A tick that lands on the boundary must fire. Far
+	-- below the smallest real interval in the data (0.02 s) and far above
+	-- double-precision noise at these magnitudes.
+	cooldownEpsilon = 1e-9, -- NOT from research. Cooldown boundary tolerance (seconds)
 }
 
 return Tuning

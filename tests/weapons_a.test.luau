@@ -382,8 +382,14 @@ T.test(
 		local f3 = world2:add(18, 0, 1000)
 		local runner2 = newRunner(world2, { knife = 5 }, "imelda")
 		run(runner2, 0, 0.9, 0.05)
-		T.eq(world2:hitsOn(f1), 1)
-		T.eq(world2:hitsOn(f2), 1)
+		-- weapons.md Knife Lv2 "+1 Amount", Lv3 "+5 Damage, +1 Amount", Lv4
+		-- "+1 Amount, -0.02 s Projectile Interval": Amount is 4 at Lv5, and
+		-- "Extra knives fire as a volley spaced by repeatInterval" in the same
+		-- FACING direction, so all four cross both enemies on the line. The
+		-- pierce rule under test is that each knife stops at the SECOND enemy,
+		-- which is f3 == 0; the per-enemy count is one hit per knife.
+		T.eq(world2:hitsOn(f1), 4)
+		T.eq(world2:hitsOn(f2), 4)
 		T.eq(world2:hitsOn(f3), 0, "pierce 2 stops at the second enemy")
 	end
 )
@@ -395,7 +401,11 @@ T.test("WPN-04: a knife that hits nothing despawns past Tuning.despawnRadius", f
 	T.eq(runner:projectileCount(), 1)
 	local flight = Tuning.despawnRadius / Tuning.projectileSpeedScale
 	run(runner, 0.01, flight - 0.05, 0.01)
-	T.eq(runner:projectileCount(), 1, "still inside the radius")
+	-- weapons.md base table: Knife cooldown 1 s, and the flight to the
+	-- despawn radius takes 110 / 30 = 3.67 s, so several later knives are in
+	-- the air by now. What is under test is the FIRST knife, which is still
+	-- inside the radius; the next assertion is the same handle after it.
+	T.eq(runner.alive[1], true, "still inside the radius")
 	run(runner, flight, flight + 0.2, 0.01)
 	-- The cooldown (1 s) may have fired more knives; the FIRST is gone.
 	T.eq(runner.alive[1], false, "first knife despawned past the radius")
@@ -404,7 +414,12 @@ end)
 -- ------------------------------------------------------------ magic wand
 T.test("WPN-03: each missile targets the closest enemy at unlimited range and retargets per shot", function()
 	local world = newWorld()
-	local near = world:add(0, -30, 1)
+	-- weapons.md Magic Wand: "Fires a magic missile at the CLOSEST enemy".
+	-- `near` must therefore really be the closer of the two: at (0,-30) it was
+	-- 30 studs out against `far` at 10, so the closest enemy was `far` and the
+	-- fixture contradicted its own labels. (0,-6) keeps the aimed direction
+	-- (0,-1) that the assertions below check.
+	local near = world:add(0, -6, 1)
 	local far = world:add(10, 0, 1000)
 	-- Lv2 = 2 missiles (weapons.md Lv2 "+1 Amount") spaced 0.1 s.
 	local runner, spawns = newRunner(world, { magic_wand = 2 }, "imelda")
@@ -435,17 +450,26 @@ T.test("WPN-03: Lv7 missile has pierce 2 and passes through one enemy into a sec
 	T.eq(runner.runtimeById.magic_wand.stats.pierce, 2)
 	runner:step(0.01, frameAt(0))
 	run(runner, 0.01, 0.8, 0.01)
-	T.eq(world:hitsOn(e1), 1)
-	T.eq(world:hitsOn(e2), 1)
+	-- weapons.md Magic Wand Lv2 / Lv4 / Lv6 "+1 Amount": Amount is 4 at Lv7,
+	-- and "Extra projectiles fire in quick succession" each retargeting the
+	-- closest enemy, which stays e1. Each of the four pierces e1 into e2 and
+	-- stops: the pierce-2 rule under test is e3 == 0.
+	T.eq(world:hitsOn(e1), 4)
+	T.eq(world:hitsOn(e2), 4)
 	T.eq(world:hitsOn(e3), 0)
-	-- Record omits crit: Tuning defaults -> always base damage 30 (10 + 10 + 10).
-	T.eq(world.hits[1].amount, 30)
+	-- Record omits crit: Tuning defaults -> always base damage. weapons.md
+	-- Magic Wand raises damage at Lv5 "+10 Damage" and Lv8 "+10 Damage", so a
+	-- Lv7 wand is at 10 + 10 = 20; the Lv8 step is not in effect here.
+	T.eq(world.hits[1].amount, 20)
 end)
 
 T.test("WPN-03: with no enemy alive the wand still fires (random direction) and keeps cadence", function()
 	local world = newWorld()
 	local runner, spawns = newRunner(world, { magic_wand = 1 }, "imelda")
-	run(runner, 0, 1.19, 0.01)
+	-- Run through t = 1.2 itself: weapons.md gives Magic Wand cooldown 1.2 and
+	-- the second cast is due on the frame at t = 1.2, which a bound of 1.19
+	-- stopped one frame short of.
+	run(runner, 0, 1.2, 0.01)
 	T.eq(#spawns, 2, "t=0 and t=1.2 (weapons.md cooldown 1.2)")
 	local vx, vz = projVelocity(runner, spawns[1].handle)
 	T.eq(math.sqrt(vx * vx + vz * vz), Tuning.projectileSpeedScale, "unit direction times speed", 1e-6)
@@ -599,9 +623,14 @@ T.test(
 		T.eq(xMax, v0 * v0 / (2 * Tuning.crossDeceleration), "outward reach", 0.5)
 		run(runner, tRev, tRev + 0.1, 0.01)
 		T.truthy(select(1, projVelocity(runner, h)) < 0, "reversed")
-		run(runner, tRev + 0.11, 2 * tRev + 0.5, 0.01)
-		T.truthy(s.x[h] < 0, "came back through the player")
+		-- weapons.md base table: Cross cooldown 2 s, and 2 * tRev is exactly
+		-- 2 s here, so the NEXT cast lands on that frame and would throw a
+		-- fresh cross through the same enemy. Count the legs of this cross
+		-- just before that, then run on for the return past the player.
+		run(runner, tRev + 0.11, 2 * tRev - 0.01, 0.01)
 		T.eq(world:hitsOn(onPath), 2, "hit once on each leg")
+		run(runner, 2 * tRev, 2 * tRev + 0.5, 0.01)
+		T.truthy(s.x[h] < 0, "came back through the player")
 		-- weapons.md Cross: 5 dmg, crit omitted -> always 5.
 		T.eq(world.hits[1].amount, 5)
 	end
@@ -829,19 +858,31 @@ T.test(
 			newRunner(world, { knife = 8, magic_wand = 8, axe = 8, fire_wand = 8, cross = 8, whip = 8 }, "imelda")
 		-- The fake world's hit log allocates; swap it for a no-op after warm-up.
 		local deps = (runner :: any).deps
+		-- What is measured is the runner, so the DRIVER must not allocate
+		-- either: `frameAt` builds a fresh frame table per step and the stub's
+		-- `random` builds a fresh 200-entry candidate list on every Fire Wand
+		-- shot. Both are this test's own scaffolding, not runner behaviour;
+		-- reuse one frame table and swap `random` for a non-allocating pick,
+		-- the same move the line above makes for the hit log.
+		local frame = frameAt(0)
 		local t = 0
 		for _ = 1, 300 do
-			runner:step(1 / 60, frameAt(t))
+			frame.time = t
+			runner:step(1 / 60, frame)
 			t += 1 / 60
 		end
 		deps.damage = function(): boolean
 			return false
 		end;
 		(runner :: any).ctx.damage = deps.damage
+		world.query.random = function(_x: number, _z: number, _maxDist: number, rng: Rng): number?
+			return rng:int(1, 200)
+		end
 		collectgarbage("collect")
 		local before = collectgarbage("count")
 		for _ = 1, 300 do
-			runner:step(1 / 60, frameAt(t))
+			frame.time = t
+			runner:step(1 / 60, frame)
 			t += 1 / 60
 		end
 		local grown = collectgarbage("count") - before
