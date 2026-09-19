@@ -8,10 +8,13 @@ rc=0; n=0
 for f in tests/*.test.luau; do
   n=$((n+1))
   printf '%-44s ' "$f"
-  if out=$(luau "$f" 2>&1); then
+  out=$(luau "$f" 2>&1); code=$?
+  # Belt and braces: trust the exit code, but also fail on any FAIL marker in
+  # the output, so a harness that forgets to raise cannot report a green suite.
+  if [ "$code" -eq 0 ] && ! printf '%s' "$out" | grep -q 'FAIL'; then
     echo "$out" | tail -1
   else
-    echo "$out" | tail -20; rc=1
+    echo; echo "$out" | tail -25; rc=1
   fi
 done
 [ "$n" -eq 0 ] && { echo "no tests found"; exit 1; }

@@ -53,13 +53,16 @@ function Harness.throws(fn: () -> (), label: string?)
 	end
 end
 
+-- Returning a number does NOT set the `luau` CLI's exit code (a returned value
+-- is discarded); only a raised error does. So a failing run MUST error, or the
+-- runner sees exit 0 and reports a green suite over red tests.
 function Harness.finish(): number
 	if failed > 0 then
 		print(string.format("FAIL  %d passed, %d failed", passed, failed))
 		for _, f in failures do
 			print(f)
 		end
-		return 1
+		error(string.format("%d test(s) failed", failed), 0)
 	end
 	print(string.format("ok    %d passed", passed))
 	return 0
