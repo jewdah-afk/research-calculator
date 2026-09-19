@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "_comment": "Asset manifest. Every sprite is looked up here by id, never hard-coded, so art can be replaced without touching code. `source` null means the sprite is generated procedurally as a placeholder at the given size and palette index.",
+  "palette": [
+    "#0d0b1a", "#1b1830", "#2e2a4a", "#4a4468", "#6f6690", "#a9a0c4", "#e8e4f5",
+    "#7a1f2b", "#c23a46", "#e86a5a", "#f2b47e", "#3d6b35", "#5fa34a", "#9ed36a",
+    "#1f4e79", "#3a86c8", "#7ec8f0", "#c9a227", "#f0d264", "#8a3fa8", "#c96ad8"
+  ],
+  "sheets": {},
+  "sprites": {
+    "player.idle":      { "sheet": null, "size": [12, 12], "paletteIndex": 8,  "anchor": [0.5, 0.9] },
+    "enemy.ZOMBIE":     { "sheet": null, "size": [10, 10], "paletteIndex": 12, "anchor": [0.5, 0.9] },
+    "enemy.BAT1":       { "sheet": null, "size": [8, 8],   "paletteIndex": 4,  "anchor": [0.5, 0.5] },
+    "enemy.BAT2":       { "sheet": null, "size": [8, 8],   "paletteIndex": 5,  "anchor": [0.5, 0.5] },
+    "enemy.BAT3":       { "sheet": null, "size": [8, 8],   "paletteIndex": 3,  "anchor": [0.5, 0.5] },
+    "enemy.BAT4":       { "sheet": null, "size": [9, 9],   "paletteIndex": 20, "anchor": [0.5, 0.5] },
+    "enemy.BAT5":       { "sheet": null, "size": [9, 9],   "paletteIndex": 6,  "anchor": [0.5, 0.5] },
+    "enemy.SKELETON":   { "sheet": null, "size": [10, 12], "paletteIndex": 6,  "anchor": [0.5, 0.9] },
+    "enemy.GHOST":      { "sheet": null, "size": [10, 10], "paletteIndex": 16, "anchor": [0.5, 0.7] },
+    "enemy.MUDMAN":     { "sheet": null, "size": [12, 12], "paletteIndex": 11, "anchor": [0.5, 0.9] },
+    "enemy.WEREWOLF":   { "sheet": null, "size": [14, 12], "paletteIndex": 3,  "anchor": [0.5, 0.9] },
+    "enemy.XLBAT":      { "sheet": null, "size": [18, 18], "paletteIndex": 20, "anchor": [0.5, 0.5] },
+    "enemy.XLMUMMY":    { "sheet": null, "size": [20, 20], "paletteIndex": 18, "anchor": [0.5, 0.9] },
+    "enemy.XLMANTIS":   { "sheet": null, "size": [20, 20], "paletteIndex": 13, "anchor": [0.5, 0.9] },
+    "enemy.XLFLOWER":   { "sheet": null, "size": [20, 20], "paletteIndex": 9,  "anchor": [0.5, 0.9] },
+    "enemy.FLOWER":     { "sheet": null, "size": [12, 12], "paletteIndex": 9,  "anchor": [0.5, 0.9] },
+    "enemy.BOSS":       { "sheet": null, "size": [28, 28], "paletteIndex": 7,  "anchor": [0.5, 0.9] },
+    "enemy.REAPER":     { "sheet": null, "size": [32, 32], "paletteIndex": 1,  "anchor": [0.5, 0.9] },
+    "gem.1":            { "sheet": null, "size": [5, 5],   "paletteIndex": 15, "anchor": [0.5, 0.5] },
+    "gem.2":            { "sheet": null, "size": [6, 6],   "paletteIndex": 13, "anchor": [0.5, 0.5] },
+    "gem.3":            { "sheet": null, "size": [7, 7],   "paletteIndex": 9,  "anchor": [0.5, 0.5] },
+    "projectile.default": { "sheet": null, "size": [5, 5], "paletteIndex": 18, "anchor": [0.5, 0.5] },
+    "ground.tile":      { "sheet": null, "size": [32, 32], "paletteIndex": 11, "anchor": [0, 0] }
+  },
+  "animations": {}
+}
