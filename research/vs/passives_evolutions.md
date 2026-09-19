@@ -9,7 +9,7 @@ Retrieved 2026-09-19. Schema: /research/vs/SCHEMA.md. Times in seconds; percenta
 - `fandom-wiki` — https://vampire-survivors.fandom.com/wiki/Passive_items — Same limitation as above.
 - `vst` — https://raw.githubusercontent.com/jerek/vampire-survivors-tools/main/src/js/VST/VS/Weapon.js — Community tool mirroring wiki data; used only to cross-check the evolution recipe list.
 
-**Access caveat:** `vampire.survivors.wiki`, `vampire-survivors.fandom.com`, Steam Community and all community-spreadsheet domains are blocked by this session's egress proxy. Numeric data below therefore comes from the game's own shipped data file (`Weapon.json`, v1.16 rip), which is strictly more authoritative than any wiki table. Wiki-only claims (chest timing rules) are marked as unverified.
+**Access caveat:** `vampire.survivors.wiki`, `vampire-survivors.fandom.com`, Steam Community and every community-guide domain tried are blocked by this session's egress proxy (403 at CONNECT). Numeric data below therefore comes from the game's own shipped data file (`Data/Vampire Survivors/Weapon.json`, v1.16 rip), which is strictly more authoritative than any wiki table. Wiki-only claims (chest timing) are marked unverified.
 
 ## 1. Passive items
 
@@ -34,26 +34,28 @@ Retrieved 2026-09-19. Schema: /research/vs/SCHEMA.md. Times in seconds; percenta
 
 In-game descriptions (level 1):
 
-- **Spinach** (`spinach`, vsId `POWER`, rarity 100): Raises inflicted damage by 10%.
-- **Armor** (`armor`, vsId `ARMOR`, rarity 100): Reduces incoming Damage by 1. Increases retaliatory Damage by 10%.
-- **Hollow Heart** (`hollow_heart`, vsId `MAXHEALTH`, rarity 90): Augments Max Health by 20%.
-- **Pummarola** (`pummarola`, vsId `REGEN`, rarity 90): Character recovers 0.2 HP per second.
-- **Empty Tome** (`empty_tome`, vsId `COOLDOWN`, rarity 50): Reduces weapon cooldown by 8%.
-- **Candelabrador** (`candelabrador`, vsId `AREA`, rarity 100): Augments area of attacks by 10%.
-- **Bracer** (`bracer`, vsId `SPEED`, rarity 100): Increases projectile speed by 10%.
-- **Spellbinder** (`spellbinder`, vsId `DURATION`, rarity 100): Increases duration of weapon effects by 10%.
-- **Duplicator** (`duplicator`, vsId `AMOUNT`, rarity 50): Weapons fire more projectiles.
-- **Wings** (`wings`, vsId `MOVESPEED`, rarity 50): Character moves 10% faster.
-- **Attractorb** (`attractorb`, vsId `MAGNET`, rarity 100): Character picks up items from further away.
-- **Clover** (`clover`, vsId `LUCK`, rarity 100): Character gets 10% luckier.
-- **Crown** (`crown`, vsId `GROWTH`, rarity 70): Character gains 8% more experience.
-- **Stone Mask** (`stone_mask`, vsId `GREED`, rarity 70): Character earns 10% more Gold coins.
-- **Skull O'Maniac** (`skull_omaniac`, vsId `CURSE`, rarity 40): Increases enemy speed, health, quantity, and frequency by 10%.
-- **Tiragisú** (`tiragisu`, vsId `REVIVAL`, rarity 40): Revives once with 50% Health.
+- **Spinach** (`spinach`, vsId `POWER`, rarity 100, buy price 80): Raises inflicted damage by 10%.
+- **Armor** (`armor`, vsId `ARMOR`, rarity 100, buy price 60): Reduces incoming Damage by 1. Increases retaliatory Damage by 10%.
+- **Hollow Heart** (`hollow_heart`, vsId `MAXHEALTH`, rarity 90, buy price 10): Augments Max Health by 20%.
+- **Pummarola** (`pummarola`, vsId `REGEN`, rarity 90, buy price 10): Character recovers 0.2 HP per second.
+- **Empty Tome** (`empty_tome`, vsId `COOLDOWN`, rarity 50, buy price 180): Reduces weapon cooldown by 8%.
+- **Candelabrador** (`candelabrador`, vsId `AREA`, rarity 100, buy price 120): Augments area of attacks by 10%.
+- **Bracer** (`bracer`, vsId `SPEED`, rarity 100, buy price 60): Increases projectile speed by 10%.
+- **Spellbinder** (`spellbinder`, vsId `DURATION`, rarity 100, buy price 100): Increases duration of weapon effects by 10%.
+- **Duplicator** (`duplicator`, vsId `AMOUNT`, rarity 50, buy price 200): Weapons fire more projectiles.
+- **Wings** (`wings`, vsId `MOVESPEED`, rarity 50, buy price 60): Character moves 10% faster.
+- **Attractorb** (`attractorb`, vsId `MAGNET`, rarity 100, buy price 80): Character picks up items from further away.
+- **Clover** (`clover`, vsId `LUCK`, rarity 100, buy price 7): Character gets 10% luckier.
+- **Crown** (`crown`, vsId `GROWTH`, rarity 70, buy price 10): Character gains 8% more experience.
+- **Stone Mask** (`stone_mask`, vsId `GREED`, rarity 70, buy price 200): Character earns 10% more Gold coins.
+- **Skull O'Maniac** (`skull_omaniac`, vsId `CURSE`, rarity 40, buy price 200): Increases enemy speed, health, quantity, and frequency by 10%.
+- **Tiragisú** (`tiragisu`, vsId `REVIVAL`, rarity 40, buy price 140): Revives once with 50% Health.
 
-Also base-game passive items outside the 16 requested, needed for two evolutions: Silver Ring, Gold Ring, Metaglio Left, Metaglio Right (all max level 9, stage-item only, no stat bonus fields in the data file).
+Other base-game passive items outside the requested 16, required by two evolutions: Silver Ring, Gold Ring, Metaglio Left, Metaglio Right — max level 9 each, stage-item only, no stat fields in the data file.
 
 ## 2–3. Evolution / union recipes and conditions
+
+### Core evolutions (classic base-game set)
 
 | Evolved weapon | From | Required passive(s) | Must be MAX level | Union? | Source |
 |---|---|---|---|---|---|
@@ -76,14 +78,32 @@ Also base-game passive items outside the 16 requested, needed for two evolutions
 | Infinite Corridor | Clock Lancet | Silver Ring, Gold Ring | Silver Ring, Gold Ring | no | vs-gamefiles-v1.16 |
 | Crimson Shroud | Laurel | Metaglio Left, Metaglio Right | Metaglio Left, Metaglio Right | no | vs-gamefiles-v1.16 |
 
+### Other evolutions present in the base-game data folder (post-1.0 content; scope flagged in `unknowns`)
+
+| Evolved weapon | From | Required passive(s) | Must be MAX level | Source |
+|---|---|---|---|---|
+| Valkyrie Turner | Shadow Pinion | Wings | — | vs-gamefiles-v1.16 |
+| Fuwalafuwaloo | Vento Sacro, Bloody Tear | Bloody Tear | Bloody Tear | vs-gamefiles-v1.16 |
+| Bi-Bracelet | Bracelet | Bracelet | Bracelet | vs-gamefiles-v1.16 |
+| Tri-Bracelet | Bi-Bracelet | Bi-Bracelet | Bi-Bracelet | vs-gamefiles-v1.16 |
+| Mazzo Familiar | Pako Battilia | Hollow Heart | Hollow Heart | vs-gamefiles-v1.16 |
+| Sole Solution | — | Victory Sword | Victory Sword, Torrona's Box | vs-gamefiles-v1.16 |
+| Ashes of Muspell | Flames of Misspell | Torrona's Box | Torrona's Box | vs-gamefiles-v1.16 |
+| Celestial Voulge | Glass Fandango | Wings | Wings | vs-gamefiles-v1.16 |
+| Seraphic Cry | Santa Javelin | Clover | Clover | vs-gamefiles-v1.16 |
+| Anima of Mortaccio | — | — | — | vs-gamefiles-v1.16 |
+| Yatta Daikarin | — | — | — | vs-gamefiles-v1.16 |
+| Carozza! | — | — | — | vs-gamefiles-v1.16 |
+| Profusione D'Amore | — | — | — | vs-gamefiles-v1.16 |
+| Super Candybox II Turbo | — | — | — | vs-gamefiles-v1.16 |
+
 ### Conditions
 
-- Base weapon must be at max level (8 for all evolving base weapons; Clock Lancet and Laurel max at 7).
-- Required passive must be owned at level 1+ (any level), EXCEPT: Infinite Corridor (Silver Ring + Gold Ring both max); Crimson Shroud (Metaglio Left + Metaglio Right both max).
-- Trigger: treasure chest dropped by a stage/elite boss, earliest 600s (10:00). On standard stages, only chests from bosses that spawn after 10:00 can grant evolutions. Exceptions reported by community sources: Dairy Plant chests can evolve from the start of the run, and the Mad Forest 1:00 glowing-bat chest can evolve early. Evolution consumes the base weapon but NOT the passive item.
+- Base weapon must be at max level — 8 for all classic evolving base weapons; Clock Lancet and Laurel max at 7.
+- Required passive must be owned at level 1+ (any level). Exceptions requiring the passive at MAX level: Infinite Corridor (Silver Ring + Gold Ring both max); Crimson Shroud (Metaglio Left + Metaglio Right both max); plus Sole Solution and Ashes of Muspell (max Torrona's Box), per the `requiresMax` field in the data file.
+- Trigger: treasure chest dropped by a stage/elite boss, earliest 600s (10:00). On standard stages, only chests from bosses that spawn after 10:00 can grant evolutions. Exceptions reported by community sources: Dairy Plant chests can evolve from the start of the run, and the Mad Forest 1:00 glowing-bat chest can evolve early. Evolution consumes the base weapon but NOT the passive item. **(chest timing: unverified — wiki unreachable)**
 - Unions: A union merges two WEAPONS (Vandalier = Peachone + Ebony Wings; Phieraggi = Phiera Der Tuphello + Eight The Sparrow + Tiragisu). Both source weapons are consumed.
-- The evolution consumes the base weapon; the passive item is kept.
-- Chest timing/stage exceptions are **unverified** here (wiki unreachable) — see `unknowns`.
+- The evolution consumes the base weapon(s); the passive item is kept and keeps applying its stats.
 
 ## 4. Evolved weapon stats
 
@@ -107,6 +127,20 @@ Also base-game passive items outside the 16 requested, needed for two evolutions
 | Mannajja | 4 | 4.5 | 0.0 | 6 | 1 | 1 | 2.0 | — | — | — | 30 | 1 |
 | Infinite Corridor | 0 | 1.0 | 0.0 | 1 | 1 | 1 | 6.0 | — | 0 | — | 10 | 1 |
 | Crimson Shroud | 0 | 8.0 | 0.1 | 2 | 1 | 1 | — | — | 20 | — | 50 | 1 |
+| Valkyrie Turner | 3.5 | 6.0 | 0.3 | 1.4 | 3.5 | 1 | 2.0 | — | — | — | 200 | 1 |
+| Fuwalafuwaloo | 2 | 2.0 | 0.05 | 2 | 1 | 8 | 0.4 | — | 0.2 | 0.05 / 2 | 120 | 1 |
+| Bi-Bracelet | 3 | 1.4 | 0.04 | 1 | 1.5 | 4 | 0.6 | 5 | — | — | 80 | 6 |
+| Tri-Bracelet | 3 | 1.2 | 0.04 | 1.2 | 1.5 | 6 | 1.0 | 7 | — | — | 80 | 6 |
+| Mazzo Familiar | 4 | 7.0 | 0.03 | 1 | 1 | 16 | — | 20 | — | 0.05 / 2 | 100 | 1 |
+| Sole Solution | 1 | 20.0 | 0.1 | 1 | 1 | 1 | 10.0 | — | 0 | — | 100 | 1 |
+| Ashes of Muspell | 5 | 2.0 | 0.04 | 2 | 1.5 | 12 | 0.4 | — | — | — | 200 | 1 |
+| Celestial Voulge | 2 | 1.4 | 0.03 | 1.1 | 6 | 6 | — | — | — | 0.05 / 2 | 100 | 1 |
+| Seraphic Cry | 7 | 5.0 | 0.2 | 1.5 | 1 | 3 | 1.0 | — | — | 0.05 / 2 | 200 | 1 |
+| Anima of Mortaccio | 6.5 | 3.0 | 0.0 | 1.6 | 1.75 | 3 | 2.6 | — | — | — | 80 | 1 |
+| Yatta Daikarin | 2 | 3.0 | 0.3 | 2 | 1.6 | 2 | 2.6 | — | — | — | 80 | 1 |
+| Carozza! | 15 | 12.8 | 0.0 | 1 | 10 | 3 | — | — | — | — | 50 | 1 |
+| Profusione D'Amore | 1 | 6.0 | 0.0 | 1 | 1.4 | 2 | 1.5 | — | 0.1 | — | 100 | 1 |
+| Super Candybox II Turbo | 0 | 9007199254740.99 | 9007199254740.99 | 0 | 0 | 0 | 0.0 | — | — | — | 0 | 1 |
 
 Behavior:
 
@@ -122,18 +156,32 @@ Behavior:
 - **NO FUTURE**: Evolved Runetracer. Explodes when bouncing and in retaliation. (Requires: Armor)
 - **Thunder Loop**: Evolved Lightning Ring. Projectiles strike twice. (Requires: Duplicator.)
 - **Gorgeous Moon**: Evolved Pentagram. Generates extra gems and gathers all of them. (Requires: Crown.)
-- **Vandalier**: Union of Ebony Wings and Peachone. ()
+- **Vandalier**: Union of Ebony Wings and Peachone. (no tip text)
 - **Phieraggi**: Union of Phiera Der Tuphello and Eight The Sparrow. Scales with Revivals. (Requires: Tiragisú.)
 - **Vicious Hunger**: Evolved Gatti Amari. Might turn anything into gold. (Requires: Stone Mask.)
 - **Mannajja**: Evolved Song of Mana. Might slow enemies down. (Requires: Skull O'Maniac)
 - **Infinite Corridor**: Evolved Clock Lancet. Halves enemies' health. (Requires: Gold Ring, Silver Ring.)
 - **Crimson Shroud**: Evolved Laurel. Caps incoming Damage at 10. Retaliates when losing charges. (Requires: Metaglio Left, Metaglio Right.)
+- **Valkyrie Turner**: Evolved Shadow Pinion. Bigger, longer, faster, stronger. (Requires: Wings.)
+- **Fuwalafuwaloo**: Union of Vento Sacro and Bloody Tear. Critical hits might generate explosions. (no tip text)
+- **Bi-Bracelet**: Fires three projectiles at a random enemy. (no tip text)
+- **Tri-Bracelet**: Fires three projectiles at a random enemy. (no tip text)
+- **Mazzo Familiar**: Evolved Pako Battilia. Damage and Amount affected by Max Health. (Requires Max: Hollow Heart.)
+- **Sole Solution**: Gift of Victory Sword. The more enemies are defeated, the stronger it grows. (Requires Max: Victory Sword, Torrona's Box.)
+- **Ashes of Muspell**: Evolved Flames of Misspell. The more enemies are defeated, the stronger it grows. (Requires Max: Torrona's Box.)
+- **Celestial Voulge**: Evolved Glass Fandango. Might deal critical damage and freeze enemies. Turns Orologions into Starry Heavens. (Requires Max: MoveSpeed.)
+- **Seraphic Cry**: Evolved Santa Javelin. Critical damage affected by Luck. Turns Rosaries into Weird Souls Purifiers. (Requires Max: Clover.)
+- **Anima of Mortaccio**: Evolved Bone. Projectiles accelerate when bouncing. (Requires: Tetraforce.)
+- **Yatta Daikarin**: Evolved Cherry Bomb. Generates extra explosions that can deal critical Luck-based damage. (Requires: Tetraforce.)
+- **Carozza!**: Evolved Carréllo. (Requires: Tetraforce.)
+- **Profusione D'Amore**: Evolved Celestial Dusting. Projectiles generate a chain explosion at fixed intervals. (Requires: Tetraforce.)
+- **Super Candybox II Turbo**: Gift of Candybox. Allows to choose among a selection of advanced weapons. (Requires: Candybox.)
 
-> `pierce` = `penetrating` in the data file (absent = 1 hit / not applicable). Death Spiral's 1000 pierce is the game's stand-in for infinite. Vandalier is the only evolved weapon with more than one level (8): +0.2 area at levels 2/4/6/8, −0.25s interval at 3/5/7.
+> `pierce` = `penetrating` in the data file (absent = single hit / not applicable). Death Spiral's 1000 pierce is the game's stand-in for infinite. Pentagram/Gorgeous Moon and Clock Lancet/Infinite Corridor have power 0 (they do not deal normal damage). Vandalier is the only classic evolved weapon with more than one level (8): +0.2 area at levels 2/4/6/8, −0.25 s interval at 3/5/7.
 
 ## Conflicts
 
-- **data.passives.attractorb.valuePerLevel** — values: [[0.5, 0.33, 0.25, 0.2, 0.33], "+100% pickup radius total (+20%/level, commonly quoted by community guides)"] — sources ['vs-gamefiles-v1.16', 'official-wiki'] — Game files give non-uniform per-level magnet values summing to 1.51. Community/wiki text usually says a flat per-level magnet increase. Game files taken as authoritative.
+- **data.passives.attractorb.valuePerLevel** — values: [[0.5, 0.33, 0.25, 0.2, 0.33], "+100% pickup radius total (+20%/level, commonly quoted by community guides)"] — sources ['vs-gamefiles-v1.16', 'official-wiki'] — Game files give non-uniform per-level magnet values summing to 1.61. Community/wiki text usually says a flat per-level magnet increase. Game files taken as authoritative.
 - **data.passives.hollow_heart.totalAtMax** — values: [1.0, "x1.2 per level compounding (= +148.8% at level 5)"] — sources ['vs-gamefiles-v1.16', 'fandom-wiki'] — Game file stores maxHp 0.2 per level; fandom text says 'multiplies Max Health by 1.2 per level' (multiplicative). Additive reading (+100% total) recorded in data.
 - **data.evolutions.vandalier.requiresAtMaxLevel** — values: [["Peachone"], ["Peachone", "Ebony Wings"]] — sources ['vs-gamefiles-v1.16', 'official-wiki'] — Game file marks only Peachone in requiresMax; wiki/community state BOTH Peachone and Ebony Wings must be max level. Unresolved.
 - **data.evolutions.phieraggi.requiresAtMaxLevel** — values: [["Phiera Der Tuphello"], ["Phiera Der Tuphello", "Eight The Sparrow"]] — sources ['vs-gamefiles-v1.16', 'official-wiki'] — Same pattern as Vandalier.
@@ -144,3 +192,4 @@ Behavior:
 - data.evolutionRules.chestSpawnTimeSeconds (not present in game data files; value below taken from wiki summaries, not verified against a fetched page)
 - data.evolutions.*.levels (evolved weapons other than Vandalier have a single level; per-level growth tables for base weapons are out of scope for this file)
 - data.passives.*.unlockCondition
+- data.evolutions[group=other-base-game].* — these appear in the base-game data folder but are post-1.0 content; scope relative to 'base game' not independently verified (wikis unreachable). Weapons named EX_*/PHASER/FOLLOWER_KNIFE in the same file were excluded as crossover/DLC.

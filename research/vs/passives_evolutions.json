@@ -46,7 +46,7 @@
         "vs-gamefiles-v1.16",
         "official-wiki"
       ],
-      "note": "Game files give non-uniform per-level magnet values summing to 1.51. Community/wiki text usually says a flat per-level magnet increase. Game files taken as authoritative."
+      "note": "Game files give non-uniform per-level magnet values summing to 1.61. Community/wiki text usually says a flat per-level magnet increase. Game files taken as authoritative."
     },
     {
       "field": "data.passives.hollow_heart.totalAtMax",
@@ -110,7 +110,8 @@
   "unknowns": [
     "data.evolutionRules.chestSpawnTimeSeconds (not present in game data files; value below taken from wiki summaries, not verified against a fetched page)",
     "data.evolutions.*.levels (evolved weapons other than Vandalier have a single level; per-level growth tables for base weapons are out of scope for this file)",
-    "data.passives.*.unlockCondition"
+    "data.passives.*.unlockCondition",
+    "data.evolutions[group=other-base-game].* — these appear in the base-game data folder but are post-1.0 content; scope relative to 'base game' not independently verified (wikis unreachable). Weapons named EX_*/PHASER/FOLLOWER_KNIFE in the same file were excluded as crossover/DLC."
   ],
   "data": {
     "passives": [
@@ -517,6 +518,7 @@
         "name": "Bloody Tear",
         "id": "bloody_tear",
         "vsId": "VAMPIRICA",
+        "group": "core",
         "evolvesFrom": [
           "Whip"
         ],
@@ -548,6 +550,7 @@
         "name": "Holy Wand",
         "id": "holy_wand",
         "vsId": "HOLY_MISSILE",
+        "group": "core",
         "evolvesFrom": [
           "Magic Wand"
         ],
@@ -579,6 +582,7 @@
         "name": "Thousand Edge",
         "id": "thousand_edge",
         "vsId": "THOUSAND",
+        "group": "core",
         "evolvesFrom": [
           "Knife"
         ],
@@ -610,6 +614,7 @@
         "name": "Death Spiral",
         "id": "death_spiral",
         "vsId": "SCYTHE",
+        "group": "core",
         "evolvesFrom": [
           "Axe"
         ],
@@ -641,6 +646,7 @@
         "name": "Heaven Sword",
         "id": "heaven_sword",
         "vsId": "HEAVENSWORD",
+        "group": "core",
         "evolvesFrom": [
           "Cross"
         ],
@@ -672,6 +678,7 @@
         "name": "Unholy Vespers",
         "id": "unholy_vespers",
         "vsId": "VESPERS",
+        "group": "core",
         "evolvesFrom": [
           "King Bible"
         ],
@@ -703,6 +710,7 @@
         "name": "Hellfire",
         "id": "hellfire",
         "vsId": "HELLFIRE",
+        "group": "core",
         "evolvesFrom": [
           "Fire Wand"
         ],
@@ -734,6 +742,7 @@
         "name": "Soul Eater",
         "id": "soul_eater",
         "vsId": "VORTEX",
+        "group": "core",
         "evolvesFrom": [
           "Garlic"
         ],
@@ -765,6 +774,7 @@
         "name": "La Borra",
         "id": "la_borra",
         "vsId": "BORA",
+        "group": "core",
         "evolvesFrom": [
           "Santa Water"
         ],
@@ -796,6 +806,7 @@
         "name": "NO FUTURE",
         "id": "no_future",
         "vsId": "ROCHER",
+        "group": "core",
         "evolvesFrom": [
           "Runetracer"
         ],
@@ -827,6 +838,7 @@
         "name": "Thunder Loop",
         "id": "thunder_loop",
         "vsId": "LOOP",
+        "group": "core",
         "evolvesFrom": [
           "Lightning Ring"
         ],
@@ -858,6 +870,7 @@
         "name": "Gorgeous Moon",
         "id": "gorgeous_moon",
         "vsId": "SIRE",
+        "group": "core",
         "evolvesFrom": [
           "Pentagram"
         ],
@@ -889,6 +902,7 @@
         "name": "Vandalier",
         "id": "vandalier",
         "vsId": "SILF3",
+        "group": "core",
         "evolvesFrom": [
           "Peachone",
           "Ebony Wings"
@@ -921,6 +935,7 @@
         "name": "Phieraggi",
         "id": "phieraggi",
         "vsId": "GUNS3",
+        "group": "core",
         "evolvesFrom": [
           "Phiera Der Tuphello",
           "Eight The Sparrow"
@@ -955,6 +970,7 @@
         "name": "Vicious Hunger",
         "id": "vicious_hunger",
         "vsId": "STIGRANGATTI",
+        "group": "core",
         "evolvesFrom": [
           "Gatti Amari"
         ],
@@ -986,6 +1002,7 @@
         "name": "Mannajja",
         "id": "mannajja",
         "vsId": "MANNAGGIA",
+        "group": "core",
         "evolvesFrom": [
           "Song of Mana"
         ],
@@ -1017,6 +1034,7 @@
         "name": "Infinite Corridor",
         "id": "infinite_corridor",
         "vsId": "CORRIDOR",
+        "group": "core",
         "evolvesFrom": [
           "Clock Lancet"
         ],
@@ -1052,6 +1070,7 @@
         "name": "Crimson Shroud",
         "id": "crimson_shroud",
         "vsId": "SHROUD",
+        "group": "core",
         "evolvesFrom": [
           "Laurel"
         ],
@@ -1079,6 +1098,450 @@
         "maxLevel": 1,
         "behavior": "Evolved Laurel. Caps incoming Damage at 10. Retaliates when losing charges.",
         "tips": "Requires: Metaglio Left, Metaglio Right.",
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      },
+      {
+        "name": "Valkyrie Turner",
+        "id": "valkyrie_turner",
+        "vsId": "TRAPANO2",
+        "group": "other-base-game",
+        "evolvesFrom": [
+          "Shadow Pinion"
+        ],
+        "requiredPassives": [
+          "Wings"
+        ],
+        "requiresAtMaxLevel": [],
+        "isUnion": false,
+        "baseDamage": 3.5,
+        "cooldown": 6.0,
+        "repeatInterval": 0.3,
+        "area": 1.4,
+        "speed": 3.5,
+        "amount": 1,
+        "duration": 2.0,
+        "pierce": null,
+        "knockback": null,
+        "critChance": null,
+        "critMultiplier": null,
+        "poolLimit": 200,
+        "maxLevel": 1,
+        "behavior": "Evolved Shadow Pinion. Bigger, longer, faster, stronger.",
+        "tips": "Requires: Wings.",
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      },
+      {
+        "name": "Fuwalafuwaloo",
+        "id": "fuwalafuwaloo",
+        "vsId": "VENTO2",
+        "group": "other-base-game",
+        "evolvesFrom": [
+          "Vento Sacro",
+          "Bloody Tear"
+        ],
+        "requiredPassives": [
+          "Bloody Tear"
+        ],
+        "requiresAtMaxLevel": [
+          "Bloody Tear"
+        ],
+        "isUnion": true,
+        "baseDamage": 2,
+        "cooldown": 2.0,
+        "repeatInterval": 0.05,
+        "area": 2,
+        "speed": 1,
+        "amount": 8,
+        "duration": 0.4,
+        "pierce": null,
+        "knockback": 0.2,
+        "critChance": 0.05,
+        "critMultiplier": 2,
+        "poolLimit": 120,
+        "maxLevel": 1,
+        "behavior": "Union of Vento Sacro and Bloody Tear. Critical hits might generate explosions.",
+        "tips": "",
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      },
+      {
+        "name": "Bi-Bracelet",
+        "id": "bi-bracelet",
+        "vsId": "TRIASSO2",
+        "group": "other-base-game",
+        "evolvesFrom": [
+          "Bracelet"
+        ],
+        "requiredPassives": [
+          "Bracelet"
+        ],
+        "requiresAtMaxLevel": [
+          "Bracelet"
+        ],
+        "isUnion": false,
+        "baseDamage": 3,
+        "cooldown": 1.4,
+        "repeatInterval": 0.04,
+        "area": 1,
+        "speed": 1.5,
+        "amount": 4,
+        "duration": 0.6,
+        "pierce": 5,
+        "knockback": null,
+        "critChance": null,
+        "critMultiplier": null,
+        "poolLimit": 80,
+        "maxLevel": 6,
+        "behavior": "Fires three projectiles at a random enemy.",
+        "tips": "",
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      },
+      {
+        "name": "Tri-Bracelet",
+        "id": "tri-bracelet",
+        "vsId": "TRIASSO3",
+        "group": "other-base-game",
+        "evolvesFrom": [
+          "Bi-Bracelet"
+        ],
+        "requiredPassives": [
+          "Bi-Bracelet"
+        ],
+        "requiresAtMaxLevel": [
+          "Bi-Bracelet"
+        ],
+        "isUnion": false,
+        "baseDamage": 3,
+        "cooldown": 1.2,
+        "repeatInterval": 0.04,
+        "area": 1.2,
+        "speed": 1.5,
+        "amount": 6,
+        "duration": 1.0,
+        "pierce": 7,
+        "knockback": null,
+        "critChance": null,
+        "critMultiplier": null,
+        "poolLimit": 80,
+        "maxLevel": 6,
+        "behavior": "Fires three projectiles at a random enemy.",
+        "tips": "",
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      },
+      {
+        "name": "Mazzo Familiar",
+        "id": "mazzo_familiar",
+        "vsId": "BATTILIA2",
+        "group": "other-base-game",
+        "evolvesFrom": [
+          "Pako Battilia"
+        ],
+        "requiredPassives": [
+          "Hollow Heart"
+        ],
+        "requiresAtMaxLevel": [
+          "Hollow Heart"
+        ],
+        "isUnion": false,
+        "baseDamage": 4,
+        "cooldown": 7.0,
+        "repeatInterval": 0.03,
+        "area": 1,
+        "speed": 1,
+        "amount": 16,
+        "duration": null,
+        "pierce": 20,
+        "knockback": null,
+        "critChance": 0.05,
+        "critMultiplier": 2,
+        "poolLimit": 100,
+        "maxLevel": 1,
+        "behavior": "Evolved Pako Battilia. Damage and Amount affected by Max Health.",
+        "tips": "Requires Max: Hollow Heart.",
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      },
+      {
+        "name": "Sole Solution",
+        "id": "sole_solution",
+        "vsId": "SOLES",
+        "group": "other-base-game",
+        "evolvesFrom": [],
+        "requiredPassives": [
+          "Victory Sword"
+        ],
+        "requiresAtMaxLevel": [
+          "Victory Sword",
+          "Torrona's Box"
+        ],
+        "isUnion": false,
+        "baseDamage": 1,
+        "cooldown": 20.0,
+        "repeatInterval": 0.1,
+        "area": 1,
+        "speed": 1,
+        "amount": 1,
+        "duration": 10.0,
+        "pierce": null,
+        "knockback": 0,
+        "critChance": null,
+        "critMultiplier": null,
+        "poolLimit": 100,
+        "maxLevel": 1,
+        "behavior": "Gift of Victory Sword. The more enemies are defeated, the stronger it grows.",
+        "tips": "Requires Max: Victory Sword, Torrona's Box.",
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      },
+      {
+        "name": "Ashes of Muspell",
+        "id": "ashes_of_muspell",
+        "vsId": "MISSPELL2",
+        "group": "other-base-game",
+        "evolvesFrom": [
+          "Flames of Misspell"
+        ],
+        "requiredPassives": [
+          "Torrona's Box"
+        ],
+        "requiresAtMaxLevel": [
+          "Torrona's Box"
+        ],
+        "isUnion": false,
+        "baseDamage": 5,
+        "cooldown": 2.0,
+        "repeatInterval": 0.04,
+        "area": 2,
+        "speed": 1.5,
+        "amount": 12,
+        "duration": 0.4,
+        "pierce": null,
+        "knockback": null,
+        "critChance": null,
+        "critMultiplier": null,
+        "poolLimit": 200,
+        "maxLevel": 1,
+        "behavior": "Evolved Flames of Misspell. The more enemies are defeated, the stronger it grows.",
+        "tips": "Requires Max: Torrona's Box.",
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      },
+      {
+        "name": "Celestial Voulge",
+        "id": "celestial_voulge",
+        "vsId": "ICELANCE2",
+        "group": "other-base-game",
+        "evolvesFrom": [
+          "Glass Fandango"
+        ],
+        "requiredPassives": [
+          "Wings"
+        ],
+        "requiresAtMaxLevel": [
+          "Wings"
+        ],
+        "isUnion": false,
+        "baseDamage": 2,
+        "cooldown": 1.4,
+        "repeatInterval": 0.03,
+        "area": 1.1,
+        "speed": 6,
+        "amount": 6,
+        "duration": null,
+        "pierce": null,
+        "knockback": null,
+        "critChance": 0.05,
+        "critMultiplier": 2,
+        "poolLimit": 100,
+        "maxLevel": 1,
+        "behavior": "Evolved Glass Fandango. Might deal critical damage and freeze enemies. Turns Orologions into Starry Heavens.",
+        "tips": "Requires Max: MoveSpeed.",
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      },
+      {
+        "name": "Seraphic Cry",
+        "id": "seraphic_cry",
+        "vsId": "SANTAJAVELIN2",
+        "group": "other-base-game",
+        "evolvesFrom": [
+          "Santa Javelin"
+        ],
+        "requiredPassives": [
+          "Clover"
+        ],
+        "requiresAtMaxLevel": [
+          "Clover"
+        ],
+        "isUnion": false,
+        "baseDamage": 7,
+        "cooldown": 5.0,
+        "repeatInterval": 0.2,
+        "area": 1.5,
+        "speed": 1,
+        "amount": 3,
+        "duration": 1.0,
+        "pierce": null,
+        "knockback": null,
+        "critChance": 0.05,
+        "critMultiplier": 2,
+        "poolLimit": 200,
+        "maxLevel": 1,
+        "behavior": "Evolved Santa Javelin. Critical damage affected by Luck. Turns Rosaries into Weird Souls Purifiers.",
+        "tips": "Requires Max: Clover.",
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      },
+      {
+        "name": "Anima of Mortaccio",
+        "id": "anima_of_mortaccio",
+        "vsId": "BONE2",
+        "group": "other-base-game",
+        "evolvesFrom": [],
+        "requiredPassives": [],
+        "requiresAtMaxLevel": [],
+        "isUnion": false,
+        "baseDamage": 6.5,
+        "cooldown": 3.0,
+        "repeatInterval": 0.0,
+        "area": 1.6,
+        "speed": 1.75,
+        "amount": 3,
+        "duration": 2.6,
+        "pierce": null,
+        "knockback": null,
+        "critChance": null,
+        "critMultiplier": null,
+        "poolLimit": 80,
+        "maxLevel": 1,
+        "behavior": "Evolved Bone. Projectiles accelerate when bouncing.",
+        "tips": "Requires: Tetraforce.",
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      },
+      {
+        "name": "Yatta Daikarin",
+        "id": "yatta_daikarin",
+        "vsId": "CHERRY2",
+        "group": "other-base-game",
+        "evolvesFrom": [],
+        "requiredPassives": [],
+        "requiresAtMaxLevel": [],
+        "isUnion": false,
+        "baseDamage": 2,
+        "cooldown": 3.0,
+        "repeatInterval": 0.3,
+        "area": 2,
+        "speed": 1.6,
+        "amount": 2,
+        "duration": 2.6,
+        "pierce": null,
+        "knockback": null,
+        "critChance": null,
+        "critMultiplier": null,
+        "poolLimit": 80,
+        "maxLevel": 1,
+        "behavior": "Evolved Cherry Bomb. Generates extra explosions that can deal critical Luck-based damage.",
+        "tips": "Requires: Tetraforce.",
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      },
+      {
+        "name": "Carozza!",
+        "id": "carozza!",
+        "vsId": "CART2EVO",
+        "group": "other-base-game",
+        "evolvesFrom": [],
+        "requiredPassives": [],
+        "requiresAtMaxLevel": [],
+        "isUnion": false,
+        "baseDamage": 15,
+        "cooldown": 12.8,
+        "repeatInterval": 0.0,
+        "area": 1,
+        "speed": 10,
+        "amount": 3,
+        "duration": null,
+        "pierce": null,
+        "knockback": null,
+        "critChance": null,
+        "critMultiplier": null,
+        "poolLimit": 50,
+        "maxLevel": 1,
+        "behavior": "Evolved Carréllo.",
+        "tips": "Requires: Tetraforce.",
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      },
+      {
+        "name": "Profusione D'Amore",
+        "id": "profusione_damore",
+        "vsId": "FLOWER2",
+        "group": "other-base-game",
+        "evolvesFrom": [],
+        "requiredPassives": [],
+        "requiresAtMaxLevel": [],
+        "isUnion": false,
+        "baseDamage": 1,
+        "cooldown": 6.0,
+        "repeatInterval": 0.0,
+        "area": 1,
+        "speed": 1.4,
+        "amount": 2,
+        "duration": 1.5,
+        "pierce": null,
+        "knockback": 0.1,
+        "critChance": null,
+        "critMultiplier": null,
+        "poolLimit": 100,
+        "maxLevel": 1,
+        "behavior": "Evolved Celestial Dusting. Projectiles generate a chain explosion at fixed intervals.",
+        "tips": "Requires: Tetraforce.",
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      },
+      {
+        "name": "Super Candybox II Turbo",
+        "id": "super_candybox_ii_turbo",
+        "vsId": "CANDYBOX2",
+        "group": "other-base-game",
+        "evolvesFrom": [],
+        "requiredPassives": [],
+        "requiresAtMaxLevel": [],
+        "isUnion": false,
+        "baseDamage": 0,
+        "cooldown": 9007199254740.99,
+        "repeatInterval": 9007199254740.99,
+        "area": 0,
+        "speed": 0,
+        "amount": 0,
+        "duration": 0.0,
+        "pierce": null,
+        "knockback": null,
+        "critChance": null,
+        "critMultiplier": null,
+        "poolLimit": 0,
+        "maxLevel": 1,
+        "behavior": "Gift of Candybox. Allows to choose among a selection of advanced weapons.",
+        "tips": "Requires: Candybox.",
         "sourceIds": [
           "vs-gamefiles-v1.16"
         ]
