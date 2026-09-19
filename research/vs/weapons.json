@@ -1,0 +1,171 @@
+{
+  "schemaVersion": 1,
+  "game": "Vampire Survivors",
+  "scope": "base game (no DLC)",
+  "notes": "Percent stats (area, speed) stored as MULTIPLIERS where absolute (area: 1.0 = 100%); per-level percentage CHANGES are stored as additive fractional deltas (e.g. +20% Area -> areaDelta: 0.2). Times in seconds. maxLevelTotals = cumulative bonus from Lv1 to Lv8. RESEARCH BLOCKER: the network egress proxy blocked WebFetch to vampire.survivors.wiki, vampire-survivors.fandom.com, steamcommunity.com and all other sites; only WebSearch summaries were obtainable, so exact per-level (Lv2-Lv8) delta tables could NOT be verified for 10 of 11 weapons and are null.",
+  "sources": [
+    {"id": "official-wiki", "url": "https://vampire.survivors.wiki/w/Weapons", "retrieved": "2026-09-19", "note": "accessed only via WebSearch summaries; direct fetch blocked by egress proxy"},
+    {"id": "official-wiki-whip", "url": "https://vampire.survivors.wiki/w/Whip", "retrieved": "2026-09-19"},
+    {"id": "official-wiki-magic-wand", "url": "https://vampire.survivors.wiki/w/Magic_Wand", "retrieved": "2026-09-19"},
+    {"id": "official-wiki-knife", "url": "https://vampire.survivors.wiki/w/Knife", "retrieved": "2026-09-19"},
+    {"id": "official-wiki-axe", "url": "https://vampire.survivors.wiki/w/Axe", "retrieved": "2026-09-19"},
+    {"id": "official-wiki-runetracer", "url": "https://vampire.survivors.wiki/w/Runetracer", "retrieved": "2026-09-19"},
+    {"id": "official-wiki-fire-wand", "url": "https://vampire.survivors.wiki/w/Fire_Wand", "retrieved": "2026-09-19"},
+    {"id": "official-wiki-king-bible", "url": "https://vampire.survivors.wiki/w/King_Bible", "retrieved": "2026-09-19"},
+    {"id": "official-wiki-garlic", "url": "https://vampire.survivors.wiki/w/Garlic", "retrieved": "2026-09-19"},
+    {"id": "official-wiki-santa-water", "url": "https://vampire.survivors.wiki/w/Santa_Water", "retrieved": "2026-09-19"},
+    {"id": "official-wiki-lightning-ring", "url": "https://vampire.survivors.wiki/w/Lightning_Ring", "retrieved": "2026-09-19"},
+    {"id": "official-wiki-cross", "url": "https://vampire.survivors.wiki/w/Cross", "retrieved": "2026-09-19"},
+    {"id": "fandom-wiki", "url": "https://vampire-survivors.fandom.com/wiki/Weapons", "retrieved": "2026-09-19"},
+    {"id": "progameguides-santa-water", "url": "https://progameguides.com/vampire-survivors/how-to-evolve-the-santa-water-in-vampire-survivors/", "retrieved": "2026-09-19", "note": "tertiary source; only source that surfaced a per-level table"}
+  ],
+  "conflicts": [
+    {"field": "data.santa_water.cooldown", "values": [3.0, 4.5], "sourceIds": ["official-wiki-santa-water", "fandom-wiki"], "note": "Two search summaries of the same wiki pages reported different base cooldowns for Santa Water. Unresolved; direct page fetch was blocked."},
+    {"field": "data.fire_wand.amount", "values": [3, 1], "sourceIds": ["official-wiki-fire-wand", "fandom-wiki"], "note": "One summary lists base Amount 3 (arc of fireballs); other descriptions imply base Amount 1. Unresolved."},
+    {"field": "data.santa_water.levels", "values": ["progameguides per-level table", "unverified against wiki"], "sourceIds": ["progameguides-santa-water", "official-wiki-santa-water"], "note": "The only per-level table obtained comes from a tertiary guide site and could not be cross-checked against either wiki."}
+  ],
+  "unknowns": [
+    "data.whip.levels", "data.whip.speed", "data.whip.duration", "data.whip.poolLimit", "data.whip.pierce",
+    "data.magic_wand.levels", "data.magic_wand.area", "data.magic_wand.duration", "data.magic_wand.poolLimit", "data.magic_wand.knockback",
+    "data.knife.levels", "data.knife.duration",
+    "data.axe.levels", "data.axe.amount", "data.axe.duration", "data.axe.poolLimit",
+    "data.runetracer.levels", "data.runetracer.area", "data.runetracer.pierce",
+    "data.fire_wand.levels", "data.fire_wand.duration",
+    "data.king_bible.levels", "data.king_bible.amount", "data.king_bible.pierce",
+    "data.garlic.levels", "data.garlic.area", "data.garlic.amount", "data.garlic.speed", "data.garlic.duration", "data.garlic.pierce",
+    "data.santa_water.area", "data.santa_water.speed", "data.santa_water.pierce", "data.santa_water.knockback",
+    "data.lightning_ring.levels", "data.lightning_ring.amount", "data.lightning_ring.duration", "data.lightning_ring.poolLimit", "data.lightning_ring.knockback", "data.lightning_ring.pierce", "data.lightning_ring.speed",
+    "data.cross.levels", "data.cross.duration", "data.cross.pierce", "data.cross.poolLimit", "data.cross.knockback",
+    "critChance and critMultiplier for all weapons except Whip and Axe (which gain crits only via the Slash XVI Arcana)"
+  ],
+  "data": {
+    "whip": {
+      "name": "Whip", "id": "whip", "baseDamage": 10, "area": 1.0, "speed": null, "amount": 1,
+      "duration": null, "cooldown": 1.35, "pierce": null, "knockback": 1, "poolLimit": null,
+      "critChance": 0.20, "critMultiplier": 4,
+      "critNote": "No innate crit. 20% chance / 4x damage only while the Slash (XVI) Arcana is active.",
+      "targeting": "Fires a horizontal slash originating from the character's torso, extending in the direction the character is facing; damages all enemies in the rectangular area (area-of-effect, pierces). Extra slashes from Amount alternate between firing toward and away from the facing direction, each successive slash placed progressively higher on screen.",
+      "maxLevel": 8,
+      "maxLevelTotals": {"baseDamage": 30, "areaDelta": 0.2, "amount": 1},
+      "levels": null,
+      "sourceIds": ["official-wiki-whip", "fandom-wiki"]
+    },
+    "magic_wand": {
+      "name": "Magic Wand", "id": "magic_wand", "baseDamage": 10, "area": null, "speed": 1.0, "amount": 1,
+      "duration": null, "cooldown": 1.2, "pierce": 1, "knockback": null, "poolLimit": null,
+      "critChance": null, "critMultiplier": null,
+      "targeting": "Fires a blue magic missile at the CLOSEST enemy to the player. Unlimited range; retargets each shot. Extra projectiles from Amount fire in quick succession at nearest targets.",
+      "maxLevel": 8,
+      "maxLevelTotals": {"baseDamage": 20, "amount": 3, "pierce": 1, "cooldown": -0.2},
+      "levels": null,
+      "sourceIds": ["official-wiki-magic-wand", "fandom-wiki"]
+    },
+    "knife": {
+      "name": "Knife", "id": "knife", "baseDamage": 6.5, "area": 1.0, "speed": 1.0, "amount": 1,
+      "duration": null, "cooldown": 1.0, "pierce": 1, "knockback": 0.5, "poolLimit": 70,
+      "projectileInterval": 0.1, "critChance": null, "critMultiplier": null,
+      "targeting": "Throws knives in the direction the character is facing (direction of movement, or last-moved direction when standing still). Unlimited range, travels in a straight line. Extra knives from Amount are fired as a rapid volley spaced by the projectile interval (0.1s base).",
+      "maxLevel": 8,
+      "maxLevelTotals": {"baseDamage": 10, "amount": 5, "pierce": 2, "projectileInterval": -0.06},
+      "levels": null,
+      "sourceIds": ["official-wiki-knife", "fandom-wiki"]
+    },
+    "axe": {
+      "name": "Axe", "id": "axe", "baseDamage": 20, "area": 1.0, "speed": 1.0, "amount": null,
+      "duration": null, "cooldown": 4.0, "pierce": 3, "knockback": 1, "poolLimit": null,
+      "critChance": 0.30, "critMultiplier": 4,
+      "critNote": "No innate crit. 30% chance / 4x damage only while the Slash (XVI) Arcana is active.",
+      "areaScaling": 1.3,
+      "targeting": "Throws axes upward above the player that arc back down under gravity. The first axe is thrown straight up above the character; subsequent axes from Amount are thrown in quick succession toward the facing direction in progressively wider arcs. Each axe pierces up to 3 enemies (base) before dissipating. Area from the character stat is multiplied by 1.3 for this weapon.",
+      "maxLevel": 8,
+      "maxLevelTotals": {"baseDamage": 60, "amount": 2, "pierce": 4},
+      "levels": null,
+      "sourceIds": ["official-wiki-axe", "fandom-wiki"]
+    },
+    "runetracer": {
+      "name": "Runetracer", "id": "runetracer", "baseDamage": 10, "area": null, "speed": 1.0, "amount": 1,
+      "duration": 2.25, "cooldown": 3.0, "pierce": null, "knockback": 1, "poolLimit": 25,
+      "projectileInterval": 0.2, "hitboxDelay": 0.5, "critChance": null, "critMultiplier": null,
+      "pierceNote": "Infinite pierce; limited instead by a 0.5s per-enemy hitbox delay.",
+      "targeting": "Launches a rune projectile that travels in a straight line and BOUNCES off the edges of the screen and off obstacles, ricocheting until its Duration expires. Damages every enemy it passes through; the same enemy cannot be hit again by the same rune within 0.5 seconds.",
+      "maxLevel": 8,
+      "maxLevelTotals": {"baseDamage": 20, "amount": 2, "speedDelta": 0.4, "duration": 1.0},
+      "levels": null,
+      "sourceIds": ["official-wiki-runetracer", "fandom-wiki"]
+    },
+    "fire_wand": {
+      "name": "Fire Wand", "id": "fire_wand", "baseDamage": 20, "area": 1.0, "speed": 0.75, "amount": 3,
+      "duration": null, "cooldown": 3.0, "pierce": 1, "knockback": 1, "poolLimit": 30,
+      "projectileInterval": 0.02, "critChance": null, "critMultiplier": null,
+      "targeting": "Fires an arc of fireballs in the direction of a RANDOM enemy (not the nearest). All fireballs in a cast are launched near-simultaneously (0.02s interval); additional fireballs from Amount are appended to the outer ends of the arc, widening the spread. Each fireball hits one enemy (pierce 1) then dissipates.",
+      "maxLevel": 8,
+      "maxLevelTotals": {"baseDamage": 70, "speedDelta": 0.6},
+      "levels": null,
+      "sourceIds": ["official-wiki-fire-wand", "fandom-wiki"]
+    },
+    "king_bible": {
+      "name": "King Bible", "id": "king_bible", "baseDamage": 10, "area": 1.0, "speed": 1.0, "amount": null,
+      "duration": 3.0, "cooldown": 3.0, "pierce": null, "knockback": 1, "poolLimit": 50,
+      "hitboxDelay": 1.7, "critChance": null, "critMultiplier": null,
+      "pierceNote": "Area-of-effect; pierces (hits every enemy it overlaps), limited by a 1.7s per-enemy hitbox delay.",
+      "targeting": "Orbits bibles clockwise around the player at a fixed radius for the weapon's Duration, then goes on cooldown. Speed controls rotation rate; Duration controls how long the orbit lasts; Area controls both orbit radius (capped) and bible hitbox size. Extra bibles from Amount are spaced evenly around the ring. Effective cycle time = Cooldown + Duration (3.0 + 3.0 = 6.0s base).",
+      "maxLevel": 8,
+      "maxLevelTotals": {"baseDamage": 20, "speedDelta": 0.6, "areaDelta": 0.5, "amount": 3, "duration": 1.0},
+      "levels": null,
+      "sourceIds": ["official-wiki-king-bible", "fandom-wiki"]
+    },
+    "garlic": {
+      "name": "Garlic", "id": "garlic", "baseDamage": 5, "area": null, "speed": null, "amount": null,
+      "duration": null, "cooldown": 1.3, "pierce": null, "knockback": 0, "poolLimit": 50,
+      "critChance": null, "critMultiplier": null,
+      "targeting": "Permanent damaging aura centred on the player (three rotating concentric circles). No aiming. An enemy entering the aura is damaged instantly the first time, then cannot be hit again by it until the weapon's Cooldown elapses (Cooldown functions as the per-enemy hitbox delay) even if it leaves and re-enters. Each hit also applies +0.3 knockback vulnerability and -0.1 freeze resistance to non-debuff-immune enemies, cumulatively up to their cap.",
+      "maxLevel": 8,
+      "maxLevelTotals": {"baseDamage": 10, "areaDelta": 1.0, "cooldown": -0.3},
+      "levels": null,
+      "sourceIds": ["official-wiki-garlic", "fandom-wiki"]
+    },
+    "santa_water": {
+      "name": "Santa Water", "id": "santa_water", "baseDamage": 10, "area": null, "speed": null, "amount": 1,
+      "duration": 2.0, "cooldown": 4.5, "cooldownAlt": 3.0, "pierce": null, "knockback": null, "poolLimit": 20,
+      "critChance": null, "critMultiplier": null,
+      "ignoresSpeed": true,
+      "targeting": "Drops bottles of holy water from the sky that shatter on the ground, leaving a stationary burning puddle that damages enemies standing in it for the weapon's Duration. While total Amount is below 4, the first bottle of each cast aims at the CLOSEST enemy and the rest land in nearby random positions; at Amount 4+ the bottles are dropped in a clockwise, roughly circular pattern around the player. Ignores the Speed stat.",
+      "maxLevel": 8,
+      "maxLevelTotals": {"baseDamage": 30, "areaDelta": 0.8, "amount": 3, "duration": 1.0},
+      "levels": [
+        {"level": 1, "changes": {}, "description": "1 projectile that deals area damage on impact."},
+        {"level": 2, "changes": {"amount": 1, "areaDelta": 0.2}, "description": "+1 projectile, +20% Area."},
+        {"level": 3, "changes": {"baseDamage": 10, "duration": 0.5}, "description": "+10 Damage, +0.5s Duration."},
+        {"level": 4, "changes": {"amount": 1, "areaDelta": 0.2}, "description": "+1 projectile, +20% Area."},
+        {"level": 5, "changes": {"baseDamage": 10, "duration": 0.5}, "description": "+10 Damage, +0.5s Duration."},
+        {"level": 6, "changes": {"amount": 1, "areaDelta": 0.2}, "description": "+1 projectile, +20% Area."},
+        {"level": 7, "changes": {"baseDamage": 5, "duration": 0.3}, "description": "+5 Damage, +0.3s Duration."},
+        {"level": 8, "changes": {"baseDamage": 5, "areaDelta": 0.2}, "description": "+5 Damage, +20% Area."}
+      ],
+      "levelsNote": "Per-level table from a tertiary guide only; its Duration deltas (+0.5/+0.5/+0.3 = +1.3s) do not reconcile with the stated +1.0s max-level Duration total. Treat as UNVERIFIED.",
+      "sourceIds": ["official-wiki-santa-water", "fandom-wiki", "progameguides-santa-water"]
+    },
+    "lightning_ring": {
+      "name": "Lightning Ring", "id": "lightning_ring", "baseDamage": 15, "area": 1.0, "speed": null, "amount": null,
+      "duration": null, "cooldown": 4.5, "pierce": null, "knockback": null, "poolLimit": null,
+      "critChance": null, "critMultiplier": null,
+      "ignoresSpeed": true, "ignoresDuration": true,
+      "targeting": "Calls down lightning bolts onto RANDOM enemies currently on screen. The bolt visual deals no damage; the damage comes from a circular hitbox created where it strikes the ground. Area scales that hitbox. Ignores both the Speed and Duration stats.",
+      "maxLevel": 8,
+      "maxLevelTotals": {"baseDamage": 50, "areaDelta": 3.0, "amount": 4},
+      "levels": null,
+      "sourceIds": ["official-wiki-lightning-ring", "fandom-wiki"]
+    },
+    "cross": {
+      "name": "Cross", "id": "cross", "baseDamage": 5, "area": 1.0, "speed": 1.0, "amount": 1,
+      "duration": null, "cooldown": 2.0, "pierce": null, "knockback": null, "poolLimit": null,
+      "critChance": null, "critMultiplier": null,
+      "pierceNote": "Infinite pierce — damages every enemy it contacts on both the outward and return legs.",
+      "targeting": "Throws a spinning cross toward the CLOSEST enemy. It decelerates, then boomerangs back in the opposite direction and continues until it leaves the screen. Speed determines how far out it travels before reversing.",
+      "maxLevel": 8,
+      "maxLevelTotals": {"baseDamage": 30, "areaDelta": 0.2, "speedDelta": 0.5, "amount": 2},
+      "levels": null,
+      "sourceIds": ["official-wiki-cross", "fandom-wiki"]
+    }
+  }
+}
