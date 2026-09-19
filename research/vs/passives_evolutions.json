@@ -1,0 +1,1105 @@
+{
+  "schemaVersion": 1,
+  "game": "Vampire Survivors",
+  "scope": "base game (no DLC)",
+  "sources": [
+    {
+      "id": "vs-gamefiles-v1.16",
+      "url": "https://raw.githubusercontent.com/SurvivatonsAndMore/VampireSurvivorsFiles/main/Data/Vampire%20Survivors/Weapon.json",
+      "retrieved": "2026-09-19",
+      "note": "Verbatim rip of the game's own Weapon.json, base-game folder, game v1.16 (repo README)."
+    },
+    {
+      "id": "official-wiki",
+      "url": "https://vampire.survivors.wiki/w/Evolution",
+      "retrieved": "2026-09-19",
+      "note": "Page NOT directly fetchable from this session (egress proxy blocks vampire.survivors.wiki and vampire-survivors.fandom.com). Statements attributed to it come from search-engine summaries of that page, not the page text."
+    },
+    {
+      "id": "fandom-wiki",
+      "url": "https://vampire-survivors.fandom.com/wiki/Passive_items",
+      "retrieved": "2026-09-19",
+      "note": "Same limitation as above."
+    },
+    {
+      "id": "vst",
+      "url": "https://raw.githubusercontent.com/jerek/vampire-survivors-tools/main/src/js/VST/VS/Weapon.js",
+      "retrieved": "2026-09-19",
+      "note": "Community tool mirroring wiki data; used only to cross-check the evolution recipe list."
+    }
+  ],
+  "notes": "Passive percentage bonuses are stored as FRACTIONAL DELTAS per level (e.g. Spinach 0.1 = +10% Might per level); totalAtMax is the arithmetic sum of the per-level values. Armor/Duplicator/Tiragisu are flat integers. All times in SECONDS. 'cooldown' on evolved weapons is the base attack interval in seconds.",
+  "conflicts": [
+    {
+      "field": "data.passives.attractorb.valuePerLevel",
+      "values": [
+        [
+          0.5,
+          0.33,
+          0.25,
+          0.2,
+          0.33
+        ],
+        "+100% pickup radius total (+20%/level, commonly quoted by community guides)"
+      ],
+      "sourceIds": [
+        "vs-gamefiles-v1.16",
+        "official-wiki"
+      ],
+      "note": "Game files give non-uniform per-level magnet values summing to 1.51. Community/wiki text usually says a flat per-level magnet increase. Game files taken as authoritative."
+    },
+    {
+      "field": "data.passives.hollow_heart.totalAtMax",
+      "values": [
+        1.0,
+        "x1.2 per level compounding (= +148.8% at level 5)"
+      ],
+      "sourceIds": [
+        "vs-gamefiles-v1.16",
+        "fandom-wiki"
+      ],
+      "note": "Game file stores maxHp 0.2 per level; fandom text says 'multiplies Max Health by 1.2 per level' (multiplicative). Additive reading (+100% total) recorded in data."
+    },
+    {
+      "field": "data.evolutions.vandalier.requiresAtMaxLevel",
+      "values": [
+        [
+          "Peachone"
+        ],
+        [
+          "Peachone",
+          "Ebony Wings"
+        ]
+      ],
+      "sourceIds": [
+        "vs-gamefiles-v1.16",
+        "official-wiki"
+      ],
+      "note": "Game file marks only Peachone in requiresMax; wiki/community state BOTH Peachone and Ebony Wings must be max level. Unresolved."
+    },
+    {
+      "field": "data.evolutions.phieraggi.requiresAtMaxLevel",
+      "values": [
+        [
+          "Phiera Der Tuphello"
+        ],
+        [
+          "Phiera Der Tuphello",
+          "Eight The Sparrow"
+        ]
+      ],
+      "sourceIds": [
+        "vs-gamefiles-v1.16",
+        "official-wiki"
+      ],
+      "note": "Same pattern as Vandalier."
+    },
+    {
+      "field": "data.passives.armor.maxLevel",
+      "values": [
+        5,
+        3
+      ],
+      "sourceIds": [
+        "vs-gamefiles-v1.16",
+        "vs-gamefiles-v1.16"
+      ],
+      "note": "The in-run passive ITEM Armor has 5 levels (+1 each). The meta PowerUp 'Armor' bought with gold has 3 ranks. Do not confuse them; this file documents the in-run item."
+    }
+  ],
+  "unknowns": [
+    "data.evolutionRules.chestSpawnTimeSeconds (not present in game data files; value below taken from wiki summaries, not verified against a fetched page)",
+    "data.evolutions.*.levels (evolved weapons other than Vandalier have a single level; per-level growth tables for base weapons are out of scope for this file)",
+    "data.passives.*.unlockCondition"
+  ],
+  "data": {
+    "passives": [
+      {
+        "name": "Spinach",
+        "id": "spinach",
+        "vsId": "POWER",
+        "stat": "might",
+        "description": "Raises inflicted damage by 10%.",
+        "maxLevel": 5,
+        "valuePerLevel": [
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1
+        ],
+        "totalAtMax": 0.5,
+        "rarity": 100,
+        "price": 80,
+        "enablesEvolution": "Hellfire",
+        "evoSynergy": [
+          "Fire Wand"
+        ],
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      },
+      {
+        "name": "Armor",
+        "id": "armor",
+        "vsId": "ARMOR",
+        "stat": "armor",
+        "description": "Reduces incoming Damage by 1. Increases retaliatory Damage by 10%.",
+        "maxLevel": 5,
+        "valuePerLevel": [
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "totalAtMax": 5,
+        "rarity": 100,
+        "price": 60,
+        "enablesEvolution": "NO FUTURE",
+        "evoSynergy": [
+          "Runetracer"
+        ],
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      },
+      {
+        "name": "Hollow Heart",
+        "id": "hollow_heart",
+        "vsId": "MAXHEALTH",
+        "stat": "maxHealth",
+        "description": "Augments Max Health by 20%.",
+        "maxLevel": 5,
+        "valuePerLevel": [
+          0.2,
+          0.2,
+          0.2,
+          0.2,
+          0.2
+        ],
+        "totalAtMax": 1.0,
+        "rarity": 90,
+        "price": 10,
+        "enablesEvolution": "Bloody Tear",
+        "evoSynergy": [
+          "Whip"
+        ],
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      },
+      {
+        "name": "Pummarola",
+        "id": "pummarola",
+        "vsId": "REGEN",
+        "stat": "recovery",
+        "description": "Character recovers 0.2 HP per second.",
+        "maxLevel": 5,
+        "valuePerLevel": [
+          0.2,
+          0.2,
+          0.2,
+          0.2,
+          0.2
+        ],
+        "totalAtMax": 1.0,
+        "rarity": 90,
+        "price": 10,
+        "enablesEvolution": "Soul Eater",
+        "evoSynergy": [
+          "Garlic"
+        ],
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      },
+      {
+        "name": "Empty Tome",
+        "id": "empty_tome",
+        "vsId": "COOLDOWN",
+        "stat": "cooldown",
+        "description": "Reduces weapon cooldown by 8%.",
+        "maxLevel": 5,
+        "valuePerLevel": [
+          -0.08,
+          -0.08,
+          -0.08,
+          -0.08,
+          -0.08
+        ],
+        "totalAtMax": -0.4,
+        "rarity": 50,
+        "price": 180,
+        "enablesEvolution": "Holy Wand",
+        "evoSynergy": [
+          "Magic Wand"
+        ],
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      },
+      {
+        "name": "Candelabrador",
+        "id": "candelabrador",
+        "vsId": "AREA",
+        "stat": "area",
+        "description": "Augments area of attacks by 10%.",
+        "maxLevel": 5,
+        "valuePerLevel": [
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1
+        ],
+        "totalAtMax": 0.5,
+        "rarity": 100,
+        "price": 120,
+        "enablesEvolution": "Death Spiral",
+        "evoSynergy": [
+          "Axe"
+        ],
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      },
+      {
+        "name": "Bracer",
+        "id": "bracer",
+        "vsId": "SPEED",
+        "stat": "speed",
+        "description": "Increases projectile speed by 10%.",
+        "maxLevel": 5,
+        "valuePerLevel": [
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1
+        ],
+        "totalAtMax": 0.5,
+        "rarity": 100,
+        "price": 60,
+        "enablesEvolution": "Thousand Edge",
+        "evoSynergy": [
+          "Knife"
+        ],
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      },
+      {
+        "name": "Spellbinder",
+        "id": "spellbinder",
+        "vsId": "DURATION",
+        "stat": "duration",
+        "description": "Increases duration of weapon effects by 10%.",
+        "maxLevel": 5,
+        "valuePerLevel": [
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1
+        ],
+        "totalAtMax": 0.5,
+        "rarity": 100,
+        "price": 100,
+        "enablesEvolution": "Unholy Vespers",
+        "evoSynergy": [
+          "King Bible"
+        ],
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      },
+      {
+        "name": "Duplicator",
+        "id": "duplicator",
+        "vsId": "AMOUNT",
+        "stat": "amount",
+        "description": "Weapons fire more projectiles.",
+        "maxLevel": 2,
+        "valuePerLevel": [
+          1,
+          1
+        ],
+        "totalAtMax": 2,
+        "rarity": 50,
+        "price": 200,
+        "enablesEvolution": "Thunder Loop",
+        "evoSynergy": [
+          "Lightning Ring"
+        ],
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      },
+      {
+        "name": "Wings",
+        "id": "wings",
+        "vsId": "MOVESPEED",
+        "stat": "moveSpeed",
+        "description": "Character moves 10% faster.",
+        "maxLevel": 5,
+        "valuePerLevel": [
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1
+        ],
+        "totalAtMax": 0.5,
+        "rarity": 50,
+        "price": 60,
+        "enablesEvolution": "Valkyrie Turner",
+        "evoSynergy": [
+          "Shadow Pinion",
+          "Glass Fandango"
+        ],
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      },
+      {
+        "name": "Attractorb",
+        "id": "attractorb",
+        "vsId": "MAGNET",
+        "stat": "magnet",
+        "description": "Character picks up items from further away.",
+        "maxLevel": 5,
+        "valuePerLevel": [
+          0.5,
+          0.33,
+          0.25,
+          0.2,
+          0.33
+        ],
+        "totalAtMax": 1.61,
+        "rarity": 100,
+        "price": 80,
+        "enablesEvolution": "La Borra",
+        "evoSynergy": [
+          "Santa Water"
+        ],
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      },
+      {
+        "name": "Clover",
+        "id": "clover",
+        "vsId": "LUCK",
+        "stat": "luck",
+        "description": "Character gets 10% luckier.",
+        "maxLevel": 5,
+        "valuePerLevel": [
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1
+        ],
+        "totalAtMax": 0.5,
+        "rarity": 100,
+        "price": 7,
+        "enablesEvolution": "Heaven Sword",
+        "evoSynergy": [
+          "Cross",
+          "Santa Javelin"
+        ],
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      },
+      {
+        "name": "Crown",
+        "id": "crown",
+        "vsId": "GROWTH",
+        "stat": "growth",
+        "description": "Character gains 8% more experience.",
+        "maxLevel": 5,
+        "valuePerLevel": [
+          0.08,
+          0.08,
+          0.08,
+          0.08,
+          0.08
+        ],
+        "totalAtMax": 0.4,
+        "rarity": 70,
+        "price": 10,
+        "enablesEvolution": "Gorgeous Moon",
+        "evoSynergy": [
+          "Pentagram"
+        ],
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      },
+      {
+        "name": "Stone Mask",
+        "id": "stone_mask",
+        "vsId": "GREED",
+        "stat": "greed",
+        "description": "Character earns 10% more Gold coins.",
+        "maxLevel": 5,
+        "valuePerLevel": [
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1
+        ],
+        "totalAtMax": 0.5,
+        "rarity": 70,
+        "price": 200,
+        "enablesEvolution": "Vicious Hunger",
+        "evoSynergy": [
+          "Gatti Amari"
+        ],
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      },
+      {
+        "name": "Skull O'Maniac",
+        "id": "skull_omaniac",
+        "vsId": "CURSE",
+        "stat": "curse",
+        "description": "Increases enemy speed, health, quantity, and frequency by 10%.",
+        "maxLevel": 5,
+        "valuePerLevel": [
+          0.1,
+          0.1,
+          0.1,
+          0.1,
+          0.1
+        ],
+        "totalAtMax": 0.5,
+        "rarity": 40,
+        "price": 200,
+        "enablesEvolution": "Mannajja",
+        "evoSynergy": [
+          "Song of Mana"
+        ],
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      },
+      {
+        "name": "Tiragisú",
+        "id": "tiragisu",
+        "vsId": "REVIVAL",
+        "stat": "revival",
+        "description": "Revives once with 50% Health.",
+        "maxLevel": 2,
+        "valuePerLevel": [
+          1,
+          1
+        ],
+        "totalAtMax": 2,
+        "rarity": 40,
+        "price": 140,
+        "enablesEvolution": "Phieraggi",
+        "evoSynergy": [
+          "Phiera Der Tuphello",
+          "Eight The Sparrow"
+        ],
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      }
+    ],
+    "evolutions": [
+      {
+        "name": "Bloody Tear",
+        "id": "bloody_tear",
+        "vsId": "VAMPIRICA",
+        "evolvesFrom": [
+          "Whip"
+        ],
+        "requiredPassives": [
+          "Hollow Heart"
+        ],
+        "requiresAtMaxLevel": [],
+        "isUnion": false,
+        "baseDamage": 4,
+        "cooldown": 1.35,
+        "repeatInterval": 0.1,
+        "area": 1.3,
+        "speed": 1,
+        "amount": 2,
+        "duration": null,
+        "pierce": null,
+        "knockback": null,
+        "critChance": 0.1,
+        "critMultiplier": 2,
+        "poolLimit": 30,
+        "maxLevel": 1,
+        "behavior": "Evolved Whip. Can deal critical damage and absorb HP.",
+        "tips": "Requires: Hollow Heart",
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      },
+      {
+        "name": "Holy Wand",
+        "id": "holy_wand",
+        "vsId": "HOLY_MISSILE",
+        "evolvesFrom": [
+          "Magic Wand"
+        ],
+        "requiredPassives": [
+          "Empty Tome"
+        ],
+        "requiresAtMaxLevel": [],
+        "isUnion": false,
+        "baseDamage": 3,
+        "cooldown": 0.5,
+        "repeatInterval": 0.1,
+        "area": 1,
+        "speed": 2,
+        "amount": 4,
+        "duration": null,
+        "pierce": 2,
+        "knockback": null,
+        "critChance": null,
+        "critMultiplier": null,
+        "poolLimit": 60,
+        "maxLevel": 1,
+        "behavior": "Evolved Magic Wand. Fires with no delay.",
+        "tips": "Requires: Empty Tome.",
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      },
+      {
+        "name": "Thousand Edge",
+        "id": "thousand_edge",
+        "vsId": "THOUSAND",
+        "evolvesFrom": [
+          "Knife"
+        ],
+        "requiredPassives": [
+          "Bracer"
+        ],
+        "requiresAtMaxLevel": [],
+        "isUnion": false,
+        "baseDamage": 1.65,
+        "cooldown": 0.35,
+        "repeatInterval": 0.05,
+        "area": 1,
+        "speed": 1.5,
+        "amount": 6,
+        "duration": null,
+        "pierce": 3,
+        "knockback": 0.5,
+        "critChance": 0.3,
+        "critMultiplier": 3,
+        "poolLimit": 70,
+        "maxLevel": 1,
+        "behavior": "Evolved Knife. Fires with no delay.",
+        "tips": "Requires: Bracer.",
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      },
+      {
+        "name": "Death Spiral",
+        "id": "death_spiral",
+        "vsId": "SCYTHE",
+        "evolvesFrom": [
+          "Axe"
+        ],
+        "requiredPassives": [
+          "Candelabrador"
+        ],
+        "requiresAtMaxLevel": [],
+        "isUnion": false,
+        "baseDamage": 6,
+        "cooldown": 4.0,
+        "repeatInterval": 0.05,
+        "area": 1.2,
+        "speed": 0.8,
+        "amount": 9,
+        "duration": null,
+        "pierce": 1000,
+        "knockback": null,
+        "critChance": 0.3,
+        "critMultiplier": 2,
+        "poolLimit": 50,
+        "maxLevel": 1,
+        "behavior": "Evolved Axe. Passes through enemies.",
+        "tips": "Requires: Candelabrador.",
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      },
+      {
+        "name": "Heaven Sword",
+        "id": "heaven_sword",
+        "vsId": "HEAVENSWORD",
+        "evolvesFrom": [
+          "Cross"
+        ],
+        "requiredPassives": [
+          "Clover"
+        ],
+        "requiresAtMaxLevel": [],
+        "isUnion": false,
+        "baseDamage": 7.7,
+        "cooldown": 3.3,
+        "repeatInterval": 0.5,
+        "area": 1.2,
+        "speed": 2,
+        "amount": 1,
+        "duration": null,
+        "pierce": null,
+        "knockback": 6,
+        "critChance": 0.1,
+        "critMultiplier": 2.5,
+        "poolLimit": 20,
+        "maxLevel": 1,
+        "behavior": "Evolved Cross. Can deal critical damage.",
+        "tips": "Requires: Clover.",
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      },
+      {
+        "name": "Unholy Vespers",
+        "id": "unholy_vespers",
+        "vsId": "VESPERS",
+        "evolvesFrom": [
+          "King Bible"
+        ],
+        "requiredPassives": [
+          "Spellbinder"
+        ],
+        "requiresAtMaxLevel": [],
+        "isUnion": false,
+        "baseDamage": 3,
+        "cooldown": 3.0,
+        "repeatInterval": 0.0,
+        "area": 1.75,
+        "speed": 1.5,
+        "amount": 4,
+        "duration": 3.0,
+        "pierce": null,
+        "knockback": 4,
+        "critChance": null,
+        "critMultiplier": null,
+        "poolLimit": 50,
+        "maxLevel": 1,
+        "behavior": "Evolved King Bible. Never ends.",
+        "tips": "Requires: Spellbinder.",
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      },
+      {
+        "name": "Hellfire",
+        "id": "hellfire",
+        "vsId": "HELLFIRE",
+        "evolvesFrom": [
+          "Fire Wand"
+        ],
+        "requiredPassives": [
+          "Spinach"
+        ],
+        "requiresAtMaxLevel": [],
+        "isUnion": false,
+        "baseDamage": 10,
+        "cooldown": 3.0,
+        "repeatInterval": 0.2,
+        "area": 1,
+        "speed": 1,
+        "amount": 2,
+        "duration": 0.1,
+        "pierce": null,
+        "knockback": null,
+        "critChance": null,
+        "critMultiplier": null,
+        "poolLimit": 20,
+        "maxLevel": 1,
+        "behavior": "Evolved Fire Wand. Passes through enemies.",
+        "tips": "Requires: Spinach.",
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      },
+      {
+        "name": "Soul Eater",
+        "id": "soul_eater",
+        "vsId": "VORTEX",
+        "evolvesFrom": [
+          "Garlic"
+        ],
+        "requiredPassives": [
+          "Pummarola"
+        ],
+        "requiresAtMaxLevel": [],
+        "isUnion": false,
+        "baseDamage": 2,
+        "cooldown": 1.0,
+        "repeatInterval": 0.0,
+        "area": 3,
+        "speed": 1,
+        "amount": 1,
+        "duration": 1.3,
+        "pierce": null,
+        "knockback": 0,
+        "critChance": null,
+        "critMultiplier": null,
+        "poolLimit": 50,
+        "maxLevel": 1,
+        "behavior": "Evolved Garlic. Steals hearts. Power increases when recovering HP.",
+        "tips": "Requires: Pummarola.",
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      },
+      {
+        "name": "La Borra",
+        "id": "la_borra",
+        "vsId": "BORA",
+        "evolvesFrom": [
+          "Santa Water"
+        ],
+        "requiredPassives": [
+          "Attractorb"
+        ],
+        "requiresAtMaxLevel": [],
+        "isUnion": false,
+        "baseDamage": 4,
+        "cooldown": 4.0,
+        "repeatInterval": 0.3,
+        "area": 2,
+        "speed": 1,
+        "amount": 4,
+        "duration": 4.0,
+        "pierce": null,
+        "knockback": 0,
+        "critChance": null,
+        "critMultiplier": null,
+        "poolLimit": 30,
+        "maxLevel": 1,
+        "behavior": "Evolved Santa Water. Damaging zones follow you and grow when they move.",
+        "tips": "Requires: Attractorb.",
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      },
+      {
+        "name": "NO FUTURE",
+        "id": "no_future",
+        "vsId": "ROCHER",
+        "evolvesFrom": [
+          "Runetracer"
+        ],
+        "requiredPassives": [
+          "Armor"
+        ],
+        "requiresAtMaxLevel": [],
+        "isUnion": false,
+        "baseDamage": 3,
+        "cooldown": 1.0,
+        "repeatInterval": 0.0,
+        "area": 1,
+        "speed": 2.8,
+        "amount": 1,
+        "duration": 3.0,
+        "pierce": null,
+        "knockback": null,
+        "critChance": null,
+        "critMultiplier": null,
+        "poolLimit": 50,
+        "maxLevel": 1,
+        "behavior": "Evolved Runetracer. Explodes when bouncing and in retaliation.",
+        "tips": "Requires: Armor",
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      },
+      {
+        "name": "Thunder Loop",
+        "id": "thunder_loop",
+        "vsId": "LOOP",
+        "evolvesFrom": [
+          "Lightning Ring"
+        ],
+        "requiredPassives": [
+          "Duplicator"
+        ],
+        "requiresAtMaxLevel": [],
+        "isUnion": false,
+        "baseDamage": 6.5,
+        "cooldown": 4.5,
+        "repeatInterval": 0.0,
+        "area": 4,
+        "speed": 1,
+        "amount": 6,
+        "duration": null,
+        "pierce": null,
+        "knockback": null,
+        "critChance": null,
+        "critMultiplier": null,
+        "poolLimit": 70,
+        "maxLevel": 1,
+        "behavior": "Evolved Lightning Ring. Projectiles strike twice.",
+        "tips": "Requires: Duplicator.",
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      },
+      {
+        "name": "Gorgeous Moon",
+        "id": "gorgeous_moon",
+        "vsId": "SIRE",
+        "evolvesFrom": [
+          "Pentagram"
+        ],
+        "requiredPassives": [
+          "Crown"
+        ],
+        "requiresAtMaxLevel": [],
+        "isUnion": false,
+        "baseDamage": 0,
+        "cooldown": 60.0,
+        "repeatInterval": 0.0,
+        "area": 1,
+        "speed": 1,
+        "amount": 1,
+        "duration": 1.0,
+        "pierce": null,
+        "knockback": 1,
+        "critChance": null,
+        "critMultiplier": null,
+        "poolLimit": null,
+        "maxLevel": 1,
+        "behavior": "Evolved Pentagram. Generates extra gems and gathers all of them.",
+        "tips": "Requires: Crown.",
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      },
+      {
+        "name": "Vandalier",
+        "id": "vandalier",
+        "vsId": "SILF3",
+        "evolvesFrom": [
+          "Peachone",
+          "Ebony Wings"
+        ],
+        "requiredPassives": [],
+        "requiresAtMaxLevel": [
+          "Peachone"
+        ],
+        "isUnion": true,
+        "baseDamage": 2.8,
+        "cooldown": 1.0,
+        "repeatInterval": 0.025,
+        "area": 2.2,
+        "speed": 1,
+        "amount": 20,
+        "duration": 4.0,
+        "pierce": null,
+        "knockback": 2,
+        "critChance": null,
+        "critMultiplier": null,
+        "poolLimit": 100,
+        "maxLevel": 8,
+        "behavior": "Union of Ebony Wings and Peachone.",
+        "tips": "",
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      },
+      {
+        "name": "Phieraggi",
+        "id": "phieraggi",
+        "vsId": "GUNS3",
+        "evolvesFrom": [
+          "Phiera Der Tuphello",
+          "Eight The Sparrow"
+        ],
+        "requiredPassives": [
+          "Tiragisú"
+        ],
+        "requiresAtMaxLevel": [
+          "Phiera Der Tuphello"
+        ],
+        "isUnion": true,
+        "baseDamage": 1.5,
+        "cooldown": 1.4,
+        "repeatInterval": 0.1,
+        "area": 1,
+        "speed": 1,
+        "amount": 4,
+        "duration": null,
+        "pierce": 7,
+        "knockback": 0.05,
+        "critChance": 0.1,
+        "critMultiplier": 2,
+        "poolLimit": 200,
+        "maxLevel": 1,
+        "behavior": "Union of Phiera Der Tuphello and Eight The Sparrow. Scales with Revivals.",
+        "tips": "Requires: Tiragisú.",
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      },
+      {
+        "name": "Vicious Hunger",
+        "id": "vicious_hunger",
+        "vsId": "STIGRANGATTI",
+        "evolvesFrom": [
+          "Gatti Amari"
+        ],
+        "requiredPassives": [
+          "Stone Mask"
+        ],
+        "requiresAtMaxLevel": [],
+        "isUnion": false,
+        "baseDamage": 3,
+        "cooldown": 8.0,
+        "repeatInterval": 0.3,
+        "area": 1,
+        "speed": 1,
+        "amount": 2,
+        "duration": 7.0,
+        "pierce": null,
+        "knockback": 0.1,
+        "critChance": null,
+        "critMultiplier": null,
+        "poolLimit": 60,
+        "maxLevel": 1,
+        "behavior": "Evolved Gatti Amari. Might turn anything into gold.",
+        "tips": "Requires: Stone Mask.",
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      },
+      {
+        "name": "Mannajja",
+        "id": "mannajja",
+        "vsId": "MANNAGGIA",
+        "evolvesFrom": [
+          "Song of Mana"
+        ],
+        "requiredPassives": [
+          "Skull O'Maniac"
+        ],
+        "requiresAtMaxLevel": [],
+        "isUnion": false,
+        "baseDamage": 4,
+        "cooldown": 4.5,
+        "repeatInterval": 0.0,
+        "area": 6,
+        "speed": 1,
+        "amount": 1,
+        "duration": 2.0,
+        "pierce": null,
+        "knockback": null,
+        "critChance": null,
+        "critMultiplier": null,
+        "poolLimit": 30,
+        "maxLevel": 1,
+        "behavior": "Evolved Song of Mana. Might slow enemies down.",
+        "tips": "Requires: Skull O'Maniac",
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      },
+      {
+        "name": "Infinite Corridor",
+        "id": "infinite_corridor",
+        "vsId": "CORRIDOR",
+        "evolvesFrom": [
+          "Clock Lancet"
+        ],
+        "requiredPassives": [
+          "Silver Ring",
+          "Gold Ring"
+        ],
+        "requiresAtMaxLevel": [
+          "Silver Ring",
+          "Gold Ring"
+        ],
+        "isUnion": false,
+        "baseDamage": 0,
+        "cooldown": 1.0,
+        "repeatInterval": 0.0,
+        "area": 1,
+        "speed": 1,
+        "amount": 1,
+        "duration": 6.0,
+        "pierce": null,
+        "knockback": 0,
+        "critChance": null,
+        "critMultiplier": null,
+        "poolLimit": 10,
+        "maxLevel": 1,
+        "behavior": "Evolved Clock Lancet. Halves enemies' health.",
+        "tips": "Requires: Gold Ring, Silver Ring.",
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      },
+      {
+        "name": "Crimson Shroud",
+        "id": "crimson_shroud",
+        "vsId": "SHROUD",
+        "evolvesFrom": [
+          "Laurel"
+        ],
+        "requiredPassives": [
+          "Metaglio Left",
+          "Metaglio Right"
+        ],
+        "requiresAtMaxLevel": [
+          "Metaglio Left",
+          "Metaglio Right"
+        ],
+        "isUnion": false,
+        "baseDamage": 0,
+        "cooldown": 8.0,
+        "repeatInterval": 0.1,
+        "area": 2,
+        "speed": 1,
+        "amount": 1,
+        "duration": null,
+        "pierce": null,
+        "knockback": 20,
+        "critChance": null,
+        "critMultiplier": null,
+        "poolLimit": 50,
+        "maxLevel": 1,
+        "behavior": "Evolved Laurel. Caps incoming Damage at 10. Retaliates when losing charges.",
+        "tips": "Requires: Metaglio Left, Metaglio Right.",
+        "sourceIds": [
+          "vs-gamefiles-v1.16"
+        ]
+      }
+    ],
+    "evolutionRules": {
+      "baseWeaponMustBeMaxLevel": true,
+      "baseWeaponMaxLevel": 8,
+      "requiredPassiveMinLevel": 1,
+      "passiveMustBeMaxLevelExceptions": [
+        "Infinite Corridor (Silver Ring + Gold Ring both max)",
+        "Crimson Shroud (Metaglio Left + Metaglio Right both max)"
+      ],
+      "triggerItem": "treasure chest dropped by a stage/elite boss",
+      "chestEarliestTimeSeconds": 600,
+      "chestRuleNotes": "On standard stages, only chests from bosses that spawn after 10:00 can grant evolutions. Exceptions reported by community sources: Dairy Plant chests can evolve from the start of the run, and the Mad Forest 1:00 glowing-bat chest can evolve early. Evolution consumes the base weapon but NOT the passive item.",
+      "unions": "A union merges two WEAPONS (Vandalier = Peachone + Ebony Wings; Phieraggi = Phiera Der Tuphello + Eight The Sparrow + Tiragisu). Both source weapons are consumed.",
+      "sourceIds": [
+        "official-wiki",
+        "vs-gamefiles-v1.16"
+      ]
+    }
+  }
+}
