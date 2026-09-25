@@ -1,0 +1,22 @@
+/* clean.css - fonts + a neutral base for the clean-direction option boards (art/ui/clean). The webfonts are the kit's
+   (art/ui/fonts): Montserrat for all words, Sarpanch for digit runs only, per DESIGN.md section 9. */
+@font-face { font-family: Montserrat; font-weight: 600; src: url(/ui/fonts/montserrat-latin-600-normal.woff2); }
+@font-face { font-family: Montserrat; font-weight: 700; src: url(/ui/fonts/montserrat-latin-700-normal.woff2); }
+@font-face { font-family: Montserrat; font-weight: 800; src: url(/ui/fonts/montserrat-latin-800-normal.woff2); }
+@font-face { font-family: Montserrat; font-weight: 900; src: url(/ui/fonts/montserrat-latin-900-normal.woff2); }
+@font-face { font-family: Montserrat; font-weight: 700; font-style: italic; src: url(/ui/fonts/montserrat-latin-700-italic.woff2); }
+@font-face { font-family: Montserrat; font-weight: 800; font-style: italic; src: url(/ui/fonts/montserrat-latin-800-italic.woff2); }
+@font-face { font-family: Montserrat; font-weight: 900; font-style: italic; src: url(/ui/fonts/montserrat-latin-900-italic.woff2); }
+@font-face { font-family: Sarpanch; font-weight: 700; src: url(/ui/fonts/sarpanch-latin-700-normal.woff2); }
+@font-face { font-family: Sarpanch; font-weight: 800; src: url(/ui/fonts/sarpanch-latin-800-normal.woff2); }
+@font-face { font-family: Sarpanch; font-weight: 900; src: url(/ui/fonts/sarpanch-latin-900-normal.woff2); }
+html, body { margin: 0; padding: 0; background: #05030b; overflow: hidden; }
+body { font-family: Montserrat, sans-serif; font-weight: 600; color: #f2f4fa; -webkit-font-smoothing: antialiased; }
+#root { position: relative; overflow: hidden; }
+#root * { box-sizing: border-box; }
+.nr { font-family: Sarpanch; }
+.nw { font-family: Montserrat; font-weight: 700; font-size: max(.82em, 13px); }
+.row { display: flex; align-items: center; }
+.col { display: flex; flex-direction: column; }
+.nowrap { white-space: nowrap; }
+svg { flex: none; display: block; }
