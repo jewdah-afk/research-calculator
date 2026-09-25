@@ -42,13 +42,15 @@ local WORLD = table.freeze({ w = 3840, h = 2560, cx = 1920, cy = 1280 })
 local Z_MAX = 1.25
 local ZOOM_SLACK = 0.06
 local OVERSCROLL = 72
+-- zMin is this fraction of the contain fit, so the whole realm shows with a small border (REALM.md 2.4)
+local ZOOM_OUT_FIT = 0.96
 -- the hard pan margin (world px): how far the visible rect may extend past each world edge, capped at half the view
 local PAN_MARGIN: Pt = table.freeze({ x = 960, y = 720 })
 local NO_MARGIN: Pt = table.freeze({ x = 0, y = 0 }) -- the world rect itself: the start camera (REALM.md 2.8)
 local DOMAIN: Domain = table.freeze({ minW = 568, minH = 320, maxW = 2560, maxH = 1440, minAspect = 0.45, maxAspect = 3.6 })
 MapCamera.WORLD, MapCamera.Z_MAX, MapCamera.ZOOM_SLACK, MapCamera.OVERSCROLL, MapCamera.DOMAIN =
 	WORLD, Z_MAX, ZOOM_SLACK, OVERSCROLL, DOMAIN
-MapCamera.PAN_MARGIN, MapCamera.NO_MARGIN = PAN_MARGIN, NO_MARGIN
+MapCamera.PAN_MARGIN, MapCamera.NO_MARGIN, MapCamera.ZOOM_OUT_FIT = PAN_MARGIN, NO_MARGIN, ZOOM_OUT_FIT
 local START: Pt = table.freeze({ x = 1500, y = 1150 })
 MapCamera.START = START
 
@@ -92,9 +94,17 @@ MapCamera.layerZoom = layerZoom
 function MapCamera.layerZoomInverse(f: number, s: number): number
 	return (s * f) / (1 - s * (1 - f))
 end
--- the cover fit: the smallest zoom at which the world still fills the viewport
-local function zMin(V: Size): number
+-- the cover fit: the smallest zoom at which the world still fills the viewport. It was zMin before the full zoom-out;
+-- now it only bounds the start zoom, so the first view is framed exactly as before (REALM.md 2.8)
+local function zCover(V: Size): number
 	return math.min(Z_MAX, math.max(V.w / WORLD.w, V.h / WORLD.h))
+end
+MapCamera.zCover = zCover
+-- the smallest zoom: the contain fit times ZOOM_OUT_FIT (the whole world on screen with a small border), but never a
+-- view wider or taller than the world plus the pan margin on both sides (REALM.md 2.4)
+local function zMin(V: Size): number
+	local contain = ZOOM_OUT_FIT * math.min(V.w / WORLD.w, V.h / WORLD.h)
+	return math.min(Z_MAX, math.max(contain, V.w / (WORLD.w + 2 * PAN_MARGIN.x), V.h / (WORLD.h + 2 * PAN_MARGIN.y)))
 end
 MapCamera.zMin = zMin
 local function zoomRange(V: Size, slack: boolean?): (number, number)
@@ -170,9 +180,9 @@ local function clampCamera(C: Pt, z: number, V: Size, rubber: boolean?, margin: 
 	return { x = clamp(C.x, lim.x0, lim.x1), y = clamp(C.y, lim.y0, lim.y1), z = zz }
 end
 MapCamera.clampCamera = clampCamera
--- the start zoom frames the whole tree (REALM.md 2.8)
+-- the start zoom frames the whole tree (REALM.md 2.8); its floor is the cover fit, not zMin
 local function startZoom(V: Size): number
-	return clamp(math.min(V.w / 1500, V.h / 1750), zMin(V), 1)
+	return clamp(math.min(V.w / 1500, V.h / 1750), zCover(V), 1)
 end
 MapCamera.startZoom = startZoom
 -- the start camera: START at the start zoom, clamped to the world rect (no pan margin: the first view shows only the
@@ -411,7 +421,7 @@ end
 -- safe rect (0.5 = centred; a new player's M sits at 0.6). Returns (C, z) clamped to the world rect (NO_MARGIN, like
 -- startCamera): the first view shows only the world.
 function MapCamera.startFraming(V: Size, safe: Rect, mode: string, focus: Pt?, focusY: number?): (Pt, number)
-	local lo = zMin(V)
+	local lo = zCover(V) -- the start keeps the cover-fit floor (REALM.md 2.8): the first view is framed as before
 	local z: number
 	local target = focus or MapCamera.START
 	if mode == "COMPACT" then

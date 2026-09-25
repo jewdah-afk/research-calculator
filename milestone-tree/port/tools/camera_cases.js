@@ -67,6 +67,11 @@ for (let k = 0; k < 16; k++) {
   add('startCamera', [v.w, v.h], [s.x, s.y, s.z, RC.startZoom(v)]);
 }
 for (let k = 0; k < 10; k++) { const x = U(0, 400); add('rubberBand', [x], [RC.rubberBand(x)]); }
+// the zoom floor (REALM.md 2.4): the contain fit x ZOOM_OUT_FIT, capped at world + pan margin; the cover fit (start floor)
+for (let k = 0; k < 30; k++) {
+  const v = k < 16 ? V() : { w: U(568, 2560), h: U(320, 1440) }, slack = k % 2 === 1, r = RC.zoomRange(v, { slack });
+  add('zoomRange', [v.w, v.h, slack ? 1 : 0], [RC.zMin(v), RC.zCover(v), r.lo, r.hi]);
+}
 for (let k = 0; k < 30; k++) {
   const v = V(), z = Z(v), C = k < 10 ? { x: U(2200, 3840), y: U(900, 1600) } : Cam();
   const w = RC.biome(C, B, z, v);

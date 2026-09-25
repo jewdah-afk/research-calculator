@@ -139,6 +139,7 @@ uploaded), `src/shared/Assets.luau`, `out/sprites.json`, `out/realm_assets.json`
 | `out/realm_[1-6]_*.jpg` | the same run (1920×1080 stills on the path) | ~0.3 MB each |
 | `out/realm_overview.webp` | `node compose.js out/realm_overview.webp --cx 1920 --cy 1320 --z 0.5` | ~0.3 MB |
 | `out/panroom_{1920,844}_*.jpg` | `compose.js --shots` at the pan envelope (REALM.md 2.5): the start view, the four corners at the start zoom, west / east / top / bottom at zMin; 1920×1080 HIGH and 844×390 LOW at dpr 2, quality 80 | ~0.1-0.2 MB each |
+| `out/zoomout_{1920,2560,1366,844}.jpg` | `compose.js` at zMin centred on the realm (1920, 1280): the whole-realm view of REALM.md 2.4 on 1920×1080, 2560×1440, 1366×768 and 844×390, HIGH, quality 88 | ~0.06-0.5 MB each |
 
 No PNG is committed (`.gitignore`): rendered layers and tiles are rebuilt byte for byte by `render.js` and `tile.js`
 (compare the tile sha256 in the manifest), and the previews are compressed on purpose so a re-record adds a few MB of

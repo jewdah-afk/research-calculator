@@ -11,7 +11,8 @@
  *         (premultiplied area filter). out/sprites.png is the 1024x1024 sprite atlas (realm.json atlas.file).
  * Output  roblox/tiles/<TIER>/<layer>_<col>_<row>.png and roblox/tiles/<TIER>/atlas.png, and roblox/manifest.json.
  *
- * Per tier: LOW = HIGH downsampled 2x in premultiplied space (the exact box filter a mip level uses). Each tile is its
+ * Per tier: LOW = HIGH downsampled to res.LOW in premultiplied space (2x: the exact box filter a mip level uses; less
+ * for the layers with a lowRes, REALM.md 3). Each tile is its
  * content rect (camera.js tileRects) plus a 2 px gutter copied from the neighbouring pixels (edge pixels repeated at
  * the layer border), so bilinear sampling at a tile edge reads real neighbour colour. Every fully transparent pixel
  * gets a colour bled in from the nearest visible pixels (alpha stays 0): Roblox samples straight alpha, so without it

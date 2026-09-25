@@ -15,7 +15,9 @@
  *   centre point    P = A + f (C - Wc)            the local point under the screen centre
  *   local -> screen x_s = Vc + s (p - P)          container origin O = Vc - s P, container size = s (w, h)
  *   visible rect    P +- V / (2 s)
- *   zMin(V) = max(V.w / 3840, V.h / 2560)         "cover": at zMin the world spans the viewport on one axis
+ *   zMin(V) = max(k min(V.w / 3840, V.h / 2560),   "contain" (k = ZOOM_OUT_FIT): at zMin the whole world is on screen
+ *                 V.w / (3840 + 2 Mx), V.h / (2560 + 2 My))   with a small border, but never more than world + pan margin
+ *   zCover(V) = max(V.w / 3840, V.h / 2560)       the old floor ("cover"); it still bounds the start zoom (REALM.md 2.8)
  *   pan limits: the visible world rect may extend past the world by up to PAN_MARGIN world px on each side, capped at
  *   half the view (so the screen centre never leaves the world); the rubber band adds OVERSCROLL map points on top
  * The world (f = 1, 3840 x 2560, A = Wc) gives P = C and x_s = Vc + z (p - C).
@@ -33,6 +35,7 @@
   const Z_MAX = 1.25;
   const ZOOM_SLACK = 0.06;   // rubber-band zoom may overshoot [zMin, zMax] by this fraction while a pinch/wheel settles
   const OVERSCROLL = 72;     // rubber-band pan may overshoot the pan limit by this many map points
+  const ZOOM_OUT_FIT = 0.96; // zMin is this fraction of the contain fit, so the whole realm shows with a small border
   // hard pan margin (world px): how far the visible rect may extend past each world edge, capped at half the view.
   // The world layer is transparent past its edges (its art fades out before them), so there the layers behind show.
   const PAN_MARGIN = Object.freeze({ x: 960, y: 720 });
@@ -72,9 +75,17 @@
   const layerZoom = (f, z) => z / (f + (1 - f) * z);
   /** Inverse: the world zoom at which layer f has scale s. */
   const layerZoomInverse = (f, s) => (s * f) / (1 - s * (1 - f));
-  /** The smallest zoom at which the world still covers the viewport (the world's full width on screens wider
-   *  than 3:2, its full height on narrower ones). */
-  function zMin(V, world = WORLD, zMax = Z_MAX) { return Math.min(zMax, Math.max(V.w / world.w, V.h / world.h)); }
+  /** The cover fit: the smallest zoom at which the world still fills the viewport (the world's full width on screens
+   *  wider than 3:2, its full height on narrower ones). It was zMin before the full zoom-out; now it only bounds the
+   *  start zoom (REALM.md 2.8), so the first view is framed exactly as before. */
+  function zCover(V, world = WORLD, zMax = Z_MAX) { return Math.min(zMax, Math.max(V.w / world.w, V.h / world.h)); }
+  /** The smallest zoom: the contain fit times ZOOM_OUT_FIT, so the whole world (3840 x 2560) is on screen at once with
+   *  a small border, but never a view wider or taller than the world plus the pan margin on both sides (on screens
+   *  wider than ~2.16:1 or narrower than ~1:1 that cap binds, and the view spans world + 2 margin on the long axis). */
+  function zMin(V, world = WORLD, zMax = Z_MAX, fit = ZOOM_OUT_FIT, margin = PAN_MARGIN) {
+    const contain = fit * Math.min(V.w / world.w, V.h / world.h);
+    return Math.min(zMax, Math.max(contain, V.w / (world.w + 2 * margin.x), V.h / (world.h + 2 * margin.y)));
+  }
   /** Allowed zoom interval. slack = true adds the rubber-band overshoot. */
   function zoomRange(V, { slack = false, zMax = Z_MAX, zoomSlack = ZOOM_SLACK, world = WORLD } = {}) {
     const lo = zMin(V, world, zMax), k = slack ? zoomSlack : 0;
@@ -134,8 +145,9 @@
     const lim = panLimits(zz, V, { overscroll: rubber ? OVERSCROLL : 0, margin, world });
     return { x: clamp(C.x, lim.x0, lim.x1), y: clamp(C.y, lim.y0, lim.y1), z: zz };
   }
-  /** The start zoom frames the whole tree: clamp(min(V.w / 1500, V.h / 1750), zMin, 1) (REALM.md 2.8). */
-  const startZoom = V => clamp(Math.min(V.w / 1500, V.h / 1750), zMin(V), 1);
+  /** The start zoom frames the whole tree: clamp(min(V.w / 1500, V.h / 1750), zCover, 1) (REALM.md 2.8). The floor is
+   *  the cover fit, not zMin, so the first view is the same as before the full zoom-out. */
+  const startZoom = V => clamp(Math.min(V.w / 1500, V.h / 1750), zCover(V), 1);
   /** The start camera: START at the start zoom, clamped to the world rect (no pan margin), so the first view shows only
    *  the world, exactly as before the margin existed; the player can then pan into the margin. */
   function startCamera(V) { return clampCamera(START, startZoom(V), V, { margin: NO_MARGIN }); }
@@ -153,21 +165,33 @@
     world = WORLD, steps = 24000 } = {}) {
     const zHi = zMax * (1 + zoomSlack), k = 1 - zoomSlack;
     let best = { x: 0, y: 0, wx: null, wy: null };
-    const zLo = Math.max(1e-3, Math.min(dom.minW / world.w, dom.minH / world.h) * k * 0.9, zHide);
+    // a viewport's zoom floor rises with each side, so a side is feasible at z with the smallest partner the domain
+    // allows; the feasible sides at z form an interval [lo, hi(z)], hi found by bisection
+    const partnerH = vw => Math.max(dom.minH, vw / dom.maxAspect), partnerW = vh => Math.max(dom.minW, vh * dom.minAspect);
+    const floorX = vw => k * zMin({ w: vw, h: partnerH(vw) }, world, zMax, ZOOM_OUT_FIT, margin);
+    const floorY = vh => k * zMin({ w: partnerW(vh), h: vh }, world, zMax, ZOOM_OUT_FIT, margin);
+    const wLo = Math.max(dom.minW, dom.minAspect * dom.minH), wMax = Math.min(dom.maxW, dom.maxAspect * dom.maxH);
+    const hLo = Math.max(dom.minH, dom.minW / dom.maxAspect), hMax = Math.min(dom.maxH, dom.maxW / dom.minAspect);
+    const upTo = (lo, hi, floor, z) => {
+      if (floor(lo) > z) return -1;
+      if (floor(hi) <= z) return hi;
+      let a = lo, b = hi;
+      for (let n = 0; n < 60; n++) { const m = (a + b) / 2; if (floor(m) <= z) a = m; else b = m; }
+      return a;
+    };
+    const zLo = Math.max(1e-3, Math.min(floorX(wLo), floorY(hLo)) * 0.999, zHide);
     const ext = (half, span, m, z) => { const hv = half / z; return f * (Math.max(0, span / 2 + Math.min(m, hv) - hv) + overscroll / z) + half / layerZoom(f, z); };
     for (let i = 0; i <= steps; i++) {
       const z = Math.exp(Math.log(zLo) + (Math.log(zHi) - Math.log(zLo)) * i / steps);
       if (z < zHide) continue;
       // x: Vw feasible if some Vh makes (Vw, Vh) a domain viewport whose zoom range reaches down to z
-      const wLo = Math.max(dom.minW, dom.minAspect * dom.minH);
-      const wHi = Math.min(dom.maxW, world.w * z / k, dom.maxAspect * dom.maxH, dom.maxAspect * world.h * z / k);
-      if (wHi >= wLo && z >= dom.minH * k / world.h)
+      const wHi = upTo(wLo, wMax, floorX, z);
+      if (wHi >= wLo)
         for (const vw of [wLo, wHi, clamp((world.w + 2 * margin.x) * z, wLo, wHi), clamp(2 * margin.x * z, wLo, wHi)]) {
           const e = ext(vw / 2, world.w, margin.x, z); if (e > best.x) best = { ...best, x: e, wx: { V: vw, z } };
         }
-      const hLo = Math.max(dom.minH, dom.minW / dom.maxAspect);
-      const hHi = Math.min(dom.maxH, world.h * z / k, dom.maxW / dom.minAspect, world.w * z / k / dom.minAspect);
-      if (hHi >= hLo && z >= dom.minW * k / world.w)
+      const hHi = upTo(hLo, hMax, floorY, z);
+      if (hHi >= hLo)
         for (const vh of [hLo, hHi, clamp((world.h + 2 * margin.y) * z, hLo, hHi), clamp(2 * margin.y * z, hLo, hHi)]) {
           const e = ext(vh / 2, world.h, margin.y, z); if (e > best.y) best = { ...best, y: e, wy: { V: vh, z } };
         }
@@ -181,8 +205,9 @@
   /** Uniform tile grid for a layer rendered at scale s (texture px = local px * s).
    *  Tile content tw x th (texture px, even, <= maxContent, tw/s and th/s whole local px); the layer size becomes
    *  nx*tw/s x ny*th/s >= required. Minimises texture pixels (tiles include a gutter on every side) + a per-tile cost.
-   *  fixed = { w, h } forces an exact local size (the world). LOW = s/2 merges 2x2 HIGH tiles into one. */
-  function planTiles(req, s, { fixed = null, tile = TILE } = {}) {
+   *  fixed = { w, h } forces an exact local size (the world). Each LOW tile merges 2x2 HIGH tiles, at scale lowScale
+   *  (default s/2, the same image size; lower for soft layers, which then need a half LOW tile of whole texture px). */
+  function planTiles(req, s, { fixed = null, tile = TILE, lowScale = s / 2 } = {}) {
     const g = tile.gutter, maxC = Math.min(tile.maxContent, tile.maxImage - 2 * g);
     const axis = (need, exact) => {
       const out = [];
@@ -196,6 +221,7 @@
     };
     let best = null;
     for (const a of axis(req.w, fixed && fixed.w)) for (const b of axis(req.h, fixed && fixed.h)) {
+      if (!isInt(a.loc * lowScale) || !isInt(b.loc * lowScale)) continue;   // a LOW half tile must be whole texture px
       const n = a.n * b.n, cost = n * ((a.t + 2 * g) * (b.t + 2 * g) + tile.penaltyPx);
       if (!best || cost < best.cost - 1e-6 || (Math.abs(cost - best.cost) < 1e-6 && a.t * b.t > best.tw * best.th))
         best = { cost, tw: a.t, th: b.t, nx: a.n, ny: b.n, lw: a.loc, lh: b.loc };
@@ -203,9 +229,10 @@
     if (!best) throw new Error('no tile plan for ' + JSON.stringify({ req, s, fixed }));
     const hi = { scale: s, nx: best.nx, ny: best.ny, tiles: best.nx * best.ny, texture: [best.nx * best.tw, best.ny * best.th] };
     const cols = [], rows = [];
-    for (let i = 0; i < Math.ceil(best.nx / 2); i++) cols.push(Math.min(2, best.nx - 2 * i) * best.tw / 2);
-    for (let j = 0; j < Math.ceil(best.ny / 2); j++) rows.push(Math.min(2, best.ny - 2 * j) * best.th / 2);
-    const lo = { scale: s / 2, nx: cols.length, ny: rows.length, tiles: cols.length * rows.length, texture: [hi.texture[0] / 2, hi.texture[1] / 2], cols, rows };
+    const lx = Math.round(best.lw * lowScale), ly = Math.round(best.lh * lowScale);   // LOW texture px per HIGH cell
+    for (let i = 0; i < Math.ceil(best.nx / 2); i++) cols.push(Math.min(2, best.nx - 2 * i) * lx);
+    for (let j = 0; j < Math.ceil(best.ny / 2); j++) rows.push(Math.min(2, best.ny - 2 * j) * ly);
+    const lo = { scale: lowScale, nx: cols.length, ny: rows.length, tiles: cols.length * rows.length, texture: [best.nx * lx, best.ny * ly], cols, rows };
     const bytes = (cw, ch) => (cw + 2 * g) * (ch + 2 * g) * 4;
     hi.bytes = hi.tiles * bytes(best.tw, best.th);
     lo.bytes = 0; for (const c of cols) for (const r of rows) lo.bytes += bytes(c, r);
@@ -415,9 +442,9 @@
   }
 
   return {
-    WORLD, Z_MAX, ZOOM_SLACK, OVERSCROLL, PAN_MARGIN, NO_MARGIN, START, DOMAIN, TILE,
+    WORLD, Z_MAX, ZOOM_SLACK, OVERSCROLL, ZOOM_OUT_FIT, PAN_MARGIN, NO_MARGIN, START, DOMAIN, TILE,
     clamp, lerp, smoothstep, mod, rng, hash01, EASE, mixRGB,
-    mapScale, inDomain, layerZoom, layerZoomInverse, zMin, zoomRange, anchorOf, layerCenter, layerOffset, visibleRect,
+    mapScale, inDomain, layerZoom, layerZoomInverse, zCover, zMin, zoomRange, anchorOf, layerCenter, layerOffset, visibleRect,
     localToScreen, screenToLocal, worldToScreen, screenToWorld, zoomAt, panLimits, clampCamera, startZoom, startCamera, rubberBand,
     requiredSize, planTiles, tileRects, viewCover, biome, corruptLight, bloomLocal, biomeTint, biomeWash, biomeSpriteColor,
     biomeFieldColor, bloomState, channel, spriteState, fieldAlphaZoom, visibleExtent,
@@ -453,10 +480,11 @@ function build(RC, fs, FILE) {
       : RC.requiredSize(L.f, { zHide: L.zHide || 0 });
     L.required = { w: req.w, h: req.h, worstCase: req.worst && {
       x: `V.w=${round(req.worst.x.V)} z=${round(req.worst.x.z, 3)}`, y: `V.h=${round(req.worst.y.V)} z=${round(req.worst.y.z, 3)}` } };
-    const plan = RC.planTiles(req, L.res.HIGH, { fixed: L.fixedSize ? { w: L.fixedSize[0], h: L.fixedSize[1] } : null });
+    // LOW = HIGH / 2, or the layer's own lowRes (soft, deep layers pay for the LOW budget, REALM.md 3)
+    L.res.LOW = L.lowRes || L.res.HIGH / 2;
+    const plan = RC.planTiles(req, L.res.HIGH, { fixed: L.fixedSize ? { w: L.fixedSize[0], h: L.fixedSize[1] } : null, lowScale: L.res.LOW });
     L.size = [plan.size.w, plan.size.h];
     L.anchor = [plan.size.w / 2, plan.size.h / 2];
-    L.res.LOW = L.res.HIGH / 2;
     L.tiles = plan.tile; L.tileCell = [plan.cell.w, plan.cell.h];
     L.grid = { HIGH: plan.HIGH, LOW: plan.LOW };
     L.memoryMB = { HIGH: round(plan.HIGH.bytes / 1048576, 2), LOW: round(plan.LOW.bytes / 1048576, 2) };
@@ -722,6 +750,8 @@ function test(RC, fs, FILE) {
   ok(R.world.w === W.w && R.world.h === W.h, 'world size');
   ok(R.camera.zMax === RC.Z_MAX && R.camera.zoomSlack === RC.ZOOM_SLACK && R.camera.overscroll === RC.OVERSCROLL, 'camera constants');
   ok(R.camera.panMargin && R.camera.panMargin[0] === RC.PAN_MARGIN.x && R.camera.panMargin[1] === RC.PAN_MARGIN.y, 'camera pan margin');
+  ok(R.camera.zoomOutFit === RC.ZOOM_OUT_FIT && RC.ZOOM_OUT_FIT > 0.9 && RC.ZOOM_OUT_FIT <= 1, 'camera zoomOutFit');
+  for (const L of R.layers) ok(L.res.LOW <= L.res.HIGH / 2 + 1e-12 && L.res.LOW === (L.lowRes || L.res.HIGH / 2), `${L.id} LOW res`);
   ok(R.camera.start.center[0] === RC.START.x && R.camera.start.center[1] === RC.START.y, 'camera start centre');
   for (const k of Object.keys(RC.DOMAIN)) ok(R.camera.viewportDomain[k] === RC.DOMAIN[k], 'domain ' + k);
   const world = R.layers.find(L => L.id === 'world');
@@ -746,8 +776,12 @@ function test(RC, fs, FILE) {
     ok(C.x >= -1e-6 && C.x <= W.w + 1e-6 && C.y >= -1e-6 && C.y <= W.h + 1e-6, 'hard clamp keeps the screen centre over the world');
     const far = RC.clampCamera({ x: -1e5, y: 1e5 }, z, V), vf = RC.visibleRect(wl, far, far.z, V);
     ok(near(vf.x0, -mx, 1e-9) && near(vf.y1, W.h + my, 1e-9), 'the pan margin is reachable');
+    // NO_MARGIN keeps the view inside the world from the cover fit up (the start camera's range, REALM.md 2.8); below
+    // it the view is larger than the world and pins to the world centre
     const c0 = RC.clampCamera({ x: C.x + (r() - 0.5) * 9000, y: C.y + (r() - 0.5) * 9000 }, z, V, { margin: RC.NO_MARGIN }), v0 = RC.visibleRect(wl, c0, c0.z, V);
-    ok(v0.x0 >= -1e-6 && v0.y0 >= -1e-6 && v0.x1 <= W.w + 1e-6 && v0.y1 <= W.h + 1e-6, 'NO_MARGIN keeps the view inside the world');
+    if (z >= RC.zCover(V)) ok(v0.x0 >= -1e-6 && v0.y0 >= -1e-6 && v0.x1 <= W.w + 1e-6 && v0.y1 <= W.h + 1e-6, 'NO_MARGIN keeps the view inside the world');
+    else ok((v0.x1 - v0.x0 <= W.w + 1e-6 ? v0.x0 >= -1e-6 && v0.x1 <= W.w + 1e-6 : near(c0.x, W.cx, 1e-12)) &&
+      (v0.y1 - v0.y0 <= W.h + 1e-6 ? v0.y0 >= -1e-6 && v0.y1 <= W.h + 1e-6 : near(c0.y, W.cy, 1e-12)), 'NO_MARGIN below the cover fit pins the larger axis to the centre');
     const L = R.layers[Math.floor(r() * R.layers.length)], Lg = { f: L.f, w: L.size[0], h: L.size[1] };
     const off = RC.layerOffset(Lg, C, z, V), v2 = RC.visibleRect(Lg, C, z, V);
     ok(near(off.x + off.scale * v2.x0, 0, 1e-6) && near(off.y + off.scale * v2.y1, V.h, 1e-6), 'offset and visibleRect agree');
@@ -756,9 +790,18 @@ function test(RC, fs, FILE) {
     ok(near(a.x, b.x) && near(a.y, b.y), 'zoomAt keeps the world point under the cursor');
     const cc = RC.clampCamera({ x: C.x + (r() - 0.5) * 9000, y: C.y + (r() - 0.5) * 9000 }, z * (0.2 + r() * 3), V);
     const cc2 = RC.clampCamera(cc, cc.z, V); ok(near(cc.x, cc2.x) && near(cc.y, cc2.y) && near(cc.z, cc2.z), 'clamp is idempotent');
-    // at zMin the binding axis spans the world exactly
-    const zm = RC.zMin(V), vm = RC.visibleRect(wl, RC.clampCamera({ x: 0, y: 0 }, zm, V), zm, V);
-    ok(near(vm.x1 - vm.x0, W.w, 1e-9) || near(vm.y1 - vm.y0, W.h, 1e-9), 'zMin fits the world width or height');
+    // at zMin the view is the contain fit / ZOOM_OUT_FIT on its binding axis, or world + 2 margin on one axis (the cap);
+    // it is never larger than world + 2 margin, and whenever the contain term binds, the whole world is on screen
+    const zm = RC.zMin(V), vw = V.w / zm, vh = V.h / zm, fit = RC.ZOOM_OUT_FIT, Mw = W.w + 2 * RC.PAN_MARGIN.x, Mh = W.h + 2 * RC.PAN_MARGIN.y;
+    ok(near(Math.min(vw / W.w, vh / W.h), 1 / fit, 1e-9) || near(vw, Mw, 1e-9) || near(vh, Mh, 1e-9), 'zMin is the contain fit or the margin cap');
+    ok(vw <= Mw + 1e-6 && vh <= Mh + 1e-6 && zm <= RC.zCover(V) + 1e-12, 'zMin view within world + margin, never above the cover fit');
+    if (near(Math.min(vw / W.w, vh / W.h), 1 / fit, 1e-9)) {
+      const vm = RC.visibleRect(wl, RC.clampCamera({ x: W.cx, y: W.cy }, zm, V), zm, V);
+      ok(vm.x0 <= 0 && vm.y0 <= 0 && vm.x1 >= W.w && vm.y1 >= W.h, 'at zMin the whole world is on screen');
+    }
+    // the rubber band still overshoots below zMin, and springs back to it
+    const rb = RC.clampCamera(C, zm * 0.5, V, { rubber: true }), hb = RC.clampCamera(rb, rb.z, V);
+    ok(near(rb.z, zm * (1 - RC.ZOOM_SLACK), 1e-12) && near(hb.z, zm, 1e-12), 'rubber band below zMin');
     // parallax ratio: a pan moves layer f by f * z^f / z of the world's screen motion (f at z = 1)
     const d = { x: C.x + 10, y: C.y }, sA = RC.localToScreen(Lg, C, z, V, { x: 100, y: 100 }), sB = RC.localToScreen(Lg, d, z, V, { x: 100, y: 100 });
     ok(near((sA.x - sB.x) / (10 * z), L.f * RC.layerZoom(L.f, z) / z, 1e-6), 'parallax ratio');

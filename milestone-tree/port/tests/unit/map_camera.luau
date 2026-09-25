@@ -26,6 +26,7 @@ end
 check(MC.Z_MAX == Realm.camera.zMax, "zMax")
 check(MC.ZOOM_SLACK == Realm.camera.zoomSlack, "zoomSlack")
 check(MC.OVERSCROLL == Realm.camera.overscroll, "overscroll")
+check(MC.ZOOM_OUT_FIT == Realm.camera.zoomOutFit, "zoomOutFit")
 check(MC.PAN_MARGIN.x == Realm.camera.panMargin[1] and MC.PAN_MARGIN.y == Realm.camera.panMargin[2], "pan margin")
 check(MC.NO_MARGIN.x == 0 and MC.NO_MARGIN.y == 0, "no margin")
 for k, v in Realm.camera.domain do check(MC.DOMAIN[k] == v, "domain " .. k) end
@@ -57,6 +58,11 @@ local run = {
 	end,
 	startCamera = function(i) local c = MC.startCamera({ w = i[1], h = i[2] }); return { c.x, c.y, c.z, MC.startZoom({ w = i[1], h = i[2] }) } end,
 	rubberBand = function(i) return { MC.rubberBand(i[1]) } end,
+	zoomRange = function(i)
+		local V = { w = i[1], h = i[2] }
+		local lo, hi = MC.zoomRange(V, i[3] == 1)
+		return { MC.zMin(V), MC.zCover(V), lo, hi }
+	end,
 	biome = function(i) local w = MC.biome({ x = i[1], y = i[2] }, Realm.biome, i[3], { w = i[4], h = i[5] }); return { w.rift, w.corrupt, w.cover } end,
 	corruptLight = function(i) return { MC.corruptLight(Realm.biome, { x = i[1], y = i[2] }) } end,
 	biomeFieldColor = function(i)

@@ -32,33 +32,34 @@ ends inside its rect (nothing is cut by the border) and the layers behind it cov
 
 | depth | id | f | content | size (local px) | res HIGH / LOW | tile (tex px) | HIGH tiles, MB | LOW tiles, MB |
 |---|---|---|---|---|---|---|---|---|
-| 0 | `sky` | 0.05 | deep space: nebula, stars, cosmic sun (opaque) | 2752×1600 | 0.625 / 0.3125 | 860×1000 | 2×1, 6.6 | 1×1, 1.7 |
-| 1 | `clouds` | 0.12 | far nebula wisps, god rays | 3008×1792 | 0.375 / 0.1875 | 564×672 | 2×1, 2.9 | 1×1, 0.7 |
-| 2 | `far` | 0.25 | distant hazy islands, ringed planet (painter `layers/distant.js`) | 3432×2160 | 0.5 / 0.25 | 858×540 | 2×2, 7.2 | 1×1, 1.8 |
-| 3 | `mid` | 0.45 | detailed islands, light-falls, mist bands | 4128×2736 | 0.75 / 0.375 | 774×684 | 4×3, 24.5 | 2×2, 6.1 |
-| 4 | `near` | 0.7 | big floating rocks close behind the world, sparse (painter `layers/rocks.js`) | 5040×3680 | 0.45 / 0.225 | 756×828 | 3×2, 14.5 | 2×1, 3.6 |
+| 0 | `sky` | 0.05 | deep space: nebula, stars, cosmic sun (opaque) | 2784×1616 | 0.625 / **0.25** | 870×1010 | 2×1, 6.8 | 1×1, 1.1 |
+| 1 | `clouds` | 0.12 | far nebula wisps, god rays | 3040×1840 | 0.375 / **0.125** | 570×690 | 2×1, 3.0 | 1×1, 0.3 |
+| 2 | `far` | 0.25 | distant hazy islands, ringed planet (painter `layers/distant.js`) | 3552×2272 | 0.5 / **0.1875** | 888×568 | 2×2, 7.8 | 1×1, 1.1 |
+| 3 | `mid` | 0.45 | detailed islands, light-falls, mist bands | 4352×2928 | 0.75 / 0.375 | 816×732 | 4×3, 27.6 | 2×2, 6.9 |
+| 4 | `near` | 0.7 | big floating rocks close behind the world, sparse (painter `layers/rocks.js`) | 5440×3920 | 0.45 / 0.225 | 612×882 | 4×2, 16.7 | 2×1, 4.2 |
 | 5 | `world` | 1.0 | `world.js`: tree, sockets, rift, outcrop, shrine | **3840×2560** | 1 / 0.5 | 960×640 | 4×4, 37.9 | 2×2, 9.5 |
 | 6 | `fg` | 1.3 | blurred framing vines, ferns, leaves (sparse) | 7600×5380 | 0.2 / 0.1 | 760×538 | 2×2, 6.3 | 1×1, 1.6 |
-| 7 | `particles` | 1.6 | bokeh + dust, a sprite **field** (no baked texture) | infinite (cell 5290×3210) | atlas | – | – | – |
+| 7 | `particles` | 1.6 | bokeh + dust, a sprite **field** (no baked texture) | infinite (cell 5530×3210) | atlas | – | – | – |
 
 The layers behind and in front of the world are larger than it because the camera may look past the world's edges
-by the pan margin (section 2.5); section 2.7 derives the sizes. Each painter keeps its composition in the frame the
+by the pan margin (section 2.5) and zoom out until the whole world is on screen (section 2.4); section 2.7 derives the
+sizes. The LOW res in bold is below HIGH ÷ 2 (the layer's `lowRes`, section 3). Each painter keeps its composition in the frame the
 layer had before the margin (for example 3360×2160 for `mid`), centred in the new size, and carries it out into the
 margin strips (section 8).
 
-There are two more particle fields: `motesFar` at f = 0.7 (cell 3640×2350), drawn with the near rocks, and
-`motesNear` at f = 1.3 (cell 4670×3060), drawn with the foreground. With them, drifting dust exists at three depths.
+There are two more particle fields: `motesFar` at f = 0.7 (cell 5070×3420), drawn with the near rocks, and
+`motesNear` at f = 1.3 (cell 5430×3060), drawn with the foreground. With them, drifting dust exists at three depths.
 Every field cell is larger than any screen, so no particle ever shows twice (section 6.3).
 
 **Totals**, counted as RGBA8 bytes of every uploaded image with gutters included:
 
 | tier | tiles | + atlas | texture MB | if the engine keeps mips (×4/3) | budget | GUI objects (tiles + sprites + field pools + blooms) |
 |---|---|---|---|---|---|---|
-| HIGH | 46 | 1024² | **103.9** | 138.5 | 150 | 388 |
-| LOW | 14 | 512² | **26.0** | 34.7 | 35 | 161 |
+| HIGH | 48 | 1024² | **110.1** | 146.8 | 150 | 392 |
+| LOW | 14 | 512² | **25.7** | 34.2 | 35 | 163 |
 
-The tiler skips a tile that is fully transparent, but with the current art none is (0 of 46 HIGH, 0 of 14 LOW), so
-these totals are exactly what uploads. LOW is at 99% of its budget: see section 3, Memory.
+The tiler skips a tile that is fully transparent, but with the current art none is (0 of 48 HIGH, 0 of 14 LOW), so
+these totals are exactly what uploads. Both tiers are near their budgets (98% each): see section 3, Memory.
 
 "Local px" is the layer's own pixel unit: 1 local px is 1 map point on screen when the layer's zoom is 1. For the
 world layer, local px are world px. A layer's texture is `size × res`, and the client scales it back up.
@@ -111,7 +112,7 @@ near layers zoom more than far ones in both. But `z^f` breaks depth order when z
 relative to the world is `f·s_L / z`:
 
 * with `z^f` that is `f·z^(f−1)`. It passes 1 below `z = f^(1/(1−f))`: 0.305 for `near` and 0.234 for `mid`. Phones
-  go down to z = 0.17–0.22, so the rocks *behind* the world would slide *faster* than the tree, and the eye would read
+  go down to z = 0.12–0.15 (0.113 with the rubber band), so the rocks *behind* the world would slide *faster* than the tree, and the eye would read
   them as in front.
 * with the dolly law it is `f / (f + (1 − f) z)`: below 1 for every f < 1 and above 1 for every f > 1 at *any* zoom.
 
@@ -133,29 +134,39 @@ Layer zoom and screen speed (relative to the world) for each layer:
 
 The deep sky barely moves or scales at all, so it reads as infinitely far away. That is the Terraria sky.
 
-### 2.4 Zoom range: zMin(V) = max(V.w / 3840, V.h / 2560), zMax = 1.25
+### 2.4 Zoom range: zMin(V) = max(0.96·min(V.w / 3840, V.h / 2560), V.w / 5760, V.h / 4000), zMax = 1.25
 
-zMin is the **cover** fit: the smallest zoom at which the world still fills the viewport. On screens wider than 3:2
-the whole world *width* fits, so every node from the shrine (x 520) to CM (x 3690) is on screen at once, and you pan
-only vertically. On narrower screens (4:3 iPad, portrait windows) the whole *height* fits.
+zMin is the **contain** fit times `ZOOM_OUT_FIT` = 0.96 (camera.js, realm.json `camera.zoomOutFit`): at full zoom-out
+the **whole realm** is on screen at once, from the crown's top leaves to the island's roots and from the ACH shrine to
+the CM outcrop, with a small border (2% of the view on the binding axis) where the layers behind show. It is capped so
+the view is never wider than the world plus the pan margin on both sides (3840 + 2·960 = 5760) or taller
+(2560 + 2·720 = 4000): the layers behind cover exactly that envelope (2.7). The cap binds only on screens wider than
+0.96·5760/2560 ≈ 2.16:1 or narrower than 3840/(0.96·4000) = 1:1; phones up to 19.5:9 (2.164) still see everything.
 
-* A lower zoom would show past the world's edges on both sides at once. The pan margin (2.5) already lets the view
-  reach up to 960 × 720 world px past one edge at a time; a lower zMin would grow every layer again (2.7), and the LOW
-  budget has no room for that (section 3).
+```
+zMin(V)   = min(zMax, max(0.96 · min(V.w/3840, V.h/2560),  V.w/(3840 + 2·960),  V.h/(2560 + 2·720)))
+zCover(V) = min(zMax, max(V.w/3840, V.h/2560))       the old floor (cover fit); it now only bounds the start zoom (2.8)
+```
+
+* The start framing does not change: the start zoom keeps the cover fit as its floor (2.8), and so does the client's
+  HUD-safe start (MapCamera `startFraming`). Zooming out from there reaches the whole-realm view.
+* The rubber band still overshoots to 0.94·zMin and springs back (2.5).
 * A higher floor (for example a "readable plates" zoom) is a client UX choice and can only *raise* zMin, which keeps
   every guarantee here.
 
-| screen | V (map pts) | zMin | fits | start zoom | world visible at zMin |
-|---|---|---|---|---|---|
-| 2560×1440 | 2560×1440 | 0.667 | width | 0.823 | 3840×2160 |
-| 1920×1080 | 1920×1080 | 0.500 | width | 0.617 | 3840×2160 |
-| 1366×768 | 1366×768 | 0.356 | width | 0.439 | 3840×2159 |
-| 1024×768 (iPad) | 1024×768 | 0.300 | height | 0.439 | 3413×2560 |
-| 844×390 (iPhone 14) | 844×390 | 0.220 | width | 0.223 | 3840×1774 |
-| 667×375 (iPhone SE) | 667×375 | 0.174 | width | 0.214 | 3840×2159 |
-| 3840×2160 px (4K) | 2560×1440 (scale 1.5) | 0.667 | width | 0.823 | 3840×2160 |
-| 3440×1440 ultrawide | 2560×1072 (scale 1.344) | 0.667 | width | 0.667 | 3840×1607 |
-| 390×844 portrait | 568×1229 (scale 0.687) | 0.480 | height | 0.480 | 1183×2560 |
+| screen | V (map pts) | zCover (the old zMin) | zMin | binds | start zoom | world px visible at zMin | whole realm |
+|---|---|---|---|---|---|---|---|
+| 2560×1440 | 2560×1440 | 0.667 | 0.540 | contain | 0.823 | 4741×2667 | yes |
+| 1920×1080 | 1920×1080 | 0.500 | 0.405 | contain | 0.617 | 4741×2667 | yes |
+| 1366×768 | 1366×768 | 0.356 | 0.288 | contain | 0.439 | 4743×2667 | yes |
+| 1024×768 (iPad) | 1024×768 | 0.300 | 0.256 | contain | 0.439 | 4000×3000 | yes |
+| 844×390 (iPhone 14) | 844×390 | 0.220 | 0.147 | margin cap | 0.223 | 5760×2662 | yes |
+| 667×375 (iPhone SE) | 667×375 | 0.174 | 0.141 | contain | 0.214 | 4743×2667 | yes |
+| 3840×2160 px (4K) | 2560×1440 (scale 1.5) | 0.667 | 0.540 | contain | 0.823 | 4741×2667 | yes |
+| 3440×1440 ultrawide | 2560×1072 (scale 1.344) | 0.667 | 0.444 | margin cap | 0.667 | 5760×2411 | 94% of the height |
+| 390×844 portrait | 568×1229 (scale 0.687) | 0.480 | 0.307 | margin cap | 0.480 | 1848×4000 | the full height |
+
+The committed stills `out/zoomout_{1920,2560,1366,844}.jpg` show the zMin view centred on the realm on four screens.
 
 ### 2.5 Clamping and the pan margin
 
@@ -181,14 +192,14 @@ islands, near rocks and the foreground go on into the margin (section 8). There 
 `clampCamera(C, z, V, { margin: NO_MARGIN })` keeps the view inside the world rect; only the start camera uses it
 (2.8). Travel of the camera centre around the middle of its range, before the margin (NO_MARGIN) and with it:
 
-| screen | start zoom | travel before | travel now | zMin | travel before | travel now |
-|---|---|---|---|---|---|---|
-| 2560×1440 | 0.823 | ±364 × ±405 | ±1324 × ±1125 | 0.667 | ±0 × ±200 | ±960 × ±920 |
-| 1920×1080 | 0.617 | ±364 × ±405 | ±1324 × ±1125 | 0.500 | ±0 × ±200 | ±960 × ±920 |
-| 1366×768 | 0.439 | ±364 × ±405 | ±1324 × ±1125 | 0.356 | ±0 × ±201 | ±960 × ±921 |
-| 1024×768 (iPad) | 0.439 | ±753 × ±405 | ±1713 × ±1125 | 0.300 | ±213 × ±0 | ±1173 × ±720 |
-| 844×390 (iPhone 14) | 0.223 | ±26 × ±405 | ±986 × ±1125 | 0.220 | ±0 × ±393 | ±960 × ±1113 |
-| 390×844 portrait | 0.480 | ±1328 × ±0 | ±1920 × ±720 | 0.480 | ±1328 × ±0 | ±1920 × ±720 |
+| screen | start zoom | travel before | travel now | zMin | travel at zMin |
+|---|---|---|---|---|---|
+| 2560×1440 | 0.823 | ±364 × ±405 | ±1324 × ±1125 | 0.540 | ±510 × ±667 |
+| 1920×1080 | 0.617 | ±364 × ±405 | ±1324 × ±1125 | 0.405 | ±510 × ±667 |
+| 1366×768 | 0.439 | ±364 × ±405 | ±1324 × ±1125 | 0.288 | ±508 × ±667 |
+| 1024×768 (iPad) | 0.439 | ±753 × ±405 | ±1713 × ±1125 | 0.256 | ±880 × ±500 |
+| 844×390 (iPhone 14) | 0.223 | ±26 × ±405 | ±986 × ±1125 | 0.147 | ±0 × ±669 |
+| 390×844 portrait | 0.480 | ±1328 × ±0 | ±1920 × ±720 | 0.307 | ±1920 × ±0 |
 
 (world px; the client's HUD-safe start on 1920×1080, z 0.505, went from ±20 × ±211 to ±980 × ±931.)
 
@@ -218,7 +229,9 @@ ext_y(V, z) = f · Dy + V.h / (2 s_L)          Dy = max(0, 1280 + min(720, hy) �
 required    = 2 · max over the domain of ext  (+0.25%), per axis
 ```
 
-The domain is every V in section 2.6, and z from `0.94·zMin(V)` to `1.325`. Layers with `zHide` (fg, and the
+The domain is every V in section 2.6, and z from `0.94·zMin(V)` to `1.325`. zMin rises with each side of V, so a side
+is feasible at z with the smallest partner side the domain allows; `requiredSize()` finds the largest feasible side at
+each z by bisection. Layers with `zHide` (fg, and the
 particle fields) are hidden below that zoom and are only covered from there. For a fixed z, `ext` is piecewise linear
 in V. The worst V is therefore an end of the feasible interval or a kink: `V = 2·M·z` (where the margin cap starts)
 or `V = (W + 2M)·z` (where D reaches 0). `requiredSize()` evaluates those candidates exactly and samples z densely
@@ -227,30 +240,31 @@ required half-extent by exactly f·M.
 
 Worst cases found:
 
-* `sky`, `clouds`, `far`, `mid`: a 2560×1440 view at its rubber-band minimum (z = 0.627 for x; z = 0.529 with
-  V.h = 1440 for y).
-* `near` (y): a phone-sized view at its rubber-band minimum (z = 0.139). There the 72-point overscroll is 518 world
-  px.
+* `sky`, `clouds`, `far`, `mid`: the widest view at its rubber-band minimum for x (V.w = 2560 on a ≥ 2.16:1 screen,
+  z = 0.418, where the margin cap binds) and the tallest for y (V.h = 1440 on the 0.45 portrait, z = 0.338).
+* `near`: a phone-sized view at its rubber-band minimum (x: V.w = 691, z = 0.113; y: V.h = 568, z = 0.133). There the
+  72-point overscroll is 540–640 world px.
 * `fg`: its fade-out zoom 0.5, with the view whose half-width is exactly the margin (V.w = 960, V.h = 720): the
   largest camera offset with the smallest view.
 
 Each size is then rounded up to whole tiles (section 3).
 
 **Why fg and the particles fade out when zoomed out.** Near-camera layers shrink faster than the world as you zoom
-out, so they need the most area exactly where they help least. Without `zHide`, fg would need 8686×6467 instead of
-7594×5372 (+38% memory). Foreground clutter also ruins the overview. `fg` and `motesNear` fade in over z 0.50 → 0.62, and `particles` over 0.55 → 0.70
+out, so they need the most area exactly where they help least. Without `zHide`, fg would need 9442×6781 instead of
+7594×5372 (+57% memory). Foreground clutter also ruins the overview. `fg` and `motesNear` fade in over z 0.50 → 0.62, and `particles` over 0.55 → 0.70
 (`alpha = smoothstep(zHide, zShow, z)`, `Visible = false` at 0).
 
 `node camera.js --test` brute-forces about 1.8M (C, z, V) samples. These are a grid of 2,000+ viewports × 25 zooms ×
 9 camera positions at the rubber-band limits (pan margin included), 60k random samples per layer, and clamped far-out
-requests. It asserts that every visible layer covers the viewport. The tightest margin is 6.0 local px, so the sizes
+requests. It asserts that every visible layer covers the viewport. The tightest margin is 5.3 local px, so the sizes
 are tight. It also
 checks that each worst case is reachable and reaches at least 99% of the required extent.
 
 ### 2.8 Start camera
 
-The start centre is (1500, 1150), the trunk. The start zoom is `clamp(min(V.w/1500, V.h/1750), zMin, 1)`, which
-frames the whole tree. The start camera is clamped to the world rect, without the pan margin (camera.js
+The start centre is (1500, 1150), the trunk. The start zoom is `clamp(min(V.w/1500, V.h/1750), zCover, 1)`, which
+frames the whole tree. Its floor is the cover fit (2.4), not zMin, so the start framing is the same as before the
+full zoom-out. The start camera is clamped to the world rect, without the pan margin (camera.js
 `startCamera`), so the first view shows only the world, exactly as before the margin existed; the player pans into
 the margin from there. There is an intro dolly-out from `min(1.12·z, zMax)` to z over 1.6 s (quintOut). With
 ReducedMotion the camera starts at z directly.
@@ -263,7 +277,9 @@ ReducedMotion the camera starts at z directly.
   **2 px gutter** on every side, so every image is ≤ 1024×1024. `tw/res` and `th/res` are whole local px, and the
   layer size is `nx·tw/res × ny·th/res`, which is at least the required size. The build picks (tw, th) to minimise
   texture pixels plus a per-tile cost. The world is exact: 3840×2560 = 4×4 tiles of 960×640.
-* **LOW tier** = HIGH resolution ÷ 2, and each LOW tile merges 2×2 HIGH tiles. With an odd count the last column or
+* **LOW tier** = HIGH resolution ÷ 2, or the layer's own `lowRes` (sky 0.25, clouds 0.125, far 0.1875), and each
+  LOW tile merges 2×2 HIGH tiles (`lowRes` must give whole texture px per HIGH cell; the build picks the tile so it
+  does). With an odd count the last column or
   row is half width or height (`grid.LOW.cols/rows`).
 * **Gutters.** The gutter holds the neighbouring tile's pixels (edge pixels repeated at the layer border). The client
   shows only the inside, using `ImageRectOffset = (2, 2)` and `ImageRectSize = (tw, th)`. Bilinear sampling at the
@@ -285,11 +301,13 @@ ReducedMotion the camera starts at z directly.
   by `res`. The tiler also accepts a full-size render and downsamples it with high quality.
 * **Memory** is set by pixel count (the engine transcodes to a fixed format). The totals are in section 1. The test
   checks that they fit the budget even if mip chains are kept.
-* **LOW has no headroom.** The pan margin grew every layer but the world (2.7). HIGH (desktops) got a 150 MB budget
-  (was 120) and uses 138.5 MB with mips. LOW (phones) stays at 35 MB and uses 34.7, because LOW is HIGH ÷ 2 for every
-  layer: the growth was paid for by lowering `res.HIGH` of `fg` (0.3 → 0.2; it is blurred by 10 local px, so a texel
-  of 5 local px loses little) and `near` (0.5 → 0.45; blurred by 0.9). Any new or enlarged texture must be paid for
-  the same way, for example by `clouds` (0.375) or `far` (0.5), both blurred. `--test` fails when a budget is
+* **The budgets are nearly full.** The pan margin and then the full zoom-out (2.4) grew every layer but the world
+  (2.7). HIGH (desktops) has a 150 MB budget (was 120) and uses 146.8 MB with mips. LOW (phones) stays at 35 MB and
+  uses 34.2. The pan margin was paid for by lowering `res.HIGH` of `fg` (0.3 → 0.2; it is blurred by 10 local px, so a
+  texel of 5 local px loses little) and `near` (0.5 → 0.45; blurred by 0.9). The zoom-out was paid for on LOW by the
+  deepest, softest layers only, through `lowRes`: `sky` 0.3125 → 0.25 (the bright stars are sprites), `clouds`
+  0.1875 → 0.125 (blurred by 6 local px) and `far` 0.25 → 0.1875 (hazed 50%, blurred by 2.5); `mid`, `near` and the
+  world keep HIGH ÷ 2. Any new or enlarged texture must be paid for the same way. `--test` fails when a budget is
   exceeded.
 
 ---
@@ -475,8 +493,8 @@ and no baked texture.
   `E[count] = V.w·V.h·n / (cell area · s(zFull)²)` for every z ≤ zFull. Each particle fades in over `[τ_i, 1.12·τ_i]`.
 * **No repeats.** The cell is larger than any screen. The build derives it (`cell`, `cellWorstCase`) as the largest
   local rect any domain viewport shows at any allowed zoom where the field's alpha is at least `cellCover` = 0.25,
-  plus the largest particle, rounded up to 10 px. The results are motesFar 3640×2350 (every zoom: it never fades),
-  motesNear 4670×3060 (from z 0.539) and particles 5290×3210 (from z 0.599). So no particle is ever drawn twice on
+  plus the largest particle, rounded up to 10 px. The results are motesFar 5070×3420 (every zoom: it never fades),
+  motesNear 5430×3060 (from z 0.539) and particles 5530×3210 (from z 0.599). So no particle is ever drawn twice on
   one screen. With the old 1800×1200 cell, the same bokeh pair repeated 1284 px apart at z 0.8 on 1920×1080. `--test`
   checks every domain viewport, and also checks 2,500 random cameras for a particle index drawn twice.
 * **Targets at 1920×1080.** motesFar: 14 motes. motesNear: 12 motes + 3 sparks. particles: 6 bokeh + 8 dust. Counts
@@ -487,7 +505,7 @@ and no baked texture.
   target, as real dust does.
 * **Pools** are the most sprites a screen can hold. The count in a view is a sum of independent particle copies, so
   the pool is `ceil(mean + 4σ)` at the worst domain viewport and zoom, and never less than the most found by 6,000
-  random samples. The pools are motesFar 41/24, motesNear 45/23 and particles 46/21 (HIGH/LOW). `--test` confirms that
+  random samples. The pools are motesFar 43/26, motesNear 46/23 and particles 45/21 (HIGH/LOW). `--test` confirms that
   3,000 random cameras, including 2560×1440, stay under them (peak about 80–90%). LOW uses the particles with `low: 1`.
 * **Colour**: see section 5 (the rift mix, plus the corrupt threshold `cg` near the outcrop).
 
@@ -678,7 +696,7 @@ end
 * A tile's right edge is `X[i + 1]`, the same number its right neighbour starts at, so there is no gap and no strip
   blended twice. The Box sits on a whole device pixel and nothing between it and a tile scales, so these whole
   numbers really are device pixels at any zoom and any m (0.687 on a portrait phone, 1.5 on 4K).
-* The cost is 2 writes per tile per moving frame: 92 on HIGH and 28 on LOW. A tile whose rect is off screen can be
+* The cost is 2 writes per tile per moving frame: 96 on HIGH and 28 on LOW. A tile whose rect is off screen can be
   set to `Visible = false` for that frame.
 * Other properties, set once: `Image` = the asset (skip the tile if it was not uploaded), `ImageRectOffset = (2, 2)`,
   `ImageRectSize = (cw, ch)`, `ScaleType = Stretch`, `BackgroundTransparency = 1`, `BorderSizePixel = 0`,
@@ -740,9 +758,9 @@ The rest of the map behaves the same in both tiers.
 
 ### 9.7 Performance rules
 
-* Tween only what is listed. HIGH has 208 animated sprites, up to 132 pooled field sprites and 2 blooms
-  (LOW: 77 + 68 + 2). Per moving frame the Luau cost is the container writes, the tile snapping (92 writes on HIGH)
-  and the field updater (about 280 particles × at most 4 cell copies).
+* Tween only what is listed. HIGH has 208 animated sprites, up to 134 pooled field sprites and 2 blooms
+  (LOW: 77 + 70 + 2). Per moving frame the Luau cost is the container writes, the tile snapping (96 writes on HIGH)
+  and the field updater (about 360 particles × at most 4 cell copies).
 * While a full-screen panel covers the map: `Tween:Pause()` every ambient tween, stop the field updater, and set
   `MapGui.Enabled = false`. Resume when the panel closes.
 * Preload the visible tiles and the atlas (`ContentProvider:PreloadAsync`) behind the splash, farthest layers first.
