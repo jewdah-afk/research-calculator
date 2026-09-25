@@ -26,7 +26,7 @@ function mapNodes(R, view, geo, keys, { mode = 'gem', t = 0.3, sel = null, label
   const nodes = K.nodesFor(view, keys).map((n, i) => Object.assign(n, { x: n.x - ox, y: n.y - oy, sel: n.key === sel, off: n.st === 'buy' ? i * 0.41 : 0 }));
   const cv = K.canvas(R, 0, 0, w, h), ctx = cv.getContext('2d');
   for (const n of nodes) K.drawNode(ctx, n, mode, geo, t + n.off);
-  if (label) for (const n of nodes) if (n.name || n.st === 'locked') label(R, n, n.x, n.y + geo.rSock + 10 * geo.k);
+  if (label) for (const n of nodes) if (n.name || n.st === 'locked') label(R, n, n.x, n.y + geo.rSock + (geo.labelGap != null ? geo.labelGap : 10) * geo.k);
   return { nodes, cv, ctx };
 }
 

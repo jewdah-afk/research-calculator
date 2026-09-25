@@ -242,6 +242,6 @@ const K = (() => {
     c.width = w; c.height = h; return c;
   };
   // geometry of the painted sockets per view (measured on home.png / strip_p.png)
-  K.GEO = { home: { rSock: 41, gem: 70, disc: 29, k: 1 }, strip: { rSock: 74, gem: 124, disc: 52, k: 1.8 } };
+  K.GEO = { home: { rSock: 41, gem: 70, disc: 29, k: 1 }, strip: { rSock: 74, gem: 124, disc: 52, k: 1.8, labelGap: -7 } };
   return K;
 })();
