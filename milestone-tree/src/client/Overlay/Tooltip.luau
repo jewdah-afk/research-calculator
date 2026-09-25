@@ -12,7 +12,8 @@
 	      Foot    `small` soft, sentence case ("Click to open · right-click to peek")
 
 	    local tip = Tooltip.new(root)
-	    tip:show(owner, content?, at?)   content = { title, body?, rows?, pr?, foot?, hue?, layer? }; nil hides
+	    tip:show(owner, content?, at?)   content = { title, body?, rows?, pr?, foot?, hue?, layer? }; nil hides; an empty
+	                                     title is left out (the game's own card tooltips)
 	    tip:hide(owner?)
 ]]
 
@@ -128,6 +129,7 @@ function Tooltip.new(root: GuiObject): Tooltip
 		f.Size = UDim2.fromOffset(if compact then 300 else 360, 0)
 		rim.Color = Theme.lift(hue, 0.2)
 		title.Text = c.title
+		title.Visible = c.title ~= "" -- the game's own tooltips (panel cards) come without a title
 		title.TextColor3 = Theme.lift(hue, 0.55)
 		Theme.text(title, "cardSmall")
 		local b = c.body

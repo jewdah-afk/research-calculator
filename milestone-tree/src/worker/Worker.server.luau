@@ -51,7 +51,7 @@ local canSave = false        -- false when the save could not be loaded: never o
 local stopping = false
 local tickEvery = Config.TICK
 local tickCost = 0           -- running average seconds per tick
-local sinceTick, sinceView, sinceSave = 0, 0, 0
+local sinceTick, sinceView, sinceSave, sinceSent = 0, 0, 0, 0
 local pushNow = false        -- refresh the screen at the next heartbeat (after a button press)
 local saving = false
 
@@ -172,6 +172,7 @@ RunService.Heartbeat:ConnectParallel(function(dt: number)
 	sinceTick += dt
 	sinceView += dt
 	sinceSave += dt
+	sinceSent += dt
 	if sinceTick >= tickEvery then
 		sinceTick = 0
 		local t0 = os.clock()
@@ -191,7 +192,9 @@ RunService.Heartbeat:ConnectParallel(function(dt: number)
 		if not canSave then patch.unsaved = true end
 	end
 	task.synchronize()
-	if patch and (changed or patch.pop or patch.notice or patch.export or patch.askImport or patch.imp or patch.save or patch.full) then
+	if patch and (changed or patch.pop or patch.notice or patch.export or patch.askImport or patch.imp or patch.save or patch.full
+		or sinceSent >= Config.KEEPALIVE) then
+		sinceSent = 0
 		send(patch)
 	end
 	if wantSave then

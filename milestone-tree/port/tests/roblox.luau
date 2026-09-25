@@ -1,12 +1,16 @@
 --!nocheck
 --[[
-	The Roblox scripts end to end on the mock engine (tests/mock.luau): the real Main.server, Worker (in an Actor),
-	Store, Session, the game, Main.client, Render and Style. A player joins, plays through button presses on the
-	drawn screen, leaves (the save goes to the in-memory DataStore), rejoins (the save comes back), and the server
-	shuts down. Every remote payload is checked against Roblox's rules for what a RemoteEvent can carry.
-	Run tools/wrap_scripts.py first (test.sh roblox does).
+	The Roblox scripts end to end on the mock engine (tests/mock.luau + tests/engine.luau): the real Main.server,
+	Worker (in an Actor), Store, Session, the game, and the whole client (Main.client -> App: the map, the HUD, the
+	panel with Render and the skins, the overlays). A player joins and plays through the new UI the way a player
+	would (DESIGN.md 16 anchors): taps a node, presses the cards and the hero's CTA, switches layers, closes with Esc,
+	exports from OPTIONS, leaves (the save goes to the in-memory DataStore), rejoins (the save comes back), imports
+	through the modal; a phone-sized screen gets the full-screen panel; the server shuts down. Every remote payload
+	is checked against Roblox's rules for what a RemoteEvent can carry.
+	Run tools/wrap_scripts.py first (test.sh roblox does). `-a studio`: every DataStore call fails.
 ]]
 local M = require("./mock")
+local E = require("./engine")(M)
 local L = require("../lib")
 local W = "../data/wrap/"
 
@@ -54,11 +58,6 @@ local mainScript = Instance.new("Script"); mainScript.Name = "Main"
 local workerTemplate = Instance.new("Actor"); workerTemplate.Name = "MilestoneTreeWorker"; workerTemplate.Parent = SS
 local workerScript = Instance.new("Script"); workerScript.Name = "Worker"; workerScript.Parent = workerTemplate
 workerScript.__run = W .. "worker/Worker"
-
-local client = Instance.new("Folder"); client.Name = "MilestoneTree"; client.Parent = SPS
-scriptModule(client, "Style", "client/Style")
-scriptModule(client, "Render", "client/Render")
-local clientMain = Instance.new("LocalScript"); clientMain.Name = "Main"; clientMain.Parent = client
 
 -- a Script starts when it (or an Actor holding it) lands under ServerScriptService
 local function under(o, ancestor)
@@ -132,127 +131,176 @@ if STUDIO then
 	M.failMessage = "StudioAccessToApisNotAllowed: Studio access to APIs is not allowed (mock)"
 end
 
+local frames = E.frames
+M.G.print = print
+
 print("== server starts")
 mainScript.Parent = server
 M.runScript(mainScript, require(W .. "server/Main"))
 check(RS:FindFirstChild("MilestoneTreeRemotes") ~= nil, "remotes created")
 
+local acts = {}
+local fireServer = M.fireServer
+M.fireServer = function(remote, ...)
+	if remote.Name == "Act" then table.insert(acts, (...)) end
+	return fireServer(remote, ...)
+end
+local function count(kind, a2, from)
+	local n = 0
+	for i = (from or 0) + 1, #acts do
+		local a = acts[i]
+		if type(a) == "table" and a[1] == kind and (a2 == nil or a[2] == a2) then n += 1 end
+	end
+	return n
+end
+
 local function join()
+	local old = SPS:FindFirstChild("MilestoneTree")
+	if old then old:Destroy() end
+	E.buildClient()
 	local p = M.addPlayer("Tester", 1)
 	localPlayer = p
 	Players.__props.LocalPlayer = p
-	M.step(0.2)
-	M.runScript(clientMain, require(W .. "client/Main"))
+	frames(0.2)
+	E.runMain("Main")
 	return p
+end
+local function textOf(root)
+	local out = {}
+	for _, d in root:GetDescendants() do
+		if (d.__class == "TextLabel" or d.__class == "TextButton") and (d.Text or "") ~= "" then table.insert(out, d.Text) end
+	end
+	return string.gsub(table.concat(out, " | "), "<[^>]*>", "")
+end
+local function nodeCount(pg)
+	local n = 0
+	local f = pg.MapGui.Root.Box.Nodes
+	for _, c in f:GetChildren() do if string.sub(c.Name, 1, 5) == "Node_" and c:GetAttribute("State") then n += 1 end end
+	return n
+end
+local function key(code)
+	local UIS = game:GetService("UserInputService")
+	UIS.InputBegan:Fire({ UserInputType = M.G.Enum.UserInputType.Keyboard, KeyCode = code, Position = E.Vector2.new(0, 0) }, false)
+	frames(0.05)
 end
 
 print("== player joins")
 local p = join()
+frames(1.5)
+local pg = p:FindFirstChild("PlayerGui")
+local capsuleAmount = pg.TopbarGui.Root.Capsule.Row.Amount
+check(capsuleAmount.Text ~= "", "within 1.5 s the points capsule shows the points (" .. capsuleAmount.Text .. ")")
+check(nodeCount(pg) >= 2, "the map shows the layer nodes (" .. nodeCount(pg) .. ")")
+local screen = pg.OverlayGui.Root.Screen
+check(not screen.Visible, "the loading screen is gone")
 if STUDIO then
-	M.step(1.5)
-	local pg0 = p:FindFirstChild("PlayerGui")
-	local scr = pg0 and pg0:FindFirstChild("MilestoneTree")
-	local n = 0
-	if scr then for _, d in scr.Page.Menu.MenuRoot:GetDescendants() do if d.ClassName == "TextButton" then n += 1 end end end
-	check(n >= 4, "without DataStores the game is on screen within 1.5 s (" .. n .. " menu buttons)")
-	check(scr and not scr.Page.Main.Status.Visible, "the loading message is gone")
-	local ov = pg0:FindFirstChild("MilestoneTreeOverlay")
-	check(ov and ov.Unsaved.Visible, "the not-saved banner is up")
+	local status = pg.TopbarGui.Root.Status
+	check(status.Visible and string.find(string.lower(status.Label.Text), "not saving", 1, true) ~= nil, "without DataStores the status chip reads NOT SAVING")
 	check((M.errors or 0) == 0, "no script errors (" .. tostring(M.errors or 0) .. ")")
 	print(if failures == 0 then "roblox (studio, no DataStore): all checks passed" else ("roblox (studio): " .. failures .. " checks FAILED"))
+	if failures > 0 then error("roblox (studio): " .. failures .. " FAILED", 0) end
 	return
 end
-M.step(3)
-local pg = p:FindFirstChild("PlayerGui")
-local screen = pg and pg:FindFirstChild("MilestoneTree")
-check(screen ~= nil, "client built its ScreenGui")
+frames(1.5)
 local actor = SSS.MilestoneTree:FindFirstChild("Sessions") and SSS.MilestoneTree.Sessions:FindFirstChild("Player_1")
 check(actor ~= nil, "the player's Actor is running")
 check(sent > 0, "views reached the client (" .. sent .. " patches)")
+local startPts = capsuleAmount.Text
 
-local function all(root, pred)
-	local out = {}
-	for _, d in root:GetDescendants() do if pred(d) then table.insert(out, d) end end
-	return out
-end
-local function textOf(b)
-	local l = b:FindFirstChild("Label")
-	return l and l.Text or ""
-end
-local page = screen.Page
-local menuRoot = page.Menu.MenuRoot
-local tabRoot = page.Main.TabRoot
-local headRoot = page.Main.HeadRoot
-local menuButtons = all(menuRoot, function(d) return d.ClassName == "TextButton" end)
-check(#menuButtons >= 4, "menu drawn (" .. #menuButtons .. " buttons)")
-local headText = ""
-for _, d in headRoot:GetDescendants() do if d.ClassName == "TextLabel" and d.Text ~= "" then headText ..= d.Text .. " | " end end
-check(string.find(headText, "points") ~= nil, "header shows points: " .. string.sub(string.gsub(headText, "<[^>]*>", ""), 1, 70))
-local tabButtons = all(tabRoot, function(d) return d.ClassName == "TextButton" end)
-check(#tabButtons > 0, "the milestone tab has buttons (" .. #tabButtons .. ")")
+-- a tap on M opens its panel beside the map; its tab arrives
+local nodesF = pg.MapGui.Root.Box.Nodes
+local sheet = pg.PanelGui.Root.Sheet
+local n0 = #acts
+nodesF.Node_m.Hit.Activated:Fire()
+frames(0.5)
+check(count("tab", "m", n0) == 1, "a tap on M sends {\"tab\", \"m\"} once")
+check(sheet.Visible and string.find(textOf(sheet.Title.Parent == sheet and sheet or sheet), "MILESTONE", 1, true) ~= nil, "the panel's title reads MILESTONE")
+local tabRoot = sheet.Body.Scroll.TabRoot
+check(#tabRoot:GetDescendants() > 5, "the Milestone tab has content")
 
--- play: press every button that looks affordable, now and then, like a player would
-local function pressAffordable()
+-- play: press every card that is not locked (and the hero's CTA), now and then, like a player would
+-- (one press every 40 ms: the panel drops presses closer than 30 ms apart, like a double tap)
+local function pressCards()
 	local n = 0
-	for _, b in all(tabRoot, function(d) return d.ClassName == "TextButton" and d.Active end) do
-		local c = b.BackgroundColor3
-		-- locked buttons are #bf8f8f and bought ones #77bf5f; anything else on the tab is worth a press
-		local locked = c and math.abs(c.R - 0xbf / 255) < 0.01 and math.abs(c.G - 0x8f / 255) < 0.01
-		if not locked then b.Activated:Fire(); n += 1 end
+	local cta = sheet.Hero:FindFirstChild("Cta")
+	if cta and cta.Visible then
+		cta.Activated:Fire()
+		n += 1
+		frames(0.04)
+	end
+	for _, d in tabRoot:GetDescendants() do
+		if n >= 12 then break end
+		-- the game's own cards (Render names them by their view path); a signature's extra buttons move around
+		if d.__class == "TextButton" and d.Visible ~= false and d.Parent and string.sub(d.Name, 1, 4) == "tab." then
+			local st = d:GetAttribute("State")
+			if st == "can" or st == "notyet" then
+				d.Activated:Fire()
+				n += 1
+				frames(0.04)
+			end
+		end
 	end
 	return n
 end
-local function openLayer(label)
-	for _, b in all(menuRoot, function(d) return d.ClassName == "TextButton" end) do
-		if string.find(textOf(b), label, 1, true) then b.Activated:Fire(); return true end
-	end
-	return false
+local function openNode(l)
+	local node = nodesF:FindFirstChild("Node_" .. l)
+	local st = node and node:GetAttribute("State")
+	if node == nil or st == "sealed" or st == "frontier" or st == "dormant" then return false end
+	node.Hit.Activated:Fire()
+	frames(0.4)
+	return true
 end
+local pressed = 0
 for round = 1, 40 do
-	pressAffordable()
-	M.step(0.5)
+	pressed += pressCards()
+	frames(0.5)
 	if round % 8 == 0 then
-		openLayer(if round % 16 == 0 then "Milestone" else "Prestige Points")
-		M.step(0.3)
+		openNode(if round % 16 == 0 then "m" else "p")
 	end
 end
-headText = ""
-for _, d in headRoot:GetDescendants() do if d.ClassName == "TextLabel" and d.Text ~= "" then headText = headText .. d.Text end end
-print("  header now: " .. string.sub(string.gsub(headText, "<[^>]*>", ""), 1, 90))
-local session = nil
-check(openLayer("Prestige Points"), "the Prestige layer opens from the menu")
-M.step(0.5)
-local prestigeText = ""
-for _, d in tabRoot:GetDescendants() do if d.ClassName == "TextLabel" then prestigeText ..= d.Text end end
-check(string.find(prestigeText, "prestige points") ~= nil, "Prestige tab drawn")
-check(openLayer("Milestone"), "back to the Milestone layer")
-M.step(0.5)
-local msText = ""
-for _, d in tabRoot:GetDescendants() do if d.ClassName == "TextLabel" then msText ..= d.Text .. "\n" end end
-check(string.find(msText, "milestones", 1, true) ~= nil and string.find(msText, "cost exponent", 1, true) ~= nil, "Milestone tab text drawn after switching tabs")
-check(not page.Main.Status.Visible, "no drawing errors on screen" .. (if page.Main.Status.Visible then ": " .. page.Main.Status.Text else ""))
+print("  pressed " .. pressed .. " cards; points now " .. capsuleAmount.Text)
+check(capsuleAmount.Text ~= startPts, "playing changed the points (" .. startPts .. " -> " .. capsuleAmount.Text .. ")")
+check(openNode("p"), "the Prestige layer opens from its node")
+frames(0.5)
+check(string.find(string.lower(textOf(sheet)), "prestige points", 1, true) ~= nil, "the Prestige panel is drawn")
+check(openNode("m"), "back to the Milestone layer")
+frames(0.5)
+local msText = string.lower(textOf(tabRoot))
+check(string.find(msText, "milestone", 1, true) ~= nil, "the Milestone tab is drawn after switching layers")
 check(#payloadErrors == 0, "every remote payload is carryable" .. (if #payloadErrors > 0 then ": " .. payloadErrors[1] else ""))
 print(string.format("  %d patches, avg %.1f KB, max %.1f KB", sent, sentBytes / sent / 1024, maxBytes / 1024))
+local instances = #pg.PanelGui:GetDescendants()
+check(instances <= 900, "the panel stays small (" .. instances .. " instances under PanelGui)")
 
--- hotkeys and options
-local optOpened = openLayer("Options")
-M.step(0.3)
-check(optOpened, "options open")
-local optButtons = all(tabRoot, function(d) return d.ClassName == "TextButton" end)
+-- Esc closes the panel
+n0 = #acts
+key(M.G.Enum.KeyCode.Escape)
+frames(0.4)
+check(count("tab", "none", n0) == 1 and not sheet.Visible, "Esc sends {\"tab\", \"none\"} once and closes the panel")
+
+-- OPTIONS, then Export save: the modal shows the save string
+local ov = pg.OverlayGui.Root
+pg.HudGui.Root.Dock.Options.Activated:Fire()
+frames(0.5)
+check(sheet.Visible, "OPTIONS opens the Options panel")
 local exportBtn
-for _, b in optButtons do if string.find(textOf(b), "Export", 1, true) then exportBtn = b end end
-check(exportBtn ~= nil, "Export save button")
+for _, d in tabRoot:GetDescendants() do
+	if d.__class == "TextButton" and string.find(textOf(d), "Export", 1, true) then exportBtn = d end
+end
+check(exportBtn ~= nil, "the Export save row")
 if exportBtn then exportBtn.Activated:Fire() end
-M.step(0.3)
-local overlay = pg:FindFirstChild("MilestoneTreeOverlay")
-local modal = overlay and overlay.Modal
-check(modal and modal.Visible and #modal:FindFirstChildOfClass("TextBox").Text > 100, "export shows the save string")
-local exported = modal and modal:FindFirstChildOfClass("TextBox").Text
+frames(0.5)
+local modalBox = ov.Modal:FindFirstChild("Well") and ov.Modal.Well.Box
+check(ov.Modal.Visible and modalBox and #modalBox.Text >= 100, "Export shows the save string in the modal")
+local exported = modalBox and modalBox.Text
+key(M.G.Enum.KeyCode.Escape)
+key(M.G.Enum.KeyCode.Escape)
+frames(0.3)
 
 print("== player leaves")
 local store = M.stores.MilestoneTreeNG_v1
 M.removePlayer(p)
-M.step(2)
+frames(2)
 local rec = store and store.player_1
 check(rec ~= nil and type(rec.save) == "string" and #rec.save > 1000, "save written to the DataStore")
 check(rec ~= nil and rec.lock == nil, "save lock released on leaving")
@@ -262,46 +310,94 @@ print("  saved points: " .. tostring(savedPts))
 
 print("== player rejoins")
 sent = 0
-screen:Destroy()
-overlay:Destroy()
 -- a rejoin is a new client: drop the old client's handlers
 for _, r in RS.MilestoneTreeRemotes:GetChildren() do r.__events.OnClientEvent = nil end
+local RunService = game:GetService("RunService")
+RunService.PreRender.handlers = {}
+local UIS = game:GetService("UserInputService")
+for _, e in { "InputBegan", "InputChanged", "InputEnded" } do UIS[e].handlers = {} end
 p = join()
-M.step(3)
+frames(3)
 pg = p:FindFirstChild("PlayerGui")
-screen = pg:FindFirstChild("MilestoneTree")
-headText = ""
-for _, d in screen.Page.Main.HeadRoot:GetDescendants() do if d.ClassName == "TextLabel" then headText ..= d.Text end end
-check(sent > 0 and string.find(headText, "points") ~= nil, "screen back after rejoin")
-local plainHead = string.gsub(headText, "<[^>]*>", "")
-check(string.find(plainHead, "You have 10.00 ", 1, true) == nil, "progress restored after rejoin: " .. string.sub(plainHead, 1, 50))
+capsuleAmount = pg.TopbarGui.Root.Capsule.Row.Amount
+check(sent > 0 and capsuleAmount.Text ~= "", "the screen is back after the rejoin")
+check(capsuleAmount.Text ~= "10.00" and capsuleAmount.Text ~= startPts, "progress restored after the rejoin (" .. capsuleAmount.Text .. ")")
 local rec2 = store.player_1
 check(rec2.lock ~= nil, "save locked again while playing")
 
--- import the exported save back (the web export format)
+-- import the exported save back through the modal (the web export format)
 if exported then
-	local imp = SSS.MilestoneTree.Sessions:FindFirstChild("Player_1")
-	RS.MilestoneTreeRemotes.Import:FireServer(exported)
-	M.step(0.5)
-	check(true, "import accepted without errors")
+	sheet = pg.PanelGui.Root.Sheet
+	tabRoot = sheet.Body.Scroll.TabRoot
+	ov = pg.OverlayGui.Root
+	pg.HudGui.Root.Dock.Options.Activated:Fire()
+	frames(0.5)
+	local function importButton()
+		for _, d in tabRoot:GetDescendants() do
+			if d.__class == "TextButton" and string.find(textOf(d), "Import", 1, true) then return d end
+		end
+		return nil
+	end
+	local importBtn = importButton()
+	if importBtn then importBtn.Activated:Fire() end
+	frames(0.5)
+	check(ov.Modal.Visible and ov.Modal:GetAttribute("Kind") == "import", "Import opens the import modal")
+	ov.Modal.Well.Box.Text = exported
+	ov.Modal.Buttons.Primary.Activated:Fire()
+	frames(1)
+	check(not ov.Modal.Visible, "a good save imports and closes the modal")
+	frames(11)
+	if not sheet.Visible then
+		pg.HudGui.Root.Dock.Options.Activated:Fire()
+		frames(0.5)
+	end
+	importBtn = importButton()
+	check(importBtn ~= nil, "the Options panel is still there after the import")
+	if importBtn then importBtn.Activated:Fire() end
+	frames(0.5)
+	ov.Modal.Well.Box.Text = "garbage"
+	ov.Modal.Buttons.Primary.Activated:Fire()
+	frames(1)
+	check(ov.Modal.Visible and ov.Modal.Result.Visible, "a bad string shows the inline error")
+	key(M.G.Enum.KeyCode.Escape)
+	key(M.G.Enum.KeyCode.Escape)
 end
+
+-- a phone-sized screen: the panel is full screen and the map is off
+local Workspace = game:GetService("Workspace")
+Workspace.CurrentCamera.__props.ViewportSize = E.Vector2.new(844, 390)
+Workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Fire()
+frames(0.5)
+nodesF = pg.MapGui.Root.Box.Nodes
+sheet = pg.PanelGui.Root.Sheet
+openNode("p")
+frames(0.5)
+check(sheet.Visible and not pg.MapGui.Enabled, "844 x 390: the sheet is full screen and MapGui is off")
+local band = pg.TopbarGui.Root.PanelBand
+check(band.Visible and band.Close.Size.X.Offset >= 44, "the band's close is at least 44 du")
+band.Close.Activated:Fire()
+frames(0.5)
+check(pg.MapGui.Enabled and not sheet.Visible, "the band's close brings the map back")
+
+check(E.warnings == 0, "no [MilestoneTree] warnings while playing (" .. E.warnings .. ")")
 
 print("== a second player joins while the DataStore is down")
 store.player_2 = { save = "{\"points\":\"1e100\"}", time = 1 }
 M.failStore = true
 local p2 = M.addPlayer("Unlucky", 2)
-M.step(20)
+frames(20)
 local a2 = SSS.MilestoneTree.Sessions:FindFirstChild("Player_2")
 check(a2 ~= nil, "their game still starts")
 M.failStore = false
 M.removePlayer(p2)
-M.step(2)
+frames(2)
 check(store.player_2.save == "{\"points\":\"1e100\"}", "their real save was not overwritten")
 
 print("== the server shuts down")
 for _, f in M.closers do task.spawn(f) end
-M.step(3)
+frames(3)
 check(store.player_1.lock == nil, "shutdown saved and released the lock")
 
 check((M.errors or 0) == 0, "no script errors (" .. tostring(M.errors or 0) .. ")")
 print(if failures == 0 then "roblox: all checks passed" else ("roblox: " .. failures .. " checks FAILED"))
+if failures > 0 then error("roblox: " .. failures .. " FAILED", 0) end

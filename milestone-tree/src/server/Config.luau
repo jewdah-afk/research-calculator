@@ -7,8 +7,10 @@ return {
 	MAX_TICK = 0.5,
 	TICK_CPU_SHARE = 0.25,
 
-	-- how often the player's screen is refreshed (right after a button press it is refreshed at once)
+	-- how often the player's screen is refreshed (right after a button press it is refreshed at once); an unchanged
+	-- screen still gets a patch every KEEPALIVE seconds, so the client can tell a quiet game from a lost connection
 	VIEW = 0.2,
+	KEEPALIVE = 2,
 
 	-- DataStore
 	STORE_NAME = "MilestoneTreeNG_v1",

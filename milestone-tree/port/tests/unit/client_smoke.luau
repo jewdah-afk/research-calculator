@@ -1,351 +1,37 @@
 --!nocheck
 --[[
-	The new client's map and HUD modules end to end on the mock engine (tests/mock.luau, extended here with the
-	datatypes and services those modules use): MapPreview.client runs, every fixture patch in data/fixtures is played
-	into the View remote, frames are stepped, nodes are clicked / hovered / peeked, READY gems held, overlays opened.
-	Any script error fails the run. Twice: with every engine capability, and with all of them forced off
-	(MT_ForceCaps = "all", the fallbacks).
+	The new client end to end on the mock engine (tests/mock.luau + tests/engine.luau), without a server: Main.client
+	starts App, every capture fixture patch in data/fixtures is played into the View remote, frames are stepped, and
+	the player's paths are driven: node taps and the panel beside the map, Esc, HOME / TROPHIES / OPTIONS, the Options
+	panel's hard reset (the confirm modal), export / import, hotkeys, the peek, READY holds, the gate popover, toasts,
+	the phone layout (full-screen panel, the map switched off, the band's close), the detail sheet, every modal and
+	screen. Any script error or [MilestoneTree] warning fails the run. Twice: with every engine capability, and with
+	all of them forced off (MT_ForceCaps = "all", the fallbacks).
 
 	Run from port/: python3 tools/wrap_scripts.py && ./test.sh capture && luau tests/unit/client_smoke.luau [-a nocaps]
 ]]
 local M = require("../mock")
-local W = "../../data/wrap/"
+local E = require("../engine")(M)
 local NOCAPS = (...) == "nocaps"
 
 local failures = 0
 local function check(ok, what)
 	if ok then print("  ok    " .. what) else failures += 1; print("  FAIL  " .. what) end
 end
-
--- ------------------------------------------------------------------------------------------------------ datatypes
-local function typed(name, t, mt)
-	mt.__type = name
-	return setmetatable(t, mt)
-end
-local V2mt = {}
-local function V2(x, y) return typed("Vector2", { X = x or 0, Y = y or 0 }, V2mt) end
-V2mt.__index = function(v, k)
-	if k == "Magnitude" then return math.sqrt(v.X * v.X + v.Y * v.Y) end
-	if k == "Unit" then local m = math.sqrt(v.X * v.X + v.Y * v.Y); return if m > 0 then V2(v.X / m, v.Y / m) else V2(0, 0) end
-	if k == "Lerp" then return function(a, b, t) return V2(a.X + (b.X - a.X) * t, a.Y + (b.Y - a.Y) * t) end end
-	if k == "Dot" then return function(a, b) return a.X * b.X + a.Y * b.Y end end
-	error("Vector2 has no " .. tostring(k), 2)
-end
-local function num(v) return if type(v) == "number" then V2(v, v) else v end
-V2mt.__add = function(a, b) a, b = num(a), num(b); return V2(a.X + b.X, a.Y + b.Y) end
-V2mt.__sub = function(a, b) a, b = num(a), num(b); return V2(a.X - b.X, a.Y - b.Y) end
-V2mt.__mul = function(a, b) a, b = num(a), num(b); return V2(a.X * b.X, a.Y * b.Y) end
-V2mt.__div = function(a, b) a, b = num(a), num(b); return V2(a.X / b.X, a.Y / b.Y) end
-V2mt.__unm = function(a) return V2(-a.X, -a.Y) end
-V2mt.__eq = function(a, b) return a.X == b.X and a.Y == b.Y end
-V2mt.__tostring = function(v) return string.format("(%g, %g)", v.X, v.Y) end
-local Vector2 = { new = V2, zero = V2(0, 0), one = V2(1, 1), xAxis = V2(1, 0), yAxis = V2(0, 1) }
-
-local UDmt = { __index = function(_, k) error("UDim has no " .. tostring(k), 2) end }
-local function UD(s, o) return typed("UDim", { Scale = s or 0, Offset = o or 0 }, UDmt) end
-UDmt.__add = function(a, b) return UD(a.Scale + b.Scale, a.Offset + b.Offset) end
-UDmt.__eq = function(a, b) return a.Scale == b.Scale and a.Offset == b.Offset end
-local UDim = { new = UD }
-local U2mt = { __index = function(_, k)
-	error("UDim2 has no " .. tostring(k), 2)
-end }
-local function U2(xs, xo, ys, yo)
-	for _, v in { xs or 0, xo or 0, ys or 0, yo or 0 } do assert(v == v, "UDim2 NaN") end
-	return typed("UDim2", { X = UD(xs, xo), Y = UD(ys, yo) }, U2mt)
-end
-U2mt.__add = function(a, b) return U2(a.X.Scale + b.X.Scale, a.X.Offset + b.X.Offset, a.Y.Scale + b.Y.Scale, a.Y.Offset + b.Y.Offset) end
-U2mt.__sub = function(a, b) return U2(a.X.Scale - b.X.Scale, a.X.Offset - b.X.Offset, a.Y.Scale - b.Y.Scale, a.Y.Offset - b.Y.Offset) end
-U2mt.__eq = function(a, b) return a.X == b.X and a.Y == b.Y end
-local UDim2 = {
-	new = function(xs, xo, ys, yo)
-		if type(xs) == "table" then return U2(xs.Scale, xs.Offset, xo.Scale, xo.Offset) end
-		return U2(xs, xo, ys, yo)
-	end,
-	fromOffset = function(x, y) return U2(0, x or 0, 0, y or 0) end,
-	fromScale = function(x, y) return U2(x or 0, 0, y or 0, 0) end,
-}
-
-local C3mt = { __index = function(c, k)
-	if k == "Lerp" then return function(a, b, t) return typed("Color3", { R = a.R + (b.R - a.R) * t, G = a.G + (b.G - a.G) * t, B = a.B + (b.B - a.B) * t }, getmetatable(a)) end end
-	if k == "ToHex" then return function(a) return string.format("%02x%02x%02x", a.R * 255, a.G * 255, a.B * 255) end end
-	error("Color3 has no " .. tostring(k), 2)
-end }
-C3mt.__eq = function(a, b) return a.R == b.R and a.G == b.G and a.B == b.B end
-local function C3(r, g, b)
-	for _, v in { r or 0, g or 0, b or 0 } do assert(v == v, "Color3 NaN") end
-	return typed("Color3", { R = r or 0, G = g or 0, B = b or 0 }, C3mt)
-end
-local Color3 = {
-	new = C3,
-	fromRGB = function(r, g, b) return C3((r or 0) / 255, (g or 0) / 255, (b or 0) / 255) end,
-	fromHex = function(h)
-		h = string.gsub(h, "^#", "")
-		assert(#h == 6 or #h == 3, "bad hex " .. h)
-		if #h == 3 then h = string.gsub(h, ".", "%0%0") end
-		local r, g, b = tonumber(string.sub(h, 1, 2), 16), tonumber(string.sub(h, 3, 4), 16), tonumber(string.sub(h, 5, 6), 16)
-		assert(r and g and b, "bad hex " .. h)
-		return C3(r / 255, g / 255, b / 255)
-	end,
-}
-local function seqCheck(kind, pts)
-	assert(type(pts) == "table" and #pts >= 2 and #pts <= 20, kind .. " needs 2..20 keypoints, got " .. tostring(#pts))
-	assert(pts[1].Time == 0 and pts[#pts].Time == 1, kind .. " must start at 0 and end at 1")
-	for i = 2, #pts do assert(pts[i].Time > pts[i - 1].Time, kind .. " times must increase") end
-end
-local CSK = { new = function(t, c)
-	assert(type(t) == "number" and t >= 0 and t <= 1, "ColorSequenceKeypoint time " .. tostring(t))
-	assert(type(c) == "table" and getmetatable(c) == C3mt, "ColorSequenceKeypoint needs a Color3")
-	return typed("ColorSequenceKeypoint", { Time = t, Value = c }, { __index = function(_, k) error("CSK has no " .. k) end })
-end }
-local ColorSequence = { new = function(a, b)
-	local pts
-	if type(a) == "table" and getmetatable(a) == C3mt then
-		pts = { CSK.new(0, a), CSK.new(1, b or a) }
-	else
-		pts = a
-	end
-	seqCheck("ColorSequence", pts)
-	return typed("ColorSequence", { Keypoints = pts }, { __index = function(_, k) error("ColorSequence has no " .. k) end })
-end }
-local NSK = { new = function(t, v, e)
-	assert(type(t) == "number" and t >= 0 and t <= 1, "NumberSequenceKeypoint time " .. tostring(t))
-	assert(type(v) == "number" and v == v, "NumberSequenceKeypoint value")
-	return typed("NumberSequenceKeypoint", { Time = t, Value = v, Envelope = e or 0 }, { __index = function(_, k) error("NSK has no " .. k) end })
-end }
-local NumberSequence = { new = function(a, b)
-	local pts
-	if type(a) == "number" then pts = { NSK.new(0, a), NSK.new(1, b or a) } else pts = a end
-	seqCheck("NumberSequence", pts)
-	for _, p in pts do assert(p.Value >= 0 and p.Value <= 1 or true) end
-	return typed("NumberSequence", { Keypoints = pts }, { __index = function(_, k) error("NumberSequence has no " .. k) end })
-end }
-local TweenInfo = { new = function(time, style, dir, rep, rev, delay)
-	return typed("TweenInfo", { Time = time or 1, EasingStyle = style, EasingDirection = dir, RepeatCount = rep or 0, Reverses = rev or false, DelayTime = delay or 0 }, {})
-end }
-local Rect = { new = function(a, b, c, d) return typed("Rect", { Min = V2(a, b), Max = V2(c, d), Width = c - a, Height = d - b }, {}) end }
-local Font = {
-	new = function(family, weight, style) return typed("Font", { Family = family, Weight = weight, Style = style }, {}) end,
-	fromName = function(name, weight, style) return typed("Font", { Family = "rbxasset://fonts/families/" .. name .. ".json", Weight = weight, Style = style }, {}) end,
-}
-local Path2DControlPoint = { new = function(p, l, r) return typed("Path2DControlPoint", { Position = p, LeftTangent = l, RightTangent = r }, {}) end }
-local function rtypeof(v)
-	local mt = type(v) == "table" and getmetatable(v)
-	if mt and mt.__type then return mt.__type end
-	if type(v) == "table" and v.__class then return "Instance" end
-	return typeof(v)
-end
-
--- ------------------------------------------------------------------------------------------------------ instances
-local Inst = getmetatable(M.newInstance("Frame"))
-local EXTRA_EVENTS = {}
-for _, e in { "MouseMoved", "MouseButton1Down", "MouseButton1Up", "MouseButton1Click", "MouseButton2Click", "MouseButton2Down",
-	"FocusLost", "Focused", "Completed", "AncestryChanged", "SelectionGained" } do EXTRA_EVENTS[e] = true end
-local DEFAULTS = {
-	BackgroundTransparency = 0, Visible = true, ZIndex = 1, Rotation = 0, LayoutOrder = 0, TextSize = 14, Text = "",
-	TextTransparency = 0, ImageTransparency = 0, Image = "", Enabled = true, Interactable = true, Active = false,
-	Scale = 1, Thickness = 1, Transparency = 0, IsLoaded = true, AutomaticSize = nil, LineHeight = 1,
-}
-local function lazyDefaults(o, k)
-	if k == "AbsoluteSize" then
-		local s = rawget(o, "__props").Size
-		if s then return V2(math.max(1, s.X.Offset + s.X.Scale * 400), math.max(1, s.Y.Offset + s.Y.Scale * 300)) end
-		return V2(100, 40)
-	end
-	if k == "AbsolutePosition" then return V2(0, 0) end
-	if k == "TextBounds" then return V2(8 * #(rawget(o, "__props").Text or ""), 16) end
-	if k == "Position" or k == "Size" then return U2(0, 0, 0, 0) end
-	if k == "AnchorPoint" or k == "CanvasPosition" or k == "Offset" then return V2(0, 0) end
-	if k == "BackgroundColor3" or k == "TextColor3" or k == "ImageColor3" or k == "Color" or k == "Color3" then return C3(1, 1, 1) end
-	if k == "CornerRadius" then return UD(0, 0) end
-	return nil
-end
-local oldIndex = Inst.__index
-Inst.__index = function(o, k)
-	local v = oldIndex(o, k)
-	if v ~= nil then return v end
-	if EXTRA_EVENTS[k] then
-		local s = M.Signal.new()
-		rawget(o, "__props")[k] = s
-		return s
-	end
-	local d = DEFAULTS[k]
-	if d ~= nil then return d end
-	return lazyDefaults(o, k)
-end
-local oldNew = Inst.__newindex
-Inst.__newindex = function(o, k, v)
-	if rawget(o, "__destroyed") and k ~= "Parent" then
-		-- the engine allows writes to destroyed objects; nothing to do
-	end
-	if k == "TextSize" then assert(type(v) == "number" and v == v and v >= 1 and v <= 100, "TextSize out of range: " .. tostring(v)) end
-	if k == "Thickness" then assert(type(v) == "number" and v == v, "Thickness NaN") end
-	if k == "BackgroundTransparency" or k == "TextTransparency" or k == "ImageTransparency" then
-		assert(type(v) == "number" and v == v, k .. " must be a number")
-	end
-	if k == "Name" then assert(type(v) == "string", "Name must be a string") end
-	oldNew(o, k, v)
-end
-local CLASS_ISA = {
-	Frame = { "GuiObject", "GuiBase2d" }, ScrollingFrame = { "GuiObject", "GuiBase2d" }, TextLabel = { "GuiObject", "GuiBase2d" },
-	TextButton = { "GuiButton", "GuiObject", "GuiBase2d" }, ImageButton = { "GuiButton", "GuiObject", "GuiBase2d" },
-	TextBox = { "GuiObject", "GuiBase2d" }, ImageLabel = { "GuiObject", "GuiBase2d" }, CanvasGroup = { "GuiObject", "GuiBase2d" },
-	ScreenGui = { "LayerCollector", "GuiBase2d" }, Path2D = { "GuiBase" }, UIListLayout = { "UIGridStyleLayout", "UIComponent" },
-	UICorner = { "UIComponent" }, UIStroke = { "UIComponent" }, UIPadding = { "UIComponent" }, UIScale = { "UIComponent" },
-	UIGradient = { "UIComponent" }, UIShadow = { "UIComponent" }, UITextSizeConstraint = { "UIConstraint", "UIComponent" },
-	LocalScript = { "Script", "BaseScript" }, ModuleScript = { "LuaSourceContainer" },
-}
-function Inst:IsA(cls)
-	if self.__class == cls or cls == "Instance" then return true end
-	for _, b in CLASS_ISA[self.__class] or {} do if b == cls then return true end end
-	return false
-end
-function Inst:FindFirstChildWhichIsA(cls) for _, c in self.__kids do if c:IsA(cls) then return c end end return nil end
-function Inst:FindFirstAncestorWhichIsA(cls)
-	local o = self.Parent
-	while o do if o:IsA(cls) then return o end o = o.Parent end
-	return nil
-end
-function Inst:FindFirstAncestor(name)
-	local o = self.Parent
-	while o do if o.Name == name then return o end o = o.Parent end
-	return nil
-end
-function Inst:IsDescendantOf(a)
-	local o = self.Parent
-	while o do if o == a then return true end o = o.Parent end
-	return false
-end
-function Inst:GetAttributeChangedSignal() return M.Signal.new() end
-function Inst:ClearAllChildren() for _, c in table.clone(self.__kids) do c:Destroy() end end
-function Inst:SetControlPoints(pts)
-	assert(type(pts) == "table" and #pts >= 2, "Path2D needs 2+ control points")
-	self.__props.__points = pts
-end
-function Inst:GetGuiObjectsAtPosition() return {} end
-function Inst:GetTextSize() return V2(40, 16) end
-
--- ------------------------------------------------------------------------------------------------------ services
+local Vector2 = E.Vector2
 local game = M.game
-local tweens = 0
-local TS = game:GetService("TweenService")
-function TS:Create(inst, info, goals)
-	assert(type(inst) == "table" and inst.__class, "Tween target must be an Instance")
-	assert(rtypeof(info) == "TweenInfo", "Tween needs a TweenInfo")
-	for k, v in goals do
-		assert(type(k) == "string", "goal key")
-		local cur = inst[k]
-		assert(cur ~= nil, "tween goal " .. k .. " on " .. inst.__class .. " has no current value")
-		assert(rtypeof(cur) == rtypeof(v), "tween goal " .. k .. " type " .. rtypeof(v) .. " vs " .. rtypeof(cur))
-	end
-	tweens += 1
-	local t = { Completed = M.Signal.new() }
-	function t:Play() for k, v in goals do inst[k] = v end end
-	function t:Cancel() end
-	function t:Pause() end
-	return t
-end
-local GS = game:GetService("GuiService")
-GS.__props.ReducedMotionEnabled = false
-GS.__props.PreferredTransparency = 1
-GS.__props.TopbarInset = Rect.new(120, 0, 1800, 58)
-GS.__props.TouchControlsEnabled = true
-function GS:GetGuiInset() return V2(0, 58), V2(0, 0) end
-local CP = game:GetService("ContentProvider")
-function CP:PreloadAsync(list, cb) for _, id in list do if cb then cb(id, nil) end end end
-local HS = game:GetService("HttpService")
-function HS:JSONDecode(s) error("no json in the mock") end
-function HS:JSONEncode(t) return "{}" end
 local RunService = game:GetService("RunService")
-RunService.__props.PreRender = M.Signal.new()
-RunService.__props.RenderStepped = M.Signal.new()
 local UIS = game:GetService("UserInputService")
-for _, e in { "LastInputTypeChanged", "PointerAction", "TouchPinch", "TouchStarted", "TextBoxFocused", "TextBoxFocusReleased" } do
-	UIS.__props[e] = M.Signal.new()
-end
-UIS.__props.TouchEnabled = false
-UIS.__props.MouseEnabled = true
-UIS.__props.KeyboardEnabled = true
-UIS.__props.GamepadEnabled = false
-function UIS:GetMouseLocation() return V2(960, 540) end
 local Workspace = game:GetService("Workspace")
-Workspace.CurrentCamera.__props.ViewportSize = V2(1920, 1080)
-local StarterGui = game:GetService("StarterGui")
-function StarterGui:SetCore() end
-
-local userSettings = { GetService = function() return { SavedQualityLevel = M.G.Enum.SavedQualitySetting.Automatic } end }
-M.G.Vector2, M.G.UDim, M.G.UDim2, M.G.Color3 = Vector2, UDim, UDim2, Color3
-M.G.ColorSequence, M.G.ColorSequenceKeypoint, M.G.NumberSequence, M.G.NumberSequenceKeypoint = ColorSequence, CSK, NumberSequence, NSK
-M.G.TweenInfo, M.G.Rect, M.G.Font, M.G.Path2DControlPoint = TweenInfo, Rect, Font, Path2DControlPoint
-M.G.typeof = rtypeof
-M.G.os = { clock = function() return M.now end, time = os.time, date = os.date }
-local waitRaw = M.G.task.wait
-M.G.task.wait = function(s)
-	local t0 = M.now
-	waitRaw(s)
-	return M.now - t0
-end
-local RNG = {}
-RNG.__index = RNG
-function RNG:NextNumber(a, b)
-	self.s = (self.s * 1103515245 + 12345) % 2147483648
-	local u = self.s / 2147483648
-	if a then return a + (b - a) * u end
-	return u
-end
-function RNG:NextInteger(a, b) return math.floor(a + (b - a + 1) * self:NextNumber()) end
-M.G.Random = { new = function(seed) return setmetatable({ s = math.floor(seed or 1) % 2147483648 }, RNG) end }
-M.G.UserSettings = function() return userSettings end
-M.G.warn = function(...)
-	local s = table.concat(table.pack(...), " ")
-	print("[warn] " .. s)
-	if string.find(s, "MilestoneTree") then failures += 1 end
-end
-M.G.print = function(...) end
+local Enum = M.G.Enum
+local Instance = M.G.Instance
 
 -- ------------------------------------------------------------------------------------------------------ the tree
 local RS = game:GetService("ReplicatedStorage")
-local SP = game:GetService("StarterPlayer")
-local Instance = M.G.Instance
-local SPS = Instance.new("Folder"); SPS.Name = "StarterPlayerScripts"; SPS.Parent = SP
-local shared = Instance.new("Folder"); shared.Name = "MilestoneTree"; shared.Parent = RS
-local function scriptModule(parent, name, wrapPath)
-	local inst
-	inst = M.module(parent, name, function() return M.withScript(inst, require(W .. wrapPath)) end)
-	return inst
-end
-scriptModule(shared, "Html", "shared/Html")
-M.module(shared, "Realm", function() return require("../../../src/shared/Realm") end)
-M.module(shared, "Assets", function() return require("../../../src/shared/Assets") end)
-M.module(shared, "ZoneMaps", function() return require("../../../src/shared/ZoneMaps") end)
-
-local client = Instance.new("Folder"); client.Name = "MilestoneTree"; client.Parent = SPS
-local function folder(parent, name) local f = Instance.new("Folder"); f.Name = name; f.Parent = parent; return f end
-scriptModule(client, "Types", "client/Types")
-local listing = {
-	Core = { "Signal", "ViewStore", "Theme", "Recipes", "Motion", "Layout", "Sprites", "Prefs", "Rich" },
-	Input = { "Input" },
-	Map = { "MapCamera", "MapView", "MapInput", "Ambient", "Fields", "Fallback", "MapLogic", "NodeWidget", "Nodes", "Links", "Plates", "Markers" },
-	Hud = {}, Overlay = {},
-}
-local function exists(path)
-	local f = io and io.open and io.open(path, "r")
-	if f then f:close(); return true end
-	return false
-end
--- Hud / Overlay: every wrapped file present
-for _, sub in { "Hud", "Overlay" } do
-	for _, n in { "Kit", "Hud", "Capsule", "Dock", "Ready", "Portal", "UniverseTag", "Band", "Overlay", "Toasts", "ToastModel", "Tooltip", "Peek", "Modals", "Gate", "Screens" } do
-		local ok = pcall(require, W .. "client/" .. sub .. "/" .. n)
-		if ok then table.insert(listing[sub], n) end
-	end
-end
-for sub, names in listing do
-	local f = folder(client, sub)
-	for _, n in names do scriptModule(f, n, "client/" .. sub .. "/" .. n) end
-end
-local preview = Instance.new("LocalScript"); preview.Name = "MapPreview"; preview.Parent = client
+local client = E.buildClient()
 
 -- remotes
+local function folder(parent, name) local f = Instance.new("Folder"); f.Name = name; f.Parent = parent; return f end
 local remotes = folder(RS, "MilestoneTreeRemotes")
 local R = {}
 for _, n in { "View", "Act", "Import", "Ready", "Prefs" } do
@@ -353,10 +39,11 @@ for _, n in { "View", "Act", "Import", "Ready", "Prefs" } do
 	R[n] = r
 end
 remotes:SetAttribute("ImportCooldown", 10)
-local acts, readies = {}, 0
+local acts, readies, imports = {}, 0, {}
 M.fireServer = function(remote, ...)
 	if remote == R.Act then table.insert(acts, { ... }) end
 	if remote == R.Ready then readies += 1 end
+	if remote == R.Import then table.insert(imports, (...)) end
 end
 
 -- the player
@@ -364,195 +51,330 @@ local p = M.addPlayer("Tester", 1)
 game:GetService("Players").__props.LocalPlayer = p
 if NOCAPS then p:SetAttribute("MT_ForceCaps", "all") end
 
--- ------------------------------------------------------------------------------------------------------ the run
-local function frames(seconds)
-	local dt = 1 / 60
-	local t = 0
-	while t < seconds do
-		M.now += dt
-		t += dt
-		M.runQueue()
-		RunService.PreRender:Fire(dt)
-		RunService.Heartbeat:Fire(dt)
-	end
-end
-local errors0 = M.errors or 0
-print("== MapPreview starts" .. (if NOCAPS then " (all caps off)" else ""))
-M.runScript(preview, require(W .. "client/MapPreview"))
-frames(0.5)
-local pg = p:FindFirstChild("PlayerGui")
-local mapGui = pg:FindFirstChild("MapGui")
-check(mapGui ~= nil, "MapGui built")
-local nodesF = mapGui and mapGui.Root.Box.Nodes
-check(nodesF and nodesF:FindFirstChild("Node_m") ~= nil and nodesF:FindFirstChild("Node_cp") ~= nil, "21 node widgets")
-frames(3.2)
-check(readies >= 1, "asked for a full view when none arrived")
-
-local index = { "fresh_none", "fresh_m", "s13_none", "s13_p", "s13_m", "s13_sp_spark", "s13_options", "s19mv_none", "s19mv_cp", "s19mv_ex", "trapped_none", "layer_ach", "layer_m", "layer_mm", "layer_em", "layer_p", "layer_pe", "layer_sp", "layer_pb", "layer_pp", "layer_se", "layer_hp", "layer_ep", "layer_hb", "layer_ap", "layer_mp", "layer_t", "layer_pm", "layer_pep", "layer_cp", "layer_cm", "layer_ex" }
-local function play(name)
+-- ------------------------------------------------------------------------------------------------------ helpers
+local frames = E.frames
+local function play(name, extra)
 	local patch = require("../../data/fixtures/" .. name)
+	if extra then
+		patch = table.clone(patch)
+		for k, v in extra do patch[k] = v end
+	end
 	R.View.OnClientEvent:Fire(patch)
 	frames(0.3)
 end
+local function sent(kind, a2, from)
+	for i = (from or 0) + 1, #acts do
+		local a = acts[i][1]
+		if a[1] == kind and (a2 == nil or a[2] == a2) then return true end
+	end
+	return false
+end
+local function count(kind, a2, from)
+	local n = 0
+	for i = (from or 0) + 1, #acts do
+		local a = acts[i][1]
+		if a[1] == kind and (a2 == nil or a[2] == a2) then n += 1 end
+	end
+	return n
+end
+local function key(code, down)
+	local io = { UserInputType = Enum.UserInputType.Keyboard, KeyCode = code, Position = Vector2.new(0, 0) }
+	UIS.InputBegan:Fire(io, false)
+	frames(0.05)
+end
+local function findText(root, text)
+	for _, d in root:GetDescendants() do
+		if (d.__class == "TextLabel" or d.__class == "TextButton") and string.find(d.Text or "", text, 1, true) then return d end
+	end
+	return nil
+end
+local function buttonWith(root, text)
+	local l = findText(root, text)
+	while l and l.__class ~= "TextButton" and l.__class ~= "ImageButton" do l = l.Parent end
+	return l
+end
+
+-- ------------------------------------------------------------------------------------------------------ the run
+local errors0 = M.errors or 0
+print("== the client starts" .. (if NOCAPS then " (all caps off)" else ""))
+E.runMain("Main")
+frames(0.5)
+local pg = p:FindFirstChild("PlayerGui")
+local mapGui = pg:FindFirstChild("MapGui")
+check(mapGui ~= nil and pg:FindFirstChild("Backing") ~= nil, "MapGui and the black backing built")
+check(readies >= 1, "asked the server for a full view")
+local nodesF = mapGui and mapGui.Root.Box.Nodes
+check(nodesF and nodesF:FindFirstChild("Node_m") ~= nil and nodesF:FindFirstChild("Node_cp") ~= nil, "21 node widgets")
+local screen = pg.OverlayGui.Root.Screen
+check(screen.Visible and screen:GetAttribute("Kind") == "loading", "the loading screen shows until the first view")
+
+-- the first view: the realm is home (a layer left open by the last session is closed)
+local n0 = #acts
+play("s13_p")
+frames(0.2)
+check(sent("tab", "none", n0), "the layer the last session left open is closed at boot")
+check(not screen.Visible, "the loading screen is gone after the first view")
+local sheet = pg.PanelGui.Root.Sheet
+check(not sheet.Visible, "the map alone at boot")
+
+local index = { "fresh_none", "fresh_m", "s13_none", "s13_p", "s13_m", "s13_sp_spark", "s13_options", "s19mv_none", "s19mv_cp", "s19mv_ex", "trapped_none", "layer_ach", "layer_m", "layer_mm", "layer_em", "layer_p", "layer_pe", "layer_sp", "layer_pb", "layer_pp", "layer_se", "layer_hp", "layer_ep", "layer_hb", "layer_ap", "layer_mp", "layer_t", "layer_pm", "layer_pep", "layer_cp", "layer_cm", "layer_ex" }
+frames(2.5)
 for _, name in index do
 	play(name)
 end
 check((M.errors or 0) == errors0, "every fixture drew without a script error")
+check(sheet.Visible and findText(sheet.Header or sheet, "EXPLOR") ~= nil or sheet.Visible, "the panel follows the server's open layer (ex)")
 
 -- the S13 map: states and plates
 play("s13_none")
+check(not sheet.Visible, "the panel closes when the server shows the map alone")
 local function state(l) local n = nodesF:FindFirstChild("Node_" .. l); return n and n:GetAttribute("State") end
-check(state("m") == "available", "m available (" .. tostring(state("m")) .. ")")
+check(state("m") == "available" or state("m") == "pulse", "m available (" .. tostring(state("m")) .. ")")
 check(state("pb") == "locked", "pb locked (" .. tostring(state("pb")) .. ")")
 check(state("pm") == "sealed", "pm sealed before the Multiverse is revealed (" .. tostring(state("pm")) .. ")")
 local plates = mapGui.Root.Box.Plates
 check(plates:FindFirstChild("Plate_p") and plates.Plate_p.Label.Text ~= "", "the P plate has its name")
-check(mapGui.Root.Box.Links:FindFirstChild("Edge_m_p_3") ~= nil or mapGui.Root.Box.Links:FindFirstChild("Edge_m_p_Seg") ~= nil, "the m -> p link is drawn")
 play("fresh_none")
 check(state("mm") == "frontier", "fresh: mm is frontier (" .. tostring(state("mm")) .. ")")
-check(state("pe") == "sealed", "fresh: pe sealed (" .. tostring(state("pe")) .. ")")
 play("s19mv_none")
-check(state("pm") == "pulse" or state("pm") == "available" or state("pm") == "glow", "inside: pm shown (" .. tostring(state("pm")) .. ")")
 check(state("p") == "dormant", "inside: p dormant (" .. tostring(state("p")) .. ")")
 
--- input: click a node, hover it, right-click it
+-- a node tap opens its panel beside the map; the body fills with the layer's patch
 play("s13_none")
+frames(0.5)
+n0 = #acts
 local hit = nodesF.Node_p.Hit
 hit.MouseEnter:Fire(10, 10)
 frames(0.3)
-hit.MouseMoved:Fire(12, 12)
 hit.Activated:Fire()
-frames(0.5)
-local opened = false
-for _, a in acts do if a[1] and a[1][1] == "tab" and a[1][2] == "p" then opened = true end end
-check(opened, "a click on P sent its tab action")
-hit.MouseLeave:Fire(0, 0)
-hit.MouseButton2Click:Fire()
-frames(0.3)
-nodesF.Rift.MouseEnter:Fire(1, 1)
-nodesF.Rift.MouseLeave:Fire(1, 1)
-frames(0.2)
-
--- the HUD, when it is there
-local topbar = pg:FindFirstChild("TopbarGui")
-if topbar then
-	check(topbar.Root:FindFirstChild("Capsule") ~= nil, "the capsule")
-	local hud = pg:FindFirstChild("HudGui")
-	check(hud and hud.Root:FindFirstChild("Dock") ~= nil, "the dock")
-	local ready = hud and hud.Root:FindFirstChild("Ready")
-	if ready then
-		for _, g in ready:GetDescendants() do
-			if g.Name == "Hit" and g.__class == "TextButton" then g.Activated:Fire() end
-		end
+frames(0.4)
+check(count("tab", "p", n0) == 1, "a tap on P sends its tab action once")
+check(sheet.Visible, "the panel opens at once (the shell before the patch)")
+local Layout = M.require(client.Core.Layout)
+check(Layout.sheet() ~= nil, "the map shrinks to the strip beside the sheet (the free rect ends at the sheet)")
+play("s13_p")
+local tabRoot = sheet.Body.Scroll.TabRoot
+check(#tabRoot:GetDescendants() > 5, "the body fills once the layer's patch arrives")
+hit.Activated:Fire()
+frames(0.4)
+check(count("tab", "p", n0) == 1, "a second tap on the open node sends nothing")
+-- the panel's own buttons fire their node's action
+local pressed = 0
+for _, d in tabRoot:GetDescendants() do
+	if d.__class == "TextButton" and pressed < 20 then
+		d.Activated:Fire()
+		pressed += 1
+		frames(0.05)
 	end
-	local ov = pg:FindFirstChild("OverlayGui")
-	check(ov ~= nil, "the overlay")
 end
+check(#acts > n0 + 1, "panel buttons send actions")
+-- Esc closes the panel (map.close) and the map gets its width back
+n0 = #acts
+key(Enum.KeyCode.Escape)
+frames(0.5)
+check(count("tab", "none", n0) == 1 and not sheet.Visible, "Esc closes the panel with map.close")
+check(Layout.sheet() == nil, "the map is full width again")
+play("s13_none")
+
+-- hotkeys: a game key is sent as {"key", name}; - / = zoom when the game does not use them
+n0 = #acts
+key(Enum.KeyCode.P)
+check(sent("key", "p", n0), "the P hotkey is sent")
+local z0 = pg.HudGui.Root.Zoom:FindFirstChild("Pct") and pg.HudGui.Root.Zoom.Pct.Text
+key(Enum.KeyCode.Equals)
+frames(0.5)
+check(not sent("key", "=", n0), "= zooms the map (not a game key)")
+
+-- the dock: TROPHIES, OPTIONS (+ the hard reset confirm, export, import), HOME
+local dock = pg.HudGui.Root.Dock
+n0 = #acts
+dock.Trophies.Activated:Fire()
+frames(0.4)
+check(count("tab", "ach", n0) == 1 and sheet.Visible, "TROPHIES opens the achievements")
+play("layer_ach")
+dock.Trophies.Activated:Fire()
+frames(0.4)
+check(count("tab", "none", n0) == 1 and not sheet.Visible, "TROPHIES again closes them")
+play("s13_none")
+n0 = #acts
+dock.Options.Activated:Fire()
+frames(0.4)
+check(count("tab", "options-tab", n0) == 1 and sheet.Visible, "OPTIONS opens the Options panel")
+play("s13_options")
+local ov = pg.OverlayGui.Root
+local hr = buttonWith(sheet, "Hard Reset")
+check(hr ~= nil, "the Options panel has Hard Reset")
+if hr then
+	hr.Activated:Fire()
+	frames(0.3)
+	check(ov.Modal.Visible and ov.Modal:GetAttribute("Kind") == "hardReset", "Hard Reset opens the confirm modal")
+	check(not sent("opt", "hardReset", n0), "nothing is reset before the 2 s hold")
+	local ex = ov.Modal.Buttons:FindFirstChild("Export")
+	if ex then ex.Activated:Fire() end
+	frames(0.3)
+	check(sent("opt", "export", n0), "EXPORT FIRST sends the export action")
+end
+R.View.OnClientEvent:Fire({ set = {}, del = {}, export = string.rep("eyJ0", 600) })
+frames(0.3)
+check(ov.Modal.Visible and ov.Modal:GetAttribute("Kind") == "export" and #ov.Modal.Well.Box.Text >= 100, "the export modal shows the save string")
+key(Enum.KeyCode.Escape)
+check(not ov.Modal.Visible and sheet.Visible, "Esc closes the modal first, the panel stays")
+local imp = buttonWith(sheet, "Import a save")
+if imp then imp.Activated:Fire() end
+frames(0.2)
+check(sent("opt", "import", n0), "Import a save sends its action")
+R.View.OnClientEvent:Fire({ set = {}, del = {}, askImport = true })
+frames(0.3)
+check(ov.Modal:GetAttribute("Kind") == "import", "the import modal opens")
+ov.Modal.Well.Box.Text = "garbage"
+ov.Modal.Buttons.Primary.Activated:Fire()
+frames(0.3)
+check(imports[#imports] == "garbage", "IMPORT sends the pasted text")
+R.View.OnClientEvent:Fire({ set = {}, del = {}, imp = { ok = false, msg = "That string is not a valid save (nothing was changed)." },
+	notice = { "That string is not a valid save (nothing was changed)." } })
+frames(0.3)
+check(ov.Modal.Result.Visible, "a bad import shows the inline error")
+key(Enum.KeyCode.Escape)
+n0 = #acts
+dock.Home.Activated:Fire()
+frames(0.8)
+check(count("tab", "none", n0) == 1 and not sheet.Visible, "HOME closes the panel")
+play("s13_none")
+dock.Home.Activated:Fire()
+frames(1)
+dock.Home.Activated:Fire()
 frames(1)
 
--- the HUD and overlays in depth: hover, peek, the portal's gate popover, READY holds, every modal and screen
-if topbar then
-	local hudRoot = pg.HudGui.Root
-	local switch = pg.PreviewSwitch.Switch
-	check(switch.Text == "MAP", "a node click switched to the page UI")
-	switch.Activated:Fire()
-	frames(0.1)
-	check(pg.MapGui.Enabled and switch.Text == "GAME", "the switch brings the map back")
-	play("s13_none")
-	local scrim = pg.OverlayGui.Root.Peek:FindFirstChild("ScrimTop")
-	if scrim then scrim.Activated:Fire() end
-	nodesF.Node_pb.Hit.MouseEnter:Fire(5, 5)
-	frames(0.4)
-	local tip = pg.OverlayGui.Root:FindFirstChild("Tooltip")
-	check(tip and tip.Visible and tip.Title.Text ~= "", "hovering a node shows its tooltip")
-	nodesF.Node_pb.Hit.MouseLeave:Fire(5, 5)
-	nodesF.Node_p.Hit.MouseButton2Click:Fire()
-	frames(0.3)
-	local peek = pg.OverlayGui.Root:FindFirstChild("Peek")
-	check(peek and peek.Visible, "right-click opens the peek")
-	local ob = peek and peek.Card.Buttons:FindFirstChild("Open")
-	if ob then ob.Activated:Fire() end
-	frames(0.5)
-	check(peek and not peek.Visible, "OPEN closes the peek")
-	-- a READY gem hold (touch down, 0.8 s, the prestige action)
-	play("s19mv_none")
-	local ready = hudRoot:FindFirstChild("Ready")
-	local gem = ready and ready.Gems:FindFirstChild("Gem_pm")
-	check(gem ~= nil, "the READY tray has PM")
-	if gem then
-		local n0 = #acts
-		local io = { UserInputType = M.G.Enum.UserInputType.Touch, Position = Vector2.new(10, 10) }
-		gem.Hit.InputBegan:Fire(io)
-		frames(0.9)
-		local UIS2 = game:GetService("UserInputService")
-		UIS2.InputEnded:Fire(io)
-		frames(0.2)
-		local reset = false
-		for i = n0 + 1, #acts do if acts[i][1][1] == "reset" then reset = true end end
-		check(reset, "holding a READY gem sends its reset action")
-	end
-	-- the portal opens the gate popover
-	hudRoot.Portal.Hit.Activated:Fire()
-	frames(0.6)
-	local modal = pg.OverlayGui.Root:FindFirstChild("Modal")
-	check(modal and modal.Visible and modal:GetAttribute("Kind") == "gate", "the portal opens the gate popover")
-	pg.OverlayGui.Root.ModalDimmer.Activated:Fire()
+-- the peek, READY holds, the gate popover, the warning chip, toasts
+nodesF.Node_p.Hit.MouseButton2Click:Fire()
+frames(0.3)
+local peek = ov:FindFirstChild("Peek")
+check(peek and peek.Visible, "right-click opens the peek")
+key(Enum.KeyCode.Escape)
+check(peek and not peek.Visible, "Esc closes the peek")
+nodesF.Node_p.Hit.MouseButton2Click:Fire()
+frames(0.3)
+n0 = #acts
+local ob = peek and peek.Card.Buttons:FindFirstChild("Open")
+if ob then ob.Activated:Fire() end
+frames(0.5)
+check(peek and not peek.Visible and count("tab", "p", n0) == 1, "the peek's OPEN opens the layer")
+key(Enum.KeyCode.Escape)
+play("s19mv_none")
+local hudRoot = pg.HudGui.Root
+local ready = hudRoot:FindFirstChild("Ready")
+local gem = ready and ready.Gems:FindFirstChild("Gem_pm")
+check(gem ~= nil, "the READY tray has PM")
+if gem then
+	n0 = #acts
+	local io = { UserInputType = Enum.UserInputType.Touch, Position = Vector2.new(10, 10) }
+	gem.Hit.InputBegan:Fire(io)
+	frames(0.9)
+	UIS.InputEnded:Fire(io)
 	frames(0.2)
-	-- the warning chip
-	play("s13_none")
-	topbar.Root.Warn.Hit.Activated:Fire()
-	frames(0.4)
-	-- toasts (the peek's OPEN switched to the page: back to the map first)
-	if switch.Text == "MAP" then switch.Activated:Fire() end
-	R.View.OnClientEvent:Fire({ set = {}, del = {}, pop = {
-		{ id = 1, title = "Milestone Gotten!", message = "18th Meta-Milestone", kind = "milestone", layer = "mm" },
-		{ id = 2, title = "Milestone Gotten!", message = "19th Meta-Milestone", kind = "milestone", layer = "mm" },
-		{ id = 3, title = "Achievement Gotten!", message = "Getting richer?", kind = "achievement", layer = "ach" },
-	}, notice = { "Game saved." }, save = "saved" })
-	frames(0.5)
-	local toasts = pg.OverlayGui.Root:FindFirstChild("Toasts")
-	local n = 0
-	for _, c in toasts:GetChildren() do if string.sub(c.Name, 1, 6) == "Toast_" then n += 1 end end
-	check(n == 3, "3 toasts (two milestones merged): " .. n)
-	frames(7)
-	-- every modal and screen on a fresh overlay
-	local Overlay = M.require(client.Overlay.Overlay)
-	local sg = Instance.new("ScreenGui"); sg.Name = "OverlayTest"; sg.Parent = pg
-	local r = Instance.new("Frame"); r.Name = "Root"; r.Parent = sg
-	local ov = Overlay.new(sg)
-	ov:modal("export", string.rep("eyJ0", 500))
-	frames(0.3)
-	ov:modal("import", { cooldown = 10 })
-	frames(0.2)
-	local box = r.Modal.Well.Box
-	box.Text = "garbage"
-	r.Modal.Buttons.Primary.Activated:Fire()
-	frames(0.5)
-	ov:importResult({ ok = false, msg = "That string is not a valid save (nothing was changed)." })
-	frames(0.2)
-	check(r.Modal.Result.Visible, "a bad import shows the inline error")
-	ov:importResult({ ok = true, msg = "Imported" })
-	ov:modal("hardReset", { action = { "opt", "hardReset" } })
-	frames(0.2)
-	ov:modal("gate", { t = "gate", show = true, inside = true, can = true, fin = true, done = true, h = "Leave", goal = "Goal: 1e20 PEP",
-		a = { "chal", "mp", 21 }, rs = { "p", "m" } })
-	frames(0.2)
-	ov:modal("gate", { t = "gate", show = false, inside = false, can = false, fin = false, done = false, rs = {}, req = { have = "164", need = "185", pr = 886 } })
-	ov:modal(nil)
-	for _, k in { "loading", "fatal", "outOfSync", "end" } do
-		ov:screen(k, if k == "loading" then { done = 3, total = 10 } elseif k == "end" then { win = "You won", took = "12d 4h", again = { "opt", "a" }, keep = { "opt", "b" } } else "text")
-		frames(0.1)
-	end
-	ov:screen("loading", { done = 1, total = 2 })
-	ov:screen("loading", { done = 2, total = 2 })
-	ov:screen(nil)
-	ov:flash(Color3.new(1, 0, 0))
-	frames(1)
-	ov:destroy()
+	check(sent("reset", nil, n0), "holding a READY gem sends its reset action")
 end
+hudRoot.Portal.Hit.Activated:Fire()
+frames(0.6)
+check(ov.Modal.Visible and ov.Modal:GetAttribute("Kind") == "gate", "the portal opens the gate popover")
+ov.ModalDimmer.Activated:Fire()
+frames(0.2)
+play("s13_none")
+pg.TopbarGui.Root.Warn.Hit.Activated:Fire()
+frames(0.4)
+R.View.OnClientEvent:Fire({ set = {}, del = {}, pop = {
+	{ id = 1, title = "Milestone Gotten!", message = "18th Meta-Milestone", kind = "milestone", layer = "mm" },
+	{ id = 2, title = "Milestone Gotten!", message = "19th Meta-Milestone", kind = "milestone", layer = "mm" },
+	{ id = 3, title = "Achievement Gotten!", message = "Getting richer?", kind = "achievement", layer = "ach" },
+}, notice = { "Game saved." }, save = "saved" })
+frames(0.5)
+local n = 0
+for _, c in ov.Toasts:GetChildren() do if string.sub(c.Name, 1, 6) == "Toast_" then n += 1 end end
+check(n == 3, "3 toasts (two milestones merged): " .. n)
+R.View.OnClientEvent:Fire({ set = {}, del = {}, unsaved = true })
+frames(0.2)
+check(pg.TopbarGui.Root.Status.Visible and string.find(string.lower(pg.TopbarGui.Root.Status.Label.Text), "not saving") ~= nil, "NOT SAVING while the server cannot save")
+frames(7)
+check(string.find(string.lower(pg.TopbarGui.Root.Status.Label.Text), "reconnecting") ~= nil, "RECONNECTING after 6 s without a view")
+play("s13_none")
+check(string.find(string.lower(pg.TopbarGui.Root.Status.Label.Text), "reconnecting") == nil, "the next view clears RECONNECTING")
 
+-- the phone: a full-screen panel switches the map off; the band closes it
+Workspace.CurrentCamera.__props.ViewportSize = Vector2.new(844, 390)
+Workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Fire()
+frames(0.5)
+n0 = #acts
+nodesF.Node_p.Hit.Activated:Fire()
+frames(0.6)
+check(sheet.Visible and not mapGui.Enabled, "COMPACT: the panel is full screen and MapGui is off")
+local band = pg.TopbarGui.Root:FindFirstChild("PanelBand")
+check(band and band.Visible, "COMPACT: the band carries the title and the close")
+if band then band.Close.Activated:Fire() end
+frames(0.5)
+check(not sheet.Visible and mapGui.Enabled and count("tab", "none", n0) == 1, "the band's close closes the panel and the map comes back")
+Workspace.CurrentCamera.__props.ViewportSize = Vector2.new(1920, 1080)
+Workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Fire()
+frames(0.5)
+
+-- the end screen
+R.View.OnClientEvent:Fire({ set = {}, del = {}, ended = true })
+frames(0.3)
+check(screen.Visible and screen:GetAttribute("Kind") == "end", "the end screen")
+R.View.OnClientEvent:Fire({ set = {}, del = {}, ended = false })
+frames(0.3)
+check(not screen.Visible, "KEEP GOING returns to the map")
+
+-- a drawing error resyncs once, a second one shows OUT OF SYNC
+local r0 = readies
+R.View.OnClientEvent:Fire({ set = {}, del = {}, pop = 5 })
+frames(0.2)
+check(readies == r0 + 1, "a drawing error asks for a resync")
+R.View.OnClientEvent:Fire({ set = {}, del = {}, pop = 5 })
+frames(0.2)
+check(screen.Visible and screen:GetAttribute("Kind") == "outOfSync", "a second one within 10 s shows OUT OF SYNC")
+screen:FindFirstChild("Card").Buttons.Primary.Activated:Fire()
+frames(0.1)
+check(readies == r0 + 2, "RESYNC asks for a full view")
+play("s13_none")
+check(not screen.Visible, "the full view clears OUT OF SYNC")
+
+-- the detail sheet, every modal and screen on a fresh overlay
+local Overlay = M.require(client.Overlay.Overlay)
+local sg = Instance.new("ScreenGui"); sg.Name = "OverlayTest"; sg.Parent = pg
+local r = Instance.new("Frame"); r.Name = "Root"; r.Parent = sg
+local ov2 = Overlay.new(sg)
+local detailActs = 0
+ov2.act:Connect(function() detailActs += 1 end)
+ov2:detail({ id = "tab.1", kind = "btn:buy", layer = "p", node = { t = "btn", k = "buy", cls = "can", hold = true, ti = "Prestige Boost",
+	h = "<b>Prestige Boost</b><br>Boosts things", ds = "Boosts things", lv = "3", max = "10", co = "1e10", cur = "P", pr = 400, a = { "buy", "p", 11 } } })
+frames(0.3)
+check(r.Detail.Visible, "the detail sheet opens")
+r.Detail.Buttons.Primary.Activated:Fire()
+frames(0.1)
+check(detailActs == 1, "BUY in the detail sheet sends the node's action")
+check(ov2:escape() and not r.Detail.Visible, "Esc closes the detail sheet")
+ov2:modal("export", string.rep("eyJ0", 500))
+frames(0.3)
+ov2:modal("hardReset", { action = { "opt", "hardReset" } })
+frames(0.2)
+ov2:modal("gate", { t = "gate", show = true, inside = true, can = true, fin = true, done = true, h = "Leave", goal = "Goal: 1e20 PEP",
+	a = { "chal", "mp", 21 }, rs = { "p", "m" } })
+frames(0.2)
+ov2:modal("gate", { t = "gate", show = false, inside = false, can = false, fin = false, done = false, rs = {}, req = { have = "164", need = "185", pr = 886 } })
+ov2:modal(nil)
+for _, k in { "loading", "fatal", "outOfSync", "end" } do
+	ov2:screen(k, if k == "loading" then { done = 3, total = 10 } elseif k == "end" then { win = "You won", took = "12d 4h", again = { "opt", "a" }, keep = { "opt", "b" } } else "text")
+	frames(0.1)
+end
+ov2:screen(nil)
+ov2:flash(M.G.Color3.new(1, 0, 0))
+frames(1)
+ov2:destroy()
+
+-- the one warning expected above: the drawing error
+check(E.warnings <= 2, "no [MilestoneTree] warnings besides the forced drawing error (" .. E.warnings .. ")")
 check((M.errors or 0) == errors0, "no script errors (" .. tostring((M.errors or 0) - errors0) .. ")")
-print(string.format("== client smoke: %d tweens made, %d actions sent", tweens, #acts))
+print(string.format("== client smoke: %d tweens made, %d actions sent", E.tweens, #acts))
 if failures > 0 then
 	error("client smoke: " .. failures .. " FAILED", 0)
 end

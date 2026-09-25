@@ -7,17 +7,16 @@
 	    overlay:toasts(pops?, notices?)
 	    overlay:tooltip(owner, content?, at?)      content = Tooltip.Content; nil hides that owner's tooltip
 	    overlay:peek(layer?, node?, ring?)         the node peek (nil closes)
-	    overlay:detail(card?)                      the touch detail sheet: the panel package owns the card; nothing yet
+	    overlay:detail(card?)                      the touch detail sheet (Detail.luau); overlay:detailRefresh() after a patch
 	    overlay:modal(kind?, data?)                "export" | "import" | "hardReset" | "gate" | nil
 	    overlay:importResult(imp)
 	    overlay:screen(kind?, data?)               "loading" | "fatal" | "outOfSync" | "end" | "firstRun" | nil
 	    overlay:flash(color)                       overlay:onCamera(cam)       overlay:busy() -> modal / peek open
+	    overlay:escape() -> boolean                Esc (Input/Hotkeys): closes the modal, else the peek, else the
+	                                               detail sheet; false when nothing was open (App then closes the panel)
 	    overlay.act (action, hold?), overlay.flyTo (layer), overlay.importText (text), overlay.resync (),
 	    overlay.openLayer (layer), overlay.peekClosed ()
-	Esc closes the modal, then the peek.
 ]]
-
-local UserInputService = game:GetService("UserInputService")
 
 local Core = script.Parent.Parent:WaitForChild("Core")
 local Types = require(script.Parent.Parent:WaitForChild("Types"))
@@ -27,6 +26,7 @@ local Tooltip = require(script.Parent:WaitForChild("Tooltip"))
 local Peek = require(script.Parent:WaitForChild("Peek"))
 local Modals = require(script.Parent:WaitForChild("Modals"))
 local Screens = require(script.Parent:WaitForChild("Screens"))
+local Detail = require(script.Parent:WaitForChild("Detail"))
 
 type Action = Types.Action
 type ARect = Types.Rect
@@ -42,12 +42,14 @@ export type Overlay = {
 	tooltip: (self: Overlay, owner: any, content: Tooltip.Content?, at: Vector2?) -> (),
 	peek: (self: Overlay, layer: string?, node: Types.MapNode?, ring: ARect?) -> (),
 	detail: (self: Overlay, card: any?) -> (),
+	detailRefresh: (self: Overlay) -> (),
 	modal: (self: Overlay, kind: string?, data: any?) -> (),
 	importResult: (self: Overlay, imp: Types.ImportResult) -> (),
 	screen: (self: Overlay, kind: string?, data: any?) -> (),
 	flash: (self: Overlay, color: Color3) -> (),
 	onCamera: (self: Overlay, cam: Types.Camera) -> (),
 	busy: (self: Overlay) -> boolean,
+	escape: (self: Overlay) -> boolean,
 	destroy: (self: Overlay) -> (),
 }
 
@@ -68,6 +70,7 @@ function Overlay.new(gui: ScreenGui): Overlay
 	local peek = Peek.new(root)
 	local modals = Modals.new(root)
 	local screens = Screens.new(root)
+	local detail = Detail.new(root)
 
 	toasts.flyTo:Connect(function(l: string) self.flyTo:Fire(l) end)
 	peek.open:Connect(function(l: string) self.openLayer:Fire(l) end)
@@ -83,6 +86,7 @@ function Overlay.new(gui: ScreenGui): Overlay
 	modals.notice:Connect(function(t: string) toasts:push(nil, { t }) end)
 	screens.act:Connect(function(a: Action) self.act:Fire(a, false) end)
 	screens.resync:Connect(function() self.resync:Fire() end)
+	detail.act:Connect(function(a: Action, hold: boolean) self.act:Fire(a, hold) end)
 
 	function self.toasts(_: Overlay, pops: { Types.Popup }?, notices: { string }?)
 		toasts:push(pops, notices)
@@ -99,10 +103,20 @@ function Overlay.new(gui: ScreenGui): Overlay
 		peek:show(layer, node, ring)
 		toasts:setCollapsed(layer ~= nil)
 	end
-	function self.detail(_: Overlay, _card: any?) end
+	function self.detail(_: Overlay, card: any?)
+		tip:hide()
+		if card then peek:show(nil) end
+		detail:show(card)
+	end
+	function self.detailRefresh(_: Overlay)
+		detail:refresh()
+	end
 	function self.modal(_: Overlay, kind: string?, data: any?)
 		tip:hide()
-		if kind then peek:show(nil) end
+		if kind then
+			peek:show(nil)
+			detail:show(nil)
+		end
 		modals:open(kind, data)
 	end
 	function self.importResult(_: Overlay, imp: Types.ImportResult)
@@ -116,22 +130,25 @@ function Overlay.new(gui: ScreenGui): Overlay
 	end
 	function self.onCamera(_: Overlay, _cam: Types.Camera) end
 	function self.busy(_: Overlay): boolean
-		return peek:isOpen() ~= nil or modals:isOpen() ~= nil
+		return peek:isOpen() ~= nil or modals:isOpen() ~= nil or detail:isOpen() ~= nil
 	end
-
-	local escConn = UserInputService.InputBegan:Connect(function(io: InputObject, processed: boolean)
-		if io.KeyCode ~= Enum.KeyCode.Escape then return end
+	function self.escape(_: Overlay): boolean
 		if modals:isOpen() then
 			modals:open(nil)
 		elseif peek:isOpen() then
 			peek:show(nil)
+		elseif detail:isOpen() then
+			detail:show(nil)
+		else
+			return false
 		end
-		local _ = processed
-	end)
+		tip:hide()
+		return true
+	end
 
 	function self.destroy(o: Overlay)
-		escConn:Disconnect()
 		toasts:destroy()
+		detail:destroy()
 		tip:destroy()
 		peek:destroy()
 		modals:destroy()
