@@ -28045,204 +28045,6 @@ rbx_tabStyle = function(this, layer)
 	sub = (if (JS.t(t.tabFormat) and (not Array.isArray(t.tabFormat))) then t.tabFormat[JS.k(player.subtabs[JS.k(layer)].mainTabs)].style else JS.NULL)
 	do return rbx_css(nil, JS.A(2, (if JS.t(t.style) then t.style else JS.NULL), sub)) end
 end
-rbx_menuButton = function(this, layer, label, style)
-	local shown, glow
-	shown = JS.eq(layerShown(nil, layer), true)
-	glow = (if JS.t(tmp[JS.k(layer)].notify) then player[JS.k(layer)].unlocked else tmp[JS.k(layer)].notify)
-	do return JS.O({
-		t = "btn",
-		k = "menu",
-		cls = (if JS.eq(player.tab, layer) then "cur" else "can"),
-		h = label,
-		a = rbx_act(nil, JS.A(2, "tab", layer)),
-		glow = (if JS.t(glow) then rbx_str(nil, tmp[JS.k(layer)].trueGlowColor) else JS.NULL),
-		st = rbx_css(nil, JS.A(2, (if JS.t(shown) then JS.O({
-		["background-color"] = tmp[JS.k(layer)].color
-	}) else JS.NULL), style))
-	}, {"t", "k", "cls", "h", "a", "glow", "st"}) end
-end
-rbx_menu = function(this)
-	local out, inMv, i, e, k, b
-	out = JS.A(0)
-	inMv = JS.eq(player.mp.activeChallenge, 21)
-	for i = 0, JS.cap(0, (JS.len(rbx_MENU)) - 1, 1) do
-		e = rbx_MENU[JS.k(i)]
-		k = e[0]
-		if (k == "head") then
-			JS.m(out, "push", JS.O({
-				t = "html",
-				h = e[1]
-			}, {"t", "h"}))
-		elseif (k == "hr") then
-			JS.m(out, "push", JS.O({
-				t = "hr"
-			}))
-		elseif (k == "headIf") then
-			if JS.eq(layerShown(nil, e[1]), true) then
-				JS.m(out, "push", JS.O({
-					t = "html",
-					h = e[2]
-				}, {"t", "h"}))
-			end
-		elseif (k == "hrIf") then
-			if JS.eq(layerShown(nil, e[1]), true) then
-				JS.m(out, "push", JS.O({
-					t = "hr"
-				}))
-			end
-		elseif (k == "page") then
-			JS.m(out, "push", JS.O({
-				t = "btn",
-				k = "menu",
-				cls = (if JS.eq(player.tab, e[1]) then "cur" else "can"),
-				h = e[2],
-				a = rbx_act(nil, JS.A(2, "tab", e[1]))
-			}, {"t", "k", "cls", "h", "a"}))
-		elseif (k == "layer") then
-			if JS.eq(layerShown(nil, e[1]), true) then
-				JS.m(out, "push", rbx_menuButton(nil, e[1], e[2]))
-			end
-		elseif (k == "mpOut") then
-			if (JS.eq(layerShown(nil, e[1]), true) and (not JS.t(inMv))) then
-				JS.m(out, "push", rbx_menuButton(nil, e[1], e[2]))
-			end
-		elseif (k == "mpIn") then
-			if (JS.eq(layerShown(nil, e[1]), true) and JS.t(inMv)) then
-				JS.m(out, "push", rbx_menuButton(nil, e[1], e[2]))
-			end
-		elseif (k == "multiverse") then
-			if (player.m.best:gte(185) and (not JS.t(inMv))) then
-				JS.m(out, "push", JS.O({
-					t = "btn",
-					k = "menu",
-					cls = "can",
-					h = e[1],
-					a = rbx_act(nil, JS.A(3, "chal", "mp", 21))
-				}, {"t", "k", "cls", "h", "a"}))
-			end
-		elseif (k == "multiverseIn") then
-			if (player.m.best:gte(185) and JS.t(inMv)) then
-				JS.m(out, "push", JS.O({
-					t = "btn",
-					k = "menu",
-					cls = "can",
-					h = e[1],
-					a = rbx_act(nil, JS.A(3, "chal", "mp", 21))
-				}, {"t", "k", "cls", "h", "a"}))
-			end
-		elseif (k == "inMultiverse") then
-			if JS.t(inMv) then
-				JS.m(out, "push", JS.O({
-					t = "html",
-					h = e[1]
-				}, {"t", "h"}))
-			end
-		elseif (k == "pmLayer") then
-			if JS.eq(layerShown(nil, "pm"), true) then
-				JS.m(out, "push", rbx_menuButton(nil, "pm", (if player.pm.best:gte(15) then "P███t█g█ M██e█t███" else "Prestige Milestone")))
-			end
-		elseif (k == "headPepCp") then
-			if (JS.eq(layerShown(nil, "pep"), true) or JS.eq(layerShown(nil, "cp"), true)) then
-				JS.m(out, "push", JS.O({
-					t = "html",
-					h = e[1]
-				}, {"t", "h"}))
-			end
-		elseif (k == "hrPepCp") then
-			if (JS.eq(layerShown(nil, "pep"), true) or JS.eq(layerShown(nil, "cp"), true)) then
-				JS.m(out, "push", JS.O({
-					t = "hr"
-				}))
-			end
-		elseif (k == "cpLayer") then
-			if JS.eq(layerShown(nil, "cp"), true) then
-				b = rbx_menuButton(nil, "cp", "Corrupted Prestige", JS.O({
-					color = "lime",
-					["border-color"] = "lime"
-				}, {"color", "border-color"}))
-				JS.set(b.st, "background-color", "black")
-				JS.m(out, "push", b)
-			end
-		elseif (k == "cmLayer") then
-			if (((player.tab == "cp") or (player.tab == "cm")) and JS.eq(layerShown(nil, "cm"), true)) then
-				JS.m(out, "push", rbx_menuButton(nil, "cm", "Corrupted Milestone", JS.O({
-					color = "lime",
-					["border-color"] = "lime"
-				}, {"color", "border-color"})))
-			end
-		end
-	end
-	do return JS.O({
-		t = "col",
-		c = out
-	}, {"t", "c"}) end
-end
-rbx_head = function(this)
-	local h, o, things, i
-	h = ""
-	if (JS.t(player.devSpeed) and (not JS.eq(player.devSpeed, 1))) then
-		h = (JS.str(h) .. (("<br>Dev Speed: " .. JS.str(format(nil, player.devSpeed))) .. "x<br>"))
-	end
-	if (not (player.offTime == nil)) then
-		h = (JS.str(h) .. (("<br>Offline Time: " .. JS.str(formatTime(nil, player.offTime.remain))) .. "<br>"))
-	end
-	if player.points:lt("1e1000") then
-		h = (JS.str(h) .. "You have ")
-	end
-	h = (JS.str(h) .. (("<h2>" .. JS.str(format(nil, player.points))) .. "</h2> "))
-	if JS.t(canGenPoints(nil)) then
-		o = tmp.other
-		h = (JS.str(h) .. (("(" .. JS.str((if (not JS.eq(o.oompsMag, 0)) then (((JS.str(format(nil, o.oomps)) .. " OOM") .. JS.str((if (JS.tonum(o.oompsMag) < 0) then "^OOM" else (if (JS.tonum(o.oompsMag) > 1) then ("^" .. JS.str(o.oompsMag)) else "")))) .. "s") else formatSmall(nil, getPointGen(nil))))) .. "/sec)"))
-	end
-	if player.points:lt("1e1e6") then
-		h = (JS.str(h) .. (" " .. JS.str(modInfo.pointsName)))
-	end
-	if JS.eq(player.sp.activeChallenge, 11) then
-		h = (JS.str(h) .. ((((((" and <h2 style=\"color:#9f2846\">" .. JS.str(format(nil, player.m.points, 0))) .. "</h2> milestones,<br> which can be transformed into <h2 style=\"color:orange\">") .. JS.str(format(nil, tmp.sp.ambersGain))) .. "</h2> Prestige Ashes after a cooldown. (") .. JS.str(format(nil, player.sp.chalCooldown))) .. "s)"))
-	end
-	if (((player.sp.sparkMilestones:gt(0) and (JS.D(player.sp.ashedMilestones)):lt(player.sp.sparkMilestones)) and (JS.tonum(player.sp.burningTimer) > 0)) and JS.eq(tmp.sp.milestones[JS.k(player.sp.ashedMilestones)].permanent, false)) then
-		h = (JS.str(h) .. ((((("<br><span style=\"color: orange\">Your " .. JS.str(format(nil, JS.add(player.sp.ashedMilestones, 1), 0))) .. JS.str(helper(nil, JS.add(player.sp.ashedMilestones, 1)))) .. " Spark Milestone will burn for ") .. JS.str(formatTime(nil, player.sp.burningTimer))) .. "</span>"))
-	end
-	things = JS.A(0)
-	for i = 0, JS.cap(0, (JS.len(tmp.displayThings)) - 1, 1) do
-		if JS.t(tmp.displayThings[JS.k(i)]) then
-			JS.m(things, "push", rbx_str(nil, tmp.displayThings[JS.k(i)]))
-		end
-	end
-	do return JS.O({
-		t = "col",
-		c = JS.A(2, JS.O({
-		t = "html",
-		h = h
-	}, {"t", "h"}), JS.O({
-		t = "html",
-		h = JS.m(things, "join", "<br>")
-	}, {"t", "h"}))
-	}, {"t", "c"}) end
-end
-rbx_infoTab = function(this)
-	local h, key, k
-	h = (((("<h2>" .. JS.str(modInfo.name)) .. "</h2><br><h3>") .. JS.str(VERSION.withName)) .. "</h3>")
-	if JS.t(modInfo.author) then
-		h = (JS.str(h) .. ("<br>Made by " .. JS.str(modInfo.author)))
-	end
-	h = (JS.str(h) .. (("<br>The Modding Tree " .. JS.str(TMT_VERSION.tmtNum)) .. " by Acamaeda<br>The Prestige Tree made by Jacorb and Aarex<br><br>"))
-	h = (JS.str(h) .. (("Time Played: " .. JS.str(formatTime(nil, player.timePlayed))) .. "<br><br><h3>Hotkeys</h3><br>"))
-	for _, __k6 in JS.keys(hotkeys) do
-		key = __k6
-		k = hotkeys[key]
-		if (JS.t(player[JS.k(k.layer)].unlocked) and JS.t(tmp[JS.k(k.layer)].hotkeys[JS.k(k.id)].unlocked)) then
-			h = (JS.str(h) .. ("<br>" .. JS.str(k.description)))
-		end
-	end
-	do return JS.O({
-		t = "col",
-		c = JS.A(1, JS.O({
-		t = "html",
-		h = h
-	}, {"t", "h"}))
-	}, {"t", "c"}) end
-end
 rbx_opt = function(this, label, sub, a, ti, val, idx, n, on)
 	do return JS.O({
 		t = "btn",
@@ -28261,8 +28063,8 @@ end
 rbx_about = function(this)
 	local keys, key, k, d, i
 	keys = JS.A(0)
-	for _, __k7 in JS.keys(hotkeys) do
-		key = __k7
+	for _, __k6 in JS.keys(hotkeys) do
+		key = __k6
 		k = hotkeys[key]
 		if (JS.t(player[JS.k(k.layer)].unlocked) and JS.t(tmp[JS.k(k.layer)].hotkeys[JS.k(k.id)].unlocked)) then
 			d = rbx_str(nil, k.description)
@@ -28405,8 +28207,8 @@ rbx_achTotal = function(this)
 	local n, a, k
 	n = 0
 	a = layers.ach.achievements
-	for _, __k8 in JS.keys(a) do
-		k = __k8
+	for _, __k7 in JS.keys(a) do
+		k = __k7
 		if (JS.t(a[k]) and (JS.typeof(a[k]) == "object")) then
 			n = (JS.tonum(n) + 1)
 		end
@@ -28510,11 +28312,11 @@ rbx_map = function(this)
 	kids = JS.A(0)
 	for i = 0, JS.cap(0, (JS.len(rbx_MAP)) - 1, 1) do
 		do
-			local __ok9, __e10 = pcall(function()
+			local __ok8, __e9 = pcall(function()
 				n = rbx_mapNode(nil, rbx_MAP[JS.k(i)])
 			end)
-			if not __ok9 then
-				local e = __e10
+			if not __ok8 then
+				local e = __e9
 				n = JS.O({
 					t = "node",
 					id = rbx_MAP[JS.k(i)],
@@ -28586,54 +28388,35 @@ rbx_hud = function(this)
 	do return h end
 end
 rbx_view = function(this)
-	local v, ended, open, tab, keys, key, k
+	local v, ended, open, keys, key, k
 	rbx_actions = JS.A(0)
 	updateTabFormats(nil)
 	v = JS.O({})
 	ended = (if JS.t(tmp.gameEnded) then (not JS.t(player.keepGoing)) else tmp.gameEnded)
 	JS.setk(v, "ended", (if JS.t(ended) then true else false))
 	do
-		local __ok11, __e12 = pcall(function()
-			JS.setk(v, "menu", rbx_menu(nil))
-		end)
-		if not __ok11 then
-			local e = __e12
-			JS.setk(v, "menu", rbx_err(nil, "menu", e))
-		end
-	end
-	do
-		local __ok13, __e14 = pcall(function()
-			JS.setk(v, "head", rbx_head(nil))
-		end)
-		if not __ok13 then
-			local e = __e14
-			JS.setk(v, "head", rbx_err(nil, "head", e))
-		end
-	end
-	do
-		local __ok15, __e16 = pcall(function()
+		local __ok10, __e11 = pcall(function()
 			JS.setk(v, "map", rbx_map(nil))
 		end)
-		if not __ok15 then
-			local e = __e16
+		if not __ok10 then
+			local e = __e11
 			JS.setk(v, "map", rbx_err(nil, "map", e))
 		end
 	end
 	do
-		local __ok17, __e18 = pcall(function()
+		local __ok12, __e13 = pcall(function()
 			JS.setk(v, "hud", rbx_hud(nil))
 		end)
-		if not __ok17 then
-			local e = __e18
+		if not __ok12 then
+			local e = __e13
 			JS.setk(v, "hud", rbx_err(nil, "hud", e))
 		end
 	end
 	open = (if (v.map.t == "map") then v.map.open else JS.NULL)
-	tab = player.tab
 	JS.setk(v, "tabName", (if JS.t(ended) then "end" else (if JS.t(open) then open else "none")))
 	JS.setk(v, "tabStyle", JS.O({}))
 	do
-		local __ok19, __e20 = pcall(function()
+		local __ok14, __e15 = pcall(function()
 			if JS.t(ended) then
 				JS.setk(v, "tab", rbx_endScreen(nil))
 			elseif (open == "options-tab") then
@@ -28641,16 +28424,6 @@ rbx_view = function(this)
 			elseif JS.t(open) then
 				JS.setk(v, "tab", rbx_layerTab(nil, open))
 				JS.setk(v, "tabStyle", rbx_tabStyle(nil, open))
-			elseif (tab == "info-tab") then
-				JS.setk(v, "tab", rbx_infoTab(nil))
-			elseif (tab == "changelog-tab") then
-				JS.setk(v, "tab", JS.O({
-					t = "col",
-					c = JS.A(1, JS.O({
-					t = "html",
-					h = rbx_str(nil, modInfo.changelog)
-				}, {"t", "h"}))
-				}, {"t", "c"}))
 			else
 				JS.setk(v, "tab", JS.O({
 					t = "col",
@@ -28658,14 +28431,14 @@ rbx_view = function(this)
 				}, {"t", "c"}))
 			end
 		end)
-		if not __ok19 then
-			local e = __e20
+		if not __ok14 then
+			local e = __e15
 			JS.setk(v, "tab", rbx_err(nil, "tab", e))
 		end
 	end
 	keys = JS.A(0)
-	for _, __k21 in JS.keys(hotkeys) do
-		key = __k21
+	for _, __k16 in JS.keys(hotkeys) do
+		key = __k16
 		k = hotkeys[key]
 		if (JS.t(player[JS.k(k.layer)].unlocked) and JS.t(tmp[JS.k(k.layer)].hotkeys[JS.k(k.id)].unlocked)) then
 			JS.m(keys, "push", key)
@@ -28717,7 +28490,6 @@ rbx_BUY_CUR = JS.O({
 	[34] = JS.A(3, "pm", "essence", "prestige essences")
 })
 }, {"p", "sp", "hp", "ap", "pp", "ep", "mp", "pep", "cp"})
-rbx_MENU = JS.A(50, JS.A(2, "head", "[ Misc ]"), JS.A(3, "page", "info-tab", "Information"), JS.A(3, "page", "options-tab", "Options"), JS.A(3, "page", "changelog-tab", "Changelog"), JS.A(3, "layer", "ach", "Achievements"), JS.A(1, "hr"), JS.A(3, "headIf", "m", "[ Milestones (Normal Universe) ]"), JS.A(3, "layer", "m", "Milestone"), JS.A(3, "layer", "mm", "Meta Milestone"), JS.A(3, "layer", "em", "Extra Milestone"), JS.A(2, "hrIf", "m"), JS.A(3, "headIf", "p", "[ Row 1 ]"), JS.A(3, "layer", "p", "Prestige Points"), JS.A(2, "hrIf", "p"), JS.A(3, "headIf", "sp", "[ Row 2 ]"), JS.A(3, "layer", "pe", "Prestige Energy"), JS.A(3, "layer", "sp", "Super Prestige Points"), JS.A(3, "layer", "pb", "Prestige Boosts"), JS.A(3, "layer", "pp", "Prestige Power"), JS.A(2, "hrIf", "sp"), JS.A(3, "headIf", "hp", "[ Row 3 ]"), JS.A(3, "layer", "se", "Super Energy"), JS.A(3, "layer", "hp", "Hyper Prestige Points"), JS.A(3, "layer", "ep", "Exotic Prestige Points"), JS.A(2, "hrIf", "hp"), JS.A(3, "headIf", "ap", "[ Row 4 ]"), JS.A(3, "layer", "hb", "Hyper Boosts"), JS.A(3, "layer", "ap", "Atomic Prestige Points"), JS.A(3, "mpOut", "mp", "Multiverse Prestige Points"), JS.A(2, "multiverse", "Enter Prestige Multiverse "), JS.A(2, "hrIf", "ap"), JS.A(3, "headIf", "t", "[ Row 5 ]"), JS.A(3, "layer", "t", "Transcend Points"), JS.A(2, "hrIf", "t"), JS.A(3, "headIf", "pm", "[ Prestige Multiverse ]"), JS.A(2, "inMultiverse", "[ Main ]"), JS.A(3, "mpIn", "mp", "Multiverse Prestige Points"), JS.A(2, "multiverseIn", "Leave Prestige Multiverse "), JS.A(2, "hrIf", "pm"), JS.A(3, "headIf", "pm", "[ Row 0 ]"), JS.A(1, "pmLayer"), JS.A(2, "hrIf", "pm"), JS.A(2, "headPepCp", "[ Row 1 ]"), JS.A(3, "layer", "pep", "Prestiged-Exotic Prestige "), JS.A(1, "cpLayer"), JS.A(1, "cmLayer"), JS.A(1, "hrPepCp"), JS.A(3, "headIf", "ex", "[ Row 2 ]"), JS.A(3, "layer", "ex", "Exploration Points "), JS.A(2, "hrIf", "ex"))
 rbx_MAP = JS.A(21, "ach", "m", "mm", "em", "p", "pe", "sp", "pb", "pp", "se", "hp", "ep", "hb", "ap", "mp", "t", "pm", "pep", "cp", "cm", "ex")
 rbx_MAP_NAME = JS.O({
 	ach = "Achievements",
@@ -32960,8 +32732,7 @@ end
 	notice = { text... }, export = text, askImport = true, imp = { ok, msg } (the last import), save = "saving" |
 	"saved" (set by the Worker). Nodes are the view builder's (rbx/view.js) flattened: a container's c lists its
 	children's ids; ids are paths ("tab.3.1"). The roots are "map" (the realm map: 21 layer nodes then the gate, so
-	"map.N" never moves), "hud", "tab" (the open panel; tab = "none" while the map is alone) and, for the old
-	client, "menu" and "head".
+	"map.N" never moves), "hud" and "tab" (the open panel; tab = "none" while the map is alone).
 ]]
 
 local Session = {}
@@ -33281,7 +33052,6 @@ function Session:view(): any
 	end
 	self.allowed = allowed
 	local p = if v then plain(JS, v) else {
-		menu = { t = "col", c = {} }, head = { t = "html", h = "" },
 		map = { t = "map", inside = false, c = {} }, hud = { t = "hud", pts = "?", name = "points", fr = false },
 		tab = { t = "html", h = "The page failed to draw." }, tabName = "none",
 	}
@@ -33290,8 +33060,6 @@ function Session:view(): any
 	self.hotkeys = hk
 
 	local flat = {}
-	flatten(p.menu, "menu", flat)
-	flatten(p.head, "head", flat)
 	flatten(p.map, "map", flat)
 	flatten(p.hud, "hud", flat)
 	flatten(p.tab, "tab", flat)
@@ -33719,19 +33487,29 @@ actor:SetAttribute("Ready", true)
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="61">
+  <Item class="StarterGui" referent="61">
+    <Properties>
+      <string name="Name">StarterGui</string>
+      <token name="ScreenOrientation">2</token>
+    </Properties>
+  </Item>
+  <Item class="StarterPlayer" referent="62">
     <Properties>
       <string name="Name">StarterPlayer</string>
+      <bool name="AutoJumpEnabled">false</bool>
+      <token name="DevComputerMovementMode">3</token>
+      <token name="DevTouchMovementMode">5</token>
+      <bool name="EnableMouseLockOption">false</bool>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="62">
+    <Item class="StarterPlayerScripts" referent="63">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="Folder" referent="63">
+      <Item class="Folder" referent="64">
         <Properties>
           <string name="Name">MilestoneTree</string>
         </Properties>
-        <Item class="ModuleScript" referent="64">
+        <Item class="ModuleScript" referent="65">
           <Properties>
             <string name="Name">App</string>
             <string name="Source"><![CDATA[--!strict
@@ -33899,7 +33677,6 @@ function App.start()
 	local lastLayer: string? = nil -- the last layer opened (the phone start framing, the fly back)
 	local opening = false
 	local fullToken = 0
-	local legacyActive = false
 
 	-- ------------------------------------------------------------------------------------------ actions
 	local function fire(a: any, hold: boolean?)
@@ -33938,7 +33715,7 @@ function App.start()
 	end
 	-- the map's input and art run only while it shows (DESIGN.md 3.6: a full-screen sheet disables the map)
 	local function mapShown()
-		local on = not legacyActive and geoMode ~= "full"
+		local on = geoMode ~= "full"
 		mapGui.Enabled = on
 		markerGui.Enabled = on
 		markers:setEnabled(on)
@@ -34463,7 +34240,6 @@ function App.start()
 		end
 		errorAt = os.clock()
 	end
-	local legacy: any = nil
 	local function onPatch(patch: any)
 		if type(patch) ~= "table" then return end
 		lastPatchAt = os.clock()
@@ -34480,7 +34256,6 @@ function App.start()
 			if not gotFirst and not fatal then overlay:screen("loading", tostring(patch.status)) end
 			return
 		end
-		if legacy then legacy:onPatch(patch) end
 		local ok, err = pcall(function()
 			apply(patch)
 		end)
@@ -34490,7 +34265,7 @@ function App.start()
 	-- ------------------------------------------------------------------------------------------ keyboard
 	Hotkeys.start({
 		active = function(): boolean
-			return not legacyActive and not fatal
+			return not fatal
 		end,
 		keys = function(): { [string]: true }
 			return store.keys
@@ -34512,7 +34287,6 @@ function App.start()
 		return gotFirst and (preloaded or os.clock() - firstAt > 3)
 	end
 	local function step(dt: number)
-		if legacyActive then return end
 		mi:step(dt)
 		view:step(dt)
 		Motion.step(dt)
@@ -34553,45 +34327,17 @@ function App.start()
 	viewRemote.OnClientEvent:Connect(onPatch)
 	resync()
 	lastPatchAt = os.clock()
-
-	-- Studio only, until the old page is removed: the classic page UI as a fallback (Legacy.luau)
-	local legacyModule = script.Parent:FindFirstChild("Legacy")
-	if RunService:IsStudio() and legacyModule and legacyModule:IsA("ModuleScript") then
-		local ok, res = pcall(function(): any
-			return (require(legacyModule) :: any).start({
-				remotes = folder,
-				setActive = function(on: boolean)
-					legacyActive = on
-					panelGui.Enabled = not on
-					overlayGui.Enabled = not on
-					hud:setVisible(not on)
-					if on then
-						overlay:peek(nil)
-						overlay:modal(nil)
-						overlay:tooltip(nil, nil)
-					end
-					mapShown()
-				end,
-			})
-		end)
-		if ok then
-			legacy = res
-			Input.BLOCKING.ClassicSwitch = true
-		else
-			warn("[MilestoneTree] the classic page did not start: " .. tostring(res))
-		end
-	end
 end
 
 return App
 ]]></string>
           </Properties>
         </Item>
-        <Item class="Folder" referent="65">
+        <Item class="Folder" referent="66">
           <Properties>
             <string name="Name">Core</string>
           </Properties>
-          <Item class="ModuleScript" referent="66">
+          <Item class="ModuleScript" referent="67">
             <Properties>
               <string name="Name">Layout</string>
               <string name="Source"><![CDATA[--!strict
@@ -34865,7 +34611,7 @@ return Layout
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="67">
+          <Item class="ModuleScript" referent="68">
             <Properties>
               <string name="Name">Motion</string>
               <string name="Source"><![CDATA[--!strict
@@ -35094,7 +34840,7 @@ return Motion
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="68">
+          <Item class="ModuleScript" referent="69">
             <Properties>
               <string name="Name">Prefs</string>
               <string name="Source"><![CDATA[--!strict
@@ -35206,7 +34952,7 @@ return Prefs
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="69">
+          <Item class="ModuleScript" referent="70">
             <Properties>
               <string name="Name">Recipes</string>
               <string name="Source"><![CDATA[--!strict
@@ -36102,7 +35848,7 @@ return Recipes
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="70">
+          <Item class="ModuleScript" referent="71">
             <Properties>
               <string name="Name">Rich</string>
               <string name="Source"><![CDATA[--!strict
@@ -36344,7 +36090,7 @@ return Rich
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="71">
+          <Item class="ModuleScript" referent="72">
             <Properties>
               <string name="Name">Signal</string>
               <string name="Source"><![CDATA[--!strict
@@ -36420,7 +36166,7 @@ return Signal
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="72">
+          <Item class="ModuleScript" referent="73">
             <Properties>
               <string name="Name">Sprites</string>
               <string name="Source"><![CDATA[--!strict
@@ -36699,7 +36445,7 @@ return Sprites
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="73">
+          <Item class="ModuleScript" referent="74">
             <Properties>
               <string name="Name">Theme</string>
               <string name="Source"><![CDATA[--!strict
@@ -37111,7 +36857,7 @@ return Theme
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="74">
+          <Item class="ModuleScript" referent="75">
             <Properties>
               <string name="Name">ViewStore</string>
               <string name="Source"><![CDATA[--!strict
@@ -37124,7 +36870,7 @@ return Theme
 	    store:hud(), store:endScreen(), store:get(id), store:kids(id)
 
 	Nodes arrive flattened: ids are paths ("map.3.1"), a container's `c` lists its children's ids, and the roots are
-	"map", "hud" and "tab" (plus "menu" and "head" for the old client until wave 3). The map list is fixed (all 21
+	"map", "hud" and "tab". The map list is fixed (all 21
 	layers in ORDER, then the gate), but this reads nodes by their `t` / `id`, never by position.
 ]]
 
@@ -37469,11 +37215,11 @@ return ViewStore
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="75">
+        <Item class="Folder" referent="76">
           <Properties>
             <string name="Name">Hud</string>
           </Properties>
-          <Item class="ModuleScript" referent="76">
+          <Item class="ModuleScript" referent="77">
             <Properties>
               <string name="Name">Band</string>
               <string name="Source"><![CDATA[--!strict
@@ -37622,7 +37368,7 @@ return Band
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="77">
+          <Item class="ModuleScript" referent="78">
             <Properties>
               <string name="Name">Capsule</string>
               <string name="Source"><![CDATA[--!strict
@@ -38032,7 +37778,7 @@ return Capsule
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="78">
+          <Item class="ModuleScript" referent="79">
             <Properties>
               <string name="Name">Dock</string>
               <string name="Source"><![CDATA[--!strict
@@ -38282,7 +38028,7 @@ return Dock
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="79">
+          <Item class="ModuleScript" referent="80">
             <Properties>
               <string name="Name">Hud</string>
               <string name="Source"><![CDATA[--!strict
@@ -38526,7 +38272,7 @@ return Hud
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="80">
+          <Item class="ModuleScript" referent="81">
             <Properties>
               <string name="Name">Kit</string>
               <string name="Source"><![CDATA[--!strict
@@ -39074,7 +38820,7 @@ return Kit
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="81">
+          <Item class="ModuleScript" referent="82">
             <Properties>
               <string name="Name">Portal</string>
               <string name="Source"><![CDATA[--!strict
@@ -39314,7 +39060,7 @@ return Portal
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="82">
+          <Item class="ModuleScript" referent="83">
             <Properties>
               <string name="Name">Ready</string>
               <string name="Source"><![CDATA[--!strict
@@ -39744,7 +39490,7 @@ return Ready
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="83">
+          <Item class="ModuleScript" referent="84">
             <Properties>
               <string name="Name">UniverseTag</string>
               <string name="Source"><![CDATA[--!strict
@@ -39862,11 +39608,11 @@ return UniverseTag
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="84">
+        <Item class="Folder" referent="85">
           <Properties>
             <string name="Name">Input</string>
           </Properties>
-          <Item class="ModuleScript" referent="85">
+          <Item class="ModuleScript" referent="86">
             <Properties>
               <string name="Name">Hotkeys</string>
               <string name="Source"><![CDATA[--!strict
@@ -39970,7 +39716,7 @@ return Hotkeys
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="86">
+          <Item class="ModuleScript" referent="87">
             <Properties>
               <string name="Name">Input</string>
               <string name="Source"><![CDATA[--!strict
@@ -40072,531 +39818,6 @@ return Input
 ]]></string>
             </Properties>
           </Item>
-        </Item>
-        <Item class="ModuleScript" referent="87">
-          <Properties>
-            <string name="Name">Legacy</string>
-            <string name="Source"><![CDATA[--!strict
---[[
-	Legacy: the old page UI (the web page's "Revamped" layout: the menu of layers, the points header, the current
-	layer's tab), kept for Studio only as a fallback while the new client settles. A small CLASSIC PAGE switch at
-	the left edge turns it on over the new UI (and BACK TO THE MAP off). It is deleted with the old menu / head
-	view roots.
-
-	    local legacy = Legacy.start({ remotes, setActive = fn(on) })
-	    legacy:onPatch(patch)     App forwards every View patch
-]]
-local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local UserInputService = game:GetService("UserInputService")
-local Workspace = game:GetService("Workspace")
-
-local shared = ReplicatedStorage:WaitForChild("MilestoneTree")
-local Html = require(shared:WaitForChild("Html"))
-local Style = require(script.Parent:WaitForChild("Style"))
-local Render = require(script.Parent:WaitForChild("Render"))
-
-local Legacy = {}
-
--- the page: built the first time the switch turns it on
-local function build(remotes: Instance)
-local player = Players.LocalPlayer
-local actRemote = remotes:WaitForChild("Act") :: RemoteEvent
-local importRemote = remotes:WaitForChild("Import") :: RemoteEvent
-
--- ------------------------------------------------------------------------------------------------------ the screen
-local MENU_W = 325
-
-local gui = Instance.new("ScreenGui")
-gui.Name = "MilestoneTree"
-gui.ResetOnSpawn = false
-gui.IgnoreGuiInset = false
-gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-
-local page = Instance.new("Frame")
-page.Name = "Page"
-page.Size = UDim2.fromScale(1, 1)
-page.BackgroundColor3 = Style.BG
-page.BorderSizePixel = 0
-page.Parent = gui
-local uiScale = Instance.new("UIScale")
-uiScale.Parent = page
-
-local menu = Instance.new("ScrollingFrame")
-menu.Name = "Menu"
-menu.Size = UDim2.new(0, MENU_W, 1, 0)
-menu.BackgroundColor3 = Style.BG
-menu.BorderSizePixel = 0
-menu.ScrollBarThickness = 6
-menu.CanvasSize = UDim2.new()
-menu.AutomaticCanvasSize = Enum.AutomaticSize.Y
-menu.ZIndex = 5
-menu.Parent = page
-Style.stroke(menu, 3, Color3.fromRGB(122, 122, 122), 0)
-local menuRoot = Instance.new("Frame")
-menuRoot.Name = "MenuRoot"
-menuRoot.BackgroundTransparency = 1
-menuRoot.Size = UDim2.new(1, -8, 0, 0)
-menuRoot.Position = UDim2.fromOffset(4, 8)
-menuRoot.AutomaticSize = Enum.AutomaticSize.Y
-menuRoot.Parent = menu
-
-local main = Instance.new("ScrollingFrame")
-main.Name = "Main"
-main.BackgroundColor3 = Style.BG
-main.BorderSizePixel = 0
-main.ScrollBarThickness = 8
-main.CanvasSize = UDim2.new()
-main.AutomaticCanvasSize = Enum.AutomaticSize.Y
-main.Parent = page
-local mainList = Instance.new("UIListLayout")
-mainList.SortOrder = Enum.SortOrder.LayoutOrder
-mainList.HorizontalAlignment = Enum.HorizontalAlignment.Center
-mainList.Padding = UDim.new(0, 10)
-mainList.Parent = main
-local mainPad = Instance.new("UIPadding")
-mainPad.PaddingTop = UDim.new(0, 10)
-mainPad.PaddingBottom = UDim.new(0, 60)
-mainPad.PaddingLeft = UDim.new(0, 8)
-mainPad.PaddingRight = UDim.new(0, 8)
-mainPad.Parent = main
-
-local function rootFrame(name: string, order: number): Frame
-	local f = Instance.new("Frame")
-	f.Name = name
-	f.BackgroundTransparency = 1
-	f.Size = UDim2.new(1, 0, 0, 0)
-	f.AutomaticSize = Enum.AutomaticSize.Y
-	f.LayoutOrder = order
-	f.Parent = main
-	return f
-end
-local headRoot = rootFrame("HeadRoot", 1)
-local tabRoot = rootFrame("TabRoot", 2)
-
--- what the page says while the server gets the game ready, and any error that stops it
-local status = Instance.new("TextLabel")
-status.Name = "Status"
-status.LayoutOrder = 0
-status.BackgroundTransparency = 1
-status.Size = UDim2.new(1, -40, 0, 0)
-status.AutomaticSize = Enum.AutomaticSize.Y
-status.TextWrapped = true
-status.RichText = true
-status.FontFace = Style.FONT
-status.TextSize = 20
-status.TextColor3 = Style.TEXT
-status.Text = "Loading your game..."
-status.Parent = main
-local function setStatus(text: string?, isError: boolean?)
-	status.Visible = text ~= nil
-	status.Text = if text then Html.escape(text) else ""
-	status.TextColor3 = if isError then Color3.fromRGB(255, 90, 90) else Style.TEXT
-end
-
-local menuShown = true
-local toggle = Instance.new("TextButton")
-toggle.Name = "MenuToggle"
-toggle.Size = UDim2.fromOffset(40, 60)
-toggle.BackgroundColor3 = Style.BG
-toggle.TextColor3 = Color3.new(1, 1, 1)
-toggle.FontFace = Style.FONT
-toggle.TextSize = 30
-toggle.ZIndex = 6
-toggle.Parent = page
-Style.stroke(toggle, 2, Color3.fromRGB(122, 122, 122), 0)
-
-local function layout()
-	local cam = Workspace.CurrentCamera
-	local vp = if cam then cam.ViewportSize else Vector2.new(1280, 720)
-	-- the page is laid out for a 1280 px wide browser window and scaled to the screen
-	local s = math.clamp(vp.X / 1280, 0.8, 1.6)
-	uiScale.Scale = s
-	local narrow = vp.X / s < 900
-	menu.Visible = menuShown
-	local left = if menuShown then MENU_W + 4 else 0
-	main.Position = UDim2.fromOffset(left, 0)
-	main.Size = UDim2.new(1, -left, 1, 0)
-	toggle.Position = UDim2.fromOffset(if menuShown then MENU_W + 6 else 2, 70)
-	toggle.Text = if menuShown then "<" else ">"
-	if narrow and menuShown then main.Size = UDim2.new(1, -left, 1, 0) end
-end
-toggle.Activated:Connect(function()
-	menuShown = not menuShown
-	layout()
-end)
-
--- --------------------------------------------------------------------------------------------- overlays (on top)
-local overlay = Instance.new("ScreenGui")
-overlay.Name = "MilestoneTreeOverlay"
-overlay.ResetOnSpawn = false
-overlay.DisplayOrder = 20
-overlay.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-local overlayScale = Instance.new("UIScale")
-overlayScale.Parent = overlay
-
--- tooltip
-local tip = Instance.new("Frame")
-tip.Name = "Tooltip"
-tip.Visible = false
-tip.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-tip.BackgroundTransparency = 0.05
-tip.AutomaticSize = Enum.AutomaticSize.XY
-tip.Size = UDim2.new()
-tip.ZIndex = 50
-tip.Parent = overlay
-Style.pad(tip, 7)
-Style.corner(tip, 6)
-Style.stroke(tip, 1, Style.TEXT, 0.6)
-local tipText = Instance.new("TextLabel")
-tipText.BackgroundTransparency = 1
-tipText.AutomaticSize = Enum.AutomaticSize.XY
-tipText.Size = UDim2.new()
-tipText.RichText = true
-tipText.TextWrapped = true
-tipText.FontFace = Style.FONT
-tipText.TextSize = 14
-tipText.TextColor3 = Style.TEXT
-tipText.ZIndex = 51
-tipText.Parent = tip
-local tipLimit = Instance.new("UISizeConstraint")
-tipLimit.MaxSize = Vector2.new(320, math.huge)
-tipLimit.Parent = tipText
-local tipOwner: GuiObject? = nil
-
-local function moveTip()
-	if not tip.Visible then return end
-	local m = UserInputService:GetMouseLocation()
-	local s = overlayScale.Scale
-	local cam = Workspace.CurrentCamera
-	local vp = if cam then cam.ViewportSize else Vector2.new(1280, 720)
-	local size = tip.AbsoluteSize
-	local x = math.clamp(m.X + 16, 0, math.max(0, vp.X - size.X - 4))
-	local y = m.Y - size.Y - 12
-	if y < 0 then y = m.Y + 20 end
-	tip.Position = UDim2.fromOffset(x / s, y / s)
-end
-
-local function showTip(html: string?, over: GuiObject?)
-	if html == nil then
-		if tipOwner == over then tip.Visible = false; tipOwner = nil end
-		return
-	end
-	tipOwner = over
-	tipText.Text = Html.rich(html, 14)
-	tip.Visible = true
-	moveTip()
-end
-UserInputService.InputChanged:Connect(function(input: InputObject)
-	if input.UserInputType == Enum.UserInputType.MouseMovement then moveTip() end
-end)
-
--- toasts (the page's popups: achievements, milestones, and messages from the server)
-local toasts = Instance.new("Frame")
-toasts.Name = "Toasts"
-toasts.BackgroundTransparency = 1
-toasts.AnchorPoint = Vector2.new(1, 0)
-toasts.Position = UDim2.new(1, -20, 0, 10)
-toasts.Size = UDim2.fromOffset(300, 0)
-toasts.AutomaticSize = Enum.AutomaticSize.Y
-toasts.Parent = overlay
-local toastList = Instance.new("UIListLayout")
-toastList.Padding = UDim.new(0, 10)
-toastList.SortOrder = Enum.SortOrder.LayoutOrder
-toastList.Parent = toasts
-local toastN = 0
-
-local POPUP_BG = { ["achievement-popup"] = "7182BC", ["milestone-popup"] = "D1C23C", ["challenge-popup"] = "9BBC71", ["default-popup"] = "5a5a5a" }
-
-local function toast(title: string?, message: string, bg: Color3?, border: Color3?, seconds: number?)
-	toastN += 1
-	local f = Instance.new("TextButton")
-	f.Text = ""
-	f.AutoButtonColor = false
-	f.LayoutOrder = toastN
-	f.Size = UDim2.new(1, 0, 0, 0)
-	f.AutomaticSize = Enum.AutomaticSize.Y
-	f.BackgroundColor3 = bg or Color3.fromRGB(60, 60, 60)
-	f.Parent = toasts
-	Style.corner(f, 7)
-	Style.stroke(f, 4, border or Style.DARK, if border then 0 else 0.75)
-	Style.pad(f, 10)
-	local l = Instance.new("TextLabel")
-	l.BackgroundTransparency = 1
-	l.Size = UDim2.new(1, 0, 0, 0)
-	l.AutomaticSize = Enum.AutomaticSize.Y
-	l.RichText = true
-	l.TextWrapped = true
-	l.FontFace = Style.FONT
-	l.TextSize = 14
-	l.TextColor3 = Color3.new(1, 1, 1)
-	l.Text = (if title and title ~= "" then Html.rich("<h3>" .. title .. "</h3>", 14) .. "\n" else "") .. Html.rich(message, 16)
-	l.Parent = f
-	f.Activated:Connect(function() f:Destroy() end)
-	task.delay(seconds or 4, function() if f.Parent then f:Destroy() end end)
-	while #toasts:GetChildren() > 7 do
-		local oldest: Instance? = nil
-		for _, c in toasts:GetChildren() do
-			if c:IsA("GuiObject") and (oldest == nil or c.LayoutOrder < (oldest :: GuiObject).LayoutOrder) then oldest = c end
-		end
-		if oldest then oldest:Destroy() else break end
-	end
-end
-
--- "not saving" banner
-local banner = Instance.new("TextLabel")
-banner.Name = "Unsaved"
-banner.Visible = false
-banner.AnchorPoint = Vector2.new(0.5, 0)
-banner.Position = UDim2.new(0.5, 0, 0, 4)
-banner.Size = UDim2.fromOffset(520, 26)
-banner.BackgroundColor3 = Color3.fromRGB(150, 30, 30)
-banner.TextColor3 = Color3.new(1, 1, 1)
-banner.FontFace = Style.FONT
-banner.TextSize = 14
-banner.Text = "Your progress is NOT being saved right now (see the messages). Rejoin to retry."
-banner.Parent = overlay
-Style.corner(banner, 6)
-
--- the export / import box
-local modal = Instance.new("Frame")
-modal.Name = "Modal"
-modal.Visible = false
-modal.AnchorPoint = Vector2.new(0.5, 0.5)
-modal.Position = UDim2.fromScale(0.5, 0.5)
-modal.Size = UDim2.fromOffset(560, 300)
-modal.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-modal.ZIndex = 40
-modal.Parent = overlay
-Style.corner(modal, 10)
-Style.stroke(modal, 3, Color3.fromRGB(122, 122, 122), 0)
-Style.pad(modal, 12)
-local modalTitle = Instance.new("TextLabel")
-modalTitle.BackgroundTransparency = 1
-modalTitle.Size = UDim2.new(1, 0, 0, 28)
-modalTitle.FontFace = Style.FONT
-modalTitle.TextSize = 20
-modalTitle.TextColor3 = Style.TEXT
-modalTitle.ZIndex = 41
-modalTitle.Parent = modal
-local modalBox = Instance.new("TextBox")
-modalBox.Position = UDim2.fromOffset(0, 36)
-modalBox.Size = UDim2.new(1, 0, 1, -88)
-modalBox.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
-modalBox.TextColor3 = Style.TEXT
-modalBox.FontFace = Font.new("rbxasset://fonts/families/RobotoMono.json")
-modalBox.TextSize = 12
-modalBox.TextWrapped = true
-modalBox.TextXAlignment = Enum.TextXAlignment.Left
-modalBox.TextYAlignment = Enum.TextYAlignment.Top
-modalBox.MultiLine = true
-modalBox.ClearTextOnFocus = false
-modalBox.ClipsDescendants = true
-modalBox.ZIndex = 41
-modalBox.Parent = modal
-Style.pad(modalBox, 6)
-local function modalButton(text: string, x: number): TextButton
-	local b = Instance.new("TextButton")
-	b.AnchorPoint = Vector2.new(1, 1)
-	b.Position = UDim2.new(1, x, 1, 0)
-	b.Size = UDim2.fromOffset(130, 40)
-	b.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
-	b.TextColor3 = Color3.new(1, 1, 1)
-	b.FontFace = Style.FONT
-	b.TextSize = 16
-	b.Text = text
-	b.ZIndex = 41
-	b.Parent = modal
-	Style.corner(b, 6)
-	return b
-end
-local modalOk = modalButton("Import", -140)
-local modalClose = modalButton("Close", 0)
-local modalMode = "export"
-modalClose.Activated:Connect(function() modal.Visible = false end)
-modalOk.Activated:Connect(function()
-	if modalMode == "import" and modalBox.Text ~= "" then
-		importRemote:FireServer(modalBox.Text)
-		modal.Visible = false
-	end
-end)
-
-local function openModal(mode: string, text: string?)
-	modalMode = mode
-	modal.Visible = true
-	modalOk.Visible = mode == "import"
-	if mode == "export" then
-		modalTitle.Text = "Your save (select it all and copy)"
-		modalBox.Text = text or ""
-		modalBox.PlaceholderText = ""
-		task.defer(function()
-			modalBox:CaptureFocus()
-			modalBox.SelectionStart = 1
-			modalBox.CursorPosition = #modalBox.Text + 1
-		end)
-	else
-		modalTitle.Text = "Paste a save (from Export here or on the web game)"
-		modalBox.Text = ""
-		modalBox.PlaceholderText = "save string..."
-		task.defer(function() modalBox:CaptureFocus() end)
-	end
-end
-
--- ---------------------------------------------------------------------------------------------------- the renderer
-local lastPress = 0
-local function press(a: any, hold: boolean)
-	if not hold and os.clock() - lastPress < 0.03 then return end
-	lastPress = os.clock()
-	actRemote:FireServer(a, hold)
-end
-local renderer = Render.new({ menu = menuRoot, head = headRoot, tab = tabRoot }, {
-	press = press,
-	tip = showTip,
-})
-
-local keys: { [string]: boolean } = {}
-
-local function applyTabStyle(st: any)
-	main.BackgroundColor3 = Style.BG
-	main.BackgroundTransparency = 0
-	if type(st) == "table" then Style.apply(main, st) else Style.drop(main, "Gradient") end
-end
-
-local gotScreen = false
-local failed = false
-local active = true
-local function onPatch(patch: any)
-	if type(patch) ~= "table" then return end
-	if patch.fatal then
-		failed = true
-		setStatus(tostring(patch.fatal) .. "\n\n(The same error is in Studio's Output window: View > Output.)", true)
-		return
-	end
-	if patch.status then
-		if not gotScreen and not failed then setStatus(tostring(patch.status)) end
-		return
-	end
-	local ok, err = pcall(function() renderer:apply(patch) end)
-	if not ok then
-		warn("[MilestoneTree] drawing the screen failed: " .. tostring(err))
-		setStatus("Drawing the screen failed: " .. tostring(err), true)
-		failed = true
-	elseif patch.set and next(patch.set) ~= nil and not failed then
-		gotScreen = true
-		setStatus(nil)
-	end
-	if patch.tabStyle then applyTabStyle(patch.tabStyle) end
-	if patch.keys then
-		keys = {}
-		for _, k in patch.keys do keys[k] = true end
-	end
-	banner.Visible = patch.unsaved == true
-	for _, p in patch.pop or {} do
-		local bg = Html.color(p.color ~= "" and p.color or nil) or Color3.fromHex(POPUP_BG[p.type] or "5a5a5a")
-		toast(p.title, p.message, bg, Html.color(p.bColor ~= "" and p.bColor or nil), 3)
-	end
-	for _, msg in patch.notice or {} do toast(nil, msg, nil, nil, 6) end
-	if patch.export then openModal("export", patch.export) end
-	if patch.askImport then openModal("import") end
-end
-
--- ------------------------------------------------------------------------------------------------------- hotkeys
-local ARROWS = {
-	[Enum.KeyCode.Up] = "ArrowUp", [Enum.KeyCode.Down] = "ArrowDown", [Enum.KeyCode.Left] = "ArrowLeft", [Enum.KeyCode.Right] = "ArrowRight",
-	[Enum.KeyCode.Return] = "Enter", [Enum.KeyCode.Space] = " ", [Enum.KeyCode.Escape] = "Escape", [Enum.KeyCode.Tab] = "Tab",
-}
-local function keyName(input: InputObject): string?
-	local kc = input.KeyCode
-	local name = ARROWS[kc]
-	if name == nil then
-		local v = kc.Value
-		if v >= Enum.KeyCode.A.Value and v <= Enum.KeyCode.Z.Value then
-			name = string.char(97 + v - Enum.KeyCode.A.Value)
-			if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.RightShift) then name = string.upper(name :: string) end
-		elseif v >= Enum.KeyCode.Zero.Value and v <= Enum.KeyCode.Nine.Value then
-			name = tostring(v - Enum.KeyCode.Zero.Value)
-		end
-	end
-	if name == nil then return nil end
-	if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl) then
-		name = "ctrl+" .. (name :: string)
-	end
-	return name
-end
-UserInputService.InputBegan:Connect(function(input: InputObject, processed: boolean)
-	if not active or processed or input.UserInputType ~= Enum.UserInputType.Keyboard then return end
-	if UserInputService:GetFocusedTextBox() then return end
-	local name = keyName(input)
-	if name and keys[name] then actRemote:FireServer({ "key", name }, false) end
-end)
-
--- ---------------------------------------------------------------------------------------------------------- start
-local function watchCamera()
-	local cam = Workspace.CurrentCamera
-	if cam then cam:GetPropertyChangedSignal("ViewportSize"):Connect(layout) end
-	layout()
-end
-Workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(watchCamera)
-watchCamera()
-
-gui.Parent = player:WaitForChild("PlayerGui")
-overlay.Parent = player:WaitForChild("PlayerGui")
-return {
-	onPatch = onPatch,
-	setActive = function(on: boolean)
-		active = on
-		gui.Enabled = on
-		overlay.Enabled = on
-	end,
-}
-end
-
--- the switch (the left edge): CLASSIC shows the page, MAP goes back to the realm map
-function Legacy.start(o: { remotes: Instance, setActive: (on: boolean) -> () })
-	local readyRemote = o.remotes:WaitForChild("Ready") :: RemoteEvent
-	local page: any = nil
-	local on = false
-	local sg = Instance.new("ScreenGui")
-	sg.Name = "ClassicSwitch"
-	sg.ResetOnSpawn = false
-	sg.AutoLocalize = false
-	sg.DisplayOrder = 60
-	sg.ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets
-	local b = Instance.new("TextButton")
-	b.Name = "Switch"
-	b.AnchorPoint = Vector2.new(0, 0.5)
-	b.Position = UDim2.new(0, 6, 0.5, 0)
-	b.Size = UDim2.fromOffset(120, 30)
-	b.BackgroundColor3 = Color3.fromRGB(26, 22, 40)
-	b.BackgroundTransparency = 0.2
-	b.TextColor3 = Color3.fromRGB(200, 196, 220)
-	b.FontFace = Style.FONT
-	b.TextSize = 13
-	b.AutoButtonColor = true
-	Style.corner(b, 15)
-	b.Parent = sg
-	sg.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
-	local function set(v: boolean)
-		on = v
-		b.Text = if v then "BACK TO THE MAP" else "CLASSIC PAGE"
-		if v and page == nil then page = build(o.remotes) end
-		if page then page.setActive(v) end
-		o.setActive(v)
-		-- the page draws from a whole view
-		if v then readyRemote:FireServer() end
-	end
-	b.Activated:Connect(function() set(not on) end)
-	set(false)
-	return {
-		onPatch = function(_: any, patch: any)
-			if on and page then page.onPatch(patch) end
-		end,
-	}
-end
-
-return Legacy
-]]></string>
-          </Properties>
         </Item>
         <Item class="LocalScript" referent="88">
           <Properties>
@@ -48899,6 +48120,15 @@ function Panel.new(gui: ScreenGui, deps: { store: any?, tip: ((html: string?, ov
 		if self.key then self.render:refresh() end
 		self:drawHero()
 	end)
+	local hugQueued = false
+	self.content:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+		if not self.hug or self.key == nil or hugQueued then return end
+		hugQueued = true
+		task.defer(function()
+			hugQueued = false
+			if self.hug and self.key then self:layout() end
+		end)
+	end)
 	self:layout()
 	self:showOpen(false, false)
 	return self
@@ -49236,6 +48466,14 @@ function Panel.layout(self: Panel)
 		end
 		y = math.max(8, 70 - topInset)
 		h = math.min(994, H - y - 16)
+		-- small panels hug their content (DESIGN.md 5.1, the signature's `hug`), never under 560 du
+		if self.hug and self.key and self.ready then
+			local contentH = self.content.AbsoluteSize.Y / s
+			if contentH > 1 then
+				local heroOn = self.hero ~= nil and self.hero.visible
+				h = math.min(h, math.max(560, 90 + 14 + (if heroOn then 168 else 0) + contentH + 16))
+			end
+		end
 	end
 	if full then
 		x, y, w, h = 0, 0, W, H
@@ -49443,7 +48681,13 @@ function Panel.drawShell(self: Panel, accent: boolean?)
 	Common.setText(line, Common.esc(lineText))
 	-- the signature's accent
 	local sig = Signatures.get(key)
-	self.hug = sig.hug == true
+	local hug = sig.hug == true
+	if hug ~= self.hug then
+		self.hug = hug
+		task.defer(function()
+			if self.key then self:layout() end
+		end)
+	end
 	if accent then
 		-- a signature draws its accent into children named "Accent" (the sheet's, the header band's): the previous
 		-- layer's accent goes when another panel opens
