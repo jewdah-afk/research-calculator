@@ -247,6 +247,30 @@
     return { x: P.x + (cz / s) * (c.focus[0] - cx), y: P.y + (cz / s) * (c.focus[1] - cy) };
   }
   const mixRGB = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
+  const WHITE = Object.freeze([255, 255, 255]);
+  /** The biome colours of REALM.md 5, one function per consumer (the client and the preview both call these).
+   *  Tile tint (multiply) of a layer with tint { rift }: mix(white, rift, w.rift). No corrupt term: the corrupt accent
+   *  never tints tiles (tint.corrupt is retired). The world (tint null) stays white. */
+  function biomeTint(tint, w) { return tint ? mixRGB(WHITE, tint.rift, w.rift) : [255, 255, 255]; }
+  /** The full-screen wash between mid and near: { color, alpha }, from the realm and rift entries only. */
+  function biomeWash(W, w) { return { color: mixRGB(W.realm.color, W.rift.color, w.rift), alpha: lerp(W.realm.alpha, W.rift.alpha, w.rift) }; }
+  /** A sprite with a colour object { realm, rift, corrupt }, whose on-screen centre lies over world point p:
+   *  mix(mix(realm, rift, w.rift), corrupt, w.corrupt * corruptLight(B, p)). */
+  function biomeSpriteColor(color, w, B, p) {
+    return mixRGB(mixRGB(color.realm, color.rift, w.rift), color.corrupt, w.corrupt * corruptLight(B, p));
+  }
+  /** A field particle (palette index c, threshold cg) of kind { palette, rift, corrupt } over world point p: the rift mix of
+   *  its palette colour, switched to kind.corrupt around its own threshold, smoothstep(cg - 0.12, cg + 0.12, g) with
+   *  g = w.corrupt * light(p). Neighbouring particles switch at different g, so green and ember sit side by side. */
+  function biomeFieldColor(kind, c, cg, w, B, p) {
+    const g = w.corrupt * corruptLight(B, p), base = mixRGB(kind.palette[c % kind.palette.length], kind.rift, w.rift);
+    return mixRGB(base, kind.corrupt, smoothstep(cg - 0.12, cg + 0.12, g));
+  }
+  /** Draw state of a corrupt bloom entry { local, size, color, alpha }: null when hidden (w.corrupt = 0). */
+  function bloomState(entry, w) {
+    const a = entry.alpha * w.corrupt;
+    return a > 0 ? { x: entry.local[0], y: entry.local[1], w: entry.size[0], h: entry.size[1], color: entry.color, alpha: a } : null;
+  }
 
   // ------------------------------------------------------------------------------------------------ rng / hashing
   function rng(seed) { // mulberry32, identical to lib.js
@@ -374,7 +398,8 @@
     clamp, lerp, smoothstep, mod, rng, hash01, EASE, mixRGB,
     mapScale, inDomain, layerZoom, layerZoomInverse, zMin, zoomRange, anchorOf, layerCenter, layerOffset, visibleRect,
     localToScreen, screenToLocal, worldToScreen, screenToWorld, zoomAt, panLimits, clampCamera, rubberBand,
-    requiredSize, planTiles, tileRects, viewCover, biome, corruptLight, bloomLocal, channel, spriteState, fieldAlphaZoom, visibleExtent,
+    requiredSize, planTiles, tileRects, viewCover, biome, corruptLight, bloomLocal, biomeTint, biomeWash, biomeSpriteColor,
+    biomeFieldColor, bloomState, channel, spriteState, fieldAlphaZoom, visibleExtent,
     fieldLocal, fieldPlace, fieldStep,
   };
 });
@@ -966,6 +991,29 @@ function test(RC, fs, FILE) {
   ok(!B.wash.corrupt || B.wash.corrupt.color.every((v, i) => v === B.wash.rift.color[i]), 'the wash takes no corrupt colour');
   for (const F of R.fields) for (const p of F.particles) ok(p.cg >= 0.1 && p.cg <= 0.9, `field ${F.id} cg`);
   for (const F of R.fields) for (const kd of F.kinds) ok(Array.isArray(kd.corrupt) && kd.corrupt.length === 3, `field ${F.id} ${kd.name} corrupt colour`);
+  // the colour helpers the client and the preview share: corrupt is local light, never a screen-wide blend
+  {
+    const full = { rift: 1, corrupt: 1 }, eq = (a, b) => a.every((v, i) => Math.abs(v - b[i]) < 1e-9);
+    const riftP = { x: 3150, y: 1480 }, outP = { x: 3600, y: 1320 }, treeP = { x: 1500, y: 1150 };
+    for (const S of R.sprites) if (S.color) {
+      ok(eq(RC.biomeSpriteColor(S.color, full, B, treeP), S.color.rift), `${S.name}: no corrupt colour away from the outcrop`);
+      ok(eq(RC.biomeSpriteColor(S.color, full, B, outP), S.color.corrupt), `${S.name}: corrupt colour over the outcrop`);
+      const c = RC.biomeSpriteColor(S.color, full, B, riftP), d = Math.hypot(c[0] - S.color.rift[0], c[1] - S.color.rift[1], c[2] - S.color.rift[2]);
+      ok(d < 6, `${S.name}: stays rift-coloured at the rift centre (${d.toFixed(1)} off)`);
+      ok(eq(RC.biomeSpriteColor(S.color, { rift: 0, corrupt: 0 }, B, outP), S.color.realm), `${S.name}: realm colour at w = 0`);
+    }
+    for (const F of R.fields) for (const kd of F.kinds) for (const cg of [0.1, 0.5, 0.9]) {
+      ok(eq(RC.biomeFieldColor(kd, 0, cg, full, B, riftP), RC.mixRGB(kd.palette[0], kd.rift, 1)), `${F.id} ${kd.name}: ember at the rift`);
+      ok(eq(RC.biomeFieldColor(kd, 0, cg, full, B, outP), kd.corrupt), `${F.id} ${kd.name}: green over the outcrop`);
+    }
+    for (const L of R.layers) ok(eq(RC.biomeTint(L.tint, full), L.tint ? L.tint.rift : [255, 255, 255]), `${L.id}: tint takes only w.rift`);
+    const wa = RC.biomeWash(B.wash, full);
+    ok(eq(wa.color, B.wash.rift.color) && near(wa.alpha, B.wash.rift.alpha, 1e-12), 'wash takes only w.rift');
+    for (const bl of B.corrupt.bloom.layers) {
+      ok(RC.bloomState(bl, { rift: 1, corrupt: 0 }) === null, `bloom ${bl.layer} hidden at corrupt 0`);
+      ok(near(RC.bloomState(bl, full).alpha, bl.alpha, 1e-12), `bloom ${bl.layer} alpha at corrupt 1`);
+    }
+  }
   // the old two-argument form still works (preview fallback: z = C.z or 1, V = 1920x1080)
   ok(near(RC.biome({ x: 2880, y: 1250 }, B).corrupt, RC.biome({ x: 2880, y: 1250 }, B, 1, Vref).corrupt, 1e-12), 'biome fallback');
   console.log(`biome: corrupt at the east limit reaches >= ${eastWorst.v.toFixed(3)} on every viewport (lowest at ${eastWorst.at})`);
