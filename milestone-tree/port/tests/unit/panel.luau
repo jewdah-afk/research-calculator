@@ -211,6 +211,9 @@ for _, n in { "Common", "Skins", "Generic", "Upgrade", "CompactOwned", "Buyable"
 end
 local sigF = folder(client, "Signatures")
 scriptModule(sigF, "Signatures", "client/Signatures/Signatures")
+-- the per-layer signatures (packages J1 / J2): every sibling module, auto-registered by Signatures on first use
+local SIGS = { "Kit", "M", "P" }
+for _, n in SIGS do scriptModule(sigF, n, "client/Signatures/" .. n) end
 
 -- the local player
 local lp = M.newInstance("Player")
@@ -249,6 +252,12 @@ local function allActions(store)
 	local out = {}
 	for _, n in store.nodes do
 		if type(n) == "table" and type(n.a) == "table" then table.insert(out, n.a) end
+	end
+	-- the map root's own close / opt actions (plan 1.11: the Options button of a ladder fires map.opt)
+	local mapRoot = store.nodes.map
+	if type(mapRoot) == "table" then
+		if type(mapRoot.opt) == "table" then table.insert(out, mapRoot.opt) end
+		if type(mapRoot.close) == "table" then table.insert(out, mapRoot.close) end
 	end
 	return out
 end
@@ -420,19 +429,108 @@ do
 	panel:destroy()
 end
 do
+	-- the m ladder (Signatures/M): collapsed with NEXT + 4 done + folds, notes and jump column, malware; SHOW ALL is a
+	-- virtual pool; both within the instance budget
+	for k in Theme.caps do Theme.caps[k] = true end
+	viewport(1920, 1080)
+	req(sigF.M).resetMemory() -- the fixture loop pressed every fold
 	local fx = fixtures.s13_m
 	local store = ViewStore.new()
 	local changes = store:apply(fx)
 	local panel = Panel.new(gui, { store = store })
+	local fired = {}
+	panel.act:Connect(function(a) table.insert(fired, a) end)
 	panel:update(store, changes)
 	panel:open("m", store:map().nodes.m)
-	local host = nil
-	for id, rec in panel.render.recs do if rec.claim and rec.node.cn == "milestones" then host = rec.root end end
-	check(host ~= nil, "the 165-row ladder is virtualised")
-	local rows = 0
-	if host then for _, c in host:GetChildren() do if string.sub(c.Name, 1, 3) == "Row" then rows += 1 end end end
-	check(rows > 0 and rows <= 24, "virtual pool " .. rows .. " rows (viewport + 2)")
-	check(Virtual.MS_ROWS == 24, "virtual threshold")
+	local ph = nil
+	for id, rec in panel.render.recs do if rec.claim and rec.node.cn == "milestones" then ph = rec.root end end
+	check(ph ~= nil, "the ladder claims the 165-row milestones")
+	local body = ph and ph:FindFirstChild("Body")
+	local rows = body and body:FindFirstChild("Left") and body.Left:FindFirstChild("Rows")
+	local n = 0
+	if rows then for _, c in rows:GetChildren() do if c:IsA("GuiObject") then n += 1 end end end
+	check(rows ~= nil and n >= 6 and n <= 12, "collapsed ladder rows " .. n .. " (NEXT, 4 done, folds)")
+	check(rows and rows:FindFirstChild("Next") ~= nil, "NEXT spotlight")
+	local nx = rows and rows:FindFirstChild("Next")
+	local reqText = nx and nx:FindFirstChild("Req") and string.gsub(nx.Req.Text, "<[^>]*>", "") or ""
+	check(string.find(reqText, "e3.243e59", 1, true) ~= nil and nx:FindFirstChild("Bar") ~= nil, "NEXT shows the reset's need and bar (" .. reqText .. ")")
+	check(rows and rows:FindFirstChild("Rest") ~= nil, "the rest folds into SHOW ALL")
+	local side = body and body:FindFirstChild("Side")
+	check(side and side:FindFirstChild("Notes") ~= nil and side:FindFirstChild("Jump") ~= nil, "WIDE side column: notes + jump to")
+	local notesHidden = true
+	for id, rec in panel.render.recs do
+		if rec.node.cn == "display-text" and rec.root.Visible ~= false then notesHidden = false end
+	end
+	check(notesHidden, "the display-text rows moved into NOTES")
+	local mal = ph and ph:FindFirstChild("Malware")
+	local infect = 0
+	if mal then for _, d in mal:GetDescendants() do if d.Name == "Infect" then infect += 1 end end end
+	check(infect == 9, "malware section lists 9 INFECT buttons (" .. infect .. ")")
+	local count = #descendants(panel.root)
+	check(count <= 450, "m collapsed: instances " .. count .. " <= 450")
+	io_print(string.format("    m ladder: collapsed %d instances", count))
+	-- an INFECT press fires the malware node's own action
+	local b = mal and mal:FindFirstChild("M18") and mal.M18:FindFirstChild("Infect")
+	if b then b.Activated:Fire() end
+	check(#fired == 1 and fired[1][1] == "malware" and fired[1][3] == "17", "INFECT fires ['malware','m','17']")
+	-- SHOW ALL: the virtual pool
+	local rest = rows and rows:FindFirstChild("Rest")
+	if rest then rest.Activated:Fire() end
+	M.step(0.1)
+	local host = rows and rows:FindFirstChild("All")
+	local pool = 0
+	if host then for _, c in host:GetChildren() do if string.sub(c.Name, 1, 3) == "Row" then pool += 1 end end end
+	check(host ~= nil and pool > 0 and pool <= 24, "SHOW ALL: virtual pool " .. pool .. " rows")
+	count = #descendants(panel.root)
+	check(count <= 450, "m SHOW ALL: instances " .. count .. " <= 450")
+	io_print(string.format("    m ladder: SHOW ALL %d instances, pool %d", count, pool))
+	-- jump to a block, then Show less
+	local jump = side and side:FindFirstChild("Jump")
+	local b2 = jump and jump:FindFirstChild("B2")
+	if b2 then b2.Activated:Fire() end
+	M.step(0.1)
+	local less = rows and rows:FindFirstChild("Less")
+	check(less ~= nil, "Show less offered")
+	if less then less.Activated:Fire() end
+	check(rows and rows:FindFirstChild("All") == nil and rows:FindFirstChild("Rest") ~= nil, "Show less folds the ladder again")
+	-- the Order button opens Options through the map's own action
+	local order = side and side:FindFirstChild("Order")
+	if order then order.Activated:Fire() end
+	check(fired[#fired] and fired[#fired][1] == "tab" and fired[#fired][2] == "options-tab", "Order opens Options (map.opt)")
+	-- COMPACT: one column, notes on top
+	viewport(844, 390)
+	panel.render:refresh()
+	check(ph:FindFirstChild("Notes") ~= nil and body:FindFirstChild("Side") == nil, "COMPACT: notes on top, no side column")
+	panel:destroy()
+	viewport(1920, 1080)
+end
+do
+	-- p (Signatures/P): the Hide owned switch in the UPGRADES title row hides owned cards and owned tiers, and back
+	for k in Theme.caps do Theme.caps[k] = false end
+	viewport(1920, 1080)
+	local fx = fixtures.s13_p
+	local store = ViewStore.new()
+	local changes = store:apply(fx)
+	local panel = Panel.new(gui, { store = store })
+	panel:update(store, changes)
+	panel:open("p", store:map().nodes.p)
+	local sw = nil
+	for _, d in descendants(panel.root) do if d.Name == "HideOwned" then sw = d end end
+	check(sw ~= nil, "p: Hide owned switch in the UPGRADES row")
+	local function shown(cls)
+		local k = 0
+		for id, rec in panel.render.recs do
+			if rec.kind == "btn:upg" and rec.node.cls == cls and rec.root.Visible ~= false then k += 1 end
+		end
+		return k
+	end
+	local owned0, can0 = shown("bought"), shown("can")
+	if sw then sw.Activated:Fire() end
+	check(shown("bought") == 0 and shown("can") == can0, "p: owned hidden (" .. owned0 .. " -> " .. shown("bought") .. "), BUY cards stay")
+	for _, d in descendants(panel.root) do if d.Name == "HideOwned" then sw = d end end
+	if sw then sw.Activated:Fire() end
+	check(shown("bought") == owned0, "p: owned back")
+	check(panel.parts.band:FindFirstChild("Accent") ~= nil or not Theme.caps.TileMode, "p: header accent")
 	panel:destroy()
 end
 do

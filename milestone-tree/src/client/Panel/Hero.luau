@@ -270,6 +270,9 @@ function Hero.draw(self: Hero, store: any, ctx: any)
 	if sigT and sigT.hero then
 		local ok, err = pcall(sigT.hero, f, store, ctx)
 		if not ok then warn("[MilestoneTree] signature hero failed: " .. tostring(err)) end
+	else
+		-- a signature's hero idea lives in the hero's "Accent" child: gone on a layer without one
+		Common.drop(f, "Accent")
 	end
 end
 

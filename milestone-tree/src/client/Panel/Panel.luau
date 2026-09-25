@@ -711,9 +711,15 @@ function Panel.drawShell(self: Panel, accent: boolean?)
 	-- the signature's accent
 	local sig = Signatures.get(key)
 	self.hug = sig.hug == true
-	if accent and sig.accent then
-		local ok, err = Common.try(sig.accent, p.sheet, self.ctxCache or self:ctx())
-		if not ok then warn("[MilestoneTree] signature accent failed: " .. tostring(err)) end
+	if accent then
+		-- a signature draws its accent into children named "Accent" (the sheet's, the header band's): the previous
+		-- layer's accent goes when another panel opens
+		Common.drop(p.sheet, "Accent")
+		Common.drop(p.band, "Accent")
+		if sig.accent then
+			local ok, err = Common.try(sig.accent, p.sheet, self.ctxCache or self:ctx())
+			if not ok then warn("[MilestoneTree] signature accent failed: " .. tostring(err)) end
+		end
 	end
 end
 
