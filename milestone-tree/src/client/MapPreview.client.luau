@@ -101,6 +101,20 @@ bs.Thickness = 2
 bs.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 bs.Parent = button
 button.Parent = hud
+-- a marker that shows an update from GitHub reached Studio (sync.bat); bump the number to test again
+local tag = Instance.new("TextLabel")
+tag.Name = "SyncTag"
+tag.AnchorPoint = Vector2.new(1, 0)
+tag.Position = UDim2.new(1, -16, 0, 58)
+tag.Size = UDim2.fromOffset(160, 22)
+tag.BackgroundTransparency = 1
+tag.Text = "SYNC TEST 1"
+tag.TextColor3 = Theme.hue("ep")
+tag.FontFace = Theme.font("tab")
+tag.TextSize = 16
+tag.TextXAlignment = Enum.TextXAlignment.Right
+tag.TextStrokeTransparency = 0.3
+tag.Parent = hud
 local lp = Players.LocalPlayer
 hud.Parent = lp:WaitForChild("PlayerGui")
 
