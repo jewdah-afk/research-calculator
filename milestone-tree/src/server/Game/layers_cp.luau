@@ -118,7 +118,7 @@ typeName = JS.O({
 }, {"div", "pm"})
 addLayer(nil, "cp", JS.O({
 	name = "prestige points",
-	symbol = "CP",
+	symbol = "CR",
 	position = (-1),
 	startData = function(this)
 	do return JS.O({
