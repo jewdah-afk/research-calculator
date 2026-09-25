@@ -14,49 +14,51 @@ export type Tier = { layers: { [string]: Layer }, order: { string }, atlas: { id
 export type Assets = { version: string, complete: boolean, uploaded: number, total: number, gutter: number, tiers: { HIGH: Tier, LOW: Tier }, sprites: { atlas: { HIGH: string?, LOW: string? }, size: { HIGH: { number }, LOW: { number } }, regions: { [string]: { number } }, sample: { [string]: { number } } } }
 
 local Assets: Assets = {
-	version = "eec8117ebef7",
+	version = "7e2e0975ef46",
 	complete = true,
-	uploaded = 62,
-	total = 62,
+	uploaded = 64,
+	total = 64,
 	gutter = 2,
 	tiers = {
 		HIGH = {
 			layers = {
-				sky = { depth = 0, f = 0.05, w = 2752, h = 1600, scale = 0.625, cols = 2, rows = 1, opaque = true, zHide = 0, zShow = 0, tiles = {
-					{ i = 0, j = 0, x = 0, y = 0, w = 1376, h = 1600, rw = 860, rh = 1000, id = "rbxassetid://109576955374902" },
-					{ i = 1, j = 0, x = 1376, y = 0, w = 1376, h = 1600, rw = 860, rh = 1000, id = "rbxassetid://125711598219054" },
+				sky = { depth = 0, f = 0.05, w = 2784, h = 1616, scale = 0.625, cols = 2, rows = 1, opaque = true, zHide = 0, zShow = 0, tiles = {
+					{ i = 0, j = 0, x = 0, y = 0, w = 1392, h = 1616, rw = 870, rh = 1010, id = "rbxassetid://96132035924004" },
+					{ i = 1, j = 0, x = 1392, y = 0, w = 1392, h = 1616, rw = 870, rh = 1010, id = "rbxassetid://75872250280491" },
 				} },
-				clouds = { depth = 1, f = 0.12, w = 3008, h = 1792, scale = 0.375, cols = 2, rows = 1, opaque = false, zHide = 0, zShow = 0, tiles = {
-					{ i = 0, j = 0, x = 0, y = 0, w = 1504, h = 1792, rw = 564, rh = 672, id = "rbxassetid://108197585798739" },
-					{ i = 1, j = 0, x = 1504, y = 0, w = 1504, h = 1792, rw = 564, rh = 672, id = "rbxassetid://78523046226350" },
+				clouds = { depth = 1, f = 0.12, w = 3040, h = 1840, scale = 0.375, cols = 2, rows = 1, opaque = false, zHide = 0, zShow = 0, tiles = {
+					{ i = 0, j = 0, x = 0, y = 0, w = 1520, h = 1840, rw = 570, rh = 690, id = "rbxassetid://70439967440926" },
+					{ i = 1, j = 0, x = 1520, y = 0, w = 1520, h = 1840, rw = 570, rh = 690, id = "rbxassetid://106017688034160" },
 				} },
-				far = { depth = 2, f = 0.25, w = 3432, h = 2160, scale = 0.5, cols = 2, rows = 2, opaque = false, zHide = 0, zShow = 0, tiles = {
-					{ i = 0, j = 0, x = 0, y = 0, w = 1716, h = 1080, rw = 858, rh = 540, id = "rbxassetid://138642508773728" },
-					{ i = 1, j = 0, x = 1716, y = 0, w = 1716, h = 1080, rw = 858, rh = 540, id = "rbxassetid://135814886687215" },
-					{ i = 0, j = 1, x = 0, y = 1080, w = 1716, h = 1080, rw = 858, rh = 540, id = "rbxassetid://119863721177380" },
-					{ i = 1, j = 1, x = 1716, y = 1080, w = 1716, h = 1080, rw = 858, rh = 540, id = "rbxassetid://86633218204281" },
+				far = { depth = 2, f = 0.25, w = 3552, h = 2272, scale = 0.5, cols = 2, rows = 2, opaque = false, zHide = 0, zShow = 0, tiles = {
+					{ i = 0, j = 0, x = 0, y = 0, w = 1776, h = 1136, rw = 888, rh = 568, id = "rbxassetid://100908535342428" },
+					{ i = 1, j = 0, x = 1776, y = 0, w = 1776, h = 1136, rw = 888, rh = 568, id = "rbxassetid://96559078177114" },
+					{ i = 0, j = 1, x = 0, y = 1136, w = 1776, h = 1136, rw = 888, rh = 568, id = "rbxassetid://113528897482450" },
+					{ i = 1, j = 1, x = 1776, y = 1136, w = 1776, h = 1136, rw = 888, rh = 568, id = "rbxassetid://138155396539641" },
 				} },
-				mid = { depth = 3, f = 0.45, w = 4128, h = 2736, scale = 0.75, cols = 4, rows = 3, opaque = false, zHide = 0, zShow = 0, tiles = {
-					{ i = 0, j = 0, x = 0, y = 0, w = 1032, h = 912, rw = 774, rh = 684, id = "rbxassetid://72231867270769" },
-					{ i = 1, j = 0, x = 1032, y = 0, w = 1032, h = 912, rw = 774, rh = 684, id = "rbxassetid://84180261628365" },
-					{ i = 2, j = 0, x = 2064, y = 0, w = 1032, h = 912, rw = 774, rh = 684, id = "rbxassetid://91950249272650" },
-					{ i = 3, j = 0, x = 3096, y = 0, w = 1032, h = 912, rw = 774, rh = 684, id = "rbxassetid://72628305601348" },
-					{ i = 0, j = 1, x = 0, y = 912, w = 1032, h = 912, rw = 774, rh = 684, id = "rbxassetid://91343649417495" },
-					{ i = 1, j = 1, x = 1032, y = 912, w = 1032, h = 912, rw = 774, rh = 684, id = "rbxassetid://115622093222513" },
-					{ i = 2, j = 1, x = 2064, y = 912, w = 1032, h = 912, rw = 774, rh = 684, id = "rbxassetid://78597706090029" },
-					{ i = 3, j = 1, x = 3096, y = 912, w = 1032, h = 912, rw = 774, rh = 684, id = "rbxassetid://83563712621822" },
-					{ i = 0, j = 2, x = 0, y = 1824, w = 1032, h = 912, rw = 774, rh = 684, id = "rbxassetid://98531986609111" },
-					{ i = 1, j = 2, x = 1032, y = 1824, w = 1032, h = 912, rw = 774, rh = 684, id = "rbxassetid://124267354450716" },
-					{ i = 2, j = 2, x = 2064, y = 1824, w = 1032, h = 912, rw = 774, rh = 684, id = "rbxassetid://110192134016690" },
-					{ i = 3, j = 2, x = 3096, y = 1824, w = 1032, h = 912, rw = 774, rh = 684, id = "rbxassetid://93228600638926" },
+				mid = { depth = 3, f = 0.45, w = 4352, h = 2928, scale = 0.75, cols = 4, rows = 3, opaque = false, zHide = 0, zShow = 0, tiles = {
+					{ i = 0, j = 0, x = 0, y = 0, w = 1088, h = 976, rw = 816, rh = 732, id = "rbxassetid://85792634806924" },
+					{ i = 1, j = 0, x = 1088, y = 0, w = 1088, h = 976, rw = 816, rh = 732, id = "rbxassetid://117431302284336" },
+					{ i = 2, j = 0, x = 2176, y = 0, w = 1088, h = 976, rw = 816, rh = 732, id = "rbxassetid://89163236153024" },
+					{ i = 3, j = 0, x = 3264, y = 0, w = 1088, h = 976, rw = 816, rh = 732, id = "rbxassetid://133417146514539" },
+					{ i = 0, j = 1, x = 0, y = 976, w = 1088, h = 976, rw = 816, rh = 732, id = "rbxassetid://71475368570441" },
+					{ i = 1, j = 1, x = 1088, y = 976, w = 1088, h = 976, rw = 816, rh = 732, id = "rbxassetid://130340050944025" },
+					{ i = 2, j = 1, x = 2176, y = 976, w = 1088, h = 976, rw = 816, rh = 732, id = "rbxassetid://135414485603581" },
+					{ i = 3, j = 1, x = 3264, y = 976, w = 1088, h = 976, rw = 816, rh = 732, id = "rbxassetid://77708698922622" },
+					{ i = 0, j = 2, x = 0, y = 1952, w = 1088, h = 976, rw = 816, rh = 732, id = "rbxassetid://129142843937608" },
+					{ i = 1, j = 2, x = 1088, y = 1952, w = 1088, h = 976, rw = 816, rh = 732, id = "rbxassetid://139835071451547" },
+					{ i = 2, j = 2, x = 2176, y = 1952, w = 1088, h = 976, rw = 816, rh = 732, id = "rbxassetid://130503279501890" },
+					{ i = 3, j = 2, x = 3264, y = 1952, w = 1088, h = 976, rw = 816, rh = 732, id = "rbxassetid://75476646110258" },
 				} },
-				near = { depth = 4, f = 0.7, w = 5040, h = 3680, scale = 0.45, cols = 3, rows = 2, opaque = false, zHide = 0, zShow = 0, tiles = {
-					{ i = 0, j = 0, x = 0, y = 0, w = 1680, h = 1840, rw = 756, rh = 828, id = "rbxassetid://125387548862312" },
-					{ i = 1, j = 0, x = 1680, y = 0, w = 1680, h = 1840, rw = 756, rh = 828, id = "rbxassetid://85823657957241" },
-					{ i = 2, j = 0, x = 3360, y = 0, w = 1680, h = 1840, rw = 756, rh = 828, id = "rbxassetid://104252630205412" },
-					{ i = 0, j = 1, x = 0, y = 1840, w = 1680, h = 1840, rw = 756, rh = 828, id = "rbxassetid://110448773270822" },
-					{ i = 1, j = 1, x = 1680, y = 1840, w = 1680, h = 1840, rw = 756, rh = 828, id = "rbxassetid://90532777447561" },
-					{ i = 2, j = 1, x = 3360, y = 1840, w = 1680, h = 1840, rw = 756, rh = 828, id = "rbxassetid://86644155619606" },
+				near = { depth = 4, f = 0.7, w = 5440, h = 3920, scale = 0.45, cols = 4, rows = 2, opaque = false, zHide = 0, zShow = 0, tiles = {
+					{ i = 0, j = 0, x = 0, y = 0, w = 1360, h = 1960, rw = 612, rh = 882, id = "rbxassetid://119765970761181" },
+					{ i = 1, j = 0, x = 1360, y = 0, w = 1360, h = 1960, rw = 612, rh = 882, id = "rbxassetid://126309339663220" },
+					{ i = 2, j = 0, x = 2720, y = 0, w = 1360, h = 1960, rw = 612, rh = 882, id = "rbxassetid://79532038301416" },
+					{ i = 3, j = 0, x = 4080, y = 0, w = 1360, h = 1960, rw = 612, rh = 882, id = "rbxassetid://127314476503584" },
+					{ i = 0, j = 1, x = 0, y = 1960, w = 1360, h = 1960, rw = 612, rh = 882, id = "rbxassetid://115485152665512" },
+					{ i = 1, j = 1, x = 1360, y = 1960, w = 1360, h = 1960, rw = 612, rh = 882, id = "rbxassetid://71359962481240" },
+					{ i = 2, j = 1, x = 2720, y = 1960, w = 1360, h = 1960, rw = 612, rh = 882, id = "rbxassetid://123906915928593" },
+					{ i = 3, j = 1, x = 4080, y = 1960, w = 1360, h = 1960, rw = 612, rh = 882, id = "rbxassetid://98471122844741" },
 				} },
 				world = { depth = 5, f = 1, w = 3840, h = 2560, scale = 1, cols = 4, rows = 4, opaque = false, zHide = 0, zShow = 0, tiles = {
 					{ i = 0, j = 0, x = 0, y = 0, w = 960, h = 640, rw = 960, rh = 640, id = "rbxassetid://134877864798575" },
@@ -77,10 +79,10 @@ local Assets: Assets = {
 					{ i = 3, j = 3, x = 2880, y = 1920, w = 960, h = 640, rw = 960, rh = 640, id = "rbxassetid://122989069291601" },
 				} },
 				fg = { depth = 6, f = 1.3, w = 7600, h = 5380, scale = 0.2, cols = 2, rows = 2, opaque = false, zHide = 0.5, zShow = 0.62, tiles = {
-					{ i = 0, j = 0, x = 0, y = 0, w = 3800, h = 2690, rw = 760, rh = 538, id = "rbxassetid://83780537728169" },
-					{ i = 1, j = 0, x = 3800, y = 0, w = 3800, h = 2690, rw = 760, rh = 538, id = "rbxassetid://90791060654042" },
-					{ i = 0, j = 1, x = 0, y = 2690, w = 3800, h = 2690, rw = 760, rh = 538, id = "rbxassetid://90762320096159" },
-					{ i = 1, j = 1, x = 3800, y = 2690, w = 3800, h = 2690, rw = 760, rh = 538, id = "rbxassetid://114392483350488" },
+					{ i = 0, j = 0, x = 0, y = 0, w = 3800, h = 2690, rw = 760, rh = 538, id = "rbxassetid://119673413654486" },
+					{ i = 1, j = 0, x = 3800, y = 0, w = 3800, h = 2690, rw = 760, rh = 538, id = "rbxassetid://77363351427343" },
+					{ i = 0, j = 1, x = 0, y = 2690, w = 3800, h = 2690, rw = 760, rh = 538, id = "rbxassetid://70648175771593" },
+					{ i = 1, j = 1, x = 3800, y = 2690, w = 3800, h = 2690, rw = 760, rh = 538, id = "rbxassetid://132032112968276" },
 				} },
 			},
 			order = { "sky", "clouds", "far", "mid", "near", "world", "fg" },
@@ -88,24 +90,24 @@ local Assets: Assets = {
 		},
 		LOW = {
 			layers = {
-				sky = { depth = 0, f = 0.05, w = 2752, h = 1600, scale = 0.3125, cols = 1, rows = 1, opaque = true, zHide = 0, zShow = 0, tiles = {
-					{ i = 0, j = 0, x = 0, y = 0, w = 2752, h = 1600, rw = 860, rh = 500, id = "rbxassetid://82523029372201" },
+				sky = { depth = 0, f = 0.05, w = 2784, h = 1616, scale = 0.25, cols = 1, rows = 1, opaque = true, zHide = 0, zShow = 0, tiles = {
+					{ i = 0, j = 0, x = 0, y = 0, w = 2784, h = 1616, rw = 696, rh = 404, id = "rbxassetid://98586624565449" },
 				} },
-				clouds = { depth = 1, f = 0.12, w = 3008, h = 1792, scale = 0.1875, cols = 1, rows = 1, opaque = false, zHide = 0, zShow = 0, tiles = {
-					{ i = 0, j = 0, x = 0, y = 0, w = 3008, h = 1792, rw = 564, rh = 336, id = "rbxassetid://110748966683888" },
+				clouds = { depth = 1, f = 0.12, w = 3040, h = 1840, scale = 0.125, cols = 1, rows = 1, opaque = false, zHide = 0, zShow = 0, tiles = {
+					{ i = 0, j = 0, x = 0, y = 0, w = 3040, h = 1840, rw = 380, rh = 230, id = "rbxassetid://85049474148458" },
 				} },
-				far = { depth = 2, f = 0.25, w = 3432, h = 2160, scale = 0.25, cols = 1, rows = 1, opaque = false, zHide = 0, zShow = 0, tiles = {
-					{ i = 0, j = 0, x = 0, y = 0, w = 3432, h = 2160, rw = 858, rh = 540, id = "rbxassetid://124589452981856" },
+				far = { depth = 2, f = 0.25, w = 3552, h = 2272, scale = 0.1875, cols = 1, rows = 1, opaque = false, zHide = 0, zShow = 0, tiles = {
+					{ i = 0, j = 0, x = 0, y = 0, w = 3552, h = 2272, rw = 666, rh = 426, id = "rbxassetid://127922565415594" },
 				} },
-				mid = { depth = 3, f = 0.45, w = 4128, h = 2736, scale = 0.375, cols = 2, rows = 2, opaque = false, zHide = 0, zShow = 0, tiles = {
-					{ i = 0, j = 0, x = 0, y = 0, w = 2064, h = 1824, rw = 774, rh = 684, id = "rbxassetid://71484125014001" },
-					{ i = 1, j = 0, x = 2064, y = 0, w = 2064, h = 1824, rw = 774, rh = 684, id = "rbxassetid://132184932206114" },
-					{ i = 0, j = 1, x = 0, y = 1824, w = 2064, h = 912, rw = 774, rh = 342, id = "rbxassetid://99834873642394" },
-					{ i = 1, j = 1, x = 2064, y = 1824, w = 2064, h = 912, rw = 774, rh = 342, id = "rbxassetid://88050457926196" },
+				mid = { depth = 3, f = 0.45, w = 4352, h = 2928, scale = 0.375, cols = 2, rows = 2, opaque = false, zHide = 0, zShow = 0, tiles = {
+					{ i = 0, j = 0, x = 0, y = 0, w = 2176, h = 1952, rw = 816, rh = 732, id = "rbxassetid://111188028775714" },
+					{ i = 1, j = 0, x = 2176, y = 0, w = 2176, h = 1952, rw = 816, rh = 732, id = "rbxassetid://100678635382181" },
+					{ i = 0, j = 1, x = 0, y = 1952, w = 2176, h = 976, rw = 816, rh = 366, id = "rbxassetid://93268326619678" },
+					{ i = 1, j = 1, x = 2176, y = 1952, w = 2176, h = 976, rw = 816, rh = 366, id = "rbxassetid://84888540632180" },
 				} },
-				near = { depth = 4, f = 0.7, w = 5040, h = 3680, scale = 0.225, cols = 2, rows = 1, opaque = false, zHide = 0, zShow = 0, tiles = {
-					{ i = 0, j = 0, x = 0, y = 0, w = 3360, h = 3680, rw = 756, rh = 828, id = "rbxassetid://140588776826354" },
-					{ i = 1, j = 0, x = 3360, y = 0, w = 1680, h = 3680, rw = 378, rh = 828, id = "rbxassetid://120407422041177" },
+				near = { depth = 4, f = 0.7, w = 5440, h = 3920, scale = 0.225, cols = 2, rows = 1, opaque = false, zHide = 0, zShow = 0, tiles = {
+					{ i = 0, j = 0, x = 0, y = 0, w = 2720, h = 3920, rw = 612, rh = 882, id = "rbxassetid://131756983703897" },
+					{ i = 1, j = 0, x = 2720, y = 0, w = 2720, h = 3920, rw = 612, rh = 882, id = "rbxassetid://118715424867616" },
 				} },
 				world = { depth = 5, f = 1, w = 3840, h = 2560, scale = 0.5, cols = 2, rows = 2, opaque = false, zHide = 0, zShow = 0, tiles = {
 					{ i = 0, j = 0, x = 0, y = 0, w = 1920, h = 1280, rw = 960, rh = 640, id = "rbxassetid://124284393154298" },
@@ -114,7 +116,7 @@ local Assets: Assets = {
 					{ i = 1, j = 1, x = 1920, y = 1280, w = 1920, h = 1280, rw = 960, rh = 640, id = "rbxassetid://110039716159560" },
 				} },
 				fg = { depth = 6, f = 1.3, w = 7600, h = 5380, scale = 0.1, cols = 1, rows = 1, opaque = false, zHide = 0.5, zShow = 0.62, tiles = {
-					{ i = 0, j = 0, x = 0, y = 0, w = 7600, h = 5380, rw = 760, rh = 538, id = "rbxassetid://131343310126957" },
+					{ i = 0, j = 0, x = 0, y = 0, w = 7600, h = 5380, rw = 760, rh = 538, id = "rbxassetid://105172601057821" },
 				} },
 			},
 			order = { "sky", "clouds", "far", "mid", "near", "world", "fg" },
