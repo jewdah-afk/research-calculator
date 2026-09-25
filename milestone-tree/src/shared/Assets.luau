@@ -14,63 +14,73 @@ export type Tier = { layers: { [string]: Layer }, order: { string }, atlas: { id
 export type Assets = { version: string, complete: boolean, uploaded: number, total: number, gutter: number, tiers: { HIGH: Tier, LOW: Tier }, sprites: { atlas: { HIGH: string?, LOW: string? }, size: { HIGH: { number }, LOW: { number } }, regions: { [string]: { number } }, sample: { [string]: { number } } } }
 
 local Assets: Assets = {
-	version = "d808f4ffac5a",
+	version = "eec8117ebef7",
 	complete = true,
-	uploaded = 49,
-	total = 49,
+	uploaded = 62,
+	total = 62,
 	gutter = 2,
 	tiers = {
 		HIGH = {
 			layers = {
-				sky = { depth = 0, f = 0.05, w = 2656, h = 1536, scale = 0.625, cols = 2, rows = 1, opaque = true, zHide = 0, zShow = 0, tiles = {
-					{ i = 0, j = 0, x = 0, y = 0, w = 1328, h = 1536, rw = 830, rh = 960, id = "rbxassetid://71355769880299" },
-					{ i = 1, j = 0, x = 1328, y = 0, w = 1328, h = 1536, rw = 830, rh = 960, id = "rbxassetid://91145806093194" },
+				sky = { depth = 0, f = 0.05, w = 2752, h = 1600, scale = 0.625, cols = 2, rows = 1, opaque = true, zHide = 0, zShow = 0, tiles = {
+					{ i = 0, j = 0, x = 0, y = 0, w = 1376, h = 1600, rw = 860, rh = 1000, id = "rbxassetid://109576955374902" },
+					{ i = 1, j = 0, x = 1376, y = 0, w = 1376, h = 1600, rw = 860, rh = 1000, id = "rbxassetid://125711598219054" },
 				} },
-				clouds = { depth = 1, f = 0.12, w = 2784, h = 1632, scale = 0.375, cols = 2, rows = 1, opaque = false, zHide = 0, zShow = 0, tiles = {
-					{ i = 0, j = 0, x = 0, y = 0, w = 1392, h = 1632, rw = 522, rh = 612, id = "rbxassetid://96818831309596" },
-					{ i = 1, j = 0, x = 1392, y = 0, w = 1392, h = 1632, rw = 522, rh = 612, id = "rbxassetid://113074905871619" },
+				clouds = { depth = 1, f = 0.12, w = 3008, h = 1792, scale = 0.375, cols = 2, rows = 1, opaque = false, zHide = 0, zShow = 0, tiles = {
+					{ i = 0, j = 0, x = 0, y = 0, w = 1504, h = 1792, rw = 564, rh = 672, id = "rbxassetid://108197585798739" },
+					{ i = 1, j = 0, x = 1504, y = 0, w = 1504, h = 1792, rw = 564, rh = 672, id = "rbxassetid://78523046226350" },
 				} },
-				far = { depth = 2, f = 0.25, w = 3008, h = 1836, scale = 0.5, cols = 2, rows = 1, opaque = false, zHide = 0, zShow = 0, tiles = {
-					{ i = 0, j = 0, x = 0, y = 0, w = 1504, h = 1836, rw = 752, rh = 918, id = "rbxassetid://134202173393613" },
-					{ i = 1, j = 0, x = 1504, y = 0, w = 1504, h = 1836, rw = 752, rh = 918, id = "rbxassetid://72892875306690" },
+				far = { depth = 2, f = 0.25, w = 3432, h = 2160, scale = 0.5, cols = 2, rows = 2, opaque = false, zHide = 0, zShow = 0, tiles = {
+					{ i = 0, j = 0, x = 0, y = 0, w = 1716, h = 1080, rw = 858, rh = 540, id = "rbxassetid://138642508773728" },
+					{ i = 1, j = 0, x = 1716, y = 0, w = 1716, h = 1080, rw = 858, rh = 540, id = "rbxassetid://135814886687215" },
+					{ i = 0, j = 1, x = 0, y = 1080, w = 1716, h = 1080, rw = 858, rh = 540, id = "rbxassetid://119863721177380" },
+					{ i = 1, j = 1, x = 1716, y = 1080, w = 1716, h = 1080, rw = 858, rh = 540, id = "rbxassetid://86633218204281" },
 				} },
-				mid = { depth = 3, f = 0.45, w = 3360, h = 2160, scale = 0.75, cols = 3, rows = 2, opaque = false, zHide = 0, zShow = 0, tiles = {
-					{ i = 0, j = 0, x = 0, y = 0, w = 1120, h = 1080, rw = 840, rh = 810, id = "rbxassetid://92058280643632" },
-					{ i = 1, j = 0, x = 1120, y = 0, w = 1120, h = 1080, rw = 840, rh = 810, id = "rbxassetid://110087255755347" },
-					{ i = 2, j = 0, x = 2240, y = 0, w = 1120, h = 1080, rw = 840, rh = 810, id = "rbxassetid://112890049668013" },
-					{ i = 0, j = 1, x = 0, y = 1080, w = 1120, h = 1080, rw = 840, rh = 810, id = "rbxassetid://106896463979957" },
-					{ i = 1, j = 1, x = 1120, y = 1080, w = 1120, h = 1080, rw = 840, rh = 810, id = "rbxassetid://103502176924337" },
-					{ i = 2, j = 1, x = 2240, y = 1080, w = 1120, h = 1080, rw = 840, rh = 810, id = "rbxassetid://85834429372593" },
+				mid = { depth = 3, f = 0.45, w = 4128, h = 2736, scale = 0.75, cols = 4, rows = 3, opaque = false, zHide = 0, zShow = 0, tiles = {
+					{ i = 0, j = 0, x = 0, y = 0, w = 1032, h = 912, rw = 774, rh = 684, id = "rbxassetid://72231867270769" },
+					{ i = 1, j = 0, x = 1032, y = 0, w = 1032, h = 912, rw = 774, rh = 684, id = "rbxassetid://84180261628365" },
+					{ i = 2, j = 0, x = 2064, y = 0, w = 1032, h = 912, rw = 774, rh = 684, id = "rbxassetid://91950249272650" },
+					{ i = 3, j = 0, x = 3096, y = 0, w = 1032, h = 912, rw = 774, rh = 684, id = "rbxassetid://72628305601348" },
+					{ i = 0, j = 1, x = 0, y = 912, w = 1032, h = 912, rw = 774, rh = 684, id = "rbxassetid://91343649417495" },
+					{ i = 1, j = 1, x = 1032, y = 912, w = 1032, h = 912, rw = 774, rh = 684, id = "rbxassetid://115622093222513" },
+					{ i = 2, j = 1, x = 2064, y = 912, w = 1032, h = 912, rw = 774, rh = 684, id = "rbxassetid://78597706090029" },
+					{ i = 3, j = 1, x = 3096, y = 912, w = 1032, h = 912, rw = 774, rh = 684, id = "rbxassetid://83563712621822" },
+					{ i = 0, j = 2, x = 0, y = 1824, w = 1032, h = 912, rw = 774, rh = 684, id = "rbxassetid://98531986609111" },
+					{ i = 1, j = 2, x = 1032, y = 1824, w = 1032, h = 912, rw = 774, rh = 684, id = "rbxassetid://124267354450716" },
+					{ i = 2, j = 2, x = 2064, y = 1824, w = 1032, h = 912, rw = 774, rh = 684, id = "rbxassetid://110192134016690" },
+					{ i = 3, j = 2, x = 3096, y = 1824, w = 1032, h = 912, rw = 774, rh = 684, id = "rbxassetid://93228600638926" },
 				} },
-				near = { depth = 4, f = 0.7, w = 3800, h = 2752, scale = 0.5, cols = 2, rows = 2, opaque = false, zHide = 0, zShow = 0, tiles = {
-					{ i = 0, j = 0, x = 0, y = 0, w = 1900, h = 1376, rw = 950, rh = 688, id = "rbxassetid://79582462808310" },
-					{ i = 1, j = 0, x = 1900, y = 0, w = 1900, h = 1376, rw = 950, rh = 688, id = "rbxassetid://121779640916598" },
-					{ i = 0, j = 1, x = 0, y = 1376, w = 1900, h = 1376, rw = 950, rh = 688, id = "rbxassetid://102299579165033" },
-					{ i = 1, j = 1, x = 1900, y = 1376, w = 1900, h = 1376, rw = 950, rh = 688, id = "rbxassetid://136003721562043" },
+				near = { depth = 4, f = 0.7, w = 5040, h = 3680, scale = 0.45, cols = 3, rows = 2, opaque = false, zHide = 0, zShow = 0, tiles = {
+					{ i = 0, j = 0, x = 0, y = 0, w = 1680, h = 1840, rw = 756, rh = 828, id = "rbxassetid://125387548862312" },
+					{ i = 1, j = 0, x = 1680, y = 0, w = 1680, h = 1840, rw = 756, rh = 828, id = "rbxassetid://85823657957241" },
+					{ i = 2, j = 0, x = 3360, y = 0, w = 1680, h = 1840, rw = 756, rh = 828, id = "rbxassetid://104252630205412" },
+					{ i = 0, j = 1, x = 0, y = 1840, w = 1680, h = 1840, rw = 756, rh = 828, id = "rbxassetid://110448773270822" },
+					{ i = 1, j = 1, x = 1680, y = 1840, w = 1680, h = 1840, rw = 756, rh = 828, id = "rbxassetid://90532777447561" },
+					{ i = 2, j = 1, x = 3360, y = 1840, w = 1680, h = 1840, rw = 756, rh = 828, id = "rbxassetid://86644155619606" },
 				} },
 				world = { depth = 5, f = 1, w = 3840, h = 2560, scale = 1, cols = 4, rows = 4, opaque = false, zHide = 0, zShow = 0, tiles = {
-					{ i = 0, j = 0, x = 0, y = 0, w = 960, h = 640, rw = 960, rh = 640, id = "rbxassetid://76433484896428" },
-					{ i = 1, j = 0, x = 960, y = 0, w = 960, h = 640, rw = 960, rh = 640, id = "rbxassetid://84721923248762" },
-					{ i = 2, j = 0, x = 1920, y = 0, w = 960, h = 640, rw = 960, rh = 640, id = "rbxassetid://109968601583854" },
-					{ i = 3, j = 0, x = 2880, y = 0, w = 960, h = 640, rw = 960, rh = 640, id = "rbxassetid://101907295621299" },
-					{ i = 0, j = 1, x = 0, y = 640, w = 960, h = 640, rw = 960, rh = 640, id = "rbxassetid://140149584076836" },
-					{ i = 1, j = 1, x = 960, y = 640, w = 960, h = 640, rw = 960, rh = 640, id = "rbxassetid://100138212173176" },
-					{ i = 2, j = 1, x = 1920, y = 640, w = 960, h = 640, rw = 960, rh = 640, id = "rbxassetid://114265806626453" },
-					{ i = 3, j = 1, x = 2880, y = 640, w = 960, h = 640, rw = 960, rh = 640, id = "rbxassetid://88759842696698" },
-					{ i = 0, j = 2, x = 0, y = 1280, w = 960, h = 640, rw = 960, rh = 640, id = "rbxassetid://120566439712179" },
+					{ i = 0, j = 0, x = 0, y = 0, w = 960, h = 640, rw = 960, rh = 640, id = "rbxassetid://134877864798575" },
+					{ i = 1, j = 0, x = 960, y = 0, w = 960, h = 640, rw = 960, rh = 640, id = "rbxassetid://114807756966250" },
+					{ i = 2, j = 0, x = 1920, y = 0, w = 960, h = 640, rw = 960, rh = 640, id = "rbxassetid://121619739413875" },
+					{ i = 3, j = 0, x = 2880, y = 0, w = 960, h = 640, rw = 960, rh = 640, id = "rbxassetid://94230236448367" },
+					{ i = 0, j = 1, x = 0, y = 640, w = 960, h = 640, rw = 960, rh = 640, id = "rbxassetid://86683627079399" },
+					{ i = 1, j = 1, x = 960, y = 640, w = 960, h = 640, rw = 960, rh = 640, id = "rbxassetid://73642185845500" },
+					{ i = 2, j = 1, x = 1920, y = 640, w = 960, h = 640, rw = 960, rh = 640, id = "rbxassetid://113926534643591" },
+					{ i = 3, j = 1, x = 2880, y = 640, w = 960, h = 640, rw = 960, rh = 640, id = "rbxassetid://73618021036056" },
+					{ i = 0, j = 2, x = 0, y = 1280, w = 960, h = 640, rw = 960, rh = 640, id = "rbxassetid://114676933925400" },
 					{ i = 1, j = 2, x = 960, y = 1280, w = 960, h = 640, rw = 960, rh = 640, id = "rbxassetid://114942573763280" },
-					{ i = 2, j = 2, x = 1920, y = 1280, w = 960, h = 640, rw = 960, rh = 640, id = "rbxassetid://73091047322499" },
-					{ i = 3, j = 2, x = 2880, y = 1280, w = 960, h = 640, rw = 960, rh = 640, id = "rbxassetid://87433420383530" },
-					{ i = 0, j = 3, x = 0, y = 1920, w = 960, h = 640, rw = 960, rh = 640, id = "rbxassetid://71270324883527" },
-					{ i = 1, j = 3, x = 960, y = 1920, w = 960, h = 640, rw = 960, rh = 640, id = "rbxassetid://92216471980597" },
-					{ i = 2, j = 3, x = 1920, y = 1920, w = 960, h = 640, rw = 960, rh = 640, id = "rbxassetid://100278020867214" },
-					{ i = 3, j = 3, x = 2880, y = 1920, w = 960, h = 640, rw = 960, rh = 640, id = "rbxassetid://102049544224364" },
+					{ i = 2, j = 2, x = 1920, y = 1280, w = 960, h = 640, rw = 960, rh = 640, id = "rbxassetid://70396480842012" },
+					{ i = 3, j = 2, x = 2880, y = 1280, w = 960, h = 640, rw = 960, rh = 640, id = "rbxassetid://101630615091742" },
+					{ i = 0, j = 3, x = 0, y = 1920, w = 960, h = 640, rw = 960, rh = 640, id = "rbxassetid://121047234591063" },
+					{ i = 1, j = 3, x = 960, y = 1920, w = 960, h = 640, rw = 960, rh = 640, id = "rbxassetid://104790036396681" },
+					{ i = 2, j = 3, x = 1920, y = 1920, w = 960, h = 640, rw = 960, rh = 640, id = "rbxassetid://95910955358654" },
+					{ i = 3, j = 3, x = 2880, y = 1920, w = 960, h = 640, rw = 960, rh = 640, id = "rbxassetid://122989069291601" },
 				} },
-				fg = { depth = 6, f = 1.3, w = 5240, h = 3640, scale = 0.3, cols = 2, rows = 2, opaque = false, zHide = 0.5, zShow = 0.62, tiles = {
-					{ i = 0, j = 0, x = 0, y = 0, w = 2620, h = 1820, rw = 786, rh = 546, id = "rbxassetid://87267665442007" },
-					{ i = 1, j = 0, x = 2620, y = 0, w = 2620, h = 1820, rw = 786, rh = 546, id = "rbxassetid://83329417216204" },
-					{ i = 0, j = 1, x = 0, y = 1820, w = 2620, h = 1820, rw = 786, rh = 546, id = "rbxassetid://126389638669862" },
-					{ i = 1, j = 1, x = 2620, y = 1820, w = 2620, h = 1820, rw = 786, rh = 546, id = "rbxassetid://82855053590439" },
+				fg = { depth = 6, f = 1.3, w = 7600, h = 5380, scale = 0.2, cols = 2, rows = 2, opaque = false, zHide = 0.5, zShow = 0.62, tiles = {
+					{ i = 0, j = 0, x = 0, y = 0, w = 3800, h = 2690, rw = 760, rh = 538, id = "rbxassetid://83780537728169" },
+					{ i = 1, j = 0, x = 3800, y = 0, w = 3800, h = 2690, rw = 760, rh = 538, id = "rbxassetid://90791060654042" },
+					{ i = 0, j = 1, x = 0, y = 2690, w = 3800, h = 2690, rw = 760, rh = 538, id = "rbxassetid://90762320096159" },
+					{ i = 1, j = 1, x = 3800, y = 2690, w = 3800, h = 2690, rw = 760, rh = 538, id = "rbxassetid://114392483350488" },
 				} },
 			},
 			order = { "sky", "clouds", "far", "mid", "near", "world", "fg" },
@@ -78,30 +88,33 @@ local Assets: Assets = {
 		},
 		LOW = {
 			layers = {
-				sky = { depth = 0, f = 0.05, w = 2656, h = 1536, scale = 0.3125, cols = 1, rows = 1, opaque = true, zHide = 0, zShow = 0, tiles = {
-					{ i = 0, j = 0, x = 0, y = 0, w = 2656, h = 1536, rw = 830, rh = 480, id = "rbxassetid://133307464800927" },
+				sky = { depth = 0, f = 0.05, w = 2752, h = 1600, scale = 0.3125, cols = 1, rows = 1, opaque = true, zHide = 0, zShow = 0, tiles = {
+					{ i = 0, j = 0, x = 0, y = 0, w = 2752, h = 1600, rw = 860, rh = 500, id = "rbxassetid://82523029372201" },
 				} },
-				clouds = { depth = 1, f = 0.12, w = 2784, h = 1632, scale = 0.1875, cols = 1, rows = 1, opaque = false, zHide = 0, zShow = 0, tiles = {
-					{ i = 0, j = 0, x = 0, y = 0, w = 2784, h = 1632, rw = 522, rh = 306, id = "rbxassetid://117378927805872" },
+				clouds = { depth = 1, f = 0.12, w = 3008, h = 1792, scale = 0.1875, cols = 1, rows = 1, opaque = false, zHide = 0, zShow = 0, tiles = {
+					{ i = 0, j = 0, x = 0, y = 0, w = 3008, h = 1792, rw = 564, rh = 336, id = "rbxassetid://110748966683888" },
 				} },
-				far = { depth = 2, f = 0.25, w = 3008, h = 1836, scale = 0.25, cols = 1, rows = 1, opaque = false, zHide = 0, zShow = 0, tiles = {
-					{ i = 0, j = 0, x = 0, y = 0, w = 3008, h = 1836, rw = 752, rh = 459, id = "rbxassetid://136136779070437" },
+				far = { depth = 2, f = 0.25, w = 3432, h = 2160, scale = 0.25, cols = 1, rows = 1, opaque = false, zHide = 0, zShow = 0, tiles = {
+					{ i = 0, j = 0, x = 0, y = 0, w = 3432, h = 2160, rw = 858, rh = 540, id = "rbxassetid://124589452981856" },
 				} },
-				mid = { depth = 3, f = 0.45, w = 3360, h = 2160, scale = 0.375, cols = 2, rows = 1, opaque = false, zHide = 0, zShow = 0, tiles = {
-					{ i = 0, j = 0, x = 0, y = 0, w = 2240, h = 2160, rw = 840, rh = 810, id = "rbxassetid://133929414598189" },
-					{ i = 1, j = 0, x = 2240, y = 0, w = 1120, h = 2160, rw = 420, rh = 810, id = "rbxassetid://139317569524319" },
+				mid = { depth = 3, f = 0.45, w = 4128, h = 2736, scale = 0.375, cols = 2, rows = 2, opaque = false, zHide = 0, zShow = 0, tiles = {
+					{ i = 0, j = 0, x = 0, y = 0, w = 2064, h = 1824, rw = 774, rh = 684, id = "rbxassetid://71484125014001" },
+					{ i = 1, j = 0, x = 2064, y = 0, w = 2064, h = 1824, rw = 774, rh = 684, id = "rbxassetid://132184932206114" },
+					{ i = 0, j = 1, x = 0, y = 1824, w = 2064, h = 912, rw = 774, rh = 342, id = "rbxassetid://99834873642394" },
+					{ i = 1, j = 1, x = 2064, y = 1824, w = 2064, h = 912, rw = 774, rh = 342, id = "rbxassetid://88050457926196" },
 				} },
-				near = { depth = 4, f = 0.7, w = 3800, h = 2752, scale = 0.25, cols = 1, rows = 1, opaque = false, zHide = 0, zShow = 0, tiles = {
-					{ i = 0, j = 0, x = 0, y = 0, w = 3800, h = 2752, rw = 950, rh = 688, id = "rbxassetid://114628630879315" },
+				near = { depth = 4, f = 0.7, w = 5040, h = 3680, scale = 0.225, cols = 2, rows = 1, opaque = false, zHide = 0, zShow = 0, tiles = {
+					{ i = 0, j = 0, x = 0, y = 0, w = 3360, h = 3680, rw = 756, rh = 828, id = "rbxassetid://140588776826354" },
+					{ i = 1, j = 0, x = 3360, y = 0, w = 1680, h = 3680, rw = 378, rh = 828, id = "rbxassetid://120407422041177" },
 				} },
 				world = { depth = 5, f = 1, w = 3840, h = 2560, scale = 0.5, cols = 2, rows = 2, opaque = false, zHide = 0, zShow = 0, tiles = {
-					{ i = 0, j = 0, x = 0, y = 0, w = 1920, h = 1280, rw = 960, rh = 640, id = "rbxassetid://134302757051559" },
-					{ i = 1, j = 0, x = 1920, y = 0, w = 1920, h = 1280, rw = 960, rh = 640, id = "rbxassetid://89877459631512" },
-					{ i = 0, j = 1, x = 0, y = 1280, w = 1920, h = 1280, rw = 960, rh = 640, id = "rbxassetid://131275135132364" },
-					{ i = 1, j = 1, x = 1920, y = 1280, w = 1920, h = 1280, rw = 960, rh = 640, id = "rbxassetid://88569027708869" },
+					{ i = 0, j = 0, x = 0, y = 0, w = 1920, h = 1280, rw = 960, rh = 640, id = "rbxassetid://124284393154298" },
+					{ i = 1, j = 0, x = 1920, y = 0, w = 1920, h = 1280, rw = 960, rh = 640, id = "rbxassetid://98674864501112" },
+					{ i = 0, j = 1, x = 0, y = 1280, w = 1920, h = 1280, rw = 960, rh = 640, id = "rbxassetid://82431638223819" },
+					{ i = 1, j = 1, x = 1920, y = 1280, w = 1920, h = 1280, rw = 960, rh = 640, id = "rbxassetid://110039716159560" },
 				} },
-				fg = { depth = 6, f = 1.3, w = 5240, h = 3640, scale = 0.15, cols = 1, rows = 1, opaque = false, zHide = 0.5, zShow = 0.62, tiles = {
-					{ i = 0, j = 0, x = 0, y = 0, w = 5240, h = 3640, rw = 786, rh = 546, id = "rbxassetid://127706458582283" },
+				fg = { depth = 6, f = 1.3, w = 7600, h = 5380, scale = 0.1, cols = 1, rows = 1, opaque = false, zHide = 0.5, zShow = 0.62, tiles = {
+					{ i = 0, j = 0, x = 0, y = 0, w = 7600, h = 5380, rw = 760, rh = 538, id = "rbxassetid://131343310126957" },
 				} },
 			},
 			order = { "sky", "clouds", "far", "mid", "near", "world", "fg" },
