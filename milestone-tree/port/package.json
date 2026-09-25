@@ -1,0 +1,11 @@
+{
+  "name": "milestone-tree-port",
+  "private": true,
+  "description": "Transpiles The Milestone Tree NG+ (JavaScript) to Luau for the Roblox port, and tests the port against the original.",
+  "scripts": {
+    "build": "node build.js"
+  },
+  "dependencies": {
+    "acorn": "^8.18.0"
+  }
+}

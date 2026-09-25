@@ -1,0 +1,5 @@
+port/node_modules/
+port/data/
+port/gen/probe.luau
+sourcemap.json
+port/*.log

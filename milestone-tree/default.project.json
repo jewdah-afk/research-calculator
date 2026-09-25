@@ -1,0 +1,31 @@
+{
+  "name": "MilestoneTree",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "TowerNum": {
+        "$path": "vendor/TowerNum.luau",
+        "Hyper": { "$path": "vendor/hyper/Hyper.luau" },
+        "LICENSE": { "$path": "vendor/LICENSE.luau" }
+      },
+      "MilestoneTree": { "$path": "src/shared" }
+    },
+    "ServerScriptService": {
+      "MilestoneTree": { "$path": "src/server" }
+    },
+    "ServerStorage": {
+      "MilestoneTreeWorker": { "$path": "src/worker" }
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "MilestoneTree": { "$path": "src/client" }
+      }
+    },
+    "Players": {
+      "$properties": { "CharacterAutoLoads": false }
+    },
+    "Lighting": {
+      "$properties": { "Ambient": [0.2, 0.2, 0.2], "Brightness": 1 }
+    }
+  }
+}

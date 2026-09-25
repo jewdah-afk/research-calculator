@@ -1,0 +1,2 @@
+-- load order of the game chunks (port/build.js)
+return "technical_layerSupport,mod,layers_m,layers_p,layers_sp,layers_hp,layers_pb,layers_hb,layers_ap,layers_t,layers_mm,layers_em,layers_pe,layers_se,layers_pp,layers_ep,layers_mp,layers_pm,layers_cp,layers_cm,tree,layers_pep,layers_ex,layers_ach,technical_temp,technical_displays,game,utils,utils_easyAccess,utils_NumberFormating,utils_options,utils_save,utils_themes,stubs,rbx_session,rbx_view"
