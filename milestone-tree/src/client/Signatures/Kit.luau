@@ -348,6 +348,78 @@ function Kit.band(sheet: Instance): Frame?
 	return if b and b:IsA("Frame") then b else nil
 end
 
+-- ------------------------------------------------------------------------------------------------------ hero parts
+-- a stat chip under the CTA and the default stat chips (WIDE); index stacks several (1, 2, ...)
+function Kit.heroChip(holder: Instance, hero: Frame, name: string, text: string, index: number?): TextLabel?
+	if Layout.mode == "COMPACT" then
+		Common.drop(holder, name)
+		return nil
+	end
+	local cta = hero:FindFirstChild("Cta") :: GuiObject?
+	local stats = hero:FindFirstChild("Stats") :: GuiObject?
+	local y = (if cta then cta.Size.Y.Offset + 10 else 0) + (if stats and stats.Visible then 42 else 0) + ((index or 1) - 1) * 42
+	local chip = Common.chip(holder, name, text, { rich = true, bg = C.panel2, bgT = 0, h = 34 })
+	chip.AnchorPoint = Vector2.new(1, 0)
+	chip.Position = UDim2.new(1, 0, 0, y)
+	return chip
+end
+
+-- the free slot between the resource block and the CTA (WIDE): a holder for a badge / scope; nil on phones
+function Kit.heroSlot(holder: Instance, name: string, w: number, h: number): Frame?
+	if Layout.mode == "COMPACT" then
+		Common.drop(holder, name)
+		return nil
+	end
+	local f = Common.get(holder, name, "Frame") :: Frame
+	f.Active = false
+	f.BackgroundTransparency = 1
+	f.AnchorPoint = Vector2.new(1, 0)
+	f.Position = UDim2.new(1, -424, 0, 6)
+	f.Size = UDim2.fromOffset(w, h)
+	return f
+end
+
+-- a claim for display-text lines: the ones `hide` picks leave the body (a signature shows them elsewhere); the
+-- others stay NOTES rows (the Skins/Generic look)
+function Kit.noteClaim(hide: (h: string) -> boolean): (ph: Frame, id: string, store: any, ctx: any) -> any
+	return function(ph: Frame, id: string, store: any, ctx: any): any
+		local claim = {}
+		function claim.update(_: any, st: any)
+			local n = st:get(id)
+			local h = if type(n) == "table" and type(n.h) == "string" then n.h else ""
+			if hide(h) or not string.find(Common.plain(h), "%S") then
+				ph.Visible = false
+				ph.Size = UDim2.new()
+				ph.AutomaticSize = Enum.AutomaticSize.None
+				Common.drop(ph, "Text")
+				return
+			end
+			ph.Visible = true
+			ph.Size = UDim2.new(1, 0, 0, 0)
+			ph.AutomaticSize = Enum.AutomaticSize.Y
+			ph.BackgroundColor3 = C.panel2
+			ph.BackgroundTransparency = 0
+			Common.corner(ph, 10)
+			Common.pad(ph, 10, 14, 10, 16)
+			local l = Common.label(ph, "Text", "body", C.text)
+			l.TextTransparency = 0.08
+			Common.setText(l, Common.html(h, "body", ctx.layer))
+		end
+		function claim.destroy(_: any)
+			Common.drop(ph, "Text")
+		end
+		return claim
+	end
+end
+
+-- the first display-text of the tab whose html passes pred, and its html
+function Kit.line(store: any, pred: (h: string) -> boolean): string?
+	local id = Kit.find(store, "tab", function(n: any): boolean
+		return n.cn == "display-text" and type(n.h) == "string" and pred(n.h)
+	end, 4)
+	return if id then store:get(id).h else nil
+end
+
 -- ------------------------------------------------------------------------------------------------------ scrolling
 function Kit.scrollTo(ctx: any, obj: GuiObject?, margin: number?)
 	local sf = ctx.scroll :: ScrollingFrame?

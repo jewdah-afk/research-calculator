@@ -203,7 +203,7 @@ for _, n in { "Signal", "Prefs", "Layout", "Theme", "Motion", "Sprites", "Recipe
 	scriptModule(core, n, "client/Core/" .. n)
 end
 local panelF = folder(client, "Panel")
-for _, n in { "Panel", "Hero", "Sections", "Virtual", "Preview" } do scriptModule(panelF, n, "client/Panel/" .. n) end
+for _, n in { "Panel", "Hero", "Sections", "Virtual" } do scriptModule(panelF, n, "client/Panel/" .. n) end
 local skins = folder(panelF, "Skins")
 for _, n in { "Common", "Skins", "Generic", "Upgrade", "CompactOwned", "Buyable", "Milestone", "Challenge", "Achievement", "GridTile",
 	"Clickable", "Perk", "Opt" } do
@@ -212,7 +212,7 @@ end
 local sigF = folder(client, "Signatures")
 scriptModule(sigF, "Signatures", "client/Signatures/Signatures")
 -- the per-layer signatures (packages J1 / J2): every sibling module, auto-registered by Signatures on first use
-local SIGS = { "Kit", "M", "P", "Sp", "Cp", "Ex" }
+local SIGS = { "Kit", "M", "P", "Sp", "Cp", "Ex", "Ach", "Options", "Effects", "Badges", "Pp", "Energy", "Ap", "Mp", "T" }
 for _, n in SIGS do scriptModule(sigF, n, "client/Signatures/" .. n) end
 
 -- the local player
@@ -654,6 +654,91 @@ do
 	panel:destroy()
 end
 do
+	-- ach (Signatures/Ach): the count, 2 shelves of 18 medallions, the inspector
+	local w0 = #warnings
+	local panel, store, fired = openFixture(fixtures.layer_ach, true)
+	local big = findName(panel.root, "Big")
+	check(big ~= nil and big.Text == "1 / 18", "ach: the count 1 / 18 (" .. tostring(big and big.Text) .. ")")
+	local medals = 0
+	for _, d in descendants(panel.root) do if string.match(d.Name, "^A%d+$") and d.__class == "TextButton" then medals += 1 end end
+	check(medals == 18 and findName(panel.root, "Shelf2") ~= nil, "ach: 18 medallions on 2 shelves (" .. medals .. ")")
+	local a11 = findName(panel.root, "A11")
+	if a11 then a11.Activated:Fire() end
+	local ins = findName(panel.root, "Inspect")
+	check(ins and string.find(plainText(ins.Text.Text), "Where it all begins", 1, true) ~= nil, "ach: a tap inspects the medallion")
+	local shown = 0
+	for id, rec in panel.render.recs do if rec.node.cn == "display-text" and rec.root.Visible ~= false then shown += 1 end end
+	check(shown == 0, "ach: the count line left the body")
+	check(#fired == 0, "ach: medallions fire nothing")
+	check(#warnings == w0, "ach: no warnings" .. (if #warnings > w0 then ": " .. warnings[w0 + 1] else ""))
+	panel:destroy()
+end
+do
+	-- Options (Signatures/Options): section titles, SAVE / EXPORT / IMPORT tiles, the danger zone hold, THIS DEVICE
+	local w0 = #warnings
+	local panel, store, fired = openFixture(fixtures.s13_options, true)
+	local titles = {}
+	for _, d in descendants(panel.root) do
+		if d.Name == "SectionTitle" or d.Name == "Head" then
+			local t = d:FindFirstChild("Title")
+			if t then titles[t.Text] = true end
+		end
+	end
+	check(titles["YOUR SAVE"] and titles["DISPLAY"] and titles["THIS DEVICE"] and titles["DANGER ZONE"], "options: YOUR SAVE, DISPLAY, DANGER ZONE, THIS DEVICE")
+	local tiles = 0
+	for id, rec in panel.render.recs do
+		if rec.kind == "btn:opt" and (rec.node.id == "save" or rec.node.id == "export" or rec.node.id == "import") and rec.root.Size.Y.Offset >= 84 then tiles += 1 end
+	end
+	check(tiles == 3, "options: 3 save tiles (" .. tiles .. ")")
+	local hr = findName(panel.root, "HardReset")
+	if hr then hr.Activated:Fire() end
+	check(hr ~= nil and fired[#fired] and fired[#fired][1] == "opt" and fired[#fired][2] == "hardReset", "options: HARD RESET fires the game's hardReset (the App confirms)")
+	local hidden = true
+	for id, rec in panel.render.recs do if rec.node.id == "hardReset" and rec.root.Visible ~= false then hidden = false end end
+	check(hidden, "options: the plain hard reset button is replaced")
+	local dev = findName(panel.root, "Device")
+	local seg = dev and dev:FindFirstChild("Row1") and dev.Row1:FindFirstChild("Seg")
+	local reduced = seg and seg:FindFirstChild("O3")
+	if reduced then reduced.Activated:Fire() end
+	local Prefs = req(core.Prefs)
+	check(Prefs.get().motion == "REDUCED", "options: Motion Reduced through Prefs")
+	seg = dev and dev:FindFirstChild("Row1") and dev.Row1:FindFirstChild("Seg")
+	local sys = seg and seg:FindFirstChild("O1")
+	if sys then sys.Activated:Fire() end
+	check(Prefs.get().motion == "SYSTEM", "options: back to System")
+	local foreign = 0
+	for _, a in fired do if a[1] ~= "opt" then foreign += 1 end end
+	check(foreign == 0, "options: only opt actions")
+	check(#warnings == w0, "options: no warnings" .. (if #warnings > w0 then ": " .. warnings[w0 + 1] else ""))
+	panel:destroy()
+end
+do
+	-- the rest of the tree: each signature's hero idea / accent / widget is on screen and the panel stays in budget
+	local cases = {
+		{ "layer_ep", function(panel) local n = 0; for _, d in descendants(panel.root) do if string.match(d.Name, "^R%d+$") and d:FindFirstChild("Pill") then n += 1 end end; return n >= 5, "ep: effect ladder rungs " .. n end },
+		{ "layer_ep", function(panel) return findName(panel.root, "Empowered") ~= nil, "ep: EMPOWERED chips" end },
+		{ "layer_pep", function(panel) return findName(panel.parts.sheet, "Core") ~= nil, "pep: fusion core ring" end },
+		{ "layer_pb", function(panel) local v = findName(panel.parts.hero, "Value"); return v ~= nil and v.Text == "^28,329", "pb: power badge " .. tostring(v and v.Text) end },
+		{ "layer_hb", function(panel) local v = findName(panel.parts.hero, "Value"); return v ~= nil and v.Text == "^1.6298", "hb: power badge " .. tostring(v and v.Text) end },
+		{ "layer_pp", function(panel) local v = findName(panel.parts.hero, "Scope"); return v ~= nil and findName(v, "Wave") ~= nil, "pp: Hz over the oscilloscope" end },
+		{ "layer_pp", function(panel) local k = 0; for id, rec in panel.render.recs do if rec.node.cn == "display-text" and rec.root.Visible ~= false then k += 1 end end; return k == 0, "pp: the Hz line left the body" end },
+		{ "layer_pe", function(panel) local v = findName(panel.parts.hero, "Rate"); return v ~= nil and string.find(plainText(v.Text), "16.00", 1, true) ~= nil and string.find(plainText(v.Text), "PP", 1, true) ~= nil, "pe: RATE chip " .. tostring(v and plainText(v.Text)) end },
+		{ "layer_se", function(panel) return findName(panel.parts.hero, "Rate") ~= nil, "se: RATE chip" end },
+		{ "layer_ap", function(panel) return findName(panel.parts.sheet, "Orbit") ~= nil, "ap: atom orbit" end },
+		{ "layer_mp", function(panel) return findName(panel.root, "Portal") ~= nil and findName(panel.parts.sheet, "Split") ~= nil, "mp: portal card and split rim" end },
+		{ "layer_t", function(panel) return findName(panel.parts.sheet, "Rays") ~= nil, "t: crown rays" end },
+	}
+	for _, c in cases do
+		local w0 = #warnings
+		local panel = openFixture(fixtures[c[1]], true)
+		local ok, what = c[2](panel)
+		check(ok, what)
+		check(#descendants(panel.root) <= 450, c[1] .. ": instances " .. #descendants(panel.root))
+		check(#warnings == w0, c[1] .. ": no warnings" .. (if #warnings > w0 then ": " .. warnings[w0 + 1] else ""))
+		panel:destroy()
+	end
+end
+do
 	-- subtabs: sp spark fixture has three tabs in the header
 	local fx = fixtures.s13_sp_spark
 	local store = ViewStore.new()
@@ -664,31 +749,6 @@ do
 	check(panel.parts.tabs.Visible == true and panel.parts.tabs:GetAttribute("Count") == 3, "three header tabs on sp")
 	check(panel.sub == "Spark Milestones", "current subtab read from the tabs node (" .. tostring(panel.sub) .. ")")
 	panel:destroy()
-end
-
-print("== the Studio preview over the old page")
-do
-	for k in Theme.caps do Theme.caps[k] = false end
-	viewport(1920, 1080)
-	local Preview = req(panelF.Preview)
-	local sent = {}
-	local w0 = #warnings
-	local pv = Preview.start({ press = function(a, hold) table.insert(sent, a) end })
-	check(pv ~= nil, "preview starts in Studio")
-	pv:onPatch(fixtures.layer_p)
-	check(pv.panel:isOpen() == "p", "the panel follows map.open (p)")
-	pv.panel.parts.close.Activated:Fire()
-	check(#sent == 1 and sent[1][1] == "tab" and sent[1][2] == "none", "X sends the map's close action")
-	check(pv.panel:isOpen() == nil, "the panel closes at once")
-	pv:onPatch({ set = {}, del = {} })
-	check(pv.panel:isOpen() == nil, "a stale patch does not reopen it")
-	pv:onPatch(fixtures.s13_m)
-	check(pv.panel:isOpen() == "m", "another layer opens")
-	pv:setOn(false)
-	check(pv.panel:isOpen() == nil and pv.panel.gui.Enabled == false, "the toggle hides it")
-	pv:setOn(true)
-	check(pv.panel:isOpen() == "m", "and brings it back")
-	check(#warnings == w0, "preview: no warnings" .. (if #warnings > w0 then ": " .. warnings[w0 + 1] else ""))
 end
 
 print(string.format("panel: %d checks, %d failed", checks, failures))
