@@ -19,7 +19,11 @@ equivalent is not used: no backdrop blur, no CSS filters, no letter-spacing, no 
 * `c` is the current layer hue.
 * `lift(c,t) = c:Lerp(white,t)`, `shade(c,k) = c*k` and `mix(a,b,t)` are the Figma formulas.
 
-## Mockups (`final/png/`, sources in `final/src/`)
+## Mockups (`docs/design/mockups/`, sources in `final/src/`)
+
+The repo keeps the renders as JPEG q86 in `docs/design/mockups/*.jpg` (same names as the `.png` files below; the
+`@2x` phone renders stay in the scratch tree). `docs/design/mockups/compare/compare_*.jpg` puts the previous render
+(left) beside the readability pass of §9 (right) for every screen.
 
 Every mock is built from **one** real view dump, produced by the game's own `rbx_view()` in the scratch port copy
 (`final/tools/gen_view.js`). Numbers on one screen never come from two saves.
@@ -39,6 +43,7 @@ Every mock is built from **one** real view dump, produced by the game's own `rbx
 | `n_fresh_1920.png` | **new player**: fresh save (only M and the shrine), first-run cue, no tray, no rate pill, frontier `?` sockets | empty save + 20 ticks (`tools/gen_fresh.js`) | HUD-safe start |
 | `k_map_844.png` (+`@2x`) | phone map home, LOW tier: compact capsule, dock, READY pill, `???` portal, edge markers (MP up, MM down), compact toast | S13 | touch zoom .34, C (1460,1202) |
 | `l_panel_p_844.png` (+`@2x`) | phone Prestige: band in the top-bar strip with the READY switcher and a 44 du close, hero column with the CTA at the thumb, owned summary row, BUY cards | S13 | map disabled |
+| `l_panel_p_844_scrolled.png` (+`@2x`) | the same phone Prestige sheet scrolled to the BUY cards and owned summary: reading type at the COMPACT sizes of §9.2 | S13 | map disabled |
 | `m_panel_m_844.png` (+`@2x`) | phone Milestone ladder | S13 | map disabled |
 | `n_fresh_844.png` (+`@2x`) | phone new player: START HERE cue on M | fresh | z .34, focus M at 60% down |
 
@@ -57,6 +62,8 @@ Mock cheats, all of them Roblox-equivalent:
 * `background-clip:text` stands in for a UIGradient on text.
 * Inline SVG icons stand in for atlas sprites.
 * The RBX / chat / ··· circles only mark the Roblox top-bar clearance.
+* Font sizes and line heights come from `TY` in `lib.js`, a copy of the §9.2 role table; `theme.css` lifts any
+  leftover page-level size below the §9.5 floors.
 
 ---------------------------------------------------------------------------------------------------------------------
 
@@ -72,7 +79,7 @@ Mock cheats, all of them Roblox-equivalent:
 | Q-M6 | Gate | One visible entry point: the **portal button** (bottom-right), plus the **rift hotspot** (hover teaser, click = fly + popover). Inside the Multiverse, a **universe tag** under the capsule carries EXIT/FINISH, so it stays reachable while a panel is open. The standalone map gate chip was dropped (it duplicated the portal). |
 | Q-M7 | Start camera / persistence / fly-to | Start = REALM §2.8 solved on the **HUD-safe rect** (1080p: z .505, C (1901,1146)). Phones: touch zoom .34 on the **centroid of the READY nodes**, shifted so no ring sits under the top band; M at 60% down for a new player. Not persisted: every join starts from the rule. `frameNodes(ids)` is used for universe changes and the READY `+N` list. Fly-to follows REALM (SmoothDamp .35 s, z = max(z, .9)) toward the free rect's centre. |
 | Q-M8 | fg z-order / ReducedMotion | REALM z-order: fg and motesNear under Links/Nodes, particles over them at α ≤ .24, never taking input. fg and motesNear fade out (0.2 s) while a side sheet is open. ReducedMotion follows REALM §9.6, plus the UI rules in §8. |
-| Q-L1 | Breakpoints | **WIDE** (canvas 1920×1080 du), **MEDIUM** (≈1600×900 du), **COMPACT** (phones, V.y < 500 pt). s ≥ 1 on COMPACT, so text is ≥ 11 px (§10). |
+| Q-L1 | Breakpoints | **WIDE** (canvas 1920×1080 du), **MEDIUM** (≈1600×900 du), **COMPACT** (phones, V.y < 500 pt). s ≥ 1 on COMPACT and ≥ .90 on desktops, and `Theme.size` holds the floors, so no text renders below 12 px (caps) / 13 px (everything else) (§9.5, §10). |
 | Q-L2 | Panel form | WIDE/MEDIUM: a **right side sheet**; the map Box is resized to the free strip and stays live (§3.6). COMPACT, and MEDIUM strips under 460 du: **full screen**, `MapGui.Enabled = false`. Always docked right; never left-docked. |
 | Q-P1 | Sections | Titles come from `cn` (§5.6). Order is the tabFormat order, with main-display, reset and resource-display lifted into the hero. Per-layer exceptions are in §6. |
 | Q-P2 | Buyable bar | Capped buyable: level / limit. Not affordable: **progress-to-afford** (`pr`, server-side, e.g. 91%). Affordable: none (the hold strip lights instead). |
@@ -120,19 +127,19 @@ Contradictions C1–C14 (critic §1):
 |---|---|---|---|
 | 1 | Owned cards and done rows outshine BUY / NEXT | Owned = quiet tier: `mix(panel, #4be07a, .14)`, 1.5 du stroke α .45, **no glow**, effect value. Only BUY / NEXT / CTA glow. | §5.7, mock b, c |
 | 2 | Right third overcrowded (toasts, rail, gate card, portal, rift) | Rail removed (the dock is bottom-left), gate chip removed, one Multiverse entry (portal). Toasts are the only thing top-right, max 3 WIDE. | §4, mock a |
-| 3 | P header + hero ≈ 370 px | Header 92 + hero 124 (stats inline under the CTA). Owned tiers fold to 66 du compact cards: the whole P board fits above the fold at 1080p. | §5.3, mock b |
+| 3 | P header + hero ≈ 370 px | Header 92 + hero 142 (stats inline under the CTA). Owned tiers fold to 72–88 du compact cards, so the P board needs one short scroll at 1080p with the larger reading type (§9). | §5.3, mock b |
 | 4 | Phone close floats over the scrollbar | 44 du close **in the band**, left of the Roblox "···" (TopbarSafeInsets). | §5.10, mock l, m |
 | 5 | No HUD-safe start framing | §3.3. T sits under the capsule at neither 1080p nor on phones. | mock a, k |
 | 6 | Mock numbers mixed within a screen | One real dump per screen (tables above). | all |
 | 7 | Dev note visible (hierarchy M) | Only the game's display-text lines appear, verbatim, as NOTES. No client-authored explanation copy. A lint rejects strings containing "virtualis", "Studio", "debug". | §5.6 |
 | 8 | "0.00 OOMs/sec" | `hud.gen = null` when the rate is 0 (view). The client hides the pill when null. | §15, mock n |
 | 9 | "Corrupt. Tooltip Pos." dropped | Kept as a **cycler**: mouse = the inspector docks on that side (right = inspector column); touch always uses the inspector. | §6 cp, mock g |
-| 10 | Small web-like section titles | Section titles are Heavy Italic **22** (COMPACT 15) with a gradient, stroke and hue bar. Panel titles 44 (COMPACT 22). | §9 |
+| 10 | Small web-like section titles | Section titles are Heavy Italic **24** (COMPACT 22) with a gradient, stroke and hue bar. Panel titles 44 (COMPACT 27). | §9 |
 | 11 | READY tray as heavy text rows | **Gem row** with gain chips (desktop tray) or a pill (phone and strip). | §4.5 |
 | 12 | Chrome/silver titles look disabled | Titles use `W → lift(c,.45)` plus a black Contextual stroke, never silver. | §9 |
-| 13 | Orange "3 READY" bar competes inside panels | In the strip it is a small gold **READY pill** ("TAP A GEM TO SWITCH"). The only CTA inside a panel is the panel's own. Orange is not a state hue. | §4.5, mock b |
+| 13 | Orange "3 READY" bar competes inside panels | In the strip it is a small gold **READY pill** ("Tap a gem to switch"). The only CTA inside a panel is the panel's own. Orange is not a state hue. | §4.5, mock b |
 | 14 | Rail owned-ring dead space | No rail ring. The desktop hero row is compact; the phone hero column holds stats + the CTA at the thumb. | §5.3, §5.10 |
-| 15 | Phone plates under RBX/chat and the capsule | **Plate occlusion**: plates whose rect meets a HUD rect (Roblox buttons included) fade to α .16; rings stay. Phone start framing keeps rings out of the top band. | §3.9, mock k |
+| 15 | Phone plates under RBX/chat and the capsule | **Plate occlusion**: a plate whose rect meets a HUD rect (Roblox buttons and the strip edge included) first tries the slot above its ring, then the CHIP form, then fades to **α 0** (no ghost text); rings stay. Phone start framing keeps rings out of the top band. | §3.9, mock k |
 | 16 | 14–16 "STABLE" labels | Empty disks are quiet tiles with only the slot number. | mock d |
 | 17 | UIShadow has no text / inset / Path2D mode | Text glow = a **glow_rr sprite behind the label** sized to TextBounds. Bevel = 9-slice overlay (primary). Path2D glow = stacked strokes. | §13 |
 | 18 | SelectRing square glow; tweening BlurRadius | SelectRing = `ring_dashed` + UICorner .5, or a glow_circle sprite. Pulses tween ImageTransparency / UIScale only. | §3.7, §8 |
@@ -158,8 +165,8 @@ Contradictions C1–C14 (critic §1):
 | 38 | Buyables lack an affordance state | A per-card **hold strip**: lit and "HOLD TO BUY" when affordable, otherwise the reason ("NOT ENOUGH PP"). | §5.7, mock b |
 | 39 | Phone HUD lacks Trophies / Home; top-right thumb reach | Bottom-left dock HOME / TROPHIES / OPTIONS on every device. Portal and READY at the bottom-right. | §4 |
 | 40 | Mobile READY tray lacks CAN BUY; no markers | The tray lists **PRESTIGE READY then CAN BUY** in fixed map order. Edge markers (≤ 4) point at off-screen ready and can-buy nodes. | §4.5, §3.10 |
-| 41 | "N READY · HOLD TO PRESTIGE" ambiguous | The pill says "N READY · TAP TO LIST" (or "TAP A GEM TO SWITCH" in the strip). Only an individual gem or a peek holds. Never batch-prestige. | §4.5 |
-| 42 | 10.5 px text on phones | The COMPACT floor is 11 px (s ≥ 1 + the type table). Lint: any COMPACT label under 11 fails. | §9, §10 |
+| 41 | "N READY · HOLD TO PRESTIGE" ambiguous | The pill says "N READY" over "Tap to list" (or "Tap a gem to switch" in the strip). Only an individual gem or a peek holds. Never batch-prestige. | §4.5 |
+| 42 | 10.5 px text on phones | Rendered floors on every device: 12 px caps, 13 px everything else, 14 px body paragraphs (§9.5). The COMPACT scale starts at caps 12 / body 15. Lint on every §10 row. | §9, §10 |
 | 43 | Multiverse hold never says what resets | The gate popover lists the reset layers (the game's `onEnter` list). The ENTER / EXIT / FINISH hold is **1.2 s**. | §7.8 |
 | 44 | Toasts cover phone nodes, jump position | One location: the **top-right of the free map rect** (phone: under the band, 240 du, max 1). Toasts are click-through (only `+N MORE` takes input). | §4.7 |
 | 45 | No layer switch in a full-screen phone panel | A **READY switcher** (gems) in the band. Tapping a gem opens that layer. | §5.10, mock l |
@@ -345,10 +352,10 @@ Node_<id>   Frame, Size fromScale(180/3840, 200/2560), AnchorPoint (.5,.45), Pos
 | sealed | `show == false`, not frontier, not `dor` | dark glass cap Ø104 α .7, no plate, no link, inert |
 | frontier | sealed, and a Figma parent in the same universe is shown | cap α 1, stroke #6a5f8f, faint `?` Sarpanch 44 #8d86a8; tooltip "???" |
 | dormant | `show == false` and `val.dor` | grey ring α .8, symbol #5b5572, moon badge; tap → toast "Lives in the Normal Universe" / "…in the Prestige Multiverse" |
-| locked | `!val.lit` | grey ring #898598/#4a4360/#1e1b26, gem #3a3352→#14111f, lock sprite, plate name #a39cc0 + `🔒 val.req` |
+| locked | `!val.lit` | grey ring #898598/#4a4360/#1e1b26, gem #3a3352→#14111f, lock sprite, plate name #c9bfd0 + lock sprite + `val.req` in soft |
 | available | `val.lit` | hue ring + gem, glow α .45 |
 | can buy | `val.glow` | + "!" badge (pop 0.25 s Back Out); listed in READY as CAN BUY |
-| prestige ready | `val.pulse` | + rays + aura + glow α .9 + bolt badge + plate line "⚡ PRESTIGE READY" (COMPACT "⚡ READY"); flow sparks on its incoming edge |
+| prestige ready | `val.pulse` | + rays + aura + glow α .9 + bolt badge + plate line bolt sprite + "READY" (`plateSub`); flow sparks on its incoming edge |
 | selected | `map.open == id` | dashed select ring + aura; plate always FULL |
 | in challenge | `ch ≠ null` | gold counter-rotating ring + chip `C<id>` |
 | infected | `col` is a malware variant (m #9f2846, p #c25757, sp rgb(238,112,112)) | hue → danger #ff3b5c for the ring, gem, plate and incoming edge; symbol glitch flicker (R12) every 3–6 s |
@@ -385,11 +392,22 @@ sends it. Hover gives UIScale 1.08 (0.12 s); press gives .94 (0.08 s).
 
 ### 3.9 Nameplates
 
-* Constant screen size: name Heavy Italic 13 (COMPACT 11), amount Sarpanch Bold 13 (11).
-* One Frame: AutomaticSize XY, UIPadding 4/12/5/12, UICorner 10, UIGradient panel2→deep α .95, UIStroke 1.5
-  `lift(c,.25)` (locked #4e4763; pulse: a 2 du white→lift(c,.4)→white gradient), shadow sprite.
-* One RichText label: `<i><b>NAME</b></i><br/>amount[<br/>⚡ PRESTIGE READY]`.
+* **Type** (§9.2): name `plate` 15 (COMPACT 13, ExtraBold Italic caps with hair spaces, UIGradient W → lift(c,.45),
+  stroke 1.5 + shadow +1); amount `plateNum` 15 (14, Sarpanch Bold lift(c,.55), no stroke: the plate is its
+  backing); READY line `plateSub` 13 (12, ExtraBold caps #ffe08a) with a bolt sprite. LineHeight 1.1.
+* One Frame: AutomaticSize XY, UIPadding 5/12/6/12 (COMPACT 4/9/5/9), UICorner 10, UIGradient panel2 → deep α .95,
+  UIStroke 1.5 `lift(c,.25)` (locked #4e4763; pulse: a 2 du white → lift(c,.4) → white gradient), shadow sprite.
+  Plates live under `Plates`, which carries UIScale s, so they get the UI floors of §9.5.
+* One RichText label: `NAME<br/>amount[<br/>READY]`, with the amount run in Sarpanch (`<font family>`) and the unit
+  split per §9.9.
+* **Names are whole words** (no "P. ENERGY"): the emblem symbol already names the family, so the plate shows the
+  distinguishing word. m MILESTONE, mm META, em EXTRA, p PRESTIGE, pe ENERGY, sp SUPER, pb BOOST, pp POWER,
+  se SUPER ENERGY, hp HYPER, ep EXOTIC, hb HYPER BOOST, ap ATOMIC, mp MULTIVERSE, t TRANSCEND, pm (masked as sent),
+  pep PRESTIGED EXOTIC, cp CORRUPTED, cm CORRUPTED MILESTONE, ex EXPLORE, ach ACHIEVEMENTS. A name over 12 characters
+  wraps to 2 lines. pm's redacted blocks render at α .6 in the hue, with the known letters bright.
+* **Locked:** name #c9bfd0, then a lock sprite + `val.req` in `plateNum` soft.
 * Text is written at ≤ 5 Hz and only when it changes.
+* Size: WIDE ≈ 140 × 58 du with a READY line (46 without); COMPACT ≈ 110 × 40 (52 with READY).
 
 **LOD**, with hysteresis ±.02:
 
@@ -399,12 +417,16 @@ sends it. Hover gives UIScale 1.08 (0.12 s); press gives .94 (0.08 s).
 | CHIP (amount only) | .28 ≤ z < .40 | .22 ≤ z < .30 |
 | NONE | below that | below that |
 
-The selected, hovered and peeked nodes always get FULL. The READY line and badges always show.
+The selected, hovered and peeked nodes always get FULL. The READY line and badges always show. On COMPACT, FULL shows
+the amount only for READY, CAN BUY and selected nodes; the others show the name alone.
 
 * **Occlusion:** a plate whose rect meets a HUD rect (capsule and pill, the Roblox buttons, dock, tray / pill, portal,
-  visible toasts) fades to α .16 over 0.15 s. Its ring stays.
+  visible toasts, and **the strip's right edge** while a sheet is open) first tries the slot **above** its ring, then
+  the CHIP form, and otherwise fades to **α 0** over 0.15 s. No half-read ghost text, no half-cut plates at the sheet
+  seam. Its ring stays.
 * **Collision:** plates are placed greedily in priority order (selected > pulse > glow > available > locked, then by
-  world y). A plate that overlaps a placed one by more than 4 pt fades.
+  world y). A plate that overlaps a placed one by more than 4 pt first drops to CHIP, then fades. With the larger
+  type the plates are about 35% taller, so the thresholds above are re-checked in the mocks (a, k) after this pass.
 * Both are recomputed when z changes by 2%, the camera moves more than 8 pt, the HUD layout changes, or the node set
   changes. That is 21 rect tests.
 * **Options › Map Labels:** AUTO (these rules) / ALWAYS (FULL at every zoom) / OFF (selected and hover only).
@@ -422,8 +444,8 @@ The selected, hovered and peeked nodes always get FULL. The READY line and badge
 
 * **Hotspot:** an invisible ImageButton ellipse, 520×960 world px at (3150, 1480), in `Nodes`, below PM.
 * **Hover:** `rift_glow` +α .15, plus a tooltip:
-  * sealed: "THE RIFT IS SEALED · Reach 185 milestones to reveal the Prestige Multiverse · You have N", with a
-    `gate.req` progress bar (mock a);
+  * sealed: title "The rift is sealed", body "Reach 185 milestones to reveal the Prestige Multiverse.", then two
+    aligned rows "Need 185" / "Have 164" and the `gate.req` progress bar with its % (mock a);
   * revealed: the gate state line.
 * **Click:** fly to the rift and open the gate popover (§7.8).
 * The gate states themselves live on the portal (§4.6) and the universe tag (§4.3).
@@ -437,7 +459,7 @@ The selected, hovered and peeked nodes always get FULL. The READY line and badge
 | item | data | where |
 |---|---|---|
 | Points capsule | `hud.pts`, `hud.gen` (null → no pill), universe label from `map.inside`, warning chip from `hud.c` (value shown, e.g. "SOFTCAP e1.169e9"), status chip | TopbarGui, centred in `GuiService.TopbarInset` |
-| Universe tag | `gate` (inside only): "GOAL MET · LEAVING WILL FINISH" + FINISH (hold 1.2 s), or "GOAL NOT MET · LEAVING EXITS EARLY" + EXIT | TopbarGui, hanging under the capsule |
+| Universe tag | `gate` (inside only): "Goal met: leaving will finish" + FINISH (hold 1.2 s), or "Goal not met: leaving exits early" + EXIT | TopbarGui, hanging under the capsule |
 | Dock | HOME, TROPHIES (`N/18` badge, opens ach), OPTIONS (red dot while unsaved; white ring while open) | HudGui, bottom-left |
 | Zoom capsule | `[−] 51% [+]` | HudGui, right of the dock; mouse only |
 | READY tray | pulse nodes (+ `val.gain`), then glow nodes, in fixed map order | HudGui, bottom-right, left of the portal |
@@ -450,7 +472,7 @@ The selected, hovered and peeked nodes always get FULL. The READY line and badge
 ```
 WIDE 1920×1080                                                          COMPACT 844×390
 ┌[RBX][chat]      ╭─ POINTS · NORMAL UNIVERSE ─╮          [···]┐      ┌[RBX][chat] ╭ e6.424e23 ╮           [···]┐
-│                 ╰──── ↑ 6.21e24 OOMs/sec ────╯   ┌toast 380┐  │      │            ╰─ ↑ /sec ──╯  ┌toast 240┐     │
+│                 ╰──── ↑ 6.21e24 OOMs/sec ────╯   ┌toast 400┐  │      │            ╰─ ↑ /sec ──╯  ┌toast 260┐     │
 │ ░ chat area: no HUD in x<420, y<300 ░            │ toast   │  │      │ ░chat░       ▲ marker     └─────────┘     │
 │                                                  └─+3 MORE─┘  │      │                                           │
 │                                                               │      │                     ▼ marker              │
@@ -460,18 +482,18 @@ WIDE 1920×1080                                                          COMPACT
 
 | element | WIDE (du) | COMPACT (du) |
 |---|---|---|
-| capsule | 400×58 at y 6, centred in TopbarInset; drops below the bar (y 62, 0.2 s) if the strip < 200 du (unibar expanded) | 290×44 at y 6 |
-| dock | buttons 64 (gap 14), captions Heavy Italic 12; x 20, bottom 30 | buttons 50 (gap 10), captions 11; x 12, bottom 22 |
+| capsule | 400×58 at y 6, centred in TopbarInset; drops below the bar (y 62, 0.2 s) if the strip < 200 du (unibar expanded) | 300×44 at y 6 |
+| dock | buttons 64 (gap 20), caption pill **below** each button (`label` 14 Title Case, 22 tall); x 20, bottom 8 (the whole dock stays inside the 96 du bottom band) | buttons 50 (gap 18), caption pill `label` 13 (20 tall); x 12, bottom 6 |
 | zoom capsule | glass 54 tall, after the dock | none |
-| READY | tray (gem row, max 6 gems + `+N`), right edge at W−170 | pill (≤ 3 mini gems + "N READY · TAP TO LIST"); tap expands to the tray |
+| READY | tray (gem row, max 6 gems + `+N more`), right edge at W−170 | pill (≤ 3 mini gems + "N READY" / "Tap to list"); tap expands to the tray |
 | portal | 140×160 (disc Ø112) at the bottom-right | 92×104 (disc Ø70) |
-| toasts | 380 wide, y 68, pitch 74, max 3 | 240 wide, y 58, max 1 (2 on tablets) |
+| toasts | 400 wide, y 68, pitch 84, max 3 (2 while the notification list is open) | 260 wide, y 58, max 1 (2 on tablets) |
 
 **With a side sheet open** (WIDE/MEDIUM), everything re-centres on the strip:
 
 * the capsule at the strip centre (x SX/2 + 40, clear of RBX/chat);
 * the dock at the strip's bottom-left (56 du buttons);
-* the READY tray collapses to the **READY pill** at the strip's bottom-right ("TAP A GEM TO SWITCH"): each gem opens
+* the READY tray collapses to the **READY pill** at the strip's bottom-right ("Tap a gem to switch"): each gem opens
   its layer;
 * the portal is hidden: its function is the universe tag and the rift;
 * the zoom capsule is hidden (wheel still works);
@@ -485,16 +507,25 @@ WIDE 1920×1080                                                          COMPACT
 Capsule     Frame 400×58, UICorner .5, UIGradient #2a2140→#0d0b16 α .04, UIStroke 2.5 + UIGradient #ffe89a→#ffc233 α .67,
             glow_rr gold α .6 (UIShadow if available), bevel_button overlay
 ├ Coin      Frame Ø68 at x −19 (breaks out): Radial #fff6cf→#ffd34d@.45→#a8761a, UIStroke 3 #fff1b8, sparkle sprite; spins 6 s/rev
-├ Label     "POINTS · NORMAL UNIVERSE" / "POINTS · PRESTIGE MULTIVERSE", ExtraBold 11 caps #ffe9a3 α .8 (hair spaces)
-├ Amount    Sarpanch Heavy 34, UIGradient W→#ffe89a→#ffc233, UIStroke 5 black + shadow clone (R4); steps 34→30→26 if > 250 du
-├ Unit      "points" Montserrat Bold 13 #ffe9a3
-├ GenPill   hangs at y 51: h 26, green gradient #3fdc78→#1f8f47, UIStroke #b5f5c9, up sprite + Sarpanch Bold 14 (hud.gen verbatim)
-├ Warn      chip right of the capsule: gold, warn sprite + the first hud.c line's value; tap → tooltip with all lines
-└ Status    chip under the pill: SAVING… (gold) / NOT SAVING (danger) / RECONNECTING (info); SAVED shows 1.5 s after a save
+├ Label     "POINTS · NORMAL UNIVERSE" / "POINTS · PRESTIGE MULTIVERSE", `caps` 13 #ffe9a3 (full alpha, hair spaces)
+├ Amount    `capsule` Sarpanch Heavy 34, UIGradient W→#ffe89a→#ffc233, UIStroke 5 black + shadow clone (R4); steps 34→30→26
+│           if > 250 du; anchored left (it ticks, §9.9)
+├ Unit      "points" in Montserrat Bold 15 #ffe9a3 after a thin space (the §9.9 unit run)
+├ GenPill   hangs at y 51: h 30, dark green gradient #1a7a3c→#0f4d26 (white ≥ 5.3:1), UIStroke 2 #b5f5c9, up sprite +
+│           `Rich.num(hud.gen)`: the number in Sarpanch Bold 16, "OOMs/sec" in Montserrat Bold; no text outline
+├ Warn      chip right of the capsule: gold stroke on a dark body, warn sprite + the first hud.c line's value (`label` 14);
+│           tap → tooltip with all lines
+└ Status    chip under the pill (`label` 14): SAVING… (gold) / NOT SAVING (danger) / RECONNECTING (info); SAVED shows
+            1.5 s after a save
 ```
 
-COMPACT: 290×44, coin Ø52, amount 26, no label, pill h 20 / text 12. A tick bump (UIScale 1 → 1.05 → 1, 0.18 s) plays
-every second while points grow. Numbers never tween.
+COMPACT: 300×44, coin Ø52, amount 28 (steps 26, 22), no caps label, the unit "pts" (`label` 13) while the amount is
+≤ 150 du wide, pill h 26 / number 15. A tick bump (UIScale 1 → 1.05 → 1, 0.18 s) plays every second while points
+grow. Numbers never tween.
+
+**Universe tag** (inside the Multiverse), 40 tall (COMPACT 36): swirl sprite, status `small` 14 sentence case in
+#ffd0dc ("Goal met: leaving will finish"), then the FINISH / EXIT hold chip: the verb in `label` 14 (13), dark ink
+#2a1a00 on the gold gradient (≥ 10:1), with a small R6 ring sprite for the hold instead of a 9.5 px "HOLD" word.
 
 ### 4.4 Dock buttons
 
@@ -502,36 +533,47 @@ every second while points grow. Numbers never tween.
 * UIGradient `lift(c,.2)` → c@.55 → `shade(c,.55)`, UIStroke 2.5 `lift(c,.55)`, `bevel_button` overlay, glow_rr hue
   α .55.
 * Icon sprite at 48% size with a hard-shadow clone.
-* Caption Heavy Italic 12 (11) with UIStroke 4.
+* **Caption** fully below the button, 2 du gap: a dark pill (#0d0b16 α .8, UICorner .5, padding 0/8) with the word in
+  `label` 14 (COMPACT 13), **Title Case** ("Home", "Trophies", "Options"), white, no outline. Captions never overlap
+  the bevel or each other: the button gap is at least the caption overhang (20 WIDE, 18 COMPACT).
 * Hues: HOME #2fcf8f, TROPHIES #ffb020 (badge #b8860b `N/18`), OPTIONS #8a7cff.
 * The active state gets a white 3 du stroke. Press: UIScale .94.
 
 ### 4.5 READY tray and pill
 
 * **Entries:** every shown node with `val.pulse` (kind READY, gain chip `+val.gain` in gold), then every node with
-  `val.glow` (kind CAN BUY, "! BUY" chip in danger). Fixed map order inside each group, so nothing jumps.
-  * Header: "⚡ N READY · M CAN BUY" and the hint "TAP = OPEN · HOLD = PRESTIGE" (mouse and touch alike).
+  `val.glow` (kind CAN BUY, a "BUY" chip: danger stroke on a dark body, no "!"). Fixed map order inside each group,
+  so nothing jumps.
+  * Header: bolt sprite + "N READY" (`toast` 18, #ffe08a) and "· M can buy" (`label` 14, #ffb3c0).
+  * The gesture hint ("Tap to open · hold to prestige", `small` 14 soft) shows only until the player's first
+    successful hold; after that it lives in the gem tooltip.
   * Hidden when both are 0.
-* **Gem:** a 52 du Frame circle (Radial gradient, symbol), the chip below, 84 du pitch. Max 6 gems + `+N` (tap →
+* **Gem:** a 52 du Frame circle (Radial gradient, symbol ≥ 18), the chip below (26 tall, `badge` 14 gold on #2a200a,
+  short form for long gains per §9.9), **96 du pitch**. Max 6 gems + "+N more" (`label` 14 chip; tap →
   `frameNodes` + a list popover).
 * **Tap a gem:** fly to the node and open its panel.
 * **Hold a READY gem 0.6 s:** send `val.ra` (prestige), after the safety rules of §3.4.
   * A conical charge ring (R6) fills around the gem.
-  * A "HOLDING · PRESTIGE <LAYER> +gain" banner shows above the tray (mock h).
+  * A two-line banner shows above the tray (mock h): "HOLDING · PRESTIGE <LAYER>  +gain" (`toast` 18 + the gain in
+    `number` 16) over "Release to cancel" (`small` 14, #ffe9a3).
   * Releasing early cancels.
   * CAN BUY gems do not hold.
-* **Pill** (COMPACT home, and the strip while a sheet is open): up to 3 overlapping mini gems + "N READY" + "TAP TO LIST"
-  or "TAP A GEM TO SWITCH". Tapping expands it into the tray. The pill itself never holds.
+* **Pill** (COMPACT home, and the strip while a sheet is open): up to 3 mini gems (34 / 30 du, **2 du apart, never
+  overlapping**, symbol ≥ 13 px) + "N READY" (`toast` 18 / 16) over "Tap to list" or "Tap a gem to switch" (`small`
+  14 / 13, soft, sentence case), 4 du between the lines. Tapping expands it into the tray. The pill itself never
+  holds.
 
 ### 4.6 Multiverse portal
 
 * A Ø112 disc with a UIGradient **Conical** ring (#ff2e63, #b35cff, #ff5a1f, #ffd34d) rotating 8 s/rev.
 * Inner void: Radial #05030b → #1a0a24 + swirl sprite.
-* Label "MULTIVERSE" Heavy Italic 16 + a state pill.
+* One glass pill (α .88, 2 du stroke in the state colour) hangs from the disc's lower rim, never wider than the
+  portal box: WIDE "MULTIVERSE" (`tab` 16, white) over the state line (`label` 14 + `number` 14), 46 tall; COMPACT the
+  state line only (`label` 13 / `number` 13), 26 tall. No text sits on the art without it (§9.7).
 
 | state | from | pill |
 |---|---|---|
-| sealed | `gate.show == false` | `??? · 164/185` (from `gate.req`); desaturated, no rotation; hidden entirely in first-run mode |
+| sealed | `gate.show == false` | "SEALED 164/185" (from `gate.req`; COMPACT "164/185"); the rift tooltip names the milestones; desaturated ring, no rotation; hidden entirely in first-run mode |
 | locked | show, `!can` | LOCKED + lock sprite |
 | enter | can, outside | ENTER, crimson aura |
 | exit early | inside, `!fin` | EXIT EARLY, orange |
@@ -541,12 +583,17 @@ Tap: fly to the rift and open the gate popover (§7.8).
 
 ### 4.7 Toasts
 
-The toast is the Figma Popup 4:91 at 380×64 (COMPACT 240×48):
+The toast is the Figma Popup 4:91 at 400×72 (COMPACT 260×56):
 
 * horizontal UIGradient `shade(k,.55)` → panel, UIStroke 2 k, hue glow;
-* icon disc (Radial);
-* title Heavy Italic 15 + UIStroke 4, a ×N chip, sub SemiBold 13;
+* icon disc Ø44 (Ø32) (Radial);
+* title `toast` 18 (16) with stroke 2, a ×N chip (`badge` 14 / 13 on #0d0b16 with a hue stroke), sub `small` 14 (13)
+  in text α .92 (not soft: it sits on the hue gradient), one line, 4 du below the title;
 * a 3 du life bar.
+* Coalesced subs name the count or range ("3 achievements", "18th – 27th Meta-Milestone"), never joined names.
+* `+N MORE`: a glass chip (α .88) 34 tall (COMPACT 30), bell sprite + `label` 14 / 13, hit area ≥ 44.
+* Notification list rows: 56 tall, title `cardSmall` 17, sub `small` 14 soft; "Earlier" `caps` 13; CLEAR is a `label`
+  14 text button with a 44 du hit area.
 
 Kinds, from the view's `kind` (fallback: title/type/bColor):
 
@@ -598,9 +645,13 @@ Sheet (Frame 1112×H)
 ├ HeaderBand  Frame h 90, UIGradient 0° mix(panel,c,.22)→transparent; stripes tile (standalone texture) α .035
 ├ HeaderRule  Frame h 2 at y 92, UIGradient c→α .75→1, glow
 ├ Emblem      Ø96 at (−18,−22): Radial lift(c,.6)/c@.45/shade(c,.4), UIStroke 3 lift(c,.5), bevel, glow_circle c α .9 (R7, R2)
-├ Title       Heavy Italic 44, UIGradient W→lift(c,.45), UIStroke 7, shadow +4 (R3), at (96,10)
-├ SubRow      chip "ROW 1" / "MULTIVERSE · ROW 1" + caps verb line ("RESETS FOR PRESTIGE POINTS", "THE ROOT OF THE TREE"…)
-├ Tabs        in the header, right-aligned (y 26), when there are ≥ 2 (Figma Tab 4:55: Active hue gradient + glow; Idle; Notify dot)
+├ Title       `title` Heavy Italic 44, UIGradient W→lift(c,.45), UIStroke 7, shadow +4 (R3), at (96,10)
+├ SubRow      at y 60: chip "ROW 1" / "MULTIVERSE · ROW 1" (`label` 14, 26 tall) + the verb line in `small` 14, sentence
+│             case, soft ("Resets for prestige points", "The root of the tree"). When a status chip is present
+│             (INFECTED), the verb line is dropped
+├ Tabs        in the header, right-aligned (y 24), when there are ≥ 2, 40 tall (Figma Tab 4:55): active = `tab` 16
+│             ExtraBold Italic white on the hue gradient + glow (stroke 2); idle = `tab` 16 ExtraBold **upright** soft on
+│             panel2; Notify dot
 ├ Close       ImageButton 52, UICorner 14, danger gradient, UIStroke #ffc2cc, bevel; X sprite; hover rotates 90°
 ├ Hero        §5.3 (pinned, not scrolling)
 └ Body        styled Frame (UICorner, gradient) holding a transparent ScrollingFrame (§5.8)
@@ -615,25 +666,31 @@ Corrupted layers (cp, cm):
 * a breadcrumb `C:\MULTIVERSE\CORRUPTED>_`;
 * a glitch title (R12).
 
-### 5.3 Hero (y 104–236 WIDE)
+### 5.3 Hero (y 104–256 WIDE)
 
-* **Left: resource block.** "YOU HAVE" ExtraBold 12 caps muted, then the amount **Sarpanch Heavy 56** (UIGradient
+* **Left: resource block.** "YOU HAVE" `caps` 13 soft, then the amount **`hero` Sarpanch Heavy 56** (UIGradient
   W@.08 → lift(c,.5)@.5 → c@.92, UIStroke 7, shadow +5, Radial glow blob 470×150 behind it at α .35). Long values step
   56 → 48 → 40 to fit 560 du.
-  * Resource name Heavy Italic 20 `lift(c,.6)`.
-  * Effect line Bold 13 muted (RichText, colours remapped). Hidden when `eff` is null, which the view sends instead of
-    the "undefined" quirk.
-* **Right: CTA** 400×90 (Figma Prestige Button 4:47 at 1.2×):
+  * Resource name `resource` 22 `lift(c,.6)`; a name over 20 characters ("INFECTED SUPER PRESTIGE POINTS") steps to 18.
+  * Effect line `body` 16 in soft, up to 2 lines (RichText, colours remapped). Hidden when `eff` is null, which the
+    view sends instead of the "undefined" quirk.
+* **Right: CTA** 400×96 (static and locked 400×110; Figma Prestige Button 4:47 at 1.2×):
   * **Can:** UIGradient `lift(c,.15)`/c/`shade(c,.55)`, UIStroke `lift(c,.5)`, bevel, glow α .6, and a shine sweep
     (R5) every 2.8 s.
-  * Title = the verb (PRESTIGE, GET +1 MILESTONE, COLLECT, EXPLORE, CORRUPT), Heavy Italic 26 + UIStroke 6.
-  * Gain line `+reset.gain res` in Sarpanch Bold 15.
-  * **Static layers** add `pr` as a bar + "40%" under the gain.
-  * **Locked:** grey gradient, title kept, gain line = "have / need", the `pr` bar, no glow.
-  * The hotkey keycap (from `reset.hk`) shows **only when PreferredInput = KeyboardAndMouse**.
-* **Stat chips** under the CTA (30 du, one row): resource-display lines as `LABEL ········ VALUE`
+  * Title = the verb (PRESTIGE, GET +1 MILESTONE, COLLECT, EXPLORE, CORRUPT), `cta` Heavy Italic 26 + UIStroke 6,
+    ≥ 12 du side padding (steps 26 → 22 when wider).
+  * Gain line in a **value well** (R15, 26 tall): `+reset.gain` in `ctaSub` Sarpanch Bold 17 + the short unit
+    ("PP", "SP", "EXP") in Montserrat Bold 14 (§9.9). No outline.
+  * **Static layers** replace the gain with the `pr` bar and "40%" (`number` 16) at its right.
+  * **Locked:** grey gradient, title kept, the `pr` bar with "40%", and a well "need e1.057e60 points" (`small` 14).
+    Never "have / need" as two raw exponents. No glow.
+  * A requirement line (ex "Req: …") never sits on the fill: it becomes a stat chip under the CTA.
+  * The hotkey keycap (from `reset.hk`, `label` 13 dark ink on a 26 du light cap) shows **only when PreferredInput =
+    KeyboardAndMouse**.
+* **Stat chips** under the CTA (34 du, one row, 8 apart): resource-display lines as `LABEL ········ VALUE`, the label
+  `caps` 13 soft, the value `number` 16 (word values such as "ON · META MILESTONES" in `label` 14)
   (POINTS e6.424e23 · PASSIVE +e1.073e25/s · AUTO-GET ON · PRESTIGE ASHES …).
-* A divider at y 246. The body starts at y 256.
+* A divider at y 262. The body starts at y 272.
 
 ### 5.4 Prestige feedback (juice)
 
@@ -654,17 +711,18 @@ dot. The newly active tab gets UIScale .92 → 1 (0.15 s).
 
 The client inserts section titles from `cn`, grouping consecutive components of one kind. A title is:
 
-* a 6×24 hue bar;
-* Heavy Italic **22** with a UIGradient + UIStroke 5;
-* chips;
+* a 6×26 hue bar;
+* `section` Heavy Italic **24** (COMPACT 22) with a UIGradient + UIStroke 5 (4);
+* chips (28 tall, `label` 14 words + `badge` counts; READY in the hue, OWNED green);
 * a hairline UIGradient c α .45 → 0;
-* a right-side hint or control.
+* a right-side control, or a hint of ≤ 6 words in `small` 14 soft, sentence case. Hints that repeat a chip, a card
+  strip or the CTA are dropped.
 
 | cn | title | chips | right |
 |---|---|---|---|
-| buyables | BUYABLES | n | "HOLD TO BUY · TAP ⓘ FOR DETAILS" |
-| upgrades | UPGRADES | **N READY** (hue) + **owned / total OWNED** (green) | HIDE OWNED mini toggle (session memory) |
-| milestones | per layer: MILESTONE LADDER, META LADDER… | done / total | NEWEST FIRST (the Options order) |
+| buyables | BUYABLES | n | none (the card's hold strip says "HOLD TO BUY"; the ⓘ explains the rest) |
+| upgrades | UPGRADES | **N READY** (hue) + **owned / total OWNED** (green) | "Hide owned" mini toggle (`label` 14, session memory) |
+| milestones | per layer: MILESTONE LADDER, META LADDER… | done / total | "Newest first ▸" button (`label` 14; opens the Options order) |
 | challenges | CHALLENGES | done / n | — |
 | achievements | TROPHY SHELF | n / 18 | — |
 | clickables | per layer (§6) | — | — |
@@ -672,30 +730,44 @@ The client inserts section titles from `cn`, grouping consecutive components of 
 | display-text / raw html | none: **NOTES rows** (ⓘ + the game's line verbatim; no parsing) | — | long explainers collapse to one line + "MORE ▾" |
 | blank, h-line, v-line | dropped | — | — |
 
-Rhythm: WIDE body padding 32, section gap 22, title → content 12, card gap 12. COMPACT: 10 / 8 / 8 / 8.
+Rhythm: WIDE body padding 32, section gap 28, title → content 14, card gap 12. COMPACT: 12 / 16 / 10 / 10.
 
 ### 5.7 Cards and states
 
 | widget | can (actionable) | owned / done / maxed (quiet) | not yet (unlocked, unaffordable) | locked |
 |---|---|---|---|---|
-| Upgrade 5:47, 237×196 | hue surface `mix(panel,c,.38)→mix(deep,c,.15)`, stroke gradient, **glow α .55**, BUY chip, shine sweep, "Currently" chip, COST white | `mix(panel,#4be07a,.14)`, stroke α .45, **no glow**, "✓ OWNED", footer **EFFECT value** or "✓ ACTIVE" | mauve surface, **pr% chip + 5 du bar**, COST #d9b3be | dim mauve, lock chip, the requirement text (3 lines), no cost |
-| Compact owned, 237×66 | — | index + title + ✓ + EFFECT value: used for **fully owned tiers** in their slots | — | — |
-| Buyable (wide ≤ 2 per section, else a 260 grid) | hue surface; **hold strip lit "HOLD TO BUY"** (fills while held) | "MAX" green | mauve; hold strip = the reason ("NOT ENOUGH PP") + pr | — |
+| Upgrade 5:47, 237 × auto (min 232, AutomaticSize Y) | hue surface `mix(panel,c,.38)→mix(deep,c,.15)`, stroke gradient, **glow α .55**, BUY chip, shine sweep (top band only), "Currently" value, COST white | `mix(panel,#4be07a,.14)`, stroke α .45, **no glow**, "✓ OWNED", footer: the effect value (✓ + value) or "✓ Active" | mauve surface, **pr% chip + 5 du bar**, COST #d9b3be | dim mauve, lock chip, the requirement text (≤ 4 lines), no cost |
+| Compact owned, 237 × auto (72 with a 1-line title, 88 with 2) | — | index + title (2 lines allowed) + ✓ + the effect value: used for **fully owned tiers** in their slots | — | — |
+| Buyable (wide ≤ 2 per section, else a 280 grid), 700 × auto (min 132) | hue surface; **hold strip lit "HOLD TO BUY"** (fills while held) | "MAX" green | mauve; hold strip = the reason ("Not enough PP") + the pr bar and % inside the card | — |
 | Challenge 5:173 | idle hue, START | done green, COMPLETED, `cmp/lim` | — | requirement |
 | Challenge active / completable | gold, EXIT EARLY / **FINISH** (glow) | | | |
-| Milestone row | NEXT = spotlight card (78 du pill, glow) | done = 50 du quiet green row | future = faint pill + cost | infected = danger stroke + glitch stripe + second effect line |
+| Milestone row | NEXT = spotlight card, 116 tall (78 du pill, glow) | done = quiet green row, 60 (title line + effect line; 78 with a 2-line effect) | future = faint pill + cost | infected = danger stroke + glitch stripe + second effect line |
 | Perk 5:58 | gold dashed (R8) "EXPLORE A NEW PERK" | | | mauve dashed |
 | Achievement 5:180 | — | gold medallion + star + glint | — | "?" slate |
-| Corruption tile 96 | Trojan: lime dashed; Backdoor: **crimson dashed**; active / chosen: gold + fix bar | fixed: green solid | — | empty: quiet, slot number only |
+| Corruption tile 104 | Trojan: lime dashed; Backdoor: **crimson dashed**; active / chosen: gold + fix bar | fixed: green solid | — | empty: quiet, slot number only (#5f8a58, 13) |
+
+**Card type** (§9.2; WIDE / COMPACT). Everything grows with its text; nothing is clipped by a fixed card height.
+
+| part | upgrade card | compact owned | buyable | milestone NEXT / done / fold |
+|---|---|---|---|---|
+| padding | 16 / 12 | 12 / 10 | 16×18 / 12 | 14×18 / 12 |
+| index / level | `index` 28 / 22, lift(c,.5) α .8 (owned: soft α .8) | `badge` 14 soft | "LV" `caps` 13 + `big` 44 / 30 | pill number `number` 16 |
+| title | `card` 20 / 18, Title Case, ≤ 2 lines | `cardSmall` 17 / 16, ≤ 2 lines | `card` 20 / 18 | NEXT `card` 20; done `cardSmall` 17 |
+| text | `body` 16 / 15, LH 1.3, ≤ 4 lines, text α .92 (owned α .82) | — | effect `body` 16 / 15 | desc `body` 16 / 15; done effect `small` 14 soft (≤ 2 lines); fold: headline fact only, `small` 14 soft |
+| labels | "Currently", COST `caps` 13 / 12 (text α .92 on BUY, soft elsewhere) | — | NEXT LEVEL `caps` 13 | NEXT MILESTONE, REQUIRES `caps` 13 |
+| values | Currently: `number` 16 in a well; COST `numberHeavy` 18 / 17, 10 du above the bottom edge | effect `numberHeavy` 18 / 17, #a5efbc, ✓ before it (no "EFFECT" label) | NEXT LEVEL `numberHeavy` 18 | need `numberHeavy` 18 + unit `label` 14; % `number` 16 |
+| chips | BUY / OWNED / LOCKED `label` 14 (28 tall); pr% `badge` 14 | — | hold strip 32 tall, `label` 14 caps | fold count `badge` 14; SHOW ALL is a `label` 14 button on the right |
 
 **Tier board (WIDE upgrades).**
 
-* One row per game row (11–14, 21–24…), with a 42 du **tier rail**: a roman-numeral badge on a glowing spine.
-* A fully owned tier shows its compact owned cards in the same slots, and the rail badge turns green "✓". Slots never
-  regroup across rows, because the ids are path-stable.
+* One row per game row (11–14, 21–24…), with a 44 du **tier rail**: a badge "1" / "2" / "3" (Arabic, `badge` 16 in
+  Sarpanch) on a glowing spine. An owned tier shows the ✓ on the spine beside the badge, not inside it.
+* The row height is the tallest card in it (cards stretch to it). A fully owned tier shows its compact owned cards in
+  the same slots, and the rail turns green. Slots never regroup across rows, because the ids are path-stable.
 * Perk slots sit inline.
-* COMPACT: all owned upgrades fold into **one summary row** "✓ 14 OWNED ×e2.296e21 · ×e1.725e22 … SHOW", then the
-  remaining cards in index order (mock l).
+* COMPACT: all owned upgrades fold into **one summary row**, 48 tall: "✓ 14 OWNED" (`cardSmall` 16) + "Show"
+  (`label` 13) and a chevron. **No effect values on the row**: expanding lists each owned upgrade on its own row with
+  its name and effect (`body` 15). Then the remaining cards in index order (mock l).
 
 Glow budget: ≤ 2 glowing elements per card and ≤ 24 per panel. Owned and locked never glow.
 
@@ -713,20 +785,28 @@ Glow budget: ≤ 2 glowing elements per card and ≤ 24 per panel. Owned and loc
 ### 5.9 Empty, locked and loading states
 
 * **Locked layer** (opened from a locked node): the hero shows a lock emblem, "LOCKED" and `val.tip` with a `pr` bar.
-  The CTA is in its Locked variant. The body renders at α .6 and is inert.
+  The CTA is in its Locked variant. The body is inert and its surfaces dim to the mauve locked tier; its text stays
+  ≥ 4.5:1 (§9.6).
 * **Empty section after hiding:** a slim row with an OPTIONS link (Q-P3).
 * **Skeleton:** 3 shimmer bars (UIGradient Offset sweep 1.2 s).
 
 ### 5.10 COMPACT panel (phones)
 
-* **Band** (TopbarGui, TopbarSafeInsets, 56 du; mock l / m): emblem 42 + title Heavy Italic 22 + ROW chip.
-  * The **READY switcher**: 3 mini gems + "+N" + a bolt, 38 tall. Tapping a gem opens that layer.
+* **Band** (TopbarGui, TopbarSafeInsets, 56 du; mock l / m): emblem 42 + `title` 27 (steps 24, 22 to fit) + ROW chip
+  (`label` 13).
+  * The **READY switcher**: 3 mini gems (28, 2 du apart, no overlap) + "+N" (`badge` 13) + a bolt, 38 tall. Tapping
+    a gem opens that layer.
   * A **44 du close** left of the Roblox "···".
   * A neon rule under the band.
-* **Hero column** (x 10, 226 wide, full height, left thumb): YOU HAVE + amount (Sarpanch 34–38) + resource name +
-  stat chips. The **CTA is pinned at the bottom** (200×72; static layers 86 with the `pr` bar).
-* **Content** (x 248 → 832): section titles 15, cards in 2 columns (upgrades) or rows (buyables 78, milestone rows
-  44), an ⓘ button on buyables, the owned summary row, and the scrollbar at the right edge.
+* **Hero column** (x 10, 226 wide, full height, left thumb): YOU HAVE (`caps` 12) + amount (`hero` 38, steps 34, 30) +
+  resource name (`resource` 18) + stat chips (32 tall, `caps` 12 + `number` 15, one per row). The hero column uses its
+  height: no empty flex gap above the CTA larger than 24 du. The **CTA is pinned at the bottom** (200×80; static and
+  locked 200×96 with the `pr` bar): `cta` 20 (steps 18, 16 to keep 12 du side padding), the gain `ctaSub` 15 in a
+  well, the % `number` 15.
+* **Content** (x 248 → 832): section titles `section` 22, cards in 2 columns (upgrades, 284 wide, auto height ≈ 190
+  with a 3-line description) or rows (buyables auto, min 96; milestone done rows 56, 2 lines), an ⓘ button on
+  buyables, the owned summary row (48, no effect values), and the scrollbar at the right edge. Body text is 15 with
+  LineHeight 1.3; labels 12; chips 26 tall.
 * Toasts: top-right under the band, max 1, click-through.
 
 ---------------------------------------------------------------------------------------------------------------------
@@ -743,7 +823,7 @@ widget**, so no two panels read alike. "Hug" means the sheet height hugs its con
 | **em** Extra Milestone (#e88af2) | count + GET +1 (auto at m.best ≥ 170) | pink; "M³" watermark | EXTRA LADDER (19) | same ladder | same |
 | **p** Prestige (#6fc3ff) | PP + PRESTIGE (P) + POINTS / PASSIVE | sky blue; header stripes | BUYABLES (wide + progress box) → UPGRADES tier board (rows 11–53) | perk slots (15/25/35/45 with malware m4; 51–53 in sp C11) as dashed gold cards; RESPEC PERKS small danger button in the UPGRADES title row (mock b, l) | shine on BUY; buy burst |
 | **pe** Prestige Energy (#ff9a2e) | energy + COLLECT (E) with pr | orange; lightning watermark | rate chip ("×a per OoM of PP, ^b") → UPGRADES (8, 2×4) | none; **hug** | crackle on COLLECT |
-| **sp** Super Prestige (#5fe0ff; infected → danger emblem; malware tabs → **ember #ff7a2e** accent) | SP + PRESTIGE (S); tabs Main / Prestige Ashes / Spark Milestones | cyan; ember rim on the malware tabs | Main: BUYABLES (2) → UPGRADES (17, perk 51). Ashes: ashes stat → challenge 11. Spark: furnace box → SPARK MILESTONES → pager | **Furnace** (the game's unlock box as a titled card: flame emblem, ashes bar, 3/3 UNLOCKED, IGNITE + auto-fill state, REIGNITE #n). **Ember burn bars** (a real `bar` node: p + st8): BURNING (flame gradient + ember sprites), ASHED (grey), PERMANENT (gold "skipped when burning"). SHOW cycler 1/3/5 (one press). Pager « ‹ PAGE a/b › » at 52×44. Challenge 11 "Milestone Dilation" is a round 330 du portal card with a conical ring. (mock f) | embers rise from burning bars (≤ 6 per bar, none on LOW) |
+| **sp** Super Prestige (#5fe0ff; infected → danger emblem; malware tabs → **ember #ff7a2e** accent) | SP + PRESTIGE (S); tabs Main / Prestige Ashes / Spark Milestones | cyan; ember rim on the malware tabs | Main: BUYABLES (2) → UPGRADES (17, perk 51). Ashes: ashes stat → challenge 11. Spark: furnace box → SPARK MILESTONES → pager | **Furnace** (the game's unlock box as a titled card: flame emblem, ashes bar, 3/3 UNLOCKED, IGNITE + auto-fill state, REIGNITE #n). **Ember burn bars** (a real `bar` node: p + st8): BURNING (flame gradient + ember sprites), ASHED (grey), PERMANENT (gold "skipped when burning"). SHOW cycler 1/3/5 (one press). Pager « ‹ Page a / b › » at 52×44, **hidden when there is one page**. Challenge 11 "Milestone Dilation" is a round 330 du portal card with a conical ring. (mock f) | embers rise from burning bars (≤ 6 per bar, none on LOW) |
 | **pb** Prestige Boost (#57e0b0) | amount + GET; **power badge** "^x" (hexagon sprite, Sarpanch Heavy 40) | mint | UPGRADES (16) | power badge from main-display eff | badge pulses once per purchase |
 | **pp** Prestige Power (#ff4d6d) | PP + PRESTIGE (W); "X Hz" Sarpanch Heavy 40 over an **oscilloscope strip** | crimson-pink | BUYABLE Power Scaler (wide) → UPGRADES (9, 3×3) | wave tile texture (standalone, ScaleType Tile) scrolled by Position | wave scroll; frozen with ReducedMotion |
 | **se** Super Energy (#ff6a1f) | amount + COLLECT (Shift+E) | deep orange | rate chip → UPGRADES (4, one row) | none; **hug** | crackle |
@@ -756,70 +836,121 @@ widget**, so no two panels read alike. "Hug" means the sheet height hugs its con
 | **ach** Achievements (#ffc93c) | "13 / 18" Sarpanch 64 gold + the effect line | gold shrine | TROPHY SHELF | 2 shelves × 9 medallions on plank Frames; tap = an inspector strip (name + goal/done); hover = tooltip. No CTA. | a glint crosses one done medallion every 3 s |
 | **pm** Prestige Milestone (#ff2e63) | count + GET (Ctrl+P); **glitch title** (R12); the masked name as sent | crimson; scanline α .05 | Main: debuff tile (red) + essence tile → PRESTIGE MILESTONE LADDER (16). Challenges: completions → "Current Unlocked Boosts" titled card → CHALLENGES (3, gold when completable) | glitch title; the resource-name flicker is kept as sent | glitch bursts 2–4 s, 80 ms |
 | **pep** Prestiged-Exotic (#f2b04d) | PEP + GET (Ctrl+X) | amber **fusion core** (conical ring around the fusioner level) | EFFECT LADDER (5) → (Pr) Exotic Fusioner. Upgrades: 3 | effect ladder as ep | core ring rotation |
-| **cp** Corrupted Prestige (#39ff14, symbol **CR**) | CAUSED / FIXED counters (Sarpanch 52) + essences line + **CORRUPT** (black glossy, lime, scanlines, CTRL+C, "n / 20 charges · next at X") | Corrupted treatment, terminal tabs, breadcrumb, RobotoMono | ESSENCE & RECHARGE MODE (radio, one press) → **DISK GRID** + inspector → explainer (one line + MORE) | **Disk grid** 4×4 → 6×6 of 96 du tiles from `grid.state/lv/kind`: empty = quiet slot number; Trojan lime dashed; Backdoor crimson dashed; active or algorithm-chosen gold + fix bar; a legend. **Inspector**: `grid.tip` split into fix / debuff / reward, pr + the game's ASCII bar `[██████====] -< 63% >-`, DEACTIVATE, other corruptions list. It docks on the side set by **Corrupt. Tooltip Pos.** (mouse); touch always uses the inspector. Antivirus: buyables + TrojanFix.scr / BackdoorRemove.scr process cards with conical cooldown rings. (mock d) | scanline scroll, cursor blink 1 s, glitch bars on a corruption; lime "CORRUPTION FIXED!" toast |
+| **cp** Corrupted Prestige (#39ff14, symbol **CR**) | CAUSED / FIXED counters (Sarpanch 52) + essences line + **CORRUPT** (black glossy, lime, scanlines, CTRL+C, "n / 20 charges · next at X") | Corrupted treatment, terminal tabs, breadcrumb, RobotoMono | ESSENCE & RECHARGE MODE (radio, one press) → **DISK GRID** + inspector → explainer (one line + MORE) | **Disk grid** 4×4 → 6×6 of 104 du tiles from `grid.state/lv/kind`: empty = quiet slot number; Trojan lime dashed; Backdoor crimson dashed; active or algorithm-chosen gold + fix bar; a legend. **Inspector**: `grid.tip` split into fix / debuff / reward, pr shown **once** as the game's ASCII bar `[██████====] -< 63% >-` (the graphic bar is dropped), DEACTIVATE, other corruptions list. It docks on the side set by **Corrupt. Tooltip Pos.** (mouse); touch always uses the inspector. Antivirus: buyables + TrojanFix.scr / BackdoorRemove.scr process cards with conical cooldown rings. (mock d) | scanline scroll, cursor blink 1 s, glitch bars on a corruption; lime "CORRUPTION FIXED!" toast |
 | **cm** Corrupted Milestone (#1fbf4a) | count + GET (C+M) | Corrupted treatment, darker green | CORRUPTED LADDER (5) | small lime terminal ladder; **hug** | cursor blink |
-| **ex** Exploration (#45e07f) | EX + EXPLORE (Ctrl+E) + ZONE / AREA LIMITS chips | green cartography: 40 du grid tile α .05 | Main: **MAP** + **D-PAD** → feature tiles (new feature at (x;y); the danger line "new feature at zones: …"). Upgrades: 2. Rewards: the game's per-zone list | **Map**: the ZoneMaps SVG redrawn as Frames (cell lines, border), **cached by svg string**; position = a green gem, goal = a star sprite, portals (m14) = swirl sprites. **D-pad**: the 4 movement buyables as arrow keys around RESPEC POSITION, each with "went right 6" and its cost; the arrow keys and R stay the game's hotkeys. **Hug** (mock e) | the position gem hops (0.15 s Back Out) |
+| **ex** Exploration (#45e07f) | EX + EXPLORE (Ctrl+E) + ZONE / AREA LIMITS chips | green cartography: 40 du grid tile α .05 | Main: **MAP** + **D-PAD** → feature tiles (new feature at (x;y); the danger line "new feature at zones: …"). Upgrades: 2. Rewards: the game's per-zone list | **Map**: the ZoneMaps SVG redrawn as Frames (cell lines, border), **cached by svg string**; position = a green gem, goal = a star sprite, portals (m14) = swirl sprites. **D-pad**: the 4 movement buyables as arrow keys around RESPEC POSITION, each with a level badge ("→ 6") and its cost in a well (short unit, full name in the tooltip); the arrow keys and R stay the game's hotkeys. **Hug** (mock e) | the position gem hops (0.15 s Back Out) |
 | **Options** (#9d8cff) | gear emblem; no hero | bevel cards, section tags | **YOUR SAVE** (SAVED WITH YOUR GAME): status card ("ALL PROGRESS SAVED · saves live on the server for this Roblox account" / UNSAVED), SAVE / EXPORT / IMPORT tiles, Offline Production toggle · **DANGER ZONE**: HARD RESET… → modal (§7.7) · **ABOUT**: credits + the unlocked hotkeys (keycaps) · **DISPLAY** (SAVED WITH YOUR GAME): Milestone Showing Mode **cycler** (5 dots), Completed Challenges toggle, Corrupt. Tooltip Pos. **cycler** (4), Milestones Order segmented (2 options = one press) · **THIS DEVICE** (NOT PART OF THE SAVE): Motion SYSTEM/FULL/REDUCED, Map Detail AUTO/HIGH/LOW, Map Labels AUTO/ALWAYS/OFF, Interface Size 90/100/115% | game options send `["opt", …]`, one press per tap. Device options are client-only: stored in a separate DataStore key `client` through a tiny remote, never in the save string; `Player:SetAttribute` mirrors them for the client. (mock g) | tiles sweep on hover |
 | **End screen** (`ended`) | full-screen OverlayGui over the frozen, dimmed map: gold rays + trophy emblem, "YOU BEAT THE GAME!" Heavy Italic 64 gold, winText, "IT TOOK YOU T" chip | gold | KEEP GOING (gold primary, `opt keepGoing`) · PLAY AGAIN (danger outline, **hold 2 s**, `opt playAgain`) | **no Discord line**; only `opt` actions run | confetti once (≤ 40 sprites) |
+
+### 6.1 Type and density per signature
+
+The template roles (§9.2) apply everywhere. These are the per-layer adjustments; each replaces a small or crammed run
+in mocks b–j with one readable one.
+
+* **m / mm / em ladder.** NEXT: `card` 20 title, `body` 16 desc, REQUIRES `caps` 13, the need `numberHeavy` 18 with
+  the unit in Montserrat, % `number` 16. Done rows put the title and the effect on separate lines. Fold rows show the
+  range (`number` 16), the count (`badge` 14) and one headline fact; SHOW ALL is a real button. NOTES: `body` 15
+  LH 1.3 with inline numbers in Montserrat Bold (same x-height, no Sarpanch in running text). JUMP TO: `label` 15
+  rows with soft chevrons. Filter chips become labelled buttons ("Show: All ▸", "Order: Newest first ▸", `label` 14).
+  MALWARE: the "9 infectable" chip in `label` 14; **INFECT** buttons 44 tall: "INFECT" `label` 15 on one line, the
+  cost `number` 15 beside it.
+* **p.** The buyable's side box "Progress to next level" is dropped; its bar and % move inside the card under the
+  cost. The tier badges are Arabic.
+* **sp furnace**, two rows. Row 1: the ashes bar with "0.00 / 225.74 ashes" (`number` 16 + `label` 14). Row 2:
+  IGNITE (title `tab` 16 + a separate ON/OFF toggle pill, `label` 13) and REIGNITE #2 / #5 buttons
+  (`label` 14, cost `number` 14 + "ashes" in Montserrat). The gold "3 / 3 unlocked" chip uses dark ink #2a1a00. The
+  hint line is dropped. **Spark rows**: ASHED dims only the surface and the state tag; the title stays #d9d3ec
+  (`card` 20), the desc `body` 16 at α .82, "Currently" `caps` 13. Percentages to 1 decimal ("63%"); "Skipped when
+  burning" in `small` 14, not Sarpanch.
+* **cp terminal.** `terminal` 15 / 14 for the tabs, path, paragraph and footer; labels #9fdc92 at minimum, body
+  #caffbf. Inspector keys and the mode subtitles in `small` 14 (Montserrat); values `number` 16 with units in
+  Montserrat Bold; the "you have" line `small` 14 soft. The essence line becomes two stat rows ("Corruption essences
+  e569,142,978", "Points & PE gain ×e423,228,229"; labels `small` 14, values `numberHeavy` 18); the parenthetical
+  goes to a tooltip. Disk tiles 104: kind `caps` 13, "LV 3" `big` (step 24), slot id `label` 13 soft; empty slots #5f8a58
+  (5.3:1). Legend `small` 14. CORRUPT's sub splits into "1 / 20 charges" and "next at 2,000,000 pts" (`terminal` 14);
+  the CTRL+C keycap is `label` 13 in a 26 du cap. The footer explainer gets 2 lines before MORE.
+* **ex.** D-pad keys 132×112: arrow + label `label` 16; the level as a dark badge ("↑ 0", `badge` 14); the cost in a
+  well (`number` 14 + "PE" / "CE", full name in the tooltip). Map axes `number` 14 in #9fdc92; legend `small` 14;
+  coordinates "6, 4"; the zone list as small chips.
+* **Options.** Card titles `card` 20 with a tag chip (`small` 14, sentence case: "Saved with your game" / "Not part
+  of the save"). Rows 64 tall: title `cardSmall` 17 (full names:
+  "Corruption tooltip position"), subtitle `small` 14 soft LH 1.3, one sentence. Segmented controls 38 tall, options
+  `label` 14 (idle ExtraBold soft upright, selected ExtraBold Italic white); cyclers `label` 15 with "Newest first" /
+  "Oldest first" wording instead of an arrow. SAVE / EXPORT / IMPORT tiles: the title `cta` stepped to 20 (white + stroke), the sub
+  `small` 14 in a well with 10 du side padding. ABOUT: `body` 16; hotkeys fold behind "Show hotkeys", keycaps `label` 13 in 26 du
+  caps. DANGER ZONE text `body` 16 #f2d7dd.
+* **End screen.** The win text is `body` 16 on a scrim band (black α .45, UICorner 12), balanced into 2 lines; "IT
+  TOOK YOU" `caps` 13.
 
 ---------------------------------------------------------------------------------------------------------------------
 
 ## 7. Overlays (OverlayGui)
 
-1. **Tooltip** (Figma 4:68): 300 du, UICorner 14, UIGradient panel3 → panel, UIStroke 1.5 `lift(c,.2)`, shadow +
-   hue glow.
-   * Title Heavy Italic 14 `lift(c,.55)`, body SemiBold 13 RichText, optional `pr` bar, foot caps 11 ("Click to open ·
-     right-click to peek").
+1. **Tooltip** (Figma 4:68): 360 du (COMPACT 300), UIPadding 14/16, UICorner 14, UIGradient panel3 → panel, UIStroke
+   1.5 `lift(c,.2)`, shadow + hue glow.
+   * Title `cardSmall` 17 `lift(c,.55)`; body `body` 16 LH 1.3 RichText (≤ 5 lines); have / need as two aligned rows
+     ("Need 1e413,950 HP" / "Have e8.502e20 HP", labels `small` 14 soft, values `number` 16) + the `pr` bar with its
+     %; foot `small` 14 soft, sentence case ("Click to open · right-click to peek").
    * Mouse only, after 250 ms, at the cursor + (16, −h−12). It flips to the side with fewer node rects and is clamped
      to the viewport. One owner at a time.
 2. **Peek** (long-press 450 ms / right-click on a node; mock j):
    * The node grows ×1.25.
    * Scrim: a Frame α .62 plus a **square** Frame centred on the node with a Radial UIGradient transparency hole. A
      radial gradient on a full-screen frame would be elliptical, since its radius is (w+h)/4.
-   * A 330 du card: emblem, name, amount, the `val.tip` line, **OPEN**, and **HOLD TO PRESTIGE +gain** (0.6 s,
-     conical fill; only when `val.ra` exists). A locked node shows its requirement instead.
+   * A 360 du card (COMPACT 320): emblem, name (`card` 20), amount (`number` 16 + unit `small` 14; "0" gets its unit,
+     "0 milestones"), the `val.tip` line as `body` 16 have / need rows, **OPEN** (`tab` 16), and the **PRESTIGE** hold
+     button (`tab` 16, one line, an R6 ring glyph before the verb shows that it holds) with the gain as a `badge` 14
+     chip at the right (0.6 s; the hold fill darkens, R13; only when `val.ra` exists). Buttons 52 tall. A locked node shows its requirement instead.
    * Dismiss: tap the scrim, pan, or Esc. While a peek is up, toasts collapse to the newest.
 3. **Toasts** §4.7; the **notification list** opens from `+N MORE` (mock h).
 4. **Detail sheet** (touch; long-press an upgrade, or ⓘ on a buyable): a full-width bottom sheet with a drag handle,
-   the full text, CURRENTLY / COST / YOU HAVE + pr, and the big action (BUY / HOLD TO BUY). Holds happen here, away
+   the full text (`body` 16 / 15, never clamped), CURRENTLY / COST / YOU HAVE (`caps` + `numberHeavy`) + pr, and the
+   big action (BUY / HOLD TO BUY). Holds happen here, away
    from the scroll list. Dismiss: tap outside or drag down 60 du.
 5. **Modal chrome:** a dimmer (black α .6, `Active = true`, `InputSink = All`) and a bevel card with a hue rim. Open:
    scale .96 → 1 (0.2 s).
-6. **Export** (mock i): a read-only monospace TextBox (RobotoMono 13, `TextEditable = false`,
+6. **Export** (mock i): a read-only monospace TextBox (`terminal` 15 / 14, `TextEditable = false`,
    `ClearTextOnFocus = false`, TextWrapped, inside a styled Frame).
    * On open: CaptureFocus + select-all (`SelectionStart = 1`, `CursorPosition = #text + 1`).
-   * Chip "22,204 CHARACTERS · ALL SELECTED".
-   * Hint: "Press Ctrl+C to copy. On a phone: tap the box, then Select All and Copy. (Roblox games cannot write to
-     your clipboard.)"
-   * Buttons: SELECT ALL (primary), DONE.
+   * Chip "22,204 characters · all selected" (`label` 14; the count in `badge`).
+   * Hint (`body` 16 LH 1.3): "Press Ctrl+C to copy. On a phone: tap the box, then Select All and Copy. (Roblox games
+     cannot write to your clipboard.)"
+   * Buttons: SELECT ALL (primary; a darker teal gradient `shade(c,.2)` so white passes 3:1 without the outline),
+     DONE.
    * **Fallback** where read-only select/copy fails on mobile: an editable TextBox whose Text is restored whenever it
      changes.
 7. **Import:**
-   * An editable TextBox ("Paste a save string (web saves work too)"); IMPORT is disabled while the box is empty.
-   * After a press: a **conical cooldown ring** for the server's 10 s `IMPORT_COOLDOWN` ("IMPORT · 4 s").
+   * An editable TextBox (`terminal` 15, placeholder "Paste a save string (web saves work too)" in `small` 14 soft);
+     IMPORT is disabled while the box is empty.
+   * After a press: a **conical cooldown ring** for the server's 10 s `IMPORT_COOLDOWN` ("IMPORT · 4 s"). Disabled
+     labels are `label` 15 upright soft; the ring carries the disabled meaning.
    * The result is shown inline: "That string is not a valid save (nothing was changed)." in danger; success closes
      the modal and shows a Notice toast.
-   * **Hard reset confirm:** "HARD RESET?", what is lost, EXPORT FIRST · CANCEL · **HOLD TO RESET 2 s** (conical
-     ring, "0.8 / 2.0 s"). Completion sends `{"opt","hardReset"}` twice, then a red edge flash + a Notice toast.
+   * **Hard reset confirm:** "HARD RESET?", what is lost (`body` 16), EXPORT FIRST · CANCEL · **HOLD TO RESET 2 s**
+     (conical ring; the footnote "Release early to cancel" in `small` 14). Completion sends `{"opt","hardReset"}` twice, then a red edge flash + a Notice toast.
 8. **Gate popover** (portal / rift / universe tag):
-   * Conical swirl emblem, PRESTIGE MULTIVERSE, "MP CHALLENGE 21 · <state>", a GOAL box (`gate.goal`), completions
-     (`done ≥ 1` = won).
+   * Conical swirl emblem, PRESTIGE MULTIVERSE (`section` 24), the context "MP challenge 21 · you are inside"
+     (`small` 14 in the hue), a GOAL box (`gate.goal` in `body` 16; the state as a 14 du chip, "Goal met" green),
+     completions (`done ≥ 1` = won). The consequence text is `body` 16.
    * **What happens:**
      * ENTER lists the layers that reset: the game's `onEnter` list, m mm em p pe sp pb pp se hp ep hb ap t.
      * FINISH: "completes it (+1) and returns you".
      * EXIT EARLY: "returns you without completing".
-   * The action is a **1.2 s hold** with a conical ring (STAY / HOLD TO ENTER | EXIT | FINISH). Locked shows a
-     disabled bar "UNLOCK MULTIVERSE (MP) FIRST".
-9. **Status** (TopbarGui, under the capsule): SAVED (green, 1.5 s after a save), SAVING… (gold, while
-   `patch.unsaved`), NOT SAVING (danger; the data failed to load, tooltip explains), RECONNECTING… (info).
+   * The action is a **1.2 s hold** with a conical ring (STAY / HOLD TO ENTER | EXIT | FINISH): the label `cta` (step 22) in
+     white + stroke on a darker amber gradient (#b37400 → #6b4500), the time as a separate `badge` 14 chip. Locked
+     shows a disabled bar "Unlock Multiverse (MP) first" (`label` 15 soft).
+9. **Status** (TopbarGui, under the capsule; `label` 14, 28 tall): SAVED (green, 1.5 s after a save), SAVING… (gold,
+   while `patch.unsaved`), NOT SAVING (danger; the data failed to load, tooltip explains), RECONNECTING… (info).
 10. **Loading / fatal:**
     * Loading: a realm thumbnail card, "THE MILESTONE TREE" gradient title, a progress bar from the PreloadAsync count,
-      "LOADING THE REALM…".
+      "LOADING THE REALM…" (`caps` 13).
     * A render failure first auto-resyncs once (re-sends Ready), then shows **OUT OF SYNC · RESYNC**.
 11. **End screen:** §6.
 12. **First run** (while m.best == 0; mock n):
     * The READY tray, portal, zoom capsule and rate pill are hidden.
-    * A **START HERE** pointer chip ("get your first milestone") bobs above M, whose plate reads "⚡ READY".
+    * A **START HERE** pointer chip bobs above M, whose plate reads "⚡ READY". It is stacked: "START HERE" (`toast`
+      18 / 16) over "Get your first milestone" (`body` 16 / 15, white), on a darker chip body `shade(c,.35)` so the
+      white line reaches ≥ 7:1.
     * Sealed sockets stay quiet; only the frontier (MM, P) shows `?`.
     * The cue disappears after the first milestone. The normal HUD fades in over the next 2 s.
 
@@ -836,12 +967,12 @@ widget**, so no two panels read alike. "Hug" means the sheet height hugs its con
 | select ring | open panel | Rotation 20 s/rev | static |
 | flow sparks | pulse edges (HIGH) | 1.6 s loop, ≤ 6 | none |
 | capsule tick / coin | 1 s / always | UIScale 1 → 1.05 → 1 (0.18 s) / coin 6 s/rev | none |
-| shine sweep | BUY cards, CTAs | UIGradient.Offset (−1,0) → (1,0), 0.9 s, every 2.8 s, random phase | none |
+| shine sweep | BUY cards (top band: index + title), CTAs | UIGradient.Offset (−1,0) → (1,0), 0.9 s, every 2.8 s, random phase; peak α ≤ .18; never over a description (§9.6) | none |
 | buy / prestige | cls change / reset | §5.4 | colour flash only |
 | sheet open / close | tab | slide 48 du + Box tween (0.24 s quintOut) / (0.16 s quadIn); staggered cards y +12 → 0 (25 ms apart, first 12) | instant |
 | tabs | switch | new active UIScale .92 → 1 (0.15 s) | instant |
 | toasts | popup | slide 60 du Back Out 0.28 s; merge bump 1.06 → 1 | appear / disappear |
-| holds | hold buttons, gems, peek | conical or linear fill ∝ time; rewind 0.12 s | same (functional) |
+| holds | hold buttons, gems, peek | conical or linear fill ∝ time (a black α .22 sweep, never a white wash); rewind 0.12 s | same (functional) |
 | universe change | `map.inside` flips | frameNodes fly (0.9 s) + a full-screen Radial flash (crimson in / violet out) α .6 → 1 | flash only |
 | glitch (pm, cp, infected) | every 2–6 s | clone Position ±2–4 du for 60–140 ms | none |
 | first-run cue | m.best == 0 | chip bob ±4 du 1 s sine | static |
@@ -859,37 +990,218 @@ Rules:
 
 ---------------------------------------------------------------------------------------------------------------------
 
-## 9. Type scale
+## 9. Type scale and readability
+
+The type system has two halves.
+
+* **Display type** stays exactly as loved. It covers panel titles, hero and capsule numbers, CTAs, section titles and
+  resource names: Heavy Italic or Sarpanch Heavy, gradient fill, black outline and a hard shadow, at **≥ 20 du**.
+* **Reading type** is everything a player reads for information: descriptions, effects, costs, labels, hints, toasts
+  and options. It is upright, SemiBold to ExtraBold, has no outline, uses flat high-contrast colour and real line
+  spacing, and is never below the floors of §9.5.
+
+Hierarchy comes from **steps in size, weight and colour**, never from shrinking secondary text. Every size lives in
+`Theme.ROLES` (`src/client/Core/Theme.luau`) and in the mock mirror `TY` (`final/src/lib.js`). A literal TextSize
+anywhere else fails the lint (§16).
+
+### 9.1 Fonts, weights and styles
 
 `Font.fromName(name, weight, style)`:
 
-* Montserrat Heavy is the heaviest weight (no Black).
-* Sarpanch has no italic.
-* There is no letter-spacing: caps get U+200A hair spaces.
-* `LineHeight = 1`.
-* Heavy Italic labels get `UIPadding.PaddingRight = 4` (overhang).
-* Outlines go on Montserrat only. Sarpanch numbers get a hard shadow clone + an optional glow sprite, never UIShadow.
+* Montserrat Heavy is the heaviest weight (there is no Black). Sarpanch has no italic.
+* **Weight follows size.** Montserrat Heavy's gap between letters is .05–.06 em, which is under 1 px at 13 px, so the
+  letters fuse.
+  * **Heavy** (900) only for the display roles (title, hero, capsule, big, CTA, section, resource), which are
+    ≥ 20 du on WIDE; their COMPACT steps (down to 16) keep the weight.
+  * **ExtraBold** (800) for 13–20 du labels: card title, cardSmall, toast title, tab, plate name, `label`.
+  * **Bold** (700) for caps labels.
+  * **SemiBold** (600) for body and small text.
+* **Italic** only on display and title roles (title, CTA, section, resource, card, cardSmall, toast, active tab,
+  plate), and only for ≤ 4 words (a longer card title is set upright). Never on body, small, caps, labels, numbers or
+  any sentence. Game `<i>` spans inside body text stay italic at body size.
+* **Uppercase** only for display roles and labels of 1–3 words: panel and section titles, CTA verbs, caps labels,
+  plate names, tab names, chip words. **Card titles are Title Case in every state** (BUY, OWNED, NOT YET, LOCKED). Banners and tags put only the
+  1–2 word verb in caps ("FINISH", "HOLDING"); the rest is sentence case.
+* **Sarpanch is for numeral runs only**: digits and `. , e + − × % / ^`. Sarpanch has O = 0, l = 1 = I, a single-storey
+  `a` that reads as `o`, and a colon that renders as a centred dot. Units, words and labels on the same line are a
+  Montserrat Bold run (§9.9). Chips with words, keycaps, pager labels, jump buttons and tier badges use `label`
+  (Montserrat ExtraBold). Node and gem **symbols** (M, PEP, CR…) stay Sarpanch Heavy at ≥ 13 px: they are all
+  capital letters without O or I.
+* **Hair spaces** (U+200A, `Rich.caps`) only on caps text ≤ 16 du: `caps`, caps chips, plate names, `plateSub`. Never
+  on titles, sections, CTAs or numbers. There is no letter-spacing in Roblox.
+* Italic labels get `UIPadding.PaddingRight = ceil(.1 × size)` for the overhang.
 
-| role | font | WIDE | COMPACT | fill / stroke |
+### 9.2 Role table
+
+**WIDE** is du at s = 1 (1080p, 100%). **MED** is the rendered px on the smallest desktop (s = .90, §10); a value in
+brackets is the du that `Theme.size` writes there to hold the floor. **COMPACT** is du on phones (s ≥ 1, so px ≥ du).
+LH is the Roblox `LineHeight`. Strokes are UIStroke Contextual black, LineJoinMode Round, in du at the role size, in
+three tiers: **display** (≥ 20 du, or ≥ 18 on art) gets the full outline (.14–.2 em) + a hard shadow; **labels on hue
+fills, plates or glass** (plate name, active tab, toast title, badge on a disc) get a thin one (≤ .1 em, shadow ≤ 1);
+everything on a solid panel or card surface under 20 du gets **none**.
+
+| role | font · case | WIDE | MED | COMPACT | LH | stroke / shadow | colour |
+|---|---|---|---|---|---|---|---|
+| `hero` | Sarpanch Heavy | 56 (steps 48, 40) | 50 | 38 (34, 30) | 1.0 | 7 / 5 + shadow +5 + glow blob | UIGradient W → lift(c,.5) → c |
+| `title` | Montserrat Heavy Italic · CAPS | 44 | 40 | 27 (steps 24, 22) | 1.0 | 7 / 5 + shadow +4 | UIGradient W → lift(c,.45) |
+| `big` (LV, counters) | Sarpanch Heavy | 44 | 40 | 30 | 1.0 | 5 / 3 + shadow +3 | white |
+| `capsule` | Sarpanch Heavy | 34 (30, 26) | 31 | 28 (26, 22) | 1.0 | 5 / 4 + shadow +3 | gold gradient |
+| `index` (card №) | Sarpanch Heavy | 28 | 25 | 22 | 1.0 | none | lift(c,.5) α .8 |
+| `cta` | Montserrat Heavy Italic · CAPS verb | 26 | 23 | 20 (18, 16) | 1.0 | 6 / 4 + shadow +3 | white |
+| `section` | Montserrat Heavy Italic · CAPS | 24 | 22 | 22 | 1.0 | 5 / 4 + shadow +3 | UIGradient W → lift(c,.45) |
+| `resource` | Montserrat Heavy Italic · CAPS | 22 (18 when > 20 chars) | 20 | 18 (16) | 1.0 | 4 / 3 + shadow +2 | lift(c,.6) |
+| `card` | Montserrat ExtraBold Italic · Title Case | 20 | 18 | 18 | 1.1 | none | BUY: UIGradient W → lift(c,.45) (≥ 5.1:1 on the BUY surface); owned #d7f7e1; locked #c9bfd0 |
+| `toast` | Montserrat ExtraBold Italic · ≤ 4 words | 18 | 16 | 16 | 1.0 | 2 (on hue / glass) | white |
+| `numberHeavy` (values) | Sarpanch ExtraBold | 18 | 16 | 17 | 1.0 | none (well on fills) | white; not yet #d9b3be; owned #a5efbc |
+| `cardSmall` | Montserrat ExtraBold Italic · Title Case | 17 | 15 | 16 | 1.1 | none | text / #d7f7e1 |
+| `ctaSub` (gain line) | Sarpanch Bold + unit run | 17 | 15 | 15 | 1.0 | none; sits in a well (R15) | white |
+| `body` | Montserrat SemiBold · sentence | 16 | 14.4 | 15 | 1.3 | none | text α .92 |
+| `tab` | Montserrat ExtraBold, Italic when active · CAPS | 16 | 14.4 | 15 | 1.0 | 2 active on the fill; none idle | white / soft |
+| `number` | Sarpanch Bold | 16 | 14.4 | 15 | 1.0 | none | white |
+| `plate` | Montserrat ExtraBold Italic · CAPS + hair | 15 | 13.5 | 13 | 1.1 | 1.5 + shadow +1 | UIGradient W → lift(c,.45) |
+| `plateNum` | Sarpanch Bold | 15 | 13.5 | 14 | 1.1 | none | lift(c,.55) |
+| `terminal` / `terminalBold` | RobotoMono Medium / Bold | 15 | 13.5 | 14 | 1.35 | none | #caffbf / #9fdc92 |
+| `small` (secondary) | Montserrat SemiBold · sentence | 14 | 13.5 [15] | 13 | 1.25 | none | soft; text α .92 on hue cards |
+| `label` (chips, keys, buttons) | Montserrat ExtraBold · Title or CAPS ≤ 3 words | 14 | 13.5 [15] | 13 | 1.0 (1.15 wrapped) | none | per use |
+| `badge` (counts ×10, 13/18) | Sarpanch ExtraBold · digits | 14 | 13.5 [15] | 13 | 1.0 | 2 on hue discs | white, or dark ink on light fills |
+| `caps` (field labels) | Montserrat Bold · CAPS ≤ 3 words + hair | 13 | 12.6 [14] | 12 | 1.0 | none | soft #c9c3e6 |
+| `plateSub` ("⚡ READY") | Montserrat ExtraBold · CAPS + hair | 13 | 12.6 [14] | 12 | 1.1 | none | #ffe08a |
+
+Other display sizes stay as their signatures give them (§6): the `+gain` floater 28, pb/pp badges 40, cp counters
+52, ach "13 / 18" 64, the end-screen title 64, node symbols 44 / 40.5 / 31.7. They follow the display rules.
+
+### 9.3 The hierarchy ladder
+
+Every step between adjacent levels is **≥ 1.2×**. The loved big type did not shrink; the small type grew.
+
+| level | WIDE | ratio | COMPACT | ratio |
 |---|---|---|---|---|
-| Panel title | Montserrat Heavy Italic | 44 | 22 | UIGradient W → lift(c,.45); UIStroke 7 / 5; shadow +4 |
-| Hero amount | Sarpanch Heavy | 56 (steps 48, 40) | 34–38 | UIGradient W → lift(c,.5) → c; UIStroke 7 / 5; glow blob |
-| Capsule amount | Sarpanch Heavy | 34 | 26 | gold gradient; UIStroke 5 |
-| CTA title | Montserrat Heavy Italic | 26 | 18 | white; UIStroke 6 / 4 |
-| Section title | Montserrat Heavy Italic | 22 | 15 | UIGradient; UIStroke 5 / 4 |
-| Resource name | Montserrat Heavy Italic | 20 | 14 | lift(c,.6); UIStroke 4 / 3 |
-| Card title | Montserrat Heavy Italic | 16 | 14 (min 12) | UIGradient (can) / #d7f7e1 (owned) / #c9bfd0 (locked) |
-| Toast title / tab | Montserrat Heavy Italic | 15 / 14 | 13 / 13 | white; UIStroke 4 |
-| Node plate name | Montserrat Heavy Italic | 13 | 11 | UIGradient; UIStroke 3 |
-| Big numbers in cards (LV, index) | Sarpanch Heavy | 44 / 26 | 28 / 20 | white / lift(c,.5) α .6 |
-| Numbers (cost, chips, stats) | Sarpanch Bold / Heavy | 13–17 | 11–13 | white; not-yet #d9b3be |
-| Body | Montserrat SemiBold | 13 | 12 (floor 11) | W α .85; RichText |
-| Small labels | Montserrat Bold | 12–13 | 11–12 | muted #9a94b8 |
-| Caps labels | Montserrat ExtraBold + hair spaces | 11–12 | 11 | W α .55–.6 |
-| Terminal (cp, cm, export) | RobotoMono Medium / Bold | 12–14 | 11–12 | lime tints #caffbf / #9fdc92 |
+| hero | 56 | 1.27 | 38 | 1.41 |
+| title | 44 | 1.83 | 27 | 1.23 |
+| section | 24 | 1.20 | 22 | 1.22 |
+| card | 20 | 1.25 | 18 | 1.20 |
+| body | 16 | 1.23 | 15 | 1.25 |
+| caption (`caps`) | 13 | — | 12 | — |
 
-The **COMPACT floor is 11 px**, since s ≥ 1 there (§10). A lint fails any COMPACT label below 11. At WIDE/MEDIUM the
-smallest caps render at ≥ 9.4 px on the smallest desktop (0.85 × 11).
+Siblings at one level are separated by colour and weight, not size: `small` is body-level secondary text (soft),
+`number` sits beside body, `numberHeavy` is one step above its caps label, and `cardSmall` sits between card and
+body.
+
+### 9.4 Line spacing and padding
+
+* `LineHeight` is per role (table). Single-line roles stay at 1.0 so their frames do not grow; multi-line roles
+  get 1.1 (titles), 1.25–1.3 (body, small) or 1.35 (terminal). Roblox pitches lines at `floor(size × LineHeight)`.
+  Size frames from `TextBounds` after LineHeight is set, and use `AutomaticSize = Y` for anything that wraps.
+* Paragraphs and blocks are ≥ .5 em of body apart (8 WIDE / 8 COMPACT). Label → value is 4 du; title → body in a
+  card 8 / 6.
+* Text never touches a frame edge: at least 10 du of side padding on buttons, tiles and chips (8 in COMPACT chips),
+  and 12–16 on cards.
+* A chip is `1.9 × text` tall: 28 du for `label` 14, 30 for `number` 16, 26 for COMPACT 13.
+
+### 9.5 Floors and scaling
+
+**Rendered floors** (px on screen, TextSize × s, on every row of the §10 device table):
+
+| text | floor | smallest WIDE du | smallest COMPACT du |
+|---|---|---|---|
+| caps labels, chip words, `plateSub` | **12 px** | 13 | 12 |
+| mixed case, numbers, mono | **13 px** | 14 | 13 |
+| running text (`body` paragraphs) | **14 px** | 16 | 15 |
+
+* **`Theme.size(role)`** returns the COMPACT size on COMPACT. On WIDE and MEDIUM it returns
+  `max(role.wide, ceil(floor / s))`: at s = .90 the floor roles (`small`, `label`, `badge`, `caps`, `plateSub`) are
+  written one du larger (the bracketed MED values), so nothing renders below 12 / 13 px. Boxes around those roles use AutomaticSize or 2 du of slack.
+* The desktop UI scale no longer goes below .90, and Interface Size can never push s below it (§10).
+* `COMPACT_FLOOR` is 12. The old 11 px floor and the accepted 9.4 px caps are gone.
+* **Game HTML** cannot go under the floor. `Html.open()` clamps a game `font-size` to
+  `max(nsize, .88 × base, floor)` and caps enlarged sizes at 1.3 × base. The game's text-shadow → `<stroke>` is dropped
+  below 16 du.
+* **`Rich.fit`** step-fits only display roles, and its last step is never below the role's floor.
+* **PreferredTextSize** (Larger / Largest): the engine already enlarges text. The client does **not** also scale s.
+  * Reading roles (body, small, caps, number, terminal, label) follow the setting inside AutomaticSize-Y containers:
+    card bodies, toasts, tooltips, the detail sheet.
+  * Display roles ≥ 20 du get a `UITextSizeConstraint.MaxTextSize` equal to the role size.
+  * Fixed-geometry single-line roles (plate, tab, badge, chips) get `MaxTextSize = round(1.2 × size)` plus
+    `TextTruncate = AtEnd`, and their frames are sized with `TextService:GetTextSize`.
+  * `TextScaled` is never used for text.
+
+### 9.6 Colour and contrast
+
+Text colour tokens (§11.1): **text** #f2f0ff (primary), **soft** #c9c3e6 (secondary, labels, hints), **muted**
+#9a94b8 (tertiary only), **faint** #5c5775 (never text).
+
+| surface | primary | secondary | measured |
+|---|---|---|---|
+| panel, panel2, panel3, deep, dim, notyet | text | soft | soft ≥ 9.1:1; muted ≥ 5.3:1 |
+| owned green `mix(panel, bought, .14)` | #d7f7e1 / #a5efbc | soft | soft 8.4:1; #a5efbc 10.6:1 |
+| hue-tinted BUY / NEXT cards `mix(panel, c, .38)` | text | **text α .92** (never soft or muted) | ≥ 4.8:1 on all 21 hues (t is the worst) |
+| glass HUD (R10) carrying text, α ≥ .88 | text | soft | soft ≥ 8.9:1 even over white art |
+| bright hue fills (buttons, tiles, chips, the gen pill) | white ≥ 20 du with stroke + shadow | a **value well** (R15) or dark ink #0d0b16 | well ≥ 5.1:1 on every hue; ink ≥ 6.4:1 |
+
+Rules:
+
+* Every reading string is **≥ 4.5:1** on its real surface. On dark surfaces secondary text is ≥ 7:1 (soft is ≥ 8.4:1
+  everywhere dark). Display text ≥ 20 du needs ≥ 3:1 plus its outline.
+* Caps labels and hints use **soft** at full alpha, not white α .55. muted is only for text ≥ 15 du on dark surfaces
+  (disabled labels, timestamps), never on hue-tinted cards, glass or fills.
+* **Dim the surface, not the words.** Locked, ashed and owned states change the surface, the stroke and a state chip.
+  Their text stays ≥ 4.5:1 (ashed desc text α .82, locked title #c9bfd0, never α .55 or .6).
+* Coloured text on panels uses `Theme.textHue` (the §11.2 lift) at ≥ 4.5:1.
+* The shine sweep (R5) crosses only the top band of a card (index + title) at peak α ≤ .18, never the description.
+  Hold fills darken (black α .22 sweep or a brighter rim); they never wash a label in white.
+* A contrast unit test checks every role colour against every surface token for all 21 hues (§16).
+
+### 9.7 Text on the map and art always has a backing
+
+Text is never set directly on the parallax art, the rays or the sunburst. It needs one of:
+
+* a **plate** (§3.9: panel2 → deep α .95);
+* **glass** (R10) at α ≥ .88 (`BackgroundTransparency ≤ .12`, multiplied toward opaque by
+  `GuiService.PreferredTransparency`);
+* a **scrim band** (black α .45–.55, UICorner 12) behind a paragraph, e.g. the end-screen body;
+* for display text **≥ 18 du only**, the display outline: stroke ≥ .15 em plus a hard shadow (node symbols, the
+  end-screen and loading titles).
+
+Every HUD string is checked against the brightest map frame (the portal rim, sparkles, lit clouds), not a flat comp.
+
+### 9.8 Measure: lines and characters
+
+| text | max | overflow rule |
+|---|---|---|
+| card title | 2 lines, ≈ 17 chars per line at 237 du | never ellipsized; the view's short name if longer. Two-line titles are **balanced**: the client breaks at the word boundary nearest the middle, so a lone "I" / "IV" never sits on line 2 |
+| upgrade / challenge description | 4 lines (≈ 26 chars per line at 237 du WIDE, ≈ 30 COMPACT) | the card grows (AutomaticSize Y; the tier row takes the tallest card). Past 4 lines: clamp + ⓘ → the full text in the tooltip or detail sheet. Never cut an effect with "…" |
+| milestone done row | title 1 line + effect ≤ 2 lines | the row grows 60 → 78 |
+| fold row note | 1 line, the headline fact only | the rest on expand |
+| notes, tooltips, modal text | 45–75 chars per line; tooltips ≤ 5 lines at 360 du | — |
+| hints | ≤ 6 words, sentence case (`small`) | longer hints move into the ⓘ / tooltip, or a first-use coach mark |
+| caps labels | 1–3 words | more words become sentence-case `small` |
+| toast sub | 1 line, ≤ 40 chars | coalesced subs show a count or range ("3 achievements", "18th – 27th Meta-Milestone"), never joined names |
+| summary rows | 1 number per row, with its owner's name | never ≥ 3 numbers joined by " · " on one line |
+| plate name | whole words, ≤ 12 chars per line, 2 lines allowed | no initial-plus-period abbreviations (§3.9) |
+| buttons and CTAs | 1 line, ≥ 12 du side padding | step-fit (cta 26 → 22, COMPACT 20 → 18 → 16), then the short verb |
+
+### 9.9 Number presentation (client only; view.js parity is untouched)
+
+`Rich.num(s, role)` turns a game-formatted string into RichText. `format()` output is never re-computed, only
+re-typeset:
+
+1. **Families.** Numeral runs stay in the role's Sarpanch face. Words and units ("PP", "points", "OOMs/sec",
+   "weaker", "essences") become a `<font family=Montserrat weight=700 size=max(0.85×, small)>` run in soft (on dark surfaces)
+   or the run's own colour at α .8 (on fills), after a thin space U+2009.
+2. **Exponent markers.** Every `e` inside a numeral run gets `transparency=".3"` at the same size, so digit groups
+   separate: "e1,329,005" versus "1e413,950" read differently at a glance. `×` before an `e` gets a thin space
+   ("× e2.296e21").
+3. **Percentages** the client shows (the `pr` bars, and game strings of the form `63.000%`) have 0 decimals from 10%
+   and 1 decimal below ("63%", "4.2%", "0%"). "100%" only when have ≥ need.
+4. **Have / need.** The % is the primary figure (`number` or `ctaSub`). The need is secondary (`small`: "need
+   e1.057e60 points"). Tooltips show two aligned rows ("Need 1e413,950 HP" / "Have e8.502e20 HP") plus the bar.
+   Never two raw exponents joined by a slash.
+5. **Narrow slots** (chips and pills ≤ 100 du): an exponent run with ≥ 7 digits steps to the short form of the same
+   value ("+e483,525,689" → "+e4.84e8"). The full value stays in the hero, tooltip or detail sheet.
+6. **Tier badges and levels** use Arabic numerals ("TIER 1", "LV 3"). Game titles keep their roman numerals as sent.
+7. **Coordinates** "(6;4)" show as "6, 4".
+8. **Ticking values** are anchored to a stable edge (left for the capsule and hero, right for stat rows and costs)
+   in a slot sized for one extra character. They are never centred, so they do not jitter.
 
 ---------------------------------------------------------------------------------------------------------------------
 
@@ -899,25 +1211,38 @@ smallest caps render at ≥ 9.4 px on the smallest desktop (0.85 × 11).
 local V = workspace.CurrentCamera.ViewportSize   -- points; recompute on change
 local mode = (V.Y < 500) and "COMPACT" or ((V.X < 1500 or V.Y < 860) and "MEDIUM" or "WIDE")
 local s = mode == "COMPACT" and math.clamp(V.Y / 390, 1.0, 1.3)
-       or mode == "MEDIUM"  and math.clamp(math.min(V.X / 1600, V.Y / 900), 0.85, 1.0)
-       or                        math.clamp(math.min(V.X / 1920, V.Y / 1080), 0.85, 1.5)
-s = s * userSize            -- Options › Interface Size .90 / 1.00 / 1.15; COMPACT ignores .90 (never below 1)
-if GuiService.PreferredTextSize > Medium then s *= 1.1 end
+       or mode == "MEDIUM"  and math.clamp(math.min(V.X / 1600, V.Y / 900), 0.90, 1.0)
+       or                        math.clamp(math.min(V.X / 1920, V.Y / 1080), 0.90, 2.0)
+local S_MIN = mode == "COMPACT" and 1.0 or 0.90
+s = math.max(s * userSize, S_MIN)   -- Options › Interface Size .90 / 1.00 / 1.15; never below S_MIN
+-- PreferredTextSize does NOT change s: the engine enlarges text itself (§9.5)
 -- one UIScale on each root of HudGui, TopbarGui, MarkerGui, PanelGui, OverlayGui; roots sized in offset = V / s (never a
--- Scale-sized full-screen frame under a UIScale); MapGui uses REALM mapScale only
+-- Scale-sized full-screen frame under a UIScale); MapGui uses REALM mapScale only (Plates carry their own UIScale s)
 ```
 
-| device | V (pt) | mode | s | canvas (du) | sheet |
+* **The desktop floor is .90** (it was .85). The most common laptop setups land on it: 1366×768, 1440×900, and a
+  1080p laptop at the Windows default of 125% (reported as 1536×864). At .90 body text renders at 14.4 px and caps at
+  12.6 px; `Theme.size` lifts the four floor roles by one du (§9.5).
+* **The WIDE ceiling is 2.0** (it was 1.5), so a 4K monitor at 100% gets the same physical text as 1080p.
+* **Interface Size** .90 only shrinks screens where s > .90 (1440p and up); it can never push text under the floors.
+* The strip width is `canvas.w − 1160` on WIDE and `canvas.w − sheet − 24` on MEDIUM, with
+  `sheet = clamp(.62·canvas.w, 900, 1112)`. A strip under 568 pt uses REALM mapScale < 1; under 460 du the sheet is
+  full screen (§3.6).
+
+| device | mode | s | canvas (du) | sheet / strip | body / caps (px) |
 |---|---|---|---|---|---|
-| 1920×1080 | 1920×1080 | WIDE | 1.0 | 1920×1080 | side, SX 760 |
-| 2560×1440 | 2560×1440 | WIDE | 1.333 | 1920×1080 | side |
-| 1600×900 | 1600×900 | WIDE | .85 | 1882×1059 | side |
-| 1366×768 | 1366×768 | MEDIUM | .853 | 1601×900 | side, strip 584 du (map at mapScale .877) |
-| 1280×720 | 1280×720 | MEDIUM | .85 | 1506×847 | side, strip ≈ 490 du |
-| 1180×820 iPad | 1180×820 | MEDIUM | .85 | 1388×965 | strip 464 → ≥ 460: side (at the limit) |
-| 844×390 | 844×390 | COMPACT | 1.0 | 844×390 | full screen |
-| 932×430 | 932×430 | COMPACT | 1.10 | 847×390 | full screen |
-| 667×375 SE | 667×375 | COMPACT | 1.0 | 667×375 | full screen; content 1 card column |
+| 1920×1080 | WIDE | 1.0 | 1920×1080 | side, SX 760 | 16 / 13 |
+| 2560×1440 | WIDE | 1.333 | 1920×1080 | side, SX 760 | 21.3 / 17.3 |
+| 3840×2160 (4K at 100%) | WIDE | 2.0 | 1920×1080 | side, SX 760 | 32 / 26 |
+| 1600×900 | WIDE | .90 | 1778×1000 | side, strip 618 du (mapScale .979) | 14.4 / 12.6 |
+| 1536×864 (1080p laptop at Windows 125%) | WIDE | .90 | 1707×960 | side, strip 547 du (mapScale .866) | 14.4 / 12.6 |
+| 1440×900 (MacBook) | MEDIUM | .90 | 1600×1000 | side, strip 584 du (mapScale .925) | 14.4 / 12.6 |
+| 1366×768 | MEDIUM | .90 | 1518×853 | side, strip 553 du (mapScale .876) | 14.4 / 12.6 |
+| 1280×720 | MEDIUM | .90 | 1422×800 | side, strip 498 du (mapScale .789) | 14.4 / 12.6 |
+| 1180×820 iPad | MEDIUM | .90 | 1311×911 | strip 387 du → full screen | 14.4 / 12.6 |
+| 844×390 | COMPACT | 1.0 | 844×390 | full screen | 15 / 12 |
+| 932×430 | COMPACT | 1.10 | 845×390 | full screen | 16.5 / 13.2 |
+| 667×375 SE | COMPACT | 1.0 | 667×375 | full screen; content 1 card column | 15 / 12 |
 
 Phones are **landscape only** (LandscapeSensor). Portrait falls into COMPACT and is not optimised.
 `GuiService.PreferredTransparency` multiplies the glass and HUD background transparencies (not panel bodies).
@@ -930,9 +1255,10 @@ Phones are **landscape only** (LandscapeSensor). Portrait falls into COMPACT and
 
 | group | tokens |
 |---|---|
-| base | void #07060d, deep #0d0b16, panel #14111f, panel2 #1c1829, panel3 #262138, stroke #3a3352, strokeHi #6a5f8f, text #f2f0ff, muted #9a94b8, faint #5c5775 |
+| base | void #07060d, deep #0d0b16, panel #14111f, panel2 #1c1829, panel3 #262138, stroke #3a3352, strokeHi #6a5f8f, text #f2f0ff, **soft #c9c3e6** (secondary text, labels, hints), muted #9a94b8 (tertiary, ≥ 15 du only), faint #5c5775 (never text) |
 | state | bought #4be07a, locked #8a6f7a, complete #ffc233, danger #ff3b5c, gold #ffd34d |
 | extra | info #7a8cff, lockedLink #c7b8f2, ember #ff7a2e (sp malware tabs), system #9d8cff (Options) |
+| text on surfaces | well = black α .55 (R15), ink #0d0b16 (dark text on light fills), ownedTitle #d7f7e1, ownedValue #a5efbc, lockedTitle #c9bfd0, notYet #d9b3be, dangerText #f2d7dd, termLime #caffbf, termDim #9fdc92, stableId #5f8a58 |
 
 Layer hues (keyed by game id):
 
@@ -971,14 +1297,19 @@ Layer hues (keyed by game id):
    | black backgrounds | removed |
 
    Unknown colours fall back to `lift(c,.35)`.
-3. **Contrast:** coloured text on panel must reach 4.5:1 (body) or 3:1 (≥ 18 du heavy). `lift(c,t)` with the smallest
-   passing t is precomputed per layer (m .25, pp .20, mp .20, se .10, pm .35, others 0). Muted #9a94b8 (6.5:1) is the
-   floor for readable secondary text; faint is decoration only.
-4. **Text on hue fills:** ≥ 14 du → white + Contextual black stroke + hard shadow. < 14 du on low-contrast fills (t,
-   ach, cp, hb, ap, sp, hp, ep, pb, p, pep, ex, em) → dark #0d0b16 text without a stroke.
+3. **Contrast** (the full rules are §9.6): every reading string is ≥ 4.5:1 on its real surface; display text ≥ 20 du
+   is ≥ 3:1 plus its outline. Coloured text on panels uses `lift(c,t)` with the smallest passing t, precomputed per
+   layer (m .25, pp .20, mp .20, se .10, pm .35, others 0). Secondary text is **soft** #c9c3e6 (≥ 8.4:1 on every
+   dark surface). On hue-tinted cards all reading text is text α .92 (≥ 4.8:1 on all 21 hues). muted is tertiary
+   (≥ 15 du, dark surfaces only). faint is decoration only.
+4. **Text on hue fills:** display text ≥ 20 du → white + Contextual black stroke + hard shadow. Anything smaller sits
+   in a **value well** (R15: black α .55, ≥ 5.1:1 on every hue) in white without a stroke, or is dark ink #0d0b16
+   (≥ 6.4:1) on the light fills (t, ach, cp, hb, ap, sp, hp, ep, pb, p, pep, ex, em). A 3–4 px outline on text under
+   20 du is not allowed: it fills the counters.
 5. **Glow budget:** ≤ 2 per card, α ≤ .55 (CTAs and pulse ≤ .9). Owned and locked never glow.
 6. The **biome tint** affects map layers only, never the world layer, nodes or UI.
-7. **Dim, don't hide:** locked content stays visible (mauve / α .6).
+7. **Dim, don't hide, and dim the surface, not the words:** locked content stays visible through the mauve surface,
+   the lock sprite and the stroke. Its text stays ≥ 4.5:1 (never α .6 on the text).
 
 ---------------------------------------------------------------------------------------------------------------------
 
@@ -1021,18 +1352,19 @@ Every recipe reads the flags and falls back to sprites.
 |---|---|---|---|
 | R1 | Bevel surface | Frame + UICorner r + UIGradient (Rotation 90) + UIStroke (Border, child UIGradient) + **`bevel_card` / `bevel_button` 9-slice ImageLabel as the last child** (primary recipe) | — |
 | R2 | Glow / depth shadow | `UIShadow{Color, BlurRadius UDim, Spread, Transparency}` on **shapes only** | `glow_rr` / `glow_circle` sprite as a sibling **before** the body (children draw above parents) |
-| R3 | Outlined title | TextLabel white + UIGradient (fill) + UIStroke Contextual black (LineJoinMode Round) + a hard shadow clone TextLabel behind (+2..5 y) | — |
+| R3 | Outlined title | TextLabel white + UIGradient (fill) + UIStroke Contextual black (LineJoinMode Round) + a hard shadow clone TextLabel behind (+2..5 y). **Display roles** (≥ 20 du; ≥ 18 on art, §9.7) get the full outline; plate, active tab, toast title and disc badges a thin one (≤ .1 em, shadow ≤ 1); thickness as in the §9.2 table, scaled with the label when it is step-fitted. Card, cardSmall and reading roles use the same recipe with `stroke = 0, shadow = 0` | — |
 | R4 | Gold / hero number | Sarpanch Heavy + UIGradient + UIStroke + shadow clone; **glow = `glow_rr` sized to TextBounds + 2B behind** (never UIShadow on text) | — |
 | R5 | Shine sweep | overlay Frame (same UICorner) white + UIGradient transparency 1 → .72@.5 → 1, Rotation 105; tween `Offset` | none |
 | R6 | Conical ring (progress, hold, cooldown, portal) | ring Frame + inner hole Frame, UIGradient **Type Conical** with Transparency keys (0:0, p:0, p+.001:1, 1:1); shimmer = Rotation tween | two `halfdisc` sprites (classic radial progress) |
 | R7 | Radial gem / aura / vignette / glow blob | Frame + UIGradient **Type Radial** | `radial_p50/60/70` + `radial_lin` stack, `aura` |
 | R8 | Dashed rim | UIStroke + child UIGradient TileMode Repeat, Rotation 45, small Scale, stepped transparency | solid stroke α .7 |
 | R9 | Tiled texture (scanlines, stripes, grid, wave) | ImageLabel **ScaleType Tile** with a **standalone** small image (§14.2); scroll via Position | none |
-| R10 | Glass HUD | Frame #090711 α .72 + UIStroke W α .14 (no backdrop blur exists) | — |
+| R10 | Glass HUD | Frame #090711 α .72 + UIStroke W α .14 (no backdrop blur exists); **α .88 when it carries text** (§9.7) | — |
 | R11 | Glowing curve | 4 Path2D (halo, glow, core, hot) with UDim2 control points in `Links` scale units; thickness from k | 24 rotated thin Frames per curve (only if Path2D is missing) |
 | R12 | Glitch text | 3 TextLabels (white, #ff2e63 −2 x α .7, #2ee6ff +2 x α .55); the flicker moves the clones 60–140 ms | static |
-| R13 | Hold button | TextButton + a fill Frame (Size.X ∝ hold) or R6; InputBegan/Ended; starts after 120 ms / < 10 pt; rewinds on release | — |
+| R13 | Hold button | TextButton + a fill Frame (Size.X ∝ hold) or R6; InputBegan/Ended; starts after 120 ms / < 10 pt; rewinds on release. The fill is a **black α .22 sweep** (or a brighter rim), never a white wash over the label | — |
 | R14 | Scrim with a hole | full-screen Frame α .62 **minus** a square Frame centred on the target with a Radial transparency hole | plain scrim |
+| R15 | Value well | Frame black α .55, UICorner 8, UIPadding 3/10/3/10, AutomaticSize XY; holds white `number` / `small` / `label` text **without a stroke**. Used for secondary text on bright fills: CTA gain lines, D-pad costs, tile subs, the gen pill value, hold-button gains | a dark #0d0b16 chip |
 
 ### 13.3 Mock CSS → Roblox
 
@@ -1052,7 +1384,9 @@ Every recipe reads the flags and falls back to sprites.
 | inline SVG | atlas sprites |
 | mask on rays | the `rays` sprite |
 | SVG path | Path2D |
-| `-webkit-line-clamp` | TextTruncate AtEnd + a fixed height |
+| `-webkit-line-clamp` | only for display labels: TextTruncate AtEnd + a fixed height. Descriptions never clamp (§9.8) |
+| `line-height` (unitless, per role) | `TextLabel.LineHeight` of the role (§9.2); the mocks use the same numbers |
+| `font-size` | `Theme.size(role)`; the mocks read the same table from `TY` in `lib.js` |
 
 ---------------------------------------------------------------------------------------------------------------------
 
@@ -1175,7 +1509,19 @@ Snapshots render MapGui at the REALM camera given in the case file, which is the
 
 **Lints:**
 
-* no COMPACT label under 11 px;
+* **type floors** on the rendered tree at every §10 device row: TextSize × s ≥ 12 px for caps and chip words, ≥ 13 px
+  for everything else (mixed case, numbers, mono), ≥ 14 px for `body` paragraphs; the same check runs over the
+  mockup DOM;
+* no literal TextSize outside `Theme` (every label names a role); `TextScaled` never on text;
+* LineHeight matches the role (1.3 body, 1.25 small, 1.35 terminal, 1.1 titles, 1.0 single-line);
+* no italic or uppercase string longer than 4 words; card titles are never all caps;
+* no Sarpanch label whose text contains a letter other than `e`/`x` inside a numeral run, or a colon (the
+  `[A-DF-WYZa-df-wyz:]` check); symbols on nodes and gems are exempt;
+* no UIStroke thicker than .1 em on text under 18 du, none at all on panel / card surfaces under 20 du, and no text
+  on a hue fill under 20 du outside a value well or dark ink (thin-stroke labels of §9.2 excepted);
+* contrast: every text colour ≥ 4.5:1 on its surface for all 21 hues (`core_theme`), ≥ 3:1 for display ≥ 20 du;
+* no reading text directly on map art (it has a plate, glass ≥ .88, a scrim or a display outline, §9.7);
+* no "…" ellipsis in an upgrade, challenge or milestone effect description;
 * no client-authored text containing dev words ("virtualis", "Studio", "debug", "TODO");
 * no raw game colour in rendered RichText (the remap is applied);
 * ≤ 24 glows per panel.
@@ -1204,7 +1550,12 @@ Snapshots render MapGui at the REALM camera given in the case file, which is the
   (the Theme.caps flags).
 * Path2D with about 90 strokes renders at 60 fps on a phone; check whether the UIGradient follows the curve or its
   bbox.
-* Montserrat Heavy **Italic** and Sarpanch Heavy resolve (not synthesised).
+* Montserrat Heavy **Italic**, ExtraBold Italic, Sarpanch Heavy and Sarpanch ExtraBold resolve (not synthesised).
+* A type specimen at 1920×1080, 1536×864 (s .90) and 844×390: every §9.2 role, a 3-line body paragraph (the
+  LineHeight 1.3 pitch), U+200A (`GetTextSize("A"..HAIR.."A") − GetTextSize("AA") ≈ .1 × size`; otherwise
+  `Rich.useHair = false`), U+2009 for units, and a `<font family weight size transparency>` RichText run.
+* PreferredTextSize Larger and Largest: measure the engine multipliers; cards, toasts and tooltips grow, fixed
+  chips truncate (§9.5). Review the 1920 set at 100% on a physical 24" 1080p monitor and on a phone.
 * A read-only TextBox allows select-all + copy on desktop and mobile (otherwise use the §7.6 fallback).
 * `InputObject.Position` vs `GetMouseLocation` inset offsets on MapGui (ScreenInsets None) vs HudGui.
 * `GuiService.TopbarInset` changes when the unibar expands (capsule drop rule).

@@ -4,7 +4,8 @@
 	remap, contrast lifts), the type roles (9) and the engine capability flags (13.1).
 
 	    Theme.C.panel, Theme.hue("m"), Theme.lift(c, .45), Theme.remap("#793784", "p"), Theme.remapper("p")
-	    Theme.font("title"), Theme.size("title")           -- the size for the current Layout mode
+	    Theme.font("title"), Theme.size("title")           -- the size for the current Layout mode and scale (floors held)
+	    Theme.text(label, "body")                          -- FontFace + TextSize + LineHeight of a role (DESIGN.md 9.2)
 	    Theme.detect(); Theme.caps.Radial                  -- pcall probes, once at start (App)
 
 	Colour maths uses Color3.new with the channels, so it runs on the test engine too.
@@ -30,8 +31,9 @@ Theme.C = {
 	stroke = hex("3a3352"),
 	strokeHi = hex("6a5f8f"),
 	text = hex("f2f0ff"),
-	muted = hex("9a94b8"),
-	faint = hex("5c5775"),
+	soft = hex("c9c3e6"), -- secondary text, labels, hints (DESIGN.md 9.6; >= 8.4:1 on every dark surface)
+	muted = hex("9a94b8"), -- tertiary only, >= 15 du on dark surfaces
+	faint = hex("5c5775"), -- never text
 	-- state
 	bought = hex("4be07a"),
 	locked = hex("8a6f7a"),
@@ -43,12 +45,17 @@ Theme.C = {
 	lockedLink = hex("c7b8f2"),
 	ember = hex("ff7a2e"),
 	system = hex("9d8cff"),
-	-- fixed text colours of the type table (DESIGN.md 9)
+	-- fixed text colours of the type table (DESIGN.md 9.2 / 9.6, 11.1)
 	ownedTitle = hex("d7f7e1"),
+	ownedValue = hex("a5efbc"),
 	lockedTitle = hex("c9bfd0"),
 	notYet = hex("d9b3be"),
+	ready = hex("ffe08a"),
+	dangerText = hex("f2d7dd"),
+	ink = hex("0d0b16"), -- dark text on light hue fills
 	termLime = hex("caffbf"),
 	termDim = hex("9fdc92"),
+	stableId = hex("5f8a58"),
 	glass = hex("090711"),
 	white = Color3.new(1, 1, 1),
 	black = Color3.new(0, 0, 0),
@@ -207,35 +214,58 @@ function Theme.remapper(layer: string?): (hex: string) -> string
 end
 
 -- ------------------------------------------------------------------------------------------------------ type roles
--- DESIGN.md 9: family, weight, italic, WIDE size (MEDIUM uses it too under the smaller UI scale), COMPACT size
-type Role = { family: string, weight: Enum.FontWeight, italic: boolean, wide: number, compact: number }
-local function role(family: string, weight: Enum.FontWeight, italic: boolean, wide: number, compact: number): Role
-	return { family = family, weight = weight, italic = italic, wide = wide, compact = compact }
+-- DESIGN.md 9.2: family, weight, italic, WIDE size (MEDIUM too; Theme.size lifts the floor roles when s < 1), COMPACT
+-- size, LineHeight, and the rendered floor class ("caps" = 12 px, "text" = 13 px; DESIGN.md 9.5)
+export type FloorClass = "caps" | "text"
+export type Role = {
+	family: string,
+	weight: Enum.FontWeight,
+	italic: boolean,
+	wide: number,
+	compact: number,
+	lh: number,
+	floor: FloorClass,
+}
+local function role(family: string, weight: Enum.FontWeight, italic: boolean, wide: number, compact: number, lh: number,
+	floor: FloorClass?): Role
+	return { family = family, weight = weight, italic = italic, wide = wide, compact = compact, lh = lh, floor = floor or "text" }
 end
 local W = Enum.FontWeight
 local ROLES: { [string]: Role } = {
-	title = role("Montserrat", W.Heavy, true, 44, 22),
-	hero = role("Sarpanch", W.Heavy, false, 56, 36),
-	capsule = role("Sarpanch", W.Heavy, false, 34, 26),
-	cta = role("Montserrat", W.Heavy, true, 26, 18),
-	section = role("Montserrat", W.Heavy, true, 22, 15),
-	resource = role("Montserrat", W.Heavy, true, 20, 14),
-	card = role("Montserrat", W.Heavy, true, 16, 14),
-	toast = role("Montserrat", W.Heavy, true, 15, 13),
-	tab = role("Montserrat", W.Heavy, true, 14, 13),
-	plate = role("Montserrat", W.Heavy, true, 13, 11),
-	big = role("Sarpanch", W.Heavy, false, 44, 28),
-	index = role("Sarpanch", W.Heavy, false, 26, 20),
-	number = role("Sarpanch", W.Bold, false, 15, 12),
-	numberHeavy = role("Sarpanch", W.Heavy, false, 15, 12),
-	body = role("Montserrat", W.SemiBold, false, 13, 12),
-	small = role("Montserrat", W.Bold, false, 13, 12),
-	caps = role("Montserrat", W.ExtraBold, false, 12, 11),
-	terminal = role("RobotoMono", W.Medium, false, 13, 12),
-	terminalBold = role("RobotoMono", W.Bold, false, 13, 12),
+	-- display: Heavy / Sarpanch Heavy with outline + shadow (the loved look; nothing here shrank)
+	hero = role("Sarpanch", W.Heavy, false, 56, 38, 1),
+	title = role("Montserrat", W.Heavy, true, 44, 27, 1),
+	big = role("Sarpanch", W.Heavy, false, 44, 30, 1),
+	capsule = role("Sarpanch", W.Heavy, false, 34, 28, 1),
+	index = role("Sarpanch", W.Heavy, false, 28, 22, 1),
+	cta = role("Montserrat", W.Heavy, true, 26, 20, 1),
+	section = role("Montserrat", W.Heavy, true, 24, 22, 1),
+	resource = role("Montserrat", W.Heavy, true, 22, 18, 1),
+	-- titles and labels: ExtraBold (Heavy fuses letters below 20 du); italic only on short titles
+	card = role("Montserrat", W.ExtraBold, true, 20, 18, 1.1),
+	toast = role("Montserrat", W.ExtraBold, true, 18, 16, 1),
+	cardSmall = role("Montserrat", W.ExtraBold, true, 17, 16, 1.1),
+	tab = role("Montserrat", W.ExtraBold, true, 16, 15, 1),
+	plate = role("Montserrat", W.ExtraBold, true, 15, 13, 1.1, "caps"),
+	label = role("Montserrat", W.ExtraBold, false, 14, 13, 1),
+	-- numbers: Sarpanch for numeral runs only (words and units go through Rich.num)
+	numberHeavy = role("Sarpanch", W.ExtraBold, false, 18, 17, 1),
+	ctaSub = role("Sarpanch", W.Bold, false, 17, 15, 1),
+	number = role("Sarpanch", W.Bold, false, 16, 15, 1),
+	plateNum = role("Sarpanch", W.Bold, false, 15, 14, 1.1),
+	badge = role("Sarpanch", W.ExtraBold, false, 14, 13, 1),
+	-- reading text: upright, no outline, real line spacing
+	body = role("Montserrat", W.SemiBold, false, 16, 15, 1.3),
+	small = role("Montserrat", W.SemiBold, false, 14, 13, 1.25),
+	caps = role("Montserrat", W.Bold, false, 13, 12, 1, "caps"),
+	plateSub = role("Montserrat", W.ExtraBold, false, 13, 12, 1.1, "caps"),
+	terminal = role("RobotoMono", W.Medium, false, 15, 14, 1.35),
+	terminalBold = role("RobotoMono", W.Bold, false, 15, 14, 1.35),
 }
 Theme.ROLES = ROLES
-Theme.COMPACT_FLOOR = 11
+-- rendered floors in px (TextSize x UI scale) on every device row, DESIGN.md 9.5
+Theme.FLOOR = { caps = 12, text = 13, body = 14 }
+Theme.COMPACT_FLOOR = 12
 
 local fonts: { [string]: Font } = {}
 function Theme.font(name: string): Font
@@ -246,17 +276,33 @@ function Theme.font(name: string): Font
 	fonts[name] = f
 	return f
 end
--- the size of a role for a layout mode (default: the current Layout.mode)
+
 local layoutModule: any = nil
-function Theme.size(name: string, mode: string?): number
+local function layout(): any
+	if layoutModule == nil then layoutModule = require(script.Parent:WaitForChild("Layout")) :: any end
+	return layoutModule
+end
+-- the TextSize of a role. mode defaults to Layout.mode; s to Layout.s when the mode is the current one, else 1.
+-- COMPACT has s >= 1, so its table size is already on screen. WIDE / MEDIUM lift a role until size x s reaches its
+-- floor: at s .90 the floor roles (small, label, badge, caps, plateSub) are written one du larger.
+function Theme.size(name: string, mode: string?, s: number?): number
 	local r = ROLES[name] or ROLES.body
-	local m = mode
-	if m == nil then
-		if layoutModule == nil then layoutModule = require(script.Parent:WaitForChild("Layout")) :: any end
-		m = layoutModule.mode
-	end
-	if m == "COMPACT" then return math.max(Theme.COMPACT_FLOOR, r.compact) end
-	return r.wide
+	local floorPx = if r.floor == "caps" then Theme.FLOOR.caps else Theme.FLOOR.text
+	local m: string = mode or layout().mode
+	if m == "COMPACT" then return math.max(r.compact, floorPx) end
+	local sc: number = s or (if mode == nil then layout().s else 1)
+	return math.max(r.wide, math.ceil(floorPx / math.max(sc, 0.01) - 1e-6))
+end
+-- the role's LineHeight: 1 for single-line roles, 1.1 for titles that wrap, 1.25-1.35 for running text
+function Theme.lineHeight(name: string): number
+	return (ROLES[name] or ROLES.body).lh
+end
+-- FontFace + TextSize + LineHeight of a role on a TextLabel / TextButton / TextBox: the one way a label gets its type
+function Theme.text(l: GuiObject, name: string, mode: string?)
+	local t = l :: any
+	t.FontFace = Theme.font(name)
+	t.TextSize = Theme.size(name, mode)
+	t.LineHeight = Theme.lineHeight(name)
 end
 
 -- ------------------------------------------------------------------------------------------------------ capabilities

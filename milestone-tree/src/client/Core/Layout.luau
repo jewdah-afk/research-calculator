@@ -4,7 +4,7 @@
 	the HUD-rect registry and the free / safe map rects.
 
 	    Layout.mode ("WIDE" | "MEDIUM" | "COMPACT"), Layout.s, Layout.canvas (du), Layout.viewport (points)
-	    Layout.changed                      viewport, Interface Size, PreferredTextSize
+	    Layout.changed                      viewport, Interface Size, PreferredTextSize (re-measure; s ignores it)
 	    Layout.screen(name, order, insets)  a ScreenGui + its Root (UIScale s, sized V/s in offset; MapGui: none)
 	    Layout.duToAbs(gui, p)              screen du from the device top-left -> abs space px
 	    Layout.inputToAbs(p)                InputObject.Position -> abs space (the only such conversion)
@@ -42,21 +42,21 @@ Layout.BOTTOM_BAND_COMPACT = 64
 Layout.STRIP_MIN = 460 -- a side sheet whose map strip is narrower than this (du) goes full screen
 
 -- ------------------------------------------------------------------------------------------------------ the formula
--- DESIGN.md 10 verbatim. vw, vh: the viewport in points; userSize: .90 / 1 / 1.15; bigText: PreferredTextSize > Medium
-function Layout.compute(vw: number, vh: number, userSize: number?, bigText: boolean?): (string, number, Vector2)
+-- the smallest UI scale per mode: text never renders under the DESIGN.md 9.5 floors (Theme.size lifts the rest)
+Layout.S_MIN = { COMPACT = 1.0, MEDIUM = 0.90, WIDE = 0.90 } :: { [string]: number }
+-- DESIGN.md 10 verbatim. vw, vh: the viewport in points; userSize: .90 / 1 / 1.15. PreferredTextSize does not
+-- change s: the engine enlarges text itself (DESIGN.md 9.5).
+function Layout.compute(vw: number, vh: number, userSize: number?): (string, number, Vector2)
 	local mode = if vh < 500 then "COMPACT" elseif vw < 1500 or vh < 860 then "MEDIUM" else "WIDE"
 	local s
 	if mode == "COMPACT" then
 		s = math.clamp(vh / 390, 1.0, 1.3)
 	elseif mode == "MEDIUM" then
-		s = math.clamp(math.min(vw / 1600, vh / 900), 0.85, 1.0)
+		s = math.clamp(math.min(vw / 1600, vh / 900), 0.90, 1.0)
 	else
-		s = math.clamp(math.min(vw / 1920, vh / 1080), 0.85, 1.5)
+		s = math.clamp(math.min(vw / 1920, vh / 1080), 0.90, 2.0)
 	end
-	local u = userSize or 1
-	if mode == "COMPACT" then u = math.max(1, u) end
-	s *= u
-	if bigText then s *= 1.1 end
+	s = math.max(s * (userSize or 1), Layout.S_MIN[mode])
 	return mode, s, Vector2.new(vw / s, vh / s)
 end
 -- the map strip left of a side sheet that is too narrow keeps the sheet full screen (DESIGN.md 3.6)
@@ -85,16 +85,17 @@ local function fitRoot(sc: Screen)
 	sc.root.Size = UDim2.fromOffset(math.floor(size.X / s + 0.5), math.floor(size.Y / s + 0.5))
 end
 
+-- the player's text size setting: s ignores it, but text frames re-measure when it changes (Layout.changed)
+Layout.textSize = "Medium"
 local function refresh()
 	local v = viewportSize()
-	local bigText = false
+	local textSize = Layout.textSize
 	pcall(function()
-		local p = GuiService.PreferredTextSize
-		bigText = p ~= Enum.PreferredTextSize.Medium
+		textSize = GuiService.PreferredTextSize.Name
 	end)
-	local mode, s, canvas = Layout.compute(v.X, v.Y, Prefs.get().size / 100, bigText)
-	local moved = mode ~= Layout.mode or math.abs(s - Layout.s) > 1e-6 or v ~= Layout.viewport
-	Layout.mode, Layout.s, Layout.canvas, Layout.viewport = mode, s, canvas, v
+	local mode, s, canvas = Layout.compute(v.X, v.Y, Prefs.get().size / 100)
+	local moved = mode ~= Layout.mode or math.abs(s - Layout.s) > 1e-6 or v ~= Layout.viewport or textSize ~= Layout.textSize
+	Layout.mode, Layout.s, Layout.canvas, Layout.viewport, Layout.textSize = mode, s, canvas, v, textSize
 	for _, sc in screens do fitRoot(sc) end
 	if moved then Layout.changed:Fire() end
 end

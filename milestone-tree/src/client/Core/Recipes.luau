@@ -178,10 +178,11 @@ local function follow(l: TextLabel, names: { string })
 	hook(l, "textFollow", l:GetPropertyChangedSignal("Text"):Connect(copy))
 	hook(l, "sizeFollow", l:GetPropertyChangedSignal("TextSize"):Connect(copy))
 end
+-- italic overhang: ceil(.1 x size) of right padding (DESIGN.md 9.1)
 local function italicPad(c: TextLabel, italic: boolean)
 	if italic then
 		local p = child(c, "Overhang", "UIPadding") :: UIPadding
-		p.PaddingRight = UDim.new(0, 4)
+		p.PaddingRight = UDim.new(0, math.ceil(0.1 * c.TextSize))
 	else
 		remove(c, "Overhang")
 	end
@@ -200,11 +201,13 @@ local function strokeOn(c: TextLabel, thickness: number)
 end
 
 export type TitleOpts = { text: string, role: string, from: Color3?, to: Color3?, stroke: number, shadow: number, size: number? }
--- R3: white (or gradient) heavy text, black contextual stroke, hard shadow clone
+-- R3: white (or gradient) heavy text, black contextual stroke, hard shadow clone. Display roles only (DESIGN.md 9.2):
+-- card / cardSmall titles use it with stroke = 0 and shadow = 0 (no outline under 18 du)
 function Recipes.title(l: TextLabel, o: TitleOpts)
 	local r = Theme.ROLES[o.role]
 	l.FontFace = Theme.font(o.role)
 	l.TextSize = o.size or Theme.size(o.role)
+	l.LineHeight = Theme.lineHeight(o.role)
 	l.Text = o.text
 	l.TextTransparency = 1
 	l.BackgroundTransparency = 1
@@ -239,6 +242,7 @@ export type NumberOpts = { text: string, size: number, from: Color3, mid: Color3
 function Recipes.number(l: TextLabel, o: NumberOpts)
 	l.FontFace = Theme.font(o.role or "hero")
 	l.TextSize = o.size
+	l.LineHeight = Theme.lineHeight(o.role or "hero")
 	l.Text = o.text
 	l.TextTransparency = 1
 	l.BackgroundTransparency = 1
