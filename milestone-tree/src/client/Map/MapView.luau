@@ -861,33 +861,52 @@ function MapView.new(gui: ScreenGui, root: Frame, o: { assets: any?, realm: any?
 		end)
 	end
 
-	-- a failed load counts as a missing id for that layer (plan 3.4): after 10 s, fall back where needed
+	-- a sky or world whose painted tiles have not come in after 10 s (a failed or still-moderated upload) gets the
+	-- procedural look (plan 3.4), but only while NONE of its tiles has loaded: the fallback sits in the layer's own
+	-- container over the tiles, so it must never cover painted art. It goes away as soon as a tile arrives (checked
+	-- every 2 s for 2 minutes).
 	local function watchdog()
 		task.delay(10, function()
 			if box.Parent == nil then return end
-			local sky, world = byId.sky, byId.world
-			local rebuilt = false
 			local recs: { LayerRec } = {}
-			if sky then table.insert(recs, sky) end
-			if world then table.insert(recs, world) end
+			if byId.sky then table.insert(recs, byId.sky) end
+			if byId.world then table.insert(recs, byId.world) end
 			for _, rec in recs do
-				local bad = false
-				for _, t in rec.tiles do
-					if t.gui.Image ~= "" and not t.gui.IsLoaded then bad = true end
-				end
-				if bad and rec.sprites:FindFirstChild("FallbackStars") == nil and rec.sprites:FindFirstChild("FallbackWorld") == nil then
-					if rec == sky then
-						for _, inst in Fallback.sky(sky.plane, sky.sprites, { w = sky.def.w, h = sky.def.h }) do table.insert(fallbackMade, inst) end
-					else
-						local fw = Fallback.world(world.sprites, realm)
-						fallbackWorld = fw
-						for _, inst in fw.made do table.insert(fallbackMade, inst) end
-						for _, t in Fallback.breathe(fw, reduced) do table.insert(fallbackTweens, t) end
+				local function anyLoaded(): boolean
+					for _, t in rec.tiles do
+						if t.gui.Image ~= "" and t.gui.IsLoaded then return true end
 					end
-					rebuilt = true
+					return false
 				end
+				if #rec.tiles == 0 or anyLoaded() then continue end
+				if rec.sprites:FindFirstChild("FallbackStars") or rec.sprites:FindFirstChild("FallbackWorld") then continue end
+				local made: { Instance }, tweens: { Tween } = {}, {}
+				if rec == byId.sky then
+					made = Fallback.sky(rec.plane, rec.sprites, { w = rec.def.w, h = rec.def.h })
+				else
+					local fw = Fallback.world(rec.sprites, realm)
+					fallbackWorld = fw
+					made = fw.made
+					tweens = Fallback.breathe(fw, reduced)
+				end
+				for _, inst in made do table.insert(fallbackMade, inst) end
+				for _, t in tweens do table.insert(fallbackTweens, t) end
+				dirty = true
+				task.spawn(function()
+					for _ = 1, 60 do
+						task.wait(2)
+						local first: Instance? = made[1]
+						if not box.Parent or not first or not first.Parent then return end
+						if anyLoaded() then
+							for _, t in tweens do t:Cancel() end
+							for _, inst in made do inst:Destroy() end
+							if rec == byId.world then fallbackWorld = nil end
+							dirty = true
+							return
+						end
+					end
+				end)
 			end
-			if rebuilt then dirty = true end
 		end)
 	end
 

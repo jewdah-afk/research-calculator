@@ -51,15 +51,19 @@ local function blob(parent: Instance, name: string, cx: number, cy: number, w: n
 		f.BackgroundTransparency = 0
 		local g = Instance.new("UIGradient")
 		g.Type = Enum.GradientType.Radial
+		-- the radial ramp can run out to the frame's corners (CSS farthest-corner), which leaves a visible square: the
+		-- fade ends at 0.7 (the inscribed circle) and the UICorner keeps the blob round however the engine maps it
 		g.Transparency = if hard
 			then NumberSequence.new({
 				NumberSequenceKeypoint.new(0, 1 - alpha),
-				NumberSequenceKeypoint.new(0.35, 1 - alpha * 0.8),
+				NumberSequenceKeypoint.new(0.25, 1 - alpha * 0.8),
+				NumberSequenceKeypoint.new(0.7, 1),
 				NumberSequenceKeypoint.new(1, 1),
 			})
 			else NumberSequence.new({
 				NumberSequenceKeypoint.new(0, 1 - alpha),
-				NumberSequenceKeypoint.new(0.45, 1 - alpha * 0.45),
+				NumberSequenceKeypoint.new(0.32, 1 - alpha * 0.45),
+				NumberSequenceKeypoint.new(0.7, 1),
 				NumberSequenceKeypoint.new(1, 1),
 			})
 		g.Parent = f
@@ -69,8 +73,8 @@ local function blob(parent: Instance, name: string, cx: number, cy: number, w: n
 			return nil
 		end
 		f.BackgroundTransparency = 1 - alpha * 0.5
-		round(f)
 	end
+	round(f)
 	return f
 end
 
