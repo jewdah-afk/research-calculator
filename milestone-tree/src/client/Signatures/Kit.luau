@@ -246,6 +246,25 @@ function Kit.stack(parent: Instance, name: string, horizontal: boolean, gap: num
 	return f
 end
 
+-- a control at the right end of a section title row (Sections.header): the hairline flexes to leave it room
+-- (UIFlexItem); without flex items it follows the chips
+function Kit.headerControl(header: Instance, name: string, text: string, w: number, o: ButtonOpts?): TextButton
+	local rule = header:FindFirstChild("Rule")
+	local flex = false
+	if rule then
+		flex = pcall(function()
+			local f = Common.get(rule, "Flex", "UIFlexItem") :: any
+			f.FlexMode = Enum.UIFlexMode.Fill
+		end)
+	end
+	local opts: ButtonOpts = table.clone(o or ({} :: ButtonOpts))
+	opts.w = w
+	opts.h = opts.h or 30
+	opts.order = if flex then 20 else 5
+	local b = Kit.button(header, name, text, opts)
+	return b
+end
+
 -- ------------------------------------------------------------------------------------------------------ accents
 -- the holder a signature draws its accent into (the sheet, the header band or the hero); a new key clears it
 function Kit.accent(parent: Instance, key: string): Frame
@@ -262,20 +281,36 @@ function Kit.accent(parent: Instance, key: string): Frame
 	return f
 end
 
+-- a decoration that must sit outside an accent holder (inside a reused button, say) goes when the accent's content
+-- goes: a guard object in the holder destroys it
+function Kit.tether(holder: Instance, name: string, obj: Instance)
+	local guard = holder:FindFirstChild(name)
+	if guard and guard:GetAttribute("For") == obj:GetFullName() then return end
+	if guard then guard:Destroy() end
+	local g = Instance.new("Folder")
+	g.Name = name
+	g:SetAttribute("For", obj:GetFullName())
+	g.Destroying:Connect(function()
+		if obj.Parent then obj:Destroy() end
+	end)
+	g.Parent = holder
+end
+
 -- diagonal stripes (R9 without a texture): a repeating gradient; nothing without TileMode
-function Kit.stripes(parent: Instance, color: Color3, alpha: number, radius: number?): Frame?
+function Kit.stripes(parent: Instance, color: Color3, alpha: number, radius: number?, rotation: number?, name: string?): Frame?
+	local key = name or "Stripes"
 	if not Theme.caps.TileMode then
-		Common.drop(parent, "Stripes")
+		Common.drop(parent, key)
 		return nil
 	end
-	local f = Common.get(parent, "Stripes", "Frame") :: Frame
+	local f = Common.get(parent, key, "Frame") :: Frame
 	f.Active = false
 	f.Size = UDim2.fromScale(1, 1)
 	f.BackgroundColor3 = color
 	f.BackgroundTransparency = 0
 	if radius then Common.corner(f, radius) end
 	local g = Common.get(f, "Tile", "UIGradient") :: UIGradient
-	g.Rotation = 45
+	g.Rotation = rotation or 45
 	pcall(function()
 		g.TileMode = Enum.GradientTileMode.Repeat
 		g.Scale = 0.035

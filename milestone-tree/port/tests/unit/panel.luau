@@ -212,7 +212,7 @@ end
 local sigF = folder(client, "Signatures")
 scriptModule(sigF, "Signatures", "client/Signatures/Signatures")
 -- the per-layer signatures (packages J1 / J2): every sibling module, auto-registered by Signatures on first use
-local SIGS = { "Kit", "M", "P" }
+local SIGS = { "Kit", "M", "P", "Sp", "Cp", "Ex" }
 for _, n in SIGS do scriptModule(sigF, n, "client/Signatures/" .. n) end
 
 -- the local player
@@ -273,6 +273,7 @@ local gui, root = Layout.screen("PanelGui", 20, M.G.Enum.ScreenInsets.CoreUISafe
 check(gui ~= nil and root ~= nil, "PanelGui built")
 local gui2 = Layout.screen("PanelGuiShell", 21, M.G.Enum.ScreenInsets.CoreUISafeInsets)
 
+REPORT = {}
 local function runFixture(name, caps, w, h)
 	local fx = fixtures[name]
 	for k in Theme.caps do Theme.caps[k] = caps end
@@ -313,6 +314,7 @@ local function runFixture(name, caps, w, h)
 		for i = 1, 30 do if list[i] then io_print(list[i][1], list[i][2]) end end
 	end
 	check(n <= 450, label .. ": instances " .. n .. " <= 450")
+	if caps and w == 1920 then table.insert(REPORT, name .. " " .. n) end
 	-- cards carry State, sections have titles
 	local cards, stated = 0, 0
 	for id, rec in panel.render.recs do
@@ -392,6 +394,7 @@ for _, name in index do
 	runFixture(name, false, 1366, 768)
 end
 
+io_print("    instances (WIDE, caps on): " .. table.concat(REPORT, ", "))
 print("== claim routing and the open protocol")
 do
 	for k in Theme.caps do Theme.caps[k] = false end
@@ -531,6 +534,123 @@ do
 	if sw then sw.Activated:Fire() end
 	check(shown("bought") == owned0, "p: owned back")
 	check(panel.parts.band:FindFirstChild("Accent") ~= nil or not Theme.caps.TileMode, "p: header accent")
+	panel:destroy()
+end
+-- a fixture's panel, opened (the helper of the per-signature checks)
+local function openFixture(fx, caps, w, h)
+	for k in Theme.caps do Theme.caps[k] = caps end
+	viewport(w or 1920, h or 1080)
+	local store = ViewStore.new()
+	local changes = store:apply(fx)
+	local panel = Panel.new(gui, { store = store })
+	local fired = {}
+	panel.act:Connect(function(a) table.insert(fired, a) end)
+	panel:update(store, changes)
+	panel:open(store.tab, store:map().nodes[store.tab])
+	return panel, store, fired
+end
+local function findName(root, name)
+	for _, d in descendants(root) do if d.Name == name then return d end end
+	return nil
+end
+local function plainText(t) return (string.gsub(tostring(t or ""), "<[^>]*>", "")) end
+
+do
+	-- sp (Signatures/Sp): furnace, spark cards with burn bars, the Show cycler in the title row, the pager hidden on 1 page
+	local w0 = #warnings
+	local panel, store, fired = openFixture(fixtures.s13_sp_spark, true)
+	local furnace = findName(panel.root, "Furnace")
+	check(furnace ~= nil, "sp: furnace card")
+	local btns = 0
+	if furnace then for _, d in furnace:GetDescendants() do if d.__class == "TextButton" then btns += 1 end end end
+	check(btns == 3, "sp: IGNITE + 2 REIGNITE (" .. btns .. ")")
+	check(findName(panel.root, "Unlocked") ~= nil, "sp: the unlocked chip")
+	local cards = 0
+	for _, d in descendants(panel.root) do if string.match(d.Name, "^S%d$") and findName(d, "Burn") then cards += 1 end end
+	check(cards == 3, "sp: 3 spark cards with burn bars (" .. cards .. ")")
+	local show = findName(panel.root, "Show")
+	check(show ~= nil and string.find(plainText(show.Text), "3", 1, true) ~= nil, "sp: Show: 3 in the title row")
+	if show then show.Activated:Fire() end
+	check(#fired == 1 and fired[1][1] == "click" and type(fired[1][3]) == "table" and fired[1][3][1] == 14, "sp: Show fires the clickable's action")
+	local pagerHidden = false
+	for id, rec in panel.render.recs do if rec.claim and rec.node.ci == 15 and rec.root.Visible == false then pagerHidden = true end end
+	check(pagerHidden, "sp: the pager hides on one page")
+	check(findName(panel.parts.hero, "Ashes") ~= nil, "sp: PRESTIGE ASHES chip in the hero")
+	check(findName(panel.parts.sheet, "Rim") ~= nil, "sp: ember rim on the Spark tab")
+	check(#warnings == w0, "sp: no warnings" .. (if #warnings > w0 then ": " .. warnings[w0 + 1] else ""))
+	panel:destroy()
+end
+do
+	-- cp (Signatures/Cp): counters in the hero, the mode radio, the disk grid (<= 36 tiles x <= 8 instances), the inspector
+	local w0 = #warnings
+	local panel, store, fired = openFixture(fixtures.s19mv_cp, true)
+	local caused = findName(panel.parts.hero, "Caused")
+	check(caused ~= nil and plainText(caused.Text) == "23", "cp: CAUSED 23 in the hero")
+	local stat = findName(panel.parts.hero, "Stat1")
+	check(stat ~= nil and string.find(plainText(stat.Text), "e569,142,978", 1, true) ~= nil, "cp: the essences stat row")
+	local grid = findName(panel.root, "Grid")
+	local tiles, worst = 0, 0
+	if grid then
+		for _, c in grid:GetChildren() do
+			if c.__class == "TextButton" then
+				tiles += 1
+				worst = math.max(worst, 1 + #c:GetDescendants())
+			end
+		end
+	end
+	check(tiles == 20 and tiles <= 36, "cp: 20 disk tiles (" .. tiles .. ")")
+	check(worst <= 8, "cp: a tile is at most 8 instances (" .. worst .. ")")
+	check(findName(panel.root, "Inspector") ~= nil and findName(panel.root, "Act") ~= nil, "cp: the inspector with ACTIVATE / DEACTIVATE")
+	local d101 = grid and grid:FindFirstChild("D101")
+	if d101 then d101.Activated:Fire() end
+	check(fired[#fired] and fired[#fired][1] == "grid" and fired[#fired][3] == 101, "cp: a tile click fires its grid action")
+	local modes = findName(panel.root, "Options")
+	local o2 = modes and modes:FindFirstChild("O2")
+	if o2 then o2.Activated:Fire() end
+	check(fired[#fired] and fired[#fired][1] == "click" and fired[#fired][3] == 12, "cp: the mode radio fires the free mode's action")
+	local visibleNotes = 0
+	for id, rec in panel.render.recs do if rec.node.cn == "display-text" and rec.root.Visible ~= false then visibleNotes += 1 end end
+	check(visibleNotes == 1, "cp: only the explainer stays in the body (" .. visibleNotes .. ")")
+	check(#descendants(panel.root) <= 450, "cp: instances " .. #descendants(panel.root))
+	check(#warnings == w0, "cp: no warnings" .. (if #warnings > w0 then ": " .. warnings[w0 + 1] else ""))
+	panel:destroy()
+end
+do
+	-- ex (Signatures/Ex): the map is cached by its static svg content; a move only moves the gem
+	local w0 = #warnings
+	local panel, store, fired = openFixture(fixtures.s19mv_ex, true)
+	local map = findName(panel.root, "Map")
+	check(map ~= nil and map:GetAttribute("Builds") == 1, "ex: the map built once (" .. tostring(map and map:GetAttribute("Builds")) .. ")")
+	local lines0 = map and findName(map, "Static") and #findName(map, "Static"):GetChildren() or 0
+	check(lines0 > 0, "ex: map lines and axis numbers drawn (" .. lines0 .. ")")
+	local gem = map and findName(map, "Gem")
+	local gx0 = gem and gem.Position.X.Offset
+	check(gem ~= nil and findName(map, "Goal") ~= nil, "ex: the position gem and the goal")
+	-- move the position only
+	local svgId = nil
+	for id, n in store.nodes do if type(n) == "table" and type(n.h) == "string" and string.find(n.h, "<svg", 1, true) then svgId = id end end
+	local moved = table.clone(store:get(svgId))
+	moved.h = string.gsub(moved.h, '<text x="131" y="135"', '<text x="151" y="135"')
+	local ch = store:apply({ set = { [svgId] = moved }, del = {} })
+	panel:update(store, ch)
+	M.step(0.5)
+	check(map:GetAttribute("Builds") == 1, "ex: a move rebuilds nothing (" .. tostring(map:GetAttribute("Builds")) .. ")")
+	check(gem.Parent ~= nil and gem.Position.X.Offset ~= gx0, "ex: the gem moved")
+	-- another zone rebuilds
+	local other = table.clone(moved)
+	other.h = string.gsub(other.h, "zones/a%-3%.svg", "zones/a-2.svg")
+	ch = store:apply({ set = { [svgId] = other }, del = {} })
+	panel:update(store, ch)
+	check(map:GetAttribute("Builds") == 2, "ex: a new zone rebuilds once")
+	local keys = 0
+	for _, d in descendants(panel.root) do if string.sub(d.Name, 1, 3) == "Key" and d.__class == "TextButton" then keys += 1 end end
+	check(keys == 4 and findName(panel.root, "Respec") ~= nil, "ex: D-pad 4 keys + RESPEC (" .. keys .. ")")
+	local right = findName(panel.root, "KeyRight")
+	if right then right.Activated:Fire() end
+	check(fired[#fired] and fired[#fired][1] == "buy" and fired[#fired][3] == 11, "ex: the right key buys Increase X")
+	check(findName(panel.parts.hero, "Zone") ~= nil and findName(panel.parts.hero, "Area") ~= nil, "ex: ZONE and AREA chips")
+	check(#descendants(panel.root) <= 450, "ex: instances " .. #descendants(panel.root))
+	check(#warnings == w0, "ex: no warnings" .. (if #warnings > w0 then ": " .. warnings[w0 + 1] else ""))
 	panel:destroy()
 end
 do
