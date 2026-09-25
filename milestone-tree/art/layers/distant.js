@@ -647,6 +647,10 @@
     { x: 2060, top: 1520, w: 200, d: 150, hz: 0.28, seed: 209, shape: 'tilt', crystals: [255, 90, 150] },
     { x: 930, top: 1540, w: 230, d: 160, hz: 0.25, seed: 210, shape: 'arch' },
   ];
+  // The central band (behind the tree and in the gap to the rift, local x 700-2400, y 560-1250 at the start and overview
+  // cameras) would otherwise hold only sky. The keep-clear rule here is advisory (dim, low contrast), so these ghosts sit
+  // deep in the haze: tiny, 70-85% mixed into the haze colour before the atmosphere pass. [x, top, w, haze]
+  const GHOSTS = [[1010, 690, 92, 0.8], [1610, 600, 64, 0.84], [1935, 905, 118, 0.74], [2275, 735, 80, 0.78], [1275, 1010, 60, 0.82]];
   const SPECKS = [[990, 370, 70], [2250, 380, 60], [230, 1330, 90], [2760, 1060, 80], [1700, 1620, 60], [2840, 300, 56], [150, 560, 64], [2900, 1560, 76], [720, 700, 44], [2700, 640, 40]];
 
   function subCanvas(x0, y0, w, h) { const c = mk(w, h), x = cx2(c); x.translate(-x0, -y0); return { c, x, x0, y0 }; }
@@ -680,7 +684,7 @@
       pal: { dark: [14, 8, 34], base: [70, 50, 140], soil: [60, 38, 96], moss: [120, 100, 220], mossRift: [190, 80, 150], rim: [255, 214, 150], bounce: [120, 90, 230] },
       soil: 12, moss: 6, amb: 0.12, gamma: 1.3, rimW: 2.5, rimK: 0.55, keyK: 0.35, bounceK: 0.4, ao: 0.45, yTop, yBot, riftW: X => riftW(X), riftRimK: 0.8, ...WARM });
     sb.x.drawImage(M.c, M.x, M.y); if (M.e) se.x.drawImage(M.e, M.x, M.y);
-    if (I.arch) { // a hole through the island: an arch silhouette
+    if (sh === 'arch') { // a hole through the island: an arch silhouette
       for (const q of [sb.x, se.x]) { q.save(); q.globalCompositeOperation = 'destination-out'; q.beginPath(); q.ellipse(I.x + hw * 0.1, I.top + I.d * 0.55, hw * 0.28, I.d * 0.3, 0, 0, 7); q.fill(); q.restore(); }
       sb.x.strokeStyle = col([255, 214, 150], 0.3); sb.x.lineWidth = 2; sb.x.beginPath(); sb.x.ellipse(I.x + hw * 0.1, I.top + I.d * 0.55, hw * 0.28, I.d * 0.3, 0, Math.PI * 0.95, Math.PI * 1.6); sb.x.stroke();
     }
@@ -714,16 +718,18 @@
     return { S, yBot };
   }
 
-  function paintSpeck([x, top, w], b, i) {
+  function paintSpeck([x, top, w, hzGhost], b, e, i) {
     const r = rng(700 + i), hw = w / 2;
     const lobes = [{ x: x + (r() - 0.5) * hw * 0.5, y: top + w * (0.4 + r() * 0.3), w: hw * 0.7, p: 1.1 }, { x: x + (r() < 0.5 ? -1 : 1) * hw * 0.5, y: top + w * (0.2 + r() * 0.15), w: hw * 0.35 }];
     const S = K.island({ xL: x - hw, xR: x + hw, top, tilt: (r() - 0.5) * 0.2, thick: w * 0.1, seed: 700 + i, lobes, droop: 0.12, jag: 1.4, step: 1.5 });
-    const sb = subCanvas(Math.floor(x - hw - 20), Math.floor(top - 40), w + 40, w + 90);
+    const sb = subCanvas(Math.floor(x - hw - 20), Math.floor(top - 40), w + 40, w + 90), se = subCanvas(sb.x0, sb.y0, w + 40, w + 90);
     const M = K.mass({ poly: S.poly, seed: 700 + i, pad: 4, openTop: true, bevel: 3, dome: w * 0.25, domeK: 0.7, bump: 1, crack: 0, cyl: { cx: x, hw, k: 0.5, down: 0.5 },
-      pal: { dark: [20, 12, 44], base: [74, 56, 146], moss: [120, 100, 220], rim: [255, 214, 150] }, moss: 3, amb: 0.2, rimW: 1.5, rimK: 0.5, riftW: X => riftW(X) });
-    sb.x.drawImage(M.c, M.x, M.y);
+      pal: { dark: [20, 12, 44], base: [74, 56, 146], moss: [120, 100, 220], rim: [255, 214, 150] }, moss: 3, amb: 0.2, rimW: 1.5, rimK: 0.5, riftW: X => riftW(X), ...WARM, warmW: 2 });
+    sb.x.drawImage(M.c, M.x, M.y); if (M.e) se.x.drawImage(M.e, M.x, M.y);
     if (r() < 0.6) K.tree(sb.x, null, x + (r() - 0.5) * hw * 0.6, S.topY(x) + 1, w * 0.35, 800 + i, { kind: riftW(x) > 0.6 ? 'dead' : null, bark: [30, 20, 60], leaf: [50, 36, 100], rim: [230, 200, 190] });
-    commit(b, sb, 0.4 + r() * 0.15, HAZE(x));
+    const hz = hzGhost != null ? hzGhost : 0.4 + r() * 0.15;
+    commit(b, sb, hz, HAZE(x));
+    commit(e, se, Math.min(0.9, hz * 0.8), [0, 0, 0]);
   }
 
   function paintPlanet(b, e) {
@@ -781,31 +787,49 @@
   }
 
   function paintRidges(b, e) {
-    // far ridgelines, lowest last (nearest), each sinking into a bright misty abyss
-    const ridge = (base, amp, scale, seed, c0, c1, rimA, fadeTo) => {
+    // far ridgelines, farthest first, each sinking into the misty abyss. The fill keeps a floor alpha (`floor`) over its
+    // last 8% so the bottom rows of the layer match the rows just inside (no dim strip at the edge during overscroll).
+    // The top line gets the warm key-light rim (emissive, ~30%), strongest on the left-facing flanks, crimson on the rift side.
+    const ridge = (o) => {
+      const { base, amp, scale, seed, c0, c1, a0 = 0.85, a1 = 0.55, floor, rimA, lights = 16, lightA = 0.7 } = o;
       const n = makeNoise(seed), pts = [];
-      for (let x = -10; x <= W + 10; x += 4) {
+      for (let x = -12; x <= W + 12; x += 4) {
         const big = 0.5 + 0.5 * fbm(n, x / (scale * 2.6), 2.2, 3), peaks = Math.pow(ridged(n, x / scale, seed * 0.1, 5), 1.6);
         pts.push([x, base - amp * (0.25 + 0.75 * big) * (0.35 + 0.9 * peaks) - amp * 0.1 * n(x / 40, 7)]);
       }
-      b.save(); b.beginPath(); b.moveTo(-10, H); pts.forEach(p => b.lineTo(p[0], p[1])); b.lineTo(W + 10, H); b.closePath();
-      const g = b.createLinearGradient(0, base - amp, 0, H); g.addColorStop(0, col(c0, 0.85)); g.addColorStop(0.35, col(c1, 0.55)); g.addColorStop(1, col(c1, fadeTo)); b.fillStyle = g; b.fill(); b.restore();
-      b.save(); b.beginPath(); pts.forEach((p, i) => i ? b.lineTo(p[0], p[1]) : b.moveTo(p[0], p[1])); b.strokeStyle = col([255, 214, 150], rimA); b.lineWidth = 1.5; b.stroke(); b.restore();
+      b.save(); b.beginPath(); b.moveTo(-12, H + 20); pts.forEach(p => b.lineTo(p[0], p[1])); b.lineTo(W + 12, H + 20); b.closePath();
+      const g = b.createLinearGradient(0, base - amp, 0, H);
+      g.addColorStop(0, col(c0, a0)); g.addColorStop(0.35, col(c1, a1)); g.addColorStop(0.92, col(c1, floor)); g.addColorStop(1, col(c1, floor));
+      b.fillStyle = g; b.fill(); b.restore();
+      b.save(); b.beginPath(); pts.forEach((p, i) => i ? b.lineTo(p[0], p[1]) : b.moveTo(p[0], p[1])); b.strokeStyle = col(K.KEY, rimA * 0.5); b.lineWidth = 1.5; b.stroke(); b.restore();
+      e.save(); e.lineCap = 'round'; e.lineWidth = 2.2;
+      for (let i = 1; i < pts.length; i++) {
+        const p = pts[i - 1], q = pts[i], dx = q[0] - p[0], dy = q[1] - p[1], l = Math.hypot(dx, dy) || 1;
+        const face = clamp(((dy / l) * K.L2[0] + (-dx / l) * K.L2[1] - 0.35) / 0.6);
+        if (face <= 0.02) continue;
+        e.strokeStyle = col(mixc(K.WARM, K.CRIMSON, riftW(p[0])), rimA * face);
+        e.beginPath(); e.moveTo(p[0], p[1] + 0.6); e.lineTo(q[0], q[1] + 0.6); e.stroke();
+      }
+      e.restore();
       // pinpoint lights on the ridge: distant crystal groves
       const r = rng(seed + 1);
-      for (let i = 0; i < 16; i++) { const p = pts[Math.floor(r() * pts.length)]; const c = r() < 0.5 ? [180, 140, 255] : r() < 0.5 ? [95, 224, 255] : [255, 201, 60]; const cc = mixc(c, [255, 70, 120], riftW(p[0]) * 0.8); blob(e, p[0], p[1] + 6 + r() * 30, 3 + r() * 3, cc, 0.7); }
+      for (let i = 0; i < lights; i++) { const p = pts[Math.floor(r() * pts.length)]; const c = r() < 0.5 ? [180, 140, 255] : r() < 0.5 ? [95, 224, 255] : [255, 201, 60]; const cc = mixc(c, [255, 70, 120], riftW(p[0]) * 0.8); blob(e, p[0], p[1] + 6 + r() * 30, 3 + r() * 3, cc, lightA); }
       return pts;
     };
-    ridge(1640, 200, 420, 31, [92, 74, 164], [84, 66, 156], 0.14, 0.0);
-    ridge(1760, 170, 300, 47, [70, 54, 136], [62, 46, 124], 0.2, 0.0);
+    // the farthest ridge crosses the central band (behind the tree and the rift gap): near the haze colour, low alpha
+    ridge({ base: 1235, amp: 150, scale: 360, seed: 23, c0: [80, 64, 156], c1: [72, 56, 146], a0: 0.5, a1: 0.36, floor: 0.2, rimA: 0.26, lights: 9, lightA: 0.4 });
+    ridge({ base: 1640, amp: 200, scale: 420, seed: 31, c0: [92, 74, 164], c1: [84, 66, 156], floor: 0.24, rimA: 0.3 });
+    ridge({ base: 1760, amp: 170, scale: 300, seed: 47, c0: [70, 54, 136], c1: [62, 46, 124], floor: 0.3, rimA: 0.34 });
   }
+
 
   LAYERS.distant = LAYERS.far = async function () {
     const t0 = performance.now();
     const base = mk(W, H), b = cx2(base), emis = mk(W, H), e = cx2(emis);
     paintPlanet(b, e);
     paintRidges(b, e);
-    SPECKS.forEach((s, i) => paintSpeck(s, b, i));
+    GHOSTS.forEach((s, i) => paintSpeck(s, b, e, 40 + i));
+    SPECKS.forEach((s, i) => paintSpeck(s, b, e, i));
     // islands, farthest (most haze) first
     [...ISLES].sort((p, q) => q.hz - p.hz).forEach(I => paintIsle(I, b, e));
     // readability: island centres off the soft zones, widths <= 420

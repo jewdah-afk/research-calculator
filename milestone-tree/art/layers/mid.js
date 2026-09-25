@@ -619,9 +619,10 @@
   // ================================================================ ISLAND KIT (end)
 
   // ---- contract snapshot (realm.json layers[mid], sprites[lightfall]); repaint if `node camera.js --build` changes them
+  // blur 1.5 (was 1): softness grows with distance behind the focal plane (near 0.9 < mid 1.5 < far 3)
   const CFG = {
     size: [3360, 2160], res: 0.75, splitX: 1918.5, fade: 563,
-    atm: { hazeColor: [56, 40, 118], hazeRift: [96, 26, 62], haze: 0.3, hazeBottom: 0.25, saturation: 0.85, contrast: 0.75, blur: 1, maxLuma: 0.62, emissiveMax: 0.85 },
+    atm: { hazeColor: [56, 40, 118], hazeRift: [96, 26, 62], haze: 0.3, hazeBottom: 0.25, saturation: 0.85, contrast: 0.75, blur: 1.5, maxLuma: 0.62, emissiveMax: 0.85 },
     // sprites[lightfall].instances: x, y = top of the fall (the lip), s = sprite width, len = length
     falls: [[1916, 236, 80, 380], [2286, 1536, 81, 420], [376, 1206, 63.9, 520], [2816, 356, 58, 560], [1186, 1616, 77.2, 380], [596, 316, 74, 620], [3036, 1306, 64.4, 480]],
     hard: [['m', 1491, 1369.8, 171, 194], ['mm', 1347, 1396.8, 171, 194], ['em', 1635, 1396.8, 171, 194], ['p', 1491, 1225.8, 171, 194], ['pe', 1284, 1099.8, 171, 194], ['sp', 1414.5, 1077.3, 171, 194], ['pb', 1567.5, 1077.3, 171, 194], ['pp', 1698, 1099.8, 171, 194], ['se', 1333.5, 955.8, 171, 194], ['hp', 1491, 933.3, 171, 194], ['ep', 1648.5, 955.8, 171, 194], ['hb', 1347, 811.8, 171, 194], ['ap', 1491, 789.3, 171, 194], ['mp', 1635, 811.8, 171, 194], ['t', 1491, 658.8, 171, 194], ['pm', 2233.5, 1216.8, 171, 194], ['pep', 2071.5, 1045.8, 171, 194], ['cr', 2395.5, 1054.8, 171, 194], ['cm', 2476.5, 933.3, 171, 194], ['ex', 2233.5, 865.8, 171, 194], ['ach', 1050, 784.8, 171, 194]],
@@ -632,6 +633,7 @@
   const FALL = { realm: [222, 204, 255], rift: [255, 150, 196], corrupt: [178, 255, 196] };
   const fallCol = (x, corrupt) => corrupt ? FALL.corrupt : mixc(FALL.realm, FALL.rift, riftW(x));
   const fall = i => { const [x, y, s, len] = CFG.falls[i]; return { x, y, s, len }; };
+  const WARM = { warm: 0.62, warmW: 3 }; // thin warm key-light rim at ~60% of the near layer's strength
 
   // Island specs. xL/xR/top: the grassy top line; lobes: hanging cones {x, y tip, w half-width}; the fall anchor is
   // the lip (a flat notch) at the lightfall instance. Positions keep every island out of the hard zones.
@@ -663,7 +665,7 @@
       cyl: { cx: (I.xL + I.xR) / 2, hw: (I.xR - I.xL) / 2, k: 0.55, down: 0.5 },
       strata: { period: 22, lw: 0.1, dark: 0.3, warp: 8, wl: 110, tilt: 0.03 },
       pal: { dark: [6, 3, 18], base: [100, 58, 196], soil: [78, 42, 104], moss: rw > 0.5 ? [160, 80, 180] : [118, 96, 235], mossRift: [180, 70, 150], rim: [245, 212, 205], key: [255, 206, 140], bounce: [120, 80, 230] },
-      soil: 30, moss: 12, amb: 0.07, gamma: 1.5, rimW: 3, rimK: 1.0, keyK: 0.75, bounceK: 0.5, ao: 0.55, yTop, yBot, riftW: (X) => riftW(X), riftRimK: 0.7,
+      soil: 30, moss: 12, amb: 0.07, gamma: 1.5, rimW: 3, rimK: 1.0, keyK: 0.75, bounceK: 0.5, ao: 0.55, yTop, yBot, riftW: (X) => riftW(X), riftRimK: 0.7, ...WARM,
     });
     b.drawImage(M.c, M.x, M.y); if (M.e) e.drawImage(M.e, M.x, M.y); chk.drawImage(M.c, M.x, M.y);
     // crystal seams spreading up from the lip into the rock: the light comes from inside the island
@@ -715,8 +717,8 @@
     for (let k = 0; k < 5; k++) {
       const side = R() < 0.5 ? -1 : 1, x = (side < 0 ? I.xL : I.xR) + side * (10 + R() * 100), y = I.top + 60 + R() * (yBot - I.top) * 0.8, sz = 8 + R() * 26;
       const P = K.rock({ cx: x, cy: y, w: sz * 1.3, h: sz, seed: I.seed * 3 + k, corners: 7, taper: 0.5, jitter: 0.3 });
-      const m = K.mass({ poly: P, seed: I.seed * 3 + k, pad: 6, bevel: 4, dome: sz * 0.5, domeK: 0.8, bump: 2, facet: 12, facetTilt: 0.4, pal: { dark: [8, 4, 20], base: [92, 64, 160], rim: [225, 200, 255] }, amb: 0.1, rimW: 2, rimK: 0.9, riftW: X => riftW(X) });
-      b.drawImage(m.c, m.x, m.y); chk.drawImage(m.c, m.x, m.y);
+      const m = K.mass({ poly: P, seed: I.seed * 3 + k, pad: 6, bevel: 4, dome: sz * 0.5, domeK: 0.8, bump: 2, facet: 12, facetTilt: 0.4, pal: { dark: [8, 4, 20], base: [92, 64, 160], rim: [225, 200, 255] }, amb: 0.1, rimW: 2, rimK: 0.9, riftW: X => riftW(X), ...WARM, warmW: 2 });
+      b.drawImage(m.c, m.x, m.y); if (m.e) e.drawImage(m.e, m.x, m.y); chk.drawImage(m.c, m.x, m.y);
     }
     return S;
   }
