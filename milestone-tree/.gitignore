@@ -3,3 +3,4 @@ port/data/
 port/gen/probe.luau
 sourcemap.json
 port/*.log
+__pycache__/
