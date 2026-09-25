@@ -179,9 +179,11 @@
             R += (mc2[0] * ml - R) * mk2; G += (mc2[1] * ml - G) * mk2; B += (mc2[2] * ml - B) * mk2;
           }
         }
-        // rims: key light from the upper left; crimson from the right inside the rift biome
+        // rims: key light from the upper left; crimson from the right inside the rift biome. With a warm rim, the outermost
+        // px belong to it: the broad base rim steps back there so the thin gold line reads on a dark edge, not over lilac.
+        const wm = wd ? a * (0.75 * (1 - at(x + L2[0] * ww, y + L2[1] * ww)) + 0.25 * (1 - at(x + L2[0] * ww * 2.2, y + L2[1] * ww * 2.2))) : 0;
         const rk = a * (0.65 * (1 - at(x + L2[0] * rimW, y + L2[1] * rimW)) + 0.35 * (1 - at(x + L2[0] * rimW * 2.4, y + L2[1] * rimW * 2.4)));
-        const rc = P.rim || LILAC, rs = (S.rimK == null ? 0.7 : S.rimK) * (1 - 0.45 * rw);
+        const rc = P.rim || LILAC, rs = (S.rimK == null ? 0.7 : S.rimK) * (1 - 0.45 * rw) * (1 - 0.75 * wm * (1 - rw));
         R += rc[0] * rk * rs; G += rc[1] * rk * rs; B += rc[2] * rk * rs;
         if (rw > 0) {
           const rr = a * (1 - at(x + rimW * 1.2, y - rimW * 0.3)) * rw * (S.riftRimK == null ? 0.6 : S.riftRimK);
@@ -189,12 +191,9 @@
         }
         const o4 = i * 4;
         od[o4] = clamp(R, 0, 255); od[o4 + 1] = clamp(G, 0, 255); od[o4 + 2] = clamp(B, 0, 255); od[o4 + 3] = a * 255;
-        if (wd) {
-          const wm = a * (0.75 * (1 - at(x + L2[0] * ww, y + L2[1] * ww)) + 0.25 * (1 - at(x + L2[0] * ww * 2.2, y + L2[1] * ww * 2.2)));
-          if (wm > 0.02) {
-            const wc = mixc(WC, CRIMSON, rw), br = WS * wm * (0.72 + 0.28 * (0.5 + 0.5 * nX(X / 34, Y / 34)));
-            wd[o4] = wc[0]; wd[o4 + 1] = wc[1]; wd[o4 + 2] = wc[2]; wd[o4 + 3] = clamp(br) * 255; warmAny = true;
-          }
+        if (wm > 0.02) {
+          const wc = mixc(WC, CRIMSON, rw), br = WS * wm * (0.72 + 0.28 * (0.5 + 0.5 * nX(X / 34, Y / 34)));
+          wd[o4] = wc[0]; wd[o4 + 1] = wc[1]; wd[o4 + 2] = wc[2]; wd[o4 + 3] = clamp(br) * 255; warmAny = true;
         }
         // glowing crystal seams
         if (V && d > 3) {

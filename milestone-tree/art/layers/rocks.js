@@ -179,9 +179,11 @@
             R += (mc2[0] * ml - R) * mk2; G += (mc2[1] * ml - G) * mk2; B += (mc2[2] * ml - B) * mk2;
           }
         }
-        // rims: key light from the upper left; crimson from the right inside the rift biome
+        // rims: key light from the upper left; crimson from the right inside the rift biome. With a warm rim, the outermost
+        // px belong to it: the broad base rim steps back there so the thin gold line reads on a dark edge, not over lilac.
+        const wm = wd ? a * (0.75 * (1 - at(x + L2[0] * ww, y + L2[1] * ww)) + 0.25 * (1 - at(x + L2[0] * ww * 2.2, y + L2[1] * ww * 2.2))) : 0;
         const rk = a * (0.65 * (1 - at(x + L2[0] * rimW, y + L2[1] * rimW)) + 0.35 * (1 - at(x + L2[0] * rimW * 2.4, y + L2[1] * rimW * 2.4)));
-        const rc = P.rim || LILAC, rs = (S.rimK == null ? 0.7 : S.rimK) * (1 - 0.45 * rw);
+        const rc = P.rim || LILAC, rs = (S.rimK == null ? 0.7 : S.rimK) * (1 - 0.45 * rw) * (1 - 0.75 * wm * (1 - rw));
         R += rc[0] * rk * rs; G += rc[1] * rk * rs; B += rc[2] * rk * rs;
         if (rw > 0) {
           const rr = a * (1 - at(x + rimW * 1.2, y - rimW * 0.3)) * rw * (S.riftRimK == null ? 0.6 : S.riftRimK);
@@ -189,12 +191,9 @@
         }
         const o4 = i * 4;
         od[o4] = clamp(R, 0, 255); od[o4 + 1] = clamp(G, 0, 255); od[o4 + 2] = clamp(B, 0, 255); od[o4 + 3] = a * 255;
-        if (wd) {
-          const wm = a * (0.75 * (1 - at(x + L2[0] * ww, y + L2[1] * ww)) + 0.25 * (1 - at(x + L2[0] * ww * 2.2, y + L2[1] * ww * 2.2)));
-          if (wm > 0.02) {
-            const wc = mixc(WC, CRIMSON, rw), br = WS * wm * (0.72 + 0.28 * (0.5 + 0.5 * nX(X / 34, Y / 34)));
-            wd[o4] = wc[0]; wd[o4 + 1] = wc[1]; wd[o4 + 2] = wc[2]; wd[o4 + 3] = clamp(br) * 255; warmAny = true;
-          }
+        if (wm > 0.02) {
+          const wc = mixc(WC, CRIMSON, rw), br = WS * wm * (0.72 + 0.28 * (0.5 + 0.5 * nX(X / 34, Y / 34)));
+          wd[o4] = wc[0]; wd[o4 + 1] = wc[1]; wd[o4 + 2] = wc[2]; wd[o4 + 3] = clamp(br) * 255; warmAny = true;
         }
         // glowing crystal seams
         if (V && d > 3) {
@@ -619,9 +618,10 @@
   // ================================================================ ISLAND KIT (end)
 
   // ---- contract snapshot (realm.json layers[near]); repaint if `node camera.js --build` changes it
+  // blur 0.9 (was 2.5): this plane sits between mid and the focal world, so it must be sharper than mid (1.5) and far (3)
   const CFG = {
     size: [3800, 2752], res: 0.5, splitX: 2271, fade: 375,
-    atm: { hazeColor: [42, 28, 90], hazeRift: [80, 20, 50], haze: 0.15, hazeBottom: 0.2, saturation: 0.9, contrast: 0.85, blur: 2.5, maxLuma: 0.6, emissiveMax: 0.8 },
+    atm: { hazeColor: [42, 28, 90], hazeRift: [80, 20, 50], haze: 0.15, hazeBottom: 0.2, saturation: 0.9, contrast: 0.85, blur: 0.9, maxLuma: 0.6, emissiveMax: 0.8 },
     hard: [['m', 1606, 1826.8, 162, 183], ['mm', 1382, 1868.8, 162, 183], ['em', 1830, 1868.8, 162, 183], ['p', 1606, 1602.8, 162, 183], ['pe', 1284, 1406.8, 162, 183], ['sp', 1487, 1371.8, 162, 183], ['pb', 1725, 1371.8, 162, 183], ['pp', 1928, 1406.8, 162, 183], ['se', 1361, 1182.8, 162, 183], ['hp', 1606, 1147.8, 162, 183], ['ep', 1851, 1182.8, 162, 183], ['hb', 1382, 958.8, 162, 183], ['ap', 1606, 923.8, 162, 183], ['mp', 1830, 958.8, 162, 183], ['t', 1606, 720.8, 162, 183], ['pm', 2761, 1588.8, 162, 183], ['pep', 2509, 1322.8, 162, 183], ['cr', 3013, 1336.8, 162, 183], ['cm', 3139, 1147.8, 162, 183], ['ex', 2761, 1042.8, 162, 183], ['ach', 920, 916.8, 162, 183]],
     softR: [248, 232], // soft zones: same centres, rx x ry
   };
@@ -630,17 +630,29 @@
   const riftW = x => smooth(CFG.splitX - CFG.fade, CFG.splitX + CFG.fade, x);
   const SOFT = CFG.hard.map(z => [z[0], z[1], z[2], CFG.softR[0], CFG.softR[1]]);
 
-  // kind: 'earth' (mossy top, roots), 'boulder' (faceted, crystal cluster), 'shard' (tall, veined)
+  // kind: 'earth' (a mini-island: flat mossy top, roots, a lumpy hanging belly), 'boulder' (rounded and faceted, crystal
+  // cluster underneath), 'slab' (a tipped flat shard), 'shard' (tall, veined). tilt rotates the whole silhouette (rad).
+  // subs: fused chunks [dx, dy, w, h] as fractions of the rock; earth chunks hang under the belly (no side shelf),
+  // boulder chunks fuse on top as a second rounded lump.
   const ROCKS = [
-    { id: 'N1', kind: 'earth', cx: 470, cy: 1960, w: 780, h: 500, seed: 501, corners: 11, taper: 0.55, flat: 0.9, spike: [30, 90], crystals: [[250, -1, 5, 70, [179, 92, 255]]] },
-    { id: 'N2', kind: 'boulder', cx: 385, cy: 520, w: 520, h: 390, seed: 502, corners: 9, taper: 0.35, flat: 0.3, crystals: [[520, 0.2, 6, 80, [95, 224, 255]]] },
-    { id: 'N3', kind: 'boulder', cx: 1240, cy: 318, w: 560, h: 250, seed: 503, corners: 10, taper: 0.45, flat: 0.5, crystals: [[1010, 0.1, 4, 60, [179, 92, 255]]] },
-    { id: 'N9', kind: 'earth', cx: 2480, cy: 560, w: 600, h: 340, seed: 509, corners: 10, taper: 0.5, flat: 0.8, spike: [-20, 70], crystals: [[2660, -1, 5, 64, [255, 46, 99]]] },
-    { id: 'N5', kind: 'earth', cx: 2660, cy: 2090, w: 740, h: 430, seed: 505, corners: 11, taper: 0.55, flat: 0.85, spike: [40, 100], crystals: [[2430, -1, 6, 76, [232, 70, 190]]] },
-    { id: 'N4', kind: 'shard', cx: 3640, cy: 1240, w: 470, h: 660, seed: 504, corners: 8, taper: 0.5, flat: 0.1, boxy: 2.4, corrupt: true, subs: 1, crystals: [[3520, -1, 6, 90, [57, 255, 20]]] },
-    { id: 'N6', kind: 'earth', cx: 1700, cy: 2400, w: 880, h: 400, seed: 506, corners: 12, taper: 0.5, flat: 0.9, spike: [-40, 80], crystals: [[1960, -1, 4, 56, [95, 224, 255]]] },
-    { id: 'N7', kind: 'shard', cx: 2290, cy: 1740, w: 230, h: 190, seed: 507, corners: 7, taper: 0.7, flat: 0.3, boxy: 2.0, subs: 0, spike: [10, 70], crystals: [[2290, -1, 3, 46, [255, 46, 99]]] },
+    { id: 'N1', kind: 'earth', cx: 470, cy: 1960, w: 780, h: 480, seed: 501, corners: 11, taper: 0.55, flat: 0.9, tilt: 0.05, spike: [30, 90],
+      subs: [[-0.1, 0.34, 0.34, 0.6], [0.2, 0.26, 0.24, 0.5]], crystals: [[250, -1, 5, 70, [179, 92, 255]]] },
+    { id: 'N2', kind: 'boulder', cx: 385, cy: 520, w: 470, h: 390, seed: 502, corners: 15, taper: 0.16, flat: 0.05, boxy: 2.0, jitter: 0.1, tilt: -0.32,
+      subs: [[0.28, -0.24, 0.4, 0.36]], crystals: [[520, 0.2, 6, 80, [95, 224, 255]]] },
+    { id: 'N3', kind: 'slab', cx: 1240, cy: 318, w: 560, h: 190, seed: 503, corners: 8, taper: 0.3, flat: 0, boxy: 2.8, jitter: 0.16, tilt: 0.21,
+      subs: [], crystals: [[1010, 0.1, 4, 60, [179, 92, 255]]] },
+    { id: 'N9', kind: 'earth', cx: 2480, cy: 560, w: 600, h: 320, seed: 509, corners: 10, taper: 0.5, flat: 0.8, tilt: -0.08, spike: [-20, 70],
+      subs: [[0.12, 0.36, 0.32, 0.6]], crystals: [[2660, -1, 5, 64, [255, 46, 99]]] },
+    { id: 'N5', kind: 'earth', cx: 2660, cy: 2090, w: 740, h: 430, seed: 505, corners: 11, taper: 0.55, flat: 0.85, tilt: 0.06, spike: [40, 100],
+      subs: [[-0.16, 0.3, 0.3, 0.55], [0.18, 0.36, 0.22, 0.48]], crystals: [[2430, -1, 6, 76, [232, 70, 190]]] },
+    { id: 'N4', kind: 'shard', cx: 3640, cy: 1240, w: 420, h: 680, seed: 504, corners: 8, taper: 0.5, flat: 0.1, boxy: 2.2, tilt: 0.2, corrupt: true,
+      subs: [], crystals: [[3520, -1, 6, 90, [57, 255, 20]]] },
+    { id: 'N6', kind: 'boulder', cx: 1700, cy: 2410, w: 740, h: 400, seed: 506, corners: 16, taper: 0.2, flat: 0.1, boxy: 2.1, jitter: 0.1, tilt: 0.1,
+      subs: [[0.34, -0.14, 0.42, 0.6]], crystals: [[1960, 0.5, 4, 56, [95, 224, 255]]] },
+    { id: 'N7', kind: 'shard', cx: 2290, cy: 1740, w: 170, h: 240, seed: 507, corners: 7, taper: 0.7, flat: 0.3, boxy: 2.0, tilt: -0.42, spike: [10, 70],
+      subs: [], crystals: [[2290, -1, 3, 46, [255, 46, 99]]] },
   ];
+  const rot = (pts, cx, cy, a) => { const c = Math.cos(a), s2 = Math.sin(a); return pts.map(([x, y]) => [cx + (x - cx) * c - (y - cy) * s2, cy + (x - cx) * s2 + (y - cy) * c]); };
 
   // top and bottom silhouette lines of a mass (every 3 px)
   function lines(M) {
@@ -655,21 +667,24 @@
 
   function paintRock(Rk, b, e) {
     const r = rng(Rk.seed * 11 + 3), rw = riftW(Rk.cx), corrupt = !!Rk.corrupt;
-    const P = K.rock({ cx: Rk.cx, cy: Rk.cy, w: Rk.w, h: Rk.h, seed: Rk.seed, corners: Rk.corners, taper: Rk.taper, flat: Rk.flat, jitter: 0.2, boxy: Rk.boxy || 3.2, spike: Rk.spike });
-    // fused secondary chunks make the silhouette chunkier and less symmetric
+    const tilt = Rk.tilt || 0, round = Rk.kind === 'boulder';
+    const P = rot(K.rock({ cx: Rk.cx, cy: Rk.cy, w: Rk.w, h: Rk.h, seed: Rk.seed, corners: Rk.corners, taper: Rk.taper, flat: Rk.flat, jitter: Rk.jitter || 0.2, boxy: Rk.boxy || 3.2, spike: Rk.spike }), Rk.cx, Rk.cy, tilt);
+    // fused chunks: hanging lobes under an earth belly, a second rounded lump on a boulder
     const polys = [P];
-    for (let k = 0; k < (Rk.subs == null ? 2 : Rk.subs); k++) {
-      const side = k % 2 ? 1 : -1, sw = Rk.w * (0.28 + r() * 0.2), sh = Rk.h * (0.35 + r() * 0.25);
-      polys.push(K.rock({ cx: Rk.cx + side * Rk.w * (0.22 + r() * 0.15), cy: Rk.cy + Rk.h * (0.12 + r() * 0.2), w: sw, h: sh, seed: Rk.seed * 7 + k, corners: 7, taper: 0.6, flat: 0.2, jitter: 0.3, boxy: 2.6, spike: [0, sh * (0.3 + r() * 0.4)] }));
-    }
+    (Rk.subs || []).forEach(([dx, dy, fw, fh], k) => {
+      const sw = Rk.w * fw, sh = Rk.h * fh, hang = dy > 0;
+      polys.push(rot(K.rock({ cx: Rk.cx + dx * Rk.w, cy: Rk.cy + dy * Rk.h, w: sw, h: sh, seed: Rk.seed * 7 + k, corners: round ? 12 : 7, taper: hang ? 0.65 : 0.2,
+        flat: round ? 0.05 : 0.2, jitter: round ? 0.12 : 0.28, boxy: round ? 2.0 : 2.4, spike: hang ? [(r() - 0.5) * sw * 0.2, sh * (0.3 + r() * 0.35)] : null }), Rk.cx, Rk.cy, tilt));
+    });
     const earth = Rk.kind === 'earth', fs = Math.min(Rk.w, Rk.h);
     const M = K.mass({
       polys, poly: P, seed: Rk.seed, pad: 14, openTop: earth, openTopMax: 90, bevel: 14, dome: fs * 0.4, domeK: 0.75, bump: 6, bumpScale: 36,
-      flutes: earth ? 12 : 5, facet: fs * (Rk.kind === 'shard' ? 0.3 : 0.34), facetTilt: Rk.kind === 'boulder' ? 0.42 : 0.32, crackW: 3, crack: 0.35,
-      cyl: { cx: Rk.cx, hw: Rk.w / 2, k: 0.45, down: earth ? 0.45 : 0.25 },
+      flutes: earth ? 12 : round ? 0 : 5, facet: fs * (Rk.kind === 'shard' ? 0.3 : round ? 0.42 : 0.34), facetTilt: round ? 0.3 : Rk.kind === 'slab' ? 0.36 : 0.32, crackW: 3, crack: round ? 0.25 : 0.35,
+      cyl: { cx: Rk.cx, hw: Rk.w / 2, k: round ? 0.6 : 0.45, down: earth ? 0.45 : 0.25 },
       strata: earth ? { period: 30, lw: 0.08, dark: 0.3, warp: 10, wl: 140, tilt: 0.04 } : null,
       pal: { dark: [2, 1, 8], base: [34, 18, 74], soil: [24, 12, 40], moss: rw > 0.5 ? [96, 36, 104] : [56, 44, 140], mossRift: [110, 34, 96], rim: [215, 195, 255], key: [255, 196, 160], bounce: [110, 70, 220] },
       soil: earth ? 34 : 0, moss: earth ? 14 : 0, amb: 0.03, gamma: 2.0, rimW: 5, rimK: 1.2, keyK: 0.34, bounceK: 0.45, ao: 0.55, riftW: (X) => riftW(X), riftRimK: 0.8,
+      warm: 1, warmW: 4,
     });
     b.drawImage(M.c, M.x, M.y); if (M.e) e.drawImage(M.e, M.x, M.y);
     const L = lines(M), top = L.top, bot = L.bot.filter(p => p[1] > Rk.cy);
@@ -719,8 +734,8 @@
       const a = r() * Math.PI * 2, d = 0.62 + r() * 0.3, x = Rk.cx + Math.cos(a) * Rk.w * d, y = Rk.cy + Math.sin(a) * Rk.h * d * 0.9, sz = 14 + r() * 34;
       if (CFG.hard.some(z => K.inEllipse(x, y, z, 60)) || SOFT.some(z => K.inEllipse(x, y, z, 30))) continue;
       const Q = K.rock({ cx: x, cy: y, w: sz * 1.3, h: sz, seed: Rk.seed * 3 + k, corners: 7, taper: 0.5, jitter: 0.3 });
-      const m = K.mass({ poly: Q, seed: Rk.seed * 3 + k, pad: 6, bevel: 5, dome: sz * 0.5, domeK: 0.8, bump: 2, facet: 14, facetTilt: 0.45, pal: { dark: [2, 1, 8], base: [34, 18, 74], rim: [215, 195, 255] }, amb: 0.03, gamma: 2, rimW: 2.5, rimK: 1.1, riftW: X => riftW(X) });
-      b.drawImage(m.c, m.x, m.y);
+      const m = K.mass({ poly: Q, seed: Rk.seed * 3 + k, pad: 6, bevel: 5, dome: sz * 0.5, domeK: 0.8, bump: 2, facet: 14, facetTilt: 0.45, pal: { dark: [2, 1, 8], base: [34, 18, 74], rim: [215, 195, 255] }, amb: 0.03, gamma: 2, rimW: 2.5, rimK: 1.1, riftW: X => riftW(X), warm: 0.9, warmW: 2.5 });
+      b.drawImage(m.c, m.x, m.y); if (m.e) e.drawImage(m.e, m.x, m.y);
     }
   }
 
@@ -728,6 +743,9 @@
     const t0 = performance.now();
     const base = mk(W, H), b = cx2(base), emis = mk(W, H), e = cx2(emis);
     for (const Rk of ROCKS) paintRock(Rk, b, e);
+    // before the erase: a rock that reaches into a hard zone would get an elliptical bite; report it
+    { const pre = K.zoneMax(base, CFG.hard, 14), bit = Object.entries(pre).filter(([, v]) => v > 0.02);
+      console.log('near rocks reaching into hard zones (+14 px) before the erase:', bit.length ? JSON.stringify(bit) : 'none'); }
     // soft zones: fade anything inside to <= 0.3 alpha with a feathered edge (roots and vines recede into the haze)
     { const m = mk(W, H), mx = cx2(m); mx.fillStyle = '#000'; mx.fillRect(0, 0, W, H); mx.globalCompositeOperation = 'destination-out';
       for (const z of SOFT) { mx.save(); mx.translate(z[1], z[2]); mx.scale(z[3] + 30, z[4] + 30); const g = mx.createRadialGradient(0, 0, 0, 0, 0, 1); g.addColorStop(0, 'rgba(0,0,0,0.72)'); g.addColorStop(0.86, 'rgba(0,0,0,0.72)'); g.addColorStop(1, 'rgba(0,0,0,0)'); mx.fillStyle = g; mx.beginPath(); mx.arc(0, 0, 1, 0, 7); mx.fill(); mx.restore(); }
