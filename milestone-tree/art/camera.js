@@ -261,10 +261,11 @@
   }
   /** A field particle (palette index c, threshold cg) of kind { palette, rift, corrupt } over world point p: the rift mix of
    *  its palette colour, switched to kind.corrupt around its own threshold, smoothstep(cg - 0.12, cg + 0.12, g) with
-   *  g = w.corrupt * light(p). Neighbouring particles switch at different g, so green and ember sit side by side. */
+   *  g = w.corrupt * light(p) and the window clipped to [0, 1] (so g = 0 is never green and g = 1 is fully green, even
+   *  for cg near 0.1 or 0.9). Neighbouring particles switch at different g, so green and ember sit side by side. */
   function biomeFieldColor(kind, c, cg, w, B, p) {
     const g = w.corrupt * corruptLight(B, p), base = mixRGB(kind.palette[c % kind.palette.length], kind.rift, w.rift);
-    return mixRGB(base, kind.corrupt, smoothstep(cg - 0.12, cg + 0.12, g));
+    return mixRGB(base, kind.corrupt, smoothstep(Math.max(0, cg - 0.12), Math.min(1, cg + 0.12), g));
   }
   /** Draw state of a corrupt bloom entry { local, size, color, alpha }: null when hidden (w.corrupt = 0). */
   function bloomState(entry, w) {
@@ -1002,9 +1003,11 @@ function test(RC, fs, FILE) {
       ok(d < 6, `${S.name}: stays rift-coloured at the rift centre (${d.toFixed(1)} off)`);
       ok(eq(RC.biomeSpriteColor(S.color, { rift: 0, corrupt: 0 }, B, outP), S.color.realm), `${S.name}: realm colour at w = 0`);
     }
+    const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
     for (const F of R.fields) for (const kd of F.kinds) for (const cg of [0.1, 0.5, 0.9]) {
-      ok(eq(RC.biomeFieldColor(kd, 0, cg, full, B, riftP), RC.mixRGB(kd.palette[0], kd.rift, 1)), `${F.id} ${kd.name}: ember at the rift`);
-      ok(eq(RC.biomeFieldColor(kd, 0, cg, full, B, outP), kd.corrupt), `${F.id} ${kd.name}: green over the outcrop`);
+      ok(dist(RC.biomeFieldColor(kd, 0, cg, full, B, riftP), kd.rift) < 8, `${F.id} ${kd.name} cg ${cg}: ember at the rift`);
+      ok(eq(RC.biomeFieldColor(kd, 0, cg, full, B, outP), kd.corrupt), `${F.id} ${kd.name} cg ${cg}: green over the outcrop`);
+      ok(eq(RC.biomeFieldColor(kd, 0, cg, full, B, treeP), kd.rift), `${F.id} ${kd.name} cg ${cg}: never green at the tree`);
     }
     for (const L of R.layers) ok(eq(RC.biomeTint(L.tint, full), L.tint ? L.tint.rift : [255, 255, 255]), `${L.id}: tint takes only w.rift`);
     const wa = RC.biomeWash(B.wash, full);

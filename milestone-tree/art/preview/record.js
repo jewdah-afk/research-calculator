@@ -24,6 +24,12 @@
 // video size. The committed preview is small on purpose (about 5 MB; REALM.md reviews use the stills for detail).
 // Video mode is the literal recordVideo capture: the page draws as fast as it can and the camera follows wall-clock
 // time.
+//
+// Nothing tracked is ever half-written: the encoder writes realm_preview.webm.part (in a private temp directory; -f webm,
+// since the name no longer says the container) and the stills go to temp names too. Only when ffmpeg exits 0 are they
+// moved over the tracked files, together (copy to <name>.part beside it, then an atomic rename), so the video and the six
+// stills always come from one run. A failed or interrupted run deletes its parts and leaves the previous video and stills
+// untouched. (A commit taken during the ~10 minute run used to capture a 0-byte webm.)
 const { chromium } = require('playwright'); const fs = require('fs'); const path = require('path'); const http = require('http');
 const { spawn } = require('child_process');
 
@@ -139,7 +145,7 @@ function biomeSeries(cam, n, fps, V = { w: 1920, h: 1080 }) {
   const RC = require(path.join(ART, 'camera.js')), B = JSON.parse(fs.readFileSync(path.join(ART, 'realm.json'), 'utf8')).biomes;
   const out = []; let w = null; const a = 1 - Math.exp(-(1 / fps) / 0.35);
   for (let i = 0; i < n; i++) {
-    const c = cam(i / fps), tgt = RC.biome(RC.clampCamera(c, c.z, RC.mapScale(V)), B);
+    const c = cam(i / fps), Vm = RC.mapScale(V), k = RC.clampCamera(c, c.z, Vm), tgt = RC.biome(k, B, k.z, Vm);
     w = w ? { rift: w.rift + (tgt.rift - w.rift) * a, corrupt: w.corrupt + (tgt.corrupt - w.corrupt) * a } : tgt;
     out.push(w);
   }
@@ -148,56 +154,94 @@ function biomeSeries(cam, n, fps, V = { w: 1920, h: 1080 }) {
 const frameArgs = (cam, W, i, fps) => ({ ...cam(i / fps), t: i / fps, w: W[i] });
 
 const stillMime = o => (o.stillFormat === 'png' ? 'image/png' : 'image/jpeg');
+/** Staged outputs. Parts are written to a private temp directory (never into the working tree, where a commit taken during
+ *  the ~10 minute run could pick them up); commit() moves each one next to its tracked file as <name>.part (a copy of a
+ *  few ms) and renames it over the tracked file (atomic), all together; abort() deletes them and leaves the tracked files
+ *  as they were. */
+function staging() {
+  const dir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'realm-record-')), parts = [];   // [temp path, final path]
+  return {
+    /** A temp path for `final` (the caller writes it, e.g. ffmpeg). */
+    path(final) { const p = path.join(dir, path.basename(final) + '.part'); parts.push([p, final]); return p; },
+    write(final, buf) { fs.writeFileSync(this.path(final), buf); },
+    commit() {
+      for (const [p] of parts) if (!fs.existsSync(p) || fs.statSync(p).size === 0) throw new Error('staged output missing or empty: ' + p);
+      const done = [];
+      for (const [p, f] of parts) { const near = f + '.part'; fs.copyFileSync(p, near); fs.renameSync(near, f); done.push(f); }
+      fs.rmSync(dir, { recursive: true, force: true }); parts.length = 0; return done;
+    },
+    abort() { fs.rmSync(dir, { recursive: true, force: true }); parts.length = 0; },
+  };
+}
+
 async function stills(page, cam, o, fps) {
-  const out = [], W = biomeSeries(cam, Math.round(o.seconds * fps) + 1, fps, { w: o.w, h: o.h });
-  for (const [name, t] of STILLS) {
-    const i = Math.round(pathTime(t, o) * fps);
-    const url = await page.evaluate(([a, mime]) => { window.Realm.frame(a); return document.getElementById('gl').toDataURL(mime, 0.9); }, [frameArgs(cam, W, i, fps), stillMime(o)]);
-    const f = path.join(OUT, name + '.' + o.stillFormat); fs.writeFileSync(f, Buffer.from(url.split(',')[1], 'base64')); out.push(path.relative(ART, f));
-  }
-  return out;
+  const W = biomeSeries(cam, Math.round(o.seconds * fps) + 1, fps, { w: o.w, h: o.h }), stage = staging();
+  try {
+    for (const [name, t] of STILLS) {
+      const i = Math.round(pathTime(t, o) * fps);
+      const url = await page.evaluate(([a, mime]) => { window.Realm.frame(a); return document.getElementById('gl').toDataURL(mime, 0.9); }, [frameArgs(cam, W, i, fps), stillMime(o)]);
+      stage.write(path.join(OUT, name + '.' + o.stillFormat), Buffer.from(url.split(',')[1], 'base64'));
+    }
+  } catch (e) { stage.abort(); throw e; }
+  return stage.commit().map(f => path.relative(ART, f));
 }
 
 async function recordFrames(browser, base, o) {
   const cam = cameraPath(KEYS, o.seconds), n = Math.round(o.seconds * o.fps), ff = ffmpegPath(), W = biomeSeries(cam, n, o.fps, { w: o.w, h: o.h });
   if (!ff) throw new Error('no ffmpeg found (Playwright ships one: npx playwright install ffmpeg)');
   fs.mkdirSync(path.dirname(o.out), { recursive: true });
+  const stage = staging(), part = stage.path(o.out);   // the video and the stills are replaced together, on success only
   // constrained quality: CRF 10 with the bitrate as the ceiling (soft art at 540p looks clean well under it)
   const scale = o.vw !== o.w || o.vh !== o.h ? ['-vf', `scale=${o.vw}:${o.vh}:flags=lanczos`] : [];
   const args = ['-loglevel', 'error', '-f', 'image2pipe', '-c:v', 'mjpeg', '-framerate', String(o.fps), '-i', 'pipe:0', ...scale,
     '-c:v', 'vp8', '-b:v', o.bitrate, '-crf', '10', '-qmin', '2', '-qmax', '40', '-deadline', 'good', '-cpu-used', '1', '-auto-alt-ref', '1', '-arnr-maxframes', '7',
-    '-arnr-strength', '3', '-threads', '3', '-lag-in-frames', '25', '-g', String(o.fps * 5), '-pix_fmt', 'yuv420p', '-r', String(o.fps), '-y', o.out];
+    '-arnr-strength', '3', '-threads', '3', '-lag-in-frames', '25', '-g', String(o.fps * 5), '-pix_fmt', 'yuv420p', '-r', String(o.fps),
+    '-f', 'webm', '-y', part];   // -f: the .part name no longer tells ffmpeg the container
   const enc = spawn(ff, args, { stdio: ['pipe', 'inherit', 'inherit'] });
-  const done = new Promise((res, rej) => enc.on('close', c => (c ? rej(new Error('ffmpeg exit ' + c)) : res())));
+  const done = new Promise((res, rej) => { enc.on('error', rej); enc.on('close', c => (c ? rej(new Error('ffmpeg exit ' + c)) : res())); });
+  let encErr = null; done.catch(e => { encErr = e; });   // an encoder failure stops the drawing at the next frame
+  enc.stdin.on('error', () => {});   // EPIPE if ffmpeg dies: reported through `done`
+  const drained = () => new Promise(r => { enc.stdin.once('drain', r); enc.once('close', r); });   // never waits on a dead encoder
   const still = new Map(STILLS.map(([name, t]) => [Math.round(pathTime(t, o) * o.fps), name]));
-  const t0 = Date.now(), shots = [], ready = new Map();
+  const t0 = Date.now(), ready = new Map(), workers = [];
   let next = 0, drawn = 0;
   const flush = async () => { // frames reach the encoder in order, whichever worker drew them
-    while (ready.has(next)) { const jpg = ready.get(next); ready.delete(next); next++; if (!enc.stdin.write(jpg)) await new Promise(r => enc.stdin.once('drain', r)); }
+    while (ready.has(next) && !encErr) { const jpg = ready.get(next); ready.delete(next); next++; if (!enc.stdin.write(jpg)) await drained(); }
   };
-  // one browser per worker (each has its own GPU process, which is where the drawing happens); frame i -> worker i % N
-  const workers = await Promise.all(Array.from({ length: o.workers }, async (_, k) => {
-    const b = k === 0 ? browser : await launch();
-    const { ctx, page } = await openRealm(b, base, { w: o.w, h: o.h, q: { tier: o.tier, source: o.source } });
-    return { b, ctx, page, own: k > 0 };
-  }));
-  let flushing = Promise.resolve();
-  await Promise.all(workers.map(async ({ page }, k) => {
-    for (let i = k; i < n; i += o.workers) {
-      while (i - next > 6 * o.workers) await new Promise(r => setTimeout(r, 20));   // keep the reorder buffer small
-      const png = o.stills && still.has(i);
-      // draw + read back in one call (a page screenshot would add a compositor pass: ~1.5x slower on SwiftShader)
-      const url = await page.evaluate(([a, png, mime]) => { window.Realm.frame(a); const cv = document.getElementById('gl');
-        return [cv.toDataURL('image/jpeg', 0.95), png ? cv.toDataURL(mime, 0.9) : null]; }, [frameArgs(cam, W, i, o.fps), png, stillMime(o)]);
-      ready.set(i, Buffer.from(url[0].split(',')[1], 'base64'));
-      if (png) { const f = path.join(OUT, still.get(i) + '.' + o.stillFormat); fs.writeFileSync(f, Buffer.from(url[1].split(',')[1], 'base64')); shots.push(path.relative(ART, f)); }
-      flushing = flushing.then(flush);
-      if (++drawn % 30 === 0) process.stdout.write(`  frame ${drawn}/${n}  ${((Date.now() - t0) / 1000).toFixed(0)} s\r`);
-    }
-  }));
-  await flushing; await flush();
-  enc.stdin.end(); await done;
-  for (const w of workers) { await w.ctx.close(); if (w.own) await w.b.close(); }
+  try {
+    // one browser per worker (each has its own GPU process, which is where the drawing happens); frame i -> worker i % N
+    await Promise.all(Array.from({ length: o.workers }, async (_, k) => {
+      const b = k === 0 ? browser : await launch();
+      if (k > 0) workers.push({ b, own: true });
+      const { ctx, page } = await openRealm(b, base, { w: o.w, h: o.h, q: { tier: o.tier, source: o.source } });
+      workers.push({ ctx, page, k });
+    }));
+    const pages = workers.filter(w => w.page).sort((p, q) => p.k - q.k);
+    let flushing = Promise.resolve();
+    await Promise.all(pages.map(async ({ page }, k) => {
+      for (let i = k; i < n; i += o.workers) {
+        while (i - next > 6 * o.workers && !encErr) await new Promise(r => setTimeout(r, 20));   // keep the reorder buffer small
+        if (encErr) throw encErr;
+        const png = o.stills && still.has(i);
+        // draw + read back in one call (a page screenshot would add a compositor pass: ~1.5x slower on SwiftShader)
+        const url = await page.evaluate(([a, png, mime]) => { window.Realm.frame(a); const cv = document.getElementById('gl');
+          return [cv.toDataURL('image/jpeg', 0.95), png ? cv.toDataURL(mime, 0.9) : null]; }, [frameArgs(cam, W, i, o.fps), png, stillMime(o)]);
+        ready.set(i, Buffer.from(url[0].split(',')[1], 'base64'));
+        if (png) stage.write(path.join(OUT, still.get(i) + '.' + o.stillFormat), Buffer.from(url[1].split(',')[1], 'base64'));
+        flushing = flushing.then(flush);
+        if (++drawn % 30 === 0) process.stdout.write(`  frame ${drawn}/${n}  ${((Date.now() - t0) / 1000).toFixed(0)} s\r`);
+      }
+    }));
+    await flushing; await flush();
+    enc.stdin.end(); await done;   // ffmpeg exited 0
+  } catch (e) {
+    try { enc.kill('SIGKILL'); } catch (_) { /* already gone */ }
+    stage.abort(); throw e;
+  } finally {
+    for (const w of workers) { if (w.ctx) await w.ctx.close().catch(() => {}); if (w.own) await w.b.close().catch(() => {}); }
+  }
+  // the encode succeeded: the video and its stills replace the tracked files together
+  const shots = stage.commit().filter(f => f !== o.out).map(f => path.relative(ART, f));
   console.log(`\nframes: ${n} at ${o.fps} fps, drawn at ${o.w}x${o.h} in ${((Date.now() - t0) / 1000).toFixed(0)} s (${o.workers} workers) -> ${path.relative(ART, o.out)} ` +
     `${o.vw}x${o.vh} (${(fs.statSync(o.out).size / 1048576).toFixed(1)} MB)`);
   return shots.sort();
@@ -216,7 +260,7 @@ async function restCheck(page, o) {
     if (!pairs.length) continue;
     // the settled biome weights of the held camera: the steady state at rest, so only the ambient motion differs
     const RC = require(path.join(ART, 'camera.js')), B = JSON.parse(fs.readFileSync(path.join(ART, 'realm.json'), 'utf8')).biomes, c0 = cam(t0);
-    const settled = RC.biome(RC.clampCamera(c0, c0.z, RC.mapScale({ w: o.w, h: o.h })), B);
+    const Vm = RC.mapScale({ w: o.w, h: o.h }), k0 = RC.clampCamera(c0, c0.z, Vm), settled = RC.biome(k0, B, k0.z, Vm);
     const r = [];
     for (const [i, j] of pairs) r.push(await page.evaluate(([A, B]) => {
       const cv = document.getElementById('gl');

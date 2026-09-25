@@ -38,6 +38,7 @@ node roblox/upload.js --dry-run                    # -> ../src/shared/Assets.lua
 ROBLOX_CREATOR=user:<id> node roblox/upload.js     # the real upload (Open Cloud), then Assets.luau with the ids
 node compose.js out/view.png --cx 1500 --cy 1150 --z 0.8        # one frame of the full stack as the client shows it (.png/.jpg/.webp)
 node compose.js out/realm_overview.webp --cx 1920 --cy 1320 --z 0.5   # the committed whole-realm still
+node compose.js out/edge.png --cx 1500 --cy 1300 --z 1.25 --straight   # straight-alpha filtering, as Roblox draws edges
 node preview/record.js                             # -> out/realm_preview.webm (27 s, 540p) + out/realm_[1-6]_*.jpg + rest-motion report
 node preview/record.js --rest-only                 # just the rest-motion report (ambient motion with the camera still)
 node preview/record.js --serve                     # the interactive simulator: open the printed URL
@@ -86,12 +87,20 @@ w, h, rw, rh, id} } }`, `sprites = { atlas ids, regions }`; `id = nil` means not
 `out/realm_assets.json` (the REALM.md asset map).
 
 **preview/realm.html** is a WebGL simulator of the client, built on the same `camera.js` maths: layer containers
-(dolly-law zoom per depth), the uploaded tiles, sprites (`spriteState`), particle fields (`fieldPlace`), biome tint,
-wash and sprite colours, the fg fade, the vignette, and stand-in node plates. Camera feel follows `camera.feel`: drag
-threshold, smoothed fling, inertia, rubber band with spring-back, wheel zoom eased in log space about the cursor,
-double-click zoom. Keys: H hud, N nodes, M ReducedMotion, T tier, S tiles/full renders, B wash, G tile grid, O seam
-mode, K keep-clear zones, 1-8 hide a depth, P pause, R reset. Without `out/sprites.png` it paints a stand-in atlas
-from `atlas.looks`.
+(dolly-law zoom per depth), the uploaded tiles, sprites (`spriteState`), particle fields (`fieldPlace`), the fg fade,
+the vignette, stand-in node plates, and the biome colours of REALM.md 5 through the camera.js helpers: tile tint and
+wash from w.rift only (`biomeTint`, `biomeWash`), the two corrupt blooms at their zOrder slots (`bloomState`), and
+sprite and particle colours from the outcrop light under each one (`biomeSpriteColor`, `biomeFieldColor`), so the
+rift stays crimson and only the outcrop's surroundings turn green. The biome weights use the real zoom and viewport
+(`biome(C, B, z, V)`). Camera feel follows `camera.feel`: drag threshold, smoothed fling, inertia, rubber band with
+spring-back, wheel zoom eased in log space about the cursor, double-click zoom. Keys: H hud, N nodes, M ReducedMotion,
+T tier, S tiles/full renders, B wash, G tile grid, O seam mode, K keep-clear zones, A alpha mode, 1-8 hide a depth,
+P pause, R reset. Without `out/sprites.png` it paints a stand-in atlas from `atlas.looks`.
+
+By default textures are premultiplied on upload and mipmapped: the ideal image. `straight=1` (key A,
+`compose.js --straight`) draws the way a Roblox ImageLabel does: straight alpha, bilinear without mipmaps, blended with
+SRC_ALPHA / ONE_MINUS_SRC_ALPHA. Bright pixels at low alpha next to an opaque dark shape then show as a one-texel light
+rim, which the premultiplied preview hides (REALM.md 9.8, check 6).
 
 **preview/record.js** flies a scripted 27 s path: a 3 s rest at the tree base → up the trunk → the whole realm → east
 to the rift and a 3 s rest there → in by the corrupted outcrop and a last rest. The rests are what the player sees most:
@@ -100,7 +109,10 @@ a rest-motion report per hold (the share of pixels that change by more than 8/25
 every frame deterministically (t = i / 30) at 1920×1080 and encodes it with the ffmpeg Playwright ships (VP8), scaled
 to 960×540 at about 1.8 Mbps, so the committed video stays near 5 MB (`--video-size same --bitrate 8M` for a local
 full-size copy). The six stills are 1920×1080 JPEGs (`--stills png` for lossless). `--mode video` is a plain Playwright
-`recordVideo` capture in real time (smooth only with a GPU).
+`recordVideo` capture in real time (smooth only with a GPU). The encoder and the stills write to a private temp
+directory; only when ffmpeg exits 0 do the video and all six stills replace the tracked files, together (copy beside,
+then an atomic rename). A failed or interrupted run leaves the previous ones untouched, and a commit taken during the
+~10 minute run never sees a half-written webm. Commit `out/realm_preview.webm` and `out/realm_[1-6]_*.jpg` together.
 
 ## Notes for the client
 

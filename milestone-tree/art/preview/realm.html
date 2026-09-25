@@ -5,13 +5,18 @@
 
   It draws what the Roblox client draws, with the same maths: layer containers from RealmCamera.layerOffset, tiles from
   roblox/manifest.json (ImageRectOffset/Size inside the gutter, snapped edges as in REALM.md 9.3), sprites from spriteState, fields
-  from fieldPlace, the biome tint / wash / sprite colours from RealmCamera.biome, the fg fade, the vignette. Camera
+  from fieldPlace, the biome tint / wash / sprite and particle colours / corrupt blooms from the RealmCamera biome helpers
+  (REALM.md 5: biomeTint, biomeWash, biomeSpriteColor, biomeFieldColor, bloomState), the fg fade, the vignette. Camera
   feel follows realm.json camera.feel: drag with threshold and smoothed velocity, inertia, rubber band + spring back,
   wheel zoom eased in log space about the cursor, double-click zoom.
 
   URL options: tier=HIGH|LOW  source=tiles|layers  seams=snap|overlap  hud=0  nodes=0  rm=1 (ReducedMotion)  clock=manual  x= y= z=
+               straight=1: draw as Roblox does (REALM.md 9.8): textures keep straight alpha (no premultiply on upload), are
+               filtered bilinearly without mipmaps and blend with SRC_ALPHA / ONE_MINUS_SRC_ALPHA, so any dark or bright
+               rim that bilinear filtering of straight alpha makes at a transparent edge shows here too. The default
+               (premultiplied, mipmapped) is the ideal the art is judged against.
   Keys: H hud, N nodes, M reduced motion, T tier, S source, B wash, G tile grid, O seam mode, K keep-clear zones, 1-8 depth,
-        P pause time, R reset camera, - / = zoom.
+        A alpha mode (premultiplied / straight), P pause time, R reset camera, - / = zoom.
   Automation (compose.js, record.js): window.Realm.ready, Realm.frame({ x, y, z, t, dt, settle, w }), Realm.stats().
 -->
 <html lang="en">
@@ -49,6 +54,7 @@ const OPT = Object.assign({
   tier: Q.get('tier') || 'HIGH', source: Q.get('source') || 'tiles', hud: Q.get('hud') !== '0', nodes: Q.get('nodes') !== '0',
   rm: Q.get('rm') === '1', clock: Q.get('clock') || 'auto', x: +Q.get('x') || null, y: +Q.get('y') || null, z: +Q.get('z') || null,
   seams: Q.get('seams') || 'snap',   // snap: REALM.md 9.3 (edges on whole device px, shared by neighbours); overlap: the retired 1-point overlap
+  straight: Q.get('straight') === '1',   // Roblox-like straight-alpha filtering and blending (see the header)
   sources: null,   // { layerId: 'out/xyz.png' } overrides for source=layers
 }, window.REALM_OPTIONS || {});
 const fail = e => { $('err').textContent = String(e && e.stack || e); console.error(e); };
@@ -73,7 +79,7 @@ void main() {
 const FS = `#version 300 es
 precision highp float;
 in vec2 v_uv; in vec2 v_q;
-uniform sampler2D u_tex; uniform vec3 u_color; uniform float u_alpha; uniform vec2 u_grad; uniform int u_mode;
+uniform sampler2D u_tex; uniform vec3 u_color; uniform float u_alpha; uniform vec2 u_grad; uniform int u_mode; uniform int u_straight;
 out vec4 o;
 float seqT(float v) {
   v = clamp(v, 0.0, 1.0);
@@ -86,7 +92,9 @@ void main() {
   vec4 t = u_mode == 1 ? vec4(1.0) : texture(u_tex, v_uv);
   float a = u_alpha;
   if (u_grad.x > 0.5) a *= 1.0 - seqT(v_q.y - u_grad.y);
-  o = vec4(t.rgb * u_color, t.a) * a;
+  // premultiplied: the texel is premultiplied (UNPACK_PREMULTIPLY_ALPHA), blend ONE / ONE_MINUS_SRC_ALPHA;
+  // straight: the texel is straight, blend SRC_ALPHA / ONE_MINUS_SRC_ALPHA (what a Roblox ImageLabel does)
+  o = u_straight == 1 ? vec4(t.rgb * u_color, t.a * a) : vec4(t.rgb * u_color, t.a) * a;
 }`;
 const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
   if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
@@ -95,11 +103,16 @@ gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(prog, sh(gl.FRA
 gl.bindAttribLocation(prog, 0, 'a'); gl.linkProgram(prog);
 if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
 gl.useProgram(prog);
-const U = {}; for (const n of ['u_res', 'u_rect', 'u_uv', 'u_rot', 'u_tex', 'u_color', 'u_alpha', 'u_grad', 'u_mode']) U[n] = gl.getUniformLocation(prog, n);
+const U = {}; for (const n of ['u_res', 'u_rect', 'u_uv', 'u_rot', 'u_tex', 'u_color', 'u_alpha', 'u_grad', 'u_mode', 'u_straight']) U[n] = gl.getUniformLocation(prog, n);
 const vbo = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
 gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, 0, 1, 0, 0, 1, 1, 1]), gl.STATIC_DRAW);
 gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+gl.enable(gl.BLEND);
+function alphaMode(straight) {
+  gl.blendFunc(straight ? gl.SRC_ALPHA : gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+  gl.uniform1i(U.u_straight, straight ? 1 : 0);
+}
+alphaMode(OPT.straight);
 gl.uniform1i(U.u_tex, 0);
 let draws = 0;
 /** One quad. r: device px rect {x, y, w, h}; uv: [u0, v0, u1, v1]; color 0..255 rgb; rot degrees about pivot (device px). */
@@ -118,11 +131,12 @@ function quad(tex, r, uv, color, alpha, rot = 0, pivot = null, grad = null) {
 }
 function texture(src) {
   const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t); quad.bound = null;
-  gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+  const straight = st.straight;   // straight: keep the PNG's straight alpha and filter it as is (no mipmaps), like Roblox
+  gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, !straight);
   gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
-  gl.generateMipmap(gl.TEXTURE_2D);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+  if (!straight) gl.generateMipmap(gl.TEXTURE_2D);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, straight ? gl.LINEAR : gl.LINEAR_MIPMAP_LINEAR);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
@@ -289,11 +303,11 @@ function paintNode(id, hex) {
 // ================================================================================================= state
 const st = {
   R: null, man: null, tier: OPT.tier, source: OPT.source, layers: [], atlas: null, atlasScale: 1, nodes: [], hud: OPT.hud,
-  showNodes: OPT.nodes, rm: OPT.rm, seams: OPT.seams, wash: true, grid: false, keep: false, hidden: new Set(), paused: false,
+  showNodes: OPT.nodes, rm: OPT.rm, seams: OPT.seams, straight: OPT.straight, wash: true, grid: false, keep: false, hidden: new Set(), paused: false,
   C: { x: 1500, y: 1150 }, z: 0.6, t: 0, w: { rift: 0, corrupt: 0 }, Vpx: { w: 1, h: 1 }, map: null, dpr: 1,
   fps: 0, frameMs: 0,
 };
-const lerp = (a, b, t) => a + (b - a) * t, sstep = RC.smoothstep, mixC = RC.mixRGB;
+const lerp = (a, b, t) => a + (b - a) * t, sstep = RC.smoothstep;
 const WHITE = [255, 255, 255];
 
 function resize() {
@@ -328,7 +342,7 @@ async function load() {
   const Vm = V(), zStart = RC.clamp(Math.min(Vm.w / 1500, Vm.h / 1750), RC.zMin(Vm), 1);
   st.z = OPT.z || zStart;
   Object.assign(st.C, RC.clampCamera(st.C, st.z, Vm));
-  st.w = RC.biome(st.C, R.biomes);
+  st.w = RC.biome(st.C, R.biomes, st.z, Vm);
 }
 
 async function loadTier(tier) {
@@ -387,10 +401,9 @@ function layerXf(f, w, h) { // container transform in map points
   const o = RC.layerOffset({ f, w, h }, st.C, st.z, V());
   return o;             // { x, y, scale }
 }
-function tintFor(L) {
-  if (!L.tint) return WHITE;
-  return mixC(mixC(WHITE, L.tint.rift, st.w.rift), L.tint.corrupt, 0.5 * st.w.corrupt);
-}
+const tintFor = L => RC.biomeTint(L.tint, st.w);     // REALM.md 5.1: w.rift only (the corrupt accent never tints tiles)
+/** World point under a screen point (map points): p = C + (q - Vc) / z, where the corrupt light is sampled (REALM.md 5). */
+const worldAt = q => RC.screenToWorld(st.C, st.z, V(), q);
 function fgFade(L) { return L.zHide ? sstep(L.zHide, L.zShow, st.z) : 1; }
 
 function drawTiles(E) {
@@ -424,7 +437,7 @@ function regionUV(name) {
   return [r[0] * s / W, r[1] * s / H, (r[0] + r[2]) * s / W, (r[1] + r[3]) * s / H];
 }
 const HIDE_RM = new Set(['shooting_star', 'ember', 'rift_ring', 'corrupt_glitch', 'crystal_glint']);
-function spriteColor(S, inst, t) {
+function spriteColor(S, inst, t, q) {   // q: the sprite's on-screen centre (map points)
   if (S.palette) {
     let c = inst.c || 0;
     if (S.motion.some(m => m.type === 'flicker') && inst.m) { // a random palette colour per burst (hashed, repeatable)
@@ -432,7 +445,7 @@ function spriteColor(S, inst, t) {
     }
     return S.palette[c % S.palette.length];
   }
-  if (S.color) return mixC(mixC(S.color.realm, S.color.rift, st.w.rift), S.color.corrupt, 0.5 * st.w.corrupt);
+  if (S.color) return RC.biomeSpriteColor(S.color, st.w, st.R.biomes, worldAt(q));
   return WHITE;
 }
 function drawSprites(layerId) {
@@ -450,9 +463,11 @@ function drawSprites(layerId) {
       const ss = st.rm ? { dx: 0, dy: 0, rot: 0, scale: 1, alpha: inst.a != null ? inst.a : 1, grad: 0 } : RC.spriteState(inst, t);
       if (st.rm) for (const m of inst.m || []) if (m.type === 'drift') { const v = RC.channel(m, 0); if (m.ch === 'x') ss.dx = v; else if (m.ch === 'y') ss.dy = v; }
       const alpha = ss.alpha * fade; if (alpha <= 0.003) continue;
-      const region = S.atlas[inst.t || 0], uv = regionUV(region), color = spriteColor(S, inst, t);
+      const region = S.atlas[inst.t || 0], uv = regionUV(region);
       const w = inst.s * ss.scale, len = S.hangs ? (inst.len || inst.h || inst.s) : (inst.h || inst.s) * ss.scale;
       const cx = inst.x + ss.dx, cy = inst.y + ss.dy, rot = (inst.r || 0) + ss.rot;
+      // the on-screen centre (a hanging sprite's is half its length below the attachment point)
+      const color = spriteColor(S, inst, t, { x: o.x + o.scale * cx, y: o.y + o.scale * (S.hangs ? cy + len / 2 : cy) });
       let r, pivot;
       if (S.hangs) {  // attachment point at the top centre; the image hangs down and swings about it
         const q = toDev({ x: o.x + o.scale * (cx - inst.s / 2), y: o.y + o.scale * cy });
@@ -477,16 +492,30 @@ function drawField(id) {
   const K = k();
   for (const p of list) {
     const P = field.particles[p.i], kind = F.kinds.find(q => q.name === P.k);
-    const region = kind.atlas[P.t || 0], color = mixC(kind.palette[P.c % kind.palette.length], kind.rift, st.w.rift);
+    // REALM.md 5: the rift mix, switched to kind.corrupt at this particle's own threshold cg of the outcrop light under it
+    const region = kind.atlas[P.t || 0], color = RC.biomeFieldColor(kind, P.c, P.cg, st.w, st.R.biomes, worldAt(p));
     const q = toDev({ x: p.x - p.size / 2, y: p.y - p.size / 2 });
     quad(st.atlas, { x: q.x, y: q.y, w: p.size * K, h: p.size * K }, regionUV(region), color, p.alpha);
   }
 }
 function drawWash() {
   if (!st.wash) return;
-  const Wd = st.R.biomes.wash, c = mixC(mixC(Wd.realm.color, Wd.rift.color, st.w.rift), Wd.corrupt.color, 0.35 * st.w.corrupt);
+  const Wd = RC.biomeWash(st.R.biomes.wash, st.w);   // REALM.md 5.2: w.rift only
   const q = toDev({ x: 0, y: 0 }), K = k();
-  quad(null, { x: q.x, y: q.y, w: st.map.w * K, h: st.map.h * K }, [0, 0, 1, 1], c, lerp(Wd.realm.alpha, Wd.rift.alpha, st.w.rift));
+  quad(null, { x: q.x, y: q.y, w: st.map.w * K, h: st.map.h * K }, [0, 0, 1, 1], Wd.color, Wd.alpha);
+}
+/** REALM.md 5.3 blooms: one soft green glow per biomes.corrupt.bloom.layers entry of this layer, in the layer's container
+ *  (its transform), centred at entry.local, sized entry.size, alpha entry.alpha * w.corrupt; drawn before the tiles. */
+function drawBloom(layerId) {
+  const Lr = st.R.layers.find(l => l.id === layerId), Bc = st.R.biomes.corrupt;
+  if (!Lr || st.hidden.has(Lr.depth)) return;
+  const o = layerXf(Lr.f, Lr.size[0], Lr.size[1]), K = k(), fade = fgFade(Lr);
+  for (const e of Bc.bloom.layers) {
+    if (e.layer !== layerId) continue;
+    const b = RC.bloomState(e, st.w); if (!b) continue;
+    const q = toDev({ x: o.x + o.scale * (b.x - b.w / 2), y: o.y + o.scale * (b.y - b.h / 2) });
+    quad(st.atlas, { x: q.x, y: q.y, w: b.w * o.scale * K, h: b.h * o.scale * K }, regionUV(Bc.bloom.atlas), b.color, b.alpha * fade);
+  }
 }
 function drawVignette() {
   const vg = st.R.biomes.vignette, q = toDev({ x: 0, y: 0 }), K = k();
@@ -524,6 +553,7 @@ function render() {
     if ((m = item.match(/^(\w+) tiles$/))) drawTiles(layerById(m[1]));
     else if ((m = item.match(/^(\w+) sprites$/))) drawSprites(m[1]);
     else if ((m = item.match(/^field (\w+)$/))) drawField(m[1]);
+    else if ((m = item.match(/^corrupt bloom (\w+)$/))) drawBloom(m[1]);
     else if (item === 'biome wash') drawWash();
     else if (item === 'nodes') { drawKeepClear(); drawNodes(); }
     else if (item === 'vignette') drawVignette();
@@ -624,6 +654,7 @@ window.addEventListener('keydown', e => {
   else if (key === 'o') st.seams = st.seams === 'snap' ? 'overlap' : 'snap';
   else if (key === 'k') st.keep = !st.keep;
   else if (key === 'p') st.paused = !st.paused;
+  else if (key === 'a') setStraight(!st.straight).catch(fail);
   else if (key === 't') loadTier(st.tier === 'HIGH' ? 'LOW' : 'HIGH').catch(fail);
   else if (key === 's') { st.source = st.source === 'tiles' ? 'layers' : 'tiles'; loadTier(st.tier).catch(fail); }
   else if (key === 'r') { const Vm = V(); st.C = { x: 1500, y: 1150 }; st.z = RC.clamp(Math.min(Vm.w / 1500, Vm.h / 1750), RC.zMin(Vm), 1); input.zT = null; }
@@ -667,7 +698,7 @@ function stepCamera(dt) {
   const soft = RC.clampCamera(st.C, st.z, Vm, { rubber: true }); st.C = { x: soft.x, y: soft.y }; st.z = soft.z;
 }
 function stepBiome(dt, settle) {
-  const tgt = RC.biome(st.C, st.R.biomes);
+  const tgt = RC.biome(st.C, st.R.biomes, st.z, V());
   if (settle || st.rm) { st.w = tgt; return; }
   const a = 1 - Math.exp(-dt / 0.35);
   st.w = { rift: lerp(st.w.rift, tgt.rift, a), corrupt: lerp(st.w.corrupt, tgt.corrupt, a) };
@@ -678,14 +709,21 @@ function hud() {
   el.classList.toggle('hidden', !st.hud); if (!st.hud) return;
   const Vm = V(), f3 = v => v.toFixed(3);
   const lines = [
-    `<b>Realm</b>  ${st.tier}  ${st.source} (${st.seams})  atlas: ${st.atlas.src}  ${st.fps.toFixed(0)} fps  ${draws} draws`,
+    `<b>Realm</b>  ${st.tier}  ${st.source} (${st.seams}, ${st.straight ? 'straight' : 'premult'} alpha)  atlas: ${st.atlas.src}  ${st.fps.toFixed(0)} fps  ${draws} draws`,
     `C (${st.C.x.toFixed(0)}, ${st.C.y.toFixed(0)})  z ${f3(st.z)}  zMin ${f3(RC.zMin(Vm))}  V ${Vm.w.toFixed(0)}x${Vm.h.toFixed(0)}`,
     `biome  rift ${st.w.rift.toFixed(2)}  corrupt ${st.w.corrupt.toFixed(2)}${st.rm ? '  <b>ReducedMotion</b>' : ''}${st.paused ? '  <b>paused</b>' : ''}`,
     ...st.R.layers.map(L => `${st.hidden.has(L.depth) ? '<i>' : ''}${L.depth + 1} ${L.id.padEnd(9)} f ${String(L.f).padEnd(5)} s ${f3(RC.layerZoom(L.f, st.z))}  ${(layerById(L.id) || {}).mode || ''}${st.hidden.has(L.depth) ? '</i>' : ''}`),
     `${st.hidden.has(7) ? '<i>' : ''}8 particles f 1.6   s ${f3(RC.layerZoom(1.6, st.z))}  field (+ dust at f 0.7, 1.3)${st.hidden.has(7) ? '</i>' : ''}`,
-    `<i>drag, wheel, dbl-click  H N M T S B G O K P R 1-8</i>`,
+    `<i>drag, wheel, dbl-click  H N M T S B G O K A P R 1-8</i>`,
   ];
   el.innerHTML = lines.join('\n');
+}
+
+/** Switch the alpha mode: every texture is uploaded again (premultiplied or straight) and the blend changes. */
+async function setStraight(on) {
+  st.straight = !!on; alphaMode(st.straight);
+  await loadTier(st.tier);
+  for (const n of st.nodes) { if (n.tex) gl.deleteTexture(n.tex.t); n.tex = texture(paintNode(n.id, n.hex)); }
 }
 
 // ================================================================================================= loop + API
@@ -714,7 +752,8 @@ window.Realm = {
     return this.stats();
   },
   async setTier(tier) { await loadTier(tier); },
-  stats() { return { C: { ...st.C }, z: st.z, t: st.t, w: { ...st.w }, draws, tier: st.tier, atlas: st.atlas.src,
+  async setStraight(on) { await setStraight(on); },
+  stats() { return { C: { ...st.C }, z: st.z, t: st.t, w: { ...st.w }, draws, tier: st.tier, atlas: st.atlas.src, straight: st.straight,
     layers: st.layers.map(l => ({ id: l.id, mode: l.mode, tiles: l.tiles.filter(t => t.tex).length })) }; },
   set(o) { Object.assign(st, o); },
 };

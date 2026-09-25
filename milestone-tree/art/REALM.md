@@ -342,9 +342,14 @@ The client recomputes both weights on every frame the camera moves, eases them t
      rewrites them when a weight moves by more than 0.01, or when the camera has moved more than 24 map points or 2%
      of zoom since the last pass. It does this only while w.corrupt > 0, plus once when it returns to 0.
    * **Field particles.** `g = w.corrupt·light(p)` and
-     `ImageColor3 = mix(mix(palette[c], kind.rift, w.rift), kind.corrupt, smoothstep(p.cg − 0.12, p.cg + 0.12, g))`.
+     `ImageColor3 = mix(mix(palette[c], kind.rift, w.rift), kind.corrupt, smoothstep(max(0, p.cg − 0.12), min(1, p.cg + 0.12), g))`.
      Each particle turns green at its own threshold `cg` (in 0.1–0.9, derived), so around the outcrop some motes are
-     green and some are embers: the colours sit side by side instead of being averaged.
+     green and some are embers: the colours sit side by side instead of being averaged. The window is clipped to
+     [0, 1], so no particle is green at g = 0 and every one is fully green at g = 1.
+   * **Reference code.** camera.js `biomeTint`, `biomeWash`, `biomeSpriteColor`, `biomeFieldColor` and `bloomState`
+     implement items 1–3 exactly; the preview simulator (preview/realm.html) calls them, and `--test` checks that a
+     sprite is rift-coloured at the rift centre and corrupt-coloured over the outcrop, and that nothing is green at the
+     tree.
 
 **Painted biome split.** Painters also paint the rift side into each layer's art. For layer f, the biome midpoint
 x = 2450 lies behind the screen centre at local `splitX = A.x + f·(2450 − 1920)`. Values are in
@@ -618,7 +623,7 @@ end
   `ImageRectSize = (cw, ch)`, `ScaleType = Stretch`, `BackgroundTransparency = 1`, `BorderSizePixel = 0`,
   `ImageColor3` = the biome tint (5).
 * The preview simulator and `compose.js` use this same recipe (`seams=snap`, the default). `seams=overlap` shows the
-  retired 1-point overlap for comparison.
+  retired 1-point overlap for comparison, and `straight=1` filters and blends straight alpha like Roblox (check 6 of 9.8).
 
 **Sprites**: `ImageLabel` with the atlas and the `ImageRectOffset/Size` of their region (halved on LOW),
 `AnchorPoint (0.5, 0.5)` (or a pivot for hanging ones), `Position = fromScale(x / w, y / h)`,
@@ -698,6 +703,16 @@ Run these in Studio at three map scales: a 390×844 portrait phone (m 0.687), 19
 4. **Fields.** At z 0.62–0.8 on 1920×1080 and 2560×1440, no bokeh pattern repeats across the screen.
 5. **Biome.** At the east limit on 1920×1080 and z 1, crimson stays saturated around the rift, and green light shows
    behind the outcrop (the blooms), green-lit mist and some green motes. At the tree nothing is green.
+6. **Straight-alpha rims.** Roblox filters an image's straight (not premultiplied) alpha, so a bright pixel at low
+   alpha (3–40) right against an opaque dark shape turns into a light or coloured rim one texel wide when the image is
+   magnified. At z 1.25, with `Root` magenta, look along the trunk, the roots and the outcrop edges. The preview draws
+   the same way with `straight=1` (`compose.js --straight`); the default preview premultiplies and hides it. Baseline
+   (1920×1080, z 1.25, straight against premultiplied): the trunk has about 1,900 pixels off by more than 24/255 (at
+   most 52), the roots about 570 (at most 37) and the outcrop about 20 (at most 35), all one-texel rims along branch and
+   leaf edges. If the rims show in Studio, soften the glow edges in the world art (a 1–2 px alpha ramp out from the
+   opaque shape, with the glow colour pulled toward the shape's colour at low alpha). Do not change the tiler: its
+   alpha bleed already gives every alpha-0 pixel a colour (no black at alpha 0 in any tile) and the gutters match their
+   neighbours byte for byte, so the rims come from the art itself.
 
 ---
 
