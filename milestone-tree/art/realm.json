@@ -1,0 +1,4766 @@
+{
+  "about": "Realm parallax manifest. Human spec: REALM.md. Inputs are hand-written; required, size, anchor, tiles, tileCell, grid, memoryMB, landmarks, biomeLocal, keepClear, instances, particles, poolMax and budget are derived by `node camera.js --build` (never edit them by hand). `node camera.js --test` checks it.",
+  "version": 1,
+  "world": {"w": 3840, "h": 2560, "center": [1920, 1280]},
+  "camera": {
+    "zMax": 1.25,
+    "zMin": "max(V.w/3840, V.h/2560)",
+    "zoomSlack": 0.06,
+    "overscroll": 72,
+    "viewportDomain": {"minW": 568, "minH": 320, "maxW": 2560, "maxH": 1440, "minAspect": 0.45, "maxAspect": 3.6},
+    "mapScale": "device viewport -> map points: letterbox outside aspect [0.45, 3.6]; s = max(w/2560, h/1440) if larger, min(w/568, h/320) if smaller, else 1; V = box / s",
+    "start": {
+      "center": [1500, 1150],
+      "zoom": "clamp(min(V.w/1500, V.h/1750), zMin(V), 1)",
+      "introFromZoomFactor": 1.12,
+      "introSeconds": 1.6,
+      "introEase": "quintOut"
+    },
+    "feel": {
+      "dragThreshold": {"mouse": 6, "touch": 12},
+      "velocitySmoothingTau": 0.05,
+      "inertiaTau": 0.32,
+      "inertiaStopSpeed": 6,
+      "maxFlingSpeed": 4500,
+      "rubberBand": {"distance": 72, "c": 0.55, "returnSmoothTime": 0.18},
+      "wheel": {"factorPerNotch": 1.12, "smoothTau": 0.085},
+      "pinch": {"zoomRubber": 0.06, "returnSmoothTime": 0.2},
+      "doubleTap": {"factor": 1.6, "seconds": 0.35, "ease": "quintOut"},
+      "flyTo": {"smoothTime": 0.35, "zoom": "max(current, 0.9)"},
+      "gamepad": {"panSpeed": 1400, "deadzone": 0.18, "curve": 1.6, "zoomRatePerSecond": 1.8},
+      "keyboard": "no pan keys (the game owns letters and arrows); '-' and '=' zoom by one wheel notch unless a layer hotkey claims them"
+    }
+  },
+  "tiers": {
+    "HIGH": {"budgetMB": 120, "select": "default (PC, console, tablets with keyboard)"},
+    "LOW": {
+      "budgetMB": 35,
+      "select": "TouchEnabled and not KeyboardEnabled, or GuiService.ViewportDisplaySize == Small, or SavedQualityLevel <= 3; the player can override in Options"
+    }
+  },
+  "tiling": {
+    "maxImage": 1024,
+    "gutter": 2,
+    "maxContent": 1020,
+    "tilePenaltyPx": 20000,
+    "rule": "uniform grid per layer; tile content tw x th texture px + a 2 px gutter copied from the neighbours (clamped at the layer edge); LOW = HIGH scale / 2 and merges 2x2 HIGH tiles",
+    "alphaBleed": "every transparent pixel gets the colour of its nearest opaque pixel (alpha stays 0) before PNG export",
+    "dropEmpty": "a tile whose max alpha < 2/255 is not uploaded; the client skips it",
+    "upload": "PNG only (Open Cloud rejects WebP)"
+  },
+  "readability": {
+    "footprint": {"rx": 150, "ry": 170, "dy": 24, "note": "world px around a node centre: ring + socket glow + nameplate below"},
+    "zoomRange": [0.6, 1.25],
+    "refViewport": [1920, 1080]
+  },
+  "landmarks": {
+    "tree": [1500, 1150],
+    "crown": [1500, 330],
+    "island": [1500, 2000],
+    "rift": [3150, 1480],
+    "shrine": [520, 640],
+    "outcrop": [3600, 1320]
+  },
+  "nodes": {
+    "m": [1500, 1900],
+    "mm": [1180, 1960],
+    "em": [1820, 1960],
+    "p": [1500, 1580],
+    "pe": [1040, 1300],
+    "sp": [1330, 1250],
+    "pb": [1670, 1250],
+    "pp": [1960, 1300],
+    "se": [1150, 980],
+    "hp": [1500, 930],
+    "ep": [1850, 980],
+    "hb": [1180, 660],
+    "ap": [1500, 610],
+    "mp": [1820, 660],
+    "t": [1500, 320],
+    "pm": [3150, 1560],
+    "pep": [2790, 1180],
+    "cr": [3510, 1200],
+    "cm": [3690, 930],
+    "ex": [3150, 780],
+    "ach": [520, 600]
+  },
+  "palette": {
+    "void": [7, 5, 13],
+    "dark": [12, 6, 22],
+    "bark": [34, 20, 62],
+    "violet": [179, 92, 255],
+    "lilac": [205, 182, 255],
+    "gold": [255, 201, 60],
+    "cyan": [95, 224, 255],
+    "crimson": [255, 46, 99],
+    "ember": [255, 90, 31],
+    "magenta": [232, 70, 190],
+    "corrupt": [57, 255, 20],
+    "corruptDeep": [31, 191, 74]
+  },
+  "atmosphere": {
+    "formula": "per pixel, sRGB 0..1: L = luma709(c); c1 = L + (c - L) * saturation; c2 = lumaHaze + (c1 - lumaHaze) * contrast; k = haze + hazeBottom * smoothstep(0.35, 1, y / h); c3 = mix(c2, hazeColor(x), k); then clamp luma to maxLuma unless the pixel is marked emissive (light-falls, sun, rift glow: up to emissiveMax); then a gaussian blur of `blur` local px over the whole layer (premultiplied alpha). hazeColor(x) cross-fades hazeColor -> hazeRift across biomeLocal.splitX +- fadeHalfWidth.",
+    "keyLight": {
+      "from": "upper left (the cosmic sun)",
+      "dir": [-0.45, -0.62, 0.64],
+      "color": [255, 214, 150],
+      "note": "same vector as world.js LIGHT: rims on up-left facing edges"
+    },
+    "riftLight": {
+      "from": "the rift, world (3150, 1480)",
+      "color": [255, 46, 99],
+      "note": "second rim on right-facing edges inside the rift biome"
+    }
+  },
+  "biomes": {
+    "realm": {
+      "x": [0, 2300],
+      "mood": "violet night, gold key light, cyan accents",
+      "colors": [[179, 92, 255], [255, 201, 60], [95, 224, 255]]
+    },
+    "rift": {
+      "from": 2300,
+      "to": 2600,
+      "mood": "crimson / magenta, ember light, torn space",
+      "colors": [[255, 46, 99], [232, 70, 190], [255, 90, 31]]
+    },
+    "corrupt": {
+      "x0": 3300,
+      "x1": 3600,
+      "cy": 1250,
+      "yInner": 350,
+      "yOuter": 700,
+      "mood": "corrupted green accent around the CR / CM outcrop",
+      "colors": [[57, 255, 20], [31, 191, 74]]
+    },
+    "weights": "rift = smoothstep(from, to, C.x); corrupt = smoothstep(x0, x1, C.x) * (1 - smoothstep(yInner, yOuter, |C.y - cy|)); both eased toward their target with tau 0.35 s (instant with ReducedMotion)",
+    "tintRule": "tiles of layer L: ImageColor3 = mix(mix(white, L.tint.rift, w.rift), L.tint.corrupt, 0.5 * w.corrupt); the world (tint null) stays white",
+    "spriteColorRule": "sprites with color {realm, rift, corrupt}: ImageColor3 = mix(mix(realm, rift, w.rift), corrupt, 0.5 * w.corrupt); sprites with a palette keep palette[c]; field particles: mix(palette[c], kind.rift, w.rift)",
+    "update": "recompute when a weight moves by more than 0.01; write ImageColor3 only then",
+    "wash": {
+      "between": ["mid", "near"],
+      "realm": {"color": [70, 40, 140], "alpha": 0.06},
+      "rift": {"color": [150, 20, 60], "alpha": 0.12},
+      "corrupt": {"color": [30, 160, 60], "alpha": 0.08},
+      "rule": "one full-screen Frame; colour = mix(mix(realm, rift, w.rift), corrupt, 0.35 * w.corrupt); BackgroundTransparency = 1 - mix(realm.alpha, rift.alpha, w.rift)"
+    },
+    "vignette": {
+      "atlas": "vignette",
+      "color": [8, 4, 16],
+      "alpha": 0.55,
+      "rule": "full-screen ImageLabel above everything in the map (below the HUD); static"
+    }
+  },
+  "layers": [
+    {
+      "id": "sky",
+      "depth": 0,
+      "name": "Deep space",
+      "file": "layers/sky.js",
+      "f": 0.05,
+      "kind": "baked",
+      "opaque": true,
+      "res": {"HIGH": 0.625, "LOW": 0.3125},
+      "keepClearRule": "advisory: the layer is dim; keep the brightest nebula knots out of the soft zones",
+      "tint": {"rift": [255, 196, 214], "corrupt": [214, 255, 214]},
+      "atmosphere": {
+        "hazeColor": [22, 14, 48],
+        "hazeRift": [40, 12, 34],
+        "haze": 0,
+        "hazeBottom": 0,
+        "saturation": 1,
+        "contrast": 1,
+        "blur": 0,
+        "maxLuma": 0.72,
+        "emissiveMax": 0.95
+      },
+      "art": {
+        "contains": "domain-warped nebula, galactic band, dust lanes, a dense faint star field (bright stars are sprites), the cosmic sun at about (0.36 w, 0.26 h) with a soft corona; the right third leans crimson/magenta (the rift bleeding into space)",
+        "palette": "void (7, 5, 13) to deep violet (32, 16, 70); nebula violet (179, 92, 255) / magenta / cyan; sun core warm (255, 214, 150)",
+        "feel": "infinitely far: barely moves (5% of the world), fills every corner, never pure black",
+        "empty": "no hard shapes; keep the band's brightest knots away from the screen centre band y 0.4-0.6 h so node plates read"
+      },
+      "required": {
+        "w": 2655,
+        "h": 1522,
+        "worstCase": {"x": "V.w=2560 z=0.627", "y": "V.h=1440 z=0.529"}
+      },
+      "size": [2656, 1536],
+      "anchor": [1328, 768],
+      "tiles": {"w": 830, "h": 960, "gutter": 2},
+      "tileCell": [1328, 1536],
+      "grid": {
+        "HIGH": {"scale": 0.625, "nx": 2, "ny": 1, "tiles": 2, "texture": [1660, 960], "bytes": 6431808},
+        "LOW": {
+          "scale": 0.3125,
+          "nx": 1,
+          "ny": 1,
+          "tiles": 1,
+          "texture": [830, 480],
+          "cols": [830],
+          "rows": [480],
+          "bytes": 1614624
+        }
+      },
+      "memoryMB": {"HIGH": 6.13, "LOW": 1.54},
+      "landmarks": {
+        "tree": [1307, 761.5],
+        "crown": [1307, 720.5],
+        "island": [1307, 804],
+        "rift": [1389.5, 778],
+        "shrine": [1258, 736],
+        "outcrop": [1412, 770]
+      },
+      "biomeLocal": {
+        "splitX": 1354.5,
+        "fadeHalfWidth": 863,
+        "note": "paint the rift palette (hazeRift, crimson glow) from splitX - fadeHalfWidth to splitX + fadeHalfWidth and beyond"
+      },
+      "keepClear": {
+        "format": "[node, cx, cy, rx, ry] ellipses in layer-local px",
+        "rule": "advisory: the layer is dim; keep the brightest nebula knots out of the soft zones",
+        "hard": [
+          ["m", 1307, 800.2, 186, 211],
+          ["mm", 1291, 803.2, 186, 211],
+          ["em", 1323, 803.2, 186, 211],
+          ["p", 1307, 784.2, 186, 211],
+          ["pe", 1284, 770.2, 186, 211],
+          ["sp", 1298.5, 767.7, 186, 211],
+          ["pb", 1315.5, 767.7, 186, 211],
+          ["pp", 1330, 770.2, 186, 211],
+          ["se", 1289.5, 754.2, 186, 211],
+          ["hp", 1307, 751.7, 186, 211],
+          ["ep", 1324.5, 754.2, 186, 211],
+          ["hb", 1291, 738.2, 186, 211],
+          ["ap", 1307, 735.7, 186, 211],
+          ["mp", 1323, 738.2, 186, 211],
+          ["t", 1307, 721.2, 186, 211],
+          ["pm", 1389.5, 783.2, 186, 211],
+          ["pep", 1371.5, 764.2, 186, 211],
+          ["cr", 1407.5, 765.2, 186, 211],
+          ["cm", 1416.5, 751.7, 186, 211],
+          ["ex", 1389.5, 744.2, 186, 211],
+          ["ach", 1258, 735.2, 186, 211]
+        ],
+        "soft": [
+          ["m", 1307, 800.2, 460, 365],
+          ["mm", 1291, 803.2, 460, 365],
+          ["em", 1323, 803.2, 460, 365],
+          ["p", 1307, 784.2, 460, 365],
+          ["pe", 1284, 770.2, 460, 365],
+          ["sp", 1298.5, 767.7, 460, 365],
+          ["pb", 1315.5, 767.7, 460, 365],
+          ["pp", 1330, 770.2, 460, 365],
+          ["se", 1289.5, 754.2, 460, 365],
+          ["hp", 1307, 751.7, 460, 365],
+          ["ep", 1324.5, 754.2, 460, 365],
+          ["hb", 1291, 738.2, 460, 365],
+          ["ap", 1307, 735.7, 460, 365],
+          ["mp", 1323, 738.2, 460, 365],
+          ["t", 1307, 721.2, 460, 365],
+          ["pm", 1389.5, 783.2, 460, 365],
+          ["pep", 1371.5, 764.2, 460, 365],
+          ["cr", 1407.5, 765.2, 460, 365],
+          ["cm", 1416.5, 751.7, 460, 365],
+          ["ex", 1389.5, 744.2, 460, 365],
+          ["ach", 1258, 735.2, 460, 365]
+        ]
+      }
+    },
+    {
+      "id": "clouds",
+      "depth": 1,
+      "name": "Far nebula clouds",
+      "file": "layers/clouds.js",
+      "f": 0.12,
+      "kind": "baked",
+      "opaque": false,
+      "res": {"HIGH": 0.375, "LOW": 0.1875},
+      "keepClearRule": "advisory: wisps stay under 0.55 alpha; no bright crest behind the soft zones",
+      "tint": {"rift": [255, 170, 196], "corrupt": [200, 255, 200]},
+      "atmosphere": {
+        "hazeColor": [72, 54, 150],
+        "hazeRift": [120, 36, 80],
+        "haze": 0.35,
+        "hazeBottom": 0.1,
+        "saturation": 0.8,
+        "contrast": 0.55,
+        "blur": 6,
+        "maxLuma": 0.55,
+        "emissiveMax": 0.7
+      },
+      "art": {
+        "contains": "slow transparent nebula wisps and cloud banks, crepuscular rays fanning from the sun direction (upper left), a crimson cloud wall on the right past biomeLocal.splitX",
+        "palette": "lilac (205, 182, 255) at 20-50% alpha over violet haze; rift side crimson (255, 46, 99) at low alpha",
+        "feel": "depth between the stars and the islands: a second, slightly faster sky",
+        "empty": "alpha under 0.25 in the band y 0.35-0.65 h; the wisp sprites add motion on top"
+      },
+      "required": {
+        "w": 2778,
+        "h": 1631,
+        "worstCase": {"x": "V.w=2560 z=0.627", "y": "V.h=1440 z=0.529"}
+      },
+      "size": [2784, 1632],
+      "anchor": [1392, 816],
+      "tiles": {"w": 522, "h": 612, "gutter": 2},
+      "tileCell": [1392, 1632],
+      "grid": {
+        "HIGH": {"scale": 0.375, "nx": 2, "ny": 1, "tiles": 2, "texture": [1044, 612], "bytes": 2592128},
+        "LOW": {
+          "scale": 0.1875,
+          "nx": 1,
+          "ny": 1,
+          "tiles": 1,
+          "texture": [522, 306],
+          "cols": [522],
+          "rows": [306],
+          "bytes": 652240
+        }
+      },
+      "memoryMB": {"HIGH": 2.47, "LOW": 0.62},
+      "landmarks": {
+        "tree": [1341.6, 800.4],
+        "crown": [1341.6, 702],
+        "island": [1341.6, 902.4],
+        "rift": [1539.6, 840],
+        "shrine": [1224, 739.2],
+        "outcrop": [1593.6, 820.8]
+      },
+      "biomeLocal": {
+        "splitX": 1455.6,
+        "fadeHalfWidth": 810,
+        "note": "paint the rift palette (hazeRift, crimson glow) from splitX - fadeHalfWidth to splitX + fadeHalfWidth and beyond"
+      },
+      "keepClear": {
+        "format": "[node, cx, cy, rx, ry] ellipses in layer-local px",
+        "rule": "advisory: wisps stay under 0.55 alpha; no bright crest behind the soft zones",
+        "hard": [
+          ["m", 1341.6, 893.3, 184, 208],
+          ["mm", 1303.2, 900.5, 184, 208],
+          ["em", 1380, 900.5, 184, 208],
+          ["p", 1341.6, 854.9, 184, 208],
+          ["pe", 1286.4, 821.3, 184, 208],
+          ["sp", 1321.2, 815.3, 184, 208],
+          ["pb", 1362, 815.3, 184, 208],
+          ["pp", 1396.8, 821.3, 184, 208],
+          ["se", 1299.6, 782.9, 184, 208],
+          ["hp", 1341.6, 776.9, 184, 208],
+          ["ep", 1383.6, 782.9, 184, 208],
+          ["hb", 1303.2, 744.5, 184, 208],
+          ["ap", 1341.6, 738.5, 184, 208],
+          ["mp", 1380, 744.5, 184, 208],
+          ["t", 1341.6, 703.7, 184, 208],
+          ["pm", 1539.6, 852.5, 184, 208],
+          ["pep", 1496.4, 806.9, 184, 208],
+          ["cr", 1582.8, 809.3, 184, 208],
+          ["cm", 1604.4, 776.9, 184, 208],
+          ["ex", 1539.6, 758.9, 184, 208],
+          ["ach", 1224, 737.3, 184, 208]
+        ],
+        "soft": [
+          ["m", 1341.6, 893.3, 437, 350],
+          ["mm", 1303.2, 900.5, 437, 350],
+          ["em", 1380, 900.5, 437, 350],
+          ["p", 1341.6, 854.9, 437, 350],
+          ["pe", 1286.4, 821.3, 437, 350],
+          ["sp", 1321.2, 815.3, 437, 350],
+          ["pb", 1362, 815.3, 437, 350],
+          ["pp", 1396.8, 821.3, 437, 350],
+          ["se", 1299.6, 782.9, 437, 350],
+          ["hp", 1341.6, 776.9, 437, 350],
+          ["ep", 1383.6, 782.9, 437, 350],
+          ["hb", 1303.2, 744.5, 437, 350],
+          ["ap", 1341.6, 738.5, 437, 350],
+          ["mp", 1380, 744.5, 437, 350],
+          ["t", 1341.6, 703.7, 437, 350],
+          ["pm", 1539.6, 852.5, 437, 350],
+          ["pep", 1496.4, 806.9, 437, 350],
+          ["cr", 1582.8, 809.3, 437, 350],
+          ["cm", 1604.4, 776.9, 437, 350],
+          ["ex", 1539.6, 758.9, 437, 350],
+          ["ach", 1224, 737.3, 437, 350]
+        ]
+      }
+    },
+    {
+      "id": "far",
+      "depth": 2,
+      "name": "Distant islands",
+      "file": "layers/far.js",
+      "f": 0.25,
+      "kind": "baked",
+      "opaque": false,
+      "res": {"HIGH": 0.5, "LOW": 0.25},
+      "keepClearRule": "advisory: silhouettes may cross soft zones but stay under 0.5 luma",
+      "tint": {"rift": [255, 186, 205], "corrupt": [205, 255, 205]},
+      "atmosphere": {
+        "hazeColor": [66, 50, 138],
+        "hazeRift": [110, 34, 72],
+        "haze": 0.5,
+        "hazeBottom": 0.2,
+        "saturation": 0.7,
+        "contrast": 0.55,
+        "blur": 2.5,
+        "maxLuma": 0.5,
+        "emissiveMax": 0.65
+      },
+      "art": {
+        "contains": "hazy floating-island silhouettes (6-10, small), thin mist ridges at the bottom, the ringed planet (upper right, over the rift side) and its moon",
+        "palette": "silhouettes mix 50% into haze (66, 50, 138); rim light gold at 30%; right side crimson-lit",
+        "feel": "the realm goes on forever: many islands, all far away",
+        "empty": "no island larger than 420 local px; none centred on a soft zone"
+      },
+      "required": {
+        "w": 3007,
+        "h": 1834,
+        "worstCase": {"x": "V.w=2560 z=0.627", "y": "V.h=1440 z=0.529"}
+      },
+      "size": [3008, 1836],
+      "anchor": [1504, 918],
+      "tiles": {"w": 752, "h": 918, "gutter": 2},
+      "tileCell": [1504, 1836],
+      "grid": {
+        "HIGH": {"scale": 0.5, "nx": 2, "ny": 1, "tiles": 2, "texture": [1504, 918], "bytes": 5576256},
+        "LOW": {
+          "scale": 0.25,
+          "nx": 1,
+          "ny": 1,
+          "tiles": 1,
+          "texture": [752, 459],
+          "cols": [752],
+          "rows": [459],
+          "bytes": 1400112
+        }
+      },
+      "memoryMB": {"HIGH": 5.32, "LOW": 1.34},
+      "landmarks": {
+        "tree": [1399, 885.5],
+        "crown": [1399, 680.5],
+        "island": [1399, 1098],
+        "rift": [1811.5, 968],
+        "shrine": [1154, 758],
+        "outcrop": [1924, 928]
+      },
+      "biomeLocal": {
+        "splitX": 1636.5,
+        "fadeHalfWidth": 713,
+        "note": "paint the rift palette (hazeRift, crimson glow) from splitX - fadeHalfWidth to splitX + fadeHalfWidth and beyond"
+      },
+      "keepClear": {
+        "format": "[node, cx, cy, rx, ry] ellipses in layer-local px",
+        "rule": "advisory: silhouettes may cross soft zones but stay under 0.5 luma",
+        "hard": [
+          ["m", 1399, 1079, 179, 202],
+          ["mm", 1319, 1094, 179, 202],
+          ["em", 1479, 1094, 179, 202],
+          ["p", 1399, 999, 179, 202],
+          ["pe", 1284, 929, 179, 202],
+          ["sp", 1356.5, 916.5, 179, 202],
+          ["pb", 1441.5, 916.5, 179, 202],
+          ["pp", 1514, 929, 179, 202],
+          ["se", 1311.5, 849, 179, 202],
+          ["hp", 1399, 836.5, 179, 202],
+          ["ep", 1486.5, 849, 179, 202],
+          ["hb", 1319, 769, 179, 202],
+          ["ap", 1399, 756.5, 179, 202],
+          ["mp", 1479, 769, 179, 202],
+          ["t", 1399, 684, 179, 202],
+          ["pm", 1811.5, 994, 179, 202],
+          ["pep", 1721.5, 899, 179, 202],
+          ["cr", 1901.5, 904, 179, 202],
+          ["cm", 1946.5, 836.5, 179, 202],
+          ["ex", 1811.5, 799, 179, 202],
+          ["ach", 1154, 754, 179, 202]
+        ],
+        "soft": [
+          ["m", 1399, 1079, 395, 324],
+          ["mm", 1319, 1094, 395, 324],
+          ["em", 1479, 1094, 395, 324],
+          ["p", 1399, 999, 395, 324],
+          ["pe", 1284, 929, 395, 324],
+          ["sp", 1356.5, 916.5, 395, 324],
+          ["pb", 1441.5, 916.5, 395, 324],
+          ["pp", 1514, 929, 395, 324],
+          ["se", 1311.5, 849, 395, 324],
+          ["hp", 1399, 836.5, 395, 324],
+          ["ep", 1486.5, 849, 395, 324],
+          ["hb", 1319, 769, 395, 324],
+          ["ap", 1399, 756.5, 395, 324],
+          ["mp", 1479, 769, 395, 324],
+          ["t", 1399, 684, 395, 324],
+          ["pm", 1811.5, 994, 395, 324],
+          ["pep", 1721.5, 899, 395, 324],
+          ["cr", 1901.5, 904, 395, 324],
+          ["cm", 1946.5, 836.5, 395, 324],
+          ["ex", 1811.5, 799, 395, 324],
+          ["ach", 1154, 754, 395, 324]
+        ]
+      }
+    },
+    {
+      "id": "mid",
+      "depth": 3,
+      "name": "Mid islands and mist",
+      "file": "layers/mid.js",
+      "f": 0.45,
+      "kind": "baked",
+      "opaque": false,
+      "res": {"HIGH": 0.75, "LOW": 0.375},
+      "keepClearRule": "hard zones: no island mass, only mist (alpha < 0.3); soft zones: low contrast. Light-falls must start at the lightfall sprite anchors (sprites[lightfall].instances: x, y = top, len = length)",
+      "tint": {"rift": [255, 205, 215], "corrupt": [210, 255, 210]},
+      "atmosphere": {
+        "hazeColor": [56, 40, 118],
+        "hazeRift": [96, 26, 62],
+        "haze": 0.3,
+        "hazeBottom": 0.25,
+        "saturation": 0.85,
+        "contrast": 0.75,
+        "blur": 1,
+        "maxLuma": 0.62,
+        "emissiveMax": 0.85
+      },
+      "art": {
+        "contains": "4-7 detailed floating islands (rock underside with hanging roots, glowing crystal seams, tiny trees) whose undersides pour light-falls (luminous waterfalls of light) at the lightfall anchors; horizontal mist bands at 55-95% height",
+        "palette": "rock (40, 26, 78) lit gold/lilac from upper left; light-falls lilac-white (220, 200, 255) emissive; rift side islands cracked with crimson seams",
+        "feel": "the layer that sells the depth: islands clearly behind the tree, crossing slower than it",
+        "empty": "the hard keep-clear zones (a band behind the trunk) stay mist-only"
+      },
+      "required": {
+        "w": 3359,
+        "h": 2146,
+        "worstCase": {"x": "V.w=2560 z=0.627", "y": "V.h=1440 z=0.529"}
+      },
+      "size": [3360, 2160],
+      "anchor": [1680, 1080],
+      "tiles": {"w": 840, "h": 810, "gutter": 2},
+      "tileCell": [1120, 1080],
+      "grid": {
+        "HIGH": {"scale": 0.75, "nx": 3, "ny": 2, "tiles": 6, "texture": [2520, 1620], "bytes": 16488384},
+        "LOW": {
+          "scale": 0.375,
+          "nx": 2,
+          "ny": 1,
+          "tiles": 2,
+          "texture": [1260, 810],
+          "cols": [840, 420],
+          "rows": [810],
+          "bytes": 4128608
+        }
+      },
+      "memoryMB": {"HIGH": 15.72, "LOW": 3.94},
+      "landmarks": {
+        "tree": [1491, 1021.5],
+        "crown": [1491, 652.5],
+        "island": [1491, 1404],
+        "rift": [2233.5, 1170],
+        "shrine": [1050, 792],
+        "outcrop": [2436, 1098]
+      },
+      "biomeLocal": {
+        "splitX": 1918.5,
+        "fadeHalfWidth": 563,
+        "note": "paint the rift palette (hazeRift, crimson glow) from splitX - fadeHalfWidth to splitX + fadeHalfWidth and beyond"
+      },
+      "keepClear": {
+        "format": "[node, cx, cy, rx, ry] ellipses in layer-local px",
+        "rule": "hard zones: no island mass, only mist (alpha < 0.3); soft zones: low contrast. Light-falls must start at the lightfall sprite anchors (sprites[lightfall].instances: x, y = top, len = length)",
+        "hard": [
+          ["m", 1491, 1369.8, 171, 194],
+          ["mm", 1347, 1396.8, 171, 194],
+          ["em", 1635, 1396.8, 171, 194],
+          ["p", 1491, 1225.8, 171, 194],
+          ["pe", 1284, 1099.8, 171, 194],
+          ["sp", 1414.5, 1077.3, 171, 194],
+          ["pb", 1567.5, 1077.3, 171, 194],
+          ["pp", 1698, 1099.8, 171, 194],
+          ["se", 1333.5, 955.8, 171, 194],
+          ["hp", 1491, 933.3, 171, 194],
+          ["ep", 1648.5, 955.8, 171, 194],
+          ["hb", 1347, 811.8, 171, 194],
+          ["ap", 1491, 789.3, 171, 194],
+          ["mp", 1635, 811.8, 171, 194],
+          ["t", 1491, 658.8, 171, 194],
+          ["pm", 2233.5, 1216.8, 171, 194],
+          ["pep", 2071.5, 1045.8, 171, 194],
+          ["cr", 2395.5, 1054.8, 171, 194],
+          ["cm", 2476.5, 933.3, 171, 194],
+          ["ex", 2233.5, 865.8, 171, 194],
+          ["ach", 1050, 784.8, 171, 194]
+        ],
+        "soft": [
+          ["m", 1491, 1369.8, 330, 283],
+          ["mm", 1347, 1396.8, 330, 283],
+          ["em", 1635, 1396.8, 330, 283],
+          ["p", 1491, 1225.8, 330, 283],
+          ["pe", 1284, 1099.8, 330, 283],
+          ["sp", 1414.5, 1077.3, 330, 283],
+          ["pb", 1567.5, 1077.3, 330, 283],
+          ["pp", 1698, 1099.8, 330, 283],
+          ["se", 1333.5, 955.8, 330, 283],
+          ["hp", 1491, 933.3, 330, 283],
+          ["ep", 1648.5, 955.8, 330, 283],
+          ["hb", 1347, 811.8, 330, 283],
+          ["ap", 1491, 789.3, 330, 283],
+          ["mp", 1635, 811.8, 330, 283],
+          ["t", 1491, 658.8, 330, 283],
+          ["pm", 2233.5, 1216.8, 330, 283],
+          ["pep", 2071.5, 1045.8, 330, 283],
+          ["cr", 2395.5, 1054.8, 330, 283],
+          ["cm", 2476.5, 933.3, 330, 283],
+          ["ex", 2233.5, 865.8, 330, 283],
+          ["ach", 1050, 784.8, 330, 283]
+        ]
+      }
+    },
+    {
+      "id": "near",
+      "depth": 4,
+      "name": "Near rocks",
+      "file": "layers/near.js",
+      "f": 0.7,
+      "kind": "baked",
+      "opaque": false,
+      "res": {"HIGH": 0.5, "LOW": 0.25},
+      "keepClearRule": "hard zones must be fully empty (alpha 0); soft zones: alpha < 0.35. Sparse: at most 8 rocks, most tiles empty",
+      "tint": {"rift": [255, 220, 225], "corrupt": [220, 255, 220]},
+      "atmosphere": {
+        "hazeColor": [42, 28, 90],
+        "hazeRift": [80, 20, 50],
+        "haze": 0.15,
+        "hazeBottom": 0.2,
+        "saturation": 0.9,
+        "contrast": 0.85,
+        "blur": 2.5,
+        "maxLuma": 0.6,
+        "emissiveMax": 0.8
+      },
+      "art": {
+        "contains": "5-8 big floating rocks passing close behind the world (300-900 local px), chunky, with crystal veins and a few hanging vines, rim-lit by the key light; one or two crimson-veined shards on the rift side",
+        "palette": "dark rock (26, 16, 52) with lilac rim (205, 182, 255) at 60%; veins violet/cyan; rift side veins crimson",
+        "feel": "scale and speed: big shapes gliding by just behind the tree",
+        "empty": "the hard keep-clear zones; the tree trunk band"
+      },
+      "required": {
+        "w": 3798,
+        "h": 2752,
+        "worstCase": {"x": "V.w=2560 z=0.627", "y": "V.h=378.7 z=0.139"}
+      },
+      "size": [3800, 2752],
+      "anchor": [1900, 1376],
+      "tiles": {"w": 950, "h": 688, "gutter": 2},
+      "tileCell": [1900, 1376],
+      "grid": {
+        "HIGH": {"scale": 0.5, "nx": 2, "ny": 2, "tiles": 4, "texture": [1900, 1376], "bytes": 10562688},
+        "LOW": {
+          "scale": 0.25,
+          "nx": 1,
+          "ny": 1,
+          "tiles": 1,
+          "texture": [950, 688],
+          "cols": [950],
+          "rows": [688],
+          "bytes": 2640672
+        }
+      },
+      "memoryMB": {"HIGH": 10.07, "LOW": 2.52},
+      "landmarks": {
+        "tree": [1606, 1285],
+        "crown": [1606, 711],
+        "island": [1606, 1880],
+        "rift": [2761, 1516],
+        "shrine": [920, 928],
+        "outcrop": [3076, 1404]
+      },
+      "biomeLocal": {
+        "splitX": 2271,
+        "fadeHalfWidth": 375,
+        "note": "paint the rift palette (hazeRift, crimson glow) from splitX - fadeHalfWidth to splitX + fadeHalfWidth and beyond"
+      },
+      "keepClear": {
+        "format": "[node, cx, cy, rx, ry] ellipses in layer-local px",
+        "rule": "hard zones must be fully empty (alpha 0); soft zones: alpha < 0.35. Sparse: at most 8 rocks, most tiles empty",
+        "hard": [
+          ["m", 1606, 1826.8, 162, 183],
+          ["mm", 1382, 1868.8, 162, 183],
+          ["em", 1830, 1868.8, 162, 183],
+          ["p", 1606, 1602.8, 162, 183],
+          ["pe", 1284, 1406.8, 162, 183],
+          ["sp", 1487, 1371.8, 162, 183],
+          ["pb", 1725, 1371.8, 162, 183],
+          ["pp", 1928, 1406.8, 162, 183],
+          ["se", 1361, 1182.8, 162, 183],
+          ["hp", 1606, 1147.8, 162, 183],
+          ["ep", 1851, 1182.8, 162, 183],
+          ["hb", 1382, 958.8, 162, 183],
+          ["ap", 1606, 923.8, 162, 183],
+          ["mp", 1830, 958.8, 162, 183],
+          ["t", 1606, 720.8, 162, 183],
+          ["pm", 2761, 1588.8, 162, 183],
+          ["pep", 2509, 1322.8, 162, 183],
+          ["cr", 3013, 1336.8, 162, 183],
+          ["cm", 3139, 1147.8, 162, 183],
+          ["ex", 2761, 1042.8, 162, 183],
+          ["ach", 920, 916.8, 162, 183]
+        ],
+        "soft": [
+          ["m", 1606, 1826.8, 248, 232],
+          ["mm", 1382, 1868.8, 248, 232],
+          ["em", 1830, 1868.8, 248, 232],
+          ["p", 1606, 1602.8, 248, 232],
+          ["pe", 1284, 1406.8, 248, 232],
+          ["sp", 1487, 1371.8, 248, 232],
+          ["pb", 1725, 1371.8, 248, 232],
+          ["pp", 1928, 1406.8, 248, 232],
+          ["se", 1361, 1182.8, 248, 232],
+          ["hp", 1606, 1147.8, 248, 232],
+          ["ep", 1851, 1182.8, 248, 232],
+          ["hb", 1382, 958.8, 248, 232],
+          ["ap", 1606, 923.8, 248, 232],
+          ["mp", 1830, 958.8, 248, 232],
+          ["t", 1606, 720.8, 248, 232],
+          ["pm", 2761, 1588.8, 248, 232],
+          ["pep", 2509, 1322.8, 248, 232],
+          ["cr", 3013, 1336.8, 248, 232],
+          ["cm", 3139, 1147.8, 248, 232],
+          ["ex", 2761, 1042.8, 248, 232],
+          ["ach", 920, 916.8, 248, 232]
+        ]
+      }
+    },
+    {
+      "id": "world",
+      "depth": 5,
+      "name": "World",
+      "file": "layers/world.js",
+      "f": 1,
+      "kind": "baked",
+      "opaque": false,
+      "fixedSize": [3840, 2560],
+      "res": {"HIGH": 1, "LOW": 0.5},
+      "keepClearRule": "contract: nodes are live UI; world.js paints only sockets",
+      "tint": null,
+      "atmosphere": {
+        "hazeColor": [0, 0, 0],
+        "hazeRift": [0, 0, 0],
+        "haze": 0,
+        "hazeBottom": 0,
+        "saturation": 1,
+        "contrast": 1,
+        "blur": 0,
+        "maxLuma": 1,
+        "emissiveMax": 1
+      },
+      "art": {
+        "contains": "the existing world.js: the tree, sockets, the Multiverse rift, the corrupted outcrop, the achievement shrine. Unchanged: node coordinates and the 3840x2560 size are a contract",
+        "palette": "as painted",
+        "feel": "the focal plane: sharpest, most saturated, full contrast",
+        "empty": "sockets hold the live nodes"
+      },
+      "required": {"w": 3840, "h": 2560, "worstCase": null},
+      "size": [3840, 2560],
+      "anchor": [1920, 1280],
+      "tiles": {"w": 960, "h": 640, "gutter": 2},
+      "tileCell": [960, 640],
+      "grid": {
+        "HIGH": {"scale": 1, "nx": 4, "ny": 4, "tiles": 16, "texture": [3840, 2560], "bytes": 39732224},
+        "LOW": {
+          "scale": 0.5,
+          "nx": 2,
+          "ny": 2,
+          "tiles": 4,
+          "texture": [1920, 1280],
+          "cols": [960, 960],
+          "rows": [640, 640],
+          "bytes": 9933056
+        }
+      },
+      "memoryMB": {"HIGH": 37.89, "LOW": 9.47},
+      "landmarks": {
+        "tree": [1500, 1150],
+        "crown": [1500, 330],
+        "island": [1500, 2000],
+        "rift": [3150, 1480],
+        "shrine": [520, 640],
+        "outcrop": [3600, 1320]
+      },
+      "biomeLocal": {
+        "splitX": 2450,
+        "fadeHalfWidth": 150,
+        "note": "paint the rift palette (hazeRift, crimson glow) from splitX - fadeHalfWidth to splitX + fadeHalfWidth and beyond"
+      },
+      "keepClear": {
+        "format": "[node, cx, cy, rx, ry] ellipses in layer-local px",
+        "rule": "contract: nodes are live UI; world.js paints only sockets",
+        "hard": [
+          ["m", 1500, 1924, 150, 170],
+          ["mm", 1180, 1984, 150, 170],
+          ["em", 1820, 1984, 150, 170],
+          ["p", 1500, 1604, 150, 170],
+          ["pe", 1040, 1324, 150, 170],
+          ["sp", 1330, 1274, 150, 170],
+          ["pb", 1670, 1274, 150, 170],
+          ["pp", 1960, 1324, 150, 170],
+          ["se", 1150, 1004, 150, 170],
+          ["hp", 1500, 954, 150, 170],
+          ["ep", 1850, 1004, 150, 170],
+          ["hb", 1180, 684, 150, 170],
+          ["ap", 1500, 634, 150, 170],
+          ["mp", 1820, 684, 150, 170],
+          ["t", 1500, 344, 150, 170],
+          ["pm", 3150, 1584, 150, 170],
+          ["pep", 2790, 1204, 150, 170],
+          ["cr", 3510, 1224, 150, 170],
+          ["cm", 3690, 954, 150, 170],
+          ["ex", 3150, 804, 150, 170],
+          ["ach", 520, 624, 150, 170]
+        ],
+        "soft": [
+          ["m", 1500, 1924, 150, 170],
+          ["mm", 1180, 1984, 150, 170],
+          ["em", 1820, 1984, 150, 170],
+          ["p", 1500, 1604, 150, 170],
+          ["pe", 1040, 1324, 150, 170],
+          ["sp", 1330, 1274, 150, 170],
+          ["pb", 1670, 1274, 150, 170],
+          ["pp", 1960, 1324, 150, 170],
+          ["se", 1150, 1004, 150, 170],
+          ["hp", 1500, 954, 150, 170],
+          ["ep", 1850, 1004, 150, 170],
+          ["hb", 1180, 684, 150, 170],
+          ["ap", 1500, 634, 150, 170],
+          ["mp", 1820, 684, 150, 170],
+          ["t", 1500, 344, 150, 170],
+          ["pm", 3150, 1584, 150, 170],
+          ["pep", 2790, 1204, 150, 170],
+          ["cr", 3510, 1224, 150, 170],
+          ["cm", 3690, 954, 150, 170],
+          ["ex", 3150, 804, 150, 170],
+          ["ach", 520, 624, 150, 170]
+        ]
+      }
+    },
+    {
+      "id": "fg",
+      "depth": 6,
+      "name": "Foreground",
+      "file": "layers/fg.js",
+      "f": 1.3,
+      "kind": "baked",
+      "opaque": false,
+      "res": {"HIGH": 0.3, "LOW": 0.15},
+      "zHide": 0.5,
+      "zShow": 0.62,
+      "keepClearRule": "hard zones must be fully empty (alpha 0), soft zones alpha < 0.25. Content lives at the layer edges (top vines, bottom ferns, side leaves)",
+      "tint": {"rift": [255, 225, 230], "corrupt": [225, 255, 225]},
+      "atmosphere": {
+        "hazeColor": [8, 4, 18],
+        "hazeRift": [22, 4, 14],
+        "haze": 0.55,
+        "hazeBottom": 0,
+        "saturation": 0.6,
+        "contrast": 0.6,
+        "blur": 10,
+        "maxLuma": 0.25,
+        "emissiveMax": 0.6
+      },
+      "art": {
+        "contains": "out-of-focus framing: hanging vines and leaf clusters from the top edge, fern and root silhouettes along the bottom, a few leaves at the sides, sparse glowing flower dots (the only bright bits)",
+        "palette": "near-black violet (18, 9, 34) silhouettes, faint lilac/gold rim (35%), flower dots pink (255, 140, 220) / cyan",
+        "feel": "you are standing inside the realm, looking through its foliage",
+        "empty": "all hard keep-clear zones; nothing in the middle 60% of the layer height except thin, faint leaf tips"
+      },
+      "required": {
+        "w": 5209,
+        "h": 3616,
+        "worstCase": {"x": "V.w=568 z=0.5", "y": "V.h=320 z=0.5"}
+      },
+      "size": [5240, 3640],
+      "anchor": [2620, 1820],
+      "tiles": {"w": 786, "h": 546, "gutter": 2},
+      "tileCell": [2620, 1820],
+      "grid": {
+        "HIGH": {"scale": 0.3, "nx": 2, "ny": 2, "tiles": 4, "texture": [1572, 1092], "bytes": 6952000},
+        "LOW": {
+          "scale": 0.15,
+          "nx": 1,
+          "ny": 1,
+          "tiles": 1,
+          "texture": [786, 546],
+          "cols": [786],
+          "rows": [546],
+          "bytes": 1738000
+        }
+      },
+      "memoryMB": {"HIGH": 6.63, "LOW": 1.66},
+      "landmarks": {
+        "tree": [2074, 1651],
+        "crown": [2074, 585],
+        "island": [2074, 2756],
+        "rift": [4219, 2080],
+        "shrine": [800, 988],
+        "outcrop": [4804, 1872]
+      },
+      "biomeLocal": {
+        "splitX": 3309,
+        "fadeHalfWidth": 150,
+        "note": "paint the rift palette (hazeRift, crimson glow) from splitX - fadeHalfWidth to splitX + fadeHalfWidth and beyond"
+      },
+      "keepClear": {
+        "format": "[node, cx, cy, rx, ry] ellipses in layer-local px",
+        "rule": "hard zones must be fully empty (alpha 0), soft zones alpha < 0.25. Content lives at the layer edges (top vines, bottom ferns, side leaves)",
+        "hard": [
+          ["m", 2074, 2657.2, 168, 191],
+          ["mm", 1658, 2735.2, 168, 191],
+          ["em", 2490, 2735.2, 168, 191],
+          ["p", 2074, 2241.2, 168, 191],
+          ["pe", 1476, 1877.2, 168, 191],
+          ["sp", 1853, 1812.2, 168, 191],
+          ["pb", 2295, 1812.2, 168, 191],
+          ["pp", 2672, 1877.2, 168, 191],
+          ["se", 1619, 1461.2, 168, 191],
+          ["hp", 2074, 1396.2, 168, 191],
+          ["ep", 2529, 1461.2, 168, 191],
+          ["hb", 1658, 1045.2, 168, 191],
+          ["ap", 2074, 980.2, 168, 191],
+          ["mp", 2490, 1045.2, 168, 191],
+          ["t", 2074, 603.2, 168, 191],
+          ["pm", 4219, 2215.2, 168, 191],
+          ["pep", 3751, 1721.2, 168, 191],
+          ["cr", 4687, 1747.2, 168, 191],
+          ["cm", 4921, 1396.2, 168, 191],
+          ["ex", 4219, 1201.2, 168, 191],
+          ["ach", 800, 967.2, 168, 191]
+        ],
+        "soft": [
+          ["m", 2074, 2657.2, 255, 240],
+          ["mm", 1658, 2735.2, 255, 240],
+          ["em", 2490, 2735.2, 255, 240],
+          ["p", 2074, 2241.2, 255, 240],
+          ["pe", 1476, 1877.2, 255, 240],
+          ["sp", 1853, 1812.2, 255, 240],
+          ["pb", 2295, 1812.2, 255, 240],
+          ["pp", 2672, 1877.2, 255, 240],
+          ["se", 1619, 1461.2, 255, 240],
+          ["hp", 2074, 1396.2, 255, 240],
+          ["ep", 2529, 1461.2, 255, 240],
+          ["hb", 1658, 1045.2, 255, 240],
+          ["ap", 2074, 980.2, 255, 240],
+          ["mp", 2490, 1045.2, 255, 240],
+          ["t", 2074, 603.2, 255, 240],
+          ["pm", 4219, 2215.2, 255, 240],
+          ["pep", 3751, 1721.2, 255, 240],
+          ["cr", 4687, 1747.2, 255, 240],
+          ["cm", 4921, 1396.2, 255, 240],
+          ["ex", 4219, 1201.2, 255, 240],
+          ["ach", 800, 967.2, 255, 240]
+        ]
+      }
+    }
+  ],
+  "fields": [
+    {
+      "id": "motesFar",
+      "f": 0.7,
+      "order": "after near",
+      "seed": 701,
+      "cell": [1400, 1000],
+      "zHide": 0,
+      "zShow": 0.0001,
+      "zFull": 1,
+      "kinds": [
+        {
+          "name": "mote",
+          "target": 14,
+          "lowShare": 0.5,
+          "atlas": ["mote"],
+          "size": [3, 7],
+          "vx": [-4, 4],
+          "vy": [-12, -4],
+          "bob": [4, 12],
+          "bobPeriod": [4, 8],
+          "alpha": [0.25, 0.5],
+          "twinkle": [0.1, 0.2],
+          "twinklePeriod": [2.5, 5],
+          "palette": [[210, 190, 255], [150, 220, 255]],
+          "rift": [255, 150, 170],
+          "perCell": 9
+        }
+      ],
+      "particles": [
+        {
+          "k": "mote",
+          "x": 1181.1,
+          "y": 832.3,
+          "size": 4.5,
+          "vx": 2.72,
+          "vy": -6.06,
+          "bx": 5.8,
+          "by": 5.8,
+          "bt": 7.53,
+          "bp": 0.487,
+          "a": 0.289,
+          "ta": 0.173,
+          "tt": 2.82,
+          "tp": 0.765,
+          "c": 0,
+          "tau": 0.1936,
+          "t": 0,
+          "low": 1
+        },
+        {
+          "k": "mote",
+          "x": 464,
+          "y": 846,
+          "size": 5.5,
+          "vx": -0.47,
+          "vy": -11.62,
+          "bx": 4.7,
+          "by": 8.6,
+          "bt": 5.07,
+          "bp": 0.945,
+          "a": 0.384,
+          "ta": 0.111,
+          "tt": 2.54,
+          "tp": 0.371,
+          "c": 0,
+          "tau": 0.3348,
+          "t": 0,
+          "low": 0
+        },
+        {
+          "k": "mote",
+          "x": 609.3,
+          "y": 708.2,
+          "size": 5.2,
+          "vx": -0.86,
+          "vy": -7.46,
+          "bx": 9.3,
+          "by": 11.8,
+          "bt": 5.59,
+          "bp": 0.44,
+          "a": 0.285,
+          "ta": 0.128,
+          "tt": 2.55,
+          "tp": 0.013,
+          "c": 0,
+          "tau": 0.4598,
+          "t": 0,
+          "low": 1
+        },
+        {
+          "k": "mote",
+          "x": 384.5,
+          "y": 860.4,
+          "size": 5.9,
+          "vx": 1.99,
+          "vy": -8.25,
+          "bx": 11.7,
+          "by": 11.1,
+          "bt": 5.94,
+          "bp": 0.17,
+          "a": 0.294,
+          "ta": 0.184,
+          "tt": 4.73,
+          "tp": 0.406,
+          "c": 1,
+          "tau": 0.5757,
+          "t": 0,
+          "low": 0
+        },
+        {
+          "k": "mote",
+          "x": 723.4,
+          "y": 87.6,
+          "size": 3.5,
+          "vx": -1.86,
+          "vy": -8.27,
+          "bx": 4.2,
+          "by": 10.2,
+          "bt": 4.14,
+          "bp": 0.628,
+          "a": 0.489,
+          "ta": 0.12,
+          "tt": 3.52,
+          "tp": 0.188,
+          "c": 1,
+          "tau": 0.6389,
+          "t": 0,
+          "low": 1
+        },
+        {
+          "k": "mote",
+          "x": 804.2,
+          "y": 711.4,
+          "size": 4,
+          "vx": -1.95,
+          "vy": -11.55,
+          "bx": 11.3,
+          "by": 4.5,
+          "bt": 7.85,
+          "bp": 0.101,
+          "a": 0.348,
+          "ta": 0.107,
+          "tt": 4.96,
+          "tp": 0.836,
+          "c": 0,
+          "tau": 0.7307,
+          "t": 0,
+          "low": 1
+        },
+        {
+          "k": "mote",
+          "x": 629.8,
+          "y": 89.5,
+          "size": 6.2,
+          "vx": 1.26,
+          "vy": -7.37,
+          "bx": 7.4,
+          "by": 5.4,
+          "bt": 5.39,
+          "bp": 0.544,
+          "a": 0.466,
+          "ta": 0.107,
+          "tt": 2.54,
+          "tp": 0.793,
+          "c": 1,
+          "tau": 0.7841,
+          "t": 0,
+          "low": 0
+        },
+        {
+          "k": "mote",
+          "x": 1115.8,
+          "y": 722.5,
+          "size": 3.3,
+          "vx": 2.07,
+          "vy": -10.82,
+          "bx": 7,
+          "by": 11.3,
+          "bt": 5.01,
+          "bp": 0.204,
+          "a": 0.351,
+          "ta": 0.111,
+          "tt": 3.17,
+          "tp": 0.916,
+          "c": 0,
+          "tau": 0.916,
+          "t": 0,
+          "low": 1
+        },
+        {
+          "k": "mote",
+          "x": 1176,
+          "y": 821,
+          "size": 5,
+          "vx": 0.15,
+          "vy": -10.79,
+          "bx": 6.7,
+          "by": 9.6,
+          "bt": 6.31,
+          "bp": 0.839,
+          "a": 0.333,
+          "ta": 0.115,
+          "tt": 2.59,
+          "tp": 0.336,
+          "c": 0,
+          "tau": 0.993,
+          "t": 0,
+          "low": 0
+        }
+      ],
+      "maxSize": 6.2,
+      "maxBob": 11.8,
+      "poolMax": {"HIGH": 30, "LOW": 18}
+    },
+    {
+      "id": "motesNear",
+      "f": 1.3,
+      "order": "after fg",
+      "seed": 1301,
+      "cell": [1500, 1100],
+      "zHide": 0.5,
+      "zShow": 0.62,
+      "zFull": 1,
+      "kinds": [
+        {
+          "name": "mote",
+          "target": 12,
+          "lowShare": 0.5,
+          "atlas": ["mote"],
+          "size": [5, 11],
+          "vx": [-6, 6],
+          "vy": [-16, -6],
+          "bob": [6, 16],
+          "bobPeriod": [4, 8],
+          "alpha": [0.35, 0.6],
+          "twinkle": [0.1, 0.25],
+          "twinklePeriod": [2.5, 5],
+          "palette": [[255, 230, 190], [210, 190, 255]],
+          "rift": [255, 140, 120],
+          "perCell": 10
+        },
+        {
+          "name": "spark",
+          "target": 3,
+          "lowShare": 0,
+          "atlas": ["spark"],
+          "size": [10, 18],
+          "vx": [-4, 4],
+          "vy": [-10, -3],
+          "bob": [8, 20],
+          "bobPeriod": [5, 9],
+          "alpha": [0.4, 0.7],
+          "twinkle": [0.2, 0.3],
+          "twinklePeriod": [1.6, 3.2],
+          "palette": [[255, 220, 140], [140, 230, 255]],
+          "rift": [255, 110, 80],
+          "perCell": 2
+        }
+      ],
+      "particles": [
+        {
+          "k": "mote",
+          "x": 742.6,
+          "y": 658,
+          "size": 9.3,
+          "vx": -1.33,
+          "vy": -13.55,
+          "bx": 10.8,
+          "by": 15.9,
+          "bt": 7.48,
+          "bp": 0.03,
+          "a": 0.432,
+          "ta": 0.14,
+          "tt": 3.98,
+          "tp": 0.187,
+          "c": 1,
+          "tau": 0.3262,
+          "t": 0,
+          "low": 1
+        },
+        {
+          "k": "mote",
+          "x": 298.6,
+          "y": 138.1,
+          "size": 10.7,
+          "vx": -1.71,
+          "vy": -13.56,
+          "bx": 14,
+          "by": 13.7,
+          "bt": 7.85,
+          "bp": 0.792,
+          "a": 0.444,
+          "ta": 0.239,
+          "tt": 4.07,
+          "tp": 0.026,
+          "c": 1,
+          "tau": 0.4626,
+          "t": 0,
+          "low": 0
+        },
+        {
+          "k": "mote",
+          "x": 252.4,
+          "y": 1046.6,
+          "size": 7.6,
+          "vx": 4.01,
+          "vy": -13.46,
+          "bx": 8,
+          "by": 12.5,
+          "bt": 7.91,
+          "bp": 0.564,
+          "a": 0.366,
+          "ta": 0.219,
+          "tt": 2.52,
+          "tp": 0.361,
+          "c": 0,
+          "tau": 0.5775,
+          "t": 0,
+          "low": 1
+        },
+        {
+          "k": "mote",
+          "x": 70.6,
+          "y": 311.5,
+          "size": 9.1,
+          "vx": -4.06,
+          "vy": -12.61,
+          "bx": 9.9,
+          "by": 13.6,
+          "bt": 7.02,
+          "bp": 0.038,
+          "a": 0.395,
+          "ta": 0.155,
+          "tt": 3.49,
+          "tp": 0.038,
+          "c": 1,
+          "tau": 0.6274,
+          "t": 0,
+          "low": 0
+        },
+        {
+          "k": "mote",
+          "x": 125.5,
+          "y": 951.9,
+          "size": 10.6,
+          "vx": -4.17,
+          "vy": -7.38,
+          "bx": 10,
+          "by": 10,
+          "bt": 4.57,
+          "bp": 0.872,
+          "a": 0.591,
+          "ta": 0.136,
+          "tt": 3.6,
+          "tp": 0.219,
+          "c": 0,
+          "tau": 0.7184,
+          "t": 0,
+          "low": 1
+        },
+        {
+          "k": "mote",
+          "x": 550.1,
+          "y": 438.2,
+          "size": 6.6,
+          "vx": -2.7,
+          "vy": -14,
+          "bx": 14.1,
+          "by": 13.8,
+          "bt": 6.13,
+          "bp": 0.693,
+          "a": 0.472,
+          "ta": 0.214,
+          "tt": 2.94,
+          "tp": 0.537,
+          "c": 1,
+          "tau": 0.8039,
+          "t": 0,
+          "low": 1
+        },
+        {
+          "k": "mote",
+          "x": 68.1,
+          "y": 1031.1,
+          "size": 6,
+          "vx": 4.85,
+          "vy": -14,
+          "bx": 7.9,
+          "by": 13.3,
+          "bt": 7.86,
+          "bp": 0.42,
+          "a": 0.462,
+          "ta": 0.246,
+          "tt": 4.15,
+          "tp": 0.316,
+          "c": 0,
+          "tau": 0.8551,
+          "t": 0,
+          "low": 0
+        },
+        {
+          "k": "mote",
+          "x": 612.7,
+          "y": 1045.3,
+          "size": 7.1,
+          "vx": 5.44,
+          "vy": -11.61,
+          "bx": 6.3,
+          "by": 7.3,
+          "bt": 4.37,
+          "bp": 0.628,
+          "a": 0.539,
+          "ta": 0.201,
+          "tt": 2.93,
+          "tp": 0.846,
+          "c": 0,
+          "tau": 0.9051,
+          "t": 0,
+          "low": 1
+        },
+        {
+          "k": "mote",
+          "x": 725.7,
+          "y": 737.7,
+          "size": 10.2,
+          "vx": -0.79,
+          "vy": -11.5,
+          "bx": 10.4,
+          "by": 6.3,
+          "bt": 4.43,
+          "bp": 0.215,
+          "a": 0.546,
+          "ta": 0.169,
+          "tt": 2.74,
+          "tp": 0.593,
+          "c": 0,
+          "tau": 0.9447,
+          "t": 0,
+          "low": 0
+        },
+        {
+          "k": "mote",
+          "x": 406.8,
+          "y": 678,
+          "size": 8.8,
+          "vx": -5.77,
+          "vy": -11.26,
+          "bx": 13.5,
+          "by": 8.1,
+          "bt": 4.85,
+          "bp": 0.977,
+          "a": 0.499,
+          "ta": 0.189,
+          "tt": 2.74,
+          "tp": 0.858,
+          "c": 1,
+          "tau": 0.9864,
+          "t": 0,
+          "low": 0
+        },
+        {
+          "k": "spark",
+          "x": 1350.7,
+          "y": 558.9,
+          "size": 12.8,
+          "vx": -3.93,
+          "vy": -8.9,
+          "bx": 9,
+          "by": 19,
+          "bt": 7.91,
+          "bp": 0.032,
+          "a": 0.5,
+          "ta": 0.257,
+          "tt": 2.28,
+          "tp": 0.606,
+          "c": 1,
+          "tau": 0.4712,
+          "t": 0,
+          "low": 0
+        },
+        {
+          "k": "spark",
+          "x": 601,
+          "y": 750.5,
+          "size": 13.6,
+          "vx": -0.01,
+          "vy": -8.8,
+          "bx": 10.2,
+          "by": 17.2,
+          "bt": 8.45,
+          "bp": 0.809,
+          "a": 0.694,
+          "ta": 0.227,
+          "tt": 3.01,
+          "tp": 0.914,
+          "c": 1,
+          "tau": 0.8079,
+          "t": 0,
+          "low": 0
+        }
+      ],
+      "maxSize": 13.6,
+      "maxBob": 19,
+      "poolMax": {"HIGH": 33, "LOW": 18}
+    },
+    {
+      "id": "particles",
+      "depth": 7,
+      "name": "Near particles",
+      "f": 1.6,
+      "order": "above nodes",
+      "seed": 1601,
+      "cell": [1800, 1200],
+      "zHide": 0.55,
+      "zShow": 0.7,
+      "zFull": 1,
+      "kinds": [
+        {
+          "name": "bokeh",
+          "target": 6,
+          "lowShare": 0.4,
+          "atlas": ["bokehA", "bokehB"],
+          "size": [70, 220],
+          "vx": [-5, 5],
+          "vy": [-4, 4],
+          "bob": [6, 16],
+          "bobPeriod": [7, 12],
+          "alpha": [0.1, 0.24],
+          "twinkle": [0.02, 0.05],
+          "twinklePeriod": [6, 11],
+          "palette": [[190, 150, 255], [255, 210, 120], [120, 220, 255]],
+          "rift": [255, 70, 110],
+          "perCell": 6
+        },
+        {
+          "name": "dust",
+          "target": 8,
+          "lowShare": 0.3,
+          "atlas": ["mote"],
+          "size": [8, 16],
+          "vx": [-6, 6],
+          "vy": [-18, -6],
+          "bob": [8, 18],
+          "bobPeriod": [4, 7],
+          "alpha": [0.3, 0.55],
+          "twinkle": [0.1, 0.2],
+          "twinklePeriod": [2, 4],
+          "palette": [[255, 236, 200], [220, 200, 255]],
+          "rift": [255, 150, 130],
+          "perCell": 8
+        }
+      ],
+      "particles": [
+        {
+          "k": "bokeh",
+          "x": 102.9,
+          "y": 575.3,
+          "size": 142.7,
+          "vx": -0.09,
+          "vy": -2.68,
+          "bx": 13.4,
+          "by": 10.6,
+          "bt": 10.36,
+          "bp": 0.197,
+          "a": 0.164,
+          "ta": 0.027,
+          "tt": 9.14,
+          "tp": 0.552,
+          "c": 0,
+          "tau": 0.3675,
+          "t": 1,
+          "low": 1
+        },
+        {
+          "k": "bokeh",
+          "x": 767.5,
+          "y": 372.4,
+          "size": 130.8,
+          "vx": -1.98,
+          "vy": -2.15,
+          "bx": 8.4,
+          "by": 8.4,
+          "bt": 11.56,
+          "bp": 0.545,
+          "a": 0.159,
+          "ta": 0.031,
+          "tt": 10.39,
+          "tp": 0.078,
+          "c": 2,
+          "tau": 0.6703,
+          "t": 1,
+          "low": 0
+        },
+        {
+          "k": "bokeh",
+          "x": 1685.4,
+          "y": 689.7,
+          "size": 194.2,
+          "vx": 1.74,
+          "vy": 0.94,
+          "bx": 8.6,
+          "by": 7.9,
+          "bt": 7.04,
+          "bp": 0.762,
+          "a": 0.233,
+          "ta": 0.046,
+          "tt": 7.97,
+          "tp": 0.827,
+          "c": 0,
+          "tau": 0.7469,
+          "t": 1,
+          "low": 1
+        },
+        {
+          "k": "bokeh",
+          "x": 191.3,
+          "y": 946,
+          "size": 211.3,
+          "vx": 1.5,
+          "vy": 3.9,
+          "bx": 6.8,
+          "by": 15.2,
+          "bt": 9.12,
+          "bp": 0.08,
+          "a": 0.189,
+          "ta": 0.033,
+          "tt": 10.47,
+          "tp": 0.602,
+          "c": 1,
+          "tau": 0.8388,
+          "t": 0,
+          "low": 0
+        },
+        {
+          "k": "bokeh",
+          "x": 1423.8,
+          "y": 440.3,
+          "size": 178.6,
+          "vx": -0.6,
+          "vy": -3.54,
+          "bx": 9.5,
+          "by": 13.3,
+          "bt": 8.99,
+          "bp": 0.988,
+          "a": 0.132,
+          "ta": 0.044,
+          "tt": 10.28,
+          "tp": 0.808,
+          "c": 2,
+          "tau": 0.902,
+          "t": 1,
+          "low": 0
+        },
+        {
+          "k": "bokeh",
+          "x": 1639.1,
+          "y": 440.7,
+          "size": 177.7,
+          "vx": 0.73,
+          "vy": -3.14,
+          "bx": 11.1,
+          "by": 11.3,
+          "bt": 8.47,
+          "bp": 0.644,
+          "a": 0.172,
+          "ta": 0.027,
+          "tt": 8.24,
+          "tp": 0.671,
+          "c": 1,
+          "tau": 0.9906,
+          "t": 1,
+          "low": 1
+        },
+        {
+          "k": "dust",
+          "x": 1612.4,
+          "y": 376,
+          "size": 12.8,
+          "vx": -3.92,
+          "vy": -16.12,
+          "bx": 12,
+          "by": 11.8,
+          "bt": 6.24,
+          "bp": 0.356,
+          "a": 0.388,
+          "ta": 0.188,
+          "tt": 2.19,
+          "tp": 0.975,
+          "c": 1,
+          "tau": 0.2192,
+          "t": 0,
+          "low": 0
+        },
+        {
+          "k": "dust",
+          "x": 1671,
+          "y": 1083.9,
+          "size": 8.6,
+          "vx": 5.1,
+          "vy": -16.08,
+          "bx": 9.7,
+          "by": 11.7,
+          "bt": 6.82,
+          "bp": 0.332,
+          "a": 0.415,
+          "ta": 0.197,
+          "tt": 3.91,
+          "tp": 0.607,
+          "c": 0,
+          "tau": 0.5699,
+          "t": 0,
+          "low": 0
+        },
+        {
+          "k": "dust",
+          "x": 913.8,
+          "y": 767.1,
+          "size": 8.4,
+          "vx": 0.46,
+          "vy": -9.92,
+          "bx": 17.5,
+          "by": 14.6,
+          "bt": 4.49,
+          "bp": 0.436,
+          "a": 0.354,
+          "ta": 0.175,
+          "tt": 3.71,
+          "tp": 0.622,
+          "c": 0,
+          "tau": 0.6979,
+          "t": 0,
+          "low": 0
+        },
+        {
+          "k": "dust",
+          "x": 217.5,
+          "y": 826.4,
+          "size": 8.8,
+          "vx": 0.44,
+          "vy": -15.28,
+          "bx": 9.7,
+          "by": 15.3,
+          "bt": 6.35,
+          "bp": 0.957,
+          "a": 0.48,
+          "ta": 0.151,
+          "tt": 2.11,
+          "tp": 0.759,
+          "c": 0,
+          "tau": 0.7363,
+          "t": 0,
+          "low": 0
+        },
+        {
+          "k": "dust",
+          "x": 204.5,
+          "y": 100.6,
+          "size": 8.9,
+          "vx": 5.61,
+          "vy": -11.34,
+          "bx": 11.1,
+          "by": 10.1,
+          "bt": 4.47,
+          "bp": 0.827,
+          "a": 0.313,
+          "ta": 0.173,
+          "tt": 2.42,
+          "tp": 0.981,
+          "c": 0,
+          "tau": 0.8157,
+          "t": 0,
+          "low": 1
+        },
+        {
+          "k": "dust",
+          "x": 1629.9,
+          "y": 348.8,
+          "size": 12.8,
+          "vx": 2.28,
+          "vy": -8.93,
+          "bx": 13.2,
+          "by": 13.1,
+          "bt": 6.15,
+          "bp": 0.568,
+          "a": 0.495,
+          "ta": 0.158,
+          "tt": 3.37,
+          "tp": 0.148,
+          "c": 1,
+          "tau": 0.8914,
+          "t": 0,
+          "low": 0
+        },
+        {
+          "k": "dust",
+          "x": 495.6,
+          "y": 1181.3,
+          "size": 15.4,
+          "vx": 2.67,
+          "vy": -14.54,
+          "bx": 12.4,
+          "by": 10.6,
+          "bt": 4.11,
+          "bp": 0.146,
+          "a": 0.465,
+          "ta": 0.192,
+          "tt": 3.75,
+          "tp": 0.998,
+          "c": 1,
+          "tau": 0.953,
+          "t": 0,
+          "low": 0
+        },
+        {
+          "k": "dust",
+          "x": 795.2,
+          "y": 323.7,
+          "size": 10.2,
+          "vx": 1.21,
+          "vy": -9.73,
+          "bx": 11.3,
+          "by": 8.9,
+          "bt": 6.3,
+          "bp": 0.587,
+          "a": 0.511,
+          "ta": 0.151,
+          "tt": 2.51,
+          "tp": 0.72,
+          "c": 1,
+          "tau": 0.9786,
+          "t": 0,
+          "low": 1
+        }
+      ],
+      "maxSize": 211.3,
+      "maxBob": 17.5,
+      "poolMax": {"HIGH": 30, "LOW": 12}
+    }
+  ],
+  "sprites": [
+    {
+      "name": "star_twinkle",
+      "layer": "sky",
+      "seed": 11,
+      "atlas": ["star4", "stardot"],
+      "count": {"HIGH": 72, "LOW": 28},
+      "size": [10, 28],
+      "alpha": [0.55, 0.8],
+      "palette": [[255, 255, 255], [210, 190, 255], [170, 220, 255], [255, 225, 190]],
+      "place": {"mode": "field", "regions": ["layer"], "minDist": 70},
+      "keepClear": "none",
+      "excludeNorm": [[0.36, 0.26, 240]],
+      "motion": [
+        {"ch": "alpha", "type": "sine", "amp": [0.18, 0.4], "period": [2.2, 5.5]},
+        {"ch": "scale", "type": "sine", "amp": [0.04, 0.12], "period": [5, 11]}
+      ],
+      "reducedMotion": "static at base alpha",
+      "instances": [
+        {
+          "x": 1407.5,
+          "y": 934.1,
+          "s": 20.6,
+          "t": 1,
+          "a": 0.685,
+          "c": 0,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.2967, "period": 4.2055, "phase": 0.4503},
+            {"ch": "scale", "type": "sine", "amp": 0.0784, "period": 10.0611, "phase": 0.42}
+          ]
+        },
+        {
+          "x": 1810.1,
+          "y": 247,
+          "s": 13.2,
+          "t": 0,
+          "a": 0.649,
+          "c": 1,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.3082, "period": 2.6207, "phase": 0.5971},
+            {"ch": "scale", "type": "sine", "amp": 0.0861, "period": 7.5105, "phase": 0.8443}
+          ]
+        },
+        {
+          "x": 2041.9,
+          "y": 487.9,
+          "s": 21.2,
+          "t": 0,
+          "a": 0.564,
+          "c": 2,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.3951, "period": 3.1796, "phase": 0.1465},
+            {"ch": "scale", "type": "sine", "amp": 0.0995, "period": 7.0833, "phase": 0.5534}
+          ]
+        },
+        {
+          "x": 2245.7,
+          "y": 220,
+          "s": 25.3,
+          "t": 1,
+          "a": 0.646,
+          "c": 0,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.1969, "period": 4.9763, "phase": 0.4973},
+            {"ch": "scale", "type": "sine", "amp": 0.0821, "period": 6.6226, "phase": 0.502}
+          ]
+        },
+        {
+          "x": 236.1,
+          "y": 989.3,
+          "s": 10.8,
+          "t": 0,
+          "a": 0.709,
+          "c": 3,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.2742, "period": 3.7384, "phase": 0.3529},
+            {"ch": "scale", "type": "sine", "amp": 0.0439, "period": 9.4004, "phase": 0.4194}
+          ]
+        },
+        {
+          "x": 797.8,
+          "y": 852.2,
+          "s": 16.3,
+          "t": 1,
+          "a": 0.59,
+          "c": 0,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.3186, "period": 4.258, "phase": 0.1255},
+            {"ch": "scale", "type": "sine", "amp": 0.0695, "period": 7.2657, "phase": 0.9373}
+          ]
+        },
+        {
+          "x": 1673,
+          "y": 631.1,
+          "s": 26.5,
+          "t": 1,
+          "a": 0.659,
+          "c": 1,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.2932, "period": 2.2284, "phase": 0.8807},
+            {"ch": "scale", "type": "sine", "amp": 0.0641, "period": 7.4488, "phase": 0.1235}
+          ]
+        },
+        {
+          "x": 1979,
+          "y": 836.4,
+          "s": 19.3,
+          "t": 0,
+          "a": 0.69,
+          "c": 2,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.3746, "period": 5.3725, "phase": 0.5982},
+            {"ch": "scale", "type": "sine", "amp": 0.0883, "period": 8.4391, "phase": 0.487}
+          ]
+        },
+        {
+          "x": 1731,
+          "y": 999.6,
+          "s": 27.9,
+          "t": 1,
+          "a": 0.584,
+          "c": 0,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.3223, "period": 5.4079, "phase": 0.3435},
+            {"ch": "scale", "type": "sine", "amp": 0.114, "period": 7.2591, "phase": 0.7607}
+          ]
+        },
+        {
+          "x": 189.5,
+          "y": 440.3,
+          "s": 22,
+          "t": 0,
+          "a": 0.707,
+          "c": 0,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.338, "period": 3.2392, "phase": 0.092},
+            {"ch": "scale", "type": "sine", "amp": 0.0843, "period": 7.2855, "phase": 0.1811}
+          ]
+        },
+        {
+          "x": 2483.7,
+          "y": 1152.9,
+          "s": 10.1,
+          "t": 0,
+          "a": 0.763,
+          "c": 2,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.3341, "period": 4.2746, "phase": 0.0008},
+            {"ch": "scale", "type": "sine", "amp": 0.0797, "period": 7.9472, "phase": 0.1631}
+          ]
+        },
+        {
+          "x": 169.2,
+          "y": 130.2,
+          "s": 28,
+          "t": 1,
+          "a": 0.726,
+          "c": 3,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.3821, "period": 5.4418, "phase": 0.0506},
+            {"ch": "scale", "type": "sine", "amp": 0.0535, "period": 8.5765, "phase": 0.3949}
+          ]
+        },
+        {
+          "x": 1415.5,
+          "y": 77.7,
+          "s": 11.1,
+          "t": 0,
+          "a": 0.618,
+          "c": 1,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.3397, "period": 3.5656, "phase": 0.3382},
+            {"ch": "scale", "type": "sine", "amp": 0.0871, "period": 7.2353, "phase": 0.9753}
+          ]
+        },
+        {
+          "x": 1493.9,
+          "y": 988.4,
+          "s": 10.1,
+          "t": 0,
+          "a": 0.591,
+          "c": 3,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.2098, "period": 4.8956, "phase": 0.1934},
+            {"ch": "scale", "type": "sine", "amp": 0.0906, "period": 9.9535, "phase": 0.7389}
+          ]
+        },
+        {
+          "x": 265.1,
+          "y": 136,
+          "s": 23.4,
+          "t": 0,
+          "a": 0.578,
+          "c": 1,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.2014, "period": 5.1155, "phase": 0.639},
+            {"ch": "scale", "type": "sine", "amp": 0.0977, "period": 8.467, "phase": 0.7564}
+          ]
+        },
+        {
+          "x": 1019.2,
+          "y": 1173.4,
+          "s": 14.1,
+          "t": 0,
+          "a": 0.585,
+          "c": 2,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.1819, "period": 4.06, "phase": 0.9659},
+            {"ch": "scale", "type": "sine", "amp": 0.1093, "period": 8.1186, "phase": 0.8761}
+          ]
+        },
+        {
+          "x": 1402.2,
+          "y": 1180.2,
+          "s": 14.6,
+          "t": 1,
+          "a": 0.585,
+          "c": 3,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.2839, "period": 5.2591, "phase": 0.9905},
+            {"ch": "scale", "type": "sine", "amp": 0.0711, "period": 7.7757, "phase": 0.4357}
+          ]
+        },
+        {
+          "x": 498.5,
+          "y": 145.5,
+          "s": 11.6,
+          "t": 1,
+          "a": 0.688,
+          "c": 2,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.2309, "period": 5.2831, "phase": 0.0773},
+            {"ch": "scale", "type": "sine", "amp": 0.1069, "period": 6.6291, "phase": 0.063}
+          ]
+        },
+        {
+          "x": 2382.7,
+          "y": 889.3,
+          "s": 18.3,
+          "t": 1,
+          "a": 0.637,
+          "c": 2,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.2996, "period": 3.0539, "phase": 0.5038},
+            {"ch": "scale", "type": "sine", "amp": 0.1156, "period": 6.8102, "phase": 0.4746}
+          ]
+        },
+        {
+          "x": 338.4,
+          "y": 364,
+          "s": 21.4,
+          "t": 0,
+          "a": 0.573,
+          "c": 2,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.2151, "period": 2.903, "phase": 0.432},
+            {"ch": "scale", "type": "sine", "amp": 0.1026, "period": 8.606, "phase": 0.6053}
+          ]
+        },
+        {
+          "x": 1887,
+          "y": 130.2,
+          "s": 12.4,
+          "t": 1,
+          "a": 0.721,
+          "c": 0,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.3825, "period": 5.2092, "phase": 0.1337},
+            {"ch": "scale", "type": "sine", "amp": 0.1118, "period": 7.3, "phase": 0.7117}
+          ]
+        },
+        {
+          "x": 2081.7,
+          "y": 1483.7,
+          "s": 18,
+          "t": 0,
+          "a": 0.63,
+          "c": 2,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.3348, "period": 2.3629, "phase": 0.718},
+            {"ch": "scale", "type": "sine", "amp": 0.0498, "period": 7.568, "phase": 0.7565}
+          ]
+        },
+        {
+          "x": 448,
+          "y": 25.5,
+          "s": 27,
+          "t": 0,
+          "a": 0.713,
+          "c": 1,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.2511, "period": 4.5625, "phase": 0.755},
+            {"ch": "scale", "type": "sine", "amp": 0.0888, "period": 10.8445, "phase": 0.5523}
+          ]
+        },
+        {
+          "x": 1455.5,
+          "y": 603,
+          "s": 15.2,
+          "t": 1,
+          "a": 0.575,
+          "c": 2,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.277, "period": 4.4166, "phase": 0.5286},
+            {"ch": "scale", "type": "sine", "amp": 0.0552, "period": 9.02, "phase": 0.2799}
+          ]
+        },
+        {
+          "x": 260.9,
+          "y": 1362.3,
+          "s": 17.2,
+          "t": 0,
+          "a": 0.693,
+          "c": 1,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.2241, "period": 2.4109, "phase": 0.0592},
+            {"ch": "scale", "type": "sine", "amp": 0.0713, "period": 10.4784, "phase": 0.4182}
+          ]
+        },
+        {
+          "x": 980.7,
+          "y": 848.7,
+          "s": 24.3,
+          "t": 1,
+          "a": 0.707,
+          "c": 3,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.3177, "period": 2.7419, "phase": 0.0891},
+            {"ch": "scale", "type": "sine", "amp": 0.0504, "period": 6.3051, "phase": 0.8502}
+          ]
+        },
+        {
+          "x": 347.3,
+          "y": 101.1,
+          "s": 25.1,
+          "t": 1,
+          "a": 0.555,
+          "c": 1,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.1827, "period": 2.9469, "phase": 0.8032},
+            {"ch": "scale", "type": "sine", "amp": 0.0778, "period": 5.0302, "phase": 0.044}
+          ]
+        },
+        {
+          "x": 1003.5,
+          "y": 769.8,
+          "s": 10.3,
+          "t": 1,
+          "a": 0.778,
+          "c": 0,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.2568, "period": 2.5725, "phase": 0.1559},
+            {"ch": "scale", "type": "sine", "amp": 0.0426, "period": 7.4898, "phase": 0.7579}
+          ]
+        },
+        {
+          "x": 1049.9,
+          "y": 1317.4,
+          "s": 18.5,
+          "t": 0,
+          "a": 0.705,
+          "c": 2,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.326, "period": 3.4992, "phase": 0.7032},
+            {"ch": "scale", "type": "sine", "amp": 0.0771, "period": 7.4299, "phase": 0.4214}
+          ]
+        },
+        {
+          "x": 813.9,
+          "y": 975.5,
+          "s": 11.2,
+          "t": 1,
+          "a": 0.582,
+          "c": 2,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.2289, "period": 4.8615, "phase": 0.7295},
+            {"ch": "scale", "type": "sine", "amp": 0.0557, "period": 10.7691, "phase": 0.413}
+          ]
+        },
+        {
+          "x": 559.9,
+          "y": 19.2,
+          "s": 25.9,
+          "t": 0,
+          "a": 0.679,
+          "c": 3,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.3742, "period": 2.697, "phase": 0.9061},
+            {"ch": "scale", "type": "sine", "amp": 0.072, "period": 8.332, "phase": 0.3529}
+          ]
+        },
+        {
+          "x": 254.5,
+          "y": 43.9,
+          "s": 14.7,
+          "t": 0,
+          "a": 0.624,
+          "c": 2,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.2824, "period": 3.0153, "phase": 0.5222},
+            {"ch": "scale", "type": "sine", "amp": 0.09, "period": 9.5552, "phase": 0.9312}
+          ]
+        },
+        {
+          "x": 1159.2,
+          "y": 181,
+          "s": 22.6,
+          "t": 0,
+          "a": 0.589,
+          "c": 2,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.2373, "period": 2.7344, "phase": 0.6589},
+            {"ch": "scale", "type": "sine", "amp": 0.0557, "period": 6.4296, "phase": 0.2334}
+          ]
+        },
+        {
+          "x": 865,
+          "y": 1489.7,
+          "s": 23,
+          "t": 1,
+          "a": 0.622,
+          "c": 2,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.2724, "period": 5.1461, "phase": 0.3898},
+            {"ch": "scale", "type": "sine", "amp": 0.1013, "period": 6.0426, "phase": 0.2418}
+          ]
+        },
+        {
+          "x": 767.3,
+          "y": 105.8,
+          "s": 25.6,
+          "t": 1,
+          "a": 0.614,
+          "c": 0,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.2127, "period": 3.8136, "phase": 0.0399},
+            {"ch": "scale", "type": "sine", "amp": 0.0941, "period": 9.2351, "phase": 0.6723}
+          ]
+        },
+        {
+          "x": 558.6,
+          "y": 1431.2,
+          "s": 27.4,
+          "t": 1,
+          "a": 0.579,
+          "c": 1,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.2483, "period": 3.8707, "phase": 0.807},
+            {"ch": "scale", "type": "sine", "amp": 0.116, "period": 5.3357, "phase": 0.2765}
+          ]
+        },
+        {
+          "x": 2511.8,
+          "y": 917.7,
+          "s": 18.4,
+          "t": 0,
+          "a": 0.71,
+          "c": 2,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.2695, "period": 5.1691, "phase": 0.4637},
+            {"ch": "scale", "type": "sine", "amp": 0.116, "period": 5.866, "phase": 0.2391}
+          ]
+        },
+        {
+          "x": 901.7,
+          "y": 1282,
+          "s": 26.1,
+          "t": 0,
+          "a": 0.66,
+          "c": 1,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.2677, "period": 3.5478, "phase": 0.7271},
+            {"ch": "scale", "type": "sine", "amp": 0.0486, "period": 6.9536, "phase": 0.2297}
+          ]
+        },
+        {
+          "x": 12.7,
+          "y": 1268.3,
+          "s": 22.5,
+          "t": 0,
+          "a": 0.738,
+          "c": 0,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.1957, "period": 2.7975, "phase": 0.0412},
+            {"ch": "scale", "type": "sine", "amp": 0.0407, "period": 10.6043, "phase": 0.8657}
+          ]
+        },
+        {
+          "x": 1717.7,
+          "y": 921.6,
+          "s": 23.9,
+          "t": 0,
+          "a": 0.562,
+          "c": 1,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.2057, "period": 3.1137, "phase": 0.4081},
+            {"ch": "scale", "type": "sine", "amp": 0.0626, "period": 5.7767, "phase": 0.866}
+          ]
+        },
+        {
+          "x": 2331.7,
+          "y": 1106.5,
+          "s": 12.6,
+          "t": 1,
+          "a": 0.716,
+          "c": 0,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.2666, "period": 4.5195, "phase": 0.8246},
+            {"ch": "scale", "type": "sine", "amp": 0.0702, "period": 8.8017, "phase": 0.4434}
+          ]
+        },
+        {
+          "x": 1517.2,
+          "y": 1500.8,
+          "s": 13.7,
+          "t": 0,
+          "a": 0.632,
+          "c": 1,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.2471, "period": 4.6991, "phase": 0.9718},
+            {"ch": "scale", "type": "sine", "amp": 0.0736, "period": 7.2062, "phase": 0.1224}
+          ]
+        },
+        {
+          "x": 1497.9,
+          "y": 304.1,
+          "s": 20.8,
+          "t": 0,
+          "a": 0.764,
+          "c": 3,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.2041, "period": 3.3766, "phase": 0.4018},
+            {"ch": "scale", "type": "sine", "amp": 0.0621, "period": 5.9211, "phase": 0.8147}
+          ]
+        },
+        {
+          "x": 1505.4,
+          "y": 136,
+          "s": 19.3,
+          "t": 1,
+          "a": 0.733,
+          "c": 1,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.2858, "period": 5.3006, "phase": 0.1402},
+            {"ch": "scale", "type": "sine", "amp": 0.0985, "period": 7.5193, "phase": 0.7504}
+          ]
+        },
+        {
+          "x": 794.1,
+          "y": 655.7,
+          "s": 22,
+          "t": 0,
+          "a": 0.715,
+          "c": 2,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.3241, "period": 4.9189, "phase": 0.0075},
+            {"ch": "scale", "type": "sine", "amp": 0.0994, "period": 9.6643, "phase": 0.5527}
+          ]
+        },
+        {
+          "x": 490.1,
+          "y": 239.1,
+          "s": 19.7,
+          "t": 0,
+          "a": 0.66,
+          "c": 1,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.2247, "period": 2.5161, "phase": 0.3242},
+            {"ch": "scale", "type": "sine", "amp": 0.1017, "period": 8.949, "phase": 0.8334}
+          ]
+        },
+        {
+          "x": 229,
+          "y": 736.8,
+          "s": 26.5,
+          "t": 0,
+          "a": 0.658,
+          "c": 0,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.3231, "period": 3.7592, "phase": 0.9962},
+            {"ch": "scale", "type": "sine", "amp": 0.068, "period": 5.9951, "phase": 0.9273}
+          ]
+        },
+        {
+          "x": 612.9,
+          "y": 310.8,
+          "s": 15.6,
+          "t": 1,
+          "a": 0.743,
+          "c": 3,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.2236, "period": 4.1255, "phase": 0.7341},
+            {"ch": "scale", "type": "sine", "amp": 0.0873, "period": 10.7368, "phase": 0.5201}
+          ]
+        },
+        {
+          "x": 927.8,
+          "y": 101.2,
+          "s": 27.4,
+          "t": 1,
+          "a": 0.578,
+          "c": 0,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.2107, "period": 3.2441, "phase": 0.6852},
+            {"ch": "scale", "type": "sine", "amp": 0.0944, "period": 7.3127, "phase": 0.5615}
+          ]
+        },
+        {
+          "x": 1825.7,
+          "y": 617.1,
+          "s": 11.5,
+          "t": 1,
+          "a": 0.589,
+          "c": 2,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.3854, "period": 5.043, "phase": 0.9977},
+            {"ch": "scale", "type": "sine", "amp": 0.0753, "period": 7.0568, "phase": 0.9341}
+          ]
+        },
+        {
+          "x": 1977.5,
+          "y": 1342.3,
+          "s": 13.2,
+          "t": 0,
+          "a": 0.717,
+          "c": 1,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.2819, "period": 4.4281, "phase": 0.5479},
+            {"ch": "scale", "type": "sine", "amp": 0.1125, "period": 6.2081, "phase": 0.0048}
+          ]
+        },
+        {
+          "x": 382.8,
+          "y": 1535.3,
+          "s": 21.5,
+          "t": 0,
+          "a": 0.623,
+          "c": 2,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.3312, "period": 5.3385, "phase": 0.3268},
+            {"ch": "scale", "type": "sine", "amp": 0.0656, "period": 5.5358, "phase": 0.047}
+          ]
+        },
+        {
+          "x": 384.2,
+          "y": 1201.5,
+          "s": 22.2,
+          "t": 1,
+          "a": 0.65,
+          "c": 0,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.3311, "period": 5.4843, "phase": 0.7482},
+            {"ch": "scale", "type": "sine", "amp": 0.0629, "period": 6.7337, "phase": 0.1445}
+          ]
+        },
+        {
+          "x": 1903.8,
+          "y": 10.6,
+          "s": 19.4,
+          "t": 0,
+          "a": 0.695,
+          "c": 3,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.3917, "period": 5.429, "phase": 0.3004},
+            {"ch": "scale", "type": "sine", "amp": 0.1063, "period": 8.0174, "phase": 0.4661}
+          ]
+        },
+        {
+          "x": 292.3,
+          "y": 1137.6,
+          "s": 20.8,
+          "t": 1,
+          "a": 0.624,
+          "c": 0,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.1956, "period": 4.4928, "phase": 0.6176},
+            {"ch": "scale", "type": "sine", "amp": 0.1189, "period": 7.0129, "phase": 0.1113}
+          ]
+        },
+        {
+          "x": 572.7,
+          "y": 776.1,
+          "s": 21.5,
+          "t": 0,
+          "a": 0.592,
+          "c": 0,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.2494, "period": 2.6441, "phase": 0.6075},
+            {"ch": "scale", "type": "sine", "amp": 0.1023, "period": 8.5282, "phase": 0.0833}
+          ]
+        },
+        {
+          "x": 169.1,
+          "y": 365.5,
+          "s": 14.6,
+          "t": 0,
+          "a": 0.591,
+          "c": 0,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.3895, "period": 2.7473, "phase": 0.1121},
+            {"ch": "scale", "type": "sine", "amp": 0.1125, "period": 5.832, "phase": 0.1059}
+          ]
+        },
+        {
+          "x": 549.1,
+          "y": 353.2,
+          "s": 25.2,
+          "t": 1,
+          "a": 0.717,
+          "c": 3,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.3467, "period": 5.4263, "phase": 0.8047},
+            {"ch": "scale", "type": "sine", "amp": 0.0579, "period": 7.4554, "phase": 0.3421}
+          ]
+        },
+        {
+          "x": 681.9,
+          "y": 67.5,
+          "s": 18.7,
+          "t": 1,
+          "a": 0.574,
+          "c": 3,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.2759, "period": 2.406, "phase": 0.3066},
+            {"ch": "scale", "type": "sine", "amp": 0.0524, "period": 10.5207, "phase": 0.1448}
+          ]
+        },
+        {
+          "x": 1190.8,
+          "y": 1247.3,
+          "s": 25.3,
+          "t": 0,
+          "a": 0.795,
+          "c": 0,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.2721, "period": 5.3847, "phase": 0.2312},
+            {"ch": "scale", "type": "sine", "amp": 0.04, "period": 10.0919, "phase": 0.5089}
+          ]
+        },
+        {
+          "x": 2603.3,
+          "y": 203.2,
+          "s": 14,
+          "t": 1,
+          "a": 0.558,
+          "c": 3,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.3119, "period": 4.4466, "phase": 0.5895},
+            {"ch": "scale", "type": "sine", "amp": 0.0744, "period": 10.0415, "phase": 0.9293}
+          ]
+        },
+        {
+          "x": 2514.8,
+          "y": 35.4,
+          "s": 11.1,
+          "t": 0,
+          "a": 0.647,
+          "c": 2,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.2385, "period": 2.9916, "phase": 0.6781},
+            {"ch": "scale", "type": "sine", "amp": 0.0939, "period": 10.6912, "phase": 0.4431}
+          ]
+        },
+        {
+          "x": 64.3,
+          "y": 1406,
+          "s": 13.1,
+          "t": 0,
+          "a": 0.731,
+          "c": 1,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.3975, "period": 5.065, "phase": 0.7841},
+            {"ch": "scale", "type": "sine", "amp": 0.085, "period": 10.036, "phase": 0.8539}
+          ]
+        },
+        {
+          "x": 2614.3,
+          "y": 1288.6,
+          "s": 17.5,
+          "t": 1,
+          "a": 0.727,
+          "c": 3,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.2488, "period": 4.6387, "phase": 0.3241},
+            {"ch": "scale", "type": "sine", "amp": 0.0909, "period": 6.3256, "phase": 0.8221}
+          ]
+        },
+        {
+          "x": 357.2,
+          "y": 1024.7,
+          "s": 24.1,
+          "t": 1,
+          "a": 0.779,
+          "c": 1,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.3691, "period": 5.2256, "phase": 0.7069},
+            {"ch": "scale", "type": "sine", "amp": 0.0967, "period": 7.621, "phase": 0.4927}
+          ]
+        },
+        {
+          "x": 1283.6,
+          "y": 1039.7,
+          "s": 23.6,
+          "t": 0,
+          "a": 0.621,
+          "c": 2,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.2711, "period": 3.6416, "phase": 0.8336},
+            {"ch": "scale", "type": "sine", "amp": 0.0617, "period": 9.8895, "phase": 0.5899}
+          ]
+        },
+        {
+          "x": 818,
+          "y": 1214.4,
+          "s": 20.7,
+          "t": 1,
+          "a": 0.622,
+          "c": 2,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.3743, "period": 4.1656, "phase": 0.7069},
+            {"ch": "scale", "type": "sine", "amp": 0.0589, "period": 8.8481, "phase": 0.3639}
+          ]
+        },
+        {
+          "x": 1238.2,
+          "y": 504.7,
+          "s": 28,
+          "t": 1,
+          "a": 0.611,
+          "c": 1,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.3699, "period": 4.4239, "phase": 0.2899},
+            {"ch": "scale", "type": "sine", "amp": 0.0789, "period": 6.8134, "phase": 0.8651}
+          ]
+        },
+        {
+          "x": 325,
+          "y": 800.8,
+          "s": 11.4,
+          "t": 0,
+          "a": 0.686,
+          "c": 1,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.243, "period": 4.3133, "phase": 0.4174},
+            {"ch": "scale", "type": "sine", "amp": 0.1106, "period": 10.5908, "phase": 0.9217}
+          ]
+        },
+        {
+          "x": 1853,
+          "y": 1442.5,
+          "s": 18.7,
+          "t": 0,
+          "a": 0.554,
+          "c": 2,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.2984, "period": 5.0169, "phase": 0.3645},
+            {"ch": "scale", "type": "sine", "amp": 0.0668, "period": 7.9947, "phase": 0.4633}
+          ]
+        },
+        {
+          "x": 2175,
+          "y": 127.1,
+          "s": 18.9,
+          "t": 0,
+          "a": 0.601,
+          "c": 0,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.211, "period": 2.8657, "phase": 0.0685},
+            {"ch": "scale", "type": "sine", "amp": 0.0709, "period": 5.8582, "phase": 0.9068}
+          ]
+        },
+        {
+          "x": 757.2,
+          "y": 1025.4,
+          "s": 14.6,
+          "t": 0,
+          "a": 0.771,
+          "c": 1,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.3037, "period": 4.0021, "phase": 0.3535},
+            {"ch": "scale", "type": "sine", "amp": 0.0826, "period": 8.7102, "phase": 0.9148}
+          ]
+        }
+      ]
+    },
+    {
+      "name": "shooting_star",
+      "layer": "sky",
+      "seed": 12,
+      "atlas": ["streak"],
+      "count": {"HIGH": 2, "LOW": 1},
+      "size": [180, 260],
+      "aspect": [0.1, 0.12],
+      "rotation": [18, 22],
+      "palette": [[235, 225, 255]],
+      "place": {
+        "mode": "field",
+        "regions": [[0.1, 0.05, 0.75, 0.45]],
+        "regionsNorm": true,
+        "minDist": 600
+      },
+      "keepClear": "none",
+      "motion": [
+        {"ch": "x", "type": "pulse", "a": 0, "b": 520, "dur": 0.9, "period": [19, 37], "ease": "linear", "sync": 1},
+        {"ch": "y", "type": "pulse", "a": 0, "b": 180, "dur": 0.9, "ease": "linear", "sync": 1},
+        {"ch": "alpha", "type": "pulse", "a": 1, "b": 0, "dur": 0.9, "ease": "quadOut", "sync": 1}
+      ],
+      "reducedMotion": "hidden",
+      "instances": [
+        {
+          "x": 396.2,
+          "y": 433.3,
+          "s": 255.3,
+          "h": 26.3,
+          "r": 18.05,
+          "m": [
+            {
+              "ch": "x",
+              "type": "pulse",
+              "a": 0,
+              "b": 520,
+              "dur": 0.9,
+              "period": 31.5281,
+              "ease": "linear",
+              "phase": 0.6401
+            },
+            {
+              "ch": "y",
+              "type": "pulse",
+              "a": 0,
+              "b": 180,
+              "dur": 0.9,
+              "ease": "linear",
+              "phase": 0.6401,
+              "period": 31.5281
+            },
+            {
+              "ch": "alpha",
+              "type": "pulse",
+              "a": 1,
+              "b": 0,
+              "dur": 0.9,
+              "ease": "quadOut",
+              "phase": 0.6401,
+              "period": 31.5281
+            }
+          ]
+        },
+        {
+          "x": 1867.8,
+          "y": 277.4,
+          "s": 221.2,
+          "h": 25.4,
+          "r": 20.61,
+          "m": [
+            {
+              "ch": "x",
+              "type": "pulse",
+              "a": 0,
+              "b": 520,
+              "dur": 0.9,
+              "period": 28.5646,
+              "ease": "linear",
+              "phase": 0.7981
+            },
+            {
+              "ch": "y",
+              "type": "pulse",
+              "a": 0,
+              "b": 180,
+              "dur": 0.9,
+              "ease": "linear",
+              "phase": 0.7981,
+              "period": 28.5646
+            },
+            {
+              "ch": "alpha",
+              "type": "pulse",
+              "a": 1,
+              "b": 0,
+              "dur": 0.9,
+              "ease": "quadOut",
+              "phase": 0.7981,
+              "period": 28.5646
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "nebula_wisp",
+      "layer": "clouds",
+      "seed": 21,
+      "atlas": ["wispA", "wispB", "wispC", "wispD"],
+      "count": {"HIGH": 7, "LOW": 4},
+      "size": [1100, 1900],
+      "aspect": [0.32, 0.5],
+      "alpha": [0.22, 0.42],
+      "color": {"realm": [190, 150, 255], "rift": [255, 120, 170], "corrupt": [150, 255, 160]},
+      "place": {"mode": "field", "regions": ["layer"], "minDist": 450},
+      "keepClear": "none",
+      "motion": [
+        {"ch": "x", "type": "drift", "speed": [5, 12], "span": "layerX"},
+        {"ch": "y", "type": "sine", "amp": [10, 24], "period": [50, 90]},
+        {"ch": "alpha", "type": "sine", "amp": [0.04, 0.08], "period": [20, 36]}
+      ],
+      "reducedMotion": "static",
+      "instances": [
+        {
+          "x": 1244.5,
+          "y": 462.3,
+          "s": 1405.9,
+          "h": 570.5,
+          "t": 3,
+          "a": 0.394,
+          "m": [
+            {"ch": "x", "type": "drift", "speed": 7.4206, "phase": 0.4428, "from": -2650.4, "to": 2945.4},
+            {"ch": "y", "type": "sine", "amp": 20.8685, "period": 57.5544, "phase": 0.3402},
+            {"ch": "alpha", "type": "sine", "amp": 0.0645, "period": 25.4413, "phase": 0.0969}
+          ]
+        },
+        {
+          "x": 574.6,
+          "y": 904.7,
+          "s": 1758.7,
+          "h": 579.1,
+          "t": 1,
+          "a": 0.266,
+          "m": [
+            {"ch": "x", "type": "drift", "speed": 8.8477, "phase": 0.4657, "from": -2333.3, "to": 3968.1},
+            {"ch": "y", "type": "sine", "amp": 11.3695, "period": 76.7521, "phase": 0.8045},
+            {"ch": "alpha", "type": "sine", "amp": 0.0759, "period": 30.3815, "phase": 0.5891}
+          ]
+        },
+        {
+          "x": 1081.9,
+          "y": 1513.3,
+          "s": 1565.5,
+          "h": 713.2,
+          "t": 1,
+          "a": 0.393,
+          "m": [
+            {"ch": "x", "type": "drift", "speed": 11.4502, "phase": 0.7948, "from": -2647.4, "to": 3267.6},
+            {"ch": "y", "type": "sine", "amp": 18.9663, "period": 55.1105, "phase": 0.4714},
+            {"ch": "alpha", "type": "sine", "amp": 0.0424, "period": 21.6245, "phase": 0.7242}
+          ]
+        },
+        {
+          "x": 2186.6,
+          "y": 456.7,
+          "s": 1271.6,
+          "h": 557.7,
+          "t": 3,
+          "a": 0.227,
+          "m": [
+            {"ch": "x", "type": "drift", "speed": 5.1726, "phase": 0.1214, "from": -3458.2, "to": 1869},
+            {"ch": "y", "type": "sine", "amp": 12.9486, "period": 74.0792, "phase": 0.7519},
+            {"ch": "alpha", "type": "sine", "amp": 0.0509, "period": 35.5317, "phase": 0.2144}
+          ]
+        },
+        {
+          "x": 2703.5,
+          "y": 416.9,
+          "s": 1296.2,
+          "h": 417.1,
+          "t": 0,
+          "a": 0.372,
+          "m": [
+            {"ch": "x", "type": "drift", "speed": 10.7496, "phase": 0.7219, "from": -3999.7, "to": 1376.7},
+            {"ch": "y", "type": "sine", "amp": 15.7517, "period": 62.65, "phase": 0.2243},
+            {"ch": "alpha", "type": "sine", "amp": 0.0588, "period": 32.5799, "phase": 0.2496}
+          ]
+        },
+        {
+          "x": 77.6,
+          "y": 1153.8,
+          "s": 1618.1,
+          "h": 595.4,
+          "t": 2,
+          "a": 0.389,
+          "m": [
+            {"ch": "x", "type": "drift", "speed": 6.5725, "phase": 0.5923, "from": -1695.7, "to": 4324.5},
+            {"ch": "y", "type": "sine", "amp": 16.2429, "period": 68.6572, "phase": 0.6279},
+            {"ch": "alpha", "type": "sine", "amp": 0.0764, "period": 20.2638, "phase": 0.7382}
+          ]
+        },
+        {
+          "x": 2063.6,
+          "y": 991.1,
+          "s": 1745.1,
+          "h": 741.2,
+          "t": 2,
+          "a": 0.387,
+          "m": [
+            {"ch": "x", "type": "drift", "speed": 8.2834, "phase": 0.8527, "from": -3808.7, "to": 2465.5},
+            {"ch": "y", "type": "sine", "amp": 15.7435, "period": 52.3146, "phase": 0.197},
+            {"ch": "alpha", "type": "sine", "amp": 0.0497, "period": 30.4686, "phase": 0.0714}
+          ]
+        }
+      ]
+    },
+    {
+      "name": "mist_far",
+      "layer": "far",
+      "seed": 31,
+      "atlas": ["wispC", "wispD"],
+      "count": {"HIGH": 5, "LOW": 3},
+      "size": [1500, 2600],
+      "aspect": [0.12, 0.2],
+      "alpha": [0.25, 0.45],
+      "color": {"realm": [150, 125, 230], "rift": [230, 100, 150], "corrupt": [140, 230, 150]},
+      "place": {
+        "mode": "field",
+        "regions": [[0, 0.55, 1, 0.95]],
+        "regionsNorm": true,
+        "minDist": 300
+      },
+      "keepClear": "none",
+      "motion": [
+        {"ch": "x", "type": "drift", "speed": [8, 16], "span": "layerX", "dirRandom": true},
+        {"ch": "alpha", "type": "sine", "amp": [0.05, 0.1], "period": [18, 30]}
+      ],
+      "reducedMotion": "static",
+      "instances": [
+        {
+          "x": 2514.5,
+          "y": 1560.4,
+          "s": 1553.8,
+          "h": 238.3,
+          "t": 0,
+          "a": 0.265,
+          "m": [
+            {"ch": "x", "type": "drift", "speed": 15.4523, "phase": 0.8125, "from": -4068.3, "to": 2047.3},
+            {"ch": "alpha", "type": "sine", "amp": 0.066, "period": 26.7629, "phase": 0.5727}
+          ]
+        },
+        {
+          "x": 2163.3,
+          "y": 1044.7,
+          "s": 2285.3,
+          "h": 413.2,
+          "t": 1,
+          "a": 0.307,
+          "m": [
+            {"ch": "x", "type": "drift", "speed": 15.0377, "phase": 0.8332, "from": -4448.6, "to": 3130},
+            {"ch": "alpha", "type": "sine", "amp": 0.0902, "period": 29.4839, "phase": 0.655}
+          ]
+        },
+        {
+          "x": 105.2,
+          "y": 1136.8,
+          "s": 1697.4,
+          "h": 299.2,
+          "t": 0,
+          "a": 0.306,
+          "m": [
+            {"ch": "x", "type": "drift", "speed": 13.3897, "phase": 0.6494, "from": -1802.6, "to": 4600.2},
+            {"ch": "alpha", "type": "sine", "amp": 0.0909, "period": 28.0076, "phase": 0.8836}
+          ]
+        },
+        {
+          "x": 1154,
+          "y": 1284.5,
+          "s": 1575,
+          "h": 294.2,
+          "t": 0,
+          "a": 0.331,
+          "m": [
+            {"ch": "x", "type": "drift", "speed": 8.3626, "phase": 0.4495, "from": -2729, "to": 3429},
+            {"ch": "alpha", "type": "sine", "amp": 0.0987, "period": 25.8656, "phase": 0.8172}
+          ]
+        },
+        {
+          "x": 2453.4,
+          "y": 1207.9,
+          "s": 2379.9,
+          "h": 363.3,
+          "t": 1,
+          "a": 0.409,
+          "m": [
+            {"ch": "x", "type": "drift", "speed": -15.3692, "phase": 0.4721, "from": -4833.3, "to": 2934.5},
+            {"ch": "alpha", "type": "sine", "amp": 0.0932, "period": 20.6886, "phase": 0.7776}
+          ]
+        }
+      ]
+    },
+    {
+      "name": "mist_mid",
+      "layer": "mid",
+      "seed": 41,
+      "atlas": ["wispC", "wispD"],
+      "count": {"HIGH": 6, "LOW": 3},
+      "size": [1400, 2400],
+      "aspect": [0.14, 0.24],
+      "alpha": [0.3, 0.5],
+      "color": {"realm": [175, 150, 245], "rift": [240, 110, 160], "corrupt": [150, 240, 160]},
+      "place": {
+        "mode": "field",
+        "regions": [[0, 0.45, 1, 0.97]],
+        "regionsNorm": true,
+        "minDist": 260
+      },
+      "keepClear": "none",
+      "motion": [
+        {"ch": "x", "type": "drift", "speed": [12, 26], "span": "layerX", "dirRandom": true},
+        {"ch": "y", "type": "sine", "amp": [6, 14], "period": [30, 50]}
+      ],
+      "reducedMotion": "static",
+      "instances": [
+        {
+          "x": 1709.7,
+          "y": 1684.6,
+          "s": 1941.2,
+          "h": 437.2,
+          "t": 0,
+          "a": 0.483,
+          "m": [
+            {"ch": "x", "type": "drift", "speed": 18.205, "phase": 0.0576, "from": -3650.9, "to": 3591.5},
+            {"ch": "y", "type": "sine", "amp": 12.6531, "period": 36.6159, "phase": 0.3415}
+          ]
+        },
+        {
+          "x": 1365.3,
+          "y": 1210.9,
+          "s": 1662.9,
+          "h": 351.4,
+          "t": 1,
+          "a": 0.362,
+          "m": [
+            {"ch": "x", "type": "drift", "speed": -15.723, "phase": 0.5405, "from": -3028.2, "to": 3657.6},
+            {"ch": "y", "type": "sine", "amp": 9.0452, "period": 33.0147, "phase": 0.4783}
+          ]
+        },
+        {
+          "x": 126.1,
+          "y": 1927.7,
+          "s": 1579.5,
+          "h": 226,
+          "t": 1,
+          "a": 0.396,
+          "m": [
+            {"ch": "x", "type": "drift", "speed": -18.975, "phase": 0.7568, "from": -1705.6, "to": 4813.4},
+            {"ch": "y", "type": "sine", "amp": 11.7488, "period": 39.1535, "phase": 0.5541}
+          ]
+        },
+        {
+          "x": 643.8,
+          "y": 1777.2,
+          "s": 1942.6,
+          "h": 323.3,
+          "t": 1,
+          "a": 0.443,
+          "m": [
+            {"ch": "x", "type": "drift", "speed": -15.2505, "phase": 0.0378, "from": -2586.4, "to": 4658.8},
+            {"ch": "y", "type": "sine", "amp": 6.0086, "period": 39.6044, "phase": 0.1834}
+          ]
+        },
+        {
+          "x": 424.5,
+          "y": 1415.7,
+          "s": 2276.3,
+          "h": 494.2,
+          "t": 0,
+          "a": 0.466,
+          "m": [
+            {"ch": "x", "type": "drift", "speed": 13.3281, "phase": 0.2004, "from": -2700.8, "to": 5211.8},
+            {"ch": "y", "type": "sine", "amp": 13.2676, "period": 48.2398, "phase": 0.5976}
+          ]
+        },
+        {
+          "x": 954.7,
+          "y": 1646.6,
+          "s": 1692.4,
+          "h": 339.7,
+          "t": 0,
+          "a": 0.352,
+          "m": [
+            {"ch": "x", "type": "drift", "speed": -24.9141, "phase": 0.6297, "from": -2647.1, "to": 4097.7},
+            {"ch": "y", "type": "sine", "amp": 7.654, "period": 49.2698, "phase": 0.3552}
+          ]
+        }
+      ]
+    },
+    {
+      "name": "lightfall",
+      "layer": "mid",
+      "seed": 42,
+      "atlas": ["lightfall"],
+      "count": {"HIGH": 7, "LOW": 3},
+      "hangs": true,
+      "size": [56, 96],
+      "alpha": [0.45, 0.6],
+      "color": {"realm": [215, 195, 255], "rift": [255, 150, 190], "corrupt": [170, 255, 180]},
+      "place": {
+        "mode": "anchorsRel",
+        "anchors": [
+          [236, -844, 380],
+          [606, 456, 420],
+          [-1304, 126, 520],
+          [1136, -724, 560],
+          [-494, 536, 380],
+          [-1084, -764, 620],
+          [1356, 226, 480]
+        ]
+      },
+      "motion": [
+        {"ch": "grad", "type": "scroll", "period": [2.4, 4]},
+        {"ch": "alpha", "type": "sine", "amp": [0.08, 0.14], "period": [1.3, 2.1]}
+      ],
+      "reducedMotion": "static, gradient offset 0",
+      "instances": [
+        {
+          "x": 1916,
+          "y": 236,
+          "s": 80,
+          "len": 380,
+          "a": 0.517,
+          "m": [
+            {"ch": "grad", "type": "scroll", "period": 3.7639, "phase": 0.6697},
+            {"ch": "alpha", "type": "sine", "amp": 0.0905, "period": 1.7213, "phase": 0.2732}
+          ]
+        },
+        {
+          "x": 2286,
+          "y": 1536,
+          "s": 81,
+          "len": 420,
+          "a": 0.58,
+          "m": [
+            {"ch": "grad", "type": "scroll", "period": 3.1557, "phase": 0.2499},
+            {"ch": "alpha", "type": "sine", "amp": 0.1329, "period": 1.8966, "phase": 0.307}
+          ]
+        },
+        {
+          "x": 376,
+          "y": 1206,
+          "s": 63.9,
+          "len": 520,
+          "a": 0.525,
+          "m": [
+            {"ch": "grad", "type": "scroll", "period": 3.4986, "phase": 0.6106},
+            {"ch": "alpha", "type": "sine", "amp": 0.0802, "period": 1.6766, "phase": 0.8373}
+          ]
+        },
+        {
+          "x": 2816,
+          "y": 356,
+          "s": 58,
+          "len": 560,
+          "a": 0.539,
+          "m": [
+            {"ch": "grad", "type": "scroll", "period": 2.4505, "phase": 0.267},
+            {"ch": "alpha", "type": "sine", "amp": 0.0837, "period": 1.4486, "phase": 0.7835}
+          ]
+        },
+        {
+          "x": 1186,
+          "y": 1616,
+          "s": 77.2,
+          "len": 380,
+          "a": 0.454,
+          "m": [
+            {"ch": "grad", "type": "scroll", "period": 2.6768, "phase": 0.8427},
+            {"ch": "alpha", "type": "sine", "amp": 0.1093, "period": 1.9472, "phase": 0.3195}
+          ]
+        },
+        {
+          "x": 596,
+          "y": 316,
+          "s": 74,
+          "len": 620,
+          "a": 0.456,
+          "m": [
+            {"ch": "grad", "type": "scroll", "period": 2.4822, "phase": 0.5566},
+            {"ch": "alpha", "type": "sine", "amp": 0.1158, "period": 1.4961, "phase": 0.6457}
+          ]
+        },
+        {
+          "x": 3036,
+          "y": 1306,
+          "s": 64.4,
+          "len": 480,
+          "a": 0.496,
+          "m": [
+            {"ch": "grad", "type": "scroll", "period": 3.5818, "phase": 0.8587},
+            {"ch": "alpha", "type": "sine", "amp": 0.1105, "period": 1.4634, "phase": 0.2842}
+          ]
+        }
+      ]
+    },
+    {
+      "name": "shard_float",
+      "layer": "near",
+      "seed": 51,
+      "atlas": ["shardA", "shardB"],
+      "count": {"HIGH": 8, "LOW": 0},
+      "size": [40, 110],
+      "alpha": [0.75, 0.95],
+      "color": {"realm": [140, 110, 220], "rift": [210, 80, 120], "corrupt": [90, 200, 110]},
+      "place": {"mode": "field", "regions": ["layer"], "minDist": 300},
+      "motion": [
+        {"ch": "y", "type": "sine", "amp": [6, 14], "period": [5, 9]},
+        {"ch": "rot", "type": "sine", "amp": [2, 5], "period": [9, 15]}
+      ],
+      "reducedMotion": "static",
+      "instances": [
+        {
+          "x": 276.5,
+          "y": 1136.8,
+          "s": 46.2,
+          "t": 0,
+          "a": 0.806,
+          "m": [
+            {"ch": "y", "type": "sine", "amp": 9.7479, "period": 6.2727, "phase": 0.9195},
+            {"ch": "rot", "type": "sine", "amp": 4.8902, "period": 10.8935, "phase": 0.9795}
+          ]
+        },
+        {
+          "x": 326.2,
+          "y": 220.5,
+          "s": 54.6,
+          "t": 1,
+          "a": 0.843,
+          "m": [
+            {"ch": "y", "type": "sine", "amp": 6.7683, "period": 8.4675, "phase": 0.6301},
+            {"ch": "rot", "type": "sine", "amp": 4.7486, "period": 11.3105, "phase": 0.1599}
+          ]
+        },
+        {
+          "x": 2085,
+          "y": 1189,
+          "s": 96.8,
+          "t": 0,
+          "a": 0.809,
+          "m": [
+            {"ch": "y", "type": "sine", "amp": 13.4458, "period": 8.1349, "phase": 0.0953},
+            {"ch": "rot", "type": "sine", "amp": 4.1318, "period": 12.3933, "phase": 0.4515}
+          ]
+        },
+        {
+          "x": 473.3,
+          "y": 1538.7,
+          "s": 87.7,
+          "t": 0,
+          "a": 0.793,
+          "m": [
+            {"ch": "y", "type": "sine", "amp": 8.8266, "period": 6.6733, "phase": 0.8871},
+            {"ch": "rot", "type": "sine", "amp": 3.6379, "period": 12.0998, "phase": 0.9118}
+          ]
+        },
+        {
+          "x": 2703.5,
+          "y": 206.6,
+          "s": 105.4,
+          "t": 1,
+          "a": 0.9,
+          "m": [
+            {"ch": "y", "type": "sine", "amp": 12.1446, "period": 5.4443, "phase": 0.5442},
+            {"ch": "rot", "type": "sine", "amp": 3.8543, "period": 12.0129, "phase": 0.5791}
+          ]
+        },
+        {
+          "x": 187.3,
+          "y": 2356.6,
+          "s": 41.1,
+          "t": 0,
+          "a": 0.762,
+          "m": [
+            {"ch": "y", "type": "sine", "amp": 11.3274, "period": 6.1761, "phase": 0.1454},
+            {"ch": "rot", "type": "sine", "amp": 3.0549, "period": 11.0343, "phase": 0.3852}
+          ]
+        },
+        {
+          "x": 3334.3,
+          "y": 2402.9,
+          "s": 48.7,
+          "t": 0,
+          "a": 0.948,
+          "m": [
+            {"ch": "y", "type": "sine", "amp": 11.5674, "period": 5.6045, "phase": 0.3133},
+            {"ch": "rot", "type": "sine", "amp": 4.9333, "period": 13.2381, "phase": 0.0761}
+          ]
+        },
+        {
+          "x": 27,
+          "y": 1643.9,
+          "s": 101.1,
+          "t": 0,
+          "a": 0.849,
+          "m": [
+            {"ch": "y", "type": "sine", "amp": 6.8343, "period": 7.8367, "phase": 0.4007},
+            {"ch": "rot", "type": "sine", "amp": 4.1799, "period": 13.2111, "phase": 0.091}
+          ]
+        }
+      ]
+    },
+    {
+      "name": "firefly",
+      "layer": "world",
+      "seed": 61,
+      "atlas": ["firefly"],
+      "count": {"HIGH": 34, "LOW": 12},
+      "size": [16, 28],
+      "alpha": [0.5, 0.58],
+      "palette": [[255, 220, 130], [190, 255, 170], [170, 220, 255]],
+      "place": {
+        "mode": "field",
+        "regions": [[640, 160, 2360, 2160], [260, 420, 800, 820]],
+        "minDist": 60
+      },
+      "keepClear": "none",
+      "motion": [
+        {"ch": "x", "type": "sine", "amp": [30, 90], "period": [7, 13]},
+        {"ch": "y", "type": "sine", "amp": [20, 60], "period": [5, 11]},
+        {"ch": "alpha", "type": "sine", "amp": [0.3, 0.42], "period": [1.8, 3.6]}
+      ],
+      "reducedMotion": "static at base alpha",
+      "instances": [
+        {
+          "x": 1858.3,
+          "y": 1921.5,
+          "s": 24.8,
+          "a": 0.504,
+          "c": 0,
+          "m": [
+            {"ch": "x", "type": "sine", "amp": 64.3702, "period": 9.5272, "phase": 0.3923},
+            {"ch": "y", "type": "sine", "amp": 40.7817, "period": 9.7336, "phase": 0.6273},
+            {"ch": "alpha", "type": "sine", "amp": 0.3879, "period": 2.517, "phase": 0.7389}
+          ]
+        },
+        {
+          "x": 2102,
+          "y": 1118.2,
+          "s": 21.9,
+          "a": 0.568,
+          "c": 2,
+          "m": [
+            {"ch": "x", "type": "sine", "amp": 66.9913, "period": 12.8033, "phase": 0.2019},
+            {"ch": "y", "type": "sine", "amp": 20.5103, "period": 5.8458, "phase": 0.9543},
+            {"ch": "alpha", "type": "sine", "amp": 0.3954, "period": 3.0085, "phase": 0.2154}
+          ]
+        },
+        {
+          "x": 2128.9,
+          "y": 560.5,
+          "s": 17.8,
+          "a": 0.567,
+          "c": 1,
+          "m": [
+            {"ch": "x", "type": "sine", "amp": 66.9772, "period": 10.3279, "phase": 0.4992},
+            {"ch": "y", "type": "sine", "amp": 24.2161, "period": 6.2967, "phase": 0.7733},
+            {"ch": "alpha", "type": "sine", "amp": 0.3684, "period": 1.9011, "phase": 0.7938}
+          ]
+        },
+        {
+          "x": 1603.3,
+          "y": 1794.1,
+          "s": 16.4,
+          "a": 0.558,
+          "c": 0,
+          "m": [
+            {"ch": "x", "type": "sine", "amp": 81.4777, "period": 12.2033, "phase": 0.9876},
+            {"ch": "y", "type": "sine", "amp": 34.8327, "period": 6.5399, "phase": 0.7508},
+            {"ch": "alpha", "type": "sine", "amp": 0.4083, "period": 2.1016, "phase": 0.8126}
+          ]
+        },
+        {
+          "x": 1267.2,
+          "y": 773.9,
+          "s": 24.8,
+          "a": 0.575,
+          "c": 1,
+          "m": [
+            {"ch": "x", "type": "sine", "amp": 30.1791, "period": 10.0925, "phase": 0.966},
+            {"ch": "y", "type": "sine", "amp": 55.4876, "period": 5.8246, "phase": 0.7606},
+            {"ch": "alpha", "type": "sine", "amp": 0.3919, "period": 2.7931, "phase": 0.4472}
+          ]
+        },
+        {
+          "x": 1972.4,
+          "y": 607.4,
+          "s": 20.4,
+          "a": 0.52,
+          "c": 1,
+          "m": [
+            {"ch": "x", "type": "sine", "amp": 79.4344, "period": 8.7032, "phase": 0.3613},
+            {"ch": "y", "type": "sine", "amp": 32.6303, "period": 10.2539, "phase": 0.3473},
+            {"ch": "alpha", "type": "sine", "amp": 0.3873, "period": 3.3694, "phase": 0.127}
+          ]
+        },
+        {
+          "x": 1979.9,
+          "y": 480.8,
+          "s": 26.1,
+          "a": 0.517,
+          "c": 0,
+          "m": [
+            {"ch": "x", "type": "sine", "amp": 77.6607, "period": 7.1282, "phase": 0.458},
+            {"ch": "y", "type": "sine", "amp": 31.6418, "period": 7.8343, "phase": 0.6566},
+            {"ch": "alpha", "type": "sine", "amp": 0.3031, "period": 2.5876, "phase": 0.4563}
+          ]
+        },
+        {
+          "x": 696.8,
+          "y": 761.5,
+          "s": 18.2,
+          "a": 0.518,
+          "c": 1,
+          "m": [
+            {"ch": "x", "type": "sine", "amp": 50.4704, "period": 10.0152, "phase": 0.9733},
+            {"ch": "y", "type": "sine", "amp": 56.674, "period": 8.6243, "phase": 0.4983},
+            {"ch": "alpha", "type": "sine", "amp": 0.3127, "period": 2.3168, "phase": 0.1078}
+          ]
+        },
+        {
+          "x": 2252.4,
+          "y": 905.3,
+          "s": 21.8,
+          "a": 0.571,
+          "c": 0,
+          "m": [
+            {"ch": "x", "type": "sine", "amp": 76.0487, "period": 12.9815, "phase": 0.0062},
+            {"ch": "y", "type": "sine", "amp": 36.2024, "period": 6.926, "phase": 0.6152},
+            {"ch": "alpha", "type": "sine", "amp": 0.3217, "period": 3.4267, "phase": 0.2369}
+          ]
+        },
+        {
+          "x": 2299.6,
+          "y": 1353.8,
+          "s": 27.4,
+          "a": 0.518,
+          "c": 2,
+          "m": [
+            {"ch": "x", "type": "sine", "amp": 76.7664, "period": 8.8304, "phase": 0.8278},
+            {"ch": "y", "type": "sine", "amp": 35.489, "period": 10.4449, "phase": 0.7817},
+            {"ch": "alpha", "type": "sine", "amp": 0.3522, "period": 2.6272, "phase": 0.8879}
+          ]
+        },
+        {
+          "x": 2061.6,
+          "y": 1018.6,
+          "s": 23.7,
+          "a": 0.545,
+          "c": 1,
+          "m": [
+            {"ch": "x", "type": "sine", "amp": 73.443, "period": 11.1945, "phase": 0.7688},
+            {"ch": "y", "type": "sine", "amp": 50.6457, "period": 8.6719, "phase": 0.7552},
+            {"ch": "alpha", "type": "sine", "amp": 0.3329, "period": 3.1137, "phase": 0.0136}
+          ]
+        },
+        {
+          "x": 755.7,
+          "y": 2109.4,
+          "s": 22.7,
+          "a": 0.553,
+          "c": 2,
+          "m": [
+            {"ch": "x", "type": "sine", "amp": 44.6733, "period": 11.0732, "phase": 0.0547},
+            {"ch": "y", "type": "sine", "amp": 40.2297, "period": 8.2295, "phase": 0.9786},
+            {"ch": "alpha", "type": "sine", "amp": 0.3856, "period": 3.1082, "phase": 0.4924}
+          ]
+        },
+        {
+          "x": 2304.5,
+          "y": 688.9,
+          "s": 21.7,
+          "a": 0.57,
+          "c": 1,
+          "m": [
+            {"ch": "x", "type": "sine", "amp": 43.9037, "period": 12.4142, "phase": 0.2357},
+            {"ch": "y", "type": "sine", "amp": 47.2102, "period": 9.422, "phase": 0.3772},
+            {"ch": "alpha", "type": "sine", "amp": 0.3181, "period": 2.2309, "phase": 0.7032}
+          ]
+        },
+        {
+          "x": 1525.8,
+          "y": 200,
+          "s": 25.2,
+          "a": 0.505,
+          "c": 1,
+          "m": [
+            {"ch": "x", "type": "sine", "amp": 43.6543, "period": 9.7944, "phase": 0.7981},
+            {"ch": "y", "type": "sine", "amp": 59.0259, "period": 6.8208, "phase": 0.8716},
+            {"ch": "alpha", "type": "sine", "amp": 0.3131, "period": 1.9664, "phase": 0.5608}
+          ]
+        },
+        {
+          "x": 1020.1,
+          "y": 1556.7,
+          "s": 17.4,
+          "a": 0.576,
+          "c": 0,
+          "m": [
+            {"ch": "x", "type": "sine", "amp": 49.4792, "period": 9.1416, "phase": 0.2559},
+            {"ch": "y", "type": "sine", "amp": 31.3268, "period": 8.0533, "phase": 0.6291},
+            {"ch": "alpha", "type": "sine", "amp": 0.401, "period": 2.5803, "phase": 0.7116}
+          ]
+        },
+        {
+          "x": 1695.3,
+          "y": 990.9,
+          "s": 27.3,
+          "a": 0.574,
+          "c": 1,
+          "m": [
+            {"ch": "x", "type": "sine", "amp": 60.674, "period": 10.8324, "phase": 0.8119},
+            {"ch": "y", "type": "sine", "amp": 29.4908, "period": 8.0578, "phase": 0.4693},
+            {"ch": "alpha", "type": "sine", "amp": 0.3941, "period": 2.8463, "phase": 0.4309}
+          ]
+        },
+        {
+          "x": 912.5,
+          "y": 2075.6,
+          "s": 21.7,
+          "a": 0.555,
+          "c": 2,
+          "m": [
+            {"ch": "x", "type": "sine", "amp": 35.8716, "period": 9.0638, "phase": 0.684},
+            {"ch": "y", "type": "sine", "amp": 44.7212, "period": 10.6712, "phase": 0.0866},
+            {"ch": "alpha", "type": "sine", "amp": 0.323, "period": 2.3555, "phase": 0.0613}
+          ]
+        },
+        {
+          "x": 2012.4,
+          "y": 353.6,
+          "s": 26.3,
+          "a": 0.509,
+          "c": 2,
+          "m": [
+            {"ch": "x", "type": "sine", "amp": 59.6791, "period": 12.5764, "phase": 0.168},
+            {"ch": "y", "type": "sine", "amp": 57.0527, "period": 7.8833, "phase": 0.0484},
+            {"ch": "alpha", "type": "sine", "amp": 0.3466, "period": 3.4254, "phase": 0.2657}
+          ]
+        },
+        {
+          "x": 1466.4,
+          "y": 2074.2,
+          "s": 21.8,
+          "a": 0.524,
+          "c": 0,
+          "m": [
+            {"ch": "x", "type": "sine", "amp": 65.2139, "period": 12.6907, "phase": 0.0068},
+            {"ch": "y", "type": "sine", "amp": 38.9615, "period": 8.5039, "phase": 0.3052},
+            {"ch": "alpha", "type": "sine", "amp": 0.3686, "period": 3.3838, "phase": 0.7779}
+          ]
+        },
+        {
+          "x": 1352.8,
+          "y": 410.7,
+          "s": 26.5,
+          "a": 0.525,
+          "c": 1,
+          "m": [
+            {"ch": "x", "type": "sine", "amp": 35.2785, "period": 11.7951, "phase": 0.5466},
+            {"ch": "y", "type": "sine", "amp": 54.6457, "period": 8.0791, "phase": 0.5986},
+            {"ch": "alpha", "type": "sine", "amp": 0.3302, "period": 3.1775, "phase": 0.0149}
+          ]
+        },
+        {
+          "x": 890,
+          "y": 997.5,
+          "s": 19,
+          "a": 0.578,
+          "c": 2,
+          "m": [
+            {"ch": "x", "type": "sine", "amp": 41.1762, "period": 11.2476, "phase": 0.9071},
+            {"ch": "y", "type": "sine", "amp": 25.972, "period": 5.9755, "phase": 0.673},
+            {"ch": "alpha", "type": "sine", "amp": 0.3235, "period": 3.5931, "phase": 0.8115}
+          ]
+        },
+        {
+          "x": 1779.2,
+          "y": 2033.3,
+          "s": 17.9,
+          "a": 0.508,
+          "c": 0,
+          "m": [
+            {"ch": "x", "type": "sine", "amp": 75.502, "period": 7.8477, "phase": 0.7961},
+            {"ch": "y", "type": "sine", "amp": 50.6751, "period": 10.6357, "phase": 0.2612},
+            {"ch": "alpha", "type": "sine", "amp": 0.3802, "period": 2.6826, "phase": 0.4575}
+          ]
+        },
+        {
+          "x": 1946,
+          "y": 342,
+          "s": 17,
+          "a": 0.57,
+          "c": 2,
+          "m": [
+            {"ch": "x", "type": "sine", "amp": 77.1259, "period": 9.7386, "phase": 0.0497},
+            {"ch": "y", "type": "sine", "amp": 57.0784, "period": 9.033, "phase": 0.2463},
+            {"ch": "alpha", "type": "sine", "amp": 0.3915, "period": 2.6627, "phase": 0.2346}
+          ]
+        },
+        {
+          "x": 1230.8,
+          "y": 1142.8,
+          "s": 19.4,
+          "a": 0.555,
+          "c": 1,
+          "m": [
+            {"ch": "x", "type": "sine", "amp": 81.8366, "period": 11.2318, "phase": 0.5794},
+            {"ch": "y", "type": "sine", "amp": 31.7864, "period": 10.7118, "phase": 0.8699},
+            {"ch": "alpha", "type": "sine", "amp": 0.3139, "period": 2.0824, "phase": 0.5186}
+          ]
+        },
+        {
+          "x": 1248.6,
+          "y": 1465.2,
+          "s": 23.4,
+          "a": 0.522,
+          "c": 2,
+          "m": [
+            {"ch": "x", "type": "sine", "amp": 64.6346, "period": 12.7281, "phase": 0.9378},
+            {"ch": "y", "type": "sine", "amp": 47.2911, "period": 9.2674, "phase": 0.0689},
+            {"ch": "alpha", "type": "sine", "amp": 0.3928, "period": 3.4303, "phase": 0.6276}
+          ]
+        },
+        {
+          "x": 1090.9,
+          "y": 1201.6,
+          "s": 19.4,
+          "a": 0.511,
+          "c": 1,
+          "m": [
+            {"ch": "x", "type": "sine", "amp": 37.8662, "period": 10.8283, "phase": 0.6562},
+            {"ch": "y", "type": "sine", "amp": 51.8448, "period": 6.9484, "phase": 0.4787},
+            {"ch": "alpha", "type": "sine", "amp": 0.3286, "period": 2.1774, "phase": 0.8014}
+          ]
+        },
+        {
+          "x": 669.1,
+          "y": 1823.5,
+          "s": 22.7,
+          "a": 0.551,
+          "c": 0,
+          "m": [
+            {"ch": "x", "type": "sine", "amp": 60.3928, "period": 8.2399, "phase": 0.3795},
+            {"ch": "y", "type": "sine", "amp": 28.9766, "period": 5.8773, "phase": 0.9534},
+            {"ch": "alpha", "type": "sine", "amp": 0.3058, "period": 2.4191, "phase": 0.8117}
+          ]
+        },
+        {
+          "x": 1203.7,
+          "y": 641.9,
+          "s": 25.9,
+          "a": 0.562,
+          "c": 0,
+          "m": [
+            {"ch": "x", "type": "sine", "amp": 62.1828, "period": 11.9152, "phase": 0.9382},
+            {"ch": "y", "type": "sine", "amp": 39.3686, "period": 6.6001, "phase": 0.2344},
+            {"ch": "alpha", "type": "sine", "amp": 0.3209, "period": 2.2196, "phase": 0.8336}
+          ]
+        },
+        {
+          "x": 1155,
+          "y": 1464.4,
+          "s": 19.4,
+          "a": 0.521,
+          "c": 0,
+          "m": [
+            {"ch": "x", "type": "sine", "amp": 70.7413, "period": 11.8018, "phase": 0.3413},
+            {"ch": "y", "type": "sine", "amp": 26.2109, "period": 7.3017, "phase": 0.0909},
+            {"ch": "alpha", "type": "sine", "amp": 0.3834, "period": 3.2884, "phase": 0.7826}
+          ]
+        },
+        {
+          "x": 1892.3,
+          "y": 948.5,
+          "s": 18.6,
+          "a": 0.542,
+          "c": 0,
+          "m": [
+            {"ch": "x", "type": "sine", "amp": 31.8483, "period": 9.8584, "phase": 0.1193},
+            {"ch": "y", "type": "sine", "amp": 52.6742, "period": 9.2108, "phase": 0.2591},
+            {"ch": "alpha", "type": "sine", "amp": 0.4038, "period": 2.2297, "phase": 0.8143}
+          ]
+        },
+        {
+          "x": 2143.2,
+          "y": 1504.4,
+          "s": 27.6,
+          "a": 0.503,
+          "c": 1,
+          "m": [
+            {"ch": "x", "type": "sine", "amp": 66.2711, "period": 8.8311, "phase": 0.8089},
+            {"ch": "y", "type": "sine", "amp": 58.4221, "period": 9.63, "phase": 0.5255},
+            {"ch": "alpha", "type": "sine", "amp": 0.3848, "period": 2.1529, "phase": 0.9682}
+          ]
+        },
+        {
+          "x": 2065.3,
+          "y": 1698.4,
+          "s": 19.6,
+          "a": 0.562,
+          "c": 1,
+          "m": [
+            {"ch": "x", "type": "sine", "amp": 36.7541, "period": 12.3642, "phase": 0.834},
+            {"ch": "y", "type": "sine", "amp": 26.1702, "period": 5.4399, "phase": 0.0621},
+            {"ch": "alpha", "type": "sine", "amp": 0.3065, "period": 3.32, "phase": 0.5456}
+          ]
+        },
+        {
+          "x": 1765.6,
+          "y": 598.7,
+          "s": 26.4,
+          "a": 0.563,
+          "c": 1,
+          "m": [
+            {"ch": "x", "type": "sine", "amp": 40.7345, "period": 7.6953, "phase": 0.9134},
+            {"ch": "y", "type": "sine", "amp": 36.8962, "period": 10.3333, "phase": 0.7768},
+            {"ch": "alpha", "type": "sine", "amp": 0.3877, "period": 3.1794, "phase": 0.1209}
+          ]
+        },
+        {
+          "x": 1367.1,
+          "y": 787.5,
+          "s": 22.6,
+          "a": 0.508,
+          "c": 0,
+          "m": [
+            {"ch": "x", "type": "sine", "amp": 88.9443, "period": 12.5513, "phase": 0.1113},
+            {"ch": "y", "type": "sine", "amp": 56.9676, "period": 5.075, "phase": 0.7665},
+            {"ch": "alpha", "type": "sine", "amp": 0.3931, "period": 3.4176, "phase": 0.619}
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ember",
+      "layer": "world",
+      "seed": 62,
+      "atlas": ["ember"],
+      "count": {"HIGH": 20, "LOW": 8},
+      "size": [10, 20],
+      "alpha": [0.5, 0.5],
+      "palette": [[255, 120, 70], [255, 60, 100], [255, 170, 110]],
+      "place": {
+        "mode": "field",
+        "regions": [[2560, 900, 3800, 2150]],
+        "minDist": 50
+      },
+      "keepClear": "none",
+      "lockAlphaToDrift": true,
+      "motion": [
+        {"ch": "y", "type": "drift", "speed": [-28, -14], "span": 420},
+        {"ch": "x", "type": "sine", "amp": [10, 26], "period": [3, 6]},
+        {"ch": "alpha", "type": "sine", "amp": 0.5, "period": 1}
+      ],
+      "reducedMotion": "hidden",
+      "instances": [
+        {
+          "x": 2803.9,
+          "y": 1120.8,
+          "s": 14.2,
+          "a": 0.5,
+          "c": 0,
+          "m": [
+            {"ch": "y", "type": "drift", "speed": -16.6267, "phase": 0.988, "from": -210, "to": 210},
+            {"ch": "x", "type": "sine", "amp": 23.2251, "period": 3.9349, "phase": 0.6151},
+            {"ch": "alpha", "type": "sine", "amp": 0.5, "period": 25.2606, "phase": 0.762}
+          ]
+        },
+        {
+          "x": 2782,
+          "y": 1427.8,
+          "s": 15.4,
+          "a": 0.5,
+          "c": 2,
+          "m": [
+            {"ch": "y", "type": "drift", "speed": -23.5422, "phase": 0.1956, "from": -210, "to": 210},
+            {"ch": "x", "type": "sine", "amp": 13.4107, "period": 5.8497, "phase": 0.9055},
+            {"ch": "alpha", "type": "sine", "amp": 0.5, "period": 17.8403, "phase": 0.5544}
+          ]
+        },
+        {
+          "x": 2687,
+          "y": 1906.1,
+          "s": 10.7,
+          "a": 0.5,
+          "c": 1,
+          "m": [
+            {"ch": "y", "type": "drift", "speed": -22.1646, "phase": 0.397, "from": -210, "to": 210},
+            {"ch": "x", "type": "sine", "amp": 23.1277, "period": 3.6177, "phase": 0.0787},
+            {"ch": "alpha", "type": "sine", "amp": 0.5, "period": 18.9491, "phase": 0.353}
+          ]
+        },
+        {
+          "x": 2749.1,
+          "y": 2012.2,
+          "s": 10.4,
+          "a": 0.5,
+          "c": 0,
+          "m": [
+            {"ch": "y", "type": "drift", "speed": -15.8258, "phase": 0.6155, "from": -210, "to": 210},
+            {"ch": "x", "type": "sine", "amp": 23.9908, "period": 3.7382, "phase": 0.7114},
+            {"ch": "alpha", "type": "sine", "amp": 0.5, "period": 26.5389, "phase": 0.1345}
+          ]
+        },
+        {
+          "x": 2853.7,
+          "y": 909.2,
+          "s": 12.8,
+          "a": 0.5,
+          "c": 1,
+          "m": [
+            {"ch": "y", "type": "drift", "speed": -20.4693, "phase": 0.1583, "from": -210, "to": 210},
+            {"ch": "x", "type": "sine", "amp": 19.8939, "period": 3.2588, "phase": 0.7998},
+            {"ch": "alpha", "type": "sine", "amp": 0.5, "period": 20.5185, "phase": 0.5917}
+          ]
+        },
+        {
+          "x": 3250.5,
+          "y": 1755.9,
+          "s": 18.8,
+          "a": 0.5,
+          "c": 0,
+          "m": [
+            {"ch": "y", "type": "drift", "speed": -15.1115, "phase": 0.0802, "from": -210, "to": 210},
+            {"ch": "x", "type": "sine", "amp": 15.2735, "period": 4.9802, "phase": 0.9611},
+            {"ch": "alpha", "type": "sine", "amp": 0.5, "period": 27.7934, "phase": 0.6698}
+          ]
+        },
+        {
+          "x": 3311.2,
+          "y": 1912.4,
+          "s": 12,
+          "a": 0.5,
+          "c": 0,
+          "m": [
+            {"ch": "y", "type": "drift", "speed": -16.3797, "phase": 0.5595, "from": -210, "to": 210},
+            {"ch": "x", "type": "sine", "amp": 24.0276, "period": 3.7974, "phase": 0.1124},
+            {"ch": "alpha", "type": "sine", "amp": 0.5, "period": 25.6415, "phase": 0.1905}
+          ]
+        },
+        {
+          "x": 3470.9,
+          "y": 1293.1,
+          "s": 12.9,
+          "a": 0.5,
+          "c": 2,
+          "m": [
+            {"ch": "y", "type": "drift", "speed": -18.9963, "phase": 0.1255, "from": -210, "to": 210},
+            {"ch": "x", "type": "sine", "amp": 19.4864, "period": 3.9324, "phase": 0.9808},
+            {"ch": "alpha", "type": "sine", "amp": 0.5, "period": 22.1096, "phase": 0.6245}
+          ]
+        },
+        {
+          "x": 3069.8,
+          "y": 1944.2,
+          "s": 19.8,
+          "a": 0.5,
+          "c": 0,
+          "m": [
+            {"ch": "y", "type": "drift", "speed": -15.5142, "phase": 0.5528, "from": -210, "to": 210},
+            {"ch": "x", "type": "sine", "amp": 16.3523, "period": 5.8588, "phase": 0.2076},
+            {"ch": "alpha", "type": "sine", "amp": 0.5, "period": 27.072, "phase": 0.1972}
+          ]
+        },
+        {
+          "x": 3258.6,
+          "y": 1415.6,
+          "s": 14.8,
+          "a": 0.5,
+          "c": 0,
+          "m": [
+            {"ch": "y", "type": "drift", "speed": -19.1447, "phase": 0.0061, "from": -210, "to": 210},
+            {"ch": "x", "type": "sine", "amp": 15.7388, "period": 3.3885, "phase": 0.7472},
+            {"ch": "alpha", "type": "sine", "amp": 0.5, "period": 21.9382, "phase": 0.7439}
+          ]
+        },
+        {
+          "x": 2785.1,
+          "y": 1654.1,
+          "s": 10.1,
+          "a": 0.5,
+          "c": 0,
+          "m": [
+            {"ch": "y", "type": "drift", "speed": -24.3518, "phase": 0.2417, "from": -210, "to": 210},
+            {"ch": "x", "type": "sine", "amp": 21.6016, "period": 5.8499, "phase": 0.4325},
+            {"ch": "alpha", "type": "sine", "amp": 0.5, "period": 17.2472, "phase": 0.5083}
+          ]
+        },
+        {
+          "x": 3694.3,
+          "y": 1743.5,
+          "s": 16.8,
+          "a": 0.5,
+          "c": 2,
+          "m": [
+            {"ch": "y", "type": "drift", "speed": -15.8577, "phase": 0.2831, "from": -210, "to": 210},
+            {"ch": "x", "type": "sine", "amp": 14.5061, "period": 5.747, "phase": 0.3378},
+            {"ch": "alpha", "type": "sine", "amp": 0.5, "period": 26.4856, "phase": 0.4669}
+          ]
+        },
+        {
+          "x": 3357.2,
+          "y": 1711.6,
+          "s": 15.1,
+          "a": 0.5,
+          "c": 1,
+          "m": [
+            {"ch": "y", "type": "drift", "speed": -25.5404, "phase": 0.2609, "from": -210, "to": 210},
+            {"ch": "x", "type": "sine", "amp": 20.8205, "period": 4.6408, "phase": 0.2517},
+            {"ch": "alpha", "type": "sine", "amp": 0.5, "period": 16.4445, "phase": 0.4891}
+          ]
+        },
+        {
+          "x": 3295.6,
+          "y": 2047.6,
+          "s": 15.1,
+          "a": 0.5,
+          "c": 2,
+          "m": [
+            {"ch": "y", "type": "drift", "speed": -18.391, "phase": 0.8959, "from": -210, "to": 210},
+            {"ch": "x", "type": "sine", "amp": 20.4756, "period": 3.6205, "phase": 0.7283},
+            {"ch": "alpha", "type": "sine", "amp": 0.5, "period": 22.8373, "phase": 0.8541}
+          ]
+        },
+        {
+          "x": 3346.6,
+          "y": 1225.5,
+          "s": 11.7,
+          "a": 0.5,
+          "c": 0,
+          "m": [
+            {"ch": "y", "type": "drift", "speed": -20.4279, "phase": 0.7347, "from": -210, "to": 210},
+            {"ch": "x", "type": "sine", "amp": 14.2468, "period": 4.0929, "phase": 0.7718},
+            {"ch": "alpha", "type": "sine", "amp": 0.5, "period": 20.5601, "phase": 0.0153}
+          ]
+        },
+        {
+          "x": 2601.6,
+          "y": 1160.8,
+          "s": 14.3,
+          "a": 0.5,
+          "c": 1,
+          "m": [
+            {"ch": "y", "type": "drift", "speed": -17.455, "phase": 0.8279, "from": -210, "to": 210},
+            {"ch": "x", "type": "sine", "amp": 24.5434, "period": 5.4676, "phase": 0.1801},
+            {"ch": "alpha", "type": "sine", "amp": 0.5, "period": 24.0619, "phase": 0.9221}
+          ]
+        },
+        {
+          "x": 2766.5,
+          "y": 903,
+          "s": 14.2,
+          "a": 0.5,
+          "c": 0,
+          "m": [
+            {"ch": "y", "type": "drift", "speed": -26.7837, "phase": 0.2466, "from": -210, "to": 210},
+            {"ch": "x", "type": "sine", "amp": 23.9598, "period": 4.9514, "phase": 0.7596},
+            {"ch": "alpha", "type": "sine", "amp": 0.5, "period": 15.6812, "phase": 0.5034}
+          ]
+        },
+        {
+          "x": 3665.6,
+          "y": 1163.7,
+          "s": 16.8,
+          "a": 0.5,
+          "c": 1,
+          "m": [
+            {"ch": "y", "type": "drift", "speed": -25.8537, "phase": 0.557, "from": -210, "to": 210},
+            {"ch": "x", "type": "sine", "amp": 16.6104, "period": 3.1972, "phase": 0.0609},
+            {"ch": "alpha", "type": "sine", "amp": 0.5, "period": 16.2453, "phase": 0.193}
+          ]
+        },
+        {
+          "x": 2919.6,
+          "y": 1104.5,
+          "s": 17.2,
+          "a": 0.5,
+          "c": 2,
+          "m": [
+            {"ch": "y", "type": "drift", "speed": -24.8213, "phase": 0.3189, "from": -210, "to": 210},
+            {"ch": "x", "type": "sine", "amp": 16.253, "period": 4.591, "phase": 0.6523},
+            {"ch": "alpha", "type": "sine", "amp": 0.5, "period": 16.921, "phase": 0.4311}
+          ]
+        },
+        {
+          "x": 3060.6,
+          "y": 1443.4,
+          "s": 10.3,
+          "a": 0.5,
+          "c": 0,
+          "m": [
+            {"ch": "y", "type": "drift", "speed": -17.91, "phase": 0.2905, "from": -210, "to": 210},
+            {"ch": "x", "type": "sine", "amp": 23.4334, "period": 4.996, "phase": 0.2352},
+            {"ch": "alpha", "type": "sine", "amp": 0.5, "period": 23.4506, "phase": 0.4595}
+          ]
+        }
+      ]
+    },
+    {
+      "name": "vine_world",
+      "layer": "world",
+      "seed": 63,
+      "atlas": ["vineThin"],
+      "count": {"HIGH": 10, "LOW": 4},
+      "hangs": true,
+      "size": [18, 28],
+      "alpha": [0.85, 1],
+      "palette": [[92, 60, 160]],
+      "place": {
+        "mode": "anchorsWorld",
+        "anchors": [
+          [800, 1150, 150],
+          [2172, 1125, 150],
+          [1240, 1380, 150],
+          [1780, 1365, 150],
+          [905, 1235, 170],
+          [2092, 1220, 170],
+          [1022, 935, 140],
+          [1978, 925, 140],
+          [1330, 745, 110],
+          [1680, 725, 110],
+          [1040, 575, 120],
+          [1960, 560, 120],
+          [1620, 1432, 120]
+        ]
+      },
+      "motion": [
+        {"ch": "rot", "type": "sine", "amp": [2.5, 4], "period": [4.5, 7.5]}
+      ],
+      "reducedMotion": "static",
+      "instances": [
+        {
+          "x": 800,
+          "y": 1150,
+          "s": 20.4,
+          "len": 150,
+          "a": 0.862,
+          "m": [
+            {"ch": "rot", "type": "sine", "amp": 2.9236, "period": 4.6568, "phase": 0.3971}
+          ]
+        },
+        {
+          "x": 2172,
+          "y": 1125,
+          "s": 26.4,
+          "len": 150,
+          "a": 0.893,
+          "m": [
+            {"ch": "rot", "type": "sine", "amp": 3.4931, "period": 6.4874, "phase": 0.2007}
+          ]
+        },
+        {
+          "x": 1240,
+          "y": 1380,
+          "s": 18.5,
+          "len": 150,
+          "a": 0.853,
+          "m": [
+            {"ch": "rot", "type": "sine", "amp": 2.588, "period": 7.2112, "phase": 0.4622}
+          ]
+        },
+        {
+          "x": 1780,
+          "y": 1365,
+          "s": 21.3,
+          "len": 150,
+          "a": 0.937,
+          "m": [
+            {"ch": "rot", "type": "sine", "amp": 3.6611, "period": 4.8878, "phase": 0.0216}
+          ]
+        },
+        {
+          "x": 905,
+          "y": 1235,
+          "s": 27.4,
+          "len": 170,
+          "a": 0.932,
+          "m": [
+            {"ch": "rot", "type": "sine", "amp": 2.8111, "period": 4.7744, "phase": 0.6331}
+          ]
+        },
+        {
+          "x": 2092,
+          "y": 1220,
+          "s": 18.5,
+          "len": 170,
+          "a": 0.926,
+          "m": [
+            {"ch": "rot", "type": "sine", "amp": 3.889, "period": 7.0591, "phase": 0.9759}
+          ]
+        },
+        {
+          "x": 1022,
+          "y": 935,
+          "s": 24.5,
+          "len": 140,
+          "a": 0.918,
+          "m": [
+            {"ch": "rot", "type": "sine", "amp": 3.3291, "period": 7.2236, "phase": 0.9857}
+          ]
+        },
+        {
+          "x": 1978,
+          "y": 925,
+          "s": 19.6,
+          "len": 140,
+          "a": 0.951,
+          "m": [
+            {"ch": "rot", "type": "sine", "amp": 3.742, "period": 7.2303, "phase": 0.8379}
+          ]
+        },
+        {
+          "x": 1330,
+          "y": 745,
+          "s": 25.9,
+          "len": 110,
+          "a": 0.98,
+          "m": [
+            {"ch": "rot", "type": "sine", "amp": 3.9656, "period": 6.0828, "phase": 0.7336}
+          ]
+        },
+        {
+          "x": 1680,
+          "y": 725,
+          "s": 22,
+          "len": 110,
+          "a": 0.868,
+          "m": [
+            {"ch": "rot", "type": "sine", "amp": 2.7993, "period": 5.7893, "phase": 0.3451}
+          ]
+        }
+      ],
+      "clearScale": 0.72
+    },
+    {
+      "name": "vine_fg",
+      "layer": "fg",
+      "seed": 71,
+      "atlas": ["vineA", "vineB"],
+      "count": {"HIGH": 6, "LOW": 0},
+      "hangs": true,
+      "size": [160, 300],
+      "aspect": [3.2, 5],
+      "alpha": [0.9, 1],
+      "palette": [[16, 8, 30]],
+      "place": {
+        "mode": "field",
+        "regions": [[0, 0, 1, 0.002]],
+        "regionsNorm": true,
+        "minDist": 500
+      },
+      "motion": [
+        {"ch": "rot", "type": "sine", "amp": [1.2, 2.4], "period": [6, 10]}
+      ],
+      "reducedMotion": "static",
+      "instances": [
+        {
+          "x": 3644,
+          "y": 3.9,
+          "s": 236.3,
+          "h": 1108.8,
+          "t": 1,
+          "a": 0.996,
+          "m": [
+            {"ch": "rot", "type": "sine", "amp": 1.7519, "period": 8.6776, "phase": 0.5415}
+          ]
+        },
+        {
+          "x": 2879.2,
+          "y": 1.8,
+          "s": 226.5,
+          "h": 965.9,
+          "t": 0,
+          "a": 0.992,
+          "m": [
+            {"ch": "rot", "type": "sine", "amp": 2.1964, "period": 7.4963, "phase": 0.7689}
+          ]
+        },
+        {
+          "x": 1103.4,
+          "y": 1.7,
+          "s": 190,
+          "h": 856.4,
+          "t": 0,
+          "a": 0.956,
+          "m": [
+            {"ch": "rot", "type": "sine", "amp": 1.3951, "period": 9.1304, "phase": 0.3436}
+          ]
+        },
+        {
+          "x": 4545.7,
+          "y": 2.1,
+          "s": 269,
+          "h": 1200.1,
+          "t": 0,
+          "a": 0.979,
+          "m": [
+            {"ch": "rot", "type": "sine", "amp": 1.7679, "period": 8.7586, "phase": 0.3891}
+          ]
+        },
+        {
+          "x": 56.5,
+          "y": 2.9,
+          "s": 175.2,
+          "h": 747.6,
+          "t": 1,
+          "a": 0.978,
+          "m": [
+            {"ch": "rot", "type": "sine", "amp": 2.3561, "period": 7.1786, "phase": 0.4061}
+          ]
+        },
+        {
+          "x": 5057.3,
+          "y": 0.7,
+          "s": 283.8,
+          "h": 1072.5,
+          "t": 1,
+          "a": 0.975,
+          "m": [
+            {"ch": "rot", "type": "sine", "amp": 1.336, "period": 6.4134, "phase": 0.1428}
+          ]
+        }
+      ]
+    },
+    {
+      "name": "rift_glow",
+      "layer": "world",
+      "seed": 81,
+      "atlas": ["glow"],
+      "count": {"HIGH": 1, "LOW": 1},
+      "size": [1150, 1150],
+      "aspect": [1.35, 1.35],
+      "alpha": [0.42, 0.42],
+      "palette": [[255, 46, 99]],
+      "place": {
+        "mode": "anchorsWorld",
+        "anchors": [[3150, 1480]]
+      },
+      "keepClear": "none",
+      "motion": [
+        {"ch": "alpha", "type": "sine", "amp": 0.14, "period": 2.8, "phase": 0},
+        {"ch": "scale", "type": "sine", "amp": 0.035, "period": 2.8, "phase": 0}
+      ],
+      "reducedMotion": "static at base alpha",
+      "instances": [
+        {
+          "x": 3150,
+          "y": 1480,
+          "s": 1150,
+          "h": 1552.5,
+          "a": 0.42,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.14, "period": 2.8, "phase": 0},
+            {"ch": "scale", "type": "sine", "amp": 0.035, "period": 2.8, "phase": 0}
+          ]
+        }
+      ]
+    },
+    {
+      "name": "rift_ring",
+      "layer": "world",
+      "seed": 82,
+      "atlas": ["ring"],
+      "count": {"HIGH": 1, "LOW": 1},
+      "size": [760, 760],
+      "aspect": [1.45, 1.45],
+      "palette": [[255, 90, 140]],
+      "place": {
+        "mode": "anchorsWorld",
+        "anchors": [[3150, 1480]]
+      },
+      "keepClear": "none",
+      "motion": [
+        {"ch": "scale", "type": "pulse", "a": 0.55, "b": 1.6, "dur": 2.4, "period": 6, "ease": "quadOut", "phase": 0},
+        {"ch": "alpha", "type": "pulse", "a": 0.6, "b": 0, "dur": 2.4, "period": 6, "ease": "quadOut", "phase": 0}
+      ],
+      "reducedMotion": "hidden",
+      "instances": [
+        {
+          "x": 3150,
+          "y": 1480,
+          "s": 760,
+          "h": 1102,
+          "m": [
+            {
+              "ch": "scale",
+              "type": "pulse",
+              "a": 0.55,
+              "b": 1.6,
+              "dur": 2.4,
+              "period": 6,
+              "ease": "quadOut",
+              "phase": 0
+            },
+            {"ch": "alpha", "type": "pulse", "a": 0.6, "b": 0, "dur": 2.4, "period": 6, "ease": "quadOut", "phase": 0}
+          ]
+        }
+      ]
+    },
+    {
+      "name": "corrupt_glitch",
+      "layer": "world",
+      "seed": 83,
+      "atlas": ["bar"],
+      "count": {"HIGH": 4, "LOW": 2},
+      "size": [300, 520],
+      "aspect": [0.008, 0.02],
+      "alpha": [0.7, 0.9],
+      "palette": [[57, 255, 20], [255, 0, 64], [0, 229, 255]],
+      "place": {
+        "mode": "field",
+        "regions": [[3340, 900, 3840, 1640]]
+      },
+      "keepClear": "none",
+      "motion": [
+        {"ch": "alpha", "type": "flicker", "slot": [2.2, 5.5], "dur": [0.06, 0.14]},
+        {"ch": "x", "type": "flicker", "out": "jitter", "amp": 18}
+      ],
+      "reducedMotion": "hidden",
+      "instances": [
+        {
+          "x": 3468.9,
+          "y": 1324,
+          "s": 429,
+          "h": 6.9,
+          "a": 0.774,
+          "c": 0,
+          "m": [
+            {"ch": "alpha", "type": "flicker", "slot": 3.3706, "dur": 0.0707, "phase": 0.9098, "seed": 506624},
+            {
+              "ch": "x",
+              "type": "flicker",
+              "out": "jitter",
+              "amp": 18,
+              "phase": 0.8409,
+              "seed": 506624,
+              "slot": 3.3706,
+              "dur": 0.0707
+            }
+          ]
+        },
+        {
+          "x": 3376.7,
+          "y": 1484.5,
+          "s": 454.9,
+          "h": 6.8,
+          "a": 0.789,
+          "c": 1,
+          "m": [
+            {"ch": "alpha", "type": "flicker", "slot": 2.8616, "dur": 0.0995, "phase": 0.8316, "seed": 85619},
+            {
+              "ch": "x",
+              "type": "flicker",
+              "out": "jitter",
+              "amp": 18,
+              "phase": 0.2005,
+              "seed": 85619,
+              "slot": 2.8616,
+              "dur": 0.0995
+            }
+          ]
+        },
+        {
+          "x": 3720.8,
+          "y": 1523.8,
+          "s": 457.4,
+          "h": 8.9,
+          "a": 0.722,
+          "c": 2,
+          "m": [
+            {"ch": "alpha", "type": "flicker", "slot": 2.9459, "dur": 0.066, "phase": 0.9987, "seed": 62785},
+            {
+              "ch": "x",
+              "type": "flicker",
+              "out": "jitter",
+              "amp": 18,
+              "phase": 0.426,
+              "seed": 62785,
+              "slot": 2.9459,
+              "dur": 0.066
+            }
+          ]
+        },
+        {
+          "x": 3429.7,
+          "y": 1553.3,
+          "s": 381.5,
+          "h": 3.7,
+          "a": 0.824,
+          "c": 2,
+          "m": [
+            {"ch": "alpha", "type": "flicker", "slot": 2.8258, "dur": 0.1168, "phase": 0.4309, "seed": 869189},
+            {
+              "ch": "x",
+              "type": "flicker",
+              "out": "jitter",
+              "amp": 18,
+              "phase": 0.5253,
+              "seed": 869189,
+              "slot": 2.8258,
+              "dur": 0.1168
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "corrupt_glow",
+      "layer": "world",
+      "seed": 84,
+      "atlas": ["glow"],
+      "count": {"HIGH": 3, "LOW": 2},
+      "size": [300, 420],
+      "alpha": [0.3, 0.3],
+      "palette": [[57, 255, 20]],
+      "place": {
+        "mode": "anchorsWorld",
+        "anchors": [[3510, 1200], [3690, 930], [3600, 1450]]
+      },
+      "keepClear": "none",
+      "motion": [
+        {"ch": "alpha", "type": "sine", "amp": 0.12, "period": [2.6, 3.6]}
+      ],
+      "reducedMotion": "static at base alpha",
+      "instances": [
+        {
+          "x": 3510,
+          "y": 1200,
+          "s": 355,
+          "a": 0.3,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.12, "period": 3.4591, "phase": 0.5657}
+          ]
+        },
+        {
+          "x": 3690,
+          "y": 930,
+          "s": 394.8,
+          "a": 0.3,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.12, "period": 3.1024, "phase": 0.2893}
+          ]
+        },
+        {
+          "x": 3600,
+          "y": 1450,
+          "s": 379.7,
+          "a": 0.3,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.12, "period": 3.3371, "phase": 0.9508}
+          ]
+        }
+      ]
+    },
+    {
+      "name": "crystal_glint",
+      "layer": "world",
+      "seed": 85,
+      "atlas": ["star4"],
+      "count": {"HIGH": 8, "LOW": 4},
+      "size": [26, 40],
+      "palette": [[255, 225, 150], [220, 200, 255]],
+      "place": {
+        "mode": "anchorsWorld",
+        "anchors": [[392, 650], [410, 672], [640, 655], [655, 676], [860, 1950], [2150, 1945], [1290, 1985], [1720, 1983]]
+      },
+      "keepClear": "none",
+      "motion": [
+        {
+          "ch": "alpha",
+          "type": "pulse",
+          "a": 0.95,
+          "b": 0,
+          "dur": 0.9,
+          "period": [3, 6],
+          "ease": "quadOut",
+          "sync": 1
+        },
+        {"ch": "scale", "type": "pulse", "a": 1.3, "b": 0.5, "dur": 0.9, "ease": "quadOut", "sync": 1}
+      ],
+      "reducedMotion": "hidden",
+      "instances": [
+        {
+          "x": 392,
+          "y": 650,
+          "s": 32.3,
+          "c": 0,
+          "m": [
+            {
+              "ch": "alpha",
+              "type": "pulse",
+              "a": 0.95,
+              "b": 0,
+              "dur": 0.9,
+              "period": 5.1515,
+              "ease": "quadOut",
+              "phase": 0.2079
+            },
+            {
+              "ch": "scale",
+              "type": "pulse",
+              "a": 1.3,
+              "b": 0.5,
+              "dur": 0.9,
+              "ease": "quadOut",
+              "phase": 0.2079,
+              "period": 5.1515
+            }
+          ]
+        },
+        {
+          "x": 410,
+          "y": 672,
+          "s": 31.4,
+          "c": 0,
+          "m": [
+            {
+              "ch": "alpha",
+              "type": "pulse",
+              "a": 0.95,
+              "b": 0,
+              "dur": 0.9,
+              "period": 3.2258,
+              "ease": "quadOut",
+              "phase": 0.6296
+            },
+            {
+              "ch": "scale",
+              "type": "pulse",
+              "a": 1.3,
+              "b": 0.5,
+              "dur": 0.9,
+              "ease": "quadOut",
+              "phase": 0.6296,
+              "period": 3.2258
+            }
+          ]
+        },
+        {
+          "x": 640,
+          "y": 655,
+          "s": 38.6,
+          "c": 1,
+          "m": [
+            {
+              "ch": "alpha",
+              "type": "pulse",
+              "a": 0.95,
+              "b": 0,
+              "dur": 0.9,
+              "period": 5.1964,
+              "ease": "quadOut",
+              "phase": 0.3843
+            },
+            {
+              "ch": "scale",
+              "type": "pulse",
+              "a": 1.3,
+              "b": 0.5,
+              "dur": 0.9,
+              "ease": "quadOut",
+              "phase": 0.3843,
+              "period": 5.1964
+            }
+          ]
+        },
+        {
+          "x": 655,
+          "y": 676,
+          "s": 39.3,
+          "c": 0,
+          "m": [
+            {
+              "ch": "alpha",
+              "type": "pulse",
+              "a": 0.95,
+              "b": 0,
+              "dur": 0.9,
+              "period": 5.6018,
+              "ease": "quadOut",
+              "phase": 0.7617
+            },
+            {
+              "ch": "scale",
+              "type": "pulse",
+              "a": 1.3,
+              "b": 0.5,
+              "dur": 0.9,
+              "ease": "quadOut",
+              "phase": 0.7617,
+              "period": 5.6018
+            }
+          ]
+        },
+        {
+          "x": 860,
+          "y": 1950,
+          "s": 35.1,
+          "c": 1,
+          "m": [
+            {
+              "ch": "alpha",
+              "type": "pulse",
+              "a": 0.95,
+              "b": 0,
+              "dur": 0.9,
+              "period": 4.174,
+              "ease": "quadOut",
+              "phase": 0.5302
+            },
+            {
+              "ch": "scale",
+              "type": "pulse",
+              "a": 1.3,
+              "b": 0.5,
+              "dur": 0.9,
+              "ease": "quadOut",
+              "phase": 0.5302,
+              "period": 4.174
+            }
+          ]
+        },
+        {
+          "x": 2150,
+          "y": 1945,
+          "s": 26.2,
+          "c": 1,
+          "m": [
+            {
+              "ch": "alpha",
+              "type": "pulse",
+              "a": 0.95,
+              "b": 0,
+              "dur": 0.9,
+              "period": 5.0544,
+              "ease": "quadOut",
+              "phase": 0.0647
+            },
+            {
+              "ch": "scale",
+              "type": "pulse",
+              "a": 1.3,
+              "b": 0.5,
+              "dur": 0.9,
+              "ease": "quadOut",
+              "phase": 0.0647,
+              "period": 5.0544
+            }
+          ]
+        },
+        {
+          "x": 1290,
+          "y": 1985,
+          "s": 31.5,
+          "c": 1,
+          "m": [
+            {
+              "ch": "alpha",
+              "type": "pulse",
+              "a": 0.95,
+              "b": 0,
+              "dur": 0.9,
+              "period": 5.7064,
+              "ease": "quadOut",
+              "phase": 0.88
+            },
+            {
+              "ch": "scale",
+              "type": "pulse",
+              "a": 1.3,
+              "b": 0.5,
+              "dur": 0.9,
+              "ease": "quadOut",
+              "phase": 0.88,
+              "period": 5.7064
+            }
+          ]
+        },
+        {
+          "x": 1720,
+          "y": 1983,
+          "s": 40,
+          "c": 1,
+          "m": [
+            {
+              "ch": "alpha",
+              "type": "pulse",
+              "a": 0.95,
+              "b": 0,
+              "dur": 0.9,
+              "period": 5.322,
+              "ease": "quadOut",
+              "phase": 0.714
+            },
+            {
+              "ch": "scale",
+              "type": "pulse",
+              "a": 1.3,
+              "b": 0.5,
+              "dur": 0.9,
+              "ease": "quadOut",
+              "phase": 0.714,
+              "period": 5.322
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "atlas": {
+    "file": "sprites.png",
+    "size": [1024, 1024],
+    "lowSize": [512, 512],
+    "padding": 2,
+    "rule": "one sheet, regions below in HIGH px (LOW sheet = half size, same normalized rects). Every region fades to alpha 0 within its own 2 px border; alpha-bleed like the tiles. Soft sprites are drawn pre-blurred.",
+    "regions": {
+      "wispA": [0, 0, 512, 256],
+      "wispB": [512, 0, 512, 256],
+      "wispC": [0, 256, 512, 192],
+      "wispD": [512, 256, 512, 192],
+      "vineA": [0, 448, 128, 576],
+      "vineB": [128, 448, 128, 576],
+      "vineThin": [256, 448, 64, 576],
+      "lightfall": [320, 448, 96, 576],
+      "glow": [416, 448, 256, 256],
+      "ring": [672, 448, 256, 256],
+      "bokehA": [416, 704, 128, 128],
+      "bokehB": [544, 704, 128, 128],
+      "vignette": [672, 704, 256, 256],
+      "star4": [416, 832, 64, 64],
+      "stardot": [480, 832, 32, 32],
+      "firefly": [512, 832, 48, 48],
+      "ember": [560, 832, 32, 32],
+      "mote": [592, 832, 16, 16],
+      "spark": [608, 832, 32, 32],
+      "bar": [416, 896, 256, 16],
+      "shardA": [416, 912, 96, 96],
+      "shardB": [512, 912, 96, 96],
+      "streak": [672, 960, 256, 32]
+    },
+    "looks": {
+      "wispA-D": "soft, torn cloud wisps, white on transparent (tinted by ImageColor3), pre-blurred 6-10 px, alpha peak 0.9",
+      "vineA/B": "hanging vine with leaves, top-anchored (top-centre = attachment), silhouette white-ish grey so ImageColor3 sets the colour, pre-blurred 3 px",
+      "vineThin": "thin tendril with 2-3 leaves and a glowing bud at the tip, top-anchored, crisp",
+      "lightfall": "vertical luminous streak, bright core column, soft edges, fades at the bottom 30%; white",
+      "glow": "radial gaussian glow, white, alpha 1 at centre to 0 at the edge",
+      "ring": "thin soft ring (radius 0.42 of the region, width 0.05), white",
+      "bokehA": "out-of-focus disc: flat interior 0.55, brighter rim 0.9, soft 3 px edge, white",
+      "bokehB": "hexagonal aperture version of bokehA",
+      "vignette": "radial: alpha 0 inside 0.55 radius to 1 at the corners, black",
+      "star4": "4-point sparkle with long thin rays + white core (lib.js sparkle)",
+      "stardot": "round star: white core, 2 px halo",
+      "firefly": "warm core 3 px + halo 20 px, white (tinted)",
+      "ember": "tiny hot ember with a short upward smear",
+      "mote": "soft dot 6 px + halo",
+      "spark": "tiny 4-point sparkle",
+      "bar": "horizontal line, hard top/bottom edge, soft ends",
+      "shardA/B": "small floating rock shard with a crystal vein, rim lit upper-left, white-grey (tinted)",
+      "streak": "shooting star: bright head on the right, tail fading to the left"
+    }
+  },
+  "zOrder": [
+    "sky tiles", "sky sprites", "clouds tiles", "clouds sprites", "far tiles", "far sprites", "mid tiles",
+    "mid sprites", "biome wash", "near tiles", "near sprites", "field motesFar", "world tiles", "world sprites",
+    "fg tiles", "fg sprites", "field motesNear", "node links", "nodes", "field particles", "vignette"
+  ],
+  "budget": {
+    "note": "RGBA8 bytes of every uploaded image (tiles include their gutters). withMips = x4/3 in case the engine mips GUI textures. Tiles the tiler finds fully transparent are not uploaded, so these are upper bounds.",
+    "HIGH": {"tiles": 36, "atlasImages": 1, "textureMB": 88.2, "withMipsMB": 117.7, "budgetMB": 120, "guiObjects": 323},
+    "LOW": {"tiles": 11, "atlasImages": 1, "textureMB": 22.1, "withMipsMB": 29.4, "budgetMB": 35, "guiObjects": 135}
+  }
+}
