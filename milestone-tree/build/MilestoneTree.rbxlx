@@ -34315,6 +34315,7 @@ function App.start()
 	hud.zoomIn:Connect(function() mi:zoomStep(1) end)
 	hud.zoomOut:Connect(function() mi:zoomStep(-1) end)
 	hud.bandClose:Connect(function() requestClose() end)
+	hud.bandSwitch:Connect(function(layer: string) openLayer(layer) end)
 	hud.readyTap:Connect(function(layer: string) openLayer(layer) end)
 	hud.readyHold:Connect(function(layer: string)
 		local ms = lastMs
@@ -37478,10 +37479,11 @@ return ViewStore
               <string name="Source"><![CDATA[--!strict
 --[[
 	Band: the COMPACT panel band (DESIGN.md 5.10) that replaces the capsule while a full-screen panel is open on a
-	phone: the layer's emblem, its title (R3, `title` COMPACT step) and a 44 du close button left of the Roblox "···".
+	phone: the layer's emblem, its title (R3, `title` COMPACT step), the READY switcher (up to 3 mini gems of the other
+	READY layers + "+N" after a bolt; a tap opens that layer) and a 44 du close button left of the Roblox "···".
 
 	    local part = Band.new(parent)
-	    part:show(layer?, title?)   part.close ()
+	    part:show(layer?, title?, sym?)   part:setReady({ { layer, sym } })   part.close ()   part.switch (layer)
 ]]
 
 local Core = script.Parent.Parent:WaitForChild("Core")
@@ -37490,10 +37492,13 @@ local Theme = require(Core:WaitForChild("Theme"))
 local Kit = require(script.Parent:WaitForChild("Kit"))
 local Ready = require(script.Parent:WaitForChild("Ready"))
 
+export type Entry = { layer: string, sym: string }
 export type Band = {
 	frame: Frame,
 	close: Signal.Signal<>,
-	show: (self: Band, layer: string?, title: string?) -> (),
+	switch: Signal.Signal<string>,
+	show: (self: Band, layer: string?, title: string?, sym: string?) -> (),
+	setReady: (self: Band, list: { Entry }) -> (),
 	destroy: (self: Band) -> (),
 }
 
@@ -37502,6 +37507,7 @@ local Band = {}
 function Band.new(parent: GuiObject): Band
 	local self = {} :: Band
 	self.close = Signal.new() :: Signal.Signal<>
+	self.switch = Signal.new() :: Signal.Signal<string>
 	local f = Kit.frame(parent, "PanelBand", 8)
 	f.AnchorPoint = Vector2.new(0.5, 0)
 	f.Position = UDim2.new(0.5, 0, 0, 6)
@@ -37527,14 +37533,76 @@ function Band.new(parent: GuiObject): Band
 	x.Size = UDim2.fromOffset(18, 18)
 	closeB.Activated:Connect(function() self.close:Fire() end)
 	self.frame = f
-	function self.show(_: Band, layer: string?, text: string?)
+	-- the READY switcher, left of the close
+	local sw = Kit.frame(f, "Switch", 9)
+	sw.AnchorPoint = Vector2.new(1, 0.5)
+	sw.Position = UDim2.new(1, -54, 0.5, 0)
+	sw.Size = UDim2.fromOffset(0, 38)
+	sw.AutomaticSize = Enum.AutomaticSize.X
+	Kit.list(sw, "x", 2, Enum.HorizontalAlignment.Right, Enum.VerticalAlignment.Center)
+	local current: string? = nil
+	local entries: { Entry } = {}
+	local swW = 0
+	local function drawSwitch()
+		for _, c in sw:GetChildren() do
+			if c:IsA("GuiObject") then c:Destroy() end
+		end
+		local shown, more = 0, 0
+		for _, e in entries do
+			if e.layer ~= current then
+				if shown < 3 then
+					shown += 1
+					local b = Kit.button(sw, "Gem_" .. e.layer)
+					b.LayoutOrder = 1 + shown
+					b.Size = UDim2.fromOffset(28, 38)
+					local g = Ready.gem(b, "Disc", e.layer, e.sym, 28)
+					g.AnchorPoint = Vector2.new(0.5, 0.5)
+					g.Position = UDim2.fromScale(0.5, 0.5)
+					local layer = e.layer
+					b.Activated:Connect(function() self.switch:Fire(layer) end)
+				else
+					more += 1
+				end
+			end
+		end
+		swW = 0
+		if shown > 0 then
+			local bolt = Kit.glyph(sw, "Bolt", "bolt", Color3.fromHex("ffe08a"))
+			bolt.LayoutOrder = 1
+			bolt.Size = UDim2.fromOffset(14, 14)
+			swW = 16 + shown * 30
+		end
+		if more > 0 then
+			local m = Kit.label(sw, "More", "badge", "+" .. more, Color3.fromHex("ffe08a"))
+			m.LayoutOrder = 10
+			m.AutomaticSize = Enum.AutomaticSize.X
+			m.Size = UDim2.fromOffset(0, 38)
+			swW += 30
+		end
+		title.Size = UDim2.new(1, -110 - swW, 1, 0)
+	end
+	function self.setReady(_: Band, list: { Entry })
+		local sig = ""
+		for _, e in list do sig ..= e.layer .. "," end
+		if sw:GetAttribute("Sig") == sig .. tostring(current) then return end
+		sw:SetAttribute("Sig", sig .. tostring(current))
+		entries = list
+		drawSwitch()
+	end
+	function self.show(_: Band, layer: string?, text: string?, sym: string?)
 		if layer == nil then
 			f.Visible = false
+			current = nil
 			return
+		end
+		if current ~= layer then
+			current = layer
+			sw:SetAttribute("Sig", nil)
+			drawSwitch()
 		end
 		local old = f:FindFirstChild("Emblem")
 		if old then old:Destroy() end
-		local g = Ready.gem(f, "Emblem", layer, string.upper(layer), 34)
+		local g = Ready.gem(f, "Emblem", layer, sym or string.upper(layer), 34)
 		g.AnchorPoint = Vector2.new(0, 0.5)
 		g.Position = UDim2.new(0, 8, 0.5, 0)
 		rim.Color = Theme.lift(Theme.hue(layer), 0.3)
@@ -37544,6 +37612,7 @@ function Band.new(parent: GuiObject): Band
 	end
 	function self.destroy(b: Band)
 		b.close:DisconnectAll()
+		b.switch:DisconnectAll()
 		f:Destroy()
 	end
 	return self
@@ -37568,6 +37637,8 @@ return Band
 	      GenPill the rate (Rich.num) on a dark green pill hanging from the rim; hidden when hud.gen is nil
 	      Warn    a chip right of the capsule with the first warning value; tap -> warnTap (the tooltip lists all)
 	      Status  SAVING... / SAVED / NOT SAVING / RECONNECTING... under the pill
+	      Info    the game's other head lines under them (hud.x: sp challenge 11's ashes, a burning Spark Milestone;
+	              hud.off offline time; hud.dev dev speed), `small` on a glass chip; bottom() counts it
 
 	    local part = Capsule.new(parent)
 	    part:update(h)   part:setStatus(kind)   part:setUniverse(inside)   part:setFirstRun(b)   part.warnTap
@@ -37591,6 +37662,7 @@ export type Capsule = {
 	pill: Frame,
 	warn: Frame,
 	status: Frame,
+	info: Frame,
 	warnTap: Signal.Signal<Vector2>,
 	changed: Signal.Signal<>, -- a part moved, appeared or disappeared (Hud re-registers the rects)
 	update: (self: Capsule, h: Types.HudState) -> (),
@@ -37737,6 +37809,26 @@ function Capsule.new(parent: GuiObject): Capsule
 	status.Visible = false
 	self.status = status
 
+	-- the game's other head lines (sp challenge 11's ashes, a burning Spark Milestone, offline time, dev speed)
+	local info = Kit.frame(parent, "Info", 6)
+	info.AnchorPoint = Vector2.new(0.5, 0)
+	info.AutomaticSize = Enum.AutomaticSize.Y
+	info.BackgroundColor3 = Theme.C.deep
+	info.BackgroundTransparency = 0.12
+	Kit.corner(info, UDim.new(0, 12))
+	Kit.stroke(info, 1.5, Theme.C.strokeHi, 1, "Rim")
+	local iLabel = Kit.label(info, "Label", "small", "", Theme.C.text)
+	iLabel.AutomaticSize = Enum.AutomaticSize.Y
+	iLabel.Size = UDim2.fromScale(1, 0)
+	iLabel.TextWrapped = true
+	iLabel.RichText = true
+	iLabel.TextXAlignment = Enum.TextXAlignment.Center
+	info.Visible = false
+	self.info = info
+	info:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+		self.changed:Fire()
+	end)
+
 	-- ------------------------------------------------------------------------------------------ layout
 	local compact = false
 	local inside = false
@@ -37786,6 +37878,9 @@ function Capsule.new(parent: GuiObject): Capsule
 		Kit.pad(status, 0, 10, 0, 8)
 		Theme.text(sLabel, "label")
 		sLabel.Size = UDim2.fromScale(0, 1)
+		info.Size = UDim2.fromOffset(if compact then 340 else 460, 0)
+		Kit.pad(info, 6, 12, 6, 12)
+		Theme.text(iLabel, "small")
 		self.changed:Fire()
 	end
 
@@ -37794,6 +37889,32 @@ function Capsule.new(parent: GuiObject): Capsule
 		local y = 6 + h + 6
 		if pill.Visible then y = 6 + h - 7 + (if compact then 26 else 30) + 6 end
 		return y
+	end
+
+	local function infoY(): number
+		local y = statusY()
+		if status.Visible then y += 28 + 6 end
+		return y
+	end
+	local infoText = ""
+	local function writeInfo(h: Types.HudState?)
+		local parts = {}
+		if h and not firstRun then
+			if type(h.x) == "string" and h.x ~= "" then table.insert(parts, Rich.html(h.x, Theme.size("small"), nil)) end
+			if type(h.off) == "string" then table.insert(parts, Rich.caps("Offline time") .. "  " .. Rich.num(h.off, { size = Theme.size("small") })) end
+			if type(h.dev) == "string" then table.insert(parts, Rich.caps("Dev speed") .. "  " .. Rich.num(h.dev, { size = Theme.size("small") })) end
+		end
+		local t = table.concat(parts, "\n")
+		if t ~= infoText then
+			infoText = t
+			iLabel.Text = t
+		end
+		local show = t ~= ""
+		info.Position = UDim2.new(0.5, 0, 0, infoY())
+		if info.Visible ~= show then
+			info.Visible = show
+			self.changed:Fire()
+		end
 	end
 
 	local function writeLabel()
@@ -37842,6 +37963,7 @@ function Capsule.new(parent: GuiObject): Capsule
 			c.changed:Fire()
 		end
 		status.Position = UDim2.new(0.5, 0, 0, statusY())
+		writeInfo(h)
 	end
 
 	function self.setStatus(c: Capsule, kind: string?)
@@ -37857,6 +37979,7 @@ function Capsule.new(parent: GuiObject): Capsule
 		local spec = if kind then STATUS[kind] else nil
 		if spec == nil then
 			status.Visible = false
+			writeInfo(hud)
 			c.changed:Fire()
 			return
 		end
@@ -37868,6 +37991,7 @@ function Capsule.new(parent: GuiObject): Capsule
 		g.Size = UDim2.fromOffset(14, 14)
 		status.Position = UDim2.new(0.5, 0, 0, statusY())
 		status.Visible = true
+		writeInfo(hud)
 		c.changed:Fire()
 	end
 
@@ -37882,15 +38006,15 @@ function Capsule.new(parent: GuiObject): Capsule
 		if h then c:update(h) end
 	end
 	function self.bottom(_: Capsule): number
-		local y = statusY()
-		if status.Visible then y += 28 + 6 end
+		local y = infoY()
+		if info.Visible then y += math.max(28, info.AbsoluteSize.Y / math.max(Layout.s, 0.01)) + 6 end
 		return y
 	end
 	function self.destroy(c: Capsule)
 		c.warnTap:DisconnectAll()
 		c.changed:DisconnectAll()
 		Kit.unspin(star)
-		for _, x in { f, pill, warn, status } do x:Destroy() end
+		for _, x in { f, pill, warn, status, info } do x:Destroy() end
 	end
 
 	place()
@@ -38172,6 +38296,7 @@ return Dock
 	    hud:updateHud(h)   hud:updateMap(ms)   hud:setStatus(kind)   hud:setPanel(p)   hud:setFirstRun(b)   hud:setZoomPct(z)
 	    hud:setVisible(b)
 	    hud.home, hud.trophies, hud.options, hud.portal, hud.zoomIn, hud.zoomOut, hud.bandClose   ()
+	    hud.bandSwitch (layer)                              -- a READY gem in the COMPACT band
 	    hud.readyTap (layer), hud.readyHold (layer)        -- the hold already passed the hold safety
 	    hud.readyMore ()                                    -- "+N more" in the tray
 	    hud.gateHold ()                                     -- the universe tag FINISH / EXIT hold completed
@@ -38203,6 +38328,7 @@ export type Hud = {
 	zoomIn: Signal.Signal<>,
 	zoomOut: Signal.Signal<>,
 	bandClose: Signal.Signal<>,
+	bandSwitch: Signal.Signal<string>,
 	readyTap: Signal.Signal<string>,
 	readyHold: Signal.Signal<string>,
 	readyMore: Signal.Signal<>,
@@ -38229,6 +38355,7 @@ function Hud.new(topbar: ScreenGui, hud: ScreenGui): Hud
 	self.zoomIn = Signal.new() :: Signal.Signal<>
 	self.zoomOut = Signal.new() :: Signal.Signal<>
 	self.bandClose = Signal.new() :: Signal.Signal<>
+	self.bandSwitch = Signal.new() :: Signal.Signal<string>
 	self.readyTap = Signal.new() :: Signal.Signal<string>
 	self.readyHold = Signal.new() :: Signal.Signal<string>
 	self.readyMore = Signal.new() :: Signal.Signal<>
@@ -38248,6 +38375,7 @@ function Hud.new(topbar: ScreenGui, hud: ScreenGui): Hud
 	capsule.warnTap:Connect(function(abs: Vector2) self.warnTap:Fire(abs) end)
 	tag.hold:Connect(function() self.gateHold:Fire() end)
 	band.close:Connect(function() self.bandClose:Fire() end)
+	band.switch:Connect(function(l: string) self.bandSwitch:Fire(l) end)
 	dock.home:Connect(function() self.home:Fire() end)
 	dock.trophies:Connect(function() self.trophies:Fire() end)
 	dock.options:Connect(function() self.options:Fire() end)
@@ -38265,7 +38393,7 @@ function Hud.new(topbar: ScreenGui, hud: ScreenGui): Hud
 
 	-- ------------------------------------------------------------------------------------------ rects
 	local parts: { [string]: GuiObject } = {
-		capsule = capsule.frame, pill = capsule.pill, warn = capsule.warn, status = capsule.status, unitag = tag.frame,
+		capsule = capsule.frame, pill = capsule.pill, warn = capsule.warn, status = capsule.status, info = capsule.info, unitag = tag.frame,
 		band = band.frame, dock = dock.frame, zoom = dock.zoom, ready = ready.frame, readyPill = ready.pill,
 		banner = ready.banner, portal = portal.frame,
 	}
@@ -38311,7 +38439,9 @@ function Hud.new(topbar: ScreenGui, hud: ScreenGui): Hud
 		local side = p ~= nil and p.mode == "side"
 		local full = p ~= nil and p.mode == "full"
 		capsule.frame.Visible = not (full and compact)
-		band:show(if full and compact and p then p.layer else nil, if p then p.title else nil)
+		local bl = if full and compact and p then p.layer else nil
+		local bn = if bl and lastMs then (lastMs :: MapState).nodes[bl] else nil
+		band:show(bl, if p then p.title else nil, if bn and type(bn.sym) == "string" then bn.sym else nil)
 		dock:setSmall(side)
 		dock:setZoomVisible(not firstRun and p == nil)
 		ready:setMode(if side then "strip" elseif compact then "pill" else "tray")
@@ -38334,6 +38464,12 @@ function Hud.new(topbar: ScreenGui, hud: ScreenGui): Hud
 		tag:setTop(capsule:bottom())
 		ready:update(ms)
 		portal:update(ms.gate)
+		local list = {}
+		for _, l in ms.ready do
+			local n = ms.nodes[l]
+			table.insert(list, { layer = l, sym = if n and type(n.sym) == "string" then n.sym else string.upper(l) })
+		end
+		band:setReady(list)
 		local ach = ms.nodes.ach
 		local v = ach and ach.val
 		dock:setTrophies(if ach and ach.show and v and v.pts then v.pts .. "/" .. (v.tot or "18") else nil)
@@ -38370,6 +38506,7 @@ function Hud.new(topbar: ScreenGui, hud: ScreenGui): Hud
 			s:DisconnectAll()
 		end
 		h.readyTap:DisconnectAll()
+		h.bandSwitch:DisconnectAll()
 		h.readyHold:DisconnectAll()
 		h.warnTap:DisconnectAll()
 		for key in parts do Layout.setRect("hud." .. key, nil) end
