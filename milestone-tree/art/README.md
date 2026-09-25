@@ -31,18 +31,24 @@ cd art && export NODE_PATH=$(npm root -g)          # needs playwright (Chromium 
 node camera.js --test                              # the contract: coverage, depth order, tiles, budget, sprites
 node render.js all                                 # every painter -> out/<layer>.png + out/<layer>_prev.png, with contract checks
 node render.js mid                                 # one layer (ids, painter names like `distant`, or `sprites` all work)
+node render.js sprites                             # the atlas: runs `node layers/sprites.js` -> out/sprites.png + sprites.json
 node render.js near --tier LOW                     # also write out/near_LOW.png at exactly size × res.LOW
 node roblox/tile.js                                # -> roblox/tiles/<TIER>/<layer>_<col>_<row>.png + roblox/manifest.json (self-checks)
 node roblox/upload.js --dry-run                    # -> ../src/shared/Assets.luau with nil ids, lists what would upload
 ROBLOX_CREATOR=user:<id> node roblox/upload.js     # the real upload (Open Cloud), then Assets.luau with the ids
-node compose.js out/view.png --cx 1500 --cy 1150 --z 0.8        # one frame of the full stack as the client shows it
-node preview/record.js                             # -> out/realm_preview.webm (20 s camera path) + out/realm_[1-6]_*.png
+node compose.js out/view.png --cx 1500 --cy 1150 --z 0.8        # one frame of the full stack as the client shows it (.png/.jpg/.webp)
+node compose.js out/realm_overview.webp --cx 1920 --cy 1320 --z 0.5   # the committed whole-realm still
+node preview/record.js                             # -> out/realm_preview.webm (27 s, 540p) + out/realm_[1-6]_*.jpg + rest-motion report
 node preview/record.js --serve                     # the interactive simulator: open the printed URL
 ```
 
 **render.js** loads `lib.js`, `window.REALM` (realm.json) and the painter, calls `LAYERS[<id>]()` and saves the canvas.
 Painters draw the HIGH texture (`size × res.HIGH`). After each render it checks the texture size, the keep-clear zones
 (`mid` hard ≤ 0.3 alpha; `near` / `fg` hard = 0, soft < 0.35 / 0.25) and tile coverage, and prints `ok` / `WARN`.
+A painter with its own node entry point (`layers/sprites.js`) is run as `node layers/<painter>.js` instead, so
+`render.js sprites` and `render.js all` write exactly what that command writes: `out/sprites.png` from its
+deterministic PNG encoder, `out/sprites.json` (whose `sha256` must match the PNG; render.js and tile.js check it) and
+the labelled `out/sprites_prev.png`.
 
 **roblox/tile.js** turns each render into Roblox images (REALM.md section 3):
 
@@ -62,8 +68,18 @@ Painters draw the HIGH texture (`size × res.HIGH`). After each render it checks
 and polls `GET /assets/v1/operations/<id>` for the asset id. The API key header is injected by the network proxy for
 apis.roblox.com, so the script needs none (it sends `ROBLOX_API_KEY` as `x-api-key` only if that variable is set).
 The creator is `ROBLOX_CREATOR` (`user:<id>` or `group:<id>`). One rate limiter (`--rpm`, default 50/min) covers
-uploads and polls; 429 / 5xx back off exponentially and honour `Retry-After`. `roblox/uploaded.json` records
-sha256 → asset id after every finished image, so re-runs upload only what changed and an interrupted run resumes.
+uploads and polls. `roblox/uploaded.json` records sha256 → asset id after every finished image, so re-runs upload only
+what changed and an interrupted run resumes; identical PNGs upload once.
+
+* Polls are idempotent: network errors, 429 and 5xx back off exponentially and honour `Retry-After`.
+* The create is not, so it retries only where Roblox cannot have processed it: 429, 503 with `Retry-After`, or a
+  network error before the connection existed (refused, DNS, connect timeout). Anything else after the body went out
+  (another 5xx, a reset, a lost or unreadable response, an operation that never finishes) is **unconfirmed**: it is
+  logged, recorded under `unconfirmed` in uploaded.json (with the operation id when there is one), the tile keeps
+  `id = nil` and the run exits 1. The next run polls a recorded operation instead of uploading again. One without an
+  operation id waits for you: find it in the Creator Dashboard by its displayName (`Realm HIGH sky_0_0`; the
+  description carries the sha256 prefix) and run `--adopt HIGH/sky_0_0=<assetId>`, or `--retry-unconfirmed`.
+  A plain failure (4xx, or an operation that reports an error) created nothing and is retried by the next run.
 It always regenerates `src/shared/Assets.luau` (a ModuleScript: `tiers.HIGH/LOW.layers[id] = { f, w, h, tiles = { {x, y,
 w, h, rw, rh, id} } }`, `sprites = { atlas ids, regions }`; `id = nil` means not uploaded yet) and
 `out/realm_assets.json` (the REALM.md asset map).
@@ -76,20 +92,40 @@ double-click zoom. Keys: H hud, N nodes, M ReducedMotion, T tier, S tiles/full r
 mode, K keep-clear zones, 1-8 hide a depth, P pause, R reset. Without `out/sprites.png` it paints a stand-in atlas
 from `atlas.looks`.
 
-**preview/record.js** flies a scripted path (tree base → up the trunk → the whole realm → east to the rift → in by the
-corrupted outcrop). The default mode renders every frame deterministically (t = i / 30) and encodes it with the ffmpeg
-Playwright ships; `--mode video` is a plain Playwright `recordVideo` capture in real time (smooth only with a GPU).
+**preview/record.js** flies a scripted 27 s path: a 3 s rest at the tree base → up the trunk → the whole realm → east
+to the rift and a 3 s rest there → in by the corrupted outcrop and a last rest. The rests are what the player sees most:
+the camera is still and only the ambient sprites move, so the video shows them unmasked, and after recording it prints
+a rest-motion report per hold (the share of pixels that change by more than 8/255 over 1 s). The default mode renders
+every frame deterministically (t = i / 30) at 1920×1080 and encodes it with the ffmpeg Playwright ships (VP8), scaled
+to 960×540 at about 1.8 Mbps, so the committed video stays near 5 MB (`--video-size same --bitrate 8M` for a local
+full-size copy). The six stills are 1920×1080 JPEGs (`--stills png` for lossless). `--mode video` is a plain Playwright
+`recordVideo` capture in real time (smooth only with a GPU).
 
 ## Notes for the client
 
-* **Tile seams.** Draw tiles with their edges on whole device pixels, shared by neighbours (the simulator's default,
-  `seams=snap`). The 1-point overlap in REALM.md 9.3 blends translucent pixels twice, which shows as a faint line at
-  every tile seam of a soft layer (clouds, mist, glows); `seams=overlap` in the simulator shows it.
-* **Vignette.** Sample the `vignette` region 3 px inside its rect: the atlas keeps a clear 2 px border around every
-  region, which stretched over the whole screen becomes a light frame.
+* **Tile seams.** Place tiles by the snapped recipe of REALM.md 9.3 (the same text is in `roblox/manifest.json` →
+  `about` and in `Assets.luau`): the column and row edges (`x`, `x + w`; `y`, `y + h` in layer-local px) are rounded
+  to whole device pixels and each edge is shared by the two tiles that meet there. No overlap: a tile drawn 1 point
+  larger blends a soft layer's edge strip twice, a faint line on clouds, mist and glows (`seams=overlap` in the
+  simulator shows the retired recipe).
+* **Vignette.** Sample the `vignette` region through its `sampleRect`, never its plain rect. It comes from
+  `out/sprites.json` (`sampleRect`, `lowSampleRect`) and is copied into `roblox/manifest.json` (`atlas.sampleRects`,
+  `atlas.lowSampleRects`) and `Assets.luau` (`sprites.sample`, HIGH px; halve it for LOW). Today it is 6 px inside the
+  rect on HIGH and 3 px on LOW: the region keeps a clear 4 px gutter inside its rect (2 px on LOW) and its black runs
+  2 px past the sampleRect (1 px on LOW), so, stretched over the screen, bilinear sampling at the screen edge reads
+  vignette and never the gutter. Every other region fades to alpha 0 within its own 2 px border.
 
 ## What is committed
 
 Painters, pipeline scripts, `realm.json`, `roblox/manifest.json`, `roblox/uploaded.json` (once something is
-uploaded), `src/shared/Assets.luau` and the previews. Rendered PNGs and the tiles are not committed: `render.js` and
-`tile.js` rebuild them byte for byte (compare the tile sha256 in the manifest).
+uploaded), `src/shared/Assets.luau`, `out/sprites.json`, `out/realm_assets.json` and the previews:
+
+| preview | made by | size |
+|---|---|---|
+| `out/realm_preview.webm` | `node preview/record.js` (27 s, 960×540 VP8) | ~5 MB |
+| `out/realm_[1-6]_*.jpg` | the same run (1920×1080 stills on the path) | ~0.5 MB each |
+| `out/realm_overview.webp` | `node compose.js out/realm_overview.webp --cx 1920 --cy 1320 --z 0.5` | ~0.3 MB |
+
+No PNG is committed (`.gitignore`): rendered layers and tiles are rebuilt byte for byte by `render.js` and `tile.js`
+(compare the tile sha256 in the manifest), and the previews are compressed on purpose so a re-record adds a few MB of
+history, not 40.

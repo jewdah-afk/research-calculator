@@ -5,7 +5,8 @@
 -- the image holds the tile plus a `gutter` px border, so ImageRectOffset = (gutter, gutter) and ImageRectSize = (rw, rh).
 -- id = nil means that image is not uploaded yet: skip the tile (the layers behind show through) or fall back to
 -- the other tier. Fully transparent tiles are left out. Sprite regions are HIGH atlas px; the LOW atlas is half size.
--- Place tiles with their edges on whole device pixels shared by neighbours (art/README.md: tile seams).
+-- Place tiles by the snapped recipe of art/REALM.md 9.3: the column / row edges (x, x + w; y, y + h) rounded to whole
+-- device pixels, each edge shared by the two neighbours. No overlap: a tile drawn wider blends its edge strip twice.
 
 export type Tile = { i: number, j: number, x: number, y: number, w: number, h: number, rw: number, rh: number, id: string? }
 export type Layer = { depth: number, f: number, w: number, h: number, scale: number, cols: number, rows: number, opaque: boolean, zHide: number, zShow: number, tiles: { Tile } }
@@ -13,7 +14,7 @@ export type Tier = { layers: { [string]: Layer }, order: { string }, atlas: { id
 export type Assets = { version: string, complete: boolean, uploaded: number, total: number, gutter: number, tiers: { HIGH: Tier, LOW: Tier }, sprites: { atlas: { HIGH: string?, LOW: string? }, size: { HIGH: { number }, LOW: { number } }, regions: { [string]: { number } }, sample: { [string]: { number } } } }
 
 local Assets: Assets = {
-	version = "ad284b381414",
+	version = "bdb1789cb627",
 	complete = false,
 	uploaded = 0,
 	total = 49,
@@ -135,7 +136,8 @@ local Assets: Assets = {
 			shardB = { 512, 912, 96, 96 },
 			streak = { 672, 960, 256, 32 },
 		},
-		-- regions that run to their rect edge (the vignette): sample them through this rect instead
+		-- regions sampled through an inset rect instead of their own (HIGH atlas px; halve for LOW). The vignette keeps a
+		-- clear gutter inside its rect and its black runs a little past this rect, so stretched over the screen no edge shows.
 		sample = { vignette = { 678, 710, 244, 244 } },
 	},
 }

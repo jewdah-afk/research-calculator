@@ -431,11 +431,11 @@
         b.strokeStyle = col([50, 30, 96], 0.9); b.lineWidth = 1; b.beginPath(); b.moveTo(p[0], p[1] + 1); b.lineTo(p[0] + (r() - 0.5) * 4, p[1] - hh); b.stroke();
         blob(e, p[0], p[1] - hh, 4 + r() * 3, c, 0.85); blob(e, p[0], p[1] - hh, 1.4, [255, 255, 255], 0.9);
       }
-      if (e && o.mossLine) { // soft glowing moss line along the lit top edge
-        e.save(); e.lineCap = 'round';
+      if (e && o.mossLine) { // soft glowing moss line along the lit top edge (mossDy px under the lip, below the warm rim)
+        const md = o.mossDy == null ? 1 : o.mossDy; e.save(); e.lineCap = 'round';
         for (let i = 0; i < top.length - 1; i++) {
           const k = 0.5 + 0.5 * Math.sin(i * 0.37 + seed) * Math.sin(i * 0.11 + seed * 2);
-          e.strokeStyle = col(o.mossLine, (0.08 + 0.3 * k * k) * (o.mossA || 1)); e.lineWidth = 3 + 3 * k; e.beginPath(); e.moveTo(top[i][0], top[i][1] + 1); e.lineTo(top[i + 1][0], top[i + 1][1] + 1); e.stroke();
+          e.strokeStyle = col(o.mossLine, (0.08 + 0.3 * k * k) * (o.mossA || 1)); e.lineWidth = 3 + 3 * k; e.beginPath(); e.moveTo(top[i][0], top[i][1] + md); e.lineTo(top[i + 1][0], top[i + 1][1] + md); e.stroke();
         }
         e.restore();
       }
@@ -642,7 +642,7 @@
   const FALL = { realm: [222, 204, 255], rift: [255, 150, 196], corrupt: [178, 255, 196] };
   const fallCol = (x, corrupt) => corrupt ? FALL.corrupt : mixc(FALL.realm, FALL.rift, riftW(x));
   const fall = i => { const [x, y, s, len] = CFG.falls[i]; return { x, y, s, len }; };
-  const WARM = { warm: 0.62, warmW: 3 }; // thin warm key-light rim at ~60% of the near layer's strength
+  const WARM = { warm: 1, warmW: 3.5 }; // thin warm key-light rim; after this layer's haze and blur it reads at ~60% of near's
 
   // Island specs. xL/xR/top: the grassy top line; lobes: hanging cones {x, y tip, w half-width}; the fall anchor is
   // the lip (a flat notch) at the lightfall instance. Positions keep every island out of the hard zones.
@@ -706,7 +706,7 @@
     }
     K.grass(b, e, topPts, I.seed + 5, { density: 1.8, h: 12, color: [50, 32, 100], moss: rw > 0.5 ? [230, 100, 170] : [160, 140, 255], flowers: Math.round((I.xR - I.xL) / 55),
       flowerCols: corrupt ? [[57, 255, 20], [255, 46, 99]] : rw > 0.5 ? [[255, 80, 140], [255, 150, 90], [232, 70, 190]] : [[255, 120, 200], [120, 230, 255], [255, 220, 120], [190, 140, 255]],
-      mossLine: rw > 0.5 ? [255, 110, 170] : [175, 150, 255], mossA: 0.8 });
+      mossLine: rw > 0.5 ? [255, 110, 170] : [175, 150, 255], mossA: 0.8, mossDy: 5 });
     // corrupted green glitch shards on G: hard slabs with an RGB-split edge, plus scanline glitches
     if (corrupt) {
       for (let k = 0; k < 6; k++) {

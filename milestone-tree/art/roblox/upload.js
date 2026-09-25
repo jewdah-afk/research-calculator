@@ -8,6 +8,7 @@
  *            --force (re-upload even if the sha256 is recorded)  --luau <path>  --no-luau  --record <uploaded.json>
  *            --adopt <TIER>/<key>=<assetId>   record an asset found in the Creator Dashboard (see "unconfirmed" below)
  *            --retry-unconfirmed              upload the unconfirmed images again (may leave a duplicate on Roblox)
+ *            --poll-max 120                   polls per operation before it counts as unconfirmed
  *
  * Reads roblox/manifest.json (from tile.js). A file is identified by its sha256: roblox/uploaded.json maps
  * sha256 -> { assetId, ... }, so re-running uploads only what changed, and an interrupted run resumes where it stopped

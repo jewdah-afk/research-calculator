@@ -431,11 +431,11 @@
         b.strokeStyle = col([50, 30, 96], 0.9); b.lineWidth = 1; b.beginPath(); b.moveTo(p[0], p[1] + 1); b.lineTo(p[0] + (r() - 0.5) * 4, p[1] - hh); b.stroke();
         blob(e, p[0], p[1] - hh, 4 + r() * 3, c, 0.85); blob(e, p[0], p[1] - hh, 1.4, [255, 255, 255], 0.9);
       }
-      if (e && o.mossLine) { // soft glowing moss line along the lit top edge
-        e.save(); e.lineCap = 'round';
+      if (e && o.mossLine) { // soft glowing moss line along the lit top edge (mossDy px under the lip, below the warm rim)
+        const md = o.mossDy == null ? 1 : o.mossDy; e.save(); e.lineCap = 'round';
         for (let i = 0; i < top.length - 1; i++) {
           const k = 0.5 + 0.5 * Math.sin(i * 0.37 + seed) * Math.sin(i * 0.11 + seed * 2);
-          e.strokeStyle = col(o.mossLine, (0.08 + 0.3 * k * k) * (o.mossA || 1)); e.lineWidth = 3 + 3 * k; e.beginPath(); e.moveTo(top[i][0], top[i][1] + 1); e.lineTo(top[i + 1][0], top[i + 1][1] + 1); e.stroke();
+          e.strokeStyle = col(o.mossLine, (0.08 + 0.3 * k * k) * (o.mossA || 1)); e.lineWidth = 3 + 3 * k; e.beginPath(); e.moveTo(top[i][0], top[i][1] + md); e.lineTo(top[i + 1][0], top[i + 1][1] + md); e.stroke();
         }
         e.restore();
       }
@@ -639,7 +639,7 @@
   const K = KIT, { mk, cx2, col, mixc } = K;
   const riftW = x => smooth(CFG.splitX - CFG.fade, CFG.splitX + CFG.fade, x);
   const HAZE = x => mixc(CFG.atm.hazeColor, CFG.atm.hazeRift, riftW(x));
-  const WARM = { warm: 0.34, warmW: 2.5 }; // thin warm key-light rim at ~30% of the near layer's strength
+  const WARM = { warm: 0.75, warmW: 3.5 }; // thin warm key-light rim; after this layer's haze it reads at ~30% of near's
 
   // islands: centre x, top y, width (<= 420), depth, extra haze (sub-depth), shape and details.
   // shapes vary the silhouette: cone (one main hanging cone), twin (two cones), mesa (wide, shallow, many drips),
@@ -796,40 +796,70 @@
   }
 
   function paintRidges(b, e) {
-    // far ridgelines, farthest first, each sinking into the misty abyss. The fill keeps a floor alpha (`floor`) over its
-    // last 8% so the bottom rows of the layer match the rows just inside (no dim strip at the edge during overscroll).
-    // The top line gets the warm key-light rim (emissive, ~30%), strongest on the left-facing flanks, crimson on the rift side.
+    // far ridgelines, farthest first. The two bottom ridges sink into the misty abyss: their fill fades to a small floor
+    // alpha (`floor`) and holds it over the last 8%, so the bottom rows of the layer match the rows just inside (no dim
+    // strip at the edge during overscroll). `range` is a floating distant range in the central band: its underside
+    // dissolves into mist within `sink` px instead of reaching the bottom, so the cloud sea behind stays visible.
+    // Every top line gets the warm key-light rim (emissive), strongest on left-facing flanks, crimson on the rift side.
     const ridge = (o) => {
-      const { base, amp, scale, seed, c0, c1, a0 = 0.85, a1 = 0.55, floor, rimA, lights = 16, lightA = 0.7 } = o;
+      const { base, amp, scale, seed, c0, c1, a0 = 0.85, a1 = 0.55, floor = 0, rimA, lights = 16, lightA = 0.7, x0 = -12, x1 = W + 12, sink = 0, taper = 0, massifs = null } = o;
       const n = makeNoise(seed), pts = [];
-      for (let x = -12; x <= W + 12; x += 4) {
+      for (let x = x0; x <= x1; x += 4) {
         const big = 0.5 + 0.5 * fbm(n, x / (scale * 2.6), 2.2, 3), peaks = Math.pow(ridged(n, x / scale, seed * 0.1, 5), 1.6);
-        pts.push([x, base - amp * (0.25 + 0.75 * big) * (0.35 + 0.9 * peaks) - amp * 0.1 * n(x / 40, 7)]);
+        let env = taper ? smooth(x0, x0 + taper, x) * (1 - smooth(x1 - taper, x1, x)) : 1;
+        if (massifs) env *= 0.22 + massifs.reduce((m, [mx, mw, mh]) => Math.max(m, mh * Math.exp(-Math.pow((x - mx) / mw, 2))), 0);
+        pts.push([x, base - env * amp * (0.25 + 0.75 * big) * (0.35 + 0.9 * peaks) - env * amp * 0.1 * n(x / 40, 7)]);
       }
-      b.save(); b.beginPath(); b.moveTo(-12, H + 20); pts.forEach(p => b.lineTo(p[0], p[1])); b.lineTo(W + 12, H + 20); b.closePath();
-      const g = b.createLinearGradient(0, base - amp, 0, H);
-      g.addColorStop(0, col(c0, a0)); g.addColorStop(0.35, col(c1, a1)); g.addColorStop(0.92, col(c1, floor)); g.addColorStop(1, col(c1, floor));
-      b.fillStyle = g; b.fill(); b.restore();
-      b.save(); b.beginPath(); pts.forEach((p, i) => i ? b.lineTo(p[0], p[1]) : b.moveTo(p[0], p[1])); b.strokeStyle = col(K.KEY, rimA * 0.5); b.lineWidth = 1.5; b.stroke(); b.restore();
-      e.save(); e.lineCap = 'round'; e.lineWidth = 2.2;
+      b.save(); b.beginPath();
+      if (sink) {
+        // top line, then a ragged underside `sink` px lower; the fill fades to 0 before it
+        pts.forEach((p, i) => i ? b.lineTo(p[0], p[1]) : b.moveTo(p[0], p[1]));
+        for (let i = pts.length - 1; i >= 0; i--) b.lineTo(pts[i][0], base + sink * (0.85 + 0.15 * n(pts[i][0] / 90, 3.3)));
+        b.closePath();
+        const g = b.createLinearGradient(0, base - amp, 0, base + sink * 0.62);
+        g.addColorStop(0, col(c0, a0)); g.addColorStop(0.5, col(c1, a1)); g.addColorStop(1, col(c1, 0));
+        b.fillStyle = g; b.fill();
+        // soften the ends into the haze
+        b.globalCompositeOperation = 'destination-out';
+        for (const [xa, xb] of [[x0 - 1, x0 + taper], [x1 + 1, x1 - taper]]) { const gg = b.createLinearGradient(xa, 0, xb, 0); gg.addColorStop(0, 'rgba(0,0,0,1)'); gg.addColorStop(1, 'rgba(0,0,0,0)'); b.fillStyle = gg; b.fillRect(Math.min(xa, xb), base - amp * 2, Math.abs(xb - xa), amp * 2 + sink + 10); }
+      } else {
+        b.moveTo(-12, H + 20); pts.forEach(p => b.lineTo(p[0], p[1])); b.lineTo(W + 12, H + 20); b.closePath();
+        const g = b.createLinearGradient(0, base - amp, 0, H);
+        g.addColorStop(0, col(c0, a0)); g.addColorStop(0.35, col(c1, a1)); g.addColorStop(0.92, col(c1, floor)); g.addColorStop(1, col(c1, floor));
+        b.fillStyle = g; b.fill();
+      }
+      b.restore();
+      if (sink) { // a pale mist veil the range sinks into
+        const mv = mk(W, 2 * sink), mx2 = cx2(mv), my = sink;
+        for (let x = x0 + taper * 0.5; x < x1 - taper * 0.5; x += 60) { mx2.save(); mx2.translate(x, my + 18 * n(x / 300, 8.1)); mx2.scale(3.2, 1); blob(mx2, 0, 0, 36 + 16 * n(x / 170, 2.2), [150, 130, 232], 0.09); mx2.restore(); }
+        b.save(); b.filter = 'blur(10px)'; b.drawImage(mv, 0, base - sink * 0.55); b.restore();
+      }
+      const env = x => taper ? smooth(x0, x0 + taper, x) * (1 - smooth(x1 - taper, x1, x)) : 1;
+      b.save(); b.lineWidth = 1.5;
+      for (let i = 1; i < pts.length; i++) { const p = pts[i - 1], q = pts[i]; b.strokeStyle = col(K.KEY, rimA * 0.5 * env(p[0])); b.beginPath(); b.moveTo(p[0], p[1]); b.lineTo(q[0], q[1]); b.stroke(); }
+      b.restore();
+      e.save(); e.lineCap = 'round'; e.lineWidth = 2.6;
       for (let i = 1; i < pts.length; i++) {
         const p = pts[i - 1], q = pts[i], dx = q[0] - p[0], dy = q[1] - p[1], l = Math.hypot(dx, dy) || 1;
-        const face = clamp(((dy / l) * K.L2[0] + (-dx / l) * K.L2[1] - 0.35) / 0.6);
+        const face = clamp(((dy / l) * K.L2[0] + (-dx / l) * K.L2[1] - 0.35) / 0.6) * env(p[0]);
         if (face <= 0.02) continue;
         e.strokeStyle = col(mixc(K.WARM, K.CRIMSON, riftW(p[0])), rimA * face);
-        e.beginPath(); e.moveTo(p[0], p[1] + 0.6); e.lineTo(q[0], q[1] + 0.6); e.stroke();
+        e.beginPath(); e.moveTo(p[0], p[1] + 0.8); e.lineTo(q[0], q[1] + 0.8); e.stroke();
       }
       e.restore();
       // pinpoint lights on the ridge: distant crystal groves
       const r = rng(seed + 1);
-      for (let i = 0; i < lights; i++) { const p = pts[Math.floor(r() * pts.length)]; const c = r() < 0.5 ? [180, 140, 255] : r() < 0.5 ? [95, 224, 255] : [255, 201, 60]; const cc = mixc(c, [255, 70, 120], riftW(p[0]) * 0.8); blob(e, p[0], p[1] + 6 + r() * 30, 3 + r() * 3, cc, lightA); }
+      for (let i = 0; i < lights; i++) { const p = pts[Math.floor(r() * pts.length)]; if (env(p[0]) < 0.5) continue; const c = r() < 0.5 ? [180, 140, 255] : r() < 0.5 ? [95, 224, 255] : [255, 201, 60]; const cc = mixc(c, [255, 70, 120], riftW(p[0]) * 0.8); blob(e, p[0], p[1] + 6 + r() * 30, 3 + r() * 3, cc, lightA); }
       return pts;
     };
-    // the farthest ridge crosses the central band (behind the tree and the rift gap): near the haze colour, low alpha
-    ridge({ base: 1235, amp: 150, scale: 360, seed: 23, c0: [80, 64, 156], c1: [72, 56, 146], a0: 0.5, a1: 0.36, floor: 0.2, rimA: 0.26, lights: 9, lightA: 0.4 });
-    ridge({ base: 1640, amp: 200, scale: 420, seed: 31, c0: [92, 74, 164], c1: [84, 66, 156], floor: 0.24, rimA: 0.3 });
-    ridge({ base: 1760, amp: 170, scale: 300, seed: 47, c0: [70, 54, 136], c1: [62, 46, 124], floor: 0.3, rimA: 0.34 });
+    // a floating distant range across the central band (behind the tree and the rift gap): near the haze colour, low
+    // alpha, its underside dissolving into mist; the keep-clear rule here is advisory (dim, low contrast)
+    ridge({ base: 1045, amp: 150, scale: 260, seed: 23, c0: [82, 66, 158], c1: [72, 56, 146], a0: 0.46, a1: 0.24, rimA: 0.5, lights: 10, lightA: 0.4, x0: 380, x1: 2780, sink: 190, taper: 380,
+      massifs: [[760, 230, 1.0], [1240, 170, 0.55], [1700, 260, 0.95], [2210, 200, 0.7], [2540, 150, 0.45]] });
+    ridge({ base: 1640, amp: 200, scale: 420, seed: 31, c0: [92, 74, 164], c1: [84, 66, 156], floor: 0.08, rimA: 0.42 });
+    ridge({ base: 1760, amp: 170, scale: 300, seed: 47, c0: [70, 54, 136], c1: [62, 46, 124], floor: 0.1, rimA: 0.46 });
   }
+
 
 
   LAYERS.distant = LAYERS.far = async function () {

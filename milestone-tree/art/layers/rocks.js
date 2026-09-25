@@ -431,11 +431,11 @@
         b.strokeStyle = col([50, 30, 96], 0.9); b.lineWidth = 1; b.beginPath(); b.moveTo(p[0], p[1] + 1); b.lineTo(p[0] + (r() - 0.5) * 4, p[1] - hh); b.stroke();
         blob(e, p[0], p[1] - hh, 4 + r() * 3, c, 0.85); blob(e, p[0], p[1] - hh, 1.4, [255, 255, 255], 0.9);
       }
-      if (e && o.mossLine) { // soft glowing moss line along the lit top edge
-        e.save(); e.lineCap = 'round';
+      if (e && o.mossLine) { // soft glowing moss line along the lit top edge (mossDy px under the lip, below the warm rim)
+        const md = o.mossDy == null ? 1 : o.mossDy; e.save(); e.lineCap = 'round';
         for (let i = 0; i < top.length - 1; i++) {
           const k = 0.5 + 0.5 * Math.sin(i * 0.37 + seed) * Math.sin(i * 0.11 + seed * 2);
-          e.strokeStyle = col(o.mossLine, (0.08 + 0.3 * k * k) * (o.mossA || 1)); e.lineWidth = 3 + 3 * k; e.beginPath(); e.moveTo(top[i][0], top[i][1] + 1); e.lineTo(top[i + 1][0], top[i + 1][1] + 1); e.stroke();
+          e.strokeStyle = col(o.mossLine, (0.08 + 0.3 * k * k) * (o.mossA || 1)); e.lineWidth = 3 + 3 * k; e.beginPath(); e.moveTo(top[i][0], top[i][1] + md); e.lineTo(top[i + 1][0], top[i + 1][1] + md); e.stroke();
         }
         e.restore();
       }
@@ -716,7 +716,7 @@
       for (let k = 0; k < 5; k++) { const p = bot[Math.floor(r() * bot.length)]; let vl = 110 + r() * 220; if (p) while (vl > 60 && clearOf(p[0], p[1] + vl)) vl *= 0.8; if (p) K.vine(b, e, p[0], p[1] - 6, vl, Rk.seed * 57 + k, { w: 4, leafLen: 22, color: [10, 5, 22], leaf: [18, 10, 40], leafRim: [110, 90, 190], bud: r() < 0.6 ? (rw > 0.5 ? [255, 90, 150] : [150, 230, 255]) : null }); }
       const tp = top.filter(p => p[1] < Rk.cy - Rk.h * 0.1);
       K.grass(b, e, tp, Rk.seed + 5, { density: 1.2, h: 18, w: 1.8, color: [20, 12, 44], moss: rw > 0.5 ? [150, 60, 120] : [90, 76, 190], flowers: Math.round(tp.length / 14),
-        flowerCols: rw > 0.5 ? [[255, 80, 140], [255, 150, 90]] : [[255, 120, 200], [120, 230, 255], [255, 220, 120]], mossLine: rw > 0.5 ? [255, 110, 170] : [175, 150, 255], mossA: 0.6 });
+        flowerCols: rw > 0.5 ? [[255, 80, 140], [255, 150, 90]] : [[255, 120, 200], [120, 230, 255], [255, 220, 120]], mossLine: rw > 0.5 ? [255, 110, 170] : [175, 150, 255], mossA: 0.6, mossDy: 7 });
       // one or two small bushes / a young tree
       for (let k = 0; k < 2; k++) { const p = tp[Math.floor(tp.length * (0.25 + 0.5 * r()))]; if (p) K.tree(b, e, p[0], p[1] + 4, 90 + r() * 70, Rk.seed * 17 + k, { kind: rw > 0.6 ? 'dead' : null, bark: [10, 5, 22], leaf: [30, 18, 64], rim: rw > 0.5 ? [255, 150, 190] : [210, 185, 255], glow: rw > 0.5 ? [[255, 80, 130]] : [[255, 201, 60], [95, 224, 255]], glowN: 1 }); }
     } else {
