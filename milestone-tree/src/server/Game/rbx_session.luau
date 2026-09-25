@@ -149,19 +149,37 @@ rbx_saveData = function(this)
 	do return JS.A(2, JSON.stringify(player), JSON.stringify(options)) end
 end
 rbx_popups = function(this, since)
-	local out, i, p
+	local out, i, p, kind, layer
 	out = JS.A(0)
 	for i = 0, JS.cap(0, (JS.len(activePopups)) - 1, 1) do
 		p = activePopups[JS.k(i)]
 		if JS.cmp(p.id, ">=", since) then
+			kind = "other"
+			if JS.t(p.rbxKind) then
+				kind = p.rbxKind
+			elseif (p.type == "achievement-popup") then
+				kind = "achievement"
+			elseif (p.title == "Corruption Info") then
+				kind = "corruption"
+			end
+			layer = JS.NULL
+			if JS.t(p.layer) then
+				layer = ("" .. JS.str(p.layer))
+			elseif (kind == "achievement") then
+				layer = "ach"
+			elseif (kind == "corruption") then
+				layer = "cp"
+			end
 			JS.m(out, "push", JS.O({
 				id = p.id,
 				title = ("" .. JS.str(p.title)),
 				message = ("" .. JS.str(p.message)),
 				type = ("" .. JS.str(p.type)),
 				color = (if JS.t(p.color) then ("" .. JS.str(p.color)) else ""),
-				bColor = (if JS.t(p.bColor) then ("" .. JS.str(p.bColor)) else "")
-			}, {"id", "title", "message", "type", "color", "bColor"}))
+				bColor = (if JS.t(p.bColor) then ("" .. JS.str(p.bColor)) else ""),
+				kind = kind,
+				layer = layer
+			}, {"id", "title", "message", "type", "color", "bColor", "kind", "layer"}))
 		end
 	end
 	do return out end
@@ -179,6 +197,8 @@ updateMilestones = function(this, layer)
 			end
 			if (JS.t(tmp[JS.k(layer)].milestonePopups) or (tmp[JS.k(layer)].milestonePopups == nil)) then
 				doPopup(nil, "milestone", rbx_v(nil, tmp[JS.k(layer)].milestones[id], layers[JS.k(layer)].milestones[id], "requirementDescription"), "Milestone Gotten!", 3, tmp[JS.k(layer)].color)
+				JS.setk(activePopups[JS.k((JS.len(activePopups) - 1))], "layer", layer)
+				JS.setk(activePopups[JS.k((JS.len(activePopups) - 1))], "rbxKind", "milestone")
 			end
 			JS.setk(player[JS.k(layer)], "lastMilestone", id)
 		end
@@ -187,6 +207,12 @@ end
 rbx_displayOnly = JS.A(18, "style", "tooltip", "tooltipStyle", "title", "description", "challengeDescription", "rewardDescription", "requirementDescription", "goalDescription", "costDescription", "buttonStyle", "nodeStyle", "respecMessage", "prestigeButtonText", "currencyDisplayName", "markNodes", "pseudoReq", "perkReq")
 for rbx_i = 0, JS.cap(0, (JS.len(rbx_displayOnly)) - 1, 1) do
 	JS.m(activeFunctions, "push", rbx_displayOnly[JS.k(rbx_i)])
+end
+rbx_burnHtml = handleBurnDisplay
+handleBurnDisplay = function(this, checkId)
+	local d
+	d = rbx_burnHtml(nil, checkId)
+	do return (if JS.t(d) then JS.A(2, "rbx-burn", checkId) else d) end
 end
 
 end

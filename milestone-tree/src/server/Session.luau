@@ -12,9 +12,12 @@
 	deps = { TN = TowerNum, JSRT = the JSRT factory, BEcore = BEcore, chunks = { function... } in load order }
 
 	A view patch is { set = { [id] = node }, del = { id... }, tab = name, tabStyle = css, keys = { hotkey... },
-	ended = bool, pop = { popup... }, full = true on the first patch }. Nodes are the view builder's (rbx/view.js)
-	flattened: a container's c lists its children's ids; ids are paths ("tab.3.1") and the three roots are
-	"menu", "head" and "tab".
+	ended = bool, full = true on the first patch } plus, once each when they happen: pop = { popup... },
+	notice = { text... }, export = text, askImport = true, imp = { ok, msg } (the last import), save = "saving" |
+	"saved" (set by the Worker). Nodes are the view builder's (rbx/view.js) flattened: a container's c lists its
+	children's ids; ids are paths ("tab.3.1"). The roots are "map" (the realm map: 21 layer nodes then the gate, so
+	"map.N" never moves), "hud", "tab" (the open panel; tab = "none" while the map is alone) and, for the old
+	client, "menu" and "head".
 ]]
 
 local Session = {}
@@ -149,6 +152,9 @@ function Session.new(deps, saveJson: string?, optionsJson: string?, nowMs: numbe
 	self.errors = 0
 	self.notices = {}       -- messages for the player (import failed, NaN recovered...)
 	self.hardResetArmed = 0
+	self.armNotice = nil    -- "press Hard Reset again", held back so that a quick second press never shows it
+	self.importResult = nil -- { ok, msg } of the last import, sent once
+	self.saveEvent = nil    -- "saving" / "saved", set by the Worker, sent once
 	self:_start(saveJson, optionsJson, nowMs)
 	self.goodSave, self.goodOptions = self:save()
 	return self
@@ -241,10 +247,11 @@ function Session:_option(name: string, nowMs: number): (boolean, string?)
 	elseif name == "hardReset" or name == "playAgain" then
 		if name == "hardReset" and nowMs - self.hardResetArmed > 5000 then
 			self.hardResetArmed = nowMs
-			table.insert(self.notices, "Press Hard Reset again within 5 seconds to wipe your progress.")
+			self.armNotice = "Press Hard Reset again within 5 seconds to wipe your progress."
 			return true
 		end
 		self.hardResetArmed = 0
+		self.armNotice = nil
 		local _, opts = self:save()
 		self:_start(nil, opts, nowMs)
 		self.goodSave, self.goodOptions = self:save()
@@ -269,8 +276,15 @@ function Session:export(): string?
 	return b64encode(s)
 end
 
--- a save string from the web game (Export, or the localStorage value) or from export(); JSON works too
+-- a save string from the web game (Export, or the localStorage value) or from export(); JSON works too. The result
+-- is also sent once as patch.imp = { ok, msg }.
 function Session:import(text: string, nowMs: number): (boolean, string?)
+	local ok, msg = self:_import(text, nowMs)
+	self.importResult = { ok = ok, msg = msg or "Save imported." }
+	return ok, msg
+end
+
+function Session:_import(text: string, nowMs: number): (boolean, string?)
 	if type(text) ~= "string" or #text < 2 or #text > 3000000 then return false, "That is not a save." end
 	text = string.gsub(text, "^%s+", "")
 	text = string.gsub(text, "%s+$", "")
@@ -322,7 +336,11 @@ function Session:view(): any
 		for i = 0, JS.LEN[acts] - 1 do allowed[actionKey(plain(JS, acts[i]))] = true end
 	end
 	self.allowed = allowed
-	local p = if v then plain(JS, v) else { menu = { t = "col", c = {} }, head = { t = "html", h = "" }, tab = { t = "html", h = "The page failed to draw." } }
+	local p = if v then plain(JS, v) else {
+		menu = { t = "col", c = {} }, head = { t = "html", h = "" },
+		map = { t = "map", inside = false, c = {} }, hud = { t = "hud", pts = "?", name = "points", fr = false },
+		tab = { t = "html", h = "The page failed to draw." }, tabName = "none",
+	}
 	local hk = {}
 	for _, k in p.keys or {} do hk[k] = true end
 	self.hotkeys = hk
@@ -330,6 +348,8 @@ function Session:view(): any
 	local flat = {}
 	flatten(p.menu, "menu", flat)
 	flatten(p.head, "head", flat)
+	flatten(p.map, "map", flat)
+	flatten(p.hud, "hud", flat)
 	flatten(p.tab, "tab", flat)
 	local set, del = {}, {}
 	local prev = self.prev
@@ -354,9 +374,22 @@ function Session:view(): any
 		for _, pp in list do self.lastPopup = math.max(self.lastPopup, (pp.id or 0) + 1) end
 		patch.pop = list
 	end
+	-- the hard-reset arm notice waits half a second: a second press before then resets without it
+	if self.armNotice and self.hardResetArmed ~= 0 and (self.JS.NOW or 0) - self.hardResetArmed >= 500 then
+		table.insert(self.notices, self.armNotice)
+		self.armNotice = nil
+	end
 	if #self.notices > 0 then
 		patch.notice = self.notices
 		self.notices = {}
+	end
+	if self.importResult then
+		patch.imp = self.importResult
+		self.importResult = nil
+	end
+	if self.saveEvent then
+		patch.save = self.saveEvent
+		self.saveEvent = nil
 	end
 	if self.exportText then
 		patch.export = self.exportText

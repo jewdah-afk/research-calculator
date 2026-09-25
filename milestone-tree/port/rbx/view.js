@@ -52,24 +52,78 @@ function rbx_str(x) {
 function rbx_err(what, e) {
 	return { t: "html", h: "<span style='color: #ff5050'>[" + what + " failed: " + rbx_str(e) + "]</span>" }
 }
+// null when a formatted value is NaN (the game shows "NaN"; the client hides the line instead)
+function rbx_nn(s) {
+	s = rbx_str(s)
+	return s.indexOf("NaN") >= 0 ? null : s
+}
+// a text a display function returned, or null when it returned nothing (never the string "undefined")
+function rbx_txt(x) {
+	if (x === undefined || x === null || x === "") return null
+	return rbx_nn(x)
+}
+// progress toward `need`, per mille, floored, on a log scale. 1000 only when have >= need. null when unknown.
+function rbx_pr(have, need) {
+	if (have === undefined || have === null || need === undefined || need === null) return null
+	have = new Decimal(have)
+	need = new Decimal(need)
+	if (have.gte(need)) return 1000
+	if (have.lte(1) || need.lte(1)) return 0
+	var a = have.log10(), b = need.log10()
+	var r = a.div(b).toNumber()
+	if (r < 0.01 && a.gt(1) && b.gt(1)) r = a.log10().div(b.log10()).toNumber()
+	if (!(r >= 0)) return 0
+	return Math.min(999, Math.floor(r * 1000))
+}
+// per mille that is never "done": a cost that cannot be paid right now caps at 999
+function rbx_prCap(p) {
+	if (p === null) return null
+	return Math.min(999, p)
+}
+// the label of a layer's first hotkey ("P", "Shift+M", "Ctrl+E", "C+M"): the text before ":" in its description
+function rbx_hk(l) {
+	var h = layers[l].hotkeys
+	if (!h || !h.length || !tmp[l].hotkeys || !tmp[l].hotkeys[0] || !tmp[l].hotkeys[0].unlocked) return null
+	var d = rbx_str(h[0].description), i = d.indexOf(":")
+	return i > 0 ? d.substring(0, i) : null
+}
 
 // ------------------------------------------------------------------------------------------------ layer components
 function rbx_mainDisplay(layer, data) {
 	var c = tmp[layer].color
+	var pts = data ? format(player[layer].points, data) : formatWhole(player[layer].points)
 	var h = player[layer].points.lt("1e1000") ? "You have " : ""
-	h += "<h2 style=\"color: " + c + "; text-shadow: 0px 0px 10px " + c + "\">" + (data ? format(player[layer].points, data) : formatWhole(player[layer].points)) + "</h2> "
+	h += "<h2 style=\"color: " + c + "; text-shadow: 0px 0px 10px " + c + "\">" + pts + "</h2> "
 	h += rbx_str(tmp[layer].resource)
-	if (layers[layer].effectDescription) h += ", " + run(layers[layer].effectDescription, layers[layer])
-	return { t: "html", h: h + "<br><br>" }
+	var eff = null
+	if (layers[layer].effectDescription) {
+		var e = run(layers[layer].effectDescription, layers[layer])
+		h += ", " + e
+		eff = rbx_txt(e)
+	}
+	return { t: "html", h: h + "<br><br>", pts: pts, res: rbx_str(tmp[layer].resource), eff: eff }
 }
 
 function rbx_prestigeButton(layer) {
 	if (tmp[layer].type === "none") return null
-	var can = tmp[layer].canReset
-	return {
+	var t = tmp[layer]
+	var can = t.canReset
+	var n = {
 		t: "btn", k: "reset", cls: can ? "can" : "locked", h: prestigeButtonText(layer), a: rbx_act(["reset", layer]),
 		st: rbx_css([can ? { "background-color": tmp[layer].color } : null, tmp[layer].componentStyles["prestige-button"]]),
 	}
+	var stat = t.type == "static"
+	var nextAt = stat ? t.nextAtDisp : t.nextAt
+	n.gain = formatWhole(t.resetGain)
+	n.res = rbx_str(t.resource)
+	n.verb = t.resetDescription !== undefined && t.resetDescription !== null ? rbx_str(t.resetDescription).trim() : null
+	n.next = nextAt === undefined || nextAt === null ? null : rbx_nn(t.roundUpCost ? formatWhole(nextAt) : format(nextAt))
+	n.base = t.baseAmount === undefined || t.baseAmount === null ? null : formatWhole(t.baseAmount)
+	n.bres = rbx_str(t.baseResource)
+	n.static = stat ? true : false
+	n.pr = can ? null : rbx_prCap(rbx_pr(t.baseAmount, stat ? t.nextAt : t.requires))
+	n.hk = rbx_hk(layer)
+	return n
 }
 
 function rbx_resourceDisplay(layer) {
@@ -80,7 +134,11 @@ function rbx_resourceDisplay(layer) {
 	h += "<br><br>"
 	if (t.showBest) h += "Your best " + rbx_str(t.resource) + " is " + formatWhole(player[layer].best) + "<br>"
 	if (t.showTotal) h += "You have made a total of " + formatWhole(player[layer].total) + " " + rbx_str(t.resource) + "<br>"
-	return { t: "html", h: h }
+	return {
+		t: "html", h: h, have: t.baseAmount ? formatWhole(t.baseAmount) : null, bres: t.baseAmount ? rbx_str(t.baseResource) : null,
+		gen: t.passiveGeneration ? rbx_nn(format(t.resetGain.times(t.passiveGeneration))) : null,
+		best: t.showBest ? formatWhole(player[layer].best) : null, total: t.showTotal ? formatWhole(player[layer].total) : null,
+	}
 }
 
 function rbx_upgrade(layer, id) {
@@ -88,34 +146,66 @@ function rbx_upgrade(layer, id) {
 	var L = layers[layer].upgrades[id]
 	if (t === undefined) return null
 	if (perkUnl(layer, id) && !t.unlocked) {
+		var req = rbx_str(rbx_v(t, L, "perkReq"))
 		return {
 			t: "btn", k: "perk", cls: t.perkCan ? "perk" : "perked", a: rbx_act(["perk", layer, id]),
-			h: "<h3>Explore A New Perk Upgrade</h3><br>" + rbx_str(rbx_v(t, L, "perkReq")),
+			h: "<h3>Explore A New Perk Upgrade</h3><br>" + req, id: id, req: req,
 		}
 	}
 	if (!t.unlocked) return null
 	var bought = hasUpgrade(layer, id)
 	var can = canAffordUpgrade(layer, id) && !bought
 	var h = ""
+	var ti = null, ds = null, ef = null, co = null, cn = null, custom = true
 	if (L.fullDisplay) h = rbx_str(run(L.fullDisplay, L))
 	else {
 		var title = rbx_v(t, L, "title")
 		if (title) h += "<h3>" + title + "</h3><br>"
-		h += rbx_str(rbx_v(t, L, "description"))
-		if (L.effectDisplay) h += "<br>Currently: " + run(L.effectDisplay, L)
+		ti = rbx_txt(title)
+		ds = rbx_str(rbx_v(t, L, "description"))
+		h += ds
+		if (L.effectDisplay) {
+			var e = run(L.effectDisplay, L)
+			h += "<br>Currently: " + e
+			ef = rbx_txt(e)
+		}
 		h += "<br>"
 		var cd = rbx_v(t, L, "costDescription")
-		if (cd) h += cd
-		else {
+		if (cd) {
+			h += cd
+			co = rbx_str(cd)
+		} else {
 			var cur = rbx_v(t, L, "currencyDisplayName")
-			h += "Cost: " + formatWhole(t.cost) + " " + rbx_str(cur ? cur : tmp[layer].resource)
+			co = formatWhole(t.cost)
+			cn = rbx_str(cur ? cur : tmp[layer].resource)
+			h += "Cost: " + co + " " + cn
+			custom = false
 		}
 	}
-	return {
+	var n = {
 		t: "btn", k: "upg", cls: bought ? "bought" : (can ? "can" : "locked"), n: L.fullDisplay ? null : id, h: h,
 		a: rbx_act(["upg", layer, id]), tip: rbx_v(t, L, "tooltip"),
 		st: rbx_css([can ? { "background-color": tmp[layer].color } : null, tmp[layer].componentStyles.upgrade, rbx_v(t, L, "style")]),
 	}
+	n.id = id
+	n.ti = ti
+	n.ds = ds
+	n.ef = ef
+	n.co = co
+	n.cur = cn
+	n.pr = bought || can || custom || t.cost === undefined ? null : rbx_prCap(rbx_pr(rbx_upgHave(layer, t), t.cost))
+	return n
+}
+
+// what canAffordPurchase checks an upgrade's cost against
+function rbx_upgHave(layer, t) {
+	var name = t.currencyInternalName
+	if (name) {
+		if (t.currencyLocation) return t.currencyLocation[name]
+		if (t.currencyLayer) return player[t.currencyLayer][name]
+		return player[name]
+	}
+	return player[layer].points
 }
 
 function rbx_upgrades(layer) {
@@ -148,13 +238,16 @@ function rbx_milestone(layer, id) {
 	var L = layers[layer].milestones[id]
 	if (!(t !== undefined && milestoneShown(layer, id) && t.unlocked)) return null
 	var done = hasMilestone(layer, id)
-	var h = "<h3>" + rbx_str(rbx_v(t, L, "requirementDescription")) + "</h3><br>" + rbx_str(run(L.effectDescription, L)) + "<br>"
+	var ti = rbx_str(rbx_v(t, L, "requirementDescription"))
+	var ds = rbx_str(run(L.effectDescription, L))
+	var h = "<h3>" + ti + "</h3><br>" + ds + "<br>"
 	var kids = []
 	if (t.pseudoUnl == true && !player[layer].pseudoBuys.includes(id)) {
 		var plocked = !player.points.gte(t.pseudoCost)
+		var pc = format(t.pseudoCost)
 		kids.push({
 			t: "btn", k: "malware", cls: plocked ? "plocked" : "pseudo", a: rbx_act(["malware", layer, id]),
-			h: "Infect a Milestone with Malware<br>Cost: " + format(t.pseudoCost) + " points.",
+			h: "Infect a Milestone with Malware<br>Cost: " + pc + " points.", id: id, co: pc,
 		})
 	}
 	if (t.toggles && done) {
@@ -163,6 +256,7 @@ function rbx_milestone(layer, id) {
 	return {
 		t: "ms", done: done, h: h, c: kids, tip: rbx_v(t, L, "tooltip"),
 		st: rbx_css([tmp[layer].componentStyles.milestone, rbx_v(t, L, "style")]),
+		id: id, ti: ti, ds: ds, mal: player[layer].pseudoBuys && player[layer].pseudoBuys.includes(rbx_str(id)) ? true : false,
 	}
 }
 
@@ -184,6 +278,27 @@ function rbx_milestones(layer, data) {
 	return { t: "col", c: out }
 }
 
+// what each buyable's canAfford checks its cost against: [layer or null, key, currency name or null (the layer's
+// resource)]. Read from the buyables' canAfford / buy code; port/tools/check_buycur.js checks it on the fuzz saves.
+// Buyables whose price also depends on something else (mp 23, the ex movers) are left out: they get no progress bar.
+var rbx_BUY_CUR = {
+	p: { 11: ["p", "points"], 12: ["p", "points"] },
+	sp: { 11: ["sp", "points"], 12: ["sp", "points"] },
+	hp: { 11: ["hp", "points"], 12: ["hp", "points"] },
+	ap: { 11: ["ap", "points"] },
+	pp: { 11: ["pp", "points"] },
+	ep: { 11: ["ep", "points"] },
+	mp: { 11: ["mp", "points"], 12: ["mp", "points"], 13: ["mp", "points"], 21: ["mp", "points"], 22: ["pm", "essence", "prestige essences"] },
+	pep: { 11: ["pep", "points"] },
+	cp: {
+		11: ["cp", "formatted", "corruption essences"], 21: ["cp", "formatted", "corruption essences"], 22: ["cp", "formatted", "corruption essences"],
+		31: [null, "points", null], 32: ["pm", "essence", "prestige essences"], 33: [null, "points", null], 34: ["pm", "essence", "prestige essences"],
+	},
+}
+function rbx_buyHave(bc) {
+	return bc[0] ? player[bc[0]][bc[1]] : player[bc[1]]
+}
+
 function rbx_buyable(layer, id) {
 	var t = tmp[layer].buyables[id]
 	var L = layers[layer].buyables[id]
@@ -198,6 +313,16 @@ function rbx_buyable(layer, id) {
 		t: "btn", k: "buy", cls: cls, h: h, a: rbx_act(["buy", layer, id]), tip: rbx_v(t, L, "tooltip"), hold: true,
 		st: rbx_css([t.canBuy ? { "background-color": tmp[layer].color } : null, tmp[layer].componentStyles.buyable, rbx_v(t, L, "style")]),
 	}
+	var maxed = cls == "bought"
+	var pl = t.purchaseLimit
+	var bc = rbx_BUY_CUR[layer] ? rbx_BUY_CUR[layer][id] : undefined
+	node.id = id
+	node.ti = rbx_txt(title)
+	node.lv = formatWhole(player[layer].buyables[id])
+	node.max = pl !== undefined && pl !== null && new Decimal(pl).lt("1e300") ? formatWhole(pl) : null
+	node.co = t.cost === undefined || t.cost === null ? null : rbx_nn(format(t.cost))
+	node.cur = bc ? (bc[2] ? bc[2] : (bc[0] ? rbx_str(tmp[bc[0]].resource) : rbx_str(modInfo.pointsName))) : null
+	node.pr = !bc || maxed || t.canAfford || t.cost === undefined ? null : rbx_prCap(rbx_pr(rbx_buyHave(bc), t.cost))
 	var sellOne = t.sellOne && !(t.canSellOne !== undefined && t.canSellOne == false)
 	var sellAll = t.sellAll && !(t.canSellAll !== undefined && t.canSellAll == false)
 	if (!sellOne && !sellAll) return node
@@ -253,6 +378,7 @@ function rbx_clickable(layer, id) {
 		t: "btn", k: "click", cls: t.canClick ? "can" : "locked", h: h, a: rbx_act(["click", layer, id]), tip: rbx_v(t, L, "tooltip"),
 		hold: L.onHold ? true : null,
 		st: rbx_css([t.canClick ? { "background-color": tmp[layer].color } : null, tmp[layer].componentStyles.clickable, rbx_v(t, L, "style")]),
+		id: id, ti: rbx_txt(title),
 	}
 }
 
@@ -291,21 +417,35 @@ function rbx_challenge(layer, id) {
 		st: rbx_css([rbx_v(t, L, "buttonStyle") ? rbx_v(t, L, "buttonStyle") : { "background-color": tmp[layer].color }]),
 	}
 	var body = ""
+	var ds = null, goal = null, rw = null, rcur = null
 	if (L.fullDisplay) body = rbx_str(run(L.fullDisplay, L))
 	else {
-		body = rbx_str(rbx_v(t, L, "challengeDescription")) + "<br>Goal:  "
+		ds = rbx_str(rbx_v(t, L, "challengeDescription"))
+		body = ds + "<br>Goal:  "
 		var gd = rbx_v(t, L, "goalDescription")
-		if (gd) body += gd
+		if (gd) goal = rbx_str(gd)
 		else {
 			var cur = rbx_v(t, L, "currencyDisplayName")
-			body += format(t.goal) + " " + rbx_str(cur ? cur : modInfo.pointsName)
+			goal = format(t.goal) + " " + rbx_str(cur ? cur : modInfo.pointsName)
 		}
-		body += "<br>Reward: " + rbx_str(rbx_v(t, L, "rewardDescription")) + "<br>"
-		if (L.rewardDisplay !== undefined) body += "Currently: " + (t.rewardDisplay ? run(L.rewardDisplay, L) : format(t.rewardEffect))
+		body += goal
+		rw = rbx_str(rbx_v(t, L, "rewardDescription"))
+		body += "<br>Reward: " + rw + "<br>"
+		if (L.rewardDisplay !== undefined) {
+			var rd = t.rewardDisplay ? run(L.rewardDisplay, L) : format(t.rewardEffect)
+			body += "Currently: " + rd
+			rcur = rbx_txt(rd)
+		}
 	}
+	var active = player[layer].activeChallenge === id
+	var name = rbx_str(rbx_v(t, L, "name"))
+	var lim = t.completionLimit
 	return {
-		t: "chal", cls: cls, active: player[layer].activeChallenge === id, st: rbx_css([tmp[layer].componentStyles.challenge, rbx_v(t, L, "style")]),
-		c: [{ t: "html", h: "<h3>" + rbx_str(rbx_v(t, L, "name")) + "</h3>" }, btn, { t: "html", h: body }],
+		t: "chal", cls: cls, active: active, st: rbx_css([tmp[layer].componentStyles.challenge, rbx_v(t, L, "style")]),
+		c: [{ t: "html", h: "<h3>" + name + "</h3>" }, btn, { t: "html", h: body }],
+		id: id, ti: name, ds: ds, goal: goal, rw: rw, cur: rcur, cmp: formatWhole(challengeCompletions(layer, id)),
+		lim: lim !== undefined && lim !== null && lim != 1 ? rbx_str(lim) : null,
+		st8: active ? (canCompleteChallenge(layer, id) ? "completable" : "active") : (maxedChallenge(layer, id) ? "done" : "idle"),
 	}
 }
 
@@ -347,6 +487,7 @@ function rbx_achievement(layer, id) {
 	return {
 		t: "ach", done: done, tip: text, num: Math.floor(id / 10) <= 1 ? id - 10 : id - 11,
 		h: name ? "<h3>" + name + "</h3>" : "", st: rbx_css([tmp[layer].componentStyles.achievement, rbx_v(t, L, "style")]),
+		id: id, ti: rbx_txt(name),
 	}
 }
 
@@ -377,10 +518,36 @@ function rbx_gridable(layer, id) {
 	var h = ""
 	if (g.getTitle) h += "<h3>" + rbx_str(gridRun(layer, "getTitle", data, id)) + "</h3><br>"
 	h += rbx_str(gridRun(layer, "getDisplay", data, id))
-	return {
+	var n = {
 		t: "btn", k: "grid", cls: can ? "can" : "locked", h: h, a: rbx_act(["grid", layer, id]), hold: g.onHold ? true : null,
 		tip: g.getTooltip ? gridRun(layer, "getTooltip", data, id) : null,
 		st: rbx_css([can ? { "background-color": tmp[layer].color } : null, tmp[layer].componentStyles.gridable, gridRun(layer, "getStyle", data, id)]),
+	}
+	if (layer == "cp") rbx_cpCell(n, data, id)
+	return n
+}
+
+// a Corrupted Prestige hard drive: its state, level and the tooltip's three numbers, apart
+function rbx_cpCell(n, data, id) {
+	var lv = data.level ? data.level : 0
+	var pm = data.type == "pm"
+	var chosen = pm ? player.cp.chosenBackdoor == id : player.cp.trojanChosen == id
+	var gs = lv < 1 ? "empty" : (data.active == true ? "active" : (chosen ? "chosen" : "corrupted"))
+	n.id = id
+	n.gs = gs
+	n.lv = lv
+	n.kind = pm ? "backdoor" : "trojan"
+	n.caut = data.cautPower ? data.cautPower : 0
+	n.gx = null
+	n.gp = null
+	if (lv < 1) return
+	var cost = gridCost("cp", id)
+	n.gx = { fix: format(cost), fres: pm ? "prestige essences" : "points", deb: format(gridEffect("cp", id), 5), rew: format(gridEssence("cp", id), 0) }
+	if (gs == "active" || gs == "chosen") {
+		// the resource the drive's ASCII bar fills from
+		var have = gs == "chosen" ? (pm ? player.cp.peInCorrupt.add(1) : player.cp.pointsInCorrupt.add(1)) : (pm ? player.pm.essence : player.points)
+		var r = new Decimal(have).div(cost)
+		n.gp = r.gte(1) ? 1000 : (r.gt(0) ? Math.min(999, Math.floor(r.toNumber() * 1000)) : 0)
 	}
 }
 
@@ -411,6 +578,20 @@ function rbx_infobox(layer, id) {
 		t: "info", shut: shut ? true : false, color: rbx_str(tmp[layer].color), a: rbx_act(["infobox", layer, id]),
 		title: rbx_str(t[id].title ? t[id].title : tmp[layer].name), body: rbx_str(t[id].body ? t[id].body : "Blah"),
 		st: rbx_css([t[id].style]),
+	}
+}
+
+// sp's Spark Milestone burn bar (session.js turns handleBurnDisplay's HTML div into ["rbx-burn", id]); h keeps the
+// game's HTML for the old client
+function rbx_burnBar(id) {
+	var html = rbx_burnHtml(id)
+	if (!html) return null
+	var timer = player.sp.timer[id]
+	var perm = tmp.sp.milestones[id].permanent == true
+	var p = perm || timer === undefined || timer === null ? 1 : 1 - Math.max(0, (240 - timer) / 240)
+	return {
+		t: "bar", w: 300, hh: 44, p: p, dir: 3, h: rbx_str(html[1]), st: {}, fill: {}, base: {}, id: id,
+		st8: perm ? "permanent" : (timer == 0 ? "ashed" : "burning"), bp: Math.max(0, Math.min(1000, Math.floor(p * 1000))),
 	}
 }
 
@@ -474,8 +655,9 @@ function rbx_thingTree(layer, data, type) {
 	return { t: "col", c: out }
 }
 
-// one tabFormat entry: "name", [name, data] or [name, data, style]
-function rbx_component(layer, item) {
+// one tabFormat entry: "name", [name, data] or [name, data, style]. ci is its 1-based place in the list it came from
+// (before empty entries are dropped): cn + ci + the subtab name name a component the same way while path ids shift.
+function rbx_component(layer, item, ci) {
 	var name = item, data = undefined, style = undefined
 	if (Array.isArray(item)) {
 		name = item[0]
@@ -492,6 +674,8 @@ function rbx_component(layer, item) {
 	if (!n) return null
 	var st = rbx_css([tmp[layer].componentStyles[name], style])
 	if (Object.keys(st).length) n.cst = st
+	n.cn = rbx_str(name)
+	n.ci = ci ? ci : null
 	return n
 }
 
@@ -531,6 +715,7 @@ function rbx_componentNode(layer, name, data) {
 		case "upgrade-tree": return rbx_thingTree(layer, data, "upgrade")
 		case "buyable-tree": return rbx_thingTree(layer, data, "buyable")
 		case "clickable-tree": return rbx_thingTree(layer, data, "clickable")
+		case "rbx-burn": return rbx_burnBar(data)
 	}
 	return { t: "html", h: "" }
 }
@@ -539,7 +724,7 @@ function rbx_container(t, layer, data) {
 	var out = []
 	if (data) {
 		for (var i = 0; i < data.length; i++) {
-			var n = rbx_component(layer, data[i])
+			var n = rbx_component(layer, data[i], i + 1)
 			if (n) out.push(n)
 		}
 	}
@@ -558,16 +743,16 @@ function rbx_layerTab(layer, embedded) {
 	var out = []
 	if (!t.tabFormat) {
 		if (t.infoboxes) out.push(rbx_infobox(layer, Object.keys(t.infoboxes)[0]))
-		out.push(rbx_component(layer, "main-display"))
-		if (t.type !== "none") out.push(rbx_component(layer, "prestige-button"))
-		out.push(rbx_component(layer, "resource-display"))
-		out.push(rbx_component(layer, "milestones"))
+		out.push(rbx_component(layer, "main-display", 1))
+		if (t.type !== "none") out.push(rbx_component(layer, "prestige-button", 2))
+		out.push(rbx_component(layer, "resource-display", 3))
+		out.push(rbx_component(layer, "milestones", 4))
 		if (Array.isArray(t.midsection)) out.push(rbx_column(layer, t.midsection))
-		out.push(rbx_component(layer, "clickables"))
-		out.push(rbx_component(layer, "buyables"))
-		out.push(rbx_component(layer, "upgrades"))
-		out.push(rbx_component(layer, "challenges"))
-		out.push(rbx_component(layer, "achievements"))
+		out.push(rbx_component(layer, "clickables", 6))
+		out.push(rbx_component(layer, "buyables", 7))
+		out.push(rbx_component(layer, "upgrades", 8))
+		out.push(rbx_component(layer, "challenges", 9))
+		out.push(rbx_component(layer, "achievements", 10))
 	} else if (Array.isArray(t.tabFormat)) {
 		out.push(rbx_column(layer, t.tabFormat))
 	} else {
@@ -683,40 +868,254 @@ function rbx_infoTab() {
 	return { t: "col", c: [{ t: "html", h: h }] }
 }
 
-function rbx_opt(label, sub, a) {
-	return { t: "btn", k: "opt", cls: "can", h: "<b>" + label + "</b><br><span style=\"font-size:12px\">" + sub + "</span>", a: rbx_act(a) }
+// an Options button. id is the option, ti its label, val the state it shows; idx / n place a cycler (0-based, of n);
+// on is the state of a two-state toggle
+function rbx_opt(label, sub, a, ti, val, idx, n, on) {
+	return {
+		t: "btn", k: "opt", cls: "can", h: "<b>" + label + "</b><br><span style=\"font-size:12px\">" + sub + "</span>", a: rbx_act(a),
+		id: a[1], ti: ti, val: val === undefined ? null : val, idx: idx === undefined ? null : idx, n: n === undefined ? null : n,
+		on: on === undefined ? null : (on ? true : false),
+	}
+}
+
+// the Information page's facts, for the Options ABOUT card
+function rbx_about() {
+	var keys = []
+	for (var key in hotkeys) {
+		var k = hotkeys[key]
+		if (player[k.layer].unlocked && tmp[k.layer].hotkeys[k.id].unlocked) {
+			var d = rbx_str(k.description), i = d.indexOf(":")
+			keys.push({ k: i > 0 ? d.substring(0, i) : rbx_str(key), d: i > 0 ? d.substring(i + 1).trim() : d })
+		}
+	}
+	return {
+		t: "about", name: rbx_str(modInfo.name), ver: rbx_str(VERSION.withName), author: modInfo.author ? rbx_str(modInfo.author) : null,
+		tmt: "The Modding Tree " + TMT_VERSION.tmtNum + " by Acamaeda", pt: "The Prestige Tree made by Jacorb and Aarex", keys: keys,
+	}
 }
 
 function rbx_optionsTab() {
+	var ms = MS_SETTINGS.indexOf(options.msDisplay), cc = CCTP_SETTINGS.indexOf(options.changeCorruptTooltipPlace)
 	var saving = { t: "row", c: [
-		rbx_opt("Save", "Save current progress", ["opt", "save"]),
-		rbx_opt("Hard Reset", "Reset current progress (press twice)", ["opt", "hardReset"]),
-		rbx_opt("Export save", "Show a save string you can copy", ["opt", "export"]),
-		rbx_opt("Import a save", "Paste a save string (web saves work too)", ["opt", "import"]),
-		rbx_opt("Offline Production - [ " + (options.offlineProd ? "ON" : "OFF") + " ]", "Produce resources when not in game", ["opt", "offlineProd"]),
+		rbx_opt("Save", "Save current progress", ["opt", "save"], "Save"),
+		rbx_opt("Hard Reset", "Reset current progress (press twice)", ["opt", "hardReset"], "Hard Reset"),
+		rbx_opt("Export save", "Show a save string you can copy", ["opt", "export"], "Export save"),
+		rbx_opt("Import a save", "Paste a save string (web saves work too)", ["opt", "import"], "Import a save"),
+		rbx_opt("Offline Production - [ " + (options.offlineProd ? "ON" : "OFF") + " ]", "Produce resources when not in game", ["opt", "offlineProd"],
+			"Offline Production", options.offlineProd ? "ON" : "OFF", null, null, options.offlineProd ? true : false),
 	] }
 	var displays = { t: "row", c: [
-		rbx_opt("Milestone Showing Mode", "[ " + MS_DISPLAYS[MS_SETTINGS.indexOf(options.msDisplay)] + " ]", ["opt", "msDisplay"]),
-		rbx_opt("Completed Challenges", "[ " + (options.hideChallenges ? "Hidden" : "Shown") + " ]", ["opt", "hideChallenges"]),
-		rbx_opt("Corrupt. Tooltip Pos.", "[ " + CCTP_DISPLAYS[CCTP_SETTINGS.indexOf(options.changeCorruptTooltipPlace)] + " ]", ["opt", "cctp"]),
-		rbx_opt("Milestones Order - [ " + (options.reverseMilestones ? "Last to First" : "First to Last") + " ]", "Choose milestone ordering", ["opt", "reverseMilestones"]),
+		rbx_opt("Milestone Showing Mode", "[ " + MS_DISPLAYS[ms] + " ]", ["opt", "msDisplay"],
+			"Milestone Showing Mode", rbx_str(MS_DISPLAYS[ms]), ms, MS_SETTINGS.length),
+		rbx_opt("Completed Challenges", "[ " + (options.hideChallenges ? "Hidden" : "Shown") + " ]", ["opt", "hideChallenges"],
+			"Completed Challenges", options.hideChallenges ? "Hidden" : "Shown", null, null, options.hideChallenges ? true : false),
+		rbx_opt("Corrupt. Tooltip Pos.", "[ " + CCTP_DISPLAYS[cc] + " ]", ["opt", "cctp"],
+			"Corrupt. Tooltip Pos.", rbx_str(CCTP_DISPLAYS[cc]), cc, CCTP_SETTINGS.length),
+		rbx_opt("Milestones Order - [ " + (options.reverseMilestones ? "Last to First" : "First to Last") + " ]", "Choose milestone ordering", ["opt", "reverseMilestones"],
+			"Milestones Order", options.reverseMilestones ? "Last to First" : "First to Last", null, null, options.reverseMilestones ? true : false),
 	] }
 	return { t: "col", c: [
 		{ t: "html", h: "<h2>[ Saving ]</h2><br>" }, saving, { t: "blank", w: "8px", hh: "20px" },
-		{ t: "html", h: "<h2>[ Displays ]</h2><br>" }, displays,
+		{ t: "html", h: "<h2>[ Displays ]</h2><br>" }, displays, rbx_about(),
 	] }
 }
 
 function rbx_endScreen() {
-	var h = "<br><h3>" + modInfo.winText + "</h3><br><h3>Please check the Discord to see if there are new content updates!</h3><br><br>"
-	if (!player.timePlayedReset) h += "It took you " + formatTime(player.timePlayed) + " to beat the game.<br>"
+	var h = "<br><h3>" + modInfo.winText + "</h3><br><br>"
+	var took = player.timePlayedReset ? null : formatTime(player.timePlayed)
+	if (took !== null) h += "It took you " + took + " to beat the game.<br>"
 	return { t: "col", c: [{ t: "html", h: h }, { t: "row", c: [
 		{ t: "btn", k: "opt", cls: "can", h: "Play Again", a: rbx_act(["opt", "playAgain"]) },
 		{ t: "btn", k: "opt", cls: "can", h: "Keep Going", a: rbx_act(["opt", "keepGoing"]) },
-	] }] }
+	] }], win: rbx_str(modInfo.winText), took: took }
 }
 
-// The whole page for the current tab. Returns { menu, head, tab, tabStyle, tabName, ended, keys }.
+// ------------------------------------------------------------------------------------------------ the map
+// The home screen: every layer is a node in a socket on the painted tree / Multiverse rift. The list is fixed (hidden
+// layers stay in it as { show: false }), so node ids ("map.3") never move and a patch only carries nodes that changed.
+// A node's changing numbers live in its one child ("map.3.1", t: "val") so the node itself is resent only when its
+// look changes. map.22 is the Enter / Leave Prestige Multiverse gate.
+var rbx_MAP = ["ach", "m", "mm", "em", "p", "pe", "sp", "pb", "pp", "se", "hp", "ep", "hb", "ap", "mp", "t", "pm", "pep", "cp", "cm", "ex"]
+var rbx_MAP_NAME = {
+	ach: "Achievements", m: "Milestone", mm: "Meta Milestone", em: "Extra Milestone", p: "Prestige Points", pe: "Prestige Energy",
+	sp: "Super Prestige Points", pb: "Prestige Boosts", pp: "Prestige Power", se: "Super Energy", hp: "Hyper Prestige Points",
+	ep: "Exotic Prestige Points", hb: "Hyper Boosts", ap: "Atomic Prestige Points", mp: "Multiverse Prestige Points", t: "Transcend Points",
+	pm: "Prestige Milestone", pep: "Prestiged-Exotic Prestige", cp: "Corrupted Prestige", cm: "Corrupted Milestone", ex: "Exploration Points",
+}
+// the layers entering the Prestige Multiverse resets (mp challenge 21 onEnter)
+var rbx_MV_RESETS = ["pp", "p", "sp", "pe", "hp", "ap", "pb", "hb", "se", "ep", "em", "mm", "m", "t"]
+
+function rbx_mapName(l) {
+	if (l == "pm" && player.pm.best.gte(15)) return "P███t█g█ M██e█t███"
+	return rbx_MAP_NAME[l]
+}
+
+// a branch colour: a theme slot (1 white, 2 light grey, 3 grey, 4 red) or a CSS colour (P's malware "#c86a6a")
+function rbx_branchColor(c) {
+	if (typeof c == "number") {
+		var th = colors[options.theme] ? colors[options.theme] : colors["default"]
+		return rbx_str(th[c])
+	}
+	return rbx_str(c)
+}
+
+// drawTree(): a branch is drawn from a shown layer to each target in its (live) branches list
+function rbx_mapBranches(l) {
+	var out = []
+	var b = tmp[l].branches
+	if (!Array.isArray(b)) return out
+	for (var i = 0; i < b.length; i++) {
+		var to = b[i], col = 1, w = 15
+		if (Array.isArray(to)) {
+			if (to[1] !== undefined) col = to[1]
+			if (to[2]) w = to[2]
+			to = to[0]
+		}
+		if (tmp[to] && tmp[to].layerShown == true) out.push({ to: rbx_str(to), col: rbx_branchColor(col), w: w })
+	}
+	return out
+}
+
+// the tree node's tooltip (components.js tree-node)
+function rbx_nodeTip(l) {
+	var t = tmp[l]
+	var tip = rbx_v(t, layers[l], "tooltip")
+	if (tip === "") return null
+	if (player[l].unlocked) return tip ? rbx_str(tip) : formatWhole(player[l].points) + " " + rbx_str(t.resource)
+	if (t.tooltipLocked) return rbx_str(t.tooltipLocked)
+	return "Reach " + formatWhole(t.requires) + " " + rbx_str(t.baseResource) + " to unlock (You have " + formatWhole(t.baseAmount) + " " + rbx_str(t.baseResource) + ")"
+}
+
+// how many achievements the game has
+function rbx_achTotal() {
+	var n = 0
+	var a = layers.ach.achievements
+	for (var k in a) if (a[k] && typeof a[k] == "object") n++
+	return n
+}
+
+function rbx_mapNode(l) {
+	var t = tmp[l]
+	var shown = t.layerShown == true
+	var n = { t: "node", id: l, show: shown }
+	if (!shown) {
+		var reached = player[l].unlocked || (player[l].best !== undefined && new Decimal(player[l].best).gt(0))
+		n.dor = reached ? true : false
+		return n
+	}
+	var unl = player[l].unlocked ? true : false
+	var can = t.type != "none" && t.canReset ? true : false
+	var lit = unl || can
+	n.unl = unl
+	n.col = rbx_str(t.color)
+	n.sym = l == "cp" ? "CR" : rbx_str(t.symbol)
+	n.name = rbx_mapName(l)
+	n.st = rbx_css([rbx_v(t, layers[l], "nodeStyle")])
+	n.tab = (t.tabFormat && !Array.isArray(t.tabFormat)) ? rbx_str(player.subtabs[l].mainTabs) : null
+	n.ch = player[l].activeChallenge ? player[l].activeChallenge : null
+	n.cur = player.tab == l ? true : false
+	n.br = rbx_mapBranches(l)
+	n.a = rbx_act(["tab", l])
+	n.c = [{
+		t: "val", can: can, lit: lit, glow: t.notify && unl ? true : false, pulse: t.prestigeNotify ? true : false,
+		pts: l == "ach" ? formatWhole(player.ach.achievements.length) : formatWhole(player[l].points), res: rbx_str(t.resource),
+		tip: rbx_nodeTip(l), ra: can ? rbx_act(["reset", l]) : null,
+		req: lit || t.requires === undefined ? null : rbx_nn(formatWhole(t.requires)), rres: lit ? null : rbx_str(t.baseResource),
+		gain: can ? formatWhole(t.resetGain) : null, pr: lit ? null : rbx_prCap(rbx_pr(t.baseAmount, t.requires)),
+		tot: l == "ach" ? rbx_achTotal() : null,
+	}]
+	return n
+}
+
+// the Enter / Leave Prestige Multiverse gate (the menu's button: Multiverse Prestige challenge 21)
+function rbx_mapGate() {
+	var inMv = player.mp.activeChallenge == 21
+	var g = { t: "gate", show: player.m.best.gte(185) ? true : false, inside: inMv }
+	var best = player.m.best
+	var req = { have: formatWhole(best), need: "185", pr: best.gte(185) ? 1000 : Math.max(0, Math.min(999, Math.floor(best.toNumber() / 185 * 1000))) }
+	if (!g.show) {
+		g.req = req
+		return g
+	}
+	var c = tmp.mp.challenges[21]
+	g.can = player.mp.unlocked && c.unlocked ? true : false
+	g.fin = inMv && canCompleteChallenge("mp", 21) ? true : false
+	g.h = inMv ? "Leave Prestige Multiverse" : "Enter Prestige Multiverse"
+	g.goal = rbx_str(rbx_v(c, layers.mp.challenges[21], "goalDescription"))
+	g.done = challengeCompletions("mp", 21) >= 1
+	g.a = rbx_act(["chal", "mp", 21])
+	g.req = req
+	var rs = []
+	for (var i = 0; i < rbx_MV_RESETS.length; i++) if (!(rbx_MV_RESETS[i] == "sp" && hasMalware("m", 15))) rs.push(rbx_MV_RESETS[i])
+	g.rs = rs
+	return g
+}
+
+// the panel that is open: a shown layer or the options; anything else (a hidden layer, "none", an old info tab) is the map
+function rbx_openPanel() {
+	var tab = player.tab
+	if (tab == "options-tab") return tab
+	if (rbx_MAP.indexOf(tab) >= 0 && tmp[tab].layerShown == true) return tab
+	return null
+}
+
+function rbx_map() {
+	var open = rbx_openPanel()
+	var kids = []
+	for (var i = 0; i < rbx_MAP.length; i++) {
+		var n
+		try {
+			n = rbx_mapNode(rbx_MAP[i])
+		} catch (e) {
+			n = { t: "node", id: rbx_MAP[i], show: false, dor: false }
+		}
+		kids.push(n)
+	}
+	kids.push(rbx_mapGate())
+	return {
+		t: "map", inside: player.mp.activeChallenge == 21, open: open,
+		close: rbx_act(["tab", "none"]), opt: rbx_act(["tab", "options-tab"]), c: kids,
+	}
+}
+
+// the HUD: the overlay head's numbers, apart, so the client can set them big
+function rbx_hud() {
+	var h = { t: "hud", pts: format(player.points), name: rbx_str(modInfo.pointsName), gen: null }
+	var pg = getPointGen() // once: it is the costly part
+	if (canGenPoints()) {
+		var o = tmp.other
+		// no pill while the rate is zero
+		if (!(o.oompsMag == 0 ? pg.lte(0) : new Decimal(o.oomps).lte(0))) {
+			h.gen = o.oompsMag != 0 ? format(o.oomps) + " OOM" + (o.oompsMag < 0 ? "^OOM" : (o.oompsMag > 1 ? "^" + o.oompsMag : "")) + "s/sec" : formatSmall(pg) + "/sec"
+		}
+	}
+	h.dev = player.devSpeed && player.devSpeed != 1 ? format(player.devSpeed) + "x" : null
+	h.off = player.offTime !== undefined && player.offTime.remain > 0 ? formatTime(player.offTime.remain) : null
+	// the softcap / overflow warnings (mod.js displayThings[1], same conditions)
+	var w = []
+	var wh = tmp.displayThings[1] ? rbx_str(tmp.displayThings[1]) : ""
+	if (wh !== "") {
+		var sc = getPointSoftcapStart(), of = getCostOverflowStart()
+		if (pg.gte(sc.sqrt())) w.push({ k: "softcap", v: format(sc), e: rbx_nn(format(pg.log(getPointGenBeforeSoftcap()), 4)) })
+		if (player.m.points.gte(of)) w.push({ k: "overflow", v: format(of), e: rbx_nn(format(getCostOverflowEff(), 4)) })
+	}
+	h.w = w
+	h.wh = wh === "" ? null : wh
+	// the head's other lines: sp challenge 11's ashes and the burning Spark Milestone
+	var x = []
+	if (player.sp.activeChallenge == 11) {
+		x.push("<h2 style=\"color:#9f2846\">" + format(player.m.points, 0) + "</h2> milestones,<br> which can be transformed into <h2 style=\"color:orange\">" + format(tmp.sp.ambersGain) + "</h2> Prestige Ashes after a cooldown. (" + format(player.sp.chalCooldown) + "s)")
+	}
+	if ((player.sp.sparkMilestones.gt(0) && new Decimal(player.sp.ashedMilestones).lt(player.sp.sparkMilestones) && player.sp.burningTimer > 0) && tmp.sp.milestones[player.sp.ashedMilestones].permanent == false) {
+		x.push("<span style=\"color: orange\">Your " + format(player.sp.ashedMilestones + 1, 0) + helper(player.sp.ashedMilestones + 1) + " Spark Milestone will burn for " + formatTime(player.sp.burningTimer) + "</span>")
+	}
+	h.x = x.length ? x.join("<br>") : null
+	h.fr = player.m.best.eq(0) ? true : false
+	return h
+}
+
+// The whole page. Returns { ended, menu, head, map, hud, tabName, tabStyle, tab, keys }. menu and head are the old
+// client's; tabName is "end", "options-tab", the open layer, or "none" (the map alone: no tab is built).
 function rbx_view() {
 	rbx_actions = []
 	updateTabFormats()
@@ -725,18 +1124,22 @@ function rbx_view() {
 	v.ended = ended ? true : false
 	try { v.menu = rbx_menu() } catch (e) { v.menu = rbx_err("menu", e) }
 	try { v.head = rbx_head() } catch (e) { v.head = rbx_err("head", e) }
+	try { v.map = rbx_map() } catch (e) { v.map = rbx_err("map", e) }
+	try { v.hud = rbx_hud() } catch (e) { v.hud = rbx_err("hud", e) }
+	var open = v.map.t == "map" ? v.map.open : null
 	var tab = player.tab
-	v.tabName = tab
+	v.tabName = ended ? "end" : (open ? open : "none")
 	v.tabStyle = {}
 	try {
 		if (ended) v.tab = rbx_endScreen()
+		else if (open == "options-tab") v.tab = rbx_optionsTab()
+		else if (open) {
+			v.tab = rbx_layerTab(open)
+			v.tabStyle = rbx_tabStyle(open)
+		}
 		else if (tab == "info-tab") v.tab = rbx_infoTab()
-		else if (tab == "options-tab") v.tab = rbx_optionsTab()
 		else if (tab == "changelog-tab") v.tab = { t: "col", c: [{ t: "html", h: rbx_str(modInfo.changelog) }] }
-		else if (layers[tab]) {
-			v.tab = rbx_layerTab(tab)
-			v.tabStyle = rbx_tabStyle(tab)
-		} else v.tab = { t: "col", c: [] }
+		else v.tab = { t: "col", c: [] }
 	} catch (e) {
 		v.tab = rbx_err("tab", e)
 	}

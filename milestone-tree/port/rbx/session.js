@@ -117,12 +117,26 @@ function rbx_saveData() {
 	return [JSON.stringify(player), JSON.stringify(options)]
 }
 
-// popups (achievements, milestones...) raised since the given id
+// popups (achievements, milestones...) raised since the given id. kind: milestone / achievement / corruption / other;
+// layer: the layer it is about, or null
 function rbx_popups(since) {
 	var out = []
 	for (var i = 0; i < activePopups.length; i++) {
 		var p = activePopups[i]
-		if (p.id >= since) out.push({ id: p.id, title: "" + p.title, message: "" + p.message, type: "" + p.type, color: p.color ? "" + p.color : "", bColor: p.bColor ? "" + p.bColor : "" })
+		if (p.id >= since) {
+			var kind = "other"
+			if (p.rbxKind) kind = p.rbxKind
+			else if (p.type == "achievement-popup") kind = "achievement"
+			else if (p.title == "Corruption Info") kind = "corruption"
+			var layer = null
+			if (p.layer) layer = "" + p.layer
+			else if (kind == "achievement") layer = "ach"
+			else if (kind == "corruption") layer = "cp"
+			out.push({
+				id: p.id, title: "" + p.title, message: "" + p.message, type: "" + p.type, color: p.color ? "" + p.color : "", bColor: p.bColor ? "" + p.bColor : "",
+				kind: kind, layer: layer,
+			})
+		}
 	}
 	return out
 }
@@ -135,8 +149,20 @@ function updateMilestones(layer) {
 		if (!(hasMilestone(layer, id)) && layers[layer].milestones[id].done()) {
 			player[layer].milestones.push(id)
 			if (layers[layer].milestones[id].onComplete) layers[layer].milestones[id].onComplete()
-			if (tmp[layer].milestonePopups || tmp[layer].milestonePopups === undefined) doPopup("milestone", rbx_v(tmp[layer].milestones[id], layers[layer].milestones[id], "requirementDescription"), "Milestone Gotten!", 3, tmp[layer].color);
+			if (tmp[layer].milestonePopups || tmp[layer].milestonePopups === undefined) {
+				doPopup("milestone", rbx_v(tmp[layer].milestones[id], layers[layer].milestones[id], "requirementDescription"), "Milestone Gotten!", 3, tmp[layer].color)
+				activePopups[activePopups.length - 1].layer = layer
+				activePopups[activePopups.length - 1].rbxKind = "milestone"
+			}
 			player[layer].lastMilestone = id
 		}
 	}
+}
+
+// sp's Spark Milestone burn bar: the game draws it as an HTML div with a gradient; the view builds a bar node from
+// ["rbx-burn", id] instead (rbx_burnBar in view.js), under the same two conditions. rbx_burnHtml is the game's own.
+var rbx_burnHtml = handleBurnDisplay
+handleBurnDisplay = function (checkId) {
+	var d = rbx_burnHtml(checkId)
+	return d ? ["rbx-burn", checkId] : d
 }

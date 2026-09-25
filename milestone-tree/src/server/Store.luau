@@ -5,6 +5,9 @@
 	The lock keeps two servers from playing the same save at once (a quick server hop): load takes it (waiting for
 	a live lock elsewhere to be released, and taking over one older than LOCK_TTL), every save refreshes it, and
 	the last save on leaving releases it. A save only writes while this server still holds the lock.
+
+	The device options (motion, map detail, labels, interface size) live apart, under "client_<userId>" in the same
+	DataStore: never part of the game save or the export string, and last write wins (no lock).
 ]]
 local DataStoreService = game:GetService("DataStoreService")
 local Config = require(script.Parent.Config)
@@ -105,6 +108,23 @@ function Store.save(userId: number, save: string, options: string?, release: boo
 	end)
 	if not ok then return false, tostring(err) end
 	if lost then return false, "another server has this save open" end
+	return true, nil
+end
+
+-- the player's device options, or nil (none saved yet, or the store could not be read)
+function Store.loadPrefs(userId: number): { [string]: any }?
+	local ok, result = retry(function()
+		return ds():GetAsync("client_" .. userId)
+	end)
+	if ok and type(result) == "table" then return result end
+	return nil
+end
+
+function Store.savePrefs(userId: number, prefs: { [string]: any }): (boolean, string?)
+	local ok, err = retry(function()
+		return ds():SetAsync("client_" .. userId, prefs)
+	end)
+	if not ok then return false, tostring(err) end
 	return true, nil
 end
 

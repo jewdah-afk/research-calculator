@@ -9,6 +9,9 @@ def load(fn):
         elif cur is not None: secs[cur].append(line)
     return secs
 NUM = re.compile(r'-?\d+(?:\.\d+)?(?:e[+-]?\d+)?')
+# per-mille progress values (floored from a float ratio): a last-digit float difference can move them by one
+PERMILLE = {'pr', 'gp', 'bp'}
+noise = collections.Counter()
 def walk(a, b, path, out):
     if type(a) != type(b): out.append((path, repr(a)[:120], repr(b)[:120])); return
     if isinstance(a, dict):
@@ -19,7 +22,11 @@ def walk(a, b, path, out):
     elif isinstance(a, list):
         if len(a) != len(b): out.append((path + '#', str(len(a)), str(len(b))))
         for i in range(min(len(a), len(b))): walk(a[i], b[i], path + '[' + str(i) + ']', out)
-    elif a != b: out.append((path, repr(a)[:160], repr(b)[:160]))
+    elif a != b:
+        key = path.rsplit('.', 1)[-1]
+        if key in PERMILLE and isinstance(a, (int, float)) and isinstance(b, (int, float)) and not isinstance(a, bool) and abs(a - b) <= 1:
+            noise[re.sub(r'\[\d+\]', '[]', path)] += 1; return
+        out.append((path, repr(a)[:160], repr(b)[:160]))
 js, lu = load(sys.argv[1]), load(sys.argv[2])
 bad = collections.Counter(); ex = {}; n = 0
 for sec in js:
@@ -35,5 +42,6 @@ for sec in js:
         for p, va, vb in out:
             key = re.sub(r'\[\d+\]', '[]', p); bad[key] += 1; ex.setdefault(key, (sec, va, vb))
 print(f'sections {n}, differing values {sum(bad.values())} in {len(bad)} paths')
+if noise: print(f'per-mille noise (within 1): {sum(noise.values())} values in {len(noise)} paths: ' + ', '.join(sorted(noise)[:8]))
 for k, c in bad.most_common(int(sys.argv[3]) if len(sys.argv) > 3 else 40):
     sec, va, vb = ex[k]; print(f'{c:5d} {k}\n        [{sec}]\n        js ={va}\n        lua={vb}')

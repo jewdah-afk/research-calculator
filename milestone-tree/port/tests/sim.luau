@@ -1,6 +1,8 @@
 --!nocheck
 -- Plays the game through Session the way the Roblox server does: 20 ticks/s, a view every 5 ticks, a greedy bot
--- pressing the buttons on screen. usage: luau sim.luau -a SECONDS
+-- pressing the buttons on screen and moving between layers through the map's nodes. Then: closing the panel, and a
+-- second game that goes into the Prestige Multiverse through the map's gate and back out.
+-- usage: luau sim.luau -a SECONDS
 local L = require("../lib")
 local TN = L.TN
 local Session = L.Session
@@ -56,16 +58,17 @@ for step = 1, SECS * 20 do
 				li = li % #layerOrder + 1
 				local want = layerOrder[li]
 				local found = false
-				for id, n in nodes do
-					if n.k == "menu" and n.a and n.a[2] == want then s:act(n.a, now); found = true; break end
+				for k = 1, 21 do
+					local n = nodes["map." .. k]
+					if n and n.t == "node" and n.show and n.a and n.id == want then s:act(n.a, now); found = true; break end
 				end
 				if found then break end
 			end
 		end
 	end
 	if step % 400 == 0 then
-		local head = nodes["head.1"] and nodes["head.1"].h or ""
-		print(string.format("t=%ds pts: %s | tab %s | nodes %d", step // 20, string.sub(string.gsub(head, "<[^>]*>", ""), 1, 60), tostring(s.ENV.player.tab), (function() local c = 0 for _ in nodes do c += 1 end return c end)()))
+		local hud = nodes["hud"]
+		print(string.format("t=%ds pts: %s | tab %s | nodes %d", step // 20, if hud then tostring(hud.pts) else "?", tostring(s.ENV.player.tab), (function() local c = 0 for _ in nodes do c += 1 end return c end)()))
 	end
 end
 print(string.format("ticks %d avg %.2f ms | views %d avg %.2f ms | patch avg %.1f KB max %.1f KB | presses %d",
@@ -84,3 +87,59 @@ print("round trip: ids only in original", diff)
 local ex = s:export()
 local ok, err = s2:import(ex, now)
 print("import of export:", ok, err)
+local imp = s2:view().imp
+assert(imp and imp.ok == true, "the import result is sent once as patch.imp")
+assert(s2:view().imp == nil, "patch.imp is sent once")
+
+local function check(cond: any, what: string)
+	if not cond then error("sim: " .. what, 0) end
+	print("ok: " .. what)
+end
+
+-- the map's close button: the map alone, no tab built
+local function mapNode(): any return nodes["map"] end
+s:resetView()
+nodes = {}
+apply(s:view())
+s:act(mapNode().close, now)
+local pc = s:view()
+apply(pc)
+check(pc.tab == "none", "map.close leaves patch.tab == \"none\"")
+check(nodes["tab"] and #nodes["tab"].c == 0, "map.close leaves an empty tab")
+check(mapNode().open == nil, "map.open is nil on the map alone")
+check(nodes["map.22"] and nodes["map.22"].t == "gate", "map.22 is the gate")
+
+-- the gate: a game with 190 best milestones and Multiverse Prestige unlocked goes in and back out
+local JS = s.JS
+local sv = s2:save()
+local p = JS.G.JSON.parse(sv)
+p.m.best = "190"
+p.m.points = "190"
+p.mp.unlocked = true
+p.tab = "none"
+local g = Session.new(deps, JS.G.JSON.stringify(p), nil, now)
+nodes = {}
+local function step(n: number)
+	for _ = 1, n do
+		now += 50
+		g:tick(now)
+	end
+	apply(g:view())
+end
+step(2)
+local gate = nodes["map.22"]
+check(gate.show == true and gate.inside == false and gate.can == true, "the gate shows and can be used at 190 milestones")
+check(g:act(gate.a, now), "the gate's action is on screen")
+step(2)
+check(mapNode().inside == true and nodes["map.22"].inside == true, "map.inside after going through the gate")
+check(mapNode().open == nil, "no panel right after entering (the game moved the tab to a hidden layer)")
+local shown = {}
+for k = 1, 21 do
+	local n = nodes["map." .. k]
+	if n and n.show then table.insert(shown, n.id) end
+end
+print("shown inside: " .. table.concat(shown, " "))
+check(table.find(shown, "pm") ~= nil and table.find(shown, "p") == nil, "the rift's layers show inside, the tree's do not")
+check(g:act(nodes["map.22"].a, now), "the gate's action is on screen inside")
+step(2)
+check(mapNode().inside == false, "map.inside is false after leaving")

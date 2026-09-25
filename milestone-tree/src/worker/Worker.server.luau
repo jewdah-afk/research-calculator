@@ -80,7 +80,16 @@ local function saveNow(release: boolean?)
 	saving = true
 	local save, options = session:checkpoint()
 	if save then
+		-- the capsule's SAVING... / SAVED (patch.save, sent once each)
+		session.saveEvent = "saving"
+		pushNow = true
 		local ok, err = Store.save(player.UserId, save, options, release)
+		if ok then
+			session.saveEvent = "saved"
+			pushNow = true
+		elseif session.saveEvent == "saving" then
+			session.saveEvent = nil
+		end
 		if not ok then
 			warn("[MilestoneTree] save failed for " .. player.Name .. ": " .. tostring(err))
 			if err == "another server has this save open" then
@@ -182,7 +191,7 @@ RunService.Heartbeat:ConnectParallel(function(dt: number)
 		if not canSave then patch.unsaved = true end
 	end
 	task.synchronize()
-	if patch and (changed or patch.pop or patch.notice or patch.export or patch.askImport or patch.full) then
+	if patch and (changed or patch.pop or patch.notice or patch.export or patch.askImport or patch.imp or patch.save or patch.full) then
 		send(patch)
 	end
 	if wantSave then

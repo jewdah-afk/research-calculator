@@ -10,14 +10,19 @@
 	  View    server -> client   screen patches (see Session:view)
 	  Act     client -> server   (action, hold?) a button on the screen, or { "key", name } for a hotkey
 	  Import  client -> server   (text) a pasted save string
-	  Ready   client -> server   the client wants the whole screen (first load, UI rebuilt)
+	  Ready   client -> server   the client wants the whole screen (first load, UI rebuilt, out of sync)
+	  Prefs   client -> server   { motion, detail, labels, size } the device options; mirrored as JSON in the
+	                             player's MT_Prefs attribute and saved apart from the game (Store.savePrefs)
+	The folder's ImportCooldown attribute is Config.IMPORT_COOLDOWN (seconds between imports).
 ]]
+local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
 
 local root = script.Parent
 local Config = require(root:WaitForChild("Config"))
+local Store = require(root:WaitForChild("Store"))
 
 local remotes = Instance.new("Folder")
 remotes.Name = "MilestoneTreeRemotes"
@@ -31,6 +36,8 @@ local viewRemote = remote("View")
 local actRemote = remote("Act")
 local importRemote = remote("Import")
 local readyRemote = remote("Ready")
+local prefsRemote = remote("Prefs")
+remotes:SetAttribute("ImportCooldown", Config.IMPORT_COOLDOWN)
 remotes.Parent = ReplicatedStorage
 
 local sessionsFolder = Instance.new("Folder")
@@ -39,7 +46,11 @@ sessionsFolder.Parent = root
 
 local template = ServerStorage:WaitForChild("MilestoneTreeWorker") :: Actor
 
-type Entry = { actor: Actor, tokens: number, last: number, lastImport: number }
+type Prefs = { motion: string, detail: string, labels: string, size: number }
+type Entry = {
+	actor: Actor, tokens: number, last: number, lastImport: number,
+	prefsAt: number, prefsPending: Prefs?, prefsSet: boolean, prefsDirty: boolean, prefsSaveAt: number,
+}
 local entries: { [Player]: Entry } = {}
 
 local function fatal(player: Player, text: string)
@@ -47,13 +58,79 @@ local function fatal(player: Player, text: string)
 	viewRemote:FireClient(player, { fatal = text })
 end
 
+-- ---------------------------------------------------------------------------------------------- device options
+local PREF_CHOICES: { [string]: { [any]: boolean } } = {
+	motion = { SYSTEM = true, FULL = true, REDUCED = true },
+	detail = { AUTO = true, HIGH = true, LOW = true },
+	labels = { AUTO = true, ALWAYS = true, OFF = true },
+	size = { [90] = true, [100] = true, [115] = true },
+}
+
+-- a valid options table from the client or the store, or nil
+local function validPrefs(p: any): Prefs?
+	if type(p) ~= "table" then return nil end
+	local n = 0
+	for k, v in p do
+		n += 1
+		local choices = PREF_CHOICES[k]
+		if type(k) ~= "string" or not choices or not choices[v] then return nil end
+	end
+	if n ~= 4 then return nil end
+	return { motion = p.motion, detail = p.detail, labels = p.labels, size = p.size }
+end
+
+local function setPrefsAttribute(player: Player, prefs: Prefs)
+	player:SetAttribute("MT_Prefs", HttpService:JSONEncode(prefs))
+end
+
+local function loadPrefs(player: Player, entry: Entry)
+	local saved = validPrefs(Store.loadPrefs(player.UserId))
+	-- a change the player made while this was loading wins
+	if saved and not entry.prefsSet and entries[player] == entry then setPrefsAttribute(player, saved) end
+end
+
+local function savePrefsLater(player: Player, entry: Entry)
+	entry.prefsSaveAt = os.clock() + Config.PREFS_SAVE_DELAY
+	if entry.prefsDirty then return end
+	entry.prefsDirty = true
+	task.spawn(function()
+		while os.clock() < entry.prefsSaveAt and entries[player] == entry do task.wait(0.5) end
+		entry.prefsDirty = false
+		local json = player:GetAttribute("MT_Prefs")
+		local prefs = if type(json) == "string" then validPrefs(HttpService:JSONDecode(json)) else nil
+		if prefs then Store.savePrefs(player.UserId, prefs) end
+	end)
+end
+
+-- at most one change per PREFS_INTERVAL; a quicker one is held and applied when the interval is over
+local function applyPrefs(player: Player, entry: Entry)
+	local wait = entry.prefsAt + Config.PREFS_INTERVAL - os.clock()
+	if wait > 0 then
+		task.delay(wait, function()
+			if entries[player] == entry and entry.prefsPending then applyPrefs(player, entry) end
+		end)
+		return
+	end
+	local prefs = entry.prefsPending
+	if not prefs then return end
+	entry.prefsPending = nil
+	entry.prefsAt = os.clock()
+	entry.prefsSet = true
+	setPrefsAttribute(player, prefs)
+	savePrefsLater(player, entry)
+end
+
 local function start(player: Player)
 	if entries[player] then return end
 	local a = template:Clone()
 	a.Name = "Player_" .. player.UserId
 	a.Parent = sessionsFolder
-	local entry: Entry = { actor = a, tokens = Config.ACTIONS_PER_SECOND, last = os.clock(), lastImport = 0 }
+	local entry: Entry = {
+		actor = a, tokens = Config.ACTIONS_PER_SECOND, last = os.clock(), lastImport = 0,
+		prefsAt = 0, prefsPending = nil, prefsSet = false, prefsDirty = false, prefsSaveAt = 0,
+	}
 	entries[player] = entry
+	task.spawn(loadPrefs, player, entry)
 	-- the Worker binds its messages when it starts running
 	local t0 = os.clock()
 	while not a:GetAttribute("Ready") and not a:GetAttribute("Error") and os.clock() - t0 < 30 do task.wait() end
@@ -124,6 +201,15 @@ importRemote.OnServerEvent:Connect(function(player: Player, text: any)
 	if os.clock() - entry.lastImport < Config.IMPORT_COOLDOWN then return end
 	entry.lastImport = os.clock()
 	entry.actor:SendMessage("import", text)
+end)
+
+prefsRemote.OnServerEvent:Connect(function(player: Player, p: any)
+	local entry = entries[player]
+	local prefs = validPrefs(p)
+	if not entry or not prefs then return end
+	local held = entry.prefsPending ~= nil
+	entry.prefsPending = prefs
+	if not held then applyPrefs(player, entry) end
 end)
 
 readyRemote.OnServerEvent:Connect(function(player: Player)

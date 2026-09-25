@@ -1,7 +1,7 @@
 // Shared by the JS and Luau view tests (transpiled too): walk every tab and dump its view as JSON; replay actions.
 function rbx_viewDump(tag) {
 	var out = []
-	var tabs = ["info-tab", "options-tab"]
+	var tabs = ["none", "options-tab"]
 	for (var l in layers) if (tmp[l].layerShown == true && l != "tree-tab") tabs.push(l)
 	for (var i = 0; i < tabs.length; i++) {
 		rbx_do(["tab", tabs[i]])
@@ -12,6 +12,22 @@ function rbx_viewDump(tag) {
 			if (subs[j] !== null) rbx_do(["subtab", tabs[i], "mainTabs", subs[j]])
 			out.push("##" + tag + " " + tabs[i] + " " + subs[j] + "\n" + JSON.stringify(rbx_view()))
 		}
+	}
+	// inside the Prestige Multiverse (mp challenge 21): its own layers and the map's other half (saves already inside
+	// were dumped there above)
+	if (player.m.best.gte(185) && player.mp.activeChallenge != 21) {
+		player.mp.unlocked = true
+		rbx_do(["chal", "mp", 21])
+		player.time -= 50
+		rbx_tick()
+		var mv = []
+		for (var l in layers) if (tmp[l].layerShown == true && l != "tree-tab") mv.push(l)
+		for (var k = 0; k < mv.length; k++) {
+			rbx_do(["tab", mv[k]])
+			out.push("##" + tag + " mv " + mv[k] + "\n" + JSON.stringify(rbx_view()))
+		}
+		rbx_do(["tab", "none"])
+		out.push("##" + tag + " mv none\n" + JSON.stringify(rbx_view()) + "\n" + JSON.stringify(rbx_popups(0)))
 	}
 	return out.join("\n")
 }

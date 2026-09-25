@@ -863,6 +863,9 @@ function JS.eq(a, b)
 	local ta, tb = type(a), type(b)
 	if ta == tb then return false end
 	if (ta == "number" and tb == "string") or (ta == "string" and tb == "number") then return tonum(a) == tonum(b) end
+	-- a Decimal against a primitive compares its valueOf (its string), as JS does (pm's exponent: points == 14)
+	if ta == "table" and (tb == "number" or tb == "string") and isD(a) then return JS.eq(DP.toString(a), b) end
+	if tb == "table" and (ta == "number" or ta == "string") and isD(b) then return JS.eq(a, DP.toString(b)) end
 	return false
 end
 
@@ -969,7 +972,17 @@ function AM.unshift(a, ...) KC[a] = nil;
 	LEN[a] = n + c
 	return n + c
 end
-function AM.includes(a, v) local n = LEN[a]; for i = 0, n - 1 do local x = a[i]; if x == v or (x ~= x and v ~= v) then return true end end return false end
+-- a number also finds its string: the port's for-in keys are numbers where JS has strings (a milestone's this.id is
+-- 3, JS "3"), and the game looks those ids up in lists of strings (player.m.pseudoBuys.includes(this.id))
+function AM.includes(a, v)
+	local n = LEN[a]
+	local vs = if type(v) == "number" then str(v) else nil
+	for i = 0, n - 1 do
+		local x = a[i]
+		if x == v or (x ~= x and v ~= v) or (vs ~= nil and x == vs) then return true end
+	end
+	return false
+end
 function AM.indexOf(a, v) local n = LEN[a]; for i = 0, n - 1 do if a[i] == v then return i end end return -1 end
 function AM.lastIndexOf(a, v) for i = LEN[a] - 1, 0, -1 do if a[i] == v then return i end end return -1 end
 function AM.join(a, sep)

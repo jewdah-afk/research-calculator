@@ -3,9 +3,9 @@
 return function()
 -- transpiled from view_dump.js
 rbx_viewDump = function(this, tag)
-	local out, tabs, l, i, subs, t, j
+	local out, tabs, l, i, subs, t, j, mv, k
 	out = JS.A(0)
-	tabs = JS.A(2, "info-tab", "options-tab")
+	tabs = JS.A(2, "none", "options-tab")
 	for _, __k1 in JS.keys(layers) do
 		l = __k1
 		if (JS.eq(tmp[l].layerShown, true) and (not (l == "tree-tab"))) then
@@ -25,6 +25,25 @@ rbx_viewDump = function(this, tag)
 			end
 			JS.m(out, "push", ((((((("##" .. JS.str(tag)) .. " ") .. JS.str(tabs[JS.k(i)])) .. " ") .. JS.str(subs[JS.k(j)])) .. "\n") .. JS.str(JSON.stringify(rbx_view(nil)))))
 		end
+	end
+	if (player.m.best:gte(185) and (not JS.eq(player.mp.activeChallenge, 21))) then
+		JS.setk(player.mp, "unlocked", true)
+		rbx_do(nil, JS.A(3, "chal", "mp", 21))
+		JS.setk(player, "time", (JS.tonum(player.time) - 50))
+		rbx_tick(nil)
+		mv = JS.A(0)
+		for _, __k2 in JS.keys(layers) do
+			l = __k2
+			if (JS.eq(tmp[l].layerShown, true) and (not (l == "tree-tab"))) then
+				JS.m(mv, "push", l)
+			end
+		end
+		for k = 0, JS.cap(0, (JS.len(mv)) - 1, 1) do
+			rbx_do(nil, JS.A(2, "tab", mv[JS.k(k)]))
+			JS.m(out, "push", ((((("##" .. JS.str(tag)) .. " mv ") .. JS.str(mv[JS.k(k)])) .. "\n") .. JS.str(JSON.stringify(rbx_view(nil)))))
+		end
+		rbx_do(nil, JS.A(2, "tab", "none"))
+		JS.m(out, "push", ((((("##" .. JS.str(tag)) .. " mv none\n") .. JS.str(JSON.stringify(rbx_view(nil)))) .. "\n") .. JS.str(JSON.stringify(rbx_popups(nil, 0)))))
 	end
 	do return JS.m(out, "join", "\n") end
 end

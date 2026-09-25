@@ -3,6 +3,7 @@
 # releases; set LUAU=/path/to/luau when it is not on PATH).
 #
 #   ./test.sh game [dir] [states] [seed]   the game: random saves + actions, JS vs Luau, every player/tmp value
+#                                          (plus MV=8 saves inside the Prestige Multiverse)
 #   ./test.sh view [dir]                   the screen: every tab of those saves, JS vs Luau, every view node
 #   ./test.sh decimal                      Decimal ops: the game's break_eternity vs the port (TowerNum + BEcore)
 #   ./test.sh strings                      new Decimal(string): the game's parser vs the port
@@ -10,6 +11,7 @@
 #   ./test.sh timeline                     2000 ticks of the deterministic bot, JS vs Luau
 #   ./test.sh sim [seconds]                the Roblox Session end to end: 20 ticks/s, views, a bot, saves, import
 #   ./test.sh roblox                       the Roblox scripts (server, Actor worker, DataStore, client UI) on a mock engine
+#   ./test.sh capture                      full views of chosen saves for the client's offline checks (data/fixtures)
 #   ./test.sh all                          all of the above (game/view with 60 states, seed 7)
 # Differences left in `game` / `view` are last-digit float noise (see README).
 set -e
@@ -20,7 +22,7 @@ export LUAU
 game() {
 	local dir=${1:-fz} n=${2:-60} seed=${3:-7}
 	mkdir -p data/$dir
-	node gen_states.js $n $seed > data/$dir/states.json
+	node gen_states.js $n $seed --mv ${MV:-8} > data/$dir/states.json
 	python3 tools/tolua.py data/$dir/states.json data/$dir/fz_states.luau
 	echo "== game: $n states (seed $seed), JS side..."
 	FZ_TIMEOUT=${FZ_TIMEOUT:-20000} node fuzz_js.js data/$dir/states.json data/$dir/js.txt > data/$dir/js.log 2>&1
@@ -64,6 +66,10 @@ timeline() {
 sim() {
 	"$LUAU" -O2 tests/sim.luau -a ${1:-60}
 }
+capture() {
+	node tools/fix_gen.js
+	"$LUAU" -O2 tools/capture.luau | node tools/split_fix.js data/fixtures
+}
 roblox() {
 	python3 tools/wrap_scripts.py
 	"$LUAU" tests/roblox.luau
@@ -79,6 +85,7 @@ case ${1:-all} in
 	timeline) timeline ;;
 	sim) shift; sim "$@" ;;
 	roblox) roblox ;;
-	all) node build.js; timeline; decimal; strings; game; view; html; sim 60; roblox ;;
+	capture) capture ;;
+	all) node build.js; timeline; decimal; strings; game; view; html; sim 60; capture; roblox ;;
 	*) echo "unknown test $1"; exit 1 ;;
 esac
