@@ -112,11 +112,19 @@ M.fireServer = function(remote, ...)
 	for i = 1, args.n do args[i] = carry(args[i], remote.Name .. "#" .. i) end
 	remote.OnServerEvent:Fire(localPlayer, table.unpack(args, 1, args.n))
 end
+local optPaths = {}
 M.fireClient = function(remote, player, ...)
 	if player ~= localPlayer then return end
 	local args = table.pack(...)
 	for i = 1, args.n do args[i] = carry(args[i], remote.Name .. "#" .. i) end
 	sent += 1
+	-- where the game's option rows are (their view paths), so the test finds them however a skin draws them
+	local patch = args[1]
+	if remote.Name == "View" and type(patch) == "table" and type(patch.set) == "table" then
+		for path, n in patch.set do
+			if type(n) == "table" and n.k == "opt" and type(n.id) == "string" then optPaths[n.id] = path end
+		end
+	end
 	local b = size(args)
 	sentBytes += b
 	maxBytes = math.max(maxBytes, b)
@@ -283,10 +291,15 @@ local ov = pg.OverlayGui.Root
 pg.HudGui.Root.Dock.Options.Activated:Fire()
 frames(0.5)
 check(sheet.Visible, "OPTIONS opens the Options panel")
-local exportBtn
-for _, d in tabRoot:GetDescendants() do
-	if d.__class == "TextButton" and string.find(textOf(d), "Export", 1, true) then exportBtn = d end
+local function optButton(id)
+	local path = optPaths[id]
+	if path == nil then return nil end
+	for _, d in pg.PanelGui:GetDescendants() do
+		if d.Name == path and (d.__class == "TextButton" or d.__class == "ImageButton") then return d end
+	end
+	return nil
 end
+local exportBtn = optButton("export")
 check(exportBtn ~= nil, "the Export save row")
 if exportBtn then exportBtn.Activated:Fire() end
 frames(0.5)
@@ -333,10 +346,7 @@ if exported then
 	pg.HudGui.Root.Dock.Options.Activated:Fire()
 	frames(0.5)
 	local function importButton()
-		for _, d in tabRoot:GetDescendants() do
-			if d.__class == "TextButton" and string.find(textOf(d), "Import", 1, true) then return d end
-		end
-		return nil
+		return optButton("import")
 	end
 	local importBtn = importButton()
 	if importBtn then importBtn.Activated:Fire() end

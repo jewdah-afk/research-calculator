@@ -10,6 +10,8 @@
 	      GenPill the rate (Rich.num) on a dark green pill hanging from the rim; hidden when hud.gen is nil
 	      Warn    a chip right of the capsule with the first warning value; tap -> warnTap (the tooltip lists all)
 	      Status  SAVING... / SAVED / NOT SAVING / RECONNECTING... under the pill
+	      Info    the game's other head lines under them (hud.x: sp challenge 11's ashes, a burning Spark Milestone;
+	              hud.off offline time; hud.dev dev speed), `small` on a glass chip; bottom() counts it
 
 	    local part = Capsule.new(parent)
 	    part:update(h)   part:setStatus(kind)   part:setUniverse(inside)   part:setFirstRun(b)   part.warnTap
@@ -33,6 +35,7 @@ export type Capsule = {
 	pill: Frame,
 	warn: Frame,
 	status: Frame,
+	info: Frame,
 	warnTap: Signal.Signal<Vector2>,
 	changed: Signal.Signal<>, -- a part moved, appeared or disappeared (Hud re-registers the rects)
 	update: (self: Capsule, h: Types.HudState) -> (),
@@ -179,6 +182,26 @@ function Capsule.new(parent: GuiObject): Capsule
 	status.Visible = false
 	self.status = status
 
+	-- the game's other head lines (sp challenge 11's ashes, a burning Spark Milestone, offline time, dev speed)
+	local info = Kit.frame(parent, "Info", 6)
+	info.AnchorPoint = Vector2.new(0.5, 0)
+	info.AutomaticSize = Enum.AutomaticSize.Y
+	info.BackgroundColor3 = Theme.C.deep
+	info.BackgroundTransparency = 0.12
+	Kit.corner(info, UDim.new(0, 12))
+	Kit.stroke(info, 1.5, Theme.C.strokeHi, 1, "Rim")
+	local iLabel = Kit.label(info, "Label", "small", "", Theme.C.text)
+	iLabel.AutomaticSize = Enum.AutomaticSize.Y
+	iLabel.Size = UDim2.fromScale(1, 0)
+	iLabel.TextWrapped = true
+	iLabel.RichText = true
+	iLabel.TextXAlignment = Enum.TextXAlignment.Center
+	info.Visible = false
+	self.info = info
+	info:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+		self.changed:Fire()
+	end)
+
 	-- ------------------------------------------------------------------------------------------ layout
 	local compact = false
 	local inside = false
@@ -228,6 +251,9 @@ function Capsule.new(parent: GuiObject): Capsule
 		Kit.pad(status, 0, 10, 0, 8)
 		Theme.text(sLabel, "label")
 		sLabel.Size = UDim2.fromScale(0, 1)
+		info.Size = UDim2.fromOffset(if compact then 340 else 460, 0)
+		Kit.pad(info, 6, 12, 6, 12)
+		Theme.text(iLabel, "small")
 		self.changed:Fire()
 	end
 
@@ -236,6 +262,32 @@ function Capsule.new(parent: GuiObject): Capsule
 		local y = 6 + h + 6
 		if pill.Visible then y = 6 + h - 7 + (if compact then 26 else 30) + 6 end
 		return y
+	end
+
+	local function infoY(): number
+		local y = statusY()
+		if status.Visible then y += 28 + 6 end
+		return y
+	end
+	local infoText = ""
+	local function writeInfo(h: Types.HudState?)
+		local parts = {}
+		if h and not firstRun then
+			if type(h.x) == "string" and h.x ~= "" then table.insert(parts, Rich.html(h.x, Theme.size("small"), nil)) end
+			if type(h.off) == "string" then table.insert(parts, Rich.caps("Offline time") .. "  " .. Rich.num(h.off, { size = Theme.size("small") })) end
+			if type(h.dev) == "string" then table.insert(parts, Rich.caps("Dev speed") .. "  " .. Rich.num(h.dev, { size = Theme.size("small") })) end
+		end
+		local t = table.concat(parts, "\n")
+		if t ~= infoText then
+			infoText = t
+			iLabel.Text = t
+		end
+		local show = t ~= ""
+		info.Position = UDim2.new(0.5, 0, 0, infoY())
+		if info.Visible ~= show then
+			info.Visible = show
+			self.changed:Fire()
+		end
 	end
 
 	local function writeLabel()
@@ -284,6 +336,7 @@ function Capsule.new(parent: GuiObject): Capsule
 			c.changed:Fire()
 		end
 		status.Position = UDim2.new(0.5, 0, 0, statusY())
+		writeInfo(h)
 	end
 
 	function self.setStatus(c: Capsule, kind: string?)
@@ -299,6 +352,7 @@ function Capsule.new(parent: GuiObject): Capsule
 		local spec = if kind then STATUS[kind] else nil
 		if spec == nil then
 			status.Visible = false
+			writeInfo(hud)
 			c.changed:Fire()
 			return
 		end
@@ -310,6 +364,7 @@ function Capsule.new(parent: GuiObject): Capsule
 		g.Size = UDim2.fromOffset(14, 14)
 		status.Position = UDim2.new(0.5, 0, 0, statusY())
 		status.Visible = true
+		writeInfo(hud)
 		c.changed:Fire()
 	end
 
@@ -324,15 +379,15 @@ function Capsule.new(parent: GuiObject): Capsule
 		if h then c:update(h) end
 	end
 	function self.bottom(_: Capsule): number
-		local y = statusY()
-		if status.Visible then y += 28 + 6 end
+		local y = infoY()
+		if info.Visible then y += math.max(28, info.AbsoluteSize.Y / math.max(Layout.s, 0.01)) + 6 end
 		return y
 	end
 	function self.destroy(c: Capsule)
 		c.warnTap:DisconnectAll()
 		c.changed:DisconnectAll()
 		Kit.unspin(star)
-		for _, x in { f, pill, warn, status } do x:Destroy() end
+		for _, x in { f, pill, warn, status, info } do x:Destroy() end
 	end
 
 	place()

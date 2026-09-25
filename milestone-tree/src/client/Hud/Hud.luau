@@ -9,6 +9,7 @@
 	    hud:updateHud(h)   hud:updateMap(ms)   hud:setStatus(kind)   hud:setPanel(p)   hud:setFirstRun(b)   hud:setZoomPct(z)
 	    hud:setVisible(b)
 	    hud.home, hud.trophies, hud.options, hud.portal, hud.zoomIn, hud.zoomOut, hud.bandClose   ()
+	    hud.bandSwitch (layer)                              -- a READY gem in the COMPACT band
 	    hud.readyTap (layer), hud.readyHold (layer)        -- the hold already passed the hold safety
 	    hud.readyMore ()                                    -- "+N more" in the tray
 	    hud.gateHold ()                                     -- the universe tag FINISH / EXIT hold completed
@@ -40,6 +41,7 @@ export type Hud = {
 	zoomIn: Signal.Signal<>,
 	zoomOut: Signal.Signal<>,
 	bandClose: Signal.Signal<>,
+	bandSwitch: Signal.Signal<string>,
 	readyTap: Signal.Signal<string>,
 	readyHold: Signal.Signal<string>,
 	readyMore: Signal.Signal<>,
@@ -66,6 +68,7 @@ function Hud.new(topbar: ScreenGui, hud: ScreenGui): Hud
 	self.zoomIn = Signal.new() :: Signal.Signal<>
 	self.zoomOut = Signal.new() :: Signal.Signal<>
 	self.bandClose = Signal.new() :: Signal.Signal<>
+	self.bandSwitch = Signal.new() :: Signal.Signal<string>
 	self.readyTap = Signal.new() :: Signal.Signal<string>
 	self.readyHold = Signal.new() :: Signal.Signal<string>
 	self.readyMore = Signal.new() :: Signal.Signal<>
@@ -85,6 +88,7 @@ function Hud.new(topbar: ScreenGui, hud: ScreenGui): Hud
 	capsule.warnTap:Connect(function(abs: Vector2) self.warnTap:Fire(abs) end)
 	tag.hold:Connect(function() self.gateHold:Fire() end)
 	band.close:Connect(function() self.bandClose:Fire() end)
+	band.switch:Connect(function(l: string) self.bandSwitch:Fire(l) end)
 	dock.home:Connect(function() self.home:Fire() end)
 	dock.trophies:Connect(function() self.trophies:Fire() end)
 	dock.options:Connect(function() self.options:Fire() end)
@@ -102,7 +106,7 @@ function Hud.new(topbar: ScreenGui, hud: ScreenGui): Hud
 
 	-- ------------------------------------------------------------------------------------------ rects
 	local parts: { [string]: GuiObject } = {
-		capsule = capsule.frame, pill = capsule.pill, warn = capsule.warn, status = capsule.status, unitag = tag.frame,
+		capsule = capsule.frame, pill = capsule.pill, warn = capsule.warn, status = capsule.status, info = capsule.info, unitag = tag.frame,
 		band = band.frame, dock = dock.frame, zoom = dock.zoom, ready = ready.frame, readyPill = ready.pill,
 		banner = ready.banner, portal = portal.frame,
 	}
@@ -148,7 +152,9 @@ function Hud.new(topbar: ScreenGui, hud: ScreenGui): Hud
 		local side = p ~= nil and p.mode == "side"
 		local full = p ~= nil and p.mode == "full"
 		capsule.frame.Visible = not (full and compact)
-		band:show(if full and compact and p then p.layer else nil, if p then p.title else nil)
+		local bl = if full and compact and p then p.layer else nil
+		local bn = if bl and lastMs then (lastMs :: MapState).nodes[bl] else nil
+		band:show(bl, if p then p.title else nil, if bn and type(bn.sym) == "string" then bn.sym else nil)
 		dock:setSmall(side)
 		dock:setZoomVisible(not firstRun and p == nil)
 		ready:setMode(if side then "strip" elseif compact then "pill" else "tray")
@@ -171,6 +177,12 @@ function Hud.new(topbar: ScreenGui, hud: ScreenGui): Hud
 		tag:setTop(capsule:bottom())
 		ready:update(ms)
 		portal:update(ms.gate)
+		local list = {}
+		for _, l in ms.ready do
+			local n = ms.nodes[l]
+			table.insert(list, { layer = l, sym = if n and type(n.sym) == "string" then n.sym else string.upper(l) })
+		end
+		band:setReady(list)
 		local ach = ms.nodes.ach
 		local v = ach and ach.val
 		dock:setTrophies(if ach and ach.show and v and v.pts then v.pts .. "/" .. (v.tot or "18") else nil)
@@ -207,6 +219,7 @@ function Hud.new(topbar: ScreenGui, hud: ScreenGui): Hud
 			s:DisconnectAll()
 		end
 		h.readyTap:DisconnectAll()
+		h.bandSwitch:DisconnectAll()
 		h.readyHold:DisconnectAll()
 		h.warnTap:DisconnectAll()
 		for key in parts do Layout.setRect("hud." .. key, nil) end

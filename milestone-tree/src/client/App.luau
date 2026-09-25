@@ -579,6 +579,7 @@ function App.start()
 	hud.zoomIn:Connect(function() mi:zoomStep(1) end)
 	hud.zoomOut:Connect(function() mi:zoomStep(-1) end)
 	hud.bandClose:Connect(function() requestClose() end)
+	hud.bandSwitch:Connect(function(layer: string) openLayer(layer) end)
 	hud.readyTap:Connect(function(layer: string) openLayer(layer) end)
 	hud.readyHold:Connect(function(layer: string)
 		local ms = lastMs

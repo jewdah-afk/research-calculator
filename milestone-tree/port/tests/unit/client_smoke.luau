@@ -125,8 +125,13 @@ end
 check((M.errors or 0) == errors0, "every fixture drew without a script error")
 check(sheet.Visible and findText(sheet.Header or sheet, "EXPLOR") ~= nil or sheet.Visible, "the panel follows the server's open layer (ex)")
 
+play("layer_sp")
+local info = pg.TopbarGui.Root.Info
+check(info.Visible and string.find(info.Label.Text, "Spark Milestone", 1, true) ~= nil, "the head's extra line (a burning Spark Milestone) shows under the capsule")
+
 -- the S13 map: states and plates
 play("s13_none")
+check(not info.Visible, "no extra line when the game has none")
 check(not sheet.Visible, "the panel closes when the server shows the map alone")
 local function state(l) local n = nodesF:FindFirstChild("Node_" .. l); return n and n:GetAttribute("State") end
 check(state("m") == "available" or state("m") == "pulse", "m available (" .. tostring(state("m")) .. ")")
@@ -202,7 +207,19 @@ frames(0.4)
 check(count("tab", "options-tab", n0) == 1 and sheet.Visible, "OPTIONS opens the Options panel")
 play("s13_options")
 local ov = pg.OverlayGui.Root
-local hr = buttonWith(sheet, "Hard Reset")
+-- the game's option rows by their view path (a signature may restyle or wrap them)
+local function optButton(id)
+	local fx = require("../../data/fixtures/s13_options")
+	for path, n in fx.set do
+		if type(n) == "table" and n.k == "opt" and n.id == id then
+			for _, d in sheet:GetDescendants() do
+				if d.Name == path and (d.__class == "TextButton" or d.__class == "ImageButton") then return d end
+			end
+		end
+	end
+	return nil
+end
+local hr = optButton("hardReset")
 check(hr ~= nil, "the Options panel has Hard Reset")
 if hr then
 	hr.Activated:Fire()
@@ -219,7 +236,7 @@ frames(0.3)
 check(ov.Modal.Visible and ov.Modal:GetAttribute("Kind") == "export" and #ov.Modal.Well.Box.Text >= 100, "the export modal shows the save string")
 key(Enum.KeyCode.Escape)
 check(not ov.Modal.Visible and sheet.Visible, "Esc closes the modal first, the panel stays")
-local imp = buttonWith(sheet, "Import a save")
+local imp = optButton("import")
 if imp then imp.Activated:Fire() end
 frames(0.2)
 check(sent("opt", "import", n0), "Import a save sends its action")
@@ -309,6 +326,17 @@ frames(0.6)
 check(sheet.Visible and not mapGui.Enabled, "COMPACT: the panel is full screen and MapGui is off")
 local band = pg.TopbarGui.Root:FindFirstChild("PanelBand")
 check(band and band.Visible, "COMPACT: the band carries the title and the close")
+local switchGem = nil
+for _, c in band.Switch:GetChildren() do if string.sub(c.Name, 1, 4) == "Gem_" then switchGem = c end end
+if switchGem then
+	local target = string.sub(switchGem.Name, 5)
+	local s0 = #acts
+	switchGem.Activated:Fire()
+	frames(0.4)
+	check(count("tab", target, s0) == 1 and sheet.Visible, "COMPACT: a READY gem in the band switches to its layer (" .. target .. ")")
+else
+	print("  (no other READY layer in this state: the band switcher is empty)")
+end
 if band then band.Close.Activated:Fire() end
 frames(0.5)
 check(not sheet.Visible and mapGui.Enabled and count("tab", "none", n0) == 1, "the band's close closes the panel and the map comes back")
