@@ -1,8 +1,10 @@
 // Parallax depth 3, `mid` (f = 0.45): the layer that sells the depth. Seven detailed floating islands (lit rock
 // undersides, hanging roots, glowing crystal seams, tiny trees) pour luminous light-falls from the lightfall sprite
-// anchors, over horizontal mist bands at 55-95 % of the height. The rift side (right) is cracked with crimson seams;
-// the island nearest the corrupted outcrop grows green glitch crystals. The trunk band and the rift cluster (the
-// hard keep-clear zones) hold mist only.
+// anchors, over horizontal mist bands at 55-95 % of the height. No two share a silhouette: a broken twin pouring from
+// its cleft, a natural arch pouring from its keystone, a ruined colonnade under a rock needle, three plain slabs, and
+// the corrupted island. The rift side (right) is cracked with crimson seams; the corrupted island sits where the
+// clamped east-limit cameras see it (under the outcrop's tip), lit green from above. The trunk band and the rift
+// cluster (the hard keep-clear zones) hold mist only.
 // Transparent. Painted at full local size 3360x2160, output at res.HIGH 0.75 -> 2520x1620 (realm.json layers[mid]).
 (function () {
   // ================================================================ ISLAND KIT (begin)
@@ -646,90 +648,294 @@
 
   // Island specs. xL/xR/top: the grassy top line; lobes: hanging cones {x, y tip, w half-width}; the fall anchor is
   // the lip (a flat notch) at the lightfall instance. Positions keep every island out of the hard zones.
+  // Three islands keep the plain slab (A, D, B: far up or half behind the rift). The four the camera sees most each
+  // break it, so the layer never reads as one stamp repeated:
+  //   F  broken twin: a crack splits the slab from the top, the right half has slumped, and the light pours out of the
+  //      cleft between two hanging fangs instead of off a lobe tip
+  //   C  natural arch: the light pours from the keystone down through the arch
+  //   E  a ruined colonnade at the foot of a rock needle, a gold relic light between the columns; the fall spills off
+  //      the island's right edge
+  //   G  the corrupted island (below)
+  // G is placed for the cameras that actually see the corrupt biome. The camera cannot centre on the outcrop: at the
+  // hard east limit it stops at (2880, y, z 1) and (3072, y, z 1.25) on 1920x1080 and (3294, y, z 1.25) on 1366x768,
+  // where this layer shows local x <= 3072 (1920) and <= 2920 (1366), and the world outcrop covers the right third of
+  // the screen. Projected with camera.js localToScreen, the band x 2570-2900, y 1330-1440 is clear of the world at
+  // (2880, 1250, z 1), (2880, 1480, z 1), (3072, 1320, z 1.25) and (3294, 1320, z 1.25), right under the outcrop's
+  // lower tip. G1, the corrupted main mass, fills that band; G2, a raised block (the tall step), holds the fall-6 lip at
+  // its left edge and sits off screen there. The green is light, not paint: dark rock with a green rim on the edges
+  // that face the outcrop (up), green veins and crystals, and debris the corruption lifts off the top.
   const ISLES = [
-    { id: 'F', fall: 5, xL: 235, xR: 915, top: 40, tilt: 0.02, thick: 46, seed: 301, lobes: [{ x: 400, y: 250, w: 165 }, { x: 790, y: 236, w: 125 }, { x: 520, y: 290, w: 170 }],
-      crystals: [[860, 5, 40, [95, 224, 255]]], trees: [[420, 90], [640, 60]], roots: 16 },
+    { id: 'F', fall: 5, xL: 235, xR: 915, top: 40, tilt: 0.02, thick: 46, seed: 301, lobes: [{ x: 330, y: 238, w: 96 }, { x: 852, y: 226, w: 66 }, { x: 440, y: 200, w: 120 }],
+      shape: 'twin', crack: 600, crystals: [[860, 5, 40, [95, 224, 255]], [300, 3, 26, [179, 92, 255]]], trees: [[420, 92], [700, 62, null, 0.12]], roots: 16 },
     { id: 'A', fall: 0, xL: 1712, xR: 2120, top: 20, tilt: -0.01, thick: 40, seed: 302, lobes: [{ x: 1795, y: 176, w: 95 }, { x: 2045, y: 190, w: 85 }],
       crystals: [[2050, 4, 40, [95, 224, 255]]], trees: [[1790, 70]], roots: 10 },
     { id: 'D', fall: 3, xL: 2540, xR: 3130, top: 120, tilt: -0.03, thick: 44, seed: 303, lobes: [{ x: 2655, y: 310, w: 115 }, { x: 2995, y: 336, w: 135 }],
       crystals: [[2640, 5, 48, [232, 70, 190]], [3070, 3, 30, [255, 46, 99]]], trees: [[2880, 84, 'dead']], roots: 14 },
-    { id: 'C', fall: 2, xL: 100, xR: 720, top: 935, tilt: 0.03, thick: 50, seed: 304, lobes: [{ x: 225, y: 1140, w: 125 }, { x: 570, y: 1168, w: 145 }],
-      crystals: [[250, 5, 58, [179, 92, 255]], [640, 3, 34, [95, 224, 255]]], trees: [[430, 104], [520, 66], [160, 54]], roots: 16 },
+    { id: 'C', fall: 2, xL: 118, xR: 700, top: 1085, tilt: 0.02, thick: 58, seed: 304, shape: 'arch',
+      lobes: [{ x: 196, y: 1478, w: 44, p: 1.6 }, { x: 262, y: 1446, w: 30, p: 1.7 }, { x: 548, y: 1512, w: 56, p: 1.6 }, { x: 636, y: 1450, w: 34, p: 1.7 }],
+      crystals: [[196, 5, 50, [179, 92, 255]], [660, 3, 30, [95, 224, 255]]], trees: [[560, 104], [626, 62], [372, 50]], roots: 16 },
     { id: 'E', fall: 4, xL: 780, xR: 1212, top: 1506, tilt: 0.09, thick: 40, seed: 305, lobes: [{ x: 960, y: 1760, w: 175, p: 1.05 }, { x: 850, y: 1660, w: 70 }], anchorSlope: 1.6,
-      crystals: [[880, 4, 42, [255, 201, 60]]], trees: [[1000, 88], [1085, 52]], roots: 12 },
-    { id: 'B', fall: 1, xL: 2195, xR: 2680, top: 1420, tilt: -0.085, thick: 40, seed: 306, lobes: [{ x: 2470, y: 1700, w: 190 }, { x: 2615, y: 1580, w: 80 }],
-      crystals: [[2575, 6, 54, [255, 46, 99]], [2380, 3, 30, [232, 70, 190]]], trees: [[2470, 76, 'dead']], roots: 14 },
-    { id: 'G', fall: 6, xL: 2775, xR: 3345, top: 1040, tilt: 0.02, thick: 46, seed: 307, corrupt: true, lobes: [{ x: 2905, y: 1240, w: 115 }, { x: 3220, y: 1272, w: 135 }],
-      crystals: [[2900, 6, 72, [57, 255, 20]], [3250, 4, 46, [31, 191, 74]]], trees: [[3110, 66, 'dead']], roots: 14 },
+      needle: { x: 822, w: 76, h: 350, lean: -0.05 }, ruin: true, crystals: [], trees: [[1122, 50]], roots: 12 },
+    { id: 'B', fall: 1, xL: 2150, xR: 2560, top: 1420, tilt: -0.075, thick: 40, seed: 306, lobes: [{ x: 2385, y: 1690, w: 160 }, { x: 2512, y: 1585, w: 62 }],
+      crystals: [[2488, 6, 52, [255, 46, 99]], [2350, 3, 30, [232, 70, 190]]], trees: [[2420, 76, 'dead']], roots: 14 },
+    { id: 'G', fall: 6, seed: 307, corrupt: true, xL: 2600, xR: 3330, roots: 16,
+      parts: [
+        { xL: 2600, xR: 2968, top: 1300, tilt: -0.045, thick: 38, jag: 1.5, anchor: false,
+          lobes: [{ x: 2685, y: 1478, w: 92, p: 1.15 }, { x: 2828, y: 1532, w: 118, p: 1.2 }, { x: 2925, y: 1425, w: 42, p: 1.6 }] },
+        { xL: 2930, xR: 3330, top: 1172, tilt: -0.02, thick: 46, seed: 317, anchor: true, anchorSlope: 1.4, droop: 0.02,
+          lobes: [{ x: 2962, y: 1336, w: 46, p: 0.35 }, { x: 3165, y: 1420, w: 125 }, { x: 3292, y: 1335, w: 55 }] }],
+      crystals: [[2664, 5, 44, [57, 255, 20]], [2792, 7, 66, [57, 255, 20]], [2904, 4, 36, [31, 191, 74]], [3232, 4, 42, [57, 255, 20]], [3000, 3, 28, [255, 46, 99]]],
+      trees: [[3120, 70, 'dead']],
+      fragments: [[2698, 1226, 34, 0.35], [2772, 1180, 22, -0.25], [2846, 1216, 15, 0.6], [2735, 1148, 10, 0.1]] },
   ];
 
+  // An island() outline with its top and underside remapped: fTop / fUnder (x, y) -> y (either may be null).
+  function reshape(S, fTop, fUnder) {
+    const topY = fTop ? (x => fTop(x, S.topY(x))) : S.topY;
+    const top = S.top.map(([x]) => [x, topY(x)]);
+    const under = S.under.map(([x, y]) => [x, Math.max(topY(x) + 0.5, fUnder ? fUnder(x, y) : y)]);
+    const underY = x => Math.max(topY(x) + 0.5, fUnder ? fUnder(x, S.underY(x)) : S.underY(x));
+    return { ...S, poly: [...top, ...under], top, under, topY, underY };
+  }
+  // F: a crack from the top at `crack` splits the slab, the right half has slumped; under the lip two fangs hang and
+  // the cleft between them opens downward (walls sloping out), so the light pours from inside the island
+  function twinShape(I, F, S) {
+    const XC = I.crack, nh = Math.max(14, F.s * 0.3), n = makeNoise(I.seed + 40);
+    const slump = x => x > XC ? 7 + (x - XC) * 0.06 : 0;
+    const fTop = (x, y) => y + slump(x) + 170 * Math.pow(Math.max(0, 1 - Math.abs(x - XC) / 30), 1.25);
+    const fUnder = (x, y) => {
+      const d = Math.abs(x - F.x); if (d <= nh) return F.y;
+      y += slump(x);
+      if (d < 175) y = Math.max(y, F.y + 175 * (1 - Math.pow(d / 175, 2.4)) + 16 * n(x / 17, 2.2) * (d / 175));
+      return Math.min(y, F.y + (d - nh) * 1.45 + 6 * n(x / 9, 7.1));
+    };
+    return reshape(S, fTop, fUnder);
+  }
+  // C: two fat legs under the slab and an arch cut between them; the keystone is the lip
+  function archShape(I, F, S) {
+    const nh = Math.max(14, F.s * 0.3), R = 92, RV = 128, n = makeNoise(I.seed + 41), base = I.top + I.thick + 4;
+    const leg = (x, x0, x1, yb) => { if (x <= x0 || x >= x1) return -1e9; const u = Math.abs(2 * (x - x0) / (x1 - x0) - 1); return yb - (yb - base) * Math.pow(u, 3.2); };
+    const fUnder = (x, y) => {
+      const d = Math.abs(x - F.x); if (d <= nh) return F.y;
+      y = Math.max(y, leg(x, 122, 420, 1392 + 22 * fbm(n, x / 38, 3.3, 2)), leg(x, 330, 694, 1420 + 24 * fbm(n, x / 38, 5.1, 2)));
+      if (d < R) y = Math.min(y, F.y + RV * (1 - Math.sqrt(1 - (d / R) * (d / R))) + 3 * n(x / 7, 1.1));
+      return y;
+    };
+    return reshape(S, null, fUnder);
+  }
+  // a rock needle rising from (bx, by): ledges on the flanks, a crooked tip
+  function needle(bx, by, w, h, lean, seed) {
+    const r = rng(seed), L = [], Rt = [], N = 14;
+    for (let i = 0; i < N; i++) {
+      const t = i / N, y = by - h * t, cx = bx + lean * h * t * t + (t > 0.8 ? (t - 0.8) * h * 0.12 : 0);
+      const half = (w / 2) * Math.pow(1 - t, 0.8) * (0.9 + 0.2 * r()) + 2;
+      const lk = i % 4 === 1 ? w * 0.16 * r() : 0, rk = i % 5 === 3 ? w * 0.13 * r() : 0;
+      L.push([cx - half - lk, y + (r() - 0.5) * 5]); Rt.push([cx + half + rk, y + (r() - 0.5) * 7]);
+    }
+    const tip = [bx + lean * h + h * 0.024, by - h];
+    return [...L, tip, ...Rt.reverse()];
+  }
+  // a classical column: plinth, drum shaft, capital; a broken one ends in a jagged break
+  function columnPoly(x, yb, h, w, seed, broken) {
+    const r = rng(seed), hw = w / 2, pl = hw * 1.35, ca = hw * 1.3, yt = yb - h;
+    const left = [[x - pl, yb + 10], [x - pl, yb - 5], [x - hw, yb - 8]], right = [[x + hw, yb - 8], [x + pl, yb - 5], [x + pl, yb + 10]];
+    let top;
+    if (broken) { top = []; for (let i = 0; i <= 5; i++) top.push([x - hw + (2 * hw * i) / 5, yt + (i === 0 || i === 5 ? 4 : 0) + (r() - 0.35) * w * 0.8]); }
+    else top = [[x - hw, yt + 9], [x - ca, yt + 7], [x - ca, yt], [x + ca, yt], [x + ca, yt + 7], [x + hw, yt + 9]];
+    return [...left, ...top, ...right];
+  }
+  const rot = (pts, cx, cy, a) => pts.map(([x, y]) => [cx + (x - cx) * Math.cos(a) - (y - cy) * Math.sin(a), cy + (x - cx) * Math.sin(a) + (y - cy) * Math.cos(a)]);
+  const STONE = { dark: [10, 6, 24], base: [132, 110, 186], rim: [255, 226, 190], key: [255, 214, 150], bounce: [120, 90, 230] };
+  // E: a broken colonnade (two standing columns under a cracked lintel, a snapped column, a stump, a fallen drum) and a
+  // gold relic crystal hovering in the doorway, its light on the column faces
+  function ruin(b, e, chk, S, I) {
+    const stone = (poly, seed, extra = {}) => {
+      const M = K.mass({ poly, seed, pad: 6, bevel: 3, dome: 10, domeK: 0.5, bump: 1.5, bumpScale: 12, facet: 22, facetTilt: 0.25, crackW: 1.2, crack: 0.25,
+        strata: { period: 17, lw: 0.08, dark: 0.45, warp: 1, wl: 60, tilt: 0 }, pal: STONE, amb: 0.1, gamma: 1.4, rimW: 2, rimK: 0.8, keyK: 0.6, bounceK: 0.35, ao: 0.3,
+        riftW: () => 0, warm: 1, warmW: 2.5, ...extra });
+      b.drawImage(M.c, M.x, M.y); if (M.e) e.drawImage(M.e, M.x, M.y); chk.drawImage(M.c, M.x, M.y);
+      return M;
+    };
+    const yb = x => S.topY(x) + 2;
+    const cols = [[902, 98, 17, false], [956, 112, 17, false], [1016, 60, 16, true], [1062, 30, 16, true]];
+    cols.forEach(([x, h, w, br], k) => stone(columnPoly(x, yb(x), h, w, I.seed * 11 + k, br), I.seed * 13 + k));
+    // lintel over the first two, cracked through and sagging at its right end
+    const ly = yb(902) - 112, lint = [[884, ly - 1], [930, ly - 3], [933, ly + 9], [886, ly + 11]], lint2 = rot([[936, ly - 4], [986, ly - 6], [986, ly + 7], [937, ly + 8]], 936, ly, 0.11);
+    stone(lint, I.seed * 17); stone(lint2, I.seed * 17 + 1);
+    // a fallen drum and a toppled shaft lying on the grass
+    stone(rot([[1080, yb(1080) - 12], [1128, yb(1128) - 16], [1130, yb(1130) - 2], [1082, yb(1082) + 2]], 1100, yb(1100), -0.05), I.seed * 19);
+    stone(rot([[846, yb(846) - 10], [870, yb(870) - 12], [872, yb(872)], [848, yb(848) + 1]], 860, yb(860), 0.3), I.seed * 19 + 1);
+    // the relic: a gold crystal hovering in the doorway, and its light on the inner column faces and the ground
+    const rx = 929, ry = yb(929) - 58;
+    blob(e, rx, ry, 46, [255, 201, 60], 0.28); blob(e, rx, yb(929) - 4, 30, [255, 190, 90], 0.22);
+    K.crystal(b, e, rx, ry + 12, 24, 9, 0, [255, 214, 120], 1, 1);
+    K.crystal(b, e, rx - 7, ry + 10, 12, 5, -0.5, [255, 201, 60], 1, 0.7); K.crystal(b, e, rx + 7, ry + 10, 13, 5, 0.45, [255, 201, 60], 1, 0.7);
+    for (const [x, s] of [[911, 1], [947, -1]]) { const g = e.createLinearGradient(x, 0, x + s * 10, 0); g.addColorStop(0, col([255, 201, 90], 0.5)); g.addColorStop(1, col([255, 201, 90], 0)); e.fillStyle = g; e.fillRect(Math.min(x, x + s * 10), ry - 40, 10, 86); }
+  }
+
+  // emissive rim for a light other than the key light (the outcrop's green from above, the rift's crimson from the
+  // left): mask pixels whose neighbour toward the light lies outside the silhouette. Bright on dark reads as light.
+  function dirRim(e, M, dir, w, color, k, o = {}) {
+    const { A } = M, W2 = M.w, H2 = M.h, dl = Math.hypot(dir[0], dir[1]), ux = dir[0] / dl, uy = dir[1] / dl, n = makeNoise(o.seed || 5);
+    const at = (x, y) => { x = Math.round(x); y = Math.round(y); return x < 0 || y < 0 || x >= W2 || y >= H2 ? 0 : A[y * W2 + x]; };
+    const im = new ImageData(W2, H2), dd = im.data;
+    for (let y = 0; y < H2; y++) for (let x = 0; x < W2; x++) {
+      const a = A[y * W2 + x]; if (a <= 0) continue;
+      let v = a * (0.7 * (1 - at(x + ux * w, y + uy * w)) + 0.3 * (1 - at(x + ux * w * 2.6, y + uy * w * 2.6)));
+      if (v <= 0.01) continue;
+      if (o.region) v *= o.region(x + M.x, y + M.y);
+      v *= 0.72 + 0.28 * (0.5 + 0.5 * n((x + M.x) / 21, (y + M.y) / 21));
+      const i = (y * W2 + x) * 4; dd[i] = color[0]; dd[i + 1] = color[1]; dd[i + 2] = color[2]; dd[i + 3] = clamp(v * k) * 255;
+    }
+    const c = mk(W2, H2); cx2(c).putImageData(im, 0, 0);
+    e.save(); e.globalCompositeOperation = 'lighter'; e.drawImage(c, M.x, M.y);
+    if (o.glow) { e.filter = `blur(${o.glow}px)`; e.globalAlpha = o.glowK || 0.6; e.drawImage(c, M.x, M.y); }
+    e.restore();
+  }
+  // a fracture splitting the rock open: a dark gap (base) that tapers upward, green light inside it (emissive)
+  function fracture(b, e, clip, pts, w) {
+    const S2 = spline(pts.map(([x, y], i) => [x, y, w * (1 - (i / (pts.length - 1)) * 0.85)]), 8), O = outline(S2);
+    b.save(); poly(b, clip); b.clip(); poly(b, O); b.fillStyle = col([3, 2, 8], 0.95); b.fill(); b.restore();
+    e.save(); poly(e, clip); e.clip();
+    e.filter = 'blur(7px)'; poly(e, O); e.fillStyle = col(GREEN, 0.55); e.fill(); e.lineWidth = 6; e.strokeStyle = col(GREEN, 0.35); e.stroke();
+    e.filter = 'none'; const O2 = outline(S2.map(p => ({ ...p, w: p.w * 0.35 }))); poly(e, O2); e.fillStyle = col([190, 255, 200], 0.95); e.fill();
+    e.restore();
+  }
+  const GREEN = [57, 255, 20], GREEN2 = [31, 191, 74], UP_OUTCROP = [0.18, -1]; // the outcrop's light in this layer comes from above
+
   function paintIsland(I, b, e, chk) {
-    const F = fall(I.fall), rw = riftW((I.xL + I.xR) / 2), R = rng(I.seed * 7 + 1);
-    const S = K.island({ xL: I.xL, xR: I.xR, top: I.top, tilt: I.tilt, thick: I.thick, seed: I.seed, lobes: I.lobes, droop: 0.08,
-      anchor: { x: F.x, y: F.y, nh: Math.max(14, F.s * 0.3), slope: I.anchorSlope || 1.3 } });
-    const yTop = Math.min(...S.top.map(p => p[1])), yBot = Math.max(...S.under.map(p => p[1]));
-    const corrupt = !!I.corrupt;
+    const F = I.fall != null ? fall(I.fall) : null, rw = riftW((I.xL + I.xR) / 2), R = rng(I.seed * 7 + 1), corrupt = !!I.corrupt;
+    const shapes = (I.parts || [I]).map(P => {
+      const withLip = F && P.anchor !== false;
+      let S = K.island({ xL: P.xL, xR: P.xR, top: P.top, tilt: P.tilt, thick: P.thick, seed: P.seed || I.seed, lobes: P.lobes, droop: P.droop == null ? 0.08 : P.droop, jag: P.jag,
+        anchor: withLip ? { x: F.x, y: F.y, nh: Math.max(14, F.s * 0.3), slope: P.anchorSlope || I.anchorSlope || 1.3 } : null });
+      if (I.shape === 'twin') S = twinShape(I, F, S);
+      if (I.shape === 'arch') S = archShape(I, F, S);
+      return S;
+    });
+    // top / underside lookups over every part (the higher top where parts overlap)
+    const topY = x => { let y = 1e9; for (const S of shapes) if (x >= S.top[0][0] - 0.5 && x <= S.top[S.top.length - 1][0] + 0.5) y = Math.min(y, S.topY(x)); return y < 1e9 ? y : shapes[0].topY(x); };
+    const yTop = Math.min(...shapes.map(S => Math.min(...S.top.map(p => p[1])))), yBot = Math.max(...shapes.map(S => Math.max(...S.under.map(p => p[1]))));
+    const polys = shapes.map(S => S.poly);
+    let spire = null;
+    if (I.needle) { const Nd = I.needle; spire = needle(Nd.x, topY(Nd.x) + 22, Nd.w, Nd.h, Nd.lean, I.seed + 90); polys.push(spire); }
+    const pal = corrupt ? { dark: [3, 2, 9], base: [56, 34, 78], soil: [38, 24, 52], moss: [50, 110, 64], mossRift: [50, 110, 64], rim: [190, 140, 180], key: [255, 206, 140], bounce: [90, 50, 130] }
+      : { dark: [6, 3, 18], base: [100, 58, 196], soil: [78, 42, 104], moss: rw > 0.5 ? [160, 80, 180] : [118, 96, 235], mossRift: [180, 70, 150], rim: [245, 212, 205], key: [255, 206, 140], bounce: [120, 80, 230] };
+    const veins = corrupt ? { th: 0.12, patch: 150, scale: 55, width: 0.03, alpha: 0.8, glow: 3, glowK: 0.8, color: () => GREEN, region: (X, Y, yn) => (X < 2975 ? 1 : 0.4) * smooth(0.12, 0.4, yn) } : null;
     const M = K.mass({
-      poly: S.poly, seed: I.seed, pad: 12, openTop: true, openTopMax: 70, bevel: 9, dome: 110, domeK: 0.8, bump: 4, bumpScale: 30, flutes: 10, facet: 120, facetTilt: 0.16, crackW: 1.5, crack: 0.12,
+      polys, poly: shapes[0].poly, seed: I.seed, pad: 12, openTop: true, openTopMax: 70, bevel: 9, dome: 110, domeK: 0.8, bump: 4, bumpScale: 30, flutes: 10, facet: corrupt ? 70 : 120, facetTilt: corrupt ? 0.3 : 0.16, crackW: 1.5, crack: corrupt ? 0.3 : 0.12,
       cyl: { cx: (I.xL + I.xR) / 2, hw: (I.xR - I.xL) / 2, k: 0.55, down: 0.5 },
-      strata: { period: 22, lw: 0.1, dark: 0.3, warp: 8, wl: 110, tilt: 0.03 },
-      pal: { dark: [6, 3, 18], base: [100, 58, 196], soil: [78, 42, 104], moss: rw > 0.5 ? [160, 80, 180] : [118, 96, 235], mossRift: [180, 70, 150], rim: [245, 212, 205], key: [255, 206, 140], bounce: [120, 80, 230] },
-      soil: 30, moss: 12, amb: 0.07, gamma: 1.5, rimW: 3, rimK: 1.0, keyK: 0.75, bounceK: 0.5, ao: 0.55, yTop, yBot, riftW: (X) => riftW(X), riftRimK: 0.7, ...WARM,
+      strata: { period: 22, lw: 0.1, dark: 0.3, warp: 8, wl: 110, tilt: 0.03 }, pal, veins,
+      soil: 30, moss: 12, amb: corrupt ? 0.05 : 0.07, gamma: 1.5, rimW: 3, rimK: corrupt ? 0.35 : 1.0, keyK: corrupt ? 0.32 : 0.75, bounceK: 0.5, ao: 0.55, yTop, yBot,
+      riftW: (X) => riftW(X), riftRimK: corrupt ? 0.2 : 0.7, ...WARM, ...(corrupt ? { warm: 0.4 } : {}),
     });
     b.drawImage(M.c, M.x, M.y); if (M.e) e.drawImage(M.e, M.x, M.y); chk.drawImage(M.c, M.x, M.y);
+    if (corrupt) {
+      // the outcrop's green light on every up-facing edge, the rift's crimson on the left-facing ones
+      dirRim(e, M, UP_OUTCROP, 4, GREEN, 0.95, { glow: 5, glowK: 0.7, seed: I.seed });
+      dirRim(e, M, [-1, -0.25], 3, [255, 46, 99], 0.5, { glow: 3, glowK: 0.5, seed: I.seed + 1 });
+    }
+    if (I.shape === 'arch') { // the fall's light on the arch intrados
+      const nh = Math.max(14, F.s * 0.3), c2 = fallCol(F.x, false);
+      e.save(); poly(e, shapes[0].poly); e.clip(); e.filter = 'blur(6px)'; e.strokeStyle = col(c2, 0.55); e.lineWidth = 9; e.beginPath();
+      for (let d = -92; d <= 92; d += 2) { const x = F.x + d, y = Math.abs(d) <= nh ? F.y : F.y + 128 * (1 - Math.sqrt(1 - (d / 92) * (d / 92))); d === -92 ? e.moveTo(x, y + 60) : e.lineTo(x, y); }
+      e.lineTo(F.x + 92, F.y + 190); e.stroke(); e.restore();
+    }
+    if (I.shape === 'twin') { // light leaking up the crack from the lip
+      const XC = I.crack; e.save(); e.filter = 'blur(4px)';
+      const g = e.createLinearGradient(0, topY(XC - 30), 0, F.y); g.addColorStop(0, col([205, 180, 255], 0)); g.addColorStop(0.5, col([205, 180, 255], 0.35)); g.addColorStop(1, col([222, 204, 255], 0.6));
+      e.strokeStyle = g; e.lineWidth = 4; e.beginPath(); e.moveTo(XC, shapes[0].topY(XC) - 4); e.lineTo(XC - 2, (shapes[0].topY(XC) + F.y) / 2); e.lineTo(F.x, F.y); e.stroke(); e.restore();
+    }
     // crystal seams spreading up from the lip into the rock: the light comes from inside the island
-    const sc = corrupt ? [57, 255, 20] : mixc([200, 130, 255], [255, 60, 110], rw);
-    K.seams(b, e, S.poly, F.x, F.y - 6, { seed: I.seed + 77, n: 3, dir: -Math.PI / 2, fan: 1.6, len: (F.y - S.topY(F.x)) * 0.55, w: 1.6, color: sc, glow: 3, a: 0.7, branch: 0.06 });
-    if (corrupt) K.seams(b, e, S.poly, I.xL + (I.xR - I.xL) * 0.75, yBot - 30, { seed: I.seed + 78, n: 3, dir: -Math.PI / 2, fan: 1.6, len: 120, w: 1.8, color: [255, 46, 99], glow: 4 });
+    if (F) {
+      const sc = corrupt ? GREEN : mixc([200, 130, 255], [255, 60, 110], rw), shapeL = shapes.find(S => F.x >= S.top[0][0] && F.x <= S.top[S.top.length - 1][0]) || shapes[0];
+      K.seams(b, e, shapeL.poly, F.x, F.y - 6, { seed: I.seed + 77, n: 3, dir: -Math.PI / 2, fan: 1.6, len: (F.y - shapeL.topY(F.x)) * 0.55, w: 1.6, color: sc, glow: 3, a: 0.7, branch: 0.06 });
+    }
+    if (corrupt) {
+      const S1 = shapes[0], yb1 = Math.max(...S1.under.map(p => p[1]));
+      fracture(b, e, S1.poly, [[2833, 1528], [2826, 1490], [2838, 1458], [2818, 1420], [2826, 1392], [2808, 1356], [2814, 1330]], 6);
+      K.seams(b, e, shapes[1].poly, 3170, 1400, { seed: I.seed + 79, n: 3, dir: -Math.PI / 2, fan: 1.6, len: 120, w: 1.6, color: [255, 46, 99], glow: 4 });
+    }
     // hanging roots and vines from the underside (never across the fall)
-    const under = S.under.filter(p => Math.abs(p[0] - F.x) > F.s * 1.1 && p[1] - S.topY(p[0]) > I.thick * 0.9);
+    const under = [].concat(...shapes.map(S => S.under.filter(p => (!F || Math.abs(p[0] - F.x) > F.s * 1.1) && p[1] - S.topY(p[0]) > (I.thick || 40) * 0.9)));
     for (let k = 0; k < I.roots; k++) {
       const p = under[Math.floor(R() * under.length)]; if (!p) break;
-      const depth = p[1] - S.topY(p[0]), len = 24 + R() * (30 + depth * 0.8), wd = 2 + R() * 3.5;
-      const bulb = R() < 0.3 ? (corrupt ? [57, 255, 20] : mixc([120, 220, 255], [255, 80, 130], rw)) : null;
-      const ro = { twigs: R() < 0.5 ? 1 : 0, bulb, color: [12, 7, 26], rim: mixc([170, 140, 255], [255, 90, 130], rw * 0.6) };
+      const depth = p[1] - topY(p[0]), len = 24 + R() * (30 + depth * 0.8), wd = 2 + R() * 3.5;
+      const bulb = R() < (corrupt ? 0.45 : 0.3) ? (corrupt ? GREEN : mixc([120, 220, 255], [255, 80, 130], rw)) : null;
+      const ro = { twigs: R() < 0.5 ? 1 : 0, bulb, color: [12, 7, 26], rim: corrupt ? [120, 255, 150] : mixc([170, 140, 255], [255, 90, 130], rw * 0.6) };
       K.root(b, e, p[0], p[1] - 5, len, wd, I.seed * 31 + k, ro); K.root(chk, null, p[0], p[1] - 5, len, wd, I.seed * 31 + k, ro);
-      if (R() < 0.3) { const q = under[Math.floor(R() * under.length)]; K.vine(b, e, q[0], q[1] - 4, 50 + R() * 90, I.seed * 57 + k, { w: 1.5, leafLen: 8, leaf: [30, 18, 60], bud: R() < 0.5 ? (rw > 0.5 ? [255, 90, 150] : [150, 230, 255]) : null }); }
+      if (R() < 0.3) { const q = under[Math.floor(R() * under.length)]; K.vine(b, e, q[0], q[1] - 4, 50 + R() * 90, I.seed * 57 + k, { w: 1.5, leafLen: 8, leaf: [30, 18, 60], bud: R() < 0.5 ? (corrupt ? GREEN : rw > 0.5 ? [255, 90, 150] : [150, 230, 255]) : null }); }
     }
     // small crystals flanking the lip (the light's source), angled away from the fall
-    const fc = corrupt ? [110, 255, 140] : mixc([200, 160, 255], [255, 90, 150], rw);
-    for (const side of [-1, 1]) for (let k = 0; k < 2; k++) {
-      const x = F.x + side * (F.s * (0.42 + k * 0.28) + R() * 6), y = S.underY(x) - 4;
-      K.crystal(b, e, x, y, 10 + R() * 16 - k * 3, 4 + R() * 3, Math.PI + side * (0.35 + R() * 0.3), fc, 1, 0.8);
-    }
-    // top: grass, flowers, glowing moss line, crystals, tiny trees
-    const topPts = S.top.slice(2, -2);
-    for (const [x, n, size, c] of I.crystals) K.crystals(b, e, x, S.topY(x) + 5, n, size, c, I.seed * 13 + x, { glow: 0.75, fan: corrupt ? 1.4 : 0.9 });
-    for (const [x, h, kind] of I.trees) {
-      const glow = corrupt ? [[57, 255, 20]] : rw > 0.5 ? [[255, 80, 130], [255, 150, 90]] : [[255, 201, 60], [95, 224, 255], [255, 120, 200]];
-      K.tree(b, e, x, S.topY(x) + 3, h, I.seed * 17 + x, { kind, bark: [18, 10, 36], leaf: [40, 26, 84], rim: rw > 0.5 ? [255, 150, 190] : [205, 180, 255], glow });
-    }
-    K.grass(b, e, topPts, I.seed + 5, { density: 1.8, h: 12, color: [50, 32, 100], moss: rw > 0.5 ? [230, 100, 170] : [160, 140, 255], flowers: Math.round((I.xR - I.xL) / 55),
-      flowerCols: corrupt ? [[57, 255, 20], [255, 46, 99]] : rw > 0.5 ? [[255, 80, 140], [255, 150, 90], [232, 70, 190]] : [[255, 120, 200], [120, 230, 255], [255, 220, 120], [190, 140, 255]],
-      mossLine: rw > 0.5 ? [255, 110, 170] : [175, 150, 255], mossA: 0.8, mossDy: 5 });
-    // corrupted green glitch shards on G: hard slabs with an RGB-split edge, plus scanline glitches
-    if (corrupt) {
-      for (let k = 0; k < 6; k++) {
-        const x = I.xL + 80 + R() * (I.xR - I.xL - 160), y = S.topY(x) + 4, h = 34 + R() * 70, w = 9 + R() * 12, a = (R() - 0.5) * 0.6;
-        const sh = [[-w / 2, 0], [-w / 2, -h * 0.78], [0, -h], [w / 2, -h * 0.7], [w / 2, 0]];
-        b.save(); b.translate(x, y); b.rotate(a);
-        b.save(); b.translate(3, 0); poly(b, sh); b.fillStyle = col([255, 46, 99], 0.5); b.fill(); b.restore();
-        b.save(); b.translate(-3, 0); poly(b, sh); b.fillStyle = col([60, 220, 255], 0.35); b.fill(); b.restore();
-        poly(b, sh); const g = b.createLinearGradient(0, 0, 0, -h); g.addColorStop(0, col([10, 60, 30])); g.addColorStop(1, col([90, 255, 120])); b.fillStyle = g; b.fill();
-        b.restore();
-        e.save(); e.translate(x, y); e.rotate(a); poly(e, sh); e.fillStyle = col([57, 255, 20], 0.3); e.fill(); e.restore();
-        blob(e, x, y - h * 0.6, h * 0.55, [57, 255, 20], 0.16);
+    if (F) {
+      const fc = corrupt ? [110, 255, 140] : mixc([200, 160, 255], [255, 90, 150], rw);
+      const uY = x => { let y = -1e9; for (const S of shapes) if (x >= S.under[S.under.length - 1][0] && x <= S.under[0][0]) y = Math.max(y, S.underY(x)); return y; };
+      for (const side of [-1, 1]) for (let k = 0; k < 2; k++) {
+        const x = F.x + side * (F.s * (0.42 + k * 0.28) + R() * 6), y = uY(x) - 4;
+        if (y < -1e8) continue;
+        K.crystal(b, e, x, y, 10 + R() * 16 - k * 3, 4 + R() * 3, Math.PI + side * (0.35 + R() * 0.3), fc, 1, 0.8);
       }
-      for (let k = 0; k < 6; k++) { const y = yTop + 20 + R() * (yBot - yTop) * 0.6, x = I.xL + R() * (I.xR - I.xL) * 0.8; e.fillStyle = col(R() < 0.6 ? [57, 255, 20] : [255, 46, 99], 0.3); e.fillRect(x, y, 30 + R() * 80, 1.5 + R() * 2.5); }
     }
-    // floating debris around the island
-    for (let k = 0; k < 5; k++) {
-      const side = R() < 0.5 ? -1 : 1, x = (side < 0 ? I.xL : I.xR) + side * (10 + R() * 100), y = I.top + 60 + R() * (yBot - I.top) * 0.8, sz = 8 + R() * 26;
+    // top: ruin, grass, flowers, glowing moss line, crystals, tiny trees
+    if (I.ruin) ruin(b, e, chk, shapes[0], I);
+    for (const [x, n, size, c] of I.crystals) K.crystals(b, e, x, topY(x) + 5, n, size, c, I.seed * 13 + x, { glow: corrupt ? 0.95 : 0.75, fan: corrupt ? 1.4 : 0.9 });
+    for (const [x, h, kind, lean] of I.trees) {
+      const glow = corrupt ? [GREEN] : rw > 0.5 ? [[255, 80, 130], [255, 150, 90]] : [[255, 201, 60], [95, 224, 255], [255, 120, 200]];
+      for (const q of [b, e]) { q.save(); if (lean) { q.translate(x, topY(x) + 3); q.rotate(lean); q.translate(-x, -topY(x) - 3); } }
+      K.tree(b, e, x, topY(x) + 3, h, I.seed * 17 + x, { kind, bark: [18, 10, 36], leaf: [40, 26, 84], rim: rw > 0.5 ? [255, 150, 190] : [205, 180, 255], glow });
+      b.restore(); e.restore();
+    }
+    for (const S of shapes) {
+      const topPts = S.top.slice(2, -2).filter(p => !I.crack || Math.abs(p[0] - I.crack) > 18);
+      K.grass(b, e, topPts, I.seed + 5, { density: 1.8, h: 12, color: corrupt ? [34, 26, 50] : [50, 32, 100], moss: corrupt ? [90, 200, 110] : rw > 0.5 ? [230, 100, 170] : [160, 140, 255], flowers: Math.round((S.top[S.top.length - 1][0] - S.top[0][0]) / 55),
+        flowerCols: corrupt ? [GREEN, [255, 46, 99]] : rw > 0.5 ? [[255, 80, 140], [255, 150, 90], [232, 70, 190]] : [[255, 120, 200], [120, 230, 255], [255, 220, 120], [190, 140, 255]],
+        mossLine: corrupt ? [120, 255, 150] : rw > 0.5 ? [255, 110, 170] : [175, 150, 255], mossA: 0.8, mossDy: 5 });
+    }
+    if (corrupt) paintCorrupt(I, b, e, chk, shapes, topY, R);
+    // floating debris around the island (the corrupted one has its own torn-off fragments)
+    if (!corrupt) for (let k = 0; k < 5; k++) {
+      const side = R() < 0.5 ? -1 : 1, x = (side < 0 ? I.xL : I.xR) + side * (10 + R() * 100), y = yTop + 60 + R() * (yBot - yTop) * 0.8, sz = 8 + R() * 26;
+      if (CFG.hard.some(z => K.inEllipse(x, y, z, sz + 16))) continue; // debris never drifts into a keep-clear zone
       const P = K.rock({ cx: x, cy: y, w: sz * 1.3, h: sz, seed: I.seed * 3 + k, corners: 7, taper: 0.5, jitter: 0.3 });
       const m = K.mass({ poly: P, seed: I.seed * 3 + k, pad: 6, bevel: 4, dome: sz * 0.5, domeK: 0.8, bump: 2, facet: 12, facetTilt: 0.4, pal: { dark: [8, 4, 20], base: [92, 64, 160], rim: [225, 200, 255] }, amb: 0.1, rimW: 2, rimK: 0.9, riftW: X => riftW(X), ...WARM, warmW: 2 });
       b.drawImage(m.c, m.x, m.y); if (m.e) e.drawImage(m.e, m.x, m.y); chk.drawImage(m.c, m.x, m.y);
     }
-    return S;
+    return shapes[0];
+  }
+
+  // G's corruption: green glitch shards (hard slabs with an RGB-split edge) rising from cracks, rock torn off the top
+  // and lifted toward the outcrop, a few scanline glitches, and the light those crystals throw into the air around them
+  function paintCorrupt(I, b, e, chk, shapes, topY, R) {
+    const S1 = shapes[0];
+    for (const [x, y, s, a] of I.fragments) {
+      const P = rot(K.rock({ cx: x, cy: y, w: s * 1.6, h: s, seed: I.seed * 5 + x, corners: 6, taper: 0.25, flat: 0.3, jitter: 0.35, spike: [s * 0.1, s * 0.55] }), x, y, a);
+      const m = K.mass({ poly: P, seed: I.seed * 5 + x, pad: 8, bevel: 4, dome: s * 0.5, domeK: 0.8, bump: 2, facet: 14, facetTilt: 0.45, crack: 0.3,
+        pal: { dark: [5, 3, 12], base: [70, 42, 100], rim: [200, 150, 190] }, amb: 0.06, rimW: 2, rimK: 0.4, riftW: X => riftW(X), riftRimK: 0.2, warm: 0.4, warmW: 2 });
+      b.drawImage(m.c, m.x, m.y); if (m.e) e.drawImage(m.e, m.x, m.y); chk.drawImage(m.c, m.x, m.y);
+      dirRim(e, m, UP_OUTCROP, 3, GREEN, 1, { glow: 4, glowK: 0.8, seed: x });
+      blob(e, x, y + s * 0.2, s * 0.9, GREEN, 0.1);
+      // the torn underside still glows where it broke away
+      e.save(); e.filter = 'blur(2px)'; e.strokeStyle = col([150, 255, 170], 0.7); e.lineWidth = 1.6; e.beginPath(); e.moveTo(x - s * 0.5, y + s * 0.25); e.lineTo(x - s * 0.1, y + s * 0.45); e.lineTo(x + s * 0.35, y + s * 0.3); e.stroke(); e.restore();
+    }
+    // glitch shards on G1 and on the step
+    const xs = [2632, 2718, 2756, 2860, 2934, 2958];
+    xs.forEach((x, k) => {
+      const y = topY(x) + 4, h = (k === 4 ? 70 : 30 + R() * 46), w = 8 + R() * 10, a = (R() - 0.5) * 0.5 + (k === 4 ? -0.25 : 0);
+      const sh = [[-w / 2, 0], [-w / 2, -h * 0.78], [0, -h], [w / 2, -h * 0.7], [w / 2, 0]];
+      b.save(); b.translate(x, y); b.rotate(a);
+      b.save(); b.translate(2.5, 0); poly(b, sh); b.fillStyle = col([255, 46, 99], 0.45); b.fill(); b.restore();
+      b.save(); b.translate(-2.5, 0); poly(b, sh); b.fillStyle = col([60, 220, 255], 0.3); b.fill(); b.restore();
+      poly(b, sh); const g = b.createLinearGradient(0, 0, 0, -h); g.addColorStop(0, col([6, 40, 20])); g.addColorStop(1, col([80, 240, 110])); b.fillStyle = g; b.fill();
+      b.restore();
+      e.save(); e.translate(x, y); e.rotate(a); poly(e, sh); e.fillStyle = col(GREEN, 0.28); e.fill();
+      e.strokeStyle = col([200, 255, 210], 0.8); e.lineWidth = 1.2; e.beginPath(); e.moveTo(-w / 2, -h * 0.78); e.lineTo(0, -h); e.stroke(); e.restore();
+      blob(e, x, y - h * 0.55, h * 0.6, GREEN, 0.12);
+    });
+    // scanline glitches across the corrupted mass
+    const yb1 = Math.max(...S1.under.map(p => p[1]));
+    for (let k = 0; k < 4; k++) { const y = S1.topY(2780) + 10 + R() * (yb1 - S1.topY(2780)) * 0.7, x = 2610 + R() * 300; e.fillStyle = col(R() < 0.65 ? GREEN : [255, 46, 99], 0.28); e.fillRect(x, y, 26 + R() * 70, 1.5 + R() * 2); }
+    // the crystals' light in the air over the island (small and local: the rock itself stays dark)
+    blob(e, 2792, topY(2792) - 34, 120, GREEN, 0.07);
   }
 
   LAYERS.mid = async function () {

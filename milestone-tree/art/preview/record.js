@@ -201,7 +201,10 @@ async function recordFrames(browser, base, o) {
   const done = new Promise((res, rej) => { enc.on('error', rej); enc.on('close', c => (c ? rej(new Error('ffmpeg exit ' + c)) : res())); });
   let encErr = null; done.catch(e => { encErr = e; });   // an encoder failure stops the drawing at the next frame
   enc.stdin.on('error', () => {});   // EPIPE if ffmpeg dies: reported through `done`
-  const drained = () => new Promise(r => { enc.stdin.once('drain', r); enc.once('close', r); });   // never waits on a dead encoder
+  const drained = () => new Promise(r => {   // never waits on a dead encoder; both listeners go when either fires
+    const go = () => { enc.stdin.off('drain', go); enc.off('close', go); r(); };
+    enc.stdin.once('drain', go); enc.once('close', go);
+  });
   const still = new Map(STILLS.map(([name, t]) => [Math.round(pathTime(t, o) * o.fps), name]));
   const t0 = Date.now(), ready = new Map(), workers = [];
   let next = 0, drawn = 0;
