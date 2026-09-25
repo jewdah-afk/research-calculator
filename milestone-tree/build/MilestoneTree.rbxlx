@@ -9699,7 +9699,6 @@ return {
 
 	-- remote limits per player
 	ACTIONS_PER_SECOND = 40,
-	IMPORT_COOLDOWN = 10, -- seconds; also the ImportCooldown attribute on the remotes folder, for the client's ring
 
 	-- device options (the Prefs remote): at most one change applied per PREFS_INTERVAL, saved PREFS_SAVE_DELAY
 	-- seconds after the last change
@@ -28091,7 +28090,7 @@ rbx_optionsTab = function(this)
 	cc = JS.m(CCTP_SETTINGS, "indexOf", options.changeCorruptTooltipPlace)
 	saving = JS.O({
 		t = "row",
-		c = JS.A(5, rbx_opt(nil, "Save", "Save current progress", JS.A(2, "opt", "save"), "Save"), rbx_opt(nil, "Hard Reset", "Reset current progress (press twice)", JS.A(2, "opt", "hardReset"), "Hard Reset"), rbx_opt(nil, "Export save", "Show a save string you can copy", JS.A(2, "opt", "export"), "Export save"), rbx_opt(nil, "Import a save", "Paste a save string (web saves work too)", JS.A(2, "opt", "import"), "Import a save"), rbx_opt(nil, (("Offline Production - [ " .. JS.str((if JS.t(options.offlineProd) then "ON" else "OFF"))) .. " ]"), "Produce resources when not in game", JS.A(2, "opt", "offlineProd"), "Offline Production", (if JS.t(options.offlineProd) then "ON" else "OFF"), JS.NULL, JS.NULL, (if JS.t(options.offlineProd) then true else false)))
+		c = JS.A(2, rbx_opt(nil, "Save", "Save now (the game also saves automatically)", JS.A(2, "opt", "save"), "Save"), rbx_opt(nil, (("Offline Production - [ " .. JS.str((if JS.t(options.offlineProd) then "ON" else "OFF"))) .. " ]"), "Produce resources when not in game", JS.A(2, "opt", "offlineProd"), "Offline Production", (if JS.t(options.offlineProd) then "ON" else "OFF"), JS.NULL, JS.NULL, (if JS.t(options.offlineProd) then true else false)))
 	}, {"t", "c"})
 	displays = JS.O({
 		t = "row",
@@ -30779,11 +30778,9 @@ end
 	Remotes (ReplicatedStorage.MilestoneTreeRemotes):
 	  View    server -> client   screen patches (see Session:view)
 	  Act     client -> server   (action, hold?) a button on the screen, or { "key", name } for a hotkey
-	  Import  client -> server   (text) a pasted save string
 	  Ready   client -> server   the client wants the whole screen (first load, UI rebuilt, out of sync)
 	  Prefs   client -> server   { motion, detail, labels, size } the device options; mirrored as JSON in the
 	                             player's MT_Prefs attribute and saved apart from the game (Store.savePrefs)
-	The folder's ImportCooldown attribute is Config.IMPORT_COOLDOWN (seconds between imports).
 ]]
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
@@ -30804,10 +30801,8 @@ local function remote(name: string): RemoteEvent
 end
 local viewRemote = remote("View")
 local actRemote = remote("Act")
-local importRemote = remote("Import")
 local readyRemote = remote("Ready")
 local prefsRemote = remote("Prefs")
-remotes:SetAttribute("ImportCooldown", Config.IMPORT_COOLDOWN)
 remotes.Parent = ReplicatedStorage
 
 local sessionsFolder = Instance.new("Folder")
@@ -30818,7 +30813,7 @@ local template = ServerStorage:WaitForChild("MilestoneTreeWorker") :: Actor
 
 type Prefs = { motion: string, detail: string, labels: string, size: number }
 type Entry = {
-	actor: Actor, tokens: number, last: number, lastImport: number,
+	actor: Actor, tokens: number, last: number,
 	prefsAt: number, prefsPending: Prefs?, prefsSet: boolean, prefsDirty: boolean, prefsSaveAt: number,
 }
 local entries: { [Player]: Entry } = {}
@@ -30896,7 +30891,7 @@ local function start(player: Player)
 	a.Name = "Player_" .. player.UserId
 	a.Parent = sessionsFolder
 	local entry: Entry = {
-		actor = a, tokens = Config.ACTIONS_PER_SECOND, last = os.clock(), lastImport = 0,
+		actor = a, tokens = Config.ACTIONS_PER_SECOND, last = os.clock(),
 		prefsAt = 0, prefsPending = nil, prefsSet = false, prefsDirty = false, prefsSaveAt = 0,
 	}
 	entries[player] = entry
@@ -30963,14 +30958,6 @@ actRemote.OnServerEvent:Connect(function(player: Player, a: any, hold: any)
 	local entry = entries[player]
 	if not entry or not validAction(a) or not allow(entry) then return end
 	entry.actor:SendMessage("act", a, hold == true)
-end)
-
-importRemote.OnServerEvent:Connect(function(player: Player, text: any)
-	local entry = entries[player]
-	if not entry or type(text) ~= "string" or #text > 3000000 then return end
-	if os.clock() - entry.lastImport < Config.IMPORT_COOLDOWN then return end
-	entry.lastImport = os.clock()
-	entry.actor:SendMessage("import", text)
 end)
 
 prefsRemote.OnServerEvent:Connect(function(player: Player, p: any)
@@ -32729,50 +32716,13 @@ end
 
 	A view patch is { set = { [id] = node }, del = { id... }, tab = name, tabStyle = css, keys = { hotkey... },
 	ended = bool, full = true on the first patch } plus, once each when they happen: pop = { popup... },
-	notice = { text... }, export = text, askImport = true, imp = { ok, msg } (the last import), save = "saving" |
-	"saved" (set by the Worker). Nodes are the view builder's (rbx/view.js) flattened: a container's c lists its
+	notice = { text... }, save = "saving" | "saved" (set by the Worker). Nodes are the view builder's (rbx/view.js) flattened: a container's c lists its
 	children's ids; ids are paths ("tab.3.1"). The roots are "map" (the realm map: 21 layer nodes then the gate, so
 	"map.N" never moves), "hud" and "tab" (the open panel; tab = "none" while the map is alone).
 ]]
 
 local Session = {}
 Session.__index = Session
-
-local B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-local B64INV = {}
-for i = 1, 64 do B64INV[string.byte(B64, i)] = i - 1 end
-
-local function b64encode(s: string): string
-	local out = table.create(math.ceil(#s / 3) * 4)
-	for i = 1, #s, 3 do
-		local a, b, c = string.byte(s, i, i + 2)
-		local n = a * 65536 + (b or 0) * 256 + (c or 0)
-		local c1, c2, c3, c4 = bit32.extract(n, 18, 6), bit32.extract(n, 12, 6), bit32.extract(n, 6, 6), bit32.extract(n, 0, 6)
-		table.insert(out, string.sub(B64, c1 + 1, c1 + 1) .. string.sub(B64, c2 + 1, c2 + 1)
-			.. (if b then string.sub(B64, c3 + 1, c3 + 1) else "=") .. (if c then string.sub(B64, c4 + 1, c4 + 1) else "="))
-	end
-	return table.concat(out)
-end
-local function b64decode(s: string): string?
-	s = string.gsub(s, "[^%w%+/=]", "")
-	local out = {}
-	local bits, nbits = 0, 0
-	for i = 1, #s do
-		local ch = string.byte(s, i)
-		if ch == 61 then break end -- "="
-		local v = B64INV[ch]
-		if v == nil then return nil end
-		bits = bit32.bor(bit32.lshift(bits, 6), v)
-		nbits += 6
-		if nbits >= 8 then
-			nbits -= 8
-			table.insert(out, string.char(bit32.band(bit32.rshift(bits, nbits), 255)))
-		end
-		bits = bit32.band(bits, 0xFFFF)
-	end
-	return table.concat(out)
-end
-Session.b64encode, Session.b64decode = b64encode, b64decode
 
 -- JS value -> plain Luau (1-based arrays, string keys) that RemoteEvents carry
 local function plain(JS, x)
@@ -32865,10 +32815,7 @@ function Session.new(deps, saveJson: string?, optionsJson: string?, nowMs: numbe
 	self.allowed = {}       -- action key -> true, for what is on screen
 	self.lastPopup = 0
 	self.errors = 0
-	self.notices = {}       -- messages for the player (import failed, NaN recovered...)
-	self.hardResetArmed = 0
-	self.armNotice = nil    -- "press Hard Reset again", held back so that a quick second press never shows it
-	self.importResult = nil -- { ok, msg } of the last import, sent once
+	self.notices = {}       -- messages for the player (NaN recovered...)
 	self.saveEvent = nil    -- "saving" / "saved", set by the Worker, sent once
 	self:_start(saveJson, optionsJson, nowMs)
 	self.goodSave, self.goodOptions = self:save()
@@ -32959,68 +32906,17 @@ function Session:_option(name: string, nowMs: number): (boolean, string?)
 		self.wantSave = true
 		table.insert(self.notices, "Game saved.")
 		return true
-	elseif name == "hardReset" or name == "playAgain" then
-		if name == "hardReset" and nowMs - self.hardResetArmed > 5000 then
-			self.hardResetArmed = nowMs
-			self.armNotice = "Press Hard Reset again within 5 seconds to wipe your progress."
-			return true
-		end
-		self.hardResetArmed = 0
-		self.armNotice = nil
+	elseif name == "playAgain" then
+		-- the end screen's Play Again: a fresh game, the options kept (saves live in Roblox, so there is no
+		-- export, import or hard reset)
 		local _, opts = self:save()
 		self:_start(nil, opts, nowMs)
 		self.goodSave, self.goodOptions = self:save()
 		self.wantSave = true
-		table.insert(self.notices, "Your progress was reset.")
-		return true
-	elseif name == "export" then
-		self.exportText = self:export()
-		return true
-	elseif name == "import" then
-		self.wantImport = true
 		return true
 	end
 	local ok, err = pcall(self.ENV.rbx_do, nil, toJS(self.JS, { "opt", name }))
 	return ok, if ok then nil else tostring(err)
-end
-
--- the web game's export string: base64 of the player JSON (its Import accepts it back)
-function Session:export(): string?
-	local s = self:save()
-	if s == nil then return nil end
-	return b64encode(s)
-end
-
--- a save string from the web game (Export, or the localStorage value) or from export(); JSON works too. The result
--- is also sent once as patch.imp = { ok, msg }.
-function Session:import(text: string, nowMs: number): (boolean, string?)
-	local ok, msg = self:_import(text, nowMs)
-	self.importResult = { ok = ok, msg = msg or "Save imported." }
-	return ok, msg
-end
-
-function Session:_import(text: string, nowMs: number): (boolean, string?)
-	if type(text) ~= "string" or #text < 2 or #text > 3000000 then return false, "That is not a save." end
-	text = string.gsub(text, "^%s+", "")
-	text = string.gsub(text, "%s+$", "")
-	local json = if string.sub(text, 1, 1) == "{" then text else b64decode(text)
-	if json == nil or string.sub(json, 1, 1) ~= "{" then return false, "That is not a save." end
-	local okParse, parsed = pcall(self.JS.G.JSON.parse, json)
-	if not okParse or type(parsed) ~= "table" or parsed.points == nil then return false, "That is not a save for this game." end
-	local oldSave, oldOpts = self:save()
-	local ok, err = pcall(self._start, self, json, oldOpts, nowMs)
-	if ok then
-		ok, err = pcall(self.tick, self, nowMs)
-		if ok and self.ENV.NaNalert then ok, err = false, "the save holds invalid values" end
-	end
-	if not ok then
-		self:_start(oldSave, oldOpts, nowMs)
-		return false, "That save could not be loaded (" .. tostring(err) .. ")."
-	end
-	self.goodSave, self.goodOptions = self:save()
-	self.wantSave = true
-	table.insert(self.notices, "Save imported.")
-	return true
 end
 
 -- ------------------------------------------------------------------------------------------------------------ saves
@@ -33086,30 +32982,13 @@ function Session:view(): any
 		for _, pp in list do self.lastPopup = math.max(self.lastPopup, (pp.id or 0) + 1) end
 		patch.pop = list
 	end
-	-- the hard-reset arm notice waits half a second: a second press before then resets without it
-	if self.armNotice and self.hardResetArmed ~= 0 and (self.JS.NOW or 0) - self.hardResetArmed >= 500 then
-		table.insert(self.notices, self.armNotice)
-		self.armNotice = nil
-	end
 	if #self.notices > 0 then
 		patch.notice = self.notices
 		self.notices = {}
 	end
-	if self.importResult then
-		patch.imp = self.importResult
-		self.importResult = nil
-	end
 	if self.saveEvent then
 		patch.save = self.saveEvent
 		self.saveEvent = nil
-	end
-	if self.exportText then
-		patch.export = self.exportText
-		self.exportText = nil
-	end
-	if self.wantImport then
-		patch.askImport = true
-		self.wantImport = nil
 	end
 	return patch, any
 end
@@ -33282,7 +33161,6 @@ return Store
 	Main clones this Actor into ServerScriptService.MilestoneTree.Sessions for each player and sends it messages:
 	  "start" (player)            load the save, start the game
 	  "act"   (action, hold)      a button press / hotkey from the player's screen
-	  "import"(text)              a pasted save
 	  "resync"                    the client wants the whole screen again
 	  "stop"                      save, release the save lock, then set the Actor's Stopped attribute
 	The game ticks in the parallel phase; sending to the client and DataStore calls happen in the serial phase.
@@ -33423,13 +33301,6 @@ actor:BindToMessageParallel("act", function(a, hold)
 	if ok then pushNow = true end
 end)
 
-actor:BindToMessageParallel("import", function(text)
-	if not session or stopping then return end
-	local ok, why = session:import(text, nowMs())
-	if not ok then table.insert(session.notices, why) end
-	pushNow = true
-end)
-
 actor:BindToMessageParallel("resync", function()
 	if not session then return end
 	session:resetView()
@@ -33469,7 +33340,7 @@ RunService.Heartbeat:ConnectParallel(function(dt: number)
 		if not canSave then patch.unsaved = true end
 	end
 	task.synchronize()
-	if patch and (changed or patch.pop or patch.notice or patch.export or patch.askImport or patch.imp or patch.save or patch.full
+	if patch and (changed or patch.pop or patch.notice or patch.save or patch.full
 		or sinceSent >= Config.KEEPALIVE) then
 		sinceSent = 0
 		send(patch)
@@ -33652,10 +33523,8 @@ function App.start()
 	local store = ViewStore.new()
 
 	-- ------------------------------------------------------------------------------------------ state
-	local remotes: Instance? = nil
 	local actRemote: RemoteEvent? = nil
 	local readyRemote: RemoteEvent? = nil
-	local importRemote: RemoteEvent? = nil
 	local lastMs: MapState? = nil
 	local gotFirst = false -- the first full view arrived
 	local firstAt = 0
@@ -33685,13 +33554,6 @@ function App.start()
 		r:FireServer(a, hold == true)
 	end
 	local lastPress = 0
-	local resetFlashAt = -math.huge
-	local function exportAction(): any
-		for _, n in store.nodes do
-			if type(n) == "table" and n.k == "opt" and n.id == "export" and type(n.a) == "table" then return n.a end
-		end
-		return nil
-	end
 	local function resync()
 		local r = readyRemote
 		if r then r:FireServer() end
@@ -33864,11 +33726,6 @@ function App.start()
 			else
 				openLayer(a[2])
 			end
-			return
-		end
-		if a[1] == "opt" and a[2] == "hardReset" then
-			-- the confirm modal fires it twice after a 2 s hold (DESIGN.md 7.7)
-			overlay:modal("hardReset", { action = a, export = exportAction() })
 			return
 		end
 		if hold ~= true then
@@ -34115,19 +33972,11 @@ function App.start()
 	end)
 
 	overlay.act:Connect(function(a: any, hold: boolean?)
-		if type(a) == "table" and a[1] == "opt" and a[2] == "hardReset" and os.clock() - resetFlashAt > 1 then
-			resetFlashAt = os.clock()
-			overlay:flash(Theme.C.danger)
-		end
 		fire(a, hold)
 	end)
 	overlay.flyTo:Connect(flyToLayer)
 	overlay.openLayer:Connect(function(layer: string) openLayer(layer) end)
 	overlay.peekClosed:Connect(function() nodes:setPeek(nil) end)
-	overlay.importText:Connect(function(t: string)
-		local r = importRemote
-		if r then r:FireServer(t) end
-	end)
 	overlay.resync:Connect(resync)
 
 	Prefs.changed:Connect(function(key: string)
@@ -34211,23 +34060,9 @@ function App.start()
 			end
 			wasInside = ms.inside
 		end
-		-- toasts (an import's own failure shows in the modal, not twice)
+		-- toasts
 		local notices = patch.notice
-		local imp = patch.imp
-		if type(imp) == "table" and type(notices) == "table" then
-			local kept = {}
-			for _, t in notices do
-				if t ~= imp.msg then table.insert(kept, t) end
-			end
-			notices = kept
-		end
 		if patch.pop or (notices and #notices > 0) then overlay:toasts(patch.pop, notices) end
-		if type(patch.export) == "string" then overlay:modal("export", patch.export) end
-		if patch.askImport then
-			local cd = if remotes then remotes:GetAttribute("ImportCooldown") else nil
-			overlay:modal("import", { cooldown = if type(cd) == "number" then cd else 10 })
-		end
-		if type(imp) == "table" then overlay:importResult(imp) end
 		onStatus(patch)
 	end
 	local function onError(err: any)
@@ -34318,12 +34153,10 @@ function App.start()
 		found = ReplicatedStorage:WaitForChild("MilestoneTreeRemotes", 10)
 		if found == nil and screenKind == "loading" then overlay:screen("loading", "Waiting for the server…") end
 	end
-	remotes = found
 	local folder = found :: Instance
 	local viewRemote = folder:WaitForChild("View") :: RemoteEvent
 	actRemote = folder:WaitForChild("Act") :: RemoteEvent
 	readyRemote = folder:WaitForChild("Ready") :: RemoteEvent
-	importRemote = folder:WaitForChild("Import") :: RemoteEvent
 	viewRemote.OnClientEvent:Connect(onPatch)
 	resync()
 	lastPatchAt = os.clock()
@@ -45272,31 +45105,21 @@ return Detail
               <string name="Name">Modals</string>
               <string name="Source"><![CDATA[--!strict
 --[[
-	Modals: the modal chrome and its four uses (DESIGN.md 7.5-7.8; mocks i, j).
+	Modals: the modal chrome and its uses (DESIGN.md 7.5-7.8; mock j). Saves live in Roblox, so there is no export,
+	import or hard reset.
 
 	    ModalDimmer  black alpha .6, takes every input (InputSink All); a tap closes (not during a hold)
 	    Modal        the card: panel2 -> panel, a hue rim, the head (icon disc + R3 title + a hue sub line), the body,
 	                 the Buttons row. Opens with scale .96 -> 1 (0.2 s).
-	      export     Well > Box: a read-only monospace TextBox (`terminal`), focused and all selected on open; the
-	                 "22,204 characters · all selected" chip, the copy hint, SELECT ALL (primary) / DONE. Touch-only
-	                 devices get an editable box whose text is restored on every change (select + copy still work).
-	      import     Well > Box: editable, placeholder in `small` soft; IMPORT is off while the box is empty; after a
-	                 press a ring counts the server's ImportCooldown; the result shows inline (danger) or closes the
-	                 modal (ok)
-	      hardReset  HARD RESET?, what is lost, EXPORT FIRST · CANCEL · HOLD TO RESET (2 s ring): the reset action
-	                 fires twice
 	      gate       the Multiverse gate: PRESTIGE MULTIVERSE, the context, the GOAL box (+ Goal met chip), what
 	                 happens (the reset list / completes / returns), STAY + HOLD TO ENTER | EXIT | FINISH (1.2 s);
 	                 locked: "Unlock Multiverse (MP) first"; sealed: the requirement with its bar
 
 	    local modals = Modals.new(root)
-	    modals:open(kind?, data?)      nil closes. data: export = the string; import = { cooldown }; hardReset =
-	                                   { action, export? }; gate = Gate
-	    modals:importResult(imp)       modals:isOpen() -> kind?
-	    modals.act (action, hold?), modals.importText (text), modals.closed (), modals.notice (text)
+	    modals:open(kind?, data?)      nil closes. data: gate = Gate; any other kind shows data as text with OK
+	    modals:isOpen() -> kind?
+	    modals.act (action, hold?), modals.closed (), modals.notice (text)
 ]]
-
-local UserInputService = game:GetService("UserInputService")
 
 local Core = script.Parent.Parent:WaitForChild("Core")
 local Types = require(script.Parent.Parent:WaitForChild("Types"))
@@ -45313,11 +45136,9 @@ type Action = Types.Action
 export type Modals = {
 	frame: Frame,
 	act: Signal.Signal<Action>,
-	importText: Signal.Signal<string>,
 	closed: Signal.Signal<>,
 	notice: Signal.Signal<string>,
 	open: (self: Modals, kind: string?, data: any?) -> (),
-	importResult: (self: Modals, imp: Types.ImportResult) -> (),
 	isOpen: (self: Modals) -> string?,
 	destroy: (self: Modals) -> (),
 }
@@ -45331,16 +45152,9 @@ local LAYER_NAMES = {
 	hb = "Hyper Boost", ap = "Atomic Prestige", mp = "Multiverse", t = "Transcend",
 } :: { [string]: string }
 
-local function commas(n: number): string
-	local s = tostring(math.floor(n))
-	local out = string.reverse((string.gsub(string.reverse(s), "(%d%d%d)", "%1,")))
-	return (string.gsub(out, "^,", ""))
-end
-
 function Modals.new(root: GuiObject): Modals
 	local self = {} :: Modals
 	self.act = Signal.new() :: Signal.Signal<Action>
-	self.importText = Signal.new() :: Signal.Signal<string>
 	self.closed = Signal.new() :: Signal.Signal<>
 	self.notice = Signal.new() :: Signal.Signal<string>
 
@@ -45371,9 +45185,6 @@ function Modals.new(root: GuiObject): Modals
 	local kind: string? = nil
 	local holds: { Recipes.Hold } = {}
 	local conns: { RBXScriptConnection } = {}
-	local cooldownUntil = 0
-	local importTotal = 10
-	local importState: { box: TextBox?, result: TextLabel?, button: TextButton?, label: TextLabel?, ring: Recipes.Ring? } = {}
 
 	local function clear()
 		for _, h in holds do h:destroy() end
@@ -45383,7 +45194,6 @@ function Modals.new(root: GuiObject): Modals
 		for _, c in card:GetChildren() do
 			if c:IsA("GuiObject") then c:Destroy() end
 		end
-		importState = {}
 	end
 
 	local function close()
@@ -45456,31 +45266,6 @@ function Modals.new(root: GuiObject): Modals
 		Kit.list(r, "x", 12, Enum.HorizontalAlignment.Right, Enum.VerticalAlignment.Center)
 		return r
 	end
-	local function well(editable: boolean, text: string, hue: Color3): TextBox
-		local w = Kit.frame(card, "Well")
-		w.LayoutOrder = nextOrder()
-		w.Size = UDim2.new(1, 0, 0, if Layout.mode == "COMPACT" then 120 else 170)
-		w.BackgroundColor3 = Theme.C.void
-		w.BackgroundTransparency = 0
-		w.ClipsDescendants = true
-		Kit.corner(w, UDim.new(0, 12))
-		Kit.stroke(w, 2, hue, 0.9, "Rim")
-		local box = Kit.child(w, "Box", "TextBox") :: TextBox
-		box.BackgroundTransparency = 1
-		box.BorderSizePixel = 0
-		box.Position = UDim2.fromOffset(14, 10)
-		box.Size = UDim2.new(1, -28, 1, -20)
-		Theme.text(box, "terminal")
-		box.TextColor3 = Theme.C.text
-		box.TextXAlignment = Enum.TextXAlignment.Left
-		box.TextYAlignment = Enum.TextYAlignment.Top
-		box.TextWrapped = true
-		box.MultiLine = true
-		box.ClearTextOnFocus = false
-		box.TextEditable = editable
-		box.Text = text
-		return box
-	end
 	local function holdButton(parent: Instance, name: string, text: string, style: string, hue: Color3?, seconds: number,
 		onDone: () -> ()): TextButton
 		local b, l = Kit.action(parent, name, text, { style = style, hue = hue, h = 52 })
@@ -45497,139 +45282,6 @@ function Modals.new(root: GuiObject): Modals
 	end
 
 	-- ------------------------------------------------------------------------------------------ kinds
-	local function buildExport(text: string)
-		local hue = Theme.C.info
-		rim.Color = Theme.lift(hue, 0.2)
-		head("Export save", "Your save as one line of text", hue, "save")
-		local touchOnly = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
-		local box = well(touchOnly, text, hue)
-		if touchOnly then
-			table.insert(conns, box:GetPropertyChangedSignal("Text"):Connect(function()
-				if box.Text ~= text then box.Text = text end
-			end))
-		end
-		local chipRow = Kit.frame(card, "Info")
-		chipRow.LayoutOrder = nextOrder()
-		chipRow.Size = UDim2.new(1, 0, 0, 28)
-		local chip, cl = Kit.chip(chipRow, "Chars", "label", "", { h = 28, pad = 10, fg = Theme.C.soft, bg = Theme.C.panel3, bgA = 1 })
-		local _ = chip
-		cl.RichText = true
-		cl.Text = string.format('<font family="%s" weight="800">%s</font> characters · all selected',
-			"rbxasset://fonts/families/Sarpanch.json", commas(#text))
-		para("Hint", "Press Ctrl+C to copy. On a phone: tap the box, then Select All and Copy. (Roblox games cannot write to your clipboard.)")
-		local row = buttonRow()
-		local done = Kit.action(row, "Secondary", Rich.caps("Done"), { style = "quiet" })
-		done.LayoutOrder = 1
-		done.Activated:Connect(close)
-		local sel = Kit.action(row, "Primary", Rich.caps("Select all"), { style = "primary", hue = Theme.shade(Color3.fromHex("1fbfa0"), 0.8) })
-		sel.LayoutOrder = 2
-		local function selectAll()
-			pcall(function()
-				box:CaptureFocus()
-				box.SelectionStart = 1
-				box.CursorPosition = #box.Text + 1
-			end)
-		end
-		sel.Activated:Connect(selectAll)
-		task.defer(selectAll)
-	end
-
-	local function setImportButton()
-		local st = importState
-		local b, l = st.button, st.label
-		if b == nil or l == nil then return end
-		local left = cooldownUntil - os.clock()
-		local empty = st.box == nil or (st.box :: TextBox).Text == ""
-		local enabled = left <= 0 and not empty
-		b.Active = enabled
-		b.AutoButtonColor = false
-		b.BackgroundTransparency = if enabled then 0 else 0.5
-		if left > 0 then
-			l.Text = "Import · " .. math.ceil(left) .. " s"
-			Theme.text(l, "label")
-			l.TextColor3 = Theme.C.soft
-		else
-			l.Text = Rich.caps("Import")
-			Theme.text(l, "tab")
-			l.TextColor3 = if enabled then Color3.new(1, 1, 1) else Theme.C.soft
-		end
-		local ring = st.ring
-		if ring then
-			ring:set(if left > 0 then 1 - left / math.max(1, importTotal) else 0)
-			ring.frame.Visible = left > 0
-		end
-	end
-
-	local function buildImport(data: any)
-		local hue = Theme.C.system
-		rim.Color = Theme.lift(hue, 0.2)
-		head("Import save", "Your current progress is replaced.", hue, "down")
-		local box = well(true, "", hue)
-		box.PlaceholderText = "Paste a save string (web saves work too)"
-		box.PlaceholderColor3 = Theme.C.soft
-		local res = para("Result", "", "body", Theme.lift(Theme.C.danger, 0.25))
-		res.Visible = false
-		local row = buttonRow()
-		local cancel = Kit.action(row, "Secondary", Rich.caps("Cancel"), { style = "quiet" })
-		cancel.LayoutOrder = 1
-		cancel.Activated:Connect(close)
-		local imp, il = Kit.action(row, "Primary", Rich.caps("Import"), { style = "primary", hue = hue })
-		imp.LayoutOrder = 2
-		local ring = Recipes.ring(il.Parent :: GuiObject, { size = 18, thick = 3, color = Color3.new(1, 1, 1), track = 0.7 })
-		ring.frame.AnchorPoint = Vector2.new(0.5, 0.5)
-		ring.frame.LayoutOrder = 1
-		ring.frame.Visible = false
-		importState = { box = box, result = res, button = imp, label = il, ring = ring }
-		local total = if type(data) == "table" and type(data.cooldown) == "number" then data.cooldown else 10
-		importTotal = total
-		table.insert(conns, box:GetPropertyChangedSignal("Text"):Connect(setImportButton))
-		imp.Activated:Connect(function()
-			if cooldownUntil > os.clock() or box.Text == "" then return end
-			cooldownUntil = os.clock() + total
-			res.Visible = false
-			self.importText:Fire(box.Text)
-			task.spawn(function()
-				while kind == "import" and os.clock() < cooldownUntil do
-					setImportButton()
-					task.wait(0.1)
-				end
-				setImportButton()
-			end)
-		end)
-		setImportButton()
-	end
-
-	local function buildHardReset(data: any)
-		local hue = Theme.C.danger
-		rim.Color = hue
-		head("Hard reset?", nil, hue, "warn")
-		para("Body", "This deletes <b>all progress</b> on this account: every layer, every milestone and the Multiverse. It cannot be undone. Export your save first if you might want it back.")
-		local row = buttonRow()
-		local exportAction = if type(data) == "table" then data.export else nil
-		local ex = Kit.action(row, "Export", Rich.caps("Export first"), { style = "quiet" })
-		ex.LayoutOrder = 1
-		ex.Activated:Connect(function()
-			close()
-			if type(exportAction) == "table" then self.act:Fire(exportAction) end
-		end)
-		local cancel = Kit.action(row, "Secondary", Rich.caps("Cancel"), { style = "quiet" })
-		cancel.LayoutOrder = 2
-		cancel.Activated:Connect(close)
-		local action = if type(data) == "table" then data.action else nil
-		local b = holdButton(row, "Primary", Rich.caps("Hold to reset"), "danger", nil, 2, function()
-			close()
-			if type(action) == "table" then
-				-- the game resets on the second press (the first one arms it)
-				self.act:Fire(action)
-				self.act:Fire(action)
-			end
-		end)
-		b.LayoutOrder = 3
-		local foot = para("Foot", "Release early to cancel", "small", Theme.C.soft)
-		foot.TextXAlignment = Enum.TextXAlignment.Right
-		foot.LayoutOrder = 1001
-	end
-
 	local function buildGate(g: Types.Gate?)
 		local hue = CRIMSON
 		rim.Color = hue
@@ -45772,13 +45424,7 @@ function Modals.new(root: GuiObject): Modals
 		local compact = Layout.mode == "COMPACT"
 		card.Size = UDim2.fromOffset(if compact then 520 else 600, 0)
 		Kit.pad(card, if compact then 16 else 22, if compact then 18 else 24, if compact then 16 else 22, if compact then 18 else 24)
-		if k == "export" then
-			buildExport(if type(data) == "string" then data else "")
-		elseif k == "import" then
-			buildImport(data)
-		elseif k == "hardReset" then
-			buildHardReset(data)
-		elseif k == "gate" then
+		if k == "gate" then
 			buildGate(data)
 		else
 			para("Body", tostring(data or ""))
@@ -45793,27 +45439,12 @@ function Modals.new(root: GuiObject): Modals
 		sc.Scale = 0.96
 		Motion.tween(sc, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Scale = 1 }, "modalOpen")
 	end
-	function self.importResult(m: Modals, imp: Types.ImportResult)
-		if imp.ok then
-			if kind == "import" then close() end
-			m.notice:Fire(imp.msg ~= "" and imp.msg or "Save imported")
-			return
-		end
-		local res = importState.result
-		if kind == "import" and res then
-			res.Text = imp.msg ~= "" and imp.msg or "That string is not a valid save (nothing was changed)."
-			res.Visible = true
-		else
-			m.notice:Fire(imp.msg)
-		end
-	end
 	function self.isOpen(_: Modals): string?
 		return kind
 	end
 	function self.destroy(m: Modals)
 		clear()
 		m.act:DisconnectAll()
-		m.importText:DisconnectAll()
 		m.closed:DisconnectAll()
 		m.notice:DisconnectAll()
 		card:Destroy()
@@ -45832,20 +45463,19 @@ return Modals
               <string name="Source"><![CDATA[--!strict
 --[[
 	Overlay: the facade over OverlayGui (DESIGN.md 7): toasts and the notification list, the hover tooltip, the node
-	peek, the modals (export, import, hard reset, the Multiverse gate) and the full-screen states.
+	peek, the modals (the Multiverse gate) and the full-screen states.
 
 	    local overlay = Overlay.new(gui)
 	    overlay:toasts(pops?, notices?)
 	    overlay:tooltip(owner, content?, at?)      content = Tooltip.Content; nil hides that owner's tooltip
 	    overlay:peek(layer?, node?, ring?)         the node peek (nil closes)
 	    overlay:detail(card?)                      the touch detail sheet (Detail.luau); overlay:detailRefresh() after a patch
-	    overlay:modal(kind?, data?)                "export" | "import" | "hardReset" | "gate" | nil
-	    overlay:importResult(imp)
+	    overlay:modal(kind?, data?)                "gate" | nil (any other kind shows data as text)
 	    overlay:screen(kind?, data?)               "loading" | "fatal" | "outOfSync" | "end" | "firstRun" | nil
 	    overlay:flash(color)                       overlay:onCamera(cam)       overlay:busy() -> modal / peek open
 	    overlay:escape() -> boolean                Esc (Input/Hotkeys): closes the modal, else the peek, else the
 	                                               detail sheet; false when nothing was open (App then closes the panel)
-	    overlay.act (action, hold?), overlay.flyTo (layer), overlay.importText (text), overlay.resync (),
+	    overlay.act (action, hold?), overlay.flyTo (layer), overlay.resync (),
 	    overlay.openLayer (layer), overlay.peekClosed ()
 ]]
 
@@ -45865,7 +45495,6 @@ type ARect = Types.Rect
 export type Overlay = {
 	act: Signal.Signal<Action, boolean?>,
 	flyTo: Signal.Signal<string>,
-	importText: Signal.Signal<string>,
 	resync: Signal.Signal<>,
 	openLayer: Signal.Signal<string>,
 	peekClosed: Signal.Signal<>,
@@ -45875,7 +45504,6 @@ export type Overlay = {
 	detail: (self: Overlay, card: any?) -> (),
 	detailRefresh: (self: Overlay) -> (),
 	modal: (self: Overlay, kind: string?, data: any?) -> (),
-	importResult: (self: Overlay, imp: Types.ImportResult) -> (),
 	screen: (self: Overlay, kind: string?, data: any?) -> (),
 	flash: (self: Overlay, color: Color3) -> (),
 	onCamera: (self: Overlay, cam: Types.Camera) -> (),
@@ -45890,7 +45518,6 @@ function Overlay.new(gui: ScreenGui): Overlay
 	local self = {} :: Overlay
 	self.act = Signal.new() :: Signal.Signal<Action, boolean?>
 	self.flyTo = Signal.new() :: Signal.Signal<string>
-	self.importText = Signal.new() :: Signal.Signal<string>
 	self.resync = Signal.new() :: Signal.Signal<>
 	self.openLayer = Signal.new() :: Signal.Signal<string>
 	self.peekClosed = Signal.new() :: Signal.Signal<>
@@ -45913,7 +45540,6 @@ function Overlay.new(gui: ScreenGui): Overlay
 	modals.act:Connect(function(a: Action)
 		self.act:Fire(a, false)
 	end)
-	modals.importText:Connect(function(t: string) self.importText:Fire(t) end)
 	modals.notice:Connect(function(t: string) toasts:push(nil, { t }) end)
 	screens.act:Connect(function(a: Action) self.act:Fire(a, false) end)
 	screens.resync:Connect(function() self.resync:Fire() end)
@@ -45950,9 +45576,6 @@ function Overlay.new(gui: ScreenGui): Overlay
 		end
 		modals:open(kind, data)
 	end
-	function self.importResult(_: Overlay, imp: Types.ImportResult)
-		modals:importResult(imp)
-	end
 	function self.screen(_: Overlay, kind: string?, data: any?)
 		screens:show(kind, data)
 	end
@@ -45986,7 +45609,6 @@ function Overlay.new(gui: ScreenGui): Overlay
 		screens:destroy()
 		o.act:DisconnectAll()
 		o.flyTo:DisconnectAll()
-		o.importText:DisconnectAll()
 		o.resync:DisconnectAll()
 		o.openLayer:DisconnectAll()
 		o.peekClosed:DisconnectAll()
@@ -50623,7 +50245,7 @@ return Milestone
 --[[
 	Opt: an Options row (DESIGN.md 6 Options, 6.1): the title (cardSmall) and the game's one-line subtitle (small, soft),
 	the value as a chip at the right: ON / OFF for the two-state toggles (on), the cycler position for cyclers
-	(idx / n), the shown value otherwise. Hard Reset reads as a danger row. One press per tap, the action as sent.
+	(idx / n), the shown value otherwise. One press per tap, the action as sent.
 ]]
 
 local Core = script.Parent.Parent.Parent:WaitForChild("Core")
@@ -50640,19 +50262,12 @@ function Opt.skin(rec: any, n: any, ctx: any): boolean
 	if l == nil then return false end
 	local label = l :: TextLabel
 	local compact = ctx.mode == "COMPACT"
-	local danger = n.id == "hardReset"
 	b.Visible = true
 	b.AutoButtonColor = false
 	for _, name in { "Gradient", "Glow", "Num", "Limit" } do Common.drop(b, name) end
-	if danger then
-		Common.fill(b, Theme.mix(C.panel, C.danger, 0.22), Theme.mix(C.deep, C.danger, 0.12))
-		Common.corner(b, 14)
-		Common.stroke(b, 1.5, C.danger, 0.3)
-	else
-		Common.fill(b, C.panel3, C.panel2)
-		Common.corner(b, 14)
-		Common.stroke(b, 1.5, Theme.lift(ctx.hue, 0.2), 0.55)
-	end
+	Common.fill(b, C.panel3, C.panel2)
+	Common.corner(b, 14)
+	Common.stroke(b, 1.5, Theme.lift(ctx.hue, 0.2), 0.55)
 	b.Size = UDim2.fromOffset(if compact then math.floor((ctx.contentW - 10) / 2) else 320, 0)
 	b.AutomaticSize = Enum.AutomaticSize.Y
 	local lim = Common.get(b, "Limit", "UISizeConstraint") :: UISizeConstraint
@@ -50683,7 +50298,7 @@ function Opt.skin(rec: any, n: any, ctx: any): boolean
 	end
 	-- a subtitle that only repeats the value ("[ ALL ]") is dropped
 	if chipText and string.find(subText, "^%[.*%]$") then subText = "" end
-	local parts = { Common.title(title, "cardSmall", if danger then C.dangerText else C.text) }
+	local parts = { Common.title(title, "cardSmall", C.text) }
 	if subText ~= "" then table.insert(parts, Common.esc(subText)) end
 	Common.setText(label, table.concat(parts, "\n"))
 	if chipText then
@@ -55592,10 +55207,9 @@ return {
 --[[
 	Options (DESIGN.md 6 row Options, 6.1 "Options"). Gear emblem, no hero.
 
-	    YOUR SAVE     the game's "[ Saving ]" line becomes the section title with a "Saved with your game" tag; SAVE /
-	                  EXPORT / IMPORT are tiles (the title, the game's one-line sub in a well); Offline Production keeps
-	                  the toggle row; DANGER ZONE closes the row: HARD RESET fires the game's own hardReset action on a
-	                  press, which the App turns into the DESIGN 7.7 confirm modal (EXPORT FIRST / CANCEL / hold 2 s)
+	    YOUR SAVE     the game's "[ Saving ]" line becomes the section title with a "Saved with your game" tag; SAVE is
+	                  a tile (the title, the game's one-line sub in a well); Offline Production keeps the toggle row.
+	                  Saves live in Roblox (autosave), so there is no export, import or hard reset.
 	    DISPLAY       "[ Displays ]" becomes the section title; the cyclers and toggles keep the Opt rows
 	    ABOUT         the about node (Skins/Generic)
 	    THIS DEVICE   "Not part of the save": Motion, Map detail, Map labels, Interface size as segmented controls,
@@ -55620,7 +55234,7 @@ local HEADINGS: { [string]: { title: string, tag: string } } = {
 	saving = { title = "YOUR SAVE", tag = "Saved with your game" },
 	displays = { title = "DISPLAY", tag = "Saved with your game" },
 }
-local TILES: { [string]: boolean } = { save = true, export = true, import = true }
+local TILES: { [string]: boolean } = { save = true }
 
 local DEVICE: { { key: string, title: string, sub: string, values: { any }, labels: { string } } } = {
 	{ key = "motion", title = "Motion", sub = "Animations and effects", values = { "SYSTEM", "FULL", "REDUCED" },
@@ -55691,25 +55305,6 @@ local function tile(rec: any, n: any, ctx: any): boolean
 	return true
 end
 
--- ------------------------------------------------------------------------------------------------------ danger zone
-local function danger(row: Instance, resetId: string, ctx: any)
-	local card = Kit.card(row, "Danger", { order = 99, gap = 10, pad = 16, fill = Theme.mix(C.panel, C.danger, 0.12), stroke = C.danger,
-		strokeT = 0.3 })
-	card.Size = UDim2.new(1, 0, 0, 0)
-	Sections.header(card, { name = "Head", order = 0, text = "DANGER ZONE", hue = C.danger })
-	local t = Common.label(card, "Text", "body", C.dangerText, { order = 1 })
-	Common.setText(t, Common.esc("A hard reset wipes all your progress. Export your save first to keep a copy."))
-	local b = Kit.button(card, "HardReset", Common.run(Common.esc("HARD RESET…"), "label", C.text) .. "   "
-		.. Common.run(Common.esc("Opens a confirm: hold 2 s to wipe"), "small", C.dangerText), { fill = Theme.mix(C.panel, C.danger, 0.55),
-		stroke = C.danger, h = 44, order = 2 })
-	Common.state(b, "can")
-	local store = ctx.store
-	Kit.onPress(b, function()
-		local n = store:get(resetId)
-		if type(n) == "table" and type(n.a) == "table" then ctx.act(n.a, false) end
-	end)
-end
-
 -- ------------------------------------------------------------------------------------------------------ this device
 local function device(root: Instance, ctx: any)
 	local compact = ctx.mode == "COMPACT"
@@ -55773,15 +55368,6 @@ local function skin(rec: any, n: any, ctx: any): boolean
 	end
 	if rec.kind == "btn:opt" then
 		if TILES[n.id or ""] then return tile(rec, n, ctx) end
-		if n.id == "hardReset" then
-			(rec.root :: GuiObject).Visible = false
-			Common.state(rec.root, "can")
-			-- the danger zone closes the save row
-			local pid = Common.parentId(rec.id)
-			local prow = if pid then ctx.render.recs[pid] else nil
-			if prow then danger(prow.root, rec.id, ctx) end
-			return true
-		end
 		return false
 	end
 	-- the tab root: the device options come last
@@ -57084,7 +56670,6 @@ export type Popup = {
 	kind: string?, -- milestone | achievement | corruption | other (notices are kind "notice" on the client)
 	layer: string?,
 }
-export type ImportResult = { ok: boolean, msg: string }
 export type Patch = {
 	set: { [string]: any }?,
 	del: { string }?,
@@ -57095,9 +56680,6 @@ export type Patch = {
 	ended: boolean?,
 	pop: { Popup }?,
 	notice: { string }?,
-	export: string?,
-	askImport: boolean?,
-	imp: ImportResult?,
 	save: string?, -- "saving" | "saved"
 	unsaved: boolean?,
 	fatal: string?,
