@@ -6,7 +6,10 @@
 //     sun through the cloud density, so every shaft and every shadow comes from a cloud;
 //   * a calm middle band (y 0.35–0.65 h) that only carries veils, faint trails and rays, alpha < 0.25 by contract;
 //   * a sea of cumulus rows below, receding upward, each puff shaded as a soft sphere under the contract's key light
-//     (world.js LIGHT, upper left) with a warm silver lining, bellies thinning so the rows layer;
+//     (world.js LIGHT, upper left) with a silver lining, bellies thinning so the rows layer;
+//   * on the realm side (weight GR, 1 left of the sun, 0 by splitX) the key light is gold: the rays and the sun-facing
+//     linings are tinted (255, 214, 150) at the same luminance as before, and that warm light is treated as emissive
+//     (kept out of the haze / desaturation, hue-preserving roll-off) so it survives the atmosphere pass;
 //   * past splitX, the Multiverse side: a towering crimson cumulus wall (anvil in the deck, base in the sea, a hazy
 //     column between), rimmed on the side facing the tear by the rift's crimson light, and a faint glow behind it.
 // The contract's atmosphere recipe (saturation, contrast, haze toward hazeColor -> hazeRift, maxLuma with emissive
@@ -51,7 +54,7 @@ LAYERS.clouds = async function () {
   // the sea (round tops, sharp valleys between puffs, small puffs riding on big ones), chains of flat lenses for the
   // upper streamers, a stacked tower + anvil for the crimson wall. Designed shapes read better than thresholded
   // noise at this texture size (1 texel = 2.7 local px, then blurred).
-  const D = new Float32Array(N), OP = new Float32Array(N), HR = new Float32Array(N);
+  const D = new Float32Array(N), OP = new Float32Array(N), HR = new Float32Array(N), GR = new Float32Array(N);
   const P = [], pr = rng(5150);
   const puff = (x, y, rx, ry, op, soft, kind) => P.push({ x, y, rx, ry, op, soft, kind });
   // upper deck streamers: [x0, x1, y0, half thickness, tilt]. The gap below-right of the sun lets its light fall
@@ -143,6 +146,7 @@ LAYERS.clouds = async function () {
       D[k] *= tt; LS[k] *= tt; RS[k] *= tt; LR[k] *= tt; RR[k] *= tt; AO[k] *= tt;
       OP[k] = veil;
       HR[k] = smooth(SPLIT - FHW, SPLIT + FHW, x + 120 * wx);
+      GR[k] = 1 - smooth(SPLIT - 380, SPLIT - 20, x + 60 * wx);   // gold key light: realm side only, gone by splitX
     }
   }
   const at = (A, x, y) => { // bilinear in local px
@@ -168,16 +172,19 @@ LAYERS.clouds = async function () {
   // ---- pass C: light and alpha (premultiplied, linear) --------------------------------------------------------------
   // 2.5D shading: a blurred copy of the density is a height map; its normals, lit from the sun's direction (and on the
   // rift side from the tear), give each puff a round, lit shoulder. The transmittance march adds cast shadows.
-  const PR = new Float32Array(N), PG = new Float32Array(N), PB = new Float32Array(N), PA = new Float32Array(N), EM = new Float32Array(N);
+  const PR = new Float32Array(N), PG = new Float32Array(N), PB = new Float32Array(N), PA = new Float32Array(N), EM = new Float32Array(N),
+    GW = new Float32Array(N);   // share of the pixel's light that is the gold key light (rays + linings, realm side)
+  const llum = c => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
   const SHADE = lin([86, 64, 170]), SHADE_R = lin([84, 18, 54]), LILAC = lin([226, 208, 255]), LIT_R = lin([255, 84, 128]),
-    WARM = lin([255, 210, 150]), RAY = lin([255, 222, 190]), RAY_FAR = lin([214, 186, 255]), CRIM = lin([255, 46, 99]),
+    WARM = lin([255, 210, 150]), SILVER = lin([236, 226, 255]), RAY = lin([255, 222, 190]), RAY_FAR = lin([214, 186, 255]),
+    RAY_GOLD = lin([255, 214, 150]), RAY_ROSE = lin([255, 180, 190]), AUR = lin([255, 204, 136]), CRIM = lin([255, 46, 99]),
     MAG = lin([232, 70, 190]), GLOW = lin([255, 60, 118]), VEIL = lin([150, 128, 230]);
   const nR = makeNoise(3909);
   for (let j = 0; j < TH; j++) {
     const y = (j + 0.5) / RES;
     for (let i = 0; i < TW; i++) {
       const x = (i + 0.5) / RES, k = j * TW + i;
-      const d = D[k], hr = HR[k], ts = TS[k], id = 1 / Math.max(d, 1e-4);
+      const d = D[k], hr = HR[k], gr = GR[k], ts = TS[k], id = 1 / Math.max(d, 1e-4);
       const dx = x - SX, dy = y - SY, ds = Math.hypot(dx, dy) || 1, dr = Math.hypot(x - RX, (y - RY) * 1.1) || 1;
       const lam = LS[k] * id, rim = RS[k] * id, lamR = LR[k] * id, rimR = RR[k] * id, ao = AO[k] * id;
       // sun: lambert on the puff, cast shadows from the march, a warm silver lining on the sun-facing rim
@@ -185,9 +192,15 @@ LAYERS.clouds = async function () {
       const Ls = (0.45 + 0.55 * ts) * (0.6 + 0.4 * near);
       // keep-clear (advisory): no bright crests behind the node cluster (tree + rift landmarks, soft-zone union)
       const kc = 1 - 0.4 * Math.exp(-((x - KX) / 640) * ((x - KX) / 640) - ((y - KY) / 440) * ((y - KY) / 440));
-      const shade = mix3(SHADE, SHADE_R, hr), lit = mix3(LILAC, LIT_R, hr * 0.85);
+      // aureole: gas and cloud right around the sun forward-scatter its gold light (a hue shift at equal luminance, so
+      // the sun seen through this layer stays gold instead of going lilac); emissive above the calm band only
+      const aur = gr * Math.exp(-(ds / 300) * (ds / 300)), aurE = aur * (1 - smooth(BY0 - 70, BY0 + 50, y));
+      const warmAt = c => { const w = AUR.map(v => v * llum(c) / llum(AUR)); return mix3(c, w, 0.9 * aur); };
+      const shade = mix3(SHADE, SHADE_R, hr), lit = warmAt(mix3(LILAC, LIT_R, hr * 0.85));
+      // lining: gold on the realm side, a cool silver toward the rift (which the tear's crimson rim then takes over)
+      const lining = mix3(SILVER, WARM, gr), linI = rim * Ls * (1.1 + 1.6 * near) * (1 - 0.55 * hr) * (1 + 0.7 * gr) * kc;
       let c = [0, 0, 0];
-      for (let q = 0; q < 3; q++) c[q] = shade[q] * ao + (lit[q] - shade[q]) * lam * Ls * ao * kc + WARM[q] * rim * Ls * (1.1 + 1.6 * near) * (1 - 0.55 * hr) * kc;
+      for (let q = 0; q < 3; q++) c[q] = shade[q] * ao + (lit[q] - shade[q]) * lam * Ls * ao * kc + lining[q] * linI;
       // crimson light from the tear on the rift side
       const Lr = (0.35 + 0.65 * TR[k]) * hr / (1 + (dr / 850) * (dr / 850));
       const rc = mix3(CRIM, MAG, smooth(-0.2, 0.3, fbm(nR, x / 700, y / 700, 3)));
@@ -199,18 +212,24 @@ LAYERS.clouds = async function () {
       const th = Math.atan2(dy, dx);
       const streaks = clamp(0.25 + 1.8 * fbm(nR, th * 4.2, 0.5, 3) + 0.45 * fbm(nR, th * 11, 9.5, 2));
       const fall = smooth(40, 260, ds) * Math.exp(-ds / 950) * (0.45 + 0.55 * smooth(SY - 260, SY + 80, y));
-      const ar = 0.42 * Math.pow(ts, 1.5) * streaks * fall * (1 - 0.55 * hr);
-      const rcol = mix3(RAY, RAY_FAR, smooth(150, 1100, ds));
+      // (the gold shafts are a little denser at their source, above the calm band only)
+      const src = 1 + 0.6 * gr * Math.exp(-(ds / 380) * (ds / 380)) * (1 - smooth(BY0 - 90, BY0 + 30, y));
+      const ar = 0.42 * Math.pow(ts, 1.5) * streaks * fall * (1 - 0.55 * hr) * src;
+      // gold shafts on the realm side at the luminance the lilac ones had (the centre band gets no brighter)
+      const rcool = mix3(RAY, RAY_FAR, smooth(150, 1100, ds)), rwarm = mix3(RAY_GOLD, RAY_ROSE, smooth(500, 1400, ds));
+      const rcol = mix3(rcool, rwarm.map(v => v * llum(rcool) / llum(rwarm)), gr);
       // crimson glow behind the rift
       const ag = hr * (0.14 * Math.exp(-(dr / 430) * (dr / 430)) + 0.05 * Math.exp(-(dr / 950) * (dr / 950)));
       // composite: glow < veil < rays < cloud (premultiplied)
       let pr_ = GLOW[0] * ag, pg = GLOW[1] * ag, pb = GLOW[2] * ag, pa = ag;
-      const vc = mix3(VEIL, LIT_R, hr * 0.7);
+      const vc = warmAt(mix3(VEIL, LIT_R, hr * 0.7));
       pr_ = vc[0] * av + pr_ * (1 - av); pg = vc[1] * av + pg * (1 - av); pb = vc[2] * av + pb * (1 - av); pa = av + pa * (1 - av);
       pr_ = rcol[0] * ar + pr_ * (1 - ar); pg = rcol[1] * ar + pg * (1 - ar); pb = rcol[2] * ar + pb * (1 - ar); pa = ar + pa * (1 - ar);
       pr_ = c[0] * ac + pr_ * (1 - ac); pg = c[1] * ac + pg * (1 - ac); pb = c[2] * ac + pb * (1 - ac); pa = ac + pa * (1 - ac);
       PR[k] = pr_; PG[k] = pg; PB[k] = pb; PA[k] = pa;
-      EM[k] = clamp(ar * 6 + ag * 5 + (rim * Ls * (0.5 + near) * 1.6 + Lr * rimR * 2) * smooth(0.02, 0.2, d));
+      const emS = rim * Ls * (0.5 + near) * 1.6 * smooth(0.02, 0.2, d);
+      EM[k] = clamp(ar * 6 + ag * 5 + emS + Lr * rimR * 2 * smooth(0.02, 0.2, d));
+      GW[k] = Math.max(gr * clamp(ar * 6 + emS * 1.5), aurE);
     }
   }
 
@@ -222,15 +241,18 @@ LAYERS.clouds = async function () {
     for (let i = 0; i < TW; i++) {
       const x = (i + 0.5) / RES, k = j * TW + i, a = PA[k];
       if (a < 1e-5) { PR[k] = PG[k] = PB[k] = 0; continue; }
-      // straight colour, sRGB 0..1 (tone-mapped so bright rims roll off instead of clipping)
-      let c = [PR[k] / a, PG[k] / a, PB[k] / a].map(v => Math.pow(1 - Math.exp(-v * 1.25), 1 / 2.2));
+      // straight colour, sRGB 0..1 (tone-mapped so bright rims roll off instead of clipping; where the light is the
+      // gold key light the roll-off is hue-preserving, on the max channel, so the gold does not bleach to white)
+      const gw = GW[k], lr = [PR[k] / a, PG[k] / a, PB[k] / a], tm = v => 1 - Math.exp(-v * 1.25);
+      const mx = Math.max(lr[0], lr[1], lr[2], 1e-6), hs = tm(mx) / mx;
+      let c = lr.map(v => Math.pow(lerp(tm(v), v * hs, gw), 1 / 2.2));
       const hz = mix3(HC, HRC, smooth(SPLIT - FHW, SPLIT + FHW, x)), Lh = luma(hz[0], hz[1], hz[2]);
       const L = luma(c[0], c[1], c[2]);
-      const c1 = c.map(v => L + (v - L) * AT.saturation);
+      const c1 = mix3(c.map(v => L + (v - L) * AT.saturation), c, gw);   // the gold keeps its saturation
       c = mix3(c1.map(v => Lh + (v - Lh) * AT.contrast), hz, kh);
-      // emissive light (rays, rims, the rift glow) is not hazed away: it keeps up to 65% of its unhazed colour, and
-      // only it may pass maxLuma, up to emissiveMax
-      c = mix3(c, c1, 0.65 * EM[k]);
+      // emissive light (rays, rims, the rift glow) is not hazed away: it keeps up to 65% of its unhazed colour (the
+      // gold key light up to 90%), and only it may pass maxLuma, up to emissiveMax
+      c = mix3(c, c1, Math.min(0.9, 0.65 * EM[k] + 0.6 * gw));
       const lim = lerp(AT.maxLuma, AT.emissiveMax, EM[k]), L2 = luma(c[0], c[1], c[2]), knee = lim * 0.85;
       if (L2 > knee) { const L3 = knee + (lim - knee) * (1 - Math.exp(-(L2 - knee) / (lim - knee))), s = L3 / L2; c = c.map(v => v * s); }
       PR[k] = clamp(c[0]) * a; PG[k] = clamp(c[1]) * a; PB[k] = clamp(c[2]) * a;   // back to premultiplied (sRGB)
@@ -270,10 +292,12 @@ LAYERS.clouds = async function () {
       const q = k * 4, dz = () => (dr() + dr() - 1) * 0.6;
       const A8 = Math.min(clamp(Math.round(a * 255 + dz()), 0, 255), inBand ? Math.floor(SPEC.bandAlpha * 255) - 1 : Math.floor(SPEC.maxAlpha * 255));
       if (A8 === 0) { px[q] = px[q + 1] = px[q + 2] = px[q + 3] = 0; continue; }
-      const ia = 1 / Math.max(a, 1e-6);
-      px[q] = clamp(Math.round(BR[k] * s * ia * 255 + dz()), 0, 255);
-      px[q + 1] = clamp(Math.round(BG[k] * s * ia * 255 + dz()), 0, 255);
-      px[q + 2] = clamp(Math.round(BB[k] * s * ia * 255 + dz()), 0, 255);
+      // straight colour, with the emissiveMax luma ceiling re-applied as a safety net after the blur and the dither
+      const ia = 1 / Math.max(a, 1e-6), sr = BR[k] * s * ia, sg = BG[k] * s * ia, sb = BB[k] * s * ia;
+      const sl = luma(sr, sg, sb), sc = sl > AT.emissiveMax - 0.01 ? (AT.emissiveMax - 0.01) / sl : 1;
+      px[q] = clamp(Math.round(sr * sc * 255 + dz()), 0, 255);
+      px[q + 1] = clamp(Math.round(sg * sc * 255 + dz()), 0, 255);
+      px[q + 2] = clamp(Math.round(sb * sc * 255 + dz()), 0, 255);
       px[q + 3] = A8;
       if (y >= BY0 && y <= BY1) maxBand = Math.max(maxBand, A8 / 255);
       maxAll = Math.max(maxAll, A8 / 255);
@@ -281,6 +305,6 @@ LAYERS.clouds = async function () {
   }
   o.putImageData(img, 0, 0);
   console.log(`clouds ${TW}x${TH} max alpha ${maxAll.toFixed(3)} (cap ${SPEC.maxAlpha}), in band y ${BY0.toFixed(0)}-${BY1.toFixed(0)}: ${maxBand.toFixed(3)} (< ${SPEC.bandAlpha})`);
-  window.__last = out; window.__fields = { D, TS, TR, HR, EM, PA, LS, RS };   // __fields: debug hook for field dumps
+  window.__last = out; window.__fields = { D, TS, TR, HR, GR, EM, GW, PA, LS, RS };   // __fields: debug hook for field dumps
   return out;
 };

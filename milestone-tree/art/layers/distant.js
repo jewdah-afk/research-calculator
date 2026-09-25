@@ -14,12 +14,35 @@
     const LV = (() => { const v = [-0.45, -0.62, 0.64], d = Math.hypot(...v); return v.map(a => a / d); })();
     const L2 = (() => { const d = Math.hypot(LV[0], LV[1]); return [LV[0] / d, LV[1] / d]; })();
     const KEY = [255, 214, 150], LILAC = [205, 182, 255], CRIMSON = [255, 46, 99];
+    // the warm rim is painted more saturated than KEY: the atmosphere pass (desaturate, lower contrast, haze) pulls it
+    // back toward (255, 214, 150) on screen
+    const WARM = [255, 180, 84];
     const mk = (w, h) => { const c = document.createElement('canvas'); c.width = Math.max(1, Math.ceil(w)); c.height = Math.max(1, Math.ceil(h)); return c; };
     const cx2 = (c, read) => c.getContext('2d', read ? { willReadFrequently: true } : undefined);
     const luma = (r, g, b) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
     const col = (c, a = 1) => `rgba(${Math.round(c[0])},${Math.round(c[1])},${Math.round(c[2])},${a})`;
     const mixc = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
     const inEllipse = (x, y, z, grow = 0) => { const dx = (x - z[1]) / (z[3] + grow), dy = (y - z[2]) / (z[4] + grow); return dx * dx + dy * dy < 1; };
+
+    // ---------------------------------------------------------------- gaussian blur with clamped edges
+    // Canvas blur treats pixels outside the canvas as transparent, so alpha falls off at the layer border and a dim strip
+    // slides in at the screen edge during overscroll. Pad by 3 sigma with the edge pixels replicated, blur, crop.
+    function padBlur(src, px) {
+      const w = src.width, h = src.height, p = Math.ceil(px * 3) + 2, t = mk(w + 2 * p, h + 2 * p), tx = cx2(t);
+      tx.imageSmoothingEnabled = false;
+      tx.drawImage(src, p, p);
+      tx.drawImage(src, 0, 0, 1, h, 0, p, p, h); tx.drawImage(src, w - 1, 0, 1, h, w + p, p, p, h);
+      tx.drawImage(src, 0, 0, w, 1, p, 0, w, p); tx.drawImage(src, 0, h - 1, w, 1, p, h + p, w, p);
+      tx.drawImage(src, 0, 0, 1, 1, 0, 0, p, p); tx.drawImage(src, w - 1, 0, 1, 1, w + p, 0, p, p);
+      tx.drawImage(src, 0, h - 1, 1, 1, 0, h + p, p, p); tx.drawImage(src, w - 1, h - 1, 1, 1, w + p, h + p, p, p);
+      const o = mk(w, h), ox = cx2(o); ox.filter = `blur(${px}px)`; ox.drawImage(t, -p, -p);
+      return o;
+    }
+    // a low-res layer-sized canvas scaled up to w x h and blurred with clamped edges
+    function upBlur(c, w, h, px) {
+      const u = mk(w, h), ux = cx2(u); ux.imageSmoothingQuality = 'high'; ux.drawImage(c, 0, 0, w, h);
+      return padBlur(u, px);
+    }
 
     // ---------------------------------------------------------------- exact euclidean distance transform
     // (Felzenszwalb & Huttenlocher). mask >= 0.5 is inside; returns the distance of every pixel to the outside.
@@ -105,6 +128,11 @@
       const riftW = S.riftW || (() => 0), rimW = S.rimW || 5, moss = S.moss || 0;
       const V = S.veins, ST = S.strata;
       let emis = false;
+      // warm key-light rim (REALM.md 4, 255,214,150 from the upper left): a thin emissive line on up-left facing edges and
+      // grass lips, so it survives the layer's haze; S.warm = strength (far 0.3, mid 0.6, near 1). Crossfades to the
+      // crimson rim inside the rift biome.
+      const WS = S.warm || 0, ww = S.warmW || 2, WC = S.warmCol || WARM, wr = WS > 0 ? new ImageData(w, h) : null, wd = wr ? wr.data : null;
+      let warmAny = false;
       for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
         const i = y * w + x, a = A[i]; if (a <= 0) continue;
         const X = x + bb.x, Y = y + bb.y, d = D[i];
@@ -161,6 +189,13 @@
         }
         const o4 = i * 4;
         od[o4] = clamp(R, 0, 255); od[o4 + 1] = clamp(G, 0, 255); od[o4 + 2] = clamp(B, 0, 255); od[o4 + 3] = a * 255;
+        if (wd) {
+          const wm = a * (0.75 * (1 - at(x + L2[0] * ww, y + L2[1] * ww)) + 0.25 * (1 - at(x + L2[0] * ww * 2.2, y + L2[1] * ww * 2.2)));
+          if (wm > 0.02) {
+            const wc = mixc(WC, CRIMSON, rw), br = WS * wm * (0.72 + 0.28 * (0.5 + 0.5 * nX(X / 34, Y / 34)));
+            wd[o4] = wc[0]; wd[o4 + 1] = wc[1]; wd[o4 + 2] = wc[2]; wd[o4 + 3] = clamp(br) * 255; warmAny = true;
+          }
+        }
         // glowing crystal seams
         if (V && d > 3) {
           const patch = smooth(V.th, V.th + 0.12, fbm(nP, X / V.patch, Y / V.patch, 2)) * (V.region ? V.region(X, Y, yn) : 1);
@@ -181,6 +216,11 @@
         e = mk(w, h); const ex = cx2(e); ex.putImageData(em, 0, 0);
         const g = mk(w, h), gx = cx2(g); gx.filter = `blur(${V.glow || 5}px)`; gx.drawImage(e, 0, 0);
         ex.globalCompositeOperation = 'lighter'; ex.globalAlpha = V.glowK || 0.9; ex.drawImage(g, 0, 0); ex.drawImage(g, 0, 0);
+      }
+      if (warmAny) {
+        const wc = mk(w, h); cx2(wc).putImageData(wr, 0, 0);
+        if (!e) e = mk(w, h);
+        const ex = cx2(e); ex.save(); ex.globalCompositeOperation = 'lighter'; ex.drawImage(wc, 0, 0); ex.restore();
       }
       return { c, e, x: bb.x, y: bb.y, w, h, A, D };
     }
@@ -482,7 +522,7 @@
         d[k] = cc[0]; d[k + 1] = cc[1]; d[k + 2] = cc[2]; d[k + 3] = a * 255;
       }
       x.putImageData(im, 0, 0);
-      b.save(); b.imageSmoothingQuality = 'high'; b.filter = `blur(${o.blur || 5}px)`; b.drawImage(c, 0, 0, w * q, h * q); b.restore();
+      b.drawImage(upBlur(c, w * q, h * q, o.blur || 5), 0, 0);
     }
 
     // ---------------------------------------------------------------- mist band (low-res noise, stretched)
@@ -503,13 +543,13 @@
         const k = (j * w + i) * 4; d[k] = o.color[0]; d[k + 1] = o.color[1]; d[k + 2] = o.color[2]; d[k + 3] = a * 255;
       }
       x.putImageData(im, 0, 0);
-      b.save(); b.imageSmoothingQuality = 'high'; b.filter = `blur(${o.blur || 6}px)`; b.drawImage(c, 0, 0, w * q, h * q); b.restore();
+      b.drawImage(upBlur(c, w * q, h * q, o.blur || 6), 0, 0);
     }
 
     // ---------------------------------------------------------------- the atmosphere pass (REALM.md section 4)
     // base: colour art; emis: light that may exceed maxLuma (up to emissiveMax). Both get the same colour recipe;
     // the light is then screened over the base (premultiplied), the luma limit follows the local emissive share,
-    // and the whole layer gets a premultiplied gaussian blur of `blur` local px.
+    // and the whole layer gets a premultiplied gaussian blur of `blur` local px (edges clamped, see padBlur).
     function atmosphere(base, emis, T) {
       const w = base.width, h = base.height, A = T.atm, bx = cx2(base, true);
       const bI = bx.getImageData(0, 0, w, h), bd = bI.data, eI = emis ? cx2(emis, true).getImageData(0, 0, w, h) : null, edd = eI ? eI.data : null;
@@ -551,9 +591,7 @@
         }
       }
       bx.putImageData(bI, 0, 0);
-      if (!A.blur) return base;
-      const out = mk(w, h), ox = cx2(out); ox.filter = `blur(${A.blur}px)`; ox.drawImage(base, 0, 0);
-      return out;
+      return A.blur ? padBlur(base, A.blur) : base;
     }
 
     function downsample(src, w, h) {
@@ -576,14 +614,15 @@
       return out;
     }
 
-    return { LV, L2, KEY, LILAC, CRIMSON, mk, cx2, luma, col, mixc, inEllipse, edt, bbox, mass, island, rock, crystal, crystals, seams, root, vine, tree, grass, lightfall, mistBand, cloudBank, atmosphere, downsample, zoneMax };
+    return { LV, L2, KEY, WARM, LILAC, CRIMSON, padBlur, upBlur, mk, cx2, luma, col, mixc, inEllipse, edt, bbox, mass, island, rock, crystal, crystals, seams, root, vine, tree, grass, lightfall, mistBand, cloudBank, atmosphere, downsample, zoneMax };
   })();
   // ================================================================ ISLAND KIT (end)
 
   // ---- contract snapshot (realm.json layers[far]); repaint if `node camera.js --build` changes it
+  // blur 3 (was 2.5): softness grows with distance behind the focal plane (near 0.9 < mid 1.5 < far 3)
   const CFG = {
     size: [3008, 1836], res: 0.5, splitX: 1636.5, fade: 713,
-    atm: { hazeColor: [66, 50, 138], hazeRift: [110, 34, 72], haze: 0.5, hazeBottom: 0.2, saturation: 0.7, contrast: 0.55, blur: 2.5, maxLuma: 0.5, emissiveMax: 0.65 },
+    atm: { hazeColor: [66, 50, 138], hazeRift: [110, 34, 72], haze: 0.5, hazeBottom: 0.2, saturation: 0.7, contrast: 0.55, blur: 3, maxLuma: 0.5, emissiveMax: 0.65 },
     soft: [['m', 1399, 1079, 395, 324], ['mm', 1319, 1094, 395, 324], ['em', 1479, 1094, 395, 324], ['p', 1399, 999, 395, 324], ['pe', 1284, 929, 395, 324], ['sp', 1356.5, 916.5, 395, 324], ['pb', 1441.5, 916.5, 395, 324], ['pp', 1514, 929, 395, 324], ['se', 1311.5, 849, 395, 324], ['hp', 1399, 836.5, 395, 324], ['ep', 1486.5, 849, 395, 324], ['hb', 1319, 769, 395, 324], ['ap', 1399, 756.5, 395, 324], ['mp', 1479, 769, 395, 324], ['t', 1399, 684, 395, 324], ['pm', 1811.5, 994, 395, 324], ['pep', 1721.5, 899, 395, 324], ['cr', 1901.5, 904, 395, 324], ['cm', 1946.5, 836.5, 395, 324], ['ex', 1811.5, 799, 395, 324], ['ach', 1154, 754, 395, 324]],
     rift: [1811.5, 968], // landmarks.rift: the local point behind the rift
   };
@@ -591,6 +630,7 @@
   const K = KIT, { mk, cx2, col, mixc } = K;
   const riftW = x => smooth(CFG.splitX - CFG.fade, CFG.splitX + CFG.fade, x);
   const HAZE = x => mixc(CFG.atm.hazeColor, CFG.atm.hazeRift, riftW(x));
+  const WARM = { warm: 0.34, warmW: 2.5 }; // thin warm key-light rim at ~30% of the near layer's strength
 
   // islands: centre x, top y, width (<= 420), depth, extra haze (sub-depth), shape and details.
   // shapes vary the silhouette: cone (one main hanging cone), twin (two cones), mesa (wide, shallow, many drips),
@@ -638,10 +678,10 @@
     const M = K.mass({ polys, poly: S.poly, seed: I.seed, pad: 8, openTop: true, openTopMax: 40, bevel: 5, dome: 50, domeK: 0.7, bump: 2, bumpScale: 20, flutes: 5, crack: 0,
       cyl: { cx: I.x, hw, k: 0.5, down: 0.5 }, strata: { period: 14, lw: 0.1, dark: 0.25, warp: 5, wl: 70, tilt: 0.03 },
       pal: { dark: [14, 8, 34], base: [70, 50, 140], soil: [60, 38, 96], moss: [120, 100, 220], mossRift: [190, 80, 150], rim: [255, 214, 150], bounce: [120, 90, 230] },
-      soil: 12, moss: 6, amb: 0.12, gamma: 1.3, rimW: 2.5, rimK: 0.55, keyK: 0.35, bounceK: 0.4, ao: 0.45, yTop, yBot, riftW: X => riftW(X), riftRimK: 0.8 });
-    sb.x.drawImage(M.c, M.x, M.y);
+      soil: 12, moss: 6, amb: 0.12, gamma: 1.3, rimW: 2.5, rimK: 0.55, keyK: 0.35, bounceK: 0.4, ao: 0.45, yTop, yBot, riftW: X => riftW(X), riftRimK: 0.8, ...WARM });
+    sb.x.drawImage(M.c, M.x, M.y); if (M.e) se.x.drawImage(M.e, M.x, M.y);
     if (I.arch) { // a hole through the island: an arch silhouette
-      sb.x.save(); sb.x.globalCompositeOperation = 'destination-out'; sb.x.beginPath(); sb.x.ellipse(I.x + hw * 0.1, I.top + I.d * 0.55, hw * 0.28, I.d * 0.3, 0, 0, 7); sb.x.fill(); sb.x.restore();
+      for (const q of [sb.x, se.x]) { q.save(); q.globalCompositeOperation = 'destination-out'; q.beginPath(); q.ellipse(I.x + hw * 0.1, I.top + I.d * 0.55, hw * 0.28, I.d * 0.3, 0, 0, 7); q.fill(); q.restore(); }
       sb.x.strokeStyle = col([255, 214, 150], 0.3); sb.x.lineWidth = 2; sb.x.beginPath(); sb.x.ellipse(I.x + hw * 0.1, I.top + I.d * 0.55, hw * 0.28, I.d * 0.3, 0, Math.PI * 0.95, Math.PI * 1.6); sb.x.stroke();
     }
     // top: grass fringe, silhouette trees, crystal spires
@@ -661,8 +701,8 @@
       const side = k % 2 ? 1 : -1, sz = 12 + r() * 26, x = I.x + side * (hw + 20 + r() * 60), y = I.top + I.d * (0.2 + r() * 0.6);
       const Q = K.rock({ cx: x, cy: y, w: sz * 1.4, h: sz, seed: I.seed * 7 + k, corners: 6, taper: 0.6, flat: 0.5, jitter: 0.3 });
       const m = K.mass({ poly: Q, seed: I.seed * 7 + k, pad: 5, bevel: 3, dome: sz * 0.5, domeK: 0.7, bump: 1, crack: 0, cyl: { cx: x, hw: sz * 0.7, k: 0.5 },
-        pal: { dark: [14, 8, 34], base: [70, 50, 140], rim: [255, 214, 150] }, amb: 0.12, rimW: 2, rimK: 0.55, riftW: X => riftW(X) });
-      sb.x.drawImage(m.c, m.x, m.y);
+        pal: { dark: [14, 8, 34], base: [70, 50, 140], rim: [255, 214, 150] }, amb: 0.12, rimW: 2, rimK: 0.55, riftW: X => riftW(X), ...WARM, warmW: 2 });
+      sb.x.drawImage(m.c, m.x, m.y); if (m.e) se.x.drawImage(m.e, m.x, m.y);
     }
     // a faint distant light-fall
     if (I.fall != null) {

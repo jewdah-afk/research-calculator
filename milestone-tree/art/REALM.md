@@ -17,7 +17,7 @@ renderer and the Roblox `Map` module:
 ```sh
 cd art
 node camera.js --build    # recompute every derived field of realm.json (sizes, tiles, memory, keep-clear, instances, particles)
-node camera.js --test     # ~1.87M checks: coverage brute force, identities, depth order, tiles, budget, sprites, fields (exit 1 on failure)
+node camera.js --test     # ~1.96M checks: coverage brute force, identities, depth order, tiles, budget, sprites, fields, biome (exit 1 on failure)
 node camera.js --report   # the table in section 1
 ```
 
@@ -32,32 +32,34 @@ live UI and are never painted. `realm.json` repeats the node coordinates only as
 |---|---|---|---|---|---|---|---|---|
 | 0 | `sky` | 0.05 | deep space: nebula, stars, cosmic sun (opaque) | 2656×1536 | 0.625 / 0.3125 | 830×960 | 2×1, 6.1 | 1×1, 1.5 |
 | 1 | `clouds` | 0.12 | far nebula wisps, god rays | 2784×1632 | 0.375 / 0.1875 | 522×612 | 2×1, 2.5 | 1×1, 0.6 |
-| 2 | `far` | 0.25 | distant hazy islands, ringed planet | 3008×1836 | 0.5 / 0.25 | 752×918 | 2×1, 5.3 | 1×1, 1.3 |
+| 2 | `far` | 0.25 | distant hazy islands, ringed planet (painter `layers/distant.js`) | 3008×1836 | 0.5 / 0.25 | 752×918 | 2×1, 5.3 | 1×1, 1.3 |
 | 3 | `mid` | 0.45 | detailed islands, light-falls, mist bands | 3360×2160 | 0.75 / 0.375 | 840×810 | 3×2, 15.7 | 2×1, 3.9 |
-| 4 | `near` | 0.7 | big floating rocks close behind the world (sparse) | 3800×2752 | 0.5 / 0.25 | 950×688 | 2×2, 10.1 | 1×1, 2.5 |
+| 4 | `near` | 0.7 | big floating rocks close behind the world, sparse (painter `layers/rocks.js`) | 3800×2752 | 0.5 / 0.25 | 950×688 | 2×2, 10.1 | 1×1, 2.5 |
 | 5 | `world` | 1.0 | `world.js`: tree, sockets, rift, outcrop, shrine | **3840×2560** | 1 / 0.5 | 960×640 | 4×4, 37.9 | 2×2, 9.5 |
 | 6 | `fg` | 1.3 | blurred framing vines, ferns, leaves (sparse) | 5240×3640 | 0.3 / 0.15 | 786×546 | 2×2, 6.6 | 1×1, 1.7 |
-| 7 | `particles` | 1.6 | bokeh + dust, a sprite **field** (no baked texture) | infinite (cell 1800×1200) | atlas | – | – | – |
+| 7 | `particles` | 1.6 | bokeh + dust, a sprite **field** (no baked texture) | infinite (cell 5290×3210) | atlas | – | – | – |
 
-There are two more particle fields: `motesFar` at f = 0.7, drawn with the near rocks, and `motesNear` at f = 1.3,
-drawn with the foreground. With them, drifting dust exists at three depths.
+There are two more particle fields: `motesFar` at f = 0.7 (cell 3640×2350), drawn with the near rocks, and
+`motesNear` at f = 1.3 (cell 4670×3060), drawn with the foreground. With them, drifting dust exists at three depths.
+Every field cell is larger than any screen, so no particle ever shows twice (section 6.3).
 
 **Totals**, counted as RGBA8 bytes of every uploaded image with gutters included:
 
-| tier | tiles | + atlas | texture MB | if the engine keeps mips (×4/3) | budget | GUI objects (tiles + sprites + field pools) |
+| tier | tiles | + atlas | texture MB | if the engine keeps mips (×4/3) | budget | GUI objects (tiles + sprites + field pools + blooms) |
 |---|---|---|---|---|---|---|
-| HIGH | 36 | 1024² | **88.2** | 117.7 | 120 | 323 |
-| LOW | 11 | 512² | **22.1** | 29.4 | 35 | 135 |
+| HIGH | 36 | 1024² | **88.2** | 117.7 | 120 | 362 |
+| LOW | 11 | 512² | **22.1** | 29.4 | 35 | 155 |
 
-The tiler drops fully transparent tiles, which are common in `near` and `fg`, so the real numbers are lower.
+The tiler skips a tile that is fully transparent, but with the current art none is (0 of 36 HIGH, 0 of 11 LOW), so
+these totals are exactly what uploads. HIGH is at 98% of its budget: see section 3, Memory.
 
 "Local px" is the layer's own pixel unit: 1 local px is 1 map point on screen when the layer's zoom is 1. For the
 world layer, local px are world px. A layer's texture is `size × res`, and the client scales it back up.
 
 **Z-order** inside the MapGui, back to front (`realm.json → zOrder`):
-sky tiles, sky sprites, clouds tiles, clouds sprites, far tiles, far sprites, mid tiles, mid sprites, **biome wash**,
-near tiles, near sprites, field `motesFar`, world tiles, world sprites, fg tiles, fg sprites, field `motesNear`,
-**node links, nodes**, field `particles`, **vignette**.
+sky tiles, sky sprites, **corrupt bloom** (clouds), clouds tiles, clouds sprites, far tiles, far sprites, mid tiles,
+mid sprites, **biome wash**, **corrupt bloom** (near), near tiles, near sprites, field `motesFar`, world tiles, world
+sprites, fg tiles, fg sprites, field `motesNear`, **node links, nodes**, field `particles`, **vignette**.
 The foreground sits *under* the nodes, so node plates always read cleanly. The particle field sits over them but is
 very faint (alpha ≤ 0.24 for bokeh) and never takes input.
 
@@ -167,10 +169,12 @@ converts:
 1. letterbox anything outside aspect [0.45, 3.6] (a black box around the map; practically only 32:9 monitors);
 2. `s = max(w/2560, h/1440)` if the box is larger than 2560×1440; `s = min(w/568, h/320)` if it is smaller than
    568×320; otherwise `s = 1`;
-3. a `UIScale` of `s` on the map root, and `V = box / s`.
+3. `V = box / m`, with m = that s (device px per map point).
 
-A 4K screen therefore renders the 2560×1440 layout at 1.5× device pixels. Nothing else in the client needs to know
-about DPI.
+A 4K screen therefore renders the 2560×1440 layout at 1.5× device pixels. The camera maths stays in map points. The
+client never puts a `UIScale` between the Box and a tile, because tile edges must land on whole device pixels (9.3).
+It writes positions in **Scale units of the Box** instead: a map point q becomes `fromScale(q.x / V.w, q.y / V.h)`,
+which is DPI-free. Only the tile snapping (9.3) and the node widgets' own `UIScale(m)` use m.
 
 ### 2.7 Required layer sizes: "no layer ever runs out"
 
@@ -225,21 +229,27 @@ ReducedMotion the camera starts at z directly.
   row is half width or height (`grid.LOW.cols/rows`).
 * **Gutters.** The gutter holds the neighbouring tile's pixels (edge pixels repeated at the layer border). The client
   shows only the inside, using `ImageRectOffset = (2, 2)` and `ImageRectSize = (tw, th)`. Bilinear sampling at the
-  edge then reads real neighbour colour, which avoids seams from filtering. Each tile is also drawn **1 map point
-  wider and taller** (not the last column or row), which avoids seams from pixel rounding. The overlap covers
-  duplicated content, so it is invisible.
+  edge then reads real neighbour colour, which avoids seams from filtering.
+* **Placement.** Neighbouring tiles share their edges, and every edge sits on a whole device pixel (9.3). There is
+  no overlap: a tile drawn 1 point larger blends a translucent layer's edge strip twice (a visible line on clouds and
+  mist) and shifts sharp content by up to 1 px. Snapped, the tiles match a single texture exactly apart from the
+  resampling.
 * **Alpha bleed.** Roblox turns fully transparent pixels black on upload, and scaled edges then show a dark fringe.
   Before export, every pixel with alpha 0 gets the RGB of its nearest opaque pixel and keeps alpha 0. The sprite
   atlas gets the same treatment.
 * **Empty tiles** (max alpha < 2/255) are not uploaded, and the client skips them.
-* **Format**: PNG (Open Cloud does not take WebP). File names are `out/tiles/<TIER>/<layer>_<i>_<j>.png`, with i the
-  column and j the row, both from 0. Asset map: `out/realm_assets.json` =
+* **Format**: PNG (Open Cloud does not take WebP). File names are `roblox/tiles/<TIER>/<layer>_<i>_<j>.png` (plus
+  `roblox/tiles/<TIER>/atlas.png`), with i the column and j the row, both from 0. `node roblox/tile.js` writes them and
+  `roblox/manifest.json`. Asset map: `out/realm_assets.json` =
   `{ "HIGH": { "<layer>": { "<i>_<j>": "rbxassetid://…" }, "atlas": "rbxassetid://…" }, "LOW": { … } }`.
 * **Painting resolution.** Painters render at `size × res.HIGH`, drawing in local coordinates with
   `ctx.setTransform(res, 0, 0, res, 0, 0)`. Canvas `filter: blur(px)` ignores the transform, so multiply blur radii
   by `res`. The tiler also accepts a full-size render and downsamples it with high quality.
 * **Memory** is set by pixel count (the engine transcodes to a fixed format). The totals are in section 1. The test
   checks that they fit the budget even if mip chains are kept.
+* **HIGH has no headroom.** It is at 98% of its budget: 117.7 of 120 MB with mips, so 2.3 MB are left. Any new or
+  enlarged HIGH texture must be paid for elsewhere, for example by lowering `res.HIGH` of `fg` or `clouds` (both are
+  blurred, so they lose little). `--test` fails when the budget is exceeded. LOW has 5.6 MB left.
 
 ---
 
@@ -276,29 +286,65 @@ rim (255,46,99) lights right-facing edges.
 
 ---
 
-## 5. Biomes: the realm and the rift
+## 5. Biomes: the realm, the rift and the corrupted outcrop
 
-Panning from the tree (x < 2300) toward the rift (x > 2600) cross-fades the mood. Two weights come from the camera
-centre (camera.js `biome`):
+Panning from the tree (x < 2300) toward the rift (x > 2600) cross-fades the mood from violet and gold to crimson and
+magenta. Near the CR / CM outcrop, corrupted green light bleeds into the crimson. Two weights drive it (camera.js
+`biome(C, B, z, V)`, with V in map points):
 
 ```
 w.rift    = smoothstep(2300, 2600, C.x)
-w.corrupt = smoothstep(3300, 3600, C.x) · (1 − smoothstep(350, 700, |C.y − 1250|))      (the CR/CM outcrop)
+cover     = |R ∩ view| / |view|        R = outcrop rect [3300, 3840] × [700, 1700], view = C ± V/(2z)   (viewCover)
+w.corrupt = w.rift · smoothstep(0.02, 0.22, cover)
 ```
 
-The client eases both toward these targets with τ = 0.35 s, instantly with ReducedMotion. It writes colours only when
-a weight has moved by more than 0.01. The weights drive three things:
+**Why the corrupt weight looks at the view, not the centre.** The hard clamp keeps the camera centre at
+x ≤ 3840 − V.w/(2z): 2816 on a 2560-wide screen and 3072 on a 1920 one at zMax. A centre-based weight at x 3300–3600
+never switched on for a desktop player. At the east limit the outcrop instead fills 15–35% of a desktop view (up to
+100% on a portrait phone), so the weight follows that share. It is 0 at the start camera and at every overview zoom,
+because w.rift is 0 there, and at the east limit it reaches:
 
-1. **Tile tint (multiply).** Every tile of layer L gets
-   `ImageColor3 = mix(mix(white, L.tint.rift, w.rift), L.tint.corrupt, 0.5·w.corrupt)`. The rift tints get stronger
-   with distance: sky (255,196,214), clouds (255,170,196), far (255,186,205), mid (255,205,215), near (255,220,225),
-   fg (255,225,230). The world is never tinted, because it is painted as it should look.
-2. **Biome wash.** One full-screen Frame between `mid` and `near`. Its colour is
-   `mix(mix((70,40,140), (150,20,60), w.rift), (30,160,60), 0.35·w.corrupt)` and its alpha is
-   `mix(0.06, 0.12, w.rift)`. It washes the whole background toward the biome's air colour, like Terraria's
-   background fade.
-3. **Sprite colours.** Sprites with a `color` object use `mix(mix(realm, rift, w.rift), corrupt, 0.5·w.corrupt)`. Field
-   particles use `mix(palette[c], kind.rift, w.rift)`.
+| screen | z 1 | z 1.1 | z 1.25 (zMax) |
+|---|---|---|---|
+| 2560×1440 | 0.66 | 0.88 | 1 |
+| 1920×1080 | 1 | 1 | 1 |
+| 1366×768 and smaller | 1 | 1 | 1 |
+
+`--test` checks this for every domain viewport: the east limit near y 1250 reaches ≥ 0.9, the 1920 and 2560 screens
+stay ≥ 0.6 over z 1–1.25, and the tree and the start camera stay at 0.
+
+The client recomputes both weights on every frame the camera moves, eases them toward their targets with τ = 0.35 s
+(instantly with ReducedMotion), and writes colours only when a weight has moved by more than 0.01. The weights drive:
+
+1. **Tile tint (multiply).** Every tile of layer L gets `ImageColor3 = mix(white, L.tint.rift, w.rift)`. The rift
+   tints get stronger with distance: sky (255,196,214), clouds (255,170,196), far (255,186,205), mid (255,205,215),
+   near (255,220,225), fg (255,225,230). The world is never tinted, because it is painted as it should look.
+   (`tint.corrupt` and `wash.corrupt` are retired. They equal the rift values, so a consumer still on the old rule
+   draws the same colours.)
+2. **Biome wash.** One full-screen Frame between `mid` and `near`. Its colour is `mix((70,40,140), (150,20,60), w.rift)`
+   and its alpha is `mix(0.06, 0.12, w.rift)`. It washes the whole background toward the biome's air colour, like
+   Terraria's background fade.
+3. **The corrupt accent is light next to the crimson, never a blend over it.** Green and crimson are complements: a
+   multiply tint or a wash toward green over crimson and violet art turns the whole screen a muddy grey-mauve (the
+   first version did that). So the corrupt weight never touches tile tints or the wash. It works through three local
+   effects around the outcrop instead:
+   * **Blooms** (`biomes.corrupt.bloom`): a large soft green glow (atlas `glow`) in the `clouds` layer (3200×3400 local
+     px, colour (60,230,120), alpha 0.3) and in the `near` layer (1900×2500, (40,255,110), alpha 0.35). Each one is
+     drawn *before* its layer's tiles, so clouds and rocks show against the green. The centre is `local` (derived by
+     the build), which is the spot behind the outcrop focus (3620, 1180) as seen from the east-limit camera
+     (2880, 1250, z 1). `ImageTransparency = 1 − alpha·w.corrupt`, and `Visible = false` at 0.
+   * **Outcrop light** at a world point p: `light(p) = 1 − smoothstep(0.55, 1.25, |(p − (3620, 1180)) / (420, 650)|)`
+     (camera.js `corruptLight`). It is 1 over the outcrop, CR and CM, under 0.02 at the rift centre, and 0 west of
+     x 3095. For a sprite or particle, p is the world point under it on screen: `p = C + (q − Vc)/z`.
+   * **Sprite colours.** Sprites with a `color` object use
+     `mix(mix(realm, rift, w.rift), corrupt, w.corrupt·light(p))`. Mists, wisps, light-falls and shards near the outcrop
+     on screen turn green, and the ones by the rift stay crimson. These ~33 colours depend on the camera, so the client
+     rewrites them when a weight moves by more than 0.01, or when the camera has moved more than 24 map points or 2%
+     of zoom since the last pass. It does this only while w.corrupt > 0, plus once when it returns to 0.
+   * **Field particles.** `g = w.corrupt·light(p)` and
+     `ImageColor3 = mix(mix(palette[c], kind.rift, w.rift), kind.corrupt, smoothstep(p.cg − 0.12, p.cg + 0.12, g))`.
+     Each particle turns green at its own threshold `cg` (in 0.1–0.9, derived), so around the outcrop some motes are
+     green and some are embers: the colours sit side by side instead of being averaged.
 
 **Painted biome split.** Painters also paint the rift side into each layer's art. For layer f, the biome midpoint
 x = 2450 lies behind the screen centre at local `splitX = A.x + f·(2450 − 1920)`. Values are in
@@ -380,10 +426,23 @@ and no baked texture.
 * **Zoom thinning** keeps the on-screen count about constant. Particle i shows only when `z ≥ τ_i`, where
   `s(τ_i) = s(zFull)·√u_i` and the u_i are stratified. That gives
   `E[count] = V.w·V.h·n / (cell area · s(zFull)²)` for every z ≤ zFull. Each particle fades in over `[τ_i, 1.12·τ_i]`.
+* **No repeats.** The cell is larger than any screen. The build derives it (`cell`, `cellWorstCase`) as the largest
+  local rect any domain viewport shows at any allowed zoom where the field's alpha is at least `cellCover` = 0.25,
+  plus the largest particle, rounded up to 10 px. The results are motesFar 3640×2350 (every zoom: it never fades),
+  motesNear 4670×3060 (from z 0.539) and particles 5290×3210 (from z 0.599). So no particle is ever drawn twice on
+  one screen. With the old 1800×1200 cell, the same bokeh pair repeated 1284 px apart at z 0.8 on 1920×1080. `--test`
+  checks every domain viewport, and also checks 2,500 random cameras for a particle index drawn twice.
 * **Targets at 1920×1080.** motesFar: 14 motes. motesNear: 12 motes + 3 sparks. particles: 6 bokeh + 8 dust. Counts
-  scale with screen area.
-* **Pools** (the most sprites ever on screen, sampled over the whole domain): motesFar 30/18, motesNear 33/18,
-  particles 30/12 (HIGH/LOW). LOW uses the particles with `low: 1`.
+  scale with screen area. `perCell` follows the cell area, so the density on screen does not depend on the cell size.
+* **Positions** start on a jittered grid, one particle per stratum, with the strata taken in a shuffled order. So the
+  first screen is evenly filled and the thinning order does not depend on position. Each particle drifts at its own
+  velocity, so within minutes this becomes a uniform scatter, and the count per screen varies a little around the
+  target, as real dust does.
+* **Pools** are the most sprites a screen can hold. The count in a view is a sum of independent particle copies, so
+  the pool is `ceil(mean + 4σ)` at the worst domain viewport and zoom, and never less than the most found by 6,000
+  random samples. The pools are motesFar 41/24, motesNear 45/23 and particles 46/21 (HIGH/LOW). `--test` confirms that
+  3,000 random cameras, including 2560×1440, stay under them (peak about 80–90%). LOW uses the particles with `low: 1`.
+* **Colour**: see section 5 (the rift mix, plus the corrupt threshold `cg` near the outcrop).
 
 Per-frame algorithm (camera.js `fieldPlace` is the reference; `fieldStep` is the exact incremental form):
 
@@ -395,7 +454,10 @@ for each particle p (tier-filtered) with z ≥ p.tau:
     a = vis · smoothstep(p.tau, 1.12·p.tau, z) · (p.a + p.ta·sin(2π(t/p.tt + p.tp)))
     q = ((p.x + p.vx·t) mod cw + p.bx·sin(2π(t/p.bt + p.bp)),  (p.y + p.vy·t) mod ch + p.by·sin(2π(t/p.bt + p.bp + ¼)))
     for each cell (i, j): local = (i·cw + q.x, j·ch + q.y); if within R ± size/2:
-        next pooled ImageLabel: Position = Vc + s·(local − P), Size = p.size·s, ImageTransparency = 1 − a
+        m = Vc + s·(local − P)                                          (map points)
+        next pooled ImageLabel (AnchorPoint 0.5, 0.5), in Scale units of the Box (2.6):
+            Position = fromScale(m.x / V.w, m.y / V.h),  Size = fromScale(p.size·s / V.w, p.size·s / V.h)
+            ImageTransparency = 1 − a,  ImageColor3 = section 5 with light(C + (m − Vc)/z)
 hide the unused pool entries
 ```
 
@@ -486,47 +548,88 @@ region.
 ```
 MapGui (ScreenGui)  ScreenInsets = None, ZIndexBehavior = Sibling, DisplayOrder = 0, ResetOnSpawn = false
   Root (Frame, full screen, black)
-    Box (Frame, letterbox from mapScale, centred) + UIScale(mapScale.scale)        -- V = Box size in map points
-      L0_sky, L1_clouds, L2_far, L3_mid        (layer containers: Frame, transparent, ClipsDescendants = false)
+    Box (Frame: the letterbox of 2.6 on whole device px, no UIScale)   -- m = mapScale.scale, V = Box size / m
+      L0_sky, L1_clouds, L2_far, L3_mid     layer planes: Frame, Size = fromScale(1, 1), transparent, never moves;
+                                            ClipsDescendants = false. Children, back to front (ZIndex 1, 2, 3):
+          Back       (Frame, the moving layer container of 9.2; only L1_clouds and L4_near: it holds the bloom, 5)
+          Tile_i_j…  (ImageLabels, whole device px, rewritten when the camera moves, 9.3)
+          Sprites    (Frame, the moving layer container of 9.2; the layer's sprites inside it, in scale units)
       Wash (Frame, full Box)
       L4_near, F_motesFar (Frame, full Box), L5_world, L6_fg, F_motesNear
-      Links, Nodes                              (same transform as L5_world)
+      Links, Nodes                          (Frames, full Box; placed with the world transform, 9.3)
       F_particles, Vignette (ImageLabel, full Box, atlas "vignette", ImageColor3 (8,4,16), ImageTransparency 0.45)
 ```
 
-Every map object sets `Active = false`, `Interactable = false` (or has no input), except the nodes. The HUD, panels
-and overlays live in other ScreenGuis (DisplayOrder 10+), so moving the map never invalidates them.
+Siblings take `ZIndex` = their place in this list, so the order never depends on creation order. Every map object
+sets `Active = false`, `Interactable = false` (or has no input), except the nodes. The HUD, panels and overlays live
+in other ScreenGuis (DisplayOrder 10+), so moving the map never invalidates them.
+
+**Box.** From `mapScale` of the viewport: `Box.Size = fromOffset(round(box.w), round(box.h))`, and
+`Box.Position = fromOffset(floor((vp.X − Size.X) / 2), floor((vp.Y − Size.Y) / 2))`. Both are whole device pixels, and
+then `V = Box.Size / m`. Roblox stores a UDim offset as a whole number (a fraction is dropped) and rounds a GUI
+object's position and size separately. So an offset written in map points under a `UIScale` could never land on a
+device pixel. That is why the Box has no UIScale: offsets are written only where whole device pixels are wanted
+(tiles), and everything else uses Scale units of the Box.
 
 ### 9.2 Layer containers (every frame the camera moved)
 
 ```lua
 local function layerZoom(f, z) return z / (f + (1 - f) * z) end
--- for each layer L (w, h = L.size; ax, ay = L.anchor):
+-- for each layer L (w, h = L.size; ax, ay = L.anchor), camera C, z; V in map points
 local s  = layerZoom(L.f, z)
-local px = ax + L.f * (C.X - 1920)
-local py = ay + L.f * (C.Y - 1280)
-container.Position = UDim2.fromOffset(V.X / 2 - s * px, V.Y / 2 - s * py)
-container.Size     = UDim2.fromOffset(w * s, h * s)
+local ox = V.X / 2 - s * (ax + L.f * (C.X - 1920))     -- container origin O (map points)
+local oy = V.Y / 2 - s * (ay + L.f * (C.Y - 1280))
+Sprites.Position = UDim2.fromScale(ox / V.X, oy / V.Y)          -- Scale units of the Box: sub-pixel, DPI-free
+Sprites.Size     = UDim2.fromScale(w * s / V.X, h * s / V.Y)
+-- the Back container of clouds and near gets the same two writes
+placeTiles(L, ox, oy, s)                                        -- 9.3
 ```
 
-That is 2 writes × 8 containers. Skip them while the camera is at rest, so the ScreenGui cache holds apart from the
-ambient tweens. `fg` fades with zoom without a CanvasGroup: each fg tile and sprite gets
-`ImageTransparency = 1 − smoothstep(0.5, 0.62, z)·alpha` (write it only when the value changes), and the container
-is `Visible = false` at 0.
+That is 2 writes × 8 containers (+2 Back), plus the tile writes of 9.3. Skip them all while the camera is at rest, so
+the ScreenGui cache holds apart from the ambient tweens. `fg` fades with zoom without a CanvasGroup: each fg tile and
+sprite gets `ImageTransparency = 1 − smoothstep(0.5, 0.62, z)·alpha` (write it only when the value changes), and the
+plane is `Visible = false` at 0.
 
-### 9.3 Tiles and sprites (created once)
+### 9.3 Tiles, sprites, nodes
 
-* **Tile (i, j)** of tier T (from camera.js `tileRects`): an `ImageLabel` with `Image` = the asset (skip it if it was
-  not uploaded), `ImageRectOffset = (2, 2)`, `ImageRectSize = (cw, ch)`,
-  `Position = UDim2.fromScale(lx / w, ly / h)`, and
-  `Size = UDim2.new(lw / w, lastCol and 0 or 1, lh / h, lastRow and 0 or 1)` (the 1-point overlap).
-  `BackgroundTransparency = 1`, `ScaleType = Stretch`, `ImageColor3` = the biome tint.
-* **Sprites**: `ImageLabel` with the atlas and the `ImageRectOffset/Size` of their region (halved on LOW),
-  `AnchorPoint (0.5, 0.5)` (or a pivot for hanging ones), `Position = fromScale(x / w, y / h)`,
-  `Size = fromScale(s / w, (h or s) / h_layer)`, `Rotation = r`, and the tweens from section 6.2. All children use
-  scale units, so they follow the container's zoom for free.
-* **Nodes** stay live UI. Place them with the world transform, `q = Vc + z·(N − C)`. Their size policy (scaled with z
-  or with a minimum) is the node widget's choice.
+**Tiles: one exact recipe.** Every tile edge is a whole device pixel, and neighbours share it. There is no overlap
+and no separate rounding of position and size.
+
+```lua
+-- once per layer and tier: the column / row edges in layer-local px, from camera.js tileRects (local x, w; y, h),
+-- whole numbers: xs = { 0, w_1, w_1 + w_2, …, L.size.w },  ys = { 0, …, L.size.h }
+local X, Y = {}, {}
+local function placeTiles(L, ox, oy, s)                -- m = device px per map point (2.6)
+  for i, x in L.xs do X[i] = math.round(m * (ox + s * x)) end   -- device px from the Box's top-left corner
+  for j, y in L.ys do Y[j] = math.round(m * (oy + s * y)) end
+  for _, t in L.tiles do                               -- t.i, t.j from 0
+    t.gui.Position = UDim2.fromOffset(X[t.i + 1], Y[t.j + 1])
+    t.gui.Size     = UDim2.fromOffset(X[t.i + 2] - X[t.i + 1], Y[t.j + 2] - Y[t.j + 1])
+  end
+end
+```
+
+* A tile's right edge is `X[i + 1]`, the same number its right neighbour starts at, so there is no gap and no strip
+  blended twice. The Box sits on a whole device pixel and nothing between it and a tile scales, so these whole
+  numbers really are device pixels at any zoom and any m (0.687 on a portrait phone, 1.5 on 4K).
+* The cost is 2 writes per tile per moving frame: 72 on HIGH and 22 on LOW. A tile whose rect is off screen can be
+  set to `Visible = false` for that frame.
+* Other properties, set once: `Image` = the asset (skip the tile if it was not uploaded), `ImageRectOffset = (2, 2)`,
+  `ImageRectSize = (cw, ch)`, `ScaleType = Stretch`, `BackgroundTransparency = 1`, `BorderSizePixel = 0`,
+  `ImageColor3` = the biome tint (5).
+* The preview simulator and `compose.js` use this same recipe (`seams=snap`, the default). `seams=overlap` shows the
+  retired 1-point overlap for comparison.
+
+**Sprites**: `ImageLabel` with the atlas and the `ImageRectOffset/Size` of their region (halved on LOW),
+`AnchorPoint (0.5, 0.5)` (or a pivot for hanging ones), `Position = fromScale(x / w, y / h)`,
+`Size = fromScale(s / w, (h or s) / h_layer)`, `Rotation = r`, and the tweens from section 6.2. All children of a
+container use scale units, so they follow its zoom for free, and they stay within about half a device pixel of the
+snapped tiles. The corrupt **blooms** (5) are built the same way in the `Back` container, at `bloom.layers[].local`,
+with size `size`.
+
+**Nodes** stay live UI. Place them with the world transform, `q = Vc + z·(N − C)`, as `fromScale(q.x / V.X, q.y / V.Y)`
+inside the full-Box `Nodes` frame. Node widgets are authored in map points, so each one carries a `UIScale(m)`. Their
+size policy (scaled with z or with a minimum) is the node widget's choice.
 
 ### 9.4 Input feel (`camera.feel`)
 
@@ -539,7 +642,9 @@ is `Visible = false` at 0.
 * **Pinch.** Direct, anchored at the midpoint, with a pan by the midpoint's delta. The zoom rubber band is ±6%, and it
   springs back in 0.2 s.
 * **Double-tap / double-click.** ×1.6 toward the point over 0.35 s (quintOut).
-* **Fly to node.** SmoothDamp on C and on log z, smoothTime 0.35 s, zoom `max(current, 0.9)`.
+* **Fly to node.** SmoothDamp on C and on log z, smoothTime 0.35 s, zoom `max(current, 0.9)`. The target is the
+  hard-clamped camera `clampCamera(N, zoom, V)`, not N itself. PM, CR and CM lie past the east pan limit, so they
+  end right of centre instead of flying past the limit and springing back.
 * **Gamepad.** Left stick pans at 1400 pt/s at full tilt (deadzone 0.18, curve 1.6). Triggers zoom at 1.8× per second.
 * **Keyboard.** No pan keys, because the game owns letters and arrows. `-` / `=` zoom one notch when not claimed.
 * **Every frame.** Clamp with `clampCamera(…, { rubber = true })` while input is active, and the hard clamp at rest.
@@ -569,12 +674,30 @@ The rest of the map behaves the same in both tiers.
 
 ### 9.7 Performance rules
 
-* Tween only what is listed. HIGH has 194 animated sprites plus up to 93 pooled field sprites (LOW: 76 + 48). Per frame the Luau cost
-  is the container writes plus the field updater.
+* Tween only what is listed. HIGH has 194 animated sprites, up to 132 pooled field sprites and 2 blooms
+  (LOW: 76 + 68 + 2). Per moving frame the Luau cost is the container writes, the tile snapping (72 writes on HIGH)
+  and the field updater (about 280 particles × at most 4 cell copies).
 * While a full-screen panel covers the map: `Tween:Pause()` every ambient tween, stop the field updater, and set
   `MapGui.Enabled = false`. Resume when the panel closes.
 * Preload the visible tiles and the atlas (`ContentProvider:PreloadAsync`) behind the splash, farthest layers first.
 * The biome colour writes are throttled (section 5).
+
+### 9.8 Studio acceptance checks
+
+Run these in Studio at three map scales: a 390×844 portrait phone (m 0.687), 1920×1080 (m 1) and 3840×2160
+(m 1.5), using the device emulator or the window size.
+
+1. **Seams.** Colour `Root` magenta for the test. Pan slowly and zoom through the whole range (wheel notches, pinch,
+   and a slow tween of z), stopping at odd zooms. No magenta line may appear between `sky` or `world` tiles, and no
+   brighter or darker line along the tile seams of `clouds`, `mid` or `near`.
+2. **Whole pixels.** In a debug build, assert that every visible tile has integral `AbsolutePosition` and
+   `AbsoluteSize`, and that `AbsolutePosition.X + AbsoluteSize.X` equals its right neighbour's `AbsolutePosition.X`
+   (and the same for rows).
+3. **Registration.** Light-fall sprites stay on their island lips within 1 px while panning, and node widgets scale
+   by m (1.5 on 4K).
+4. **Fields.** At z 0.62–0.8 on 1920×1080 and 2560×1440, no bokeh pattern repeats across the screen.
+5. **Biome.** At the east limit on 1920×1080 and z 1, crimson stays saturated around the rift, and green light shows
+   behind the outcrop (the blooms), green-lit mist and some green motes. At the tree nothing is green.
 
 ---
 
@@ -589,5 +712,7 @@ The rest of the map behaves the same in both tiers.
 4. If a layer size changed, repaint that layer (painters read `size`, `anchor`, `landmarks`, `biomeLocal`,
    `keepClear` and the `lightfall` instances).
 
-`compose.js` predates this contract. It uses a top-left camera with no zoom. Previews should place layers with
-`RealmCamera.layerOffset`, sprites with `spriteState` and fields with `fieldPlace`, so they match the client exactly.
+The previews follow this contract through camera.js. `preview/realm.html` is the WebGL simulator of the client, and
+`compose.js` and `preview/record.js` drive it headless. It places layers with `RealmCamera.layerOffset`, tiles with
+the snapped recipe of 9.3, sprites with `spriteState` and fields with `fieldPlace`, so a still matches the client.
+Change the contract here first, then the simulator.

@@ -1,7 +1,8 @@
 // Parallax 0 — Deep space (f 0.05, opaque). Contract: realm.json layers[id="sky"], REALM.md sections 3, 4 and 8.
 //
 // The layer barely moves (5% of the world), so it is composed like a fixed backdrop: the cosmic sun upper left at
-// (0.36 w, 0.26 h) is the key light for the whole realm; a galactic band runs through it from the lower left to the
+// (0.36 w, 0.26 h) is the warm key light for the whole realm (white-gold core, gold corona turning through amber and
+// rose into the violet, the realm's one gold accent in deep space); a galactic band runs through it from the lower left to the
 // upper right, cut by meandering dust lanes; a calm, dim centre sits behind the tree (bright knots compressed there);
 // the right third is the Multiverse bleeding into space: a torn crimson / magenta shock shell blown out around the
 // rift, with ember knots on its front, dark fingers of the medium it ploughs into, and a few teal / cold-violet wisps
@@ -53,7 +54,16 @@ LAYERS.sky = async function () {
   const CYAN_R = ramp([[0, [16, 42, 96]], [0.35, [40, 120, 210]], [0.7, [95, 210, 255]], [1, [210, 246, 255]]]);
   const CRIM_R = ramp([[0, [60, 6, 34]], [0.3, [140, 14, 60]], [0.6, [222, 34, 92]], [0.85, [255, 70, 118]], [1, [255, 132, 158]]]);
   const MAG_R = ramp([[0, [58, 10, 64]], [0.35, [150, 32, 140]], [0.65, [226, 70, 190]], [1, [255, 186, 240]]]);
-  const TEAL = lin([70, 210, 220]), EMBER = lin([255, 96, 40]), HOT = lin([255, 186, 120]), GOLD = lin([255, 206, 120]), COLD = lin([120, 110, 255]);
+  const TEAL = lin([70, 210, 220]), EMBER = lin([255, 96, 40]), HOT = lin([255, 186, 120]), COLD = lin([120, 110, 255]);
+  // the sun's light by distance (t = d / 800 local px): white-gold core, gold corona, amber, rose, then the realm's
+  // violet. It turns through the warm side of the hue wheel: gold and violet are complements, so a straight mix
+  // between them goes through grey-brown mud, while gold -> amber -> rose -> violet stays saturated all the way
+  // (gold only where the light is bright: dim gold reads as brown, dim rose as plum, which sits well in the violet)
+  const SUN_R = ramp([[0, [255, 240, 212]], [0.05, [255, 222, 150]], [0.11, [255, 198, 104]], [0.19, [255, 164, 92]],
+    [0.29, [252, 150, 158]], [0.42, [232, 138, 214]], [0.6, [194, 128, 246]], [1, [170, 118, 246]]]);
+  const SUNLIGHT = new Array(1601);  // tabulated per local px
+  for (let d = 0; d <= 1600; d++) SUNLIGHT[d] = SUN_R(d / 800);
+  const sunLight = d => SUNLIGHT[Math.min(1600, d | 0)];
 
   const nA = makeNoise(1101), nB = makeNoise(1202), nC = makeNoise(1303), nD = makeNoise(1404), nE = makeNoise(1505),
     nF = makeNoise(1606), nG = makeNoise(1707), nH = makeNoise(1808), nS = makeNoise(1909), nI = makeNoise(2010), nJ = makeNoise(2111), nK = makeNoise(2212);
@@ -157,9 +167,12 @@ LAYERS.sky = async function () {
   }
 
   // ---- pass C: light -------------------------------------------------------------------------------------------------
-  const R = new Float32Array(N), G = new Float32Array(N), B = new Float32Array(N), E = new Float32Array(N);
+  // E: emissive share (lifts the luma clamp toward emissiveMax); WM: warm-light share, tone mapped hue-preserving so
+  // the sun's gold survives the roll-off instead of bleaching to a grey-white (REALM.md 8: the key light is warm)
+  const R = new Float32Array(N), G = new Float32Array(N), B = new Float32Array(N), E = new Float32Array(N), WM = new Float32Array(N);
   const BG_T = lin([8, 5, 17]), BG_M = lin([14, 8, 31]), BG_B = lin([26, 13, 56]), BG_R = lin([22, 6, 24]), BG_RB = lin([36, 10, 34]);
-  const REFL_NEAR = lin([255, 196, 160]), REFL_FAR = lin([214, 150, 236]), RIM_SUN = lin([255, 196, 226]), RIM_RIFT = lin([255, 70, 110]);
+  // (near the sun the reflection haze and the lit dust rims take sunLight(d); farther out they cool to these)
+  const REFL_FAR = lin([214, 150, 236]), RIM_SUN = lin([255, 190, 222]), RIM_RIFT = lin([255, 70, 110]), WHITE = [1, 1, 1];
   for (let j = 0; j < TH; j++) {
     const y = (j + 0.5) / RES, vy = y / LH;
     for (let i = 0; i < TW; i++) {
@@ -189,29 +202,35 @@ LAYERS.sky = async function () {
       const wcol = mix3(TEAL, COLD, F.acc3[k]);
       const wk = clamp(F.wisp[k] * 4) * F.inner[k] * hr * clamp(F.acc2[k] * 1.4 + 0.15) * 0.8;
       col = mix3(col, wcol, wk);
-      // the sun warms the gas near it (gold toward the core)
-      const dx = x - SX, dy = y - SY, dSun = Math.hypot(dx, dy);
-      col = mix3(col, GOLD, Math.exp(-(dSun / 380) * (dSun / 380)) * 0.6);
+      // the sun colours the gas near it (gold at the core, amber, then rose where it meets the violet)
+      const dx = x - SX, dy = y - SY, dSun = Math.hypot(dx, dy), lc = sunLight(dSun);
+      col = mix3(col, lc, 0.8 * Math.exp(-(dSun / 240) * (dSun / 240)) * (1 - hr));
       const absorb = Math.exp(-2.1 * dust);
       // reflection haze lit by the sun, shadowed by the dust between (T): streaming shadow rays
       const Isun = 1 / (1 + (dSun / 300) * (dSun / 300));
       const refl = 0.22 * Isun * T[k] * Math.pow(F.broad[k], 1.2) * (1 - 0.7 * dust) * (0.6 + 0.4 * calm);
-      const rcol = mix3(REFL_NEAR, REFL_FAR, smooth(100, 800, dSun));
-      // thin rim fronts: dust edges facing the sun catch warm light near it; in the rift they face the tear (crimson)
+      const rcol = mix3(lc, REFL_FAR, smooth(240, 560, dSun));
+      // thin rim fronts: dust edges facing the sun catch its light, gold on the nearest lanes (the warm spill of the
+      // key light), rose farther out; in the rift they face the tear (crimson)
       let rimS = 0, rimR = 0;
+      const warmNear = Math.exp(-(dSun / 330) * (dSun / 330)) * (1 - hr);      // how much of the sun's light is still gold
       if (dust > 0.02) {
-        rimS = rimAt(x, y, SX, SY, 6) * 0.4 / (1 + (dSun / 380) * (dSun / 380)) * T[k] * (1 - hr * 0.8);
+        rimS = rimAt(x, y, SX, SY, 6) * (0.4 + 0.5 * warmNear) / (1 + (dSun / 380) * (dSun / 380)) * T[k] * (1 - hr * 0.8);
         rimR = rimAt(x, y, RXL, RYL, 7) * (0.35 * rift + 1.1 * front + 0.4 * inner) * hr * calm;
       }
+      const rimC = mix3(mix3(lc, WHITE, 0.14), RIM_SUN, smooth(260, 600, dSun));
       // behind the nodes, bright knots are compressed harder than the dim gas (calm, not a hole)
       const em = (I + W) / (1 + 2.2 * (1 - calm) * (I + W));
       // hot ember knots where the shell front burns brightest (their own light, not a hue shift of the pink)
       const hot = 0.75 * Math.pow(F.front[k], 1.6) * Math.pow(F.acc3[k], 1.5) * (0.25 + 0.75 * dens) * calm * Math.sqrt(absorb) * (0.4 + 0.6 * clamp(F.wisp[k] * 3));
       const hc = mix3(EMBER, HOT, smooth(0.1, 0.3, hot));
       R[k] = hc[0] * hot; G[k] = hc[1] * hot; B[k] = hc[2] * hot;
-      R[k] += bg[0] * bgk + col[0] * em * absorb + rcol[0] * refl + RIM_SUN[0] * rimS + RIM_RIFT[0] * rimR;
-      G[k] += bg[1] * bgk + col[1] * em * absorb + rcol[1] * refl + RIM_SUN[1] * rimS + RIM_RIFT[1] * rimR;
-      B[k] += bg[2] * bgk + col[2] * em * absorb + rcol[2] * refl + RIM_SUN[2] * rimS + RIM_RIFT[2] * rimR;
+      R[k] += bg[0] * bgk + col[0] * em * absorb + rcol[0] * refl + rimC[0] * rimS + RIM_RIFT[0] * rimR;
+      G[k] += bg[1] * bgk + col[1] * em * absorb + rcol[1] * refl + rimC[1] * rimS + RIM_RIFT[1] * rimR;
+      B[k] += bg[2] * bgk + col[2] * em * absorb + rcol[2] * refl + rimC[2] * rimS + RIM_RIFT[2] * rimR;
+      // the gold spill (lit dust edges, sunlit haze near the core) is light, not gas: emissive for the clamp
+      const spill = warmNear * clamp(rimS * 9 + refl * 5);
+      E[k] = Math.max(E[k], 0.6 * spill); WM[k] = Math.max(WM[k], spill);
     }
   }
 
@@ -270,8 +289,8 @@ LAYERS.sky = async function () {
   }
 
   // ---- the cosmic sun (emissive) -------------------------------------------------------------------------------------
-  const STREAK = lin([236, 214, 255]);
-  const SUNC = [lin([255, 246, 228]), lin([255, 214, 150]), lin([255, 172, 168]), lin([196, 126, 255]), lin([110, 66, 214])];
+  // coloured by sunLight(d): white-gold core, gold corona, amber, rose, violet (REALM.md 8: sun core (255, 214, 150))
+  const STREAK = lin([255, 230, 188]), HALO = lin([110, 66, 214]);
   for (let j = 0; j < TH; j++) {
     const y = (j + 0.5) / RES, dy = y - SY;
     for (let i = 0; i < TW; i++) {
@@ -285,11 +304,13 @@ LAYERS.sky = async function () {
       const streak = (0.14 * Math.exp(-(dy / 2.4) * (dy / 2.4)) * Math.exp(-Math.pow(Math.abs(dx) / 190, 1.3)) +
         0.06 * Math.exp(-(dy / 8) * (dy / 8)) * Math.exp(-Math.abs(dx) / 260));
       const add = [0, 0, 0];
-      for (let c = 0; c < 3; c++) add[c] = SUNC[0][c] * a0 + SUNC[1][c] * a1 + SUNC[2][c] * a2 + SUNC[3][c] * a3 + SUNC[4][c] * a4 + STREAK[c] * streak;
+      const lc = sunLight(d), A = a0 + a1 + a2 + a3;   // the wide a4 halo stays the realm's violet
+      for (let c = 0; c < 3; c++) add[c] = lc[c] * A + HALO[c] * a4 + STREAK[c] * streak;
       // the outer glow sits behind the dust; the core and streak do not
       const veil = Math.exp(-1.6 * F.dust[k]);
       R[k] += add[0] * (d < 60 ? 1 : veil); G[k] += add[1] * (d < 60 ? 1 : veil); B[k] += add[2] * (d < 60 ? 1 : veil);
-      E[k] = clamp((a0 + a1 + a2 * 1.2 + streak * 1.5) * 1.4);
+      E[k] = Math.max(E[k], clamp((a0 + a1 + a2 * 1.2 + streak * 1.5) * 1.4));
+      WM[k] = Math.max(WM[k], clamp((a0 + a1 + a2 + a3 * 0.6 + streak) * 2.2));
     }
   }
 
@@ -297,8 +318,17 @@ LAYERS.sky = async function () {
   const out = canvas(TW, TH), o = ctx(out), img = o.createImageData(TW, TH), px = img.data;
   const dr = rng(777);
   const enc = c => Math.pow(clamp(c), 1 / 2.2);
+  const tm = v => 1 - Math.exp(-v * 1.05);
   for (let k = 0; k < N; k++) {
-    let c0 = enc(1 - Math.exp(-R[k] * 1.05)), c1 = enc(1 - Math.exp(-G[k] * 1.05)), c2 = enc(1 - Math.exp(-B[k] * 1.05));
+    // per-channel roll-off for the gas (bright knots bleach gently); hue-preserving (on the max channel) where the
+    // light is the sun's, so the corona stays gold instead of going grey-white
+    let l0 = tm(R[k]), l1 = tm(G[k]), l2 = tm(B[k]);
+    const w = WM[k];
+    if (w > 0) {
+      const m = Math.max(R[k], G[k], B[k], 1e-6), s = tm(m) / m;
+      l0 = lerp(l0, R[k] * s, w); l1 = lerp(l1, G[k] * s, w); l2 = lerp(l2, B[k] * s, w);
+    }
+    let c0 = enc(l0), c1 = enc(l1), c2 = enc(l2);
     const L = 0.2126 * c0 + 0.7152 * c1 + 0.0722 * c2, lim = lerp(MAXL, EMIS, E[k]), knee = lim * 0.82;
     if (L > knee) { const L2 = knee + (lim - knee) * (1 - Math.exp(-(L - knee) / (lim - knee))), s = L2 / L; c0 *= s; c1 *= s; c2 *= s; }
     const q = k * 4, dz = () => (dr() + dr() - 1) * 0.9;

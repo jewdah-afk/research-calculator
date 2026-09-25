@@ -232,6 +232,20 @@
     const corrupt = rift * smoothstep(c.cover[0], c.cover[1], cover);
     return { rift, corrupt, cover };
   }
+  /** The outcrop's light at world point p, in [0, 1]: 1 - smoothstep(falloff, |(p - focus) / radius|). Corrupt colours
+   *  are laid next to the crimson where this is high (juxtaposed), never mixed over the whole screen: green and
+   *  crimson are complements, and a global blend of the two reads as grey. */
+  function corruptLight(B, p) {
+    const c = B.corrupt, L = c.light;
+    const d = Math.hypot((p.x - c.focus[0]) / L.radius[0], (p.y - c.focus[1]) / L.radius[1]);
+    return 1 - smoothstep(L.falloff[0], L.falloff[1], d);
+  }
+  /** Layer-local centre of a corrupt bloom on layer Lg ({ f, w, h }): the spot behind the focus as seen from the
+   *  bloom reference camera [x, y, z] (the east limit), so the glow sits behind the outcrop where the player sees it. */
+  function bloomLocal(Lg, B, world = WORLD) {
+    const c = B.corrupt, [cx, cy, cz] = c.bloom.camera, s = layerZoom(Lg.f, cz), P = layerCenter(Lg, { x: cx, y: cy }, world);
+    return { x: P.x + (cz / s) * (c.focus[0] - cx), y: P.y + (cz / s) * (c.focus[1] - cy) };
+  }
   const mixRGB = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
 
   // ------------------------------------------------------------------------------------------------ rng / hashing
@@ -360,7 +374,7 @@
     clamp, lerp, smoothstep, mod, rng, hash01, EASE, mixRGB,
     mapScale, inDomain, layerZoom, layerZoomInverse, zMin, zoomRange, anchorOf, layerCenter, layerOffset, visibleRect,
     localToScreen, screenToLocal, worldToScreen, screenToWorld, zoomAt, panLimits, clampCamera, rubberBand,
-    requiredSize, planTiles, tileRects, viewCover, biome, channel, spriteState, fieldAlphaZoom, visibleExtent,
+    requiredSize, planTiles, tileRects, viewCover, biome, corruptLight, bloomLocal, channel, spriteState, fieldAlphaZoom, visibleExtent,
     fieldLocal, fieldPlace, fieldStep,
   };
 });
@@ -425,6 +439,12 @@ function build(RC, fs, FILE) {
       hard: nodes.map(n => { const p = aligned(n.x, n.y + fp.dy); return [n.id, round(p.x), round(p.y), Math.ceil(fp.rx * kHard), Math.ceil(fp.ry * kHard)]; }),
       soft: nodes.map(n => { const p = aligned(n.x, n.y + fp.dy); return [n.id, round(p.x), round(p.y), Math.ceil(softX), Math.ceil(softY)]; }),
     };
+  }
+
+  // ---- corrupt bloom: the layer-local centre of each glow (behind the outcrop, seen from the bloom reference camera)
+  for (const bl of R.biomes.corrupt.bloom.layers) {
+    const L = R.layers.find(l => l.id === bl.layer), p = RC.bloomLocal({ f: L.f, w: L.size[0], h: L.size[1] }, R.biomes);
+    bl.local = [round(p.x), round(p.y)];
   }
 
   // ---- sprites: deterministic instances (HIGH list; LOW = the first count.LOW of them)
@@ -526,7 +546,8 @@ function build(RC, fs, FILE) {
           vx: round(pick(r, kind.vx), 2), vy: round(pick(r, kind.vy), 2), bx: round(pick(r, kind.bob), 1), by: round(pick(r, kind.bob), 1),
           bt: round(pick(r, kind.bobPeriod), 2), bp: round(r(), 3), a: round(pick(r, kind.alpha), 3), ta: round(pick(r, kind.twinkle), 3),
           tt: round(pick(r, kind.twinklePeriod), 2), tp: round(r(), 3), c: Math.floor(r() * kind.palette.length),
-          tau: round(RC.layerZoomInverse(F.f, sFull * Math.sqrt(Math.max(u, 1e-6))), 4), t: Math.floor(r() * kind.atlas.length) });
+          tau: round(RC.layerZoomInverse(F.f, sFull * Math.sqrt(Math.max(u, 1e-6))), 4), t: Math.floor(r() * kind.atlas.length),
+          cg: round(0.1 + 0.8 * r(), 3) }); // cg: the outcrop light at which this particle turns corrupt (REALM.md 5)
       }
     }
     parts.forEach((p, idx) => { p.low = lowKeep(F, p, idx) ? 1 : 0; });
@@ -580,7 +601,7 @@ function build(RC, fs, FILE) {
   // ---- atlas + budget
   const atlasBytes = { HIGH: R.atlas.size[0] * R.atlas.size[1] * 4, LOW: (R.atlas.size[0] / 2) * (R.atlas.size[1] / 2) * 4 };
   const spriteObjects = tier => R.sprites.reduce((a, S) => a + Math.min(S.count[tier], S.instances.length), 0) +
-    R.fields.reduce((a, F) => a + F.poolMax[tier], 0);
+    R.fields.reduce((a, F) => a + F.poolMax[tier], 0) + R.biomes.corrupt.bloom.layers.length;
   R.budget = {
     note: 'RGBA8 bytes of every uploaded image (tiles include their gutters). withMips = x4/3 in case the engine mips GUI textures. Tiles the tiler finds fully transparent are not uploaded, so these are upper bounds.',
     HIGH: { tiles: tilesHi, atlasImages: 1, textureMB: round((memHi + atlasBytes.HIGH) / 1048576, 1), withMipsMB: round((memHi + atlasBytes.HIGH) * 4 / 3 / 1048576, 1), budgetMB: R.tiers.HIGH.budgetMB, guiObjects: tilesHi + spriteObjects('HIGH') },
@@ -927,6 +948,24 @@ function test(RC, fs, FILE) {
     const z = 1 + (RC.Z_MAX - 1) * k / 20, C = RC.clampCamera({ x: W.w, y: 1250 }, z, V), w = RC.biome(C, B, z, V);
     ok(w.corrupt >= 0.6, `corrupt ${w.corrupt.toFixed(3)} at the east limit, V=${V.w}x${V.h} z=${z.toFixed(3)}`);
   }
+  // the outcrop light: full on the outcrop and its nodes, off at the rift centre and everywhere west of it
+  const light = (x, y) => RC.corruptLight(B, { x, y });
+  ok(light(3510, 1200) >= 0.95 && light(3690, 930) >= 0.95 && light(3600, 1320) >= 0.95, 'corrupt light on CR, CM, the outcrop');
+  ok(light(3150, 1480) <= 0.05 && light(3150, 1560) <= 0.05 && light(1500, 1150) === 0 && light(3089, 1180) === 0, 'corrupt light off at the rift and the tree');
+  for (let k = 0; k < 2000; k++) { const v = light(r() * W.w, r() * W.h); ok(v >= 0 && v <= 1, 'corrupt light in [0, 1]'); }
+  // blooms sit exactly behind the focus at their reference camera, and are drawn before their layer's tiles
+  for (const bl of B.corrupt.bloom.layers) {
+    const L = R.layers.find(l => l.id === bl.layer), Lg = { f: L.f, w: L.size[0], h: L.size[1] }, [cx, cy, cz] = B.corrupt.bloom.camera;
+    const a = RC.localToScreen(Lg, { x: cx, y: cy }, cz, Vref, { x: bl.local[0], y: bl.local[1] }), b = RC.worldToScreen({ x: cx, y: cy }, cz, Vref, { x: B.corrupt.focus[0], y: B.corrupt.focus[1] });
+    ok(Math.hypot(a.x - b.x, a.y - b.y) < 0.2, `bloom ${bl.layer} behind the focus (${(a.x - b.x).toFixed(2)}, ${(a.y - b.y).toFixed(2)})`);
+    ok(R.zOrder.indexOf('corrupt bloom ' + bl.layer) >= 0 && R.zOrder.indexOf('corrupt bloom ' + bl.layer) < R.zOrder.indexOf(bl.layer + ' tiles'), `bloom ${bl.layer} z-order`);
+    ok(bl.alpha > 0 && bl.alpha <= 0.5 && !!R.atlas.regions[B.corrupt.bloom.atlas], `bloom ${bl.layer} alpha / atlas`);
+  }
+  // tiles and the wash take no corrupt colour (the retired keys equal the rift ones, so old consumers match the rule)
+  for (const L of R.layers) ok(!L.tint || L.tint.corrupt == null || L.tint.corrupt.every((v, i) => v === L.tint.rift[i]), `${L.id}: tiles take no corrupt tint`);
+  ok(!B.wash.corrupt || B.wash.corrupt.color.every((v, i) => v === B.wash.rift.color[i]), 'the wash takes no corrupt colour');
+  for (const F of R.fields) for (const p of F.particles) ok(p.cg >= 0.1 && p.cg <= 0.9, `field ${F.id} cg`);
+  for (const F of R.fields) for (const kd of F.kinds) ok(Array.isArray(kd.corrupt) && kd.corrupt.length === 3, `field ${F.id} ${kd.name} corrupt colour`);
   // the old two-argument form still works (preview fallback: z = C.z or 1, V = 1920x1080)
   ok(near(RC.biome({ x: 2880, y: 1250 }, B).corrupt, RC.biome({ x: 2880, y: 1250 }, B, 1, Vref).corrupt, 1e-12), 'biome fallback');
   console.log(`biome: corrupt at the east limit reaches >= ${eastWorst.v.toFixed(3)} on every viewport (lowest at ${eastWorst.at})`);
