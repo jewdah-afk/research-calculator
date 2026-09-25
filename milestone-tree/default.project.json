@@ -17,9 +17,18 @@
       "MilestoneTreeWorker": { "$path": "src/worker" }
     },
     "StarterPlayer": {
+      "$properties": {
+        "EnableMouseLockOption": false,
+        "DevComputerMovementMode": "Scriptable",
+        "DevTouchMovementMode": "Scriptable",
+        "AutoJumpEnabled": false
+      },
       "StarterPlayerScripts": {
         "MilestoneTree": { "$path": "src/client" }
       }
+    },
+    "StarterGui": {
+      "$properties": { "ScreenOrientation": "LandscapeSensor" }
     },
     "Players": {
       "$properties": { "CharacterAutoLoads": false }

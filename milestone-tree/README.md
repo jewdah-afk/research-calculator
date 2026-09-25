@@ -2,11 +2,12 @@
 
 A Roblox port of the web incremental game **The Milestone Tree NG+** (v2.044, by Seder3214 / loader3229, built on
 The Modding Tree). The game itself is not rewritten: its JavaScript is transpiled to Luau and runs on the server for
-each player, with big numbers on TowerNum. The screen is the web page's "Revamped" layout, drawn with Roblox GUI.
+each player, with big numbers on TowerNum. The screen is a painted realm map: every layer is a node on the tree
+(and on the Prestige Multiverse rift), and a node opens that layer's panel.
 
 **To play it:** open `build/MilestoneTree.rbxlx` in Roblox Studio and press Play. For saves in Studio, turn on
-*Game Settings → Security → Enable Studio Access to API Services*. Without it the game still runs, but it shows a
-red "not being saved" banner.
+*Game Settings → Security → Enable Studio Access to API Services*. Without it the game still runs, but the status
+chip under the points reads NOT SAVING. `STUDIO_CHECKLIST.md` lists what to try.
 
 ## How it fits together
 
@@ -24,14 +25,22 @@ red "not being saved" banner.
    Html      the game's HTML strings -> RichText (colours, sizes, glow, <hr>, the exploration map's <svg>)
    ZoneMaps  the exploration zones' background drawings
  StarterPlayerScripts.MilestoneTree
-   Main      the page: menu of layers, points header, the current tab, tooltips, popups, hotkeys, export/import
-   Render    view nodes -> GUI objects, updated in place from patches
-   Style     the page's CSS (TMT + NG+) as GUI properties
+   Main      starts App
+   App       the client: patches -> the map, the HUD, the panel and the overlays; the open / close protocol,
+             hotkeys (Input/), resync and reconnect
+   Core/     ViewStore (the client's copy of the view), Theme, Layout, Motion, Recipes, Prefs, Rich, Sprites
+   Map/      the realm map: camera, tiles, ambient art, node widgets, links, nameplates, edge markers
+   Hud/      the points capsule, dock (HOME / TROPHIES / OPTIONS), READY tray, Multiverse portal, phone band
+   Panel/    the layer panel (sheet, hero, tabs, skins); Signatures/ the per-layer ideas
+   Overlay/  toasts, tooltip, peek, modals (export, import, hard reset, the gate), detail sheet, full screens
+   Render    view nodes -> GUI objects inside the panel, updated in place from patches
+   Style     the game's own CSS (progress bars, bespoke boxes) as GUI properties
  ReplicatedStorage.TowerNum   TowerNum 2.0.0 (with its Hyper tier)
 ```
 
 What the player sees comes from `port/rbx/view.js`, which mirrors TMT's Vue components (upgrades, milestones,
-buyables, clickables, challenges, achievements, grids, microtabs, infoboxes, bars) and the NG+ menu. It runs inside
+buyables, clickables, challenges, achievements, grids, microtabs, infoboxes, bars), plus the map (`v.map`) and
+the HUD (`v.hud`). It runs inside
 the game, so it calls the game's own display functions. The server sends only what changed, keyed by each node's
 path. Buttons send their action back, and the server only runs actions that are on that player's screen right now.
 
@@ -90,7 +99,8 @@ What still differs from the web game, and why:
   softcap). In the port every loop is capped. The game errors out instead, and the server puts the player back on
   their last good save. NaN in the player data is handled the same way (the web page stops and asks you to refresh).
 * **`tetrate` edge cases** (negative bases, 0^^x) differ from break_eternity. The game never tetrates.
-* **Not ported:** the old "Tree Style" layout (only the Revamped menu layout), particles, themes, and the two
+* **Not ported:** the web page's layouts (the realm map replaces both the tree and the Revamped menu), the
+  Information and Changelog tabs (Options' ABOUT card keeps the credits and hotkeys), particles, themes, and the two
   images the web game shows (the corrupted-prestige and warning icons).
 
 ## Performance

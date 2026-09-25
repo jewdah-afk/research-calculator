@@ -16,8 +16,7 @@
 	notice = { text... }, export = text, askImport = true, imp = { ok, msg } (the last import), save = "saving" |
 	"saved" (set by the Worker). Nodes are the view builder's (rbx/view.js) flattened: a container's c lists its
 	children's ids; ids are paths ("tab.3.1"). The roots are "map" (the realm map: 21 layer nodes then the gate, so
-	"map.N" never moves), "hud", "tab" (the open panel; tab = "none" while the map is alone) and, for the old
-	client, "menu" and "head".
+	"map.N" never moves), "hud" and "tab" (the open panel; tab = "none" while the map is alone).
 ]]
 
 local Session = {}
@@ -337,7 +336,6 @@ function Session:view(): any
 	end
 	self.allowed = allowed
 	local p = if v then plain(JS, v) else {
-		menu = { t = "col", c = {} }, head = { t = "html", h = "" },
 		map = { t = "map", inside = false, c = {} }, hud = { t = "hud", pts = "?", name = "points", fr = false },
 		tab = { t = "html", h = "The page failed to draw." }, tabName = "none",
 	}
@@ -346,8 +344,6 @@ function Session:view(): any
 	self.hotkeys = hk
 
 	local flat = {}
-	flatten(p.menu, "menu", flat)
-	flatten(p.head, "head", flat)
 	flatten(p.map, "map", flat)
 	flatten(p.hud, "hud", flat)
 	flatten(p.tab, "tab", flat)

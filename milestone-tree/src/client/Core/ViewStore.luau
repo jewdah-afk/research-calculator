@@ -8,7 +8,7 @@
 	    store:hud(), store:endScreen(), store:get(id), store:kids(id)
 
 	Nodes arrive flattened: ids are paths ("map.3.1"), a container's `c` lists its children's ids, and the roots are
-	"map", "hud" and "tab" (plus "menu" and "head" for the old client until wave 3). The map list is fixed (all 21
+	"map", "hud" and "tab". The map list is fixed (all 21
 	layers in ORDER, then the gate), but this reads nodes by their `t` / `id`, never by position.
 ]]
 

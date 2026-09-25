@@ -1265,204 +1265,6 @@ rbx_tabStyle = function(this, layer)
 	sub = (if (JS.t(t.tabFormat) and (not Array.isArray(t.tabFormat))) then t.tabFormat[JS.k(player.subtabs[JS.k(layer)].mainTabs)].style else JS.NULL)
 	do return rbx_css(nil, JS.A(2, (if JS.t(t.style) then t.style else JS.NULL), sub)) end
 end
-rbx_menuButton = function(this, layer, label, style)
-	local shown, glow
-	shown = JS.eq(layerShown(nil, layer), true)
-	glow = (if JS.t(tmp[JS.k(layer)].notify) then player[JS.k(layer)].unlocked else tmp[JS.k(layer)].notify)
-	do return JS.O({
-		t = "btn",
-		k = "menu",
-		cls = (if JS.eq(player.tab, layer) then "cur" else "can"),
-		h = label,
-		a = rbx_act(nil, JS.A(2, "tab", layer)),
-		glow = (if JS.t(glow) then rbx_str(nil, tmp[JS.k(layer)].trueGlowColor) else JS.NULL),
-		st = rbx_css(nil, JS.A(2, (if JS.t(shown) then JS.O({
-		["background-color"] = tmp[JS.k(layer)].color
-	}) else JS.NULL), style))
-	}, {"t", "k", "cls", "h", "a", "glow", "st"}) end
-end
-rbx_menu = function(this)
-	local out, inMv, i, e, k, b
-	out = JS.A(0)
-	inMv = JS.eq(player.mp.activeChallenge, 21)
-	for i = 0, JS.cap(0, (JS.len(rbx_MENU)) - 1, 1) do
-		e = rbx_MENU[JS.k(i)]
-		k = e[0]
-		if (k == "head") then
-			JS.m(out, "push", JS.O({
-				t = "html",
-				h = e[1]
-			}, {"t", "h"}))
-		elseif (k == "hr") then
-			JS.m(out, "push", JS.O({
-				t = "hr"
-			}))
-		elseif (k == "headIf") then
-			if JS.eq(layerShown(nil, e[1]), true) then
-				JS.m(out, "push", JS.O({
-					t = "html",
-					h = e[2]
-				}, {"t", "h"}))
-			end
-		elseif (k == "hrIf") then
-			if JS.eq(layerShown(nil, e[1]), true) then
-				JS.m(out, "push", JS.O({
-					t = "hr"
-				}))
-			end
-		elseif (k == "page") then
-			JS.m(out, "push", JS.O({
-				t = "btn",
-				k = "menu",
-				cls = (if JS.eq(player.tab, e[1]) then "cur" else "can"),
-				h = e[2],
-				a = rbx_act(nil, JS.A(2, "tab", e[1]))
-			}, {"t", "k", "cls", "h", "a"}))
-		elseif (k == "layer") then
-			if JS.eq(layerShown(nil, e[1]), true) then
-				JS.m(out, "push", rbx_menuButton(nil, e[1], e[2]))
-			end
-		elseif (k == "mpOut") then
-			if (JS.eq(layerShown(nil, e[1]), true) and (not JS.t(inMv))) then
-				JS.m(out, "push", rbx_menuButton(nil, e[1], e[2]))
-			end
-		elseif (k == "mpIn") then
-			if (JS.eq(layerShown(nil, e[1]), true) and JS.t(inMv)) then
-				JS.m(out, "push", rbx_menuButton(nil, e[1], e[2]))
-			end
-		elseif (k == "multiverse") then
-			if (player.m.best:gte(185) and (not JS.t(inMv))) then
-				JS.m(out, "push", JS.O({
-					t = "btn",
-					k = "menu",
-					cls = "can",
-					h = e[1],
-					a = rbx_act(nil, JS.A(3, "chal", "mp", 21))
-				}, {"t", "k", "cls", "h", "a"}))
-			end
-		elseif (k == "multiverseIn") then
-			if (player.m.best:gte(185) and JS.t(inMv)) then
-				JS.m(out, "push", JS.O({
-					t = "btn",
-					k = "menu",
-					cls = "can",
-					h = e[1],
-					a = rbx_act(nil, JS.A(3, "chal", "mp", 21))
-				}, {"t", "k", "cls", "h", "a"}))
-			end
-		elseif (k == "inMultiverse") then
-			if JS.t(inMv) then
-				JS.m(out, "push", JS.O({
-					t = "html",
-					h = e[1]
-				}, {"t", "h"}))
-			end
-		elseif (k == "pmLayer") then
-			if JS.eq(layerShown(nil, "pm"), true) then
-				JS.m(out, "push", rbx_menuButton(nil, "pm", (if player.pm.best:gte(15) then "P███t█g█ M██e█t███" else "Prestige Milestone")))
-			end
-		elseif (k == "headPepCp") then
-			if (JS.eq(layerShown(nil, "pep"), true) or JS.eq(layerShown(nil, "cp"), true)) then
-				JS.m(out, "push", JS.O({
-					t = "html",
-					h = e[1]
-				}, {"t", "h"}))
-			end
-		elseif (k == "hrPepCp") then
-			if (JS.eq(layerShown(nil, "pep"), true) or JS.eq(layerShown(nil, "cp"), true)) then
-				JS.m(out, "push", JS.O({
-					t = "hr"
-				}))
-			end
-		elseif (k == "cpLayer") then
-			if JS.eq(layerShown(nil, "cp"), true) then
-				b = rbx_menuButton(nil, "cp", "Corrupted Prestige", JS.O({
-					color = "lime",
-					["border-color"] = "lime"
-				}, {"color", "border-color"}))
-				JS.set(b.st, "background-color", "black")
-				JS.m(out, "push", b)
-			end
-		elseif (k == "cmLayer") then
-			if (((player.tab == "cp") or (player.tab == "cm")) and JS.eq(layerShown(nil, "cm"), true)) then
-				JS.m(out, "push", rbx_menuButton(nil, "cm", "Corrupted Milestone", JS.O({
-					color = "lime",
-					["border-color"] = "lime"
-				}, {"color", "border-color"})))
-			end
-		end
-	end
-	do return JS.O({
-		t = "col",
-		c = out
-	}, {"t", "c"}) end
-end
-rbx_head = function(this)
-	local h, o, things, i
-	h = ""
-	if (JS.t(player.devSpeed) and (not JS.eq(player.devSpeed, 1))) then
-		h = (JS.str(h) .. (("<br>Dev Speed: " .. JS.str(format(nil, player.devSpeed))) .. "x<br>"))
-	end
-	if (not (player.offTime == nil)) then
-		h = (JS.str(h) .. (("<br>Offline Time: " .. JS.str(formatTime(nil, player.offTime.remain))) .. "<br>"))
-	end
-	if player.points:lt("1e1000") then
-		h = (JS.str(h) .. "You have ")
-	end
-	h = (JS.str(h) .. (("<h2>" .. JS.str(format(nil, player.points))) .. "</h2> "))
-	if JS.t(canGenPoints(nil)) then
-		o = tmp.other
-		h = (JS.str(h) .. (("(" .. JS.str((if (not JS.eq(o.oompsMag, 0)) then (((JS.str(format(nil, o.oomps)) .. " OOM") .. JS.str((if (JS.tonum(o.oompsMag) < 0) then "^OOM" else (if (JS.tonum(o.oompsMag) > 1) then ("^" .. JS.str(o.oompsMag)) else "")))) .. "s") else formatSmall(nil, getPointGen(nil))))) .. "/sec)"))
-	end
-	if player.points:lt("1e1e6") then
-		h = (JS.str(h) .. (" " .. JS.str(modInfo.pointsName)))
-	end
-	if JS.eq(player.sp.activeChallenge, 11) then
-		h = (JS.str(h) .. ((((((" and <h2 style=\"color:#9f2846\">" .. JS.str(format(nil, player.m.points, 0))) .. "</h2> milestones,<br> which can be transformed into <h2 style=\"color:orange\">") .. JS.str(format(nil, tmp.sp.ambersGain))) .. "</h2> Prestige Ashes after a cooldown. (") .. JS.str(format(nil, player.sp.chalCooldown))) .. "s)"))
-	end
-	if (((player.sp.sparkMilestones:gt(0) and (JS.D(player.sp.ashedMilestones)):lt(player.sp.sparkMilestones)) and (JS.tonum(player.sp.burningTimer) > 0)) and JS.eq(tmp.sp.milestones[JS.k(player.sp.ashedMilestones)].permanent, false)) then
-		h = (JS.str(h) .. ((((("<br><span style=\"color: orange\">Your " .. JS.str(format(nil, JS.add(player.sp.ashedMilestones, 1), 0))) .. JS.str(helper(nil, JS.add(player.sp.ashedMilestones, 1)))) .. " Spark Milestone will burn for ") .. JS.str(formatTime(nil, player.sp.burningTimer))) .. "</span>"))
-	end
-	things = JS.A(0)
-	for i = 0, JS.cap(0, (JS.len(tmp.displayThings)) - 1, 1) do
-		if JS.t(tmp.displayThings[JS.k(i)]) then
-			JS.m(things, "push", rbx_str(nil, tmp.displayThings[JS.k(i)]))
-		end
-	end
-	do return JS.O({
-		t = "col",
-		c = JS.A(2, JS.O({
-		t = "html",
-		h = h
-	}, {"t", "h"}), JS.O({
-		t = "html",
-		h = JS.m(things, "join", "<br>")
-	}, {"t", "h"}))
-	}, {"t", "c"}) end
-end
-rbx_infoTab = function(this)
-	local h, key, k
-	h = (((("<h2>" .. JS.str(modInfo.name)) .. "</h2><br><h3>") .. JS.str(VERSION.withName)) .. "</h3>")
-	if JS.t(modInfo.author) then
-		h = (JS.str(h) .. ("<br>Made by " .. JS.str(modInfo.author)))
-	end
-	h = (JS.str(h) .. (("<br>The Modding Tree " .. JS.str(TMT_VERSION.tmtNum)) .. " by Acamaeda<br>The Prestige Tree made by Jacorb and Aarex<br><br>"))
-	h = (JS.str(h) .. (("Time Played: " .. JS.str(formatTime(nil, player.timePlayed))) .. "<br><br><h3>Hotkeys</h3><br>"))
-	for _, __k6 in JS.keys(hotkeys) do
-		key = __k6
-		k = hotkeys[key]
-		if (JS.t(player[JS.k(k.layer)].unlocked) and JS.t(tmp[JS.k(k.layer)].hotkeys[JS.k(k.id)].unlocked)) then
-			h = (JS.str(h) .. ("<br>" .. JS.str(k.description)))
-		end
-	end
-	do return JS.O({
-		t = "col",
-		c = JS.A(1, JS.O({
-		t = "html",
-		h = h
-	}, {"t", "h"}))
-	}, {"t", "c"}) end
-end
 rbx_opt = function(this, label, sub, a, ti, val, idx, n, on)
 	do return JS.O({
 		t = "btn",
@@ -1481,8 +1283,8 @@ end
 rbx_about = function(this)
 	local keys, key, k, d, i
 	keys = JS.A(0)
-	for _, __k7 in JS.keys(hotkeys) do
-		key = __k7
+	for _, __k6 in JS.keys(hotkeys) do
+		key = __k6
 		k = hotkeys[key]
 		if (JS.t(player[JS.k(k.layer)].unlocked) and JS.t(tmp[JS.k(k.layer)].hotkeys[JS.k(k.id)].unlocked)) then
 			d = rbx_str(nil, k.description)
@@ -1625,8 +1427,8 @@ rbx_achTotal = function(this)
 	local n, a, k
 	n = 0
 	a = layers.ach.achievements
-	for _, __k8 in JS.keys(a) do
-		k = __k8
+	for _, __k7 in JS.keys(a) do
+		k = __k7
 		if (JS.t(a[k]) and (JS.typeof(a[k]) == "object")) then
 			n = (JS.tonum(n) + 1)
 		end
@@ -1730,11 +1532,11 @@ rbx_map = function(this)
 	kids = JS.A(0)
 	for i = 0, JS.cap(0, (JS.len(rbx_MAP)) - 1, 1) do
 		do
-			local __ok9, __e10 = pcall(function()
+			local __ok8, __e9 = pcall(function()
 				n = rbx_mapNode(nil, rbx_MAP[JS.k(i)])
 			end)
-			if not __ok9 then
-				local e = __e10
+			if not __ok8 then
+				local e = __e9
 				n = JS.O({
 					t = "node",
 					id = rbx_MAP[JS.k(i)],
@@ -1806,54 +1608,35 @@ rbx_hud = function(this)
 	do return h end
 end
 rbx_view = function(this)
-	local v, ended, open, tab, keys, key, k
+	local v, ended, open, keys, key, k
 	rbx_actions = JS.A(0)
 	updateTabFormats(nil)
 	v = JS.O({})
 	ended = (if JS.t(tmp.gameEnded) then (not JS.t(player.keepGoing)) else tmp.gameEnded)
 	JS.setk(v, "ended", (if JS.t(ended) then true else false))
 	do
-		local __ok11, __e12 = pcall(function()
-			JS.setk(v, "menu", rbx_menu(nil))
-		end)
-		if not __ok11 then
-			local e = __e12
-			JS.setk(v, "menu", rbx_err(nil, "menu", e))
-		end
-	end
-	do
-		local __ok13, __e14 = pcall(function()
-			JS.setk(v, "head", rbx_head(nil))
-		end)
-		if not __ok13 then
-			local e = __e14
-			JS.setk(v, "head", rbx_err(nil, "head", e))
-		end
-	end
-	do
-		local __ok15, __e16 = pcall(function()
+		local __ok10, __e11 = pcall(function()
 			JS.setk(v, "map", rbx_map(nil))
 		end)
-		if not __ok15 then
-			local e = __e16
+		if not __ok10 then
+			local e = __e11
 			JS.setk(v, "map", rbx_err(nil, "map", e))
 		end
 	end
 	do
-		local __ok17, __e18 = pcall(function()
+		local __ok12, __e13 = pcall(function()
 			JS.setk(v, "hud", rbx_hud(nil))
 		end)
-		if not __ok17 then
-			local e = __e18
+		if not __ok12 then
+			local e = __e13
 			JS.setk(v, "hud", rbx_err(nil, "hud", e))
 		end
 	end
 	open = (if (v.map.t == "map") then v.map.open else JS.NULL)
-	tab = player.tab
 	JS.setk(v, "tabName", (if JS.t(ended) then "end" else (if JS.t(open) then open else "none")))
 	JS.setk(v, "tabStyle", JS.O({}))
 	do
-		local __ok19, __e20 = pcall(function()
+		local __ok14, __e15 = pcall(function()
 			if JS.t(ended) then
 				JS.setk(v, "tab", rbx_endScreen(nil))
 			elseif (open == "options-tab") then
@@ -1861,16 +1644,6 @@ rbx_view = function(this)
 			elseif JS.t(open) then
 				JS.setk(v, "tab", rbx_layerTab(nil, open))
 				JS.setk(v, "tabStyle", rbx_tabStyle(nil, open))
-			elseif (tab == "info-tab") then
-				JS.setk(v, "tab", rbx_infoTab(nil))
-			elseif (tab == "changelog-tab") then
-				JS.setk(v, "tab", JS.O({
-					t = "col",
-					c = JS.A(1, JS.O({
-					t = "html",
-					h = rbx_str(nil, modInfo.changelog)
-				}, {"t", "h"}))
-				}, {"t", "c"}))
 			else
 				JS.setk(v, "tab", JS.O({
 					t = "col",
@@ -1878,14 +1651,14 @@ rbx_view = function(this)
 				}, {"t", "c"}))
 			end
 		end)
-		if not __ok19 then
-			local e = __e20
+		if not __ok14 then
+			local e = __e15
 			JS.setk(v, "tab", rbx_err(nil, "tab", e))
 		end
 	end
 	keys = JS.A(0)
-	for _, __k21 in JS.keys(hotkeys) do
-		key = __k21
+	for _, __k16 in JS.keys(hotkeys) do
+		key = __k16
 		k = hotkeys[key]
 		if (JS.t(player[JS.k(k.layer)].unlocked) and JS.t(tmp[JS.k(k.layer)].hotkeys[JS.k(k.id)].unlocked)) then
 			JS.m(keys, "push", key)
@@ -1937,7 +1710,6 @@ rbx_BUY_CUR = JS.O({
 	[34] = JS.A(3, "pm", "essence", "prestige essences")
 })
 }, {"p", "sp", "hp", "ap", "pp", "ep", "mp", "pep", "cp"})
-rbx_MENU = JS.A(50, JS.A(2, "head", "[ Misc ]"), JS.A(3, "page", "info-tab", "Information"), JS.A(3, "page", "options-tab", "Options"), JS.A(3, "page", "changelog-tab", "Changelog"), JS.A(3, "layer", "ach", "Achievements"), JS.A(1, "hr"), JS.A(3, "headIf", "m", "[ Milestones (Normal Universe) ]"), JS.A(3, "layer", "m", "Milestone"), JS.A(3, "layer", "mm", "Meta Milestone"), JS.A(3, "layer", "em", "Extra Milestone"), JS.A(2, "hrIf", "m"), JS.A(3, "headIf", "p", "[ Row 1 ]"), JS.A(3, "layer", "p", "Prestige Points"), JS.A(2, "hrIf", "p"), JS.A(3, "headIf", "sp", "[ Row 2 ]"), JS.A(3, "layer", "pe", "Prestige Energy"), JS.A(3, "layer", "sp", "Super Prestige Points"), JS.A(3, "layer", "pb", "Prestige Boosts"), JS.A(3, "layer", "pp", "Prestige Power"), JS.A(2, "hrIf", "sp"), JS.A(3, "headIf", "hp", "[ Row 3 ]"), JS.A(3, "layer", "se", "Super Energy"), JS.A(3, "layer", "hp", "Hyper Prestige Points"), JS.A(3, "layer", "ep", "Exotic Prestige Points"), JS.A(2, "hrIf", "hp"), JS.A(3, "headIf", "ap", "[ Row 4 ]"), JS.A(3, "layer", "hb", "Hyper Boosts"), JS.A(3, "layer", "ap", "Atomic Prestige Points"), JS.A(3, "mpOut", "mp", "Multiverse Prestige Points"), JS.A(2, "multiverse", "Enter Prestige Multiverse "), JS.A(2, "hrIf", "ap"), JS.A(3, "headIf", "t", "[ Row 5 ]"), JS.A(3, "layer", "t", "Transcend Points"), JS.A(2, "hrIf", "t"), JS.A(3, "headIf", "pm", "[ Prestige Multiverse ]"), JS.A(2, "inMultiverse", "[ Main ]"), JS.A(3, "mpIn", "mp", "Multiverse Prestige Points"), JS.A(2, "multiverseIn", "Leave Prestige Multiverse "), JS.A(2, "hrIf", "pm"), JS.A(3, "headIf", "pm", "[ Row 0 ]"), JS.A(1, "pmLayer"), JS.A(2, "hrIf", "pm"), JS.A(2, "headPepCp", "[ Row 1 ]"), JS.A(3, "layer", "pep", "Prestiged-Exotic Prestige "), JS.A(1, "cpLayer"), JS.A(1, "cmLayer"), JS.A(1, "hrPepCp"), JS.A(3, "headIf", "ex", "[ Row 2 ]"), JS.A(3, "layer", "ex", "Exploration Points "), JS.A(2, "hrIf", "ex"))
 rbx_MAP = JS.A(21, "ach", "m", "mm", "em", "p", "pe", "sp", "pb", "pp", "se", "hp", "ep", "hb", "ap", "mp", "t", "pm", "pep", "cp", "cm", "ex")
 rbx_MAP_NAME = JS.O({
 	ach = "Achievements",

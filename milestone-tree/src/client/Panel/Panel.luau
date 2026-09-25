@@ -166,6 +166,15 @@ function Panel.new(gui: ScreenGui, deps: { store: any?, tip: ((html: string?, ov
 		if self.key then self.render:refresh() end
 		self:drawHero()
 	end)
+	local hugQueued = false
+	self.content:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+		if not self.hug or self.key == nil or hugQueued then return end
+		hugQueued = true
+		task.defer(function()
+			hugQueued = false
+			if self.hug and self.key then self:layout() end
+		end)
+	end)
 	self:layout()
 	self:showOpen(false, false)
 	return self
@@ -503,6 +512,14 @@ function Panel.layout(self: Panel)
 		end
 		y = math.max(8, 70 - topInset)
 		h = math.min(994, H - y - 16)
+		-- small panels hug their content (DESIGN.md 5.1, the signature's `hug`), never under 560 du
+		if self.hug and self.key and self.ready then
+			local contentH = self.content.AbsoluteSize.Y / s
+			if contentH > 1 then
+				local heroOn = self.hero ~= nil and self.hero.visible
+				h = math.min(h, math.max(560, 90 + 14 + (if heroOn then 168 else 0) + contentH + 16))
+			end
+		end
 	end
 	if full then
 		x, y, w, h = 0, 0, W, H
@@ -710,7 +727,13 @@ function Panel.drawShell(self: Panel, accent: boolean?)
 	Common.setText(line, Common.esc(lineText))
 	-- the signature's accent
 	local sig = Signatures.get(key)
-	self.hug = sig.hug == true
+	local hug = sig.hug == true
+	if hug ~= self.hug then
+		self.hug = hug
+		task.defer(function()
+			if self.key then self:layout() end
+		end)
+	end
 	if accent then
 		-- a signature draws its accent into children named "Accent" (the sheet's, the header band's): the previous
 		-- layer's accent goes when another panel opens

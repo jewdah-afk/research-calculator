@@ -1,6 +1,7 @@
 // Roblox front end, game side: builds what the web page would draw, as plain view nodes, from inside a player's game
 // instance. It is transpiled to Luau with the game (so the JS and Luau builds can be diffed like the game itself) and
-// mirrors TMT's Vue components (loader_v.js, components.js) and the NG+ page (menu, overlay head), minus the browser.
+// mirrors TMT's Vue components (loader_v.js, components.js), minus the browser. The page itself is the realm map (v.map)
+// with the HUD (v.hud) and the open panel's tab (v.tab).
 //
 // A node is { t: type, ... }. Containers have c (children). Anything the player can press has a (the action, an
 // array the server re-checks against the actions on screen before it runs one). HTML strings stay HTML (h); the
@@ -9,7 +10,7 @@
 //   html               h
 //   blank              w, hh
 //   hr                 w
-//   btn                k (kind: upg buy click chal reset tab sub toggle perk malware respec master sell grid menu opt),
+//   btn                k (kind: upg buy click chal reset tab sub toggle perk malware respec master sell grid opt),
 //                      cls (can / locked / bought / perk / perked / pseudo / plocked / ...), h, st, tip, n (upgrade number)
 //   ms                 milestone: done, h, st, tip, c (toggle / malware buttons)
 //   chal               challenge: cls, st, c (name, button, text)
@@ -774,100 +775,6 @@ function rbx_tabStyle(layer) {
 }
 
 // ------------------------------------------------------------------------------------------------ page parts
-// the NG+ menu down the left side (index.html, options.forceOneTab)
-var rbx_MENU = [
-	["head", "[ Misc ]"], ["page", "info-tab", "Information"], ["page", "options-tab", "Options"], ["page", "changelog-tab", "Changelog"],
-	["layer", "ach", "Achievements"], ["hr"],
-	["headIf", "m", "[ Milestones (Normal Universe) ]"], ["layer", "m", "Milestone"], ["layer", "mm", "Meta Milestone"], ["layer", "em", "Extra Milestone"], ["hrIf", "m"],
-	["headIf", "p", "[ Row 1 ]"], ["layer", "p", "Prestige Points"], ["hrIf", "p"],
-	["headIf", "sp", "[ Row 2 ]"], ["layer", "pe", "Prestige Energy"], ["layer", "sp", "Super Prestige Points"], ["layer", "pb", "Prestige Boosts"], ["layer", "pp", "Prestige Power"], ["hrIf", "sp"],
-	["headIf", "hp", "[ Row 3 ]"], ["layer", "se", "Super Energy"], ["layer", "hp", "Hyper Prestige Points"], ["layer", "ep", "Exotic Prestige Points"], ["hrIf", "hp"],
-	["headIf", "ap", "[ Row 4 ]"], ["layer", "hb", "Hyper Boosts"], ["layer", "ap", "Atomic Prestige Points"], ["mpOut", "mp", "Multiverse Prestige Points"], ["multiverse", "Enter Prestige Multiverse "], ["hrIf", "ap"],
-	["headIf", "t", "[ Row 5 ]"], ["layer", "t", "Transcend Points"], ["hrIf", "t"],
-	["headIf", "pm", "[ Prestige Multiverse ]"], ["inMultiverse", "[ Main ]"], ["mpIn", "mp", "Multiverse Prestige Points"], ["multiverseIn", "Leave Prestige Multiverse "], ["hrIf", "pm"],
-	["headIf", "pm", "[ Row 0 ]"], ["pmLayer"], ["hrIf", "pm"],
-	["headPepCp", "[ Row 1 ]"], ["layer", "pep", "Prestiged-Exotic Prestige "], ["cpLayer"], ["cmLayer"], ["hrPepCp"],
-	["headIf", "ex", "[ Row 2 ]"], ["layer", "ex", "Exploration Points "], ["hrIf", "ex"],
-]
-
-function rbx_menuButton(layer, label, style) {
-	var shown = layerShown(layer) == true
-	var glow = tmp[layer].notify && player[layer].unlocked
-	return {
-		t: "btn", k: "menu", cls: player.tab == layer ? "cur" : "can", h: label, a: rbx_act(["tab", layer]),
-		glow: glow ? rbx_str(tmp[layer].trueGlowColor) : null, st: rbx_css([shown ? { "background-color": tmp[layer].color } : null, style]),
-	}
-}
-
-function rbx_menu() {
-	var out = []
-	var inMv = player.mp.activeChallenge == 21
-	for (var i = 0; i < rbx_MENU.length; i++) {
-		var e = rbx_MENU[i]
-		var k = e[0]
-		if (k == "head") out.push({ t: "html", h: e[1] })
-		else if (k == "hr") out.push({ t: "hr" })
-		else if (k == "headIf") { if (layerShown(e[1]) == true) out.push({ t: "html", h: e[2] }) }
-		else if (k == "hrIf") { if (layerShown(e[1]) == true) out.push({ t: "hr" }) }
-		else if (k == "page") out.push({ t: "btn", k: "menu", cls: player.tab == e[1] ? "cur" : "can", h: e[2], a: rbx_act(["tab", e[1]]) })
-		else if (k == "layer") { if (layerShown(e[1]) == true) out.push(rbx_menuButton(e[1], e[2])) }
-		else if (k == "mpOut") { if (layerShown(e[1]) == true && !inMv) out.push(rbx_menuButton(e[1], e[2])) }
-		else if (k == "mpIn") { if (layerShown(e[1]) == true && inMv) out.push(rbx_menuButton(e[1], e[2])) }
-		else if (k == "multiverse") { if (player.m.best.gte(185) && !inMv) out.push({ t: "btn", k: "menu", cls: "can", h: e[1], a: rbx_act(["chal", "mp", 21]) }) }
-		else if (k == "multiverseIn") { if (player.m.best.gte(185) && inMv) out.push({ t: "btn", k: "menu", cls: "can", h: e[1], a: rbx_act(["chal", "mp", 21]) }) }
-		else if (k == "inMultiverse") { if (inMv) out.push({ t: "html", h: e[1] }) }
-		else if (k == "pmLayer") { if (layerShown("pm") == true) out.push(rbx_menuButton("pm", player.pm.best.gte(15) ? "P███t█g█ M██e█t███" : "Prestige Milestone")) }
-		else if (k == "headPepCp") { if (layerShown("pep") == true || layerShown("cp") == true) out.push({ t: "html", h: e[1] }) }
-		else if (k == "hrPepCp") { if (layerShown("pep") == true || layerShown("cp") == true) out.push({ t: "hr" }) }
-		else if (k == "cpLayer") {
-			if (layerShown("cp") == true) {
-				var b = rbx_menuButton("cp", "Corrupted Prestige", { color: "lime", "border-color": "lime" })
-				b.st["background-color"] = "black"
-				out.push(b)
-			}
-		}
-		else if (k == "cmLayer") {
-			if ((player.tab == "cp" || player.tab == "cm") && layerShown("cm") == true) out.push(rbx_menuButton("cm", "Corrupted Milestone", { color: "lime", "border-color": "lime" }))
-		}
-	}
-	return { t: "col", c: out }
-}
-
-// overlay-head: points, points per second and the mod's extra lines
-function rbx_head() {
-	var h = ""
-	if (player.devSpeed && player.devSpeed != 1) h += "<br>Dev Speed: " + format(player.devSpeed) + "x<br>"
-	if (player.offTime !== undefined) h += "<br>Offline Time: " + formatTime(player.offTime.remain) + "<br>"
-	if (player.points.lt("1e1000")) h += "You have "
-	h += "<h2>" + format(player.points) + "</h2> "
-	if (canGenPoints()) {
-		var o = tmp.other
-		h += "(" + (o.oompsMag != 0 ? format(o.oomps) + " OOM" + (o.oompsMag < 0 ? "^OOM" : (o.oompsMag > 1 ? "^" + o.oompsMag : "")) + "s" : formatSmall(getPointGen())) + "/sec)"
-	}
-	if (player.points.lt("1e1e6")) h += " " + modInfo.pointsName
-	if (player.sp.activeChallenge == 11) {
-		h += " and <h2 style=\"color:#9f2846\">" + format(player.m.points, 0) + "</h2> milestones,<br> which can be transformed into <h2 style=\"color:orange\">" + format(tmp.sp.ambersGain) + "</h2> Prestige Ashes after a cooldown. (" + format(player.sp.chalCooldown) + "s)"
-	}
-	if ((player.sp.sparkMilestones.gt(0) && new Decimal(player.sp.ashedMilestones).lt(player.sp.sparkMilestones) && player.sp.burningTimer > 0) && tmp.sp.milestones[player.sp.ashedMilestones].permanent == false) {
-		h += "<br><span style=\"color: orange\">Your " + format(player.sp.ashedMilestones + 1, 0) + helper(player.sp.ashedMilestones + 1) + " Spark Milestone will burn for " + formatTime(player.sp.burningTimer) + "</span>"
-	}
-	var things = []
-	for (var i = 0; i < tmp.displayThings.length; i++) if (tmp.displayThings[i]) things.push(rbx_str(tmp.displayThings[i]))
-	return { t: "col", c: [{ t: "html", h: h }, { t: "html", h: things.join("<br>") }] }
-}
-
-function rbx_infoTab() {
-	var h = "<h2>" + modInfo.name + "</h2><br><h3>" + VERSION.withName + "</h3>"
-	if (modInfo.author) h += "<br>Made by " + modInfo.author
-	h += "<br>The Modding Tree " + TMT_VERSION.tmtNum + " by Acamaeda<br>The Prestige Tree made by Jacorb and Aarex<br><br>"
-	h += "Time Played: " + formatTime(player.timePlayed) + "<br><br><h3>Hotkeys</h3><br>"
-	for (var key in hotkeys) {
-		var k = hotkeys[key]
-		if (player[k.layer].unlocked && tmp[k.layer].hotkeys[k.id].unlocked) h += "<br>" + k.description
-	}
-	return { t: "col", c: [{ t: "html", h: h }] }
-}
-
 // an Options button. id is the option, ti its label, val the state it shows; idx / n place a cycler (0-based, of n);
 // on is the state of a two-state toggle
 function rbx_opt(label, sub, a, ti, val, idx, n, on) {
@@ -878,7 +785,7 @@ function rbx_opt(label, sub, a, ti, val, idx, n, on) {
 	}
 }
 
-// the Information page's facts, for the Options ABOUT card
+// the game's facts (the web page's Information tab), for the Options ABOUT card
 function rbx_about() {
 	var keys = []
 	for (var key in hotkeys) {
@@ -1027,7 +934,7 @@ function rbx_mapNode(l) {
 	return n
 }
 
-// the Enter / Leave Prestige Multiverse gate (the menu's button: Multiverse Prestige challenge 21)
+// the Enter / Leave Prestige Multiverse gate (the web page's menu button: Multiverse Prestige challenge 21)
 function rbx_mapGate() {
 	var inMv = player.mp.activeChallenge == 21
 	var g = { t: "gate", show: player.m.best.gte(185) ? true : false, inside: inMv }
@@ -1114,20 +1021,17 @@ function rbx_hud() {
 	return h
 }
 
-// The whole page. Returns { ended, menu, head, map, hud, tabName, tabStyle, tab, keys }. menu and head are the old
-// client's; tabName is "end", "options-tab", the open layer, or "none" (the map alone: no tab is built).
+// The whole page. Returns { ended, map, hud, tabName, tabStyle, tab, keys }. tabName is "end", "options-tab", the open
+// layer, or "none" (the map alone: no tab is built; an old save's info or changelog tab is the map alone too).
 function rbx_view() {
 	rbx_actions = []
 	updateTabFormats()
 	var v = {}
 	var ended = tmp.gameEnded && !player.keepGoing
 	v.ended = ended ? true : false
-	try { v.menu = rbx_menu() } catch (e) { v.menu = rbx_err("menu", e) }
-	try { v.head = rbx_head() } catch (e) { v.head = rbx_err("head", e) }
 	try { v.map = rbx_map() } catch (e) { v.map = rbx_err("map", e) }
 	try { v.hud = rbx_hud() } catch (e) { v.hud = rbx_err("hud", e) }
 	var open = v.map.t == "map" ? v.map.open : null
-	var tab = player.tab
 	v.tabName = ended ? "end" : (open ? open : "none")
 	v.tabStyle = {}
 	try {
@@ -1137,8 +1041,6 @@ function rbx_view() {
 			v.tab = rbx_layerTab(open)
 			v.tabStyle = rbx_tabStyle(open)
 		}
-		else if (tab == "info-tab") v.tab = rbx_infoTab()
-		else if (tab == "changelog-tab") v.tab = { t: "col", c: [{ t: "html", h: rbx_str(modInfo.changelog) }] }
 		else v.tab = { t: "col", c: [] }
 	} catch (e) {
 		v.tab = rbx_err("tab", e)

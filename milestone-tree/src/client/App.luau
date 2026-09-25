@@ -163,7 +163,6 @@ function App.start()
 	local lastLayer: string? = nil -- the last layer opened (the phone start framing, the fly back)
 	local opening = false
 	local fullToken = 0
-	local legacyActive = false
 
 	-- ------------------------------------------------------------------------------------------ actions
 	local function fire(a: any, hold: boolean?)
@@ -202,7 +201,7 @@ function App.start()
 	end
 	-- the map's input and art run only while it shows (DESIGN.md 3.6: a full-screen sheet disables the map)
 	local function mapShown()
-		local on = not legacyActive and geoMode ~= "full"
+		local on = geoMode ~= "full"
 		mapGui.Enabled = on
 		markerGui.Enabled = on
 		markers:setEnabled(on)
@@ -727,7 +726,6 @@ function App.start()
 		end
 		errorAt = os.clock()
 	end
-	local legacy: any = nil
 	local function onPatch(patch: any)
 		if type(patch) ~= "table" then return end
 		lastPatchAt = os.clock()
@@ -744,7 +742,6 @@ function App.start()
 			if not gotFirst and not fatal then overlay:screen("loading", tostring(patch.status)) end
 			return
 		end
-		if legacy then legacy:onPatch(patch) end
 		local ok, err = pcall(function()
 			apply(patch)
 		end)
@@ -754,7 +751,7 @@ function App.start()
 	-- ------------------------------------------------------------------------------------------ keyboard
 	Hotkeys.start({
 		active = function(): boolean
-			return not legacyActive and not fatal
+			return not fatal
 		end,
 		keys = function(): { [string]: true }
 			return store.keys
@@ -776,7 +773,6 @@ function App.start()
 		return gotFirst and (preloaded or os.clock() - firstAt > 3)
 	end
 	local function step(dt: number)
-		if legacyActive then return end
 		mi:step(dt)
 		view:step(dt)
 		Motion.step(dt)
@@ -817,34 +813,6 @@ function App.start()
 	viewRemote.OnClientEvent:Connect(onPatch)
 	resync()
 	lastPatchAt = os.clock()
-
-	-- Studio only, until the old page is removed: the classic page UI as a fallback (Legacy.luau)
-	local legacyModule = script.Parent:FindFirstChild("Legacy")
-	if RunService:IsStudio() and legacyModule and legacyModule:IsA("ModuleScript") then
-		local ok, res = pcall(function(): any
-			return (require(legacyModule) :: any).start({
-				remotes = folder,
-				setActive = function(on: boolean)
-					legacyActive = on
-					panelGui.Enabled = not on
-					overlayGui.Enabled = not on
-					hud:setVisible(not on)
-					if on then
-						overlay:peek(nil)
-						overlay:modal(nil)
-						overlay:tooltip(nil, nil)
-					end
-					mapShown()
-				end,
-			})
-		end)
-		if ok then
-			legacy = res
-			Input.BLOCKING.ClassicSwitch = true
-		else
-			warn("[MilestoneTree] the classic page did not start: " .. tostring(res))
-		end
-	end
 end
 
 return App
