@@ -27,7 +27,7 @@ local function remote(name: string): RemoteEvent
 	r.Parent = remotes
 	return r
 end
-remote("View")
+local viewRemote = remote("View")
 local actRemote = remote("Act")
 local importRemote = remote("Import")
 local readyRemote = remote("Ready")
@@ -42,7 +42,13 @@ local template = ServerStorage:WaitForChild("MilestoneTreeWorker") :: Actor
 type Entry = { actor: Actor, tokens: number, last: number, lastImport: number }
 local entries: { [Player]: Entry } = {}
 
+local function fatal(player: Player, text: string)
+	warn("[MilestoneTree] " .. player.Name .. ": " .. text)
+	viewRemote:FireClient(player, { fatal = text })
+end
+
 local function start(player: Player)
+	if entries[player] then return end
 	local a = template:Clone()
 	a.Name = "Player_" .. player.UserId
 	a.Parent = sessionsFolder
@@ -50,7 +56,14 @@ local function start(player: Player)
 	entries[player] = entry
 	-- the Worker binds its messages when it starts running
 	local t0 = os.clock()
-	while not a:GetAttribute("Ready") and os.clock() - t0 < 30 do task.wait() end
+	while not a:GetAttribute("Ready") and not a:GetAttribute("Error") and os.clock() - t0 < 30 do task.wait() end
+	if a:GetAttribute("Error") then
+		fatal(player, tostring(a:GetAttribute("Error")))
+		return
+	elseif not a:GetAttribute("Ready") then
+		fatal(player, "The game did not start on the server within 30 seconds (see the Output window).")
+		return
+	end
 	a:SendMessage("start", player)
 end
 
@@ -115,7 +128,12 @@ end)
 
 readyRemote.OnServerEvent:Connect(function(player: Player)
 	local entry = entries[player]
-	if entry then entry.actor:SendMessage("resync") end
+	if not entry then return end
+	if entry.actor:GetAttribute("Error") then
+		fatal(player, tostring(entry.actor:GetAttribute("Error")))
+	else
+		entry.actor:SendMessage("resync")
+	end
 end)
 
 game:BindToClose(function()

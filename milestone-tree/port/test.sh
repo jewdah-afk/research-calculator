@@ -67,6 +67,7 @@ sim() {
 roblox() {
 	python3 tools/wrap_scripts.py
 	"$LUAU" tests/roblox.luau
+	"$LUAU" tests/roblox.luau -a studio
 }
 
 case ${1:-all} in

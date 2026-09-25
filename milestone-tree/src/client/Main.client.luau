@@ -101,6 +101,26 @@ end
 local headRoot = rootFrame("HeadRoot", 1)
 local tabRoot = rootFrame("TabRoot", 2)
 
+-- what the page says while the server gets the game ready, and any error that stops it
+local status = Instance.new("TextLabel")
+status.Name = "Status"
+status.LayoutOrder = 0
+status.BackgroundTransparency = 1
+status.Size = UDim2.new(1, -40, 0, 0)
+status.AutomaticSize = Enum.AutomaticSize.Y
+status.TextWrapped = true
+status.RichText = true
+status.FontFace = Style.FONT
+status.TextSize = 20
+status.TextColor3 = Style.TEXT
+status.Text = "Loading your game..."
+status.Parent = main
+local function setStatus(text: string?, isError: boolean?)
+	status.Visible = text ~= nil
+	status.Text = if text then Html.escape(text) else ""
+	status.TextColor3 = if isError then Color3.fromRGB(255, 90, 90) else Style.TEXT
+end
+
 local menuShown = true
 local toggle = Instance.new("TextButton")
 toggle.Name = "MenuToggle"
@@ -368,9 +388,28 @@ local function applyTabStyle(st: any)
 	if type(st) == "table" then Style.apply(main, st) else Style.drop(main, "Gradient") end
 end
 
+local gotScreen = false
+local failed = false
 viewRemote.OnClientEvent:Connect(function(patch: any)
 	if type(patch) ~= "table" then return end
-	renderer:apply(patch)
+	if patch.fatal then
+		failed = true
+		setStatus(tostring(patch.fatal) .. "\n\n(The same error is in Studio's Output window: View > Output.)", true)
+		return
+	end
+	if patch.status then
+		if not gotScreen and not failed then setStatus(tostring(patch.status)) end
+		return
+	end
+	local ok, err = pcall(function() renderer:apply(patch) end)
+	if not ok then
+		warn("[MilestoneTree] drawing the screen failed: " .. tostring(err))
+		setStatus("Drawing the screen failed: " .. tostring(err), true)
+		failed = true
+	elseif patch.set and next(patch.set) ~= nil and not failed then
+		gotScreen = true
+		setStatus(nil)
+	end
 	if patch.tabStyle then applyTabStyle(patch.tabStyle) end
 	if patch.keys then
 		keys = {}
@@ -428,3 +467,8 @@ watchCamera()
 gui.Parent = player:WaitForChild("PlayerGui")
 overlay.Parent = player:WaitForChild("PlayerGui")
 readyRemote:FireServer()
+task.delay(20, function()
+	if not gotScreen and not failed then
+		setStatus("Still waiting for the server. In Studio, open View > Output and look for red errors from MilestoneTree.", true)
+	end
+end)

@@ -571,6 +571,12 @@ function Render.apply(self: Renderer, patch: any)
 		if rec and rec.kind ~= kindOf(n) then
 			-- rebuilt: keep the children and move them to the new object
 			local kids = self:_children(id)
+			-- take the children out first: destroying the old object would destroy them too, and Roblox never
+			-- lets a destroyed object be parented again
+			for _, k in kids do
+				local kr = self.recs[k]
+				if kr then kr.root.Parent = nil end
+			end
 			self:_destroy(id, true)
 			local built = self:_build(id, n)
 			rec = built

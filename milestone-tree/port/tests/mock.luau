@@ -120,6 +120,7 @@ Inst.__index = function(o, k)
 end
 Inst.__newindex = function(o, k, v)
 	if k == "Parent" then
+		if rawget(o, "__destroyed") then error("The Parent property of " .. tostring(o.__props.Name) .. " is locked, current parent: NULL, new parent " .. tostring(v), 2) end
 		local old = o.__props.Parent
 		if old == v then return end
 		if old then
@@ -161,7 +162,7 @@ function Inst:Destroy()
 	if self.__events.Destroying then self.__events.Destroying:Fire() end
 	for _, c in table.clone(self.__kids) do c:Destroy() end
 	self.Parent = nil
-	self.__destroyed = true
+	rawset(self, "__destroyed", true)
 end
 function Inst:Clone()
 	local c = newInstance(self.__class)
@@ -315,7 +316,7 @@ function DSS:GetDataStore(name)
 	M.stores[name] = data
 	return {
 		UpdateAsync = function(_, key, f)
-			if M.failStore then error("DataStore request failed (mock)") end
+			if M.failStore then error(M.failMessage or "DataStore request failed (mock)") end
 			local old = data[key]
 			local new = f(if old then M.deep(old) else nil)
 			if new ~= nil then data[key] = M.deep(new); return M.deep(new) end

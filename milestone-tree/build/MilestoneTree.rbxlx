@@ -29510,7 +29510,7 @@ local function remote(name: string): RemoteEvent
 	r.Parent = remotes
 	return r
 end
-remote("View")
+local viewRemote = remote("View")
 local actRemote = remote("Act")
 local importRemote = remote("Import")
 local readyRemote = remote("Ready")
@@ -29525,7 +29525,13 @@ local template = ServerStorage:WaitForChild("MilestoneTreeWorker") :: Actor
 type Entry = { actor: Actor, tokens: number, last: number, lastImport: number }
 local entries: { [Player]: Entry } = {}
 
+local function fatal(player: Player, text: string)
+	warn("[MilestoneTree] " .. player.Name .. ": " .. text)
+	viewRemote:FireClient(player, { fatal = text })
+end
+
 local function start(player: Player)
+	if entries[player] then return end
 	local a = template:Clone()
 	a.Name = "Player_" .. player.UserId
 	a.Parent = sessionsFolder
@@ -29533,7 +29539,14 @@ local function start(player: Player)
 	entries[player] = entry
 	-- the Worker binds its messages when it starts running
 	local t0 = os.clock()
-	while not a:GetAttribute("Ready") and os.clock() - t0 < 30 do task.wait() end
+	while not a:GetAttribute("Ready") and not a:GetAttribute("Error") and os.clock() - t0 < 30 do task.wait() end
+	if a:GetAttribute("Error") then
+		fatal(player, tostring(a:GetAttribute("Error")))
+		return
+	elseif not a:GetAttribute("Ready") then
+		fatal(player, "The game did not start on the server within 30 seconds (see the Output window).")
+		return
+	end
 	a:SendMessage("start", player)
 end
 
@@ -29598,7 +29611,12 @@ end)
 
 readyRemote.OnServerEvent:Connect(function(player: Player)
 	local entry = entries[player]
-	if entry then entry.actor:SendMessage("resync") end
+	if not entry then return end
+	if entry.actor:GetAttribute("Error") then
+		fatal(player, tostring(entry.actor:GetAttribute("Error")))
+	else
+		entry.actor:SendMessage("resync")
+	end
 end)
 
 game:BindToClose(function()
@@ -31722,12 +31740,29 @@ local function jobId(): string
 	return if game.JobId ~= "" then game.JobId else "studio"
 end
 
+-- errors no retry fixes: Studio without API access, a place that was never published (a .rbxlx opened from disk).
+-- After one of those the store is off for this server, so nobody waits on it again.
+local unavailable: string? = nil
+local function permanent(err: any): boolean
+	local s = string.lower(tostring(err))
+	return string.find(s, "studioaccesstoapisnotallowed", 1, true) ~= nil or string.find(s, "publish", 1, true) ~= nil
+		or string.find(s, "api services", 1, true) ~= nil or string.find(s, "not allowed", 1, true) ~= nil
+		or string.find(s, "403", 1, true) ~= nil
+end
+
 local function retry<T...>(f: () -> T...): (boolean, any)
+	if unavailable then return false, unavailable end
 	local ok, err
-	for attempt = 1, 4 do
+	for attempt = 1, 3 do
 		ok, err = pcall(f)
 		if ok then return true, err end
-		task.wait(attempt * 1.5)
+		if permanent(err) then
+			unavailable = tostring(err)
+			warn("[MilestoneTree] saving is off on this server: " .. tostring(err)
+				.. " (publish the place and turn on Game Settings > Security > Enable Studio Access to API Services)")
+			return false, err
+		end
+		task.wait(attempt)
 	end
 	return false, err
 end
@@ -31829,19 +31864,28 @@ local Store = require(root:WaitForChild("Store"))
 local remotes = ReplicatedStorage:WaitForChild("MilestoneTreeRemotes")
 local viewRemote: RemoteEvent = remotes:WaitForChild("View")
 
--- the game: the runtime, TowerNum and the transpiled game files in load order
-local runtime = root:WaitForChild("Runtime")
-local gameFolder = root:WaitForChild("Game")
-local chunks = {}
-for name in string.gmatch(require(gameFolder:WaitForChild("Manifest")), "[^,]+") do
-	table.insert(chunks, require(gameFolder:WaitForChild(name)))
+-- the game: the runtime, TowerNum and the transpiled game files in load order. If any of it fails to load, Main
+-- shows the error on the player's screen (the Error attribute) instead of leaving it blank.
+local deps
+local okLoad, loadErr = pcall(function()
+	local runtime = root:WaitForChild("Runtime")
+	local gameFolder = root:WaitForChild("Game")
+	local chunks = {}
+	for name in string.gmatch(require(gameFolder:WaitForChild("Manifest")), "[^,]+") do
+		table.insert(chunks, require(gameFolder:WaitForChild(name, 10)))
+	end
+	deps = {
+		TN = require(ReplicatedStorage:WaitForChild("TowerNum")),
+		JSRT = require(runtime:WaitForChild("JSRT")),
+		BEcore = require(runtime:WaitForChild("BEcore")),
+		chunks = chunks,
+	}
+end)
+if not okLoad then
+	warn("[MilestoneTree] the game failed to load: " .. tostring(loadErr))
+	actor:SetAttribute("Error", "The game failed to load on the server: " .. tostring(loadErr))
+	return
 end
-local deps = {
-	TN = require(ReplicatedStorage:WaitForChild("TowerNum")),
-	JSRT = require(runtime:WaitForChild("JSRT")),
-	BEcore = require(runtime:WaitForChild("BEcore")),
-	chunks = chunks,
-}
 
 local player: Player? = nil
 local session = nil
@@ -31893,6 +31937,7 @@ end
 
 local function begin(plr: Player)
 	player = plr
+	viewRemote:FireClient(plr, { status = "Loading your save..." })
 	local rec, err = Store.load(plr.UserId)
 	if not plr.Parent then
 		if rec then task.spawn(Store.save, plr.UserId, rec.save or "", rec.options, true) end
@@ -31919,7 +31964,13 @@ local function begin(plr: Player)
 	pushNow = true
 end
 actor:BindToMessage("start", function(plr: Player)
-	task.spawn(begin, plr) -- loading yields (DataStore)
+	task.spawn(function() -- loading yields (DataStore)
+		local ok, err = pcall(begin, plr)
+		if not ok then
+			warn("[MilestoneTree] could not start " .. plr.Name .. "'s game: " .. tostring(err))
+			viewRemote:FireClient(plr, { fatal = "Your game could not start on the server: " .. tostring(err) })
+		end
+	end)
 end)
 
 actor:BindToMessageParallel("act", function(a, hold)
@@ -32106,6 +32157,26 @@ local function rootFrame(name: string, order: number): Frame
 end
 local headRoot = rootFrame("HeadRoot", 1)
 local tabRoot = rootFrame("TabRoot", 2)
+
+-- what the page says while the server gets the game ready, and any error that stops it
+local status = Instance.new("TextLabel")
+status.Name = "Status"
+status.LayoutOrder = 0
+status.BackgroundTransparency = 1
+status.Size = UDim2.new(1, -40, 0, 0)
+status.AutomaticSize = Enum.AutomaticSize.Y
+status.TextWrapped = true
+status.RichText = true
+status.FontFace = Style.FONT
+status.TextSize = 20
+status.TextColor3 = Style.TEXT
+status.Text = "Loading your game..."
+status.Parent = main
+local function setStatus(text: string?, isError: boolean?)
+	status.Visible = text ~= nil
+	status.Text = if text then Html.escape(text) else ""
+	status.TextColor3 = if isError then Color3.fromRGB(255, 90, 90) else Style.TEXT
+end
 
 local menuShown = true
 local toggle = Instance.new("TextButton")
@@ -32374,9 +32445,28 @@ local function applyTabStyle(st: any)
 	if type(st) == "table" then Style.apply(main, st) else Style.drop(main, "Gradient") end
 end
 
+local gotScreen = false
+local failed = false
 viewRemote.OnClientEvent:Connect(function(patch: any)
 	if type(patch) ~= "table" then return end
-	renderer:apply(patch)
+	if patch.fatal then
+		failed = true
+		setStatus(tostring(patch.fatal) .. "\n\n(The same error is in Studio's Output window: View > Output.)", true)
+		return
+	end
+	if patch.status then
+		if not gotScreen and not failed then setStatus(tostring(patch.status)) end
+		return
+	end
+	local ok, err = pcall(function() renderer:apply(patch) end)
+	if not ok then
+		warn("[MilestoneTree] drawing the screen failed: " .. tostring(err))
+		setStatus("Drawing the screen failed: " .. tostring(err), true)
+		failed = true
+	elseif patch.set and next(patch.set) ~= nil and not failed then
+		gotScreen = true
+		setStatus(nil)
+	end
 	if patch.tabStyle then applyTabStyle(patch.tabStyle) end
 	if patch.keys then
 		keys = {}
@@ -32434,6 +32524,11 @@ watchCamera()
 gui.Parent = player:WaitForChild("PlayerGui")
 overlay.Parent = player:WaitForChild("PlayerGui")
 readyRemote:FireServer()
+task.delay(20, function()
+	if not gotScreen and not failed then
+		setStatus("Still waiting for the server. In Studio, open View > Output and look for red errors from MilestoneTree.", true)
+	end
+end)
 ]]></string>
           </Properties>
         </Item>
@@ -33013,6 +33108,12 @@ function Render.apply(self: Renderer, patch: any)
 		if rec and rec.kind ~= kindOf(n) then
 			-- rebuilt: keep the children and move them to the new object
 			local kids = self:_children(id)
+			-- take the children out first: destroying the old object would destroy them too, and Roblox never
+			-- lets a destroyed object be parented again
+			for _, k in kids do
+				local kr = self.recs[k]
+				if kr then kr.root.Parent = nil end
+			end
 			self:_destroy(id, true)
 			local built = self:_build(id, n)
 			rec = built

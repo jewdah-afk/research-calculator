@@ -22,19 +22,28 @@ local Store = require(root:WaitForChild("Store"))
 local remotes = ReplicatedStorage:WaitForChild("MilestoneTreeRemotes")
 local viewRemote: RemoteEvent = remotes:WaitForChild("View")
 
--- the game: the runtime, TowerNum and the transpiled game files in load order
-local runtime = root:WaitForChild("Runtime")
-local gameFolder = root:WaitForChild("Game")
-local chunks = {}
-for name in string.gmatch(require(gameFolder:WaitForChild("Manifest")), "[^,]+") do
-	table.insert(chunks, require(gameFolder:WaitForChild(name)))
+-- the game: the runtime, TowerNum and the transpiled game files in load order. If any of it fails to load, Main
+-- shows the error on the player's screen (the Error attribute) instead of leaving it blank.
+local deps
+local okLoad, loadErr = pcall(function()
+	local runtime = root:WaitForChild("Runtime")
+	local gameFolder = root:WaitForChild("Game")
+	local chunks = {}
+	for name in string.gmatch(require(gameFolder:WaitForChild("Manifest")), "[^,]+") do
+		table.insert(chunks, require(gameFolder:WaitForChild(name, 10)))
+	end
+	deps = {
+		TN = require(ReplicatedStorage:WaitForChild("TowerNum")),
+		JSRT = require(runtime:WaitForChild("JSRT")),
+		BEcore = require(runtime:WaitForChild("BEcore")),
+		chunks = chunks,
+	}
+end)
+if not okLoad then
+	warn("[MilestoneTree] the game failed to load: " .. tostring(loadErr))
+	actor:SetAttribute("Error", "The game failed to load on the server: " .. tostring(loadErr))
+	return
 end
-local deps = {
-	TN = require(ReplicatedStorage:WaitForChild("TowerNum")),
-	JSRT = require(runtime:WaitForChild("JSRT")),
-	BEcore = require(runtime:WaitForChild("BEcore")),
-	chunks = chunks,
-}
 
 local player: Player? = nil
 local session = nil
@@ -86,6 +95,7 @@ end
 
 local function begin(plr: Player)
 	player = plr
+	viewRemote:FireClient(plr, { status = "Loading your save..." })
 	local rec, err = Store.load(plr.UserId)
 	if not plr.Parent then
 		if rec then task.spawn(Store.save, plr.UserId, rec.save or "", rec.options, true) end
@@ -112,7 +122,13 @@ local function begin(plr: Player)
 	pushNow = true
 end
 actor:BindToMessage("start", function(plr: Player)
-	task.spawn(begin, plr) -- loading yields (DataStore)
+	task.spawn(function() -- loading yields (DataStore)
+		local ok, err = pcall(begin, plr)
+		if not ok then
+			warn("[MilestoneTree] could not start " .. plr.Name .. "'s game: " .. tostring(err))
+			viewRemote:FireClient(plr, { fatal = "Your game could not start on the server: " .. tostring(err) })
+		end
+	end)
 end)
 
 actor:BindToMessageParallel("act", function(a, hold)

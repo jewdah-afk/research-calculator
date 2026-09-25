@@ -125,6 +125,13 @@ M.fireClient = function(remote, player, ...)
 end
 
 -- ------------------------------------------------------------------------------------------------------ the run
+-- `luau tests/roblox.luau -a studio`: a place opened from a file in Studio, where every DataStore call fails
+local STUDIO = (...) == "studio"
+if STUDIO then
+	M.failStore = true
+	M.failMessage = "StudioAccessToApisNotAllowed: Studio access to APIs is not allowed (mock)"
+end
+
 print("== server starts")
 mainScript.Parent = server
 M.runScript(mainScript, require(W .. "server/Main"))
@@ -141,6 +148,20 @@ end
 
 print("== player joins")
 local p = join()
+if STUDIO then
+	M.step(1.5)
+	local pg0 = p:FindFirstChild("PlayerGui")
+	local scr = pg0 and pg0:FindFirstChild("MilestoneTree")
+	local n = 0
+	if scr then for _, d in scr.Page.Menu.MenuRoot:GetDescendants() do if d.ClassName == "TextButton" then n += 1 end end end
+	check(n >= 4, "without DataStores the game is on screen within 1.5 s (" .. n .. " menu buttons)")
+	check(scr and not scr.Page.Main.Status.Visible, "the loading message is gone")
+	local ov = pg0:FindFirstChild("MilestoneTreeOverlay")
+	check(ov and ov.Unsaved.Visible, "the not-saved banner is up")
+	check((M.errors or 0) == 0, "no script errors (" .. tostring(M.errors or 0) .. ")")
+	print(if failures == 0 then "roblox (studio, no DataStore): all checks passed" else ("roblox (studio): " .. failures .. " checks FAILED"))
+	return
+end
 M.step(3)
 local pg = p:FindFirstChild("PlayerGui")
 local screen = pg and pg:FindFirstChild("MilestoneTree")
@@ -204,6 +225,12 @@ M.step(0.5)
 local prestigeText = ""
 for _, d in tabRoot:GetDescendants() do if d.ClassName == "TextLabel" then prestigeText ..= d.Text end end
 check(string.find(prestigeText, "prestige points") ~= nil, "Prestige tab drawn")
+check(openLayer("Milestone"), "back to the Milestone layer")
+M.step(0.5)
+local msText = ""
+for _, d in tabRoot:GetDescendants() do if d.ClassName == "TextLabel" then msText ..= d.Text .. "\n" end end
+check(string.find(msText, "milestones", 1, true) ~= nil and string.find(msText, "cost exponent", 1, true) ~= nil, "Milestone tab text drawn after switching tabs")
+check(not page.Main.Status.Visible, "no drawing errors on screen" .. (if page.Main.Status.Visible then ": " .. page.Main.Status.Text else ""))
 check(#payloadErrors == 0, "every remote payload is carryable" .. (if #payloadErrors > 0 then ": " .. payloadErrors[1] else ""))
 print(string.format("  %d patches, avg %.1f KB, max %.1f KB", sent, sentBytes / sent / 1024, maxBytes / 1024))
 
@@ -237,6 +264,8 @@ print("== player rejoins")
 sent = 0
 screen:Destroy()
 overlay:Destroy()
+-- a rejoin is a new client: drop the old client's handlers
+for _, r in RS.MilestoneTreeRemotes:GetChildren() do r.__events.OnClientEvent = nil end
 p = join()
 M.step(3)
 pg = p:FindFirstChild("PlayerGui")

@@ -27,12 +27,29 @@ local function jobId(): string
 	return if game.JobId ~= "" then game.JobId else "studio"
 end
 
+-- errors no retry fixes: Studio without API access, a place that was never published (a .rbxlx opened from disk).
+-- After one of those the store is off for this server, so nobody waits on it again.
+local unavailable: string? = nil
+local function permanent(err: any): boolean
+	local s = string.lower(tostring(err))
+	return string.find(s, "studioaccesstoapisnotallowed", 1, true) ~= nil or string.find(s, "publish", 1, true) ~= nil
+		or string.find(s, "api services", 1, true) ~= nil or string.find(s, "not allowed", 1, true) ~= nil
+		or string.find(s, "403", 1, true) ~= nil
+end
+
 local function retry<T...>(f: () -> T...): (boolean, any)
+	if unavailable then return false, unavailable end
 	local ok, err
-	for attempt = 1, 4 do
+	for attempt = 1, 3 do
 		ok, err = pcall(f)
 		if ok then return true, err end
-		task.wait(attempt * 1.5)
+		if permanent(err) then
+			unavailable = tostring(err)
+			warn("[MilestoneTree] saving is off on this server: " .. tostring(err)
+				.. " (publish the place and turn on Game Settings > Security > Enable Studio Access to API Services)")
+			return false, err
+		end
+		task.wait(attempt)
 	end
 	return false, err
 end
