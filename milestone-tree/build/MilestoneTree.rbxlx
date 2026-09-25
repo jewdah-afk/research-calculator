@@ -53067,6 +53067,433 @@ return Render
           </Properties>
           <Item class="ModuleScript" referent="132">
             <Properties>
+              <string name="Name">Ach</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	Ach: Achievements (DESIGN.md 6 row ach). No CTA.
+
+	    TROPHY SHELF   the count "13 / 18" (Sarpanch 64 gold, the game's own highlighted count) and its effect line,
+	                   then 2 shelves of medallions on plank frames: done = gold medallion with its number and a glint
+	                   that crosses one of them every 3 s; not yet = slate "?"
+	    inspector      a tap (or hover) shows the medallion's name and its goal / reward (the game's tooltip) with a
+	                   DONE / NOT YET chip
+	The count line leaves the body (the shelf shows it).
+]]
+
+local Client = script.Parent.Parent
+local Core = Client:WaitForChild("Core")
+local Theme = require(Core:WaitForChild("Theme"))
+local Recipes = require(Core:WaitForChild("Recipes"))
+local Layout = require(Core:WaitForChild("Layout"))
+local PanelF = Client:WaitForChild("Panel")
+local Common = require(PanelF:WaitForChild("Skins"):WaitForChild("Common"))
+local Sections = require(PanelF:WaitForChild("Sections"))
+local Kit = require(script.Parent:WaitForChild("Kit"))
+
+local C = Theme.C
+local GOLD = Theme.hue("ach")
+
+local function countLine(h: any): boolean
+	return type(h) == "string" and string.find(h, "<h2", 1, true) ~= nil and string.find(h, "completed", 1, true) ~= nil
+end
+
+local selected: string? = nil -- the inspected achievement id, for the session
+
+local function shelf(ph: Frame, id: string, store: any, ctx: any): any
+	local claim = {}
+	local glint: any = nil
+	ph.Size = UDim2.new(1, 0, 0, 0)
+	ph.AutomaticSize = Enum.AutomaticSize.Y
+	Common.list(ph, false, 14)
+	local draw: (st: any) -> () = nil :: any
+	draw = function(st: any)
+		store = st or store
+		local compact = Layout.mode == "COMPACT"
+		local ids = Kit.findAll(st, id, function(n: any): boolean
+			return n.t == "ach"
+		end, 3)
+		local done = 0
+		for _, aid in ids do
+			if st:get(aid).done then done += 1 end
+		end
+		-- the game's count and effect line
+		local lid = Kit.find(st, "tab", function(n: any): boolean
+			return n.cn == "display-text" and countLine(n.h)
+		end, 4)
+		local line = if lid then st:get(lid).h else nil
+		local count = if line then Kit.h2(line)[1] else nil
+		count = count or (done .. " / " .. #ids)
+		count = string.gsub(count :: string, "%s*/%s*", " / ")
+		Sections.header(ph, { name = "Head", order = 0, text = "TROPHY SHELF", hue = GOLD,
+			chips = { { text = done .. " / " .. #ids, color = C.ink, bg = GOLD, bgT = 0 } } })
+		local top = Common.get(ph, "Count", "Frame") :: Frame
+		top.LayoutOrder = 1
+		top.Active = false
+		top.Size = UDim2.new(1, 0, 0, 0)
+		top.AutomaticSize = Enum.AutomaticSize.Y
+		Common.list(top, true, 18, { valign = Enum.VerticalAlignment.Center })
+		local big = Common.get(top, "Big", "TextLabel") :: TextLabel
+		big.LayoutOrder = 1
+		big.AutomaticSize = Enum.AutomaticSize.X
+		big.Size = UDim2.fromOffset(0, if compact then 44 else 72)
+		local sig = tostring(count) .. "|" .. tostring(compact)
+		if big:GetAttribute("Sig") ~= sig then
+			big:SetAttribute("Sig", sig)
+			Recipes.number(big, { text = count :: string, size = if compact then 38 else 64, from = C.white, mid = Theme.lift(GOLD, 0.35), to = GOLD,
+				stroke = if compact then 5 else 7, shadow = if compact then 3 else 5, role = "hero" })
+		end
+		local eff = Common.label(top, "Effect", "body", C.text, { order = 2 })
+		eff.Size = UDim2.new(1, if compact then -130 else -220, 0, 0)
+		local effText = ""
+		if line then
+			local rest = string.match(line, "</h2>(.*)$") or ""
+			effText = Common.html(rest, "body", ctx.layer)
+		end
+		Common.setText(eff, effText)
+		-- the shelves: 2 planks of up to 9 medallions (wrapping on phones)
+		local per = math.max(1, math.ceil(#ids / 2))
+		local size = if compact then 48 else 64
+		local used: { [string]: boolean } = { Head = true, Count = true, List = true }
+		local firstDone: TextButton? = nil
+		for s = 1, 2 do
+			local name = "Shelf" .. s
+			local lo, hi = (s - 1) * per + 1, math.min(#ids, s * per)
+			if lo > hi then
+				Common.drop(ph, name)
+				continue
+			end
+			used[name] = true
+			local plank = Common.get(ph, name, "Frame") :: Frame
+			plank.LayoutOrder = 1 + s
+			plank.Active = false
+			plank.Size = UDim2.new(1, 0, 0, 0)
+			plank.AutomaticSize = Enum.AutomaticSize.Y
+			plank.BackgroundColor3 = Color3.fromRGB(58, 40, 22)
+			plank.BackgroundTransparency = 0.35
+			Common.corner(plank, 10)
+			Common.pad(plank, 12, 12, 16, 12)
+			Common.list(plank, true, if compact then 8 else 14, { wraps = true, align = Enum.HorizontalAlignment.Center })
+			local mine: { [string]: boolean } = { List = true, Pad = true, Corner = true }
+			for i = lo, hi do
+				local aid = ids[i]
+				local n = st:get(aid)
+				local key = "A" .. tostring(n.id)
+				mine[key] = true
+				local b = Common.get(plank, key, "TextButton") :: TextButton
+				b.LayoutOrder = i
+				b.AutoButtonColor = false
+				b.Size = UDim2.fromOffset(size, size)
+				Common.corner(b, 0.5)
+				local isDone = n.done == true
+				local sel = selected == tostring(n.id)
+				if isDone then
+					b.BackgroundColor3 = GOLD
+					Common.stroke(b, if sel then 3 else 2, if sel then C.white else Theme.lift(GOLD, 0.5), 0)
+					Common.text(b, "badge", C.ink)
+					Common.setText(b, tostring(n.num or i))
+					if firstDone == nil then firstDone = b end
+				else
+					b.BackgroundColor3 = C.panel3
+					Common.stroke(b, if sel then 3 else 1.5, if sel then GOLD else C.strokeHi, if sel then 0 else 0.3)
+					Common.text(b, "label", C.soft)
+					Common.setText(b, "?")
+				end
+				b.BackgroundTransparency = 0
+				b.TextXAlignment = Enum.TextXAlignment.Center
+				b.TextYAlignment = Enum.TextYAlignment.Center
+				Common.state(b, if isDone then "owned" else "locked")
+				local aKey = tostring(n.id)
+				local function pick()
+					if selected ~= aKey then
+						selected = aKey
+						draw(store)
+					end
+				end
+				Kit.onPress(b, pick)
+				if b:GetAttribute("Hover") ~= true then
+					b:SetAttribute("Hover", true)
+					b.MouseEnter:Connect(pick)
+				end
+			end
+			for _, c in plank:GetChildren() do
+				if c:IsA("GuiObject") and not mine[c.Name] then c:Destroy() end
+			end
+		end
+		-- the glint: one done medallion catches the light every 3 s
+		if firstDone and glint == nil then
+			glint = Recipes.shine(firstDone, { every = 3, dur = 0.8 })
+		elseif firstDone == nil and glint then
+			glint:stop()
+			glint = nil
+		end
+		-- the inspector strip
+		used.Inspect = true
+		local strip = Kit.card(ph, "Inspect", { order = 4, gap = 6, pad = 14, fill = Theme.mix(C.panel, GOLD, 0.08), stroke = GOLD, strokeT = 0.5 })
+		local pickN: any = nil
+		for _, aid in ids do
+			local n = st:get(aid)
+			if tostring(n.id) == selected then pickN = n end
+		end
+		local text = Common.label(strip, "Text", "body", C.text, { order = 1 })
+		if pickN then
+			local state = if pickN.done then Common.caps("Done", C.ownedValue) else Common.caps("Not yet", C.soft)
+			Common.setText(text, Common.title(Common.plain(Common.str(pickN.ti) or ""), "card", C.text) .. "   " .. state .. "\n"
+				.. Common.html(pickN.tip, "body", ctx.layer))
+		else
+			Common.setText(text, Common.run(Common.esc("Tap a medallion to see its goal."), "small", C.soft))
+		end
+		for _, c in ph:GetChildren() do
+			if c:IsA("GuiObject") and not used[c.Name] then c:Destroy() end
+		end
+	end
+	function claim.update(_: any, st: any)
+		draw(st)
+	end
+	function claim.destroy(_: any)
+		if glint then
+			glint:stop()
+			glint = nil
+		end
+		for _, c in ph:GetChildren() do c:Destroy() end
+	end
+	return claim
+end
+
+-- the count line leaves the body; other lines stay notes
+local function note(ph: Frame, id: string, store: any, ctx: any): any
+	local claim = {}
+	function claim.update(_: any, st: any)
+		local n = st:get(id)
+		local h = if type(n) == "table" then n.h else nil
+		if countLine(h) or not string.find(Common.plain(h), "%S") then
+			ph.Visible = false
+			ph.Size = UDim2.new()
+			ph.AutomaticSize = Enum.AutomaticSize.None
+			Common.drop(ph, "Text")
+			return
+		end
+		ph.Visible = true
+		ph.Size = UDim2.new(1, 0, 0, 0)
+		ph.AutomaticSize = Enum.AutomaticSize.Y
+		ph.BackgroundColor3 = C.panel2
+		ph.BackgroundTransparency = 0
+		Common.corner(ph, 10)
+		Common.pad(ph, 10, 14, 10, 16)
+		local l = Common.label(ph, "Text", "body", C.text)
+		Common.setText(l, Common.html(h, "body", ctx.layer))
+	end
+	function claim.destroy(_: any)
+		Common.drop(ph, "Text")
+	end
+	return claim
+end
+
+-- a gold shrine: a warm glow behind the header
+local function accent(sheet: Frame, ctx: any)
+	local band = Kit.band(sheet)
+	if band == nil then return end
+	local a = Kit.accent(band, "Ach")
+	a.ClipsDescendants = true
+	local blob = Common.blob(a, "Shrine", GOLD, 0.3)
+	if blob then
+		blob.AnchorPoint = Vector2.new(0.5, 0.5)
+		blob.Position = UDim2.new(0.5, 0, 0, 10)
+		blob.Size = UDim2.fromOffset(700, 200)
+	end
+end
+
+return {
+	layers = { "ach" },
+	accent = accent,
+	claims = ({
+		{ match = { cn = "achievements" }, make = shelf },
+		{ match = { cn = "display-text" }, make = note },
+	} :: { any }),
+}
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="133">
+            <Properties>
+              <string name="Name">Ap</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	Ap: Atomic Prestige (DESIGN.md 6 row ap).
+
+	    accent   the atom orbit: two elliptical rings around the emblem, turning (still with reduced motion)
+	    active   the challenge being run is pinned with a gold ribbon ("ACTIVE") over its card
+	The challenges, the Challenge Slayer buyable and the upgrades keep the template (P.skin: Hide owned).
+]]
+
+local Client = script.Parent.Parent
+local Core = Client:WaitForChild("Core")
+local Theme = require(Core:WaitForChild("Theme"))
+local Layout = require(Core:WaitForChild("Layout"))
+local Motion = require(Core:WaitForChild("Motion"))
+local PanelF = Client:WaitForChild("Panel")
+local Skins = PanelF:WaitForChild("Skins")
+local Common = require(Skins:WaitForChild("Common"))
+local Challenge = require(Skins:WaitForChild("Challenge"))
+local Kit = require(script.Parent:WaitForChild("Kit"))
+local P = (require(script.Parent:WaitForChild("P")) :: any).P
+
+local C = Theme.C
+
+local function orbit(sheet: Frame, ctx: any)
+	local emblem = sheet:FindFirstChild("Emblem") :: GuiObject?
+	if emblem == nil or Layout.mode == "COMPACT" then return end
+	local a = Kit.accent(sheet, "Ap")
+	local cx = emblem.Position.X.Offset + emblem.Size.X.Offset / 2
+	local cy = emblem.Position.Y.Offset + emblem.Size.Y.Offset / 2
+	local holder = Common.get(a, "Orbit", "Frame") :: Frame
+	holder.Active = false
+	holder.BackgroundTransparency = 1
+	holder.ZIndex = 7
+	holder.AnchorPoint = Vector2.new(0.5, 0.5)
+	holder.Position = UDim2.fromOffset(cx, cy)
+	holder.Size = UDim2.fromOffset(150, 150)
+	for i, rot in { 30, -30 } do
+		local r = Common.get(holder, "Ring" .. i, "Frame") :: Frame
+		r.Active = false
+		r.BackgroundTransparency = 1
+		r.AnchorPoint = Vector2.new(0.5, 0.5)
+		r.Position = UDim2.fromScale(0.5, 0.5)
+		r.Size = UDim2.fromOffset(146, 52)
+		r.Rotation = rot
+		Common.corner(r, 0.5)
+		Common.stroke(r, 2, Theme.lift(ctx.hue, 0.35), 0.25)
+	end
+	Motion.loop(holder, function(dt: number)
+		if not Motion.reduced() then holder.Rotation = (holder.Rotation + dt * 18) % 360 end
+	end)
+end
+
+-- the running challenge gets a gold ribbon over the default card
+local function skin(rec: any, n: any, ctx: any): boolean
+	if rec.kind == "chal" then
+		local ok = Challenge.skin(rec, n, ctx)
+		local active = n.st8 == "active" or n.st8 == "completable" or n.active == true
+		if active then
+			local rib = Common.chip(rec.root, "Ribbon", "ACTIVE", { color = C.ink, bg = C.gold, bgT = 0, h = 24 })
+			rib.AnchorPoint = Vector2.new(1, 0)
+			rib.Position = UDim2.new(1, 6, 0, -12)
+			rib.ZIndex = 6
+		else
+			Common.drop(rec.root, "Ribbon")
+		end
+		return ok
+	end
+	return P.skin(rec, n, ctx)
+end
+
+return {
+	layers = { "ap" },
+	skin = skin,
+	accent = orbit,
+}
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="134">
+            <Properties>
+              <string name="Name">Badges</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	Badges: Prestige Boost and Hyper Boost (DESIGN.md 6 rows pb and hb).
+
+	    hero     the power badge: a hue diamond with "^x" (the exponent the main display's effect line ends with, as
+	             sent) in the free slot between the resource block and the CTA; it pulses once when the value changes
+	    accent   pb mint / hb pale mint: a soft glow in the header corner
+	The upgrades keep the tier board (P.skin: Hide owned).
+]]
+
+local Client = script.Parent.Parent
+local Core = Client:WaitForChild("Core")
+local Theme = require(Core:WaitForChild("Theme"))
+local Motion = require(Core:WaitForChild("Motion"))
+local PanelF = Client:WaitForChild("Panel")
+local Common = require(PanelF:WaitForChild("Skins"):WaitForChild("Common"))
+local Kit = require(script.Parent:WaitForChild("Kit"))
+local P = (require(script.Parent:WaitForChild("P")) :: any).P
+
+local C = Theme.C
+
+local function hero(f: Frame, store: any, ctx: any)
+	local a = Kit.accent(f, "Badge")
+	local md = Kit.find(store, "tab", function(n: any): boolean
+		return n.cn == "main-display"
+	end, 3)
+	local eff = if md then Common.plain(Common.str(store:get(md).eff) or "") else ""
+	local power = string.match(eff, "powered by%s+([%d%.,e%+]+)")
+	local slot = if power then Kit.heroSlot(a, "Power", 170, 140) else nil
+	if slot == nil then
+		Common.drop(a, "Power")
+		return
+	end
+	local s = slot :: Frame
+	local hue = ctx.hue :: Color3
+	local gem = Common.get(s, "Gem", "Frame") :: Frame
+	gem.Active = false
+	gem.AnchorPoint = Vector2.new(0.5, 0.5)
+	gem.Position = UDim2.new(0.5, 0, 0, 46)
+	gem.Size = UDim2.fromOffset(62, 62)
+	gem.Rotation = 45
+	gem.BackgroundColor3 = Theme.mix(C.deep, hue, 0.55)
+	gem.BackgroundTransparency = 0
+	Common.corner(gem, 14)
+	Common.stroke(gem, 3, Theme.lift(hue, 0.45), 0)
+	Common.glow(gem, hue, 0.55, 16)
+	local value = Common.get(s, "Value", "TextLabel") :: TextLabel
+	value.Active = false
+	value.AnchorPoint = Vector2.new(0.5, 0.5)
+	value.Position = UDim2.new(0.5, 0, 0, 46)
+	value.Size = UDim2.new(1, 0, 0, 44)
+	value.ZIndex = 3
+	value.TextXAlignment = Enum.TextXAlignment.Center
+	value.TextYAlignment = Enum.TextYAlignment.Center
+	value.TextWrapped = false
+	local text = "^" .. (power :: string)
+	if value:GetAttribute("Sig") ~= text then
+		local had = value:GetAttribute("Sig") ~= nil
+		value:SetAttribute("Sig", text)
+		Common.text(value, "index", C.text)
+		value.Text = text
+		local st = Common.stroke(value, 3, C.black, 0, "Stroke")
+		st.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+		if had then Motion.bump(gem, 0.12) end
+	end
+	local cap = Common.get(s, "Cap", "TextLabel") :: TextLabel
+	cap.Active = false
+	Common.text(cap, "caps", C.soft)
+	cap.AnchorPoint = Vector2.new(0.5, 0)
+	cap.Position = UDim2.new(0.5, 0, 0, 94)
+	cap.Size = UDim2.new(1, 0, 0, 18)
+	cap.TextXAlignment = Enum.TextXAlignment.Center
+	Common.setText(cap, Common.caps("Power"))
+end
+
+local function accent(sheet: Frame, ctx: any)
+	local band = Kit.band(sheet)
+	if band == nil then return end
+	local a = Kit.accent(band, "Badges")
+	a.ClipsDescendants = true
+	local blob = Common.blob(a, "Glow", Theme.lift(ctx.hue, 0.3), 0.3)
+	if blob then
+		blob.AnchorPoint = Vector2.new(0.5, 0.5)
+		blob.Position = UDim2.new(1, -160, 0, 0)
+		blob.Size = UDim2.fromOffset(420, 200)
+	end
+end
+
+return {
+	{ layers = { "pb" }, skin = P.skin, hero = hero, accent = accent },
+	{ layers = { "hb" }, skin = P.skin, hero = hero, accent = accent },
+}
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="135">
+            <Properties>
               <string name="Name">Cp</string>
               <string name="Source"><![CDATA[--!strict
 --[[
@@ -53578,7 +54005,271 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="133">
+          <Item class="ModuleScript" referent="136">
+            <Properties>
+              <string name="Name">Effects</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	Effects: Exotic Prestige and Prestiged-Exotic (DESIGN.md 6 rows ep and pep).
+
+	    EFFECT LADDER   the game's "1st effect: …" lines (its <br> lines, as sent) as rungs in milestone-row style: the
+	                    ordinal in a pill, the effect text; a line in class 'ef' / 'pef' gets a gold EMPOWERED chip. No
+	                    rung is invented: the ladder has exactly the lines the game sends.
+	    accent          ep: acid-green header stripes; pep: an amber fusion-core ring around the emblem
+	The rest (the Fusioner buyable, the upgrades board) keeps the template (P.skin: Hide owned).
+]]
+
+local Client = script.Parent.Parent
+local Core = Client:WaitForChild("Core")
+local Theme = require(Core:WaitForChild("Theme"))
+local Layout = require(Core:WaitForChild("Layout"))
+local Recipes = require(Core:WaitForChild("Recipes"))
+local Motion = require(Core:WaitForChild("Motion"))
+local PanelF = Client:WaitForChild("Panel")
+local Common = require(PanelF:WaitForChild("Skins"):WaitForChild("Common"))
+local Sections = require(PanelF:WaitForChild("Sections"))
+local Kit = require(script.Parent:WaitForChild("Kit"))
+local P = (require(script.Parent:WaitForChild("P")) :: any).P
+
+local C = Theme.C
+
+local function isLadder(h: string): boolean
+	return string.find(h, "1st effect", 1, true) ~= nil
+end
+
+local function trim(s: string): string
+	return (string.gsub(string.gsub(s, "^%s+", ""), "%s+$", ""))
+end
+
+local function ladder(ph: Frame, id: string, store: any, ctx: any): any
+	local claim = {}
+	local lastCount = 0
+	function claim.update(_: any, st: any)
+		local n = st:get(id)
+		local h = if type(n) == "table" and type(n.h) == "string" then n.h else ""
+		if not isLadder(h) then
+			-- another line: a NOTES row
+			for _, c in ph:GetChildren() do
+				if c.Name ~= "Text" then c:Destroy() end
+			end
+			ph.Visible = string.find(Common.plain(h), "%S") ~= nil
+			ph.Size = UDim2.new(1, 0, 0, 0)
+			ph.AutomaticSize = Enum.AutomaticSize.Y
+			ph.BackgroundColor3 = C.panel2
+			ph.BackgroundTransparency = 0
+			Common.corner(ph, 10)
+			Common.pad(ph, 10, 14, 10, 16)
+			local l = Common.label(ph, "Text", "body", C.text)
+			Common.setText(l, Common.html(h, "body", ctx.layer))
+			return
+		end
+		Common.drop(ph, "Text")
+		Common.drop(ph, "Pad")
+		Common.drop(ph, "Corner")
+		ph.Visible = true
+		ph.BackgroundTransparency = 1
+		ph.Size = UDim2.new(1, 0, 0, 0)
+		ph.AutomaticSize = Enum.AutomaticSize.Y
+		Common.list(ph, false, 10)
+		local compact = Layout.mode == "COMPACT"
+		local hue = ctx.hue :: Color3
+		local lines = string.split((string.gsub(h, "<br%s*/?>", "\0")), "\0")
+		local rungs: { { ord: string, text: string, ef: boolean } } = {}
+		for _, part in lines do
+			local plain = trim(Common.plain(part))
+			if plain == "" then continue end
+			local ord, rest = string.match(plain, "^(%d+%a%a)%s+effect:%s*(.*)$")
+			table.insert(rungs, { ord = ord or tostring(#rungs + 1), text = rest or plain,
+				ef = string.find(part, "class=[\"']p?ef[\"']") ~= nil })
+		end
+		local empowered = 0
+		for _, r in rungs do
+			if r.ef then empowered += 1 end
+		end
+		local chips: { any } = { { text = #rungs .. " effects", color = C.text, bg = C.panel3, bgT = 0 } }
+		if empowered > 0 then table.insert(chips, { text = empowered .. " empowered", color = C.ink, bg = C.gold, bgT = 0 }) end
+		Sections.header(ph, { name = "Head", order = 0, text = "EFFECT LADDER", hue = hue, chips = chips })
+		local used: { [string]: boolean } = { Head = true }
+		for i, r in rungs do
+			local name = "R" .. i
+			used[name] = true
+			local c = Common.get(ph, name, "TextLabel") :: TextLabel
+			c.LayoutOrder = i
+			c.Active = false
+			Common.text(c, "body", C.text)
+			c.TextWrapped = true
+			c.TextXAlignment = Enum.TextXAlignment.Left
+			c.TextYAlignment = Enum.TextYAlignment.Center
+			c.Size = UDim2.new(1, 0, 0, 0)
+			c.AutomaticSize = Enum.AutomaticSize.Y
+			c.BackgroundColor3 = if r.ef then Theme.mix(C.panel, C.gold, 0.12) else Theme.mix(C.panel, hue, 0.1)
+			c.BackgroundTransparency = 0
+			Common.corner(c, 12)
+			Common.stroke(c, if r.ef then 1.5 else 1, if r.ef then C.gold else Theme.lift(hue, 0.2), if r.ef then 0.2 else 0.55)
+			local padL = if compact then 64 else 76
+			Common.pad(c, 11, if r.ef and not compact then 150 else 14, 11, padL)
+			Common.setText(c, Common.esc(r.text))
+			local pill = Common.get(c, "Pill", "TextLabel") :: TextLabel
+			pill.Active = false
+			Common.text(pill, "label", C.ink)
+			pill.AnchorPoint = Vector2.new(0, 0.5)
+			pill.Position = UDim2.new(0, -padL + 12, 0.5, 0)
+			pill.Size = UDim2.fromOffset(if compact then 42 else 50, 28)
+			pill.TextXAlignment = Enum.TextXAlignment.Center
+			pill.TextYAlignment = Enum.TextYAlignment.Center
+			pill.BackgroundColor3 = if r.ef then C.gold else Theme.lift(hue, 0.25)
+			pill.BackgroundTransparency = 0
+			Common.corner(pill, 14)
+			Common.setText(pill, r.ord)
+			if r.ef and not compact then
+				local chip = Common.chip(c, "Empowered", "EMPOWERED", { color = C.ink, bg = C.gold, bgT = 0, h = 26 })
+				chip.AnchorPoint = Vector2.new(1, 0.5)
+				chip.Position = UDim2.new(1, 140, 0.5, 0)
+			else
+				Common.drop(c, "Empowered")
+			end
+			Common.state(c, if r.ef then "owned" else "can")
+		end
+		for _, c in ph:GetChildren() do
+			if c:IsA("GuiObject") and not used[c.Name] then c:Destroy() end
+		end
+		-- a new rung lights up (never on first sight)
+		if #rungs > lastCount and lastCount > 0 then
+			local c = ph:FindFirstChild("R" .. #rungs) :: GuiObject?
+			if c then Motion.flash(c) end
+		end
+		lastCount = #rungs
+	end
+	function claim.destroy(_: any)
+		for _, c in ph:GetChildren() do c:Destroy() end
+	end
+	return claim
+end
+
+-- ep: acid-green stripes
+local function stripes(sheet: Frame, ctx: any)
+	local band = Kit.band(sheet)
+	if band == nil then return end
+	Kit.stripes(Kit.accent(band, "Ep"), Theme.lift(ctx.hue, 0.25), 0.06, 22)
+end
+
+-- pep: the fusion core, an amber ring around the emblem that turns slowly
+local function core(sheet: Frame, ctx: any)
+	local emblem = sheet:FindFirstChild("Emblem") :: GuiObject?
+	if emblem == nil or Layout.mode == "COMPACT" then return end
+	local a = Kit.accent(sheet, "Pep")
+	local holder = Common.get(a, "Core", "Frame") :: Frame
+	holder.Active = false
+	holder.BackgroundTransparency = 1
+	holder.ZIndex = 5
+	holder.AnchorPoint = Vector2.new(0.5, 0.5)
+	holder.Position = UDim2.fromOffset(emblem.Position.X.Offset + emblem.Size.X.Offset / 2, emblem.Position.Y.Offset + emblem.Size.Y.Offset / 2)
+	holder.Size = UDim2.fromOffset(emblem.Size.X.Offset + 22, emblem.Size.Y.Offset + 22)
+	local ring = Recipes.ring(holder, { size = emblem.Size.X.Offset + 22, thick = 4, color = Theme.lift(ctx.hue, 0.2), track = 0.8 })
+	ring:set(0.7)
+	Motion.loop(holder, function(dt: number)
+		if not Motion.reduced() then holder.Rotation = (holder.Rotation + dt * 24) % 360 end
+	end)
+end
+
+local function sig(layer: string, accent: (Frame, any) -> ()): any
+	return {
+		layers = { layer },
+		skin = P.skin,
+		accent = accent,
+		claims = ({ { match = { cn = "display-text" }, make = ladder } } :: { any }),
+	}
+end
+
+return {
+	sig("ep", stripes),
+	sig("pep", core),
+}
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="137">
+            <Properties>
+              <string name="Name">Energy</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	Energy: Prestige Energy and Super Energy (DESIGN.md 6 rows pe and se). Small panels: the sheet hugs its content.
+
+	    hero     the RATE chip under the CTA: "×16.00 per OoM of PP, ^1.00" (the game's two numbers, as sent, with the
+	             short unit); the source line leaves the body
+	    accent   a lightning bolt watermark in the header (three hue strokes)
+	The upgrades keep the tier board (P.skin: Hide owned).
+]]
+
+local Client = script.Parent.Parent
+local Core = Client:WaitForChild("Core")
+local Theme = require(Core:WaitForChild("Theme"))
+local PanelF = Client:WaitForChild("Panel")
+local Common = require(PanelF:WaitForChild("Skins"):WaitForChild("Common"))
+local Signatures = require(script.Parent:WaitForChild("Signatures"))
+local Kit = require(script.Parent:WaitForChild("Kit"))
+local P = (require(script.Parent:WaitForChild("P")) :: any).P
+
+local C = Theme.C
+
+local function rateLine(h: string): boolean
+	return string.find(h, "per OoM", 1, true) ~= nil
+end
+
+local function hero(f: Frame, store: any, ctx: any)
+	local a = Kit.accent(f, "Energy")
+	local line = Kit.line(store, rateLine)
+	local plain = if line then Common.plain(line) else ""
+	local per, res, pow = string.match(plain, "([%d%.,e%+]+) per OoM of (.-), then raised to a power of ([%d%.,e%+]+)")
+	if per == nil or res == nil or pow == nil then
+		Common.drop(a, "Rate")
+		return
+	end
+	local unit = Signatures.unit(res)
+	Kit.heroChip(a, f, "Rate", Common.caps("Rate", C.soft) .. "   " .. Common.num("×" .. per, "number", C.text)
+		.. Common.run(Common.esc(" per OoM of " .. unit .. ", "), "small", C.soft) .. Common.num("^" .. pow, "number", C.text))
+end
+
+local function accent(sheet: Frame, ctx: any)
+	local band = Kit.band(sheet)
+	if band == nil then return end
+	local a = Kit.accent(band, "Energy")
+	local bolt = Common.get(a, "Bolt", "Frame") :: Frame
+	bolt.Active = false
+	bolt.BackgroundTransparency = 1
+	bolt.AnchorPoint = Vector2.new(1, 0.5)
+	bolt.Position = UDim2.new(1, -150, 0.5, 0)
+	bolt.Size = UDim2.fromOffset(60, 80)
+	local strokes = { { 34, 4, 24 }, { 30, 36, -62 }, { 26, 50, 24 } }
+	for i, s in strokes do
+		local b = Common.get(bolt, "S" .. i, "Frame") :: Frame
+		b.Active = false
+		b.AnchorPoint = Vector2.new(0.5, 0)
+		b.Position = UDim2.fromOffset(s[1], s[2])
+		b.Size = UDim2.fromOffset(9, 34)
+		b.Rotation = s[3]
+		b.BackgroundColor3 = Theme.lift(ctx.hue, 0.2)
+		b.BackgroundTransparency = 0.82
+		Common.corner(b, 4)
+	end
+end
+
+local function sig(layer: string): any
+	return {
+		layers = { layer },
+		hug = true,
+		skin = P.skin,
+		hero = hero,
+		accent = accent,
+		claims = ({ { match = { cn = "display-text" }, make = Kit.noteClaim(rateLine) } } :: { any }),
+	}
+end
+
+return { sig("pe"), sig("se") }
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="138">
             <Properties>
               <string name="Name">Ex</string>
               <string name="Source"><![CDATA[--!strict
@@ -54080,7 +54771,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="134">
+          <Item class="ModuleScript" referent="139">
             <Properties>
               <string name="Name">Kit</string>
               <string name="Source"><![CDATA[--!strict
@@ -54433,6 +55124,78 @@ function Kit.band(sheet: Instance): Frame?
 	return if b and b:IsA("Frame") then b else nil
 end
 
+-- ------------------------------------------------------------------------------------------------------ hero parts
+-- a stat chip under the CTA and the default stat chips (WIDE); index stacks several (1, 2, ...)
+function Kit.heroChip(holder: Instance, hero: Frame, name: string, text: string, index: number?): TextLabel?
+	if Layout.mode == "COMPACT" then
+		Common.drop(holder, name)
+		return nil
+	end
+	local cta = hero:FindFirstChild("Cta") :: GuiObject?
+	local stats = hero:FindFirstChild("Stats") :: GuiObject?
+	local y = (if cta then cta.Size.Y.Offset + 10 else 0) + (if stats and stats.Visible then 42 else 0) + ((index or 1) - 1) * 42
+	local chip = Common.chip(holder, name, text, { rich = true, bg = C.panel2, bgT = 0, h = 34 })
+	chip.AnchorPoint = Vector2.new(1, 0)
+	chip.Position = UDim2.new(1, 0, 0, y)
+	return chip
+end
+
+-- the free slot between the resource block and the CTA (WIDE): a holder for a badge / scope; nil on phones
+function Kit.heroSlot(holder: Instance, name: string, w: number, h: number): Frame?
+	if Layout.mode == "COMPACT" then
+		Common.drop(holder, name)
+		return nil
+	end
+	local f = Common.get(holder, name, "Frame") :: Frame
+	f.Active = false
+	f.BackgroundTransparency = 1
+	f.AnchorPoint = Vector2.new(1, 0)
+	f.Position = UDim2.new(1, -424, 0, 6)
+	f.Size = UDim2.fromOffset(w, h)
+	return f
+end
+
+-- a claim for display-text lines: the ones `hide` picks leave the body (a signature shows them elsewhere); the
+-- others stay NOTES rows (the Skins/Generic look)
+function Kit.noteClaim(hide: (h: string) -> boolean): (ph: Frame, id: string, store: any, ctx: any) -> any
+	return function(ph: Frame, id: string, store: any, ctx: any): any
+		local claim = {}
+		function claim.update(_: any, st: any)
+			local n = st:get(id)
+			local h = if type(n) == "table" and type(n.h) == "string" then n.h else ""
+			if hide(h) or not string.find(Common.plain(h), "%S") then
+				ph.Visible = false
+				ph.Size = UDim2.new()
+				ph.AutomaticSize = Enum.AutomaticSize.None
+				Common.drop(ph, "Text")
+				return
+			end
+			ph.Visible = true
+			ph.Size = UDim2.new(1, 0, 0, 0)
+			ph.AutomaticSize = Enum.AutomaticSize.Y
+			ph.BackgroundColor3 = C.panel2
+			ph.BackgroundTransparency = 0
+			Common.corner(ph, 10)
+			Common.pad(ph, 10, 14, 10, 16)
+			local l = Common.label(ph, "Text", "body", C.text)
+			l.TextTransparency = 0.08
+			Common.setText(l, Common.html(h, "body", ctx.layer))
+		end
+		function claim.destroy(_: any)
+			Common.drop(ph, "Text")
+		end
+		return claim
+	end
+end
+
+-- the first display-text of the tab whose html passes pred, and its html
+function Kit.line(store: any, pred: (h: string) -> boolean): string?
+	local id = Kit.find(store, "tab", function(n: any): boolean
+		return n.cn == "display-text" and type(n.h) == "string" and pred(n.h)
+	end, 4)
+	return if id then store:get(id).h else nil
+end
+
 -- ------------------------------------------------------------------------------------------------------ scrolling
 function Kit.scrollTo(ctx: any, obj: GuiObject?, margin: number?)
 	local sf = ctx.scroll :: ScrollingFrame?
@@ -54447,7 +55210,7 @@ return Kit
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="135">
+          <Item class="ModuleScript" referent="140">
             <Properties>
               <string name="Name">M</string>
               <string name="Source"><![CDATA[--!strict
@@ -55483,7 +56246,326 @@ return M
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="136">
+          <Item class="ModuleScript" referent="141">
+            <Properties>
+              <string name="Name">Mp</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	Mp: Multiverse (DESIGN.md 6 row mp).
+
+	    accent   the split rim: violet (m) -> crimson (danger) around the sheet
+	    portal   challenge 21 ("Enter The Prestige Multiverse") becomes the full-width PORTAL card: the default challenge
+	             card widened, with a turning swirl ring at its right (still with reduced motion); its START button is
+	             the challenge's own (the same ["chal", "mp", 21] as the map's gate)
+	The other challenges and the upgrades keep the template (P.skin: Hide owned).
+]]
+
+local Client = script.Parent.Parent
+local Core = Client:WaitForChild("Core")
+local Theme = require(Core:WaitForChild("Theme"))
+local Layout = require(Core:WaitForChild("Layout"))
+local Motion = require(Core:WaitForChild("Motion"))
+local Recipes = require(Core:WaitForChild("Recipes"))
+local PanelF = Client:WaitForChild("Panel")
+local Skins = PanelF:WaitForChild("Skins")
+local Common = require(Skins:WaitForChild("Common"))
+local Challenge = require(Skins:WaitForChild("Challenge"))
+local Kit = require(script.Parent:WaitForChild("Kit"))
+local P = (require(script.Parent:WaitForChild("P")) :: any).P
+
+local C = Theme.C
+
+local function rim(sheet: Frame, ctx: any)
+	if Layout.mode == "COMPACT" then return end
+	local a = Kit.accent(sheet, "Mp")
+	local f = Common.get(a, "Split", "Frame") :: Frame
+	f.Active = false
+	f.BackgroundTransparency = 1
+	f.Size = UDim2.fromScale(1, 1)
+	f.ZIndex = 4
+	Common.corner(f, 22)
+	local s = Common.stroke(f, 3, C.white, 0)
+	local g = Common.get(s, "Split", "UIGradient") :: UIGradient
+	g.Rotation = 0
+	g.Color = ColorSequence.new(Theme.hue("m"), C.danger)
+end
+
+local function skin(rec: any, n: any, ctx: any): boolean
+	if rec.kind == "chal" and tostring(n.id) == "21" then
+		local ok = Challenge.skin(rec, n, ctx)
+		local root = rec.root :: Frame
+		local compact = ctx.mode == "COMPACT"
+		root.Size = UDim2.fromOffset(Kit.live(ctx).contentW, 0)
+		if compact then
+			Common.drop(root, "Portal")
+			Common.drop(root, "Clear")
+			return ok
+		end
+		local pad = Common.get(root, "Clear", "UIPadding") :: UIPadding
+		pad.PaddingRight = UDim.new(0, 170)
+		local holder = Common.get(root, "Portal", "Frame") :: Frame
+		holder.Active = false
+		holder.BackgroundTransparency = 1
+		holder.AnchorPoint = Vector2.new(1, 0.5)
+		holder.Position = UDim2.new(1, 150, 0, 80)
+		holder.Size = UDim2.fromOffset(120, 120)
+		holder.ZIndex = 4
+		if holder:FindFirstChild("Ring") == nil then
+			local ring = Recipes.ring(holder, { size = 112, thick = 6, color = Theme.lift(ctx.hue, 0.25), track = 0.75 })
+			ring:set(0.72)
+			Motion.loop(holder, function(dt: number)
+				if not Motion.reduced() then holder.Rotation = (holder.Rotation + dt * 40) % 360 end
+			end)
+		end
+		local core = Common.blob(holder, "Core", Theme.hue("m"), 0.55)
+		if core then
+			core.AnchorPoint = Vector2.new(0.5, 0.5)
+			core.Position = UDim2.fromScale(0.5, 0.5)
+			core.Size = UDim2.fromOffset(96, 96)
+		end
+		return ok
+	end
+	if rec.kind == "chal" then
+		Common.drop(rec.root, "Portal")
+		Common.drop(rec.root, "Clear")
+		return false
+	end
+	return P.skin(rec, n, ctx)
+end
+
+return {
+	layers = { "mp" },
+	skin = skin,
+	accent = rim,
+}
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="142">
+            <Properties>
+              <string name="Name">Options</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	Options (DESIGN.md 6 row Options, 6.1 "Options"). Gear emblem, no hero.
+
+	    YOUR SAVE     the game's "[ Saving ]" line becomes the section title with a "Saved with your game" tag; SAVE /
+	                  EXPORT / IMPORT are tiles (the title, the game's one-line sub in a well); Offline Production keeps
+	                  the toggle row; DANGER ZONE closes the row: HARD RESET fires the game's own hardReset action on a
+	                  press, which the App turns into the DESIGN 7.7 confirm modal (EXPORT FIRST / CANCEL / hold 2 s)
+	    DISPLAY       "[ Displays ]" becomes the section title; the cyclers and toggles keep the Opt rows
+	    ABOUT         the about node (Skins/Generic)
+	    THIS DEVICE   "Not part of the save": Motion, Map detail, Map labels, Interface size as segmented controls,
+	                  client-only through Prefs (one press)
+	Every game option fires its node's own action; device options never reach the save.
+]]
+
+local Client = script.Parent.Parent
+local Core = Client:WaitForChild("Core")
+local Theme = require(Core:WaitForChild("Theme"))
+local Prefs = require(Core:WaitForChild("Prefs"))
+local PanelF = Client:WaitForChild("Panel")
+local Skins = PanelF:WaitForChild("Skins")
+local Common = require(Skins:WaitForChild("Common"))
+local Generic = require(Skins:WaitForChild("Generic"))
+local Sections = require(PanelF:WaitForChild("Sections"))
+local Kit = require(script.Parent:WaitForChild("Kit"))
+
+local C = Theme.C
+
+local HEADINGS: { [string]: { title: string, tag: string } } = {
+	saving = { title = "YOUR SAVE", tag = "Saved with your game" },
+	displays = { title = "DISPLAY", tag = "Saved with your game" },
+}
+local TILES: { [string]: boolean } = { save = true, export = true, import = true }
+
+local DEVICE: { { key: string, title: string, sub: string, values: { any }, labels: { string } } } = {
+	{ key = "motion", title = "Motion", sub = "Animations and effects", values = { "SYSTEM", "FULL", "REDUCED" },
+		labels = { "System", "Full", "Reduced" } },
+	{ key = "detail", title = "Map detail", sub = "Lower detail runs lighter", values = { "AUTO", "HIGH", "LOW" },
+		labels = { "Auto", "High", "Low" } },
+	{ key = "labels", title = "Map labels", sub = "Names under the map nodes", values = { "AUTO", "ALWAYS", "OFF" },
+		labels = { "Auto", "Always", "Off" } },
+	{ key = "size", title = "Interface size", sub = "Scales every panel and the HUD", values = { 90, 100, 115 },
+		labels = { "90%", "100%", "115%" } },
+}
+
+-- a section title with its tag chip (sentence case)
+local function heading(root: Instance, title: string, tag: string, hue: Color3, order: number?)
+	Sections.header(root, { name = "SectionTitle", order = order, text = title, hue = hue,
+		chips = { { text = tag, color = C.soft, bg = C.panel2, bgT = 0 } } })
+	local h = root:FindFirstChild("SectionTitle")
+	-- the tag is a sentence, not a count: small, soft
+	local chip = if h then h:FindFirstChild("Chip1") else nil
+	if chip and chip:IsA("TextLabel") then Common.text(chip, "small", C.soft) end
+end
+
+-- ------------------------------------------------------------------------------------------------------ tiles
+local function tile(rec: any, n: any, ctx: any): boolean
+	local b = rec.root :: TextButton
+	local l = b:FindFirstChild("Label") :: TextLabel?
+	if l == nil then return false end
+	local label = l :: TextLabel
+	local compact = ctx.mode == "COMPACT"
+	b.Visible = true
+	b.AutoButtonColor = false
+	for _, name in { "Gradient", "Glow", "Num", "Limit", "Fill" } do Common.drop(b, name) end
+	b.BackgroundColor3 = Theme.mix(C.panel, ctx.hue, 0.3)
+	b.BackgroundTransparency = 0
+	Common.corner(b, 16)
+	Common.stroke(b, 1.5, Theme.lift(ctx.hue, 0.3), 0.1)
+	b.Size = UDim2.fromOffset(if compact then math.floor((ctx.contentW - 20) / 3) else 220, if compact then 84 else 104)
+	b.AutomaticSize = Enum.AutomaticSize.None
+	Common.pad(b, 12, 10, 12, 10)
+	Common.text(label, "card", C.text)
+	label.Visible = true
+	label.ZIndex = 3
+	label.Size = UDim2.new(1, 0, 0, 30)
+	label.AutomaticSize = Enum.AutomaticSize.None
+	label.TextXAlignment = Enum.TextXAlignment.Center
+	label.TextYAlignment = Enum.TextYAlignment.Center
+	label.TextWrapped = false
+	local stroke = Common.stroke(label, 2, C.black, 0, "Stroke")
+	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	local title = string.upper(Common.plain(Common.str(n.ti) or n.h or ""))
+	title = string.gsub(title, " SAVE$", "")
+	title = string.gsub(title, " A SAVE$", "")
+	Common.setText(label, Common.esc(title))
+	local sub = string.match(Common.str(n.h) or "", "<br%s*/?>(.*)$")
+	local subText = Common.plain(sub or "")
+	subText = string.gsub(string.gsub(subText, "^%s+", ""), "%s+$", "")
+	if subText ~= "" and not compact then
+		local well = Common.chip(label, "Sub", subText, { color = C.text, bg = C.black, bgT = 0.45, h = 26, role = "small" })
+		well.AnchorPoint = Vector2.new(0.5, 0)
+		well.Position = UDim2.new(0.5, 0, 1, 12)
+		well.TextTruncate = Enum.TextTruncate.AtEnd
+		local lim = Common.get(well, "Max", "UISizeConstraint") :: UISizeConstraint
+		lim.MaxSize = Vector2.new(200, 26)
+	else
+		Common.drop(label, "Sub")
+	end
+	Common.state(b, "can")
+	return true
+end
+
+-- ------------------------------------------------------------------------------------------------------ danger zone
+local function danger(row: Instance, resetId: string, ctx: any)
+	local card = Kit.card(row, "Danger", { order = 99, gap = 10, pad = 16, fill = Theme.mix(C.panel, C.danger, 0.12), stroke = C.danger,
+		strokeT = 0.3 })
+	card.Size = UDim2.new(1, 0, 0, 0)
+	Sections.header(card, { name = "Head", order = 0, text = "DANGER ZONE", hue = C.danger })
+	local t = Common.label(card, "Text", "body", C.dangerText, { order = 1 })
+	Common.setText(t, Common.esc("A hard reset wipes all your progress. Export your save first to keep a copy."))
+	local b = Kit.button(card, "HardReset", Common.run(Common.esc("HARD RESET…"), "label", C.text) .. "   "
+		.. Common.run(Common.esc("Opens a confirm: hold 2 s to wipe"), "small", C.dangerText), { fill = Theme.mix(C.panel, C.danger, 0.55),
+		stroke = C.danger, h = 44, order = 2 })
+	Common.state(b, "can")
+	local store = ctx.store
+	Kit.onPress(b, function()
+		local n = store:get(resetId)
+		if type(n) == "table" and type(n.a) == "table" then ctx.act(n.a, false) end
+	end)
+end
+
+-- ------------------------------------------------------------------------------------------------------ this device
+local function device(root: Instance, ctx: any)
+	local compact = ctx.mode == "COMPACT"
+	local card = Kit.card(root, "Device", { order = 99, gap = 12, pad = 16 })
+	heading(card, "THIS DEVICE", "Not part of the save", ctx.hue, 0)
+	local prefs = Prefs.get() :: any
+	for i, d in DEVICE do
+		local row = Common.get(card, "Row" .. i, "Frame") :: Frame
+		row.LayoutOrder = i
+		row.Active = false
+		row.BackgroundTransparency = 1
+		row.Size = UDim2.new(1, 0, 0, 0)
+		row.AutomaticSize = Enum.AutomaticSize.Y
+		local t = Common.label(row, "Title", "small", C.soft)
+		t.Size = UDim2.new(1, if compact then -250 else -360, 0, 0)
+		Common.setText(t, Common.title(d.title, "cardSmall", C.text) .. "\n" .. Common.esc(d.sub))
+		local seg = Common.get(row, "Seg", "Frame") :: Frame
+		seg.Active = false
+		seg.AnchorPoint = Vector2.new(1, 0)
+		seg.Position = UDim2.new(1, 0, 0, 0)
+		seg.Size = UDim2.fromOffset(if compact then 240 else 340, 38)
+		seg.BackgroundColor3 = C.deep
+		seg.BackgroundTransparency = 0
+		Common.corner(seg, 10)
+		Common.list(seg, true, 4, { valign = Enum.VerticalAlignment.Center, align = Enum.HorizontalAlignment.Center })
+		for j, v in d.values do
+			local on = prefs[d.key] == v
+			local b = Kit.button(seg, "O" .. j, Common.esc(d.labels[j]), { fill = if on then Theme.mix(C.panel, ctx.hue, 0.6) else C.panel2,
+				ink = if on then C.text else C.soft, h = 32, w = if compact then 76 else 108, order = j, radius = 8 })
+			b.FontFace = Font.fromName("Montserrat", Enum.FontWeight.ExtraBold, if on then Enum.FontStyle.Italic else Enum.FontStyle.Normal)
+			Common.state(b, if on then "owned" else "can")
+			local key, value = d.key, v
+			Kit.onPress(b, function()
+				Prefs.set(key, value)
+				device(root, ctx)
+			end)
+		end
+	end
+end
+
+-- ------------------------------------------------------------------------------------------------------ the skin
+local function skin(rec: any, n: any, ctx: any): boolean
+	-- the game's "[ Saving ]" / "[ Displays ]" lines become section titles
+	if n.t == "html" and rec.kind == "html" then
+		local plain = Common.plain(n.h)
+		local word = string.match(plain, "^%s*%[%s*(%a+)%s*%]%s*$")
+		local head = if word then HEADINGS[string.lower(word)] else nil
+		if head then
+			local root = rec.root :: Frame
+			root.Visible = true
+			root.BackgroundTransparency = 1
+			root.Size = UDim2.new(1, 0, 0, 0)
+			root.AutomaticSize = Enum.AutomaticSize.Y
+			Common.drop(root, "Pad")
+			local text = root:FindFirstChild("Text")
+			if text and text:IsA("GuiObject") then text.Visible = false end
+			heading(root, head.title, head.tag, ctx.hue)
+			return true
+		end
+		return false
+	end
+	if rec.kind == "btn:opt" then
+		if TILES[n.id or ""] then return tile(rec, n, ctx) end
+		if n.id == "hardReset" then
+			(rec.root :: GuiObject).Visible = false
+			Common.state(rec.root, "can")
+			-- the danger zone closes the save row
+			local pid = Common.parentId(rec.id)
+			local prow = if pid then ctx.render.recs[pid] else nil
+			if prow then danger(prow.root, rec.id, ctx) end
+			return true
+		end
+		return false
+	end
+	-- the tab root: the device options come last
+	if rec.id == "tab" and (n.t == "col" or n.t == "row") then
+		Generic.skin(rec, n, ctx)
+		device(rec.root, ctx)
+		return true
+	end
+	return false
+end
+
+-- the gear emblem's accent: a quiet system-violet glow in the header
+local function accent(sheet: Frame, ctx: any)
+	local band = Kit.band(sheet)
+	if band == nil then return end
+	local a = Kit.accent(band, "Options")
+	Kit.watermark(a, "⚙", Theme.lift(ctx.hue, 0.3), 0.08)
+end
+
+return {
+	layers = { "options-tab" },
+	skin = skin,
+	accent = accent,
+}
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="143">
             <Properties>
               <string name="Name">P</string>
               <string name="Source"><![CDATA[--!strict
@@ -55626,7 +56708,113 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="137">
+          <Item class="ModuleScript" referent="144">
+            <Properties>
+              <string name="Name">Pp</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	Pp: Prestige Power (DESIGN.md 6 row pp).
+
+	    hero     "X Hz" (the game's own Hz value, as sent) over an oscilloscope strip in the free slot between the
+	             resource block and the CTA; the wave scrolls (frozen with reduced motion). The source line leaves the
+	             body.
+	    accent   crimson-pink header stripes
+	The Power Scaler buyable and the upgrades keep the template (P.skin: Hide owned).
+]]
+
+local Client = script.Parent.Parent
+local Core = Client:WaitForChild("Core")
+local Theme = require(Core:WaitForChild("Theme"))
+local Motion = require(Core:WaitForChild("Motion"))
+local PanelF = Client:WaitForChild("Panel")
+local Common = require(PanelF:WaitForChild("Skins"):WaitForChild("Common"))
+local Kit = require(script.Parent:WaitForChild("Kit"))
+local P = (require(script.Parent:WaitForChild("P")) :: any).P
+
+local C = Theme.C
+local W, H, DOTS = 200, 38, 14
+
+local function hzLine(h: string): boolean
+	return string.find(h, "Hz powerful", 1, true) ~= nil
+end
+
+local function hero(f: Frame, store: any, ctx: any)
+	local a = Kit.accent(f, "Pp")
+	local line = Kit.line(store, hzLine)
+	local hz = if line then string.match(Common.plain(line), "is%s+(%S+)%s+Hz") else nil
+	local slot = if hz then Kit.heroSlot(a, "Scope", 230, 140) else nil
+	if slot == nil then
+		Common.drop(a, "Scope")
+		return
+	end
+	local s = slot :: Frame
+	local hue = Theme.textHue(ctx.layer)
+	local value = Common.label(s, "Value", "numberHeavy", C.text, { wrap = false, align = Enum.TextXAlignment.Center })
+	value.Position = UDim2.fromOffset(0, 4)
+	Common.setText(value, Common.num((hz :: string) .. " Hz", "numberHeavy", C.text))
+	-- the strip: two periods of dots on a sine, slid left forever (one write a frame)
+	local strip = Common.get(s, "Strip", "Frame") :: Frame
+	strip.Active = false
+	strip.Position = UDim2.fromOffset(15, 40)
+	strip.Size = UDim2.fromOffset(W, H + 16)
+	strip.BackgroundColor3 = C.deep
+	strip.BackgroundTransparency = 0.1
+	strip.ClipsDescendants = true
+	Common.corner(strip, 10)
+	Common.stroke(strip, 1, hue, 0.5)
+	local wave = strip:FindFirstChild("Wave") :: Frame?
+	if wave == nil then
+		local w = Instance.new("Frame")
+		w.Name = "Wave"
+		w.Active = false
+		w.BackgroundTransparency = 1
+		w.Size = UDim2.fromOffset(2 * W, H + 16)
+		for i = 0, 2 * DOTS - 1 do
+			local d = Instance.new("Frame")
+			d.Name = "D" .. i
+			d.Active = false
+			d.BorderSizePixel = 0
+			d.AnchorPoint = Vector2.new(0.5, 0.5)
+			local x = (i + 0.5) * W / DOTS
+			d.Position = UDim2.fromOffset(x, 8 + H / 2 - math.sin(x / W * 2 * math.pi * 2) * H / 2)
+			d.Size = UDim2.fromOffset(5, 5)
+			d.BackgroundColor3 = hue
+			d.Parent = w
+		end
+		w.Parent = strip
+		local x = 0
+		Motion.loop(w, function(dt: number)
+			if Motion.reduced() then return end
+			x = (x + dt * 60) % W
+			w.Position = UDim2.fromOffset(-x, 0)
+		end)
+	end
+	local cap = Common.get(s, "Cap", "TextLabel") :: TextLabel
+	cap.Active = false
+	Common.text(cap, "caps", C.soft)
+	cap.Position = UDim2.fromOffset(0, 104)
+	cap.Size = UDim2.new(1, 0, 0, 18)
+	cap.TextXAlignment = Enum.TextXAlignment.Center
+	Common.setText(cap, Common.caps("Prestige power"))
+end
+
+local function accent(sheet: Frame, ctx: any)
+	local band = Kit.band(sheet)
+	if band == nil then return end
+	Kit.stripes(Kit.accent(band, "Pp"), Theme.lift(ctx.hue, 0.2), 0.06, 22)
+end
+
+return {
+	layers = { "pp" },
+	skin = P.skin,
+	hero = hero,
+	accent = accent,
+	claims = ({ { match = { cn = "display-text" }, make = Kit.noteClaim(hzLine) } } :: { any }),
+}
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="145">
             <Properties>
               <string name="Name">Signatures</string>
               <string name="Source"><![CDATA[--!strict
@@ -55812,7 +57000,7 @@ return Signatures
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="138">
+          <Item class="ModuleScript" referent="146">
             <Properties>
               <string name="Name">Sp</string>
               <string name="Source"><![CDATA[--!strict
@@ -56282,8 +57470,79 @@ return {
 ]]></string>
             </Properties>
           </Item>
+          <Item class="ModuleScript" referent="147">
+            <Properties>
+              <string name="Name">T</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	T: Transcend (DESIGN.md 6 row t).
+
+	    accent   the crown rays behind the emblem: a gold glow and 8 thin rays turning once in 30 s (still with reduced
+	             motion)
+	The challenges, the Upgrades tier board (P.skin: Hide owned) and the special points keep the template.
+]]
+
+local Client = script.Parent.Parent
+local Core = Client:WaitForChild("Core")
+local Theme = require(Core:WaitForChild("Theme"))
+local Layout = require(Core:WaitForChild("Layout"))
+local Motion = require(Core:WaitForChild("Motion"))
+local PanelF = Client:WaitForChild("Panel")
+local Common = require(PanelF:WaitForChild("Skins"):WaitForChild("Common"))
+local Kit = require(script.Parent:WaitForChild("Kit"))
+local P = (require(script.Parent:WaitForChild("P")) :: any).P
+
+local function rays(sheet: Frame, ctx: any)
+	local emblem = sheet:FindFirstChild("Emblem") :: GuiObject?
+	if emblem == nil or Layout.mode == "COMPACT" then return end
+	local a = Kit.accent(sheet, "T")
+	local cx = emblem.Position.X.Offset + emblem.Size.X.Offset / 2
+	local cy = emblem.Position.Y.Offset + emblem.Size.Y.Offset / 2
+	local glow = Common.blob(a, "Glow", ctx.hue, 0.35)
+	if glow then
+		glow.AnchorPoint = Vector2.new(0.5, 0.5)
+		glow.Position = UDim2.fromOffset(cx, cy)
+		glow.Size = UDim2.fromOffset(200, 200)
+	end
+	local holder = Common.get(a, "Rays", "Frame") :: Frame
+	holder.Active = false
+	holder.BackgroundTransparency = 1
+	holder.AnchorPoint = Vector2.new(0.5, 0.5)
+	holder.Position = UDim2.fromOffset(cx, cy)
+	holder.Size = UDim2.fromOffset(180, 180)
+	for i = 1, 4 do
+		local r = Common.get(holder, "Ray" .. i, "Frame") :: Frame
+		r.Active = false
+		r.AnchorPoint = Vector2.new(0.5, 0.5)
+		r.Position = UDim2.fromScale(0.5, 0.5)
+		r.Size = UDim2.fromOffset(170, 6)
+		r.Rotation = (i - 1) * 45
+		r.BackgroundColor3 = Theme.lift(ctx.hue, 0.3)
+		r.BackgroundTransparency = 0
+		local g = Common.get(r, "Fade", "UIGradient") :: UIGradient
+		g.Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 1),
+			NumberSequenceKeypoint.new(0.3, 0.55),
+			NumberSequenceKeypoint.new(0.5, 1),
+			NumberSequenceKeypoint.new(0.7, 0.55),
+			NumberSequenceKeypoint.new(1, 1),
+		})
+	end
+	Motion.loop(holder, function(dt: number)
+		if not Motion.reduced() then holder.Rotation = (holder.Rotation + dt * 12) % 360 end
+	end)
+end
+
+return {
+	layers = { "t" },
+	skin = P.skin,
+	accent = rays,
+}
+]]></string>
+            </Properties>
+          </Item>
         </Item>
-        <Item class="ModuleScript" referent="139">
+        <Item class="ModuleScript" referent="148">
           <Properties>
             <string name="Name">Style</string>
             <string name="Source"><![CDATA[--!strict
@@ -56477,7 +57736,7 @@ return Style
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="140">
+        <Item class="ModuleScript" referent="149">
           <Properties>
             <string name="Name">Types</string>
             <string name="Source"><![CDATA[--!strict
