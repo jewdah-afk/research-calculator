@@ -342,7 +342,7 @@ function E.buildClient()
 	for _, pair in { { "Html", "shared/Html" } } do
 		if shared:FindFirstChild(pair[1]) == nil then scriptModule(shared, pair[1], pair[2]) end
 	end
-	for _, n in { "Realm", "Assets", "ZoneMaps" } do
+	for _, n in { "Realm", "Assets", "ZoneMaps", "PrefsSchema", "Flags" } do
 		if shared:FindFirstChild(n) == nil then
 			M.module(shared, n, function() return require("../../src/shared/" .. n) end)
 		end

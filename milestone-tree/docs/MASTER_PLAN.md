@@ -454,7 +454,7 @@ CHECKPOINT (addition A): once this plan is accepted, it is a good moment for the
 
 | Risk | Mitigation |
 |---|---|
-| The owner is not ID-verified, so EditableImage and EditableMesh fail in the published game | Every procedural surface has an offline bake from the same generator (§2.7). A debug chip shows which path is live |
+| The Mesh / Image APIs toggle is off, or a device runs out of budget, so EditableImage and EditableMesh fail in the published game (the owner is ID-verified) | Every procedural surface has an offline bake from the same generator (§2.7). A debug chip shows which path is live |
 | The painted art shifts colour in 3D (the tonemapper) | Colour-card spike (G2); correction LUT or pre-compensation; `EmissiveTint` per plane |
 | Draw distance at low quality at far zoom-out | The proxy rule (≤ 200 studs); the SAFE backend |
 | Glass hides translucent parts behind it, and there is no refraction on mobile | The slab sits only behind the panel rect; realm planes use cutout alpha; the pre-blurred fallback |
@@ -473,7 +473,7 @@ CHECKPOINT (addition A): once this plan is accepted, it is a good moment for the
 
 | # | Action | Why it matters |
 |---|---|---|
-| 1 | **ID-verify the account that owns the game (13+)** (the group owner, if it is a group game), and turn on **Enable Mesh / Image APIs** (Creator Dashboard or Game Settings › Security) | Without it the published game ships every procedural effect as its bake: the live sky, the growing tree, the ray-marched gems, living corruption. It also raises audio uploads to 2,000 per 30 days and enables video uploads (`rc` §0.1, `au` §6.1) |
+| 1 | ~~ID-verify the account that owns the game~~ **Done:** the owner is the user account spedboyjake2 (`user:5167569069`), confirmed ID-verified on 2026-09-25. **Still to do:** turn on **Enable Mesh / Image APIs** (Creator Dashboard, or Studio › Game Settings › Security › "Allow Mesh / Image APIs") | Without it the published game ships every procedural effect as its bake: the live sky, the growing tree, the ray-marched gems, living corruption. It also raises audio uploads to 2,000 per 30 days and enables video uploads (`rc` §0.1, `au` §6.1) |
 | 2 | **Turn on 2FA** (plus Plus/Premium or the refundable fee when ready) | Required for Kids & Select. Without it the game stays 16+ and out of search and home (`pf` §2.9) |
 | 3 | **Choose the owner (user or group) and turn on "Restrict on creation"** before the final uploads | Open Use can never be reverted, so anyone could reuse the painted realm by id. A wrong owner means tiles that don't load (`pf` §1.3) |
 | 4 | **Studio MCP and Remote Control:** in Studio, Assistant › Manage MCP Servers › *Enable Studio as MCP server*; run a local Claude Code session on the PC that connects to it (optionally with Remote Control, so this conversation can drive it) | The only way for the agent to press Play, fly the camera and take screenshots in the real engine. The cloud container can't run Studio (`pf` §1.6) |
@@ -507,7 +507,7 @@ CHECKPOINT (addition A): once this plan is accepted, it is a good moment for the
 6. **Per-player keepsakes** (the flame memento, a personal sigil, a "share my realm" button).
    - Default: **yes to all three.** They are cheap and they give players something to share.
 7. **Who owns the game: your user account or a group?**
-   - Default: **keep the current owner** (`ROBLOX_CREATOR` in `upload.js`), and verify that account.
+   - **Answered:** the user account spedboyjake2 (`ROBLOX_CREATOR` in `upload.js`), which is ID-verified.
 8. **Spending.**
    - Default: **no paid Weave credits and no ads** until Phase 4 retention data. Free Weave-in-Figma tools during the
      beta only.

@@ -190,6 +190,7 @@ end
 scriptModule(shared, "Html", "shared/Html")
 M.module(shared, "ZoneMaps", function() return require("../../../src/shared/ZoneMaps") end)
 M.module(shared, "Assets", function() return require("../../../src/shared/Assets") end)
+M.module(shared, "PrefsSchema", function() return require("../../../src/shared/PrefsSchema") end)
 local client = Instance.new("Folder"); client.Name = "MilestoneTree"; client.Parent = SPS
 local function folder(parent, name)
 	local f = Instance.new("Folder"); f.Name = name; f.Parent = parent

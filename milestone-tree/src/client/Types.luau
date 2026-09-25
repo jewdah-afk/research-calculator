@@ -134,6 +134,12 @@ export type Prefs = {
 	detail: string, -- AUTO | HIGH | LOW
 	labels: string, -- AUTO | ALWAYS | OFF
 	size: number, -- 90 | 100 | 115
+	weather: string, -- OFF | RESETS | AMBIENT
+	guide: string, -- ON | OFF
+	music: number, -- 0..100, steps of 10
+	sfx: number,
+	ambience: number,
+	seenPrestige: { string }, -- layers whose first prestige has played
 }
 export type Mode = string -- "WIDE" | "MEDIUM" | "COMPACT"
 export type Handle = { stop: (self: Handle) -> () }

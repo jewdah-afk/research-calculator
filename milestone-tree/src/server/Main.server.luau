@@ -10,8 +10,9 @@
 	  View    server -> client   screen patches (see Session:view)
 	  Act     client -> server   (action, hold?) a button on the screen, or { "key", name } for a hotkey
 	  Ready   client -> server   the client wants the whole screen (first load, UI rebuilt, out of sync)
-	  Prefs   client -> server   { motion, detail, labels, size } the device options; mirrored as JSON in the
-	                             player's MT_Prefs attribute and saved apart from the game (Store.savePrefs)
+	  Prefs   client -> server   the device options (shared/PrefsSchema: motion, detail, labels, size, weather,
+	                             guide, the volumes, seenPrestige); mirrored as JSON in the player's MT_Prefs
+	                             attribute and saved apart from the game (Store.savePrefs)
 ]]
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
@@ -42,7 +43,7 @@ sessionsFolder.Parent = root
 
 local template = ServerStorage:WaitForChild("MilestoneTreeWorker") :: Actor
 
-type Prefs = { motion: string, detail: string, labels: string, size: number }
+type Prefs = { [string]: any }
 type Entry = {
 	actor: Actor, tokens: number, last: number,
 	prefsAt: number, prefsPending: Prefs?, prefsSet: boolean, prefsDirty: boolean, prefsSaveAt: number,
@@ -55,24 +56,13 @@ local function fatal(player: Player, text: string)
 end
 
 -- ---------------------------------------------------------------------------------------------- device options
-local PREF_CHOICES: { [string]: { [any]: boolean } } = {
-	motion = { SYSTEM = true, FULL = true, REDUCED = true },
-	detail = { AUTO = true, HIGH = true, LOW = true },
-	labels = { AUTO = true, ALWAYS = true, OFF = true },
-	size = { [90] = true, [100] = true, [115] = true },
-}
+-- the keys, choices and defaults are shared/PrefsSchema (the client's table too); a missing key takes its default and
+-- a wrong value falls back, so an old stored record still loads
+local PrefsSchema = require(ReplicatedStorage:WaitForChild("MilestoneTree"):WaitForChild("PrefsSchema"))
 
 -- a valid options table from the client or the store, or nil
 local function validPrefs(p: any): Prefs?
-	if type(p) ~= "table" then return nil end
-	local n = 0
-	for k, v in p do
-		n += 1
-		local choices = PREF_CHOICES[k]
-		if type(k) ~= "string" or not choices or not choices[v] then return nil end
-	end
-	if n ~= 4 then return nil end
-	return { motion = p.motion, detail = p.detail, labels = p.labels, size = p.size }
+	return PrefsSchema.clean(p)
 end
 
 local function setPrefsAttribute(player: Player, prefs: Prefs)

@@ -36,6 +36,7 @@ local shared = Instance.new("Folder"); shared.Name = "MilestoneTree"; shared.Par
 local htmlInst
 htmlInst = M.module(shared, "Html", function() return M.withScript(htmlInst, require(W .. "shared/Html")) end)
 M.module(shared, "ZoneMaps", function() return require("../../src/shared/ZoneMaps") end)
+M.module(shared, "PrefsSchema", function() return require("../../src/shared/PrefsSchema") end)
 
 local server = Instance.new("Folder"); server.Name = "MilestoneTree"; server.Parent = SSS
 local function scriptModule(parent, name, wrapPath)
