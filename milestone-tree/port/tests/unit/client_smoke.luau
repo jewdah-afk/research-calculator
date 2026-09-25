@@ -277,6 +277,7 @@ M.G.Vector2, M.G.UDim, M.G.UDim2, M.G.Color3 = Vector2, UDim, UDim2, Color3
 M.G.ColorSequence, M.G.ColorSequenceKeypoint, M.G.NumberSequence, M.G.NumberSequenceKeypoint = ColorSequence, CSK, NumberSequence, NSK
 M.G.TweenInfo, M.G.Rect, M.G.Font, M.G.Path2DControlPoint = TweenInfo, Rect, Font, Path2DControlPoint
 M.G.typeof = rtypeof
+M.G.os = { clock = function() return M.now end, time = os.time, date = os.date }
 local waitRaw = M.G.task.wait
 M.G.task.wait = function(s)
 	local t0 = M.now
@@ -448,6 +449,107 @@ if topbar then
 	check(ov ~= nil, "the overlay")
 end
 frames(1)
+
+-- the HUD and overlays in depth: hover, peek, the portal's gate popover, READY holds, every modal and screen
+if topbar then
+	local hudRoot = pg.HudGui.Root
+	local switch = pg.PreviewSwitch.Switch
+	check(switch.Text == "MAP", "a node click switched to the page UI")
+	switch.Activated:Fire()
+	frames(0.1)
+	check(pg.MapGui.Enabled and switch.Text == "GAME", "the switch brings the map back")
+	play("s13_none")
+	local scrim = pg.OverlayGui.Root.Peek:FindFirstChild("ScrimTop")
+	if scrim then scrim.Activated:Fire() end
+	nodesF.Node_pb.Hit.MouseEnter:Fire(5, 5)
+	frames(0.4)
+	local tip = pg.OverlayGui.Root:FindFirstChild("Tooltip")
+	check(tip and tip.Visible and tip.Title.Text ~= "", "hovering a node shows its tooltip")
+	nodesF.Node_pb.Hit.MouseLeave:Fire(5, 5)
+	nodesF.Node_p.Hit.MouseButton2Click:Fire()
+	frames(0.3)
+	local peek = pg.OverlayGui.Root:FindFirstChild("Peek")
+	check(peek and peek.Visible, "right-click opens the peek")
+	local ob = peek and peek.Card.Buttons:FindFirstChild("Open")
+	if ob then ob.Activated:Fire() end
+	frames(0.5)
+	check(peek and not peek.Visible, "OPEN closes the peek")
+	-- a READY gem hold (touch down, 0.8 s, the prestige action)
+	play("s19mv_none")
+	local ready = hudRoot:FindFirstChild("Ready")
+	local gem = ready and ready.Gems:FindFirstChild("Gem_pm")
+	check(gem ~= nil, "the READY tray has PM")
+	if gem then
+		local n0 = #acts
+		local io = { UserInputType = M.G.Enum.UserInputType.Touch, Position = Vector2.new(10, 10) }
+		gem.Hit.InputBegan:Fire(io)
+		frames(0.9)
+		local UIS2 = game:GetService("UserInputService")
+		UIS2.InputEnded:Fire(io)
+		frames(0.2)
+		local reset = false
+		for i = n0 + 1, #acts do if acts[i][1][1] == "reset" then reset = true end end
+		check(reset, "holding a READY gem sends its reset action")
+	end
+	-- the portal opens the gate popover
+	hudRoot.Portal.Hit.Activated:Fire()
+	frames(0.6)
+	local modal = pg.OverlayGui.Root:FindFirstChild("Modal")
+	check(modal and modal.Visible and modal:GetAttribute("Kind") == "gate", "the portal opens the gate popover")
+	pg.OverlayGui.Root.ModalDimmer.Activated:Fire()
+	frames(0.2)
+	-- the warning chip
+	play("s13_none")
+	topbar.Root.Warn.Hit.Activated:Fire()
+	frames(0.4)
+	-- toasts (the peek's OPEN switched to the page: back to the map first)
+	if switch.Text == "MAP" then switch.Activated:Fire() end
+	R.View.OnClientEvent:Fire({ set = {}, del = {}, pop = {
+		{ id = 1, title = "Milestone Gotten!", message = "18th Meta-Milestone", kind = "milestone", layer = "mm" },
+		{ id = 2, title = "Milestone Gotten!", message = "19th Meta-Milestone", kind = "milestone", layer = "mm" },
+		{ id = 3, title = "Achievement Gotten!", message = "Getting richer?", kind = "achievement", layer = "ach" },
+	}, notice = { "Game saved." }, save = "saved" })
+	frames(0.5)
+	local toasts = pg.OverlayGui.Root:FindFirstChild("Toasts")
+	local n = 0
+	for _, c in toasts:GetChildren() do if string.sub(c.Name, 1, 6) == "Toast_" then n += 1 end end
+	check(n == 3, "3 toasts (two milestones merged): " .. n)
+	frames(7)
+	-- every modal and screen on a fresh overlay
+	local Overlay = M.require(client.Overlay.Overlay)
+	local sg = Instance.new("ScreenGui"); sg.Name = "OverlayTest"; sg.Parent = pg
+	local r = Instance.new("Frame"); r.Name = "Root"; r.Parent = sg
+	local ov = Overlay.new(sg)
+	ov:modal("export", string.rep("eyJ0", 500))
+	frames(0.3)
+	ov:modal("import", { cooldown = 10 })
+	frames(0.2)
+	local box = r.Modal.Well.Box
+	box.Text = "garbage"
+	r.Modal.Buttons.Primary.Activated:Fire()
+	frames(0.5)
+	ov:importResult({ ok = false, msg = "That string is not a valid save (nothing was changed)." })
+	frames(0.2)
+	check(r.Modal.Result.Visible, "a bad import shows the inline error")
+	ov:importResult({ ok = true, msg = "Imported" })
+	ov:modal("hardReset", { action = { "opt", "hardReset" } })
+	frames(0.2)
+	ov:modal("gate", { t = "gate", show = true, inside = true, can = true, fin = true, done = true, h = "Leave", goal = "Goal: 1e20 PEP",
+		a = { "chal", "mp", 21 }, rs = { "p", "m" } })
+	frames(0.2)
+	ov:modal("gate", { t = "gate", show = false, inside = false, can = false, fin = false, done = false, rs = {}, req = { have = "164", need = "185", pr = 886 } })
+	ov:modal(nil)
+	for _, k in { "loading", "fatal", "outOfSync", "end" } do
+		ov:screen(k, if k == "loading" then { done = 3, total = 10 } elseif k == "end" then { win = "You won", took = "12d 4h", again = { "opt", "a" }, keep = { "opt", "b" } } else "text")
+		frames(0.1)
+	end
+	ov:screen("loading", { done = 1, total = 2 })
+	ov:screen("loading", { done = 2, total = 2 })
+	ov:screen(nil)
+	ov:flash(Color3.new(1, 0, 0))
+	frames(1)
+	ov:destroy()
+end
 
 check((M.errors or 0) == errors0, "no script errors (" .. tostring((M.errors or 0) - errors0) .. ")")
 print(string.format("== client smoke: %d tweens made, %d actions sent", tweens, #acts))

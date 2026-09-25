@@ -474,6 +474,48 @@ function Kit.rect(g: GuiObject): ARect
 	return { x = p.X, y = p.Y, w = s.X, h = s.Y }
 end
 
+-- a button with a word (DESIGN.md 9.8: one line, >= 12 du side padding). style: "primary" (the hue, a darker gradient
+-- so white passes 3:1), "gold" (dark ink), "danger", "quiet" (dark glass with a rim)
+function Kit.action(parent: Instance, name: string, text: string, o: { style: string?, hue: Color3?, h: number?, role: string?,
+	w: number? }): (TextButton, TextLabel)
+	local b = Kit.button(parent, name)
+	local h = o.h or 52
+	b.Size = if o.w then UDim2.fromOffset(o.w, h) else UDim2.fromOffset(0, h)
+	b.AutomaticSize = if o.w then Enum.AutomaticSize.None else Enum.AutomaticSize.X
+	b.BackgroundTransparency = 0
+	b.BackgroundColor3 = Color3.new(1, 1, 1)
+	Kit.corner(b, UDim.new(0, 12))
+	Kit.pad(b, 0, 16, 0, 16)
+	local style = o.style or "quiet"
+	local hue = o.hue or Theme.C.system
+	local fg = WHITE
+	if style == "primary" then
+		Kit.grad(b, { Theme.lift(hue, 0.08), Theme.shade(hue, 0.62) }, 90, nil, "Back")
+		Kit.stroke(b, 2, Theme.lift(hue, 0.4), 1, "Rim")
+	elseif style == "gold" then
+		Kit.grad(b, { Color3.fromHex("b37400"), Color3.fromHex("6b4500") }, 90, nil, "Back")
+		Kit.stroke(b, 2, Color3.fromHex("ffd34d"), 1, "Rim")
+	elseif style == "danger" then
+		Kit.grad(b, { Theme.shade(Theme.C.danger, 0.75), Theme.shade(Theme.C.danger, 0.42) }, 90, nil, "Back")
+		Kit.stroke(b, 2, Theme.lift(Theme.C.danger, 0.3), 1, "Rim")
+	else
+		Kit.grad(b, { Theme.C.panel3, Theme.C.panel2 }, 90, nil, "Back")
+		Kit.stroke(b, 1.5, Theme.C.strokeHi, 1, "Rim")
+	end
+	local row = Kit.frame(b, "Content")
+	row.AutomaticSize = Enum.AutomaticSize.X
+	row.Size = UDim2.fromScale(if o.w then 1 else 0, 1)
+	Kit.list(row, "x", 8, Enum.HorizontalAlignment.Center, Enum.VerticalAlignment.Center)
+	local l = Kit.label(row, "Label", o.role or "tab", text, fg)
+	l.LayoutOrder = 2
+	l.AutomaticSize = Enum.AutomaticSize.X
+	l.Size = UDim2.fromScale(0, 1)
+	Kit.textStroke(l, if style == "quiet" then 0 else 1.5, 0.8)
+	local over = child(l, "Overhang", "UIPadding") :: UIPadding
+	over.PaddingRight = UDim.new(0, 3)
+	return b, l
+end
+
 -- a chip: a rounded frame with a label, AutomaticSize X (height h, side padding pad)
 function Kit.chip(parent: Instance, name: string, role: string, text: string, o: { h: number, pad: number?, fg: Color3?, bg: Color3?,
 	bgA: number?, line: Color3?, lineA: number? }): (Frame, TextLabel)
