@@ -1,0 +1,1421 @@
+{
+ "about": "Milestone Tree NG+ UI kit (cosmic ornate). Built by art/ui/build.js from the Blender renders (blender/build.py) and the painters (kit.js, pieces.js, vfx.js). Images are 2x the 1080p display size. slice: ImageLabel.ScaleType = Slice, SliceCenter = Rect.new(sliceCenter[1..4]), SliceScale = sliceScale (x the UI scale). image: shown at display size, anchor = the image px placed on the reference point (frame corner / rim centre line / socket centre). tile: ScaleType.Tile, TileSize = tileSize.",
+ "version": 1,
+ "root": "art/ui/out/ (file paths are relative to it; build.js regenerates the PNGs, they are not committed)",
+ "scale": 2,
+ "layers": [
+  "m",
+  "p",
+  "cp"
+ ],
+ "themes": {
+  "m": {
+   "key": "m",
+   "name": "MILESTONE",
+   "sym": "M",
+   "hue": "#b35cff",
+   "hueHi": "#e6c2ff",
+   "hueDeep": "#35105c",
+   "body": [
+    "#1b1128",
+    "#0f0a18",
+    "#0a0712"
+   ],
+   "wash": "#b35cff",
+   "text": "#f5ecff",
+   "soft": "#d9c8ee",
+   "motif": "amethyst"
+  },
+  "p": {
+   "key": "p",
+   "name": "PRESTIGE",
+   "sym": "P",
+   "hue": "#6fc3ff",
+   "hueHi": "#d2eeff",
+   "hueDeep": "#0c3558",
+   "body": [
+    "#0f1a2a",
+    "#0a111d",
+    "#070b14"
+   ],
+   "wash": "#6fc3ff",
+   "text": "#eef7ff",
+   "soft": "#c3d6ea",
+   "motif": "ice"
+  },
+  "cp": {
+   "key": "cp",
+   "name": "CORRUPTED PRESTIGE",
+   "sym": "CR",
+   "hue": "#39ff14",
+   "hueHi": "#c9ffb5",
+   "hueDeep": "#0c4a05",
+   "body": [
+    "#0b170d",
+    "#070f08",
+    "#040905"
+   ],
+   "wash": "#39ff14",
+   "text": "#eaffe4",
+   "soft": "#b9dcb0",
+   "motif": "corrupt",
+   "glitch": {
+    "alt": "#ff2e63",
+    "cyan": "#2ef2ff"
+   }
+  }
+ },
+ "gold": {
+  "hi": "#fff6d2",
+  "light": "#ffe08a",
+  "mid": "#f2c35a",
+  "low": "#b07a28",
+  "deep": "#5a3a12",
+  "ink": "#2a1a06"
+ },
+ "pieces": {
+  "panel_m": {
+   "file": "pieces/panel_m.png",
+   "size": [
+    256,
+    256
+   ],
+   "kind": "slice",
+   "display": [
+    128,
+    128
+   ],
+   "sha256": "557442e44d3756cd",
+   "sliceCenter": [
+    48,
+    48,
+    208,
+    208
+   ],
+   "sliceScale": 0.5
+  },
+  "tex_m": {
+   "file": "pieces/tex_m.png",
+   "size": [
+    512,
+    512
+   ],
+   "kind": "tile",
+   "display": [
+    256,
+    256
+   ],
+   "sha256": "782699e4d26a3db0",
+   "tileSize": [
+    256,
+    256
+   ]
+  },
+  "header_m": {
+   "file": "pieces/header_m.png",
+   "size": [
+    512,
+    160
+   ],
+   "kind": "slice",
+   "display": [
+    256,
+    80
+   ],
+   "sha256": "632650d8c4dd373c",
+   "sliceCenter": [
+    320,
+    40,
+    472,
+    120
+   ],
+   "sliceScale": 0.5
+  },
+  "corner_m_tl": {
+   "file": "pieces/corner_m_tl.png",
+   "size": [
+    384,
+    384
+   ],
+   "kind": "image",
+   "display": [
+    192,
+    192
+   ],
+   "sha256": "0422e3359619a661",
+   "anchor": [
+    100,
+    100
+   ]
+  },
+  "corner_m_tr": {
+   "file": "pieces/corner_m_tr.png",
+   "size": [
+    384,
+    384
+   ],
+   "kind": "image",
+   "display": [
+    192,
+    192
+   ],
+   "sha256": "c5c3a9e4ff619ce9",
+   "anchor": [
+    284,
+    100
+   ]
+  },
+  "corner_m_bl": {
+   "file": "pieces/corner_m_bl.png",
+   "size": [
+    384,
+    384
+   ],
+   "kind": "image",
+   "display": [
+    192,
+    192
+   ],
+   "sha256": "d930d04d70b68886",
+   "anchor": [
+    100,
+    284
+   ]
+  },
+  "corner_m_br": {
+   "file": "pieces/corner_m_br.png",
+   "size": [
+    384,
+    384
+   ],
+   "kind": "image",
+   "display": [
+    192,
+    192
+   ],
+   "sha256": "8d35e50e4121e4ef",
+   "anchor": [
+    284,
+    284
+   ]
+  },
+  "crest_m": {
+   "file": "pieces/crest_m.png",
+   "size": [
+    320,
+    204
+   ],
+   "kind": "image",
+   "display": [
+    160,
+    102
+   ],
+   "sha256": "1560fae9dd2f0896",
+   "anchor": [
+    160,
+    114
+   ]
+  },
+  "medal_m": {
+   "file": "pieces/medal_m.png",
+   "size": [
+    256,
+    256
+   ],
+   "kind": "image",
+   "display": [
+    128,
+    128
+   ],
+   "sha256": "b8ab90eee5ad4a3f",
+   "anchor": [
+    128,
+    128
+   ]
+  },
+  "socket_m": {
+   "file": "pieces/socket_m.png",
+   "size": [
+    128,
+    128
+   ],
+   "kind": "image",
+   "display": [
+    64,
+    64
+   ],
+   "sha256": "2ab7541d1d4abd4a",
+   "anchor": [
+    64,
+    64
+   ]
+  },
+  "tabA_m": {
+   "file": "pieces/tabA_m.png",
+   "size": [
+    320,
+    96
+   ],
+   "kind": "slice",
+   "display": [
+    160,
+    48
+   ],
+   "sha256": "7d215b593795654c",
+   "sliceCenter": [
+    56,
+    40,
+    264,
+    56
+   ],
+   "sliceScale": 0.5
+  },
+  "tabB_m": {
+   "file": "pieces/tabB_m.png",
+   "size": [
+    256,
+    96
+   ],
+   "kind": "slice",
+   "display": [
+    128,
+    48
+   ],
+   "sha256": "f5e5efced51ee8be",
+   "sliceCenter": [
+    40,
+    40,
+    216,
+    56
+   ],
+   "sliceScale": 0.5
+  },
+  "btn_m": {
+   "file": "pieces/btn_m.png",
+   "size": [
+    512,
+    160
+   ],
+   "kind": "slice",
+   "display": [
+    256,
+    80
+   ],
+   "sha256": "2a34d29431973385",
+   "sliceCenter": [
+    84,
+    60,
+    428,
+    100
+   ],
+   "sliceScale": 0.5
+  },
+  "card_m": {
+   "file": "pieces/card_m.png",
+   "size": [
+    192,
+    192
+   ],
+   "kind": "slice",
+   "display": [
+    96,
+    96
+   ],
+   "sha256": "ca45bd1316d75afe",
+   "sliceCenter": [
+    44,
+    44,
+    148,
+    148
+   ],
+   "sliceScale": 0.5
+  },
+  "panel_p": {
+   "file": "pieces/panel_p.png",
+   "size": [
+    256,
+    256
+   ],
+   "kind": "slice",
+   "display": [
+    128,
+    128
+   ],
+   "sha256": "98b5ab62ea113c25",
+   "sliceCenter": [
+    48,
+    48,
+    208,
+    208
+   ],
+   "sliceScale": 0.5
+  },
+  "tex_p": {
+   "file": "pieces/tex_p.png",
+   "size": [
+    512,
+    512
+   ],
+   "kind": "tile",
+   "display": [
+    256,
+    256
+   ],
+   "sha256": "8f25798011020b46",
+   "tileSize": [
+    256,
+    256
+   ]
+  },
+  "header_p": {
+   "file": "pieces/header_p.png",
+   "size": [
+    512,
+    160
+   ],
+   "kind": "slice",
+   "display": [
+    256,
+    80
+   ],
+   "sha256": "475d159cb7c90ec8",
+   "sliceCenter": [
+    320,
+    40,
+    472,
+    120
+   ],
+   "sliceScale": 0.5
+  },
+  "corner_p_tl": {
+   "file": "pieces/corner_p_tl.png",
+   "size": [
+    384,
+    384
+   ],
+   "kind": "image",
+   "display": [
+    192,
+    192
+   ],
+   "sha256": "c97fa98fe11192b0",
+   "anchor": [
+    100,
+    100
+   ]
+  },
+  "corner_p_tr": {
+   "file": "pieces/corner_p_tr.png",
+   "size": [
+    384,
+    384
+   ],
+   "kind": "image",
+   "display": [
+    192,
+    192
+   ],
+   "sha256": "d29dbe18803e3822",
+   "anchor": [
+    284,
+    100
+   ]
+  },
+  "corner_p_bl": {
+   "file": "pieces/corner_p_bl.png",
+   "size": [
+    384,
+    384
+   ],
+   "kind": "image",
+   "display": [
+    192,
+    192
+   ],
+   "sha256": "38adb09203d1f65c",
+   "anchor": [
+    100,
+    284
+   ]
+  },
+  "corner_p_br": {
+   "file": "pieces/corner_p_br.png",
+   "size": [
+    384,
+    384
+   ],
+   "kind": "image",
+   "display": [
+    192,
+    192
+   ],
+   "sha256": "07f567d1c4e71931",
+   "anchor": [
+    284,
+    284
+   ]
+  },
+  "crest_p": {
+   "file": "pieces/crest_p.png",
+   "size": [
+    320,
+    204
+   ],
+   "kind": "image",
+   "display": [
+    160,
+    102
+   ],
+   "sha256": "4da2cb19bb64102c",
+   "anchor": [
+    160,
+    114
+   ]
+  },
+  "medal_p": {
+   "file": "pieces/medal_p.png",
+   "size": [
+    256,
+    256
+   ],
+   "kind": "image",
+   "display": [
+    128,
+    128
+   ],
+   "sha256": "f2ac2045609f459f",
+   "anchor": [
+    128,
+    128
+   ]
+  },
+  "socket_p": {
+   "file": "pieces/socket_p.png",
+   "size": [
+    128,
+    128
+   ],
+   "kind": "image",
+   "display": [
+    64,
+    64
+   ],
+   "sha256": "c09ffc1b9358c084",
+   "anchor": [
+    64,
+    64
+   ]
+  },
+  "tabA_p": {
+   "file": "pieces/tabA_p.png",
+   "size": [
+    320,
+    96
+   ],
+   "kind": "slice",
+   "display": [
+    160,
+    48
+   ],
+   "sha256": "178fe28c3225a535",
+   "sliceCenter": [
+    56,
+    40,
+    264,
+    56
+   ],
+   "sliceScale": 0.5
+  },
+  "tabB_p": {
+   "file": "pieces/tabB_p.png",
+   "size": [
+    256,
+    96
+   ],
+   "kind": "slice",
+   "display": [
+    128,
+    48
+   ],
+   "sha256": "b359d4d79f5de5b8",
+   "sliceCenter": [
+    40,
+    40,
+    216,
+    56
+   ],
+   "sliceScale": 0.5
+  },
+  "btn_p": {
+   "file": "pieces/btn_p.png",
+   "size": [
+    512,
+    160
+   ],
+   "kind": "slice",
+   "display": [
+    256,
+    80
+   ],
+   "sha256": "5f195fcb9f67a328",
+   "sliceCenter": [
+    84,
+    60,
+    428,
+    100
+   ],
+   "sliceScale": 0.5
+  },
+  "card_p": {
+   "file": "pieces/card_p.png",
+   "size": [
+    192,
+    192
+   ],
+   "kind": "slice",
+   "display": [
+    96,
+    96
+   ],
+   "sha256": "496bfd71481536db",
+   "sliceCenter": [
+    44,
+    44,
+    148,
+    148
+   ],
+   "sliceScale": 0.5
+  },
+  "panel_cp": {
+   "file": "pieces/panel_cp.png",
+   "size": [
+    256,
+    256
+   ],
+   "kind": "slice",
+   "display": [
+    128,
+    128
+   ],
+   "sha256": "aec98afc5622787d",
+   "sliceCenter": [
+    48,
+    48,
+    208,
+    208
+   ],
+   "sliceScale": 0.5
+  },
+  "tex_cp": {
+   "file": "pieces/tex_cp.png",
+   "size": [
+    512,
+    512
+   ],
+   "kind": "tile",
+   "display": [
+    256,
+    256
+   ],
+   "sha256": "841f7c01bfef6381",
+   "tileSize": [
+    256,
+    256
+   ]
+  },
+  "header_cp": {
+   "file": "pieces/header_cp.png",
+   "size": [
+    512,
+    160
+   ],
+   "kind": "slice",
+   "display": [
+    256,
+    80
+   ],
+   "sha256": "c0a558366325ec24",
+   "sliceCenter": [
+    320,
+    40,
+    472,
+    120
+   ],
+   "sliceScale": 0.5
+  },
+  "corner_cp_tl": {
+   "file": "pieces/corner_cp_tl.png",
+   "size": [
+    384,
+    384
+   ],
+   "kind": "image",
+   "display": [
+    192,
+    192
+   ],
+   "sha256": "9f34236e096bbe18",
+   "anchor": [
+    100,
+    100
+   ]
+  },
+  "corner_cp_tr": {
+   "file": "pieces/corner_cp_tr.png",
+   "size": [
+    384,
+    384
+   ],
+   "kind": "image",
+   "display": [
+    192,
+    192
+   ],
+   "sha256": "524e988195532127",
+   "anchor": [
+    284,
+    100
+   ]
+  },
+  "corner_cp_bl": {
+   "file": "pieces/corner_cp_bl.png",
+   "size": [
+    384,
+    384
+   ],
+   "kind": "image",
+   "display": [
+    192,
+    192
+   ],
+   "sha256": "ae70ec20747285cb",
+   "anchor": [
+    100,
+    284
+   ]
+  },
+  "corner_cp_br": {
+   "file": "pieces/corner_cp_br.png",
+   "size": [
+    384,
+    384
+   ],
+   "kind": "image",
+   "display": [
+    192,
+    192
+   ],
+   "sha256": "9cdd2aa218b8d6f3",
+   "anchor": [
+    284,
+    284
+   ]
+  },
+  "crest_cp": {
+   "file": "pieces/crest_cp.png",
+   "size": [
+    320,
+    204
+   ],
+   "kind": "image",
+   "display": [
+    160,
+    102
+   ],
+   "sha256": "cb8c282fc9bb641d",
+   "anchor": [
+    160,
+    114
+   ]
+  },
+  "medal_cp": {
+   "file": "pieces/medal_cp.png",
+   "size": [
+    256,
+    256
+   ],
+   "kind": "image",
+   "display": [
+    128,
+    128
+   ],
+   "sha256": "61193a8925cb4128",
+   "anchor": [
+    128,
+    128
+   ]
+  },
+  "socket_cp": {
+   "file": "pieces/socket_cp.png",
+   "size": [
+    128,
+    128
+   ],
+   "kind": "image",
+   "display": [
+    64,
+    64
+   ],
+   "sha256": "49b706843660e52a",
+   "anchor": [
+    64,
+    64
+   ]
+  },
+  "tabA_cp": {
+   "file": "pieces/tabA_cp.png",
+   "size": [
+    320,
+    96
+   ],
+   "kind": "slice",
+   "display": [
+    160,
+    48
+   ],
+   "sha256": "7215056fabde24c4",
+   "sliceCenter": [
+    56,
+    40,
+    264,
+    56
+   ],
+   "sliceScale": 0.5
+  },
+  "tabB_cp": {
+   "file": "pieces/tabB_cp.png",
+   "size": [
+    256,
+    96
+   ],
+   "kind": "slice",
+   "display": [
+    128,
+    48
+   ],
+   "sha256": "e9acafa9d77132ad",
+   "sliceCenter": [
+    40,
+    40,
+    216,
+    56
+   ],
+   "sliceScale": 0.5
+  },
+  "btn_cp": {
+   "file": "pieces/btn_cp.png",
+   "size": [
+    512,
+    160
+   ],
+   "kind": "slice",
+   "display": [
+    256,
+    80
+   ],
+   "sha256": "26eb12d9c7a1a52e",
+   "sliceCenter": [
+    84,
+    60,
+    428,
+    100
+   ],
+   "sliceScale": 0.5
+  },
+  "card_cp": {
+   "file": "pieces/card_cp.png",
+   "size": [
+    192,
+    192
+   ],
+   "kind": "slice",
+   "display": [
+    96,
+    96
+   ],
+   "sha256": "74afb6530ceb8bda",
+   "sliceCenter": [
+    44,
+    44,
+    148,
+    148
+   ],
+   "sliceScale": 0.5
+  },
+  "card_owned": {
+   "file": "pieces/card_owned.png",
+   "size": [
+    192,
+    192
+   ],
+   "kind": "slice",
+   "display": [
+    96,
+    96
+   ],
+   "sha256": "09c648eb42239aba",
+   "sliceCenter": [
+    48,
+    48,
+    144,
+    144
+   ],
+   "sliceScale": 0.5
+  },
+  "card_locked": {
+   "file": "pieces/card_locked.png",
+   "size": [
+    192,
+    192
+   ],
+   "kind": "slice",
+   "display": [
+    96,
+    96
+   ],
+   "sha256": "5000071fcae45c36",
+   "sliceCenter": [
+    44,
+    44,
+    148,
+    148
+   ],
+   "sliceScale": 0.5
+  },
+  "tex_stone": {
+   "file": "pieces/tex_stone.png",
+   "size": [
+    256,
+    256
+   ],
+   "kind": "tile",
+   "display": [
+    128,
+    128
+   ],
+   "sha256": "9e64bfa2c0f19fa7",
+   "tileSize": [
+    128,
+    128
+   ]
+  },
+  "seal_owned": {
+   "file": "pieces/seal_owned.png",
+   "size": [
+    128,
+    128
+   ],
+   "kind": "image",
+   "display": [
+    64,
+    64
+   ],
+   "sha256": "f724ee0fbf393e1f",
+   "anchor": [
+    64,
+    64
+   ]
+  },
+  "seal_locked": {
+   "file": "pieces/seal_locked.png",
+   "size": [
+    160,
+    160
+   ],
+   "kind": "image",
+   "display": [
+    80,
+    80
+   ],
+   "sha256": "3ae701a65631f4af",
+   "anchor": [
+    80,
+    80
+   ]
+  },
+  "socket_empty": {
+   "file": "pieces/socket_empty.png",
+   "size": [
+    128,
+    128
+   ],
+   "kind": "image",
+   "display": [
+    64,
+    64
+   ],
+   "sha256": "a99c9e09fe31a5e9",
+   "anchor": [
+    64,
+    64
+   ]
+  },
+  "dock_medal": {
+   "file": "pieces/dock_medal.png",
+   "size": [
+    192,
+    192
+   ],
+   "kind": "image",
+   "display": [
+    96,
+    96
+   ],
+   "sha256": "56b2cca85c2ab869",
+   "anchor": [
+    96,
+    96
+   ]
+  },
+  "coin": {
+   "file": "pieces/coin.png",
+   "size": [
+    160,
+    160
+   ],
+   "kind": "image",
+   "display": [
+    80,
+    80
+   ],
+   "sha256": "9416ff87aef096e6",
+   "anchor": [
+    80,
+    80
+   ]
+  },
+  "portal_ring": {
+   "file": "pieces/portal_ring.png",
+   "size": [
+    384,
+    384
+   ],
+   "kind": "image",
+   "display": [
+    192,
+    192
+   ],
+   "sha256": "eb2571b107c450be",
+   "anchor": [
+    192,
+    192
+   ]
+  },
+  "divider": {
+   "file": "pieces/divider.png",
+   "size": [
+    512,
+    64
+   ],
+   "kind": "slice",
+   "display": [
+    256,
+    32
+   ],
+   "sha256": "f28ddc377e1267dc",
+   "sliceCenter": [
+    96,
+    31,
+    416,
+    33
+   ],
+   "sliceScale": 0.5
+  },
+  "chain": {
+   "file": "pieces/chain.png",
+   "size": [
+    512,
+    64
+   ],
+   "kind": "tile",
+   "display": [
+    256,
+    32
+   ],
+   "sha256": "7950ddd79b9c28d5",
+   "tileSize": [
+    256,
+    32
+   ]
+  },
+  "close_btn": {
+   "file": "pieces/close_btn.png",
+   "size": [
+    128,
+    128
+   ],
+   "kind": "image",
+   "display": [
+    64,
+    64
+   ],
+   "sha256": "1aa1f6c437c34529",
+   "anchor": [
+    64,
+    64
+   ]
+  },
+  "tabA_strip": {
+   "file": "pieces/tabA_strip.png",
+   "size": [
+    192,
+    192
+   ],
+   "kind": "slice",
+   "display": [
+    96,
+    96
+   ],
+   "sha256": "364757a784853a97",
+   "sliceCenter": [
+    48,
+    48,
+    144,
+    144
+   ],
+   "sliceScale": 0.5
+  },
+  "tabB_bar": {
+   "file": "pieces/tabB_bar.png",
+   "size": [
+    192,
+    192
+   ],
+   "kind": "slice",
+   "display": [
+    96,
+    96
+   ],
+   "sha256": "6003b0b455e06f97",
+   "sliceCenter": [
+    40,
+    40,
+    152,
+    152
+   ],
+   "sliceScale": 0.5
+  },
+  "tabB_div": {
+   "file": "pieces/tabB_div.png",
+   "size": [
+    24,
+    96
+   ],
+   "kind": "image",
+   "display": [
+    12,
+    48
+   ],
+   "sha256": "30773533edefbd85",
+   "anchor": [
+    12,
+    48
+   ]
+  },
+  "plaque": {
+   "file": "pieces/plaque.png",
+   "size": [
+    512,
+    144
+   ],
+   "kind": "slice",
+   "display": [
+    256,
+    72
+   ],
+   "sha256": "aaba9c6e6e16dcf5",
+   "sliceCenter": [
+    64,
+    40,
+    448,
+    104
+   ],
+   "sliceScale": 0.5
+  },
+  "shelf": {
+   "file": "pieces/shelf.png",
+   "size": [
+    512,
+    176
+   ],
+   "kind": "slice",
+   "display": [
+    256,
+    88
+   ],
+   "sha256": "9533378f523aefbd",
+   "sliceCenter": [
+    56,
+    40,
+    456,
+    104
+   ],
+   "sliceScale": 0.5
+  },
+  "toast": {
+   "file": "pieces/toast.png",
+   "size": [
+    192,
+    192
+   ],
+   "kind": "slice",
+   "display": [
+    96,
+    96
+   ],
+   "sha256": "cf9848f09c34e60d",
+   "sliceCenter": [
+    40,
+    40,
+    152,
+    152
+   ],
+   "sliceScale": 0.5
+  },
+  "shadow": {
+   "file": "pieces/shadow.png",
+   "size": [
+    128,
+    128
+   ],
+   "kind": "slice",
+   "display": [
+    64,
+    64
+   ],
+   "sha256": "5ed57e4ca1f7ee73",
+   "sliceCenter": [
+    56,
+    56,
+    72,
+    72
+   ],
+   "sliceScale": 0.5
+  },
+  "glow9": {
+   "file": "pieces/glow9.png",
+   "size": [
+    128,
+    128
+   ],
+   "kind": "slice",
+   "display": [
+    64,
+    64
+   ],
+   "sha256": "86f413d03b5b69f5",
+   "sliceCenter": [
+    56,
+    56,
+    72,
+    72
+   ],
+   "sliceScale": 0.5
+  },
+  "btn_gold": {
+   "file": "pieces/btn_gold.png",
+   "size": [
+    512,
+    160
+   ],
+   "kind": "slice",
+   "display": [
+    256,
+    80
+   ],
+   "sha256": "c0060d9902780abe",
+   "sliceCenter": [
+    84,
+    60,
+    428,
+    100
+   ],
+   "sliceScale": 0.5
+  }
+ },
+ "atlas": {
+  "file": "pieces/vfx.png",
+  "size": [
+   1024,
+   1024
+  ],
+  "sha256": "643f429cc18a307f",
+  "tint": "white sprites: tint with ImageColor3 (stone shards and chain links keep their colour)",
+  "sprites": {
+   "sweep": [
+    4,
+    4,
+    128,
+    512
+   ],
+   "ring": [
+    136,
+    4,
+    256,
+    256
+   ],
+   "ring_thin": [
+    396,
+    4,
+    256,
+    256
+   ],
+   "glow": [
+    656,
+    4,
+    128,
+    128
+   ],
+   "star": [
+    788,
+    4,
+    128,
+    128
+   ],
+   "flare": [
+    4,
+    520,
+    512,
+    96
+   ],
+   "glint": [
+    520,
+    520,
+    96,
+    96
+   ],
+   "rune0": [
+    620,
+    520,
+    96,
+    96
+   ],
+   "rune1": [
+    720,
+    520,
+    96,
+    96
+   ],
+   "rune2": [
+    820,
+    520,
+    96,
+    96
+   ],
+   "rune3": [
+    920,
+    520,
+    96,
+    96
+   ],
+   "rune4": [
+    4,
+    620,
+    96,
+    96
+   ],
+   "rune5": [
+    104,
+    620,
+    96,
+    96
+   ],
+   "shard_crystal0": [
+    204,
+    620,
+    48,
+    80
+   ],
+   "shard_crystal1": [
+    256,
+    620,
+    48,
+    80
+   ],
+   "shard_crystal2": [
+    308,
+    620,
+    48,
+    80
+   ],
+   "shard_crystal3": [
+    360,
+    620,
+    48,
+    80
+   ],
+   "shard_stone0": [
+    412,
+    620,
+    64,
+    64
+   ],
+   "shard_stone1": [
+    480,
+    620,
+    64,
+    64
+   ],
+   "shard_stone2": [
+    548,
+    620,
+    64,
+    64
+   ],
+   "shard_stone3": [
+    616,
+    620,
+    64,
+    64
+   ],
+   "shard_stone4": [
+    684,
+    620,
+    64,
+    64
+   ],
+   "shard_stone5": [
+    752,
+    620,
+    64,
+    64
+   ],
+   "link": [
+    820,
+    620,
+    72,
+    56
+   ],
+   "link_half": [
+    896,
+    620,
+    44,
+    56
+   ],
+   "streak": [
+    4,
+    720,
+    256,
+    48
+   ],
+   "spark": [
+    264,
+    720,
+    48,
+    48
+   ],
+   "shimmer": [
+    316,
+    720,
+    256,
+    32
+   ],
+   "ember": [
+    576,
+    720,
+    32,
+    32
+   ]
+  }
+ }
+}
