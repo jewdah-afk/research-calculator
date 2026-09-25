@@ -213,10 +213,12 @@ local HR_LINE = string.rep("─", 18)
 ]]
 local cache: { [string]: string } = {}
 local cacheN = 0
-function Html.rich(html: string?, base: number?, preLine: boolean?): string
+-- remap (optional): "rrggbb" -> "rrggbb" for every text colour the HTML sets (the new client's colour remap,
+-- DESIGN.md 11.2). Keep one function per remap table: the cache is keyed by its identity.
+function Html.rich(html: string?, base: number?, preLine: boolean?, remap: ((string) -> string)?): string
 	if html == nil or html == "" then return "" end
 	local b = base or 14
-	local key = html .. "\0" .. b .. (if preLine then "p" else "")
+	local key = html .. "\0" .. b .. (if preLine then "p" else "") .. (if remap then tostring(remap) else "")
 	local hit = cache[key]
 	if hit then return hit end
 
@@ -326,6 +328,7 @@ function Html.rich(html: string?, base: number?, preLine: boolean?): string
 		end
 		nsize = math.clamp(nsize, 6, 100)
 		local fontAttr = {}
+		if color and remap then color = remap(color) end
 		if color then table.insert(fontAttr, string.format('color="#%s"', color)) end
 		if transp > 0 then table.insert(fontAttr, string.format('transparency="%.2f"', transp)) end
 		if math.abs(nsize - size) > 0.01 then table.insert(fontAttr, string.format('size="%d"', math.floor(nsize + 0.5))) end
@@ -386,6 +389,7 @@ function Html.rich(html: string?, base: number?, preLine: boolean?): string
 				if not atLineStart then newline() end
 				local a = attrs(rest or "")
 				local h = Html.hex(a.color) or "4f4f4f"
+				if remap then h = remap(h) end
 				emit(string.format('<font color="#%s">%s</font>', h, HR_LINE))
 				newline()
 			elseif tag == "img" or tag == "input" or tag == "svg" then
