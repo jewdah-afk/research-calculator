@@ -12,7 +12,7 @@
   URL options: tier=HIGH|LOW  source=tiles|layers  seams=snap|overlap  hud=0  nodes=0  rm=1 (ReducedMotion)  clock=manual  x= y= z=
   Keys: H hud, N nodes, M reduced motion, T tier, S source, B wash, G tile grid, O seam mode, K keep-clear zones, 1-8 depth,
         P pause time, R reset camera, - / = zoom.
-  Automation (compose.js, record.js): window.Realm.ready, Realm.frame({ x, y, z, t, dt, settle }), Realm.stats().
+  Automation (compose.js, record.js): window.Realm.ready, Realm.frame({ x, y, z, t, dt, settle, w }), Realm.stats().
 -->
 <html lang="en">
 <head>
@@ -25,7 +25,7 @@
   body { font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--hud-fg); }
   canvas { display: block; width: 100vw; height: 100vh; touch-action: none; cursor: grab; }
   canvas.dragging { cursor: grabbing; }
-  #hud { position: fixed; left: 12px; top: 12px; max-width: min(460px, calc(100vw - 24px)); padding: 10px 12px;
+  #hud { position: fixed; left: 12px; top: 12px; max-width: calc(100vw - 48px); overflow: hidden; padding: 10px 12px;
     background: var(--hud-bg); border: 1px solid rgba(179, 92, 255, 0.35); border-radius: 8px; white-space: pre;
     pointer-events: none; backdrop-filter: blur(4px); }
   #hud b { color: var(--hud-accent); font-weight: 600; }
@@ -217,9 +217,12 @@ function paintAtlas(A) {
   const radial = (n, fn) => field(n, (u, v) => fn(Math.hypot(u - 0.5, v - 0.5) * 2, u, v));
   radial('glow', r => [1, Math.exp(-r * r / (2 * 0.3 * 0.3)) * (1 - sm(0.82, 0.98, r))]);
   radial('ring', r => [1, Math.exp(-((r - 0.84) ** 2) / (2 * 0.045 ** 2))]);
-  radial('bokehA', (r, u, v) => { const R = 0.92; return [1, (0.55 + 0.35 * sm(R - 0.16, R - 0.02, r)) * (1 - sm(R - 0.03, R + 0.02, r))]; });
-  field('bokehB', (u, v) => { const X = u * 2 - 1, Y = v * 2 - 1, ang = Math.atan2(Y, X), seg = Math.PI / 3, a = ((ang % seg) + seg) % seg - seg / 2;
-    const r = Math.hypot(X, Y) * Math.cos(a) / Math.cos(0), R = 0.86; return [1, (0.55 + 0.35 * sm(R - 0.15, R - 0.02, r)) * (1 - sm(R - 0.03, R + 0.02, r))]; });
+  // bokeh: a flat disc (0.55) brightening toward the rim (0.9), soft edge; B is the hexagonal-aperture version with
+  // rounded corners (a real iris), both pre-softened so the big near-camera discs never read as hard shapes
+  const bokeh = (r, R) => (0.5 + 0.3 * sm(R - 0.3, R - 0.04, r)) * (1 - sm(R - 0.07, R + 0.03, r));
+  radial('bokehA', r => [1, bokeh(r, 0.9)]);
+  field('bokehB', (u, v) => { const X = u * 2 - 1, Y = v * 2 - 1, ang = Math.atan2(Y, X) + Math.PI / 6, seg = Math.PI / 3, a = ((ang % seg) + seg) % seg - seg / 2;
+    const d = Math.hypot(X, Y), hex = d * Math.cos(a) / Math.cos(seg / 2), r = hex * 0.75 + d * 0.25; return [1, bokeh(r, 0.86)]; }, 1.5);
   field('vignette', (u, v) => { const r = Math.hypot(u - 0.5, v - 0.5) / Math.SQRT1_2; return [0, sm(0.55, 1.0, r)]; });
   const drawIn = (n, fn, blur = 0) => { const [, , w, h] = reg(n), s = scratch(w, h), g = s.getContext('2d'); fn(g, w, h); put(n, s, blur); };
   const sparkleAt = (g, cx, cy, r) => {
@@ -362,9 +365,17 @@ async function loadTier(tier) {
   // atlas
   const A = R.atlas; let img = null, scale = 1, src = 'procedural';
   const at = man && man.atlas && man.atlas.tiers && man.atlas.tiers[tier];
-  if (at) { try { img = await loadImage('../roblox/' + at.file + '?v=' + at.sha256.slice(0, 8)); scale = at.scale; src = at.file; } catch (e) { img = null; } }
-  if (!img && await exists('../out/' + A.file)) { try { img = await loadImage('../out/' + A.file + '?t=' + Date.now()); src = 'out/' + A.file; } catch (e) { img = null; } }
-  if (!img) img = paintAtlas(A);
+  let sample = {};
+  if (at) { try { img = await loadImage('../roblox/' + at.file + '?v=' + at.sha256.slice(0, 8)); scale = at.scale; src = at.file; sample = man.atlas.sampleRects || {}; } catch (e) { img = null; } }
+  if (!img && await exists('../out/' + A.file)) {
+    try { img = await loadImage('../out/' + A.file + '?t=' + Date.now()); src = 'out/' + A.file;
+      const meta = await fetch('../out/' + A.file.replace(/\.png$/, '.json'), { cache: 'no-store' }).then(r => (r.ok ? r.json() : null)).catch(() => null);
+      if (meta && meta.regions) for (const [k, r] of Object.entries(meta.regions)) if (r.sampleRect) sample[k] = r.sampleRect;
+    } catch (e) { img = null; }
+  }
+  // the stand-in atlas keeps a clear 2 px border even round the vignette: sample it 3 px inside
+  if (!img) { img = paintAtlas(A); const v = A.regions.vignette; sample = { vignette: [v[0] + 3, v[1] + 3, v[2] - 6, v[3] - 6] }; }
+  st.sample = sample;
   if (st.atlas) gl.deleteTexture(st.atlas.t);
   st.atlas = texture(img); st.atlas.src = src; st.atlasScale = scale;
   st.tier = tier;
@@ -407,9 +418,10 @@ function outline(r, c, a) {
   quad(null, { x: r.x, y: r.y, w: r.w, h: 2 }, [0, 0, 1, 1], c, a); quad(null, { x: r.x, y: r.y + r.h - 2, w: r.w, h: 2 }, [0, 0, 1, 1], c, a);
   quad(null, { x: r.x, y: r.y, w: 2, h: r.h }, [0, 0, 1, 1], c, a); quad(null, { x: r.x + r.w - 2, y: r.y, w: 2, h: r.h }, [0, 0, 1, 1], c, a);
 }
-function regionUV(name, inset = 0) {
-  const r = st.R.atlas.regions[name], s = st.atlasScale, W = st.atlas.w, H = st.atlas.h, i = inset;
-  return [(r[0] + i) * s / W, (r[1] + i) * s / H, (r[0] + r[2] - i) * s / W, (r[1] + r[3] - i) * s / H];
+/** UV rect of an atlas region (HIGH px x the tier's atlas scale); 'extend' regions (the vignette) use their sampleRect */
+function regionUV(name) {
+  const r = (st.sample && st.sample[name]) || st.R.atlas.regions[name], s = st.atlasScale, W = st.atlas.w, H = st.atlas.h;
+  return [r[0] * s / W, r[1] * s / H, (r[0] + r[2]) * s / W, (r[1] + r[3]) * s / H];
 }
 const HIDE_RM = new Set(['shooting_star', 'ember', 'rift_ring', 'corrupt_glitch', 'crystal_glint']);
 function spriteColor(S, inst, t) {
@@ -478,8 +490,8 @@ function drawWash() {
 }
 function drawVignette() {
   const vg = st.R.biomes.vignette, q = toDev({ x: 0, y: 0 }), K = k();
-  // inset 3 px: every atlas region has a clear 2 px border, which stretched over the screen would be a light frame
-  quad(st.atlas, { x: q.x, y: q.y, w: st.map.w * K, h: st.map.h * K }, regionUV(vg.atlas, 3), vg.color, vg.alpha);
+  // through the region's sampleRect: its outer 2 px, stretched over the whole screen, would show as a frame
+  quad(st.atlas, { x: q.x, y: q.y, w: st.map.w * K, h: st.map.h * K }, regionUV(vg.atlas), vg.color, vg.alpha);
 }
 function drawNodes() {
   if (!st.showNodes) return;
@@ -521,7 +533,7 @@ function render() {
 // ================================================================================================= camera feel (camera.feel)
 const FEEL = () => st.R.camera.feel;
 const input = { down: false, drag: false, id: null, sx: 0, sy: 0, lx: 0, ly: 0, lt: 0, v: { x: 0, y: 0 }, touch: false,
-  zT: null, zAnchor: null, anim: null, spring: { vx: 0, vy: 0 } };
+  zT: null, zAnchor: null, anim: null, pinch: null, spring: { vx: 0, vy: 0, vz: 0 } };
 function panLimitsNow(rubber) { return RC.panLimits(st.z, V(), { overscroll: rubber ? RC.OVERSCROLL : 0 }); }
 /** raw (finger) camera -> displayed camera with the rubber band past the hard limit */
 function rubberAxis(raw, lo, hi) {
@@ -536,14 +548,35 @@ function smoothDamp(cur, target, velObj, key, smoothTime, dt) { // Unity SmoothD
   return target + (change + temp) * exp;
 }
 const toMap = e => { const r = cv.getBoundingClientRect(); return { x: ((e.clientX - r.left) - (st.Vpx.w - st.map.box.w) / 2) / st.map.scale, y: ((e.clientY - r.top) - (st.Vpx.h - st.map.box.h) / 2) / st.map.scale }; };
+const ptrs = new Map();       // active pointers: id -> map point (two of them = a pinch)
+const pinchState = () => { const [p, q] = [...ptrs.values()]; return { mid: { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 }, d: Math.max(1, Math.hypot(p.x - q.x, p.y - q.y)) }; };
 cv.addEventListener('pointerdown', e => {
   cv.setPointerCapture(e.pointerId);
-  const p = toMap(e); Object.assign(input, { down: true, drag: false, id: e.pointerId, sx: p.x, sy: p.y, lx: p.x, ly: p.y, lt: performance.now(), touch: e.pointerType === 'touch', anim: null });
-  input.raw = { ...st.C }; input.v = { x: 0, y: 0 };
+  const p = toMap(e); ptrs.set(e.pointerId, p);
+  input.anim = null; input.zT = null; input.v = { x: 0, y: 0 }; input.spring = { vx: 0, vy: 0, vz: 0 };
+  if (ptrs.size === 2) { // pinch: direct zoom about the midpoint + pan by the midpoint's motion
+    const ps = pinchState(); input.pinch = { ...ps, z0: st.z, zRaw: st.z }; input.down = true; input.drag = true; input.raw = { ...st.C };
+    input.lx = ps.mid.x; input.ly = ps.mid.y; input.lt = performance.now(); return;
+  }
+  Object.assign(input, { down: true, drag: false, id: e.pointerId, sx: p.x, sy: p.y, lx: p.x, ly: p.y, lt: performance.now(), touch: e.pointerType === 'touch', pinch: null });
+  input.raw = { ...st.C };
 });
 cv.addEventListener('pointermove', e => {
+  if (!ptrs.has(e.pointerId)) return;
+  const p = toMap(e); ptrs.set(e.pointerId, p);
+  const now = performance.now(), dt = Math.max(1e-3, (now - input.lt) / 1000);
+  if (input.pinch && ptrs.size === 2) {
+    const ps = pinchState(), r = RC.zoomRange(V()), k = FEEL().pinch.zoomRubber;
+    input.pinch.zRaw = input.pinch.z0 * ps.d / input.pinch.d;
+    // rubber band past the zoom limits (+-6 %), eased like the pan rubber band
+    const zr = input.pinch.zRaw, lo = r.lo, hi = r.hi;
+    const z2 = zr < lo ? lo * Math.exp(-k * (1 - 1 / (Math.log(lo / zr) / k + 1))) : zr > hi ? hi * Math.exp(k * (1 - 1 / (Math.log(zr / hi) / k + 1))) : zr;
+    const Q = RC.screenToWorld(st.C, st.z, V(), { x: input.lx, y: input.ly });              // world point under the old midpoint
+    st.z = z2; st.C = { x: Q.x - (ps.mid.x - V().w / 2) / st.z, y: Q.y - (ps.mid.y - V().h / 2) / st.z };
+    input.lx = ps.mid.x; input.ly = ps.mid.y; input.lt = now; input.raw = { ...st.C };
+    return;
+  }
   if (!input.down || e.pointerId !== input.id) return;
-  const p = toMap(e), now = performance.now(), dt = Math.max(1e-3, (now - input.lt) / 1000);
   if (!input.drag && Math.hypot(p.x - input.sx, p.y - input.sy) >= FEEL().dragThreshold[input.touch ? 'touch' : 'mouse']) { input.drag = true; cv.classList.add('dragging'); }
   if (input.drag) {
     const dx = p.x - input.lx, dy = p.y - input.ly;
@@ -556,12 +589,16 @@ cv.addEventListener('pointermove', e => {
   input.lx = p.x; input.ly = p.y; input.lt = now;
 });
 const release = e => {
+  ptrs.delete(e.pointerId);
+  if (input.pinch) { // end of a pinch: no fling; the zoom and pan spring back inside the limits
+    input.pinch = null; input.down = false; input.drag = false; input.v = { x: 0, y: 0 }; input.spring = { vx: 0, vy: 0, vz: 0 }; ptrs.clear(); return;
+  }
   if (!input.down) return; input.down = false; cv.classList.remove('dragging');
   if (performance.now() - input.lt > 80) input.v = { x: 0, y: 0 };   // held still before letting go: no fling
   const sp = Math.hypot(input.v.x, input.v.y), cap = FEEL().maxFlingSpeed;
   if (sp > cap) { input.v.x *= cap / sp; input.v.y *= cap / sp; }
   if (st.rm) input.v = { x: 0, y: 0 };
-  input.drag = false; input.spring = { vx: 0, vy: 0 };
+  input.drag = false; input.spring = { vx: 0, vy: 0, vz: 0 };
 };
 cv.addEventListener('pointerup', release); cv.addEventListener('pointercancel', release);
 cv.addEventListener('wheel', e => {
@@ -644,7 +681,8 @@ function hud() {
     `<b>Realm</b>  ${st.tier}  ${st.source} (${st.seams})  atlas: ${st.atlas.src}  ${st.fps.toFixed(0)} fps  ${draws} draws`,
     `C (${st.C.x.toFixed(0)}, ${st.C.y.toFixed(0)})  z ${f3(st.z)}  zMin ${f3(RC.zMin(Vm))}  V ${Vm.w.toFixed(0)}x${Vm.h.toFixed(0)}`,
     `biome  rift ${st.w.rift.toFixed(2)}  corrupt ${st.w.corrupt.toFixed(2)}${st.rm ? '  <b>ReducedMotion</b>' : ''}${st.paused ? '  <b>paused</b>' : ''}`,
-    ...st.R.layers.map(L => `${st.hidden.has(L.depth) ? '<i>' : ''}${L.depth + 1} ${L.id.padEnd(7)} f ${String(L.f).padEnd(5)} s ${f3(RC.layerZoom(L.f, st.z))}  ${(layerById(L.id) || {}).mode || ''}${st.hidden.has(L.depth) ? '</i>' : ''}`),
+    ...st.R.layers.map(L => `${st.hidden.has(L.depth) ? '<i>' : ''}${L.depth + 1} ${L.id.padEnd(9)} f ${String(L.f).padEnd(5)} s ${f3(RC.layerZoom(L.f, st.z))}  ${(layerById(L.id) || {}).mode || ''}${st.hidden.has(L.depth) ? '</i>' : ''}`),
+    `${st.hidden.has(7) ? '<i>' : ''}8 particles f 1.6   s ${f3(RC.layerZoom(1.6, st.z))}  field (+ dust at f 0.7, 1.3)${st.hidden.has(7) ? '</i>' : ''}`,
     `<i>drag, wheel, dbl-click  H N M T S B G O K P R 1-8</i>`,
   ];
   el.innerHTML = lines.join('\n');
@@ -664,13 +702,14 @@ function tick() {
 window.Realm = {
   state: st, options: OPT,
   ready: null,
-  /** Deterministic frame for automation: sets the camera (hard-clamped), time and biome easing, draws, returns stats. */
-  frame({ x, y, z, t, dt = 1 / 30, settle = false, tier, rm } = {}) {
+  /** Deterministic frame for automation: sets the camera (hard-clamped), time and biome weights (eased by dt, settled,
+   *  or given as w = { rift, corrupt } so frames can be drawn out of order), draws, returns stats. */
+  frame({ x, y, z, t, dt = 1 / 30, settle = false, w = null, rm } = {}) {
     if (rm != null) st.rm = rm;
     if (z != null) st.z = z; if (x != null) st.C = { x, y };
     const c = RC.clampCamera(st.C, st.z, V()); st.C = { x: c.x, y: c.y }; st.z = c.z;
     if (t != null) st.t = t;
-    stepBiome(dt, settle);
+    if (w) st.w = { rift: w.rift, corrupt: w.corrupt }; else stepBiome(dt, settle);
     render(); gl.finish();
     return this.stats();
   },

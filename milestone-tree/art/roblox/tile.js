@@ -266,6 +266,22 @@ function maxAlpha(img, x = 0, y = 0, w = img.width, h = img.height) {
   for (let v = y; v < y + h; v++) for (let u = x; u < x + w; u++) { const a = img.data[(v * img.width + u) * 4 + 3]; if (a > m) m = a; if (m === 255) return m; }
   return m;
 }
+function pasteRGBA(dst, src, x, y) {
+  for (let v = 0; v < src.height; v++) dst.data.set(src.data.subarray(v * src.width * 4, (v + 1) * src.width * 4), ((y + v) * dst.width + x) * 4);
+}
+/** true when some alpha-0 pixel of the rect is black while a visible, non-black pixel is within 2 px (not alpha-bled;
+ *  black content such as the vignette may keep black neighbours) */
+function blackNextToContent(img, x, y, w, h) {
+  const d = img.data, W = img.width;
+  for (let v = y; v < y + h; v++) for (let u = x; u < x + w; u++) {
+    const o = (v * W + u) * 4; if (d[o + 3] || d[o] + d[o + 1] + d[o + 2]) continue;
+    for (let dv = -2; dv <= 2; dv++) for (let du = -2; du <= 2; du++) {
+      const qu = u + du, qv = v + dv; if (qu < x || qv < y || qu >= x + w || qv >= y + h) continue;
+      const q = (qv * W + qu) * 4; if (d[q + 3] && d[q] + d[q + 1] + d[q + 2] > 24) return true;
+    }
+  }
+  return false;
+}
 function forceOpaque(img) { for (let i = 3; i < img.data.length; i += 4) img.data[i] = 255; return img; }
 
 // ==================================================================================================== sources
@@ -381,20 +397,31 @@ function run(argv) {
       console.log(`  ${L.id.padEnd(7)} ${tier.padEnd(4)} ${String(kept.length).padStart(2)}/${tiles.length} tiles  ${(kept.reduce((a, t) => a + t.bytes, 0) / 1048576).toFixed(2).padStart(6)} MB png  from ${path.relative(ART, cands[0])} (${hi.note})`);
     }
   }
-  // ---- sprite atlas
+  // ---- sprite atlas: bled per region (a region must only ever sample its own colour); an 'extend' region (the
+  // vignette) runs to its rect edge and is sampled through its sampleRect (out/sprites.json from layers/sprites.js)
   const aCands = sourceCandidates('sprites', R, idx);
   const A = R.atlas;
   if (aCands.length) {
     const img = readPNG(aCands[0]);
+    const metaFile = path.join(OUT, path.basename(aCands[0], '.png') + '.json');
+    const meta = fs.existsSync(metaFile) ? JSON.parse(fs.readFileSync(metaFile, 'utf8')) : null;
+    const sample = {};
+    if (meta && meta.regions) for (const [k, r] of Object.entries(meta.regions)) if (r.sampleRect) sample[k] = r.sampleRect;
     if (img.width !== A.size[0] || img.height !== A.size[1]) console.log(`  atlas   SKIPPED: ${path.relative(ART, aCands[0])} is ${img.width}x${img.height}, the contract says ${A.size.join('x')}`);
     else {
-      man.atlas = { source: path.relative(ART, aCands[0]), sourceSha256: sha256(fs.readFileSync(aCands[0])), regions: A.regions, tiers: {} };
+      man.atlas = { source: path.relative(ART, aCands[0]), sourceSha256: sha256(fs.readFileSync(aCands[0])), regions: A.regions, sampleRects: sample, tiers: {} };
       for (const tier of TIERS) {
-        const [w, h] = tier === 'HIGH' ? A.size : A.lowSize;
-        const tex = alphaBleed(tier === 'HIGH' ? img : resample(img, w, h));
+        const [w, h] = tier === 'HIGH' ? A.size : A.lowSize, k = w / A.size[0];
+        const tex = tier === 'HIGH' ? { width: w, height: h, data: new Uint8Array(img.data) } : resample(img, w, h);
+        let bled = 0;
+        for (const [, r] of Object.entries(A.regions)) {
+          const [x, y, rw, rh] = r.map(v => Math.round(v * k));
+          if (tier === 'HIGH' && !blackNextToContent(tex, x, y, rw, rh)) continue;   // the painter already bled it: keep its pixels
+          pasteRGBA(tex, alphaBleed(cutWithGutter(tex, x, y, rw, rh, 0)), x, y); bled++;
+        }
         const file = `tiles/${tier}/atlas.png`, buf = writePNG(path.join(ROBLOX, file), tex, { alpha: true });
-        man.atlas.tiers[tier] = { file, image: [w, h], scale: tier === 'HIGH' ? 1 : w / A.size[0], bytes: buf.length, sha256: sha256(buf) };
-        console.log(`  atlas   ${tier.padEnd(4)} ${w}x${h}  ${(buf.length / 1048576).toFixed(2)} MB png  from ${path.relative(ART, aCands[0])}`);
+        man.atlas.tiers[tier] = { file, image: [w, h], scale: k, bytes: buf.length, sha256: sha256(buf) };
+        console.log(`  atlas   ${tier.padEnd(4)} ${w}x${h}  ${(buf.length / 1048576).toFixed(2)} MB png  from ${path.relative(ART, aCands[0])} (${bled} regions bled here)`);
       }
     }
   } else {
@@ -483,13 +510,17 @@ function check(R) {
     const buf = fs.readFileSync(path.join(ROBLOX, at.file));
     ok(sha256(buf) === at.sha256, `${at.file} sha256`);
     const img = decodePNG(buf); ok(img.width === at.image[0] && img.height === at.image[1], `${at.file} dims`);
+    for (const [k, r] of Object.entries(man.atlas.regions)) {
+      const [x, y, w, h] = r.map(v => Math.round(v * at.scale));
+      ok(!blackNextToContent(img, x, y, w, h), `${at.file} region ${k}: transparent black next to content (alpha bleed)`);
+    }
   }
   for (const tier of TIERS) ok(man.budget[tier].ok, `${tier} texture budget ${man.budget[tier].withMipsMB} <= ${man.budget[tier].budgetMB} MB`);
   console.log(`check: ${checks - fails}/${checks} passed${fails ? ` (${fails} FAILED)` : ''}`);
   return fails === 0;
 }
 
-module.exports = { decodePNG, encodePNG, readPNG, writePNG, resample, alphaBleed, premul, unpremul, cutWithGutter, maxAlpha, sha256,
+module.exports = { decodePNG, encodePNG, readPNG, writePNG, resample, alphaBleed, premul, unpremul, cutWithGutter, maxAlpha, sha256, pasteRGBA, blackNextToContent,
   painterIndex, sourceCandidates, highTexture, loadRealm, ART, OUT, MANIFEST };
 
 if (require.main === module) process.exit(run(process.argv.slice(2)));

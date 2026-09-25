@@ -1,0 +1,83 @@
+{
+ "HIGH": {
+  "sky": {
+   "0_0": null,
+   "1_0": null
+  },
+  "clouds": {
+   "0_0": null,
+   "1_0": null
+  },
+  "far": {
+   "0_0": null,
+   "1_0": null
+  },
+  "mid": {
+   "0_0": null,
+   "1_0": null,
+   "2_0": null,
+   "0_1": null,
+   "1_1": null,
+   "2_1": null
+  },
+  "near": {
+   "0_0": null,
+   "1_0": null,
+   "0_1": null,
+   "1_1": null
+  },
+  "world": {
+   "0_0": null,
+   "1_0": null,
+   "2_0": null,
+   "3_0": null,
+   "0_1": null,
+   "1_1": null,
+   "2_1": null,
+   "3_1": null,
+   "0_2": null,
+   "1_2": null,
+   "2_2": null,
+   "3_2": null,
+   "0_3": null,
+   "1_3": null,
+   "2_3": null,
+   "3_3": null
+  },
+  "fg": {
+   "0_0": null,
+   "1_0": null,
+   "0_1": null,
+   "1_1": null
+  },
+  "atlas": null
+ },
+ "LOW": {
+  "sky": {
+   "0_0": null
+  },
+  "clouds": {
+   "0_0": null
+  },
+  "far": {
+   "0_0": null
+  },
+  "mid": {
+   "0_0": null,
+   "1_0": null
+  },
+  "near": {
+   "0_0": null
+  },
+  "world": {
+   "0_0": null,
+   "1_0": null,
+   "0_1": null,
+   "1_1": null
+  },
+  "fg": {
+   "0_0": null
+  },
+  "atlas": null
+ }
+}

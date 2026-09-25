@@ -5,13 +5,14 @@
 //   node preview/record.js --stills-only        just the 6 stills
 //   node preview/record.js --serve [--port N]   serve art/ and print the simulator URL (interactive: drag, wheel, keys)
 //   options: --tier HIGH|LOW  --fps 30  --seconds 20  --size 1920x1080  --out out/realm_preview.webm  --source tiles|layers
+//            --workers 2 (browsers drawing frames in parallel)  --bitrate 8M
 //
 // The path: start at the tree base, drift up the trunk to the crown, pull out to the whole realm, pan east to the
 // Multiverse rift, then push in by the corrupted outcrop. Keys are (t, x, y, z) inside the hard camera limits of a
 // 1920x1080 view; x, y and ln z are interpolated with monotone cubics (no overshoot past a clamp), then hard-clamped.
 //
 // Frames mode (default) is deterministic: frame i is drawn at t = i / fps with the biome weights eased by exactly
-// 1 / fps per frame, captured as a JPEG screenshot and piped to the ffmpeg that ships with Playwright (the same VP8
+// 1 / fps per frame (precomputed, so several browsers can draw frames in parallel), read back from the canvas as a JPEG and piped to the ffmpeg that ships with Playwright (the same VP8
 // encoder recordVideo uses, but at a high bitrate and without dropped frames). Video mode is the literal
 // recordVideo capture: the page draws as fast as it can and the camera follows wall-clock time.
 const { chromium } = require('playwright'); const fs = require('fs'); const path = require('path'); const http = require('http');
@@ -98,57 +99,83 @@ function ffmpegPath() {
 
 function parse(argv) {
   const o = { mode: 'frames', tier: 'HIGH', fps: 30, seconds: 20, w: 1920, h: 1080, out: path.join(OUT, 'realm_preview.webm'), stills: true, stillsOnly: false,
-    serve: false, port: 0, source: 'tiles', bitrate: '9M' };
+    serve: false, port: 0, source: 'tiles', bitrate: '8M', workers: 2 };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i], v = () => argv[++i];
     if (a === '--mode') o.mode = v(); else if (a === '--tier') o.tier = v().toUpperCase(); else if (a === '--fps') o.fps = +v();
     else if (a === '--seconds') o.seconds = +v(); else if (a === '--size') [o.w, o.h] = v().split('x').map(Number);
     else if (a === '--out') o.out = path.resolve(v()); else if (a === '--no-stills') o.stills = false; else if (a === '--stills-only') o.stillsOnly = true;
     else if (a === '--serve') o.serve = true; else if (a === '--port') o.port = +v(); else if (a === '--source') o.source = v();
-    else if (a === '--bitrate') o.bitrate = v();
+    else if (a === '--bitrate') o.bitrate = v(); else if (a === '--workers') o.workers = Math.max(1, +v());
     else throw new Error('unknown argument ' + a);
   }
   return o;
 }
 
+/** The eased biome weights of every frame, exactly as the page eases them (tau 0.35 s, settled on frame 0), so frames
+ *  can be drawn in any order by several browsers. */
+function biomeSeries(cam, n, fps, V = { w: 1920, h: 1080 }) {
+  const RC = require(path.join(ART, 'camera.js')), B = JSON.parse(fs.readFileSync(path.join(ART, 'realm.json'), 'utf8')).biomes;
+  const out = []; let w = null; const a = 1 - Math.exp(-(1 / fps) / 0.35);
+  for (let i = 0; i < n; i++) {
+    const c = cam(i / fps), tgt = RC.biome(RC.clampCamera(c, c.z, RC.mapScale(V)), B);
+    w = w ? { rift: w.rift + (tgt.rift - w.rift) * a, corrupt: w.corrupt + (tgt.corrupt - w.corrupt) * a } : tgt;
+    out.push(w);
+  }
+  return out;
+}
+const frameArgs = (cam, W, i, fps) => ({ ...cam(i / fps), t: i / fps, w: W[i] });
+
 async function stills(page, cam, o, fps) {
-  // replay the path up to each still so the eased biome weights match the video frame exactly
-  let i = 0; const out = [];
-  const frames = STILLS.map(([name, t]) => [name, Math.round(t * o.seconds / 20 * fps)]);
-  const last = Math.max(...frames.map(f => f[1]));
-  for (; i <= last; i++) {
-    const t = i / fps, c = cam(t);
-    await page.evaluate(a => window.Realm.frame(a), { ...c, t, dt: 1 / fps, settle: i === 0 });
-    for (const [name, fi] of frames) if (fi === i) {
-      const f = path.join(OUT, name + '.png'); await page.screenshot({ path: f, type: 'png' }); out.push(path.relative(ART, f));
-    }
+  const out = [], W = biomeSeries(cam, Math.round(o.seconds * fps) + 1, fps, { w: o.w, h: o.h });
+  for (const [name, t] of STILLS) {
+    const i = Math.round(t * o.seconds / 20 * fps);
+    const url = await page.evaluate(a => { window.Realm.frame(a); return document.getElementById('gl').toDataURL('image/png'); }, frameArgs(cam, W, i, fps));
+    const f = path.join(OUT, name + '.png'); fs.writeFileSync(f, Buffer.from(url.split(',')[1], 'base64')); out.push(path.relative(ART, f));
   }
   return out;
 }
 
 async function recordFrames(browser, base, o) {
-  const { ctx, page } = await openRealm(browser, base, { w: o.w, h: o.h, q: { tier: o.tier, source: o.source } });
-  const cam = cameraPath(KEYS, o.seconds), n = Math.round(o.seconds * o.fps), ff = ffmpegPath();
+  const cam = cameraPath(KEYS, o.seconds), n = Math.round(o.seconds * o.fps), ff = ffmpegPath(), W = biomeSeries(cam, n, o.fps, { w: o.w, h: o.h });
   if (!ff) throw new Error('no ffmpeg found (Playwright ships one: npx playwright install ffmpeg)');
   fs.mkdirSync(path.dirname(o.out), { recursive: true });
   const args = ['-loglevel', 'error', '-f', 'image2pipe', '-c:v', 'mjpeg', '-framerate', String(o.fps), '-i', 'pipe:0',
-    '-c:v', 'vp8', '-b:v', o.bitrate, '-crf', '6', '-qmin', '0', '-qmax', '36', '-deadline', 'good', '-cpu-used', '1', '-auto-alt-ref', '1',
+    '-c:v', 'vp8', '-b:v', o.bitrate, '-crf', '6', '-qmin', '0', '-qmax', '36', '-deadline', 'good', '-cpu-used', '2', '-auto-alt-ref', '1', '-threads', '3',
     '-lag-in-frames', '16', '-pix_fmt', 'yuv420p', '-r', String(o.fps), '-y', o.out];
   const enc = spawn(ff, args, { stdio: ['pipe', 'inherit', 'inherit'] });
   const done = new Promise((res, rej) => enc.on('close', c => (c ? rej(new Error('ffmpeg exit ' + c)) : res())));
   const still = new Map(STILLS.map(([name, t]) => [Math.round(t * o.seconds / 20 * o.fps), name]));
-  const t0 = Date.now(), shots = [];
-  for (let i = 0; i < n; i++) {
-    const t = i / o.fps, c = cam(t);
-    await page.evaluate(a => window.Realm.frame(a), { ...c, t, dt: 1 / o.fps, settle: i === 0 });
-    const jpg = await page.screenshot({ type: 'jpeg', quality: 95 });
-    if (!enc.stdin.write(jpg)) await new Promise(r => enc.stdin.once('drain', r));
-    if (o.stills && still.has(i)) { const f = path.join(OUT, still.get(i) + '.png'); await page.screenshot({ path: f, type: 'png' }); shots.push(path.relative(ART, f)); }
-    if (i % 60 === 0) process.stdout.write(`  frame ${i}/${n}  ${((Date.now() - t0) / 1000).toFixed(0)} s\r`);
-  }
-  enc.stdin.end(); await done; await ctx.close();
-  console.log(`\nframes: ${n} at ${o.fps} fps in ${((Date.now() - t0) / 1000).toFixed(0)} s -> ${path.relative(ART, o.out)} (${(fs.statSync(o.out).size / 1048576).toFixed(1)} MB)`);
-  return shots;
+  const t0 = Date.now(), shots = [], ready = new Map();
+  let next = 0, drawn = 0;
+  const flush = async () => { // frames reach the encoder in order, whichever worker drew them
+    while (ready.has(next)) { const jpg = ready.get(next); ready.delete(next); next++; if (!enc.stdin.write(jpg)) await new Promise(r => enc.stdin.once('drain', r)); }
+  };
+  // one browser per worker (each has its own GPU process, which is where the drawing happens); frame i -> worker i % N
+  const workers = await Promise.all(Array.from({ length: o.workers }, async (_, k) => {
+    const b = k === 0 ? browser : await launch();
+    const { ctx, page } = await openRealm(b, base, { w: o.w, h: o.h, q: { tier: o.tier, source: o.source } });
+    return { b, ctx, page, own: k > 0 };
+  }));
+  let flushing = Promise.resolve();
+  await Promise.all(workers.map(async ({ page }, k) => {
+    for (let i = k; i < n; i += o.workers) {
+      while (i - next > 6 * o.workers) await new Promise(r => setTimeout(r, 20));   // keep the reorder buffer small
+      const png = o.stills && still.has(i);
+      // draw + read back in one call (a page screenshot would add a compositor pass: ~1.5x slower on SwiftShader)
+      const url = await page.evaluate(([a, png]) => { window.Realm.frame(a); const cv = document.getElementById('gl');
+        return [cv.toDataURL('image/jpeg', 0.95), png ? cv.toDataURL('image/png') : null]; }, [frameArgs(cam, W, i, o.fps), png]);
+      ready.set(i, Buffer.from(url[0].split(',')[1], 'base64'));
+      if (png) { const f = path.join(OUT, still.get(i) + '.png'); fs.writeFileSync(f, Buffer.from(url[1].split(',')[1], 'base64')); shots.push(path.relative(ART, f)); }
+      flushing = flushing.then(flush);
+      if (++drawn % 30 === 0) process.stdout.write(`  frame ${drawn}/${n}  ${((Date.now() - t0) / 1000).toFixed(0)} s\r`);
+    }
+  }));
+  await flushing; await flush();
+  enc.stdin.end(); await done;
+  for (const w of workers) { await w.ctx.close(); if (w.own) await w.b.close(); }
+  console.log(`\nframes: ${n} at ${o.fps} fps in ${((Date.now() - t0) / 1000).toFixed(0)} s (${o.workers} workers) -> ${path.relative(ART, o.out)} (${(fs.statSync(o.out).size / 1048576).toFixed(1)} MB)`);
+  return shots.sort();
 }
 
 async function recordVideo(browser, base, o) {

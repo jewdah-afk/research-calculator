@@ -127,7 +127,7 @@
 
   /** One leaf. o: { x, y, ang, len, wid, bend, asym, col, heart, vein } */
   function leafAt(c, o) {
-    c.save(); c.translate(o.x, o.y); c.rotate(o.ang);
+    c.save(); c.translate(o.x, o.y); c.rotate(o.ang); if (o.alpha != null) c.globalAlpha = o.alpha;
     const path = () => (o.heart ? heartPath : leafPath)(c, o.len, o.wid, o.bend || 0, o.asym || 0);
     c.fillStyle = rgba(o.col); path(); c.fill();
     light(c, path, o.ang, o.len * 0.5, 0, o.len * 0.55, o.lights || lightsAt(o.x, o.y), Math.max(3, o.wid * 0.12));
@@ -227,10 +227,10 @@
         }
         continue;
       }
-      const inBand = p.y > BAND[0];
-      const l = lerp(leaf, leaf * 0.45, t) * (0.75 + rr() * 0.5) * (inBand ? 0.65 : 1), ang = Math.PI / 2 + side * (0.5 + rr() * 0.6);
+      const deep = smooth(BAND[0] - 60, BAND[0] + 320, p.y);          // into the middle band: smaller and fainter tips
+      const l = lerp(leaf, leaf * 0.45, t) * (0.75 + rr() * 0.5) * (1 - 0.45 * deep), ang = Math.PI / 2 + side * (0.5 + rr() * 0.6);
       if (!clearOf(leafPts(p.x, p.y, ang, l, l * 0.3))) continue;
-      leafAt(c, { x: p.x, y: p.y, ang, len: l, wid: l * 0.27, bend: -0.12 * side, asym: (rr() - 0.5) * 0.3, col });
+      leafAt(c, { x: p.x, y: p.y, ang, len: l, wid: l * 0.27, bend: -0.12 * side, asym: (rr() - 0.5) * 0.3, col, alpha: 1 - 0.55 * deep });
     }
     const e = T[T.length - 1];
     if (budAt) glows.push({ x: e.x, y: e.y + 10, r: 10 + rr() * 5, col: budCol(e.x, rr), plane });
@@ -376,8 +376,8 @@
     for (const pl of ['back', 'mid']) {
       const c = P[pl]; c.fillStyle = rgba(PLANE[pl]); c.beginPath(); c.moveTo(-10, -10);
       for (let x = -10; x <= LW + 10; x += 20) {
-        let y = (pl === 'back' ? 260 : 200) + 50 * N(x / 260, pl === 'back' ? 1 : 2) + 24 * N(x / 70, 5);
-        y = Math.min(y, 120 + Math.pow(Math.abs(x - 2074) / 420, 2) * 140);
+        let y = (pl === 'back' ? 150 : 120) + 40 * N(x / 260, pl === 'back' ? 1 : 2) + 22 * N(x / 70, 5);
+        y = Math.min(y, 90 + Math.pow(Math.abs(x - 2074) / 420, 2) * 90 + 25 * N(x / 90, 6));
         c.lineTo(x, y);
       }
       c.lineTo(LW + 10, -10); c.closePath(); c.fill();
@@ -437,7 +437,7 @@
       const c = P[pl]; c.fillStyle = rgba(PLANE[pl]); c.beginPath(); c.moveTo(-10, LH + 10);
       for (let x = -10; x <= LW + 10; x += 20) {
         const corner = Math.max(smooth(1100, 0, x), smooth(4200, LW, x));
-        c.lineTo(x, (pl === 'back' ? 3400 : 3440) - 110 * corner + 30 * N(x / 200, pl === 'back' ? 7 : 8) + 14 * N(x / 50, 9));
+        c.lineTo(x, (pl === 'back' ? 3470 : 3500) - 60 * corner + 26 * N(x / 200, pl === 'back' ? 7 : 8) + 12 * N(x / 50, 9));
       }
       c.lineTo(LW + 10, LH + 10); c.closePath(); c.fill();
     }
@@ -488,10 +488,7 @@
       blob(E, x + s / 2, y + s / 2, s * 3, CORRUPT, 0.18);
     }
 
-    // --- sides: thin fronds reaching in from the left edge, a thorn tendril from the right (thin, faint tips)
-    frond(P, 0, 1500, 0.25, 640, 0.9, 950, 'back', { pinna: 0.6 });
-    frond(P, 0, 2250, -0.2, 560, -0.7, 951, 'mid', { pinna: 0.6 });
-    thornLimb(P, [[5300, 2300, 30], [4900, 2220, 18], [4640, 2250, 8]], 960, 'mid');
+    // --- sides: nothing in the middle band. The corners and the swaying vine_fg sprites frame the left and right edges.
 
     // --- a few more buds among the canopy leaves
     const br = rng(1000);
@@ -500,7 +497,7 @@
       if (!clearOf([[x, y]], 60)) continue;
       glows.push({ x, y, r: 7 + br() * 5, col: budCol(x, br), plane: br() < 0.5 ? 'mid' : 'back' });
     }
-    glows.forEach((g, i) => { if (!clearOf([[g.x, g.y]], 50)) return; bud(P[g.plane], E, g.x, g.y, g.r * (g.tiny ? 0.6 : 1), g.col, rng(1100 + i), PLANE[g.plane]); });
+    glows.forEach((g, i) => { if (!clearOf([[g.x, g.y]], 60)) return; bud(P[g.plane], E, g.x, g.y, g.r * (g.tiny ? 0.9 : 1.55), g.col, rng(1100 + i), PLANE[g.plane]); });
 
     // --- merge the planes: the front plane is closer to the camera, so it gets extra defocus
     const base = mk(CW, CH), b = c2(base, true);
