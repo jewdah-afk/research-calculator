@@ -7,11 +7,13 @@
 //
 // <layer> is a realm.json id (sky, clouds, far, mid, near, world, fg), a painter file name (distant, rocks), or any
 // LAYERS.<key> a painter registers (sprites). The page gets lib.js, window.REALM (realm.json) and window.REALM_TIER, then
-// the painter; LAYERS[<key>]() returns the canvas. Painters draw the HIGH texture (size x res.HIGH); LOW is a 2x
+// the painter; LAYERS[<key>]() returns the canvas. A painter with its own node entry point (layers/sprites.js) runs as
+// `node layers/<painter>.js` instead, so its outputs are byte for byte what that command writes (sprites.png with its
+// deterministic PNG encoder, sprites.json whose sha256 matches it, the labelled sprites_prev.png). Painters draw the HIGH texture (size x res.HIGH); LOW is a 2x
 // premultiplied box downsample of it (exactly what roblox/tile.js does). [scale] is accepted for old callers and ignored.
 // After rendering, the contract checks from REALM.md 3 and 7 run: texture size, keep-clear zones (hard / soft alpha
 // limits per layer), empty tiles. They warn; they never fail the render.
-const { chromium } = require('playwright'); const fs = require('fs'); const path = require('path');
+const { chromium } = require('playwright'); const fs = require('fs'); const path = require('path'); const { spawnSync } = require('child_process');
 const T = require('./roblox/tile.js');
 
 const ART = __dirname, OUT = path.join(ART, 'out');
@@ -49,7 +51,9 @@ function resolve(name, idx) {
   if (!file && layer && layer.file && fs.existsSync(path.join(ART, layer.file))) { file = path.join(ART, layer.file); key = layer.id; }
   if (!file) for (const k of keys) if (idx[k]) { file = path.join(ART, 'layers', idx[k][0]); key = k; break; }
   if (!file) throw new Error(`no painter for "${name}": expected layers/${name}.js or a file registering LAYERS.${layer ? layer.id : name}`);
-  return { key, file, layer, out: name };
+  // a painter that runs itself under node (require.main === module) owns its outputs: render.js runs it as is
+  const own_main = /require\.main\s*===\s*module/.test(fs.readFileSync(file, 'utf8'));
+  return { key, file, layer, out: name, selfRun: own_main && !layer };
 }
 
 async function paint(browser, job) {
@@ -132,7 +136,12 @@ function contractChecks(L, img) {
   for (const job of jobs) {
     const pngFile = path.join(OUT, job.out + '.png');
     let img;
-    if (opt.render) {
+    if (opt.render && job.selfRun) {
+      const t0 = Date.now(), r = spawnSync(process.execPath, [job.file], { cwd: ART, stdio: 'inherit', env: process.env });
+      if (r.status !== 0) throw new Error(`node ${path.relative(ART, job.file)} failed (exit ${r.status})`);
+      img = T.readPNG(pngFile);
+      console.log(`${job.out} rendered in ${Date.now() - t0} ms (node ${path.relative(ART, job.file)}) -> out/${job.out}.png ${img.width}x${img.height}`);
+    } else if (opt.render) {
       browser = browser || await chromium.launch({ args: ['--js-flags=--max-old-space-size=4096'] });
       const { buf, ms } = await paint(browser, job);
       fs.writeFileSync(pngFile, buf);
@@ -143,10 +152,15 @@ function contractChecks(L, img) {
       img = T.readPNG(src);
       console.log(`${job.out}: ${path.relative(ART, src)} ${img.width}x${img.height}`);
     }
-    if (opt.prev) preview(img, path.join(OUT, job.out + '_prev.png'));
+    if (opt.prev && !job.selfRun) preview(img, path.join(OUT, job.out + '_prev.png'));   // a self-run painter writes its own
     const L = job.layer;
     if (L) for (const line of contractChecks(L, img)) console.log('  ' + line);
-    else if (job.key === 'sprites' || job.key === 'atlas') console.log(`  ${img.width === R.atlas.size[0] && img.height === R.atlas.size[1] ? 'ok  ' : 'WARN'} atlas ${img.width}x${img.height} (contract ${R.atlas.size.join('x')})`);
+    else if (job.key === 'sprites' || job.key === 'atlas') {
+      console.log(`  ${img.width === R.atlas.size[0] && img.height === R.atlas.size[1] ? 'ok  ' : 'WARN'} atlas ${img.width}x${img.height} (contract ${R.atlas.size.join('x')})`);
+      const meta = path.join(OUT, job.out + '.json'), sha = T.sha256(fs.readFileSync(pngFile));
+      const m = fs.existsSync(meta) ? JSON.parse(fs.readFileSync(meta, 'utf8')) : null;
+      console.log(`  ${m && m.sha256 === sha ? 'ok  ' : 'WARN'} out/${job.out}.json ${m ? 'sha256 ' + (m.sha256 === sha ? 'matches' : 'does NOT match') + ` out/${job.out}.png (${sha.slice(0, 12)})` : 'missing'}`);
+    }
     for (const tier of opt.tiers) {
       if (!L) { console.log(`  --tier ignored for ${job.out}: not a realm.json layer`); continue; }
       const [tw, th] = L.grid[tier].texture;

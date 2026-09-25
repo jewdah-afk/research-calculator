@@ -4,7 +4,7 @@
   Serve art/ over http and open preview/realm.html:   node preview/record.js --serve   (prints the URL)
 
   It draws what the Roblox client draws, with the same maths: layer containers from RealmCamera.layerOffset, tiles from
-  roblox/manifest.json (ImageRectOffset/Size inside the gutter, the 1-point overlap), sprites from spriteState, fields
+  roblox/manifest.json (ImageRectOffset/Size inside the gutter, snapped edges as in REALM.md 9.3), sprites from spriteState, fields
   from fieldPlace, the biome tint / wash / sprite colours from RealmCamera.biome, the fg fade, the vignette. Camera
   feel follows realm.json camera.feel: drag with threshold and smoothed velocity, inertia, rubber band + spring back,
   wheel zoom eased in log space about the cursor, double-click zoom.
@@ -48,7 +48,7 @@ const Q = new URLSearchParams(location.search);
 const OPT = Object.assign({
   tier: Q.get('tier') || 'HIGH', source: Q.get('source') || 'tiles', hud: Q.get('hud') !== '0', nodes: Q.get('nodes') !== '0',
   rm: Q.get('rm') === '1', clock: Q.get('clock') || 'auto', x: +Q.get('x') || null, y: +Q.get('y') || null, z: +Q.get('z') || null,
-  seams: Q.get('seams') || 'snap',   // snap: tile edges on whole device px (recommended); overlap: REALM.md 9.3 as written
+  seams: Q.get('seams') || 'snap',   // snap: REALM.md 9.3 (edges on whole device px, shared by neighbours); overlap: the retired 1-point overlap
   sources: null,   // { layerId: 'out/xyz.png' } overrides for source=layers
 }, window.REALM_OPTIONS || {});
 const fail = e => { $('err').textContent = String(e && e.stack || e); console.error(e); };
@@ -402,7 +402,7 @@ function drawTiles(E) {
     const q = toDev({ x: o.x + o.scale * t.local.x, y: o.y + o.scale * t.local.y });
     let r;
     if (st.seams === 'overlap') {
-      // REALM.md 9.3: Size = UDim2.new(lw / w, lastCol and 0 or 1, lh / h, lastRow and 0 or 1), the 1-point overlap
+      // the retired recipe (before REALM.md 9.3 settled on snapping): every tile but the last column / row 1 point larger
       r = { x: q.x, y: q.y, w: (o.scale * t.local.w + (t.lastCol ? 0 : 1)) * K, h: (o.scale * t.local.h + (t.lastRow ? 0 : 1)) * K };
     } else {
       // snapped: every tile edge on a whole device pixel, neighbours share the edge (no gap, no double-blended strip)

@@ -27,15 +27,19 @@
     // ---------------------------------------------------------------- gaussian blur with clamped edges
     // Canvas blur treats pixels outside the canvas as transparent, so alpha falls off at the layer border and a dim strip
     // slides in at the screen edge during overscroll. Pad by 3 sigma with the edge pixels replicated, blur, crop.
-    function padBlur(src, px) {
-      const w = src.width, h = src.height, p = Math.ceil(px * 3) + 2, t = mk(w + 2 * p, h + 2 * p), tx = cx2(t);
+    function padCanvas(src, p) {
+      const w = src.width, h = src.height, t = mk(w + 2 * p, h + 2 * p), tx = cx2(t);
       tx.imageSmoothingEnabled = false;
       tx.drawImage(src, p, p);
       tx.drawImage(src, 0, 0, 1, h, 0, p, p, h); tx.drawImage(src, w - 1, 0, 1, h, w + p, p, p, h);
       tx.drawImage(src, 0, 0, w, 1, p, 0, w, p); tx.drawImage(src, 0, h - 1, w, 1, p, h + p, w, p);
       tx.drawImage(src, 0, 0, 1, 1, 0, 0, p, p); tx.drawImage(src, w - 1, 0, 1, 1, w + p, 0, p, p);
       tx.drawImage(src, 0, h - 1, 1, 1, 0, h + p, p, p); tx.drawImage(src, w - 1, h - 1, 1, 1, w + p, h + p, p, p);
-      const o = mk(w, h), ox = cx2(o); ox.filter = `blur(${px}px)`; ox.drawImage(t, -p, -p);
+      return t;
+    }
+    function padBlur(src, px) {
+      const p = Math.ceil(px * 3) + 2, t = padCanvas(src, p), o = mk(src.width, src.height), ox = cx2(o);
+      ox.filter = `blur(${px}px)`; ox.drawImage(t, -p, -p); ox.filter = 'none';
       return o;
     }
     // a low-res layer-sized canvas scaled up to w x h and blurred with clamped edges
@@ -190,11 +194,12 @@
           R += CRIMSON[0] * rr; G += CRIMSON[1] * rr; B += CRIMSON[2] * rr;
         }
         const o4 = i * 4;
-        od[o4] = clamp(R, 0, 255); od[o4 + 1] = clamp(G, 0, 255); od[o4 + 2] = clamp(B, 0, 255); od[o4 + 3] = a * 255;
-        if (wm > 0.02) {
-          const wc = mixc(WC, CRIMSON, rw), br = WS * wm * (0.72 + 0.28 * (0.5 + 0.5 * nX(X / 34, Y / 34)));
+        if (wm > 0.02) { // the lit edge itself turns warm (base), and the emissive line glows over it
+          const wc = mixc(WC, CRIMSON, rw), br = WS * wm * (0.72 + 0.28 * (0.5 + 0.5 * nX(X / 34, Y / 34))), tk = clamp(br * 0.8);
+          R += (wc[0] * 0.85 - R) * tk; G += (wc[1] * 0.85 - G) * tk; B += (wc[2] * 0.85 - B) * tk;
           wd[o4] = wc[0]; wd[o4 + 1] = wc[1]; wd[o4 + 2] = wc[2]; wd[o4 + 3] = clamp(br) * 255; warmAny = true;
         }
+        od[o4] = clamp(R, 0, 255); od[o4 + 1] = clamp(G, 0, 255); od[o4 + 2] = clamp(B, 0, 255); od[o4 + 3] = a * 255;
         // glowing crystal seams
         if (V && d > 3) {
           const patch = smooth(V.th, V.th + 0.12, fbm(nP, X / V.patch, Y / V.patch, 2)) * (V.region ? V.region(X, Y, yn) : 1);
@@ -594,10 +599,15 @@
     }
 
     function downsample(src, w, h) {
+      // every step scales an edge-replicated copy, so the border texels keep their alpha (no dim strip at the layer edge)
+      const step = (c, tw, th) => {
+        const p = Math.ceil(2 * c.width / tw) + 2, t = padCanvas(c, p), o = mk(tw, th), x = cx2(o), sx = tw / c.width, sy = th / c.height;
+        x.imageSmoothingQuality = 'high'; x.drawImage(t, -p * sx, -p * sy, t.width * sx, t.height * sy); return o;
+      };
       let c = src;
-      while (c.width / 2 >= w * 1.02) { const n2 = mk(Math.round(c.width / 2), Math.round(c.height / 2)), x = cx2(n2); x.imageSmoothingQuality = 'high'; x.drawImage(c, 0, 0, n2.width, n2.height); c = n2; }
+      while (c.width / 2 >= w * 1.02) c = step(c, Math.round(c.width / 2), Math.round(c.height / 2));
       if (c.width === w && c.height === h) return c;
-      const o = mk(w, h), x = cx2(o); x.imageSmoothingQuality = 'high'; x.drawImage(c, 0, 0, w, h); return o;
+      return step(c, w, h);
     }
 
     // max alpha of a canvas inside a set of keep-clear ellipses ([name, cx, cy, rx, ry], layer-local px)
@@ -613,7 +623,7 @@
       return out;
     }
 
-    return { LV, L2, KEY, WARM, LILAC, CRIMSON, padBlur, upBlur, mk, cx2, luma, col, mixc, inEllipse, edt, bbox, mass, island, rock, crystal, crystals, seams, root, vine, tree, grass, lightfall, mistBand, cloudBank, atmosphere, downsample, zoneMax };
+    return { LV, L2, KEY, WARM, LILAC, CRIMSON, padCanvas, padBlur, upBlur, mk, cx2, luma, col, mixc, inEllipse, edt, bbox, mass, island, rock, crystal, crystals, seams, root, vine, tree, grass, lightfall, mistBand, cloudBank, atmosphere, downsample, zoneMax };
   })();
   // ================================================================ ISLAND KIT (end)
 

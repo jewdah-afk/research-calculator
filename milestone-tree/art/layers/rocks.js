@@ -27,15 +27,19 @@
     // ---------------------------------------------------------------- gaussian blur with clamped edges
     // Canvas blur treats pixels outside the canvas as transparent, so alpha falls off at the layer border and a dim strip
     // slides in at the screen edge during overscroll. Pad by 3 sigma with the edge pixels replicated, blur, crop.
-    function padBlur(src, px) {
-      const w = src.width, h = src.height, p = Math.ceil(px * 3) + 2, t = mk(w + 2 * p, h + 2 * p), tx = cx2(t);
+    function padCanvas(src, p) {
+      const w = src.width, h = src.height, t = mk(w + 2 * p, h + 2 * p), tx = cx2(t);
       tx.imageSmoothingEnabled = false;
       tx.drawImage(src, p, p);
       tx.drawImage(src, 0, 0, 1, h, 0, p, p, h); tx.drawImage(src, w - 1, 0, 1, h, w + p, p, p, h);
       tx.drawImage(src, 0, 0, w, 1, p, 0, w, p); tx.drawImage(src, 0, h - 1, w, 1, p, h + p, w, p);
       tx.drawImage(src, 0, 0, 1, 1, 0, 0, p, p); tx.drawImage(src, w - 1, 0, 1, 1, w + p, 0, p, p);
       tx.drawImage(src, 0, h - 1, 1, 1, 0, h + p, p, p); tx.drawImage(src, w - 1, h - 1, 1, 1, w + p, h + p, p, p);
-      const o = mk(w, h), ox = cx2(o); ox.filter = `blur(${px}px)`; ox.drawImage(t, -p, -p);
+      return t;
+    }
+    function padBlur(src, px) {
+      const p = Math.ceil(px * 3) + 2, t = padCanvas(src, p), o = mk(src.width, src.height), ox = cx2(o);
+      ox.filter = `blur(${px}px)`; ox.drawImage(t, -p, -p); ox.filter = 'none';
       return o;
     }
     // a low-res layer-sized canvas scaled up to w x h and blurred with clamped edges
@@ -190,11 +194,12 @@
           R += CRIMSON[0] * rr; G += CRIMSON[1] * rr; B += CRIMSON[2] * rr;
         }
         const o4 = i * 4;
-        od[o4] = clamp(R, 0, 255); od[o4 + 1] = clamp(G, 0, 255); od[o4 + 2] = clamp(B, 0, 255); od[o4 + 3] = a * 255;
-        if (wm > 0.02) {
-          const wc = mixc(WC, CRIMSON, rw), br = WS * wm * (0.72 + 0.28 * (0.5 + 0.5 * nX(X / 34, Y / 34)));
+        if (wm > 0.02) { // the lit edge itself turns warm (base), and the emissive line glows over it
+          const wc = mixc(WC, CRIMSON, rw), br = WS * wm * (0.72 + 0.28 * (0.5 + 0.5 * nX(X / 34, Y / 34))), tk = clamp(br * 0.8);
+          R += (wc[0] * 0.85 - R) * tk; G += (wc[1] * 0.85 - G) * tk; B += (wc[2] * 0.85 - B) * tk;
           wd[o4] = wc[0]; wd[o4 + 1] = wc[1]; wd[o4 + 2] = wc[2]; wd[o4 + 3] = clamp(br) * 255; warmAny = true;
         }
+        od[o4] = clamp(R, 0, 255); od[o4 + 1] = clamp(G, 0, 255); od[o4 + 2] = clamp(B, 0, 255); od[o4 + 3] = a * 255;
         // glowing crystal seams
         if (V && d > 3) {
           const patch = smooth(V.th, V.th + 0.12, fbm(nP, X / V.patch, Y / V.patch, 2)) * (V.region ? V.region(X, Y, yn) : 1);
@@ -594,10 +599,15 @@
     }
 
     function downsample(src, w, h) {
+      // every step scales an edge-replicated copy, so the border texels keep their alpha (no dim strip at the layer edge)
+      const step = (c, tw, th) => {
+        const p = Math.ceil(2 * c.width / tw) + 2, t = padCanvas(c, p), o = mk(tw, th), x = cx2(o), sx = tw / c.width, sy = th / c.height;
+        x.imageSmoothingQuality = 'high'; x.drawImage(t, -p * sx, -p * sy, t.width * sx, t.height * sy); return o;
+      };
       let c = src;
-      while (c.width / 2 >= w * 1.02) { const n2 = mk(Math.round(c.width / 2), Math.round(c.height / 2)), x = cx2(n2); x.imageSmoothingQuality = 'high'; x.drawImage(c, 0, 0, n2.width, n2.height); c = n2; }
+      while (c.width / 2 >= w * 1.02) c = step(c, Math.round(c.width / 2), Math.round(c.height / 2));
       if (c.width === w && c.height === h) return c;
-      const o = mk(w, h), x = cx2(o); x.imageSmoothingQuality = 'high'; x.drawImage(c, 0, 0, w, h); return o;
+      return step(c, w, h);
     }
 
     // max alpha of a canvas inside a set of keep-clear ellipses ([name, cx, cy, rx, ry], layer-local px)
@@ -613,7 +623,7 @@
       return out;
     }
 
-    return { LV, L2, KEY, WARM, LILAC, CRIMSON, padBlur, upBlur, mk, cx2, luma, col, mixc, inEllipse, edt, bbox, mass, island, rock, crystal, crystals, seams, root, vine, tree, grass, lightfall, mistBand, cloudBank, atmosphere, downsample, zoneMax };
+    return { LV, L2, KEY, WARM, LILAC, CRIMSON, padCanvas, padBlur, upBlur, mk, cx2, luma, col, mixc, inEllipse, edt, bbox, mass, island, rock, crystal, crystals, seams, root, vine, tree, grass, lightfall, mistBand, cloudBank, atmosphere, downsample, zoneMax };
   })();
   // ================================================================ ISLAND KIT (end)
 
@@ -638,7 +648,7 @@
     { id: 'N1', kind: 'earth', cx: 470, cy: 1960, w: 780, h: 480, seed: 501, corners: 11, taper: 0.55, flat: 0.9, tilt: 0.05, spike: [30, 90],
       subs: [[-0.1, 0.34, 0.34, 0.6], [0.2, 0.26, 0.24, 0.5]], crystals: [[250, -1, 5, 70, [179, 92, 255]]] },
     { id: 'N2', kind: 'boulder', cx: 385, cy: 520, w: 470, h: 390, seed: 502, corners: 15, taper: 0.16, flat: 0.05, boxy: 2.0, jitter: 0.1, tilt: -0.32,
-      subs: [[0.28, -0.24, 0.4, 0.36]], crystals: [[520, 0.2, 6, 80, [95, 224, 255]]] },
+      subs: [], crystals: [[520, 0.2, 6, 80, [95, 224, 255]]] },
     { id: 'N3', kind: 'slab', cx: 1240, cy: 318, w: 560, h: 190, seed: 503, corners: 8, taper: 0.3, flat: 0, boxy: 2.8, jitter: 0.16, tilt: 0.21,
       subs: [], crystals: [[1010, 0.1, 4, 60, [179, 92, 255]]] },
     { id: 'N9', kind: 'earth', cx: 2480, cy: 560, w: 600, h: 320, seed: 509, corners: 10, taper: 0.5, flat: 0.8, tilt: -0.08, spike: [-20, 70],
@@ -652,6 +662,8 @@
     { id: 'N7', kind: 'shard', cx: 2290, cy: 1740, w: 170, h: 240, seed: 507, corners: 7, taper: 0.7, flat: 0.3, boxy: 2.0, tilt: -0.42, spike: [10, 70],
       subs: [], crystals: [[2290, -1, 3, 46, [255, 46, 99]]] },
   ];
+  // true when a hanging tip at (x, y) would reach into a hard zone (+40 px) or deep into a soft one
+  const clearOf = (x, y) => CFG.hard.some(z => K.inEllipse(x, y, z, 40)) || SOFT.some(z => K.inEllipse(x, y, z, -60));
   const rot = (pts, cx, cy, a) => { const c = Math.cos(a), s2 = Math.sin(a); return pts.map(([x, y]) => [cx + (x - cx) * c - (y - cy) * s2, cy + (x - cx) * s2 + (y - cy) * c]); };
 
   // top and bottom silhouette lines of a mass (every 3 px)
@@ -679,11 +691,11 @@
     const earth = Rk.kind === 'earth', fs = Math.min(Rk.w, Rk.h);
     const M = K.mass({
       polys, poly: P, seed: Rk.seed, pad: 14, openTop: earth, openTopMax: 90, bevel: 14, dome: fs * 0.4, domeK: 0.75, bump: 6, bumpScale: 36,
-      flutes: earth ? 12 : round ? 0 : 5, facet: fs * (Rk.kind === 'shard' ? 0.3 : round ? 0.42 : 0.34), facetTilt: round ? 0.3 : Rk.kind === 'slab' ? 0.36 : 0.32, crackW: 3, crack: round ? 0.25 : 0.35,
+      flutes: earth ? 12 : round ? 0 : 5, facet: fs * (Rk.kind === 'shard' ? 0.3 : round ? 0.26 : 0.34), facetTilt: round ? 0.3 : Rk.kind === 'slab' ? 0.36 : 0.32, crackW: 3, crack: round ? 0.25 : 0.35,
       cyl: { cx: Rk.cx, hw: Rk.w / 2, k: round ? 0.6 : 0.45, down: earth ? 0.45 : 0.25 },
       strata: earth ? { period: 30, lw: 0.08, dark: 0.3, warp: 10, wl: 140, tilt: 0.04 } : null,
       pal: { dark: [2, 1, 8], base: [34, 18, 74], soil: [24, 12, 40], moss: rw > 0.5 ? [96, 36, 104] : [56, 44, 140], mossRift: [110, 34, 96], rim: [215, 195, 255], key: [255, 196, 160], bounce: [110, 70, 220] },
-      soil: earth ? 34 : 0, moss: earth ? 14 : 0, amb: 0.03, gamma: 2.0, rimW: 5, rimK: 1.2, keyK: 0.34, bounceK: 0.45, ao: 0.55, riftW: (X) => riftW(X), riftRimK: 0.8,
+      soil: earth ? 34 : 0, moss: earth ? 14 : round ? 9 : 0, amb: 0.03, gamma: 2.0, rimW: 5, rimK: 1.2, keyK: 0.34, bounceK: 0.45, ao: 0.55, riftW: (X) => riftW(X), riftRimK: 0.8,
       warm: 1, warmW: 4,
     });
     b.drawImage(M.c, M.x, M.y); if (M.e) e.drawImage(M.e, M.x, M.y);
@@ -697,10 +709,11 @@
     if (earth) {
       for (let k = 0; k < 16; k++) {
         const p = bot[Math.floor(r() * bot.length)]; if (!p) break;
-        const len = 50 + r() * r() * 280, wd = 6 + r() * 8;
+        let len = 50 + r() * r() * 280; const wd = 6 + r() * 8;
+        while (len > 40 && clearOf(p[0], p[1] + len)) len *= 0.8;
         K.root(b, e, p[0], p[1] - 8, len, wd, Rk.seed * 31 + k, { twigs: r() < 0.6 ? 2 : 0, color: [6, 3, 14], rim: mixc([120, 100, 200], [200, 70, 110], rw * 0.7), bulb: r() < 0.25 ? mixc([130, 220, 255], [255, 80, 130], rw) : null });
       }
-      for (let k = 0; k < 5; k++) { const p = bot[Math.floor(r() * bot.length)]; if (p) K.vine(b, e, p[0], p[1] - 6, 110 + r() * 220, Rk.seed * 57 + k, { w: 4, leafLen: 22, color: [10, 5, 22], leaf: [18, 10, 40], leafRim: [110, 90, 190], bud: r() < 0.6 ? (rw > 0.5 ? [255, 90, 150] : [150, 230, 255]) : null }); }
+      for (let k = 0; k < 5; k++) { const p = bot[Math.floor(r() * bot.length)]; let vl = 110 + r() * 220; if (p) while (vl > 60 && clearOf(p[0], p[1] + vl)) vl *= 0.8; if (p) K.vine(b, e, p[0], p[1] - 6, vl, Rk.seed * 57 + k, { w: 4, leafLen: 22, color: [10, 5, 22], leaf: [18, 10, 40], leafRim: [110, 90, 190], bud: r() < 0.6 ? (rw > 0.5 ? [255, 90, 150] : [150, 230, 255]) : null }); }
       const tp = top.filter(p => p[1] < Rk.cy - Rk.h * 0.1);
       K.grass(b, e, tp, Rk.seed + 5, { density: 1.2, h: 18, w: 1.8, color: [20, 12, 44], moss: rw > 0.5 ? [150, 60, 120] : [90, 76, 190], flowers: Math.round(tp.length / 14),
         flowerCols: rw > 0.5 ? [[255, 80, 140], [255, 150, 90]] : [[255, 120, 200], [120, 230, 255], [255, 220, 120]], mossLine: rw > 0.5 ? [255, 110, 170] : [175, 150, 255], mossA: 0.6 });
@@ -708,7 +721,7 @@
       for (let k = 0; k < 2; k++) { const p = tp[Math.floor(tp.length * (0.25 + 0.5 * r()))]; if (p) K.tree(b, e, p[0], p[1] + 4, 90 + r() * 70, Rk.seed * 17 + k, { kind: rw > 0.6 ? 'dead' : null, bark: [10, 5, 22], leaf: [30, 18, 64], rim: rw > 0.5 ? [255, 150, 190] : [210, 185, 255], glow: rw > 0.5 ? [[255, 80, 130]] : [[255, 201, 60], [95, 224, 255]], glowN: 1 }); }
     } else {
       for (let k = 0; k < 4; k++) { const p = bot[Math.floor(r() * bot.length)]; if (p) K.crystal(b, e, p[0], p[1] - 6, 26 + r() * 40, 9 + r() * 8, Math.PI + (r() - 0.5) * 0.8, vc, 1, 0.7); }
-      for (let k = 0; k < 3; k++) { const p = bot[Math.floor(r() * bot.length)]; if (p) K.root(b, e, p[0], p[1] - 6, 40 + r() * 110, 5 + r() * 5, Rk.seed * 41 + k, { color: [6, 3, 14], rim: [120, 100, 200] }); }
+      for (let k = 0; k < 3; k++) { const p = bot[Math.floor(r() * bot.length)]; let rl = 40 + r() * 110; if (p) while (rl > 30 && clearOf(p[0], p[1] + rl)) rl *= 0.8; if (p) K.root(b, e, p[0], p[1] - 6, rl, 5 + r() * 5, Rk.seed * 41 + k, { color: [6, 3, 14], rim: [120, 100, 200] }); }
     }
     // crystal clusters growing out of the rock: [x, side (-1 top, 0..1 fraction up the left/right), n, size, colour]
     for (const [x, where, n, size, c] of Rk.crystals || []) {
@@ -746,14 +759,14 @@
     // before the erase: a rock that reaches into a hard zone would get an elliptical bite; report it
     { const pre = K.zoneMax(base, CFG.hard, 14), bit = Object.entries(pre).filter(([, v]) => v > 0.02);
       console.log('near rocks reaching into hard zones (+14 px) before the erase:', bit.length ? JSON.stringify(bit) : 'none'); }
-    // soft zones: fade anything inside to <= 0.3 alpha with a feathered edge (roots and vines recede into the haze)
-    { const m = mk(W, H), mx = cx2(m); mx.fillStyle = '#000'; mx.fillRect(0, 0, W, H); mx.globalCompositeOperation = 'destination-out';
-      for (const z of SOFT) { mx.save(); mx.translate(z[1], z[2]); mx.scale(z[3] + 30, z[4] + 30); const g = mx.createRadialGradient(0, 0, 0, 0, 0, 1); g.addColorStop(0, 'rgba(0,0,0,0.72)'); g.addColorStop(0.86, 'rgba(0,0,0,0.72)'); g.addColorStop(1, 'rgba(0,0,0,0)'); mx.fillStyle = g; mx.beginPath(); mx.arc(0, 0, 1, 0, 7); mx.fill(); mx.restore(); }
-      for (const c of [b, e]) { c.save(); c.globalCompositeOperation = 'destination-in'; c.drawImage(m, 0, 0); c.restore(); } }
-    // hard zones must be fully empty: erase anything that strayed in (with a margin for the blur)
-    for (const c of [b, e]) { c.save(); c.globalCompositeOperation = 'destination-out'; c.fillStyle = '#000'; for (const z of CFG.hard) { c.beginPath(); c.ellipse(z[1], z[2], z[3] + 14, z[4] + 14, 0, 0, 7); c.fill(); } c.restore(); }
     const lit = window.__islandsNoAtmosphere ? K.atmosphere(base, emis, { atm: { ...CFG.atm, haze: 0, hazeBottom: 0, saturation: 1, contrast: 1, blur: 0, maxLuma: 1, emissiveMax: 1 }, splitX: CFG.splitX, fade: CFG.fade })
       : K.atmosphere(base, emis, { atm: CFG.atm, splitX: CFG.splitX, fade: CFG.fade });
+    // After the atmosphere pass (so the emissive light and the blur are included): soft zones fade to <= 0.28 alpha with
+    // a feathered edge (roots and vines recede into the haze); hard zones are erased with a margin for the downsample.
+    { const lx = cx2(lit), m = mk(W, H), mx = cx2(m); mx.fillStyle = '#000'; mx.fillRect(0, 0, W, H); mx.globalCompositeOperation = 'destination-out';
+      for (const z of SOFT) { mx.save(); mx.translate(z[1], z[2]); mx.scale(z[3] + 44, z[4] + 44); const g = mx.createRadialGradient(0, 0, 0, 0, 0, 1); g.addColorStop(0, 'rgba(0,0,0,0.72)'); g.addColorStop(0.9, 'rgba(0,0,0,0.72)'); g.addColorStop(1, 'rgba(0,0,0,0)'); mx.fillStyle = g; mx.beginPath(); mx.arc(0, 0, 1, 0, 7); mx.fill(); mx.restore(); }
+      lx.save(); lx.globalCompositeOperation = 'destination-in'; lx.drawImage(m, 0, 0); lx.restore();
+      lx.save(); lx.globalCompositeOperation = 'destination-out'; lx.fillStyle = '#000'; for (const z of CFG.hard) { lx.beginPath(); lx.ellipse(z[1], z[2], z[3] + 8, z[4] + 8, 0, 0, 7); lx.fill(); } lx.restore(); }
     const hz = K.zoneMax(lit, CFG.hard), sz = K.zoneMax(lit, SOFT);
     console.log('near hard zones max alpha (must be 0):', Math.max(...Object.values(hz)), ' soft zones max (< 0.35):', Math.max(...Object.values(sz)), JSON.stringify(Object.entries(sz).filter(([, v]) => v >= 0.35)));
     const out = K.downsample(lit, Math.round(W * CFG.res), Math.round(H * CFG.res));
