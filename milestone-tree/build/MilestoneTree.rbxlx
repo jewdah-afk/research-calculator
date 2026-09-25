@@ -36614,6 +36614,923 @@ return ViewStore
           </Properties>
           <Item class="ModuleScript" referent="75">
             <Properties>
+              <string name="Name">Band</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	Band: the COMPACT panel band (DESIGN.md 5.10) that replaces the capsule while a full-screen panel is open on a
+	phone: the layer's emblem, its title (R3, `title` COMPACT step) and a 44 du close button left of the Roblox "···".
+
+	    local part = Band.new(parent)
+	    part:show(layer?, title?)   part.close ()
+]]
+
+local Core = script.Parent.Parent:WaitForChild("Core")
+local Signal = require(Core:WaitForChild("Signal"))
+local Theme = require(Core:WaitForChild("Theme"))
+local Kit = require(script.Parent:WaitForChild("Kit"))
+local Ready = require(script.Parent:WaitForChild("Ready"))
+
+export type Band = {
+	frame: Frame,
+	close: Signal.Signal<>,
+	show: (self: Band, layer: string?, title: string?) -> (),
+	destroy: (self: Band) -> (),
+}
+
+local Band = {}
+
+function Band.new(parent: GuiObject): Band
+	local self = {} :: Band
+	self.close = Signal.new() :: Signal.Signal<>
+	local f = Kit.frame(parent, "PanelBand", 8)
+	f.AnchorPoint = Vector2.new(0.5, 0)
+	f.Position = UDim2.new(0.5, 0, 0, 6)
+	f.Size = UDim2.new(1, -24, 0, 44)
+	f.BackgroundColor3 = Theme.C.deep
+	f.BackgroundTransparency = 0.08
+	f.Visible = false
+	Kit.corner(f, UDim.new(0, 14))
+	local rim = Kit.stroke(f, 1.5, Theme.C.strokeHi, 1, "Rim")
+	local title = Kit.label(f, "Title", "section", "", Color3.new(1, 1, 1))
+	title.Position = UDim2.fromOffset(50, 0)
+	title.Size = UDim2.new(1, -110, 1, 0)
+	title.TextXAlignment = Enum.TextXAlignment.Left
+	title.TextTruncate = Enum.TextTruncate.AtEnd
+	Kit.textStroke(title, 2, 0.9)
+	local closeB = Kit.button(f, "Close")
+	closeB.AnchorPoint = Vector2.new(1, 0.5)
+	closeB.Position = UDim2.new(1, -4, 0.5, 0)
+	closeB.Size = UDim2.fromOffset(44, 44)
+	local x = Kit.glyph(closeB, "Icon", "x", Color3.new(1, 1, 1))
+	x.AnchorPoint = Vector2.new(0.5, 0.5)
+	x.Position = UDim2.fromScale(0.5, 0.5)
+	x.Size = UDim2.fromOffset(18, 18)
+	closeB.Activated:Connect(function() self.close:Fire() end)
+	self.frame = f
+	function self.show(_: Band, layer: string?, text: string?)
+		if layer == nil then
+			f.Visible = false
+			return
+		end
+		local old = f:FindFirstChild("Emblem")
+		if old then old:Destroy() end
+		local g = Ready.gem(f, "Emblem", layer, string.upper(layer), 34)
+		g.AnchorPoint = Vector2.new(0, 0.5)
+		g.Position = UDim2.new(0, 8, 0.5, 0)
+		rim.Color = Theme.lift(Theme.hue(layer), 0.3)
+		title.Text = string.upper(text or layer)
+		Theme.text(title, "section")
+		f.Visible = true
+	end
+	function self.destroy(b: Band)
+		b.close:DisconnectAll()
+		f:Destroy()
+	end
+	return self
+end
+
+return Band
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="76">
+            <Properties>
+              <string name="Name">Capsule</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	Capsule: the points capsule (DESIGN.md 4.3), in TopbarGui centred under the Roblox top bar.
+
+	    Capsule   400 x 58 (COMPACT 300 x 44), dark gradient, gold rim and glow
+	      Coin    Ø68 gold disc breaking out on the left, a spinning star (6 s / rev)
+	      Label   "POINTS · NORMAL UNIVERSE" (`caps`, #ffe9a3; not on COMPACT)
+	      Row     Amount (R4 gold gradient number, `capsule` role, steps 34 -> 30 -> 26 past 250 du, left anchored)
+	              + Unit ("points" / "pts")
+	      GenPill the rate (Rich.num) on a dark green pill hanging from the rim; hidden when hud.gen is nil
+	      Warn    a chip right of the capsule with the first warning value; tap -> warnTap (the tooltip lists all)
+	      Status  SAVING... / SAVED / NOT SAVING / RECONNECTING... under the pill
+
+	    local part = Capsule.new(parent)
+	    part:update(h)   part:setStatus(kind)   part:setUniverse(inside)   part:setFirstRun(b)   part.warnTap
+	    part:rects() -> { capsule, pill?, warn?, status? } (abs space; Hud registers them with Layout)
+]]
+
+local Core = script.Parent.Parent:WaitForChild("Core")
+local Types = require(script.Parent.Parent:WaitForChild("Types"))
+local Signal = require(Core:WaitForChild("Signal"))
+local Theme = require(Core:WaitForChild("Theme"))
+local Layout = require(Core:WaitForChild("Layout"))
+local Motion = require(Core:WaitForChild("Motion"))
+local Rich = require(Core:WaitForChild("Rich"))
+local Recipes = require(Core:WaitForChild("Recipes"))
+local Kit = require(script.Parent:WaitForChild("Kit"))
+
+type ARect = Types.Rect
+
+export type Capsule = {
+	frame: Frame,
+	pill: Frame,
+	warn: Frame,
+	status: Frame,
+	warnTap: Signal.Signal<Vector2>,
+	changed: Signal.Signal<>, -- a part moved, appeared or disappeared (Hud re-registers the rects)
+	update: (self: Capsule, h: Types.HudState) -> (),
+	setStatus: (self: Capsule, kind: string?) -> (),
+	setUniverse: (self: Capsule, inside: boolean) -> (),
+	setFirstRun: (self: Capsule, b: boolean) -> (),
+	bottom: (self: Capsule) -> number, -- du below the Root top where things can hang (pill / status)
+	destroy: (self: Capsule) -> (),
+}
+
+local Capsule = {}
+
+local GOLD_HI = Color3.fromHex("ffe89a")
+local GOLD = Color3.fromHex("ffc233")
+local CREAM = Color3.fromHex("ffe9a3")
+local GREEN_A, GREEN_B, GREEN_LINE = Color3.fromHex("1a7a3c"), Color3.fromHex("0f4d26"), Color3.fromHex("b5f5c9")
+
+local STATUS: { [string]: { text: string, color: Color3, glyph: string } } = {
+	saving = { text = "Saving…", color = GOLD, glyph = "clock" },
+	saved = { text = "Saved", color = Theme.C.bought, glyph = "check" },
+	off = { text = "Not saving", color = Theme.C.danger, glyph = "warn" },
+	reconnecting = { text = "Reconnecting…", color = Theme.C.info, glyph = "swirl" },
+}
+
+function Capsule.new(parent: GuiObject): Capsule
+	local self = {} :: Capsule
+	self.warnTap = Signal.new() :: Signal.Signal<Vector2>
+	self.changed = Signal.new() :: Signal.Signal<>
+
+	local f = Kit.frame(parent, "Capsule", 5)
+	f.AnchorPoint = Vector2.new(0.5, 0)
+	f.BackgroundColor3 = Color3.new(1, 1, 1)
+	f.BackgroundTransparency = 0.04
+	Kit.corner(f)
+	Kit.grad(f, { Color3.fromHex("2a2140"), Theme.C.deep }, 90, nil, "Back")
+	local rim = Kit.stroke(f, 2.5, Color3.new(1, 1, 1), 0.67, "Rim")
+	Kit.grad(rim, { GOLD_HI, GOLD }, 90, nil, "RimGrad")
+	self.frame = f
+
+	local coin = Kit.frame(f, "Coin", 6)
+	coin.AnchorPoint = Vector2.new(0, 0.5)
+	coin.BackgroundColor3 = Color3.new(1, 1, 1)
+	coin.BackgroundTransparency = 0
+	Kit.corner(coin)
+	if Theme.caps.Radial then
+		local g = Kit.child(coin, "Radial", "UIGradient") :: UIGradient
+		g.Type = Enum.GradientType.Radial
+		g.Offset = Vector2.new(-0.1, -0.14)
+		g.Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.fromHex("fff6cf")),
+			ColorSequenceKeypoint.new(0.32, Color3.fromHex("ffd34d")),
+			ColorSequenceKeypoint.new(0.7, Color3.fromHex("a8761a")),
+			ColorSequenceKeypoint.new(1, Color3.fromHex("a8761a")),
+		})
+	else
+		Kit.grad(coin, { Color3.fromHex("fff6cf"), Color3.fromHex("ffd34d"), Color3.fromHex("a8761a") }, 90, nil, "Radial")
+	end
+	Kit.stroke(coin, 3, Color3.fromHex("fff1b8"), 1, "Rim")
+	local star = Kit.glyph(coin, "Star", "star", Color3.fromHex("fffbe8"))
+	star.AnchorPoint = Vector2.new(0.5, 0.5)
+	star.Position = UDim2.fromScale(0.5, 0.5)
+	star.Size = UDim2.fromScale(0.46, 0.46)
+	star.ZIndex = 7
+	Kit.spin(star, 6)
+
+	local label = Kit.label(f, "Label", "caps", "", CREAM)
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.Size = UDim2.fromOffset(320, 14)
+
+	local row = Kit.frame(f, "Row", 6)
+	row.AutomaticSize = Enum.AutomaticSize.X
+	Kit.list(row, "x", 5, Enum.HorizontalAlignment.Left, Enum.VerticalAlignment.Bottom)
+	local amount = Kit.label(row, "Amount", "capsule", "0", Color3.new(1, 1, 1))
+	amount.LayoutOrder = 1
+	amount.AutomaticSize = Enum.AutomaticSize.X
+	amount.TextXAlignment = Enum.TextXAlignment.Left
+	amount.TextYAlignment = Enum.TextYAlignment.Bottom
+	local unit = Kit.label(row, "Unit", "small", "points", CREAM)
+	unit.LayoutOrder = 2
+	unit.FontFace = Font.fromName("Montserrat", Enum.FontWeight.Bold)
+	unit.AutomaticSize = Enum.AutomaticSize.X
+	unit.TextYAlignment = Enum.TextYAlignment.Bottom
+
+	-- the rate pill
+	local pill = Kit.frame(parent, "GenPill", 7)
+	pill.AnchorPoint = Vector2.new(0.5, 0)
+	pill.AutomaticSize = Enum.AutomaticSize.X
+	pill.BackgroundColor3 = Color3.new(1, 1, 1)
+	pill.BackgroundTransparency = 0
+	Kit.corner(pill)
+	Kit.grad(pill, { GREEN_A, GREEN_B }, 90, nil, "Back")
+	Kit.stroke(pill, 2, GREEN_LINE, 1, "Rim")
+	Kit.list(pill, "x", 6, Enum.HorizontalAlignment.Center, Enum.VerticalAlignment.Center)
+	local up = Kit.glyph(pill, "Up", "up", Color3.new(1, 1, 1))
+	up.LayoutOrder = 1
+	local pillLabel = Kit.label(pill, "Label", "number", "", Color3.new(1, 1, 1))
+	pillLabel.LayoutOrder = 2
+	pillLabel.RichText = true
+	pillLabel.AutomaticSize = Enum.AutomaticSize.X
+	pill.Visible = false
+	self.pill = pill
+
+	-- the warning chip
+	local warn = Kit.frame(parent, "Warn", 6)
+	warn.AnchorPoint = Vector2.new(0, 0.5)
+	warn.AutomaticSize = Enum.AutomaticSize.X
+	warn.BackgroundColor3 = Theme.C.deep
+	warn.BackgroundTransparency = 0.1
+	Kit.corner(warn)
+	Kit.stroke(warn, 1.5, GOLD, 1, "Rim")
+	local wContent = Kit.frame(warn, "Content")
+	wContent.AutomaticSize = Enum.AutomaticSize.X
+	wContent.Size = UDim2.fromScale(0, 1)
+	Kit.list(wContent, "x", 6, Enum.HorizontalAlignment.Left, Enum.VerticalAlignment.Center)
+	local wIcon = Kit.glyph(wContent, "Icon", "warn", GOLD)
+	wIcon.LayoutOrder = 1
+	local wLabel = Kit.label(wContent, "Label", "badge", "", Color3.new(1, 1, 1))
+	wLabel.LayoutOrder = 2
+	wLabel.RichText = true
+	wLabel.AutomaticSize = Enum.AutomaticSize.X
+	local wHit = Kit.button(warn, "Hit")
+	wHit.Size = UDim2.new(1, 0, 1, 12)
+	wHit.Position = UDim2.fromOffset(0, -6)
+	wHit.ZIndex = 5
+	wHit.Activated:Connect(function()
+		local p, s = warn.AbsolutePosition, warn.AbsoluteSize
+		self.warnTap:Fire(Vector2.new(p.X + s.X / 2, p.Y + s.Y))
+	end)
+	warn.Visible = false
+	self.warn = warn
+
+	-- the status chip
+	local status = Kit.frame(parent, "Status", 6)
+	status.AnchorPoint = Vector2.new(0.5, 0)
+	status.AutomaticSize = Enum.AutomaticSize.X
+	status.BackgroundColor3 = Theme.C.deep
+	status.BackgroundTransparency = 0.12
+	Kit.corner(status)
+	local sRim = Kit.stroke(status, 1.5, GOLD, 1, "Rim")
+	Kit.list(status, "x", 6, Enum.HorizontalAlignment.Left, Enum.VerticalAlignment.Center)
+	local sLabel = Kit.label(status, "Label", "label", "", Color3.new(1, 1, 1))
+	sLabel.LayoutOrder = 2
+	sLabel.AutomaticSize = Enum.AutomaticSize.X
+	status.Visible = false
+	self.status = status
+
+	-- ------------------------------------------------------------------------------------------ layout
+	local compact = false
+	local inside = false
+	local firstRun = false
+	local hud: Types.HudState? = nil
+	local statusKind: string? = nil
+	local savedToken = 0
+
+	local function place()
+		compact = Layout.mode == "COMPACT"
+		local w, h = if compact then 300 else 400, if compact then 44 else 58
+		f.Size = UDim2.fromOffset(w, h)
+		f.Position = UDim2.new(0.5, 0, 0, 6)
+		local cd = if compact then 52 else 68
+		coin.Size = UDim2.fromOffset(cd, cd)
+		coin.Position = UDim2.new(0, if compact then -14 else -19, 0.5, 0)
+		local x0 = (if compact then -14 else -19) + cd + 8
+		label.Visible = not compact
+		label.Position = UDim2.fromOffset(x0, 5)
+		Theme.text(label, "caps")
+		row.Position = UDim2.fromOffset(x0, if compact then 4 else 19)
+		row.Size = UDim2.fromOffset(0, if compact then 36 else 36)
+		amount.Size = UDim2.fromScale(0, 1)
+		unit.Size = UDim2.fromScale(0, 1)
+		Theme.text(unit, if compact then "label" else "small")
+		unit.FontFace = Font.fromName("Montserrat", Enum.FontWeight.Bold)
+		local pad = Kit.child(unit, "Pad", "UIPadding") :: UIPadding
+		pad.PaddingBottom = UDim.new(0, if compact then 5 else 6)
+		-- the pill hangs from the rim
+		local ph = if compact then 26 else 30
+		pill.Size = UDim2.fromOffset(0, ph)
+		pill.Position = UDim2.new(0.5, 0, 0, 6 + h - 7)
+		Kit.pad(pill, 0, 12, 0, 10)
+		Theme.text(pillLabel, "number")
+		pillLabel.Size = UDim2.fromScale(0, 1)
+		local gs = if compact then 12 else 14
+		up.Size = UDim2.fromOffset(gs, gs)
+		-- warn: right of the capsule
+		warn.Size = UDim2.fromOffset(0, if compact then 26 else 30)
+		warn.Position = UDim2.new(0.5, w / 2 + 12, 0, 6 + h / 2)
+		Kit.pad(warn, 0, 10, 0, 8)
+		wIcon.Size = UDim2.fromOffset(16, 16)
+		Theme.text(wLabel, "badge")
+		wLabel.Size = UDim2.fromScale(0, 1)
+		-- status: under the pill (or the capsule)
+		status.Size = UDim2.fromOffset(0, 28)
+		Kit.pad(status, 0, 10, 0, 8)
+		Theme.text(sLabel, "label")
+		sLabel.Size = UDim2.fromScale(0, 1)
+		self.changed:Fire()
+	end
+
+	local function statusY(): number
+		local h = if compact then 44 else 58
+		local y = 6 + h + 6
+		if pill.Visible then y = 6 + h - 7 + (if compact then 26 else 30) + 6 end
+		return y
+	end
+
+	local function writeLabel()
+		label.Text = Rich.caps(if inside then "Points · Prestige Multiverse" else "Points · Normal Universe")
+	end
+
+	local lastPts = ""
+	local lastBump = 0
+	function self.update(c: Capsule, h: Types.HudState)
+		hud = h
+		local pts = h.pts
+		if pts ~= lastPts then
+			local grew = lastPts ~= ""
+			lastPts = pts
+			local size = Theme.size("capsule")
+			Recipes.number(amount, { text = pts, size = size, from = Color3.new(1, 1, 1), mid = GOLD_HI, to = GOLD,
+				stroke = if compact then 3 else 4, shadow = 3, role = "capsule" })
+			local steps = if compact then { 28, 26, 22 } else { 34, 30, 26 }
+			Rich.fit(amount, steps, if compact then 150 else 250)
+			if grew and os.clock() - lastBump >= 1 then
+				lastBump = os.clock()
+				Motion.bump(row, 0.05)
+			end
+		end
+		local name = h.name
+		local unitText = if compact then (if name == "points" then "pts" else name) else name
+		if unit.Text ~= unitText then unit.Text = unitText end
+		local gen = h.gen
+		local showPill = gen ~= nil and gen ~= "" and not firstRun
+		if showPill then
+			local t = Rich.num(gen :: string, { size = Theme.size("number"), onFill = true })
+			if pillLabel.Text ~= t then pillLabel.Text = t end
+		end
+		if pill.Visible ~= showPill then
+			pill.Visible = showPill
+			c.changed:Fire()
+		end
+		local w = h.w[1]
+		local showWarn = w ~= nil
+		if w then
+			local t = Rich.num(string.upper(w.k) .. " " .. w.v, { size = Theme.size("badge"), unit = CREAM })
+			if wLabel.Text ~= t then wLabel.Text = t end
+		end
+		if warn.Visible ~= showWarn then
+			warn.Visible = showWarn
+			c.changed:Fire()
+		end
+		status.Position = UDim2.new(0.5, 0, 0, statusY())
+	end
+
+	function self.setStatus(c: Capsule, kind: string?)
+		if kind == "saved" then
+			savedToken += 1
+			local token = savedToken
+			task.delay(1.5, function()
+				if savedToken == token and statusKind == "saved" then c:setStatus(nil) end
+			end)
+		end
+		if kind == statusKind then return end
+		statusKind = kind
+		local spec = if kind then STATUS[kind] else nil
+		if spec == nil then
+			status.Visible = false
+			c.changed:Fire()
+			return
+		end
+		sRim.Color = spec.color
+		sLabel.Text = spec.text
+		sLabel.TextColor3 = Theme.lift(spec.color, 0.35)
+		local g = Kit.glyph(status, "Icon", spec.glyph, spec.color, Theme.C.deep)
+		g.LayoutOrder = 1
+		g.Size = UDim2.fromOffset(14, 14)
+		status.Position = UDim2.new(0.5, 0, 0, statusY())
+		status.Visible = true
+		c.changed:Fire()
+	end
+
+	function self.setUniverse(_: Capsule, b: boolean)
+		inside = b
+		writeLabel()
+	end
+	function self.setFirstRun(c: Capsule, b: boolean)
+		if firstRun == b then return end
+		firstRun = b
+		local h = hud
+		if h then c:update(h) end
+	end
+	function self.bottom(_: Capsule): number
+		local y = statusY()
+		if status.Visible then y += 28 + 6 end
+		return y
+	end
+	function self.destroy(c: Capsule)
+		c.warnTap:DisconnectAll()
+		c.changed:DisconnectAll()
+		Kit.unspin(star)
+		for _, x in { f, pill, warn, status } do x:Destroy() end
+	end
+
+	place()
+	writeLabel()
+	Layout.changed:Connect(function()
+		place()
+		lastPts = ""
+		local h = hud
+		if h then self:update(h) end
+	end)
+	return self
+end
+
+return Capsule
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="77">
+            <Properties>
+              <string name="Name">Dock</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	Dock: HOME / TROPHIES / OPTIONS at the bottom left (DESIGN.md 4.4) and the zoom capsule after it (mouse only).
+
+	    Dock      Home, Trophies (+ Badge "13/18"), Options (+ Dot while the server cannot save): ImageButtons with the
+	              hue bevel, a glyph with a hard shadow, the caption pill below (`label`, Title Case)
+	    Zoom      glass: Minus, Pct ("51%", `number`), Plus
+
+	    local part = Dock.new(parent)
+	    part:setTrophies(text?)  part:setUnsaved(b)  part:setActive(key?)  part:setZoomPct(z)  part:setCompactStrip(...)
+	    part.home, part.trophies, part.options, part.zoomIn, part.zoomOut   ()
+]]
+
+local Core = script.Parent.Parent:WaitForChild("Core")
+local Signal = require(Core:WaitForChild("Signal"))
+local Theme = require(Core:WaitForChild("Theme"))
+local Layout = require(Core:WaitForChild("Layout"))
+local Motion = require(Core:WaitForChild("Motion"))
+local Recipes = require(Core:WaitForChild("Recipes"))
+local Input = require(script.Parent.Parent:WaitForChild("Input"):WaitForChild("Input"))
+local Kit = require(script.Parent:WaitForChild("Kit"))
+
+export type Dock = {
+	frame: Frame,
+	zoom: Frame,
+	home: Signal.Signal<>,
+	trophies: Signal.Signal<>,
+	options: Signal.Signal<>,
+	zoomIn: Signal.Signal<>,
+	zoomOut: Signal.Signal<>,
+	changed: Signal.Signal<>,
+	setTrophies: (self: Dock, text: string?) -> (),
+	setUnsaved: (self: Dock, b: boolean) -> (),
+	setActive: (self: Dock, key: string?) -> (),
+	setZoomPct: (self: Dock, z: number) -> (),
+	setZoomVisible: (self: Dock, b: boolean) -> (),
+	setSmall: (self: Dock, b: boolean) -> (), -- 56 du buttons while a side sheet is open
+	destroy: (self: Dock) -> (),
+}
+
+local Dock = {}
+
+local BUTTONS = {
+	{ key = "Home", caption = "Home", hue = Color3.fromHex("2fcf8f"), glyph = "home" },
+	{ key = "Trophies", caption = "Trophies", hue = Color3.fromHex("ffb020"), glyph = "star" },
+	{ key = "Options", caption = "Options", hue = Color3.fromHex("8a7cff"), glyph = "gear" },
+}
+
+function Dock.new(parent: GuiObject): Dock
+	local self = {} :: Dock
+	self.home = Signal.new() :: Signal.Signal<>
+	self.trophies = Signal.new() :: Signal.Signal<>
+	self.options = Signal.new() :: Signal.Signal<>
+	self.zoomIn = Signal.new() :: Signal.Signal<>
+	self.zoomOut = Signal.new() :: Signal.Signal<>
+	self.changed = Signal.new() :: Signal.Signal<>
+
+	local f = Kit.frame(parent, "Dock", 5)
+	f.AnchorPoint = Vector2.new(0, 1)
+	self.frame = f
+	local small = false
+	local active: string? = nil
+	local buttons: { [string]: ImageButton } = {}
+	local captions: { [string]: Frame } = {}
+
+	for i, spec in BUTTONS do
+		local b = Kit.child(f, spec.key, "ImageButton") :: ImageButton
+		b.BackgroundColor3 = Color3.new(1, 1, 1)
+		b.BackgroundTransparency = 0
+		b.BorderSizePixel = 0
+		b.AutoButtonColor = false
+		b.Image = ""
+		b.ZIndex = 3
+		Kit.corner(b, UDim.new(0.25, 0))
+		local c = spec.hue
+		Kit.grad(b, { Theme.lift(c, 0.2), c, Theme.shade(c, 0.55) }, 90, nil, "Back", { 0, 0.55, 1 })
+		Kit.stroke(b, 2.5, Theme.lift(c, 0.55), 1, "Rim")
+		local lip = Kit.frame(b, "Lip", 4)
+		lip.Size = UDim2.fromScale(1, 1)
+		lip.BackgroundColor3 = Color3.new(1, 1, 1)
+		lip.BackgroundTransparency = 0
+		Kit.corner(lip, UDim.new(0.25, 0))
+		Kit.grad(lip, { Color3.new(1, 1, 1), Color3.new(1, 1, 1), Color3.new(0, 0, 0), Color3.new(0, 0, 0) }, 90,
+			{ { 0, 0.3 }, { 0.14, 0 }, { 0.8, 0 }, { 1, 0.35 } }, "Lips", { 0, 0.5, 0.51, 1 })
+		local shadow = Kit.glyph(b, "IconShadow", spec.glyph, Color3.new(0, 0, 0), Theme.shade(c, 0.75))
+		shadow.AnchorPoint = Vector2.new(0.5, 0.5)
+		shadow.Position = UDim2.new(0.5, 0, 0.5, 2)
+		shadow.Size = UDim2.fromScale(0.48, 0.48)
+		shadow.ZIndex = 5
+		for _, d in shadow:GetDescendants() do
+			if d:IsA("GuiObject") then d.BackgroundTransparency = 0.6 end
+		end
+		local icon = Kit.glyph(b, "Icon", spec.glyph, Color3.new(1, 1, 1), c)
+		icon.AnchorPoint = Vector2.new(0.5, 0.5)
+		icon.Position = UDim2.fromScale(0.5, 0.5)
+		icon.Size = UDim2.fromScale(0.48, 0.48)
+		icon.ZIndex = 6
+		local press = Kit.child(b, "Press", "UIScale") :: UIScale
+		b.MouseButton1Down:Connect(function()
+			Motion.tween(press, TweenInfo.new(0.08), { Scale = 0.94 }, "dockPress" .. spec.key, true)
+		end)
+		b.MouseButton1Up:Connect(function()
+			Motion.tween(press, TweenInfo.new(0.12), { Scale = 1 }, "dockPress" .. spec.key, true)
+		end)
+		b.MouseLeave:Connect(function()
+			press.Scale = 1
+		end)
+		b.Activated:Connect(function()
+			if spec.key == "Home" then
+				self.home:Fire()
+			elseif spec.key == "Trophies" then
+				self.trophies:Fire()
+			else
+				self.options:Fire()
+			end
+		end)
+		buttons[spec.key] = b
+		local cap, cl = Kit.chip(f, spec.key .. "Caption", "label", spec.caption, { h = 22, pad = 8, fg = Color3.new(1, 1, 1),
+			bg = Theme.C.deep, bgA = 0.8 })
+		cap.AnchorPoint = Vector2.new(0.5, 0)
+		cap.ZIndex = 3
+		cl.ZIndex = 3
+		captions[spec.key] = cap
+		local _ = i
+	end
+	-- the trophies badge and the options dot
+	local badge, badgeLabel = Kit.chip(buttons.Trophies, "Badge", "badge", "", { h = 22, pad = 7, fg = Color3.new(1, 1, 1),
+		bg = Color3.fromHex("b8860b"), bgA = 1, line = Color3.fromHex("ffe08a"), lineA = 0.9 })
+	badge.AnchorPoint = Vector2.new(0.5, 0.5)
+	badge.Position = UDim2.fromScale(0.5, 0)
+	badge.ZIndex = 8
+	badgeLabel.ZIndex = 8
+	Kit.textStroke(badgeLabel, 1.5, 0.7)
+	badge.Visible = false
+	local dot = Kit.frame(buttons.Options, "Dot", 8)
+	dot.AnchorPoint = Vector2.new(0.5, 0.5)
+	dot.Position = UDim2.fromScale(0.9, 0.1)
+	dot.Size = UDim2.fromOffset(14, 14)
+	dot.BackgroundColor3 = Theme.C.danger
+	dot.BackgroundTransparency = 0
+	Kit.corner(dot)
+	Kit.stroke(dot, 2, Color3.new(1, 1, 1), 1)
+	dot.Visible = false
+
+	-- the zoom capsule
+	local zoom = Kit.frame(parent, "Zoom", 5)
+	zoom.AnchorPoint = Vector2.new(0, 1)
+	Recipes.glass(zoom)
+	zoom.BackgroundTransparency = math.min(zoom.BackgroundTransparency, 0.12)
+	Kit.corner(zoom)
+	self.zoom = zoom
+	local function zbtn(name: string, glyph: string, x: number, sig: Signal.Signal<>): TextButton
+		local b = Kit.button(zoom, name)
+		b.AnchorPoint = Vector2.new(0.5, 0.5)
+		b.Position = UDim2.new(x, 0, 0.5, 0)
+		b.Size = UDim2.fromOffset(40, 40)
+		b.BackgroundTransparency = 0
+		b.BackgroundColor3 = Theme.C.panel3
+		Kit.corner(b)
+		Kit.stroke(b, 1.5, Theme.C.strokeHi, 1)
+		local g = Kit.glyph(b, "Icon", glyph, Color3.new(1, 1, 1))
+		g.AnchorPoint = Vector2.new(0.5, 0.5)
+		g.Position = UDim2.fromScale(0.5, 0.5)
+		g.Size = UDim2.fromScale(0.5, 0.5)
+		b.Activated:Connect(function() sig:Fire() end)
+		return b
+	end
+	zbtn("Minus", "minus", 0, self.zoomOut)
+	zbtn("Plus", "plus", 1, self.zoomIn)
+	local pct = Kit.label(zoom, "Pct", "number", "", Color3.new(1, 1, 1))
+	pct.AnchorPoint = Vector2.new(0.5, 0.5)
+	pct.Position = UDim2.fromScale(0.5, 0.5)
+	pct.Size = UDim2.new(1, -90, 1, 0)
+	pct.TextXAlignment = Enum.TextXAlignment.Center
+	local zoomWanted = true
+
+	local function place()
+		local compact = Layout.mode == "COMPACT"
+		local bs = if small then 56 elseif compact then 50 else 64
+		local gap = if compact then 18 else 20
+		local capH = if compact then 20 else 22
+		f.Position = UDim2.new(0, if compact then 12 else 20, 1, if compact then -6 else -8)
+		f.Size = UDim2.fromOffset(3 * bs + 2 * gap, bs + 2 + capH)
+		for i, spec in BUTTONS do
+			local b = buttons[spec.key]
+			b.Size = UDim2.fromOffset(bs, bs)
+			b.Position = UDim2.fromOffset((i - 1) * (bs + gap), 0)
+			local cap = captions[spec.key]
+			cap.Size = UDim2.fromOffset(0, capH)
+			cap.Position = UDim2.fromOffset((i - 1) * (bs + gap) + bs / 2, bs + 2)
+			local cl = cap:FindFirstChild("Label") :: TextLabel?
+			if cl then Theme.text(cl, "label") end
+			Kit.halo(b, spec.hue, 0.4, 10)
+			local st = b:FindFirstChild("Rim") :: UIStroke?
+			if st then
+				st.Thickness = if active == spec.key then 3 else 2.5
+				st.Color = if active == spec.key then Color3.new(1, 1, 1) else Theme.lift(spec.hue, 0.55)
+			end
+		end
+		Theme.text(badgeLabel, "badge")
+		badge.Size = UDim2.fromOffset(0, if compact then 20 else 22)
+		zoom.Size = UDim2.fromOffset(176, 54)
+		zoom.Position = UDim2.new(0, (if compact then 12 else 20) + 3 * bs + 2 * gap + 20, 1, -(if compact then 6 else 8) - capH - 2 - (bs - 54) / 2)
+		Theme.text(pct, "number")
+		zoom.Visible = zoomWanted and not compact and Input.kind() == "mouse"
+		self.changed:Fire()
+	end
+	place()
+	Layout.changed:Connect(place)
+	Input.kindChanged:Connect(place)
+
+	function self.setTrophies(_: Dock, text: string?)
+		badge.Visible = text ~= nil
+		if text then badgeLabel.Text = text end
+	end
+	function self.setUnsaved(_: Dock, b: boolean)
+		dot.Visible = b
+	end
+	function self.setActive(_: Dock, key: string?)
+		active = key
+		place()
+	end
+	function self.setZoomPct(_: Dock, z: number)
+		local t = string.format("%d%%", math.floor(z * 100 + 0.5))
+		if pct.Text ~= t then pct.Text = t end
+	end
+	function self.setZoomVisible(_: Dock, b: boolean)
+		zoomWanted = b
+		place()
+	end
+	function self.setSmall(_: Dock, b: boolean)
+		if small == b then return end
+		small = b
+		place()
+	end
+	function self.destroy(d: Dock)
+		for _, s in { d.home, d.trophies, d.options, d.zoomIn, d.zoomOut, d.changed } do s:DisconnectAll() end
+		f:Destroy()
+		zoom:Destroy()
+	end
+	return self
+end
+
+return Dock
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="78">
+            <Properties>
+              <string name="Name">Hud</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	Hud: the facade over the HUD (DESIGN.md 4, 12). TopbarGui (TopbarSafeInsets) holds the points capsule with the
+	rate pill, warning and status chips, the universe tag and the COMPACT panel band; HudGui (CoreUISafeInsets) holds
+	the dock (HOME / TROPHIES / OPTIONS), the zoom capsule, the READY tray / pill and the Multiverse portal. Every part
+	registers its rect with Layout.setRect (hud.capsule, hud.pill, ...) so plates and markers keep clear.
+
+	    local hud = Hud.new(topbarGui, hudGui)
+	    hud:updateHud(h)   hud:updateMap(ms)   hud:setStatus(kind)   hud:setPanel(p)   hud:setFirstRun(b)   hud:setZoomPct(z)
+	    hud:setVisible(b)
+	    hud.home, hud.trophies, hud.options, hud.portal, hud.zoomIn, hud.zoomOut, hud.bandClose   ()
+	    hud.readyTap (layer), hud.readyHold (layer)        -- the hold already passed the hold safety
+	    hud.readyMore ()                                    -- "+N more" in the tray
+	    hud.gateHold ()                                     -- the universe tag FINISH / EXIT hold completed
+	    hud.warnTap (abs)
+]]
+
+local Core = script.Parent.Parent:WaitForChild("Core")
+local Types = require(script.Parent.Parent:WaitForChild("Types"))
+local Signal = require(Core:WaitForChild("Signal"))
+local Layout = require(Core:WaitForChild("Layout"))
+local Kit = require(script.Parent:WaitForChild("Kit"))
+local Capsule = require(script.Parent:WaitForChild("Capsule"))
+local UniverseTag = require(script.Parent:WaitForChild("UniverseTag"))
+local Band = require(script.Parent:WaitForChild("Band"))
+local Dock = require(script.Parent:WaitForChild("Dock"))
+local Ready = require(script.Parent:WaitForChild("Ready"))
+local Portal = require(script.Parent:WaitForChild("Portal"))
+
+type HudState = Types.HudState
+type MapState = Types.MapState
+type ARect = Types.Rect
+
+export type PanelInfo = { layer: string?, mode: string, strip: ARect?, title: string? } -- mode: "side" | "full"
+export type Hud = {
+	home: Signal.Signal<>,
+	trophies: Signal.Signal<>,
+	options: Signal.Signal<>,
+	portal: Signal.Signal<>,
+	zoomIn: Signal.Signal<>,
+	zoomOut: Signal.Signal<>,
+	bandClose: Signal.Signal<>,
+	readyTap: Signal.Signal<string>,
+	readyHold: Signal.Signal<string>,
+	readyMore: Signal.Signal<>,
+	gateHold: Signal.Signal<>,
+	warnTap: Signal.Signal<Vector2>,
+	updateHud: (self: Hud, h: HudState) -> (),
+	updateMap: (self: Hud, ms: MapState) -> (),
+	setStatus: (self: Hud, kind: string?) -> (), -- "saving" | "saved" | "off" | "reconnecting" | nil
+	setPanel: (self: Hud, p: PanelInfo?) -> (),
+	setFirstRun: (self: Hud, b: boolean) -> (),
+	setZoomPct: (self: Hud, z: number) -> (),
+	setVisible: (self: Hud, b: boolean) -> (),
+	destroy: (self: Hud) -> (),
+}
+
+local Hud = {}
+
+function Hud.new(topbar: ScreenGui, hud: ScreenGui): Hud
+	local self = {} :: Hud
+	self.home = Signal.new() :: Signal.Signal<>
+	self.trophies = Signal.new() :: Signal.Signal<>
+	self.options = Signal.new() :: Signal.Signal<>
+	self.portal = Signal.new() :: Signal.Signal<>
+	self.zoomIn = Signal.new() :: Signal.Signal<>
+	self.zoomOut = Signal.new() :: Signal.Signal<>
+	self.bandClose = Signal.new() :: Signal.Signal<>
+	self.readyTap = Signal.new() :: Signal.Signal<string>
+	self.readyHold = Signal.new() :: Signal.Signal<string>
+	self.readyMore = Signal.new() :: Signal.Signal<>
+	self.gateHold = Signal.new() :: Signal.Signal<>
+	self.warnTap = Signal.new() :: Signal.Signal<Vector2>
+
+	local topRoot = (topbar:FindFirstChild("Root") or topbar) :: GuiObject
+	local hudRoot = (hud:FindFirstChild("Root") or hud) :: GuiObject
+
+	local capsule = Capsule.new(topRoot)
+	local tag = UniverseTag.new(topRoot)
+	local band = Band.new(topRoot)
+	local dock = Dock.new(hudRoot)
+	local ready = Ready.new(hudRoot)
+	local portal = Portal.new(hudRoot)
+
+	capsule.warnTap:Connect(function(abs: Vector2) self.warnTap:Fire(abs) end)
+	tag.hold:Connect(function() self.gateHold:Fire() end)
+	band.close:Connect(function() self.bandClose:Fire() end)
+	dock.home:Connect(function() self.home:Fire() end)
+	dock.trophies:Connect(function() self.trophies:Fire() end)
+	dock.options:Connect(function() self.options:Fire() end)
+	dock.zoomIn:Connect(function() self.zoomIn:Fire() end)
+	dock.zoomOut:Connect(function() self.zoomOut:Fire() end)
+	ready.tap:Connect(function(l: string) self.readyTap:Fire(l) end)
+	ready.hold:Connect(function(l: string) self.readyHold:Fire(l) end)
+	ready.more:Connect(function() self.readyMore:Fire() end)
+	portal.tap:Connect(function() self.portal:Fire() end)
+
+	local firstRun = false
+	local panel: PanelInfo? = nil
+	local visible = true
+	local lastMs: MapState? = nil
+
+	-- ------------------------------------------------------------------------------------------ rects
+	local parts: { [string]: GuiObject } = {
+		capsule = capsule.frame, pill = capsule.pill, warn = capsule.warn, status = capsule.status, unitag = tag.frame,
+		band = band.frame, dock = dock.frame, zoom = dock.zoom, ready = ready.frame, readyPill = ready.pill,
+		banner = ready.banner, portal = portal.frame,
+	}
+	local pending = false
+	local function shownOnScreen(g: GuiObject): boolean
+		if not g.Visible then return false end
+		local p = g.Parent
+		while p and p:IsA("GuiObject") do
+			if not (p :: GuiObject).Visible then return false end
+			p = p.Parent
+		end
+		local gui = g:FindFirstAncestorWhichIsA("ScreenGui")
+		return gui == nil or gui.Enabled
+	end
+	local function register()
+		pending = false
+		for key, g in parts do
+			if visible and shownOnScreen(g) and g.AbsoluteSize.X > 1 then
+				Layout.setRect("hud." .. key, Kit.rect(g))
+			else
+				Layout.setRect("hud." .. key, nil)
+			end
+		end
+		Layout.setRect("hud.topbar", if visible then Layout.topbar() else nil)
+	end
+	local function soon()
+		if pending then return end
+		pending = true
+		task.defer(register)
+	end
+	for _, g in parts do
+		g:GetPropertyChangedSignal("AbsoluteSize"):Connect(soon)
+		g:GetPropertyChangedSignal("AbsolutePosition"):Connect(soon)
+		g:GetPropertyChangedSignal("Visible"):Connect(soon)
+	end
+	for _, s in { capsule.changed, dock.changed, ready.changed, portal.changed } do s:Connect(soon) end
+	Layout.changed:Connect(soon)
+
+	-- ------------------------------------------------------------------------------------------ modes
+	local function apply()
+		local compact = Layout.mode == "COMPACT"
+		local p = panel
+		local side = p ~= nil and p.mode == "side"
+		local full = p ~= nil and p.mode == "full"
+		capsule.frame.Visible = not (full and compact)
+		band:show(if full and compact and p then p.layer else nil, if p then p.title else nil)
+		dock:setSmall(side)
+		dock:setZoomVisible(not firstRun and p == nil)
+		ready:setMode(if side then "strip" elseif compact then "pill" else "tray")
+		ready:setHidden(firstRun or full)
+		portal:setHidden(firstRun or side or full)
+		local ms = lastMs
+		if ms then ready:update(ms) end
+		soon()
+	end
+
+	function self.updateHud(_: Hud, h: HudState)
+		capsule:update(h)
+		tag:setTop(capsule:bottom())
+		soon()
+	end
+	function self.updateMap(_: Hud, ms: MapState)
+		lastMs = ms
+		capsule:setUniverse(ms.inside)
+		tag:update(ms.gate)
+		tag:setTop(capsule:bottom())
+		ready:update(ms)
+		portal:update(ms.gate)
+		local ach = ms.nodes.ach
+		local v = ach and ach.val
+		dock:setTrophies(if ach and ach.show and v and v.pts then v.pts .. "/" .. (v.tot or "18") else nil)
+		dock:setActive(if ms.open == "ach" then "Trophies" elseif ms.open == "options-tab" then "Options" else nil)
+		soon()
+	end
+	function self.setStatus(_: Hud, kind: string?)
+		capsule:setStatus(kind)
+		dock:setUnsaved(kind == "off")
+		tag:setTop(capsule:bottom())
+		soon()
+	end
+	function self.setPanel(_: Hud, p: PanelInfo?)
+		panel = p
+		apply()
+	end
+	function self.setFirstRun(_: Hud, b: boolean)
+		if b == firstRun then return end
+		firstRun = b
+		capsule:setFirstRun(b)
+		apply()
+	end
+	function self.setZoomPct(_: Hud, z: number)
+		dock:setZoomPct(z)
+	end
+	function self.setVisible(_: Hud, b: boolean)
+		visible = b
+		topbar.Enabled = b
+		hud.Enabled = b
+		register()
+	end
+	function self.destroy(h: Hud)
+		for _, s in { h.home, h.trophies, h.options, h.portal, h.zoomIn, h.zoomOut, h.bandClose, h.gateHold, h.readyMore } do
+			s:DisconnectAll()
+		end
+		h.readyTap:DisconnectAll()
+		h.readyHold:DisconnectAll()
+		h.warnTap:DisconnectAll()
+		for key in parts do Layout.setRect("hud." .. key, nil) end
+		Layout.setRect("hud.topbar", nil)
+		capsule:destroy()
+		tag:destroy()
+		band:destroy()
+		dock:destroy()
+		ready:destroy()
+		portal:destroy()
+	end
+	apply()
+	return self
+end
+
+return Hud
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="79">
+            <Properties>
               <string name="Name">Kit</string>
               <string name="Source"><![CDATA[--!strict
 --[[
@@ -37091,6 +38008,48 @@ function Kit.rect(g: GuiObject): ARect
 	return { x = p.X, y = p.Y, w = s.X, h = s.Y }
 end
 
+-- a button with a word (DESIGN.md 9.8: one line, >= 12 du side padding). style: "primary" (the hue, a darker gradient
+-- so white passes 3:1), "gold" (dark ink), "danger", "quiet" (dark glass with a rim)
+function Kit.action(parent: Instance, name: string, text: string, o: { style: string?, hue: Color3?, h: number?, role: string?,
+	w: number? }): (TextButton, TextLabel)
+	local b = Kit.button(parent, name)
+	local h = o.h or 52
+	b.Size = if o.w then UDim2.fromOffset(o.w, h) else UDim2.fromOffset(0, h)
+	b.AutomaticSize = if o.w then Enum.AutomaticSize.None else Enum.AutomaticSize.X
+	b.BackgroundTransparency = 0
+	b.BackgroundColor3 = Color3.new(1, 1, 1)
+	Kit.corner(b, UDim.new(0, 12))
+	Kit.pad(b, 0, 16, 0, 16)
+	local style = o.style or "quiet"
+	local hue = o.hue or Theme.C.system
+	local fg = WHITE
+	if style == "primary" then
+		Kit.grad(b, { Theme.lift(hue, 0.08), Theme.shade(hue, 0.62) }, 90, nil, "Back")
+		Kit.stroke(b, 2, Theme.lift(hue, 0.4), 1, "Rim")
+	elseif style == "gold" then
+		Kit.grad(b, { Color3.fromHex("b37400"), Color3.fromHex("6b4500") }, 90, nil, "Back")
+		Kit.stroke(b, 2, Color3.fromHex("ffd34d"), 1, "Rim")
+	elseif style == "danger" then
+		Kit.grad(b, { Theme.shade(Theme.C.danger, 0.75), Theme.shade(Theme.C.danger, 0.42) }, 90, nil, "Back")
+		Kit.stroke(b, 2, Theme.lift(Theme.C.danger, 0.3), 1, "Rim")
+	else
+		Kit.grad(b, { Theme.C.panel3, Theme.C.panel2 }, 90, nil, "Back")
+		Kit.stroke(b, 1.5, Theme.C.strokeHi, 1, "Rim")
+	end
+	local row = Kit.frame(b, "Content")
+	row.AutomaticSize = Enum.AutomaticSize.X
+	row.Size = UDim2.fromScale(if o.w then 1 else 0, 1)
+	Kit.list(row, "x", 8, Enum.HorizontalAlignment.Center, Enum.VerticalAlignment.Center)
+	local l = Kit.label(row, "Label", o.role or "tab", text, fg)
+	l.LayoutOrder = 2
+	l.AutomaticSize = Enum.AutomaticSize.X
+	l.Size = UDim2.fromScale(0, 1)
+	Kit.textStroke(l, if style == "quiet" then 0 else 1.5, 0.8)
+	local over = child(l, "Overhang", "UIPadding") :: UIPadding
+	over.PaddingRight = UDim.new(0, 3)
+	return b, l
+end
+
 -- a chip: a rounded frame with a label, AutomaticSize X (height h, side padding pad)
 function Kit.chip(parent: Instance, name: string, role: string, text: string, o: { h: number, pad: number?, fg: Color3?, bg: Color3?,
 	bgA: number?, line: Color3?, lineA: number? }): (Frame, TextLabel)
@@ -37118,12 +38077,799 @@ return Kit
 ]]></string>
             </Properties>
           </Item>
+          <Item class="ModuleScript" referent="80">
+            <Properties>
+              <string name="Name">Portal</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	Portal: the Multiverse portal at the bottom right (DESIGN.md 4.6).
+
+	    Portal   140 x 160 (COMPACT 92 x 104)
+	      Aura   a soft glow in the state colour (breathing when FINISH)
+	      Disc   Ø112 (70): a Conical ring (#ff2e63, #b35cff, #ff5a1f, #ffd34d) rotating 8 s / rev; desaturated and still
+	             while sealed
+	      Void   the inner void (radial #05030b -> #1a0a24) with a swirl, or "?" while sealed
+	      Label  a glass pill hanging from the rim: "MULTIVERSE" (`tab`) over the state line (`label` + `number`);
+	             COMPACT the state line alone
+
+	    state      from
+	    sealed     gate.show == false: "SEALED 164/185" (hidden in first-run mode)
+	    locked     show, not can: LOCKED + lock
+	    enter      can, outside: ENTER (crimson)
+	    exit       inside, not fin: EXIT EARLY (orange)
+	    finish     inside, fin: FINISH (gold aura breathing)
+
+	    local part = Portal.new(parent)
+	    part:update(gate?)   part:setHidden(b)   part.tap ()
+]]
+
+local Core = script.Parent.Parent:WaitForChild("Core")
+local Types = require(script.Parent.Parent:WaitForChild("Types"))
+local Signal = require(Core:WaitForChild("Signal"))
+local Theme = require(Core:WaitForChild("Theme"))
+local Layout = require(Core:WaitForChild("Layout"))
+local Rich = require(Core:WaitForChild("Rich"))
+local Kit = require(script.Parent:WaitForChild("Kit"))
+
+export type Portal = {
+	frame: Frame,
+	tap: Signal.Signal<>,
+	changed: Signal.Signal<>,
+	state: string,
+	update: (self: Portal, gate: Types.Gate?) -> (),
+	setHidden: (self: Portal, b: boolean) -> (),
+	destroy: (self: Portal) -> (),
+}
+
+local Portal = {}
+
+local RING = { Color3.fromHex("ff2e63"), Color3.fromHex("b35cff"), Color3.fromHex("ff5a1f"), Color3.fromHex("ffd34d"), Color3.fromHex("ff2e63") }
+local GREY = { Color3.fromHex("6a5f8f"), Color3.fromHex("3a3352"), Color3.fromHex("5c5775"), Color3.fromHex("3a3352"), Color3.fromHex("6a5f8f") }
+local STATE_COLOR: { [string]: Color3 } = {
+	sealed = Color3.fromHex("8d86a8"),
+	locked = Color3.fromHex("9a94b8"),
+	enter = Color3.fromHex("ff2e63"),
+	exit = Color3.fromHex("ff7a2e"),
+	finish = Color3.fromHex("ffc233"),
+}
+
+function Portal.new(parent: GuiObject): Portal
+	local self = {} :: Portal
+	self.tap = Signal.new() :: Signal.Signal<>
+	self.changed = Signal.new() :: Signal.Signal<>
+	self.state = ""
+
+	local f = Kit.frame(parent, "Portal", 5)
+	f.AnchorPoint = Vector2.new(1, 1)
+	self.frame = f
+	local aura = Kit.blob(f, "Aura", STATE_COLOR.enter, 0.55, 1)
+	local disc = Kit.frame(f, "Disc", 2)
+	disc.AnchorPoint = Vector2.new(0.5, 0)
+	disc.BackgroundColor3 = Color3.new(1, 1, 1)
+	disc.BackgroundTransparency = 0
+	Kit.corner(disc)
+	local ringGrad = Kit.child(disc, "Ring", "UIGradient") :: UIGradient
+	if Theme.caps.Conical then ringGrad.Type = Enum.GradientType.Conical end
+	local void = Kit.frame(disc, "Void", 3)
+	void.AnchorPoint = Vector2.new(0.5, 0.5)
+	void.Position = UDim2.fromScale(0.5, 0.5)
+	void.Size = UDim2.fromScale(0.78, 0.78)
+	void.BackgroundColor3 = Color3.new(1, 1, 1)
+	void.BackgroundTransparency = 0
+	Kit.corner(void)
+	local vg = Kit.child(void, "Radial", "UIGradient") :: UIGradient
+	if Theme.caps.Radial then vg.Type = Enum.GradientType.Radial end
+	vg.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromHex("05030b")),
+		ColorSequenceKeypoint.new(0.7, Color3.fromHex("1a0a24")),
+		ColorSequenceKeypoint.new(1, Color3.fromHex("1a0a24")),
+	})
+	local swirl = Kit.glyph(void, "Swirl", "swirl", Color3.fromHex("ff8fb0"))
+	swirl.AnchorPoint = Vector2.new(0.5, 0.5)
+	swirl.Position = UDim2.fromScale(0.5, 0.5)
+	swirl.Size = UDim2.fromScale(0.5, 0.5)
+	swirl.ZIndex = 4
+	local q = Kit.label(void, "Question", "big", "?", Color3.fromHex("c9c3e6"))
+	q.Size = UDim2.fromScale(1, 1)
+	q.TextXAlignment = Enum.TextXAlignment.Center
+	q.ZIndex = 4
+	Kit.textStroke(q, 3, 1)
+
+	local pill = Kit.frame(f, "Label", 6)
+	pill.AnchorPoint = Vector2.new(0.5, 1)
+	pill.Position = UDim2.fromScale(0.5, 1)
+	pill.AutomaticSize = Enum.AutomaticSize.X
+	pill.BackgroundColor3 = Color3.fromHex("0e0b18")
+	pill.BackgroundTransparency = 0.12
+	Kit.corner(pill, UDim.new(0, 12))
+	local pRim = Kit.stroke(pill, 2, STATE_COLOR.enter, 1, "Rim")
+	Kit.list(pill, "y", 0, Enum.HorizontalAlignment.Center, Enum.VerticalAlignment.Center)
+	local title = Kit.label(pill, "Title", "tab", Rich.caps("Multiverse"), Color3.new(1, 1, 1))
+	title.LayoutOrder = 1
+	title.AutomaticSize = Enum.AutomaticSize.XY
+	Kit.textStroke(title, 1.5, 0.8)
+	local line = Kit.frame(pill, "Line")
+	line.LayoutOrder = 2
+	line.AutomaticSize = Enum.AutomaticSize.XY
+	Kit.list(line, "x", 5, Enum.HorizontalAlignment.Center, Enum.VerticalAlignment.Center)
+	local lock = Kit.glyph(line, "Lock", "lock", Theme.C.gold, Color3.fromHex("0e0b18"))
+	lock.LayoutOrder = 1
+	lock.Visible = false
+	local word = Kit.label(line, "Word", "label", "", Theme.C.soft)
+	word.LayoutOrder = 2
+	word.AutomaticSize = Enum.AutomaticSize.XY
+	local numL = Kit.label(line, "Num", "number", "", Color3.new(1, 1, 1))
+	numL.LayoutOrder = 3
+	numL.AutomaticSize = Enum.AutomaticSize.XY
+
+	local hit = Kit.button(f, "Hit")
+	hit.Size = UDim2.fromScale(1, 1)
+	hit.ZIndex = 10
+	hit.Activated:Connect(function() self.tap:Fire() end)
+
+	local hidden = false
+	local gate: Types.Gate? = nil
+	local compact = false
+
+	local function place()
+		compact = Layout.mode == "COMPACT"
+		local w, h = if compact then 92 else 140, if compact then 104 else 160
+		local d = if compact then 70 else 112
+		f.Size = UDim2.fromOffset(w, h)
+		f.Position = UDim2.new(1, if compact then -10 else -16, 1, if compact then -4 else -8)
+		disc.Size = UDim2.fromOffset(d, d)
+		disc.Position = UDim2.new(0.5, 0, 0, 0)
+		if aura then
+			aura.AnchorPoint = Vector2.new(0.5, 0.5)
+			aura.Position = UDim2.new(0.5, 0, 0, d / 2)
+			aura.Size = UDim2.fromOffset(d * 1.9, d * 1.9)
+		end
+		pill.Size = UDim2.fromOffset(0, if compact then 26 else 46)
+		Kit.pad(pill, 0, 12, 0, 12)
+		title.Visible = not compact
+		Theme.text(title, "tab")
+		Theme.text(word, "label")
+		Theme.text(numL, "number")
+		lock.Size = UDim2.fromOffset(13, 13)
+		self.changed:Fire()
+	end
+	place()
+
+	local function apply()
+		local g = gate
+		local st: string
+		if g == nil or not g.show then
+			st = "sealed"
+		elseif g.inside then
+			st = if g.fin then "finish" else "exit"
+		elseif not g.can then
+			st = "locked"
+		else
+			st = "enter"
+		end
+		local c = STATE_COLOR[st]
+		pRim.Color = c
+		lock.Visible = st == "locked"
+		q.Visible = st == "sealed"
+		swirl.Visible = st ~= "sealed"
+		numL.Text = ""
+		if st == "sealed" then
+			local req = g and g.req
+			word.Text = if compact then "" else Rich.caps("Sealed")
+			numL.Text = if req then req.have .. "/" .. req.need else ""
+			word.Visible = not compact
+		else
+			word.Visible = true
+			word.Text = Rich.caps(if st == "locked" then "Locked" elseif st == "enter" then "Enter"
+				elseif st == "exit" then "Exit early" else "Finish")
+		end
+		word.TextColor3 = if st == "sealed" then Theme.C.soft else Theme.lift(c, 0.45)
+		numL.Visible = numL.Text ~= ""
+		if st ~= self.state then
+			self.state = st
+			f:SetAttribute("State", st)
+			local stops: { Color3 } = if st == "sealed" or st == "locked" then GREY else RING
+			local keys = {}
+			for i, col in stops do table.insert(keys, ColorSequenceKeypoint.new((i - 1) / (#stops - 1), col)) end
+			ringGrad.Color = ColorSequence.new(keys)
+			if st == "sealed" or st == "locked" then Kit.unspin(ringGrad) else Kit.spin(ringGrad, 8) end
+			local a = aura
+			if a then
+				a.BackgroundColor3 = c
+				local ag = a:FindFirstChild("Radial") :: UIGradient?
+				if ag then ag.Color = ColorSequence.new(c) end
+				a.Visible = st ~= "sealed"
+				if st == "finish" then
+					Kit.breathe(a, "BackgroundTransparency", 0, 0.5, 1.2)
+				else
+					Kit.still(a)
+					a.BackgroundTransparency = if st == "locked" then 0.7 else 0.2
+				end
+			end
+		end
+	end
+
+	function self.update(_: Portal, g: Types.Gate?)
+		gate = g
+		apply()
+	end
+	function self.setHidden(p: Portal, b: boolean)
+		if b == hidden then return end
+		hidden = b
+		f.Visible = not b
+		p.changed:Fire()
+	end
+	function self.destroy(p: Portal)
+		p.tap:DisconnectAll()
+		p.changed:DisconnectAll()
+		Kit.unspin(ringGrad)
+		f:Destroy()
+	end
+	Layout.changed:Connect(function()
+		place()
+		apply()
+	end)
+	apply()
+	return self
+end
+
+return Portal
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="81">
+            <Properties>
+              <string name="Name">Ready</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	Ready: the READY tray (desktop) or pill (phones, and the strip beside a side sheet) of DESIGN.md 4.5.
+
+	    Ready      glass tray, gold rim, right edge at W - 170 (left of the portal)
+	      Header   bolt + "3 READY" (`toast`, #ffe08a) + "· 4 can buy" (`label`, #ffb3c0) + the gesture hint
+	      Gems     Gem_<id>: a 52 du gem (radial hue, symbol), the chip below ("+gain" gold / "BUY" danger rim),
+	               96 du pitch, at most 6 + "+N more"; READY gems hold 0.6 s to prestige (a conical ring fills)
+	      Banner   while a hold runs: "HOLDING · PRESTIGE <LAYER>  +gain" over "Release to cancel"
+	    ReadyPill  up to 3 mini gems + "N READY" over "Tap to list" / "Tap a gem to switch"; a tap opens the tray
+	               above it (COMPACT) - in the strip each gem opens its layer
+
+	Entries: every shown node with val.pulse (READY, gain chip), then every node with val.glow (CAN BUY), in the fixed
+	map order (MapState.ready / canBuy), so nothing jumps. Hidden when both are empty.
+
+	    local part = Ready.new(parent)
+	    part:update(ms)   part:setMode("tray" | "pill" | "strip")   part:setHidden(b)
+	    part.tap (layer), part.hold (layer), part.more ()
+]]
+
+local Core = script.Parent.Parent:WaitForChild("Core")
+local Types = require(script.Parent.Parent:WaitForChild("Types"))
+local Signal = require(Core:WaitForChild("Signal"))
+local Theme = require(Core:WaitForChild("Theme"))
+local Layout = require(Core:WaitForChild("Layout"))
+local Motion = require(Core:WaitForChild("Motion"))
+local Rich = require(Core:WaitForChild("Rich"))
+local Recipes = require(Core:WaitForChild("Recipes"))
+local Kit = require(script.Parent:WaitForChild("Kit"))
+
+type MapState = Types.MapState
+
+export type Ready = {
+	frame: Frame,
+	pill: Frame,
+	banner: Frame,
+	tap: Signal.Signal<string>,
+	hold: Signal.Signal<string>,
+	more: Signal.Signal<>,
+	changed: Signal.Signal<>,
+	update: (self: Ready, ms: MapState) -> (),
+	setMode: (self: Ready, mode: string) -> (),
+	setHidden: (self: Ready, b: boolean) -> (),
+	destroy: (self: Ready) -> (),
+}
+
+local Ready = {}
+
+local MAX_GEMS = 6
+local GOLD = Color3.fromHex("ffc233")
+local READY_TEXT = Theme.C.ready
+local CANBUY_TEXT = Color3.fromHex("ffb3c0")
+local SYMS = {
+	ach = "★", m = "M", mm = "MM", em = "EM", p = "P", pe = "PE", sp = "SP", pb = "PB", pp = "PP", se = "SE", hp = "HP",
+	ep = "EP", hb = "HB", ap = "AP", mp = "MP", t = "T", pm = "PM", pep = "PEP", cp = "CR", cm = "CM", ex = "EX",
+} :: { [string]: string }
+local NAMES = {
+	m = "Milestone", mm = "Meta", em = "Extra", p = "Prestige", pe = "Energy", sp = "Super", pb = "Boost", pp = "Power",
+	se = "Super Energy", hp = "Hyper", ep = "Exotic", hb = "Hyper Boost", ap = "Atomic", mp = "Multiverse", t = "Transcend",
+	pm = "Multiverse", pep = "Prestiged Exotic", cp = "Corrupted", cm = "Corrupted Milestone", ex = "Explore", ach = "Achievements",
+} :: { [string]: string }
+
+type Entry = { layer: string, ready: boolean, gain: string?, sym: string }
+
+-- a gem: disc + symbol (Sarpanch Heavy) in `size` du
+local function gem(parent: Instance, name: string, layer: string, sym: string, size: number): Frame
+	local g = Kit.frame(parent, name, 3)
+	g.Size = UDim2.fromOffset(size, size)
+	Kit.gem(g, Theme.hue(layer))
+	Kit.stroke(g, 2, Theme.lift(Theme.hue(layer), 0.5), 0.9, "Rim")
+	if sym == "★" then
+		local st = Kit.glyph(g, "Star", "star", Color3.new(1, 1, 1))
+		st.AnchorPoint = Vector2.new(0.5, 0.5)
+		st.Position = UDim2.fromScale(0.5, 0.5)
+		st.Size = UDim2.fromScale(0.5, 0.5)
+		st.ZIndex = 4
+	else
+		local l = Kit.label(g, "Symbol", "index", sym, Color3.new(1, 1, 1))
+		l.Size = UDim2.fromScale(1, 1)
+		l.ZIndex = 4
+		l.TextXAlignment = Enum.TextXAlignment.Center
+		l.TextSize = math.max(13, math.floor(size * (if #sym >= 3 then 0.3 elseif #sym == 2 then 0.36 else 0.44)))
+		Kit.textStroke(l, if size >= 40 then 2 else 1.5, 1)
+	end
+	return g
+end
+Ready.gem = gem
+
+function Ready.new(parent: GuiObject): Ready
+	local self = {} :: Ready
+	self.tap = Signal.new() :: Signal.Signal<string>
+	self.hold = Signal.new() :: Signal.Signal<string>
+	self.more = Signal.new() :: Signal.Signal<>
+	self.changed = Signal.new() :: Signal.Signal<>
+
+	-- ------------------------------------------------------------------------------------------ the tray
+	local tray = Kit.frame(parent, "Ready", 5)
+	tray.AnchorPoint = Vector2.new(1, 1)
+	tray.AutomaticSize = Enum.AutomaticSize.XY
+	tray.BackgroundColor3 = Color3.new(1, 1, 1)
+	tray.BackgroundTransparency = 0.06
+	tray.Visible = false
+	Kit.corner(tray, UDim.new(0, 16))
+	Kit.grad(tray, { Color3.fromHex("231b33"), Theme.C.deep }, 90, nil, "Back")
+	Kit.stroke(tray, 2, GOLD, 0.75, "Rim")
+	Kit.pad(tray, 10, 16, 10, 16)
+	Kit.list(tray, "y", 8, Enum.HorizontalAlignment.Left)
+	self.frame = tray
+
+	local header = Kit.frame(tray, "Header")
+	header.LayoutOrder = 1
+	header.AutomaticSize = Enum.AutomaticSize.X
+	header.Size = UDim2.fromOffset(0, 22)
+	Kit.list(header, "x", 8, Enum.HorizontalAlignment.Left, Enum.VerticalAlignment.Center)
+	local hb = Kit.glyph(header, "Bolt", "bolt", READY_TEXT)
+	hb.LayoutOrder = 1
+	hb.Size = UDim2.fromOffset(16, 16)
+	local count = Kit.label(header, "Count", "toast", "", READY_TEXT)
+	count.LayoutOrder = 2
+	count.AutomaticSize = Enum.AutomaticSize.X
+	count.Size = UDim2.fromScale(0, 1)
+	local buy = Kit.label(header, "CanBuy", "label", "", CANBUY_TEXT)
+	buy.LayoutOrder = 3
+	buy.AutomaticSize = Enum.AutomaticSize.X
+	buy.Size = UDim2.fromScale(0, 1)
+	local hint = Kit.label(header, "Hint", "small", "Tap to open · hold to prestige", Theme.C.soft)
+	hint.LayoutOrder = 4
+	hint.AutomaticSize = Enum.AutomaticSize.X
+	hint.Size = UDim2.fromScale(0, 1)
+	local hinted = true
+
+	local gems = Kit.frame(tray, "Gems")
+	gems.LayoutOrder = 2
+	gems.AutomaticSize = Enum.AutomaticSize.X
+	gems.Size = UDim2.fromOffset(0, 82)
+	Kit.list(gems, "x", 0, Enum.HorizontalAlignment.Left, Enum.VerticalAlignment.Top)
+
+	-- the hold banner
+	local banner = Kit.frame(parent, "HoldBanner", 6)
+	banner.AnchorPoint = Vector2.new(1, 1)
+	banner.AutomaticSize = Enum.AutomaticSize.XY
+	banner.BackgroundColor3 = Color3.fromHex("2a200a")
+	banner.BackgroundTransparency = 0.04
+	banner.Visible = false
+	Kit.corner(banner, UDim.new(0, 12))
+	Kit.stroke(banner, 2, GOLD, 1, "Rim")
+	Kit.pad(banner, 8, 16, 9, 16)
+	Kit.list(banner, "y", 4, Enum.HorizontalAlignment.Left)
+	local bTop = Kit.frame(banner, "Top")
+	bTop.LayoutOrder = 1
+	bTop.AutomaticSize = Enum.AutomaticSize.XY
+	Kit.list(bTop, "x", 10, Enum.HorizontalAlignment.Left, Enum.VerticalAlignment.Center)
+	local bTitle = Kit.label(bTop, "Title", "toast", "", READY_TEXT)
+	bTitle.LayoutOrder = 1
+	bTitle.AutomaticSize = Enum.AutomaticSize.XY
+	Kit.textStroke(bTitle, 1.5, 0.8)
+	local bGain = Kit.label(bTop, "Gain", "number", "", Color3.new(1, 1, 1))
+	bGain.LayoutOrder = 2
+	bGain.AutomaticSize = Enum.AutomaticSize.XY
+	bGain.RichText = true
+	local bSub = Kit.label(banner, "Sub", "small", "Release to cancel", Color3.fromHex("ffe9a3"))
+	bSub.LayoutOrder = 2
+	bSub.AutomaticSize = Enum.AutomaticSize.XY
+	self.banner = banner
+
+	-- ------------------------------------------------------------------------------------------ the pill
+	local pill = Kit.frame(parent, "ReadyPill", 5)
+	pill.AnchorPoint = Vector2.new(1, 1)
+	pill.AutomaticSize = Enum.AutomaticSize.X
+	pill.BackgroundColor3 = Color3.new(1, 1, 1)
+	pill.BackgroundTransparency = 0.06
+	pill.Visible = false
+	Kit.corner(pill)
+	Kit.grad(pill, { Color3.fromHex("231b33"), Theme.C.deep }, 90, nil, "Back")
+	Kit.stroke(pill, 2, GOLD, 0.75, "Rim")
+	local pillRow = Kit.frame(pill, "Row")
+	pillRow.AutomaticSize = Enum.AutomaticSize.X
+	pillRow.Size = UDim2.fromScale(0, 1)
+	Kit.list(pillRow, "x", 10, Enum.HorizontalAlignment.Left, Enum.VerticalAlignment.Center)
+	local mini = Kit.frame(pillRow, "Gems")
+	mini.LayoutOrder = 1
+	mini.AutomaticSize = Enum.AutomaticSize.X
+	Kit.list(mini, "x", 2, Enum.HorizontalAlignment.Left, Enum.VerticalAlignment.Center)
+	local pText = Kit.frame(pillRow, "Text")
+	pText.LayoutOrder = 2
+	pText.AutomaticSize = Enum.AutomaticSize.XY
+	Kit.list(pText, "y", 4, Enum.HorizontalAlignment.Left)
+	local pCount = Kit.label(pText, "Count", "toast", "", READY_TEXT)
+	pCount.LayoutOrder = 1
+	pCount.AutomaticSize = Enum.AutomaticSize.XY
+	local pSub = Kit.label(pText, "Sub", "small", "Tap to list", Theme.C.soft)
+	pSub.LayoutOrder = 2
+	pSub.AutomaticSize = Enum.AutomaticSize.XY
+	local pillHit = Kit.button(pill, "Hit")
+	pillHit.Size = UDim2.fromScale(1, 1)
+	pillHit.ZIndex = 2
+
+	-- ------------------------------------------------------------------------------------------ state
+	local mode = "tray"
+	local hidden = false
+	local expanded = false
+	local entries: { Entry } = {}
+	local sig = ""
+	local holds: { [string]: Recipes.Hold } = {}
+	local gains: { [string]: string } = {}
+
+	local function clearGems()
+		for _, h in holds do h:destroy() end
+		table.clear(holds)
+		for _, c in gems:GetChildren() do
+			if c:IsA("GuiObject") then c:Destroy() end
+		end
+		for _, c in mini:GetChildren() do
+			if c:IsA("GuiObject") then c:Destroy() end
+		end
+	end
+
+	local function chipFor(slot: Frame, e: Entry)
+		local compact = Layout.mode == "COMPACT"
+		local h = if compact then 24 else 26
+		if e.ready then
+			local text = "+" .. Rich.short(e.gain or "1")
+			local c, l = Kit.chip(slot, "Chip", "badge", "", { h = h, pad = 8, fg = GOLD, bg = Color3.fromHex("2a200a"), bgA = 1,
+				line = GOLD, lineA = 0.8 })
+			l.RichText = true
+			l.Text = Rich.num(text, { size = Theme.size("badge"), unit = Color3.fromHex("ffe9a3") })
+			c.AnchorPoint = Vector2.new(0.5, 0)
+			c.Position = UDim2.new(0.5, 0, 0, 56)
+		else
+			local c = Kit.chip(slot, "Chip", "label", Rich.caps("Buy"), { h = h, pad = 10, fg = Color3.new(1, 1, 1),
+				bg = Theme.C.deep, bgA = 1, line = Theme.C.danger, lineA = 1 })
+			c.AnchorPoint = Vector2.new(0.5, 0)
+			c.Position = UDim2.new(0.5, 0, 0, 56)
+		end
+	end
+
+	local function buildGems()
+		clearGems()
+		local shown = math.min(#entries, MAX_GEMS)
+		for i = 1, shown do
+			local e = entries[i]
+			local slot = Kit.frame(gems, "Gem_" .. e.layer)
+			slot.LayoutOrder = i
+			slot.Size = UDim2.fromOffset(96, 82)
+			local g = gem(slot, "Disc", e.layer, e.sym, 52)
+			g.AnchorPoint = Vector2.new(0.5, 0)
+			g.Position = UDim2.fromScale(0.5, 0)
+			chipFor(slot, e)
+			local hit = Kit.button(slot, "Hit")
+			hit.AnchorPoint = Vector2.new(0.5, 0)
+			hit.Position = UDim2.fromScale(0.5, 0)
+			hit.Size = UDim2.fromOffset(62, 62)
+			hit.ZIndex = 6
+			local layer = e.layer
+			if e.ready then
+				local h = Recipes.hold(hit, { dur = 0.6, ring = true, color = GOLD, onDone = function()
+					if hinted then
+						hinted = false
+						hint.Visible = false
+					end
+					self.hold:Fire(layer)
+				end })
+				local ring = hit:FindFirstChild("Ring") :: Frame?
+				if ring then ring.Size = UDim2.fromOffset(62, 62) end
+				holds[layer] = h
+			end
+			hit.Activated:Connect(function()
+				local h = holds[layer]
+				if h and h:consumed() then return end
+				self.tap:Fire(layer)
+			end)
+		end
+		if #entries > MAX_GEMS then
+			local slot = Kit.frame(gems, "More")
+			slot.LayoutOrder = 100
+			slot.Size = UDim2.fromOffset(96, 82)
+			local c, _ = Kit.chip(slot, "Chip", "label", "+" .. (#entries - MAX_GEMS) .. " more", { h = 28, pad = 10,
+				fg = Theme.C.soft, bg = Theme.C.panel3, bgA = 1, line = Theme.C.strokeHi, lineA = 1 })
+			c.AnchorPoint = Vector2.new(0.5, 0.5)
+			c.Position = UDim2.fromOffset(48, 26)
+			local hit = Kit.button(slot, "Hit")
+			hit.Size = UDim2.fromScale(1, 1)
+			hit.Activated:Connect(function() self.more:Fire() end)
+		end
+		-- the pill's mini gems
+		local compact = Layout.mode == "COMPACT"
+		local ms = if compact then 30 else 34
+		for i = 1, math.min(3, #entries) do
+			local e = entries[i]
+			local g = gem(mini, "Mini_" .. e.layer, e.layer, e.sym, ms)
+			g.LayoutOrder = i
+			local hit = Kit.button(g, "Hit")
+			hit.Size = UDim2.fromScale(1, 1)
+			hit.ZIndex = 6
+			hit.Visible = mode == "strip"
+			local layer = e.layer
+			hit.Activated:Connect(function() self.tap:Fire(layer) end)
+		end
+	end
+
+	local function layout()
+		local compact = Layout.mode == "COMPACT"
+		local nReady, nBuy = 0, 0
+		for _, e in entries do
+			if e.ready then nReady += 1 else nBuy += 1 end
+		end
+		local any = #entries > 0
+		local usePill = mode == "strip" or (mode == "pill" and not expanded)
+		tray.Visible = any and not hidden and not usePill
+		pill.Visible = any and not hidden and usePill
+		-- positions
+		local right = if mode == "tray" then -170 else -14
+		local bottom = if compact then -6 else -8
+		tray.Position = UDim2.new(1, if mode == "pill" then -14 else right, 1, if mode == "pill" then bottom - 64 else bottom)
+		pill.Position = UDim2.new(1, if mode == "strip" then -14 else (if compact then -110 else -170), 1, bottom)
+		pill.Size = UDim2.fromOffset(0, if compact then 50 else 56)
+		Kit.pad(pill, 0, 14, 0, 8)
+		banner.Position = UDim2.new(1, if mode == "tray" then -170 else -14, 1, bottom - 150)
+		-- texts
+		count.Text = if nReady > 0 then Rich.caps(nReady .. " ready") else Rich.caps(nBuy .. " can buy")
+		buy.Text = if nReady > 0 and nBuy > 0 then "· " .. nBuy .. " can buy" else ""
+		buy.Visible = nReady > 0 and nBuy > 0
+		hint.Visible = hinted and nReady > 0 and not compact
+		Theme.text(count, "toast")
+		Theme.text(pCount, "toast")
+		pCount.Text = if nReady > 0 then Rich.caps(nReady .. " ready") else Rich.caps(nBuy .. " can buy")
+		pSub.Text = if mode == "strip" then "Tap a gem to switch" else "Tap to list"
+		self.changed:Fire()
+	end
+
+	-- the banner follows any running hold
+	Motion.loop(tray, function()
+		local holding: string? = nil
+		for layer, h in holds do
+			if h.holding then holding = layer end
+		end
+		local on = holding ~= nil
+		if on and holding then
+			local name = NAMES[holding] or string.upper(holding)
+			bTitle.Text = Rich.caps("Holding") .. " · " .. string.upper("Prestige " .. name)
+			local g = gains[holding]
+			bGain.Text = if g then Rich.num("+" .. g, { size = Theme.size("number"), unit = Color3.fromHex("ffe9a3") }) else ""
+		end
+		if banner.Visible ~= on then banner.Visible = on end
+	end)
+
+	pillHit.Activated:Connect(function()
+		if mode == "pill" then
+			expanded = true
+			layout()
+			task.delay(6, function()
+				if expanded then
+					expanded = false
+					layout()
+				end
+			end)
+		end
+	end)
+
+	function self.update(_: Ready, ms: MapState)
+		local list: { Entry } = {}
+		for _, l in ms.ready do
+			local n = ms.nodes[l]
+			local v = n and n.val
+			table.insert(list, { layer = l, ready = true, gain = if v then v.gain else nil, sym = (n and n.sym) or SYMS[l] or l })
+			if v and v.gain then gains[l] = v.gain else gains[l] = nil end
+		end
+		for _, l in ms.canBuy do
+			local n = ms.nodes[l]
+			table.insert(list, { layer = l, ready = false, gain = nil, sym = (n and n.sym) or SYMS[l] or l })
+		end
+		local parts = {}
+		for _, e in list do table.insert(parts, e.layer .. (if e.ready then "!" else "?") .. (e.gain or "")) end
+		local nsig = table.concat(parts, ",") .. "|" .. mode .. "|" .. Layout.mode
+		entries = list
+		if nsig ~= sig then
+			-- the gain text alone changed: rewrite the chips, keep the gems (and any running hold)
+			local sameSet = true
+			local a = string.gsub(sig, "!([^,|]*)", "!")
+			local b = string.gsub(nsig, "!([^,|]*)", "!")
+			if a ~= b then sameSet = false end
+			sig = nsig
+			if sameSet then
+				for _, e in list do
+					local slot = gems:FindFirstChild("Gem_" .. e.layer) :: Frame?
+					if slot and e.ready then chipFor(slot, e) end
+				end
+			else
+				buildGems()
+			end
+		end
+		layout()
+	end
+	function self.setMode(_: Ready, m: string)
+		if m == mode then return end
+		mode = m
+		expanded = false
+		sig = ""
+		buildGems()
+		layout()
+	end
+	function self.setHidden(_: Ready, b: boolean)
+		if b == hidden then return end
+		hidden = b
+		layout()
+	end
+	function self.destroy(r: Ready)
+		clearGems()
+		for _, s in { r.more, r.changed } do s:DisconnectAll() end
+		r.tap:DisconnectAll()
+		r.hold:DisconnectAll()
+		tray:Destroy()
+		pill:Destroy()
+		banner:Destroy()
+	end
+	Layout.changed:Connect(function()
+		sig = ""
+		buildGems()
+		layout()
+	end)
+	return self
+end
+
+return Ready
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="82">
+            <Properties>
+              <string name="Name">UniverseTag</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	UniverseTag: inside the Prestige Multiverse, a tag hanging under the capsule (DESIGN.md 4.3): a swirl, the state in
+	sentence case ("Goal met: leaving will finish" / "Goal not met: leaving exits early", `small`, #ffd0dc) and the
+	FINISH / EXIT hold chip (dark ink on the gold gradient, a ring glyph for the hold; 1.2 s, Recipes.hold).
+
+	    local part = UniverseTag.new(parent)
+	    part:update(gate?)      shown only while gate.inside
+	    part:setTop(y)          du below the Root top
+	    part.hold ()            the hold completed (Hud forwards it as gateHold)
+]]
+
+local Core = script.Parent.Parent:WaitForChild("Core")
+local Types = require(script.Parent.Parent:WaitForChild("Types"))
+local Signal = require(Core:WaitForChild("Signal"))
+local Theme = require(Core:WaitForChild("Theme"))
+local Layout = require(Core:WaitForChild("Layout"))
+local Rich = require(Core:WaitForChild("Rich"))
+local Recipes = require(Core:WaitForChild("Recipes"))
+local Kit = require(script.Parent:WaitForChild("Kit"))
+
+export type UniverseTag = {
+	frame: Frame,
+	hold: Signal.Signal<>,
+	update: (self: UniverseTag, gate: Types.Gate?) -> (),
+	setTop: (self: UniverseTag, y: number) -> (),
+	destroy: (self: UniverseTag) -> (),
+}
+
+local UniverseTag = {}
+
+local CRIMSON = Color3.fromHex("ff2e63")
+local PINK = Color3.fromHex("ffd0dc")
+local INK = Color3.fromHex("2a1a00")
+
+function UniverseTag.new(parent: GuiObject): UniverseTag
+	local self = {} :: UniverseTag
+	self.hold = Signal.new() :: Signal.Signal<>
+	local f = Kit.frame(parent, "UniTag", 6)
+	f.AnchorPoint = Vector2.new(0.5, 0)
+	f.AutomaticSize = Enum.AutomaticSize.X
+	f.BackgroundColor3 = Color3.fromHex("1a0a24")
+	f.BackgroundTransparency = 0.08
+	f.Visible = false
+	Kit.corner(f)
+	Kit.stroke(f, 1.5, CRIMSON, 0.9, "Rim")
+	Kit.list(f, "x", 8, Enum.HorizontalAlignment.Left, Enum.VerticalAlignment.Center)
+	self.frame = f
+	local swirl = Kit.glyph(f, "Swirl", "swirl", Theme.lift(CRIMSON, 0.2))
+	swirl.LayoutOrder = 1
+	local text = Kit.label(f, "Label", "small", "", PINK)
+	text.LayoutOrder = 2
+	text.AutomaticSize = Enum.AutomaticSize.X
+
+	local chip = Kit.button(f, "Finish")
+	chip.LayoutOrder = 3
+	chip.AutomaticSize = Enum.AutomaticSize.X
+	chip.BackgroundTransparency = 0
+	chip.BackgroundColor3 = Color3.new(1, 1, 1)
+	Kit.corner(chip)
+	Kit.grad(chip, { Color3.fromHex("ffe89a"), Color3.fromHex("ffc233"), Color3.fromHex("d99a1a") }, 90, nil, "Back")
+	local inner = Kit.frame(chip, "Content")
+	inner.AutomaticSize = Enum.AutomaticSize.X
+	inner.Size = UDim2.fromScale(0, 1)
+	Kit.list(inner, "x", 6, Enum.HorizontalAlignment.Left, Enum.VerticalAlignment.Center)
+	local ring = Kit.glyph(inner, "Ring", "ring", INK)
+	ring.LayoutOrder = 1
+	local verb = Kit.label(inner, "Verb", "label", "", INK)
+	verb.LayoutOrder = 2
+	verb.AutomaticSize = Enum.AutomaticSize.X
+	local holder = Recipes.hold(chip, { dur = 1.2, ring = false, color = Color3.new(0, 0, 0), onDone = function()
+		self.hold:Fire()
+	end })
+	local _ = holder
+
+	local function place()
+		local compact = Layout.mode == "COMPACT"
+		local h = if compact then 36 else 40
+		f.Size = UDim2.fromOffset(0, h)
+		Kit.pad(f, 0, 5, 0, 12)
+		swirl.Size = UDim2.fromOffset(18, 18)
+		Theme.text(text, "small")
+		text.Size = UDim2.fromScale(0, 1)
+		chip.Size = UDim2.fromOffset(0, h - 10)
+		Kit.pad(chip, 0, 12, 0, 10)
+		ring.Size = UDim2.fromOffset(14, 14)
+		Theme.text(verb, "label")
+		verb.Size = UDim2.fromScale(0, 1)
+	end
+	place()
+	Layout.changed:Connect(place)
+
+	function self.update(_: UniverseTag, gate: Types.Gate?)
+		local on = gate ~= nil and gate.inside
+		f.Visible = on
+		if not on or gate == nil then return end
+		text.Text = if gate.fin then "Goal met: leaving will finish" else "Goal not met: leaving exits early"
+		verb.Text = Rich.caps(if gate.fin then "Finish" else "Exit")
+	end
+	function self.setTop(_: UniverseTag, y: number)
+		f.Position = UDim2.new(0.5, 0, 0, y)
+	end
+	function self.destroy(u: UniverseTag)
+		u.hold:DisconnectAll()
+		holder:destroy()
+		f:Destroy()
+	end
+	return self
+end
+
+return UniverseTag
+]]></string>
+            </Properties>
+          </Item>
         </Item>
-        <Item class="Folder" referent="76">
+        <Item class="Folder" referent="83">
           <Properties>
             <string name="Name">Input</string>
           </Properties>
-          <Item class="ModuleScript" referent="77">
+          <Item class="ModuleScript" referent="84">
             <Properties>
               <string name="Name">Input</string>
               <string name="Source"><![CDATA[--!strict
@@ -37215,7 +38961,7 @@ return Input
             </Properties>
           </Item>
         </Item>
-        <Item class="LocalScript" referent="78">
+        <Item class="LocalScript" referent="85">
           <Properties>
             <string name="Name">Main</string>
             <string name="Source"><![CDATA[--!strict
@@ -37713,11 +39459,11 @@ end)
 ]]></string>
           </Properties>
         </Item>
-        <Item class="Folder" referent="79">
+        <Item class="Folder" referent="86">
           <Properties>
             <string name="Name">Map</string>
           </Properties>
-          <Item class="ModuleScript" referent="80">
+          <Item class="ModuleScript" referent="87">
             <Properties>
               <string name="Name">Ambient</string>
               <string name="Source"><![CDATA[--!strict
@@ -38216,7 +39962,7 @@ return Ambient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="81">
+          <Item class="ModuleScript" referent="88">
             <Properties>
               <string name="Name">Fallback</string>
               <string name="Source"><![CDATA[--!strict
@@ -38440,7 +40186,7 @@ return Fallback
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="82">
+          <Item class="ModuleScript" referent="89">
             <Properties>
               <string name="Name">Fields</string>
               <string name="Source"><![CDATA[--!strict
@@ -38627,7 +40373,7 @@ return Fields
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="83">
+          <Item class="ModuleScript" referent="90">
             <Properties>
               <string name="Name">Links</string>
               <string name="Source"><![CDATA[--!strict
@@ -38955,7 +40701,7 @@ return Links
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="84">
+          <Item class="ModuleScript" referent="91">
             <Properties>
               <string name="Name">MapCamera</string>
               <string name="Source"><![CDATA[--!strict
@@ -39427,7 +41173,7 @@ return MapCamera
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="85">
+          <Item class="ModuleScript" referent="92">
             <Properties>
               <string name="Name">MapInput</string>
               <string name="Source"><![CDATA[--!strict
@@ -39871,7 +41617,7 @@ return MapInput
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="86">
+          <Item class="ModuleScript" referent="93">
             <Properties>
               <string name="Name">MapLogic</string>
               <string name="Source"><![CDATA[--!strict
@@ -40207,7 +41953,7 @@ return MapLogic
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="87">
+          <Item class="ModuleScript" referent="94">
             <Properties>
               <string name="Name">MapView</string>
               <string name="Source"><![CDATA[--!strict
@@ -41152,7 +42898,7 @@ return MapView
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="88">
+          <Item class="ModuleScript" referent="95">
             <Properties>
               <string name="Name">Markers</string>
               <string name="Source"><![CDATA[--!strict
@@ -41377,7 +43123,7 @@ return Markers
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="89">
+          <Item class="ModuleScript" referent="96">
             <Properties>
               <string name="Name">NodeWidget</string>
               <string name="Source"><![CDATA[--!strict
@@ -41979,7 +43725,7 @@ return NodeWidget
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="90">
+          <Item class="ModuleScript" referent="97">
             <Properties>
               <string name="Name">Nodes</string>
               <string name="Source"><![CDATA[--!strict
@@ -42398,7 +44144,7 @@ return Nodes
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="91">
+          <Item class="ModuleScript" referent="98">
             <Properties>
               <string name="Name">Plates</string>
               <string name="Source"><![CDATA[--!strict
@@ -42836,20 +44582,24 @@ return Plates
             </Properties>
           </Item>
         </Item>
-        <Item class="LocalScript" referent="92">
+        <Item class="LocalScript" referent="99">
           <Properties>
             <string name="Name">MapPreview</string>
             <string name="Source"><![CDATA[--!strict
 --[[
-	MapPreview: shows the realm map full screen over the current page UI, so the new map (nodes, links, plates, edge
-	markers) can be tried in Studio before the new client replaces the page. It listens to the same View patches as
-	the page (a ViewStore of its own), so the map shows the live game: node states, READY badges, plates.
+	MapPreview: shows the realm map full screen over the current page UI, so the new map and HUD can be tried in
+	Studio before the new client replaces the page. It listens to the same View patches as the page (a ViewStore of
+	its own), so everything shows the live game: node states and badges, links, plates, edge markers, the points
+	capsule, the dock, the READY tray, the portal, toasts, tooltips, the peek and the gate popover.
 
-	    drag / touch-drag      pan            wheel / pinch / double-click     zoom
-	    click a node           opens that layer in the page UI (the panel comes with the new client)
-	    M or the GAME button   switch between the map and the page UI
+	    drag / touch-drag      pan            wheel / pinch / double-click / the zoom capsule     zoom
+	    click a node           opens that layer: in the new panel preview when it is on, else in the page UI
+	    hover / right-click    tooltip / peek (OPEN, hold PRESTIGE)
+	    READY gems             tap opens the layer, hold 0.6 s prestiges
+	    the portal / the rift  the Multiverse gate (hold to enter / exit / finish)
+	    M or the GAME button   switch between the map and the page UI; HOME frames the map again
 
-	App.luau takes the map over when the new client lands; this script is then deleted.
+	App.luau takes all of this over when the new client lands; this script is then deleted.
 ]]
 
 local Players = game:GetService("Players")
@@ -42861,15 +44611,19 @@ local Core = script.Parent:WaitForChild("Core")
 local Layout = require(Core:WaitForChild("Layout"))
 local Motion = require(Core:WaitForChild("Motion"))
 local Theme = require(Core:WaitForChild("Theme"))
+local Recipes = require(Core:WaitForChild("Recipes"))
 local ViewStore = require(Core:WaitForChild("ViewStore"))
 local Input = require(script.Parent:WaitForChild("Input"):WaitForChild("Input"))
 local MapFolder = script.Parent:WaitForChild("Map")
 local MapView = require(MapFolder:WaitForChild("MapView"))
 local MapInput = require(MapFolder:WaitForChild("MapInput"))
+local MapLogic = require(MapFolder:WaitForChild("MapLogic"))
 local Nodes = require(MapFolder:WaitForChild("Nodes"))
 local Links = require(MapFolder:WaitForChild("Links"))
 local Plates = require(MapFolder:WaitForChild("Plates"))
 local Markers = require(MapFolder:WaitForChild("Markers"))
+local Hud = require(script.Parent:WaitForChild("Hud"):WaitForChild("Hud"))
+local Overlay = require(script.Parent:WaitForChild("Overlay"):WaitForChild("Overlay"))
 
 local lp = Players.LocalPlayer
 Input.start()
@@ -42879,11 +44633,20 @@ local gui, root = Layout.screen("MapGui", 40, Enum.ScreenInsets.None)
 local view = MapView.new(gui, root, { tier = MapView.chooseTier() })
 local mi = MapInput.new(view, Input)
 local markerGui = Layout.screen("MarkerGui", 41, Enum.ScreenInsets.DeviceSafeInsets)
+-- the HUD stays under the panel preview (PanelGui 42, src/client/Panel/Preview.luau), the overlays above it
+local hudGui = Layout.screen("HudGui", 41, Enum.ScreenInsets.CoreUISafeInsets)
+local topbarGui = Layout.screen("TopbarGui", 41, Enum.ScreenInsets.TopbarSafeInsets)
+local overlayGui = Layout.screen("OverlayGui", 45, Enum.ScreenInsets.DeviceSafeInsets)
+Recipes.holdGate = function(): boolean
+	return not mi:busy()
+end
 
 local nodes = Nodes.new(view, mi)
 local links = Links.new(view)
 local plates = Plates.new(view, nodes)
 local markers = Markers.new(markerGui, view, nodes)
+local hud = Hud.new(topbarGui, hudGui)
+local overlay = Overlay.new(overlayGui)
 
 -- ------------------------------------------------------------------------------------------------------ switch
 local switchGui = Instance.new("ScreenGui")
@@ -42917,8 +44680,15 @@ local function show(on: boolean)
 	showing = on
 	gui.Enabled = on
 	markerGui.Enabled = on
+	overlayGui.Enabled = on
+	hud:setVisible(on)
 	mi:setEnabled(on)
 	view:setAmbient(on)
+	if not on then
+		overlay:peek(nil)
+		overlay:modal(nil)
+		overlay:tooltip(nil, nil)
+	end
 	button.Text = if on then "GAME" else "MAP"
 end
 button.Activated:Connect(function() show(not showing) end)
@@ -42947,16 +44717,92 @@ local function onMap()
 	links:update(ms)
 	plates:update(ms)
 	markers:update(ms)
+	hud:updateMap(ms)
 end
 local function onHud()
 	local h = store:hud()
-	if h then nodes:setFirstRun(h.fr) end
+	if h then
+		nodes:setFirstRun(h.fr)
+		hud:setFirstRun(h.fr)
+		hud:updateHud(h)
+	end
+end
+
+view.cameraChanged:Connect(function(cam: any)
+	hud:setZoomPct(cam.z)
+end)
+hud:setZoomPct(view:camera().z)
+
+-- the tooltip of a node (mouse hover)
+local UNIVERSE_WORD = { [true] = "Lives in the Prestige Multiverse", [false] = "Lives in the Normal Universe" }
+local function nodeTip(layer: string): any
+	local ms = lastMs
+	local node = if ms then ms.nodes[layer] else nil
+	local st = nodes:state(layer)
+	if st == "sealed" or st == "frontier" then
+		return { title = "???", body = "Not discovered yet.", layer = layer, hue = Theme.C.muted }
+	end
+	if st == "dormant" then
+		return { title = MapLogic.NAMES[layer] and (string.sub(MapLogic.NAMES[layer], 1, 1) .. string.lower(string.sub(MapLogic.NAMES[layer], 2))) or layer,
+			body = UNIVERSE_WORD[MapLogic.MULTIVERSE[layer] == true], layer = layer }
+	end
+	if node == nil then return nil end
+	local v = node.val
+	local title = node.name or layer
+	if st == "locked" then title ..= " · Locked" end
+	local content: any = { title = title, body = v and v.tip, layer = layer, foot = "Click to open · right-click to peek" }
+	if v and not v.lit and v.req then
+		content.rows = { { "Need", v.req .. " " .. MapLogic.unit(v.rres) } }
+		if v.pr then content.pr = v.pr / 1000 end
+	end
+	return content
+end
+nodes.hover:Connect(function(layer: string?, abs: Vector2)
+	if layer == nil then
+		overlay:tooltip("node", nil)
+		return
+	end
+	overlay:tooltip("node", nodeTip(layer), abs)
+end)
+-- the rift tooltip
+nodes.rift:Connect(function(event: string, abs: Vector2)
+	local ms = lastMs
+	local gate = ms and ms.gate
+	if event == "leave" then
+		overlay:tooltip("rift", nil)
+	elseif event == "hover" then
+		if gate and gate.show then
+			overlay:tooltip("rift", { title = "Prestige Multiverse", body = gate.h or "The rift is open.",
+				foot = "Click to fly there", hue = Color3.fromHex("ff2e63") }, abs)
+		else
+			local req = gate and gate.req
+			overlay:tooltip("rift", { title = "The rift is sealed", body = "Reach 185 milestones to reveal the Prestige Multiverse.",
+				rows = if req then { { "Need", req.need .. " milestones" }, { "Have", req.have .. " milestones" } } else nil,
+				pr = if req then req.pr / 1000 else nil, foot = "Click to fly there", hue = Color3.fromHex("ff2e63") }, abs)
+		end
+	end
+end)
+
+local function frameReady()
+	local ms = lastMs
+	if ms == nil or #ms.ready + #ms.canBuy == 0 then return end
+	local x0, y0, x1, y1 = math.huge, math.huge, -math.huge, -math.huge
+	for _, list in { ms.ready, ms.canBuy } do
+		for _, l in list do
+			local p = nodes:worldPos(l)
+			x0, y0, x1, y1 = math.min(x0, p.X - 110), math.min(y0, p.Y - 110), math.max(x1, p.X + 110), math.max(y1, p.Y + 150)
+		end
+	end
+	view:frameWorld({ x = x0, y = y0, w = x1 - x0, h = y1 - y0 }, { time = 0.9 })
 end
 
 if remotes then
 	local viewRemote = remotes:WaitForChild("View") :: RemoteEvent
 	local actRemote = remotes:WaitForChild("Act") :: RemoteEvent
 	local readyRemote = remotes:WaitForChild("Ready") :: RemoteEvent
+	local importRemote = remotes:WaitForChild("Import") :: RemoteEvent
+	local wasInside: boolean? = nil
+	local offShown = false
 	viewRemote.OnClientEvent:Connect(function(patch: any)
 		if type(patch) ~= "table" or patch.fatal or patch.status then return end
 		local ok, err = pcall(function()
@@ -42964,6 +44810,26 @@ if remotes then
 			if changes.full then gotFull = true end
 			if changes.map then onMap() end
 			if changes.hud then onHud() end
+			if patch.save == "saving" or patch.save == "saved" then hud:setStatus(patch.save) end
+			if patch.unsaved == true then
+				offShown = true
+				hud:setStatus("off")
+			elseif offShown and patch.set ~= nil and patch.save == nil then
+				offShown = false
+				hud:setStatus(nil)
+			end
+			local ms = lastMs
+			if ms and ms.ok then
+				if wasInside ~= nil and wasInside ~= ms.inside then
+					overlay:flash(if ms.inside then Color3.fromHex("ff2e63") else Color3.fromHex("8a7cff"))
+				end
+				wasInside = ms.inside
+			end
+			if showing then
+				if patch.pop or patch.notice then overlay:toasts(patch.pop, patch.notice) end
+				if type(patch.imp) == "table" then overlay:importResult(patch.imp) end
+				if changes.ended then overlay:screen(if store.ended then "end" else nil, store:endScreen()) end
+			end
 		end)
 		if not ok then warn("[MilestoneTree] map preview: " .. tostring(err)) end
 	end)
@@ -42975,22 +44841,112 @@ if remotes then
 	local function fire(a: any)
 		if type(a) == "table" and #a > 0 then actRemote:FireServer(a, false) end
 	end
-	-- a node opens its layer in the page UI (the side sheet comes with the new client)
-	nodes.activated:Connect(function(layer: string)
+	-- the new panel preview (Studio) opens over the map by itself when the server opens a tab; without it the layer
+	-- shows in the page UI
+	local function panelOn(): boolean
+		local pg = lp:FindFirstChildOfClass("PlayerGui")
+		local panel = pg and pg:FindFirstChild("PanelGui")
+		return panel ~= nil and panel:IsA("ScreenGui") and panel.Enabled
+	end
+	local function toPage()
+		if panelOn() then return end
+		task.delay(0.35, function()
+			if showing and not panelOn() then show(false) end
+		end)
+	end
+	-- open a layer (the panel preview, else the page UI)
+	local function openLayer(layer: string)
 		local ms = lastMs
 		local node = if ms then ms.nodes[layer] else nil
-		if node == nil or not node.show then return end
-		fire(node.a)
+		if node == nil or not node.show then
+			if nodes:state(layer) == "dormant" then
+				overlay:toasts(nil, { UNIVERSE_WORD[MapLogic.MULTIVERSE[layer] == true] })
+			end
+			return
+		end
+		local ms2 = lastMs
+		if not (ms2 and ms2.open == layer) then fire(node.a) end
 		view:focusWorld(nodes:worldPos(layer))
-		task.delay(0.35, function()
-			if showing then show(false) end
-		end)
+		toPage()
+	end
+	nodes.activated:Connect(openLayer)
+	nodes.peek:Connect(function(layer: string)
+		local ms = lastMs
+		local node = if ms then ms.nodes[layer] else nil
+		local st = nodes:state(layer)
+		if st == "sealed" or st == "frontier" or st == "dormant" then return end
+		nodes:setPeek(layer)
+		overlay:peek(layer, node, nodes:ringRect(layer))
 	end)
+	overlay.peekClosed:Connect(function() nodes:setPeek(nil) end)
+	overlay.openLayer:Connect(openLayer)
+	overlay.act:Connect(function(a: any) fire(a) end)
+	overlay.flyTo:Connect(function(layer: string) view:focusWorld(nodes:worldPos(layer)) end)
+	overlay.importText:Connect(function(t: string) importRemote:FireServer(t) end)
+	overlay.resync:Connect(function() readyRemote:FireServer() end)
 	markers.activated:Connect(function(layer: string)
 		view:focusWorld(nodes:worldPos(layer))
 	end)
+	local function openGate()
+		view:focusWorld(Vector2.new(3150, 1350))
+		local ms = lastMs
+		task.delay(0.3, function()
+			overlay:modal("gate", if ms then ms.gate else nil)
+		end)
+	end
 	nodes.rift:Connect(function(event: string)
-		if event == "click" then view:focusWorld(Vector2.new(3150, 1350)) end
+		if event == "click" then openGate() end
+	end)
+
+	-- the HUD
+	hud.home:Connect(function()
+		overlay:peek(nil)
+		local ms = lastMs
+		if ms and ms.open and ms.close then fire(ms.close) end
+		view:frameStart({})
+	end)
+	hud.trophies:Connect(function() openLayer("ach") end)
+	hud.options:Connect(function()
+		local ms = lastMs
+		if ms and ms.opt then
+			fire(ms.opt)
+			toPage()
+		end
+	end)
+	hud.portal:Connect(openGate)
+	hud.zoomIn:Connect(function() mi:zoomStep(1) end)
+	hud.zoomOut:Connect(function() mi:zoomStep(-1) end)
+	hud.readyTap:Connect(openLayer)
+	hud.readyHold:Connect(function(layer: string)
+		local ms = lastMs
+		local node = if ms then ms.nodes[layer] else nil
+		local v = node and node.val
+		if v and v.ra then fire(v.ra) end
+	end)
+	hud.readyMore:Connect(frameReady)
+	hud.gateHold:Connect(function()
+		local ms = lastMs
+		local gate = ms and ms.gate
+		if gate and gate.a then fire(gate.a) end
+	end)
+	local warnOpen = false
+	hud.warnTap:Connect(function(abs: Vector2)
+		local h = store:hud()
+		warnOpen = not warnOpen
+		if not warnOpen or h == nil then
+			overlay:tooltip("warn", nil)
+			return
+		end
+		local rows = {}
+		for _, w in h.w do table.insert(rows, { string.upper(string.sub(w.k, 1, 1)) .. string.sub(w.k, 2) .. " from", w.v }) end
+		overlay:tooltip("warn", { title = "Point production is slowed", body = h.wh or h.x, rows = rows,
+			hue = Color3.fromHex("ffc233") }, abs)
+		task.delay(6, function()
+			if warnOpen then
+				warnOpen = false
+				overlay:tooltip("warn", nil)
+			end
+		end)
 	end)
 else
 	warn("[MilestoneTree] map preview: no remotes, showing the empty map")
@@ -43010,11 +44966,2149 @@ if not ok then RunService.RenderStepped:Connect(step) end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="Folder" referent="93">
+        <Item class="Folder" referent="100">
+          <Properties>
+            <string name="Name">Overlay</string>
+          </Properties>
+          <Item class="ModuleScript" referent="101">
+            <Properties>
+              <string name="Name">Modals</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	Modals: the modal chrome and its four uses (DESIGN.md 7.5-7.8; mocks i, j).
+
+	    ModalDimmer  black alpha .6, takes every input (InputSink All); a tap closes (not during a hold)
+	    Modal        the card: panel2 -> panel, a hue rim, the head (icon disc + R3 title + a hue sub line), the body,
+	                 the Buttons row. Opens with scale .96 -> 1 (0.2 s).
+	      export     Well > Box: a read-only monospace TextBox (`terminal`), focused and all selected on open; the
+	                 "22,204 characters · all selected" chip, the copy hint, SELECT ALL (primary) / DONE. Touch-only
+	                 devices get an editable box whose text is restored on every change (select + copy still work).
+	      import     Well > Box: editable, placeholder in `small` soft; IMPORT is off while the box is empty; after a
+	                 press a ring counts the server's ImportCooldown; the result shows inline (danger) or closes the
+	                 modal (ok)
+	      hardReset  HARD RESET?, what is lost, EXPORT FIRST · CANCEL · HOLD TO RESET (2 s ring): the reset action
+	                 fires twice
+	      gate       the Multiverse gate: PRESTIGE MULTIVERSE, the context, the GOAL box (+ Goal met chip), what
+	                 happens (the reset list / completes / returns), STAY + HOLD TO ENTER | EXIT | FINISH (1.2 s);
+	                 locked: "Unlock Multiverse (MP) first"; sealed: the requirement with its bar
+
+	    local modals = Modals.new(root)
+	    modals:open(kind?, data?)      nil closes. data: export = the string; import = { cooldown }; hardReset =
+	                                   { action, export? }; gate = Gate
+	    modals:importResult(imp)       modals:isOpen() -> kind?
+	    modals.act (action, hold?), modals.importText (text), modals.closed (), modals.notice (text)
+]]
+
+local UserInputService = game:GetService("UserInputService")
+
+local Core = script.Parent.Parent:WaitForChild("Core")
+local Types = require(script.Parent.Parent:WaitForChild("Types"))
+local Signal = require(Core:WaitForChild("Signal"))
+local Theme = require(Core:WaitForChild("Theme"))
+local Layout = require(Core:WaitForChild("Layout"))
+local Motion = require(Core:WaitForChild("Motion"))
+local Rich = require(Core:WaitForChild("Rich"))
+local Recipes = require(Core:WaitForChild("Recipes"))
+local Kit = require(script.Parent.Parent:WaitForChild("Hud"):WaitForChild("Kit"))
+
+type Action = Types.Action
+
+export type Modals = {
+	frame: Frame,
+	act: Signal.Signal<Action>,
+	importText: Signal.Signal<string>,
+	closed: Signal.Signal<>,
+	notice: Signal.Signal<string>,
+	open: (self: Modals, kind: string?, data: any?) -> (),
+	importResult: (self: Modals, imp: Types.ImportResult) -> (),
+	isOpen: (self: Modals) -> string?,
+	destroy: (self: Modals) -> (),
+}
+
+local Modals = {}
+
+local CRIMSON = Color3.fromHex("ff2e63")
+local LAYER_NAMES = {
+	m = "Milestone", mm = "Meta-Milestone", em = "Extra-Milestone", p = "Prestige", pe = "Prestige Energy", sp = "Super Prestige",
+	pb = "Prestige Boost", pp = "Prestige Power", se = "Super Energy", hp = "Hyper Prestige", ep = "Exotic Prestige",
+	hb = "Hyper Boost", ap = "Atomic Prestige", mp = "Multiverse", t = "Transcend",
+} :: { [string]: string }
+
+local function commas(n: number): string
+	local s = tostring(math.floor(n))
+	local out = string.reverse((string.gsub(string.reverse(s), "(%d%d%d)", "%1,")))
+	return (string.gsub(out, "^,", ""))
+end
+
+function Modals.new(root: GuiObject): Modals
+	local self = {} :: Modals
+	self.act = Signal.new() :: Signal.Signal<Action>
+	self.importText = Signal.new() :: Signal.Signal<string>
+	self.closed = Signal.new() :: Signal.Signal<>
+	self.notice = Signal.new() :: Signal.Signal<string>
+
+	local dimmer = Kit.button(root, "ModalDimmer")
+	dimmer.Size = UDim2.fromScale(1, 1)
+	dimmer.BackgroundColor3 = Color3.new(0, 0, 0)
+	dimmer.BackgroundTransparency = 0.4
+	dimmer.ZIndex = 50
+	dimmer.Visible = false
+	if Theme.caps.InputSink then
+		pcall(function() (dimmer :: any).InputSink = (Enum :: any).InputSink.All end)
+	end
+
+	local card = Kit.frame(root, "Modal", 51)
+	card.AnchorPoint = Vector2.new(0.5, 0.5)
+	card.Position = UDim2.fromScale(0.5, 0.5)
+	card.AutomaticSize = Enum.AutomaticSize.Y
+	card.BackgroundColor3 = Color3.new(1, 1, 1)
+	card.BackgroundTransparency = 0
+	card.Active = true
+	card.Visible = false
+	Kit.corner(card, UDim.new(0, 18))
+	Kit.grad(card, { Theme.C.panel2, Theme.C.panel }, 90, nil, "Back")
+	local rim = Kit.stroke(card, 2, Theme.C.strokeHi, 1, "Rim")
+	Kit.list(card, "y", 14, Enum.HorizontalAlignment.Left)
+	self.frame = card
+
+	local kind: string? = nil
+	local holds: { Recipes.Hold } = {}
+	local conns: { RBXScriptConnection } = {}
+	local cooldownUntil = 0
+	local importTotal = 10
+	local importState: { box: TextBox?, result: TextLabel?, button: TextButton?, label: TextLabel?, ring: Recipes.Ring? } = {}
+
+	local function clear()
+		for _, h in holds do h:destroy() end
+		table.clear(holds)
+		for _, c in conns do c:Disconnect() end
+		table.clear(conns)
+		for _, c in card:GetChildren() do
+			if c:IsA("GuiObject") then c:Destroy() end
+		end
+		importState = {}
+	end
+
+	local function close()
+		if kind == nil then return end
+		kind = nil
+		clear()
+		card.Visible = false
+		dimmer.Visible = false
+		self.closed:Fire()
+	end
+	dimmer.Activated:Connect(function()
+		for _, h in holds do
+			if h.holding then return end
+		end
+		close()
+	end)
+
+	-- ------------------------------------------------------------------------------------------ parts
+	local order = 0
+	local function nextOrder(): number
+		order += 1
+		return order
+	end
+	local function head(title: string, sub: string?, hue: Color3, glyph: string?)
+		local h = Kit.frame(card, "Head")
+		h.LayoutOrder = nextOrder()
+		h.AutomaticSize = Enum.AutomaticSize.Y
+		h.Size = UDim2.fromScale(1, 0)
+		local x0 = 0
+		if glyph then
+			local disc = Kit.frame(h, "Icon", 2)
+			disc.Size = UDim2.fromOffset(48, 48)
+			Kit.gem(disc, hue, { hi = 0.5, lo = 0.4 })
+			Kit.stroke(disc, 2, Theme.lift(hue, 0.5), 0.9, "Rim")
+			local g = Kit.glyph(disc, "Glyph", glyph, Color3.new(1, 1, 1), Theme.shade(hue, 0.6))
+			g.AnchorPoint = Vector2.new(0.5, 0.5)
+			g.Position = UDim2.fromScale(0.5, 0.5)
+			g.Size = UDim2.fromScale(0.52, 0.52)
+			g.ZIndex = 3
+			x0 = 62
+		end
+		local t = Kit.label(h, "Title", "section", "", Color3.new(1, 1, 1))
+		t.Position = UDim2.fromOffset(x0, 0)
+		t.Size = UDim2.new(1, -x0, 0, 28)
+		t.TextXAlignment = Enum.TextXAlignment.Left
+		Recipes.title(t, { text = string.upper(title), role = "section", from = Color3.new(1, 1, 1), to = Theme.lift(hue, 0.45),
+			stroke = 4, shadow = 3 })
+		if sub then
+			local s = Kit.label(h, "Sub", "small", sub, Theme.textHue(nil))
+			s.TextColor3 = Theme.lift(hue, 0.35)
+			s.Position = UDim2.fromOffset(x0, 32)
+			s.Size = UDim2.new(1, -x0, 0, 18)
+			s.TextXAlignment = Enum.TextXAlignment.Left
+		end
+	end
+	local function para(name: string, text: string, role: string?, color: Color3?): TextLabel
+		local l = Kit.label(card, name, role or "body", text, color or Theme.C.text)
+		l.LayoutOrder = nextOrder()
+		l.AutomaticSize = Enum.AutomaticSize.Y
+		l.Size = UDim2.fromScale(1, 0)
+		l.TextWrapped = true
+		l.RichText = true
+		l.TextXAlignment = Enum.TextXAlignment.Left
+		return l
+	end
+	local function buttonRow(): Frame
+		local r = Kit.frame(card, "Buttons")
+		r.LayoutOrder = 1000
+		r.Size = UDim2.new(1, 0, 0, 52)
+		Kit.list(r, "x", 12, Enum.HorizontalAlignment.Right, Enum.VerticalAlignment.Center)
+		return r
+	end
+	local function well(editable: boolean, text: string, hue: Color3): TextBox
+		local w = Kit.frame(card, "Well")
+		w.LayoutOrder = nextOrder()
+		w.Size = UDim2.new(1, 0, 0, if Layout.mode == "COMPACT" then 120 else 170)
+		w.BackgroundColor3 = Theme.C.void
+		w.BackgroundTransparency = 0
+		w.ClipsDescendants = true
+		Kit.corner(w, UDim.new(0, 12))
+		Kit.stroke(w, 2, hue, 0.9, "Rim")
+		local box = Kit.child(w, "Box", "TextBox") :: TextBox
+		box.BackgroundTransparency = 1
+		box.BorderSizePixel = 0
+		box.Position = UDim2.fromOffset(14, 10)
+		box.Size = UDim2.new(1, -28, 1, -20)
+		Theme.text(box, "terminal")
+		box.TextColor3 = Theme.C.text
+		box.TextXAlignment = Enum.TextXAlignment.Left
+		box.TextYAlignment = Enum.TextYAlignment.Top
+		box.TextWrapped = true
+		box.MultiLine = true
+		box.ClearTextOnFocus = false
+		box.TextEditable = editable
+		box.Text = text
+		return box
+	end
+	local function holdButton(parent: Instance, name: string, text: string, style: string, hue: Color3?, seconds: number,
+		onDone: () -> ()): TextButton
+		local b, l = Kit.action(parent, name, text, { style = style, hue = hue, h = 52 })
+		local content = l.Parent :: Instance
+		local ringG = Kit.glyph(content, "RingGlyph", "ring", Color3.new(1, 1, 1))
+		ringG.LayoutOrder = 1
+		ringG.Size = UDim2.fromOffset(18, 18)
+		local chip, cl = Kit.chip(content, "Time", "badge", "", { h = 24, pad = 7, fg = Color3.new(1, 1, 1), bg = Theme.C.deep, bgA = 0.6 })
+		chip.LayoutOrder = 3
+		cl.RichText = true
+		cl.Text = Rich.num(string.format("%g s", seconds), { size = Theme.size("badge"), onFill = true })
+		table.insert(holds, Recipes.hold(b, { dur = seconds, ring = false, color = Color3.new(0, 0, 0), onDone = onDone }))
+		return b
+	end
+
+	-- ------------------------------------------------------------------------------------------ kinds
+	local function buildExport(text: string)
+		local hue = Theme.C.info
+		rim.Color = Theme.lift(hue, 0.2)
+		head("Export save", "Your save as one line of text", hue, "save")
+		local touchOnly = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+		local box = well(touchOnly, text, hue)
+		if touchOnly then
+			table.insert(conns, box:GetPropertyChangedSignal("Text"):Connect(function()
+				if box.Text ~= text then box.Text = text end
+			end))
+		end
+		local chipRow = Kit.frame(card, "Info")
+		chipRow.LayoutOrder = nextOrder()
+		chipRow.Size = UDim2.new(1, 0, 0, 28)
+		local chip, cl = Kit.chip(chipRow, "Chars", "label", "", { h = 28, pad = 10, fg = Theme.C.soft, bg = Theme.C.panel3, bgA = 1 })
+		local _ = chip
+		cl.RichText = true
+		cl.Text = string.format('<font family="%s" weight="800">%s</font> characters · all selected',
+			"rbxasset://fonts/families/Sarpanch.json", commas(#text))
+		para("Hint", "Press Ctrl+C to copy. On a phone: tap the box, then Select All and Copy. (Roblox games cannot write to your clipboard.)")
+		local row = buttonRow()
+		local done = Kit.action(row, "Secondary", Rich.caps("Done"), { style = "quiet" })
+		done.LayoutOrder = 1
+		done.Activated:Connect(close)
+		local sel = Kit.action(row, "Primary", Rich.caps("Select all"), { style = "primary", hue = Theme.shade(Color3.fromHex("1fbfa0"), 0.8) })
+		sel.LayoutOrder = 2
+		local function selectAll()
+			pcall(function()
+				box:CaptureFocus()
+				box.SelectionStart = 1
+				box.CursorPosition = #box.Text + 1
+			end)
+		end
+		sel.Activated:Connect(selectAll)
+		task.defer(selectAll)
+	end
+
+	local function setImportButton()
+		local st = importState
+		local b, l = st.button, st.label
+		if b == nil or l == nil then return end
+		local left = cooldownUntil - os.clock()
+		local empty = st.box == nil or (st.box :: TextBox).Text == ""
+		local enabled = left <= 0 and not empty
+		b.Active = enabled
+		b.AutoButtonColor = false
+		b.BackgroundTransparency = if enabled then 0 else 0.5
+		if left > 0 then
+			l.Text = "Import · " .. math.ceil(left) .. " s"
+			Theme.text(l, "label")
+			l.TextColor3 = Theme.C.soft
+		else
+			l.Text = Rich.caps("Import")
+			Theme.text(l, "tab")
+			l.TextColor3 = if enabled then Color3.new(1, 1, 1) else Theme.C.soft
+		end
+		local ring = st.ring
+		if ring then
+			ring:set(if left > 0 then 1 - left / math.max(1, importTotal) else 0)
+			ring.frame.Visible = left > 0
+		end
+	end
+
+	local function buildImport(data: any)
+		local hue = Theme.C.system
+		rim.Color = Theme.lift(hue, 0.2)
+		head("Import save", "Your current progress is replaced.", hue, "down")
+		local box = well(true, "", hue)
+		box.PlaceholderText = "Paste a save string (web saves work too)"
+		box.PlaceholderColor3 = Theme.C.soft
+		local res = para("Result", "", "body", Theme.lift(Theme.C.danger, 0.25))
+		res.Visible = false
+		local row = buttonRow()
+		local cancel = Kit.action(row, "Secondary", Rich.caps("Cancel"), { style = "quiet" })
+		cancel.LayoutOrder = 1
+		cancel.Activated:Connect(close)
+		local imp, il = Kit.action(row, "Primary", Rich.caps("Import"), { style = "primary", hue = hue })
+		imp.LayoutOrder = 2
+		local ring = Recipes.ring(il.Parent :: GuiObject, { size = 18, thick = 3, color = Color3.new(1, 1, 1), track = 0.7 })
+		ring.frame.AnchorPoint = Vector2.new(0.5, 0.5)
+		ring.frame.LayoutOrder = 1
+		ring.frame.Visible = false
+		importState = { box = box, result = res, button = imp, label = il, ring = ring }
+		local total = if type(data) == "table" and type(data.cooldown) == "number" then data.cooldown else 10
+		importTotal = total
+		table.insert(conns, box:GetPropertyChangedSignal("Text"):Connect(setImportButton))
+		imp.Activated:Connect(function()
+			if cooldownUntil > os.clock() or box.Text == "" then return end
+			cooldownUntil = os.clock() + total
+			res.Visible = false
+			self.importText:Fire(box.Text)
+			task.spawn(function()
+				while kind == "import" and os.clock() < cooldownUntil do
+					setImportButton()
+					task.wait(0.1)
+				end
+				setImportButton()
+			end)
+		end)
+		setImportButton()
+	end
+
+	local function buildHardReset(data: any)
+		local hue = Theme.C.danger
+		rim.Color = hue
+		head("Hard reset?", nil, hue, "warn")
+		para("Body", "This deletes <b>all progress</b> on this account: every layer, every milestone and the Multiverse. It cannot be undone. Export your save first if you might want it back.")
+		local row = buttonRow()
+		local exportAction = if type(data) == "table" then data.export else nil
+		local ex = Kit.action(row, "Export", Rich.caps("Export first"), { style = "quiet" })
+		ex.LayoutOrder = 1
+		ex.Activated:Connect(function()
+			close()
+			if type(exportAction) == "table" then self.act:Fire(exportAction) end
+		end)
+		local cancel = Kit.action(row, "Secondary", Rich.caps("Cancel"), { style = "quiet" })
+		cancel.LayoutOrder = 2
+		cancel.Activated:Connect(close)
+		local action = if type(data) == "table" then data.action else nil
+		local b = holdButton(row, "Primary", Rich.caps("Hold to reset"), "danger", nil, 2, function()
+			close()
+			if type(action) == "table" then
+				-- the game resets on the second press (the first one arms it)
+				self.act:Fire(action)
+				self.act:Fire(action)
+			end
+		end)
+		b.LayoutOrder = 3
+		local foot = para("Foot", "Release early to cancel", "small", Theme.C.soft)
+		foot.TextXAlignment = Enum.TextXAlignment.Right
+		foot.LayoutOrder = 1001
+	end
+
+	local function buildGate(g: Types.Gate?)
+		local hue = CRIMSON
+		rim.Color = hue
+		if g == nil or not g.show then
+			head("The rift is sealed", "The Prestige Multiverse", hue, "swirl")
+			local req = g and g.req
+			para("Body", "Reach 185 milestones to reveal the Prestige Multiverse.")
+			if req then
+				local rows = Kit.frame(card, "Rows")
+				rows.LayoutOrder = nextOrder()
+				rows.AutomaticSize = Enum.AutomaticSize.Y
+				rows.Size = UDim2.fromScale(1, 0)
+				Kit.list(rows, "y", 4)
+				for i, kv in { { "Need", req.need .. " milestones" }, { "Have", req.have .. " milestones" } } do
+					local r = Kit.frame(rows, "Row" .. i)
+					r.LayoutOrder = i
+					r.Size = UDim2.new(1, 0, 0, 22)
+					local k = Kit.label(r, "Key", "small", kv[1], Theme.C.soft)
+					k.Size = UDim2.fromScale(0.4, 1)
+					k.TextXAlignment = Enum.TextXAlignment.Left
+					local v = Kit.label(r, "Value", "number", "", Theme.C.text)
+					v.AnchorPoint = Vector2.new(1, 0)
+					v.Position = UDim2.fromScale(1, 0)
+					v.Size = UDim2.fromScale(0.6, 1)
+					v.TextXAlignment = Enum.TextXAlignment.Right
+					v.RichText = true
+					v.Text = Rich.num(kv[2], { size = Theme.size("number"), unit = Theme.C.soft })
+				end
+				local bar = Kit.frame(card, "Bar")
+				bar.LayoutOrder = nextOrder()
+				bar.Size = UDim2.new(1, 0, 0, 18)
+				local track = Kit.frame(bar, "Track")
+				track.AnchorPoint = Vector2.new(0, 0.5)
+				track.Position = UDim2.fromScale(0, 0.5)
+				track.Size = UDim2.new(1, -60, 0, 8)
+				track.BackgroundColor3 = Theme.C.deep
+				track.BackgroundTransparency = 0
+				Kit.corner(track)
+				local fill = Kit.frame(track, "Fill")
+				fill.Size = UDim2.fromScale(math.clamp(req.pr / 1000, 0, 1), 1)
+				fill.BackgroundColor3 = hue
+				fill.BackgroundTransparency = 0
+				Kit.corner(fill)
+				local pct = Kit.label(bar, "Pct", "number", Rich.pct(req.pr / 1000), Theme.C.text)
+				pct.AnchorPoint = Vector2.new(1, 0.5)
+				pct.Position = UDim2.fromScale(1, 0.5)
+				pct.Size = UDim2.fromOffset(56, 18)
+				pct.TextXAlignment = Enum.TextXAlignment.Right
+			end
+			local row = buttonRow()
+			local ok = Kit.action(row, "Secondary", Rich.caps("Close"), { style = "quiet" })
+			ok.Activated:Connect(close)
+			return
+		end
+		local gate = g :: Types.Gate
+		head("Prestige Multiverse", if gate.inside then "MP challenge 21 · you are inside" else "MP challenge 21", hue, "swirl")
+		-- the goal box
+		local box = Kit.frame(card, "Goal")
+		box.LayoutOrder = nextOrder()
+		box.AutomaticSize = Enum.AutomaticSize.Y
+		box.Size = UDim2.fromScale(1, 0)
+		box.BackgroundColor3 = Theme.C.deep
+		box.BackgroundTransparency = 0
+		Kit.corner(box, UDim.new(0, 12))
+		Kit.stroke(box, 1.5, Theme.C.stroke, 1, "Rim")
+		Kit.pad(box, 12, 14, 12, 14)
+		Kit.list(box, "y", 6)
+		local top = Kit.frame(box, "Top")
+		top.LayoutOrder = 1
+		top.Size = UDim2.new(1, 0, 0, 24)
+		local cap = Kit.label(top, "Cap", "caps", Rich.caps("Goal"), Theme.C.soft)
+		cap.Size = UDim2.fromScale(0.5, 1)
+		cap.TextXAlignment = Enum.TextXAlignment.Left
+		if gate.inside then
+			local met = gate.fin
+			local chip = Kit.chip(top, "State", "label", if met then "Goal met" else "Goal not met", { h = 24, pad = 10,
+				fg = if met then Theme.C.ownedTitle else Theme.C.soft, bg = if met then Theme.shade(Theme.C.bought, 0.3) else Theme.C.panel3,
+				bgA = 1, line = if met then Theme.C.bought else Theme.C.strokeHi, lineA = 1 })
+			chip.AnchorPoint = Vector2.new(1, 0)
+			chip.Position = UDim2.fromScale(1, 0)
+		end
+		local goalText = string.gsub(gate.goal or "", "^Goal:%s*", "")
+		local gl = Kit.label(box, "Text", "body", "", Theme.C.text)
+		gl.LayoutOrder = 2
+		gl.AutomaticSize = Enum.AutomaticSize.Y
+		gl.Size = UDim2.fromScale(1, 0)
+		gl.TextWrapped = true
+		gl.RichText = true
+		gl.TextXAlignment = Enum.TextXAlignment.Left
+		gl.Text = Rich.html(goalText, Theme.size("body"), "mp")
+		if gate.done then
+			para("Done", "You have completed it before.", "small", Theme.C.soft)
+		end
+		-- what happens
+		local what: string
+		local verb: string
+		if gate.inside then
+			if gate.fin then
+				what = "Leaving now completes the challenge (+1) and returns you to the Normal Universe."
+				verb = "Finish"
+			else
+				what = "Leaving now returns you to the Normal Universe without completing the challenge."
+				verb = "Exit"
+			end
+		else
+			local names = {}
+			for _, l in gate.rs do table.insert(names, LAYER_NAMES[l] or string.upper(l)) end
+			what = "Entering resets " .. table.concat(names, ", ") .. "."
+			verb = "Enter"
+		end
+		para("What", what)
+		local row = buttonRow()
+		local stay = Kit.action(row, "Secondary", Rich.caps("Stay"), { style = "quiet" })
+		stay.LayoutOrder = 1
+		stay.Activated:Connect(close)
+		if not gate.can and not gate.inside then
+			local bar, bl = Kit.action(row, "Primary", "Unlock Multiverse (MP) first", { style = "quiet", role = "label" })
+			bar.LayoutOrder = 2
+			bar.Active = false
+			bl.TextColor3 = Theme.C.soft
+			return
+		end
+		local action = gate.a
+		local b = holdButton(row, "Primary", Rich.caps("Hold to " .. string.lower(verb)), "gold", nil, 1.2, function()
+			close()
+			if action then self.act:Fire(action) end
+		end)
+		b.LayoutOrder = 2
+	end
+
+	-- ------------------------------------------------------------------------------------------ API
+	function self.open(_: Modals, k: string?, data: any?)
+		if k == nil then
+			close()
+			return
+		end
+		clear()
+		order = 0
+		kind = k
+		local compact = Layout.mode == "COMPACT"
+		card.Size = UDim2.fromOffset(if compact then 520 else 600, 0)
+		Kit.pad(card, if compact then 16 else 22, if compact then 18 else 24, if compact then 16 else 22, if compact then 18 else 24)
+		if k == "export" then
+			buildExport(if type(data) == "string" then data else "")
+		elseif k == "import" then
+			buildImport(data)
+		elseif k == "hardReset" then
+			buildHardReset(data)
+		elseif k == "gate" then
+			buildGate(data)
+		else
+			para("Body", tostring(data or ""))
+			local row = buttonRow()
+			local ok = Kit.action(row, "Primary", Rich.caps("OK"), { style = "quiet" })
+			ok.Activated:Connect(close)
+		end
+		card:SetAttribute("Kind", k)
+		dimmer.Visible = true
+		card.Visible = true
+		local sc = Motion.scaleOf(card)
+		sc.Scale = 0.96
+		Motion.tween(sc, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Scale = 1 }, "modalOpen")
+	end
+	function self.importResult(m: Modals, imp: Types.ImportResult)
+		if imp.ok then
+			if kind == "import" then close() end
+			m.notice:Fire(imp.msg ~= "" and imp.msg or "Save imported")
+			return
+		end
+		local res = importState.result
+		if kind == "import" and res then
+			res.Text = imp.msg ~= "" and imp.msg or "That string is not a valid save (nothing was changed)."
+			res.Visible = true
+		else
+			m.notice:Fire(imp.msg)
+		end
+	end
+	function self.isOpen(_: Modals): string?
+		return kind
+	end
+	function self.destroy(m: Modals)
+		clear()
+		m.act:DisconnectAll()
+		m.importText:DisconnectAll()
+		m.closed:DisconnectAll()
+		m.notice:DisconnectAll()
+		card:Destroy()
+		dimmer:Destroy()
+	end
+	return self
+end
+
+return Modals
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="102">
+            <Properties>
+              <string name="Name">Overlay</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	Overlay: the facade over OverlayGui (DESIGN.md 7): toasts and the notification list, the hover tooltip, the node
+	peek, the modals (export, import, hard reset, the Multiverse gate) and the full-screen states.
+
+	    local overlay = Overlay.new(gui)
+	    overlay:toasts(pops?, notices?)
+	    overlay:tooltip(owner, content?, at?)      content = Tooltip.Content; nil hides that owner's tooltip
+	    overlay:peek(layer?, node?, ring?)         the node peek (nil closes)
+	    overlay:detail(card?)                      the touch detail sheet: the panel package owns the card; nothing yet
+	    overlay:modal(kind?, data?)                "export" | "import" | "hardReset" | "gate" | nil
+	    overlay:importResult(imp)
+	    overlay:screen(kind?, data?)               "loading" | "fatal" | "outOfSync" | "end" | "firstRun" | nil
+	    overlay:flash(color)                       overlay:onCamera(cam)       overlay:busy() -> modal / peek open
+	    overlay.act (action, hold?), overlay.flyTo (layer), overlay.importText (text), overlay.resync (),
+	    overlay.openLayer (layer), overlay.peekClosed ()
+	Esc closes the modal, then the peek.
+]]
+
+local UserInputService = game:GetService("UserInputService")
+
+local Core = script.Parent.Parent:WaitForChild("Core")
+local Types = require(script.Parent.Parent:WaitForChild("Types"))
+local Signal = require(Core:WaitForChild("Signal"))
+local Toasts = require(script.Parent:WaitForChild("Toasts"))
+local Tooltip = require(script.Parent:WaitForChild("Tooltip"))
+local Peek = require(script.Parent:WaitForChild("Peek"))
+local Modals = require(script.Parent:WaitForChild("Modals"))
+local Screens = require(script.Parent:WaitForChild("Screens"))
+
+type Action = Types.Action
+type ARect = Types.Rect
+
+export type Overlay = {
+	act: Signal.Signal<Action, boolean?>,
+	flyTo: Signal.Signal<string>,
+	importText: Signal.Signal<string>,
+	resync: Signal.Signal<>,
+	openLayer: Signal.Signal<string>,
+	peekClosed: Signal.Signal<>,
+	toasts: (self: Overlay, pops: { Types.Popup }?, notices: { string }?) -> (),
+	tooltip: (self: Overlay, owner: any, content: Tooltip.Content?, at: Vector2?) -> (),
+	peek: (self: Overlay, layer: string?, node: Types.MapNode?, ring: ARect?) -> (),
+	detail: (self: Overlay, card: any?) -> (),
+	modal: (self: Overlay, kind: string?, data: any?) -> (),
+	importResult: (self: Overlay, imp: Types.ImportResult) -> (),
+	screen: (self: Overlay, kind: string?, data: any?) -> (),
+	flash: (self: Overlay, color: Color3) -> (),
+	onCamera: (self: Overlay, cam: Types.Camera) -> (),
+	busy: (self: Overlay) -> boolean,
+	destroy: (self: Overlay) -> (),
+}
+
+local Overlay = {}
+
+function Overlay.new(gui: ScreenGui): Overlay
+	local self = {} :: Overlay
+	self.act = Signal.new() :: Signal.Signal<Action, boolean?>
+	self.flyTo = Signal.new() :: Signal.Signal<string>
+	self.importText = Signal.new() :: Signal.Signal<string>
+	self.resync = Signal.new() :: Signal.Signal<>
+	self.openLayer = Signal.new() :: Signal.Signal<string>
+	self.peekClosed = Signal.new() :: Signal.Signal<>
+
+	local root = (gui:FindFirstChild("Root") or gui) :: GuiObject
+	local toasts = Toasts.new(root)
+	local tip = Tooltip.new(root)
+	local peek = Peek.new(root)
+	local modals = Modals.new(root)
+	local screens = Screens.new(root)
+
+	toasts.flyTo:Connect(function(l: string) self.flyTo:Fire(l) end)
+	peek.open:Connect(function(l: string) self.openLayer:Fire(l) end)
+	peek.act:Connect(function(a: Action) self.act:Fire(a, false) end)
+	peek.closed:Connect(function()
+		toasts:setCollapsed(false)
+		self.peekClosed:Fire()
+	end)
+	modals.act:Connect(function(a: Action)
+		self.act:Fire(a, false)
+	end)
+	modals.importText:Connect(function(t: string) self.importText:Fire(t) end)
+	modals.notice:Connect(function(t: string) toasts:push(nil, { t }) end)
+	screens.act:Connect(function(a: Action) self.act:Fire(a, false) end)
+	screens.resync:Connect(function() self.resync:Fire() end)
+
+	function self.toasts(_: Overlay, pops: { Types.Popup }?, notices: { string }?)
+		toasts:push(pops, notices)
+	end
+	function self.tooltip(_: Overlay, owner: any, content: Tooltip.Content?, at: Vector2?)
+		if peek:isOpen() or modals:isOpen() then
+			tip:hide()
+			return
+		end
+		tip:show(owner, content, at)
+	end
+	function self.peek(_: Overlay, layer: string?, node: Types.MapNode?, ring: ARect?)
+		tip:hide()
+		peek:show(layer, node, ring)
+		toasts:setCollapsed(layer ~= nil)
+	end
+	function self.detail(_: Overlay, _card: any?) end
+	function self.modal(_: Overlay, kind: string?, data: any?)
+		tip:hide()
+		if kind then peek:show(nil) end
+		modals:open(kind, data)
+	end
+	function self.importResult(_: Overlay, imp: Types.ImportResult)
+		modals:importResult(imp)
+	end
+	function self.screen(_: Overlay, kind: string?, data: any?)
+		screens:show(kind, data)
+	end
+	function self.flash(_: Overlay, color: Color3)
+		screens:flash(color)
+	end
+	function self.onCamera(_: Overlay, _cam: Types.Camera) end
+	function self.busy(_: Overlay): boolean
+		return peek:isOpen() ~= nil or modals:isOpen() ~= nil
+	end
+
+	local escConn = UserInputService.InputBegan:Connect(function(io: InputObject, processed: boolean)
+		if io.KeyCode ~= Enum.KeyCode.Escape then return end
+		if modals:isOpen() then
+			modals:open(nil)
+		elseif peek:isOpen() then
+			peek:show(nil)
+		end
+		local _ = processed
+	end)
+
+	function self.destroy(o: Overlay)
+		escConn:Disconnect()
+		toasts:destroy()
+		tip:destroy()
+		peek:destroy()
+		modals:destroy()
+		screens:destroy()
+		o.act:DisconnectAll()
+		o.flyTo:DisconnectAll()
+		o.importText:DisconnectAll()
+		o.resync:DisconnectAll()
+		o.openLayer:DisconnectAll()
+		o.peekClosed:DisconnectAll()
+	end
+	return self
+end
+
+return Overlay
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="103">
+            <Properties>
+              <string name="Name">Peek</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	Peek: the node peek (DESIGN.md 7.2, mock j). A long-press (touch) or right-click on a node shows a scrim with a
+	soft round hole over the node, and a 360 du card beside it: the emblem, the name (`card`), the amount (`number` +
+	unit), the node's line as body text (have / need and the progress bar when locked), OPEN (`tab`) and the
+	PRESTIGE hold (0.6 s, a ring glyph before the verb, the gain in a `badge` chip) when val.ra exists.
+	Dismiss: a tap on the scrim, Esc, or the camera moving.
+
+	The scrim is 4 dark frames around a square frame with a Radial transparency hole. The ramp can run to the square's
+	corners, so the hole is fully transparent inside and reaches the scrim's alpha by t = .7 (the inscribed circle),
+	staying there: the square never shows.
+
+	    local peek = Peek.new(root)
+	    peek:show(layer?, node?, ring?)      ring: the node's ring rect (abs); nil layer closes
+	    peek.open (layer), peek.act (action), peek.closed ()
+]]
+
+local Core = script.Parent.Parent:WaitForChild("Core")
+local Types = require(script.Parent.Parent:WaitForChild("Types"))
+local Signal = require(Core:WaitForChild("Signal"))
+local Theme = require(Core:WaitForChild("Theme"))
+local Layout = require(Core:WaitForChild("Layout"))
+local Motion = require(Core:WaitForChild("Motion"))
+local Rich = require(Core:WaitForChild("Rich"))
+local Recipes = require(Core:WaitForChild("Recipes"))
+local Kit = require(script.Parent.Parent:WaitForChild("Hud"):WaitForChild("Kit"))
+local Ready = require(script.Parent.Parent:WaitForChild("Hud"):WaitForChild("Ready"))
+local MapLogic = require(script.Parent.Parent:WaitForChild("Map"):WaitForChild("MapLogic"))
+
+type ARect = Types.Rect
+type MapNode = Types.MapNode
+
+export type Peek = {
+	frame: Frame,
+	open: Signal.Signal<string>,
+	act: Signal.Signal<Types.Action>,
+	closed: Signal.Signal<>,
+	show: (self: Peek, layer: string?, node: MapNode?, ring: ARect?) -> (),
+	isOpen: (self: Peek) -> string?,
+	destroy: (self: Peek) -> (),
+}
+
+local Peek = {}
+
+local SCRIM_A = 0.62
+local TITLES = {
+	m = "Milestone", mm = "Meta-Milestone", em = "Extra-Milestone", p = "Prestige", pe = "Prestige Energy", sp = "Super Prestige",
+	pb = "Prestige Boost", pp = "Prestige Power", se = "Super Energy", hp = "Hyper Prestige", ep = "Exotic Prestige",
+	hb = "Hyper Boost", ap = "Atomic Prestige", mp = "Multiverse", t = "Transcend", pep = "Prestiged Exotic",
+	cp = "Corrupted", cm = "Corrupted Milestone", ex = "Exploration", ach = "Achievements",
+} :: { [string]: string }
+
+function Peek.new(root: GuiObject): Peek
+	local self = {} :: Peek
+	self.open = Signal.new() :: Signal.Signal<string>
+	self.act = Signal.new() :: Signal.Signal<Types.Action>
+	self.closed = Signal.new() :: Signal.Signal<>
+
+	local f = Kit.frame(root, "Peek", 30)
+	f.Size = UDim2.fromScale(1, 1)
+	f.Visible = false
+	self.frame = f
+	-- the scrim
+	local parts: { [string]: TextButton } = {}
+	for _, n in { "Top", "Bottom", "Left", "Right", "Hole" } do
+		local p = Kit.button(f, "Scrim" .. n)
+		p.BackgroundColor3 = Color3.new(0, 0, 0)
+		p.BackgroundTransparency = SCRIM_A
+		p.ZIndex = 1
+		parts[n] = p
+		p.Activated:Connect(function() self:show(nil) end)
+	end
+	local hg = Kit.child(parts.Hole, "Hole", "UIGradient") :: UIGradient
+	if Theme.caps.Radial then
+		hg.Type = Enum.GradientType.Radial
+		hg.Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 1),
+			NumberSequenceKeypoint.new(0.36, 1),
+			NumberSequenceKeypoint.new(0.7, 0),
+			NumberSequenceKeypoint.new(1, 0),
+		})
+	end
+
+	local card = Kit.frame(f, "Card", 5)
+	card.AutomaticSize = Enum.AutomaticSize.Y
+	card.BackgroundColor3 = Color3.new(1, 1, 1)
+	card.BackgroundTransparency = 0.02
+	card.Active = true
+	Kit.corner(card, UDim.new(0, 16))
+	Kit.grad(card, { Theme.C.panel2, Theme.C.panel }, 90, nil, "Back")
+	local rim = Kit.stroke(card, 2, Theme.C.strokeHi, 1, "Rim")
+	Kit.pad(card, 16, 18, 16, 18)
+	Kit.list(card, "y", 10, Enum.HorizontalAlignment.Left)
+
+	local head = Kit.frame(card, "Head")
+	head.LayoutOrder = 1
+	head.Size = UDim2.new(1, 0, 0, 52)
+	local titleL = Kit.label(head, "Title", "card", "", Color3.new(1, 1, 1))
+	titleL.Position = UDim2.fromOffset(64, 4)
+	titleL.Size = UDim2.new(1, -64, 0, 24)
+	titleL.TextXAlignment = Enum.TextXAlignment.Left
+	titleL.TextTruncate = Enum.TextTruncate.AtEnd
+	local amountL = Kit.label(head, "Amount", "number", "", Theme.C.text)
+	amountL.Position = UDim2.fromOffset(64, 30)
+	amountL.Size = UDim2.new(1, -64, 0, 20)
+	amountL.TextXAlignment = Enum.TextXAlignment.Left
+	amountL.RichText = true
+	amountL.TextTruncate = Enum.TextTruncate.AtEnd
+
+	local body = Kit.label(card, "Body", "body", "", Theme.C.text)
+	body.LayoutOrder = 2
+	body.AutomaticSize = Enum.AutomaticSize.Y
+	body.Size = UDim2.fromScale(1, 0)
+	body.TextWrapped = true
+	body.RichText = true
+	body.TextXAlignment = Enum.TextXAlignment.Left
+	body.TextTransparency = 0.08
+
+	local bar = Kit.frame(card, "Bar")
+	bar.LayoutOrder = 3
+	bar.Size = UDim2.new(1, 0, 0, 18)
+	local track = Kit.frame(bar, "Track")
+	track.AnchorPoint = Vector2.new(0, 0.5)
+	track.Position = UDim2.fromScale(0, 0.5)
+	track.Size = UDim2.new(1, -56, 0, 6)
+	track.BackgroundColor3 = Theme.C.deep
+	track.BackgroundTransparency = 0
+	Kit.corner(track)
+	local fill = Kit.frame(track, "Fill")
+	fill.BackgroundTransparency = 0
+	Kit.corner(fill)
+	local pct = Kit.label(bar, "Pct", "number", "", Theme.C.text)
+	pct.AnchorPoint = Vector2.new(1, 0.5)
+	pct.Position = UDim2.fromScale(1, 0.5)
+	pct.Size = UDim2.fromOffset(52, 18)
+	pct.TextXAlignment = Enum.TextXAlignment.Right
+
+	local buttons = Kit.frame(card, "Buttons")
+	buttons.LayoutOrder = 4
+	buttons.Size = UDim2.new(1, 0, 0, 52)
+	Kit.list(buttons, "x", 10, Enum.HorizontalAlignment.Left, Enum.VerticalAlignment.Center)
+
+	local layer: string? = nil
+	local hold: Recipes.Hold? = nil
+	local shownAt: ARect? = nil
+
+	local function setHole(r: ARect?)
+		local s = Layout.s
+		local ra = root.AbsolutePosition
+		local top, bottom, left, right, h = parts.Top, parts.Bottom, parts.Left, parts.Right, parts.Hole
+		if r == nil or not Theme.caps.Radial then
+			top.Position = UDim2.new()
+			top.Size = UDim2.fromScale(1, 1)
+			for _, p in { bottom, left, right, h } do p.Visible = false end
+			return
+		end
+		local rr = r :: ARect
+		local cx, cy = (rr.x + rr.w / 2 - ra.X) / s, (rr.y + rr.h / 2 - ra.Y) / s
+		local side = math.max(rr.w, rr.h) * 1.7 / s
+		local x0, y0 = cx - side / 2, cy - side / 2
+		top.Position = UDim2.new()
+		top.Size = UDim2.new(1, 0, 0, math.max(0, y0))
+		bottom.Position = UDim2.fromOffset(0, y0 + side)
+		bottom.Size = UDim2.new(1, 0, 1, -(y0 + side))
+		left.Position = UDim2.fromOffset(0, y0)
+		left.Size = UDim2.fromOffset(math.max(0, x0), side)
+		right.Position = UDim2.fromOffset(x0 + side, y0)
+		right.Size = UDim2.new(1, -(x0 + side), 0, side)
+		h.Position = UDim2.fromOffset(x0, y0)
+		h.Size = UDim2.fromOffset(side, side)
+		h.BackgroundTransparency = 0
+		for _, p in { top, bottom, left, right, h } do p.Visible = true end
+		-- the hole frame is transparent inside: the scrim's alpha lives in the gradient
+		h.BackgroundTransparency = 0
+		hg.Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 1),
+			NumberSequenceKeypoint.new(0.36, 1),
+			NumberSequenceKeypoint.new(0.7, SCRIM_A),
+			NumberSequenceKeypoint.new(1, SCRIM_A),
+		})
+	end
+
+	local function placeCard(r: ARect?)
+		local s = Layout.s
+		local ra, rs = root.AbsolutePosition, root.AbsoluteSize
+		local W, H = rs.X / s, rs.Y / s
+		local w = if Layout.mode == "COMPACT" then 320 else 360
+		card.Size = UDim2.fromOffset(w, 0)
+		local h = math.max(160, card.AbsoluteSize.Y / s)
+		local x, y = (W - w) / 2, (H - h) / 2
+		if r then
+			local cx, cy = (r.x + r.w / 2 - ra.X) / s, (r.y + r.h / 2 - ra.Y) / s
+			local half = math.max(r.w, r.h) / s * 0.85
+			x = if cx + half + 16 + w <= W - 8 then cx + half + 16 else cx - half - 16 - w
+			y = cy - h / 2
+		end
+		card.Position = UDim2.fromOffset(math.floor(math.clamp(x, 8, math.max(8, W - w - 8))), math.floor(math.clamp(y, 8, math.max(8, H - h - 8))))
+	end
+
+	local function clearButtons()
+		if hold then
+			(hold :: Recipes.Hold):destroy()
+			hold = nil
+		end
+		for _, c in buttons:GetChildren() do
+			if c:IsA("GuiObject") then c:Destroy() end
+		end
+	end
+
+	function self.show(p: Peek, l: string?, node: MapNode?, ring: ARect?)
+		if l == nil then
+			if layer ~= nil then
+				layer = nil
+				clearButtons()
+				f.Visible = false
+				p.closed:Fire()
+			end
+			return
+		end
+		local lay = l :: string
+		layer = lay
+		shownAt = ring
+		local hue = Theme.hue(lay)
+		local v = node and node.val
+		rim.Color = Theme.lift(hue, 0.25)
+		local old = head:FindFirstChild("Emblem")
+		if old then old:Destroy() end
+		local g = Ready.gem(head, "Emblem", lay, (node and node.sym) or string.upper(lay), 52)
+		g.Position = UDim2.fromOffset(0, 0)
+		titleL.Text = string.upper(TITLES[lay] or (node and node.name) or lay)
+		Theme.text(titleL, "card")
+		local lit = v ~= nil and v.lit
+		if v and lit then
+			local pts = v.pts or "0"
+			if lay == "ach" and v.tot then pts = pts .. " / " .. v.tot end
+			local res = MapLogic.plain(v.res)
+			amountL.Text = Rich.num(pts .. (if res ~= "" then " " .. res else ""), { size = Theme.size("number"), unit = Theme.C.soft })
+		else
+			amountL.Text = if v and v.req then Rich.num("Need " .. v.req .. " " .. MapLogic.unit(v.rres), { size = Theme.size("number"), unit = Theme.C.soft }) else ""
+		end
+		local tip = v and v.tip
+		body.Text = if tip then Rich.html(tip, Theme.size("body"), lay) else ""
+		body.Visible = body.Text ~= ""
+		Theme.text(body, "body")
+		local prv = v and v.pr
+		bar.Visible = prv ~= nil and not lit
+		if prv then
+			local pr = math.clamp(prv / 1000, 0, 1)
+			fill.Size = UDim2.fromScale(pr, 1)
+			fill.BackgroundColor3 = Theme.lift(hue, 0.1)
+			pct.Text = Rich.pct(pr)
+		end
+		clearButtons()
+		if node and node.show then
+			local ob, ol = Kit.action(buttons, "Open", Rich.caps("Open"), { style = "quiet", h = 52 })
+			ob.LayoutOrder = 1
+			local chev = Kit.glyph(ol.Parent :: Instance, "Chev", "chev", Color3.new(1, 1, 1))
+			chev.LayoutOrder = 3
+			chev.Size = UDim2.fromOffset(12, 12)
+			ob.Activated:Connect(function()
+				p:show(nil)
+				p.open:Fire(lay)
+			end)
+		end
+		local ra = v and v.ra
+		if ra and node then
+			local pb, pl = Kit.action(buttons, "Prestige", Rich.caps("Prestige"), { style = "primary", hue = hue, h = 52 })
+			pb.LayoutOrder = 2
+			local content = pl.Parent :: Instance
+			local ringG = Kit.glyph(content, "RingGlyph", "ring", Color3.new(1, 1, 1))
+			ringG.LayoutOrder = 1
+			ringG.Size = UDim2.fromOffset(16, 16)
+			local gain = v and v.gain
+			if gain then
+				local chip, cl = Kit.chip(content, "Gain", "badge", "", { h = 26, pad = 8, fg = Color3.new(1, 1, 1), bg = Theme.C.deep,
+					bgA = 0.55 })
+				chip.LayoutOrder = 3
+				cl.RichText = true
+				cl.Text = Rich.num("+" .. Rich.short(gain), { size = Theme.size("badge"), onFill = true })
+			end
+			local action = ra
+			hold = Recipes.hold(pb, { dur = 0.6, ring = false, color = Color3.new(0, 0, 0), onDone = function()
+				p.act:Fire(action)
+				p:show(nil)
+			end })
+		end
+		buttons.Visible = #buttons:GetChildren() > 1
+		setHole(ring)
+		f.Visible = true
+		placeCard(ring)
+		task.defer(function()
+			if layer == lay then placeCard(shownAt) end
+		end)
+		local sc = Motion.scaleOf(card)
+		sc.Scale = 0.96
+		Motion.tween(sc, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Scale = 1 }, "peekOpen")
+	end
+	function self.isOpen(_: Peek): string?
+		return layer
+	end
+	function self.destroy(p: Peek)
+		clearButtons()
+		p.open:DisconnectAll()
+		p.act:DisconnectAll()
+		p.closed:DisconnectAll()
+		f:Destroy()
+	end
+	return self
+end
+
+return Peek
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="104">
+            <Properties>
+              <string name="Name">Screens</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	Screens: the full-screen states of DESIGN.md 7.10-7.12 (mock j).
+
+	    loading    "THE MILESTONE TREE" (R3 gradient), a progress bar from the preload count, LOADING THE REALM...
+	    fatal      the error text with "Your save is safe on the server."
+	    outOfSync  OUT OF SYNC · the screen stopped updating · RESYNC (fires `resync`)
+	    end        the star emblem, YOU BEAT THE GAME!, the win text on a scrim band, IT TOOK YOU <took>,
+	               PLAY AGAIN (2 s hold) and KEEP GOING (their actions come from the view's end screen)
+	    firstRun   drawn on the map by Nodes (the START HERE cue); nothing here
+
+	    local screens = Screens.new(root)
+	    screens:show(kind?, data?)     nil hides; loading data = { done, total } or a status string
+	    screens:flash(color)           a full-screen colour flash (universe change, hard reset)
+	    screens.act (action), screens.resync ()
+]]
+
+local Core = script.Parent.Parent:WaitForChild("Core")
+local Types = require(script.Parent.Parent:WaitForChild("Types"))
+local Signal = require(Core:WaitForChild("Signal"))
+local Theme = require(Core:WaitForChild("Theme"))
+local Layout = require(Core:WaitForChild("Layout"))
+local Motion = require(Core:WaitForChild("Motion"))
+local Rich = require(Core:WaitForChild("Rich"))
+local Recipes = require(Core:WaitForChild("Recipes"))
+local Kit = require(script.Parent.Parent:WaitForChild("Hud"):WaitForChild("Kit"))
+
+export type Screens = {
+	frame: Frame,
+	act: Signal.Signal<Types.Action>,
+	resync: Signal.Signal<>,
+	show: (self: Screens, kind: string?, data: any?) -> (),
+	flash: (self: Screens, color: Color3) -> (),
+	current: (self: Screens) -> string?,
+	destroy: (self: Screens) -> (),
+}
+
+local Screens = {}
+
+local GOLD = Color3.fromHex("ffc233")
+
+function Screens.new(root: GuiObject): Screens
+	local self = {} :: Screens
+	self.act = Signal.new() :: Signal.Signal<Types.Action>
+	self.resync = Signal.new() :: Signal.Signal<>
+
+	local f = Kit.button(root, "Screen")
+	f.Size = UDim2.fromScale(1, 1)
+	f.ZIndex = 80
+	f.BackgroundTransparency = 0
+	f.BackgroundColor3 = Theme.C.void
+	f.Visible = false
+	if Theme.caps.InputSink then
+		pcall(function() (f :: any).InputSink = (Enum :: any).InputSink.All end)
+	end
+	self.frame = f :: any
+
+	local flashF = Kit.frame(root, "Flash", 90)
+	flashF.Size = UDim2.fromScale(1, 1)
+	flashF.BackgroundTransparency = 1
+	flashF.Visible = false
+	pcall(function() flashF.Interactable = false end)
+
+	local kind: string? = nil
+	local holds: { Recipes.Hold } = {}
+	local bar: Frame? = nil
+	local barPct: TextLabel? = nil
+	local statusL: TextLabel? = nil
+
+	local function clear()
+		for _, h in holds do h:destroy() end
+		table.clear(holds)
+		for _, c in f:GetChildren() do
+			if c:IsA("GuiObject") then c:Destroy() end
+		end
+		bar, barPct, statusL = nil, nil, nil
+	end
+
+	local function card(name: string, w: number, hue: Color3): Frame
+		local c = Kit.frame(f, name, 2)
+		c.AnchorPoint = Vector2.new(0.5, 0.5)
+		c.Position = UDim2.fromScale(0.5, 0.5)
+		c.AutomaticSize = Enum.AutomaticSize.Y
+		c.Size = UDim2.fromOffset(math.min(w, Layout.canvas.X - 32), 0)
+		c.BackgroundColor3 = Color3.new(1, 1, 1)
+		c.BackgroundTransparency = 0
+		Kit.corner(c, UDim.new(0, 18))
+		Kit.grad(c, { Theme.C.panel2, Theme.C.panel }, 90, nil, "Back")
+		Kit.stroke(c, 2, hue, 1, "Rim")
+		Kit.pad(c, 24, 28, 24, 28)
+		Kit.list(c, "y", 14, Enum.HorizontalAlignment.Left)
+		return c
+	end
+	local function title(parent: Instance, order: number, text: string, hue: Color3, role: string, size: number?): TextLabel
+		local t = Kit.label(parent, "Title", role, "", Color3.new(1, 1, 1))
+		t.LayoutOrder = order
+		t.Size = UDim2.new(1, 0, 0, (size or Theme.size(role)) + 8)
+		t.TextXAlignment = Enum.TextXAlignment.Left
+		Recipes.title(t, { text = string.upper(text), role = role, from = Color3.new(1, 1, 1), to = Theme.lift(hue, 0.45),
+			stroke = if (size or Theme.size(role)) >= 40 then 6 else 4, shadow = if (size or Theme.size(role)) >= 40 then 4 else 3, size = size })
+		return t
+	end
+	local function text(parent: Instance, order: number, s: string, role: string?, color: Color3?): TextLabel
+		local l = Kit.label(parent, "Text" .. order, role or "body", s, color or Theme.C.text)
+		l.LayoutOrder = order
+		l.AutomaticSize = Enum.AutomaticSize.Y
+		l.Size = UDim2.fromScale(1, 0)
+		l.TextWrapped = true
+		l.RichText = true
+		l.TextXAlignment = Enum.TextXAlignment.Left
+		return l
+	end
+
+	local function buildLoading(data: any)
+		f.BackgroundColor3 = Theme.C.void
+		f.BackgroundTransparency = 0
+		local c = card("Card", 620, Theme.hue("m"))
+		title(c, 1, "The Milestone Tree", Theme.hue("m"), "title", if Layout.mode == "COMPACT" then 27 else 40)
+		local b = Kit.frame(c, "Bar")
+		b.LayoutOrder = 2
+		b.Size = UDim2.new(1, 0, 0, 20)
+		local track = Kit.frame(b, "Track")
+		track.AnchorPoint = Vector2.new(0, 0.5)
+		track.Position = UDim2.fromScale(0, 0.5)
+		track.Size = UDim2.new(1, -64, 0, 10)
+		track.BackgroundColor3 = Theme.C.deep
+		track.BackgroundTransparency = 0
+		Kit.corner(track)
+		local fill = Kit.frame(track, "Fill")
+		fill.Size = UDim2.fromScale(0, 1)
+		fill.BackgroundColor3 = Color3.new(1, 1, 1)
+		fill.BackgroundTransparency = 0
+		Kit.grad(fill, { Theme.hue("m"), Theme.lift(Theme.hue("m"), 0.3) }, 0)
+		Kit.corner(fill)
+		local pct = Kit.label(b, "Pct", "number", "", Theme.C.text)
+		pct.AnchorPoint = Vector2.new(1, 0.5)
+		pct.Position = UDim2.fromScale(1, 0.5)
+		pct.Size = UDim2.fromOffset(60, 20)
+		pct.TextXAlignment = Enum.TextXAlignment.Right
+		bar, barPct = fill, pct
+		statusL = text(c, 3, Rich.caps("Loading the realm…"), "caps", Theme.C.soft)
+		local _ = data
+	end
+	local function setLoading(data: any)
+		local fill, pct = bar, barPct
+		if type(data) == "table" and type(data.done) == "number" and type(data.total) == "number" and fill and pct then
+			local p = if data.total > 0 then math.clamp(data.done / data.total, 0, 1) else 1
+			fill.Size = UDim2.fromScale(p, 1)
+			pct.Text = Rich.pct(p)
+		elseif type(data) == "string" and statusL then
+			(statusL :: TextLabel).Text = Rich.caps(data)
+		end
+	end
+
+	local function buildFatal(data: any)
+		f.BackgroundColor3 = Theme.C.void
+		f.BackgroundTransparency = 0.05
+		local c = card("Card", 620, Theme.C.danger)
+		title(c, 1, "Something went wrong", Theme.C.danger, "section")
+		text(c, 2, Rich.html(tostring(data or ""), Theme.size("body"), nil))
+		text(c, 3, "Your save is safe on the server.", "small", Theme.C.soft)
+	end
+
+	local function buildOutOfSync()
+		f.BackgroundColor3 = Color3.new(0, 0, 0)
+		f.BackgroundTransparency = 0.35
+		local c = card("Card", 560, Theme.C.info)
+		title(c, 1, "Out of sync", Theme.C.info, "section")
+		text(c, 2, "The screen stopped updating.\nYour save is safe on the server.")
+		local row = Kit.frame(c, "Buttons")
+		row.LayoutOrder = 3
+		row.Size = UDim2.new(1, 0, 0, 52)
+		local b = Kit.action(row, "Primary", Rich.caps("Resync"), { style = "primary", hue = Theme.C.info, role = "cta" })
+		b.Size = UDim2.new(1, 0, 0, 52)
+		b.AutomaticSize = Enum.AutomaticSize.None
+		b.Activated:Connect(function() self.resync:Fire() end)
+	end
+
+	local function buildEnd(data: any)
+		f.BackgroundColor3 = Color3.fromHex("0c0812")
+		f.BackgroundTransparency = 0
+		local g = Kit.grad(f, { Color3.fromHex("2a2008"), Color3.fromHex("0c0812") }, 90, nil, "Back")
+		local _ = g
+		local col = Kit.frame(f, "End", 2)
+		col.AnchorPoint = Vector2.new(0.5, 0.5)
+		col.Position = UDim2.fromScale(0.5, 0.5)
+		col.AutomaticSize = Enum.AutomaticSize.Y
+		col.Size = UDim2.fromOffset(math.min(820, Layout.canvas.X - 32), 0)
+		Kit.list(col, "y", 16, Enum.HorizontalAlignment.Center)
+		local star = Kit.frame(col, "Emblem", 2)
+		star.LayoutOrder = 1
+		star.Size = UDim2.fromOffset(96, 96)
+		Kit.gem(star, GOLD, { hi = 0.6, lo = 0.5 })
+		Kit.stroke(star, 3, Color3.fromHex("fff1b8"), 1, "Rim")
+		local sg = Kit.glyph(star, "Star", "star", Color3.new(1, 1, 1))
+		sg.AnchorPoint = Vector2.new(0.5, 0.5)
+		sg.Position = UDim2.fromScale(0.5, 0.5)
+		sg.Size = UDim2.fromScale(0.5, 0.5)
+		sg.ZIndex = 4
+		local compact = Layout.mode == "COMPACT"
+		local t = title(col, 2, "You beat the game!", GOLD, "title", if compact then 36 else 64)
+		t.TextXAlignment = Enum.TextXAlignment.Center
+		for _, n in { "Shadow", "Fill" } do
+			local x = t:FindFirstChild(n) :: TextLabel?
+			if x then x.TextXAlignment = Enum.TextXAlignment.Center end
+		end
+		local d = if type(data) == "table" then data else {}
+		local band = Kit.frame(col, "Band", 2)
+		band.LayoutOrder = 3
+		band.AutomaticSize = Enum.AutomaticSize.Y
+		band.Size = UDim2.new(0.8, 0, 0, 0)
+		band.BackgroundColor3 = Color3.new(0, 0, 0)
+		band.BackgroundTransparency = 0.5
+		Kit.corner(band, UDim.new(0, 12))
+		Kit.pad(band, 12, 18, 12, 18)
+		local win = Kit.label(band, "Win", "body", "", Theme.C.text)
+		win.AutomaticSize = Enum.AutomaticSize.Y
+		win.Size = UDim2.fromScale(1, 0)
+		win.TextWrapped = true
+		win.RichText = true
+		win.Text = Rich.html(if type(d.win) == "string" then d.win else "You have reached the end.", Theme.size("body"), nil)
+		if type(d.took) == "string" then
+			local chip = Kit.frame(col, "Took", 2)
+			chip.LayoutOrder = 4
+			chip.AutomaticSize = Enum.AutomaticSize.X
+			chip.Size = UDim2.fromOffset(0, 30)
+			chip.BackgroundColor3 = Theme.C.deep
+			chip.BackgroundTransparency = 0.1
+			Kit.corner(chip)
+			Kit.stroke(chip, 1.5, GOLD, 1, "Rim")
+			Kit.pad(chip, 0, 14, 0, 14)
+			Kit.list(chip, "x", 8, Enum.HorizontalAlignment.Center, Enum.VerticalAlignment.Center)
+			local k = Kit.label(chip, "Key", "caps", Rich.caps("It took you"), Color3.fromHex("ffe9a3"))
+			k.LayoutOrder = 1
+			k.AutomaticSize = Enum.AutomaticSize.X
+			k.Size = UDim2.fromScale(0, 1)
+			local v = Kit.label(chip, "Value", "number", "", Color3.new(1, 1, 1))
+			v.LayoutOrder = 2
+			v.AutomaticSize = Enum.AutomaticSize.X
+			v.Size = UDim2.fromScale(0, 1)
+			v.RichText = true
+			v.Text = Rich.num(d.took, { size = Theme.size("number"), unit = Theme.C.soft })
+		end
+		local row = Kit.frame(col, "Buttons", 2)
+		row.LayoutOrder = 5
+		row.AutomaticSize = Enum.AutomaticSize.X
+		row.Size = UDim2.fromOffset(0, 56)
+		Kit.list(row, "x", 16, Enum.HorizontalAlignment.Center, Enum.VerticalAlignment.Center)
+		if type(d.again) == "table" then
+			local again = d.again
+			local b, l = Kit.action(row, "Again", Rich.caps("Play again"), { style = "quiet", h = 52 })
+			b.LayoutOrder = 1
+			local content = l.Parent :: Instance
+			local rg = Kit.glyph(content, "RingGlyph", "ring", Color3.new(1, 1, 1))
+			rg.LayoutOrder = 1
+			rg.Size = UDim2.fromOffset(18, 18)
+			local chip, cl = Kit.chip(content, "Time", "badge", "2 s", { h = 24, pad = 7, fg = Color3.new(1, 1, 1), bg = Theme.C.deep, bgA = 0.6 })
+			chip.LayoutOrder = 3
+			local _ = cl
+			table.insert(holds, Recipes.hold(b, { dur = 2, ring = false, color = Color3.new(0, 0, 0), onDone = function()
+				self.act:Fire(again)
+			end }))
+		end
+		if type(d.keep) == "table" then
+			local keep = d.keep
+			local b = Kit.action(row, "Keep", Rich.caps("Keep going"), { style = "gold", h = 52, role = "cta" })
+			b.LayoutOrder = 2
+			b.Activated:Connect(function() self.act:Fire(keep) end)
+		end
+	end
+
+	function self.show(_: Screens, k: string?, data: any?)
+		if k == "loading" and kind == "loading" then
+			setLoading(data)
+			return
+		end
+		if k == nil or k == "firstRun" then
+			kind = nil
+			clear()
+			f.Visible = false
+			return
+		end
+		clear()
+		local old = f:FindFirstChild("Back")
+		if old then old:Destroy() end
+		kind = k
+		if k == "loading" then
+			buildLoading(data)
+			setLoading(data)
+		elseif k == "fatal" then
+			buildFatal(data)
+		elseif k == "outOfSync" then
+			buildOutOfSync()
+		elseif k == "end" then
+			buildEnd(data)
+		end
+		f:SetAttribute("Kind", k)
+		f.Visible = true
+	end
+	function self.flash(_: Screens, color: Color3)
+		flashF.BackgroundColor3 = color
+		flashF.BackgroundTransparency = 0.4
+		flashF.Visible = true
+		Motion.tween(flashF, TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundTransparency = 1 }, "screenFlash", true)
+		task.delay(0.65, function() flashF.Visible = false end)
+	end
+	function self.current(_: Screens): string?
+		return kind
+	end
+	function self.destroy(s: Screens)
+		clear()
+		s.act:DisconnectAll()
+		s.resync:DisconnectAll()
+		f:Destroy()
+		flashF:Destroy()
+	end
+	return self
+end
+
+return Screens
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="105">
+            <Properties>
+              <string name="Name">ToastModel</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	ToastModel: the pure bookkeeping behind the toasts (DESIGN.md 4.7): coalescing, the ×N count, the sub line of a
+	merged toast (a count or a range, never joined names), expiry and the notification history (the last 20).
+	No Roblox services: the unit tests run it under plain luau (port/tests/unit/overlay.luau).
+
+	    local model = ToastModel.new()
+	    local t, merged = model:push({ kind, title, sub, layer }, now)   -- kind: milestone | achievement | corruption |
+	                                                                     -- other | notice
+	    model:active(now)          the live toasts, newest first
+	    model:history()            the last 20 (newest first); model:clear()
+	    ToastModel.kindOf(pop)     the view's kind, else guessed from title / type
+	    ToastModel.plain(html)     the popup message as plain text
+]]
+
+local ToastModel = {}
+
+export type Item = { kind: string, title: string, sub: string, layer: string? }
+export type Toast = {
+	id: number,
+	kind: string,
+	title: string,
+	sub: string,
+	layer: string?,
+	count: number,
+	subs: { string },
+	born: number, -- the last push (a merge restarts the life)
+	life: number,
+}
+export type Model = {
+	push: (self: Model, item: Item, now: number) -> (Toast, boolean),
+	active: (self: Model, now: number) -> { Toast },
+	history: (self: Model) -> { Toast },
+	clear: (self: Model) -> (),
+}
+
+ToastModel.LIFE = 4
+ToastModel.NOTICE_LIFE = 6
+ToastModel.HISTORY = 20
+
+function ToastModel.plain(s: string?): string
+	if s == nil then return "" end
+	local t = string.gsub(s, "<br%s*/?>", " ")
+	t = string.gsub(t, "<[^>]*>", "")
+	t = string.gsub(t, "&nbsp;", " ")
+	t = string.gsub(t, "&lt;", "<")
+	t = string.gsub(t, "&gt;", ">")
+	t = string.gsub(t, "&amp;", "&")
+	t = string.gsub(t, "%s+", " ")
+	t = string.gsub(t, "^ ", "")
+	t = string.gsub(t, " $", "")
+	return t
+end
+
+function ToastModel.kindOf(p: { [string]: any }): string
+	local k = p.kind
+	if type(k) == "string" and k ~= "" and k ~= "other" then return k end
+	local title = if type(p.title) == "string" then string.lower(p.title) else ""
+	local ty = if type(p.type) == "string" then p.type else ""
+	if ty == "milestone" or string.find(title, "milestone", 1, true) then return "milestone" end
+	if ty == "achievement" or string.find(title, "achievement", 1, true) then return "achievement" end
+	if string.find(title, "corruption", 1, true) then return "corruption" end
+	if string.find(title, "challenge", 1, true) then return "challenge" end
+	return if type(k) == "string" and k ~= "" then k else "other"
+end
+
+-- "18th Meta-Milestone" -> 18, "Meta-Milestone"; "Spark Milestone #2" -> 2, "Spark Milestone #"
+local function ordinal(s: string): (number?, string?)
+	local n, rest = string.match(s, "^(%d+)%a%a%s+(.+)$")
+	if n and rest then return tonumber(n), "o|" .. rest end
+	local head, m = string.match(s, "^(.-#)(%d+)$")
+	if head and m then return tonumber(m), "h|" .. head end
+	return nil, nil
+end
+local function suffix(n: number): string
+	local t = n % 100
+	if t >= 11 and t <= 13 then return "th" end
+	local u = n % 10
+	return if u == 1 then "st" elseif u == 2 then "nd" elseif u == 3 then "rd" else "th"
+end
+
+-- the sub line of a merged toast
+function ToastModel.mergedSub(kind: string, subs: { string }): string
+	local n = #subs
+	if n <= 1 then return subs[1] or "" end
+	local lo, hi, key = math.huge, -math.huge, nil :: string?
+	local same = true
+	for _, s in subs do
+		local v, k = ordinal(s)
+		if v == nil or k == nil then
+			same = false
+			break
+		end
+		if key == nil then
+			key = k
+		elseif key ~= k then
+			same = false
+			break
+		end
+		lo, hi = math.min(lo, v), math.max(hi, v)
+	end
+	if same and key then
+		local kind2, rest = string.sub(key, 1, 1), string.sub(key, 3)
+		if kind2 == "o" then
+			return string.format("%d%s – %d%s %s", lo, suffix(lo), hi, suffix(hi), rest)
+		end
+		return string.format("%s%d – #%d", rest, lo, hi)
+	end
+	if kind == "achievement" then return string.format("%d achievements", n) end
+	if kind == "milestone" then return string.format("%d milestones", n) end
+	return string.format("%d updates", n)
+end
+
+function ToastModel.new(): Model
+	local self = {} :: Model
+	local live: { Toast } = {}
+	local hist: { Toast } = {}
+	local nextId = 0
+
+	function self.push(_: Model, item: Item, now: number): (Toast, boolean)
+		local life = if item.kind == "notice" then ToastModel.NOTICE_LIFE else ToastModel.LIFE
+		for _, t in live do
+			if t.kind == item.kind and t.title == item.title and now - t.born < t.life and item.kind ~= "notice" then
+				t.count += 1
+				table.insert(t.subs, item.sub)
+				t.sub = ToastModel.mergedSub(t.kind, t.subs)
+				t.born = now
+				t.layer = item.layer or t.layer
+				return t, true
+			end
+		end
+		nextId += 1
+		local t: Toast = {
+			id = nextId, kind = item.kind, title = item.title, sub = item.sub, layer = item.layer, count = 1,
+			subs = { item.sub }, born = now, life = life,
+		}
+		table.insert(live, 1, t)
+		table.insert(hist, 1, t)
+		while #hist > ToastModel.HISTORY do table.remove(hist) end
+		return t, false
+	end
+	function self.active(_: Model, now: number): { Toast }
+		local i = 1
+		while i <= #live do
+			local t = live[i]
+			if now - t.born >= t.life then table.remove(live, i) else i += 1 end
+		end
+		return live
+	end
+	function self.history(_: Model): { Toast }
+		return hist
+	end
+	function self.clear(_: Model)
+		table.clear(hist)
+	end
+	return self
+end
+
+return ToastModel
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="106">
+            <Properties>
+              <string name="Name">Toasts</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	Toasts: the coalescing toasts at the top right of the free map rect, the "+N more" chip and the notification list
+	(DESIGN.md 4.7, 7.3; mock h). The bookkeeping is ToastModel (pure).
+
+	    Toast_<id>  400 x 72 (COMPACT 260 x 56): a horizontal hue gradient, hue rim, icon disc, title (`toast`, thin
+	                outline) + ×N chip, sub (`small`), a 3 du life bar. Click-through. Enter: slide 60 du, Back Out.
+	    More        "+N more" glass chip (bell); opens the list
+	    Notify      the last 20: rows (title `cardSmall`, sub `small`), "EARLIER N", CLEAR; a row flies to its layer
+
+	    local toasts = Toasts.new(root)
+	    toasts:push(pops?, notices?)     toasts:setCollapsed(b)    toasts.flyTo (layer)
+]]
+
+local Core = script.Parent.Parent:WaitForChild("Core")
+local Types = require(script.Parent.Parent:WaitForChild("Types"))
+local Signal = require(Core:WaitForChild("Signal"))
+local Theme = require(Core:WaitForChild("Theme"))
+local Layout = require(Core:WaitForChild("Layout"))
+local Motion = require(Core:WaitForChild("Motion"))
+local Rich = require(Core:WaitForChild("Rich"))
+local Kit = require(script.Parent.Parent:WaitForChild("Hud"):WaitForChild("Kit"))
+local ToastModel = require(script.Parent:WaitForChild("ToastModel"))
+
+export type Toasts = {
+	frame: Frame,
+	flyTo: Signal.Signal<string>,
+	push: (self: Toasts, pops: { Types.Popup }?, notices: { string }?) -> (),
+	setCollapsed: (self: Toasts, b: boolean) -> (),
+	destroy: (self: Toasts) -> (),
+}
+
+local Toasts = {}
+local instances = 0
+
+local KIND: { [string]: { color: Color3, glyph: string } } = {
+	milestone = { color = Color3.fromHex("ffc233"), glyph = "star" },
+	achievement = { color = Theme.C.info, glyph = "star" },
+	corruption = { color = Theme.hue("cp"), glyph = "check" },
+	challenge = { color = Color3.fromHex("ffc233"), glyph = "star" },
+	notice = { color = Theme.C.muted, glyph = "info" },
+	other = { color = Theme.C.system, glyph = "bell" },
+}
+
+-- the HUD glass (R10) at alpha .88
+local function glass(f: Frame)
+	f.BackgroundColor3 = Theme.C.glass
+	f.BackgroundTransparency = 0.12
+	f.BorderSizePixel = 0
+	Kit.stroke(f, 1, Color3.new(1, 1, 1), 0.14, "GlassRim")
+end
+
+local function iconDisc(parent: Instance, name: string, kind: string, d: number): Frame
+	local spec = KIND[kind] or KIND.other
+	local disc = Kit.frame(parent, name, 3)
+	disc.Size = UDim2.fromOffset(d, d)
+	Kit.gem(disc, spec.color, { hi = 0.6, lo = 0.45 })
+	Kit.stroke(disc, 2, Theme.lift(spec.color, 0.5), 0.9, "Rim")
+	local g = Kit.glyph(disc, "Icon", spec.glyph, Color3.new(1, 1, 1), Theme.shade(spec.color, 0.6))
+	g.AnchorPoint = Vector2.new(0.5, 0.5)
+	g.Position = UDim2.fromScale(0.5, 0.5)
+	g.Size = UDim2.fromScale(0.5, 0.5)
+	g.ZIndex = 4
+	return disc
+end
+Toasts.iconDisc = iconDisc
+
+function Toasts.new(root: GuiObject): Toasts
+	local self = {} :: Toasts
+	self.flyTo = Signal.new() :: Signal.Signal<string>
+	local model = ToastModel.new()
+	instances += 1
+	local rectKey = "overlay.toasts" .. (if instances > 1 then tostring(instances) else "")
+	local holder = Kit.frame(root, "Toasts", 20)
+	holder.AnchorPoint = Vector2.new(1, 0)
+	pcall(function() holder.Interactable = false end)
+	self.frame = holder
+	local views: { [number]: Frame? } = {}
+	local collapsed = false
+	local listOpen = false
+
+	-- the "+N more" chip and the notification list (these take input)
+	local more = Kit.frame(root, "More", 21)
+	more.AnchorPoint = Vector2.new(1, 0)
+	more.AutomaticSize = Enum.AutomaticSize.X
+	glass(more)
+	Kit.corner(more)
+	local mc = Kit.frame(more, "Content")
+	mc.AutomaticSize = Enum.AutomaticSize.X
+	mc.Size = UDim2.fromScale(0, 1)
+	Kit.list(mc, "x", 6, Enum.HorizontalAlignment.Left, Enum.VerticalAlignment.Center)
+	local bell = Kit.glyph(mc, "Bell", "bell", Color3.new(1, 1, 1))
+	bell.LayoutOrder = 1
+	bell.Size = UDim2.fromOffset(14, 14)
+	local moreLabel = Kit.label(mc, "Label", "label", "", Color3.new(1, 1, 1))
+	moreLabel.LayoutOrder = 2
+	moreLabel.AutomaticSize = Enum.AutomaticSize.X
+	moreLabel.Size = UDim2.fromScale(0, 1)
+	local moreHit = Kit.button(more, "Hit")
+	moreHit.Size = UDim2.new(1, 0, 1, 12)
+	moreHit.Position = UDim2.fromOffset(0, -6)
+	more.Visible = false
+
+	local list = Kit.frame(root, "NotifyList", 22)
+	list.AnchorPoint = Vector2.new(1, 0)
+	list.AutomaticSize = Enum.AutomaticSize.Y
+	list.BackgroundColor3 = Theme.C.panel
+	list.BackgroundTransparency = 0.04
+	Kit.corner(list, UDim.new(0, 14))
+	Kit.stroke(list, 1.5, Theme.C.strokeHi, 1, "Rim")
+	Kit.pad(list, 12, 12, 12, 12)
+	Kit.list(list, "y", 6, Enum.HorizontalAlignment.Left)
+	list.Visible = false
+
+	local lastPush = 0
+	local function width(): number
+		return if Layout.mode == "COMPACT" then 260 else 400
+	end
+	local function maxShown(): number
+		if Layout.mode == "COMPACT" then return 1 end
+		if listOpen or collapsed then return if collapsed then 1 else 2 end
+		return 3
+	end
+
+	local function place()
+		local compact = Layout.mode == "COMPACT"
+		local F = Layout.free()
+		local s = Layout.s
+		local ra = root.AbsolutePosition
+		local x = (F.x + F.w - ra.X) / s - 16
+		local y = if compact then 58 else 68
+		holder.Position = UDim2.fromOffset(x, y)
+		holder.Size = UDim2.fromOffset(width(), 0)
+		local now = os.clock()
+		local act = model:active(now)
+		local shown = 0
+		local pitch = if compact then 64 else 84
+		for i, t in act do
+			local v = views[t.id]
+			if v == nil then continue end
+			if i <= maxShown() then
+				shown += 1
+				v.Visible = true
+				Motion.tween(v, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+					{ Position = UDim2.fromOffset(0, (shown - 1) * pitch) }, "toastY" .. t.id)
+			else
+				v.Visible = false
+			end
+		end
+		local hidden = #model:history() - shown
+		more.Visible = hidden > 0 and now - lastPush < 10 or listOpen
+		moreLabel.Text = if listOpen then "Close" else "+" .. math.max(0, hidden) .. " more"
+		Theme.text(moreLabel, "label")
+		more.Size = UDim2.fromOffset(0, if compact then 30 else 34)
+		Kit.pad(more, 0, 12, 0, 10)
+		more.Position = UDim2.fromOffset(x, y + shown * pitch)
+		-- the visible toasts are a HUD rect for the plates and markers
+		if shown > 0 then
+			Layout.setRect(rectKey, { x = ra.X + (x - width()) * s, y = ra.Y + y * s, w = width() * s, h = (shown * pitch) * s })
+		else
+			Layout.setRect(rectKey, nil)
+		end
+		list.Position = UDim2.fromOffset(x, y + shown * pitch + 42)
+		list.Size = UDim2.fromOffset(width(), 0)
+	end
+
+	local function makeToast(t: ToastModel.Toast): Frame
+		local compact = Layout.mode == "COMPACT"
+		local spec = KIND[t.kind] or KIND.other
+		local k = spec.color
+		local w, h = width(), if compact then 56 else 72
+		local f = Kit.frame(holder, "Toast_" .. t.id, 1)
+		f.AnchorPoint = Vector2.new(1, 0)
+		f.Size = UDim2.fromOffset(w, h)
+		f.Position = UDim2.fromOffset(0, 0)
+		f.BackgroundColor3 = Color3.new(1, 1, 1)
+		f.BackgroundTransparency = 0.02
+		Kit.corner(f, UDim.new(0, 14))
+		Kit.grad(f, { Theme.shade(k, 0.55), Theme.C.panel }, 0, nil, "Back")
+		Kit.stroke(f, 2, k, 1, "Rim")
+		local disc = iconDisc(f, "Icon", t.kind, if compact then 32 else 44)
+		disc.AnchorPoint = Vector2.new(0, 0.5)
+		disc.Position = UDim2.new(0, 14, 0.5, 0)
+		local x0 = 14 + (if compact then 32 else 44) + 12
+		local top = Kit.frame(f, "Top", 3)
+		top.Position = UDim2.fromOffset(x0, if compact then 8 else 12)
+		top.Size = UDim2.new(1, -x0 - 12, 0, if compact then 20 else 24)
+		Kit.list(top, "x", 8, Enum.HorizontalAlignment.Left, Enum.VerticalAlignment.Center)
+		local title = Kit.label(top, "Title", "toast", t.title, Color3.new(1, 1, 1))
+		title.LayoutOrder = 1
+		title.AutomaticSize = Enum.AutomaticSize.X
+		title.Size = UDim2.fromScale(0, 1)
+		title.TextTruncate = Enum.TextTruncate.AtEnd
+		Kit.textStroke(title, 1.8, 0.85)
+		local over = Kit.child(title, "Overhang", "UIPadding") :: UIPadding
+		over.PaddingRight = UDim.new(0, 2)
+		local chip, cl = Kit.chip(top, "Count", "badge", "", { h = if compact then 20 else 22, pad = 7, fg = Color3.new(1, 1, 1),
+			bg = Theme.C.deep, bgA = 1, line = k, lineA = 1 })
+		chip.LayoutOrder = 2
+		chip.Visible = false
+		cl.RichText = true
+		local sub = Kit.label(f, "Sub", "small", t.sub, Theme.C.text)
+		sub.TextTransparency = 0.08
+		sub.Position = UDim2.fromOffset(x0, if compact then 30 else 40)
+		sub.Size = UDim2.new(1, -x0 - 12, 0, 18)
+		sub.TextXAlignment = Enum.TextXAlignment.Left
+		sub.TextTruncate = Enum.TextTruncate.AtEnd
+		local bar = Kit.frame(f, "Life", 4)
+		bar.AnchorPoint = Vector2.new(0, 1)
+		bar.Position = UDim2.new(0, 14, 1, -1)
+		bar.Size = UDim2.new(1, -28, 0, 3)
+		bar.BackgroundColor3 = k
+		bar.BackgroundTransparency = 0.1
+		Kit.corner(bar)
+		pcall(function() f.Interactable = false end)
+		return f
+	end
+
+	local function refresh(t: ToastModel.Toast)
+		local v = views[t.id]
+		if v == nil then return end
+		local top = v:FindFirstChild("Top")
+		local chip = top and top:FindFirstChild("Count") :: Frame?
+		if chip then
+			chip.Visible = t.count > 1
+			local cl = chip:FindFirstChild("Label") :: TextLabel?
+			if cl then cl.Text = "×" .. t.count end
+		end
+		local sub = v:FindFirstChild("Sub") :: TextLabel?
+		if sub then sub.Text = t.sub end
+		local bar = v:FindFirstChild("Life") :: Frame?
+		if bar then
+			bar.Size = UDim2.new(1, -28, 0, 3)
+			local life = if Motion.snapshot() then 0 else t.life
+			Motion.tween(bar, TweenInfo.new(life, Enum.EasingStyle.Linear), { Size = UDim2.new(0, 0, 0, 3) }, "toastLife" .. t.id, true)
+		end
+	end
+
+	local function expire(id: number)
+		local v = views[id]
+		if v == nil then return end
+		views[id] = nil
+		Motion.tween(v, TweenInfo.new(0.2), { Position = v.Position + UDim2.fromOffset(60, 0) }, "toastY" .. id)
+		task.delay(0.22, function() v:Destroy() end)
+	end
+
+	local function sweep()
+		local now = os.clock()
+		local alive: { [number]: boolean } = {}
+		for _, t in model:active(now) do alive[t.id] = true end
+		for id in views do
+			if not alive[id] then expire(id) end
+		end
+		place()
+	end
+
+	local function add(item: ToastModel.Item)
+		local now = os.clock()
+		lastPush = now
+		local t, merged = model:push(item, now)
+		if merged then
+			refresh(t)
+			local v = views[t.id]
+			if v then Motion.bump(v, 0.06) end
+		else
+			local v = makeToast(t)
+			views[t.id] = v
+			refresh(t)
+			local target = UDim2.fromOffset(0, 0)
+			v.Position = target + UDim2.fromOffset(60, 0)
+			Motion.tween(v, TweenInfo.new(0.28, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Position = target }, "toastY" .. t.id)
+		end
+		task.delay(t.life + 0.05, sweep)
+		task.delay(10.1, place)
+		place()
+	end
+
+	local function rebuildList()
+		for _, c in list:GetChildren() do
+			if c:IsA("GuiObject") then c:Destroy() end
+		end
+		local hist = model:history()
+		local head = Kit.frame(list, "Head")
+		head.LayoutOrder = 0
+		head.Size = UDim2.new(1, 0, 0, 24)
+		local cap = Kit.label(head, "Earlier", "caps", Rich.caps("Earlier") .. "  " .. #hist, Theme.C.soft)
+		cap.Size = UDim2.fromScale(0.6, 1)
+		cap.TextXAlignment = Enum.TextXAlignment.Left
+		local clear = Kit.button(head, "Clear")
+		clear.AnchorPoint = Vector2.new(1, 0.5)
+		clear.Position = UDim2.new(1, 0, 0.5, 0)
+		clear.Size = UDim2.fromOffset(64, 44)
+		local cl = Kit.label(clear, "Label", "label", "Clear", Theme.C.info)
+		cl.Size = UDim2.fromScale(1, 1)
+		cl.TextXAlignment = Enum.TextXAlignment.Right
+		clear.Activated:Connect(function()
+			model:clear()
+			listOpen = false
+			list.Visible = false
+			place()
+		end)
+		for i, t in hist do
+			local row = Kit.button(list, "Row" .. i)
+			row.LayoutOrder = i
+			row.Size = UDim2.new(1, 0, 0, 56)
+			row.BackgroundTransparency = 0
+			row.BackgroundColor3 = Theme.C.panel2
+			Kit.corner(row, UDim.new(0, 10))
+			local disc = iconDisc(row, "Icon", t.kind, 32)
+			disc.AnchorPoint = Vector2.new(0, 0.5)
+			disc.Position = UDim2.new(0, 10, 0.5, 0)
+			local title = Kit.label(row, "Title", "cardSmall", t.title .. (if t.count > 1 then "  ×" .. t.count else ""), Theme.C.text)
+			title.Position = UDim2.fromOffset(54, 8)
+			title.Size = UDim2.new(1, -64, 0, 20)
+			title.TextXAlignment = Enum.TextXAlignment.Left
+			title.TextTruncate = Enum.TextTruncate.AtEnd
+			local sub = Kit.label(row, "Sub", "small", t.sub, Theme.C.soft)
+			sub.Position = UDim2.fromOffset(54, 30)
+			sub.Size = UDim2.new(1, -64, 0, 18)
+			sub.TextXAlignment = Enum.TextXAlignment.Left
+			sub.TextTruncate = Enum.TextTruncate.AtEnd
+			local layer = t.layer
+			row.Activated:Connect(function()
+				if layer then self.flyTo:Fire(layer) end
+			end)
+		end
+	end
+	moreHit.Activated:Connect(function()
+		listOpen = not listOpen
+		list.Visible = listOpen
+		if listOpen then rebuildList() end
+		place()
+	end)
+
+	function self.push(_: Toasts, pops: { Types.Popup }?, notices: { string }?)
+		for _, p in (pops or {}) :: { Types.Popup } do
+			if type(p) ~= "table" then continue end
+			local kind = ToastModel.kindOf(p :: any)
+			local title = ToastModel.plain(p.title)
+			if title == "" then title = if kind == "achievement" then "Achievement Gotten!" else "Notice" end
+			add({ kind = kind, title = title, sub = ToastModel.plain(p.message), layer = p.layer })
+		end
+		for _, n in (notices or {}) :: { string } do
+			if type(n) == "string" and n ~= "" then add({ kind = "notice", title = "Notice", sub = ToastModel.plain(n), layer = nil }) end
+		end
+	end
+	function self.setCollapsed(_: Toasts, b: boolean)
+		collapsed = b
+		place()
+	end
+	function self.destroy(t: Toasts)
+		t.flyTo:DisconnectAll()
+		Layout.setRect(rectKey, nil)
+		holder:Destroy()
+		more:Destroy()
+		list:Destroy()
+	end
+	-- HUD rects move the free rect's edge (a side sheet): follow on the next frame, never re-entrantly
+	local queued = false
+	local function soon()
+		if queued then return end
+		queued = true
+		task.defer(function()
+			queued = false
+			if holder.Parent then place() end
+		end)
+	end
+	Layout.changed:Connect(soon)
+	Layout.rectsChanged:Connect(soon)
+	place()
+	return self
+end
+
+return Toasts
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="107">
+            <Properties>
+              <string name="Name">Tooltip</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	Tooltip: the one-owner hover tooltip (DESIGN.md 7.1, Figma 4:68). Mouse only, after 250 ms, at the cursor +
+	(16, -h - 12), clamped to the screen (it flips below / left when there is no room). One owner at a time; the
+	owner's Destroying hides it.
+
+	    Tooltip   360 du (COMPACT 300), panel3 -> panel, rim lift(c, .2), hue glow
+	      Title   `cardSmall`, lift(c, .55)
+	      Body    `body` RichText (the game's HTML, colours remapped)
+	      Rows    two aligned rows ("Need" / "Have": `small` soft labels, `number` values with Rich.num units)
+	      Bar     the `pr` progress with its % (Rich.pct)
+	      Foot    `small` soft, sentence case ("Click to open · right-click to peek")
+
+	    local tip = Tooltip.new(root)
+	    tip:show(owner, content?, at?)   content = { title, body?, rows?, pr?, foot?, hue?, layer? }; nil hides
+	    tip:hide(owner?)
+]]
+
+local Core = script.Parent.Parent:WaitForChild("Core")
+local Theme = require(Core:WaitForChild("Theme"))
+local Layout = require(Core:WaitForChild("Layout"))
+local Rich = require(Core:WaitForChild("Rich"))
+local Kit = require(script.Parent.Parent:WaitForChild("Hud"):WaitForChild("Kit"))
+
+export type Content = {
+	title: string,
+	body: string?, -- game HTML
+	rows: { { string } }?, -- { label, value }
+	pr: number?, -- 0..1
+	foot: string?,
+	hue: Color3?,
+	layer: string?,
+}
+export type Tooltip = {
+	frame: Frame,
+	show: (self: Tooltip, owner: any, content: Content?, at: Vector2?) -> (),
+	hide: (self: Tooltip, owner: any?) -> (),
+	owner: (self: Tooltip) -> any?,
+	destroy: (self: Tooltip) -> (),
+}
+
+local Tooltip = {}
+
+function Tooltip.new(root: GuiObject): Tooltip
+	local self = {} :: Tooltip
+	local f = Kit.frame(root, "Tooltip", 40)
+	f.AutomaticSize = Enum.AutomaticSize.Y
+	f.BackgroundColor3 = Color3.new(1, 1, 1)
+	f.BackgroundTransparency = 0.02
+	f.Visible = false
+	Kit.corner(f, UDim.new(0, 14))
+	Kit.grad(f, { Theme.C.panel3, Theme.C.panel }, 90, nil, "Back")
+	local rim = Kit.stroke(f, 1.5, Theme.C.strokeHi, 1, "Rim")
+	Kit.pad(f, 14, 16, 14, 16)
+	Kit.list(f, "y", 6, Enum.HorizontalAlignment.Left)
+	pcall(function() f.Interactable = false end)
+	self.frame = f
+
+	local title = Kit.label(f, "Title", "cardSmall", "", Theme.C.text)
+	title.LayoutOrder = 1
+	title.AutomaticSize = Enum.AutomaticSize.Y
+	title.Size = UDim2.fromScale(1, 0)
+	title.TextXAlignment = Enum.TextXAlignment.Left
+	title.TextWrapped = true
+	local body = Kit.label(f, "Body", "body", "", Theme.C.text)
+	body.LayoutOrder = 2
+	body.AutomaticSize = Enum.AutomaticSize.Y
+	body.Size = UDim2.fromScale(1, 0)
+	body.TextXAlignment = Enum.TextXAlignment.Left
+	body.TextWrapped = true
+	body.RichText = true
+	local rows = Kit.frame(f, "Rows")
+	rows.LayoutOrder = 3
+	rows.AutomaticSize = Enum.AutomaticSize.Y
+	rows.Size = UDim2.fromScale(1, 0)
+	Kit.list(rows, "y", 4, Enum.HorizontalAlignment.Left)
+	local bar = Kit.frame(f, "Bar")
+	bar.LayoutOrder = 4
+	bar.Size = UDim2.new(1, 0, 0, 18)
+	local track = Kit.frame(bar, "Track")
+	track.AnchorPoint = Vector2.new(0, 0.5)
+	track.Position = UDim2.fromScale(0, 0.5)
+	track.Size = UDim2.new(1, -56, 0, 6)
+	track.BackgroundColor3 = Theme.C.deep
+	track.BackgroundTransparency = 0
+	Kit.corner(track)
+	local fill = Kit.frame(track, "Fill")
+	fill.Size = UDim2.fromScale(0, 1)
+	fill.BackgroundColor3 = Theme.C.danger
+	fill.BackgroundTransparency = 0
+	Kit.corner(fill)
+	local pct = Kit.label(bar, "Pct", "number", "", Theme.C.text)
+	pct.AnchorPoint = Vector2.new(1, 0.5)
+	pct.Position = UDim2.fromScale(1, 0.5)
+	pct.Size = UDim2.fromOffset(52, 18)
+	pct.TextXAlignment = Enum.TextXAlignment.Right
+	local foot = Kit.label(f, "Foot", "small", "", Theme.C.soft)
+	foot.LayoutOrder = 5
+	foot.AutomaticSize = Enum.AutomaticSize.Y
+	foot.Size = UDim2.fromScale(1, 0)
+	foot.TextXAlignment = Enum.TextXAlignment.Left
+	foot.TextWrapped = true
+
+	local current: any = nil
+	local lastSig = ""
+	local token = 0
+	local destroyConn: RBXScriptConnection? = nil
+
+	local function row(i: number, k: string, v: string)
+		local r = Kit.frame(rows, "Row" .. i)
+		r.LayoutOrder = i
+		r.Size = UDim2.new(1, 0, 0, 20)
+		local kl = Kit.label(r, "Key", "small", k, Theme.C.soft)
+		kl.Size = UDim2.fromScale(0.4, 1)
+		kl.TextXAlignment = Enum.TextXAlignment.Left
+		local vl = Kit.label(r, "Value", "number", "", Theme.C.text)
+		vl.AnchorPoint = Vector2.new(1, 0)
+		vl.Position = UDim2.fromScale(1, 0)
+		vl.Size = UDim2.fromScale(0.6, 1)
+		vl.TextXAlignment = Enum.TextXAlignment.Right
+		vl.RichText = true
+		vl.Text = Rich.num(v, { size = Theme.size("number"), unit = Theme.C.soft })
+	end
+
+	local function fill_(c: Content)
+		local hue = c.hue or Theme.hue(c.layer)
+		local compact = Layout.mode == "COMPACT"
+		f.Size = UDim2.fromOffset(if compact then 300 else 360, 0)
+		rim.Color = Theme.lift(hue, 0.2)
+		title.Text = c.title
+		title.TextColor3 = Theme.lift(hue, 0.55)
+		Theme.text(title, "cardSmall")
+		local b = c.body
+		body.Visible = b ~= nil and b ~= ""
+		if b then body.Text = Rich.html(b, Theme.size("body"), c.layer) end
+		Theme.text(body, "body")
+		for _, x in rows:GetChildren() do
+			if x:IsA("GuiObject") then x:Destroy() end
+		end
+		local list = (c.rows or {}) :: { { string } }
+		rows.Visible = #list > 0
+		for i, r in list do row(i, r[1], r[2]) end
+		local p = c.pr
+		bar.Visible = p ~= nil
+		if p then
+			fill.Size = UDim2.fromScale(math.clamp(p, 0, 1), 1)
+			fill.BackgroundColor3 = if p >= 1 then Theme.C.bought else Theme.lift(hue, 0.1)
+			pct.Text = Rich.pct(p)
+		end
+		foot.Visible = c.foot ~= nil
+		foot.Text = c.foot or ""
+		Theme.text(foot, "small")
+	end
+
+	local function place(at: Vector2)
+		local s = Layout.s
+		local ra, rs = root.AbsolutePosition, root.AbsoluteSize
+		local lx, ly = (at.X - ra.X) / s, (at.Y - ra.Y) / s
+		local w, h = f.Size.X.Offset, math.max(40, f.AbsoluteSize.Y / s)
+		local W, H = rs.X / s, rs.Y / s
+		local x, y = lx + 16, ly - h - 12
+		if x + w > W - 8 then x = lx - 16 - w end
+		if y < 8 then y = ly + 24 end
+		x = math.clamp(x, 8, math.max(8, W - w - 8))
+		y = math.clamp(y, 8, math.max(8, H - h - 8))
+		f.Position = UDim2.fromOffset(math.floor(x), math.floor(y))
+	end
+
+	function self.show(t: Tooltip, owner: any, content: Content?, at: Vector2?)
+		if content == nil then
+			t:hide(owner)
+			return
+		end
+		local was = current
+		current = owner
+		token += 1
+		local my = token
+		if destroyConn then
+			destroyConn:Disconnect()
+			destroyConn = nil
+		end
+		if typeof(owner) == "Instance" then
+			destroyConn = (owner :: Instance).Destroying:Connect(function()
+				if current == owner then t:hide(owner) end
+			end)
+		end
+		local sig = content.title .. "|" .. (content.body or "") .. "|" .. tostring(content.pr) .. "|" .. (content.foot or "")
+		for _, r in (content.rows or {}) :: { { string } } do sig ..= "|" .. r[1] .. "=" .. r[2] end
+		if sig ~= lastSig or was ~= owner then
+			lastSig = sig
+			fill_(content)
+		end
+		local pos = at
+		if was == owner and f.Visible then
+			if pos then place(pos) end
+			return
+		end
+		-- the 250 ms hover delay (a new owner while one shows switches at once)
+		local delay = if f.Visible then 0 else 0.25
+		task.delay(delay, function()
+			if token ~= my or current ~= owner then return end
+			f.Visible = true
+			if pos then place(pos) end
+			task.defer(function()
+				if token == my and pos then place(pos) end
+			end)
+		end)
+	end
+	function self.hide(_: Tooltip, owner: any?)
+		if owner ~= nil and owner ~= current then return end
+		current = nil
+		token += 1
+		f.Visible = false
+	end
+	function self.owner(_: Tooltip): any?
+		return current
+	end
+	function self.destroy(_: Tooltip)
+		if destroyConn then destroyConn:Disconnect() end
+		f:Destroy()
+	end
+	return self
+end
+
+return Tooltip
+]]></string>
+            </Properties>
+          </Item>
+        </Item>
+        <Item class="Folder" referent="108">
           <Properties>
             <string name="Name">Panel</string>
           </Properties>
-          <Item class="ModuleScript" referent="94">
+          <Item class="ModuleScript" referent="109">
             <Properties>
               <string name="Name">Hero</string>
               <string name="Source"><![CDATA[--!strict
@@ -43536,7 +47630,7 @@ return Hero
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="95">
+          <Item class="ModuleScript" referent="110">
             <Properties>
               <string name="Name">Panel</string>
               <string name="Source"><![CDATA[--!strict
@@ -44420,7 +48514,7 @@ return Panel
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="96">
+          <Item class="ModuleScript" referent="111">
             <Properties>
               <string name="Name">Preview</string>
               <string name="Source"><![CDATA[--!strict
@@ -44561,7 +48655,7 @@ return Preview
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="97">
+          <Item class="ModuleScript" referent="112">
             <Properties>
               <string name="Name">Sections</string>
               <string name="Source"><![CDATA[--!strict
@@ -44777,11 +48871,11 @@ return Sections
 ]]></string>
             </Properties>
           </Item>
-          <Item class="Folder" referent="98">
+          <Item class="Folder" referent="113">
             <Properties>
               <string name="Name">Skins</string>
             </Properties>
-            <Item class="ModuleScript" referent="99">
+            <Item class="ModuleScript" referent="114">
               <Properties>
                 <string name="Name">Achievement</string>
                 <string name="Source"><![CDATA[--!strict
@@ -44840,7 +48934,7 @@ return Achievement
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="100">
+            <Item class="ModuleScript" referent="115">
               <Properties>
                 <string name="Name">Buyable</string>
                 <string name="Source"><![CDATA[--!strict
@@ -45064,7 +49158,7 @@ return Buyable
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="101">
+            <Item class="ModuleScript" referent="116">
               <Properties>
                 <string name="Name">Challenge</string>
                 <string name="Source"><![CDATA[--!strict
@@ -45216,7 +49310,7 @@ return Challenge
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="102">
+            <Item class="ModuleScript" referent="117">
               <Properties>
                 <string name="Name">Clickable</string>
                 <string name="Source"><![CDATA[--!strict
@@ -45280,7 +49374,7 @@ return Clickable
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="103">
+            <Item class="ModuleScript" referent="118">
               <Properties>
                 <string name="Name">Common</string>
                 <string name="Source"><![CDATA[--!strict
@@ -45656,7 +49750,7 @@ return Common
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="104">
+            <Item class="ModuleScript" referent="119">
               <Properties>
                 <string name="Name">CompactOwned</string>
                 <string name="Source"><![CDATA[--!strict
@@ -45740,7 +49834,7 @@ return CompactOwned
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="105">
+            <Item class="ModuleScript" referent="120">
               <Properties>
                 <string name="Name">Generic</string>
                 <string name="Source"><![CDATA[--!strict
@@ -46103,7 +50197,7 @@ return Generic
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="106">
+            <Item class="ModuleScript" referent="121">
               <Properties>
                 <string name="Name">GridTile</string>
                 <string name="Source"><![CDATA[--!strict
@@ -46183,7 +50277,7 @@ return GridTile
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="107">
+            <Item class="ModuleScript" referent="122">
               <Properties>
                 <string name="Name">Milestone</string>
                 <string name="Source"><![CDATA[--!strict
@@ -46315,7 +50409,7 @@ return Milestone
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="108">
+            <Item class="ModuleScript" referent="123">
               <Properties>
                 <string name="Name">Opt</string>
                 <string name="Source"><![CDATA[--!strict
@@ -46409,7 +50503,7 @@ return Opt
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="109">
+            <Item class="ModuleScript" referent="124">
               <Properties>
                 <string name="Name">Perk</string>
                 <string name="Source"><![CDATA[--!strict
@@ -46469,7 +50563,7 @@ return Perk
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="110">
+            <Item class="ModuleScript" referent="125">
               <Properties>
                 <string name="Name">Skins</string>
                 <string name="Source"><![CDATA[--!strict
@@ -46525,7 +50619,7 @@ return Skins
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="111">
+            <Item class="ModuleScript" referent="126">
               <Properties>
                 <string name="Name">Upgrade</string>
                 <string name="Source"><![CDATA[--!strict
@@ -46857,7 +50951,7 @@ return Upgrade
               </Properties>
             </Item>
           </Item>
-          <Item class="ModuleScript" referent="112">
+          <Item class="ModuleScript" referent="127">
             <Properties>
               <string name="Name">Virtual</string>
               <string name="Source"><![CDATA[--!strict
@@ -47122,7 +51216,7 @@ return Virtual
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="113">
+        <Item class="ModuleScript" referent="128">
           <Properties>
             <string name="Name">Render</string>
             <string name="Source"><![CDATA[--!strict
@@ -48004,11 +52098,11 @@ return Render
 ]]></string>
           </Properties>
         </Item>
-        <Item class="Folder" referent="114">
+        <Item class="Folder" referent="129">
           <Properties>
             <string name="Name">Signatures</string>
           </Properties>
-          <Item class="ModuleScript" referent="115">
+          <Item class="ModuleScript" referent="130">
             <Properties>
               <string name="Name">Signatures</string>
               <string name="Source"><![CDATA[--!strict
@@ -48195,7 +52289,7 @@ return Signatures
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="116">
+        <Item class="ModuleScript" referent="131">
           <Properties>
             <string name="Name">Style</string>
             <string name="Source"><![CDATA[--!strict
@@ -48389,7 +52483,7 @@ return Style
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="117">
+        <Item class="ModuleScript" referent="132">
           <Properties>
             <string name="Name">Types</string>
             <string name="Source"><![CDATA[--!strict
