@@ -5,7 +5,9 @@
 // the corrupted island. The rift side (right) is cracked with crimson seams; the corrupted island sits where the
 // clamped east-limit cameras see it (under the outcrop's tip), lit green from above. The trunk band and the rift
 // cluster (the hard keep-clear zones) hold mist only.
-// Transparent. Painted at full local size 3360x2160, output at res.HIGH 0.75 -> 2520x1620 (realm.json layers[mid]).
+// The composition is designed in a 3360x2160 frame (the layer before the pan margin, REALM.md 2.5) centred in the
+// layer (size from realm.json, 4128x2736); two more islands (H west, I on the rift side) and the mist banks carry it out
+// into the margin strips. Transparent. Painted at full local size, output at res.HIGH 0.75 -> 3096x2052.
 (function () {
   // ================================================================ ISLAND KIT (begin)
   // Shared by layers/distant.js, layers/mid.js and layers/rocks.js. render.js loads one layer file per page, so each
@@ -499,8 +501,10 @@
     // ---------------------------------------------------------------- cloud banks
     // Billowy banks with a defined top edge, lit from the key light direction (density sampled toward the light),
     // denser and darker below. Rendered at 1/4 resolution and blurred up. `cap(X, Y)` limits the alpha.
+    // o.x0, o.y0: the (drawing-space) point of the canvas' top-left corner (default 0, 0); o.w x o.h: the area covered
     function cloudBank(b, o) {
       const q = o.q || 4, w = Math.ceil(o.w / q), h = Math.ceil(o.h / q), c = mk(w, h), x = cx2(c, true), im = x.createImageData(w, h), d = im.data;
+      const x0 = o.x0 || 0, y0 = o.y0 || 0;
       const n = makeNoise(o.seed), n2 = makeNoise(o.seed + 7), n3 = makeNoise(o.seed + 3);
       const dens = (X, Y, B) => {
         const ytop = B.y - B.h * 0.5 + B.wob * fbm(n2, X / B.sx * 0.6, B.y * 0.003, 3);
@@ -512,7 +516,7 @@
       };
       const dl = o.dl || 14;
       for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
-        const X = i * q, Y = j * q;
+        const X = x0 + i * q, Y = y0 + j * q;
         let a = 0, litv = 0;
         for (const B of o.bands) {
           if (Y < B.y - B.h * 0.5 - B.wob - 20 || Y > B.y + B.h * 1.2) continue;
@@ -528,15 +532,15 @@
         d[k] = cc[0]; d[k + 1] = cc[1]; d[k + 2] = cc[2]; d[k + 3] = a * 255;
       }
       x.putImageData(im, 0, 0);
-      b.drawImage(upBlur(c, w * q, h * q, o.blur || 5), 0, 0);
+      b.drawImage(upBlur(c, w * q, h * q, o.blur || 5), x0, y0);
     }
 
     // ---------------------------------------------------------------- mist band (low-res noise, stretched)
     function mistBand(b, o) {
       const q = 4, w = Math.ceil(o.w / q), h = Math.ceil(o.h / q), c = mk(w, h), x = cx2(c, true), im = x.createImageData(w, h), d = im.data;
-      const n = makeNoise(o.seed), n2 = makeNoise(o.seed + 7);
+      const n = makeNoise(o.seed), n2 = makeNoise(o.seed + 7), x0 = o.x0 || 0, y0 = o.y0 || 0;
       for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
-        const X = i * q, Y = j * q;
+        const X = x0 + i * q, Y = y0 + j * q;
         let a = 0;
         for (const B of o.bands) {
           const wob = B.wob * fbm(n2, X / 900, B.y * 0.01, 2);
@@ -549,13 +553,14 @@
         const k = (j * w + i) * 4; d[k] = o.color[0]; d[k + 1] = o.color[1]; d[k + 2] = o.color[2]; d[k + 3] = a * 255;
       }
       x.putImageData(im, 0, 0);
-      b.drawImage(upBlur(c, w * q, h * q, o.blur || 6), 0, 0);
+      b.drawImage(upBlur(c, w * q, h * q, o.blur || 6), x0, y0);
     }
 
     // ---------------------------------------------------------------- the atmosphere pass (REALM.md section 4)
     // base: colour art; emis: light that may exceed maxLuma (up to emissiveMax). Both get the same colour recipe;
     // the light is then screened over the base (premultiplied), the luma limit follows the local emissive share,
     // and the whole layer gets a premultiplied gaussian blur of `blur` local px (edges clamped, see padBlur).
+    // T.splitX is in canvas px; the haze-bottom ramp runs over rows T.hy0 .. T.hy0 + T.hh (default: the whole canvas).
     function atmosphere(base, emis, T) {
       const w = base.width, h = base.height, A = T.atm, bx = cx2(base, true);
       const bI = bx.getImageData(0, 0, w, h), bd = bI.data, eI = emis ? cx2(emis, true).getImageData(0, 0, w, h) : null, edd = eI ? eI.data : null;
@@ -572,7 +577,7 @@
       };
       const c1 = [0, 0, 0], c2 = [0, 0, 0];
       for (let y = 0; y < h; y++) {
-        const k = A.haze + A.hazeBottom * smooth(0.35, 1, y / h);
+        const k = A.haze + A.hazeBottom * smooth(0.35, 1, (y - (T.hy0 || 0)) / (T.hh || h));
         for (let x = 0; x < w; x++) {
           const i = (y * w + x) * 4, ba = bd[i + 3] / 255, ea = edd ? edd[i + 3] / 255 : 0;
           if (ba <= 0 && ea <= 0) continue;
@@ -632,13 +637,17 @@
   // ---- contract snapshot (realm.json layers[mid], sprites[lightfall]); repaint if `node camera.js --build` changes them
   // blur 1.5 (was 1): softness grows with distance behind the focal plane (near 0.9 < mid 1.5 < far 3)
   const CFG = {
-    size: [3360, 2160], res: 0.75, splitX: 1918.5, fade: 563,
+    frame: [3360, 2160], size: [4128, 2736], res: 0.75, splitX: 1918.5, fade: 563,   // splitX, falls, hard: design frame
     atm: { hazeColor: [56, 40, 118], hazeRift: [96, 26, 62], haze: 0.3, hazeBottom: 0.25, saturation: 0.85, contrast: 0.75, blur: 1.5, maxLuma: 0.62, emissiveMax: 0.85 },
     // sprites[lightfall].instances: x, y = top of the fall (the lip), s = sprite width, len = length
     falls: [[1916, 236, 80, 380], [2286, 1536, 81, 420], [376, 1206, 63.9, 520], [2816, 356, 58, 560], [1186, 1616, 77.2, 380], [596, 316, 74, 620], [3036, 1306, 64.4, 480]],
     hard: [['m', 1491, 1369.8, 171, 194], ['mm', 1347, 1396.8, 171, 194], ['em', 1635, 1396.8, 171, 194], ['p', 1491, 1225.8, 171, 194], ['pe', 1284, 1099.8, 171, 194], ['sp', 1414.5, 1077.3, 171, 194], ['pb', 1567.5, 1077.3, 171, 194], ['pp', 1698, 1099.8, 171, 194], ['se', 1333.5, 955.8, 171, 194], ['hp', 1491, 933.3, 171, 194], ['ep', 1648.5, 955.8, 171, 194], ['hb', 1347, 811.8, 171, 194], ['ap', 1491, 789.3, 171, 194], ['mp', 1635, 811.8, 171, 194], ['t', 1491, 658.8, 171, 194], ['pm', 2233.5, 1216.8, 171, 194], ['pep', 2071.5, 1045.8, 171, 194], ['cr', 2395.5, 1054.8, 171, 194], ['cm', 2476.5, 933.3, 171, 194], ['ex', 2233.5, 865.8, 171, 194], ['ach', 1050, 784.8, 171, 194]],
   };
-  const [W, H] = CFG.size;
+  // the layer grew around the design frame (the pan margin): paint in design coordinates, translated to the centre
+  const RL = typeof window !== 'undefined' && window.REALM && window.REALM.layers && window.REALM.layers.find(l => l.id === 'mid');
+  if (RL) { CFG.size = RL.size; CFG.res = RL.res.HIGH; }
+  const [W0, H0] = CFG.frame, [W, H] = CFG.size, OX = (W - W0) / 2, OY = (H - H0) / 2;
+  const toCanvas = zs => zs.map(z => [z[0], z[1] + OX, z[2] + OY, z[3], z[4]]);   // design-frame zones -> canvas px
   const K = KIT, { mk, cx2, col, mixc } = K;
   const riftW = x => smooth(CFG.splitX - CFG.fade, CFG.splitX + CFG.fade, x);
   const FALL = { realm: [222, 204, 255], rift: [255, 150, 196], corrupt: [178, 255, 196] };
@@ -683,6 +692,11 @@
       crystals: [[2664, 5, 44, [57, 255, 20]], [2792, 7, 66, [57, 255, 20]], [2904, 4, 36, [31, 191, 74]], [3232, 4, 42, [57, 255, 20]], [3000, 3, 28, [255, 46, 99]]],
       trees: [[3120, 70, 'dead']],
       fragments: [[2698, 1226, 34, 0.35], [2772, 1180, 22, -0.25], [2846, 1216, 15, 0.6], [2735, 1148, 10, 0.1]] },
+    // out at the west and east edges of the design frame, reaching into the pan margin (no light-fall: plain slabs)
+    { id: 'H', xL: -250, xR: 190, top: 560, tilt: 0.03, thick: 44, seed: 308, lobes: [{ x: -150, y: 776, w: 105 }, { x: 70, y: 742, w: 90 }, { x: -30, y: 700, w: 60 }],
+      crystals: [[-60, 4, 40, [95, 224, 255]], [150, 3, 26, [179, 92, 255]]], trees: [[-170, 86], [40, 58]], roots: 14 },
+    { id: 'I', xL: 3250, xR: 3660, top: 660, tilt: -0.04, thick: 42, seed: 309, lobes: [{ x: 3340, y: 870, w: 100 }, { x: 3560, y: 900, w: 120 }],
+      crystals: [[3300, 5, 44, [232, 70, 190]], [3600, 3, 30, [255, 46, 99]]], trees: [[3470, 78, 'dead']], roots: 14 },
   ];
 
   // An island() outline with its top and underside remapped: fTop / fUnder (x, y) -> y (either may be null).
@@ -946,13 +960,15 @@
   LAYERS.mid = async function () {
     const t0 = performance.now();
     const base = mk(W, H), b = cx2(base), emis = mk(W, H), e = cx2(emis), chkC = mk(W, H), chk = cx2(chkC);
+    for (const q of [b, e, chk]) q.translate(OX, OY);
+    const area = { x0: -OX, y0: -OY, w: W, h: H };   // the mist covers the whole layer, margin strips included
     // mist that must stay under 0.3 inside the hard zones
     const cap = (X, Y) => { for (const z of CFG.hard) if (K.inEllipse(X, Y, z, 30)) return 0.26; return 1; };
     // back cloud banks (behind the islands): billowy, lit on top from the upper left
-    K.cloudBank(b, { w: W, h: H, seed: 11, lit: [215, 195, 255], shade: [52, 36, 112], blur: 5, litK: 5, cap,
+    K.cloudBank(b, { ...area, seed: 11, lit: [215, 195, 255], shade: [52, 36, 112], blur: 5, litK: 5, cap,
       bands: [{ y: 1330, h: 120, a: 0.28, sx: 380, sy: 90, th: 0.25, wob: 50, fall: 0.2 }, { y: 1640, h: 200, a: 0.45, sx: 460, sy: 110, th: 0.15, wob: 70 }, { y: 1900, h: 260, a: 0.6, sx: 520, sy: 130, th: 0.05, wob: 90 }] });
     // faint high veils near the top islands
-    K.mistBand(b, { w: W, h: H, seed: 12, color: [175, 155, 240], blur: 10, cap,
+    K.mistBand(b, { ...area, seed: 12, color: [175, 155, 240], blur: 10, cap,
       bands: [{ y: 430, h: 80, a: 0.14, sx: 500, sy: 70, th: 0.2, wob: 50 }, { y: 820, h: 60, a: 0.1, sx: 450, sy: 60, th: 0.25, wob: 40 }] });
     // islands
     for (const I of ISLES) paintIsland(I, b, e, chk);
@@ -962,17 +978,20 @@
       K.lightfall(b, e, x, y, s, len, fallCol(x, I && I.corrupt), 900 + i, { spread: 2.5, mist: I && I.corrupt ? [190, 255, 210] : mixc([205, 190, 255], [255, 170, 205], riftW(x)) });
     });
     // front cloud banks: the lowest bank rolls over the island bottoms and the light-fall mist
-    K.cloudBank(b, { w: W, h: H, seed: 13, lit: [220, 200, 255], shade: [50, 34, 108], blur: 4, litK: 5, cap,
-      bands: [{ y: 1790, h: 140, a: 0.32, sx: 360, sy: 80, th: 0.3, wob: 60, fall: 0.2 }, { y: 2040, h: 240, a: 0.7, sx: 520, sy: 120, th: 0.05, wob: 80 }] });
+    // (the last band rolls on under the design frame to the bottom of the margin strip: its fade starts past the layer)
+    K.cloudBank(b, { ...area, seed: 13, lit: [220, 200, 255], shade: [50, 34, 108], blur: 4, litK: 5, cap,
+      bands: [{ y: 1790, h: 140, a: 0.32, sx: 360, sy: 80, th: 0.3, wob: 60, fall: 0.2 }, { y: 2040, h: 240, a: 0.7, sx: 520, sy: 120, th: 0.05, wob: 80 },
+        { y: 2330, h: 260, a: 0.72, sx: 520, sy: 120, th: 0.05, wob: 80, fall: 1.05 }] });
     // keep-clear check: island mass (not mist, not light) must stay out of the hard zones
     // every light-fall must start at a rock lip: rock just above the anchor, open air just below it
-    { const d = cx2(chkC, true).getImageData(0, 0, W, H).data, A = (x, y) => d[(Math.round(y) * W + Math.round(x)) * 4 + 3] / 255;
+    { const d = cx2(chkC, true).getImageData(0, 0, W, H).data, A = (x, y) => d[(Math.round(y + OY) * W + Math.round(x + OX)) * 4 + 3] / 255;
       const lips = CFG.falls.map(([x, y]) => [x, y, A(x, y - 4), A(x, y + 4)]).filter(q => q[2] < 0.5 || q[3] > 0.5);
       console.log('mid light-fall lips:', lips.length ? 'MISPLACED ' + JSON.stringify(lips) : 'all 7 at their anchors'); }
-    const zm = K.zoneMax(chkC, CFG.hard, 0), bad = Object.entries(zm).filter(([, v]) => v > 0.02);
+    const zm = K.zoneMax(chkC, toCanvas(CFG.hard), 0), bad = Object.entries(zm).filter(([, v]) => v > 0.02);
     console.log('mid hard-zone island alpha max:', bad.length ? JSON.stringify(bad) : 'clear');
-    const lit = window.__islandsNoAtmosphere ? K.atmosphere(base, emis, { atm: { ...CFG.atm, haze: 0, hazeBottom: 0, saturation: 1, contrast: 1, blur: 0, maxLuma: 1, emissiveMax: 1 }, splitX: CFG.splitX, fade: CFG.fade }) : K.atmosphere(base, emis, { atm: CFG.atm, splitX: CFG.splitX, fade: CFG.fade });
-    const zm2 = K.zoneMax(lit, CFG.hard, 0);
+    const fr = { splitX: CFG.splitX + OX, fade: CFG.fade, hy0: OY, hh: H0 };   // the atmosphere runs in canvas px
+    const lit = window.__islandsNoAtmosphere ? K.atmosphere(base, emis, { atm: { ...CFG.atm, haze: 0, hazeBottom: 0, saturation: 1, contrast: 1, blur: 0, maxLuma: 1, emissiveMax: 1 }, ...fr }) : K.atmosphere(base, emis, { atm: CFG.atm, ...fr });
+    const zm2 = K.zoneMax(lit, toCanvas(CFG.hard), 0);
     console.log('mid hard-zone total alpha max (mist/light allowed < 0.3):', Math.max(...Object.values(zm2)).toFixed(3), JSON.stringify(Object.entries(zm2).filter(([, v]) => v >= 0.3)));
     const out = K.downsample(lit, Math.round(W * CFG.res), Math.round(H * CFG.res));
     console.log('mid', out.width + 'x' + out.height, Math.round(performance.now() - t0) + ' ms');

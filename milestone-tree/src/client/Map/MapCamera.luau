@@ -42,10 +42,15 @@ local WORLD = table.freeze({ w = 3840, h = 2560, cx = 1920, cy = 1280 })
 local Z_MAX = 1.25
 local ZOOM_SLACK = 0.06
 local OVERSCROLL = 72
+-- the hard pan margin (world px): how far the visible rect may extend past each world edge, capped at half the view
+local PAN_MARGIN: Pt = table.freeze({ x = 960, y = 720 })
+local NO_MARGIN: Pt = table.freeze({ x = 0, y = 0 }) -- the world rect itself: the start camera (REALM.md 2.8)
 local DOMAIN: Domain = table.freeze({ minW = 568, minH = 320, maxW = 2560, maxH = 1440, minAspect = 0.45, maxAspect = 3.6 })
 MapCamera.WORLD, MapCamera.Z_MAX, MapCamera.ZOOM_SLACK, MapCamera.OVERSCROLL, MapCamera.DOMAIN =
 	WORLD, Z_MAX, ZOOM_SLACK, OVERSCROLL, DOMAIN
-MapCamera.START = table.freeze({ x = 1500, y = 1150 })
+MapCamera.PAN_MARGIN, MapCamera.NO_MARGIN = PAN_MARGIN, NO_MARGIN
+local START: Pt = table.freeze({ x = 1500, y = 1150 })
+MapCamera.START = START
 
 local function clamp(x: number, a: number, b: number): number
 	return if x < a then a elseif x > b then b else x
@@ -143,24 +148,38 @@ function MapCamera.zoomAt(C: Pt, z: number, z2: number, S: Pt, V: Size): Pt
 end
 
 -- ------------------------------------------------------------------------------------------------ clamping
--- range of camera centres at zoom z; overscroll in map points (the rubber band), 0 for the hard limit
-local function panLimits(z: number, V: Size, overscroll: number?): Limits
+-- range of camera centres at zoom z; overscroll in map points (the rubber band), 0 for the hard limit. On each axis
+-- the visible rect may extend past the world by m = min(margin, half the view) world px (margin defaults to
+-- PAN_MARGIN), so the centre ranges over [h - m, W - h + m] and never leaves the world; wider than W + 2m pins it
+local function panLimits(z: number, V: Size, overscroll: number?, margin: Pt?): Limits
 	local hw, hh, o = V.w / (2 * z), V.h / (2 * z), (overscroll or 0) / z
+	local M = margin or PAN_MARGIN
+	local mx, my = math.min(M.x, hw), math.min(M.y, hh)
 	local ax0, ax1 = WORLD.cx, WORLD.cx
-	if 2 * hw <= WORLD.w then ax0, ax1 = hw, WORLD.w - hw end
+	if 2 * hw <= WORLD.w + 2 * mx then ax0, ax1 = hw - mx, WORLD.w - hw + mx end
 	local ay0, ay1 = WORLD.cy, WORLD.cy
-	if 2 * hh <= WORLD.h then ay0, ay1 = hh, WORLD.h - hh end
+	if 2 * hh <= WORLD.h + 2 * my then ay0, ay1 = hh - my, WORLD.h - hh + my end
 	return { x0 = ax0 - o, x1 = ax1 + o, y0 = ay0 - o, y1 = ay1 + o }
 end
 MapCamera.panLimits = panLimits
--- the hard clamp, or the rubber-band envelope (rubber = true)
-local function clampCamera(C: Pt, z: number, V: Size, rubber: boolean?): Cam
+-- the hard clamp, or the rubber-band envelope (rubber = true); margin as in panLimits
+local function clampCamera(C: Pt, z: number, V: Size, rubber: boolean?, margin: Pt?): Cam
 	local lo, hi = zoomRange(V, rubber)
 	local zz = clamp(z, lo, hi)
-	local lim = panLimits(zz, V, if rubber then OVERSCROLL else 0)
+	local lim = panLimits(zz, V, if rubber then OVERSCROLL else 0, margin)
 	return { x = clamp(C.x, lim.x0, lim.x1), y = clamp(C.y, lim.y0, lim.y1), z = zz }
 end
 MapCamera.clampCamera = clampCamera
+-- the start zoom frames the whole tree (REALM.md 2.8)
+local function startZoom(V: Size): number
+	return clamp(math.min(V.w / 1500, V.h / 1750), zMin(V), 1)
+end
+MapCamera.startZoom = startZoom
+-- the start camera: START at the start zoom, clamped to the world rect (no pan margin: the first view shows only the
+-- world; the player pans into the margin from there)
+function MapCamera.startCamera(V: Size): Cam
+	return clampCamera(START, startZoom(V), V, false, NO_MARGIN)
+end
 -- iOS-style resistance: raw overshoot x (>= 0, map points) -> displayed overshoot, approaching d
 function MapCamera.rubberBand(x: number, d: number?, c: number?): number
 	local dd, cc = d or OVERSCROLL, c or 0.55
@@ -389,7 +408,8 @@ end
 -- The HUD-safe start (DESIGN.md 3.3, REALM.md 2.8). V = the Box in map points, safe = the part of it not under the
 -- HUD bands (map points, Box-relative). WIDE / MEDIUM: the whole tree framed on the safe rect. COMPACT: the touch rest
 -- zoom 0.34 around `focus` (the READY centroid, the last layer, or the trunk), placed `focusY` of the way down the
--- safe rect (0.5 = centred; a new player's M sits at 0.6). Returns the hard-clamped (C, z).
+-- safe rect (0.5 = centred; a new player's M sits at 0.6). Returns (C, z) clamped to the world rect (NO_MARGIN, like
+-- startCamera): the first view shows only the world.
 function MapCamera.startFraming(V: Size, safe: Rect, mode: string, focus: Pt?, focusY: number?): (Pt, number)
 	local lo = zMin(V)
 	local z: number
@@ -403,7 +423,7 @@ function MapCamera.startFraming(V: Size, safe: Rect, mode: string, focus: Pt?, f
 	local sx = safe.x + safe.w / 2
 	local sy = safe.y + safe.h * (focusY or 0.5)
 	local C = { x = target.x + (V.w / 2 - sx) / z, y = target.y + (V.h / 2 - sy) / z }
-	local c = clampCamera(C, z, V, false)
+	local c = clampCamera(C, z, V, false, NO_MARGIN)
 	return { x = c.x, y = c.y }, c.z
 end
 -- frameNodes: fit a world rect (the rings and plates of some nodes) into the safe rect; returns the hard-clamped (C, z)

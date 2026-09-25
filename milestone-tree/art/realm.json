@@ -7,6 +7,8 @@
     "zMin": "max(V.w/3840, V.h/2560)",
     "zoomSlack": 0.06,
     "overscroll": 72,
+    "panMargin": [960, 720],
+    "panRule": "hard limit (camera.js panLimits): on each axis the visible world rect may extend past the world by m = min(panMargin, half the view) world px, so the camera centre ranges over [h - m, W - h + m] with h = V / (2 z) and never leaves the world (a view wider than W + 2m pins to the centre); the rubber band adds overscroll / z on top. The world layer fades out before its edges, so past them the layers behind show",
     "viewportDomain": {"minW": 568, "minH": 320, "maxW": 2560, "maxH": 1440, "minAspect": 0.45, "maxAspect": 3.6},
     "mapScale": "device viewport -> map points: letterbox outside aspect [0.45, 3.6]; s = max(w/2560, h/1440) if larger, min(w/568, h/320) if smaller, else 1; V = box / s. The Box sits on whole device px with no UIScale: positions are written in Scale units of the Box, tiles are snapped to whole device px with m = s (REALM.md 2.6, 9.1-9.3)",
     "start": {
@@ -14,7 +16,8 @@
       "zoom": "clamp(min(V.w/1500, V.h/1750), zMin(V), 1)",
       "introFromZoomFactor": 1.12,
       "introSeconds": 1.6,
-      "introEase": "quintOut"
+      "introEase": "quintOut",
+      "clamp": "clampCamera(center, zoom, V, { margin: NO_MARGIN }) (camera.js startCamera): the first view shows only the world; the player pans into the margin from there"
     },
     "feel": {
       "dragThreshold": {"mouse": 6, "touch": 12},
@@ -36,7 +39,7 @@
     }
   },
   "tiers": {
-    "HIGH": {"budgetMB": 120, "select": "default (PC, console, tablets with keyboard)"},
+    "HIGH": {"budgetMB": 150, "select": "default (PC, console, tablets with keyboard)"},
     "LOW": {
       "budgetMB": 35,
       "select": "TouchEnabled and not KeyboardEnabled, or GuiService.ViewportDisplaySize == Small, or SavedQualityLevel <= 3; the player can override in Options"
@@ -133,7 +136,7 @@
       "rect": [3300, 700, 3840, 1700],
       "cover": [0.02, 0.22],
       "gate": "rift",
-      "note": "rect = the CR / CM outcrop footprint in world px (crystals, spire, green glows, glitch bands). cover = the share of the visible world rect that rect covers; at the hard east limit it is 0.23 (2560x1440, z 1.25) to 1 (portrait phones), at the start camera and every overview it is <= 0.09 with w.rift = 0",
+      "note": "rect = the CR / CM outcrop footprint in world px (crystals, spire, green glows, glitch bands). cover = the share of the visible world rect (the pan margin included) that rect covers; at the hard east limit (y 1250) it is 0.15 (2560x1440, z 1) to 0.5 (from z 1 on 1920x1080 the limit puts the world's east edge at the screen centre); the start camera and the overview have w.rift = 0, so the accent is off there",
       "focus": [3620, 1180],
       "light": {
         "radius": [420, 650],
@@ -143,10 +146,10 @@
       "bloom": {
         "atlas": "glow",
         "camera": [2880, 1250, 1],
-        "rule": "one ImageLabel per entry in that layer container, centred at `local` (layer-local px, derived: the spot behind `focus` seen from `camera` = [x, y, z], the 1920x1080 east limit), size `size`, ImageColor3 = color, ImageTransparency = 1 - alpha * w.corrupt, Visible = false at 0; drawn before the layer tiles (see zOrder)",
+        "rule": "one ImageLabel per entry in that layer container, centred at `local` (layer-local px, derived: the spot behind `focus` seen from `camera` = [x, y, z], the 1920x1080 view at z 1 where the accent first reaches full strength), size `size`, ImageColor3 = color, ImageTransparency = 1 - alpha * w.corrupt, Visible = false at 0; drawn before the layer tiles (see zOrder)",
         "layers": [
-          {"layer": "clouds", "size": [3200, 3400], "color": [60, 230, 120], "alpha": 0.3, "local": [2247.2, 742.4]},
-          {"layer": "near", "size": [1900, 2500], "color": [40, 255, 110], "alpha": 0.35, "local": [3312, 1285]}
+          {"layer": "clouds", "size": [3200, 3400], "color": [60, 230, 120], "alpha": 0.3, "local": [2359.2, 822.4]},
+          {"layer": "near", "size": [1900, 2500], "color": [40, 255, 110], "alpha": 0.35, "local": [3932, 1749]}
         ]
       },
       "mood": "corrupted green accent around the CR / CM outcrop",
@@ -204,38 +207,38 @@
         "empty": "no hard shapes; keep the band's brightest knots away from the screen centre band y 0.4-0.6 h so node plates read"
       },
       "required": {
-        "w": 2655,
-        "h": 1522,
+        "w": 2739,
+        "h": 1586,
         "worstCase": {"x": "V.w=2560 z=0.627", "y": "V.h=1440 z=0.529"}
       },
-      "size": [2656, 1536],
-      "anchor": [1328, 768],
-      "tiles": {"w": 830, "h": 960, "gutter": 2},
-      "tileCell": [1328, 1536],
+      "size": [2752, 1600],
+      "anchor": [1376, 800],
+      "tiles": {"w": 860, "h": 1000, "gutter": 2},
+      "tileCell": [1376, 1600],
       "grid": {
-        "HIGH": {"scale": 0.625, "nx": 2, "ny": 1, "tiles": 2, "texture": [1660, 960], "bytes": 6431808},
+        "HIGH": {"scale": 0.625, "nx": 2, "ny": 1, "tiles": 2, "texture": [1720, 1000], "bytes": 6939648},
         "LOW": {
           "scale": 0.3125,
           "nx": 1,
           "ny": 1,
           "tiles": 1,
-          "texture": [830, 480],
-          "cols": [830],
-          "rows": [480],
-          "bytes": 1614624
+          "texture": [860, 500],
+          "cols": [860],
+          "rows": [500],
+          "bytes": 1741824
         }
       },
-      "memoryMB": {"HIGH": 6.13, "LOW": 1.54},
+      "memoryMB": {"HIGH": 6.62, "LOW": 1.66},
       "landmarks": {
-        "tree": [1307, 761.5],
-        "crown": [1307, 720.5],
-        "island": [1307, 804],
-        "rift": [1389.5, 778],
-        "shrine": [1258, 736],
-        "outcrop": [1412, 770]
+        "tree": [1355, 793.5],
+        "crown": [1355, 752.5],
+        "island": [1355, 836],
+        "rift": [1437.5, 810],
+        "shrine": [1306, 768],
+        "outcrop": [1460, 802]
       },
       "biomeLocal": {
-        "splitX": 1354.5,
+        "splitX": 1402.5,
         "fadeHalfWidth": 863,
         "note": "paint the rift palette (hazeRift, crimson glow) from splitX - fadeHalfWidth to splitX + fadeHalfWidth and beyond"
       },
@@ -243,50 +246,50 @@
         "format": "[node, cx, cy, rx, ry] ellipses in layer-local px",
         "rule": "advisory: the layer is dim; keep the brightest nebula knots out of the soft zones",
         "hard": [
-          ["m", 1307, 800.2, 186, 211],
-          ["mm", 1291, 803.2, 186, 211],
-          ["em", 1323, 803.2, 186, 211],
-          ["p", 1307, 784.2, 186, 211],
-          ["pe", 1284, 770.2, 186, 211],
-          ["sp", 1298.5, 767.7, 186, 211],
-          ["pb", 1315.5, 767.7, 186, 211],
-          ["pp", 1330, 770.2, 186, 211],
-          ["se", 1289.5, 754.2, 186, 211],
-          ["hp", 1307, 751.7, 186, 211],
-          ["ep", 1324.5, 754.2, 186, 211],
-          ["hb", 1291, 738.2, 186, 211],
-          ["ap", 1307, 735.7, 186, 211],
-          ["mp", 1323, 738.2, 186, 211],
-          ["t", 1307, 721.2, 186, 211],
-          ["pm", 1389.5, 783.2, 186, 211],
-          ["pep", 1371.5, 764.2, 186, 211],
-          ["cr", 1407.5, 765.2, 186, 211],
-          ["cm", 1416.5, 751.7, 186, 211],
-          ["ex", 1389.5, 744.2, 186, 211],
-          ["ach", 1258, 735.2, 186, 211]
+          ["m", 1355, 832.2, 186, 211],
+          ["mm", 1339, 835.2, 186, 211],
+          ["em", 1371, 835.2, 186, 211],
+          ["p", 1355, 816.2, 186, 211],
+          ["pe", 1332, 802.2, 186, 211],
+          ["sp", 1346.5, 799.7, 186, 211],
+          ["pb", 1363.5, 799.7, 186, 211],
+          ["pp", 1378, 802.2, 186, 211],
+          ["se", 1337.5, 786.2, 186, 211],
+          ["hp", 1355, 783.7, 186, 211],
+          ["ep", 1372.5, 786.2, 186, 211],
+          ["hb", 1339, 770.2, 186, 211],
+          ["ap", 1355, 767.7, 186, 211],
+          ["mp", 1371, 770.2, 186, 211],
+          ["t", 1355, 753.2, 186, 211],
+          ["pm", 1437.5, 815.2, 186, 211],
+          ["pep", 1419.5, 796.2, 186, 211],
+          ["cr", 1455.5, 797.2, 186, 211],
+          ["cm", 1464.5, 783.7, 186, 211],
+          ["ex", 1437.5, 776.2, 186, 211],
+          ["ach", 1306, 767.2, 186, 211]
         ],
         "soft": [
-          ["m", 1307, 800.2, 460, 365],
-          ["mm", 1291, 803.2, 460, 365],
-          ["em", 1323, 803.2, 460, 365],
-          ["p", 1307, 784.2, 460, 365],
-          ["pe", 1284, 770.2, 460, 365],
-          ["sp", 1298.5, 767.7, 460, 365],
-          ["pb", 1315.5, 767.7, 460, 365],
-          ["pp", 1330, 770.2, 460, 365],
-          ["se", 1289.5, 754.2, 460, 365],
-          ["hp", 1307, 751.7, 460, 365],
-          ["ep", 1324.5, 754.2, 460, 365],
-          ["hb", 1291, 738.2, 460, 365],
-          ["ap", 1307, 735.7, 460, 365],
-          ["mp", 1323, 738.2, 460, 365],
-          ["t", 1307, 721.2, 460, 365],
-          ["pm", 1389.5, 783.2, 460, 365],
-          ["pep", 1371.5, 764.2, 460, 365],
-          ["cr", 1407.5, 765.2, 460, 365],
-          ["cm", 1416.5, 751.7, 460, 365],
-          ["ex", 1389.5, 744.2, 460, 365],
-          ["ach", 1258, 735.2, 460, 365]
+          ["m", 1355, 832.2, 460, 365],
+          ["mm", 1339, 835.2, 460, 365],
+          ["em", 1371, 835.2, 460, 365],
+          ["p", 1355, 816.2, 460, 365],
+          ["pe", 1332, 802.2, 460, 365],
+          ["sp", 1346.5, 799.7, 460, 365],
+          ["pb", 1363.5, 799.7, 460, 365],
+          ["pp", 1378, 802.2, 460, 365],
+          ["se", 1337.5, 786.2, 460, 365],
+          ["hp", 1355, 783.7, 460, 365],
+          ["ep", 1372.5, 786.2, 460, 365],
+          ["hb", 1339, 770.2, 460, 365],
+          ["ap", 1355, 767.7, 460, 365],
+          ["mp", 1371, 770.2, 460, 365],
+          ["t", 1355, 753.2, 460, 365],
+          ["pm", 1437.5, 815.2, 460, 365],
+          ["pep", 1419.5, 796.2, 460, 365],
+          ["cr", 1455.5, 797.2, 460, 365],
+          ["cm", 1464.5, 783.7, 460, 365],
+          ["ex", 1437.5, 776.2, 460, 365],
+          ["ach", 1306, 767.2, 460, 365]
         ]
       }
     },
@@ -319,38 +322,38 @@
         "empty": "alpha under 0.25 in the band y 0.35-0.65 h; the wisp sprites add motion on top"
       },
       "required": {
-        "w": 2778,
-        "h": 1631,
+        "w": 2980,
+        "h": 1785,
         "worstCase": {"x": "V.w=2560 z=0.627", "y": "V.h=1440 z=0.529"}
       },
-      "size": [2784, 1632],
-      "anchor": [1392, 816],
-      "tiles": {"w": 522, "h": 612, "gutter": 2},
-      "tileCell": [1392, 1632],
+      "size": [3008, 1792],
+      "anchor": [1504, 896],
+      "tiles": {"w": 564, "h": 672, "gutter": 2},
+      "tileCell": [1504, 1792],
       "grid": {
-        "HIGH": {"scale": 0.375, "nx": 2, "ny": 1, "tiles": 2, "texture": [1044, 612], "bytes": 2592128},
+        "HIGH": {"scale": 0.375, "nx": 2, "ny": 1, "tiles": 2, "texture": [1128, 672], "bytes": 3071744},
         "LOW": {
           "scale": 0.1875,
           "nx": 1,
           "ny": 1,
           "tiles": 1,
-          "texture": [522, 306],
-          "cols": [522],
-          "rows": [306],
-          "bytes": 652240
+          "texture": [564, 336],
+          "cols": [564],
+          "rows": [336],
+          "bytes": 772480
         }
       },
-      "memoryMB": {"HIGH": 2.47, "LOW": 0.62},
+      "memoryMB": {"HIGH": 2.93, "LOW": 0.74},
       "landmarks": {
-        "tree": [1341.6, 800.4],
-        "crown": [1341.6, 702],
-        "island": [1341.6, 902.4],
-        "rift": [1539.6, 840],
-        "shrine": [1224, 739.2],
-        "outcrop": [1593.6, 820.8]
+        "tree": [1453.6, 880.4],
+        "crown": [1453.6, 782],
+        "island": [1453.6, 982.4],
+        "rift": [1651.6, 920],
+        "shrine": [1336, 819.2],
+        "outcrop": [1705.6, 900.8]
       },
       "biomeLocal": {
-        "splitX": 1455.6,
+        "splitX": 1567.6,
         "fadeHalfWidth": 810,
         "note": "paint the rift palette (hazeRift, crimson glow) from splitX - fadeHalfWidth to splitX + fadeHalfWidth and beyond"
       },
@@ -358,50 +361,50 @@
         "format": "[node, cx, cy, rx, ry] ellipses in layer-local px",
         "rule": "advisory: wisps stay under 0.55 alpha; no bright crest behind the soft zones",
         "hard": [
-          ["m", 1341.6, 893.3, 184, 208],
-          ["mm", 1303.2, 900.5, 184, 208],
-          ["em", 1380, 900.5, 184, 208],
-          ["p", 1341.6, 854.9, 184, 208],
-          ["pe", 1286.4, 821.3, 184, 208],
-          ["sp", 1321.2, 815.3, 184, 208],
-          ["pb", 1362, 815.3, 184, 208],
-          ["pp", 1396.8, 821.3, 184, 208],
-          ["se", 1299.6, 782.9, 184, 208],
-          ["hp", 1341.6, 776.9, 184, 208],
-          ["ep", 1383.6, 782.9, 184, 208],
-          ["hb", 1303.2, 744.5, 184, 208],
-          ["ap", 1341.6, 738.5, 184, 208],
-          ["mp", 1380, 744.5, 184, 208],
-          ["t", 1341.6, 703.7, 184, 208],
-          ["pm", 1539.6, 852.5, 184, 208],
-          ["pep", 1496.4, 806.9, 184, 208],
-          ["cr", 1582.8, 809.3, 184, 208],
-          ["cm", 1604.4, 776.9, 184, 208],
-          ["ex", 1539.6, 758.9, 184, 208],
-          ["ach", 1224, 737.3, 184, 208]
+          ["m", 1453.6, 973.3, 184, 208],
+          ["mm", 1415.2, 980.5, 184, 208],
+          ["em", 1492, 980.5, 184, 208],
+          ["p", 1453.6, 934.9, 184, 208],
+          ["pe", 1398.4, 901.3, 184, 208],
+          ["sp", 1433.2, 895.3, 184, 208],
+          ["pb", 1474, 895.3, 184, 208],
+          ["pp", 1508.8, 901.3, 184, 208],
+          ["se", 1411.6, 862.9, 184, 208],
+          ["hp", 1453.6, 856.9, 184, 208],
+          ["ep", 1495.6, 862.9, 184, 208],
+          ["hb", 1415.2, 824.5, 184, 208],
+          ["ap", 1453.6, 818.5, 184, 208],
+          ["mp", 1492, 824.5, 184, 208],
+          ["t", 1453.6, 783.7, 184, 208],
+          ["pm", 1651.6, 932.5, 184, 208],
+          ["pep", 1608.4, 886.9, 184, 208],
+          ["cr", 1694.8, 889.3, 184, 208],
+          ["cm", 1716.4, 856.9, 184, 208],
+          ["ex", 1651.6, 838.9, 184, 208],
+          ["ach", 1336, 817.3, 184, 208]
         ],
         "soft": [
-          ["m", 1341.6, 893.3, 437, 350],
-          ["mm", 1303.2, 900.5, 437, 350],
-          ["em", 1380, 900.5, 437, 350],
-          ["p", 1341.6, 854.9, 437, 350],
-          ["pe", 1286.4, 821.3, 437, 350],
-          ["sp", 1321.2, 815.3, 437, 350],
-          ["pb", 1362, 815.3, 437, 350],
-          ["pp", 1396.8, 821.3, 437, 350],
-          ["se", 1299.6, 782.9, 437, 350],
-          ["hp", 1341.6, 776.9, 437, 350],
-          ["ep", 1383.6, 782.9, 437, 350],
-          ["hb", 1303.2, 744.5, 437, 350],
-          ["ap", 1341.6, 738.5, 437, 350],
-          ["mp", 1380, 744.5, 437, 350],
-          ["t", 1341.6, 703.7, 437, 350],
-          ["pm", 1539.6, 852.5, 437, 350],
-          ["pep", 1496.4, 806.9, 437, 350],
-          ["cr", 1582.8, 809.3, 437, 350],
-          ["cm", 1604.4, 776.9, 437, 350],
-          ["ex", 1539.6, 758.9, 437, 350],
-          ["ach", 1224, 737.3, 437, 350]
+          ["m", 1453.6, 973.3, 437, 350],
+          ["mm", 1415.2, 980.5, 437, 350],
+          ["em", 1492, 980.5, 437, 350],
+          ["p", 1453.6, 934.9, 437, 350],
+          ["pe", 1398.4, 901.3, 437, 350],
+          ["sp", 1433.2, 895.3, 437, 350],
+          ["pb", 1474, 895.3, 437, 350],
+          ["pp", 1508.8, 901.3, 437, 350],
+          ["se", 1411.6, 862.9, 437, 350],
+          ["hp", 1453.6, 856.9, 437, 350],
+          ["ep", 1495.6, 862.9, 437, 350],
+          ["hb", 1415.2, 824.5, 437, 350],
+          ["ap", 1453.6, 818.5, 437, 350],
+          ["mp", 1492, 824.5, 437, 350],
+          ["t", 1453.6, 783.7, 437, 350],
+          ["pm", 1651.6, 932.5, 437, 350],
+          ["pep", 1608.4, 886.9, 437, 350],
+          ["cr", 1694.8, 889.3, 437, 350],
+          ["cm", 1716.4, 856.9, 437, 350],
+          ["ex", 1651.6, 838.9, 437, 350],
+          ["ach", 1336, 817.3, 437, 350]
         ]
       }
     },
@@ -434,38 +437,38 @@
         "empty": "no island larger than 420 local px; none centred on a soft zone"
       },
       "required": {
-        "w": 3007,
-        "h": 1834,
+        "w": 3426,
+        "h": 2154,
         "worstCase": {"x": "V.w=2560 z=0.627", "y": "V.h=1440 z=0.529"}
       },
-      "size": [3008, 1836],
-      "anchor": [1504, 918],
-      "tiles": {"w": 752, "h": 918, "gutter": 2},
-      "tileCell": [1504, 1836],
+      "size": [3432, 2160],
+      "anchor": [1716, 1080],
+      "tiles": {"w": 858, "h": 540, "gutter": 2},
+      "tileCell": [1716, 1080],
       "grid": {
-        "HIGH": {"scale": 0.5, "nx": 2, "ny": 1, "tiles": 2, "texture": [1504, 918], "bytes": 5576256},
+        "HIGH": {"scale": 0.5, "nx": 2, "ny": 2, "tiles": 4, "texture": [1716, 1080], "bytes": 7502848},
         "LOW": {
           "scale": 0.25,
           "nx": 1,
           "ny": 1,
           "tiles": 1,
-          "texture": [752, 459],
-          "cols": [752],
-          "rows": [459],
-          "bytes": 1400112
+          "texture": [858, 540],
+          "cols": [858],
+          "rows": [540],
+          "bytes": 1875712
         }
       },
-      "memoryMB": {"HIGH": 5.32, "LOW": 1.34},
+      "memoryMB": {"HIGH": 7.16, "LOW": 1.79},
       "landmarks": {
-        "tree": [1399, 885.5],
-        "crown": [1399, 680.5],
-        "island": [1399, 1098],
-        "rift": [1811.5, 968],
-        "shrine": [1154, 758],
-        "outcrop": [1924, 928]
+        "tree": [1611, 1047.5],
+        "crown": [1611, 842.5],
+        "island": [1611, 1260],
+        "rift": [2023.5, 1130],
+        "shrine": [1366, 920],
+        "outcrop": [2136, 1090]
       },
       "biomeLocal": {
-        "splitX": 1636.5,
+        "splitX": 1848.5,
         "fadeHalfWidth": 713,
         "note": "paint the rift palette (hazeRift, crimson glow) from splitX - fadeHalfWidth to splitX + fadeHalfWidth and beyond"
       },
@@ -473,50 +476,50 @@
         "format": "[node, cx, cy, rx, ry] ellipses in layer-local px",
         "rule": "advisory: silhouettes may cross soft zones but stay under 0.5 luma",
         "hard": [
-          ["m", 1399, 1079, 179, 202],
-          ["mm", 1319, 1094, 179, 202],
-          ["em", 1479, 1094, 179, 202],
-          ["p", 1399, 999, 179, 202],
-          ["pe", 1284, 929, 179, 202],
-          ["sp", 1356.5, 916.5, 179, 202],
-          ["pb", 1441.5, 916.5, 179, 202],
-          ["pp", 1514, 929, 179, 202],
-          ["se", 1311.5, 849, 179, 202],
-          ["hp", 1399, 836.5, 179, 202],
-          ["ep", 1486.5, 849, 179, 202],
-          ["hb", 1319, 769, 179, 202],
-          ["ap", 1399, 756.5, 179, 202],
-          ["mp", 1479, 769, 179, 202],
-          ["t", 1399, 684, 179, 202],
-          ["pm", 1811.5, 994, 179, 202],
-          ["pep", 1721.5, 899, 179, 202],
-          ["cr", 1901.5, 904, 179, 202],
-          ["cm", 1946.5, 836.5, 179, 202],
-          ["ex", 1811.5, 799, 179, 202],
-          ["ach", 1154, 754, 179, 202]
+          ["m", 1611, 1241, 179, 202],
+          ["mm", 1531, 1256, 179, 202],
+          ["em", 1691, 1256, 179, 202],
+          ["p", 1611, 1161, 179, 202],
+          ["pe", 1496, 1091, 179, 202],
+          ["sp", 1568.5, 1078.5, 179, 202],
+          ["pb", 1653.5, 1078.5, 179, 202],
+          ["pp", 1726, 1091, 179, 202],
+          ["se", 1523.5, 1011, 179, 202],
+          ["hp", 1611, 998.5, 179, 202],
+          ["ep", 1698.5, 1011, 179, 202],
+          ["hb", 1531, 931, 179, 202],
+          ["ap", 1611, 918.5, 179, 202],
+          ["mp", 1691, 931, 179, 202],
+          ["t", 1611, 846, 179, 202],
+          ["pm", 2023.5, 1156, 179, 202],
+          ["pep", 1933.5, 1061, 179, 202],
+          ["cr", 2113.5, 1066, 179, 202],
+          ["cm", 2158.5, 998.5, 179, 202],
+          ["ex", 2023.5, 961, 179, 202],
+          ["ach", 1366, 916, 179, 202]
         ],
         "soft": [
-          ["m", 1399, 1079, 395, 324],
-          ["mm", 1319, 1094, 395, 324],
-          ["em", 1479, 1094, 395, 324],
-          ["p", 1399, 999, 395, 324],
-          ["pe", 1284, 929, 395, 324],
-          ["sp", 1356.5, 916.5, 395, 324],
-          ["pb", 1441.5, 916.5, 395, 324],
-          ["pp", 1514, 929, 395, 324],
-          ["se", 1311.5, 849, 395, 324],
-          ["hp", 1399, 836.5, 395, 324],
-          ["ep", 1486.5, 849, 395, 324],
-          ["hb", 1319, 769, 395, 324],
-          ["ap", 1399, 756.5, 395, 324],
-          ["mp", 1479, 769, 395, 324],
-          ["t", 1399, 684, 395, 324],
-          ["pm", 1811.5, 994, 395, 324],
-          ["pep", 1721.5, 899, 395, 324],
-          ["cr", 1901.5, 904, 395, 324],
-          ["cm", 1946.5, 836.5, 395, 324],
-          ["ex", 1811.5, 799, 395, 324],
-          ["ach", 1154, 754, 395, 324]
+          ["m", 1611, 1241, 395, 324],
+          ["mm", 1531, 1256, 395, 324],
+          ["em", 1691, 1256, 395, 324],
+          ["p", 1611, 1161, 395, 324],
+          ["pe", 1496, 1091, 395, 324],
+          ["sp", 1568.5, 1078.5, 395, 324],
+          ["pb", 1653.5, 1078.5, 395, 324],
+          ["pp", 1726, 1091, 395, 324],
+          ["se", 1523.5, 1011, 395, 324],
+          ["hp", 1611, 998.5, 395, 324],
+          ["ep", 1698.5, 1011, 395, 324],
+          ["hb", 1531, 931, 395, 324],
+          ["ap", 1611, 918.5, 395, 324],
+          ["mp", 1691, 931, 395, 324],
+          ["t", 1611, 846, 395, 324],
+          ["pm", 2023.5, 1156, 395, 324],
+          ["pep", 1933.5, 1061, 395, 324],
+          ["cr", 2113.5, 1066, 395, 324],
+          ["cm", 2158.5, 998.5, 395, 324],
+          ["ex", 2023.5, 961, 395, 324],
+          ["ach", 1366, 916, 395, 324]
         ]
       }
     },
@@ -549,38 +552,38 @@
         "empty": "the hard keep-clear zones (a band behind the trunk) stay mist-only"
       },
       "required": {
-        "w": 3359,
-        "h": 2146,
+        "w": 4114,
+        "h": 2722,
         "worstCase": {"x": "V.w=2560 z=0.627", "y": "V.h=1440 z=0.529"}
       },
-      "size": [3360, 2160],
-      "anchor": [1680, 1080],
-      "tiles": {"w": 840, "h": 810, "gutter": 2},
-      "tileCell": [1120, 1080],
+      "size": [4128, 2736],
+      "anchor": [2064, 1368],
+      "tiles": {"w": 774, "h": 684, "gutter": 2},
+      "tileCell": [1032, 912],
       "grid": {
-        "HIGH": {"scale": 0.75, "nx": 3, "ny": 2, "tiles": 6, "texture": [2520, 1620], "bytes": 16488384},
+        "HIGH": {"scale": 0.75, "nx": 4, "ny": 3, "tiles": 12, "texture": [3096, 2052], "bytes": 25692672},
         "LOW": {
           "scale": 0.375,
           "nx": 2,
-          "ny": 1,
-          "tiles": 2,
-          "texture": [1260, 810],
-          "cols": [840, 420],
-          "rows": [810],
-          "bytes": 4128608
+          "ny": 2,
+          "tiles": 4,
+          "texture": [1548, 1026],
+          "cols": [774, 774],
+          "rows": [684, 342],
+          "bytes": 6435616
         }
       },
-      "memoryMB": {"HIGH": 15.72, "LOW": 3.94},
+      "memoryMB": {"HIGH": 24.5, "LOW": 6.14},
       "landmarks": {
-        "tree": [1491, 1021.5],
-        "crown": [1491, 652.5],
-        "island": [1491, 1404],
-        "rift": [2233.5, 1170],
-        "shrine": [1050, 792],
-        "outcrop": [2436, 1098]
+        "tree": [1875, 1309.5],
+        "crown": [1875, 940.5],
+        "island": [1875, 1692],
+        "rift": [2617.5, 1458],
+        "shrine": [1434, 1080],
+        "outcrop": [2820, 1386]
       },
       "biomeLocal": {
-        "splitX": 1918.5,
+        "splitX": 2302.5,
         "fadeHalfWidth": 563,
         "note": "paint the rift palette (hazeRift, crimson glow) from splitX - fadeHalfWidth to splitX + fadeHalfWidth and beyond"
       },
@@ -588,50 +591,50 @@
         "format": "[node, cx, cy, rx, ry] ellipses in layer-local px",
         "rule": "hard zones: no island mass, only mist (alpha < 0.3); soft zones: low contrast. Light-falls must start at the lightfall sprite anchors (sprites[lightfall].instances: x, y = top, len = length)",
         "hard": [
-          ["m", 1491, 1369.8, 171, 194],
-          ["mm", 1347, 1396.8, 171, 194],
-          ["em", 1635, 1396.8, 171, 194],
-          ["p", 1491, 1225.8, 171, 194],
-          ["pe", 1284, 1099.8, 171, 194],
-          ["sp", 1414.5, 1077.3, 171, 194],
-          ["pb", 1567.5, 1077.3, 171, 194],
-          ["pp", 1698, 1099.8, 171, 194],
-          ["se", 1333.5, 955.8, 171, 194],
-          ["hp", 1491, 933.3, 171, 194],
-          ["ep", 1648.5, 955.8, 171, 194],
-          ["hb", 1347, 811.8, 171, 194],
-          ["ap", 1491, 789.3, 171, 194],
-          ["mp", 1635, 811.8, 171, 194],
-          ["t", 1491, 658.8, 171, 194],
-          ["pm", 2233.5, 1216.8, 171, 194],
-          ["pep", 2071.5, 1045.8, 171, 194],
-          ["cr", 2395.5, 1054.8, 171, 194],
-          ["cm", 2476.5, 933.3, 171, 194],
-          ["ex", 2233.5, 865.8, 171, 194],
-          ["ach", 1050, 784.8, 171, 194]
+          ["m", 1875, 1657.8, 171, 194],
+          ["mm", 1731, 1684.8, 171, 194],
+          ["em", 2019, 1684.8, 171, 194],
+          ["p", 1875, 1513.8, 171, 194],
+          ["pe", 1668, 1387.8, 171, 194],
+          ["sp", 1798.5, 1365.3, 171, 194],
+          ["pb", 1951.5, 1365.3, 171, 194],
+          ["pp", 2082, 1387.8, 171, 194],
+          ["se", 1717.5, 1243.8, 171, 194],
+          ["hp", 1875, 1221.3, 171, 194],
+          ["ep", 2032.5, 1243.8, 171, 194],
+          ["hb", 1731, 1099.8, 171, 194],
+          ["ap", 1875, 1077.3, 171, 194],
+          ["mp", 2019, 1099.8, 171, 194],
+          ["t", 1875, 946.8, 171, 194],
+          ["pm", 2617.5, 1504.8, 171, 194],
+          ["pep", 2455.5, 1333.8, 171, 194],
+          ["cr", 2779.5, 1342.8, 171, 194],
+          ["cm", 2860.5, 1221.3, 171, 194],
+          ["ex", 2617.5, 1153.8, 171, 194],
+          ["ach", 1434, 1072.8, 171, 194]
         ],
         "soft": [
-          ["m", 1491, 1369.8, 330, 283],
-          ["mm", 1347, 1396.8, 330, 283],
-          ["em", 1635, 1396.8, 330, 283],
-          ["p", 1491, 1225.8, 330, 283],
-          ["pe", 1284, 1099.8, 330, 283],
-          ["sp", 1414.5, 1077.3, 330, 283],
-          ["pb", 1567.5, 1077.3, 330, 283],
-          ["pp", 1698, 1099.8, 330, 283],
-          ["se", 1333.5, 955.8, 330, 283],
-          ["hp", 1491, 933.3, 330, 283],
-          ["ep", 1648.5, 955.8, 330, 283],
-          ["hb", 1347, 811.8, 330, 283],
-          ["ap", 1491, 789.3, 330, 283],
-          ["mp", 1635, 811.8, 330, 283],
-          ["t", 1491, 658.8, 330, 283],
-          ["pm", 2233.5, 1216.8, 330, 283],
-          ["pep", 2071.5, 1045.8, 330, 283],
-          ["cr", 2395.5, 1054.8, 330, 283],
-          ["cm", 2476.5, 933.3, 330, 283],
-          ["ex", 2233.5, 865.8, 330, 283],
-          ["ach", 1050, 784.8, 330, 283]
+          ["m", 1875, 1657.8, 330, 283],
+          ["mm", 1731, 1684.8, 330, 283],
+          ["em", 2019, 1684.8, 330, 283],
+          ["p", 1875, 1513.8, 330, 283],
+          ["pe", 1668, 1387.8, 330, 283],
+          ["sp", 1798.5, 1365.3, 330, 283],
+          ["pb", 1951.5, 1365.3, 330, 283],
+          ["pp", 2082, 1387.8, 330, 283],
+          ["se", 1717.5, 1243.8, 330, 283],
+          ["hp", 1875, 1221.3, 330, 283],
+          ["ep", 2032.5, 1243.8, 330, 283],
+          ["hb", 1731, 1099.8, 330, 283],
+          ["ap", 1875, 1077.3, 330, 283],
+          ["mp", 2019, 1099.8, 330, 283],
+          ["t", 1875, 946.8, 330, 283],
+          ["pm", 2617.5, 1504.8, 330, 283],
+          ["pep", 2455.5, 1333.8, 330, 283],
+          ["cr", 2779.5, 1342.8, 330, 283],
+          ["cm", 2860.5, 1221.3, 330, 283],
+          ["ex", 2617.5, 1153.8, 330, 283],
+          ["ach", 1434, 1072.8, 330, 283]
         ]
       }
     },
@@ -643,8 +646,8 @@
       "f": 0.7,
       "kind": "baked",
       "opaque": false,
-      "res": {"HIGH": 0.5, "LOW": 0.25},
-      "keepClearRule": "hard zones must be fully empty (alpha 0); soft zones: alpha < 0.35. Sparse: at most 8 rocks, most tiles empty",
+      "res": {"HIGH": 0.45, "LOW": 0.225},
+      "keepClearRule": "hard zones must be fully empty (alpha 0); soft zones: alpha < 0.35. Sparse: 8 rocks around the world frame plus a few in the pan margin, most of the layer empty",
       "tint": {"rift": [255, 220, 225], "corrupt": [255, 220, 225]},
       "atmosphere": {
         "hazeColor": [42, 28, 90],
@@ -658,95 +661,95 @@
         "emissiveMax": 0.8
       },
       "art": {
-        "contains": "5-8 big floating rocks passing close behind the world (300-900 local px), chunky, with crystal veins and a few hanging vines, rim-lit by the key light; one or two crimson-veined shards on the rift side",
+        "contains": "5-8 big floating rocks passing close behind the world (300-900 local px), plus 3-4 out in the pan margin, chunky, with crystal veins and a few hanging vines, rim-lit by the key light; one or two crimson-veined shards on the rift side",
         "palette": "dark rock (26, 16, 52) with lilac rim (205, 182, 255) at 60%; veins violet/cyan; rift side veins crimson",
         "feel": "scale and speed: big shapes gliding by just behind the tree",
         "empty": "the hard keep-clear zones; the tree trunk band"
       },
       "required": {
-        "w": 3798,
-        "h": 2752,
+        "w": 4974,
+        "h": 3648,
         "worstCase": {"x": "V.w=2560 z=0.627", "y": "V.h=378.7 z=0.139"}
       },
-      "size": [3800, 2752],
-      "anchor": [1900, 1376],
-      "tiles": {"w": 950, "h": 688, "gutter": 2},
-      "tileCell": [1900, 1376],
+      "size": [5040, 3680],
+      "anchor": [2520, 1840],
+      "tiles": {"w": 756, "h": 828, "gutter": 2},
+      "tileCell": [1680, 1840],
       "grid": {
-        "HIGH": {"scale": 0.5, "nx": 2, "ny": 2, "tiles": 4, "texture": [1900, 1376], "bytes": 10562688},
+        "HIGH": {"scale": 0.45, "nx": 3, "ny": 2, "tiles": 6, "texture": [2268, 1656], "bytes": 15175680},
         "LOW": {
-          "scale": 0.25,
-          "nx": 1,
+          "scale": 0.225,
+          "nx": 2,
           "ny": 1,
-          "tiles": 1,
-          "texture": [950, 688],
-          "cols": [950],
-          "rows": [688],
-          "bytes": 2640672
+          "tiles": 2,
+          "texture": [1134, 828],
+          "cols": [756, 378],
+          "rows": [828],
+          "bytes": 3800576
         }
       },
-      "memoryMB": {"HIGH": 10.07, "LOW": 2.52},
+      "memoryMB": {"HIGH": 14.47, "LOW": 3.62},
       "landmarks": {
-        "tree": [1606, 1285],
-        "crown": [1606, 711],
-        "island": [1606, 1880],
-        "rift": [2761, 1516],
-        "shrine": [920, 928],
-        "outcrop": [3076, 1404]
+        "tree": [2226, 1749],
+        "crown": [2226, 1175],
+        "island": [2226, 2344],
+        "rift": [3381, 1980],
+        "shrine": [1540, 1392],
+        "outcrop": [3696, 1868]
       },
       "biomeLocal": {
-        "splitX": 2271,
+        "splitX": 2891,
         "fadeHalfWidth": 375,
         "note": "paint the rift palette (hazeRift, crimson glow) from splitX - fadeHalfWidth to splitX + fadeHalfWidth and beyond"
       },
       "keepClear": {
         "format": "[node, cx, cy, rx, ry] ellipses in layer-local px",
-        "rule": "hard zones must be fully empty (alpha 0); soft zones: alpha < 0.35. Sparse: at most 8 rocks, most tiles empty",
+        "rule": "hard zones must be fully empty (alpha 0); soft zones: alpha < 0.35. Sparse: 8 rocks around the world frame plus a few in the pan margin, most of the layer empty",
         "hard": [
-          ["m", 1606, 1826.8, 162, 183],
-          ["mm", 1382, 1868.8, 162, 183],
-          ["em", 1830, 1868.8, 162, 183],
-          ["p", 1606, 1602.8, 162, 183],
-          ["pe", 1284, 1406.8, 162, 183],
-          ["sp", 1487, 1371.8, 162, 183],
-          ["pb", 1725, 1371.8, 162, 183],
-          ["pp", 1928, 1406.8, 162, 183],
-          ["se", 1361, 1182.8, 162, 183],
-          ["hp", 1606, 1147.8, 162, 183],
-          ["ep", 1851, 1182.8, 162, 183],
-          ["hb", 1382, 958.8, 162, 183],
-          ["ap", 1606, 923.8, 162, 183],
-          ["mp", 1830, 958.8, 162, 183],
-          ["t", 1606, 720.8, 162, 183],
-          ["pm", 2761, 1588.8, 162, 183],
-          ["pep", 2509, 1322.8, 162, 183],
-          ["cr", 3013, 1336.8, 162, 183],
-          ["cm", 3139, 1147.8, 162, 183],
-          ["ex", 2761, 1042.8, 162, 183],
-          ["ach", 920, 916.8, 162, 183]
+          ["m", 2226, 2290.8, 162, 183],
+          ["mm", 2002, 2332.8, 162, 183],
+          ["em", 2450, 2332.8, 162, 183],
+          ["p", 2226, 2066.8, 162, 183],
+          ["pe", 1904, 1870.8, 162, 183],
+          ["sp", 2107, 1835.8, 162, 183],
+          ["pb", 2345, 1835.8, 162, 183],
+          ["pp", 2548, 1870.8, 162, 183],
+          ["se", 1981, 1646.8, 162, 183],
+          ["hp", 2226, 1611.8, 162, 183],
+          ["ep", 2471, 1646.8, 162, 183],
+          ["hb", 2002, 1422.8, 162, 183],
+          ["ap", 2226, 1387.8, 162, 183],
+          ["mp", 2450, 1422.8, 162, 183],
+          ["t", 2226, 1184.8, 162, 183],
+          ["pm", 3381, 2052.8, 162, 183],
+          ["pep", 3129, 1786.8, 162, 183],
+          ["cr", 3633, 1800.8, 162, 183],
+          ["cm", 3759, 1611.8, 162, 183],
+          ["ex", 3381, 1506.8, 162, 183],
+          ["ach", 1540, 1380.8, 162, 183]
         ],
         "soft": [
-          ["m", 1606, 1826.8, 248, 232],
-          ["mm", 1382, 1868.8, 248, 232],
-          ["em", 1830, 1868.8, 248, 232],
-          ["p", 1606, 1602.8, 248, 232],
-          ["pe", 1284, 1406.8, 248, 232],
-          ["sp", 1487, 1371.8, 248, 232],
-          ["pb", 1725, 1371.8, 248, 232],
-          ["pp", 1928, 1406.8, 248, 232],
-          ["se", 1361, 1182.8, 248, 232],
-          ["hp", 1606, 1147.8, 248, 232],
-          ["ep", 1851, 1182.8, 248, 232],
-          ["hb", 1382, 958.8, 248, 232],
-          ["ap", 1606, 923.8, 248, 232],
-          ["mp", 1830, 958.8, 248, 232],
-          ["t", 1606, 720.8, 248, 232],
-          ["pm", 2761, 1588.8, 248, 232],
-          ["pep", 2509, 1322.8, 248, 232],
-          ["cr", 3013, 1336.8, 248, 232],
-          ["cm", 3139, 1147.8, 248, 232],
-          ["ex", 2761, 1042.8, 248, 232],
-          ["ach", 920, 916.8, 248, 232]
+          ["m", 2226, 2290.8, 248, 232],
+          ["mm", 2002, 2332.8, 248, 232],
+          ["em", 2450, 2332.8, 248, 232],
+          ["p", 2226, 2066.8, 248, 232],
+          ["pe", 1904, 1870.8, 248, 232],
+          ["sp", 2107, 1835.8, 248, 232],
+          ["pb", 2345, 1835.8, 248, 232],
+          ["pp", 2548, 1870.8, 248, 232],
+          ["se", 1981, 1646.8, 248, 232],
+          ["hp", 2226, 1611.8, 248, 232],
+          ["ep", 2471, 1646.8, 248, 232],
+          ["hb", 2002, 1422.8, 248, 232],
+          ["ap", 2226, 1387.8, 248, 232],
+          ["mp", 2450, 1422.8, 248, 232],
+          ["t", 2226, 1184.8, 248, 232],
+          ["pm", 3381, 2052.8, 248, 232],
+          ["pep", 3129, 1786.8, 248, 232],
+          ["cr", 3633, 1800.8, 248, 232],
+          ["cm", 3759, 1611.8, 248, 232],
+          ["ex", 3381, 1506.8, 248, 232],
+          ["ach", 1540, 1380.8, 248, 232]
         ]
       }
     },
@@ -870,10 +873,10 @@
       "f": 1.3,
       "kind": "baked",
       "opaque": false,
-      "res": {"HIGH": 0.3, "LOW": 0.15},
+      "res": {"HIGH": 0.2, "LOW": 0.1},
       "zHide": 0.5,
       "zShow": 0.62,
-      "keepClearRule": "hard zones must be fully empty (alpha 0), soft zones alpha < 0.25. Content lives at the layer edges (top vines, bottom ferns, side leaves)",
+      "keepClearRule": "hard zones must be fully empty (alpha 0), soft zones alpha < 0.25. Content lives at the layer edges (top vines, bottom ferns, side leaves), which frame the view at the pan limits",
       "tint": {"rift": [255, 225, 230], "corrupt": [255, 225, 230]},
       "atmosphere": {
         "hazeColor": [8, 4, 18],
@@ -890,92 +893,92 @@
         "contains": "out-of-focus framing: hanging vines and leaf clusters from the top edge, fern and root silhouettes along the bottom, a few leaves at the sides, sparse glowing flower dots (the only bright bits)",
         "palette": "near-black violet (18, 9, 34) silhouettes, faint lilac/gold rim (35%), flower dots pink (255, 140, 220) / cyan",
         "feel": "you are standing inside the realm, looking through its foliage",
-        "empty": "all hard keep-clear zones; nothing in the middle 60% of the layer height except thin, faint leaf tips"
+        "empty": "all hard keep-clear zones; the canopy hangs from the layer's top edge and the ground growth rises from its bottom edge (the edges of the pan envelope, REALM.md 2.5); more than 728 local px from both edges only thin, faint leaf tips"
       },
       "required": {
-        "w": 5209,
-        "h": 3616,
-        "worstCase": {"x": "V.w=568 z=0.5", "y": "V.h=320 z=0.5"}
+        "w": 7594,
+        "h": 5372,
+        "worstCase": {"x": "V.w=960 z=0.5", "y": "V.h=720 z=0.5"}
       },
-      "size": [5240, 3640],
-      "anchor": [2620, 1820],
-      "tiles": {"w": 786, "h": 546, "gutter": 2},
-      "tileCell": [2620, 1820],
+      "size": [7600, 5380],
+      "anchor": [3800, 2690],
+      "tiles": {"w": 760, "h": 538, "gutter": 2},
+      "tileCell": [3800, 2690],
       "grid": {
-        "HIGH": {"scale": 0.3, "nx": 2, "ny": 2, "tiles": 4, "texture": [1572, 1092], "bytes": 6952000},
+        "HIGH": {"scale": 0.2, "nx": 2, "ny": 2, "tiles": 4, "texture": [1520, 1076], "bytes": 6625408},
         "LOW": {
-          "scale": 0.15,
+          "scale": 0.1,
           "nx": 1,
           "ny": 1,
           "tiles": 1,
-          "texture": [786, 546],
-          "cols": [786],
-          "rows": [546],
-          "bytes": 1738000
+          "texture": [760, 538],
+          "cols": [760],
+          "rows": [538],
+          "bytes": 1656352
         }
       },
-      "memoryMB": {"HIGH": 6.63, "LOW": 1.66},
+      "memoryMB": {"HIGH": 6.32, "LOW": 1.58},
       "landmarks": {
-        "tree": [2074, 1651],
-        "crown": [2074, 585],
-        "island": [2074, 2756],
-        "rift": [4219, 2080],
-        "shrine": [800, 988],
-        "outcrop": [4804, 1872]
+        "tree": [3254, 2521],
+        "crown": [3254, 1455],
+        "island": [3254, 3626],
+        "rift": [5399, 2950],
+        "shrine": [1980, 1858],
+        "outcrop": [5984, 2742]
       },
       "biomeLocal": {
-        "splitX": 3309,
+        "splitX": 4489,
         "fadeHalfWidth": 150,
         "note": "paint the rift palette (hazeRift, crimson glow) from splitX - fadeHalfWidth to splitX + fadeHalfWidth and beyond"
       },
       "keepClear": {
         "format": "[node, cx, cy, rx, ry] ellipses in layer-local px",
-        "rule": "hard zones must be fully empty (alpha 0), soft zones alpha < 0.25. Content lives at the layer edges (top vines, bottom ferns, side leaves)",
+        "rule": "hard zones must be fully empty (alpha 0), soft zones alpha < 0.25. Content lives at the layer edges (top vines, bottom ferns, side leaves), which frame the view at the pan limits",
         "hard": [
-          ["m", 2074, 2657.2, 168, 191],
-          ["mm", 1658, 2735.2, 168, 191],
-          ["em", 2490, 2735.2, 168, 191],
-          ["p", 2074, 2241.2, 168, 191],
-          ["pe", 1476, 1877.2, 168, 191],
-          ["sp", 1853, 1812.2, 168, 191],
-          ["pb", 2295, 1812.2, 168, 191],
-          ["pp", 2672, 1877.2, 168, 191],
-          ["se", 1619, 1461.2, 168, 191],
-          ["hp", 2074, 1396.2, 168, 191],
-          ["ep", 2529, 1461.2, 168, 191],
-          ["hb", 1658, 1045.2, 168, 191],
-          ["ap", 2074, 980.2, 168, 191],
-          ["mp", 2490, 1045.2, 168, 191],
-          ["t", 2074, 603.2, 168, 191],
-          ["pm", 4219, 2215.2, 168, 191],
-          ["pep", 3751, 1721.2, 168, 191],
-          ["cr", 4687, 1747.2, 168, 191],
-          ["cm", 4921, 1396.2, 168, 191],
-          ["ex", 4219, 1201.2, 168, 191],
-          ["ach", 800, 967.2, 168, 191]
+          ["m", 3254, 3527.2, 168, 191],
+          ["mm", 2838, 3605.2, 168, 191],
+          ["em", 3670, 3605.2, 168, 191],
+          ["p", 3254, 3111.2, 168, 191],
+          ["pe", 2656, 2747.2, 168, 191],
+          ["sp", 3033, 2682.2, 168, 191],
+          ["pb", 3475, 2682.2, 168, 191],
+          ["pp", 3852, 2747.2, 168, 191],
+          ["se", 2799, 2331.2, 168, 191],
+          ["hp", 3254, 2266.2, 168, 191],
+          ["ep", 3709, 2331.2, 168, 191],
+          ["hb", 2838, 1915.2, 168, 191],
+          ["ap", 3254, 1850.2, 168, 191],
+          ["mp", 3670, 1915.2, 168, 191],
+          ["t", 3254, 1473.2, 168, 191],
+          ["pm", 5399, 3085.2, 168, 191],
+          ["pep", 4931, 2591.2, 168, 191],
+          ["cr", 5867, 2617.2, 168, 191],
+          ["cm", 6101, 2266.2, 168, 191],
+          ["ex", 5399, 2071.2, 168, 191],
+          ["ach", 1980, 1837.2, 168, 191]
         ],
         "soft": [
-          ["m", 2074, 2657.2, 255, 240],
-          ["mm", 1658, 2735.2, 255, 240],
-          ["em", 2490, 2735.2, 255, 240],
-          ["p", 2074, 2241.2, 255, 240],
-          ["pe", 1476, 1877.2, 255, 240],
-          ["sp", 1853, 1812.2, 255, 240],
-          ["pb", 2295, 1812.2, 255, 240],
-          ["pp", 2672, 1877.2, 255, 240],
-          ["se", 1619, 1461.2, 255, 240],
-          ["hp", 2074, 1396.2, 255, 240],
-          ["ep", 2529, 1461.2, 255, 240],
-          ["hb", 1658, 1045.2, 255, 240],
-          ["ap", 2074, 980.2, 255, 240],
-          ["mp", 2490, 1045.2, 255, 240],
-          ["t", 2074, 603.2, 255, 240],
-          ["pm", 4219, 2215.2, 255, 240],
-          ["pep", 3751, 1721.2, 255, 240],
-          ["cr", 4687, 1747.2, 255, 240],
-          ["cm", 4921, 1396.2, 255, 240],
-          ["ex", 4219, 1201.2, 255, 240],
-          ["ach", 800, 967.2, 255, 240]
+          ["m", 3254, 3527.2, 255, 240],
+          ["mm", 2838, 3605.2, 255, 240],
+          ["em", 3670, 3605.2, 255, 240],
+          ["p", 3254, 3111.2, 255, 240],
+          ["pe", 2656, 2747.2, 255, 240],
+          ["sp", 3033, 2682.2, 255, 240],
+          ["pb", 3475, 2682.2, 255, 240],
+          ["pp", 3852, 2747.2, 255, 240],
+          ["se", 2799, 2331.2, 255, 240],
+          ["hp", 3254, 2266.2, 255, 240],
+          ["ep", 3709, 2331.2, 255, 240],
+          ["hb", 2838, 1915.2, 255, 240],
+          ["ap", 3254, 1850.2, 255, 240],
+          ["mp", 3670, 1915.2, 255, 240],
+          ["t", 3254, 1473.2, 255, 240],
+          ["pm", 5399, 3085.2, 255, 240],
+          ["pep", 4931, 2591.2, 255, 240],
+          ["cr", 5867, 2617.2, 255, 240],
+          ["cm", 6101, 2266.2, 255, 240],
+          ["ex", 5399, 2071.2, 255, 240],
+          ["ach", 1980, 1837.2, 255, 240]
         ]
       }
     }
@@ -6972,7 +6975,7 @@
       "palette": [[255, 255, 255], [210, 190, 255], [170, 220, 255], [255, 225, 190]],
       "place": {"mode": "field", "regions": ["layer"], "minDist": 70},
       "keepClear": "none",
-      "excludeNorm": [[0.36, 0.26, 240]],
+      "excludeNorm": [[0.365, 0.27, 240]],
       "motion": [
         {"ch": "alpha", "type": "sine", "amp": [0.18, 0.4], "period": [2.2, 5.5]},
         {"ch": "scale", "type": "sine", "amp": [0.04, 0.12], "period": [5, 11]}
@@ -6980,8 +6983,8 @@
       "reducedMotion": "static at base alpha",
       "instances": [
         {
-          "x": 1407.5,
-          "y": 934.1,
+          "x": 1458.4,
+          "y": 973,
           "s": 20.6,
           "t": 1,
           "a": 0.685,
@@ -6992,8 +6995,8 @@
           ]
         },
         {
-          "x": 1810.1,
-          "y": 247,
+          "x": 1875.6,
+          "y": 257.3,
           "s": 13.2,
           "t": 0,
           "a": 0.649,
@@ -7004,8 +7007,8 @@
           ]
         },
         {
-          "x": 2041.9,
-          "y": 487.9,
+          "x": 2115.8,
+          "y": 508.2,
           "s": 21.2,
           "t": 0,
           "a": 0.564,
@@ -7016,8 +7019,8 @@
           ]
         },
         {
-          "x": 2245.7,
-          "y": 220,
+          "x": 2326.8,
+          "y": 229.1,
           "s": 25.3,
           "t": 1,
           "a": 0.646,
@@ -7028,8 +7031,8 @@
           ]
         },
         {
-          "x": 236.1,
-          "y": 989.3,
+          "x": 244.7,
+          "y": 1030.6,
           "s": 10.8,
           "t": 0,
           "a": 0.709,
@@ -7040,8 +7043,8 @@
           ]
         },
         {
-          "x": 797.8,
-          "y": 852.2,
+          "x": 826.7,
+          "y": 887.7,
           "s": 16.3,
           "t": 1,
           "a": 0.59,
@@ -7052,8 +7055,8 @@
           ]
         },
         {
-          "x": 1673,
-          "y": 631.1,
+          "x": 1733.5,
+          "y": 657.4,
           "s": 26.5,
           "t": 1,
           "a": 0.659,
@@ -7064,8 +7067,8 @@
           ]
         },
         {
-          "x": 1979,
-          "y": 836.4,
+          "x": 2050.5,
+          "y": 871.2,
           "s": 19.3,
           "t": 0,
           "a": 0.69,
@@ -7076,8 +7079,8 @@
           ]
         },
         {
-          "x": 1731,
-          "y": 999.6,
+          "x": 1793.6,
+          "y": 1041.3,
           "s": 27.9,
           "t": 1,
           "a": 0.584,
@@ -7088,8 +7091,8 @@
           ]
         },
         {
-          "x": 189.5,
-          "y": 440.3,
+          "x": 196.3,
+          "y": 458.7,
           "s": 22,
           "t": 0,
           "a": 0.707,
@@ -7100,8 +7103,8 @@
           ]
         },
         {
-          "x": 2483.7,
-          "y": 1152.9,
+          "x": 2573.4,
+          "y": 1201,
           "s": 10.1,
           "t": 0,
           "a": 0.763,
@@ -7112,8 +7115,8 @@
           ]
         },
         {
-          "x": 169.2,
-          "y": 130.2,
+          "x": 175.3,
+          "y": 135.6,
           "s": 28,
           "t": 1,
           "a": 0.726,
@@ -7124,8 +7127,8 @@
           ]
         },
         {
-          "x": 1415.5,
-          "y": 77.7,
+          "x": 1466.7,
+          "y": 80.9,
           "s": 11.1,
           "t": 0,
           "a": 0.618,
@@ -7136,8 +7139,8 @@
           ]
         },
         {
-          "x": 1493.9,
-          "y": 988.4,
+          "x": 1547.9,
+          "y": 1029.6,
           "s": 10.1,
           "t": 0,
           "a": 0.591,
@@ -7148,8 +7151,8 @@
           ]
         },
         {
-          "x": 265.1,
-          "y": 136,
+          "x": 274.7,
+          "y": 141.7,
           "s": 23.4,
           "t": 0,
           "a": 0.578,
@@ -7160,8 +7163,8 @@
           ]
         },
         {
-          "x": 1019.2,
-          "y": 1173.4,
+          "x": 1056,
+          "y": 1222.2,
           "s": 14.1,
           "t": 0,
           "a": 0.585,
@@ -7172,8 +7175,8 @@
           ]
         },
         {
-          "x": 1402.2,
-          "y": 1180.2,
+          "x": 1452.9,
+          "y": 1229.3,
           "s": 14.6,
           "t": 1,
           "a": 0.585,
@@ -7184,8 +7187,8 @@
           ]
         },
         {
-          "x": 498.5,
-          "y": 145.5,
+          "x": 516.5,
+          "y": 151.6,
           "s": 11.6,
           "t": 1,
           "a": 0.688,
@@ -7196,8 +7199,8 @@
           ]
         },
         {
-          "x": 2382.7,
-          "y": 889.3,
+          "x": 2468.8,
+          "y": 926.4,
           "s": 18.3,
           "t": 1,
           "a": 0.637,
@@ -7208,8 +7211,8 @@
           ]
         },
         {
-          "x": 338.4,
-          "y": 364,
+          "x": 350.7,
+          "y": 379.2,
           "s": 21.4,
           "t": 0,
           "a": 0.573,
@@ -7220,8 +7223,8 @@
           ]
         },
         {
-          "x": 1887,
-          "y": 130.2,
+          "x": 1955.2,
+          "y": 135.7,
           "s": 12.4,
           "t": 1,
           "a": 0.721,
@@ -7232,8 +7235,8 @@
           ]
         },
         {
-          "x": 2081.7,
-          "y": 1483.7,
+          "x": 2156.9,
+          "y": 1545.5,
           "s": 18,
           "t": 0,
           "a": 0.63,
@@ -7244,8 +7247,8 @@
           ]
         },
         {
-          "x": 448,
-          "y": 25.5,
+          "x": 464.2,
+          "y": 26.6,
           "s": 27,
           "t": 0,
           "a": 0.713,
@@ -7256,8 +7259,8 @@
           ]
         },
         {
-          "x": 1455.5,
-          "y": 603,
+          "x": 1508.1,
+          "y": 628.1,
           "s": 15.2,
           "t": 1,
           "a": 0.575,
@@ -7268,8 +7271,8 @@
           ]
         },
         {
-          "x": 260.9,
-          "y": 1362.3,
+          "x": 270.3,
+          "y": 1419,
           "s": 17.2,
           "t": 0,
           "a": 0.693,
@@ -7280,8 +7283,8 @@
           ]
         },
         {
-          "x": 980.7,
-          "y": 848.7,
+          "x": 1016.2,
+          "y": 884.1,
           "s": 24.3,
           "t": 1,
           "a": 0.707,
@@ -7292,8 +7295,8 @@
           ]
         },
         {
-          "x": 347.3,
-          "y": 101.1,
+          "x": 359.9,
+          "y": 105.3,
           "s": 25.1,
           "t": 1,
           "a": 0.555,
@@ -7304,8 +7307,8 @@
           ]
         },
         {
-          "x": 1003.5,
-          "y": 769.8,
+          "x": 1039.8,
+          "y": 801.9,
           "s": 10.3,
           "t": 1,
           "a": 0.778,
@@ -7316,8 +7319,8 @@
           ]
         },
         {
-          "x": 1049.9,
-          "y": 1317.4,
+          "x": 1087.8,
+          "y": 1372.3,
           "s": 18.5,
           "t": 0,
           "a": 0.705,
@@ -7328,8 +7331,8 @@
           ]
         },
         {
-          "x": 813.9,
-          "y": 975.5,
+          "x": 843.3,
+          "y": 1016.1,
           "s": 11.2,
           "t": 1,
           "a": 0.582,
@@ -7340,8 +7343,8 @@
           ]
         },
         {
-          "x": 559.9,
-          "y": 19.2,
+          "x": 580.1,
+          "y": 20,
           "s": 25.9,
           "t": 0,
           "a": 0.679,
@@ -7352,8 +7355,8 @@
           ]
         },
         {
-          "x": 254.5,
-          "y": 43.9,
+          "x": 263.7,
+          "y": 45.8,
           "s": 14.7,
           "t": 0,
           "a": 0.624,
@@ -7364,8 +7367,8 @@
           ]
         },
         {
-          "x": 1159.2,
-          "y": 181,
+          "x": 1201.1,
+          "y": 188.5,
           "s": 22.6,
           "t": 0,
           "a": 0.589,
@@ -7376,8 +7379,8 @@
           ]
         },
         {
-          "x": 865,
-          "y": 1489.7,
+          "x": 896.3,
+          "y": 1551.8,
           "s": 23,
           "t": 1,
           "a": 0.622,
@@ -7388,8 +7391,8 @@
           ]
         },
         {
-          "x": 767.3,
-          "y": 105.8,
+          "x": 795.1,
+          "y": 110.2,
           "s": 25.6,
           "t": 1,
           "a": 0.614,
@@ -7400,8 +7403,8 @@
           ]
         },
         {
-          "x": 558.6,
-          "y": 1431.2,
+          "x": 578.8,
+          "y": 1490.9,
           "s": 27.4,
           "t": 1,
           "a": 0.579,
@@ -7412,8 +7415,8 @@
           ]
         },
         {
-          "x": 2511.8,
-          "y": 917.7,
+          "x": 2602.6,
+          "y": 955.9,
           "s": 18.4,
           "t": 0,
           "a": 0.71,
@@ -7424,423 +7427,423 @@
           ]
         },
         {
-          "x": 901.7,
-          "y": 1282,
-          "s": 26.1,
+          "x": 2186.3,
+          "y": 511.9,
+          "s": 14.9,
           "t": 0,
-          "a": 0.66,
-          "c": 1,
-          "m": [
-            {"ch": "alpha", "type": "sine", "amp": 0.2677, "period": 3.5478, "phase": 0.7271},
-            {"ch": "scale", "type": "sine", "amp": 0.0486, "period": 6.9536, "phase": 0.2297}
-          ]
-        },
-        {
-          "x": 12.7,
-          "y": 1268.3,
-          "s": 22.5,
-          "t": 0,
-          "a": 0.738,
-          "c": 0,
-          "m": [
-            {"ch": "alpha", "type": "sine", "amp": 0.1957, "period": 2.7975, "phase": 0.0412},
-            {"ch": "scale", "type": "sine", "amp": 0.0407, "period": 10.6043, "phase": 0.8657}
-          ]
-        },
-        {
-          "x": 1717.7,
-          "y": 921.6,
-          "s": 23.9,
-          "t": 0,
-          "a": 0.562,
-          "c": 1,
-          "m": [
-            {"ch": "alpha", "type": "sine", "amp": 0.2057, "period": 3.1137, "phase": 0.4081},
-            {"ch": "scale", "type": "sine", "amp": 0.0626, "period": 5.7767, "phase": 0.866}
-          ]
-        },
-        {
-          "x": 2331.7,
-          "y": 1106.5,
-          "s": 12.6,
-          "t": 1,
-          "a": 0.716,
-          "c": 0,
-          "m": [
-            {"ch": "alpha", "type": "sine", "amp": 0.2666, "period": 4.5195, "phase": 0.8246},
-            {"ch": "scale", "type": "sine", "amp": 0.0702, "period": 8.8017, "phase": 0.4434}
-          ]
-        },
-        {
-          "x": 1517.2,
-          "y": 1500.8,
-          "s": 13.7,
-          "t": 0,
-          "a": 0.632,
-          "c": 1,
-          "m": [
-            {"ch": "alpha", "type": "sine", "amp": 0.2471, "period": 4.6991, "phase": 0.9718},
-            {"ch": "scale", "type": "sine", "amp": 0.0736, "period": 7.2062, "phase": 0.1224}
-          ]
-        },
-        {
-          "x": 1497.9,
-          "y": 304.1,
-          "s": 20.8,
-          "t": 0,
-          "a": 0.764,
+          "a": 0.635,
           "c": 3,
           "m": [
-            {"ch": "alpha", "type": "sine", "amp": 0.2041, "period": 3.3766, "phase": 0.4018},
-            {"ch": "scale", "type": "sine", "amp": 0.0621, "period": 5.9211, "phase": 0.8147}
+            {"ch": "alpha", "type": "sine", "amp": 0.3765, "period": 3.1507, "phase": 0.4385},
+            {"ch": "scale", "type": "sine", "amp": 0.0749, "period": 7.3918, "phase": 0.4084}
           ]
         },
         {
-          "x": 1505.4,
-          "y": 136,
-          "s": 19.3,
+          "x": 295.8,
+          "y": 521,
+          "s": 14.1,
           "t": 1,
-          "a": 0.733,
-          "c": 1,
+          "a": 0.59,
+          "c": 0,
           "m": [
-            {"ch": "alpha", "type": "sine", "amp": 0.2858, "period": 5.3006, "phase": 0.1402},
-            {"ch": "scale", "type": "sine", "amp": 0.0985, "period": 7.5193, "phase": 0.7504}
+            {"ch": "alpha", "type": "sine", "amp": 0.3069, "period": 2.956, "phase": 0.0048},
+            {"ch": "scale", "type": "sine", "amp": 0.1061, "period": 9.1568, "phase": 0.1542}
           ]
         },
         {
-          "x": 794.1,
-          "y": 655.7,
-          "s": 22,
+          "x": 15.6,
+          "y": 114.1,
+          "s": 13.3,
           "t": 0,
-          "a": 0.715,
+          "a": 0.552,
+          "c": 3,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.3704, "period": 4.7628, "phase": 0.6467},
+            {"ch": "scale", "type": "sine", "amp": 0.088, "period": 9.626, "phase": 0.2608}
+          ]
+        },
+        {
+          "x": 1065.7,
+          "y": 187.2,
+          "s": 15,
+          "t": 0,
+          "a": 0.621,
+          "c": 0,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.3705, "period": 3.7779, "phase": 0.8779},
+            {"ch": "scale", "type": "sine", "amp": 0.0976, "period": 5.8531, "phase": 0.5175}
+          ]
+        },
+        {
+          "x": 47.9,
+          "y": 630.1,
+          "s": 22.7,
+          "t": 1,
+          "a": 0.644,
           "c": 2,
           "m": [
-            {"ch": "alpha", "type": "sine", "amp": 0.3241, "period": 4.9189, "phase": 0.0075},
-            {"ch": "scale", "type": "sine", "amp": 0.0994, "period": 9.6643, "phase": 0.5527}
+            {"ch": "alpha", "type": "sine", "amp": 0.2775, "period": 2.9049, "phase": 0.5713},
+            {"ch": "scale", "type": "sine", "amp": 0.1182, "period": 6.2232, "phase": 0.0765}
           ]
         },
         {
-          "x": 490.1,
-          "y": 239.1,
-          "s": 19.7,
-          "t": 0,
-          "a": 0.66,
+          "x": 1344.9,
+          "y": 488.3,
+          "s": 23.6,
+          "t": 1,
+          "a": 0.655,
           "c": 1,
           "m": [
-            {"ch": "alpha", "type": "sine", "amp": 0.2247, "period": 2.5161, "phase": 0.3242},
-            {"ch": "scale", "type": "sine", "amp": 0.1017, "period": 8.949, "phase": 0.8334}
+            {"ch": "alpha", "type": "sine", "amp": 0.2069, "period": 4.4927, "phase": 0.4362},
+            {"ch": "scale", "type": "sine", "amp": 0.0602, "period": 5.7279, "phase": 0.0219}
           ]
         },
         {
-          "x": 229,
-          "y": 736.8,
-          "s": 26.5,
+          "x": 544.8,
+          "y": 962.4,
+          "s": 16.7,
+          "t": 1,
+          "a": 0.761,
+          "c": 0,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.2584, "period": 3.526, "phase": 0.2767},
+            {"ch": "scale", "type": "sine", "amp": 0.0523, "period": 9.8882, "phase": 0.2131}
+          ]
+        },
+        {
+          "x": 243.7,
+          "y": 822.5,
+          "s": 20.9,
+          "t": 1,
+          "a": 0.672,
+          "c": 1,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.3867, "period": 2.6628, "phase": 0.731},
+            {"ch": "scale", "type": "sine", "amp": 0.0736, "period": 9.5027, "phase": 0.6034}
+          ]
+        },
+        {
+          "x": 1401.1,
+          "y": 1107.6,
+          "s": 10.2,
           "t": 0,
-          "a": 0.658,
-          "c": 0,
+          "a": 0.657,
+          "c": 2,
           "m": [
-            {"ch": "alpha", "type": "sine", "amp": 0.3231, "period": 3.7592, "phase": 0.9962},
-            {"ch": "scale", "type": "sine", "amp": 0.068, "period": 5.9951, "phase": 0.9273}
+            {"ch": "alpha", "type": "sine", "amp": 0.2642, "period": 4.382, "phase": 0.577},
+            {"ch": "scale", "type": "sine", "amp": 0.0924, "period": 9.9434, "phase": 0.0075}
           ]
         },
         {
-          "x": 612.9,
-          "y": 310.8,
-          "s": 15.6,
-          "t": 1,
-          "a": 0.743,
-          "c": 3,
-          "m": [
-            {"ch": "alpha", "type": "sine", "amp": 0.2236, "period": 4.1255, "phase": 0.7341},
-            {"ch": "scale", "type": "sine", "amp": 0.0873, "period": 10.7368, "phase": 0.5201}
-          ]
-        },
-        {
-          "x": 927.8,
-          "y": 101.2,
-          "s": 27.4,
-          "t": 1,
-          "a": 0.578,
-          "c": 0,
-          "m": [
-            {"ch": "alpha", "type": "sine", "amp": 0.2107, "period": 3.2441, "phase": 0.6852},
-            {"ch": "scale", "type": "sine", "amp": 0.0944, "period": 7.3127, "phase": 0.5615}
-          ]
-        },
-        {
-          "x": 1825.7,
-          "y": 617.1,
-          "s": 11.5,
-          "t": 1,
+          "x": 2139.4,
+          "y": 884.4,
+          "s": 20.5,
+          "t": 0,
           "a": 0.589,
           "c": 2,
           "m": [
-            {"ch": "alpha", "type": "sine", "amp": 0.3854, "period": 5.043, "phase": 0.9977},
-            {"ch": "scale", "type": "sine", "amp": 0.0753, "period": 7.0568, "phase": 0.9341}
+            {"ch": "alpha", "type": "sine", "amp": 0.2165, "period": 3.6544, "phase": 0.4082},
+            {"ch": "scale", "type": "sine", "amp": 0.0563, "period": 5.5747, "phase": 0.3242}
           ]
         },
         {
-          "x": 1977.5,
-          "y": 1342.3,
-          "s": 13.2,
+          "x": 1811.3,
+          "y": 1333.4,
+          "s": 12.1,
           "t": 0,
-          "a": 0.717,
-          "c": 1,
-          "m": [
-            {"ch": "alpha", "type": "sine", "amp": 0.2819, "period": 4.4281, "phase": 0.5479},
-            {"ch": "scale", "type": "sine", "amp": 0.1125, "period": 6.2081, "phase": 0.0048}
-          ]
-        },
-        {
-          "x": 382.8,
-          "y": 1535.3,
-          "s": 21.5,
-          "t": 0,
-          "a": 0.623,
+          "a": 0.558,
           "c": 2,
           "m": [
-            {"ch": "alpha", "type": "sine", "amp": 0.3312, "period": 5.3385, "phase": 0.3268},
-            {"ch": "scale", "type": "sine", "amp": 0.0656, "period": 5.5358, "phase": 0.047}
+            {"ch": "alpha", "type": "sine", "amp": 0.3897, "period": 4.4694, "phase": 0.1838},
+            {"ch": "scale", "type": "sine", "amp": 0.0657, "period": 7.8339, "phase": 0.0862}
           ]
         },
         {
-          "x": 384.2,
-          "y": 1201.5,
-          "s": 22.2,
-          "t": 1,
-          "a": 0.65,
-          "c": 0,
-          "m": [
-            {"ch": "alpha", "type": "sine", "amp": 0.3311, "period": 5.4843, "phase": 0.7482},
-            {"ch": "scale", "type": "sine", "amp": 0.0629, "period": 6.7337, "phase": 0.1445}
-          ]
-        },
-        {
-          "x": 1903.8,
-          "y": 10.6,
-          "s": 19.4,
+          "x": 2519.9,
+          "y": 796.4,
+          "s": 17.8,
           "t": 0,
-          "a": 0.695,
-          "c": 3,
+          "a": 0.713,
+          "c": 1,
           "m": [
-            {"ch": "alpha", "type": "sine", "amp": 0.3917, "period": 5.429, "phase": 0.3004},
-            {"ch": "scale", "type": "sine", "amp": 0.1063, "period": 8.0174, "phase": 0.4661}
+            {"ch": "alpha", "type": "sine", "amp": 0.3992, "period": 3.354, "phase": 0.1659},
+            {"ch": "scale", "type": "sine", "amp": 0.1142, "period": 8.2436, "phase": 0.2307}
           ]
         },
         {
-          "x": 292.3,
-          "y": 1137.6,
-          "s": 20.8,
-          "t": 1,
-          "a": 0.624,
-          "c": 0,
-          "m": [
-            {"ch": "alpha", "type": "sine", "amp": 0.1956, "period": 4.4928, "phase": 0.6176},
-            {"ch": "scale", "type": "sine", "amp": 0.1189, "period": 7.0129, "phase": 0.1113}
-          ]
-        },
-        {
-          "x": 572.7,
-          "y": 776.1,
-          "s": 21.5,
-          "t": 0,
-          "a": 0.592,
-          "c": 0,
-          "m": [
-            {"ch": "alpha", "type": "sine", "amp": 0.2494, "period": 2.6441, "phase": 0.6075},
-            {"ch": "scale", "type": "sine", "amp": 0.1023, "period": 8.5282, "phase": 0.0833}
-          ]
-        },
-        {
-          "x": 169.1,
-          "y": 365.5,
-          "s": 14.6,
-          "t": 0,
-          "a": 0.591,
-          "c": 0,
-          "m": [
-            {"ch": "alpha", "type": "sine", "amp": 0.3895, "period": 2.7473, "phase": 0.1121},
-            {"ch": "scale", "type": "sine", "amp": 0.1125, "period": 5.832, "phase": 0.1059}
-          ]
-        },
-        {
-          "x": 549.1,
-          "y": 353.2,
-          "s": 25.2,
-          "t": 1,
-          "a": 0.717,
-          "c": 3,
-          "m": [
-            {"ch": "alpha", "type": "sine", "amp": 0.3467, "period": 5.4263, "phase": 0.8047},
-            {"ch": "scale", "type": "sine", "amp": 0.0579, "period": 7.4554, "phase": 0.3421}
-          ]
-        },
-        {
-          "x": 681.9,
-          "y": 67.5,
-          "s": 18.7,
-          "t": 1,
-          "a": 0.574,
-          "c": 3,
-          "m": [
-            {"ch": "alpha", "type": "sine", "amp": 0.2759, "period": 2.406, "phase": 0.3066},
-            {"ch": "scale", "type": "sine", "amp": 0.0524, "period": 10.5207, "phase": 0.1448}
-          ]
-        },
-        {
-          "x": 1190.8,
-          "y": 1247.3,
+          "x": 2631.3,
+          "y": 832.1,
           "s": 25.3,
           "t": 0,
-          "a": 0.795,
-          "c": 0,
-          "m": [
-            {"ch": "alpha", "type": "sine", "amp": 0.2721, "period": 5.3847, "phase": 0.2312},
-            {"ch": "scale", "type": "sine", "amp": 0.04, "period": 10.0919, "phase": 0.5089}
-          ]
-        },
-        {
-          "x": 2603.3,
-          "y": 203.2,
-          "s": 14,
-          "t": 1,
-          "a": 0.558,
+          "a": 0.566,
           "c": 3,
           "m": [
-            {"ch": "alpha", "type": "sine", "amp": 0.3119, "period": 4.4466, "phase": 0.5895},
-            {"ch": "scale", "type": "sine", "amp": 0.0744, "period": 10.0415, "phase": 0.9293}
+            {"ch": "alpha", "type": "sine", "amp": 0.3194, "period": 2.5669, "phase": 0.093},
+            {"ch": "scale", "type": "sine", "amp": 0.0512, "period": 6.8984, "phase": 0.6852}
           ]
         },
         {
-          "x": 2514.8,
-          "y": 35.4,
-          "s": 11.1,
-          "t": 0,
-          "a": 0.647,
-          "c": 2,
-          "m": [
-            {"ch": "alpha", "type": "sine", "amp": 0.2385, "period": 2.9916, "phase": 0.6781},
-            {"ch": "scale", "type": "sine", "amp": 0.0939, "period": 10.6912, "phase": 0.4431}
-          ]
-        },
-        {
-          "x": 64.3,
-          "y": 1406,
-          "s": 13.1,
-          "t": 0,
-          "a": 0.731,
+          "x": 1534.1,
+          "y": 1494,
+          "s": 25.5,
+          "t": 1,
+          "a": 0.66,
           "c": 1,
           "m": [
-            {"ch": "alpha", "type": "sine", "amp": 0.3975, "period": 5.065, "phase": 0.7841},
-            {"ch": "scale", "type": "sine", "amp": 0.085, "period": 10.036, "phase": 0.8539}
+            {"ch": "alpha", "type": "sine", "amp": 0.3855, "period": 4.6474, "phase": 0.7445},
+            {"ch": "scale", "type": "sine", "amp": 0.1099, "period": 6.062, "phase": 0.2657}
           ]
         },
         {
-          "x": 2614.3,
-          "y": 1288.6,
-          "s": 17.5,
+          "x": 756.4,
+          "y": 741.3,
+          "s": 22.2,
           "t": 1,
-          "a": 0.727,
-          "c": 3,
-          "m": [
-            {"ch": "alpha", "type": "sine", "amp": 0.2488, "period": 4.6387, "phase": 0.3241},
-            {"ch": "scale", "type": "sine", "amp": 0.0909, "period": 6.3256, "phase": 0.8221}
-          ]
-        },
-        {
-          "x": 357.2,
-          "y": 1024.7,
-          "s": 24.1,
-          "t": 1,
-          "a": 0.779,
-          "c": 1,
-          "m": [
-            {"ch": "alpha", "type": "sine", "amp": 0.3691, "period": 5.2256, "phase": 0.7069},
-            {"ch": "scale", "type": "sine", "amp": 0.0967, "period": 7.621, "phase": 0.4927}
-          ]
-        },
-        {
-          "x": 1283.6,
-          "y": 1039.7,
-          "s": 23.6,
-          "t": 0,
-          "a": 0.621,
-          "c": 2,
-          "m": [
-            {"ch": "alpha", "type": "sine", "amp": 0.2711, "period": 3.6416, "phase": 0.8336},
-            {"ch": "scale", "type": "sine", "amp": 0.0617, "period": 9.8895, "phase": 0.5899}
-          ]
-        },
-        {
-          "x": 818,
-          "y": 1214.4,
-          "s": 20.7,
-          "t": 1,
-          "a": 0.622,
-          "c": 2,
-          "m": [
-            {"ch": "alpha", "type": "sine", "amp": 0.3743, "period": 4.1656, "phase": 0.7069},
-            {"ch": "scale", "type": "sine", "amp": 0.0589, "period": 8.8481, "phase": 0.3639}
-          ]
-        },
-        {
-          "x": 1238.2,
-          "y": 504.7,
-          "s": 28,
-          "t": 1,
-          "a": 0.611,
-          "c": 1,
-          "m": [
-            {"ch": "alpha", "type": "sine", "amp": 0.3699, "period": 4.4239, "phase": 0.2899},
-            {"ch": "scale", "type": "sine", "amp": 0.0789, "period": 6.8134, "phase": 0.8651}
-          ]
-        },
-        {
-          "x": 325,
-          "y": 800.8,
-          "s": 11.4,
-          "t": 0,
-          "a": 0.686,
-          "c": 1,
-          "m": [
-            {"ch": "alpha", "type": "sine", "amp": 0.243, "period": 4.3133, "phase": 0.4174},
-            {"ch": "scale", "type": "sine", "amp": 0.1106, "period": 10.5908, "phase": 0.9217}
-          ]
-        },
-        {
-          "x": 1853,
-          "y": 1442.5,
-          "s": 18.7,
-          "t": 0,
-          "a": 0.554,
-          "c": 2,
-          "m": [
-            {"ch": "alpha", "type": "sine", "amp": 0.2984, "period": 5.0169, "phase": 0.3645},
-            {"ch": "scale", "type": "sine", "amp": 0.0668, "period": 7.9947, "phase": 0.4633}
-          ]
-        },
-        {
-          "x": 2175,
-          "y": 127.1,
-          "s": 18.9,
-          "t": 0,
-          "a": 0.601,
+          "a": 0.777,
           "c": 0,
           "m": [
-            {"ch": "alpha", "type": "sine", "amp": 0.211, "period": 2.8657, "phase": 0.0685},
-            {"ch": "scale", "type": "sine", "amp": 0.0709, "period": 5.8582, "phase": 0.9068}
+            {"ch": "alpha", "type": "sine", "amp": 0.1811, "period": 4.3981, "phase": 0.6765},
+            {"ch": "scale", "type": "sine", "amp": 0.0917, "period": 10.7297, "phase": 0.1901}
           ]
         },
         {
-          "x": 757.2,
-          "y": 1025.4,
+          "x": 2750.8,
+          "y": 1026.6,
           "s": 14.6,
           "t": 0,
-          "a": 0.771,
+          "a": 0.731,
+          "c": 2,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.3892, "period": 3.2784, "phase": 0.3194},
+            {"ch": "scale", "type": "sine", "amp": 0.0471, "period": 5.2817, "phase": 0.5846}
+          ]
+        },
+        {
+          "x": 2152.6,
+          "y": 1084.1,
+          "s": 23.6,
+          "t": 0,
+          "a": 0.586,
+          "c": 2,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.399, "period": 4.669, "phase": 0.2862},
+            {"ch": "scale", "type": "sine", "amp": 0.0631, "period": 5.8671, "phase": 0.3597}
+          ]
+        },
+        {
+          "x": 19.1,
+          "y": 838,
+          "s": 12.1,
+          "t": 1,
+          "a": 0.768,
+          "c": 3,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.3953, "period": 3.1914, "phase": 0.8293},
+            {"ch": "scale", "type": "sine", "amp": 0.0802, "period": 7.7967, "phase": 0.8815}
+          ]
+        },
+        {
+          "x": 2038.2,
+          "y": 959.6,
+          "s": 25.2,
+          "t": 0,
+          "a": 0.594,
+          "c": 0,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.3329, "period": 4.2381, "phase": 0.986},
+            {"ch": "scale", "type": "sine", "amp": 0.0668, "period": 5.6675, "phase": 0.4657}
+          ]
+        },
+        {
+          "x": 123.4,
+          "y": 845.3,
+          "s": 13.1,
+          "t": 0,
+          "a": 0.676,
+          "c": 2,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.2799, "period": 2.7484, "phase": 0.007},
+            {"ch": "scale", "type": "sine", "amp": 0.0652, "period": 5.8074, "phase": 0.6075}
+          ]
+        },
+        {
+          "x": 1618.3,
+          "y": 133.2,
+          "s": 21.7,
+          "t": 0,
+          "a": 0.609,
           "c": 1,
           "m": [
-            {"ch": "alpha", "type": "sine", "amp": 0.3037, "period": 4.0021, "phase": 0.3535},
-            {"ch": "scale", "type": "sine", "amp": 0.0826, "period": 8.7102, "phase": 0.9148}
+            {"ch": "alpha", "type": "sine", "amp": 0.2803, "period": 2.7395, "phase": 0.0792},
+            {"ch": "scale", "type": "sine", "amp": 0.1162, "period": 5.9951, "phase": 0.1121}
+          ]
+        },
+        {
+          "x": 632.9,
+          "y": 1348.7,
+          "s": 22.7,
+          "t": 1,
+          "a": 0.751,
+          "c": 3,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.3951, "period": 4.8556, "phase": 0.2239},
+            {"ch": "scale", "type": "sine", "amp": 0.0727, "period": 7.0527, "phase": 0.8509}
+          ]
+        },
+        {
+          "x": 56.4,
+          "y": 1140,
+          "s": 18.5,
+          "t": 0,
+          "a": 0.561,
+          "c": 1,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.3244, "period": 2.5162, "phase": 0.8889},
+            {"ch": "scale", "type": "sine", "amp": 0.0749, "period": 5.3745, "phase": 0.3066}
+          ]
+        },
+        {
+          "x": 2532.2,
+          "y": 231.6,
+          "s": 20.6,
+          "t": 0,
+          "a": 0.753,
+          "c": 3,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.1942, "period": 5.4311, "phase": 0.0112},
+            {"ch": "scale", "type": "sine", "amp": 0.0735, "period": 10.7904, "phase": 0.2312}
+          ]
+        },
+        {
+          "x": 2335.5,
+          "y": 814.3,
+          "s": 19.5,
+          "t": 1,
+          "a": 0.719,
+          "c": 1,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.2986, "period": 4.857, "phase": 0.9898},
+            {"ch": "scale", "type": "sine", "amp": 0.0785, "period": 9.8064, "phase": 0.9802}
+          ]
+        },
+        {
+          "x": 604.5,
+          "y": 1127,
+          "s": 10.5,
+          "t": 1,
+          "a": 0.7,
+          "c": 2,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.3097, "period": 3.6195, "phase": 0.8403},
+            {"ch": "scale", "type": "sine", "amp": 0.1143, "period": 7.8939, "phase": 0.9468}
+          ]
+        },
+        {
+          "x": 173.7,
+          "y": 256.2,
+          "s": 17,
+          "t": 1,
+          "a": 0.616,
+          "c": 0,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.3292, "period": 4.422, "phase": 0.9485},
+            {"ch": "scale", "type": "sine", "amp": 0.0754, "period": 10.0758, "phase": 0.0242}
+          ]
+        },
+        {
+          "x": 474.3,
+          "y": 373.7,
+          "s": 23.1,
+          "t": 0,
+          "a": 0.797,
+          "c": 3,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.3525, "period": 4.0559, "phase": 0.8393},
+            {"ch": "scale", "type": "sine", "amp": 0.1083, "period": 5.2643, "phase": 0.9843}
+          ]
+        },
+        {
+          "x": 1153.4,
+          "y": 1138.4,
+          "s": 22.8,
+          "t": 1,
+          "a": 0.628,
+          "c": 2,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.2513, "period": 4.3001, "phase": 0.2209},
+            {"ch": "scale", "type": "sine", "amp": 0.1058, "period": 6.3909, "phase": 0.9856}
+          ]
+        },
+        {
+          "x": 312.4,
+          "y": 800.8,
+          "s": 12.4,
+          "t": 1,
+          "a": 0.746,
+          "c": 3,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.3817, "period": 3.7887, "phase": 0.8597},
+            {"ch": "scale", "type": "sine", "amp": 0.1133, "period": 9.2415, "phase": 0.7093}
+          ]
+        },
+        {
+          "x": 1356,
+          "y": 946.1,
+          "s": 18.7,
+          "t": 1,
+          "a": 0.739,
+          "c": 0,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.2425, "period": 4.3374, "phase": 0.4142},
+            {"ch": "scale", "type": "sine", "amp": 0.0749, "period": 10.0014, "phase": 0.2713}
+          ]
+        },
+        {
+          "x": 1623.3,
+          "y": 713.1,
+          "s": 13.7,
+          "t": 0,
+          "a": 0.785,
+          "c": 0,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.2478, "period": 4.8092, "phase": 0.5923},
+            {"ch": "scale", "type": "sine", "amp": 0.1094, "period": 6.7179, "phase": 0.5267}
+          ]
+        },
+        {
+          "x": 1639.2,
+          "y": 1131.1,
+          "s": 14.3,
+          "t": 1,
+          "a": 0.641,
+          "c": 0,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.2826, "period": 3.2844, "phase": 0.9987},
+            {"ch": "scale", "type": "sine", "amp": 0.0829, "period": 6.4592, "phase": 0.3465}
+          ]
+        },
+        {
+          "x": 1854.6,
+          "y": 463.8,
+          "s": 18.8,
+          "t": 0,
+          "a": 0.766,
+          "c": 3,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.2841, "period": 3.271, "phase": 0.3423},
+            {"ch": "scale", "type": "sine", "amp": 0.0788, "period": 5.7341, "phase": 0.5214}
+          ]
+        },
+        {
+          "x": 2536.4,
+          "y": 675.9,
+          "s": 22.6,
+          "t": 1,
+          "a": 0.67,
+          "c": 1,
+          "m": [
+            {"ch": "alpha", "type": "sine", "amp": 0.1834, "period": 4.2661, "phase": 0.5382},
+            {"ch": "scale", "type": "sine", "amp": 0.1083, "period": 7.1872, "phase": 0.3354}
           ]
         }
       ]
@@ -7870,8 +7873,8 @@
       "reducedMotion": "hidden",
       "instances": [
         {
-          "x": 396.2,
-          "y": 433.3,
+          "x": 410.6,
+          "y": 451.3,
           "s": 255.3,
           "h": 26.3,
           "r": 18.05,
@@ -7909,8 +7912,8 @@
           ]
         },
         {
-          "x": 1867.8,
-          "y": 277.4,
+          "x": 1935.3,
+          "y": 288.9,
           "s": 221.2,
           "h": 25.4,
           "r": 20.61,
@@ -7969,92 +7972,92 @@
       "reducedMotion": "static",
       "instances": [
         {
-          "x": 1244.5,
-          "y": 462.3,
+          "x": 1344.7,
+          "y": 507.6,
           "s": 1405.9,
           "h": 570.5,
           "t": 3,
           "a": 0.394,
           "m": [
-            {"ch": "x", "type": "drift", "speed": 7.4206, "phase": 0.4428, "from": -2650.4, "to": 2945.4},
+            {"ch": "x", "type": "drift", "speed": 7.4206, "phase": 0.4428, "from": -2750.6, "to": 3069.2},
             {"ch": "y", "type": "sine", "amp": 20.8685, "period": 57.5544, "phase": 0.3402},
             {"ch": "alpha", "type": "sine", "amp": 0.0645, "period": 25.4413, "phase": 0.0969}
           ]
         },
         {
-          "x": 574.6,
-          "y": 904.7,
+          "x": 620.9,
+          "y": 993.4,
           "s": 1758.7,
           "h": 579.1,
           "t": 1,
           "a": 0.266,
           "m": [
-            {"ch": "x", "type": "drift", "speed": 8.8477, "phase": 0.4657, "from": -2333.3, "to": 3968.1},
+            {"ch": "x", "type": "drift", "speed": 8.8477, "phase": 0.4657, "from": -2379.6, "to": 4145.8},
             {"ch": "y", "type": "sine", "amp": 11.3695, "period": 76.7521, "phase": 0.8045},
             {"ch": "alpha", "type": "sine", "amp": 0.0759, "period": 30.3815, "phase": 0.5891}
           ]
         },
         {
-          "x": 1081.9,
-          "y": 1513.3,
+          "x": 1169,
+          "y": 1661.7,
           "s": 1565.5,
           "h": 713.2,
           "t": 1,
           "a": 0.393,
           "m": [
-            {"ch": "x", "type": "drift", "speed": 11.4502, "phase": 0.7948, "from": -2647.4, "to": 3267.6},
+            {"ch": "x", "type": "drift", "speed": 11.4502, "phase": 0.7948, "from": -2734.5, "to": 3404.5},
             {"ch": "y", "type": "sine", "amp": 18.9663, "period": 55.1105, "phase": 0.4714},
             {"ch": "alpha", "type": "sine", "amp": 0.0424, "period": 21.6245, "phase": 0.7242}
           ]
         },
         {
-          "x": 2186.6,
-          "y": 456.7,
+          "x": 2362.6,
+          "y": 501.5,
           "s": 1271.6,
           "h": 557.7,
           "t": 3,
           "a": 0.227,
           "m": [
-            {"ch": "x", "type": "drift", "speed": 5.1726, "phase": 0.1214, "from": -3458.2, "to": 1869},
+            {"ch": "x", "type": "drift", "speed": 5.1726, "phase": 0.1214, "from": -3634.2, "to": 1917},
             {"ch": "y", "type": "sine", "amp": 12.9486, "period": 74.0792, "phase": 0.7519},
             {"ch": "alpha", "type": "sine", "amp": 0.0509, "period": 35.5317, "phase": 0.2144}
           ]
         },
         {
-          "x": 2703.5,
-          "y": 416.9,
+          "x": 2921.1,
+          "y": 457.8,
           "s": 1296.2,
           "h": 417.1,
           "t": 0,
           "a": 0.372,
           "m": [
-            {"ch": "x", "type": "drift", "speed": 10.7496, "phase": 0.7219, "from": -3999.7, "to": 1376.7},
+            {"ch": "x", "type": "drift", "speed": 10.7496, "phase": 0.7219, "from": -4217.3, "to": 1383.1},
             {"ch": "y", "type": "sine", "amp": 15.7517, "period": 62.65, "phase": 0.2243},
             {"ch": "alpha", "type": "sine", "amp": 0.0588, "period": 32.5799, "phase": 0.2496}
           ]
         },
         {
-          "x": 77.6,
-          "y": 1153.8,
+          "x": 83.8,
+          "y": 1266.9,
           "s": 1618.1,
           "h": 595.4,
           "t": 2,
           "a": 0.389,
           "m": [
-            {"ch": "x", "type": "drift", "speed": 6.5725, "phase": 0.5923, "from": -1695.7, "to": 4324.5},
+            {"ch": "x", "type": "drift", "speed": 6.5725, "phase": 0.5923, "from": -1701.9, "to": 4542.3},
             {"ch": "y", "type": "sine", "amp": 16.2429, "period": 68.6572, "phase": 0.6279},
             {"ch": "alpha", "type": "sine", "amp": 0.0764, "period": 20.2638, "phase": 0.7382}
           ]
         },
         {
-          "x": 2063.6,
-          "y": 991.1,
+          "x": 2229.6,
+          "y": 1088.3,
           "s": 1745.1,
           "h": 741.2,
           "t": 2,
           "a": 0.387,
           "m": [
-            {"ch": "x", "type": "drift", "speed": 8.2834, "phase": 0.8527, "from": -3808.7, "to": 2465.5},
+            {"ch": "x", "type": "drift", "speed": 8.2834, "phase": 0.8527, "from": -3974.7, "to": 2523.5},
             {"ch": "y", "type": "sine", "amp": 15.7435, "period": 52.3146, "phase": 0.197},
             {"ch": "alpha", "type": "sine", "amp": 0.0497, "period": 30.4686, "phase": 0.0714}
           ]
@@ -8066,7 +8069,7 @@
       "layer": "far",
       "seed": 31,
       "atlas": ["wispC", "wispD"],
-      "count": {"HIGH": 5, "LOW": 3},
+      "count": {"HIGH": 6, "LOW": 3},
       "size": [1500, 2600],
       "aspect": [0.12, 0.2],
       "alpha": [0.25, 0.45],
@@ -8085,63 +8088,75 @@
       "reducedMotion": "static",
       "instances": [
         {
-          "x": 2514.5,
-          "y": 1560.4,
+          "x": 2869,
+          "y": 1835.7,
           "s": 1553.8,
           "h": 238.3,
           "t": 0,
           "a": 0.265,
           "m": [
-            {"ch": "x", "type": "drift", "speed": 15.4523, "phase": 0.8125, "from": -4068.3, "to": 2047.3},
+            {"ch": "x", "type": "drift", "speed": 15.4523, "phase": 0.8125, "from": -4422.8, "to": 2116.8},
             {"ch": "alpha", "type": "sine", "amp": 0.066, "period": 26.7629, "phase": 0.5727}
           ]
         },
         {
-          "x": 2163.3,
-          "y": 1044.7,
+          "x": 2468.3,
+          "y": 1229.1,
           "s": 2285.3,
           "h": 413.2,
           "t": 1,
           "a": 0.307,
           "m": [
-            {"ch": "x", "type": "drift", "speed": 15.0377, "phase": 0.8332, "from": -4448.6, "to": 3130},
+            {"ch": "x", "type": "drift", "speed": 15.0377, "phase": 0.8332, "from": -4753.6, "to": 3249},
             {"ch": "alpha", "type": "sine", "amp": 0.0902, "period": 29.4839, "phase": 0.655}
           ]
         },
         {
-          "x": 105.2,
-          "y": 1136.8,
+          "x": 120,
+          "y": 1337.5,
           "s": 1697.4,
           "h": 299.2,
           "t": 0,
           "a": 0.306,
           "m": [
-            {"ch": "x", "type": "drift", "speed": 13.3897, "phase": 0.6494, "from": -1802.6, "to": 4600.2},
+            {"ch": "x", "type": "drift", "speed": 13.3897, "phase": 0.6494, "from": -1817.4, "to": 5009.4},
             {"ch": "alpha", "type": "sine", "amp": 0.0909, "period": 28.0076, "phase": 0.8836}
           ]
         },
         {
-          "x": 1154,
-          "y": 1284.5,
+          "x": 1316.6,
+          "y": 1511.1,
           "s": 1575,
           "h": 294.2,
           "t": 0,
           "a": 0.331,
           "m": [
-            {"ch": "x", "type": "drift", "speed": 8.3626, "phase": 0.4495, "from": -2729, "to": 3429},
+            {"ch": "x", "type": "drift", "speed": 8.3626, "phase": 0.4495, "from": -2891.6, "to": 3690.4},
             {"ch": "alpha", "type": "sine", "amp": 0.0987, "period": 25.8656, "phase": 0.8172}
           ]
         },
         {
-          "x": 2453.4,
-          "y": 1207.9,
+          "x": 2799.3,
+          "y": 1421,
           "s": 2379.9,
           "h": 363.3,
           "t": 1,
           "a": 0.409,
           "m": [
-            {"ch": "x", "type": "drift", "speed": -15.3692, "phase": 0.4721, "from": -4833.3, "to": 2934.5},
+            {"ch": "x", "type": "drift", "speed": -15.3692, "phase": 0.4721, "from": -5179.2, "to": 3012.6},
             {"ch": "alpha", "type": "sine", "amp": 0.0932, "period": 20.6886, "phase": 0.7776}
+          ]
+        },
+        {
+          "x": 1829.9,
+          "y": 1995.2,
+          "s": 2030.2,
+          "h": 319.2,
+          "t": 0,
+          "a": 0.316,
+          "m": [
+            {"ch": "x", "type": "drift", "speed": -8.9508, "phase": 0.6024, "from": -3860.1, "to": 3632.3},
+            {"ch": "alpha", "type": "sine", "amp": 0.0758, "period": 24.0236, "phase": 0.5661}
           ]
         }
       ]
@@ -8151,7 +8166,7 @@
       "layer": "mid",
       "seed": 41,
       "atlas": ["wispC", "wispD"],
-      "count": {"HIGH": 6, "LOW": 3},
+      "count": {"HIGH": 9, "LOW": 4},
       "size": [1400, 2400],
       "aspect": [0.14, 0.24],
       "alpha": [0.3, 0.5],
@@ -8170,75 +8185,111 @@
       "reducedMotion": "static",
       "instances": [
         {
-          "x": 1709.7,
-          "y": 1684.6,
+          "x": 2100.5,
+          "y": 2133.8,
           "s": 1941.2,
           "h": 437.2,
           "t": 0,
           "a": 0.483,
           "m": [
-            {"ch": "x", "type": "drift", "speed": 18.205, "phase": 0.0576, "from": -3650.9, "to": 3591.5},
+            {"ch": "x", "type": "drift", "speed": 18.205, "phase": 0.0576, "from": -4041.7, "to": 3968.7},
             {"ch": "y", "type": "sine", "amp": 12.6531, "period": 36.6159, "phase": 0.3415}
           ]
         },
         {
-          "x": 1365.3,
-          "y": 1210.9,
+          "x": 1677.4,
+          "y": 1533.8,
           "s": 1662.9,
           "h": 351.4,
           "t": 1,
           "a": 0.362,
           "m": [
-            {"ch": "x", "type": "drift", "speed": -15.723, "phase": 0.5405, "from": -3028.2, "to": 3657.6},
+            {"ch": "x", "type": "drift", "speed": -15.723, "phase": 0.5405, "from": -3340.3, "to": 4113.5},
             {"ch": "y", "type": "sine", "amp": 9.0452, "period": 33.0147, "phase": 0.4783}
           ]
         },
         {
-          "x": 126.1,
-          "y": 1927.7,
+          "x": 154.9,
+          "y": 2441.8,
           "s": 1579.5,
           "h": 226,
           "t": 1,
           "a": 0.396,
           "m": [
-            {"ch": "x", "type": "drift", "speed": -18.975, "phase": 0.7568, "from": -1705.6, "to": 4813.4},
+            {"ch": "x", "type": "drift", "speed": -18.975, "phase": 0.7568, "from": -1734.4, "to": 5552.6},
             {"ch": "y", "type": "sine", "amp": 11.7488, "period": 39.1535, "phase": 0.5541}
           ]
         },
         {
-          "x": 643.8,
-          "y": 1777.2,
+          "x": 791,
+          "y": 2251.1,
           "s": 1942.6,
           "h": 323.3,
           "t": 1,
           "a": 0.443,
           "m": [
-            {"ch": "x", "type": "drift", "speed": -15.2505, "phase": 0.0378, "from": -2586.4, "to": 4658.8},
+            {"ch": "x", "type": "drift", "speed": -15.2505, "phase": 0.0378, "from": -2733.6, "to": 5279.6},
             {"ch": "y", "type": "sine", "amp": 6.0086, "period": 39.6044, "phase": 0.1834}
           ]
         },
         {
-          "x": 424.5,
-          "y": 1415.7,
+          "x": 521.5,
+          "y": 1793.3,
           "s": 2276.3,
           "h": 494.2,
           "t": 0,
           "a": 0.466,
           "m": [
-            {"ch": "x", "type": "drift", "speed": 13.3281, "phase": 0.2004, "from": -2700.8, "to": 5211.8},
+            {"ch": "x", "type": "drift", "speed": 13.3281, "phase": 0.2004, "from": -2797.8, "to": 5882.8},
             {"ch": "y", "type": "sine", "amp": 13.2676, "period": 48.2398, "phase": 0.5976}
           ]
         },
         {
-          "x": 954.7,
-          "y": 1646.6,
+          "x": 1172.9,
+          "y": 2085.7,
           "s": 1692.4,
           "h": 339.7,
           "t": 0,
           "a": 0.352,
           "m": [
-            {"ch": "x", "type": "drift", "speed": -24.9141, "phase": 0.6297, "from": -2647.1, "to": 4097.7},
+            {"ch": "x", "type": "drift", "speed": -24.9141, "phase": 0.6297, "from": -2865.3, "to": 4647.5},
             {"ch": "y", "type": "sine", "amp": 7.654, "period": 49.2698, "phase": 0.3552}
+          ]
+        },
+        {
+          "x": 2862.1,
+          "y": 2098.3,
+          "s": 2282.6,
+          "h": 330,
+          "t": 1,
+          "a": 0.355,
+          "m": [
+            {"ch": "x", "type": "drift", "speed": 19.2408, "phase": 0.0632, "from": -5144.7, "to": 3548.5},
+            {"ch": "y", "type": "sine", "amp": 10.8778, "period": 35.1149, "phase": 0.5761}
+          ]
+        },
+        {
+          "x": 2581.9,
+          "y": 2012.6,
+          "s": 1581.7,
+          "h": 263.6,
+          "t": 1,
+          "a": 0.364,
+          "m": [
+            {"ch": "x", "type": "drift", "speed": -12.4987, "phase": 0.9756, "from": -4163.6, "to": 3127.8},
+            {"ch": "y", "type": "sine", "amp": 13.0214, "period": 45.9254, "phase": 0.4796}
+          ]
+        },
+        {
+          "x": 693.4,
+          "y": 1546.4,
+          "s": 1670.9,
+          "h": 394.1,
+          "t": 1,
+          "a": 0.337,
+          "m": [
+            {"ch": "x", "type": "drift", "speed": -13.304, "phase": 0.5369, "from": -2364.3, "to": 5105.5},
+            {"ch": "y", "type": "sine", "amp": 12.632, "period": 34.5849, "phase": 0.4808}
           ]
         }
       ]
@@ -8272,8 +8323,8 @@
       "reducedMotion": "static, gradient offset 0",
       "instances": [
         {
-          "x": 1916,
-          "y": 236,
+          "x": 2300,
+          "y": 524,
           "s": 80,
           "len": 380,
           "a": 0.517,
@@ -8283,8 +8334,8 @@
           ]
         },
         {
-          "x": 2286,
-          "y": 1536,
+          "x": 2670,
+          "y": 1824,
           "s": 81,
           "len": 420,
           "a": 0.58,
@@ -8294,8 +8345,8 @@
           ]
         },
         {
-          "x": 376,
-          "y": 1206,
+          "x": 760,
+          "y": 1494,
           "s": 63.9,
           "len": 520,
           "a": 0.525,
@@ -8305,8 +8356,8 @@
           ]
         },
         {
-          "x": 2816,
-          "y": 356,
+          "x": 3200,
+          "y": 644,
           "s": 58,
           "len": 560,
           "a": 0.539,
@@ -8316,8 +8367,8 @@
           ]
         },
         {
-          "x": 1186,
-          "y": 1616,
+          "x": 1570,
+          "y": 1904,
           "s": 77.2,
           "len": 380,
           "a": 0.454,
@@ -8327,8 +8378,8 @@
           ]
         },
         {
-          "x": 596,
-          "y": 316,
+          "x": 980,
+          "y": 604,
           "s": 74,
           "len": 620,
           "a": 0.456,
@@ -8338,8 +8389,8 @@
           ]
         },
         {
-          "x": 3036,
-          "y": 1306,
+          "x": 3420,
+          "y": 1594,
           "s": 64.4,
           "len": 480,
           "a": 0.496,
@@ -8355,7 +8406,7 @@
       "layer": "near",
       "seed": 51,
       "atlas": ["shardA", "shardB"],
-      "count": {"HIGH": 8, "LOW": 0},
+      "count": {"HIGH": 12, "LOW": 0},
       "size": [40, 110],
       "alpha": [0.75, 0.95],
       "color": {"realm": [140, 110, 220], "rift": [210, 80, 120], "corrupt": [90, 200, 110]},
@@ -8367,8 +8418,8 @@
       "reducedMotion": "static",
       "instances": [
         {
-          "x": 276.5,
-          "y": 1136.8,
+          "x": 366.8,
+          "y": 1520.1,
           "s": 46.2,
           "t": 0,
           "a": 0.806,
@@ -8378,8 +8429,8 @@
           ]
         },
         {
-          "x": 326.2,
-          "y": 220.5,
+          "x": 432.7,
+          "y": 294.9,
           "s": 54.6,
           "t": 1,
           "a": 0.843,
@@ -8389,8 +8440,8 @@
           ]
         },
         {
-          "x": 2085,
-          "y": 1189,
+          "x": 2765.4,
+          "y": 1590,
           "s": 96.8,
           "t": 0,
           "a": 0.809,
@@ -8400,8 +8451,8 @@
           ]
         },
         {
-          "x": 473.3,
-          "y": 1538.7,
+          "x": 627.8,
+          "y": 2057.6,
           "s": 87.7,
           "t": 0,
           "a": 0.793,
@@ -8411,8 +8462,8 @@
           ]
         },
         {
-          "x": 2703.5,
-          "y": 206.6,
+          "x": 3585.7,
+          "y": 276.2,
           "s": 105.4,
           "t": 1,
           "a": 0.9,
@@ -8422,8 +8473,8 @@
           ]
         },
         {
-          "x": 187.3,
-          "y": 2356.6,
+          "x": 248.4,
+          "y": 3151.2,
           "s": 41.1,
           "t": 0,
           "a": 0.762,
@@ -8433,8 +8484,8 @@
           ]
         },
         {
-          "x": 3334.3,
-          "y": 2402.9,
+          "x": 4422.3,
+          "y": 3213.2,
           "s": 48.7,
           "t": 0,
           "a": 0.948,
@@ -8444,14 +8495,58 @@
           ]
         },
         {
-          "x": 27,
-          "y": 1643.9,
+          "x": 35.8,
+          "y": 2198.2,
           "s": 101.1,
           "t": 0,
           "a": 0.849,
           "m": [
             {"ch": "y", "type": "sine", "amp": 6.8343, "period": 7.8367, "phase": 0.4007},
             {"ch": "rot", "type": "sine", "amp": 4.1799, "period": 13.2111, "phase": 0.091}
+          ]
+        },
+        {
+          "x": 4467.2,
+          "y": 1889.3,
+          "s": 66.4,
+          "t": 0,
+          "a": 0.854,
+          "m": [
+            {"ch": "y", "type": "sine", "amp": 8.9906, "period": 5.5544, "phase": 0.9932},
+            {"ch": "rot", "type": "sine", "amp": 2.9495, "period": 14.5782, "phase": 0.8071}
+          ]
+        },
+        {
+          "x": 4039,
+          "y": 2124.1,
+          "s": 84.5,
+          "t": 0,
+          "a": 0.891,
+          "m": [
+            {"ch": "y", "type": "sine", "amp": 7.4835, "period": 7.1875, "phase": 0.6062},
+            {"ch": "rot", "type": "sine", "amp": 2.4029, "period": 11.8619, "phase": 0.559}
+          ]
+        },
+        {
+          "x": 3132.5,
+          "y": 2361.7,
+          "s": 102.8,
+          "t": 0,
+          "a": 0.867,
+          "m": [
+            {"ch": "y", "type": "sine", "amp": 10.2726, "period": 6.9262, "phase": 0.5883},
+            {"ch": "rot", "type": "sine", "amp": 3.9428, "period": 13.9657, "phase": 0.6369}
+          ]
+        },
+        {
+          "x": 896.7,
+          "y": 2718.3,
+          "s": 43,
+          "t": 1,
+          "a": 0.871,
+          "m": [
+            {"ch": "y", "type": "sine", "amp": 8.7006, "period": 5.2551, "phase": 0.6956},
+            {"ch": "rot", "type": "sine", "amp": 2.3808, "period": 9.8068, "phase": 0.2545}
           ]
         }
       ]
@@ -9294,7 +9389,7 @@
       "layer": "fg",
       "seed": 71,
       "atlas": ["vineA", "vineB"],
-      "count": {"HIGH": 6, "LOW": 0},
+      "count": {"HIGH": 9, "LOW": 0},
       "hangs": true,
       "size": [160, 300],
       "aspect": [3.2, 5],
@@ -9312,8 +9407,19 @@
       "reducedMotion": "static",
       "instances": [
         {
-          "x": 3644,
-          "y": 3.9,
+          "x": 1213,
+          "y": 6.5,
+          "s": 255,
+          "h": 1040.6,
+          "t": 0,
+          "a": 0.92,
+          "m": [
+            {"ch": "rot", "type": "sine", "amp": 2.0118, "period": 7.2161, "phase": 0.4308}
+          ]
+        },
+        {
+          "x": 5285.2,
+          "y": 5.8,
           "s": 236.3,
           "h": 1108.8,
           "t": 1,
@@ -9323,8 +9429,19 @@
           ]
         },
         {
-          "x": 2879.2,
-          "y": 1.8,
+          "x": 2205.2,
+          "y": 7.3,
+          "s": 180.1,
+          "h": 865.7,
+          "t": 0,
+          "a": 0.938,
+          "m": [
+            {"ch": "rot", "type": "sine", "amp": 1.3998, "period": 7.0094, "phase": 0.4308}
+          ]
+        },
+        {
+          "x": 4176,
+          "y": 2.7,
           "s": 226.5,
           "h": 965.9,
           "t": 0,
@@ -9334,30 +9451,19 @@
           ]
         },
         {
-          "x": 1103.4,
-          "y": 1.7,
-          "s": 190,
-          "h": 856.4,
-          "t": 0,
-          "a": 0.956,
+          "x": 6238.1,
+          "y": 3.3,
+          "s": 280.5,
+          "h": 1292.4,
+          "t": 1,
+          "a": 0.987,
           "m": [
-            {"ch": "rot", "type": "sine", "amp": 1.3951, "period": 9.1304, "phase": 0.3436}
+            {"ch": "rot", "type": "sine", "amp": 1.5441, "period": 9.1129, "phase": 0.7008}
           ]
         },
         {
-          "x": 4545.7,
-          "y": 2.1,
-          "s": 269,
-          "h": 1200.1,
-          "t": 0,
-          "a": 0.979,
-          "m": [
-            {"ch": "rot", "type": "sine", "amp": 1.7679, "period": 8.7586, "phase": 0.3891}
-          ]
-        },
-        {
-          "x": 56.5,
-          "y": 2.9,
+          "x": 81.9,
+          "y": 4.3,
           "s": 175.2,
           "h": 747.6,
           "t": 1,
@@ -9367,14 +9473,36 @@
           ]
         },
         {
-          "x": 5057.3,
-          "y": 0.7,
-          "s": 283.8,
-          "h": 1072.5,
+          "x": 7093.2,
+          "y": 9.6,
+          "s": 280.4,
+          "h": 1367.5,
           "t": 1,
-          "a": 0.975,
+          "a": 0.936,
           "m": [
-            {"ch": "rot", "type": "sine", "amp": 1.336, "period": 6.4134, "phase": 0.1428}
+            {"ch": "rot", "type": "sine", "amp": 1.7238, "period": 9.3066, "phase": 0.599}
+          ]
+        },
+        {
+          "x": 653.9,
+          "y": 0.2,
+          "s": 173.5,
+          "h": 720.2,
+          "t": 1,
+          "a": 0.989,
+          "m": [
+            {"ch": "rot", "type": "sine", "amp": 1.5321, "period": 9.7581, "phase": 0.4588}
+          ]
+        },
+        {
+          "x": 3122.2,
+          "y": 7.8,
+          "s": 249.8,
+          "h": 1141.6,
+          "t": 1,
+          "a": 0.976,
+          "m": [
+            {"ch": "rot", "type": "sine", "amp": 2.1135, "period": 8.9869, "phase": 0.4492}
           ]
         }
       ]
@@ -9924,7 +10052,7 @@
   ],
   "budget": {
     "note": "RGBA8 bytes of every uploaded image (tiles include their gutters). withMips = x4/3 in case the engine mips GUI textures. Tiles the tiler finds fully transparent are not uploaded, so these are upper bounds.",
-    "HIGH": {"tiles": 36, "atlasImages": 1, "textureMB": 88.2, "withMipsMB": 117.7, "budgetMB": 120, "guiObjects": 364},
-    "LOW": {"tiles": 11, "atlasImages": 1, "textureMB": 22.1, "withMipsMB": 29.4, "budgetMB": 35, "guiObjects": 157}
+    "HIGH": {"tiles": 46, "atlasImages": 1, "textureMB": 103.9, "withMipsMB": 138.5, "budgetMB": 150, "guiObjects": 385},
+    "LOW": {"tiles": 14, "atlasImages": 1, "textureMB": 26, "withMipsMB": 34.7, "budgetMB": 35, "guiObjects": 161}
   }
 }

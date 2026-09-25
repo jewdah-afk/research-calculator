@@ -10,14 +10,16 @@
 // its light and the dust throws shadow rays away from it (a real transmittance march), which ties the light direction
 // to the rest of the stack.
 //
-// Output: the HIGH texture, size × res.HIGH = 1660×960 px (the tiler makes the LOW tier and the gutters). All geometry
-// below is in layer-local px (2656×1536); the canvas is painted per texel in linear light, tone mapped, luma-clamped
-// with the contract's maxLuma / emissiveMax and dithered (no banding once the client upscales and tints it).
+// Output: the HIGH texture, size × res.HIGH = 1720×1000 px (the tiler makes the LOW tier and the gutters). All geometry
+// below is in layer-local px (2752×1600); the composition is designed in the 2656×1536 frame the layer had before the
+// pan margin (REALM.md 2.5), centred in it (DX, DY), and the gas, dust and stars simply run on across the margin. The
+// canvas is painted per texel in linear light, tone mapped, luma-clamped with the contract's maxLuma / emissiveMax and
+// dithered (no banding once the client upscales and tints it).
 // Bright twinkling stars are sprites (star_twinkle), so the baked star field stays faint.
 LAYERS.sky = async function () {
   // ---- contract (mirrors realm.json; window.REALM wins when a pipeline injects the manifest) ----------------------
   const SPEC = {
-    size: [2656, 1536], res: 0.625, sun: [0.36, 0.26],
+    size: [2752, 1600], frame: [2656, 1536], res: 0.625, sun: [0.36, 0.26],   // sun: a fraction of the design frame
     biomeLocal: { splitX: 1354.5, fadeHalfWidth: 863 },
     tree: [1307, 761.5], rift: [1389.5, 778],             // landmarks: the calm centre, behind the tear
     atmosphere: { maxLuma: 0.72, emissiveMax: 0.95 },
@@ -27,9 +29,9 @@ LAYERS.sky = async function () {
     SPEC.size = RL.size; SPEC.res = RL.res.HIGH; SPEC.biomeLocal = RL.biomeLocal; SPEC.tree = RL.landmarks.tree; SPEC.rift = RL.landmarks.rift;
     SPEC.atmosphere = RL.atmosphere;
   }
-  const [LW, LH] = SPEC.size, RES = SPEC.res;
+  const [LW, LH] = SPEC.size, RES = SPEC.res, [LW0, LH0] = SPEC.frame, DX = (LW - LW0) / 2, DY = (LH - LH0) / 2;
   const TW = Math.round(LW * RES), TH = Math.round(LH * RES), N = TW * TH;
-  const SX = SPEC.sun[0] * LW, SY = SPEC.sun[1] * LH;
+  const SX = SPEC.sun[0] * LW0 + DX, SY = SPEC.sun[1] * LH0 + DY;
   const [CX, CY] = SPEC.tree;
   const SPLIT = SPEC.biomeLocal.splitX, FHW = SPEC.biomeLocal.fadeHalfWidth;
   const MAXL = SPEC.atmosphere.maxLuma, EMIS = SPEC.atmosphere.emissiveMax;
@@ -83,7 +85,7 @@ LAYERS.sky = async function () {
     const y = (j + 0.5) / RES;
     for (let i = 0; i < TW; i++) {
       const x = (i + 0.5) / RES, k = j * TW + i;
-      const u = x / 900, v = y / 900;
+      const u = (x - DX) / 900, v = (y - DY) / 900;   // the noise stays registered to the design frame
       // gentle domain warp: billowing gas without the marbled look of a strong warp
       const qx = fbm(nA, u, v, 4), qy = fbm(nA, u + 5.2, v + 1.3, 4);
       const env = fbm(nB, u * 0.7 + 3.1, v * 0.7 + 7.7, 3);                      // large-scale clumping
@@ -101,18 +103,18 @@ LAYERS.sky = async function () {
       const rdx = x - RXL, rdy = (y - RYL) * 1.12, rr = Math.hypot(rdx, rdy);
       const ca = rdx / (rr || 1), sa = rdy / (rr || 1);
       const shD = rr - 1040 - 170 * fbm(nJ, ca * 1.7 + 4.2, sa * 1.7 + 1.9, 4) - 70 * g - 40 * qy;  // < 0 inside the shell
-      const arc = smooth(1620, 2150, x + 120 * env);
+      const arc = smooth(1620 + DX, 2150 + DX, x + 120 * env);
       const front = Math.exp(-(shD / 85) * (shD / 85)) * arc;
       const inner = smooth(-620, -30, shD) * (1 - smooth(-30, 60, shD)) * arc;
       const outer = Math.exp(-Math.max(0, shD) / 300) * smooth(-40, 40, shD) * arc;
-      const rEdge = smooth(1640, 2380, x + 240 * qx + 160 * env);
-      const lobes = 0.25 + 0.6 * g2(x - 2380, y - 280, 560, 300) + 0.55 * g2(x - 2280, y - 1270, 600, 330);
+      const rEdge = smooth(1640 + DX, 2380 + DX, x + 240 * qx + 160 * env);
+      const lobes = 0.25 + 0.6 * g2(x - DX - 2380, y - DY - 280, 560, 300) + 0.55 * g2(x - DX - 2280, y - DY - 1270, 600, 330);
       const rift = rEdge * lobes;
       // cool reflection nebula low on the left
-      const cool = g2(x - 380 - 110 * qy, y - 1220, 600, 380);
+      const cool = g2(x - DX - 380 - 110 * qy, y - DY - 1220, 600, 380);
       // calm centre behind the tree, and the readable centre band (y 0.4-0.6 h)
       const calm = g2(x - CX, y - CY - 30, 760, 460);
-      const midBand = g2(0, y - 0.5 * LH, 1, 0.13 * LH);
+      const midBand = g2(0, y - 0.5 * LH, 1, 0.13 * LH0);
       // hue: realm violet -> rift palette across splitX +- fadeHalfWidth (slow start so the tree side stays violet)
       const hr = Math.pow(smooth(SPLIT - FHW, SPLIT + FHW, x + 160 * env), 1.6);
       // soft gas density and fine wisps (ridged, following the warp)
@@ -179,7 +181,7 @@ LAYERS.sky = async function () {
       const x = (i + 0.5) / RES, k = j * TW + i;
       const hr = F.hr[k], dust = F.dust[k], calm = F.calm[k], dens = F.dens[k];
       // background: never black; deep violet, deepening toward the top, maroon on the rift side
-      let bg = vy < 0.55 ? mix3(BG_T, BG_M, smooth(0, 0.55, vy)) : mix3(BG_M, BG_B, smooth(0.55, 1, vy));
+      let bg = vy < 0.55 ? mix3(BG_T, BG_M, smooth(0, 0.55, vy)) : mix3(BG_M, BG_B, smooth(0.55, 1, vy));   // (vy: of the whole layer)
       bg = mix3(bg, mix3(BG_R, BG_RB, smooth(0.3, 1, vy)), hr * 0.85);
       const bgk = (1 + 0.6 * F.bgv[k]) * (1 - 0.45 * dust);
       // emission: soft band glow + band clouds + the rift complex + the cool nebula + faint wisps everywhere

@@ -81,7 +81,7 @@ const KEYS = [ // t (s), x, y (world px), z. A repeated key is a rest hold: the 
   [17.2, 2620, 1400, 0.80],    // east: the mood turns crimson
   [18.8, 2820, 1400, 0.95],    // the Multiverse rift
   [21.8, 2820, 1400, 0.95],    //   rest: the rift pulse and shock ring, crimson wisps, embers
-  [25.6, 3070, 1290, 1.25],    // push in by the corrupted outcrop (the camera's east limit at this zoom)
+  [25.6, 3070, 1290, 1.25],    // push in by the corrupted outcrop (the east limit before the pan margin)
   [27.0, 3070, 1290, 1.25],    //   rest: glitch bars, green motes
 ];
 const PATH_SECONDS = KEYS[KEYS.length - 1][0];

@@ -3,7 +3,9 @@
 // side, a corrupted green shard by the outcrop), rim-lit from the upper left, slightly out of focus. They sit at the
 // edges of the typical views so they frame the tree instead of covering nodes: every hard keep-clear zone stays
 // fully empty (alpha 0) and every soft zone below 0.35. Most of the layer is transparent (most tiles get dropped).
-// Painted at full local size 3800x2752, output at res.HIGH 0.5 -> 1900x1376 (realm.json layers[near]).
+// The composition is designed in a 3800x2752 frame (the layer before the pan margin, REALM.md 2.5) centred in the
+// layer (size from realm.json, 5040x3680); four more rocks (N10-N13) sit out in the margin strips. Painted at full
+// local size, output at res.HIGH 0.45 -> 2268x1656 (realm.json layers[near]).
 (function () {
   // ================================================================ ISLAND KIT (begin)
   // Shared by layers/distant.js, layers/mid.js and layers/rocks.js. render.js loads one layer file per page, so each
@@ -497,8 +499,10 @@
     // ---------------------------------------------------------------- cloud banks
     // Billowy banks with a defined top edge, lit from the key light direction (density sampled toward the light),
     // denser and darker below. Rendered at 1/4 resolution and blurred up. `cap(X, Y)` limits the alpha.
+    // o.x0, o.y0: the (drawing-space) point of the canvas' top-left corner (default 0, 0); o.w x o.h: the area covered
     function cloudBank(b, o) {
       const q = o.q || 4, w = Math.ceil(o.w / q), h = Math.ceil(o.h / q), c = mk(w, h), x = cx2(c, true), im = x.createImageData(w, h), d = im.data;
+      const x0 = o.x0 || 0, y0 = o.y0 || 0;
       const n = makeNoise(o.seed), n2 = makeNoise(o.seed + 7), n3 = makeNoise(o.seed + 3);
       const dens = (X, Y, B) => {
         const ytop = B.y - B.h * 0.5 + B.wob * fbm(n2, X / B.sx * 0.6, B.y * 0.003, 3);
@@ -510,7 +514,7 @@
       };
       const dl = o.dl || 14;
       for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
-        const X = i * q, Y = j * q;
+        const X = x0 + i * q, Y = y0 + j * q;
         let a = 0, litv = 0;
         for (const B of o.bands) {
           if (Y < B.y - B.h * 0.5 - B.wob - 20 || Y > B.y + B.h * 1.2) continue;
@@ -526,15 +530,15 @@
         d[k] = cc[0]; d[k + 1] = cc[1]; d[k + 2] = cc[2]; d[k + 3] = a * 255;
       }
       x.putImageData(im, 0, 0);
-      b.drawImage(upBlur(c, w * q, h * q, o.blur || 5), 0, 0);
+      b.drawImage(upBlur(c, w * q, h * q, o.blur || 5), x0, y0);
     }
 
     // ---------------------------------------------------------------- mist band (low-res noise, stretched)
     function mistBand(b, o) {
       const q = 4, w = Math.ceil(o.w / q), h = Math.ceil(o.h / q), c = mk(w, h), x = cx2(c, true), im = x.createImageData(w, h), d = im.data;
-      const n = makeNoise(o.seed), n2 = makeNoise(o.seed + 7);
+      const n = makeNoise(o.seed), n2 = makeNoise(o.seed + 7), x0 = o.x0 || 0, y0 = o.y0 || 0;
       for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
-        const X = i * q, Y = j * q;
+        const X = x0 + i * q, Y = y0 + j * q;
         let a = 0;
         for (const B of o.bands) {
           const wob = B.wob * fbm(n2, X / 900, B.y * 0.01, 2);
@@ -547,13 +551,14 @@
         const k = (j * w + i) * 4; d[k] = o.color[0]; d[k + 1] = o.color[1]; d[k + 2] = o.color[2]; d[k + 3] = a * 255;
       }
       x.putImageData(im, 0, 0);
-      b.drawImage(upBlur(c, w * q, h * q, o.blur || 6), 0, 0);
+      b.drawImage(upBlur(c, w * q, h * q, o.blur || 6), x0, y0);
     }
 
     // ---------------------------------------------------------------- the atmosphere pass (REALM.md section 4)
     // base: colour art; emis: light that may exceed maxLuma (up to emissiveMax). Both get the same colour recipe;
     // the light is then screened over the base (premultiplied), the luma limit follows the local emissive share,
     // and the whole layer gets a premultiplied gaussian blur of `blur` local px (edges clamped, see padBlur).
+    // T.splitX is in canvas px; the haze-bottom ramp runs over rows T.hy0 .. T.hy0 + T.hh (default: the whole canvas).
     function atmosphere(base, emis, T) {
       const w = base.width, h = base.height, A = T.atm, bx = cx2(base, true);
       const bI = bx.getImageData(0, 0, w, h), bd = bI.data, eI = emis ? cx2(emis, true).getImageData(0, 0, w, h) : null, edd = eI ? eI.data : null;
@@ -570,7 +575,7 @@
       };
       const c1 = [0, 0, 0], c2 = [0, 0, 0];
       for (let y = 0; y < h; y++) {
-        const k = A.haze + A.hazeBottom * smooth(0.35, 1, y / h);
+        const k = A.haze + A.hazeBottom * smooth(0.35, 1, (y - (T.hy0 || 0)) / (T.hh || h));
         for (let x = 0; x < w; x++) {
           const i = (y * w + x) * 4, ba = bd[i + 3] / 255, ea = edd ? edd[i + 3] / 255 : 0;
           if (ba <= 0 && ea <= 0) continue;
@@ -630,12 +635,16 @@
   // ---- contract snapshot (realm.json layers[near]); repaint if `node camera.js --build` changes it
   // blur 0.9 (was 2.5): this plane sits between mid and the focal world, so it must be sharper than mid (1.5) and far (3)
   const CFG = {
-    size: [3800, 2752], res: 0.5, splitX: 2271, fade: 375,
+    frame: [3800, 2752], size: [5040, 3680], res: 0.45, splitX: 2271, fade: 375,   // splitX, hard: design frame
     atm: { hazeColor: [42, 28, 90], hazeRift: [80, 20, 50], haze: 0.15, hazeBottom: 0.2, saturation: 0.9, contrast: 0.85, blur: 0.9, maxLuma: 0.6, emissiveMax: 0.8 },
     hard: [['m', 1606, 1826.8, 162, 183], ['mm', 1382, 1868.8, 162, 183], ['em', 1830, 1868.8, 162, 183], ['p', 1606, 1602.8, 162, 183], ['pe', 1284, 1406.8, 162, 183], ['sp', 1487, 1371.8, 162, 183], ['pb', 1725, 1371.8, 162, 183], ['pp', 1928, 1406.8, 162, 183], ['se', 1361, 1182.8, 162, 183], ['hp', 1606, 1147.8, 162, 183], ['ep', 1851, 1182.8, 162, 183], ['hb', 1382, 958.8, 162, 183], ['ap', 1606, 923.8, 162, 183], ['mp', 1830, 958.8, 162, 183], ['t', 1606, 720.8, 162, 183], ['pm', 2761, 1588.8, 162, 183], ['pep', 2509, 1322.8, 162, 183], ['cr', 3013, 1336.8, 162, 183], ['cm', 3139, 1147.8, 162, 183], ['ex', 2761, 1042.8, 162, 183], ['ach', 920, 916.8, 162, 183]],
     softR: [248, 232], // soft zones: same centres, rx x ry
   };
-  const [W, H] = CFG.size;
+  // the layer grew around the design frame (the pan margin): paint in design coordinates, translated to the centre
+  const RL = typeof window !== 'undefined' && window.REALM && window.REALM.layers && window.REALM.layers.find(l => l.id === 'near');
+  if (RL) { CFG.size = RL.size; CFG.res = RL.res.HIGH; }
+  const [W0, H0] = CFG.frame, [W, H] = CFG.size, OX = (W - W0) / 2, OY = (H - H0) / 2;
+  const toCanvas = zs => zs.map(z => [z[0], z[1] + OX, z[2] + OY, z[3], z[4]]);   // design-frame zones -> canvas px
   const K = KIT, { mk, cx2, col, mixc } = K;
   const riftW = x => smooth(CFG.splitX - CFG.fade, CFG.splitX + CFG.fade, x);
   const SOFT = CFG.hard.map(z => [z[0], z[1], z[2], CFG.softR[0], CFG.softR[1]]);
@@ -661,6 +670,15 @@
       subs: [[0.34, -0.14, 0.42, 0.6]], crystals: [[1960, 0.5, 4, 56, [95, 224, 255]]] },
     { id: 'N7', kind: 'shard', cx: 2290, cy: 1740, w: 170, h: 240, seed: 507, corners: 7, taper: 0.7, flat: 0.3, boxy: 2.0, tilt: -0.42, spike: [10, 70],
       subs: [], crystals: [[2290, -1, 3, 46, [255, 46, 99]]] },
+    // out in the pan margin: west (between N2 and N1), north-east and east (rift side), south-west
+    { id: 'N10', kind: 'earth', cx: -170, cy: 1190, w: 640, h: 360, seed: 510, corners: 11, taper: 0.55, flat: 0.85, tilt: -0.05, spike: [-30, 80],
+      subs: [[0.14, 0.32, 0.3, 0.55]], crystals: [[-40, -1, 5, 64, [95, 224, 255]]] },
+    { id: 'N11', kind: 'boulder', cx: 3990, cy: 150, w: 500, h: 380, seed: 511, corners: 15, taper: 0.18, flat: 0.05, boxy: 2.0, jitter: 0.1, tilt: 0.28,
+      subs: [], crystals: [[3990, 0.2, 5, 76, [255, 46, 99]]] },
+    { id: 'N12', kind: 'slab', cx: 4060, cy: 2360, w: 600, h: 200, seed: 512, corners: 8, taper: 0.3, flat: 0, boxy: 2.8, jitter: 0.16, tilt: -0.19,
+      subs: [], crystals: [[3860, 0.1, 4, 60, [232, 70, 190]]] },
+    { id: 'N13', kind: 'boulder', cx: -230, cy: 2830, w: 600, h: 360, seed: 513, corners: 16, taper: 0.2, flat: 0.1, boxy: 2.1, jitter: 0.1, tilt: -0.08,
+      subs: [[-0.3, -0.16, 0.4, 0.55]], crystals: [[-300, 0.5, 4, 56, [179, 92, 255]]] },
   ];
   // true when a hanging tip at (x, y) would reach into a hard zone (+40 px) or deep into a soft one
   const clearOf = (x, y) => CFG.hard.some(z => K.inEllipse(x, y, z, 40)) || SOFT.some(z => K.inEllipse(x, y, z, -60));
@@ -755,19 +773,22 @@
   LAYERS.rocks = LAYERS.near = async function () {
     const t0 = performance.now();
     const base = mk(W, H), b = cx2(base), emis = mk(W, H), e = cx2(emis);
+    b.translate(OX, OY); e.translate(OX, OY);
     for (const Rk of ROCKS) paintRock(Rk, b, e);
+    const HARD = toCanvas(CFG.hard), SOFTC = toCanvas(SOFT);   // the canvas-space checks and masks below
     // before the erase: a rock that reaches into a hard zone would get an elliptical bite; report it
-    { const pre = K.zoneMax(base, CFG.hard, 14), bit = Object.entries(pre).filter(([, v]) => v > 0.02);
+    { const pre = K.zoneMax(base, HARD, 14), bit = Object.entries(pre).filter(([, v]) => v > 0.02);
       console.log('near rocks reaching into hard zones (+14 px) before the erase:', bit.length ? JSON.stringify(bit) : 'none'); }
-    const lit = window.__islandsNoAtmosphere ? K.atmosphere(base, emis, { atm: { ...CFG.atm, haze: 0, hazeBottom: 0, saturation: 1, contrast: 1, blur: 0, maxLuma: 1, emissiveMax: 1 }, splitX: CFG.splitX, fade: CFG.fade })
-      : K.atmosphere(base, emis, { atm: CFG.atm, splitX: CFG.splitX, fade: CFG.fade });
+    const fr = { splitX: CFG.splitX + OX, fade: CFG.fade, hy0: OY, hh: H0 };   // the atmosphere runs in canvas px
+    const lit = window.__islandsNoAtmosphere ? K.atmosphere(base, emis, { atm: { ...CFG.atm, haze: 0, hazeBottom: 0, saturation: 1, contrast: 1, blur: 0, maxLuma: 1, emissiveMax: 1 }, ...fr })
+      : K.atmosphere(base, emis, { atm: CFG.atm, ...fr });
     // After the atmosphere pass (so the emissive light and the blur are included): soft zones fade to <= 0.28 alpha with
     // a feathered edge (roots and vines recede into the haze); hard zones are erased with a margin for the downsample.
     { const lx = cx2(lit), m = mk(W, H), mx = cx2(m); mx.fillStyle = '#000'; mx.fillRect(0, 0, W, H); mx.globalCompositeOperation = 'destination-out';
-      for (const z of SOFT) { mx.save(); mx.translate(z[1], z[2]); mx.scale(z[3] + 44, z[4] + 44); const g = mx.createRadialGradient(0, 0, 0, 0, 0, 1); g.addColorStop(0, 'rgba(0,0,0,0.72)'); g.addColorStop(0.9, 'rgba(0,0,0,0.72)'); g.addColorStop(1, 'rgba(0,0,0,0)'); mx.fillStyle = g; mx.beginPath(); mx.arc(0, 0, 1, 0, 7); mx.fill(); mx.restore(); }
+      for (const z of SOFTC) { mx.save(); mx.translate(z[1], z[2]); mx.scale(z[3] + 44, z[4] + 44); const g = mx.createRadialGradient(0, 0, 0, 0, 0, 1); g.addColorStop(0, 'rgba(0,0,0,0.72)'); g.addColorStop(0.9, 'rgba(0,0,0,0.72)'); g.addColorStop(1, 'rgba(0,0,0,0)'); mx.fillStyle = g; mx.beginPath(); mx.arc(0, 0, 1, 0, 7); mx.fill(); mx.restore(); }
       lx.save(); lx.globalCompositeOperation = 'destination-in'; lx.drawImage(m, 0, 0); lx.restore();
-      lx.save(); lx.globalCompositeOperation = 'destination-out'; lx.fillStyle = '#000'; for (const z of CFG.hard) { lx.beginPath(); lx.ellipse(z[1], z[2], z[3] + 8, z[4] + 8, 0, 0, 7); lx.fill(); } lx.restore(); }
-    const hz = K.zoneMax(lit, CFG.hard), sz = K.zoneMax(lit, SOFT);
+      lx.save(); lx.globalCompositeOperation = 'destination-out'; lx.fillStyle = '#000'; for (const z of HARD) { lx.beginPath(); lx.ellipse(z[1], z[2], z[3] + 8, z[4] + 8, 0, 0, 7); lx.fill(); } lx.restore(); }
+    const hz = K.zoneMax(lit, HARD), sz = K.zoneMax(lit, SOFTC);
     console.log('near hard zones max alpha (must be 0):', Math.max(...Object.values(hz)), ' soft zones max (< 0.35):', Math.max(...Object.values(sz)), JSON.stringify(Object.entries(sz).filter(([, v]) => v >= 0.35)));
     const out = K.downsample(lit, Math.round(W * CFG.res), Math.round(H * CFG.res));
     console.log('near (rocks)', out.width + 'x' + out.height, Math.round(performance.now() - t0) + ' ms');

@@ -15,7 +15,9 @@
  *   centre point    P = A + f (C - Wc)            the local point under the screen centre
  *   local -> screen x_s = Vc + s (p - P)          container origin O = Vc - s P, container size = s (w, h)
  *   visible rect    P +- V / (2 s)
- *   zMin(V) = max(V.w / 3840, V.h / 2560)         "cover": the world always fills the viewport
+ *   zMin(V) = max(V.w / 3840, V.h / 2560)         "cover": at zMin the world spans the viewport on one axis
+ *   pan limits: the visible world rect may extend past the world by up to PAN_MARGIN world px on each side, capped at
+ *   half the view (so the screen centre never leaves the world); the rubber band adds OVERSCROLL map points on top
  * The world (f = 1, 3840 x 2560, A = Wc) gives P = C and x_s = Vc + z (p - C).
  */
 (function (root, factory) {
@@ -31,6 +33,11 @@
   const Z_MAX = 1.25;
   const ZOOM_SLACK = 0.06;   // rubber-band zoom may overshoot [zMin, zMax] by this fraction while a pinch/wheel settles
   const OVERSCROLL = 72;     // rubber-band pan may overshoot the pan limit by this many map points
+  // hard pan margin (world px): how far the visible rect may extend past each world edge, capped at half the view.
+  // The world layer is transparent past its edges (its art fades out before them), so there the layers behind show.
+  const PAN_MARGIN = Object.freeze({ x: 960, y: 720 });
+  const NO_MARGIN = Object.freeze({ x: 0, y: 0 });   // the world rect itself: the start camera (REALM.md 2.8)
+  const START = Object.freeze({ x: 1500, y: 1150 }); // the start centre, the trunk (REALM.md 2.8)
   const DOMAIN = Object.freeze({ minW: 568, minH: 320, maxW: 2560, maxH: 1440, minAspect: 0.45, maxAspect: 3.6 });
   const TILE = Object.freeze({ maxImage: 1024, gutter: 2, maxContent: 1020, penaltyPx: 20000 });
 
@@ -109,48 +116,61 @@
   }
 
   // ------------------------------------------------------------------------------------------------ clamping
-  /** Range of camera centres at zoom z. overscroll is in map points (the rubber band), 0 for the hard limit. */
-  function panLimits(z, V, { overscroll = 0, world = WORLD } = {}) {
+  /** Range of camera centres at zoom z. overscroll is in map points (the rubber band), 0 for the hard limit. On each
+   *  axis the visible rect may extend past the world by m = min(margin, half the view) world px, so the camera centre
+   *  ranges over [h - m, W - h + m] (h = V / (2 z)) and never leaves the world; a view wider than W + 2m pins to the
+   *  world centre. margin = NO_MARGIN keeps the view inside the world. */
+  function panLimits(z, V, { overscroll = 0, margin = PAN_MARGIN, world = WORLD } = {}) {
     const hw = V.w / (2 * z), hh = V.h / (2 * z), o = overscroll / z;
-    const ax = 2 * hw <= world.w ? [hw, world.w - hw] : [world.cx, world.cx];
-    const ay = 2 * hh <= world.h ? [hh, world.h - hh] : [world.cy, world.cy];
+    const mx = Math.min(margin.x, hw), my = Math.min(margin.y, hh);
+    const ax = 2 * hw <= world.w + 2 * mx ? [hw - mx, world.w - hw + mx] : [world.cx, world.cx];
+    const ay = 2 * hh <= world.h + 2 * my ? [hh - my, world.h - hh + my] : [world.cy, world.cy];
     return { x0: ax[0] - o, x1: ax[1] + o, y0: ay[0] - o, y1: ay[1] + o };
   }
   /** Hard clamp (default) or the rubber-band envelope ({ rubber: true }). Returns { x, y, z }. */
-  function clampCamera(C, z, V, { rubber = false, zMax = Z_MAX, world = WORLD } = {}) {
+  function clampCamera(C, z, V, { rubber = false, margin = PAN_MARGIN, zMax = Z_MAX, world = WORLD } = {}) {
     const r = zoomRange(V, { slack: rubber, zMax, world });
     const zz = clamp(z, r.lo, r.hi);
-    const lim = panLimits(zz, V, { overscroll: rubber ? OVERSCROLL : 0, world });
+    const lim = panLimits(zz, V, { overscroll: rubber ? OVERSCROLL : 0, margin, world });
     return { x: clamp(C.x, lim.x0, lim.x1), y: clamp(C.y, lim.y0, lim.y1), z: zz };
   }
+  /** The start zoom frames the whole tree: clamp(min(V.w / 1500, V.h / 1750), zMin, 1) (REALM.md 2.8). */
+  const startZoom = V => clamp(Math.min(V.w / 1500, V.h / 1750), zMin(V), 1);
+  /** The start camera: START at the start zoom, clamped to the world rect (no pan margin), so the first view shows only
+   *  the world, exactly as before the margin existed; the player can then pan into the margin. */
+  function startCamera(V) { return clampCamera(START, startZoom(V), V, { margin: NO_MARGIN }); }
   /** iOS-style resistance: raw overshoot x (>= 0, map points) -> displayed overshoot, approaching d asymptotically. */
   const rubberBand = (x, d = OVERSCROLL, c = 0.55) => d * (1 - 1 / (x * c / d + 1));
 
   // ------------------------------------------------------------------------------------------------ required size
   /** Largest distance from the anchor that layer f ever shows, per axis, over every allowed (C, z, V): pan and zoom
-   *  include the rubber-band slack; layers with zHide are only checked where they are visible (z >= zHide).
-   *  For a given z the extent f*D + V/(2 s) is piecewise linear in V, so only the ends of the feasible V interval
-   *  and the kink V = world*z are candidates; z is sampled densely (log spaced) and the result gets +0.25%. */
-  function requiredSize(f, { zHide = 0, zMax = Z_MAX, zoomSlack = ZOOM_SLACK, overscroll = OVERSCROLL, dom = DOMAIN,
+   *  include the pan margin and the rubber-band slack; layers with zHide are only checked where they are visible
+   *  (z >= zHide). The camera's largest offset from the world centre is D = max(0, W/2 + min(M, h) - h) + overscroll / z
+   *  (h = V / (2 z), M = the pan margin), so for a given z the extent f*D + V/(2 s) is piecewise linear in V: only the
+   *  ends of the feasible V interval and the kinks V = 2 M z (the margin cap) and V = (W + 2 M) z (D reaches 0) are
+   *  candidates; z is sampled densely (log spaced) and the result gets +0.25%. */
+  function requiredSize(f, { zHide = 0, zMax = Z_MAX, zoomSlack = ZOOM_SLACK, overscroll = OVERSCROLL, margin = PAN_MARGIN, dom = DOMAIN,
     world = WORLD, steps = 24000 } = {}) {
     const zHi = zMax * (1 + zoomSlack), k = 1 - zoomSlack;
     let best = { x: 0, y: 0, wx: null, wy: null };
     const zLo = Math.max(1e-3, Math.min(dom.minW / world.w, dom.minH / world.h) * k * 0.9, zHide);
-    const ext = (half, span, z) => f * (Math.max(0, span / 2 - half / z) + overscroll / z) + half / layerZoom(f, z);
+    const ext = (half, span, m, z) => { const hv = half / z; return f * (Math.max(0, span / 2 + Math.min(m, hv) - hv) + overscroll / z) + half / layerZoom(f, z); };
     for (let i = 0; i <= steps; i++) {
       const z = Math.exp(Math.log(zLo) + (Math.log(zHi) - Math.log(zLo)) * i / steps);
       if (z < zHide) continue;
       // x: Vw feasible if some Vh makes (Vw, Vh) a domain viewport whose zoom range reaches down to z
       const wLo = Math.max(dom.minW, dom.minAspect * dom.minH);
       const wHi = Math.min(dom.maxW, world.w * z / k, dom.maxAspect * dom.maxH, dom.maxAspect * world.h * z / k);
-      if (wHi >= wLo && z >= dom.minH * k / world.h) for (const vw of [wLo, wHi, clamp(world.w * z, wLo, wHi)]) {
-        const e = ext(vw / 2, world.w, z); if (e > best.x) best = { ...best, x: e, wx: { V: vw, z } };
-      }
+      if (wHi >= wLo && z >= dom.minH * k / world.h)
+        for (const vw of [wLo, wHi, clamp((world.w + 2 * margin.x) * z, wLo, wHi), clamp(2 * margin.x * z, wLo, wHi)]) {
+          const e = ext(vw / 2, world.w, margin.x, z); if (e > best.x) best = { ...best, x: e, wx: { V: vw, z } };
+        }
       const hLo = Math.max(dom.minH, dom.minW / dom.maxAspect);
       const hHi = Math.min(dom.maxH, world.h * z / k, dom.maxW / dom.minAspect, world.w * z / k / dom.minAspect);
-      if (hHi >= hLo && z >= dom.minW * k / world.w) for (const vh of [hLo, hHi, clamp(world.h * z, hLo, hHi)]) {
-        const e = ext(vh / 2, world.h, z); if (e > best.y) best = { ...best, y: e, wy: { V: vh, z } };
-      }
+      if (hHi >= hLo && z >= dom.minW * k / world.w)
+        for (const vh of [hLo, hHi, clamp((world.h + 2 * margin.y) * z, hLo, hHi), clamp(2 * margin.y * z, hLo, hHi)]) {
+          const e = ext(vh / 2, world.h, margin.y, z); if (e > best.y) best = { ...best, y: e, wy: { V: vh, z } };
+        }
     }
     const m = 1.0025;
     return { w: Math.ceil(2 * best.x * m), h: Math.ceil(2 * best.y * m), worst: { x: best.wx, y: best.wy } };
@@ -395,10 +415,10 @@
   }
 
   return {
-    WORLD, Z_MAX, ZOOM_SLACK, OVERSCROLL, DOMAIN, TILE,
+    WORLD, Z_MAX, ZOOM_SLACK, OVERSCROLL, PAN_MARGIN, NO_MARGIN, START, DOMAIN, TILE,
     clamp, lerp, smoothstep, mod, rng, hash01, EASE, mixRGB,
     mapScale, inDomain, layerZoom, layerZoomInverse, zMin, zoomRange, anchorOf, layerCenter, layerOffset, visibleRect,
-    localToScreen, screenToLocal, worldToScreen, screenToWorld, zoomAt, panLimits, clampCamera, rubberBand,
+    localToScreen, screenToLocal, worldToScreen, screenToWorld, zoomAt, panLimits, clampCamera, startZoom, startCamera, rubberBand,
     requiredSize, planTiles, tileRects, viewCover, biome, corruptLight, bloomLocal, biomeTint, biomeWash, biomeSpriteColor,
     biomeFieldColor, bloomState, channel, spriteState, fieldAlphaZoom, visibleExtent,
     fieldLocal, fieldPlace, fieldStep,
@@ -701,6 +721,8 @@ function test(RC, fs, FILE) {
   // -- 0. realm.json agrees with the constants here
   ok(R.world.w === W.w && R.world.h === W.h, 'world size');
   ok(R.camera.zMax === RC.Z_MAX && R.camera.zoomSlack === RC.ZOOM_SLACK && R.camera.overscroll === RC.OVERSCROLL, 'camera constants');
+  ok(R.camera.panMargin && R.camera.panMargin[0] === RC.PAN_MARGIN.x && R.camera.panMargin[1] === RC.PAN_MARGIN.y, 'camera pan margin');
+  ok(R.camera.start.center[0] === RC.START.x && R.camera.start.center[1] === RC.START.y, 'camera start centre');
   for (const k of Object.keys(RC.DOMAIN)) ok(R.camera.viewportDomain[k] === RC.DOMAIN[k], 'domain ' + k);
   const world = R.layers.find(L => L.id === 'world');
   ok(world && world.f === 1 && world.size[0] === 3840 && world.size[1] === 2560, 'world layer is 3840x2560 at f=1');
@@ -717,8 +739,15 @@ function test(RC, fs, FILE) {
     ok(near(p.x, p2.x) && near(p.y, p2.y), 'world <-> screen round trip');
     const wl = { f: 1, w: W.w, h: W.h }, q2 = RC.localToScreen(wl, C, z, V, p);
     ok(near(q.x, q2.x) && near(q.y, q2.y), 'world layer == worldToScreen');
-    const vr = RC.visibleRect(wl, C, z, V);
-    ok(vr.x0 >= -1e-6 && vr.y0 >= -1e-6 && vr.x1 <= W.w + 1e-6 && vr.y1 <= W.h + 1e-6, 'hard clamp keeps the view inside the world');
+    // the hard clamp: the view extends past the world by at most the pan margin (capped at half the view), so the
+    // screen centre stays over the world; the margin is reached; with NO_MARGIN the view stays inside the world
+    const vr = RC.visibleRect(wl, C, z, V), mx = Math.min(RC.PAN_MARGIN.x, V.w / (2 * z)), my = Math.min(RC.PAN_MARGIN.y, V.h / (2 * z));
+    ok(vr.x0 >= -mx - 1e-6 && vr.y0 >= -my - 1e-6 && vr.x1 <= W.w + mx + 1e-6 && vr.y1 <= W.h + my + 1e-6, 'hard clamp keeps the view inside the world + margin');
+    ok(C.x >= -1e-6 && C.x <= W.w + 1e-6 && C.y >= -1e-6 && C.y <= W.h + 1e-6, 'hard clamp keeps the screen centre over the world');
+    const far = RC.clampCamera({ x: -1e5, y: 1e5 }, z, V), vf = RC.visibleRect(wl, far, far.z, V);
+    ok(near(vf.x0, -mx, 1e-9) && near(vf.y1, W.h + my, 1e-9), 'the pan margin is reachable');
+    const c0 = RC.clampCamera({ x: C.x + (r() - 0.5) * 9000, y: C.y + (r() - 0.5) * 9000 }, z, V, { margin: RC.NO_MARGIN }), v0 = RC.visibleRect(wl, c0, c0.z, V);
+    ok(v0.x0 >= -1e-6 && v0.y0 >= -1e-6 && v0.x1 <= W.w + 1e-6 && v0.y1 <= W.h + 1e-6, 'NO_MARGIN keeps the view inside the world');
     const L = R.layers[Math.floor(r() * R.layers.length)], Lg = { f: L.f, w: L.size[0], h: L.size[1] };
     const off = RC.layerOffset(Lg, C, z, V), v2 = RC.visibleRect(Lg, C, z, V);
     ok(near(off.x + off.scale * v2.x0, 0, 1e-6) && near(off.y + off.scale * v2.y1, V.h, 1e-6), 'offset and visibleRect agree');
@@ -965,9 +994,13 @@ function test(RC, fs, FILE) {
     }
     if (best < eastWorst.v) eastWorst = { v: best, at: `${V.w.toFixed(0)}x${V.h.toFixed(0)}` };
     ok(best >= 0.9, `corrupt reaches only ${best.toFixed(3)} at the east limit for V=${V.w.toFixed(0)}x${V.h.toFixed(0)}`);
-    // the start camera (REALM.md 2.8): pure realm
-    const zs = RC.clamp(Math.min(V.w / 1500, V.h / 1750), RC.zMin(V), 1), Cs = RC.clampCamera({ x: 1500, y: 1150 }, zs, V), ws = RC.biome(Cs, B, zs, V);
+    // the start camera (REALM.md 2.8): pure realm, and inside the world (no pan margin)
+    const Cs = RC.startCamera(V), ws = RC.biome(Cs, B, Cs.z, V), vs = RC.visibleRect({ f: 1, w: W.w, h: W.h }, Cs, Cs.z, V);
     ok(ws.rift === 0 && ws.corrupt === 0, `start camera biome ${JSON.stringify(ws)} at V=${V.w.toFixed(0)}x${V.h.toFixed(0)}`);
+    ok(vs.x0 >= -1e-6 && vs.y0 >= -1e-6 && vs.x1 <= W.w + 1e-6 && vs.y1 <= W.h + 1e-6, `start camera inside the world at V=${V.w.toFixed(0)}x${V.h.toFixed(0)}`);
+    // the west limit (the shrine side, past the world edge): never rift, never corrupt
+    for (const z of [RC.zMin(V), 1]) { const Cw = RC.clampCamera({ x: -1e5, y: 1280 }, z, V), ww = RC.biome(Cw, B, Cw.z, V);
+      ok(ww.rift === 0 && ww.corrupt === 0, `west limit biome ${JSON.stringify(ww)} at V=${V.w.toFixed(0)}x${V.h.toFixed(0)} z=${z.toFixed(3)}`); }
   }
   // the main desktop screens: at the east limit (y 1250) the accent holds >= 0.6 over the whole zoom band 1 .. zMax
   for (const V of [{ w: 1920, h: 1080 }, { w: 2560, h: 1440 }]) for (let k = 0; k <= 20; k++) {

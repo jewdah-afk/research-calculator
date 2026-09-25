@@ -1,5 +1,8 @@
 // Parallax 2 — the World: the Milestone Tree on its floating island, the Multiverse rift, the achievement shrine.
-// Transparent PNG, 3840x2160. Nodes are NOT drawn here (they are live UI); only their cradles and glows.
+// Transparent PNG, 3840x2560. Nodes are NOT drawn here (they are live UI); only their cradles and glows.
+// The camera may look up to the pan margin past every edge (REALM.md 2.5), so nothing may be cut by the border: the
+// crown, the roots, the rift's warp rings and the outcrop end inside, and a last pass fades every glow out before the
+// edges (EDGE_FADE).
 const NODES = {
   m: [1500, 1900, 'b35cff'], mm: [1180, 1960, 'd17aff'], em: [1820, 1960, 'e88af2'], p: [1500, 1580, '6fc3ff'],
   pe: [1040, 1300, 'ff9a2e'], sp: [1330, 1250, '5fe0ff'], pb: [1670, 1250, '57e0b0'], pp: [1960, 1300, 'ff4d6d'],
@@ -111,6 +114,7 @@ LAYERS.world = async function () {
       for (let k = 0; k <= 3; k++) { const a = ang + bend * k / 3; const d = len * k / 3; pts.push([p.x + Math.cos(ang) * d + Math.cos(a) * d * 0.1, p.y + Math.sin(ang) * d + Math.sin(a) * d * 0.1 - k * 6, lerp(w0, 1.2, k / 3)]); }
       const T = spline(pts, 10);
       if (T.some(q => avoid.some(([ax, ay]) => Math.hypot(q.x - ax, q.y - ay) < 96))) continue;
+      if (T.some(q => q.y < 120)) continue;   // the crown stays clear of the top edge (its tip clusters too)
       drawLimb(x, T, { seed: seed * 7 + i, rim: 0.7 });
       const e = T[T.length - 1]; tips.push([e.x, e.y, accent, depth]);
       if (depth < 1 && r() < 0.6) twigs(x, T, seed * 13 + i, avoid, accent, 2, depth + 1);
@@ -238,8 +242,10 @@ LAYERS.world = async function () {
   }
 
   // =============== THE MAIN TREE ===============
-  // ground light
-  blob(o, 1500, 2060, 900, [120, 60, 220], 0.16);
+  // ground light (thinned out before the bottom edge, which the pan margin shows)
+  { const gc = canvas(), gx = ctx(gc); blob(gx, 1500, 2060, 900, [120, 60, 220], 0.16);
+    gx.globalCompositeOperation = 'destination-in'; const gm = gx.createLinearGradient(0, 2230, 0, 2530); gm.addColorStop(0, 'rgba(0,0,0,1)'); gm.addColorStop(1, 'rgba(0,0,0,0)');
+    gx.fillStyle = gm; gx.fillRect(0, 0, W, H); o.drawImage(gc, 0, 0); }
   blob(g, 1500, 2000, 520, [179, 92, 255], 0.18);
 
   // roots hanging below the island (behind)
@@ -247,17 +253,17 @@ LAYERS.world = async function () {
   const hr = rng(401);
   [720, 840, 960, 1090, 1230, 1380, 1640, 1790, 1930, 2060, 2190, 2290].forEach((hx, i) => {
     const under = isl.slice(81).reduce((m, p) => Math.abs(p[0] - hx) < Math.abs(m[0] - hx) ? p : m); const hy = under[1] - 10;
-    const len = 110 + hr() * 260 * (1 - Math.abs(hx - 1500) / 1100), pts = [];
+    const len = Math.min(110 + hr() * 260 * (1 - Math.abs(hx - 1500) / 1100), 2480 - hy), pts = [];   // tips end above the bottom edge
     let px = hx, sway = (hr() - 0.5) * 2;
     for (let k = 0; k <= 6; k++) { pts.push([px, hy + len * k / 6, lerp(22, 1.5, Math.pow(k / 6, 0.7))]); px += sway * 14 + Math.sin(k * 1.3 + i) * 10; }
     const S = spline(pts, 10);
     drawLimb(o, S, { seed: 400 + i, rim: 0.6, vein: hr() < 0.45 ? hex('b35cff') : null });
-    for (let j = 0; j < 3; j++) { const p = at(S, 0.25 + hr() * 0.5), d = hr() < 0.5 ? -1 : 1, l = 30 + hr() * 50; drawLimb(o, spline([[p.x, p.y, 6], [p.x + d * l * 0.5, p.y + l * 0.5, 3], [p.x + d * l * 0.7, p.y + l, 1]], 8), { seed: 460 + i * 3 + j, rim: 0.5 }); }
+    for (let j = 0; j < 3; j++) { const p = at(S, 0.25 + hr() * 0.5), d = hr() < 0.5 ? -1 : 1, l = Math.min(30 + hr() * 50, Math.max(12, 2490 - p.y)); drawLimb(o, spline([[p.x, p.y, 6], [p.x + d * l * 0.5, p.y + l * 0.5, 3], [p.x + d * l * 0.7, p.y + l, 1]], 8), { seed: 460 + i * 3 + j, rim: 0.5 }); }
     const e = S[S.length - 1]; blob(g, e.x, e.y, 12, [210, 150, 255], 0.9); blob(g, e.x, e.y, 3, [255, 255, 255], 1);
   });
   [[1000, 'd17aff'], [1320, 'b35cff'], [1560, '7fd9ff'], [1880, 'e88af2']].forEach(([hx, c], i) => {
     const under = isl.slice(81).reduce((m, p) => Math.abs(p[0] - hx) < Math.abs(m[0] - hx) ? p : m);
-    for (let j = 0; j < 3; j++) crystal(o, hx + (j - 1) * 26 + hr() * 10, under[1] - 16, 50 + hr() * 70, 18, Math.PI + (hr() - 0.5) * 0.4, hex(c), 600 + i * 5 + j);
+    for (let j = 0; j < 3; j++) crystal(o, hx + (j - 1) * 26 + hr() * 10, under[1] - 16, Math.min(50 + hr() * 70, 2505 - under[1]), 18, Math.PI + (hr() - 0.5) * 0.4, hex(c), 600 + i * 5 + j);
   });
   // island crystals & tufts
   [[860, 1995, 7, 60, 'd17aff'], [2150, 1990, 6, 55, 'e88af2'], [1290, 2002, 4, 34, 'b35cff'], [1720, 2000, 4, 30, '7fd9ff'], [1020, 1998, 3, 26, 'ff9a2e'], [1980, 1995, 3, 28, 'ff4d6d']]
@@ -287,7 +293,7 @@ LAYERS.world = async function () {
   // back foliage (behind limbs): the outer tips and crown
   const back = canvas(), b = ctx(back);
   const tipC = [[800, 1130, 'pe', 150], [2178, 1110, 'pp', 150], [925, 850, 'se', 130], [2070, 835, 'ep', 130], [995, 510, 'hb', 120], [1998, 500, 'mp', 120],
-    [1240, 1060, 'sp', 90], [1768, 1064, 'pb', 90], [1320, 180, 't', 120], [1690, 176, 't', 120], [1500, 170, 't', 170]];
+    [1240, 1060, 'sp', 90], [1768, 1064, 'pb', 90], [1320, 204, 't', 112], [1690, 200, 't', 112], [1500, 214, 't', 150]];
   tipC.forEach(([x0, y0, k, rr], i) => cluster(b, x0, y0, rr, Math.round(rr * 2.6), col(k), 500 + i));
   o.drawImage(back, 0, 0);
 
@@ -353,6 +359,25 @@ LAYERS.world = async function () {
     sg.addColorStop(0, rgba(mix(DARK, s.c, 0.16), 0.9)); sg.addColorStop(0.75, rgba(DARK, 0.88)); sg.addColorStop(1, rgba(mix(DARK, s.c, 0.3), 0.7));
     o.fillStyle = sg; o.fillRect(s.cx - s.rr, s.cy - s.rr, s.rr * 2, s.rr * 2); o.restore();
   });
+  // EDGE_FADE: the pan margin shows the border of this layer, so every pixel fades out toward it (smoothstep over the
+  // widths below, world px): no glow, stroke or leaf ends in a straight line. The shapes themselves end inside.
+  {
+    const EDGE_FADE = { left: 140, top: 50, right: 36, bottom: 40 };
+    const im = o.getImageData(0, 0, W, H), d = im.data, fx = new Float32Array(W), fy = new Float32Array(H);
+    const band = { left: 0, top: 0, right: 0, bottom: 0 };   // the most alpha each border strip had before the fade
+    for (let x = 0; x < W; x++) fx[x] = smooth(0, EDGE_FADE.left, x + 0.5) * smooth(0, EDGE_FADE.right, W - x - 0.5);
+    for (let y = 0; y < H; y++) fy[y] = smooth(0, EDGE_FADE.top, y + 0.5) * smooth(0, EDGE_FADE.bottom, H - y - 0.5);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const i = (y * W + x) * 4 + 3, a = d[i];
+      if (!a) continue;
+      if (x < 8) band.left = Math.max(band.left, a); if (x >= W - 8) band.right = Math.max(band.right, a);
+      if (y < 8) band.top = Math.max(band.top, a); if (y >= H - 8) band.bottom = Math.max(band.bottom, a);
+      const k = fx[x] * fy[y];
+      if (k < 1) d[i] = Math.round(a * k);
+    }
+    o.putImageData(im, 0, 0);
+    console.log('world: max alpha within 8 px of the border before the edge fade', JSON.stringify(band));
+  }
   window.__last = out;
   return out;
 };
@@ -364,9 +389,17 @@ async function rift(o, g, R, api) {
   const L = [], Rr = [];
   for (let y = top; y <= bot; y += 6) { const h = half(y); const j = 30 * n(y / 90, 1) + 5 * n(y / 34, 2); L.push([cx - h + j + 30 * Math.sin(y / 300), y]); Rr.push([cx + h + j * 0.8 + 30 * Math.sin(y / 300), y]); }
   const shape = [...L, ...Rr.reverse()];
-  // spacetime warp rings around it
-  for (let i = 0; i < 9; i++) { o.save(); o.strokeStyle = `rgba(255,${90 + i * 10},${120 + i * 6},${0.10 - i * 0.008})`; o.lineWidth = 2; o.beginPath(); o.ellipse(cx + 10, (top + bot) / 2, 320 + i * 60, 560 + i * 55, 0.04, 0, 7); o.stroke(); o.restore(); }
-  blob(o, cx, 1480, 820, [120, 20, 60], 0.4);
+  // spacetime warp rings around it, and its crimson haze; both thin out toward the layer's right edge (x 3840), which
+  // the pan margin shows: the outer rings pass it
+  {
+    const wc = canvas(), wx = ctx(wc);
+    for (let i = 0; i < 9; i++) { wx.save(); wx.strokeStyle = `rgba(255,${90 + i * 10},${120 + i * 6},${0.10 - i * 0.008})`; wx.lineWidth = 2; wx.beginPath(); wx.ellipse(cx + 10, (top + bot) / 2, 320 + i * 60, 560 + i * 55, 0.04, 0, 7); wx.stroke(); wx.restore(); }
+    blob(wx, cx, 1480, 820, [120, 20, 60], 0.4);
+    wx.globalCompositeOperation = 'destination-in';
+    const gm = wx.createLinearGradient(3420, 0, 3830, 0); gm.addColorStop(0, 'rgba(0,0,0,1)'); gm.addColorStop(1, 'rgba(0,0,0,0)');
+    wx.fillStyle = gm; wx.fillRect(0, 0, W, H);
+    o.drawImage(wc, 0, 0);
+  }
   // interior: swirling other-universe
   const bw = 700, bh = bot - top + 40, bx = cx - bw / 2, by = top - 20;
   const ic = canvas(bw, bh), ix = ctx(ic), img = ix.createImageData(bw, bh), d = img.data, n2 = makeNoise(79);
@@ -425,8 +458,8 @@ async function rift(o, g, R, api) {
     const green = hex('39ff14'), dg = hex('1fbf4a');
     // floating shard rock
     const pts = []; const n3 = makeNoise(88);
-    for (let i = 0; i <= 40; i++) { const t = i / 40; pts.push([3390 + t * 430, 1285 + 12 * n3(t * 6, 1) - (t > 0.55 ? (t - 0.55) * 90 : 0)]); }
-    for (let i = 40; i >= 0; i--) { const t = i / 40; pts.push([3400 + t * 410, 1285 + 330 * Math.pow(Math.sin(Math.PI * t), 1.3) * (0.7 + 0.3 * (0.5 + n3(t * 12, 5)))]); }
+    for (let i = 0; i <= 40; i++) { const t = i / 40; pts.push([3390 + t * 405, 1285 + 12 * n3(t * 6, 1) - (t > 0.55 ? (t - 0.55) * 90 : 0)]); }
+    for (let i = 40; i >= 0; i--) { const t = i / 40; pts.push([3400 + t * 385, 1285 + 330 * Math.pow(Math.sin(Math.PI * t), 1.3) * (0.7 + 0.3 * (0.5 + n3(t * 12, 5)))]); }
     c2.save(); poly(c2, pts); const gr = c2.createLinearGradient(0, 1280, 0, 1640); gr.addColorStop(0, '#12301a'); gr.addColorStop(0.2, '#0b1a10'); gr.addColorStop(1, '#030805'); c2.fillStyle = gr; c2.fill(); c2.restore();
     c2.save(); c2.beginPath(); for (let i = 0; i <= 40; i++) i ? c2.lineTo(...pts[i]) : c2.moveTo(...pts[i]); c2.strokeStyle = rgba(green, 0.9); c2.lineWidth = 3; c2.stroke(); c2.restore();
     // a spire rising to CM
@@ -442,7 +475,7 @@ async function rift(o, g, R, api) {
       c2.restore();
       g2.save(); g2.translate(x, y); g2.rotate(a); g2.fillStyle = rgba(c, 0.55); g2.beginPath(); g2.moveTo(-w / 2, 0); g2.lineTo(0, -h); g2.lineTo(w / 2, 0); g2.fill(); g2.restore();
     };
-    for (let i = 0; i < 22; i++) { const x = 3400 + rc() * 400; if (Math.abs(x - 3510) < 80 || Math.abs(x - 3690) < 60) continue; shard(x, 1285 - (x > 3627 ? (x - 3627) * 0.2 : 0), 30 + rc() * 110, 12 + rc() * 22, (rc() - 0.5) * 0.9, rc() < 0.7 ? green : dg); }
+    for (let i = 0; i < 22; i++) { const x = 3400 + rc() * 375; if (Math.abs(x - 3510) < 80 || Math.abs(x - 3690) < 60) continue; shard(x, 1285 - (x > 3627 ? (x - 3627) * 0.2 : 0), 30 + rc() * 110, 12 + rc() * 22, (rc() - 0.5) * 0.9, rc() < 0.7 ? green : dg); }
     for (let i = 0; i < 7; i++) shard(3632 + rc() * 116, 1245 - rc() * 130, 30 + rc() * 50, 10 + rc() * 14, (rc() - 0.5) * 1.4, green);
     // CR cradle: a jagged ring
     for (const k of ['cr', 'cm']) {

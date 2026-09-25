@@ -2,7 +2,9 @@
 // several sub-depths (the farthest nearly dissolved into the violet), far ridgelines sinking into a misty abyss at the
 // bottom, and the ringed planet with its moon hanging upper right over the rift side. Strong atmospheric haze.
 // Keep-clear (advisory): no island wider than 420 local px and none centred on a soft zone, so the centre stays calm.
-// Painted at full local size 3008x1836, output at res.HIGH 0.5 -> 1504x918 (realm.json layers[far]).
+// The composition is designed in a 3008x1836 frame (the layer before the pan margin, REALM.md 2.5) centred in the
+// layer (size from realm.json, 3432x2160): the ridges, a few specks and the haze run on across the margin strips.
+// Painted at full local size, output at res.HIGH 0.5 -> 1716x1080 (realm.json layers[far]).
 // This file replaces the old layers/far.js; it registers LAYERS.distant and, for the manifest id, LAYERS.far.
 (function () {
   // ================================================================ ISLAND KIT (begin)
@@ -497,8 +499,10 @@
     // ---------------------------------------------------------------- cloud banks
     // Billowy banks with a defined top edge, lit from the key light direction (density sampled toward the light),
     // denser and darker below. Rendered at 1/4 resolution and blurred up. `cap(X, Y)` limits the alpha.
+    // o.x0, o.y0: the (drawing-space) point of the canvas' top-left corner (default 0, 0); o.w x o.h: the area covered
     function cloudBank(b, o) {
       const q = o.q || 4, w = Math.ceil(o.w / q), h = Math.ceil(o.h / q), c = mk(w, h), x = cx2(c, true), im = x.createImageData(w, h), d = im.data;
+      const x0 = o.x0 || 0, y0 = o.y0 || 0;
       const n = makeNoise(o.seed), n2 = makeNoise(o.seed + 7), n3 = makeNoise(o.seed + 3);
       const dens = (X, Y, B) => {
         const ytop = B.y - B.h * 0.5 + B.wob * fbm(n2, X / B.sx * 0.6, B.y * 0.003, 3);
@@ -510,7 +514,7 @@
       };
       const dl = o.dl || 14;
       for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
-        const X = i * q, Y = j * q;
+        const X = x0 + i * q, Y = y0 + j * q;
         let a = 0, litv = 0;
         for (const B of o.bands) {
           if (Y < B.y - B.h * 0.5 - B.wob - 20 || Y > B.y + B.h * 1.2) continue;
@@ -526,15 +530,15 @@
         d[k] = cc[0]; d[k + 1] = cc[1]; d[k + 2] = cc[2]; d[k + 3] = a * 255;
       }
       x.putImageData(im, 0, 0);
-      b.drawImage(upBlur(c, w * q, h * q, o.blur || 5), 0, 0);
+      b.drawImage(upBlur(c, w * q, h * q, o.blur || 5), x0, y0);
     }
 
     // ---------------------------------------------------------------- mist band (low-res noise, stretched)
     function mistBand(b, o) {
       const q = 4, w = Math.ceil(o.w / q), h = Math.ceil(o.h / q), c = mk(w, h), x = cx2(c, true), im = x.createImageData(w, h), d = im.data;
-      const n = makeNoise(o.seed), n2 = makeNoise(o.seed + 7);
+      const n = makeNoise(o.seed), n2 = makeNoise(o.seed + 7), x0 = o.x0 || 0, y0 = o.y0 || 0;
       for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
-        const X = i * q, Y = j * q;
+        const X = x0 + i * q, Y = y0 + j * q;
         let a = 0;
         for (const B of o.bands) {
           const wob = B.wob * fbm(n2, X / 900, B.y * 0.01, 2);
@@ -547,13 +551,14 @@
         const k = (j * w + i) * 4; d[k] = o.color[0]; d[k + 1] = o.color[1]; d[k + 2] = o.color[2]; d[k + 3] = a * 255;
       }
       x.putImageData(im, 0, 0);
-      b.drawImage(upBlur(c, w * q, h * q, o.blur || 6), 0, 0);
+      b.drawImage(upBlur(c, w * q, h * q, o.blur || 6), x0, y0);
     }
 
     // ---------------------------------------------------------------- the atmosphere pass (REALM.md section 4)
     // base: colour art; emis: light that may exceed maxLuma (up to emissiveMax). Both get the same colour recipe;
     // the light is then screened over the base (premultiplied), the luma limit follows the local emissive share,
     // and the whole layer gets a premultiplied gaussian blur of `blur` local px (edges clamped, see padBlur).
+    // T.splitX is in canvas px; the haze-bottom ramp runs over rows T.hy0 .. T.hy0 + T.hh (default: the whole canvas).
     function atmosphere(base, emis, T) {
       const w = base.width, h = base.height, A = T.atm, bx = cx2(base, true);
       const bI = bx.getImageData(0, 0, w, h), bd = bI.data, eI = emis ? cx2(emis, true).getImageData(0, 0, w, h) : null, edd = eI ? eI.data : null;
@@ -570,7 +575,7 @@
       };
       const c1 = [0, 0, 0], c2 = [0, 0, 0];
       for (let y = 0; y < h; y++) {
-        const k = A.haze + A.hazeBottom * smooth(0.35, 1, y / h);
+        const k = A.haze + A.hazeBottom * smooth(0.35, 1, (y - (T.hy0 || 0)) / (T.hh || h));
         for (let x = 0; x < w; x++) {
           const i = (y * w + x) * 4, ba = bd[i + 3] / 255, ea = edd ? edd[i + 3] / 255 : 0;
           if (ba <= 0 && ea <= 0) continue;
@@ -630,12 +635,15 @@
   // ---- contract snapshot (realm.json layers[far]); repaint if `node camera.js --build` changes it
   // blur 3 (was 2.5): softness grows with distance behind the focal plane (near 0.9 < mid 1.5 < far 3)
   const CFG = {
-    size: [3008, 1836], res: 0.5, splitX: 1636.5, fade: 713,
+    frame: [3008, 1836], size: [3432, 2160], res: 0.5, splitX: 1636.5, fade: 713,   // splitX, soft, rift: design frame
     atm: { hazeColor: [66, 50, 138], hazeRift: [110, 34, 72], haze: 0.5, hazeBottom: 0.2, saturation: 0.7, contrast: 0.55, blur: 3, maxLuma: 0.5, emissiveMax: 0.65 },
     soft: [['m', 1399, 1079, 395, 324], ['mm', 1319, 1094, 395, 324], ['em', 1479, 1094, 395, 324], ['p', 1399, 999, 395, 324], ['pe', 1284, 929, 395, 324], ['sp', 1356.5, 916.5, 395, 324], ['pb', 1441.5, 916.5, 395, 324], ['pp', 1514, 929, 395, 324], ['se', 1311.5, 849, 395, 324], ['hp', 1399, 836.5, 395, 324], ['ep', 1486.5, 849, 395, 324], ['hb', 1319, 769, 395, 324], ['ap', 1399, 756.5, 395, 324], ['mp', 1479, 769, 395, 324], ['t', 1399, 684, 395, 324], ['pm', 1811.5, 994, 395, 324], ['pep', 1721.5, 899, 395, 324], ['cr', 1901.5, 904, 395, 324], ['cm', 1946.5, 836.5, 395, 324], ['ex', 1811.5, 799, 395, 324], ['ach', 1154, 754, 395, 324]],
     rift: [1811.5, 968], // landmarks.rift: the local point behind the rift
   };
-  const [W, H] = CFG.size;
+  // the layer grew around the design frame (the pan margin): paint in design coordinates, translated to the centre
+  const RL = typeof window !== 'undefined' && window.REALM && window.REALM.layers && window.REALM.layers.find(l => l.id === 'far');
+  if (RL) { CFG.size = RL.size; CFG.res = RL.res.HIGH; }
+  const [W0, H0] = CFG.frame, [W, H] = CFG.size, OX = (W - W0) / 2, OY = (H - H0) / 2;
   const K = KIT, { mk, cx2, col, mixc } = K;
   const riftW = x => smooth(CFG.splitX - CFG.fade, CFG.splitX + CFG.fade, x);
   const HAZE = x => mixc(CFG.atm.hazeColor, CFG.atm.hazeRift, riftW(x));
@@ -661,6 +669,8 @@
   // deep in the haze: tiny, 70-85% mixed into the haze colour before the atmosphere pass. [x, top, w, haze]
   const GHOSTS = [[1010, 690, 92, 0.8], [1610, 600, 64, 0.84], [1935, 905, 118, 0.74], [2275, 735, 80, 0.78], [1275, 1010, 60, 0.82]];
   const SPECKS = [[990, 370, 70], [2250, 380, 60], [230, 1330, 90], [2760, 1060, 80], [1700, 1620, 60], [2840, 300, 56], [150, 560, 64], [2900, 1560, 76], [720, 700, 44], [2700, 640, 40]];
+  // out in the pan-margin strips (design x < 0 or > 3008, y < 0): a few more, so the realm goes on past the world
+  const MARGIN_SPECKS = [[-110, 900, 78, 0.42], [-150, 250, 52, 0.5], [3120, 860, 70, 0.4], [3150, 1420, 58, 0.45], [1180, -70, 46, 0.55], [2560, -90, 54, 0.5]];
 
   function subCanvas(x0, y0, w, h) { const c = mk(w, h), x = cx2(c); x.translate(-x0, -y0); return { c, x, x0, y0 }; }
   function commit(dst, sub, hz, hc) {
@@ -802,7 +812,7 @@
     // dissolves into mist within `sink` px instead of reaching the bottom, so the cloud sea behind stays visible.
     // Every top line gets the warm key-light rim (emissive), strongest on left-facing flanks, crimson on the rift side.
     const ridge = (o) => {
-      const { base, amp, scale, seed, c0, c1, a0 = 0.85, a1 = 0.55, floor = 0, rimA, lights = 16, lightA = 0.7, x0 = -12, x1 = W + 12, sink = 0, taper = 0, massifs = null } = o;
+      const { base, amp, scale, seed, c0, c1, a0 = 0.85, a1 = 0.55, floor = 0, rimA, lights = 16, lightA = 0.7, x0 = -OX - 12, x1 = W0 + OX + 12, sink = 0, taper = 0, massifs = null } = o;
       const n = makeNoise(seed), pts = [];
       for (let x = x0; x <= x1; x += 4) {
         const big = 0.5 + 0.5 * fbm(n, x / (scale * 2.6), 2.2, 3), peaks = Math.pow(ridged(n, x / scale, seed * 0.1, 5), 1.6);
@@ -823,8 +833,8 @@
         b.globalCompositeOperation = 'destination-out';
         for (const [xa, xb] of [[x0 - 1, x0 + taper], [x1 + 1, x1 - taper]]) { const gg = b.createLinearGradient(xa, 0, xb, 0); gg.addColorStop(0, 'rgba(0,0,0,1)'); gg.addColorStop(1, 'rgba(0,0,0,0)'); b.fillStyle = gg; b.fillRect(Math.min(xa, xb), base - amp * 2, Math.abs(xb - xa), amp * 2 + sink + 10); }
       } else {
-        b.moveTo(-12, H + 20); pts.forEach(p => b.lineTo(p[0], p[1])); b.lineTo(W + 12, H + 20); b.closePath();
-        const g = b.createLinearGradient(0, base - amp, 0, H);
+        b.moveTo(x0, H0 + OY + 20); pts.forEach(p => b.lineTo(p[0], p[1])); b.lineTo(x1, H0 + OY + 20); b.closePath();
+        const g = b.createLinearGradient(0, base - amp, 0, H0 + OY);
         g.addColorStop(0, col(c0, a0)); g.addColorStop(0.35, col(c1, a1)); g.addColorStop(0.92, col(c1, floor)); g.addColorStop(1, col(c1, floor));
         b.fillStyle = g; b.fill();
       }
@@ -865,18 +875,21 @@
   LAYERS.distant = LAYERS.far = async function () {
     const t0 = performance.now();
     const base = mk(W, H), b = cx2(base), emis = mk(W, H), e = cx2(emis);
+    b.translate(OX, OY); e.translate(OX, OY);
     paintPlanet(b, e);
     paintRidges(b, e);
     GHOSTS.forEach((s, i) => paintSpeck(s, b, e, 40 + i));
     SPECKS.forEach((s, i) => paintSpeck(s, b, e, i));
+    MARGIN_SPECKS.forEach((s, i) => paintSpeck(s, b, e, 60 + i));
     // islands, farthest (most haze) first
     [...ISLES].sort((p, q) => q.hz - p.hz).forEach(I => paintIsle(I, b, e));
     // readability: island centres off the soft zones, widths <= 420
     const bad = ISLES.filter(I => CFG.soft.some(z => K.inEllipse(I.x, I.top + I.d * 0.4, z)) || I.w > 420).map(I => I.seed);
     const badS = SPECKS.filter(s => CFG.soft.some(z => K.inEllipse(s[0], s[1], z)));
     console.log('far islands centred on soft zones / too wide:', bad.length || badS.length ? JSON.stringify([bad, badS]) : 'none');
-    const lit = window.__islandsNoAtmosphere ? K.atmosphere(base, emis, { atm: { ...CFG.atm, haze: 0, hazeBottom: 0, saturation: 1, contrast: 1, blur: 0, maxLuma: 1, emissiveMax: 1 }, splitX: CFG.splitX, fade: CFG.fade })
-      : K.atmosphere(base, emis, { atm: CFG.atm, splitX: CFG.splitX, fade: CFG.fade, emisHaze: 0.45 });
+    const fr = { splitX: CFG.splitX + OX, fade: CFG.fade, hy0: OY, hh: H0 };   // the atmosphere runs in canvas px
+    const lit = window.__islandsNoAtmosphere ? K.atmosphere(base, emis, { atm: { ...CFG.atm, haze: 0, hazeBottom: 0, saturation: 1, contrast: 1, blur: 0, maxLuma: 1, emissiveMax: 1 }, ...fr })
+      : K.atmosphere(base, emis, { atm: CFG.atm, ...fr, emisHaze: 0.45 });
     const out = K.downsample(lit, Math.round(W * CFG.res), Math.round(H * CFG.res));
     console.log('far (distant)', out.width + 'x' + out.height, Math.round(performance.now() - t0) + ' ms');
     window.__last = out;

@@ -55,7 +55,7 @@ const pick = (o, ks) => { const r = {}; for (const k of ks) if (o[k] !== undefin
 // ------------------------------------------------------------------------------------------------ the data
 const cam = R.camera, dom = cam.viewportDomain;
 const camera = {
-  zMax: cam.zMax, zoomSlack: cam.zoomSlack, overscroll: cam.overscroll,
+  zMax: cam.zMax, zoomSlack: cam.zoomSlack, overscroll: cam.overscroll, panMargin: cam.panMargin,
   domain: pick(dom, ['minW', 'minH', 'maxW', 'maxH', 'minAspect', 'maxAspect']),
   start: cam.start.center, introFactor: cam.start.introFromZoomFactor, introSeconds: cam.start.introSeconds,
 };
@@ -152,7 +152,7 @@ export type Edge = { from: string, to: string, p: { number } }
 export type Realm = {
 	version: string,
 	world: { w: number, h: number },
-	camera: { zMax: number, zoomSlack: number, overscroll: number, domain: Domain, start: { number }, introFactor: number,
+	camera: { zMax: number, zoomSlack: number, overscroll: number, panMargin: { number }, domain: Domain, start: { number }, introFactor: number,
 		introSeconds: number },
 	feel: Feel,
 	layers: { Layer },

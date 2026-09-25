@@ -350,12 +350,16 @@ function MapView.new(gui: ScreenGui, root: Frame, o: { assets: any?, realm: any?
 				continue
 			end
 			local anyMissing = false
+			-- layers grow around their centre (the pan margin, REALM.md 2.5): tiles cut for a different layer size (an
+			-- Assets.luau older than Realm.luau) stay centred on the anchor, so the art keeps its registration
+			local dx = if tl.w then (rec.def.w - tl.w) / 2 else 0
+			local dy = if tl.h then (rec.def.h - tl.h) / 2 else 0
 			for _, t in tl.tiles do
 				total += 1
-				rec.xs[t.i + 1] = t.x
-				rec.xs[t.i + 2] = t.x + t.w
-				rec.ys[t.j + 1] = t.y
-				rec.ys[t.j + 2] = t.y + t.h
+				rec.xs[t.i + 1] = t.x + dx
+				rec.xs[t.i + 2] = t.x + t.w + dx
+				rec.ys[t.j + 1] = t.y + dy
+				rec.ys[t.j + 2] = t.y + t.h + dy
 				local ok = hasId(t.id)
 				if ok then have += 1 end
 				if not ok and not assume then
@@ -577,7 +581,7 @@ function MapView.new(gui: ScreenGui, root: Frame, o: { assets: any?, realm: any?
 		flight = nil
 		if fo and fo.intro and not reduced and not Motion.snapshot() then
 			local zi = math.min(realm.camera.introFactor * zs, MapCamera.Z_MAX)
-			local ci = MapCamera.clampCamera(C0, zi, V, false)
+			local ci = MapCamera.clampCamera(C0, zi, V, false, MapCamera.NO_MARGIN)
 			C, z = { x = ci.x, y = ci.y }, ci.z
 			dirty = true
 			self:flyTo(Vector2.new(C0.x, C0.y), zs, { time = realm.camera.introSeconds, ease = "quintOut" })
@@ -896,9 +900,8 @@ function MapView.new(gui: ScreenGui, root: Frame, o: { assets: any?, realm: any?
 	-- ------------------------------------------------------------------------------------------ start
 	layoutBox(nil)
 	do
-		local zs = math.clamp(math.min(V.w / 1500, V.h / 1750), MapCamera.zMin(V), 1)
-		z = zs
-		applyClamp(false)
+		local s = MapCamera.startCamera(V) -- REALM.md 2.8: inside the world (no pan margin)
+		C, z = { x = s.x, y = s.y }, s.z
 	end
 	buildArt()
 	if tileCount > 0 then watchdog() end

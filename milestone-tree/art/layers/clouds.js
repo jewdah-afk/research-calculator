@@ -15,34 +15,35 @@
 // The contract's atmosphere recipe (saturation, contrast, haze toward hazeColor -> hazeRift, maxLuma with emissive
 // rims / rays / glow up to emissiveMax, gaussian blur in premultiplied alpha) is applied as the final pass.
 //
-// Output: the HIGH texture, size × res.HIGH = 1044×612 px, straight (unpremultiplied) RGBA. Geometry is in layer-local
-// px (2784×1632). The drifting nebula_wisp sprites add motion on top of this.
+// Output: the HIGH texture, size × res.HIGH = 1128×672 px, straight (unpremultiplied) RGBA. Geometry is in layer-local
+// px (3008×1792): the composition is designed in the 2784×1632 frame the layer had before the pan margin (REALM.md 2.5),
+// centred in it (DX, DY); the streams, the cumulus rows and the sea's floor already ran past that frame's edges, so
+// they fill the margin. The drifting nebula_wisp sprites add motion on top of this.
 LAYERS.clouds = async function () {
   // ---- contract (mirrors realm.json; window.REALM wins when a pipeline injects the manifest) ----------------------
   const SPEC = {
-    size: [2784, 1632], res: 0.375, anchor: [1392, 816],
+    size: [3008, 1792], frame: [2784, 1632], res: 0.375, anchor: [1504, 896],
     biomeLocal: { splitX: 1455.6, fadeHalfWidth: 810 },
     rift: [1539.6, 840], tree: [1341.6, 800.4],
     atmosphere: { hazeColor: [72, 54, 150], hazeRift: [120, 36, 80], haze: 0.35, hazeBottom: 0.1, saturation: 0.8,
       contrast: 0.55, blur: 6, maxLuma: 0.55, emissiveMax: 0.7 },
     band: [0.35, 0.65], bandAlpha: 0.25, maxAlpha: 0.55,
-    // the sky's sun (0.36 w, 0.26 h of 2656×1536, anchor 1328×768) seen through this layer at C = world centre
+    // the sky's sun (0.36 w, 0.26 h of the sky's 2656×1536 design frame, relative to its anchor, which is the frame's
+    // centre) seen through this layer at C = world centre
     sunSky: [0.36 * 2656 - 1328, 0.26 * 1536 - 768],
   };
   const RL = typeof window !== 'undefined' && window.REALM && window.REALM.layers && window.REALM.layers.find(l => l.id === 'clouds');
   if (RL) {
     SPEC.size = RL.size; SPEC.res = RL.res.HIGH; SPEC.anchor = RL.anchor; SPEC.biomeLocal = RL.biomeLocal;
     SPEC.rift = RL.landmarks.rift; SPEC.tree = RL.landmarks.tree; SPEC.atmosphere = RL.atmosphere;
-    const sky = window.REALM.layers.find(l => l.id === 'sky');
-    if (sky) SPEC.sunSky = [0.36 * sky.size[0] - sky.anchor[0], 0.26 * sky.size[1] - sky.anchor[1]];
   }
-  const [LW, LH] = SPEC.size, RES = SPEC.res;
+  const [LW, LH] = SPEC.size, RES = SPEC.res, [LW0, LH0] = SPEC.frame, DX = (LW - LW0) / 2, DY = (LH - LH0) / 2;
   const TW = Math.round(LW * RES), TH = Math.round(LH * RES), N = TW * TH;
   const SX = SPEC.anchor[0] + SPEC.sunSky[0], SY = SPEC.anchor[1] + SPEC.sunSky[1];   // ≈ (1020, 447)
   const [RX, RY] = SPEC.rift;
   const KX = (SPEC.tree[0] + RX) / 2, KY = (SPEC.tree[1] + RY) / 2;
   const SPLIT = SPEC.biomeLocal.splitX, FHW = SPEC.biomeLocal.fadeHalfWidth, AT = SPEC.atmosphere;
-  const BY0 = SPEC.band[0] * LH, BY1 = SPEC.band[1] * LH;
+  const BY0 = SPEC.band[0] * LH0 + DY, BY1 = SPEC.band[1] * LH0 + DY;   // the calm band stays behind the nodes
 
   // ---- helpers (kept local: lib.js is shared) -----------------------------------------------------------------------
   const lin = c => [Math.pow(c[0] / 255, 2.2), Math.pow(c[1] / 255, 2.2), Math.pow(c[2] / 255, 2.2)];
@@ -56,7 +57,8 @@ LAYERS.clouds = async function () {
   // noise at this texture size (1 texel = 2.7 local px, then blurred).
   const D = new Float32Array(N), OP = new Float32Array(N), HR = new Float32Array(N), GR = new Float32Array(N);
   const P = [], pr = rng(5150);
-  const puff = (x, y, rx, ry, op, soft, kind) => P.push({ x, y, rx, ry, op, soft, kind });
+  // puffs are placed in design-frame coordinates (the rules below) and stored in layer px
+  const puff = (x, y, rx, ry, op, soft, kind) => P.push({ x: x + DX, y: y + DY, rx, ry, op, soft, kind });
   // upper deck streamers: [x0, x1, y0, half thickness, tilt]. The gap below-right of the sun lets its light fall
   // through the middle band as rays; the streamer ends near it catch the rim light.
   const STREAM = [
@@ -80,7 +82,7 @@ LAYERS.clouds = async function () {
   // tops stand on the shaded, fading bellies of the row behind; small puffs ride on the big ones
   const ROWS = [[1108, 28, 70, 0.55, 0.6], [1196, 48, 130, 0.8, 0.68], [1310, 80, 190, 0.95, 0.74], [1460, 120, 260, 1, 0.8]];
   ROWS.forEach(([y0, r0, r1, op, flat], ri) => {
-    for (let x = -160; x < LW + 160;) {
+    for (let x = -160; x < LW0 + 160;) {
       const r = r0 + (r1 - r0) * Math.pow(pr(), 1.6), gap = ri < 2 && pr() < 0.2;
       if (!gap) {
         const yy = y0 + (pr() - 0.45) * r * 0.7;
@@ -115,13 +117,14 @@ LAYERS.clouds = async function () {
     for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
       const x = (i + 0.5) / RES, y = (j + 0.5) / RES, ex = (x - q.x) / q.rx, ey = (y - q.y) / q.ry, e = Math.sqrt(ex * ex + ey * ey);
       if (e > 1.35) continue;
-      const tear = hz ? fbm(nEdge, x / 330, y / 55, 4) : fbm(nEdge, x / 110, y / 110, 4);
+      const xd = x - DX, yd = y - DY;   // noise registered to the design frame
+      const tear = hz ? fbm(nEdge, xd / 330, yd / 55, 4) : fbm(nEdge, xd / 110, yd / 110, 4);
       let v = smooth(1, 1 - q.soft, e + (hz ? 0.8 : 0.55) * tear) * q.op;
       if (q.kind === 1 || q.kind === 2) v *= 1 - 0.55 * smooth(-0.1, 1, ey);   // bellies thin out: rows layer
-      if (hz) v *= clamp(0.5 + 1.2 * (fbm(nFib, x / 460 + q.x * 0.001, y / 24, 3) + 0.2));   // combed cirrus fibres
+      if (hz) v *= clamp(0.5 + 1.2 * (fbm(nFib, xd / 460 + (q.x - DX) * 0.001, yd / 24, 3) + 0.2));   // combed cirrus fibres
       if (v <= 0.002) continue;
       // sphere normal, roughened
-      const ee = Math.min(e, 0.999), bz = fbm(nBump, x / 60, y / 60, 3) * 0.35;
+      const ee = Math.min(e, 0.999), bz = fbm(nBump, xd / 60, yd / 60, 3) * 0.35;
       let nx = ex * 0.95 + bz, ny = ey * 0.95 - bz * 0.5, nz = Math.sqrt(1 - ee * ee) * (hz ? 0.6 : 1) + 0.05;
       const nl = Math.hypot(nx, ny, nz); nx /= nl; ny /= nl; nz /= nl;
       const lam = clamp((nx * lx + ny * ly + nz * lz + 0.3) / 1.3), rim = smooth(0.55, 1.05, e) * clamp((nx * lx + ny * ly) * 1.4);
@@ -136,11 +139,11 @@ LAYERS.clouds = async function () {
   for (let j = 0; j < TH; j++) {
     const y = (j + 0.5) / RES;
     for (let i = 0; i < TW; i++) {
-      const x = (i + 0.5) / RES, k = j * TW + i;
-      const wx = fbm(nA, x / 900, y / 420, 3);
-      const floor = smooth(1480, 1640, y + 60 * wx) * 0.95;
-      const veil = smooth(0.0, 0.32, fbm(nH, x / 1300 + wx, y / 280, 4)) * 0.3 * (1 - smooth(1000, 1150, y));
-      const tex = 0.78 + 0.4 * fbm(nC, x / 260 + wx, y / 120, 4);
+      const x = (i + 0.5) / RES, k = j * TW + i, xd = x - DX, yd = y - DY;   // design-frame coordinates
+      const wx = fbm(nA, xd / 900, yd / 420, 3);
+      const floor = smooth(1480, 1640, yd + 60 * wx) * 0.95;
+      const veil = smooth(0.0, 0.32, fbm(nH, xd / 1300 + wx, yd / 280, 4)) * 0.3 * (1 - smooth(1000, 1150, yd));
+      const tex = 0.78 + 0.4 * fbm(nC, xd / 260 + wx, yd / 120, 4);
       if (floor > D[k]) { const add = floor - D[k]; D[k] = floor; LS[k] += 0.55 * add; AO[k] += 0.6 * add; }
       const tt = Math.min(tex, 1 / Math.max(D[k], 1e-3));
       D[k] *= tt; LS[k] *= tt; RS[k] *= tt; LR[k] *= tt; RR[k] *= tt; AO[k] *= tt;
@@ -203,7 +206,7 @@ LAYERS.clouds = async function () {
       for (let q = 0; q < 3; q++) c[q] = shade[q] * ao + (lit[q] - shade[q]) * lam * Ls * ao * kc + lining[q] * linI;
       // crimson light from the tear on the rift side
       const Lr = (0.35 + 0.65 * TR[k]) * hr / (1 + (dr / 850) * (dr / 850));
-      const rc = mix3(CRIM, MAG, smooth(-0.2, 0.3, fbm(nR, x / 700, y / 700, 3)));
+      const rc = mix3(CRIM, MAG, smooth(-0.2, 0.3, fbm(nR, (x - DX) / 700, (y - DY) / 700, 3)));
       for (let q = 0; q < 3; q++) c[q] += rc[q] * Lr * (0.35 * lamR + 1.6 * rimR);
       const ac = SPEC.maxAlpha * (1 - Math.exp(-2.8 * d));
       // veils: broad faint sheets
@@ -237,7 +240,7 @@ LAYERS.clouds = async function () {
   const luma = (r, g, b) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
   const HC = AT.hazeColor.map(v => v / 255), HRC = AT.hazeRift.map(v => v / 255);
   for (let j = 0; j < TH; j++) {
-    const y = (j + 0.5) / RES, kh = AT.haze + AT.hazeBottom * smooth(0.35, 1, y / LH);
+    const y = (j + 0.5) / RES, kh = AT.haze + AT.hazeBottom * smooth(0.35, 1, (y - DY) / LH0);
     for (let i = 0; i < TW; i++) {
       const x = (i + 0.5) / RES, k = j * TW + i, a = PA[k];
       if (a < 1e-5) { PR[k] = PG[k] = PB[k] = 0; continue; }

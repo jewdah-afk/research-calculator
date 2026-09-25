@@ -26,6 +26,8 @@ end
 check(MC.Z_MAX == Realm.camera.zMax, "zMax")
 check(MC.ZOOM_SLACK == Realm.camera.zoomSlack, "zoomSlack")
 check(MC.OVERSCROLL == Realm.camera.overscroll, "overscroll")
+check(MC.PAN_MARGIN.x == Realm.camera.panMargin[1] and MC.PAN_MARGIN.y == Realm.camera.panMargin[2], "pan margin")
+check(MC.NO_MARGIN.x == 0 and MC.NO_MARGIN.y == 0, "no margin")
 for k, v in Realm.camera.domain do check(MC.DOMAIN[k] == v, "domain " .. k) end
 check(MC.WORLD.w == Realm.world.w and MC.WORLD.h == Realm.world.h, "world size")
 check(MC.START.x == Realm.camera.start[1] and MC.START.y == Realm.camera.start[2], "start centre")
@@ -45,6 +47,15 @@ local run = {
 	end,
 	zoomAt = function(i) local c = MC.zoomAt({ x = i[1], y = i[2] }, i[3], i[4], { x = i[5], y = i[6] }, { w = i[7], h = i[8] }); return { c.x, c.y } end,
 	clampCamera = function(i) local c = MC.clampCamera({ x = i[1], y = i[2] }, i[3], { w = i[4], h = i[5] }, i[6] == 1); return { c.x, c.y, c.z } end,
+	clampCameraM = function(i)
+		local c = MC.clampCamera({ x = i[1], y = i[2] }, i[3], { w = i[4], h = i[5] }, i[6] == 1, { x = i[7], y = i[8] })
+		return { c.x, c.y, c.z }
+	end,
+	panLimits = function(i)
+		local L = MC.panLimits(i[1], { w = i[2], h = i[3] }, i[4], { x = i[5], y = i[6] })
+		return { L.x0, L.x1, L.y0, L.y1 }
+	end,
+	startCamera = function(i) local c = MC.startCamera({ w = i[1], h = i[2] }); return { c.x, c.y, c.z, MC.startZoom({ w = i[1], h = i[2] }) } end,
 	rubberBand = function(i) return { MC.rubberBand(i[1]) } end,
 	biome = function(i) local w = MC.biome({ x = i[1], y = i[2] }, Realm.biome, i[3], { w = i[4], h = i[5] }); return { w.rift, w.corrupt, w.cover } end,
 	corruptLight = function(i) return { MC.corruptLight(Realm.biome, { x = i[1], y = i[2] }) } end,
@@ -107,6 +118,14 @@ do
 	local Ce = MC.flyTarget({ x = 3690, y = 930 }, 0.9, V, nil)
 	local lim = MC.panLimits(0.9, V, 0)
 	check(Ce.x <= lim.x1 + 1e-9, "fly target respects the east pan limit")
+	check(math.abs(Ce.x - 3690) < 1e-9, "the pan margin lets the fly target centre CM")
+	-- the margin is capped at half the view: the screen centre never leaves the world
+	local far = MC.clampCamera({ x = 1e6, y = -1e6 }, 1.25, V, false)
+	check(far.x == 3840 and far.y == 0, string.format("margin capped at half the view (%.1f, %.1f)", far.x, far.y))
+	-- and the start framing stays inside the world rect (no margin)
+	local Cs, zs = MC.startFraming({ w = 844, h = 390 }, { x = 0, y = 76, w = 844, h = 314 }, "WIDE")
+	local hw = 844 / (2 * zs)
+	check(Cs.x - hw >= -1e-9 and Cs.x + hw <= 3840 + 1e-9, "start framing inside the world")
 end
 -- SmoothDamp converges without overshoot
 do

@@ -24,7 +24,7 @@ const B = R.biomes;
 const views = [[1920, 1080], [2560, 1440], [1366, 768], [844, 390], [568, 1229], [760, 1080], [1024, 768], [667, 375]];
 const V = () => { if (rnd() < 0.5) { const v = views[pickI(views.length)]; return { w: v[0], h: v[1] }; }
   const h = U(320, 1440); return { w: Math.min(2560, Math.max(568, h * U(0.5, 3.4))), h }; };
-const Cam = () => ({ x: U(-200, 4040), y: U(-200, 2760) });
+const Cam = () => ({ x: U(-1500, 5340), y: U(-1100, 3660) });   // the world, the pan margin and past it
 const Z = v => U(RC.zMin(v) * 0.9, 1.35);
 
 for (let k = 0; k < 30; k++) {
@@ -47,6 +47,24 @@ for (let k = 0; k < 60; k++) {
   const v = V(), C = Cam(), z = U(0.1, 1.5), rubber = k % 2 === 1;
   const o = RC.clampCamera(C, z, v, { rubber });
   add('clampCamera', [C.x, C.y, z, v.w, v.h, rubber ? 1 : 0], [o.x, o.y, o.z]);
+}
+// the pan margin (REALM.md 2.5): far-out requests land on the margin limits (capped at half the view), and explicit
+// margins (NO_MARGIN, small, larger than the view) go through the same formula
+const FAR = () => ({ x: rnd() < 0.5 ? U(-9000, -1200) : U(5000, 13000), y: rnd() < 0.5 ? U(-9000, -900) : U(3500, 11000) });
+for (let k = 0; k < 40; k++) {
+  const v = V(), C = k % 2 ? FAR() : Cam(), z = U(0.12, 1.4), rubber = k % 4 === 3;
+  const m = [RC.NO_MARGIN, { x: U(0, 400), y: U(0, 300) }, RC.PAN_MARGIN, { x: U(2000, 5000), y: U(2000, 5000) }][k % 4];
+  const o = RC.clampCamera(C, z, v, { rubber, margin: m });
+  add('clampCameraM', [C.x, C.y, z, v.w, v.h, rubber ? 1 : 0, m.x, m.y], [o.x, o.y, o.z]);
+}
+for (let k = 0; k < 30; k++) {
+  const v = V(), z = U(0.12, 1.4), o = U(0, 80), m = k % 3 === 0 ? RC.NO_MARGIN : k % 3 === 1 ? RC.PAN_MARGIN : { x: U(0, 3000), y: U(0, 3000) };
+  const L = RC.panLimits(z, v, { overscroll: o, margin: m });
+  add('panLimits', [z, v.w, v.h, o, m.x, m.y], [L.x0, L.x1, L.y0, L.y1]);
+}
+for (let k = 0; k < 16; k++) {
+  const v = V(), s = RC.startCamera(v);
+  add('startCamera', [v.w, v.h], [s.x, s.y, s.z, RC.startZoom(v)]);
 }
 for (let k = 0; k < 10; k++) { const x = U(0, 400); add('rubberBand', [x], [RC.rubberBand(x)]); }
 for (let k = 0; k < 30; k++) {

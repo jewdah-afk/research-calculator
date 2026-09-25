@@ -339,9 +339,9 @@ async function load() {
   await loadTier(st.tier);
   for (const n of st.nodes) n.tex = texture(paintNode(n.id, n.hex));
   resize();
-  const Vm = V(), zStart = RC.clamp(Math.min(Vm.w / 1500, Vm.h / 1750), RC.zMin(Vm), 1);
-  st.z = OPT.z || zStart;
-  Object.assign(st.C, RC.clampCamera(st.C, st.z, Vm));
+  const Vm = V();
+  if (OPT.z || OPT.x || OPT.y) { st.z = OPT.z || RC.startZoom(Vm); Object.assign(st.C, RC.clampCamera(st.C, st.z, Vm)); }
+  else { const c = RC.startCamera(Vm); st.C = { x: c.x, y: c.y }; st.z = c.z; }   // REALM.md 2.8: inside the world
   st.w = RC.biome(st.C, R.biomes, st.z, Vm);
 }
 
@@ -657,7 +657,7 @@ window.addEventListener('keydown', e => {
   else if (key === 'a') setStraight(!st.straight).catch(fail);
   else if (key === 't') loadTier(st.tier === 'HIGH' ? 'LOW' : 'HIGH').catch(fail);
   else if (key === 's') { st.source = st.source === 'tiles' ? 'layers' : 'tiles'; loadTier(st.tier).catch(fail); }
-  else if (key === 'r') { const Vm = V(); st.C = { x: 1500, y: 1150 }; st.z = RC.clamp(Math.min(Vm.w / 1500, Vm.h / 1750), RC.zMin(Vm), 1); input.zT = null; }
+  else if (key === 'r') { const c = RC.startCamera(V()); st.C = { x: c.x, y: c.y }; st.z = c.z; input.zT = null; }
   else if (key === '-' || key === '=' || key === '+') {
     const r = RC.zoomRange(V()); input.zT = RC.clamp((input.zT || st.z) * Math.pow(FEEL().wheel.factorPerNotch, key === '-' ? -1 : 1), r.lo, r.hi);
     input.zAnchor = { x: V().w / 2, y: V().h / 2 };

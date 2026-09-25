@@ -17,12 +17,14 @@ renderer and the Roblox `Map` module:
 ```sh
 cd art
 node camera.js --build    # recompute every derived field of realm.json (sizes, tiles, memory, keep-clear, instances, particles)
-node camera.js --test     # ~1.96M checks: coverage brute force, identities, depth order, tiles, budget, sprites, fields, biome (exit 1 on failure)
+node camera.js --test     # ~1.98M checks: coverage brute force, identities, depth order, tiles, budget, sprites, fields, biome (exit 1 on failure)
 node camera.js --report   # the table in section 1
 ```
 
 Fixed by contract: the world layer stays **3840×2560 at f = 1**. `NODES` in `layers/world.js` never move. Nodes are
 live UI and are never painted. `realm.json` repeats the node coordinates only as a reference for keep-clear zones.
+The camera may look past the world's edges by the **pan margin** (960 × 720 world px, section 2.5), so the world art
+ends inside its rect (nothing is cut by the border) and the layers behind it cover the margin.
 
 ---
 
@@ -30,14 +32,19 @@ live UI and are never painted. `realm.json` repeats the node coordinates only as
 
 | depth | id | f | content | size (local px) | res HIGH / LOW | tile (tex px) | HIGH tiles, MB | LOW tiles, MB |
 |---|---|---|---|---|---|---|---|---|
-| 0 | `sky` | 0.05 | deep space: nebula, stars, cosmic sun (opaque) | 2656×1536 | 0.625 / 0.3125 | 830×960 | 2×1, 6.1 | 1×1, 1.5 |
-| 1 | `clouds` | 0.12 | far nebula wisps, god rays | 2784×1632 | 0.375 / 0.1875 | 522×612 | 2×1, 2.5 | 1×1, 0.6 |
-| 2 | `far` | 0.25 | distant hazy islands, ringed planet (painter `layers/distant.js`) | 3008×1836 | 0.5 / 0.25 | 752×918 | 2×1, 5.3 | 1×1, 1.3 |
-| 3 | `mid` | 0.45 | detailed islands, light-falls, mist bands | 3360×2160 | 0.75 / 0.375 | 840×810 | 3×2, 15.7 | 2×1, 3.9 |
-| 4 | `near` | 0.7 | big floating rocks close behind the world, sparse (painter `layers/rocks.js`) | 3800×2752 | 0.5 / 0.25 | 950×688 | 2×2, 10.1 | 1×1, 2.5 |
+| 0 | `sky` | 0.05 | deep space: nebula, stars, cosmic sun (opaque) | 2752×1600 | 0.625 / 0.3125 | 860×1000 | 2×1, 6.6 | 1×1, 1.7 |
+| 1 | `clouds` | 0.12 | far nebula wisps, god rays | 3008×1792 | 0.375 / 0.1875 | 564×672 | 2×1, 2.9 | 1×1, 0.7 |
+| 2 | `far` | 0.25 | distant hazy islands, ringed planet (painter `layers/distant.js`) | 3432×2160 | 0.5 / 0.25 | 858×540 | 2×2, 7.2 | 1×1, 1.8 |
+| 3 | `mid` | 0.45 | detailed islands, light-falls, mist bands | 4128×2736 | 0.75 / 0.375 | 774×684 | 4×3, 24.5 | 2×2, 6.1 |
+| 4 | `near` | 0.7 | big floating rocks close behind the world, sparse (painter `layers/rocks.js`) | 5040×3680 | 0.45 / 0.225 | 756×828 | 3×2, 14.5 | 2×1, 3.6 |
 | 5 | `world` | 1.0 | `world.js`: tree, sockets, rift, outcrop, shrine | **3840×2560** | 1 / 0.5 | 960×640 | 4×4, 37.9 | 2×2, 9.5 |
-| 6 | `fg` | 1.3 | blurred framing vines, ferns, leaves (sparse) | 5240×3640 | 0.3 / 0.15 | 786×546 | 2×2, 6.6 | 1×1, 1.7 |
+| 6 | `fg` | 1.3 | blurred framing vines, ferns, leaves (sparse) | 7600×5380 | 0.2 / 0.1 | 760×538 | 2×2, 6.3 | 1×1, 1.6 |
 | 7 | `particles` | 1.6 | bokeh + dust, a sprite **field** (no baked texture) | infinite (cell 5290×3210) | atlas | – | – | – |
+
+The layers behind and in front of the world are larger than it because the camera may look past the world's edges
+by the pan margin (section 2.5); section 2.7 derives the sizes. Each painter keeps its composition in the frame the
+layer had before the margin (for example 3360×2160 for `mid`), centred in the new size, and carries it out into the
+margin strips (section 8).
 
 There are two more particle fields: `motesFar` at f = 0.7 (cell 3640×2350), drawn with the near rocks, and
 `motesNear` at f = 1.3 (cell 4670×3060), drawn with the foreground. With them, drifting dust exists at three depths.
@@ -47,11 +54,11 @@ Every field cell is larger than any screen, so no particle ever shows twice (sec
 
 | tier | tiles | + atlas | texture MB | if the engine keeps mips (×4/3) | budget | GUI objects (tiles + sprites + field pools + blooms) |
 |---|---|---|---|---|---|---|
-| HIGH | 36 | 1024² | **88.2** | 117.7 | 120 | 362 |
-| LOW | 11 | 512² | **22.1** | 29.4 | 35 | 155 |
+| HIGH | 46 | 1024² | **103.9** | 138.5 | 150 | 385 |
+| LOW | 14 | 512² | **26.0** | 34.7 | 35 | 161 |
 
-The tiler skips a tile that is fully transparent, but with the current art none is (0 of 36 HIGH, 0 of 11 LOW), so
-these totals are exactly what uploads. HIGH is at 98% of its budget: see section 3, Memory.
+The tiler skips a tile that is fully transparent, but with the current art none is (0 of 46 HIGH, 0 of 14 LOW), so
+these totals are exactly what uploads. LOW is at 99% of its budget: see section 3, Memory.
 
 "Local px" is the layer's own pixel unit: 1 local px is 1 map point on screen when the layer's zoom is 1. For the
 world layer, local px are world px. A layer's texture is `size × res`, and the client scales it back up.
@@ -132,8 +139,9 @@ zMin is the **cover** fit: the smallest zoom at which the world still fills the 
 the whole world *width* fits, so every node from the shrine (x 520) to CM (x 3690) is on screen at once, and you pan
 only vertically. On narrower screens (4:3 iPad, portrait windows) the whole *height* fits.
 
-* A lower zoom would show past the world's painted edges on both sides and make clamping ambiguous. The world layer
-  is transparent there, and its content stops at the edge.
+* A lower zoom would show past the world's edges on both sides at once. The pan margin (2.5) already lets the view
+  reach up to 960 × 720 world px past one edge at a time; a lower zMin would grow every layer again (2.7), and the LOW
+  budget has no room for that (section 3).
 * A higher floor (for example a "readable plates" zoom) is a client UX choice and can only *raise* zMin, which keeps
   every guarantee here.
 
@@ -149,17 +157,40 @@ only vertically. On narrower screens (4:3 iPad, portrait windows) the whole *hei
 | 3440×1440 ultrawide | 2560×1072 (scale 1.344) | 0.667 | width | 0.667 | 3840×1607 |
 | 390×844 portrait | 568×1229 (scale 0.687) | 0.480 | height | 0.480 | 1183×2560 |
 
-### 2.5 Clamping
+### 2.5 Clamping and the pan margin
 
-At zoom z, half the view is `h = V/(2z)` world px. On each axis the camera centre may range over `[h, W − h]`. If the
-view is wider than the world on that axis (only possible during the rubber band), it pins to the world centre. There
-are two envelopes (camera.js `panLimits`, `clampCamera`):
+At zoom z, half the view is `h = V/(2z)` world px. The camera may look past each edge of the world by the **pan
+margin** M = (960, 720) world px (camera.js `PAN_MARGIN`, realm.json `camera.panMargin`), capped at half the view:
 
-* **hard** (at rest): zoom in [zMin, zMax] and centre in the range above. The visible world rect always stays inside
-  the world.
+```
+m = min(M, h)                                 per axis
+centre range = [h − m, W − h + m]             (pins to the world centre if 2h > W + 2m)
+```
+
+So the visible rect may extend up to m past the world on each side, and the screen centre never leaves the world
+(at high zoom the cap m = h stops the camera with the world's edge at the screen centre). The world art fades out
+before its edges (`layers/world.js`, `EDGE_FADE`), so past them the layers behind show: the sky, clouds, far and mid
+islands, near rocks and the foreground go on into the margin (section 8). There are two envelopes (camera.js
+`panLimits`, `clampCamera`):
+
+* **hard** (at rest): zoom in [zMin, zMax] and centre in the range above.
 * **rubber band** (while a finger or wheel is still active): zoom may overshoot to `[0.94·zMin, 1.06·zMax]`, and the
-  centre may overshoot by `72/z` world px (72 map points on screen). The displayed overshoot is
+  centre may overshoot by `72/z` world px (72 map points on screen) past the hard range. The displayed overshoot is
   `d·(1 − 1/(x·0.55/d + 1))` with d = 72 (`rubberBand`). On release it springs back (section 9.4).
+
+`clampCamera(C, z, V, { margin: NO_MARGIN })` keeps the view inside the world rect; only the start camera uses it
+(2.8). Travel of the camera centre around the middle of its range, before the margin (NO_MARGIN) and with it:
+
+| screen | start zoom | travel before | travel now | zMin | travel before | travel now |
+|---|---|---|---|---|---|---|
+| 2560×1440 | 0.823 | ±364 × ±405 | ±1324 × ±1125 | 0.667 | ±0 × ±200 | ±960 × ±920 |
+| 1920×1080 | 0.617 | ±364 × ±405 | ±1324 × ±1125 | 0.500 | ±0 × ±200 | ±960 × ±920 |
+| 1366×768 | 0.439 | ±364 × ±405 | ±1324 × ±1125 | 0.356 | ±0 × ±201 | ±960 × ±921 |
+| 1024×768 (iPad) | 0.439 | ±753 × ±405 | ±1713 × ±1125 | 0.300 | ±213 × ±0 | ±1173 × ±720 |
+| 844×390 (iPhone 14) | 0.223 | ±26 × ±405 | ±986 × ±1125 | 0.220 | ±0 × ±393 | ±960 × ±1113 |
+| 390×844 portrait | 0.480 | ±1328 × ±0 | ±1920 × ±720 | 0.480 | ±1328 × ±0 | ±1920 × ±720 |
+
+(world px; the client's HUD-safe start on 1920×1080, z 0.505, went from ±20 × ±211 to ±980 × ±931.)
 
 ### 2.6 Device pixels → map points (`mapScale`)
 
@@ -181,15 +212,18 @@ which is DPI-free. Only the tile snapping (9.3) and the node widgets' own `UISca
 Given (V, z), the largest distance from the anchor that layer f shows, in local px, is:
 
 ```
-ext_x(V, z) = f · Dx + V.w / (2 s_L)          Dx = max(0, 1920 − V.w/(2z)) + 72/z     (max camera offset, rubber band included)
-ext_y(V, z) = f · Dy + V.h / (2 s_L)          Dy = max(0, 1280 − V.h/(2z)) + 72/z
+ext_x(V, z) = f · Dx + V.w / (2 s_L)          Dx = max(0, 1920 + min(960, hx) − hx) + 72/z     hx = V.w/(2z)
+ext_y(V, z) = f · Dy + V.h / (2 s_L)          Dy = max(0, 1280 + min(720, hy) − hy) + 72/z     hy = V.h/(2z)
+                                              (D: the largest camera offset, pan margin and rubber band included)
 required    = 2 · max over the domain of ext  (+0.25%), per axis
 ```
 
 The domain is every V in section 2.6, and z from `0.94·zMin(V)` to `1.325`. Layers with `zHide` (fg, and the
 particle fields) are hidden below that zoom and are only covered from there. For a fixed z, `ext` is piecewise linear
-in V. The worst V is therefore an end of the feasible interval or the kink `V = 3840·z`. `requiredSize()` evaluates
-those candidates exactly and samples z densely (24,001 log steps).
+in V. The worst V is therefore an end of the feasible interval or a kink: `V = 2·M·z` (where the margin cap starts)
+or `V = (W + 2M)·z` (where D reaches 0). `requiredSize()` evaluates those candidates exactly and samples z densely
+(24,001 log steps). For a layer behind the world the V/(2z) terms cancel while D > 0, so the margin grows its
+required half-extent by exactly f·M.
 
 Worst cases found:
 
@@ -197,24 +231,28 @@ Worst cases found:
   V.h = 1440 for y).
 * `near` (y): a phone-sized view at its rubber-band minimum (z = 0.139). There the 72-point overscroll is 518 world
   px.
-* `fg`: its fade-out zoom 0.5, with the widest viewport that can reach it.
+* `fg`: its fade-out zoom 0.5, with the view whose half-width is exactly the margin (V.w = 960, V.h = 720): the
+  largest camera offset with the smallest view.
 
 Each size is then rounded up to whole tiles (section 3).
 
 **Why fg and the particles fade out when zoomed out.** Near-camera layers shrink faster than the world as you zoom
-out, so they need the most area exactly where they help least. Without `zHide`, fg would need 6503×4786 instead of
-5209×3616 (+80% memory). Foreground clutter also ruins the overview. `fg` and `motesNear` fade in over z 0.50 → 0.62, and `particles` over 0.55 → 0.70
+out, so they need the most area exactly where they help least. Without `zHide`, fg would need 8686×6467 instead of
+7594×5372 (+38% memory). Foreground clutter also ruins the overview. `fg` and `motesNear` fade in over z 0.50 → 0.62, and `particles` over 0.55 → 0.70
 (`alpha = smoothstep(zHide, zShow, z)`, `Visible = false` at 0).
 
 `node camera.js --test` brute-forces about 1.8M (C, z, V) samples. These are a grid of 2,000+ viewports × 25 zooms ×
-9 camera positions at the rubber-band limits, 60k random samples per layer, and clamped far-out requests. It asserts
-that every visible layer covers the viewport. The tightest margin is 2.7 local px, so the sizes are tight. It also
+9 camera positions at the rubber-band limits (pan margin included), 60k random samples per layer, and clamped far-out
+requests. It asserts that every visible layer covers the viewport. The tightest margin is 6.0 local px, so the sizes
+are tight. It also
 checks that each worst case is reachable and reaches at least 99% of the required extent.
 
 ### 2.8 Start camera
 
 The start centre is (1500, 1150), the trunk. The start zoom is `clamp(min(V.w/1500, V.h/1750), zMin, 1)`, which
-frames the whole tree. There is an intro dolly-out from `min(1.12·z, zMax)` to z over 1.6 s (quintOut). With
+frames the whole tree. The start camera is clamped to the world rect, without the pan margin (camera.js
+`startCamera`), so the first view shows only the world, exactly as before the margin existed; the player pans into
+the margin from there. There is an intro dolly-out from `min(1.12·z, zMax)` to z over 1.6 s (quintOut). With
 ReducedMotion the camera starts at z directly.
 
 ---
@@ -247,9 +285,12 @@ ReducedMotion the camera starts at z directly.
   by `res`. The tiler also accepts a full-size render and downsamples it with high quality.
 * **Memory** is set by pixel count (the engine transcodes to a fixed format). The totals are in section 1. The test
   checks that they fit the budget even if mip chains are kept.
-* **HIGH has no headroom.** It is at 98% of its budget: 117.7 of 120 MB with mips, so 2.3 MB are left. Any new or
-  enlarged HIGH texture must be paid for elsewhere, for example by lowering `res.HIGH` of `fg` or `clouds` (both are
-  blurred, so they lose little). `--test` fails when the budget is exceeded. LOW has 5.6 MB left.
+* **LOW has no headroom.** The pan margin grew every layer but the world (2.7). HIGH (desktops) got a 150 MB budget
+  (was 120) and uses 138.5 MB with mips. LOW (phones) stays at 35 MB and uses 34.7, because LOW is HIGH ÷ 2 for every
+  layer: the growth was paid for by lowering `res.HIGH` of `fg` (0.3 → 0.2; it is blurred by 10 local px, so a texel
+  of 5 local px loses little) and `near` (0.5 → 0.45; blurred by 0.9). Any new or enlarged texture must be paid for
+  the same way, for example by `clouds` (0.375) or `far` (0.5), both blurred. `--test` fails when a budget is
+  exceeded.
 
 ---
 
@@ -298,20 +339,20 @@ cover     = |R ∩ view| / |view|        R = outcrop rect [3300, 3840] × [700, 
 w.corrupt = w.rift · smoothstep(0.02, 0.22, cover)
 ```
 
-**Why the corrupt weight looks at the view, not the centre.** The hard clamp keeps the camera centre at
-x ≤ 3840 − V.w/(2z): 2816 on a 2560-wide screen and 3072 on a 1920 one at zMax. A centre-based weight at x 3300–3600
-never switched on for a desktop player. At the east limit the outcrop instead fills 15–35% of a desktop view (up to
-100% on a portrait phone), so the weight follows that share. It is 0 at the start camera and at every overview zoom,
-because w.rift is 0 there, and at the east limit it reaches:
+**Why the corrupt weight looks at the view, not the centre.** How much of the screen the outcrop fills depends on
+the zoom and the screen more than on where the centre is: at the hard east limit (2.5) the camera centre is at
+x = 3840 − V.w/(2z) + min(960, V.w/(2z)), 3520 on a 2560-wide screen at z 1, and the outcrop fills 15–50% of the view
+(the share counts the margin past the world too). So the weight follows that share. It is 0 at the start camera and
+at every overview zoom, because w.rift is 0 there, and at the east limit it reaches:
 
 | screen | z 1 | z 1.1 | z 1.25 (zMax) |
 |---|---|---|---|
-| 2560×1440 | 0.66 | 0.88 | 1 |
+| 2560×1440 | 0.69 | 0.88 | 1 |
 | 1920×1080 | 1 | 1 | 1 |
 | 1366×768 and smaller | 1 | 1 | 1 |
 
 `--test` checks this for every domain viewport: the east limit near y 1250 reaches ≥ 0.9, the 1920 and 2560 screens
-stay ≥ 0.6 over z 1–1.25, and the tree and the start camera stay at 0.
+stay ≥ 0.6 over z 1–1.25, and the tree, the start camera and the west limit stay at 0.
 
 The client recomputes both weights on every frame the camera moves, eases them toward their targets with τ = 0.35 s
 (instantly with ReducedMotion), and writes colours only when a weight has moved by more than 0.01. The weights drive:
@@ -331,8 +372,9 @@ The client recomputes both weights on every frame the camera moves, eases them t
    * **Blooms** (`biomes.corrupt.bloom`): a large soft green glow (atlas `glow`) in the `clouds` layer (3200×3400 local
      px, colour (60,230,120), alpha 0.3) and in the `near` layer (1900×2500, (40,255,110), alpha 0.35). Each one is
      drawn *before* its layer's tiles, so clouds and rocks show against the green. The centre is `local` (derived by
-     the build), which is the spot behind the outcrop focus (3620, 1180) as seen from the east-limit camera
-     (2880, 1250, z 1). `ImageTransparency = 1 − alpha·w.corrupt`, and `Visible = false` at 0.
+     the build), which is the spot behind the outcrop focus (3620, 1180) as seen from the reference camera
+     (2880, 1250, z 1): the 1920×1080 view where the accent first reaches full strength (the east limit before the
+     pan margin). Further east the blooms drift a little right of the focus, which reads as the glow behind it. `ImageTransparency = 1 − alpha·w.corrupt`, and `Visible = false` at 0.
    * **Outcrop light** at a world point p: `light(p) = 1 − smoothstep(0.55, 1.25, |(p − (3620, 1180)) / (420, 650)|)`
      (camera.js `corruptLight`). It is 1 over the outcrop, CR and CM, under 0.02 at the rift centre, and 0 west of
      x 3095. For a sprite or particle, p is the world point under it on screen: `p = C + (q − Vc)/z`.
@@ -510,12 +552,13 @@ never empty (dust at three depths), light moves (light-falls, rift pulse, twinkl
     wall lies past `splitX`.
   * Palette: lilac (205,182,255) at 20–50% alpha.
   * Feel: a second sky that moves a little faster, so even the sky has depth.
-  * Keep empty: alpha < 0.25 in the band y 0.35–0.65 h.
+  * Keep empty: alpha < 0.25 in the band y 0.35–0.65 h of the design frame (2784×1632, centred in the layer).
 * **2 far (f 0.25)**
   * Contents: 6–10 small, hazy floating-island silhouettes and thin mist ridges at the bottom. The **ringed planet**
     and its moon hang upper right, over the rift side.
   * Palette: silhouettes 50% into haze (66,50,138), gold rim at 30%.
   * Feel: "the realm goes on forever".
+  * Margin: the ridges and the misty abyss run across the whole layer; six more specks sit in the margin strips.
   * Keep empty: no island wider than 420 px.
 * **3 mid (f 0.45)**
   * Contents: 4–7 detailed floating islands with rock undersides, hanging roots, glowing crystal seams and tiny trees.
@@ -523,20 +566,29 @@ never empty (dust at three depths), light moves (light-falls, rift pulse, twinkl
     instances (x, y = top, len). Horizontal mist bands sit at 55–95% height.
   * The rift side: islands cracked with crimson seams.
   * Feel: this is the layer that sells the depth, clearly crossing slower than the tree.
+  * Margin: two more islands (H in the west, I on the rift side) reach into the margin strips, and the mist sea rolls
+    on to the layer's bottom edge.
   * Keep empty: the trunk band stays mist-only.
 * **4 near (f 0.7)**
   * Contents: 5–8 big chunky floating rocks (300–900 px) with crystal veins and a few hanging vines, rim-lit, passing
     close behind the world. One or two crimson-veined shards sit on the rift side.
   * Feel: scale and speed. Big shapes glide by just behind the tree, and small `shard_float` sprites bob among them.
+  * Margin: four more rocks (N10–N13) float out in the margin strips.
   * Keep empty: every hard zone. Most tiles stay empty.
-* **5 world (f 1)**: `world.js` unchanged. The focal plane: sharpest, most saturated.
+* **5 world (f 1)**: `world.js`. The focal plane: sharpest, most saturated. Everything ends inside the 3840×2560
+  rect (the crown, the roots, the hanging crystals, the outcrop) and `EDGE_FADE` fades the glows out before the border,
+  because the pan margin shows it.
 * **6 fg (f 1.3)**
   * Contents: out-of-focus framing: vines and leaf clusters hanging from the top edge (plus the swaying `vine_fg`
     sprites), fern and root silhouettes along the bottom, a few leaves at the sides, and sparse glowing flower dots
     (the only bright bits).
   * Palette: near-black violet (18,9,34) with a faint rim.
   * Feel: you are standing inside the realm, looking through its foliage.
-  * Keep empty: every hard zone, and the middle 60% of the height except faint leaf tips.
+  * Frames: the canopy is laid out from the layer's top edge and the ground growth from its bottom edge, which are the
+    edges of the pan envelope, so the screen is framed at the new pan limits as it was at the old ones; the margin
+    strips get more canopy, vines, fronds, brambles and crystals.
+  * Keep empty: every hard zone, and everything more than 728 local px from the top and bottom edges except faint
+    leaf tips.
 * **7 particles (f 1.6)**: big soft bokeh (violet, gold, cyan; crimson in the rift) and dust drifting upward, all very
   faint.
 
@@ -617,7 +669,7 @@ end
 * A tile's right edge is `X[i + 1]`, the same number its right neighbour starts at, so there is no gap and no strip
   blended twice. The Box sits on a whole device pixel and nothing between it and a tile scales, so these whole
   numbers really are device pixels at any zoom and any m (0.687 on a portrait phone, 1.5 on 4K).
-* The cost is 2 writes per tile per moving frame: 72 on HIGH and 22 on LOW. A tile whose rect is off screen can be
+* The cost is 2 writes per tile per moving frame: 92 on HIGH and 28 on LOW. A tile whose rect is off screen can be
   set to `Visible = false` for that frame.
 * Other properties, set once: `Image` = the asset (skip the tile if it was not uploaded), `ImageRectOffset = (2, 2)`,
   `ImageRectSize = (cw, ch)`, `ScaleType = Stretch`, `BackgroundTransparency = 1`, `BorderSizePixel = 0`,
@@ -648,8 +700,8 @@ size policy (scaled with z or with a minimum) is the node widget's choice.
   springs back in 0.2 s.
 * **Double-tap / double-click.** ×1.6 toward the point over 0.35 s (quintOut).
 * **Fly to node.** SmoothDamp on C and on log z, smoothTime 0.35 s, zoom `max(current, 0.9)`. The target is the
-  hard-clamped camera `clampCamera(N, zoom, V)`, not N itself. PM, CR and CM lie past the east pan limit, so they
-  end right of centre instead of flying past the limit and springing back.
+  hard-clamped camera `clampCamera(N, zoom, V)`, not N itself, so a node near a pan limit ends off centre instead of
+  flying past the limit and springing back. With the pan margin every node, CM included, can be centred at z 0.9.
 * **Gamepad.** Left stick pans at 1400 pt/s at full tilt (deadzone 0.18, curve 1.6). Triggers zoom at 1.8× per second.
 * **Keyboard.** No pan keys, because the game owns letters and arrows. `-` / `=` zoom one notch when not claimed.
 * **Every frame.** Clamp with `clampCamera(…, { rubber = true })` while input is active, and the hard clamp at rest.
@@ -679,8 +731,8 @@ The rest of the map behaves the same in both tiers.
 
 ### 9.7 Performance rules
 
-* Tween only what is listed. HIGH has 194 animated sprites, up to 132 pooled field sprites and 2 blooms
-  (LOW: 76 + 68 + 2). Per moving frame the Luau cost is the container writes, the tile snapping (72 writes on HIGH)
+* Tween only what is listed. HIGH has 205 animated sprites, up to 132 pooled field sprites and 2 blooms
+  (LOW: 77 + 68 + 2). Per moving frame the Luau cost is the container writes, the tile snapping (92 writes on HIGH)
   and the field updater (about 280 particles × at most 4 cell copies).
 * While a full-screen panel covers the map: `Tween:Pause()` every ambient tween, stop the field updater, and set
   `MapGui.Enabled = false`. Resume when the panel closes.
@@ -701,7 +753,7 @@ Run these in Studio at three map scales: a 390×844 portrait phone (m 0.687), 19
 3. **Registration.** Light-fall sprites stay on their island lips within 1 px while panning, and node widgets scale
    by m (1.5 on 4K).
 4. **Fields.** At z 0.62–0.8 on 1920×1080 and 2560×1440, no bokeh pattern repeats across the screen.
-5. **Biome.** At the east limit on 1920×1080 and z 1, crimson stays saturated around the rift, and green light shows
+5. **Biome.** At the east limit on 1920×1080 and z 1 (the world's east edge at the screen centre), crimson stays saturated around the rift, and green light shows
    behind the outcrop (the blooms), green-lit mist and some green motes. At the tree nothing is green.
 6. **Straight-alpha rims.** Roblox filters an image's straight (not premultiplied) alpha, so a bright pixel at low
    alpha (3–40) right against an opaque dark shape turns into a light or coloured rim one texel wide when the image is
@@ -725,7 +777,10 @@ Run these in Studio at three map scales: a 390×844 portrait phone (m 0.687), 19
 3. `node camera.js --test` must pass: coverage, tightness, depth order, tiles and budget, readability, motion, fields
    and biome.
 4. If a layer size changed, repaint that layer (painters read `size`, `anchor`, `landmarks`, `biomeLocal`,
-   `keepClear` and the `lightfall` instances).
+   `keepClear` and the `lightfall` instances). Layers grow around their centre, so a painter keeps its composition
+   in its design frame (the size it was composed for, `frame` in `distant.js`, `mid.js`, `rocks.js`, `clouds.js` and
+   `sky.js`, `F0W × F0H` in `fg.js`) translated to the centre, and fills the new strips. If the pan margin or zMin
+   changes, check the composites at the new limits (`compose.js`, the `out/panroom_*.jpg` stills).
 
 The previews follow this contract through camera.js. `preview/realm.html` is the WebGL simulator of the client, and
 `compose.js` and `preview/record.js` drive it headless. It places layers with `RealmCamera.layerOffset`, tiles with
