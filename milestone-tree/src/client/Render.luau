@@ -4,20 +4,43 @@
 
 	Every node has an id that is its path ("tab.3.1"), so its parent and its place among its siblings come from the
 	id: a patch only has to carry the nodes that changed. A node whose kind is unchanged is updated in place;
-	otherwise it is rebuilt and its children move over to the new object.
+	otherwise it is rebuilt and its children move over to the new object (and are re-inherited and re-drawn).
+
+	The panel (plan 2.5) adds optional hooks; the old page passes none and looks as it always did:
+	    hooks.ctx()                  -> the skin context, asked once per apply
+	    hooks.skin(rec, n, ctx)      -> true when the skin drew the node (the old look is then skipped); runs on every
+	                                    update, so skins are idempotent
+	    hooks.claim(id, n, ctx)      -> a maker (ph) -> Claim, asked when a record is built. A claimed id gets a plain
+	                                    placeholder Frame and no subtree; every later set / del at or under it only marks
+	                                    the claim dirty, and after the apply each dirty claim gets update(store)
+	    hooks.store                  the ViewStore handed to claims
+	    hooks.detail(rec)            a touch long-press on a button (the detail sheet); its Activated is then skipped
+	Buttons keep their wiring: the current node's `a` is read at press time, and hold buttons repeat 20 times a second
+	after 0.25 s, but only while the pointer stays within 10 px and the list does not scroll (DESIGN.md 3.4). A touch
+	that moved or scrolled never presses.
 ]]
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
 local shared = ReplicatedStorage:WaitForChild("MilestoneTree")
 local Html = require(shared:WaitForChild("Html"))
 local ZoneMaps = require(shared:WaitForChild("ZoneMaps"))
 local Style = require(script.Parent:WaitForChild("Style"))
 
+export type Claim = {
+	update: (self: Claim, store: any) -> (),
+	destroy: (self: Claim) -> (),
+}
 export type Hooks = {
 	press: (action: any, hold: boolean) -> (),
 	tip: (html: string?, over: GuiObject?) -> (),
+	ctx: (() -> any)?,
+	skin: ((rec: any, n: any, ctx: any) -> boolean)?,
+	claim: ((id: string, n: any, ctx: any) -> ((ph: Frame) -> Claim)?)?,
+	store: any?,
+	detail: ((rec: any) -> ())?,
 }
 
-type Rec = {
+export type Rec = {
 	id: string,
 	kind: string,
 	node: any,
@@ -29,6 +52,7 @@ type Rec = {
 	base: number,           -- text size children inherit
 	conns: { RBXScriptConnection },
 	sig: string?,           -- what the object currently shows (skip redundant updates)
+	claim: Claim?,          -- a claimed id: the placeholder's owner (no subtree is built)
 }
 
 local Render = {}
@@ -39,12 +63,27 @@ export type Renderer = typeof(setmetatable({} :: {
 	recs: { [string]: Rec },
 	kids: { [string]: { [string]: boolean } },
 	hooks: Hooks,
+	dirty: { [string]: boolean },
+	ctxNow: any,
+	skinErrors: number,
 }, Render))
 
 function Render.new(roots: { [string]: GuiObject }, hooks: Hooks): Renderer
-	local self = setmetatable({ roots = roots, recs = {}, kids = {}, hooks = hooks }, Render)
+	local self = setmetatable({ roots = roots, recs = {}, kids = {}, hooks = hooks, dirty = {}, ctxNow = nil, skinErrors = 0 }, Render)
 	return self
 end
+
+-- pcall for functions that return nothing (the result is ok, err)
+local function try(f: (...any) -> ...any, ...: any): (boolean, any)
+	return pcall(function(...: any): any
+		f(...)
+		return nil
+	end, ...)
+end
+
+-- the hold / tap thresholds (DESIGN.md 3.4)
+Render.SLOP = 10
+Render.LONG_PRESS = 0.45
 
 local function parentOf(id: string): (string?, number)
 	local p, i = string.match(id, "^(.*)%.(%d+)$")
@@ -203,38 +242,102 @@ function Render._wireTip(self: Renderer, rec: Rec, obj: GuiObject)
 	table.insert(rec.conns, obj.MouseLeave:Connect(function() self.hooks.tip(nil, obj) end))
 end
 
+type Press = {
+	io: InputObject,
+	touch: boolean,
+	x: number,
+	y: number,
+	scroll: ScrollingFrame?,
+	cy: number,
+	moved: boolean,
+}
+
+local function pointerOf(p: Press): (number, number)
+	if p.touch then
+		local v = p.io.Position
+		return v.X, v.Y
+	end
+	local m = UserInputService:GetMouseLocation()
+	return m.X, m.Y
+end
+-- the press moved more than SLOP px, or its list scrolled: it is a drag / scroll, not a press (DESIGN.md 3.4)
+local function movedOf(p: Press): boolean
+	if p.moved then return true end
+	local x, y = pointerOf(p)
+	local dx, dy = x - p.x, y - p.y
+	local sf = p.scroll
+	local scrolled = sf ~= nil and math.abs(sf.CanvasPosition.Y - p.cy) > 2
+	if dx * dx + dy * dy > Render.SLOP * Render.SLOP or scrolled then p.moved = true end
+	return p.moved
+end
+
 function Render._wireButton(self: Renderer, rec: Rec, b: GuiButton)
-	local holding = 0
-	local scale = Style.child(b, "UIScale", "Hover") :: UIScale
+	local cur: Press? = nil
+	local seq = 0
+	local skipNext = false
+	local function isPointer(t: Enum.UserInputType): boolean
+		return t == Enum.UserInputType.MouseButton1 or t == Enum.UserInputType.Touch
+	end
 	table.insert(rec.conns, b.Activated:Connect(function()
+		if skipNext then
+			skipNext = false
+			return
+		end
+		local p = cur
+		if p and p.touch and movedOf(p) then return end
 		local a = rec.node.a
 		if a then self.hooks.press(a, false) end
 	end))
-	-- hold to repeat (buyables, and clickables / grid tiles that have onHold): after 0.25 s, 20 presses a second
+	-- hold to repeat (buyables, and clickables / grid tiles that have onHold): after 0.25 s, 20 presses a second,
+	-- only while the pointer stays put and the list does not scroll
 	table.insert(rec.conns, b.InputBegan:Connect(function(input: InputObject)
-		if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
-		if not rec.node.hold then return end
-		holding += 1
-		local mine = holding
-		task.delay(0.25, function()
-			while holding == mine and rec.root.Parent do
-				local a = rec.node.a
-				if a then self.hooks.press(a, true) end
-				task.wait(0.05)
-			end
-		end)
+		if not isPointer(input.UserInputType) then return end
+		seq += 1
+		local mine = seq
+		skipNext = false
+		local touch = input.UserInputType == Enum.UserInputType.Touch
+		local sf = b:FindFirstAncestorWhichIsA("ScrollingFrame")
+		local p: Press = { io = input, touch = touch, x = 0, y = 0, scroll = sf, cy = if sf then sf.CanvasPosition.Y else 0, moved = false }
+		p.x, p.y = pointerOf(p)
+		cur = p
+		if rec.node.hold then
+			task.delay(0.25, function()
+				while seq == mine and cur == p and rec.root.Parent do
+					if movedOf(p) then break end
+					local a = rec.node.a
+					if a then self.hooks.press(a, true) end
+					task.wait(0.05)
+				end
+			end)
+		elseif touch and self.hooks.detail then
+			local detail = self.hooks.detail
+			task.delay(Render.LONG_PRESS, function()
+				if seq == mine and cur == p and not movedOf(p) and rec.root.Parent then
+					skipNext = true
+					seq += 1
+					if detail then detail(rec) end
+				end
+			end)
+		end
 	end))
+	-- the release ends the hold and the long-press wait; `cur` stays until the next press, so Activated (which may
+	-- arrive before or after InputEnded) can still tell a moved touch from a tap
 	table.insert(rec.conns, b.InputEnded:Connect(function(input: InputObject)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then holding += 1 end
+		if not isPointer(input.UserInputType) then return end
+		seq += 1
 	end))
 	table.insert(rec.conns, b.MouseEnter:Connect(function()
-		if rec.node.cls == "can" or rec.node.cls == "perk" or rec.node.cls == "pseudo" then scale.Scale = 1.06 end
+		if rec.node.cls == "can" or rec.node.cls == "perk" or rec.node.cls == "pseudo" then
+			local scale = Style.child(b, "UIScale", "Hover") :: UIScale
+			scale.Scale = if rec.claim == nil and self.hooks.skin then 1.03 else 1.06
+		end
 		local tip = rec.node.tip
 		if type(tip) == "string" and tip ~= "" then self.hooks.tip(tip, b) end
 	end))
 	table.insert(rec.conns, b.MouseLeave:Connect(function()
-		holding += 1
-		scale.Scale = 1
+		seq += 1
+		local scale = b:FindFirstChild("Hover")
+		if scale and scale:IsA("UIScale") then scale.Scale = 1 end
 		self.hooks.tip(nil, b)
 	end))
 end
@@ -270,7 +373,12 @@ local function drawSvg(parent: GuiObject, svg: any, order: number): Frame
 			seg.Parent = canvas
 		end
 	end
+	-- the game draws the same label at the same spot many times (435 texts, 26 distinct): draw each once
+	local drawn: { [string]: boolean } = {}
 	for _, t in svg.texts do
+		local key = t.x .. "," .. t.y .. "," .. t.text
+		if drawn[key] then continue end
+		drawn[key] = true
 		local l = Instance.new("TextLabel")
 		l.BackgroundTransparency = 1
 		l.AnchorPoint = Vector2.new(0, 1)
@@ -293,6 +401,16 @@ end
 
 function Render._update(self: Renderer, rec: Rec, n: any)
 	rec.node = n
+	if rec.claim then return end
+	local skin = self.hooks.skin
+	if skin then
+		local ok, handled = pcall(skin, rec, n, self.ctxNow)
+		if ok and handled then return end
+		if not ok then
+			self.skinErrors += 1
+			if self.skinErrors <= 5 then warn("[MilestoneTree] panel skin failed on " .. rec.id .. ": " .. tostring(handled)) end
+		end
+	end
 	local t, root = n.t, rec.root
 	local extraStyle = n.cst
 	if t == "col" or t == "row" or t == "tabs" then
@@ -302,6 +420,10 @@ function Render._update(self: Renderer, rec: Rec, n: any)
 		if a.w then root.Size = UDim2.new(0, a.w, root.Size.Y.Scale, root.Size.Y.Offset); root.AutomaticSize = Enum.AutomaticSize.Y end
 		if extraStyle then Style.apply(root, extraStyle) end
 	elseif rec.kind == "svg" then
+		-- the exploration map: redrawn only when its html changes (hundreds of line frames)
+		local key = tostring(n.h) .. "|" .. tostring(rec.base)
+		if rec.sig == key then return end
+		rec.sig = key
 		for _, c in root:GetChildren() do if c:IsA("GuiObject") then c:Destroy() end end
 		list(root, false, 4)
 		local order = 0
@@ -529,6 +651,13 @@ function Render._destroy(self: Renderer, id: string, keepKids: boolean?)
 		self.kids[id] = nil
 	end
 	for _, c in rec.conns do c:Disconnect() end
+	local claim = rec.claim
+	if claim then
+		rec.claim = nil
+		self.dirty[id] = nil
+		local ok, err = try(claim.destroy, claim)
+		if not ok then warn("[MilestoneTree] claim destroy failed on " .. id .. ": " .. tostring(err)) end
+	end
 	rec.root:Destroy()
 	self.recs[id] = nil
 	local p = parentOf(id)
@@ -551,13 +680,80 @@ function Render._place(self: Renderer, rec: Rec)
 	end
 end
 
+-- the nearest claimed record at or above id (nil when none)
+function Render._claimOwner(self: Renderer, id: string): string?
+	local p: string? = id
+	while p do
+		local r = self.recs[p]
+		if r and r.claim then return p end
+		p = (parentOf(p))
+	end
+	return nil
+end
+
+-- a placeholder for a claimed id: a plain Frame in the node's slot, no subtree
+function Render._makeClaim(self: Renderer, id: string, n: any, maker: (ph: Frame) -> Claim): Rec
+	local ph = Instance.new("Frame")
+	ph.Name = id
+	ph.BackgroundTransparency = 1
+	ph.BorderSizePixel = 0
+	ph.Size = UDim2.new(1, 0, 0, 0)
+	ph.AutomaticSize = Enum.AutomaticSize.Y
+	local autoW, text, textT, base = self:_inherit((parentOf(id)))
+	local rec: Rec = { id = id, kind = kindOf(n), node = n, root = ph, content = ph, autoW = autoW, text = text, textT = textT,
+		base = base, conns = {} }
+	self.recs[id] = rec
+	self:_place(rec)
+	local ok, claim = pcall(maker, ph)
+	if ok and claim then
+		rec.claim = claim
+		self.dirty[id] = true
+	elseif not ok then
+		warn("[MilestoneTree] claim failed on " .. id .. ": " .. tostring(claim))
+	end
+	return rec
+end
+
+function Render._askClaim(self: Renderer, id: string, n: any): ((ph: Frame) -> Claim)?
+	local hook = self.hooks.claim
+	if hook == nil then return nil end
+	local ok, maker = pcall(hook, id, n, self.ctxNow)
+	if ok then return maker end
+	warn("[MilestoneTree] claim check failed on " .. id .. ": " .. tostring(maker))
+	return nil
+end
+
+-- after a rebuild: the children take the new parent's inherited text colour / size and redraw
+function Render._reinherit(self: Renderer, id: string, depthLeft: number)
+	if depthLeft <= 0 then return end
+	for _, k in self:_children(id) do
+		local kr = self.recs[k]
+		if kr and not kr.claim then
+			local autoW, text, textT, base = self:_inherit(id)
+			kr.autoW, kr.text, kr.textT, kr.base = autoW, text, textT, base
+			kr.sig = nil
+			self:_update(kr, kr.node)
+			self:_reinherit(k, depthLeft - 1)
+		end
+	end
+end
+
 function Render.apply(self: Renderer, patch: any)
+	local ctxHook = self.hooks.ctx
+	self.ctxNow = if ctxHook then ctxHook() else nil
 	if patch.full then
 		for id in self.recs do
 			if parentOf(id) == nil then self:_destroy(id) end
 		end
 	end
-	for _, id in patch.del or {} do self:_destroy(id) end
+	for _, id in patch.del or {} do
+		local owner = self:_claimOwner(id)
+		if owner and owner ~= id then
+			self.dirty[owner] = true
+		else
+			self:_destroy(id)
+		end
+	end
 	local ids = {}
 	for id in patch.set or {} do table.insert(ids, id) end
 	table.sort(ids, function(a, b)
@@ -567,7 +763,22 @@ function Render.apply(self: Renderer, patch: any)
 	end)
 	for _, id in ids do
 		local n = patch.set[id]
+		local owner = self:_claimOwner(id)
+		if owner and owner ~= id then
+			self.dirty[owner] = true
+			continue
+		end
 		local rec: Rec? = self.recs[id]
+		if rec and rec.claim then
+			-- the claimed node itself changed: keep the claim while it is the same component, else give it back
+			if rec.kind == kindOf(n) and rec.node.cn == n.cn then
+				rec.node = n
+				self.dirty[id] = true
+				continue
+			end
+			self:_destroy(id)
+			rec = nil
+		end
 		if rec and rec.kind ~= kindOf(n) then
 			-- rebuilt: keep the children and move them to the new object
 			local kids = self:_children(id)
@@ -578,6 +789,13 @@ function Render.apply(self: Renderer, patch: any)
 				if kr then kr.root.Parent = nil end
 			end
 			self:_destroy(id, true)
+			local maker = self:_askClaim(id, n)
+			if maker then
+				for _, k in kids do self:_destroy(k) end
+				self.kids[id] = nil
+				self:_makeClaim(id, n, maker)
+				continue
+			end
 			local built = self:_build(id, n)
 			rec = built
 			self.recs[id] = built
@@ -587,7 +805,15 @@ function Render.apply(self: Renderer, patch: any)
 				local kr = self.recs[k]
 				if kr then self:_place(kr) end
 			end
+			self:_update(built, n)
+			self:_reinherit(id, 12)
+			continue
 		elseif not rec then
+			local maker = self:_askClaim(id, n)
+			if maker then
+				self:_makeClaim(id, n, maker)
+				continue
+			end
 			local built = self:_build(id, n)
 			rec = built
 			self.recs[id] = built
@@ -595,6 +821,50 @@ function Render.apply(self: Renderer, patch: any)
 		end
 		self:_update(rec :: Rec, n)
 	end
+	-- claims read their subtree from the store once the patch is in
+	local store = self.hooks.store
+	for id in self.dirty do
+		self.dirty[id] = nil
+		local r = self.recs[id]
+		local claim = r and r.claim
+		if claim then
+			local ok, err = try(claim.update, claim, store)
+			if not ok then warn("[MilestoneTree] claim update failed on " .. id .. ": " .. tostring(err)) end
+		end
+	end
+	self.ctxNow = nil
+end
+
+-- redraw every record (after a layout / mode change: skins re-read sizes), and every claim
+function Render.refresh(self: Renderer)
+	local ctxHook = self.hooks.ctx
+	self.ctxNow = if ctxHook then ctxHook() else nil
+	local ids = {}
+	for id in self.recs do table.insert(ids, id) end
+	table.sort(ids, function(a, b)
+		local da, db = depth(a), depth(b)
+		if da ~= db then return da < db end
+		return a < b
+	end)
+	local store = self.hooks.store
+	for _, id in ids do
+		local r = self.recs[id]
+		if r then
+			local claim = r.claim
+			if claim then
+				local ok, err = try(claim.update, claim, store)
+				if not ok then warn("[MilestoneTree] claim update failed on " .. id .. ": " .. tostring(err)) end
+			else
+				r.sig = nil
+				self:_update(r, r.node)
+			end
+		end
+	end
+	self.ctxNow = nil
+end
+
+function Render.recOf(self: Renderer, id: string): Rec?
+	return self.recs[id]
 end
 
 function Render.clear(self: Renderer)

@@ -371,14 +371,28 @@ end
 
 -- ---------------------------------------------------------------------------------------------------- the renderer
 local lastPress = 0
+local function press(a: any, hold: boolean)
+	if not hold and os.clock() - lastPress < 0.03 then return end
+	lastPress = os.clock()
+	actRemote:FireServer(a, hold)
+end
 local renderer = Render.new({ menu = menuRoot, head = headRoot, tab = tabRoot }, {
-	press = function(a: any, hold: boolean)
-		if not hold and os.clock() - lastPress < 0.03 then return end
-		lastPress = os.clock()
-		actRemote:FireServer(a, hold)
-	end,
+	press = press,
 	tip = showTip,
 })
+
+-- Studio only: the new layer panel over this page (src/client/Panel/Preview.luau), until the app shell replaces it
+local preview: any = nil
+do
+	local folder = script.Parent:FindFirstChild("Panel")
+	local mod = if folder then folder:FindFirstChild("Preview") else nil
+	if mod and mod:IsA("ModuleScript") then
+		local ok, res = pcall(function(): any
+			return (require(mod) :: any).start({ press = press })
+		end)
+		if ok then preview = res else warn("[MilestoneTree] panel preview did not start: " .. tostring(res)) end
+	end
+end
 
 local keys: { [string]: boolean } = {}
 
@@ -409,6 +423,10 @@ viewRemote.OnClientEvent:Connect(function(patch: any)
 	elseif patch.set and next(patch.set) ~= nil and not failed then
 		gotScreen = true
 		setStatus(nil)
+	end
+	if preview then
+		local pok, perr = pcall(function() preview:onPatch(patch) end)
+		if not pok then warn("[MilestoneTree] panel preview: " .. tostring(perr)) end
 	end
 	if patch.tabStyle then applyTabStyle(patch.tabStyle) end
 	if patch.keys then
