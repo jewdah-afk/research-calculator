@@ -1,0 +1,1212 @@
+# The Milestone Tree NG+ on Roblox: FINAL client design
+
+This is the build spec for the Roblox-native client: the parallax **realm map** is home, a **HUD** sits around it, and
+each of the 21 layers opens as a **panel**. It is self-contained. You do not need the three competing specs to build
+from it.
+
+* **Base:** `design_juicy` won overall: premium simulator look, neon italic titles, gold capsule, medallion emblems,
+  terminal CR.
+* **Grafts:** the judges' graft lists from `design_hierarchy` (hierarchy discipline, HUD-safe framing, overlays) and
+  `design_mobile` (thumb map, READY tray, Box-resize strip, performance budget).
+* **Fixes:** every must-fix item of the three judges is resolved (§2).
+* **Decisions:** all 30 open decisions from `understand_critic.md` are decided (§1).
+
+Every element names its Roblox construction, either inline or as a recipe id `R#` (§13). Anything that has no Roblox
+equivalent is not used: no backdrop blur, no CSS filters, no letter-spacing, no blend modes.
+
+* Units are **du** (design units). The WIDE canvas is 1920×1080 du at UI scale 1 (§10). **World px** are pixels of
+  the 3840×2560 world layer.
+* `c` is the current layer hue.
+* `lift(c,t) = c:Lerp(white,t)`, `shade(c,k) = c*k` and `mix(a,b,t)` are the Figma formulas.
+
+## Mockups (`final/png/`, sources in `final/src/`)
+
+Every mock is built from **one** real view dump, produced by the game's own `rbx_view()` in the scratch port copy
+(`final/tools/gen_view.js`). Numbers on one screen never come from two saves.
+
+| file | what it shows | save / state (tools) | camera |
+|---|---|---|---|
+| `a_map_1920.png` | map home + full HUD: capsule, dock, zoom, READY tray (3 ready + 4 can buy), `???` portal, 2 coalesced toasts + `+3 MORE`, sealed-rift hover teaser | **S13**: fuzz save 13, then a P reset, an SP reset, 7 P upgrade buys, malware m15 and a spark state (`tools/s13pre.js`) | HUD-safe start C (1901,1146), z .505 |
+| `b_panel_p_1920.png` | Prestige sheet: tier board with owned tiers folded to compact effect cards, 2 glowing BUY cards, buyable with its hold strip and 91% progress | S13 | Box = strip 760×1080, C (1500,1580), z .9 |
+| `c_panel_m_1920.png` | Milestone ladder: NEXT spotlight (40%), 4 newest done rows, decade folds, MALWARE section with INFECT, NOTES, JUMP TO | S13 | strip, C (1500,1900), z .9 |
+| `d_panel_cp_1920.png` | Corrupted Prestige terminal: counters, CORRUPT, mode radio, 5×4 disks (Trojan lime, Backdoor crimson, active gold 63%), inspector with the game's ASCII bar; universe tag with FINISH | **S19 inside** the Multiverse + disk grid, ex state and cp buyable 22 (`tools/mv2.js`) | strip, clamped C (3418,1200), z .9 |
+| `e_panel_ex_1920.png` | Exploration: zone map (14×12), D-pad from the 4 buyables, feature tiles; the sheet hugs its content | S19 inside | strip, C (3150,780), z .9 |
+| `f_panel_sp_1920.png` | Super Prestige · Spark Milestones (infected SP): furnace box, ember burn bars (ashed / burning 63% / permanent), pager | S13 | strip, C (1330,1250), z .9 |
+| `g_options_1920.png` | Options: save status, SAVE/EXPORT/IMPORT tiles, Offline Production, DISPLAY (game options, one press per tap), THIS DEVICE (client-only), DANGER ZONE, ABOUT + unlocked hotkeys | S13 | panel without a node: Box shrinks, C compensated to (753,1146) |
+| `h_toasts_1920.png` | toast stack (kind+layer coalescing ×10 / ×5 / ×2), notification list opened from `+3 MORE`, READY hold in progress (conical ring), locked-node tooltip | S13 popups | as (a) |
+| `i_export_1920.png` | export modal over Options (real 22,204-character save string, selected) | S13 | — |
+| `j_system_1920.png` | system overlays: peek, Multiverse gate popover (FINISH), hard-reset confirm, import with inline error and cooldown, status chips, loading, OUT OF SYNC, end screen | S13 / S19 inside | — |
+| `n_fresh_1920.png` | **new player**: fresh save (only M and the shrine), first-run cue, no tray, no rate pill, frontier `?` sockets | empty save + 20 ticks (`tools/gen_fresh.js`) | HUD-safe start |
+| `k_map_844.png` (+`@2x`) | phone map home, LOW tier: compact capsule, dock, READY pill, `???` portal, edge markers (MP up, MM down), compact toast | S13 | touch zoom .34, C (1460,1202) |
+| `l_panel_p_844.png` (+`@2x`) | phone Prestige: band in the top-bar strip with the READY switcher and a 44 du close, hero column with the CTA at the thumb, owned summary row, BUY cards | S13 | map disabled |
+| `m_panel_m_844.png` (+`@2x`) | phone Milestone ladder | S13 | map disabled |
+| `n_fresh_844.png` (+`@2x`) | phone new player: START HERE cue on M | fresh | z .34, focus M at 60% down |
+
+Re-render with the commands below. `realm_bg.js` drives the repo's own `art/preview/realm.html` with the REALM camera,
+read-only, with the strip viewports at 760×1080 and the phones at 844×390 @2x on the LOW tier.
+
+```sh
+cd art && NODE_PATH=$(npm root -g) node <final>/tools/realm_bg.js <final>/tools/shots.json
+cd <final>/src && NODE_PATH=$(npm root -g) node render.js a_map_1920.html ../png/a_map_1920.png 1920 1080
+```
+
+Mock cheats, all of them Roblox-equivalent:
+
+* `box-shadow` stands in for UIShadow or a glow sprite.
+* The `.tx` clone stands in for the Contextual UIStroke plus the shadow clone.
+* `background-clip:text` stands in for a UIGradient on text.
+* Inline SVG icons stand in for atlas sprites.
+* The RBX / chat / ··· circles only mark the Roblox top-bar clearance.
+
+---------------------------------------------------------------------------------------------------------------------
+
+## 1. Decisions (the critic's 30 open questions, all resolved)
+
+| # | question | decision |
+|---|---|---|
+| Q-M1 | Zoom? | **Yes.** Wheel (×1.12/notch at the cursor), pinch, double-tap/double-click (×1.6), **double-tap-and-drag** one-finger zoom (1 pt up = ×1.006), and HOME toggles start ⇄ overview (zMin). Range is REALM `[zMin(V), 1.25]`. **No pan keys**; `-`/`=` zoom one notch only when not in `patch.keys`. |
+| Q-M2 | Hidden layers | `show:false`: a sealed socket (dark glass cap α .7, no plate, inert). **Frontier** (a hidden node whose Figma parent is shown, same universe) gets a faint `?`. Hidden by universe (`val.dor`) is dormant: grey ring, moon badge, toast "Lives in the Normal Universe" on tap. Locked (`!lit`): real symbol, lock sprite, plate `🔒 val.req`. |
+| Q-M3 | Node scale | Ring and gem scale with z inside the painted socket. **Floor** k = max(z, 36/132) with a mouse, max(z, 44/132) on touch, written as one UIScale **only while z is below the floor**. Plates and badges have a constant screen size. Plate LOD: FULL / CHIP / NONE by zoom (§3.9), plus occlusion fade under HUD rects and collision culling. |
+| Q-M4 | Edges | Existence and lit state come from the live `br`; geometry from the Figma control points plus the new MP→PM bridge; colour is the TO (child) hue. **Malware P→M stays red.** Locked edges are dots every 15 world px on HIGH (≤ 400 in total) and one thin thread on LOW and phones. |
+| Q-M5 | Painted veins | Accepted. The live Path2D stack on top carries the state. |
+| Q-M6 | Gate | One visible entry point: the **portal button** (bottom-right), plus the **rift hotspot** (hover teaser, click = fly + popover). Inside the Multiverse, a **universe tag** under the capsule carries EXIT/FINISH, so it stays reachable while a panel is open. The standalone map gate chip was dropped (it duplicated the portal). |
+| Q-M7 | Start camera / persistence / fly-to | Start = REALM §2.8 solved on the **HUD-safe rect** (1080p: z .505, C (1901,1146)). Phones: touch zoom .34 on the **centroid of the READY nodes**, shifted so no ring sits under the top band; M at 60% down for a new player. Not persisted: every join starts from the rule. `frameNodes(ids)` is used for universe changes and the READY `+N` list. Fly-to follows REALM (SmoothDamp .35 s, z = max(z, .9)) toward the free rect's centre. |
+| Q-M8 | fg z-order / ReducedMotion | REALM z-order: fg and motesNear under Links/Nodes, particles over them at α ≤ .24, never taking input. fg and motesNear fade out (0.2 s) while a side sheet is open. ReducedMotion follows REALM §9.6, plus the UI rules in §8. |
+| Q-L1 | Breakpoints | **WIDE** (canvas 1920×1080 du), **MEDIUM** (≈1600×900 du), **COMPACT** (phones, V.y < 500 pt). s ≥ 1 on COMPACT, so text is ≥ 11 px (§10). |
+| Q-L2 | Panel form | WIDE/MEDIUM: a **right side sheet**; the map Box is resized to the free strip and stays live (§3.6). COMPACT, and MEDIUM strips under 460 du: **full screen**, `MapGui.Enabled = false`. Always docked right; never left-docked. |
+| Q-P1 | Sections | Titles come from `cn` (§5.6). Order is the tabFormat order, with main-display, reset and resource-display lifted into the hero. Per-layer exceptions are in §6. |
+| Q-P2 | Buyable bar | Capped buyable: level / limit. Not affordable: **progress-to-afford** (`pr`, server-side, e.g. 91%). Affordable: none (the hold strip lights instead). |
+| Q-P3 | Hidden / done challenges | The "Completed Challenges" option is honoured (the game removes them). Done = quiet green. If hiding empties a section, a slim row reads "All challenges completed · hidden by Options" with an OPTIONS link. |
+| Q-P4 | m's 186 rows | **NEXT** spotlight, then the 4 newest done rows, then **decade folds** (each names its notable unlocks), then "1 – N · SHOW ALL". Expanding virtualises a pool of 16 rows. JUMP TO index in 25-blocks (WIDE). |
+| Q-P5 | tabStyle / st | Dropped. Structural widths survive only for bespoke widgets. Game colours are remapped (§11.2). |
+| Q-H1 | HUD contents | Capsule (points, rate, universe, warnings, status), universe tag, dock (HOME / TROPHIES n/18 / OPTIONS), zoom capsule (mouse), READY tray / pill, portal, toasts + notification list, edge markers. **No Alerts bell**: the READY tray replaces it. |
+| Q-H2 | Chat | Chat stays enabled and is never moved. No HUD control sits in the top-left 420×300 du below the band; only map art is there (the shrine, which Trophies duplicates). |
+| Q-H3 | Credits / hotkeys | An **ABOUT** card inside Options: the game credits, TMT, the Prestige Tree, and the **unlocked hotkeys** (the view's `keys`). This is not an info screen: no changelog, no dev notes, no time-played readout. |
+| Q-O1 | Popup flood | Coalesce by **kind + layer** within 1.5 s: ×N chip, range sub ("18th – 27th Meta-Milestone"), life 3 s + 1 s per merge (max 6 s). Visible: 3 WIDE / 2 MEDIUM / 1 COMPACT. Overflow goes to `+N MORE`, which opens the notification list (the last 20). |
+| Q-O2 | Hard reset | Options › HARD RESET… opens a confirm modal with EXPORT FIRST, CANCEL and **HOLD 2 s**. Completion sends `{"opt","hardReset"}` twice (the game's press-twice rule). |
+| Q-T1 | Touch info | Nodes: long-press **peek**. Upgrades: long-press opens the detail sheet. Buyables: an ⓘ button (their long-press is the hold-to-buy). cp disks and ach: the inspector strip. Mouse: hover tooltips after 250 ms. |
+| Q-G1 | Gamepad | Out of scope, but `Selectable` stays sane: the dock, READY gems, the portal and the panel CTA form the focus ring; B closes a panel. REALM stick pan and trigger zoom are kept. |
+| Q-F1 | Figma first? | **Code-first mockups** (this workflow) are the source of truth. A follow-up task pushes these screens into Figma Screens 2:5 and Overlays 2:6 for the snapshot comparison. It does not block the build. |
+| Q-F2 | Order of work | (1) view.js fields (§15) + v.map/v.hud + parity; (2) mock.luau additions (§16); (3) client skeleton: MapGui/TopbarGui/HudGui/MarkerGui/PanelGui/OverlayGui and ViewStore routing; (4) recipes and skins (§13), Theme.caps; (5) per-layer signatures (§6); (6) asset pipeline (tiles + ui_atlas + tile textures) in parallel; (7) snapshots, Studio verification (§17), `rojo build`, commit. |
+| U1 | Art upload | Needs **the user**: an Open Cloud API key (Assets read+write) plus the creator id, or a manual Asset Manager import of about 34 tiles + 1 atlas + 6 tile textures. Until then `Assets.luau` returns nil and the fallback look applies: a procedural sky gradient + nodes + links, with every HUD and panel unchanged. |
+| U2 | Publish / creator | Must match the key's creator (user or group). Asked with U1. |
+| U3 | Devices | **PC + phones (landscape) + tablets.** Console is kept sane, not polished (Q-G1). |
+| U4 | Credits and hotkeys in Options | Yes, as the ABOUT card (Q-H3). It respects "no info screens". |
+| U5 | Figma vs code first | Code first (Q-F1). |
+| U6 | "I don't see any" | Treated as "no art in Studio" (U1). The fallback look plus a clear "Map art not uploaded" dev-only chip (Studio only, `RunService:IsStudio()`) make it visible. |
+
+Contradictions C1–C14 (critic §1):
+
+* C1: use Montserrat **Heavy** (no Black exists).
+* C2: no pan keys.
+* C3: `v.map` / `v.hud`.
+* C4: close = `["tab","none"]`.
+* C5: the UI scale is in §10.
+* C6: zMin is REALM's cover fit; the depth-scaled layers make the art cover it.
+* C7: `br` gives existence, Figma gives geometry, the TO hue gives colour.
+* C8: pulse = aura + bolt badge, glow = "!", selected = `map.open`, locked = `!lit`, hidden = `show:false`.
+* C9: `Sibling` everywhere, and `SortOrder = LayoutOrder`.
+* C10: GetInsetArea is used through pcall.
+* C11: tiles ≤ 1024.
+* C12: `N / 18`.
+* C13: toast kind comes from `kind` (view) with a title/type/colour fallback.
+* C14: the colour remap in §11.2.
+
+---------------------------------------------------------------------------------------------------------------------
+
+## 2. Every judge must-fix, resolved
+
+| # | must-fix (short) | resolution | where |
+|---|---|---|---|
+| 1 | Owned cards and done rows outshine BUY / NEXT | Owned = quiet tier: `mix(panel, #4be07a, .14)`, 1.5 du stroke α .45, **no glow**, effect value. Only BUY / NEXT / CTA glow. | §5.7, mock b, c |
+| 2 | Right third overcrowded (toasts, rail, gate card, portal, rift) | Rail removed (the dock is bottom-left), gate chip removed, one Multiverse entry (portal). Toasts are the only thing top-right, max 3 WIDE. | §4, mock a |
+| 3 | P header + hero ≈ 370 px | Header 92 + hero 124 (stats inline under the CTA). Owned tiers fold to 66 du compact cards: the whole P board fits above the fold at 1080p. | §5.3, mock b |
+| 4 | Phone close floats over the scrollbar | 44 du close **in the band**, left of the Roblox "···" (TopbarSafeInsets). | §5.10, mock l, m |
+| 5 | No HUD-safe start framing | §3.3. T sits under the capsule at neither 1080p nor on phones. | mock a, k |
+| 6 | Mock numbers mixed within a screen | One real dump per screen (tables above). | all |
+| 7 | Dev note visible (hierarchy M) | Only the game's display-text lines appear, verbatim, as NOTES. No client-authored explanation copy. A lint rejects strings containing "virtualis", "Studio", "debug". | §5.6 |
+| 8 | "0.00 OOMs/sec" | `hud.gen = null` when the rate is 0 (view). The client hides the pill when null. | §15, mock n |
+| 9 | "Corrupt. Tooltip Pos." dropped | Kept as a **cycler**: mouse = the inspector docks on that side (right = inspector column); touch always uses the inspector. | §6 cp, mock g |
+| 10 | Small web-like section titles | Section titles are Heavy Italic **22** (COMPACT 15) with a gradient, stroke and hue bar. Panel titles 44 (COMPACT 22). | §9 |
+| 11 | READY tray as heavy text rows | **Gem row** with gain chips (desktop tray) or a pill (phone and strip). | §4.5 |
+| 12 | Chrome/silver titles look disabled | Titles use `W → lift(c,.45)` plus a black Contextual stroke, never silver. | §9 |
+| 13 | Orange "3 READY" bar competes inside panels | In the strip it is a small gold **READY pill** ("TAP A GEM TO SWITCH"). The only CTA inside a panel is the panel's own. Orange is not a state hue. | §4.5, mock b |
+| 14 | Rail owned-ring dead space | No rail ring. The desktop hero row is compact; the phone hero column holds stats + the CTA at the thumb. | §5.3, §5.10 |
+| 15 | Phone plates under RBX/chat and the capsule | **Plate occlusion**: plates whose rect meets a HUD rect (Roblox buttons included) fade to α .16; rings stay. Phone start framing keeps rings out of the top band. | §3.9, mock k |
+| 16 | 14–16 "STABLE" labels | Empty disks are quiet tiles with only the slot number. | mock d |
+| 17 | UIShadow has no text / inset / Path2D mode | Text glow = a **glow_rr sprite behind the label** sized to TextBounds. Bevel = 9-slice overlay (primary). Path2D glow = stacked strokes. | §13 |
+| 18 | SelectRing square glow; tweening BlurRadius | SelectRing = `ring_dashed` + UICorner .5, or a glow_circle sprite. Pulses tween ImageTransparency / UIScale only. | §3.7, §8 |
+| 19 | Links/Nodes vs fg order | Links and Nodes are separate siblings **after F_motesNear**, with the world transform. About 20 container writes per moving frame. | §3.1 |
+| 20 | Band content in CoreUISafeInsets | **TopbarGui** (`ScreenInsets = TopbarSafeInsets`) holds the capsule, universe tag and the COMPACT panel band. | §3.1, §4.2 |
+| 21 | Box-resize transition unspecified | Formulas, animation, zMin changes and the < 568 pt fallback are in §3.6. | §3.6 |
+| 22 | Juicy strip clamp outside the tested domain | Replaced by mobile's **Box-resize strip**: V = strip, plain hard clamp, inside camera.js `--test`. | §3.6 |
+| 23 | Gate chip / markers dirty HudGui | Edge markers live in a separate **MarkerGui**. The gate chip is gone. Plates live in MapGui. | §3.1 |
+| 24 | "Build once per layer, destroy tabs after 30 s" vs path ids | **One Render tab tree**, re-skinned idempotently. Animations are keyed by `(layer, id)` from `a`. | §5.1 |
+| 25 | Static bar parses reset.base/next strings | Server-side `reset.pr` / `pr` from Decimal (§15). | §15 |
+| 26 | Client settings inside the game save | A separate DataStore key `client` (Motion, Map Detail, Map Labels, Interface Size). The save and export stay identical to the web game. | §6 Options |
+| 27 | Node click semantics | A click on the **selected** node is a no-op (it re-flies to the node if the camera moved). A double-click on a node counts as one click (300 ms debounce). | §3.4 |
+| 28 | Left dock + ChatWindowConfiguration | No left dock, and the chat is never touched. Rift layers reach the strip through the Box-resize clamp (CR lands at x 463 of the 760 strip). | §3.6, mock d |
+| 29 | Dot spacing on zoom, uncapped dots | Fixed at 15 world px, capped at 400, built once in world scale units. LOW and phones use a thread. Node conditional parts (rays, aura, rings, badges, chips) are created lazily. | §3.8 |
+| 30 | FACTS regex parsing | None. display-text lines render verbatim as NOTES rows. | §5.6 |
+| 31 | Segmented controls on game cyclers → N presses | Game cyclers stay **cyclers** (one `opt` press per tap, page dots). Two-option game toggles are a segmented control (one press). Device options are client-only (direct set). | §6 Options |
+| 32 | Map hold-to-prestige safety | The hold starts only while the press stays under the drag threshold and never during inertia or a pinch. Hold **0.6 s** (tray, peek). The server accepts `val.ra` because it is a view action (registered only while the layer can reset). | §3.4, §4.5 |
+| 33 | Discord line on the end screen | Removed. | §7.11 |
+| 34 | No test contract | §16: anchors, mock additions, snapshot mode. | §16 |
+| 35 | Tiled textures from atlas regions | Tile textures are **standalone images** (§14.2), counted in the budget. | §14 |
+| 36 | Read-only TextBox copy on mobile | Fallback: an editable TextBox whose Text is restored on every change. | §7.6 |
+| 37 | No new-player mock | Mocks n (desktop + phone). First-run mode in §7.12. | mock n |
+| 38 | Buyables lack an affordance state | A per-card **hold strip**: lit and "HOLD TO BUY" when affordable, otherwise the reason ("NOT ENOUGH PP"). | §5.7, mock b |
+| 39 | Phone HUD lacks Trophies / Home; top-right thumb reach | Bottom-left dock HOME / TROPHIES / OPTIONS on every device. Portal and READY at the bottom-right. | §4 |
+| 40 | Mobile READY tray lacks CAN BUY; no markers | The tray lists **PRESTIGE READY then CAN BUY** in fixed map order. Edge markers (≤ 4) point at off-screen ready and can-buy nodes. | §4.5, §3.10 |
+| 41 | "N READY · HOLD TO PRESTIGE" ambiguous | The pill says "N READY · TAP TO LIST" (or "TAP A GEM TO SWITCH" in the strip). Only an individual gem or a peek holds. Never batch-prestige. | §4.5 |
+| 42 | 10.5 px text on phones | The COMPACT floor is 11 px (s ≥ 1 + the type table). Lint: any COMPACT label under 11 fails. | §9, §10 |
+| 43 | Multiverse hold never says what resets | The gate popover lists the reset layers (the game's `onEnter` list). The ENTER / EXIT / FINISH hold is **1.2 s**. | §7.8 |
+| 44 | Toasts cover phone nodes, jump position | One location: the **top-right of the free map rect** (phone: under the band, 240 du, max 1). Toasts are click-through (only `+N MORE` takes input). | §4.7 |
+| 45 | No layer switch in a full-screen phone panel | A **READY switcher** (gems) in the band. Tapping a gem opens that layer. | §5.10, mock l |
+
+---------------------------------------------------------------------------------------------------------------------
+
+## 3. Map (home)
+
+### 3.1 ScreenGuis and trees
+
+| ScreenGui | DisplayOrder | ScreenInsets | holds |
+|---|---|---|---|
+| `MapGui` | 0 | None, SafeAreaCompatibility None | REALM §9.1 tree + Links, Nodes, Plates |
+| `MarkerGui` | 5 | DeviceSafeInsets | edge markers (≤ 4), repositioned per camera frame; nothing else |
+| `HudGui` | 10 | CoreUISafeInsets | dock, zoom capsule, READY tray / pill, portal |
+| `TopbarGui` | 12 | **TopbarSafeInsets** | capsule, gen pill, warning chip, status chip, universe tag; the COMPACT panel band |
+| `PanelGui` | 20 | CoreUISafeInsets | sheet backdrop, sheet |
+| `OverlayGui` | 30 | DeviceSafeInsets | toasts, notification list, tooltip, peek, modals, loading, fatal, end screen |
+
+All of them set `ZIndexBehavior = Sibling`, `ResetOnSpawn = false` and `AutoLocalize = false`. Every UIListLayout uses
+`SortOrder = LayoutOrder`.
+
+Other settings:
+
+* `StarterPlayer.EnableMouseLockOption = false` (Shift hotkeys);
+* `StarterGui.ScreenOrientation = LandscapeSensor`;
+* `GuiService.TouchControlsEnabled = false`;
+* `Camera.CameraType = Scriptable`;
+* `SetCoreGuiEnabled` Backpack / Health / PlayerList false.
+
+```
+MapGui > Root (black) > Box (Frame, ClipsDescendants = true, + UIScale mapScale)          -- V = Box size (map pts)
+  L0_sky, L1_clouds, L2_far, L3_mid, Wash, L4_near, F_motesFar, L5_world, L6_fg, F_motesNear   (REALM, unchanged)
+  Links   (Frame, same Position/Size writes as L5_world)   Path2D stacks + dot Frames, all in scale units
+  Nodes   (Frame, same transform)                          Node_<id> widgets in scale units, + the rift hotspot
+  F_particles, Vignette                                    (REALM)
+  Plates  (Frame, full Box, NOT scaled)                    Plate_<id>: one Frame + one RichText TextLabel, AnchorPoint (.5,0)
+```
+
+Per moving frame the client writes:
+
+* 2 writes × (8 layers + Links + Nodes) = 20 container writes;
+* 21 plate Positions;
+* the field updater.
+
+At rest it writes nothing. Map art has `Active = false` and `Interactable = false`. Only the node `Hit` buttons and
+the rift hotspot take input (`InputSink = None`, so the map drag still sees the press).
+
+### 3.2 Camera: the REALM contract, verbatim
+
+`art/REALM.md` §2–§9 and `art/camera.js` apply unchanged:
+
+| rule | value |
+|---|---|
+| layer zoom | the **dolly law** `s_L = z/(f + (1−f)z)`. The brief's `z^f` breaks depth order below z ≈ .3; REALM §2.3 explains it. |
+| layer placement | `P_L = A + f(C − Wc)` |
+| world transform | `q = Vc + z(p − C)` |
+| zoom range | zMin = cover fit `max(V.w/3840, V.h/2560)`, zMax 1.25 |
+| clamps | hard clamp at rest; rubber band while input is active |
+| mapScale | REALM §2.6 |
+| biome tint and wash | REALM §5 |
+| ambient sprites and fields | REALM §6 |
+| tiers and ReducedMotion | REALM §9.5 / §9.6 |
+
+The client only chooses parameters inside the contract:
+
+* the start framing;
+* the touch rest zoom;
+* the node floor;
+* the Box size (§3.6).
+
+### 3.3 Start, recenter, framing
+
+* **HUD-safe start (WIDE/MEDIUM).** Solve REALM §2.8 on the safe rect V' = V minus the top band (100 du·s) and minus
+  the bottom (96 du·s):
+  * `z0 = clamp(min(V'.w/1500, V'.h/1750), zMin, 1)`;
+  * `C0 = (1500, 1150) + (Vc − V'c)/z0`, then the hard clamp.
+
+  At 1920×1080 that gives z .505 and C (1901, 1146): the whole realm width fits, and T's ring top sits at y 90,
+  below the capsule and pill (mock a). The intro dolly-out from `min(1.12 z0, zMax)` runs 1.6 s quintOut (none with
+  ReducedMotion).
+* **Phone start (COMPACT).** z = **.34**, so the ring is 45 pt, above the 44 pt touch floor.
+  * C = the **centroid of the READY nodes** (pulse + glow), then nudged vertically so no ring sits under the top band
+    (76 du) and the lowest READY plate stays on screen.
+  * No READY nodes: the last opened layer; otherwise the trunk (1500,1150).
+  * New player: M at 60% down the safe rect (mock n phone: C (1500,1832)).
+* **Inside the Multiverse** at boot: the same rules on the rift cluster (`frameNodes(shown)`).
+* **frameNodes(ids)**:
+  * bbox of the rings + plates;
+  * `z = clamp(min(V'.w/bw, V'.h/bh), zMin, 1)`;
+  * `C = centre + (Vc − V'c)/z`, then the hard clamp;
+  * used for a universe change (0.9 s quintInOut), the READY `+N` list and HOME's second tap (overview = zMin).
+* **HOME button**: fly to the start framing. If the camera is already there, toggle to the overview.
+* **Closing a COMPACT sheet**: fly back to the node that was open.
+
+### 3.4 Input arbitration
+
+One module on `UserInputService` handles raw InputBegan / Changed / Ended, updated in `RunService.PreRender`.
+
+* **Gate on press.** A press is ignored when `PlayerGui:GetGuiObjectsAtPosition(x, y)` finds an object of HudGui,
+  TopbarGui, MarkerGui, PanelGui or OverlayGui on top.
+* **Drag.** Past 6 pt (mouse) or 12 pt (touch), the press becomes a pan. The flag suppresses the node's `Activated`
+  on release.
+
+| gesture | on a node | on empty map |
+|---|---|---|
+| tap / click (< threshold) | open its panel (`["tab", id]`, sent once); **selected node: no-op** (re-fly if the camera moved); a double-click counts as one click (300 ms debounce) | none |
+| hover 250 ms (mouse) | tooltip (§7.1) | none |
+| long-press 450 ms, < 12 pt of travel (touch) / right-click (mouse) | **peek** (§7.2); never opens | none |
+| drag | pan (works when it starts on a node) | pan + inertia (REALM feel) |
+| wheel / pinch / double-tap-drag | zoom about the point | zoom |
+| double-tap / double-click | — | ×1.6 toward the point, 0.35 s |
+| `-` / `=` | one zoom notch if not in `patch.keys` | same |
+
+**Hold safety (tray gems, peek HOLD TO PRESTIGE).** The hold starts only after 120 ms with < 10 pt of movement. It
+never starts during inertia (|v| > 6 pt/s) or a pinch. It takes **0.6 s**, with a conical ring. Releasing early
+rewinds it in 0.12 s.
+
+### 3.5 Fly-to
+
+REALM fly-to: SmoothDamp on C and on log z, smoothTime .35 s, z = max(current, .9). The target puts the node at the
+centre of the **free rect** F: the Box (the strip while a sheet is open) minus the HUD band, `C* = N + (Vc − Fc)/z*`,
+then the hard clamp. ReducedMotion cuts instead.
+
+Triggers:
+
+* opening a node (click, READY gem, notification row, edge marker, hotkey opening a layer);
+* the portal (flies to the rift centre (3150, 1350) and opens the gate popover);
+* a universe change;
+* closing a COMPACT sheet.
+
+### 3.6 The map while a side sheet is open: Box-resize strip
+
+* **Geometry.** The sheet covers `[SX, W)`. At 1920×1080, SX = 760 du: the backdrop ramps over 24 du and the card
+  starts at 784.
+* **The Box is resized** to `[0, SX) × [0, H)`. `V` becomes the strip (760×1080 at 1080p, aspect .70) and
+  `Box.ClipsDescendants = true` culls everything behind the sheet.
+  * The strip is inside the contract domain (568–2560 × 320–1440 map pts, aspect .45–3.6), so coverage, clamps,
+    zMin and `camera.js --test` all hold unchanged.
+  * On MEDIUM, a strip narrower than 568 pt falls back to REALM mapScale < 1 (`s = min(w/568, h/320)`). For example
+    1366×768: strip 498 pt → s .877.
+  * A strip narrower than 460 du makes the sheet full screen and disables the map.
+* **Transition (open).** The sheet slides in (Position +48 du → 0, 0.24 s quintOut). The Box width tweens with it.
+  On every frame the camera is compensated so the world plane does not jump:
+  `Vc_old + z(p − C) = Vc_new + z(p − C')` ⇒ **`C' = C + (Vc_new − Vc_old)/z`**. The fly-to then SmoothDamps C'
+  toward the node.
+  * Other layers slip by `ΔVc(1 − f·s_L/z)`: the sky moves almost the whole ΔVc, the world 0. This reads as a
+    lateral dolly and is accepted.
+  * ReducedMotion cuts: the Box snaps and C' is set directly.
+* **zMin** drops to the strip's cover fit: .422 at 760×1080, against .5 full screen. **On close** the Box tweens back
+  (0.16 s), C is compensated the same way, and if z < zMin(full) the zoom springs up with SmoothDamp 0.18 s.
+* **A panel without a node** (Options) never flies: the Box shrinks and C is only compensated. Mock g: C (753,1146)
+  at z .505.
+* **Rift layers:** the plain strip clamp lands CR at x 463 and CM at x 625 of the 760 strip (mock d). No left dock
+  is needed.
+* **fg + motesNear** fade to 0 in 0.2 s while a sheet is open (foliage in a narrow strip is clutter), and fade back on
+  close.
+* COMPACT (full-screen sheet): after the slide, `MapGui.Enabled = false`, ambient tweens paused, field updater
+  stopped (REALM §9.7).
+
+### 3.7 Node widget (Figma Map Node 4:40, instance values) — ≤ 10 instances + lazy parts
+
+```
+Node_<id>   Frame, Size fromScale(180/3840, 200/2560), AnchorPoint (.5,.45), Position fromScale(N.x/3840, N.y/2560)
+  UIScale   = k/z, written only while z < floor (k = max(z, 36/132) mouse, max(z, 44/132) touch)
+  Glow      ImageLabel glow_circle 2×Ø, tint c, α .45 (pulse/selected α .9)                         (R2 fallback; else UIShadow on Ring)
+  Ring      Frame Ø132, UICorner .5, UIGradient 135° lift(c,.35)/c/shade(c,.4) (keys 0,.1,.5,.9,1), bevel_ring overlay (R1)
+  Gem       Frame Ø104, UIGradient Radial lift(c,.55)/c@.5/shade(c,.28) (R7), UIStroke 3 shade(c,.28)
+  Shine     ImageLabel circle 60×26 at (0,−31), UIGradient transparency .45 → 1
+  Symbol    TextLabel Sarpanch Heavy 44/40.5/31.7 (1/2/3 chars), white, UIStroke Contextual 4 black (★ = star sprite for ach)
+  Hit       ImageButton transparent Ø max(132, 44/k), UICorner .5, InputSink None
+  -- lazy (created on first need, then kept and toggled):
+  Rays      ImageLabel rays 300, tint c, α .55, Rotation 12 s/rev                  [pulse, max 4 nodes at once]
+  Aura      ImageLabel aura 220, tint c, α .55↔.30 (1.4 s sine)                     [pulse, selected]
+  Select    ImageLabel ring_dashed 164, tint lift(c,.3), Rotation 20 s/rev (UICorner .5 if UIShadow is used)   [selected]
+  ChalRing  ImageLabel ring_dashed 150, tint #ffc233, counter-rotating 14 s/rev     [ch ≠ null] + chip "C<id>"
+  Badge     ImageLabel 26 (22 COMPACT) at (.72R, −.72R): **bolt** (gold) = pulse, **"!"** (danger) = glow (bolt wins)
+  Lock      ImageLabel lock 20 (17) at (.62R, .62R)                                  [locked]
+```
+
+| state | condition | look |
+|---|---|---|
+| sealed | `show == false`, not frontier, not `dor` | dark glass cap Ø104 α .7, no plate, no link, inert |
+| frontier | sealed, and a Figma parent in the same universe is shown | cap α 1, stroke #6a5f8f, faint `?` Sarpanch 44 #8d86a8; tooltip "???" |
+| dormant | `show == false` and `val.dor` | grey ring α .8, symbol #5b5572, moon badge; tap → toast "Lives in the Normal Universe" / "…in the Prestige Multiverse" |
+| locked | `!val.lit` | grey ring #898598/#4a4360/#1e1b26, gem #3a3352→#14111f, lock sprite, plate name #a39cc0 + `🔒 val.req` |
+| available | `val.lit` | hue ring + gem, glow α .45 |
+| can buy | `val.glow` | + "!" badge (pop 0.25 s Back Out); listed in READY as CAN BUY |
+| prestige ready | `val.pulse` | + rays + aura + glow α .9 + bolt badge + plate line "⚡ PRESTIGE READY" (COMPACT "⚡ READY"); flow sparks on its incoming edge |
+| selected | `map.open == id` | dashed select ring + aura; plate always FULL |
+| in challenge | `ch ≠ null` | gold counter-rotating ring + chip `C<id>` |
+| infected | `col` is a malware variant (m #9f2846, p #c25757, sp rgb(238,112,112)) | hue → danger #ff3b5c for the ring, gem, plate and incoming edge; symbol glitch flicker (R12) every 3–6 s |
+
+Priority: selected > pulse > glow > challenge > available. cp shows **CR**. pm's plate name is masked as the view
+sends it. Hover gives UIScale 1.08 (0.12 s); press gives .94 (0.08 s).
+
+### 3.8 Connections (Path2D; geometry from Figma, existence from `br`)
+
+* **Existence and state:** each shown node's `br` (live TMT branches); drawn only when both ends are shown.
+  * **Geometry:** the Figma cubic control points (`final/src/lib.js EDGES`) + the MP→PM bridge
+    `(1878,699) (2330,610) (2860,1120) (3092,1521)`.
+  * **Colour:** the child (TO) hue.
+  * **Lit** when the child is lit.
+* **Lit** (R11): 4 stacked Path2D, with thickness scaled by k = max(z, floor) and rewritten when z changes by > 2%.
+  LOW and phones drop the hot stroke.
+
+  | stroke | colour | thickness | transparency |
+  |---|---|---|---|
+  | halo | c | max(10, 24k) | .86 |
+  | glow | c | max(6, 14k) | .68 |
+  | core | lift(c,.3) | max(2.5, 4k) | 0 |
+  | hot | white | max(1, 1.5k) | .15 |
+
+* **Locked:**
+  * HIGH: Ø3 dot Frames (#c7b8f2 α .45) every **15 world px** of arc length, sampled once with
+    `Path2D:GetPositionOnCurveArcLength`, positioned in `Links` scale units. They never rebuild on zoom. There are
+    **≤ 400 in total**; past the cap the remaining edges use the thread.
+  * LOW and phones: one Path2D thread, 2.5 pt, #c7b8f2 α .42.
+* **Secondary** (game colour theme slot 3: hp→sp, ap→hp): halo and glow at half alpha.
+* **Infected** P→M (`#c86a6a`): danger strokes, with the core flickering on the R12 schedule.
+* **Flow sparks** (HIGH only, none with ReducedMotion): 1 spark (glow_circle 26k + sparkle 12k) per edge into a
+  pulse node, 1.6 s loop along a precomputed 32-point table. There are **≤ 6** in total.
+
+### 3.9 Nameplates
+
+* Constant screen size: name Heavy Italic 13 (COMPACT 11), amount Sarpanch Bold 13 (11).
+* One Frame: AutomaticSize XY, UIPadding 4/12/5/12, UICorner 10, UIGradient panel2→deep α .95, UIStroke 1.5
+  `lift(c,.25)` (locked #4e4763; pulse: a 2 du white→lift(c,.4)→white gradient), shadow sprite.
+* One RichText label: `<i><b>NAME</b></i><br/>amount[<br/>⚡ PRESTIGE READY]`.
+* Text is written at ≤ 5 Hz and only when it changes.
+
+**LOD**, with hysteresis ±.02:
+
+| level | WIDE / MEDIUM | COMPACT |
+|---|---|---|
+| FULL | z ≥ .40 | z ≥ .30 |
+| CHIP (amount only) | .28 ≤ z < .40 | .22 ≤ z < .30 |
+| NONE | below that | below that |
+
+The selected, hovered and peeked nodes always get FULL. The READY line and badges always show.
+
+* **Occlusion:** a plate whose rect meets a HUD rect (capsule and pill, the Roblox buttons, dock, tray / pill, portal,
+  visible toasts) fades to α .16 over 0.15 s. Its ring stays.
+* **Collision:** plates are placed greedily in priority order (selected > pulse > glow > available > locked, then by
+  world y). A plate that overlaps a placed one by more than 4 pt fades.
+* Both are recomputed when z changes by 2%, the camera moves more than 8 pt, the HUD layout changes, or the node set
+  changes. That is 21 rect tests.
+* **Options › Map Labels:** AUTO (these rules) / ALWAYS (FULL at every zoom) / OFF (selected and hover only).
+
+### 3.10 Edge markers (MarkerGui)
+
+* Pulse and glow nodes whose ring is outside F get a marker: Ø50 (Ø38 COMPACT) emblem + white pointer + bolt or "!"
+  badge.
+* The marker sits where the ray from F's centre crosses F inset by 14 du, pushed out of HUD rects.
+* At most **4** are shown, pulse first.
+* Tap flies to the node. The marker pops in with Back Out 0.2 s.
+* Mocks: d (MP, left) and k (MP up, MM down).
+
+### 3.11 The rift (Multiverse gate)
+
+* **Hotspot:** an invisible ImageButton ellipse, 520×960 world px at (3150, 1480), in `Nodes`, below PM.
+* **Hover:** `rift_glow` +α .15, plus a tooltip:
+  * sealed: "THE RIFT IS SEALED · Reach 185 milestones to reveal the Prestige Multiverse · You have N", with a
+    `gate.req` progress bar (mock a);
+  * revealed: the gate state line.
+* **Click:** fly to the rift and open the gate popover (§7.8).
+* The gate states themselves live on the portal (§4.6) and the universe tag (§4.3).
+
+---------------------------------------------------------------------------------------------------------------------
+
+## 4. HUD
+
+### 4.1 Contents
+
+| item | data | where |
+|---|---|---|
+| Points capsule | `hud.pts`, `hud.gen` (null → no pill), universe label from `map.inside`, warning chip from `hud.c` (value shown, e.g. "SOFTCAP e1.169e9"), status chip | TopbarGui, centred in `GuiService.TopbarInset` |
+| Universe tag | `gate` (inside only): "GOAL MET · LEAVING WILL FINISH" + FINISH (hold 1.2 s), or "GOAL NOT MET · LEAVING EXITS EARLY" + EXIT | TopbarGui, hanging under the capsule |
+| Dock | HOME, TROPHIES (`N/18` badge, opens ach), OPTIONS (red dot while unsaved; white ring while open) | HudGui, bottom-left |
+| Zoom capsule | `[−] 51% [+]` | HudGui, right of the dock; mouse only |
+| READY tray | pulse nodes (+ `val.gain`), then glow nodes, in fixed map order | HudGui, bottom-right, left of the portal |
+| Portal | `gate` | HudGui, bottom-right corner |
+| Toasts + notification list | popups (`kind`) | OverlayGui, top-right of the free map rect |
+| Edge markers | off-screen pulse and glow nodes | MarkerGui |
+
+### 4.2 Placement
+
+```
+WIDE 1920×1080                                                          COMPACT 844×390
+┌[RBX][chat]      ╭─ POINTS · NORMAL UNIVERSE ─╮          [···]┐      ┌[RBX][chat] ╭ e6.424e23 ╮           [···]┐
+│                 ╰──── ↑ 6.21e24 OOMs/sec ────╯   ┌toast 380┐  │      │            ╰─ ↑ /sec ──╯  ┌toast 240┐     │
+│ ░ chat area: no HUD in x<420, y<300 ░            │ toast   │  │      │ ░chat░       ▲ marker     └─────────┘     │
+│                                                  └─+3 MORE─┘  │      │                                           │
+│                                                               │      │                     ▼ marker              │
+│ [HOME][TROPHIES][OPTIONS] [− 51% +]   ┌─ READY tray ─┐ (PORTAL)│      │ [HOME][TROPH][OPT]  (7 READY·TAP) (PORTAL)│
+└───────────────────────────────────────────────────────────────┘      └───────────────────────────────────────────┘
+```
+
+| element | WIDE (du) | COMPACT (du) |
+|---|---|---|
+| capsule | 400×58 at y 6, centred in TopbarInset; drops below the bar (y 62, 0.2 s) if the strip < 200 du (unibar expanded) | 290×44 at y 6 |
+| dock | buttons 64 (gap 14), captions Heavy Italic 12; x 20, bottom 30 | buttons 50 (gap 10), captions 11; x 12, bottom 22 |
+| zoom capsule | glass 54 tall, after the dock | none |
+| READY | tray (gem row, max 6 gems + `+N`), right edge at W−170 | pill (≤ 3 mini gems + "N READY · TAP TO LIST"); tap expands to the tray |
+| portal | 140×160 (disc Ø112) at the bottom-right | 92×104 (disc Ø70) |
+| toasts | 380 wide, y 68, pitch 74, max 3 | 240 wide, y 58, max 1 (2 on tablets) |
+
+**With a side sheet open** (WIDE/MEDIUM), everything re-centres on the strip:
+
+* the capsule at the strip centre (x SX/2 + 40, clear of RBX/chat);
+* the dock at the strip's bottom-left (56 du buttons);
+* the READY tray collapses to the **READY pill** at the strip's bottom-right ("TAP A GEM TO SWITCH"): each gem opens
+  its layer;
+* the portal is hidden: its function is the universe tag and the rift;
+* the zoom capsule is hidden (wheel still works);
+* toasts appear at the strip's top-right.
+
+**COMPACT with a panel open:** the capsule is swapped for the panel band (§5.10). Toasts stay top-right, max 1.
+
+### 4.3 Points capsule (the loved gold pill) — TopbarGui
+
+```
+Capsule     Frame 400×58, UICorner .5, UIGradient #2a2140→#0d0b16 α .04, UIStroke 2.5 + UIGradient #ffe89a→#ffc233 α .67,
+            glow_rr gold α .6 (UIShadow if available), bevel_button overlay
+├ Coin      Frame Ø68 at x −19 (breaks out): Radial #fff6cf→#ffd34d@.45→#a8761a, UIStroke 3 #fff1b8, sparkle sprite; spins 6 s/rev
+├ Label     "POINTS · NORMAL UNIVERSE" / "POINTS · PRESTIGE MULTIVERSE", ExtraBold 11 caps #ffe9a3 α .8 (hair spaces)
+├ Amount    Sarpanch Heavy 34, UIGradient W→#ffe89a→#ffc233, UIStroke 5 black + shadow clone (R4); steps 34→30→26 if > 250 du
+├ Unit      "points" Montserrat Bold 13 #ffe9a3
+├ GenPill   hangs at y 51: h 26, green gradient #3fdc78→#1f8f47, UIStroke #b5f5c9, up sprite + Sarpanch Bold 14 (hud.gen verbatim)
+├ Warn      chip right of the capsule: gold, warn sprite + the first hud.c line's value; tap → tooltip with all lines
+└ Status    chip under the pill: SAVING… (gold) / NOT SAVING (danger) / RECONNECTING (info); SAVED shows 1.5 s after a save
+```
+
+COMPACT: 290×44, coin Ø52, amount 26, no label, pill h 20 / text 12. A tick bump (UIScale 1 → 1.05 → 1, 0.18 s) plays
+every second while points grow. Numbers never tween.
+
+### 4.4 Dock buttons
+
+* `ImageButton`, UICorner 25%.
+* UIGradient `lift(c,.2)` → c@.55 → `shade(c,.55)`, UIStroke 2.5 `lift(c,.55)`, `bevel_button` overlay, glow_rr hue
+  α .55.
+* Icon sprite at 48% size with a hard-shadow clone.
+* Caption Heavy Italic 12 (11) with UIStroke 4.
+* Hues: HOME #2fcf8f, TROPHIES #ffb020 (badge #b8860b `N/18`), OPTIONS #8a7cff.
+* The active state gets a white 3 du stroke. Press: UIScale .94.
+
+### 4.5 READY tray and pill
+
+* **Entries:** every shown node with `val.pulse` (kind READY, gain chip `+val.gain` in gold), then every node with
+  `val.glow` (kind CAN BUY, "! BUY" chip in danger). Fixed map order inside each group, so nothing jumps.
+  * Header: "⚡ N READY · M CAN BUY" and the hint "TAP = OPEN · HOLD = PRESTIGE" (mouse and touch alike).
+  * Hidden when both are 0.
+* **Gem:** a 52 du Frame circle (Radial gradient, symbol), the chip below, 84 du pitch. Max 6 gems + `+N` (tap →
+  `frameNodes` + a list popover).
+* **Tap a gem:** fly to the node and open its panel.
+* **Hold a READY gem 0.6 s:** send `val.ra` (prestige), after the safety rules of §3.4.
+  * A conical charge ring (R6) fills around the gem.
+  * A "HOLDING · PRESTIGE <LAYER> +gain" banner shows above the tray (mock h).
+  * Releasing early cancels.
+  * CAN BUY gems do not hold.
+* **Pill** (COMPACT home, and the strip while a sheet is open): up to 3 overlapping mini gems + "N READY" + "TAP TO LIST"
+  or "TAP A GEM TO SWITCH". Tapping expands it into the tray. The pill itself never holds.
+
+### 4.6 Multiverse portal
+
+* A Ø112 disc with a UIGradient **Conical** ring (#ff2e63, #b35cff, #ff5a1f, #ffd34d) rotating 8 s/rev.
+* Inner void: Radial #05030b → #1a0a24 + swirl sprite.
+* Label "MULTIVERSE" Heavy Italic 16 + a state pill.
+
+| state | from | pill |
+|---|---|---|
+| sealed | `gate.show == false` | `??? · 164/185` (from `gate.req`); desaturated, no rotation; hidden entirely in first-run mode |
+| locked | show, `!can` | LOCKED + lock sprite |
+| enter | can, outside | ENTER, crimson aura |
+| exit early | inside, `!fin` | EXIT EARLY, orange |
+| finish | inside, `fin` | FINISH, gold aura breathing |
+
+Tap: fly to the rift and open the gate popover (§7.8).
+
+### 4.7 Toasts
+
+The toast is the Figma Popup 4:91 at 380×64 (COMPACT 240×48):
+
+* horizontal UIGradient `shade(k,.55)` → panel, UIStroke 2 k, hue glow;
+* icon disc (Radial);
+* title Heavy Italic 15 + UIStroke 4, a ×N chip, sub SemiBold 13;
+* a 3 du life bar.
+
+Kinds, from the view's `kind` (fallback: title/type/bColor):
+
+| kind | colour |
+|---|---|
+| Milestone | gold |
+| Achievement | info #7a8cff |
+| Corruption fixed | lime |
+| Challenge complete | gold, star icon |
+| Notice | muted: saved, import result |
+
+Rules:
+
+* **Coalescing** per Q-O1. Milestone popups inside the Multiverse stay silent (game rule).
+* **One location:** the top-right of the free map rect.
+* Toasts are **click-through** (Interactable false). Only `+N MORE` takes input: it opens the notification list (the
+  last 20, CLEAR; tapping a row flies to its layer).
+* Enter: slide 60 du, Back Out 0.28 s. Exit: 0.2 s.
+
+---------------------------------------------------------------------------------------------------------------------
+
+## 5. Panel template
+
+### 5.1 Form factor and protocol
+
+| mode | geometry | map |
+|---|---|---|
+| WIDE | sheet backdrop from SX 760; card x 784, y 70, 1112 × up to 994 du; emblem breaks out top-left; close 52 at the top-right corner (y ≥ 56, under the Roblox "···"); **small panels hug their content** (min 560) | Box = strip (§3.6) |
+| MEDIUM | card width clamp(.62·canvas.w, 900, 1112), right margin 16; full screen if the strip < 460 du | strip or disabled |
+| COMPACT | full screen: band in the top-bar strip + a 226 du hero column + a scrolling content column (§5.10) | `MapGui.Enabled = false` |
+
+**Protocol (C4).**
+
+* **Open** sends `["tab", id]` once. The shell (emblem, title, hue, row) draws immediately from the node data. The body
+  fills when `patch.tab == id`, with a skeleton for at most 1 frame.
+* **Close** sends `map.close = ["tab","none"]`, through X, Esc, or a click on the strip's empty map.
+* The client never re-sends `["tab", id]` for an open panel (that resets the subtab).
+* There is **one Render tab tree**, re-skinned idempotently (`Style.child` get-or-create). Animations are keyed by
+  `(layer, id)` from `a`, never by path id.
+* Tabs that have content only while open (pm, cp, cm, pep Upgrades, ex Upgrades, ach) show the skeleton until their
+  first patch.
+
+### 5.2 Shell (WIDE)
+
+```
+Sheet (Frame 1112×H)
+├ Rim         Frame, UICorner 22, UIGradient #221d33→#14111f@.28→#100d19, UIStroke 3 + UIGradient 135° lift(c,.4)→c@.4→shade(c,.55)@.75→c,
+│             glow_rr c α .45 + black depth shadow (UIShadow if available), inner top lip (bevel_card)
+├ HeaderBand  Frame h 90, UIGradient 0° mix(panel,c,.22)→transparent; stripes tile (standalone texture) α .035
+├ HeaderRule  Frame h 2 at y 92, UIGradient c→α .75→1, glow
+├ Emblem      Ø96 at (−18,−22): Radial lift(c,.6)/c@.45/shade(c,.4), UIStroke 3 lift(c,.5), bevel, glow_circle c α .9 (R7, R2)
+├ Title       Heavy Italic 44, UIGradient W→lift(c,.45), UIStroke 7, shadow +4 (R3), at (96,10)
+├ SubRow      chip "ROW 1" / "MULTIVERSE · ROW 1" + caps verb line ("RESETS FOR PRESTIGE POINTS", "THE ROOT OF THE TREE"…)
+├ Tabs        in the header, right-aligned (y 26), when there are ≥ 2 (Figma Tab 4:55: Active hue gradient + glow; Idle; Notify dot)
+├ Close       ImageButton 52, UICorner 14, danger gradient, UIStroke #ffc2cc, bevel; X sprite; hover rotates 90°
+├ Hero        §5.3 (pinned, not scrolling)
+└ Body        styled Frame (UICorner, gradient) holding a transparent ScrollingFrame (§5.8)
+```
+
+Corrupted layers (cp, cm):
+
+* body `black → #041a06 → #062b0a` + a scanline tile α .025;
+* rim UIStroke 3 lime, **dashed** (R8), lime glow;
+* RobotoMono for system text;
+* terminal tabs `> CORRUPTIONS`;
+* a breadcrumb `C:\MULTIVERSE\CORRUPTED>_`;
+* a glitch title (R12).
+
+### 5.3 Hero (y 104–236 WIDE)
+
+* **Left: resource block.** "YOU HAVE" ExtraBold 12 caps muted, then the amount **Sarpanch Heavy 56** (UIGradient
+  W@.08 → lift(c,.5)@.5 → c@.92, UIStroke 7, shadow +5, Radial glow blob 470×150 behind it at α .35). Long values step
+  56 → 48 → 40 to fit 560 du.
+  * Resource name Heavy Italic 20 `lift(c,.6)`.
+  * Effect line Bold 13 muted (RichText, colours remapped). Hidden when `eff` is null, which the view sends instead of
+    the "undefined" quirk.
+* **Right: CTA** 400×90 (Figma Prestige Button 4:47 at 1.2×):
+  * **Can:** UIGradient `lift(c,.15)`/c/`shade(c,.55)`, UIStroke `lift(c,.5)`, bevel, glow α .6, and a shine sweep
+    (R5) every 2.8 s.
+  * Title = the verb (PRESTIGE, GET +1 MILESTONE, COLLECT, EXPLORE, CORRUPT), Heavy Italic 26 + UIStroke 6.
+  * Gain line `+reset.gain res` in Sarpanch Bold 15.
+  * **Static layers** add `pr` as a bar + "40%" under the gain.
+  * **Locked:** grey gradient, title kept, gain line = "have / need", the `pr` bar, no glow.
+  * The hotkey keycap (from `reset.hk`) shows **only when PreferredInput = KeyboardAndMouse**.
+* **Stat chips** under the CTA (30 du, one row): resource-display lines as `LABEL ········ VALUE`
+  (POINTS e6.424e23 · PASSIVE +e1.073e25/s · AUTO-GET ON · PRESTIGE ASHES …).
+* A divider at y 246. The body starts at y 256.
+
+### 5.4 Prestige feedback (juice)
+
+1. Press: UIScale .94 (0.08 s), then Back Out.
+2. A burst ring (ring sprite, Ø120 → Ø360, α .6 → 1, 0.45 s) + 10 sparkles.
+3. A **"+gain" floater** (Sarpanch Heavy 28 gold) flies from the CTA into the hero amount (0.6 s Quad Out).
+4. The hero amount bumps (UIScale 1.12 → 1) and its glow flares.
+
+ReducedMotion keeps a 0.1 s colour flash only. Buy an upgrade: card UIScale 1 → 1.06 → 1, a white flash α .5 → 1
+(0.25 s), 8 sparkles, the chip swaps BUY → OWNED, and the card eases into the quiet tier (0.3 s).
+
+### 5.5 Sub-tabs
+
+Tabs sit in the header (§5.2) and send `["subtab", …]`. A single-tab bar (Main only) is hidden. Notify = a 10 du danger
+dot. The newly active tab gets UIScale .92 → 1 (0.15 s).
+
+### 5.6 Sections
+
+The client inserts section titles from `cn`, grouping consecutive components of one kind. A title is:
+
+* a 6×24 hue bar;
+* Heavy Italic **22** with a UIGradient + UIStroke 5;
+* chips;
+* a hairline UIGradient c α .45 → 0;
+* a right-side hint or control.
+
+| cn | title | chips | right |
+|---|---|---|---|
+| buyables | BUYABLES | n | "HOLD TO BUY · TAP ⓘ FOR DETAILS" |
+| upgrades | UPGRADES | **N READY** (hue) + **owned / total OWNED** (green) | HIDE OWNED mini toggle (session memory) |
+| milestones | per layer: MILESTONE LADDER, META LADDER… | done / total | NEWEST FIRST (the Options order) |
+| challenges | CHALLENGES | done / n | — |
+| achievements | TROPHY SHELF | n / 18 | — |
+| clickables | per layer (§6) | — | — |
+| grid | C:\CORRUPTION\DISKS (terminal window header) | cols × rows · n CORRUPTED · n FIXING | — |
+| display-text / raw html | none: **NOTES rows** (ⓘ + the game's line verbatim; no parsing) | — | long explainers collapse to one line + "MORE ▾" |
+| blank, h-line, v-line | dropped | — | — |
+
+Rhythm: WIDE body padding 32, section gap 22, title → content 12, card gap 12. COMPACT: 10 / 8 / 8 / 8.
+
+### 5.7 Cards and states
+
+| widget | can (actionable) | owned / done / maxed (quiet) | not yet (unlocked, unaffordable) | locked |
+|---|---|---|---|---|
+| Upgrade 5:47, 237×196 | hue surface `mix(panel,c,.38)→mix(deep,c,.15)`, stroke gradient, **glow α .55**, BUY chip, shine sweep, "Currently" chip, COST white | `mix(panel,#4be07a,.14)`, stroke α .45, **no glow**, "✓ OWNED", footer **EFFECT value** or "✓ ACTIVE" | mauve surface, **pr% chip + 5 du bar**, COST #d9b3be | dim mauve, lock chip, the requirement text (3 lines), no cost |
+| Compact owned, 237×66 | — | index + title + ✓ + EFFECT value: used for **fully owned tiers** in their slots | — | — |
+| Buyable (wide ≤ 2 per section, else a 260 grid) | hue surface; **hold strip lit "HOLD TO BUY"** (fills while held) | "MAX" green | mauve; hold strip = the reason ("NOT ENOUGH PP") + pr | — |
+| Challenge 5:173 | idle hue, START | done green, COMPLETED, `cmp/lim` | — | requirement |
+| Challenge active / completable | gold, EXIT EARLY / **FINISH** (glow) | | | |
+| Milestone row | NEXT = spotlight card (78 du pill, glow) | done = 50 du quiet green row | future = faint pill + cost | infected = danger stroke + glitch stripe + second effect line |
+| Perk 5:58 | gold dashed (R8) "EXPLORE A NEW PERK" | | | mauve dashed |
+| Achievement 5:180 | — | gold medallion + star + glint | — | "?" slate |
+| Corruption tile 96 | Trojan: lime dashed; Backdoor: **crimson dashed**; active / chosen: gold + fix bar | fixed: green solid | — | empty: quiet, slot number only |
+
+**Tier board (WIDE upgrades).**
+
+* One row per game row (11–14, 21–24…), with a 42 du **tier rail**: a roman-numeral badge on a glowing spine.
+* A fully owned tier shows its compact owned cards in the same slots, and the rail badge turns green "✓". Slots never
+  regroup across rows, because the ids are path-stable.
+* Perk slots sit inline.
+* COMPACT: all owned upgrades fold into **one summary row** "✓ 14 OWNED ×e2.296e21 · ×e1.725e22 … SHOW", then the
+  remaining cards in index order (mock l).
+
+Glow budget: ≤ 2 glowing elements per card and ≤ 24 per panel. Owned and locked never glow.
+
+### 5.8 Scrolling and virtualisation
+
+* A styled Frame holds a transparent ScrollingFrame: `AutomaticCanvasSize = Y`, `ScrollBarThickness = 6`,
+  `ScrollBarImageColor3 = lift(c,.3)`, `ElasticBehavior = WhenScrollable`, `ScrollingDirection = Y`.
+* An 80 du bottom-fade Frame sits on top (not interactive).
+* The scroll position is remembered per layer/subtab for the session.
+* **Touch safety:** a hold (buy, grid, click) starts after 120 ms with < 10 pt of movement. Earlier movement means a
+  scroll, never a buy.
+* **Virtualisation** for lists over 60 rows (the expanded m ladder, t's 28 upgrades, the mp buyables): a pool of fixed
+  rows (viewport + 2), repositioned on `CanvasPosition`, with a spacer Frame.
+
+### 5.9 Empty, locked and loading states
+
+* **Locked layer** (opened from a locked node): the hero shows a lock emblem, "LOCKED" and `val.tip` with a `pr` bar.
+  The CTA is in its Locked variant. The body renders at α .6 and is inert.
+* **Empty section after hiding:** a slim row with an OPTIONS link (Q-P3).
+* **Skeleton:** 3 shimmer bars (UIGradient Offset sweep 1.2 s).
+
+### 5.10 COMPACT panel (phones)
+
+* **Band** (TopbarGui, TopbarSafeInsets, 56 du; mock l / m): emblem 42 + title Heavy Italic 22 + ROW chip.
+  * The **READY switcher**: 3 mini gems + "+N" + a bolt, 38 tall. Tapping a gem opens that layer.
+  * A **44 du close** left of the Roblox "···".
+  * A neon rule under the band.
+* **Hero column** (x 10, 226 wide, full height, left thumb): YOU HAVE + amount (Sarpanch 34–38) + resource name +
+  stat chips. The **CTA is pinned at the bottom** (200×72; static layers 86 with the `pr` bar).
+* **Content** (x 248 → 832): section titles 15, cards in 2 columns (upgrades) or rows (buyables 78, milestone rows
+  44), an ⓘ button on buyables, the owned summary row, and the scrollbar at the right edge.
+* Toasts: top-right under the band, max 1, click-through.
+
+---------------------------------------------------------------------------------------------------------------------
+
+## 6. Per-layer signatures
+
+Every panel uses the template. Each signature adds **one hero idea**, an **accent treatment** and at most **one bespoke
+widget**, so no two panels read alike. "Hug" means the sheet height hugs its content (min 560 du).
+
+| layer (hue) | hero | accent | sections (after the hero) | bespoke widget / behaviour | motion |
+|---|---|---|---|---|---|
+| **m** Milestone (#b35cff) | count "164 MILESTONES" + GET +1 MILESTONE (`pr` bar, M keycap) + AUTO-GET chip | violet; the ladder spine glows | NOTES (the game's display-text lines) → MILESTONE LADDER → MALWARE | **Ladder:** NEXT spotlight (REQUIRES + pr), 4 newest done rows (quiet), decade folds naming their unlocks, "1 – N SHOW ALL" (virtualised pool of 16). WIDE right column: NOTES + JUMP TO (NEXT + 25-blocks + MALWARE) + order/filter chips mirroring Options. MALWARE: infectable rows with **INFECT** (bug sprite + cost; lit when affordable). Honours Milestone Showing Mode and Order. (mock c, m) | new milestone: NEXT flashes gold, slides into done (0.35 s), the new NEXT slides in |
+| **mm** Meta Milestone (#d17aff) | count + GET +1 (AUTO chip when em.best ≥ 1) | orchid; "M²" watermark | META LADDER (30) | same ladder, no malware | same |
+| **em** Extra Milestone (#e88af2) | count + GET +1 (auto at m.best ≥ 170) | pink; "M³" watermark | EXTRA LADDER (19) | same ladder | same |
+| **p** Prestige (#6fc3ff) | PP + PRESTIGE (P) + POINTS / PASSIVE | sky blue; header stripes | BUYABLES (wide + progress box) → UPGRADES tier board (rows 11–53) | perk slots (15/25/35/45 with malware m4; 51–53 in sp C11) as dashed gold cards; RESPEC PERKS small danger button in the UPGRADES title row (mock b, l) | shine on BUY; buy burst |
+| **pe** Prestige Energy (#ff9a2e) | energy + COLLECT (E) with pr | orange; lightning watermark | rate chip ("×a per OoM of PP, ^b") → UPGRADES (8, 2×4) | none; **hug** | crackle on COLLECT |
+| **sp** Super Prestige (#5fe0ff; infected → danger emblem; malware tabs → **ember #ff7a2e** accent) | SP + PRESTIGE (S); tabs Main / Prestige Ashes / Spark Milestones | cyan; ember rim on the malware tabs | Main: BUYABLES (2) → UPGRADES (17, perk 51). Ashes: ashes stat → challenge 11. Spark: furnace box → SPARK MILESTONES → pager | **Furnace** (the game's unlock box as a titled card: flame emblem, ashes bar, 3/3 UNLOCKED, IGNITE + auto-fill state, REIGNITE #n). **Ember burn bars** (a real `bar` node: p + st8): BURNING (flame gradient + ember sprites), ASHED (grey), PERMANENT (gold "skipped when burning"). SHOW cycler 1/3/5 (one press). Pager « ‹ PAGE a/b › » at 52×44. Challenge 11 "Milestone Dilation" is a round 330 du portal card with a conical ring. (mock f) | embers rise from burning bars (≤ 6 per bar, none on LOW) |
+| **pb** Prestige Boost (#57e0b0) | amount + GET; **power badge** "^x" (hexagon sprite, Sarpanch Heavy 40) | mint | UPGRADES (16) | power badge from main-display eff | badge pulses once per purchase |
+| **pp** Prestige Power (#ff4d6d) | PP + PRESTIGE (W); "X Hz" Sarpanch Heavy 40 over an **oscilloscope strip** | crimson-pink | BUYABLE Power Scaler (wide) → UPGRADES (9, 3×3) | wave tile texture (standalone, ScaleType Tile) scrolled by Position | wave scroll; frozen with ReducedMotion |
+| **se** Super Energy (#ff6a1f) | amount + COLLECT (Shift+E) | deep orange | rate chip → UPGRADES (4, one row) | none; **hug** | crackle |
+| **hp** Hyper Prestige (#7fd9ff) | HP + PRESTIGE (H) | icy cyan; frost corner sprites | BUYABLES (2) → UPGRADES (16) | none | slow shimmer (5 s) |
+| **ep** Exotic Prestige (#9be02c) | EP + PRESTIGE (X) | acid green | **EFFECT LADDER** (the 1st–8th effect lines the game sends) → BUYABLE Exotic Fusioner (docked) → UPGRADES (6) | rungs in milestone-row style; lines in `class='ef'` get a gold EMPOWERED chip; no rungs are invented | a new rung lights bottom-up (0.4 s) |
+| **hb** Hyper Boost (#6dffb0) | amount + GET (Shift+B); two power badges | pale mint | UPGRADES (12) | badges as pb | as pb |
+| **ap** Atomic Prestige (#8ff3f3) | AP + PRESTIGE (A); **atom orbit** on the emblem (two conical rings) | aqua | **CHALLENGES** (8, 4×2, the active one pinned with a gold ribbon) → BUYABLE Challenge Slayer → UPGRADES (12) | challenge grid as the main section | orbit rotation |
+| **mp** Multiverse (#ff5a1f) | MP + GET (V); tabs Main / Upgrades / Fusioners / Scalings | **split rim** violet→crimson | Main: **PORTAL CARD** (challenge 21, full width) → CHALLENGES (4, "N completions"). Fusioners: MODE (2-option segmented, one press) → BUYABLES (6) + RESPEC. Scalings: level tiles | portal card = the gate popover's content (same `["chal","mp",21]`, same 1.2 s hold, the reset list) | swirl rotation; FINISH breathes |
+| **t** Transcend (#ffe93a; dark text on yellow fills) | TP + PRESTIGE (T); **crown rays** behind the emblem | gold crown | Main: NOTES → CHALLENGES (6). Upgrades: tier board (28, 7 tiers, owned tiers compact, virtualised). Special: SPECIAL POINTS | **relic grid**: 6 tiles (kind, amount Sarpanch 28, effect, BOOST / CHOOSE) + RESPEC | rays 30 s/rev |
+| **ach** Achievements (#ffc93c) | "13 / 18" Sarpanch 64 gold + the effect line | gold shrine | TROPHY SHELF | 2 shelves × 9 medallions on plank Frames; tap = an inspector strip (name + goal/done); hover = tooltip. No CTA. | a glint crosses one done medallion every 3 s |
+| **pm** Prestige Milestone (#ff2e63) | count + GET (Ctrl+P); **glitch title** (R12); the masked name as sent | crimson; scanline α .05 | Main: debuff tile (red) + essence tile → PRESTIGE MILESTONE LADDER (16). Challenges: completions → "Current Unlocked Boosts" titled card → CHALLENGES (3, gold when completable) | glitch title; the resource-name flicker is kept as sent | glitch bursts 2–4 s, 80 ms |
+| **pep** Prestiged-Exotic (#f2b04d) | PEP + GET (Ctrl+X) | amber **fusion core** (conical ring around the fusioner level) | EFFECT LADDER (5) → (Pr) Exotic Fusioner. Upgrades: 3 | effect ladder as ep | core ring rotation |
+| **cp** Corrupted Prestige (#39ff14, symbol **CR**) | CAUSED / FIXED counters (Sarpanch 52) + essences line + **CORRUPT** (black glossy, lime, scanlines, CTRL+C, "n / 20 charges · next at X") | Corrupted treatment, terminal tabs, breadcrumb, RobotoMono | ESSENCE & RECHARGE MODE (radio, one press) → **DISK GRID** + inspector → explainer (one line + MORE) | **Disk grid** 4×4 → 6×6 of 96 du tiles from `grid.state/lv/kind`: empty = quiet slot number; Trojan lime dashed; Backdoor crimson dashed; active or algorithm-chosen gold + fix bar; a legend. **Inspector**: `grid.tip` split into fix / debuff / reward, pr + the game's ASCII bar `[██████====] -< 63% >-`, DEACTIVATE, other corruptions list. It docks on the side set by **Corrupt. Tooltip Pos.** (mouse); touch always uses the inspector. Antivirus: buyables + TrojanFix.scr / BackdoorRemove.scr process cards with conical cooldown rings. (mock d) | scanline scroll, cursor blink 1 s, glitch bars on a corruption; lime "CORRUPTION FIXED!" toast |
+| **cm** Corrupted Milestone (#1fbf4a) | count + GET (C+M) | Corrupted treatment, darker green | CORRUPTED LADDER (5) | small lime terminal ladder; **hug** | cursor blink |
+| **ex** Exploration (#45e07f) | EX + EXPLORE (Ctrl+E) + ZONE / AREA LIMITS chips | green cartography: 40 du grid tile α .05 | Main: **MAP** + **D-PAD** → feature tiles (new feature at (x;y); the danger line "new feature at zones: …"). Upgrades: 2. Rewards: the game's per-zone list | **Map**: the ZoneMaps SVG redrawn as Frames (cell lines, border), **cached by svg string**; position = a green gem, goal = a star sprite, portals (m14) = swirl sprites. **D-pad**: the 4 movement buyables as arrow keys around RESPEC POSITION, each with "went right 6" and its cost; the arrow keys and R stay the game's hotkeys. **Hug** (mock e) | the position gem hops (0.15 s Back Out) |
+| **Options** (#9d8cff) | gear emblem; no hero | bevel cards, section tags | **YOUR SAVE** (SAVED WITH YOUR GAME): status card ("ALL PROGRESS SAVED · saves live on the server for this Roblox account" / UNSAVED), SAVE / EXPORT / IMPORT tiles, Offline Production toggle · **DANGER ZONE**: HARD RESET… → modal (§7.7) · **ABOUT**: credits + the unlocked hotkeys (keycaps) · **DISPLAY** (SAVED WITH YOUR GAME): Milestone Showing Mode **cycler** (5 dots), Completed Challenges toggle, Corrupt. Tooltip Pos. **cycler** (4), Milestones Order segmented (2 options = one press) · **THIS DEVICE** (NOT PART OF THE SAVE): Motion SYSTEM/FULL/REDUCED, Map Detail AUTO/HIGH/LOW, Map Labels AUTO/ALWAYS/OFF, Interface Size 90/100/115% | game options send `["opt", …]`, one press per tap. Device options are client-only: stored in a separate DataStore key `client` through a tiny remote, never in the save string; `Player:SetAttribute` mirrors them for the client. (mock g) | tiles sweep on hover |
+| **End screen** (`ended`) | full-screen OverlayGui over the frozen, dimmed map: gold rays + trophy emblem, "YOU BEAT THE GAME!" Heavy Italic 64 gold, winText, "IT TOOK YOU T" chip | gold | KEEP GOING (gold primary, `opt keepGoing`) · PLAY AGAIN (danger outline, **hold 2 s**, `opt playAgain`) | **no Discord line**; only `opt` actions run | confetti once (≤ 40 sprites) |
+
+---------------------------------------------------------------------------------------------------------------------
+
+## 7. Overlays (OverlayGui)
+
+1. **Tooltip** (Figma 4:68): 300 du, UICorner 14, UIGradient panel3 → panel, UIStroke 1.5 `lift(c,.2)`, shadow +
+   hue glow.
+   * Title Heavy Italic 14 `lift(c,.55)`, body SemiBold 13 RichText, optional `pr` bar, foot caps 11 ("Click to open ·
+     right-click to peek").
+   * Mouse only, after 250 ms, at the cursor + (16, −h−12). It flips to the side with fewer node rects and is clamped
+     to the viewport. One owner at a time.
+2. **Peek** (long-press 450 ms / right-click on a node; mock j):
+   * The node grows ×1.25.
+   * Scrim: a Frame α .62 plus a **square** Frame centred on the node with a Radial UIGradient transparency hole. A
+     radial gradient on a full-screen frame would be elliptical, since its radius is (w+h)/4.
+   * A 330 du card: emblem, name, amount, the `val.tip` line, **OPEN**, and **HOLD TO PRESTIGE +gain** (0.6 s,
+     conical fill; only when `val.ra` exists). A locked node shows its requirement instead.
+   * Dismiss: tap the scrim, pan, or Esc. While a peek is up, toasts collapse to the newest.
+3. **Toasts** §4.7; the **notification list** opens from `+N MORE` (mock h).
+4. **Detail sheet** (touch; long-press an upgrade, or ⓘ on a buyable): a full-width bottom sheet with a drag handle,
+   the full text, CURRENTLY / COST / YOU HAVE + pr, and the big action (BUY / HOLD TO BUY). Holds happen here, away
+   from the scroll list. Dismiss: tap outside or drag down 60 du.
+5. **Modal chrome:** a dimmer (black α .6, `Active = true`, `InputSink = All`) and a bevel card with a hue rim. Open:
+   scale .96 → 1 (0.2 s).
+6. **Export** (mock i): a read-only monospace TextBox (RobotoMono 13, `TextEditable = false`,
+   `ClearTextOnFocus = false`, TextWrapped, inside a styled Frame).
+   * On open: CaptureFocus + select-all (`SelectionStart = 1`, `CursorPosition = #text + 1`).
+   * Chip "22,204 CHARACTERS · ALL SELECTED".
+   * Hint: "Press Ctrl+C to copy. On a phone: tap the box, then Select All and Copy. (Roblox games cannot write to
+     your clipboard.)"
+   * Buttons: SELECT ALL (primary), DONE.
+   * **Fallback** where read-only select/copy fails on mobile: an editable TextBox whose Text is restored whenever it
+     changes.
+7. **Import:**
+   * An editable TextBox ("Paste a save string (web saves work too)"); IMPORT is disabled while the box is empty.
+   * After a press: a **conical cooldown ring** for the server's 10 s `IMPORT_COOLDOWN` ("IMPORT · 4 s").
+   * The result is shown inline: "That string is not a valid save (nothing was changed)." in danger; success closes
+     the modal and shows a Notice toast.
+   * **Hard reset confirm:** "HARD RESET?", what is lost, EXPORT FIRST · CANCEL · **HOLD TO RESET 2 s** (conical
+     ring, "0.8 / 2.0 s"). Completion sends `{"opt","hardReset"}` twice, then a red edge flash + a Notice toast.
+8. **Gate popover** (portal / rift / universe tag):
+   * Conical swirl emblem, PRESTIGE MULTIVERSE, "MP CHALLENGE 21 · <state>", a GOAL box (`gate.goal`), completions
+     (`done ≥ 1` = won).
+   * **What happens:**
+     * ENTER lists the layers that reset: the game's `onEnter` list, m mm em p pe sp pb pp se hp ep hb ap t.
+     * FINISH: "completes it (+1) and returns you".
+     * EXIT EARLY: "returns you without completing".
+   * The action is a **1.2 s hold** with a conical ring (STAY / HOLD TO ENTER | EXIT | FINISH). Locked shows a
+     disabled bar "UNLOCK MULTIVERSE (MP) FIRST".
+9. **Status** (TopbarGui, under the capsule): SAVED (green, 1.5 s after a save), SAVING… (gold, while
+   `patch.unsaved`), NOT SAVING (danger; the data failed to load, tooltip explains), RECONNECTING… (info).
+10. **Loading / fatal:**
+    * Loading: a realm thumbnail card, "THE MILESTONE TREE" gradient title, a progress bar from the PreloadAsync count,
+      "LOADING THE REALM…".
+    * A render failure first auto-resyncs once (re-sends Ready), then shows **OUT OF SYNC · RESYNC**.
+11. **End screen:** §6.
+12. **First run** (while m.best == 0; mock n):
+    * The READY tray, portal, zoom capsule and rate pill are hidden.
+    * A **START HERE** pointer chip ("get your first milestone") bobs above M, whose plate reads "⚡ READY".
+    * Sealed sockets stay quiet; only the frontier (MM, P) shows `?`.
+    * The cue disappears after the first milestone. The normal HUD fades in over the next 2 s.
+
+---------------------------------------------------------------------------------------------------------------------
+
+## 8. Motion
+
+| element | trigger | animation | ReducedMotion |
+|---|---|---|---|
+| camera, ambient realm | input / always | REALM §9.4 / §6 | REALM §9.6 |
+| node hover / press | pointer | UIScale 1.08 (0.12 s) / .94 (0.08 s) | instant 1.04 |
+| badge | glow or pulse on | pop 0 → 1.15 → 1 (0.25 s Back Out), then bob ±2 du 0.8 s | static |
+| pulse aura / rays | pulse (≤ 4 nodes) | aura ImageTransparency .55 ↔ .30 1.2 s sine; rays Rotation 12 s/rev | static aura α .45 |
+| select ring | open panel | Rotation 20 s/rev | static |
+| flow sparks | pulse edges (HIGH) | 1.6 s loop, ≤ 6 | none |
+| capsule tick / coin | 1 s / always | UIScale 1 → 1.05 → 1 (0.18 s) / coin 6 s/rev | none |
+| shine sweep | BUY cards, CTAs | UIGradient.Offset (−1,0) → (1,0), 0.9 s, every 2.8 s, random phase | none |
+| buy / prestige | cls change / reset | §5.4 | colour flash only |
+| sheet open / close | tab | slide 48 du + Box tween (0.24 s quintOut) / (0.16 s quadIn); staggered cards y +12 → 0 (25 ms apart, first 12) | instant |
+| tabs | switch | new active UIScale .92 → 1 (0.15 s) | instant |
+| toasts | popup | slide 60 du Back Out 0.28 s; merge bump 1.06 → 1 | appear / disappear |
+| holds | hold buttons, gems, peek | conical or linear fill ∝ time; rewind 0.12 s | same (functional) |
+| universe change | `map.inside` flips | frameNodes fly (0.9 s) + a full-screen Radial flash (crimson in / violet out) α .6 → 1 | flash only |
+| glitch (pm, cp, infected) | every 2–6 s | clone Position ±2–4 du for 60–140 ms | none |
+| first-run cue | m.best == 0 | chip bob ±4 du 1 s sine | static |
+
+Rules:
+
+* Tween only Position, Size, Rotation, UIScale, transparencies and UIGradient **Offset / Rotation**. Never tween
+  UIGradient sequences, `UIStroke.Thickness` on text, or `UIShadow.BlurRadius`.
+* No CanvasGroup for sheets.
+* Budget: ≤ 6 running tweens in HudGui and ≤ 40 outside the map. Loops pause with their gui's visibility.
+* "Motion means change": idle panels do not animate except shine sweeps on actionable items.
+* `GuiService.ReducedMotionEnabled` is watched. Options › Motion (SYSTEM / FULL / REDUCED) overrides it for the UI
+  and the REALM layer alike.
+* The snapshot mode forces REDUCED (§16).
+
+---------------------------------------------------------------------------------------------------------------------
+
+## 9. Type scale
+
+`Font.fromName(name, weight, style)`:
+
+* Montserrat Heavy is the heaviest weight (no Black).
+* Sarpanch has no italic.
+* There is no letter-spacing: caps get U+200A hair spaces.
+* `LineHeight = 1`.
+* Heavy Italic labels get `UIPadding.PaddingRight = 4` (overhang).
+* Outlines go on Montserrat only. Sarpanch numbers get a hard shadow clone + an optional glow sprite, never UIShadow.
+
+| role | font | WIDE | COMPACT | fill / stroke |
+|---|---|---|---|---|
+| Panel title | Montserrat Heavy Italic | 44 | 22 | UIGradient W → lift(c,.45); UIStroke 7 / 5; shadow +4 |
+| Hero amount | Sarpanch Heavy | 56 (steps 48, 40) | 34–38 | UIGradient W → lift(c,.5) → c; UIStroke 7 / 5; glow blob |
+| Capsule amount | Sarpanch Heavy | 34 | 26 | gold gradient; UIStroke 5 |
+| CTA title | Montserrat Heavy Italic | 26 | 18 | white; UIStroke 6 / 4 |
+| Section title | Montserrat Heavy Italic | 22 | 15 | UIGradient; UIStroke 5 / 4 |
+| Resource name | Montserrat Heavy Italic | 20 | 14 | lift(c,.6); UIStroke 4 / 3 |
+| Card title | Montserrat Heavy Italic | 16 | 14 (min 12) | UIGradient (can) / #d7f7e1 (owned) / #c9bfd0 (locked) |
+| Toast title / tab | Montserrat Heavy Italic | 15 / 14 | 13 / 13 | white; UIStroke 4 |
+| Node plate name | Montserrat Heavy Italic | 13 | 11 | UIGradient; UIStroke 3 |
+| Big numbers in cards (LV, index) | Sarpanch Heavy | 44 / 26 | 28 / 20 | white / lift(c,.5) α .6 |
+| Numbers (cost, chips, stats) | Sarpanch Bold / Heavy | 13–17 | 11–13 | white; not-yet #d9b3be |
+| Body | Montserrat SemiBold | 13 | 12 (floor 11) | W α .85; RichText |
+| Small labels | Montserrat Bold | 12–13 | 11–12 | muted #9a94b8 |
+| Caps labels | Montserrat ExtraBold + hair spaces | 11–12 | 11 | W α .55–.6 |
+| Terminal (cp, cm, export) | RobotoMono Medium / Bold | 12–14 | 11–12 | lime tints #caffbf / #9fdc92 |
+
+The **COMPACT floor is 11 px**, since s ≥ 1 there (§10). A lint fails any COMPACT label below 11. At WIDE/MEDIUM the
+smallest caps render at ≥ 9.4 px on the smallest desktop (0.85 × 11).
+
+---------------------------------------------------------------------------------------------------------------------
+
+## 10. Breakpoints and UI scale
+
+```lua
+local V = workspace.CurrentCamera.ViewportSize   -- points; recompute on change
+local mode = (V.Y < 500) and "COMPACT" or ((V.X < 1500 or V.Y < 860) and "MEDIUM" or "WIDE")
+local s = mode == "COMPACT" and math.clamp(V.Y / 390, 1.0, 1.3)
+       or mode == "MEDIUM"  and math.clamp(math.min(V.X / 1600, V.Y / 900), 0.85, 1.0)
+       or                        math.clamp(math.min(V.X / 1920, V.Y / 1080), 0.85, 1.5)
+s = s * userSize            -- Options › Interface Size .90 / 1.00 / 1.15; COMPACT ignores .90 (never below 1)
+if GuiService.PreferredTextSize > Medium then s *= 1.1 end
+-- one UIScale on each root of HudGui, TopbarGui, MarkerGui, PanelGui, OverlayGui; roots sized in offset = V / s (never a
+-- Scale-sized full-screen frame under a UIScale); MapGui uses REALM mapScale only
+```
+
+| device | V (pt) | mode | s | canvas (du) | sheet |
+|---|---|---|---|---|---|
+| 1920×1080 | 1920×1080 | WIDE | 1.0 | 1920×1080 | side, SX 760 |
+| 2560×1440 | 2560×1440 | WIDE | 1.333 | 1920×1080 | side |
+| 1600×900 | 1600×900 | WIDE | .85 | 1882×1059 | side |
+| 1366×768 | 1366×768 | MEDIUM | .853 | 1601×900 | side, strip 584 du (map at mapScale .877) |
+| 1280×720 | 1280×720 | MEDIUM | .85 | 1506×847 | side, strip ≈ 490 du |
+| 1180×820 iPad | 1180×820 | MEDIUM | .85 | 1388×965 | strip 464 → ≥ 460: side (at the limit) |
+| 844×390 | 844×390 | COMPACT | 1.0 | 844×390 | full screen |
+| 932×430 | 932×430 | COMPACT | 1.10 | 847×390 | full screen |
+| 667×375 SE | 667×375 | COMPACT | 1.0 | 667×375 | full screen; content 1 card column |
+
+Phones are **landscape only** (LandscapeSensor). Portrait falls into COMPACT and is not optimised.
+`GuiService.PreferredTransparency` multiplies the glass and HUD background transparencies (not panel bodies).
+
+---------------------------------------------------------------------------------------------------------------------
+
+## 11. Colour
+
+### 11.1 Tokens
+
+| group | tokens |
+|---|---|
+| base | void #07060d, deep #0d0b16, panel #14111f, panel2 #1c1829, panel3 #262138, stroke #3a3352, strokeHi #6a5f8f, text #f2f0ff, muted #9a94b8, faint #5c5775 |
+| state | bought #4be07a, locked #8a6f7a, complete #ffc233, danger #ff3b5c, gold #ffd34d |
+| extra | info #7a8cff, lockedLink #c7b8f2, ember #ff7a2e (sp malware tabs), system #9d8cff (Options) |
+
+Layer hues (keyed by game id):
+
+| layer | hue | layer | hue | layer | hue |
+|---|---|---|---|---|---|
+| m | #b35cff | se | #ff6a1f | t | #ffe93a |
+| mm | #d17aff | hp | #7fd9ff | pm | #ff2e63 |
+| em | #e88af2 | ep | #9be02c | pep | #f2b04d |
+| p | #6fc3ff | hb | #6dffb0 | cp | #39ff14 |
+| pe | #ff9a2e | ap | #8ff3f3 | cm | #1fbf4a |
+| sp | #5fe0ff | mp | #ff5a1f | ex | #45e07f |
+| pb | #57e0b0 | | | ach | #ffc93c |
+| pp | #ff4d6d | | | | |
+
+### 11.2 Rules
+
+1. **One hue per panel** (the layer token). State hues override it on cards: owned green (always desaturated on
+   surfaces: `mix(panel, bought, .14)`), complete/active gold, danger, locked mauve. **Gold #ffd34d = points and
+   "ready"** only. The layer hue never paints a state.
+2. **Game colours are remapped** wherever they arrive (`col`, `<h2 style=color>`, class colours, `st`):
+
+   | game colour | token |
+   |---|---|
+   | #793784 | m |
+   | #9f2846, #c25757, rgb(238,112,112), #c86a6a | danger |
+   | #652021 | pp |
+   | #648c11 | ep |
+   | #d03800 | mp |
+   | #FFFF00 | t |
+   | black | cp lime |
+   | darkgreen | cm |
+   | gold | ach |
+   | red / #ff0000 | danger |
+   | lime / green | cp / bought |
+   | yellow | complete |
+   | black backgrounds | removed |
+
+   Unknown colours fall back to `lift(c,.35)`.
+3. **Contrast:** coloured text on panel must reach 4.5:1 (body) or 3:1 (≥ 18 du heavy). `lift(c,t)` with the smallest
+   passing t is precomputed per layer (m .25, pp .20, mp .20, se .10, pm .35, others 0). Muted #9a94b8 (6.5:1) is the
+   floor for readable secondary text; faint is decoration only.
+4. **Text on hue fills:** ≥ 14 du → white + Contextual black stroke + hard shadow. < 14 du on low-contrast fills (t,
+   ach, cp, hb, ap, sp, hp, ep, pb, p, pep, ex, em) → dark #0d0b16 text without a stroke.
+5. **Glow budget:** ≤ 2 per card, α ≤ .55 (CTAs and pulse ≤ .9). Owned and locked never glow.
+6. The **biome tint** affects map layers only, never the world layer, nodes or UI.
+7. **Dim, don't hide:** locked content stays visible (mauve / α .6).
+
+---------------------------------------------------------------------------------------------------------------------
+
+## 12. Roblox trees (HUD, sheet, phone band)
+
+```
+TopbarGui (TopbarSafeInsets, DisplayOrder 12) > Root (+UIScale s)
+  Capsule   Frame (R1 + R2 gold) > Coin, Label, Amount (R4), Unit, GenPill (hidden when hud.gen == nil), Warn, Status
+  UniTag    Frame (inside only) > Swirl (R6 conical), Label, Finish (R13 hold 1.2 s)
+  PanelBand Frame (COMPACT with a panel open; replaces Capsule) > Emblem, Title (R3), RowChip, ReadySwitch (gems), Close (44)
+HudGui (CoreUISafeInsets, 10) > Root (+UIScale s)
+  Dock > Home, Trophies (+Badge), Options (+Dot)          ImageButtons (R1 + icon sprite + shadow clone + caption R3)
+  Zoom > Minus, Pct, Plus                                   R10 glass (mouse only)
+  Ready > Header, Gem_<id> (Frame circle R7 + Symbol + Chip + Ring R6 while held)   | ReadyPill (collapsed form)
+  Portal > Aura, Ring (R6 conical rotating), Void (R7), Swirl, Label, StatePill
+MarkerGui (DeviceSafeInsets, 5) > Marker_<id> (≤ 4)
+PanelGui (CoreUISafeInsets, 20) > Root (+UIScale s)
+  Backdrop  Frame #07060d from SX (+24 du ramp) + 2 Radial washes (R7)
+  Sheet     Rim, HeaderBand (+tile_stripes R9), HeaderRule, Emblem, Title, SubRow, Tabs, Close, Hero (Resource, Cta, Stats),
+            Body (styled Frame) > Scroll (ScrollingFrame, transparent) > TabRoot (Render) + BottomFade
+OverlayGui (DeviceSafeInsets, 30) > Root (+UIScale s)
+  Toasts (UIListLayout, click-through) · More (+N) · NotifyList · Tooltip · Peek (+R14 scrim) · Sheet (touch detail)
+  Modal (Dimmer InputSink All + Card) · Loading · Fatal · EndScreen
+```
+
+---------------------------------------------------------------------------------------------------------------------
+
+## 13. Roblox construction reference
+
+### 13.1 Feature detection (`Theme.caps`, filled by pcall at start)
+
+`UIShadow = pcall(Instance.new, "UIShadow")` · `Radial`/`Conical` = pcall(set `UIGradient.Type`) · `TileMode` ·
+`BorderStrokePosition` · `Path2D = pcall(Instance.new, "Path2D")` · per-corner UICorner.
+
+Every recipe reads the flags and falls back to sprites.
+
+### 13.2 Recipes
+
+| id | name | construction | fallback |
+|---|---|---|---|
+| R1 | Bevel surface | Frame + UICorner r + UIGradient (Rotation 90) + UIStroke (Border, child UIGradient) + **`bevel_card` / `bevel_button` 9-slice ImageLabel as the last child** (primary recipe) | — |
+| R2 | Glow / depth shadow | `UIShadow{Color, BlurRadius UDim, Spread, Transparency}` on **shapes only** | `glow_rr` / `glow_circle` sprite as a sibling **before** the body (children draw above parents) |
+| R3 | Outlined title | TextLabel white + UIGradient (fill) + UIStroke Contextual black (LineJoinMode Round) + a hard shadow clone TextLabel behind (+2..5 y) | — |
+| R4 | Gold / hero number | Sarpanch Heavy + UIGradient + UIStroke + shadow clone; **glow = `glow_rr` sized to TextBounds + 2B behind** (never UIShadow on text) | — |
+| R5 | Shine sweep | overlay Frame (same UICorner) white + UIGradient transparency 1 → .72@.5 → 1, Rotation 105; tween `Offset` | none |
+| R6 | Conical ring (progress, hold, cooldown, portal) | ring Frame + inner hole Frame, UIGradient **Type Conical** with Transparency keys (0:0, p:0, p+.001:1, 1:1); shimmer = Rotation tween | two `halfdisc` sprites (classic radial progress) |
+| R7 | Radial gem / aura / vignette / glow blob | Frame + UIGradient **Type Radial** | `radial_p50/60/70` + `radial_lin` stack, `aura` |
+| R8 | Dashed rim | UIStroke + child UIGradient TileMode Repeat, Rotation 45, small Scale, stepped transparency | solid stroke α .7 |
+| R9 | Tiled texture (scanlines, stripes, grid, wave) | ImageLabel **ScaleType Tile** with a **standalone** small image (§14.2); scroll via Position | none |
+| R10 | Glass HUD | Frame #090711 α .72 + UIStroke W α .14 (no backdrop blur exists) | — |
+| R11 | Glowing curve | 4 Path2D (halo, glow, core, hot) with UDim2 control points in `Links` scale units; thickness from k | 24 rotated thin Frames per curve (only if Path2D is missing) |
+| R12 | Glitch text | 3 TextLabels (white, #ff2e63 −2 x α .7, #2ee6ff +2 x α .55); the flicker moves the clones 60–140 ms | static |
+| R13 | Hold button | TextButton + a fill Frame (Size.X ∝ hold) or R6; InputBegan/Ended; starts after 120 ms / < 10 pt; rewinds on release | — |
+| R14 | Scrim with a hole | full-screen Frame α .62 **minus** a square Frame centred on the target with a Radial transparency hole | plain scrim |
+
+### 13.3 Mock CSS → Roblox
+
+| CSS | Roblox |
+|---|---|
+| linear-gradient | UIGradient Linear (Rotation = CSS angle − 90) |
+| radial-gradient | R7 |
+| conic-gradient | R6 |
+| border-radius | UICorner |
+| border / gradient border-box | UIStroke (+ UIGradient) |
+| dashed border | R8 |
+| box-shadow outer | R2 |
+| box-shadow inset | R1 bevel sprite |
+| `.tx` clone + text-stroke | R3 |
+| background-clip:text | UIGradient on the TextLabel |
+| repeating stripes | R9 |
+| inline SVG | atlas sprites |
+| mask on rays | the `rays` sprite |
+| SVG path | Path2D |
+| `-webkit-line-clamp` | TextTruncate AtEnd + a fixed height |
+
+---------------------------------------------------------------------------------------------------------------------
+
+## 14. Sprites
+
+### 14.1 `ui_atlas` (1024×1024 PNG, alpha-bled; LOW = a 512² half-scale copy)
+
+All regions are white or grey, tinted with ImageColor3, faded to α 0 within a 2 px border. Sizes are region sizes in
+texture px (@2x where noted: display at half). 9-slice centers are `SliceCenter` Rects relative to the region.
+
+| sprite | size | content | 9-slice / use |
+|---|---|---|---|
+| glow_rr | 256×256 | white rounded rect 128² (r 24), blur σ 16 | SliceCenter (112,112,144,144), SliceScale = B/32; behind cards, CTAs, capsule, text glows (R2, R4) |
+| glow_circle | 256×256 | disc Ø128, blur σ 16 | ring, badge, emblem, gem glows |
+| aura | 256×256 | radial α 1 → .27@.55 → 0 | node aura 220, tint c |
+| rays | 300×300 | 12 soft rays, radial alpha fade | pulse node rays (rotating) |
+| radial_p50 / p60 / p70 | 256×256 each | disc, α 1 to m, linear to 0 | radial gradient fallback (R7) |
+| radial_lin | 256×256 | disc α 1 − r | with the above |
+| circle | 256×256 | hard AA disc | shine ellipse, dots |
+| halfdisc | 128×64 | half disc | R6 fallback (two halves) |
+| bevel_button | 128×128 @2x | transparent rr r32: top lip 4 px W α .35, bottom lip 10 px black α .40 | SliceCenter (40,40,88,88), SliceScale .5·r/16 |
+| bevel_card | 128×128 @2x | top lip 4 px W α .18, bottom 8 px black α .35 | SliceCenter (40,40,88,88) |
+| bevel_ring | 264×264 @2x | crescent lips on Ø264 | node ring overlay 132 |
+| ring_dashed | 312×312 @2x | Ø312 ring 6 px, 22 dashes (14:8) | select ring 164 / challenge ring 150 |
+| shadow_card | 192×192 | black rr blur σ 20, offset baked 0 | SliceCenter (80,80,112,112); depth shadow |
+| keycap | 48×48 @2x | light rr + 6 px dark bottom lip | SliceCenter (14,12,34,32) |
+| chip | 64×64 @2x | rr r16 fill + 3 px inner stroke | SliceCenter (20,20,44,44); chips without UIStroke (fallback) |
+| icons (white, 64×64 @2x each) | 64×64 | gear, star, home, bell, lock (pre-coloured gold 44×44), plus, minus, x, save, export, import, copy, trash, warn, info, check, chev, chevr, up, down, left, right, bolt (pre-coloured variant for badges), sparkle, swirl, moon, bug, flame, hand, clock, eye, sort, grid, motion, map, text, target, disk | `ImageRectOffset/Size` |
+| badge_bolt / badge_bang | 52×52 @2x | pre-coloured gold bolt disc / danger "!" disc with white ring | node badges 26 |
+| coin_star | 80×80 @2x | 4-point star with shade | capsule coin |
+| hex | 96×96 @2x | hexagon | pb / hb power badges |
+| ember, sparkle_small | 32×32 | soft ember dot / 4-point sparkle | spark flow, embers, bursts (the realm atlas has its own copies) |
+
+### 14.2 Standalone tile textures (ScaleType Tile does not tile an ImageRect region)
+
+| texture | size | use |
+|---|---|---|
+| tile_scan | 4×6 | cp / cm scanlines (α .025–.07) |
+| tile_stripes | 28×28 | header band stripes α .035 |
+| tile_grid40 | 40×40 | ex cartography grid α .05 |
+| tile_wave | 256×64 | pp oscilloscope (scrolled by Position) |
+| tile_dots | 16×16 | skeleton shimmer base |
+| tile_noise | 128×128 | optional panel grain α .03 |
+
+Upload count: 36 HIGH + 11 LOW realm tiles, 2 realm atlases, 2 UI atlases, 6 tile textures = **57 images**. UI memory:
+≈ 5.3 MB HIGH (1024² + tiles), ≈ 1.4 MB LOW. That is inside the REALM budget headroom (§1: 88.2 / 120 MB HIGH,
+22.1 / 35 MB LOW).
+
+---------------------------------------------------------------------------------------------------------------------
+
+## 15. Data contract (view.js, parity-tested; everything derivable from the game)
+
+The base: `v.map` (fixed order `ach m mm em p pe sp pb pp se hp ep hb ap mp t pm pep cp cm ex` + gate) with node
+`show unl col sym name st tab ch cur br a` and `val {can lit glow pulse pts res tip ra}`, `map.inside/open/close/opt`,
+gate `{show inside can fin h goal done a}` (`done ≥ 1` = won), and `v.hud {pts name gen dev off c}`. Critic §3.1 adds
+`cn` on components plus the per-component fields listed in the table below. **Added by this design:**
+
+| field | value | used by |
+|---|---|---|
+| `val.req` | short "amount + base unit" from requires/nextAt ("1e13,760 P", "1.00e15 PP") | locked plates |
+| `val.gain` | formatWhole(resetGain); static "+1" | READY gems, peek |
+| `val.dor` | the layer was reached (unlocked or best > 0) but is hidden by the universe split | dormant state |
+| `pr` on reset (static), upg, buy, map val (locked) | progress to cost, 0..1, from Decimal: a = log10(have), b = log10(need); `pr = a/b` if a/b ≥ .01, else `log10(a)/log10(b)` (tower numbers); 0 if have ≤ 1; < 1 when not affordable | CTA bars, 91% chips, NEXT spotlight |
+| `reset.hk` | the hotkey label ("P", "CTRL+C") from `layers[l].hotkeys` | keycaps |
+| `gate.req` | the reveal rule + have/need (m.best ≥ 185: "185 milestones", have 164) | `???` portal, sealed-rift teaser |
+| popup `kind` | milestone / achievement / corruption / challenge / notice | toasts |
+| `hud.gen` | **null when the rate is 0** | capsule pill hidden |
+| `eff` | **null**, never the string "undefined" | hero effect line |
+| `lv` | formatWhole(level) ("50", not "50.00") | buyables |
+| `grid.state/lv/kind` + `grid.tip` split `{fix, debuff, reward}` + `grid.prog` | cp disks and inspector | mock d |
+| sp burn bar node `{t:"bar", p, st8: burning/ashed/permanent}` | replaces the HTML div gradient | mock f |
+| NaN guard | any formatted value that is "NaN" (e.g. "Currently: NaNx") becomes null and is hidden | cards |
+| `ms.id / ti / ds / mal`, `upg.ti/ds/ef/co/cur`, `buy.id/ti/lv/max/co + h`, `chal.id/ti/ds/goal/rw/cur/cmp/lim/st8`, `ach.ti`, main-display `pts/res/eff`, reset `gain/res/verb/next/base/bres/static` | critic §3.1 | all cards |
+
+The **client** derives: section titles (from `cn`), owned / READY counts, tier folding, the NEXT milestone (the first
+`ms.done == false`), decade folds, toast coalescing, READY membership, plate LOD and occlusion, the colour remap, and
+the camera. Nothing else is invented.
+
+---------------------------------------------------------------------------------------------------------------------
+
+## 16. Test contract
+
+**Stable anchors.** These replace the `port/tests/roblox.luau` paths `Page.Menu.MenuRoot`, `Page.Main.HeadRoot`,
+`Page.Main.TabRoot` and `MilestoneTreeOverlay.*`.
+
+| anchor | what |
+|---|---|
+| `MapGui.Root.Box.Nodes.Node_<id>` (+ `.Hit`) | map nodes (the bot navigates by `n.t == "node"`) |
+| `MapGui.Root.Box.Plates.Plate_<id>.Label` | plate text |
+| `TopbarGui.Root.Capsule.Amount`, `.GenPill.Label`, `.Status` | points, rate, save status (was HeadRoot) |
+| `HudGui.Root.Dock.Home` / `.Trophies` / `.Options`, `HudGui.Root.Ready.Gem_<id>`, `HudGui.Root.Portal` | HUD |
+| `PanelGui.Root.Sheet.Header.Title`, `.Hero.Cta`, `.Header.Tabs` | panel chrome |
+| `PanelGui.Root.Sheet.Body.Scroll.TabRoot` | the Render root (was `Page.Main.TabRoot`) |
+| `OverlayGui.Root.Toasts`, `OverlayGui.Root.Modal.Box` (TextBox), `OverlayGui.Root.Modal.Primary` | overlays (was `MilestoneTreeOverlay.Modal`) |
+| `TopbarGui.Root.Capsule.Status` = "NOT SAVING" | the unsaved check (was `MilestoneTreeOverlay.Unsaved`) |
+
+The "locked" state is detected by the node attribute `State = "locked"` (every node sets `State`), no longer by the
+`#bf8f8f` colour.
+
+**mock.luau additions:**
+
+* instances and enums: ImageButton, UIGridLayout, UIShadow, `Enum.InputSink`, `Enum.GradientType` (+ TileMode,
+  Scale), Path2D (GuiBase; `SetControlPoints`, `GetPositionOnCurveArcLength`), Path2DControlPoint;
+* services: TweenService (Create / Play / Pause / Cancel / Completed), RunService.PreRender (and RenderStepped),
+  GuiService (TopbarInset, ReducedMotionEnabled, PreferredInput, PreferredTransparency, PreferredTextSize,
+  ViewportDisplaySize), `PlayerGui:GetGuiObjectsAtPosition`, UserInputService raw input;
+* guards: AbsoluteSize / AbsolutePosition, `Font.fromName` with a style.
+
+**Deterministic snapshot mode:** the attribute `MT_Snapshot = true` on the client:
+
+* ReducedMotion forced;
+* RNG seeded (7);
+* ambient and REALM time fixed at t = 7 s;
+* no intro dolly;
+* no flow sparks;
+* toast life frozen at 60%;
+* fonts preloaded.
+
+Snapshots render MapGui at the REALM camera given in the case file, which is the same (C, z, V) as these mocks.
+
+**Lints:**
+
+* no COMPACT label under 11 px;
+* no client-authored text containing dev words ("virtualis", "Studio", "debug", "TODO");
+* no raw game colour in rendered RichText (the remap is applied);
+* ≤ 24 glows per panel.
+
+---------------------------------------------------------------------------------------------------------------------
+
+## 17. Performance budget (review gates)
+
+| surface | budget | how |
+|---|---|---|
+| MapGui textures | HIGH 88 MB / LOW 22 MB (REALM) + ui_atlas 1024² (512² LOW) + tile textures | tier choice; PreloadAsync behind the splash, farthest first |
+| MapGui instances | REALM (tiles 36/11, sprites 194/76, pools 93/48) + **nodes ≤ 21 × 10 (+ lazy parts)** + **Path2D ≤ 4 × 23** + **dots ≤ 400 (HIGH only)** + sparks ≤ 6 + plates 21 × 2 | no layout objects in moving containers; lazy node parts |
+| MapGui per moving frame | 20 container writes + 21 plate positions + field updater; **0 at rest** | REALM §9.2 |
+| MarkerGui | ≤ 4 markers, ≤ 8 writes per moving frame | isolated gui (HudGui cache untouched) |
+| HudGui / TopbarGui | ≤ 80 instances, ≤ 6 running tweens | pulses only on READY / portal |
+| PanelGui | ≤ 450 instances for the open panel; one Render tree re-skinned | cards ≤ 10 instances (fixed cells), virtualised long lists |
+| glows | ≤ 24 per panel | owned and locked never glow |
+| text writes | only changed strings; numbers ≤ 5 Hz | RichText merges runs |
+| COMPACT + full-screen sheet | `MapGui.Enabled = false`, tweens paused | REALM §9.7 |
+
+---------------------------------------------------------------------------------------------------------------------
+
+## 18. Verify in Studio early (pcall + fallbacks already specified)
+
+* UIShadow, Radial / Conical UIGradient, TileMode, BorderStrokePosition and per-corner UICorner work on a live server
+  (the Theme.caps flags).
+* Path2D with about 90 strokes renders at 60 fps on a phone; check whether the UIGradient follows the curve or its
+  bbox.
+* Montserrat Heavy **Italic** and Sarpanch Heavy resolve (not synthesised).
+* A read-only TextBox allows select-all + copy on desktop and mobile (otherwise use the §7.6 fallback).
+* `InputObject.Position` vs `GetMouseLocation` inset offsets on MapGui (ScreenInsets None) vs HudGui.
+* `GuiService.TopbarInset` changes when the unibar expands (capsule drop rule).
+* Box-resize + ClipsDescendants cost at 60 fps during the 0.24 s tween.
+* Memory on a low-end phone (F9) with LOW + ui_atlas 512.
