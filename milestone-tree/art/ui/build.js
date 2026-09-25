@@ -87,7 +87,7 @@ function savePNG(file, px) {
   await browser.close();
   const themes = require('./themes.js');
   const manifest = {
-    about: 'Milestone Tree NG+ UI kit (cosmic ornate). Built by art/ui/build.js from the Blender renders (blender/build.py) and the painters (kit.js, pieces.js, vfx.js). ' +
+    about: 'TOOLING REFERENCE ONLY: the cosmic ornate art direction was rejected by the user (2026-09-25); the pieces below show the manifest format. Milestone Tree NG+ UI kit. Built by art/ui/build.js from the Blender renders (blender/build.py) and the painters (kit.js, pieces.js, vfx.js). ' +
       'Images are 2x the 1080p display size. slice: ImageLabel.ScaleType = Slice, SliceCenter = Rect.new(sliceCenter[1..4]), SliceScale = sliceScale (x the UI scale). ' +
       'image: shown at display size, anchor = the image px placed on the reference point (frame corner / rim centre line / socket centre). tile: ScaleType.Tile, TileSize = tileSize.',
     version: 1, root: 'art/ui/out/ (file paths are relative to it; build.js regenerates the PNGs, they are not committed)', scale: SCALE, layers: Object.keys(themes.UI_THEMES), themes: themes.UI_THEMES, gold: themes.UI_GOLD, pieces, atlas,

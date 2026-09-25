@@ -44,8 +44,8 @@ function prestigePanel(R, { tabs = 'A', hoverLift = 0, buyPulse = 0.8, locked4 =
   if (tabs === 'A') PANEL.tabsA(c, L, 30, 104, PW - 60, TABS, { right: chips });
   else PANEL.tabsB(c, L, 30, 106, PW - 60, TABS);
   // hero row
-  PANEL.hero(c, L, 40, 178, { amt: 'e1.029e25', res: 'PRESTIGE POINTS' });
-  PANEL.cta(c, L, PW - 44 - 410, 172, 410, 104, { title: 'PRESTIGE', gain: '+e1.073e25 PP', key: 'P' });
+  const hero = PANEL.hero(c, L, 40, 178, { amt: 'e1.029e25', res: 'PRESTIGE POINTS' });
+  const cta = PANEL.cta(c, L, PW - 44 - 410, 172, 410, 104, { title: 'PRESTIGE', gain: '+e1.073e25 PP', key: 'P' });
   PANEL.chip(c, PW - 44 - 410, 286, 200, 'Points', 'e6.424e23');
   PANEL.chip(c, PW - 44 - 200, 286, 200, 'Passive', '+e1.073e25/s', { valColor: '#9ff3b4' });
   // tier board (tab B has no strip for the chips: they head the board)
@@ -69,7 +69,7 @@ function prestigePanel(R, { tabs = 'A', hoverLift = 0, buyPulse = 0.8, locked4 =
   O.abs(c, 14, PH - 34, PW - 28, 22, 'background:linear-gradient(180deg,rgba(7,11,20,0),rgba(7,11,20,.8))');
   O.abs(c, PW - 24, 350, 5, 560, 'border-radius:3px;background:rgba(255,255,255,.07)');
   O.abs(c, PW - 24, 350, 5, 420, `border-radius:3px;background:linear-gradient(${UI_THEMES.p.hueHi},${UI_THEMES.p.hue});box-shadow:0 0 6px ${UI_THEMES.p.hue}`);
-  return { F, c, cards, cx, rows: { r1, r2, r3, r4 }, CW };
+  return { F, c, cards, cx, rows: { r1, r2, r3, r4 }, CW, hero, cta };
 }
 
 function pScene(tabs) {

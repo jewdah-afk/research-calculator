@@ -85,19 +85,22 @@ const PANEL = (() => {
   P.hero = (parent, L, x, y, { amt, res, label = 'YOU HAVE', size = 58, k = 1 } = {}) => {
     const T = UI_THEMES[L];
     O.sprite(parent, 'glow', x + 150 * k, y + 60 * k, 520 * k, 220 * k, { color: T.hue, alpha: 0.28 });
-    O.abs(parent, x, y, null, null, 'display:flex;flex-direction:column;gap:4px',
+    return O.abs(parent, x, y, null, null, 'display:flex;flex-direction:column;gap:4px',
       O.caps(label, '#d8d0ea', 13 * k) + O.tx(amt, { size: size * k, font: 'num', grad: ['#ffffff', T.hueHi, T.hue], ow: 7 * k, sh: 5 * k }) +
       `<div style="margin-top:4px">${O.tx(res, { size: 22 * k, grad: [T.hueHi, T.hueHi], ow: 4 * k, sh: 2 })}</div>`);
   };
   P.cta = (parent, L, x, y, w, h, { title, gain, key, bar = null, k = 1 } = {}) => {
     const T = UI_THEMES[L];
-    O.sprite(parent, 'glow', x + w / 2, y + h / 2, w * 1.4, h * 2.4, { color: T.hue, alpha: 0.4 });
-    O.slice(parent, `btn_${L}`, x, y, w, h, { k: 0.72 * k });
+    const glow = O.sprite(parent, 'glow', x + w / 2, y + h / 2, w * 1.4, h * 2.4, { color: T.hue, alpha: 0.4 });
+    const btn = O.abs(parent, x, y, w, h, '');
+    O.slice(btn, `btn_${L}`, 0, 0, w, h, { k: 0.72 * k });
+    parent = btn; x = 0; y = 0;
     let inner = O.tx(title, { size: 28 * k, ow: 6 * k, sh: 3 });
     if (bar != null) inner += `<div style="display:flex;align-items:center;gap:10px"><div class="bar" style="width:${w - 150 * k}px"><i style="width:${bar * 100}%"></i></div><span class="well"><span class="nr">${Math.round(bar * 100)}%</span></span></div>`;
     if (gain) inner += `<span class="well">${O.nf(gain, '#e6f2ff')}</span>`;
     O.abs(parent, x, y, w, h, `display:flex;flex-direction:column;align-items:center;justify-content:center;gap:${7 * k}px`, inner);
     if (key) { O.slice(parent, 'toast', x + w - 54 * k, y + 12 * k, 34 * k, 30 * k, { k: 0.4 * k }); O.abs(parent, x + w - 54 * k, y + 12 * k, 34 * k, 30 * k, 'display:grid;place-items:center;font:800 14px Montserrat;color:#ffe9b0;text-shadow:0 1px 0 #000', key); }
+    return { btn, glow };
   };
   P.chip = (parent, x, y, w, label, val, { valColor = '#fff', h = 36, k = 1 } = {}) => {
     O.slice(parent, 'toast', x, y, w, h, { k: 0.5 * k });
@@ -117,7 +120,7 @@ const PANEL = (() => {
   P.cardBuy = (parent, L, x, y, w, h, { n, title, desc, cur, cost, pulse = 0.8, lift = 0 } = {}) => {
     const T = UI_THEMES[L];
     const c = O.abs(parent, x, y - lift, w, h, lift ? `filter:brightness(${1 + lift / 60})` : '');
-    O.slice(c, 'glow9', -22, -22, w + 44, h + 44, { k: 0.9, tint: T.hue, style: `opacity:${0.45 + 0.35 * pulse}` });
+    c.refs = { glow: O.slice(c, 'glow9', -22, -22, w + 44, h + 44, { k: 0.9, tint: T.hue, style: `opacity:${0.45 + 0.35 * pulse}` }) };
     O.slice(c, `card_${L}`, 0, 0, w, h, { k: 0.72 });
     O.sprite(c, 'glow', w / 2, 2, 150, 110, { color: T.hue, alpha: 0.6 + 0.4 * pulse });
     O.image(c, `socket_${L}`, w / 2, 2, { k: 0.9 });
@@ -163,9 +166,10 @@ const PANEL = (() => {
        <div style="flex:1;min-height:34px"></div><div class="well" style="white-space:normal;font:600 13px/1.3 Montserrat;color:#e2dbeb;display:flex;gap:6px;align-items:flex-start">${O.icon('lock', 13, '#c9b8ff', 'flex:none;margin-top:1px')}<span>${O.nf(req, '#e2dbeb')}</span></div>`);
     if (chain) {
       const cy = chainY != null ? chainY : h * 0.5;
-      O.tile(c, 'chain', -6, cy - 16, w + 12, 32, { style: 'filter:drop-shadow(0 3px 2px rgba(0,0,0,.8))' });
-      O.sprite(c, 'glow', w / 2, cy, 110, 110, { color: '#b9a8ff', alpha: 0.35 });
-      O.image(c, 'seal_locked', w / 2, cy, { k: sealK });
+      c.refs = { cy,
+        chain: O.tile(c, 'chain', -6, cy - 16, w + 12, 32, { style: 'filter:drop-shadow(0 3px 2px rgba(0,0,0,.8))' }),
+        glow: O.sprite(c, 'glow', w / 2, cy, 110, 110, { color: '#b9a8ff', alpha: 0.35 }),
+        seal: O.image(c, 'seal_locked', w / 2, cy, { k: sealK }) };
     }
     return c;
   };
