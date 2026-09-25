@@ -678,12 +678,8 @@
       needle: { x: 822, w: 76, h: 350, lean: -0.05 }, ruin: true, crystals: [], trees: [[1122, 50]], roots: 12 },
     { id: 'B', fall: 1, xL: 2150, xR: 2560, top: 1420, tilt: -0.075, thick: 40, seed: 306, lobes: [{ x: 2385, y: 1690, w: 160 }, { x: 2512, y: 1585, w: 62 }],
       crystals: [[2488, 6, 52, [255, 46, 99]], [2350, 3, 30, [232, 70, 190]]], trees: [[2420, 76, 'dead']], roots: 14 },
-    { id: 'G', fall: 6, seed: 307, corrupt: true, xL: 2600, xR: 3330, roots: 16,
-      parts: [
-        { xL: 2600, xR: 2968, top: 1300, tilt: -0.045, thick: 38, jag: 1.5, anchor: false,
-          lobes: [{ x: 2685, y: 1478, w: 92, p: 1.15 }, { x: 2828, y: 1532, w: 118, p: 1.2 }, { x: 2925, y: 1425, w: 42, p: 1.6 }] },
-        { xL: 2930, xR: 3330, top: 1172, tilt: -0.02, thick: 46, seed: 317, anchor: true, anchorSlope: 1.4, droop: 0.02,
-          lobes: [{ x: 2962, y: 1336, w: 46, p: 0.35 }, { x: 3165, y: 1420, w: 125 }, { x: 3292, y: 1335, w: 55 }] }],
+    { id: 'G', fall: 6, seed: 307, corrupt: true, xL: 2600, xR: 3330, top: 1300, tilt: -0.03, thick: 38, jag: 1.4, roots: 16, shape: 'step', step: [2930, 2962, 128],
+      lobes: [{ x: 2685, y: 1478, w: 92, p: 1.15 }, { x: 2828, y: 1532, w: 118, p: 1.2 }, { x: 2925, y: 1425, w: 42, p: 1.6 }, { x: 3165, y: 1420, w: 125 }, { x: 3292, y: 1335, w: 55 }],
       crystals: [[2664, 5, 44, [57, 255, 20]], [2792, 7, 66, [57, 255, 20]], [2904, 4, 36, [31, 191, 74]], [3232, 4, 42, [57, 255, 20]], [3000, 3, 28, [255, 46, 99]]],
       trees: [[3120, 70, 'dead']],
       fragments: [[2698, 1226, 34, 0.35], [2772, 1180, 22, -0.25], [2846, 1216, 15, 0.6], [2735, 1148, 10, 0.1]] },
@@ -709,6 +705,14 @@
       if (d < 175) y = Math.max(y, F.y + 175 * (1 - Math.pow(d / 175, 2.4)) + 16 * n(x / 17, 2.2) * (d / 175));
       return Math.min(y, F.y + (d - nh) * 1.45 + 6 * n(x / 9, 7.1));
     };
+    return reshape(S, fTop, fUnder);
+  }
+  // G: the right part is a raised block (a tall step facing the key light); the fall-6 lip is a crack in the block's
+  // underside whose mouth widens downward
+  function stepShape(I, F, S) {
+    const [x0, x1, hgt] = I.step, nh = Math.max(14, F.s * 0.3), n = makeNoise(I.seed + 42);
+    const fTop = (x, y) => y - hgt * smooth(x0, x1, x + 6 * n(1.3, (y - I.top) / 18));
+    const fUnder = (x, y) => { const d = Math.abs(x - F.x); if (d <= nh) return F.y; return d < 70 ? Math.min(y, F.y + (d - nh) * 0.9 + 3 * n(x / 8, 4.4)) : y; };
     return reshape(S, fTop, fUnder);
   }
   // C: two fat legs under the slab and an arch cut between them; the keystone is the lip
@@ -811,6 +815,7 @@
         anchor: withLip ? { x: F.x, y: F.y, nh: Math.max(14, F.s * 0.3), slope: P.anchorSlope || I.anchorSlope || 1.3 } : null });
       if (I.shape === 'twin') S = twinShape(I, F, S);
       if (I.shape === 'arch') S = archShape(I, F, S);
+      if (I.shape === 'step') S = stepShape(I, F, S);
       return S;
     });
     // top / underside lookups over every part (the higher top where parts overlap)
@@ -854,7 +859,7 @@
     if (corrupt) {
       const S1 = shapes[0], yb1 = Math.max(...S1.under.map(p => p[1]));
       fracture(b, e, S1.poly, [[2833, 1528], [2826, 1490], [2838, 1458], [2818, 1420], [2826, 1392], [2808, 1356], [2814, 1330]], 6);
-      K.seams(b, e, shapes[1].poly, 3170, 1400, { seed: I.seed + 79, n: 3, dir: -Math.PI / 2, fan: 1.6, len: 120, w: 1.6, color: [255, 46, 99], glow: 4 });
+      K.seams(b, e, S1.poly, 3170, 1400, { seed: I.seed + 79, n: 3, dir: -Math.PI / 2, fan: 1.6, len: 120, w: 1.6, color: [255, 46, 99], glow: 4 });
     }
     // hanging roots and vines from the underside (never across the fall)
     const under = [].concat(...shapes.map(S => S.under.filter(p => (!F || Math.abs(p[0] - F.x) > F.s * 1.1) && p[1] - S.topY(p[0]) > (I.thick || 40) * 0.9)));
