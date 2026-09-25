@@ -57,7 +57,7 @@ export type Realm = {
 }
 
 local Realm: Realm = {
-	version = "d2042e167fc0",
+	version = "5e8bdf671265",
 	world = { w = 3840, h = 2560 },
 	camera = { zMax = 1.25, zoomSlack = 0.06, overscroll = 72, panMargin = { 960, 720 }, domain = { minW = 568, minH = 320, maxW = 2560, maxH = 1440, minAspect = 0.45, maxAspect = 3.6 }, start = { 1500, 1150 }, introFactor = 1.12, introSeconds = 1.6 },
 	feel = { dragMouse = 6, dragTouch = 12, velocityTau = 0.05, inertiaTau = 0.32, inertiaStop = 6, maxFling = 4500, rubberDistance = 72, rubberC = 0.55, rubberReturn = 0.18, wheelFactor = 1.12, wheelTau = 0.085, pinchRubber = 0.06, pinchReturn = 0.2, doubleTapFactor = 1.6, doubleTapSeconds = 0.35, flySmoothTime = 0.35, flyZoom = 0.9, padSpeed = 1400, padDeadzone = 0.18, padCurve = 1.6, padZoomRate = 1.8 },
@@ -278,16 +278,19 @@ local Realm: Realm = {
 			{ x = 1330, y = 745, s = 25.9, len = 110, a = 0.98, m = { { ch = "rot", type = "sine", amp = 3.9656, period = 6.0828, phase = 0.7336 } } },
 			{ x = 1680, y = 725, s = 22, len = 110, a = 0.868, m = { { ch = "rot", type = "sine", amp = 2.7993, period = 5.7893, phase = 0.3451 } } },
 		} },
-		{ name = "vine_fg", layer = "fg", regions = { "vineA", "vineB" }, count = { HIGH = 9, LOW = 0 }, hangs = true, rmHide = false, flicker = false, palette = { { 16, 8, 30 } }, instances = {
-			{ x = 1213, y = 6.5, s = 255, h = 1040.6, t = 0, a = 0.92, m = { { ch = "rot", type = "sine", amp = 2.0118, period = 7.2161, phase = 0.4308 } } },
-			{ x = 5285.2, y = 5.8, s = 236.3, h = 1108.8, t = 1, a = 0.996, m = { { ch = "rot", type = "sine", amp = 1.7519, period = 8.6776, phase = 0.5415 } } },
-			{ x = 2205.2, y = 7.3, s = 180.1, h = 865.7, t = 0, a = 0.938, m = { { ch = "rot", type = "sine", amp = 1.3998, period = 7.0094, phase = 0.4308 } } },
-			{ x = 4176, y = 2.7, s = 226.5, h = 965.9, t = 0, a = 0.992, m = { { ch = "rot", type = "sine", amp = 2.1964, period = 7.4963, phase = 0.7689 } } },
-			{ x = 6238.1, y = 3.3, s = 280.5, h = 1292.4, t = 1, a = 0.987, m = { { ch = "rot", type = "sine", amp = 1.5441, period = 9.1129, phase = 0.7008 } } },
-			{ x = 81.9, y = 4.3, s = 175.2, h = 747.6, t = 1, a = 0.978, m = { { ch = "rot", type = "sine", amp = 2.3561, period = 7.1786, phase = 0.4061 } } },
-			{ x = 7093.2, y = 9.6, s = 280.4, h = 1367.5, t = 1, a = 0.936, m = { { ch = "rot", type = "sine", amp = 1.7238, period = 9.3066, phase = 0.599 } } },
-			{ x = 653.9, y = 0.2, s = 173.5, h = 720.2, t = 1, a = 0.989, m = { { ch = "rot", type = "sine", amp = 1.5321, period = 9.7581, phase = 0.4588 } } },
-			{ x = 3122.2, y = 7.8, s = 249.8, h = 1141.6, t = 1, a = 0.976, m = { { ch = "rot", type = "sine", amp = 2.1135, period = 8.9869, phase = 0.4492 } } },
+		{ name = "vine_fg", layer = "fg", regions = { "vineA", "vineB" }, count = { HIGH = 12, LOW = 0 }, hangs = true, rmHide = false, flicker = false, palette = { { 16, 8, 30 } }, instances = {
+			{ x = 1213, y = 651.9, s = 224.6, h = 986.3, t = 0, a = 0.92, m = { { ch = "rot", type = "sine", amp = 2.0118, period = 7.2161, phase = 0.4308 } } },
+			{ x = 5285.2, y = 639.8, s = 209.9, h = 978.8, t = 1, a = 0.996, m = { { ch = "rot", type = "sine", amp = 1.7519, period = 8.6776, phase = 0.5415 } } },
+			{ x = 2205.2, y = 666.1, s = 165.8, h = 781.6, t = 0, a = 0.938, m = { { ch = "rot", type = "sine", amp = 1.3998, period = 7.0094, phase = 0.4308 } } },
+			{ x = 4176, y = 585, s = 202.2, h = 904.4, t = 0, a = 0.992, m = { { ch = "rot", type = "sine", amp = 2.1964, period = 7.4963, phase = 0.7689 } } },
+			{ x = 6238.1, y = 595.1, s = 244.7, h = 1131.9, t = 1, a = 0.987, m = { { ch = "rot", type = "sine", amp = 1.5441, period = 9.1129, phase = 0.7008 } } },
+			{ x = 81.9, y = 612.6, s = 162, h = 724.8, t = 1, a = 0.978, m = { { ch = "rot", type = "sine", amp = 2.3561, period = 7.1786, phase = 0.4061 } } },
+			{ x = 7093.2, y = 706.5, s = 244.6, h = 1160.7, t = 1, a = 0.936, m = { { ch = "rot", type = "sine", amp = 1.7238, period = 9.3066, phase = 0.599 } } },
+			{ x = 653.9, y = 540.9, s = 160.6, h = 710.3, t = 1, a = 0.989, m = { { ch = "rot", type = "sine", amp = 1.5321, period = 9.7581, phase = 0.4588 } } },
+			{ x = 2795, y = 613.3, s = 223.3, h = 935.7, t = 0, a = 0.911, m = { { ch = "rot", type = "sine", amp = 1.8308, period = 6.5519, phase = 0.8277 } } },
+			{ x = 4759.4, y = 705, s = 259.7, h = 1178.8, t = 0, a = 0.944, m = { { ch = "rot", type = "sine", amp = 1.6037, period = 9.567, phase = 0.505 } } },
+			{ x = 3536.5, y = 625.5, s = 235.7, h = 945.6, t = 0, a = 0.952, m = { { ch = "rot", type = "sine", amp = 1.4517, period = 9.5983, phase = 0.366 } } },
+			{ x = 7574.5, y = 555.4, s = 192.6, h = 871.9, t = 1, a = 0.934, m = { { ch = "rot", type = "sine", amp = 1.2384, period = 8.2477, phase = 0.2309 } } },
 		} },
 		{ name = "rift_glow", layer = "world", regions = { "glow" }, count = { HIGH = 1, LOW = 1 }, hangs = false, rmHide = false, flicker = false, palette = { { 255, 46, 99 } }, instances = {
 			{ x = 3150, y = 1480, s = 1150, h = 1552.5, a = 0.42, m = { { ch = "alpha", type = "sine", amp = 0.14, period = 2.8, phase = 0 }, { ch = "scale", type = "sine", amp = 0.035, period = 2.8, phase = 0 } } },

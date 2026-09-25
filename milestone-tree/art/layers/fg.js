@@ -2,14 +2,21 @@
 // Out-of-focus framing only. A leafy canopy hangs from the top edge, and vines hang from it. Ferns, broad leaves and
 // grass rise from the bottom. On the rift side there are thorn brambles, dark crystals and torn strands. A few glowing
 // buds are the only bright bits. Everything lives at the layer edges: every hard keep-clear zone is fully empty, every
-// soft zone stays below alpha 0.25, and between 0.2 x 3640 local px from the top and from the bottom only thin, faint
-// tips reach in. The `vine_fg` sprites hang from the same canopy, so the painted vines leave their columns free.
+// soft zone stays below alpha 0.25, and nothing reaches further than REACH (1860 local px) from the top or bottom edge.
+// The `vine_fg` sprites hang from the canopy's underside, each from a painted leaf knot, and the painted vines leave
+// their columns free.
 //
 // Frames. The composition is designed in the 5240x3640 frame the layer had before the pan margin (REALM.md 2.5). The
-// layer is now larger (size from realm.json, 7600x5380) and the framing belongs to the edges of the pan envelope, not
-// of the world: the canopy is laid out from the layer's top edge (design x + OX, y + 0) and the ground growth from its
-// bottom edge (design x + OX, y + 2 OY), so at the new top / bottom pan limits the screen is framed as it was at the
-// old ones. The west and east margin strips get more canopy, vines, fronds, brambles and crystals.
+// layer is now larger (size from realm.json, 7600x5380): the canopy is laid out from the layer's top edge (design
+// x + OX, y + 0) and the ground growth from its bottom edge (design x + OX, y + 2 OY), the edges of the pan envelope.
+// The west and east margin strips get more canopy, vines, fronds, brambles and crystals.
+//
+// Tiers (distance d from the nearer edge, DENSE / REACH below). The dense canopy and ground stay within d ~930, so an
+// N / S pan-limit view is framed, not walled. The views inside the world meet the layer further in: at the world's top
+// or bottom edge the screen edge sits at d = 1026 + 0.15 V.h (1188 on 1080p) at every zoom. So a thin tier of long
+// leafy vines, leafy branches, aerial roots and torn strands hangs on from the canopy, and arching fern fronds, heart
+// leaves, reeds, flower stalks and brambles rise from the ground, to d 1500-1790: the top and bottom of those views
+// keep their foliage. The thin tier is opaque near the screen edge of those views and fades toward its tips (thinA).
 //
 // Pipeline: paint in layer-local px at PS = 2 x res.HIGH canvas px per local px, in three depth planes (back, mid,
 // front; the front plane gets extra defocus). Then the section 4 atmosphere pass runs in float, premultiplied: shade
@@ -22,7 +29,7 @@
 // 2D canvas would write it black.
 (function () {
   'use strict';
-  // ---- contract snapshot (realm.json layers[fg], sprites[vine_fg]). window.REALM wins when a pipeline injects it.
+  // ---- contract snapshot (realm.json layers[fg], sprites[vine_fg]: [x, y, s, len]). window.REALM wins when a pipeline injects it.
   const SNAP = {
     size: [7600, 5380], res: 0.2, splitX: 4489, fade: 150,
     atm: { hazeColor: [8, 4, 18], hazeRift: [22, 4, 14], haze: 0.55, hazeBottom: 0, saturation: 0.6, contrast: 0.6, blur: 10, maxLuma: 0.25, emissiveMax: 0.6 },
@@ -35,7 +42,7 @@
       ['cm', 6101, 2266.2, 168, 191], ['ex', 5399, 2071.2, 168, 191], ['ach', 1980, 1837.2, 168, 191]],
     softR: [255, 240],
     landmarks: { tree: [3254, 2521], crown: [3254, 1455], island: [3254, 3626], rift: [5399, 2950], shrine: [1980, 1858], outcrop: [5984, 2742] },
-    vines: [[1213, 255, 1040.6], [5285.2, 236.3, 1108.8], [2205.2, 180.1, 865.7], [4176, 226.5, 965.9], [6238.1, 280.5, 1292.4], [81.9, 175.2, 747.6], [7093.2, 280.4, 1367.5], [653.9, 173.5, 720.2], [3122.2, 249.8, 1141.6]],
+    vines: [[1213, 651.9, 224.6, 986.3], [5285.2, 639.8, 209.9, 978.8], [2205.2, 666.1, 165.8, 781.6], [4176, 585, 202.2, 904.4], [6238.1, 595.1, 244.7, 1131.9], [81.9, 612.6, 162, 724.8], [7093.2, 706.5, 244.6, 1160.7], [653.9, 540.9, 160.6, 710.3], [2795, 613.3, 223.3, 935.7], [4759.4, 705, 259.7, 1178.8], [3536.5, 625.5, 235.7, 945.6], [7574.5, 555.4, 192.6, 871.9]],
   };
   const RJ = typeof window !== 'undefined' && window.REALM && window.REALM.layers ? window.REALM : null;
   const CFG = (() => {
@@ -43,7 +50,7 @@
     if (!L) return { ...SNAP, soft: SNAP.hard.map(z => [z[0], z[1], z[2], SNAP.softR[0], SNAP.softR[1]]) };
     const V = RJ.sprites && RJ.sprites.find(s => s.name === 'vine_fg');
     return { size: L.size, res: L.res.HIGH, splitX: L.biomeLocal.splitX, fade: L.biomeLocal.fadeHalfWidth, atm: L.atmosphere,
-      hard: L.keepClear.hard, soft: L.keepClear.soft, landmarks: L.landmarks, vines: V ? V.instances.map(o => [o.x, o.s, o.h]) : SNAP.vines };
+      hard: L.keepClear.hard, soft: L.keepClear.soft, landmarks: L.landmarks, vines: V ? V.instances.slice(0, V.count.HIGH).map(o => [o.x, o.y, o.s, o.len || o.h]) : SNAP.vines };
   })();
 
   const [LW, LH] = CFG.size, PS = 2 * CFG.res;                  // local px -> paint canvas px
@@ -52,8 +59,17 @@
   // the design frame and the drawing frame: design (x, y) is drawn at layer px (x + FR.x, y + FR.y); frame() sets it
   const F0W = 5240, F0H = 3640, OX = (LW - F0W) / 2, OY = (LH - F0H) / 2, TOP = 0, BOTTOM = 2 * OY;
   const FR = { x: OX, y: TOP };
-  const BAND = [0.2 * F0H, 0.8 * F0H];                           // design frame: below BAND[0] only thin, faint tips
-  const BANDN = [BAND[0], LH - (F0H - BAND[1])];                 // the same band in layer px (the empty middle)
+  // Tiers, in layer px from the nearer (top or bottom) edge. The dense canopy and ground stay within DENSE: at an N / S
+  // pan limit (z 1 on 1080p the view spans d 486..1566) that is under 45% of the screen height, so those views are framed,
+  // not walled. The thin tier (long vines, leafy branches, aerial roots, strands; tall fronds, reeds, flower stalks,
+  // brambles) reaches on to REACH, fading (thinA), so the views inside the world, whose screen edge sits at d = 1026 +
+  // 0.15 V.h (1188 on 1080p) at the world's top / bottom edge, keep foliage along their top and bottom. Beyond REACH the
+  // middle of the layer stays empty.
+  const DENSE = 930, REACH = 1860;
+  const edgeD = ly => Math.min(ly, LH - ly);
+  /** Alpha of thin-tier growth at layer y: opaque silhouettes down past the world-edge views' screen edge, then fading
+   *  toward the tips (~0.85 at d 1500, ~0.6 at REACH). */
+  const thinA = ly => { const d = edgeD(ly); return lerp(1, 0.84, smooth(1150, 1500, d)) * lerp(1, 0.74, smooth(1500, REACH, d)); };
   const TAU = Math.PI * 2;
   const LDIR = (() => { const d = Math.hypot(-0.45, -0.62); return [-0.45 / d, -0.62 / d]; })();   // toward the key light
   const KEY = [255, 214, 150], LILAC = [205, 182, 255], CRIMSON = [255, 46, 99], EMBER = [255, 90, 31], MAGENTA = [232, 70, 190];
@@ -160,10 +176,16 @@
     }
     c.restore();
   }
-  /** Tapered stroke along a sampled spline (lib.js spline), widths from S[i].w. */
-  function stem(c, S, col, lights) {
+  /** Tapered stroke along a sampled spline (lib.js spline), widths from S[i].w. fade: its alpha follows thinA from the
+   *  first point to the last (a hanging or rising stem fades out as it reaches into the thin tier). */
+  function stem(c, S, col, lights, fade = false) {
     const sh = outline(S);
-    c.fillStyle = rgba(col); poly(c, sh); c.fill();
+    if (fade) {
+      const a = S[0], b = S[S.length - 1], g = c.createLinearGradient(a.x, a.y, b.x, b.y);
+      for (let k = 0; k <= 4; k++) { const p = at(S, k / 4); g.addColorStop(k / 4, rgba(col, thinA(p.y + FR.y))); }
+      c.fillStyle = g;
+    } else c.fillStyle = rgba(col);
+    poly(c, sh); c.fill();
     if (lights) {
       const m = at(S, 0.5), R = Math.max(40, S.len * 0.5);
       light(c, () => poly(c, sh), 0, m.x, m.y, R, lights.map(L => ({ ...L, a: L.a * 0.7 })), 3);
@@ -201,12 +223,13 @@
     const rr = rng(seed), c = P[plane], col = PLANE[plane];
     const T = clearPrefix(spline(pts, 16));
     if (!T) return;
-    stem(c, T, col, lightsAt(T[T.length >> 1].x, T[T.length >> 1].y));
-    const Lmax = o.leaf || 300, maxY = o.maxY || BAND[0] + 60, leaves = [];
+    stem(c, T, col, lightsAt(T[T.length >> 1].x, T[T.length >> 1].y), !!o.fade);
+    const Lmax = o.leaf || 300, maxY = o.maxY || DENSE, leaves = [];
     let side = rr() < 0.5 ? -1 : 1;
     for (let s = 30 + rr() * 40; s < T.len; s += Lmax * (0.13 + rr() * 0.1)) {
       const p = T[idx(T, s)], t = s / T.len;
       side = -side;
+      if (t < (o.from || 0)) continue;
       const len = Lmax * lerp(1, 0.6, t) * (0.72 + rr() * 0.42);
       const tang = Math.atan2(p.ty, p.tx);
       // leaves fan out from the stem and droop: halfway between "sideways off the stem" and "straight down"
@@ -219,13 +242,13 @@
     for (const L of leaves) {
       if (L.y + Math.sin(L.ang) * L.len > maxY) continue;
       if (!clearOf(leafPts(L.x, L.y, L.ang, L.len, L.wid))) continue;
-      leafAt(c, { ...L, col: mix(col, [0, 0, 0], rr() * 0.3), vein: L.len > 200 });
+      leafAt(c, { ...L, col: mix(col, [0, 0, 0], rr() * 0.3), vein: L.len > 200, alpha: o.fade ? thinA(L.y + Math.sin(L.ang) * L.len * 0.5 + FR.y) : null });
       if (o.buds && rr() < o.buds) glow({ x: L.x + Math.cos(L.ang) * 14, y: L.y + Math.sin(L.ang) * 14, r: 7 + rr() * 4, col: budCol(L.x, rr), plane });
     }
   }
 
   /** A vine hanging from the canopy: a tapering stem, drooping leaves, a curl or a glowing bud at the tip. */
-  function vine(P, x0, y0, len, seed, plane, { budAt = true, thorny = false, leaf = 130 } = {}) {
+  function vine(P, x0, y0, len, seed, plane, { budAt = true, thorny = false, leaf = 130, taper = 0.5, gap = 46, bare = 0 } = {}) {
     const rr = rng(seed), c = P[plane], col = PLANE[plane], N = makeNoise(seed);
     const pts = [];
     for (let k = 0; k <= 10; k++) {
@@ -234,27 +257,28 @@
     }
     const T = clearPrefix(spline(pts, 12), 30);
     if (!T) { console.log('fg: vine at', x0, 'skipped (keep-clear)'); return; }
-    stem(c, T, col, lightsAt(x0, y0 + len * 0.4));
+    stem(c, T, col, lightsAt(x0, y0 + len * 0.4), true);
     let side = rr() < 0.5 ? -1 : 1;
-    for (let s = 50; s < T.len - 20; s += (thorny ? 30 : 46) * (0.75 + rr() * 0.5)) {
-      const p = T[idx(T, s)], t = s / T.len;
+    for (let s = 50; s < T.len - 20; s += (thorny ? 30 : gap) * (0.75 + rr() * 0.5)) {
+      const p = T[idx(T, s)], t = s / T.len, ly = p.y + FR.y;
       side = -side;
+      if (t < bare) continue;                                        // a bare stretch below the canopy
       if (thorny) {
         const a = Math.atan2(p.ty, p.tx) + side * (1.0 + rr() * 0.4), tl = lerp(40, 16, t);
         const q = rot([1, 0], a), n = [-q[1], q[0]];
-        c.fillStyle = rgba(col); c.beginPath();
+        c.fillStyle = rgba(col, thinA(ly)); c.beginPath();
         c.moveTo(p.x + n[0] * 6, p.y + n[1] * 6); c.lineTo(p.x + q[0] * tl - p.tx * tl * 0.3, p.y + q[1] * tl - p.ty * tl * 0.3); c.lineTo(p.x - n[0] * 6, p.y - n[1] * 6); c.fill();
         if (rr() < 0.3) {   // a narrow, jagged leaf
           const ang = Math.PI / 2 + side * (0.6 + rr() * 0.5), l = lerp(150, 70, t);
-          if (p.y + Math.sin(ang) * l < BAND[0] + 200 && clearOf(leafPts(p.x, p.y, ang, l, l * 0.13)))
-            leafAt(c, { x: p.x, y: p.y, ang, len: l, wid: l * 0.13, bend: 0.12 * side, col });
+          if (edgeD(ly + Math.sin(ang) * l) < REACH && clearOf(leafPts(p.x, p.y, ang, l, l * 0.13)))
+            leafAt(c, { x: p.x, y: p.y, ang, len: l, wid: l * 0.13, bend: 0.12 * side, col, alpha: thinA(ly) });
         }
         continue;
       }
-      const deep = smooth(BAND[0] - 60, BAND[0] + 320, p.y);          // into the middle band: smaller and fainter tips
-      const l = lerp(leaf, leaf * 0.45, t) * (0.75 + rr() * 0.5) * (1 - 0.45 * deep), ang = Math.PI / 2 + side * (0.5 + rr() * 0.6);
-      if (!clearOf(leafPts(p.x, p.y, ang, l, l * 0.3))) continue;
-      leafAt(c, { x: p.x, y: p.y, ang, len: l, wid: l * 0.27, bend: -0.12 * side, asym: (rr() - 0.5) * 0.3, col, alpha: 1 - 0.55 * deep });
+      const deep = smooth(DENSE - 60, REACH, edgeD(ly));             // into the thin tier: smaller and fainter leaves
+      const l = lerp(leaf, leaf * taper, t) * (0.75 + rr() * 0.5) * (1 - (taper > 0.7 ? 0.12 : 0.3) * deep), ang = Math.PI / 2 + side * (0.5 + rr() * 0.6);
+      if (!clearOf(leafPts(p.x, p.y, ang, l, l * 0.3)) || edgeD(ly + Math.sin(ang) * l) > REACH - 30) continue;
+      leafAt(c, { x: p.x, y: p.y, ang, len: l, wid: l * 0.27, bend: -0.12 * side, asym: (rr() - 0.5) * 0.3, col, alpha: thinA(ly) });
     }
     const e = T[T.length - 1];
     if (budAt) glow({ x: e.x, y: e.y + 10, r: 10 + rr() * 5, col: budCol(e.x, rr), plane });
@@ -265,8 +289,9 @@
     }
   }
 
-  /** A fern frond rising from (x0, y0): an arching rachis with pinnae, longest in the lower third. Stops below maxTop. */
-  function frond(P, x0, y0, ang, len, arch, seed, plane, { pinna = 1, maxTop = -1e9, wr = 0.23 } = {}) {
+  /** A fern frond rising from (x0, y0): an arching rachis with pinnae, longest in the lower third of the blade (above a
+   *  bare stipe, the first `stipe` of its length). Stops below maxTop. */
+  function frond(P, x0, y0, ang, len, arch, seed, plane, { pinna = 1, maxTop = -1e9, wr = 0.23, stipe = 0, step = 3 } = {}) {
     const rr = rng(seed), c = P[plane], col = PLANE[plane];
     let px = x0, py = y0; const P2 = [];
     for (let k = 0; k <= 10; k++) {
@@ -278,29 +303,31 @@
     const T = cut === -1 ? S : cut > 3 ? S.slice(0, cut) : null;
     if (!T) return null;
     T.len = T[T.length - 1].s;
-    stem(c, T, col, lightsAt(x0, y0 - len * 0.4));
+    stem(c, T, col, lightsAt(x0, y0 - len * 0.4), true);
     const pl = Math.min(len * 0.2, 200) * pinna;
-    for (let i = 4; i < T.length; i += 3) {
-      const p = T[i], t = p.s / S.len, prof = Math.pow(Math.sin(Math.PI * (0.1 + 0.9 * t)), 0.6) * (1 - 0.5 * t);
+    for (let i = 4; i < T.length; i += step) {
+      if (T[i].s / S.len < stipe) continue;
+      const p = T[i], t = (p.s / S.len - stipe) / (1 - stipe), prof = Math.pow(Math.sin(Math.PI * (0.1 + 0.9 * t)), 0.6) * (1 - 0.5 * t);
       for (const sd of [-1, 1]) {
         const l = pl * prof * (0.85 + rr() * 0.3); if (l < 24) continue;
         const a = Math.atan2(p.ty, p.tx) + sd * (0.85 + rr() * 0.25) - sd * 0.3 * t;
         const tipY = p.y + Math.sin(a) * l;
         if (tipY < maxTop || !clearOf(leafPts(p.x, p.y, a, l, l * wr))) continue;
-        leafAt(c, { x: p.x, y: p.y, ang: a, len: l, wid: l * wr, bend: 0.16 * sd, col: mix(col, [0, 0, 0], rr() * 0.25) });
+        leafAt(c, { x: p.x, y: p.y, ang: a, len: l, wid: l * wr, bend: 0.16 * sd, col: mix(col, [0, 0, 0], rr() * 0.25), alpha: thinA(p.y + FR.y) });
       }
     }
     return T[T.length - 1];
   }
 
   /** A broad (elephant-ear) leaf on a petiole rising from the bottom. */
-  function broadLeaf(P, x0, y0, tx, ty, len, seed, plane, droop = 0.5) {
+  function broadLeaf(P, x0, y0, tx, ty, len, seed, plane, droop = 0.5, quiet = false) {
     const rr = rng(seed), c = P[plane], col = PLANE[plane];
     const S = spline([[x0, y0, 30], [lerp(x0, tx, 0.45) + (rr() - 0.5) * 80, lerp(y0, ty, 0.55), 22], [tx, ty, 14]], 14);
     const ang = Math.atan2(ty - y0, tx - x0) + droop * Math.sign(tx - x0 || 1);
-    if (!clearOf(leafPts(tx, ty, ang, len, len * 0.5)) || !S.every(p => clearOf([[p.x, p.y]]))) { console.log('fg: broad leaf', seed, 'skipped'); return; }
-    stem(c, S, col, lightsAt(tx, ty));
-    leafAt(c, { x: tx, y: ty, ang, len, wid: len * 0.4, bend: (rr() - 0.5) * 0.25, heart: true, col, vein: true });
+    if (!clearOf(leafPts(tx, ty, ang, len, len * 0.5)) || !S.every(p => clearOf([[p.x, p.y]]))) { if (!quiet) console.log('fg: broad leaf', seed, 'skipped'); return false; }
+    stem(c, S, col, lightsAt(tx, ty), true);
+    leafAt(c, { x: tx, y: ty, ang, len, wid: len * 0.4, bend: (rr() - 0.5) * 0.25, heart: true, col, vein: true, alpha: thinA(ty + Math.sin(ang) * len * 0.5 + FR.y) });
+    return true;
   }
 
   /** A clump of grass blades fanning out from one root. */
@@ -311,10 +338,15 @@
       const bx = x0 + (rr() - 0.5) * 60, tx = bx + lean, ty = y0 - h, mx = bx + lean * 0.2, my = y0 - h * 0.62;
       const curl = lean * 0.25;
       if (!clearOf([[tx + curl, ty], [mx, my]], 24)) continue;
-      c.fillStyle = rgba(mix(col, [0, 0, 0], rr() * 0.3)); c.beginPath();
+      const bc = mix(col, [0, 0, 0], rr() * 0.3), fa = thinA(ty + FR.y);
+      if (fa < 0.999) { const g = c.createLinearGradient(bx, y0, tx + curl, ty); g.addColorStop(0, rgba(bc, thinA(y0 + FR.y))); g.addColorStop(1, rgba(bc, fa)); c.fillStyle = g; }
+      else c.fillStyle = rgba(bc);
+      c.beginPath();
       c.moveTo(bx - w, y0); c.quadraticCurveTo(mx - w * 0.5, my, tx + curl, ty); c.quadraticCurveTo(mx + w * 0.5, my, bx + w, y0); c.closePath(); c.fill();
       const Lt = lightsAt(tx, ty)[0];
-      c.strokeStyle = rgba(Lt.col, Lt.a * 0.55); c.lineWidth = 3.5; c.lineCap = 'round';
+      if (fa < 0.999) { const g = c.createLinearGradient(bx, y0, tx + curl, ty); g.addColorStop(0, rgba(Lt.col, Lt.a * 0.55 * thinA(y0 + FR.y))); g.addColorStop(1, rgba(Lt.col, Lt.a * 0.55 * fa)); c.strokeStyle = g; }
+      else c.strokeStyle = rgba(Lt.col, Lt.a * 0.55);
+      c.lineWidth = 3.5; c.lineCap = 'round';
       c.beginPath(); c.moveTo(bx - w, y0); c.quadraticCurveTo(mx - w * 0.5, my, tx + curl, ty); c.stroke();
     }
   }
@@ -331,7 +363,7 @@
     for (const o of L) {
       if (o.y + Math.sin(o.ang) * o.len < hTop) continue;
       if (!clearOf(leafPts(o.x, o.y, o.ang, o.len, o.wid))) continue;
-      leafAt(c, { ...o, col: mix(col, [0, 0, 0], rr() * 0.3) });
+      leafAt(c, { ...o, col: mix(col, [0, 0, 0], rr() * 0.3), alpha: thinA(o.y + Math.sin(o.ang) * o.len * 0.5 + FR.y) });
     }
   }
 
@@ -340,14 +372,14 @@
     const rr = rng(seed), c = P[plane], col = PLANE[plane];
     const S = clearPrefix(spline(pts, 14), 36);
     if (!S) { console.log('fg: thorn limb', seed, 'skipped'); return null; }
-    stem(c, S, col, lightsAt(S[S.length >> 1].x, S[S.length >> 1].y));
+    stem(c, S, col, lightsAt(S[S.length >> 1].x, S[S.length >> 1].y), true);
     for (let s = 20; s < S.len - 20; s += (24 + rr() * 34) / thorn) {
       const p = S[idx(S, s)], sd = rr() < 0.5 ? -1 : 1, t = s / S.len;
       const a = Math.atan2(p.ty, p.tx) + sd * (0.95 + rr() * 0.4), tl = (0.45 + rr() * 0.6) * p.w + 10;
       const q = rot([1, 0], a), base = [p.x + p.nx * p.w * 0.42 * sd, p.y + p.ny * p.w * 0.42 * sd], n = [-q[1], q[0]], bw = Math.max(4, p.w * 0.2);
       const tip = [base[0] + q[0] * tl + p.tx * tl * 0.35, base[1] + q[1] * tl + p.ty * tl * 0.35];
       if (!clearOf([tip], 30)) continue;
-      c.fillStyle = rgba(col); c.beginPath();
+      c.fillStyle = rgba(col, thinA(p.y + FR.y)); c.beginPath();
       c.moveTo(base[0] + n[0] * bw, base[1] + n[1] * bw); c.quadraticCurveTo(base[0] + q[0] * tl * 0.4, base[1] + q[1] * tl * 0.4, tip[0], tip[1]); c.lineTo(base[0] - n[0] * bw, base[1] - n[1] * bw); c.fill();
       if (t > 0.25 && rr() < 0.07) glow({ x: tip[0], y: tip[1], r: 6 + rr() * 4, col: rr() < 0.6 ? CRIMSON : EMBER, plane, tiny: true });
     }
@@ -380,12 +412,48 @@
     const pts = [];
     for (let k = 0; k <= 8; k++) { const t = k / 8; pts.push([x0 + 30 * N(t * 2.5, 3) * t, y0 + len * t, lerp(7, 2.5, t)]); }
     const T = clearPrefix(spline(pts, 10), 30);
-    if (!T) return;
-    stem(c, T, col, null);
+    if (!T) return null;
+    stem(c, T, col, null, true);
     for (let s = 30; s < T.len - 20; s += 38 + rr() * 50) {
       const p = T[idx(T, s)], sd = rr() < 0.5 ? -1 : 1, l = 14 + rr() * 22;
-      c.fillStyle = rgba(col); c.beginPath(); c.moveTo(p.x, p.y - 4); c.lineTo(p.x + sd * l * 0.6, p.y + l); c.lineTo(p.x, p.y + 6); c.fill();
+      c.fillStyle = rgba(col, thinA(p.y + FR.y)); c.beginPath(); c.moveTo(p.x, p.y - 4); c.lineTo(p.x + sd * l * 0.6, p.y + l); c.lineTo(p.x, p.y + 6); c.fill();
     }
+    return T[T.length - 1];
+  }
+  /** An aerial root hanging from the canopy: a thin, slightly wavering line with a rootlet or two. */
+  function aerialRoot(P, x0, y0, len, seed, plane) {
+    const rr = rng(seed), c = P[plane], col = PLANE[plane], N = makeNoise(seed);
+    const pts = [];
+    for (let k = 0; k <= 8; k++) { const t = k / 8; pts.push([x0 + 26 * N(t * 1.8, 4) * t + 10 * Math.sin(t * 3 + seed), y0 + len * t, lerp(10, 3, t)]); }
+    const T = clearPrefix(spline(pts, 10), 30);
+    if (!T) return null;
+    stem(c, T, col, lightsAt(x0, y0 + len * 0.5), true);
+    for (let k = 0; k < 2; k++) {
+      const p = at(T, 0.3 + rr() * 0.45), sd = rr() < 0.5 ? -1 : 1, l = 100 + rr() * 160;
+      const S = clearPrefix(spline([[p.x, p.y, 6], [p.x + sd * l * 0.3, p.y + l * 0.5, 4], [p.x + sd * l * 0.4, p.y + l, 2]], 8), 30);
+      if (S) stem(c, S, col, null, true);
+    }
+    return T[T.length - 1];
+  }
+  /** A flower stalk rising from the ground to `top`: a thin curved stem, narrow leaves low on it, a glowing bud on top. */
+  function stalk(P, x0, y0, top, seed, plane) {
+    const rr = rng(seed), c = P[plane], col = PLANE[plane];
+    const h = y0 - top, lean = (rr() - 0.5) * h * 0.3;
+    const S = spline([[x0, y0, 18], [x0 + lean * 0.25, y0 - h * 0.5, 11], [x0 + lean, top, 5]], 14);
+    const cut = S.findIndex(p => !clearOf([[p.x, p.y]], 30));
+    const T = cut === -1 ? S : cut > 3 ? S.slice(0, cut) : null;
+    if (!T) return null;
+    T.len = T[T.length - 1].s;
+    stem(c, T, col, lightsAt(x0, y0 - h * 0.5), true);
+    for (let k = 0; k < 5; k++) {
+      const p = at(T, 0.1 + k * 0.1 + rr() * 0.05), sd = k % 2 ? 1 : -1, l = 170 + rr() * 150;
+      const a = -Math.PI / 2 + sd * (0.45 + rr() * 0.45);
+      if (!clearOf(leafPts(p.x, p.y, a, l, l * 0.15))) continue;
+      leafAt(c, { x: p.x, y: p.y, ang: a, len: l, wid: l * 0.15, bend: 0.2 * sd, col: mix(col, [0, 0, 0], rr() * 0.25), alpha: thinA(p.y + FR.y) });
+    }
+    const e = T[T.length - 1];
+    if (cut === -1) glow({ x: e.x, y: e.y - 8, r: 8 + rr() * 5, col: budCol(e.x, rr), plane });
+    return e;
   }
 
   // ---------------------------------------------------------------- composition
@@ -397,9 +465,9 @@
     const R = rng(1300), N = makeNoise(1301), R2 = rng(1400);   // R2: the margin strips (R keeps the design frame's sequence)
     const vineCols = CFG.vines.map(v => v[0] - OX);
     const X0 = -OX, X1 = F0W + OX;                               // the layer's extent in design x
-    // canopy depth: at the top clamp (z 1, 1080p) the dense canopy stays within ~25% of the screen height, so every
-    // hanging element is laid out with its y scaled by CK and its leaves by LK (the tips below stay thin and faint)
-    const CK = 0.78, LK = 0.84, cy = pts => pts.map(([x, y, w]) => [x, y > 0 ? y * CK : y, w]);
+    // canopy depth: the dense canopy reaches ~DENSE (at the N pan limit, z 1 on 1080p, under 45% of the screen height),
+    // so every hanging element is laid out with its y scaled by CK and its leaves by LK; the thin tier hangs on below it
+    const CK = 0.86, LK = 0.9, MY = 1.1, cy = pts => pts.map(([x, y, w]) => [x, y > 0 ? y * CK : y, w]);
 
     // ================= the canopy, laid out from the layer's top edge
     frame(TOP);
@@ -420,7 +488,7 @@
       [[[2560, -60, 32], [2560, 170, 22], [2540, 420, 10]], 210], [[[2980, -60, 36], [3000, 200, 24], [3040, 480, 12]], 230],
       [[[3300, -60, 36], [3330, 190, 24], [3380, 430, 12]], 210],
     ];
-    back.forEach(([pts, leaf], i) => spray(P, cy(pts), 40 + i, 'back', { leaf: leaf * LK, maxY: 560 }));
+    back.forEach(([pts, leaf], i) => spray(P, cy(pts), 40 + i, 'back', { leaf: leaf * LK, maxY: 560 * MY }));
     const mid = [
       [[[-160, -80, 64], [-10, 220, 44], [140, 520, 26], [230, 760, 12]], 330, 0.05],
       [[[360, -80, 50], [430, 170, 36], [470, 420, 20], [480, 600, 10]], 290, 0.1],
@@ -431,18 +499,18 @@
       [[[2730, -80, 50], [2700, 200, 34], [2650, 450, 18], [2610, 620, 8]], 290, 0.1],
       [[[3180, -80, 52], [3120, 220, 36], [3060, 500, 18], [3040, 700, 8]], 300, 0.05],
     ];
-    mid.forEach(([pts, leaf, buds], i) => spray(P, cy(pts), 60 + i, 'mid', { leaf: leaf * LK, buds, heart: 0.12, maxY: 610 }));
+    mid.forEach(([pts, leaf, buds], i) => spray(P, cy(pts), 60 + i, 'mid', { leaf: leaf * LK, buds, heart: 0.12, maxY: 610 * MY }));
     // nearest: huge sprays with extra defocus
-    spray(P, cy([[-220, 40, 90], [-40, 300, 60], [170, 640, 30], [300, 860, 12]]), 90, 'front', { leaf: 440 * LK, heart: 0.2, maxY: 720 });
-    spray(P, cy([[2900, -100, 70], [2870, 180, 50], [2820, 470, 24], [2780, 640, 10]]), 91, 'front', { leaf: 280, maxY: 580 });
+    spray(P, cy([[-220, 40, 90], [-40, 300, 60], [170, 640, 30], [300, 860, 12]]), 90, 'front', { leaf: 440 * LK, heart: 0.2, maxY: DENSE });
+    spray(P, cy([[2900, -100, 70], [2870, 180, 50], [2820, 470, 24], [2780, 640, 10]]), 91, 'front', { leaf: 280, maxY: 580 * MY });
     // the west margin strip: the realm canopy goes on (a third huge spray at the new corner)
     [[[[-1110, -60, 38], [-1070, 190, 26], [-1030, 440, 12]], 230], [[[-720, -60, 34], [-690, 170, 24], [-650, 410, 12]], 210],
       [[[-350, -60, 36], [-320, 200, 24], [-270, 460, 12]], 230]]
-      .forEach(([pts, leaf], i) => spray(P, cy(pts), 140 + i, 'back', { leaf: leaf * LK, maxY: 560 }));
+      .forEach(([pts, leaf], i) => spray(P, cy(pts), 140 + i, 'back', { leaf: leaf * LK, maxY: 560 * MY }));
     [[[[-1250, -80, 58], [-1150, 210, 40], [-1060, 480, 22], [-1010, 650, 10]], 310, 0.08], [[[-880, -80, 50], [-830, 180, 36], [-780, 420, 20], [-760, 580, 10]], 280, 0.1],
       [[[-540, -80, 48], [-490, 190, 34], [-440, 430, 18], [-420, 560, 8]], 270, 0.06]]
-      .forEach(([pts, leaf, buds], i) => spray(P, cy(pts), 160 + i, 'mid', { leaf: leaf * LK, buds, heart: 0.12, maxY: 610 }));
-    spray(P, cy([[-1330, 40, 90], [-1160, 300, 60], [-960, 640, 30], [-830, 860, 12]]), 190, 'front', { leaf: 420 * LK, heart: 0.2, maxY: 720 });
+      .forEach(([pts, leaf, buds], i) => spray(P, cy(pts), 160 + i, 'mid', { leaf: leaf * LK, buds, heart: 0.12, maxY: 610 * MY }));
+    spray(P, cy([[-1330, 40, 90], [-1160, 300, 60], [-960, 640, 30], [-830, 860, 12]]), 190, 'front', { leaf: 420 * LK, heart: 0.2, maxY: DENSE });
 
     // rift canopy: thorn limbs arching down into view (y 330-730), dark crystals and torn strands hanging from them
     const riftLimb = ([pts, pl], i, seed) => {
@@ -454,7 +522,7 @@
         crystal(P, E, p.x, p.y + p.w * 0.3, Math.PI / 2 + (rr() - 0.45) * 0.45, (120 + rr() * 130) * LK, (36 + rr() * 22) * LK, seed + 20 + i * 7 + k, pl,
           p.x > 4550 && p.x < 5000 && rr() < 0.5 ? CORRUPT : rr() < 0.75 ? CRIMSON : MAGENTA);
       }
-      for (let k = 0; k < 2; k++) { const p = at(S, 0.35 + rr() * 0.6); strand(P, p.x, p.y, (260 + rr() * 320) * 0.75, seed + 30 + i * 5 + k, pl === 'front' ? 'mid' : pl); }
+      for (let k = 0; k < 2; k++) { const p = at(S, 0.35 + rr() * 0.6); strand(P, p.x, p.y, (260 + rr() * 320) * 1.2, seed + 30 + i * 5 + k, pl === 'front' ? 'mid' : pl); }
     };
     [
       [[[3620, -60, 50], [3700, 200, 38], [3820, 420, 22], [3900, 560, 8]], 'back'],
@@ -471,7 +539,7 @@
       [[[6520, 160, 96], [6300, 360, 72], [6080, 540, 48], [5900, 670, 26], [5780, 740, 8]], 'front'],
     ].forEach((L, i) => riftLimb(L, i, 250));
     // sparse dark leaves behind the first limb so the canopy stays continuous across the biome split
-    spray(P, cy([[3450, -60, 34], [3470, 190, 22], [3500, 440, 10]]), 120, 'back', { leaf: 210 * LK, wr: 0.16, maxY: 580 });
+    spray(P, cy([[3450, -60, 34], [3470, 190, 22], [3500, 440, 10]]), 120, 'back', { leaf: 210 * LK, wr: 0.16, maxY: 580 * MY });
 
     // hanging vines (painted; the vine_fg sprites hang at their own columns)
     const vines = [[300, 120, 860, 'mid', {}], [760, 150, 540, 'front', { leaf: 150 }], [1260, 110, 980, 'mid', {}], [1630, 90, 620, 'back', { budAt: false }],
@@ -479,7 +547,39 @@
       [3880, 460, 480, 'back', { thorny: true }], [4300, 380, 560, 'mid', { thorny: true }], [4790, 500, 600, 'front', { thorny: true }],
       // the margin strips
       [-940, 130, 820, 'mid', {}], [-300, 110, 600, 'back', { budAt: false }], [5620, 420, 620, 'mid', { thorny: true }], [6260, 440, 520, 'back', { thorny: true }]];
-    vines.forEach(([x, y, len, pl, o], i) => { if (vineCols.some(v => Math.abs(v - x) < 140)) console.log('fg: vine', x, 'near a sprite vine'); vine(P, x, y * CK, len * 0.8, 300 + i, pl, o); });
+    vines.forEach(([x, y, len, pl, o], i) => { if (vineCols.some(v => Math.abs(v - x) < 140)) console.log('fg: vine', x, 'near a sprite vine'); vine(P, x, y * CK, len * 1.1, 300 + i, pl, o); });
+    // the thin tier, hanging: long leafy vines, leafy branches and aerial roots (realm), thorny vines and torn strands
+    // with crystal pendants (rift) hang on from the canopy toward REACH, fading (thinA), so the views inside the world
+    // keep foliage along their top edge. They leave the vine_fg sprite columns and the painted vines above free.
+    const HR = rng(2100), taken = [...vines.map(v => v[0]), ...vineCols];
+    const hangRealm = ['vine', 'branch', 'vine', 'vine', 'branch', 'vine', 'root'], hangRift = ['thorny', 'strand', 'thorny', 'strand', 'strand'];
+    for (let x = X0 + 150, i = 0; x < X1 - 150; x += 150 + HR() * 105, i++) {
+      if (taken.some(v => Math.abs(v - x) < 100)) continue;
+      const rift = riftW(x) > 0.5, kind = rift ? hangRift[i % hangRift.length] : hangRealm[i % hangRealm.length];
+      const y0 = 420 + HR() * 240, tip = 1540 + HR() * 250, pl = HR() < 0.15 ? 'back' : 'mid', dx = (HR() - 0.5) * 220;
+      if (kind === 'vine') vine(P, x, y0, tip - y0, 2200 + i, pl, { leaf: 200 + HR() * 55, taper: 0.95, gap: 35, bare: 0.36, budAt: HR() < 0.3 });
+      else if (kind === 'branch') spray(P, [[x, y0 - 160, 34], [x + dx * 0.4, (y0 + tip - 50) / 2, 20], [x + dx, tip - 50, 7]], 2400 + i, pl,
+        { leaf: 225 + HR() * 60, droop: 0.85, maxY: tip + 20, fade: true, heart: 0.15, buds: 0.1, wr: 0.22, from: 0.45 });
+      else if (kind === 'root') aerialRoot(P, x, y0, tip - y0 + 60, 2500 + i, pl);
+      else if (kind === 'thorny') vine(P, x, y0 + 60, tip - y0 - 60, 2600 + i, pl, { thorny: true, budAt: false, bare: 0.25 });
+      else {
+        const e = strand(P, x, y0 + 80, tip - y0 - 80, 2800 + i, pl), len = 110 + HR() * 80;
+        if (e && HR() < 0.55 && edgeD(e.y + len) < REACH - 40) crystal(P, E, e.x, e.y - 12, Math.PI / 2 + (HR() - 0.5) * 0.3, len, 38 + HR() * 16, 2900 + i, pl, HR() < 0.75 ? CRIMSON : MAGENTA);
+      }
+      taken.push(x);
+    }
+    // a leaf knot at each vine_fg attachment (realm.json sprites[vine_fg]), so the swaying sprites hang from foliage
+    CFG.vines.forEach(([vx, vy, vs], i) => {
+      const x = vx - OX, rr = rng(3700 + i), c = P.mid, col = PLANE.mid;
+      const T = spline([[x + (rr() - 0.5) * 140, vy - 300, 28], [x + (rr() - 0.5) * 60, vy - 130, 20], [x, vy + 10, 12]], 10);
+      if (T.every(p => clearOf([[p.x, p.y]], 30))) stem(c, T, col, lightsAt(x, vy));
+      for (let k = 0; k < 9; k++) {
+        const a = Math.PI / 2 + (k / 8 - 0.5) * 3.3 + (rr() - 0.5) * 0.3, l = vs * (0.6 + rr() * 0.5);
+        const px = x + (rr() - 0.5) * vs * 0.35, py = vy - 50 + (rr() - 0.5) * 50;
+        if (!clearOf(leafPts(px, py, a, l, l * 0.28))) continue;
+        leafAt(c, { x: px, y: py, ang: a, len: l, wid: l * 0.28, bend: (rr() - 0.5) * 0.3, asym: (rr() - 0.5) * 0.3, col: mix(col, [0, 0, 0], rr() * 0.25), heart: rr() < 0.25 });
+      }
+    });
     // corrupted glints in the canopy near the outcrop
     const gr = rng(900), glints = [];
     for (let k = 0; k < 8; k++) { const x = 4450 + gr() * 370, y = k < 5 ? 3010 + gr() * 170 : 380 + gr() * 160, s = 12 + gr() * 16, sq = gr() < 0.5; glints.push([x, y, s, sq, k >= 5]); }
@@ -566,11 +666,33 @@
       crystal(P, E, x, y + 40, a, len * BK, w * 0.9, 800 + i, i % 3 === 2 ? 'front' : 'mid', cor ? (i % 2 ? CORRUPT : CRIMSON) : (i % 2 ? MAGENTA : CRIMSON));
     });
     glints.filter(g => !g[4]).forEach(glint);
+    // the thin tier, rising: arching fern fronds, heart leaves on long petioles, reed tufts and flower stalks (realm),
+    // brambles, narrow-leaved ferns and reeds (rift) rise from the bottom edge toward REACH, fading (thinA), so the views
+    // inside the world keep foliage along their bottom edge. In this frame a layer distance d from the bottom edge is
+    // design y = F0H - d.
+    const GR = rng(2800);
+    const riseRealm = ['frond', 'grass', 'broad', 'frond', 'stalk', 'grass', 'frond', 'broad', 'grass'], riseRift = ['bramble', 'fern', 'grass', 'fern', 'bramble', 'grass'];
+    for (let x = X0 + 140, i = 0; x < X1 - 140; x += 235 + GR() * 155, i++) {
+      const rift = riftW(x) > 0.5, kind = rift ? riseRift[i % riseRift.length] : riseRealm[i % riseRealm.length];
+      const d = 1530 + GR() * 260, pl = GR() < 0.15 ? 'back' : 'mid', top = F0H - d, sd = GR() < 0.5 ? -1 : 1, u = GR();
+      if (kind === 'frond') {        // an arching fern frond
+        const tip = frond(P, x, F0H + 60, -Math.PI / 2 + sd * (0.1 + u * 0.25), (d + 60) / 0.8, sd * (0.45 + GR() * 0.45), 3000 + i, pl, { maxTop: F0H - REACH + 40, pinna: 0.95, stipe: 0.42, step: 2 });
+        if (tip && GR() < 0.35) glow({ x: tip.x, y: tip.y - 6, r: 8 + GR() * 4, col: budCol(tip.x, GR), plane: pl });
+      } else if (kind === 'grass') grass(P, x, F0H + 20, 9 + Math.floor(GR() * 4), top, 3200 + i, pl);
+      else if (kind === 'stalk') stalk(P, x, F0H + 40, top + 60, 3300 + i, pl);
+      else if (kind === 'broad') {   // a heart leaf on a long petiole, lower than the rest (tip at d - 260), lowered until it clears the zones
+        const len = 300 + u * 120, droop = sd * (0.55 + GR() * 0.4), tx = x + sd * (80 + u * 140);
+        for (let dd = d - 200; dd > 1000; dd -= 120) if (broadLeaf(P, x, F0H + 60, tx, F0H - dd + len * Math.cos(droop) * 0.92, len, 3100 + i, pl, droop, true)) break;
+      } else if (kind === 'bramble') {
+        const dx = sd * (240 + u * 220);
+        thornLimb(P, [[x, F0H + 60, 58], [x + dx * 0.1, F0H - 0.45 * d, 42], [x + dx * 0.45, F0H - 0.9 * d, 26], [x + dx, top, 12], [x + dx * 1.3, F0H - 0.9 * d, 5]], 3400 + i, pl);
+      } else if (kind === 'fern') frond(P, x, F0H + 60, -Math.PI / 2 + sd * (0.1 + u * 0.25), (d + 60) / 0.8, sd * (0.4 + GR() * 0.45), 3600 + i, pl, { maxTop: F0H - REACH + 40, pinna: 1, wr: 0.13, stipe: 0.42, step: 2 });
+    }
 
     // --- sides: nothing in the middle band. The corners and the swaying vine_fg sprites frame the left and right edges.
 
     // --- the buds, each in the frame it was placed in
-    glows.forEach((g, i) => { frame(g.fy); if (!clearOf([[g.x, g.y]], 60)) return; bud(P[g.plane], E, g.x, g.y, g.r * (g.tiny ? 0.9 : 1.55), g.col, rng(1100 + i), PLANE[g.plane]); });
+    glows.forEach((g, i) => { frame(g.fy); if (!clearOf([[g.x, g.y]], 60) || edgeD(g.y + g.fy) > REACH - 90) return; bud(P[g.plane], E, g.x, g.y, g.r * (g.tiny ? 0.9 : 1.55), g.col, rng(1100 + i), PLANE[g.plane]); });
     frame(TOP);
 
     // --- merge the planes: the front plane is closer to the camera, so it gets extra defocus
@@ -720,8 +842,9 @@
     ch = downsample2(ch, CW, CH);
     // keep-clear guarantee at output resolution (local = (px + 0.5) / res)
     const [R, G, B, A] = ch;
-    const stat = { hardMax: 0, softMax: 0, bandMax: 0, bandOver30: 0, clampedPx: 0 };
-    let bandN = 0;
+    // thinMax / thinOver50: the thin tier (DENSE < d <= REACH); midMax: the empty middle (d > REACH)
+    const stat = { hardMax: 0, softMax: 0, thinMax: 0, thinOver50: 0, midMax: 0, clampedPx: 0 };
+    let thinN = 0;
     for (let y = 0; y < OH; y++) for (let x = 0; x < OW; x++) {
       const i = y * OW + x, a = A[i]; if (a <= 0) continue;
       const lx = (x + 0.5) / CFG.res, ly = (y + 0.5) / CFG.res, al = allowance(lx, ly);
@@ -731,9 +854,11 @@
       const i = y * OW + x, a = A[i], lx = (x + 0.5) / CFG.res, ly = (y + 0.5) / CFG.res;
       if (CFG.hard.some(z => inside(lx, ly, z))) stat.hardMax = Math.max(stat.hardMax, a);
       else if (CFG.soft.some(z => inside(lx, ly, z))) stat.softMax = Math.max(stat.softMax, a);
-      if (ly > BANDN[0] && ly < BANDN[1]) { bandN++; stat.bandMax = Math.max(stat.bandMax, a); if (a > 0.3) stat.bandOver30++; }
+      const d = edgeD(ly);
+      if (d > REACH) stat.midMax = Math.max(stat.midMax, a);
+      else if (d > DENSE) { thinN++; stat.thinMax = Math.max(stat.thinMax, a); if (a > 0.5) stat.thinOver50++; }
     }
-    stat.bandOver30 = +(stat.bandOver30 / bandN).toFixed(4);
+    stat.thinOver50 = +(stat.thinOver50 / thinN).toFixed(4);
     const px = toRGBA8(ch, OW, OH);
     let cover = 0; for (let i = 3; i < px.length; i += 4) if (px[i] >= 2) cover++;
     stat.coverage = +(cover / (OW * OH)).toFixed(3);

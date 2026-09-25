@@ -876,7 +876,7 @@
       "res": {"HIGH": 0.2, "LOW": 0.1},
       "zHide": 0.5,
       "zShow": 0.62,
-      "keepClearRule": "hard zones must be fully empty (alpha 0), soft zones alpha < 0.25. Content lives at the layer edges (top vines, bottom ferns, side leaves), which frame the view at the pan limits",
+      "keepClearRule": "hard zones must be fully empty (alpha 0), soft zones alpha < 0.25. Content lives at the layer edges (top vines, bottom ferns, side leaves): the dense canopy and ground frame the pan limits, and a thin tier reaches the views inside the world",
       "tint": {"rift": [255, 225, 230], "corrupt": [255, 225, 230]},
       "atmosphere": {
         "hazeColor": [8, 4, 18],
@@ -893,7 +893,7 @@
         "contains": "out-of-focus framing: hanging vines and leaf clusters from the top edge, fern and root silhouettes along the bottom, a few leaves at the sides, sparse glowing flower dots (the only bright bits)",
         "palette": "near-black violet (18, 9, 34) silhouettes, faint lilac/gold rim (35%), flower dots pink (255, 140, 220) / cyan",
         "feel": "you are standing inside the realm, looking through its foliage",
-        "empty": "all hard keep-clear zones; the canopy hangs from the layer's top edge and the ground growth rises from its bottom edge (the edges of the pan envelope, REALM.md 2.5); more than 728 local px from both edges only thin, faint leaf tips"
+        "empty": "all hard keep-clear zones; the dense canopy and ground stay within ~930 local px of the layer's top and bottom edges (the edges of the pan envelope, REALM.md 2.5); a thin tier (long leafy vines, leafy branches, strands, arching fronds, heart leaves, reeds) reaches on to 1860 px, where the views inside the world meet it; the middle beyond that stays empty"
       },
       "required": {
         "w": 7594,
@@ -933,7 +933,7 @@
       },
       "keepClear": {
         "format": "[node, cx, cy, rx, ry] ellipses in layer-local px",
-        "rule": "hard zones must be fully empty (alpha 0), soft zones alpha < 0.25. Content lives at the layer edges (top vines, bottom ferns, side leaves), which frame the view at the pan limits",
+        "rule": "hard zones must be fully empty (alpha 0), soft zones alpha < 0.25. Content lives at the layer edges (top vines, bottom ferns, side leaves): the dense canopy and ground frame the pan limits, and a thin tier reaches the views inside the world",
         "hard": [
           ["m", 3254, 3527.2, 168, 191],
           ["mm", 2838, 3605.2, 168, 191],
@@ -9389,15 +9389,15 @@
       "layer": "fg",
       "seed": 71,
       "atlas": ["vineA", "vineB"],
-      "count": {"HIGH": 9, "LOW": 0},
+      "count": {"HIGH": 12, "LOW": 0},
       "hangs": true,
-      "size": [160, 300],
-      "aspect": [3.2, 5],
+      "size": [150, 260],
+      "aspect": [4, 4.8],
       "alpha": [0.9, 1],
       "palette": [[16, 8, 30]],
       "place": {
         "mode": "field",
-        "regions": [[0, 0, 1, 0.002]],
+        "regions": [[0, 0.1, 1, 0.135]],
         "regionsNorm": true,
         "minDist": 500
       },
@@ -9408,9 +9408,9 @@
       "instances": [
         {
           "x": 1213,
-          "y": 6.5,
-          "s": 255,
-          "h": 1040.6,
+          "y": 651.9,
+          "s": 224.6,
+          "h": 986.3,
           "t": 0,
           "a": 0.92,
           "m": [
@@ -9419,9 +9419,9 @@
         },
         {
           "x": 5285.2,
-          "y": 5.8,
-          "s": 236.3,
-          "h": 1108.8,
+          "y": 639.8,
+          "s": 209.9,
+          "h": 978.8,
           "t": 1,
           "a": 0.996,
           "m": [
@@ -9430,9 +9430,9 @@
         },
         {
           "x": 2205.2,
-          "y": 7.3,
-          "s": 180.1,
-          "h": 865.7,
+          "y": 666.1,
+          "s": 165.8,
+          "h": 781.6,
           "t": 0,
           "a": 0.938,
           "m": [
@@ -9441,9 +9441,9 @@
         },
         {
           "x": 4176,
-          "y": 2.7,
-          "s": 226.5,
-          "h": 965.9,
+          "y": 585,
+          "s": 202.2,
+          "h": 904.4,
           "t": 0,
           "a": 0.992,
           "m": [
@@ -9452,9 +9452,9 @@
         },
         {
           "x": 6238.1,
-          "y": 3.3,
-          "s": 280.5,
-          "h": 1292.4,
+          "y": 595.1,
+          "s": 244.7,
+          "h": 1131.9,
           "t": 1,
           "a": 0.987,
           "m": [
@@ -9463,9 +9463,9 @@
         },
         {
           "x": 81.9,
-          "y": 4.3,
-          "s": 175.2,
-          "h": 747.6,
+          "y": 612.6,
+          "s": 162,
+          "h": 724.8,
           "t": 1,
           "a": 0.978,
           "m": [
@@ -9474,9 +9474,9 @@
         },
         {
           "x": 7093.2,
-          "y": 9.6,
-          "s": 280.4,
-          "h": 1367.5,
+          "y": 706.5,
+          "s": 244.6,
+          "h": 1160.7,
           "t": 1,
           "a": 0.936,
           "m": [
@@ -9485,9 +9485,9 @@
         },
         {
           "x": 653.9,
-          "y": 0.2,
-          "s": 173.5,
-          "h": 720.2,
+          "y": 540.9,
+          "s": 160.6,
+          "h": 710.3,
           "t": 1,
           "a": 0.989,
           "m": [
@@ -9495,14 +9495,47 @@
           ]
         },
         {
-          "x": 3122.2,
-          "y": 7.8,
-          "s": 249.8,
-          "h": 1141.6,
-          "t": 1,
-          "a": 0.976,
+          "x": 2795,
+          "y": 613.3,
+          "s": 223.3,
+          "h": 935.7,
+          "t": 0,
+          "a": 0.911,
           "m": [
-            {"ch": "rot", "type": "sine", "amp": 2.1135, "period": 8.9869, "phase": 0.4492}
+            {"ch": "rot", "type": "sine", "amp": 1.8308, "period": 6.5519, "phase": 0.8277}
+          ]
+        },
+        {
+          "x": 4759.4,
+          "y": 705,
+          "s": 259.7,
+          "h": 1178.8,
+          "t": 0,
+          "a": 0.944,
+          "m": [
+            {"ch": "rot", "type": "sine", "amp": 1.6037, "period": 9.567, "phase": 0.505}
+          ]
+        },
+        {
+          "x": 3536.5,
+          "y": 625.5,
+          "s": 235.7,
+          "h": 945.6,
+          "t": 0,
+          "a": 0.952,
+          "m": [
+            {"ch": "rot", "type": "sine", "amp": 1.4517, "period": 9.5983, "phase": 0.366}
+          ]
+        },
+        {
+          "x": 7574.5,
+          "y": 555.4,
+          "s": 192.6,
+          "h": 871.9,
+          "t": 1,
+          "a": 0.934,
+          "m": [
+            {"ch": "rot", "type": "sine", "amp": 1.2384, "period": 8.2477, "phase": 0.2309}
           ]
         }
       ]
@@ -10052,7 +10085,7 @@
   ],
   "budget": {
     "note": "RGBA8 bytes of every uploaded image (tiles include their gutters). withMips = x4/3 in case the engine mips GUI textures. Tiles the tiler finds fully transparent are not uploaded, so these are upper bounds.",
-    "HIGH": {"tiles": 46, "atlasImages": 1, "textureMB": 103.9, "withMipsMB": 138.5, "budgetMB": 150, "guiObjects": 385},
+    "HIGH": {"tiles": 46, "atlasImages": 1, "textureMB": 103.9, "withMipsMB": 138.5, "budgetMB": 150, "guiObjects": 388},
     "LOW": {"tiles": 14, "atlasImages": 1, "textureMB": 26, "withMipsMB": 34.7, "budgetMB": 35, "guiObjects": 161}
   }
 }

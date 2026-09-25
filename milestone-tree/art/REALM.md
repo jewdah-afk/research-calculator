@@ -54,7 +54,7 @@ Every field cell is larger than any screen, so no particle ever shows twice (sec
 
 | tier | tiles | + atlas | texture MB | if the engine keeps mips (×4/3) | budget | GUI objects (tiles + sprites + field pools + blooms) |
 |---|---|---|---|---|---|---|
-| HIGH | 46 | 1024² | **103.9** | 138.5 | 150 | 385 |
+| HIGH | 46 | 1024² | **103.9** | 138.5 | 150 | 388 |
 | LOW | 14 | 512² | **26.0** | 34.7 | 35 | 161 |
 
 The tiler skips a tile that is fully transparent, but with the current art none is (0 of 46 HIGH, 0 of 14 LOW), so
@@ -425,7 +425,7 @@ Nothing on the map is ever perfectly still. Two systems provide the motion:
 | firefly | world | firefly | 34 / 12 | 16–28 | Lissajous: x sine ±30–90, 7–13 s; y sine ±20–60, 5–11 s; blink alpha sine ±0.30–0.42, 1.8–3.6 s |
 | ember | world (rift) | ember | 20 / 8 | 10–20 | rise 14–28 px/s over 420 px (wraps); x sine ±10–26, 3–6 s; alpha locked to the rise (0 at the wrap) |
 | vine_world | world | vineThin | 10 / 4 | 18–28 wide, len 110–170, hangs from limbs | sway rotation ±2.5–4°, 4.5–7.5 s |
-| vine_fg | fg (1.3) | vineA/B | 6 / 0 | 160–300 wide, len 3.2–5 × wide, hangs from the top edge | sway ±1.2–2.4°, 6–10 s |
+| vine_fg | fg (1.3) | vineA/B | 12 / 0 | 150–260 wide, len 4–4.8 × wide, hangs from the canopy's underside (y 540–730, from a painted leaf knot), tips at y 1250–1880 | sway ±1.2–2.4°, 6–10 s |
 | rift_glow | world | glow | 1 / 1 | 1150×1553 at (3150, 1480) | alpha 0.42 ± 0.14 and scale 1 ± 0.035, both 2.8 s in phase |
 | rift_ring | world | ring | 1 / 1 | 760×1102 at (3150, 1480) | every 6 s: scale 0.55 → 1.6 and alpha 0.6 → 0 over 2.4 s (quadOut), then hidden |
 | corrupt_glitch | world (outcrop) | bar | 4 / 2 | 300–520 × 3–10 | one burst per 2.2–5.5 s slot, 60–140 ms, x jitter ±18 |
@@ -585,10 +585,19 @@ never empty (dust at three depths), light moves (light-falls, rift pulse, twinkl
   * Palette: near-black violet (18,9,34) with a faint rim.
   * Feel: you are standing inside the realm, looking through its foliage.
   * Frames: the canopy is laid out from the layer's top edge and the ground growth from its bottom edge, which are the
-    edges of the pan envelope, so the screen is framed at the new pan limits as it was at the old ones; the margin
-    strips get more canopy, vines, fronds, brambles and crystals.
-  * Keep empty: every hard zone, and everything more than 728 local px from the top and bottom edges except faint
-    leaf tips.
+    edges of the pan envelope; the margin strips get more canopy, vines, fronds, brambles and crystals. Two tiers, by
+    the distance d from the nearer of those edges:
+    * the dense canopy and ground stay within d ≈ 930. At an N / S pan limit (z 1 on 1080p the view spans d 486–1566)
+      that is under 45% of the screen height, so the limit views are framed, not walled;
+    * a thin tier reaches on to d 1500–1790: long leafy vines, leafy branches, aerial roots and torn strands with
+      crystal pendants hang from the canopy, and arching fern fronds, heart leaves on long petioles, reeds, flower
+      stalks and brambles rise from the ground. The views inside the world meet the layer there: with the camera at
+      the world's top or bottom edge the screen edge sits at d = 1026 + 0.15 V.h (1188 on 1080p) at every zoom, so the
+      top and bottom of those views show foliage again, as before the pan margin: on 1920×1080, over a 7×7 grid of
+      cameras inside the world at z 0.62–1.2, fg covers 3.7–5.7% of the screen on average (3.5–6.4% before the
+      margin) and more than 3% at 19–23 of the 49 positions. The thin tier is opaque near that screen edge and fades
+      toward its tips (alpha ~0.85 at d 1500, ~0.6 at d 1860). The `vine_fg` sprites hang in the same band.
+  * Keep empty: every hard zone, and everything more than 1860 local px from the top and bottom edges.
 * **7 particles (f 1.6)**: big soft bokeh (violet, gold, cyan; crimson in the rift) and dust drifting upward, all very
   faint.
 
@@ -731,7 +740,7 @@ The rest of the map behaves the same in both tiers.
 
 ### 9.7 Performance rules
 
-* Tween only what is listed. HIGH has 205 animated sprites, up to 132 pooled field sprites and 2 blooms
+* Tween only what is listed. HIGH has 208 animated sprites, up to 132 pooled field sprites and 2 blooms
   (LOW: 77 + 68 + 2). Per moving frame the Luau cost is the container writes, the tile snapping (92 writes on HIGH)
   and the field updater (about 280 particles × at most 4 cell copies).
 * While a full-screen panel covers the map: `Tween:Pause()` every ambient tween, stop the field updater, and set
