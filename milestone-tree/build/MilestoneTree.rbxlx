@@ -37591,14 +37591,28 @@ end
 
 -- ---------------------------------------------------------------------------------------------------- the renderer
 local lastPress = 0
+local function press(a: any, hold: boolean)
+	if not hold and os.clock() - lastPress < 0.03 then return end
+	lastPress = os.clock()
+	actRemote:FireServer(a, hold)
+end
 local renderer = Render.new({ menu = menuRoot, head = headRoot, tab = tabRoot }, {
-	press = function(a: any, hold: boolean)
-		if not hold and os.clock() - lastPress < 0.03 then return end
-		lastPress = os.clock()
-		actRemote:FireServer(a, hold)
-	end,
+	press = press,
 	tip = showTip,
 })
+
+-- Studio only: the new layer panel over this page (src/client/Panel/Preview.luau), until the app shell replaces it
+local preview: any = nil
+do
+	local folder = script.Parent:FindFirstChild("Panel")
+	local mod = if folder then folder:FindFirstChild("Preview") else nil
+	if mod and mod:IsA("ModuleScript") then
+		local ok, res = pcall(function(): any
+			return (require(mod) :: any).start({ press = press })
+		end)
+		if ok then preview = res else warn("[MilestoneTree] panel preview did not start: " .. tostring(res)) end
+	end
+end
 
 local keys: { [string]: boolean } = {}
 
@@ -37629,6 +37643,10 @@ viewRemote.OnClientEvent:Connect(function(patch: any)
 	elseif patch.set and next(patch.set) ~= nil and not failed then
 		gotScreen = true
 		setStatus(nil)
+	end
+	if preview then
+		local pok, perr = pcall(function() preview:onPatch(patch) end)
+		if not pok then warn("[MilestoneTree] panel preview: " .. tostring(perr)) end
 	end
 	if patch.tabStyle then applyTabStyle(patch.tabStyle) end
 	if patch.keys then
@@ -42992,7 +43010,4119 @@ if not ok then RunService.RenderStepped:Connect(step) end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="93">
+        <Item class="Folder" referent="93">
+          <Properties>
+            <string name="Name">Panel</string>
+          </Properties>
+          <Item class="ModuleScript" referent="94">
+            <Properties>
+              <string name="Name">Hero</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	Hero: the pinned hero of a panel (DESIGN.md 5.3, 5.4, 5.10; plan 2.5). It claims the first main-display,
+	prestige-button and resource-display of the current tab (depth <= 3) and draws them from their structured fields:
+
+	    resource block   YOU HAVE, the amount (hero: Sarpanch Heavy with gradient, outline, shadow and a round glow blob;
+	                     steps 56 -> 48 -> 40 to fit), the resource name (resource: heavy italic caps), the effect line
+	    CTA              the signature's word (PRESTIGE / GET +1 MILESTONE / COLLECT ...), the gain in a value well; static
+	                     layers with a pr show the bar and %; the locked variant is grey with the bar, % and
+	                     "need X <resource>"; the hotkey keycap only with keyboard and mouse
+	    stat chips       resource-display lines: <RESOURCE> have, PASSIVE +gen/s, BEST, TOTAL
+	WIDE: the block at the left, the CTA at the right, chips under the CTA. COMPACT: one 226 du column with the chips
+	stacked and the CTA pinned at the bottom.
+
+	The CTA fires the prestige-button node's own action (read from the store at press time) and plays the prestige
+	juice: press squash, burst ring, a "+gain" floater into the amount, the amount bump. Reduced motion keeps a short
+	colour flash only.
+]]
+
+local UserInputService = game:GetService("UserInputService")
+
+local Core = script.Parent.Parent:WaitForChild("Core")
+local Theme = require(Core:WaitForChild("Theme"))
+local Recipes = require(Core:WaitForChild("Recipes"))
+local Motion = require(Core:WaitForChild("Motion"))
+local Rich = require(Core:WaitForChild("Rich"))
+local Layout = require(Core:WaitForChild("Layout"))
+local Common = require(script.Parent:WaitForChild("Skins"):WaitForChild("Common"))
+local Signatures = require(script.Parent.Parent:WaitForChild("Signatures"):WaitForChild("Signatures"))
+
+local Hero = {}
+Hero.__index = Hero
+
+local C = Theme.C
+local WHITE = Color3.new(1, 1, 1)
+
+local CN = { ["main-display"] = true, ["prestige-button"] = true, ["resource-display"] = true }
+
+export type Hero = typeof(setmetatable({} :: {
+	frame: Frame,
+	ids: { [string]: string },
+	dirty: boolean,
+	visible: boolean,
+	store: any,
+	ctx: any,
+	act: (action: any, hold: boolean?) -> (),
+	shine: any?,
+	lastGain: string?,
+}, Hero))
+
+function Hero.new(frame: Frame, act: (action: any, hold: boolean?) -> ()): Hero
+	local self = setmetatable({
+		frame = frame,
+		ids = {},
+		dirty = false,
+		visible = false,
+		store = nil,
+		ctx = nil,
+		act = act,
+		shine = nil,
+		lastGain = nil,
+	}, Hero)
+	frame.Visible = false
+	return self
+end
+
+-- forget the claimed ids (a new panel opened, or a full patch)
+function Hero.reset(self: Hero)
+	table.clear(self.ids)
+	self.dirty = true
+end
+
+-- the claim hook's question: is this the hero's component?
+function Hero.wants(self: Hero, id: string, n: any): boolean
+	if type(n) ~= "table" or not CN[n.cn or ""] then return false end
+	if Common.depth(id) > 3 then return false end
+	local cn = n.cn :: string
+	-- a resource-display with no structured value (the game's empty "<br><br>") stays in the body (hidden there)
+	if cn == "resource-display" and n.have == nil and n.gen == nil and n.best == nil and n.total == nil then return false end
+	local held = self.ids[cn]
+	return held == nil or held == id
+end
+
+function Hero.claim(self: Hero, id: string, n: any): (ph: Frame) -> any
+	local cn = n.cn :: string
+	return function(ph: Frame): any
+		ph.Visible = false
+		ph.Size = UDim2.new()
+		ph.AutomaticSize = Enum.AutomaticSize.None
+		self.ids[cn] = id
+		self.dirty = true
+		local claim = {}
+		function claim.update(_: any, store: any)
+			self.store = store
+			self.dirty = true
+		end
+		function claim.destroy(_: any)
+			if self.ids[cn] == id then self.ids[cn] = nil end
+			self.dirty = true
+		end
+		return claim
+	end
+end
+
+-- ------------------------------------------------------------------------------------------------------ drawing
+local function keyboard(): boolean
+	local ok, kbm = pcall(function(): boolean
+		return (UserInputService :: any).PreferredInput == (Enum :: any).PreferredInput.KeyboardAndMouse
+	end)
+	if ok then return kbm end
+	return UserInputService.KeyboardEnabled and not UserInputService.TouchEnabled
+end
+
+local function gainZero(s: string?): boolean
+	return s == nil or string.find(s, "^[%+]?0[%.0]*$") ~= nil
+end
+
+function Hero.draw(self: Hero, store: any, ctx: any)
+	self.dirty = false
+	self.store = store
+	self.ctx = ctx
+	local f = self.frame
+	local md = if self.ids["main-display"] then store:get(self.ids["main-display"]) else nil
+	local pb = if self.ids["prestige-button"] then store:get(self.ids["prestige-button"]) else nil
+	local rd = if self.ids["resource-display"] then store:get(self.ids["resource-display"]) else nil
+	if type(md) ~= "table" then md = nil end
+	if type(pb) ~= "table" then pb = nil end
+	if type(rd) ~= "table" then rd = nil end
+	self.visible = md ~= nil or pb ~= nil or rd ~= nil
+	f.Visible = self.visible
+	if not self.visible then return end
+	local compact = Layout.mode == "COMPACT"
+	local hue = ctx.hue :: Color3
+	f.ClipsDescendants = false
+
+	-- the resource block
+	local res = Common.get(f, "Res", "Frame") :: Frame
+	res.Active = false
+	Common.list(res, false, if compact then 2 else 4)
+	if compact then
+		res.Position = UDim2.fromOffset(0, 0)
+		res.Size = UDim2.new(1, 0, 0, 0)
+	else
+		res.Position = UDim2.fromOffset(0, 0)
+		res.Size = UDim2.new(1, if pb then -440 else 0, 0, 0)
+	end
+	res.AutomaticSize = Enum.AutomaticSize.Y
+	res.Visible = md ~= nil or (compact and rd ~= nil)
+	local you = Common.label(res, "YouHave", "caps", C.soft, { order = 1, wrap = false })
+	you.Visible = md ~= nil
+	Common.setText(you, Common.esc(Rich.caps("You have")))
+	local amountText = if md then Common.str(md.pts) or "0" else "0"
+	local amount = Common.get(res, "Amount", "TextLabel") :: TextLabel
+	amount.LayoutOrder = 2
+	amount.Visible = md ~= nil
+	amount.TextXAlignment = Enum.TextXAlignment.Left
+	amount.TextYAlignment = Enum.TextYAlignment.Center
+	amount.TextWrapped = false
+	amount.AutomaticSize = Enum.AutomaticSize.None
+	local steps = if compact then { 38, 34, 30 } else { 56, 48, 40 }
+	amount.Size = UDim2.new(1, 0, 0, steps[1] + 8)
+	local sig = amountText .. "|" .. Theme.toHex(hue) .. "|" .. tostring(compact)
+	if amount:GetAttribute("Sig") ~= sig then
+		amount:SetAttribute("Sig", sig)
+		Recipes.number(amount, { text = amountText, size = steps[1], from = WHITE, mid = Theme.lift(hue, 0.5), to = hue,
+			stroke = if compact then 5 else 7, shadow = if compact then 3 else 5, role = "hero" })
+		Rich.fit(amount, steps, if compact then 216 else 560)
+	end
+	-- the round glow blob behind the amount (never a square: Common.blob)
+	local blob = if md and not compact then Common.blob(f, "AmountGlow", hue, 0.35) else nil
+	if blob then
+		blob.ZIndex = 0
+		blob.AnchorPoint = Vector2.new(0.5, 0.5)
+		blob.Position = UDim2.fromOffset(200, 58)
+		blob.Size = UDim2.fromOffset(470, 150)
+	elseif not (md and not compact) then
+		Common.drop(f, "AmountGlow")
+	end
+	local resName = Common.get(res, "ResName", "TextLabel") :: TextLabel
+	resName.LayoutOrder = 3
+	resName.Visible = md ~= nil
+	resName.TextXAlignment = Enum.TextXAlignment.Left
+	resName.TextYAlignment = Enum.TextYAlignment.Center
+	resName.TextWrapped = false
+	resName.AutomaticSize = Enum.AutomaticSize.None
+	local name = string.upper(Common.plain(if md then md.res else ""))
+	name = string.gsub(string.gsub(name, "^%s+", ""), "%s+$", "")
+	local long = utf8.len(name) ~= nil and (utf8.len(name) :: number) > 20
+	local rsize = if compact then (if long then 16 else 18) else (if long then 18 else 22)
+	resName.Size = UDim2.new(1, 0, 0, rsize + 6)
+	local rsig = name .. "|" .. tostring(rsize) .. "|" .. Theme.toHex(hue)
+	if resName:GetAttribute("Sig") ~= rsig then
+		resName:SetAttribute("Sig", rsig)
+		Recipes.title(resName, { text = name, role = "resource", size = rsize, from = Theme.lift(hue, 0.6), to = Theme.lift(hue, 0.6),
+			stroke = if compact then 3 else 4, shadow = 2 })
+	end
+	local eff = Common.label(res, "Eff", "body", C.soft, { order = 4 })
+	local effText = if md and not compact then Common.html(md.eff, "body", ctx.layer) else ""
+	eff.Visible = effText ~= ""
+	eff.TextTruncate = Enum.TextTruncate.AtEnd
+	local effLim = Common.get(eff, "Lines", "UISizeConstraint") :: UISizeConstraint
+	effLim.MaxSize = Vector2.new(math.huge, math.floor(Theme.size("body") * Theme.lineHeight("body") * 2 + 2))
+	Common.setText(eff, effText)
+
+	-- the stat chips
+	local stats = Common.get(f, "Stats", "Frame") :: Frame
+	stats.Active = false
+	local rows: { { string } } = {}
+	if rd then
+		local have, bres = Common.str(rd.have), Common.str(rd.bres)
+		if have then table.insert(rows, { string.upper(Common.plain(bres or "")), have }) end
+		local gen = Common.str(rd.gen)
+		if gen and not gainZero(gen) then table.insert(rows, { "PASSIVE", "+" .. gen .. "/s" }) end
+		local best = Common.str(rd.best)
+		if best then table.insert(rows, { "BEST", best }) end
+		local total = Common.str(rd.total)
+		if total then table.insert(rows, { "TOTAL", total }) end
+	end
+	if compact then
+		stats.Parent = res
+		stats.LayoutOrder = 10
+		stats.Position = UDim2.new()
+		stats.AnchorPoint = Vector2.new()
+		stats.Size = UDim2.new(1, 0, 0, 0)
+		stats.AutomaticSize = Enum.AutomaticSize.Y
+		Common.list(stats, false, 6)
+	else
+		stats.Parent = f
+		stats.AnchorPoint = Vector2.new(1, 0)
+		stats.Size = UDim2.fromOffset(0, 34)
+		stats.AutomaticSize = Enum.AutomaticSize.X
+		Common.list(stats, true, 8, { align = Enum.HorizontalAlignment.Right, valign = Enum.VerticalAlignment.Center })
+	end
+	stats.Visible = #rows > 0
+	for i = 1, 4 do
+		local row = rows[i]
+		if row then
+			local label = if row[1] ~= "" then row[1] else "HAVE"
+			local text = Common.caps(label, C.soft) .. "   " .. Common.num(if compact then Rich.short(row[2]) else row[2], "number", C.text)
+			local chip = Common.chip(stats, "Stat" .. i, text, { rich = true, bg = C.panel2, bgT = 0, h = if compact then 32 else 34 })
+			chip.LayoutOrder = i
+			chip.TextXAlignment = if compact then Enum.TextXAlignment.Left else Enum.TextXAlignment.Center
+			if compact then
+				chip.AutomaticSize = Enum.AutomaticSize.None
+				chip.Size = UDim2.new(1, 0, 0, 32)
+			end
+		else
+			Common.drop(stats, "Stat" .. i)
+		end
+	end
+
+	-- the CTA
+	if pb then
+		self:drawCta(pb, ctx, compact)
+	else
+		Common.drop(f, "Cta")
+		if self.shine then
+			self.shine:stop()
+			self.shine = nil
+		end
+	end
+	local cta = f:FindFirstChild("Cta") :: GuiObject?
+	if not compact then
+		local ctaH = if cta then cta.Size.Y.Offset else 0
+		stats.Position = UDim2.new(1, 0, 0, if cta then ctaH + 10 else 0)
+	end
+
+	-- the signature's hero idea
+	local sigT = ctx.signature
+	if sigT and sigT.hero then
+		local ok, err = pcall(sigT.hero, f, store, ctx)
+		if not ok then warn("[MilestoneTree] signature hero failed: " .. tostring(err)) end
+	end
+end
+
+function Hero.drawCta(self: Hero, pb: any, ctx: any, compact: boolean)
+	local f = self.frame
+	local hue = ctx.hue :: Color3
+	local can = pb.cls == "can"
+	local static = pb.static == true
+	local pr = Common.pr(pb.pr)
+	local tall = (not can) or (static and pr ~= nil)
+	local w = if compact then 200 else 400
+	local h = if compact then (if tall then 96 else 80) else (if tall then 110 else 96)
+	local cta = Common.get(f, "Cta", "TextButton") :: TextButton
+	cta.Text = ""
+	cta.AutoButtonColor = false
+	cta.ClipsDescendants = false
+	if compact then
+		cta.AnchorPoint = Vector2.new(0.5, 1)
+		cta.Position = UDim2.new(0.5, 0, 1, 0)
+	else
+		cta.AnchorPoint = Vector2.new(1, 0)
+		cta.Position = UDim2.new(1, 0, 0, 0)
+	end
+	cta.Size = UDim2.fromOffset(w, h)
+	if can then
+		Recipes.bevel(cta, { radius = 16, top = Theme.lift(hue, 0.15), mid = hue, bottom = Theme.shade(hue, 0.55), stroke = 2,
+			strokeFrom = Theme.lift(hue, 0.5), strokeTo = hue, sprite = "button" })
+		Common.glow(cta, hue, 0.6, 20)
+		if self.shine == nil then self.shine = Recipes.shine(cta, { every = 2.8 }) end
+	else
+		Recipes.bevel(cta, { radius = 16, top = C.panel3, mid = C.panel2, bottom = C.deep, stroke = 2, strokeFrom = C.strokeHi,
+			strokeTo = C.stroke, sprite = "button" })
+		Common.glow(cta, nil)
+		if self.shine then
+			self.shine:stop()
+			self.shine = nil
+		end
+		Common.drop(cta, "Shine")
+	end
+	-- the word (display: white, outline, hard shadow), step-fit to keep 12 du side padding
+	local word = Common.get(cta, "Word", "TextLabel") :: TextLabel
+	word.ZIndex = 10
+	word.AnchorPoint = Vector2.new(0.5, 0)
+	word.Position = UDim2.new(0.5, 0, 0, if compact then 10 else 12)
+	word.Size = UDim2.new(1, -24, 0, if compact then 24 else 32)
+	word.TextXAlignment = Enum.TextXAlignment.Center
+	word.TextYAlignment = Enum.TextYAlignment.Center
+	word.TextWrapped = false
+	local text = Signatures.cta(ctx.layer)
+	local sizes = if compact then { 20, 18, 16 } else { 26, 22 }
+	local wsig = text .. "|" .. tostring(compact) .. "|" .. tostring(can)
+	if word:GetAttribute("Sig") ~= wsig then
+		word:SetAttribute("Sig", wsig)
+		Recipes.title(word, { text = text, role = "cta", size = sizes[1], stroke = if compact then 4 else 6, shadow = 3 })
+		Rich.fit(word, sizes, w - 24)
+	end
+	-- the value well: +gain, or "need X res" when locked
+	local well = Common.get(cta, "Well", "TextLabel") :: TextLabel
+	well.ZIndex = 10
+	well.AnchorPoint = Vector2.new(0.5, 1)
+	well.AutomaticSize = Enum.AutomaticSize.X
+	well.TextWrapped = false
+	well.TextXAlignment = Enum.TextXAlignment.Center
+	well.TextYAlignment = Enum.TextYAlignment.Center
+	well.BackgroundColor3 = C.black
+	well.BackgroundTransparency = 0.45
+	Common.corner(well, 8)
+	Common.pad(well, 0, 10, 0, 10)
+	local unit = Signatures.unit(pb.res)
+	local barShown = pr ~= nil and (static or not can)
+	if can then
+		Common.text(well, "ctaSub", C.text)
+		well.Size = UDim2.fromOffset(0, 26)
+		well.Position = UDim2.new(0.5, 0, 1, if barShown then -38 else -12)
+		Common.setText(well, Common.num("+" .. (Common.str(pb.gain) or "0"), "ctaSub", C.text, unit, true))
+	else
+		Common.text(well, "small", C.text)
+		well.Size = UDim2.fromOffset(0, 26)
+		well.Position = UDim2.new(0.5, 0, 1, -10)
+		local need = Common.str(pb.next)
+		local bres = Common.plain(Common.str(pb.bres) or "")
+		if need then
+			Common.setText(well, Common.esc("need ") .. Common.num(if compact then Rich.short(need) else need, "number", C.text, bres, true))
+		else
+			Common.setText(well, Common.esc("Not ready"))
+		end
+	end
+	-- the pr bar + %
+	if barShown then
+		local p = pr :: number
+		local bar = Common.bar(cta, "Bar", p, if can then WHITE else Theme.lift(hue, 0.2), 6)
+		bar.ZIndex = 10
+		bar.AnchorPoint = Vector2.new(0, 0)
+		bar.Position = UDim2.new(0, 20, 0, if compact then 40 else 52)
+		bar.Size = UDim2.new(1, -96, 0, 6)
+		local pct = Common.get(cta, "Pct", "TextLabel") :: TextLabel
+		pct.ZIndex = 10
+		Common.text(pct, "number", C.text)
+		pct.AnchorPoint = Vector2.new(1, 0)
+		pct.Position = UDim2.new(1, -18, 0, if compact then 33 else 45)
+		pct.Size = UDim2.fromOffset(60, 20)
+		pct.TextXAlignment = Enum.TextXAlignment.Right
+		pct.TextYAlignment = Enum.TextYAlignment.Center
+		Common.setText(pct, Common.esc(Rich.pct(p)))
+	else
+		Common.drop(cta, "Bar")
+		Common.drop(cta, "Pct")
+	end
+	-- the hotkey keycap (keyboard and mouse only)
+	local hk = Common.str(pb.hk)
+	if hk and keyboard() then
+		local key = Common.get(cta, "Key", "TextLabel") :: TextLabel
+		key.ZIndex = 11
+		Common.text(key, "label", C.ink)
+		key.AnchorPoint = Vector2.new(1, 0)
+		key.Position = UDim2.new(1, -10, 0, 10)
+		key.AutomaticSize = Enum.AutomaticSize.X
+		key.Size = UDim2.fromOffset(0, 26)
+		key.BackgroundColor3 = Color3.fromRGB(236, 233, 248)
+		key.BackgroundTransparency = 0
+		key.TextXAlignment = Enum.TextXAlignment.Center
+		key.TextYAlignment = Enum.TextYAlignment.Center
+		Common.corner(key, 6)
+		Common.pad(key, 0, 7, 0, 7)
+		Common.setText(key, Common.esc(hk))
+	else
+		Common.drop(cta, "Key")
+	end
+	cta:SetAttribute("State", if can then "can" else "locked")
+	if cta:GetAttribute("Wired") ~= true then
+		cta:SetAttribute("Wired", true)
+		cta.Activated:Connect(function()
+			self:press()
+		end)
+	end
+end
+
+-- ------------------------------------------------------------------------------------------------------ press + juice
+function Hero.press(self: Hero)
+	local store = self.store
+	local id = self.ids["prestige-button"]
+	if store == nil or id == nil then return end
+	local pb = store:get(id)
+	if type(pb) ~= "table" or type(pb.a) ~= "table" then return end
+	self.act(pb.a, false)
+	if pb.cls == "can" then
+		local ok, err = pcall(function()
+			self:juice(Common.str(pb.gain), Signatures.unit(pb.res))
+		end)
+		if not ok then warn("[MilestoneTree] prestige juice failed: " .. tostring(err)) end
+	end
+end
+
+function Hero.juice(self: Hero, gain: string?, unit: string)
+	local f = self.frame
+	local cta = f:FindFirstChild("Cta") :: GuiObject?
+	if cta == nil then return end
+	local ctaObj = cta :: GuiObject
+	if Motion.reduced() then
+		Motion.flash(ctaObj)
+		return
+	end
+	-- 1. press squash, then Back Out
+	local sc = Motion.scaleOf(ctaObj)
+	sc.Scale = 0.94
+	Motion.tween(sc, TweenInfo.new(0.28, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }, "hero:cta")
+	local s = math.max(Layout.s, 0.01)
+	local origin = f.AbsolutePosition
+	local cc = (ctaObj.AbsolutePosition - origin + ctaObj.AbsoluteSize / 2) / s
+	-- 2. a burst ring
+	local ring = Instance.new("Frame")
+	ring.Name = "Burst"
+	ring.AnchorPoint = Vector2.new(0.5, 0.5)
+	ring.Position = UDim2.fromOffset(cc.X, cc.Y)
+	ring.Size = UDim2.fromOffset(120, 120)
+	ring.BackgroundTransparency = 1
+	ring.ZIndex = 20
+	ring.Active = false
+	Common.corner(ring, 0.5)
+	local rs = Common.stroke(ring, 4, C.gold, 0.4)
+	ring.Parent = f
+	Motion.tween(ring, TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = UDim2.fromOffset(360, 360) })
+	Motion.tween(rs, TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Transparency = 1 })
+	task.delay(0.5, function()
+		if ring.Parent then ring:Destroy() end
+	end)
+	-- 3. the "+gain" floater into the amount
+	local resF = f:FindFirstChild("Res")
+	local amount: GuiObject? = if resF then resF:FindFirstChild("Amount") :: GuiObject? else nil
+	if gain and amount and (amount :: GuiObject).Visible then
+		local a = amount :: GuiObject
+		local target = (a.AbsolutePosition - origin) / s + Vector2.new(60, a.AbsoluteSize.Y / (2 * s))
+		local fl = Instance.new("TextLabel")
+		fl.Name = "Floater"
+		fl.BackgroundTransparency = 1
+		fl.AnchorPoint = Vector2.new(0.5, 0.5)
+		fl.Position = UDim2.fromOffset(cc.X, cc.Y)
+		fl.Size = UDim2.fromOffset(320, 36)
+		fl.ZIndex = 21
+		fl.RichText = true
+		fl.FontFace = Theme.font("hero")
+		fl.TextSize = 28
+		fl.TextColor3 = C.gold
+		fl.TextStrokeTransparency = 1
+		local st = Common.stroke(fl, 3, C.black, 0, "Stroke")
+		st.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+		fl.Text = Rich.num("+" .. gain .. (if unit ~= "" then " " .. unit else ""), { size = 28, onFill = true })
+		fl.Parent = f
+		Motion.tween(fl, TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Position = UDim2.fromOffset(target.X, target.Y) })
+		task.delay(0.45, function()
+			if fl.Parent then
+				Motion.tween(fl, TweenInfo.new(0.2), { TextTransparency = 1 })
+				Motion.tween(st, TweenInfo.new(0.2), { Transparency = 1 })
+			end
+		end)
+		task.delay(0.7, function()
+			if fl.Parent then fl:Destroy() end
+		end)
+		-- 4. the amount bumps and its glow flares
+		task.delay(0.5, function()
+			if a.Parent then Motion.bump(a, 0.12) end
+			local blob = f:FindFirstChild("AmountGlow") :: Frame?
+			if blob then
+				local g = blob:FindFirstChild("Radial")
+				blob.BackgroundTransparency = 0
+				if g and g:IsA("UIGradient") then
+					local sc2 = Motion.scaleOf(blob)
+					sc2.Scale = 1.15
+					Motion.tween(sc2, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Scale = 1 })
+				end
+			end
+		end)
+	end
+end
+
+function Hero.destroy(self: Hero)
+	if self.shine then
+		self.shine:stop()
+		self.shine = nil
+	end
+	table.clear(self.ids)
+end
+
+return Hero
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="95">
+            <Properties>
+              <string name="Name">Panel</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	Panel: the layer panel (DESIGN.md 5, plan 2.4 / 2.5 / 1.12): sheet geometry and lifecycle, the shell (rim, header
+	band, emblem, title, sub row, tabs, close), the pinned hero, the body with the Render tab tree, the skeleton and
+	the scroll memory.
+
+	    local panel = Panel.new(gui, { store = store, tip = fn? })   -- gui: the PanelGui (Layout.screen, order 20)
+	    panel:open(key, node)          key = layer | "options-tab"; the shell draws at once from the map node
+	    panel:update(store, changes)   applies changes.tabPatch to the panel's own Render, then header, hero, sections
+	    panel:close(); panel:isOpen() -> key?
+	    panel:geometry() -> { mode = "side" | "full", sx = abs px of the strip edge?, card = Rect }
+	    panel:setBand(on)              COMPACT: the Hud band carries the title and close (the panel then hides its own)
+	    panel.content                  the Render tab root (Body.Scroll.TabRoot)
+	    panel.render                   the panel's Renderer (skins / claims / hero hooks installed)
+	    panel.closeRequested, panel.act (action, hold), panel.detail (card), panel.flyTo (layer), panel.geometryChanged
+
+	Protocol (plan 1.12): the panel never sends ["tab", id] itself: App fires the node's action once and calls open.
+	The body shows a skeleton until a patch arrives with patch.tab == key. Every button fires its node's `a` as sent
+	(panel.act); the hero CTA fires the prestige-button node's own action.
+	When the shown layer or subtab changes, the tab tree is rebuilt from the store, so no skin or claim keeps the
+	previous layer's state.
+]]
+
+local Core = script.Parent.Parent:WaitForChild("Core")
+local Theme = require(Core:WaitForChild("Theme"))
+local Recipes = require(Core:WaitForChild("Recipes"))
+local Motion = require(Core:WaitForChild("Motion"))
+local Rich = require(Core:WaitForChild("Rich"))
+local Layout = require(Core:WaitForChild("Layout"))
+local Signal = require(Core:WaitForChild("Signal"))
+local Types = require(script.Parent.Parent:WaitForChild("Types"))
+local Render = require(script.Parent.Parent:WaitForChild("Render"))
+local Signatures = require(script.Parent.Parent:WaitForChild("Signatures"):WaitForChild("Signatures"))
+local Common = require(script.Parent:WaitForChild("Skins"):WaitForChild("Common"))
+local Skins = require(script.Parent:WaitForChild("Skins"):WaitForChild("Skins"))
+local Sections = require(script.Parent:WaitForChild("Sections"))
+local Hero = require(script.Parent:WaitForChild("Hero"))
+local Virtual = require(script.Parent:WaitForChild("Virtual"))
+
+type ARect = Types.Rect
+
+local Panel = {}
+Panel.__index = Panel
+
+local C = Theme.C
+local WHITE = Color3.new(1, 1, 1)
+
+export type Geometry = { mode: string, sx: number?, card: ARect }
+
+export type Panel = typeof(setmetatable({} :: {
+	gui: ScreenGui,
+	root: Frame,
+	store: any,
+	render: any,
+	content: Frame,
+	key: string?,
+	node: any,
+	layer: string, -- the layer the tab tree currently shows (store.tab)
+	sub: string?,
+	ready: boolean,
+	band: boolean,
+	hug: boolean,
+	seen: { [string]: boolean },
+	scrollMem: { [string]: number },
+	restoring: boolean,
+	parts: { [string]: any },
+	hero: any,
+	ctxCache: any,
+	geo: Geometry,
+	closeRequested: Signal.Signal<>,
+	act: Signal.Signal<any, boolean?>,
+	detail: Signal.Signal<any>,
+	flyTo: Signal.Signal<string>,
+	geometryChanged: Signal.Signal<Geometry>,
+}, Panel))
+
+-- ------------------------------------------------------------------------------------------------------ helpers
+local function frame(parent: Instance, name: string): Frame
+	local f = Common.get(parent, name, "Frame") :: Frame
+	f.Active = false
+	return f
+end
+
+-- the current subtab: the text of the "cur" button of the top-level tabs node
+local function subOf(store: any): string?
+	local root = store:get("tab")
+	if type(root) ~= "table" or type(root.c) ~= "table" then return nil end
+	for _, cid in root.c do
+		local n = store:get(cid)
+		if type(n) == "table" and n.t == "tabs" and type(n.c) == "table" then
+			for _, tid in n.c do
+				local b = store:get(tid)
+				if type(b) == "table" and b.cls == "cur" then return Common.plain(b.h) end
+			end
+		end
+	end
+	return nil
+end
+
+-- every tab.* node of the store, as a full patch (a rebuild for a new layer / subtab)
+local function fullTabPatch(store: any): any
+	local set = {}
+	for id, n in store.nodes do
+		if id == "tab" or string.sub(id, 1, 4) == "tab." then set[id] = n end
+	end
+	return { full = true, set = set, del = {} }
+end
+
+-- ------------------------------------------------------------------------------------------------------ build
+function Panel.new(gui: ScreenGui, deps: { store: any?, tip: ((html: string?, over: GuiObject?) -> ())?, root: Frame? }): Panel
+	local root = deps.root or (gui:FindFirstChild("Root") :: Frame?) or (gui :: any)
+	local self = setmetatable({
+		gui = gui,
+		root = root,
+		store = deps.store,
+		render = nil :: any,
+		content = nil :: any,
+		key = nil,
+		node = nil,
+		layer = "none",
+		sub = nil,
+		ready = false,
+		band = false,
+		hug = false,
+		seen = {},
+		scrollMem = {},
+		restoring = false,
+		parts = {},
+		hero = nil :: any,
+		ctxCache = nil,
+		geo = { mode = "side", sx = nil, card = { x = 0, y = 0, w = 0, h = 0 } },
+		closeRequested = Signal.new() :: Signal.Signal<>,
+		act = Signal.new() :: Signal.Signal<any, boolean?>,
+		detail = Signal.new() :: Signal.Signal<any>,
+		flyTo = Signal.new() :: Signal.Signal<string>,
+		geometryChanged = Signal.new() :: Signal.Signal<Geometry>,
+	}, Panel)
+	self:build()
+	local tip = deps.tip or function(_: string?, _o: GuiObject?) end
+	self.hero = Hero.new(self.parts.hero, function(a: any, hold: boolean?)
+		self.act:Fire(a, hold)
+	end)
+	self.render = Render.new({ tab = self.content }, {
+		press = function(a: any, hold: boolean)
+			self.act:Fire(a, hold)
+		end,
+		tip = tip,
+		ctx = function(): any
+			return self:ctx()
+		end,
+		skin = function(rec: any, n: any, ctx: any): boolean
+			return Skins.apply(rec, n, ctx)
+		end,
+		claim = function(id: string, n: any, ctx: any): any
+			return self:claimFor(id, n, ctx)
+		end,
+		store = deps.store,
+		detail = function(rec: any)
+			if rec.kind == "btn:upg" or rec.kind == "btn:buy" then
+				self.detail:Fire({ id = rec.id, kind = rec.kind, node = rec.node, layer = self.layer })
+			end
+		end,
+	})
+	Layout.changed:Connect(function()
+		self:layout()
+		if self.key then self.render:refresh() end
+		self:drawHero()
+	end)
+	self:layout()
+	self:showOpen(false, false)
+	return self
+end
+
+function Panel.build(self: Panel)
+	local root = self.root
+	local p = self.parts
+	-- the backdrop over the map right of the strip
+	local back = frame(root, "Backdrop")
+	back.BackgroundColor3 = C.void
+	back.BackgroundTransparency = 0.04
+	back.ZIndex = 1
+	back.Active = true
+	local ramp = Common.get(back, "Ramp", "UIGradient") :: UIGradient
+	ramp.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 1),
+		NumberSequenceKeypoint.new(0.02, 0.04),
+		NumberSequenceKeypoint.new(1, 0.04),
+	})
+	p.back = back
+	-- the sheet
+	local sheet = frame(root, "Sheet")
+	sheet.ZIndex = 2
+	sheet.Active = true
+	sheet.ClipsDescendants = false
+	p.sheet = sheet
+	local band = frame(sheet, "HeaderBand")
+	band.ZIndex = 2
+	p.band = band
+	local rule = frame(sheet, "HeaderRule")
+	rule.ZIndex = 3
+	p.rule = rule
+	local emblem = frame(sheet, "Emblem")
+	emblem.ZIndex = 6
+	p.emblem = emblem
+	local sym = Common.get(emblem, "Symbol", "TextLabel") :: TextLabel
+	sym.ZIndex = 7
+	p.sym = sym
+	local title = Common.get(sheet, "Title", "TextLabel") :: TextLabel
+	title.ZIndex = 6
+	p.title = title
+	local subRow = frame(sheet, "SubRow")
+	subRow.ZIndex = 6
+	p.subRow = subRow
+	local tabs = frame(sheet, "Tabs")
+	tabs.ZIndex = 6
+	p.tabs = tabs
+	local close = Common.get(sheet, "Close", "TextButton") :: TextButton
+	close.ZIndex = 20
+	close.AutoButtonColor = false
+	close.Text = ""
+	p.close = close
+	close.Activated:Connect(function()
+		self.closeRequested:Fire()
+	end)
+	close.MouseEnter:Connect(function()
+		Motion.tween(close, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Rotation = 90 }, "panel:close")
+	end)
+	close.MouseLeave:Connect(function()
+		Motion.tween(close, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Rotation = 0 }, "panel:close")
+	end)
+	local hero = frame(sheet, "Hero")
+	hero.ZIndex = 5
+	p.hero = hero
+	local divider = frame(sheet, "Divider")
+	divider.ZIndex = 3
+	p.divider = divider
+	local body = frame(sheet, "Body")
+	body.ZIndex = 3
+	body.ClipsDescendants = true
+	p.body = body
+	local scroll = Common.get(body, "Scroll", "ScrollingFrame") :: ScrollingFrame
+	scroll.BackgroundTransparency = 1
+	scroll.BorderSizePixel = 0
+	scroll.Size = UDim2.fromScale(1, 1)
+	scroll.CanvasSize = UDim2.new()
+	scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	scroll.ScrollingDirection = Enum.ScrollingDirection.Y
+	scroll.ScrollBarThickness = 6
+	scroll.ElasticBehavior = Enum.ElasticBehavior.WhenScrollable
+	scroll.ZIndex = 3
+	scroll.Active = true
+	p.scroll = scroll
+	local tabRoot = frame(scroll, "TabRoot")
+	tabRoot.Size = UDim2.new(1, 0, 0, 0)
+	tabRoot.AutomaticSize = Enum.AutomaticSize.Y
+	tabRoot.ZIndex = 3
+	self.content = tabRoot
+	local fade = frame(body, "BottomFade")
+	fade.AnchorPoint = Vector2.new(0, 1)
+	fade.Position = UDim2.fromScale(0, 1)
+	fade.Size = UDim2.new(1, 0, 0, 80)
+	fade.ZIndex = 9
+	fade.BackgroundTransparency = 0
+	fade.Active = false
+	p.fade = fade
+	local fg = Common.get(fade, "Fade", "UIGradient") :: UIGradient
+	fg.Rotation = 90
+	fg.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(1, 0.1) })
+	scroll:GetPropertyChangedSignal("CanvasPosition"):Connect(function()
+		if self.key and self.ready and not self.restoring then
+			self.scrollMem[self:memKey()] = scroll.CanvasPosition.Y
+		end
+	end)
+end
+
+-- ------------------------------------------------------------------------------------------------------ context
+function Panel.memKey(self: Panel): string
+	return tostring(self.layer) .. "|" .. tostring(self.sub or "")
+end
+
+-- the body's content width in du and the upgrade card width
+function Panel.widths(self: Panel): (number, number)
+	local compact = Layout.mode == "COMPACT"
+	local bodyW = self.parts.body.Size.X.Offset
+	if bodyW <= 0 then bodyW = if compact then 580 else 1080 end
+	local pad = if compact then 6 + 14 else 16 + 24
+	local contentW = math.max(200, bodyW - pad)
+	local cardW = if compact then math.max(200, math.floor((contentW - 10) / 2)) else 237
+	return contentW, cardW
+end
+
+function Panel.ctx(self: Panel): any
+	local store = self.store
+	local layer = self.layer
+	local contentW, cardW = self:widths()
+	local ctx: Signatures.Ctx = {
+		layer = layer,
+		sub = self.sub,
+		hue = Theme.hue(layer),
+		mode = Layout.mode,
+		signature = Signatures.get(layer),
+		act = function(a: any, hold: boolean?)
+			self.act:Fire(a, hold)
+		end,
+		store = store,
+		render = self.render,
+		s = Layout.s,
+		contentW = contentW,
+		cardW = cardW,
+		corrupted = Signatures.corrupted(layer),
+		detail = function(card: any)
+			self.detail:Fire(card)
+		end,
+		firstSeen = function(key: string): boolean
+			if self.seen[key] then return false end
+			self.seen[key] = true
+			return true
+		end,
+		cache = {},
+		scroll = self.parts.scroll,
+	}
+	self.ctxCache = ctx
+	return ctx
+end
+
+-- the claim hook: header tabs, the signature's claims, the hero, long milestone ladders
+local function matches(m: any, id: string, n: any, ctx: any): boolean
+	if type(m) ~= "table" or n.cn ~= m.cn then return false end
+	if m.ci ~= nil and n.ci ~= m.ci then return false end
+	if m.sub ~= nil and ctx.sub ~= m.sub then return false end
+	if m.depth ~= nil and Common.depth(id) > m.depth then return false end
+	return true
+end
+
+function Panel.claimFor(self: Panel, id: string, n: any, ctx: any): any
+	if type(n) ~= "table" or ctx == nil then return nil end
+	local store = self.store
+	if n.t == "tabs" and Common.depth(id) == 1 then
+		return function(ph: Frame): any
+			return self:tabsClaim(ph, id)
+		end
+	end
+	local sig = ctx.signature
+	if sig and type(sig.claims) == "table" then
+		for _, rule in sig.claims do
+			if matches(rule.match, id, n, ctx) then
+				return function(ph: Frame): any
+					return rule.make(ph, id, store, ctx)
+				end
+			end
+		end
+	end
+	if self.hero:wants(id, n) then return self.hero:claim(id, n) end
+	if n.cn == "milestones" and #store:kids(id) > Virtual.MS_ROWS then
+		return function(ph: Frame): any
+			return Virtual.milestones(ph, id, store, ctx)
+		end
+	end
+	return nil
+end
+
+-- ------------------------------------------------------------------------------------------------------ header tabs
+function Panel.tabsClaim(self: Panel, ph: Frame, id: string): any
+	ph.Visible = false
+	ph.Size = UDim2.new()
+	ph.AutomaticSize = Enum.AutomaticSize.None
+	local tabs = self.parts.tabs :: Frame
+	local claim = {}
+	function claim.update(_: any, store: any)
+		self:drawTabs(store, id)
+	end
+	function claim.destroy(_: any)
+		for _, c in tabs:GetChildren() do
+			if c:IsA("GuiButton") then c:Destroy() end
+		end
+		tabs:SetAttribute("Count", 0)
+	end
+	return claim
+end
+
+function Panel.drawTabs(self: Panel, store: any, id: string)
+	local tabs = self.parts.tabs :: Frame
+	local kids = store:kids(id)
+	local compact = Layout.mode == "COMPACT"
+	local hue = Theme.hue(self.layer)
+	local count = 0
+	for i, tid in kids do
+		local n = store:get(tid)
+		if type(n) ~= "table" or n.t ~= "btn" then continue end
+		count += 1
+		local b = Common.get(tabs, "Tab" .. i, "TextButton") :: TextButton
+		b.LayoutOrder = i
+		b.AutoButtonColor = false
+		b.Text = ""
+		b.ZIndex = 7
+		b.Size = UDim2.fromOffset(0, if compact then 36 else 40)
+		b.AutomaticSize = Enum.AutomaticSize.X
+		local active = n.cls == "cur"
+		if active then
+			Common.fill(b, Theme.lift(hue, 0.1), Theme.shade(hue, 0.6))
+			Common.stroke(b, 1.5, Theme.lift(hue, 0.45), 0)
+			Common.glow(b, hue, 0.45, 12)
+		else
+			Common.drop(b, "Fill")
+			b.BackgroundColor3 = C.panel2
+			b.BackgroundTransparency = 0
+			Common.stroke(b, 1, C.stroke, 0)
+			Common.glow(b, nil)
+		end
+		Common.corner(b, 12)
+		Common.pad(b, 0, 16, 0, 16)
+		local l = Common.get(b, "Label", "TextLabel") :: TextLabel
+		l.ZIndex = 8
+		Common.text(l, "tab", if active then C.text else C.soft)
+		l.FontFace = Font.fromName("Montserrat", Enum.FontWeight.ExtraBold, if active then Enum.FontStyle.Italic else Enum.FontStyle.Normal)
+		l.Size = UDim2.new(0, 0, 1, 0)
+		l.AutomaticSize = Enum.AutomaticSize.X
+		l.TextXAlignment = Enum.TextXAlignment.Center
+		l.TextYAlignment = Enum.TextYAlignment.Center
+		l.TextWrapped = false
+		if active then
+			Common.stroke(l, 2, C.black, 0, "Stroke").ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+		else
+			Common.drop(l, "Stroke")
+		end
+		Common.setText(l, Common.esc(string.upper(Common.plain(n.h))))
+		-- a notify dot (10 du, danger)
+		if n.glow or n.pulse then
+			local dot = Common.get(b, "Dot", "Frame") :: Frame
+			dot.AnchorPoint = Vector2.new(0.5, 0.5)
+			dot.Position = UDim2.new(1, 16, 0, 0)
+			dot.Size = UDim2.fromOffset(10, 10)
+			dot.BackgroundColor3 = C.danger
+			dot.BackgroundTransparency = 0
+			dot.ZIndex = 9
+			Common.corner(dot, 0.5)
+		else
+			Common.drop(b, "Dot")
+		end
+		b:SetAttribute("TabId", tid)
+		b:SetAttribute("State", if active then "owned" else "can")
+		if b:GetAttribute("Wired") ~= true then
+			b:SetAttribute("Wired", true)
+			b.Activated:Connect(function()
+				local t = b:GetAttribute("TabId")
+				local node = if type(t) == "string" then self.store:get(t) else nil
+				if type(node) == "table" and type(node.a) == "table" and node.cls ~= "cur" then
+					self.act:Fire(node.a, false)
+				end
+			end)
+		end
+	end
+	-- drop buttons past the list
+	for _, c in tabs:GetChildren() do
+		if c:IsA("GuiButton") then
+			local i = tonumber(string.match(c.Name, "^Tab(%d+)$"))
+			if i == nil or i > #kids then c:Destroy() end
+		end
+	end
+	tabs:SetAttribute("Count", count)
+	-- a single-tab bar (Main only) is hidden
+	tabs.Visible = count >= 2
+end
+
+-- ------------------------------------------------------------------------------------------------------ geometry
+function Panel.geometry(self: Panel): Geometry
+	return self.geo
+end
+
+function Panel.setBand(self: Panel, on: boolean)
+	self.band = on
+	self:layout()
+end
+
+function Panel.layout(self: Panel)
+	local p = self.parts
+	local root = self.root
+	local s = math.max(Layout.s, 0.01)
+	local W = root.Size.X.Offset
+	local H = root.Size.Y.Offset
+	if W <= 0 or H <= 0 then
+		W, H = Layout.canvas.X, Layout.canvas.Y
+	end
+	local mode = Layout.mode
+	local key = self.key or self.layer
+	local hue = Theme.hue(key)
+	local corrupted = Signatures.corrupted(key)
+	-- where the device top is in the root's space (D coordinates are screen du from the device top-left)
+	local origin = Layout.deviceOrigin()
+	local topInset = math.max(0, (root.AbsolutePosition.Y - origin.Y) / s)
+	local full = mode == "COMPACT"
+	local x, y, w, h = 0, 0, W, H
+	if not full then
+		if mode == "WIDE" then
+			w = math.min(1112, W - 48)
+			x = W - 24 - w
+			if x - 24 < Layout.STRIP_MIN then full = true end
+		else
+			w = math.clamp(0.62 * W, 900, 1112)
+			w = math.min(w, W - 32)
+			x = W - 16 - w
+			if W - w - 24 < Layout.STRIP_MIN then full = true end
+		end
+		y = math.max(8, 70 - topInset)
+		h = math.min(994, H - y - 16)
+	end
+	if full then
+		x, y, w, h = 0, 0, W, H
+	end
+	w, h = math.floor(w), math.floor(h)
+	local compact = mode == "COMPACT"
+	local sheet = p.sheet :: Frame
+	sheet.Position = UDim2.fromOffset(x, y)
+	sheet.Size = UDim2.fromOffset(w, h)
+	-- the backdrop covers everything right of the strip (the whole screen when full)
+	local back = p.back :: Frame
+	local bx = if full then 0 else x - 24
+	back.Position = UDim2.fromOffset(bx, 0)
+	back.Size = UDim2.fromOffset(W - bx, H)
+	-- rim
+	local radius = if full then 0 else 22
+	Common.corner(sheet, radius)
+	Common.fill(sheet, Color3.fromHex("221d33"), Color3.fromHex("100d19"), Color3.fromHex("14111f"))
+	local rim = Common.stroke(sheet, if full then 0 else 3, WHITE, 0, "Rim")
+	local rg = Common.get(rim, "RimGradient", "UIGradient") :: UIGradient
+	rg.Rotation = 135
+	rg.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Theme.lift(hue, 0.4)),
+		ColorSequenceKeypoint.new(0.4, hue),
+		ColorSequenceKeypoint.new(0.75, Theme.shade(hue, 0.55)),
+		ColorSequenceKeypoint.new(1, hue),
+	})
+	if corrupted then
+		Recipes.dashed(rim, { color = WHITE })
+	else
+		Common.drop(rim, "Dash")
+	end
+	Common.glow(sheet, if full then nil else hue, 0.45, 28)
+	-- header band + rule
+	local headerH = if compact then (if self.band then 0 else 56) else 90
+	local band = p.band :: Frame
+	band.Visible = headerH > 0
+	band.Position = UDim2.new()
+	band.Size = UDim2.new(1, 0, 0, headerH)
+	Common.corner(band, radius)
+	Common.fill(band, Theme.mix(C.panel, hue, 0.22), Theme.mix(C.panel, hue, 0.22))
+	local bg = band:FindFirstChild("Fill") :: UIGradient?
+	if bg then
+		bg.Rotation = 0
+		bg.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 1) })
+	end
+	local rule = p.rule :: Frame
+	rule.Visible = headerH > 0
+	rule.Position = UDim2.fromOffset(0, headerH + 2)
+	rule.Size = UDim2.new(1, 0, 0, 2)
+	rule.BackgroundColor3 = hue
+	rule.BackgroundTransparency = 0
+	local rgf = Common.get(rule, "Fade", "UIGradient") :: UIGradient
+	rgf.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0),
+		NumberSequenceKeypoint.new(0.5, 0.75),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	-- emblem, title, sub row, tabs, close
+	local emblem = p.emblem :: Frame
+	local ed = if compact then 42 else 96
+	emblem.Visible = headerH > 0
+	emblem.Size = UDim2.fromOffset(ed, ed)
+	emblem.Position = if compact then UDim2.fromOffset(10, 7) elseif full then UDim2.fromOffset(12, 8) else UDim2.fromOffset(-18, -22)
+	Common.corner(emblem, 0.5)
+	Recipes.radial(emblem, { { t = 0, c = Theme.lift(hue, 0.6) }, { t = 0.45, c = hue }, { t = 1, c = Theme.shade(hue, 0.4) } })
+	Common.corner(emblem, 0.5)
+	Common.stroke(emblem, if compact then 2 else 3, Theme.lift(hue, 0.5), 0)
+	Common.glow(emblem, hue, 0.7, 18)
+	local titleX = if compact then 60 elseif full then 124 else 96
+	local title = p.title :: TextLabel
+	title.Visible = headerH > 0
+	title.Position = UDim2.fromOffset(titleX, if compact then 8 else 10)
+	title.Size = UDim2.new(0, 0, 0, if compact then 32 else 50)
+	title.AutomaticSize = Enum.AutomaticSize.X
+	title.TextXAlignment = Enum.TextXAlignment.Left
+	title.TextYAlignment = Enum.TextYAlignment.Center
+	title.TextWrapped = false
+	local subRow = p.subRow :: Frame
+	subRow.Visible = headerH > 0 and not compact
+	subRow.Position = UDim2.fromOffset(titleX, 60)
+	subRow.Size = UDim2.new(1, -titleX - 140, 0, 26)
+	local tabs = p.tabs :: Frame
+	tabs.AnchorPoint = Vector2.new(1, 0)
+	tabs.Position = if compact then UDim2.new(1, -64, 0, 10) else UDim2.new(1, -56, 0, 24)
+	tabs.Size = UDim2.fromOffset(0, if compact then 36 else 40)
+	tabs.AutomaticSize = Enum.AutomaticSize.X
+	Common.list(tabs, true, 8, { align = Enum.HorizontalAlignment.Right, valign = Enum.VerticalAlignment.Center })
+	local close = p.close :: TextButton
+	close.Visible = not (compact and self.band)
+	local cs = if compact then 44 else 52
+	close.AnchorPoint = Vector2.new(0.5, 0.5)
+	close.Size = UDim2.fromOffset(cs, cs)
+	close.Position = if compact then UDim2.new(1, -32, 0, 28) elseif full then UDim2.new(1, -40, 0, 40) else UDim2.new(1, -10, 0, 12)
+	Recipes.bevel(close, { radius = 14, top = Theme.lift(C.danger, 0.2), mid = C.danger, bottom = Theme.shade(C.danger, 0.6), stroke = 2,
+		strokeFrom = Color3.fromHex("ffc2cc"), strokeTo = Color3.fromHex("ffc2cc"), sprite = "button" })
+	local cross = Common.get(close, "X", "TextLabel") :: TextLabel
+	cross.ZIndex = 21
+	cross.Size = UDim2.fromScale(1, 1)
+	cross.FontFace = Theme.font("title")
+	cross.TextSize = if compact then 28 else 32
+	cross.TextColor3 = WHITE
+	cross.TextXAlignment = Enum.TextXAlignment.Center
+	cross.TextYAlignment = Enum.TextYAlignment.Center
+	cross.Text = "×"
+	Common.stroke(cross, 2, C.black, 0.2, "Stroke").ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	-- hero and body
+	local hero = p.hero :: Frame
+	local heroOn = self.hero ~= nil and self.hero.visible
+	local divider = p.divider :: Frame
+	local body = p.body :: Frame
+	local top = headerH + (if compact then 8 else 14)
+	if compact then
+		hero.Position = UDim2.fromOffset(10, top)
+		hero.Size = UDim2.fromOffset(226, h - top - 10)
+		divider.Visible = false
+		local bx0 = if heroOn then 248 else 10
+		body.Position = UDim2.fromOffset(bx0, top)
+		body.Size = UDim2.fromOffset(w - bx0 - 8, h - top - 8)
+	else
+		hero.Position = UDim2.fromOffset(32, top)
+		hero.Size = UDim2.fromOffset(w - 64, 152)
+		divider.Visible = heroOn
+		divider.Position = UDim2.fromOffset(24, top + 158)
+		divider.Size = UDim2.new(1, -48, 0, 1)
+		divider.BackgroundColor3 = C.stroke
+		divider.BackgroundTransparency = 0.3
+		local by = if heroOn then top + 168 else top
+		body.Position = UDim2.fromOffset(16, by)
+		body.Size = UDim2.fromOffset(w - 32, h - by - 16)
+	end
+	-- the body: a styled frame holding the transparent scroll
+	Common.corner(body, 16)
+	if corrupted then
+		Common.fill(body, Color3.new(0, 0, 0), Color3.fromHex("062b0a"), Color3.fromHex("041a06"))
+	else
+		Common.fill(body, Theme.mix(C.panel, hue, 0.04), C.deep)
+	end
+	local fill = body:FindFirstChild("Fill") :: UIGradient?
+	if fill then fill.Transparency = NumberSequence.new(0.25) end
+	local scroll = p.scroll :: ScrollingFrame
+	scroll.ScrollBarImageColor3 = Theme.lift(hue, 0.3)
+	Common.pad(self.content, if compact then 10 else 20, if compact then 14 else 24, 90, if compact then 6 else 16, "Pad")
+	local fade = p.fade :: Frame
+	fade.BackgroundColor3 = if corrupted then Color3.fromHex("031305") else C.deep
+	-- abs geometry for App (strip edge, card rect)
+	local o = root.AbsolutePosition
+	self.geo = {
+		mode = if full then "full" else "side",
+		sx = if full then nil else o.X + bx * s,
+		card = { x = o.X + x * s, y = o.Y + y * s, w = w * s, h = h * s },
+	}
+	self.geometryChanged:Fire(self.geo)
+end
+
+-- ------------------------------------------------------------------------------------------------------ the shell
+function Panel.drawShell(self: Panel, accent: boolean?)
+	local p = self.parts
+	local key = self.key or self.layer
+	local node = self.node
+	local compact = Layout.mode == "COMPACT"
+	local hue = Theme.hue(key)
+	-- emblem symbol
+	local sym = p.sym :: TextLabel
+	sym.Size = UDim2.fromScale(1, 1)
+	sym.TextXAlignment = Enum.TextXAlignment.Center
+	sym.TextYAlignment = Enum.TextYAlignment.Center
+	sym.TextWrapped = false
+	local symText = if node and type(node.sym) == "string" then node.sym elseif key == "options-tab" then "OPT" else string.upper(key)
+	local symSize = if compact then (if #symText > 2 then 14 else 20) else (if #symText > 2 then 30 else 44)
+	local ssig = symText .. "|" .. symSize
+	if sym:GetAttribute("Sig") ~= ssig then
+		sym:SetAttribute("Sig", ssig)
+		Recipes.title(sym, { text = symText, role = "index", size = symSize, stroke = if compact then 2 else 4, shadow = if compact then 1 else 3 })
+	end
+	-- title (step-fit to leave the tabs room)
+	local title = p.title :: TextLabel
+	local text = string.upper(Signatures.title(key, node))
+	local sizes = if compact then { 27, 24, 22 } else { 44, 38, 32 }
+	local tsig = text .. "|" .. Theme.toHex(hue) .. "|" .. tostring(compact)
+	if title:GetAttribute("Sig") ~= tsig then
+		title:SetAttribute("Sig", tsig)
+		Recipes.title(title, { text = text, role = "title", size = sizes[1], from = WHITE, to = Theme.lift(hue, 0.45),
+			stroke = if compact then 5 else 7, shadow = 4 })
+	end
+	local sheetW = (p.sheet :: Frame).Size.X.Offset
+	local tabsW = if (p.tabs :: Frame).Visible then (p.tabs :: Frame).AbsoluteSize.X / math.max(Layout.s, 0.01) else 0
+	Rich.fit(title, sizes, math.max(160, sheetW - title.Position.X.Offset - tabsW - 90))
+	-- the sub row: ROW chip + the sentence-case line (the corrupted breadcrumb for cp / cm)
+	local subRow = p.subRow :: Frame
+	Common.list(subRow, true, 10, { valign = Enum.VerticalAlignment.Center })
+	local row = Signatures.row(key)
+	if row then
+		local chip = Common.chip(subRow, "RowChip", "ROW " .. row, { color = C.text, bg = C.deep, bgT = 0, h = 26, stroke = Theme.lift(hue, 0.3) })
+		chip.LayoutOrder = 1
+	else
+		Common.drop(subRow, "RowChip")
+	end
+	local line = Common.label(subRow, "Line", "small", C.soft, { autoX = true, wrap = false, order = 2 })
+	local lineText = if Signatures.corrupted(key) then "C:\\MULTIVERSE\\CORRUPTED>_" else (Signatures.subRow(key) or "")
+	if Signatures.corrupted(key) then
+		line.FontFace = Theme.font("terminal")
+		line.TextColor3 = C.termDim
+	end
+	Common.setText(line, Common.esc(lineText))
+	-- the signature's accent
+	local sig = Signatures.get(key)
+	self.hug = sig.hug == true
+	if accent and sig.accent then
+		local ok, err = Common.try(sig.accent, p.sheet, self.ctxCache or self:ctx())
+		if not ok then warn("[MilestoneTree] signature accent failed: " .. tostring(err)) end
+	end
+end
+
+function Panel.drawHero(self: Panel)
+	if self.store == nil then return end
+	local was = self.hero.visible
+	local ok, err = pcall(function()
+		self.hero:draw(self.store, self.ctxCache or self:ctx())
+	end)
+	if not ok then warn("[MilestoneTree] hero failed: " .. tostring(err)) end
+	if was ~= self.hero.visible then self:layout() end
+end
+
+-- ------------------------------------------------------------------------------------------------------ lifecycle
+-- the skeleton: 3 shimmer bars until the first patch of the opened layer (built only while it shows)
+local function shimmer(self: Panel, on: boolean)
+	local body = self.parts.body :: Frame
+	if not on then
+		Common.drop(body, "Skeleton")
+		return
+	end
+	local sk = frame(body, "Skeleton")
+	sk.ZIndex = 8
+	sk.Size = UDim2.fromScale(1, 1)
+	sk.Visible = true
+	Common.pad(sk, 24, 24, 24, 24)
+	Common.list(sk, false, 16)
+	for i = 1, 3 do
+		local bar = frame(sk, "Bar" .. i)
+		bar.LayoutOrder = i
+		bar.ZIndex = 8
+		bar.Size = UDim2.new(if i == 3 then 0.6 else 1, 0, 0, if i == 1 then 36 else 120)
+		bar.BackgroundColor3 = C.panel3
+		bar.BackgroundTransparency = 0
+		Common.corner(bar, 14)
+		local g = Common.get(bar, "Shimmer", "UIGradient") :: UIGradient
+		g.Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.35),
+			NumberSequenceKeypoint.new(0.5, 0),
+			NumberSequenceKeypoint.new(1, 0.35),
+		})
+		g.Offset = Vector2.new(-1, 0)
+		Motion.tween(g, TweenInfo.new(1.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1), { Offset = Vector2.new(1, 0) },
+			"panel:shimmer" .. i)
+	end
+end
+
+function Panel.showOpen(self: Panel, on: boolean, animate: boolean)
+	local p = self.parts
+	local sheet = p.sheet :: Frame
+	local back = p.back :: Frame
+	sheet.Visible = on
+	back.Visible = on
+	if on and animate and not Motion.reduced() then
+		local target = sheet.Position
+		sheet.Position = target + UDim2.fromOffset(if Layout.mode == "COMPACT" then 0 else 60, if Layout.mode == "COMPACT" then 30 else 0)
+		Motion.tween(sheet, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Position = target }, "panel:slide")
+	end
+end
+
+function Panel.open(self: Panel, key: string, node: any?)
+	local reopen = self.key == key
+	self.key = key
+	self.node = node
+	if not reopen then self.seen = {} end
+	local store = self.store
+	self.ready = store ~= nil and store.tab == key
+	self:layout()
+	self:drawShell(true)
+	shimmer(self, not self.ready)
+	local scroll = self.parts.scroll :: ScrollingFrame
+	scroll.Visible = self.ready
+	self:showOpen(true, not reopen)
+	if self.ready and store then self:sync(store, true) end
+end
+
+function Panel.close(self: Panel)
+	if self.key == nil then return end
+	if self.ready then self.scrollMem[self:memKey()] = (self.parts.scroll :: ScrollingFrame).CanvasPosition.Y end
+	self.key = nil
+	self.node = nil
+	self.ready = false
+	shimmer(self, false)
+	self:showOpen(false, false)
+end
+
+function Panel.isOpen(self: Panel): string?
+	return self.key
+end
+
+-- the tree shows another layer / subtab: rebuild it from the store (fresh skins and claims), restore the scroll
+function Panel.sync(self: Panel, store: any, force: boolean)
+	local layer = store.tab
+	local sub = subOf(store)
+	if not force and layer == self.layer and sub == self.sub then return end
+	if self.ready and self.key then self.scrollMem[self:memKey()] = (self.parts.scroll :: ScrollingFrame).CanvasPosition.Y end
+	self.layer = layer
+	self.sub = sub
+	self.hero:reset()
+	local ok, err = pcall(function()
+		self.render:apply(fullTabPatch(store))
+	end)
+	if not ok then warn("[MilestoneTree] panel rebuild failed: " .. tostring(err)) end
+	self:after(store)
+	-- the scroll position of this layer / subtab, once the layout settled
+	local scroll = self.parts.scroll :: ScrollingFrame
+	local y = self.scrollMem[self:memKey()] or 0
+	self.restoring = true
+	scroll.CanvasPosition = Vector2.new(0, y)
+	task.defer(function()
+		scroll.CanvasPosition = Vector2.new(0, y)
+		self.restoring = false
+	end)
+end
+
+-- after a render apply: hero, sections, header
+function Panel.after(self: Panel, store: any)
+	if self.hero.dirty then self:drawHero() end
+	local ctx = self.ctxCache
+	if ctx then
+		local ok, err = Common.try(Sections.refresh, ctx)
+		if not ok then warn("[MilestoneTree] sections failed: " .. tostring(err)) end
+	end
+	if self.key then self:drawShell() end
+end
+
+function Panel.update(self: Panel, store: any, changes: any)
+	self.store = store
+	self.render.hooks.store = store
+	local layerMoved = store.tab ~= self.layer or subOf(store) ~= self.sub
+	if layerMoved or (changes and changes.full) then
+		self:sync(store, true)
+	elseif changes and changes.tab then
+		local ok, err = pcall(function()
+			self.render:apply(changes.tabPatch)
+		end)
+		if not ok then
+			warn("[MilestoneTree] panel render failed: " .. tostring(err) .. "; rebuilding")
+			self:sync(store, true)
+		else
+			self:after(store)
+		end
+	end
+	-- the body fills when the opened layer's content has arrived (plan 1.12)
+	if self.key then
+		local ready = store.tab == self.key
+		if ready ~= self.ready then
+			self.ready = ready
+			shimmer(self, not ready)
+			local scroll = self.parts.scroll :: ScrollingFrame
+			scroll.Visible = ready
+		end
+	end
+end
+
+function Panel.destroy(self: Panel)
+	self.hero:destroy()
+	self.render:clear()
+	for _, name in { "Backdrop", "Sheet" } do Common.drop(self.root, name) end
+end
+
+return Panel
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="96">
+            <Properties>
+              <string name="Name">Preview</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	Preview: the new layer panel over the old page UI, in Studio only, until the app shell (package I) replaces the
+	page. The old Main.client feeds every View patch here; the panel follows the server's open layer (map.open), the
+	way App will (plan 1.12): pick a layer in the old menu (or press its hotkey) and its new panel opens at the right;
+	X / closing sends the map's own close action. Every button fires its node's own action through the old client's
+	press function (the server whitelist applies as always).
+
+	    local preview = Preview.start({ press = fn(action, hold) })   -- nil outside Studio
+	    preview:onPatch(patch)
+
+	A small toggle at the bottom left switches the preview off and on. The panel sits above the map preview (M / the
+	GAME button switch the map and the page as before).
+]]
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local Core = script.Parent.Parent:WaitForChild("Core")
+local Theme = require(Core:WaitForChild("Theme"))
+local Layout = require(Core:WaitForChild("Layout"))
+local ViewStore = require(Core:WaitForChild("ViewStore"))
+local Panel = require(script.Parent:WaitForChild("Panel"))
+
+local Preview = {}
+Preview.__index = Preview
+
+export type Preview = typeof(setmetatable({} :: {
+	store: any,
+	panel: any,
+	on: boolean,
+	press: (action: any, hold: boolean) -> (),
+	toggle: TextButton,
+	errors: number,
+	closing: string?,
+}, Preview))
+
+function Preview.start(o: { press: (action: any, hold: boolean) -> () }): Preview?
+	if not RunService:IsStudio() then return nil end
+	Theme.detect()
+	local gui = Layout.screen("PanelGui", 20, Enum.ScreenInsets.CoreUISafeInsets)
+	gui.DisplayOrder = 42 -- above the map preview (40) and its button bar (41)
+	local store = ViewStore.new()
+	local panel = Panel.new(gui, { store = store })
+	-- the toggle
+	local tg = Instance.new("ScreenGui")
+	tg.Name = "PanelPreviewToggle"
+	tg.ResetOnSpawn = false
+	tg.DisplayOrder = 43
+	tg.ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets
+	local b = Instance.new("TextButton")
+	b.Name = "Toggle"
+	b.AnchorPoint = Vector2.new(0, 1)
+	b.Position = UDim2.new(0, 12, 1, -12)
+	b.Size = UDim2.fromOffset(190, 36)
+	b.BackgroundColor3 = Theme.C.panel2
+	b.AutoButtonColor = true
+	b.FontFace = Theme.font("label")
+	b.TextSize = 14
+	b.TextColor3 = Theme.C.text
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0.5, 0)
+	corner.Parent = b
+	local stroke = Instance.new("UIStroke")
+	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	stroke.Color = Theme.C.system
+	stroke.Thickness = 2
+	stroke.Parent = b
+	b.Parent = tg
+	tg.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
+
+	local self = setmetatable({ store = store, panel = panel, on = true, press = o.press, toggle = b, errors = 0, closing = nil :: string? }, Preview)
+	panel.act:Connect(function(a: any, hold: boolean?)
+		self.press(a, hold == true)
+	end)
+	panel.closeRequested:Connect(function()
+		local ms = store:map()
+		if ms.close then self.press(ms.close, false) end
+		-- the panel closes at once; a patch still showing the layer open must not reopen it
+		self.closing = panel:isOpen()
+		panel:close()
+	end)
+	b.Activated:Connect(function()
+		self:setOn(not self.on)
+	end)
+	self:setOn(true)
+	return self
+end
+
+function Preview.setOn(self: Preview, on: boolean)
+	self.on = on
+	self.toggle.Text = if on then "NEW PANEL · ON" else "NEW PANEL · OFF"
+	self.panel.gui.Enabled = on
+	if on then
+		-- catch up from the store (the tree is rebuilt for the current layer)
+		self.panel:update(self.store, { full = true, tab = true, tabPatch = { set = {}, del = {}, full = true } })
+		self:follow()
+	else
+		self.panel:close()
+	end
+end
+
+-- open / close / switch with the server's open layer (plan 1.12 "the server moves the tab")
+function Preview.follow(self: Preview)
+	local ms = self.store:map()
+	local open = ms.open
+	if self.closing ~= nil then
+		if open == self.closing then return end
+		self.closing = nil
+	end
+	local key = self.panel:isOpen()
+	if open == key then return end
+	if open then
+		self.panel:open(open, ms.nodes[open])
+	else
+		self.panel:close()
+	end
+end
+
+function Preview.onPatch(self: Preview, patch: any)
+	if type(patch) ~= "table" or patch.fatal or patch.status then return end
+	local ok, err = pcall(function(): any
+		local changes = self.store:apply(patch)
+		if not self.on then return nil end
+		self.panel:update(self.store, changes)
+		self:follow()
+		return nil
+	end)
+	if not ok then
+		self.errors += 1
+		if self.errors <= 5 then warn("[MilestoneTree] panel preview: " .. tostring(err)) end
+	end
+end
+
+return Preview
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="97">
+            <Properties>
+              <string name="Name">Sections</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	Sections: the client's section titles over the tab's components (DESIGN.md 5.6, plan 2.5).
+
+	    Sections.decorate(rec, n, ctx)   a component frame whose cn is in the table gets a SectionTitle child at
+	                                     LayoutOrder -1; it hides when the previous visible sibling has the same cn
+	    Sections.refresh(ctx)            recount the chips of every decorated section (after each apply: the counts
+	                                     come from cards whose patches never touch the component node itself)
+	    Sections.header(parent, o)       the title row itself (hue bar, heavy italic title, chips, hairline), for
+	                                     claims that draw their own section (the virtual milestone list)
+
+	Titles and chips are derived from cn and counts only (plan 1.13). No hint text is invented.
+]]
+
+local Core = script.Parent.Parent:WaitForChild("Core")
+local Theme = require(Core:WaitForChild("Theme"))
+local Recipes = require(Core:WaitForChild("Recipes"))
+local Layout = require(Core:WaitForChild("Layout"))
+local Common = require(script.Parent:WaitForChild("Skins"):WaitForChild("Common"))
+
+local Sections = {}
+
+-- the milestone ladder's name per layer (DESIGN.md 5.6)
+local LADDER: { [string]: string } = {
+	m = "MILESTONE LADDER", mm = "META LADDER", em = "EXTRA LADDER", pm = "MILESTONE LADDER", cm = "CORRUPTED LADDER",
+}
+local TITLE: { [string]: string } = {
+	buyables = "BUYABLES", upgrades = "UPGRADES", milestones = "MILESTONES", challenges = "CHALLENGES",
+	achievements = "TROPHY SHELF", clickables = "CONTROLS", grid = "DISKS",
+}
+Sections.TITLE = TITLE
+
+function Sections.titleOf(cn: string, layer: string): string?
+	if cn == "milestones" then return LADDER[layer] or TITLE.milestones end
+	return TITLE[cn]
+end
+
+-- ------------------------------------------------------------------------------------------------------ counting
+type Counts = { total: number, ready: number, owned: number }
+local function count(store: any, id: string, depthLeft: number, want: (n: any) -> string?, out: Counts)
+	if depthLeft < 0 then return end
+	local n = store:get(id)
+	if type(n) ~= "table" then return end
+	local k = want(n)
+	if k then
+		out.total += 1
+		if k == "ready" then out.ready += 1 elseif k == "owned" then out.owned += 1 end
+		return
+	end
+	if type(n.c) == "table" then
+		for _, cid in n.c do
+			if type(cid) == "string" then count(store, cid, depthLeft - 1, want, out) end
+		end
+	end
+end
+local WANT: { [string]: (n: any) -> string? } = {
+	upgrades = function(n: any): string?
+		if n.t ~= "btn" or n.k ~= "upg" then return nil end
+		return if n.cls == "bought" then "owned" elseif n.cls == "can" then "ready" else "other"
+	end,
+	buyables = function(n: any): string?
+		if n.t ~= "btn" or n.k ~= "buy" then return nil end
+		return if n.cls == "can" then "ready" else "other"
+	end,
+	milestones = function(n: any): string?
+		if n.t ~= "ms" then return nil end
+		return if n.done then "owned" else "other"
+	end,
+	challenges = function(n: any): string?
+		if n.t ~= "chal" then return nil end
+		return if n.st8 == "done" or n.cls == "done" then "owned" else "other"
+	end,
+	achievements = function(n: any): string?
+		if n.t ~= "ach" then return nil end
+		return if n.done then "owned" else "other"
+	end,
+	grid = function(n: any): string?
+		if n.t ~= "btn" or n.k ~= "grid" then return nil end
+		return if n.gs == "empty" then "other" else "ready"
+	end,
+}
+local function counts(store: any, id: string, cn: string): Counts?
+	local want = WANT[cn]
+	if want == nil then return nil end
+	local out: Counts = { total = 0, ready = 0, owned = 0 }
+	count(store, id, 5, want, out)
+	return out
+end
+
+-- ------------------------------------------------------------------------------------------------------ the row
+export type Chip = { text: string, color: Color3?, bg: Color3?, bgT: number? }
+export type HeaderOpts = { name: string?, text: string, hue: Color3, chips: { Chip }?, order: number? }
+-- the section title row: hue bar, heavy italic title with gradient / outline / shadow (R3), chips, hairline
+function Sections.header(parent: Instance, o: HeaderOpts): Frame
+	local compact = Layout.mode == "COMPACT"
+	local f = Common.get(parent, o.name or "SectionTitle", "Frame") :: Frame
+	f.LayoutOrder = o.order or -1
+	f.Size = UDim2.new(1, 0, 0, if compact then 32 else 36)
+	f.ClipsDescendants = true
+	f.Active = false
+	Common.list(f, true, 10, { valign = Enum.VerticalAlignment.Center })
+	local bar = Common.get(f, "HueBar", "Frame") :: Frame
+	bar.LayoutOrder = 1
+	bar.Size = UDim2.fromOffset(6, 26)
+	bar.BackgroundColor3 = o.hue
+	bar.BackgroundTransparency = 0
+	Common.corner(bar, 3)
+	local t = Common.get(f, "Title", "TextLabel") :: TextLabel
+	t.LayoutOrder = 2
+	t.AutomaticSize = Enum.AutomaticSize.X
+	t.Size = UDim2.fromOffset(0, if compact then 28 else 32)
+	t.TextXAlignment = Enum.TextXAlignment.Left
+	t.TextYAlignment = Enum.TextYAlignment.Center
+	local sig = o.text .. "|" .. tostring(Theme.size("section")) .. "|" .. Theme.toHex(o.hue)
+	if t:GetAttribute("Sig") ~= sig then
+		t:SetAttribute("Sig", sig)
+		Recipes.title(t, { text = o.text, role = "section", from = Color3.new(1, 1, 1), to = Theme.lift(o.hue, 0.45),
+			stroke = if compact then 4 else 5, shadow = 3 })
+	end
+	local chips = o.chips or {}
+	for i = 1, 2 do
+		local c = chips[i]
+		if c then
+			local l = Common.chip(f, "Chip" .. i, c.text, { color = c.color, bg = c.bg, bgT = c.bgT, h = if compact then 26 else 28 })
+			l.LayoutOrder = 2 + i
+		else
+			Common.drop(f, "Chip" .. i)
+		end
+	end
+	local rule = Common.get(f, "Rule", "Frame") :: Frame
+	rule.LayoutOrder = 10
+	rule.Size = UDim2.fromOffset(1400, 2)
+	rule.BackgroundColor3 = o.hue
+	rule.BackgroundTransparency = 0
+	local g = Common.get(rule, "Fade", "UIGradient") :: UIGradient
+	g.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.55),
+		NumberSequenceKeypoint.new(0.45, 1),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	return f
+end
+
+-- the chips of a component (DESIGN.md 5.6 table)
+local function chipsOf(cn: string, c: Counts?, hue: Color3): { Chip }
+	if c == nil or c.total == 0 then return {} end
+	local C = Theme.C
+	if cn == "upgrades" then
+		local out: { Chip } = {}
+		if c.ready > 0 then
+			table.insert(out, { text = c.ready .. " READY", color = Theme.lift(hue, 0.55), bg = Theme.mix(C.deep, hue, 0.22), bgT = 0 })
+		end
+		table.insert(out, { text = c.owned .. " / " .. c.total .. " OWNED", color = C.ownedValue, bg = Theme.mix(C.deep, C.bought, 0.16), bgT = 0 })
+		return out
+	elseif cn == "milestones" or cn == "challenges" or cn == "achievements" then
+		return { { text = c.owned .. " / " .. c.total .. (if cn == "achievements" then "" else " DONE"), color = C.ownedValue,
+			bg = Theme.mix(C.deep, C.bought, 0.16), bgT = 0 } }
+	elseif cn == "grid" then
+		return { { text = c.ready .. " CORRUPTED", color = Theme.lift(hue, 0.4), bg = Theme.mix(C.deep, hue, 0.18), bgT = 0 } }
+	end
+	return { { text = tostring(c.total), color = C.text, bg = C.panel3, bgT = 0 } }
+end
+
+-- ------------------------------------------------------------------------------------------------------ decorate
+local decorated: { [GuiObject]: { id: string, cn: string } } = setmetatable({}, { __mode = "k" }) :: any
+
+-- the previous visible sibling of id (by the store's child order) has the same cn
+local function sameAsPrevious(store: any, id: string, cn: string): boolean
+	local pid = Common.parentId(id)
+	if pid == nil then return false end
+	local kids = store:kids(pid)
+	local idx = table.find(kids, id)
+	if idx == nil then return false end
+	for i = idx - 1, 1, -1 do
+		local prev = store:get(kids[i])
+		if type(prev) == "table" then
+			if prev.cn == "blank" or prev.t == "blank" then continue end
+			return prev.cn == cn
+		end
+	end
+	return false
+end
+
+function Sections.decorate(rec: any, n: any, ctx: any)
+	local cn = n.cn
+	local title = if type(cn) == "string" then Sections.titleOf(cn, ctx.layer) else nil
+	local root = rec.root :: GuiObject
+	if title == nil or sameAsPrevious(ctx.store, rec.id, cn) then
+		Common.drop(root, "SectionTitle")
+		decorated[root] = nil
+		return
+	end
+	decorated[root] = { id = rec.id, cn = cn }
+	Sections.header(root, { text = title, hue = ctx.hue, chips = chipsOf(cn, counts(ctx.store, rec.id, cn), ctx.hue) })
+end
+
+function Sections.refresh(ctx: any)
+	for root, d in decorated do
+		if root.Parent == nil then
+			decorated[root] = nil
+			continue
+		end
+		local title = Sections.titleOf(d.cn, ctx.layer)
+		if title then
+			Sections.header(root, { text = title, hue = ctx.hue, chips = chipsOf(d.cn, counts(ctx.store, d.id, d.cn), ctx.hue) })
+		end
+	end
+end
+
+return Sections
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="Folder" referent="98">
+            <Properties>
+              <string name="Name">Skins</string>
+            </Properties>
+            <Item class="ModuleScript" referent="99">
+              <Properties>
+                <string name="Name">Achievement</string>
+                <string name="Source"><![CDATA[--!strict
+--[[
+	Achievement: a trophy tile (Figma 5:180, DESIGN.md 5.7): a done achievement is a gold medallion with its number, a
+	missing one a quiet slate with the number dim. The name and goal stay in the game's tooltip (hover), as sent.
+]]
+
+local Core = script.Parent.Parent.Parent:WaitForChild("Core")
+local Theme = require(Core:WaitForChild("Theme"))
+local Common = require(script.Parent:WaitForChild("Common"))
+
+local Achievement = {}
+
+local C = Theme.C
+
+function Achievement.skin(rec: any, n: any, ctx: any): boolean
+	local root = rec.root :: Frame
+	local l = root:FindFirstChild("Label") :: TextLabel?
+	if l == nil then return false end
+	local label = l :: TextLabel
+	local size = if ctx.mode == "COMPACT" then 72 else 92
+	root.Visible = true
+	root.Size = UDim2.fromOffset(size, size)
+	root.AutomaticSize = Enum.AutomaticSize.None
+	for _, name in { "Gradient", "List", "Pad", "Limit", "Shadow" } do Common.drop(root, name) end
+	Common.drop(label, "Shadow")
+	Common.drop(root, "Num")
+	local kids = root:FindFirstChild("Kids")
+	if kids and kids:IsA("GuiObject") then kids.Visible = false end
+	if n.done then
+		Common.fill(root, Theme.lift(C.gold, 0.25), Theme.shade(C.complete, 0.62))
+		Common.corner(root, 0.5)
+		Common.stroke(root, 3, Theme.lift(C.gold, 0.4), 0)
+		Common.glow(root, C.gold, 0.35, 12)
+	else
+		Common.fill(root, C.panel3, C.panel2)
+		Common.corner(root, 0.5)
+		Common.stroke(root, 2, C.stroke, 0)
+		Common.glow(root, nil)
+	end
+	Common.text(label, "index", if n.done then C.ink else C.muted)
+	label.Size = UDim2.fromScale(1, 1)
+	label.Position = UDim2.new()
+	label.AutomaticSize = Enum.AutomaticSize.None
+	label.TextXAlignment = Enum.TextXAlignment.Center
+	label.TextYAlignment = Enum.TextYAlignment.Center
+	label.TextWrapped = false
+	label.Visible = true
+	Common.setText(label, Common.esc(Common.str(n.num) or Common.str(n.id) or "?"))
+	Common.state(root, if n.done then "owned" else "locked")
+	return true
+end
+
+return Achievement
+]]></string>
+              </Properties>
+            </Item>
+            <Item class="ModuleScript" referent="100">
+              <Properties>
+                <string name="Name">Buyable</string>
+                <string name="Source"><![CDATA[--!strict
+--[[
+	Buyable: the buyable card (DESIGN.md 5.7): wide (700 du) when a section has at most 2, else a 280 du grid; full
+	width on phones.
+
+	    title (card) + LV and the level (big) at the top right
+	    the effect lines of the game's text (its <br> lines without the title, level and cost lines: a structural
+	    split, no parsing of the numbers)
+	    NEXT LEVEL + the cost (numberHeavy + short unit)
+	    the hold strip: "HOLD TO BUY" lit when affordable; otherwise "Not enough <unit>" with the pr bar and % inside
+	    MAX (green) when the level reached the limit
+	The button keeps Render's hold-to-repeat (20 a second after 0.25 s, gated by the 10 px / scroll rule).
+]]
+
+local Core = script.Parent.Parent.Parent:WaitForChild("Core")
+local Theme = require(Core:WaitForChild("Theme"))
+local Rich = require(Core:WaitForChild("Rich"))
+local Common = require(script.Parent:WaitForChild("Common"))
+local Signatures = require(script.Parent.Parent.Parent:WaitForChild("Signatures"):WaitForChild("Signatures"))
+
+local Buyable = {}
+
+local C = Theme.C
+
+local function stateOf(n: any): string
+	local lv, max = Common.str(n.lv), Common.str(n.max)
+	if n.cls == "bought" or (lv ~= nil and max ~= nil and lv == max) then return "owned" end
+	if n.cls == "can" then return "can" end
+	return "notyet"
+end
+
+-- the game's text lines that describe the effect (drop the title, the level / tier and the cost lines)
+local DROP = { "^Level", "^Tier", "^Amount" }
+local function effectLines(n: any): string
+	local h = Common.str(n.h)
+	if h == nil then return "" end
+	local parts = string.split((string.gsub(h, "<br%s*/?>", "\0")), "\0")
+	local keep: { string } = {}
+	for i, part in parts do
+		local plain = Common.plain(part)
+		plain = string.gsub(plain, "^%s+", "")
+		if plain == "" then continue end
+		if i == 1 and string.find(part, "<h", 1, true) then continue end
+		local drop = false
+		for _, pat in DROP do
+			if string.find(plain, pat) then drop = true end
+		end
+		if string.find(plain, "^Cost") and Common.str(n.co) and Common.str(n.cur) then drop = true end
+		if not drop then table.insert(keep, part) end
+	end
+	return table.concat(keep, "<br>")
+end
+
+-- how many buyables share this card's component (cached per apply)
+local function siblings(ctx: any, id: string): number
+	local pid = Common.parentId(id)
+	if pid == nil then return 1 end
+	local gid = Common.parentId(pid)
+	local key = "buyN:" .. (gid or pid)
+	local hit = ctx.cache[key]
+	if hit then return hit end
+	local nBuy = 0
+	local function walk(x: string, d: number)
+		if d > 2 then return end
+		local node = ctx.store:get(x)
+		if type(node) ~= "table" then return end
+		if node.t == "btn" and node.k == "buy" then nBuy += 1 end
+		if type(node.c) == "table" then
+			for _, c in node.c do
+				if type(c) == "string" then walk(c, d + 1) end
+			end
+		end
+	end
+	walk(gid or pid, 0)
+	ctx.cache[key] = math.max(1, nBuy)
+	return math.max(1, nBuy)
+end
+
+function Buyable.skin(rec: any, n: any, ctx: any): boolean
+	local b = rec.root :: TextButton
+	local l = b:FindFirstChild("Label") :: TextLabel?
+	if l == nil then return false end
+	local label = l :: TextLabel
+	local state = stateOf(n)
+	local compact = ctx.mode == "COMPACT"
+	b.Visible = true
+	b.AutoButtonColor = false
+	Common.drop(b, "Num")
+	Common.drop(b, "Gradient")
+	local p = Common.surface(b, state, ctx.hue, 16)
+	Common.glow(b, if state == "can" then ctx.hue else nil, 0.5, 16)
+	local w: number
+	if compact then
+		w = ctx.contentW
+	elseif siblings(ctx, rec.id) <= 2 then
+		w = math.min(700, ctx.contentW)
+	else
+		w = 280
+	end
+	b.Size = UDim2.fromOffset(w, 0)
+	b.AutomaticSize = Enum.AutomaticSize.Y
+	local lim = Common.get(b, "Limit", "UISizeConstraint") :: UISizeConstraint
+	lim.MinSize = Vector2.new(0, if compact then 96 else 132)
+	lim.MaxSize = Vector2.new(math.huge, math.huge)
+	Common.pad(b, if compact then 12 else 16, if compact then 12 else 18, if compact then 12 else 16, if compact then 12 else 18)
+	Common.list(b, false, 8, { name = "CardList" })
+
+	-- title and effect
+	Common.text(label, "body", p.text, 0)
+	label.LayoutOrder = 1
+	label.ZIndex = 3
+	label.Size = UDim2.new(1, 0, 0, 0)
+	label.AutomaticSize = Enum.AutomaticSize.Y
+	label.TextWrapped = true
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.TextYAlignment = Enum.TextYAlignment.Top
+	label.Visible = true
+	local title = Common.plain(Common.str(n.ti) or "")
+	local parts = { Common.title(title, "card", p.title) }
+	local eff = Common.html(effectLines(n), "body", ctx.layer)
+	if eff ~= "" then table.insert(parts, string.format('<font transparency="%.2f">%s</font>', p.textT, eff)) end
+	Common.setText(label, table.concat(parts, "\n"))
+	-- the level at the top right
+	local lvText = Common.str(n.lv)
+	if lvText then
+		local lv = Common.get(label, "Lv", "TextLabel") :: TextLabel
+		Common.text(lv, "big", C.text)
+		local clear = math.min(160, 24 + 22 * #lvText)
+		lv.AnchorPoint = Vector2.new(1, 0)
+		lv.Position = UDim2.new(1, clear, 0, -4) -- children sit in the padded box: step back out of the padding
+		lv.AutomaticSize = Enum.AutomaticSize.XY
+		lv.Size = UDim2.new()
+		lv.TextXAlignment = Enum.TextXAlignment.Right
+		lv.TextWrapped = false
+		lv.ZIndex = 4
+		local maxText = Common.str(n.max)
+		local big = Common.num(lvText, "big", C.text)
+		local text = Common.caps("Lv", p.soft) .. " " .. big
+		if maxText then text ..= Common.run(Common.esc(" / ") , "number", p.soft) .. Common.num(maxText, "number", p.soft) end
+		Common.setText(lv, text)
+		-- keep the title clear of the level
+		local pad = Common.get(label, "Clear", "UIPadding") :: UIPadding
+		pad.PaddingRight = UDim.new(0, clear)
+	else
+		Common.drop(label, "Lv")
+		Common.drop(label, "Clear")
+	end
+
+	-- NEXT LEVEL cost
+	local co = Common.str(n.co)
+	if co and state ~= "owned" then
+		local foot = Common.get(b, "Foot", "TextLabel") :: TextLabel
+		foot.LayoutOrder = 2
+		Common.text(foot, "caps", p.soft)
+		foot.Size = UDim2.new(1, 0, 0, 24)
+		foot.AutomaticSize = Enum.AutomaticSize.None
+		foot.TextXAlignment = Enum.TextXAlignment.Left
+		foot.TextYAlignment = Enum.TextYAlignment.Center
+		foot.TextWrapped = false
+		foot.TextTruncate = Enum.TextTruncate.AtEnd
+		local unit = Signatures.unit(n.cur)
+		Common.setText(foot, Common.caps("Next level", p.soft) .. "   " ..
+			Common.num(co, "numberHeavy", if state == "can" then C.text else C.notYet, unit))
+	else
+		Common.drop(b, "Foot")
+	end
+
+	-- the hold strip
+	local strip = Common.get(b, "Hold", "TextLabel") :: TextLabel
+	strip.LayoutOrder = 3
+	strip.ZIndex = 3
+	Common.text(strip, "label", C.text)
+	strip.Size = UDim2.new(1, 0, 0, if compact then 30 else 32)
+	strip.AutomaticSize = Enum.AutomaticSize.None
+	strip.TextXAlignment = Enum.TextXAlignment.Center
+	strip.TextYAlignment = Enum.TextYAlignment.Center
+	strip.TextWrapped = false
+	strip.BackgroundTransparency = 0
+	strip.BackgroundColor3 = Color3.new(1, 1, 1)
+	Common.corner(strip, 8)
+	local g = Common.get(strip, "Fill", "UIGradient") :: UIGradient
+	g.Rotation = 0
+	local pr = Common.pr(n.pr)
+	if state == "owned" then
+		g.Color = ColorSequence.new(Theme.mix(C.deep, C.bought, 0.3))
+		strip.TextColor3 = C.ownedValue
+		Common.setText(strip, "MAX")
+	elseif state == "can" then
+		g.Color = ColorSequence.new(Theme.shade(ctx.hue, 0.55))
+		strip.TextColor3 = C.text
+		Common.setText(strip, Rich.caps("Hold to buy"))
+	else
+		local lit = Theme.mix(C.deep, ctx.hue, 0.45)
+		local track = Theme.mix(C.deep, C.locked, 0.25)
+		local q = pr or 0
+		if q <= 0.001 then
+			g.Color = ColorSequence.new(track)
+		else
+			g.Color = ColorSequence.new({
+				ColorSequenceKeypoint.new(0, lit),
+				ColorSequenceKeypoint.new(math.min(0.998, q), lit),
+				ColorSequenceKeypoint.new(math.min(0.999, q + 0.001), track),
+				ColorSequenceKeypoint.new(1, track),
+			})
+		end
+		strip.TextColor3 = C.text
+		local unit = Signatures.unit(n.cur)
+		local reason = if unit ~= "" then "Not enough " .. unit else "Not affordable"
+		local text = Common.esc(reason)
+		if pr then text ..= "   " .. Common.num(Rich.pct(pr), "number", C.text) end
+		Common.setText(strip, text)
+	end
+	Common.state(b, state)
+	Common.transition(ctx, n.a, state, b)
+	return true
+end
+
+return Buyable
+]]></string>
+              </Properties>
+            </Item>
+            <Item class="ModuleScript" referent="101">
+              <Properties>
+                <string name="Name">Challenge</string>
+                <string name="Source"><![CDATA[--!strict
+--[[
+	Challenge: the challenge card (Figma 5:173, DESIGN.md 5.7) and its action button.
+
+	    idle         hue surface, the game's button word (START) in a hue pill
+	    active       gold surface; EXIT EARLY
+	    completable  gold surface + glow; FINISH
+	    done         quiet green, the completions chip
+	    locked       mauve, the requirement
+	The card's text comes from the structured fields (ti, ds, goal, rw, cur, cmp, lim); the game's own title / body
+	html children are hidden (Skins/Generic). The button is the chal's `chalbtn` child, fired as sent.
+]]
+
+local Core = script.Parent.Parent.Parent:WaitForChild("Core")
+local Theme = require(Core:WaitForChild("Theme"))
+local Common = require(script.Parent:WaitForChild("Common"))
+
+local Challenge = {}
+
+local C = Theme.C
+
+local function stateOf(n: any): (string, string)
+	local st8 = n.st8
+	if st8 == "done" or (st8 == nil and n.cls == "done") then return "owned", "done" end
+	if st8 == "completable" then return "gold", "completable" end
+	if st8 == "active" or n.active then return "gold", "active" end
+	if st8 == "locked" then return "locked", "locked" end
+	-- idle: a completed-before challenge (cls done) still reads as done; the rest can start
+	if n.cls == "done" then return "owned", "done" end
+	return "can", "idle"
+end
+Challenge.stateOf = stateOf
+
+function Challenge.skin(rec: any, n: any, ctx: any): boolean
+	local root = rec.root :: Frame
+	local l = root:FindFirstChild("Label") :: TextLabel?
+	local kids = root:FindFirstChild("Kids") :: Frame?
+	if l == nil or kids == nil then return false end
+	local label = l :: TextLabel
+	local compact = ctx.mode == "COMPACT"
+	local surface, st8 = stateOf(n)
+	local p = Common.surface(root, surface, ctx.hue, 16)
+	Common.glow(root, if st8 == "completable" then C.complete elseif surface == "can" then ctx.hue else nil, 0.45, 16)
+	Common.drop(root, "Gradient")
+	local w = if compact then math.floor((ctx.contentW - 10) / 2) else 330
+	root.Size = UDim2.fromOffset(w, 0)
+	root.AutomaticSize = Enum.AutomaticSize.Y
+	root.Visible = true
+	Common.drop(root, "Limit")
+	Common.pad(root, 14, 16, 14, 16)
+	Common.list(root, false, 10)
+	Common.text(label, "small", p.text)
+	label.LayoutOrder = 0
+	label.Size = UDim2.new(1, 0, 0, 0)
+	label.AutomaticSize = Enum.AutomaticSize.Y
+	label.TextWrapped = true
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.TextYAlignment = Enum.TextYAlignment.Top
+	label.Visible = true
+	local parts: { string } = {}
+	table.insert(parts, Common.title(Common.plain(Common.str(n.ti) or ""), "card", p.title))
+	local ds = Common.html(n.ds, "body", ctx.layer)
+	if ds ~= "" then table.insert(parts, string.format('<font transparency="%.2f">%s</font>', p.textT, ds)) end
+	local goal = Common.str(n.goal)
+	if goal then
+		table.insert(parts, Common.caps("Goal", p.soft) .. "  " .. Common.html(goal, "small", ctx.layer))
+	end
+	local rw = Common.str(n.rw)
+	if rw then
+		table.insert(parts, Common.caps("Reward", p.soft) .. "  " .. Common.html(rw, "small", ctx.layer))
+	end
+	local cur = Common.str(n.cur)
+	if cur then
+		table.insert(parts, Common.caps("Currently", p.soft) .. "  " .. Common.num(cur, "number", p.value))
+	end
+	Common.setText(label, table.concat(parts, "\n"))
+	-- completions chip (cmp / lim; one-shot challenges show none)
+	local cmp, lim = Common.str(n.cmp), Common.str(n.lim)
+	if cmp and cmp ~= "0" then
+		local text = if lim and lim ~= "Infinity" then cmp .. " / " .. lim else cmp .. " done"
+		local chip = Common.chip(label, "Chip", text, { color = C.ownedValue, bg = Theme.mix(C.deep, C.bought, 0.25), bgT = 0,
+			h = if compact then 26 else 28 })
+		chip.AnchorPoint = Vector2.new(1, 0)
+		chip.Position = UDim2.new(1, 0, 0, 0)
+		chip.ZIndex = 4
+	else
+		Common.drop(label, "Chip")
+	end
+	kids.LayoutOrder = 1
+	Common.list(kids, true, 8, { wraps = true })
+	rec.text, rec.textT, rec.base = p.text, 0, Theme.size("small")
+	Common.state(root, if surface == "gold" then "can" else surface)
+	return true
+end
+
+-- the chal's action button: coloured by the card's state, the game's word in caps
+function Challenge.button(rec: any, n: any, ctx: any): boolean
+	local b = rec.root :: TextButton
+	local l = b:FindFirstChild("Label") :: TextLabel?
+	if l == nil then return false end
+	local label = l :: TextLabel
+	local pid = Common.parentId(rec.id)
+	local owner = if pid then Common.parentId(pid) else nil
+	local chal = if pid then ctx.store:get(pid) else nil
+	if type(chal) ~= "table" or chal.t ~= "chal" then
+		chal = if owner then ctx.store:get(owner) else nil
+	end
+	local _, st8 = stateOf(if type(chal) == "table" then chal else {})
+	local fill: Color3
+	local ink: Color3 = C.text
+	if st8 == "done" then
+		fill, ink = Theme.mix(C.panel, C.bought, 0.28), C.ownedTitle
+	elseif st8 == "completable" or st8 == "active" then
+		fill, ink = C.complete, C.ink
+	elseif st8 == "locked" then
+		fill, ink = Theme.mix(C.panel, C.locked, 0.3), C.lockedTitle
+	else
+		fill = ctx.hue
+		ink = if Theme.darkOnFill(ctx.layer) then C.ink else C.text
+	end
+	b.AutoButtonColor = false
+	b.Visible = true
+	b.BackgroundColor3 = fill
+	b.BackgroundTransparency = 0
+	for _, name in { "Gradient", "Glow", "Num", "Limit" } do Common.drop(b, name) end
+	Common.corner(b, 10)
+	Common.stroke(b, 1.5, Theme.lift(fill, 0.3), 0.1)
+	Common.pad(b, 0, 16, 0, 16)
+	b.Size = UDim2.fromOffset(0, if ctx.mode == "COMPACT" then 38 else 42)
+	b.AutomaticSize = Enum.AutomaticSize.X
+	Common.glow(b, if st8 == "completable" then C.complete else nil, 0.6, 14)
+	Common.text(label, "label", ink)
+	label.TextWrapped = false
+	label.TextXAlignment = Enum.TextXAlignment.Center
+	label.TextYAlignment = Enum.TextYAlignment.Center
+	label.Size = UDim2.new(0, 0, 1, 0)
+	label.AutomaticSize = Enum.AutomaticSize.X
+	label.Visible = true
+	local word = Common.plain(n.h)
+	word = string.upper((string.gsub(string.gsub(word, "^%s+", ""), "%s+$", "")))
+	Common.setText(label, Common.esc(word))
+	Common.state(b, if st8 == "locked" then "locked" elseif st8 == "done" then "owned" else "can")
+	return true
+end
+
+return Challenge
+]]></string>
+              </Properties>
+            </Item>
+            <Item class="ModuleScript" referent="102">
+              <Properties>
+                <string name="Name">Clickable</string>
+                <string name="Source"><![CDATA[--!strict
+--[[
+	Clickable: the game's clickables (sp's ignite / reignite / show / pager, t's relics, cp's mode switch).
+
+	    a short label ("<<", "<", ">")   a 52 x 44 pager key
+	    anything else                    a card (237 du, auto height) with the game's text verbatim (colours remapped);
+	                                     hue when it can be pressed, mauve when not
+	Hold clickables keep Render's hold-to-repeat. Signatures give the special ones their own widgets.
+]]
+
+local Common = require(script.Parent:WaitForChild("Common"))
+
+local Clickable = {}
+
+function Clickable.skin(rec: any, n: any, ctx: any): boolean
+	local b = rec.root :: TextButton
+	local l = b:FindFirstChild("Label") :: TextLabel?
+	if l == nil then return false end
+	local label = l :: TextLabel
+	local state = if n.cls == "can" then "can" elseif n.cls == "bought" then "owned" else "notyet"
+	local plain = Common.plain(n.h)
+	plain = string.gsub(string.gsub(plain, "^%s+", ""), "%s+$", "")
+	b.Visible = true
+	b.AutoButtonColor = false
+	for _, name in { "Gradient", "Glow", "Num", "Limit" } do Common.drop(b, name) end
+	local p = Common.surface(b, state, ctx.hue, 12)
+	label.Visible = true
+	label.ZIndex = 3
+	if utf8.len(plain) ~= nil and (utf8.len(plain) :: number) <= 3 then
+		-- a pager key
+		b.Size = UDim2.fromOffset(52, 44)
+		b.AutomaticSize = Enum.AutomaticSize.None
+		Common.drop(b, "Pad")
+		Common.text(label, "label", p.title)
+		label.Size = UDim2.fromScale(1, 1)
+		label.AutomaticSize = Enum.AutomaticSize.None
+		label.TextXAlignment = Enum.TextXAlignment.Center
+		label.TextYAlignment = Enum.TextYAlignment.Center
+		label.TextWrapped = false
+		Common.setText(label, Common.esc(plain))
+	else
+		b.Size = UDim2.fromOffset(if ctx.mode == "COMPACT" then math.floor((ctx.contentW - 10) / 2) else 237, 0)
+		b.AutomaticSize = Enum.AutomaticSize.Y
+		Common.pad(b, 12, 14, 12, 14)
+		Common.text(label, "small", p.text)
+		label.Size = UDim2.new(1, 0, 0, 0)
+		label.AutomaticSize = Enum.AutomaticSize.Y
+		label.TextXAlignment = Enum.TextXAlignment.Left
+		label.TextYAlignment = Enum.TextYAlignment.Top
+		label.TextWrapped = true
+		Common.setText(label, Common.html(n.h, "small", ctx.layer))
+	end
+	Common.glow(b, if state == "can" then ctx.hue else nil, 0.4, 12)
+	Common.state(b, state)
+	return true
+end
+
+return Clickable
+]]></string>
+              </Properties>
+            </Item>
+            <Item class="ModuleScript" referent="103">
+              <Properties>
+                <string name="Name">Common</string>
+                <string name="Source"><![CDATA[--!strict
+--[[
+	Common: the small builders every panel skin shares. Everything is get-or-create by name and writes every property
+	it owns on each call, so a skin can run on every update without leaving stale styling (plan 2.5).
+
+	    Common.get(parent, "Chip", "TextLabel")     get-or-create a child of a class
+	    Common.drop(parent, "Chip")                 remove it when the state no longer needs it
+	    Common.text(l, "body", color)               a role's font, size and LineHeight (Theme.text) plus colour
+	    Common.run("Prestige Boost I", "card", c)   one RichText run in a role's family / weight / size / colour
+	    Common.surface(f, state, hue)               the card surface of a state (DESIGN.md 5.7): fill, rim, corner
+	    Common.chip(parent, "Chip", "BUY", o)       a 28 du chip; Common.bar(parent, "Bar", p, color) a thin pr bar
+	    Common.state(root, "can")                   the State attribute the tests read (can / owned / notyet / locked)
+
+	Text rules (DESIGN.md 9): Sarpanch only for numeral runs, italic only on display and short title roles, no
+	outline on text under 20 du, reading text never below the floors (Theme.size holds them).
+]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Core = script.Parent.Parent.Parent:WaitForChild("Core")
+local Theme = require(Core:WaitForChild("Theme"))
+local Rich = require(Core:WaitForChild("Rich"))
+local Html = require(ReplicatedStorage:WaitForChild("MilestoneTree"):WaitForChild("Html"))
+
+local Common = {}
+
+local WHITE = Color3.new(1, 1, 1)
+local BLACK = Color3.new(0, 0, 0)
+
+-- ------------------------------------------------------------------------------------------------------ instances
+function Common.get(parent: Instance, name: string, class: string): any
+	local c = parent:FindFirstChild(name)
+	if c and c.ClassName == class then return c end
+	if c then c:Destroy() end
+	local n = Instance.new(class :: any)
+	n.Name = name
+	if n:IsA("GuiObject") then
+		local g = n :: GuiObject
+		g.BorderSizePixel = 0
+		g.BackgroundTransparency = 1
+	end
+	n.Parent = parent
+	return n
+end
+function Common.drop(parent: Instance, name: string)
+	local c = parent:FindFirstChild(name)
+	if c then c:Destroy() end
+end
+
+function Common.corner(f: GuiObject, r: number, name: string?)
+	local c = Common.get(f, name or "Corner", "UICorner") :: UICorner
+	c.CornerRadius = if r < 1 and r > 0 then UDim.new(r, 0) else UDim.new(0, r)
+end
+function Common.stroke(f: GuiObject, thickness: number, color: Color3, transparency: number?, name: string?): UIStroke
+	local s = Common.get(f, name or "Border", "UIStroke") :: UIStroke
+	s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	s.Thickness = thickness
+	s.Color = color
+	s.Transparency = transparency or 0
+	s.LineJoinMode = Enum.LineJoinMode.Round
+	return s
+end
+function Common.pad(f: GuiObject, top: number, right: number, bottom: number, left: number, name: string?)
+	local p = Common.get(f, name or "Pad", "UIPadding") :: UIPadding
+	p.PaddingTop, p.PaddingRight = UDim.new(0, top), UDim.new(0, right)
+	p.PaddingBottom, p.PaddingLeft = UDim.new(0, bottom), UDim.new(0, left)
+end
+-- a vertical (or horizontal) list layout named List
+export type ListOpts = { align: Enum.HorizontalAlignment?, valign: Enum.VerticalAlignment?, wraps: boolean?, name: string? }
+function Common.list(f: GuiObject, horizontal: boolean, gap: number, o: ListOpts?): UIListLayout
+	local opts: ListOpts = o or ({} :: ListOpts)
+	local l = Common.get(f, opts.name or "List", "UIListLayout") :: UIListLayout
+	l.FillDirection = if horizontal then Enum.FillDirection.Horizontal else Enum.FillDirection.Vertical
+	l.SortOrder = Enum.SortOrder.LayoutOrder
+	l.Padding = UDim.new(0, gap)
+	l.HorizontalAlignment = opts.align or Enum.HorizontalAlignment.Left
+	l.VerticalAlignment = opts.valign or Enum.VerticalAlignment.Top
+	l.Wraps = opts.wraps == true
+	return l
+end
+-- a vertical top-to-bottom two/three-stop fill on a white background (the surface gradients)
+function Common.fill(f: GuiObject, top: Color3, bottom: Color3, mid: Color3?, name: string?)
+	f.BackgroundColor3 = WHITE
+	f.BackgroundTransparency = 0
+	local g = Common.get(f, name or "Fill", "UIGradient") :: UIGradient
+	g.Rotation = 90
+	g.Color = if mid
+		then ColorSequence.new({ ColorSequenceKeypoint.new(0, top), ColorSequenceKeypoint.new(0.5, mid), ColorSequenceKeypoint.new(1, bottom) })
+		else ColorSequence.new({ ColorSequenceKeypoint.new(0, top), ColorSequenceKeypoint.new(1, bottom) })
+	g.Transparency = NumberSequence.new(0)
+end
+-- a soft glow around a surface: UIShadow where the engine has it, nothing otherwise (the rim already carries the hue)
+function Common.glow(f: GuiObject, color: Color3?, alpha: number?, blur: number?)
+	if color == nil or not Theme.caps.UIShadow then
+		Common.drop(f, "Glow")
+		return
+	end
+	local s = Common.get(f, "Glow", "UIShadow") :: any
+	pcall(function()
+		s.Color = color
+		s.Transparency = 1 - (alpha or 0.5)
+		s.BlurRadius = UDim.new(0, blur or 18)
+		s.Offset = UDim2.new()
+	end)
+end
+-- a round radial blob (never a square: the fade reaches 1 by t = .7 and a UICorner keeps it round); nil without Radial
+function Common.blob(parent: Instance, name: string, color: Color3, alpha: number): Frame?
+	if not Theme.caps.Radial then
+		Common.drop(parent, name)
+		return nil
+	end
+	local f = Common.get(parent, name, "Frame") :: Frame
+	f.BackgroundColor3 = color
+	f.BackgroundTransparency = 0
+	f.Active = false
+	Common.corner(f, 0.5, "Round")
+	local g = Common.get(f, "Radial", "UIGradient") :: UIGradient
+	g.Type = Enum.GradientType.Radial
+	g.Color = ColorSequence.new(color)
+	g.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 1 - alpha),
+		NumberSequenceKeypoint.new(0.3, 1 - alpha * 0.55),
+		NumberSequenceKeypoint.new(0.7, 1),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	return f
+end
+
+-- ------------------------------------------------------------------------------------------------------ text
+local FAMILY: { [string]: string } = {
+	Montserrat = "rbxasset://fonts/families/Montserrat.json",
+	Sarpanch = "rbxasset://fonts/families/Sarpanch.json",
+	RobotoMono = "rbxasset://fonts/families/RobotoMono.json",
+}
+Common.FAMILY = FAMILY
+
+function Common.esc(s: string): string
+	return Html.escape(s)
+end
+function Common.plain(html: any): string
+	if type(html) ~= "string" then return "" end
+	return Html.plain(html)
+end
+function Common.hex(c: Color3): string
+	return "#" .. Theme.toHex(c)
+end
+function Common.words(s: string): number
+	local n = 0
+	for _ in string.gmatch(s, "%S+") do n += 1 end
+	return n
+end
+
+-- a label's type (Theme.text) and colour; RichText on, no stroke
+function Common.text(label: GuiObject, role: string, color: Color3?, transparency: number?)
+	local l = label :: any
+	Theme.text(label, role)
+	l.TextColor3 = color or Theme.C.text
+	l.TextTransparency = transparency or 0
+	l.RichText = true
+	l.TextStrokeTransparency = 1
+end
+
+-- a plain text label (transparent, RichText, AutomaticSize Y by default)
+export type LabelOpts = { wrap: boolean?, autoX: boolean?, align: Enum.TextXAlignment?, order: number? }
+function Common.label(parent: Instance, name: string, role: string, color: Color3?, o: LabelOpts?): TextLabel
+	local opts: LabelOpts = o or ({} :: LabelOpts)
+	local l = Common.get(parent, name, "TextLabel") :: TextLabel
+	Common.text(l, role, color)
+	l.TextWrapped = opts.wrap ~= false
+	l.TextXAlignment = opts.align or Enum.TextXAlignment.Left
+	l.TextYAlignment = Enum.TextYAlignment.Top
+	l.Active = false
+	if opts.autoX then
+		l.AutomaticSize = Enum.AutomaticSize.XY
+		l.Size = UDim2.new()
+	else
+		l.AutomaticSize = Enum.AutomaticSize.Y
+		l.Size = UDim2.new(1, 0, 0, 0)
+	end
+	if opts.order then l.LayoutOrder = opts.order end
+	return l
+end
+
+-- one RichText run in a role (text must already be RichText-safe: escaped or from Rich)
+function Common.run(text: string, role: string, color: Color3?, transparency: number?): string
+	local r = Theme.ROLES[role] or Theme.ROLES.body
+	local attrs = string.format('family="%s" weight="%d" size="%d"', FAMILY[r.family] or FAMILY.Montserrat, r.weight.Value,
+		Theme.size(role))
+	if color then attrs ..= string.format(' color="%s"', Common.hex(color)) end
+	if transparency and transparency > 0 then attrs ..= string.format(' transparency="%.2f"', transparency) end
+	local body = if r.italic then "<i>" .. text .. "</i>" else text
+	return "<font " .. attrs .. ">" .. body .. "</font>"
+end
+-- a caps label run (upper case with hair spaces, DESIGN.md 9.1)
+function Common.caps(text: string, color: Color3?, role: string?): string
+	return Common.run(Common.esc(Rich.caps(text)), role or "caps", color or Theme.C.soft)
+end
+-- a card / section title run: italic only when it is at most 4 words (DESIGN.md 9.1)
+function Common.title(text: string, role: string, color: Color3?): string
+	local r = Theme.ROLES[role] or Theme.ROLES.card
+	local size = Theme.size(role)
+	local attrs = string.format('family="%s" weight="%d" size="%d"', FAMILY[r.family] or FAMILY.Montserrat, r.weight.Value, size)
+	if color then attrs ..= string.format(' color="%s"', Common.hex(color)) end
+	local body = Common.esc(text)
+	if r.italic and Common.words(text) <= 4 then body = "<i>" .. body .. "</i>" end
+	return "<font " .. attrs .. ">" .. body .. "</font>"
+end
+-- a game number string in a Sarpanch role, words / units as a Montserrat run (Rich.num)
+function Common.num(s: string, role: string, color: Color3?, unit: string?, onFill: boolean?): string
+	local r = Theme.ROLES[role] or Theme.ROLES.number
+	local size = Theme.size(role)
+	local text = if unit and unit ~= "" then s .. " " .. unit else s
+	local body = Rich.num(text, { size = size, onFill = onFill, unit = color })
+	local attrs = string.format('family="%s" weight="%d" size="%d"', FAMILY[r.family] or FAMILY.Sarpanch, r.weight.Value, size)
+	if color then attrs ..= string.format(' color="%s"', Common.hex(color)) end
+	return "<font " .. attrs .. ">" .. body .. "</font>"
+end
+-- the game's HTML as body RichText with the layer's colour remap (DESIGN.md 11.2)
+function Common.html(html: any, role: string, layer: string?): string
+	if type(html) ~= "string" or html == "" then return "" end
+	return Rich.html(html, Theme.size(role), layer)
+end
+function Common.setText(label: GuiObject, s: string)
+	local l = label :: any
+	if l.Text ~= s then l.Text = s end
+end
+-- pcall for functions that return nothing (the result is ok, err)
+function Common.try(f: (...any) -> ...any, ...: any): (boolean, any)
+	return pcall(function(...: any): any
+		f(...)
+		return nil
+	end, ...)
+end
+
+-- ------------------------------------------------------------------------------------------------------ surfaces
+export type Palette = { top: Color3, bottom: Color3, rim: Color3, rimT: number, title: Color3, text: Color3, textT: number,
+	soft: Color3, value: Color3 }
+-- the card surface of each state (DESIGN.md 5.7, 11.2): the layer hue paints only the actionable state
+function Common.palette(state: string, hue: Color3): Palette
+	local C = Theme.C
+	if state == "can" then
+		return { top = Theme.mix(C.panel, hue, 0.38), bottom = Theme.mix(C.deep, hue, 0.15), rim = Theme.lift(hue, 0.35), rimT = 0,
+			title = C.text, text = C.text, textT = 0.08, soft = C.text, value = C.text }
+	elseif state == "owned" then
+		return { top = Theme.mix(C.panel, C.bought, 0.16), bottom = Theme.mix(C.deep, C.bought, 0.08), rim = C.bought, rimT = 0.55,
+			title = C.ownedTitle, text = C.text, textT = 0.18, soft = C.soft, value = C.ownedValue }
+	elseif state == "gold" then
+		return { top = Theme.mix(C.panel, C.complete, 0.34), bottom = Theme.mix(C.deep, C.complete, 0.14), rim = C.complete, rimT = 0,
+			title = C.text, text = C.text, textT = 0.08, soft = C.text, value = C.text }
+	elseif state == "locked" then
+		return { top = Theme.mix(C.panel, C.locked, 0.12), bottom = Theme.mix(C.deep, C.locked, 0.06), rim = C.locked, rimT = 0.55,
+			title = C.lockedTitle, text = C.text, textT = 0.18, soft = C.soft, value = C.notYet }
+	end
+	-- notyet: unlocked, not affordable (mauve)
+	return { top = Theme.mix(C.panel, C.locked, 0.24), bottom = Theme.mix(C.deep, C.locked, 0.12), rim = C.locked, rimT = 0.3,
+		title = C.text, text = C.text, textT = 0.1, soft = C.soft, value = C.notYet }
+end
+-- fill + rim + corner of a card in a state
+function Common.surface(f: GuiObject, state: string, hue: Color3, radius: number?): Palette
+	local p = Common.palette(state, hue)
+	Common.fill(f, p.top, p.bottom)
+	Common.corner(f, radius or 14)
+	Common.stroke(f, if state == "can" or state == "gold" then 2 else 1.5, p.rim, p.rimT)
+	Common.drop(f, "Gradient") -- Style.apply's game gradient, if an old look was ever applied
+	return p
+end
+function Common.state(root: Instance, state: string)
+	if root:GetAttribute("State") ~= state then root:SetAttribute("State", state) end
+end
+
+-- ------------------------------------------------------------------------------------------------------ chips, bars
+export type ChipOpts = { bg: Color3?, bgT: number?, color: Color3?, role: string?, h: number?, rich: boolean?, stroke: Color3? }
+-- a chip: a TextLabel with a background and corner, sized from its text (two spaces of side padding)
+function Common.chip(parent: Instance, name: string, text: string, o: ChipOpts?): TextLabel
+	local opts: ChipOpts = o or ({} :: ChipOpts)
+	local l = Common.get(parent, name, "TextLabel") :: TextLabel
+	local role = opts.role or "label"
+	Common.text(l, role, opts.color or Theme.C.text)
+	l.TextWrapped = false
+	l.TextXAlignment = Enum.TextXAlignment.Center
+	l.TextYAlignment = Enum.TextYAlignment.Center
+	l.AutomaticSize = Enum.AutomaticSize.X
+	l.Size = UDim2.fromOffset(0, opts.h or 28)
+	l.BackgroundColor3 = opts.bg or BLACK
+	l.BackgroundTransparency = if opts.bg == nil and opts.bgT == nil then 0.55 else (opts.bgT or 0)
+	l.Active = false
+	-- side padding as spaces (a UIPadding per chip costs an instance on every card)
+	Common.setText(l, "  " .. (if opts.rich then text else Common.esc(text)) .. "  ")
+	Common.corner(l, 8)
+	Common.drop(l, "Pad")
+	if opts.stroke then
+		Common.stroke(l, 1, opts.stroke, 0.35)
+	else
+		Common.drop(l, "Border")
+	end
+	return l
+end
+-- a thin progress bar (p in 0..1): one Frame whose gradient shows the filled part (no fill child)
+function Common.bar(parent: Instance, name: string, p: number, color: Color3, h: number?): Frame
+	local f = Common.get(parent, name, "Frame") :: Frame
+	f.Size = UDim2.new(1, 0, 0, h or 5)
+	f.BackgroundColor3 = WHITE
+	f.BackgroundTransparency = 0
+	f.Active = false
+	Common.corner(f, 0.5)
+	local g = Common.get(f, "Fill", "UIGradient") :: UIGradient
+	local q = math.clamp(p, 0, 1)
+	local track = Color3.fromRGB(52, 46, 72)
+	if q <= 0.001 then
+		g.Color = ColorSequence.new(track)
+	elseif q >= 0.999 then
+		g.Color = ColorSequence.new(color)
+	else
+		g.Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, color),
+			ColorSequenceKeypoint.new(q, color),
+			ColorSequenceKeypoint.new(math.min(1, q + 0.001), track),
+			ColorSequenceKeypoint.new(1, track),
+		})
+	end
+	g.Rotation = 0
+	return f
+end
+
+-- ------------------------------------------------------------------------------------------------------ motion
+-- the buy feedback (DESIGN.md 5.4): a card that turns owned bumps and its rim flashes; keyed by (layer, the action's
+-- id), never by the path id; nothing plays the first time a key is seen after the panel opened
+local lastState: { [string]: string } = {}
+function Common.transition(ctx: any, a: any, state: string, root: GuiObject)
+	if type(a) ~= "table" then return end
+	local key = tostring(ctx.layer) .. ":" .. tostring(a[1]) .. ":" .. tostring(a[3])
+	local prev = lastState[key]
+	lastState[key] = state
+	if ctx.firstSeen(key) or prev == nil or prev == state then return end
+	if prev == "can" and state == "owned" then
+		local Motion = require(Core:WaitForChild("Motion")) :: any
+		Motion.bump(root, 0.06)
+		local rim = root:FindFirstChild("Border")
+		if rim and rim:IsA("UIStroke") then
+			local final = rim.Transparency
+			rim.Transparency = 0
+			rim.Color = Color3.new(1, 1, 1)
+			Motion.tween(rim, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+				{ Transparency = final, Color = Theme.C.bought }, "flash:" .. key)
+		end
+	end
+end
+
+-- a per mille progress value (view: 0..1000) -> 0..1, nil when absent
+function Common.pr(v: any): number?
+	if type(v) ~= "number" then return nil end
+	return math.clamp(v / 1000, 0, 1)
+end
+-- nil, false and JS null are "none" (plan 1.8)
+function Common.str(v: any): string?
+	if type(v) == "string" and v ~= "" then return v end
+	if type(v) == "number" then return tostring(v) end
+	return nil
+end
+
+-- the row id's parent ("tab.2.5.1" -> "tab.2.5")
+function Common.parentId(id: string): string?
+	return string.match(id, "^(.*)%.%d+$")
+end
+function Common.depth(id: string): number
+	local _, n = string.gsub(id, "%.", "")
+	return n
+end
+
+return Common
+]]></string>
+              </Properties>
+            </Item>
+            <Item class="ModuleScript" referent="104">
+              <Properties>
+                <string name="Name">CompactOwned</string>
+                <string name="Source"><![CDATA[--!strict
+--[[
+	CompactOwned: the quiet card of an owned upgrade inside a fully owned tier (WIDE / MEDIUM) and every expanded owned
+	upgrade on phones (DESIGN.md 5.7): index + title (2 lines allowed) on the left, the effect value in the owned green
+	at the bottom right ("Active" when the upgrade shows no value). No glow, no cost, no chip.
+]]
+
+local Core = script.Parent.Parent.Parent:WaitForChild("Core")
+local Theme = require(Core:WaitForChild("Theme"))
+local Common = require(script.Parent:WaitForChild("Common"))
+
+local CompactOwned = {}
+
+local C = Theme.C
+
+function CompactOwned.skin(rec: any, n: any, ctx: any): boolean
+	local b = rec.root :: TextButton
+	local l = b:FindFirstChild("Label") :: TextLabel?
+	if l == nil then return false end
+	local label = l :: TextLabel
+	local compact = ctx.mode == "COMPACT"
+	b.Visible = true
+	b.AutoButtonColor = false
+	for _, name in { "Num", "Gradient", "Glow", "Bar", "Foot" } do Common.drop(b, name) end
+	Common.drop(label, "Chip")
+	Common.surface(b, "owned", ctx.hue, 12)
+	b.Size = UDim2.fromOffset(ctx.cardW, 0)
+	b.AutomaticSize = Enum.AutomaticSize.Y
+	local lim = Common.get(b, "Limit", "UISizeConstraint") :: UISizeConstraint
+	lim.MinSize = Vector2.new(0, if compact then 56 else 72)
+	lim.MaxSize = Vector2.new(math.huge, math.huge)
+	Common.pad(b, 10, 12, 10, 12)
+	Common.list(b, false, 4, { name = "CardList" })
+
+	Common.text(label, "cardSmall", C.ownedTitle, 0)
+	label.LayoutOrder = 1
+	label.ZIndex = 3
+	label.Size = UDim2.new(1, 0, 0, 0)
+	label.AutomaticSize = Enum.AutomaticSize.Y
+	label.TextWrapped = true
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.TextYAlignment = Enum.TextYAlignment.Top
+	label.Visible = true
+	local idx = Common.str(n.n) or Common.str(n.id) or ""
+	local title = Common.plain(Common.str(n.ti) or "")
+	local text = Common.run(Common.esc(idx), "badge", C.soft, 0.2) .. "  " .. Common.title(title, "cardSmall", C.ownedTitle)
+	if compact then
+		-- phones list each owned upgrade with its effect as body text (DESIGN.md 5.7 COMPACT)
+		local ds = Common.html(n.ds, "body", ctx.layer)
+		if ds ~= "" then text ..= "\n" .. string.format('<font transparency="0.18">%s</font>', ds) end
+	end
+	Common.setText(label, text)
+
+	local eff = Common.get(b, "Eff", "TextLabel") :: TextLabel
+	eff.LayoutOrder = 2
+	eff.ZIndex = 3
+	eff.BackgroundTransparency = 1
+	eff.Size = UDim2.new(1, 0, 0, 22)
+	eff.AutomaticSize = Enum.AutomaticSize.None
+	eff.TextXAlignment = Enum.TextXAlignment.Right
+	eff.TextYAlignment = Enum.TextYAlignment.Center
+	eff.TextWrapped = false
+	eff.TextTruncate = Enum.TextTruncate.AtEnd
+	Common.drop(eff, "Corner")
+	local ef = Common.str(n.ef)
+	if ef then
+		Common.text(eff, "numberHeavy", C.ownedValue)
+		Common.setText(eff, Common.num(ef, "numberHeavy", C.ownedValue))
+	else
+		Common.text(eff, "label", C.ownedValue)
+		Common.setText(eff, "Active")
+	end
+	Common.state(b, "owned")
+	Common.transition(ctx, n.a, "owned", b)
+	return true
+end
+
+return CompactOwned
+]]></string>
+              </Properties>
+            </Item>
+            <Item class="ModuleScript" referent="105">
+              <Properties>
+                <string name="Name">Generic</string>
+                <string name="Source"><![CDATA[--!strict
+--[[
+	Generic: the quiet panel look for every node no card skin handles (DESIGN.md 5.6, plan 2.5).
+
+	    containers (col / row / tabs)   panel rhythm: section gap between components, card gap inside them, rows wrap
+	                                    left-aligned; an upgrades row becomes a tier-board row (Skins/Upgrade.tier)
+	    display-text / raw html         NOTES rows: a quiet panel2 strip with the game's line verbatim (colours remapped)
+	    other html                      body text in soft, remapped colours; empty text is hidden
+	    blank / hr / h-line / v-line    dropped (the section rhythm replaces them)
+	    small buttons                   respec / master / sell / toggle / chalbtn / malware / nested tabs / reset:
+	                                    40 du pills, hue when actionable, mauve when not
+	    about                           the Options ABOUT card (credits and unlocked hotkeys)
+	    bar (rbx-burn)                  a themed bar with the game's text; st8 picks ember / grey / gold
+	The game's own per-thing CSS (st) is ignored in the panel: the template sets the look.
+]]
+
+local Core = script.Parent.Parent.Parent:WaitForChild("Core")
+local Theme = require(Core:WaitForChild("Theme"))
+local Common = require(script.Parent:WaitForChild("Common"))
+local Sections = require(script.Parent.Parent:WaitForChild("Sections"))
+
+local Generic = {}
+
+local C = Theme.C
+
+local HIDDEN_CN: { [string]: boolean } = { blank = true, ["h-line"] = true, ["v-line"] = true }
+local NOTE_CN: { [string]: boolean } = { ["display-text"] = true, ["raw-html"] = true }
+
+local function parentRec(ctx: any, id: string): any?
+	local pid = Common.parentId(id)
+	if pid == nil then return nil end
+	return ctx.render.recs[pid]
+end
+
+-- ------------------------------------------------------------------------------------------------------ containers
+local function container(rec: any, n: any, ctx: any)
+	local root = rec.root :: Frame
+	local compact = ctx.mode == "COMPACT"
+	root.BackgroundTransparency = 1
+	Common.drop(root, "Gradient")
+	Common.drop(root, "Border")
+	Common.drop(root, "Corner")
+	Common.drop(root, "Pad")
+	local depth = Common.depth(rec.id)
+	local parent = parentRec(ctx, rec.id)
+	local inUpgrades = parent ~= nil and parent.node and parent.node.cn == "upgrades"
+	if n.t == "col" then
+		-- the tab root and its direct content column hold components: the section gap; inside a component: the card gap
+		local gap = if depth <= 1 then (if compact then 16 else 28) else (if compact then 10 else 12)
+		Common.list(root, false, gap, { align = Enum.HorizontalAlignment.Left })
+		if rec.autoW then
+			root.Size = UDim2.new()
+			root.AutomaticSize = Enum.AutomaticSize.XY
+		else
+			root.Size = UDim2.new(1, 0, 0, 0)
+			root.AutomaticSize = Enum.AutomaticSize.Y
+		end
+	else
+		-- row / nested tabs: horizontal, wrapping, left-aligned
+		local gap = if compact then 10 else 12
+		local l = Common.list(root, true, gap, { align = Enum.HorizontalAlignment.Left, valign = Enum.VerticalAlignment.Top,
+			wraps = not rec.autoW })
+		pcall(function()
+			l.ItemLineAlignment = if inUpgrades then Enum.ItemLineAlignment.Stretch else Enum.ItemLineAlignment.Start
+		end)
+		if rec.autoW then
+			root.Size = UDim2.new()
+			root.AutomaticSize = Enum.AutomaticSize.XY
+		else
+			root.Size = UDim2.new(1, 0, 0, 0)
+			root.AutomaticSize = Enum.AutomaticSize.Y
+		end
+	end
+	-- the text children inherit (html inside rows / columns)
+	rec.text, rec.textT, rec.base = C.soft, 0, Theme.size("body")
+	if n.cn and Sections.titleOf(n.cn, ctx.layer) then
+		Sections.decorate(rec, n, ctx)
+	else
+		Common.drop(root, "SectionTitle")
+	end
+	local Upgrade = require(script.Parent:WaitForChild("Upgrade")) :: any
+	if inUpgrades and n.t == "row" then
+		Upgrade.tier(rec, n, ctx)
+	else
+		Common.drop(root, "Rail")
+	end
+	Upgrade.summary(rec, n, ctx)
+	root.Visible = true
+end
+
+-- ------------------------------------------------------------------------------------------------------ html
+local function textLabel(rec: any): TextLabel
+	local root = rec.root :: Frame
+	local l = root:FindFirstChild("Text")
+	if l and l:IsA("TextLabel") then return l end
+	if l then l:Destroy() end
+	return Common.label(root, "Text", "body", C.soft)
+end
+
+local function html(rec: any, n: any, ctx: any): boolean
+	if rec.kind == "svg" then return false end -- the exploration map keeps the old drawing (cached by its html)
+	local root = rec.root :: Frame
+	local cn = n.cn
+	local parent = parentRec(ctx, rec.id)
+	local pk = if parent then parent.kind else nil
+	-- a challenge draws its own title / text from the structured fields
+	if pk == "chal" or cn == "blank" then
+		root.Visible = false
+		return true
+	end
+	-- the hero's components when they are not claimed (deeper than the hero looks): a resource-display without text
+	if cn == "resource-display" and Common.plain(n.h) == "" then
+		root.Visible = false
+		return true
+	end
+	local text = Common.html(n.h, "body", ctx.layer)
+	local plain = Common.plain(n.h)
+	if not string.find(plain, "%S") then
+		root.Visible = false
+		return true
+	end
+	root.Visible = true
+	local l = textLabel(rec)
+	local note = NOTE_CN[cn] == true or (cn == nil and Common.depth(rec.id) <= 2)
+	if note then
+		-- NOTES row: panel2 strip, a hue tick at the left, the game's line verbatim
+		root.BackgroundColor3 = C.panel2
+		root.BackgroundTransparency = 0
+		Common.corner(root, 10)
+		Common.pad(root, 10, 14, 10, 16)
+		local tick = Common.get(root, "Tick", "Frame") :: Frame
+		tick.BackgroundColor3 = ctx.hue
+		tick.BackgroundTransparency = 0.2
+		tick.Size = UDim2.new(0, 3, 1, -6)
+		tick.Position = UDim2.fromOffset(-10, 3)
+		Common.corner(tick, 2, "TickCorner")
+		Common.text(l, "body", C.text)
+		l.TextTransparency = 0.08
+	else
+		root.BackgroundTransparency = 1
+		Common.drop(root, "Corner")
+		Common.drop(root, "Pad")
+		Common.drop(root, "Tick")
+		Common.text(l, "body", C.soft)
+	end
+	l.TextXAlignment = Enum.TextXAlignment.Left
+	if rec.autoW then
+		root.Size = UDim2.new()
+		root.AutomaticSize = Enum.AutomaticSize.XY
+		l.Size = UDim2.new()
+		l.AutomaticSize = Enum.AutomaticSize.XY
+		local lim = Common.get(l, "Limit", "UISizeConstraint") :: UISizeConstraint
+		lim.MaxSize = Vector2.new(if ctx.mode == "COMPACT" then 420 else 640, math.huge)
+	else
+		root.Size = UDim2.new(1, 0, 0, 0)
+		root.AutomaticSize = Enum.AutomaticSize.Y
+		l.Size = UDim2.new(1, 0, 0, 0)
+		l.AutomaticSize = Enum.AutomaticSize.Y
+		Common.drop(l, "Limit")
+	end
+	l.TextWrapped = true
+	Common.setText(l, text)
+	return true
+end
+
+-- ------------------------------------------------------------------------------------------------------ buttons
+local SMALL: { [string]: boolean } = {
+	respec = true, master = true, sell = true, toggle = true, chalbtn = true, malware = true, tab = true, reset = true,
+	click = true, menu = true,
+}
+function Generic.button(rec: any, n: any, ctx: any): boolean
+	local b = rec.root :: TextButton
+	local l = b:FindFirstChild("Label") :: TextLabel?
+	if l == nil then return false end
+	local k = n.k
+	local compact = ctx.mode == "COMPACT"
+	local can = n.cls == "can" or n.cls == "cur" or n.cls == "perk" or n.cls == "pseudo"
+	local danger = k == "respec" or k == "sell"
+	local state = if n.cls == "bought" or n.cls == "pseudo" or n.cls == "done" then "owned" elseif can then "can" else "notyet"
+	local fill: Color3
+	local ink: Color3
+	if state == "owned" then
+		fill, ink = Theme.mix(C.panel, C.bought, 0.22), C.ownedTitle
+	elseif not can then
+		fill, ink = Theme.mix(C.panel, C.locked, 0.22), C.lockedTitle
+	elseif danger then
+		fill, ink = Theme.mix(C.panel, C.danger, 0.45), C.text
+	elseif k == "tab" and n.cls ~= "cur" then
+		fill, ink = C.panel2, C.soft
+	else
+		fill = ctx.hue
+		ink = if Theme.darkOnFill(ctx.layer) then C.ink else C.text
+	end
+	b.AutoButtonColor = false
+	b.BackgroundColor3 = fill
+	b.BackgroundTransparency = 0
+	Common.drop(b, "Gradient")
+	Common.drop(b, "Glow")
+	Common.drop(b, "Num")
+	Common.drop(b, "Limit")
+	Common.corner(b, 10)
+	Common.stroke(b, 1.5, if can and not danger then Theme.lift(fill, 0.35) else C.stroke, if can then 0.1 else 0.3)
+	Common.pad(b, 6, 14, 6, 14)
+	local h = if compact then 38 else 40
+	b.Size = UDim2.fromOffset(0, h)
+	b.AutomaticSize = Enum.AutomaticSize.XY
+	local role = "label"
+	Common.text(l, role, ink)
+	l.TextWrapped = false
+	l.TextXAlignment = Enum.TextXAlignment.Center
+	l.TextYAlignment = Enum.TextYAlignment.Center
+	l.Size = UDim2.new(0, 0, 1, 0)
+	l.AutomaticSize = Enum.AutomaticSize.X
+	l.Visible = true
+	-- a single line: the game's first line (plain); the cost line of a malware button becomes a number run
+	local text: string
+	if k == "malware" then
+		local co = Common.str(n.co)
+		text = Common.esc(if n.cls == "pseudo" then "INFECTED" else "INFECT")
+		if co and n.cls ~= "pseudo" then text ..= "  " .. Common.num(co, "number", ink) end
+	else
+		local first = Common.plain(n.h)
+		first = string.gsub(first, "\n.*$", "")
+		first = string.gsub(first, "^%s+", "")
+		first = string.gsub(first, "%s+$", "")
+		if #first > 40 then
+			-- a long clickable text: keep it readable on two lines inside a fixed width
+			l.TextWrapped = true
+			l.TextXAlignment = Enum.TextXAlignment.Left
+			b.AutomaticSize = Enum.AutomaticSize.Y
+			b.Size = UDim2.fromOffset(if compact then 260 else 300, h)
+			l.Size = UDim2.new(1, 0, 0, 0)
+			l.AutomaticSize = Enum.AutomaticSize.Y
+			Common.text(l, "small", ink)
+			text = Common.esc(first)
+		else
+			text = Common.esc(if k == "tab" then string.upper(first) else first)
+		end
+	end
+	Common.setText(l, text)
+	Common.state(b, state)
+	b.Visible = true
+	return true
+end
+
+-- ------------------------------------------------------------------------------------------------------ about
+local function about(rec: any, n: any, ctx: any): boolean
+	local root = rec.root :: Frame
+	root.BackgroundColor3 = C.panel2
+	root.BackgroundTransparency = 0
+	root.Size = UDim2.new(1, 0, 0, 0)
+	root.AutomaticSize = Enum.AutomaticSize.Y
+	Common.corner(root, 14)
+	Common.stroke(root, 1, C.stroke, 0.2)
+	Common.pad(root, 16, 20, 16, 20)
+	Common.list(root, false, 8)
+	Sections.header(root, { text = "ABOUT", hue = ctx.hue, order = 0, name = "Head" })
+	local lines: { string } = {}
+	local name = Common.str(n.name)
+	if name then table.insert(lines, Common.title(name, "card", C.text)) end
+	local ver = Common.str(n.ver)
+	if ver then table.insert(lines, Common.run(Common.esc(ver), "small", C.soft)) end
+	local author = Common.str(n.author)
+	if author then table.insert(lines, Common.run(Common.esc("Made by " .. author), "body", C.text)) end
+	for _, k in { "tmt", "pt" } do
+		local v = Common.str(n[k])
+		if v then table.insert(lines, Common.run(Common.esc(v), "body", C.soft)) end
+	end
+	local body = Common.label(root, "Body", "body", C.text, { order = 1 })
+	body.LineHeight = Theme.lineHeight("body")
+	Common.setText(body, table.concat(lines, "\n"))
+	-- the unlocked hotkeys: keycap run + description, one per line
+	local keys: { string } = {}
+	if type(n.keys) == "table" then
+		for _, kk in n.keys do
+			if type(kk) == "table" and type(kk.k) == "string" then
+				table.insert(keys, Common.run(Common.esc(kk.k), "label", C.gold) .. "   " .. Common.run(Common.esc(tostring(kk.d or "")), "body", C.soft))
+			end
+		end
+	end
+	local kl = Common.label(root, "Keys", "body", C.text, { order = 2 })
+	kl.Visible = #keys > 0
+	Common.setText(kl, if #keys > 0 then Common.caps("Hotkeys") .. "\n" .. table.concat(keys, "\n") else "")
+	root.Visible = true
+	return true
+end
+
+-- ------------------------------------------------------------------------------------------------------ bar
+local function bar(rec: any, n: any, ctx: any): boolean
+	local root = rec.root :: Frame
+	local l = root:FindFirstChild("Label") :: TextLabel?
+	local fill = root:FindFirstChild("Fill") :: Frame?
+	if l == nil or fill == nil then return false end
+	local st8 = n.st8
+	local col = if st8 == "permanent" then C.gold elseif st8 == "ashed" then C.muted else C.ember
+	local w = if ctx.mode == "COMPACT" then 260 else 320
+	root.Size = UDim2.fromOffset(w, 48)
+	root.AutomaticSize = Enum.AutomaticSize.None
+	root.BackgroundColor3 = C.deep
+	root.BackgroundTransparency = 0
+	Common.drop(root, "Gradient")
+	Common.drop(root, "List")
+	Common.corner(root, 10)
+	Common.stroke(root, 1.5, col, 0.35)
+	root.ClipsDescendants = true
+	local p = math.clamp(tonumber(n.p) or 0, 0, 1)
+	fill.BackgroundColor3 = col
+	fill.BackgroundTransparency = 0.55
+	fill.Position = UDim2.new()
+	fill.Size = UDim2.fromScale(p, 1)
+	fill.ZIndex = 0
+	Common.drop(fill, "Gradient")
+	Common.text(l, "small", C.text)
+	l.Size = UDim2.fromScale(1, 1)
+	l.AutomaticSize = Enum.AutomaticSize.None
+	l.TextXAlignment = Enum.TextXAlignment.Center
+	l.TextYAlignment = Enum.TextYAlignment.Center
+	l.ZIndex = 2
+	l.Visible = true
+	local word = if st8 == "permanent" then "PERMANENT" elseif st8 == "ashed" then "ASHED" else "BURNING"
+	local bp = Common.pr(n.bp)
+	local text = Common.caps(word, col)
+	if bp and st8 == "burning" then
+		text ..= "   " .. Common.num(require(Core:WaitForChild("Rich")).pct(bp), "number", C.text)
+	end
+	Common.setText(l, text)
+	local kids = root:FindFirstChild("Kids")
+	if kids and kids:IsA("GuiObject") then kids.Visible = false end
+	root.Visible = true
+	return true
+end
+
+-- ------------------------------------------------------------------------------------------------------ dispatch
+function Generic.skin(rec: any, n: any, ctx: any): boolean
+	local t = n.t
+	if t == "col" or t == "row" then
+		container(rec, n, ctx)
+		return true
+	elseif t == "tabs" then
+		container(rec, n, ctx)
+		return true
+	elseif t == "html" then
+		return html(rec, n, ctx)
+	elseif t == "blank" or t == "hr" or HIDDEN_CN[n.cn or ""] then
+		(rec.root :: GuiObject).Visible = false
+		return true
+	elseif t == "btn" and SMALL[n.k or ""] then
+		return Generic.button(rec, n, ctx)
+	elseif t == "about" then
+		return about(rec, n, ctx)
+	elseif t == "bar" then
+		return bar(rec, n, ctx)
+	end
+	return false
+end
+
+return Generic
+]]></string>
+              </Properties>
+            </Item>
+            <Item class="ModuleScript" referent="106">
+              <Properties>
+                <string name="Name">GridTile</string>
+                <string name="Source"><![CDATA[--!strict
+--[[
+	GridTile: a corruption disk (cp grid cells, DESIGN.md 5.7 "Corruption tile" and 6 cp).
+
+	    empty      quiet slot: the slot number only (#5f8a58)
+	    corrupted  Trojan: lime dashed rim; Backdoor: crimson dashed rim; kind (caps) + LV (big)
+	    active / chosen  gold rim and the fix bar from gp (per mille)
+	From gs / lv / kind / gp only (plan P9: there is no "fixed" tile state).
+]]
+
+local Core = script.Parent.Parent.Parent:WaitForChild("Core")
+local Theme = require(Core:WaitForChild("Theme"))
+local Recipes = require(Core:WaitForChild("Recipes"))
+local Common = require(script.Parent:WaitForChild("Common"))
+
+local GridTile = {}
+
+local C = Theme.C
+
+function GridTile.skin(rec: any, n: any, ctx: any): boolean
+	local b = rec.root :: TextButton
+	local l = b:FindFirstChild("Label") :: TextLabel?
+	if l == nil then return false end
+	local label = l :: TextLabel
+	local size = if ctx.mode == "COMPACT" then 84 else 104
+	local gs = n.gs
+	local backdoor = n.kind == "backdoor"
+	local rimColor = if gs == "active" or gs == "chosen" then C.complete elseif backdoor then C.danger else C.termLime
+	b.Visible = true
+	b.AutoButtonColor = false
+	b.Size = UDim2.fromOffset(size, size)
+	b.AutomaticSize = Enum.AutomaticSize.None
+	for _, name in { "Gradient", "Glow", "Num", "Limit", "Pad" } do Common.drop(b, name) end
+	Common.corner(b, 12)
+	if gs == "empty" then
+		Common.fill(b, Color3.fromRGB(8, 20, 10), Color3.fromRGB(4, 12, 6))
+		Common.stroke(b, 1, C.stableId, 0.5)
+	else
+		Common.fill(b, Color3.fromRGB(10, 34, 14), Color3.fromRGB(4, 16, 7))
+		local s = Common.stroke(b, 2, rimColor, 0)
+		if gs == "corrupted" then Recipes.dashed(s, { color = rimColor }) else Common.drop(s, "Dash") end
+	end
+	Common.text(label, "small", C.termLime)
+	label.Size = UDim2.fromScale(1, 1)
+	label.AutomaticSize = Enum.AutomaticSize.None
+	label.TextXAlignment = Enum.TextXAlignment.Center
+	label.TextYAlignment = Enum.TextYAlignment.Center
+	label.TextWrapped = true
+	label.Visible = true
+	local slot = Common.str(n.id) or ""
+	local text: string
+	if gs == "empty" then
+		text = Common.run(Common.esc(slot), "label", C.stableId)
+	else
+		local kind = if backdoor then "Backdoor" else "Trojan"
+		text = Common.caps(kind, rimColor) .. "\n" .. Common.caps("Lv", C.termDim) .. " " .. Common.num(Common.str(n.lv) or "0", "number", C.text)
+			.. "\n" .. Common.run(Common.esc(slot), "label", C.termDim)
+	end
+	Common.setText(label, text)
+	local gp = Common.pr(n.gp)
+	if gp and (gs == "active" or gs == "chosen") then
+		local bar = Common.bar(b, "Bar", gp, C.complete, 5)
+		bar.AnchorPoint = Vector2.new(0.5, 1)
+		bar.Position = UDim2.new(0.5, 0, 1, -8)
+		bar.Size = UDim2.new(1, -20, 0, 5)
+		bar.ZIndex = 4
+	else
+		Common.drop(b, "Bar")
+	end
+	Common.state(b, if gs == "empty" then "notyet" else "can")
+	return true
+end
+
+return GridTile
+]]></string>
+              </Properties>
+            </Item>
+            <Item class="ModuleScript" referent="107">
+              <Properties>
+                <string name="Name">Milestone</string>
+                <string name="Source"><![CDATA[--!strict
+--[[
+	Milestone: a milestone row (DESIGN.md 5.7 "Milestone row").
+
+	    NEXT (the first not-done row in ladder order, plan 1.13)  spotlight card: hue surface, NEXT MILESTONE caps,
+	                                                              title (card), the effect (body)
+	    done                                                      quiet green row: title (cardSmall) + effect (small)
+	    future                                                    faint row: title + effect in soft
+	    infected (mal)                                            danger rim; the effect splits at the game's <hr> into
+	                                                              the base effect and the malware effect (plan 1.4)
+	A row's children (the INFECT button of the malware ladder) sit under the text, skinned as small buttons.
+	Long ladders are virtualised by the panel (Panel/Virtual); this skin draws the short ones.
+]]
+
+local Core = script.Parent.Parent.Parent:WaitForChild("Core")
+local Theme = require(Core:WaitForChild("Theme"))
+local Common = require(script.Parent:WaitForChild("Common"))
+
+local Milestone = {}
+
+local C = Theme.C
+
+-- the id of the NEXT milestone among the row's siblings (cached per apply)
+function Milestone.nextOf(ctx: any, pid: string?): string?
+	if pid == nil then return nil end
+	local key = "next:" .. pid
+	local hit = ctx.cache[key]
+	if hit ~= nil then return if hit == false then nil else hit end
+	local found: string? = nil
+	for _, cid in ctx.store:kids(pid) do
+		local k = ctx.store:get(cid)
+		if type(k) == "table" and k.t == "ms" and not k.done then
+			found = cid
+			break
+		end
+	end
+	ctx.cache[key] = found or false
+	return found
+end
+
+-- the row text: NEXT / done / future, with the infected split
+function Milestone.text(n: any, kind: string, ctx: any): string
+	local title = Common.plain(Common.str(n.ti) or "")
+	local ds = Common.str(n.ds) or ""
+	local parts: { string } = {}
+	if kind == "next" then
+		table.insert(parts, Common.caps("Next milestone", C.text))
+		table.insert(parts, Common.title(title, "card", C.text))
+	else
+		table.insert(parts, Common.title(title, "cardSmall", if kind == "done" then C.ownedTitle else C.text))
+	end
+	local role = if kind == "next" then "body" else "small"
+	if n.mal and string.find(ds, "<hr", 1, true) then
+		local a, b = string.match(ds, "^(.-)<hr[^>]*>(.*)$")
+		if a and b then
+			local base = Common.html(a, role, ctx.layer)
+			local mal = Common.html(b, role, ctx.layer)
+			if base ~= "" then table.insert(parts, string.format('<font transparency="0.1">%s</font>', base)) end
+			if mal ~= "" then table.insert(parts, string.format('<font color="%s">%s</font>', Common.hex(Theme.lift(C.danger, 0.3)), mal)) end
+			return table.concat(parts, "\n")
+		end
+	end
+	local body = Common.html(ds, role, ctx.layer)
+	if body ~= "" then
+		local t = if kind == "next" then 0.08 elseif kind == "done" then 0.15 else 0.1
+		local color = if kind == "future" then C.soft else C.text
+		table.insert(parts, string.format('<font color="%s" transparency="%.2f">%s</font>', Common.hex(color), t, body))
+	end
+	return table.concat(parts, "\n")
+end
+
+function Milestone.skin(rec: any, n: any, ctx: any): boolean
+	local root = rec.root :: Frame
+	local l = root:FindFirstChild("Label") :: TextLabel?
+	local kids = root:FindFirstChild("Kids") :: Frame?
+	if l == nil or kids == nil then return false end
+	local label = l :: TextLabel
+	local isNext = not n.done and Milestone.nextOf(ctx, Common.parentId(rec.id)) == rec.id
+	local kind = if n.done then "done" elseif isNext then "next" else "future"
+	local state = if n.done then "owned" else "notyet"
+	root.Visible = true
+	Common.drop(root, "Gradient")
+	Common.drop(root, "Glow")
+	root.Size = UDim2.new(1, 0, 0, 0)
+	root.AutomaticSize = Enum.AutomaticSize.Y
+	Common.drop(root, "Limit")
+	if kind == "next" then
+		Common.surface(root, "can", ctx.hue, 16)
+		Common.glow(root, ctx.hue, 0.45, 18)
+		Common.pad(root, 14, 18, 14, 18)
+	else
+		Common.drop(root, "Fill")
+		root.BackgroundTransparency = 0
+		root.BackgroundColor3 = if kind == "done" then Theme.mix(C.panel, C.bought, 0.14) else C.panel2
+		Common.corner(root, 12)
+		Common.pad(root, 10, 16, 10, 16)
+		if n.mal then
+			Common.stroke(root, 2, C.danger, 0.1)
+		elseif kind == "done" then
+			Common.stroke(root, 1, C.bought, 0.6)
+		else
+			Common.stroke(root, 1, C.stroke, 0.35)
+		end
+	end
+	if kind == "next" and n.mal then Common.stroke(root, 2, C.danger, 0.1) end
+	Common.list(root, false, 8)
+	Common.text(label, if kind == "next" then "body" else "small", C.text)
+	label.LayoutOrder = 0
+	label.Size = UDim2.new(1, 0, 0, 0)
+	label.AutomaticSize = Enum.AutomaticSize.Y
+	label.TextWrapped = true
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.TextYAlignment = Enum.TextYAlignment.Top
+	label.Visible = true
+	Common.setText(label, Milestone.text(n, kind, ctx))
+	-- children (the malware INFECT button): a row under the text, hidden when empty
+	kids.LayoutOrder = 1
+	local hasKids = #ctx.store:kids(rec.id) > 0
+	kids.Visible = hasKids
+	if hasKids then Common.list(kids, true, 8, { wraps = true }) end
+	rec.text, rec.textT, rec.base = C.text, 0, Theme.size("small")
+	Common.state(root, state)
+	return true
+end
+
+return Milestone
+]]></string>
+              </Properties>
+            </Item>
+            <Item class="ModuleScript" referent="108">
+              <Properties>
+                <string name="Name">Opt</string>
+                <string name="Source"><![CDATA[--!strict
+--[[
+	Opt: an Options row (DESIGN.md 6 Options, 6.1): the title (cardSmall) and the game's one-line subtitle (small, soft),
+	the value as a chip at the right: ON / OFF for the two-state toggles (on), the cycler position for cyclers
+	(idx / n), the shown value otherwise. Hard Reset reads as a danger row. One press per tap, the action as sent.
+]]
+
+local Core = script.Parent.Parent.Parent:WaitForChild("Core")
+local Theme = require(Core:WaitForChild("Theme"))
+local Common = require(script.Parent:WaitForChild("Common"))
+
+local Opt = {}
+
+local C = Theme.C
+
+function Opt.skin(rec: any, n: any, ctx: any): boolean
+	local b = rec.root :: TextButton
+	local l = b:FindFirstChild("Label") :: TextLabel?
+	if l == nil then return false end
+	local label = l :: TextLabel
+	local compact = ctx.mode == "COMPACT"
+	local danger = n.id == "hardReset"
+	b.Visible = true
+	b.AutoButtonColor = false
+	for _, name in { "Gradient", "Glow", "Num", "Limit" } do Common.drop(b, name) end
+	if danger then
+		Common.fill(b, Theme.mix(C.panel, C.danger, 0.22), Theme.mix(C.deep, C.danger, 0.12))
+		Common.corner(b, 14)
+		Common.stroke(b, 1.5, C.danger, 0.3)
+	else
+		Common.fill(b, C.panel3, C.panel2)
+		Common.corner(b, 14)
+		Common.stroke(b, 1.5, Theme.lift(ctx.hue, 0.2), 0.55)
+	end
+	b.Size = UDim2.fromOffset(if compact then math.floor((ctx.contentW - 10) / 2) else 320, 0)
+	b.AutomaticSize = Enum.AutomaticSize.Y
+	local lim = Common.get(b, "Limit", "UISizeConstraint") :: UISizeConstraint
+	lim.MinSize = Vector2.new(0, 64)
+	lim.MaxSize = Vector2.new(math.huge, math.huge)
+	Common.pad(b, 12, 16, 12, 16)
+	Common.text(label, "small", C.soft)
+	label.Visible = true
+	label.ZIndex = 3
+	label.Size = UDim2.new(1, 0, 0, 0)
+	label.AutomaticSize = Enum.AutomaticSize.Y
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.TextYAlignment = Enum.TextYAlignment.Top
+	label.TextWrapped = true
+	-- the subtitle: the game's second line (after its first <br>), plain
+	local h = Common.str(n.h) or ""
+	local sub = string.match(h, "<br%s*/?>(.*)$")
+	local subText = Common.plain(sub or "")
+	subText = string.gsub(string.gsub(subText, "^%s+", ""), "%s+$", "")
+	local title = Common.str(n.ti) or Common.plain(h)
+	local chipText: string? = nil
+	if n.on ~= nil then
+		chipText = if n.on == true then "ON" else "OFF"
+	elseif type(n.idx) == "number" and type(n.n) == "number" then
+		chipText = tostring(n.val or "") .. "  " .. tostring(n.idx + 1) .. " / " .. tostring(n.n)
+	elseif Common.str(n.val) then
+		chipText = Common.str(n.val)
+	end
+	-- a subtitle that only repeats the value ("[ ALL ]") is dropped
+	if chipText and string.find(subText, "^%[.*%]$") then subText = "" end
+	local parts = { Common.title(title, "cardSmall", if danger then C.dangerText else C.text) }
+	if subText ~= "" then table.insert(parts, Common.esc(subText)) end
+	Common.setText(label, table.concat(parts, "\n"))
+	if chipText then
+		local on = n.on == true
+		local chip = Common.chip(label, "Chip", string.upper(chipText), {
+			color = if n.on == nil then C.text elseif on then C.ownedValue else C.soft,
+			bg = if on then Theme.mix(C.deep, C.bought, 0.3) else C.deep, bgT = 0, h = 26 })
+		-- the text keeps clear of the chip (children sit in the padded box, so the chip steps back out of it)
+		local clear = 110
+		local pad = Common.get(label, "Clear", "UIPadding") :: UIPadding
+		pad.PaddingRight = UDim.new(0, clear)
+		chip.AnchorPoint = Vector2.new(1, 0)
+		chip.Position = UDim2.new(1, clear, 0, 0)
+		chip.ZIndex = 4
+	else
+		Common.drop(label, "Chip")
+		Common.drop(label, "Clear")
+	end
+	Common.state(b, "can")
+	return true
+end
+
+return Opt
+]]></string>
+              </Properties>
+            </Item>
+            <Item class="ModuleScript" referent="109">
+              <Properties>
+                <string name="Name">Perk</string>
+                <string name="Source"><![CDATA[--!strict
+--[[
+	Perk: a perk slot (Figma 5:58, DESIGN.md 5.7): gold dashed "Explore a new perk" when it can be taken, mauve
+	dashed when locked, the owned look once taken. The requirement (req) is shown as sent.
+]]
+
+local Core = script.Parent.Parent.Parent:WaitForChild("Core")
+local Theme = require(Core:WaitForChild("Theme"))
+local Recipes = require(Core:WaitForChild("Recipes"))
+local Common = require(script.Parent:WaitForChild("Common"))
+
+local Perk = {}
+
+local C = Theme.C
+
+function Perk.skin(rec: any, n: any, ctx: any): boolean
+	local b = rec.root :: TextButton
+	local l = b:FindFirstChild("Label") :: TextLabel?
+	if l == nil then return false end
+	local label = l :: TextLabel
+	local state = if n.cls == "perked" or n.cls == "bought" then "owned" elseif n.cls == "perk" or n.cls == "can" then "can" else "locked"
+	b.Visible = true
+	b.AutoButtonColor = false
+	for _, name in { "Gradient", "Glow", "Num", "Limit" } do Common.drop(b, name) end
+	local p = Common.surface(b, if state == "can" then "gold" else state, ctx.hue, 14)
+	local rim = b:FindFirstChild("Border")
+	if rim and rim:IsA("UIStroke") and state ~= "owned" then
+		Recipes.dashed(rim, { color = if state == "can" then C.gold else C.locked })
+	elseif rim then
+		Common.drop(rim, "Dash")
+	end
+	b.Size = UDim2.fromOffset(ctx.cardW, 0)
+	b.AutomaticSize = Enum.AutomaticSize.Y
+	Common.pad(b, 14, 16, 14, 16)
+	Common.text(label, "small", p.text)
+	label.Visible = true
+	label.ZIndex = 3
+	label.Size = UDim2.new(1, 0, 0, 0)
+	label.AutomaticSize = Enum.AutomaticSize.Y
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.TextYAlignment = Enum.TextYAlignment.Top
+	label.TextWrapped = true
+	local parts: { string } = {}
+	if state == "can" then table.insert(parts, Common.title("Explore a new perk", "card", C.text)) end
+	local body = Common.html(n.h, "small", ctx.layer)
+	if body ~= "" then table.insert(parts, body) end
+	local req = Common.str(n.req)
+	if req and state == "locked" then table.insert(parts, Common.caps("Requires", p.soft) .. "  " .. Common.html(req, "small", ctx.layer)) end
+	Common.setText(label, table.concat(parts, "\n"))
+	Common.state(b, state)
+	return true
+end
+
+return Perk
+]]></string>
+              </Properties>
+            </Item>
+            <Item class="ModuleScript" referent="110">
+              <Properties>
+                <string name="Name">Skins</string>
+                <string name="Source"><![CDATA[--!strict
+--[[
+	Skins: the dispatcher Render's skin hook calls for every node of the panel's tab tree (plan 2.5).
+
+	    Skins.apply(rec, n, ctx) -> boolean   true when a skin drew the node (Render then skips the old page look)
+
+	Order: the layer's signature skin first (true = handled), then the card skins by kind, then Generic. Every skin is
+	idempotent and writes the State attribute on cards (can / owned / notyet / locked).
+]]
+
+local Generic = require(script.Parent:WaitForChild("Generic"))
+local Upgrade = require(script.Parent:WaitForChild("Upgrade"))
+local Buyable = require(script.Parent:WaitForChild("Buyable"))
+local Milestone = require(script.Parent:WaitForChild("Milestone"))
+local Challenge = require(script.Parent:WaitForChild("Challenge"))
+local Achievement = require(script.Parent:WaitForChild("Achievement"))
+local GridTile = require(script.Parent:WaitForChild("GridTile"))
+local Clickable = require(script.Parent:WaitForChild("Clickable"))
+local Perk = require(script.Parent:WaitForChild("Perk"))
+local Opt = require(script.Parent:WaitForChild("Opt"))
+
+local Skins = {}
+
+local BY_KIND: { [string]: (rec: any, n: any, ctx: any) -> boolean } = {
+	["btn:upg"] = Upgrade.skin,
+	["btn:buy"] = Buyable.skin,
+	["btn:grid"] = GridTile.skin,
+	["btn:click"] = Clickable.skin,
+	["btn:perk"] = Perk.skin,
+	["btn:opt"] = Opt.skin,
+	["btn:chalbtn"] = Challenge.button,
+	ms = Milestone.skin,
+	chal = Challenge.skin,
+	ach = Achievement.skin,
+}
+
+function Skins.apply(rec: any, n: any, ctx: any): boolean
+	if ctx == nil then return false end
+	local sig = ctx.signature
+	if sig and sig.skin then
+		local ok, handled = pcall(sig.skin, rec, n, ctx)
+		if ok and handled then return true end
+		if not ok then warn("[MilestoneTree] signature skin failed on " .. tostring(rec.id) .. ": " .. tostring(handled)) end
+	end
+	local f = BY_KIND[rec.kind]
+	if f and f(rec, n, ctx) then return true end
+	return Generic.skin(rec, n, ctx)
+end
+
+return Skins
+]]></string>
+              </Properties>
+            </Item>
+            <Item class="ModuleScript" referent="111">
+              <Properties>
+                <string name="Name">Upgrade</string>
+                <string name="Source"><![CDATA[--!strict
+--[[
+	Upgrade: the upgrade card (Figma 5:47, DESIGN.md 5.7) and the default tier board (5.7 "Tier board").
+
+	    can     hue surface, glow, BUY chip, "Currently" value in a well, COST in white
+	    owned   quiet green surface, OWNED chip, the effect value (or "Active") in the owned green; no glow
+	    notyet  mauve surface, the pr % chip and a 5 du bar, COST in the not-yet rose
+	    locked  dim mauve, LOCKED chip (never sent for upgrades today; kept for signatures)
+	A fully owned tier (every card of a game row bought) uses the compact owned cards (Skins/CompactOwned) and its
+	rail turns green. The tier rail (WIDE / MEDIUM) is a badge with the row number on a glowing spine.
+	COMPACT folds every owned upgrade into one summary row ("N OWNED · Show") at the top of the section.
+
+	One TextLabel carries the index, title, description and the "Currently" caps (RichText runs, DESIGN.md 9.2), so a
+	card stays near 12 instances. Card titles are Title Case as the game sends them; italic only up to 4 words.
+]]
+
+local Core = script.Parent.Parent.Parent:WaitForChild("Core")
+local Theme = require(Core:WaitForChild("Theme"))
+local Rich = require(Core:WaitForChild("Rich"))
+local Common = require(script.Parent:WaitForChild("Common"))
+local CompactOwned = require(script.Parent:WaitForChild("CompactOwned"))
+local Signatures = require(script.Parent.Parent.Parent:WaitForChild("Signatures"):WaitForChild("Signatures"))
+
+local Upgrade = {}
+
+local C = Theme.C
+
+-- the COMPACT owned fold, per layer / component, for the session (DESIGN.md 5.7)
+local showOwned: { [string]: boolean } = {}
+
+function Upgrade.stateOf(n: any): string
+	if n.cls == "bought" then return "owned" end
+	if n.cls == "can" then return "can" end
+	if n.cls == "plocked" then return "locked" end
+	return "notyet"
+end
+
+-- every upgrade of the card's game row is bought (a row id's children in the store)
+local function tierOwned(store: any, rowId: string?, cache: { [string]: any }): boolean
+	if rowId == nil then return false end
+	local key = "own:" .. rowId
+	local hit = cache[key]
+	if hit ~= nil then return hit end
+	local kids = store:kids(rowId)
+	local any, all = false, true
+	for _, cid in kids do
+		local k = store:get(cid)
+		if type(k) == "table" and k.t == "btn" and k.k == "upg" then
+			any = true
+			if k.cls ~= "bought" then all = false end
+		end
+	end
+	local r = any and all
+	cache[key] = r
+	return r
+end
+Upgrade.tierOwned = tierOwned
+
+local function inUpgradesRow(ctx: any, id: string): string?
+	local pid = Common.parentId(id)
+	if pid == nil then return nil end
+	local gid = Common.parentId(pid)
+	local g = if gid then ctx.store:get(gid) else nil
+	if type(g) == "table" and g.cn == "upgrades" then return pid end
+	return nil
+end
+-- the upgrades component id above a card (row -> component), nil when the card is not in one
+local function componentOf(ctx: any, id: string): string?
+	local pid = Common.parentId(id)
+	if pid == nil then return nil end
+	local p = ctx.store:get(pid)
+	if type(p) == "table" and p.cn == "upgrades" then return pid end
+	local gid = Common.parentId(pid)
+	local g = if gid then ctx.store:get(gid) else nil
+	if type(g) == "table" and g.cn == "upgrades" then return gid end
+	return nil
+end
+
+function Upgrade.skin(rec: any, n: any, ctx: any): boolean
+	local b = rec.root :: TextButton
+	local l = b:FindFirstChild("Label") :: TextLabel?
+	if l == nil then return false end
+	local label = l :: TextLabel
+	local state = Upgrade.stateOf(n)
+	local compact = ctx.mode == "COMPACT"
+	local rowId = inUpgradesRow(ctx, rec.id)
+	-- COMPACT: owned upgrades fold into the section's summary row unless it is open
+	if compact and state == "owned" then
+		local comp = componentOf(ctx, rec.id)
+		if comp and not showOwned[ctx.layer .. ":" .. comp] then
+			b.Visible = false
+			Common.state(b, state)
+			return true
+		end
+	end
+	if state == "owned" and (compact or (rowId ~= nil and tierOwned(ctx.store, rowId, ctx.cache))) then
+		return CompactOwned.skin(rec, n, ctx)
+	end
+	b.Visible = true
+	b.AutoButtonColor = false
+	Common.drop(b, "Num")
+	Common.drop(b, "Gradient")
+	Common.drop(b, "Glow")
+	local p = Common.surface(b, state, ctx.hue, 14)
+	Common.glow(b, if state == "can" then ctx.hue else nil, 0.55, 16)
+	b.Size = UDim2.fromOffset(ctx.cardW, 0)
+	b.AutomaticSize = Enum.AutomaticSize.Y
+	Common.drop(b, "Limit") -- a tier row stretches its cards to the tallest one
+	Common.pad(b, if compact then 12 else 14, if compact then 12 else 16, if compact then 12 else 14, if compact then 12 else 16)
+	Common.list(b, false, if compact then 6 else 8, { name = "CardList" })
+
+	-- the text block: index, title, description, "Currently"
+	Common.text(label, "body", p.text, 0)
+	label.LayoutOrder = 1
+	label.ZIndex = 3
+	label.Size = UDim2.new(1, 0, 0, 0)
+	label.AutomaticSize = Enum.AutomaticSize.Y
+	label.TextWrapped = true
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.TextYAlignment = Enum.TextYAlignment.Top
+	label.Visible = true
+	local idx = Common.str(n.n) or Common.str(n.id) or ""
+	local idxColor = if state == "owned" then C.soft else Theme.lift(ctx.hue, 0.5)
+	local parts: { string } = {}
+	table.insert(parts, Common.run(Common.esc(idx), "index", idxColor, 0.2))
+	local title = Common.str(n.ti)
+	if title then table.insert(parts, Common.title(Common.plain(title), "card", p.title)) end
+	local ds = Common.html(n.ds, "body", ctx.layer)
+	if ds ~= "" then
+		table.insert(parts, string.format('<font transparency="%.2f">%s</font>', p.textT, ds))
+	end
+	local ef = Common.str(n.ef)
+	if ef and state ~= "owned" then table.insert(parts, Common.caps("Currently", p.soft)) end
+	Common.setText(label, table.concat(parts, "\n"))
+
+	-- the chip at the top right: BUY / OWNED / pr % / LOCKED
+	local pr = Common.pr(n.pr)
+	local chipText, chipColor, chipBg, chipBgT = "BUY", C.text, C.black, 0.45
+	if state == "owned" then
+		chipText, chipColor, chipBg, chipBgT = "OWNED", C.ownedValue, Theme.mix(C.deep, C.bought, 0.25), 0
+	elseif state == "notyet" then
+		chipText, chipColor, chipBg, chipBgT = if pr then Rich.pct(pr) else "NOT YET", C.notYet, C.black, 0.5
+	elseif state == "locked" then
+		chipText, chipColor, chipBg, chipBgT = "LOCKED", C.lockedTitle, C.black, 0.5
+	end
+	local chip = Common.chip(label, "Chip", chipText, { color = chipColor, bg = chipBg, bgT = chipBgT, h = if compact then 26 else 28 })
+	chip.AnchorPoint = Vector2.new(1, 0)
+	chip.Position = UDim2.new(1, 0, 0, 0)
+	chip.ZIndex = 4
+
+	-- "Currently": the value in a well (can / not yet), or the owned effect line
+	if ef then
+		local eff = Common.get(b, "Eff", "TextLabel") :: TextLabel
+		eff.LayoutOrder = 2
+		eff.ZIndex = 3
+		eff.TextWrapped = false
+		eff.TextXAlignment = Enum.TextXAlignment.Center
+		eff.TextYAlignment = Enum.TextYAlignment.Center
+		eff.AutomaticSize = Enum.AutomaticSize.X
+		eff.Active = false
+		if state == "owned" then
+			Common.text(eff, "numberHeavy", C.ownedValue)
+			eff.BackgroundTransparency = 1
+			eff.Size = UDim2.fromOffset(0, 24)
+			Common.drop(eff, "Corner")
+			Common.setText(eff, Common.num(ef, "numberHeavy", C.ownedValue))
+		else
+			Common.text(eff, "number", C.text)
+			eff.BackgroundColor3 = C.black
+			eff.BackgroundTransparency = 0.45
+			eff.Size = UDim2.fromOffset(0, 28)
+			Common.corner(eff, 8)
+			Common.setText(eff, "  " .. Common.num(ef, "number", C.text) .. "  ")
+		end
+	elseif state == "owned" then
+		local eff = Common.get(b, "Eff", "TextLabel") :: TextLabel
+		eff.LayoutOrder = 2
+		Common.text(eff, "label", C.ownedValue)
+		eff.BackgroundTransparency = 1
+		eff.AutomaticSize = Enum.AutomaticSize.X
+		eff.Size = UDim2.fromOffset(0, 22)
+		eff.TextXAlignment = Enum.TextXAlignment.Left
+		Common.drop(eff, "Corner")
+		Common.setText(eff, "Active")
+	else
+		Common.drop(b, "Eff")
+	end
+
+	-- the pr bar (not yet) and the cost line
+	if state == "notyet" and pr then
+		local bar = Common.bar(b, "Bar", pr, Theme.lift(ctx.hue, 0.15), 5)
+		bar.LayoutOrder = 3
+	else
+		Common.drop(b, "Bar")
+	end
+	local co = Common.str(n.co)
+	if co and state ~= "owned" and state ~= "locked" then
+		local foot = Common.get(b, "Foot", "TextLabel") :: TextLabel
+		foot.LayoutOrder = 4
+		Common.text(foot, "caps", p.soft)
+		foot.Size = UDim2.new(1, 0, 0, 24)
+		foot.AutomaticSize = Enum.AutomaticSize.None
+		foot.TextXAlignment = Enum.TextXAlignment.Left
+		foot.TextYAlignment = Enum.TextYAlignment.Center
+		foot.TextWrapped = false
+		foot.TextTruncate = Enum.TextTruncate.AtEnd
+		local valueColor = if state == "can" then C.text else C.notYet
+		Common.setText(foot, Common.caps("Cost", p.soft) .. "   " .. Common.num(co, "numberHeavy", valueColor, Signatures.unit(n.cur)))
+	else
+		Common.drop(b, "Foot")
+	end
+	Common.state(b, state)
+	Common.transition(ctx, n.a, state, b)
+	return true
+end
+
+-- ------------------------------------------------------------------------------------------------------ tier board
+-- a game row inside the upgrades component: the rail at the left (WIDE / MEDIUM), green when the tier is owned
+function Upgrade.tier(rec: any, n: any, ctx: any)
+	local root = rec.root :: Frame
+	if ctx.mode == "COMPACT" then
+		Common.drop(root, "Rail")
+		return
+	end
+	local owned = tierOwned(ctx.store, rec.id, ctx.cache)
+	local tierNo = string.match(rec.id, "%.(%d+)$") or "?"
+	local col = if owned then C.bought else ctx.hue
+	local rail = Common.get(root, "Rail", "Frame") :: Frame
+	rail.LayoutOrder = 0
+	rail.Size = UDim2.fromOffset(44, 0)
+	rail.Active = false
+	local spine = Common.get(rail, "Spine", "Frame") :: Frame
+	spine.AnchorPoint = Vector2.new(0.5, 0)
+	spine.Position = UDim2.fromScale(0.5, 0)
+	spine.Size = UDim2.new(0, 2, 1, 12)
+	spine.BackgroundColor3 = col
+	spine.BackgroundTransparency = 0.45
+	local badge = Common.get(rail, "Badge", "TextLabel") :: TextLabel
+	badge.AnchorPoint = Vector2.new(0.5, 0)
+	badge.Position = UDim2.new(0.5, 0, 0, 14)
+	badge.Size = UDim2.fromOffset(34, 34)
+	badge.BackgroundColor3 = Theme.mix(C.deep, col, 0.35)
+	badge.BackgroundTransparency = 0
+	Common.text(badge, "badge", C.text)
+	badge.TextSize = math.max(badge.TextSize, 16)
+	badge.TextXAlignment = Enum.TextXAlignment.Center
+	badge.TextYAlignment = Enum.TextYAlignment.Center
+	badge.ZIndex = 2
+	Common.corner(badge, 0.5)
+	Common.stroke(badge, 2, col, 0)
+	Common.setText(badge, tierNo)
+	if owned then
+		local check = Common.get(rail, "Check", "Frame") :: Frame
+		check.AnchorPoint = Vector2.new(0.5, 0)
+		check.Position = UDim2.new(0.5, 0, 0, 54)
+		check.Size = UDim2.fromOffset(12, 12)
+		check.BackgroundColor3 = C.bought
+		check.BackgroundTransparency = 0
+		check.ZIndex = 2
+		Common.corner(check, 0.5)
+	else
+		Common.drop(rail, "Check")
+	end
+end
+
+-- ------------------------------------------------------------------------------------------------------ COMPACT fold
+-- the summary row at the top of an upgrades section on phones: "N OWNED" + Show / Hide (one press)
+function Upgrade.summary(rec: any, n: any, ctx: any)
+	local root = rec.root :: Frame
+	if ctx.mode ~= "COMPACT" or n.cn ~= "upgrades" then
+		Common.drop(root, "OwnedRow")
+		return
+	end
+	local owned = 0
+	local function walk(id: string, d: number)
+		if d > 3 then return end
+		local x = ctx.store:get(id)
+		if type(x) ~= "table" then return end
+		if x.t == "btn" and x.k == "upg" and x.cls == "bought" then owned += 1 end
+		if type(x.c) == "table" then
+			for _, cid in x.c do
+				if type(cid) == "string" then walk(cid, d + 1) end
+			end
+		end
+	end
+	walk(rec.id, 0)
+	if owned == 0 then
+		Common.drop(root, "OwnedRow")
+		return
+	end
+	local key = ctx.layer .. ":" .. rec.id
+	local open = showOwned[key] == true
+	local row = Common.get(root, "OwnedRow", "TextButton") :: TextButton
+	row.LayoutOrder = 0
+	row.AutoButtonColor = false
+	row.Text = ""
+	row.Size = UDim2.new(1, 0, 0, 48)
+	Common.fill(row, Theme.mix(C.panel, C.bought, 0.16), Theme.mix(C.deep, C.bought, 0.1))
+	Common.corner(row, 12)
+	Common.stroke(row, 1.5, C.bought, 0.5)
+	Common.pad(row, 0, 14, 0, 14)
+	local t = Common.label(row, "Text", "cardSmall", C.ownedTitle, { wrap = false })
+	t.Size = UDim2.fromScale(1, 1)
+	t.AutomaticSize = Enum.AutomaticSize.None
+	t.TextYAlignment = Enum.TextYAlignment.Center
+	Common.setText(t, Common.title(owned .. " owned", "cardSmall", C.ownedTitle))
+	local s = Common.label(row, "Show", "label", C.ownedValue, { wrap = false, align = Enum.TextXAlignment.Right })
+	s.Size = UDim2.fromScale(1, 1)
+	s.AutomaticSize = Enum.AutomaticSize.None
+	s.TextYAlignment = Enum.TextYAlignment.Center
+	Common.setText(s, if open then "Hide" else "Show")
+	row:SetAttribute("Key", key)
+	if row:GetAttribute("Wired") ~= true then
+		row:SetAttribute("Wired", true)
+		local render = ctx.render
+		row.Activated:Connect(function()
+			local k = row:GetAttribute("Key")
+			if type(k) ~= "string" then return end
+			showOwned[k] = not showOwned[k]
+			if render then render:refresh() end
+		end)
+	end
+end
+
+return Upgrade
+]]></string>
+              </Properties>
+            </Item>
+          </Item>
+          <Item class="ModuleScript" referent="112">
+            <Properties>
+              <string name="Name">Virtual</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	Virtual: a fixed-row pool for long lists (DESIGN.md 5.8, plan 2.5). The host Frame (a claim's placeholder inside
+	the panel's scrolling body) is sized to the whole list; only ceil(viewport / pitch) + 2 row frames exist, moved and
+	redrawn as the body scrolls.
+
+	    local v = Virtual.new({ scroll = sf, host = ph, top = 48, rowH = 64, gap = 8, count = n, draw = fn(row, i) })
+	    v:setCount(n); v:redraw(); v:destroy()
+
+	Virtual.milestones(ph, id, store, ctx) is the default claim for a milestone ladder longer than Virtual.MS_ROWS:
+	a section header, then one row per milestone (NEXT in the hue, done in quiet green, future faint), with the row's
+	INFECT button when the game sends one (the button fires the malware node's own action).
+]]
+
+local Core = script.Parent.Parent:WaitForChild("Core")
+local Theme = require(Core:WaitForChild("Theme"))
+local Layout = require(Core:WaitForChild("Layout"))
+local Rich = require(Core:WaitForChild("Rich"))
+local Common = require(script.Parent:WaitForChild("Skins"):WaitForChild("Common"))
+local Milestone = require(script.Parent:WaitForChild("Skins"):WaitForChild("Milestone"))
+local Sections = require(script.Parent:WaitForChild("Sections"))
+
+local Virtual = {}
+Virtual.__index = Virtual
+
+-- ladders longer than this are virtualised by default (keeps a panel within its instance budget)
+Virtual.MS_ROWS = 24
+
+local C = Theme.C
+
+export type Options = {
+	scroll: ScrollingFrame,
+	host: Frame,
+	top: number, -- du above the first row (a header)
+	rowH: number,
+	gap: number,
+	count: number,
+	draw: (row: Frame, i: number) -> (),
+}
+
+export type Virtual = typeof(setmetatable({} :: {
+	o: Options,
+	rows: { Frame },
+	first: number,
+	conns: { RBXScriptConnection },
+	alive: boolean,
+}, Virtual))
+
+function Virtual.new(o: Options): Virtual
+	local self = setmetatable({ o = o, rows = {}, first = -1, conns = {}, alive = true }, Virtual)
+	o.host.AutomaticSize = Enum.AutomaticSize.None
+	o.host.ClipsDescendants = false
+	table.insert(self.conns, o.scroll:GetPropertyChangedSignal("CanvasPosition"):Connect(function() self:place(false) end))
+	table.insert(self.conns, o.scroll:GetPropertyChangedSignal("AbsoluteSize"):Connect(function() self:place(true) end))
+	self:setCount(o.count)
+	return self
+end
+
+function Virtual.pitch(self: Virtual): number
+	return self.o.rowH + self.o.gap
+end
+
+function Virtual.setCount(self: Virtual, n: number)
+	self.o.count = n
+	local o = self.o
+	o.host.Size = UDim2.new(1, 0, 0, o.top + math.max(0, n * self:pitch() - o.gap))
+	self:place(true)
+end
+
+-- how many rows fit the viewport, plus two
+function Virtual.poolSize(self: Virtual): number
+	local s = math.max(Layout.s, 0.01)
+	local vh = self.o.scroll.AbsoluteSize.Y / s
+	if vh < 1 then vh = 900 end
+	return math.ceil(vh / self:pitch()) + 2
+end
+
+function Virtual.place(self: Virtual, force: boolean)
+	if not self.alive then return end
+	local o = self.o
+	local s = math.max(Layout.s, 0.01)
+	-- where the host's first row is, relative to the visible top of the scroll (du)
+	local dy = (o.host.AbsolutePosition.Y - o.scroll.AbsolutePosition.Y) / s + o.top
+	local first = math.max(0, math.floor(-dy / self:pitch()))
+	local pool = math.min(self:poolSize(), math.max(0, o.count))
+	-- grow / shrink the pool
+	while #self.rows < pool do
+		local row = Instance.new("Frame")
+		row.Name = "Row" .. (#self.rows + 1)
+		row.BackgroundTransparency = 1
+		row.BorderSizePixel = 0
+		row.Size = UDim2.new(1, 0, 0, o.rowH)
+		row.Parent = o.host
+		table.insert(self.rows, row)
+		force = true
+	end
+	while #self.rows > pool do
+		local row = table.remove(self.rows) :: Frame
+		row:Destroy()
+		force = true
+	end
+	if first == self.first and not force then return end
+	self.first = first
+	for k, row in self.rows do
+		local i = first + k
+		if i <= o.count then
+			row.Visible = true
+			row.Size = UDim2.new(1, 0, 0, o.rowH)
+			row.Position = UDim2.fromOffset(0, o.top + (i - 1) * self:pitch())
+			local ok, err = Common.try(o.draw, row, i)
+			if not ok then warn("[MilestoneTree] virtual row failed: " .. tostring(err)) end
+		else
+			row.Visible = false
+		end
+	end
+end
+
+function Virtual.redraw(self: Virtual)
+	self:place(true)
+end
+
+function Virtual.destroy(self: Virtual)
+	self.alive = false
+	for _, c in self.conns do c:Disconnect() end
+	for _, r in self.rows do r:Destroy() end
+	table.clear(self.rows)
+end
+
+-- ------------------------------------------------------------------------------------------------------ milestones
+local function drawRow(row: Frame, n: any, kind: string, ctx: any, mal: any?)
+	local bg = if kind == "next" then Theme.mix(C.panel, ctx.hue, 0.38) elseif kind == "done" then Theme.mix(C.panel, C.bought, 0.14) else C.panel2
+	row.BackgroundColor3 = bg
+	row.BackgroundTransparency = 0
+	Common.corner(row, 12)
+	Common.stroke(row, if kind == "next" or n.mal then 2 else 1, if n.mal then C.danger elseif kind == "next" then Theme.lift(ctx.hue, 0.35)
+		elseif kind == "done" then C.bought else C.stroke, if kind == "done" then 0.6 elseif kind == "future" then 0.35 else 0)
+	local t = Common.get(row, "Text", "TextLabel") :: TextLabel
+	Common.text(t, "small", C.text)
+	t.Position = UDim2.fromOffset(16, 8)
+	t.Size = UDim2.new(1, if mal then -200 else -32, 1, -16)
+	t.AutomaticSize = Enum.AutomaticSize.None
+	t.TextXAlignment = Enum.TextXAlignment.Left
+	t.TextYAlignment = Enum.TextYAlignment.Center
+	t.TextWrapped = true
+	t.TextTruncate = Enum.TextTruncate.AtEnd
+	local title = Common.plain(Common.str(n.ti) or "")
+	local titleRun = Common.title(title, "cardSmall", if kind == "done" then C.ownedTitle else C.text)
+	if kind == "next" then titleRun = Common.caps("Next", C.text) .. "  " .. titleRun end
+	local ds = Common.html(n.ds, "small", ctx.layer)
+	local text = titleRun
+	if ds ~= "" then
+		text ..= "\n" .. string.format('<font color="%s" transparency="0.1">%s</font>', Common.hex(if kind == "future" then C.soft else C.text), ds)
+	end
+	Common.setText(t, text)
+	-- the INFECT button of the malware ladder (the malware node's own action, read at press time)
+	if mal then
+		local b = Common.get(row, "Infect", "TextButton") :: TextButton
+		b.AutoButtonColor = false
+		b.Text = ""
+		b.AnchorPoint = Vector2.new(1, 0.5)
+		b.Position = UDim2.new(1, -12, 0.5, 0)
+		b.Size = UDim2.fromOffset(170, 44)
+		local infected = mal.cls == "pseudo"
+		local can = mal.cls == "can" or mal.cls == "perk"
+		b.BackgroundColor3 = if infected then Theme.mix(C.panel, C.danger, 0.35) elseif can then C.danger else Theme.mix(C.panel, C.locked, 0.3)
+		b.BackgroundTransparency = 0
+		Common.corner(b, 10)
+		local bl = Common.get(b, "Label", "TextLabel") :: TextLabel
+		Common.text(bl, "label", C.text)
+		bl.Size = UDim2.fromScale(1, 1)
+		bl.TextXAlignment = Enum.TextXAlignment.Center
+		bl.TextYAlignment = Enum.TextYAlignment.Center
+		bl.TextWrapped = false
+		local co = Common.str(mal.co)
+		local label = if infected then "INFECTED" else "INFECT"
+		Common.setText(bl, Common.esc(label) .. (if co and not infected then "  " .. Common.num(Rich.short(co), "number", C.text) else ""))
+		b:SetAttribute("State", if infected then "owned" elseif can then "can" else "notyet")
+		b:SetAttribute("Ms", n.id)
+	else
+		Common.drop(row, "Infect")
+	end
+end
+
+function Virtual.milestones(ph: Frame, id: string, store: any, ctx: any): any
+	local compact = Layout.mode == "COMPACT"
+	local header = 52
+	local ids: { string } = {}
+	local rowsById: { [Frame]: string } = {}
+	local function collect(st: any)
+		table.clear(ids)
+		for _, cid in st:kids(id) do
+			local k = st:get(cid)
+			if type(k) == "table" and k.t == "ms" then table.insert(ids, cid) end
+		end
+	end
+	collect(store)
+	local current = store
+	local v: Virtual
+	v = Virtual.new({
+		scroll = ctx.scroll,
+		host = ph,
+		top = header,
+		rowH = if compact then 60 else 64,
+		gap = 8,
+		count = #ids,
+		draw = function(row: Frame, i: number)
+			local cid = ids[i]
+			local n = if cid then current:get(cid) else nil
+			if type(n) ~= "table" then
+				row.Visible = false
+				return
+			end
+			local nextId = Milestone.nextOf({ cache = {}, store = current }, id)
+			local kind = if n.done then "done" elseif cid == nextId then "next" else "future"
+			local malId = current:kids(cid)[1]
+			local mal = if malId then current:get(malId) else nil
+			if type(mal) ~= "table" or mal.k ~= "malware" then mal = nil end
+			drawRow(row, n, kind, ctx, mal)
+			rowsById[row] = cid
+			local b = row:FindFirstChild("Infect")
+			if b and b:IsA("TextButton") and b:GetAttribute("Wired") ~= true then
+				b:SetAttribute("Wired", true)
+				b.Activated:Connect(function()
+					local msId = rowsById[row]
+					local mid = if msId then current:kids(msId)[1] else nil
+					local m = if mid then current:get(mid) else nil
+					if type(m) == "table" and type(m.a) == "table" then ctx.act(m.a, false) end
+				end)
+			end
+		end,
+	})
+	local function head(st: any)
+		local done = 0
+		for _, cid in ids do
+			local k = st:get(cid)
+			if type(k) == "table" and k.done then done += 1 end
+		end
+		Sections.header(ph, { name = "Head", text = Sections.titleOf("milestones", ctx.layer) or "MILESTONES", hue = ctx.hue,
+			chips = { { text = done .. " / " .. #ids .. " DONE", color = C.ownedValue, bg = Theme.mix(C.deep, C.bought, 0.16), bgT = 0 } } })
+		local h = ph:FindFirstChild("Head") :: Frame?
+		if h then h.Position = UDim2.new() end
+	end
+	head(store)
+	local claim = {}
+	function claim.update(_: any, st: any)
+		current = st or current
+		collect(current)
+		head(current)
+		v:setCount(#ids)
+	end
+	function claim.destroy(_: any)
+		v:destroy()
+		Common.drop(ph, "Head")
+	end
+	return claim
+end
+
+return Virtual
+]]></string>
+            </Properties>
+          </Item>
+        </Item>
+        <Item class="ModuleScript" referent="113">
           <Properties>
             <string name="Name">Render</string>
             <string name="Source"><![CDATA[--!strict
@@ -43001,20 +47131,43 @@ if not ok then RunService.RenderStepped:Connect(step) end
 
 	Every node has an id that is its path ("tab.3.1"), so its parent and its place among its siblings come from the
 	id: a patch only has to carry the nodes that changed. A node whose kind is unchanged is updated in place;
-	otherwise it is rebuilt and its children move over to the new object.
+	otherwise it is rebuilt and its children move over to the new object (and are re-inherited and re-drawn).
+
+	The panel (plan 2.5) adds optional hooks; the old page passes none and looks as it always did:
+	    hooks.ctx()                  -> the skin context, asked once per apply
+	    hooks.skin(rec, n, ctx)      -> true when the skin drew the node (the old look is then skipped); runs on every
+	                                    update, so skins are idempotent
+	    hooks.claim(id, n, ctx)      -> a maker (ph) -> Claim, asked when a record is built. A claimed id gets a plain
+	                                    placeholder Frame and no subtree; every later set / del at or under it only marks
+	                                    the claim dirty, and after the apply each dirty claim gets update(store)
+	    hooks.store                  the ViewStore handed to claims
+	    hooks.detail(rec)            a touch long-press on a button (the detail sheet); its Activated is then skipped
+	Buttons keep their wiring: the current node's `a` is read at press time, and hold buttons repeat 20 times a second
+	after 0.25 s, but only while the pointer stays within 10 px and the list does not scroll (DESIGN.md 3.4). A touch
+	that moved or scrolled never presses.
 ]]
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
 local shared = ReplicatedStorage:WaitForChild("MilestoneTree")
 local Html = require(shared:WaitForChild("Html"))
 local ZoneMaps = require(shared:WaitForChild("ZoneMaps"))
 local Style = require(script.Parent:WaitForChild("Style"))
 
+export type Claim = {
+	update: (self: Claim, store: any) -> (),
+	destroy: (self: Claim) -> (),
+}
 export type Hooks = {
 	press: (action: any, hold: boolean) -> (),
 	tip: (html: string?, over: GuiObject?) -> (),
+	ctx: (() -> any)?,
+	skin: ((rec: any, n: any, ctx: any) -> boolean)?,
+	claim: ((id: string, n: any, ctx: any) -> ((ph: Frame) -> Claim)?)?,
+	store: any?,
+	detail: ((rec: any) -> ())?,
 }
 
-type Rec = {
+export type Rec = {
 	id: string,
 	kind: string,
 	node: any,
@@ -43026,6 +47179,7 @@ type Rec = {
 	base: number,           -- text size children inherit
 	conns: { RBXScriptConnection },
 	sig: string?,           -- what the object currently shows (skip redundant updates)
+	claim: Claim?,          -- a claimed id: the placeholder's owner (no subtree is built)
 }
 
 local Render = {}
@@ -43036,12 +47190,27 @@ export type Renderer = typeof(setmetatable({} :: {
 	recs: { [string]: Rec },
 	kids: { [string]: { [string]: boolean } },
 	hooks: Hooks,
+	dirty: { [string]: boolean },
+	ctxNow: any,
+	skinErrors: number,
 }, Render))
 
 function Render.new(roots: { [string]: GuiObject }, hooks: Hooks): Renderer
-	local self = setmetatable({ roots = roots, recs = {}, kids = {}, hooks = hooks }, Render)
+	local self = setmetatable({ roots = roots, recs = {}, kids = {}, hooks = hooks, dirty = {}, ctxNow = nil, skinErrors = 0 }, Render)
 	return self
 end
+
+-- pcall for functions that return nothing (the result is ok, err)
+local function try(f: (...any) -> ...any, ...: any): (boolean, any)
+	return pcall(function(...: any): any
+		f(...)
+		return nil
+	end, ...)
+end
+
+-- the hold / tap thresholds (DESIGN.md 3.4)
+Render.SLOP = 10
+Render.LONG_PRESS = 0.45
 
 local function parentOf(id: string): (string?, number)
 	local p, i = string.match(id, "^(.*)%.(%d+)$")
@@ -43200,38 +47369,102 @@ function Render._wireTip(self: Renderer, rec: Rec, obj: GuiObject)
 	table.insert(rec.conns, obj.MouseLeave:Connect(function() self.hooks.tip(nil, obj) end))
 end
 
+type Press = {
+	io: InputObject,
+	touch: boolean,
+	x: number,
+	y: number,
+	scroll: ScrollingFrame?,
+	cy: number,
+	moved: boolean,
+}
+
+local function pointerOf(p: Press): (number, number)
+	if p.touch then
+		local v = p.io.Position
+		return v.X, v.Y
+	end
+	local m = UserInputService:GetMouseLocation()
+	return m.X, m.Y
+end
+-- the press moved more than SLOP px, or its list scrolled: it is a drag / scroll, not a press (DESIGN.md 3.4)
+local function movedOf(p: Press): boolean
+	if p.moved then return true end
+	local x, y = pointerOf(p)
+	local dx, dy = x - p.x, y - p.y
+	local sf = p.scroll
+	local scrolled = sf ~= nil and math.abs(sf.CanvasPosition.Y - p.cy) > 2
+	if dx * dx + dy * dy > Render.SLOP * Render.SLOP or scrolled then p.moved = true end
+	return p.moved
+end
+
 function Render._wireButton(self: Renderer, rec: Rec, b: GuiButton)
-	local holding = 0
-	local scale = Style.child(b, "UIScale", "Hover") :: UIScale
+	local cur: Press? = nil
+	local seq = 0
+	local skipNext = false
+	local function isPointer(t: Enum.UserInputType): boolean
+		return t == Enum.UserInputType.MouseButton1 or t == Enum.UserInputType.Touch
+	end
 	table.insert(rec.conns, b.Activated:Connect(function()
+		if skipNext then
+			skipNext = false
+			return
+		end
+		local p = cur
+		if p and p.touch and movedOf(p) then return end
 		local a = rec.node.a
 		if a then self.hooks.press(a, false) end
 	end))
-	-- hold to repeat (buyables, and clickables / grid tiles that have onHold): after 0.25 s, 20 presses a second
+	-- hold to repeat (buyables, and clickables / grid tiles that have onHold): after 0.25 s, 20 presses a second,
+	-- only while the pointer stays put and the list does not scroll
 	table.insert(rec.conns, b.InputBegan:Connect(function(input: InputObject)
-		if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
-		if not rec.node.hold then return end
-		holding += 1
-		local mine = holding
-		task.delay(0.25, function()
-			while holding == mine and rec.root.Parent do
-				local a = rec.node.a
-				if a then self.hooks.press(a, true) end
-				task.wait(0.05)
-			end
-		end)
+		if not isPointer(input.UserInputType) then return end
+		seq += 1
+		local mine = seq
+		skipNext = false
+		local touch = input.UserInputType == Enum.UserInputType.Touch
+		local sf = b:FindFirstAncestorWhichIsA("ScrollingFrame")
+		local p: Press = { io = input, touch = touch, x = 0, y = 0, scroll = sf, cy = if sf then sf.CanvasPosition.Y else 0, moved = false }
+		p.x, p.y = pointerOf(p)
+		cur = p
+		if rec.node.hold then
+			task.delay(0.25, function()
+				while seq == mine and cur == p and rec.root.Parent do
+					if movedOf(p) then break end
+					local a = rec.node.a
+					if a then self.hooks.press(a, true) end
+					task.wait(0.05)
+				end
+			end)
+		elseif touch and self.hooks.detail then
+			local detail = self.hooks.detail
+			task.delay(Render.LONG_PRESS, function()
+				if seq == mine and cur == p and not movedOf(p) and rec.root.Parent then
+					skipNext = true
+					seq += 1
+					if detail then detail(rec) end
+				end
+			end)
+		end
 	end))
+	-- the release ends the hold and the long-press wait; `cur` stays until the next press, so Activated (which may
+	-- arrive before or after InputEnded) can still tell a moved touch from a tap
 	table.insert(rec.conns, b.InputEnded:Connect(function(input: InputObject)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then holding += 1 end
+		if not isPointer(input.UserInputType) then return end
+		seq += 1
 	end))
 	table.insert(rec.conns, b.MouseEnter:Connect(function()
-		if rec.node.cls == "can" or rec.node.cls == "perk" or rec.node.cls == "pseudo" then scale.Scale = 1.06 end
+		if rec.node.cls == "can" or rec.node.cls == "perk" or rec.node.cls == "pseudo" then
+			local scale = Style.child(b, "UIScale", "Hover") :: UIScale
+			scale.Scale = if rec.claim == nil and self.hooks.skin then 1.03 else 1.06
+		end
 		local tip = rec.node.tip
 		if type(tip) == "string" and tip ~= "" then self.hooks.tip(tip, b) end
 	end))
 	table.insert(rec.conns, b.MouseLeave:Connect(function()
-		holding += 1
-		scale.Scale = 1
+		seq += 1
+		local scale = b:FindFirstChild("Hover")
+		if scale and scale:IsA("UIScale") then scale.Scale = 1 end
 		self.hooks.tip(nil, b)
 	end))
 end
@@ -43267,7 +47500,12 @@ local function drawSvg(parent: GuiObject, svg: any, order: number): Frame
 			seg.Parent = canvas
 		end
 	end
+	-- the game draws the same label at the same spot many times (435 texts, 26 distinct): draw each once
+	local drawn: { [string]: boolean } = {}
 	for _, t in svg.texts do
+		local key = t.x .. "," .. t.y .. "," .. t.text
+		if drawn[key] then continue end
+		drawn[key] = true
 		local l = Instance.new("TextLabel")
 		l.BackgroundTransparency = 1
 		l.AnchorPoint = Vector2.new(0, 1)
@@ -43290,6 +47528,16 @@ end
 
 function Render._update(self: Renderer, rec: Rec, n: any)
 	rec.node = n
+	if rec.claim then return end
+	local skin = self.hooks.skin
+	if skin then
+		local ok, handled = pcall(skin, rec, n, self.ctxNow)
+		if ok and handled then return end
+		if not ok then
+			self.skinErrors += 1
+			if self.skinErrors <= 5 then warn("[MilestoneTree] panel skin failed on " .. rec.id .. ": " .. tostring(handled)) end
+		end
+	end
 	local t, root = n.t, rec.root
 	local extraStyle = n.cst
 	if t == "col" or t == "row" or t == "tabs" then
@@ -43299,6 +47547,10 @@ function Render._update(self: Renderer, rec: Rec, n: any)
 		if a.w then root.Size = UDim2.new(0, a.w, root.Size.Y.Scale, root.Size.Y.Offset); root.AutomaticSize = Enum.AutomaticSize.Y end
 		if extraStyle then Style.apply(root, extraStyle) end
 	elseif rec.kind == "svg" then
+		-- the exploration map: redrawn only when its html changes (hundreds of line frames)
+		local key = tostring(n.h) .. "|" .. tostring(rec.base)
+		if rec.sig == key then return end
+		rec.sig = key
 		for _, c in root:GetChildren() do if c:IsA("GuiObject") then c:Destroy() end end
 		list(root, false, 4)
 		local order = 0
@@ -43526,6 +47778,13 @@ function Render._destroy(self: Renderer, id: string, keepKids: boolean?)
 		self.kids[id] = nil
 	end
 	for _, c in rec.conns do c:Disconnect() end
+	local claim = rec.claim
+	if claim then
+		rec.claim = nil
+		self.dirty[id] = nil
+		local ok, err = try(claim.destroy, claim)
+		if not ok then warn("[MilestoneTree] claim destroy failed on " .. id .. ": " .. tostring(err)) end
+	end
 	rec.root:Destroy()
 	self.recs[id] = nil
 	local p = parentOf(id)
@@ -43548,13 +47807,80 @@ function Render._place(self: Renderer, rec: Rec)
 	end
 end
 
+-- the nearest claimed record at or above id (nil when none)
+function Render._claimOwner(self: Renderer, id: string): string?
+	local p: string? = id
+	while p do
+		local r = self.recs[p]
+		if r and r.claim then return p end
+		p = (parentOf(p))
+	end
+	return nil
+end
+
+-- a placeholder for a claimed id: a plain Frame in the node's slot, no subtree
+function Render._makeClaim(self: Renderer, id: string, n: any, maker: (ph: Frame) -> Claim): Rec
+	local ph = Instance.new("Frame")
+	ph.Name = id
+	ph.BackgroundTransparency = 1
+	ph.BorderSizePixel = 0
+	ph.Size = UDim2.new(1, 0, 0, 0)
+	ph.AutomaticSize = Enum.AutomaticSize.Y
+	local autoW, text, textT, base = self:_inherit((parentOf(id)))
+	local rec: Rec = { id = id, kind = kindOf(n), node = n, root = ph, content = ph, autoW = autoW, text = text, textT = textT,
+		base = base, conns = {} }
+	self.recs[id] = rec
+	self:_place(rec)
+	local ok, claim = pcall(maker, ph)
+	if ok and claim then
+		rec.claim = claim
+		self.dirty[id] = true
+	elseif not ok then
+		warn("[MilestoneTree] claim failed on " .. id .. ": " .. tostring(claim))
+	end
+	return rec
+end
+
+function Render._askClaim(self: Renderer, id: string, n: any): ((ph: Frame) -> Claim)?
+	local hook = self.hooks.claim
+	if hook == nil then return nil end
+	local ok, maker = pcall(hook, id, n, self.ctxNow)
+	if ok then return maker end
+	warn("[MilestoneTree] claim check failed on " .. id .. ": " .. tostring(maker))
+	return nil
+end
+
+-- after a rebuild: the children take the new parent's inherited text colour / size and redraw
+function Render._reinherit(self: Renderer, id: string, depthLeft: number)
+	if depthLeft <= 0 then return end
+	for _, k in self:_children(id) do
+		local kr = self.recs[k]
+		if kr and not kr.claim then
+			local autoW, text, textT, base = self:_inherit(id)
+			kr.autoW, kr.text, kr.textT, kr.base = autoW, text, textT, base
+			kr.sig = nil
+			self:_update(kr, kr.node)
+			self:_reinherit(k, depthLeft - 1)
+		end
+	end
+end
+
 function Render.apply(self: Renderer, patch: any)
+	local ctxHook = self.hooks.ctx
+	self.ctxNow = if ctxHook then ctxHook() else nil
 	if patch.full then
 		for id in self.recs do
 			if parentOf(id) == nil then self:_destroy(id) end
 		end
 	end
-	for _, id in patch.del or {} do self:_destroy(id) end
+	for _, id in patch.del or {} do
+		local owner = self:_claimOwner(id)
+		if owner and owner ~= id then
+			self.dirty[owner] = true
+		else
+			self:_destroy(id)
+		end
+	end
 	local ids = {}
 	for id in patch.set or {} do table.insert(ids, id) end
 	table.sort(ids, function(a, b)
@@ -43564,7 +47890,22 @@ function Render.apply(self: Renderer, patch: any)
 	end)
 	for _, id in ids do
 		local n = patch.set[id]
+		local owner = self:_claimOwner(id)
+		if owner and owner ~= id then
+			self.dirty[owner] = true
+			continue
+		end
 		local rec: Rec? = self.recs[id]
+		if rec and rec.claim then
+			-- the claimed node itself changed: keep the claim while it is the same component, else give it back
+			if rec.kind == kindOf(n) and rec.node.cn == n.cn then
+				rec.node = n
+				self.dirty[id] = true
+				continue
+			end
+			self:_destroy(id)
+			rec = nil
+		end
 		if rec and rec.kind ~= kindOf(n) then
 			-- rebuilt: keep the children and move them to the new object
 			local kids = self:_children(id)
@@ -43575,6 +47916,13 @@ function Render.apply(self: Renderer, patch: any)
 				if kr then kr.root.Parent = nil end
 			end
 			self:_destroy(id, true)
+			local maker = self:_askClaim(id, n)
+			if maker then
+				for _, k in kids do self:_destroy(k) end
+				self.kids[id] = nil
+				self:_makeClaim(id, n, maker)
+				continue
+			end
 			local built = self:_build(id, n)
 			rec = built
 			self.recs[id] = built
@@ -43584,7 +47932,15 @@ function Render.apply(self: Renderer, patch: any)
 				local kr = self.recs[k]
 				if kr then self:_place(kr) end
 			end
+			self:_update(built, n)
+			self:_reinherit(id, 12)
+			continue
 		elseif not rec then
+			local maker = self:_askClaim(id, n)
+			if maker then
+				self:_makeClaim(id, n, maker)
+				continue
+			end
 			local built = self:_build(id, n)
 			rec = built
 			self.recs[id] = built
@@ -43592,6 +47948,50 @@ function Render.apply(self: Renderer, patch: any)
 		end
 		self:_update(rec :: Rec, n)
 	end
+	-- claims read their subtree from the store once the patch is in
+	local store = self.hooks.store
+	for id in self.dirty do
+		self.dirty[id] = nil
+		local r = self.recs[id]
+		local claim = r and r.claim
+		if claim then
+			local ok, err = try(claim.update, claim, store)
+			if not ok then warn("[MilestoneTree] claim update failed on " .. id .. ": " .. tostring(err)) end
+		end
+	end
+	self.ctxNow = nil
+end
+
+-- redraw every record (after a layout / mode change: skins re-read sizes), and every claim
+function Render.refresh(self: Renderer)
+	local ctxHook = self.hooks.ctx
+	self.ctxNow = if ctxHook then ctxHook() else nil
+	local ids = {}
+	for id in self.recs do table.insert(ids, id) end
+	table.sort(ids, function(a, b)
+		local da, db = depth(a), depth(b)
+		if da ~= db then return da < db end
+		return a < b
+	end)
+	local store = self.hooks.store
+	for _, id in ids do
+		local r = self.recs[id]
+		if r then
+			local claim = r.claim
+			if claim then
+				local ok, err = try(claim.update, claim, store)
+				if not ok then warn("[MilestoneTree] claim update failed on " .. id .. ": " .. tostring(err)) end
+			else
+				r.sig = nil
+				self:_update(r, r.node)
+			end
+		end
+	end
+	self.ctxNow = nil
+end
+
+function Render.recOf(self: Renderer, id: string): Rec?
+	return self.recs[id]
 end
 
 function Render.clear(self: Renderer)
@@ -43604,7 +48004,198 @@ return Render
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="94">
+        <Item class="Folder" referent="114">
+          <Properties>
+            <string name="Name">Signatures</string>
+          </Properties>
+          <Item class="ModuleScript" referent="115">
+            <Properties>
+              <string name="Name">Signatures</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	Signatures: the per-layer plug-ins of the panel template (plan 2.6, DESIGN.md 6) and the default one.
+
+	    Signatures.register(sig)     a sibling module (Signatures/<X>.luau, packages J1 / J2) registers its tables
+	    Signatures.get(key)          the signature of a layer ("m", "p", ..., "options-tab"); the default when none
+	    Signatures.title(key, node)  the panel title, CTA word, sub-row line, tree row and short unit helpers the
+	    Signatures.cta(key) ...      default signature uses (client labels, never game data: plan P10)
+
+	Every sibling ModuleScript is required once, on the first get(): J1 and J2 add files and never edit this one.
+	A signature that fails to load is skipped (with a warning), so one bad file never blanks a panel.
+
+	A signature table (Types.Signature):
+	    layers     { "m", "mm" }        the keys it serves
+	    cta        "GET +1 MILESTONE"   the CTA word (default: the table below)
+	    subRow     "The root of the tree"   the sentence-case line next to the ROW chip
+	    corrupted  true                 the D 5.2 corrupted treatment (cp, cm)
+	    hug        true                 the sheet hugs its content (min 560 du)
+	    order      { "milestones", ... } section order override, by cn
+	    hero       fn(hero, store, ctx) adds the hero idea after the default hero drew (called on every update)
+	    accent     fn(sheet, ctx)       watermark / tile / rim variant (called when the panel opens or relayouts)
+	    claims     { {match = {cn, ci?, sub?, depth?}, make = fn(ph, id, store, ctx) -> Claim} }
+	    skin       fn(rec, n, ctx) -> boolean   a per-layer skin that runs before the default skins; true = handled
+]]
+
+local Types = require(script.Parent.Parent:WaitForChild("Types"))
+
+type Signature = Types.Signature
+
+-- the context every skin, claim and hero hook receives (a superset of Types.SkinCtx)
+export type Ctx = {
+	layer: string, -- the panel key: a layer id or "options-tab"
+	sub: string?, -- the current subtab ("Main", "Upgrades", ...)
+	hue: Color3,
+	mode: string, -- Layout.mode
+	signature: any,
+	act: (action: Types.Action, hold: boolean?) -> (),
+	store: any, -- the ViewStore
+	render: any, -- the Renderer (skins look up parent records through render.recs)
+	s: number, -- Layout.s
+	contentW: number, -- the body's content width (du)
+	cardW: number, -- the upgrade card width (du)
+	corrupted: boolean,
+	detail: (card: any) -> (), -- the touch detail sheet (panel.detail)
+	firstSeen: (key: string) -> boolean, -- true the first time an animation key is seen since the panel opened
+	cache: { [string]: any }, -- per-apply memo (fresh for every Render apply)
+	scroll: ScrollingFrame, -- the body's scrolling frame (virtual lists follow it)
+}
+
+local Signatures = {}
+
+-- ------------------------------------------------------------------------------------------------------ labels
+-- panel titles (the map node's name is the fallback; pm keeps its masked name as sent)
+local TITLE: { [string]: string } = {
+	m = "Milestone", mm = "Meta Milestone", em = "Extra Milestone", p = "Prestige", pe = "Prestige Energy",
+	sp = "Super Prestige", pb = "Prestige Boost", pp = "Prestige Power", se = "Super Energy", hp = "Hyper Prestige",
+	ep = "Exotic Prestige", hb = "Hyper Boost", ap = "Atomic Prestige", mp = "Multiverse", t = "Transcend",
+	ach = "Achievements", pep = "Prestiged Exotic", cp = "Corrupted Prestige", cm = "Corrupted Milestone",
+	ex = "Exploration", ["options-tab"] = "Options",
+}
+-- the CTA word (plan P10: a label, not game data)
+local CTA: { [string]: string } = {
+	m = "GET +1 MILESTONE", mm = "GET +1", em = "GET +1", pm = "GET +1", cm = "GET +1",
+	pe = "COLLECT", se = "COLLECT", ex = "EXPLORE", cp = "CORRUPT",
+	pb = "GET", hb = "GET", mp = "GET", pep = "GET",
+}
+-- the sentence-case line of the sub row
+local SUBROW: { [string]: string } = {
+	m = "The root of the tree", mm = "Resets for meta milestones", em = "Resets for extra milestones",
+	p = "Resets for prestige points", pe = "Collects prestige energy", sp = "Resets for super prestige points",
+	pb = "Resets for prestige boosts", pp = "Resets for prestige power", se = "Collects super energy",
+	hp = "Resets for hyper prestige points", ep = "Resets for exotic prestige points", hb = "Resets for hyper boosts",
+	ap = "Resets for atomic prestige points", mp = "Resets for multiverse points", t = "Resets for transcend points",
+	ach = "Your trophies", pm = "Resets for prestige milestones", pep = "Resets for prestiged exotic points",
+	cp = "Corrupts prestige points", cm = "Resets for corrupted milestones", ex = "Explores the zones",
+	["options-tab"] = "Your save and this device",
+}
+-- the game's tree rows (layers/*.js `row`); "side" layers have no chip
+local ROW: { [string]: number } = {
+	m = 0, pm = 0, mm = 1, p = 1, cm = 1, cp = 1, pep = 1, em = 2, pe = 2, sp = 2, pb = 2, pp = 2, ex = 2,
+	se = 3, hp = 3, ep = 3, hb = 4, ap = 4, mp = 4, t = 5,
+}
+-- short units for resource names (the client's abbreviation table, plan 1.13)
+local UNIT: { [string]: string } = {
+	["prestige points"] = "PP", ["super-prestige points"] = "SP", ["hyper-prestige points"] = "HP",
+	["exotic prestige points"] = "EP", ["atomic-prestige points"] = "AP", ["multiverse prestige points"] = "MP",
+	["transcend points"] = "TP", ["prestige energy"] = "PE", ["super energy"] = "SE", ["prestige power"] = "PW",
+	["prestige boosts"] = "PB", ["hyper boosts"] = "HB", ["prestiged-exotic prestige points"] = "PEP",
+	["exploration points"] = "EX", ["prestige essence"] = "PE", ["prestige essences"] = "PE",
+	["corruption essences"] = "CE", ["corrupted milestones"] = "CM", ["milestones"] = "M",
+	["meta-milestones"] = "MM", ["extra-milestones"] = "EM", ["points"] = "points",
+}
+
+function Signatures.title(key: string, node: any?): string
+	if key == "pm" and node and type(node.name) == "string" then return node.name end
+	return TITLE[key] or (if node and type(node.name) == "string" then node.name else string.upper(key))
+end
+function Signatures.row(key: string): number?
+	return ROW[key]
+end
+-- a resource name -> its short unit ("prestige points" -> "PP"); the name itself when unknown
+function Signatures.unit(res: string?): string
+	if type(res) ~= "string" then return "" end
+	local k = string.lower((string.gsub(string.gsub(res, "<[^>]*>", ""), "^%s+", "")))
+	k = string.gsub(k, "%s+$", "")
+	return UNIT[k] or k
+end
+
+-- ------------------------------------------------------------------------------------------------------ registry
+local registry: { [string]: Signature } = {}
+local loaded = false
+
+local DEFAULT: Signature = {
+	layers = {},
+	cta = nil,
+	subRow = nil,
+	corrupted = nil,
+	hug = nil,
+	order = nil,
+	hero = nil,
+	accent = nil,
+	claims = nil,
+	skin = nil,
+}
+Signatures.DEFAULT = DEFAULT
+
+function Signatures.register(sig: Signature)
+	if type(sig) ~= "table" or type(sig.layers) ~= "table" then return end
+	for _, l in sig.layers do
+		if type(l) == "string" then registry[l] = sig end
+	end
+end
+
+-- require every sibling once (auto-registration); a module may return a Signature or a list of them
+local function loadAll()
+	if loaded then return end
+	loaded = true
+	for _, m in script.Parent:GetChildren() do
+		if m ~= script and m:IsA("ModuleScript") then
+			local ok, res = pcall(require, m)
+			if not ok then
+				warn("[MilestoneTree] signature " .. m.Name .. " failed to load: " .. tostring(res))
+				continue
+			end
+			if type(res) == "table" then
+				local r: any = res
+				if type(r.layers) == "table" then
+					Signatures.register(r)
+				else
+					for _, s in r do
+						if type(s) == "table" and type(s.layers) == "table" then Signatures.register(s) end
+					end
+				end
+			end
+		end
+	end
+end
+
+function Signatures.get(key: string): Signature
+	loadAll()
+	return registry[key] or DEFAULT
+end
+
+-- the CTA word of a layer: the signature's, else the default table, else PRESTIGE
+function Signatures.cta(key: string): string
+	local sig = Signatures.get(key)
+	return sig.cta or CTA[key] or "PRESTIGE"
+end
+function Signatures.subRow(key: string): string?
+	local sig = Signatures.get(key)
+	return sig.subRow or SUBROW[key]
+end
+-- corrupted treatment: the signature's flag, else cp / cm
+function Signatures.corrupted(key: string): boolean
+	local sig = Signatures.get(key)
+	if sig.corrupted ~= nil then return sig.corrupted == true end
+	return key == "cp" or key == "cm"
+end
+
+return Signatures
+]]></string>
+            </Properties>
+          </Item>
+        </Item>
+        <Item class="ModuleScript" referent="116">
           <Properties>
             <string name="Name">Style</string>
             <string name="Source"><![CDATA[--!strict
@@ -43798,7 +48389,7 @@ return Style
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="95">
+        <Item class="ModuleScript" referent="117">
           <Properties>
             <string name="Name">Types</string>
             <string name="Source"><![CDATA[--!strict
