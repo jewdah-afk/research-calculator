@@ -684,18 +684,14 @@ do
 			if t then titles[t.Text] = true end
 		end
 	end
-	check(titles["YOUR SAVE"] and titles["DISPLAY"] and titles["THIS DEVICE"] and titles["DANGER ZONE"], "options: YOUR SAVE, DISPLAY, DANGER ZONE, THIS DEVICE")
-	local tiles = 0
+	check(titles["YOUR SAVE"] and titles["DISPLAY"] and titles["THIS DEVICE"] and not titles["DANGER ZONE"], "options: YOUR SAVE, DISPLAY, THIS DEVICE (no danger zone)")
+	local tiles, gone = 0, true
 	for id, rec in panel.render.recs do
-		if rec.kind == "btn:opt" and (rec.node.id == "save" or rec.node.id == "export" or rec.node.id == "import") and rec.root.Size.Y.Offset >= 84 then tiles += 1 end
+		if rec.kind == "btn:opt" and rec.node.id == "save" and rec.root.Size.Y.Offset >= 84 then tiles += 1 end
+		if rec.node.id == "hardReset" or rec.node.id == "export" or rec.node.id == "import" then gone = false end
 	end
-	check(tiles == 3, "options: 3 save tiles (" .. tiles .. ")")
-	local hr = findName(panel.root, "HardReset")
-	if hr then hr.Activated:Fire() end
-	check(hr ~= nil and fired[#fired] and fired[#fired][1] == "opt" and fired[#fired][2] == "hardReset", "options: HARD RESET fires the game's hardReset (the App confirms)")
-	local hidden = true
-	for id, rec in panel.render.recs do if rec.node.id == "hardReset" and rec.root.Visible ~= false then hidden = false end end
-	check(hidden, "options: the plain hard reset button is replaced")
+	check(tiles == 1, "options: the Save tile (" .. tiles .. ")")
+	check(gone and findName(panel.root, "HardReset") == nil, "options: no Hard Reset, Export or Import (saves live in Roblox)")
 	local dev = findName(panel.root, "Device")
 	local seg = dev and dev:FindFirstChild("Row1") and dev.Row1:FindFirstChild("Seg")
 	local reduced = seg and seg:FindFirstChild("O3")

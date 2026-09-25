@@ -2,10 +2,9 @@
 --[[
 	Options (DESIGN.md 6 row Options, 6.1 "Options"). Gear emblem, no hero.
 
-	    YOUR SAVE     the game's "[ Saving ]" line becomes the section title with a "Saved with your game" tag; SAVE /
-	                  EXPORT / IMPORT are tiles (the title, the game's one-line sub in a well); Offline Production keeps
-	                  the toggle row; DANGER ZONE closes the row: HARD RESET fires the game's own hardReset action on a
-	                  press, which the App turns into the DESIGN 7.7 confirm modal (EXPORT FIRST / CANCEL / hold 2 s)
+	    YOUR SAVE     the game's "[ Saving ]" line becomes the section title with a "Saved with your game" tag; SAVE is
+	                  a tile (the title, the game's one-line sub in a well); Offline Production keeps the toggle row.
+	                  Saves live in Roblox (autosave), so there is no export, import or hard reset.
 	    DISPLAY       "[ Displays ]" becomes the section title; the cyclers and toggles keep the Opt rows
 	    ABOUT         the about node (Skins/Generic)
 	    THIS DEVICE   "Not part of the save": Motion, Map detail, Map labels, Interface size as segmented controls,
@@ -30,7 +29,7 @@ local HEADINGS: { [string]: { title: string, tag: string } } = {
 	saving = { title = "YOUR SAVE", tag = "Saved with your game" },
 	displays = { title = "DISPLAY", tag = "Saved with your game" },
 }
-local TILES: { [string]: boolean } = { save = true, export = true, import = true }
+local TILES: { [string]: boolean } = { save = true }
 
 local DEVICE: { { key: string, title: string, sub: string, values: { any }, labels: { string } } } = {
 	{ key = "motion", title = "Motion", sub = "Animations and effects", values = { "SYSTEM", "FULL", "REDUCED" },
@@ -101,25 +100,6 @@ local function tile(rec: any, n: any, ctx: any): boolean
 	return true
 end
 
--- ------------------------------------------------------------------------------------------------------ danger zone
-local function danger(row: Instance, resetId: string, ctx: any)
-	local card = Kit.card(row, "Danger", { order = 99, gap = 10, pad = 16, fill = Theme.mix(C.panel, C.danger, 0.12), stroke = C.danger,
-		strokeT = 0.3 })
-	card.Size = UDim2.new(1, 0, 0, 0)
-	Sections.header(card, { name = "Head", order = 0, text = "DANGER ZONE", hue = C.danger })
-	local t = Common.label(card, "Text", "body", C.dangerText, { order = 1 })
-	Common.setText(t, Common.esc("A hard reset wipes all your progress. Export your save first to keep a copy."))
-	local b = Kit.button(card, "HardReset", Common.run(Common.esc("HARD RESET…"), "label", C.text) .. "   "
-		.. Common.run(Common.esc("Opens a confirm: hold 2 s to wipe"), "small", C.dangerText), { fill = Theme.mix(C.panel, C.danger, 0.55),
-		stroke = C.danger, h = 44, order = 2 })
-	Common.state(b, "can")
-	local store = ctx.store
-	Kit.onPress(b, function()
-		local n = store:get(resetId)
-		if type(n) == "table" and type(n.a) == "table" then ctx.act(n.a, false) end
-	end)
-end
-
 -- ------------------------------------------------------------------------------------------------------ this device
 local function device(root: Instance, ctx: any)
 	local compact = ctx.mode == "COMPACT"
@@ -183,15 +163,6 @@ local function skin(rec: any, n: any, ctx: any): boolean
 	end
 	if rec.kind == "btn:opt" then
 		if TILES[n.id or ""] then return tile(rec, n, ctx) end
-		if n.id == "hardReset" then
-			(rec.root :: GuiObject).Visible = false
-			Common.state(rec.root, "can")
-			-- the danger zone closes the save row
-			local pid = Common.parentId(rec.id)
-			local prow = if pid then ctx.render.recs[pid] else nil
-			if prow then danger(prow.root, rec.id, ctx) end
-			return true
-		end
 		return false
 	end
 	-- the tab root: the device options come last

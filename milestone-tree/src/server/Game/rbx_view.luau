@@ -1311,7 +1311,7 @@ rbx_optionsTab = function(this)
 	cc = JS.m(CCTP_SETTINGS, "indexOf", options.changeCorruptTooltipPlace)
 	saving = JS.O({
 		t = "row",
-		c = JS.A(5, rbx_opt(nil, "Save", "Save current progress", JS.A(2, "opt", "save"), "Save"), rbx_opt(nil, "Hard Reset", "Reset current progress (press twice)", JS.A(2, "opt", "hardReset"), "Hard Reset"), rbx_opt(nil, "Export save", "Show a save string you can copy", JS.A(2, "opt", "export"), "Export save"), rbx_opt(nil, "Import a save", "Paste a save string (web saves work too)", JS.A(2, "opt", "import"), "Import a save"), rbx_opt(nil, (("Offline Production - [ " .. JS.str((if JS.t(options.offlineProd) then "ON" else "OFF"))) .. " ]"), "Produce resources when not in game", JS.A(2, "opt", "offlineProd"), "Offline Production", (if JS.t(options.offlineProd) then "ON" else "OFF"), JS.NULL, JS.NULL, (if JS.t(options.offlineProd) then true else false)))
+		c = JS.A(2, rbx_opt(nil, "Save", "Save now (the game also saves automatically)", JS.A(2, "opt", "save"), "Save"), rbx_opt(nil, (("Offline Production - [ " .. JS.str((if JS.t(options.offlineProd) then "ON" else "OFF"))) .. " ]"), "Produce resources when not in game", JS.A(2, "opt", "offlineProd"), "Offline Production", (if JS.t(options.offlineProd) then "ON" else "OFF"), JS.NULL, JS.NULL, (if JS.t(options.offlineProd) then true else false)))
 	}, {"t", "c"})
 	displays = JS.O({
 		t = "row",

@@ -1,30 +1,20 @@
 --!strict
 --[[
-	Modals: the modal chrome and its four uses (DESIGN.md 7.5-7.8; mocks i, j).
+	Modals: the modal chrome and its uses (DESIGN.md 7.5-7.8; mock j). Saves live in Roblox, so there is no export,
+	import or hard reset.
 
 	    ModalDimmer  black alpha .6, takes every input (InputSink All); a tap closes (not during a hold)
 	    Modal        the card: panel2 -> panel, a hue rim, the head (icon disc + R3 title + a hue sub line), the body,
 	                 the Buttons row. Opens with scale .96 -> 1 (0.2 s).
-	      export     Well > Box: a read-only monospace TextBox (`terminal`), focused and all selected on open; the
-	                 "22,204 characters · all selected" chip, the copy hint, SELECT ALL (primary) / DONE. Touch-only
-	                 devices get an editable box whose text is restored on every change (select + copy still work).
-	      import     Well > Box: editable, placeholder in `small` soft; IMPORT is off while the box is empty; after a
-	                 press a ring counts the server's ImportCooldown; the result shows inline (danger) or closes the
-	                 modal (ok)
-	      hardReset  HARD RESET?, what is lost, EXPORT FIRST · CANCEL · HOLD TO RESET (2 s ring): the reset action
-	                 fires twice
 	      gate       the Multiverse gate: PRESTIGE MULTIVERSE, the context, the GOAL box (+ Goal met chip), what
 	                 happens (the reset list / completes / returns), STAY + HOLD TO ENTER | EXIT | FINISH (1.2 s);
 	                 locked: "Unlock Multiverse (MP) first"; sealed: the requirement with its bar
 
 	    local modals = Modals.new(root)
-	    modals:open(kind?, data?)      nil closes. data: export = the string; import = { cooldown }; hardReset =
-	                                   { action, export? }; gate = Gate
-	    modals:importResult(imp)       modals:isOpen() -> kind?
-	    modals.act (action, hold?), modals.importText (text), modals.closed (), modals.notice (text)
+	    modals:open(kind?, data?)      nil closes. data: gate = Gate; any other kind shows data as text with OK
+	    modals:isOpen() -> kind?
+	    modals.act (action, hold?), modals.closed (), modals.notice (text)
 ]]
-
-local UserInputService = game:GetService("UserInputService")
 
 local Core = script.Parent.Parent:WaitForChild("Core")
 local Types = require(script.Parent.Parent:WaitForChild("Types"))
@@ -41,11 +31,9 @@ type Action = Types.Action
 export type Modals = {
 	frame: Frame,
 	act: Signal.Signal<Action>,
-	importText: Signal.Signal<string>,
 	closed: Signal.Signal<>,
 	notice: Signal.Signal<string>,
 	open: (self: Modals, kind: string?, data: any?) -> (),
-	importResult: (self: Modals, imp: Types.ImportResult) -> (),
 	isOpen: (self: Modals) -> string?,
 	destroy: (self: Modals) -> (),
 }
@@ -59,16 +47,9 @@ local LAYER_NAMES = {
 	hb = "Hyper Boost", ap = "Atomic Prestige", mp = "Multiverse", t = "Transcend",
 } :: { [string]: string }
 
-local function commas(n: number): string
-	local s = tostring(math.floor(n))
-	local out = string.reverse((string.gsub(string.reverse(s), "(%d%d%d)", "%1,")))
-	return (string.gsub(out, "^,", ""))
-end
-
 function Modals.new(root: GuiObject): Modals
 	local self = {} :: Modals
 	self.act = Signal.new() :: Signal.Signal<Action>
-	self.importText = Signal.new() :: Signal.Signal<string>
 	self.closed = Signal.new() :: Signal.Signal<>
 	self.notice = Signal.new() :: Signal.Signal<string>
 
@@ -99,9 +80,6 @@ function Modals.new(root: GuiObject): Modals
 	local kind: string? = nil
 	local holds: { Recipes.Hold } = {}
 	local conns: { RBXScriptConnection } = {}
-	local cooldownUntil = 0
-	local importTotal = 10
-	local importState: { box: TextBox?, result: TextLabel?, button: TextButton?, label: TextLabel?, ring: Recipes.Ring? } = {}
 
 	local function clear()
 		for _, h in holds do h:destroy() end
@@ -111,7 +89,6 @@ function Modals.new(root: GuiObject): Modals
 		for _, c in card:GetChildren() do
 			if c:IsA("GuiObject") then c:Destroy() end
 		end
-		importState = {}
 	end
 
 	local function close()
@@ -184,31 +161,6 @@ function Modals.new(root: GuiObject): Modals
 		Kit.list(r, "x", 12, Enum.HorizontalAlignment.Right, Enum.VerticalAlignment.Center)
 		return r
 	end
-	local function well(editable: boolean, text: string, hue: Color3): TextBox
-		local w = Kit.frame(card, "Well")
-		w.LayoutOrder = nextOrder()
-		w.Size = UDim2.new(1, 0, 0, if Layout.mode == "COMPACT" then 120 else 170)
-		w.BackgroundColor3 = Theme.C.void
-		w.BackgroundTransparency = 0
-		w.ClipsDescendants = true
-		Kit.corner(w, UDim.new(0, 12))
-		Kit.stroke(w, 2, hue, 0.9, "Rim")
-		local box = Kit.child(w, "Box", "TextBox") :: TextBox
-		box.BackgroundTransparency = 1
-		box.BorderSizePixel = 0
-		box.Position = UDim2.fromOffset(14, 10)
-		box.Size = UDim2.new(1, -28, 1, -20)
-		Theme.text(box, "terminal")
-		box.TextColor3 = Theme.C.text
-		box.TextXAlignment = Enum.TextXAlignment.Left
-		box.TextYAlignment = Enum.TextYAlignment.Top
-		box.TextWrapped = true
-		box.MultiLine = true
-		box.ClearTextOnFocus = false
-		box.TextEditable = editable
-		box.Text = text
-		return box
-	end
 	local function holdButton(parent: Instance, name: string, text: string, style: string, hue: Color3?, seconds: number,
 		onDone: () -> ()): TextButton
 		local b, l = Kit.action(parent, name, text, { style = style, hue = hue, h = 52 })
@@ -225,139 +177,6 @@ function Modals.new(root: GuiObject): Modals
 	end
 
 	-- ------------------------------------------------------------------------------------------ kinds
-	local function buildExport(text: string)
-		local hue = Theme.C.info
-		rim.Color = Theme.lift(hue, 0.2)
-		head("Export save", "Your save as one line of text", hue, "save")
-		local touchOnly = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
-		local box = well(touchOnly, text, hue)
-		if touchOnly then
-			table.insert(conns, box:GetPropertyChangedSignal("Text"):Connect(function()
-				if box.Text ~= text then box.Text = text end
-			end))
-		end
-		local chipRow = Kit.frame(card, "Info")
-		chipRow.LayoutOrder = nextOrder()
-		chipRow.Size = UDim2.new(1, 0, 0, 28)
-		local chip, cl = Kit.chip(chipRow, "Chars", "label", "", { h = 28, pad = 10, fg = Theme.C.soft, bg = Theme.C.panel3, bgA = 1 })
-		local _ = chip
-		cl.RichText = true
-		cl.Text = string.format('<font family="%s" weight="800">%s</font> characters · all selected',
-			"rbxasset://fonts/families/Sarpanch.json", commas(#text))
-		para("Hint", "Press Ctrl+C to copy. On a phone: tap the box, then Select All and Copy. (Roblox games cannot write to your clipboard.)")
-		local row = buttonRow()
-		local done = Kit.action(row, "Secondary", Rich.caps("Done"), { style = "quiet" })
-		done.LayoutOrder = 1
-		done.Activated:Connect(close)
-		local sel = Kit.action(row, "Primary", Rich.caps("Select all"), { style = "primary", hue = Theme.shade(Color3.fromHex("1fbfa0"), 0.8) })
-		sel.LayoutOrder = 2
-		local function selectAll()
-			pcall(function()
-				box:CaptureFocus()
-				box.SelectionStart = 1
-				box.CursorPosition = #box.Text + 1
-			end)
-		end
-		sel.Activated:Connect(selectAll)
-		task.defer(selectAll)
-	end
-
-	local function setImportButton()
-		local st = importState
-		local b, l = st.button, st.label
-		if b == nil or l == nil then return end
-		local left = cooldownUntil - os.clock()
-		local empty = st.box == nil or (st.box :: TextBox).Text == ""
-		local enabled = left <= 0 and not empty
-		b.Active = enabled
-		b.AutoButtonColor = false
-		b.BackgroundTransparency = if enabled then 0 else 0.5
-		if left > 0 then
-			l.Text = "Import · " .. math.ceil(left) .. " s"
-			Theme.text(l, "label")
-			l.TextColor3 = Theme.C.soft
-		else
-			l.Text = Rich.caps("Import")
-			Theme.text(l, "tab")
-			l.TextColor3 = if enabled then Color3.new(1, 1, 1) else Theme.C.soft
-		end
-		local ring = st.ring
-		if ring then
-			ring:set(if left > 0 then 1 - left / math.max(1, importTotal) else 0)
-			ring.frame.Visible = left > 0
-		end
-	end
-
-	local function buildImport(data: any)
-		local hue = Theme.C.system
-		rim.Color = Theme.lift(hue, 0.2)
-		head("Import save", "Your current progress is replaced.", hue, "down")
-		local box = well(true, "", hue)
-		box.PlaceholderText = "Paste a save string (web saves work too)"
-		box.PlaceholderColor3 = Theme.C.soft
-		local res = para("Result", "", "body", Theme.lift(Theme.C.danger, 0.25))
-		res.Visible = false
-		local row = buttonRow()
-		local cancel = Kit.action(row, "Secondary", Rich.caps("Cancel"), { style = "quiet" })
-		cancel.LayoutOrder = 1
-		cancel.Activated:Connect(close)
-		local imp, il = Kit.action(row, "Primary", Rich.caps("Import"), { style = "primary", hue = hue })
-		imp.LayoutOrder = 2
-		local ring = Recipes.ring(il.Parent :: GuiObject, { size = 18, thick = 3, color = Color3.new(1, 1, 1), track = 0.7 })
-		ring.frame.AnchorPoint = Vector2.new(0.5, 0.5)
-		ring.frame.LayoutOrder = 1
-		ring.frame.Visible = false
-		importState = { box = box, result = res, button = imp, label = il, ring = ring }
-		local total = if type(data) == "table" and type(data.cooldown) == "number" then data.cooldown else 10
-		importTotal = total
-		table.insert(conns, box:GetPropertyChangedSignal("Text"):Connect(setImportButton))
-		imp.Activated:Connect(function()
-			if cooldownUntil > os.clock() or box.Text == "" then return end
-			cooldownUntil = os.clock() + total
-			res.Visible = false
-			self.importText:Fire(box.Text)
-			task.spawn(function()
-				while kind == "import" and os.clock() < cooldownUntil do
-					setImportButton()
-					task.wait(0.1)
-				end
-				setImportButton()
-			end)
-		end)
-		setImportButton()
-	end
-
-	local function buildHardReset(data: any)
-		local hue = Theme.C.danger
-		rim.Color = hue
-		head("Hard reset?", nil, hue, "warn")
-		para("Body", "This deletes <b>all progress</b> on this account: every layer, every milestone and the Multiverse. It cannot be undone. Export your save first if you might want it back.")
-		local row = buttonRow()
-		local exportAction = if type(data) == "table" then data.export else nil
-		local ex = Kit.action(row, "Export", Rich.caps("Export first"), { style = "quiet" })
-		ex.LayoutOrder = 1
-		ex.Activated:Connect(function()
-			close()
-			if type(exportAction) == "table" then self.act:Fire(exportAction) end
-		end)
-		local cancel = Kit.action(row, "Secondary", Rich.caps("Cancel"), { style = "quiet" })
-		cancel.LayoutOrder = 2
-		cancel.Activated:Connect(close)
-		local action = if type(data) == "table" then data.action else nil
-		local b = holdButton(row, "Primary", Rich.caps("Hold to reset"), "danger", nil, 2, function()
-			close()
-			if type(action) == "table" then
-				-- the game resets on the second press (the first one arms it)
-				self.act:Fire(action)
-				self.act:Fire(action)
-			end
-		end)
-		b.LayoutOrder = 3
-		local foot = para("Foot", "Release early to cancel", "small", Theme.C.soft)
-		foot.TextXAlignment = Enum.TextXAlignment.Right
-		foot.LayoutOrder = 1001
-	end
-
 	local function buildGate(g: Types.Gate?)
 		local hue = CRIMSON
 		rim.Color = hue
@@ -500,13 +319,7 @@ function Modals.new(root: GuiObject): Modals
 		local compact = Layout.mode == "COMPACT"
 		card.Size = UDim2.fromOffset(if compact then 520 else 600, 0)
 		Kit.pad(card, if compact then 16 else 22, if compact then 18 else 24, if compact then 16 else 22, if compact then 18 else 24)
-		if k == "export" then
-			buildExport(if type(data) == "string" then data else "")
-		elseif k == "import" then
-			buildImport(data)
-		elseif k == "hardReset" then
-			buildHardReset(data)
-		elseif k == "gate" then
+		if k == "gate" then
 			buildGate(data)
 		else
 			para("Body", tostring(data or ""))
@@ -521,27 +334,12 @@ function Modals.new(root: GuiObject): Modals
 		sc.Scale = 0.96
 		Motion.tween(sc, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Scale = 1 }, "modalOpen")
 	end
-	function self.importResult(m: Modals, imp: Types.ImportResult)
-		if imp.ok then
-			if kind == "import" then close() end
-			m.notice:Fire(imp.msg ~= "" and imp.msg or "Save imported")
-			return
-		end
-		local res = importState.result
-		if kind == "import" and res then
-			res.Text = imp.msg ~= "" and imp.msg or "That string is not a valid save (nothing was changed)."
-			res.Visible = true
-		else
-			m.notice:Fire(imp.msg)
-		end
-	end
 	function self.isOpen(_: Modals): string?
 		return kind
 	end
 	function self.destroy(m: Modals)
 		clear()
 		m.act:DisconnectAll()
-		m.importText:DisconnectAll()
 		m.closed:DisconnectAll()
 		m.notice:DisconnectAll()
 		card:Destroy()

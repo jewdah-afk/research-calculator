@@ -99,7 +99,6 @@ export type Popup = {
 	kind: string?, -- milestone | achievement | corruption | other (notices are kind "notice" on the client)
 	layer: string?,
 }
-export type ImportResult = { ok: boolean, msg: string }
 export type Patch = {
 	set: { [string]: any }?,
 	del: { string }?,
@@ -110,9 +109,6 @@ export type Patch = {
 	ended: boolean?,
 	pop: { Popup }?,
 	notice: { string }?,
-	export: string?,
-	askImport: boolean?,
-	imp: ImportResult?,
 	save: string?, -- "saving" | "saved"
 	unsaved: boolean?,
 	fatal: string?,

@@ -1,20 +1,19 @@
 --!strict
 --[[
 	Overlay: the facade over OverlayGui (DESIGN.md 7): toasts and the notification list, the hover tooltip, the node
-	peek, the modals (export, import, hard reset, the Multiverse gate) and the full-screen states.
+	peek, the modals (the Multiverse gate) and the full-screen states.
 
 	    local overlay = Overlay.new(gui)
 	    overlay:toasts(pops?, notices?)
 	    overlay:tooltip(owner, content?, at?)      content = Tooltip.Content; nil hides that owner's tooltip
 	    overlay:peek(layer?, node?, ring?)         the node peek (nil closes)
 	    overlay:detail(card?)                      the touch detail sheet (Detail.luau); overlay:detailRefresh() after a patch
-	    overlay:modal(kind?, data?)                "export" | "import" | "hardReset" | "gate" | nil
-	    overlay:importResult(imp)
+	    overlay:modal(kind?, data?)                "gate" | nil (any other kind shows data as text)
 	    overlay:screen(kind?, data?)               "loading" | "fatal" | "outOfSync" | "end" | "firstRun" | nil
 	    overlay:flash(color)                       overlay:onCamera(cam)       overlay:busy() -> modal / peek open
 	    overlay:escape() -> boolean                Esc (Input/Hotkeys): closes the modal, else the peek, else the
 	                                               detail sheet; false when nothing was open (App then closes the panel)
-	    overlay.act (action, hold?), overlay.flyTo (layer), overlay.importText (text), overlay.resync (),
+	    overlay.act (action, hold?), overlay.flyTo (layer), overlay.resync (),
 	    overlay.openLayer (layer), overlay.peekClosed ()
 ]]
 
@@ -34,7 +33,6 @@ type ARect = Types.Rect
 export type Overlay = {
 	act: Signal.Signal<Action, boolean?>,
 	flyTo: Signal.Signal<string>,
-	importText: Signal.Signal<string>,
 	resync: Signal.Signal<>,
 	openLayer: Signal.Signal<string>,
 	peekClosed: Signal.Signal<>,
@@ -44,7 +42,6 @@ export type Overlay = {
 	detail: (self: Overlay, card: any?) -> (),
 	detailRefresh: (self: Overlay) -> (),
 	modal: (self: Overlay, kind: string?, data: any?) -> (),
-	importResult: (self: Overlay, imp: Types.ImportResult) -> (),
 	screen: (self: Overlay, kind: string?, data: any?) -> (),
 	flash: (self: Overlay, color: Color3) -> (),
 	onCamera: (self: Overlay, cam: Types.Camera) -> (),
@@ -59,7 +56,6 @@ function Overlay.new(gui: ScreenGui): Overlay
 	local self = {} :: Overlay
 	self.act = Signal.new() :: Signal.Signal<Action, boolean?>
 	self.flyTo = Signal.new() :: Signal.Signal<string>
-	self.importText = Signal.new() :: Signal.Signal<string>
 	self.resync = Signal.new() :: Signal.Signal<>
 	self.openLayer = Signal.new() :: Signal.Signal<string>
 	self.peekClosed = Signal.new() :: Signal.Signal<>
@@ -82,7 +78,6 @@ function Overlay.new(gui: ScreenGui): Overlay
 	modals.act:Connect(function(a: Action)
 		self.act:Fire(a, false)
 	end)
-	modals.importText:Connect(function(t: string) self.importText:Fire(t) end)
 	modals.notice:Connect(function(t: string) toasts:push(nil, { t }) end)
 	screens.act:Connect(function(a: Action) self.act:Fire(a, false) end)
 	screens.resync:Connect(function() self.resync:Fire() end)
@@ -119,9 +114,6 @@ function Overlay.new(gui: ScreenGui): Overlay
 		end
 		modals:open(kind, data)
 	end
-	function self.importResult(_: Overlay, imp: Types.ImportResult)
-		modals:importResult(imp)
-	end
 	function self.screen(_: Overlay, kind: string?, data: any?)
 		screens:show(kind, data)
 	end
@@ -155,7 +147,6 @@ function Overlay.new(gui: ScreenGui): Overlay
 		screens:destroy()
 		o.act:DisconnectAll()
 		o.flyTo:DisconnectAll()
-		o.importText:DisconnectAll()
 		o.resync:DisconnectAll()
 		o.openLayer:DisconnectAll()
 		o.peekClosed:DisconnectAll()

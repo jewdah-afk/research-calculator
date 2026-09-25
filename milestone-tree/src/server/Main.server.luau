@@ -9,11 +9,9 @@
 	Remotes (ReplicatedStorage.MilestoneTreeRemotes):
 	  View    server -> client   screen patches (see Session:view)
 	  Act     client -> server   (action, hold?) a button on the screen, or { "key", name } for a hotkey
-	  Import  client -> server   (text) a pasted save string
 	  Ready   client -> server   the client wants the whole screen (first load, UI rebuilt, out of sync)
 	  Prefs   client -> server   { motion, detail, labels, size } the device options; mirrored as JSON in the
 	                             player's MT_Prefs attribute and saved apart from the game (Store.savePrefs)
-	The folder's ImportCooldown attribute is Config.IMPORT_COOLDOWN (seconds between imports).
 ]]
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
@@ -34,10 +32,8 @@ local function remote(name: string): RemoteEvent
 end
 local viewRemote = remote("View")
 local actRemote = remote("Act")
-local importRemote = remote("Import")
 local readyRemote = remote("Ready")
 local prefsRemote = remote("Prefs")
-remotes:SetAttribute("ImportCooldown", Config.IMPORT_COOLDOWN)
 remotes.Parent = ReplicatedStorage
 
 local sessionsFolder = Instance.new("Folder")
@@ -48,7 +44,7 @@ local template = ServerStorage:WaitForChild("MilestoneTreeWorker") :: Actor
 
 type Prefs = { motion: string, detail: string, labels: string, size: number }
 type Entry = {
-	actor: Actor, tokens: number, last: number, lastImport: number,
+	actor: Actor, tokens: number, last: number,
 	prefsAt: number, prefsPending: Prefs?, prefsSet: boolean, prefsDirty: boolean, prefsSaveAt: number,
 }
 local entries: { [Player]: Entry } = {}
@@ -126,7 +122,7 @@ local function start(player: Player)
 	a.Name = "Player_" .. player.UserId
 	a.Parent = sessionsFolder
 	local entry: Entry = {
-		actor = a, tokens = Config.ACTIONS_PER_SECOND, last = os.clock(), lastImport = 0,
+		actor = a, tokens = Config.ACTIONS_PER_SECOND, last = os.clock(),
 		prefsAt = 0, prefsPending = nil, prefsSet = false, prefsDirty = false, prefsSaveAt = 0,
 	}
 	entries[player] = entry
@@ -193,14 +189,6 @@ actRemote.OnServerEvent:Connect(function(player: Player, a: any, hold: any)
 	local entry = entries[player]
 	if not entry or not validAction(a) or not allow(entry) then return end
 	entry.actor:SendMessage("act", a, hold == true)
-end)
-
-importRemote.OnServerEvent:Connect(function(player: Player, text: any)
-	local entry = entries[player]
-	if not entry or type(text) ~= "string" or #text > 3000000 then return end
-	if os.clock() - entry.lastImport < Config.IMPORT_COOLDOWN then return end
-	entry.lastImport = os.clock()
-	entry.actor:SendMessage("import", text)
 end)
 
 prefsRemote.OnServerEvent:Connect(function(player: Player, p: any)

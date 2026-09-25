@@ -804,10 +804,7 @@ function rbx_about() {
 function rbx_optionsTab() {
 	var ms = MS_SETTINGS.indexOf(options.msDisplay), cc = CCTP_SETTINGS.indexOf(options.changeCorruptTooltipPlace)
 	var saving = { t: "row", c: [
-		rbx_opt("Save", "Save current progress", ["opt", "save"], "Save"),
-		rbx_opt("Hard Reset", "Reset current progress (press twice)", ["opt", "hardReset"], "Hard Reset"),
-		rbx_opt("Export save", "Show a save string you can copy", ["opt", "export"], "Export save"),
-		rbx_opt("Import a save", "Paste a save string (web saves work too)", ["opt", "import"], "Import a save"),
+		rbx_opt("Save", "Save now (the game also saves automatically)", ["opt", "save"], "Save"),
 		rbx_opt("Offline Production - [ " + (options.offlineProd ? "ON" : "OFF") + " ]", "Produce resources when not in game", ["opt", "offlineProd"],
 			"Offline Production", options.offlineProd ? "ON" : "OFF", null, null, options.offlineProd ? true : false),
 	] }

@@ -138,10 +138,8 @@ function App.start()
 	local store = ViewStore.new()
 
 	-- ------------------------------------------------------------------------------------------ state
-	local remotes: Instance? = nil
 	local actRemote: RemoteEvent? = nil
 	local readyRemote: RemoteEvent? = nil
-	local importRemote: RemoteEvent? = nil
 	local lastMs: MapState? = nil
 	local gotFirst = false -- the first full view arrived
 	local firstAt = 0
@@ -171,13 +169,6 @@ function App.start()
 		r:FireServer(a, hold == true)
 	end
 	local lastPress = 0
-	local resetFlashAt = -math.huge
-	local function exportAction(): any
-		for _, n in store.nodes do
-			if type(n) == "table" and n.k == "opt" and n.id == "export" and type(n.a) == "table" then return n.a end
-		end
-		return nil
-	end
 	local function resync()
 		local r = readyRemote
 		if r then r:FireServer() end
@@ -350,11 +341,6 @@ function App.start()
 			else
 				openLayer(a[2])
 			end
-			return
-		end
-		if a[1] == "opt" and a[2] == "hardReset" then
-			-- the confirm modal fires it twice after a 2 s hold (DESIGN.md 7.7)
-			overlay:modal("hardReset", { action = a, export = exportAction() })
 			return
 		end
 		if hold ~= true then
@@ -601,19 +587,11 @@ function App.start()
 	end)
 
 	overlay.act:Connect(function(a: any, hold: boolean?)
-		if type(a) == "table" and a[1] == "opt" and a[2] == "hardReset" and os.clock() - resetFlashAt > 1 then
-			resetFlashAt = os.clock()
-			overlay:flash(Theme.C.danger)
-		end
 		fire(a, hold)
 	end)
 	overlay.flyTo:Connect(flyToLayer)
 	overlay.openLayer:Connect(function(layer: string) openLayer(layer) end)
 	overlay.peekClosed:Connect(function() nodes:setPeek(nil) end)
-	overlay.importText:Connect(function(t: string)
-		local r = importRemote
-		if r then r:FireServer(t) end
-	end)
 	overlay.resync:Connect(resync)
 
 	Prefs.changed:Connect(function(key: string)
@@ -697,23 +675,9 @@ function App.start()
 			end
 			wasInside = ms.inside
 		end
-		-- toasts (an import's own failure shows in the modal, not twice)
+		-- toasts
 		local notices = patch.notice
-		local imp = patch.imp
-		if type(imp) == "table" and type(notices) == "table" then
-			local kept = {}
-			for _, t in notices do
-				if t ~= imp.msg then table.insert(kept, t) end
-			end
-			notices = kept
-		end
 		if patch.pop or (notices and #notices > 0) then overlay:toasts(patch.pop, notices) end
-		if type(patch.export) == "string" then overlay:modal("export", patch.export) end
-		if patch.askImport then
-			local cd = if remotes then remotes:GetAttribute("ImportCooldown") else nil
-			overlay:modal("import", { cooldown = if type(cd) == "number" then cd else 10 })
-		end
-		if type(imp) == "table" then overlay:importResult(imp) end
 		onStatus(patch)
 	end
 	local function onError(err: any)
@@ -804,12 +768,10 @@ function App.start()
 		found = ReplicatedStorage:WaitForChild("MilestoneTreeRemotes", 10)
 		if found == nil and screenKind == "loading" then overlay:screen("loading", "Waiting for the server…") end
 	end
-	remotes = found
 	local folder = found :: Instance
 	local viewRemote = folder:WaitForChild("View") :: RemoteEvent
 	actRemote = folder:WaitForChild("Act") :: RemoteEvent
 	readyRemote = folder:WaitForChild("Ready") :: RemoteEvent
-	importRemote = folder:WaitForChild("Import") :: RemoteEvent
 	viewRemote.OnClientEvent:Connect(onPatch)
 	resync()
 	lastPatchAt = os.clock()

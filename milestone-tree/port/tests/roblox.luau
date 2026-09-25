@@ -4,8 +4,8 @@
 	Worker (in an Actor), Store, Session, the game, and the whole client (Main.client -> App: the map, the HUD, the
 	panel with Render and the skins, the overlays). A player joins and plays through the new UI the way a player
 	would (DESIGN.md 16 anchors): taps a node, presses the cards and the hero's CTA, switches layers, closes with Esc,
-	exports from OPTIONS, leaves (the save goes to the in-memory DataStore), rejoins (the save comes back), imports
-	through the modal; a phone-sized screen gets the full-screen panel; the server shuts down. Every remote payload
+	opens OPTIONS (Save only: no export, import or hard reset), leaves (the save goes to the in-memory DataStore),
+	rejoins (the save comes back); a phone-sized screen gets the full-screen panel; the server shuts down. Every remote payload
 	is checked against Roblox's rules for what a RemoteEvent can carry.
 	Run tools/wrap_scripts.py first (test.sh roblox does). `-a studio`: every DataStore call fails.
 ]]
@@ -286,7 +286,7 @@ key(M.G.Enum.KeyCode.Escape)
 frames(0.4)
 check(count("tab", "none", n0) == 1 and not sheet.Visible, "Esc sends {\"tab\", \"none\"} once and closes the panel")
 
--- OPTIONS, then Export save: the modal shows the save string
+-- OPTIONS: the Options panel
 local ov = pg.OverlayGui.Root
 pg.HudGui.Root.Dock.Options.Activated:Fire()
 frames(0.5)
@@ -299,14 +299,10 @@ local function optButton(id)
 	end
 	return nil
 end
-local exportBtn = optButton("export")
-check(exportBtn ~= nil, "the Export save row")
-if exportBtn then exportBtn.Activated:Fire() end
-frames(0.5)
-local modalBox = ov.Modal:FindFirstChild("Well") and ov.Modal.Well.Box
-check(ov.Modal.Visible and modalBox and #modalBox.Text >= 100, "Export shows the save string in the modal")
-local exported = modalBox and modalBox.Text
-key(M.G.Enum.KeyCode.Escape)
+-- saves live in Roblox: Options has Save but no Export, Import or Hard Reset
+check(optButton("save") ~= nil, "the Save row")
+check(optButton("export") == nil and optButton("import") == nil and optButton("hardReset") == nil,
+	"no Export, Import or Hard Reset rows")
 key(M.G.Enum.KeyCode.Escape)
 frames(0.3)
 
@@ -338,40 +334,13 @@ check(capsuleAmount.Text ~= "10.00" and capsuleAmount.Text ~= startPts, "progres
 local rec2 = store.player_1
 check(rec2.lock ~= nil, "save locked again while playing")
 
--- import the exported save back through the modal (the web export format)
-if exported then
-	sheet = pg.PanelGui.Root.Sheet
-	tabRoot = sheet.Body.Scroll.TabRoot
-	ov = pg.OverlayGui.Root
-	pg.HudGui.Root.Dock.Options.Activated:Fire()
-	frames(0.5)
-	local function importButton()
-		return optButton("import")
-	end
-	local importBtn = importButton()
-	if importBtn then importBtn.Activated:Fire() end
-	frames(0.5)
-	check(ov.Modal.Visible and ov.Modal:GetAttribute("Kind") == "import", "Import opens the import modal")
-	ov.Modal.Well.Box.Text = exported
-	ov.Modal.Buttons.Primary.Activated:Fire()
-	frames(1)
-	check(not ov.Modal.Visible, "a good save imports and closes the modal")
-	frames(11)
-	if not sheet.Visible then
-		pg.HudGui.Root.Dock.Options.Activated:Fire()
-		frames(0.5)
-	end
-	importBtn = importButton()
-	check(importBtn ~= nil, "the Options panel is still there after the import")
-	if importBtn then importBtn.Activated:Fire() end
-	frames(0.5)
-	ov.Modal.Well.Box.Text = "garbage"
-	ov.Modal.Buttons.Primary.Activated:Fire()
-	frames(1)
-	check(ov.Modal.Visible and ov.Modal.Result.Visible, "a bad string shows the inline error")
-	key(M.G.Enum.KeyCode.Escape)
-	key(M.G.Enum.KeyCode.Escape)
-end
+-- the new client's panel after the rejoin
+sheet = pg.PanelGui.Root.Sheet
+tabRoot = sheet.Body.Scroll.TabRoot
+ov = pg.OverlayGui.Root
+pg.HudGui.Root.Dock.Options.Activated:Fire()
+frames(0.5)
+check(sheet.Visible, "OPTIONS opens the Options panel after the rejoin")
 
 -- a phone-sized screen: the panel is full screen and the map is off
 local Workspace = game:GetService("Workspace")

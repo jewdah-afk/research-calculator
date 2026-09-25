@@ -83,13 +83,9 @@ p2 = s2:view()
 local diff = 0
 for id, n in p1.set do if Session.plain and p2.set[id] == nil then diff += 1 end end
 print("round trip: ids only in original", diff)
--- export / import
-local ex = s:export()
-local ok, err = s2:import(ex, now)
-print("import of export:", ok, err)
-local imp = s2:view().imp
-assert(imp and imp.ok == true, "the import result is sent once as patch.imp")
-assert(s2:view().imp == nil, "patch.imp is sent once")
+-- saves live in Roblox: no export / import / hard reset path on the Session
+assert(Session.export == nil and Session.import == nil, "the Session has no export or import")
+assert(select(1, s:act({ "opt", "hardReset" }, now)) == false, "a hard reset is not an action")
 
 local function check(cond: any, what: string)
 	if not cond then error("sim: " .. what, 0) end

@@ -5,7 +5,6 @@
 	Main clones this Actor into ServerScriptService.MilestoneTree.Sessions for each player and sends it messages:
 	  "start" (player)            load the save, start the game
 	  "act"   (action, hold)      a button press / hotkey from the player's screen
-	  "import"(text)              a pasted save
 	  "resync"                    the client wants the whole screen again
 	  "stop"                      save, release the save lock, then set the Actor's Stopped attribute
 	The game ticks in the parallel phase; sending to the client and DataStore calls happen in the serial phase.
@@ -146,13 +145,6 @@ actor:BindToMessageParallel("act", function(a, hold)
 	if ok then pushNow = true end
 end)
 
-actor:BindToMessageParallel("import", function(text)
-	if not session or stopping then return end
-	local ok, why = session:import(text, nowMs())
-	if not ok then table.insert(session.notices, why) end
-	pushNow = true
-end)
-
 actor:BindToMessageParallel("resync", function()
 	if not session then return end
 	session:resetView()
@@ -192,7 +184,7 @@ RunService.Heartbeat:ConnectParallel(function(dt: number)
 		if not canSave then patch.unsaved = true end
 	end
 	task.synchronize()
-	if patch and (changed or patch.pop or patch.notice or patch.export or patch.askImport or patch.imp or patch.save or patch.full
+	if patch and (changed or patch.pop or patch.notice or patch.save or patch.full
 		or sinceSent >= Config.KEEPALIVE) then
 		sinceSent = 0
 		send(patch)

@@ -2,7 +2,7 @@
 --[[
 	Opt: an Options row (DESIGN.md 6 Options, 6.1): the title (cardSmall) and the game's one-line subtitle (small, soft),
 	the value as a chip at the right: ON / OFF for the two-state toggles (on), the cycler position for cyclers
-	(idx / n), the shown value otherwise. Hard Reset reads as a danger row. One press per tap, the action as sent.
+	(idx / n), the shown value otherwise. One press per tap, the action as sent.
 ]]
 
 local Core = script.Parent.Parent.Parent:WaitForChild("Core")
@@ -19,19 +19,12 @@ function Opt.skin(rec: any, n: any, ctx: any): boolean
 	if l == nil then return false end
 	local label = l :: TextLabel
 	local compact = ctx.mode == "COMPACT"
-	local danger = n.id == "hardReset"
 	b.Visible = true
 	b.AutoButtonColor = false
 	for _, name in { "Gradient", "Glow", "Num", "Limit" } do Common.drop(b, name) end
-	if danger then
-		Common.fill(b, Theme.mix(C.panel, C.danger, 0.22), Theme.mix(C.deep, C.danger, 0.12))
-		Common.corner(b, 14)
-		Common.stroke(b, 1.5, C.danger, 0.3)
-	else
-		Common.fill(b, C.panel3, C.panel2)
-		Common.corner(b, 14)
-		Common.stroke(b, 1.5, Theme.lift(ctx.hue, 0.2), 0.55)
-	end
+	Common.fill(b, C.panel3, C.panel2)
+	Common.corner(b, 14)
+	Common.stroke(b, 1.5, Theme.lift(ctx.hue, 0.2), 0.55)
 	b.Size = UDim2.fromOffset(if compact then math.floor((ctx.contentW - 10) / 2) else 320, 0)
 	b.AutomaticSize = Enum.AutomaticSize.Y
 	local lim = Common.get(b, "Limit", "UISizeConstraint") :: UISizeConstraint
@@ -62,7 +55,7 @@ function Opt.skin(rec: any, n: any, ctx: any): boolean
 	end
 	-- a subtitle that only repeats the value ("[ ALL ]") is dropped
 	if chipText and string.find(subText, "^%[.*%]$") then subText = "" end
-	local parts = { Common.title(title, "cardSmall", if danger then C.dangerText else C.text) }
+	local parts = { Common.title(title, "cardSmall", C.text) }
 	if subText ~= "" then table.insert(parts, Common.esc(subText)) end
 	Common.setText(label, table.concat(parts, "\n"))
 	if chipText then

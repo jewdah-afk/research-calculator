@@ -13,50 +13,13 @@
 
 	A view patch is { set = { [id] = node }, del = { id... }, tab = name, tabStyle = css, keys = { hotkey... },
 	ended = bool, full = true on the first patch } plus, once each when they happen: pop = { popup... },
-	notice = { text... }, export = text, askImport = true, imp = { ok, msg } (the last import), save = "saving" |
-	"saved" (set by the Worker). Nodes are the view builder's (rbx/view.js) flattened: a container's c lists its
+	notice = { text... }, save = "saving" | "saved" (set by the Worker). Nodes are the view builder's (rbx/view.js) flattened: a container's c lists its
 	children's ids; ids are paths ("tab.3.1"). The roots are "map" (the realm map: 21 layer nodes then the gate, so
 	"map.N" never moves), "hud" and "tab" (the open panel; tab = "none" while the map is alone).
 ]]
 
 local Session = {}
 Session.__index = Session
-
-local B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-local B64INV = {}
-for i = 1, 64 do B64INV[string.byte(B64, i)] = i - 1 end
-
-local function b64encode(s: string): string
-	local out = table.create(math.ceil(#s / 3) * 4)
-	for i = 1, #s, 3 do
-		local a, b, c = string.byte(s, i, i + 2)
-		local n = a * 65536 + (b or 0) * 256 + (c or 0)
-		local c1, c2, c3, c4 = bit32.extract(n, 18, 6), bit32.extract(n, 12, 6), bit32.extract(n, 6, 6), bit32.extract(n, 0, 6)
-		table.insert(out, string.sub(B64, c1 + 1, c1 + 1) .. string.sub(B64, c2 + 1, c2 + 1)
-			.. (if b then string.sub(B64, c3 + 1, c3 + 1) else "=") .. (if c then string.sub(B64, c4 + 1, c4 + 1) else "="))
-	end
-	return table.concat(out)
-end
-local function b64decode(s: string): string?
-	s = string.gsub(s, "[^%w%+/=]", "")
-	local out = {}
-	local bits, nbits = 0, 0
-	for i = 1, #s do
-		local ch = string.byte(s, i)
-		if ch == 61 then break end -- "="
-		local v = B64INV[ch]
-		if v == nil then return nil end
-		bits = bit32.bor(bit32.lshift(bits, 6), v)
-		nbits += 6
-		if nbits >= 8 then
-			nbits -= 8
-			table.insert(out, string.char(bit32.band(bit32.rshift(bits, nbits), 255)))
-		end
-		bits = bit32.band(bits, 0xFFFF)
-	end
-	return table.concat(out)
-end
-Session.b64encode, Session.b64decode = b64encode, b64decode
 
 -- JS value -> plain Luau (1-based arrays, string keys) that RemoteEvents carry
 local function plain(JS, x)
@@ -149,10 +112,7 @@ function Session.new(deps, saveJson: string?, optionsJson: string?, nowMs: numbe
 	self.allowed = {}       -- action key -> true, for what is on screen
 	self.lastPopup = 0
 	self.errors = 0
-	self.notices = {}       -- messages for the player (import failed, NaN recovered...)
-	self.hardResetArmed = 0
-	self.armNotice = nil    -- "press Hard Reset again", held back so that a quick second press never shows it
-	self.importResult = nil -- { ok, msg } of the last import, sent once
+	self.notices = {}       -- messages for the player (NaN recovered...)
 	self.saveEvent = nil    -- "saving" / "saved", set by the Worker, sent once
 	self:_start(saveJson, optionsJson, nowMs)
 	self.goodSave, self.goodOptions = self:save()
@@ -243,68 +203,17 @@ function Session:_option(name: string, nowMs: number): (boolean, string?)
 		self.wantSave = true
 		table.insert(self.notices, "Game saved.")
 		return true
-	elseif name == "hardReset" or name == "playAgain" then
-		if name == "hardReset" and nowMs - self.hardResetArmed > 5000 then
-			self.hardResetArmed = nowMs
-			self.armNotice = "Press Hard Reset again within 5 seconds to wipe your progress."
-			return true
-		end
-		self.hardResetArmed = 0
-		self.armNotice = nil
+	elseif name == "playAgain" then
+		-- the end screen's Play Again: a fresh game, the options kept (saves live in Roblox, so there is no
+		-- export, import or hard reset)
 		local _, opts = self:save()
 		self:_start(nil, opts, nowMs)
 		self.goodSave, self.goodOptions = self:save()
 		self.wantSave = true
-		table.insert(self.notices, "Your progress was reset.")
-		return true
-	elseif name == "export" then
-		self.exportText = self:export()
-		return true
-	elseif name == "import" then
-		self.wantImport = true
 		return true
 	end
 	local ok, err = pcall(self.ENV.rbx_do, nil, toJS(self.JS, { "opt", name }))
 	return ok, if ok then nil else tostring(err)
-end
-
--- the web game's export string: base64 of the player JSON (its Import accepts it back)
-function Session:export(): string?
-	local s = self:save()
-	if s == nil then return nil end
-	return b64encode(s)
-end
-
--- a save string from the web game (Export, or the localStorage value) or from export(); JSON works too. The result
--- is also sent once as patch.imp = { ok, msg }.
-function Session:import(text: string, nowMs: number): (boolean, string?)
-	local ok, msg = self:_import(text, nowMs)
-	self.importResult = { ok = ok, msg = msg or "Save imported." }
-	return ok, msg
-end
-
-function Session:_import(text: string, nowMs: number): (boolean, string?)
-	if type(text) ~= "string" or #text < 2 or #text > 3000000 then return false, "That is not a save." end
-	text = string.gsub(text, "^%s+", "")
-	text = string.gsub(text, "%s+$", "")
-	local json = if string.sub(text, 1, 1) == "{" then text else b64decode(text)
-	if json == nil or string.sub(json, 1, 1) ~= "{" then return false, "That is not a save." end
-	local okParse, parsed = pcall(self.JS.G.JSON.parse, json)
-	if not okParse or type(parsed) ~= "table" or parsed.points == nil then return false, "That is not a save for this game." end
-	local oldSave, oldOpts = self:save()
-	local ok, err = pcall(self._start, self, json, oldOpts, nowMs)
-	if ok then
-		ok, err = pcall(self.tick, self, nowMs)
-		if ok and self.ENV.NaNalert then ok, err = false, "the save holds invalid values" end
-	end
-	if not ok then
-		self:_start(oldSave, oldOpts, nowMs)
-		return false, "That save could not be loaded (" .. tostring(err) .. ")."
-	end
-	self.goodSave, self.goodOptions = self:save()
-	self.wantSave = true
-	table.insert(self.notices, "Save imported.")
-	return true
 end
 
 -- ------------------------------------------------------------------------------------------------------------ saves
@@ -370,30 +279,13 @@ function Session:view(): any
 		for _, pp in list do self.lastPopup = math.max(self.lastPopup, (pp.id or 0) + 1) end
 		patch.pop = list
 	end
-	-- the hard-reset arm notice waits half a second: a second press before then resets without it
-	if self.armNotice and self.hardResetArmed ~= 0 and (self.JS.NOW or 0) - self.hardResetArmed >= 500 then
-		table.insert(self.notices, self.armNotice)
-		self.armNotice = nil
-	end
 	if #self.notices > 0 then
 		patch.notice = self.notices
 		self.notices = {}
 	end
-	if self.importResult then
-		patch.imp = self.importResult
-		self.importResult = nil
-	end
 	if self.saveEvent then
 		patch.save = self.saveEvent
 		self.saveEvent = nil
-	end
-	if self.exportText then
-		patch.export = self.exportText
-		self.exportText = nil
-	end
-	if self.wantImport then
-		patch.askImport = true
-		self.wantImport = nil
 	end
 	return patch, any
 end

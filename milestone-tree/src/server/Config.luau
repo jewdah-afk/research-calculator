@@ -19,7 +19,6 @@ return {
 
 	-- remote limits per player
 	ACTIONS_PER_SECOND = 40,
-	IMPORT_COOLDOWN = 10, -- seconds; also the ImportCooldown attribute on the remotes folder, for the client's ring
 
 	-- device options (the Prefs remote): at most one change applied per PREFS_INTERVAL, saved PREFS_SAVE_DELAY
 	-- seconds after the last change

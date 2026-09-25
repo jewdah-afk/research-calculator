@@ -3,7 +3,7 @@
 	The new client end to end on the mock engine (tests/mock.luau + tests/engine.luau), without a server: Main.client
 	starts App, every capture fixture patch in data/fixtures is played into the View remote, frames are stepped, and
 	the player's paths are driven: node taps and the panel beside the map, Esc, HOME / TROPHIES / OPTIONS, the Options
-	panel's hard reset (the confirm modal), export / import, hotkeys, the peek, READY holds, the gate popover, toasts,
+	panel (Save, no hard reset / export / import), hotkeys, the peek, READY holds, the gate popover, toasts,
 	the phone layout (full-screen panel, the map switched off, the band's close), the detail sheet, every modal and
 	screen. Any script error or [MilestoneTree] warning fails the run. Twice: with every engine capability, and with
 	all of them forced off (MT_ForceCaps = "all", the fallbacks).
@@ -34,16 +34,14 @@ local client = E.buildClient()
 local function folder(parent, name) local f = Instance.new("Folder"); f.Name = name; f.Parent = parent; return f end
 local remotes = folder(RS, "MilestoneTreeRemotes")
 local R = {}
-for _, n in { "View", "Act", "Import", "Ready", "Prefs" } do
+for _, n in { "View", "Act", "Ready", "Prefs" } do
 	local r = Instance.new("RemoteEvent"); r.Name = n; r.Parent = remotes
 	R[n] = r
 end
-remotes:SetAttribute("ImportCooldown", 10)
-local acts, readies, imports = {}, 0, {}
+local acts, readies = {}, 0
 M.fireServer = function(remote, ...)
 	if remote == R.Act then table.insert(acts, { ... }) end
 	if remote == R.Ready then readies += 1 end
-	if remote == R.Import then table.insert(imports, (...)) end
 end
 
 -- the player
@@ -190,7 +188,7 @@ key(Enum.KeyCode.Equals)
 frames(0.5)
 check(not sent("key", "=", n0), "= zooms the map (not a game key)")
 
--- the dock: TROPHIES, OPTIONS (+ the hard reset confirm, export, import), HOME
+-- the dock: TROPHIES, OPTIONS, HOME
 local dock = pg.HudGui.Root.Dock
 n0 = #acts
 dock.Trophies.Activated:Fire()
@@ -219,39 +217,10 @@ local function optButton(id)
 	end
 	return nil
 end
-local hr = optButton("hardReset")
-check(hr ~= nil, "the Options panel has Hard Reset")
-if hr then
-	hr.Activated:Fire()
-	frames(0.3)
-	check(ov.Modal.Visible and ov.Modal:GetAttribute("Kind") == "hardReset", "Hard Reset opens the confirm modal")
-	check(not sent("opt", "hardReset", n0), "nothing is reset before the 2 s hold")
-	local ex = ov.Modal.Buttons:FindFirstChild("Export")
-	if ex then ex.Activated:Fire() end
-	frames(0.3)
-	check(sent("opt", "export", n0), "EXPORT FIRST sends the export action")
-end
-R.View.OnClientEvent:Fire({ set = {}, del = {}, export = string.rep("eyJ0", 600) })
-frames(0.3)
-check(ov.Modal.Visible and ov.Modal:GetAttribute("Kind") == "export" and #ov.Modal.Well.Box.Text >= 100, "the export modal shows the save string")
-key(Enum.KeyCode.Escape)
-check(not ov.Modal.Visible and sheet.Visible, "Esc closes the modal first, the panel stays")
-local imp = optButton("import")
-if imp then imp.Activated:Fire() end
-frames(0.2)
-check(sent("opt", "import", n0), "Import a save sends its action")
-R.View.OnClientEvent:Fire({ set = {}, del = {}, askImport = true })
-frames(0.3)
-check(ov.Modal:GetAttribute("Kind") == "import", "the import modal opens")
-ov.Modal.Well.Box.Text = "garbage"
-ov.Modal.Buttons.Primary.Activated:Fire()
-frames(0.3)
-check(imports[#imports] == "garbage", "IMPORT sends the pasted text")
-R.View.OnClientEvent:Fire({ set = {}, del = {}, imp = { ok = false, msg = "That string is not a valid save (nothing was changed)." },
-	notice = { "That string is not a valid save (nothing was changed)." } })
-frames(0.3)
-check(ov.Modal.Result.Visible, "a bad import shows the inline error")
-key(Enum.KeyCode.Escape)
+-- saves live in Roblox: no Hard Reset, Export or Import anywhere in Options
+check(optButton("hardReset") == nil and optButton("export") == nil and optButton("import") == nil,
+	"Options has no Hard Reset, Export or Import")
+check(optButton("save") ~= nil, "Options still has Save")
 n0 = #acts
 dock.Home.Activated:Fire()
 frames(0.8)
@@ -381,10 +350,6 @@ r.Detail.Buttons.Primary.Activated:Fire()
 frames(0.1)
 check(detailActs == 1, "BUY in the detail sheet sends the node's action")
 check(ov2:escape() and not r.Detail.Visible, "Esc closes the detail sheet")
-ov2:modal("export", string.rep("eyJ0", 500))
-frames(0.3)
-ov2:modal("hardReset", { action = { "opt", "hardReset" } })
-frames(0.2)
 ov2:modal("gate", { t = "gate", show = true, inside = true, can = true, fin = true, done = true, h = "Leave", goal = "Goal: 1e20 PEP",
 	a = { "chal", "mp", 21 }, rs = { "p", "m" } })
 frames(0.2)
