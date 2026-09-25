@@ -13,7 +13,7 @@ export type Tier = { layers: { [string]: Layer }, order: { string }, atlas: { id
 export type Assets = { version: string, complete: boolean, uploaded: number, total: number, gutter: number, tiers: { HIGH: Tier, LOW: Tier }, sprites: { atlas: { HIGH: string?, LOW: string? }, size: { HIGH: { number }, LOW: { number } }, regions: { [string]: { number } }, sample: { [string]: { number } } } }
 
 local Assets: Assets = {
-	version = "8c9d6864d8d9",
+	version = "ad284b381414",
 	complete = false,
 	uploaded = 0,
 	total = 49,
@@ -136,7 +136,7 @@ local Assets: Assets = {
 			streak = { 672, 960, 256, 32 },
 		},
 		-- regions that run to their rect edge (the vignette): sample them through this rect instead
-		sample = { vignette = { 674, 706, 252, 252 } },
+		sample = { vignette = { 678, 710, 244, 244 } },
 	},
 }
 

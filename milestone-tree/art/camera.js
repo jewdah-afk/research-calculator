@@ -210,12 +210,27 @@
   }
 
   // ------------------------------------------------------------------------------------------------ biome
-  /** Biome weights at camera centre C: rift in [0,1] (x 2300 -> 2600), corrupt in [0,1] (outcrop accent). */
-  function biome(C, B) {
+  const REF_VIEW = Object.freeze({ w: 1920, h: 1080 });
+  /** Share of the visible world rect (camera C, zoom z, map-point viewport V) that rect r = [x0, y0, x1, y1] covers. */
+  function viewCover(r, C, z, V) {
+    const hw = V.w / (2 * z), hh = V.h / (2 * z);
+    const ix = Math.max(0, Math.min(C.x + hw, r[2]) - Math.max(C.x - hw, r[0]));
+    const iy = Math.max(0, Math.min(C.y + hh, r[3]) - Math.max(C.y - hh, r[1]));
+    return (ix * iy) / (4 * hw * hh);
+  }
+  /** Biome weights for camera (C, z) and viewport V (map points), each in [0, 1]:
+   *    rift    = smoothstep(rift.from, rift.to, C.x)                      the camera centre crosses the tree -> rift line
+   *    corrupt = rift * smoothstep(cover[0], cover[1], share of the view the outcrop rect covers)
+   *  The corrupt accent depends on what is on screen, not on the centre: the hard clamp keeps a desktop camera centre
+   *  at x <= 3840 - V.w/(2z), far left of the outcrop, but at the east limit the outcrop fills 15-35% of the view.
+   *  z and V are required for the real weight; without them (old two-argument callers) z = C.z or 1, V = 1920x1080. */
+  function biome(C, B, z, V) {
+    if (z == null) z = C.z != null ? C.z : 1;
+    if (!V) V = REF_VIEW;
     const rift = smoothstep(B.rift.from, B.rift.to, C.x);
-    const c = B.corrupt;
-    const corrupt = smoothstep(c.x0, c.x1, C.x) * (1 - smoothstep(c.yInner, c.yOuter, Math.abs(C.y - c.cy)));
-    return { rift, corrupt };
+    const c = B.corrupt, cover = viewCover(c.rect, C, z, V);
+    const corrupt = rift * smoothstep(c.cover[0], c.cover[1], cover);
+    return { rift, corrupt, cover };
   }
   const mixRGB = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
 
@@ -276,6 +291,32 @@
   // draws the copies of each particle that fall in the visible rect. Zoom thinning keeps the on-screen count about
   // constant: particle i is shown only when z >= tau_i, where s(tau_i) = s(zFull) sqrt(u_i), u_i ~ U(0,1], so for
   // z <= zFull   E[count] = (V.w V.h / (cell area s^2)) * n * (s / s(zFull))^2 = V.w V.h n / (cell area s(zFull)^2).
+  // The cell is never smaller than a screen: while the field's alpha is >= cellCover, every domain viewport shows
+  // less than one cell (minus the largest particle), so no particle is ever drawn twice on one screen (a repeat that
+  // the eye catches at once with big bokeh). The count formula above does not depend on the cell size.
+  /** Zoom at which smoothstep(zHide, zShow, z) reaches alpha (0 when the field is always fully visible). */
+  function fieldAlphaZoom(field, alpha) {
+    if (!(field.zShow > field.zHide) || field.zHide <= 0) return 0;
+    let lo = 0, hi = 1;
+    for (let i = 0; i < 60; i++) { const m = (lo + hi) / 2; if (m * m * (3 - 2 * m) < alpha) lo = m; else hi = m; }
+    return field.zHide + (field.zShow - field.zHide) * hi;
+  }
+  /** Largest layer-local rect (w, h) that any domain viewport shows on a layer of factor f at any allowed zoom >= zFrom
+   *  (the rubber-band minimum included). V / s(z) falls with z, so the worst zoom is max(zoomRange.lo, zFrom), and the
+   *  worst viewport keeps the other side as small as the domain allows (it lowers zMin); both sides are scanned. */
+  function visibleExtent(f, zFrom = 0, { dom = DOMAIN, world = WORLD } = {}) {
+    const best = { w: 0, h: 0, atW: null, atH: null };
+    const ev = V => {
+      if (!inDomain(V, dom)) return;
+      const z = Math.max(zoomRange(V, { slack: true, world }).lo, zFrom), s = layerZoom(f, z);
+      if (V.w / s > best.w) { best.w = V.w / s; best.atW = { V: { w: V.w, h: V.h }, z }; }
+      if (V.h / s > best.h) { best.h = V.h / s; best.atH = { V: { w: V.w, h: V.h }, z }; }
+    };
+    for (let w = dom.minW; w <= dom.maxW; w += 1) ev({ w, h: Math.max(dom.minH, w / dom.maxAspect) });
+    for (let h = dom.minH; h <= dom.maxH; h += 1) ev({ w: Math.max(dom.minW, h * dom.minAspect), h });
+    ev({ w: dom.maxW, h: Math.max(dom.minH, dom.maxW / dom.maxAspect) }); ev({ w: Math.max(dom.minW, dom.maxH * dom.minAspect), h: dom.maxH });
+    return best;
+  }
   /** Particles of one cell at time t: local position inside [0,cw) x [0,ch) (drift wraps inside the cell, so the
    *  neighbouring copy takes over exactly where this one leaves: seamless). */
   function fieldLocal(p, cell, t) {
@@ -319,7 +360,8 @@
     clamp, lerp, smoothstep, mod, rng, hash01, EASE, mixRGB,
     mapScale, inDomain, layerZoom, layerZoomInverse, zMin, zoomRange, anchorOf, layerCenter, layerOffset, visibleRect,
     localToScreen, screenToLocal, worldToScreen, screenToWorld, zoomAt, panLimits, clampCamera, rubberBand,
-    requiredSize, planTiles, tileRects, biome, channel, spriteState, fieldLocal, fieldPlace, fieldStep,
+    requiredSize, planTiles, tileRects, viewCover, biome, channel, spriteState, fieldAlphaZoom, visibleExtent,
+    fieldLocal, fieldPlace, fieldStep,
   };
 });
 
@@ -459,14 +501,28 @@ function build(RC, fs, FILE) {
   const Vr = { w: 1920, h: 1080 };
   for (const F of R.fields) {
     const r = RC.rng(F.seed), parts = [];
+    // cell: the largest local rect any domain viewport shows while the field's alpha >= cellCover, plus the largest
+    // particle, rounded up to 10 px, so no particle is ever drawn twice on one screen (REALM.md 6.3)
+    const zc = RC.fieldAlphaZoom(F, F.cellCover), ext = RC.visibleExtent(F.f, zc);
+    const padMax = Math.max(...F.kinds.map(k => (Array.isArray(k.size) ? k.size[1] : k.size)));
+    F.cell = [Math.ceil((ext.w + padMax) / 10) * 10, Math.ceil((ext.h + padMax) / 10) * 10];
+    F.cellWorstCase = { fromZoom: round(zc, 4), extent: [round(ext.w), round(ext.h)], pad: padMax,
+      x: `V=${round(ext.atW.V.w)}x${round(ext.atW.V.h)} z=${round(ext.atW.z, 3)}`, y: `V=${round(ext.atH.V.w)}x${round(ext.atH.V.h)} z=${round(ext.atH.z, 3)}` };
     const cellArea = F.cell[0] * F.cell[1];
     for (const kind of F.kinds) {
       const sFull = RC.layerZoom(F.f, F.zFull);
       const n = Math.max(1, Math.round(kind.target * cellArea * sFull * sFull / (Vr.w * Vr.h)));
       kind.perCell = n;
+      // positions: one particle per stratum of a jittered gx x gy grid over the cell, strata taken in a shuffled order.
+      // A plain uniform scatter over a cell bigger than the screen clumps (one screen empty, the next crowded); this
+      // keeps every screen near its share, and the shuffle keeps the zoom-thinning order (tau) independent of position.
+      const gx = Math.max(1, Math.round(Math.sqrt(n * F.cell[0] / F.cell[1]))), gy = Math.ceil(n / gx);
+      const strata = Array.from({ length: gx * gy }, (_, q) => q);
+      for (let q = strata.length - 1; q > 0; q--) { const j = Math.floor(r() * (q + 1)); [strata[q], strata[j]] = [strata[j], strata[q]]; }
       for (let i = 0; i < n; i++) {
         const u = (i + r()) / n; // stratified, so the visible count is smooth across zoom even with few particles
-        parts.push({ k: kind.name, x: round(r() * F.cell[0]), y: round(r() * F.cell[1]), size: round(pick(r, kind.size)),
+        const sx = strata[i] % gx, sy = Math.floor(strata[i] / gx);
+        parts.push({ k: kind.name, x: round((sx + r()) * F.cell[0] / gx), y: round((sy + r()) * F.cell[1] / gy), size: round(pick(r, kind.size)),
           vx: round(pick(r, kind.vx), 2), vy: round(pick(r, kind.vy), 2), bx: round(pick(r, kind.bob), 1), by: round(pick(r, kind.bob), 1),
           bt: round(pick(r, kind.bobPeriod), 2), bp: round(r(), 3), a: round(pick(r, kind.alpha), 3), ta: round(pick(r, kind.twinkle), 3),
           tt: round(pick(r, kind.twinklePeriod), 2), tp: round(r(), 3), c: Math.floor(r() * kind.palette.length),
@@ -478,8 +534,35 @@ function build(RC, fs, FILE) {
     const spec = { f: F.f, cell: { w: F.cell[0], h: F.cell[1] }, zHide: F.zHide, zShow: F.zShow, particles: parts,
       maxSize: Math.max(...parts.map(p => p.size)), maxBob: Math.max(...parts.map(p => Math.max(p.bx, p.by))) };
     F.maxSize = spec.maxSize; F.maxBob = spec.maxBob;
-    // pool size: most sprites ever on screen (sampled over the domain, zoom range and time)
+    // pool size: the most sprites a screen can hold. Each particle drifts at its own velocity, so after a few minutes the
+    // positions are an independent uniform scatter and the count in a view is a sum of independent copies: particle i
+    // lands in the view (V/s grown by its size) with mean r_i = area ratio to the cell (r_i < 1 here, since the cell
+    // covers the screen), variance frac(r_i)(1 - frac(r_i)). Pool = ceil(max over the domain and zoom of mean + 4 sigma),
+    // and never below the most found by sampling (domain, zoom, pan, time).
     const pool = { HIGH: 0, LOW: 0 }, rr = RC.rng(4242);
+    const bound = list => {
+      let best = 0;
+      const views = [];
+      for (let w = RC.DOMAIN.minW; w <= RC.DOMAIN.maxW + 1e-9; w += (RC.DOMAIN.maxW - RC.DOMAIN.minW) / 24)
+        for (let h = RC.DOMAIN.minH; h <= RC.DOMAIN.maxH + 1e-9; h += (RC.DOMAIN.maxH - RC.DOMAIN.minH) / 16) if (RC.inDomain({ w, h })) views.push({ w, h });
+      for (const V of views) {
+        const zr = RC.zoomRange(V, { slack: true }), lo = Math.max(zr.lo, F.zHide || 1e-3);
+        for (let k = 0; k <= 40; k++) {
+          const z = Math.exp(RC.lerp(Math.log(lo), Math.log(zr.hi), k / 40));
+          if (RC.smoothstep(F.zHide, F.zShow, z) <= 0) continue;
+          const s = RC.layerZoom(F.f, z);
+          let mu = 0, v2 = 0;
+          for (const p of list) {
+            if (z < p.tau) continue;
+            const ri = (V.w / s + p.size) * (V.h / s + p.size) / cellArea, fr = ri - Math.floor(ri);
+            mu += ri; v2 += fr * (1 - fr);
+          }
+          best = Math.max(best, Math.ceil(mu + 4 * Math.sqrt(v2)));
+        }
+      }
+      return best;
+    };
+    pool.HIGH = bound(parts); pool.LOW = bound(parts.filter(p => p.low));
     for (let i = 0; i < 6000; i++) {
       const Vw = RC.lerp(RC.DOMAIN.minW, RC.DOMAIN.maxW, rr()), a = RC.lerp(RC.DOMAIN.minAspect, RC.DOMAIN.maxAspect, rr());
       const V = RC.mapScale({ w: Vw, h: Vw / a }), zr = RC.zoomRange(V, { slack: true });
@@ -771,12 +854,82 @@ function test(RC, fs, FILE) {
     const tgt = F.kinds.reduce((a, k) => a + k.target, 0);
     ok(counts.every(c => c > tgt * 0.4 && c < tgt * 2.2), `field ${F.id} count ~ target ${tgt}: ${counts.map(c => c.toFixed(1)).join(', ')}`);
     ok(F.poolMax.HIGH >= F.poolMax.LOW && F.poolMax.HIGH <= 3 * tgt + 12, `field ${F.id} pool ${F.poolMax.HIGH}`);
+    // single screens: at z = min(1, zFull) on 1920x1080 over random pans and times the mean holds the target, and no
+    // screen ever needs more sprites than the pool (checked again over the whole domain below)
+    let cSum = 0, cMax = 0;
+    for (let k = 0; k < 400; k++) {
+      const zz = Math.min(1, F.zFull), lim = RC.panLimits(zz, V), Cq = { x: RC.lerp(lim.x0, lim.x1, r()), y: RC.lerp(lim.y0, lim.y1, r()) };
+      const n = RC.fieldPlace(spec, Cq, zz, V, r() * 3600).length; cSum += n; cMax = Math.max(cMax, n);
+    }
+    ok(cSum / 400 > tgt * 0.8 && cSum / 400 < tgt * 1.25 && cMax <= F.poolMax.HIGH, `field ${F.id} per-screen mean ${(cSum / 400).toFixed(1)} (target ${tgt}), max ${cMax} (pool ${F.poolMax.HIGH})`);
+    const lowSpec = { ...spec, particles: F.particles.filter(p => p.low) };
+    let poolWorst = 0;
+    for (let k = 0; k < 3000; k++) {
+      const Vq = k % 3 ? Vs[Math.floor(r() * Vs.length)] : { w: 2560, h: 1440 }, zr = RC.zoomRange(Vq, { slack: true }), lo = Math.max(zr.lo, F.zHide || 0);
+      if (lo > zr.hi) continue;
+      const z = Math.exp(RC.lerp(Math.log(lo), Math.log(zr.hi), r())), lim = RC.panLimits(z, Vq, { overscroll: RC.OVERSCROLL });
+      const Cq = { x: RC.lerp(lim.x0, lim.x1, r()), y: RC.lerp(lim.y0, lim.y1, r()) }, t = r() * 3600;
+      const nh = RC.fieldPlace(spec, Cq, z, Vq, t).length, nl = RC.fieldPlace(lowSpec, Cq, z, Vq, t).length;
+      poolWorst = Math.max(poolWorst, nh / F.poolMax.HIGH);
+      ok(nh <= F.poolMax.HIGH && nl <= F.poolMax.LOW, `field ${F.id} needs ${nh}/${nl} sprites > pool ${F.poolMax.HIGH}/${F.poolMax.LOW}`);
+    }
+    console.log(`field ${F.id}: cell ${F.cell.join('x')}, 1920x1080 mean ${(cSum / 400).toFixed(1)} (target ${tgt}), sampled peak ${Math.round(poolWorst * 100)}% of pool ${F.poolMax.HIGH}`);
+    // no repeats: wherever the field's alpha is >= cellCover, no domain viewport shows one cell plus the largest
+    // particle, so no particle is ever drawn twice on one screen
+    const zc = RC.fieldAlphaZoom(F, F.cellCover);
+    ok(F.cellCover > 0 && F.cellCover <= 0.5 && near(F.zHide > 0 ? RC.smoothstep(F.zHide, F.zShow, zc) : F.cellCover, F.cellCover, 1e-6), `field ${F.id} cellCover zoom`);
+    for (const Vq of Vs) {
+      const zr = RC.zoomRange(Vq, { slack: true }), z = Math.max(zr.lo, zc);
+      if (z > zr.hi) continue;
+      const s = RC.layerZoom(F.f, z);
+      ok(Vq.w / s + F.maxSize <= F.cell[0] + 1e-6 && Vq.h / s + F.maxSize <= F.cell[1] + 1e-6,
+        `field ${F.id} cell ${F.cell} smaller than the view ${(Vq.w / s).toFixed(0)}x${(Vq.h / s).toFixed(0)} (V=${Vq.w.toFixed(0)}x${Vq.h.toFixed(0)} z=${z.toFixed(3)})`);
+    }
+    let placed = 0;
+    for (let k = 0; k < 2500; k++) {
+      const Vq = Vs[Math.floor(r() * Vs.length)], zr = RC.zoomRange(Vq, { slack: true }), lo = Math.max(zr.lo, zc);
+      if (lo > zr.hi) continue;
+      const z = Math.exp(RC.lerp(Math.log(lo), Math.log(zr.hi), r())), lim = RC.panLimits(z, Vq, { overscroll: RC.OVERSCROLL });
+      const Cq = { x: RC.lerp(lim.x0, lim.x1, r()), y: RC.lerp(lim.y0, lim.y1, r()) }, seen = new Set();
+      let dup = -1;
+      for (const q of RC.fieldPlace(spec, Cq, z, Vq, r() * 900)) { if (seen.has(q.i)) dup = q.i; seen.add(q.i); placed++; }
+      ok(dup < 0, `field ${F.id} particle ${dup} drawn twice at V=${Vq.w.toFixed(0)}x${Vq.h.toFixed(0)} z=${z.toFixed(3)} C=${Cq.x.toFixed(0)},${Cq.y.toFixed(0)}`);
+    }
+    ok(placed > 0, `field ${F.id} repeat test placed particles`);
   }
 
-  // -- 8. biome
-  const B = R.biomes;
-  ok(RC.biome({ x: 1500, y: 1200 }, B).rift === 0 && RC.biome({ x: 2700, y: 1200 }, B).rift === 1, 'biome endpoints');
-  ok(RC.biome({ x: 3700, y: 1250 }, B).corrupt > 0.99 && RC.biome({ x: 3700, y: 300 }, B).corrupt === 0, 'corrupt accent window');
+  // -- 8. biome: weights over reachable (hard-clamped) cameras, for every domain viewport
+  const B = R.biomes, Vref = { w: 1920, h: 1080 };
+  ok(RC.biome({ x: 1500, y: 1200 }, B, 1, Vref).rift === 0 && RC.biome({ x: 2700, y: 1200 }, B, 1, Vref).rift === 1, 'biome endpoints');
+  const oc = B.corrupt.rect;
+  ok(oc[0] >= 0 && oc[1] >= 0 && oc[2] <= W.w && oc[3] <= W.h && oc[0] < oc[2] && oc[1] < oc[3] && B.corrupt.cover[0] < B.corrupt.cover[1], 'corrupt rect / cover');
+  const zSteps = V => { const zr = RC.zoomRange(V), out = []; for (let k = 0; k <= 32; k++) out.push(zr.lo * Math.pow(zr.hi / zr.lo, k / 32)); return out; };
+  let eastWorst = { v: Infinity, at: '' };
+  for (const V of Vs) {
+    let best = 0;
+    for (const z of zSteps(V)) {
+      // the east limit near the outcrop's height: the accent must be reachable on every screen
+      const Ce = RC.clampCamera({ x: W.w, y: 1250 }, z, V), we = RC.biome(Ce, B, z, V);
+      ok(we.corrupt >= 0 && we.corrupt <= 1 && we.corrupt <= we.rift + 1e-12, 'corrupt in [0, rift]');
+      best = Math.max(best, we.corrupt);
+      // the tree (the camera asked to centre on the trunk, hard-clamped): never corrupt, at any zoom
+      const Ct = RC.clampCamera({ x: 1500, y: 1150 }, z, V);
+      ok(RC.biome(Ct, B, z, V).corrupt === 0, `corrupt at the tree V=${V.w.toFixed(0)}x${V.h.toFixed(0)} z=${z.toFixed(3)}`);
+    }
+    if (best < eastWorst.v) eastWorst = { v: best, at: `${V.w.toFixed(0)}x${V.h.toFixed(0)}` };
+    ok(best >= 0.9, `corrupt reaches only ${best.toFixed(3)} at the east limit for V=${V.w.toFixed(0)}x${V.h.toFixed(0)}`);
+    // the start camera (REALM.md 2.8): pure realm
+    const zs = RC.clamp(Math.min(V.w / 1500, V.h / 1750), RC.zMin(V), 1), Cs = RC.clampCamera({ x: 1500, y: 1150 }, zs, V), ws = RC.biome(Cs, B, zs, V);
+    ok(ws.rift === 0 && ws.corrupt === 0, `start camera biome ${JSON.stringify(ws)} at V=${V.w.toFixed(0)}x${V.h.toFixed(0)}`);
+  }
+  // the main desktop screens: at the east limit (y 1250) the accent holds >= 0.6 over the whole zoom band 1 .. zMax
+  for (const V of [{ w: 1920, h: 1080 }, { w: 2560, h: 1440 }]) for (let k = 0; k <= 20; k++) {
+    const z = 1 + (RC.Z_MAX - 1) * k / 20, C = RC.clampCamera({ x: W.w, y: 1250 }, z, V), w = RC.biome(C, B, z, V);
+    ok(w.corrupt >= 0.6, `corrupt ${w.corrupt.toFixed(3)} at the east limit, V=${V.w}x${V.h} z=${z.toFixed(3)}`);
+  }
+  // the old two-argument form still works (preview fallback: z = C.z or 1, V = 1920x1080)
+  ok(near(RC.biome({ x: 2880, y: 1250 }, B).corrupt, RC.biome({ x: 2880, y: 1250 }, B, 1, Vref).corrupt, 1e-12), 'biome fallback');
+  console.log(`biome: corrupt at the east limit reaches >= ${eastWorst.v.toFixed(3)} on every viewport (lowest at ${eastWorst.at})`);
 
   console.log(`${checks} checks, ${fails} failed`);
   return fails === 0;

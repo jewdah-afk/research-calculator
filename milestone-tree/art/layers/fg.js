@@ -9,7 +9,10 @@
 // Pipeline: paint in layer-local px at PS = 2 x res.HIGH canvas px per local px, in three depth planes (back, mid,
 // front; the front plane gets extra defocus). Then the section 4 atmosphere pass runs in float, premultiplied: shade
 // toward the haze colour, desaturate, flatten contrast, clamp luma, and apply a 10 local px gaussian depth-of-field
-// blur. Then the keep-clear guarantee, a 2x downsample to size x res.HIGH = 1572x1092, and an alpha bleed. The PNG
+// blur. The atmosphere pass also screens in a deep-violet floor (crimson-plum on the rift side, luma ~0.055) and adds a
+// backlit rim on the silhouette edges that face the light (the sun on the realm side, the rift beyond the split), so
+// the nearest plane reads as foliage you look through rather than black. Then the keep-clear guarantee, a 2x
+// downsample to size x res.HIGH = 1572x1092, and an alpha bleed. The PNG
 // comes from a WebGL canvas (premultipliedAlpha: false), so the bled colour of transparent pixels survives export. A
 // 2D canvas would write it black.
 (function () {
@@ -47,6 +50,13 @@
   const CORRUPT = [57, 255, 20], PINK = [255, 140, 220], CYAN = [120, 220, 255], GOLD = [255, 214, 150];
   // silhouette colours per depth plane before the atmosphere pass (it shades them toward near-black violet)
   const PLANE = { back: [40, 24, 74], mid: [22, 12, 42], front: [13, 7, 26] };
+  // after the atmosphere pass: a deep-violet floor (crimson-plum on the rift side), screened in so the nearest plane
+  // never falls below luma ~0.055 and keeps its hue: foliage you look through, not a black smudge
+  const FLOOR = { realm: [21, 11, 42], rift: [34, 8, 25] };
+  // backlit rim / leaf translucency (REALM.md 4: the only light the fg gets is from behind it): a band on the edges
+  // that face the light (the cosmic sun on the realm side, the rift on the rift side) plus a faint fringe all round.
+  // Width in local px before the depth-of-field blur, and its strength in luma terms.
+  const RIM = { reach: 14, fringeSigma: 6, lit: 0.85, fringe: 0.4, k: 0.62 };
   const RIFT = CFG.landmarks.rift, OUTCROP = CFG.landmarks.outcrop;
   const riftW = x => smooth(CFG.splitX - CFG.fade, CFG.splitX + CFG.fade, x);
   const mk = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
@@ -371,6 +381,9 @@
     E.setTransform(PS, 0, 0, PS, 0, 0);
     const R = rng(1300), N = makeNoise(1301);
     const vineCols = CFG.vines.map(v => v[0]);
+    // canopy depth: at the top clamp (z 1, 1080p) the dense canopy stays within ~25% of the screen height, so every
+    // hanging element is laid out with its y scaled by CK and its leaves by LK (the tips below stay thin and faint)
+    const CK = 0.78, LK = 0.84, cy = pts => pts.map(([x, y, w]) => [x, y > 0 ? y * CK : y, w]);
 
     // --- top: a dark band above the visible edge (y < ~318 only shows in rubber-band views), then the canopy
     for (const pl of ['back', 'mid']) {
@@ -389,7 +402,7 @@
       [[[2560, -60, 32], [2560, 170, 22], [2540, 420, 10]], 210], [[[2980, -60, 36], [3000, 200, 24], [3040, 480, 12]], 230],
       [[[3300, -60, 36], [3330, 190, 24], [3380, 430, 12]], 210],
     ];
-    back.forEach(([pts, leaf], i) => spray(P, pts, 40 + i, 'back', { leaf, maxY: 700 }));
+    back.forEach(([pts, leaf], i) => spray(P, cy(pts), 40 + i, 'back', { leaf: leaf * LK, maxY: 560 }));
     const mid = [
       [[[-160, -80, 64], [-10, 220, 44], [140, 520, 26], [230, 760, 12]], 330, 0.05],
       [[[360, -80, 50], [430, 170, 36], [470, 420, 20], [480, 600, 10]], 290, 0.1],
@@ -400,10 +413,10 @@
       [[[2730, -80, 50], [2700, 200, 34], [2650, 450, 18], [2610, 620, 8]], 290, 0.1],
       [[[3180, -80, 52], [3120, 220, 36], [3060, 500, 18], [3040, 700, 8]], 300, 0.05],
     ];
-    mid.forEach(([pts, leaf, buds], i) => spray(P, pts, 60 + i, 'mid', { leaf, buds, heart: 0.12 }));
+    mid.forEach(([pts, leaf, buds], i) => spray(P, cy(pts), 60 + i, 'mid', { leaf: leaf * LK, buds, heart: 0.12, maxY: 610 }));
     // nearest: two huge corner sprays, extra defocus
-    spray(P, [[-220, 40, 90], [-40, 300, 60], [170, 640, 30], [300, 860, 12]], 90, 'front', { leaf: 440, heart: 0.2, maxY: 900 });
-    spray(P, [[2900, -100, 70], [2870, 180, 50], [2820, 470, 24], [2780, 640, 10]], 91, 'front', { leaf: 360, maxY: 760 });
+    spray(P, cy([[-220, 40, 90], [-40, 300, 60], [170, 640, 30], [300, 860, 12]]), 90, 'front', { leaf: 440 * LK, heart: 0.2, maxY: 720 });
+    spray(P, cy([[2900, -100, 70], [2870, 180, 50], [2820, 470, 24], [2780, 640, 10]]), 91, 'front', { leaf: 280, maxY: 580 });
 
     // rift canopy: thorn limbs arching down into view (y 330-730), dark crystals and torn strands hanging from them
     const limbs = [
@@ -414,23 +427,23 @@
       [[[5340, 180, 96], [5100, 380, 72], [4880, 560, 48], [4700, 690, 26], [4580, 760, 8]], 'front'],
     ];
     limbs.forEach(([pts, pl], i) => {
-      const S = thornLimb(P, pts, 200 + i, pl, { thorn: 1.2 });
+      const S = thornLimb(P, cy(pts), 200 + i, pl, { thorn: 1.2 });
       if (!S) return;
       const rr = rng(210 + i);
       for (let k = 0; k < (pl === 'back' ? 1 : 3); k++) {
         const p = at(S, 0.3 + rr() * 0.55);
-        crystal(P, E, p.x, p.y + p.w * 0.3, Math.PI / 2 + (rr() - 0.5) * 0.45, 120 + rr() * 130, 36 + rr() * 22, 220 + i * 7 + k, pl, p.x > 4550 && rr() < 0.5 ? CORRUPT : rr() < 0.75 ? CRIMSON : MAGENTA);
+        crystal(P, E, p.x, p.y + p.w * 0.3, Math.PI / 2 + (rr() - 0.5) * 0.45, (120 + rr() * 130) * LK, (36 + rr() * 22) * LK, 220 + i * 7 + k, pl, p.x > 4550 && rr() < 0.5 ? CORRUPT : rr() < 0.75 ? CRIMSON : MAGENTA);
       }
-      for (let k = 0; k < 2; k++) { const p = at(S, 0.35 + rr() * 0.6); strand(P, p.x, p.y, 260 + rr() * 320, 230 + i * 5 + k, pl === 'front' ? 'mid' : pl); }
+      for (let k = 0; k < 2; k++) { const p = at(S, 0.35 + rr() * 0.6); strand(P, p.x, p.y, (260 + rr() * 320) * 0.75, 230 + i * 5 + k, pl === 'front' ? 'mid' : pl); }
     });
     // sparse dark leaves behind the first limb so the canopy stays continuous across the biome split
-    spray(P, [[3450, -60, 34], [3470, 190, 22], [3500, 440, 10]], 120, 'back', { leaf: 210, wr: 0.16, maxY: 740 });
+    spray(P, cy([[3450, -60, 34], [3470, 190, 22], [3500, 440, 10]]), 120, 'back', { leaf: 210 * LK, wr: 0.16, maxY: 580 });
 
     // hanging vines (painted; the vine_fg sprites hang at their own columns)
     const vines = [[300, 120, 860, 'mid', {}], [760, 150, 540, 'front', { leaf: 150 }], [1260, 110, 980, 'mid', {}], [1630, 90, 620, 'back', { budAt: false }],
       [2570, 120, 640, 'mid', {}], [3200, 150, 1020, 'mid', { budAt: false }], [3420, 250, 760, 'mid', { thorny: true }],
       [3880, 460, 480, 'back', { thorny: true }], [4300, 380, 560, 'mid', { thorny: true }], [4790, 500, 600, 'front', { thorny: true }]];
-    vines.forEach(([x, y, len, pl, o], i) => { if (vineCols.some(v => Math.abs(v - x) < 140)) console.log('fg: vine', x, 'near a sprite vine'); vine(P, x, y, len, 300 + i, pl, o); });
+    vines.forEach(([x, y, len, pl, o], i) => { if (vineCols.some(v => Math.abs(v - x) < 140)) console.log('fg: vine', x, 'near a sprite vine'); vine(P, x, y * CK, len * 0.8, 300 + i, pl, o); });
 
     // --- bottom: a ground band below anything a view reaches (y > ~3420), then leaves rising into view
     for (const pl of ['back', 'mid']) {
@@ -442,7 +455,9 @@
       c.lineTo(LW + 10, LH + 10); c.closePath(); c.fill();
     }
     // the allowed top of the bottom foliage: low in the middle (the island nodes), rising toward the corners
-    const topAt = x => 3000 - 360 * smooth(1300, 0, x) - 380 * smooth(3700, 5240, x) - 60 * smooth(2900, 3300, x);
+    // (at the bottom clamp, z 1 on 1080p, the view ends at y ~3322: dense growth stays within ~25-30% of its height)
+    const topAt = x => 3080 - 280 * smooth(1300, 0, x) - 300 * smooth(3700, 5240, x) - 50 * smooth(2900, 3300, x);
+    const BK = 0.8;                                                 // bottom growth scale
     // back plane: grass and low bushes everywhere
     for (let x = -30, i = 0; x < LW + 30; x += 110 + R() * 110, i++) {
       const top = topAt(x);
@@ -453,15 +468,15 @@
     const fr = [[-90, -1.02, 1.0, 1250, 'mid'], [190, -1.3, 0.8, 1080, 'mid'], [480, -1.62, -0.7, 960, 'back'], [820, -1.2, 0.6, 820, 'mid'],
       [1150, -1.9, -0.6, 760, 'mid'], [2950, -1.95, -0.6, 900, 'mid'], [3230, -1.55, 0.5, 860, 'front']];
     fr.forEach(([x, a, arch, len, pl], i) => {
-      const tip = frond(P, x, LH + 60, a, len, arch, 500 + i, pl, { maxTop: topAt(x) - 20, pinna: 1.1 });
+      const tip = frond(P, x, LH + 60, a, len * BK, arch, 500 + i, pl, { maxTop: topAt(x) - 20, pinna: 1.1 });
       const rr = rng(520 + i);
       if (tip && rr() < 0.7) glows.push({ x: tip.x, y: tip.y - 6, r: 9 + rr() * 5, col: budCol(tip.x, rr), plane: pl });
     });
-    broadLeaf(P, 30, LH + 60, 300, 3110, 470, 601, 'front', 0.3);
-    broadLeaf(P, 520, LH + 60, 690, 3200, 440, 602, 'mid', 0.6);
-    broadLeaf(P, 1120, LH + 60, 1010, 3240, 360, 603, 'mid', -0.7);
-    broadLeaf(P, 2760, LH + 60, 2880, 3250, 330, 604, 'mid', 0.6);
-    [[1480, 300], [1860, 260], [2200, 280], [2560, 300]].forEach(([x, l], i) => bush(P, x, 3460, 11, l, topAt(x), 610 + i, 'mid'));
+    broadLeaf(P, 30, LH + 60, 300, 3200, 470 * BK, 601, 'front', 0.3);
+    broadLeaf(P, 520, LH + 60, 690, 3290, 440 * BK, 602, 'mid', 0.6);
+    broadLeaf(P, 1120, LH + 60, 1010, 3320, 360 * BK, 603, 'mid', -0.7);
+    broadLeaf(P, 2760, LH + 60, 2880, 3330, 330 * BK, 604, 'mid', 0.6);
+    [[1480, 300], [1860, 260], [2200, 280], [2560, 300]].forEach(([x, l], i) => bush(P, x, 3480, 11, l * BK, topAt(x), 610 + i, 'mid'));
     for (let x = 0, i = 0; x < 3400; x += 170 + R() * 120, i++) grass(P, x, LH + 20, 5 + Math.floor(R() * 4), topAt(x), 650 + i, 'mid');
     // rift: brambles arching up, crystal clusters, corrupted glints near the outcrop
     const brambles = [
@@ -471,18 +486,18 @@
       [[4560, 3700, 64], [4600, 3230, 48], [4700, 2960, 30], [4850, 2840, 16], [4960, 2800, 8]],
       [[5300, 2980, 80], [5060, 2900, 54], [4880, 2740, 30], [4800, 2600, 10]],
     ];
-    brambles.forEach((pts, i) => thornLimb(P, pts, 700 + i, i % 2 ? 'front' : 'mid'));
+    brambles.forEach((pts, i) => thornLimb(P, pts.map(([x, y, w]) => [x, LH - (LH - y) * BK, w]), 700 + i, i % 2 ? 'front' : 'mid'));
     for (let x = 3300, i = 0; x < LW + 30; x += 150 + R() * 110, i++) grass(P, x, LH + 20, 4 + Math.floor(R() * 3), topAt(x) + 60, 760 + i, 'mid');
     const crys = [[3470, 3440, -1.9, 300, 74], [3560, 3450, -1.35, 220, 56], [3990, 3420, -1.7, 360, 84], [4080, 3440, -1.2, 240, 60],
       [4380, 3380, -1.95, 420, 96], [4470, 3400, -1.45, 290, 68], [4700, 3330, -1.8, 460, 100], [4790, 3350, -1.3, 320, 74], [4620, 3360, -2.2, 260, 60]];
     crys.forEach(([x, y, a, len, w], i) => {
       const cor = x > 4580 ? 1 : 0;
-      crystal(P, E, x, y, a, len, w, 800 + i, i % 3 === 2 ? 'front' : 'mid', cor ? (i % 2 ? CORRUPT : CRIMSON) : (i % 2 ? MAGENTA : CRIMSON));
+      crystal(P, E, x, y + 40, a, len * BK, w * 0.9, 800 + i, i % 3 === 2 ? 'front' : 'mid', cor ? (i % 2 ? CORRUPT : CRIMSON) : (i % 2 ? MAGENTA : CRIMSON));
     });
     // corrupted glints: a broken row of tiny squares, as if the world were failing to render there
     const gr = rng(900);
     for (let k = 0; k < 8; k++) {
-      const x = 4450 + gr() * 370, y = k < 5 ? 2920 + gr() * 200 : 440 + gr() * 220, s = 12 + gr() * 16;
+      const x = 4450 + gr() * 370, y = k < 5 ? 3010 + gr() * 170 : 380 + gr() * 160, s = 12 + gr() * 16;
       if (!clearOf([[x, y]])) continue;
       E.fillStyle = rgba(CORRUPT, 0.8); E.fillRect(x, y, s, s * (gr() < 0.5 ? 1 : 0.35));
       blob(E, x + s / 2, y + s / 2, s * 3, CORRUPT, 0.18);
@@ -493,7 +508,7 @@
     // --- a few more buds among the canopy leaves
     const br = rng(1000);
     for (let k = 0; k < 8; k++) {
-      const x = 80 + br() * 3150, y = 330 + br() * 300;
+      const x = 80 + br() * 3150, y = 270 + br() * 220;
       if (!clearOf([[x, y]], 60)) continue;
       glows.push({ x, y, r: 7 + br() * 5, col: budCol(x, br), plane: br() < 0.5 ? 'mid' : 'back' });
     }
@@ -513,7 +528,27 @@
     const bd = c2(base, true).getImageData(0, 0, CW, CH).data, ed = c2(emis, true).getImageData(0, 0, CW, CH).data;
     const R = new Float32Array(n), G = new Float32Array(n), B = new Float32Array(n), Al = new Float32Array(n);
     const hz = [], sat = A.saturation, con = A.contrast, maxL = A.maxLuma, emax = A.emissiveMax;
-    for (let x = 0; x < CW; x++) { const t = smooth(CFG.splitX - CFG.fade, CFG.splitX + CFG.fade, x / PS), c = mix(A.hazeColor, A.hazeRift, t).map(v => v / 255); hz.push([...c, luma(...c)]); }
+    const fl = [], rimCol = [];
+    for (let x = 0; x < CW; x++) {
+      const lx = x / PS, t = smooth(CFG.splitX - CFG.fade, CFG.splitX + CFG.fade, lx), c = mix(A.hazeColor, A.hazeRift, t).map(v => v / 255);
+      hz.push([...c, luma(...c)]);
+      fl.push(mix(FLOOR.realm, FLOOR.rift, t).map(v => v / 255));
+      const sunK = clamp(1 - (lx / LW) * 0.9);
+      rimCol.push(mix(mix(LILAC, KEY, 0.3 + 0.5 * sunK), mix(CRIMSON, MAGENTA, 0.25), t).map(v => v / 255));
+    }
+    // rim mask from the silhouette alpha: lit edge = a(p) * (1 - a(p + reach * toward-light)), fringe = a * (1 - blur(a))
+    const Af = new Float32Array(n); for (let i = 0; i < n; i++) Af[i] = bd[i * 4 + 3] / 255;
+    const Ab = Float32Array.from(Af); blur([Ab], CW, CH, RIM.fringeSigma * PS);
+    const reach = RIM.reach * PS, rift = [CFG.landmarks.rift[0] * PS, CFG.landmarks.rift[1] * PS];
+    const rimAt = (x, y, i) => {
+      const a = Af[i]; if (a <= 0) return 0;
+      const t = riftW(x / PS);
+      let dx = LDIR[0], dy = LDIR[1];
+      if (t > 0) { const rx = rift[0] - x, ry = rift[1] - y, d = Math.hypot(rx, ry) || 1; dx = lerp(dx, rx / d, t); dy = lerp(dy, ry / d, t); const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l; }
+      const sx = Math.round(x + dx * reach), sy = Math.round(y + dy * reach);
+      const aL = sx >= 0 && sy >= 0 && sx < CW && sy < CH ? Af[sy * CW + sx] : 0;
+      return clamp(RIM.lit * a * (1 - aL) + RIM.fringe * a * clamp(2 * (1 - Ab[i])));
+    };
     const tr = (r, g, b, h, k, out) => {
       const L = luma(r, g, b);
       let r1 = L + (r - L) * sat, g1 = L + (g - L) * sat, b1 = L + (b - L) * sat;
@@ -530,6 +565,8 @@
         let pr = 0, pg = 0, pb = 0;
         if (ba > 0) {
           tr(bd[j] / 255, bd[j + 1] / 255, bd[j + 2] / 255, h, k, c1);
+          const f = fl[x], rc = rimCol[x], rim = rimAt(x, y, i) * RIM.k;
+          for (let q = 0; q < 3; q++) c1[q] = c1[q] + f[q] - c1[q] * f[q] + rc[q] * rim;   // floor (screen), then the rim
           const L = luma(c1[0], c1[1], c1[2]); if (L > maxL) { const s = maxL / L; c1[0] *= s; c1[1] *= s; c1[2] *= s; }
           pr = c1[0] * ba; pg = c1[1] * ba; pb = c1[2] * ba;
         }

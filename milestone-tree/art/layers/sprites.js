@@ -2,11 +2,16 @@
 // piece the Roblox client tweens. That covers cloud wisps and mist bands, hanging vines, a light-fall streak, the
 // rift glow and shock ring, bokeh discs, stars, fireflies, embers, motes, sparks, the glitch bar, floating shards, a
 // shooting star and the screen vignette. Every region is drawn white or grey, so ImageColor3 tints it. It stays
-// inside its own rect (realm.json atlas.regions) and fades to alpha 0 within its 2 px border. The vignette is the one
-// exception: it runs to the edge of its rect, and the client samples it inset by 2 px (sprites.json sampleRect). Soft
-// pieces are pre-blurred. All maths runs in float, premultiplied. Transparent pixels are alpha-bled per region, so
-// scaled edges never fringe dark. LOW is the same sheet at half size (roblox/tile.js makes it with a 2x premultiplied
-// box filter), so every rect is even and halves exactly.
+// inside its own rect (realm.json atlas.regions) and fades to alpha 0 within its 2 px border, so a texel just outside
+// any rect is always transparent (bilinear or mip sampling at a sprite's edge never pulls in a neighbour). The
+// vignette, which is black and stretched over the whole screen, keeps a wider clear gutter (4 px, 2 px on the LOW
+// sheet) and the client samples it 6 px inside its rect (sprites.json sampleRect). Every region's 2 px border is
+// transparent white (the tint-neutral colour), so even straight-alpha filtering never mixes vignette black, or any
+// other neighbour's colour, into a sprite's edge.
+// Soft pieces are pre-blurred. All maths runs in float, premultiplied. Transparent pixels are alpha-bled per region,
+// so scaled edges never fringe dark. LOW is the same sheet at half size (roblox/tile.js makes it with a 2x
+// premultiplied box filter), so every rect is even and halves exactly. The node run checks all of it, on the HIGH
+// sheet and on a 2x box-downsampled LOW sheet.
 //
 //   node render.js sprites        -> out/sprites.png (+ out/sprites_prev.png), like any painter
 //   node layers/sprites.js        -> out/sprites.png, out/sprites.json (rects for HIGH and LOW), out/sprites_prev.png
@@ -30,7 +35,10 @@
   };
   // how the client anchors each region (AnchorPoint / pivot, REALM.md 6.2 and 9.3); every region not listed is centred
   const PIVOT = { vineA: [0.5, 0], vineB: [0.5, 0], vineThin: [0.5, 0], lightfall: [0.5, 0] };
-  const EDGE_EXTEND = { vignette: true };   // regions that run to their edge (sampled inset by the padding)
+  // regions the client samples through an inset sampleRect (HIGH px from each side; even, so LOW halves exactly),
+  // and the clear gutter they keep inside their own rect (>= 2 x padding: 2 px of it survive on the LOW sheet)
+  const EDGE_EXTEND = { vignette: 6 };
+  const GUTTER = { vignette: 4 };
 
   // ============================================================================================ page side (Chromium)
   function pageSide() {
@@ -274,25 +282,33 @@
       const wake = e < 0 ? 0.1 * sm(0.18 * w, R, d) : 0;
       return [1, clamp(screen(a, wake) * sm(w / 2 - PAD, w / 2 - PAD - 6, d))];
     }, 4)), 8);
-    /** Out-of-focus disc (A) and its hexagonal-aperture twin (B): flat interior 0.55, brighter rim 0.9, soft edge. */
-    function bokeh(w, h, hex) {
-      const R = w / 2 - PAD - 3.5;
-      const ax = [0, 1, 2].map(k => { const a = Math.PI / 6 + k * Math.PI / 3; return [Math.cos(a), Math.sin(a)]; });
-      return border(field(w, h, (x, y) => {
-        const px = x - w / 2, py = y - h / 2;
-        let d, Rr = R;
-        if (hex) { Rr = R * Math.cos(Math.PI / 6); d = Math.pow(ax.reduce((s, n) => s + Math.pow(Math.abs(px * n[0] + py * n[1]), 10), 0), 1 / 10); }
-        else d = Math.hypot(px, py);
-        const edge = 1 - sm(Rr - 1.5, Rr + 1.5, d);
-        const rim = sm(Rr - (hex ? 6.5 : 5.5), Rr - 1.2, d), rings = 0.006 * Math.sin(d / Rr * 13);
-        return [1, edge * (0.53 + 0.04 * d / Rr + rings + (hex ? 0.27 : 0.35) * rim)];
-      }, 4));
+    /** Out-of-focus light (bokeh). A white disc (value 1, so ImageColor3 gives the light its colour) with a wide,
+     *  soft falloff and only a faint lift toward the edge: no outline ring and no aperture polygon, so a tint reads as
+     *  defocused light and never as a bubble, a pane or a planet. A: the main disc, plateau ~0.68 lifting ~7% before
+     *  a falloff over the outer third. B: the same light further out of focus, a smooth hump at ~2/3 the weight. The
+     *  field alpha multiplies these peaks (sprites.json maxAlpha). */
+    function bokeh(w, h, soft) {
+      const R = w / 2 - PAD - 1;
+      return dither(border(field(w, h, (x, y) => {
+        const r = Math.hypot(x - w / 2, y - h / 2) / R;
+        if (r >= 1) return [1, 0];
+        if (soft) return [1, 0.46 * Math.pow(1 - sm(0.12, 1, r), 1.35)];
+        const lift = 0.68 + 0.05 * sm(0.3, 0.72, r);
+        return [1, lift * (1 - sm(0.64, 1, r))];
+      }, 4)), soft ? 13 : 12);
     }
-    /** Vignette: black, alpha 0 inside radius 0.55 (of the half size) to 1 in the corners. Runs to its edge. */
-    const vignette = (w, h) => dither(field(w, h, (x, y) => {
-      const u = (x - w / 2) / (w / 2), v = (y - h / 2) / (h / 2), r = Math.hypot(u, v);
-      return [0, Math.pow(sm(0.55, 1.414, r), 1.15)];
-    }, 2), 9);
+    /** Vignette: black, alpha 0 inside radius 0.55 to 1 in the corners, measured on the sampleRect (the client
+     *  stretches that rect over the screen). Opaque only inside a clear gutter of GUTTER px: the content runs 2 px past
+     *  the sampleRect, so bilinear sampling at the screen edge still reads vignette and never the gutter. */
+    const vignette = (w, h) => {
+      const g = GUTTER.vignette, ins = EDGE_EXTEND.vignette, hw = w / 2 - ins, hh = h / 2 - ins;
+      const B = field(w, h, (x, y) => {
+        if (x < g || y < g || x > w - g || y > h - g) return [0, 0];
+        const r = Math.hypot((x - w / 2) / hw, (y - h / 2) / hh);
+        return [0, Math.pow(sm(0.55, 1.414, r), 1.15)];
+      }, 2);
+      return dither(border(B, g), 9);
+    };
     /** 4-point sparkle with long thin rays and shorter diagonals (the lib.js sparkle look). */
     function sparkleField(w, h, len, thick, core, diag = 0.5) {
       return border(field(w, h, (x, y) => {
@@ -336,47 +352,60 @@
       const d2 = (x - hx) ** 2 + dy * dy, head = g2(d2, 2.2), halo = 0.45 * g2(d2, 5.5);
       return [1, screen(tail * 0.9, head, halo) * sm(h / 2 - PAD, h / 2 - PAD - 3, Math.abs(dy)) * sm(w - PAD, w - PAD - 3, x)];
     }, 4));
-    /** Floating shard: a faceted rock lit from the upper left with a glowing crystal vein; A chunky, B tall. */
+    /** Floating shard, lit from the upper left, hand-faceted. A: a broken rock slab, a lit top face in three facets
+     *  over a dark thickness band, with a step in its top edge; a straight crystal vein crosses its left third.
+     *  B: a long crystal sliver (a prism: a lit face, a narrow ridge face and a shadowed face), pointed at the top
+     *  right and snapped off at the bottom left, with a straight inner glow line along its length. Faces stay at or
+     *  below ~0.72 so the vein and the rim are the brightest things on it. */
     function shard(w, h, seed, variant) {
+      // faces: [points in px (x, y, height)], shaded by their normal against L3
+      let faces, outline, vein, core;
+      if (variant === 'A') {   // a broken slab: a lit top face in three facets over a dark thickness band
+        const A = [[9, 45, 5], [27, 29, 6], [49, 24, 7], [63, 14, 6], [87, 23, 4], [85, 38, 0], [66, 58, 0], [43, 71, 0], [23, 75, 0], [12, 63, 0]];
+        const T = [[79, 36, 11], [60, 49, 15], [39, 58, 14], [18, 57, 10]];
+        faces = [[A[0], A[1], T[2], T[3]], [A[1], A[2], T[1], T[2]], [A[2], A[3], A[4], T[0], T[1]],   // top
+          [A[4], T[0], A[5]], [T[0], T[1], A[6], A[5]], [T[1], T[2], A[7], A[6]], [T[2], T[3], A[8], A[7]], [T[3], A[0], A[9], A[8]]];
+        outline = A;
+        vein = [[27, 33], [41, 69]]; core = 1.5;
+      } else {
+        const B0 = [27, 85], T = [79, 9], u = [T[0] - B0[0], T[1] - B0[1]], nr = (() => { const l = Math.hypot(...u); return [-u[1] / l, u[0] / l]; })();
+        const ax = (t, off, z = 0) => [B0[0] + u[0] * t + nr[0] * off, B0[1] + u[1] * t + nr[1] * off, z];
+        const L0 = ax(0.07, -8.5), L1 = ax(0.79, -7.5), M0 = ax(0.0, -1.5, 7), M1 = ax(0.81, -1.2, 7), R0 = ax(-0.03, 8), R1 = ax(0.76, 7.2);
+        const Tp = [...T, 0], K = ax(0.02, 3.5, 3);   // K: the snapped-off base
+        faces = [[L0, L1, M1, M0], [M0, M1, R1, R0], [L1, Tp, M1], [M1, Tp, R1], [L0, M0, K], [M0, R0, K]];
+        outline = [L0, L1, Tp, R1, R0, K];
+        vein = [ax(0.12, -3.5).slice(0, 2), ax(0.84, -2.6).slice(0, 2)]; core = 1.3;
+      }
+      const cen = outline.reduce((a, p) => [a[0] + p[0] / outline.length, a[1] + p[1] / outline.length], [0, 0]);
       return border(blur(drawn(w, h, 4, (c) => {
-        const r = rng(seed);
-        const out = variant === 'A'
-          ? [[13, 38], [26, 22], [48, 15], [70, 19], [84, 33], [80, 47], [66, 61], [55, 83], [44, 72], [27, 60]]
-          : [[36, 9], [55, 13], [70, 32], [68, 55], [56, 86], [45, 74], [30, 52], [27, 28]];
-        const apex = variant === 'A' ? [43, 36] : [47, 38], H = variant === 'A' ? 24 : 20;
-        // facets: triangles apex -> edge, shaded by their normal against the key light
-        for (let i = 0; i < out.length; i++) {
-          const p = out[i], q = out[(i + 1) % out.length];
-          const e1 = [p[0] - apex[0], p[1] - apex[1], -H], e2 = [q[0] - apex[0], q[1] - apex[1], -H];
-          let n = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
-          if (n[2] < 0) n = n.map(v => -v);
-          const nl = Math.hypot(...n); n = n.map(v => v / nl);
+        const r = rng(seed), path = pts => { c.beginPath(); c.moveTo(pts[0][0], pts[0][1]); pts.slice(1).forEach(p => c.lineTo(p[0], p[1])); c.closePath(); };
+        c.fillStyle = grey(0.3); path(outline); c.fill();
+        c.save(); path(outline); c.clip();
+        for (const F of faces) {
+          const [p0, p1, p2] = F, u = [p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]], v = [p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2]];
+          let n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+          if (n[2] < 0) n = n.map(a => -a);
+          const nl = Math.hypot(...n) || 1; n = n.map(a => a / nl);
           const lit = Math.max(0, n[0] * L3[0] + n[1] * L3[1] + n[2] * L3[2]);
-          const lower = clamp(((p[1] + q[1]) / 2 - apex[1]) / 40);
-          c.fillStyle = grey(clamp(0.2 + 0.72 * Math.pow(lit, 1.3) - 0.08 * lower + (r() - 0.5) * 0.05));
-          c.beginPath(); c.moveTo(...apex); c.lineTo(...p); c.lineTo(...q); c.closePath(); c.fill();
-          c.strokeStyle = c.fillStyle; c.lineWidth = 0.6; c.stroke();
+          c.fillStyle = grey(clamp(0.13 + 0.62 * Math.pow(lit, 1.5) + (r() - 0.5) * 0.05, 0.1, 0.74));
+          path(F); c.fill(); c.strokeStyle = c.fillStyle; c.lineWidth = 0.5; c.stroke();
         }
-        // rim on the edges whose outward normal faces the light
-        for (let i = 0; i < out.length; i++) {
-          const p = out[i], q = out[(i + 1) % out.length], nx = q[1] - p[1], ny = -(q[0] - p[0]), nl = Math.hypot(nx, ny);
-          const f = (nx * LD[0] + ny * LD[1]) / nl;
-          if (f > 0.2) { c.strokeStyle = grey(1, clamp(f * 1.1)); c.lineWidth = 1.6; c.beginPath(); c.moveTo(...p); c.lineTo(...q); c.stroke(); }
+        if (variant === 'B') {   // faint striations along the crystal's lit face
+          c.strokeStyle = grey(0.85, 0.22); c.lineWidth = 0.6;
+          for (const off of [-6.2, -4.4]) { const B0 = [27, 85], T = [79, 9], l = Math.hypot(T[0] - B0[0], T[1] - B0[1]), nr = [(B0[1] - T[1]) / l, (T[0] - B0[0]) / l];
+            c.beginPath(); c.moveTo(B0[0] + (T[0] - B0[0]) * 0.15 + nr[0] * off, B0[1] + (T[1] - B0[1]) * 0.15 + nr[1] * off); c.lineTo(B0[0] + (T[0] - B0[0]) * 0.7 + nr[0] * off, B0[1] + (T[1] - B0[1]) * 0.7 + nr[1] * off); c.stroke(); }
         }
-        // crystal vein: glow, then a bright core line
-        const vein = variant === 'A' ? [[27, 44], [37, 50], [45, 47], [53, 57], [60, 55], [66, 50]] : [[44, 24], [47, 36], [44, 47], [49, 58], [51, 70]];
-        c.save(); c.beginPath(); c.moveTo(...out[0]); out.slice(1).forEach(p => c.lineTo(...p)); c.closePath(); c.clip();
-        c.filter = `blur(${2.5 * c.getTransform().a}px)`; c.strokeStyle = grey(1, 0.75); c.lineWidth = 5; c.beginPath(); c.moveTo(...vein[0]); vein.slice(1).forEach(p => c.lineTo(...p)); c.stroke();
-        c.filter = 'none'; c.strokeStyle = grey(1); c.lineWidth = 1.6; c.beginPath(); c.moveTo(...vein[0]); vein.slice(1).forEach(p => c.lineTo(...p)); c.stroke();
+        // the vein: a soft glow, then a bright straight core
+        c.filter = `blur(${2.4 * c.getTransform().a}px)`; c.strokeStyle = grey(1, 0.7); c.lineWidth = 5; c.beginPath(); c.moveTo(...vein[0]); c.lineTo(...vein[1]); c.stroke();
+        c.filter = 'none'; c.strokeStyle = grey(1); c.lineWidth = core; c.beginPath(); c.moveTo(...vein[0]); c.lineTo(...vein[1]); c.stroke();
         c.restore();
-        // a small crystal cluster breaking out of the top (A) or the side (B)
-        const cl = variant === 'A' ? [[56, 19, -1.2, 13, 5], [63, 21, -0.75, 10, 4], [50, 18, -1.75, 8, 3.5]] : [[66, 40, -0.35, 13, 5], [68, 48, 0.1, 9, 4]];
-        for (const [x, y, a, len, wd] of cl) {
-          c.save(); c.translate(x, y); c.rotate(a);
-          c.beginPath(); c.moveTo(0, -wd / 2); c.lineTo(len * 0.75, -wd / 2); c.lineTo(len, 0); c.lineTo(len * 0.75, wd / 2); c.lineTo(0, wd / 2); c.closePath();
-          c.fillStyle = grey(0.95); c.fill();
-          c.beginPath(); c.moveTo(0, 0); c.lineTo(len, 0); c.lineTo(len * 0.75, wd / 2); c.lineTo(0, wd / 2); c.closePath(); c.fillStyle = grey(0.62); c.fill();
-          c.restore();
+        // rim on the outline edges whose outward normal faces the key light
+        for (let i = 0; i < outline.length; i++) {
+          const p = outline[i], q = outline[(i + 1) % outline.length];
+          let nx = q[1] - p[1], ny = -(q[0] - p[0]); const m = [(p[0] + q[0]) / 2 - cen[0], (p[1] + q[1]) / 2 - cen[1]];
+          if (nx * m[0] + ny * m[1] < 0) { nx = -nx; ny = -ny; }
+          const f = (nx * LD[0] + ny * LD[1]) / Math.hypot(nx, ny);
+          if (f > 0.2) { c.strokeStyle = grey(1, clamp(f)); c.lineWidth = 1.3; c.beginPath(); c.moveTo(p[0], p[1]); c.lineTo(q[0], q[1]); c.stroke(); }
         }
       }), 0.45));
     }
@@ -417,8 +446,21 @@
         px[o + 2] = Math.round(clamp(sheet[o + 2] / a) * 255); px[o + 3] = a8;
       }
       for (const r of Object.values(ATLAS.regions)) bleed(px, AW, r);
+      for (const r of Object.values(ATLAS.regions)) whiteBorder(px, AW, r, PAD);
       console.log(`sprites: ${Object.keys(stats).length} regions in ${Math.round(performance.now() - t0)} ms`);
       return { px, stats };
+    }
+    /** Every region's outer `band` px (alpha 0 by contract) become transparent white, the neutral colour of
+     *  ImageColor3 tinting. What any sprite meets just outside its rect is then the same transparent white it has on
+     *  its own edge, so straight-alpha bilinear or mip filtering at a rect edge never picks up a neighbour's colour
+     *  (the black vignette keeps its black only in the inner half of its gutter). Inside the border the per-region
+     *  bleed stands. */
+    function whiteBorder(px, W, [rx, ry, rw, rh], band) {
+      for (let y = ry; y < ry + rh; y++) for (let x = rx; x < rx + rw; x++) {
+        if (x - rx >= band && y - ry >= band && rx + rw - 1 - x >= band && ry + rh - 1 - y >= band) continue;
+        const o = (y * W + x) * 4; if (px[o + 3]) continue;
+        px[o] = px[o + 1] = px[o + 2] = 255;
+      }
     }
     /** Alpha bleed inside one region: every alpha-0 pixel takes the colour of its nearest visible pixel (8-neighbour
      *  BFS), alpha stays 0. A region with no visible pixel keeps white. */
@@ -534,18 +576,20 @@
       }
       return null;
     };
-    const half = r => r.map(v => v / 2), inset = r => [r[0] + A.padding, r[1] + A.padding, r[2] - 2 * A.padding, r[3] - 2 * A.padding];
+    const half = r => r.map(v => v / 2), inset = (r, k) => [r[0] + k, r[1] + k, r[2] - 2 * k, r[3] - 2 * k];
       const regions = {};
       for (const [name, r] of Object.entries(A.regions)) {
         const o = { rect: r, lowRect: half(r), pivot: PIVOT[name] || [0.5, 0.5] };
-        if (EDGE_EXTEND[name]) { o.edge = 'extend'; o.sampleRect = inset(r); o.lowSampleRect = half(inset(r)).map((v, i) => i < 2 ? Math.ceil(v) : Math.floor(v)); }
-        else o.edge = 'transparent';
+        if (EDGE_EXTEND[name]) {
+          o.edge = 'extend'; o.gutter = GUTTER[name]; o.sampleRect = inset(r, EDGE_EXTEND[name]);
+          o.lowSampleRect = half(o.sampleRect).map((v, i) => i < 2 ? Math.ceil(v) : Math.floor(v));
+        } else o.edge = 'transparent';
         const look = lookFor(name); if (look) o.look = look;
         o.maxAlpha = res.stats[name] ? res.stats[name].maxAlpha : 0;
         regions[name] = o;
       }
       const json = {
-        about: 'Sprite atlas rects (generated by layers/sprites.js from realm.json atlas). HIGH uses `rect` on `file`; LOW uses `lowRect` on the half-size sheet roblox/tile.js makes from it. ImageRectOffset = rect[0..1], ImageRectSize = rect[2..3]. Every region is white/grey (tint with ImageColor3) and transparent in its 2 px border, except edge "extend" regions, which the client samples with sampleRect. pivot = AnchorPoint (hanging sprites attach at their top centre).',
+        about: 'Sprite atlas rects (generated by layers/sprites.js from realm.json atlas). HIGH uses `rect` on `file`; LOW uses `lowRect` on the half-size sheet roblox/tile.js makes from it. ImageRectOffset = rect[0..1], ImageRectSize = rect[2..3]. Every region is white/grey (tint with ImageColor3) and transparent in its 2 px border, so the texels just outside any rect are transparent. Edge "extend" regions (the black vignette, stretched over the screen) keep a wider clear gutter inside their rect and are sampled through sampleRect / lowSampleRect. pivot = AnchorPoint (hanging sprites attach at their top centre).',
         file: A.file || 'sprites.png', size: A.size, lowSize: A.lowSize || half(A.size), padding: A.padding,
         sha256: crypto.createHash('sha256').update(png).digest('hex'), regions,
       };
@@ -553,10 +597,43 @@
       // ---- checks
       let bad = 0;
       for (const [name, s] of Object.entries(res.stats)) {
-        const okB = EDGE_EXTEND[name] || s.borderAlpha === 0, okA = s.maxAlpha > 0.05;
+        const okB = s.borderAlpha === 0, okA = s.maxAlpha > 0.05;
         if (!okB || !okA) bad++;
-        console.log(`  ${okB && okA ? 'ok  ' : 'WARN'} ${name.padEnd(9)} max alpha ${s.maxAlpha.toFixed(3)}  border ${EDGE_EXTEND[name] ? 'extends (sampled inset)' : s.borderAlpha === 0 ? 'transparent' : 'NOT transparent ' + s.borderAlpha}`);
+        console.log(`  ${okB && okA ? 'ok  ' : 'WARN'} ${name.padEnd(9)} max alpha ${s.maxAlpha.toFixed(3)}  border ${s.borderAlpha === 0 ? 'transparent' : 'NOT transparent ' + s.borderAlpha}${EDGE_EXTEND[name] ? `  (gutter ${GUTTER[name]} px, sampled ${EDGE_EXTEND[name]} px inset)` : ''}`);
       }
+      // what a neighbour sees: the ring just outside every rect must be transparent (HIGH: 2 px; LOW, a 2x premultiplied
+      // box downsample like tile.js makes: 1 px), and on HIGH its bled colour must match the region's own edge colour
+      const low = (() => {
+        const w = W / 2, h = H / 2, o = new Float32Array(w * h * 4);
+        for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+          let r = 0, g = 0, b = 0, a = 0;
+          for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) { const q = ((2 * y + dy) * W + 2 * x + dx) * 4, al = px[q + 3] / 255; r += px[q] * al; g += px[q + 1] * al; b += px[q + 2] * al; a += al; }
+          const k = (y * w + x) * 4; o[k] = r / 4; o[k + 1] = g / 4; o[k + 2] = b / 4; o[k + 3] = a / 4;
+        }
+        return { w, h, a: (x, y) => o[(y * w + x) * 4 + 3] };
+      })();
+      const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+      const ring = (rx, ry, rw, rh, k, sw, sh, fn) => {
+        for (let d = 1; d <= k; d++) {
+          for (let x = rx - d; x < rx + rw + d; x++) for (const y of [ry - d, ry + rh - 1 + d]) if (x >= 0 && y >= 0 && x < sw && y < sh) fn(x, y, clamp(x, rx, rx + rw - 1), clamp(y, ry, ry + rh - 1));
+          for (let y = ry - d + 1; y < ry + rh - 1 + d; y++) for (const x of [rx - d, rx + rw - 1 + d]) if (x >= 0 && y >= 0 && x < sw && y < sh) fn(x, y, clamp(x, rx, rx + rw - 1), clamp(y, ry, ry + rh - 1));
+        }
+      };
+      let worstA = 0, worstLow = 0, worstRGB = 0, worstName = '', ringBad = 0;
+      for (const [name, [rx, ry, rw, rh]] of Object.entries(A.regions)) {
+        let mA = 0, mL = 0, mC = 0;
+        ring(rx, ry, rw, rh, 2, W, H, (x, y, ex, ey) => {
+          const o = (y * W + x) * 4, e = (ey * W + ex) * 4; mA = Math.max(mA, px[o + 3]);
+          mC = Math.max(mC, Math.abs(px[o] - px[e]), Math.abs(px[o + 1] - px[e + 1]), Math.abs(px[o + 2] - px[e + 2]));
+        });
+        ring(rx / 2, ry / 2, rw / 2, rh / 2, 1, low.w, low.h, (x, y) => { mL = Math.max(mL, low.a(x, y)); });
+        const ok = mA === 0 && mL === 0 && mC <= 64;
+        if (!ok) { ringBad++; console.log(`  WARN ${name.padEnd(9)} outside ring: HIGH alpha ${mA}, LOW alpha ${(mL * 255).toFixed(2)}, colour step ${mC}/255`); }
+        worstA = Math.max(worstA, mA); worstLow = Math.max(worstLow, mL);
+        if (mC > worstRGB) { worstRGB = mC; worstName = name; }
+      }
+      bad += ringBad;
+      console.log(`  ${ringBad ? 'WARN' : 'ok  '} outside rings: max alpha HIGH ${worstA}/255, LOW ${(worstLow * 255).toFixed(2)}/255; bled colour vs own edge max step ${worstRGB}/255 (${worstName})`);
       let black = 0; for (let i = 0; i < W * H; i++) if (px[i * 4 + 3] === 0 && px[i * 4] + px[i * 4 + 1] + px[i * 4 + 2] === 0) black++;
       const vg = A.regions.vignette, vgPx = vg ? vg[2] * vg[3] : 0;
       console.log(`  ${black <= vgPx ? 'ok  ' : 'WARN'} alpha bleed: ${black} transparent-black pixels (the black vignette owns up to ${vgPx})`);
