@@ -44582,395 +44582,11 @@ return Plates
             </Properties>
           </Item>
         </Item>
-        <Item class="LocalScript" referent="99">
-          <Properties>
-            <string name="Name">MapPreview</string>
-            <string name="Source"><![CDATA[--!strict
---[[
-	MapPreview: shows the realm map full screen over the current page UI, so the new map and HUD can be tried in
-	Studio before the new client replaces the page. It listens to the same View patches as the page (a ViewStore of
-	its own), so everything shows the live game: node states and badges, links, plates, edge markers, the points
-	capsule, the dock, the READY tray, the portal, toasts, tooltips, the peek and the gate popover.
-
-	    drag / touch-drag      pan            wheel / pinch / double-click / the zoom capsule     zoom
-	    click a node           opens that layer: in the new panel preview when it is on, else in the page UI
-	    hover / right-click    tooltip / peek (OPEN, hold PRESTIGE)
-	    READY gems             tap opens the layer, hold 0.6 s prestiges
-	    the portal / the rift  the Multiverse gate (hold to enter / exit / finish)
-	    M or the GAME button   switch between the map and the page UI; HOME frames the map again
-
-	App.luau takes all of this over when the new client lands; this script is then deleted.
-]]
-
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
-local Core = script.Parent:WaitForChild("Core")
-local Layout = require(Core:WaitForChild("Layout"))
-local Motion = require(Core:WaitForChild("Motion"))
-local Theme = require(Core:WaitForChild("Theme"))
-local Recipes = require(Core:WaitForChild("Recipes"))
-local ViewStore = require(Core:WaitForChild("ViewStore"))
-local Input = require(script.Parent:WaitForChild("Input"):WaitForChild("Input"))
-local MapFolder = script.Parent:WaitForChild("Map")
-local MapView = require(MapFolder:WaitForChild("MapView"))
-local MapInput = require(MapFolder:WaitForChild("MapInput"))
-local MapLogic = require(MapFolder:WaitForChild("MapLogic"))
-local Nodes = require(MapFolder:WaitForChild("Nodes"))
-local Links = require(MapFolder:WaitForChild("Links"))
-local Plates = require(MapFolder:WaitForChild("Plates"))
-local Markers = require(MapFolder:WaitForChild("Markers"))
-local Hud = require(script.Parent:WaitForChild("Hud"):WaitForChild("Hud"))
-local Overlay = require(script.Parent:WaitForChild("Overlay"):WaitForChild("Overlay"))
-
-local lp = Players.LocalPlayer
-Input.start()
-
--- above the page UI (its popups use DisplayOrder 20)
-local gui, root = Layout.screen("MapGui", 40, Enum.ScreenInsets.None)
-local view = MapView.new(gui, root, { tier = MapView.chooseTier() })
-local mi = MapInput.new(view, Input)
-local markerGui = Layout.screen("MarkerGui", 41, Enum.ScreenInsets.DeviceSafeInsets)
--- the HUD stays under the panel preview (PanelGui 42, src/client/Panel/Preview.luau), the overlays above it
-local hudGui = Layout.screen("HudGui", 41, Enum.ScreenInsets.CoreUISafeInsets)
-local topbarGui = Layout.screen("TopbarGui", 41, Enum.ScreenInsets.TopbarSafeInsets)
-local overlayGui = Layout.screen("OverlayGui", 45, Enum.ScreenInsets.DeviceSafeInsets)
-Recipes.holdGate = function(): boolean
-	return not mi:busy()
-end
-
-local nodes = Nodes.new(view, mi)
-local links = Links.new(view)
-local plates = Plates.new(view, nodes)
-local markers = Markers.new(markerGui, view, nodes)
-local hud = Hud.new(topbarGui, hudGui)
-local overlay = Overlay.new(overlayGui)
-
--- ------------------------------------------------------------------------------------------------------ switch
-local switchGui = Instance.new("ScreenGui")
-switchGui.Name = "PreviewSwitch"
-switchGui.ResetOnSpawn = false
-switchGui.DisplayOrder = 49
-switchGui.ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets
-Input.BLOCKING.PreviewSwitch = true
-local button = Instance.new("TextButton")
-button.Name = "Switch"
-button.AnchorPoint = Vector2.new(1, 0)
-button.Position = UDim2.new(1, -16, 0, 12)
-button.Size = UDim2.fromOffset(132, 40)
-button.BackgroundColor3 = Theme.C.panel
-button.TextColor3 = Theme.C.text
-button.AutoButtonColor = true
-Theme.text(button, "tab")
-local bc = Instance.new("UICorner")
-bc.CornerRadius = UDim.new(0.5, 0)
-bc.Parent = button
-local bs = Instance.new("UIStroke")
-bs.Color = Theme.hue("t")
-bs.Thickness = 2
-bs.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-bs.Parent = button
-button.Parent = switchGui
-switchGui.Parent = lp:WaitForChild("PlayerGui")
-
-local showing = true
-local function show(on: boolean)
-	showing = on
-	gui.Enabled = on
-	markerGui.Enabled = on
-	overlayGui.Enabled = on
-	hud:setVisible(on)
-	mi:setEnabled(on)
-	view:setAmbient(on)
-	if not on then
-		overlay:peek(nil)
-		overlay:modal(nil)
-		overlay:tooltip(nil, nil)
-	end
-	button.Text = if on then "GAME" else "MAP"
-end
-button.Activated:Connect(function() show(not showing) end)
-UserInputService.InputBegan:Connect(function(io: InputObject, processed: boolean)
-	if processed or UserInputService:GetFocusedTextBox() then return end
-	if io.KeyCode == Enum.KeyCode.M and not UserInputService:IsKeyDown(Enum.KeyCode.LeftShift)
-		and not UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
-		show(not showing)
-	end
-end)
-show(true)
-
-view:preload(function() end)
-view:frameStart({ intro = true })
-
--- ------------------------------------------------------------------------------------------------------ live data
-local remotes = ReplicatedStorage:WaitForChild("MilestoneTreeRemotes", 30)
-local store = ViewStore.new()
-local gotFull = false
-local lastMs: any = nil
-
-local function onMap()
-	local ms = store:map()
-	lastMs = ms
-	nodes:update(ms)
-	links:update(ms)
-	plates:update(ms)
-	markers:update(ms)
-	hud:updateMap(ms)
-end
-local function onHud()
-	local h = store:hud()
-	if h then
-		nodes:setFirstRun(h.fr)
-		hud:setFirstRun(h.fr)
-		hud:updateHud(h)
-	end
-end
-
-view.cameraChanged:Connect(function(cam: any)
-	hud:setZoomPct(cam.z)
-end)
-hud:setZoomPct(view:camera().z)
-
--- the tooltip of a node (mouse hover)
-local UNIVERSE_WORD = { [true] = "Lives in the Prestige Multiverse", [false] = "Lives in the Normal Universe" }
-local function nodeTip(layer: string): any
-	local ms = lastMs
-	local node = if ms then ms.nodes[layer] else nil
-	local st = nodes:state(layer)
-	if st == "sealed" or st == "frontier" then
-		return { title = "???", body = "Not discovered yet.", layer = layer, hue = Theme.C.muted }
-	end
-	if st == "dormant" then
-		return { title = MapLogic.NAMES[layer] and (string.sub(MapLogic.NAMES[layer], 1, 1) .. string.lower(string.sub(MapLogic.NAMES[layer], 2))) or layer,
-			body = UNIVERSE_WORD[MapLogic.MULTIVERSE[layer] == true], layer = layer }
-	end
-	if node == nil then return nil end
-	local v = node.val
-	local title = node.name or layer
-	if st == "locked" then title ..= " · Locked" end
-	local content: any = { title = title, body = v and v.tip, layer = layer, foot = "Click to open · right-click to peek" }
-	if v and not v.lit and v.req then
-		content.rows = { { "Need", v.req .. " " .. MapLogic.unit(v.rres) } }
-		if v.pr then content.pr = v.pr / 1000 end
-	end
-	return content
-end
-nodes.hover:Connect(function(layer: string?, abs: Vector2)
-	if layer == nil then
-		overlay:tooltip("node", nil)
-		return
-	end
-	overlay:tooltip("node", nodeTip(layer), abs)
-end)
--- the rift tooltip
-nodes.rift:Connect(function(event: string, abs: Vector2)
-	local ms = lastMs
-	local gate = ms and ms.gate
-	if event == "leave" then
-		overlay:tooltip("rift", nil)
-	elseif event == "hover" then
-		if gate and gate.show then
-			overlay:tooltip("rift", { title = "Prestige Multiverse", body = gate.h or "The rift is open.",
-				foot = "Click to fly there", hue = Color3.fromHex("ff2e63") }, abs)
-		else
-			local req = gate and gate.req
-			overlay:tooltip("rift", { title = "The rift is sealed", body = "Reach 185 milestones to reveal the Prestige Multiverse.",
-				rows = if req then { { "Need", req.need .. " milestones" }, { "Have", req.have .. " milestones" } } else nil,
-				pr = if req then req.pr / 1000 else nil, foot = "Click to fly there", hue = Color3.fromHex("ff2e63") }, abs)
-		end
-	end
-end)
-
-local function frameReady()
-	local ms = lastMs
-	if ms == nil or #ms.ready + #ms.canBuy == 0 then return end
-	local x0, y0, x1, y1 = math.huge, math.huge, -math.huge, -math.huge
-	for _, list in { ms.ready, ms.canBuy } do
-		for _, l in list do
-			local p = nodes:worldPos(l)
-			x0, y0, x1, y1 = math.min(x0, p.X - 110), math.min(y0, p.Y - 110), math.max(x1, p.X + 110), math.max(y1, p.Y + 150)
-		end
-	end
-	view:frameWorld({ x = x0, y = y0, w = x1 - x0, h = y1 - y0 }, { time = 0.9 })
-end
-
-if remotes then
-	local viewRemote = remotes:WaitForChild("View") :: RemoteEvent
-	local actRemote = remotes:WaitForChild("Act") :: RemoteEvent
-	local readyRemote = remotes:WaitForChild("Ready") :: RemoteEvent
-	local importRemote = remotes:WaitForChild("Import") :: RemoteEvent
-	local wasInside: boolean? = nil
-	local offShown = false
-	viewRemote.OnClientEvent:Connect(function(patch: any)
-		if type(patch) ~= "table" or patch.fatal or patch.status then return end
-		local ok, err = pcall(function()
-			local changes = store:apply(patch)
-			if changes.full then gotFull = true end
-			if changes.map then onMap() end
-			if changes.hud then onHud() end
-			if patch.save == "saving" or patch.save == "saved" then hud:setStatus(patch.save) end
-			if patch.unsaved == true then
-				offShown = true
-				hud:setStatus("off")
-			elseif offShown and patch.set ~= nil and patch.save == nil then
-				offShown = false
-				hud:setStatus(nil)
-			end
-			local ms = lastMs
-			if ms and ms.ok then
-				if wasInside ~= nil and wasInside ~= ms.inside then
-					overlay:flash(if ms.inside then Color3.fromHex("ff2e63") else Color3.fromHex("8a7cff"))
-				end
-				wasInside = ms.inside
-			end
-			if showing then
-				if patch.pop or patch.notice then overlay:toasts(patch.pop, patch.notice) end
-				if type(patch.imp) == "table" then overlay:importResult(patch.imp) end
-				if changes.ended then overlay:screen(if store.ended then "end" else nil, store:endScreen()) end
-			end
-		end)
-		if not ok then warn("[MilestoneTree] map preview: " .. tostring(err)) end
-	end)
-	-- the page asked for the first full view before this script listened: ask again once (a resync is harmless)
-	task.delay(3, function()
-		if not gotFull then readyRemote:FireServer() end
-	end)
-
-	local function fire(a: any)
-		if type(a) == "table" and #a > 0 then actRemote:FireServer(a, false) end
-	end
-	-- the new panel preview (Studio) opens over the map by itself when the server opens a tab; without it the layer
-	-- shows in the page UI
-	local function panelOn(): boolean
-		local pg = lp:FindFirstChildOfClass("PlayerGui")
-		local panel = pg and pg:FindFirstChild("PanelGui")
-		return panel ~= nil and panel:IsA("ScreenGui") and panel.Enabled
-	end
-	local function toPage()
-		if panelOn() then return end
-		task.delay(0.35, function()
-			if showing and not panelOn() then show(false) end
-		end)
-	end
-	-- open a layer (the panel preview, else the page UI)
-	local function openLayer(layer: string)
-		local ms = lastMs
-		local node = if ms then ms.nodes[layer] else nil
-		if node == nil or not node.show then
-			if nodes:state(layer) == "dormant" then
-				overlay:toasts(nil, { UNIVERSE_WORD[MapLogic.MULTIVERSE[layer] == true] })
-			end
-			return
-		end
-		local ms2 = lastMs
-		if not (ms2 and ms2.open == layer) then fire(node.a) end
-		view:focusWorld(nodes:worldPos(layer))
-		toPage()
-	end
-	nodes.activated:Connect(openLayer)
-	nodes.peek:Connect(function(layer: string)
-		local ms = lastMs
-		local node = if ms then ms.nodes[layer] else nil
-		local st = nodes:state(layer)
-		if st == "sealed" or st == "frontier" or st == "dormant" then return end
-		nodes:setPeek(layer)
-		overlay:peek(layer, node, nodes:ringRect(layer))
-	end)
-	overlay.peekClosed:Connect(function() nodes:setPeek(nil) end)
-	overlay.openLayer:Connect(openLayer)
-	overlay.act:Connect(function(a: any) fire(a) end)
-	overlay.flyTo:Connect(function(layer: string) view:focusWorld(nodes:worldPos(layer)) end)
-	overlay.importText:Connect(function(t: string) importRemote:FireServer(t) end)
-	overlay.resync:Connect(function() readyRemote:FireServer() end)
-	markers.activated:Connect(function(layer: string)
-		view:focusWorld(nodes:worldPos(layer))
-	end)
-	local function openGate()
-		view:focusWorld(Vector2.new(3150, 1350))
-		local ms = lastMs
-		task.delay(0.3, function()
-			overlay:modal("gate", if ms then ms.gate else nil)
-		end)
-	end
-	nodes.rift:Connect(function(event: string)
-		if event == "click" then openGate() end
-	end)
-
-	-- the HUD
-	hud.home:Connect(function()
-		overlay:peek(nil)
-		local ms = lastMs
-		if ms and ms.open and ms.close then fire(ms.close) end
-		view:frameStart({})
-	end)
-	hud.trophies:Connect(function() openLayer("ach") end)
-	hud.options:Connect(function()
-		local ms = lastMs
-		if ms and ms.opt then
-			fire(ms.opt)
-			toPage()
-		end
-	end)
-	hud.portal:Connect(openGate)
-	hud.zoomIn:Connect(function() mi:zoomStep(1) end)
-	hud.zoomOut:Connect(function() mi:zoomStep(-1) end)
-	hud.readyTap:Connect(openLayer)
-	hud.readyHold:Connect(function(layer: string)
-		local ms = lastMs
-		local node = if ms then ms.nodes[layer] else nil
-		local v = node and node.val
-		if v and v.ra then fire(v.ra) end
-	end)
-	hud.readyMore:Connect(frameReady)
-	hud.gateHold:Connect(function()
-		local ms = lastMs
-		local gate = ms and ms.gate
-		if gate and gate.a then fire(gate.a) end
-	end)
-	local warnOpen = false
-	hud.warnTap:Connect(function(abs: Vector2)
-		local h = store:hud()
-		warnOpen = not warnOpen
-		if not warnOpen or h == nil then
-			overlay:tooltip("warn", nil)
-			return
-		end
-		local rows = {}
-		for _, w in h.w do table.insert(rows, { string.upper(string.sub(w.k, 1, 1)) .. string.sub(w.k, 2) .. " from", w.v }) end
-		overlay:tooltip("warn", { title = "Point production is slowed", body = h.wh or h.x, rows = rows,
-			hue = Color3.fromHex("ffc233") }, abs)
-		task.delay(6, function()
-			if warnOpen then
-				warnOpen = false
-				overlay:tooltip("warn", nil)
-			end
-		end)
-	end)
-else
-	warn("[MilestoneTree] map preview: no remotes, showing the empty map")
-end
-
--- ------------------------------------------------------------------------------------------------------ loop
-local function step(dt: number)
-	if not showing then return end
-	mi:step(dt)
-	view:step(dt)
-	Motion.step(dt)
-end
-local ok = pcall(function()
-	(RunService :: any).PreRender:Connect(step)
-end)
-if not ok then RunService.RenderStepped:Connect(step) end
-]]></string>
-          </Properties>
-        </Item>
-        <Item class="Folder" referent="100">
+        <Item class="Folder" referent="99">
           <Properties>
             <string name="Name">Overlay</string>
           </Properties>
-          <Item class="ModuleScript" referent="101">
+          <Item class="ModuleScript" referent="100">
             <Properties>
               <string name="Name">Modals</string>
               <string name="Source"><![CDATA[--!strict
@@ -45529,7 +45145,7 @@ return Modals
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="102">
+          <Item class="ModuleScript" referent="101">
             <Properties>
               <string name="Name">Overlay</string>
               <string name="Source"><![CDATA[--!strict
@@ -45684,7 +45300,7 @@ return Overlay
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="103">
+          <Item class="ModuleScript" referent="102">
             <Properties>
               <string name="Name">Peek</string>
               <string name="Source"><![CDATA[--!strict
@@ -46001,7 +45617,7 @@ return Peek
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="104">
+          <Item class="ModuleScript" referent="103">
             <Properties>
               <string name="Name">Screens</string>
               <string name="Source"><![CDATA[--!strict
@@ -46327,7 +45943,7 @@ return Screens
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="105">
+          <Item class="ModuleScript" referent="104">
             <Properties>
               <string name="Name">ToastModel</string>
               <string name="Source"><![CDATA[--!strict
@@ -46492,7 +46108,7 @@ return ToastModel
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="106">
+          <Item class="ModuleScript" referent="105">
             <Properties>
               <string name="Name">Toasts</string>
               <string name="Source"><![CDATA[--!strict
@@ -46872,7 +46488,7 @@ return Toasts
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="107">
+          <Item class="ModuleScript" referent="106">
             <Properties>
               <string name="Name">Tooltip</string>
               <string name="Source"><![CDATA[--!strict
@@ -47104,11 +46720,11 @@ return Tooltip
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="108">
+        <Item class="Folder" referent="107">
           <Properties>
             <string name="Name">Panel</string>
           </Properties>
-          <Item class="ModuleScript" referent="109">
+          <Item class="ModuleScript" referent="108">
             <Properties>
               <string name="Name">Hero</string>
               <string name="Source"><![CDATA[--!strict
@@ -47633,7 +47249,7 @@ return Hero
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="110">
+          <Item class="ModuleScript" referent="109">
             <Properties>
               <string name="Name">Panel</string>
               <string name="Source"><![CDATA[--!strict
@@ -48523,148 +48139,7 @@ return Panel
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="111">
-            <Properties>
-              <string name="Name">Preview</string>
-              <string name="Source"><![CDATA[--!strict
---[[
-	Preview: the new layer panel over the old page UI, in Studio only, until the app shell (package I) replaces the
-	page. The old Main.client feeds every View patch here; the panel follows the server's open layer (map.open), the
-	way App will (plan 1.12): pick a layer in the old menu (or press its hotkey) and its new panel opens at the right;
-	X / closing sends the map's own close action. Every button fires its node's own action through the old client's
-	press function (the server whitelist applies as always).
-
-	    local preview = Preview.start({ press = fn(action, hold) })   -- nil outside Studio
-	    preview:onPatch(patch)
-
-	A small toggle at the bottom left switches the preview off and on. The panel sits above the map preview (M / the
-	GAME button switch the map and the page as before).
-]]
-
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-
-local Core = script.Parent.Parent:WaitForChild("Core")
-local Theme = require(Core:WaitForChild("Theme"))
-local Layout = require(Core:WaitForChild("Layout"))
-local ViewStore = require(Core:WaitForChild("ViewStore"))
-local Panel = require(script.Parent:WaitForChild("Panel"))
-
-local Preview = {}
-Preview.__index = Preview
-
-export type Preview = typeof(setmetatable({} :: {
-	store: any,
-	panel: any,
-	on: boolean,
-	press: (action: any, hold: boolean) -> (),
-	toggle: TextButton,
-	errors: number,
-	closing: string?,
-}, Preview))
-
-function Preview.start(o: { press: (action: any, hold: boolean) -> () }): Preview?
-	if not RunService:IsStudio() then return nil end
-	Theme.detect()
-	local gui = Layout.screen("PanelGui", 20, Enum.ScreenInsets.CoreUISafeInsets)
-	gui.DisplayOrder = 42 -- above the map preview (40) and its button bar (41)
-	local store = ViewStore.new()
-	local panel = Panel.new(gui, { store = store })
-	-- the toggle
-	local tg = Instance.new("ScreenGui")
-	tg.Name = "PanelPreviewToggle"
-	tg.ResetOnSpawn = false
-	tg.DisplayOrder = 43
-	tg.ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets
-	local b = Instance.new("TextButton")
-	b.Name = "Toggle"
-	b.AnchorPoint = Vector2.new(0, 1)
-	b.Position = UDim2.new(0, 12, 1, -12)
-	b.Size = UDim2.fromOffset(190, 36)
-	b.BackgroundColor3 = Theme.C.panel2
-	b.AutoButtonColor = true
-	b.FontFace = Theme.font("label")
-	b.TextSize = 14
-	b.TextColor3 = Theme.C.text
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0.5, 0)
-	corner.Parent = b
-	local stroke = Instance.new("UIStroke")
-	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-	stroke.Color = Theme.C.system
-	stroke.Thickness = 2
-	stroke.Parent = b
-	b.Parent = tg
-	tg.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
-
-	local self = setmetatable({ store = store, panel = panel, on = true, press = o.press, toggle = b, errors = 0, closing = nil :: string? }, Preview)
-	panel.act:Connect(function(a: any, hold: boolean?)
-		self.press(a, hold == true)
-	end)
-	panel.closeRequested:Connect(function()
-		local ms = store:map()
-		if ms.close then self.press(ms.close, false) end
-		-- the panel closes at once; a patch still showing the layer open must not reopen it
-		self.closing = panel:isOpen()
-		panel:close()
-	end)
-	b.Activated:Connect(function()
-		self:setOn(not self.on)
-	end)
-	self:setOn(true)
-	return self
-end
-
-function Preview.setOn(self: Preview, on: boolean)
-	self.on = on
-	self.toggle.Text = if on then "NEW PANEL · ON" else "NEW PANEL · OFF"
-	self.panel.gui.Enabled = on
-	if on then
-		-- catch up from the store (the tree is rebuilt for the current layer)
-		self.panel:update(self.store, { full = true, tab = true, tabPatch = { set = {}, del = {}, full = true } })
-		self:follow()
-	else
-		self.panel:close()
-	end
-end
-
--- open / close / switch with the server's open layer (plan 1.12 "the server moves the tab")
-function Preview.follow(self: Preview)
-	local ms = self.store:map()
-	local open = ms.open
-	if self.closing ~= nil then
-		if open == self.closing then return end
-		self.closing = nil
-	end
-	local key = self.panel:isOpen()
-	if open == key then return end
-	if open then
-		self.panel:open(open, ms.nodes[open])
-	else
-		self.panel:close()
-	end
-end
-
-function Preview.onPatch(self: Preview, patch: any)
-	if type(patch) ~= "table" or patch.fatal or patch.status then return end
-	local ok, err = pcall(function(): any
-		local changes = self.store:apply(patch)
-		if not self.on then return nil end
-		self.panel:update(self.store, changes)
-		self:follow()
-		return nil
-	end)
-	if not ok then
-		self.errors += 1
-		if self.errors <= 5 then warn("[MilestoneTree] panel preview: " .. tostring(err)) end
-	end
-end
-
-return Preview
-]]></string>
-            </Properties>
-          </Item>
-          <Item class="ModuleScript" referent="112">
+          <Item class="ModuleScript" referent="110">
             <Properties>
               <string name="Name">Sections</string>
               <string name="Source"><![CDATA[--!strict
@@ -48880,11 +48355,11 @@ return Sections
 ]]></string>
             </Properties>
           </Item>
-          <Item class="Folder" referent="113">
+          <Item class="Folder" referent="111">
             <Properties>
               <string name="Name">Skins</string>
             </Properties>
-            <Item class="ModuleScript" referent="114">
+            <Item class="ModuleScript" referent="112">
               <Properties>
                 <string name="Name">Achievement</string>
                 <string name="Source"><![CDATA[--!strict
@@ -48943,7 +48418,7 @@ return Achievement
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="115">
+            <Item class="ModuleScript" referent="113">
               <Properties>
                 <string name="Name">Buyable</string>
                 <string name="Source"><![CDATA[--!strict
@@ -49167,7 +48642,7 @@ return Buyable
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="116">
+            <Item class="ModuleScript" referent="114">
               <Properties>
                 <string name="Name">Challenge</string>
                 <string name="Source"><![CDATA[--!strict
@@ -49319,7 +48794,7 @@ return Challenge
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="117">
+            <Item class="ModuleScript" referent="115">
               <Properties>
                 <string name="Name">Clickable</string>
                 <string name="Source"><![CDATA[--!strict
@@ -49383,7 +48858,7 @@ return Clickable
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="118">
+            <Item class="ModuleScript" referent="116">
               <Properties>
                 <string name="Name">Common</string>
                 <string name="Source"><![CDATA[--!strict
@@ -49759,7 +49234,7 @@ return Common
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="119">
+            <Item class="ModuleScript" referent="117">
               <Properties>
                 <string name="Name">CompactOwned</string>
                 <string name="Source"><![CDATA[--!strict
@@ -49843,7 +49318,7 @@ return CompactOwned
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="120">
+            <Item class="ModuleScript" referent="118">
               <Properties>
                 <string name="Name">Generic</string>
                 <string name="Source"><![CDATA[--!strict
@@ -50206,7 +49681,7 @@ return Generic
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="121">
+            <Item class="ModuleScript" referent="119">
               <Properties>
                 <string name="Name">GridTile</string>
                 <string name="Source"><![CDATA[--!strict
@@ -50286,7 +49761,7 @@ return GridTile
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="122">
+            <Item class="ModuleScript" referent="120">
               <Properties>
                 <string name="Name">Milestone</string>
                 <string name="Source"><![CDATA[--!strict
@@ -50418,7 +49893,7 @@ return Milestone
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="123">
+            <Item class="ModuleScript" referent="121">
               <Properties>
                 <string name="Name">Opt</string>
                 <string name="Source"><![CDATA[--!strict
@@ -50512,7 +49987,7 @@ return Opt
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="124">
+            <Item class="ModuleScript" referent="122">
               <Properties>
                 <string name="Name">Perk</string>
                 <string name="Source"><![CDATA[--!strict
@@ -50572,7 +50047,7 @@ return Perk
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="125">
+            <Item class="ModuleScript" referent="123">
               <Properties>
                 <string name="Name">Skins</string>
                 <string name="Source"><![CDATA[--!strict
@@ -50628,7 +50103,7 @@ return Skins
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="126">
+            <Item class="ModuleScript" referent="124">
               <Properties>
                 <string name="Name">Upgrade</string>
                 <string name="Source"><![CDATA[--!strict
@@ -50960,7 +50435,7 @@ return Upgrade
               </Properties>
             </Item>
           </Item>
-          <Item class="ModuleScript" referent="127">
+          <Item class="ModuleScript" referent="125">
             <Properties>
               <string name="Name">Virtual</string>
               <string name="Source"><![CDATA[--!strict
@@ -51225,7 +50700,7 @@ return Virtual
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="128">
+        <Item class="ModuleScript" referent="126">
           <Properties>
             <string name="Name">Render</string>
             <string name="Source"><![CDATA[--!strict
@@ -52107,10 +51582,1025 @@ return Render
 ]]></string>
           </Properties>
         </Item>
-        <Item class="Folder" referent="129">
+        <Item class="Folder" referent="127">
           <Properties>
             <string name="Name">Signatures</string>
           </Properties>
+          <Item class="ModuleScript" referent="128">
+            <Properties>
+              <string name="Name">Cp</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	Cp: Corrupted Prestige, symbol CR (DESIGN.md 6 row cp, 6.1 "cp terminal"). The Panel draws the corrupted shell
+	(dashed lime rim, terminal body, breadcrumb); this adds:
+
+	    hero      CAUSED / FIXED counters (the game's two highlighted numbers, Sarpanch 52), the essences as two stat
+	              rows, and a black glossy CORRUPT with lime scanlines whose well reads "n charges" and a "next at"
+	              chip (the prestige button's own gain / next, as sent). The source lines leave the body.
+	    MODE      ESSENCE & RECHARGE MODE: the two mode clickables as a radio (one press, the clickable's own action)
+	    DISKS     the grid as a terminal window (C:\CORRUPTION\DISKS, cols x rows, corrupted / fixing counts): 104 du
+	              tiles from gs / lv / kind (empty = quiet slot id, Trojan lime dashed, Backdoor crimson dashed, active
+	              or chosen gold with the fix bar), a legend, and the INSPECTOR: the selected disk's fix / debuff /
+	              reward (gx), the fix progress once as the game's ASCII bar, ACTIVATE / DEACTIVATE (the tile's own
+	              action). Mouse: a click fires the tile, hovering selects it; touch: a tap selects, the inspector acts.
+	At most 36 tiles, each at most 8 instances.
+]]
+
+local UserInputService = game:GetService("UserInputService")
+
+local Client = script.Parent.Parent
+local Core = Client:WaitForChild("Core")
+local Theme = require(Core:WaitForChild("Theme"))
+local Rich = require(Core:WaitForChild("Rich"))
+local Layout = require(Core:WaitForChild("Layout"))
+local Recipes = require(Core:WaitForChild("Recipes"))
+local PanelF = Client:WaitForChild("Panel")
+local Common = require(PanelF:WaitForChild("Skins"):WaitForChild("Common"))
+local Sections = require(PanelF:WaitForChild("Sections"))
+local Kit = require(script.Parent:WaitForChild("Kit"))
+local P = (require(script.Parent:WaitForChild("P")) :: any).P
+
+local C = Theme.C
+local LIME = Theme.hue("cp")
+
+local function trim(s: string): string
+	return (string.gsub(string.gsub(s, "^%s+", ""), "%s+$", ""))
+end
+
+-- the display-text lines the hero takes over (they carry the game's highlighted numbers)
+local function heroLine(h: any): string?
+	if type(h) ~= "string" or not string.find(h, "<h2", 1, true) then return nil end
+	if string.find(h, "caused", 1, true) then return "counts" end
+	if string.find(h, "corruption essences", 1, true) then return "essences" end
+	return nil
+end
+
+-- ------------------------------------------------------------------------------------------------------ hero
+local function hero(f: Frame, store: any, ctx: any)
+	local a = Kit.accent(f, "Cp")
+	local compact = Layout.mode == "COMPACT"
+	local counts: { string } = {}
+	local ess, boost = nil :: string?, nil :: string?
+	for _, id in Kit.findAll(store, "tab", function(n: any): boolean
+		return n.cn == "display-text" and heroLine(n.h) ~= nil
+	end, 4) do
+		local n = store:get(id)
+		local kind = heroLine(n.h)
+		if kind == "counts" then
+			counts = Kit.h2(n.h)
+		elseif kind == "essences" then
+			ess = Kit.h2(n.h)[1]
+			local plain = Common.plain(n.h)
+			boost = string.match(plain, "gain by%s+([^%s%(]+)")
+		end
+	end
+	-- the counters and the essences rows (WIDE: left block; COMPACT: the column's top)
+	local block = Common.get(a, "Block", "Frame") :: Frame
+	block.Active = false
+	block.Position = UDim2.new()
+	block.Size = UDim2.new(if compact then 1 else 0, if compact then 0 else 560, 0, 0)
+	block.AutomaticSize = Enum.AutomaticSize.Y
+	Common.list(block, false, if compact then 4 else 6)
+	local row = Common.get(block, "Counts", "Frame") :: Frame
+	row.Active = false
+	row.LayoutOrder = 1
+	row.Size = UDim2.new(1, 0, 0, if compact then 40 else 64)
+	Common.list(row, true, if compact then 14 else 28, { valign = Enum.VerticalAlignment.Bottom })
+	local labels = { "Caused", "Fixed" }
+	for i = 1, 2 do
+		local v = counts[i]
+		local name = labels[i]
+		if v then
+			local cap = Common.get(row, name .. "Cap", "TextLabel") :: TextLabel
+			cap.Active = false
+			cap.LayoutOrder = i * 2 - 1
+			Common.text(cap, "caps", C.termDim)
+			cap.AutomaticSize = Enum.AutomaticSize.X
+			cap.Size = UDim2.fromOffset(0, 20)
+			cap.TextYAlignment = Enum.TextYAlignment.Bottom
+			Common.setText(cap, Common.esc(Rich.caps(name)))
+			local num = Common.get(row, name, "TextLabel") :: TextLabel
+			num.LayoutOrder = i * 2
+			num.AutomaticSize = Enum.AutomaticSize.X
+			num.Size = UDim2.fromOffset(0, if compact then 36 else 60)
+			num.TextXAlignment = Enum.TextXAlignment.Left
+			local sig = v .. "|" .. tostring(compact)
+			if num:GetAttribute("Sig") ~= sig then
+				num:SetAttribute("Sig", sig)
+				Recipes.number(num, { text = v, size = if compact then 30 else 52, from = C.white, mid = Theme.lift(LIME, 0.4),
+					to = if i == 1 then LIME else C.bought, stroke = if compact then 4 else 6, shadow = if compact then 2 else 4, role = "big" })
+			end
+		else
+			Common.drop(row, name .. "Cap")
+			Common.drop(row, name)
+		end
+	end
+	local rows: { { string } } = {}
+	if ess then table.insert(rows, { "Corruption essences", ess }) end
+	if boost then table.insert(rows, { "Points & PE gain", "×" .. boost }) end
+	for i = 1, 2 do
+		local r = rows[i]
+		local name = "Stat" .. i
+		if r then
+			local l = Common.label(block, name, "small", C.termDim, { order = 1 + i, wrap = false })
+			Common.setText(l, Common.esc(r[1]) .. "   " .. Common.num(if compact then Rich.short(r[2]) else r[2], "numberHeavy", C.termLime))
+		else
+			Common.drop(block, name)
+		end
+	end
+	-- CORRUPT: black gloss, lime rim and scanlines; the well reads the charges, a chip the next charge
+	local cta = f:FindFirstChild("Cta") :: GuiObject?
+	local pb = Kit.resetNode(store)
+	if cta and pb then
+		local fill = cta:FindFirstChild("Fill")
+		if fill and fill:IsA("UIGradient") then
+			fill.Color = ColorSequence.new({
+				ColorSequenceKeypoint.new(0, Color3.fromRGB(34, 44, 36)),
+				ColorSequenceKeypoint.new(0.5, Color3.fromRGB(8, 14, 9)),
+				ColorSequenceKeypoint.new(1, Color3.new(0, 0, 0)),
+			})
+		end
+		local rim = cta:FindFirstChild("Rim")
+		if rim and rim:IsA("UIStroke") then
+			local rg = rim:FindFirstChild("RimGradient")
+			if rg and rg:IsA("UIGradient") then rg.Color = ColorSequence.new(Theme.lift(LIME, 0.3), Theme.shade(LIME, 0.6)) end
+		end
+		Common.glow(cta, if pb.cls == "can" then LIME else nil, 0.5, 18)
+		local scan = Kit.stripes(cta, LIME, 0.06, 16, 90, "Scan")
+		if scan then
+			scan.ZIndex = 9
+			Kit.tether(a, "ScanGuard", scan)
+		end
+		local well = cta:FindFirstChild("Well") :: TextLabel?
+		local gain = Common.str(pb.gain)
+		if well and gain and pb.cls == "can" then
+			Common.setText(well, Common.num(gain, "ctaSub", C.text, "charges", true))
+		end
+		local nextAt = Common.str(pb.next)
+		if nextAt and not compact then
+			local stats = f:FindFirstChild("Stats") :: GuiObject?
+			local y = cta.Size.Y.Offset + 10 + (if stats and stats.Visible then 42 else 0)
+			local chip = Common.chip(a, "Next", Common.caps("Next charge at", C.termDim) .. "   "
+				.. Common.num(nextAt, "number", C.termLime, Common.plain(Common.str(pb.bres) or "")), { rich = true, bg = Color3.new(0, 0, 0), bgT = 0.2, h = 34 })
+			chip.AnchorPoint = Vector2.new(1, 0)
+			chip.Position = UDim2.new(1, 0, 0, y)
+		else
+			Common.drop(a, "Next")
+		end
+	else
+		Common.drop(a, "Next")
+	end
+end
+
+-- the hero's source lines leave the body; the explainer stays a note (terminal text)
+local function noteClaim(ph: Frame, id: string, store: any, ctx: any): any
+	local claim = {}
+	function claim.update(_: any, st: any)
+		local n = st:get(id)
+		local h = if type(n) == "table" then n.h else nil
+		local text = Common.plain(h)
+		if heroLine(h) or not string.find(text, "%S") then
+			ph.Visible = false
+			ph.Size = UDim2.new()
+			ph.AutomaticSize = Enum.AutomaticSize.None
+			Common.drop(ph, "Text")
+			return
+		end
+		ph.Visible = true
+		ph.Size = UDim2.new(1, 0, 0, 0)
+		ph.AutomaticSize = Enum.AutomaticSize.Y
+		ph.BackgroundColor3 = Color3.fromRGB(4, 16, 6)
+		ph.BackgroundTransparency = 0.2
+		Common.corner(ph, 10)
+		Common.stroke(ph, 1, C.stableId, 0.4)
+		Common.pad(ph, 10, 14, 10, 14)
+		local l = Common.label(ph, "Text", "terminal", C.termLime)
+		Common.setText(l, Common.esc("> ") .. Common.html(h, "terminal", ctx.layer))
+	end
+	function claim.destroy(_: any)
+		Common.drop(ph, "Text")
+	end
+	return claim
+end
+
+-- ------------------------------------------------------------------------------------------------------ mode radio
+local function modeClaim(ph: Frame, id: string, store: any, ctx: any): any
+	local claim = {}
+	ph.Size = UDim2.new(1, 0, 0, 0)
+	ph.AutomaticSize = Enum.AutomaticSize.Y
+	Common.list(ph, false, 12)
+	function claim.update(_: any, st: any)
+		store = st or store
+		local compact = Layout.mode == "COMPACT"
+		local ids = Kit.findAll(st, id, function(n: any): boolean
+			return n.t == "btn" and n.k == "click"
+		end, 3)
+		Sections.header(ph, { name = "Head", order = 0, text = "ESSENCE & RECHARGE MODE", hue = LIME })
+		local row = Kit.stack(ph, "Options", true, 12, 1)
+		local used: { [string]: boolean } = { List = true }
+		for i, cid in ids do
+			local n = st:get(cid)
+			local plain = trim(Common.plain(n.h or ""))
+			local mode = string.match(plain, "mode to (.-),") or string.match(plain, "mode to (.-)%.") or plain
+			local rest = string.match(plain, ",%s*(.*)$")
+			local current = n.cls ~= "can" -- the game locks the mode you are already in
+			local name = "O" .. i
+			used[name] = true
+			local b = Common.get(row, name, "TextButton") :: TextButton
+			b.LayoutOrder = i
+			b.AutoButtonColor = false
+			b.Size = UDim2.fromOffset(if compact then math.floor((Kit.live(ctx).contentW - 12) / 2) else 420, 0)
+			b.AutomaticSize = Enum.AutomaticSize.Y
+			b.BackgroundColor3 = if current then Color3.fromRGB(12, 40, 14) else Color3.fromRGB(6, 18, 8)
+			b.BackgroundTransparency = 0
+			Common.corner(b, 12)
+			Common.stroke(b, if current then 2 else 1, if current then LIME else C.stableId, if current then 0 else 0.3)
+			Common.pad(b, 12, 14, 12, 44)
+			Common.text(b, "small", C.termLime)
+			b.TextWrapped = true
+			b.TextXAlignment = Enum.TextXAlignment.Left
+			b.TextYAlignment = Enum.TextYAlignment.Top
+			local text = Common.run(Common.esc(mode), "label", if current then C.text else C.termLime)
+			if rest and rest ~= "" then text ..= "\n" .. Common.run(Common.esc(rest), "small", C.termDim) end
+			Common.setText(b, text)
+			-- the radio dot
+			local dot = Common.get(b, "Dot", "Frame") :: Frame
+			dot.Active = false
+			dot.Position = UDim2.fromOffset(-30, 1)
+			dot.Size = UDim2.fromOffset(18, 18)
+			dot.BackgroundColor3 = if current then LIME else Color3.new(0, 0, 0)
+			dot.BackgroundTransparency = 0
+			Common.corner(dot, 0.5)
+			Common.stroke(dot, 2, LIME, if current then 0 else 0.4)
+			Common.state(b, if current then "owned" else "can")
+			Kit.onPress(b, function()
+				local x = store:get(cid)
+				if type(x) == "table" and type(x.a) == "table" and x.cls == "can" then ctx.act(x.a, false) end
+			end)
+		end
+		for _, c in row:GetChildren() do
+			if c:IsA("GuiObject") and not used[c.Name] then c:Destroy() end
+		end
+	end
+	function claim.destroy(_: any)
+		for _, c in ph:GetChildren() do c:Destroy() end
+	end
+	return claim
+end
+
+-- ------------------------------------------------------------------------------------------------------ disks
+local selected: { [string]: string } = {} -- the inspected disk per layer (its action id), for the session
+
+local function tileLook(b: TextButton, n: any, size: number)
+	local gs = n.gs
+	local backdoor = n.kind == "backdoor"
+	local rim = if gs == "active" or gs == "chosen" then C.complete elseif backdoor then C.danger else C.termLime
+	b.AutoButtonColor = false
+	b.Size = UDim2.fromOffset(size, size)
+	b.BackgroundTransparency = 0
+	Common.corner(b, 12)
+	Common.text(b, "small", C.termLime)
+	b.TextWrapped = true
+	b.TextXAlignment = Enum.TextXAlignment.Center
+	b.TextYAlignment = Enum.TextYAlignment.Center
+	local slot = Common.str(n.id) or ""
+	if gs == "empty" then
+		b.BackgroundColor3 = Color3.fromRGB(6, 16, 8)
+		local s = Common.stroke(b, 1, C.stableId, 0.5)
+		Common.drop(s, "Dash")
+		Common.setText(b, Common.run(Common.esc(slot), "label", C.stableId))
+		Common.drop(b, "Bar")
+		return
+	end
+	b.BackgroundColor3 = if gs == "active" or gs == "chosen" then Color3.fromRGB(34, 30, 8) else Color3.fromRGB(8, 28, 12)
+	local s = Common.stroke(b, 2, rim, 0)
+	if gs == "corrupted" then Recipes.dashed(s, { color = rim }) else Common.drop(s, "Dash") end
+	local lv = math.floor(tonumber(n.lv) or 0)
+	local kind = if backdoor then "Backdoor" else "Trojan"
+	Common.setText(b, Common.caps(kind, rim) .. "\n" .. Common.caps("Lv", C.termDim) .. " "
+		.. Common.num(tostring(lv), if size >= 100 then "numberHeavy" else "number", C.text) .. "\n" .. Common.run(Common.esc(slot), "label", C.termDim))
+	local gp = Common.pr(n.gp)
+	if gp and (gs == "active" or gs == "chosen") then
+		local bar = Common.bar(b, "Bar", gp, C.complete, 5)
+		bar.AnchorPoint = Vector2.new(0.5, 1)
+		bar.Position = UDim2.new(0.5, 0, 1, -8)
+		bar.Size = UDim2.new(1, -20, 0, 5)
+	else
+		Common.drop(b, "Bar")
+	end
+end
+
+-- the game's ASCII progress bar (the fix progress, shown once)
+local function ascii(p: number): string
+	local k = math.clamp(math.floor(p * 10 + 0.5), 0, 10)
+	return "[" .. string.rep("#", k) .. string.rep("=", 10 - k) .. "]  -< " .. Rich.pct(p) .. " >-"
+end
+
+local function gridClaim(ph: Frame, id: string, store: any, ctx: any): any
+	local claim = {}
+	ph.Size = UDim2.new(1, 0, 0, 0)
+	ph.AutomaticSize = Enum.AutomaticSize.Y
+	local layer = ctx.layer
+	local draw: (st: any) -> () = nil :: any
+	local function inspect(key: string)
+		selected[layer] = key
+		draw(store)
+	end
+	draw = function(st: any)
+		store = st or store
+		local compact = Layout.mode == "COMPACT"
+		local tiles: { string } = {}
+		local cols = 0
+		for _, rid in st:kids(id) do
+			local r = st:get(rid)
+			if type(r) ~= "table" then continue end
+			local c = 0
+			for _, tid in st:kids(rid) do
+				local t = st:get(tid)
+				if type(t) == "table" and t.t == "btn" and t.k == "grid" and #tiles < 36 then
+					table.insert(tiles, tid)
+					c += 1
+				end
+			end
+			cols = math.max(cols, c)
+		end
+		local rowsN = if cols > 0 then math.ceil(#tiles / cols) else 0
+		local corrupted, fixing = 0, 0
+		for _, tid in tiles do
+			local t = st:get(tid)
+			if t.gs == "active" or t.gs == "chosen" then fixing += 1 elseif t.gs ~= "empty" then corrupted += 1 end
+		end
+		-- the terminal window
+		local win = Kit.card(ph, "Window", { gap = 12, pad = if compact then 10 else 16, fill = Color3.fromRGB(2, 10, 3), stroke = LIME,
+			strokeT = 0.45, radius = 14 })
+		local head = Common.label(win, "Head", "terminalBold", C.termLime, { order = 1, wrap = false })
+		Common.setText(head, Common.esc("C:\\CORRUPTION\\DISKS")
+			.. "   " .. Common.run(Common.esc(cols .. " × " .. rowsN .. " · " .. corrupted .. " corrupted · " .. fixing .. " fixing"), "small", C.termDim))
+		local body = Common.get(win, "Body", "Frame") :: Frame
+		body.LayoutOrder = 2
+		body.Active = false
+		body.Size = UDim2.new(1, 0, 0, 0)
+		body.AutomaticSize = Enum.AutomaticSize.Y
+		Common.list(body, not compact, 16, { valign = Enum.VerticalAlignment.Top })
+		local size = if compact then 84 else 104
+		local gap = 10
+		local grid = Common.get(body, "Grid", "Frame") :: Frame
+		grid.LayoutOrder = 1
+		grid.Active = false
+		grid.Size = UDim2.fromOffset(math.max(1, cols) * (size + gap) - gap, 0)
+		grid.AutomaticSize = Enum.AutomaticSize.Y
+		local gl = Common.get(grid, "Layout", "UIGridLayout") :: UIGridLayout
+		gl.CellSize = UDim2.fromOffset(size, size)
+		gl.CellPadding = UDim2.fromOffset(gap, gap)
+		gl.FillDirection = Enum.FillDirection.Horizontal
+		gl.SortOrder = Enum.SortOrder.LayoutOrder
+		pcall(function()
+			gl.FillDirectionMaxCells = math.max(1, cols)
+		end)
+		-- the selection: the kept one if it is still a disk, else the first fixing / corrupted disk
+		local sel = selected[layer]
+		local selId: string? = nil
+		for _, tid in tiles do
+			local t = st:get(tid)
+			if tostring(t.id) == sel then selId = tid end
+		end
+		if selId == nil then
+			for _, tid in tiles do
+				local t = st:get(tid)
+				if t.gs == "active" or t.gs == "chosen" then
+					selId = tid
+					break
+				end
+			end
+		end
+		if selId == nil then
+			for _, tid in tiles do
+				if st:get(tid).gs ~= "empty" then
+					selId = tid
+					break
+				end
+			end
+		end
+		local used: { [string]: boolean } = { Layout = true }
+		for i, tid in tiles do
+			local t = st:get(tid)
+			local name = "D" .. tostring(t.id)
+			used[name] = true
+			local b = Common.get(grid, name, "TextButton") :: TextButton
+			b.LayoutOrder = i
+			tileLook(b, t, size)
+			if tid == selId then
+				local s = b:FindFirstChild("Border")
+				if s and s:IsA("UIStroke") then s.Thickness = 3 end
+			end
+			Common.state(b, if t.gs == "empty" then "notyet" else "can")
+			local key = tostring(t.id)
+			Kit.onPress(b, function()
+				local touch = false
+				pcall(function()
+					touch = UserInputService:GetLastInputType() == Enum.UserInputType.Touch
+				end)
+				if touch then
+					inspect(key)
+					return
+				end
+				local x = store:get(tid)
+				if type(x) == "table" and type(x.a) == "table" then ctx.act(x.a, false) end
+			end)
+			if b:GetAttribute("Hover") ~= true then
+				b:SetAttribute("Hover", true)
+				b.MouseEnter:Connect(function()
+					if selected[layer] ~= key then inspect(key) end
+				end)
+			end
+		end
+		for _, c in grid:GetChildren() do
+			if c:IsA("GuiObject") and not used[c.Name] then c:Destroy() end
+		end
+		-- the inspector
+		local ins = Kit.card(body, "Inspector", { order = 2, gap = 8, pad = 14, fill = Color3.fromRGB(4, 18, 6), stroke = LIME, strokeT = 0.5,
+			w = if compact then nil else 300, radius = 12 })
+		local s = if selId then st:get(selId) else nil
+		local lines: { string } = {}
+		if s then
+			local kind = if s.kind == "backdoor" then "Backdoor" else "Trojan"
+			table.insert(lines, Common.run(Common.esc("> DISK " .. tostring(s.id)), "terminalBold", C.termLime))
+			if s.gs == "empty" then
+				table.insert(lines, Common.run(Common.esc("Stable. No corruptions detected."), "small", C.termDim))
+			else
+				table.insert(lines, Common.caps(kind, if s.kind == "backdoor" then Theme.lift(C.danger, 0.3) else C.termLime) .. "  "
+					.. Common.caps("Lv", C.termDim) .. " " .. Common.num(tostring(math.floor(tonumber(s.lv) or 0)), "number", C.text))
+				local gx = if type(s.gx) == "table" then s.gx else nil
+				if gx then
+					local fres = Common.plain(Common.str(gx.fres) or "")
+					if gx.fix then table.insert(lines, Common.run("To fix, get", "small", C.termDim) .. "  " .. Common.num(tostring(gx.fix), "number", C.termLime, fres)) end
+					if gx.deb then table.insert(lines, Common.run("While active,", "small", C.termDim) .. "  " .. Common.num("/" .. tostring(gx.deb), "number", C.termLime, fres .. " gain")) end
+					if gx.rew then table.insert(lines, Common.run("Reward", "small", C.termDim) .. "  " .. Common.num(tostring(gx.rew), "number", C.termLime, "essences")) end
+				end
+				local gp = Common.pr(s.gp)
+				if gp then table.insert(lines, Common.run(Common.esc(ascii(gp)), "terminal", C.complete)) end
+			end
+		else
+			table.insert(lines, Common.run(Common.esc("> no disk selected"), "terminal", C.termDim))
+		end
+		local info = Common.label(ins, "Info", "small", C.termLime, { order = 1 })
+		info.LineHeight = Theme.lineHeight("terminal")
+		Common.setText(info, table.concat(lines, "\n"))
+		if s and s.gs ~= "empty" and type(s.a) == "table" then
+			local active = s.gs == "active" or s.gs == "chosen"
+			local b = Kit.button(ins, "Act", Common.esc(if active then "DEACTIVATE" else "ACTIVATE"), { fill = if active then Color3.fromRGB(40, 34, 8) else Color3.fromRGB(10, 44, 14),
+				ink = if active then C.complete else C.termLime, stroke = if active then C.complete else LIME, h = 40, w = 1, order = 2 })
+			Common.state(b, "can")
+			local sid = selId :: string
+			Kit.onPress(b, function()
+				local x = store:get(sid)
+				if type(x) == "table" and type(x.a) == "table" then ctx.act(x.a, false) end
+			end)
+		else
+			Common.drop(ins, "Act")
+		end
+		-- the legend
+		local legend = Common.label(win, "Legend", "small", C.termDim, { order = 3, wrap = true })
+		local function dot(c: Color3): string
+			return Common.run("•", "label", c)
+		end
+		Common.setText(legend, dot(C.termLime) .. " Trojan     " .. dot(C.danger) .. " Backdoor     " .. dot(C.complete) .. " Fixing     "
+			.. dot(C.stableId) .. " Stable")
+	end
+	function claim.update(_: any, st: any)
+		draw(st)
+	end
+	function claim.destroy(_: any)
+		Common.drop(ph, "Window")
+	end
+	return claim
+end
+
+-- scanlines over the header band
+local function accent(sheet: Frame, ctx: any)
+	local band = Kit.band(sheet)
+	if band == nil then return end
+	local a = Kit.accent(band, "Cp")
+	Kit.stripes(a, LIME, 0.05, 22, 90)
+end
+
+return {
+	layers = { "cp" },
+	corrupted = true,
+	skin = P.skin,
+	hero = hero,
+	accent = accent,
+	claims = ({
+		{ match = { cn = "display-text" }, make = noteClaim },
+		{ match = { cn = "clickables" }, make = modeClaim },
+		{ match = { cn = "grid" }, make = gridClaim },
+	} :: { any }),
+}
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="129">
+            <Properties>
+              <string name="Name">Ex</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	Ex: Exploration (DESIGN.md 6 row ex, 6.1 "ex").
+
+	    hero       ZONE, AREA LIMITS and the next feature's spot as chips under the CTA (the game's line, as sent;
+	               coordinates "(9;5)" read "9, 5")
+	    accent     green cartography: a faint grid over the header band
+	    Main       the EXPLORER: the zone map and the D-pad side by side (stacked on phones)
+	               map    the ZoneMaps drawing as Frames (cell lines, border, axis numbers), CACHED by the svg's static
+	                      content: when only the position or the goal moves, nothing is rebuilt; the green position gem
+	                      hops (0.15 s Back Out), the goal is a gold diamond
+	               D-pad  the 4 movement buyables as arrow keys around RESPEC POSITION: arrow + direction, the level badge
+	                      ("→ 6"), the cost in a well (short unit; "Free" when the game says so); hold to repeat like every
+	                      buyable, and the centre key fires the respec node's own action
+	The map's display-text line leaves the body (the explorer draws it); the explainer stays a note.
+]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Client = script.Parent.Parent
+local Core = Client:WaitForChild("Core")
+local Theme = require(Core:WaitForChild("Theme"))
+local Layout = require(Core:WaitForChild("Layout"))
+local Motion = require(Core:WaitForChild("Motion"))
+local PanelF = Client:WaitForChild("Panel")
+local Common = require(PanelF:WaitForChild("Skins"):WaitForChild("Common"))
+local Sections = require(PanelF:WaitForChild("Sections"))
+local Signatures = require(script.Parent:WaitForChild("Signatures"))
+local Kit = require(script.Parent:WaitForChild("Kit"))
+local P = (require(script.Parent:WaitForChild("P")) :: any).P
+local Shared = ReplicatedStorage:WaitForChild("MilestoneTree")
+local Html = require(Shared:WaitForChild("Html"))
+local ZoneMaps = require(Shared:WaitForChild("ZoneMaps")) :: any
+
+local C = Theme.C
+local HUE = Theme.hue("ex")
+
+local function trim(s: string): string
+	return (string.gsub(string.gsub(s, "^%s+", ""), "%s+$", ""))
+end
+local function isSvg(n: any): boolean
+	return type(n) == "table" and type(n.h) == "string" and string.find(n.h, "<svg", 1, true) ~= nil
+end
+
+-- ------------------------------------------------------------------------------------------------------ the map
+type Explorer = {
+	ph: Frame,
+	id: string,
+	ctx: any,
+	store: any,
+	lastH: string?,
+	lastKey: string?,
+	builds: number,
+	gemAt: Vector2?,
+}
+
+local current: any = nil -- the explorer on screen (the map line's claim wakes it)
+
+local function scaleOf(): number
+	return if Layout.mode == "COMPACT" then 0.9 else 1.25
+end
+
+-- the static part of a parsed svg (what the cache is keyed by) and its moving marks
+local function split(svg: any): (string, { any }, { any })
+	local axis: { any } = {}
+	local marks: { any } = {}
+	local seen: { [string]: boolean } = {}
+	for _, t in svg.texts do
+		local text = trim(tostring(t.text))
+		local key = t.x .. "," .. t.y .. "," .. text
+		if seen[key] then continue end
+		seen[key] = true
+		if string.find(text, "^%d+$") or text == "X" or text == "Y" then
+			table.insert(axis, t)
+		else
+			table.insert(marks, t)
+		end
+	end
+	local parts = { tostring(svg.bg), tostring(svg.w), tostring(svg.h) }
+	for _, t in axis do table.insert(parts, t.x .. "," .. t.y .. "," .. t.text) end
+	return table.concat(parts, "|"), axis, marks
+end
+
+local function lineColor(hex: string): Color3
+	local h = string.lower(hex)
+	if h == "ff0000" then return C.danger end
+	if h == "26ff00" then return HUE end
+	return Theme.mix(C.deep, HUE, 0.3)
+end
+
+local function buildStatic(canvas: Frame, svg: any, axis: { any }, k: number)
+	local st = Common.get(canvas, "Static", "Frame") :: Frame
+	for _, c in st:GetChildren() do c:Destroy() end
+	st.Active = false
+	st.BackgroundTransparency = 1
+	st.Size = UDim2.fromScale(1, 1)
+	local lines = if svg.bg then ZoneMaps[svg.bg] else nil
+	if type(lines) == "table" then
+		for i, ln in lines do
+			local x1, y1, x2, y2, col, w = ln[1], ln[2], ln[3], ln[4], ln[5], ln[6]
+			local f = Instance.new("Frame")
+			f.Name = "L" .. i
+			f.BorderSizePixel = 0
+			f.Active = false
+			f.BackgroundColor3 = lineColor(tostring(col))
+			f.BackgroundTransparency = if string.lower(tostring(col)) == "262626" then 0.2 else 0
+			local ww = math.max(2, w * k)
+			f.Position = UDim2.fromOffset(math.min(x1, x2) * k - ww / 2, math.min(y1, y2) * k - ww / 2)
+			f.Size = UDim2.fromOffset(math.abs(x2 - x1) * k + ww, math.abs(y2 - y1) * k + ww)
+			f.Parent = st
+		end
+	end
+	for i, t in axis do
+		local l = Instance.new("TextLabel")
+		l.Name = "A" .. i
+		l.Active = false
+		l.BackgroundTransparency = 1
+		Common.text(l, "number", C.termDim)
+		if t.text == "X" or t.text == "Y" then Common.text(l, "label", C.termLime) end
+		l.AnchorPoint = Vector2.new(0, 1)
+		l.Position = UDim2.fromOffset(t.x * k, (t.y + 3) * k)
+		l.AutomaticSize = Enum.AutomaticSize.XY
+		l.Size = UDim2.new()
+		l.Text = t.text
+		l.Parent = st
+	end
+end
+
+-- a mark's centre in the svg (text baseline -> glyph centre)
+local function centre(t: any): Vector2
+	local size = tonumber(t.size) or 12
+	return Vector2.new(t.x + 0.6 * size, t.y - 0.35 * size)
+end
+
+local function drawMap(self: any, parent: Instance, n: any)
+	local compact = Layout.mode == "COMPACT"
+	local k = scaleOf()
+	local card = Common.get(parent, "Map", "Frame") :: Frame
+	card.LayoutOrder = 1
+	card.Active = false
+	if n == nil then
+		card.Visible = false
+		return
+	end
+	card.Visible = true
+	local h = n.h :: string
+	if h == self.lastH and card:FindFirstChild("Canvas") then return end
+	self.lastH = h
+	local svg: any = nil
+	for _, part in Html.split(h) do
+		if type(part) == "table" then
+			svg = part
+			break
+		end
+	end
+	if svg == nil then return end
+	local key, axis, marks = split(svg)
+	key ..= "|" .. tostring(k)
+	card.BackgroundColor3 = Color3.fromRGB(5, 16, 9)
+	card.BackgroundTransparency = 0
+	card.Size = UDim2.fromOffset(math.floor(svg.w * k) + 24, math.floor(svg.h * k) + 48)
+	Common.corner(card, 14)
+	Common.stroke(card, 1.5, HUE, 0.45)
+	local canvas = Common.get(card, "Canvas", "Frame") :: Frame
+	canvas.Active = false
+	canvas.BackgroundTransparency = 1
+	canvas.Position = UDim2.fromOffset(12, 8)
+	canvas.Size = UDim2.fromOffset(math.floor(svg.w * k), math.floor(svg.h * k))
+	canvas.ClipsDescendants = true
+	if key ~= self.lastKey then
+		self.lastKey = key
+		self.builds += 1
+		card:SetAttribute("Builds", self.builds)
+		buildStatic(canvas, svg, axis, k)
+	end
+	-- the moving marks: the position gem, the goal diamond, anything else (portals) as small discs
+	local usedMarks: { [string]: boolean } = {}
+	local others = 0
+	for _, t in marks do
+		local text = trim(tostring(t.text))
+		local c = centre(t) * k
+		local color = if t.color then Color3.fromHex(t.color) else C.text
+		local isGoal = text == "★" or string.find(string.lower(tostring(t.color)), "ffff00", 1, true) ~= nil
+		local isGem = not isGoal and (text == "🟢" or color.G > color.R + 0.2)
+		if isGem then
+			usedMarks.Gem = true
+			local gem = Common.get(canvas, "Gem", "Frame") :: Frame
+			gem.Active = false
+			gem.ZIndex = 4
+			gem.AnchorPoint = Vector2.new(0.5, 0.5)
+			gem.Size = UDim2.fromOffset(18, 18)
+			gem.BackgroundColor3 = Theme.lift(HUE, 0.2)
+			gem.BackgroundTransparency = 0
+			Common.corner(gem, 0.5)
+			Common.stroke(gem, 2, C.white, 0)
+			Common.glow(gem, HUE, 0.7, 12)
+			local target = UDim2.fromOffset(c.X, c.Y)
+			local prev = self.gemAt
+			self.gemAt = c
+			if prev and prev ~= c then
+				Motion.tween(gem, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Position = target }, "ex:gem")
+			else
+				gem.Position = target
+			end
+		elseif isGoal then
+			usedMarks.Goal = true
+			local star = Common.get(canvas, "Goal", "Frame") :: Frame
+			star.Active = false
+			star.ZIndex = 3
+			star.AnchorPoint = Vector2.new(0.5, 0.5)
+			star.Rotation = 45
+			star.Size = UDim2.fromOffset(15, 15)
+			star.Position = UDim2.fromOffset(c.X, c.Y)
+			star.BackgroundColor3 = C.gold
+			star.BackgroundTransparency = 0
+			Common.corner(star, 3)
+			Common.glow(star, C.gold, 0.6, 12)
+		elseif others < 6 then
+			others += 1
+			local name = "Mark" .. others
+			usedMarks[name] = true
+			local m = Common.get(canvas, name, "Frame") :: Frame
+			m.Active = false
+			m.ZIndex = 3
+			m.AnchorPoint = Vector2.new(0.5, 0.5)
+			m.Size = UDim2.fromOffset(14, 14)
+			m.Position = UDim2.fromOffset(c.X, c.Y)
+			m.BackgroundColor3 = Theme.lift(Theme.hue("mp"), 0.2)
+			m.BackgroundTransparency = 0
+			Common.corner(m, 0.5)
+		end
+	end
+	for _, name in { "Gem", "Goal", "Mark1", "Mark2", "Mark3", "Mark4", "Mark5", "Mark6" } do
+		if not usedMarks[name] then Common.drop(canvas, name) end
+	end
+	-- the legend under the drawing
+	local legend = Common.get(card, "Legend", "TextLabel") :: TextLabel
+	legend.Active = false
+	Common.text(legend, "small", C.soft)
+	legend.AnchorPoint = Vector2.new(0, 1)
+	legend.Position = UDim2.new(0, 14, 1, -8)
+	legend.Size = UDim2.new(1, -28, 0, 22)
+	legend.TextXAlignment = Enum.TextXAlignment.Left
+	legend.TextYAlignment = Enum.TextYAlignment.Center
+	legend.TextWrapped = false
+	Common.setText(legend, Common.run("•", "label", Theme.lift(HUE, 0.2)) .. Common.esc(" You are here     ")
+		.. Common.run("•", "label", C.gold) .. Common.esc(if compact then " Feature" else " Next feature"))
+end
+
+-- ------------------------------------------------------------------------------------------------------ the D-pad
+local DIRS: { [string]: { arrow: string, word: string, col: number, row: number } } = {
+	["Increase X"] = { arrow = "→", word = "Right", col = 3, row = 2 },
+	["Decrease X"] = { arrow = "←", word = "Left", col = 1, row = 2 },
+	["Increase Y"] = { arrow = "↓", word = "Down", col = 2, row = 3 },
+	["Decrease Y"] = { arrow = "↑", word = "Up", col = 2, row = 1 },
+}
+
+local function drawPad(self: any, parent: Instance)
+	local st = self.store
+	local ctx = self.ctx
+	local compact = Layout.mode == "COMPACT"
+	local kw, kh, gap = (if compact then 100 else 132), (if compact then 88 else 112), 10
+	local pad = Common.get(parent, "Pad", "Frame") :: Frame
+	pad.LayoutOrder = 2
+	pad.Active = false
+	pad.BackgroundTransparency = 1
+	pad.Size = UDim2.fromOffset(3 * kw + 2 * gap, 3 * kh + 2 * gap)
+	local buys = Kit.findAll(st, self.id, function(n: any): boolean
+		return n.t == "btn" and n.k == "buy"
+	end, 3)
+	local respec = Kit.find(st, self.id, function(n: any): boolean
+		return n.t == "btn" and n.k == "respec"
+	end, 2)
+	local used: { [string]: boolean } = {}
+	local function place(g: GuiObject, col: number, row: number)
+		g.Position = UDim2.fromOffset((col - 1) * (kw + gap), (row - 1) * (kh + gap))
+		g.Size = UDim2.fromOffset(kw, kh)
+	end
+	for _, bid in buys do
+		local n = st:get(bid)
+		local ti = trim(Common.plain(Common.str(n.ti) or ""))
+		local dir = DIRS[ti]
+		if dir == nil then continue end
+		local name = "Key" .. dir.word
+		used[name] = true
+		local can = n.cls == "can"
+		local b = Common.get(pad, name, "TextButton") :: TextButton
+		b.AutoButtonColor = false
+		place(b, dir.col, dir.row)
+		b.BackgroundColor3 = if can then Theme.mix(C.panel, HUE, 0.42) else Theme.mix(C.panel, C.locked, 0.22)
+		b.BackgroundTransparency = 0
+		Common.corner(b, 14)
+		Common.stroke(b, if can then 2 else 1.5, if can then Theme.lift(HUE, 0.35) else C.locked, if can then 0 else 0.35)
+		Common.glow(b, if can then HUE else nil, 0.45, 12)
+		Common.pad(b, if compact then 12 else 16, 6, 0, 6)
+		Common.text(b, "label", C.text)
+		b.TextWrapped = false
+		b.TextXAlignment = Enum.TextXAlignment.Center
+		b.TextYAlignment = Enum.TextYAlignment.Top
+		b.LineHeight = 1.15
+		Common.setText(b, Common.run(dir.arrow, "cta", C.text) .. "\n" .. Common.run(Common.esc(dir.word), "label", C.text))
+		-- the level badge and the cost well
+		local lv = Common.str(n.lv) or "0"
+		local badge = Common.chip(b, "Level", Common.run(dir.arrow, "label", C.soft) .. " " .. Common.num(lv, "badge", C.text),
+			{ rich = true, bg = C.deep, bgT = 0.1, h = 24 })
+		badge.AnchorPoint = Vector2.new(0, 0)
+		badge.Position = UDim2.fromOffset(-2, if compact then -8 else -10)
+		local plain = Common.plain(n.h or "")
+		local cost: string
+		if string.find(plain, "without a cost", 1, true) then
+			cost = Common.run(Common.esc("Free"), "label", C.ownedValue)
+		else
+			local co = Common.str(n.co)
+			local unitName = string.match(plain, "Cost:%s*%S+%s+(.-)%s*$")
+			cost = if co then Common.num(co, "number", C.text, Signatures.unit(unitName)) else ""
+		end
+		if cost ~= "" then
+			local well = Common.chip(b, "Cost", cost, { rich = true, bg = C.black, bgT = 0.45, h = 26 })
+			well.AnchorPoint = Vector2.new(0.5, 1)
+			well.Position = UDim2.new(0.5, 0, 1, -8)
+		else
+			Common.drop(b, "Cost")
+		end
+		Common.state(b, if can then "can" else "notyet")
+		Kit.repeatPress(b, function(): any
+			local x = self.store:get(bid)
+			return if type(x) == "table" then x.a else nil
+		end, ctx.act)
+	end
+	if respec then
+		used.Respec = true
+		local n = st:get(respec)
+		local b = Common.get(pad, "Respec", "TextButton") :: TextButton
+		b.AutoButtonColor = false
+		place(b, 2, 2)
+		b.BackgroundColor3 = Theme.mix(C.panel, C.danger, 0.3)
+		b.BackgroundTransparency = 0
+		Common.corner(b, 14)
+		Common.stroke(b, 1.5, C.danger, 0.3)
+		Common.drop(b, "Pad")
+		Common.text(b, "label", C.text)
+		b.TextWrapped = true
+		b.TextXAlignment = Enum.TextXAlignment.Center
+		b.TextYAlignment = Enum.TextYAlignment.Center
+		local word = trim(Common.plain(n.h or "Respec position"))
+		Common.setText(b, Common.run("R", "cta", C.text) .. "\n" .. Common.run(Common.esc(word), "small", C.dangerText))
+		Common.state(b, if n.cls == "can" then "can" else "notyet")
+		Kit.onPress(b, function()
+			local x = self.store:get(respec)
+			if type(x) == "table" and type(x.a) == "table" then ctx.act(x.a, false) end
+		end)
+	end
+	for _, c in pad:GetChildren() do
+		if c:IsA("GuiObject") and not used[c.Name] then c:Destroy() end
+	end
+end
+
+-- the map's own node: the display-text sibling (or any node) of the tab holding an <svg>
+local function svgNode(st: any): any?
+	local sid = Kit.find(st, "tab", function(n: any): boolean
+		return n.cn == "display-text" and isSvg(n)
+	end, 4)
+	return if sid then st:get(sid) else nil
+end
+
+local function explorer(ph: Frame, id: string, store: any, ctx: any): any
+	local self: any = { ph = ph, id = id, ctx = ctx, store = store, lastH = nil, lastKey = nil, builds = 0, gemAt = nil }
+	ph.Size = UDim2.new(1, 0, 0, 0)
+	ph.AutomaticSize = Enum.AutomaticSize.Y
+	Common.list(ph, false, 14)
+	function self.update(_: any, st: any)
+		self.store = st or self.store
+		local compact = Layout.mode == "COMPACT"
+		Sections.header(ph, { name = "Head", order = 0, text = "ZONE MAP", hue = HUE })
+		local box = Common.get(ph, "Explorer", "Frame") :: Frame
+		box.LayoutOrder = 1
+		box.Active = false
+		box.BackgroundTransparency = 1
+		box.Size = UDim2.new(1, 0, 0, 0)
+		box.AutomaticSize = Enum.AutomaticSize.Y
+		Common.list(box, not compact, 24, { valign = Enum.VerticalAlignment.Top, align = if compact then Enum.HorizontalAlignment.Center else nil })
+		local ok, err = Common.try(drawMap, self, box, svgNode(self.store))
+		if not ok then warn("[MilestoneTree] ex map failed: " .. tostring(err)) end
+		drawPad(self, box)
+		current = self
+	end
+	function self.destroy(_: any)
+		if current == self then current = nil end
+		Common.drop(ph, "Explorer")
+		Common.drop(ph, "Head")
+	end
+	return self
+end
+
+-- the display-text lines: the map's line is drawn by the explorer (it only wakes it); the others stay notes
+local function note(ph: Frame, id: string, store: any, ctx: any): any
+	local claim = {}
+	function claim.update(_: any, st: any)
+		local n = st:get(id)
+		if isSvg(n) then
+			ph.Visible = false
+			ph.Size = UDim2.new()
+			ph.AutomaticSize = Enum.AutomaticSize.None
+			Common.drop(ph, "Text")
+			local e = current
+			if e and e.ph.Parent then e:update(st) end
+			return
+		end
+		local text = if type(n) == "table" then Common.plain(n.h) else ""
+		if not string.find(text, "%S") then
+			ph.Visible = false
+			ph.Size = UDim2.new()
+			ph.AutomaticSize = Enum.AutomaticSize.None
+			Common.drop(ph, "Text")
+			return
+		end
+		ph.Visible = true
+		ph.Size = UDim2.new(1, 0, 0, 0)
+		ph.AutomaticSize = Enum.AutomaticSize.Y
+		ph.BackgroundColor3 = C.panel2
+		ph.BackgroundTransparency = 0
+		Common.corner(ph, 10)
+		Common.pad(ph, 10, 14, 10, 16)
+		local l = Common.label(ph, "Text", "body", C.text)
+		l.TextTransparency = 0.08
+		Common.setText(l, Common.html(n.h, "body", ctx.layer))
+	end
+	function claim.destroy(_: any)
+		Common.drop(ph, "Text")
+	end
+	return claim
+end
+
+-- ------------------------------------------------------------------------------------------------------ hero
+local function hero(f: Frame, store: any, ctx: any)
+	local a = Kit.accent(f, "Ex")
+	if Layout.mode == "COMPACT" then
+		for _, name in { "Zone", "Area", "Feature" } do Common.drop(a, name) end
+		return
+	end
+	local text = ""
+	local tid = Kit.find(store, "tab", function(n: any): boolean
+		return n.cn == "display-text" and type(n.h) == "string" and string.find(n.h, "area limits", 1, true) ~= nil
+	end, 4)
+	if tid then text = Common.plain(store:get(tid).h) end
+	local zone = string.match(text, "Current zone:%s*([%w%-]+)")
+	local ax, ay = string.match(text, "X axis %-%s*([%d%.,]+),%s*Y axis %-%s*([%d%.,]+)")
+	local fx, fy = string.match(text, "feature is at %((%d+);(%d+)%)")
+	local chips: { { string } } = {}
+	if zone then table.insert(chips, { "Zone", Common.caps("Zone", C.soft) .. "   " .. Common.run(Common.esc(zone), "label", C.text) }) end
+	if ax and ay then
+		table.insert(chips, { "Area", Common.caps("Area limits", C.soft) .. "   " .. Common.num(ax .. " × " .. ay, "number", C.text) })
+	end
+	if fx and fy then
+		table.insert(chips, { "Feature", Common.caps("Next feature", C.soft) .. "   " .. Common.num(fx .. ", " .. fy, "number", C.gold) })
+	end
+	local cta = f:FindFirstChild("Cta") :: GuiObject?
+	local stats = f:FindFirstChild("Stats") :: GuiObject?
+	local y = (if cta then cta.Size.Y.Offset + 10 else 0) + (if stats and stats.Visible then 42 else 0)
+	local row = Common.get(a, "Chips", "Frame") :: Frame
+	row.Active = false
+	row.AnchorPoint = Vector2.new(1, 0)
+	row.Position = UDim2.new(1, 0, 0, y)
+	row.Size = UDim2.fromOffset(0, 34)
+	row.AutomaticSize = Enum.AutomaticSize.X
+	Common.list(row, true, 8, { align = Enum.HorizontalAlignment.Right, valign = Enum.VerticalAlignment.Center })
+	local used: { [string]: boolean } = {}
+	for i, c in chips do
+		used[c[1]] = true
+		local chip = Common.chip(row, c[1], c[2], { rich = true, bg = C.panel2, bgT = 0, h = 34 })
+		chip.LayoutOrder = i
+	end
+	for _, name in { "Zone", "Area", "Feature" } do
+		if not used[name] then Common.drop(row, name) end
+	end
+end
+
+-- green cartography: a faint grid over the header band
+local function accent(sheet: Frame, ctx: any)
+	local band = Kit.band(sheet)
+	if band == nil then return end
+	local a = Kit.accent(band, "Ex")
+	Kit.stripes(a, Theme.lift(HUE, 0.2), 0.05, 22, 0, "GridV")
+	Kit.stripes(a, Theme.lift(HUE, 0.2), 0.05, 22, 90, "GridH")
+end
+
+return {
+	layers = { "ex" },
+	skin = P.skin,
+	hero = hero,
+	accent = accent,
+	claims = ({
+		{ match = { cn = "buyables", sub = "Main" }, make = explorer },
+		{ match = { cn = "display-text" }, make = note },
+	} :: { any }),
+}
+]]></string>
+            </Properties>
+          </Item>
           <Item class="ModuleScript" referent="130">
             <Properties>
               <string name="Name">Kit</string>
@@ -52362,6 +52852,25 @@ function Kit.stack(parent: Instance, name: string, horizontal: boolean, gap: num
 	return f
 end
 
+-- a control at the right end of a section title row (Sections.header): the hairline flexes to leave it room
+-- (UIFlexItem); without flex items it follows the chips
+function Kit.headerControl(header: Instance, name: string, text: string, w: number, o: ButtonOpts?): TextButton
+	local rule = header:FindFirstChild("Rule")
+	local flex = false
+	if rule then
+		flex = pcall(function()
+			local f = Common.get(rule, "Flex", "UIFlexItem") :: any
+			f.FlexMode = Enum.UIFlexMode.Fill
+		end)
+	end
+	local opts: ButtonOpts = table.clone(o or ({} :: ButtonOpts))
+	opts.w = w
+	opts.h = opts.h or 30
+	opts.order = if flex then 20 else 5
+	local b = Kit.button(header, name, text, opts)
+	return b
+end
+
 -- ------------------------------------------------------------------------------------------------------ accents
 -- the holder a signature draws its accent into (the sheet, the header band or the hero); a new key clears it
 function Kit.accent(parent: Instance, key: string): Frame
@@ -52378,20 +52887,36 @@ function Kit.accent(parent: Instance, key: string): Frame
 	return f
 end
 
+-- a decoration that must sit outside an accent holder (inside a reused button, say) goes when the accent's content
+-- goes: a guard object in the holder destroys it
+function Kit.tether(holder: Instance, name: string, obj: Instance)
+	local guard = holder:FindFirstChild(name)
+	if guard and guard:GetAttribute("For") == obj:GetFullName() then return end
+	if guard then guard:Destroy() end
+	local g = Instance.new("Folder")
+	g.Name = name
+	g:SetAttribute("For", obj:GetFullName())
+	g.Destroying:Connect(function()
+		if obj.Parent then obj:Destroy() end
+	end)
+	g.Parent = holder
+end
+
 -- diagonal stripes (R9 without a texture): a repeating gradient; nothing without TileMode
-function Kit.stripes(parent: Instance, color: Color3, alpha: number, radius: number?): Frame?
+function Kit.stripes(parent: Instance, color: Color3, alpha: number, radius: number?, rotation: number?, name: string?): Frame?
+	local key = name or "Stripes"
 	if not Theme.caps.TileMode then
-		Common.drop(parent, "Stripes")
+		Common.drop(parent, key)
 		return nil
 	end
-	local f = Common.get(parent, "Stripes", "Frame") :: Frame
+	local f = Common.get(parent, key, "Frame") :: Frame
 	f.Active = false
 	f.Size = UDim2.fromScale(1, 1)
 	f.BackgroundColor3 = color
 	f.BackgroundTransparency = 0
 	if radius then Common.corner(f, radius) end
 	local g = Common.get(f, "Tile", "UIGradient") :: UIGradient
-	g.Rotation = 45
+	g.Rotation = rotation or 45
 	pcall(function()
 		g.TileMode = Enum.GradientTileMode.Repeat
 		g.Scale = 0.035
@@ -53808,8 +54333,478 @@ return Signatures
 ]]></string>
             </Properties>
           </Item>
+          <Item class="ModuleScript" referent="134">
+            <Properties>
+              <string name="Name">Sp</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	Sp: Super Prestige (DESIGN.md 6 row sp, 6.1 "sp furnace").
+
+	    Main              the tier board (P.skin: Hide owned)
+	    malware tabs      an ember rim over the sheet (Prestige Ashes, Spark Milestones); an infected layer (the resource
+	                      name says so) rings the emblem in danger
+	    hero              PRESTIGE ASHES as a stat chip under the CTA (the game's highlighted number, as sent)
+	    Spark Milestones  the FURNACE: the game's unlock box as a titled card (ember orb, ASHES FILLED with the bar,
+	                      "3 / 3 unlocked", IGNITE with its auto-fill state, REIGNITE #n with its cost);
+	                      SPARK MILESTONES: one card per milestone with its burn bar (BURNING in flame colours with the
+	                      burning %, ASHED grey, PERMANENT gold "Skipped when burning"), the "Show: N" cycler in the title
+	                      row (one press, the clickable's own action); the pager « ‹ Page a / b › », hidden on one page
+	Every button fires its clickable's own action.
+]]
+
+local Client = script.Parent.Parent
+local Core = Client:WaitForChild("Core")
+local Theme = require(Core:WaitForChild("Theme"))
+local Rich = require(Core:WaitForChild("Rich"))
+local Layout = require(Core:WaitForChild("Layout"))
+local PanelF = Client:WaitForChild("Panel")
+local Common = require(PanelF:WaitForChild("Skins"):WaitForChild("Common"))
+local Sections = require(PanelF:WaitForChild("Sections"))
+local Kit = require(script.Parent:WaitForChild("Kit"))
+local P = (require(script.Parent:WaitForChild("P")) :: any).P
+local M = require(script.Parent:WaitForChild("M")) :: any
+
+local C = Theme.C
+local SPARK = "Spark Milestones"
+
+local function trim(s: string): string
+	return (string.gsub(string.gsub(s, "^%s+", ""), "%s+$", ""))
+end
+local function plainOf(n: any): string
+	return trim(Common.plain(if type(n) == "table" then n.h else ""))
+end
+-- a clickable node's action at press time
+local function fire(ctx: any, store: any, id: string)
+	local n = store:get(id)
+	if type(n) == "table" and type(n.a) == "table" then ctx.act(n.a, false) end
+end
+
+-- ------------------------------------------------------------------------------------------------------ furnace
+local function furnace(ph: Frame, id: string, store: any, ctx: any): any
+	local claim = {}
+	ph.Size = UDim2.new(1, 0, 0, 0)
+	ph.AutomaticSize = Enum.AutomaticSize.Y
+	function claim.update(_: any, st: any)
+		store = st or store
+		local compact = Layout.mode == "COMPACT"
+		local ember = C.ember
+		local card = Kit.card(ph, "Furnace", { gap = 12, pad = if compact then 12 else 18, fill = Theme.mix(C.panel, ember, 0.14),
+			stroke = ember, strokeT = 0.2, radius = 16 })
+		-- the game's texts: the unlock line, the ashes pair and the unlocked pair (as sent)
+		local info, have, need, unl, tot = "", nil :: string?, nil :: string?, nil :: string?, nil :: string?
+		local buttons: { string } = {}
+		for _, cid in st:kids(id) do
+			local n = st:get(cid)
+			if type(n) ~= "table" then continue end
+			if n.t == "btn" and n.k == "click" then
+				table.insert(buttons, cid)
+			elseif n.t == "html" then
+				local t = plainOf(n)
+				if t ~= "" then
+					local a, b = string.match(t, "([%d%.,e%+]+)%s*/%s*([%d%.,e%+]+)%s*Prestige Ashes")
+					if a then have, need = a, b end
+					local u, v = string.match(t, "Unlocked%s+(%d+)%s*/%s*(%d+)")
+					if u then unl, tot = u, v end
+					local head = string.match(t, "^(.-):")
+					if head and info == "" then info = trim(head) end
+				end
+			end
+		end
+		-- the head: ember orb, the title and ASHES FILLED
+		local head = Common.label(card, "Head", "body", C.text, { order = 1 })
+		Common.pad(head, 0, if unl then 130 else 0, 0, 62, "Clear")
+		local lines = { Common.title(if info ~= "" then info else "Spark furnace", "card", C.text) }
+		if have and need then
+			table.insert(lines, Common.caps("Ashes filled", C.soft) .. "   " .. Common.num(have .. " / " .. need, "number", C.text, "ashes"))
+		end
+		Common.setText(head, table.concat(lines, "\n"))
+		local orb = Common.get(head, "Orb", "Frame") :: Frame
+		orb.Active = false
+		orb.Size = UDim2.fromOffset(48, 48)
+		orb.Position = UDim2.fromOffset(-62, 0)
+		Common.corner(orb, 0.5)
+		orb.BackgroundColor3 = ember
+		orb.BackgroundTransparency = 0
+		Common.stroke(orb, 2, Theme.lift(ember, 0.45), 0)
+		Common.glow(orb, ember, 0.55, 14)
+		local core = Common.get(orb, "Core", "Frame") :: Frame
+		core.Active = false
+		core.AnchorPoint = Vector2.new(0.5, 0.5)
+		core.Position = UDim2.fromScale(0.5, 0.58)
+		core.Size = UDim2.fromOffset(18, 22)
+		core.BackgroundColor3 = C.ready
+		core.BackgroundTransparency = 0
+		Common.corner(core, 0.5)
+		if unl and tot then
+			local chip = Common.chip(head, "Unlocked", unl .. " / " .. tot .. " unlocked", { color = C.ink, bg = C.gold, bgT = 0, h = 28 })
+			chip.AnchorPoint = Vector2.new(1, 0)
+			chip.Position = UDim2.new(1, 130, 0, 0)
+		else
+			Common.drop(head, "Unlocked")
+		end
+		-- the ashes bar
+		local p = 0
+		local hn, nn = tonumber((string.gsub(have or "", ",", ""))), tonumber((string.gsub(need or "", ",", "")))
+		if hn and nn and nn > 0 then p = math.clamp(hn / nn, 0, 1) end
+		if have then
+			local bar = Common.bar(card, "Bar", p, Theme.lift(ember, 0.15), 8)
+			bar.LayoutOrder = 2
+		else
+			Common.drop(card, "Bar")
+		end
+		-- IGNITE (with its auto-fill state) and REIGNITE #n (with its cost)
+		local row = Kit.stack(card, "Buttons", true, 10, 3)
+		local list = row:FindFirstChild("List") :: UIListLayout?
+		if list then list.Wraps = true end
+		local used: { [string]: boolean } = { List = true }
+		for i, cid in buttons do
+			local n = st:get(cid)
+			local t = Common.plain(Common.str(n.ti) or n.h or "")
+			local num = string.match(t, "#(%d+)")
+			local can = n.cls == "can"
+			local text: string
+			local fill: Color3
+			if num then
+				local cost = string.match(n.h or "", "<b>([^<]+)</b>")
+				text = Common.run(Common.esc(Rich.caps("Reignite") .. " #" .. num), "label", C.text)
+				if cost then text ..= "   " .. Common.num(trim(cost), "number", C.text, "ashes") end
+				fill = if can then Theme.mix(C.panel, ember, 0.45) else C.panel3
+			else
+				local auto = string.match(Common.plain(n.h or ""), "Auto%-fill:%s*(%u+)")
+				text = Common.run(Common.esc("IGNITE"), "tab", if can then C.ink else C.text)
+				if auto then
+					text ..= "    " .. Common.run(Common.esc("Auto-fill " .. auto), "label", if can then C.ink else C.soft)
+				end
+				fill = if can then ember else C.panel3
+			end
+			local name = "B" .. i
+			used[name] = true
+			local b = Kit.button(row, name, text, { fill = fill, stroke = if can then Theme.lift(ember, 0.4) else C.stroke, h = 42, order = i })
+			Common.state(b, if can then "can" else "notyet")
+			Kit.onPress(b, function()
+				fire(ctx, store, cid)
+			end)
+		end
+		for _, c in row:GetChildren() do
+			if c:IsA("GuiObject") and not used[c.Name] then c:Destroy() end
+		end
+	end
+	function claim.destroy(_: any)
+		Common.drop(ph, "Furnace")
+	end
+	return claim
+end
+
+-- ------------------------------------------------------------------------------------------------------ sparks
+local STATE_COL = { burning = C.ember, ashed = C.muted, permanent = C.gold }
+
+local function sparkList(ph: Frame, id: string, store: any, ctx: any): any
+	local claim = {}
+	ph.Size = UDim2.new(1, 0, 0, 0)
+	ph.AutomaticSize = Enum.AutomaticSize.Y
+	Common.list(ph, false, 12)
+	function claim.update(_: any, st: any)
+		store = st or store
+		local compact = Layout.mode == "COMPACT"
+		-- each row: a spark milestone and its burn bar
+		local items: { { ms: any, bar: any, key: string } } = {}
+		for _, rid in st:kids(id) do
+			local r = st:get(rid)
+			if type(r) ~= "table" then continue end
+			local ms, bar = nil, nil
+			local function take(x: any)
+				if type(x) ~= "table" then return end
+				if x.t == "ms" then ms = x elseif x.t == "bar" then bar = x end
+			end
+			take(r)
+			for _, kid in st:kids(rid) do take(st:get(kid)) end
+			if ms then table.insert(items, { ms = ms, bar = bar, key = rid }) end
+		end
+		local ashed, perm = 0, 0
+		for _, it in items do
+			local s8 = if it.bar then it.bar.st8 else nil
+			if s8 == "ashed" then ashed += 1 elseif s8 == "permanent" then perm += 1 end
+		end
+		local chips: { any } = { { text = ashed .. " / " .. #items .. " ashed", color = C.text, bg = Theme.mix(C.deep, C.ember, 0.3), bgT = 0 } }
+		if perm > 0 then table.insert(chips, { text = perm .. " permanent", color = C.ink, bg = C.gold, bgT = 0 }) end
+		local header = Sections.header(ph, { name = "Head", order = 0, text = "SPARK MILESTONES", hue = C.ember, chips = chips })
+		-- the SHOW cycler: the "Show Multiple Milestones" clickable next to the list (one press)
+		local showId = Kit.find(st, Common.parentId(id) or "tab", function(n: any): boolean
+			return n.t == "btn" and n.k == "click" and string.find(Common.plain(n.h or ""), "Show Multiple", 1, true) ~= nil
+		end, 1)
+		if showId then
+			local sn = st:get(showId)
+			local cur = string.match(Common.plain(sn.h or ""), "Currently:%s*(%d+)") or "?"
+			local b = Kit.headerControl(header, "Show", Common.run(Common.esc("Show: "), "label", C.soft)
+				.. Common.num(cur, "number", C.text) .. Common.run("  ›", "label", C.soft), 110, { fill = C.panel2, stroke = C.stroke })
+			Common.state(b, "can")
+			Kit.onPress(b, function()
+				fire(ctx, store, showId)
+			end)
+		else
+			Common.drop(header, "Show")
+		end
+		local used: { [string]: boolean } = { Head = true, List = true }
+		for i, it in items do
+			local name = "S" .. i
+			used[name] = true
+			local s8 = if it.bar then (it.bar.st8 or "burning") else "none"
+			local col = STATE_COL[s8] or ctx.hue
+			local card = Common.get(ph, name, "Frame") :: Frame
+			card.LayoutOrder = i
+			card.Active = false
+			card.Size = UDim2.new(1, 0, 0, 0)
+			card.AutomaticSize = Enum.AutomaticSize.Y
+			card.BackgroundColor3 = if s8 == "ashed" then C.panel2 else Theme.mix(C.panel, col, 0.12)
+			card.BackgroundTransparency = 0
+			Common.corner(card, 14)
+			Common.stroke(card, if s8 == "ashed" then 1 else 1.5, col, if s8 == "ashed" then 0.5 else 0.3)
+			Common.pad(card, 14, 16, 14, if compact then 60 else 76)
+			-- the milestone: title, effect, "Currently"
+			local barW = if compact then 180 else 320
+			local t = Common.label(card, "Text", "body", C.text, { order = 1 })
+			t.Size = UDim2.new(1, -(barW + 16), 0, 0)
+			local ms = it.ms
+			local parts = { Common.title(Common.plain(Common.str(ms.ti) or ""), "card", C.text) }
+			local ds = Common.html(ms.ds, "body", ctx.layer)
+			if ds ~= "" then table.insert(parts, string.format('<font transparency="%.2f">%s</font>', if s8 == "ashed" then 0.18 else 0.08, ds)) end
+			local tip = Common.plain(Common.str(ms.tip) or "")
+			if tip ~= "" then
+				local v = string.match(tip, "^Currently:%s*(.*)$")
+				table.insert(parts, Common.caps("Currently", C.soft) .. "   " .. Common.num(trim(v or tip), "number", C.text))
+			end
+			Common.setText(t, table.concat(parts, "\n"))
+			-- the number disc
+			local disc = Common.get(card, "Disc", "TextLabel") :: TextLabel
+			disc.Active = false
+			disc.Size = UDim2.fromOffset(if compact then 40 else 52, if compact then 40 else 52)
+			disc.Position = UDim2.fromOffset(if compact then -50 else -64, 0)
+			Common.text(disc, "label", if s8 == "ashed" then C.soft else C.ink)
+			disc.TextXAlignment = Enum.TextXAlignment.Center
+			disc.TextYAlignment = Enum.TextYAlignment.Center
+			disc.BackgroundColor3 = if s8 == "ashed" then C.panel3 else col
+			disc.BackgroundTransparency = 0
+			Common.corner(disc, 0.5)
+			Common.setText(disc, "#" .. (string.match(Common.plain(Common.str(ms.ti) or ""), "#(%d+)") or tostring(i)))
+			-- the burn state and bar
+			local bar = it.bar
+			if bar then
+				local state = Common.get(card, "State", "TextLabel") :: TextLabel
+				state.Active = false
+				Common.text(state, "caps", col)
+				state.AnchorPoint = Vector2.new(1, 0)
+				state.Position = UDim2.new(1, 0, 0, 2)
+				state.Size = UDim2.fromOffset(barW, 20)
+				state.TextXAlignment = Enum.TextXAlignment.Left
+				state.TextYAlignment = Enum.TextYAlignment.Center
+				local word = if s8 == "permanent" then "Permanent" elseif s8 == "ashed" then "Ashed" else "Burning"
+				local right = ""
+				if s8 == "permanent" then
+					right = Common.run(Common.esc("Skipped when burning"), "small", C.soft)
+				else
+					local bp = Common.pr(bar.bp)
+					right = Common.num(Rich.pct(if s8 == "ashed" then 0 else (bp or 0)), "number", C.text)
+				end
+				Common.setText(state, Common.caps(word, if s8 == "ashed" then C.soft else Theme.lift(col, 0.2)))
+				local r = Common.get(state, "Right", "TextLabel") :: TextLabel
+				r.Active = false
+				Common.text(r, "number", C.text)
+				r.Size = UDim2.fromScale(1, 1)
+				r.TextXAlignment = Enum.TextXAlignment.Right
+				r.TextYAlignment = Enum.TextYAlignment.Center
+				Common.setText(r, right)
+				local p = if s8 == "permanent" then 1 elseif s8 == "ashed" then 0 else (Common.pr(bar.bp) or math.clamp(tonumber(bar.p) or 0, 0, 1))
+				local b = Common.bar(card, "Burn", p, if s8 == "permanent" then C.gold else C.ember, 8)
+				b.AnchorPoint = Vector2.new(1, 0)
+				b.Position = UDim2.new(1, 0, 0, 30)
+				b.Size = UDim2.fromOffset(barW, 8)
+				if s8 == "burning" and p > 0.001 and p < 0.999 then
+					local g = b:FindFirstChild("Fill") :: UIGradient?
+					if g then
+						local track = Color3.fromRGB(52, 46, 72)
+						g.Color = ColorSequence.new({
+							ColorSequenceKeypoint.new(0, C.gold),
+							ColorSequenceKeypoint.new(p * 0.6, C.ember),
+							ColorSequenceKeypoint.new(p, C.danger),
+							ColorSequenceKeypoint.new(math.min(1, p + 0.001), track),
+							ColorSequenceKeypoint.new(1, track),
+						})
+					end
+				end
+			else
+				Common.drop(card, "State")
+				Common.drop(card, "Burn")
+			end
+			Common.state(card, if s8 == "ashed" then "notyet" else "owned")
+		end
+		for _, c in ph:GetChildren() do
+			if c:IsA("GuiObject") and not used[c.Name] then c:Destroy() end
+		end
+	end
+	function claim.destroy(_: any)
+		for _, c in ph:GetChildren() do c:Destroy() end
+	end
+	return claim
+end
+
+-- ------------------------------------------------------------------------------------------------------ pager
+local function pager(ph: Frame, id: string, store: any, ctx: any): any
+	local claim = {}
+	function claim.update(_: any, st: any)
+		store = st or store
+		local keys: { string } = {}
+		local page, pages = "1", "1"
+		for _, cid in st:kids(id) do
+			local n = st:get(cid)
+			if type(n) ~= "table" then continue end
+			if n.t == "btn" and n.k == "click" then
+				table.insert(keys, cid)
+			elseif n.t == "html" then
+				local a, b = string.match(plainOf(n), "(%d+)%s*/%s*(%d+)")
+				if a and b then page, pages = a, b end
+			end
+		end
+		-- hidden when there is one page
+		if pages == "1" or #keys == 0 then
+			ph.Visible = false
+			ph.Size = UDim2.new()
+			ph.AutomaticSize = Enum.AutomaticSize.None
+			for _, c in ph:GetChildren() do c:Destroy() end
+			return
+		end
+		ph.Visible = true
+		ph.Size = UDim2.new(1, 0, 0, 44)
+		ph.AutomaticSize = Enum.AutomaticSize.None
+		Common.list(ph, true, 8, { align = Enum.HorizontalAlignment.Center, valign = Enum.VerticalAlignment.Center })
+		local half = #keys // 2
+		for i, cid in keys do
+			local n = st:get(cid)
+			local t = trim(Common.plain(Common.str(n.ti) or n.h or ""))
+			local b = Kit.button(ph, "K" .. i, Common.esc(t), { fill = if n.cls == "can" then Theme.mix(C.panel, ctx.hue, 0.4) else C.panel3,
+				stroke = C.stroke, h = 44, w = 52, order = if i <= half then i else i + 1 })
+			Common.state(b, if n.cls == "can" then "can" else "notyet")
+			Kit.onPress(b, function()
+				fire(ctx, store, cid)
+			end)
+		end
+		local label = Common.label(ph, "Page", "label", C.text, { autoX = true, wrap = false, order = half + 1 })
+		Common.setText(label, Common.esc("Page ") .. Common.num(page .. " / " .. pages, "number", C.text))
+	end
+	function claim.destroy(_: any)
+		for _, c in ph:GetChildren() do c:Destroy() end
+	end
+	return claim
+end
+
+-- the Spark tab's display-text lines: the ashes line moves into the hero; the rest stay notes
+local function sparkNote(ph: Frame, id: string, store: any, ctx: any): any
+	local inner = M.noteClaim(ph, id, store, ctx)
+	local claim = {}
+	function claim.update(_: any, st: any)
+		local n = st:get(id)
+		local h = if type(n) == "table" and type(n.h) == "string" then n.h else ""
+		if string.find(h, "<h2", 1, true) and string.find(h, "Prestige Ashes", 1, true) then
+			ph.Visible = false
+			ph.Size = UDim2.new()
+			ph.AutomaticSize = Enum.AutomaticSize.None
+			Common.drop(ph, "Text")
+			return
+		end
+		inner.update(inner, st)
+	end
+	function claim.destroy(_: any)
+		inner.destroy(inner)
+	end
+	return claim
+end
+
+-- the Spark tab's lone "Show Multiple Milestones" clickable: drawn in the SPARK MILESTONES title row instead
+local function hidden(ph: Frame, id: string, store: any, ctx: any): any
+	ph.Visible = false
+	ph.Size = UDim2.new()
+	ph.AutomaticSize = Enum.AutomaticSize.None
+	return { update = function(_: any, _s: any) end, destroy = function(_: any) end }
+end
+
+-- ------------------------------------------------------------------------------------------------------ hero
+local function hero(f: Frame, store: any, ctx: any)
+	local a = Kit.accent(f, "Sp")
+	-- PRESTIGE ASHES as a stat chip under the CTA and the stat chips
+	local aid = Kit.find(store, "tab", function(n: any): boolean
+		return n.cn == "display-text" and type(n.h) == "string" and string.find(n.h, "Prestige Ashes", 1, true) ~= nil
+			and string.find(n.h, "<h2", 1, true) ~= nil
+	end, 3)
+	local ashes = if aid then Kit.h2(store:get(aid).h)[1] else nil
+	if ashes and Layout.mode ~= "COMPACT" then
+		local cta = f:FindFirstChild("Cta") :: GuiObject?
+		local stats = f:FindFirstChild("Stats") :: GuiObject?
+		local y = (if cta then cta.Size.Y.Offset + 10 else 0) + (if stats and stats.Visible then 42 else 0)
+		local chip = Common.chip(a, "Ashes", Common.caps("Prestige ashes", C.soft) .. "   " .. Common.num(ashes, "number", Theme.lift(C.ember, 0.3)),
+			{ rich = true, bg = C.panel2, bgT = 0, h = 34 })
+		chip.AnchorPoint = Vector2.new(1, 0)
+		chip.Position = UDim2.new(1, 0, 0, y)
+	else
+		Common.drop(a, "Ashes")
+	end
+	-- the malware tabs: an ember rim over the sheet; an infected layer rings the emblem in danger
+	local sheet = f.Parent
+	if sheet == nil then return end
+	local malwareTab = ctx.sub ~= nil and ctx.sub ~= "Main"
+	local md = Kit.find(store, "tab", function(n: any): boolean
+		return n.cn == "main-display"
+	end, 3)
+	local infected = md ~= nil and string.find(string.lower(Common.plain(store:get(md).res or "")), "infected", 1, true) ~= nil
+	if not malwareTab and not infected then
+		Common.drop(sheet, "Accent")
+		return
+	end
+	local sa = Kit.accent(sheet, "SpRim")
+	if malwareTab and Layout.mode ~= "COMPACT" then
+		local rim = Common.get(sa, "Rim", "Frame") :: Frame
+		rim.Active = false
+		rim.BackgroundTransparency = 1
+		rim.Size = UDim2.fromScale(1, 1)
+		rim.ZIndex = 4
+		Common.corner(rim, 22)
+		Common.stroke(rim, 3, C.ember, 0.1)
+		Common.glow(rim, C.ember, 0.35, 22)
+	else
+		Common.drop(sa, "Rim")
+	end
+	local emblem = sheet:FindFirstChild("Emblem") :: GuiObject?
+	if infected and emblem then
+		local ring = Common.get(sa, "Infected", "Frame") :: Frame
+		ring.Active = false
+		ring.BackgroundTransparency = 1
+		ring.ZIndex = 7
+		ring.AnchorPoint = Vector2.new(0.5, 0.5)
+		ring.Position = UDim2.fromOffset(emblem.Position.X.Offset + emblem.Size.X.Offset / 2, emblem.Position.Y.Offset + emblem.Size.Y.Offset / 2)
+		ring.Size = UDim2.fromOffset(emblem.Size.X.Offset + 10, emblem.Size.Y.Offset + 10)
+		Common.corner(ring, 0.5)
+		Common.stroke(ring, 3, C.danger, 0)
+		Common.glow(ring, C.danger, 0.5, 14)
+	else
+		Common.drop(sa, "Infected")
+	end
+end
+
+return {
+	layers = { "sp" },
+	skin = P.skin,
+	hero = hero,
+	claims = ({
+		{ match = { cn = "row", ci = 9, sub = SPARK }, make = furnace },
+		{ match = { cn = "column", sub = SPARK }, make = sparkList },
+		{ match = { cn = "row", ci = 15, sub = SPARK }, make = pager },
+		{ match = { cn = "display-text", sub = SPARK, depth = 2 }, make = sparkNote },
+		{ match = { cn = "clickable", sub = SPARK, depth = 2 }, make = hidden },
+	} :: { any }),
+}
+]]></string>
+            </Properties>
+          </Item>
         </Item>
-        <Item class="ModuleScript" referent="134">
+        <Item class="ModuleScript" referent="135">
           <Properties>
             <string name="Name">Style</string>
             <string name="Source"><![CDATA[--!strict
@@ -54003,7 +54998,7 @@ return Style
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="135">
+        <Item class="ModuleScript" referent="136">
           <Properties>
             <string name="Name">Types</string>
             <string name="Source"><![CDATA[--!strict
