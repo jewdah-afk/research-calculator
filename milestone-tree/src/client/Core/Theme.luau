@@ -380,6 +380,17 @@ function Theme.detect(force: boolean?): Caps
 		f.InputSink = Enum.InputSink.None
 		f:Destroy()
 	end)
+	-- features that are a Studio-only beta stay off unless shared/Flags says they are live (so Studio shows what
+	-- players see)
+	pcall(function()
+		local ReplicatedStorage = game:GetService("ReplicatedStorage")
+		local shared = ReplicatedStorage:FindFirstChild("MilestoneTree")
+		local mod = if shared then shared:FindFirstChild("Flags") else nil
+		local flags: any = if mod and mod:IsA("ModuleScript") then require(mod) :: any else nil
+		if not (flags and flags.BETA_GRADIENTS == true) then
+			caps.Radial, caps.Conical, caps.TileMode = false, false, false
+		end
+	end)
 	-- Studio only: force flags off
 	pcall(function()
 		local RunService = game:GetService("RunService")
