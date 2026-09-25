@@ -34,13 +34,13 @@ function mapNodes(R, view, geo, keys, { mode = 'gem', t = 0.3, sel = null, label
 const P = {
   title: 'PRESTIGE', row: 'Row 1', sub: 'Resets for prestige points', sym: 'P',
   tabs: [{ label: 'Upgrades', on: true, badge: '2' }, { label: 'Buyables', badge: '1' }, { label: 'Perks', dot: true }],
-  ready: '2', owned: '14 / 16',
+  ready: '2', owned: '14 / 16', ownedN: [14, 16], layer: ['02', '21'],
   hero: { cap: 'You have', amt: 'e1.029e25', res: 'Prestige points' },
   cta: { title: 'PRESTIGE', gain: '+e1.073e25 PP', key: 'P' },
   chips: [['Points', 'e6.424e23', null], ['Passive', '+e1.073e25/s', 'good']],
   summary: { label: 'Tiers 1 – 2', count: '8 / 8', names: 'Prestige Boost I – IV  ·  Exponental Boost I – II  ·  Self-Synergy I – II' },
-  tier3: { label: 'Tier 3', count: '2 / 4 owned' },
-  tier4: { label: 'Tier 4', count: 'Locked' },
+  tier3: { label: 'Tier 3', count: '2 / 4 owned', n: [2, 4] },
+  tier4: { label: 'Tier 4', count: 'Locked', n: [0, 4] },
   cards: [
     { n: 31, st: 'buy', title: 'Prestige Scaling Reducer I', desc: 'Milestone Cost Scaling is weaker based on your prestige points.', cur: '1.9745x weaker', cost: '1.00e6810 PP' },
     { n: 32, st: 'owned', title: 'Prestige Scaling Reducer II', desc: 'Prestige Upgrade 31 is boosted.' },
@@ -48,15 +48,15 @@ const P = {
     { n: 34, st: 'buy', title: 'Prestige Scaling Reducer IV', desc: 'Prestige Upgrade 31 is boosted.', cost: '1e16,335 PP' },
   ],
   locked: [
-    { n: 41, st: 'locked', title: 'Prestige Boost V', req: 'Complete AP Challenge 4 19.7 times' },
-    { n: 42, st: 'locked', title: 'Prestige Boost VI', req: 'Complete AP Challenge 3 14.1 times' },
+    { n: 41, st: 'locked', title: 'Prestige Boost V', req: 'Complete AP Challenge 4 19.7 times', prog: [14.2, 19.7] },
+    { n: 42, st: 'locked', title: 'Prestige Boost VI', req: 'Complete AP Challenge 3 14.1 times', prog: [9.6, 14.1] },
     { n: 43, st: 'locked', title: 'Prestige Buyable Boost I', req: 'Buy while in T Challenge 2' },
     { n: 44, st: 'locked', title: 'Prestige Buyable Boost II', req: 'Buy while in T Challenge 4' },
   ],
 };
 // the HUD content
 const HUD = {
-  points: { cap: 'Points · Normal Universe', amt: 'e6.424e23', unit: 'points', rate: '+6.21e24 OOMs/sec' },
+  points: { cap: 'Points · Normal Universe', amt: 'e6.424e23', unit: 'points', rate: '+6.21e24 OOMs/sec', rateShort: '+6.21e24', rateUnit: 'OOMs/s' },
   dock: [['home', 'Home'], ['trophy', 'Trophies', '13/18'], ['gear', 'Options']],
   tray: { title: '3 ready', sub: '4 can buy', items: [['mm', 'MM', '+1', 'ready'], ['ep', 'EP', '+e4.84e8', 'ready'], ['mp', 'MP', '+1', 'ready'], ['p', 'P', 'Buy', 'buy'], ['pe', 'PE', 'Buy', 'buy'], ['sp', 'SP', 'Buy', 'buy']] },
   toast: { title: 'Milestone Gotten!', chip: '×10', sub: '18th – 27th Meta-Milestone' },
@@ -101,7 +101,7 @@ CLEAN.nodes = async () => {
   }
   K.abs(R, 959, 0, 2, 1080, 'background:rgba(255,255,255,.35);box-shadow:0 0 0 1px rgba(0,0,0,.5)');
   // legend: the four states and which real nodes show them
-  const L = [['locked', 'Locked', 'dim + still', 'HB · PB · ?'], ['idle', 'Idle', 'slow breathe', 'T · AP · HP · PP · M'], ['buy', 'Can buy', 'flicker + comet', 'P · SP · SE · PE'], ['ready', 'Ready', 'fast pulse + ⚡', 'MM · EP · MP']];
+  const L = [['locked', 'Locked', 'dim + still', 'HB · PB · ?'], ['idle', 'Idle', 'slow breathe', 'T · AP · HP · PP · M'], ['buy', 'Can buy', 'flicker + comet', 'P · SP · SE · PE'], ['ready', 'Ready', 'fast pulse + badge', 'MM · EP · MP']];
   K.abs(R, 0, 1080, 1920, 1, 'background:rgba(255,255,255,.14)');
   const lg = K.abs(R, 0, 1081, 1920, 79, 'display:flex;align-items:center;justify-content:center;gap:64px');
   K.el(lg, 'div', '', K.caps('Energy ring states', { size: 13, color: '#8f98aa', weight: 800 }));
@@ -117,14 +117,48 @@ CLEAN.nodes = async () => {
 
 // ------------------------------------------------------------------------------------------------ contact board
 CLEAN.board = async () => {
-  const W = 2560, H = 1440, R = K.root(); R.style.cssText = `width:${W}px;height:${H}px;background:#08070d`;
-  const names = ['Sleek sci-fi', 'Sharp', 'Soft premium', 'Frosted glass'], refs = ['Destiny 2', 'Valorant / Apex', 'Honkai: Star Rail', 'visionOS'];
+  const W = 2560, BAND = 72, H = 2 * (720 + BAND), R = K.root(); R.style.cssText = `width:${W}px;height:${H}px;background:#0a0a10`;
+  const names = ['Sleek sci-fi', 'Sharp', 'Soft premium', 'Frosted glass'], refs = ['Destiny 2 director · Nothing OS', 'Valorant · Apex · F1 broadcast', 'Honkai: Star Rail menus', 'visionOS'];
+  const notes = ['hairlines · corner ticks · registration marks · sparkline', 'opaque slabs · angled cuts · position boxes · segment meters', 'top-lit gradients · pearl primaries · orbit lines · gauge', 'blurred glass · specular edges · capsules · recessed wells'];
   for (let i = 0; i < 4; i++) {
-    const x = (i % 2) * 1280, y = Math.floor(i / 2) * 720;
-    const im = K.el(R, 'img', `position:absolute;left:${x}px;top:${y}px;width:1280px;height:720px`); im.src = `/ui/clean/out/style${i + 1}_p_panel.png`;
-    K.abs(R, x + 20, y + 640, null, null, 'display:flex;align-items:center;gap:14px;padding:10px 20px 10px 10px;border-radius:12px;background:rgba(6,7,12,.88);box-shadow:0 6px 20px rgba(0,0,0,.5),inset 0 0 0 1px rgba(255,255,255,.14)',
+    const x = (i % 2) * 1280, y = Math.floor(i / 2) * (720 + BAND);
+    K.abs(R, x, y, 1280, BAND, 'display:flex;align-items:center;gap:18px;padding:0 24px;box-shadow:inset 0 -1px 0 rgba(255,255,255,.08)',
       `<span style="display:grid;place-items:center;width:44px;height:44px;border-radius:9px;background:#fff;font:900 26px Sarpanch;color:#0b0d14">${i + 1}</span>
-       <span style="display:flex;flex-direction:column;gap:5px"><span style="font:italic 900 24px/1 Montserrat;color:#fff">${names[i].toUpperCase()}</span><span style="font:600 14px/1 Montserrat;color:#c9cfdb">after ${refs[i]}</span></span>`);
+       <span style="display:flex;flex-direction:column;gap:7px"><span style="font:italic 900 26px/1 Montserrat;color:#fff">${names[i].toUpperCase()}</span><span style="font:600 14px/1 Montserrat;color:#aab2c2">after ${refs[i]}</span></span>
+       <span style="flex:1"></span><span style="font:700 13px/1 Montserrat;letter-spacing:.08em;text-transform:uppercase;color:#7f889a">${notes[i]}</span>`);
+    const im = K.el(R, 'img', `position:absolute;left:${x}px;top:${y + BAND}px;width:1280px;height:720px`); im.src = `/ui/clean/out/style${i + 1}_p_panel.png`;
   }
-  K.abs(R, 1279, 0, 2, H, 'background:#000'); K.abs(R, 0, 719, W, 2, 'background:#000');
+  K.abs(R, 1279, 0, 2, H, 'background:#000');
+};
+
+// ------------------------------------------------------------------------------------------------ energy-ring clip
+// 1280 x 720: the bottom of the tree (strip_p.png at 2/3) twice, gems left and clean icons right; clip.js calls
+// CLEAN.clipFrame(t) for every frame. Nodes: SP + P can buy, PB + ? locked, M idle, MM ready.
+const CLIP = { W: 1280, H: 720, keys: ['sp', 'pb', 'p', 'm', 'mm', 'em'], s: 720 / 1080 };
+CLEAN.clipSetup = async () => {
+  const R = K.root(); R.style.cssText = `width:${CLIP.W}px;height:${CLIP.H}px;background:#07070c`;
+  const s = CLIP.s, bw = 760 * s, geo = { rSock: K.GEO.strip.rSock * s, gem: K.GEO.strip.gem * s, disc: K.GEO.strip.disc * s, k: K.GEO.strip.k * s };
+  const STATE = { locked: ['Locked', 'dim + still'], idle: ['Idle', 'slow breathe'], buy: ['Can buy', 'flicker + comet'], ready: ['Ready', 'pulse + badge'] };
+  CLIP.halves = [];
+  for (const [side, mode, title] of [[0, 'gem', 'A · Crystal gems'], [1, 'icon', 'B · Clean icons']]) {
+    const H = K.abs(R, side * 640, 0, 640, CLIP.H, 'overflow:hidden'), ox = (640 - bw) / 2;
+    K.abs(H, -20, -20, 680, CLIP.H + 40, `background:url(${BG}strip_p.png) center/cover;filter:blur(16px) brightness(.5)`);
+    K.abs(H, ox, 0, bw, CLIP.H, `background:url(${BG}strip_p.png) 0 0/${bw}px ${CLIP.H}px;-webkit-mask-image:linear-gradient(90deg,transparent,#000 9%,#000 91%,transparent)`);
+    const nodes = K.nodesFor(K.STRIP, CLIP.keys).map(n => Object.assign(n, { x: n.x * s + ox, y: n.y * s }));
+    for (const n of nodes) {
+      const [a, b] = STATE[n.st];
+      K.abs(H, n.x - 80, n.y + geo.rSock + 8, 160, null, 'display:flex;justify-content:center', `<div style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:5px 10px;border-radius:6px;background:rgba(7,8,14,.8);box-shadow:inset 0 0 0 1px rgba(255,255,255,.1)">${K.caps(a, { size: 12, color: '#fff', weight: 800 })}<span style="font:600 13px/1 Montserrat;color:#b9c1d0">${b}</span></div>`);
+    }
+    K.abs(H, 16, 14, null, null, 'padding:10px 14px;border-radius:8px;background:rgba(7,8,14,.8);box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)', `<span style="font:italic 900 20px/1 Montserrat;color:#fff">${title}</span>`);
+    const cv = K.canvas(H, 0, 0, 640, CLIP.H);
+    CLIP.halves.push({ mode, nodes, geo, ctx: cv.getContext('2d') });
+  }
+  K.abs(R, 639, 0, 2, CLIP.H, 'background:rgba(255,255,255,.3)');
+  return { dur: 6 };
+};
+CLEAN.clipFrame = t => {
+  for (const h of CLIP.halves) {
+    h.ctx.clearRect(0, 0, 640, CLIP.H);
+    h.nodes.forEach((n, i) => K.drawNode(h.ctx, n, h.mode, h.geo, t + (n.st === 'buy' ? i * 0.37 : 0)));
+  }
 };

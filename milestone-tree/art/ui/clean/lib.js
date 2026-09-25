@@ -102,9 +102,10 @@ const K = (() => {
   // ---------------------------------------------------------------------------------------------- energy ring
   // One thin ring in the layer hue around the socket. Every state is a function of t (seconds):
   //   locked  dim mauve-grey hairline, no glow, still
-  //   idle    slow breathe (3.2 s sine) of the glow and the core
-  //   buy     a quick irregular flicker + one bright comet arc orbiting (1.6 s / turn)
-  //   ready   fast bright pulse (1.0 s, sharp attack / exp decay) + a ripple ring leaving the node, and a ⚡ badge
+  //   idle    slow breathe (3.0 s sine) of the glow and the core
+  //   buy     a quick irregular flicker + one bright comet arc orbiting (1.5 s / turn)
+  //   ready   fast bright pulse (1.0 s, sharp attack / exp decay) + a ripple ring leaving the node, rising spark motes, ⚡ badge
+// All periods divide 6 s, so a 6 s clip loops seamlessly.
   // Roblox build: the ring is a white ring sprite (ImageColor3 = hue) + a soft glow sprite; the comet is a UIStroke on
   // a round Frame with a UIGradient whose Rotation tweens; the ripple is a second ring sprite tweening Size + alpha.
   const frac = x => x - Math.floor(x);
@@ -117,8 +118,8 @@ const K = (() => {
   };
   K.ringState = (st, t) => {
     if (st === 'locked') return { st, core: 0.34, glow: 0, width: 1.3, color: '#a39cb3' };
-    if (st === 'idle') { const p = 0.5 + 0.5 * Math.sin((t / 3.2) * Math.PI * 2); return { st, p, core: 0.62 + 0.28 * p, glow: 0.16 + 0.34 * p, width: 1.7 }; }
-    if (st === 'buy') { const f = K.flicker(t); return { st, f, core: 0.5 + 0.3 * f, glow: 0.14 + 0.3 * f, width: 1.7, arc: (t / 1.6) * Math.PI * 2 - Math.PI * 0.5 }; }
+    if (st === 'idle') { const p = 0.5 + 0.5 * Math.sin((t / 3.0) * Math.PI * 2); return { st, p, core: 0.62 + 0.28 * p, glow: 0.16 + 0.34 * p, width: 1.7 }; }
+    if (st === 'buy') { const f = K.flicker(t); return { st, f, core: 0.5 + 0.3 * f, glow: 0.14 + 0.3 * f, width: 1.7, arc: (t / 1.5) * Math.PI * 2 - Math.PI * 0.5 }; }
     const ph = frac(t / 1.0), p = Math.exp(-3.2 * ph);   // ready
     return { st, ph, p, core: 0.88 + 0.12 * p, glow: 0.45 + 0.5 * p, width: 2.4 + 0.8 * p };
   };
@@ -152,6 +153,14 @@ const K = (() => {
       const rr = r + (r * 0.42) * smooth(Math.min(1, S.ph * 1.15)), a = Math.pow(1 - S.ph, 2);
       strokeCircle(ctx, x, y, rr, hue, 4 * k, 0.55 * a, 3 * k);
       strokeCircle(ctx, x, y, rr, hi, (1.6 * (1 - S.ph) + 0.4) * k, 0.8 * a);
+      // spark motes drifting up and out of the ring (each mote loops every 2 s, staggered)
+      for (let i = 0; i < 9; i++) {
+        const u = frac(t / 2 + i / 9), a0 = hash(i + 7) * Math.PI * 2 + t * (0.25 + 0.3 * hash(i + 3)) * (i % 2 ? 1 : -1);
+        const rad = r * (0.96 + 0.42 * u), mx = x + Math.cos(a0) * rad, my = y + Math.sin(a0) * rad - u * 10 * k, al = Math.min(1, Math.sin(Math.PI * u) * (0.8 + 0.4 * S.p));
+        const ms = (1.4 + 1.6 * hash(i + 11)) * k, g2 = ctx.createRadialGradient(mx, my, 0, mx, my, ms * 3.2);
+        g2.addColorStop(0, K.rgba('#ffffff', al)); g2.addColorStop(0.35, K.rgba(hi, al * 0.7)); g2.addColorStop(1, K.rgba(hue, 0));
+        ctx.fillStyle = g2; ctx.beginPath(); ctx.arc(mx, my, ms * 3.2, 0, Math.PI * 2); ctx.fill();
+      }
     }
     ctx.restore();
     return S;

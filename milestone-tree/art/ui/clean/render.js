@@ -15,7 +15,7 @@ for (const n of [1, 2, 3, 4]) {
   SCENES[`style${n}_home_hud`] = { size: [1920, 1080], call: ['hud', n], jpg: true };
 }
 SCENES.nodes_compare = { size: [1920, 1160], call: ['nodes'], jpg: true };
-SCENES.style_board = { size: [2560, 1440], call: ['board'], jpg: true };
+SCENES.style_board = { size: [2560, 1584], call: ['board'], jpg: true };
 
 async function openPage(browser, [w, h]) {
   const page = await browser.newPage({ viewport: { width: w, height: h } });
