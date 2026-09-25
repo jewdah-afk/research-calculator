@@ -1,13 +1,56 @@
-// node compose.js out.png camX camY [w h]  — composite sky/far/world(/fg) as the player would see it
-// camera = world-space top-left of a 1920x1080 view; layer offset = cam * factor
-const {chromium}=require('playwright');const fs=require('fs');
-(async()=>{const [o,cx,cy,w=1920,h=1080]=process.argv.slice(2);const b=await chromium.launch();const p=await b.newPage();
-const L=['sky','far','world','fg'].filter(n=>fs.existsSync('out/'+n+'.png')).map(n=>[n,'data:image/png;base64,'+fs.readFileSync('out/'+n+'.png').toString('base64')]);
-const F={sky:0.15,far:0.35,world:1,fg:1.25};
-const url=await p.evaluate(async([L,F,cx,cy,w,h])=>{const load=s=>new Promise(r=>{const im=new Image();im.onload=()=>r(im);im.src=s});
-const c=document.createElement('canvas');c.width=w;c.height=h;const t=c.getContext('2d');t.fillStyle='#05030b';t.fillRect(0,0,w,h);
-for(const [n,d] of L){const im=await load(d);const f=F[n];
- // each layer is sized so that panning the world across its range pans the layer across its own range
- t.drawImage(im,-cx*f- (n==='fg'? 0:0),-cy*f);}
-return c.toDataURL()},[L,F,+cx,+cy,+w,+h]);
-fs.writeFileSync(o,Buffer.from(url.split(',')[1],'base64'));await b.close()})();
+// Composite the whole realm stack as the Roblox client would show it, at one camera (C, z) and viewport V.
+//
+//   node compose.js out.png --cx 1500 --cy 1150 --z 0.8 [--vw 1920 --vh 1080] [--tier HIGH|LOW] [--t 0]
+//                           [--source tiles|layers] [--seams snap|overlap] [--nodes 0] [--rm] [--dpr 1]
+//   node compose.js out.png camX camY [w h]        old form: a w x h view at zoom 1 whose top-left is world (camX, camY)
+//
+// It opens preview/realm.html headless and draws one deterministic frame, so the placement is exactly the client's:
+// RealmCamera.layerOffset for the eight layers (dolly-law zoom per depth), sprites from spriteState at time --t, the
+// particle fields, biome tint / wash (settled at the target weights), fg fade, vignette, and stand-in node plates.
+// --source tiles (default when roblox/manifest.json exists) draws the uploaded tiles with their gutters and 1-point
+// overlaps: a seam check. --source layers draws the full renders. The camera is hard-clamped like the client.
+// Several shots in one run: --shots shots.json   ([{ "out": "a.png", "cx": .., "cy": .., "z": .., "t": .. }, ...])
+const fs = require('fs'); const path = require('path');
+const { serve, launch, openRealm } = require('./preview/record.js');
+
+function parse(argv) {
+  const o = { out: null, cx: null, cy: null, z: null, vw: 1920, vh: 1080, tier: 'HIGH', t: 0, source: fs.existsSync(path.join(__dirname, 'roblox/manifest.json')) ? 'tiles' : 'layers', nodes: '1', rm: false, dpr: 1, shots: null, seams: 'snap' };
+  const pos = [];
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a.startsWith('--')) {
+      const [k, inline] = a.slice(2).split('=');
+      if (k === 'rm') { o.rm = true; continue; }
+      const v = inline != null ? inline : argv[++i];
+      if (['cx', 'cy', 'z', 'vw', 'vh', 't', 'dpr'].includes(k)) o[k] = +v; else if (k in o) o[k] = v; else throw new Error('unknown option --' + k);
+    } else pos.push(a);
+  }
+  o.out = pos[0] || o.out;
+  if (pos.length >= 3 && o.cx == null) { // legacy: top-left camera at zoom 1
+    const [, x, y, w = 1920, h = 1080] = pos.map(Number); o.vw = w; o.vh = h; o.z = 1; o.cx = x + w / 2; o.cy = y + h / 2;
+  }
+  o.tier = o.tier.toUpperCase();
+  return o;
+}
+
+async function main() {
+  const o = parse(process.argv.slice(2));
+  const shots = o.shots ? JSON.parse(fs.readFileSync(o.shots, 'utf8')) : [{ out: o.out, cx: o.cx, cy: o.cy, z: o.z, t: o.t }];
+  if (!shots.every(s => s.out)) { console.log(fs.readFileSync(__filename, 'utf8').split('\n').slice(0, 14).join('\n')); process.exit(2); }
+  const srv = await serve(), browser = await launch();
+  try {
+    const { ctx, page, errs } = await openRealm(browser, srv.url, { w: o.vw, h: o.vh, dpr: o.dpr,
+      q: { tier: o.tier, source: o.source, nodes: o.nodes, rm: o.rm ? '1' : '0', seams: o.seams } });
+    for (const s of shots) {
+      const st = await page.evaluate(a => window.Realm.frame(a), { x: s.cx, y: s.cy, z: s.z, t: s.t || 0, settle: true });
+      fs.mkdirSync(path.dirname(path.resolve(s.out)), { recursive: true });
+      await page.screenshot({ path: s.out, type: 'png' });
+      console.log(`${s.out}: C (${st.C.x.toFixed(0)}, ${st.C.y.toFixed(0)}) z ${st.z.toFixed(3)}  rift ${st.w.rift.toFixed(2)} corrupt ${st.w.corrupt.toFixed(2)}  ` +
+        `${st.draws} draws  ${st.layers.map(l => l.id + ':' + (l.mode === 'tiles' ? l.tiles : l.mode)).join(' ')}  atlas ${st.atlas}`);
+    }
+    const real = errs.filter(e => !/status of 404/.test(e));   // optional files (out/sprites.png) probe with HEAD
+    if (real.length) console.log('page errors:\n' + real.join('\n'));
+    await ctx.close();
+  } finally { await browser.close(); await srv.close(); }
+}
+main().catch(e => { console.error(e.stack || e.message); process.exit(1); });

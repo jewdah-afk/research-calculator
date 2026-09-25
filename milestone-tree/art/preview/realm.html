@@ -1,0 +1,686 @@
+<!doctype html>
+<!--
+  Realm simulator: the Roblox map (REALM.md) in a browser, driven by the same contract files as the client.
+  Serve art/ over http and open preview/realm.html:   node preview/record.js --serve   (prints the URL)
+
+  It draws what the Roblox client draws, with the same maths: layer containers from RealmCamera.layerOffset, tiles from
+  roblox/manifest.json (ImageRectOffset/Size inside the gutter, the 1-point overlap), sprites from spriteState, fields
+  from fieldPlace, the biome tint / wash / sprite colours from RealmCamera.biome, the fg fade, the vignette. Camera
+  feel follows realm.json camera.feel: drag with threshold and smoothed velocity, inertia, rubber band + spring back,
+  wheel zoom eased in log space about the cursor, double-click zoom.
+
+  URL options: tier=HIGH|LOW  source=tiles|layers  seams=snap|overlap  hud=0  nodes=0  rm=1 (ReducedMotion)  clock=manual  x= y= z=
+  Keys: H hud, N nodes, M reduced motion, T tier, S source, B wash, G tile grid, O seam mode, K keep-clear zones, 1-8 depth,
+        P pause time, R reset camera, - / = zoom.
+  Automation (compose.js, record.js): window.Realm.ready, Realm.frame({ x, y, z, t, dt, settle }), Realm.stats().
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Realm Preview</title>
+<style>
+  :root { --hud-bg: rgba(10, 6, 20, 0.72); --hud-fg: #e8defc; --hud-dim: #a898cc; --hud-accent: #ffc93c; }
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  body { font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--hud-fg); }
+  canvas { display: block; width: 100vw; height: 100vh; touch-action: none; cursor: grab; }
+  canvas.dragging { cursor: grabbing; }
+  #hud { position: fixed; left: 12px; top: 12px; max-width: min(460px, calc(100vw - 24px)); padding: 10px 12px;
+    background: var(--hud-bg); border: 1px solid rgba(179, 92, 255, 0.35); border-radius: 8px; white-space: pre;
+    pointer-events: none; backdrop-filter: blur(4px); }
+  #hud b { color: var(--hud-accent); font-weight: 600; }
+  #hud i { color: var(--hud-dim); font-style: normal; }
+  #hud.hidden { display: none; }
+  #err { position: fixed; inset: auto 12px 12px 12px; color: #ff8aa8; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="hud">loading...</div>
+<div id="err"></div>
+<script src="../camera.js"></script>
+<script>
+'use strict';
+(() => {
+const RC = window.RealmCamera;
+const $ = id => document.getElementById(id);
+const Q = new URLSearchParams(location.search);
+const OPT = Object.assign({
+  tier: Q.get('tier') || 'HIGH', source: Q.get('source') || 'tiles', hud: Q.get('hud') !== '0', nodes: Q.get('nodes') !== '0',
+  rm: Q.get('rm') === '1', clock: Q.get('clock') || 'auto', x: +Q.get('x') || null, y: +Q.get('y') || null, z: +Q.get('z') || null,
+  seams: Q.get('seams') || 'snap',   // snap: tile edges on whole device px (recommended); overlap: REALM.md 9.3 as written
+  sources: null,   // { layerId: 'out/xyz.png' } overrides for source=layers
+}, window.REALM_OPTIONS || {});
+const fail = e => { $('err').textContent = String(e && e.stack || e); console.error(e); };
+
+// ================================================================================================= WebGL
+const cv = $('gl');
+const gl = cv.getContext('webgl2', { premultipliedAlpha: true, alpha: false, antialias: false, preserveDrawingBuffer: true });
+if (!gl) { fail('WebGL2 is not available'); return; }
+const VS = `#version 300 es
+in vec2 a;
+uniform vec2 u_res; uniform vec4 u_rect; uniform vec4 u_uv; uniform vec3 u_rot;
+out vec2 v_uv; out vec2 v_q;
+void main() {
+  vec2 p = u_rect.xy + a * u_rect.zw;
+  float c = cos(u_rot.x), s = sin(u_rot.x); vec2 d = p - u_rot.yz;
+  p = u_rot.yz + vec2(c * d.x - s * d.y, s * d.x + c * d.y);
+  v_uv = mix(u_uv.xy, u_uv.zw, a); v_q = a;
+  gl_Position = vec4(p / u_res * 2.0 - 1.0, 0.0, 1.0); gl_Position.y = -gl_Position.y;
+}`;
+// UIGradient emulation for the light-falls (REALM.md 6.2 scroll): a transparency sequence along the sprite with a bright
+// band in the middle, shifted by the scrolling offset; values past the ends clamp, like a Roblox NumberSequence.
+const FS = `#version 300 es
+precision highp float;
+in vec2 v_uv; in vec2 v_q;
+uniform sampler2D u_tex; uniform vec3 u_color; uniform float u_alpha; uniform vec2 u_grad; uniform int u_mode;
+out vec4 o;
+float seqT(float v) {
+  v = clamp(v, 0.0, 1.0);
+  if (v < 0.35) return mix(0.62, 0.40, v / 0.35);
+  if (v < 0.50) return mix(0.40, 0.00, (v - 0.35) / 0.15);
+  if (v < 0.65) return mix(0.00, 0.40, (v - 0.50) / 0.15);
+  return mix(0.40, 0.62, (v - 0.65) / 0.35);
+}
+void main() {
+  vec4 t = u_mode == 1 ? vec4(1.0) : texture(u_tex, v_uv);
+  float a = u_alpha;
+  if (u_grad.x > 0.5) a *= 1.0 - seqT(v_q.y - u_grad.y);
+  o = vec4(t.rgb * u_color, t.a) * a;
+}`;
+const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
+const prog = gl.createProgram();
+gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS));
+gl.bindAttribLocation(prog, 0, 'a'); gl.linkProgram(prog);
+if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+gl.useProgram(prog);
+const U = {}; for (const n of ['u_res', 'u_rect', 'u_uv', 'u_rot', 'u_tex', 'u_color', 'u_alpha', 'u_grad', 'u_mode']) U[n] = gl.getUniformLocation(prog, n);
+const vbo = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, 0, 1, 0, 0, 1, 1, 1]), gl.STATIC_DRAW);
+gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+gl.uniform1i(U.u_tex, 0);
+let draws = 0;
+/** One quad. r: device px rect {x, y, w, h}; uv: [u0, v0, u1, v1]; color 0..255 rgb; rot degrees about pivot (device px). */
+function quad(tex, r, uv, color, alpha, rot = 0, pivot = null, grad = null) {
+  if (alpha <= 0.002 || r.w <= 0 || r.h <= 0) return;
+  gl.uniform1i(U.u_mode, tex ? 0 : 1);
+  if (tex && tex !== quad.bound) { gl.bindTexture(gl.TEXTURE_2D, tex.t); quad.bound = tex; }
+  gl.uniform4f(U.u_rect, r.x, r.y, r.w, r.h);
+  gl.uniform4f(U.u_uv, uv[0], uv[1], uv[2], uv[3]);
+  const p = pivot || { x: r.x + r.w / 2, y: r.y + r.h / 2 };
+  gl.uniform3f(U.u_rot, rot * Math.PI / 180, p.x, p.y);
+  gl.uniform3f(U.u_color, color[0] / 255, color[1] / 255, color[2] / 255);
+  gl.uniform1f(U.u_alpha, Math.min(1, alpha));
+  gl.uniform2f(U.u_grad, grad == null ? 0 : 1, grad || 0);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); draws++;
+}
+function texture(src) {
+  const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t); quad.bound = null;
+  gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+  gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
+  gl.generateMipmap(gl.TEXTURE_2D);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  return { t, w: src.width, h: src.height };
+}
+const loadImage = url => new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error('cannot load ' + url)); im.src = url; });
+const exists = async url => { try { const r = await fetch(url, { method: 'HEAD', cache: 'no-store' }); return r.ok; } catch (e) { return false; } };
+
+// ================================================================================================= fallback sprite atlas
+// Used only when neither roblox/tiles/<tier>/atlas.png nor out/sprites.png exists: paints every region of
+// realm.json atlas.regions from its atlas.looks description (white/grey, tinted by the sprite colour, 2 px clear border).
+function paintAtlas(A) {
+  const c = document.createElement('canvas'); c.width = A.size[0]; c.height = A.size[1];
+  const x = c.getContext('2d');
+  let seed = 9;
+  const rnd = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+  // value noise
+  const perm = new Uint8Array(512); for (let i = 0; i < 256; i++) perm[i] = i;
+  for (let i = 255; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [perm[i], perm[j]] = [perm[j], perm[i]]; }
+  for (let i = 0; i < 256; i++) perm[i + 256] = perm[i];
+  const hv = (i, j) => perm[(perm[i & 255] + j) & 511] / 255;
+  const vn = (px, py) => { const i = Math.floor(px), j = Math.floor(py), fx = px - i, fy = py - j, u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy);
+    return (hv(i, j) * (1 - u) + hv(i + 1, j) * u) * (1 - v) + (hv(i, j + 1) * (1 - u) + hv(i + 1, j + 1) * u) * v; };
+  const fbm = (px, py, o = 5) => { let s = 0, a = 0.5, f = 1; for (let k = 0; k < o; k++) { s += a * vn(px * f, py * f); f *= 2.03; a *= 0.5; } return s; };
+  const sm = (a, b, v) => { const t = Math.min(1, Math.max(0, (v - a) / (b - a))); return t * t * (3 - 2 * t); };
+  const reg = n => A.regions[n];
+  const scratch = (w, h) => { const s = document.createElement('canvas'); s.width = w; s.height = h; return s; };
+  // place a scratch canvas into its region, clipped 2 px inside the border, optionally pre-blurred
+  const put = (n, s, blur = 0) => {
+    const [rx, ry, rw, rh] = reg(n); x.save(); x.beginPath(); x.rect(rx + 2, ry + 2, rw - 4, rh - 4); x.clip();
+    if (blur) x.filter = `blur(${blur}px)`; x.drawImage(s, rx, ry, rw, rh); x.restore();
+  };
+  const field = (n, fn, blur = 0) => { // per-pixel painter: fn(u, v, w, h) -> [grey, alpha]
+    const [, , w, h] = reg(n), s = scratch(w, h), g = s.getContext('2d'), im = g.createImageData(w, h);
+    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
+      const [lum, al] = fn((i + 0.5) / w, (j + 0.5) / h, w, h), o = (j * w + i) * 4;
+      im.data[o] = im.data[o + 1] = im.data[o + 2] = Math.round(255 * lum); im.data[o + 3] = Math.round(255 * Math.min(1, Math.max(0, al)));
+    }
+    g.putImageData(im, 0, 0); put(n, s, blur);
+  };
+  // wisps: torn, combed cloud streaks, denser core, ragged edges
+  ['wispA', 'wispB', 'wispC', 'wispD'].forEach((n, k) => {
+    const ox = rnd() * 50, oy = rnd() * 50, comb = k < 2 ? 2.6 : 3.4;
+    field(n, (u, v) => {
+      const X = u * 2 - 1, Y = v * 2 - 1;
+      const w1 = fbm(ox + u * 3, oy + v * 2, 3), wx = u * 4.2 + w1 * 1.4, wy = v * comb * 1.8 + w1 * 0.9;
+      const d = fbm(ox + wx, oy + wy * 1.6, 6);
+      const env = (1 - sm(0.25, 1, Math.hypot(X / 0.98, (Y + 0.12 * Math.sin(X * 2.4 + k)) / (0.78 - 0.18 * X * X))));
+      const a = sm(0.34, 0.78, d * 0.9 + env * 0.55) * env;
+      return [0.92 + 0.08 * d, 0.9 * a];
+    }, k < 2 ? 8 : 6);
+  });
+  // hanging vines (top-centre attachment), grey silhouettes
+  const vine = (n, sd, leafy) => {
+    const [, , w, h] = reg(n), s = scratch(w, h), g = s.getContext('2d'); seed = sd;
+    const pts = []; let px = w / 2;
+    for (let yy = 0; yy <= h * 0.93; yy += 6) { px = w / 2 + Math.sin(yy * 0.011 + sd) * w * 0.12 + Math.sin(yy * 0.031) * w * 0.04; pts.push([px, yy]); }
+    g.lineCap = 'round';
+    for (let i = 1; i < pts.length; i++) { const t = i / pts.length; g.strokeStyle = `rgb(${200 - 40 * t},${200 - 40 * t},${200 - 40 * t})`; g.lineWidth = 7 - 5 * t; g.beginPath(); g.moveTo(...pts[i - 1]); g.lineTo(...pts[i]); g.stroke(); }
+    for (let i = 3; i < pts.length; i += leafy ? 3 : 4) {
+      const t = i / pts.length, side = (i / 3) % 2 ? 1 : -1, len = (leafy ? 44 : 34) * (1 - 0.45 * t) * (0.8 + 0.4 * rnd()), wid = len * 0.36;
+      const ang = Math.PI / 2 + side * (0.7 + rnd() * 0.6);
+      g.save(); g.translate(pts[i][0], pts[i][1]); g.rotate(ang);
+      g.fillStyle = `rgb(${230 - 30 * rnd()},${230 - 30 * rnd()},${235})`;
+      g.beginPath(); g.moveTo(0, 0); g.quadraticCurveTo(len * 0.45, -wid, len, 0); g.quadraticCurveTo(len * 0.45, wid, 0, 0); g.fill();
+      g.strokeStyle = 'rgba(150,150,160,0.8)'; g.lineWidth = 1.2; g.beginPath(); g.moveTo(2, 0); g.lineTo(len * 0.85, 0); g.stroke();
+      g.restore();
+    }
+    put(n, s, 3);
+  };
+  vine('vineA', 3, false); vine('vineB', 17, true);
+  { // thin tendril with a glowing bud
+    const [, , w, h] = reg('vineThin'), s = scratch(w, h), g = s.getContext('2d'); const pts = [];
+    for (let yy = 0; yy <= h * 0.9; yy += 4) pts.push([w / 2 + Math.sin(yy * 0.018 + 1) * w * 0.18, yy]);
+    g.lineCap = 'round';
+    for (let i = 1; i < pts.length; i++) { g.strokeStyle = 'rgb(225,220,240)'; g.lineWidth = 4 - 2.4 * i / pts.length; g.beginPath(); g.moveTo(...pts[i - 1]); g.lineTo(...pts[i]); g.stroke(); }
+    [[0.32, -1], [0.55, 1], [0.74, -1]].forEach(([t, sd]) => { const p = pts[Math.round(t * (pts.length - 1))]; g.save(); g.translate(p[0], p[1]); g.rotate(Math.PI / 2 + sd * 1.1);
+      g.fillStyle = 'rgb(235,232,245)'; g.beginPath(); g.moveTo(0, 0); g.quadraticCurveTo(12, -7, 24, 0); g.quadraticCurveTo(12, 7, 0, 0); g.fill(); g.restore(); });
+    const tip = pts[pts.length - 1], gg = g.createRadialGradient(tip[0], tip[1], 0, tip[0], tip[1], 26);
+    gg.addColorStop(0, 'rgba(255,255,255,1)'); gg.addColorStop(0.18, 'rgba(255,255,255,0.95)'); gg.addColorStop(0.45, 'rgba(255,255,255,0.3)'); gg.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = gg; g.beginPath(); g.arc(tip[0], tip[1], 26, 0, 7); g.fill();
+    put('vineThin', s, 0);
+  }
+  // light-fall: bright core column, soft glow, vertical striations, fades over the bottom 30%
+  const stri = [...Array(96)].map(() => rnd());
+  field('lightfall', (u, v, w) => {
+    const X = (u - 0.5) * w, spread = 1 + 0.5 * v, core = Math.exp(-(X * X) / (2 * (5.5 * spread) ** 2)), halo = Math.exp(-(X * X) / (2 * (20 * spread) ** 2));
+    const k = Math.min(95, Math.max(0, Math.floor(u * 96))), st = 0.78 + 0.22 * (stri[k] * 0.6 + stri[(k + 1) % 96] * 0.4);
+    const vert = sm(0, 0.03, v) * (1 - sm(0.7, 1, v));
+    return [1, Math.min(1, (core * 0.95 + halo * 0.42) * st) * vert];
+  });
+  const radial = (n, fn) => field(n, (u, v) => fn(Math.hypot(u - 0.5, v - 0.5) * 2, u, v));
+  radial('glow', r => [1, Math.exp(-r * r / (2 * 0.3 * 0.3)) * (1 - sm(0.82, 0.98, r))]);
+  radial('ring', r => [1, Math.exp(-((r - 0.84) ** 2) / (2 * 0.045 ** 2))]);
+  radial('bokehA', (r, u, v) => { const R = 0.92; return [1, (0.55 + 0.35 * sm(R - 0.16, R - 0.02, r)) * (1 - sm(R - 0.03, R + 0.02, r))]; });
+  field('bokehB', (u, v) => { const X = u * 2 - 1, Y = v * 2 - 1, ang = Math.atan2(Y, X), seg = Math.PI / 3, a = ((ang % seg) + seg) % seg - seg / 2;
+    const r = Math.hypot(X, Y) * Math.cos(a) / Math.cos(0), R = 0.86; return [1, (0.55 + 0.35 * sm(R - 0.15, R - 0.02, r)) * (1 - sm(R - 0.03, R + 0.02, r))]; });
+  field('vignette', (u, v) => { const r = Math.hypot(u - 0.5, v - 0.5) / Math.SQRT1_2; return [0, sm(0.55, 1.0, r)]; });
+  const drawIn = (n, fn, blur = 0) => { const [, , w, h] = reg(n), s = scratch(w, h), g = s.getContext('2d'); fn(g, w, h); put(n, s, blur); };
+  const sparkleAt = (g, cx, cy, r) => {
+    for (const [len, th] of [[r, r * 0.07], [r * 0.5, r * 0.05]]) for (let k = 0; k < 2; k++) {
+      g.save(); g.translate(cx, cy); g.rotate(k * Math.PI / 2 + (len < r ? Math.PI / 4 : 0));
+      const gr = g.createLinearGradient(-len, 0, len, 0); gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(0.5, 'rgba(255,255,255,1)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = gr; g.beginPath(); g.ellipse(0, 0, len, Math.max(0.7, th), 0, 0, 7); g.fill(); g.restore();
+    }
+    const gg = g.createRadialGradient(cx, cy, 0, cx, cy, r * 0.3); gg.addColorStop(0, 'rgba(255,255,255,1)'); gg.addColorStop(0.35, 'rgba(255,255,255,0.8)'); gg.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = gg; g.beginPath(); g.arc(cx, cy, r * 0.3, 0, 7); g.fill();
+  };
+  drawIn('star4', (g, w, h) => sparkleAt(g, w / 2, h / 2, w / 2 - 3));
+  drawIn('spark', (g, w, h) => sparkleAt(g, w / 2, h / 2, w / 2 - 3));
+  const dot = (g, cx, cy, core, halo, ha = 0.55) => {
+    const gg = g.createRadialGradient(cx, cy, 0, cx, cy, halo);
+    gg.addColorStop(0, 'rgba(255,255,255,1)'); gg.addColorStop(core / halo, 'rgba(255,255,255,0.95)'); gg.addColorStop(Math.min(0.99, core / halo + 0.12), `rgba(255,255,255,${ha})`); gg.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = gg; g.beginPath(); g.arc(cx, cy, halo, 0, 7); g.fill();
+  };
+  drawIn('stardot', (g, w, h) => dot(g, w / 2, h / 2, 2.4, w / 2 - 3, 0.35));
+  drawIn('firefly', (g, w, h) => dot(g, w / 2, h / 2, 3, w / 2 - 3, 0.3));
+  drawIn('mote', (g, w, h) => dot(g, w / 2, h / 2, 2.2, w / 2 - 2.5, 0.4));
+  drawIn('ember', (g, w, h) => {
+    const cx = w / 2, cy = h * 0.66, sg = g.createLinearGradient(0, cy, 0, 3); sg.addColorStop(0, 'rgba(255,255,255,0.8)'); sg.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = sg; g.beginPath(); g.ellipse(cx, (cy + 3) / 2 + 1, 2.2, (cy - 3) / 2, 0, 0, 7); g.fill(); dot(g, cx, cy, 2.2, 7, 0.5);
+  });
+  drawIn('bar', (g, w, h) => { const gr = g.createLinearGradient(2, 0, w - 2, 0); gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(0.16, 'rgba(255,255,255,1)'); gr.addColorStop(0.84, 'rgba(255,255,255,1)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(2, 4, w - 4, h - 8); });
+  const shard = (n, sd) => drawIn(n, (g, w, h) => {
+    seed = sd; const cx = w / 2, cy = h / 2, pts = [];
+    for (let i = 0; i < 7; i++) { const a = i / 7 * Math.PI * 2 + rnd() * 0.5, r = (i % 2 ? 0.28 : 0.44) * w * (0.8 + 0.3 * rnd()); pts.push([cx + Math.cos(a) * r * (i === 2 ? 1.2 : 1), cy + Math.sin(a) * r * (a > 1 && a < 2.2 ? 1.25 : 0.85)]); }
+    const gr = g.createLinearGradient(cx - w * 0.3, cy - h * 0.35, cx + w * 0.3, cy + h * 0.35); gr.addColorStop(0, 'rgb(235,235,240)'); gr.addColorStop(0.45, 'rgb(150,150,160)'); gr.addColorStop(1, 'rgb(70,70,80)');
+    g.fillStyle = gr; g.beginPath(); pts.forEach((p, i) => i ? g.lineTo(...p) : g.moveTo(...p)); g.closePath(); g.fill();
+    g.strokeStyle = 'rgba(255,255,255,0.9)'; g.lineWidth = 2; g.beginPath(); for (let i = 3; i <= 6; i++) { const p = pts[i % 7]; i === 3 ? g.moveTo(...p) : g.lineTo(...p); } g.stroke();
+    g.strokeStyle = 'rgba(255,255,255,1)'; g.lineWidth = 2.2; g.shadowColor = 'white'; g.shadowBlur = 6; g.beginPath(); g.moveTo(cx - w * 0.12, cy - h * 0.18); g.lineTo(cx + w * 0.02, cy + h * 0.02); g.lineTo(cx + w * 0.16, cy + h * 0.2); g.stroke();
+  }, 0.6);
+  shard('shardA', 41); shard('shardB', 77);
+  drawIn('streak', (g, w, h) => {
+    const cy = h / 2, gr = g.createLinearGradient(4, 0, w - 16, 0); gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(1, 'rgba(255,255,255,0.9)');
+    g.fillStyle = gr; g.beginPath(); g.moveTo(4, cy); g.lineTo(w - 16, cy - 2.2); g.lineTo(w - 16, cy + 2.2); g.closePath(); g.fill(); dot(g, w - 16, cy, 3, 11, 0.45);
+  });
+  return c;
+}
+
+// ================================================================================================= node widgets (preview only)
+// Nodes are live UI in the game; the preview draws stand-ins so the composition reads like the real map.
+function paintNode(id, hex) {
+  const S = 1.25, R = 72, c = document.createElement('canvas'); c.width = c.height = Math.ceil(2 * 116 * S);
+  const g = c.getContext('2d'), m = c.width / 2; g.scale(S, S); const cx = m / S, cy = m / S;
+  const rgb = [parseInt(hex.slice(0, 2), 16), parseInt(hex.slice(2, 4), 16), parseInt(hex.slice(4, 6), 16)];
+  const mx = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * t)), css = (v, a = 1) => `rgba(${v[0]},${v[1]},${v[2]},${a})`;
+  let gr = g.createRadialGradient(cx, cy, R * 0.8, cx, cy, R * 1.55); gr.addColorStop(0, css(rgb, 0.36)); gr.addColorStop(1, css(rgb, 0));
+  g.fillStyle = gr; g.beginPath(); g.arc(cx, cy, R * 1.55, 0, 7); g.fill();
+  gr = g.createRadialGradient(cx - R * 0.35, cy - R * 0.45, R * 0.05, cx, cy, R);
+  gr.addColorStop(0, css(mx(rgb, [255, 255, 255], 0.5))); gr.addColorStop(0.55, css(rgb)); gr.addColorStop(1, css(mx(rgb, [12, 6, 22], 0.55)));
+  g.fillStyle = gr; g.beginPath(); g.arc(cx, cy, R, 0, 7); g.fill();
+  g.strokeStyle = css(mx(rgb, [255, 255, 255], 0.55), 0.95); g.lineWidth = 3; g.beginPath(); g.arc(cx, cy, R - 1.5, 0, 7); g.stroke();
+  g.strokeStyle = css([12, 6, 22], 0.35); g.lineWidth = 6; g.beginPath(); g.arc(cx, cy, R - 7, 0.2, 2.9); g.stroke();
+  gr = g.createRadialGradient(cx - R * 0.38, cy - R * 0.42, 0, cx - R * 0.38, cy - R * 0.42, R * 0.42); gr.addColorStop(0, 'rgba(255,255,255,0.55)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.beginPath(); g.arc(cx - R * 0.38, cy - R * 0.42, R * 0.42, 0, 7); g.fill();
+  const label = id.toUpperCase(); g.font = `700 ${label.length > 2 ? 34 : 42}px "Segoe UI", system-ui, sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.shadowColor = 'rgba(8,4,16,0.85)'; g.shadowBlur = 8; g.fillStyle = '#fff'; g.fillText(label, cx, cy + 2);
+  return c;
+}
+
+// ================================================================================================= state
+const st = {
+  R: null, man: null, tier: OPT.tier, source: OPT.source, layers: [], atlas: null, atlasScale: 1, nodes: [], hud: OPT.hud,
+  showNodes: OPT.nodes, rm: OPT.rm, seams: OPT.seams, wash: true, grid: false, keep: false, hidden: new Set(), paused: false,
+  C: { x: 1500, y: 1150 }, z: 0.6, t: 0, w: { rift: 0, corrupt: 0 }, Vpx: { w: 1, h: 1 }, map: null, dpr: 1,
+  fps: 0, frameMs: 0,
+};
+const lerp = (a, b, t) => a + (b - a) * t, sstep = RC.smoothstep, mixC = RC.mixRGB;
+const WHITE = [255, 255, 255];
+
+function resize() {
+  st.dpr = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+  const w = window.innerWidth, h = window.innerHeight;
+  cv.width = Math.round(w * st.dpr); cv.height = Math.round(h * st.dpr);
+  st.Vpx = { w, h }; st.map = RC.mapScale(st.Vpx);
+  gl.viewport(0, 0, cv.width, cv.height);
+  gl.uniform2f(U.u_res, cv.width, cv.height);
+}
+const V = () => ({ w: st.map.w, h: st.map.h });
+/** map points -> device px (letterbox box centred, UIScale = map.scale) */
+const toDev = (q) => ({ x: ((st.Vpx.w - st.map.box.w) / 2 + q.x * st.map.scale) * st.dpr, y: ((st.Vpx.h - st.map.box.h) / 2 + q.y * st.map.scale) * st.dpr });
+const k = () => st.map.scale * st.dpr;          // device px per map point
+
+// ================================================================================================= loading
+async function load() {
+  const [R, man, worldSrc] = await Promise.all([
+    fetch('../realm.json', { cache: 'no-store' }).then(r => r.json()),
+    fetch('../roblox/manifest.json', { cache: 'no-store' }).then(r => (r.ok ? r.json() : null)).catch(() => null),
+    fetch('../layers/world.js', { cache: 'no-store' }).then(r => (r.ok ? r.text() : '')).catch(() => ''),
+  ]);
+  st.R = R; st.man = man;
+  const n0 = { x: 1500, y: 1150 };
+  st.C = { x: OPT.x || n0.x, y: OPT.y || n0.y };
+  // node colours from world.js NODES (fallback lilac)
+  const col = {}; for (const m of worldSrc.matchAll(/(\w+):\s*\[(\d+),\s*(\d+),\s*'([0-9a-fA-F]{6})'\]/g)) col[m[1]] = m[4];
+  st.nodes = Object.entries(R.nodes).map(([id, [x, y]]) => ({ id, x, y, hex: col[id] || 'cdb6ff' }));
+  await loadTier(st.tier);
+  for (const n of st.nodes) n.tex = texture(paintNode(n.id, n.hex));
+  resize();
+  const Vm = V(), zStart = RC.clamp(Math.min(Vm.w / 1500, Vm.h / 1750), RC.zMin(Vm), 1);
+  st.z = OPT.z || zStart;
+  Object.assign(st.C, RC.clampCamera(st.C, st.z, Vm));
+  st.w = RC.biome(st.C, R.biomes);
+}
+
+async function loadTier(tier) {
+  const R = st.R, man = st.man;
+  for (const L of st.layers) for (const t of L.tiles) if (t.tex) gl.deleteTexture(t.tex.t);
+  st.layers = [];
+  for (const L of R.layers.filter(l => l.kind === 'baked')) {
+    const E = man && man.tiers[tier] && man.tiers[tier].layers.find(e => e.id === L.id);
+    const entry = { L, id: L.id, f: L.f, w: L.size[0], h: L.size[1], tiles: [], mode: null, tint: L.tint };
+    if (st.source === 'tiles' && E && !E.missing && E.tiles.length) {
+      entry.mode = 'tiles';
+      const cols = Math.max(...E.tiles.map(t => t.i)), rows = Math.max(...E.tiles.map(t => t.j));
+      await Promise.all(E.tiles.map(async t => {
+        const tile = { ...t, lastCol: t.i === cols, lastRow: t.j === rows, tex: null };
+        entry.tiles.push(tile);
+        if (!t.empty) { const im = await loadImage('../roblox/' + t.file + '?v=' + t.sha256.slice(0, 8)); tile.tex = texture(im);
+          const W = tile.tex.w, H = tile.tex.h, [ox, oy] = t.rectOffset, [rw, rh] = t.rectSize; tile.uv = [ox / W, oy / H, (ox + rw) / W, (oy + rh) / H]; }
+      }));
+    } else {
+      // the full HIGH render as one texture (source=layers, or no tiles yet)
+      const cands = [];
+      if (OPT.sources && OPT.sources[L.id]) cands.push('../' + OPT.sources[L.id]);
+      if (E && E.source) cands.push('../' + E.source);
+      cands.push(`../out/${L.id}.png`); if (L.file) cands.push(`../out/${L.file.replace(/^.*\//, '').replace(/\.js$/, '')}.png`);
+      for (const u of cands) {
+        try { const im = await loadImage(u + '?t=' + Date.now()); const tex = texture(im);
+          entry.mode = 'layer'; entry.tiles.push({ local: { x: 0, y: 0, w: L.size[0], h: L.size[1] }, uv: [0, 0, 1, 1], tex, lastCol: true, lastRow: true, file: u }); break; }
+        catch (e) { /* next candidate */ }
+      }
+      if (!entry.mode) entry.mode = 'missing';
+    }
+    st.layers.push(entry);
+  }
+  // atlas
+  const A = R.atlas; let img = null, scale = 1, src = 'procedural';
+  const at = man && man.atlas && man.atlas.tiers && man.atlas.tiers[tier];
+  if (at) { try { img = await loadImage('../roblox/' + at.file + '?v=' + at.sha256.slice(0, 8)); scale = at.scale; src = at.file; } catch (e) { img = null; } }
+  if (!img && await exists('../out/' + A.file)) { try { img = await loadImage('../out/' + A.file + '?t=' + Date.now()); src = 'out/' + A.file; } catch (e) { img = null; } }
+  if (!img) img = paintAtlas(A);
+  if (st.atlas) gl.deleteTexture(st.atlas.t);
+  st.atlas = texture(img); st.atlas.src = src; st.atlasScale = scale;
+  st.tier = tier;
+}
+
+// ================================================================================================= drawing
+const layerById = id => st.layers.find(l => l.id === id);
+function layerXf(f, w, h) { // container transform in map points
+  const o = RC.layerOffset({ f, w, h }, st.C, st.z, V());
+  return o;             // { x, y, scale }
+}
+function tintFor(L) {
+  if (!L.tint) return WHITE;
+  return mixC(mixC(WHITE, L.tint.rift, st.w.rift), L.tint.corrupt, 0.5 * st.w.corrupt);
+}
+function fgFade(L) { return L.zHide ? sstep(L.zHide, L.zShow, st.z) : 1; }
+
+function drawTiles(E) {
+  if (!E || E.mode === 'missing' || st.hidden.has(E.L.depth)) return;
+  const o = layerXf(E.f, E.w, E.h), K = k(), tint = tintFor(E.L), a = fgFade(E.L);
+  if (a <= 0) return;
+  for (const t of E.tiles) {
+    if (!t.tex) continue;
+    const q = toDev({ x: o.x + o.scale * t.local.x, y: o.y + o.scale * t.local.y });
+    let r;
+    if (st.seams === 'overlap') {
+      // REALM.md 9.3: Size = UDim2.new(lw / w, lastCol and 0 or 1, lh / h, lastRow and 0 or 1), the 1-point overlap
+      r = { x: q.x, y: q.y, w: (o.scale * t.local.w + (t.lastCol ? 0 : 1)) * K, h: (o.scale * t.local.h + (t.lastRow ? 0 : 1)) * K };
+    } else {
+      // snapped: every tile edge on a whole device pixel, neighbours share the edge (no gap, no double-blended strip)
+      const q1 = toDev({ x: o.x + o.scale * (t.local.x + t.local.w), y: o.y + o.scale * (t.local.y + t.local.h) });
+      const x0 = Math.round(q.x), y0 = Math.round(q.y);
+      r = { x: x0, y: y0, w: Math.round(q1.x) - x0, h: Math.round(q1.y) - y0 };
+    }
+    quad(t.tex, r, t.uv, tint, a);
+    if (st.grid) outline(r, [255, 201, 60], 0.8);
+  }
+}
+function outline(r, c, a) {
+  quad(null, { x: r.x, y: r.y, w: r.w, h: 2 }, [0, 0, 1, 1], c, a); quad(null, { x: r.x, y: r.y + r.h - 2, w: r.w, h: 2 }, [0, 0, 1, 1], c, a);
+  quad(null, { x: r.x, y: r.y, w: 2, h: r.h }, [0, 0, 1, 1], c, a); quad(null, { x: r.x + r.w - 2, y: r.y, w: 2, h: r.h }, [0, 0, 1, 1], c, a);
+}
+function regionUV(name, inset = 0) {
+  const r = st.R.atlas.regions[name], s = st.atlasScale, W = st.atlas.w, H = st.atlas.h, i = inset;
+  return [(r[0] + i) * s / W, (r[1] + i) * s / H, (r[0] + r[2] - i) * s / W, (r[1] + r[3] - i) * s / H];
+}
+const HIDE_RM = new Set(['shooting_star', 'ember', 'rift_ring', 'corrupt_glitch', 'crystal_glint']);
+function spriteColor(S, inst, t) {
+  if (S.palette) {
+    let c = inst.c || 0;
+    if (S.motion.some(m => m.type === 'flicker') && inst.m) { // a random palette colour per burst (hashed, repeatable)
+      const m = inst.m.find(q => q.type === 'flicker'); c = Math.floor(RC.hash01(m.seed + 2, Math.floor(t / m.slot)) * S.palette.length);
+    }
+    return S.palette[c % S.palette.length];
+  }
+  if (S.color) return mixC(mixC(S.color.realm, S.color.rift, st.w.rift), S.color.corrupt, 0.5 * st.w.corrupt);
+  return WHITE;
+}
+function drawSprites(layerId) {
+  const Lr = st.R.layers.find(l => l.id === layerId);
+  if (!Lr || st.hidden.has(Lr.depth)) return;
+  const o = layerXf(Lr.f, Lr.size[0], Lr.size[1]), K = k(), fade = fgFade(Lr);
+  if (fade <= 0) return;
+  const t = st.t;
+  for (const S of st.R.sprites) {
+    if (S.layer !== layerId) continue;
+    if (st.rm && HIDE_RM.has(S.name)) continue;
+    const n = Math.min(S.count[st.tier], S.instances.length);
+    for (let i = 0; i < n; i++) {
+      const inst = S.instances[i];
+      const ss = st.rm ? { dx: 0, dy: 0, rot: 0, scale: 1, alpha: inst.a != null ? inst.a : 1, grad: 0 } : RC.spriteState(inst, t);
+      if (st.rm) for (const m of inst.m || []) if (m.type === 'drift') { const v = RC.channel(m, 0); if (m.ch === 'x') ss.dx = v; else if (m.ch === 'y') ss.dy = v; }
+      const alpha = ss.alpha * fade; if (alpha <= 0.003) continue;
+      const region = S.atlas[inst.t || 0], uv = regionUV(region), color = spriteColor(S, inst, t);
+      const w = inst.s * ss.scale, len = S.hangs ? (inst.len || inst.h || inst.s) : (inst.h || inst.s) * ss.scale;
+      const cx = inst.x + ss.dx, cy = inst.y + ss.dy, rot = (inst.r || 0) + ss.rot;
+      let r, pivot;
+      if (S.hangs) {  // attachment point at the top centre; the image hangs down and swings about it
+        const q = toDev({ x: o.x + o.scale * (cx - inst.s / 2), y: o.y + o.scale * cy });
+        r = { x: q.x, y: q.y, w: inst.s * o.scale * K, h: len * o.scale * K }; pivot = { x: q.x + r.w / 2, y: q.y };
+      } else {
+        const q = toDev({ x: o.x + o.scale * (cx - w / 2), y: o.y + o.scale * (cy - len / 2) });
+        r = { x: q.x, y: q.y, w: w * o.scale * K, h: len * o.scale * K }; pivot = null;
+      }
+      if (r.x > cv.width + 400 || r.y > cv.height + 400 || r.x + r.w < -400 || r.y + r.h < -400) continue;
+      const grad = inst.m && inst.m.some(m => m.ch === 'grad') ? (st.rm ? 0 : ss.grad) : null;
+      quad(st.atlas, r, uv, color, alpha, rot, pivot, grad);
+    }
+  }
+}
+function drawField(id) {
+  const F = st.R.fields.find(f => f.id === id); if (!F) return;
+  const depthOf = { motesFar: 4, motesNear: 6, particles: 7 }[id];
+  if (st.hidden.has(depthOf)) return;
+  if (st.rm && id !== 'motesFar') return;
+  const field = { ...F, cell: { w: F.cell[0], h: F.cell[1] }, particles: st.tier === 'LOW' ? F.particles.filter(p => p.low === 1) : F.particles };
+  const list = RC.fieldPlace(field, st.C, st.z, V(), st.rm ? 0 : st.t).slice(0, F.poolMax[st.tier]);
+  const K = k();
+  for (const p of list) {
+    const P = field.particles[p.i], kind = F.kinds.find(q => q.name === P.k);
+    const region = kind.atlas[P.t || 0], color = mixC(kind.palette[P.c % kind.palette.length], kind.rift, st.w.rift);
+    const q = toDev({ x: p.x - p.size / 2, y: p.y - p.size / 2 });
+    quad(st.atlas, { x: q.x, y: q.y, w: p.size * K, h: p.size * K }, regionUV(region), color, p.alpha);
+  }
+}
+function drawWash() {
+  if (!st.wash) return;
+  const Wd = st.R.biomes.wash, c = mixC(mixC(Wd.realm.color, Wd.rift.color, st.w.rift), Wd.corrupt.color, 0.35 * st.w.corrupt);
+  const q = toDev({ x: 0, y: 0 }), K = k();
+  quad(null, { x: q.x, y: q.y, w: st.map.w * K, h: st.map.h * K }, [0, 0, 1, 1], c, lerp(Wd.realm.alpha, Wd.rift.alpha, st.w.rift));
+}
+function drawVignette() {
+  const vg = st.R.biomes.vignette, q = toDev({ x: 0, y: 0 }), K = k();
+  // inset 3 px: every atlas region has a clear 2 px border, which stretched over the screen would be a light frame
+  quad(st.atlas, { x: q.x, y: q.y, w: st.map.w * K, h: st.map.h * K }, regionUV(vg.atlas, 3), vg.color, vg.alpha);
+}
+function drawNodes() {
+  if (!st.showNodes) return;
+  const K = k();
+  for (const n of st.nodes) {
+    const q = toDev(RC.worldToScreen(st.C, st.z, V(), { x: n.x, y: n.y })), sz = 2 * 116 * st.z * K;
+    quad(n.tex, { x: q.x - sz / 2, y: q.y - sz / 2, w: sz, h: sz }, [0, 0, 1, 1], WHITE, 1);
+  }
+}
+function drawKeepClear() {
+  if (!st.keep) return;
+  const K = k();
+  for (const id of ['mid', 'near', 'fg']) {
+    const Lr = st.R.layers.find(l => l.id === id), o = layerXf(Lr.f, Lr.size[0], Lr.size[1]);
+    for (const [, cx, cy, rx, ry] of Lr.keepClear.hard) {
+      const q = toDev({ x: o.x + o.scale * cx, y: o.y + o.scale * cy }), W = 2 * rx / 0.84 * o.scale * K, H = 2 * ry / 0.84 * o.scale * K;
+      quad(st.atlas, { x: q.x - W / 2, y: q.y - H / 2, w: W, h: H }, regionUV('ring'), id === 'mid' ? [120, 200, 255] : id === 'near' ? [255, 90, 90] : [255, 220, 90], 0.8);
+    }
+  }
+}
+
+function render() {
+  draws = 0;
+  gl.disable(gl.SCISSOR_TEST); gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT);
+  // letterbox: the map draws inside its Box only (black bars outside, as the Root frame)
+  const b0 = toDev({ x: 0, y: 0 }), K = k();
+  gl.enable(gl.SCISSOR_TEST); gl.scissor(Math.round(b0.x), Math.round(cv.height - b0.y - st.map.h * K), Math.round(st.map.w * K), Math.round(st.map.h * K));
+  for (const item of st.R.zOrder) {
+    let m;
+    if ((m = item.match(/^(\w+) tiles$/))) drawTiles(layerById(m[1]));
+    else if ((m = item.match(/^(\w+) sprites$/))) drawSprites(m[1]);
+    else if ((m = item.match(/^field (\w+)$/))) drawField(m[1]);
+    else if (item === 'biome wash') drawWash();
+    else if (item === 'nodes') { drawKeepClear(); drawNodes(); }
+    else if (item === 'vignette') drawVignette();
+  }
+}
+
+// ================================================================================================= camera feel (camera.feel)
+const FEEL = () => st.R.camera.feel;
+const input = { down: false, drag: false, id: null, sx: 0, sy: 0, lx: 0, ly: 0, lt: 0, v: { x: 0, y: 0 }, touch: false,
+  zT: null, zAnchor: null, anim: null, spring: { vx: 0, vy: 0 } };
+function panLimitsNow(rubber) { return RC.panLimits(st.z, V(), { overscroll: rubber ? RC.OVERSCROLL : 0 }); }
+/** raw (finger) camera -> displayed camera with the rubber band past the hard limit */
+function rubberAxis(raw, lo, hi) {
+  if (raw < lo) return lo - RC.rubberBand((lo - raw) * st.z) / st.z;
+  if (raw > hi) return hi + RC.rubberBand((raw - hi) * st.z) / st.z;
+  return raw;
+}
+function smoothDamp(cur, target, velObj, key, smoothTime, dt) { // Unity SmoothDamp
+  const omega = 2 / smoothTime, x = omega * dt, exp = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x);
+  const change = cur - target, temp = (velObj[key] + omega * change) * dt;
+  velObj[key] = (velObj[key] - omega * temp) * exp;
+  return target + (change + temp) * exp;
+}
+const toMap = e => { const r = cv.getBoundingClientRect(); return { x: ((e.clientX - r.left) - (st.Vpx.w - st.map.box.w) / 2) / st.map.scale, y: ((e.clientY - r.top) - (st.Vpx.h - st.map.box.h) / 2) / st.map.scale }; };
+cv.addEventListener('pointerdown', e => {
+  cv.setPointerCapture(e.pointerId);
+  const p = toMap(e); Object.assign(input, { down: true, drag: false, id: e.pointerId, sx: p.x, sy: p.y, lx: p.x, ly: p.y, lt: performance.now(), touch: e.pointerType === 'touch', anim: null });
+  input.raw = { ...st.C }; input.v = { x: 0, y: 0 };
+});
+cv.addEventListener('pointermove', e => {
+  if (!input.down || e.pointerId !== input.id) return;
+  const p = toMap(e), now = performance.now(), dt = Math.max(1e-3, (now - input.lt) / 1000);
+  if (!input.drag && Math.hypot(p.x - input.sx, p.y - input.sy) >= FEEL().dragThreshold[input.touch ? 'touch' : 'mouse']) { input.drag = true; cv.classList.add('dragging'); }
+  if (input.drag) {
+    const dx = p.x - input.lx, dy = p.y - input.ly;
+    input.raw.x -= dx / st.z; input.raw.y -= dy / st.z;
+    const lim = panLimitsNow(false);
+    st.C = { x: rubberAxis(input.raw.x, lim.x0, lim.x1), y: rubberAxis(input.raw.y, lim.y0, lim.y1) };
+    const a = 1 - Math.exp(-dt / FEEL().velocitySmoothingTau);
+    input.v.x = lerp(input.v.x, dx / dt, a); input.v.y = lerp(input.v.y, dy / dt, a);
+  }
+  input.lx = p.x; input.ly = p.y; input.lt = now;
+});
+const release = e => {
+  if (!input.down) return; input.down = false; cv.classList.remove('dragging');
+  if (performance.now() - input.lt > 80) input.v = { x: 0, y: 0 };   // held still before letting go: no fling
+  const sp = Math.hypot(input.v.x, input.v.y), cap = FEEL().maxFlingSpeed;
+  if (sp > cap) { input.v.x *= cap / sp; input.v.y *= cap / sp; }
+  if (st.rm) input.v = { x: 0, y: 0 };
+  input.drag = false; input.spring = { vx: 0, vy: 0 };
+};
+cv.addEventListener('pointerup', release); cv.addEventListener('pointercancel', release);
+cv.addEventListener('wheel', e => {
+  e.preventDefault();
+  const notches = Math.max(-4, Math.min(4, -e.deltaY / (e.deltaMode === 1 ? 3 : 100)));
+  const r = RC.zoomRange(V());
+  input.zT = RC.clamp((input.zT || st.z) * Math.pow(FEEL().wheel.factorPerNotch, notches), r.lo, r.hi);
+  input.zAnchor = toMap(e); input.anim = null;
+  if (st.rm) { st.C = RC.zoomAt(st.C, st.z, input.zT, input.zAnchor, V()); st.z = input.zT; input.zT = null; }
+}, { passive: false });
+cv.addEventListener('dblclick', e => {
+  const r = RC.zoomRange(V()), z1 = RC.clamp(st.z * FEEL().doubleTap.factor, r.lo, r.hi), S = toMap(e);
+  const Q = RC.screenToWorld(st.C, st.z, V(), S);
+  input.anim = { t0: st.clock(), dur: st.rm ? 0 : FEEL().doubleTap.seconds, z0: st.z, z1, Q, S };
+});
+window.addEventListener('keydown', e => {
+  const key = e.key.toLowerCase();
+  if (key === 'h') { st.hud = !st.hud; }
+  else if (key === 'n') st.showNodes = !st.showNodes;
+  else if (key === 'm') st.rm = !st.rm;
+  else if (key === 'b') st.wash = !st.wash;
+  else if (key === 'g') st.grid = !st.grid;
+  else if (key === 'o') st.seams = st.seams === 'snap' ? 'overlap' : 'snap';
+  else if (key === 'k') st.keep = !st.keep;
+  else if (key === 'p') st.paused = !st.paused;
+  else if (key === 't') loadTier(st.tier === 'HIGH' ? 'LOW' : 'HIGH').catch(fail);
+  else if (key === 's') { st.source = st.source === 'tiles' ? 'layers' : 'tiles'; loadTier(st.tier).catch(fail); }
+  else if (key === 'r') { const Vm = V(); st.C = { x: 1500, y: 1150 }; st.z = RC.clamp(Math.min(Vm.w / 1500, Vm.h / 1750), RC.zMin(Vm), 1); input.zT = null; }
+  else if (key === '-' || key === '=' || key === '+') {
+    const r = RC.zoomRange(V()); input.zT = RC.clamp((input.zT || st.z) * Math.pow(FEEL().wheel.factorPerNotch, key === '-' ? -1 : 1), r.lo, r.hi);
+    input.zAnchor = { x: V().w / 2, y: V().h / 2 };
+  } else if (/^[1-8]$/.test(key)) { const d = +key - 1; st.hidden.has(d) ? st.hidden.delete(d) : st.hidden.add(d); }
+});
+window.addEventListener('resize', () => { resize(); });
+
+function stepCamera(dt) {
+  const Vm = V(), f = FEEL();
+  if (input.anim) { // double-tap zoom (quintOut), anchored at the tapped point
+    const a = input.anim, u = a.dur ? Math.min(1, (st.clock() - a.t0) / a.dur) : 1, e = RC.EASE.quintOut(u);
+    st.z = Math.exp(lerp(Math.log(a.z0), Math.log(a.z1), e)); st.C = { x: a.Q.x - (a.S.x - Vm.w / 2) / st.z, y: a.Q.y - (a.S.y - Vm.h / 2) / st.z };
+    if (u >= 1) input.anim = null;
+  } else if (input.zT != null) { // wheel: ease log z toward the target, about the cursor
+    const z2 = Math.exp(lerp(Math.log(st.z), Math.log(input.zT), 1 - Math.exp(-dt / f.wheel.smoothTau)));
+    st.C = RC.zoomAt(st.C, st.z, z2, input.zAnchor, Vm); st.z = z2;
+    if (Math.abs(Math.log(st.z / input.zT)) < 1e-4) { st.C = RC.zoomAt(st.C, st.z, input.zT, input.zAnchor, Vm); st.z = input.zT; input.zT = null; }
+  }
+  if (!input.down) {
+    // inertia
+    const sp = Math.hypot(input.v.x, input.v.y);
+    if (sp > f.inertiaStopSpeed) {
+      st.C.x -= input.v.x * dt / st.z; st.C.y -= input.v.y * dt / st.z;
+      const d = Math.exp(-dt / f.inertiaTau); input.v.x *= d; input.v.y *= d;
+      const lim = panLimitsNow(true);   // flinging into the edge: stop at the rubber envelope
+      if (st.C.x < lim.x0 || st.C.x > lim.x1) input.v.x = 0; if (st.C.y < lim.y0 || st.C.y > lim.y1) input.v.y = 0;
+      st.C = { x: RC.clamp(st.C.x, lim.x0, lim.x1), y: RC.clamp(st.C.y, lim.y0, lim.y1) };
+    } else input.v = { x: 0, y: 0 };
+    // spring back inside the hard limits
+    const hard = RC.clampCamera(st.C, st.z, Vm);
+    if (input.zT == null && !input.anim && (Math.abs(hard.z - st.z) > 1e-6)) st.z = smoothDamp(st.z, hard.z, input.spring, 'vz', f.pinch.returnSmoothTime, dt);
+    const lim = panLimitsNow(false);
+    const tx = RC.clamp(st.C.x, lim.x0, lim.x1), ty = RC.clamp(st.C.y, lim.y0, lim.y1);
+    if (st.rm) st.C = { x: tx, y: ty };
+    else { if (tx !== st.C.x) st.C.x = smoothDamp(st.C.x, tx, input.spring, 'vx', f.rubberBand.returnSmoothTime, dt);
+           if (ty !== st.C.y) st.C.y = smoothDamp(st.C.y, ty, input.spring, 'vy', f.rubberBand.returnSmoothTime, dt); }
+  }
+  const soft = RC.clampCamera(st.C, st.z, Vm, { rubber: true }); st.C = { x: soft.x, y: soft.y }; st.z = soft.z;
+}
+function stepBiome(dt, settle) {
+  const tgt = RC.biome(st.C, st.R.biomes);
+  if (settle || st.rm) { st.w = tgt; return; }
+  const a = 1 - Math.exp(-dt / 0.35);
+  st.w = { rift: lerp(st.w.rift, tgt.rift, a), corrupt: lerp(st.w.corrupt, tgt.corrupt, a) };
+}
+
+function hud() {
+  const el = $('hud');
+  el.classList.toggle('hidden', !st.hud); if (!st.hud) return;
+  const Vm = V(), f3 = v => v.toFixed(3);
+  const lines = [
+    `<b>Realm</b>  ${st.tier}  ${st.source} (${st.seams})  atlas: ${st.atlas.src}  ${st.fps.toFixed(0)} fps  ${draws} draws`,
+    `C (${st.C.x.toFixed(0)}, ${st.C.y.toFixed(0)})  z ${f3(st.z)}  zMin ${f3(RC.zMin(Vm))}  V ${Vm.w.toFixed(0)}x${Vm.h.toFixed(0)}`,
+    `biome  rift ${st.w.rift.toFixed(2)}  corrupt ${st.w.corrupt.toFixed(2)}${st.rm ? '  <b>ReducedMotion</b>' : ''}${st.paused ? '  <b>paused</b>' : ''}`,
+    ...st.R.layers.map(L => `${st.hidden.has(L.depth) ? '<i>' : ''}${L.depth + 1} ${L.id.padEnd(7)} f ${String(L.f).padEnd(5)} s ${f3(RC.layerZoom(L.f, st.z))}  ${(layerById(L.id) || {}).mode || ''}${st.hidden.has(L.depth) ? '</i>' : ''}`),
+    `<i>drag, wheel, dbl-click  H N M T S B G O K P R 1-8</i>`,
+  ];
+  el.innerHTML = lines.join('\n');
+}
+
+// ================================================================================================= loop + API
+let tPrev = null, tBase = performance.now(), frames = 0, fpsT = performance.now();
+st.clock = () => (performance.now() - tBase) / 1000;
+function tick() {
+  const now = st.clock(), dt = tPrev == null ? 0 : Math.min(0.1, now - tPrev); tPrev = now;
+  if (!st.paused) st.t += dt;
+  stepCamera(dt); stepBiome(dt, false);
+  const t0 = performance.now(); render(); st.frameMs = performance.now() - t0;
+  frames++; if (performance.now() - fpsT > 500) { st.fps = frames * 1000 / (performance.now() - fpsT); frames = 0; fpsT = performance.now(); hud(); }
+  if (OPT.clock !== 'manual') requestAnimationFrame(tick);
+}
+window.Realm = {
+  state: st, options: OPT,
+  ready: null,
+  /** Deterministic frame for automation: sets the camera (hard-clamped), time and biome easing, draws, returns stats. */
+  frame({ x, y, z, t, dt = 1 / 30, settle = false, tier, rm } = {}) {
+    if (rm != null) st.rm = rm;
+    if (z != null) st.z = z; if (x != null) st.C = { x, y };
+    const c = RC.clampCamera(st.C, st.z, V()); st.C = { x: c.x, y: c.y }; st.z = c.z;
+    if (t != null) st.t = t;
+    stepBiome(dt, settle);
+    render(); gl.finish();
+    return this.stats();
+  },
+  async setTier(tier) { await loadTier(tier); },
+  stats() { return { C: { ...st.C }, z: st.z, t: st.t, w: { ...st.w }, draws, tier: st.tier, atlas: st.atlas.src,
+    layers: st.layers.map(l => ({ id: l.id, mode: l.mode, tiles: l.tiles.filter(t => t.tex).length })) }; },
+  set(o) { Object.assign(st, o); },
+};
+window.Realm.ready = load().then(() => { hud(); if (OPT.clock !== 'manual') requestAnimationFrame(tick); else render(); return window.Realm.stats(); }).catch(e => { fail(e); throw e; });
+})();
+</script>
+</body>
+</html>
