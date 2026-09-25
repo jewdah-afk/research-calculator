@@ -14,7 +14,7 @@ export type Tier = { layers: { [string]: Layer }, order: { string }, atlas: { id
 export type Assets = { version: string, complete: boolean, uploaded: number, total: number, gutter: number, tiers: { HIGH: Tier, LOW: Tier }, sprites: { atlas: { HIGH: string?, LOW: string? }, size: { HIGH: { number }, LOW: { number } }, regions: { [string]: { number } }, sample: { [string]: { number } } } }
 
 local Assets: Assets = {
-	version = "bdb1789cb627",
+	version = "2fc6ecec1a7d",
 	complete = false,
 	uploaded = 0,
 	total = 49,

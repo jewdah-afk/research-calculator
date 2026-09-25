@@ -4,6 +4,7 @@
 //                                                  + out/realm_[1-6]_*.jpg (six 1920x1080 stills) + the rest-motion report
 //   node preview/record.js --mode video         Playwright recordVideo in real time (smooth only on a GPU machine)
 //   node preview/record.js --stills-only        just the 6 stills (and the rest-motion report)
+//   node preview/record.js --rest-only          just the rest-motion report
 //   node preview/record.js --serve [--port N]   serve art/ and print the simulator URL (interactive: drag, wheel, keys)
 //   options: --tier HIGH|LOW  --fps 30  --seconds 27 (rescales the path)  --size 1920x1080 (drawn)  --video-size 960x540
 //            (encoded; `same` keeps the drawn size)  --bitrate 1.8M  --stills jpg|png  --out out/realm_preview.webm
@@ -115,7 +116,7 @@ function ffmpegPath() {
 
 function parse(argv) {
   const o = { mode: 'frames', tier: 'HIGH', fps: 30, seconds: PATH_SECONDS, w: 1920, h: 1080, vw: 960, vh: 540, out: path.join(OUT, 'realm_preview.webm'),
-    stills: true, stillsOnly: false, stillFormat: 'jpg', restCheck: true, serve: false, port: 0, source: 'tiles', bitrate: '1.8M', workers: 2 };
+    stills: true, stillsOnly: false, restOnly: false, stillFormat: 'jpg', restCheck: true, serve: false, port: 0, source: 'tiles', bitrate: '1.8M', workers: 2 };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i], v = () => argv[++i];
     if (a === '--mode') o.mode = v(); else if (a === '--tier') o.tier = v().toUpperCase(); else if (a === '--fps') o.fps = +v();
@@ -123,7 +124,7 @@ function parse(argv) {
     else if (a === '--video-size') { const q = v(); [o.vw, o.vh] = q === 'same' ? [0, 0] : q.split('x').map(Number); }
     else if (a === '--out') o.out = path.resolve(v()); else if (a === '--no-stills') o.stills = false; else if (a === '--stills-only') o.stillsOnly = true;
     else if (a === '--stills') { o.stillFormat = v().toLowerCase(); if (!['jpg', 'png'].includes(o.stillFormat)) throw new Error('--stills jpg|png'); }
-    else if (a === '--no-rest-check') o.restCheck = false;
+    else if (a === '--no-rest-check') o.restCheck = false; else if (a === '--rest-only') o.restOnly = true;
     else if (a === '--serve') o.serve = true; else if (a === '--port') o.port = +v(); else if (a === '--source') o.source = v();
     else if (a === '--bitrate') o.bitrate = v(); else if (a === '--workers') o.workers = Math.max(1, +v());
     else throw new Error('unknown argument ' + a);
@@ -202,14 +203,20 @@ async function recordFrames(browser, base, o) {
   return shots.sort();
 }
 
-/** Rest-motion report: on each hold of the path, with the camera still, the share of pixels whose colour changes by
- *  more than 8/255 (and 24/255) over 1 s. Three pairs per hold (0.5 s apart), after the biome weights settled. */
+/** Rest-motion report: on each hold of the path, with the camera still and the biome weights settled, the share of
+ *  pixels whose colour changes by more than 8/255 (and 24/255) over 1 s: the ambient motion alone. Up to three pairs
+ *  per hold, 0.5 s apart. */
 async function restCheck(page, o) {
-  const cam = cameraPath(KEYS, o.seconds), n = Math.round(o.seconds * o.fps) + 1, W = biomeSeries(cam, n, o.fps, { w: o.w, h: o.h }), out = [];
+  const cam = cameraPath(KEYS, o.seconds), n = Math.round(o.seconds * o.fps), W = biomeSeries(cam, n, o.fps, { w: o.w, h: o.h }), out = [];
   for (const [a, b, label] of HOLDS) {
     const t0 = pathTime(a, o), t1 = pathTime(b, o), pairs = [];
-    for (let s = t0 + 0.5; s + 1 <= t1 + 1e-9 && pairs.length < 3; s += 0.5) pairs.push([Math.round(s * o.fps), Math.round((s + 1) * o.fps)]);
+    // start 0.5 s into the hold (the biome weights ease with tau 0.35 s), less on a short hold; the last frame is n - 1
+    const lead = Math.min(0.5, Math.max(0, (t1 - t0 - 1) / 2)), last = (n - 1) / o.fps;
+    for (let s = t0 + lead; s + 1 <= Math.min(t1, last) + 1e-9 && pairs.length < 3; s += 0.5) pairs.push([Math.round(s * o.fps), Math.round((s + 1) * o.fps)]);
     if (!pairs.length) continue;
+    // the settled biome weights of the held camera: the steady state at rest, so only the ambient motion differs
+    const RC = require(path.join(ART, 'camera.js')), B = JSON.parse(fs.readFileSync(path.join(ART, 'realm.json'), 'utf8')).biomes, c0 = cam(t0);
+    const settled = RC.biome(RC.clampCamera(c0, c0.z, RC.mapScale({ w: o.w, h: o.h })), B);
     const r = [];
     for (const [i, j] of pairs) r.push(await page.evaluate(([A, B]) => {
       const cv = document.getElementById('gl');
@@ -218,7 +225,7 @@ async function restCheck(page, o) {
       let n8 = 0, n24 = 0; const N = P.length / 4;
       for (let k = 0; k < P.length; k += 4) { const d = Math.max(Math.abs(P[k] - Q[k]), Math.abs(P[k + 1] - Q[k + 1]), Math.abs(P[k + 2] - Q[k + 2])); if (d > 8) n8++; if (d > 24) n24++; }
       return [n8 / N, n24 / N];
-    }, [frameArgs(cam, W, i, o.fps), frameArgs(cam, W, j, o.fps)]));
+    }, [{ ...frameArgs(cam, W, i, o.fps), w: settled }, { ...frameArgs(cam, W, j, o.fps), w: settled }]));
     const mean = k => r.reduce((s, v) => s + v[k], 0) / r.length, max = k => Math.max(...r.map(v => v[k]));
     const c = cam(t0);
     out.push({ label, t: [+t0.toFixed(2), +t1.toFixed(2)], cam: { x: Math.round(c.x), y: Math.round(c.y), z: +c.z.toFixed(2) }, over8: +mean(0).toFixed(4), over8max: +max(0).toFixed(4), over24: +mean(1).toFixed(4) });
@@ -252,7 +259,8 @@ async function main() {
   try {
     let shots = [], page = null, ctx = null;
     const open = async () => { if (!page) ({ ctx, page } = await openRealm(browser, srv.url, { w: o.w, h: o.h, q: { tier: o.tier, source: o.source } })); return page; };
-    if (o.stillsOnly) shots = await stills(await open(), cameraPath(KEYS, o.seconds), o, o.fps);
+    if (o.restOnly) o.restCheck = true;
+    else if (o.stillsOnly) shots = await stills(await open(), cameraPath(KEYS, o.seconds), o, o.fps);
     else if (o.mode === 'video') {
       await recordVideo(browser, srv.url, o);
       if (o.stills) shots = await stills(await open(), cameraPath(KEYS, o.seconds), o, o.fps);

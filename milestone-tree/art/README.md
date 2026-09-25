@@ -39,6 +39,7 @@ ROBLOX_CREATOR=user:<id> node roblox/upload.js     # the real upload (Open Cloud
 node compose.js out/view.png --cx 1500 --cy 1150 --z 0.8        # one frame of the full stack as the client shows it (.png/.jpg/.webp)
 node compose.js out/realm_overview.webp --cx 1920 --cy 1320 --z 0.5   # the committed whole-realm still
 node preview/record.js                             # -> out/realm_preview.webm (27 s, 540p) + out/realm_[1-6]_*.jpg + rest-motion report
+node preview/record.js --rest-only                 # just the rest-motion report (ambient motion with the camera still)
 node preview/record.js --serve                     # the interactive simulator: open the printed URL
 ```
 
@@ -123,7 +124,7 @@ uploaded), `src/shared/Assets.luau`, `out/sprites.json`, `out/realm_assets.json`
 | preview | made by | size |
 |---|---|---|
 | `out/realm_preview.webm` | `node preview/record.js` (27 s, 960×540 VP8) | ~5 MB |
-| `out/realm_[1-6]_*.jpg` | the same run (1920×1080 stills on the path) | ~0.5 MB each |
+| `out/realm_[1-6]_*.jpg` | the same run (1920×1080 stills on the path) | ~0.3 MB each |
 | `out/realm_overview.webp` | `node compose.js out/realm_overview.webp --cx 1920 --cy 1320 --z 0.5` | ~0.3 MB |
 
 No PNG is committed (`.gitignore`): rendered layers and tiles are rebuilt byte for byte by `render.js` and `tile.js`
