@@ -21,8 +21,9 @@ function CompactOwned.skin(rec: any, n: any, ctx: any): boolean
 	local compact = ctx.mode == "COMPACT"
 	b.Visible = true
 	b.AutoButtonColor = false
-	for _, name in { "Num", "Gradient", "Glow", "Bar", "Foot" } do Common.drop(b, name) end
-	Common.drop(label, "Chip")
+	-- the full card's parts (a card that was BUY a moment ago): its bar, cost footer and the lit top edge
+	for _, name in { "Num", "Gradient", "Glow", "Bar", "Foot", "MotionFlash" } do Common.drop(b, name) end
+	for _, name in { "Chip", "TopLine", "TickV1", "TickV2" } do Common.drop(label, name) end
 	Common.surface(b, "owned", ctx.hue, 12)
 	b.Size = UDim2.fromOffset(ctx.cardW, 0)
 	b.AutomaticSize = Enum.AutomaticSize.Y

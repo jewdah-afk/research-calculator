@@ -167,8 +167,37 @@ function Motion.bump(inst: GuiObject, amount: number?)
 	s.Scale = 1 + (amount or 0.06)
 	Motion.tween(s, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Scale = 1 }, nil)
 end
--- a white flash over the object (the colour flash reduced motion keeps)
+-- a white flash over the object (the colour flash reduced motion keeps). An object that lays out its own children
+-- (a card with a UIListLayout) flashes its outline instead: a flash Frame inside it would be one more list item, as
+-- tall as the card, and under AutomaticSize the card would grow with it without end
 function Motion.flash(inst: GuiObject)
+	if inst:FindFirstChildWhichIsA("UIGridStyleLayout") then
+		local old = inst:FindFirstChild("MotionFlash")
+		if old then old:Destroy() end
+		local st = inst:FindFirstChild("Border") or inst:FindFirstChildWhichIsA("UIStroke")
+		if st == nil or not st:IsA("UIStroke") then return end
+		local stroke = st :: UIStroke
+		-- the resting look, kept across flashes that overlap (a tween in flight is not the resting value)
+		local t0 = stroke:GetAttribute("FlashT0")
+		local c0 = stroke:GetAttribute("FlashC0")
+		if type(t0) ~= "number" or typeof(c0) ~= "Color3" then
+			t0, c0 = stroke.Transparency, stroke.Color
+			stroke:SetAttribute("FlashT0", t0)
+			stroke:SetAttribute("FlashC0", c0)
+		end
+		stroke.Transparency = 0
+		stroke.Color = Color3.new(1, 1, 1)
+		local tw = Motion.tween(stroke, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+			{ Transparency = t0 :: number, Color = c0 :: Color3 }, "outline:" .. inst:GetFullName(), true)
+		local function done()
+			stroke:SetAttribute("FlashT0", nil)
+			stroke:SetAttribute("FlashC0", nil)
+		end
+		if tw then tw.Completed:Connect(function(st: Enum.PlaybackState)
+			if st == Enum.PlaybackState.Completed then done() end
+		end) else done() end
+		return
+	end
 	local f = inst:FindFirstChild("MotionFlash") :: Frame?
 	if f == nil then
 		local nf = Instance.new("Frame")

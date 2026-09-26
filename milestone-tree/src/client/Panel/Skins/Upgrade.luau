@@ -103,6 +103,7 @@ function Upgrade.skin(rec: any, n: any, ctx: any): boolean
 	Common.drop(b, "Num")
 	Common.drop(b, "Gradient")
 	Common.drop(b, "Glow")
+	Common.drop(b, "MotionFlash") -- never a list item in the card (Motion.flash)
 	local p = Common.surface(b, state, ctx.hue)
 	Common.glow(b, if state == "can" then ctx.hue else nil, 0.2, 14)
 

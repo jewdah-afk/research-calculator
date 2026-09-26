@@ -778,6 +778,7 @@ function Render.apply(self: Renderer, patch: any)
 		end
 	end
 	local ids = {}
+	local rows: { [string]: boolean } = {}
 	for id in patch.set or {} do table.insert(ids, id) end
 	table.sort(ids, function(a, b)
 		local da, db = depth(a), depth(b)
@@ -843,6 +844,20 @@ function Render.apply(self: Renderer, patch: any)
 			self:_place(built)
 		end
 		self:_update(rec :: Rec, n)
+		if n.t == "btn" and n.k == "upg" and self.hooks.skin then
+			local p = parentOf(id)
+			if p then rows[p] = true end
+		end
+	end
+	-- an upgrade's look depends on its row (a fully owned tier turns every card compact and the rail green), so a
+	-- changed upgrade redraws its row and the siblings the patch did not carry
+	for p in rows do
+		local pr = self.recs[p]
+		if pr and not pr.claim then self:_update(pr, pr.node) end
+		for _, k in self:_children(p) do
+			local kr = self.recs[k]
+			if kr and not kr.claim and patch.set[k] == nil then self:_update(kr, kr.node) end
+		end
 	end
 	-- claims read their subtree from the store once the patch is in
 	local store = self.hooks.store

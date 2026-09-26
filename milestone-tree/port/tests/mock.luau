@@ -161,6 +161,7 @@ function Inst:IsA(cls)
 	for _, b in ISA[self.__class] or {} do if b == cls then return true end end
 	return false
 end
+function Inst:FindFirstChildWhichIsA(cls) for _, c in self.__kids do if c:IsA(cls) then return c end end return nil end
 function Inst:Destroy()
 	if self.__events.Destroying then self.__events.Destroying:Fire() end
 	for _, c in table.clone(self.__kids) do c:Destroy() end

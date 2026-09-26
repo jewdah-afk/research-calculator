@@ -539,6 +539,76 @@ do
 	check(panel.parts.band:FindFirstChild("Accent") ~= nil or not Theme.caps.TileMode, "p: header accent")
 	panel:destroy()
 end
+print("== buying upgrades on an open panel (the tier turns compact; the flash is no list item)")
+do
+	for k in Theme.caps do Theme.caps[k] = true end
+	viewport(1920, 1080)
+	local store = ViewStore.new()
+	local panel = Panel.new(gui, { store = store })
+	panel:update(store, store:apply(fixtures.s13_p))
+	panel:open("p", store:map().nodes.p)
+	-- a tier with a BUY card: its cards in the store, by row
+	local rows: { [string]: { string } } = {}
+	for id, rec in panel.render.recs do
+		if rec.kind == "btn:upg" then
+			local row = string.match(id, "^(.*)%.%d+$") :: string
+			rows[row] = rows[row] or {}
+			table.insert(rows[row], id)
+		end
+	end
+	local rowId, cards = nil, nil
+	for r, list in rows do
+		local can = false
+		for _, id in list do if store:get(id).cls == "can" then can = true end end
+		if can and #list >= 3 then rowId, cards = r, list end
+	end
+	check(rowId ~= nil, "p has a tier with a BUY card")
+	if rowId and cards then
+		table.sort(cards)
+		local function buy(ids: { string })
+			local set = {}
+			for _, id in ids do
+				local n = table.clone(store:get(id))
+				n.cls = "bought"
+				set[id] = n
+			end
+			panel:update(store, store:apply({ set = set, del = {} }))
+			M.step(0.1)
+		end
+		-- all but the last card owned (one patch), then the last one bought on its own: the tier is complete
+		req(core.Prefs).set("motion", "FULL") -- the state change plays its flash
+		local rest = table.clone(cards)
+		local last = table.remove(rest) :: string
+		buy(rest)
+		local card = panel.render.recs[last].root
+		local label = card:FindFirstChild("Label")
+		check(store:get(last).cls ~= "bought" and label and label:FindFirstChild("Chip") ~= nil, "the last card is a full card before")
+		buy({ last })
+		local h0 = card.AbsoluteSize.Y
+		M.step(0.5)
+		local flashItem = false
+		for _, id in cards do
+			local c = panel.render.recs[id].root
+			for _, ch in c:GetChildren() do
+				if ch.Name == "MotionFlash" and ch:IsA("GuiObject") then flashItem = true end
+			end
+		end
+		check(not flashItem, "no flash Frame inside a card that lays out its children")
+		check(card.AbsoluteSize.Y <= h0 + 0.5, "the bought card does not grow (" .. h0 .. " -> " .. card.AbsoluteSize.Y .. ")")
+		-- every card of the complete tier is compact, also the ones the last patch did not carry
+		local compact = 0
+		for _, id in cards do
+			local l = panel.render.recs[id].root:FindFirstChild("Label")
+			if l and l:FindFirstChild("Chip") == nil and l:FindFirstChild("TopLine") == nil then compact += 1 end
+		end
+		check(compact == #cards, "the complete tier is all compact (" .. compact .. " / " .. #cards .. ")")
+		local rail = panel.render.recs[rowId].root:FindFirstChild("Rail")
+		check(rail ~= nil and rail:FindFirstChild("Check") ~= nil, "the tier rail turns owned")
+		check(card:FindFirstChild("Foot") == nil and card:FindFirstChild("Bar") == nil, "no BUY bar left on the compact card")
+		req(core.Prefs).set("motion", "SYSTEM")
+	end
+	panel:destroy()
+end
 -- a fixture's panel, opened (the helper of the per-signature checks)
 local function openFixture(fx, caps, w, h)
 	for k in Theme.caps do Theme.caps[k] = caps end
