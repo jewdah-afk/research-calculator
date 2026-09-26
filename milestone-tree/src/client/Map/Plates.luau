@@ -209,7 +209,7 @@ function Plates.new(view: MapView.MapView, nodes: Nodes.Nodes): Plates
 			p.written = key
 			p.label.Text = nameRich(w.name)
 			p.amount.Text = w.amount
-			p.lock.Visible = w.locked
+			p.lock.Visible = false -- Sleek: a locked plate is grey; no lock coin in the value row
 			local hue = Theme.hue(layer)
 			-- Sleek: white hairline plates; a READY node's plate takes the hue on its hairline
 			if w.locked then

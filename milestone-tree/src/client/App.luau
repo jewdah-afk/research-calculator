@@ -253,6 +253,8 @@ function App.start()
 			end
 		end
 	end
+	-- set with the camera helpers below: frames the tree in the strip beside an open panel
+	local frameStrip: (key: string) -> () = function(_: string) end
 	local function showPanel(key: string, node: any?, fly: boolean)
 		local was = panelKey
 		if was ~= key then Audio.play("panel_open", if was then { volume = 0.7 } else nil) end
@@ -271,8 +273,8 @@ function App.start()
 			hud:setPanel({ layer = key, mode = geoMode or "side", strip = if appliedSx then stripRect(appliedSx :: number) else nil,
 				title = titleOf(key) })
 		end
-		-- fly the node to the centre of the strip (DESIGN.md 3.5); a panel without a node never flies
-		if fly and key ~= "options-tab" and geoMode == "side" then view:focusWorld(nodes:worldPos(key)) end
+		-- keep the tree in view in the strip, the opened node inside it; a panel without a node never flies
+		if fly and key ~= "options-tab" and geoMode == "side" then frameStrip(key) end
 	end
 	local function hidePanel(flyBack: boolean)
 		local key = panelKey
@@ -307,7 +309,7 @@ function App.start()
 		if panelKey == layer then
 			-- the selected node: nothing to send; fly back to it if the camera moved away
 			overlay:peek(nil)
-			if geoMode == "side" then view:focusWorld(nodes:worldPos(layer)) end
+			if geoMode == "side" then frameStrip(layer) end
 			return
 		end
 		if ms.open ~= layer or intent ~= nil then fire(node.a) end
@@ -401,6 +403,21 @@ function App.start()
 			end
 		end
 		return out
+	end
+	-- the strip beside a side sheet shows the whole tree (every shown node and its plate), zoomed to fit the free
+	-- rect, centred between the tree and the opened node so that node never sits at an edge. A close-up (the old
+	-- fly-to at zoom .9) left only a node or two and the edge markers in the strip.
+	frameStrip = function(key: string)
+		local bb = nodeBox(shownNodes())
+		local free = view:freeRect()
+		local p = nodes:worldPos(key)
+		if bb == nil or free.w < 2 or free.h < 2 then
+			view:focusWorld(p)
+			return
+		end
+		local zz = math.min(free.w / bb.w, free.h / bb.h, 0.9)
+		local c = Vector2.new(bb.x + bb.w / 2, bb.y + bb.h / 2)
+		view:focusWorld(c:Lerp(p, 0.35), { zoom = zz })
 	end
 	local function vSize(): MapCamera.Size
 		local cam = view:camera()

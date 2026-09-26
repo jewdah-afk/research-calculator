@@ -26,19 +26,21 @@ function insets(w, h) {
   return { None: [0, 0, w, h], DeviceSafeInsets: [0, 0, w, h], CoreUISafeInsets: [0, 58, w, h - 58], TopbarSafeInsets: [136, 0, w - 136 - 76, 58] };
 }
 
+function serveRoute(route) {
+  const u = new URL(route.request().url());
+  let file;
+  if (u.pathname === '/') return route.fulfill({ contentType: 'text/html', body: PAGE });
+  if (u.pathname.startsWith('/f/')) file = decodeURIComponent(u.pathname.slice(3));
+  else if (u.pathname.startsWith('/fonts/')) file = path.join(ART, 'ui', 'fonts', path.basename(u.pathname));
+  else if (u.pathname === '/page.js') file = path.join(__dirname, 'page.js');
+  if (!file || !fs.existsSync(file)) return route.fulfill({ status: 404, body: '' });
+  return route.fulfill({ body: fs.readFileSync(file), contentType: file.endsWith('.js') ? 'text/javascript' : file.endsWith('.woff2') ? 'font/woff2' : 'image/png' });
+}
+
 async function draw(browser, dump, out) {
   const page = await browser.newPage({ viewport: { width: dump.w, height: dump.h } });
   page.on('pageerror', e => console.log('pageerror', e.message));
-  await page.route('http://snap.local/**', async route => {
-    const u = new URL(route.request().url());
-    let file;
-    if (u.pathname === '/') return route.fulfill({ contentType: 'text/html', body: PAGE });
-    if (u.pathname.startsWith('/f/')) file = decodeURIComponent(u.pathname.slice(3));
-    else if (u.pathname.startsWith('/fonts/')) file = path.join(ART, 'ui', 'fonts', path.basename(u.pathname));
-    else if (u.pathname === '/page.js') file = path.join(__dirname, 'page.js');
-    if (!file || !fs.existsSync(file)) return route.fulfill({ status: 404, body: '' });
-    route.fulfill({ body: fs.readFileSync(file), contentType: file.endsWith('.js') ? 'text/javascript' : file.endsWith('.woff2') ? 'font/woff2' : 'image/png' });
-  });
+  await page.route('http://snap.local/**', route => serveRoute(route));
   await page.goto('http://snap.local/');
   const res = await page.evaluate(([d, a, i]) => SNAP.draw(d, a, i), [dump, assetMap(), insets(dump.w, dump.h)]);
   await page.waitForTimeout(100);
@@ -60,9 +62,41 @@ ${FONTS.map(([f, w, s, file]) => `@font-face{font-family:${f};font-weight:${w};f
 html,body{margin:0;background:#000}*{box-sizing:border-box}.g{margin:0}.tx{font-kerning:normal}
 </style></head><body><div id="root"></div><script src="/page.js"></script></body></html>`;
 
+// a clip: one snap.luau run with a pinned clock per frame, drawn on one page (images stay cached), cropped, encoded
+// to H.264 MP4 with the ffmpeg from `pip install imageio-ffmpeg`
+async function clip(browser, scene, size, n, fps, crop, out) {
+  const [w, h] = size.split('x').map(Number);
+  const text = execFileSync(process.env.LUAU || 'luau', ['tools/snap/snap.luau', '-a', scene, size, `clip:${n}:${fps}`], { cwd: PORT, maxBuffer: 1 << 30 }).toString();
+  const dumps = text.split('\n').filter(l => l.startsWith('{"scene"'));
+  const page = await browser.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: 2 });
+  await page.route('http://snap.local/**', route => serveRoute(route));
+  await page.goto('http://snap.local/');
+  const dir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'snapclip-'));
+  for (let i = 0; i < dumps.length; i++) {
+    await page.evaluate(([d, a, ins]) => SNAP.draw(d, a, ins), [JSON.parse(dumps[i]), assetMap(), insets(w, h)]);
+    await page.screenshot({ path: path.join(dir, `f${String(i).padStart(4, '0')}.png`), clip: crop });
+  }
+  await page.close();
+  const ff = execFileSync('python3', ['-c', 'import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())']).toString().trim();
+  execFileSync(ff, ['-y', '-loglevel', 'error', '-framerate', String(fps), '-i', path.join(dir, 'f%04d.png'), '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
+    '-crf', '20', '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2', out]);
+  fs.rmSync(dir, { recursive: true, force: true });
+  console.log(`${scene}: ${out} (${dumps.length} frames)`);
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const browser = await chromium.launch();
+  const ci = args.indexOf('--clip');
+  if (ci >= 0) {
+    // --clip scene:frames:fps:x,y,w,h out.mp4 [--size WxH]
+    const [scene, n, fps, box] = args[ci + 1].split(':');
+    const [x, y, cw, ch] = box.split(',').map(Number);
+    const vi = args.indexOf('--size');
+    await clip(browser, scene, vi >= 0 ? args[vi + 1] : '1920x1080', +n, +fps, { x, y, width: cw, height: ch }, args[ci + 2]);
+    await browser.close();
+    return;
+  }
   const si = args.indexOf('--scenes');
   if (si >= 0) {
     const oi = args.indexOf('--out'), outDir = oi >= 0 ? args[oi + 1] : path.join(PORT, 'data', 'snap');

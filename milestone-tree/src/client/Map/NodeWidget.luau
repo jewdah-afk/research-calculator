@@ -21,6 +21,8 @@
 	    w.frame, w.hit, w.ring, w.state
 ]]
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
 local Core = script.Parent.Parent:WaitForChild("Core")
 local Types = require(script.Parent.Parent:WaitForChild("Types"))
 local Theme = require(Core:WaitForChild("Theme"))
@@ -28,6 +30,7 @@ local Motion = require(Core:WaitForChild("Motion"))
 local Layout = require(Core:WaitForChild("Layout"))
 local Recipes = require(Core:WaitForChild("Recipes"))
 local Kit = require(script.Parent.Parent:WaitForChild("Hud"):WaitForChild("Kit"))
+local NodeAtlas = require(ReplicatedStorage:WaitForChild("MilestoneTree"):WaitForChild("NodeAtlas"))
 
 type MapNode = Types.MapNode
 
@@ -64,6 +67,25 @@ NodeWidget.SYMS = {
 	ach = "★", m = "M", mm = "MM", em = "EM", p = "P", pe = "PE", sp = "SP", pb = "PB", pp = "PP", se = "SE", hp = "HP",
 	ep = "EP", hb = "HB", ap = "AP", mp = "MP", t = "T", pm = "PM", pep = "PEP", cp = "CR", cm = "CM", ex = "EX",
 } :: { [string]: string }
+
+-- the crystal node (art/ui/clean lib.js drawNode, approved): a Blender gem from the node atlas inside an energy ring
+-- whose state is a function of time. Without an atlas id the drawn discs below stay.
+local ATLAS: string? = NodeAtlas.id
+local RING_IMG = RING / (2 * NodeAtlas.ringR) -- the ring sprite's size (world px) that puts its ring on the socket
+local CRYSTAL = 128
+local LOCK_RING = Color3.fromHex("a39cb3")
+local function frac(x: number): number return x - math.floor(x) end
+local function hash(i: number): number return frac(math.sin(i * 12.9898 + 78.233) * 43758.5453) end
+local function smooth(x: number): number return x * x * (3 - 2 * x) end
+-- the CAN BUY flicker: value noise at 13 Hz with occasional dips
+local function flicker(t: number): number
+	local f = t * 13
+	local i = math.floor(f)
+	local v = hash(i) + (hash(i + 1) - hash(i)) * smooth(f - i)
+	local dip = if hash(math.floor(t * 5.3) + 31) < 0.22 then 0.55 else 1
+	return (0.62 + 0.38 * v) * dip
+end
+NodeWidget.flicker = flicker
 
 local GREY_RING = { Color3.fromHex("898598"), Color3.fromHex("4a4360"), Color3.fromHex("1e1b26") }
 local GREY_GEM = Color3.fromHex("3a3352")
@@ -140,6 +162,110 @@ function NodeWidget.new(parent: Frame, layer: string, pos: Vector2): NodeWidget
 	Kit.corner(hit)
 	if Theme.caps.InputSink then
 		pcall(function() (hit :: any).InputSink = (Enum :: any).InputSink.None end)
+	end
+
+	-- crystal parts (made on first use): Pool (light in the socket), Halo (soft ring), Crystal (the gem), Energy (the
+	-- ring's core line), Comet (CAN BUY), Ripple (READY)
+	local cr: { [string]: ImageLabel }? = nil
+	local crMode = "" -- the ring state the loop animates: locked | idle | buy | ready | "" (off)
+	local crHue = Color3.new(1, 1, 1)
+	local phase = hash(#layer * 7 + string.byte(layer, 1)) * 6
+	local function atlasImage(name: string, key: string, size: number, z: number): ImageLabel
+		local im = Kit.child(body, name, "ImageLabel") :: ImageLabel
+		im.BackgroundTransparency = 1
+		im.BorderSizePixel = 0
+		im.Active = false
+		im.Image = ATLAS or ""
+		im.AnchorPoint = Vector2.new(0.5, 0.5)
+		im.Position = UDim2.fromScale(0.5, 0.5)
+		im.Size = UDim2.fromScale(sc(size), sc(size))
+		im.ZIndex = z
+		local r = NodeAtlas.rects[key]
+		im.ImageRectOffset = Vector2.new(r[1], r[2])
+		im.ImageRectSize = Vector2.new(r[3], r[4])
+		return im
+	end
+	local function crystalParts(): { [string]: ImageLabel }
+		local c = cr
+		if c then return c end
+		local made = {
+			Pool = atlasImage("Pool", "disc", 150, 2),
+			Halo = atlasImage("Halo", "glow", RING_IMG, 3),
+			Crystal = atlasImage("Crystal", layer, CRYSTAL, 5),
+			Energy = atlasImage("Energy", "ring", RING_IMG, 6),
+			Comet = atlasImage("Comet", "comet", RING_IMG, 7),
+			Ripple = atlasImage("Ripple", "ring", RING_IMG, 6),
+		}
+		cr = made
+		-- the ring's life: every state is a function of time (reduced motion holds a still frame)
+		Motion.loop(f, function()
+			local p = made
+			if crMode == "" then return end
+			local t = if Motion.reduced() then 1.5 else Motion.now() + phase
+			local hue = crHue
+			local core, glow, pool = 0.34, 0, 0
+			p.Comet.Visible = crMode == "buy"
+			p.Ripple.Visible = crMode == "ready"
+			if crMode == "locked" then
+				core = 0.34
+			elseif crMode == "idle" then
+				local q = 0.5 + 0.5 * math.sin(t / 3 * math.pi * 2)
+				core, glow, pool = 0.62 + 0.28 * q, 0.16 + 0.34 * q, 0.1 + 0.08 * q
+			elseif crMode == "buy" then
+				local fl = flicker(t)
+				core, glow, pool = 0.5 + 0.3 * fl, 0.14 + 0.3 * fl, 0.16 + 0.12 * fl
+				p.Comet.Rotation = (t / 1.5) * 360 % 360
+				p.Comet.ImageTransparency = 1 - (0.6 + 0.4 * fl)
+			else
+				local ph = frac(t)
+				local q = math.exp(-3.2 * ph)
+				core, glow, pool = 0.88 + 0.12 * q, 0.45 + 0.5 * q, 0.28 + 0.3 * q
+				local k = 1 + 0.42 * smooth(math.min(1, ph * 1.15))
+				p.Ripple.Size = UDim2.fromScale(sc(RING_IMG * k), sc(RING_IMG * k))
+				p.Ripple.ImageTransparency = 1 - 0.8 * (1 - ph) ^ 2
+			end
+			p.Energy.ImageTransparency = 1 - core
+			p.Halo.ImageTransparency = 1 - math.min(1, glow)
+			p.Pool.ImageTransparency = 1 - pool
+			local _ = hue
+		end)
+		return made
+	end
+	local function setCrystal(mode: string, hue: Color3, locked: boolean)
+		if mode == "" then
+			crMode = ""
+			local c = cr
+			if c then
+				for _, im in c do im.Visible = false end
+			end
+			return
+		end
+		local p = crystalParts()
+		crMode = mode
+		crHue = hue
+		local key = if locked then layer .. "_locked" else layer
+		local r = NodeAtlas.rects[key] or NodeAtlas.rects[layer]
+		if r then
+			p.Crystal.ImageRectOffset = Vector2.new(r[1], r[2])
+			p.Crystal.ImageRectSize = Vector2.new(r[3], r[4])
+		end
+		p.Crystal.Visible = true
+		p.Crystal.ImageTransparency = if mode == "locked" then 0.1 else 0
+		p.Energy.Visible = true
+		p.Energy.ImageColor3 = if mode == "locked" then LOCK_RING else Theme.lift(hue, if mode == "ready" then 0.7 else 0.4)
+		p.Halo.Visible = mode ~= "locked"
+		p.Halo.ImageColor3 = hue
+		p.Pool.Visible = mode ~= "locked"
+		p.Pool.ImageColor3 = hue
+		p.Comet.ImageColor3 = Theme.lift(hue, 0.55)
+		p.Ripple.ImageColor3 = Theme.lift(hue, 0.55)
+		p.Comet.Visible = mode == "buy"
+		p.Ripple.Visible = mode == "ready"
+		if Motion.reduced() or Motion.snapshot() then
+			-- one still frame now (the loop keeps it; snapshots are deterministic)
+			p.Energy.ImageTransparency = if mode == "locked" then 0.66 else 0.2
+			p.Halo.ImageTransparency = if mode == "ready" then 0.2 else 0.6
+		end
 	end
 
 	local self = {} :: NodeWidget
@@ -467,7 +593,26 @@ function NodeWidget.new(parent: Frame, layer: string, pos: Vector2): NodeWidget
 		local sym = (node and node.sym) or NodeWidget.SYMS[layer] or string.upper(layer)
 		if sym == "" then sym = NodeWidget.SYMS[layer] or "?" end
 
-		if state == "sealed" or state == "frontier" then
+		local crystalState = if ATLAS == nil then nil
+			elseif state == "locked" or state == "dormant" then "locked"
+			elseif state == "available" then "idle"
+			elseif state == "glow" then "buy"
+			elseif state == "pulse" then "ready"
+			else nil
+		if crystalState then
+			-- the crystal node: no drawn disc or letters (the nameplate names it); the ring says the state
+			ring.Visible = false
+			setCrystal(crystalState, hue, crystalState == "locked")
+			setGlow(nil, 0)
+			setBadge(if state == "pulse" then "bolt" elseif state == "dormant" then "moon" else nil)
+			setLock(false) -- the grey gem and ring say it
+			hit.Visible = true
+		else
+			setCrystal("", hue, false)
+		end
+		if crystalState then
+			-- (drawn below: rays, aura, selection, challenge)
+		elseif state == "sealed" or state == "frontier" then
 			ring.Visible = true
 			ring.BackgroundTransparency = 1
 			rim.Transparency = 1
@@ -537,9 +682,9 @@ function NodeWidget.new(parent: Frame, layer: string, pos: Vector2): NodeWidget
 		end
 
 		local live = state == "available" or state == "glow" or state == "pulse" or state == "locked"
-		-- rays: pulse only, and at most 4 at once (Nodes decides through setRays)
-		setRaysVisible(if raysOn and state == "pulse" then hue else nil)
-		setAura(if live and (state == "pulse" or flags.selected) then hue else nil, state == "pulse")
+		-- rays: pulse only, and at most 4 at once (Nodes decides through setRays); the crystal ring replaces both
+		setRaysVisible(if raysOn and state == "pulse" and not crystalState then hue else nil)
+		setAura(if live and not crystalState and (state == "pulse" or flags.selected) then hue else nil, state == "pulse")
 		setSelectRing(if flags.selected then Theme.lift(hue, 0.3) else nil)
 		setChallenge(if live and node and node.ch then node.ch else nil)
 		if flags.selected ~= lastSel then lastSel = flags.selected end
@@ -563,7 +708,7 @@ function NodeWidget.new(parent: Frame, layer: string, pos: Vector2): NodeWidget
 		if on == raysOn then return end
 		raysOn = on
 		local hue = if w.flags.infected then Theme.C.danger else Theme.hue(layer)
-		setRaysVisible(if on and w.state == "pulse" then hue else nil)
+		setRaysVisible(if on and w.state == "pulse" and ATLAS == nil then hue else nil)
 	end
 	function self.setHover(_: NodeWidget, on: boolean)
 		if on == hovered then return end

@@ -20,6 +20,18 @@ if ARGS[2] then
 	VW, VH = tonumber(w), tonumber(h)
 end
 
+-- clip mode (-a <scene> <WxH> clip:<frames>:<fps>): the client's clock is pinned per frame so the motion is exact
+local CLOCK = 0
+local CLIP = ARGS[3] and string.match(ARGS[3], "^clip:(%d+):(%d+)$")
+local clipN, clipFps = 0, 30
+if CLIP then
+	local n, fps = string.match(ARGS[3], "^clip:(%d+):(%d+)$")
+	clipN, clipFps = tonumber(n) :: number, tonumber(fps) :: number
+	local fakeOs = table.clone(os)
+	fakeOs.clock = function() return CLOCK end
+	M.G.os = fakeOs
+end
+
 local game = M.game
 local Instance = M.G.Instance
 local Vector2 = E.Vector2
@@ -198,8 +210,19 @@ enc = function(o, out)
 	table.insert(out, "]}")
 end
 
-local out = {}
-table.insert(out, '{"scene":' .. jstr(SCENE) .. ',"w":' .. VW .. ',"h":' .. VH .. ',"errors":' .. (M.errors or 0) .. ',"gui":')
-enc(pg, out)
-table.insert(out, "}")
-print(table.concat(out))
+local function dump()
+	local out = {}
+	table.insert(out, '{"scene":' .. jstr(SCENE) .. ',"w":' .. VW .. ',"h":' .. VH .. ',"errors":' .. (M.errors or 0) .. ',"gui":')
+	enc(pg, out)
+	table.insert(out, "}")
+	print(table.concat(out))
+end
+if CLIP then
+	for i = 0, clipN - 1 do
+		CLOCK = 100 + i / clipFps
+		frames(1 / clipFps)
+		dump()
+	end
+else
+	dump()
+end

@@ -28,6 +28,7 @@ local Rich = require(Core:WaitForChild("Rich"))
 local Recipes = require(Core:WaitForChild("Recipes"))
 local Sleek = require(Core:WaitForChild("Sleek"))
 local Kit = require(script.Parent:WaitForChild("Kit"))
+local NodeAtlas = require(game:GetService("ReplicatedStorage"):WaitForChild("MilestoneTree"):WaitForChild("NodeAtlas"))
 
 type MapState = Types.MapState
 
@@ -66,6 +67,26 @@ type Entry = { layer: string, ready: boolean, gain: string?, sym: string }
 local function gem(parent: Instance, name: string, layer: string, sym: string, size: number): Frame
 	local g = Kit.frame(parent, name, 3)
 	g.Size = UDim2.fromOffset(size, size)
+	-- the layer's crystal from the node atlas (the map's gems); the drawn disc is the fallback before the upload
+	local r = NodeAtlas.rects[layer]
+	if NodeAtlas.id and r then
+		for _, n in { "Grad", "Radial", "Rim", "Corner", "Symbol", "Star" } do
+			local old = g:FindFirstChild(n)
+			if old then old:Destroy() end
+		end
+		g.BackgroundTransparency = 1
+		local im = Kit.child(g, "Crystal", "ImageLabel") :: ImageLabel
+		im.BackgroundTransparency = 1
+		im.BorderSizePixel = 0
+		im.Image = NodeAtlas.id :: string
+		im.ImageRectOffset = Vector2.new(r[1], r[2])
+		im.ImageRectSize = Vector2.new(r[3], r[4])
+		im.AnchorPoint = Vector2.new(0.5, 0.5)
+		im.Position = UDim2.fromScale(0.5, 0.5)
+		im.Size = UDim2.fromScale(1.1, 1.1)
+		im.ZIndex = 4
+		return g
+	end
 	Kit.gem(g, Theme.hue(layer))
 	Kit.stroke(g, 1, Theme.lift(Theme.hue(layer), 0.6), 0.6, "Rim")
 	if sym == "★" then

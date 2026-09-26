@@ -96,7 +96,7 @@
   }
 
   // ------------------------------------------------------------------------------------------------ images
-  const imgCache = {};
+  const imgCache = {}, urlCache = {};
   function loadImg(url) {
     if (!imgCache[url]) imgCache[url] = new Promise(res => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = url; });
     return imgCache[url];
@@ -110,18 +110,22 @@
     if (!im) { missing.add(id); return; }
     const ro = o.p.ImageRectOffset || { X: 0, Y: 0 }, rs = o.p.ImageRectSize || { X: 0, Y: 0 };
     const sx = ro.X, sy = ro.Y, sw = rs.X > 0 ? rs.X : im.naturalWidth - sx, sh = rs.Y > 0 ? rs.Y : im.naturalHeight - sy;
+    const tint = o.p.ImageColor3;
+    const ck = [url, sx, sy, sw, sh, tint ? [tint.R, tint.G, tint.B].map(v => v.toFixed(3)).join() : ''].join('|');
+    let dataUrl = urlCache[ck];
+    if (!dataUrl) {
     const cv = document.createElement('canvas');
     cv.width = Math.max(1, Math.round(sw)); cv.height = Math.max(1, Math.round(sh));
     const x = cv.getContext('2d');
     x.drawImage(im, sx, sy, sw, sh, 0, 0, sw, sh);
-    const tint = o.p.ImageColor3;
     if (tint && !(tint.R === 1 && tint.G === 1 && tint.B === 1)) {
       x.globalCompositeOperation = 'multiply'; x.fillStyle = rgba(tint); x.fillRect(0, 0, sw, sh);
       x.globalCompositeOperation = 'destination-in'; x.drawImage(im, sx, sy, sw, sh, 0, 0, sw, sh);
     }
+    dataUrl = urlCache[ck] = (tint && !(tint.R === 1 && tint.G === 1 && tint.B === 1)) || sx || sy || rs.X > 0 ? cv.toDataURL() : url;
+    }
     const layer = document.createElement('div');
     layer.className = 'img';
-    const dataUrl = cv.toDataURL();
     const st = ENUM(o.p.ScaleType) || 'Stretch';
     let css = `position:absolute;inset:0;pointer-events:none;opacity:${1 - (o.p.ImageTransparency || 0)};`;
     const grad = enabledGrad(o);
@@ -376,6 +380,7 @@
   SNAP.draw = async (dump, assets, insets) => {
     ASSETS = assets;
     const root = document.getElementById('root');
+    root.innerHTML = ''; pending.length = 0;
     root.style.cssText = `position:relative;width:${dump.w}px;height:${dump.h}px;overflow:hidden;background:#000`;
     const guis = dump.gui.k.filter(g => g.c === 'ScreenGui' && g.p.Enabled !== false).map((g, i) => [g, i])
       .sort((a, b) => (a[0].p.DisplayOrder || 0) - (b[0].p.DisplayOrder || 0) || a[1] - b[1]).map(x => x[0]);

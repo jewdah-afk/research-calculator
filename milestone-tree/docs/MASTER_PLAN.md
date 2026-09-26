@@ -22,6 +22,12 @@ Update 2026-09-26 (supersedes the ornate direction of W1):
   readout, tabs on their own row), hero and CTA, stat chips, section headers, card surfaces and chips, upgrade and
   buyable cards, and the overlay cards (square). Per-layer signature art (the trophy shelf, M's ladder, the Multiverse
   rim) keeps its own look until the W1 "remaining layers" pass.
+- **Map nodes are crystal gems in an energy ring** (the approved `art/ui/clean` node spec): the Blender gems, their
+  locked copies and the ring parts are one 1024² atlas (`art/gems/atlas.py` → `node gems/upload.js` →
+  `src/shared/NodeAtlas.luau`). The ring is dim when locked, breathes at rest, flickers with an orbiting comet on
+  CAN BUY and pulses with a ripple on READY (`Map/NodeWidget.luau`). Without an atlas id the drawn discs stay.
+- **An open panel keeps the tree in view:** the strip frames every shown node (App `frameStrip`) instead of flying to
+  the opened node at zoom .9.
 - **Pictures without Studio:** `port/tools/snap` runs the real client on the mock engine and draws its PlayerGui in
   Chromium over the realm tiles (`./test.sh snap home,panel_p`). Use it for every UI change before a push.
 
