@@ -32,9 +32,24 @@ const PORT = path.join(__dirname, '..', '..');
       const winner = stack.find(e => e.dataset && e.dataset.active === '1' && !e.closest('[data-noint="1"]'));
       out.push({ node: node.dataset.name, ok: winner === hit, size: Math.round(r.width), by: winner ? pathOf(winner) : '(nothing: the map)' });
     }
+    // every other button on screen (panel, HUD, overlays): does a click at its centre reach it?
+    for (const b of document.querySelectorAll('[data-active="1"]')) {
+      if (b.closest('[data-name^="Node_"]')) continue;
+      if (b.closest('[data-noint="1"]') || b.offsetParent === null || getComputedStyle(b).visibility === 'hidden') continue;
+      const r = b.getBoundingClientRect();
+      if (r.width < 4 || r.height < 4) continue;
+      const x = r.left + r.width / 2, y = r.top + r.height / 2;
+      if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) continue;
+      const winner = document.elementsFromPoint(x, y).find(e => e.dataset && e.dataset.active === '1' && !e.closest('[data-noint="1"]'));
+      const ok = winner === b || (winner && b.contains(winner));
+      out.push({ node: pathOf(b), ok, size: Math.round(r.width), by: winner ? pathOf(winner) : '(nothing)', button: true });
+    }
     return out;
   });
-  for (const r of res) console.log(`${r.ok ? 'ok  ' : 'BLOCKED'} ${r.node.padEnd(10)} hit ${r.size}px ${r.ok ? '' : 'by ' + r.by}`);
-  console.log(`${res.filter(r => r.ok).length}/${res.length} nodes take their own click`);
+  const nodes = res.filter(r => !r.button), buttons = res.filter(r => r.button);
+  for (const r of nodes) console.log(`${r.ok ? 'ok  ' : 'BLOCKED'} ${r.node.padEnd(10)} hit ${r.size}px ${r.ok ? '' : 'by ' + r.by}`);
+  console.log(`${nodes.filter(r => r.ok).length}/${nodes.length} nodes take their own click`);
+  for (const r of buttons) if (!r.ok) console.log(`BLOCKED button ${r.node}  by ${r.by}`);
+  console.log(`${buttons.filter(r => r.ok).length}/${buttons.length} other buttons take their own click`);
   await browser.close();
 })();

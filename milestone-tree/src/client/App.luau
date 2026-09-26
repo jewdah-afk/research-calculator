@@ -303,6 +303,12 @@ function App.start()
 		local st = nodes:state(layer)
 		if node == nil or not node.show or st == "dormant" or st == "sealed" or st == "frontier" then
 			if st == "dormant" then overlay:toasts(nil, { UNIVERSE_WORD[MapLogic.MULTIVERSE[layer] == true] }) end
+			-- a hidden layer says what reveals it ("Reach 40 milestones to discover it · 31 / 40")
+			local need = node and node.need
+			if (st == "sealed" or st == "frontier") and type(need) == "table" then
+				overlay:toasts(nil, { string.format("Reach %s %s to discover this layer (%s / %s)", tostring(need.n),
+					tostring(need.r), tostring(need.have), tostring(need.n)) })
+			end
 			Audio.play("error", { volume = 0.7 })
 			return
 		end
@@ -504,6 +510,12 @@ function App.start()
 		local node = if ms then ms.nodes[layer] else nil
 		local st = nodes:state(layer)
 		if st == "sealed" or st == "frontier" then
+			local need = node and node.need
+			if type(need) == "table" then
+				return { title = "???", body = string.format("Reach %s %s to discover this layer.", tostring(need.n), tostring(need.r)),
+					rows = { { "Need", tostring(need.n) .. " " .. tostring(need.r) }, { "Have", tostring(need.have) .. " " .. tostring(need.r) } },
+					pr = if type(need.pr) == "number" then need.pr / 1000 else nil, layer = layer, hue = Theme.C.muted }
+			end
 			return { title = "???", body = "Not discovered yet.", layer = layer, hue = Theme.C.muted }
 		end
 		if st == "dormant" then

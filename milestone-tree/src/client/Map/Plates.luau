@@ -5,8 +5,8 @@
 
 	    Plate_<id>  Frame (AutomaticSize XY, AnchorPoint .5 / 0, panel2 -> deep at .95, UIStroke 1.5 lift(c, .25))
 	      Label     the name: `plate` role, caps with hair spaces, W -> lift(c, .45), a thin outline
-	      AmountRow Amount: `plateNum` (Sarpanch Bold, lift(c, .55); Rich.num units); locked: lock + requirement + unit
-	      Sub       bolt + "READY" (`plateSub`, #ffe08a) on pulse nodes
+	      AmountRow Amount: `plateNum` (Montserrat Bold, lift(c, .55); Rich.num units); locked: lock + requirement + unit
+	      Sub       bolt + "READY" (`plateSub`, #ffe08a) on pulse nodes, else "+1.23e45/s" (green) while it generates passively
 
 	Level of detail FULL / CHIP (the amount alone) / NONE by zoom with +-.02 hysteresis (MapLogic.lod); the selected,
 	hovered and peeked nodes always get FULL; Options Map Labels ALWAYS / OFF (setMode). Placement is greedy in
@@ -45,6 +45,7 @@ export type Plates = {
 local Plates = {}
 
 local READY = Theme.C.ready
+local GAIN = Color3.fromHex("7ee0a0") -- the passive gain line (the capsule's rate green)
 
 type Plate = {
 	layer: string,
@@ -57,7 +58,7 @@ type Plate = {
 	stroke: UIStroke,
 	strokeGrad: UIGradient,
 	labelGrad: UIGradient,
-	want: { name: string, amount: string, locked: boolean, ready: boolean, hasAmount: boolean }?,
+	want: { name: string, amount: string, locked: boolean, ready: boolean, gen: string?, hasAmount: boolean }?,
 	written: string,
 	form: string, -- FULL | CHIP | NONE (as shown)
 	slot: number, -- 1 below the ring, 2 above
@@ -204,11 +205,25 @@ function Plates.new(view: MapView.MapView, nodes: Nodes.Nodes): Plates
 		for layer, p in plates do
 			local w = p.want
 			if w == nil then continue end
-			local key = w.name .. "|" .. w.amount .. "|" .. tostring(w.locked) .. "|" .. tostring(w.ready)
+			local key = w.name .. "|" .. w.amount .. "|" .. tostring(w.locked) .. "|" .. tostring(w.ready) .. "|" .. tostring(w.gen)
 			if key == p.written then continue end
 			p.written = key
 			p.label.Text = nameRich(w.name)
 			p.amount.Text = w.amount
+			-- the second line: READY, or the passive gain ("+1.23e45/s") once the layer generates on its own
+			local rl = p.sub:FindFirstChild("Text") :: TextLabel?
+			local bolt = p.sub:FindFirstChild("Bolt") :: GuiObject?
+			if rl then
+				rl.RichText = true
+				if w.ready or w.gen == nil then
+					rl.Text = Rich.caps("Ready")
+					rl.TextColor3 = READY
+				else
+					rl.Text = Rich.num("+" .. w.gen .. "/s", { size = Theme.size("plateSub"), unit = Theme.C.soft })
+					rl.TextColor3 = GAIN
+				end
+			end
+			if bolt then bolt.Visible = w.ready end
 			p.lock.Visible = false -- Sleek: a locked plate is grey; no lock coin in the value row
 			local hue = Theme.hue(layer)
 			-- Sleek: white hairline plates; a READY node's plate takes the hue on its hairline
@@ -298,10 +313,10 @@ function Plates.new(view: MapView.MapView, nodes: Nodes.Nodes): Plates
 					-- COMPACT FULL shows the amount only on READY, CAN BUY and the selected node (DESIGN.md 3.9)
 					local showAmount = form == "CHIP" or not c or w.ready or layer == sel or nodes:state(layer) == "glow"
 					p.row.Visible = w.hasAmount and showAmount
-					p.sub.Visible = w.ready
+					p.sub.Visible = w.ready or (w.gen ~= nil and form == "FULL")
 				end
 			elseif w and form ~= "NONE" then
-				p.sub.Visible = w.ready
+				p.sub.Visible = w.ready or (w.gen ~= nil and form == "FULL")
 				p.row.Visible = w.hasAmount and (form == "CHIP" or not c or w.ready or layer == sel or nodes:state(layer) == "glow")
 			end
 			p.slot = slot
@@ -345,6 +360,7 @@ function Plates.new(view: MapView.MapView, nodes: Nodes.Nodes): Plates
 				amount = amt,
 				locked = st == "locked",
 				ready = st == "pulse",
+				gen = if node.val and type(node.val.gen) == "string" and st ~= "locked" then node.val.gen else nil,
 				hasAmount = has,
 			}
 			local _ = sel

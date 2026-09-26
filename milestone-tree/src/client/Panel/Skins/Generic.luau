@@ -9,7 +9,7 @@
 	    blank / hr / h-line / v-line    dropped (the section rhythm replaces them)
 	    small buttons                   respec / master / sell / toggle / chalbtn / malware / nested tabs / reset:
 	                                    40 du pills, hue when actionable, mauve when not
-	    about                           the Options ABOUT card (credits and unlocked hotkeys)
+	    about                           the Options HOTKEYS card (the unlocked hotkeys; no credits in game)
 	    bar (rbx-burn)                  a themed bar with the game's text; st8 picks ember / grey / gold
 	The game's own per-thing CSS (st) is ignored in the panel: the template sets the look.
 ]]
@@ -264,21 +264,9 @@ local function about(rec: any, n: any, ctx: any): boolean
 	Common.stroke(root, 1, C.stroke, 0.2)
 	Common.pad(root, 16, 20, 16, 20)
 	Common.list(root, false, 8)
-	Sections.header(root, { text = "ABOUT", hue = ctx.hue, order = 0, name = "Head" })
-	local lines: { string } = {}
-	local name = Common.str(n.name)
-	if name then table.insert(lines, Common.title(name, "card", C.text)) end
-	local ver = Common.str(n.ver)
-	if ver then table.insert(lines, Common.run(Common.esc(ver), "small", C.soft)) end
-	local author = Common.str(n.author)
-	if author then table.insert(lines, Common.run(Common.esc("Made by " .. author), "body", C.text)) end
-	for _, k in { "tmt", "pt" } do
-		local v = Common.str(n[k])
-		if v then table.insert(lines, Common.run(Common.esc(v), "body", C.soft)) end
-	end
-	local body = Common.label(root, "Body", "body", C.text, { order = 1 })
-	body.LineHeight = Theme.lineHeight("body")
-	Common.setText(body, table.concat(lines, "\n"))
+	-- the credits are not shown in game (the README keeps them); the card lists the unlocked hotkeys
+	Sections.header(root, { text = "HOTKEYS", hue = ctx.hue, order = 0, name = "Head" })
+	Common.drop(root, "Body")
 	-- the unlocked hotkeys: keycap run + description, one per line
 	local keys: { string } = {}
 	if type(n.keys) == "table" then
@@ -290,8 +278,8 @@ local function about(rec: any, n: any, ctx: any): boolean
 	end
 	local kl = Common.label(root, "Keys", "body", C.text, { order = 2 })
 	kl.Visible = #keys > 0
-	Common.setText(kl, if #keys > 0 then Common.caps("Hotkeys") .. "\n" .. table.concat(keys, "\n") else "")
-	root.Visible = true
+	Common.setText(kl, table.concat(keys, "\n"))
+	root.Visible = #keys > 0
 	return true
 end
 

@@ -6,7 +6,7 @@
 	                  a tile (the title, the game's one-line sub in a well); Offline Production keeps the toggle row.
 	                  Saves live in Roblox (autosave), so there is no export, import or hard reset.
 	    DISPLAY       "[ Displays ]" becomes the section title; the cyclers and toggles keep the Opt rows
-	    ABOUT         the about node (Skins/Generic)
+	    HOTKEYS       the about node (Skins/Generic): the unlocked hotkeys only, no credits
 	    THIS DEVICE   "Not part of the save": Numbers (suffix / scientific, formatted by the server), Motion, Map detail, Map labels, Interface size as segmented controls,
 	                  client-only through Prefs (one press); then Music, Sound effects and Ambience volumes (0 to 100
 	                  in steps of 10) as a stepper: - / a 10-cell level bar (a cell sets its level) / the value / +.

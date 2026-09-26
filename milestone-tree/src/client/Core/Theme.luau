@@ -248,12 +248,13 @@ local ROLES: { [string]: Role } = {
 	tab = role("Montserrat", W.ExtraBold, true, 16, 15, 1),
 	plate = role("Montserrat", W.ExtraBold, false, 13, 12, 1.1, "caps"),
 	label = role("Montserrat", W.ExtraBold, false, 14, 13, 1),
-	-- numbers: Sarpanch for numeral runs only (words and units go through Rich.num)
-	numberHeavy = role("Sarpanch", W.ExtraBold, false, 18, 17, 1),
-	ctaSub = role("Sarpanch", W.Bold, false, 17, 15, 1),
-	number = role("Sarpanch", W.Bold, false, 16, 15, 1),
-	plateNum = role("Sarpanch", W.Bold, false, 15, 14, 1.1),
-	badge = role("Sarpanch", W.ExtraBold, false, 14, 13, 1),
+	-- numbers under ~20 px: Montserrat. Sarpanch's 8 and 9 merge at these sizes ("1e10,927" read as "1e10,827"), so
+	-- it stays on the display sizes above only (words and units go through Rich.num)
+	numberHeavy = role("Montserrat", W.ExtraBold, false, 18, 17, 1),
+	ctaSub = role("Montserrat", W.Bold, false, 17, 15, 1),
+	number = role("Montserrat", W.Bold, false, 16, 15, 1),
+	plateNum = role("Montserrat", W.Bold, false, 15, 14, 1.1),
+	badge = role("Montserrat", W.ExtraBold, false, 14, 13, 1),
 	-- reading text: upright, no outline, real line spacing
 	body = role("Montserrat", W.SemiBold, false, 16, 15, 1.3),
 	small = role("Montserrat", W.SemiBold, false, 14, 13, 1.25),

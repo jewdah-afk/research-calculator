@@ -333,8 +333,19 @@ function Render._wireButton(self: Renderer, rec: Rec, b: GuiButton)
 	end))
 	table.insert(rec.conns, b.MouseEnter:Connect(function()
 		if rec.node.cls == "can" or rec.node.cls == "perk" or rec.node.cls == "pseudo" then
-			local scale = Style.child(b, "UIScale", "Hover") :: UIScale
-			scale.Scale = if rec.claim == nil and self.hooks.skin then 1.03 else 1.06
+			-- a UIScale grows the item's footprint in its parent's list / grid too (a row of 4 cards wraps its last
+			-- card), so an item in a layout lights its hairline instead; a free-standing button still grows
+			local parent = b.Parent
+			if parent and parent:FindFirstChildWhichIsA("UIGridStyleLayout") then
+				local hair = b:FindFirstChild("Hair") or b:FindFirstChildWhichIsA("UIStroke")
+				if hair and hair:IsA("UIStroke") then
+					if b:GetAttribute("HairT") == nil then b:SetAttribute("HairT", hair.Transparency) end
+					hair.Transparency = 0.1
+				end
+			else
+				local scale = Style.child(b, "UIScale", "Hover") :: UIScale
+				scale.Scale = if rec.claim == nil and self.hooks.skin then 1.03 else 1.06
+			end
 			Audio.play("hover")
 		end
 		local tip = rec.node.tip
@@ -344,6 +355,12 @@ function Render._wireButton(self: Renderer, rec: Rec, b: GuiButton)
 		seq += 1
 		local scale = b:FindFirstChild("Hover")
 		if scale and scale:IsA("UIScale") then scale.Scale = 1 end
+		local was = b:GetAttribute("HairT")
+		if type(was) == "number" then
+			local hair = b:FindFirstChild("Hair") or b:FindFirstChildWhichIsA("UIStroke")
+			if hair and hair:IsA("UIStroke") then hair.Transparency = was end
+			b:SetAttribute("HairT", nil)
+		end
 		self.hooks.tip(nil, b)
 	end))
 end

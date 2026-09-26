@@ -1435,6 +1435,20 @@ rbx_achTotal = function(this)
 	end
 	do return n end
 end
+rbx_need = function(this, l)
+	local u, have
+	u = rbx_UNLOCK[JS.k(l)]
+	if (((not JS.t(u)) or (not JS.t(player[JS.k(u[0])]))) or (player[JS.k(u[0])].best == nil)) then
+		do return JS.NULL end
+	end
+	have = JS.D(player[JS.k(u[0])].best)
+	do return JS.O({
+		r = rbx_UNLOCK_NAMES[JS.k(u[0])],
+		n = formatWhole(nil, u[1]),
+		have = formatWhole(nil, have),
+		pr = rbx_prCap(nil, rbx_pr(nil, have, u[1]))
+	}, {"r", "n", "have", "pr"}) end
+end
 rbx_mapNode = function(this, l)
 	local t, shown, n, reached, unl, can, lit
 	t = tmp[JS.k(l)]
@@ -1447,6 +1461,7 @@ rbx_mapNode = function(this, l)
 	if (not JS.t(shown)) then
 		reached = (if JS.t(player[JS.k(l)].unlocked) then player[JS.k(l)].unlocked else ((not (player[JS.k(l)].best == nil)) and (JS.D(player[JS.k(l)].best)):gt(0)))
 		JS.setk(n, "dor", (if JS.t(reached) then true else false))
+		JS.setk(n, "need", rbx_need(nil, l))
 		do return n end
 	end
 	unl = (if JS.t(player[JS.k(l)].unlocked) then true else false)
@@ -1476,8 +1491,9 @@ rbx_mapNode = function(this, l)
 		rres = (if JS.t(lit) then JS.NULL else rbx_str(nil, t.baseResource)),
 		gain = (if JS.t(can) then formatWhole(nil, t.resetGain) else JS.NULL),
 		pr = (if JS.t(lit) then JS.NULL else rbx_prCap(nil, rbx_pr(nil, t.baseAmount, t.requires))),
+		gen = (if (((JS.t(unl) and JS.t(t.passiveGeneration)) and JS.t(t.resetGain)) and (JS.D(t.resetGain)):gt(0)) then rbx_nn(nil, format(nil, t.resetGain:times(t.passiveGeneration))) else JS.NULL),
 		tot = (if (l == "ach") then rbx_achTotal(nil) else JS.NULL)
-	}, {"t", "can", "lit", "glow", "pulse", "pts", "res", "tip", "ra", "req", "rres", "gain", "pr", "tot"})))
+	}, {"t", "can", "lit", "glow", "pulse", "pts", "res", "tip", "ra", "req", "rres", "gain", "pr", "gen", "tot"})))
 	do return n end
 end
 rbx_mapGate = function(this)
@@ -1735,5 +1751,29 @@ rbx_MAP_NAME = JS.O({
 	ex = "Exploration Points"
 }, {"ach", "m", "mm", "em", "p", "pe", "sp", "pb", "pp", "se", "hp", "ep", "hb", "ap", "mp", "t", "pm", "pep", "cp", "cm", "ex"})
 rbx_MV_RESETS = JS.A(14, "pp", "p", "sp", "pe", "hp", "ap", "pb", "hb", "se", "ep", "em", "mm", "m", "t")
+rbx_UNLOCK = JS.O({
+	p = JS.A(2, "m", 5),
+	sp = JS.A(2, "m", 25),
+	mm = JS.A(2, "m", 40),
+	pb = JS.A(2, "m", 50),
+	hp = JS.A(2, "m", 60),
+	ap = JS.A(2, "m", 80),
+	t = JS.A(2, "m", 99),
+	hb = JS.A(2, "m", 104),
+	pe = JS.A(2, "m", 125),
+	se = JS.A(2, "m", 140),
+	pp = JS.A(2, "m", 151),
+	ep = JS.A(2, "m", 160),
+	mp = JS.A(2, "m", 181),
+	em = JS.A(2, "mm", 30),
+	pep = JS.A(2, "pm", 5),
+	cp = JS.A(2, "pm", 6),
+	cm = JS.A(2, "pm", 10)
+}, {"p", "sp", "mm", "pb", "hp", "ap", "t", "hb", "pe", "se", "pp", "ep", "mp", "em", "pep", "cp", "cm"})
+rbx_UNLOCK_NAMES = JS.O({
+	m = "milestones",
+	mm = "meta-milestones",
+	pm = "prestige-milestones"
+}, {"m", "mm", "pm"})
 
 end

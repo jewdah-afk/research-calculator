@@ -174,7 +174,7 @@ function Upgrade.skin(rec: any, n: any, ctx: any): boolean
 	end
 	local chip = Common.chip(label, "Chip", chipText, { color = chipColor, bgT = 1, h = if compact then 22 else 24, stroke = chipLine,
 		role = if state == "notyet" and pr then "badge" else "caps" })
-	chip.FontFace = Font.fromName(if state == "notyet" and pr then "Sarpanch" else "Montserrat", Enum.FontWeight.ExtraBold)
+	chip.FontFace = Font.fromName("Montserrat", Enum.FontWeight.ExtraBold)
 	local cb = chip:FindFirstChild("Border") :: UIStroke?
 	if cb then cb.Transparency = 0.3 end
 	chip.AnchorPoint = Vector2.new(1, 0)

@@ -28,12 +28,14 @@ export type Val = {
 	gain: string?,
 	pr: number?, -- per mille (0..1000)
 	tot: string?,
+	gen: string?, -- the passive gain per second (formatted), while the layer generates on its own
 }
 export type MapNode = {
 	t: string,
 	id: string,
 	show: boolean,
 	dor: boolean,
+	need: { r: string, n: string, have: string, pr: number? }?, -- a hidden layer: the count that reveals it
 	unl: boolean?,
 	col: string?,
 	sym: string?,

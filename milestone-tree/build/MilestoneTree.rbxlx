@@ -28479,6 +28479,20 @@ rbx_achTotal = function(this)
 	end
 	do return n end
 end
+rbx_need = function(this, l)
+	local u, have
+	u = rbx_UNLOCK[JS.k(l)]
+	if (((not JS.t(u)) or (not JS.t(player[JS.k(u[0])]))) or (player[JS.k(u[0])].best == nil)) then
+		do return JS.NULL end
+	end
+	have = JS.D(player[JS.k(u[0])].best)
+	do return JS.O({
+		r = rbx_UNLOCK_NAMES[JS.k(u[0])],
+		n = formatWhole(nil, u[1]),
+		have = formatWhole(nil, have),
+		pr = rbx_prCap(nil, rbx_pr(nil, have, u[1]))
+	}, {"r", "n", "have", "pr"}) end
+end
 rbx_mapNode = function(this, l)
 	local t, shown, n, reached, unl, can, lit
 	t = tmp[JS.k(l)]
@@ -28491,6 +28505,7 @@ rbx_mapNode = function(this, l)
 	if (not JS.t(shown)) then
 		reached = (if JS.t(player[JS.k(l)].unlocked) then player[JS.k(l)].unlocked else ((not (player[JS.k(l)].best == nil)) and (JS.D(player[JS.k(l)].best)):gt(0)))
 		JS.setk(n, "dor", (if JS.t(reached) then true else false))
+		JS.setk(n, "need", rbx_need(nil, l))
 		do return n end
 	end
 	unl = (if JS.t(player[JS.k(l)].unlocked) then true else false)
@@ -28520,8 +28535,9 @@ rbx_mapNode = function(this, l)
 		rres = (if JS.t(lit) then JS.NULL else rbx_str(nil, t.baseResource)),
 		gain = (if JS.t(can) then formatWhole(nil, t.resetGain) else JS.NULL),
 		pr = (if JS.t(lit) then JS.NULL else rbx_prCap(nil, rbx_pr(nil, t.baseAmount, t.requires))),
+		gen = (if (((JS.t(unl) and JS.t(t.passiveGeneration)) and JS.t(t.resetGain)) and (JS.D(t.resetGain)):gt(0)) then rbx_nn(nil, format(nil, t.resetGain:times(t.passiveGeneration))) else JS.NULL),
 		tot = (if (l == "ach") then rbx_achTotal(nil) else JS.NULL)
-	}, {"t", "can", "lit", "glow", "pulse", "pts", "res", "tip", "ra", "req", "rres", "gain", "pr", "tot"})))
+	}, {"t", "can", "lit", "glow", "pulse", "pts", "res", "tip", "ra", "req", "rres", "gain", "pr", "gen", "tot"})))
 	do return n end
 end
 rbx_mapGate = function(this)
@@ -28779,6 +28795,30 @@ rbx_MAP_NAME = JS.O({
 	ex = "Exploration Points"
 }, {"ach", "m", "mm", "em", "p", "pe", "sp", "pb", "pp", "se", "hp", "ep", "hb", "ap", "mp", "t", "pm", "pep", "cp", "cm", "ex"})
 rbx_MV_RESETS = JS.A(14, "pp", "p", "sp", "pe", "hp", "ap", "pb", "hb", "se", "ep", "em", "mm", "m", "t")
+rbx_UNLOCK = JS.O({
+	p = JS.A(2, "m", 5),
+	sp = JS.A(2, "m", 25),
+	mm = JS.A(2, "m", 40),
+	pb = JS.A(2, "m", 50),
+	hp = JS.A(2, "m", 60),
+	ap = JS.A(2, "m", 80),
+	t = JS.A(2, "m", 99),
+	hb = JS.A(2, "m", 104),
+	pe = JS.A(2, "m", 125),
+	se = JS.A(2, "m", 140),
+	pp = JS.A(2, "m", 151),
+	ep = JS.A(2, "m", 160),
+	mp = JS.A(2, "m", 181),
+	em = JS.A(2, "mm", 30),
+	pep = JS.A(2, "pm", 5),
+	cp = JS.A(2, "pm", 6),
+	cm = JS.A(2, "pm", 10)
+}, {"p", "sp", "mm", "pb", "hp", "ap", "t", "hb", "pe", "se", "pp", "ep", "mp", "em", "pep", "cp", "cm"})
+rbx_UNLOCK_NAMES = JS.O({
+	m = "milestones",
+	mm = "meta-milestones",
+	pm = "prestige-milestones"
+}, {"m", "mm", "pm"})
 
 end
 ]]></string>
@@ -34023,6 +34063,12 @@ function App.start()
 		local st = nodes:state(layer)
 		if node == nil or not node.show or st == "dormant" or st == "sealed" or st == "frontier" then
 			if st == "dormant" then overlay:toasts(nil, { UNIVERSE_WORD[MapLogic.MULTIVERSE[layer] == true] }) end
+			-- a hidden layer says what reveals it ("Reach 40 milestones to discover it · 31 / 40")
+			local need = node and node.need
+			if (st == "sealed" or st == "frontier") and type(need) == "table" then
+				overlay:toasts(nil, { string.format("Reach %s %s to discover this layer (%s / %s)", tostring(need.n),
+					tostring(need.r), tostring(need.have), tostring(need.n)) })
+			end
 			Audio.play("error", { volume = 0.7 })
 			return
 		end
@@ -34224,6 +34270,12 @@ function App.start()
 		local node = if ms then ms.nodes[layer] else nil
 		local st = nodes:state(layer)
 		if st == "sealed" or st == "frontier" then
+			local need = node and node.need
+			if type(need) == "table" then
+				return { title = "???", body = string.format("Reach %s %s to discover this layer.", tostring(need.n), tostring(need.r)),
+					rows = { { "Need", tostring(need.n) .. " " .. tostring(need.r) }, { "Have", tostring(need.have) .. " " .. tostring(need.r) } },
+					pr = if type(need.pr) == "number" then need.pr / 1000 else nil, layer = layer, hue = Theme.C.muted }
+			end
 			return { title = "???", body = "Not discovered yet.", layer = layer, hue = Theme.C.muted }
 		end
 		if st == "dormant" then
@@ -35713,6 +35765,12 @@ end
 -- a small bump: 1 + amount -> 1
 function Motion.bump(inst: GuiObject, amount: number?)
 	if Motion.reduced() then return end
+	-- a UIScale grows an item's footprint in its parent's list / grid (the row reflows): flash those instead
+	local parent = inst.Parent
+	if parent and parent:FindFirstChildWhichIsA("UIGridStyleLayout") then
+		Motion.flash(inst)
+		return
+	end
 	local s = scaleOf(inst)
 	s.Scale = 1 + (amount or 0.06)
 	Motion.tween(s, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Scale = 1 }, nil)
@@ -36633,6 +36691,7 @@ end
 export type Hold = {
 	progress: number,
 	holding: boolean,
+	pressed: boolean, -- a finger or the mouse is down on it (a hold may be about to start)
 	consumed: (self: Hold) -> boolean, -- the last press became a hold or moved: the owner skips its Activated
 	cancel: (self: Hold) -> (),
 	destroy: (self: Hold) -> (),
@@ -36667,6 +36726,7 @@ function Recipes.hold(b: GuiButton, o: { dur: number, ring: boolean?, onDone: ()
 	local hold = {} :: Hold
 	hold.progress = 0
 	hold.holding = false
+	hold.pressed = false
 	local consumed = false
 	local input: InputObject? = nil
 	local startPos = Vector2.zero
@@ -36695,6 +36755,7 @@ function Recipes.hold(b: GuiButton, o: { dur: number, ring: boolean?, onDone: ()
 	local function release()
 		input = nil
 		hold.holding = false
+		hold.pressed = false
 		if hold.progress > 0 then
 			rewinding = true
 		else
@@ -36731,6 +36792,7 @@ function Recipes.hold(b: GuiButton, o: { dur: number, ring: boolean?, onDone: ()
 		if hold.progress >= 1 then
 			input = nil
 			hold.holding = false
+			hold.pressed = false
 			hold.progress = 0
 			draw()
 			stopLoop()
@@ -36745,6 +36807,7 @@ function Recipes.hold(b: GuiButton, o: { dur: number, ring: boolean?, onDone: ()
 		local gate = Recipes.holdGate
 		if gate and not gate() then return end
 		input = io
+		hold.pressed = true
 		rewinding = false
 		startT = os.clock()
 		startPos = pointer()
@@ -37267,7 +37330,7 @@ return Skin
 	    Sleek.ticks(f, o?)                 four L-shaped corner ticks drawn just outside (or on) a frame's edge
 	    Sleek.accent(f, color, x, w)       the short lit bar on a plate's top edge (one accent per plate)
 	    Sleek.reg(parent, name, x, y)      a registration mark (+)
-	    Sleek.micro(parent, name, text, c) an index number ("01", "02/04") in Sarpanch, tracked
+	    Sleek.micro(parent, name, text, c) an index number ("01", "02/04") in Montserrat, tracked
 	    Sleek.caps(parent, name, text, o?) a tracked caps micro label (the `caps` role)
 	    Sleek.seg(parent, name, n, k, o?)  a segment meter: n cells, k lit
 	    Sleek.rule(parent, name, o?)       a 1 px hairline (optionally fading out)
@@ -37453,7 +37516,7 @@ end
 -- an index number: Sarpanch Bold, auto width
 function Sleek.micro(parent: Instance, name: string, text: string, color: Color3?, size: number?): TextLabel
 	local l = get(parent, name, "TextLabel") :: TextLabel
-	l.FontFace = Font.fromName("Sarpanch", Enum.FontWeight.Bold)
+	l.FontFace = Font.fromName("Montserrat", Enum.FontWeight.Bold)
 	l.TextSize = size or 13
 	l.LineHeight = 1
 	l.TextColor3 = color or C.micro
@@ -38224,12 +38287,13 @@ local ROLES: { [string]: Role } = {
 	tab = role("Montserrat", W.ExtraBold, true, 16, 15, 1),
 	plate = role("Montserrat", W.ExtraBold, false, 13, 12, 1.1, "caps"),
 	label = role("Montserrat", W.ExtraBold, false, 14, 13, 1),
-	-- numbers: Sarpanch for numeral runs only (words and units go through Rich.num)
-	numberHeavy = role("Sarpanch", W.ExtraBold, false, 18, 17, 1),
-	ctaSub = role("Sarpanch", W.Bold, false, 17, 15, 1),
-	number = role("Sarpanch", W.Bold, false, 16, 15, 1),
-	plateNum = role("Sarpanch", W.Bold, false, 15, 14, 1.1),
-	badge = role("Sarpanch", W.ExtraBold, false, 14, 13, 1),
+	-- numbers under ~20 px: Montserrat. Sarpanch's 8 and 9 merge at these sizes ("1e10,927" read as "1e10,827"), so
+	-- it stays on the display sizes above only (words and units go through Rich.num)
+	numberHeavy = role("Montserrat", W.ExtraBold, false, 18, 17, 1),
+	ctaSub = role("Montserrat", W.Bold, false, 17, 15, 1),
+	number = role("Montserrat", W.Bold, false, 16, 15, 1),
+	plateNum = role("Montserrat", W.Bold, false, 15, 14, 1.1),
+	badge = role("Montserrat", W.ExtraBold, false, 14, 13, 1),
 	-- reading text: upright, no outline, real line spacing
 	body = role("Montserrat", W.SemiBold, false, 16, 15, 1.3),
 	small = role("Montserrat", W.SemiBold, false, 14, 13, 1.25),
@@ -41109,6 +41173,17 @@ function Ready.new(parent: GuiObject): Ready
 		local parts = {}
 		for _, e in list do table.insert(parts, e.layer .. (if e.ready then "!" else "?") .. (e.gain or "")) end
 		local nsig = table.concat(parts, ",") .. "|" .. mode .. "|" .. Layout.mode
+		-- a rebuild destroys the gems and any hold on them: while a gem is pressed, the set waits (with automation
+		-- the CAN BUY set can change several times a second, which cancelled every hold)
+		local pressed = false
+		for _, h in holds do
+			if h.pressed or h.holding then pressed = true end
+		end
+		if pressed then
+			local a = string.gsub(sig, "!([^,|]*)", "!")
+			local b = string.gsub(nsig, "!([^,|]*)", "!")
+			if a ~= b then return end
+		end
 		entries = list
 		if nsig ~= sig then
 			-- the gain text alone changed: rewrite the chips, keep the gems (and any running hold)
@@ -46382,8 +46457,8 @@ return Nodes
 
 	    Plate_<id>  Frame (AutomaticSize XY, AnchorPoint .5 / 0, panel2 -> deep at .95, UIStroke 1.5 lift(c, .25))
 	      Label     the name: `plate` role, caps with hair spaces, W -> lift(c, .45), a thin outline
-	      AmountRow Amount: `plateNum` (Sarpanch Bold, lift(c, .55); Rich.num units); locked: lock + requirement + unit
-	      Sub       bolt + "READY" (`plateSub`, #ffe08a) on pulse nodes
+	      AmountRow Amount: `plateNum` (Montserrat Bold, lift(c, .55); Rich.num units); locked: lock + requirement + unit
+	      Sub       bolt + "READY" (`plateSub`, #ffe08a) on pulse nodes, else "+1.23e45/s" (green) while it generates passively
 
 	Level of detail FULL / CHIP (the amount alone) / NONE by zoom with +-.02 hysteresis (MapLogic.lod); the selected,
 	hovered and peeked nodes always get FULL; Options Map Labels ALWAYS / OFF (setMode). Placement is greedy in
@@ -46422,6 +46497,7 @@ export type Plates = {
 local Plates = {}
 
 local READY = Theme.C.ready
+local GAIN = Color3.fromHex("7ee0a0") -- the passive gain line (the capsule's rate green)
 
 type Plate = {
 	layer: string,
@@ -46434,7 +46510,7 @@ type Plate = {
 	stroke: UIStroke,
 	strokeGrad: UIGradient,
 	labelGrad: UIGradient,
-	want: { name: string, amount: string, locked: boolean, ready: boolean, hasAmount: boolean }?,
+	want: { name: string, amount: string, locked: boolean, ready: boolean, gen: string?, hasAmount: boolean }?,
 	written: string,
 	form: string, -- FULL | CHIP | NONE (as shown)
 	slot: number, -- 1 below the ring, 2 above
@@ -46581,11 +46657,25 @@ function Plates.new(view: MapView.MapView, nodes: Nodes.Nodes): Plates
 		for layer, p in plates do
 			local w = p.want
 			if w == nil then continue end
-			local key = w.name .. "|" .. w.amount .. "|" .. tostring(w.locked) .. "|" .. tostring(w.ready)
+			local key = w.name .. "|" .. w.amount .. "|" .. tostring(w.locked) .. "|" .. tostring(w.ready) .. "|" .. tostring(w.gen)
 			if key == p.written then continue end
 			p.written = key
 			p.label.Text = nameRich(w.name)
 			p.amount.Text = w.amount
+			-- the second line: READY, or the passive gain ("+1.23e45/s") once the layer generates on its own
+			local rl = p.sub:FindFirstChild("Text") :: TextLabel?
+			local bolt = p.sub:FindFirstChild("Bolt") :: GuiObject?
+			if rl then
+				rl.RichText = true
+				if w.ready or w.gen == nil then
+					rl.Text = Rich.caps("Ready")
+					rl.TextColor3 = READY
+				else
+					rl.Text = Rich.num("+" .. w.gen .. "/s", { size = Theme.size("plateSub"), unit = Theme.C.soft })
+					rl.TextColor3 = GAIN
+				end
+			end
+			if bolt then bolt.Visible = w.ready end
 			p.lock.Visible = false -- Sleek: a locked plate is grey; no lock coin in the value row
 			local hue = Theme.hue(layer)
 			-- Sleek: white hairline plates; a READY node's plate takes the hue on its hairline
@@ -46675,10 +46765,10 @@ function Plates.new(view: MapView.MapView, nodes: Nodes.Nodes): Plates
 					-- COMPACT FULL shows the amount only on READY, CAN BUY and the selected node (DESIGN.md 3.9)
 					local showAmount = form == "CHIP" or not c or w.ready or layer == sel or nodes:state(layer) == "glow"
 					p.row.Visible = w.hasAmount and showAmount
-					p.sub.Visible = w.ready
+					p.sub.Visible = w.ready or (w.gen ~= nil and form == "FULL")
 				end
 			elseif w and form ~= "NONE" then
-				p.sub.Visible = w.ready
+				p.sub.Visible = w.ready or (w.gen ~= nil and form == "FULL")
 				p.row.Visible = w.hasAmount and (form == "CHIP" or not c or w.ready or layer == sel or nodes:state(layer) == "glow")
 			end
 			p.slot = slot
@@ -46722,6 +46812,7 @@ function Plates.new(view: MapView.MapView, nodes: Nodes.Nodes): Plates
 				amount = amt,
 				locked = st == "locked",
 				ready = st == "pulse",
+				gen = if node.val and type(node.val.gen) == "string" and st ~= "locked" then node.val.gen else nil,
 				hasAmount = has,
 			}
 			local _ = sel
@@ -50880,8 +50971,15 @@ function Sections.decorate(rec: any, n: any, ctx: any)
 		decorated[root] = nil
 		return
 	end
+	-- a section with nothing in it yet (a layer's buyables before the first unlocks) has no title
+	local c = counts(ctx.store, rec.id, cn)
+	if c ~= nil and c.total == 0 then
+		Common.drop(root, "SectionTitle")
+		decorated[root] = { id = rec.id, cn = cn }
+		return
+	end
 	decorated[root] = { id = rec.id, cn = cn }
-	Sections.header(root, { text = title, hue = ctx.hue, chips = chipsOf(cn, counts(ctx.store, rec.id, cn), ctx.hue) })
+	Sections.header(root, { text = title, hue = ctx.hue, chips = chipsOf(cn, c, ctx.hue) })
 end
 
 function Sections.refresh(ctx: any)
@@ -50892,7 +50990,12 @@ function Sections.refresh(ctx: any)
 		end
 		local title = Sections.titleOf(d.cn, ctx.layer)
 		if title then
-			Sections.header(root, { text = title, hue = ctx.hue, chips = chipsOf(d.cn, counts(ctx.store, d.id, d.cn), ctx.hue) })
+			local c = counts(ctx.store, d.id, d.cn)
+			if c ~= nil and c.total == 0 then
+				Common.drop(root, "SectionTitle")
+			else
+				Sections.header(root, { text = title, hue = ctx.hue, chips = chipsOf(d.cn, c, ctx.hue) })
+			end
 		end
 	end
 end
@@ -51920,7 +52023,7 @@ return CompactOwned
 	    blank / hr / h-line / v-line    dropped (the section rhythm replaces them)
 	    small buttons                   respec / master / sell / toggle / chalbtn / malware / nested tabs / reset:
 	                                    40 du pills, hue when actionable, mauve when not
-	    about                           the Options ABOUT card (credits and unlocked hotkeys)
+	    about                           the Options HOTKEYS card (the unlocked hotkeys; no credits in game)
 	    bar (rbx-burn)                  a themed bar with the game's text; st8 picks ember / grey / gold
 	The game's own per-thing CSS (st) is ignored in the panel: the template sets the look.
 ]]
@@ -52175,21 +52278,9 @@ local function about(rec: any, n: any, ctx: any): boolean
 	Common.stroke(root, 1, C.stroke, 0.2)
 	Common.pad(root, 16, 20, 16, 20)
 	Common.list(root, false, 8)
-	Sections.header(root, { text = "ABOUT", hue = ctx.hue, order = 0, name = "Head" })
-	local lines: { string } = {}
-	local name = Common.str(n.name)
-	if name then table.insert(lines, Common.title(name, "card", C.text)) end
-	local ver = Common.str(n.ver)
-	if ver then table.insert(lines, Common.run(Common.esc(ver), "small", C.soft)) end
-	local author = Common.str(n.author)
-	if author then table.insert(lines, Common.run(Common.esc("Made by " .. author), "body", C.text)) end
-	for _, k in { "tmt", "pt" } do
-		local v = Common.str(n[k])
-		if v then table.insert(lines, Common.run(Common.esc(v), "body", C.soft)) end
-	end
-	local body = Common.label(root, "Body", "body", C.text, { order = 1 })
-	body.LineHeight = Theme.lineHeight("body")
-	Common.setText(body, table.concat(lines, "\n"))
+	-- the credits are not shown in game (the README keeps them); the card lists the unlocked hotkeys
+	Sections.header(root, { text = "HOTKEYS", hue = ctx.hue, order = 0, name = "Head" })
+	Common.drop(root, "Body")
 	-- the unlocked hotkeys: keycap run + description, one per line
 	local keys: { string } = {}
 	if type(n.keys) == "table" then
@@ -52201,8 +52292,8 @@ local function about(rec: any, n: any, ctx: any): boolean
 	end
 	local kl = Common.label(root, "Keys", "body", C.text, { order = 2 })
 	kl.Visible = #keys > 0
-	Common.setText(kl, if #keys > 0 then Common.caps("Hotkeys") .. "\n" .. table.concat(keys, "\n") else "")
-	root.Visible = true
+	Common.setText(kl, table.concat(keys, "\n"))
+	root.Visible = #keys > 0
 	return true
 end
 
@@ -52873,7 +52964,7 @@ function Upgrade.skin(rec: any, n: any, ctx: any): boolean
 	end
 	local chip = Common.chip(label, "Chip", chipText, { color = chipColor, bgT = 1, h = if compact then 22 else 24, stroke = chipLine,
 		role = if state == "notyet" and pr then "badge" else "caps" })
-	chip.FontFace = Font.fromName(if state == "notyet" and pr then "Sarpanch" else "Montserrat", Enum.FontWeight.ExtraBold)
+	chip.FontFace = Font.fromName("Montserrat", Enum.FontWeight.ExtraBold)
 	local cb = chip:FindFirstChild("Border") :: UIStroke?
 	if cb then cb.Transparency = 0.3 end
 	chip.AnchorPoint = Vector2.new(1, 0)
@@ -53703,8 +53794,19 @@ function Render._wireButton(self: Renderer, rec: Rec, b: GuiButton)
 	end))
 	table.insert(rec.conns, b.MouseEnter:Connect(function()
 		if rec.node.cls == "can" or rec.node.cls == "perk" or rec.node.cls == "pseudo" then
-			local scale = Style.child(b, "UIScale", "Hover") :: UIScale
-			scale.Scale = if rec.claim == nil and self.hooks.skin then 1.03 else 1.06
+			-- a UIScale grows the item's footprint in its parent's list / grid too (a row of 4 cards wraps its last
+			-- card), so an item in a layout lights its hairline instead; a free-standing button still grows
+			local parent = b.Parent
+			if parent and parent:FindFirstChildWhichIsA("UIGridStyleLayout") then
+				local hair = b:FindFirstChild("Hair") or b:FindFirstChildWhichIsA("UIStroke")
+				if hair and hair:IsA("UIStroke") then
+					if b:GetAttribute("HairT") == nil then b:SetAttribute("HairT", hair.Transparency) end
+					hair.Transparency = 0.1
+				end
+			else
+				local scale = Style.child(b, "UIScale", "Hover") :: UIScale
+				scale.Scale = if rec.claim == nil and self.hooks.skin then 1.03 else 1.06
+			end
 			Audio.play("hover")
 		end
 		local tip = rec.node.tip
@@ -53714,6 +53816,12 @@ function Render._wireButton(self: Renderer, rec: Rec, b: GuiButton)
 		seq += 1
 		local scale = b:FindFirstChild("Hover")
 		if scale and scale:IsA("UIScale") then scale.Scale = 1 end
+		local was = b:GetAttribute("HairT")
+		if type(was) == "number" then
+			local hair = b:FindFirstChild("Hair") or b:FindFirstChildWhichIsA("UIStroke")
+			if hair and hair:IsA("UIStroke") then hair.Transparency = was end
+			b:SetAttribute("HairT", nil)
+		end
 		self.hooks.tip(nil, b)
 	end))
 end
@@ -57521,7 +57629,7 @@ return {
 	                  a tile (the title, the game's one-line sub in a well); Offline Production keeps the toggle row.
 	                  Saves live in Roblox (autosave), so there is no export, import or hard reset.
 	    DISPLAY       "[ Displays ]" becomes the section title; the cyclers and toggles keep the Opt rows
-	    ABOUT         the about node (Skins/Generic)
+	    HOTKEYS       the about node (Skins/Generic): the unlocked hotkeys only, no credits
 	    THIS DEVICE   "Not part of the save": Numbers (suffix / scientific, formatted by the server), Motion, Map detail, Map labels, Interface size as segmented controls,
 	                  client-only through Prefs (one press); then Music, Sound effects and Ambience volumes (0 to 100
 	                  in steps of 10) as a stepper: - / a 10-cell level bar (a cell sets its level) / the value / +.
@@ -58986,12 +59094,14 @@ export type Val = {
 	gain: string?,
 	pr: number?, -- per mille (0..1000)
 	tot: string?,
+	gen: string?, -- the passive gain per second (formatted), while the layer generates on its own
 }
 export type MapNode = {
 	t: string,
 	id: string,
 	show: boolean,
 	dor: boolean,
+	need: { r: string, n: string, have: string, pr: number? }?, -- a hidden layer: the count that reveals it
 	unl: boolean?,
 	col: string?,
 	sym: string?,

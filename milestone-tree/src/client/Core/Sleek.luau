@@ -7,7 +7,7 @@
 	    Sleek.ticks(f, o?)                 four L-shaped corner ticks drawn just outside (or on) a frame's edge
 	    Sleek.accent(f, color, x, w)       the short lit bar on a plate's top edge (one accent per plate)
 	    Sleek.reg(parent, name, x, y)      a registration mark (+)
-	    Sleek.micro(parent, name, text, c) an index number ("01", "02/04") in Sarpanch, tracked
+	    Sleek.micro(parent, name, text, c) an index number ("01", "02/04") in Montserrat, tracked
 	    Sleek.caps(parent, name, text, o?) a tracked caps micro label (the `caps` role)
 	    Sleek.seg(parent, name, n, k, o?)  a segment meter: n cells, k lit
 	    Sleek.rule(parent, name, o?)       a 1 px hairline (optionally fading out)
@@ -193,7 +193,7 @@ end
 -- an index number: Sarpanch Bold, auto width
 function Sleek.micro(parent: Instance, name: string, text: string, color: Color3?, size: number?): TextLabel
 	local l = get(parent, name, "TextLabel") :: TextLabel
-	l.FontFace = Font.fromName("Sarpanch", Enum.FontWeight.Bold)
+	l.FontFace = Font.fromName("Montserrat", Enum.FontWeight.Bold)
 	l.TextSize = size or 13
 	l.LineHeight = 1
 	l.TextColor3 = color or C.micro

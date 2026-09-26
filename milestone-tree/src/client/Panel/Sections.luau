@@ -203,8 +203,15 @@ function Sections.decorate(rec: any, n: any, ctx: any)
 		decorated[root] = nil
 		return
 	end
+	-- a section with nothing in it yet (a layer's buyables before the first unlocks) has no title
+	local c = counts(ctx.store, rec.id, cn)
+	if c ~= nil and c.total == 0 then
+		Common.drop(root, "SectionTitle")
+		decorated[root] = { id = rec.id, cn = cn }
+		return
+	end
 	decorated[root] = { id = rec.id, cn = cn }
-	Sections.header(root, { text = title, hue = ctx.hue, chips = chipsOf(cn, counts(ctx.store, rec.id, cn), ctx.hue) })
+	Sections.header(root, { text = title, hue = ctx.hue, chips = chipsOf(cn, c, ctx.hue) })
 end
 
 function Sections.refresh(ctx: any)
@@ -215,7 +222,12 @@ function Sections.refresh(ctx: any)
 		end
 		local title = Sections.titleOf(d.cn, ctx.layer)
 		if title then
-			Sections.header(root, { text = title, hue = ctx.hue, chips = chipsOf(d.cn, counts(ctx.store, d.id, d.cn), ctx.hue) })
+			local c = counts(ctx.store, d.id, d.cn)
+			if c ~= nil and c.total == 0 then
+				Common.drop(root, "SectionTitle")
+			else
+				Sections.header(root, { text = title, hue = ctx.hue, chips = chipsOf(d.cn, c, ctx.hue) })
+			end
 		end
 	end
 end

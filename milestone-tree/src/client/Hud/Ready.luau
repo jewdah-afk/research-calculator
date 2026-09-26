@@ -410,6 +410,17 @@ function Ready.new(parent: GuiObject): Ready
 		local parts = {}
 		for _, e in list do table.insert(parts, e.layer .. (if e.ready then "!" else "?") .. (e.gain or "")) end
 		local nsig = table.concat(parts, ",") .. "|" .. mode .. "|" .. Layout.mode
+		-- a rebuild destroys the gems and any hold on them: while a gem is pressed, the set waits (with automation
+		-- the CAN BUY set can change several times a second, which cancelled every hold)
+		local pressed = false
+		for _, h in holds do
+			if h.pressed or h.holding then pressed = true end
+		end
+		if pressed then
+			local a = string.gsub(sig, "!([^,|]*)", "!")
+			local b = string.gsub(nsig, "!([^,|]*)", "!")
+			if a ~= b then return end
+		end
 		entries = list
 		if nsig ~= sig then
 			-- the gain text alone changed: rewrite the chips, keep the gems (and any running hold)

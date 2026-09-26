@@ -898,6 +898,22 @@ function rbx_achTotal() {
 	return n
 }
 
+// what reveals a hidden layer (the layers' own layerShown rules): the best of that resource must reach the count.
+// Only the plain count rules are listed (ex needs Malware 9 on the Milestone layer and has no count).
+var rbx_UNLOCK = {
+	p: ["m", 5], sp: ["m", 25], mm: ["m", 40], pb: ["m", 50], hp: ["m", 60], ap: ["m", 80], t: ["m", 99],
+	hb: ["m", 104], pe: ["m", 125], se: ["m", 140], pp: ["m", 151], ep: ["m", 160], mp: ["m", 181], em: ["mm", 30],
+	pep: ["pm", 5], cp: ["pm", 6], cm: ["pm", 10],
+}
+// plain names: the prestige-milestone resource name is deliberately scrambled text in the game
+var rbx_UNLOCK_NAMES = { m: "milestones", mm: "meta-milestones", pm: "prestige-milestones" }
+function rbx_need(l) {
+	var u = rbx_UNLOCK[l]
+	if (!u || !player[u[0]] || player[u[0]].best === undefined) return null
+	var have = new Decimal(player[u[0]].best)
+	return { r: rbx_UNLOCK_NAMES[u[0]], n: formatWhole(u[1]), have: formatWhole(have), pr: rbx_prCap(rbx_pr(have, u[1])) }
+}
+
 function rbx_mapNode(l) {
 	var t = tmp[l]
 	var shown = t.layerShown == true
@@ -905,6 +921,7 @@ function rbx_mapNode(l) {
 	if (!shown) {
 		var reached = player[l].unlocked || (player[l].best !== undefined && new Decimal(player[l].best).gt(0))
 		n.dor = reached ? true : false
+		n.need = rbx_need(l)
 		return n
 	}
 	var unl = player[l].unlocked ? true : false
@@ -926,6 +943,7 @@ function rbx_mapNode(l) {
 		tip: rbx_nodeTip(l), ra: can ? rbx_act(["reset", l]) : null,
 		req: lit || t.requires === undefined ? null : rbx_nn(formatWhole(t.requires)), rres: lit ? null : rbx_str(t.baseResource),
 		gain: can ? formatWhole(t.resetGain) : null, pr: lit ? null : rbx_prCap(rbx_pr(t.baseAmount, t.requires)),
+		gen: unl && t.passiveGeneration && t.resetGain && new Decimal(t.resetGain).gt(0) ? rbx_nn(format(t.resetGain.times(t.passiveGeneration))) : null,
 		tot: l == "ach" ? rbx_achTotal() : null,
 	}]
 	return n

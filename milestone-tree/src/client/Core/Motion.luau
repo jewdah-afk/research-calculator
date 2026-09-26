@@ -157,6 +157,12 @@ end
 -- a small bump: 1 + amount -> 1
 function Motion.bump(inst: GuiObject, amount: number?)
 	if Motion.reduced() then return end
+	-- a UIScale grows an item's footprint in its parent's list / grid (the row reflows): flash those instead
+	local parent = inst.Parent
+	if parent and parent:FindFirstChildWhichIsA("UIGridStyleLayout") then
+		Motion.flash(inst)
+		return
+	end
 	local s = scaleOf(inst)
 	s.Scale = 1 + (amount or 0.06)
 	Motion.tween(s, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Scale = 1 }, nil)

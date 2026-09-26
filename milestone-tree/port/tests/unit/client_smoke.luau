@@ -296,10 +296,21 @@ if gem then
 	n0 = #acts
 	local io = { UserInputType = Enum.UserInputType.Touch, Position = Vector2.new(10, 10) }
 	gem.Hit.InputBegan:Fire(io)
-	frames(0.9)
+	-- late game: automation flips a layer's CAN BUY several times a second while the hold runs (it used to rebuild
+	-- the tray and cancel the hold)
+	local fx = require("../../data/fixtures/s19mv_none")
+	local base = fx.set and fx.set["map.15.1"]
+	for i = 1, 9 do
+		if base then
+			local v = table.clone(base)
+			v.glow = i % 2 == 0
+			R.View.OnClientEvent:Fire({ set = { ["map.15.1"] = v } })
+		end
+		frames(0.1)
+	end
 	UIS.InputEnded:Fire(io)
 	frames(0.2)
-	check(sent("reset", nil, n0), "holding a READY gem sends its reset action")
+	check(sent("reset", nil, n0), "holding a READY gem sends its reset action (while CAN BUY flickers)")
 end
 hudRoot.Portal.Hit.Activated:Fire()
 frames(0.6)

@@ -698,6 +698,7 @@ end
 export type Hold = {
 	progress: number,
 	holding: boolean,
+	pressed: boolean, -- a finger or the mouse is down on it (a hold may be about to start)
 	consumed: (self: Hold) -> boolean, -- the last press became a hold or moved: the owner skips its Activated
 	cancel: (self: Hold) -> (),
 	destroy: (self: Hold) -> (),
@@ -732,6 +733,7 @@ function Recipes.hold(b: GuiButton, o: { dur: number, ring: boolean?, onDone: ()
 	local hold = {} :: Hold
 	hold.progress = 0
 	hold.holding = false
+	hold.pressed = false
 	local consumed = false
 	local input: InputObject? = nil
 	local startPos = Vector2.zero
@@ -760,6 +762,7 @@ function Recipes.hold(b: GuiButton, o: { dur: number, ring: boolean?, onDone: ()
 	local function release()
 		input = nil
 		hold.holding = false
+		hold.pressed = false
 		if hold.progress > 0 then
 			rewinding = true
 		else
@@ -796,6 +799,7 @@ function Recipes.hold(b: GuiButton, o: { dur: number, ring: boolean?, onDone: ()
 		if hold.progress >= 1 then
 			input = nil
 			hold.holding = false
+			hold.pressed = false
 			hold.progress = 0
 			draw()
 			stopLoop()
@@ -810,6 +814,7 @@ function Recipes.hold(b: GuiButton, o: { dur: number, ring: boolean?, onDone: ()
 		local gate = Recipes.holdGate
 		if gate and not gate() then return end
 		input = io
+		hold.pressed = true
 		rewinding = false
 		startT = os.clock()
 		startPos = pointer()
