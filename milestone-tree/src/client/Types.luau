@@ -139,6 +139,7 @@ export type Prefs = {
 	weather: string, -- OFF | RESETS | AMBIENT
 	guide: string, -- ON | OFF
 	notation: string, -- SUFFIX | SCIENTIFIC
+	tut: number, -- the tutorial's next step, 0 to 8 (8 = done)
 	music: number, -- 0..100, steps of 10
 	sfx: number,
 	ambience: number,

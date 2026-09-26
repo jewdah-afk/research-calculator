@@ -58,6 +58,7 @@ local Links = require(MapFolder:WaitForChild("Links"))
 local Plates = require(MapFolder:WaitForChild("Plates"))
 local Markers = require(MapFolder:WaitForChild("Markers"))
 local Hud = require(script.Parent:WaitForChild("Hud"):WaitForChild("Hud"))
+local Kit = require(script.Parent:WaitForChild("Hud"):WaitForChild("Kit"))
 local Overlay = require(script.Parent:WaitForChild("Overlay"):WaitForChild("Overlay"))
 local Panel = require(script.Parent:WaitForChild("Panel"):WaitForChild("Panel"))
 local Signatures = require(script.Parent:WaitForChild("Signatures"):WaitForChild("Signatures"))
@@ -832,6 +833,43 @@ function App.start()
 		return vis * centre * size * (if gate and gate.show then 1 else 0.35)
 	end
 	local riftAt = 0
+	-- ------------------------------------------------------------------------------------------ the tutorial
+	-- Overlay/Guide: the state it follows and where its targets are on screen
+	local guideAt = 0
+	local function guideTick()
+		local ms = lastMs
+		if ms == nil or not gotFirst or fatal or store.ended then return end
+		local function num(layer: string): number
+			local n = ms.nodes[layer]
+			local v = n and n.val
+			local s = if v and type(v.pts) == "string" then v.pts else ""
+			if s == "" then return 0 end
+			return tonumber((string.gsub(s, ",", ""))) or 1e9 -- a suffixed or exponent form is a lot
+		end
+		local p = ms.nodes.p
+		local m = ms.nodes.m
+		overlay:guide({
+			panel = panelKey,
+			milestones = num("m"),
+			pShown = p ~= nil and p.show == true,
+			pOwned = num("p") > 0,
+			mCan = m ~= nil and m.val ~= nil and m.val.can == true,
+			rect = function(target: string): any
+				if target == "capsule" then return Layout.rect("hud.capsule") end
+				if target == "ready" then return Layout.rect("hud.ready") end
+				if string.sub(target, 1, 5) == "node:" then return nodes:ringRect(string.sub(target, 6)) end
+				if target == "cta" then
+					local pgui = panelGui:FindFirstChild("Root")
+					local sheet = pgui and pgui:FindFirstChild("Sheet")
+					local hero = sheet and sheet:FindFirstChild("Hero")
+					local cta = hero and hero:FindFirstChild("Cta")
+					if cta and cta:IsA("GuiObject") and cta.Visible and sheet and (sheet :: GuiObject).Visible then return Kit.rect(cta) end
+				end
+				return nil
+			end,
+		})
+	end
+
 	local function step(dt: number)
 		mi:step(dt)
 		view:step(dt)
@@ -849,6 +887,11 @@ function App.start()
 			Audio.loop("portal_loop", riftLevel())
 		end
 		Audio.step(dt)
+		guideAt -= dt
+		if guideAt <= 0 then
+			guideAt = 0.2
+			guideTick()
+		end
 		if gotFirst and not reconnecting and not fatal and os.clock() - lastPatchAt > RECONNECT_AFTER then
 			reconnecting = true
 			hud:setStatus("reconnecting")

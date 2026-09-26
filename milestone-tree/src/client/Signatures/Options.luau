@@ -37,6 +37,8 @@ local TILES: { [string]: boolean } = { save = true }
 local DEVICE: { { key: string, title: string, sub: string, values: { any }, labels: { string } } } = {
 	{ key = "notation", title = "Numbers", sub = "1.23M or 1.23e6", values = { "SUFFIX", "SCIENTIFIC" },
 		labels = { "Suffix", "Scientific" } },
+	{ key = "tut", title = "Tutorial", sub = "The first steps, shown again", values = { 8, 0 },
+		labels = { "Done", "Replay" } },
 	{ key = "motion", title = "Motion", sub = "Animations and effects", values = { "SYSTEM", "FULL", "REDUCED" },
 		labels = { "System", "Full", "Reduced" } },
 	{ key = "detail", title = "Map detail", sub = "Lower detail runs lighter", values = { "AUTO", "HIGH", "LOW" },

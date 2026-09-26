@@ -186,8 +186,22 @@ check(state("pb") == "locked", "pb locked (" .. tostring(state("pb")) .. ")")
 check(state("pm") == "sealed", "pm sealed before the Multiverse is revealed (" .. tostring(state("pm")) .. ")")
 local plates = mapGui.Root.Box.Plates
 check(plates:FindFirstChild("Plate_p") and plates.Plate_p.Label.Text ~= "", "the P plate has its name")
+-- the tutorial: an advanced save has none (and it is marked done); Replay + a fresh game shows step 1 on the
+-- points bar; SKIP ends it
+frames(0.5)
+local guideF = pg.OverlayGui.Root:FindFirstChild("Guide")
+check(guideF ~= nil and not guideF.Visible, "no tutorial on an advanced save")
+local PrefsM = M.require(client.Core.Prefs)
+check(PrefsM.get().tut == 8, "an advanced save marks the tutorial done (" .. tostring(PrefsM.get().tut) .. ")")
+PrefsM.set("tut", 0)
 play("fresh_none")
 check(state("mm") == "frontier", "fresh: mm is frontier (" .. tostring(state("mm")) .. ")")
+frames(0.5)
+check(guideF and guideF.Visible and string.find(guideF.Card.Title.Text, "Welcome", 1, true) ~= nil, "a new game shows the tutorial's first step")
+check(guideF and guideF.Dim.Ring.Visible, "step 1 puts the spotlight on the points bar")
+guideF.Card.Buttons.Skip.Activated:Fire()
+frames(0.5)
+check(not guideF.Visible and PrefsM.get().tut == 8, "SKIP ends the tutorial")
 play("s19mv_none")
 check(state("p") == "dormant", "inside: p dormant (" .. tostring(state("p")) .. ")")
 

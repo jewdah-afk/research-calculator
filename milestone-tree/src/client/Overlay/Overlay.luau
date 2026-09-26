@@ -26,6 +26,7 @@ local Peek = require(script.Parent:WaitForChild("Peek"))
 local Modals = require(script.Parent:WaitForChild("Modals"))
 local Screens = require(script.Parent:WaitForChild("Screens"))
 local Detail = require(script.Parent:WaitForChild("Detail"))
+local Guide = require(script.Parent:WaitForChild("Guide"))
 
 type Action = Types.Action
 type ARect = Types.Rect
@@ -37,6 +38,7 @@ export type Overlay = {
 	openLayer: Signal.Signal<string>,
 	peekClosed: Signal.Signal<>,
 	toasts: (self: Overlay, pops: { Types.Popup }?, notices: { string }?) -> (),
+	guide: (self: Overlay, ctx: any) -> (),
 	tooltip: (self: Overlay, owner: any, content: Tooltip.Content?, at: Vector2?) -> (),
 	peek: (self: Overlay, layer: string?, node: Types.MapNode?, ring: ARect?) -> (),
 	detail: (self: Overlay, card: any?) -> (),
@@ -67,6 +69,7 @@ function Overlay.new(gui: ScreenGui): Overlay
 	local modals = Modals.new(root)
 	local screens = Screens.new(root)
 	local detail = Detail.new(root)
+	local guide = Guide.new(root)
 
 	toasts.flyTo:Connect(function(l: string) self.flyTo:Fire(l) end)
 	peek.open:Connect(function(l: string) self.openLayer:Fire(l) end)
@@ -83,6 +86,14 @@ function Overlay.new(gui: ScreenGui): Overlay
 	screens.resync:Connect(function() self.resync:Fire() end)
 	detail.act:Connect(function(a: Action, hold: boolean) self.act:Fire(a, hold) end)
 
+	-- the first-run tutorial (Guide.luau): App passes the game's state; hidden under full screens
+	function self.guide(_: Overlay, ctx: any)
+		if screens:current() ~= nil or modals:isOpen() then
+			guide:hide()
+			return
+		end
+		guide:update(ctx)
+	end
 	function self.toasts(_: Overlay, pops: { Types.Popup }?, notices: { string }?)
 		toasts:push(pops, notices)
 	end
@@ -139,6 +150,7 @@ function Overlay.new(gui: ScreenGui): Overlay
 	end
 
 	function self.destroy(o: Overlay)
+		guide:destroy()
 		toasts:destroy()
 		detail:destroy()
 		tip:destroy()

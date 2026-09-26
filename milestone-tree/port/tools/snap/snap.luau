@@ -123,6 +123,18 @@ elseif SCENE == "shop" then
 	frames(1)
 	pg.HudGui.Root.Dock.Shop.Activated:Fire()
 	frames(1)
+elseif SCENE == "tut1" or SCENE == "tut3" then
+	-- the tutorial on a fresh game: step 1 (the points bar), or step 3 (the Milestone panel's button)
+	play("fresh_none")
+	frames(1)
+	if SCENE == "tut3" then
+		pg.OverlayGui.Root.Guide.Card.Buttons.Next.Activated:Fire()
+		frames(0.5)
+		nodes.Node_m.Hit.Activated:Fire()
+		frames(0.3)
+		play("fresh_m")
+		frames(1.5)
+	end
 elseif SCENE == "home" then
 	play("s13_none")
 	frames(3)

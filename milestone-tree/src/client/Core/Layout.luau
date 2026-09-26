@@ -215,6 +215,10 @@ end
 -- ------------------------------------------------------------------------------------------------------ HUD rects
 local rectMap: { [string]: ARect } = {}
 local rectList: { ARect }? = nil
+-- a registered rect by its key ("hud.capsule", "hud.ready", ...), abs space
+function Layout.rect(key: string): ARect?
+	return rectMap[key]
+end
 function Layout.setRect(key: string, r: ARect?)
 	local old = rectMap[key]
 	if old and r and old.x == r.x and old.y == r.y and old.w == r.w and old.h == r.h then return end

@@ -698,7 +698,7 @@ do
 	check(gone and findName(panel.root, "HardReset") == nil, "options: no Hard Reset, Export or Import (saves live in Roblox)")
 	local dev = findName(panel.root, "Device")
 	local Prefs = req(core.Prefs)
-	-- Row1 Numbers (suffix by default), Row2 Motion (openFixture pressed every button, so start from a known pick)
+	-- Row1 Numbers (suffix by default), Row2 Tutorial (Done / Replay), Row3 Motion (openFixture pressed every button, so start from a known pick)
 	check(require("../../../src/shared/PrefsSchema").DEFAULTS.notation == "SUFFIX", "options: numbers default to Suffix")
 	local nseg = dev and dev:FindFirstChild("Row1") and dev.Row1:FindFirstChild("Seg")
 	local sciB = nseg and nseg:FindFirstChild("O2")
@@ -708,11 +708,11 @@ do
 	local sufB = nseg and nseg:FindFirstChild("O1")
 	if sufB then sufB.Activated:Fire() end
 	check(Prefs.get().notation == "SUFFIX", "options: back to Suffix")
-	local seg = dev and dev:FindFirstChild("Row2") and dev.Row2:FindFirstChild("Seg")
+	local seg = dev and dev:FindFirstChild("Row3") and dev.Row3:FindFirstChild("Seg")
 	local reduced = seg and seg:FindFirstChild("O3")
 	if reduced then reduced.Activated:Fire() end
 	check(Prefs.get().motion == "REDUCED", "options: Motion Reduced through Prefs")
-	seg = dev and dev:FindFirstChild("Row2") and dev.Row2:FindFirstChild("Seg")
+	seg = dev and dev:FindFirstChild("Row3") and dev.Row3:FindFirstChild("Seg")
 	local sys = seg and seg:FindFirstChild("O1")
 	if sys then sys.Activated:Fire() end
 	check(Prefs.get().motion == "SYSTEM", "options: back to System")
