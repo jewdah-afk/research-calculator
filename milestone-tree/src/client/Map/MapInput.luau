@@ -75,6 +75,7 @@ function MapInput.new(view: View, input: InputLib?): MapInput
 	local lastPt: Vector2? = nil
 	local inertia = false
 	local pinch: { d0: number, z0: number, Q: Pt }? = nil
+	local pinchEnd = -math.huge -- when the last pinch ended (a release right after it does not fling)
 	local zoomDrag: { y0: number, z0: number, at: Vector2 }? = nil
 	local wheelZ: number? = nil
 	local wheelAt = Vector2.zero
@@ -226,15 +227,22 @@ function MapInput.new(view: View, input: InputLib?): MapInput
 		if i then table.remove(order, i) end
 		local abs = posOf(pr)
 		if pinch then
-			if count() < 2 then pinch = nil end
+			if count() < 2 then
+				pinch = nil
+				pinchEnd = os.clock()
+			end
 			if count() == 1 then
-				-- the remaining finger continues as a pan
+				-- the remaining finger continues as a pan, measured from where it is now: a stale lastPt (the last
+				-- one-finger drag) made the first frame's velocity huge and the release flung the map away
 				local rest = presses[order[1]]
 				if rest then
 					local C = cam()
-					dragFrom = { C = C, at = toMap(posOf(rest)) }
+					local at = toMap(posOf(rest))
+					dragFrom = { C = C, at = at }
+					lastPt = at
 					dragging = true
 				end
+				vx, vy = 0, 0
 			end
 		elseif zoomDrag then
 			local zd = zoomDrag
@@ -255,6 +263,8 @@ function MapInput.new(view: View, input: InputLib?): MapInput
 			lastTap.t, lastTap.at = os.clock(), abs
 		end
 		if count() == 0 then
+			-- letting go of a pinch (the fingers lift a moment apart) is not a fling
+			if os.clock() - pinchEnd < feel.pinchReleaseQuiet then vx, vy = 0, 0 end
 			if dragging and not reduced() then
 				-- inertia, except on an axis that is already past the hard limit (the spring takes it back)
 				local C, z, V = cam()

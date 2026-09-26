@@ -34,7 +34,7 @@ export type Biome = {
 }
 export type Domain = { minW: number, minH: number, maxW: number, maxH: number, minAspect: number, maxAspect: number }
 export type Feel = { dragMouse: number, dragTouch: number, velocityTau: number, inertiaTau: number, inertiaStop: number,
-	maxFling: number, rubberDistance: number, rubberC: number, rubberReturn: number, wheelFactor: number, wheelTau: number,
+	maxFling: number, pinchReleaseQuiet: number, rubberDistance: number, rubberC: number, rubberReturn: number, wheelFactor: number, wheelTau: number,
 	pinchRubber: number, pinchReturn: number, doubleTapFactor: number, doubleTapSeconds: number, flySmoothTime: number,
 	flyZoom: number, padSpeed: number, padDeadzone: number, padCurve: number, padZoomRate: number }
 export type Edge = { from: string, to: string, p: { number } }
@@ -60,7 +60,7 @@ local Realm: Realm = {
 	version = "0dc1814abc4a",
 	world = { w = 3840, h = 2560 },
 	camera = { zMax = 1.25, zoomSlack = 0.06, overscroll = 72, zoomOutFit = 0.96, panMargin = { 960, 720 }, domain = { minW = 568, minH = 320, maxW = 2560, maxH = 1440, minAspect = 0.45, maxAspect = 3.6 }, start = { 1500, 1150 }, introFactor = 1.12, introSeconds = 1.6 },
-	feel = { dragMouse = 6, dragTouch = 12, velocityTau = 0.05, inertiaTau = 0.32, inertiaStop = 6, maxFling = 4500, rubberDistance = 72, rubberC = 0.55, rubberReturn = 0.18, wheelFactor = 1.12, wheelTau = 0.085, pinchRubber = 0.06, pinchReturn = 0.2, doubleTapFactor = 1.6, doubleTapSeconds = 0.35, flySmoothTime = 0.35, flyZoom = 0.9, padSpeed = 1400, padDeadzone = 0.18, padCurve = 1.6, padZoomRate = 1.8 },
+	feel = { dragMouse = 6, dragTouch = 12, velocityTau = 0.05, inertiaTau = 0.32, inertiaStop = 6, maxFling = 4500, pinchReleaseQuiet = 0.25, rubberDistance = 72, rubberC = 0.55, rubberReturn = 0.18, wheelFactor = 1.12, wheelTau = 0.085, pinchRubber = 0.06, pinchReturn = 0.2, doubleTapFactor = 1.6, doubleTapSeconds = 0.35, flySmoothTime = 0.35, flyZoom = 0.9, padSpeed = 1400, padDeadzone = 0.18, padCurve = 1.6, padZoomRate = 1.8 },
 	layers = {
 		{ id = "sky", depth = 0, f = 0.05, w = 2784, h = 1616, ax = 1392, ay = 808, zHide = 0, zShow = 0, opaque = true, back = false, tint = { 255, 196, 214 } },
 		{ id = "clouds", depth = 1, f = 0.12, w = 3040, h = 1840, ax = 1520, ay = 920, zHide = 0, zShow = 0, opaque = false, back = true, tint = { 255, 170, 196 } },

@@ -1515,7 +1515,7 @@ export type Biome = {
 }
 export type Domain = { minW: number, minH: number, maxW: number, maxH: number, minAspect: number, maxAspect: number }
 export type Feel = { dragMouse: number, dragTouch: number, velocityTau: number, inertiaTau: number, inertiaStop: number,
-	maxFling: number, rubberDistance: number, rubberC: number, rubberReturn: number, wheelFactor: number, wheelTau: number,
+	maxFling: number, pinchReleaseQuiet: number, rubberDistance: number, rubberC: number, rubberReturn: number, wheelFactor: number, wheelTau: number,
 	pinchRubber: number, pinchReturn: number, doubleTapFactor: number, doubleTapSeconds: number, flySmoothTime: number,
 	flyZoom: number, padSpeed: number, padDeadzone: number, padCurve: number, padZoomRate: number }
 export type Edge = { from: string, to: string, p: { number } }
@@ -1541,7 +1541,7 @@ local Realm: Realm = {
 	version = "0dc1814abc4a",
 	world = { w = 3840, h = 2560 },
 	camera = { zMax = 1.25, zoomSlack = 0.06, overscroll = 72, zoomOutFit = 0.96, panMargin = { 960, 720 }, domain = { minW = 568, minH = 320, maxW = 2560, maxH = 1440, minAspect = 0.45, maxAspect = 3.6 }, start = { 1500, 1150 }, introFactor = 1.12, introSeconds = 1.6 },
-	feel = { dragMouse = 6, dragTouch = 12, velocityTau = 0.05, inertiaTau = 0.32, inertiaStop = 6, maxFling = 4500, rubberDistance = 72, rubberC = 0.55, rubberReturn = 0.18, wheelFactor = 1.12, wheelTau = 0.085, pinchRubber = 0.06, pinchReturn = 0.2, doubleTapFactor = 1.6, doubleTapSeconds = 0.35, flySmoothTime = 0.35, flyZoom = 0.9, padSpeed = 1400, padDeadzone = 0.18, padCurve = 1.6, padZoomRate = 1.8 },
+	feel = { dragMouse = 6, dragTouch = 12, velocityTau = 0.05, inertiaTau = 0.32, inertiaStop = 6, maxFling = 4500, pinchReleaseQuiet = 0.25, rubberDistance = 72, rubberC = 0.55, rubberReturn = 0.18, wheelFactor = 1.12, wheelTau = 0.085, pinchRubber = 0.06, pinchReturn = 0.2, doubleTapFactor = 1.6, doubleTapSeconds = 0.35, flySmoothTime = 0.35, flyZoom = 0.9, padSpeed = 1400, padDeadzone = 0.18, padCurve = 1.6, padZoomRate = 1.8 },
 	layers = {
 		{ id = "sky", depth = 0, f = 0.05, w = 2784, h = 1616, ax = 1392, ay = 808, zHide = 0, zShow = 0, opaque = true, back = false, tint = { 255, 196, 214 } },
 		{ id = "clouds", depth = 1, f = 0.12, w = 3040, h = 1840, ax = 1520, ay = 920, zHide = 0, zShow = 0, opaque = false, back = true, tint = { 255, 170, 196 } },
@@ -45204,6 +45204,7 @@ function MapInput.new(view: View, input: InputLib?): MapInput
 	local lastPt: Vector2? = nil
 	local inertia = false
 	local pinch: { d0: number, z0: number, Q: Pt }? = nil
+	local pinchEnd = -math.huge -- when the last pinch ended (a release right after it does not fling)
 	local zoomDrag: { y0: number, z0: number, at: Vector2 }? = nil
 	local wheelZ: number? = nil
 	local wheelAt = Vector2.zero
@@ -45355,15 +45356,22 @@ function MapInput.new(view: View, input: InputLib?): MapInput
 		if i then table.remove(order, i) end
 		local abs = posOf(pr)
 		if pinch then
-			if count() < 2 then pinch = nil end
+			if count() < 2 then
+				pinch = nil
+				pinchEnd = os.clock()
+			end
 			if count() == 1 then
-				-- the remaining finger continues as a pan
+				-- the remaining finger continues as a pan, measured from where it is now: a stale lastPt (the last
+				-- one-finger drag) made the first frame's velocity huge and the release flung the map away
 				local rest = presses[order[1]]
 				if rest then
 					local C = cam()
-					dragFrom = { C = C, at = toMap(posOf(rest)) }
+					local at = toMap(posOf(rest))
+					dragFrom = { C = C, at = at }
+					lastPt = at
 					dragging = true
 				end
+				vx, vy = 0, 0
 			end
 		elseif zoomDrag then
 			local zd = zoomDrag
@@ -45384,6 +45392,8 @@ function MapInput.new(view: View, input: InputLib?): MapInput
 			lastTap.t, lastTap.at = os.clock(), abs
 		end
 		if count() == 0 then
+			-- letting go of a pinch (the fingers lift a moment apart) is not a fling
+			if os.clock() - pinchEnd < feel.pinchReleaseQuiet then vx, vy = 0, 0 end
 			if dragging and not reduced() then
 				-- inertia, except on an axis that is already past the hard limit (the spring takes it back)
 				local C, z, V = cam()
@@ -46733,6 +46743,10 @@ function MapView.new(gui: ScreenGui, root: Frame, o: { assets: any?, realm: any?
 		if dirty then
 			place()
 			dirty = false
+			-- the camera on the box (world x, y and zoom): what tests and tools read to follow it
+			self.box:SetAttribute("CamX", math.floor(C.x * 10 + 0.5) / 10)
+			self.box:SetAttribute("CamY", math.floor(C.y * 10 + 0.5) / 10)
+			self.box:SetAttribute("CamZ", math.floor(z * 1e4 + 0.5) / 1e4)
 		end
 		-- biome weights ease toward the camera's (tau .35 s; instant when reduced)
 		local k = if reduced then 1 else 1 - math.exp(-dt / 0.35)

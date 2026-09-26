@@ -824,6 +824,10 @@ function MapView.new(gui: ScreenGui, root: Frame, o: { assets: any?, realm: any?
 		if dirty then
 			place()
 			dirty = false
+			-- the camera on the box (world x, y and zoom): what tests and tools read to follow it
+			self.box:SetAttribute("CamX", math.floor(C.x * 10 + 0.5) / 10)
+			self.box:SetAttribute("CamY", math.floor(C.y * 10 + 0.5) / 10)
+			self.box:SetAttribute("CamZ", math.floor(z * 1e4 + 0.5) / 1e4)
 		end
 		-- biome weights ease toward the camera's (tau .35 s; instant when reduced)
 		local k = if reduced then 1 else 1 - math.exp(-dt / 0.35)

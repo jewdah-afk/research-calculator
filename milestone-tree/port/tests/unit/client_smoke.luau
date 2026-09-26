@@ -229,6 +229,7 @@ check(pg:FindFirstChild("MilestoneBoot") == nil, "the ReplicatedFirst loading sc
 local sheet = pg.PanelGui.Root.Sheet
 check(not sheet.Visible, "the map alone at boot")
 
+
 local index = { "fresh_none", "fresh_m", "s13_none", "s13_p", "s13_m", "s13_sp_spark", "s13_options", "s19mv_none", "s19mv_cp", "s19mv_ex", "trapped_none", "layer_ach", "layer_m", "layer_mm", "layer_em", "layer_p", "layer_pe", "layer_sp", "layer_pb", "layer_pp", "layer_se", "layer_hp", "layer_ep", "layer_hb", "layer_ap", "layer_mp", "layer_t", "layer_pm", "layer_pep", "layer_cp", "layer_cm", "layer_ex" }
 frames(2.5)
 for _, name in index do
@@ -533,8 +534,52 @@ do
 	end
 	check(failed == 0, "every patch drew (" .. failed .. " drawing failures)")
 end
+-- touch: a one-finger drag, then a pinch whose fingers lift a frame apart must not fling the map (a stale velocity
+-- from the earlier drag used to throw it across the realm)
+do
+	local function where(): string
+		local box = mapGui.Root.Box
+		return string.format("%s,%s,%s", tostring(box:GetAttribute("CamX")), tostring(box:GetAttribute("CamY")), tostring(box:GetAttribute("CamZ")))
+	end
+	local function touch(x, y)
+		local io = { UserInputType = Enum.UserInputType.Touch, KeyCode = Enum.KeyCode.Unknown, Position = Vector2.new(x, y) }
+		UIS.InputBegan:Fire(io, false)
+		return io
+	end
+	local function move(io, x, y)
+		io.Position = Vector2.new(x, y)
+		UIS.InputChanged:Fire(io, false)
+	end
+	local function lift(io) UIS.InputEnded:Fire(io, false) end
+	-- a one-finger drag far away, released and settled
+	local d = touch(700, 700)
+	for i = 1, 10 do move(d, 700 + i * 30, 700); frames(1 / 60) end
+	lift(d)
+	frames(2)
+	-- a pinch out, then the fingers lift one frame apart
+	local a, b = touch(1300, 650), touch(1500, 650)
+	frames(1 / 60)
+	for i = 1, 12 do move(a, 1300 - i * 10, 650); move(b, 1500 + i * 10, 650); frames(1 / 60) end
+	lift(a)
+	frames(1 / 60)
+	lift(b)
+	frames(1 / 60)
+	local at0 = where()
+	frames(1)
+	check(where() == at0, "letting go of a pinch does not fling the map (" .. at0 .. " -> " .. where() .. ")")
+	-- a plain one-finger fling still glides
+	local f = touch(900, 500)
+	for i = 1, 8 do move(f, 900 - i * 40, 500); frames(1 / 60) end
+	lift(f)
+	frames(1 / 60)
+	local g0 = where()
+	frames(0.3)
+	check(where() ~= g0, "a one-finger flick still glides (inertia)")
+	frames(2)
+end
 print(string.format("== client smoke: %d tweens made, %d actions sent", E.tweens, #acts))
 if failures > 0 then
 	error("client smoke: " .. failures .. " FAILED", 0)
 end
+
 print("client smoke: all passed")
