@@ -35806,8 +35806,9 @@ end
 -- ------------------------------------------------------------------------------------------------------ R1 bevel
 export type BevelOpts = { radius: number, top: Color3, mid: Color3, bottom: Color3, stroke: number?, strokeFrom: Color3?,
 	strokeTo: Color3?, sprite: string? }
+-- Sleek: bevels are square (no radius, no lip sprite); the gradient and rim stay
 function Recipes.bevel(f: GuiObject, o: BevelOpts)
-	corner(f, UDim.new(0, o.radius))
+	remove(f, "Corner")
 	f.BackgroundColor3 = WHITE
 	if f.BackgroundTransparency >= 1 then f.BackgroundTransparency = 0 end
 	f.BorderSizePixel = 0
@@ -35817,7 +35818,8 @@ function Recipes.bevel(f: GuiObject, o: BevelOpts)
 	if o.stroke and o.stroke > 0 then
 		local s = child(f, "Rim", "UIStroke") :: UIStroke
 		s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-		s.Thickness = o.stroke
+		s.LineJoinMode = Enum.LineJoinMode.Miter
+		s.Thickness = math.min(o.stroke, 1.5)
 		s.Color = WHITE
 		s.Transparency = 0
 		local sg = child(s, "RimGradient", "UIGradient") :: UIGradient
@@ -35826,13 +35828,16 @@ function Recipes.bevel(f: GuiObject, o: BevelOpts)
 	else
 		remove(f, "Rim")
 	end
-	-- the bevel lips: a 9-slice overlay (atlas) or the gradient overlay fallback
-	local name = if o.sprite == "button" then "bevel_button" else "bevel_card"
-	local lip = Sprites.image(name, f, { key = "Bevel" })
-	lip.Size = UDim2.fromScale(1, 1)
-	lip.Position = UDim2.fromScale(0, 0)
-	lip.ZIndex = 8
-	Sprites.slice(name, lip, 0.5 * o.radius / 16)
+	-- a 1 du light top edge instead of the lip sprite
+	remove(f, "Bevel")
+	local e = child(f, "Edge", "Frame") :: Frame
+	e.Size = UDim2.new(1, 0, 0, 1)
+	e.Position = UDim2.new()
+	e.BackgroundColor3 = WHITE
+	e.BackgroundTransparency = 0.6
+	e.BorderSizePixel = 0
+	e.ZIndex = 8
+	e.Active = false
 end
 
 -- ------------------------------------------------------------------------------------------------------ R2 glow
@@ -36235,13 +36240,17 @@ function Recipes.glass(f: GuiObject)
 	local pt = 1
 	pcall(function() pt = GuiService.PreferredTransparency end)
 	f.BackgroundColor3 = Theme.C.glass
-	f.BackgroundTransparency = math.clamp(0.28 * pt, 0, 1)
+	f.BackgroundTransparency = math.clamp(0.14 * pt, 0, 1)
 	f.BorderSizePixel = 0
 	local s = child(f, "GlassRim", "UIStroke") :: UIStroke
 	s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	s.LineJoinMode = Enum.LineJoinMode.Miter
 	s.Color = WHITE
 	s.Thickness = 1
 	s.Transparency = 0.86
+	-- Sleek: square slabs
+	local c = f:FindFirstChildWhichIsA("UICorner")
+	if c and c.CornerRadius.Scale < 0.5 then c:Destroy() end
 end
 
 -- ------------------------------------------------------------------------------------------------------ R11 curve
@@ -36944,6 +36953,443 @@ return Signal
           </Item>
           <Item class="ModuleScript" referent="77">
             <Properties>
+              <string name="Name">Sleek</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	Sleek: the Style 1 "sleek sci-fi" vocabulary (art/ui/clean/styles.js, STYLES[1]) as idempotent builders. The HUD,
+	the panel shell, the cards and the overlays all draw with these, so the look lives in one place.
+
+	    Sleek.plate(f, o?)                 translucent dark slab: a vertical gradient, a 1 px hairline, a lighter top edge
+	    Sleek.ticks(f, o?)                 four L-shaped corner ticks drawn just outside (or on) a frame's edge
+	    Sleek.accent(f, color, x, w)       the short lit bar on a plate's top edge (one accent per plate)
+	    Sleek.reg(parent, name, x, y)      a registration mark (+)
+	    Sleek.micro(parent, name, text, c) an index number ("01", "02/04") in Sarpanch, tracked
+	    Sleek.caps(parent, name, text, o?) a tracked caps micro label (the `caps` role)
+	    Sleek.seg(parent, name, n, k, o?)  a segment meter: n cells, k lit
+	    Sleek.rule(parent, name, o?)       a 1 px hairline (optionally fading out)
+	    Sleek.diamond(parent, name, c, d)  the emblem: a rotated outlined square with a faint fill
+	    Sleek.spark(parent, name, values, color, o?)  a sparkline (Path2D when the engine has it, bars otherwise)
+	    Sleek.mag(s)                       a sortable magnitude of a formatted game number ("e6.424e23" -> 23.8...)
+
+	Colours: Sleek.C (the neutral cool greys of the style; the layer hue stays the only accent).
+]]
+
+local Theme = require(script.Parent:WaitForChild("Theme"))
+local Rich = require(script.Parent:WaitForChild("Rich"))
+
+local Sleek = {}
+
+local WHITE = Color3.new(1, 1, 1)
+
+Sleek.C = {
+	top = Color3.fromHex("0a0e16"),
+	bottom = Color3.fromHex("06090f"),
+	text = Color3.fromHex("f3f6fb"),
+	soft = Color3.fromHex("aab4c4"),
+	micro = Color3.fromHex("6d7686"),
+	microHi = Color3.fromHex("7d8797"),
+	ink = Color3.fromHex("06101b"),
+	good = Color3.fromHex("7fe6a0"),
+	goodHi = Color3.fromHex("8ff0ad"),
+	goodText = Color3.fromHex("d7f7e1"),
+	goodDeep = Color3.fromHex("4be07a"),
+	lockText = Color3.fromHex("b9aec3"),
+	gold = Color3.fromHex("ffd34d"),
+	goldText = Color3.fromHex("ffe08a"),
+}
+local C = Sleek.C
+Sleek.LINE = 0.88 -- the hairline: white at 12 %
+Sleek.LINE_HI = 0.74 -- a brighter hairline: white at 26 %
+
+local function get(parent: Instance, name: string, class: string): any
+	local c = parent:FindFirstChild(name)
+	if c and c.ClassName == class then return c end
+	if c then c:Destroy() end
+	local n = Instance.new(class :: any)
+	n.Name = name
+	if n:IsA("GuiObject") then
+		local g = n :: GuiObject
+		g.BorderSizePixel = 0
+		g.BackgroundTransparency = 1
+		g.Active = false
+	end
+	n.Parent = parent
+	return n
+end
+Sleek.get = get
+local function drop(parent: Instance, name: string)
+	local c = parent:FindFirstChild(name)
+	if c then c:Destroy() end
+end
+Sleek.drop = drop
+
+-- ------------------------------------------------------------------------------------------------------ surfaces
+export type PlateOpts = { alpha: number?, top: Color3?, bottom: Color3?, line: number?, edge: boolean?, radius: number?,
+	strokeName: string?, tint: Color3?, tintAlpha: number? }
+-- a translucent slab: gradient body (alpha is the body's opacity), a 1 px hairline and a 1 px lighter top edge
+function Sleek.plate(f: GuiObject, o: PlateOpts?)
+	local opts: PlateOpts = o or ({} :: PlateOpts)
+	local a = opts.alpha or 0.86
+	f.BackgroundColor3 = WHITE
+	f.BackgroundTransparency = 1 - a
+	f.BorderSizePixel = 0
+	local g = get(f, "Fill", "UIGradient") :: UIGradient
+	g.Rotation = 90
+	local top, bottom = opts.top or C.top, opts.bottom or C.bottom
+	if opts.tint then
+		top = Theme.mix(top, opts.tint, opts.tintAlpha or 0.1)
+		bottom = Theme.mix(bottom, opts.tint, (opts.tintAlpha or 0.1) * 0.35)
+	end
+	g.Color = ColorSequence.new({ ColorSequenceKeypoint.new(0, top), ColorSequenceKeypoint.new(1, bottom) })
+	g.Transparency = NumberSequence.new(0)
+	local s = get(f, opts.strokeName or "Hair", "UIStroke") :: UIStroke
+	s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	s.LineJoinMode = Enum.LineJoinMode.Miter
+	s.Thickness = 1
+	s.Color = WHITE
+	s.Transparency = opts.line or Sleek.LINE
+	if opts.radius and opts.radius > 0 then
+		local c = get(f, "Corner", "UICorner") :: UICorner
+		c.CornerRadius = UDim.new(0, opts.radius)
+	else
+		drop(f, "Corner")
+	end
+	if opts.edge ~= false then
+		local e = get(f, "Edge", "Frame") :: Frame
+		e.Size = UDim2.new(1, 0, 0, 1)
+		e.Position = UDim2.new()
+		e.BackgroundColor3 = WHITE
+		e.BackgroundTransparency = math.max(0, (opts.line or Sleek.LINE) - 0.08)
+		e.ZIndex = f.ZIndex
+	else
+		drop(f, "Edge")
+	end
+end
+
+export type TickOpts = { len: number?, th: number?, color: Color3?, alpha: number?, out: number?, name: string?, z: number? }
+-- four L-shaped corner ticks: 8 thin frames in a holder that is `out` du larger than the frame on every side
+function Sleek.ticks(f: GuiObject, o: TickOpts?): Frame
+	local opts: TickOpts = o or ({} :: TickOpts)
+	local len, th, out = opts.len or 10, opts.th or 2, opts.out or 1
+	local color, a = opts.color or WHITE, opts.alpha or 0.85
+	local h = get(f, opts.name or "Ticks", "Frame") :: Frame
+	h.AnchorPoint = Vector2.new(0.5, 0.5)
+	h.Position = UDim2.fromScale(0.5, 0.5)
+	h.Size = UDim2.new(1, 2 * out, 1, 2 * out)
+	h.ZIndex = opts.z or (f.ZIndex + 1)
+	local i = 0
+	for _, cx in { 0, 1 } do
+		for _, cy in { 0, 1 } do
+			i += 1
+			local hb = get(h, "H" .. i, "Frame") :: Frame
+			hb.AnchorPoint = Vector2.new(cx, cy)
+			hb.Position = UDim2.fromScale(cx, cy)
+			hb.Size = UDim2.fromOffset(len, th)
+			hb.BackgroundColor3 = color
+			hb.BackgroundTransparency = 1 - a
+			hb.ZIndex = h.ZIndex
+			local vb = get(h, "V" .. i, "Frame") :: Frame
+			vb.AnchorPoint = Vector2.new(cx, cy)
+			vb.Position = UDim2.fromScale(cx, cy)
+			vb.Size = UDim2.fromOffset(th, len)
+			vb.BackgroundColor3 = color
+			vb.BackgroundTransparency = 1 - a
+			vb.ZIndex = h.ZIndex
+		end
+	end
+	return h
+end
+
+-- the lit bar on a plate's top edge (glow where UIShadow exists)
+function Sleek.accent(f: GuiObject, color: Color3, x: number, w: number, o: { name: string?, h: number?, glow: boolean? }?): Frame
+	local name = if o and o.name then o.name else "Accent"
+	local b = get(f, name, "Frame") :: Frame
+	b.AnchorPoint = Vector2.new(0, 0.5)
+	b.Position = UDim2.fromOffset(x, 0)
+	b.Size = UDim2.fromOffset(w, if o and o.h then o.h else 3)
+	b.BackgroundColor3 = color
+	b.BackgroundTransparency = 0
+	b.ZIndex = f.ZIndex + 2
+	if (o == nil or o.glow ~= false) and Theme.caps.UIShadow then
+		local s = get(b, "Glow", "UIShadow") :: any
+		pcall(function()
+			s.Color = color
+			s.Transparency = 0.35
+			s.BlurRadius = UDim.new(0, 10)
+			s.Offset = UDim2.new()
+		end)
+	end
+	return b
+end
+
+-- a registration mark (+), centred on (x, y) in the parent's offset space
+function Sleek.reg(parent: GuiObject, name: string, x: number, y: number, o: { s: number?, alpha: number? }?): Frame
+	local s = if o and o.s then o.s else 9
+	local a = if o and o.alpha then o.alpha else 0.4
+	-- the vertical stroke is the holder, the horizontal one its child (two instances)
+	local v = get(parent, name, "Frame") :: Frame
+	v.AnchorPoint = Vector2.new(0.5, 0.5)
+	v.Position = UDim2.fromOffset(x, y)
+	v.Size = UDim2.fromOffset(1, s)
+	v.BackgroundColor3 = WHITE
+	v.BackgroundTransparency = 1 - a
+	v.ZIndex = parent.ZIndex + 1
+	local hz = get(v, "H", "Frame") :: Frame
+	hz.AnchorPoint = Vector2.new(0.5, 0.5)
+	hz.Position = UDim2.fromScale(0.5, 0.5)
+	hz.Size = UDim2.fromOffset(s, 1)
+	hz.BackgroundColor3 = WHITE
+	hz.BackgroundTransparency = 1 - a
+	hz.ZIndex = v.ZIndex
+	drop(v, "V")
+	return v
+end
+
+-- ------------------------------------------------------------------------------------------------------ type
+-- an index number: Sarpanch Bold, auto width
+function Sleek.micro(parent: Instance, name: string, text: string, color: Color3?, size: number?): TextLabel
+	local l = get(parent, name, "TextLabel") :: TextLabel
+	l.FontFace = Font.fromName("Sarpanch", Enum.FontWeight.Bold)
+	l.TextSize = size or 13
+	l.LineHeight = 1
+	l.TextColor3 = color or C.micro
+	l.AutomaticSize = Enum.AutomaticSize.X
+	l.Size = UDim2.fromOffset(0, size or 13)
+	l.TextXAlignment = Enum.TextXAlignment.Left
+	l.TextYAlignment = Enum.TextYAlignment.Center
+	l.TextWrapped = false
+	l.RichText = false
+	if l.Text ~= text then l.Text = text end
+	return l
+end
+
+-- hair spaces between letters: the tracked caps of the style (Roblox text has no letter spacing)
+function Sleek.track(s: string): string
+	return Rich.caps(s)
+end
+
+export type CapsOpts = { color: Color3?, role: string?, weight: Enum.FontWeight?, size: number?, h: number? }
+-- a tracked caps micro label: Montserrat Bold 12-13, soft, auto width
+function Sleek.caps(parent: Instance, name: string, text: string, o: CapsOpts?): TextLabel
+	local opts: CapsOpts = o or ({} :: CapsOpts)
+	local l = get(parent, name, "TextLabel") :: TextLabel
+	Theme.text(l, opts.role or "caps")
+	if opts.size then l.TextSize = opts.size end
+	if opts.weight then l.FontFace = Font.fromName("Montserrat", opts.weight) end
+	l.TextColor3 = opts.color or C.soft
+	l.AutomaticSize = Enum.AutomaticSize.X
+	l.Size = UDim2.fromOffset(0, opts.h or l.TextSize)
+	l.TextXAlignment = Enum.TextXAlignment.Left
+	l.TextYAlignment = Enum.TextYAlignment.Center
+	l.TextWrapped = false
+	l.RichText = false
+	local t = Sleek.track(text)
+	if l.Text ~= t then l.Text = t end
+	return l
+end
+
+-- ------------------------------------------------------------------------------------------------------ data
+export type SegOpts = { w: number?, h: number?, gap: number?, on: Color3?, off: number? }
+-- a segment meter: a horizontal row of n cells, the first k lit
+function Sleek.seg(parent: Instance, name: string, n: number, k: number, o: SegOpts?): Frame
+	local opts: SegOpts = o or ({} :: SegOpts)
+	local w, h, gap = opts.w or 3, opts.h or 12, opts.gap or 2
+	n = math.clamp(math.floor(n), 0, 40)
+	local f = get(parent, name, "Frame") :: Frame
+	f.Size = UDim2.fromOffset(math.max(0, n * w + (n - 1) * gap), h)
+	for i = 1, n do
+		local c = get(f, "S" .. i, "Frame") :: Frame
+		c.Position = UDim2.fromOffset((i - 1) * (w + gap), 0)
+		c.Size = UDim2.fromOffset(w, h)
+		c.BackgroundColor3 = if i <= k then opts.on or C.good else WHITE
+		c.BackgroundTransparency = if i <= k then 0 else (opts.off or 0.82)
+	end
+	for _, c in f:GetChildren() do
+		local i = tonumber(string.match(c.Name, "^S(%d+)$"))
+		if i and i > n then c:Destroy() end
+	end
+	return f
+end
+
+-- a 1 px hairline: full width of the parent by default, fading out to the right when fade is set
+function Sleek.rule(parent: Instance, name: string, o: { alpha: number?, fade: boolean?, color: Color3?, vertical: boolean? }?): Frame
+	local r = get(parent, name, "Frame") :: Frame
+	r.BackgroundColor3 = if o and o.color then o.color else WHITE
+	r.BackgroundTransparency = if o and o.alpha then 1 - o.alpha else Sleek.LINE
+	if o and o.vertical then
+		r.Size = UDim2.new(0, 1, 1, 0)
+	else
+		r.Size = UDim2.new(1, 0, 0, 1)
+	end
+	if o and o.fade then
+		local g = get(r, "Fade", "UIGradient") :: UIGradient
+		g.Rotation = if o.vertical then 90 else 0
+		g.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 1) })
+	else
+		drop(r, "Fade")
+	end
+	return r
+end
+
+-- the emblem: an outlined diamond with a faint fill and an inner fine diamond (the symbol goes on top, unrotated)
+function Sleek.diamond(parent: Instance, name: string, color: Color3, d: number, o: { fill: number?, inner: boolean? }?): Frame
+	local h = get(parent, name, "Frame") :: Frame
+	h.Size = UDim2.fromOffset(d, d)
+	local k = d / math.sqrt(2)
+	local outer = get(h, "Outer", "Frame") :: Frame
+	outer.AnchorPoint = Vector2.new(0.5, 0.5)
+	outer.Position = UDim2.fromScale(0.5, 0.5)
+	outer.Size = UDim2.fromOffset(math.floor(k * 0.98), math.floor(k * 0.98))
+	outer.Rotation = 45
+	outer.BackgroundColor3 = color
+	outer.BackgroundTransparency = 1 - (if o and o.fill then o.fill else 0.12)
+	outer.ZIndex = h.ZIndex
+	local s = get(outer, "Line", "UIStroke") :: UIStroke
+	s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	s.LineJoinMode = Enum.LineJoinMode.Miter
+	s.Thickness = if d >= 40 then 1.5 else 1.25
+	s.Color = color
+	s.Transparency = 0
+	if o == nil or o.inner ~= false then
+		local inner = get(h, "Inner", "Frame") :: Frame
+		inner.AnchorPoint = Vector2.new(0.5, 0.5)
+		inner.Position = UDim2.fromScale(0.5, 0.5)
+		inner.Size = UDim2.fromOffset(math.floor(k * 0.72), math.floor(k * 0.72))
+		inner.Rotation = 45
+		inner.ZIndex = h.ZIndex
+		local si = get(inner, "Line", "UIStroke") :: UIStroke
+		si.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		si.LineJoinMode = Enum.LineJoinMode.Miter
+		si.Thickness = 1
+		si.Color = color
+		si.Transparency = 0.65
+	else
+		drop(h, "Inner")
+	end
+	return h
+end
+
+-- ------------------------------------------------------------------------------------------------------ sparkline
+-- a magnitude that sorts formatted game numbers ("1,234", "4.2e56", "e6.4e23", "ee12", "1e1,234") for a sparkline
+function Sleek.mag(s: string?): number?
+	if type(s) ~= "string" then return nil end
+	local t = string.gsub(string.gsub(string.lower(s), ",", ""), "^%s*[%+]?", "")
+	local layers = 0
+	while string.sub(t, 1, 1) == "e" do
+		layers += 1
+		t = string.sub(t, 2)
+	end
+	local n = tonumber(string.match(t, "^[%d%.]+e?[%+%-]?%d*") or "")
+	if n == nil then
+		n = tonumber(string.match(t, "^[%d%.]+") or "")
+	end
+	if n == nil or n ~= n then return nil end
+	n = math.min(n, 1e300) -- "1e400" parses to inf; keep the maths finite
+	-- inside one layer count, log10 keeps the order; each extra "e" dwarfs the previous layers
+	local v = if n > 0 then math.log10(n) else 0
+	if layers > 0 then v = if v > 0 then math.log10(v + 1) else 0 end
+	return layers * 1000 + v
+end
+
+export type SparkOpts = { w: number, h: number, thick: number?, dot: boolean?, bars: boolean? }
+-- values are raw; the line is normalised to the frame (a flat series draws a mid line)
+function Sleek.spark(parent: Instance, name: string, values: { number }, color: Color3, o: SparkOpts): Frame
+	local f = get(parent, name, "Frame") :: Frame
+	f.Size = UDim2.fromOffset(o.w, o.h)
+	local n = #values
+	local lo, hi = math.huge, -math.huge
+	for _, v in values do
+		lo = math.min(lo, v)
+		hi = math.max(hi, v)
+	end
+	local span = hi - lo
+	local function y01(v: number): number
+		if n < 2 or not (span > 1e-12 and span < math.huge) then return 0.5 end
+		local y = (v - lo) / span
+		return if y == y then math.clamp(y, 0, 1) else 0.5
+	end
+	-- a dim baseline under the data (and all there is until two samples exist)
+	local base = get(f, "Base", "Frame") :: Frame
+	base.AnchorPoint = Vector2.new(0, 1)
+	base.Position = UDim2.fromScale(0, 1)
+	base.Size = UDim2.new(1, 0, 0, 1)
+	base.BackgroundColor3 = WHITE
+	base.BackgroundTransparency = 0.88
+	if n < 2 then
+		drop(f, "Line")
+		for _, c in f:GetChildren() do
+			if string.match(c.Name, "^B%d+$") then c:Destroy() end
+		end
+		drop(f, "Dot")
+		return f
+	end
+	local usePath = not o.bars and Theme.caps.Path2D == true
+	if usePath then
+		for _, c in f:GetChildren() do
+			if string.match(c.Name, "^B%d+$") then c:Destroy() end
+		end
+		local p = get(f, "Line", "Path2D") :: any
+		pcall(function()
+			p.Color3 = color
+			p.Thickness = o.thick or 1.6
+			p.ZIndex = f.ZIndex + 1
+			local pts = {}
+			for i, v in values do
+				local x = (i - 1) / (n - 1)
+				local y = 1 - (0.1 + 0.8 * y01(v))
+				table.insert(pts, Path2DControlPoint.new(UDim2.fromScale(x, y)))
+			end
+			p:SetControlPoints(pts)
+		end)
+	else
+		drop(f, "Line")
+		local bw = if n > 0 then o.w / n else o.w
+		for i, v in values do
+			local b = get(f, "B" .. i, "Frame") :: Frame
+			local bh = math.max(2, math.floor((0.15 + 0.85 * y01(v)) * o.h + 0.5))
+			b.AnchorPoint = Vector2.new(0, 1)
+			b.Position = UDim2.new(0, math.floor((i - 1) * bw), 1, 0)
+			b.Size = UDim2.fromOffset(math.max(1, math.floor(bw) - 1), bh)
+			b.BackgroundColor3 = color
+			b.BackgroundTransparency = if i == n then 0 else 0.72
+		end
+		for _, c in f:GetChildren() do
+			local i = tonumber(string.match(c.Name, "^B(%d+)$"))
+			if i and i > n then c:Destroy() end
+		end
+	end
+	if o.dot ~= false and n >= 1 then
+		local d = get(f, "Dot", "Frame") :: Frame
+		d.AnchorPoint = Vector2.new(0.5, 0.5)
+		d.Position = UDim2.fromScale(1, 1 - (0.1 + 0.8 * y01(values[n])))
+		d.Size = UDim2.fromOffset(5, 5)
+		d.BackgroundColor3 = color
+		d.BackgroundTransparency = if usePath then 0 else 1
+		d.ZIndex = f.ZIndex + 2
+		local c = get(d, "Corner", "UICorner") :: UICorner
+		c.CornerRadius = UDim.new(0.5, 0)
+	else
+		drop(f, "Dot")
+	end
+	return f
+end
+
+-- the layer's place in the tree (row, then the game's order): the "LAYER 02 / 21" readout
+local ORDER = { "m", "p", "mm", "sp", "pe", "pb", "em", "se", "hp", "pp", "ep", "hb", "ap", "mp", "t", "pm", "pep", "cp", "cm", "ex", "ach" }
+Sleek.ORDER = ORDER
+function Sleek.layerIndex(key: string): number?
+	for i, k in ORDER do
+		if k == key then return i end
+	end
+	return nil
+end
+
+return Sleek
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="78">
+            <Properties>
               <string name="Name">Sprites</string>
               <string name="Source"><![CDATA[--!strict
 --[[
@@ -37221,7 +37667,7 @@ return Sprites
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="78">
+          <Item class="ModuleScript" referent="79">
             <Properties>
               <string name="Name">Theme</string>
               <string name="Source"><![CDATA[--!strict
@@ -37248,18 +37694,18 @@ end
 
 -- ------------------------------------------------------------------------------------------------------ tokens
 Theme.C = {
-	-- base
-	void = hex("07060d"),
-	deep = hex("0d0b16"),
-	panel = hex("14111f"),
-	panel2 = hex("1c1829"),
-	panel3 = hex("262138"),
-	stroke = hex("3a3352"),
-	strokeHi = hex("6a5f8f"),
-	text = hex("f2f0ff"),
-	soft = hex("c9c3e6"), -- secondary text, labels, hints (DESIGN.md 9.6; >= 8.4:1 on every dark surface)
-	muted = hex("9a94b8"), -- tertiary only, >= 15 du on dark surfaces
-	faint = hex("5c5775"), -- never text
+	-- base: the cool neutral greys of the Sleek style (Core/Sleek.luau); the layer hue is the only accent
+	void = hex("05070c"),
+	deep = hex("070a11"),
+	panel = hex("0c111a"),
+	panel2 = hex("131a25"),
+	panel3 = hex("1c2533"),
+	stroke = hex("2b3444"),
+	strokeHi = hex("4b5668"),
+	text = hex("f3f6fb"),
+	soft = hex("aab4c4"), -- secondary text, labels, hints (DESIGN.md 9.6; >= 8.4:1 on every dark surface)
+	muted = hex("8a94a6"), -- tertiary only, >= 15 du on dark surfaces
+	faint = hex("4d5566"), -- never text
 	-- state
 	bought = hex("4be07a"),
 	locked = hex("8a6f7a"),
@@ -37278,11 +37724,11 @@ Theme.C = {
 	notYet = hex("d9b3be"),
 	ready = hex("ffe08a"),
 	dangerText = hex("f2d7dd"),
-	ink = hex("0d0b16"), -- dark text on light hue fills
+	ink = hex("06101b"), -- dark text on light hue fills
 	termLime = hex("caffbf"),
 	termDim = hex("9fdc92"),
 	stableId = hex("5f8a58"),
-	glass = hex("090711"),
+	glass = hex("06090f"),
 	white = Color3.new(1, 1, 1),
 	black = Color3.new(0, 0, 0),
 }
@@ -37472,7 +37918,7 @@ local ROLES: { [string]: Role } = {
 	toast = role("Montserrat", W.ExtraBold, true, 18, 16, 1),
 	cardSmall = role("Montserrat", W.ExtraBold, true, 17, 16, 1.1),
 	tab = role("Montserrat", W.ExtraBold, true, 16, 15, 1),
-	plate = role("Montserrat", W.ExtraBold, true, 15, 13, 1.1, "caps"),
+	plate = role("Montserrat", W.ExtraBold, false, 13, 12, 1.1, "caps"),
 	label = role("Montserrat", W.ExtraBold, false, 14, 13, 1),
 	-- numbers: Sarpanch for numeral runs only (words and units go through Rich.num)
 	numberHeavy = role("Sarpanch", W.ExtraBold, false, 18, 17, 1),
@@ -37644,7 +38090,7 @@ return Theme
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="79">
+          <Item class="ModuleScript" referent="80">
             <Properties>
               <string name="Name">ViewStore</string>
               <string name="Source"><![CDATA[--!strict
@@ -38002,11 +38448,11 @@ return ViewStore
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="80">
+        <Item class="Folder" referent="81">
           <Properties>
             <string name="Name">Hud</string>
           </Properties>
-          <Item class="ModuleScript" referent="81">
+          <Item class="ModuleScript" referent="82">
             <Properties>
               <string name="Name">Band</string>
               <string name="Source"><![CDATA[--!strict
@@ -38022,6 +38468,7 @@ return ViewStore
 local Core = script.Parent.Parent:WaitForChild("Core")
 local Signal = require(Core:WaitForChild("Signal"))
 local Theme = require(Core:WaitForChild("Theme"))
+local Sleek = require(Core:WaitForChild("Sleek"))
 local Kit = require(script.Parent:WaitForChild("Kit"))
 local Ready = require(script.Parent:WaitForChild("Ready"))
 
@@ -38045,17 +38492,15 @@ function Band.new(parent: GuiObject): Band
 	f.AnchorPoint = Vector2.new(0.5, 0)
 	f.Position = UDim2.new(0.5, 0, 0, 6)
 	f.Size = UDim2.new(1, -24, 0, 44)
-	f.BackgroundColor3 = Theme.C.deep
-	f.BackgroundTransparency = 0.08
+	Sleek.plate(f, { alpha = 0.92, line = 0.86 })
 	f.Visible = false
-	Kit.corner(f, UDim.new(0, 14))
-	local rim = Kit.stroke(f, 1.5, Theme.C.strokeHi, 1, "Rim")
+	local rim = Sleek.accent(f, Theme.C.text, 14, 56, { name = "Rim" })
 	local title = Kit.label(f, "Title", "section", "", Color3.new(1, 1, 1))
 	title.Position = UDim2.fromOffset(50, 0)
 	title.Size = UDim2.new(1, -110, 1, 0)
 	title.TextXAlignment = Enum.TextXAlignment.Left
 	title.TextTruncate = Enum.TextTruncate.AtEnd
-	Kit.textStroke(title, 2, 0.9)
+	Kit.textStroke(title, 0)
 	local closeB = Kit.button(f, "Close")
 	closeB.AnchorPoint = Vector2.new(1, 0.5)
 	closeB.Position = UDim2.new(1, -4, 0.5, 0)
@@ -38133,14 +38578,21 @@ function Band.new(parent: GuiObject): Band
 			sw:SetAttribute("Sig", nil)
 			drawSwitch()
 		end
+		-- Sleek: the layer's diamond and a white title; the hue lives on the top accent
 		local old = f:FindFirstChild("Emblem")
-		if old then old:Destroy() end
-		local g = Ready.gem(f, "Emblem", layer, sym or string.upper(layer), 34)
+		if old and not old:FindFirstChild("Outer") then old:Destroy() end
+		local hue = Theme.hue(layer)
+		local g = Sleek.diamond(f, "Emblem", hue, 32)
 		g.AnchorPoint = Vector2.new(0, 0.5)
-		g.Position = UDim2.new(0, 8, 0.5, 0)
-		rim.Color = Theme.lift(Theme.hue(layer), 0.3)
+		g.Position = UDim2.new(0, 10, 0.5, 0)
+		local symL = Kit.label(g, "Symbol", "badge", sym or string.upper(layer), Color3.new(1, 1, 1))
+		symL.Size = UDim2.fromScale(1, 1)
+		symL.TextXAlignment = Enum.TextXAlignment.Center
+		symL.ZIndex = g.ZIndex + 2
+		rim.BackgroundColor3 = hue
 		title.Text = string.upper(text or layer)
 		Theme.text(title, "section")
+		title.TextSize = 20
 		f.Visible = true
 	end
 	function self.destroy(b: Band)
@@ -38155,7 +38607,7 @@ return Band
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="82">
+          <Item class="ModuleScript" referent="83">
             <Properties>
               <string name="Name">Capsule</string>
               <string name="Source"><![CDATA[--!strict
@@ -38186,6 +38638,7 @@ local Layout = require(Core:WaitForChild("Layout"))
 local Motion = require(Core:WaitForChild("Motion"))
 local Rich = require(Core:WaitForChild("Rich"))
 local Recipes = require(Core:WaitForChild("Recipes"))
+local Sleek = require(Core:WaitForChild("Sleek"))
 local Kit = require(script.Parent:WaitForChild("Kit"))
 
 type ARect = Types.Rect
@@ -38208,10 +38661,10 @@ export type Capsule = {
 
 local Capsule = {}
 
-local GOLD_HI = Color3.fromHex("ffe89a")
 local GOLD = Color3.fromHex("ffc233")
+local GOLD_D = Color3.fromHex("ffd34d")
 local CREAM = Color3.fromHex("ffe9a3")
-local GREEN_A, GREEN_B, GREEN_LINE = Color3.fromHex("1a7a3c"), Color3.fromHex("0f4d26"), Color3.fromHex("b5f5c9")
+local GOOD = Color3.fromHex("8ff0ad")
 
 local STATUS: { [string]: { text: string, color: Color3, glyph: string } } = {
 	saving = { text = "Saving…", color = GOLD, glyph = "clock" },
@@ -38225,87 +38678,71 @@ function Capsule.new(parent: GuiObject): Capsule
 	self.warnTap = Signal.new() :: Signal.Signal<Vector2>
 	self.changed = Signal.new() :: Signal.Signal<>
 
+	-- Sleek: a translucent slab with a hairline, corner ticks and a gold accent; a gold diamond instead of the coin
 	local f = Kit.frame(parent, "Capsule", 5)
 	f.AnchorPoint = Vector2.new(0.5, 0)
-	f.BackgroundColor3 = Color3.new(1, 1, 1)
-	f.BackgroundTransparency = 0.04
-	Kit.corner(f)
-	Kit.grad(f, { Color3.fromHex("2a2140"), Theme.C.deep }, 90, nil, "Back")
-	local rim = Kit.stroke(f, 2.5, Color3.new(1, 1, 1), 0.67, "Rim")
-	Kit.grad(rim, { GOLD_HI, GOLD }, 90, nil, "RimGrad")
+	Sleek.plate(f, { alpha = 0.88, line = 0.86 })
+	Sleek.ticks(f, { len = 10, th = 2, out = 1, color = Color3.new(1, 1, 1), alpha = 0.8, z = 9 })
+	Sleek.accent(f, GOLD_D, 24, 64, { name = "Accent" })
 	self.frame = f
 
-	local coin = Kit.frame(f, "Coin", 6)
+	local coin = Sleek.diamond(f, "Coin", GOLD_D, 44, { fill = 0, inner = false })
 	coin.AnchorPoint = Vector2.new(0, 0.5)
-	coin.BackgroundColor3 = Color3.new(1, 1, 1)
-	coin.BackgroundTransparency = 0
-	Kit.corner(coin)
-	if Theme.caps.Radial then
-		local g = Kit.child(coin, "Radial", "UIGradient") :: UIGradient
-		g.Type = Enum.GradientType.Radial
-		g.Offset = Vector2.new(-0.1, -0.14)
-		g.Color = ColorSequence.new({
-			ColorSequenceKeypoint.new(0, Color3.fromHex("fff6cf")),
-			ColorSequenceKeypoint.new(0.32, Color3.fromHex("ffd34d")),
-			ColorSequenceKeypoint.new(0.7, Color3.fromHex("a8761a")),
-			ColorSequenceKeypoint.new(1, Color3.fromHex("a8761a")),
-		})
-	else
-		Kit.grad(coin, { Color3.fromHex("fff6cf"), Color3.fromHex("ffd34d"), Color3.fromHex("a8761a") }, 90, nil, "Radial")
-	end
-	Kit.stroke(coin, 3, Color3.fromHex("fff1b8"), 1, "Rim")
-	local star = Kit.glyph(coin, "Star", "star", Color3.fromHex("fffbe8"))
-	star.AnchorPoint = Vector2.new(0.5, 0.5)
-	star.Position = UDim2.fromScale(0.5, 0.5)
-	star.Size = UDim2.fromScale(0.46, 0.46)
-	star.ZIndex = 7
-	Kit.spin(star, 6)
+	coin.ZIndex = 6
+	local core = Kit.frame(coin, "Core", 7)
+	core.AnchorPoint = Vector2.new(0.5, 0.5)
+	core.Position = UDim2.fromScale(0.5, 0.5)
+	core.Size = UDim2.fromOffset(8, 8)
+	core.Rotation = 45
+	core.BackgroundColor3 = GOLD_D
+	core.BackgroundTransparency = 0
 
-	local label = Kit.label(f, "Label", "caps", "", CREAM)
+	local label = Kit.label(f, "Label", "caps", "", Sleek.C.soft)
 	label.TextXAlignment = Enum.TextXAlignment.Left
-	label.Size = UDim2.fromOffset(320, 14)
+	label.Size = UDim2.fromOffset(300, 13)
 
 	local row = Kit.frame(f, "Row", 6)
 	row.AutomaticSize = Enum.AutomaticSize.X
-	Kit.list(row, "x", 5, Enum.HorizontalAlignment.Left, Enum.VerticalAlignment.Bottom)
+	Kit.list(row, "x", 8, Enum.HorizontalAlignment.Left, Enum.VerticalAlignment.Bottom)
 	local amount = Kit.label(row, "Amount", "capsule", "0", Color3.new(1, 1, 1))
 	amount.LayoutOrder = 1
 	amount.AutomaticSize = Enum.AutomaticSize.X
 	amount.TextXAlignment = Enum.TextXAlignment.Left
 	amount.TextYAlignment = Enum.TextYAlignment.Bottom
-	local unit = Kit.label(row, "Unit", "small", "points", CREAM)
+	local unit = Kit.label(row, "Unit", "small", "points", Sleek.C.soft)
 	unit.LayoutOrder = 2
 	unit.FontFace = Font.fromName("Montserrat", Enum.FontWeight.Bold)
 	unit.AutomaticSize = Enum.AutomaticSize.X
 	unit.TextYAlignment = Enum.TextYAlignment.Bottom
 
-	-- the rate pill
+	-- the rate: a hairline divider, then a sparkline of the last minute over the "↑ rate" line (inside the slab)
+	local divider = Kit.frame(f, "Divider", 6)
+	divider.BackgroundColor3 = Color3.new(1, 1, 1)
+	divider.BackgroundTransparency = Sleek.LINE
 	local pill = Kit.frame(parent, "GenPill", 7)
 	pill.AnchorPoint = Vector2.new(0.5, 0)
 	pill.AutomaticSize = Enum.AutomaticSize.X
-	pill.BackgroundColor3 = Color3.new(1, 1, 1)
-	pill.BackgroundTransparency = 0
-	Kit.corner(pill)
-	Kit.grad(pill, { GREEN_A, GREEN_B }, 90, nil, "Back")
-	Kit.stroke(pill, 2, GREEN_LINE, 1, "Rim")
-	Kit.list(pill, "x", 6, Enum.HorizontalAlignment.Center, Enum.VerticalAlignment.Center)
-	local up = Kit.glyph(pill, "Up", "up", Color3.new(1, 1, 1))
+	Kit.list(pill, "x", 6, Enum.HorizontalAlignment.Left, Enum.VerticalAlignment.Center)
+	local up = Kit.glyph(pill, "Up", "up", GOOD)
 	up.LayoutOrder = 1
-	local pillLabel = Kit.label(pill, "Label", "number", "", Color3.new(1, 1, 1))
+	local pillLabel = Kit.label(pill, "Label", "number", "", GOOD)
 	pillLabel.LayoutOrder = 2
 	pillLabel.RichText = true
 	pillLabel.AutomaticSize = Enum.AutomaticSize.X
 	pill.Visible = false
 	self.pill = pill
+	local spark = Kit.frame(parent, "Spark", 7)
+	spark.AnchorPoint = Vector2.new(0.5, 0)
+	spark.Visible = false
+	local history: { number } = {}
+	local lastSample = -math.huge
 
 	-- the warning chip
 	local warn = Kit.frame(parent, "Warn", 6)
 	warn.AnchorPoint = Vector2.new(0, 0.5)
 	warn.AutomaticSize = Enum.AutomaticSize.X
-	warn.BackgroundColor3 = Theme.C.deep
-	warn.BackgroundTransparency = 0.1
-	Kit.corner(warn)
-	Kit.stroke(warn, 1.5, GOLD, 1, "Rim")
+	Sleek.plate(warn, { alpha = 0.88, line = 0.86, edge = false })
+	Kit.stroke(warn, 1, GOLD, 0.5, "Rim").LineJoinMode = Enum.LineJoinMode.Miter
 	local wContent = Kit.frame(warn, "Content")
 	wContent.AutomaticSize = Enum.AutomaticSize.X
 	wContent.Size = UDim2.fromScale(0, 1)
@@ -38331,10 +38768,9 @@ function Capsule.new(parent: GuiObject): Capsule
 	local status = Kit.frame(parent, "Status", 6)
 	status.AnchorPoint = Vector2.new(0.5, 0)
 	status.AutomaticSize = Enum.AutomaticSize.X
-	status.BackgroundColor3 = Theme.C.deep
-	status.BackgroundTransparency = 0.12
-	Kit.corner(status)
-	local sRim = Kit.stroke(status, 1.5, GOLD, 1, "Rim")
+	Sleek.plate(status, { alpha = 0.88, line = 0.86, edge = false })
+	local sRim = Kit.stroke(status, 1, GOLD, 0.6, "Rim")
+	sRim.LineJoinMode = Enum.LineJoinMode.Miter
 	Kit.list(status, "x", 6, Enum.HorizontalAlignment.Left, Enum.VerticalAlignment.Center)
 	local sLabel = Kit.label(status, "Label", "label", "", Color3.new(1, 1, 1))
 	sLabel.LayoutOrder = 2
@@ -38346,10 +38782,7 @@ function Capsule.new(parent: GuiObject): Capsule
 	local info = Kit.frame(parent, "Info", 6)
 	info.AnchorPoint = Vector2.new(0.5, 0)
 	info.AutomaticSize = Enum.AutomaticSize.Y
-	info.BackgroundColor3 = Theme.C.deep
-	info.BackgroundTransparency = 0.12
-	Kit.corner(info, UDim.new(0, 12))
-	Kit.stroke(info, 1.5, Theme.C.strokeHi, 1, "Rim")
+	Sleek.plate(info, { alpha = 0.88, line = 0.86, edge = false })
 	local iLabel = Kit.label(info, "Label", "small", "", Theme.C.text)
 	iLabel.AutomaticSize = Enum.AutomaticSize.Y
 	iLabel.Size = UDim2.fromScale(1, 0)
@@ -38370,43 +38803,52 @@ function Capsule.new(parent: GuiObject): Capsule
 	local statusKind: string? = nil
 	local savedToken = 0
 
+	local W_WIDE, H_WIDE, W_COMPACT, H_COMPACT = 540, 62, 340, 44
 	local function place()
 		compact = Layout.mode == "COMPACT"
-		local w, h = if compact then 300 else 400, if compact then 44 else 58
+		local w, h = if compact then W_COMPACT else W_WIDE, if compact then H_COMPACT else H_WIDE
 		f.Size = UDim2.fromOffset(w, h)
-		f.Position = UDim2.new(0.5, 0, 0, 6)
-		local cd = if compact then 52 else 68
-		coin.Size = UDim2.fromOffset(cd, cd)
-		coin.Position = UDim2.new(0, if compact then -14 else -19, 0.5, 0)
-		local x0 = (if compact then -14 else -19) + cd + 8
+		f.Position = UDim2.new(0.5, 0, 0, 4)
+		local cd = if compact then 30 else 40
+		Sleek.diamond(f, "Coin", GOLD_D, cd, { fill = 0, inner = false })
+		coin.Position = UDim2.new(0, if compact then 10 else 16, 0.5, 0)
+		core.Size = UDim2.fromOffset(if compact then 6 else 8, if compact then 6 else 8)
+		local x0 = (if compact then 10 else 16) + cd + (if compact then 10 else 16)
 		label.Visible = not compact
-		label.Position = UDim2.fromOffset(x0, 5)
+		label.Position = UDim2.fromOffset(x0, 10)
 		Theme.text(label, "caps")
-		row.Position = UDim2.fromOffset(x0, if compact then 4 else 19)
-		row.Size = UDim2.fromOffset(0, if compact then 36 else 36)
+		row.Position = UDim2.fromOffset(x0, if compact then 4 else 23)
+		row.Size = UDim2.fromOffset(0, 36)
 		amount.Size = UDim2.fromScale(0, 1)
 		unit.Size = UDim2.fromScale(0, 1)
 		Theme.text(unit, if compact then "label" else "small")
 		unit.FontFace = Font.fromName("Montserrat", Enum.FontWeight.Bold)
 		local pad = Kit.child(unit, "Pad", "UIPadding") :: UIPadding
 		pad.PaddingBottom = UDim.new(0, if compact then 5 else 6)
-		-- the pill hangs from the rim
-		local ph = if compact then 26 else 30
-		pill.Size = UDim2.fromOffset(0, ph)
-		pill.Position = UDim2.new(0.5, 0, 0, 6 + h - 7)
-		Kit.pad(pill, 0, 12, 0, 10)
+		-- the rate column on the right of the slab
+		local rx = if compact then 110 else 174 -- the column's width from the right edge
+		divider.Position = UDim2.new(1, -rx - 14, 0, 12)
+		divider.Size = UDim2.new(0, 1, 1, -24)
+		divider.Visible = true
+		pill.Size = UDim2.fromOffset(0, 18)
+		pill.AnchorPoint = Vector2.new(0, 0)
+		pill.Position = UDim2.new(0.5, w / 2 - rx, 0, 4 + (if compact then 13 else 36))
 		Theme.text(pillLabel, "number")
+		pillLabel.TextSize = if compact then 13 else 14
 		pillLabel.Size = UDim2.fromScale(0, 1)
-		local gs = if compact then 12 else 14
+		local gs = if compact then 11 else 12
 		up.Size = UDim2.fromOffset(gs, gs)
+		spark.AnchorPoint = Vector2.new(0, 0)
+		spark.Position = UDim2.new(0.5, w / 2 - rx, 0, 4 + 10)
+		spark.Size = UDim2.fromOffset(rx - 16, 22)
 		-- warn: right of the capsule
 		warn.Size = UDim2.fromOffset(0, if compact then 26 else 30)
-		warn.Position = UDim2.new(0.5, w / 2 + 12, 0, 6 + h / 2)
+		warn.Position = UDim2.new(0.5, w / 2 + 14, 0, 4 + h / 2)
 		Kit.pad(warn, 0, 10, 0, 8)
 		wIcon.Size = UDim2.fromOffset(16, 16)
 		Theme.text(wLabel, "badge")
 		wLabel.Size = UDim2.fromScale(0, 1)
-		-- status: under the pill (or the capsule)
+		-- status: under the capsule
 		status.Size = UDim2.fromOffset(0, 28)
 		Kit.pad(status, 0, 10, 0, 8)
 		Theme.text(sLabel, "label")
@@ -38416,12 +38858,29 @@ function Capsule.new(parent: GuiObject): Capsule
 		Theme.text(iLabel, "small")
 		self.changed:Fire()
 	end
+	-- the sparkline: one sample of the points' magnitude every 2 s, the last 30 (one minute)
+	local function sample(pts: string)
+		local now = os.clock()
+		if now - lastSample < 2 and #history > 0 then
+			history[#history] = Sleek.mag(pts) or history[#history]
+		else
+			lastSample = now
+			local m = Sleek.mag(pts)
+			if m then
+				table.insert(history, m)
+				if #history > 30 then table.remove(history, 1) end
+			end
+		end
+		local show = not compact and not firstRun and pill.Visible and #history >= 1
+		spark.Visible = show
+		if show then
+			Sleek.spark(spark, "Line", history, GOOD, { w = spark.Size.X.Offset, h = 22, thick = 1.6 })
+		end
+	end
 
 	local function statusY(): number
-		local h = if compact then 44 else 58
-		local y = 6 + h + 6
-		if pill.Visible then y = 6 + h - 7 + (if compact then 26 else 30) + 6 end
-		return y
+		local h = if compact then H_COMPACT else H_WIDE
+		return 4 + h + 8
 	end
 
 	local function infoY(): number
@@ -38452,6 +38911,7 @@ function Capsule.new(parent: GuiObject): Capsule
 
 	local function writeLabel()
 		label.Text = Rich.caps(if inside then "Points · Prestige Multiverse" else "Points · Normal Universe")
+		Sleek.accent(f, if inside then Theme.hue("pm") else GOLD_D, 24, 64, { name = "Accent" })
 	end
 
 	local lastPts = ""
@@ -38463,10 +38923,10 @@ function Capsule.new(parent: GuiObject): Capsule
 			local grew = lastPts ~= ""
 			lastPts = pts
 			local size = Theme.size("capsule")
-			Recipes.number(amount, { text = pts, size = size, from = Color3.new(1, 1, 1), mid = GOLD_HI, to = GOLD,
-				stroke = if compact then 3 else 4, shadow = 3, role = "capsule" })
+			Recipes.number(amount, { text = pts, size = size, from = Color3.new(1, 1, 1), to = Color3.new(1, 1, 1),
+				stroke = 0, shadow = 0, role = "capsule" })
 			local steps = if compact then { 28, 26, 22 } else { 34, 30, 26 }
-			Rich.fit(amount, steps, if compact then 150 else 250)
+			Rich.fit(amount, steps, if compact then 140 else 230)
 			if grew and os.clock() - lastBump >= 1 then
 				lastBump = os.clock()
 				Motion.bump(row, 0.05)
@@ -38476,17 +38936,20 @@ function Capsule.new(parent: GuiObject): Capsule
 		local unitText = if compact then (if name == "points" then "pts" else name) else name
 		if unit.Text ~= unitText then unit.Text = unitText end
 		local gen = h.gen
-		local showPill = gen ~= nil and gen ~= "" and not firstRun
+		local showPill = gen ~= nil and gen ~= "" and not firstRun and f.Visible
 		if showPill then
-			local t = Rich.num(gen :: string, { size = Theme.size("number"), onFill = true })
+			local g = gen :: string
+			if compact then g = string.gsub(string.gsub(Rich.short(g), "OOMs/sec", "OOM/s"), "/sec", "/s") end
+			local t = Rich.num(g, { size = if compact then 12 else 14, unit = GOOD })
 			if pillLabel.Text ~= t then pillLabel.Text = t end
 		end
 		if pill.Visible ~= showPill then
 			pill.Visible = showPill
 			c.changed:Fire()
 		end
+		sample(pts)
 		local w = h.w[1]
-		local showWarn = w ~= nil
+		local showWarn = w ~= nil and f.Visible
 		if w then
 			local t = Rich.num(string.upper(w.k) .. " " .. w.v, { size = Theme.size("badge"), unit = CREAM })
 			if wLabel.Text ~= t then wLabel.Text = t end
@@ -38546,12 +39009,17 @@ function Capsule.new(parent: GuiObject): Capsule
 	function self.destroy(c: Capsule)
 		c.warnTap:DisconnectAll()
 		c.changed:DisconnectAll()
-		Kit.unspin(star)
-		for _, x in { f, pill, warn, status, info } do x:Destroy() end
+		for _, x in { f, pill, spark, warn, status, info } do x:Destroy() end
 	end
 
 	place()
 	writeLabel()
+	-- the phone band hides the capsule; its detached parts (rate, sparkline, warning) follow it
+	f:GetPropertyChangedSignal("Visible"):Connect(function()
+		local h = hud
+		if h then self:update(h) end
+		if not f.Visible then spark.Visible = false end
+	end)
 	Layout.changed:Connect(function()
 		place()
 		lastPts = ""
@@ -38565,7 +39033,7 @@ return Capsule
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="83">
+          <Item class="ModuleScript" referent="84">
             <Properties>
               <string name="Name">Dock</string>
               <string name="Source"><![CDATA[--!strict
@@ -38586,7 +39054,8 @@ local Signal = require(Core:WaitForChild("Signal"))
 local Theme = require(Core:WaitForChild("Theme"))
 local Layout = require(Core:WaitForChild("Layout"))
 local Motion = require(Core:WaitForChild("Motion"))
-local Recipes = require(Core:WaitForChild("Recipes"))
+local Rich = require(Core:WaitForChild("Rich"))
+local Sleek = require(Core:WaitForChild("Sleek"))
 local Input = require(script.Parent.Parent:WaitForChild("Input"):WaitForChild("Input"))
 local Kit = require(script.Parent:WaitForChild("Kit"))
 
@@ -38635,36 +39104,29 @@ function Dock.new(parent: GuiObject): Dock
 
 	for i, spec in BUTTONS do
 		local b = Kit.child(f, spec.key, "ImageButton") :: ImageButton
-		b.BackgroundColor3 = Color3.new(1, 1, 1)
-		b.BackgroundTransparency = 0
 		b.BorderSizePixel = 0
 		b.AutoButtonColor = false
 		b.Image = ""
 		b.ZIndex = 3
-		Kit.corner(b, UDim.new(0.25, 0))
-		local c = spec.hue
-		Kit.grad(b, { Theme.lift(c, 0.2), c, Theme.shade(c, 0.55) }, 90, nil, "Back", { 0, 0.55, 1 })
-		Kit.stroke(b, 2.5, Theme.lift(c, 0.55), 1, "Rim")
-		local lip = Kit.frame(b, "Lip", 4)
-		lip.Size = UDim2.fromScale(1, 1)
-		lip.BackgroundColor3 = Color3.new(1, 1, 1)
-		lip.BackgroundTransparency = 0
-		Kit.corner(lip, UDim.new(0.25, 0))
-		Kit.grad(lip, { Color3.new(1, 1, 1), Color3.new(1, 1, 1), Color3.new(0, 0, 0), Color3.new(0, 0, 0) }, 90,
-			{ { 0, 0.3 }, { 0.14, 0 }, { 0.8, 0 }, { 1, 0.35 } }, "Lips", { 0, 0.5, 0.51, 1 })
-		local shadow = Kit.glyph(b, "IconShadow", spec.glyph, Color3.new(0, 0, 0), Theme.shade(c, 0.75))
-		shadow.AnchorPoint = Vector2.new(0.5, 0.5)
-		shadow.Position = UDim2.new(0.5, 0, 0.5, 2)
-		shadow.Size = UDim2.fromScale(0.48, 0.48)
-		shadow.ZIndex = 5
-		for _, d in shadow:GetDescendants() do
-			if d:IsA("GuiObject") then d.BackgroundTransparency = 0.6 end
-		end
-		local icon = Kit.glyph(b, "Icon", spec.glyph, Color3.new(1, 1, 1), c)
+		-- Sleek: a dark slab with a hairline and corner ticks, a white line icon, an index number; the active
+		-- button gets the button's hue as a rim and a 2 du floor line
+		Sleek.plate(b, { alpha = 0.86, line = 0.86 })
+		Sleek.ticks(b, { len = 10, th = 2, out = 1, color = Color3.new(1, 1, 1), alpha = 0.8, z = 7 })
+		local icon = Kit.glyph(b, "Icon", spec.glyph, Color3.new(1, 1, 1), Sleek.C.top)
 		icon.AnchorPoint = Vector2.new(0.5, 0.5)
 		icon.Position = UDim2.fromScale(0.5, 0.5)
-		icon.Size = UDim2.fromScale(0.48, 0.48)
+		icon.Size = UDim2.fromScale(0.42, 0.42)
 		icon.ZIndex = 6
+		local idx = Sleek.micro(b, "Index", string.format("%02d", i), Sleek.C.micro)
+		idx.Position = UDim2.fromOffset(6, 5)
+		idx.ZIndex = 6
+		local floor = Kit.frame(b, "Floor", 6)
+		floor.AnchorPoint = Vector2.new(0, 1)
+		floor.Position = UDim2.fromScale(0, 1)
+		floor.Size = UDim2.new(1, 0, 0, 2)
+		floor.BackgroundColor3 = spec.hue
+		floor.BackgroundTransparency = 0
+		floor.Visible = false
 		local press = Kit.child(b, "Press", "UIScale") :: UIScale
 		b.MouseButton1Down:Connect(function()
 			Motion.tween(press, TweenInfo.new(0.08), { Scale = 0.94 }, "dockPress" .. spec.key, true)
@@ -38685,69 +39147,82 @@ function Dock.new(parent: GuiObject): Dock
 			end
 		end)
 		buttons[spec.key] = b
-		local cap, cl = Kit.chip(f, spec.key .. "Caption", "label", spec.caption, { h = 22, pad = 8, fg = Color3.new(1, 1, 1),
-			bg = Theme.C.deep, bgA = 0.8 })
+		local cap, cl = Kit.chip(f, spec.key .. "Caption", "caps", Rich.caps(spec.caption), { h = 22, pad = 4,
+			fg = Color3.fromHex("e6ebf2"), bg = Theme.C.deep, bgA = 0 })
 		cap.AnchorPoint = Vector2.new(0.5, 0)
 		cap.ZIndex = 3
 		cl.ZIndex = 3
 		captions[spec.key] = cap
-		local _ = i
 	end
 	-- the trophies badge and the options dot
-	local badge, badgeLabel = Kit.chip(buttons.Trophies, "Badge", "badge", "", { h = 22, pad = 7, fg = Color3.new(1, 1, 1),
-		bg = Color3.fromHex("b8860b"), bgA = 1, line = Color3.fromHex("ffe08a"), lineA = 0.9 })
-	badge.AnchorPoint = Vector2.new(0.5, 0.5)
-	badge.Position = UDim2.fromScale(0.5, 0)
+	local badge, badgeLabel = Kit.chip(buttons.Trophies, "Badge", "badge", "", { h = 18, pad = 6, fg = Sleek.C.ink,
+		bg = Sleek.C.gold, bgA = 1 })
+	badge.AnchorPoint = Vector2.new(0, 0.5)
+	badge.Position = UDim2.new(0.5, 0, 0, -2)
+	local bc = badge:FindFirstChildWhichIsA("UICorner")
+	if bc then bc:Destroy() end
 	badge.ZIndex = 8
 	badgeLabel.ZIndex = 8
-	Kit.textStroke(badgeLabel, 1.5, 0.7)
+	Kit.textStroke(badgeLabel, 0)
 	badge.Visible = false
 	local dot = Kit.frame(buttons.Options, "Dot", 8)
 	dot.AnchorPoint = Vector2.new(0.5, 0.5)
 	dot.Position = UDim2.fromScale(0.9, 0.1)
-	dot.Size = UDim2.fromOffset(14, 14)
+	dot.Size = UDim2.fromOffset(9, 9)
+	dot.Rotation = 45
 	dot.BackgroundColor3 = Theme.C.danger
 	dot.BackgroundTransparency = 0
-	Kit.corner(dot)
-	Kit.stroke(dot, 2, Color3.new(1, 1, 1), 1)
 	dot.Visible = false
 
 	-- the zoom capsule
 	local zoom = Kit.frame(parent, "Zoom", 5)
 	zoom.AnchorPoint = Vector2.new(0, 1)
-	Recipes.glass(zoom)
-	zoom.BackgroundTransparency = math.min(zoom.BackgroundTransparency, 0.12)
-	Kit.corner(zoom)
+	Sleek.plate(zoom, { alpha = 0.86, line = 0.86 })
+	Sleek.ticks(zoom, { len = 10, th = 2, out = 1, color = Color3.new(1, 1, 1), alpha = 0.8, z = 7 })
+	-- a ruler under the percentage; the lit part is the zoom level
+	local ruler = Kit.frame(zoom, "Ruler", 6)
+	ruler.AnchorPoint = Vector2.new(0.5, 1)
+	ruler.Position = UDim2.new(0.5, 0, 1, -6)
+	ruler.Size = UDim2.fromOffset(60, 3)
+	for k = 0, 10 do
+		local t = Kit.frame(ruler, "T" .. k, 6)
+		t.Position = UDim2.fromOffset(k * 6, 0)
+		t.Size = UDim2.fromOffset(1, 3)
+		t.BackgroundColor3 = Color3.new(1, 1, 1)
+		t.BackgroundTransparency = 0.7
+	end
+	local lit = Kit.frame(ruler, "Lit", 7)
+	lit.Position = UDim2.fromOffset(0, -1)
+	lit.Size = UDim2.fromOffset(30, 1)
+	lit.BackgroundColor3 = Theme.hue("p")
+	lit.BackgroundTransparency = 0
 	self.zoom = zoom
 	local function zbtn(name: string, glyph: string, x: number, sig: Signal.Signal<>): TextButton
 		local b = Kit.button(zoom, name)
 		b.AnchorPoint = Vector2.new(0.5, 0.5)
 		b.Position = UDim2.new(x, 0, 0.5, 0)
 		b.Size = UDim2.fromOffset(40, 40)
-		b.BackgroundTransparency = 0
-		b.BackgroundColor3 = Theme.C.panel3
-		Kit.corner(b)
-		Kit.stroke(b, 1.5, Theme.C.strokeHi, 1)
+		b.BackgroundTransparency = 1
 		local g = Kit.glyph(b, "Icon", glyph, Color3.new(1, 1, 1))
 		g.AnchorPoint = Vector2.new(0.5, 0.5)
 		g.Position = UDim2.fromScale(0.5, 0.5)
-		g.Size = UDim2.fromScale(0.5, 0.5)
+		g.Size = UDim2.fromScale(0.42, 0.42)
 		b.Activated:Connect(function() sig:Fire() end)
 		return b
 	end
-	zbtn("Minus", "minus", 0, self.zoomOut)
-	zbtn("Plus", "plus", 1, self.zoomIn)
+	zbtn("Minus", "minus", 0, self.zoomOut).Position = UDim2.new(0, 22, 0.5, 0)
+	zbtn("Plus", "plus", 1, self.zoomIn).Position = UDim2.new(1, -22, 0.5, 0)
 	local pct = Kit.label(zoom, "Pct", "number", "", Color3.new(1, 1, 1))
 	pct.AnchorPoint = Vector2.new(0.5, 0.5)
-	pct.Position = UDim2.fromScale(0.5, 0.5)
-	pct.Size = UDim2.new(1, -90, 1, 0)
+	pct.Position = UDim2.new(0.5, 0, 0.5, -3)
+	pct.Size = UDim2.new(1, -90, 0, 20)
 	pct.TextXAlignment = Enum.TextXAlignment.Center
 	local zoomWanted = true
 
 	local function place()
 		local compact = Layout.mode == "COMPACT"
 		local bs = if small then 56 elseif compact then 50 else 64
-		local gap = if compact then 18 else 20
+		local gap = if compact then 18 else 24
 		local capH = if compact then 20 else 22
 		f.Position = UDim2.new(0, if compact then 12 else 20, 1, if compact then -6 else -8)
 		f.Size = UDim2.fromOffset(3 * bs + 2 * gap, bs + 2 + capH)
@@ -38759,18 +39234,25 @@ function Dock.new(parent: GuiObject): Dock
 			cap.Size = UDim2.fromOffset(0, capH)
 			cap.Position = UDim2.fromOffset((i - 1) * (bs + gap) + bs / 2, bs + 2)
 			local cl = cap:FindFirstChild("Label") :: TextLabel?
-			if cl then Theme.text(cl, "label") end
-			Kit.halo(b, spec.hue, 0.4, 10)
-			local st = b:FindFirstChild("Rim") :: UIStroke?
-			if st then
-				st.Thickness = if active == spec.key then 3 else 2.5
-				st.Color = if active == spec.key then Color3.new(1, 1, 1) else Theme.lift(spec.hue, 0.55)
+			if cl then
+				Theme.text(cl, "caps")
+				-- phones: no letter tracking, so the three captions fit their 68 du pitch
+				cl.Text = if compact then string.upper(spec.caption) else Rich.caps(spec.caption)
 			end
+			local on = active == spec.key
+			Sleek.plate(b, { alpha = 0.86, line = if on then 0.3 else 0.86 })
+			local hair = b:FindFirstChild("Hair") :: UIStroke?
+			if hair then hair.Color = if on then spec.hue else Color3.new(1, 1, 1) end
+			local fl = b:FindFirstChild("Floor") :: Frame?
+			if fl then fl.Visible = on end
+			local ix = b:FindFirstChild("Index") :: TextLabel?
+			if ix then ix.TextColor3 = if on then spec.hue else Sleek.C.micro end
+			if cl then cl.TextColor3 = if on then Color3.new(1, 1, 1) else Color3.fromHex("e6ebf2") end
 		end
 		Theme.text(badgeLabel, "badge")
 		badge.Size = UDim2.fromOffset(0, if compact then 20 else 22)
-		zoom.Size = UDim2.fromOffset(176, 54)
-		zoom.Position = UDim2.new(0, (if compact then 12 else 20) + 3 * bs + 2 * gap + 20, 1, -(if compact then 6 else 8) - capH - 2 - (bs - 54) / 2)
+		zoom.Size = UDim2.fromOffset(150, 44)
+		zoom.Position = UDim2.new(0, (if compact then 12 else 20) + 3 * bs + 2 * gap + 24, 1, -(if compact then 6 else 8) - capH - 2 - (bs - 44) / 2)
 		Theme.text(pct, "number")
 		zoom.Visible = zoomWanted and not compact and Input.kind() == "mouse"
 		self.changed:Fire()
@@ -38793,6 +39275,7 @@ function Dock.new(parent: GuiObject): Dock
 	function self.setZoomPct(_: Dock, z: number)
 		local t = string.format("%d%%", math.floor(z * 100 + 0.5))
 		if pct.Text ~= t then pct.Text = t end
+		lit.Size = UDim2.fromOffset(math.clamp(math.floor(z * 60 + 0.5), 1, 60), 1)
 	end
 	function self.setZoomVisible(_: Dock, b: boolean)
 		zoomWanted = b
@@ -38815,7 +39298,7 @@ return Dock
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="84">
+          <Item class="ModuleScript" referent="85">
             <Properties>
               <string name="Name">Hud</string>
               <string name="Source"><![CDATA[--!strict
@@ -39059,7 +39542,7 @@ return Hud
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="85">
+          <Item class="ModuleScript" referent="86">
             <Properties>
               <string name="Name">Kit</string>
               <string name="Source"><![CDATA[--!strict
@@ -39588,11 +40071,13 @@ function Kit.chip(parent: Instance, name: string, role: string, text: string, o:
 	f.Size = UDim2.fromOffset(0, o.h)
 	f.BackgroundColor3 = o.bg or Theme.C.deep
 	f.BackgroundTransparency = 1 - (if o.bgA ~= nil then o.bgA else 1)
-	Kit.corner(f)
+	-- Sleek: square chips with a 1 du hairline
+	local oc = f:FindFirstChild("Corner")
+	if oc then oc:Destroy() end
 	local pad = o.pad or 10
 	Kit.pad(f, 0, pad, 0, pad)
 	if o.line then
-		Kit.stroke(f, 1.5, o.line, o.lineA)
+		Kit.stroke(f, 1, o.line, o.lineA).LineJoinMode = Enum.LineJoinMode.Miter
 	else
 		local s = f:FindFirstChild("Stroke")
 		if s then s:Destroy() end
@@ -39607,7 +40092,7 @@ return Kit
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="86">
+          <Item class="ModuleScript" referent="87">
             <Properties>
               <string name="Name">Portal</string>
               <string name="Source"><![CDATA[--!strict
@@ -39709,12 +40194,13 @@ function Portal.new(parent: GuiObject): Portal
 	pill.AnchorPoint = Vector2.new(0.5, 1)
 	pill.Position = UDim2.fromScale(0.5, 1)
 	pill.AutomaticSize = Enum.AutomaticSize.X
-	pill.BackgroundColor3 = Color3.fromHex("0e0b18")
+	-- Sleek: a dark slab with a 1 du rim in the state colour
+	pill.BackgroundColor3 = Color3.fromHex("06090f")
 	pill.BackgroundTransparency = 0.12
-	Kit.corner(pill, UDim.new(0, 12))
-	local pRim = Kit.stroke(pill, 2, STATE_COLOR.enter, 1, "Rim")
+	local pRim = Kit.stroke(pill, 1, STATE_COLOR.enter, 0.8, "Rim")
+	pRim.LineJoinMode = Enum.LineJoinMode.Miter
 	Kit.list(pill, "y", 0, Enum.HorizontalAlignment.Center, Enum.VerticalAlignment.Center)
-	local title = Kit.label(pill, "Title", "tab", Rich.caps("Multiverse"), Color3.new(1, 1, 1))
+	local title = Kit.label(pill, "Title", "label", Rich.caps("Multiverse"), Color3.new(1, 1, 1))
 	title.LayoutOrder = 1
 	title.AutomaticSize = Enum.AutomaticSize.XY
 	Kit.textStroke(title, 1.5, 0.8)
@@ -39757,7 +40243,7 @@ function Portal.new(parent: GuiObject): Portal
 		pill.Size = UDim2.fromOffset(0, if compact then 26 else 46)
 		Kit.pad(pill, 0, 12, 0, 12)
 		title.Visible = not compact
-		Theme.text(title, "tab")
+		Theme.text(title, "label")
 		Theme.text(word, "label")
 		Theme.text(numL, "number")
 		lock.Size = UDim2.fromOffset(13, 13)
@@ -39847,7 +40333,7 @@ return Portal
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="87">
+          <Item class="ModuleScript" referent="88">
             <Properties>
               <string name="Name">Ready</string>
               <string name="Source"><![CDATA[--!strict
@@ -39878,6 +40364,7 @@ local Layout = require(Core:WaitForChild("Layout"))
 local Motion = require(Core:WaitForChild("Motion"))
 local Rich = require(Core:WaitForChild("Rich"))
 local Recipes = require(Core:WaitForChild("Recipes"))
+local Sleek = require(Core:WaitForChild("Sleek"))
 local Kit = require(script.Parent:WaitForChild("Kit"))
 
 type MapState = Types.MapState
@@ -39901,7 +40388,6 @@ local Ready = {}
 local MAX_GEMS = 6
 local GOLD = Color3.fromHex("ffc233")
 local READY_TEXT = Theme.C.ready
-local CANBUY_TEXT = Color3.fromHex("ffb3c0")
 local SYMS = {
 	ach = "★", m = "M", mm = "MM", em = "EM", p = "P", pe = "PE", sp = "SP", pb = "PB", pp = "PP", se = "SE", hp = "HP",
 	ep = "EP", hb = "HB", ap = "AP", mp = "MP", t = "T", pm = "PM", pep = "PEP", cp = "CR", cm = "CM", ex = "EX",
@@ -39919,7 +40405,7 @@ local function gem(parent: Instance, name: string, layer: string, sym: string, s
 	local g = Kit.frame(parent, name, 3)
 	g.Size = UDim2.fromOffset(size, size)
 	Kit.gem(g, Theme.hue(layer))
-	Kit.stroke(g, 2, Theme.lift(Theme.hue(layer), 0.5), 0.9, "Rim")
+	Kit.stroke(g, 1, Theme.lift(Theme.hue(layer), 0.6), 0.6, "Rim")
 	if sym == "★" then
 		local st = Kit.glyph(g, "Star", "star", Color3.new(1, 1, 1))
 		st.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -39932,7 +40418,7 @@ local function gem(parent: Instance, name: string, layer: string, sym: string, s
 		l.ZIndex = 4
 		l.TextXAlignment = Enum.TextXAlignment.Center
 		l.TextSize = math.max(13, math.floor(size * (if #sym >= 3 then 0.3 elseif #sym == 2 then 0.36 else 0.44)))
-		Kit.textStroke(l, if size >= 40 then 2 else 1.5, 1)
+		Kit.textStroke(l, if size >= 40 then 1.5 else 1, 0.35)
 	end
 	return g
 end
@@ -39948,14 +40434,16 @@ function Ready.new(parent: GuiObject): Ready
 	-- ------------------------------------------------------------------------------------------ the tray
 	local tray = Kit.frame(parent, "Ready", 5)
 	tray.AnchorPoint = Vector2.new(1, 1)
-	tray.AutomaticSize = Enum.AutomaticSize.XY
-	tray.BackgroundColor3 = Color3.new(1, 1, 1)
-	tray.BackgroundTransparency = 0.06
+	-- Sleek: a dark slab with a hairline; its corner ticks live on a sibling that copies the tray's rect (the tray
+	-- lays its children out in a list, so it is sized explicitly in layout())
+	tray.AutomaticSize = Enum.AutomaticSize.None
 	tray.Visible = false
-	Kit.corner(tray, UDim.new(0, 16))
-	Kit.grad(tray, { Color3.fromHex("231b33"), Theme.C.deep }, 90, nil, "Back")
-	Kit.stroke(tray, 2, GOLD, 0.75, "Rim")
-	Kit.pad(tray, 10, 16, 10, 16)
+	Sleek.plate(tray, { alpha = 0.88, line = 0.86 })
+	Kit.pad(tray, 12, 18, 10, 18)
+	local trayTicks = Kit.frame(parent, "ReadyTicks", 6)
+	trayTicks.AnchorPoint = Vector2.new(1, 1)
+	trayTicks.Visible = false
+	Sleek.ticks(trayTicks, { len = 10, th = 2, out = 1, color = Color3.new(1, 1, 1), alpha = 0.8, z = 6 })
 	Kit.list(tray, "y", 8, Enum.HorizontalAlignment.Left)
 	self.frame = tray
 
@@ -39967,11 +40455,11 @@ function Ready.new(parent: GuiObject): Ready
 	local hb = Kit.glyph(header, "Bolt", "bolt", READY_TEXT)
 	hb.LayoutOrder = 1
 	hb.Size = UDim2.fromOffset(16, 16)
-	local count = Kit.label(header, "Count", "toast", "", READY_TEXT)
+	local count = Kit.label(header, "Count", "label", "", READY_TEXT)
 	count.LayoutOrder = 2
 	count.AutomaticSize = Enum.AutomaticSize.X
 	count.Size = UDim2.fromScale(0, 1)
-	local buy = Kit.label(header, "CanBuy", "label", "", CANBUY_TEXT)
+	local buy = Kit.label(header, "CanBuy", "small", "", Sleek.C.soft)
 	buy.LayoutOrder = 3
 	buy.AutomaticSize = Enum.AutomaticSize.X
 	buy.Size = UDim2.fromScale(0, 1)
@@ -39991,11 +40479,10 @@ function Ready.new(parent: GuiObject): Ready
 	local banner = Kit.frame(parent, "HoldBanner", 6)
 	banner.AnchorPoint = Vector2.new(1, 1)
 	banner.AutomaticSize = Enum.AutomaticSize.XY
-	banner.BackgroundColor3 = Color3.fromHex("2a200a")
+	Sleek.plate(banner, { alpha = 0.92, line = 0.86, tint = GOLD, tintAlpha = 0.12 })
 	banner.BackgroundTransparency = 0.04
 	banner.Visible = false
-	Kit.corner(banner, UDim.new(0, 12))
-	Kit.stroke(banner, 2, GOLD, 1, "Rim")
+	Kit.stroke(banner, 1, GOLD, 0.5, "Rim").LineJoinMode = Enum.LineJoinMode.Miter
 	Kit.pad(banner, 8, 16, 9, 16)
 	Kit.list(banner, "y", 4, Enum.HorizontalAlignment.Left)
 	local bTop = Kit.frame(banner, "Top")
@@ -40019,12 +40506,10 @@ function Ready.new(parent: GuiObject): Ready
 	local pill = Kit.frame(parent, "ReadyPill", 5)
 	pill.AnchorPoint = Vector2.new(1, 1)
 	pill.AutomaticSize = Enum.AutomaticSize.X
-	pill.BackgroundColor3 = Color3.new(1, 1, 1)
+	Sleek.plate(pill, { alpha = 0.88, line = 0.86 })
 	pill.BackgroundTransparency = 0.06
 	pill.Visible = false
-	Kit.corner(pill)
-	Kit.grad(pill, { Color3.fromHex("231b33"), Theme.C.deep }, 90, nil, "Back")
-	Kit.stroke(pill, 2, GOLD, 0.75, "Rim")
+
 	local pillRow = Kit.frame(pill, "Row")
 	pillRow.AutomaticSize = Enum.AutomaticSize.X
 	pillRow.Size = UDim2.fromScale(0, 1)
@@ -40072,15 +40557,14 @@ function Ready.new(parent: GuiObject): Ready
 		local h = if compact then 24 else 26
 		if e.ready then
 			local text = "+" .. Rich.short(e.gain or "1")
-			local c, l = Kit.chip(slot, "Chip", "badge", "", { h = h, pad = 8, fg = GOLD, bg = Color3.fromHex("2a200a"), bgA = 1,
-				line = GOLD, lineA = 0.8 })
+			local c, l = Kit.chip(slot, "Chip", "badge", "", { h = h, pad = 4, fg = Sleek.C.goldText, bgA = 0 })
 			l.RichText = true
-			l.Text = Rich.num(text, { size = Theme.size("badge"), unit = Color3.fromHex("ffe9a3") })
+			l.Text = Rich.num(text, { size = Theme.size("badge"), unit = Sleek.C.goldText })
 			c.AnchorPoint = Vector2.new(0.5, 0)
 			c.Position = UDim2.new(0.5, 0, 0, 56)
 		else
-			local c = Kit.chip(slot, "Chip", "label", Rich.caps("Buy"), { h = h, pad = 10, fg = Color3.new(1, 1, 1),
-				bg = Theme.C.deep, bgA = 1, line = Theme.C.danger, lineA = 1 })
+			local c = Kit.chip(slot, "Chip", "caps", Rich.caps("Buy"), { h = h, pad = 4, fg = Theme.lift(Theme.hue(e.layer), 0.45),
+				bgA = 0 })
 			c.AnchorPoint = Vector2.new(0.5, 0)
 			c.Position = UDim2.new(0.5, 0, 0, 56)
 		end
@@ -40173,10 +40657,20 @@ function Ready.new(parent: GuiObject): Ready
 		buy.Text = if nReady > 0 and nBuy > 0 then "· " .. nBuy .. " can buy" else ""
 		buy.Visible = nReady > 0 and nBuy > 0
 		hint.Visible = hinted and nReady > 0 and not compact
-		Theme.text(count, "toast")
+		Theme.text(count, "label")
 		Theme.text(pCount, "toast")
 		pCount.Text = if nReady > 0 then Rich.caps(nReady .. " ready") else Rich.caps(nBuy .. " can buy")
 		pSub.Text = if mode == "strip" then "Tap a gem to switch" else "Tap to list"
+		-- the tray's size (it holds a list, so no AutomaticSize): the gem row or the header, whichever is wider
+		local shown = math.min(#entries, MAX_GEMS)
+		local gemsW = shown * 96 + (if #entries > MAX_GEMS then 96 else 0)
+		local headW = 16 + 8 + count.TextBounds.X
+		if buy.Visible then headW += 8 + buy.TextBounds.X end
+		if hint.Visible then headW += 8 + hint.TextBounds.X end
+		tray.Size = UDim2.fromOffset(36 + math.max(gemsW, headW, 240), 12 + 22 + 8 + 82 + 10)
+		trayTicks.Position = tray.Position
+		trayTicks.Size = tray.Size
+		trayTicks.Visible = tray.Visible
 		self.changed:Fire()
 	end
 
@@ -40262,6 +40756,7 @@ function Ready.new(parent: GuiObject): Ready
 		r.tap:DisconnectAll()
 		r.hold:DisconnectAll()
 		tray:Destroy()
+		trayTicks:Destroy()
 		pill:Destroy()
 		banner:Destroy()
 	end
@@ -40277,7 +40772,7 @@ return Ready
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="88">
+          <Item class="ModuleScript" referent="89">
             <Properties>
               <string name="Name">UniverseTag</string>
               <string name="Source"><![CDATA[--!strict
@@ -40395,11 +40890,11 @@ return UniverseTag
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="89">
+        <Item class="Folder" referent="90">
           <Properties>
             <string name="Name">Input</string>
           </Properties>
-          <Item class="ModuleScript" referent="90">
+          <Item class="ModuleScript" referent="91">
             <Properties>
               <string name="Name">Hotkeys</string>
               <string name="Source"><![CDATA[--!strict
@@ -40503,7 +40998,7 @@ return Hotkeys
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="91">
+          <Item class="ModuleScript" referent="92">
             <Properties>
               <string name="Name">Input</string>
               <string name="Source"><![CDATA[--!strict
@@ -40606,7 +41101,7 @@ return Input
             </Properties>
           </Item>
         </Item>
-        <Item class="LocalScript" referent="92">
+        <Item class="LocalScript" referent="93">
           <Properties>
             <string name="Name">Main</string>
             <string name="Source"><![CDATA[--!strict
@@ -40624,11 +41119,11 @@ App.start()
 ]]></string>
           </Properties>
         </Item>
-        <Item class="Folder" referent="93">
+        <Item class="Folder" referent="94">
           <Properties>
             <string name="Name">Map</string>
           </Properties>
-          <Item class="ModuleScript" referent="94">
+          <Item class="ModuleScript" referent="95">
             <Properties>
               <string name="Name">Ambient</string>
               <string name="Source"><![CDATA[--!strict
@@ -41127,7 +41622,7 @@ return Ambient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="95">
+          <Item class="ModuleScript" referent="96">
             <Properties>
               <string name="Name">Fallback</string>
               <string name="Source"><![CDATA[--!strict
@@ -41351,7 +41846,7 @@ return Fallback
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="96">
+          <Item class="ModuleScript" referent="97">
             <Properties>
               <string name="Name">Fields</string>
               <string name="Source"><![CDATA[--!strict
@@ -41538,7 +42033,7 @@ return Fields
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="97">
+          <Item class="ModuleScript" referent="98">
             <Properties>
               <string name="Name">Links</string>
               <string name="Source"><![CDATA[--!strict
@@ -41866,7 +42361,7 @@ return Links
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="98">
+          <Item class="ModuleScript" referent="99">
             <Properties>
               <string name="Name">MapCamera</string>
               <string name="Source"><![CDATA[--!strict
@@ -42338,7 +42833,7 @@ return MapCamera
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="99">
+          <Item class="ModuleScript" referent="100">
             <Properties>
               <string name="Name">MapInput</string>
               <string name="Source"><![CDATA[--!strict
@@ -42782,7 +43277,7 @@ return MapInput
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="100">
+          <Item class="ModuleScript" referent="101">
             <Properties>
               <string name="Name">MapLogic</string>
               <string name="Source"><![CDATA[--!strict
@@ -43118,7 +43613,7 @@ return MapLogic
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="101">
+          <Item class="ModuleScript" referent="102">
             <Properties>
               <string name="Name">MapView</string>
               <string name="Source"><![CDATA[--!strict
@@ -44063,7 +44558,7 @@ return MapView
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="102">
+          <Item class="ModuleScript" referent="103">
             <Properties>
               <string name="Name">Markers</string>
               <string name="Source"><![CDATA[--!strict
@@ -44288,7 +44783,7 @@ return Markers
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="103">
+          <Item class="ModuleScript" referent="104">
             <Properties>
               <string name="Name">NodeWidget</string>
               <string name="Source"><![CDATA[--!strict
@@ -44890,7 +45385,7 @@ return NodeWidget
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="104">
+          <Item class="ModuleScript" referent="105">
             <Properties>
               <string name="Name">Nodes</string>
               <string name="Source"><![CDATA[--!strict
@@ -45309,7 +45804,7 @@ return Nodes
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="105">
+          <Item class="ModuleScript" referent="106">
             <Properties>
               <string name="Name">Plates</string>
               <string name="Source"><![CDATA[--!strict
@@ -45358,7 +45853,6 @@ export type Plates = {
 
 local Plates = {}
 
-local LOCKED_STROKE = Color3.fromHex("4e4763")
 local READY = Theme.C.ready
 
 type Plate = {
@@ -45412,13 +45906,13 @@ function Plates.new(view: MapView.MapView, nodes: Nodes.Nodes): Plates
 		f.AnchorPoint = Vector2.new(0.5, 0)
 		f.AutomaticSize = Enum.AutomaticSize.XY
 		f.Size = UDim2.fromOffset(0, 0)
-		f.BackgroundColor3 = Color3.new(1, 1, 1)
-		f.BackgroundTransparency = 0.05
 		f.Visible = false
-		Kit.corner(f, UDim.new(0, 10))
-		Kit.grad(f, { Theme.C.panel2, Theme.C.deep }, 90, nil, "Back")
-		local st = Kit.stroke(f, 1.5, Color3.new(1, 1, 1), 1, "Rim")
-		local sg = Kit.grad(st, { Theme.lift(hue, 0.25) }, 90, nil, "RimGrad")
+		-- Sleek: a near-black slab, a white hairline, upright tracked caps and the value in the layer hue
+		f.BackgroundColor3 = Color3.fromHex("06090f")
+		f.BackgroundTransparency = 0.2
+		local st = Kit.stroke(f, 1, Color3.new(1, 1, 1), 0.12, "Rim")
+		st.LineJoinMode = Enum.LineJoinMode.Miter
+		local sg = Kit.grad(st, { Color3.new(1, 1, 1) }, 90, { { 0, 0.2 }, { 1, 0.1 } }, "RimGrad")
 		local list = Kit.list(f, "y", 1, Enum.HorizontalAlignment.Center)
 		local _ = list
 		local label = Kit.label(f, "Label", "plate", "", Color3.new(1, 1, 1))
@@ -45427,8 +45921,8 @@ function Plates.new(view: MapView.MapView, nodes: Nodes.Nodes): Plates
 		label.Size = UDim2.fromOffset(0, 0)
 		label.RichText = true
 		label.TextXAlignment = Enum.TextXAlignment.Center
-		local lg = Kit.grad(label, { Color3.new(1, 1, 1), Theme.lift(hue, 0.45) }, 90, nil, "Fill")
-		Kit.textStroke(label, 1.5, 0.9)
+		local lg = Kit.grad(label, { Color3.new(1, 1, 1) }, 90, nil, "Fill")
+		Kit.textStroke(label, 0)
 		local over = Kit.child(label, "Overhang", "UIPadding") :: UIPadding
 		over.PaddingRight = UDim.new(0, math.ceil(0.1 * label.TextSize))
 
@@ -45441,7 +45935,7 @@ function Plates.new(view: MapView.MapView, nodes: Nodes.Nodes): Plates
 		lock.LayoutOrder = 1
 		lock.Size = UDim2.fromOffset(12, 12)
 		lock.Visible = false
-		local amount = Kit.label(row, "Amount", "plateNum", "", Theme.lift(hue, 0.55))
+		local amount = Kit.label(row, "Amount", "plateNum", "", Theme.lift(hue, 0.45))
 		amount.LayoutOrder = 2
 		amount.AutomaticSize = Enum.AutomaticSize.XY
 		amount.Size = UDim2.fromOffset(0, 0)
@@ -45526,24 +46020,18 @@ function Plates.new(view: MapView.MapView, nodes: Nodes.Nodes): Plates
 			p.amount.Text = w.amount
 			p.lock.Visible = w.locked
 			local hue = Theme.hue(layer)
+			-- Sleek: white hairline plates; a READY node's plate takes the hue on its hairline
 			if w.locked then
 				p.labelGrad.Color = ColorSequence.new(Theme.C.lockedTitle)
-				p.amount.TextColor3 = Theme.C.soft
-				p.strokeGrad.Color = ColorSequence.new(LOCKED_STROKE)
+				p.amount.TextColor3 = Theme.C.lockedTitle
+				p.strokeGrad.Color = ColorSequence.new(Color3.new(1, 1, 1))
 			else
-				p.labelGrad.Color = ColorSequence.new(Color3.new(1, 1, 1), Theme.lift(hue, 0.45))
-				p.amount.TextColor3 = Theme.lift(hue, 0.55)
-				if w.ready then
-					p.strokeGrad.Color = ColorSequence.new({
-						ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
-						ColorSequenceKeypoint.new(0.5, Theme.lift(hue, 0.4)),
-						ColorSequenceKeypoint.new(1, Color3.new(1, 1, 1)),
-					})
-				else
-					p.strokeGrad.Color = ColorSequence.new(Theme.lift(hue, 0.25))
-				end
+				p.labelGrad.Color = ColorSequence.new(Color3.new(1, 1, 1))
+				p.amount.TextColor3 = Theme.lift(hue, 0.45)
+				p.strokeGrad.Color = ColorSequence.new(if w.ready then Theme.lift(hue, 0.3) else Color3.new(1, 1, 1))
 			end
-			p.stroke.Thickness = if w.ready then 2 else 1.5
+			p.stroke.Transparency = if w.ready then 0.35 else 0.12
+			p.stroke.Thickness = 1
 			dirty = true
 		end
 	end
@@ -45747,11 +46235,11 @@ return Plates
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="106">
+        <Item class="Folder" referent="107">
           <Properties>
             <string name="Name">Overlay</string>
           </Properties>
-          <Item class="ModuleScript" referent="107">
+          <Item class="ModuleScript" referent="108">
             <Properties>
               <string name="Name">Detail</string>
               <string name="Source"><![CDATA[--!strict
@@ -45823,7 +46311,7 @@ function Detail.new(root: GuiObject): Detail
 	sheet.BackgroundTransparency = 0
 	sheet.Active = true
 	sheet.Visible = false
-	Kit.corner(sheet, UDim.new(0, 20))
+	Kit.corner(sheet, UDim.new(0, 0)) -- Sleek: square
 	Kit.grad(sheet, { Theme.C.panel2, Theme.C.panel }, 90, nil, "Back")
 	local rim = Kit.stroke(sheet, 2, Theme.C.strokeHi, 1, "Rim")
 	Kit.list(sheet, "y", 12, Enum.HorizontalAlignment.Left)
@@ -46054,7 +46542,7 @@ return Detail
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="108">
+          <Item class="ModuleScript" referent="109">
             <Properties>
               <string name="Name">Modals</string>
               <string name="Source"><![CDATA[--!strict
@@ -46130,7 +46618,7 @@ function Modals.new(root: GuiObject): Modals
 	card.BackgroundTransparency = 0
 	card.Active = true
 	card.Visible = false
-	Kit.corner(card, UDim.new(0, 18))
+	Kit.corner(card, UDim.new(0, 0)) -- Sleek: square
 	Kit.grad(card, { Theme.C.panel2, Theme.C.panel }, 90, nil, "Back")
 	local rim = Kit.stroke(card, 2, Theme.C.strokeHi, 1, "Rim")
 	Kit.list(card, "y", 14, Enum.HorizontalAlignment.Left)
@@ -46299,7 +46787,7 @@ function Modals.new(root: GuiObject): Modals
 		box.Size = UDim2.fromScale(1, 0)
 		box.BackgroundColor3 = Theme.C.deep
 		box.BackgroundTransparency = 0
-		Kit.corner(box, UDim.new(0, 12))
+		Kit.corner(box, UDim.new(0, 0)) -- Sleek: square
 		Kit.stroke(box, 1.5, Theme.C.stroke, 1, "Rim")
 		Kit.pad(box, 12, 14, 12, 14)
 		Kit.list(box, "y", 6)
@@ -46411,7 +46899,7 @@ return Modals
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="109">
+          <Item class="ModuleScript" referent="110">
             <Properties>
               <string name="Name">Overlay</string>
               <string name="Source"><![CDATA[--!strict
@@ -46574,7 +47062,7 @@ return Overlay
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="110">
+          <Item class="ModuleScript" referent="111">
             <Properties>
               <string name="Name">Peek</string>
               <string name="Source"><![CDATA[--!strict
@@ -46665,7 +47153,7 @@ function Peek.new(root: GuiObject): Peek
 	card.BackgroundColor3 = Color3.new(1, 1, 1)
 	card.BackgroundTransparency = 0.02
 	card.Active = true
-	Kit.corner(card, UDim.new(0, 16))
+	Kit.corner(card, UDim.new(0, 0)) -- Sleek: square
 	Kit.grad(card, { Theme.C.panel2, Theme.C.panel }, 90, nil, "Back")
 	local rim = Kit.stroke(card, 2, Theme.C.strokeHi, 1, "Rim")
 	Kit.pad(card, 16, 18, 16, 18)
@@ -46891,7 +47379,7 @@ return Peek
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="111">
+          <Item class="ModuleScript" referent="112">
             <Properties>
               <string name="Name">Screens</string>
               <string name="Source"><![CDATA[--!strict
@@ -46980,7 +47468,7 @@ function Screens.new(root: GuiObject): Screens
 		c.Size = UDim2.fromOffset(math.min(w, Layout.canvas.X - 32), 0)
 		c.BackgroundColor3 = Color3.new(1, 1, 1)
 		c.BackgroundTransparency = 0
-		Kit.corner(c, UDim.new(0, 18))
+		Kit.corner(c, UDim.new(0, 0)) -- Sleek: square
 		Kit.grad(c, { Theme.C.panel2, Theme.C.panel }, 90, nil, "Back")
 		Kit.stroke(c, 2, hue, 1, "Rim")
 		Kit.pad(c, 24, 28, 24, 28)
@@ -47107,7 +47595,7 @@ function Screens.new(root: GuiObject): Screens
 		band.Size = UDim2.new(0.8, 0, 0, 0)
 		band.BackgroundColor3 = Color3.new(0, 0, 0)
 		band.BackgroundTransparency = 0.5
-		Kit.corner(band, UDim.new(0, 12))
+		Kit.corner(band, UDim.new(0, 0)) -- Sleek: square
 		Kit.pad(band, 12, 18, 12, 18)
 		local win = Kit.label(band, "Win", "body", "", Theme.C.text)
 		win.AutomaticSize = Enum.AutomaticSize.Y
@@ -47217,7 +47705,7 @@ return Screens
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="112">
+          <Item class="ModuleScript" referent="113">
             <Properties>
               <string name="Name">ToastModel</string>
               <string name="Source"><![CDATA[--!strict
@@ -47382,7 +47870,7 @@ return ToastModel
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="113">
+          <Item class="ModuleScript" referent="114">
             <Properties>
               <string name="Name">Toasts</string>
               <string name="Source"><![CDATA[--!strict
@@ -47406,6 +47894,7 @@ local Theme = require(Core:WaitForChild("Theme"))
 local Layout = require(Core:WaitForChild("Layout"))
 local Motion = require(Core:WaitForChild("Motion"))
 local Rich = require(Core:WaitForChild("Rich"))
+local Sleek = require(Core:WaitForChild("Sleek"))
 local Kit = require(script.Parent.Parent:WaitForChild("Hud"):WaitForChild("Kit"))
 local ToastModel = require(script.Parent:WaitForChild("ToastModel"))
 
@@ -47431,22 +47920,18 @@ local KIND: { [string]: { color: Color3, glyph: string } } = {
 
 -- the HUD glass (R10) at alpha .88
 local function glass(f: Frame)
-	f.BackgroundColor3 = Theme.C.glass
-	f.BackgroundTransparency = 0.12
-	f.BorderSizePixel = 0
-	Kit.stroke(f, 1, Color3.new(1, 1, 1), 0.14, "GlassRim")
+	Sleek.plate(f, { alpha = 0.88, line = 0.86, strokeName = "GlassRim" })
 end
 
 local function iconDisc(parent: Instance, name: string, kind: string, d: number): Frame
 	local spec = KIND[kind] or KIND.other
+	-- Sleek: the kind's glyph in its colour, no disc
 	local disc = Kit.frame(parent, name, 3)
 	disc.Size = UDim2.fromOffset(d, d)
-	Kit.gem(disc, spec.color, { hi = 0.6, lo = 0.45 })
-	Kit.stroke(disc, 2, Theme.lift(spec.color, 0.5), 0.9, "Rim")
-	local g = Kit.glyph(disc, "Icon", spec.glyph, Color3.new(1, 1, 1), Theme.shade(spec.color, 0.6))
+	local g = Kit.glyph(disc, "Icon", spec.glyph, spec.color, Sleek.C.top)
 	g.AnchorPoint = Vector2.new(0.5, 0.5)
 	g.Position = UDim2.fromScale(0.5, 0.5)
-	g.Size = UDim2.fromScale(0.5, 0.5)
+	g.Size = UDim2.fromScale(0.62, 0.62)
 	g.ZIndex = 4
 	return disc
 end
@@ -47471,7 +47956,7 @@ function Toasts.new(root: GuiObject): Toasts
 	more.AnchorPoint = Vector2.new(1, 0)
 	more.AutomaticSize = Enum.AutomaticSize.X
 	glass(more)
-	Kit.corner(more)
+
 	local mc = Kit.frame(more, "Content")
 	mc.AutomaticSize = Enum.AutomaticSize.X
 	mc.Size = UDim2.fromScale(0, 1)
@@ -47491,10 +47976,9 @@ function Toasts.new(root: GuiObject): Toasts
 	local list = Kit.frame(root, "NotifyList", 22)
 	list.AnchorPoint = Vector2.new(1, 0)
 	list.AutomaticSize = Enum.AutomaticSize.Y
-	list.BackgroundColor3 = Theme.C.panel
+	Sleek.plate(list, { alpha = 0.94, line = 0.86 })
 	list.BackgroundTransparency = 0.04
-	Kit.corner(list, UDim.new(0, 14))
-	Kit.stroke(list, 1.5, Theme.C.strokeHi, 1, "Rim")
+
 	Kit.pad(list, 12, 12, 12, 12)
 	Kit.list(list, "y", 6, Enum.HorizontalAlignment.Left)
 	list.Visible = false
@@ -47560,15 +48044,17 @@ function Toasts.new(root: GuiObject): Toasts
 		f.AnchorPoint = Vector2.new(1, 0)
 		f.Size = UDim2.fromOffset(w, h)
 		f.Position = UDim2.fromOffset(0, 0)
-		f.BackgroundColor3 = Color3.new(1, 1, 1)
-		f.BackgroundTransparency = 0.02
-		Kit.corner(f, UDim.new(0, 14))
-		Kit.grad(f, { Theme.shade(k, 0.55), Theme.C.panel }, 0, nil, "Back")
-		Kit.stroke(f, 2, k, 1, "Rim")
-		local disc = iconDisc(f, "Icon", t.kind, if compact then 32 else 44)
+		-- Sleek: a dark slab, a 3 du kind-colour bar on the left, corner ticks, the life line along the bottom
+		Sleek.plate(f, { alpha = 0.9, line = 0.86 })
+		Sleek.ticks(f, { len = 10, th = 2, out = 1, color = Color3.new(1, 1, 1), alpha = 0.8, z = 6 })
+		local side = Kit.frame(f, "Side", 4)
+		side.Size = UDim2.new(0, 3, 1, 0)
+		side.BackgroundColor3 = k
+		side.BackgroundTransparency = 0
+		local disc = iconDisc(f, "Icon", t.kind, if compact then 26 else 30)
 		disc.AnchorPoint = Vector2.new(0, 0.5)
-		disc.Position = UDim2.new(0, 14, 0.5, 0)
-		local x0 = 14 + (if compact then 32 else 44) + 12
+		disc.Position = UDim2.new(0, 18, 0.5, 0)
+		local x0 = 18 + (if compact then 26 else 30) + 14
 		local top = Kit.frame(f, "Top", 3)
 		top.Position = UDim2.fromOffset(x0, if compact then 8 else 12)
 		top.Size = UDim2.new(1, -x0 - 12, 0, if compact then 20 else 24)
@@ -47578,27 +48064,27 @@ function Toasts.new(root: GuiObject): Toasts
 		title.AutomaticSize = Enum.AutomaticSize.X
 		title.Size = UDim2.fromScale(0, 1)
 		title.TextTruncate = Enum.TextTruncate.AtEnd
-		Kit.textStroke(title, 1.8, 0.85)
+		title.FontFace = Font.fromName("Montserrat", Enum.FontWeight.ExtraBold, Enum.FontStyle.Italic)
+		Kit.textStroke(title, 0)
 		local over = Kit.child(title, "Overhang", "UIPadding") :: UIPadding
 		over.PaddingRight = UDim.new(0, 2)
-		local chip, cl = Kit.chip(top, "Count", "badge", "", { h = if compact then 20 else 22, pad = 7, fg = Color3.new(1, 1, 1),
-			bg = Theme.C.deep, bgA = 1, line = k, lineA = 1 })
+		local chip, cl = Kit.chip(top, "Count", "badge", "", { h = if compact then 18 else 20, pad = 6, fg = Theme.lift(k, 0.4),
+			bgA = 0, line = k, lineA = 0.9 })
 		chip.LayoutOrder = 2
 		chip.Visible = false
 		cl.RichText = true
-		local sub = Kit.label(f, "Sub", "small", t.sub, Theme.C.text)
-		sub.TextTransparency = 0.08
+		local sub = Kit.label(f, "Sub", "small", t.sub, Sleek.C.soft)
+		sub.TextTransparency = 0
 		sub.Position = UDim2.fromOffset(x0, if compact then 30 else 40)
 		sub.Size = UDim2.new(1, -x0 - 12, 0, 18)
 		sub.TextXAlignment = Enum.TextXAlignment.Left
 		sub.TextTruncate = Enum.TextTruncate.AtEnd
 		local bar = Kit.frame(f, "Life", 4)
 		bar.AnchorPoint = Vector2.new(0, 1)
-		bar.Position = UDim2.new(0, 14, 1, -1)
-		bar.Size = UDim2.new(1, -28, 0, 3)
+		bar.Position = UDim2.new(0, 3, 1, 0)
+		bar.Size = UDim2.new(1, -3, 0, 2)
 		bar.BackgroundColor3 = k
-		bar.BackgroundTransparency = 0.1
-		Kit.corner(bar)
+		bar.BackgroundTransparency = 0.2
 		pcall(function() f.Interactable = false end)
 		return f
 	end
@@ -47617,9 +48103,9 @@ function Toasts.new(root: GuiObject): Toasts
 		if sub then sub.Text = t.sub end
 		local bar = v:FindFirstChild("Life") :: Frame?
 		if bar then
-			bar.Size = UDim2.new(1, -28, 0, 3)
+			bar.Size = UDim2.new(1, -3, 0, 2)
 			local life = if Motion.snapshot() then 0 else t.life
-			Motion.tween(bar, TweenInfo.new(life, Enum.EasingStyle.Linear), { Size = UDim2.new(0, 0, 0, 3) }, "toastLife" .. t.id, true)
+			Motion.tween(bar, TweenInfo.new(life, Enum.EasingStyle.Linear), { Size = UDim2.new(0, 0, 0, 2) }, "toastLife" .. t.id, true)
 		end
 	end
 
@@ -47692,7 +48178,7 @@ function Toasts.new(root: GuiObject): Toasts
 			row.Size = UDim2.new(1, 0, 0, 56)
 			row.BackgroundTransparency = 0
 			row.BackgroundColor3 = Theme.C.panel2
-			Kit.corner(row, UDim.new(0, 10))
+			Kit.corner(row, UDim.new(0, 0)) -- Sleek: square
 			local disc = iconDisc(row, "Icon", t.kind, 32)
 			disc.AnchorPoint = Vector2.new(0, 0.5)
 			disc.Position = UDim2.new(0, 10, 0.5, 0)
@@ -47762,7 +48248,7 @@ return Toasts
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="114">
+          <Item class="ModuleScript" referent="115">
             <Properties>
               <string name="Name">Tooltip</string>
               <string name="Source"><![CDATA[--!strict
@@ -47816,7 +48302,7 @@ function Tooltip.new(root: GuiObject): Tooltip
 	f.BackgroundColor3 = Color3.new(1, 1, 1)
 	f.BackgroundTransparency = 0.02
 	f.Visible = false
-	Kit.corner(f, UDim.new(0, 14))
+	Kit.corner(f, UDim.new(0, 0)) -- Sleek: square
 	Kit.grad(f, { Theme.C.panel3, Theme.C.panel }, 90, nil, "Back")
 	local rim = Kit.stroke(f, 1.5, Theme.C.strokeHi, 1, "Rim")
 	Kit.pad(f, 14, 16, 14, 16)
@@ -47996,11 +48482,11 @@ return Tooltip
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="115">
+        <Item class="Folder" referent="116">
           <Properties>
             <string name="Name">Panel</string>
           </Properties>
-          <Item class="ModuleScript" referent="116">
+          <Item class="ModuleScript" referent="117">
             <Properties>
               <string name="Name">Hero</string>
               <string name="Source"><![CDATA[--!strict
@@ -48031,6 +48517,7 @@ local Theme = require(Core:WaitForChild("Theme"))
 local Recipes = require(Core:WaitForChild("Recipes"))
 local Motion = require(Core:WaitForChild("Motion"))
 local Rich = require(Core:WaitForChild("Rich"))
+local Sleek = require(Core:WaitForChild("Sleek"))
 local Layout = require(Core:WaitForChild("Layout"))
 local Prefs = require(Core:WaitForChild("Prefs"))
 local Audio = require(Core:WaitForChild("Audio"))
@@ -48145,13 +48632,23 @@ function Hero.draw(self: Hero, store: any, ctx: any)
 	-- the resource block
 	local res = Common.get(f, "Res", "Frame") :: Frame
 	res.Active = false
-	Common.list(res, false, if compact then 2 else 4)
+	Common.list(res, false, if compact then 2 else 6)
 	if compact then
 		res.Position = UDim2.fromOffset(0, 0)
 		res.Size = UDim2.new(1, 0, 0, 0)
+		Common.drop(f, "Spine")
 	else
-		res.Position = UDim2.fromOffset(0, 0)
-		res.Size = UDim2.new(1, if pb then -440 else 0, 0, 0)
+		res.Position = UDim2.fromOffset(20, 0)
+		res.Size = UDim2.new(1, if pb then -460 else -20, 0, 0)
+		local spine = Common.get(f, "Spine", "Frame") :: Frame
+		spine.Position = UDim2.fromOffset(0, 4)
+		spine.Size = UDim2.fromOffset(2, 112)
+		spine.BackgroundColor3 = hue
+		spine.BackgroundTransparency = 0
+		spine.Visible = md ~= nil
+		local sg = Common.get(spine, "Fade", "UIGradient") :: UIGradient
+		sg.Rotation = 90
+		sg.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0.9) })
 	end
 	res.AutomaticSize = Enum.AutomaticSize.Y
 	res.Visible = md ~= nil or (compact and rd ~= nil)
@@ -48171,12 +48668,11 @@ function Hero.draw(self: Hero, store: any, ctx: any)
 	local sig = amountText .. "|" .. Theme.toHex(hue) .. "|" .. tostring(compact)
 	if amount:GetAttribute("Sig") ~= sig then
 		amount:SetAttribute("Sig", sig)
-		Recipes.number(amount, { text = amountText, size = steps[1], from = WHITE, mid = Theme.lift(hue, 0.5), to = hue,
-			stroke = if compact then 5 else 7, shadow = if compact then 3 else 5, role = "hero" })
+		Recipes.number(amount, { text = amountText, size = steps[1], from = WHITE, to = WHITE, stroke = 0, shadow = 0, role = "hero" })
 		Rich.fit(amount, steps, if compact then 216 else 560)
 	end
 	-- the round glow blob behind the amount (never a square: Common.blob)
-	local blob = if md and not compact then Common.blob(f, "AmountGlow", hue, 0.35) else nil
+	local blob = if md and not compact then Common.blob(f, "AmountGlow", hue, 0.16) else nil
 	if blob then
 		blob.ZIndex = 0
 		blob.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -48200,8 +48696,8 @@ function Hero.draw(self: Hero, store: any, ctx: any)
 	local rsig = name .. "|" .. tostring(rsize) .. "|" .. Theme.toHex(hue)
 	if resName:GetAttribute("Sig") ~= rsig then
 		resName:SetAttribute("Sig", rsig)
-		Recipes.title(resName, { text = name, role = "resource", size = rsize, from = Theme.lift(hue, 0.6), to = Theme.lift(hue, 0.6),
-			stroke = if compact then 3 else 4, shadow = 2 })
+		Recipes.title(resName, { text = name, role = "resource", size = if compact then rsize - 2 else rsize - 2, from = Theme.lift(hue, 0.55),
+			to = Theme.lift(hue, 0.55), stroke = 0, shadow = 0 })
 	end
 	local eff = Common.label(res, "Eff", "body", C.soft, { order = 4 })
 	local effText = if md and not compact then Common.html(md.eff, "body", ctx.layer) else ""
@@ -48245,8 +48741,16 @@ function Hero.draw(self: Hero, store: any, ctx: any)
 		local row = rows[i]
 		if row then
 			local label = if row[1] ~= "" then row[1] else "HAVE"
-			local text = Common.caps(label, C.soft) .. "   " .. Common.num(if compact then Rich.short(row[2]) else row[2], "number", C.text)
-			local chip = Common.chip(stats, "Stat" .. i, text, { rich = true, bg = C.panel2, bgT = 0, h = if compact then 32 else 34 })
+			local tone = if label == "PASSIVE" then Sleek.C.goodHi else C.text
+			local text = Common.caps(label, Sleek.C.soft) .. "      " .. Common.num(if compact then Rich.short(row[2]) else row[2], "number", tone)
+			local chip = Common.chip(stats, "Stat" .. i, text, { rich = true, bg = WHITE, bgT = 0.97, h = if compact then 32 else 34,
+				stroke = WHITE })
+			Common.drop(chip, "Corner")
+			local b = chip:FindFirstChild("Border") :: UIStroke?
+			if b then
+				b.Transparency = 0.89
+				b.LineJoinMode = Enum.LineJoinMode.Miter
+			end
 			chip.LayoutOrder = i
 			chip.TextXAlignment = if compact then Enum.TextXAlignment.Left else Enum.TextXAlignment.Center
 			if compact then
@@ -48271,7 +48775,7 @@ function Hero.draw(self: Hero, store: any, ctx: any)
 	local cta = f:FindFirstChild("Cta") :: GuiObject?
 	if not compact then
 		local ctaH = if cta then cta.Size.Y.Offset else 0
-		stats.Position = UDim2.new(1, 0, 0, if cta then ctaH + 10 else 0)
+		stats.Position = UDim2.new(1, 0, 0, if cta then ctaH + 14 else 0)
 	end
 
 	-- the signature's hero idea
@@ -48306,14 +48810,29 @@ function Hero.drawCta(self: Hero, pb: any, ctx: any, compact: boolean)
 		cta.Position = UDim2.new(1, 0, 0, 0)
 	end
 	cta.Size = UDim2.fromOffset(w, h)
+	-- Sleek: the one solid light surface of the panel (ink type), corner ticks just outside; locked is a dark plate
+	for _, n in { "Corner", "Rim", "Bevel" } do Common.drop(cta, n) end
+	local ink = Sleek.C.ink
 	if can then
-		Recipes.bevel(cta, { radius = 16, top = Theme.lift(hue, 0.15), mid = hue, bottom = Theme.shade(hue, 0.55), stroke = 2,
-			strokeFrom = Theme.lift(hue, 0.5), strokeTo = hue, sprite = "button" })
-		Common.glow(cta, hue, 0.6, 20)
+		cta.BackgroundColor3 = WHITE
+		cta.BackgroundTransparency = 0
+		local g = Common.get(cta, "Fill", "UIGradient") :: UIGradient
+		g.Rotation = 90
+		g.Color = ColorSequence.new({ ColorSequenceKeypoint.new(0, Theme.lift(hue, 0.3)), ColorSequenceKeypoint.new(0.6, hue),
+			ColorSequenceKeypoint.new(1, Theme.shade(hue, 0.92)) })
+		g.Transparency = NumberSequence.new(0)
+		local edge = Common.get(cta, "Edge", "Frame") :: Frame
+		edge.Size = UDim2.new(1, 0, 0, 1)
+		edge.BackgroundColor3 = WHITE
+		edge.BackgroundTransparency = 0.3
+		edge.ZIndex = 9
+		Sleek.ticks(cta, { len = 12, th = 2, out = 6, color = Theme.lift(hue, 0.55), alpha = 1, z = 9 })
+		Common.glow(cta, hue, 0.3, 26)
 		if self.shine == nil then self.shine = Recipes.shine(cta, { every = 2.8 }) end
 	else
-		Recipes.bevel(cta, { radius = 16, top = C.panel3, mid = C.panel2, bottom = C.deep, stroke = 2, strokeFrom = C.strokeHi,
-			strokeTo = C.stroke, sprite = "button" })
+		Sleek.plate(cta, { alpha = 0.9, line = 0.8 })
+		Common.drop(cta, "Edge")
+		Sleek.ticks(cta, { len = 10, th = 2, out = 6, color = WHITE, alpha = 0.35, z = 9 })
 		Common.glow(cta, nil)
 		if self.shine then
 			self.shine:stop()
@@ -48324,43 +48843,44 @@ function Hero.drawCta(self: Hero, pb: any, ctx: any, compact: boolean)
 	-- the word (display: white, outline, hard shadow), step-fit to keep 12 du side padding
 	local word = Common.get(cta, "Word", "TextLabel") :: TextLabel
 	word.ZIndex = 10
-	word.AnchorPoint = Vector2.new(0.5, 0)
-	word.Position = UDim2.new(0.5, 0, 0, if compact then 10 else 12)
-	word.Size = UDim2.new(1, -24, 0, if compact then 24 else 32)
-	word.TextXAlignment = Enum.TextXAlignment.Center
+	word.AnchorPoint = Vector2.new(0, 0)
+	word.Position = UDim2.new(0, if compact then 14 else 28, 0, if compact then 10 else 18)
+	word.Size = UDim2.new(1, if compact then -28 else -120, 0, if compact then 24 else 32)
+	word.TextXAlignment = Enum.TextXAlignment.Left
 	word.TextYAlignment = Enum.TextYAlignment.Center
 	word.TextWrapped = false
 	local text = Signatures.cta(ctx.layer)
-	local sizes = if compact then { 20, 18, 16 } else { 26, 22 }
-	local wsig = text .. "|" .. tostring(compact) .. "|" .. tostring(can)
+	local sizes = if compact then { 20, 18, 16 } else { 30, 26, 22 }
+	local wsig = text .. "|" .. tostring(compact) .. "|" .. tostring(can) .. "|" .. Theme.toHex(hue)
 	if word:GetAttribute("Sig") ~= wsig then
 		word:SetAttribute("Sig", wsig)
-		Recipes.title(word, { text = text, role = "cta", size = sizes[1], stroke = if compact then 4 else 6, shadow = 3 })
-		Rich.fit(word, sizes, w - 24)
+		Recipes.title(word, { text = text, role = "cta", size = sizes[1], stroke = 0, shadow = 0 })
+		Rich.fit(word, sizes, w - (if compact then 28 else 120))
 	end
-	-- the value well: +gain, or "need X res" when locked
+	local fillText = word:FindFirstChild("Fill") :: TextLabel?
+	if fillText then fillText.TextColor3 = if can then ink else Sleek.C.soft end
+	-- the value line: +gain in ink under the word, or "need X res" when locked
 	local well = Common.get(cta, "Well", "TextLabel") :: TextLabel
 	well.ZIndex = 10
-	well.AnchorPoint = Vector2.new(0.5, 1)
+	well.AnchorPoint = Vector2.new(0, 1)
 	well.AutomaticSize = Enum.AutomaticSize.X
 	well.TextWrapped = false
-	well.TextXAlignment = Enum.TextXAlignment.Center
+	well.TextXAlignment = Enum.TextXAlignment.Left
 	well.TextYAlignment = Enum.TextYAlignment.Center
-	well.BackgroundColor3 = C.black
-	well.BackgroundTransparency = 0.45
-	Common.corner(well, 8)
-	Common.pad(well, 0, 10, 0, 10)
+	well.BackgroundTransparency = 1
+	Common.drop(well, "Corner")
+	Common.pad(well, 0, 0, 0, 0)
 	local unit = Signatures.unit(pb.res)
 	local barShown = pr ~= nil and (static or not can)
 	if can then
-		Common.text(well, "ctaSub", C.text)
-		well.Size = UDim2.fromOffset(0, 26)
-		well.Position = UDim2.new(0.5, 0, 1, if barShown then -38 else -12)
-		Common.setText(well, Common.num("+" .. (Common.str(pb.gain) or "0"), "ctaSub", C.text, unit, true))
+		Common.text(well, "ctaSub", ink)
+		well.Size = UDim2.fromOffset(0, 22)
+		well.Position = UDim2.new(0, if compact then 14 else 28, 1, if barShown then -34 else -16)
+		Common.setText(well, Common.num("+" .. (Common.str(pb.gain) or "0"), "ctaSub", ink, unit, true))
 	else
-		Common.text(well, "small", C.text)
-		well.Size = UDim2.fromOffset(0, 26)
-		well.Position = UDim2.new(0.5, 0, 1, -10)
+		Common.text(well, "small", Sleek.C.soft)
+		well.Size = UDim2.fromOffset(0, 22)
+		well.Position = UDim2.new(0, if compact then 14 else 28, 1, -12)
 		local need = Common.str(pb.next)
 		local bres = Common.plain(Common.str(pb.bres) or "")
 		if need then
@@ -48372,16 +48892,16 @@ function Hero.drawCta(self: Hero, pb: any, ctx: any, compact: boolean)
 	-- the pr bar + %
 	if barShown then
 		local p = pr :: number
-		local bar = Common.bar(cta, "Bar", p, if can then WHITE else Theme.lift(hue, 0.2), 6)
+		local bar = Common.bar(cta, "Bar", p, if can then ink else hue, 2)
 		bar.ZIndex = 10
 		bar.AnchorPoint = Vector2.new(0, 0)
-		bar.Position = UDim2.new(0, 20, 0, if compact then 40 else 52)
-		bar.Size = UDim2.new(1, -96, 0, 6)
+		bar.Position = UDim2.new(0, if compact then 14 else 28, 0, if compact then 42 else 58)
+		bar.Size = UDim2.new(1, if compact then -84 else -112, 0, 2)
 		local pct = Common.get(cta, "Pct", "TextLabel") :: TextLabel
 		pct.ZIndex = 10
-		Common.text(pct, "number", C.text)
+		Common.text(pct, "number", if can then ink else C.text)
 		pct.AnchorPoint = Vector2.new(1, 0)
-		pct.Position = UDim2.new(1, -18, 0, if compact then 33 else 45)
+		pct.Position = UDim2.new(1, if compact then -14 else -28, 0, if compact then 33 else 49)
 		pct.Size = UDim2.fromOffset(60, 20)
 		pct.TextXAlignment = Enum.TextXAlignment.Right
 		pct.TextYAlignment = Enum.TextYAlignment.Center
@@ -48395,20 +48915,35 @@ function Hero.drawCta(self: Hero, pb: any, ctx: any, compact: boolean)
 	if hk and keyboard() then
 		local key = Common.get(cta, "Key", "TextLabel") :: TextLabel
 		key.ZIndex = 11
-		Common.text(key, "label", C.ink)
-		key.AnchorPoint = Vector2.new(1, 0)
-		key.Position = UDim2.new(1, -10, 0, 10)
+		Common.text(key, "label", if can then ink else C.text)
+		key.AnchorPoint = Vector2.new(1, 0.5)
+		key.Position = UDim2.new(1, -52, 0.5, if barShown then -14 else 0)
 		key.AutomaticSize = Enum.AutomaticSize.X
-		key.Size = UDim2.fromOffset(0, 26)
-		key.BackgroundColor3 = Color3.fromRGB(236, 233, 248)
-		key.BackgroundTransparency = 0
+		key.Size = UDim2.fromOffset(30, 30)
+		key.BackgroundTransparency = 1
 		key.TextXAlignment = Enum.TextXAlignment.Center
 		key.TextYAlignment = Enum.TextYAlignment.Center
-		Common.corner(key, 6)
-		Common.pad(key, 0, 7, 0, 7)
+		Common.drop(key, "Corner")
+		Common.stroke(key, 1.5, if can then ink else WHITE, if can then 0 else 0.6).LineJoinMode = Enum.LineJoinMode.Miter
+		Common.pad(key, 0, 8, 0, 8)
+		local chev = Common.get(cta, "Chev", "Frame") :: Frame
+		chev.AnchorPoint = Vector2.new(0.5, 0.5)
+		chev.Position = UDim2.new(1, -30, 0.5, if barShown then -14 else 0)
+		chev.Size = UDim2.fromOffset(9, 9)
+		chev.Rotation = 45
+		chev.ZIndex = 11
+		for i, spec in { { UDim2.fromScale(0, 0), UDim2.new(1, 0, 0, 2) }, { UDim2.new(1, -2, 0, 0), UDim2.new(0, 2, 1, 0) } } do
+			local seg = Common.get(chev, "S" .. i, "Frame") :: Frame
+			seg.Position = spec[1]
+			seg.Size = spec[2]
+			seg.BackgroundColor3 = if can then ink else WHITE
+			seg.BackgroundTransparency = if can then 0 else 0.4
+			seg.ZIndex = 11
+		end
 		Common.setText(key, Common.esc(hk))
 	else
 		Common.drop(cta, "Key")
+		Common.drop(cta, "Chev")
 	end
 	cta:SetAttribute("State", if can then "can" else "locked")
 	if cta:GetAttribute("Wired") ~= true then
@@ -48538,7 +49073,7 @@ return Hero
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="117">
+          <Item class="ModuleScript" referent="118">
             <Properties>
               <string name="Name">Panel</string>
               <string name="Source"><![CDATA[--!strict
@@ -48570,6 +49105,7 @@ local Theme = require(Core:WaitForChild("Theme"))
 local Recipes = require(Core:WaitForChild("Recipes"))
 local Motion = require(Core:WaitForChild("Motion"))
 local Rich = require(Core:WaitForChild("Rich"))
+local Sleek = require(Core:WaitForChild("Sleek"))
 local Layout = require(Core:WaitForChild("Layout"))
 local Signal = require(Core:WaitForChild("Signal"))
 local Audio = require(Core:WaitForChild("Audio"))
@@ -48768,6 +49304,9 @@ function Panel.build(self: Panel)
 	local tabs = frame(sheet, "Tabs")
 	tabs.ZIndex = 6
 	p.tabs = tabs
+	local readout = frame(sheet, "Readout")
+	readout.ZIndex = 6
+	p.readout = readout
 	local close = Common.get(sheet, "Close", "TextButton") :: TextButton
 	close.ZIndex = 20
 	close.AutoButtonColor = false
@@ -48778,10 +49317,10 @@ function Panel.build(self: Panel)
 	end)
 	close.MouseEnter:Connect(function()
 		Audio.play("hover")
-		Motion.tween(close, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Rotation = 90 }, "panel:close")
+		Motion.tween(close, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundTransparency = 0.88 }, "panel:close")
 	end)
 	close.MouseLeave:Connect(function()
-		Motion.tween(close, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Rotation = 0 }, "panel:close")
+		Motion.tween(close, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundTransparency = 0.97 }, "panel:close")
 	end)
 	local hero = frame(sheet, "Hero")
 	hero.ZIndex = 5
@@ -48928,7 +49467,9 @@ function Panel.tabsClaim(self: Panel, ph: Frame, id: string): any
 		for _, c in tabs:GetChildren() do
 			if c:IsA("GuiButton") then c:Destroy() end
 		end
+		local was = tabs:GetAttribute("Count")
 		tabs:SetAttribute("Count", 0)
+		if type(was) == "number" and was >= 2 then self:layout() end
 	end
 	return claim
 end
@@ -48948,49 +49489,74 @@ function Panel.drawTabs(self: Panel, store: any, id: string)
 		b.AutoButtonColor = false
 		b.Text = ""
 		b.ZIndex = 7
-		b.Size = UDim2.fromOffset(0, if compact then 36 else 40)
+		b.Size = UDim2.fromOffset(0, if compact then 36 else 46)
 		b.AutomaticSize = Enum.AutomaticSize.X
 		local active = n.cls == "cur"
+		-- Sleek tabs: an index number, the caps word, a count; the active one gets a hue floor and a 2 du hue line
+		Common.drop(b, "Corner")
+		Common.drop(b, "Border")
+		Common.glow(b, nil)
 		if active then
-			Common.fill(b, Theme.lift(hue, 0.1), Theme.shade(hue, 0.6))
-			Common.stroke(b, 1.5, Theme.lift(hue, 0.45), 0)
-			Common.glow(b, hue, 0.45, 12)
+			b.BackgroundColor3 = hue
+			b.BackgroundTransparency = 0
+			local g = Common.get(b, "Fill", "UIGradient") :: UIGradient
+			g.Rotation = 90
+			g.Color = ColorSequence.new(WHITE)
+			g.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(1, 0.84) })
+			local line = Common.get(b, "Line", "Frame") :: Frame
+			line.AnchorPoint = Vector2.new(0, 1)
+			line.Position = UDim2.fromScale(0, 1)
+			line.Size = UDim2.new(1, 0, 0, 2)
+			line.BackgroundColor3 = hue
+			line.BackgroundTransparency = 0
+			line.ZIndex = 9
 		else
 			Common.drop(b, "Fill")
-			b.BackgroundColor3 = C.panel2
-			b.BackgroundTransparency = 0
-			Common.stroke(b, 1, C.stroke, 0)
-			Common.glow(b, nil)
+			Common.drop(b, "Line")
+			b.BackgroundTransparency = 1
 		end
-		Common.corner(b, 12)
-		Common.pad(b, 0, 16, 0, 16)
-		local l = Common.get(b, "Label", "TextLabel") :: TextLabel
+		-- the index, word and mark sit in a Row (the button also holds the floor line, which a list would lay out)
+		Common.drop(b, "Pad")
+		Common.drop(b, "List")
+		local rowF = Common.get(b, "Row", "Frame") :: Frame
+		rowF.AutomaticSize = Enum.AutomaticSize.X
+		rowF.Size = UDim2.fromScale(0, 1)
+		rowF.ZIndex = 8
+		Common.pad(rowF, 0, if compact then 12 else 22, 0, if compact then 12 else 22)
+		Common.list(rowF, true, 9, { valign = Enum.VerticalAlignment.Center })
+		local idx = Sleek.micro(rowF, "Index", string.format("%02d", count), if active then hue else Sleek.C.micro)
+		idx.LayoutOrder = 1
+		idx.ZIndex = 8
+		idx.Visible = not compact
+		Common.drop(b, "Index")
+		Common.drop(b, "Label")
+		Common.drop(b, "Dot")
+		local l = Common.get(rowF, "Label", "TextLabel") :: TextLabel
 		l.ZIndex = 8
+		l.LayoutOrder = 2
 		Common.text(l, "tab", if active then C.text else C.soft)
+		l.TextSize = if compact then 14 else 15
 		l.FontFace = Font.fromName("Montserrat", Enum.FontWeight.ExtraBold, if active then Enum.FontStyle.Italic else Enum.FontStyle.Normal)
 		l.Size = UDim2.new(0, 0, 1, 0)
 		l.AutomaticSize = Enum.AutomaticSize.X
 		l.TextXAlignment = Enum.TextXAlignment.Center
 		l.TextYAlignment = Enum.TextYAlignment.Center
 		l.TextWrapped = false
-		if active then
-			Common.stroke(l, 2, C.black, 0, "Stroke").ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
-		else
-			Common.drop(l, "Stroke")
-		end
-		Common.setText(l, Common.esc(string.upper(Common.plain(n.h))))
-		-- a notify dot (10 du, danger)
+		Common.drop(l, "Stroke")
+		Common.setText(l, Common.esc(Rich.caps(Common.plain(n.h))))
+		-- a notify mark: a small gold diamond after the word
 		if n.glow or n.pulse then
-			local dot = Common.get(b, "Dot", "Frame") :: Frame
-			dot.AnchorPoint = Vector2.new(0.5, 0.5)
-			dot.Position = UDim2.new(1, 16, 0, 0)
-			dot.Size = UDim2.fromOffset(10, 10)
-			dot.BackgroundColor3 = C.danger
+			local dot = Common.get(rowF, "Dot", "Frame") :: Frame
+			dot.Position = UDim2.new()
+			dot.Size = UDim2.fromOffset(7, 7)
+			dot.Rotation = 45
+			dot.LayoutOrder = 3
+			dot.BackgroundColor3 = Sleek.C.gold
 			dot.BackgroundTransparency = 0
 			dot.ZIndex = 9
-			Common.corner(dot, 0.5)
+			Common.drop(dot, "Corner")
 		else
-			Common.drop(b, "Dot")
+			Common.drop(rowF, "Dot")
 		end
 		b:SetAttribute("TabId", tid)
 		b:SetAttribute("State", if active then "owned" else "can")
@@ -49013,9 +49579,11 @@ function Panel.drawTabs(self: Panel, store: any, id: string)
 			if i == nil or i > #kids then c:Destroy() end
 		end
 	end
+	local was = tabs:GetAttribute("Count")
 	tabs:SetAttribute("Count", count)
-	-- a single-tab bar (Main only) is hidden
+	-- a single-tab bar (Main only) is hidden; the tab row moves the hero and body, so the sheet re-lays out
 	tabs.Visible = count >= 2
+	if (type(was) == "number" and was >= 2) ~= (count >= 2) then self:layout() end
 end
 
 -- ------------------------------------------------------------------------------------------------------ geometry
@@ -49064,7 +49632,7 @@ function Panel.layout(self: Panel)
 			local contentH = self.content.AbsoluteSize.Y / s
 			if contentH > 1 then
 				local heroOn = self.hero ~= nil and self.hero.visible
-				h = math.min(h, math.max(560, 90 + 14 + (if heroOn then 168 else 0) + contentH + 16))
+				h = math.min(h, math.max(560, 144 + 22 + (if heroOn then 168 else 0) + contentH + 16))
 			end
 		end
 	end
@@ -49081,104 +49649,145 @@ function Panel.layout(self: Panel)
 	local bx = if full then 0 else x - 24
 	back.Position = UDim2.fromOffset(bx, 0)
 	back.Size = UDim2.fromOffset(W - bx, H)
-	-- rim
-	local radius = if full then 0 else 22
-	Common.corner(sheet, radius)
-	Common.fill(sheet, Color3.fromHex("221d33"), Color3.fromHex("100d19"), Color3.fromHex("14111f"))
-	local rim = Common.stroke(sheet, if full then 0 else 3, WHITE, 0, "Rim")
-	local rg = Common.get(rim, "RimGradient", "UIGradient") :: UIGradient
-	rg.Rotation = 135
-	rg.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, Theme.lift(hue, 0.4)),
-		ColorSequenceKeypoint.new(0.4, hue),
-		ColorSequenceKeypoint.new(0.75, Theme.shade(hue, 0.55)),
-		ColorSequenceKeypoint.new(1, hue),
-	})
-	if corrupted then
-		Recipes.dashed(rim, { color = WHITE })
+	-- the sheet: a translucent dark slab with a hairline, corner ticks and one lit accent on the top edge (Sleek)
+	Common.drop(sheet, "Corner")
+	Common.drop(sheet, "Rim")
+	Common.glow(sheet, nil)
+	Sleek.plate(sheet, { alpha = if corrupted then 0.96 else 0.93, line = if full then 1 else 0.9,
+		top = if corrupted then Color3.fromHex("020a03") else nil, bottom = if corrupted then Color3.fromHex("010401") else nil })
+	if full then
+		Common.drop(sheet, "Ticks")
+		Common.drop(sheet, "TopAccent")
 	else
-		Common.drop(rim, "Dash")
+		Sleek.ticks(sheet, { len = 22, th = 2, out = 1, color = if corrupted then C.termLime else WHITE, alpha = 0.85, z = 8 })
+		Sleek.accent(sheet, hue, 40, 88, { name = "TopAccent" })
 	end
-	Common.glow(sheet, if full then nil else hue, 0.45, 28)
-	-- header band + rule
-	local headerH = if compact then (if self.band then 0 else 56) else 90
+	if corrupted then
+		local rim = Common.stroke(sheet, 1, C.termLime, 0.35, "Hair")
+		Recipes.dashed(rim, { color = C.termLime })
+	else
+		Common.drop(sheet:FindFirstChild("Hair") or sheet, "Dash")
+	end
+	-- header: a faint hue haze from the top-left (no band fill)
+	local tabsOn = (p.tabs :: Frame):GetAttribute("Count") ~= nil and ((p.tabs :: Frame):GetAttribute("Count") :: number) >= 2
+	local titleH = if compact then (if self.band then 0 else 56) else 96
+	local headerH = if compact then titleH else titleH + (if tabsOn then 48 else 0)
 	local band = p.band :: Frame
 	band.Visible = headerH > 0
 	band.Position = UDim2.new()
-	band.Size = UDim2.new(1, 0, 0, headerH)
-	Common.corner(band, radius)
-	Common.fill(band, Theme.mix(C.panel, hue, 0.22), Theme.mix(C.panel, hue, 0.22))
-	local bg = band:FindFirstChild("Fill") :: UIGradient?
-	if bg then
-		bg.Rotation = 0
-		bg.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 1) })
+	band.Size = UDim2.new(1, 0, 0, headerH + 60)
+	Common.drop(band, "Corner")
+	band.BackgroundColor3 = hue
+	band.BackgroundTransparency = 0
+	local haze = Common.get(band, "Fill", "UIGradient") :: UIGradient
+	if Theme.caps.Radial then
+		haze.Type = Enum.GradientType.Radial
+		haze.Offset = Vector2.new(-0.32, -0.5)
+		haze.Rotation = 0
+		haze.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.85), NumberSequenceKeypoint.new(0.45, 0.95),
+			NumberSequenceKeypoint.new(0.7, 1), NumberSequenceKeypoint.new(1, 1) })
+	else
+		haze.Rotation = 90
+		haze.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.9), NumberSequenceKeypoint.new(1, 1) })
 	end
+	haze.Color = ColorSequence.new(WHITE)
+	-- the tabs row sits on a hairline; registration marks where it meets the sheet's edges
 	local rule = p.rule :: Frame
-	rule.Visible = headerH > 0
-	rule.Position = UDim2.fromOffset(0, headerH + 2)
-	rule.Size = UDim2.new(1, 0, 0, 2)
-	rule.BackgroundColor3 = hue
-	rule.BackgroundTransparency = 0
-	local rgf = Common.get(rule, "Fade", "UIGradient") :: UIGradient
-	rgf.Transparency = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 0),
-		NumberSequenceKeypoint.new(0.5, 0.75),
-		NumberSequenceKeypoint.new(1, 1),
-	})
-	-- emblem, title, sub row, tabs, close
+	rule.Visible = headerH > 0 and not compact
+	rule.Position = UDim2.fromOffset(40, headerH - 1)
+	rule.Size = UDim2.new(1, -80, 0, 1)
+	rule.BackgroundColor3 = WHITE
+	rule.BackgroundTransparency = Sleek.LINE
+	Common.drop(rule, "Fade")
+	if not compact and not full and headerH > 0 then
+		Sleek.reg(sheet, "RegL", 20, headerH)
+		Sleek.reg(sheet, "RegR", w - 20, headerH)
+	else
+		Common.drop(sheet, "RegL")
+		Common.drop(sheet, "RegR")
+	end
+	-- emblem (a diamond), title, sub row, layer readout, tabs, close
 	local emblem = p.emblem :: Frame
-	local ed = if compact then 42 else 96
+	local ed = if compact then 40 else 58
 	emblem.Visible = headerH > 0
 	emblem.Size = UDim2.fromOffset(ed, ed)
-	emblem.Position = if compact then UDim2.fromOffset(10, 7) elseif full then UDim2.fromOffset(12, 8) else UDim2.fromOffset(-18, -22)
-	Common.corner(emblem, 0.5)
-	Recipes.radial(emblem, { { t = 0, c = Theme.lift(hue, 0.6) }, { t = 0.45, c = hue }, { t = 1, c = Theme.shade(hue, 0.4) } })
-	Common.corner(emblem, 0.5)
-	Common.stroke(emblem, if compact then 2 else 3, Theme.lift(hue, 0.5), 0)
-	Common.glow(emblem, hue, 0.7, 18)
-	local titleX = if compact then 60 elseif full then 124 else 96
+	emblem.Position = if compact then UDim2.fromOffset(10, 8) else UDim2.fromOffset(40, 22)
+	Common.drop(emblem, "Corner")
+	Common.drop(emblem, "Radial")
+	Common.drop(emblem, "Border")
+	Common.glow(emblem, nil)
+	emblem.BackgroundTransparency = 1
+	local dia = Sleek.diamond(emblem, "Diamond", if corrupted then C.termLime else hue, ed)
+	dia.Position = UDim2.new()
+	dia.ZIndex = 6
+	local titleX = if compact then 60 else 120
 	local title = p.title :: TextLabel
 	title.Visible = headerH > 0
-	title.Position = UDim2.fromOffset(titleX, if compact then 8 else 10)
-	title.Size = UDim2.new(0, 0, 0, if compact then 32 else 50)
+	title.Position = UDim2.fromOffset(titleX, if compact then 8 else 20)
+	title.Size = UDim2.new(0, 0, 0, if compact then 32 else 48)
 	title.AutomaticSize = Enum.AutomaticSize.X
 	title.TextXAlignment = Enum.TextXAlignment.Left
 	title.TextYAlignment = Enum.TextYAlignment.Center
 	title.TextWrapped = false
 	local subRow = p.subRow :: Frame
 	subRow.Visible = headerH > 0 and not compact
-	subRow.Position = UDim2.fromOffset(titleX, 60)
-	subRow.Size = UDim2.new(1, -titleX - 140, 0, 26)
+	subRow.Position = UDim2.fromOffset(titleX + 2, 70)
+	subRow.Size = UDim2.new(1, -titleX - 260, 0, 24)
+	local readout = p.readout :: Frame
+	readout.Visible = headerH > 0 and not compact
+	readout.AnchorPoint = Vector2.new(1, 0)
+	readout.Position = UDim2.new(1, -100, 0, 28)
+	readout.Size = UDim2.fromOffset(140, 40)
 	local tabs = p.tabs :: Frame
-	tabs.AnchorPoint = Vector2.new(1, 0)
-	tabs.Position = if compact then UDim2.new(1, -64, 0, 10) else UDim2.new(1, -56, 0, 24)
-	tabs.Size = UDim2.fromOffset(0, if compact then 36 else 40)
-	tabs.AutomaticSize = Enum.AutomaticSize.X
-	Common.list(tabs, true, 8, { align = Enum.HorizontalAlignment.Right, valign = Enum.VerticalAlignment.Center })
+	if compact then
+		tabs.AnchorPoint = Vector2.new(1, 0)
+		tabs.Position = UDim2.new(1, -64, 0, 10)
+		tabs.Size = UDim2.fromOffset(0, 36)
+		tabs.AutomaticSize = Enum.AutomaticSize.X
+		Common.list(tabs, true, 4, { align = Enum.HorizontalAlignment.Right, valign = Enum.VerticalAlignment.Center })
+	else
+		tabs.AnchorPoint = Vector2.new(0, 0)
+		tabs.Position = UDim2.fromOffset(40, titleH)
+		tabs.Size = UDim2.fromOffset(0, 47)
+		tabs.AutomaticSize = Enum.AutomaticSize.X
+		Common.list(tabs, true, 0, { align = Enum.HorizontalAlignment.Left, valign = Enum.VerticalAlignment.Bottom })
+	end
 	local close = p.close :: TextButton
 	close.Visible = not (compact and self.band)
-	local cs = if compact then 44 else 52
+	local cs = if compact then 40 else 40
 	close.AnchorPoint = Vector2.new(0.5, 0.5)
 	close.Size = UDim2.fromOffset(cs, cs)
-	close.Position = if compact then UDim2.new(1, -32, 0, 28) elseif full then UDim2.new(1, -40, 0, 40) else UDim2.new(1, -10, 0, 12)
-	Recipes.bevel(close, { radius = 14, top = Theme.lift(C.danger, 0.2), mid = C.danger, bottom = Theme.shade(C.danger, 0.6), stroke = 2,
-		strokeFrom = Color3.fromHex("ffc2cc"), strokeTo = Color3.fromHex("ffc2cc"), sprite = "button" })
-	local cross = Common.get(close, "X", "TextLabel") :: TextLabel
+	close.Position = if compact then UDim2.new(1, -32, 0, 28) else UDim2.new(1, -60, 0, 48)
+	Common.drop(close, "Corner")
+	Common.drop(close, "Bevel")
+	for _, c in close:GetChildren() do
+		if c:IsA("UIGradient") or c:IsA("ImageLabel") then c:Destroy() end
+	end
+	close.BackgroundColor3 = WHITE
+	close.BackgroundTransparency = 0.97
+	Common.stroke(close, 1, WHITE, 0.78, "Border").LineJoinMode = Enum.LineJoinMode.Miter
+	Common.drop(close, "X")
+	local cross = Common.get(close, "Cross", "Frame") :: Frame
+	cross.AnchorPoint = Vector2.new(0.5, 0.5)
+	cross.Position = UDim2.fromScale(0.5, 0.5)
+	cross.Size = UDim2.fromOffset(16, 16)
 	cross.ZIndex = 21
-	cross.Size = UDim2.fromScale(1, 1)
-	cross.FontFace = Theme.font("title")
-	cross.TextSize = if compact then 28 else 32
-	cross.TextColor3 = WHITE
-	cross.TextXAlignment = Enum.TextXAlignment.Center
-	cross.TextYAlignment = Enum.TextYAlignment.Center
-	cross.Text = "×"
-	Common.stroke(cross, 2, C.black, 0.2, "Stroke").ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	for i, r in { 45, -45 } do
+		local bar = Common.get(cross, "Bar" .. i, "Frame") :: Frame
+		bar.AnchorPoint = Vector2.new(0.5, 0.5)
+		bar.Position = UDim2.fromScale(0.5, 0.5)
+		bar.Size = UDim2.new(1.2, 0, 0, 2)
+		bar.Rotation = r
+		bar.BackgroundColor3 = WHITE
+		bar.BackgroundTransparency = 0
+		bar.ZIndex = 21
+	end
 	-- hero and body
 	local hero = p.hero :: Frame
 	local heroOn = self.hero ~= nil and self.hero.visible
 	local divider = p.divider :: Frame
 	local body = p.body :: Frame
-	local top = headerH + (if compact then 8 else 14)
+	local top = headerH + (if compact then 8 else 22)
 	if compact then
 		hero.Position = UDim2.fromOffset(10, top)
 		hero.Size = UDim2.fromOffset(226, h - top - 10)
@@ -49187,31 +49796,33 @@ function Panel.layout(self: Panel)
 		body.Position = UDim2.fromOffset(bx0, top)
 		body.Size = UDim2.fromOffset(w - bx0 - 8, h - top - 8)
 	else
-		hero.Position = UDim2.fromOffset(32, top)
-		hero.Size = UDim2.fromOffset(w - 64, 152)
+		hero.Position = UDim2.fromOffset(40, top)
+		hero.Size = UDim2.fromOffset(w - 80, 152)
 		divider.Visible = heroOn
-		divider.Position = UDim2.fromOffset(24, top + 158)
-		divider.Size = UDim2.new(1, -48, 0, 1)
-		divider.BackgroundColor3 = C.stroke
-		divider.BackgroundTransparency = 0.3
+		divider.Position = UDim2.fromOffset(40, top + 160)
+		divider.Size = UDim2.new(1, -80, 0, 1)
+		divider.BackgroundColor3 = WHITE
+		divider.BackgroundTransparency = Sleek.LINE
 		local by = if heroOn then top + 168 else top
 		body.Position = UDim2.fromOffset(16, by)
 		body.Size = UDim2.fromOffset(w - 32, h - by - 16)
 	end
 	-- the body: a styled frame holding the transparent scroll
-	Common.corner(body, 16)
+	-- the body is the sheet itself (no inner card); the corrupted layers keep their terminal green
+	Common.drop(body, "Corner")
 	if corrupted then
 		Common.fill(body, Color3.new(0, 0, 0), Color3.fromHex("062b0a"), Color3.fromHex("041a06"))
+		local fill = body:FindFirstChild("Fill") :: UIGradient?
+		if fill then fill.Transparency = NumberSequence.new(0.25) end
 	else
-		Common.fill(body, Theme.mix(C.panel, hue, 0.04), C.deep)
+		Common.drop(body, "Fill")
+		body.BackgroundTransparency = 1
 	end
-	local fill = body:FindFirstChild("Fill") :: UIGradient?
-	if fill then fill.Transparency = NumberSequence.new(0.25) end
 	local scroll = p.scroll :: ScrollingFrame
 	scroll.ScrollBarImageColor3 = Theme.lift(hue, 0.3)
 	Common.pad(self.content, if compact then 10 else 20, if compact then 14 else 24, 90, if compact then 6 else 16, "Pad")
 	local fade = p.fade :: Frame
-	fade.BackgroundColor3 = if corrupted then Color3.fromHex("031305") else C.deep
+	fade.BackgroundColor3 = if corrupted then Color3.fromHex("031305") else Sleek.C.bottom
 	-- abs geometry for App (strip edge, card rect)
 	local o = root.AbsolutePosition
 	self.geo = {
@@ -49236,11 +49847,11 @@ function Panel.drawShell(self: Panel, accent: boolean?)
 	sym.TextYAlignment = Enum.TextYAlignment.Center
 	sym.TextWrapped = false
 	local symText = if node and type(node.sym) == "string" then node.sym elseif key == "options-tab" then "OPT" else string.upper(key)
-	local symSize = if compact then (if #symText > 2 then 14 else 20) else (if #symText > 2 then 30 else 44)
+	local symSize = if compact then (if #symText > 2 then 11 else 16) else (if #symText > 2 then 16 else 24)
 	local ssig = symText .. "|" .. symSize
 	if sym:GetAttribute("Sig") ~= ssig then
 		sym:SetAttribute("Sig", ssig)
-		Recipes.title(sym, { text = symText, role = "index", size = symSize, stroke = if compact then 2 else 4, shadow = if compact then 1 else 3 })
+		Recipes.title(sym, { text = symText, role = "index", size = symSize, stroke = 0, shadow = 0 })
 	end
 	-- title (step-fit to leave the tabs room)
 	local title = p.title :: TextLabel
@@ -49249,19 +49860,25 @@ function Panel.drawShell(self: Panel, accent: boolean?)
 	local tsig = text .. "|" .. Theme.toHex(hue) .. "|" .. tostring(compact)
 	if title:GetAttribute("Sig") ~= tsig then
 		title:SetAttribute("Sig", tsig)
-		Recipes.title(title, { text = text, role = "title", size = sizes[1], from = WHITE, to = Theme.lift(hue, 0.45),
-			stroke = if compact then 5 else 7, shadow = 4 })
+		Recipes.title(title, { text = text, role = "title", size = sizes[1], stroke = 0, shadow = 0 })
 	end
 	local sheetW = (p.sheet :: Frame).Size.X.Offset
-	local tabsW = if (p.tabs :: Frame).Visible then (p.tabs :: Frame).AbsoluteSize.X / math.max(Layout.s, 0.01) else 0
-	Rich.fit(title, sizes, math.max(160, sheetW - title.Position.X.Offset - tabsW - 90))
+	local tabsW = if compact and (p.tabs :: Frame).Visible then (p.tabs :: Frame).AbsoluteSize.X / math.max(Layout.s, 0.01) else 0
+	Rich.fit(title, sizes, math.max(160, sheetW - title.Position.X.Offset - tabsW - (if compact then 90 else 280)))
 	-- the sub row: ROW chip + the sentence-case line (the corrupted breadcrumb for cp / cm)
 	local subRow = p.subRow :: Frame
 	Common.list(subRow, true, 10, { valign = Enum.VerticalAlignment.Center })
 	local row = Signatures.row(key)
 	if row then
-		local chip = Common.chip(subRow, "RowChip", "ROW " .. row, { color = C.text, bg = C.deep, bgT = 0, h = 26, stroke = Theme.lift(hue, 0.3) })
+		local chip = Common.chip(subRow, "RowChip", Rich.caps("Row " .. row), { color = Theme.lift(hue, 0.55), bgT = 1, h = 24,
+			stroke = hue, role = "caps" })
 		chip.LayoutOrder = 1
+		local b = chip:FindFirstChild("Border") :: UIStroke?
+		if b then
+			b.Transparency = 0.4
+			b.LineJoinMode = Enum.LineJoinMode.Miter
+		end
+		Common.drop(chip, "Corner")
 	else
 		Common.drop(subRow, "RowChip")
 	end
@@ -49272,6 +49889,20 @@ function Panel.drawShell(self: Panel, accent: boolean?)
 		line.TextColor3 = C.termDim
 	end
 	Common.setText(line, Common.esc(lineText))
+	-- the layer readout: LAYER 02 / 21
+	local readout = p.readout :: Frame
+	Common.list(readout, false, 7, { align = Enum.HorizontalAlignment.Right, valign = Enum.VerticalAlignment.Center })
+	local idx = Sleek.layerIndex(key)
+	if idx then
+		readout.Visible = not compact
+		local cap = Sleek.caps(readout, "Cap", "Layer")
+		cap.LayoutOrder = 1
+		local num = Common.label(readout, "Num", "number", WHITE, { autoX = true, wrap = false, order = 2 })
+		num.RichText = true
+		Common.setText(num, string.format('%02d <font color="#6d7686">/ %02d</font>', idx, #Sleek.ORDER))
+	else
+		readout.Visible = false
+	end
 	-- the signature's accent
 	local sig = Signatures.get(key)
 	local hug = sig.hug == true
@@ -49455,7 +50086,7 @@ return Panel
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="118">
+          <Item class="ModuleScript" referent="119">
             <Properties>
               <string name="Name">Sections</string>
               <string name="Source"><![CDATA[--!strict
@@ -49476,6 +50107,8 @@ local Core = script.Parent.Parent:WaitForChild("Core")
 local Theme = require(Core:WaitForChild("Theme"))
 local Recipes = require(Core:WaitForChild("Recipes"))
 local Layout = require(Core:WaitForChild("Layout"))
+local Rich = require(Core:WaitForChild("Rich"))
+local Sleek = require(Core:WaitForChild("Sleek"))
 local Common = require(script.Parent:WaitForChild("Skins"):WaitForChild("Common"))
 
 local Sections = {}
@@ -49548,77 +50181,88 @@ local function counts(store: any, id: string, cn: string): Counts?
 end
 
 -- ------------------------------------------------------------------------------------------------------ the row
-export type Chip = { text: string, color: Color3?, bg: Color3?, bgT: number? }
+export type Chip = { text: string, color: Color3?, bg: Color3?, bgT: number?, seg: { number }? }
 export type HeaderOpts = { name: string?, text: string, hue: Color3, chips: { Chip }?, order: number? }
--- the section title row: hue bar, heavy italic title with gradient / outline / shadow (R3), chips, hairline
+-- the section title row (Sleek): a hue marker, the tracked caps title, a segment meter and caps counts, a hairline
 function Sections.header(parent: Instance, o: HeaderOpts): Frame
 	local compact = Layout.mode == "COMPACT"
 	local f = Common.get(parent, o.name or "SectionTitle", "Frame") :: Frame
 	f.LayoutOrder = o.order or -1
-	f.Size = UDim2.new(1, 0, 0, if compact then 32 else 36)
+	f.Size = UDim2.new(1, 0, 0, if compact then 28 else 32)
 	f.ClipsDescendants = true
 	f.Active = false
-	Common.list(f, true, 10, { valign = Enum.VerticalAlignment.Center })
+	Common.list(f, true, 12, { valign = Enum.VerticalAlignment.Center })
 	local bar = Common.get(f, "HueBar", "Frame") :: Frame
 	bar.LayoutOrder = 1
-	bar.Size = UDim2.fromOffset(6, 26)
+	bar.Size = UDim2.fromOffset(6, 6)
+	bar.Rotation = 45
 	bar.BackgroundColor3 = o.hue
 	bar.BackgroundTransparency = 0
-	Common.corner(bar, 3)
+	Common.drop(bar, "Corner")
 	local t = Common.get(f, "Title", "TextLabel") :: TextLabel
 	t.LayoutOrder = 2
 	t.AutomaticSize = Enum.AutomaticSize.X
-	t.Size = UDim2.fromOffset(0, if compact then 28 else 32)
+	t.Size = UDim2.fromOffset(0, if compact then 24 else 28)
 	t.TextXAlignment = Enum.TextXAlignment.Left
 	t.TextYAlignment = Enum.TextYAlignment.Center
-	local sig = o.text .. "|" .. tostring(Theme.size("section")) .. "|" .. Theme.toHex(o.hue)
+	local size = if compact then 14 else 15
+	local sig = o.text .. "|" .. tostring(size) .. "|sleek"
 	if t:GetAttribute("Sig") ~= sig then
 		t:SetAttribute("Sig", sig)
-		Recipes.title(t, { text = o.text, role = "section", from = Color3.new(1, 1, 1), to = Theme.lift(o.hue, 0.45),
-			stroke = if compact then 4 else 5, shadow = 3 })
+		Recipes.title(t, { text = Rich.caps(o.text), role = "label", size = size, stroke = 0, shadow = 0 })
 	end
 	local chips = o.chips or {}
 	for i = 1, 2 do
 		local c = chips[i]
 		if c then
-			local l = Common.chip(f, "Chip" .. i, c.text, { color = c.color, bg = c.bg, bgT = c.bgT, h = if compact then 26 else 28 })
-			l.LayoutOrder = 2 + i
+			local l = Common.chip(f, "Chip" .. i, c.text, { color = c.color, bgT = 1, h = if compact then 22 else 24, role = "caps" })
+			l.FontFace = Font.fromName("Montserrat", Enum.FontWeight.ExtraBold)
+			l.LayoutOrder = 3 + i * 2
+			if c.seg then
+				local many = c.seg[1] > 8
+				local sg = Sleek.seg(f, "Seg" .. i, c.seg[1], c.seg[2], { w = if many then 3 else 10, h = if many then 12 else 3, gap = if many then 2 else 3 })
+				sg.LayoutOrder = 2 + i * 2
+			else
+				Common.drop(f, "Seg" .. i)
+			end
 		else
 			Common.drop(f, "Chip" .. i)
+			Common.drop(f, "Seg" .. i)
 		end
 	end
 	local rule = Common.get(f, "Rule", "Frame") :: Frame
 	rule.LayoutOrder = 10
-	rule.Size = UDim2.fromOffset(1400, 2)
-	rule.BackgroundColor3 = o.hue
+	rule.Size = UDim2.fromOffset(1400, 1)
+	rule.BackgroundColor3 = Color3.new(1, 1, 1)
 	rule.BackgroundTransparency = 0
 	local g = Common.get(rule, "Fade", "UIGradient") :: UIGradient
 	g.Transparency = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 0.55),
-		NumberSequenceKeypoint.new(0.45, 1),
-		NumberSequenceKeypoint.new(1, 1),
+		NumberSequenceKeypoint.new(0, 0.74),
+		NumberSequenceKeypoint.new(0.5, 0.9),
+		NumberSequenceKeypoint.new(1, 0.95),
 	})
 	return f
 end
 
--- the chips of a component (DESIGN.md 5.6 table)
+-- the chips of a component (DESIGN.md 5.6 table): caps counts, OWNED with a segment meter when it fits
 local function chipsOf(cn: string, c: Counts?, hue: Color3): { Chip }
 	if c == nil or c.total == 0 then return {} end
 	local C = Theme.C
+	local seg = if c.total <= 24 then { c.total, c.owned } else nil
 	if cn == "upgrades" then
 		local out: { Chip } = {}
 		if c.ready > 0 then
-			table.insert(out, { text = c.ready .. " READY", color = Theme.lift(hue, 0.55), bg = Theme.mix(C.deep, hue, 0.22), bgT = 0 })
+			table.insert(out, { text = Rich.caps(c.ready .. " ready"), color = Theme.lift(hue, 0.55) })
 		end
-		table.insert(out, { text = c.owned .. " / " .. c.total .. " OWNED", color = C.ownedValue, bg = Theme.mix(C.deep, C.bought, 0.16), bgT = 0 })
+		table.insert(out, { text = Rich.caps(c.owned .. " / " .. c.total .. " owned"), color = C.soft, seg = seg })
 		return out
 	elseif cn == "milestones" or cn == "challenges" or cn == "achievements" then
-		return { { text = c.owned .. " / " .. c.total .. (if cn == "achievements" then "" else " DONE"), color = C.ownedValue,
-			bg = Theme.mix(C.deep, C.bought, 0.16), bgT = 0 } }
+		return { { text = Rich.caps(c.owned .. " / " .. c.total .. (if cn == "achievements" then "" else " done")), color = C.soft,
+			seg = seg } }
 	elseif cn == "grid" then
-		return { { text = c.ready .. " CORRUPTED", color = Theme.lift(hue, 0.4), bg = Theme.mix(C.deep, hue, 0.18), bgT = 0 } }
+		return { { text = Rich.caps(c.ready .. " corrupted"), color = Theme.lift(hue, 0.4) } }
 	end
-	return { { text = tostring(c.total), color = C.text, bg = C.panel3, bgT = 0 } }
+	return { { text = tostring(c.total), color = C.soft } }
 end
 
 -- ------------------------------------------------------------------------------------------------------ decorate
@@ -49671,11 +50315,11 @@ return Sections
 ]]></string>
             </Properties>
           </Item>
-          <Item class="Folder" referent="119">
+          <Item class="Folder" referent="120">
             <Properties>
               <string name="Name">Skins</string>
             </Properties>
-            <Item class="ModuleScript" referent="120">
+            <Item class="ModuleScript" referent="121">
               <Properties>
                 <string name="Name">Achievement</string>
                 <string name="Source"><![CDATA[--!strict
@@ -49734,7 +50378,7 @@ return Achievement
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="121">
+            <Item class="ModuleScript" referent="122">
               <Properties>
                 <string name="Name">Buyable</string>
                 <string name="Source"><![CDATA[--!strict
@@ -49827,7 +50471,7 @@ function Buyable.skin(rec: any, n: any, ctx: any): boolean
 	Common.drop(b, "Num")
 	Common.drop(b, "Gradient")
 	local p = Common.surface(b, state, ctx.hue, 16)
-	Common.glow(b, if state == "can" then ctx.hue else nil, 0.5, 16)
+	Common.glow(b, if state == "can" then ctx.hue else nil, 0.2, 14)
 	local w: number
 	if compact then
 		w = ctx.contentW
@@ -49916,7 +50560,7 @@ function Buyable.skin(rec: any, n: any, ctx: any): boolean
 	strip.TextWrapped = false
 	strip.BackgroundTransparency = 0
 	strip.BackgroundColor3 = Color3.new(1, 1, 1)
-	Common.corner(strip, 8)
+	Common.drop(strip, "Corner")
 	local g = Common.get(strip, "Fill", "UIGradient") :: UIGradient
 	g.Rotation = 0
 	local pr = Common.pr(n.pr)
@@ -49925,12 +50569,13 @@ function Buyable.skin(rec: any, n: any, ctx: any): boolean
 		strip.TextColor3 = C.ownedValue
 		Common.setText(strip, "MAX")
 	elseif state == "can" then
-		g.Color = ColorSequence.new(Theme.shade(ctx.hue, 0.55))
-		strip.TextColor3 = C.text
+		-- Sleek: the actionable strip is the light hue surface with ink type, like the BUY bars
+		g.Color = ColorSequence.new({ ColorSequenceKeypoint.new(0, Theme.lift(ctx.hue, 0.25)), ColorSequenceKeypoint.new(1, ctx.hue) })
+		strip.TextColor3 = C.ink
 		Common.setText(strip, Rich.caps("Hold to buy"))
 	else
-		local lit = Theme.mix(C.deep, ctx.hue, 0.45)
-		local track = Theme.mix(C.deep, C.locked, 0.25)
+		local lit = Theme.mix(C.deep, ctx.hue, 0.32)
+		local track = Theme.mix(C.deep, C.white, 0.05)
 		local q = pr or 0
 		if q <= 0.001 then
 			g.Color = ColorSequence.new(track)
@@ -49958,7 +50603,7 @@ return Buyable
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="122">
+            <Item class="ModuleScript" referent="123">
               <Properties>
                 <string name="Name">Challenge</string>
                 <string name="Source"><![CDATA[--!strict
@@ -50110,7 +50755,7 @@ return Challenge
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="123">
+            <Item class="ModuleScript" referent="124">
               <Properties>
                 <string name="Name">Clickable</string>
                 <string name="Source"><![CDATA[--!strict
@@ -50174,7 +50819,7 @@ return Clickable
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="124">
+            <Item class="ModuleScript" referent="125">
               <Properties>
                 <string name="Name">Common</string>
                 <string name="Source"><![CDATA[--!strict
@@ -50226,9 +50871,14 @@ function Common.drop(parent: Instance, name: string)
 	if c then c:Destroy() end
 end
 
+-- Sleek: panels are square. Scale radii (circles, pills: r < 1) stay; pixel radii become sharp corners
 function Common.corner(f: GuiObject, r: number, name: string?)
+	if r >= 1 or r <= 0 then
+		Common.drop(f, name or "Corner")
+		return
+	end
 	local c = Common.get(f, name or "Corner", "UICorner") :: UICorner
-	c.CornerRadius = if r < 1 and r > 0 then UDim.new(r, 0) else UDim.new(0, r)
+	c.CornerRadius = UDim.new(r, 0)
 end
 function Common.stroke(f: GuiObject, thickness: number, color: Color3, transparency: number?, name: string?): UIStroke
 	local s = Common.get(f, name or "Border", "UIStroke") :: UIStroke
@@ -50417,29 +51067,37 @@ export type Palette = { top: Color3, bottom: Color3, rim: Color3, rimT: number, 
 -- the card surface of each state (DESIGN.md 5.7, 11.2): the layer hue paints only the actionable state
 function Common.palette(state: string, hue: Color3): Palette
 	local C = Theme.C
+	-- Sleek (art/ui/clean STYLES[1]): translucent near-black slabs with a 1 du hairline; the hue tints only the
+	-- actionable card, owned is a faint green, locked and not-yet stay neutral
+	local top, bottom = Color3.fromHex("0c1119"), Color3.fromHex("080b12")
 	if state == "can" then
-		return { top = Theme.mix(C.panel, hue, 0.38), bottom = Theme.mix(C.deep, hue, 0.15), rim = Theme.lift(hue, 0.35), rimT = 0,
-			title = C.text, text = C.text, textT = 0.08, soft = C.text, value = C.text }
+		return { top = Theme.mix(top, hue, 0.2), bottom = Theme.mix(bottom, hue, 0.05), rim = hue, rimT = 0.5,
+			title = C.text, text = C.text, textT = 0.1, soft = C.soft, value = C.text }
 	elseif state == "owned" then
-		return { top = Theme.mix(C.panel, C.bought, 0.16), bottom = Theme.mix(C.deep, C.bought, 0.08), rim = C.bought, rimT = 0.55,
-			title = C.ownedTitle, text = C.text, textT = 0.18, soft = C.soft, value = C.ownedValue }
+		return { top = Theme.mix(top, C.bought, 0.085), bottom = Theme.mix(bottom, C.bought, 0.025), rim = C.bought, rimT = 0.72,
+			title = C.ownedTitle, text = C.text, textT = 0.22, soft = C.soft, value = C.ownedValue }
 	elseif state == "gold" then
-		return { top = Theme.mix(C.panel, C.complete, 0.34), bottom = Theme.mix(C.deep, C.complete, 0.14), rim = C.complete, rimT = 0,
-			title = C.text, text = C.text, textT = 0.08, soft = C.text, value = C.text }
+		return { top = Theme.mix(top, C.complete, 0.2), bottom = Theme.mix(bottom, C.complete, 0.05), rim = C.complete, rimT = 0.35,
+			title = C.text, text = C.text, textT = 0.1, soft = C.soft, value = C.text }
 	elseif state == "locked" then
-		return { top = Theme.mix(C.panel, C.locked, 0.12), bottom = Theme.mix(C.deep, C.locked, 0.06), rim = C.locked, rimT = 0.55,
-			title = C.lockedTitle, text = C.text, textT = 0.18, soft = C.soft, value = C.notYet }
+		return { top = Color3.fromHex("07090e"), bottom = Color3.fromHex("05070b"), rim = C.white, rimT = 0.92,
+			title = C.lockedTitle, text = C.text, textT = 0.3, soft = C.soft, value = C.notYet }
 	end
-	-- notyet: unlocked, not affordable (mauve)
-	return { top = Theme.mix(C.panel, C.locked, 0.24), bottom = Theme.mix(C.deep, C.locked, 0.12), rim = C.locked, rimT = 0.3,
-		title = C.text, text = C.text, textT = 0.1, soft = C.soft, value = C.notYet }
+	-- notyet: unlocked, not affordable (a trace of mauve)
+	return { top = Theme.mix(top, C.locked, 0.1), bottom = Theme.mix(bottom, C.locked, 0.03), rim = C.locked, rimT = 0.55,
+		title = C.text, text = C.text, textT = 0.14, soft = C.soft, value = C.notYet }
 end
--- fill + rim + corner of a card in a state
+-- fill + hairline of a card in a state (square corners; the radius argument is kept for signatures that ask for one)
 function Common.surface(f: GuiObject, state: string, hue: Color3, radius: number?): Palette
 	local p = Common.palette(state, hue)
 	Common.fill(f, p.top, p.bottom)
-	Common.corner(f, radius or 14)
-	Common.stroke(f, if state == "can" or state == "gold" then 2 else 1.5, p.rim, p.rimT)
+	if radius and radius > 0 and radius <= 6 then
+		Common.corner(f, radius)
+	else
+		Common.drop(f, "Corner")
+	end
+	local st = Common.stroke(f, 1, p.rim, p.rimT)
+	st.LineJoinMode = Enum.LineJoinMode.Miter
 	Common.drop(f, "Gradient") -- Style.apply's game gradient, if an old look was ever applied
 	return p
 end
@@ -50465,10 +51123,10 @@ function Common.chip(parent: Instance, name: string, text: string, o: ChipOpts?)
 	l.Active = false
 	-- side padding as spaces (a UIPadding per chip costs an instance on every card)
 	Common.setText(l, "  " .. (if opts.rich then text else Common.esc(text)) .. "  ")
-	Common.corner(l, 8)
+	Common.drop(l, "Corner")
 	Common.drop(l, "Pad")
 	if opts.stroke then
-		Common.stroke(l, 1, opts.stroke, 0.35)
+		Common.stroke(l, 1, opts.stroke, 0.35).LineJoinMode = Enum.LineJoinMode.Miter
 	else
 		Common.drop(l, "Border")
 	end
@@ -50481,10 +51139,10 @@ function Common.bar(parent: Instance, name: string, p: number, color: Color3, h:
 	f.BackgroundColor3 = WHITE
 	f.BackgroundTransparency = 0
 	f.Active = false
-	Common.corner(f, 0.5)
+	Common.drop(f, "Corner")
 	local g = Common.get(f, "Fill", "UIGradient") :: UIGradient
 	local q = math.clamp(p, 0, 1)
-	local track = Color3.fromRGB(52, 46, 72)
+	local track = Color3.fromRGB(38, 44, 56)
 	if q <= 0.001 then
 		g.Color = ColorSequence.new(track)
 	elseif q >= 0.999 then
@@ -50550,7 +51208,7 @@ return Common
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="125">
+            <Item class="ModuleScript" referent="126">
               <Properties>
                 <string name="Name">CompactOwned</string>
                 <string name="Source"><![CDATA[--!strict
@@ -50598,7 +51256,7 @@ function CompactOwned.skin(rec: any, n: any, ctx: any): boolean
 	label.Visible = true
 	local idx = Common.str(n.n) or Common.str(n.id) or ""
 	local title = Common.plain(Common.str(n.ti) or "")
-	local text = Common.run(Common.esc(idx), "badge", C.soft, 0.2) .. "  " .. Common.title(title, "cardSmall", C.ownedTitle)
+	local text = Common.run(Common.esc(idx), "badge", Color3.fromHex("7fe6a0"), 0.2) .. "  " .. Common.title(title, "cardSmall", C.ownedTitle)
 	if compact then
 		-- phones list each owned upgrade with its effect as body text (DESIGN.md 5.7 COMPACT)
 		local ds = Common.html(n.ds, "body", ctx.layer)
@@ -50634,7 +51292,7 @@ return CompactOwned
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="126">
+            <Item class="ModuleScript" referent="127">
               <Properties>
                 <string name="Name">Generic</string>
                 <string name="Source"><![CDATA[--!strict
@@ -50997,7 +51655,7 @@ return Generic
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="127">
+            <Item class="ModuleScript" referent="128">
               <Properties>
                 <string name="Name">GridTile</string>
                 <string name="Source"><![CDATA[--!strict
@@ -51077,7 +51735,7 @@ return GridTile
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="128">
+            <Item class="ModuleScript" referent="129">
               <Properties>
                 <string name="Name">Milestone</string>
                 <string name="Source"><![CDATA[--!strict
@@ -51209,7 +51867,7 @@ return Milestone
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="129">
+            <Item class="ModuleScript" referent="130">
               <Properties>
                 <string name="Name">Opt</string>
                 <string name="Source"><![CDATA[--!strict
@@ -51296,7 +51954,7 @@ return Opt
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="130">
+            <Item class="ModuleScript" referent="131">
               <Properties>
                 <string name="Name">Perk</string>
                 <string name="Source"><![CDATA[--!strict
@@ -51356,7 +52014,7 @@ return Perk
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="131">
+            <Item class="ModuleScript" referent="132">
               <Properties>
                 <string name="Name">Skins</string>
                 <string name="Source"><![CDATA[--!strict
@@ -51412,7 +52070,7 @@ return Skins
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="132">
+            <Item class="ModuleScript" referent="133">
               <Properties>
                 <string name="Name">Upgrade</string>
                 <string name="Source"><![CDATA[--!strict
@@ -51434,6 +52092,7 @@ return Skins
 local Core = script.Parent.Parent.Parent:WaitForChild("Core")
 local Theme = require(Core:WaitForChild("Theme"))
 local Rich = require(Core:WaitForChild("Rich"))
+local Sleek = require(Core:WaitForChild("Sleek"))
 local Common = require(script.Parent:WaitForChild("Common"))
 local CompactOwned = require(script.Parent:WaitForChild("CompactOwned"))
 local Signatures = require(script.Parent.Parent.Parent:WaitForChild("Signatures"):WaitForChild("Signatures"))
@@ -51518,8 +52177,9 @@ function Upgrade.skin(rec: any, n: any, ctx: any): boolean
 	Common.drop(b, "Num")
 	Common.drop(b, "Gradient")
 	Common.drop(b, "Glow")
-	local p = Common.surface(b, state, ctx.hue, 14)
-	Common.glow(b, if state == "can" then ctx.hue else nil, 0.55, 16)
+	local p = Common.surface(b, state, ctx.hue)
+	Common.glow(b, if state == "can" then ctx.hue else nil, 0.2, 14)
+
 	b.Size = UDim2.fromOffset(ctx.cardW, 0)
 	b.AutomaticSize = Enum.AutomaticSize.Y
 	Common.drop(b, "Limit") -- a tier row stretches its cards to the tallest one
@@ -51537,9 +52197,9 @@ function Upgrade.skin(rec: any, n: any, ctx: any): boolean
 	label.TextYAlignment = Enum.TextYAlignment.Top
 	label.Visible = true
 	local idx = Common.str(n.n) or Common.str(n.id) or ""
-	local idxColor = if state == "owned" then C.soft else Theme.lift(ctx.hue, 0.5)
+	local idxColor = if state == "owned" then Sleek.C.good elseif state == "can" then ctx.hue else Sleek.C.micro
 	local parts: { string } = {}
-	table.insert(parts, Common.run(Common.esc(idx), "index", idxColor, 0.2))
+	table.insert(parts, Common.run(Common.esc(idx), "index", idxColor, if state == "owned" then 0.2 else 0))
 	local title = Common.str(n.ti)
 	if title then table.insert(parts, Common.title(Common.plain(title), "card", p.title)) end
 	local ds = Common.html(n.ds, "body", ctx.layer)
@@ -51549,18 +52209,48 @@ function Upgrade.skin(rec: any, n: any, ctx: any): boolean
 	local ef = Common.str(n.ef)
 	if ef and state ~= "owned" then table.insert(parts, Common.caps("Currently", p.soft)) end
 	Common.setText(label, table.concat(parts, "\n"))
+	-- Sleek: the BUY card gets a lit top edge and its two top corner ticks. The card lays its children out in a list,
+	-- so the marks hang off the first item (the label) with the card's padding as offsets; the bottom pair hangs off
+	-- the BUY bar below. The other states stay quiet (instance budget).
+	local padT, padX = if compact then 12 else 14, if compact then 12 else 16
+	if state == "can" then
+		local top = Common.get(label, "TopLine", "Frame") :: Frame
+		top.Position = UDim2.fromOffset(-padX, -padT)
+		top.Size = UDim2.new(1, 2 * padX, 0, 2)
+		top.BackgroundColor3 = ctx.hue
+		top.BackgroundTransparency = 0
+		top.ZIndex = 5
+		local tick = Theme.lift(ctx.hue, 0.55)
+		for i, spec in { { 0, -padX }, { 1, padX } } do
+			local ax, dx = spec[1], spec[2]
+			local v = Common.get(label, "TickV" .. i, "Frame") :: Frame
+			v.AnchorPoint = Vector2.new(ax, 0)
+			v.Position = UDim2.new(ax, dx, 0, -padT)
+			v.Size = UDim2.fromOffset(2, 9)
+			v.BackgroundColor3 = tick
+			v.BackgroundTransparency = 0
+			v.ZIndex = 5
+		end
+	else
+		for _, n in { "TopLine", "TickV1", "TickV2" } do Common.drop(label, n) end
+	end
 
 	-- the chip at the top right: BUY / OWNED / pr % / LOCKED
 	local pr = Common.pr(n.pr)
-	local chipText, chipColor, chipBg, chipBgT = "BUY", C.text, C.black, 0.45
+	-- the tag: an outlined caps word (BUY in the hue, pr % in rose), or a bare ✓ OWNED / LOCKED
+	local chipText, chipColor, chipLine = Rich.caps("Buy"), Theme.lift(ctx.hue, 0.55), ctx.hue :: Color3?
 	if state == "owned" then
-		chipText, chipColor, chipBg, chipBgT = "OWNED", C.ownedValue, Theme.mix(C.deep, C.bought, 0.25), 0
+		chipText, chipColor, chipLine = "✓ " .. Rich.caps("Owned"), Sleek.C.good, nil
 	elseif state == "notyet" then
-		chipText, chipColor, chipBg, chipBgT = if pr then Rich.pct(pr) else "NOT YET", C.notYet, C.black, 0.5
+		chipText, chipColor, chipLine = if pr then Rich.pct(pr) else Rich.caps("Not yet"), C.notYet, C.locked
 	elseif state == "locked" then
-		chipText, chipColor, chipBg, chipBgT = "LOCKED", C.lockedTitle, C.black, 0.5
+		chipText, chipColor, chipLine = Rich.caps("Locked"), Sleek.C.lockText, nil
 	end
-	local chip = Common.chip(label, "Chip", chipText, { color = chipColor, bg = chipBg, bgT = chipBgT, h = if compact then 26 else 28 })
+	local chip = Common.chip(label, "Chip", chipText, { color = chipColor, bgT = 1, h = if compact then 22 else 24, stroke = chipLine,
+		role = if state == "notyet" and pr then "badge" else "caps" })
+	chip.FontFace = Font.fromName(if state == "notyet" and pr then "Sarpanch" else "Montserrat", Enum.FontWeight.ExtraBold)
+	local cb = chip:FindFirstChild("Border") :: UIStroke?
+	if cb then cb.Transparency = 0.3 end
 	chip.AnchorPoint = Vector2.new(1, 0)
 	chip.Position = UDim2.new(1, 0, 0, 0)
 	chip.ZIndex = 4
@@ -51584,9 +52274,10 @@ function Upgrade.skin(rec: any, n: any, ctx: any): boolean
 		else
 			Common.text(eff, "number", C.text)
 			eff.BackgroundColor3 = C.black
-			eff.BackgroundTransparency = 0.45
-			eff.Size = UDim2.fromOffset(0, 28)
-			Common.corner(eff, 8)
+			eff.BackgroundTransparency = 0.62
+			eff.Size = UDim2.fromOffset(0, 30)
+			Common.drop(eff, "Corner")
+			Common.stroke(eff, 1, C.white, 0.92).LineJoinMode = Enum.LineJoinMode.Miter
 			Common.setText(eff, "  " .. Common.num(ef, "number", C.text) .. "  ")
 		end
 	elseif state == "owned" then
@@ -51598,14 +52289,15 @@ function Upgrade.skin(rec: any, n: any, ctx: any): boolean
 		eff.Size = UDim2.fromOffset(0, 22)
 		eff.TextXAlignment = Enum.TextXAlignment.Left
 		Common.drop(eff, "Corner")
-		Common.setText(eff, "Active")
+		Common.drop(eff, "Border")
+		Common.setText(eff, "✓  Active")
 	else
 		Common.drop(b, "Eff")
 	end
 
 	-- the pr bar (not yet) and the cost line
 	if state == "notyet" and pr then
-		local bar = Common.bar(b, "Bar", pr, Theme.lift(ctx.hue, 0.15), 5)
+		local bar = Common.bar(b, "Bar", pr, C.notYet, 2)
 		bar.LayoutOrder = 3
 	else
 		Common.drop(b, "Bar")
@@ -51615,14 +52307,39 @@ function Upgrade.skin(rec: any, n: any, ctx: any): boolean
 		local foot = Common.get(b, "Foot", "TextLabel") :: TextLabel
 		foot.LayoutOrder = 4
 		Common.text(foot, "caps", p.soft)
-		foot.Size = UDim2.new(1, 0, 0, 24)
 		foot.AutomaticSize = Enum.AutomaticSize.None
-		foot.TextXAlignment = Enum.TextXAlignment.Left
 		foot.TextYAlignment = Enum.TextYAlignment.Center
 		foot.TextWrapped = false
 		foot.TextTruncate = Enum.TextTruncate.AtEnd
-		local valueColor = if state == "can" then C.text else C.notYet
-		Common.setText(foot, Common.caps("Cost", p.soft) .. "   " .. Common.num(co, "numberHeavy", valueColor, Signatures.unit(n.cur)))
+		if state == "can" then
+			local ink = Sleek.C.ink
+			foot.Size = UDim2.new(1, 0, 0, if compact then 36 else 42)
+			foot.TextXAlignment = Enum.TextXAlignment.Right
+			foot.BackgroundColor3 = C.white
+			foot.BackgroundTransparency = 0
+			local g = Common.get(foot, "Fill", "UIGradient") :: UIGradient
+			g.Rotation = 90
+			g.Color = ColorSequence.new({ ColorSequenceKeypoint.new(0, Theme.lift(ctx.hue, 0.25)), ColorSequenceKeypoint.new(1, ctx.hue) })
+			Common.drop(foot, "Pad")
+			local verb = Common.get(foot, "Verb", "TextLabel") :: TextLabel
+			Common.text(verb, "cta", ink)
+			verb.TextSize = 16
+			verb.Position = UDim2.fromOffset(12, 0)
+			verb.Size = UDim2.new(1, -12, 1, 0)
+			verb.TextXAlignment = Enum.TextXAlignment.Left
+			verb.TextYAlignment = Enum.TextYAlignment.Center
+			Common.setText(verb, "BUY")
+			Common.setText(foot, Common.num(co, "numberHeavy", ink, Signatures.unit(n.cur), true) .. "   ")
+		else
+			foot.Size = UDim2.new(1, 0, 0, 24)
+			foot.TextXAlignment = Enum.TextXAlignment.Left
+			foot.BackgroundTransparency = 1
+			Common.drop(foot, "Fill")
+			Common.drop(foot, "Pad")
+			Common.drop(foot, "Verb")
+
+			Common.setText(foot, Common.caps("Cost", p.soft) .. "   " .. Common.num(co, "numberHeavy", C.notYet, Signatures.unit(n.cur)))
+		end
 	else
 		Common.drop(b, "Foot")
 	end
@@ -51649,32 +52366,33 @@ function Upgrade.tier(rec: any, n: any, ctx: any)
 	local spine = Common.get(rail, "Spine", "Frame") :: Frame
 	spine.AnchorPoint = Vector2.new(0.5, 0)
 	spine.Position = UDim2.fromScale(0.5, 0)
-	spine.Size = UDim2.new(0, 2, 1, 12)
+	spine.Size = UDim2.new(0, 1, 1, 12)
 	spine.BackgroundColor3 = col
-	spine.BackgroundTransparency = 0.45
+	spine.BackgroundTransparency = 0.6
 	local badge = Common.get(rail, "Badge", "TextLabel") :: TextLabel
 	badge.AnchorPoint = Vector2.new(0.5, 0)
 	badge.Position = UDim2.new(0.5, 0, 0, 14)
-	badge.Size = UDim2.fromOffset(34, 34)
-	badge.BackgroundColor3 = Theme.mix(C.deep, col, 0.35)
-	badge.BackgroundTransparency = 0
+	badge.Size = UDim2.fromOffset(30, 30)
+	badge.BackgroundColor3 = col
+	badge.BackgroundTransparency = 0.86
 	Common.text(badge, "badge", C.text)
 	badge.TextSize = math.max(badge.TextSize, 16)
 	badge.TextXAlignment = Enum.TextXAlignment.Center
 	badge.TextYAlignment = Enum.TextYAlignment.Center
 	badge.ZIndex = 2
-	Common.corner(badge, 0.5)
-	Common.stroke(badge, 2, col, 0)
+	Common.drop(badge, "Corner")
+	Common.stroke(badge, 1, col, 0.25).LineJoinMode = Enum.LineJoinMode.Miter
 	Common.setText(badge, tierNo)
 	if owned then
 		local check = Common.get(rail, "Check", "Frame") :: Frame
 		check.AnchorPoint = Vector2.new(0.5, 0)
 		check.Position = UDim2.new(0.5, 0, 0, 54)
-		check.Size = UDim2.fromOffset(12, 12)
+		check.Size = UDim2.fromOffset(7, 7)
+		check.Rotation = 45
 		check.BackgroundColor3 = C.bought
 		check.BackgroundTransparency = 0
 		check.ZIndex = 2
-		Common.corner(check, 0.5)
+		Common.drop(check, "Corner")
 	else
 		Common.drop(rail, "Check")
 	end
@@ -51712,9 +52430,7 @@ function Upgrade.summary(rec: any, n: any, ctx: any)
 	row.AutoButtonColor = false
 	row.Text = ""
 	row.Size = UDim2.new(1, 0, 0, 48)
-	Common.fill(row, Theme.mix(C.panel, C.bought, 0.16), Theme.mix(C.deep, C.bought, 0.1))
-	Common.corner(row, 12)
-	Common.stroke(row, 1.5, C.bought, 0.5)
+	Common.surface(row, "owned", C.bought)
 	Common.pad(row, 0, 14, 0, 14)
 	local t = Common.label(row, "Text", "cardSmall", C.ownedTitle, { wrap = false })
 	t.Size = UDim2.fromScale(1, 1)
@@ -51744,7 +52460,7 @@ return Upgrade
               </Properties>
             </Item>
           </Item>
-          <Item class="ModuleScript" referent="133">
+          <Item class="ModuleScript" referent="134">
             <Properties>
               <string name="Name">Virtual</string>
               <string name="Source"><![CDATA[--!strict
@@ -52009,7 +52725,7 @@ return Virtual
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="134">
+        <Item class="ModuleScript" referent="135">
           <Properties>
             <string name="Name">Render</string>
             <string name="Source"><![CDATA[--!strict
@@ -52897,11 +53613,11 @@ return Render
 ]]></string>
           </Properties>
         </Item>
-        <Item class="Folder" referent="135">
+        <Item class="Folder" referent="136">
           <Properties>
             <string name="Name">Signatures</string>
           </Properties>
-          <Item class="ModuleScript" referent="136">
+          <Item class="ModuleScript" referent="137">
             <Properties>
               <string name="Name">Ach</string>
               <string name="Source"><![CDATA[--!strict
@@ -53149,7 +53865,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="137">
+          <Item class="ModuleScript" referent="138">
             <Properties>
               <string name="Name">Ap</string>
               <string name="Source"><![CDATA[--!strict
@@ -53230,7 +53946,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="138">
+          <Item class="ModuleScript" referent="139">
             <Properties>
               <string name="Name">Badges</string>
               <string name="Source"><![CDATA[--!strict
@@ -53328,7 +54044,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="139">
+          <Item class="ModuleScript" referent="140">
             <Properties>
               <string name="Name">Cp</string>
               <string name="Source"><![CDATA[--!strict
@@ -53841,7 +54557,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="140">
+          <Item class="ModuleScript" referent="141">
             <Properties>
               <string name="Name">Effects</string>
               <string name="Source"><![CDATA[--!strict
@@ -54024,7 +54740,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="141">
+          <Item class="ModuleScript" referent="142">
             <Properties>
               <string name="Name">Energy</string>
               <string name="Source"><![CDATA[--!strict
@@ -54105,7 +54821,7 @@ return { sig("pe"), sig("se") }
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="142">
+          <Item class="ModuleScript" referent="143">
             <Properties>
               <string name="Name">Ex</string>
               <string name="Source"><![CDATA[--!strict
@@ -54607,7 +55323,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="143">
+          <Item class="ModuleScript" referent="144">
             <Properties>
               <string name="Name">Kit</string>
               <string name="Source"><![CDATA[--!strict
@@ -55054,7 +55770,7 @@ return Kit
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="144">
+          <Item class="ModuleScript" referent="145">
             <Properties>
               <string name="Name">M</string>
               <string name="Source"><![CDATA[--!strict
@@ -56090,7 +56806,7 @@ return M
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="145">
+          <Item class="ModuleScript" referent="146">
             <Properties>
               <string name="Name">Mp</string>
               <string name="Source"><![CDATA[--!strict
@@ -56185,7 +56901,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="146">
+          <Item class="ModuleScript" referent="147">
             <Properties>
               <string name="Name">Options</string>
               <string name="Source"><![CDATA[--!strict
@@ -56455,7 +57171,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="147">
+          <Item class="ModuleScript" referent="148">
             <Properties>
               <string name="Name">P</string>
               <string name="Source"><![CDATA[--!strict
@@ -56598,7 +57314,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="148">
+          <Item class="ModuleScript" referent="149">
             <Properties>
               <string name="Name">Pp</string>
               <string name="Source"><![CDATA[--!strict
@@ -56704,7 +57420,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="149">
+          <Item class="ModuleScript" referent="150">
             <Properties>
               <string name="Name">Signatures</string>
               <string name="Source"><![CDATA[--!strict
@@ -56890,7 +57606,7 @@ return Signatures
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="150">
+          <Item class="ModuleScript" referent="151">
             <Properties>
               <string name="Name">Sp</string>
               <string name="Source"><![CDATA[--!strict
@@ -57360,7 +58076,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="151">
+          <Item class="ModuleScript" referent="152">
             <Properties>
               <string name="Name">T</string>
               <string name="Source"><![CDATA[--!strict
@@ -57432,7 +58148,7 @@ return {
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="152">
+        <Item class="ModuleScript" referent="153">
           <Properties>
             <string name="Name">Style</string>
             <string name="Source"><![CDATA[--!strict
@@ -57626,7 +58342,7 @@ return Style
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="153">
+        <Item class="ModuleScript" referent="154">
           <Properties>
             <string name="Name">Types</string>
             <string name="Source"><![CDATA[--!strict
