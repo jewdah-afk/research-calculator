@@ -6,6 +6,7 @@
 	    owned   quiet green surface, OWNED chip, the effect value (or "Active") in the owned green; no glow
 	    notyet  mauve surface, the pr % chip and a 5 du bar, COST in the not-yet rose
 	    locked  dim mauve, LOCKED chip (never sent for upgrades today; kept for signatures)
+	BUY ALL (Upgrade.buyAll): a button in the UPGRADES title row, from when the layer after this one is reached.
 	A fully owned tier (every card of a game row bought) uses the compact owned cards (Skins/CompactOwned) and its
 	rail turns green. The tier rail (WIDE / MEDIUM) is a badge with the row number on a glowing spine.
 	COMPACT folds every owned upgrade into one summary row ("N OWNED · Show") at the top of the section.
@@ -22,6 +23,7 @@ local Skin = require(Core:WaitForChild("Skin"))
 local Common = require(script.Parent:WaitForChild("Common"))
 local CompactOwned = require(script.Parent:WaitForChild("CompactOwned"))
 local Signatures = require(script.Parent.Parent.Parent:WaitForChild("Signatures"):WaitForChild("Signatures"))
+local Kit = require(script.Parent.Parent.Parent:WaitForChild("Signatures"):WaitForChild("Kit"))
 
 local Upgrade = {}
 
@@ -338,6 +340,59 @@ function Upgrade.tier(rec: any, n: any, ctx: any)
 	else
 		Common.drop(rail, "Check")
 	end
+end
+
+-- ------------------------------------------------------------------------------------------------------ Buy All
+-- the BUY ALL button at the right of the UPGRADES title row, once the layer after this one is reached (the view sends
+-- the action as n.ba and how many upgrades it would buy now as n.bn). Every mode; dim while nothing is affordable.
+function Upgrade.buyAll(rec: any, n: any, ctx: any)
+	local header = rec.root:FindFirstChild("SectionTitle")
+	if n.cn ~= "upgrades" or type(n.ba) ~= "table" or header == nil or not header:IsA("Frame") then
+		if header then Common.drop(header, "BuyAll") end
+		return
+	end
+	local compact = ctx.mode == "COMPACT"
+	local count = if type(n.bn) == "number" then n.bn else 0
+	local on = count > 0
+	-- the rule flexes to leave the buttons room at the right (Signatures/P does the same for Hide owned)
+	local flex = false
+	local rule = header:FindFirstChild("Rule")
+	if rule then
+		flex = pcall(function()
+			local f = Common.get(rule, "Flex", "UIFlexItem") :: any
+			f.FlexMode = Enum.UIFlexMode.Fill
+		end)
+	end
+	local b = Common.get(header, "BuyAll", "TextButton") :: TextButton
+	b.LayoutOrder = if flex then 21 else 6
+	b.AutoButtonColor = false
+	b.Text = ""
+	b.Size = UDim2.fromOffset(0, if compact then 22 else 24)
+	b.AutomaticSize = Enum.AutomaticSize.X
+	b.BackgroundColor3 = ctx.hue
+	b.BackgroundTransparency = if on then 0.25 else 0.88
+	Common.drop(b, "Corner")
+	Common.stroke(b, 1, if on then Theme.lift(ctx.hue, 0.5) else C.muted, if on then 0.2 else 0.6).LineJoinMode =
+		Enum.LineJoinMode.Miter
+	Common.pad(b, 0, 10, 0, 10)
+	local l = Common.get(b, "Caption", "TextLabel") :: TextLabel
+	l.BackgroundTransparency = 1
+	l.Size = UDim2.fromScale(0, 1)
+	l.AutomaticSize = Enum.AutomaticSize.X
+	l.Active = false
+	Common.text(l, "caps", if on then Sleek.C.ink else C.muted, 0)
+	l.RichText = true
+	l.TextXAlignment = Enum.TextXAlignment.Center
+	l.TextYAlignment = Enum.TextYAlignment.Center
+	l.TextWrapped = false
+	l.FontFace = Font.fromName("Montserrat", Enum.FontWeight.ExtraBold)
+	Common.setText(l, Rich.caps(if on then "Buy all · " .. count else "Buy all"))
+	b:SetAttribute("State", if on then "can" else "notyet")
+	b:SetAttribute("Count", count)
+	local a = n.ba
+	Kit.onPress(b, function()
+		if (b:GetAttribute("Count") or 0) > 0 then ctx.act(a, false) end
+	end)
 end
 
 -- ------------------------------------------------------------------------------------------------------ COMPACT fold

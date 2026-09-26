@@ -72,6 +72,7 @@ function rbx_do(a) {
 	if (k == "opt") return rbx_option(l)
 	if (tmp.gameEnded && !player.keepGoing) return
 	if (k == "upg") buyUpg(l, id)
+	else if (k == "buyall") rbx_buyAll(l)
 	else if (k == "buy") buyBuyable(l, id)
 	else if (k == "click") clickClickable(l, id)
 	else if (k == "hold") {

@@ -83,6 +83,8 @@ rbx_do = function(this, a)
 	end
 	if (k == "upg") then
 		buyUpg(nil, l, id)
+	elseif (k == "buyall") then
+		rbx_buyAll(nil, l)
 	elseif (k == "buy") then
 		buyBuyable(nil, l, id)
 	elseif (k == "click") then

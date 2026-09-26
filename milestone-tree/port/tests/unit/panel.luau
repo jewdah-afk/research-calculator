@@ -255,6 +255,7 @@ local function allActions(store)
 	local out = {}
 	for _, n in store.nodes do
 		if type(n) == "table" and type(n.a) == "table" then table.insert(out, n.a) end
+		if type(n) == "table" and type(n.ba) == "table" then table.insert(out, n.ba) end -- an upgrades section's BUY ALL
 	end
 	-- the map root's own close / opt actions (plan 1.11: the Options button of a ladder fires map.opt)
 	local mapRoot = store.nodes.map
@@ -627,6 +628,35 @@ local function findName(root, name)
 	return nil
 end
 local function plainText(t) return (string.gsub(tostring(t or ""), "<[^>]*>", "")) end
+print("== BUY ALL in the UPGRADES title row")
+do
+	for _, spec in { { true, 1920, 1080 }, { false, 844, 390 } } do
+		local panel, _, fired = openFixture(fixtures.s13_p, spec[1], spec[2], spec[3])
+		local mode = spec[2] .. "x" .. spec[3]
+		local b = findName(panel.root, "BuyAll")
+		check(b ~= nil and b:GetAttribute("Count") == 2, mode .. ": p shows BUY ALL with 2 to buy")
+		local cap = b and b:FindFirstChild("Caption")
+		local txt = if cap then (string.gsub(string.upper(plainText(cap.Text)), "[^%w]", "")) else ""
+		check(txt == "BUYALL2",
+			mode .. ": the button reads BUY ALL · 2 (" .. txt .. ")")
+		if b then b.Activated:Fire() end
+		local last = fired[#fired]
+		check(last ~= nil and last[1] == "buyall" and last[2] == "p", mode .. ": pressing it sends the buyall action")
+		panel:destroy()
+	end
+	-- open but nothing affordable: dim, and a press sends nothing
+	local panel, _, fired = openFixture(fixtures.layer_p, true)
+	local b = findName(panel.root, "BuyAll")
+	check(b ~= nil and b:GetAttribute("Count") == 0 and b:GetAttribute("State") == "notyet", "nothing to buy: BUY ALL is dim")
+	local n0 = #fired
+	if b then b.Activated:Fire() end
+	check(#fired == n0, "a dim BUY ALL sends nothing")
+	panel:destroy()
+	-- a layer whose next layer is not reached yet: no button
+	panel = openFixture(fixtures.layer_mp, true)
+	check(findName(panel.root, "BuyAll") == nil, "no BUY ALL before the next layer is reached (mp)")
+	panel:destroy()
+end
 
 do
 	-- sp (Signatures/Sp): furnace, spark cards with burn bars, the Show cycler in the title row, the pager hidden on 1 page

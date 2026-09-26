@@ -173,6 +173,12 @@
     s.width = autoX ? 'max-content' : ud(size.X);
     s.height = autoY ? 'auto' : ud(size.Y);
     if (autoX) s.minWidth = ud(size.X);
+    // a list item keeps its size (Roblox never shrinks one); a UIFlexItem Fill takes the line's leftover space
+    if (ctx.inList) {
+      s.flexShrink = '0';
+      const fi = kid(o, 'UIFlexItem');
+      if (fi && ENUM(fi.p.FlexMode) === 'Fill') { s.flexGrow = '1'; s.flexShrink = '1'; s.flexBasis = '0'; s.minWidth = '0'; s.width = 'auto'; }
+    }
     if (autoY) s.minHeight = ud(size.Y);
     s.flex = 'none';
     s.zIndex = String(p.ZIndex != null ? p.ZIndex : 1);

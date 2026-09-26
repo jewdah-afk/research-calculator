@@ -276,8 +276,62 @@ rbx_upgHave = function(this, layer, t)
 	end
 	do return player[JS.k(layer)].points end
 end
+rbx_buyAllOn = function(this, l)
+	local nx
+	nx = rbx_BUYALL_AFTER[JS.k(l)]
+	if ((((not JS.t(nx)) or (not JS.t(player[JS.k(l)]))) or (not JS.t(player[JS.k(nx)]))) or (not JS.t(tmp[JS.k(nx)]))) then
+		do return false end
+	end
+	if (JS.t(player[JS.k(nx)].unlocked) or JS.eq(tmp[JS.k(nx)].layerShown, true)) then
+		do return true end
+	end
+	do return ((not (player[JS.k(nx)].best == nil)) and (JS.D(player[JS.k(nx)].best)):gt(0)) end
+end
+rbx_buyAllIds = function(this, l)
+	local t, out, r, c, id
+	t = tmp[JS.k(l)].upgrades
+	out = JS.A(0)
+	if (((not JS.t(t)) or (not JS.t(player[JS.k(l)].unlocked))) or JS.t(player[JS.k(l)].deactivated)) then
+		do return out end
+	end
+	for r = 1, JS.cap(1, JS.tonum(t.rows), 1) do
+		for c = 1, JS.cap(1, JS.tonum(t.cols), 1) do
+			id = JS.add((JS.tonum(r) * 10), c)
+			if ((t[JS.k(id)] == nil) or (not (layers[JS.k(l)].upgrades[JS.k(id)].perkUnl == nil))) then
+				continue
+			end
+			if ((JS.t(t[JS.k(id)].unlocked) and (not hasUpgrade(nil, l, id))) and canAffordUpgrade(nil, l, id)) then
+				JS.m(out, "push", id)
+			end
+		end
+	end
+	do return out end
+end
+rbx_buyAll = function(this, l)
+	local n, pass, ids, got, i
+	if ((not JS.t(rbx_buyAllOn(nil, l))) or (not JS.t(player[JS.k(l)].unlocked))) then
+		do return 0 end
+	end
+	n = 0
+	for pass = 0, (6) - 1 do
+		ids = rbx_buyAllIds(nil, l)
+		got = 0
+		for i = 0, JS.cap(0, (JS.len(ids)) - 1, 1) do
+			buyUpg(nil, l, ids[JS.k(i)])
+			if hasUpgrade(nil, l, ids[JS.k(i)]) then
+				got = (JS.tonum(got) + 1)
+			end
+		end
+		if JS.eq(got, 0) then
+			break
+		end
+		n = JS.add(n, got)
+		updateTemp(nil)
+	end
+	do return n end
+end
 rbx_upgrades = function(this, layer)
-	local t, rows, r, row, c, id, u
+	local t, rows, r, row, c, id, u, col
 	t = tmp[JS.k(layer)].upgrades
 	if (not JS.t(t)) then
 		do return JS.NULL end
@@ -301,10 +355,15 @@ rbx_upgrades = function(this, layer)
 			}, {"t", "c"}))
 		end
 	end
-	do return JS.O({
+	col = JS.O({
 		t = "col",
 		c = rows
-	}, {"t", "c"}) end
+	}, {"t", "c"})
+	if JS.t(rbx_buyAllOn(nil, layer)) then
+		JS.setk(col, "ba", rbx_act(nil, JS.A(2, "buyall", layer)))
+		JS.setk(col, "bn", JS.len(rbx_buyAllIds(nil, layer)))
+	end
+	do return col end
 end
 rbx_toggle = function(this, toggle)
 	do return JS.O({
@@ -1684,6 +1743,23 @@ rbx_view = function(this)
 	do return v end
 end
 rbx_actions = JS.A(0)
+rbx_BUYALL_AFTER = JS.O({
+	p = "sp",
+	sp = "mm",
+	pb = "hp",
+	hp = "ap",
+	ap = "t",
+	t = "hb",
+	hb = "pe",
+	pe = "se",
+	se = "pp",
+	pp = "ep",
+	ep = "mp",
+	mp = "pm",
+	pep = "cp",
+	cp = "cm",
+	ex = "cm"
+}, {"p", "sp", "pb", "hp", "ap", "t", "hb", "pe", "se", "pp", "ep", "mp", "pep", "cp", "ex"})
 rbx_BUY_CUR = JS.O({
 	p = JS.O({
 	[11] = JS.A(2, "p", "points"),

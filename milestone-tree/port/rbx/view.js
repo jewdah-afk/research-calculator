@@ -209,6 +209,47 @@ function rbx_upgHave(layer, t) {
 	return player[layer].points
 }
 
+// Buy All (a Roblox addition): one press buys every upgrade of a layer the player can afford, from when the layer
+// after it is reached (sp opens it on p, mm on sp, ...). Upgrade Perk upgrades (p) stay a choice and are skipped.
+var rbx_BUYALL_AFTER = { p: "sp", sp: "mm", pb: "hp", hp: "ap", ap: "t", t: "hb", hb: "pe", pe: "se", se: "pp", pp: "ep",
+	ep: "mp", mp: "pm", pep: "cp", cp: "cm", ex: "cm" }
+function rbx_buyAllOn(l) {
+	var nx = rbx_BUYALL_AFTER[l]
+	if (!nx || !player[l] || !player[nx] || !tmp[nx]) return false
+	if (player[nx].unlocked || tmp[nx].layerShown == true) return true
+	return player[nx].best !== undefined && new Decimal(player[nx].best).gt(0)
+}
+// the upgrades Buy All would buy now
+function rbx_buyAllIds(l) {
+	var t = tmp[l].upgrades, out = []
+	if (!t || !player[l].unlocked || player[l].deactivated) return out // buyUpg's own rule
+	for (var r = 1; r <= t.rows; r++) {
+		for (var c = 1; c <= t.cols; c++) {
+			var id = r * 10 + c
+			if (t[id] === undefined || layers[l].upgrades[id].perkUnl !== undefined) continue
+			if (t[id].unlocked && !hasUpgrade(l, id) && canAffordUpgrade(l, id)) out.push(id)
+		}
+	}
+	return out
+}
+// buy them, again while a purchase makes more affordable or unlocks more (a few passes at most); the count bought
+function rbx_buyAll(l) {
+	if (!rbx_buyAllOn(l) || !player[l].unlocked) return 0
+	var n = 0
+	for (var pass = 0; pass < 6; pass++) {
+		var ids = rbx_buyAllIds(l)
+		var got = 0
+		for (var i = 0; i < ids.length; i++) {
+			buyUpg(l, ids[i])
+			if (hasUpgrade(l, ids[i])) got++
+		}
+		if (got == 0) break
+		n += got
+		updateTemp()
+	}
+	return n
+}
+
 function rbx_upgrades(layer) {
 	var t = tmp[layer].upgrades
 	if (!t) return null
@@ -224,7 +265,13 @@ function rbx_upgrades(layer) {
 		}
 		if (row.length) rows.push({ t: "row", c: row })
 	}
-	return { t: "col", c: rows }
+	var col = { t: "col", c: rows }
+	// Buy All: the action while it is open, and how many upgrades it would buy now
+	if (rbx_buyAllOn(layer)) {
+		col.ba = rbx_act(["buyall", layer])
+		col.bn = rbx_buyAllIds(layer).length
+	}
+	return col
 }
 
 function rbx_toggle(toggle) {

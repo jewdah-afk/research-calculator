@@ -95,6 +95,7 @@ local function container(rec: any, n: any, ctx: any)
 		Common.drop(root, "Rail")
 	end
 	Upgrade.summary(rec, n, ctx)
+	Upgrade.buyAll(rec, n, ctx)
 	root.Visible = true
 end
 
