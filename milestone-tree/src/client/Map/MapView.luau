@@ -269,12 +269,15 @@ function MapView.new(gui: ScreenGui, root: Frame, o: { assets: any?, realm: any?
 	platesScale = Instance.new("UIScale")
 	platesScale.Parent = plates
 	self.links, self.nodes, self.plates = links, nodesF, plates
-	-- nodes and the rift hotspot take input; everything else in the map is inert
-	pcall(function()
-		for _, f in { box, links, plates } :: { GuiObject } do
-			f.Interactable = false
+	-- nodes and the rift hotspot take input; everything else in the map is inert. Interactable = false carries down to
+	-- descendants, so it goes on each layer beside Nodes, never on the Box that holds Nodes.
+	local function inert(c: Instance)
+		if c ~= nodesF and c:IsA("GuiObject") then
+			pcall(function() c.Interactable = false end)
 		end
-	end)
+	end
+	for _, c in box:GetChildren() do inert(c) end
+	box.ChildAdded:Connect(inert)
 
 	-- ------------------------------------------------------------------------------------------ art
 	local function tierLayer(id: string): (any?, string)

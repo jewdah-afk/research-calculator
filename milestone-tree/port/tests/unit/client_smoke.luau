@@ -121,6 +121,25 @@ check(mapGui ~= nil and pg:FindFirstChild("Backing") ~= nil, "MapGui and the bla
 check(readies >= 1, "asked the server for a full view")
 local nodesF = mapGui and mapGui.Root.Box.Nodes
 check(nodesF and nodesF:FindFirstChild("Node_m") ~= nil and nodesF:FindFirstChild("Node_cp") ~= nil, "21 node widgets")
+do
+	-- Interactable = false carries down to descendants in the engine: a node's Hit (and the rift) must have no
+	-- ancestor with it off, or no node can be clicked
+	local off: string? = nil
+	local function inert(o: Instance?, stop: Instance?)
+		local x = o
+		while x and x ~= stop do
+			if x:IsA("GuiObject") and (x :: any).Interactable == false then return x.Name end
+			x = x.Parent
+		end
+		return nil
+	end
+	for _, n in (if nodesF then nodesF:GetChildren() else {}) do
+		local hit = n:FindFirstChild("Hit", true)
+		off = off or (hit and inert(hit, mapGui))
+	end
+	off = off or (nodesF and inert(nodesF:FindFirstChild("Rift"), mapGui))
+	check(off == nil, "every node's Hit and the rift take input (Interactable off on: " .. tostring(off) .. ")")
+end
 local screen = pg.OverlayGui.Root.Screen
 check(screen.Visible and screen:GetAttribute("Kind") == "loading", "the loading screen shows until the first view")
 

@@ -154,6 +154,9 @@
     const el = document.createElement('div');
     el.className = 'g ' + o.c;
     el.dataset.name = o.n;
+    // input: what a click would hit in the engine (tools/snap/hittest.js)
+    if (p.Active === true || (/Button$/.test(o.c) && p.Active !== false)) el.dataset.active = '1';
+    if (p.Interactable === false) el.dataset.noint = '1';
     if (p.Visible === false) el.style.display = 'none';
     const size = p.Size || { X: { Scale: 0, Offset: 0 }, Y: { Scale: 0, Offset: 0 } };
     const pos = p.Position || { X: { Scale: 0, Offset: 0 }, Y: { Scale: 0, Offset: 0 } };
