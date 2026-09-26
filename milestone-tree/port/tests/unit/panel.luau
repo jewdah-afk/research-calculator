@@ -724,7 +724,7 @@ do
 		{ "layer_pe", function(panel) local v = findName(panel.parts.hero, "Rate"); return v ~= nil and string.find(plainText(v.Text), "16.00", 1, true) ~= nil and string.find(plainText(v.Text), "PP", 1, true) ~= nil, "pe: RATE chip " .. tostring(v and plainText(v.Text)) end },
 		{ "layer_se", function(panel) return findName(panel.parts.hero, "Rate") ~= nil, "se: RATE chip" end },
 		{ "layer_ap", function(panel) return findName(panel.parts.sheet, "Orbit") ~= nil, "ap: atom orbit" end },
-		{ "layer_mp", function(panel) return findName(panel.root, "Portal") ~= nil and findName(panel.parts.sheet, "Split") ~= nil, "mp: portal card and split rim" end },
+		{ "layer_mp", function(panel) return findName(panel.root, "Portal") == nil and findName(panel.parts.sheet, "Split") ~= nil, "mp: every challenge the same card (no portal banner), split rim" end },
 		{ "layer_t", function(panel) return findName(panel.parts.sheet, "Rays") ~= nil, "t: crown rays" end },
 	}
 	for _, c in cases do
