@@ -26,8 +26,10 @@ local function stateOf(n: any): (string, string)
 	if st8 == "completable" then return "gold", "completable" end
 	if st8 == "active" or n.active then return "gold", "active" end
 	if st8 == "locked" then return "locked", "locked" end
-	-- idle: a completed-before challenge (cls done) still reads as done; the rest can start
-	if n.cls == "done" then return "owned", "done" end
+	-- idle: a completed-before challenge (cls done) still reads as done, unless it counts completions (a limit
+	-- other than 1, not reached: the server says "done" then): it can be run again
+	local lim = n.lim
+	if n.cls == "done" and not (type(lim) == "string" and lim ~= "" and lim ~= "1") then return "owned", "done" end
 	return "can", "idle"
 end
 Challenge.stateOf = stateOf
@@ -106,7 +108,8 @@ function Challenge.skin(rec: any, n: any, ctx: any): boolean
 	Common.setText(label, table.concat(parts, "\n"))
 	-- completions chip (cmp / lim; one-shot challenges show none)
 	if cmp and cmp ~= "0" then
-		local text = if lim and lim ~= "Infinity" then cmp .. " / " .. lim else cmp .. " done"
+		local text = if lim and lim ~= "Infinity" then cmp .. " / " .. lim .. " · repeatable"
+			elseif lim then cmp .. " done · repeatable" else cmp .. " done"
 		local chip = Common.chip(label, "Chip", text, { color = C.ownedValue, bg = Theme.mix(C.deep, C.bought, 0.25), bgT = 0,
 			h = if compact then 26 else 28 })
 		chip.AnchorPoint = Vector2.new(1, 0)
@@ -172,6 +175,8 @@ function Challenge.button(rec: any, n: any, ctx: any): boolean
 	label.Visible = true
 	local word = Common.plain(n.h)
 	word = string.upper((string.gsub(string.gsub(word, "^%s+", ""), "%s+$", "")))
+	-- the game says "Completed" after one clear even when a challenge counts more: it can be run again
+	if word == "COMPLETED" and st8 == "idle" then word = "RUN AGAIN" end
 	Common.setText(label, Common.esc(word))
 	Common.state(b, if st8 == "locked" then "locked" elseif st8 == "done" then "owned" else "can")
 	return true

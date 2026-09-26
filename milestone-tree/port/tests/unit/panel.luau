@@ -892,6 +892,23 @@ do
 		{ "layer_pe", function(panel) local v = findName(panel.parts.hero, "Rate"); return v ~= nil and string.find(plainText(v.Text), "16.00", 1, true) ~= nil and string.find(plainText(v.Text), "PP", 1, true) ~= nil, "pe: RATE chip " .. tostring(v and plainText(v.Text)) end },
 		{ "layer_se", function(panel) return findName(panel.parts.hero, "Rate") ~= nil, "se: RATE chip" end },
 		{ "layer_ap", function(panel) return findName(panel.parts.sheet, "Orbit") ~= nil, "ap: atom orbit" end },
+		{ "layer_ap", function(panel)
+			local k = 0
+			for _, d in descendants(panel.root) do
+				if d:IsA("TextLabel") and string.find(plainText(d.Text), "Complete it again", 1, true) then k += 1 end
+			end
+			return k >= 4, "ap: every challenge says it is repeatable (" .. k .. ")"
+		end },
+		{ "layer_ap", function(panel)
+			local again, completed = 0, 0
+			for _, d in descendants(panel.root) do
+				if d:IsA("TextLabel") then
+					local t = plainText(d.Text)
+					if t == "RUN AGAIN" then again += 1 elseif t == "COMPLETED" then completed += 1 end
+				end
+			end
+			return again >= 1 and completed == 0, "ap: a cleared repeatable challenge reads RUN AGAIN, never COMPLETED (" .. again .. "/" .. completed .. ")"
+		end },
 		{ "layer_mp", function(panel) return findName(panel.root, "Portal") == nil and findName(panel.parts.sheet, "Split") ~= nil, "mp: every challenge the same card (no portal banner), split rim" end },
 		{ "layer_t", function(panel) return findName(panel.parts.sheet, "Rays") ~= nil, "t: crown rays" end },
 	}

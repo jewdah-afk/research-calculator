@@ -166,7 +166,7 @@ local function chipsOf(cn: string, c: Counts?, hue: Color3): { Chip }
 		table.insert(out, { text = Rich.caps(c.owned .. " / " .. c.total .. " owned"), color = C.soft, seg = seg })
 		return out
 	elseif cn == "milestones" or cn == "challenges" or cn == "achievements" then
-		return { { text = Rich.caps(c.owned .. " / " .. c.total .. (if cn == "achievements" then "" else " done")), color = C.soft,
+		return { { text = Rich.caps(c.owned .. " / " .. c.total .. (if cn == "achievements" then "" elseif cn == "challenges" then " cleared" else " done")), color = C.soft,
 			seg = seg } }
 	elseif cn == "grid" then
 		return { { text = Rich.caps(c.ready .. " corrupted"), color = Theme.lift(hue, 0.4) } }
