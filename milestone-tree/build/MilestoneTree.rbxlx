@@ -44839,6 +44839,7 @@ local MapView = require(script.Parent:WaitForChild("MapView"))
 local Nodes = require(script.Parent:WaitForChild("Nodes"))
 local MapLogic = require(script.Parent:WaitForChild("MapLogic"))
 local NodeWidget = require(script.Parent:WaitForChild("NodeWidget"))
+local NodeAtlas = require(game:GetService("ReplicatedStorage"):WaitForChild("MilestoneTree"):WaitForChild("NodeAtlas"))
 
 type MapState = Types.MapState
 type Camera = Types.Camera
@@ -44890,8 +44891,27 @@ function Markers.new(gui: ScreenGui, view: MapView.MapView, nodes: Nodes.Nodes):
 		Kit.corner(tip, UDim.new(0.15, 0))
 		local emblem = Kit.frame(f, "Emblem", 2)
 		emblem.Size = UDim2.fromScale(1, 1)
-		Kit.gem(emblem, hue)
-		Kit.stroke(emblem, 2.5, Color3.new(1, 1, 1), 0.95, "Line")
+		local r0 = NodeAtlas.rects[layer]
+		if NodeAtlas.id and r0 then
+			-- Sleek: the layer's crystal on a small dark plate with a hue hairline (the map's own gems)
+			emblem.BackgroundColor3 = Color3.fromHex("06090f")
+			emblem.BackgroundTransparency = 0.15
+			Kit.stroke(emblem, 1, hue, 0.35, "Line").LineJoinMode = Enum.LineJoinMode.Miter
+			local im = Kit.child(emblem, "Crystal", "ImageLabel") :: ImageLabel
+			im.BackgroundTransparency = 1
+			im.Image = NodeAtlas.id :: string
+			im.ImageRectOffset = Vector2.new(r0[1], r0[2])
+			im.ImageRectSize = Vector2.new(r0[3], r0[4])
+			im.AnchorPoint = Vector2.new(0.5, 0.5)
+			im.Position = UDim2.fromScale(0.5, 0.5)
+			im.Size = UDim2.fromScale(0.84, 0.84)
+			im.ZIndex = 3
+			tip.BackgroundColor3 = hue
+			Kit.corner(tip, UDim.new(0, 0))
+		else
+			Kit.gem(emblem, hue)
+		end
+		if not NodeAtlas.id then Kit.stroke(emblem, 2.5, Color3.new(1, 1, 1), 0.95, "Line") end
 		local sym = Kit.label(emblem, "Symbol", "badge", "", Color3.new(1, 1, 1))
 		sym.Size = UDim2.fromScale(1, 1)
 		sym.FontFace = Font.fromName("Sarpanch", Enum.FontWeight.Heavy)
@@ -44899,7 +44919,9 @@ function Markers.new(gui: ScreenGui, view: MapView.MapView, nodes: Nodes.Nodes):
 		sym.ZIndex = 3
 		Kit.textStroke(sym, 2, 1)
 		local text = NodeWidget.SYMS[layer] or string.upper(layer)
-		if text == "★" then
+		if NodeAtlas.id and r0 then
+			sym.Visible = false
+		elseif text == "★" then
 			local g = Kit.glyph(emblem, "Star", "star", Color3.new(1, 1, 1))
 			g.AnchorPoint = Vector2.new(0.5, 0.5)
 			g.Position = UDim2.fromScale(0.5, 0.5)
@@ -44911,11 +44933,10 @@ function Markers.new(gui: ScreenGui, view: MapView.MapView, nodes: Nodes.Nodes):
 		end
 		local badge = Kit.frame(f, "Badge", 4)
 		badge.AnchorPoint = Vector2.new(0.5, 0.5)
-		badge.Position = UDim2.fromScale(0.86, 0.14)
-		badge.Size = UDim2.fromScale(0.46, 0.46)
+		badge.Position = UDim2.fromScale(0.9, 0.1)
+		badge.Size = UDim2.fromScale(0.38, 0.38)
 		badge.BackgroundTransparency = 0
-		Kit.corner(badge)
-		Kit.stroke(badge, 1.5, Color3.new(1, 1, 1), 1, "Line")
+		Kit.stroke(badge, 1, Color3.fromHex("06090f"), 0.2, "Line").LineJoinMode = Enum.LineJoinMode.Miter
 		local hitB = Kit.button(f, "Hit")
 		hitB.Size = UDim2.new(1, 16, 1, 16)
 		hitB.Position = UDim2.fromOffset(-8, -8)
@@ -44937,8 +44958,9 @@ function Markers.new(gui: ScreenGui, view: MapView.MapView, nodes: Nodes.Nodes):
 			r.badge.BackgroundColor3 = Theme.C.complete
 			g = Kit.glyph(r.badge, "Icon", "bolt", Color3.fromHex("2a1a00"))
 		else
-			r.badge.BackgroundColor3 = Theme.C.danger
-			g = Kit.glyph(r.badge, "Icon", "bang", Color3.new(1, 1, 1))
+			-- CAN BUY: the layer hue (the ring says the rest), not an alarm red
+			r.badge.BackgroundColor3 = Theme.hue(r.layer)
+			g = Kit.glyph(r.badge, "Icon", "bang", Color3.fromHex("06101b"))
 		end
 		g.AnchorPoint = Vector2.new(0.5, 0.5)
 		g.Position = UDim2.fromScale(0.5, 0.5)
