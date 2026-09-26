@@ -20,6 +20,9 @@
 	is on the player's screen (Session:act). The remotes are limited per player (presses: a token bucket; resyncs
 	and board pages: one per interval) and a player who keeps flooding past the limits is kicked. Leaderboards are
 	written by the server from the server's own game.
+
+	Updates: BindToClose on a live server sends everyone to a holding server while their games save, and the holding
+	server sends them back to the new version (SoftShutdown).
 ]]
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
@@ -31,6 +34,7 @@ local Config = require(root:WaitForChild("Config"))
 local Store = require(root:WaitForChild("Store"))
 local Shop = require(root:WaitForChild("Shop"))
 local Leaderboards = require(root:WaitForChild("Leaderboards"))
+local SoftShutdown = require(root:WaitForChild("SoftShutdown"))
 local Boards = require(ReplicatedStorage:WaitForChild("MilestoneTree"):WaitForChild("Boards"))
 
 local remotes = Instance.new("Folder")
@@ -173,7 +177,17 @@ local function shareCpu()
 	local share = math.clamp(Config.SERVER_CPU / math.max(n, 1), Config.MIN_CPU_SHARE, Config.TICK_CPU_SHARE)
 	for _, e in entries do e.actor:SetAttribute("TickShare", share) end
 end
+-- a holding server (players waiting out an update, see SoftShutdown): no games, just a message and the way back
+local HOLDING = SoftShutdown.holding()
+local function say(player: Player, text: string)
+	viewRemote:FireClient(player, { status = text })
+end
 Players.PlayerAdded:Connect(function(player: Player)
+	if HOLDING then
+		-- the client asks for its screen (Ready) once it runs: tell it again then
+		SoftShutdown.hold(player, say)
+		return
+	end
 	task.defer(shareCpu)
 	start(player)
 end)
@@ -181,7 +195,9 @@ Players.PlayerRemoving:Connect(function(player: Player)
 	stop(player)
 	shareCpu()
 end)
-for _, p in Players:GetPlayers() do task.spawn(start, p) end
+for _, p in Players:GetPlayers() do
+	if HOLDING then SoftShutdown.hold(p, say) else task.spawn(start, p) end
+end
 task.defer(shareCpu)
 
 -- a token bucket per player: holding a buyable fires 20 presses a second, a burst of clicks a few more
@@ -247,6 +263,10 @@ prefsRemote.OnServerEvent:Connect(function(player: Player, p: any)
 end)
 
 readyRemote.OnServerEvent:Connect(function(player: Player)
+	if HOLDING then
+		say(player, "Updating to the new version")
+		return
+	end
 	local entry = entries[player]
 	if not entry then return end
 	-- a whole screen is costly to build: one per RESYNC_EVERY. A quicker ask is held and sent when the interval is
@@ -291,8 +311,12 @@ boardRemote.OnServerInvoke = function(player: Player, board: any): any
 end
 
 game:BindToClose(function()
-	for player in entries do task.spawn(stop, player) end
-	local t0 = os.clock()
-	task.wait(0.1)
-	while stopping > 0 and os.clock() - t0 < 25 do task.wait(0.1) end
+	-- an update: the players go to a holding server and come back to the new version (SoftShutdown); their games
+	-- are saved here meanwhile
+	SoftShutdown.closing(Players:GetPlayers(), function()
+		for player in entries do task.spawn(stop, player) end
+		local t0 = os.clock()
+		task.wait(0.1)
+		while stopping > 0 and os.clock() - t0 < 25 do task.wait(0.1) end
+	end)
 end)

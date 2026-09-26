@@ -51,6 +51,7 @@ scriptModule(server, "Config", "server/Config")
 scriptModule(server, "Store", "server/Store")
 scriptModule(server, "Shop", "server/Shop")
 scriptModule(server, "Leaderboards", "server/Leaderboards")
+local softInst = scriptModule(server, "SoftShutdown", "server/SoftShutdown")
 M.module(server, "Session", function() return L.Session end)
 local runtime = Instance.new("Folder"); runtime.Name = "Runtime"; runtime.Parent = server
 M.module(runtime, "JSRT", function() return L.JSRT end)
@@ -495,10 +496,40 @@ local rec3 = store.player_3
 check(rec3 ~= nil and type(rec3.save) == "string", "the save is written once the store answers again (" .. tostring(rec3 and rec3.save and #rec3.save) .. ")")
 M.studio = nil
 
-print("== the server shuts down")
+print("== the server shuts down for an update (soft shutdown)")
+M.studio = false -- a live server
 for _, f in M.closers do task.spawn(f) end
 frames(3)
 check(store.player_1.lock == nil, "shutdown saved and released the lock")
+local tp = M.teleports[1]
+check(#M.teleports == 1 and tp.place == 76183483380423 and table.find(tp.players, p) ~= nil, "everyone is sent to a holding server at once")
+check(tp and tp.options and tp.options.ShouldReserveServer == true and tp.options:GetTeleportData().mtSoftShutdown == true,
+	"to a reserved server, marked as a soft shutdown")
+M.studio = nil
+
+print("== the holding server sends them back to the new version")
+local Soft = M.require(softInst)
+game.__props.PrivateServerId = "reserved-1"
+M.joinData[1] = { mtSoftShutdown = true }
+check(Soft.holding(), "a reserved server reached by the soft shutdown is a holding server")
+local said = {}
+local n0 = #M.teleports
+Soft.hold(p, function(_, text) table.insert(said, text) end)
+check(said[1] == "Updating to the new version", "the loading screen says the game is updating")
+frames(Soft.HOLD_SECONDS - 1)
+check(#M.teleports == n0, "the players wait while the old server saves")
+frames(2)
+local back = M.teleports[n0 + 1]
+check(back ~= nil and back.place == 76183483380423 and back.options == nil and back.players[1] == p, "then they go back to a public server")
+M.failTeleport = true
+local n1 = #M.teleports
+Soft.hold(p, function(_, text) table.insert(said, text) end)
+frames(Soft.HOLD_SECONDS + 4)
+M.failTeleport = false
+frames(8)
+check(#M.teleports == n1 + 1, "a failed teleport back is tried again")
+game.__props.PrivateServerId = ""
+check(not Soft.holding(), "a public server is not a holding server")
 
 check((M.errors or 0) == 0, "no script errors (" .. tostring(M.errors or 0) .. ")")
 print(if failures == 0 then "roblox: all checks passed" else ("roblox: " .. failures .. " checks FAILED"))

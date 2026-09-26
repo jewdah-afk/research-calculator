@@ -386,6 +386,22 @@ function UserService:GetUserInfosByUserIdsAsync(ids)
 end
 function Players:GetNameFromUserIdAsync(id) return "user" .. id end
 
+-- TeleportService: teleports are recorded in M.teleports ({ place, players, options }); a join's teleport data in
+-- M.joinData[userId]; the server's reserved / private state on the game's props
+M.teleports = {}
+M.joinData = {}
+local TeleportService = game:GetService("TeleportService")
+function TeleportService:TeleportAsync(place, players, options)
+	if M.failTeleport then error("teleport failed (mock)") end
+	table.insert(M.teleports, { place = place, players = players, options = options })
+end
+function Inst:GetJoinData() return { TeleportData = M.joinData[self.__props.UserId] } end
+function Inst:SetTeleportData(d) self.__teleportData = d end
+function Inst:GetTeleportData() return self.__teleportData end
+game.__props.PrivateServerId = ""
+game.__props.PrivateServerOwnerId = 0
+game.__props.PlaceId = 76183483380423
+
 -- MarketplaceService: passes owned by M.passes[userId][passId]; prompts are recorded in M.prompts
 M.passes = {}
 M.prompts = {}
