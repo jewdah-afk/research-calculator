@@ -34,8 +34,8 @@ With API access off, every Play starts a fresh game, which is exactly what a new
       **Prestige** › prestige › upgrades (**NEXT**) › the READY tray (**DONE**). **Skip tutorial** is always there;
       **OPTIONS › Tutorial › Replay** starts it again.
 - [ ] 4. **Buy upgrades**: click upgrade cards and buyables (hold a buyable: it repeats), and the layer's big
-      button. Cards keep their size and look after each purchase. (There is no *Buy All* button in the code yet;
-      if a newer build adds one, test it here.)
+      button. Cards keep their size and look after each purchase. Once the next layer is reached (SP for P, MM for
+      SP, ...), **BUY ALL** in the UPGRADES title row buys every affordable upgrade of that layer (dim when none).
 - [ ] 5. **Prestige**: a READY layer glows and shows in the READY tray; holding its gem 0.6 s prestiges it.
 - [ ] 6. **Shop** (bag icon on the dock). Studio purchases are **free test purchases** (the prompt says so):
       - [ ] 2x Speed: the game visibly runs twice as fast.
@@ -146,7 +146,8 @@ Careful: with this on, Studio reads and writes the **real** live save of your ow
   until it is tested on an Xbox/PlayStation.
 - **Shop prices are hard-coded** in `src/shared/Products.luau` (not read from Roblox), so regional pricing or a price
   change on the Dashboard is not reflected in the Shop label. The purchase prompt always shows the real price.
-- **Buy All**: not in the code as of this checklist; nothing to ship for it unless a new build adds it.
+- **Time Warp during a server crash**: a warp is granted only once the player's game can save, and the rest is fed
+  before the last save on leaving; a server crash in the ~5 s a warp takes to feed can still lose the unsaved part.
 - **Studio with API access uses live data**: Hard Reset in Studio wipes your real save; receipts from Studio tests
   are recorded in the live store.
 - **Time Warp edge**: the warp is added over about 3 s and is not saved until finished; leaving in those seconds

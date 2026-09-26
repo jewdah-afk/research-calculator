@@ -29,7 +29,8 @@
           <string name="Name">Boot</string>
           <string name="Source"><![CDATA[--!strict
 -- The loading screen from the first frame: replaces Roblox's default one. The game's overlay (Overlay/Screens) drives
--- it from there (status, progress) and fades it out once the player's game is on screen.
+-- it from there (status, the asset preload's progress) and fades it out once the player's game is on screen and its
+-- images are fetched (App + Core/Preload).
 local ReplicatedFirst = game:GetService("ReplicatedFirst")
 local BootScreen = require(script.Parent:WaitForChild("BootScreen"))
 
@@ -51,14 +52,15 @@ end)
 	No other modules: it runs before ReplicatedStorage has replicated.
 
 	    BootScreen.show()                   build it (idempotent); Boot.client.luau calls it at once
-	    BootScreen.set("Loading your save…") the status line   BootScreen.set({ done = 3, total = 9 }) the progress
+	    BootScreen.set("Loading your save…") the status line   BootScreen.set({ done = 3, total = 9 }) the asset count
 	    BootScreen.hide()                   fill the line, fade out, destroy; never before MIN_SHOW seconds on screen
 	    BootScreen.visible()   BootScreen.claim() (the overlay drives it)   BootScreen.claimed()
 
 	Look (Sleek, DESIGN.md Style 1): the void, a soft violet glow, four corner ticks, a diamond emblem that breathes
 	and turns, THE MILESTONE TREE in tracked heavy italic caps with NG+ in the Milestone violet, a 2 px progress line
-	with the % at its right, the status in caps above it, and a rotating tip under it. The progress never stalls: it
-	creeps towards 90% on its own and jumps to what the game reports.
+	with the % at its right, the status in caps above it, and a rotating tip under it. The % is the client's asset
+	preload (Core/Preload): done / total of the images and fonts, up to 95%; the rest fills as it fades. Until the
+	first count arrives (the client's scripts are still replicating) it creeps towards 15% so it never looks stuck.
 
 	The screen stays at least MIN_SHOW seconds, also when the game is ready sooner (a fast device, a warm cache): the
 	title and the tree get their moment. Once asked to hide it reads ENTERING THE TREE and the line fills to 100% by the
@@ -79,6 +81,8 @@ local MUTED = Color3.fromHex("6b7486")
 local HAIR = Color3.new(1, 1, 1)
 local MIN_SHOW = 4 -- seconds on screen at the least
 BootScreen.MIN_SHOW = MIN_SHOW
+local CREEP = 0.15 -- how far the line creeps before the first asset count
+local LOADED = 0.95 -- every asset fetched; the last 5% fills as the screen fades
 
 local TIPS = {
 	"Tap a node on the tree to open its layer",
@@ -94,6 +98,7 @@ local parts: { [string]: any } = {}
 local status = "Loading the realm"
 local target = 0
 local shown = 0
+local counted = false -- the client reported an asset count: the line follows it from then on
 local started = 0
 local hiding = false
 local hideAt, hideFrom, hold = 0, 0, 0 -- when hide() was asked, the line then, the time left to MIN_SHOW
@@ -251,14 +256,16 @@ local function step()
 	local g = gui
 	if g == nil then return end
 	local t = os.clock() - started
-	-- creep to 90% on its own (fast at first), never past what the game has not confirmed
-	local creep = 0.9 * (1 - math.exp(-t / 4))
+	-- creep to 15% on its own until the client counts its assets; then the count alone moves it (never backwards)
+	local creep = if counted then 0 else CREEP * (1 - math.exp(-t / 4))
 	if hiding then
 		-- the rest of the line fills evenly by the end of the hold (smoothstep), so a fast load still reads as a load
 		local k = math.clamp((os.clock() - hideAt) / hold, 0, 1)
 		shown = hideFrom + (1 - hideFrom) * k * k * (3 - 2 * k)
 	else
-		shown += (math.max(target, creep) - shown) * math.min(1, 0.12)
+		-- paced: never ahead of the MIN_SHOW clock, so a fast load climbs evenly instead of jumping to 95% and waiting
+		local pace = LOADED * math.min(1, t / MIN_SHOW)
+		shown += (math.max(shown, math.min(math.max(target, creep), pace)) - shown) * math.min(1, 0.12)
 	end
 	if parts.fill then parts.fill.Size = UDim2.fromScale(shown, 1) end
 	if parts.pct then parts.pct.Text = string.format("%d%%", math.floor(shown * 100 + 0.5)) end
@@ -296,7 +303,7 @@ function BootScreen.show()
 	local existing = pg:FindFirstChild("MilestoneBoot")
 	if existing then existing:Destroy() end
 	started = os.clock()
-	shown, target, hiding = 0, 0, false
+	shown, target, hiding, counted = 0, 0, false, false
 	local g = build()
 	g.Parent = pg
 	gui = g
@@ -306,17 +313,16 @@ function BootScreen.show()
 	conn = RunService.Heartbeat:Connect(step)
 end
 
--- a status string, or { done, total } for the progress (the preload count)
+-- a status string, or { done, total } for the progress (the asset preload's count)
 function BootScreen.set(data: any)
 	if gui == nil or hiding then return end
 	if type(data) == "string" then
 		status = string.gsub(data, "[%.…]+$", "")
 		if parts.status then parts.status.Text = caps(status) end
-		-- each server step is further along
-		target = math.max(target, 0.35)
 	elseif type(data) == "table" and type(data.done) == "number" and type(data.total) == "number" then
 		local p = if data.total > 0 then math.clamp(data.done / data.total, 0, 1) else 1
-		target = math.max(target, 0.1 + 0.6 * p)
+		counted = true
+		target = math.max(target, LOADED * p)
 	end
 end
 
@@ -34743,6 +34749,7 @@ local Motion = require(Core:WaitForChild("Motion"))
 local Recipes = require(Core:WaitForChild("Recipes"))
 local Prefs = require(Core:WaitForChild("Prefs"))
 local Audio = require(Core:WaitForChild("Audio"))
+local Preload = require(Core:WaitForChild("Preload"))
 local ViewStore = require(Core:WaitForChild("ViewStore"))
 local InputFolder = script.Parent:WaitForChild("Input")
 local Input = require(InputFolder:WaitForChild("Input"))
@@ -34774,6 +34781,7 @@ local RIFT = Vector2.new(3150, 1350)
 local UNIVERSE_WORD = { [true] = "Lives in the Prestige Multiverse", [false] = "Lives in the Normal Universe" }
 local INTENT_WAIT = 2 -- seconds the client's own open / close waits for map.open to confirm it
 local RECONNECT_AFTER = 6
+local REVEAL_FRAMES = 2 -- Heartbeats between the loading screen's last step and its fade: the realm has drawn
 
 -- the engine settings the client owns (plan 2.1, 4); each on its own, so one missing API never stops the rest
 local function engineSettings()
@@ -34852,8 +34860,8 @@ function App.start()
 	local readyRemote: RemoteEvent? = nil
 	local lastMs: MapState? = nil
 	local gotFirst = false -- the first full view arrived
-	local firstAt = 0
-	local preloaded = false
+	local preloaded = false -- every image and font is fetched (or Preload gave up at its timeout)
+	local assetsNoted = false -- the status says LOADING ASSETS once the first view waits on them
 	local introDone = false
 	local fatal = false
 	local lastPatchAt = 0
@@ -35400,7 +35408,7 @@ function App.start()
 		local first = false
 		if changes.full then
 			if not gotFirst then
-				gotFirst, firstAt, first = true, os.clock(), true
+				gotFirst, first = true, true
 			end
 			if outOfSync then
 				outOfSync = false
@@ -35511,8 +35519,9 @@ function App.start()
 	})
 
 	-- ------------------------------------------------------------------------------------------ the loop
+	-- the loading screen goes when BOTH the first view is on the map and the images are fetched (or timed out)
 	local function loadingDone(): boolean
-		return gotFirst and (preloaded or os.clock() - firstAt > 3)
+		return gotFirst and preloaded
 	end
 	-- the Multiverse rift's hum: loudest with the rift large and central on the map, faint while it is sealed, none
 	-- while a full-screen panel hides the map
@@ -35573,12 +35582,25 @@ function App.start()
 		mi:step(dt)
 		view:step(dt)
 		Motion.step(dt)
+		if gotFirst and not preloaded and not assetsNoted and not fatal and screenKind == "loading" then
+			assetsNoted = true
+			overlay:screen("loading", "Loading assets")
+		end
 		if not introDone and loadingDone() and not fatal then
 			introDone = true
-			if screenKind == "loading" then setScreen(nil) end
 			frameBoot()
 			Audio.setLive(true)
 			Audio.loop("ambience", 1)
+			-- the framed realm draws under the loading screen for a couple of frames first, so the fade uncovers it
+			-- drawn instead of popping in
+			local left = REVEAL_FRAMES
+			local reveal: RBXScriptConnection? = nil
+			reveal = RunService.Heartbeat:Connect(function()
+				left -= 1
+				if left > 0 then return end
+				if reveal then reveal:Disconnect() end
+				if screenKind == "loading" then setScreen(nil) end
+			end)
 		end
 		riftAt -= dt
 		if riftAt <= 0 and introDone then
@@ -35601,8 +35623,12 @@ function App.start()
 	end)
 	if not okPre then RunService.RenderStepped:Connect(step) end
 
+	-- every image the client draws (the map's tiles first) and its fonts, behind the loading screen; never longer
+	-- than Preload.TIMEOUT
 	task.spawn(function()
-		view:preload(function(done: number, total: number)
+		local list = Preload.list(view:images(), MapView.chooseTier())
+		if screenKind == "loading" then overlay:screen("loading", "Loading assets") end
+		Preload.run(list, function(done: number, total: number)
 			if screenKind == "loading" then overlay:screen("loading", { done = done, total = total }) end
 		end)
 		preloaded = true
@@ -37009,6 +37035,179 @@ return Prefs
           </Item>
           <Item class="ModuleScript" referent="83">
             <Properties>
+              <string name="Name">Preload</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	Preload: every image (and the fonts) the client draws, fetched behind the loading screen so the realm, the UI kit
+	and the node gems are on the GPU when the screen fades, instead of popping in one by one.
+
+	    local list = Preload.list(view:images())   the map's own tiles first, then the UI kit, the node atlas, the
+	                                               sprite atlas, the Shop icons and one label per font face; deduped
+	    Preload.run(list, function(done, total) ... end)   yields until every batch is back or the timeout (~20 s)
+
+	ContentProvider:PreloadAsync runs in batches, side by side, each in its own pcall: a batch that errors counts as
+	fetched (the image then loads when it shows, as before), and one that never returns cannot hold the game past
+	the timeout. The progress counts each asset once, from PreloadAsync's per-asset callback and a batch's return.
+]]
+
+local ContentProvider = game:GetService("ContentProvider")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Theme = require(script.Parent:WaitForChild("Theme"))
+
+local Preload = {}
+
+Preload.BATCH = 8 -- assets per PreloadAsync call
+Preload.TIMEOUT = 20 -- seconds before the game goes on without what has not arrived
+local POLL = 0.05
+
+export type Options = { batch: number?, timeout: number? }
+
+-- ReplicatedStorage.MilestoneTree.<name>, or nil (a module that fails to load never stops the preload)
+local function shared(name: string): any
+	local ok, m = pcall(function(): any
+		local folder = ReplicatedStorage:WaitForChild("MilestoneTree", 10) :: Instance
+		return require(folder:WaitForChild(name, 5) :: ModuleScript) :: any
+	end)
+	return if ok and type(m) == "table" then m else nil
+end
+
+local function isId(v: any): boolean
+	return type(v) == "string" and v ~= "" and string.find(v, "^rbx") ~= nil
+end
+
+-- the images the client draws beside the map's tiles: the UI kit, the node atlas, the UI sprite atlas and textures of
+-- the tier in use, the Shop's pass / product icons
+function Preload.images(tier: string?): { string }
+	local out: { string } = {}
+	local function add(v: any)
+		if isId(v) then table.insert(out, v :: string) end
+	end
+	local uiKit = shared("UiKit")
+	if uiKit then add(uiKit.id) end
+	local nodeAtlas = shared("NodeAtlas")
+	if nodeAtlas then add(nodeAtlas.id) end
+	local assets = shared("Assets")
+	local t = if tier == "LOW" then "LOW" else "HIGH"
+	if assets then
+		local sp = assets.sprites
+		if type(sp) == "table" and type(sp.atlas) == "table" then add(sp.atlas[t]) end
+		local ui = assets.ui
+		if type(ui) == "table" then
+			if type(ui.atlas) == "table" then add(ui.atlas[t]) end
+			if type(ui.textures) == "table" then
+				for _, tex in ui.textures do
+					if type(tex) == "table" then add(tex.id) end
+				end
+			end
+		end
+	end
+	local products = shared("Products")
+	if products then
+		for _, group in { products.passes, products.products } do
+			if type(group) == "table" then
+				for _, item in group do
+					if type(item) == "table" and type(item.icon) == "number" then add("rbxassetid://" .. tostring(item.icon)) end
+				end
+			end
+		end
+	end
+	return out
+end
+
+-- one unparented TextLabel per font face of Theme's type roles: PreloadAsync fetches a label's FontFace
+function Preload.fonts(): { Instance }
+	local out: { Instance } = {}
+	local seen: { [string]: true } = {}
+	local names: { string } = {}
+	for name in Theme.ROLES do table.insert(names, name) end
+	table.sort(names)
+	for _, name in names do
+		local f = Theme.font(name)
+		local k = string.format("%s|%s|%s", tostring(f.Family), tostring(f.Weight), tostring(f.Style))
+		if not seen[k] then
+			seen[k] = true
+			local l = Instance.new("TextLabel")
+			l.Name = "Preload_" .. name
+			l.FontFace = f
+			l.Text = "Aa"
+			table.insert(out, l)
+		end
+	end
+	return out
+end
+
+-- the whole list, deduped, in order: `first` (the map's tiles, farthest layers first), the other images, the fonts
+function Preload.list(first: { string }?, tier: string?): { any }
+	local out: { any } = {}
+	local seen: { [string]: true } = {}
+	local function add(id: string)
+		if seen[id] then return end
+		seen[id] = true
+		table.insert(out, id)
+	end
+	if first then
+		for _, id in first do
+			if isId(id) then add(id) end
+		end
+	end
+	for _, id in Preload.images(tier) do add(id) end
+	for _, l in Preload.fonts() do table.insert(out, l) end
+	return out
+end
+
+-- PreloadAsync on `list` in batches (yields); onProgress(done, total) after each asset. Returns done, total and
+-- whether it gave up at the timeout.
+function Preload.run(list: { any }, onProgress: ((done: number, total: number) -> ())?, opts: Options?): (number, number, boolean)
+	local total = #list
+	if total == 0 then
+		if onProgress then onProgress(0, 0) end
+		return 0, 0, false
+	end
+	local size = math.max(1, (opts and opts.batch) or Preload.BATCH)
+	local deadline = os.clock() + ((opts and opts.timeout) or Preload.TIMEOUT)
+	local done = 0
+	local running = 0
+	local over = false
+	local function report()
+		if onProgress and not over then onProgress(math.min(done, total), total) end
+	end
+	for i = 1, total, size do
+		local batch: { any } = table.move(list, i, math.min(i + size - 1, total), 1, {})
+		running += 1
+		task.spawn(function()
+			local got = 0
+			pcall(function()
+				ContentProvider:PreloadAsync(batch, function()
+					-- an Instance may call back once per content id it holds: never count past the batch
+					if got >= #batch then return end
+					got += 1
+					done += 1
+					report()
+				end)
+			end)
+			-- back (or failed): whatever the callback did not count is settled now
+			if got < #batch then
+				done += #batch - got
+				got = #batch
+				report()
+			end
+			running -= 1
+		end)
+	end
+	while running > 0 and os.clock() < deadline do
+		task.wait(POLL)
+	end
+	over = true
+	return math.min(done, total), total, running > 0
+end
+
+return Preload
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="84">
+            <Properties>
               <string name="Name">Recipes</string>
               <string name="Source"><![CDATA[--!strict
 --[[
@@ -37922,7 +38121,7 @@ return Recipes
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="84">
+          <Item class="ModuleScript" referent="85">
             <Properties>
               <string name="Name">Rich</string>
               <string name="Source"><![CDATA[--!strict
@@ -38164,7 +38363,7 @@ return Rich
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="85">
+          <Item class="ModuleScript" referent="86">
             <Properties>
               <string name="Name">Signal</string>
               <string name="Source"><![CDATA[--!strict
@@ -38240,7 +38439,7 @@ return Signal
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="86">
+          <Item class="ModuleScript" referent="87">
             <Properties>
               <string name="Name">Skin</string>
               <string name="Source"><![CDATA[--!strict
@@ -38337,7 +38536,7 @@ return Skin
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="87">
+          <Item class="ModuleScript" referent="88">
             <Properties>
               <string name="Name">Sleek</string>
               <string name="Source"><![CDATA[--!strict
@@ -38774,7 +38973,7 @@ return Sleek
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="88">
+          <Item class="ModuleScript" referent="89">
             <Properties>
               <string name="Name">Sprites</string>
               <string name="Source"><![CDATA[--!strict
@@ -39053,7 +39252,7 @@ return Sprites
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="89">
+          <Item class="ModuleScript" referent="90">
             <Properties>
               <string name="Name">Theme</string>
               <string name="Source"><![CDATA[--!strict
@@ -39490,7 +39689,7 @@ return Theme
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="90">
+          <Item class="ModuleScript" referent="91">
             <Properties>
               <string name="Name">ViewStore</string>
               <string name="Source"><![CDATA[--!strict
@@ -39848,11 +40047,11 @@ return ViewStore
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="91">
+        <Item class="Folder" referent="92">
           <Properties>
             <string name="Name">Hud</string>
           </Properties>
-          <Item class="ModuleScript" referent="92">
+          <Item class="ModuleScript" referent="93">
             <Properties>
               <string name="Name">Band</string>
               <string name="Source"><![CDATA[--!strict
@@ -40007,7 +40206,7 @@ return Band
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="93">
+          <Item class="ModuleScript" referent="94">
             <Properties>
               <string name="Name">Capsule</string>
               <string name="Source"><![CDATA[--!strict
@@ -40479,7 +40678,7 @@ return Capsule
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="94">
+          <Item class="ModuleScript" referent="95">
             <Properties>
               <string name="Name">Dock</string>
               <string name="Source"><![CDATA[--!strict
@@ -40751,7 +40950,7 @@ return Dock
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="95">
+          <Item class="ModuleScript" referent="96">
             <Properties>
               <string name="Name">Hud</string>
               <string name="Source"><![CDATA[--!strict
@@ -41008,7 +41207,7 @@ return Hud
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="96">
+          <Item class="ModuleScript" referent="97">
             <Properties>
               <string name="Name">Kit</string>
               <string name="Source"><![CDATA[--!strict
@@ -41571,7 +41770,7 @@ return Kit
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="97">
+          <Item class="ModuleScript" referent="98">
             <Properties>
               <string name="Name">Portal</string>
               <string name="Source"><![CDATA[--!strict
@@ -41812,7 +42011,7 @@ return Portal
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="98">
+          <Item class="ModuleScript" referent="99">
             <Properties>
               <string name="Name">Ready</string>
               <string name="Source"><![CDATA[--!strict
@@ -42292,7 +42491,7 @@ return Ready
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="99">
+          <Item class="ModuleScript" referent="100">
             <Properties>
               <string name="Name">UniverseTag</string>
               <string name="Source"><![CDATA[--!strict
@@ -42410,11 +42609,11 @@ return UniverseTag
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="100">
+        <Item class="Folder" referent="101">
           <Properties>
             <string name="Name">Input</string>
           </Properties>
-          <Item class="ModuleScript" referent="101">
+          <Item class="ModuleScript" referent="102">
             <Properties>
               <string name="Name">Hotkeys</string>
               <string name="Source"><![CDATA[--!strict
@@ -42518,7 +42717,7 @@ return Hotkeys
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="102">
+          <Item class="ModuleScript" referent="103">
             <Properties>
               <string name="Name">Input</string>
               <string name="Source"><![CDATA[--!strict
@@ -42621,7 +42820,7 @@ return Input
             </Properties>
           </Item>
         </Item>
-        <Item class="LocalScript" referent="103">
+        <Item class="LocalScript" referent="104">
           <Properties>
             <string name="Name">Main</string>
             <string name="Source"><![CDATA[--!strict
@@ -42639,11 +42838,11 @@ App.start()
 ]]></string>
           </Properties>
         </Item>
-        <Item class="Folder" referent="104">
+        <Item class="Folder" referent="105">
           <Properties>
             <string name="Name">Map</string>
           </Properties>
-          <Item class="ModuleScript" referent="105">
+          <Item class="ModuleScript" referent="106">
             <Properties>
               <string name="Name">Ambient</string>
               <string name="Source"><![CDATA[--!strict
@@ -43142,7 +43341,7 @@ return Ambient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="106">
+          <Item class="ModuleScript" referent="107">
             <Properties>
               <string name="Name">Fallback</string>
               <string name="Source"><![CDATA[--!strict
@@ -43366,7 +43565,7 @@ return Fallback
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="107">
+          <Item class="ModuleScript" referent="108">
             <Properties>
               <string name="Name">Fields</string>
               <string name="Source"><![CDATA[--!strict
@@ -43553,7 +43752,7 @@ return Fields
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="108">
+          <Item class="ModuleScript" referent="109">
             <Properties>
               <string name="Name">Links</string>
               <string name="Source"><![CDATA[--!strict
@@ -43881,7 +44080,7 @@ return Links
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="109">
+          <Item class="ModuleScript" referent="110">
             <Properties>
               <string name="Name">MapCamera</string>
               <string name="Source"><![CDATA[--!strict
@@ -44353,7 +44552,7 @@ return MapCamera
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="110">
+          <Item class="ModuleScript" referent="111">
             <Properties>
               <string name="Name">MapInput</string>
               <string name="Source"><![CDATA[--!strict
@@ -44797,7 +44996,7 @@ return MapInput
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="111">
+          <Item class="ModuleScript" referent="112">
             <Properties>
               <string name="Name">MapLogic</string>
               <string name="Source"><![CDATA[--!strict
@@ -45133,7 +45332,7 @@ return MapLogic
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="112">
+          <Item class="ModuleScript" referent="113">
             <Properties>
               <string name="Name">MapView</string>
               <string name="Source"><![CDATA[--!strict
@@ -45147,7 +45346,7 @@ return MapLogic
 	    view:frameStart({ mode, focus, focusY, intro })          the HUD-safe start framing (DESIGN.md 3.3)
 	    view:setRect(absRect?, { animate })                      the Box-resize strip beside a side sheet (3.6)
 	    view:worldToAbs(p), view:absToWorld(q), view:absToMap(q)
-	    view:setTier("LOW"), view:setReduced(b), view:setAmbient(on), view:setForegroundOpen(open), view:preload(cb)
+	    view:setTier("LOW"), view:setReduced(b), view:setAmbient(on), view:setForegroundOpen(open), view:images()
 	    view:step(dt)                                            once a frame (App's PreRender loop)
 
 	The tree (REALM.md 9.1, siblings take ZIndex = their place in the list):
@@ -45162,7 +45361,6 @@ return MapLogic
 	sky or world gets the procedural fallback (Fallback.luau); without the realm atlas there are no ambient sprites.
 ]]
 
-local ContentProvider = game:GetService("ContentProvider")
 local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -45282,7 +45480,7 @@ export type MapView = {
 	absToMap: (self: MapView, q: Vector2) -> Vector2,
 	safeRect: (self: MapView) -> MapCamera.Rect,
 	freeRect: (self: MapView) -> MapCamera.Rect,
-	preload: (self: MapView, onProgress: ((done: number, total: number) -> ())?) -> (),
+	images: (self: MapView) -> { string },
 	step: (self: MapView, dt: number) -> (),
 	destroy: (self: MapView) -> (),
 }
@@ -45978,8 +46176,9 @@ function MapView.new(gui: ScreenGui, root: Frame, o: { assets: any?, realm: any?
 	end
 
 	-- ------------------------------------------------------------------------------------------ preload
-	-- PreloadAsync behind the splash, farthest layers first, then the atlas (yields)
-	function self.preload(_: MapView, onProgress: ((done: number, total: number) -> ())?)
+	-- the images the map draws, farthest layers first, then the atlas: Core/Preload fetches them behind the loading
+	-- screen with the rest of the client's
+	function self.images(_: MapView): { string }
 		local list: { string } = {}
 		for _, rec in layers do
 			for _, t in rec.tiles do
@@ -45988,18 +46187,7 @@ function MapView.new(gui: ScreenGui, root: Frame, o: { assets: any?, realm: any?
 		end
 		local atlas = atlasInfo()
 		if atlas and atlas.id ~= "" then table.insert(list, atlas.id) end
-		local total = #list
-		if total == 0 then
-			if onProgress then onProgress(0, 0) end
-			return
-		end
-		local done = 0
-		pcall(function()
-			ContentProvider:PreloadAsync(list, function()
-				done += 1
-				if onProgress then onProgress(done, total) end
-			end)
-		end)
+		return list
 	end
 
 	-- a sky or world whose painted tiles have not come in after 10 s (a failed or still-moderated upload) gets the
@@ -46081,7 +46269,7 @@ return MapView
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="113">
+          <Item class="ModuleScript" referent="114">
             <Properties>
               <string name="Name">Markers</string>
               <string name="Source"><![CDATA[--!strict
@@ -46328,7 +46516,7 @@ return Markers
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="114">
+          <Item class="ModuleScript" referent="115">
             <Properties>
               <string name="Name">NodeWidget</string>
               <string name="Source"><![CDATA[--!strict
@@ -47082,7 +47270,7 @@ return NodeWidget
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="115">
+          <Item class="ModuleScript" referent="116">
             <Properties>
               <string name="Name">Nodes</string>
               <string name="Source"><![CDATA[--!strict
@@ -47501,7 +47689,7 @@ return Nodes
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="116">
+          <Item class="ModuleScript" referent="117">
             <Properties>
               <string name="Name">Plates</string>
               <string name="Source"><![CDATA[--!strict
@@ -47948,11 +48136,11 @@ return Plates
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="117">
+        <Item class="Folder" referent="118">
           <Properties>
             <string name="Name">Overlay</string>
           </Properties>
-          <Item class="ModuleScript" referent="118">
+          <Item class="ModuleScript" referent="119">
             <Properties>
               <string name="Name">Detail</string>
               <string name="Source"><![CDATA[--!strict
@@ -48255,7 +48443,7 @@ return Detail
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="119">
+          <Item class="ModuleScript" referent="120">
             <Properties>
               <string name="Name">Guide</string>
               <string name="Source"><![CDATA[--!strict
@@ -48502,7 +48690,7 @@ return Guide
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="120">
+          <Item class="ModuleScript" referent="121">
             <Properties>
               <string name="Name">Modals</string>
               <string name="Source"><![CDATA[--!strict
@@ -48970,7 +49158,7 @@ return Modals
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="121">
+          <Item class="ModuleScript" referent="122">
             <Properties>
               <string name="Name">Overlay</string>
               <string name="Source"><![CDATA[--!strict
@@ -49145,7 +49333,7 @@ return Overlay
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="122">
+          <Item class="ModuleScript" referent="123">
             <Properties>
               <string name="Name">Peek</string>
               <string name="Source"><![CDATA[--!strict
@@ -49462,7 +49650,7 @@ return Peek
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="123">
+          <Item class="ModuleScript" referent="124">
             <Properties>
               <string name="Name">Screens</string>
               <string name="Source"><![CDATA[--!strict
@@ -49470,7 +49658,8 @@ return Peek
 	Screens: the full-screen states of DESIGN.md 7.10-7.12 (mock j).
 
 	    loading    the ReplicatedFirst BootScreen (src/first) when the place has it: status + progress go to it, and
-	               leaving "loading" fades it out; else the fallback card: THE MILESTONE TREE, a progress bar, LOADING…
+	               leaving "loading" fades it out (App leaves it once the first view is drawn AND Core/Preload has
+	               fetched the images, or timed out); else the fallback card: THE MILESTONE TREE, a progress bar, LOADING…
 	    fatal      the error text with "Your save is safe on the server."
 	    outOfSync  OUT OF SYNC · the screen stopped updating · RESYNC (fires `resync`)
 	    end        the star emblem, YOU BEAT THE GAME!, the win text on a scrim band, IT TOOK YOU <took>,
@@ -49820,7 +50009,7 @@ return Screens
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="124">
+          <Item class="ModuleScript" referent="125">
             <Properties>
               <string name="Name">ToastModel</string>
               <string name="Source"><![CDATA[--!strict
@@ -49985,7 +50174,7 @@ return ToastModel
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="125">
+          <Item class="ModuleScript" referent="126">
             <Properties>
               <string name="Name">Toasts</string>
               <string name="Source"><![CDATA[--!strict
@@ -50366,7 +50555,7 @@ return Toasts
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="126">
+          <Item class="ModuleScript" referent="127">
             <Properties>
               <string name="Name">Tooltip</string>
               <string name="Source"><![CDATA[--!strict
@@ -50600,11 +50789,11 @@ return Tooltip
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="127">
+        <Item class="Folder" referent="128">
           <Properties>
             <string name="Name">Panel</string>
           </Properties>
-          <Item class="ModuleScript" referent="128">
+          <Item class="ModuleScript" referent="129">
             <Properties>
               <string name="Name">Hero</string>
               <string name="Source"><![CDATA[--!strict
@@ -51197,7 +51386,7 @@ return Hero
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="129">
+          <Item class="ModuleScript" referent="130">
             <Properties>
               <string name="Name">Panel</string>
               <string name="Source"><![CDATA[--!strict
@@ -52219,7 +52408,7 @@ return Panel
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="130">
+          <Item class="ModuleScript" referent="131">
             <Properties>
               <string name="Name">Sections</string>
               <string name="Source"><![CDATA[--!strict
@@ -52460,11 +52649,11 @@ return Sections
 ]]></string>
             </Properties>
           </Item>
-          <Item class="Folder" referent="131">
+          <Item class="Folder" referent="132">
             <Properties>
               <string name="Name">Skins</string>
             </Properties>
-            <Item class="ModuleScript" referent="132">
+            <Item class="ModuleScript" referent="133">
               <Properties>
                 <string name="Name">Achievement</string>
                 <string name="Source"><![CDATA[--!strict
@@ -52523,7 +52712,7 @@ return Achievement
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="133">
+            <Item class="ModuleScript" referent="134">
               <Properties>
                 <string name="Name">Buyable</string>
                 <string name="Source"><![CDATA[--!strict
@@ -52749,7 +52938,7 @@ return Buyable
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="134">
+            <Item class="ModuleScript" referent="135">
               <Properties>
                 <string name="Name">Challenge</string>
                 <string name="Source"><![CDATA[--!strict
@@ -52929,7 +53118,7 @@ return Challenge
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="135">
+            <Item class="ModuleScript" referent="136">
               <Properties>
                 <string name="Name">Clickable</string>
                 <string name="Source"><![CDATA[--!strict
@@ -52993,7 +53182,7 @@ return Clickable
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="136">
+            <Item class="ModuleScript" referent="137">
               <Properties>
                 <string name="Name">Common</string>
                 <string name="Source"><![CDATA[--!strict
@@ -53385,7 +53574,7 @@ return Common
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="137">
+            <Item class="ModuleScript" referent="138">
               <Properties>
                 <string name="Name">CompactOwned</string>
                 <string name="Source"><![CDATA[--!strict
@@ -53471,7 +53660,7 @@ return CompactOwned
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="138">
+            <Item class="ModuleScript" referent="139">
               <Properties>
                 <string name="Name">Generic</string>
                 <string name="Source"><![CDATA[--!strict
@@ -53833,7 +54022,7 @@ return Generic
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="139">
+            <Item class="ModuleScript" referent="140">
               <Properties>
                 <string name="Name">GridTile</string>
                 <string name="Source"><![CDATA[--!strict
@@ -53913,7 +54102,7 @@ return GridTile
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="140">
+            <Item class="ModuleScript" referent="141">
               <Properties>
                 <string name="Name">Milestone</string>
                 <string name="Source"><![CDATA[--!strict
@@ -54045,7 +54234,7 @@ return Milestone
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="141">
+            <Item class="ModuleScript" referent="142">
               <Properties>
                 <string name="Name">Opt</string>
                 <string name="Source"><![CDATA[--!strict
@@ -54132,7 +54321,7 @@ return Opt
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="142">
+            <Item class="ModuleScript" referent="143">
               <Properties>
                 <string name="Name">Perk</string>
                 <string name="Source"><![CDATA[--!strict
@@ -54192,7 +54381,7 @@ return Perk
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="143">
+            <Item class="ModuleScript" referent="144">
               <Properties>
                 <string name="Name">Skins</string>
                 <string name="Source"><![CDATA[--!strict
@@ -54248,7 +54437,7 @@ return Skins
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="144">
+            <Item class="ModuleScript" referent="145">
               <Properties>
                 <string name="Name">Upgrade</string>
                 <string name="Source"><![CDATA[--!strict
@@ -54711,7 +54900,7 @@ return Upgrade
               </Properties>
             </Item>
           </Item>
-          <Item class="ModuleScript" referent="145">
+          <Item class="ModuleScript" referent="146">
             <Properties>
               <string name="Name">Virtual</string>
               <string name="Source"><![CDATA[--!strict
@@ -54976,7 +55165,7 @@ return Virtual
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="146">
+        <Item class="ModuleScript" referent="147">
           <Properties>
             <string name="Name">Render</string>
             <string name="Source"><![CDATA[--!strict
@@ -55903,11 +56092,11 @@ return Render
 ]]></string>
           </Properties>
         </Item>
-        <Item class="Folder" referent="147">
+        <Item class="Folder" referent="148">
           <Properties>
             <string name="Name">Signatures</string>
           </Properties>
-          <Item class="ModuleScript" referent="148">
+          <Item class="ModuleScript" referent="149">
             <Properties>
               <string name="Name">Ach</string>
               <string name="Source"><![CDATA[--!strict
@@ -56158,7 +56347,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="149">
+          <Item class="ModuleScript" referent="150">
             <Properties>
               <string name="Name">Ap</string>
               <string name="Source"><![CDATA[--!strict
@@ -56239,7 +56428,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="150">
+          <Item class="ModuleScript" referent="151">
             <Properties>
               <string name="Name">Badges</string>
               <string name="Source"><![CDATA[--!strict
@@ -56337,7 +56526,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="151">
+          <Item class="ModuleScript" referent="152">
             <Properties>
               <string name="Name">Cp</string>
               <string name="Source"><![CDATA[--!strict
@@ -56850,7 +57039,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="152">
+          <Item class="ModuleScript" referent="153">
             <Properties>
               <string name="Name">Effects</string>
               <string name="Source"><![CDATA[--!strict
@@ -57033,7 +57222,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="153">
+          <Item class="ModuleScript" referent="154">
             <Properties>
               <string name="Name">Energy</string>
               <string name="Source"><![CDATA[--!strict
@@ -57114,7 +57303,7 @@ return { sig("pe"), sig("se") }
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="154">
+          <Item class="ModuleScript" referent="155">
             <Properties>
               <string name="Name">Ex</string>
               <string name="Source"><![CDATA[--!strict
@@ -57616,7 +57805,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="155">
+          <Item class="ModuleScript" referent="156">
             <Properties>
               <string name="Name">Kit</string>
               <string name="Source"><![CDATA[--!strict
@@ -58063,7 +58252,7 @@ return Kit
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="156">
+          <Item class="ModuleScript" referent="157">
             <Properties>
               <string name="Name">M</string>
               <string name="Source"><![CDATA[--!strict
@@ -59099,7 +59288,7 @@ return M
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="157">
+          <Item class="ModuleScript" referent="158">
             <Properties>
               <string name="Name">Mp</string>
               <string name="Source"><![CDATA[--!strict
@@ -59160,7 +59349,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="158">
+          <Item class="ModuleScript" referent="159">
             <Properties>
               <string name="Name">Options</string>
               <string name="Source"><![CDATA[--!strict
@@ -59434,7 +59623,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="159">
+          <Item class="ModuleScript" referent="160">
             <Properties>
               <string name="Name">P</string>
               <string name="Source"><![CDATA[--!strict
@@ -59577,7 +59766,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="160">
+          <Item class="ModuleScript" referent="161">
             <Properties>
               <string name="Name">Pp</string>
               <string name="Source"><![CDATA[--!strict
@@ -59683,7 +59872,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="161">
+          <Item class="ModuleScript" referent="162">
             <Properties>
               <string name="Name">Signatures</string>
               <string name="Source"><![CDATA[--!strict
@@ -59871,7 +60060,7 @@ return Signatures
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="162">
+          <Item class="ModuleScript" referent="163">
             <Properties>
               <string name="Name">Sp</string>
               <string name="Source"><![CDATA[--!strict
@@ -60341,7 +60530,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="163">
+          <Item class="ModuleScript" referent="164">
             <Properties>
               <string name="Name">T</string>
               <string name="Source"><![CDATA[--!strict
@@ -60413,7 +60602,7 @@ return {
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="164">
+        <Item class="ModuleScript" referent="165">
           <Properties>
             <string name="Name">Style</string>
             <string name="Source"><![CDATA[--!strict
@@ -60607,7 +60796,7 @@ return Style
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="165">
+        <Item class="ModuleScript" referent="166">
           <Properties>
             <string name="Name">Types</string>
             <string name="Source"><![CDATA[--!strict
