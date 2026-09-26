@@ -317,6 +317,48 @@ M.G.warn = function(...)
 end
 M.G.print = function(...) end
 
+-- ------------------------------------------------------------------------------------------------------ audio
+-- the wired Audio API (AudioPlayer, faders, Wire) and the legacy Sound: Play / Stop are methods only while
+-- E.audio.api / E.audio.sound is on (off, Instance.new still works but the probes fail, like an engine without the
+-- API). Every Play is logged in E.audio.plays { class, name, region, speed, volume, t }.
+E.audio = { api = true, sound = true, plays = {}, stops = 0 }
+local NRmt = { __index = function(_, k) error("NumberRange has no " .. tostring(k), 2) end }
+M.G.NumberRange = { new = function(a, b)
+	assert(type(a) == "number" and a == a, "NumberRange min")
+	b = if b == nil then a else b
+	assert(type(b) == "number" and b >= a, "NumberRange max < min")
+	return typed("NumberRange", { Min = a, Max = b }, NRmt)
+end }
+local function audioPlay(self)
+	local p = rawget(self, "__props")
+	p.IsPlaying, p.Playing = true, true
+	table.insert(E.audio.plays, { class = self.__class, name = p.Name, region = p.PlaybackRegion, loop = p.LoopRegion,
+		speed = p.PlaybackSpeed, volume = p.Volume, t = M.now })
+end
+local function audioStop(self)
+	local p = rawget(self, "__props")
+	p.IsPlaying, p.Playing = false, false
+	E.audio.stops += 1
+end
+local AUDIO_METHOD = { Play = audioPlay, Stop = audioStop, Pause = audioStop, Resume = audioPlay }
+local AUDIO_CLASS = { AudioPlayer = "api", Sound = "sound" }
+local indexBeforeAudio = Inst.__index
+Inst.__index = function(o, k)
+	local kind = AUDIO_CLASS[rawget(o, "__class")]
+	if kind and AUDIO_METHOD[k] and E.audio[kind] then return AUDIO_METHOD[k] end
+	if kind and (k == "IsPlaying" or k == "Playing") then
+		local v = rawget(o, "__props")[k]
+		return v == true
+	end
+	if k == "Connected" and rawget(o, "__class") == "Wire" then
+		local p = rawget(o, "__props")
+		return p.SourceInstance ~= nil and p.TargetInstance ~= nil
+	end
+	return indexBeforeAudio(o, k)
+end
+local SoundService = game:GetService("SoundService")
+function SoundService:GetMixerTime() return M.now end
+
 
 E.Vector2 = Vector2
 E.rtypeof = rtypeof
@@ -342,7 +384,7 @@ function E.buildClient()
 	for _, pair in { { "Html", "shared/Html" } } do
 		if shared:FindFirstChild(pair[1]) == nil then scriptModule(shared, pair[1], pair[2]) end
 	end
-	for _, n in { "Realm", "Assets", "ZoneMaps", "PrefsSchema", "Flags" } do
+	for _, n in { "Realm", "Assets", "ZoneMaps", "PrefsSchema", "Flags", "AudioIds" } do
 		if shared:FindFirstChild(n) == nil then
 			M.module(shared, n, function() return require("../../src/shared/" .. n) end)
 		end

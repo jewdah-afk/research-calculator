@@ -108,7 +108,7 @@ local ladder = { step = -1, at = -math.huge }
 local pending: { [string]: { at: number, cls: any, lv: any, tab: any } } = {}
 local awakePrev: { [string]: boolean }? = nil
 local insidePrev: boolean? = nil
-local rng = Random.new()
+local rng: Random = nil :: any -- made at start (so requiring this module needs no engine globals)
 local clock: () -> number = os.clock
 local conns: { RBXScriptConnection } = {}
 
