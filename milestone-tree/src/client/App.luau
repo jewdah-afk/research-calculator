@@ -112,7 +112,9 @@ end
 function App.start()
 	engineSettings()
 	Theme.detect()
-	Audio.start()
+	-- sound is never worth a broken start: it is built defensively, and anything unforeseen leaves the game silent
+	local okAudio, audioErr = pcall(function() Audio.start() end)
+	if not okAudio then warn("[MilestoneTree] audio failed to start: " .. tostring(audioErr)) end
 	Input.start()
 	Layout.start()
 	backing()

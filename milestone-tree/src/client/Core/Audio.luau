@@ -473,7 +473,9 @@ function Audio.play(name: string, o: PlayOptions?): boolean
 	local k = opts.variant or (if rule.ladder then ladderVariant(n, now) else pickVariant(name, n))
 	k = math.clamp(math.floor(k), 1, n)
 	local region = snd.regions[k]
+	if type(region) ~= "table" then return false end
 	local a, len = tonumber(region[1]) or 0, tonumber(region[2]) or 0
+	if len <= 0 then return false end
 	local speed = (opts.pitch or 1) * (1 + rule.jitter * (2 * rng:NextNumber() - 1))
 	local volume = math.clamp((opts.volume or 1) * rule.gain * 10 ^ ((rng:NextNumber() - 0.5) * 1.2 / 20), 0, 4)
 	local v = voice :: Voice
@@ -545,6 +547,7 @@ local function stepLoop(l: Loop, dt: number)
 		local inst = l.inst
 		if inst == nil then return end
 		local region = snd.regions[1]
+		if type(region) ~= "table" then return end
 		local a, len = tonumber(region[1]) or 0, tonumber(region[2]) or 0
 		l.playing = pcall(function()
 			local p = inst :: any
