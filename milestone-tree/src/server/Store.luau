@@ -11,6 +11,7 @@
 	developer-product receipts are "receipt_<PurchaseId>" (Store.receiptGranted / markReceipt).
 ]]
 local DataStoreService = game:GetService("DataStoreService")
+local RunService = game:GetService("RunService")
 local Config = require(script.Parent.Config)
 
 local Store = {}
@@ -32,9 +33,12 @@ local function jobId(): string
 end
 
 -- errors no retry fixes: Studio without API access, a place that was never published (a .rbxlx opened from disk).
--- After one of those the store is off for this server, so nobody waits on it again.
+-- After one of those the store is off for this server, so nobody waits on it again. Only in Studio (or an unpublished
+-- place): on a live server every error is a passing one (a 502 "API Services rejected request" is retried), and
+-- saving is never switched off for everyone.
 local unavailable: string? = nil
 local function permanent(err: any): boolean
+	if not (RunService:IsStudio() or game.PlaceId == 0) then return false end
 	local s = string.lower(tostring(err))
 	return string.find(s, "studioaccesstoapisnotallowed", 1, true) ~= nil or string.find(s, "publish", 1, true) ~= nil
 		or string.find(s, "api services", 1, true) ~= nil or string.find(s, "not allowed", 1, true) ~= nil

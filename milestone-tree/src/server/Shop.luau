@@ -74,7 +74,10 @@ local function processReceipt(info: any): Enum.ProductPurchaseDecision
 	local purchaseId = tostring(info.PurchaseId)
 	local player = Players:GetPlayerByUserId(info.PlayerId)
 	local a = if player then actorOf(player) else nil
-	if player == nil or a == nil then return Enum.ProductPurchaseDecision.NotProcessedYet end
+	-- only a game that has loaded and can save keeps a warp (Worker sets CanGrant); else Roblox retries later
+	if player == nil or a == nil or a:GetAttribute("CanGrant") ~= true then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
 	local done, err = Store.receiptGranted(purchaseId)
 	local studio = RunService:IsStudio() and not Store.available()
 	if done == nil and not studio then

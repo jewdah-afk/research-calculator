@@ -98,6 +98,7 @@ local function saveNow(release: boolean?)
 			warn("[MilestoneTree] save failed for " .. player.Name .. ": " .. tostring(err))
 			if err == "another server has this save open" then
 				canSave = false
+				actor:SetAttribute("CanGrant", false)
 				notice("Your save was opened on another server, so this server stopped saving it. Rejoin to keep playing.")
 			end
 		end
@@ -158,7 +159,19 @@ local function begin(plr: Player)
 		s:addWarp(pendingWarp)
 		pendingWarp = 0
 	end
+	-- Shop grants a Time Warp only while this game can keep it (a game that cannot save would lose it)
+	-- (Studio without API access saves nothing: test purchases are still granted there)
+	actor:SetAttribute("CanGrant", canSave or (RunService:IsStudio() and not Store.available()))
 	pushNow = true
+end
+-- feed a Time Warp still on its way in full, before a last save (leaving, shutdown): the save then holds all of it
+local function drainWarp()
+	if not session then return end
+	local n = 0
+	while (session.warp or 0) > 0 and n < 2000 do
+		session:tick(nowMs())
+		n += 1
+	end
 end
 actor:BindToMessage("start", function(plr: Player)
 	task.spawn(function() -- loading yields (DataStore)
@@ -189,6 +202,7 @@ actor:BindToMessage("warp", function(seconds: any, name: any)
 	if type(seconds) ~= "number" or seconds <= 0 then return end
 	if session then
 		session:addWarp(seconds)
+		if stopping then drainWarp() end
 		table.insert(session.notices, string.format("%s: %s of progress is on its way!", tostring(name or "Time Warp"),
 			if seconds >= 3600 then string.format("%g hour%s", seconds / 3600, if seconds == 3600 then "" else "s") else string.format("%d s", seconds)))
 		pushNow = true
@@ -205,7 +219,9 @@ end)
 
 actor:BindToMessage("stop", function()
 	stopping = true
+	actor:SetAttribute("CanGrant", false)
 	task.spawn(function()
+		drainWarp()
 		saveNow(true)
 		actor:SetAttribute("Stopped", true)
 	end)

@@ -299,7 +299,7 @@ RunService.__events.Heartbeat = Signal.new()
 RunService.__props.Heartbeat = RunService.__events.Heartbeat
 function RunService:IsServer() return M.side == "server" end
 function RunService:IsClient() return M.side == "client" end
-function RunService:IsStudio() return true end
+function RunService:IsStudio() return M.studio ~= false end -- M.studio = false: a live server
 
 local Players = game:GetService("Players")
 Players.__props.PlayerAdded = Signal.new()

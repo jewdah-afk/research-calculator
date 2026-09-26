@@ -428,10 +428,27 @@ local p2 = M.addPlayer("Unlucky", 2)
 frames(20)
 local a2 = SSS.MilestoneTree.Sessions:FindFirstChild("Player_2")
 check(a2 ~= nil, "their game still starts")
+local d2 = MPS.ProcessReceipt({ ProductId = 221, PlayerId = 2, PurchaseId = "r2", CurrencySpent = 29 })
+check(d2 == M.G.Enum.ProductPurchaseDecision.NotProcessedYet, "a Time Warp waits while their game cannot save (" .. tostring(d2) .. ")")
 M.failStore = false
 M.removePlayer(p2)
 frames(2)
 check(store.player_2.save == "{\"points\":\"1e100\"}", "their real save was not overwritten")
+
+print("== a live server: a passing DataStore error (502) does not turn saving off")
+M.studio = false
+M.failMessage = "502: API Services rejected request with error. Error code: 0 Reason: Service unavailable (mock)"
+M.failStore = true
+local p3 = M.addPlayer("Blip", 3)
+frames(1) -- the first load attempt fails
+M.failStore = false
+M.failMessage = nil
+frames(20)
+M.removePlayer(p3)
+frames(3)
+local rec3 = store.player_3
+check(rec3 ~= nil and type(rec3.save) == "string", "the save is written once the store answers again (" .. tostring(rec3 and rec3.save and #rec3.save) .. ")")
+M.studio = nil
 
 print("== the server shuts down")
 for _, f in M.closers do task.spawn(f) end

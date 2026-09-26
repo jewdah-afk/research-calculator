@@ -34173,7 +34173,10 @@ local function processReceipt(info: any): Enum.ProductPurchaseDecision
 	local purchaseId = tostring(info.PurchaseId)
 	local player = Players:GetPlayerByUserId(info.PlayerId)
 	local a = if player then actorOf(player) else nil
-	if player == nil or a == nil then return Enum.ProductPurchaseDecision.NotProcessedYet end
+	-- only a game that has loaded and can save keeps a warp (Worker sets CanGrant); else Roblox retries later
+	if player == nil or a == nil or a:GetAttribute("CanGrant") ~= true then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
 	local done, err = Store.receiptGranted(purchaseId)
 	local studio = RunService:IsStudio() and not Store.available()
 	if done == nil and not studio then
@@ -34229,6 +34232,7 @@ return Shop
 	developer-product receipts are "receipt_<PurchaseId>" (Store.receiptGranted / markReceipt).
 ]]
 local DataStoreService = game:GetService("DataStoreService")
+local RunService = game:GetService("RunService")
 local Config = require(script.Parent.Config)
 
 local Store = {}
@@ -34250,9 +34254,12 @@ local function jobId(): string
 end
 
 -- errors no retry fixes: Studio without API access, a place that was never published (a .rbxlx opened from disk).
--- After one of those the store is off for this server, so nobody waits on it again.
+-- After one of those the store is off for this server, so nobody waits on it again. Only in Studio (or an unpublished
+-- place): on a live server every error is a passing one (a 502 "API Services rejected request" is retried), and
+-- saving is never switched off for everyone.
 local unavailable: string? = nil
 local function permanent(err: any): boolean
+	if not (RunService:IsStudio() or game.PlaceId == 0) then return false end
 	local s = string.lower(tostring(err))
 	return string.find(s, "studioaccesstoapisnotallowed", 1, true) ~= nil or string.find(s, "publish", 1, true) ~= nil
 		or string.find(s, "api services", 1, true) ~= nil or string.find(s, "not allowed", 1, true) ~= nil
@@ -34486,6 +34493,7 @@ local function saveNow(release: boolean?)
 			warn("[MilestoneTree] save failed for " .. player.Name .. ": " .. tostring(err))
 			if err == "another server has this save open" then
 				canSave = false
+				actor:SetAttribute("CanGrant", false)
 				notice("Your save was opened on another server, so this server stopped saving it. Rejoin to keep playing.")
 			end
 		end
@@ -34546,7 +34554,19 @@ local function begin(plr: Player)
 		s:addWarp(pendingWarp)
 		pendingWarp = 0
 	end
+	-- Shop grants a Time Warp only while this game can keep it (a game that cannot save would lose it)
+	-- (Studio without API access saves nothing: test purchases are still granted there)
+	actor:SetAttribute("CanGrant", canSave or (RunService:IsStudio() and not Store.available()))
 	pushNow = true
+end
+-- feed a Time Warp still on its way in full, before a last save (leaving, shutdown): the save then holds all of it
+local function drainWarp()
+	if not session then return end
+	local n = 0
+	while (session.warp or 0) > 0 and n < 2000 do
+		session:tick(nowMs())
+		n += 1
+	end
 end
 actor:BindToMessage("start", function(plr: Player)
 	task.spawn(function() -- loading yields (DataStore)
@@ -34577,6 +34597,7 @@ actor:BindToMessage("warp", function(seconds: any, name: any)
 	if type(seconds) ~= "number" or seconds <= 0 then return end
 	if session then
 		session:addWarp(seconds)
+		if stopping then drainWarp() end
 		table.insert(session.notices, string.format("%s: %s of progress is on its way!", tostring(name or "Time Warp"),
 			if seconds >= 3600 then string.format("%g hour%s", seconds / 3600, if seconds == 3600 then "" else "s") else string.format("%d s", seconds)))
 		pushNow = true
@@ -34593,7 +34614,9 @@ end)
 
 actor:BindToMessage("stop", function()
 	stopping = true
+	actor:SetAttribute("CanGrant", false)
 	task.spawn(function()
+		drainWarp()
 		saveNow(true)
 		actor:SetAttribute("Stopped", true)
 	end)
