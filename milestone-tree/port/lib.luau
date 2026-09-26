@@ -5,6 +5,7 @@ local L = {}
 L.TN = require("../vendor/TowerNum")
 L.JSRT = require("../src/server/Runtime/JSRT")
 L.BEcore = require("../src/server/Runtime/BEcore")
+L.Fast = require("../src/server/Runtime/Fast")
 L.Session = require("../src/server/Session")
 L.Html = nil -- tests that need it require ../src/shared/Html themselves (it wants Color3)
 
@@ -47,7 +48,7 @@ function L.withDump(JS, ENV)
 end
 -- the deps table Session.new wants
 function L.deps()
-	return { TN = L.TN, JSRT = L.JSRT, BEcore = L.BEcore, chunks = L.rbx }
+	return { TN = L.TN, JSRT = L.JSRT, BEcore = L.BEcore, chunks = L.rbx, Fast = if os.getenv and os.getenv("NO_FAST") then nil else L.Fast }
 end
 -- a data file written by the JS side (states, cases): data/<dir>/<name>.luau returns a string
 function L.data(dir, name)

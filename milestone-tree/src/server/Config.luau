@@ -7,9 +7,13 @@ return {
 	MAX_TICK = 0.5,
 	TICK_CPU_SHARE = 0.25,
 
-	-- how often the player's screen is refreshed (right after a button press it is refreshed at once); an unchanged
-	-- screen still gets a patch every KEEPALIVE seconds, so the client can tell a quiet game from a lost connection
-	VIEW = 0.2,
+	-- how often the player's screen is refreshed (right after a button press it is refreshed at once): 10 times a
+	-- second, backing off towards MAX_VIEW when building the screen gets expensive (VIEW_CPU_SHARE of a core); an
+	-- unchanged screen still gets a patch every KEEPALIVE seconds, so the client can tell a quiet game from a lost
+	-- connection
+	VIEW = 0.1,
+	MAX_VIEW = 0.25,
+	VIEW_CPU_SHARE = 0.06,
 	KEEPALIVE = 2,
 
 	-- DataStore

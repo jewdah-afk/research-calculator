@@ -105,12 +105,15 @@ What still differs from the web game, and why:
 
 ## Performance
 
-A tick costs about 7–14 ms of Luau in the command-line interpreter at mid-game (a good part of that is the
-corruption grid's own loops, which cost the web game the same). Each player's game runs in its own Actor, so
-players spread over the server's cores. A session that gets expensive ticks less often, keeping each player under
-about a quarter of a core (`Config.TICK_CPU_SHARE`). The game uses real elapsed time, so this only coarsens
-automation, not progress. The screen refreshes 5 times a second and right after every button press. Patches
-average about 0.5–1.5 KB.
+A tick costs about 6–8 ms of Luau in the command-line interpreter at mid-game. `src/server/Runtime/Fast.luau`
+holds native versions of the hottest per-tick game code (the corruption grid's nested walks), with the same results
+down to the RNG draws (`./test.sh game` checks them against the web game), and small integer strings are cached for
+`includes` (every hasUpgrade). Each player's game runs in its own Actor, so players spread over the server's cores. A
+session that gets expensive ticks less often, keeping each player under about a quarter of a core
+(`Config.TICK_CPU_SHARE`). The game uses real elapsed time, so this only coarsens automation, not progress. The
+screen refreshes 10 times a second (backing off to 4 when building it gets expensive, `Config.VIEW_CPU_SHARE`) and
+right after every button press. Patches average about 0.5–1.5 KB. `luau --profile tests/prof_tick.luau -a <state>`
+profiles the tick on a fuzz state.
 
 ## Credits
 

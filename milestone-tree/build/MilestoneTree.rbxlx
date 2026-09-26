@@ -10277,9 +10277,13 @@ return {
 	MAX_TICK = 0.5,
 	TICK_CPU_SHARE = 0.25,
 
-	-- how often the player's screen is refreshed (right after a button press it is refreshed at once); an unchanged
-	-- screen still gets a patch every KEEPALIVE seconds, so the client can tell a quiet game from a lost connection
-	VIEW = 0.2,
+	-- how often the player's screen is refreshed (right after a button press it is refreshed at once): 10 times a
+	-- second, backing off towards MAX_VIEW when building the screen gets expensive (VIEW_CPU_SHARE of a core); an
+	-- unchanged screen still gets a patch every KEEPALIVE seconds, so the client can tell a quiet game from a lost
+	-- connection
+	VIEW = 0.1,
+	MAX_VIEW = 0.25,
+	VIEW_CPU_SHARE = 0.06,
 	KEEPALIVE = 2,
 
 	-- DataStore
@@ -31836,6 +31840,159 @@ return BE
         </Item>
         <Item class="ModuleScript" referent="64">
           <Properties>
+            <string name="Name">Fast</string>
+            <string name="Source"><![CDATA[--!nocheck
+--[[
+	Fast: native versions of the game's hottest per-tick functions, installed after the game chunks load
+	(Session:_start). Same behaviour as the transpiled code, down to the RNG draws, the iteration order and the
+	sloppy globals the JS leaves behind (`i`, `l`), without the JS-emulation cost in the inner loops. The fuzz parity
+	test (./test.sh game) compares every player value with the web game after these run.
+
+	    Fast(JS, ENV)
+]]
+
+return function(JS, ENV)
+	local layers = ENV.layers
+	local cp = layers and layers.cp
+	if cp == nil or type(cp.update) ~= "function" then return end
+
+	-- layers/cp.js update(diff): the two "pick the least corrupted cell" passes walk the grid inside a walk of the
+	-- grid (49 x 49 twice a tick) through JS property access; they run natively here on arrays of the cells
+	local function pass(player, tmp, kind: string, chosenKey: string, cdKey: string)
+		local pcp = player.cp
+		local grid = pcp.grid
+		local keys = {}
+		for _, k in JS.keys(grid) do keys[#keys + 1] = k end
+		local n = #keys
+		-- per cell: its level as a number, whether it is "0" by JS ==, and its type (kept current when a level changes)
+		local lv, num, zero, ty = table.create(n), table.create(n), table.create(n), table.create(n)
+		for j = 1, n do
+			local c = grid[keys[j]]
+			local v = c.level
+			lv[j], num[j], zero[j], ty[j] = v, JS.tonum(v), JS.eq(v, 0), c.type
+		end
+		local Math = ENV.Math -- the page's Math (its seeded random)
+		local totalC = JS.tonum(pcp.totalCorrupt)
+		local a2 = JS.tonum(player.ex.a2Unl) >= 1
+		local cdZero = JS.eq(pcp[cdKey], 0)
+		local noChal = JS.isnil(player.pm.activeChallenge)
+		local lastL = ENV.l
+		for j = 1, n do
+			local i = keys[j]
+			ENV.i = i
+			-- per cell, as the page does (the values do not change inside the pass, the RNG draw must happen)
+			local rangeMul = Math.floor(totalC / 4)
+			local addLevel = Math.floor(totalC / 5) * 1.5
+			local _ranType = Math.floor(Math.random() * 1.5)
+			local pm13 = if player.pm.best:gte(13) then tmp.pm.pMilestone13Effect else 0
+			local range = JS.tonum(JS.add(10, addLevel)) - JS.tonum(pm13)
+			local startN = JS.tonum(JS.D(1):add(rangeMul))
+			local minCorrupt = 1000
+			local mine = a2 and ty[j] == kind and num[j] >= 1 and cdZero
+			local myDiff = if mine then num[j] - startN else 0
+			-- numbers only in here: JS Math.min and == on finite numbers are math.min and ==; a NaN level would
+			-- behave the same too (min(NaN) is NaN in both, NaN == x is false)
+			for m = 1, n do
+				lastL = keys[m]
+				if not zero[m] and ty[m] == kind then
+					local d = num[m] - startN
+					minCorrupt = if d ~= d or minCorrupt ~= minCorrupt then 0 / 0 elseif d < minCorrupt then d else minCorrupt
+				end
+				if mine and myDiff == minCorrupt then
+					JS.setk(pcp, chosenKey, i)
+					break
+				end
+			end
+			local cell = grid[i]
+			if JS.cmp(cell.level, ">", range) and noChal then
+				JS.setk(cell, "level", JS.tonum(ENV.getGridData(nil, "cp", i).level) - JS.tonum(pm13))
+				local v = cell.level
+				lv[j], num[j], zero[j] = v, JS.tonum(v), JS.eq(v, 0)
+			end
+		end
+		ENV.l = lastL
+	end
+
+	cp.update = function(this, diff)
+		local player, tmp = ENV.player, ENV.tmp
+		-- everything before the two passes: the transpiled function's own text (layers_cp.luau), unchanged
+		local pcp = player.cp
+		if ((not JS.isnil(pcp.trojanChosen)) and (JS.tonum(player.ex.a2Unl) >= 1)) then
+			JS.setk(pcp, "pointsInCorrupt", pcp.pointsInCorrupt:add(tmp.cp.gainInCorrupt:times(diff)))
+		end
+		if ((not JS.isnil(pcp.chosenBackdoor)) and (JS.tonum(player.ex.a2Unl) >= 1)) then
+			JS.setk(pcp, "peInCorrupt", pcp.peInCorrupt:add(tmp.cp.peGainInCorrupt:times(diff)))
+		end
+		if (JS.tonum(pcp.cooldown) > 0) then
+			JS.setk(pcp, "cooldown", (JS.tonum(pcp.cooldown) - JS.tonum(diff)))
+		end
+		if (JS.tonum(pcp.cooldown) < 0) then
+			JS.setk(pcp, "cooldown", 0)
+		end
+		if (JS.tonum(pcp.cooldown2) > 0) then
+			JS.setk(pcp, "cooldown2", (JS.tonum(pcp.cooldown2) - JS.tonum(diff)))
+		end
+		if (JS.tonum(pcp.cooldown2) < 0) then
+			JS.setk(pcp, "cooldown2", 0)
+		end
+		if JS.m(pcp.pool, "includes", "pow") then
+			JS.setk(pcp, "pool", JS.A(2, "div", "pm"))
+		end
+		local getGridData, gridEssence, gridCost, doPopup = ENV.getGridData, ENV.gridEssence, ENV.gridCost, ENV.doPopup
+		local function fix(key)
+			JS.setk(player.cp, "formatted", player.cp.formatted:add(gridEssence(nil, "cp", key)))
+			JS.set(player.cp.grid, JS.k(key), JS.O({
+				level = 0,
+				active = false,
+				fixed = false,
+				type = getGridData(nil, "cp", key).type,
+				cautPower = getGridData(nil, "cp", key).cautPower,
+			}, { "level", "active", "fixed", "type", "cautPower" }))
+			doPopup(nil, "none", "Corruption was fixed!", "Corruption Info", 3, "black", "lime")
+			JS.setk(player.cp, "totalCorrupt", JS.add(player.cp.totalCorrupt, 1))
+		end
+		local slots = ENV.activeCorruptions(nil)
+		local all = JS.m(ENV.Object.keys(pcp.grid), "filter", function(_, x)
+			return (JS.cmp(player.cp.grid[JS.k(x)].level, "<", ENV.antiCorrupt(nil)) and (JS.tonum(player.cp.grid[JS.k(x)].level) > 0))
+		end)
+		for i = 0, JS.cap(0, (JS.len(all)) - 1, 1) do
+			if ((player.cm.best:gte(3) and (JS.len(all) > 0)) and JS.isnil(player.pm.activeChallenge)) then
+				fix(all[JS.k(i)])
+			end
+		end
+		ENV.setTimeout(nil, 100000)
+		if ((((JS.eq(player.mp.activeChallenge, 21) and (JS.tonum(player.ex.a2Unl) >= 1)) and (not JS.isnil(player.cp.trojanChosen))) and (player.cp.pointsInCorrupt:gte(gridCost(nil, "cp", player.cp.trojanChosen)) and (getGridData(nil, "cp", player.cp.trojanChosen).type == "div"))) and (JS.tonum(getGridData(nil, "cp", player.cp.trojanChosen).level) >= 1)) then
+			fix(player.cp.trojanChosen)
+			JS.setk(player.cp, "cooldown", ENV.buyableEffect(nil, "cp", 33))
+			JS.setk(player.cp, "trojanChosen", nil)
+			JS.setk(player.cp, "pointsInCorrupt", JS.D(0))
+		end
+		if ((((JS.eq(player.mp.activeChallenge, 21) and (JS.tonum(player.ex.a2Unl) >= 1)) and (not JS.isnil(player.cp.chosenBackdoor))) and (player.cp.peInCorrupt:gte(gridCost(nil, "cp", player.cp.chosenBackdoor)) and (getGridData(nil, "cp", player.cp.chosenBackdoor).type == "pm"))) and (JS.tonum(getGridData(nil, "cp", player.cp.chosenBackdoor).level) >= 1)) then
+			fix(player.cp.chosenBackdoor)
+			JS.setk(player.cp, "cooldown2", ENV.buyableEffect(nil, "cp", 34))
+			JS.setk(player.cp, "chosenBackdoor", nil)
+			JS.setk(player.cp, "peInCorrupt", JS.D(0))
+		end
+		for i = 0, JS.cap(0, (JS.len(slots)) - 1, 1) do
+			if JS.isnil(player.pm.activeChallenge) then
+				if ((JS.tonum(player.ex.a2Unl) <= 1) and (player.points:gte(gridCost(nil, "cp", slots[JS.k(i)])) and (getGridData(nil, "cp", slots[JS.k(i)]).type == "div"))) then
+					fix(slots[JS.k(i)])
+				end
+				ENV.setTimeout(nil, 100000)
+				if (player.pm.essence:gte(gridCost(nil, "cp", slots[JS.k(i)])) and (getGridData(nil, "cp", slots[JS.k(i)]).type == "pm")) then
+					fix(slots[JS.k(i)])
+				end
+			end
+		end
+		pass(player, tmp, "div", "trojanChosen", "cooldown")
+		pass(player, tmp, "pm", "chosenBackdoor", "cooldown2")
+	end
+end
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="65">
+          <Properties>
             <string name="Name">JSRT</string>
             <string name="Source"><![CDATA[--!nocheck
 -- JSRT: the small slice of JavaScript semantics the transpiled Milestone Tree NG+ needs, plus a break_eternity-style
@@ -32813,9 +32970,19 @@ function AM.unshift(a, ...) KC[a] = nil;
 end
 -- a number also finds its string: the port's for-in keys are numbers where JS has strings (a milestone's this.id is
 -- 3, JS "3"), and the game looks those ids up in lists of strings (player.m.pseudoBuys.includes(this.id))
+-- the string of a small whole number, cached (includes runs thousands of times a tick: hasUpgrade, milestones)
+local INTSTR: { [number]: string } = {}
+local function intStr(v: number): string
+	local s = INTSTR[v]
+	if s == nil then
+		s = str(v)
+		if v == floor(v) and v >= -100000 and v <= 100000 then INTSTR[v] = s end
+	end
+	return s
+end
 function AM.includes(a, v)
 	local n = LEN[a]
-	local vs = if type(v) == "number" then str(v) else nil
+	local vs = if type(v) == "number" then intStr(v) else nil
 	for i = 0, n - 1 do
 		local x = a[i]
 		if x == v or (x ~= x and v ~= v) or (vs ~= nil and x == vs) then return true end
@@ -33318,7 +33485,7 @@ end
           </Properties>
         </Item>
       </Item>
-      <Item class="ModuleScript" referent="65">
+      <Item class="ModuleScript" referent="66">
         <Properties>
           <string name="Name">Session</string>
           <string name="Source"><![CDATA[--!nocheck
@@ -33332,7 +33499,8 @@ end
 	    local patch = s:view()        -- what changed on the player's screen since the last view (see below)
 	    local save, opts = s:save()   -- JSON strings for the DataStore (nil while the game holds a NaN)
 
-	deps = { TN = TowerNum, JSRT = the JSRT factory, BEcore = BEcore, chunks = { function... } in load order }
+	deps = { TN = TowerNum, JSRT = the JSRT factory, BEcore = BEcore, chunks = { function... } in load order,
+	         Fast = Runtime/Fast (optional: native per-tick overrides) }
 
 	A view patch is { set = { [id] = node }, del = { id... }, tab = name, tabStyle = css, keys = { hotkey... },
 	ended = bool, full = true on the first patch } plus, once each when they happen: pop = { popup... },
@@ -33523,6 +33691,7 @@ function Session:_start(saveJson: string?, optionsJson: string?, nowMs: number)
 		f()
 	end
 	JS.overrides()
+	if d.Fast then d.Fast(JS, ENV) end -- native versions of the hottest per-tick game functions (Runtime/Fast)
 	ENV.rbx_boot(nil, saveJson or "", optionsJson or "")
 	self.JS, self.ENV = JS, ENV
 	if self.notation then self:setNotation(self.notation) end
@@ -33693,7 +33862,7 @@ return Session
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="66">
+      <Item class="ModuleScript" referent="67">
         <Properties>
           <string name="Name">Store</string>
           <string name="Source"><![CDATA[--!strict
@@ -33832,16 +34001,16 @@ return Store
       </Item>
     </Item>
   </Item>
-  <Item class="ServerStorage" referent="67">
+  <Item class="ServerStorage" referent="68">
     <Properties>
       <string name="Name">ServerStorage</string>
     </Properties>
-    <Item class="Actor" referent="68">
+    <Item class="Actor" referent="69">
       <Properties>
         <string name="Name">MilestoneTreeWorker</string>
         <bool name="NeedsPivotMigration">false</bool>
       </Properties>
-      <Item class="Script" referent="69">
+      <Item class="Script" referent="70">
         <Properties>
           <string name="Name">Worker</string>
           <token name="RunContext">0</token>
@@ -33882,6 +34051,7 @@ local okLoad, loadErr = pcall(function()
 		TN = require(ReplicatedStorage:WaitForChild("TowerNum")),
 		JSRT = require(runtime:WaitForChild("JSRT")),
 		BEcore = require(runtime:WaitForChild("BEcore")),
+		Fast = require(runtime:WaitForChild("Fast")),
 		chunks = chunks,
 	}
 end)
@@ -33897,6 +34067,8 @@ local canSave = false        -- false when the save could not be loaded: never o
 local stopping = false
 local tickEvery = Config.TICK
 local tickCost = 0           -- running average seconds per tick
+local viewEvery = Config.VIEW
+local viewCost = 0           -- running average seconds per screen build
 local sinceTick, sinceView, sinceSave, sinceSent = 0, 0, 0, 0
 local pushNow = false        -- refresh the screen at the next heartbeat (after a button press)
 local saving = false
@@ -34043,12 +34215,16 @@ RunService.Heartbeat:ConnectParallel(function(dt: number)
 		tickEvery = math.clamp(tickCost / Config.TICK_CPU_SHARE, Config.TICK, Config.MAX_TICK)
 	end
 	local wantSave = session.wantSave or sinceSave >= Config.AUTOSAVE
-	if not (pushNow or sinceView >= Config.VIEW or wantSave) then return end
+	if not (pushNow or sinceView >= viewEvery or wantSave) then return end
 	local patch, changed = nil, false
-	if pushNow or sinceView >= Config.VIEW then
+	if pushNow or sinceView >= viewEvery then
 		sinceView = 0
 		pushNow = false
+		local v0 = os.clock()
 		patch, changed = session:view()
+		viewCost = viewCost * 0.9 + (os.clock() - v0) * 0.1
+		-- refresh less often when building the screen gets expensive (never slower than MAX_VIEW)
+		viewEvery = math.clamp(viewCost / Config.VIEW_CPU_SHARE, Config.VIEW, Config.MAX_VIEW)
 		if not canSave then patch.unsaved = true end
 	end
 	task.synchronize()
@@ -34070,13 +34246,13 @@ actor:SetAttribute("Ready", true)
       </Item>
     </Item>
   </Item>
-  <Item class="StarterGui" referent="70">
+  <Item class="StarterGui" referent="71">
     <Properties>
       <string name="Name">StarterGui</string>
       <token name="ScreenOrientation">2</token>
     </Properties>
   </Item>
-  <Item class="StarterPlayer" referent="71">
+  <Item class="StarterPlayer" referent="72">
     <Properties>
       <string name="Name">StarterPlayer</string>
       <bool name="AutoJumpEnabled">false</bool>
@@ -34084,15 +34260,15 @@ actor:SetAttribute("Ready", true)
       <token name="DevTouchMovementMode">5</token>
       <bool name="EnableMouseLockOption">false</bool>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="72">
+    <Item class="StarterPlayerScripts" referent="73">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="Folder" referent="73">
+      <Item class="Folder" referent="74">
         <Properties>
           <string name="Name">MilestoneTree</string>
         </Properties>
-        <Item class="ModuleScript" referent="74">
+        <Item class="ModuleScript" referent="75">
           <Properties>
             <string name="Name">App</string>
             <string name="Source"><![CDATA[--!strict
@@ -34977,11 +35153,11 @@ return App
 ]]></string>
           </Properties>
         </Item>
-        <Item class="Folder" referent="75">
+        <Item class="Folder" referent="76">
           <Properties>
             <string name="Name">Core</string>
           </Properties>
-          <Item class="ModuleScript" referent="76">
+          <Item class="ModuleScript" referent="77">
             <Properties>
               <string name="Name">Audio</string>
               <string name="Source"><![CDATA[--!strict
@@ -35668,7 +35844,7 @@ return Audio
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="77">
+          <Item class="ModuleScript" referent="78">
             <Properties>
               <string name="Name">Layout</string>
               <string name="Source"><![CDATA[--!strict
@@ -35940,7 +36116,7 @@ return Layout
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="78">
+          <Item class="ModuleScript" referent="79">
             <Properties>
               <string name="Name">Motion</string>
               <string name="Source"><![CDATA[--!strict
@@ -36175,7 +36351,7 @@ return Motion
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="79">
+          <Item class="ModuleScript" referent="80">
             <Properties>
               <string name="Name">Prefs</string>
               <string name="Source"><![CDATA[--!strict
@@ -36325,7 +36501,7 @@ return Prefs
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="80">
+          <Item class="ModuleScript" referent="81">
             <Properties>
               <string name="Name">Recipes</string>
               <string name="Source"><![CDATA[--!strict
@@ -37240,7 +37416,7 @@ return Recipes
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="81">
+          <Item class="ModuleScript" referent="82">
             <Properties>
               <string name="Name">Rich</string>
               <string name="Source"><![CDATA[--!strict
@@ -37482,7 +37658,7 @@ return Rich
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="82">
+          <Item class="ModuleScript" referent="83">
             <Properties>
               <string name="Name">Signal</string>
               <string name="Source"><![CDATA[--!strict
@@ -37558,7 +37734,7 @@ return Signal
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="83">
+          <Item class="ModuleScript" referent="84">
             <Properties>
               <string name="Name">Skin</string>
               <string name="Source"><![CDATA[--!strict
@@ -37655,7 +37831,7 @@ return Skin
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="84">
+          <Item class="ModuleScript" referent="85">
             <Properties>
               <string name="Name">Sleek</string>
               <string name="Source"><![CDATA[--!strict
@@ -38092,7 +38268,7 @@ return Sleek
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="85">
+          <Item class="ModuleScript" referent="86">
             <Properties>
               <string name="Name">Sprites</string>
               <string name="Source"><![CDATA[--!strict
@@ -38371,7 +38547,7 @@ return Sprites
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="86">
+          <Item class="ModuleScript" referent="87">
             <Properties>
               <string name="Name">Theme</string>
               <string name="Source"><![CDATA[--!strict
@@ -38808,7 +38984,7 @@ return Theme
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="87">
+          <Item class="ModuleScript" referent="88">
             <Properties>
               <string name="Name">ViewStore</string>
               <string name="Source"><![CDATA[--!strict
@@ -39166,11 +39342,11 @@ return ViewStore
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="88">
+        <Item class="Folder" referent="89">
           <Properties>
             <string name="Name">Hud</string>
           </Properties>
-          <Item class="ModuleScript" referent="89">
+          <Item class="ModuleScript" referent="90">
             <Properties>
               <string name="Name">Band</string>
               <string name="Source"><![CDATA[--!strict
@@ -39325,7 +39501,7 @@ return Band
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="90">
+          <Item class="ModuleScript" referent="91">
             <Properties>
               <string name="Name">Capsule</string>
               <string name="Source"><![CDATA[--!strict
@@ -39776,7 +39952,7 @@ return Capsule
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="91">
+          <Item class="ModuleScript" referent="92">
             <Properties>
               <string name="Name">Dock</string>
               <string name="Source"><![CDATA[--!strict
@@ -40043,7 +40219,7 @@ return Dock
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="92">
+          <Item class="ModuleScript" referent="93">
             <Properties>
               <string name="Name">Hud</string>
               <string name="Source"><![CDATA[--!strict
@@ -40297,7 +40473,7 @@ return Hud
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="93">
+          <Item class="ModuleScript" referent="94">
             <Properties>
               <string name="Name">Kit</string>
               <string name="Source"><![CDATA[--!strict
@@ -40854,7 +41030,7 @@ return Kit
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="94">
+          <Item class="ModuleScript" referent="95">
             <Properties>
               <string name="Name">Portal</string>
               <string name="Source"><![CDATA[--!strict
@@ -41095,7 +41271,7 @@ return Portal
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="95">
+          <Item class="ModuleScript" referent="96">
             <Properties>
               <string name="Name">Ready</string>
               <string name="Source"><![CDATA[--!strict
@@ -41575,7 +41751,7 @@ return Ready
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="96">
+          <Item class="ModuleScript" referent="97">
             <Properties>
               <string name="Name">UniverseTag</string>
               <string name="Source"><![CDATA[--!strict
@@ -41693,11 +41869,11 @@ return UniverseTag
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="97">
+        <Item class="Folder" referent="98">
           <Properties>
             <string name="Name">Input</string>
           </Properties>
-          <Item class="ModuleScript" referent="98">
+          <Item class="ModuleScript" referent="99">
             <Properties>
               <string name="Name">Hotkeys</string>
               <string name="Source"><![CDATA[--!strict
@@ -41801,7 +41977,7 @@ return Hotkeys
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="99">
+          <Item class="ModuleScript" referent="100">
             <Properties>
               <string name="Name">Input</string>
               <string name="Source"><![CDATA[--!strict
@@ -41904,7 +42080,7 @@ return Input
             </Properties>
           </Item>
         </Item>
-        <Item class="LocalScript" referent="100">
+        <Item class="LocalScript" referent="101">
           <Properties>
             <string name="Name">Main</string>
             <string name="Source"><![CDATA[--!strict
@@ -41922,11 +42098,11 @@ App.start()
 ]]></string>
           </Properties>
         </Item>
-        <Item class="Folder" referent="101">
+        <Item class="Folder" referent="102">
           <Properties>
             <string name="Name">Map</string>
           </Properties>
-          <Item class="ModuleScript" referent="102">
+          <Item class="ModuleScript" referent="103">
             <Properties>
               <string name="Name">Ambient</string>
               <string name="Source"><![CDATA[--!strict
@@ -42425,7 +42601,7 @@ return Ambient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="103">
+          <Item class="ModuleScript" referent="104">
             <Properties>
               <string name="Name">Fallback</string>
               <string name="Source"><![CDATA[--!strict
@@ -42649,7 +42825,7 @@ return Fallback
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="104">
+          <Item class="ModuleScript" referent="105">
             <Properties>
               <string name="Name">Fields</string>
               <string name="Source"><![CDATA[--!strict
@@ -42836,7 +43012,7 @@ return Fields
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="105">
+          <Item class="ModuleScript" referent="106">
             <Properties>
               <string name="Name">Links</string>
               <string name="Source"><![CDATA[--!strict
@@ -43164,7 +43340,7 @@ return Links
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="106">
+          <Item class="ModuleScript" referent="107">
             <Properties>
               <string name="Name">MapCamera</string>
               <string name="Source"><![CDATA[--!strict
@@ -43636,7 +43812,7 @@ return MapCamera
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="107">
+          <Item class="ModuleScript" referent="108">
             <Properties>
               <string name="Name">MapInput</string>
               <string name="Source"><![CDATA[--!strict
@@ -44080,7 +44256,7 @@ return MapInput
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="108">
+          <Item class="ModuleScript" referent="109">
             <Properties>
               <string name="Name">MapLogic</string>
               <string name="Source"><![CDATA[--!strict
@@ -44416,7 +44592,7 @@ return MapLogic
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="109">
+          <Item class="ModuleScript" referent="110">
             <Properties>
               <string name="Name">MapView</string>
               <string name="Source"><![CDATA[--!strict
@@ -45364,7 +45540,7 @@ return MapView
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="110">
+          <Item class="ModuleScript" referent="111">
             <Properties>
               <string name="Name">Markers</string>
               <string name="Source"><![CDATA[--!strict
@@ -45611,7 +45787,7 @@ return Markers
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="111">
+          <Item class="ModuleScript" referent="112">
             <Properties>
               <string name="Name">NodeWidget</string>
               <string name="Source"><![CDATA[--!strict
@@ -46365,7 +46541,7 @@ return NodeWidget
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="112">
+          <Item class="ModuleScript" referent="113">
             <Properties>
               <string name="Name">Nodes</string>
               <string name="Source"><![CDATA[--!strict
@@ -46784,7 +46960,7 @@ return Nodes
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="113">
+          <Item class="ModuleScript" referent="114">
             <Properties>
               <string name="Name">Plates</string>
               <string name="Source"><![CDATA[--!strict
@@ -46802,7 +46978,7 @@ return Nodes
 	priority order: below the ring, else above it, else the chip, else hidden, never over a HUD rect (Layout.rects),
 	past the side sheet's edge, or over another plate by more than 4 du (MapLogic.place). Positions are written on
 	every camera frame; placement reruns when the zoom moves 2%, the camera 8 pt, the HUD rects or the node set
-	change. Text is written at most 5 times a second and only when it changed.
+	change. Text is written at most 10 times a second (the server refreshes the screen that often) and only when it changed.
 
 	    local plates = Plates.new(view, nodes)
 	    plates:update(ms)       plates:onCamera(cam)      plates:setMode(labels)   -- AUTO | ALWAYS | OFF
@@ -46980,10 +47156,10 @@ function Plates.new(view: MapView.MapView, nodes: Nodes.Nodes): Plates
 
 	local function writeText(force: boolean)
 		local now = os.clock()
-		if not force and now - lastText < 0.2 then
+		if not force and now - lastText < 0.1 then
 			if not textPending then
 				textPending = true
-				task.delay(0.21 - (now - lastText), function()
+				task.delay(0.11 - (now - lastText), function()
 					textPending = false
 					writeText(true)
 				end)
@@ -47231,11 +47407,11 @@ return Plates
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="114">
+        <Item class="Folder" referent="115">
           <Properties>
             <string name="Name">Overlay</string>
           </Properties>
-          <Item class="ModuleScript" referent="115">
+          <Item class="ModuleScript" referent="116">
             <Properties>
               <string name="Name">Detail</string>
               <string name="Source"><![CDATA[--!strict
@@ -47538,7 +47714,7 @@ return Detail
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="116">
+          <Item class="ModuleScript" referent="117">
             <Properties>
               <string name="Name">Modals</string>
               <string name="Source"><![CDATA[--!strict
@@ -47895,7 +48071,7 @@ return Modals
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="117">
+          <Item class="ModuleScript" referent="118">
             <Properties>
               <string name="Name">Overlay</string>
               <string name="Source"><![CDATA[--!strict
@@ -48058,7 +48234,7 @@ return Overlay
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="118">
+          <Item class="ModuleScript" referent="119">
             <Properties>
               <string name="Name">Peek</string>
               <string name="Source"><![CDATA[--!strict
@@ -48375,7 +48551,7 @@ return Peek
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="119">
+          <Item class="ModuleScript" referent="120">
             <Properties>
               <string name="Name">Screens</string>
               <string name="Source"><![CDATA[--!strict
@@ -48733,7 +48909,7 @@ return Screens
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="120">
+          <Item class="ModuleScript" referent="121">
             <Properties>
               <string name="Name">ToastModel</string>
               <string name="Source"><![CDATA[--!strict
@@ -48898,7 +49074,7 @@ return ToastModel
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="121">
+          <Item class="ModuleScript" referent="122">
             <Properties>
               <string name="Name">Toasts</string>
               <string name="Source"><![CDATA[--!strict
@@ -49279,7 +49455,7 @@ return Toasts
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="122">
+          <Item class="ModuleScript" referent="123">
             <Properties>
               <string name="Name">Tooltip</string>
               <string name="Source"><![CDATA[--!strict
@@ -49513,11 +49689,11 @@ return Tooltip
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="123">
+        <Item class="Folder" referent="124">
           <Properties>
             <string name="Name">Panel</string>
           </Properties>
-          <Item class="ModuleScript" referent="124">
+          <Item class="ModuleScript" referent="125">
             <Properties>
               <string name="Name">Hero</string>
               <string name="Source"><![CDATA[--!strict
@@ -50110,7 +50286,7 @@ return Hero
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="125">
+          <Item class="ModuleScript" referent="126">
             <Properties>
               <string name="Name">Panel</string>
               <string name="Source"><![CDATA[--!strict
@@ -51132,7 +51308,7 @@ return Panel
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="126">
+          <Item class="ModuleScript" referent="127">
             <Properties>
               <string name="Name">Sections</string>
               <string name="Source"><![CDATA[--!strict
@@ -51373,11 +51549,11 @@ return Sections
 ]]></string>
             </Properties>
           </Item>
-          <Item class="Folder" referent="127">
+          <Item class="Folder" referent="128">
             <Properties>
               <string name="Name">Skins</string>
             </Properties>
-            <Item class="ModuleScript" referent="128">
+            <Item class="ModuleScript" referent="129">
               <Properties>
                 <string name="Name">Achievement</string>
                 <string name="Source"><![CDATA[--!strict
@@ -51436,7 +51612,7 @@ return Achievement
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="129">
+            <Item class="ModuleScript" referent="130">
               <Properties>
                 <string name="Name">Buyable</string>
                 <string name="Source"><![CDATA[--!strict
@@ -51661,7 +51837,7 @@ return Buyable
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="130">
+            <Item class="ModuleScript" referent="131">
               <Properties>
                 <string name="Name">Challenge</string>
                 <string name="Source"><![CDATA[--!strict
@@ -51841,7 +52017,7 @@ return Challenge
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="131">
+            <Item class="ModuleScript" referent="132">
               <Properties>
                 <string name="Name">Clickable</string>
                 <string name="Source"><![CDATA[--!strict
@@ -51905,7 +52081,7 @@ return Clickable
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="132">
+            <Item class="ModuleScript" referent="133">
               <Properties>
                 <string name="Name">Common</string>
                 <string name="Source"><![CDATA[--!strict
@@ -52294,7 +52470,7 @@ return Common
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="133">
+            <Item class="ModuleScript" referent="134">
               <Properties>
                 <string name="Name">CompactOwned</string>
                 <string name="Source"><![CDATA[--!strict
@@ -52378,7 +52554,7 @@ return CompactOwned
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="134">
+            <Item class="ModuleScript" referent="135">
               <Properties>
                 <string name="Name">Generic</string>
                 <string name="Source"><![CDATA[--!strict
@@ -52739,7 +52915,7 @@ return Generic
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="135">
+            <Item class="ModuleScript" referent="136">
               <Properties>
                 <string name="Name">GridTile</string>
                 <string name="Source"><![CDATA[--!strict
@@ -52819,7 +52995,7 @@ return GridTile
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="136">
+            <Item class="ModuleScript" referent="137">
               <Properties>
                 <string name="Name">Milestone</string>
                 <string name="Source"><![CDATA[--!strict
@@ -52951,7 +53127,7 @@ return Milestone
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="137">
+            <Item class="ModuleScript" referent="138">
               <Properties>
                 <string name="Name">Opt</string>
                 <string name="Source"><![CDATA[--!strict
@@ -53038,7 +53214,7 @@ return Opt
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="138">
+            <Item class="ModuleScript" referent="139">
               <Properties>
                 <string name="Name">Perk</string>
                 <string name="Source"><![CDATA[--!strict
@@ -53098,7 +53274,7 @@ return Perk
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="139">
+            <Item class="ModuleScript" referent="140">
               <Properties>
                 <string name="Name">Skins</string>
                 <string name="Source"><![CDATA[--!strict
@@ -53154,7 +53330,7 @@ return Skins
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="140">
+            <Item class="ModuleScript" referent="141">
               <Properties>
                 <string name="Name">Upgrade</string>
                 <string name="Source"><![CDATA[--!strict
@@ -53560,7 +53736,7 @@ return Upgrade
               </Properties>
             </Item>
           </Item>
-          <Item class="ModuleScript" referent="141">
+          <Item class="ModuleScript" referent="142">
             <Properties>
               <string name="Name">Virtual</string>
               <string name="Source"><![CDATA[--!strict
@@ -53825,7 +54001,7 @@ return Virtual
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="142">
+        <Item class="ModuleScript" referent="143">
           <Properties>
             <string name="Name">Render</string>
             <string name="Source"><![CDATA[--!strict
@@ -54730,11 +54906,11 @@ return Render
 ]]></string>
           </Properties>
         </Item>
-        <Item class="Folder" referent="143">
+        <Item class="Folder" referent="144">
           <Properties>
             <string name="Name">Signatures</string>
           </Properties>
-          <Item class="ModuleScript" referent="144">
+          <Item class="ModuleScript" referent="145">
             <Properties>
               <string name="Name">Ach</string>
               <string name="Source"><![CDATA[--!strict
@@ -54985,7 +55161,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="145">
+          <Item class="ModuleScript" referent="146">
             <Properties>
               <string name="Name">Ap</string>
               <string name="Source"><![CDATA[--!strict
@@ -55066,7 +55242,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="146">
+          <Item class="ModuleScript" referent="147">
             <Properties>
               <string name="Name">Badges</string>
               <string name="Source"><![CDATA[--!strict
@@ -55164,7 +55340,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="147">
+          <Item class="ModuleScript" referent="148">
             <Properties>
               <string name="Name">Cp</string>
               <string name="Source"><![CDATA[--!strict
@@ -55677,7 +55853,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="148">
+          <Item class="ModuleScript" referent="149">
             <Properties>
               <string name="Name">Effects</string>
               <string name="Source"><![CDATA[--!strict
@@ -55860,7 +56036,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="149">
+          <Item class="ModuleScript" referent="150">
             <Properties>
               <string name="Name">Energy</string>
               <string name="Source"><![CDATA[--!strict
@@ -55941,7 +56117,7 @@ return { sig("pe"), sig("se") }
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="150">
+          <Item class="ModuleScript" referent="151">
             <Properties>
               <string name="Name">Ex</string>
               <string name="Source"><![CDATA[--!strict
@@ -56443,7 +56619,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="151">
+          <Item class="ModuleScript" referent="152">
             <Properties>
               <string name="Name">Kit</string>
               <string name="Source"><![CDATA[--!strict
@@ -56890,7 +57066,7 @@ return Kit
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="152">
+          <Item class="ModuleScript" referent="153">
             <Properties>
               <string name="Name">M</string>
               <string name="Source"><![CDATA[--!strict
@@ -57926,7 +58102,7 @@ return M
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="153">
+          <Item class="ModuleScript" referent="154">
             <Properties>
               <string name="Name">Mp</string>
               <string name="Source"><![CDATA[--!strict
@@ -57987,7 +58163,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="154">
+          <Item class="ModuleScript" referent="155">
             <Properties>
               <string name="Name">Options</string>
               <string name="Source"><![CDATA[--!strict
@@ -58259,7 +58435,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="155">
+          <Item class="ModuleScript" referent="156">
             <Properties>
               <string name="Name">P</string>
               <string name="Source"><![CDATA[--!strict
@@ -58402,7 +58578,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="156">
+          <Item class="ModuleScript" referent="157">
             <Properties>
               <string name="Name">Pp</string>
               <string name="Source"><![CDATA[--!strict
@@ -58508,7 +58684,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="157">
+          <Item class="ModuleScript" referent="158">
             <Properties>
               <string name="Name">Signatures</string>
               <string name="Source"><![CDATA[--!strict
@@ -58694,7 +58870,7 @@ return Signatures
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="158">
+          <Item class="ModuleScript" referent="159">
             <Properties>
               <string name="Name">Sp</string>
               <string name="Source"><![CDATA[--!strict
@@ -59164,7 +59340,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="159">
+          <Item class="ModuleScript" referent="160">
             <Properties>
               <string name="Name">T</string>
               <string name="Source"><![CDATA[--!strict
@@ -59236,7 +59412,7 @@ return {
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="160">
+        <Item class="ModuleScript" referent="161">
           <Properties>
             <string name="Name">Style</string>
             <string name="Source"><![CDATA[--!strict
@@ -59430,7 +59606,7 @@ return Style
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="161">
+        <Item class="ModuleScript" referent="162">
           <Properties>
             <string name="Name">Types</string>
             <string name="Source"><![CDATA[--!strict

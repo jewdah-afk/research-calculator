@@ -13,7 +13,7 @@
 	priority order: below the ring, else above it, else the chip, else hidden, never over a HUD rect (Layout.rects),
 	past the side sheet's edge, or over another plate by more than 4 du (MapLogic.place). Positions are written on
 	every camera frame; placement reruns when the zoom moves 2%, the camera 8 pt, the HUD rects or the node set
-	change. Text is written at most 5 times a second and only when it changed.
+	change. Text is written at most 10 times a second (the server refreshes the screen that often) and only when it changed.
 
 	    local plates = Plates.new(view, nodes)
 	    plates:update(ms)       plates:onCamera(cam)      plates:setMode(labels)   -- AUTO | ALWAYS | OFF
@@ -191,10 +191,10 @@ function Plates.new(view: MapView.MapView, nodes: Nodes.Nodes): Plates
 
 	local function writeText(force: boolean)
 		local now = os.clock()
-		if not force and now - lastText < 0.2 then
+		if not force and now - lastText < 0.1 then
 			if not textPending then
 				textPending = true
-				task.delay(0.21 - (now - lastText), function()
+				task.delay(0.11 - (now - lastText), function()
 					textPending = false
 					writeText(true)
 				end)

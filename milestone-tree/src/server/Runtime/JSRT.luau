@@ -974,9 +974,19 @@ function AM.unshift(a, ...) KC[a] = nil;
 end
 -- a number also finds its string: the port's for-in keys are numbers where JS has strings (a milestone's this.id is
 -- 3, JS "3"), and the game looks those ids up in lists of strings (player.m.pseudoBuys.includes(this.id))
+-- the string of a small whole number, cached (includes runs thousands of times a tick: hasUpgrade, milestones)
+local INTSTR: { [number]: string } = {}
+local function intStr(v: number): string
+	local s = INTSTR[v]
+	if s == nil then
+		s = str(v)
+		if v == floor(v) and v >= -100000 and v <= 100000 then INTSTR[v] = s end
+	end
+	return s
+end
 function AM.includes(a, v)
 	local n = LEN[a]
-	local vs = if type(v) == "number" then str(v) else nil
+	local vs = if type(v) == "number" then intStr(v) else nil
 	for i = 0, n - 1 do
 		local x = a[i]
 		if x == v or (x ~= x and v ~= v) or (vs ~= nil and x == vs) then return true end

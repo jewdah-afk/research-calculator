@@ -35,6 +35,7 @@ local okLoad, loadErr = pcall(function()
 		TN = require(ReplicatedStorage:WaitForChild("TowerNum")),
 		JSRT = require(runtime:WaitForChild("JSRT")),
 		BEcore = require(runtime:WaitForChild("BEcore")),
+		Fast = require(runtime:WaitForChild("Fast")),
 		chunks = chunks,
 	}
 end)
@@ -50,6 +51,8 @@ local canSave = false        -- false when the save could not be loaded: never o
 local stopping = false
 local tickEvery = Config.TICK
 local tickCost = 0           -- running average seconds per tick
+local viewEvery = Config.VIEW
+local viewCost = 0           -- running average seconds per screen build
 local sinceTick, sinceView, sinceSave, sinceSent = 0, 0, 0, 0
 local pushNow = false        -- refresh the screen at the next heartbeat (after a button press)
 local saving = false
@@ -196,12 +199,16 @@ RunService.Heartbeat:ConnectParallel(function(dt: number)
 		tickEvery = math.clamp(tickCost / Config.TICK_CPU_SHARE, Config.TICK, Config.MAX_TICK)
 	end
 	local wantSave = session.wantSave or sinceSave >= Config.AUTOSAVE
-	if not (pushNow or sinceView >= Config.VIEW or wantSave) then return end
+	if not (pushNow or sinceView >= viewEvery or wantSave) then return end
 	local patch, changed = nil, false
-	if pushNow or sinceView >= Config.VIEW then
+	if pushNow or sinceView >= viewEvery then
 		sinceView = 0
 		pushNow = false
+		local v0 = os.clock()
 		patch, changed = session:view()
+		viewCost = viewCost * 0.9 + (os.clock() - v0) * 0.1
+		-- refresh less often when building the screen gets expensive (never slower than MAX_VIEW)
+		viewEvery = math.clamp(viewCost / Config.VIEW_CPU_SHARE, Config.VIEW, Config.MAX_VIEW)
 		if not canSave then patch.unsaved = true end
 	end
 	task.synchronize()

@@ -50,6 +50,7 @@ M.module(server, "Session", function() return L.Session end)
 local runtime = Instance.new("Folder"); runtime.Name = "Runtime"; runtime.Parent = server
 M.module(runtime, "JSRT", function() return L.JSRT end)
 M.module(runtime, "BEcore", function() return L.BEcore end)
+M.module(runtime, "Fast", function() return L.Fast end)
 local gameFolder = Instance.new("Folder"); gameFolder.Name = "Game"; gameFolder.Parent = server
 M.module(gameFolder, "Manifest", function() return require("../../src/server/Game/Manifest") end)
 for i, n in L.rbxNames do

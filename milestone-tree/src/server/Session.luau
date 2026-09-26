@@ -9,7 +9,8 @@
 	    local patch = s:view()        -- what changed on the player's screen since the last view (see below)
 	    local save, opts = s:save()   -- JSON strings for the DataStore (nil while the game holds a NaN)
 
-	deps = { TN = TowerNum, JSRT = the JSRT factory, BEcore = BEcore, chunks = { function... } in load order }
+	deps = { TN = TowerNum, JSRT = the JSRT factory, BEcore = BEcore, chunks = { function... } in load order,
+	         Fast = Runtime/Fast (optional: native per-tick overrides) }
 
 	A view patch is { set = { [id] = node }, del = { id... }, tab = name, tabStyle = css, keys = { hotkey... },
 	ended = bool, full = true on the first patch } plus, once each when they happen: pop = { popup... },
@@ -200,6 +201,7 @@ function Session:_start(saveJson: string?, optionsJson: string?, nowMs: number)
 		f()
 	end
 	JS.overrides()
+	if d.Fast then d.Fast(JS, ENV) end -- native versions of the hottest per-tick game functions (Runtime/Fast)
 	ENV.rbx_boot(nil, saveJson or "", optionsJson or "")
 	self.JS, self.ENV = JS, ENV
 	if self.notation then self:setNotation(self.notation) end
