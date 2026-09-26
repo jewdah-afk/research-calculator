@@ -538,13 +538,38 @@ M.studio = nil
 
 print("== the server shuts down for an update (soft shutdown)")
 M.studio = false -- a live server
+local pB = M.addPlayer("Second", 42)
+frames(3)
+local nr = M.reserved
 for _, f in M.closers do task.spawn(f) end
 frames(3)
 check(store.player_1.lock == nil, "shutdown saved and released the lock")
-local tp = M.teleports[1]
-check(#M.teleports == 1 and tp.place == 76183483380423 and table.find(tp.players, p) ~= nil, "everyone is sent to a holding server at once")
-check(tp and tp.options and tp.options.ShouldReserveServer == true and tp.options:GetTeleportData().mtSoftShutdown == true,
-	"to a reserved server, marked as a soft shutdown")
+check(M.reserved == nr + 1, "one reserved server for everyone")
+local mine = {}
+local solo = true
+for _, t in M.teleports do
+	if #t.players ~= 1 then solo = false end
+	mine[t.players[1]] = t
+end
+check(solo, "each player is teleported on their own (a group teleport from a closing server fails)")
+local tp = mine[p]
+check(tp ~= nil and mine[pB] ~= nil and tp.place == 76183483380423, "both players are sent to the holding server")
+check(tp and tp.options and tp.options:GetTeleportData().mtSoftShutdown == true
+	and tp.options.ReservedServerAccessCode == "code-" .. M.reserved
+	and mine[pB].options.ReservedServerAccessCode == tp.options.ReservedServerAccessCode,
+	"to the same reserved server, marked as a soft shutdown")
+-- a teleport that starts and then fails (TeleportInitFailed) is tried again
+local n2 = #M.teleports
+game:GetService("TeleportService").TeleportInitFailed:Fire(pB, nil, "mock")
+frames(1)
+check(#M.teleports == n2 + 1 and M.teleports[#M.teleports].players[1] == pB, "a teleport that fails to start is tried again")
+-- someone joining the closing server goes too
+local pC = M.addPlayer("Late", 43)
+frames(1)
+check(M.teleports[#M.teleports].players[1] == pC, "a player joining meanwhile is sent to the holding server too")
+M.removePlayer(pB)
+M.removePlayer(pC)
+frames(2)
 M.studio = nil
 
 print("== the holding server sends them back to the new version")
@@ -556,18 +581,25 @@ local said = {}
 local n0 = #M.teleports
 Soft.hold(p, function(_, text) table.insert(said, text) end)
 check(said[1] == "Updating to the new version", "the loading screen says the game is updating")
+check(game:GetService("Workspace"):GetAttribute("MT_Holding") == true, "the client is told it is in a holding server")
 frames(Soft.HOLD_SECONDS - 1)
-check(#M.teleports == n0, "the players wait while the old server saves")
+local early = false
+for i = n0 + 1, #M.teleports do if M.teleports[i].options == nil then early = true end end
+check(not early, "the players wait while the old server saves")
 frames(2)
-local back = M.teleports[n0 + 1]
-check(back ~= nil and back.place == 76183483380423 and back.options == nil and back.players[1] == p, "then they go back to a public server")
+local back = nil
+for i = n0 + 1, #M.teleports do
+	local t = M.teleports[i]
+	if t.players[1] == p and t.options == nil and not t.client then back = t end
+end
+check(back ~= nil and back.place == 76183483380423, "then they go back to a public server")
 M.failTeleport = true
 local n1 = #M.teleports
 Soft.hold(p, function(_, text) table.insert(said, text) end)
 frames(Soft.HOLD_SECONDS + 4)
 M.failTeleport = false
 frames(8)
-check(#M.teleports == n1 + 1, "a failed teleport back is tried again")
+check(#M.teleports >= n1 + 1, "a failed teleport back is tried again")
 game.__props.PrivateServerId = ""
 check(not Soft.holding(), "a public server is not a holding server")
 

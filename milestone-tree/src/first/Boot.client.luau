@@ -11,3 +11,17 @@ BootScreen.show()
 task.delay(45, function()
 	if BootScreen.visible() and not BootScreen.claimed() then BootScreen.hide() end
 end)
+
+-- a holding server (the game was updated, see server/SoftShutdown) sends everyone back to a public server itself;
+-- if this player is still here long after that, they go back on their own (a client may teleport itself)
+task.spawn(function()
+	local function holding(): boolean return workspace:GetAttribute("MT_Holding") == true end
+	if not holding() then workspace:GetAttributeChangedSignal("MT_Holding"):Wait() end
+	task.wait(40)
+	for _ = 1, 3 do
+		pcall(function()
+			game:GetService("TeleportService"):Teleport(game.PlaceId, game:GetService("Players").LocalPlayer)
+		end)
+		task.wait(20)
+	end
+end)

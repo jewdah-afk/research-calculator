@@ -96,9 +96,15 @@ function Challenge.skin(rec: any, n: any, ctx: any): boolean
 	if cur then
 		table.insert(parts, Common.caps("Currently", p.soft) .. "  " .. Common.num(cur, "number", p.value))
 	end
+	-- a challenge that counts completions says so (players took a finished one for done for good)
+	local cmp, lim = Common.str(n.cmp), Common.str(n.lim)
+	if lim then
+		local how = if lim == "Infinity" then "as many times as you like" else "up to " .. lim .. " times"
+		table.insert(parts, Common.caps("Repeatable", p.soft) .. "  "
+			.. Common.html("Complete it again " .. how .. ": every completion adds to its reward", "small", ctx.layer))
+	end
 	Common.setText(label, table.concat(parts, "\n"))
 	-- completions chip (cmp / lim; one-shot challenges show none)
-	local cmp, lim = Common.str(n.cmp), Common.str(n.lim)
 	if cmp and cmp ~= "0" then
 		local text = if lim and lim ~= "Infinity" then cmp .. " / " .. lim else cmp .. " done"
 		local chip = Common.chip(label, "Chip", text, { color = C.ownedValue, bg = Theme.mix(C.deep, C.bought, 0.25), bgT = 0,

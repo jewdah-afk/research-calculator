@@ -789,7 +789,12 @@ function App.start()
 			return
 		end
 		if patch.status then
-			if not gotFirst and not fatal then overlay:screen("loading", tostring(patch.status)) end
+			if not gotFirst and not fatal then
+				overlay:screen("loading", tostring(patch.status))
+			elseif not fatal then
+				-- in the game already: the server is closing for an update (SoftShutdown)
+				overlay:toasts(nil, { tostring(patch.status) })
+			end
 			return
 		end
 		local ok, err = pcall(function()

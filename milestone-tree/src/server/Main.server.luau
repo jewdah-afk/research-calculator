@@ -318,5 +318,5 @@ game:BindToClose(function()
 		local t0 = os.clock()
 		task.wait(0.1)
 		while stopping > 0 and os.clock() - t0 < 25 do task.wait(0.1) end
-	end)
+	end, say)
 end)

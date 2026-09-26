@@ -27,6 +27,17 @@ for x, want in {
 } do
 	eq(f(x), want, x)
 end
+-- Infinity (the cost of upgrades not open yet: p / sp / hp 41-44 from milestone 124) and NaN read as the game's own
+-- format does, and never recurse (their log10 is themselves: this was a stack overflow in the upgrade panels)
+local D = s.JS.D
+for _, x in { D(math.huge), D(math.huge):mul(10), D(math.huge):log10(), D(0 / 0) } do
+	local ok, got = pcall(ENV.formatWhole, nil, x)
+	eq(ok, true, "formatWhole(Infinity form) does not throw: " .. tostring(got))
+	s:setNotation("SCIENTIFIC")
+	local want = ENV.formatWhole(nil, x)
+	s:setNotation("SUFFIX")
+	eq(got, want, "Infinity form reads as SCIENTIFIC")
+end
 eq(ENV.formatWhole(nil, "12345"), "12.3K", "formatWhole 12345")
 eq(ENV.formatWhole(nil, "164"), "164", "formatWhole 164")
 eq(Session.suffix(1), "K", "suffix 1")

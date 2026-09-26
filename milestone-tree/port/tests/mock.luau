@@ -391,9 +391,19 @@ function Players:GetNameFromUserIdAsync(id) return "user" .. id end
 M.teleports = {}
 M.joinData = {}
 local TeleportService = game:GetService("TeleportService")
+M.reserved = 0
+TeleportService.__props.TeleportInitFailed = Signal.new()
+function TeleportService:ReserveServer(place)
+	if M.failReserve then error("reserve failed (mock)") end
+	M.reserved += 1
+	return "code-" .. M.reserved, "ps-" .. M.reserved
+end
 function TeleportService:TeleportAsync(place, players, options)
 	if M.failTeleport then error("teleport failed (mock)") end
 	table.insert(M.teleports, { place = place, players = players, options = options })
+end
+function TeleportService:Teleport(place, player)
+	table.insert(M.teleports, { place = place, players = { player }, client = true })
 end
 function Inst:GetJoinData() return { TeleportData = M.joinData[self.__props.UserId] } end
 function Inst:SetTeleportData(d) self.__teleportData = d end

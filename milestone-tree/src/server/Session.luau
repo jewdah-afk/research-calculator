@@ -152,12 +152,16 @@ local function suffixFormatter(JS, orig)
 		local sign = JS.tonum(JS.P(d, "sign"))
 		if sign ~= sign or sign == 0 then return orig(this, decimal, precision, small) end
 		if sign < 0 then return "-" .. fmt(this, d:neg(), precision, small) end
+		-- Infinity (the cost of an upgrade that is not open yet, e.g. p 41-44 from milestone 124) and NaN forms: the
+		-- game's own format. Their log10 is themselves, so the exponent step below would never end
+		local mag = JS.tonum(JS.P(d, "mag"))
+		if mag ~= mag or mag == math.huge then return orig(this, decimal, precision, small) end
 		if d:lt(1000) or d:gte("eeee1000") then return orig(this, decimal, precision, small) end
 		local s = suffixed(d, 3)
 		if s then return s end
 		-- past 1e303: the exponent, suffixed with 4 figures (and again for its own exponent, far enough up)
 		local E = d:log10()
-		if E:lt(1000) then return orig(this, decimal, precision, small) end
+		if E:lt(1000) or not E:lt(d) then return orig(this, decimal, precision, small) end
 		local es = suffixed(E, 4)
 		if es then return "e" .. es end
 		return "e" .. fmt(this, E, precision, small)
