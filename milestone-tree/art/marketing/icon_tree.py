@@ -1,7 +1,7 @@
-# icon_tree.py - icon option D: the game's own painted tree (a 1024 square render, the canopy filling the frame, plates
-# and HUD hidden), saturated, lightly sharpened, corners darkened, downscaled to 512; then out/icon_options.jpg compares A, B, D and C at
+# icon_tree.py - icon option D: the game's own painted tree (a 1024 square render, the canopy edge to edge, plates
+# and HUD hidden), saturated, lightly sharpened, downscaled to 512; then out/icon_options.jpg compares A, B, D and C at
 # 512 / 150 / 64 px. Render the still first:
-#   node -e "require('./lib/snap').still({scene:'s13_none',cam:'1499,1005,0.63',size:'1024x1024',hide:['hud','plates'],out:'work/stills/icon_tree_full.png'})"
+#   node -e "require('./lib/snap').still({scene:'s13_none',cam:'1499,960,0.9',size:'1024x1024',hide:['hud','plates'],out:'work/stills/icon_tree_full.png'})"
 #   python3 icon_tree.py
 from PIL import Image, ImageDraw, ImageEnhance, ImageFilter
 import numpy as np
@@ -13,7 +13,6 @@ a = np.asarray(im).astype(np.float32) / 255
 h, w = a.shape[:2]
 y, x = np.mgrid[0:h, 0:w]
 r = np.sqrt(((x - 512) / 512) ** 2 + ((y - 512) / 512) ** 2)
-a = a * np.clip(1 - (r - 0.95) * 1.2, 0.55, 1)[..., None]                      # only the corners darken: the tree fills it
 Image.fromarray((np.clip(a, 0, 1) * 255).astype(np.uint8)).resize((512, 512), Image.LANCZOS).save('out/icon_d_tree_render.png')
 
 opts = [('A: gem (current)', 'icon_512.png'), ('B: number', 'icon_b_number.png'), ('D: the tree (render)', 'icon_d_tree_render.png'),
