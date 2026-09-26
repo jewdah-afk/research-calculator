@@ -186,7 +186,9 @@ function Session:_applyPerks()
 	local ENV, JS = self.ENV, self.JS
 	if ENV == nil or ENV.player == nil then return end
 	local sp = self.perks and self.perks.speed
-	JS.setk(ENV.player, "devSpeed", if type(sp) == "number" and sp > 1 then sp else nil)
+	local on = type(sp) == "number" and sp > 1
+	JS.setk(ENV.player, "devSpeed", if on then sp else nil)
+	ENV.rbx_passSpeed = if on then sp else 0 -- the view shows it as the pass (2× SPEED · ACTIVE), not dev speed
 end
 -- a Time Warp (a developer product): seconds of progress fed through the next ticks the way the game catches up
 -- offline time (a tenth of what is left each tick, at least a second), so it is done in about 3 s

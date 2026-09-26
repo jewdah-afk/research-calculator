@@ -38,6 +38,8 @@ htmlInst = M.module(shared, "Html", function() return M.withScript(htmlInst, req
 M.module(shared, "ZoneMaps", function() return require("../../src/shared/ZoneMaps") end)
 M.module(shared, "PrefsSchema", function() return require("../../src/shared/PrefsSchema") end)
 M.module(shared, "Products", function() return require("../../src/shared/Products") end)
+local boardsInst
+boardsInst = M.module(shared, "Boards", function() return M.withScript(boardsInst, require(W .. "shared/Boards")) end)
 
 local server = Instance.new("Folder"); server.Name = "MilestoneTree"; server.Parent = SSS
 local function scriptModule(parent, name, wrapPath)
@@ -48,6 +50,7 @@ end
 scriptModule(server, "Config", "server/Config")
 scriptModule(server, "Store", "server/Store")
 scriptModule(server, "Shop", "server/Shop")
+scriptModule(server, "Leaderboards", "server/Leaderboards")
 M.module(server, "Session", function() return L.Session end)
 local runtime = Instance.new("Folder"); runtime.Name = "Runtime"; runtime.Parent = server
 M.module(runtime, "JSRT", function() return L.JSRT end)
@@ -115,6 +118,11 @@ M.fireServer = function(remote, ...)
 	local args = table.pack(...)
 	for i = 1, args.n do args[i] = carry(args[i], remote.Name .. "#" .. i) end
 	remote.OnServerEvent:Fire(localPlayer, table.unpack(args, 1, args.n))
+end
+M.invokeServer = function(remote, ...)
+	local f = remote.OnServerInvoke
+	if f == nil then return nil end
+	return M.deep(f(localPlayer, ...))
 end
 local optPaths = {}
 M.fireClient = function(remote, player, ...)
@@ -324,6 +332,9 @@ local perksRaw = p:GetAttribute("MT_Perks")
 check(type(perksRaw) == "string" and string.find(perksRaw, "speed", 1, true) ~= nil, "a pass owned before joining is a perk (" .. tostring(perksRaw) .. ")")
 local function plain(s) return (string.gsub(string.gsub(s or "", "<[^>]*>", ""), "\u{200A}", "")) end
 check(string.find(plain(pg.TopbarGui.Root.Capsule.Label.Text), "SPEED", 1, true) ~= nil, "the capsule label shows 2x SPEED (" .. plain(pg.TopbarGui.Root.Capsule.Label.Text) .. ")")
+local infoText = plain(pg.TopbarGui.Root.Info.Label.Text)
+check(string.find(infoText, "2× SPEED", 1, true) ~= nil and string.find(infoText, "ACTIVE", 1, true) ~= nil
+	and string.find(string.upper(infoText), "DEV", 1, true) == nil, "the speed pass reads 2× SPEED · ACTIVE, never dev speed (" .. infoText .. ")")
 pg.HudGui.Root.Dock.Shop.Activated:Fire()
 frames(0.4)
 local modal = pg.OverlayGui.Root:FindFirstChild("Modal")
@@ -378,6 +389,16 @@ check(rec ~= nil and rec.lock == nil, "save lock released on leaving")
 check(SSS.MilestoneTree.Sessions:FindFirstChild("Player_1") == nil, "the Actor is gone")
 local savedPts = rec and string.match(rec.save, '"points":"([^"]+)"')
 print("  saved points: " .. tostring(savedPts))
+-- the leaderboards: the stats went out on leaving (only what the server's game holds), with the real playtime
+local lbPoints = M.stores["ordered:LB_points_v1"]
+local lbTime = M.stores["ordered:LB_time_v1"]
+local lbM = M.stores["ordered:LB_m_v1"]
+check(lbPoints ~= nil and type(lbPoints["1"]) == "number" and lbPoints["1"] > 0, "the points board got the player's points (" .. tostring(lbPoints and lbPoints["1"]) .. ")")
+check(lbM ~= nil and type(lbM["1"]) == "number", "the Milestones board got a count (" .. tostring(lbM and lbM["1"]) .. ")")
+check(lbTime ~= nil and type(lbTime["1"]) == "number" and lbTime["1"] >= 3, "the playtime board got real seconds (" .. tostring(lbTime and lbTime["1"]) .. ")")
+check(rec ~= nil and type(rec.played) == "number" and rec.played >= 3, "the save keeps the playtime (" .. tostring(rec and rec.played) .. ")")
+local lbRobux = M.stores["ordered:LB_robux_v1"]
+check(lbRobux ~= nil and lbRobux["1"] == 29 + 99, "the Robux board counts the Time Warp once and the Supporter pass (R$ 29 + 99 = " .. tostring(lbRobux and lbRobux["1"]) .. ")")
 
 print("== player rejoins")
 sent = 0
@@ -420,6 +441,30 @@ frames(0.5)
 check(pg.MapGui.Enabled and not sheet.Visible, "the close brings the map back")
 
 check(E.warnings == 0, "no [MilestoneTree] warnings while playing (" .. E.warnings .. ")")
+
+print("== leaderboards")
+local boardRemote = RS.MilestoneTreeRemotes:FindFirstChild("Board")
+check(boardRemote ~= nil and boardRemote.ClassName == "RemoteFunction", "the Board remote exists")
+M.stores["ordered:LB_points_v1"]["777"] = 1 -- another player, far behind
+local page = boardRemote and boardRemote:InvokeServer("points")
+check(page ~= nil and page.ok and #page.entries == 2, "a board page lists the players (" .. tostring(page and #page.entries) .. ")")
+local top = page and page.entries[1]
+check(top ~= nil and top.rank == 1 and top.id == 1 and top.name == "Player1" and type(top.value) == "string" and top.value ~= "",
+	"rank 1 has the display name and a value (" .. tostring(top and top.name) .. " " .. tostring(top and top.value) .. ")")
+check(page ~= nil and page.you == (top and top.value), "the page has the player's own value (" .. tostring(page and page.you) .. ")")
+local quick = boardRemote:InvokeServer("time")
+check(quick ~= nil and quick.ok == false, "a second page within half a second is refused")
+frames(0.6)
+local t = boardRemote:InvokeServer("time")
+check(t ~= nil and t.ok and t.entries[1] and string.match(t.entries[1].value, "%dm$") ~= nil, "playtime reads as time (" .. tostring(t and t.entries[1] and t.entries[1].value) .. ")")
+frames(0.6)
+check(boardRemote:InvokeServer("nope") == nil and boardRemote:InvokeServer(123) == nil, "unknown boards and bad arguments get nothing")
+print("== a flood of requests is kicked")
+local kicked0 = #M.kicked
+for _ = 1, 450 do RS.MilestoneTreeRemotes.Act:FireServer("not an action") end
+check(#M.kicked == kicked0 + 1 and M.kicked[#M.kicked].player == p, "a player flooding the remotes is kicked")
+for _ = 1, 50 do RS.MilestoneTreeRemotes.Act:FireServer("not an action") end
+check(#M.kicked == kicked0 + 1, "kicked once, not again and again")
 
 print("== a second player joins while the DataStore is down")
 store.player_2 = { save = "{\"points\":\"1e100\"}", time = 1 }

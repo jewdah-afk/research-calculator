@@ -2,6 +2,8 @@
 --[[
 	Store: one DataStore record per player, { save = JSON, options = JSON, time = os.time(), lock = { job, t } }.
 
+	`played` is the real time played in seconds (the playtime leaderboard), kept beside the game.
+
 	The lock keeps two servers from playing the same save at once (a quick server hop): load takes it (waiting for
 	a live lock elsewhere to be released, and taking over one older than LOCK_TTL), every save refreshes it, and
 	the last save on leaving releases it. A save only writes while this server still holds the lock.
@@ -16,7 +18,7 @@ local Config = require(script.Parent.Config)
 
 local Store = {}
 
-export type Record = { save: string?, options: string?, time: number?, lock: { job: string, t: number }? }
+export type Record = { save: string?, options: string?, time: number?, played: number?, lock: { job: string, t: number }? }
 
 local store: DataStore? = nil
 local function ds(): DataStore
@@ -94,8 +96,9 @@ function Store.load(userId: number): (Record?, string?)
 	return (result or {}) :: Record, nil
 end
 
--- write the game; release = true on leaving. false if the lock was lost (another server took the save over).
-function Store.save(userId: number, save: string, options: string?, release: boolean?): (boolean, string?)
+-- write the game; release = true on leaving; played = the real seconds played in all (the playtime board; never
+-- lowered). false if the lock was lost (another server took the save over).
+function Store.save(userId: number, save: string, options: string?, release: boolean?, played: number?): (boolean, string?)
 	local lost = false
 	local ok, err = retry(function()
 		return ds():UpdateAsync(key(userId), function(old: Record?): Record?
@@ -107,6 +110,7 @@ function Store.save(userId: number, save: string, options: string?, release: boo
 			rec.save = save
 			rec.options = options
 			rec.time = os.time()
+			if played then rec.played = math.max(rec.played or 0, math.floor(played)) end
 			rec.lock = if release then nil else { job = jobId(), t = os.time() }
 			return rec
 		end)

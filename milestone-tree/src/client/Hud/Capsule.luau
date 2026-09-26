@@ -1,8 +1,10 @@
 --!strict
 --[[
-	Capsule: the points capsule (DESIGN.md 4.3), in TopbarGui centred under the Roblox top bar.
+	Capsule: the points capsule (DESIGN.md 4.3), in TopbarGui under the Roblox top bar, centred on the SCREEN (the
+	top bar's safe area is shifted right by Roblox's own buttons, so its middle is not the screen's).
 
-	    Capsule   400 x 58 (COMPACT 300 x 44), dark gradient, gold rim and glow
+	    Capsule   640 x 84 (COMPACT 380 x 52), the hero look: dark slab, gold accent, the amount in the panel hero's
+	              heavy face (46 du) with a gold glow
 	      Coin    Ø68 gold disc breaking out on the left, a spinning star (6 s / rev)
 	      Label   "POINTS · NORMAL UNIVERSE" (`caps`, #ffe9a3; not on COMPACT), then the passes in gold
 	              ("· 2× SPEED · SUPPORTER", from the player's MT_Perks attribute)
@@ -12,7 +14,7 @@
 	      Warn    a chip right of the capsule with the first warning value; tap -> warnTap (the tooltip lists all)
 	      Status  SAVING... / SAVED / NOT SAVING / RECONNECTING... under the pill
 	      Info    the game's other head lines under them (hud.x: sp challenge 11's ashes, a burning Spark Milestone;
-	              hud.off offline time; hud.dev dev speed), `small` on a glass chip; bottom() counts it
+	              hud.off offline time; hud.dev dev speed; hud.pass as 2× SPEED · ACTIVE), `small` on a glass chip; bottom() counts it
 
 	    local part = Capsule.new(parent)
 	    part:update(h)   part:setStatus(kind)   part:setUniverse(inside)   part:setFirstRun(b)   part.warnTap
@@ -196,29 +198,34 @@ function Capsule.new(parent: GuiObject): Capsule
 	local statusKind: string? = nil
 	local savedToken = 0
 
-	local W_WIDE, H_WIDE, W_COMPACT, H_COMPACT = 540, 62, 340, 44
-	-- the capsule's centre: the Root's middle, or a du x (over the map strip while a side sheet is open)
+	local W_WIDE, H_WIDE, W_COMPACT, H_COMPACT = 640, 84, 380, 52
+	-- the capsule's centre: the screen's middle in the parent's du, or a du x (over the map strip while a side sheet is
+	-- open)
 	local centreX: number? = nil
+	local function screenCx(): number
+		local cam = workspace.CurrentCamera
+		local vw = if cam then cam.ViewportSize.X else 1920
+		if parent.AbsoluteSize.X <= 0 then return vw / 2 / math.max(Layout.s, 0.01) end
+		return (vw / 2 - parent.AbsolutePosition.X) / math.max(Layout.s, 0.01)
+	end
 	local function at(dx: number, y: number): UDim2
-		local cx = centreX
-		if cx then return UDim2.fromOffset(cx + dx, y) end
-		return UDim2.new(0.5, dx, 0, y)
+		return UDim2.fromOffset((centreX or screenCx()) + dx, y)
 	end
 	local function place()
 		compact = Layout.mode == "COMPACT"
 		local w, h = if compact then W_COMPACT else W_WIDE, if compact then H_COMPACT else H_WIDE
 		f.Size = UDim2.fromOffset(w, h)
 		f.Position = at(0, 4)
-		local cd = if compact then 30 else 40
+		local cd = if compact then 34 else 52
 		Sleek.diamond(f, "Coin", GOLD_D, cd, { fill = 0, inner = false })
 		coin.Position = UDim2.new(0, if compact then 10 else 16, 0.5, 0)
 		core.Size = UDim2.fromOffset(if compact then 6 else 8, if compact then 6 else 8)
 		local x0 = (if compact then 10 else 16) + cd + (if compact then 10 else 16)
 		label.Visible = not compact
-		label.Position = UDim2.fromOffset(x0, 10)
+		label.Position = UDim2.fromOffset(x0, 12)
 		Theme.text(label, "caps")
-		row.Position = UDim2.fromOffset(x0, if compact then 4 else 23)
-		row.Size = UDim2.fromOffset(0, 36)
+		row.Position = UDim2.fromOffset(x0, if compact then 4 else 26)
+		row.Size = UDim2.fromOffset(0, if compact then 44 else 52)
 		amount.Size = UDim2.fromScale(0, 1)
 		unit.Size = UDim2.fromScale(0, 1)
 		Theme.text(unit, if compact then "label" else "small")
@@ -226,21 +233,21 @@ function Capsule.new(parent: GuiObject): Capsule
 		local pad = Kit.child(unit, "Pad", "UIPadding") :: UIPadding
 		pad.PaddingBottom = UDim.new(0, if compact then 5 else 6)
 		-- the rate column on the right of the slab
-		local rx = if compact then 110 else 174 -- the column's width from the right edge
+		local rx = if compact then 120 else 190 -- the column's width from the right edge
 		divider.Position = UDim2.new(1, -rx - 14, 0, 12)
 		divider.Size = UDim2.new(0, 1, 1, -24)
 		divider.Visible = true
 		pill.Size = UDim2.fromOffset(0, 18)
 		pill.AnchorPoint = Vector2.new(0, 0)
-		pill.Position = at(w / 2 - rx, 4 + (if compact then 13 else 36))
+		pill.Position = at(w / 2 - rx, 4 + (if compact then 17 else 50))
 		Theme.text(pillLabel, "number")
 		pillLabel.TextSize = if compact then 13 else 14
 		pillLabel.Size = UDim2.fromScale(0, 1)
 		local gs = if compact then 11 else 12
 		up.Size = UDim2.fromOffset(gs, gs)
 		spark.AnchorPoint = Vector2.new(0, 0)
-		spark.Position = at(w / 2 - rx, 4 + 10)
-		spark.Size = UDim2.fromOffset(rx - 16, 22)
+		spark.Position = at(w / 2 - rx, 4 + 14)
+		spark.Size = UDim2.fromOffset(rx - 16, 28)
 		-- warn: right of the capsule
 		warn.Size = UDim2.fromOffset(0, if compact then 26 else 30)
 		warn.Position = at(w / 2 + 14, 4 + h / 2)
@@ -274,7 +281,7 @@ function Capsule.new(parent: GuiObject): Capsule
 		local show = not compact and not firstRun and pill.Visible and #history >= 1
 		spark.Visible = show
 		if show then
-			Sleek.spark(spark, "Line", history, GOOD, { w = spark.Size.X.Offset, h = 22, thick = 1.6 })
+			Sleek.spark(spark, "Line", history, GOOD, { w = spark.Size.X.Offset, h = 28, thick = 1.8 })
 		end
 	end
 
@@ -295,6 +302,9 @@ function Capsule.new(parent: GuiObject): Capsule
 			if type(h.x) == "string" and h.x ~= "" then table.insert(parts, Rich.html(h.x, Theme.size("small"), nil)) end
 			if type(h.off) == "string" then table.insert(parts, Rich.caps("Offline time") .. "  " .. Rich.num(h.off, { size = Theme.size("small") })) end
 			if type(h.dev) == "string" then table.insert(parts, Rich.caps("Dev speed") .. "  " .. Rich.num(h.dev, { size = Theme.size("small") })) end
+			if type(h.pass) == "string" then
+				table.insert(parts, '<font color="#ffc93c">' .. Rich.caps(h.pass .. " Speed") .. "  ·  " .. Rich.caps("Active") .. "</font>")
+			end
 		end
 		local t = table.concat(parts, "\n")
 		if t ~= infoText then
@@ -338,11 +348,11 @@ function Capsule.new(parent: GuiObject): Capsule
 		if pts ~= lastPts then
 			local grew = lastPts ~= ""
 			lastPts = pts
-			local size = Theme.size("capsule")
-			Recipes.number(amount, { text = pts, size = size, from = Color3.new(1, 1, 1), to = Color3.new(1, 1, 1),
-				stroke = 0, shadow = 0, role = "capsule" })
-			local steps = if compact then { 28, 26, 22 } else { 34, 30, 26 }
-			Rich.fit(amount, steps, if compact then 140 else 230)
+			-- the hero face (the panel's YOU HAVE number): white into a warm cream, a gold glow behind it
+			local steps = if compact then { 32, 28, 24 } else { 46, 40, 34 }
+			Recipes.number(amount, { text = pts, size = steps[1], from = Color3.new(1, 1, 1), to = CREAM,
+				stroke = 0, shadow = 0, role = "hero", glow = GOLD })
+			Rich.fit(amount, steps, if compact then 160 else 300)
 			if grew and os.clock() - lastBump >= 1 then
 				lastBump = os.clock()
 				Motion.bump(row, 0.05)
@@ -454,6 +464,12 @@ function Capsule.new(parent: GuiObject): Capsule
 		if h then self:update(h) end
 		if not f.Visible then spark.Visible = false end
 	end)
+	-- the screen centre in the parent's du moves with the parent (the top bar's insets, a resize)
+	for _, prop in { "AbsolutePosition", "AbsoluteSize" } do
+		parent:GetPropertyChangedSignal(prop):Connect(function()
+			if centreX == nil then place() end
+		end)
+	end
 	Layout.changed:Connect(function()
 		place()
 		lastPts = ""

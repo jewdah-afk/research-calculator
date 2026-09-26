@@ -83,6 +83,7 @@ export type HudState = {
 	name: string,
 	gen: string?,
 	dev: string?,
+	pass: string?, -- the 2x Speed pass is on ("2×")
 	off: string?,
 	w: { HudWarn },
 	wh: string?,

@@ -276,6 +276,23 @@ rbx_upgHave = function(this, layer, t)
 	end
 	do return player[JS.k(layer)].points end
 end
+rbx_lbStats = function(this)
+	local out, i, l, d, v
+	out = JS.A(1, JS.A(2, "points", player.points))
+	for i = 0, JS.cap(0, (JS.len(rbx_LB_LAYERS)) - 1, 1) do
+		l = rbx_LB_LAYERS[JS.k(i)]
+		d = player[JS.k(l)]
+		if (not JS.t(d)) then
+			continue
+		end
+		v = (if (not (d.best == nil)) then d.best else d.points)
+		if (not (v == nil)) then
+			JS.m(out, "push", JS.A(2, l, v))
+		end
+	end
+	JS.m(out, "push", JS.A(2, "ach", JS.len(player.ach.achievements)))
+	do return out end
+end
 rbx_buyAllOn = function(this, l)
 	local nx, k, n, sd
 	nx = rbx_BUYALL_AFTER[JS.k(l)]
@@ -1660,7 +1677,7 @@ rbx_map = function(this)
 	}, {"t", "inside", "open", "close", "opt", "c"}) end
 end
 rbx_hud = function(this)
-	local h, pg, o, w, wh, sc, of, x
+	local h, pg, o, pass, w, wh, sc, of, x
 	h = JS.O({
 		t = "hud",
 		pts = format(nil, player.points),
@@ -1674,7 +1691,9 @@ rbx_hud = function(this)
 			JS.setk(h, "gen", (if (not JS.eq(o.oompsMag, 0)) then (((JS.str(format(nil, o.oomps)) .. " OOM") .. JS.str((if (JS.tonum(o.oompsMag) < 0) then "^OOM" else (if (JS.tonum(o.oompsMag) > 1) then ("^" .. JS.str(o.oompsMag)) else "")))) .. "s/sec") else (JS.str(formatSmall(nil, pg)) .. "/sec")))
 		end
 	end
-	JS.setk(h, "dev", (if (JS.t(player.devSpeed) and (not JS.eq(player.devSpeed, 1))) then (JS.str(format(nil, player.devSpeed)) .. "x") else JS.NULL))
+	pass = (if JS.t(rbx_passSpeed) then JS.eq(player.devSpeed, rbx_passSpeed) else rbx_passSpeed)
+	JS.setk(h, "dev", (if ((JS.t(player.devSpeed) and (not JS.eq(player.devSpeed, 1))) and (not JS.t(pass))) then (JS.str(format(nil, player.devSpeed)) .. "x") else JS.NULL))
+	JS.setk(h, "pass", (if JS.t(pass) then (JS.str(formatWhole(nil, rbx_passSpeed)) .. "×") else JS.NULL))
 	JS.setk(h, "off", (if ((not (player.offTime == nil)) and (JS.tonum(player.offTime.remain) > 0)) then formatTime(nil, player.offTime.remain) else JS.NULL))
 	w = JS.A(0)
 	wh = (if JS.t(tmp.displayThings[1]) then rbx_str(nil, tmp.displayThings[1]) else "")
@@ -1770,6 +1789,8 @@ rbx_view = function(this)
 	do return v end
 end
 rbx_actions = JS.A(0)
+rbx_passSpeed = 0
+rbx_LB_LAYERS = JS.A(20, "m", "p", "sp", "mm", "pb", "hp", "ap", "t", "hb", "pe", "se", "pp", "ep", "mp", "em", "pm", "pep", "cp", "cm", "ex")
 rbx_BUYALL_AFTER = JS.O({
 	p = "sp",
 	sp = "mm",

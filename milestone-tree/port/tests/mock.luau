@@ -203,6 +203,9 @@ function Inst:GetFullName()
 end
 -- RemoteEvents: the test wires server and client together
 function Inst:FireServer(...) if M.fireServer then M.fireServer(self, ...) end end
+function Inst:InvokeServer(...) if M.invokeServer then return M.invokeServer(self, ...) end return nil end
+M.kicked = {}
+function Inst:Kick(msg) table.insert(M.kicked, { player = self, msg = msg }) end
 function Inst:FireClient(player, ...) if M.fireClient then M.fireClient(self, player, ...) end end
 function Inst:FireAllClients(...) if M.fireClient then M.fireClient(self, nil, ...) end end
 -- Actors: messages are queued and delivered by M.pump (like the engine does between frames)
@@ -346,6 +349,43 @@ function DSS:GetDataStore(name)
 		SetAsync = function(_, key, v) data[key] = M.deep(v) end,
 	}
 end
+-- OrderedDataStore in memory (whole-number values, GetSortedAsync pages)
+function DSS:GetOrderedDataStore(name)
+	local data = M.stores["ordered:" .. name] or {}
+	M.stores["ordered:" .. name] = data
+	return {
+		UpdateAsync = function(_, key, f)
+			if M.failStore then error(M.failMessage or "DataStore request failed (mock)") end
+			local new = f(data[key])
+			if new ~= nil then
+				assert(type(new) == "number" and new == math.floor(new) and new >= -2^63 and new < 2^63, "OrderedDataStore values are whole numbers")
+				data[key] = new
+			end
+			return data[key]
+		end,
+		GetAsync = function(_, key)
+			if M.failStore then error(M.failMessage or "DataStore request failed (mock)") end
+			return data[key]
+		end,
+		GetSortedAsync = function(_, ascending, pageSize)
+			if M.failStore then error(M.failMessage or "DataStore request failed (mock)") end
+			local rows = {}
+			for k, v in data do table.insert(rows, { key = k, value = v }) end
+			table.sort(rows, function(a, b) if ascending then return a.value < b.value end return a.value > b.value end)
+			local page = {}
+			for i = 1, math.min(pageSize, #rows) do page[i] = rows[i] end
+			return { GetCurrentPage = function() return page end, IsFinished = true }
+		end,
+	}
+end
+local UserService = game:GetService("UserService")
+function UserService:GetUserInfosByUserIdsAsync(ids)
+	local out = {}
+	for _, id in ids do table.insert(out, { Id = id, Username = "user" .. id, DisplayName = "Player" .. id }) end
+	return out
+end
+function Players:GetNameFromUserIdAsync(id) return "user" .. id end
+
 -- MarketplaceService: passes owned by M.passes[userId][passId]; prompts are recorded in M.prompts
 M.passes = {}
 M.prompts = {}

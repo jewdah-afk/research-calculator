@@ -582,6 +582,178 @@ return AudioIds
       </Item>
       <Item class="ModuleScript" referent="10">
         <Properties>
+          <string name="Name">Boards</string>
+          <string name="Source"><![CDATA[--!strict
+--[[
+	Boards: the leaderboards (server/Leaderboards stores them, the client's RANKS window shows them) and how their
+	values read.
+
+	    Boards.list                     { Board } in the order the RANKS window shows them
+	    Boards.get(key) -> Board?
+	    Boards.format(x)                a big number the leaderboard way (below)
+	    Boards.show(board, key) -> string    a stored OrderedDataStore key as the board shows it
+	    Boards.keyOf(board, value) -> number  the value (a TowerNum, a number, or a numeric string) as a stored key
+
+	A board's kind says how its value is kept (OrderedDataStore holds whole numbers only):
+	    big    any size (TowerNum.sortKey: a whole number that sorts like the value; read back with fromSortKey)
+	    count  a whole number as it is (milestones, achievements)
+	    time   whole seconds, read as "3d 4h", "5h 12m", "42m"
+	    robux  whole Robux, read as "R$ 1,234"
+
+	The leaderboard number format (Boards.format):
+	    below 1,000        57, 12.5
+	    below e3,003       the -illion suffixes with 3 figures: 1.23K, 45.6NoNog, 150NoNogNoce (1e3003 is the first
+	                       value past the names)
+	    from e3,003        scientific: e plus the exponent with commas: e3,003, e10,000, e100,000
+	    exponent >= 1e6    the exponent suffixed with 4 figures: e1.000M, e198.2M; again for its own exponent
+	                       (ee3,500, ee198.2M); taller towers than that read as TowerNum's 10^^ height
+]]
+
+local TowerNum = require(game:GetService("ReplicatedStorage"):WaitForChild("TowerNum")) :: any
+
+export type Board = { key: string, title: string, kind: string, layer: string? }
+
+local Boards = {}
+
+-- every stat (the layers in the tree's own order, then the extra stats). layer: the node whose hue the tab takes
+Boards.list = {
+	{ key = "points", title = "Points", kind = "big" },
+	{ key = "m", title = "Milestones", kind = "count", layer = "m" },
+	{ key = "p", title = "Prestige Points", kind = "big", layer = "p" },
+	{ key = "sp", title = "Super Prestige", kind = "big", layer = "sp" },
+	{ key = "mm", title = "Meta-Milestones", kind = "count", layer = "mm" },
+	{ key = "pb", title = "Prestige Boost", kind = "big", layer = "pb" },
+	{ key = "hp", title = "Hyper Prestige", kind = "big", layer = "hp" },
+	{ key = "ap", title = "Atomic Prestige", kind = "big", layer = "ap" },
+	{ key = "t", title = "Transcend", kind = "big", layer = "t" },
+	{ key = "hb", title = "Hyper Boost", kind = "big", layer = "hb" },
+	{ key = "pe", title = "Prestige Energy", kind = "big", layer = "pe" },
+	{ key = "se", title = "Super Energy", kind = "big", layer = "se" },
+	{ key = "pp", title = "Prestige Power", kind = "big", layer = "pp" },
+	{ key = "ep", title = "Exotic Prestige", kind = "big", layer = "ep" },
+	{ key = "mp", title = "Multiversal Prestige", kind = "big", layer = "mp" },
+	{ key = "em", title = "Extra-Milestones", kind = "count", layer = "em" },
+	{ key = "pm", title = "Prestige Milestones", kind = "count", layer = "pm" },
+	{ key = "pep", title = "Pr-Exotic Prestige", kind = "big", layer = "pep" },
+	{ key = "cp", title = "Corruption", kind = "big", layer = "cp" },
+	{ key = "cm", title = "Corrupted Milestones", kind = "count", layer = "cm" },
+	{ key = "ex", title = "Exploration", kind = "big", layer = "ex" },
+	{ key = "ach", title = "Achievements", kind = "count", layer = "ach" },
+	{ key = "time", title = "Playtime", kind = "time" },
+	{ key = "robux", title = "Robux Spent", kind = "robux" },
+} :: { Board }
+
+local byKey: { [string]: Board } = {}
+for _, b in Boards.list do byKey[b.key] = b end
+function Boards.get(key: string): Board?
+	return byKey[key]
+end
+
+-- ------------------------------------------------------------------------------------------------------ format
+local FIRST = { "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No" }
+local UNITS = { "", "U", "D", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No" }
+local TENS = { "", "Dc", "Vg", "Tg", "Qag", "Qig", "Sxg", "Spg", "Ocg", "Nog" }
+local HUNDREDS = { "", "Ce", "Dce", "Tce", "Qace", "Qice", "Sxce", "Spce", "Occe", "Noce" }
+local MAX_K = 1000 -- 1e3000 (NoNogNoce); 1e3003 is the first value past the names
+-- the suffix of 1e(3k), 1 <= k <= MAX_K
+local function suffix(k: number): string
+	if k <= 10 then return FIRST[k] end
+	local n = k - 1 -- the -illion index: 1e(3n + 3)
+	return UNITS[n % 10 + 1] .. TENS[math.floor(n / 10) % 10 + 1] .. HUNDREDS[math.floor(n / 100) % 10 + 1]
+end
+Boards.suffix = suffix
+
+local function commas(n: number): string
+	local s = string.format("%d", n)
+	local out = s:reverse():gsub("(%d%d%d)", "%1,"):reverse()
+	return (string.gsub(out, "^,", ""))
+end
+-- m in [1, 1000) with `sig` significant figures (never "1000")
+local function mant(m: number, sig: number): (string, boolean)
+	local dec = sig - 1 - math.floor(math.log10(m) + 1e-9)
+	dec = math.max(0, dec)
+	local s = string.format("%." .. dec .. "f", m)
+	if tonumber(s) :: number >= 1000 then return "", false end
+	return s, true
+end
+-- 1000 <= x < 1e3003 (x a TowerNum): mantissa + suffix
+local function suffixed(x: any, sig: number): string
+	local e = math.floor(TowerNum.toNumber(TowerNum.log10(x)) + 1e-9)
+	local k = math.floor(e / 3)
+	local m = TowerNum.toNumber(TowerNum.div(x, TowerNum.pow(10, 3 * k)))
+	local s, ok = mant(m, sig)
+	if not ok then
+		k += 1
+		s = (mant(m / 1000, sig))
+	end
+	if k > MAX_K then return "e" .. commas(3 * k) end
+	return s .. suffix(k)
+end
+-- the exponent E (>= 3003) after an "e": commas below 1e6, suffixed with 4 figures below 1e3003, then again
+local function expo(E: any, depth: number): string
+	if TowerNum.lt(E, 1e6) then return commas(math.floor(TowerNum.toNumber(E) + 1e-9)) end
+	if TowerNum.lt(E, "1e3003") then return suffixed(E, 4) end
+	if depth >= 4 then return TowerNum.format(E) end
+	return "e" .. expo(TowerNum.log10(E), depth + 1)
+end
+
+function Boards.format(value: any): string
+	local ok, x = pcall(TowerNum.from, value)
+	if not ok or TowerNum.isNaN(x) or TowerNum.sign(x) <= 0 then return "0" end
+	if TowerNum.isInf(x) then return "Infinity" end
+	if TowerNum.lt(x, 1000) then
+		local n = TowerNum.toNumber(x)
+		if n == math.floor(n) then return tostring(math.floor(n)) end
+		return (string.gsub(string.gsub(string.format("%.2f", n), "0+$", ""), "%.$", ""))
+	end
+	if TowerNum.lt(x, "1e3003") then return suffixed(x, 3) end
+	-- towers of more than a handful of tens read as their height
+	if TowerNum.slog10(x) >= 6 then return TowerNum.format(x) end
+	return "e" .. expo(TowerNum.log10(x), 0)
+end
+
+local function duration(s: number): string
+	s = math.max(0, math.floor(s))
+	local d, h, m = math.floor(s / 86400), math.floor(s % 86400 / 3600), math.floor(s % 3600 / 60)
+	if d > 0 then return string.format("%dd %dh", d, h) end
+	if h > 0 then return string.format("%dh %dm", h, m) end
+	return string.format("%dm", m)
+end
+Boards.duration = duration
+
+-- ------------------------------------------------------------------------------------------------------ keys
+-- the stored whole number for a value (0 for nothing, never negative)
+function Boards.keyOf(board: Board, value: any): number
+	if board.kind == "big" then
+		local ok, x = pcall(TowerNum.from, value)
+		if not ok then return 0 end
+		return TowerNum.sortKey(x)
+	end
+	local n = tonumber(value) or 0
+	if n ~= n or n == math.huge then return 0 end
+	return math.max(0, math.floor(n))
+end
+
+-- a stored key as the board shows it
+function Boards.show(board: Board, key: number): string
+	if board.kind == "big" then
+		if key <= 0 then return "0" end
+		-- the middle of the key's range (fromSortKey gives its bottom, a hair under the value that was stored)
+		return Boards.format(TowerNum.fromSortKey(key + 0.5))
+	elseif board.kind == "time" then
+		return duration(key)
+	elseif board.kind == "robux" then
+		return "R$ " .. commas(key)
+	end
+	return commas(key)
+end
+
+return Boards
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="11">
+        <Properties>
           <string name="Name">Flags</string>
           <string name="Source"><![CDATA[--!strict
 --[[
@@ -608,7 +780,7 @@ return {
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="11">
+      <Item class="ModuleScript" referent="12">
         <Properties>
           <string name="Name">Html</string>
           <string name="Source"><![CDATA[--!strict
@@ -1074,7 +1246,7 @@ return Html
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="12">
+      <Item class="ModuleScript" referent="13">
         <Properties>
           <string name="Name">NodeAtlas</string>
           <string name="Source"><![CDATA[--!strict
@@ -1145,7 +1317,7 @@ return NodeAtlas
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="13">
+      <Item class="ModuleScript" referent="14">
         <Properties>
           <string name="Name">PrefsSchema</string>
           <string name="Source"><![CDATA[--!strict
@@ -1242,7 +1414,7 @@ return PrefsSchema
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="14">
+      <Item class="ModuleScript" referent="15">
         <Properties>
           <string name="Name">Products</string>
           <string name="Source"><![CDATA[--!strict
@@ -1304,7 +1476,7 @@ return Products
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="15">
+      <Item class="ModuleScript" referent="16">
         <Properties>
           <string name="Name">Realm</string>
           <string name="Source"><![CDATA[--!strict
@@ -2027,7 +2199,7 @@ return Realm
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="16">
+      <Item class="ModuleScript" referent="17">
         <Properties>
           <string name="Name">UiKit</string>
           <string name="Source"><![CDATA[--!strict
@@ -2056,7 +2228,7 @@ return UiKit
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="17">
+      <Item class="ModuleScript" referent="18">
         <Properties>
           <string name="Name">ZoneMaps</string>
           <string name="Source"><![CDATA[--!nocheck
@@ -2074,7 +2246,7 @@ return {
         </Properties>
       </Item>
     </Item>
-    <Item class="ModuleScript" referent="18">
+    <Item class="ModuleScript" referent="19">
       <Properties>
         <string name="Name">TowerNum</string>
         <string name="Source"><![CDATA[--!native
@@ -4133,7 +4305,7 @@ TowerNum.INF = huge
 return TowerNum
 ]]></string>
       </Properties>
-      <Item class="ModuleScript" referent="19">
+      <Item class="ModuleScript" referent="20">
         <Properties>
           <string name="Name">Hyper</string>
           <string name="Source"><![CDATA[--!strict
@@ -10314,7 +10486,7 @@ return Hyper
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="20">
+      <Item class="ModuleScript" referent="21">
         <Properties>
           <string name="Name">LICENSE</string>
           <string name="Source"><![CDATA[--[[
@@ -10344,15 +10516,15 @@ return Hyper
       </Item>
     </Item>
   </Item>
-  <Item class="ServerScriptService" referent="21">
+  <Item class="ServerScriptService" referent="22">
     <Properties>
       <string name="Name">ServerScriptService</string>
     </Properties>
-    <Item class="Folder" referent="22">
+    <Item class="Folder" referent="23">
       <Properties>
         <string name="Name">MilestoneTree</string>
       </Properties>
-      <Item class="ModuleScript" referent="23">
+      <Item class="ModuleScript" referent="24">
         <Properties>
           <string name="Name">Config</string>
           <string name="Source"><![CDATA[--!strict
@@ -10363,6 +10535,10 @@ return {
 	TICK = 0.05,
 	MAX_TICK = 0.5,
 	TICK_CPU_SHARE = 0.25,
+	-- a full server shares its cores: each game's tick share is at most SERVER_CPU / players (so 50 late-game players
+	-- slow their own ticks down, they do not slow the server's heartbeat for everyone); never under MIN_CPU_SHARE
+	SERVER_CPU = 3,
+	MIN_CPU_SHARE = 0.03,
 
 	-- how often the player's screen is refreshed (right after a button press it is refreshed at once): 10 times a
 	-- second, backing off towards MAX_VIEW when building the screen gets expensive (VIEW_CPU_SHARE of a core); an
@@ -10378,8 +10554,21 @@ return {
 	AUTOSAVE = 60,        -- seconds between saves while playing
 	LOCK_TTL = 180,       -- a session lock older than this is stale (the other server died without saving)
 
-	-- remote limits per player
+	-- remote limits per player: button presses (a token bucket), whole-screen resyncs, leaderboard pages. A player
+	-- who keeps flooding past the limits (FLOOD_DROPS dropped requests within FLOOD_WINDOW seconds) is kicked
 	ACTIONS_PER_SECOND = 40,
+	RESYNC_EVERY = 1,
+	BOARD_EVERY = 0.5,
+	FLOOD_DROPS = 400,
+	FLOOD_WINDOW = 10,
+
+	-- leaderboards (server/Leaderboards, shared/Boards): each player's stats are sent at most every LB_EVERY seconds
+	-- and when they leave, and only the boards whose value went up; a board page is the top LB_TOP, cached LB_CACHE
+	-- seconds. LB_BANNED: user ids kept off every board (cheaters, test accounts)
+	LB_EVERY = 300,
+	LB_TOP = 50,
+	LB_CACHE = 60,
+	LB_BANNED = {} :: { number },
 
 	-- device options (the Prefs remote): at most one change applied per PREFS_INTERVAL, saved PREFS_SAVE_DELAY
 	-- seconds after the last change
@@ -10389,11 +10578,11 @@ return {
 ]]></string>
         </Properties>
       </Item>
-      <Item class="Folder" referent="24">
+      <Item class="Folder" referent="25">
         <Properties>
           <string name="Name">Game</string>
         </Properties>
-        <Item class="ModuleScript" referent="25">
+        <Item class="ModuleScript" referent="26">
           <Properties>
             <string name="Name">Manifest</string>
             <string name="Source"><![CDATA[-- load order of the game chunks (port/build.js)
@@ -10401,7 +10590,7 @@ return "technical_layerSupport,mod,layers_m,layers_p,layers_sp,layers_hp,layers_
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="26">
+        <Item class="ModuleScript" referent="27">
           <Properties>
             <string name="Name">game</string>
             <string name="Source"><![CDATA[--!nocheck
@@ -10923,7 +11112,7 @@ end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="27">
+        <Item class="ModuleScript" referent="28">
           <Properties>
             <string name="Name">layers_ach</string>
             <string name="Source"><![CDATA[--!nocheck
@@ -11180,7 +11369,7 @@ end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="28">
+        <Item class="ModuleScript" referent="29">
           <Properties>
             <string name="Name">layers_ap</string>
             <string name="Source"><![CDATA[--!nocheck
@@ -12013,7 +12202,7 @@ end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="29">
+        <Item class="ModuleScript" referent="30">
           <Properties>
             <string name="Name">layers_cm</string>
             <string name="Source"><![CDATA[--!nocheck
@@ -12207,7 +12396,7 @@ end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="30">
+        <Item class="ModuleScript" referent="31">
           <Properties>
             <string name="Name">layers_cp</string>
             <string name="Source"><![CDATA[--!nocheck
@@ -13605,7 +13794,7 @@ end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="31">
+        <Item class="ModuleScript" referent="32">
           <Properties>
             <string name="Name">layers_em</string>
             <string name="Source"><![CDATA[--!nocheck
@@ -13887,7 +14076,7 @@ end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="32">
+        <Item class="ModuleScript" referent="33">
           <Properties>
             <string name="Name">layers_ep</string>
             <string name="Source"><![CDATA[--!nocheck
@@ -14289,7 +14478,7 @@ end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="33">
+        <Item class="ModuleScript" referent="34">
           <Properties>
             <string name="Name">layers_ex</string>
             <string name="Source"><![CDATA[--!nocheck
@@ -15464,7 +15653,7 @@ end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="34">
+        <Item class="ModuleScript" referent="35">
           <Properties>
             <string name="Name">layers_hb</string>
             <string name="Source"><![CDATA[--!nocheck
@@ -15761,7 +15950,7 @@ end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="35">
+        <Item class="ModuleScript" referent="36">
           <Properties>
             <string name="Name">layers_hp</string>
             <string name="Source"><![CDATA[--!nocheck
@@ -16281,7 +16470,7 @@ end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="36">
+        <Item class="ModuleScript" referent="37">
           <Properties>
             <string name="Name">layers_m</string>
             <string name="Source"><![CDATA[--!nocheck
@@ -19431,7 +19620,7 @@ end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="37">
+        <Item class="ModuleScript" referent="38">
           <Properties>
             <string name="Name">layers_mm</string>
             <string name="Source"><![CDATA[--!nocheck
@@ -19844,7 +20033,7 @@ end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="38">
+        <Item class="ModuleScript" referent="39">
           <Properties>
             <string name="Name">layers_mp</string>
             <string name="Source"><![CDATA[--!nocheck
@@ -20829,7 +21018,7 @@ end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="39">
+        <Item class="ModuleScript" referent="40">
           <Properties>
             <string name="Name">layers_p</string>
             <string name="Source"><![CDATA[--!nocheck
@@ -21812,7 +22001,7 @@ end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="40">
+        <Item class="ModuleScript" referent="41">
           <Properties>
             <string name="Name">layers_pb</string>
             <string name="Source"><![CDATA[--!nocheck
@@ -22191,7 +22380,7 @@ end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="41">
+        <Item class="ModuleScript" referent="42">
           <Properties>
             <string name="Name">layers_pe</string>
             <string name="Source"><![CDATA[--!nocheck
@@ -22421,7 +22610,7 @@ end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="42">
+        <Item class="ModuleScript" referent="43">
           <Properties>
             <string name="Name">layers_pep</string>
             <string name="Source"><![CDATA[--!nocheck
@@ -22702,7 +22891,7 @@ end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="43">
+        <Item class="ModuleScript" referent="44">
           <Properties>
             <string name="Name">layers_pm</string>
             <string name="Source"><![CDATA[--!nocheck
@@ -23698,7 +23887,7 @@ end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="44">
+        <Item class="ModuleScript" referent="45">
           <Properties>
             <string name="Name">layers_pp</string>
             <string name="Source"><![CDATA[--!nocheck
@@ -24040,7 +24229,7 @@ end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="45">
+        <Item class="ModuleScript" referent="46">
           <Properties>
             <string name="Name">layers_se</string>
             <string name="Source"><![CDATA[--!nocheck
@@ -24194,7 +24383,7 @@ end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="46">
+        <Item class="ModuleScript" referent="47">
           <Properties>
             <string name="Name">layers_sp</string>
             <string name="Source"><![CDATA[--!nocheck
@@ -25707,7 +25896,7 @@ end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="47">
+        <Item class="ModuleScript" referent="48">
           <Properties>
             <string name="Name">layers_t</string>
             <string name="Source"><![CDATA[--!nocheck
@@ -26960,7 +27149,7 @@ end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="48">
+        <Item class="ModuleScript" referent="49">
           <Properties>
             <string name="Name">mod</string>
             <string name="Source"><![CDATA[--!nocheck
@@ -27231,7 +27420,7 @@ end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="49">
+        <Item class="ModuleScript" referent="50">
           <Properties>
             <string name="Name">rbx_session</string>
             <string name="Source"><![CDATA[--!nocheck
@@ -27457,7 +27646,7 @@ end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="50">
+        <Item class="ModuleScript" referent="51">
           <Properties>
             <string name="Name">rbx_view</string>
             <string name="Source"><![CDATA[--!nocheck
@@ -27737,6 +27926,23 @@ rbx_upgHave = function(this, layer, t)
 		do return player[JS.k(name)] end
 	end
 	do return player[JS.k(layer)].points end
+end
+rbx_lbStats = function(this)
+	local out, i, l, d, v
+	out = JS.A(1, JS.A(2, "points", player.points))
+	for i = 0, JS.cap(0, (JS.len(rbx_LB_LAYERS)) - 1, 1) do
+		l = rbx_LB_LAYERS[JS.k(i)]
+		d = player[JS.k(l)]
+		if (not JS.t(d)) then
+			continue
+		end
+		v = (if (not (d.best == nil)) then d.best else d.points)
+		if (not (v == nil)) then
+			JS.m(out, "push", JS.A(2, l, v))
+		end
+	end
+	JS.m(out, "push", JS.A(2, "ach", JS.len(player.ach.achievements)))
+	do return out end
 end
 rbx_buyAllOn = function(this, l)
 	local nx, k, n, sd
@@ -29122,7 +29328,7 @@ rbx_map = function(this)
 	}, {"t", "inside", "open", "close", "opt", "c"}) end
 end
 rbx_hud = function(this)
-	local h, pg, o, w, wh, sc, of, x
+	local h, pg, o, pass, w, wh, sc, of, x
 	h = JS.O({
 		t = "hud",
 		pts = format(nil, player.points),
@@ -29136,7 +29342,9 @@ rbx_hud = function(this)
 			JS.setk(h, "gen", (if (not JS.eq(o.oompsMag, 0)) then (((JS.str(format(nil, o.oomps)) .. " OOM") .. JS.str((if (JS.tonum(o.oompsMag) < 0) then "^OOM" else (if (JS.tonum(o.oompsMag) > 1) then ("^" .. JS.str(o.oompsMag)) else "")))) .. "s/sec") else (JS.str(formatSmall(nil, pg)) .. "/sec")))
 		end
 	end
-	JS.setk(h, "dev", (if (JS.t(player.devSpeed) and (not JS.eq(player.devSpeed, 1))) then (JS.str(format(nil, player.devSpeed)) .. "x") else JS.NULL))
+	pass = (if JS.t(rbx_passSpeed) then JS.eq(player.devSpeed, rbx_passSpeed) else rbx_passSpeed)
+	JS.setk(h, "dev", (if ((JS.t(player.devSpeed) and (not JS.eq(player.devSpeed, 1))) and (not JS.t(pass))) then (JS.str(format(nil, player.devSpeed)) .. "x") else JS.NULL))
+	JS.setk(h, "pass", (if JS.t(pass) then (JS.str(formatWhole(nil, rbx_passSpeed)) .. "×") else JS.NULL))
 	JS.setk(h, "off", (if ((not (player.offTime == nil)) and (JS.tonum(player.offTime.remain) > 0)) then formatTime(nil, player.offTime.remain) else JS.NULL))
 	w = JS.A(0)
 	wh = (if JS.t(tmp.displayThings[1]) then rbx_str(nil, tmp.displayThings[1]) else "")
@@ -29232,6 +29440,8 @@ rbx_view = function(this)
 	do return v end
 end
 rbx_actions = JS.A(0)
+rbx_passSpeed = 0
+rbx_LB_LAYERS = JS.A(20, "m", "p", "sp", "mm", "pb", "hp", "ap", "t", "hb", "pe", "se", "pp", "ep", "mp", "em", "pm", "pep", "cp", "cm", "ex")
 rbx_BUYALL_AFTER = JS.O({
 	p = "sp",
 	sp = "mm",
@@ -29346,7 +29556,7 @@ end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="51">
+        <Item class="ModuleScript" referent="52">
           <Properties>
             <string name="Name">stubs</string>
             <string name="Source"><![CDATA[--!nocheck
@@ -29376,7 +29586,7 @@ end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="52">
+        <Item class="ModuleScript" referent="53">
           <Properties>
             <string name="Name">technical_displays</string>
             <string name="Source"><![CDATA[--!nocheck
@@ -29625,7 +29835,7 @@ end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="53">
+        <Item class="ModuleScript" referent="54">
           <Properties>
             <string name="Name">technical_layerSupport</string>
             <string name="Source"><![CDATA[--!nocheck
@@ -30001,7 +30211,7 @@ end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="54">
+        <Item class="ModuleScript" referent="55">
           <Properties>
             <string name="Name">technical_temp</string>
             <string name="Source"><![CDATA[--!nocheck
@@ -30180,7 +30390,7 @@ end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="55">
+        <Item class="ModuleScript" referent="56">
           <Properties>
             <string name="Name">tree</string>
             <string name="Source"><![CDATA[--!nocheck
@@ -30205,7 +30415,7 @@ end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="56">
+        <Item class="ModuleScript" referent="57">
           <Properties>
             <string name="Name">utils</string>
             <string name="Source"><![CDATA[--!nocheck
@@ -30784,7 +30994,7 @@ end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="57">
+        <Item class="ModuleScript" referent="58">
           <Properties>
             <string name="Name">utils_NumberFormating</string>
             <string name="Source"><![CDATA[--!nocheck
@@ -30947,7 +31157,7 @@ end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="58">
+        <Item class="ModuleScript" referent="59">
           <Properties>
             <string name="Name">utils_easyAccess</string>
             <string name="Source"><![CDATA[--!nocheck
@@ -31028,7 +31238,7 @@ end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="59">
+        <Item class="ModuleScript" referent="60">
           <Properties>
             <string name="Name">utils_options</string>
             <string name="Source"><![CDATA[--!nocheck
@@ -31136,7 +31346,7 @@ end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="60">
+        <Item class="ModuleScript" referent="61">
           <Properties>
             <string name="Name">utils_save</string>
             <string name="Source"><![CDATA[--!nocheck
@@ -31506,7 +31716,7 @@ end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="61">
+        <Item class="ModuleScript" referent="62">
           <Properties>
             <string name="Name">utils_themes</string>
             <string name="Source"><![CDATA[--!nocheck
@@ -31590,7 +31800,184 @@ end
           </Properties>
         </Item>
       </Item>
-      <Item class="Script" referent="62">
+      <Item class="ModuleScript" referent="63">
+        <Properties>
+          <string name="Name">Leaderboards</string>
+          <string name="Source"><![CDATA[--!strict
+--[[
+	Leaderboards: one OrderedDataStore per board of shared/Boards ("LB_<key>_v1", user id -> a whole number).
+
+	    Leaderboards.submit(userId, keys)    keys = { [board] = stored key }: each board keeps the highest ever sent
+	    Leaderboards.addRobux(userId, n)     Robux spent (a granted product, a bought pass) adds to the robux board
+	    Leaderboards.page(board)             { ok, board, entries = { { rank, id, name, value } }, error? }: the top
+	                                         Config.LB_TOP, names resolved, cached Config.LB_CACHE seconds
+	    Leaderboards.mine(board, userId)     the player's own stored value as the board reads it, or nil
+
+	Only the server writes: the Worker sends each player's stats from their own game (Worker "lb"), Shop the Robux. The
+	values are what the server's game holds, so a client cannot post one. Config.LB_BANNED ids are never written or
+	shown. Every DataStore call is guarded: without DataStores (Studio without API access) a page says so.
+]]
+local DataStoreService = game:GetService("DataStoreService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(script.Parent:WaitForChild("Config"))
+local Boards = require(ReplicatedStorage:WaitForChild("MilestoneTree"):WaitForChild("Boards"))
+
+export type Entry = { rank: number, id: number, name: string, value: string }
+export type Page = { ok: boolean, board: string, entries: { Entry }, error: string? }
+
+local Leaderboards = {}
+
+local stores: { [string]: OrderedDataStore } = {}
+local function store(board: string): OrderedDataStore
+	local s: OrderedDataStore? = stores[board]
+	if s == nil then
+		local made = DataStoreService:GetOrderedDataStore("LB_" .. board .. "_v1")
+		stores[board] = made
+		return made
+	end
+	return s :: OrderedDataStore
+end
+
+local banned: { [number]: boolean } = {}
+for _, id in Config.LB_BANNED do banned[id] = true end
+Leaderboards.banned = banned
+
+-- the highest value ever sent stays (a reset in the game never lowers a board); returns how many boards were written
+function Leaderboards.submit(userId: number, keys: { [string]: number }): number
+	if banned[userId] then return 0 end
+	local n = 0
+	for board, key in keys do
+		if Boards.get(board) == nil or type(key) ~= "number" or key <= 0 or key ~= key then continue end
+		local ok = pcall(function()
+			store(board):UpdateAsync(tostring(userId), function(old: any): any
+				local was = tonumber(old) or 0
+				if key <= was then return nil end
+				return key
+			end)
+		end)
+		if ok then n += 1 end
+	end
+	return n
+end
+
+function Leaderboards.addRobux(userId: number, amount: number)
+	if banned[userId] or type(amount) ~= "number" or amount <= 0 then return end
+	local ok, err = pcall(function()
+		store("robux"):UpdateAsync(tostring(userId), function(old: any): any
+			return (tonumber(old) or 0) + math.floor(amount)
+		end)
+	end)
+	if not ok then warn("[MilestoneTree] could not add Robux spent for " .. userId .. ": " .. tostring(err)) end
+end
+
+-- display names, cached for the server's life
+local names: { [number]: string } = {}
+local function resolve(ids: { number })
+	local missing = {}
+	for _, id in ids do
+		if names[id] == nil then table.insert(missing, id) end
+	end
+	if #missing == 0 then return end
+	local ok, infos = pcall(function()
+		return game:GetService("UserService"):GetUserInfosByUserIdsAsync(missing)
+	end)
+	if ok and type(infos) == "table" then
+		for _, info in infos do
+			if type(info) == "table" and type(info.Id) == "number" then
+				names[info.Id] = if type(info.DisplayName) == "string" and info.DisplayName ~= "" then info.DisplayName else info.Username
+			end
+		end
+	end
+	for _, id in missing do
+		if names[id] == nil then
+			local p = Players:GetPlayerByUserId(id)
+			if p then
+				names[id] = p.DisplayName
+			else
+				local okName, name = pcall(function() return Players:GetNameFromUserIdAsync(id) end)
+				names[id] = if okName and type(name) == "string" then name else "Player " .. id
+			end
+		end
+	end
+end
+
+local pages: { [string]: { t: number, page: Page } } = {}
+local loading: { [string]: boolean } = {}
+function Leaderboards.page(board: string): Page
+	local b = Boards.get(board)
+	if b == nil then return { ok = false, board = board, entries = {}, error = "No such board." } end
+	local hit = pages[board]
+	if hit and os.clock() - hit.t < Config.LB_CACHE then return hit.page end
+	-- one read per board at a time: the others wait for it (or take the last page)
+	if loading[board] then
+		local t0 = os.clock()
+		while loading[board] and os.clock() - t0 < 8 do task.wait(0.1) end
+		local again = pages[board]
+		if again then return again.page end
+	end
+	loading[board] = true
+	local ok, result = pcall(function()
+		local sorted = store(board):GetSortedAsync(false, math.min(100, Config.LB_TOP + #Config.LB_BANNED))
+		return sorted:GetCurrentPage()
+	end)
+	local page: Page
+	if not ok then
+		warn("[MilestoneTree] leaderboard " .. board .. " could not be read: " .. tostring(result))
+		page = { ok = false, board = board, entries = {}, error = "Leaderboards are unavailable right now." }
+		-- a failed read is kept a short while (not the full cache time), so a hiccup clears soon
+		pages[board] = { t = os.clock() - Config.LB_CACHE + 10, page = page }
+	else
+		local ids = {}
+		local rows = {}
+		for _, row in result do
+			local id = tonumber(row.key)
+			if id and not banned[id] and #rows < Config.LB_TOP then
+				table.insert(rows, { id = id, key = tonumber(row.value) or 0 })
+				table.insert(ids, id)
+			end
+		end
+		resolve(ids)
+		local entries: { Entry } = {}
+		for i, r in rows do
+			table.insert(entries, { rank = i, id = r.id, name = names[r.id] or ("Player " .. r.id), value = Boards.show(b, r.key) })
+		end
+		page = { ok = true, board = board, entries = entries }
+		pages[board] = { t = os.clock(), page = page }
+	end
+	loading[board] = nil
+	return page
+end
+
+local mineCache: { [string]: { t: number, v: string? } } = {}
+function Leaderboards.mine(board: string, userId: number): string?
+	local b = Boards.get(board)
+	if b == nil then return nil end
+	local ck = board .. ":" .. userId
+	local hit = mineCache[ck]
+	if hit and os.clock() - hit.t < Config.LB_CACHE then return hit.v end
+	local ok, v = pcall(function(): any
+		local got = store(board):GetAsync(tostring(userId))
+		return got
+	end)
+	local n = if ok then tonumber(v) else nil
+	local out = if n then Boards.show(b, n) else nil
+	mineCache[ck] = { t = os.clock(), v = out }
+	return out
+end
+-- a player's own value changed (the Worker just wrote it): read it again next time
+function Leaderboards.forget(userId: number)
+	for ck in mineCache do
+		if string.match(ck, ":(%d+)$") == tostring(userId) then mineCache[ck] = nil end
+	end
+end
+
+return Leaderboards
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="Script" referent="64">
         <Properties>
           <string name="Name">Main</string>
           <token name="RunContext">0</token>
@@ -31609,6 +31996,13 @@ end
 	  Prefs   client -> server   the device options (shared/PrefsSchema: motion, detail, labels, size, weather,
 	                             guide, the volumes, seenPrestige); mirrored as JSON in the player's MT_Prefs
 	                             attribute and saved apart from the game (Store.savePrefs)
+	  Board   client -> server   (RemoteFunction) a leaderboard page: (board key) -> Leaderboards.page + the
+	                             player's own value
+
+	Cheating: the game runs here; the client only sends button presses, and an action is carried out only when it
+	is on the player's screen (Session:act). The remotes are limited per player (presses: a token bucket; resyncs
+	and board pages: one per interval) and a player who keeps flooding past the limits is kicked. Leaderboards are
+	written by the server from the server's own game.
 ]]
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
@@ -31619,6 +32013,8 @@ local root = script.Parent
 local Config = require(root:WaitForChild("Config"))
 local Store = require(root:WaitForChild("Store"))
 local Shop = require(root:WaitForChild("Shop"))
+local Leaderboards = require(root:WaitForChild("Leaderboards"))
+local Boards = require(ReplicatedStorage:WaitForChild("MilestoneTree"):WaitForChild("Boards"))
 
 local remotes = Instance.new("Folder")
 remotes.Name = "MilestoneTreeRemotes"
@@ -31632,6 +32028,9 @@ local viewRemote = remote("View")
 local actRemote = remote("Act")
 local readyRemote = remote("Ready")
 local prefsRemote = remote("Prefs")
+local boardRemote = Instance.new("RemoteFunction")
+boardRemote.Name = "Board"
+boardRemote.Parent = remotes
 remotes.Parent = ReplicatedStorage
 
 local sessionsFolder = Instance.new("Folder")
@@ -31643,6 +32042,7 @@ local template = ServerStorage:WaitForChild("MilestoneTreeWorker") :: Actor
 type Prefs = { [string]: any }
 type Entry = {
 	actor: Actor, tokens: number, last: number,
+	drops: number, dropsAt: number, resyncAt: number, resyncHeld: boolean, boardAt: number,
 	prefsAt: number, prefsPending: Prefs?, prefsSet: boolean, prefsDirty: boolean, prefsSaveAt: number,
 }
 local entries: { [Player]: Entry } = {}
@@ -31706,10 +32106,12 @@ end
 local function start(player: Player)
 	if entries[player] then return end
 	local a = template:Clone()
+	a:SetAttribute("TickShare", Config.TICK_CPU_SHARE)
 	a.Name = "Player_" .. player.UserId
 	a.Parent = sessionsFolder
 	local entry: Entry = {
 		actor = a, tokens = Config.ACTIONS_PER_SECOND, last = os.clock(),
+		drops = 0, dropsAt = os.clock(), resyncAt = 0, resyncHeld = false, boardAt = 0,
 		prefsAt = 0, prefsPending = nil, prefsSet = false, prefsDirty = false, prefsSaveAt = 0,
 	}
 	entries[player] = entry
@@ -31747,16 +32149,45 @@ Shop.start(function(player: Player): Actor?
 	local entry = entries[player]
 	return if entry then entry.actor else nil
 end)
-Players.PlayerAdded:Connect(start)
-Players.PlayerRemoving:Connect(stop)
+-- each game's share of a core: a full server shares its cores (Worker reads the Actor's TickShare)
+local function shareCpu()
+	local n = 0
+	for _ in entries do n += 1 end
+	local share = math.clamp(Config.SERVER_CPU / math.max(n, 1), Config.MIN_CPU_SHARE, Config.TICK_CPU_SHARE)
+	for _, e in entries do e.actor:SetAttribute("TickShare", share) end
+end
+Players.PlayerAdded:Connect(function(player: Player)
+	task.defer(shareCpu)
+	start(player)
+end)
+Players.PlayerRemoving:Connect(function(player: Player)
+	stop(player)
+	shareCpu()
+end)
 for _, p in Players:GetPlayers() do task.spawn(start, p) end
+task.defer(shareCpu)
 
 -- a token bucket per player: holding a buyable fires 20 presses a second, a burst of clicks a few more
-local function allow(entry: Entry): boolean
+-- a dropped request counts towards the flood limit: FLOOD_DROPS within FLOOD_WINDOW seconds is not a player
+local function dropped(player: Player, entry: Entry)
+	local now = os.clock()
+	if now - entry.dropsAt > Config.FLOOD_WINDOW then
+		entry.drops, entry.dropsAt = 0, now
+	end
+	entry.drops += 1
+	if entry.drops == Config.FLOOD_DROPS then
+		warn("[MilestoneTree] " .. player.Name .. " (" .. player.UserId .. ") flooded the remotes and was kicked")
+		player:Kick("Too many requests. Rejoin to keep playing.")
+	end
+end
+local function allow(player: Player, entry: Entry): boolean
 	local now = os.clock()
 	entry.tokens = math.min(Config.ACTIONS_PER_SECOND, entry.tokens + (now - entry.last) * Config.ACTIONS_PER_SECOND)
 	entry.last = now
-	if entry.tokens < 1 then return false end
+	if entry.tokens < 1 then
+		dropped(player, entry)
+		return false
+	end
 	entry.tokens -= 1
 	return true
 end
@@ -31780,7 +32211,12 @@ end
 
 actRemote.OnServerEvent:Connect(function(player: Player, a: any, hold: any)
 	local entry = entries[player]
-	if not entry or not validAction(a) or not allow(entry) then return end
+	if not entry then return end
+	if not validAction(a) then
+		dropped(player, entry)
+		return
+	end
+	if not allow(player, entry) then return end
 	entry.actor:SendMessage("act", a, hold == true)
 end)
 
@@ -31796,12 +32232,46 @@ end)
 readyRemote.OnServerEvent:Connect(function(player: Player)
 	local entry = entries[player]
 	if not entry then return end
+	-- a whole screen is costly to build: one per RESYNC_EVERY. A quicker ask is held and sent when the interval is
+	-- over (the client asks again at boot when its first ask came before the game was up); a third one meanwhile is
+	-- spam
+	local now = os.clock()
+	local wait = entry.resyncAt + Config.RESYNC_EVERY - now
+	if wait > 0 then
+		if entry.resyncHeld then
+			dropped(player, entry)
+			return
+		end
+		entry.resyncHeld = true
+		task.delay(wait, function()
+			entry.resyncHeld = false
+			entry.resyncAt = os.clock()
+			if entries[player] == entry and not entry.actor:GetAttribute("Error") then entry.actor:SendMessage("resync") end
+		end)
+		return
+	end
+	entry.resyncAt = now
 	if entry.actor:GetAttribute("Error") then
 		fatal(player, tostring(entry.actor:GetAttribute("Error")))
 	else
 		entry.actor:SendMessage("resync")
 	end
 end)
+
+-- a leaderboard page, and the player's own value on that board
+boardRemote.OnServerInvoke = function(player: Player, board: any): any
+	local entry = entries[player]
+	if not entry or type(board) ~= "string" or #board > 16 or Boards.get(board) == nil then return nil end
+	local now = os.clock()
+	if now - entry.boardAt < Config.BOARD_EVERY then
+		dropped(player, entry)
+		return { ok = false, board = board, entries = {}, error = "Slow down a little." }
+	end
+	entry.boardAt = now
+	local page = Leaderboards.page(board)
+	return { ok = page.ok, board = page.board, entries = page.entries, error = page.error,
+		you = if page.ok then Leaderboards.mine(board, player.UserId) else nil }
+end
 
 game:BindToClose(function()
 	for player in entries do task.spawn(stop, player) end
@@ -31812,11 +32282,11 @@ end)
 ]]></string>
         </Properties>
       </Item>
-      <Item class="Folder" referent="63">
+      <Item class="Folder" referent="65">
         <Properties>
           <string name="Name">Runtime</string>
         </Properties>
-        <Item class="ModuleScript" referent="64">
+        <Item class="ModuleScript" referent="66">
           <Properties>
             <string name="Name">BEcore</string>
             <string name="Source"><![CDATA[--!nocheck
@@ -32038,7 +32508,7 @@ return BE
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="65">
+        <Item class="ModuleScript" referent="67">
           <Properties>
             <string name="Name">Fast</string>
             <string name="Source"><![CDATA[--!nocheck
@@ -32191,7 +32661,7 @@ end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="66">
+        <Item class="ModuleScript" referent="68">
           <Properties>
             <string name="Name">JSRT</string>
             <string name="Source"><![CDATA[--!nocheck
@@ -33685,7 +34155,7 @@ end
           </Properties>
         </Item>
       </Item>
-      <Item class="ModuleScript" referent="67">
+      <Item class="ModuleScript" referent="69">
         <Properties>
           <string name="Name">Session</string>
           <string name="Source"><![CDATA[--!nocheck
@@ -33876,7 +34346,9 @@ function Session:_applyPerks()
 	local ENV, JS = self.ENV, self.JS
 	if ENV == nil or ENV.player == nil then return end
 	local sp = self.perks and self.perks.speed
-	JS.setk(ENV.player, "devSpeed", if type(sp) == "number" and sp > 1 then sp else nil)
+	local on = type(sp) == "number" and sp > 1
+	JS.setk(ENV.player, "devSpeed", if on then sp else nil)
+	ENV.rbx_passSpeed = if on then sp else 0 -- the view shows it as the pass (2× SPEED · ACTIVE), not dev speed
 end
 -- a Time Warp (a developer product): seconds of progress fed through the next ticks the way the game catches up
 -- offline time (a tenth of what is left each tick, at least a second), so it is done in about 3 s
@@ -34100,7 +34572,7 @@ return Session
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="68">
+      <Item class="ModuleScript" referent="70">
         <Properties>
           <string name="Name">Shop</string>
           <string name="Source"><![CDATA[--!strict
@@ -34113,6 +34585,8 @@ return Session
 	Passes -> perks: the player's Actor gets ("perks", { speed = 2? }) and the player's MT_Perks attribute holds the
 	owned pass keys as JSON (the client's Shop and the SUPPORTER tag read it). A pass bought in game counts at once
 	(PromptGamePassPurchaseFinished); ownership is read again on every join.
+
+	Robux spent (the Robux leaderboard): a granted receipt's CurrencySpent, a bought pass's price.
 
 	Products -> ProcessReceipt: a Time Warp goes to the player's Actor ("warp", seconds, name). A receipt is granted
 	once: Store.receiptGranted / markReceipt. The answer is NotProcessedYet (Roblox retries later, also on the
@@ -34127,6 +34601,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local Store = require(script.Parent:WaitForChild("Store"))
+local Leaderboards = require(script.Parent:WaitForChild("Leaderboards"))
 local Products = require(ReplicatedStorage:WaitForChild("MilestoneTree"):WaitForChild("Products"))
 
 local Shop = {}
@@ -34201,6 +34676,8 @@ local function processReceipt(info: any): Enum.ProductPurchaseDecision
 		end
 	end
 	if product.warp then a:SendMessage("warp", product.warp, product.name) end
+	-- the Robux board (once per granted receipt: a granted receipt never comes back here)
+	if not studio then task.spawn(Leaderboards.addRobux, info.PlayerId, tonumber(info.CurrencySpent) or product.price) end
 	return Enum.ProductPurchaseDecision.PurchaseGranted
 end
 
@@ -34211,6 +34688,7 @@ function Shop.start(of: (Player) -> Actor?)
 		if not purchased then return end
 		local p = Products.passById(passId)
 		if p == nil then return end
+		task.spawn(Leaderboards.addRobux, player.UserId, p.price)
 		local set = owned[player] or {}
 		set[p.key] = true
 		owned[player] = set
@@ -34225,12 +34703,14 @@ return Shop
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="69">
+      <Item class="ModuleScript" referent="71">
         <Properties>
           <string name="Name">Store</string>
           <string name="Source"><![CDATA[--!strict
 --[[
 	Store: one DataStore record per player, { save = JSON, options = JSON, time = os.time(), lock = { job, t } }.
+
+	`played` is the real time played in seconds (the playtime leaderboard), kept beside the game.
 
 	The lock keeps two servers from playing the same save at once (a quick server hop): load takes it (waiting for
 	a live lock elsewhere to be released, and taking over one older than LOCK_TTL), every save refreshes it, and
@@ -34246,7 +34726,7 @@ local Config = require(script.Parent.Config)
 
 local Store = {}
 
-export type Record = { save: string?, options: string?, time: number?, lock: { job: string, t: number }? }
+export type Record = { save: string?, options: string?, time: number?, played: number?, lock: { job: string, t: number }? }
 
 local store: DataStore? = nil
 local function ds(): DataStore
@@ -34324,8 +34804,9 @@ function Store.load(userId: number): (Record?, string?)
 	return (result or {}) :: Record, nil
 end
 
--- write the game; release = true on leaving. false if the lock was lost (another server took the save over).
-function Store.save(userId: number, save: string, options: string?, release: boolean?): (boolean, string?)
+-- write the game; release = true on leaving; played = the real seconds played in all (the playtime board; never
+-- lowered). false if the lock was lost (another server took the save over).
+function Store.save(userId: number, save: string, options: string?, release: boolean?, played: number?): (boolean, string?)
 	local lost = false
 	local ok, err = retry(function()
 		return ds():UpdateAsync(key(userId), function(old: Record?): Record?
@@ -34337,6 +34818,7 @@ function Store.save(userId: number, save: string, options: string?, release: boo
 			rec.save = save
 			rec.options = options
 			rec.time = os.time()
+			if played then rec.played = math.max(rec.played or 0, math.floor(played)) end
 			rec.lock = if release then nil else { job = jobId(), t = os.time() }
 			return rec
 		end)
@@ -34389,16 +34871,16 @@ return Store
       </Item>
     </Item>
   </Item>
-  <Item class="ServerStorage" referent="70">
+  <Item class="ServerStorage" referent="72">
     <Properties>
       <string name="Name">ServerStorage</string>
     </Properties>
-    <Item class="Actor" referent="71">
+    <Item class="Actor" referent="73">
       <Properties>
         <string name="Name">MilestoneTreeWorker</string>
         <bool name="NeedsPivotMigration">false</bool>
       </Properties>
-      <Item class="Script" referent="72">
+      <Item class="Script" referent="74">
         <Properties>
           <string name="Name">Worker</string>
           <token name="RunContext">0</token>
@@ -34410,7 +34892,10 @@ return Store
 	  "start" (player)            load the save, start the game
 	  "act"   (action, hold)      a button press / hotkey from the player's screen
 	  "resync"                    the client wants the whole screen again
-	  "stop"                      save, release the save lock, then set the Actor's Stopped attribute
+	  "stop"                      save, release the save lock, send the leaderboard stats, then set Stopped
+	The leaderboard stats (server/Leaderboards) go out LB_EVERY seconds (and 30 s after joining, and on leaving), only
+	the boards whose value went up. The Actor's TickShare attribute (Main: SERVER_CPU / players) caps this game's
+	share of a core.
 	The game ticks in the parallel phase; sending to the client and DataStore calls happen in the serial phase.
 ]]
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -34422,6 +34907,9 @@ local root = ServerScriptService:WaitForChild("MilestoneTree")
 local Config = require(root:WaitForChild("Config"))
 local Session = require(root:WaitForChild("Session"))
 local Store = require(root:WaitForChild("Store"))
+local Leaderboards = require(root:WaitForChild("Leaderboards"))
+local Boards = require(ReplicatedStorage:WaitForChild("MilestoneTree"):WaitForChild("Boards"))
+local TowerNum = require(ReplicatedStorage:WaitForChild("TowerNum")) :: any
 local remotes = ReplicatedStorage:WaitForChild("MilestoneTreeRemotes")
 local viewRemote: RemoteEvent = remotes:WaitForChild("View")
 
@@ -34462,6 +34950,14 @@ local pushNow = false        -- refresh the screen at the next heartbeat (after 
 local perks: { [string]: any } = {} -- from the player's passes (Main/Shop)
 local pendingWarp = 0        -- Time Warp seconds bought before the session started
 local saving = false
+local playedBase, loadedAt = 0, os.clock() -- real seconds played before this session (the save), and when it began
+local sinceLb = 0
+local lbSent: { [string]: number } = {} -- the keys last sent per board (only a higher one is sent again)
+local lbBusy = false
+
+local function playedNow(): number
+	return playedBase + (os.clock() - loadedAt)
+end
 
 local function nowMs(): number
 	return DateTime.now().UnixTimestampMillis
@@ -34491,7 +34987,7 @@ local function saveNow(release: boolean?)
 		-- the capsule's SAVING... / SAVED (patch.save, sent once each)
 		session.saveEvent = "saving"
 		pushNow = true
-		local ok, err = Store.save(player.UserId, save, options, release)
+		local ok, err = Store.save(player.UserId, save, options, release, playedNow())
 		if ok then
 			session.saveEvent = "saved"
 			pushNow = true
@@ -34530,6 +35026,54 @@ local function applyNotation()
 	end
 end
 
+-- the leaderboard keys of this game (serial phase: reads the game, then DataStore calls)
+local function lbKeys(): { [string]: number }
+	local out: { [string]: number } = {}
+	local JS, ENV = session.JS, session.ENV
+	local ok, arr = pcall(ENV.rbx_lbStats, nil)
+	if ok and arr and JS.LEN[arr] then
+		for i = 0, JS.LEN[arr] - 1 do
+			local pair = arr[i]
+			local key, v = pair[0], pair[1]
+			local board = Boards.get(tostring(key))
+			if board then
+				local value: any = v
+				if type(v) ~= "number" then
+					local okD, d = pcall(JS.D, v)
+					if okD and d then
+						value = TowerNum.fromEN({ Sign = JS.tonum(JS.P(d, "sign")), Layer = JS.tonum(JS.P(d, "layer")),
+							Exp = JS.tonum(JS.P(d, "mag")) })
+					else
+						value = 0
+					end
+				end
+				out[board.key] = Boards.keyOf(board, value)
+			end
+		end
+	end
+	out.time = Boards.keyOf(Boards.get("time") :: any, playedNow())
+	return out
+end
+local function sendLb()
+	if lbBusy or not session or not player or not canSave or not Store.available() then return end
+	lbBusy = true
+	local ok, keys = pcall(lbKeys)
+	if ok then
+		local fresh: { [string]: number } = {}
+		for board, key in keys do
+			if key > (lbSent[board] or 0) then fresh[board] = key end
+		end
+		if next(fresh) then
+			Leaderboards.submit(player.UserId, fresh)
+			for board, key in fresh do lbSent[board] = key end
+			Leaderboards.forget(player.UserId)
+		end
+	else
+		warn("[MilestoneTree] leaderboard stats failed: " .. tostring(keys))
+	end
+	lbBusy = false
+end
+
 local function begin(plr: Player)
 	player = plr
 	plr:GetAttributeChangedSignal("MT_Prefs"):Connect(applyNotation)
@@ -34544,6 +35088,7 @@ local function begin(plr: Player)
 	if rec then
 		canSave = true
 		save, options = rec.save, rec.options
+		playedBase = tonumber(rec.played) or 0
 	else
 		warn("[MilestoneTree] could not load " .. plr.Name .. "'s save: " .. tostring(err))
 	end
@@ -34557,6 +35102,8 @@ local function begin(plr: Player)
 		table.insert(s.notices, "Your save could not be loaded (" .. tostring(err) .. "). Playing without saving; rejoin to try again.")
 	end
 	session = s
+	loadedAt = os.clock()
+	sinceLb = Config.LB_EVERY - 30 -- the first stats 30 s in, so a new player shows up soon
 	applyNotation()
 	s:setPerks(perks)
 	if pendingWarp > 0 then
@@ -34627,6 +35174,7 @@ actor:BindToMessage("stop", function()
 	task.spawn(function()
 		drainWarp()
 		saveNow(true)
+		sendLb()
 		actor:SetAttribute("Stopped", true)
 	end)
 end)
@@ -34637,6 +35185,7 @@ RunService.Heartbeat:ConnectParallel(function(dt: number)
 	sinceView += dt
 	sinceSave += dt
 	sinceSent += dt
+	sinceLb += dt
 	if sinceTick >= tickEvery then
 		sinceTick = 0
 		local t0 = os.clock()
@@ -34644,7 +35193,9 @@ RunService.Heartbeat:ConnectParallel(function(dt: number)
 		local cost = os.clock() - t0
 		tickCost = tickCost * 0.9 + cost * 0.1
 		-- keep this player's game under its share of a core: slower ticks when they get expensive
-		tickEvery = math.clamp(tickCost / Config.TICK_CPU_SHARE, Config.TICK, Config.MAX_TICK)
+		local share = actor:GetAttribute("TickShare")
+		tickEvery = math.clamp(tickCost / (if type(share) == "number" and share > 0 then share else Config.TICK_CPU_SHARE),
+			Config.TICK, Config.MAX_TICK)
 	end
 	local wantSave = session.wantSave or sinceSave >= Config.AUTOSAVE
 	if not (pushNow or sinceView >= viewEvery or wantSave) then return end
@@ -34670,6 +35221,10 @@ RunService.Heartbeat:ConnectParallel(function(dt: number)
 		session.wantSave = false
 		task.spawn(saveNow, false)
 	end
+	if sinceLb >= Config.LB_EVERY then
+		sinceLb = 0
+		task.spawn(sendLb)
+	end
 end)
 
 actor:SetAttribute("Ready", true)
@@ -34678,13 +35233,13 @@ actor:SetAttribute("Ready", true)
       </Item>
     </Item>
   </Item>
-  <Item class="StarterGui" referent="73">
+  <Item class="StarterGui" referent="75">
     <Properties>
       <string name="Name">StarterGui</string>
       <token name="ScreenOrientation">2</token>
     </Properties>
   </Item>
-  <Item class="StarterPlayer" referent="74">
+  <Item class="StarterPlayer" referent="76">
     <Properties>
       <string name="Name">StarterPlayer</string>
       <bool name="AutoJumpEnabled">false</bool>
@@ -34692,15 +35247,15 @@ actor:SetAttribute("Ready", true)
       <token name="DevTouchMovementMode">5</token>
       <bool name="EnableMouseLockOption">false</bool>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="75">
+    <Item class="StarterPlayerScripts" referent="77">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="Folder" referent="76">
+      <Item class="Folder" referent="78">
         <Properties>
           <string name="Name">MilestoneTree</string>
         </Properties>
-        <Item class="ModuleScript" referent="77">
+        <Item class="ModuleScript" referent="79">
           <Properties>
             <string name="Name">App</string>
             <string name="Source"><![CDATA[--!strict
@@ -35653,11 +36208,11 @@ return App
 ]]></string>
           </Properties>
         </Item>
-        <Item class="Folder" referent="78">
+        <Item class="Folder" referent="80">
           <Properties>
             <string name="Name">Core</string>
           </Properties>
-          <Item class="ModuleScript" referent="79">
+          <Item class="ModuleScript" referent="81">
             <Properties>
               <string name="Name">Audio</string>
               <string name="Source"><![CDATA[--!strict
@@ -36344,7 +36899,7 @@ return Audio
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="80">
+          <Item class="ModuleScript" referent="82">
             <Properties>
               <string name="Name">Layout</string>
               <string name="Source"><![CDATA[--!strict
@@ -36620,7 +37175,7 @@ return Layout
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="81">
+          <Item class="ModuleScript" referent="83">
             <Properties>
               <string name="Name">Motion</string>
               <string name="Source"><![CDATA[--!strict
@@ -36883,7 +37438,7 @@ return Motion
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="82">
+          <Item class="ModuleScript" referent="84">
             <Properties>
               <string name="Name">Prefs</string>
               <string name="Source"><![CDATA[--!strict
@@ -37033,7 +37588,7 @@ return Prefs
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="83">
+          <Item class="ModuleScript" referent="85">
             <Properties>
               <string name="Name">Preload</string>
               <string name="Source"><![CDATA[--!strict
@@ -37206,7 +37761,7 @@ return Preload
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="84">
+          <Item class="ModuleScript" referent="86">
             <Properties>
               <string name="Name">Recipes</string>
               <string name="Source"><![CDATA[--!strict
@@ -38121,7 +38676,7 @@ return Recipes
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="85">
+          <Item class="ModuleScript" referent="87">
             <Properties>
               <string name="Name">Rich</string>
               <string name="Source"><![CDATA[--!strict
@@ -38363,7 +38918,7 @@ return Rich
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="86">
+          <Item class="ModuleScript" referent="88">
             <Properties>
               <string name="Name">Signal</string>
               <string name="Source"><![CDATA[--!strict
@@ -38439,7 +38994,7 @@ return Signal
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="87">
+          <Item class="ModuleScript" referent="89">
             <Properties>
               <string name="Name">Skin</string>
               <string name="Source"><![CDATA[--!strict
@@ -38536,7 +39091,7 @@ return Skin
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="88">
+          <Item class="ModuleScript" referent="90">
             <Properties>
               <string name="Name">Sleek</string>
               <string name="Source"><![CDATA[--!strict
@@ -38973,7 +39528,7 @@ return Sleek
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="89">
+          <Item class="ModuleScript" referent="91">
             <Properties>
               <string name="Name">Sprites</string>
               <string name="Source"><![CDATA[--!strict
@@ -39252,7 +39807,7 @@ return Sprites
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="90">
+          <Item class="ModuleScript" referent="92">
             <Properties>
               <string name="Name">Theme</string>
               <string name="Source"><![CDATA[--!strict
@@ -39689,7 +40244,7 @@ return Theme
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="91">
+          <Item class="ModuleScript" referent="93">
             <Properties>
               <string name="Name">ViewStore</string>
               <string name="Source"><![CDATA[--!strict
@@ -39898,6 +40453,7 @@ local function buildHud(self: Store): HudState?
 		name = str(n.name) or "points",
 		gen = str(n.gen),
 		dev = str(n.dev),
+		pass = str(n.pass),
 		off = str(n.off),
 		w = w,
 		wh = str(n.wh),
@@ -40047,11 +40603,11 @@ return ViewStore
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="92">
+        <Item class="Folder" referent="94">
           <Properties>
             <string name="Name">Hud</string>
           </Properties>
-          <Item class="ModuleScript" referent="93">
+          <Item class="ModuleScript" referent="95">
             <Properties>
               <string name="Name">Band</string>
               <string name="Source"><![CDATA[--!strict
@@ -40206,14 +40762,16 @@ return Band
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="94">
+          <Item class="ModuleScript" referent="96">
             <Properties>
               <string name="Name">Capsule</string>
               <string name="Source"><![CDATA[--!strict
 --[[
-	Capsule: the points capsule (DESIGN.md 4.3), in TopbarGui centred under the Roblox top bar.
+	Capsule: the points capsule (DESIGN.md 4.3), in TopbarGui under the Roblox top bar, centred on the SCREEN (the
+	top bar's safe area is shifted right by Roblox's own buttons, so its middle is not the screen's).
 
-	    Capsule   400 x 58 (COMPACT 300 x 44), dark gradient, gold rim and glow
+	    Capsule   640 x 84 (COMPACT 380 x 52), the hero look: dark slab, gold accent, the amount in the panel hero's
+	              heavy face (46 du) with a gold glow
 	      Coin    Ø68 gold disc breaking out on the left, a spinning star (6 s / rev)
 	      Label   "POINTS · NORMAL UNIVERSE" (`caps`, #ffe9a3; not on COMPACT), then the passes in gold
 	              ("· 2× SPEED · SUPPORTER", from the player's MT_Perks attribute)
@@ -40223,7 +40781,7 @@ return Band
 	      Warn    a chip right of the capsule with the first warning value; tap -> warnTap (the tooltip lists all)
 	      Status  SAVING... / SAVED / NOT SAVING / RECONNECTING... under the pill
 	      Info    the game's other head lines under them (hud.x: sp challenge 11's ashes, a burning Spark Milestone;
-	              hud.off offline time; hud.dev dev speed), `small` on a glass chip; bottom() counts it
+	              hud.off offline time; hud.dev dev speed; hud.pass as 2× SPEED · ACTIVE), `small` on a glass chip; bottom() counts it
 
 	    local part = Capsule.new(parent)
 	    part:update(h)   part:setStatus(kind)   part:setUniverse(inside)   part:setFirstRun(b)   part.warnTap
@@ -40407,29 +40965,34 @@ function Capsule.new(parent: GuiObject): Capsule
 	local statusKind: string? = nil
 	local savedToken = 0
 
-	local W_WIDE, H_WIDE, W_COMPACT, H_COMPACT = 540, 62, 340, 44
-	-- the capsule's centre: the Root's middle, or a du x (over the map strip while a side sheet is open)
+	local W_WIDE, H_WIDE, W_COMPACT, H_COMPACT = 640, 84, 380, 52
+	-- the capsule's centre: the screen's middle in the parent's du, or a du x (over the map strip while a side sheet is
+	-- open)
 	local centreX: number? = nil
+	local function screenCx(): number
+		local cam = workspace.CurrentCamera
+		local vw = if cam then cam.ViewportSize.X else 1920
+		if parent.AbsoluteSize.X <= 0 then return vw / 2 / math.max(Layout.s, 0.01) end
+		return (vw / 2 - parent.AbsolutePosition.X) / math.max(Layout.s, 0.01)
+	end
 	local function at(dx: number, y: number): UDim2
-		local cx = centreX
-		if cx then return UDim2.fromOffset(cx + dx, y) end
-		return UDim2.new(0.5, dx, 0, y)
+		return UDim2.fromOffset((centreX or screenCx()) + dx, y)
 	end
 	local function place()
 		compact = Layout.mode == "COMPACT"
 		local w, h = if compact then W_COMPACT else W_WIDE, if compact then H_COMPACT else H_WIDE
 		f.Size = UDim2.fromOffset(w, h)
 		f.Position = at(0, 4)
-		local cd = if compact then 30 else 40
+		local cd = if compact then 34 else 52
 		Sleek.diamond(f, "Coin", GOLD_D, cd, { fill = 0, inner = false })
 		coin.Position = UDim2.new(0, if compact then 10 else 16, 0.5, 0)
 		core.Size = UDim2.fromOffset(if compact then 6 else 8, if compact then 6 else 8)
 		local x0 = (if compact then 10 else 16) + cd + (if compact then 10 else 16)
 		label.Visible = not compact
-		label.Position = UDim2.fromOffset(x0, 10)
+		label.Position = UDim2.fromOffset(x0, 12)
 		Theme.text(label, "caps")
-		row.Position = UDim2.fromOffset(x0, if compact then 4 else 23)
-		row.Size = UDim2.fromOffset(0, 36)
+		row.Position = UDim2.fromOffset(x0, if compact then 4 else 26)
+		row.Size = UDim2.fromOffset(0, if compact then 44 else 52)
 		amount.Size = UDim2.fromScale(0, 1)
 		unit.Size = UDim2.fromScale(0, 1)
 		Theme.text(unit, if compact then "label" else "small")
@@ -40437,21 +41000,21 @@ function Capsule.new(parent: GuiObject): Capsule
 		local pad = Kit.child(unit, "Pad", "UIPadding") :: UIPadding
 		pad.PaddingBottom = UDim.new(0, if compact then 5 else 6)
 		-- the rate column on the right of the slab
-		local rx = if compact then 110 else 174 -- the column's width from the right edge
+		local rx = if compact then 120 else 190 -- the column's width from the right edge
 		divider.Position = UDim2.new(1, -rx - 14, 0, 12)
 		divider.Size = UDim2.new(0, 1, 1, -24)
 		divider.Visible = true
 		pill.Size = UDim2.fromOffset(0, 18)
 		pill.AnchorPoint = Vector2.new(0, 0)
-		pill.Position = at(w / 2 - rx, 4 + (if compact then 13 else 36))
+		pill.Position = at(w / 2 - rx, 4 + (if compact then 17 else 50))
 		Theme.text(pillLabel, "number")
 		pillLabel.TextSize = if compact then 13 else 14
 		pillLabel.Size = UDim2.fromScale(0, 1)
 		local gs = if compact then 11 else 12
 		up.Size = UDim2.fromOffset(gs, gs)
 		spark.AnchorPoint = Vector2.new(0, 0)
-		spark.Position = at(w / 2 - rx, 4 + 10)
-		spark.Size = UDim2.fromOffset(rx - 16, 22)
+		spark.Position = at(w / 2 - rx, 4 + 14)
+		spark.Size = UDim2.fromOffset(rx - 16, 28)
 		-- warn: right of the capsule
 		warn.Size = UDim2.fromOffset(0, if compact then 26 else 30)
 		warn.Position = at(w / 2 + 14, 4 + h / 2)
@@ -40485,7 +41048,7 @@ function Capsule.new(parent: GuiObject): Capsule
 		local show = not compact and not firstRun and pill.Visible and #history >= 1
 		spark.Visible = show
 		if show then
-			Sleek.spark(spark, "Line", history, GOOD, { w = spark.Size.X.Offset, h = 22, thick = 1.6 })
+			Sleek.spark(spark, "Line", history, GOOD, { w = spark.Size.X.Offset, h = 28, thick = 1.8 })
 		end
 	end
 
@@ -40506,6 +41069,9 @@ function Capsule.new(parent: GuiObject): Capsule
 			if type(h.x) == "string" and h.x ~= "" then table.insert(parts, Rich.html(h.x, Theme.size("small"), nil)) end
 			if type(h.off) == "string" then table.insert(parts, Rich.caps("Offline time") .. "  " .. Rich.num(h.off, { size = Theme.size("small") })) end
 			if type(h.dev) == "string" then table.insert(parts, Rich.caps("Dev speed") .. "  " .. Rich.num(h.dev, { size = Theme.size("small") })) end
+			if type(h.pass) == "string" then
+				table.insert(parts, '<font color="#ffc93c">' .. Rich.caps(h.pass .. " Speed") .. "  ·  " .. Rich.caps("Active") .. "</font>")
+			end
 		end
 		local t = table.concat(parts, "\n")
 		if t ~= infoText then
@@ -40549,11 +41115,11 @@ function Capsule.new(parent: GuiObject): Capsule
 		if pts ~= lastPts then
 			local grew = lastPts ~= ""
 			lastPts = pts
-			local size = Theme.size("capsule")
-			Recipes.number(amount, { text = pts, size = size, from = Color3.new(1, 1, 1), to = Color3.new(1, 1, 1),
-				stroke = 0, shadow = 0, role = "capsule" })
-			local steps = if compact then { 28, 26, 22 } else { 34, 30, 26 }
-			Rich.fit(amount, steps, if compact then 140 else 230)
+			-- the hero face (the panel's YOU HAVE number): white into a warm cream, a gold glow behind it
+			local steps = if compact then { 32, 28, 24 } else { 46, 40, 34 }
+			Recipes.number(amount, { text = pts, size = steps[1], from = Color3.new(1, 1, 1), to = CREAM,
+				stroke = 0, shadow = 0, role = "hero", glow = GOLD })
+			Rich.fit(amount, steps, if compact then 160 else 300)
 			if grew and os.clock() - lastBump >= 1 then
 				lastBump = os.clock()
 				Motion.bump(row, 0.05)
@@ -40665,6 +41231,12 @@ function Capsule.new(parent: GuiObject): Capsule
 		if h then self:update(h) end
 		if not f.Visible then spark.Visible = false end
 	end)
+	-- the screen centre in the parent's du moves with the parent (the top bar's insets, a resize)
+	for _, prop in { "AbsolutePosition", "AbsoluteSize" } do
+		parent:GetPropertyChangedSignal(prop):Connect(function()
+			if centreX == nil then place() end
+		end)
+	end
 	Layout.changed:Connect(function()
 		place()
 		lastPts = ""
@@ -40678,7 +41250,7 @@ return Capsule
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="95">
+          <Item class="ModuleScript" referent="97">
             <Properties>
               <string name="Name">Dock</string>
               <string name="Source"><![CDATA[--!strict
@@ -40950,7 +41522,7 @@ return Dock
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="96">
+          <Item class="ModuleScript" referent="98">
             <Properties>
               <string name="Name">Hud</string>
               <string name="Source"><![CDATA[--!strict
@@ -41207,7 +41779,7 @@ return Hud
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="97">
+          <Item class="ModuleScript" referent="99">
             <Properties>
               <string name="Name">Kit</string>
               <string name="Source"><![CDATA[--!strict
@@ -41770,7 +42342,7 @@ return Kit
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="98">
+          <Item class="ModuleScript" referent="100">
             <Properties>
               <string name="Name">Portal</string>
               <string name="Source"><![CDATA[--!strict
@@ -42011,7 +42583,7 @@ return Portal
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="99">
+          <Item class="ModuleScript" referent="101">
             <Properties>
               <string name="Name">Ready</string>
               <string name="Source"><![CDATA[--!strict
@@ -42491,7 +43063,7 @@ return Ready
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="100">
+          <Item class="ModuleScript" referent="102">
             <Properties>
               <string name="Name">UniverseTag</string>
               <string name="Source"><![CDATA[--!strict
@@ -42609,11 +43181,11 @@ return UniverseTag
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="101">
+        <Item class="Folder" referent="103">
           <Properties>
             <string name="Name">Input</string>
           </Properties>
-          <Item class="ModuleScript" referent="102">
+          <Item class="ModuleScript" referent="104">
             <Properties>
               <string name="Name">Hotkeys</string>
               <string name="Source"><![CDATA[--!strict
@@ -42717,7 +43289,7 @@ return Hotkeys
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="103">
+          <Item class="ModuleScript" referent="105">
             <Properties>
               <string name="Name">Input</string>
               <string name="Source"><![CDATA[--!strict
@@ -42820,7 +43392,7 @@ return Input
             </Properties>
           </Item>
         </Item>
-        <Item class="LocalScript" referent="104">
+        <Item class="LocalScript" referent="106">
           <Properties>
             <string name="Name">Main</string>
             <string name="Source"><![CDATA[--!strict
@@ -42838,11 +43410,11 @@ App.start()
 ]]></string>
           </Properties>
         </Item>
-        <Item class="Folder" referent="105">
+        <Item class="Folder" referent="107">
           <Properties>
             <string name="Name">Map</string>
           </Properties>
-          <Item class="ModuleScript" referent="106">
+          <Item class="ModuleScript" referent="108">
             <Properties>
               <string name="Name">Ambient</string>
               <string name="Source"><![CDATA[--!strict
@@ -43341,7 +43913,7 @@ return Ambient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="107">
+          <Item class="ModuleScript" referent="109">
             <Properties>
               <string name="Name">Fallback</string>
               <string name="Source"><![CDATA[--!strict
@@ -43565,7 +44137,7 @@ return Fallback
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="108">
+          <Item class="ModuleScript" referent="110">
             <Properties>
               <string name="Name">Fields</string>
               <string name="Source"><![CDATA[--!strict
@@ -43752,7 +44324,7 @@ return Fields
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="109">
+          <Item class="ModuleScript" referent="111">
             <Properties>
               <string name="Name">Links</string>
               <string name="Source"><![CDATA[--!strict
@@ -44080,7 +44652,7 @@ return Links
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="110">
+          <Item class="ModuleScript" referent="112">
             <Properties>
               <string name="Name">MapCamera</string>
               <string name="Source"><![CDATA[--!strict
@@ -44552,7 +45124,7 @@ return MapCamera
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="111">
+          <Item class="ModuleScript" referent="113">
             <Properties>
               <string name="Name">MapInput</string>
               <string name="Source"><![CDATA[--!strict
@@ -44996,7 +45568,7 @@ return MapInput
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="112">
+          <Item class="ModuleScript" referent="114">
             <Properties>
               <string name="Name">MapLogic</string>
               <string name="Source"><![CDATA[--!strict
@@ -45332,7 +45904,7 @@ return MapLogic
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="113">
+          <Item class="ModuleScript" referent="115">
             <Properties>
               <string name="Name">MapView</string>
               <string name="Source"><![CDATA[--!strict
@@ -46269,7 +46841,7 @@ return MapView
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="114">
+          <Item class="ModuleScript" referent="116">
             <Properties>
               <string name="Name">Markers</string>
               <string name="Source"><![CDATA[--!strict
@@ -46516,7 +47088,7 @@ return Markers
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="115">
+          <Item class="ModuleScript" referent="117">
             <Properties>
               <string name="Name">NodeWidget</string>
               <string name="Source"><![CDATA[--!strict
@@ -47270,7 +47842,7 @@ return NodeWidget
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="116">
+          <Item class="ModuleScript" referent="118">
             <Properties>
               <string name="Name">Nodes</string>
               <string name="Source"><![CDATA[--!strict
@@ -47689,7 +48261,7 @@ return Nodes
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="117">
+          <Item class="ModuleScript" referent="119">
             <Properties>
               <string name="Name">Plates</string>
               <string name="Source"><![CDATA[--!strict
@@ -48136,11 +48708,11 @@ return Plates
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="118">
+        <Item class="Folder" referent="120">
           <Properties>
             <string name="Name">Overlay</string>
           </Properties>
-          <Item class="ModuleScript" referent="119">
+          <Item class="ModuleScript" referent="121">
             <Properties>
               <string name="Name">Detail</string>
               <string name="Source"><![CDATA[--!strict
@@ -48443,7 +49015,7 @@ return Detail
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="120">
+          <Item class="ModuleScript" referent="122">
             <Properties>
               <string name="Name">Guide</string>
               <string name="Source"><![CDATA[--!strict
@@ -48690,7 +49262,7 @@ return Guide
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="121">
+          <Item class="ModuleScript" referent="123">
             <Properties>
               <string name="Name">Modals</string>
               <string name="Source"><![CDATA[--!strict
@@ -49158,7 +49730,7 @@ return Modals
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="122">
+          <Item class="ModuleScript" referent="124">
             <Properties>
               <string name="Name">Overlay</string>
               <string name="Source"><![CDATA[--!strict
@@ -49333,7 +49905,7 @@ return Overlay
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="123">
+          <Item class="ModuleScript" referent="125">
             <Properties>
               <string name="Name">Peek</string>
               <string name="Source"><![CDATA[--!strict
@@ -49650,7 +50222,7 @@ return Peek
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="124">
+          <Item class="ModuleScript" referent="126">
             <Properties>
               <string name="Name">Screens</string>
               <string name="Source"><![CDATA[--!strict
@@ -50009,7 +50581,7 @@ return Screens
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="125">
+          <Item class="ModuleScript" referent="127">
             <Properties>
               <string name="Name">ToastModel</string>
               <string name="Source"><![CDATA[--!strict
@@ -50174,7 +50746,7 @@ return ToastModel
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="126">
+          <Item class="ModuleScript" referent="128">
             <Properties>
               <string name="Name">Toasts</string>
               <string name="Source"><![CDATA[--!strict
@@ -50555,7 +51127,7 @@ return Toasts
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="127">
+          <Item class="ModuleScript" referent="129">
             <Properties>
               <string name="Name">Tooltip</string>
               <string name="Source"><![CDATA[--!strict
@@ -50789,11 +51361,11 @@ return Tooltip
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="128">
+        <Item class="Folder" referent="130">
           <Properties>
             <string name="Name">Panel</string>
           </Properties>
-          <Item class="ModuleScript" referent="129">
+          <Item class="ModuleScript" referent="131">
             <Properties>
               <string name="Name">Hero</string>
               <string name="Source"><![CDATA[--!strict
@@ -51386,7 +51958,7 @@ return Hero
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="130">
+          <Item class="ModuleScript" referent="132">
             <Properties>
               <string name="Name">Panel</string>
               <string name="Source"><![CDATA[--!strict
@@ -52408,7 +52980,7 @@ return Panel
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="131">
+          <Item class="ModuleScript" referent="133">
             <Properties>
               <string name="Name">Sections</string>
               <string name="Source"><![CDATA[--!strict
@@ -52649,11 +53221,11 @@ return Sections
 ]]></string>
             </Properties>
           </Item>
-          <Item class="Folder" referent="132">
+          <Item class="Folder" referent="134">
             <Properties>
               <string name="Name">Skins</string>
             </Properties>
-            <Item class="ModuleScript" referent="133">
+            <Item class="ModuleScript" referent="135">
               <Properties>
                 <string name="Name">Achievement</string>
                 <string name="Source"><![CDATA[--!strict
@@ -52712,7 +53284,7 @@ return Achievement
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="134">
+            <Item class="ModuleScript" referent="136">
               <Properties>
                 <string name="Name">Buyable</string>
                 <string name="Source"><![CDATA[--!strict
@@ -52938,7 +53510,7 @@ return Buyable
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="135">
+            <Item class="ModuleScript" referent="137">
               <Properties>
                 <string name="Name">Challenge</string>
                 <string name="Source"><![CDATA[--!strict
@@ -53118,7 +53690,7 @@ return Challenge
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="136">
+            <Item class="ModuleScript" referent="138">
               <Properties>
                 <string name="Name">Clickable</string>
                 <string name="Source"><![CDATA[--!strict
@@ -53182,7 +53754,7 @@ return Clickable
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="137">
+            <Item class="ModuleScript" referent="139">
               <Properties>
                 <string name="Name">Common</string>
                 <string name="Source"><![CDATA[--!strict
@@ -53574,7 +54146,7 @@ return Common
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="138">
+            <Item class="ModuleScript" referent="140">
               <Properties>
                 <string name="Name">CompactOwned</string>
                 <string name="Source"><![CDATA[--!strict
@@ -53660,7 +54232,7 @@ return CompactOwned
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="139">
+            <Item class="ModuleScript" referent="141">
               <Properties>
                 <string name="Name">Generic</string>
                 <string name="Source"><![CDATA[--!strict
@@ -54022,7 +54594,7 @@ return Generic
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="140">
+            <Item class="ModuleScript" referent="142">
               <Properties>
                 <string name="Name">GridTile</string>
                 <string name="Source"><![CDATA[--!strict
@@ -54102,7 +54674,7 @@ return GridTile
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="141">
+            <Item class="ModuleScript" referent="143">
               <Properties>
                 <string name="Name">Milestone</string>
                 <string name="Source"><![CDATA[--!strict
@@ -54234,7 +54806,7 @@ return Milestone
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="142">
+            <Item class="ModuleScript" referent="144">
               <Properties>
                 <string name="Name">Opt</string>
                 <string name="Source"><![CDATA[--!strict
@@ -54321,7 +54893,7 @@ return Opt
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="143">
+            <Item class="ModuleScript" referent="145">
               <Properties>
                 <string name="Name">Perk</string>
                 <string name="Source"><![CDATA[--!strict
@@ -54381,7 +54953,7 @@ return Perk
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="144">
+            <Item class="ModuleScript" referent="146">
               <Properties>
                 <string name="Name">Skins</string>
                 <string name="Source"><![CDATA[--!strict
@@ -54437,7 +55009,7 @@ return Skins
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="145">
+            <Item class="ModuleScript" referent="147">
               <Properties>
                 <string name="Name">Upgrade</string>
                 <string name="Source"><![CDATA[--!strict
@@ -54900,7 +55472,7 @@ return Upgrade
               </Properties>
             </Item>
           </Item>
-          <Item class="ModuleScript" referent="146">
+          <Item class="ModuleScript" referent="148">
             <Properties>
               <string name="Name">Virtual</string>
               <string name="Source"><![CDATA[--!strict
@@ -55165,7 +55737,7 @@ return Virtual
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="147">
+        <Item class="ModuleScript" referent="149">
           <Properties>
             <string name="Name">Render</string>
             <string name="Source"><![CDATA[--!strict
@@ -56092,11 +56664,11 @@ return Render
 ]]></string>
           </Properties>
         </Item>
-        <Item class="Folder" referent="148">
+        <Item class="Folder" referent="150">
           <Properties>
             <string name="Name">Signatures</string>
           </Properties>
-          <Item class="ModuleScript" referent="149">
+          <Item class="ModuleScript" referent="151">
             <Properties>
               <string name="Name">Ach</string>
               <string name="Source"><![CDATA[--!strict
@@ -56347,7 +56919,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="150">
+          <Item class="ModuleScript" referent="152">
             <Properties>
               <string name="Name">Ap</string>
               <string name="Source"><![CDATA[--!strict
@@ -56428,7 +57000,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="151">
+          <Item class="ModuleScript" referent="153">
             <Properties>
               <string name="Name">Badges</string>
               <string name="Source"><![CDATA[--!strict
@@ -56526,7 +57098,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="152">
+          <Item class="ModuleScript" referent="154">
             <Properties>
               <string name="Name">Cp</string>
               <string name="Source"><![CDATA[--!strict
@@ -57039,7 +57611,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="153">
+          <Item class="ModuleScript" referent="155">
             <Properties>
               <string name="Name">Effects</string>
               <string name="Source"><![CDATA[--!strict
@@ -57222,7 +57794,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="154">
+          <Item class="ModuleScript" referent="156">
             <Properties>
               <string name="Name">Energy</string>
               <string name="Source"><![CDATA[--!strict
@@ -57303,7 +57875,7 @@ return { sig("pe"), sig("se") }
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="155">
+          <Item class="ModuleScript" referent="157">
             <Properties>
               <string name="Name">Ex</string>
               <string name="Source"><![CDATA[--!strict
@@ -57805,7 +58377,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="156">
+          <Item class="ModuleScript" referent="158">
             <Properties>
               <string name="Name">Kit</string>
               <string name="Source"><![CDATA[--!strict
@@ -58252,7 +58824,7 @@ return Kit
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="157">
+          <Item class="ModuleScript" referent="159">
             <Properties>
               <string name="Name">M</string>
               <string name="Source"><![CDATA[--!strict
@@ -59288,7 +59860,7 @@ return M
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="158">
+          <Item class="ModuleScript" referent="160">
             <Properties>
               <string name="Name">Mp</string>
               <string name="Source"><![CDATA[--!strict
@@ -59349,7 +59921,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="159">
+          <Item class="ModuleScript" referent="161">
             <Properties>
               <string name="Name">Options</string>
               <string name="Source"><![CDATA[--!strict
@@ -59623,7 +60195,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="160">
+          <Item class="ModuleScript" referent="162">
             <Properties>
               <string name="Name">P</string>
               <string name="Source"><![CDATA[--!strict
@@ -59766,7 +60338,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="161">
+          <Item class="ModuleScript" referent="163">
             <Properties>
               <string name="Name">Pp</string>
               <string name="Source"><![CDATA[--!strict
@@ -59872,7 +60444,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="162">
+          <Item class="ModuleScript" referent="164">
             <Properties>
               <string name="Name">Signatures</string>
               <string name="Source"><![CDATA[--!strict
@@ -60060,7 +60632,7 @@ return Signatures
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="163">
+          <Item class="ModuleScript" referent="165">
             <Properties>
               <string name="Name">Sp</string>
               <string name="Source"><![CDATA[--!strict
@@ -60530,7 +61102,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="164">
+          <Item class="ModuleScript" referent="166">
             <Properties>
               <string name="Name">T</string>
               <string name="Source"><![CDATA[--!strict
@@ -60602,7 +61174,7 @@ return {
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="165">
+        <Item class="ModuleScript" referent="167">
           <Properties>
             <string name="Name">Style</string>
             <string name="Source"><![CDATA[--!strict
@@ -60796,7 +61368,7 @@ return Style
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="166">
+        <Item class="ModuleScript" referent="168">
           <Properties>
             <string name="Name">Types</string>
             <string name="Source"><![CDATA[--!strict
@@ -60884,6 +61456,7 @@ export type HudState = {
 	name: string,
 	gen: string?,
 	dev: string?,
+	pass: string?, -- the 2x Speed pass is on ("2×")
 	off: string?,
 	w: { HudWarn },
 	wh: string?,

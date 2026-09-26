@@ -9,6 +9,8 @@
 	owned pass keys as JSON (the client's Shop and the SUPPORTER tag read it). A pass bought in game counts at once
 	(PromptGamePassPurchaseFinished); ownership is read again on every join.
 
+	Robux spent (the Robux leaderboard): a granted receipt's CurrencySpent, a bought pass's price.
+
 	Products -> ProcessReceipt: a Time Warp goes to the player's Actor ("warp", seconds, name). A receipt is granted
 	once: Store.receiptGranted / markReceipt. The answer is NotProcessedYet (Roblox retries later, also on the
 	player's next join) while the player has no running game or the grant could not be recorded. In Studio without
@@ -22,6 +24,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local Store = require(script.Parent:WaitForChild("Store"))
+local Leaderboards = require(script.Parent:WaitForChild("Leaderboards"))
 local Products = require(ReplicatedStorage:WaitForChild("MilestoneTree"):WaitForChild("Products"))
 
 local Shop = {}
@@ -96,6 +99,8 @@ local function processReceipt(info: any): Enum.ProductPurchaseDecision
 		end
 	end
 	if product.warp then a:SendMessage("warp", product.warp, product.name) end
+	-- the Robux board (once per granted receipt: a granted receipt never comes back here)
+	if not studio then task.spawn(Leaderboards.addRobux, info.PlayerId, tonumber(info.CurrencySpent) or product.price) end
 	return Enum.ProductPurchaseDecision.PurchaseGranted
 end
 
@@ -106,6 +111,7 @@ function Shop.start(of: (Player) -> Actor?)
 		if not purchased then return end
 		local p = Products.passById(passId)
 		if p == nil then return end
+		task.spawn(Leaderboards.addRobux, player.UserId, p.price)
 		local set = owned[player] or {}
 		set[p.key] = true
 		owned[player] = set

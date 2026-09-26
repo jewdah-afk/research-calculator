@@ -204,6 +204,7 @@ local function buildHud(self: Store): HudState?
 		name = str(n.name) or "points",
 		gen = str(n.gen),
 		dev = str(n.dev),
+		pass = str(n.pass),
 		off = str(n.off),
 		w = w,
 		wh = str(n.wh),

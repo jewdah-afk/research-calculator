@@ -13,6 +13,13 @@
 	  Prefs   client -> server   the device options (shared/PrefsSchema: motion, detail, labels, size, weather,
 	                             guide, the volumes, seenPrestige); mirrored as JSON in the player's MT_Prefs
 	                             attribute and saved apart from the game (Store.savePrefs)
+	  Board   client -> server   (RemoteFunction) a leaderboard page: (board key) -> Leaderboards.page + the
+	                             player's own value
+
+	Cheating: the game runs here; the client only sends button presses, and an action is carried out only when it
+	is on the player's screen (Session:act). The remotes are limited per player (presses: a token bucket; resyncs
+	and board pages: one per interval) and a player who keeps flooding past the limits is kicked. Leaderboards are
+	written by the server from the server's own game.
 ]]
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
@@ -23,6 +30,8 @@ local root = script.Parent
 local Config = require(root:WaitForChild("Config"))
 local Store = require(root:WaitForChild("Store"))
 local Shop = require(root:WaitForChild("Shop"))
+local Leaderboards = require(root:WaitForChild("Leaderboards"))
+local Boards = require(ReplicatedStorage:WaitForChild("MilestoneTree"):WaitForChild("Boards"))
 
 local remotes = Instance.new("Folder")
 remotes.Name = "MilestoneTreeRemotes"
@@ -36,6 +45,9 @@ local viewRemote = remote("View")
 local actRemote = remote("Act")
 local readyRemote = remote("Ready")
 local prefsRemote = remote("Prefs")
+local boardRemote = Instance.new("RemoteFunction")
+boardRemote.Name = "Board"
+boardRemote.Parent = remotes
 remotes.Parent = ReplicatedStorage
 
 local sessionsFolder = Instance.new("Folder")
@@ -47,6 +59,7 @@ local template = ServerStorage:WaitForChild("MilestoneTreeWorker") :: Actor
 type Prefs = { [string]: any }
 type Entry = {
 	actor: Actor, tokens: number, last: number,
+	drops: number, dropsAt: number, resyncAt: number, resyncHeld: boolean, boardAt: number,
 	prefsAt: number, prefsPending: Prefs?, prefsSet: boolean, prefsDirty: boolean, prefsSaveAt: number,
 }
 local entries: { [Player]: Entry } = {}
@@ -110,10 +123,12 @@ end
 local function start(player: Player)
 	if entries[player] then return end
 	local a = template:Clone()
+	a:SetAttribute("TickShare", Config.TICK_CPU_SHARE)
 	a.Name = "Player_" .. player.UserId
 	a.Parent = sessionsFolder
 	local entry: Entry = {
 		actor = a, tokens = Config.ACTIONS_PER_SECOND, last = os.clock(),
+		drops = 0, dropsAt = os.clock(), resyncAt = 0, resyncHeld = false, boardAt = 0,
 		prefsAt = 0, prefsPending = nil, prefsSet = false, prefsDirty = false, prefsSaveAt = 0,
 	}
 	entries[player] = entry
@@ -151,16 +166,45 @@ Shop.start(function(player: Player): Actor?
 	local entry = entries[player]
 	return if entry then entry.actor else nil
 end)
-Players.PlayerAdded:Connect(start)
-Players.PlayerRemoving:Connect(stop)
+-- each game's share of a core: a full server shares its cores (Worker reads the Actor's TickShare)
+local function shareCpu()
+	local n = 0
+	for _ in entries do n += 1 end
+	local share = math.clamp(Config.SERVER_CPU / math.max(n, 1), Config.MIN_CPU_SHARE, Config.TICK_CPU_SHARE)
+	for _, e in entries do e.actor:SetAttribute("TickShare", share) end
+end
+Players.PlayerAdded:Connect(function(player: Player)
+	task.defer(shareCpu)
+	start(player)
+end)
+Players.PlayerRemoving:Connect(function(player: Player)
+	stop(player)
+	shareCpu()
+end)
 for _, p in Players:GetPlayers() do task.spawn(start, p) end
+task.defer(shareCpu)
 
 -- a token bucket per player: holding a buyable fires 20 presses a second, a burst of clicks a few more
-local function allow(entry: Entry): boolean
+-- a dropped request counts towards the flood limit: FLOOD_DROPS within FLOOD_WINDOW seconds is not a player
+local function dropped(player: Player, entry: Entry)
+	local now = os.clock()
+	if now - entry.dropsAt > Config.FLOOD_WINDOW then
+		entry.drops, entry.dropsAt = 0, now
+	end
+	entry.drops += 1
+	if entry.drops == Config.FLOOD_DROPS then
+		warn("[MilestoneTree] " .. player.Name .. " (" .. player.UserId .. ") flooded the remotes and was kicked")
+		player:Kick("Too many requests. Rejoin to keep playing.")
+	end
+end
+local function allow(player: Player, entry: Entry): boolean
 	local now = os.clock()
 	entry.tokens = math.min(Config.ACTIONS_PER_SECOND, entry.tokens + (now - entry.last) * Config.ACTIONS_PER_SECOND)
 	entry.last = now
-	if entry.tokens < 1 then return false end
+	if entry.tokens < 1 then
+		dropped(player, entry)
+		return false
+	end
 	entry.tokens -= 1
 	return true
 end
@@ -184,7 +228,12 @@ end
 
 actRemote.OnServerEvent:Connect(function(player: Player, a: any, hold: any)
 	local entry = entries[player]
-	if not entry or not validAction(a) or not allow(entry) then return end
+	if not entry then return end
+	if not validAction(a) then
+		dropped(player, entry)
+		return
+	end
+	if not allow(player, entry) then return end
 	entry.actor:SendMessage("act", a, hold == true)
 end)
 
@@ -200,12 +249,46 @@ end)
 readyRemote.OnServerEvent:Connect(function(player: Player)
 	local entry = entries[player]
 	if not entry then return end
+	-- a whole screen is costly to build: one per RESYNC_EVERY. A quicker ask is held and sent when the interval is
+	-- over (the client asks again at boot when its first ask came before the game was up); a third one meanwhile is
+	-- spam
+	local now = os.clock()
+	local wait = entry.resyncAt + Config.RESYNC_EVERY - now
+	if wait > 0 then
+		if entry.resyncHeld then
+			dropped(player, entry)
+			return
+		end
+		entry.resyncHeld = true
+		task.delay(wait, function()
+			entry.resyncHeld = false
+			entry.resyncAt = os.clock()
+			if entries[player] == entry and not entry.actor:GetAttribute("Error") then entry.actor:SendMessage("resync") end
+		end)
+		return
+	end
+	entry.resyncAt = now
 	if entry.actor:GetAttribute("Error") then
 		fatal(player, tostring(entry.actor:GetAttribute("Error")))
 	else
 		entry.actor:SendMessage("resync")
 	end
 end)
+
+-- a leaderboard page, and the player's own value on that board
+boardRemote.OnServerInvoke = function(player: Player, board: any): any
+	local entry = entries[player]
+	if not entry or type(board) ~= "string" or #board > 16 or Boards.get(board) == nil then return nil end
+	local now = os.clock()
+	if now - entry.boardAt < Config.BOARD_EVERY then
+		dropped(player, entry)
+		return { ok = false, board = board, entries = {}, error = "Slow down a little." }
+	end
+	entry.boardAt = now
+	local page = Leaderboards.page(board)
+	return { ok = page.ok, board = page.board, entries = page.entries, error = page.error,
+		you = if page.ok then Leaderboards.mine(board, player.UserId) else nil }
+end
 
 game:BindToClose(function()
 	for player in entries do task.spawn(stop, player) end

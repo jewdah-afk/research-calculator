@@ -6,7 +6,10 @@
 	  "start" (player)            load the save, start the game
 	  "act"   (action, hold)      a button press / hotkey from the player's screen
 	  "resync"                    the client wants the whole screen again
-	  "stop"                      save, release the save lock, then set the Actor's Stopped attribute
+	  "stop"                      save, release the save lock, send the leaderboard stats, then set Stopped
+	The leaderboard stats (server/Leaderboards) go out LB_EVERY seconds (and 30 s after joining, and on leaving), only
+	the boards whose value went up. The Actor's TickShare attribute (Main: SERVER_CPU / players) caps this game's
+	share of a core.
 	The game ticks in the parallel phase; sending to the client and DataStore calls happen in the serial phase.
 ]]
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -18,6 +21,9 @@ local root = ServerScriptService:WaitForChild("MilestoneTree")
 local Config = require(root:WaitForChild("Config"))
 local Session = require(root:WaitForChild("Session"))
 local Store = require(root:WaitForChild("Store"))
+local Leaderboards = require(root:WaitForChild("Leaderboards"))
+local Boards = require(ReplicatedStorage:WaitForChild("MilestoneTree"):WaitForChild("Boards"))
+local TowerNum = require(ReplicatedStorage:WaitForChild("TowerNum")) :: any
 local remotes = ReplicatedStorage:WaitForChild("MilestoneTreeRemotes")
 local viewRemote: RemoteEvent = remotes:WaitForChild("View")
 
@@ -58,6 +64,14 @@ local pushNow = false        -- refresh the screen at the next heartbeat (after 
 local perks: { [string]: any } = {} -- from the player's passes (Main/Shop)
 local pendingWarp = 0        -- Time Warp seconds bought before the session started
 local saving = false
+local playedBase, loadedAt = 0, os.clock() -- real seconds played before this session (the save), and when it began
+local sinceLb = 0
+local lbSent: { [string]: number } = {} -- the keys last sent per board (only a higher one is sent again)
+local lbBusy = false
+
+local function playedNow(): number
+	return playedBase + (os.clock() - loadedAt)
+end
 
 local function nowMs(): number
 	return DateTime.now().UnixTimestampMillis
@@ -87,7 +101,7 @@ local function saveNow(release: boolean?)
 		-- the capsule's SAVING... / SAVED (patch.save, sent once each)
 		session.saveEvent = "saving"
 		pushNow = true
-		local ok, err = Store.save(player.UserId, save, options, release)
+		local ok, err = Store.save(player.UserId, save, options, release, playedNow())
 		if ok then
 			session.saveEvent = "saved"
 			pushNow = true
@@ -126,6 +140,54 @@ local function applyNotation()
 	end
 end
 
+-- the leaderboard keys of this game (serial phase: reads the game, then DataStore calls)
+local function lbKeys(): { [string]: number }
+	local out: { [string]: number } = {}
+	local JS, ENV = session.JS, session.ENV
+	local ok, arr = pcall(ENV.rbx_lbStats, nil)
+	if ok and arr and JS.LEN[arr] then
+		for i = 0, JS.LEN[arr] - 1 do
+			local pair = arr[i]
+			local key, v = pair[0], pair[1]
+			local board = Boards.get(tostring(key))
+			if board then
+				local value: any = v
+				if type(v) ~= "number" then
+					local okD, d = pcall(JS.D, v)
+					if okD and d then
+						value = TowerNum.fromEN({ Sign = JS.tonum(JS.P(d, "sign")), Layer = JS.tonum(JS.P(d, "layer")),
+							Exp = JS.tonum(JS.P(d, "mag")) })
+					else
+						value = 0
+					end
+				end
+				out[board.key] = Boards.keyOf(board, value)
+			end
+		end
+	end
+	out.time = Boards.keyOf(Boards.get("time") :: any, playedNow())
+	return out
+end
+local function sendLb()
+	if lbBusy or not session or not player or not canSave or not Store.available() then return end
+	lbBusy = true
+	local ok, keys = pcall(lbKeys)
+	if ok then
+		local fresh: { [string]: number } = {}
+		for board, key in keys do
+			if key > (lbSent[board] or 0) then fresh[board] = key end
+		end
+		if next(fresh) then
+			Leaderboards.submit(player.UserId, fresh)
+			for board, key in fresh do lbSent[board] = key end
+			Leaderboards.forget(player.UserId)
+		end
+	else
+		warn("[MilestoneTree] leaderboard stats failed: " .. tostring(keys))
+	end
+	lbBusy = false
+end
+
 local function begin(plr: Player)
 	player = plr
 	plr:GetAttributeChangedSignal("MT_Prefs"):Connect(applyNotation)
@@ -140,6 +202,7 @@ local function begin(plr: Player)
 	if rec then
 		canSave = true
 		save, options = rec.save, rec.options
+		playedBase = tonumber(rec.played) or 0
 	else
 		warn("[MilestoneTree] could not load " .. plr.Name .. "'s save: " .. tostring(err))
 	end
@@ -153,6 +216,8 @@ local function begin(plr: Player)
 		table.insert(s.notices, "Your save could not be loaded (" .. tostring(err) .. "). Playing without saving; rejoin to try again.")
 	end
 	session = s
+	loadedAt = os.clock()
+	sinceLb = Config.LB_EVERY - 30 -- the first stats 30 s in, so a new player shows up soon
 	applyNotation()
 	s:setPerks(perks)
 	if pendingWarp > 0 then
@@ -223,6 +288,7 @@ actor:BindToMessage("stop", function()
 	task.spawn(function()
 		drainWarp()
 		saveNow(true)
+		sendLb()
 		actor:SetAttribute("Stopped", true)
 	end)
 end)
@@ -233,6 +299,7 @@ RunService.Heartbeat:ConnectParallel(function(dt: number)
 	sinceView += dt
 	sinceSave += dt
 	sinceSent += dt
+	sinceLb += dt
 	if sinceTick >= tickEvery then
 		sinceTick = 0
 		local t0 = os.clock()
@@ -240,7 +307,9 @@ RunService.Heartbeat:ConnectParallel(function(dt: number)
 		local cost = os.clock() - t0
 		tickCost = tickCost * 0.9 + cost * 0.1
 		-- keep this player's game under its share of a core: slower ticks when they get expensive
-		tickEvery = math.clamp(tickCost / Config.TICK_CPU_SHARE, Config.TICK, Config.MAX_TICK)
+		local share = actor:GetAttribute("TickShare")
+		tickEvery = math.clamp(tickCost / (if type(share) == "number" and share > 0 then share else Config.TICK_CPU_SHARE),
+			Config.TICK, Config.MAX_TICK)
 	end
 	local wantSave = session.wantSave or sinceSave >= Config.AUTOSAVE
 	if not (pushNow or sinceView >= viewEvery or wantSave) then return end
@@ -265,6 +334,10 @@ RunService.Heartbeat:ConnectParallel(function(dt: number)
 		sinceSave = 0
 		session.wantSave = false
 		task.spawn(saveNow, false)
+	end
+	if sinceLb >= Config.LB_EVERY then
+		sinceLb = 0
+		task.spawn(sendLb)
 	end
 end)
 

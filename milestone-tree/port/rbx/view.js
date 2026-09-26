@@ -20,6 +20,7 @@
 //   tabs               c (tab buttons)
 
 var rbx_actions = []
+var rbx_passSpeed = 0 // the 2x Speed pass's devSpeed (Session:_applyPerks), 0 without it
 function rbx_act(a) { rbx_actions.push(a); return a }
 
 function rbx_cssInto(out, s) {
@@ -207,6 +208,22 @@ function rbx_upgHave(layer, t) {
 		return player[name]
 	}
 	return player[layer].points
+}
+
+// the leaderboard stats (server/Leaderboards via the Worker): [board key, value] pairs, value a Decimal or a
+// number. A layer's best where the game keeps one (a reset never lowers it), else its amount; the boards keep the
+// highest value ever sent, so current values are fine too. Playtime and Robux are kept by the server.
+var rbx_LB_LAYERS = ["m", "p", "sp", "mm", "pb", "hp", "ap", "t", "hb", "pe", "se", "pp", "ep", "mp", "em", "pm", "pep", "cp", "cm", "ex"]
+function rbx_lbStats() {
+	var out = [["points", player.points]]
+	for (var i = 0; i < rbx_LB_LAYERS.length; i++) {
+		var l = rbx_LB_LAYERS[i], d = player[l]
+		if (!d) continue
+		var v = d.best !== undefined ? d.best : d.points
+		if (v !== undefined) out.push([l, v])
+	}
+	out.push(["ach", player.ach.achievements.length])
+	return out
 }
 
 // Buy All (a Roblox addition): one press buys every upgrade of a layer the player can afford, from when the layer
@@ -1077,7 +1094,11 @@ function rbx_hud() {
 			h.gen = o.oompsMag != 0 ? format(o.oomps) + " OOM" + (o.oompsMag < 0 ? "^OOM" : (o.oompsMag > 1 ? "^" + o.oompsMag : "")) + "s/sec" : formatSmall(pg) + "/sec"
 		}
 	}
-	h.dev = player.devSpeed && player.devSpeed != 1 ? format(player.devSpeed) + "x" : null
+	// the 2x Speed pass sets the game's devSpeed (Session:_applyPerks sets rbx_passSpeed too): shown as the pass, not as
+	// the game's own dev speed line
+	var pass = rbx_passSpeed && player.devSpeed == rbx_passSpeed
+	h.dev = player.devSpeed && player.devSpeed != 1 && !pass ? format(player.devSpeed) + "x" : null
+	h.pass = pass ? formatWhole(rbx_passSpeed) + "×" : null
 	h.off = player.offTime !== undefined && player.offTime.remain > 0 ? formatTime(player.offTime.remain) : null
 	// the softcap / overflow warnings (mod.js displayThings[1], same conditions)
 	var w = []
