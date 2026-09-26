@@ -21,7 +21,8 @@ realm, gems, node plates and panels are therefore the game's own art and layout,
 | `out/thumb_8.jpg` | 1920 × 1080 | BUY ALL: the real P panel's upgrades with the BUY ALL button | same |
 | `out/icon_b_number.png` | 512 × 512 | Icon option B: the M crystal in the rift ring over a big 1e100 (reads as an incremental at 64 px) | `icon_alt.js` |
 | `out/icon_c_tree.png` | 512 × 512 | Icon option C: the tree of layer crystals on glowing links | `icon_alt.js` |
-| `out/icon_options.jpg` | | Icons A, B and C side by side at 512, 150 and 64 px | `icon_alt.js` + the sheet step |
+| `out/icon_d_tree_render.png` | 512 × 512 | Icon option D: the game's own painted tree, rendered square, vignetted to the tree | `icon_tree.py` |
+| `out/icon_options.jpg` | | Icons A, B, D and C side by side at 512, 150 and 64 px | `icon_tree.py` |
 | `out/video_preview.mp4` | 1920 × 1080 | ~26 s, 30 fps, H.264 High, no audio: the hook pull-back, climbing numbers, the P panel opening, the rift, the realm and an end card (the logo lockup only) | `video.js` → `video_post.py` |
 
 What helps clicks (Roblox docs and creator guides, 2026): the icon decides most of it and shows at ~150 px, so it
