@@ -606,6 +606,30 @@ do
 		local rail = panel.render.recs[rowId].root:FindFirstChild("Rail")
 		check(rail ~= nil and rail:FindFirstChild("Check") ~= nil, "the tier rail turns owned")
 		check(card:FindFirstChild("Foot") == nil and card:FindFirstChild("Bar") == nil, "no BUY bar left on the compact card")
+		-- redraw cost: a value-only patch (an owned upgrade's effect moving) redraws that card alone; a state change
+		-- redraws the row
+		local hooks = panel.render.hooks
+		local skin0 = hooks.skin
+		local calls: { [string]: number } = {}
+		hooks.skin = function(rec, n, ctx)
+			calls[rec.id] = (calls[rec.id] or 0) + 1
+			return skin0(rec, n, ctx)
+		end
+		local function drawn(): number
+			local k = 0
+			for _, id in cards do if calls[id] then k += 1 end end
+			return k
+		end
+		local v = table.clone(store:get(cards[1]))
+		v.ef = "9.99e99x"
+		panel:update(store, store:apply({ set = { [cards[1]] = v }, del = {} }))
+		check(drawn() == 1, "a value-only patch redraws one card (" .. drawn() .. ")")
+		table.clear(calls)
+		local c2 = table.clone(store:get(cards[2]))
+		c2.cls = "can"
+		panel:update(store, store:apply({ set = { [cards[2]] = c2 }, del = {} }))
+		check(drawn() == #cards, "a state change redraws the row (" .. drawn() .. " / " .. #cards .. ")")
+		hooks.skin = skin0
 		req(core.Prefs).set("motion", "SYSTEM")
 	end
 	panel:destroy()

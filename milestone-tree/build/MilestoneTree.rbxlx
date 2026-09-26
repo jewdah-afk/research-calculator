@@ -55675,16 +55675,21 @@ function Render.apply(self: Renderer, patch: any)
 			if parentOf(id) == nil then self:_destroy(id) end
 		end
 	end
+	local rows: { [string]: boolean } = {}
 	for _, id in patch.del or {} do
 		local owner = self:_claimOwner(id)
 		if owner and owner ~= id then
 			self.dirty[owner] = true
 		else
+			local gone = self.recs[id]
+			if gone and gone.node and gone.node.t == "btn" and gone.node.k == "upg" and self.hooks.skin then
+				local p = parentOf(id)
+				if p then rows[p] = true end
+			end
 			self:_destroy(id)
 		end
 	end
 	local ids = {}
-	local rows: { [string]: boolean } = {}
 	for id in patch.set or {} do table.insert(ids, id) end
 	table.sort(ids, function(a, b)
 		local da, db = depth(a), depth(b)
@@ -55699,6 +55704,12 @@ function Render.apply(self: Renderer, patch: any)
 			continue
 		end
 		local rec: Rec? = self.recs[id]
+		-- a new upgrade card, or one whose state (can / not yet / bought) changed, redraws its row (below); a patch
+		-- that only moves a value (an owned upgrade's effect, 10 times a second) does not
+		if n.t == "btn" and n.k == "upg" and self.hooks.skin and (rec == nil or rec.node == nil or rec.node.cls ~= n.cls) then
+			local p = parentOf(id)
+			if p then rows[p] = true end
+		end
 		if rec and rec.claim then
 			-- the claimed node itself changed: keep the claim while it is the same component, else give it back
 			if rec.kind == kindOf(n) and rec.node.cn == n.cn then
@@ -55750,13 +55761,9 @@ function Render.apply(self: Renderer, patch: any)
 			self:_place(built)
 		end
 		self:_update(rec :: Rec, n)
-		if n.t == "btn" and n.k == "upg" and self.hooks.skin then
-			local p = parentOf(id)
-			if p then rows[p] = true end
-		end
 	end
-	-- an upgrade's look depends on its row (a fully owned tier turns every card compact and the rail green), so a
-	-- changed upgrade redraws its row and the siblings the patch did not carry
+	-- an upgrade's look depends on its row (a fully owned tier turns every card compact and the rail green), so an
+	-- upgrade that appeared, went or changed state redraws its row and the siblings the patch did not carry
 	for p in rows do
 		local pr = self.recs[p]
 		if pr and not pr.claim then self:_update(pr, pr.node) end
