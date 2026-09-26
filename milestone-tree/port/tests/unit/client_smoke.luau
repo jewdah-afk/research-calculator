@@ -6,13 +6,17 @@
 	panel (Save, no hard reset / export / import), hotkeys, the peek, READY holds, the gate popover, toasts,
 	the phone layout (full-screen panel, the map switched off, the band's close), the detail sheet, every modal and
 	screen. Any script error or [MilestoneTree] warning fails the run. Twice: with every engine capability, and with
-	all of them forced off (MT_ForceCaps = "all", the fallbacks).
+	all of them forced off (MT_ForceCaps = "all", the fallbacks; sound then runs on the legacy Sound path). Sound:
+	the cues the run should make are checked on the engine's play log; with -a noids (every audio asset id nil)
+	nothing may play at all.
 
-	Run from port/: python3 tools/wrap_scripts.py && ./test.sh capture && luau tests/unit/client_smoke.luau [-a nocaps]
+	Run from port/: python3 tools/wrap_scripts.py && ./test.sh capture && luau tests/unit/client_smoke.luau [-a nocaps|noids]
 ]]
 local M = require("../mock")
 local E = require("../engine")(M)
-local NOCAPS = (...) == "nocaps"
+local ARG = ...
+local NOCAPS = ARG == "nocaps"
+local NOIDS = ARG == "noids"
 
 local failures = 0
 local function check(ok, what)
@@ -29,6 +33,20 @@ local Instance = M.G.Instance
 -- ------------------------------------------------------------------------------------------------------ the tree
 local RS = game:GetService("ReplicatedStorage")
 local client = E.buildClient()
+if NOIDS then
+	-- every sheet without an id: the game must be silent (and not throw)
+	RS.MilestoneTree.AudioIds.__module = function()
+		local t = table.clone(require("../../../src/shared/AudioIds"))
+		local sheets = {}
+		for k, v in t.sheets do
+			local c = table.clone(v)
+			c.id, c.review = nil, nil
+			sheets[k] = c
+		end
+		t.sheets = sheets
+		return t
+	end
+end
 
 -- remotes
 local function folder(parent, name) local f = Instance.new("Folder"); f.Name = name; f.Parent = parent; return f end
@@ -363,6 +381,33 @@ ov2:screen(nil)
 ov2:flash(M.G.Color3.new(1, 0, 0))
 frames(1)
 ov2:destroy()
+
+-- sound: what the run should have played (the engine logs every Play with its region)
+local AudioIds = M.require(RS.MilestoneTree.AudioIds)
+local function played(name)
+	local want = {}
+	for _, r in AudioIds.sounds[name].regions do want[r[1]] = true end
+	local n = 0
+	for _, pl in E.audio.plays do
+		if pl.region and want[pl.region.Min] then n += 1 end
+	end
+	return n
+end
+local Audio = M.require(client.Core.Audio)
+if NOIDS then
+	check(#E.audio.plays == 0, "no asset ids: not one sound played (" .. #E.audio.plays .. ")")
+else
+	check(Audio.mode == (if NOCAPS then "sound" else "api"), "sound runs on the " .. Audio.mode .. " path")
+	local cls = if NOCAPS then "Sound" else "AudioPlayer"
+	local right = true
+	for _, pl in E.audio.plays do if pl.class ~= cls then right = false end end
+	check(right, "every sound played on a " .. cls)
+	for _, n in { "panel_open", "panel_close", "press", "hover", "toast", "ambience" } do
+		check(played(n) > 0, "the run played " .. n .. " (" .. played(n) .. ")")
+	end
+	check(played("prestige_small") + played("prestige_big") > 0, "holding a READY gem played a prestige")
+	check(Audio.stats().total <= 32, "at most 32 voices (" .. Audio.stats().total .. ")")
+end
 
 -- the one warning expected above: the drawing error
 check(E.warnings <= 2, "no [MilestoneTree] warnings besides the forced drawing error (" .. E.warnings .. ")")

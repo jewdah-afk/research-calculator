@@ -16,7 +16,8 @@
 
 	Protocol (plan 1.12): the panel never sends ["tab", id] itself: App fires the node's action once and calls open.
 	The body shows a skeleton until a patch arrives with patch.tab == key. Every button fires its node's `a` as sent
-	(panel.act); the hero CTA fires the prestige-button node's own action.
+	(panel.act); the hero CTA fires the prestige-button node's own action. Sounds: a subtab switch plays "tab", the
+	close button's hover the hover tick (opening and closing sound in App, which knows why the panel moved).
 	When the shown layer or subtab changes, the tab tree is rebuilt from the store, so no skin or claim keeps the
 	previous layer's state.
 ]]
@@ -28,6 +29,7 @@ local Motion = require(Core:WaitForChild("Motion"))
 local Rich = require(Core:WaitForChild("Rich"))
 local Layout = require(Core:WaitForChild("Layout"))
 local Signal = require(Core:WaitForChild("Signal"))
+local Audio = require(Core:WaitForChild("Audio"))
 local Types = require(script.Parent.Parent:WaitForChild("Types"))
 local Render = require(script.Parent.Parent:WaitForChild("Render"))
 local Signatures = require(script.Parent.Parent:WaitForChild("Signatures"):WaitForChild("Signatures"))
@@ -232,6 +234,7 @@ function Panel.build(self: Panel)
 		self.closeRequested:Fire()
 	end)
 	close.MouseEnter:Connect(function()
+		Audio.play("hover")
 		Motion.tween(close, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Rotation = 90 }, "panel:close")
 	end)
 	close.MouseLeave:Connect(function()
@@ -454,6 +457,7 @@ function Panel.drawTabs(self: Panel, store: any, id: string)
 				local t = b:GetAttribute("TabId")
 				local node = if type(t) == "string" then self.store:get(t) else nil
 				if type(node) == "table" and type(node.a) == "table" and node.cls ~= "cur" then
+					Audio.play("tab")
 					self.act:Fire(node.a, false)
 				end
 			end)

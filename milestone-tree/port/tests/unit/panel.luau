@@ -200,7 +200,7 @@ scriptModule(client, "Types", "client/Types")
 scriptModule(client, "Style", "client/Style")
 scriptModule(client, "Render", "client/Render")
 local core = folder(client, "Core")
-for _, n in { "Signal", "Prefs", "Layout", "Theme", "Motion", "Sprites", "Recipes", "Rich", "ViewStore" } do
+for _, n in { "Signal", "Prefs", "Layout", "Theme", "Motion", "Sprites", "Recipes", "Rich", "ViewStore", "Audio" } do
 	scriptModule(core, n, "client/Core/" .. n)
 end
 local panelF = folder(client, "Panel")

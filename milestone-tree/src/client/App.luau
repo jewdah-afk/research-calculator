@@ -21,6 +21,12 @@
 	is closed (and remembered for the phone start framing).
 
 	Every action is a node's own `a` from the ViewStore, fired as is; the only one built here is {"key", name}.
+
+	Sound (Core/Audio): silent until the realm first shows, then the ambience bed. App plays what it can see the
+	reason for: a panel opening / closing, a refused node tap, a READY prestige, a toast, OUT OF SYNC, map and rift
+	hovers, HUD presses, and the Multiverse rift's hum while the rift is on screen. A purchase is remembered when it
+	is sent and sounds when a later patch shows it went through (Audio.expectBuy / afterPatch); a layer that woke
+	sounds from the map (Audio.observeMap).
 ]]
 
 local GuiService = game:GetService("GuiService")
@@ -37,6 +43,7 @@ local Layout = require(Core:WaitForChild("Layout"))
 local Motion = require(Core:WaitForChild("Motion"))
 local Recipes = require(Core:WaitForChild("Recipes"))
 local Prefs = require(Core:WaitForChild("Prefs"))
+local Audio = require(Core:WaitForChild("Audio"))
 local ViewStore = require(Core:WaitForChild("ViewStore"))
 local InputFolder = script.Parent:WaitForChild("Input")
 local Input = require(InputFolder:WaitForChild("Input"))
@@ -105,6 +112,7 @@ end
 function App.start()
 	engineSettings()
 	Theme.detect()
+	Audio.start()
 	Input.start()
 	Layout.start()
 	backing()
@@ -166,6 +174,7 @@ function App.start()
 	local function fire(a: any, hold: boolean?)
 		local r = actRemote
 		if r == nil or type(a) ~= "table" or type(a[1]) ~= "string" then return end
+		Audio.expectBuy(a, store)
 		r:FireServer(a, hold == true)
 	end
 	local lastPress = 0
@@ -244,6 +253,7 @@ function App.start()
 	end
 	local function showPanel(key: string, node: any?, fly: boolean)
 		local was = panelKey
+		if was ~= key then Audio.play("panel_open", if was then { volume = 0.7 } else nil) end
 		panelKey = key
 		opening = true
 		overlay:peek(nil)
@@ -265,6 +275,7 @@ function App.start()
 	local function hidePanel(flyBack: boolean)
 		local key = panelKey
 		if key == nil then return end
+		Audio.play("panel_close")
 		local wasFull = geoMode == "full"
 		panelKey = nil
 		panel:close()
@@ -288,6 +299,7 @@ function App.start()
 		local st = nodes:state(layer)
 		if node == nil or not node.show or st == "dormant" or st == "sealed" or st == "frontier" then
 			if st == "dormant" then overlay:toasts(nil, { UNIVERSE_WORD[MapLogic.MULTIVERSE[layer] == true] }) end
+			Audio.play("error", { volume = 0.7 })
 			return
 		end
 		if panelKey == layer then
@@ -458,6 +470,7 @@ function App.start()
 		view:focusWorld(RIFT)
 		task.delay(0.3, function()
 			local ms = lastMs
+			Audio.play("panel_open", { volume = 0.8 })
 			overlay:modal("gate", if ms then ms.gate else nil)
 		end)
 	end
@@ -486,7 +499,11 @@ function App.start()
 		end
 		return content
 	end
+	local hoverLayer: string? = nil
+	local riftHover = false
 	nodes.hover:Connect(function(layer: string?, abs: Vector2)
+		if layer ~= hoverLayer and layer ~= nil and nodes:state(layer) ~= "sealed" then Audio.play("hover") end
+		hoverLayer = layer
 		if layer == nil then
 			overlay:tooltip("node", nil)
 			return
@@ -496,9 +513,12 @@ function App.start()
 	nodes.rift:Connect(function(event: string, abs: Vector2)
 		local ms = lastMs
 		local gate = ms and ms.gate
+		if event ~= "hover" then riftHover = false end
 		if event == "leave" then
 			overlay:tooltip("rift", nil)
 		elseif event == "hover" then
+			if not riftHover then Audio.play("hover") end
+			riftHover = true
 			if gate and gate.show then
 				overlay:tooltip("rift", { title = "Prestige Multiverse", body = gate.h or "The rift is open.",
 					foot = "Click to fly there", hue = CRIMSON }, abs)
@@ -544,11 +564,15 @@ function App.start()
 		-- a tap on the strip's empty map closes the side sheet (DESIGN.md 5.1)
 		if panelKey and geoMode == "side" then requestClose() end
 	end)
-	markers.activated:Connect(function(layer: string) view:focusWorld(nodes:worldPos(layer)) end)
+	markers.activated:Connect(function(layer: string)
+		Audio.play("press")
+		view:focusWorld(nodes:worldPos(layer))
+	end)
 	view.cameraChanged:Connect(function(cam: any) hud:setZoomPct(cam.z) end)
 	hud:setZoomPct(view:camera().z)
 
 	hud.home:Connect(function()
+		if panelKey == nil then Audio.play("press") end
 		overlay:peek(nil)
 		local wasOpen = panelKey ~= nil
 		requestClose(false)
@@ -561,8 +585,14 @@ function App.start()
 		if panelKey == "options-tab" then requestClose() else openOptions() end
 	end)
 	hud.portal:Connect(openGate)
-	hud.zoomIn:Connect(function() mi:zoomStep(1) end)
-	hud.zoomOut:Connect(function() mi:zoomStep(-1) end)
+	hud.zoomIn:Connect(function()
+		Audio.play("press", { volume = 0.7 })
+		mi:zoomStep(1)
+	end)
+	hud.zoomOut:Connect(function()
+		Audio.play("press", { volume = 0.7, pitch = 0.94 })
+		mi:zoomStep(-1)
+	end)
 	hud.bandClose:Connect(function() requestClose() end)
 	hud.bandSwitch:Connect(function(layer: string) openLayer(layer) end)
 	hud.readyTap:Connect(function(layer: string) openLayer(layer) end)
@@ -570,7 +600,10 @@ function App.start()
 		local ms = lastMs
 		local node = if ms then ms.nodes[layer] else nil
 		local v = node and node.val
-		if v and v.ra then fire(v.ra) end
+		if v and v.ra then
+			Audio.prestige(layer)
+			fire(v.ra)
+		end
 	end)
 	hud.readyMore:Connect(function()
 		local ms = lastMs
@@ -587,6 +620,7 @@ function App.start()
 	end)
 
 	overlay.act:Connect(function(a: any, hold: boolean?)
+		if hold ~= true then Audio.play("press") end
 		fire(a, hold)
 	end)
 	overlay.flyTo:Connect(flyToLayer)
@@ -637,6 +671,7 @@ function App.start()
 		if changes.map or changes.full then
 			lastMs = ms
 			nodes:update(ms)
+			Audio.observeMap(ms)
 			links:update(ms)
 			plates:update(ms)
 			markers:update(ms)
@@ -654,6 +689,7 @@ function App.start()
 			panel:update(store, changes)
 			overlay:detailRefresh()
 		end
+		Audio.afterPatch(store)
 		if first then
 			-- the realm is home: a layer the last session left open is closed (and remembered)
 			if ms.open and not store.ended then
@@ -677,6 +713,7 @@ function App.start()
 		end
 		-- toasts
 		local notices = patch.notice
+		if type(patch.pop) == "table" and #patch.pop > 0 then Audio.play("toast") end
 		if patch.pop or (notices and #notices > 0) then overlay:toasts(patch.pop, notices) end
 		onStatus(patch)
 	end
@@ -684,6 +721,7 @@ function App.start()
 		warn("[MilestoneTree] drawing the screen failed: " .. tostring(err))
 		if os.clock() - errorAt < 10 then
 			outOfSync = true
+			Audio.play("error")
 			setScreen("outOfSync")
 		else
 			resync()
@@ -736,6 +774,24 @@ function App.start()
 	local function loadingDone(): boolean
 		return gotFirst and (preloaded or os.clock() - firstAt > 3)
 	end
+	-- the Multiverse rift's hum: loudest with the rift large and central on the map, faint while it is sealed, none
+	-- while a full-screen panel hides the map
+	local function riftLevel(): number
+		local ms = lastMs
+		if ms == nil or not ms.ok or store.ended or geoMode == "full" then return 0 end
+		local cam = view:camera()
+		local q = cam.V / 2 + (RIFT - cam.C) * cam.z
+		local r = math.max(1, 420 * cam.z)
+		local dx = math.max(0, math.abs(q.X - cam.V.X / 2) - cam.V.X / 2)
+		local dy = math.max(0, math.abs(q.Y - cam.V.Y / 2) - cam.V.Y / 2)
+		local vis = math.clamp(1 - math.sqrt(dx * dx + dy * dy) / r, 0, 1)
+		local off = (q - cam.V / 2).Magnitude / math.max(cam.V.X, cam.V.Y, 1)
+		local centre = 1 - 0.5 * math.clamp(off / 0.6, 0, 1)
+		local size = math.clamp(r / math.max(1, 0.3 * cam.V.Y), 0.3, 1)
+		local gate = ms.gate
+		return vis * centre * size * (if gate and gate.show then 1 else 0.35)
+	end
+	local riftAt = 0
 	local function step(dt: number)
 		mi:step(dt)
 		view:step(dt)
@@ -744,7 +800,15 @@ function App.start()
 			introDone = true
 			if screenKind == "loading" then setScreen(nil) end
 			frameBoot()
+			Audio.setLive(true)
+			Audio.loop("ambience", 1)
 		end
+		riftAt -= dt
+		if riftAt <= 0 and introDone then
+			riftAt = 0.1
+			Audio.loop("portal_loop", riftLevel())
+		end
+		Audio.step(dt)
 		if gotFirst and not reconnecting and not fatal and os.clock() - lastPatchAt > RECONNECT_AFTER then
 			reconnecting = true
 			hud:setStatus("reconnecting")

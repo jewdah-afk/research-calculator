@@ -6,7 +6,8 @@
 	    Kit.live(ctx)                    the context of the running apply / refresh (claims keep the one they were made
 	                                     with; the mode or widths may have changed since)
 	    Kit.find(store, id, pred, d)     the first node id under id (depth <= d, tree order) whose node passes pred
-	    Kit.onPress(button, fn)          wires Activated once; fn is replaced on every call (read the node at press time)
+	    Kit.onPress(button, fn, quiet?)  wires Activated once; fn is replaced on every call (read the node at press time);
+	                                     plays the press sound unless quiet (a control that sounds its own feedback)
 	    Kit.repeatPress(button, get, act) press + hold-to-repeat (0.25 s, then 20 a second while the pointer stays within
 	                                     10 px and the list does not scroll), like Render's hold buttons
 	    Kit.button(parent, name, text, o) a pill button whose own Text carries the RichText (2-3 instances)
@@ -27,6 +28,7 @@ local Client = script.Parent.Parent
 local Core = Client:WaitForChild("Core")
 local Theme = require(Core:WaitForChild("Theme"))
 local Layout = require(Core:WaitForChild("Layout"))
+local Audio = require(Core:WaitForChild("Audio"))
 local PanelF = Client:WaitForChild("Panel")
 local Common = require(PanelF:WaitForChild("Skins"):WaitForChild("Common"))
 
@@ -105,12 +107,15 @@ end
 
 -- ------------------------------------------------------------------------------------------------------ presses
 local handlers: { [Instance]: () -> () } = setmetatable({}, { __mode = "k" }) :: any
-function Kit.onPress(b: GuiButton, fn: () -> ())
+local quietOnes: { [Instance]: boolean } = setmetatable({}, { __mode = "k" }) :: any
+function Kit.onPress(b: GuiButton, fn: () -> (), quiet: boolean?)
 	handlers[b] = fn
+	quietOnes[b] = quiet == true
 	if b:GetAttribute("KitWired") == true then return end
 	b:SetAttribute("KitWired", true)
 	b.Activated:Connect(function()
 		local f = handlers[b]
+		if f and not quietOnes[b] then Audio.play("press") end
 		if f then f() end
 	end)
 end
@@ -145,7 +150,10 @@ function Kit.repeatPress(b: GuiButton, get: () -> any?, act: (a: any, hold: bool
 		if touchIo and moved() then return end
 		local r = repeaters[b]
 		local a = if r then r.get() else nil
-		if r and type(a) == "table" then r.act(a, false) end
+		if r and type(a) == "table" then
+			Audio.play("press")
+			r.act(a, false)
+		end
 	end)
 	b.InputBegan:Connect(function(io: InputObject)
 		local t = io.UserInputType

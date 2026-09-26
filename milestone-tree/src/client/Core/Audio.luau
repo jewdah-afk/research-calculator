@@ -110,7 +110,7 @@ local awakePrev: { [string]: boolean }? = nil
 local insidePrev: boolean? = nil
 local rng: Random = nil :: any -- made at start (so requiring this module needs no engine globals)
 local clock: () -> number = os.clock
-local conns: { RBXScriptConnection } = {}
+local conns: { any } = {} -- Signal connections (Prefs.changed)
 
 -- ------------------------------------------------------------------------------------------------------ helpers
 local function isStudio(): boolean
@@ -163,7 +163,7 @@ local function loadIds(): any
 		local mod = shared:FindFirstChild("AudioIds")
 		if mod == nil then mod = shared:WaitForChild("AudioIds", 5) end
 		if mod == nil or not mod:IsA("ModuleScript") then return nil end
-		return require(mod :: ModuleScript)
+		return (require :: any)(mod)
 	end)
 	if ok and type(t) == "table" and type(t.sounds) == "table" and type(t.sheets) == "table" then return t end
 	return nil
@@ -201,10 +201,12 @@ local function probeSound(): boolean
 end
 
 -- ------------------------------------------------------------------------------------------------------ the graph
+local POOL_BUS: { [string]: string } = { ui = "UI", fx = "Impacts" } -- each pool's sheet name and bus
+
 local function node(class: string, name: string, props: { [string]: any }?): Instance
 	local inst = Instance.new(class :: any) :: any
 	inst.Name = name
-	for k, v in props or {} do inst[k] = v end
+	for k, v in (props or {}) :: { [string]: any } do inst[k] = v end
 	inst.Parent = root
 	return inst
 end
@@ -247,7 +249,7 @@ local function buildApi(budget: { [string]: number })
 	wire(duck, master)
 	wire(master, limiter)
 	wire(limiter, out)
-	for pool, bus in { ui = "UI", fx = "Impacts" } do
+	for pool, bus in POOL_BUS do
 		local id = idOf(pool)
 		local list: { Voice } = {}
 		if id then
@@ -284,7 +286,7 @@ local function buildSound(budget: { [string]: number })
 			c.Parent = buses[b]
 		end)
 	end
-	for pool, bus in { ui = "UI", fx = "Impacts" } do
+	for pool, bus in POOL_BUS do
 		local id = idOf(pool)
 		local list: { Voice } = {}
 		if id then
@@ -301,7 +303,7 @@ end
 
 local function setVolume(bus: string, v: number)
 	Audio.volumes[bus] = v
-	local b = buses[bus]
+	local b: Instance? = buses[bus]
 	if b == nil then return end
 	pcall(function() (b :: any).Volume = v end)
 end
