@@ -60,8 +60,18 @@ local function container(rec: any, n: any, ctx: any)
 		local gap = if compact then 10 else 12
 		local l = Common.list(root, true, gap, { align = Enum.HorizontalAlignment.Left, valign = Enum.VerticalAlignment.Top,
 			wraps = not rec.autoW })
+		-- a row of challenges: centred, and its cards stretched to one height (their buttons then line up)
+		local chalRow = false
+		for _, cid in ctx.store:kids(rec.id) do
+			local c = ctx.store:get(cid)
+			if type(c) == "table" and c.t == "chal" then
+				chalRow = true
+				break
+			end
+		end
+		if chalRow then l.HorizontalAlignment = Enum.HorizontalAlignment.Center end
 		pcall(function()
-			l.ItemLineAlignment = if inUpgrades then Enum.ItemLineAlignment.Stretch else Enum.ItemLineAlignment.Start
+			l.ItemLineAlignment = if inUpgrades or chalRow then Enum.ItemLineAlignment.Stretch else Enum.ItemLineAlignment.Start
 		end)
 		if rec.autoW then
 			root.Size = UDim2.new()

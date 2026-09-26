@@ -241,6 +241,11 @@
       const H = { Left: 'flex-start', Center: 'center', Right: 'flex-end' }[ENUM(list.p.HorizontalAlignment) || 'Left'];
       const V = { Top: 'flex-start', Center: 'center', Bottom: 'flex-end' }[ENUM(list.p.VerticalAlignment) || 'Top'];
       if (dir === 'row') { is.justifyContent = H; is.alignItems = V; } else { is.justifyContent = V; is.alignItems = H; }
+      // flex options: stretch items across the line, space items along it
+      if (ENUM(list.p.ItemLineAlignment) === 'Stretch') is.alignItems = 'stretch';
+      const FLEX = { SpaceBetween: 'space-between', SpaceAround: 'space-around', SpaceEvenly: 'space-evenly' };
+      const along = dir === 'row' ? ENUM(list.p.HorizontalFlex) : ENUM(list.p.VerticalFlex);
+      if (FLEX[along]) is.justifyContent = FLEX[along];
     }
     el.appendChild(inner);
     // text

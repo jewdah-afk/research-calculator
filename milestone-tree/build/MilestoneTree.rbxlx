@@ -51097,16 +51097,35 @@ function Challenge.skin(rec: any, n: any, ctx: any): boolean
 	local p = Common.surface(root, surface, ctx.hue, 16)
 	Common.glow(root, if st8 == "completable" then C.complete elseif surface == "can" then ctx.hue else nil, 0.45, 16)
 	Common.drop(root, "Gradient")
-	-- the row's cards share its width evenly (a fixed 330 left a ragged gap on the right)
+	-- every challenge card of a section has the same width: the widest row (in challenges) shares the content width
+	-- evenly, and shorter rows are centred (Generic), so no row ends with a ragged gap or one oversized card
 	local gap = if compact then 10 else 12
-	local per = math.max(1, math.floor((ctx.contentW + gap) / ((if compact then 200 else 300) + gap)))
+	local most = 1
+	local pid = Common.parentId(rec.id)
+	local comp = if pid then Common.parentId(pid) else nil
+	local function chals(id: string): number
+		local k = 0
+		for _, cid in ctx.store:kids(id) do
+			local c = ctx.store:get(cid)
+			if type(c) == "table" and c.t == "chal" then k += 1 end
+		end
+		return k
+	end
+	if pid then most = math.max(most, chals(pid)) end
+	if comp then
+		for _, rid in ctx.store:kids(comp) do most = math.max(most, chals(rid)) end
+	end
+	local fit = math.max(1, math.floor((ctx.contentW + gap) / ((if compact then 200 else 300) + gap)))
+	local per = math.min(most, fit)
 	local w = math.floor((ctx.contentW - gap * (per - 1)) / per)
 	root.Size = UDim2.fromOffset(w, 0)
 	root.AutomaticSize = Enum.AutomaticSize.Y
 	root.Visible = true
 	Common.drop(root, "Limit")
 	Common.pad(root, 14, 16, 14, 16)
-	Common.list(root, false, 10)
+	local cl = Common.list(root, false, 10)
+	-- the text on top, the button pinned to the bottom (a row stretches its cards to the tallest one)
+	pcall(function() cl.VerticalFlex = Enum.UIFlexAlignment.SpaceBetween end)
 	Common.text(label, "small", p.text)
 	label.LayoutOrder = 0
 	label.Size = UDim2.new(1, 0, 0, 0)
@@ -51812,8 +51831,18 @@ local function container(rec: any, n: any, ctx: any)
 		local gap = if compact then 10 else 12
 		local l = Common.list(root, true, gap, { align = Enum.HorizontalAlignment.Left, valign = Enum.VerticalAlignment.Top,
 			wraps = not rec.autoW })
+		-- a row of challenges: centred, and its cards stretched to one height (their buttons then line up)
+		local chalRow = false
+		for _, cid in ctx.store:kids(rec.id) do
+			local c = ctx.store:get(cid)
+			if type(c) == "table" and c.t == "chal" then
+				chalRow = true
+				break
+			end
+		end
+		if chalRow then l.HorizontalAlignment = Enum.HorizontalAlignment.Center end
 		pcall(function()
-			l.ItemLineAlignment = if inUpgrades then Enum.ItemLineAlignment.Stretch else Enum.ItemLineAlignment.Start
+			l.ItemLineAlignment = if inUpgrades or chalRow then Enum.ItemLineAlignment.Stretch else Enum.ItemLineAlignment.Start
 		end)
 		if rec.autoW then
 			root.Size = UDim2.new()
@@ -57295,8 +57324,6 @@ local Client = script.Parent.Parent
 local Core = Client:WaitForChild("Core")
 local Theme = require(Core:WaitForChild("Theme"))
 local Layout = require(Core:WaitForChild("Layout"))
-local Motion = require(Core:WaitForChild("Motion"))
-local Recipes = require(Core:WaitForChild("Recipes"))
 local PanelF = Client:WaitForChild("Panel")
 local Skins = PanelF:WaitForChild("Skins")
 local Common = require(Skins:WaitForChild("Common"))
@@ -57322,44 +57349,12 @@ local function rim(sheet: Frame, ctx: any)
 end
 
 local function skin(rec: any, n: any, ctx: any): boolean
-	if rec.kind == "chal" and tostring(n.id) == "21" then
-		local ok = Challenge.skin(rec, n, ctx)
-		local root = rec.root :: Frame
-		local compact = ctx.mode == "COMPACT"
-		root.Size = UDim2.fromOffset(Kit.live(ctx).contentW, 0)
-		if compact then
-			Common.drop(root, "Portal")
-			Common.drop(root, "Clear")
-			return ok
-		end
-		local pad = Common.get(root, "Clear", "UIPadding") :: UIPadding
-		pad.PaddingRight = UDim.new(0, 170)
-		local holder = Common.get(root, "Portal", "Frame") :: Frame
-		holder.Active = false
-		holder.BackgroundTransparency = 1
-		holder.AnchorPoint = Vector2.new(1, 0.5)
-		holder.Position = UDim2.new(1, 150, 0, 80)
-		holder.Size = UDim2.fromOffset(120, 120)
-		holder.ZIndex = 4
-		if holder:FindFirstChild("Ring") == nil then
-			local ring = Recipes.ring(holder, { size = 112, thick = 6, color = Theme.lift(ctx.hue, 0.25), track = 0.75 })
-			ring:set(0.72)
-			Motion.loop(holder, function(dt: number)
-				if not Motion.reduced() then holder.Rotation = (holder.Rotation + dt * 40) % 360 end
-			end)
-		end
-		local core = Common.blob(holder, "Core", Theme.hue("m"), 0.55)
-		if core then
-			core.AnchorPoint = Vector2.new(0.5, 0.5)
-			core.Position = UDim2.fromScale(0.5, 0.5)
-			core.Size = UDim2.fromOffset(96, 96)
-		end
-		return ok
-	end
 	if rec.kind == "chal" then
+		-- every challenge (21, "Enter The Prestige Multiverse", included) is the same template card: the full-width
+		-- portal banner broke the row rhythm (three small cards, then one big one)
 		Common.drop(rec.root, "Portal")
 		Common.drop(rec.root, "Clear")
-		return false
+		return Challenge.skin(rec, n, ctx)
 	end
 	return P.skin(rec, n, ctx)
 end

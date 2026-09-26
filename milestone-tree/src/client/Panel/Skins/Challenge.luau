@@ -43,16 +43,35 @@ function Challenge.skin(rec: any, n: any, ctx: any): boolean
 	local p = Common.surface(root, surface, ctx.hue, 16)
 	Common.glow(root, if st8 == "completable" then C.complete elseif surface == "can" then ctx.hue else nil, 0.45, 16)
 	Common.drop(root, "Gradient")
-	-- the row's cards share its width evenly (a fixed 330 left a ragged gap on the right)
+	-- every challenge card of a section has the same width: the widest row (in challenges) shares the content width
+	-- evenly, and shorter rows are centred (Generic), so no row ends with a ragged gap or one oversized card
 	local gap = if compact then 10 else 12
-	local per = math.max(1, math.floor((ctx.contentW + gap) / ((if compact then 200 else 300) + gap)))
+	local most = 1
+	local pid = Common.parentId(rec.id)
+	local comp = if pid then Common.parentId(pid) else nil
+	local function chals(id: string): number
+		local k = 0
+		for _, cid in ctx.store:kids(id) do
+			local c = ctx.store:get(cid)
+			if type(c) == "table" and c.t == "chal" then k += 1 end
+		end
+		return k
+	end
+	if pid then most = math.max(most, chals(pid)) end
+	if comp then
+		for _, rid in ctx.store:kids(comp) do most = math.max(most, chals(rid)) end
+	end
+	local fit = math.max(1, math.floor((ctx.contentW + gap) / ((if compact then 200 else 300) + gap)))
+	local per = math.min(most, fit)
 	local w = math.floor((ctx.contentW - gap * (per - 1)) / per)
 	root.Size = UDim2.fromOffset(w, 0)
 	root.AutomaticSize = Enum.AutomaticSize.Y
 	root.Visible = true
 	Common.drop(root, "Limit")
 	Common.pad(root, 14, 16, 14, 16)
-	Common.list(root, false, 10)
+	local cl = Common.list(root, false, 10)
+	-- the text on top, the button pinned to the bottom (a row stretches its cards to the tallest one)
+	pcall(function() cl.VerticalFlex = Enum.UIFlexAlignment.SpaceBetween end)
 	Common.text(label, "small", p.text)
 	label.LayoutOrder = 0
 	label.Size = UDim2.new(1, 0, 0, 0)
