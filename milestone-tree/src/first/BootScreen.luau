@@ -5,13 +5,17 @@
 
 	    BootScreen.show()                   build it (idempotent); Boot.client.luau calls it at once
 	    BootScreen.set("Loading your save…") the status line   BootScreen.set({ done = 3, total = 9 }) the progress
-	    BootScreen.hide()                   fill the line, fade out, destroy
+	    BootScreen.hide()                   fill the line, fade out, destroy; never before MIN_SHOW seconds on screen
 	    BootScreen.visible()   BootScreen.claim() (the overlay drives it)   BootScreen.claimed()
 
 	Look (Sleek, DESIGN.md Style 1): the void, a soft violet glow, four corner ticks, a diamond emblem that breathes
 	and turns, THE MILESTONE TREE in tracked heavy italic caps with NG+ in the Milestone violet, a 2 px progress line
 	with the % at its right, the status in caps above it, and a rotating tip under it. The progress never stalls: it
 	creeps towards 90% on its own and jumps to what the game reports.
+
+	The screen stays at least MIN_SHOW seconds, also when the game is ready sooner (a fast device, a warm cache): the
+	title and the tree get their moment. Once asked to hide it reads ENTERING THE TREE and the line fills to 100% by the
+	end of that time, then it fades.
 ]]
 
 local Players = game:GetService("Players")
@@ -26,6 +30,8 @@ local TEXT = Color3.fromHex("f3f6fb")
 local SOFT = Color3.fromHex("aab4c4")
 local MUTED = Color3.fromHex("6b7486")
 local HAIR = Color3.new(1, 1, 1)
+local MIN_SHOW = 4 -- seconds on screen at the least
+BootScreen.MIN_SHOW = MIN_SHOW
 
 local TIPS = {
 	"Tap a node on the tree to open its layer",
@@ -43,6 +49,7 @@ local target = 0
 local shown = 0
 local started = 0
 local hiding = false
+local hideAt, hideFrom, hold = 0, 0, 0 -- when hide() was asked, the line then, the time left to MIN_SHOW
 local claimed = false
 local conn: RBXScriptConnection? = nil
 
@@ -199,8 +206,13 @@ local function step()
 	local t = os.clock() - started
 	-- creep to 90% on its own (fast at first), never past what the game has not confirmed
 	local creep = 0.9 * (1 - math.exp(-t / 4))
-	local want = if hiding then 1 else math.max(target, creep)
-	shown += (want - shown) * math.min(1, 0.12)
+	if hiding then
+		-- the rest of the line fills evenly by the end of the hold (smoothstep), so a fast load still reads as a load
+		local k = math.clamp((os.clock() - hideAt) / hold, 0, 1)
+		shown = hideFrom + (1 - hideFrom) * k * k * (3 - 2 * k)
+	else
+		shown += (math.max(target, creep) - shown) * math.min(1, 0.12)
+	end
 	if parts.fill then parts.fill.Size = UDim2.fromScale(shown, 1) end
 	if parts.pct then parts.pct.Text = string.format("%d%%", math.floor(shown * 100 + 0.5)) end
 	-- the emblem: the outer square turns, the core breathes
@@ -266,7 +278,11 @@ function BootScreen.hide()
 	if g == nil or hiding then return end
 	hiding = true
 	target = 1
-	task.delay(0.25, function()
+	hideAt, hideFrom = os.clock(), shown
+	hold = math.max(0.25, MIN_SHOW - (hideAt - started))
+	status = "Entering the tree"
+	if parts.status then parts.status.Text = caps(status) end
+	task.delay(hold, function()
 		local info = TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 		for _, d in g:GetDescendants() do
 			if d:IsA("Frame") and d.BackgroundTransparency < 1 then

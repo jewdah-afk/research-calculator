@@ -118,6 +118,7 @@ end
 local errors0 = M.errors or 0
 print("== the client starts" .. (if NOCAPS then " (all caps off)" else ""))
 -- ReplicatedFirst's loading screen is up before the client's scripts
+local bootAt = M.now
 E.runMain("Boot")
 frames(0.1)
 local bootGui = p:FindFirstChild("PlayerGui") and p.PlayerGui:FindFirstChild("MilestoneBoot")
@@ -159,6 +160,21 @@ play("s13_p")
 frames(0.2)
 check(sent("tab", "none", n0), "the layer the last session left open is closed at boot")
 check(not screen.Visible, "the loading screen is gone after the first view")
+-- a fast load: the ReplicatedFirst screen still holds its minimum time, filling the line to 100% by its end
+frames(1)
+local boot = pg:FindFirstChild("MilestoneBoot")
+local function bootText(name: string): string
+	if boot == nil then return "" end
+	for _, d in boot:GetDescendants() do
+		if d.Name == name and d:IsA("TextLabel") then return (string.gsub(d.Text, "\u{200A}", "")) end
+	end
+	return ""
+end
+check(boot ~= nil and bootText("Status") == "ENTERING THE TREE", "a fast load keeps the loading screen up (ENTERING THE TREE, " .. bootText("Pct") .. ")")
+local pct1 = tonumber((string.match(bootText("Pct"), "%d+"))) or 0
+check(pct1 < 85, "the line is still filling, evenly (" .. pct1 .. "% at " .. string.format("%.1f", M.now - bootAt) .. " s)")
+frames(bootAt + 4.1 - M.now)
+check(bootText("Pct") == "100%", "the line reaches 100% at the minimum time (" .. bootText("Pct") .. ")")
 frames(1)
 check(pg:FindFirstChild("MilestoneBoot") == nil, "the ReplicatedFirst loading screen faded out and is gone")
 local sheet = pg.PanelGui.Root.Sheet
