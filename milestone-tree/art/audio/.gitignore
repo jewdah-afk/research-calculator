@@ -1,0 +1,4 @@
+# Lossless masters, the per-variant renders and the contact sheet are rebuilt by pack.py (seeded). Committed: the
+# scripts, sheets/ (the uploaded Ogg files and map.json) and uploaded.json.
+out/
+__pycache__/

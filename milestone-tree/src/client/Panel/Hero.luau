@@ -14,7 +14,9 @@
 
 	The CTA fires the prestige-button node's own action (read from the store at press time) and plays the prestige
 	juice: press squash, burst ring, a "+gain" floater into the amount, the amount bump. Reduced motion keeps a short
-	colour flash only.
+	colour flash only. The press asks the one "first prestige?" question (Prefs.claimFirstPrestige) and hands the
+	answer to the sound (Audio.prestige: big or small) and to juice(gain, unit, first), where the VFX pass keys its big
+	and residual versions. A locked CTA answers with the soft error; hovering a ready CTA plays the hover tick.
 ]]
 
 local UserInputService = game:GetService("UserInputService")
@@ -25,6 +27,8 @@ local Recipes = require(Core:WaitForChild("Recipes"))
 local Motion = require(Core:WaitForChild("Motion"))
 local Rich = require(Core:WaitForChild("Rich"))
 local Layout = require(Core:WaitForChild("Layout"))
+local Prefs = require(Core:WaitForChild("Prefs"))
+local Audio = require(Core:WaitForChild("Audio"))
 local Common = require(script.Parent:WaitForChild("Skins"):WaitForChild("Common"))
 local Signatures = require(script.Parent.Parent:WaitForChild("Signatures"):WaitForChild("Signatures"))
 
@@ -407,6 +411,9 @@ function Hero.drawCta(self: Hero, pb: any, ctx: any, compact: boolean)
 		cta.Activated:Connect(function()
 			self:press()
 		end)
+		cta.MouseEnter:Connect(function()
+			if cta:GetAttribute("State") == "can" then Audio.play("hover") end
+		end)
 	end
 end
 
@@ -419,14 +426,20 @@ function Hero.press(self: Hero)
 	if type(pb) ~= "table" or type(pb.a) ~= "table" then return end
 	self.act(pb.a, false)
 	if pb.cls == "can" then
+		local layer = if self.ctx then self.ctx.layer else nil
+		local first = type(layer) == "string" and Prefs.claimFirstPrestige(layer)
+		Audio.prestige(layer, first)
 		local ok, err = pcall(function()
-			self:juice(Common.str(pb.gain), Signatures.unit(pb.res))
+			self:juice(Common.str(pb.gain), Signatures.unit(pb.res), first)
 		end)
 		if not ok then warn("[MilestoneTree] prestige juice failed: " .. tostring(err)) end
+	else
+		Audio.play("error", { volume = 0.8 })
 	end
 end
 
-function Hero.juice(self: Hero, gain: string?, unit: string)
+-- first: this is the layer's first prestige (the big moment; the VFX pass plays its big version on it)
+function Hero.juice(self: Hero, gain: string?, unit: string, first: boolean?)
 	local f = self.frame
 	local cta = f:FindFirstChild("Cta") :: GuiObject?
 	if cta == nil then return end

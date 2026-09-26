@@ -8,7 +8,9 @@
 	    DISPLAY       "[ Displays ]" becomes the section title; the cyclers and toggles keep the Opt rows
 	    ABOUT         the about node (Skins/Generic)
 	    THIS DEVICE   "Not part of the save": Motion, Map detail, Map labels, Interface size as segmented controls,
-	                  client-only through Prefs (one press)
+	                  client-only through Prefs (one press); then Music, Sound effects and Ambience volumes (0 to 100
+	                  in steps of 10) as a stepper: - / a 10-cell level bar (a cell sets its level) / the value / +.
+	                  A sound-effects change plays a short tick at the new level
 	Every game option fires its node's own action; device options never reach the save.
 ]]
 
@@ -16,6 +18,7 @@ local Client = script.Parent.Parent
 local Core = Client:WaitForChild("Core")
 local Theme = require(Core:WaitForChild("Theme"))
 local Prefs = require(Core:WaitForChild("Prefs"))
+local Audio = require(Core:WaitForChild("Audio"))
 local PanelF = Client:WaitForChild("Panel")
 local Skins = PanelF:WaitForChild("Skins")
 local Common = require(Skins:WaitForChild("Common"))
@@ -40,6 +43,12 @@ local DEVICE: { { key: string, title: string, sub: string, values: { any }, labe
 		labels = { "Auto", "Always", "Off" } },
 	{ key = "size", title = "Interface size", sub = "Scales every panel and the HUD", values = { 90, 100, 115 },
 		labels = { "90%", "100%", "115%" } },
+}
+
+local VOLUMES: { { key: string, title: string, sub: string, preview: string? } } = {
+	{ key = "music", title = "Music", sub = "The soundtrack" },
+	{ key = "sfx", title = "Sound effects", sub = "Clicks, purchases, prestige", preview = "tab" },
+	{ key = "ambience", title = "Ambience", sub = "The realm's air and the rift" },
 }
 
 -- a section title with its tag chip (sentence case)
@@ -137,6 +146,72 @@ local function device(root: Instance, ctx: any)
 				device(root, ctx)
 			end)
 		end
+	end
+	-- the volumes
+	for i, vd in VOLUMES do
+		local row = Common.get(card, "Vol" .. i, "Frame") :: Frame
+		row.LayoutOrder = #DEVICE + i
+		row.Active = false
+		row.BackgroundTransparency = 1
+		row.Size = UDim2.new(1, 0, 0, 0)
+		row.AutomaticSize = Enum.AutomaticSize.Y
+		local t = Common.label(row, "Title", "small", C.soft)
+		t.Size = UDim2.new(1, if compact then -250 else -360, 0, 0)
+		Common.setText(t, Common.title(vd.title, "cardSmall", C.text) .. "\n" .. Common.esc(vd.sub))
+		local level = math.clamp(math.floor((tonumber(prefs[vd.key]) or 0) / 10 + 0.5), 0, 10)
+		local key, preview = vd.key, vd.preview
+		local function set(n: number)
+			Prefs.set(key, math.clamp(n, 0, 10) * 10)
+			if preview then Audio.play(preview) end
+			device(root, ctx)
+		end
+		-- the stepper, in the segmented control's footprint: - [10 cells] value +
+		local ctrl = Common.get(row, "Level", "Frame") :: Frame
+		ctrl.Active = false
+		ctrl.AnchorPoint = Vector2.new(1, 0)
+		ctrl.Position = UDim2.new(1, 0, 0, 0)
+		ctrl.Size = UDim2.fromOffset(if compact then 240 else 340, 38)
+		ctrl.BackgroundColor3 = C.deep
+		ctrl.BackgroundTransparency = 0
+		Common.corner(ctrl, 10)
+		Common.list(ctrl, true, 4, { valign = Enum.VerticalAlignment.Center, align = Enum.HorizontalAlignment.Center })
+		local bw, vw = if compact then 34 else 40, if compact then 40 else 48
+		local cell = if compact then 9 else 17
+		local minus = Kit.button(ctrl, "Minus", "−", { fill = C.panel2, ink = if level > 0 then C.text else C.muted, h = 32,
+			w = bw, order = 1, radius = 8 })
+		Common.state(minus, if level > 0 then "can" else "locked")
+		Kit.onPress(minus, function() set(level - 1) end, true)
+		local bar = Common.get(ctrl, "Bar", "Frame") :: Frame
+		bar.Active = false
+		bar.LayoutOrder = 2
+		bar.BackgroundTransparency = 1
+		bar.Size = UDim2.fromOffset(cell * 10 + 18, 32)
+		Common.list(bar, true, 2, { valign = Enum.VerticalAlignment.Center })
+		local lit = Theme.lift(ctx.hue, 0.25)
+		for j = 1, 10 do
+			local c = Common.get(bar, "C" .. j, "TextButton") :: TextButton
+			c.LayoutOrder = j
+			c.AutoButtonColor = false
+			c.Text = ""
+			c.Size = UDim2.fromOffset(cell, if j <= level then 22 else 16)
+			c.BackgroundColor3 = if j <= level then lit else C.panel3
+			c.BackgroundTransparency = 0
+			Common.corner(c, 3)
+			local n = j
+			Kit.onPress(c, function() set(n) end, true)
+		end
+		local value = Common.get(ctrl, "Value", "TextLabel") :: TextLabel
+		value.LayoutOrder = 3
+		value.BackgroundTransparency = 1
+		value.Size = UDim2.fromOffset(vw, 32)
+		Common.text(value, "number", if level > 0 then C.text else C.soft)
+		value.TextXAlignment = Enum.TextXAlignment.Center
+		value.TextYAlignment = Enum.TextYAlignment.Center
+		Common.setText(value, Common.esc(if level > 0 then tostring(level * 10) else "Off"))
+		local plus = Kit.button(ctrl, "Plus", "+", { fill = C.panel2, ink = if level < 10 then C.text else C.muted, h = 32,
+			w = bw, order = 4, radius = 8 })
+		Common.state(plus, if level < 10 then "can" else "locked")
+		Kit.onPress(plus, function() set(level + 1) end, true)
 	end
 end
 

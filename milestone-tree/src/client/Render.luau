@@ -17,7 +17,8 @@
 	    hooks.detail(rec)            a touch long-press on a button (the detail sheet); its Activated is then skipped
 	Buttons keep their wiring: the current node's `a` is read at press time, and hold buttons repeat 20 times a second
 	after 0.25 s, but only while the pointer stays within 10 px and the list does not scroll (DESIGN.md 3.4). A touch
-	that moved or scrolled never presses.
+	that moved or scrolled never presses. A press clicks (Core/Audio; a locked button answers with the soft error, hold
+	repeats are silent) and the pointer entering an actionable card plays the hover tick.
 ]]
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
@@ -25,6 +26,7 @@ local shared = ReplicatedStorage:WaitForChild("MilestoneTree")
 local Html = require(shared:WaitForChild("Html"))
 local ZoneMaps = require(shared:WaitForChild("ZoneMaps"))
 local Style = require(script.Parent:WaitForChild("Style"))
+local Audio = require(script.Parent:WaitForChild("Core"):WaitForChild("Audio"))
 
 export type Claim = {
 	update: (self: Claim, store: any) -> (),
@@ -286,7 +288,10 @@ function Render._wireButton(self: Renderer, rec: Rec, b: GuiButton)
 		local p = cur
 		if p and p.touch and movedOf(p) then return end
 		local a = rec.node.a
-		if a then self.hooks.press(a, false) end
+		if a then
+			Audio.pressFor(rec.node)
+			self.hooks.press(a, false)
+		end
 	end))
 	-- hold to repeat (buyables, and clickables / grid tiles that have onHold): after 0.25 s, 20 presses a second,
 	-- only while the pointer stays put and the list does not scroll
@@ -330,6 +335,7 @@ function Render._wireButton(self: Renderer, rec: Rec, b: GuiButton)
 		if rec.node.cls == "can" or rec.node.cls == "perk" or rec.node.cls == "pseudo" then
 			local scale = Style.child(b, "UIScale", "Hover") :: UIScale
 			scale.Scale = if rec.claim == nil and self.hooks.skin then 1.03 else 1.06
+			Audio.play("hover")
 		end
 		local tip = rec.node.tip
 		if type(tip) == "string" and tip ~= "" then self.hooks.tip(tip, b) end

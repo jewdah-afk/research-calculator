@@ -120,6 +120,15 @@ function Prefs.seen(layer: string): boolean
 	return table.find(current.seenPrestige, layer) ~= nil
 end
 
+-- THE "first prestige?" decision (sound now, the VFX pass later): true the first time this layer prestiges on this
+-- account, and it is remembered at once. Ask once per prestige and hand the answer to everything that plays it.
+function Prefs.claimFirstPrestige(layer: string): boolean
+	start()
+	if Prefs.seen(layer) or not string.match(layer, "^%l+$") or #layer > 4 then return false end
+	Prefs.markSeen(layer)
+	return true
+end
+
 -- remember that it has (the oldest entry goes once the list is full)
 function Prefs.markSeen(layer: string)
 	start()

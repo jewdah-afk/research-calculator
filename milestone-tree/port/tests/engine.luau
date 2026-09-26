@@ -265,8 +265,114 @@ function GS:GetGuiInset() return V2(0, 58), V2(0, 0) end
 local CP = game:GetService("ContentProvider")
 function CP:PreloadAsync(list, cb) for _, id in list do if cb then cb(id, nil) end end end
 local HS = game:GetService("HttpService")
-function HS:JSONDecode(s) error("no json in the mock") end
-function HS:JSONEncode(t) return "{}" end
+-- a small real JSON (objects, arrays, strings, numbers, booleans, null), like the engine's: the device prefs round
+-- trip (client -> Prefs remote -> the MT_Prefs attribute -> client) runs for real
+local function jsonEncode(v)
+	local t = type(v)
+	if v == nil then return "null" end
+	if t == "boolean" then return tostring(v) end
+	if t == "number" then
+		assert(v == v and v ~= math.huge and v ~= -math.huge, "JSONEncode: a number that is not finite")
+		return if v == math.floor(v) and math.abs(v) < 2 ^ 53 then string.format("%d", v) else string.format("%.17g", v)
+	end
+	if t == "string" then
+		return '"' .. string.gsub(v, '[%c"\\]', function(c)
+			local map = { ['"'] = '\\"', ["\\"] = "\\\\", ["\n"] = "\\n", ["\r"] = "\\r", ["\t"] = "\\t" }
+			return map[c] or string.format("\\u%04x", string.byte(c))
+		end) .. '"'
+	end
+	assert(t == "table", "JSONEncode: cannot encode a " .. t)
+	if #v > 0 or next(v) == nil then
+		local parts = {}
+		for i = 1, #v do parts[i] = jsonEncode(v[i]) end
+		return "[" .. table.concat(parts, ",") .. "]"
+	end
+	local keys = {}
+	for k in v do table.insert(keys, tostring(k)) end
+	table.sort(keys)
+	local parts = {}
+	for _, k in keys do table.insert(parts, jsonEncode(k) .. ":" .. jsonEncode(v[k])) end
+	return "{" .. table.concat(parts, ",") .. "}"
+end
+local function jsonDecode(s)
+	local i = 1
+	local function ws() i = string.find(s, "[^ \t\r\n]", i) or #s + 1 end
+	local value
+	local function str()
+		local out, j = {}, i + 1
+		while true do
+			local c = string.sub(s, j, j)
+			assert(c ~= "", "JSONDecode: unterminated string")
+			if c == '"' then break end
+			if c == "\\" then
+				local e = string.sub(s, j + 1, j + 1)
+				if e == "u" then
+					table.insert(out, utf8.char(tonumber(string.sub(s, j + 2, j + 5), 16)))
+					j += 6
+				else
+					table.insert(out, ({ n = "\n", r = "\r", t = "\t", b = "\b", f = "\f" })[e] or e)
+					j += 2
+				end
+			else
+				table.insert(out, c)
+				j += 1
+			end
+		end
+		i = j + 1
+		return table.concat(out)
+	end
+	function value()
+		ws()
+		local c = string.sub(s, i, i)
+		if c == "{" then
+			local o = {}
+			i += 1
+			ws()
+			if string.sub(s, i, i) == "}" then i += 1; return o end
+			while true do
+				ws()
+				local k = str()
+				ws()
+				assert(string.sub(s, i, i) == ":", "JSONDecode: expected ':'")
+				i += 1
+				o[k] = value()
+				ws()
+				local d = string.sub(s, i, i)
+				i += 1
+				if d == "}" then return o end
+				assert(d == ",", "JSONDecode: expected ',' or '}'")
+			end
+		elseif c == "[" then
+			local a = {}
+			i += 1
+			ws()
+			if string.sub(s, i, i) == "]" then i += 1; return a end
+			while true do
+				table.insert(a, value())
+				ws()
+				local d = string.sub(s, i, i)
+				i += 1
+				if d == "]" then return a end
+				assert(d == ",", "JSONDecode: expected ',' or ']'")
+			end
+		elseif c == '"' then
+			return str()
+		elseif string.sub(s, i, i + 3) == "true" then i += 4; return true
+		elseif string.sub(s, i, i + 4) == "false" then i += 5; return false
+		elseif string.sub(s, i, i + 3) == "null" then i += 4; return nil
+		end
+		local num = string.match(s, "^-?%d+%.?%d*[eE]?[-+]?%d*", i)
+		assert(num and num ~= "", "JSONDecode: unexpected '" .. c .. "' at " .. i)
+		i += #num
+		return tonumber(num)
+	end
+	local v = value()
+	ws()
+	assert(i > #s, "JSONDecode: trailing characters")
+	return v
+end
+function HS:JSONDecode(s) return jsonDecode(s) end
+function HS:JSONEncode(t) return jsonEncode(t) end
 local RunService = game:GetService("RunService")
 RunService.__props.PreRender = M.Signal.new()
 RunService.__props.RenderStepped = M.Signal.new()
@@ -317,6 +423,48 @@ M.G.warn = function(...)
 end
 M.G.print = function(...) end
 
+-- ------------------------------------------------------------------------------------------------------ audio
+-- the wired Audio API (AudioPlayer, faders, Wire) and the legacy Sound: Play / Stop are methods only while
+-- E.audio.api / E.audio.sound is on (off, Instance.new still works but the probes fail, like an engine without the
+-- API). Every Play is logged in E.audio.plays { class, name, region, speed, volume, t }.
+E.audio = { api = true, sound = true, plays = {}, stops = 0 }
+local NRmt = { __index = function(_, k) error("NumberRange has no " .. tostring(k), 2) end }
+M.G.NumberRange = { new = function(a, b)
+	assert(type(a) == "number" and a == a, "NumberRange min")
+	b = if b == nil then a else b
+	assert(type(b) == "number" and b >= a, "NumberRange max < min")
+	return typed("NumberRange", { Min = a, Max = b }, NRmt)
+end }
+local function audioPlay(self)
+	local p = rawget(self, "__props")
+	p.IsPlaying, p.Playing = true, true
+	table.insert(E.audio.plays, { class = self.__class, name = p.Name, region = p.PlaybackRegion, loop = p.LoopRegion,
+		speed = p.PlaybackSpeed, volume = p.Volume, t = M.now })
+end
+local function audioStop(self)
+	local p = rawget(self, "__props")
+	p.IsPlaying, p.Playing = false, false
+	E.audio.stops += 1
+end
+local AUDIO_METHOD = { Play = audioPlay, Stop = audioStop, Pause = audioStop, Resume = audioPlay }
+local AUDIO_CLASS = { AudioPlayer = "api", Sound = "sound" }
+local indexBeforeAudio = Inst.__index
+Inst.__index = function(o, k)
+	local kind = AUDIO_CLASS[rawget(o, "__class")]
+	if kind and AUDIO_METHOD[k] and E.audio[kind] then return AUDIO_METHOD[k] end
+	if kind and (k == "IsPlaying" or k == "Playing") then
+		local v = rawget(o, "__props")[k]
+		return v == true
+	end
+	if k == "Connected" and rawget(o, "__class") == "Wire" then
+		local p = rawget(o, "__props")
+		return p.SourceInstance ~= nil and p.TargetInstance ~= nil
+	end
+	return indexBeforeAudio(o, k)
+end
+local SoundService = game:GetService("SoundService")
+function SoundService:GetMixerTime() return M.now end
+
 
 E.Vector2 = Vector2
 E.rtypeof = rtypeof
@@ -342,7 +490,7 @@ function E.buildClient()
 	for _, pair in { { "Html", "shared/Html" } } do
 		if shared:FindFirstChild(pair[1]) == nil then scriptModule(shared, pair[1], pair[2]) end
 	end
-	for _, n in { "Realm", "Assets", "ZoneMaps", "PrefsSchema", "Flags" } do
+	for _, n in { "Realm", "Assets", "ZoneMaps", "PrefsSchema", "Flags", "AudioIds" } do
 		if shared:FindFirstChild(n) == nil then
 			M.module(shared, n, function() return require("../../src/shared/" .. n) end)
 		end
