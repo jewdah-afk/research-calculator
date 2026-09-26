@@ -12,6 +12,19 @@ Status going in:
 - W1 (the ornate UI) is in progress. `art/ui/` holds the kit, pieces, sfx and sample renderers, uncommitted.
 - Radial and conical gradients are switched off by `src/shared/Flags.luau`.
 
+Update 2026-09-26 (supersedes the ornate direction of W1):
+- **The UI style is Style 1, "Sleek sci-fi"** (`art/ui/clean/styles.js`, `STYLES[1]`): translucent near-black slabs,
+  1 du white hairlines, corner ticks, registration marks, index numbers, tracked caps, data as decoration (sparkline,
+  segment meters), and one accent per layer (its hue). The ornate kit stays in `art/ui/` as pipeline reference only.
+- **Integrated in the client:** `Core/Sleek.luau` holds the vocabulary; the base tokens in `Core/Theme.luau` are the
+  style's cool greys. Restyled: the points capsule (with a one-minute sparkline), dock, zoom, READY tray and pill,
+  toasts, portal caption, node nameplates, the phone band, the panel shell (ticks, accent, diamond emblem, layer
+  readout, tabs on their own row), hero and CTA, stat chips, section headers, card surfaces and chips, upgrade and
+  buyable cards, and the overlay cards (square). Per-layer signature art (the trophy shelf, M's ladder, the Multiverse
+  rim) keeps its own look until the W1 "remaining layers" pass.
+- **Pictures without Studio:** `port/tools/snap` runs the real client on the mock engine and draws its PlayerGui in
+  Chromium over the realm tiles (`./test.sh snap home,panel_p`). Use it for every UI change before a push.
+
 ---
 
 ## 1. Vision

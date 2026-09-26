@@ -47,9 +47,14 @@ function Common.drop(parent: Instance, name: string)
 	if c then c:Destroy() end
 end
 
+-- Sleek: panels are square. Scale radii (circles, pills: r < 1) stay; pixel radii become sharp corners
 function Common.corner(f: GuiObject, r: number, name: string?)
+	if r >= 1 or r <= 0 then
+		Common.drop(f, name or "Corner")
+		return
+	end
 	local c = Common.get(f, name or "Corner", "UICorner") :: UICorner
-	c.CornerRadius = if r < 1 and r > 0 then UDim.new(r, 0) else UDim.new(0, r)
+	c.CornerRadius = UDim.new(r, 0)
 end
 function Common.stroke(f: GuiObject, thickness: number, color: Color3, transparency: number?, name: string?): UIStroke
 	local s = Common.get(f, name or "Border", "UIStroke") :: UIStroke
@@ -238,29 +243,37 @@ export type Palette = { top: Color3, bottom: Color3, rim: Color3, rimT: number, 
 -- the card surface of each state (DESIGN.md 5.7, 11.2): the layer hue paints only the actionable state
 function Common.palette(state: string, hue: Color3): Palette
 	local C = Theme.C
+	-- Sleek (art/ui/clean STYLES[1]): translucent near-black slabs with a 1 du hairline; the hue tints only the
+	-- actionable card, owned is a faint green, locked and not-yet stay neutral
+	local top, bottom = Color3.fromHex("0c1119"), Color3.fromHex("080b12")
 	if state == "can" then
-		return { top = Theme.mix(C.panel, hue, 0.38), bottom = Theme.mix(C.deep, hue, 0.15), rim = Theme.lift(hue, 0.35), rimT = 0,
-			title = C.text, text = C.text, textT = 0.08, soft = C.text, value = C.text }
+		return { top = Theme.mix(top, hue, 0.2), bottom = Theme.mix(bottom, hue, 0.05), rim = hue, rimT = 0.5,
+			title = C.text, text = C.text, textT = 0.1, soft = C.soft, value = C.text }
 	elseif state == "owned" then
-		return { top = Theme.mix(C.panel, C.bought, 0.16), bottom = Theme.mix(C.deep, C.bought, 0.08), rim = C.bought, rimT = 0.55,
-			title = C.ownedTitle, text = C.text, textT = 0.18, soft = C.soft, value = C.ownedValue }
+		return { top = Theme.mix(top, C.bought, 0.085), bottom = Theme.mix(bottom, C.bought, 0.025), rim = C.bought, rimT = 0.72,
+			title = C.ownedTitle, text = C.text, textT = 0.22, soft = C.soft, value = C.ownedValue }
 	elseif state == "gold" then
-		return { top = Theme.mix(C.panel, C.complete, 0.34), bottom = Theme.mix(C.deep, C.complete, 0.14), rim = C.complete, rimT = 0,
-			title = C.text, text = C.text, textT = 0.08, soft = C.text, value = C.text }
+		return { top = Theme.mix(top, C.complete, 0.2), bottom = Theme.mix(bottom, C.complete, 0.05), rim = C.complete, rimT = 0.35,
+			title = C.text, text = C.text, textT = 0.1, soft = C.soft, value = C.text }
 	elseif state == "locked" then
-		return { top = Theme.mix(C.panel, C.locked, 0.12), bottom = Theme.mix(C.deep, C.locked, 0.06), rim = C.locked, rimT = 0.55,
-			title = C.lockedTitle, text = C.text, textT = 0.18, soft = C.soft, value = C.notYet }
+		return { top = Color3.fromHex("07090e"), bottom = Color3.fromHex("05070b"), rim = C.white, rimT = 0.92,
+			title = C.lockedTitle, text = C.text, textT = 0.3, soft = C.soft, value = C.notYet }
 	end
-	-- notyet: unlocked, not affordable (mauve)
-	return { top = Theme.mix(C.panel, C.locked, 0.24), bottom = Theme.mix(C.deep, C.locked, 0.12), rim = C.locked, rimT = 0.3,
-		title = C.text, text = C.text, textT = 0.1, soft = C.soft, value = C.notYet }
+	-- notyet: unlocked, not affordable (a trace of mauve)
+	return { top = Theme.mix(top, C.locked, 0.1), bottom = Theme.mix(bottom, C.locked, 0.03), rim = C.locked, rimT = 0.55,
+		title = C.text, text = C.text, textT = 0.14, soft = C.soft, value = C.notYet }
 end
--- fill + rim + corner of a card in a state
+-- fill + hairline of a card in a state (square corners; the radius argument is kept for signatures that ask for one)
 function Common.surface(f: GuiObject, state: string, hue: Color3, radius: number?): Palette
 	local p = Common.palette(state, hue)
 	Common.fill(f, p.top, p.bottom)
-	Common.corner(f, radius or 14)
-	Common.stroke(f, if state == "can" or state == "gold" then 2 else 1.5, p.rim, p.rimT)
+	if radius and radius > 0 and radius <= 6 then
+		Common.corner(f, radius)
+	else
+		Common.drop(f, "Corner")
+	end
+	local st = Common.stroke(f, 1, p.rim, p.rimT)
+	st.LineJoinMode = Enum.LineJoinMode.Miter
 	Common.drop(f, "Gradient") -- Style.apply's game gradient, if an old look was ever applied
 	return p
 end
@@ -286,10 +299,10 @@ function Common.chip(parent: Instance, name: string, text: string, o: ChipOpts?)
 	l.Active = false
 	-- side padding as spaces (a UIPadding per chip costs an instance on every card)
 	Common.setText(l, "  " .. (if opts.rich then text else Common.esc(text)) .. "  ")
-	Common.corner(l, 8)
+	Common.drop(l, "Corner")
 	Common.drop(l, "Pad")
 	if opts.stroke then
-		Common.stroke(l, 1, opts.stroke, 0.35)
+		Common.stroke(l, 1, opts.stroke, 0.35).LineJoinMode = Enum.LineJoinMode.Miter
 	else
 		Common.drop(l, "Border")
 	end
@@ -302,10 +315,10 @@ function Common.bar(parent: Instance, name: string, p: number, color: Color3, h:
 	f.BackgroundColor3 = WHITE
 	f.BackgroundTransparency = 0
 	f.Active = false
-	Common.corner(f, 0.5)
+	Common.drop(f, "Corner")
 	local g = Common.get(f, "Fill", "UIGradient") :: UIGradient
 	local q = math.clamp(p, 0, 1)
-	local track = Color3.fromRGB(52, 46, 72)
+	local track = Color3.fromRGB(38, 44, 56)
 	if q <= 0.001 then
 		g.Color = ColorSequence.new(track)
 	elseif q >= 0.999 then

@@ -71,7 +71,7 @@ function Modals.new(root: GuiObject): Modals
 	card.BackgroundTransparency = 0
 	card.Active = true
 	card.Visible = false
-	Kit.corner(card, UDim.new(0, 18))
+	Kit.corner(card, UDim.new(0, 0)) -- Sleek: square
 	Kit.grad(card, { Theme.C.panel2, Theme.C.panel }, 90, nil, "Back")
 	local rim = Kit.stroke(card, 2, Theme.C.strokeHi, 1, "Rim")
 	Kit.list(card, "y", 14, Enum.HorizontalAlignment.Left)
@@ -240,7 +240,7 @@ function Modals.new(root: GuiObject): Modals
 		box.Size = UDim2.fromScale(1, 0)
 		box.BackgroundColor3 = Theme.C.deep
 		box.BackgroundTransparency = 0
-		Kit.corner(box, UDim.new(0, 12))
+		Kit.corner(box, UDim.new(0, 0)) -- Sleek: square
 		Kit.stroke(box, 1.5, Theme.C.stroke, 1, "Rim")
 		Kit.pad(box, 12, 14, 12, 14)
 		Kit.list(box, "y", 6)

@@ -43,7 +43,7 @@ function CompactOwned.skin(rec: any, n: any, ctx: any): boolean
 	label.Visible = true
 	local idx = Common.str(n.n) or Common.str(n.id) or ""
 	local title = Common.plain(Common.str(n.ti) or "")
-	local text = Common.run(Common.esc(idx), "badge", C.soft, 0.2) .. "  " .. Common.title(title, "cardSmall", C.ownedTitle)
+	local text = Common.run(Common.esc(idx), "badge", Color3.fromHex("7fe6a0"), 0.2) .. "  " .. Common.title(title, "cardSmall", C.ownedTitle)
 	if compact then
 		-- phones list each owned upgrade with its effect as body text (DESIGN.md 5.7 COMPACT)
 		local ds = Common.html(n.ds, "body", ctx.layer)

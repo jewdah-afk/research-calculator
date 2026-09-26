@@ -200,7 +200,7 @@ scriptModule(client, "Types", "client/Types")
 scriptModule(client, "Style", "client/Style")
 scriptModule(client, "Render", "client/Render")
 local core = folder(client, "Core")
-for _, n in { "Signal", "Prefs", "Layout", "Theme", "Motion", "Sprites", "Recipes", "Rich", "ViewStore", "Audio" } do
+for _, n in { "Signal", "Prefs", "Layout", "Theme", "Motion", "Sprites", "Recipes", "Rich", "Sleek", "ViewStore", "Audio" } do
 	scriptModule(core, n, "client/Core/" .. n)
 end
 local panelF = folder(client, "Panel")
@@ -682,7 +682,8 @@ do
 	for _, d in descendants(panel.root) do
 		if d.Name == "SectionTitle" or d.Name == "Head" then
 			local t = d:FindFirstChild("Title")
-			if t then titles[t.Text] = true end
+			-- titles are tracked caps (hair spaces between letters, Rich.caps)
+			if t then titles[(string.gsub(t.Text, "\u{200A}", ""))] = true end
 		end
 	end
 	check(titles["YOUR SAVE"] and titles["DISPLAY"] and titles["THIS DEVICE"] and not titles["DANGER ZONE"], "options: YOUR SAVE, DISPLAY, THIS DEVICE (no danger zone)")

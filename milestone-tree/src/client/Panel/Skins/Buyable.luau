@@ -88,7 +88,7 @@ function Buyable.skin(rec: any, n: any, ctx: any): boolean
 	Common.drop(b, "Num")
 	Common.drop(b, "Gradient")
 	local p = Common.surface(b, state, ctx.hue, 16)
-	Common.glow(b, if state == "can" then ctx.hue else nil, 0.5, 16)
+	Common.glow(b, if state == "can" then ctx.hue else nil, 0.2, 14)
 	local w: number
 	if compact then
 		w = ctx.contentW
@@ -177,7 +177,7 @@ function Buyable.skin(rec: any, n: any, ctx: any): boolean
 	strip.TextWrapped = false
 	strip.BackgroundTransparency = 0
 	strip.BackgroundColor3 = Color3.new(1, 1, 1)
-	Common.corner(strip, 8)
+	Common.drop(strip, "Corner")
 	local g = Common.get(strip, "Fill", "UIGradient") :: UIGradient
 	g.Rotation = 0
 	local pr = Common.pr(n.pr)
@@ -186,12 +186,13 @@ function Buyable.skin(rec: any, n: any, ctx: any): boolean
 		strip.TextColor3 = C.ownedValue
 		Common.setText(strip, "MAX")
 	elseif state == "can" then
-		g.Color = ColorSequence.new(Theme.shade(ctx.hue, 0.55))
-		strip.TextColor3 = C.text
+		-- Sleek: the actionable strip is the light hue surface with ink type, like the BUY bars
+		g.Color = ColorSequence.new({ ColorSequenceKeypoint.new(0, Theme.lift(ctx.hue, 0.25)), ColorSequenceKeypoint.new(1, ctx.hue) })
+		strip.TextColor3 = C.ink
 		Common.setText(strip, Rich.caps("Hold to buy"))
 	else
-		local lit = Theme.mix(C.deep, ctx.hue, 0.45)
-		local track = Theme.mix(C.deep, C.locked, 0.25)
+		local lit = Theme.mix(C.deep, ctx.hue, 0.32)
+		local track = Theme.mix(C.deep, C.white, 0.05)
 		local q = pr or 0
 		if q <= 0.001 then
 			g.Color = ColorSequence.new(track)

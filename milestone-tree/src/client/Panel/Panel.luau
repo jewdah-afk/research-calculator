@@ -27,6 +27,7 @@ local Theme = require(Core:WaitForChild("Theme"))
 local Recipes = require(Core:WaitForChild("Recipes"))
 local Motion = require(Core:WaitForChild("Motion"))
 local Rich = require(Core:WaitForChild("Rich"))
+local Sleek = require(Core:WaitForChild("Sleek"))
 local Layout = require(Core:WaitForChild("Layout"))
 local Signal = require(Core:WaitForChild("Signal"))
 local Audio = require(Core:WaitForChild("Audio"))
@@ -225,6 +226,9 @@ function Panel.build(self: Panel)
 	local tabs = frame(sheet, "Tabs")
 	tabs.ZIndex = 6
 	p.tabs = tabs
+	local readout = frame(sheet, "Readout")
+	readout.ZIndex = 6
+	p.readout = readout
 	local close = Common.get(sheet, "Close", "TextButton") :: TextButton
 	close.ZIndex = 20
 	close.AutoButtonColor = false
@@ -235,10 +239,10 @@ function Panel.build(self: Panel)
 	end)
 	close.MouseEnter:Connect(function()
 		Audio.play("hover")
-		Motion.tween(close, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Rotation = 90 }, "panel:close")
+		Motion.tween(close, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundTransparency = 0.88 }, "panel:close")
 	end)
 	close.MouseLeave:Connect(function()
-		Motion.tween(close, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Rotation = 0 }, "panel:close")
+		Motion.tween(close, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundTransparency = 0.97 }, "panel:close")
 	end)
 	local hero = frame(sheet, "Hero")
 	hero.ZIndex = 5
@@ -385,7 +389,9 @@ function Panel.tabsClaim(self: Panel, ph: Frame, id: string): any
 		for _, c in tabs:GetChildren() do
 			if c:IsA("GuiButton") then c:Destroy() end
 		end
+		local was = tabs:GetAttribute("Count")
 		tabs:SetAttribute("Count", 0)
+		if type(was) == "number" and was >= 2 then self:layout() end
 	end
 	return claim
 end
@@ -405,49 +411,74 @@ function Panel.drawTabs(self: Panel, store: any, id: string)
 		b.AutoButtonColor = false
 		b.Text = ""
 		b.ZIndex = 7
-		b.Size = UDim2.fromOffset(0, if compact then 36 else 40)
+		b.Size = UDim2.fromOffset(0, if compact then 36 else 46)
 		b.AutomaticSize = Enum.AutomaticSize.X
 		local active = n.cls == "cur"
+		-- Sleek tabs: an index number, the caps word, a count; the active one gets a hue floor and a 2 du hue line
+		Common.drop(b, "Corner")
+		Common.drop(b, "Border")
+		Common.glow(b, nil)
 		if active then
-			Common.fill(b, Theme.lift(hue, 0.1), Theme.shade(hue, 0.6))
-			Common.stroke(b, 1.5, Theme.lift(hue, 0.45), 0)
-			Common.glow(b, hue, 0.45, 12)
+			b.BackgroundColor3 = hue
+			b.BackgroundTransparency = 0
+			local g = Common.get(b, "Fill", "UIGradient") :: UIGradient
+			g.Rotation = 90
+			g.Color = ColorSequence.new(WHITE)
+			g.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(1, 0.84) })
+			local line = Common.get(b, "Line", "Frame") :: Frame
+			line.AnchorPoint = Vector2.new(0, 1)
+			line.Position = UDim2.fromScale(0, 1)
+			line.Size = UDim2.new(1, 0, 0, 2)
+			line.BackgroundColor3 = hue
+			line.BackgroundTransparency = 0
+			line.ZIndex = 9
 		else
 			Common.drop(b, "Fill")
-			b.BackgroundColor3 = C.panel2
-			b.BackgroundTransparency = 0
-			Common.stroke(b, 1, C.stroke, 0)
-			Common.glow(b, nil)
+			Common.drop(b, "Line")
+			b.BackgroundTransparency = 1
 		end
-		Common.corner(b, 12)
-		Common.pad(b, 0, 16, 0, 16)
-		local l = Common.get(b, "Label", "TextLabel") :: TextLabel
+		-- the index, word and mark sit in a Row (the button also holds the floor line, which a list would lay out)
+		Common.drop(b, "Pad")
+		Common.drop(b, "List")
+		local rowF = Common.get(b, "Row", "Frame") :: Frame
+		rowF.AutomaticSize = Enum.AutomaticSize.X
+		rowF.Size = UDim2.fromScale(0, 1)
+		rowF.ZIndex = 8
+		Common.pad(rowF, 0, if compact then 12 else 22, 0, if compact then 12 else 22)
+		Common.list(rowF, true, 9, { valign = Enum.VerticalAlignment.Center })
+		local idx = Sleek.micro(rowF, "Index", string.format("%02d", count), if active then hue else Sleek.C.micro)
+		idx.LayoutOrder = 1
+		idx.ZIndex = 8
+		idx.Visible = not compact
+		Common.drop(b, "Index")
+		Common.drop(b, "Label")
+		Common.drop(b, "Dot")
+		local l = Common.get(rowF, "Label", "TextLabel") :: TextLabel
 		l.ZIndex = 8
+		l.LayoutOrder = 2
 		Common.text(l, "tab", if active then C.text else C.soft)
+		l.TextSize = if compact then 14 else 15
 		l.FontFace = Font.fromName("Montserrat", Enum.FontWeight.ExtraBold, if active then Enum.FontStyle.Italic else Enum.FontStyle.Normal)
 		l.Size = UDim2.new(0, 0, 1, 0)
 		l.AutomaticSize = Enum.AutomaticSize.X
 		l.TextXAlignment = Enum.TextXAlignment.Center
 		l.TextYAlignment = Enum.TextYAlignment.Center
 		l.TextWrapped = false
-		if active then
-			Common.stroke(l, 2, C.black, 0, "Stroke").ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
-		else
-			Common.drop(l, "Stroke")
-		end
-		Common.setText(l, Common.esc(string.upper(Common.plain(n.h))))
-		-- a notify dot (10 du, danger)
+		Common.drop(l, "Stroke")
+		Common.setText(l, Common.esc(Rich.caps(Common.plain(n.h))))
+		-- a notify mark: a small gold diamond after the word
 		if n.glow or n.pulse then
-			local dot = Common.get(b, "Dot", "Frame") :: Frame
-			dot.AnchorPoint = Vector2.new(0.5, 0.5)
-			dot.Position = UDim2.new(1, 16, 0, 0)
-			dot.Size = UDim2.fromOffset(10, 10)
-			dot.BackgroundColor3 = C.danger
+			local dot = Common.get(rowF, "Dot", "Frame") :: Frame
+			dot.Position = UDim2.new()
+			dot.Size = UDim2.fromOffset(7, 7)
+			dot.Rotation = 45
+			dot.LayoutOrder = 3
+			dot.BackgroundColor3 = Sleek.C.gold
 			dot.BackgroundTransparency = 0
 			dot.ZIndex = 9
-			Common.corner(dot, 0.5)
+			Common.drop(dot, "Corner")
 		else
-			Common.drop(b, "Dot")
+			Common.drop(rowF, "Dot")
 		end
 		b:SetAttribute("TabId", tid)
 		b:SetAttribute("State", if active then "owned" else "can")
@@ -470,9 +501,11 @@ function Panel.drawTabs(self: Panel, store: any, id: string)
 			if i == nil or i > #kids then c:Destroy() end
 		end
 	end
+	local was = tabs:GetAttribute("Count")
 	tabs:SetAttribute("Count", count)
-	-- a single-tab bar (Main only) is hidden
+	-- a single-tab bar (Main only) is hidden; the tab row moves the hero and body, so the sheet re-lays out
 	tabs.Visible = count >= 2
+	if (type(was) == "number" and was >= 2) ~= (count >= 2) then self:layout() end
 end
 
 -- ------------------------------------------------------------------------------------------------------ geometry
@@ -521,7 +554,7 @@ function Panel.layout(self: Panel)
 			local contentH = self.content.AbsoluteSize.Y / s
 			if contentH > 1 then
 				local heroOn = self.hero ~= nil and self.hero.visible
-				h = math.min(h, math.max(560, 90 + 14 + (if heroOn then 168 else 0) + contentH + 16))
+				h = math.min(h, math.max(560, 144 + 22 + (if heroOn then 168 else 0) + contentH + 16))
 			end
 		end
 	end
@@ -538,104 +571,145 @@ function Panel.layout(self: Panel)
 	local bx = if full then 0 else x - 24
 	back.Position = UDim2.fromOffset(bx, 0)
 	back.Size = UDim2.fromOffset(W - bx, H)
-	-- rim
-	local radius = if full then 0 else 22
-	Common.corner(sheet, radius)
-	Common.fill(sheet, Color3.fromHex("221d33"), Color3.fromHex("100d19"), Color3.fromHex("14111f"))
-	local rim = Common.stroke(sheet, if full then 0 else 3, WHITE, 0, "Rim")
-	local rg = Common.get(rim, "RimGradient", "UIGradient") :: UIGradient
-	rg.Rotation = 135
-	rg.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, Theme.lift(hue, 0.4)),
-		ColorSequenceKeypoint.new(0.4, hue),
-		ColorSequenceKeypoint.new(0.75, Theme.shade(hue, 0.55)),
-		ColorSequenceKeypoint.new(1, hue),
-	})
-	if corrupted then
-		Recipes.dashed(rim, { color = WHITE })
+	-- the sheet: a translucent dark slab with a hairline, corner ticks and one lit accent on the top edge (Sleek)
+	Common.drop(sheet, "Corner")
+	Common.drop(sheet, "Rim")
+	Common.glow(sheet, nil)
+	Sleek.plate(sheet, { alpha = if corrupted then 0.96 else 0.93, line = if full then 1 else 0.9,
+		top = if corrupted then Color3.fromHex("020a03") else nil, bottom = if corrupted then Color3.fromHex("010401") else nil })
+	if full then
+		Common.drop(sheet, "Ticks")
+		Common.drop(sheet, "TopAccent")
 	else
-		Common.drop(rim, "Dash")
+		Sleek.ticks(sheet, { len = 22, th = 2, out = 1, color = if corrupted then C.termLime else WHITE, alpha = 0.85, z = 8 })
+		Sleek.accent(sheet, hue, 40, 88, { name = "TopAccent" })
 	end
-	Common.glow(sheet, if full then nil else hue, 0.45, 28)
-	-- header band + rule
-	local headerH = if compact then (if self.band then 0 else 56) else 90
+	if corrupted then
+		local rim = Common.stroke(sheet, 1, C.termLime, 0.35, "Hair")
+		Recipes.dashed(rim, { color = C.termLime })
+	else
+		Common.drop(sheet:FindFirstChild("Hair") or sheet, "Dash")
+	end
+	-- header: a faint hue haze from the top-left (no band fill)
+	local tabsOn = (p.tabs :: Frame):GetAttribute("Count") ~= nil and ((p.tabs :: Frame):GetAttribute("Count") :: number) >= 2
+	local titleH = if compact then (if self.band then 0 else 56) else 96
+	local headerH = if compact then titleH else titleH + (if tabsOn then 48 else 0)
 	local band = p.band :: Frame
 	band.Visible = headerH > 0
 	band.Position = UDim2.new()
-	band.Size = UDim2.new(1, 0, 0, headerH)
-	Common.corner(band, radius)
-	Common.fill(band, Theme.mix(C.panel, hue, 0.22), Theme.mix(C.panel, hue, 0.22))
-	local bg = band:FindFirstChild("Fill") :: UIGradient?
-	if bg then
-		bg.Rotation = 0
-		bg.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 1) })
+	band.Size = UDim2.new(1, 0, 0, headerH + 60)
+	Common.drop(band, "Corner")
+	band.BackgroundColor3 = hue
+	band.BackgroundTransparency = 0
+	local haze = Common.get(band, "Fill", "UIGradient") :: UIGradient
+	if Theme.caps.Radial then
+		haze.Type = Enum.GradientType.Radial
+		haze.Offset = Vector2.new(-0.32, -0.5)
+		haze.Rotation = 0
+		haze.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.85), NumberSequenceKeypoint.new(0.45, 0.95),
+			NumberSequenceKeypoint.new(0.7, 1), NumberSequenceKeypoint.new(1, 1) })
+	else
+		haze.Rotation = 90
+		haze.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.9), NumberSequenceKeypoint.new(1, 1) })
 	end
+	haze.Color = ColorSequence.new(WHITE)
+	-- the tabs row sits on a hairline; registration marks where it meets the sheet's edges
 	local rule = p.rule :: Frame
-	rule.Visible = headerH > 0
-	rule.Position = UDim2.fromOffset(0, headerH + 2)
-	rule.Size = UDim2.new(1, 0, 0, 2)
-	rule.BackgroundColor3 = hue
-	rule.BackgroundTransparency = 0
-	local rgf = Common.get(rule, "Fade", "UIGradient") :: UIGradient
-	rgf.Transparency = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 0),
-		NumberSequenceKeypoint.new(0.5, 0.75),
-		NumberSequenceKeypoint.new(1, 1),
-	})
-	-- emblem, title, sub row, tabs, close
+	rule.Visible = headerH > 0 and not compact
+	rule.Position = UDim2.fromOffset(40, headerH - 1)
+	rule.Size = UDim2.new(1, -80, 0, 1)
+	rule.BackgroundColor3 = WHITE
+	rule.BackgroundTransparency = Sleek.LINE
+	Common.drop(rule, "Fade")
+	if not compact and not full and headerH > 0 then
+		Sleek.reg(sheet, "RegL", 20, headerH)
+		Sleek.reg(sheet, "RegR", w - 20, headerH)
+	else
+		Common.drop(sheet, "RegL")
+		Common.drop(sheet, "RegR")
+	end
+	-- emblem (a diamond), title, sub row, layer readout, tabs, close
 	local emblem = p.emblem :: Frame
-	local ed = if compact then 42 else 96
+	local ed = if compact then 40 else 58
 	emblem.Visible = headerH > 0
 	emblem.Size = UDim2.fromOffset(ed, ed)
-	emblem.Position = if compact then UDim2.fromOffset(10, 7) elseif full then UDim2.fromOffset(12, 8) else UDim2.fromOffset(-18, -22)
-	Common.corner(emblem, 0.5)
-	Recipes.radial(emblem, { { t = 0, c = Theme.lift(hue, 0.6) }, { t = 0.45, c = hue }, { t = 1, c = Theme.shade(hue, 0.4) } })
-	Common.corner(emblem, 0.5)
-	Common.stroke(emblem, if compact then 2 else 3, Theme.lift(hue, 0.5), 0)
-	Common.glow(emblem, hue, 0.7, 18)
-	local titleX = if compact then 60 elseif full then 124 else 96
+	emblem.Position = if compact then UDim2.fromOffset(10, 8) else UDim2.fromOffset(40, 22)
+	Common.drop(emblem, "Corner")
+	Common.drop(emblem, "Radial")
+	Common.drop(emblem, "Border")
+	Common.glow(emblem, nil)
+	emblem.BackgroundTransparency = 1
+	local dia = Sleek.diamond(emblem, "Diamond", if corrupted then C.termLime else hue, ed)
+	dia.Position = UDim2.new()
+	dia.ZIndex = 6
+	local titleX = if compact then 60 else 120
 	local title = p.title :: TextLabel
 	title.Visible = headerH > 0
-	title.Position = UDim2.fromOffset(titleX, if compact then 8 else 10)
-	title.Size = UDim2.new(0, 0, 0, if compact then 32 else 50)
+	title.Position = UDim2.fromOffset(titleX, if compact then 8 else 20)
+	title.Size = UDim2.new(0, 0, 0, if compact then 32 else 48)
 	title.AutomaticSize = Enum.AutomaticSize.X
 	title.TextXAlignment = Enum.TextXAlignment.Left
 	title.TextYAlignment = Enum.TextYAlignment.Center
 	title.TextWrapped = false
 	local subRow = p.subRow :: Frame
 	subRow.Visible = headerH > 0 and not compact
-	subRow.Position = UDim2.fromOffset(titleX, 60)
-	subRow.Size = UDim2.new(1, -titleX - 140, 0, 26)
+	subRow.Position = UDim2.fromOffset(titleX + 2, 70)
+	subRow.Size = UDim2.new(1, -titleX - 260, 0, 24)
+	local readout = p.readout :: Frame
+	readout.Visible = headerH > 0 and not compact
+	readout.AnchorPoint = Vector2.new(1, 0)
+	readout.Position = UDim2.new(1, -100, 0, 28)
+	readout.Size = UDim2.fromOffset(140, 40)
 	local tabs = p.tabs :: Frame
-	tabs.AnchorPoint = Vector2.new(1, 0)
-	tabs.Position = if compact then UDim2.new(1, -64, 0, 10) else UDim2.new(1, -56, 0, 24)
-	tabs.Size = UDim2.fromOffset(0, if compact then 36 else 40)
-	tabs.AutomaticSize = Enum.AutomaticSize.X
-	Common.list(tabs, true, 8, { align = Enum.HorizontalAlignment.Right, valign = Enum.VerticalAlignment.Center })
+	if compact then
+		tabs.AnchorPoint = Vector2.new(1, 0)
+		tabs.Position = UDim2.new(1, -64, 0, 10)
+		tabs.Size = UDim2.fromOffset(0, 36)
+		tabs.AutomaticSize = Enum.AutomaticSize.X
+		Common.list(tabs, true, 4, { align = Enum.HorizontalAlignment.Right, valign = Enum.VerticalAlignment.Center })
+	else
+		tabs.AnchorPoint = Vector2.new(0, 0)
+		tabs.Position = UDim2.fromOffset(40, titleH)
+		tabs.Size = UDim2.fromOffset(0, 47)
+		tabs.AutomaticSize = Enum.AutomaticSize.X
+		Common.list(tabs, true, 0, { align = Enum.HorizontalAlignment.Left, valign = Enum.VerticalAlignment.Bottom })
+	end
 	local close = p.close :: TextButton
 	close.Visible = not (compact and self.band)
-	local cs = if compact then 44 else 52
+	local cs = if compact then 40 else 40
 	close.AnchorPoint = Vector2.new(0.5, 0.5)
 	close.Size = UDim2.fromOffset(cs, cs)
-	close.Position = if compact then UDim2.new(1, -32, 0, 28) elseif full then UDim2.new(1, -40, 0, 40) else UDim2.new(1, -10, 0, 12)
-	Recipes.bevel(close, { radius = 14, top = Theme.lift(C.danger, 0.2), mid = C.danger, bottom = Theme.shade(C.danger, 0.6), stroke = 2,
-		strokeFrom = Color3.fromHex("ffc2cc"), strokeTo = Color3.fromHex("ffc2cc"), sprite = "button" })
-	local cross = Common.get(close, "X", "TextLabel") :: TextLabel
+	close.Position = if compact then UDim2.new(1, -32, 0, 28) else UDim2.new(1, -60, 0, 48)
+	Common.drop(close, "Corner")
+	Common.drop(close, "Bevel")
+	for _, c in close:GetChildren() do
+		if c:IsA("UIGradient") or c:IsA("ImageLabel") then c:Destroy() end
+	end
+	close.BackgroundColor3 = WHITE
+	close.BackgroundTransparency = 0.97
+	Common.stroke(close, 1, WHITE, 0.78, "Border").LineJoinMode = Enum.LineJoinMode.Miter
+	Common.drop(close, "X")
+	local cross = Common.get(close, "Cross", "Frame") :: Frame
+	cross.AnchorPoint = Vector2.new(0.5, 0.5)
+	cross.Position = UDim2.fromScale(0.5, 0.5)
+	cross.Size = UDim2.fromOffset(16, 16)
 	cross.ZIndex = 21
-	cross.Size = UDim2.fromScale(1, 1)
-	cross.FontFace = Theme.font("title")
-	cross.TextSize = if compact then 28 else 32
-	cross.TextColor3 = WHITE
-	cross.TextXAlignment = Enum.TextXAlignment.Center
-	cross.TextYAlignment = Enum.TextYAlignment.Center
-	cross.Text = "×"
-	Common.stroke(cross, 2, C.black, 0.2, "Stroke").ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	for i, r in { 45, -45 } do
+		local bar = Common.get(cross, "Bar" .. i, "Frame") :: Frame
+		bar.AnchorPoint = Vector2.new(0.5, 0.5)
+		bar.Position = UDim2.fromScale(0.5, 0.5)
+		bar.Size = UDim2.new(1.2, 0, 0, 2)
+		bar.Rotation = r
+		bar.BackgroundColor3 = WHITE
+		bar.BackgroundTransparency = 0
+		bar.ZIndex = 21
+	end
 	-- hero and body
 	local hero = p.hero :: Frame
 	local heroOn = self.hero ~= nil and self.hero.visible
 	local divider = p.divider :: Frame
 	local body = p.body :: Frame
-	local top = headerH + (if compact then 8 else 14)
+	local top = headerH + (if compact then 8 else 22)
 	if compact then
 		hero.Position = UDim2.fromOffset(10, top)
 		hero.Size = UDim2.fromOffset(226, h - top - 10)
@@ -644,31 +718,33 @@ function Panel.layout(self: Panel)
 		body.Position = UDim2.fromOffset(bx0, top)
 		body.Size = UDim2.fromOffset(w - bx0 - 8, h - top - 8)
 	else
-		hero.Position = UDim2.fromOffset(32, top)
-		hero.Size = UDim2.fromOffset(w - 64, 152)
+		hero.Position = UDim2.fromOffset(40, top)
+		hero.Size = UDim2.fromOffset(w - 80, 152)
 		divider.Visible = heroOn
-		divider.Position = UDim2.fromOffset(24, top + 158)
-		divider.Size = UDim2.new(1, -48, 0, 1)
-		divider.BackgroundColor3 = C.stroke
-		divider.BackgroundTransparency = 0.3
+		divider.Position = UDim2.fromOffset(40, top + 160)
+		divider.Size = UDim2.new(1, -80, 0, 1)
+		divider.BackgroundColor3 = WHITE
+		divider.BackgroundTransparency = Sleek.LINE
 		local by = if heroOn then top + 168 else top
 		body.Position = UDim2.fromOffset(16, by)
 		body.Size = UDim2.fromOffset(w - 32, h - by - 16)
 	end
 	-- the body: a styled frame holding the transparent scroll
-	Common.corner(body, 16)
+	-- the body is the sheet itself (no inner card); the corrupted layers keep their terminal green
+	Common.drop(body, "Corner")
 	if corrupted then
 		Common.fill(body, Color3.new(0, 0, 0), Color3.fromHex("062b0a"), Color3.fromHex("041a06"))
+		local fill = body:FindFirstChild("Fill") :: UIGradient?
+		if fill then fill.Transparency = NumberSequence.new(0.25) end
 	else
-		Common.fill(body, Theme.mix(C.panel, hue, 0.04), C.deep)
+		Common.drop(body, "Fill")
+		body.BackgroundTransparency = 1
 	end
-	local fill = body:FindFirstChild("Fill") :: UIGradient?
-	if fill then fill.Transparency = NumberSequence.new(0.25) end
 	local scroll = p.scroll :: ScrollingFrame
 	scroll.ScrollBarImageColor3 = Theme.lift(hue, 0.3)
 	Common.pad(self.content, if compact then 10 else 20, if compact then 14 else 24, 90, if compact then 6 else 16, "Pad")
 	local fade = p.fade :: Frame
-	fade.BackgroundColor3 = if corrupted then Color3.fromHex("031305") else C.deep
+	fade.BackgroundColor3 = if corrupted then Color3.fromHex("031305") else Sleek.C.bottom
 	-- abs geometry for App (strip edge, card rect)
 	local o = root.AbsolutePosition
 	self.geo = {
@@ -693,11 +769,11 @@ function Panel.drawShell(self: Panel, accent: boolean?)
 	sym.TextYAlignment = Enum.TextYAlignment.Center
 	sym.TextWrapped = false
 	local symText = if node and type(node.sym) == "string" then node.sym elseif key == "options-tab" then "OPT" else string.upper(key)
-	local symSize = if compact then (if #symText > 2 then 14 else 20) else (if #symText > 2 then 30 else 44)
+	local symSize = if compact then (if #symText > 2 then 11 else 16) else (if #symText > 2 then 16 else 24)
 	local ssig = symText .. "|" .. symSize
 	if sym:GetAttribute("Sig") ~= ssig then
 		sym:SetAttribute("Sig", ssig)
-		Recipes.title(sym, { text = symText, role = "index", size = symSize, stroke = if compact then 2 else 4, shadow = if compact then 1 else 3 })
+		Recipes.title(sym, { text = symText, role = "index", size = symSize, stroke = 0, shadow = 0 })
 	end
 	-- title (step-fit to leave the tabs room)
 	local title = p.title :: TextLabel
@@ -706,19 +782,25 @@ function Panel.drawShell(self: Panel, accent: boolean?)
 	local tsig = text .. "|" .. Theme.toHex(hue) .. "|" .. tostring(compact)
 	if title:GetAttribute("Sig") ~= tsig then
 		title:SetAttribute("Sig", tsig)
-		Recipes.title(title, { text = text, role = "title", size = sizes[1], from = WHITE, to = Theme.lift(hue, 0.45),
-			stroke = if compact then 5 else 7, shadow = 4 })
+		Recipes.title(title, { text = text, role = "title", size = sizes[1], stroke = 0, shadow = 0 })
 	end
 	local sheetW = (p.sheet :: Frame).Size.X.Offset
-	local tabsW = if (p.tabs :: Frame).Visible then (p.tabs :: Frame).AbsoluteSize.X / math.max(Layout.s, 0.01) else 0
-	Rich.fit(title, sizes, math.max(160, sheetW - title.Position.X.Offset - tabsW - 90))
+	local tabsW = if compact and (p.tabs :: Frame).Visible then (p.tabs :: Frame).AbsoluteSize.X / math.max(Layout.s, 0.01) else 0
+	Rich.fit(title, sizes, math.max(160, sheetW - title.Position.X.Offset - tabsW - (if compact then 90 else 280)))
 	-- the sub row: ROW chip + the sentence-case line (the corrupted breadcrumb for cp / cm)
 	local subRow = p.subRow :: Frame
 	Common.list(subRow, true, 10, { valign = Enum.VerticalAlignment.Center })
 	local row = Signatures.row(key)
 	if row then
-		local chip = Common.chip(subRow, "RowChip", "ROW " .. row, { color = C.text, bg = C.deep, bgT = 0, h = 26, stroke = Theme.lift(hue, 0.3) })
+		local chip = Common.chip(subRow, "RowChip", Rich.caps("Row " .. row), { color = Theme.lift(hue, 0.55), bgT = 1, h = 24,
+			stroke = hue, role = "caps" })
 		chip.LayoutOrder = 1
+		local b = chip:FindFirstChild("Border") :: UIStroke?
+		if b then
+			b.Transparency = 0.4
+			b.LineJoinMode = Enum.LineJoinMode.Miter
+		end
+		Common.drop(chip, "Corner")
 	else
 		Common.drop(subRow, "RowChip")
 	end
@@ -729,6 +811,20 @@ function Panel.drawShell(self: Panel, accent: boolean?)
 		line.TextColor3 = C.termDim
 	end
 	Common.setText(line, Common.esc(lineText))
+	-- the layer readout: LAYER 02 / 21
+	local readout = p.readout :: Frame
+	Common.list(readout, false, 7, { align = Enum.HorizontalAlignment.Right, valign = Enum.VerticalAlignment.Center })
+	local idx = Sleek.layerIndex(key)
+	if idx then
+		readout.Visible = not compact
+		local cap = Sleek.caps(readout, "Cap", "Layer")
+		cap.LayoutOrder = 1
+		local num = Common.label(readout, "Num", "number", WHITE, { autoX = true, wrap = false, order = 2 })
+		num.RichText = true
+		Common.setText(num, string.format('%02d <font color="#6d7686">/ %02d</font>', idx, #Sleek.ORDER))
+	else
+		readout.Visible = false
+	end
 	-- the signature's accent
 	local sig = Signatures.get(key)
 	local hug = sig.hug == true

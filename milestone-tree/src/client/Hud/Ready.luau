@@ -26,6 +26,7 @@ local Layout = require(Core:WaitForChild("Layout"))
 local Motion = require(Core:WaitForChild("Motion"))
 local Rich = require(Core:WaitForChild("Rich"))
 local Recipes = require(Core:WaitForChild("Recipes"))
+local Sleek = require(Core:WaitForChild("Sleek"))
 local Kit = require(script.Parent:WaitForChild("Kit"))
 
 type MapState = Types.MapState
@@ -49,7 +50,6 @@ local Ready = {}
 local MAX_GEMS = 6
 local GOLD = Color3.fromHex("ffc233")
 local READY_TEXT = Theme.C.ready
-local CANBUY_TEXT = Color3.fromHex("ffb3c0")
 local SYMS = {
 	ach = "★", m = "M", mm = "MM", em = "EM", p = "P", pe = "PE", sp = "SP", pb = "PB", pp = "PP", se = "SE", hp = "HP",
 	ep = "EP", hb = "HB", ap = "AP", mp = "MP", t = "T", pm = "PM", pep = "PEP", cp = "CR", cm = "CM", ex = "EX",
@@ -67,7 +67,7 @@ local function gem(parent: Instance, name: string, layer: string, sym: string, s
 	local g = Kit.frame(parent, name, 3)
 	g.Size = UDim2.fromOffset(size, size)
 	Kit.gem(g, Theme.hue(layer))
-	Kit.stroke(g, 2, Theme.lift(Theme.hue(layer), 0.5), 0.9, "Rim")
+	Kit.stroke(g, 1, Theme.lift(Theme.hue(layer), 0.6), 0.6, "Rim")
 	if sym == "★" then
 		local st = Kit.glyph(g, "Star", "star", Color3.new(1, 1, 1))
 		st.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -80,7 +80,7 @@ local function gem(parent: Instance, name: string, layer: string, sym: string, s
 		l.ZIndex = 4
 		l.TextXAlignment = Enum.TextXAlignment.Center
 		l.TextSize = math.max(13, math.floor(size * (if #sym >= 3 then 0.3 elseif #sym == 2 then 0.36 else 0.44)))
-		Kit.textStroke(l, if size >= 40 then 2 else 1.5, 1)
+		Kit.textStroke(l, if size >= 40 then 1.5 else 1, 0.35)
 	end
 	return g
 end
@@ -96,14 +96,16 @@ function Ready.new(parent: GuiObject): Ready
 	-- ------------------------------------------------------------------------------------------ the tray
 	local tray = Kit.frame(parent, "Ready", 5)
 	tray.AnchorPoint = Vector2.new(1, 1)
-	tray.AutomaticSize = Enum.AutomaticSize.XY
-	tray.BackgroundColor3 = Color3.new(1, 1, 1)
-	tray.BackgroundTransparency = 0.06
+	-- Sleek: a dark slab with a hairline; its corner ticks live on a sibling that copies the tray's rect (the tray
+	-- lays its children out in a list, so it is sized explicitly in layout())
+	tray.AutomaticSize = Enum.AutomaticSize.None
 	tray.Visible = false
-	Kit.corner(tray, UDim.new(0, 16))
-	Kit.grad(tray, { Color3.fromHex("231b33"), Theme.C.deep }, 90, nil, "Back")
-	Kit.stroke(tray, 2, GOLD, 0.75, "Rim")
-	Kit.pad(tray, 10, 16, 10, 16)
+	Sleek.plate(tray, { alpha = 0.88, line = 0.86 })
+	Kit.pad(tray, 12, 18, 10, 18)
+	local trayTicks = Kit.frame(parent, "ReadyTicks", 6)
+	trayTicks.AnchorPoint = Vector2.new(1, 1)
+	trayTicks.Visible = false
+	Sleek.ticks(trayTicks, { len = 10, th = 2, out = 1, color = Color3.new(1, 1, 1), alpha = 0.8, z = 6 })
 	Kit.list(tray, "y", 8, Enum.HorizontalAlignment.Left)
 	self.frame = tray
 
@@ -115,11 +117,11 @@ function Ready.new(parent: GuiObject): Ready
 	local hb = Kit.glyph(header, "Bolt", "bolt", READY_TEXT)
 	hb.LayoutOrder = 1
 	hb.Size = UDim2.fromOffset(16, 16)
-	local count = Kit.label(header, "Count", "toast", "", READY_TEXT)
+	local count = Kit.label(header, "Count", "label", "", READY_TEXT)
 	count.LayoutOrder = 2
 	count.AutomaticSize = Enum.AutomaticSize.X
 	count.Size = UDim2.fromScale(0, 1)
-	local buy = Kit.label(header, "CanBuy", "label", "", CANBUY_TEXT)
+	local buy = Kit.label(header, "CanBuy", "small", "", Sleek.C.soft)
 	buy.LayoutOrder = 3
 	buy.AutomaticSize = Enum.AutomaticSize.X
 	buy.Size = UDim2.fromScale(0, 1)
@@ -139,11 +141,10 @@ function Ready.new(parent: GuiObject): Ready
 	local banner = Kit.frame(parent, "HoldBanner", 6)
 	banner.AnchorPoint = Vector2.new(1, 1)
 	banner.AutomaticSize = Enum.AutomaticSize.XY
-	banner.BackgroundColor3 = Color3.fromHex("2a200a")
+	Sleek.plate(banner, { alpha = 0.92, line = 0.86, tint = GOLD, tintAlpha = 0.12 })
 	banner.BackgroundTransparency = 0.04
 	banner.Visible = false
-	Kit.corner(banner, UDim.new(0, 12))
-	Kit.stroke(banner, 2, GOLD, 1, "Rim")
+	Kit.stroke(banner, 1, GOLD, 0.5, "Rim").LineJoinMode = Enum.LineJoinMode.Miter
 	Kit.pad(banner, 8, 16, 9, 16)
 	Kit.list(banner, "y", 4, Enum.HorizontalAlignment.Left)
 	local bTop = Kit.frame(banner, "Top")
@@ -167,12 +168,10 @@ function Ready.new(parent: GuiObject): Ready
 	local pill = Kit.frame(parent, "ReadyPill", 5)
 	pill.AnchorPoint = Vector2.new(1, 1)
 	pill.AutomaticSize = Enum.AutomaticSize.X
-	pill.BackgroundColor3 = Color3.new(1, 1, 1)
+	Sleek.plate(pill, { alpha = 0.88, line = 0.86 })
 	pill.BackgroundTransparency = 0.06
 	pill.Visible = false
-	Kit.corner(pill)
-	Kit.grad(pill, { Color3.fromHex("231b33"), Theme.C.deep }, 90, nil, "Back")
-	Kit.stroke(pill, 2, GOLD, 0.75, "Rim")
+
 	local pillRow = Kit.frame(pill, "Row")
 	pillRow.AutomaticSize = Enum.AutomaticSize.X
 	pillRow.Size = UDim2.fromScale(0, 1)
@@ -220,15 +219,14 @@ function Ready.new(parent: GuiObject): Ready
 		local h = if compact then 24 else 26
 		if e.ready then
 			local text = "+" .. Rich.short(e.gain or "1")
-			local c, l = Kit.chip(slot, "Chip", "badge", "", { h = h, pad = 8, fg = GOLD, bg = Color3.fromHex("2a200a"), bgA = 1,
-				line = GOLD, lineA = 0.8 })
+			local c, l = Kit.chip(slot, "Chip", "badge", "", { h = h, pad = 4, fg = Sleek.C.goldText, bgA = 0 })
 			l.RichText = true
-			l.Text = Rich.num(text, { size = Theme.size("badge"), unit = Color3.fromHex("ffe9a3") })
+			l.Text = Rich.num(text, { size = Theme.size("badge"), unit = Sleek.C.goldText })
 			c.AnchorPoint = Vector2.new(0.5, 0)
 			c.Position = UDim2.new(0.5, 0, 0, 56)
 		else
-			local c = Kit.chip(slot, "Chip", "label", Rich.caps("Buy"), { h = h, pad = 10, fg = Color3.new(1, 1, 1),
-				bg = Theme.C.deep, bgA = 1, line = Theme.C.danger, lineA = 1 })
+			local c = Kit.chip(slot, "Chip", "caps", Rich.caps("Buy"), { h = h, pad = 4, fg = Theme.lift(Theme.hue(e.layer), 0.45),
+				bgA = 0 })
 			c.AnchorPoint = Vector2.new(0.5, 0)
 			c.Position = UDim2.new(0.5, 0, 0, 56)
 		end
@@ -321,10 +319,20 @@ function Ready.new(parent: GuiObject): Ready
 		buy.Text = if nReady > 0 and nBuy > 0 then "· " .. nBuy .. " can buy" else ""
 		buy.Visible = nReady > 0 and nBuy > 0
 		hint.Visible = hinted and nReady > 0 and not compact
-		Theme.text(count, "toast")
+		Theme.text(count, "label")
 		Theme.text(pCount, "toast")
 		pCount.Text = if nReady > 0 then Rich.caps(nReady .. " ready") else Rich.caps(nBuy .. " can buy")
 		pSub.Text = if mode == "strip" then "Tap a gem to switch" else "Tap to list"
+		-- the tray's size (it holds a list, so no AutomaticSize): the gem row or the header, whichever is wider
+		local shown = math.min(#entries, MAX_GEMS)
+		local gemsW = shown * 96 + (if #entries > MAX_GEMS then 96 else 0)
+		local headW = 16 + 8 + count.TextBounds.X
+		if buy.Visible then headW += 8 + buy.TextBounds.X end
+		if hint.Visible then headW += 8 + hint.TextBounds.X end
+		tray.Size = UDim2.fromOffset(36 + math.max(gemsW, headW, 240), 12 + 22 + 8 + 82 + 10)
+		trayTicks.Position = tray.Position
+		trayTicks.Size = tray.Size
+		trayTicks.Visible = tray.Visible
 		self.changed:Fire()
 	end
 
@@ -410,6 +418,7 @@ function Ready.new(parent: GuiObject): Ready
 		r.tap:DisconnectAll()
 		r.hold:DisconnectAll()
 		tray:Destroy()
+		trayTicks:Destroy()
 		pill:Destroy()
 		banner:Destroy()
 	end

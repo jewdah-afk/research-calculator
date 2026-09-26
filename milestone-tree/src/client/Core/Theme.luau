@@ -22,18 +22,18 @@ end
 
 -- ------------------------------------------------------------------------------------------------------ tokens
 Theme.C = {
-	-- base
-	void = hex("07060d"),
-	deep = hex("0d0b16"),
-	panel = hex("14111f"),
-	panel2 = hex("1c1829"),
-	panel3 = hex("262138"),
-	stroke = hex("3a3352"),
-	strokeHi = hex("6a5f8f"),
-	text = hex("f2f0ff"),
-	soft = hex("c9c3e6"), -- secondary text, labels, hints (DESIGN.md 9.6; >= 8.4:1 on every dark surface)
-	muted = hex("9a94b8"), -- tertiary only, >= 15 du on dark surfaces
-	faint = hex("5c5775"), -- never text
+	-- base: the cool neutral greys of the Sleek style (Core/Sleek.luau); the layer hue is the only accent
+	void = hex("05070c"),
+	deep = hex("070a11"),
+	panel = hex("0c111a"),
+	panel2 = hex("131a25"),
+	panel3 = hex("1c2533"),
+	stroke = hex("2b3444"),
+	strokeHi = hex("4b5668"),
+	text = hex("f3f6fb"),
+	soft = hex("aab4c4"), -- secondary text, labels, hints (DESIGN.md 9.6; >= 8.4:1 on every dark surface)
+	muted = hex("8a94a6"), -- tertiary only, >= 15 du on dark surfaces
+	faint = hex("4d5566"), -- never text
 	-- state
 	bought = hex("4be07a"),
 	locked = hex("8a6f7a"),
@@ -52,11 +52,11 @@ Theme.C = {
 	notYet = hex("d9b3be"),
 	ready = hex("ffe08a"),
 	dangerText = hex("f2d7dd"),
-	ink = hex("0d0b16"), -- dark text on light hue fills
+	ink = hex("06101b"), -- dark text on light hue fills
 	termLime = hex("caffbf"),
 	termDim = hex("9fdc92"),
 	stableId = hex("5f8a58"),
-	glass = hex("090711"),
+	glass = hex("06090f"),
 	white = Color3.new(1, 1, 1),
 	black = Color3.new(0, 0, 0),
 }
@@ -246,7 +246,7 @@ local ROLES: { [string]: Role } = {
 	toast = role("Montserrat", W.ExtraBold, true, 18, 16, 1),
 	cardSmall = role("Montserrat", W.ExtraBold, true, 17, 16, 1.1),
 	tab = role("Montserrat", W.ExtraBold, true, 16, 15, 1),
-	plate = role("Montserrat", W.ExtraBold, true, 15, 13, 1.1, "caps"),
+	plate = role("Montserrat", W.ExtraBold, false, 13, 12, 1.1, "caps"),
 	label = role("Montserrat", W.ExtraBold, false, 14, 13, 1),
 	-- numbers: Sarpanch for numeral runs only (words and units go through Rich.num)
 	numberHeavy = role("Sarpanch", W.ExtraBold, false, 18, 17, 1),

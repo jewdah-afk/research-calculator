@@ -86,7 +86,7 @@ function Peek.new(root: GuiObject): Peek
 	card.BackgroundColor3 = Color3.new(1, 1, 1)
 	card.BackgroundTransparency = 0.02
 	card.Active = true
-	Kit.corner(card, UDim.new(0, 16))
+	Kit.corner(card, UDim.new(0, 0)) -- Sleek: square
 	Kit.grad(card, { Theme.C.panel2, Theme.C.panel }, 90, nil, "Back")
 	local rim = Kit.stroke(card, 2, Theme.C.strokeHi, 1, "Rim")
 	Kit.pad(card, 16, 18, 16, 18)

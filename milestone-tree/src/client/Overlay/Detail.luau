@@ -67,7 +67,7 @@ function Detail.new(root: GuiObject): Detail
 	sheet.BackgroundTransparency = 0
 	sheet.Active = true
 	sheet.Visible = false
-	Kit.corner(sheet, UDim.new(0, 20))
+	Kit.corner(sheet, UDim.new(0, 0)) -- Sleek: square
 	Kit.grad(sheet, { Theme.C.panel2, Theme.C.panel }, 90, nil, "Back")
 	local rim = Kit.stroke(sheet, 2, Theme.C.strokeHi, 1, "Rim")
 	Kit.list(sheet, "y", 12, Enum.HorizontalAlignment.Left)

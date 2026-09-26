@@ -17,6 +17,7 @@
 local Core = script.Parent.Parent.Parent:WaitForChild("Core")
 local Theme = require(Core:WaitForChild("Theme"))
 local Rich = require(Core:WaitForChild("Rich"))
+local Sleek = require(Core:WaitForChild("Sleek"))
 local Common = require(script.Parent:WaitForChild("Common"))
 local CompactOwned = require(script.Parent:WaitForChild("CompactOwned"))
 local Signatures = require(script.Parent.Parent.Parent:WaitForChild("Signatures"):WaitForChild("Signatures"))
@@ -101,8 +102,9 @@ function Upgrade.skin(rec: any, n: any, ctx: any): boolean
 	Common.drop(b, "Num")
 	Common.drop(b, "Gradient")
 	Common.drop(b, "Glow")
-	local p = Common.surface(b, state, ctx.hue, 14)
-	Common.glow(b, if state == "can" then ctx.hue else nil, 0.55, 16)
+	local p = Common.surface(b, state, ctx.hue)
+	Common.glow(b, if state == "can" then ctx.hue else nil, 0.2, 14)
+
 	b.Size = UDim2.fromOffset(ctx.cardW, 0)
 	b.AutomaticSize = Enum.AutomaticSize.Y
 	Common.drop(b, "Limit") -- a tier row stretches its cards to the tallest one
@@ -120,9 +122,9 @@ function Upgrade.skin(rec: any, n: any, ctx: any): boolean
 	label.TextYAlignment = Enum.TextYAlignment.Top
 	label.Visible = true
 	local idx = Common.str(n.n) or Common.str(n.id) or ""
-	local idxColor = if state == "owned" then C.soft else Theme.lift(ctx.hue, 0.5)
+	local idxColor = if state == "owned" then Sleek.C.good elseif state == "can" then ctx.hue else Sleek.C.micro
 	local parts: { string } = {}
-	table.insert(parts, Common.run(Common.esc(idx), "index", idxColor, 0.2))
+	table.insert(parts, Common.run(Common.esc(idx), "index", idxColor, if state == "owned" then 0.2 else 0))
 	local title = Common.str(n.ti)
 	if title then table.insert(parts, Common.title(Common.plain(title), "card", p.title)) end
 	local ds = Common.html(n.ds, "body", ctx.layer)
@@ -132,18 +134,48 @@ function Upgrade.skin(rec: any, n: any, ctx: any): boolean
 	local ef = Common.str(n.ef)
 	if ef and state ~= "owned" then table.insert(parts, Common.caps("Currently", p.soft)) end
 	Common.setText(label, table.concat(parts, "\n"))
+	-- Sleek: the BUY card gets a lit top edge and its two top corner ticks. The card lays its children out in a list,
+	-- so the marks hang off the first item (the label) with the card's padding as offsets; the bottom pair hangs off
+	-- the BUY bar below. The other states stay quiet (instance budget).
+	local padT, padX = if compact then 12 else 14, if compact then 12 else 16
+	if state == "can" then
+		local top = Common.get(label, "TopLine", "Frame") :: Frame
+		top.Position = UDim2.fromOffset(-padX, -padT)
+		top.Size = UDim2.new(1, 2 * padX, 0, 2)
+		top.BackgroundColor3 = ctx.hue
+		top.BackgroundTransparency = 0
+		top.ZIndex = 5
+		local tick = Theme.lift(ctx.hue, 0.55)
+		for i, spec in { { 0, -padX }, { 1, padX } } do
+			local ax, dx = spec[1], spec[2]
+			local v = Common.get(label, "TickV" .. i, "Frame") :: Frame
+			v.AnchorPoint = Vector2.new(ax, 0)
+			v.Position = UDim2.new(ax, dx, 0, -padT)
+			v.Size = UDim2.fromOffset(2, 9)
+			v.BackgroundColor3 = tick
+			v.BackgroundTransparency = 0
+			v.ZIndex = 5
+		end
+	else
+		for _, n in { "TopLine", "TickV1", "TickV2" } do Common.drop(label, n) end
+	end
 
 	-- the chip at the top right: BUY / OWNED / pr % / LOCKED
 	local pr = Common.pr(n.pr)
-	local chipText, chipColor, chipBg, chipBgT = "BUY", C.text, C.black, 0.45
+	-- the tag: an outlined caps word (BUY in the hue, pr % in rose), or a bare ✓ OWNED / LOCKED
+	local chipText, chipColor, chipLine = Rich.caps("Buy"), Theme.lift(ctx.hue, 0.55), ctx.hue :: Color3?
 	if state == "owned" then
-		chipText, chipColor, chipBg, chipBgT = "OWNED", C.ownedValue, Theme.mix(C.deep, C.bought, 0.25), 0
+		chipText, chipColor, chipLine = "✓ " .. Rich.caps("Owned"), Sleek.C.good, nil
 	elseif state == "notyet" then
-		chipText, chipColor, chipBg, chipBgT = if pr then Rich.pct(pr) else "NOT YET", C.notYet, C.black, 0.5
+		chipText, chipColor, chipLine = if pr then Rich.pct(pr) else Rich.caps("Not yet"), C.notYet, C.locked
 	elseif state == "locked" then
-		chipText, chipColor, chipBg, chipBgT = "LOCKED", C.lockedTitle, C.black, 0.5
+		chipText, chipColor, chipLine = Rich.caps("Locked"), Sleek.C.lockText, nil
 	end
-	local chip = Common.chip(label, "Chip", chipText, { color = chipColor, bg = chipBg, bgT = chipBgT, h = if compact then 26 else 28 })
+	local chip = Common.chip(label, "Chip", chipText, { color = chipColor, bgT = 1, h = if compact then 22 else 24, stroke = chipLine,
+		role = if state == "notyet" and pr then "badge" else "caps" })
+	chip.FontFace = Font.fromName(if state == "notyet" and pr then "Sarpanch" else "Montserrat", Enum.FontWeight.ExtraBold)
+	local cb = chip:FindFirstChild("Border") :: UIStroke?
+	if cb then cb.Transparency = 0.3 end
 	chip.AnchorPoint = Vector2.new(1, 0)
 	chip.Position = UDim2.new(1, 0, 0, 0)
 	chip.ZIndex = 4
@@ -167,9 +199,10 @@ function Upgrade.skin(rec: any, n: any, ctx: any): boolean
 		else
 			Common.text(eff, "number", C.text)
 			eff.BackgroundColor3 = C.black
-			eff.BackgroundTransparency = 0.45
-			eff.Size = UDim2.fromOffset(0, 28)
-			Common.corner(eff, 8)
+			eff.BackgroundTransparency = 0.62
+			eff.Size = UDim2.fromOffset(0, 30)
+			Common.drop(eff, "Corner")
+			Common.stroke(eff, 1, C.white, 0.92).LineJoinMode = Enum.LineJoinMode.Miter
 			Common.setText(eff, "  " .. Common.num(ef, "number", C.text) .. "  ")
 		end
 	elseif state == "owned" then
@@ -181,14 +214,15 @@ function Upgrade.skin(rec: any, n: any, ctx: any): boolean
 		eff.Size = UDim2.fromOffset(0, 22)
 		eff.TextXAlignment = Enum.TextXAlignment.Left
 		Common.drop(eff, "Corner")
-		Common.setText(eff, "Active")
+		Common.drop(eff, "Border")
+		Common.setText(eff, "✓  Active")
 	else
 		Common.drop(b, "Eff")
 	end
 
 	-- the pr bar (not yet) and the cost line
 	if state == "notyet" and pr then
-		local bar = Common.bar(b, "Bar", pr, Theme.lift(ctx.hue, 0.15), 5)
+		local bar = Common.bar(b, "Bar", pr, C.notYet, 2)
 		bar.LayoutOrder = 3
 	else
 		Common.drop(b, "Bar")
@@ -198,14 +232,39 @@ function Upgrade.skin(rec: any, n: any, ctx: any): boolean
 		local foot = Common.get(b, "Foot", "TextLabel") :: TextLabel
 		foot.LayoutOrder = 4
 		Common.text(foot, "caps", p.soft)
-		foot.Size = UDim2.new(1, 0, 0, 24)
 		foot.AutomaticSize = Enum.AutomaticSize.None
-		foot.TextXAlignment = Enum.TextXAlignment.Left
 		foot.TextYAlignment = Enum.TextYAlignment.Center
 		foot.TextWrapped = false
 		foot.TextTruncate = Enum.TextTruncate.AtEnd
-		local valueColor = if state == "can" then C.text else C.notYet
-		Common.setText(foot, Common.caps("Cost", p.soft) .. "   " .. Common.num(co, "numberHeavy", valueColor, Signatures.unit(n.cur)))
+		if state == "can" then
+			local ink = Sleek.C.ink
+			foot.Size = UDim2.new(1, 0, 0, if compact then 36 else 42)
+			foot.TextXAlignment = Enum.TextXAlignment.Right
+			foot.BackgroundColor3 = C.white
+			foot.BackgroundTransparency = 0
+			local g = Common.get(foot, "Fill", "UIGradient") :: UIGradient
+			g.Rotation = 90
+			g.Color = ColorSequence.new({ ColorSequenceKeypoint.new(0, Theme.lift(ctx.hue, 0.25)), ColorSequenceKeypoint.new(1, ctx.hue) })
+			Common.drop(foot, "Pad")
+			local verb = Common.get(foot, "Verb", "TextLabel") :: TextLabel
+			Common.text(verb, "cta", ink)
+			verb.TextSize = 16
+			verb.Position = UDim2.fromOffset(12, 0)
+			verb.Size = UDim2.new(1, -12, 1, 0)
+			verb.TextXAlignment = Enum.TextXAlignment.Left
+			verb.TextYAlignment = Enum.TextYAlignment.Center
+			Common.setText(verb, "BUY")
+			Common.setText(foot, Common.num(co, "numberHeavy", ink, Signatures.unit(n.cur), true) .. "   ")
+		else
+			foot.Size = UDim2.new(1, 0, 0, 24)
+			foot.TextXAlignment = Enum.TextXAlignment.Left
+			foot.BackgroundTransparency = 1
+			Common.drop(foot, "Fill")
+			Common.drop(foot, "Pad")
+			Common.drop(foot, "Verb")
+
+			Common.setText(foot, Common.caps("Cost", p.soft) .. "   " .. Common.num(co, "numberHeavy", C.notYet, Signatures.unit(n.cur)))
+		end
 	else
 		Common.drop(b, "Foot")
 	end
@@ -232,32 +291,33 @@ function Upgrade.tier(rec: any, n: any, ctx: any)
 	local spine = Common.get(rail, "Spine", "Frame") :: Frame
 	spine.AnchorPoint = Vector2.new(0.5, 0)
 	spine.Position = UDim2.fromScale(0.5, 0)
-	spine.Size = UDim2.new(0, 2, 1, 12)
+	spine.Size = UDim2.new(0, 1, 1, 12)
 	spine.BackgroundColor3 = col
-	spine.BackgroundTransparency = 0.45
+	spine.BackgroundTransparency = 0.6
 	local badge = Common.get(rail, "Badge", "TextLabel") :: TextLabel
 	badge.AnchorPoint = Vector2.new(0.5, 0)
 	badge.Position = UDim2.new(0.5, 0, 0, 14)
-	badge.Size = UDim2.fromOffset(34, 34)
-	badge.BackgroundColor3 = Theme.mix(C.deep, col, 0.35)
-	badge.BackgroundTransparency = 0
+	badge.Size = UDim2.fromOffset(30, 30)
+	badge.BackgroundColor3 = col
+	badge.BackgroundTransparency = 0.86
 	Common.text(badge, "badge", C.text)
 	badge.TextSize = math.max(badge.TextSize, 16)
 	badge.TextXAlignment = Enum.TextXAlignment.Center
 	badge.TextYAlignment = Enum.TextYAlignment.Center
 	badge.ZIndex = 2
-	Common.corner(badge, 0.5)
-	Common.stroke(badge, 2, col, 0)
+	Common.drop(badge, "Corner")
+	Common.stroke(badge, 1, col, 0.25).LineJoinMode = Enum.LineJoinMode.Miter
 	Common.setText(badge, tierNo)
 	if owned then
 		local check = Common.get(rail, "Check", "Frame") :: Frame
 		check.AnchorPoint = Vector2.new(0.5, 0)
 		check.Position = UDim2.new(0.5, 0, 0, 54)
-		check.Size = UDim2.fromOffset(12, 12)
+		check.Size = UDim2.fromOffset(7, 7)
+		check.Rotation = 45
 		check.BackgroundColor3 = C.bought
 		check.BackgroundTransparency = 0
 		check.ZIndex = 2
-		Common.corner(check, 0.5)
+		Common.drop(check, "Corner")
 	else
 		Common.drop(rail, "Check")
 	end
@@ -295,9 +355,7 @@ function Upgrade.summary(rec: any, n: any, ctx: any)
 	row.AutoButtonColor = false
 	row.Text = ""
 	row.Size = UDim2.new(1, 0, 0, 48)
-	Common.fill(row, Theme.mix(C.panel, C.bought, 0.16), Theme.mix(C.deep, C.bought, 0.1))
-	Common.corner(row, 12)
-	Common.stroke(row, 1.5, C.bought, 0.5)
+	Common.surface(row, "owned", C.bought)
 	Common.pad(row, 0, 14, 0, 14)
 	local t = Common.label(row, "Text", "cardSmall", C.ownedTitle, { wrap = false })
 	t.Size = UDim2.fromScale(1, 1)

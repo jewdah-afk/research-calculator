@@ -73,8 +73,9 @@ end
 -- ------------------------------------------------------------------------------------------------------ R1 bevel
 export type BevelOpts = { radius: number, top: Color3, mid: Color3, bottom: Color3, stroke: number?, strokeFrom: Color3?,
 	strokeTo: Color3?, sprite: string? }
+-- Sleek: bevels are square (no radius, no lip sprite); the gradient and rim stay
 function Recipes.bevel(f: GuiObject, o: BevelOpts)
-	corner(f, UDim.new(0, o.radius))
+	remove(f, "Corner")
 	f.BackgroundColor3 = WHITE
 	if f.BackgroundTransparency >= 1 then f.BackgroundTransparency = 0 end
 	f.BorderSizePixel = 0
@@ -84,7 +85,8 @@ function Recipes.bevel(f: GuiObject, o: BevelOpts)
 	if o.stroke and o.stroke > 0 then
 		local s = child(f, "Rim", "UIStroke") :: UIStroke
 		s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-		s.Thickness = o.stroke
+		s.LineJoinMode = Enum.LineJoinMode.Miter
+		s.Thickness = math.min(o.stroke, 1.5)
 		s.Color = WHITE
 		s.Transparency = 0
 		local sg = child(s, "RimGradient", "UIGradient") :: UIGradient
@@ -93,13 +95,16 @@ function Recipes.bevel(f: GuiObject, o: BevelOpts)
 	else
 		remove(f, "Rim")
 	end
-	-- the bevel lips: a 9-slice overlay (atlas) or the gradient overlay fallback
-	local name = if o.sprite == "button" then "bevel_button" else "bevel_card"
-	local lip = Sprites.image(name, f, { key = "Bevel" })
-	lip.Size = UDim2.fromScale(1, 1)
-	lip.Position = UDim2.fromScale(0, 0)
-	lip.ZIndex = 8
-	Sprites.slice(name, lip, 0.5 * o.radius / 16)
+	-- a 1 du light top edge instead of the lip sprite
+	remove(f, "Bevel")
+	local e = child(f, "Edge", "Frame") :: Frame
+	e.Size = UDim2.new(1, 0, 0, 1)
+	e.Position = UDim2.new()
+	e.BackgroundColor3 = WHITE
+	e.BackgroundTransparency = 0.6
+	e.BorderSizePixel = 0
+	e.ZIndex = 8
+	e.Active = false
 end
 
 -- ------------------------------------------------------------------------------------------------------ R2 glow
@@ -502,13 +507,17 @@ function Recipes.glass(f: GuiObject)
 	local pt = 1
 	pcall(function() pt = GuiService.PreferredTransparency end)
 	f.BackgroundColor3 = Theme.C.glass
-	f.BackgroundTransparency = math.clamp(0.28 * pt, 0, 1)
+	f.BackgroundTransparency = math.clamp(0.14 * pt, 0, 1)
 	f.BorderSizePixel = 0
 	local s = child(f, "GlassRim", "UIStroke") :: UIStroke
 	s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	s.LineJoinMode = Enum.LineJoinMode.Miter
 	s.Color = WHITE
 	s.Thickness = 1
 	s.Transparency = 0.86
+	-- Sleek: square slabs
+	local c = f:FindFirstChildWhichIsA("UICorner")
+	if c and c.CornerRadius.Scale < 0.5 then c:Destroy() end
 end
 
 -- ------------------------------------------------------------------------------------------------------ R11 curve

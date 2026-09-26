@@ -26,6 +26,7 @@ local Layout = require(Core:WaitForChild("Layout"))
 local Motion = require(Core:WaitForChild("Motion"))
 local Rich = require(Core:WaitForChild("Rich"))
 local Recipes = require(Core:WaitForChild("Recipes"))
+local Sleek = require(Core:WaitForChild("Sleek"))
 local Kit = require(script.Parent:WaitForChild("Kit"))
 
 type ARect = Types.Rect
@@ -48,10 +49,10 @@ export type Capsule = {
 
 local Capsule = {}
 
-local GOLD_HI = Color3.fromHex("ffe89a")
 local GOLD = Color3.fromHex("ffc233")
+local GOLD_D = Color3.fromHex("ffd34d")
 local CREAM = Color3.fromHex("ffe9a3")
-local GREEN_A, GREEN_B, GREEN_LINE = Color3.fromHex("1a7a3c"), Color3.fromHex("0f4d26"), Color3.fromHex("b5f5c9")
+local GOOD = Color3.fromHex("8ff0ad")
 
 local STATUS: { [string]: { text: string, color: Color3, glyph: string } } = {
 	saving = { text = "Saving…", color = GOLD, glyph = "clock" },
@@ -65,87 +66,71 @@ function Capsule.new(parent: GuiObject): Capsule
 	self.warnTap = Signal.new() :: Signal.Signal<Vector2>
 	self.changed = Signal.new() :: Signal.Signal<>
 
+	-- Sleek: a translucent slab with a hairline, corner ticks and a gold accent; a gold diamond instead of the coin
 	local f = Kit.frame(parent, "Capsule", 5)
 	f.AnchorPoint = Vector2.new(0.5, 0)
-	f.BackgroundColor3 = Color3.new(1, 1, 1)
-	f.BackgroundTransparency = 0.04
-	Kit.corner(f)
-	Kit.grad(f, { Color3.fromHex("2a2140"), Theme.C.deep }, 90, nil, "Back")
-	local rim = Kit.stroke(f, 2.5, Color3.new(1, 1, 1), 0.67, "Rim")
-	Kit.grad(rim, { GOLD_HI, GOLD }, 90, nil, "RimGrad")
+	Sleek.plate(f, { alpha = 0.88, line = 0.86 })
+	Sleek.ticks(f, { len = 10, th = 2, out = 1, color = Color3.new(1, 1, 1), alpha = 0.8, z = 9 })
+	Sleek.accent(f, GOLD_D, 24, 64, { name = "Accent" })
 	self.frame = f
 
-	local coin = Kit.frame(f, "Coin", 6)
+	local coin = Sleek.diamond(f, "Coin", GOLD_D, 44, { fill = 0, inner = false })
 	coin.AnchorPoint = Vector2.new(0, 0.5)
-	coin.BackgroundColor3 = Color3.new(1, 1, 1)
-	coin.BackgroundTransparency = 0
-	Kit.corner(coin)
-	if Theme.caps.Radial then
-		local g = Kit.child(coin, "Radial", "UIGradient") :: UIGradient
-		g.Type = Enum.GradientType.Radial
-		g.Offset = Vector2.new(-0.1, -0.14)
-		g.Color = ColorSequence.new({
-			ColorSequenceKeypoint.new(0, Color3.fromHex("fff6cf")),
-			ColorSequenceKeypoint.new(0.32, Color3.fromHex("ffd34d")),
-			ColorSequenceKeypoint.new(0.7, Color3.fromHex("a8761a")),
-			ColorSequenceKeypoint.new(1, Color3.fromHex("a8761a")),
-		})
-	else
-		Kit.grad(coin, { Color3.fromHex("fff6cf"), Color3.fromHex("ffd34d"), Color3.fromHex("a8761a") }, 90, nil, "Radial")
-	end
-	Kit.stroke(coin, 3, Color3.fromHex("fff1b8"), 1, "Rim")
-	local star = Kit.glyph(coin, "Star", "star", Color3.fromHex("fffbe8"))
-	star.AnchorPoint = Vector2.new(0.5, 0.5)
-	star.Position = UDim2.fromScale(0.5, 0.5)
-	star.Size = UDim2.fromScale(0.46, 0.46)
-	star.ZIndex = 7
-	Kit.spin(star, 6)
+	coin.ZIndex = 6
+	local core = Kit.frame(coin, "Core", 7)
+	core.AnchorPoint = Vector2.new(0.5, 0.5)
+	core.Position = UDim2.fromScale(0.5, 0.5)
+	core.Size = UDim2.fromOffset(8, 8)
+	core.Rotation = 45
+	core.BackgroundColor3 = GOLD_D
+	core.BackgroundTransparency = 0
 
-	local label = Kit.label(f, "Label", "caps", "", CREAM)
+	local label = Kit.label(f, "Label", "caps", "", Sleek.C.soft)
 	label.TextXAlignment = Enum.TextXAlignment.Left
-	label.Size = UDim2.fromOffset(320, 14)
+	label.Size = UDim2.fromOffset(300, 13)
 
 	local row = Kit.frame(f, "Row", 6)
 	row.AutomaticSize = Enum.AutomaticSize.X
-	Kit.list(row, "x", 5, Enum.HorizontalAlignment.Left, Enum.VerticalAlignment.Bottom)
+	Kit.list(row, "x", 8, Enum.HorizontalAlignment.Left, Enum.VerticalAlignment.Bottom)
 	local amount = Kit.label(row, "Amount", "capsule", "0", Color3.new(1, 1, 1))
 	amount.LayoutOrder = 1
 	amount.AutomaticSize = Enum.AutomaticSize.X
 	amount.TextXAlignment = Enum.TextXAlignment.Left
 	amount.TextYAlignment = Enum.TextYAlignment.Bottom
-	local unit = Kit.label(row, "Unit", "small", "points", CREAM)
+	local unit = Kit.label(row, "Unit", "small", "points", Sleek.C.soft)
 	unit.LayoutOrder = 2
 	unit.FontFace = Font.fromName("Montserrat", Enum.FontWeight.Bold)
 	unit.AutomaticSize = Enum.AutomaticSize.X
 	unit.TextYAlignment = Enum.TextYAlignment.Bottom
 
-	-- the rate pill
+	-- the rate: a hairline divider, then a sparkline of the last minute over the "↑ rate" line (inside the slab)
+	local divider = Kit.frame(f, "Divider", 6)
+	divider.BackgroundColor3 = Color3.new(1, 1, 1)
+	divider.BackgroundTransparency = Sleek.LINE
 	local pill = Kit.frame(parent, "GenPill", 7)
 	pill.AnchorPoint = Vector2.new(0.5, 0)
 	pill.AutomaticSize = Enum.AutomaticSize.X
-	pill.BackgroundColor3 = Color3.new(1, 1, 1)
-	pill.BackgroundTransparency = 0
-	Kit.corner(pill)
-	Kit.grad(pill, { GREEN_A, GREEN_B }, 90, nil, "Back")
-	Kit.stroke(pill, 2, GREEN_LINE, 1, "Rim")
-	Kit.list(pill, "x", 6, Enum.HorizontalAlignment.Center, Enum.VerticalAlignment.Center)
-	local up = Kit.glyph(pill, "Up", "up", Color3.new(1, 1, 1))
+	Kit.list(pill, "x", 6, Enum.HorizontalAlignment.Left, Enum.VerticalAlignment.Center)
+	local up = Kit.glyph(pill, "Up", "up", GOOD)
 	up.LayoutOrder = 1
-	local pillLabel = Kit.label(pill, "Label", "number", "", Color3.new(1, 1, 1))
+	local pillLabel = Kit.label(pill, "Label", "number", "", GOOD)
 	pillLabel.LayoutOrder = 2
 	pillLabel.RichText = true
 	pillLabel.AutomaticSize = Enum.AutomaticSize.X
 	pill.Visible = false
 	self.pill = pill
+	local spark = Kit.frame(parent, "Spark", 7)
+	spark.AnchorPoint = Vector2.new(0.5, 0)
+	spark.Visible = false
+	local history: { number } = {}
+	local lastSample = -math.huge
 
 	-- the warning chip
 	local warn = Kit.frame(parent, "Warn", 6)
 	warn.AnchorPoint = Vector2.new(0, 0.5)
 	warn.AutomaticSize = Enum.AutomaticSize.X
-	warn.BackgroundColor3 = Theme.C.deep
-	warn.BackgroundTransparency = 0.1
-	Kit.corner(warn)
-	Kit.stroke(warn, 1.5, GOLD, 1, "Rim")
+	Sleek.plate(warn, { alpha = 0.88, line = 0.86, edge = false })
+	Kit.stroke(warn, 1, GOLD, 0.5, "Rim").LineJoinMode = Enum.LineJoinMode.Miter
 	local wContent = Kit.frame(warn, "Content")
 	wContent.AutomaticSize = Enum.AutomaticSize.X
 	wContent.Size = UDim2.fromScale(0, 1)
@@ -171,10 +156,9 @@ function Capsule.new(parent: GuiObject): Capsule
 	local status = Kit.frame(parent, "Status", 6)
 	status.AnchorPoint = Vector2.new(0.5, 0)
 	status.AutomaticSize = Enum.AutomaticSize.X
-	status.BackgroundColor3 = Theme.C.deep
-	status.BackgroundTransparency = 0.12
-	Kit.corner(status)
-	local sRim = Kit.stroke(status, 1.5, GOLD, 1, "Rim")
+	Sleek.plate(status, { alpha = 0.88, line = 0.86, edge = false })
+	local sRim = Kit.stroke(status, 1, GOLD, 0.6, "Rim")
+	sRim.LineJoinMode = Enum.LineJoinMode.Miter
 	Kit.list(status, "x", 6, Enum.HorizontalAlignment.Left, Enum.VerticalAlignment.Center)
 	local sLabel = Kit.label(status, "Label", "label", "", Color3.new(1, 1, 1))
 	sLabel.LayoutOrder = 2
@@ -186,10 +170,7 @@ function Capsule.new(parent: GuiObject): Capsule
 	local info = Kit.frame(parent, "Info", 6)
 	info.AnchorPoint = Vector2.new(0.5, 0)
 	info.AutomaticSize = Enum.AutomaticSize.Y
-	info.BackgroundColor3 = Theme.C.deep
-	info.BackgroundTransparency = 0.12
-	Kit.corner(info, UDim.new(0, 12))
-	Kit.stroke(info, 1.5, Theme.C.strokeHi, 1, "Rim")
+	Sleek.plate(info, { alpha = 0.88, line = 0.86, edge = false })
 	local iLabel = Kit.label(info, "Label", "small", "", Theme.C.text)
 	iLabel.AutomaticSize = Enum.AutomaticSize.Y
 	iLabel.Size = UDim2.fromScale(1, 0)
@@ -210,43 +191,52 @@ function Capsule.new(parent: GuiObject): Capsule
 	local statusKind: string? = nil
 	local savedToken = 0
 
+	local W_WIDE, H_WIDE, W_COMPACT, H_COMPACT = 540, 62, 340, 44
 	local function place()
 		compact = Layout.mode == "COMPACT"
-		local w, h = if compact then 300 else 400, if compact then 44 else 58
+		local w, h = if compact then W_COMPACT else W_WIDE, if compact then H_COMPACT else H_WIDE
 		f.Size = UDim2.fromOffset(w, h)
-		f.Position = UDim2.new(0.5, 0, 0, 6)
-		local cd = if compact then 52 else 68
-		coin.Size = UDim2.fromOffset(cd, cd)
-		coin.Position = UDim2.new(0, if compact then -14 else -19, 0.5, 0)
-		local x0 = (if compact then -14 else -19) + cd + 8
+		f.Position = UDim2.new(0.5, 0, 0, 4)
+		local cd = if compact then 30 else 40
+		Sleek.diamond(f, "Coin", GOLD_D, cd, { fill = 0, inner = false })
+		coin.Position = UDim2.new(0, if compact then 10 else 16, 0.5, 0)
+		core.Size = UDim2.fromOffset(if compact then 6 else 8, if compact then 6 else 8)
+		local x0 = (if compact then 10 else 16) + cd + (if compact then 10 else 16)
 		label.Visible = not compact
-		label.Position = UDim2.fromOffset(x0, 5)
+		label.Position = UDim2.fromOffset(x0, 10)
 		Theme.text(label, "caps")
-		row.Position = UDim2.fromOffset(x0, if compact then 4 else 19)
-		row.Size = UDim2.fromOffset(0, if compact then 36 else 36)
+		row.Position = UDim2.fromOffset(x0, if compact then 4 else 23)
+		row.Size = UDim2.fromOffset(0, 36)
 		amount.Size = UDim2.fromScale(0, 1)
 		unit.Size = UDim2.fromScale(0, 1)
 		Theme.text(unit, if compact then "label" else "small")
 		unit.FontFace = Font.fromName("Montserrat", Enum.FontWeight.Bold)
 		local pad = Kit.child(unit, "Pad", "UIPadding") :: UIPadding
 		pad.PaddingBottom = UDim.new(0, if compact then 5 else 6)
-		-- the pill hangs from the rim
-		local ph = if compact then 26 else 30
-		pill.Size = UDim2.fromOffset(0, ph)
-		pill.Position = UDim2.new(0.5, 0, 0, 6 + h - 7)
-		Kit.pad(pill, 0, 12, 0, 10)
+		-- the rate column on the right of the slab
+		local rx = if compact then 110 else 174 -- the column's width from the right edge
+		divider.Position = UDim2.new(1, -rx - 14, 0, 12)
+		divider.Size = UDim2.new(0, 1, 1, -24)
+		divider.Visible = true
+		pill.Size = UDim2.fromOffset(0, 18)
+		pill.AnchorPoint = Vector2.new(0, 0)
+		pill.Position = UDim2.new(0.5, w / 2 - rx, 0, 4 + (if compact then 13 else 36))
 		Theme.text(pillLabel, "number")
+		pillLabel.TextSize = if compact then 13 else 14
 		pillLabel.Size = UDim2.fromScale(0, 1)
-		local gs = if compact then 12 else 14
+		local gs = if compact then 11 else 12
 		up.Size = UDim2.fromOffset(gs, gs)
+		spark.AnchorPoint = Vector2.new(0, 0)
+		spark.Position = UDim2.new(0.5, w / 2 - rx, 0, 4 + 10)
+		spark.Size = UDim2.fromOffset(rx - 16, 22)
 		-- warn: right of the capsule
 		warn.Size = UDim2.fromOffset(0, if compact then 26 else 30)
-		warn.Position = UDim2.new(0.5, w / 2 + 12, 0, 6 + h / 2)
+		warn.Position = UDim2.new(0.5, w / 2 + 14, 0, 4 + h / 2)
 		Kit.pad(warn, 0, 10, 0, 8)
 		wIcon.Size = UDim2.fromOffset(16, 16)
 		Theme.text(wLabel, "badge")
 		wLabel.Size = UDim2.fromScale(0, 1)
-		-- status: under the pill (or the capsule)
+		-- status: under the capsule
 		status.Size = UDim2.fromOffset(0, 28)
 		Kit.pad(status, 0, 10, 0, 8)
 		Theme.text(sLabel, "label")
@@ -256,12 +246,29 @@ function Capsule.new(parent: GuiObject): Capsule
 		Theme.text(iLabel, "small")
 		self.changed:Fire()
 	end
+	-- the sparkline: one sample of the points' magnitude every 2 s, the last 30 (one minute)
+	local function sample(pts: string)
+		local now = os.clock()
+		if now - lastSample < 2 and #history > 0 then
+			history[#history] = Sleek.mag(pts) or history[#history]
+		else
+			lastSample = now
+			local m = Sleek.mag(pts)
+			if m then
+				table.insert(history, m)
+				if #history > 30 then table.remove(history, 1) end
+			end
+		end
+		local show = not compact and not firstRun and pill.Visible and #history >= 1
+		spark.Visible = show
+		if show then
+			Sleek.spark(spark, "Line", history, GOOD, { w = spark.Size.X.Offset, h = 22, thick = 1.6 })
+		end
+	end
 
 	local function statusY(): number
-		local h = if compact then 44 else 58
-		local y = 6 + h + 6
-		if pill.Visible then y = 6 + h - 7 + (if compact then 26 else 30) + 6 end
-		return y
+		local h = if compact then H_COMPACT else H_WIDE
+		return 4 + h + 8
 	end
 
 	local function infoY(): number
@@ -292,6 +299,7 @@ function Capsule.new(parent: GuiObject): Capsule
 
 	local function writeLabel()
 		label.Text = Rich.caps(if inside then "Points · Prestige Multiverse" else "Points · Normal Universe")
+		Sleek.accent(f, if inside then Theme.hue("pm") else GOLD_D, 24, 64, { name = "Accent" })
 	end
 
 	local lastPts = ""
@@ -303,10 +311,10 @@ function Capsule.new(parent: GuiObject): Capsule
 			local grew = lastPts ~= ""
 			lastPts = pts
 			local size = Theme.size("capsule")
-			Recipes.number(amount, { text = pts, size = size, from = Color3.new(1, 1, 1), mid = GOLD_HI, to = GOLD,
-				stroke = if compact then 3 else 4, shadow = 3, role = "capsule" })
+			Recipes.number(amount, { text = pts, size = size, from = Color3.new(1, 1, 1), to = Color3.new(1, 1, 1),
+				stroke = 0, shadow = 0, role = "capsule" })
 			local steps = if compact then { 28, 26, 22 } else { 34, 30, 26 }
-			Rich.fit(amount, steps, if compact then 150 else 250)
+			Rich.fit(amount, steps, if compact then 140 else 230)
 			if grew and os.clock() - lastBump >= 1 then
 				lastBump = os.clock()
 				Motion.bump(row, 0.05)
@@ -316,17 +324,20 @@ function Capsule.new(parent: GuiObject): Capsule
 		local unitText = if compact then (if name == "points" then "pts" else name) else name
 		if unit.Text ~= unitText then unit.Text = unitText end
 		local gen = h.gen
-		local showPill = gen ~= nil and gen ~= "" and not firstRun
+		local showPill = gen ~= nil and gen ~= "" and not firstRun and f.Visible
 		if showPill then
-			local t = Rich.num(gen :: string, { size = Theme.size("number"), onFill = true })
+			local g = gen :: string
+			if compact then g = string.gsub(string.gsub(Rich.short(g), "OOMs/sec", "OOM/s"), "/sec", "/s") end
+			local t = Rich.num(g, { size = if compact then 12 else 14, unit = GOOD })
 			if pillLabel.Text ~= t then pillLabel.Text = t end
 		end
 		if pill.Visible ~= showPill then
 			pill.Visible = showPill
 			c.changed:Fire()
 		end
+		sample(pts)
 		local w = h.w[1]
-		local showWarn = w ~= nil
+		local showWarn = w ~= nil and f.Visible
 		if w then
 			local t = Rich.num(string.upper(w.k) .. " " .. w.v, { size = Theme.size("badge"), unit = CREAM })
 			if wLabel.Text ~= t then wLabel.Text = t end
@@ -386,12 +397,17 @@ function Capsule.new(parent: GuiObject): Capsule
 	function self.destroy(c: Capsule)
 		c.warnTap:DisconnectAll()
 		c.changed:DisconnectAll()
-		Kit.unspin(star)
-		for _, x in { f, pill, warn, status, info } do x:Destroy() end
+		for _, x in { f, pill, spark, warn, status, info } do x:Destroy() end
 	end
 
 	place()
 	writeLabel()
+	-- the phone band hides the capsule; its detached parts (rate, sparkline, warning) follow it
+	f:GetPropertyChangedSignal("Visible"):Connect(function()
+		local h = hud
+		if h then self:update(h) end
+		if not f.Visible then spark.Visible = false end
+	end)
 	Layout.changed:Connect(function()
 		place()
 		lastPts = ""

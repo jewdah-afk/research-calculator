@@ -16,6 +16,8 @@ local Core = script.Parent.Parent:WaitForChild("Core")
 local Theme = require(Core:WaitForChild("Theme"))
 local Recipes = require(Core:WaitForChild("Recipes"))
 local Layout = require(Core:WaitForChild("Layout"))
+local Rich = require(Core:WaitForChild("Rich"))
+local Sleek = require(Core:WaitForChild("Sleek"))
 local Common = require(script.Parent:WaitForChild("Skins"):WaitForChild("Common"))
 
 local Sections = {}
@@ -88,77 +90,88 @@ local function counts(store: any, id: string, cn: string): Counts?
 end
 
 -- ------------------------------------------------------------------------------------------------------ the row
-export type Chip = { text: string, color: Color3?, bg: Color3?, bgT: number? }
+export type Chip = { text: string, color: Color3?, bg: Color3?, bgT: number?, seg: { number }? }
 export type HeaderOpts = { name: string?, text: string, hue: Color3, chips: { Chip }?, order: number? }
--- the section title row: hue bar, heavy italic title with gradient / outline / shadow (R3), chips, hairline
+-- the section title row (Sleek): a hue marker, the tracked caps title, a segment meter and caps counts, a hairline
 function Sections.header(parent: Instance, o: HeaderOpts): Frame
 	local compact = Layout.mode == "COMPACT"
 	local f = Common.get(parent, o.name or "SectionTitle", "Frame") :: Frame
 	f.LayoutOrder = o.order or -1
-	f.Size = UDim2.new(1, 0, 0, if compact then 32 else 36)
+	f.Size = UDim2.new(1, 0, 0, if compact then 28 else 32)
 	f.ClipsDescendants = true
 	f.Active = false
-	Common.list(f, true, 10, { valign = Enum.VerticalAlignment.Center })
+	Common.list(f, true, 12, { valign = Enum.VerticalAlignment.Center })
 	local bar = Common.get(f, "HueBar", "Frame") :: Frame
 	bar.LayoutOrder = 1
-	bar.Size = UDim2.fromOffset(6, 26)
+	bar.Size = UDim2.fromOffset(6, 6)
+	bar.Rotation = 45
 	bar.BackgroundColor3 = o.hue
 	bar.BackgroundTransparency = 0
-	Common.corner(bar, 3)
+	Common.drop(bar, "Corner")
 	local t = Common.get(f, "Title", "TextLabel") :: TextLabel
 	t.LayoutOrder = 2
 	t.AutomaticSize = Enum.AutomaticSize.X
-	t.Size = UDim2.fromOffset(0, if compact then 28 else 32)
+	t.Size = UDim2.fromOffset(0, if compact then 24 else 28)
 	t.TextXAlignment = Enum.TextXAlignment.Left
 	t.TextYAlignment = Enum.TextYAlignment.Center
-	local sig = o.text .. "|" .. tostring(Theme.size("section")) .. "|" .. Theme.toHex(o.hue)
+	local size = if compact then 14 else 15
+	local sig = o.text .. "|" .. tostring(size) .. "|sleek"
 	if t:GetAttribute("Sig") ~= sig then
 		t:SetAttribute("Sig", sig)
-		Recipes.title(t, { text = o.text, role = "section", from = Color3.new(1, 1, 1), to = Theme.lift(o.hue, 0.45),
-			stroke = if compact then 4 else 5, shadow = 3 })
+		Recipes.title(t, { text = Rich.caps(o.text), role = "label", size = size, stroke = 0, shadow = 0 })
 	end
 	local chips = o.chips or {}
 	for i = 1, 2 do
 		local c = chips[i]
 		if c then
-			local l = Common.chip(f, "Chip" .. i, c.text, { color = c.color, bg = c.bg, bgT = c.bgT, h = if compact then 26 else 28 })
-			l.LayoutOrder = 2 + i
+			local l = Common.chip(f, "Chip" .. i, c.text, { color = c.color, bgT = 1, h = if compact then 22 else 24, role = "caps" })
+			l.FontFace = Font.fromName("Montserrat", Enum.FontWeight.ExtraBold)
+			l.LayoutOrder = 3 + i * 2
+			if c.seg then
+				local many = c.seg[1] > 8
+				local sg = Sleek.seg(f, "Seg" .. i, c.seg[1], c.seg[2], { w = if many then 3 else 10, h = if many then 12 else 3, gap = if many then 2 else 3 })
+				sg.LayoutOrder = 2 + i * 2
+			else
+				Common.drop(f, "Seg" .. i)
+			end
 		else
 			Common.drop(f, "Chip" .. i)
+			Common.drop(f, "Seg" .. i)
 		end
 	end
 	local rule = Common.get(f, "Rule", "Frame") :: Frame
 	rule.LayoutOrder = 10
-	rule.Size = UDim2.fromOffset(1400, 2)
-	rule.BackgroundColor3 = o.hue
+	rule.Size = UDim2.fromOffset(1400, 1)
+	rule.BackgroundColor3 = Color3.new(1, 1, 1)
 	rule.BackgroundTransparency = 0
 	local g = Common.get(rule, "Fade", "UIGradient") :: UIGradient
 	g.Transparency = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 0.55),
-		NumberSequenceKeypoint.new(0.45, 1),
-		NumberSequenceKeypoint.new(1, 1),
+		NumberSequenceKeypoint.new(0, 0.74),
+		NumberSequenceKeypoint.new(0.5, 0.9),
+		NumberSequenceKeypoint.new(1, 0.95),
 	})
 	return f
 end
 
--- the chips of a component (DESIGN.md 5.6 table)
+-- the chips of a component (DESIGN.md 5.6 table): caps counts, OWNED with a segment meter when it fits
 local function chipsOf(cn: string, c: Counts?, hue: Color3): { Chip }
 	if c == nil or c.total == 0 then return {} end
 	local C = Theme.C
+	local seg = if c.total <= 24 then { c.total, c.owned } else nil
 	if cn == "upgrades" then
 		local out: { Chip } = {}
 		if c.ready > 0 then
-			table.insert(out, { text = c.ready .. " READY", color = Theme.lift(hue, 0.55), bg = Theme.mix(C.deep, hue, 0.22), bgT = 0 })
+			table.insert(out, { text = Rich.caps(c.ready .. " ready"), color = Theme.lift(hue, 0.55) })
 		end
-		table.insert(out, { text = c.owned .. " / " .. c.total .. " OWNED", color = C.ownedValue, bg = Theme.mix(C.deep, C.bought, 0.16), bgT = 0 })
+		table.insert(out, { text = Rich.caps(c.owned .. " / " .. c.total .. " owned"), color = C.soft, seg = seg })
 		return out
 	elseif cn == "milestones" or cn == "challenges" or cn == "achievements" then
-		return { { text = c.owned .. " / " .. c.total .. (if cn == "achievements" then "" else " DONE"), color = C.ownedValue,
-			bg = Theme.mix(C.deep, C.bought, 0.16), bgT = 0 } }
+		return { { text = Rich.caps(c.owned .. " / " .. c.total .. (if cn == "achievements" then "" else " done")), color = C.soft,
+			seg = seg } }
 	elseif cn == "grid" then
-		return { { text = c.ready .. " CORRUPTED", color = Theme.lift(hue, 0.4), bg = Theme.mix(C.deep, hue, 0.18), bgT = 0 } }
+		return { { text = Rich.caps(c.ready .. " corrupted"), color = Theme.lift(hue, 0.4) } }
 	end
-	return { { text = tostring(c.total), color = C.text, bg = C.panel3, bgT = 0 } }
+	return { { text = tostring(c.total), color = C.soft } }
 end
 
 -- ------------------------------------------------------------------------------------------------------ decorate

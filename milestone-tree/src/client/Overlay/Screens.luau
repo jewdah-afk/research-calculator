@@ -84,7 +84,7 @@ function Screens.new(root: GuiObject): Screens
 		c.Size = UDim2.fromOffset(math.min(w, Layout.canvas.X - 32), 0)
 		c.BackgroundColor3 = Color3.new(1, 1, 1)
 		c.BackgroundTransparency = 0
-		Kit.corner(c, UDim.new(0, 18))
+		Kit.corner(c, UDim.new(0, 0)) -- Sleek: square
 		Kit.grad(c, { Theme.C.panel2, Theme.C.panel }, 90, nil, "Back")
 		Kit.stroke(c, 2, hue, 1, "Rim")
 		Kit.pad(c, 24, 28, 24, 28)
@@ -211,7 +211,7 @@ function Screens.new(root: GuiObject): Screens
 		band.Size = UDim2.new(0.8, 0, 0, 0)
 		band.BackgroundColor3 = Color3.new(0, 0, 0)
 		band.BackgroundTransparency = 0.5
-		Kit.corner(band, UDim.new(0, 12))
+		Kit.corner(band, UDim.new(0, 0)) -- Sleek: square
 		Kit.pad(band, 12, 18, 12, 18)
 		local win = Kit.label(band, "Win", "body", "", Theme.C.text)
 		win.AutomaticSize = Enum.AutomaticSize.Y

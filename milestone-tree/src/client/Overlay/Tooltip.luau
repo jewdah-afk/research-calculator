@@ -49,7 +49,7 @@ function Tooltip.new(root: GuiObject): Tooltip
 	f.BackgroundColor3 = Color3.new(1, 1, 1)
 	f.BackgroundTransparency = 0.02
 	f.Visible = false
-	Kit.corner(f, UDim.new(0, 14))
+	Kit.corner(f, UDim.new(0, 0)) -- Sleek: square
 	Kit.grad(f, { Theme.C.panel3, Theme.C.panel }, 90, nil, "Back")
 	local rim = Kit.stroke(f, 1.5, Theme.C.strokeHi, 1, "Rim")
 	Kit.pad(f, 14, 16, 14, 16)

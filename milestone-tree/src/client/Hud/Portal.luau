@@ -97,12 +97,13 @@ function Portal.new(parent: GuiObject): Portal
 	pill.AnchorPoint = Vector2.new(0.5, 1)
 	pill.Position = UDim2.fromScale(0.5, 1)
 	pill.AutomaticSize = Enum.AutomaticSize.X
-	pill.BackgroundColor3 = Color3.fromHex("0e0b18")
+	-- Sleek: a dark slab with a 1 du rim in the state colour
+	pill.BackgroundColor3 = Color3.fromHex("06090f")
 	pill.BackgroundTransparency = 0.12
-	Kit.corner(pill, UDim.new(0, 12))
-	local pRim = Kit.stroke(pill, 2, STATE_COLOR.enter, 1, "Rim")
+	local pRim = Kit.stroke(pill, 1, STATE_COLOR.enter, 0.8, "Rim")
+	pRim.LineJoinMode = Enum.LineJoinMode.Miter
 	Kit.list(pill, "y", 0, Enum.HorizontalAlignment.Center, Enum.VerticalAlignment.Center)
-	local title = Kit.label(pill, "Title", "tab", Rich.caps("Multiverse"), Color3.new(1, 1, 1))
+	local title = Kit.label(pill, "Title", "label", Rich.caps("Multiverse"), Color3.new(1, 1, 1))
 	title.LayoutOrder = 1
 	title.AutomaticSize = Enum.AutomaticSize.XY
 	Kit.textStroke(title, 1.5, 0.8)
@@ -145,7 +146,7 @@ function Portal.new(parent: GuiObject): Portal
 		pill.Size = UDim2.fromOffset(0, if compact then 26 else 46)
 		Kit.pad(pill, 0, 12, 0, 12)
 		title.Visible = not compact
-		Theme.text(title, "tab")
+		Theme.text(title, "label")
 		Theme.text(word, "label")
 		Theme.text(numL, "number")
 		lock.Size = UDim2.fromOffset(13, 13)

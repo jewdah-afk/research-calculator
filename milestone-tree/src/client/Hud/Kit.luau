@@ -524,11 +524,13 @@ function Kit.chip(parent: Instance, name: string, role: string, text: string, o:
 	f.Size = UDim2.fromOffset(0, o.h)
 	f.BackgroundColor3 = o.bg or Theme.C.deep
 	f.BackgroundTransparency = 1 - (if o.bgA ~= nil then o.bgA else 1)
-	Kit.corner(f)
+	-- Sleek: square chips with a 1 du hairline
+	local oc = f:FindFirstChild("Corner")
+	if oc then oc:Destroy() end
 	local pad = o.pad or 10
 	Kit.pad(f, 0, pad, 0, pad)
 	if o.line then
-		Kit.stroke(f, 1.5, o.line, o.lineA)
+		Kit.stroke(f, 1, o.line, o.lineA).LineJoinMode = Enum.LineJoinMode.Miter
 	else
 		local s = f:FindFirstChild("Stroke")
 		if s then s:Destroy() end

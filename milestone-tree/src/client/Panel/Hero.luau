@@ -26,6 +26,7 @@ local Theme = require(Core:WaitForChild("Theme"))
 local Recipes = require(Core:WaitForChild("Recipes"))
 local Motion = require(Core:WaitForChild("Motion"))
 local Rich = require(Core:WaitForChild("Rich"))
+local Sleek = require(Core:WaitForChild("Sleek"))
 local Layout = require(Core:WaitForChild("Layout"))
 local Prefs = require(Core:WaitForChild("Prefs"))
 local Audio = require(Core:WaitForChild("Audio"))
@@ -140,13 +141,23 @@ function Hero.draw(self: Hero, store: any, ctx: any)
 	-- the resource block
 	local res = Common.get(f, "Res", "Frame") :: Frame
 	res.Active = false
-	Common.list(res, false, if compact then 2 else 4)
+	Common.list(res, false, if compact then 2 else 6)
 	if compact then
 		res.Position = UDim2.fromOffset(0, 0)
 		res.Size = UDim2.new(1, 0, 0, 0)
+		Common.drop(f, "Spine")
 	else
-		res.Position = UDim2.fromOffset(0, 0)
-		res.Size = UDim2.new(1, if pb then -440 else 0, 0, 0)
+		res.Position = UDim2.fromOffset(20, 0)
+		res.Size = UDim2.new(1, if pb then -460 else -20, 0, 0)
+		local spine = Common.get(f, "Spine", "Frame") :: Frame
+		spine.Position = UDim2.fromOffset(0, 4)
+		spine.Size = UDim2.fromOffset(2, 112)
+		spine.BackgroundColor3 = hue
+		spine.BackgroundTransparency = 0
+		spine.Visible = md ~= nil
+		local sg = Common.get(spine, "Fade", "UIGradient") :: UIGradient
+		sg.Rotation = 90
+		sg.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 0.9) })
 	end
 	res.AutomaticSize = Enum.AutomaticSize.Y
 	res.Visible = md ~= nil or (compact and rd ~= nil)
@@ -166,12 +177,11 @@ function Hero.draw(self: Hero, store: any, ctx: any)
 	local sig = amountText .. "|" .. Theme.toHex(hue) .. "|" .. tostring(compact)
 	if amount:GetAttribute("Sig") ~= sig then
 		amount:SetAttribute("Sig", sig)
-		Recipes.number(amount, { text = amountText, size = steps[1], from = WHITE, mid = Theme.lift(hue, 0.5), to = hue,
-			stroke = if compact then 5 else 7, shadow = if compact then 3 else 5, role = "hero" })
+		Recipes.number(amount, { text = amountText, size = steps[1], from = WHITE, to = WHITE, stroke = 0, shadow = 0, role = "hero" })
 		Rich.fit(amount, steps, if compact then 216 else 560)
 	end
 	-- the round glow blob behind the amount (never a square: Common.blob)
-	local blob = if md and not compact then Common.blob(f, "AmountGlow", hue, 0.35) else nil
+	local blob = if md and not compact then Common.blob(f, "AmountGlow", hue, 0.16) else nil
 	if blob then
 		blob.ZIndex = 0
 		blob.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -195,8 +205,8 @@ function Hero.draw(self: Hero, store: any, ctx: any)
 	local rsig = name .. "|" .. tostring(rsize) .. "|" .. Theme.toHex(hue)
 	if resName:GetAttribute("Sig") ~= rsig then
 		resName:SetAttribute("Sig", rsig)
-		Recipes.title(resName, { text = name, role = "resource", size = rsize, from = Theme.lift(hue, 0.6), to = Theme.lift(hue, 0.6),
-			stroke = if compact then 3 else 4, shadow = 2 })
+		Recipes.title(resName, { text = name, role = "resource", size = if compact then rsize - 2 else rsize - 2, from = Theme.lift(hue, 0.55),
+			to = Theme.lift(hue, 0.55), stroke = 0, shadow = 0 })
 	end
 	local eff = Common.label(res, "Eff", "body", C.soft, { order = 4 })
 	local effText = if md and not compact then Common.html(md.eff, "body", ctx.layer) else ""
@@ -240,8 +250,16 @@ function Hero.draw(self: Hero, store: any, ctx: any)
 		local row = rows[i]
 		if row then
 			local label = if row[1] ~= "" then row[1] else "HAVE"
-			local text = Common.caps(label, C.soft) .. "   " .. Common.num(if compact then Rich.short(row[2]) else row[2], "number", C.text)
-			local chip = Common.chip(stats, "Stat" .. i, text, { rich = true, bg = C.panel2, bgT = 0, h = if compact then 32 else 34 })
+			local tone = if label == "PASSIVE" then Sleek.C.goodHi else C.text
+			local text = Common.caps(label, Sleek.C.soft) .. "      " .. Common.num(if compact then Rich.short(row[2]) else row[2], "number", tone)
+			local chip = Common.chip(stats, "Stat" .. i, text, { rich = true, bg = WHITE, bgT = 0.97, h = if compact then 32 else 34,
+				stroke = WHITE })
+			Common.drop(chip, "Corner")
+			local b = chip:FindFirstChild("Border") :: UIStroke?
+			if b then
+				b.Transparency = 0.89
+				b.LineJoinMode = Enum.LineJoinMode.Miter
+			end
 			chip.LayoutOrder = i
 			chip.TextXAlignment = if compact then Enum.TextXAlignment.Left else Enum.TextXAlignment.Center
 			if compact then
@@ -266,7 +284,7 @@ function Hero.draw(self: Hero, store: any, ctx: any)
 	local cta = f:FindFirstChild("Cta") :: GuiObject?
 	if not compact then
 		local ctaH = if cta then cta.Size.Y.Offset else 0
-		stats.Position = UDim2.new(1, 0, 0, if cta then ctaH + 10 else 0)
+		stats.Position = UDim2.new(1, 0, 0, if cta then ctaH + 14 else 0)
 	end
 
 	-- the signature's hero idea
@@ -301,14 +319,29 @@ function Hero.drawCta(self: Hero, pb: any, ctx: any, compact: boolean)
 		cta.Position = UDim2.new(1, 0, 0, 0)
 	end
 	cta.Size = UDim2.fromOffset(w, h)
+	-- Sleek: the one solid light surface of the panel (ink type), corner ticks just outside; locked is a dark plate
+	for _, n in { "Corner", "Rim", "Bevel" } do Common.drop(cta, n) end
+	local ink = Sleek.C.ink
 	if can then
-		Recipes.bevel(cta, { radius = 16, top = Theme.lift(hue, 0.15), mid = hue, bottom = Theme.shade(hue, 0.55), stroke = 2,
-			strokeFrom = Theme.lift(hue, 0.5), strokeTo = hue, sprite = "button" })
-		Common.glow(cta, hue, 0.6, 20)
+		cta.BackgroundColor3 = WHITE
+		cta.BackgroundTransparency = 0
+		local g = Common.get(cta, "Fill", "UIGradient") :: UIGradient
+		g.Rotation = 90
+		g.Color = ColorSequence.new({ ColorSequenceKeypoint.new(0, Theme.lift(hue, 0.3)), ColorSequenceKeypoint.new(0.6, hue),
+			ColorSequenceKeypoint.new(1, Theme.shade(hue, 0.92)) })
+		g.Transparency = NumberSequence.new(0)
+		local edge = Common.get(cta, "Edge", "Frame") :: Frame
+		edge.Size = UDim2.new(1, 0, 0, 1)
+		edge.BackgroundColor3 = WHITE
+		edge.BackgroundTransparency = 0.3
+		edge.ZIndex = 9
+		Sleek.ticks(cta, { len = 12, th = 2, out = 6, color = Theme.lift(hue, 0.55), alpha = 1, z = 9 })
+		Common.glow(cta, hue, 0.3, 26)
 		if self.shine == nil then self.shine = Recipes.shine(cta, { every = 2.8 }) end
 	else
-		Recipes.bevel(cta, { radius = 16, top = C.panel3, mid = C.panel2, bottom = C.deep, stroke = 2, strokeFrom = C.strokeHi,
-			strokeTo = C.stroke, sprite = "button" })
+		Sleek.plate(cta, { alpha = 0.9, line = 0.8 })
+		Common.drop(cta, "Edge")
+		Sleek.ticks(cta, { len = 10, th = 2, out = 6, color = WHITE, alpha = 0.35, z = 9 })
 		Common.glow(cta, nil)
 		if self.shine then
 			self.shine:stop()
@@ -319,43 +352,44 @@ function Hero.drawCta(self: Hero, pb: any, ctx: any, compact: boolean)
 	-- the word (display: white, outline, hard shadow), step-fit to keep 12 du side padding
 	local word = Common.get(cta, "Word", "TextLabel") :: TextLabel
 	word.ZIndex = 10
-	word.AnchorPoint = Vector2.new(0.5, 0)
-	word.Position = UDim2.new(0.5, 0, 0, if compact then 10 else 12)
-	word.Size = UDim2.new(1, -24, 0, if compact then 24 else 32)
-	word.TextXAlignment = Enum.TextXAlignment.Center
+	word.AnchorPoint = Vector2.new(0, 0)
+	word.Position = UDim2.new(0, if compact then 14 else 28, 0, if compact then 10 else 18)
+	word.Size = UDim2.new(1, if compact then -28 else -120, 0, if compact then 24 else 32)
+	word.TextXAlignment = Enum.TextXAlignment.Left
 	word.TextYAlignment = Enum.TextYAlignment.Center
 	word.TextWrapped = false
 	local text = Signatures.cta(ctx.layer)
-	local sizes = if compact then { 20, 18, 16 } else { 26, 22 }
-	local wsig = text .. "|" .. tostring(compact) .. "|" .. tostring(can)
+	local sizes = if compact then { 20, 18, 16 } else { 30, 26, 22 }
+	local wsig = text .. "|" .. tostring(compact) .. "|" .. tostring(can) .. "|" .. Theme.toHex(hue)
 	if word:GetAttribute("Sig") ~= wsig then
 		word:SetAttribute("Sig", wsig)
-		Recipes.title(word, { text = text, role = "cta", size = sizes[1], stroke = if compact then 4 else 6, shadow = 3 })
-		Rich.fit(word, sizes, w - 24)
+		Recipes.title(word, { text = text, role = "cta", size = sizes[1], stroke = 0, shadow = 0 })
+		Rich.fit(word, sizes, w - (if compact then 28 else 120))
 	end
-	-- the value well: +gain, or "need X res" when locked
+	local fillText = word:FindFirstChild("Fill") :: TextLabel?
+	if fillText then fillText.TextColor3 = if can then ink else Sleek.C.soft end
+	-- the value line: +gain in ink under the word, or "need X res" when locked
 	local well = Common.get(cta, "Well", "TextLabel") :: TextLabel
 	well.ZIndex = 10
-	well.AnchorPoint = Vector2.new(0.5, 1)
+	well.AnchorPoint = Vector2.new(0, 1)
 	well.AutomaticSize = Enum.AutomaticSize.X
 	well.TextWrapped = false
-	well.TextXAlignment = Enum.TextXAlignment.Center
+	well.TextXAlignment = Enum.TextXAlignment.Left
 	well.TextYAlignment = Enum.TextYAlignment.Center
-	well.BackgroundColor3 = C.black
-	well.BackgroundTransparency = 0.45
-	Common.corner(well, 8)
-	Common.pad(well, 0, 10, 0, 10)
+	well.BackgroundTransparency = 1
+	Common.drop(well, "Corner")
+	Common.pad(well, 0, 0, 0, 0)
 	local unit = Signatures.unit(pb.res)
 	local barShown = pr ~= nil and (static or not can)
 	if can then
-		Common.text(well, "ctaSub", C.text)
-		well.Size = UDim2.fromOffset(0, 26)
-		well.Position = UDim2.new(0.5, 0, 1, if barShown then -38 else -12)
-		Common.setText(well, Common.num("+" .. (Common.str(pb.gain) or "0"), "ctaSub", C.text, unit, true))
+		Common.text(well, "ctaSub", ink)
+		well.Size = UDim2.fromOffset(0, 22)
+		well.Position = UDim2.new(0, if compact then 14 else 28, 1, if barShown then -34 else -16)
+		Common.setText(well, Common.num("+" .. (Common.str(pb.gain) or "0"), "ctaSub", ink, unit, true))
 	else
-		Common.text(well, "small", C.text)
-		well.Size = UDim2.fromOffset(0, 26)
-		well.Position = UDim2.new(0.5, 0, 1, -10)
+		Common.text(well, "small", Sleek.C.soft)
+		well.Size = UDim2.fromOffset(0, 22)
+		well.Position = UDim2.new(0, if compact then 14 else 28, 1, -12)
 		local need = Common.str(pb.next)
 		local bres = Common.plain(Common.str(pb.bres) or "")
 		if need then
@@ -367,16 +401,16 @@ function Hero.drawCta(self: Hero, pb: any, ctx: any, compact: boolean)
 	-- the pr bar + %
 	if barShown then
 		local p = pr :: number
-		local bar = Common.bar(cta, "Bar", p, if can then WHITE else Theme.lift(hue, 0.2), 6)
+		local bar = Common.bar(cta, "Bar", p, if can then ink else hue, 2)
 		bar.ZIndex = 10
 		bar.AnchorPoint = Vector2.new(0, 0)
-		bar.Position = UDim2.new(0, 20, 0, if compact then 40 else 52)
-		bar.Size = UDim2.new(1, -96, 0, 6)
+		bar.Position = UDim2.new(0, if compact then 14 else 28, 0, if compact then 42 else 58)
+		bar.Size = UDim2.new(1, if compact then -84 else -112, 0, 2)
 		local pct = Common.get(cta, "Pct", "TextLabel") :: TextLabel
 		pct.ZIndex = 10
-		Common.text(pct, "number", C.text)
+		Common.text(pct, "number", if can then ink else C.text)
 		pct.AnchorPoint = Vector2.new(1, 0)
-		pct.Position = UDim2.new(1, -18, 0, if compact then 33 else 45)
+		pct.Position = UDim2.new(1, if compact then -14 else -28, 0, if compact then 33 else 49)
 		pct.Size = UDim2.fromOffset(60, 20)
 		pct.TextXAlignment = Enum.TextXAlignment.Right
 		pct.TextYAlignment = Enum.TextYAlignment.Center
@@ -390,20 +424,35 @@ function Hero.drawCta(self: Hero, pb: any, ctx: any, compact: boolean)
 	if hk and keyboard() then
 		local key = Common.get(cta, "Key", "TextLabel") :: TextLabel
 		key.ZIndex = 11
-		Common.text(key, "label", C.ink)
-		key.AnchorPoint = Vector2.new(1, 0)
-		key.Position = UDim2.new(1, -10, 0, 10)
+		Common.text(key, "label", if can then ink else C.text)
+		key.AnchorPoint = Vector2.new(1, 0.5)
+		key.Position = UDim2.new(1, -52, 0.5, if barShown then -14 else 0)
 		key.AutomaticSize = Enum.AutomaticSize.X
-		key.Size = UDim2.fromOffset(0, 26)
-		key.BackgroundColor3 = Color3.fromRGB(236, 233, 248)
-		key.BackgroundTransparency = 0
+		key.Size = UDim2.fromOffset(30, 30)
+		key.BackgroundTransparency = 1
 		key.TextXAlignment = Enum.TextXAlignment.Center
 		key.TextYAlignment = Enum.TextYAlignment.Center
-		Common.corner(key, 6)
-		Common.pad(key, 0, 7, 0, 7)
+		Common.drop(key, "Corner")
+		Common.stroke(key, 1.5, if can then ink else WHITE, if can then 0 else 0.6).LineJoinMode = Enum.LineJoinMode.Miter
+		Common.pad(key, 0, 8, 0, 8)
+		local chev = Common.get(cta, "Chev", "Frame") :: Frame
+		chev.AnchorPoint = Vector2.new(0.5, 0.5)
+		chev.Position = UDim2.new(1, -30, 0.5, if barShown then -14 else 0)
+		chev.Size = UDim2.fromOffset(9, 9)
+		chev.Rotation = 45
+		chev.ZIndex = 11
+		for i, spec in { { UDim2.fromScale(0, 0), UDim2.new(1, 0, 0, 2) }, { UDim2.new(1, -2, 0, 0), UDim2.new(0, 2, 1, 0) } } do
+			local seg = Common.get(chev, "S" .. i, "Frame") :: Frame
+			seg.Position = spec[1]
+			seg.Size = spec[2]
+			seg.BackgroundColor3 = if can then ink else WHITE
+			seg.BackgroundTransparency = if can then 0 else 0.4
+			seg.ZIndex = 11
+		end
 		Common.setText(key, Common.esc(hk))
 	else
 		Common.drop(cta, "Key")
+		Common.drop(cta, "Chev")
 	end
 	cta:SetAttribute("State", if can then "can" else "locked")
 	if cta:GetAttribute("Wired") ~= true then

@@ -11,6 +11,7 @@
 local Core = script.Parent.Parent:WaitForChild("Core")
 local Signal = require(Core:WaitForChild("Signal"))
 local Theme = require(Core:WaitForChild("Theme"))
+local Sleek = require(Core:WaitForChild("Sleek"))
 local Kit = require(script.Parent:WaitForChild("Kit"))
 local Ready = require(script.Parent:WaitForChild("Ready"))
 
@@ -34,17 +35,15 @@ function Band.new(parent: GuiObject): Band
 	f.AnchorPoint = Vector2.new(0.5, 0)
 	f.Position = UDim2.new(0.5, 0, 0, 6)
 	f.Size = UDim2.new(1, -24, 0, 44)
-	f.BackgroundColor3 = Theme.C.deep
-	f.BackgroundTransparency = 0.08
+	Sleek.plate(f, { alpha = 0.92, line = 0.86 })
 	f.Visible = false
-	Kit.corner(f, UDim.new(0, 14))
-	local rim = Kit.stroke(f, 1.5, Theme.C.strokeHi, 1, "Rim")
+	local rim = Sleek.accent(f, Theme.C.text, 14, 56, { name = "Rim" })
 	local title = Kit.label(f, "Title", "section", "", Color3.new(1, 1, 1))
 	title.Position = UDim2.fromOffset(50, 0)
 	title.Size = UDim2.new(1, -110, 1, 0)
 	title.TextXAlignment = Enum.TextXAlignment.Left
 	title.TextTruncate = Enum.TextTruncate.AtEnd
-	Kit.textStroke(title, 2, 0.9)
+	Kit.textStroke(title, 0)
 	local closeB = Kit.button(f, "Close")
 	closeB.AnchorPoint = Vector2.new(1, 0.5)
 	closeB.Position = UDim2.new(1, -4, 0.5, 0)
@@ -122,14 +121,21 @@ function Band.new(parent: GuiObject): Band
 			sw:SetAttribute("Sig", nil)
 			drawSwitch()
 		end
+		-- Sleek: the layer's diamond and a white title; the hue lives on the top accent
 		local old = f:FindFirstChild("Emblem")
-		if old then old:Destroy() end
-		local g = Ready.gem(f, "Emblem", layer, sym or string.upper(layer), 34)
+		if old and not old:FindFirstChild("Outer") then old:Destroy() end
+		local hue = Theme.hue(layer)
+		local g = Sleek.diamond(f, "Emblem", hue, 32)
 		g.AnchorPoint = Vector2.new(0, 0.5)
-		g.Position = UDim2.new(0, 8, 0.5, 0)
-		rim.Color = Theme.lift(Theme.hue(layer), 0.3)
+		g.Position = UDim2.new(0, 10, 0.5, 0)
+		local symL = Kit.label(g, "Symbol", "badge", sym or string.upper(layer), Color3.new(1, 1, 1))
+		symL.Size = UDim2.fromScale(1, 1)
+		symL.TextXAlignment = Enum.TextXAlignment.Center
+		symL.ZIndex = g.ZIndex + 2
+		rim.BackgroundColor3 = hue
 		title.Text = string.upper(text or layer)
 		Theme.text(title, "section")
+		title.TextSize = 20
 		f.Visible = true
 	end
 	function self.destroy(b: Band)

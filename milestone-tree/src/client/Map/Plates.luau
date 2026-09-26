@@ -44,7 +44,6 @@ export type Plates = {
 
 local Plates = {}
 
-local LOCKED_STROKE = Color3.fromHex("4e4763")
 local READY = Theme.C.ready
 
 type Plate = {
@@ -98,13 +97,13 @@ function Plates.new(view: MapView.MapView, nodes: Nodes.Nodes): Plates
 		f.AnchorPoint = Vector2.new(0.5, 0)
 		f.AutomaticSize = Enum.AutomaticSize.XY
 		f.Size = UDim2.fromOffset(0, 0)
-		f.BackgroundColor3 = Color3.new(1, 1, 1)
-		f.BackgroundTransparency = 0.05
 		f.Visible = false
-		Kit.corner(f, UDim.new(0, 10))
-		Kit.grad(f, { Theme.C.panel2, Theme.C.deep }, 90, nil, "Back")
-		local st = Kit.stroke(f, 1.5, Color3.new(1, 1, 1), 1, "Rim")
-		local sg = Kit.grad(st, { Theme.lift(hue, 0.25) }, 90, nil, "RimGrad")
+		-- Sleek: a near-black slab, a white hairline, upright tracked caps and the value in the layer hue
+		f.BackgroundColor3 = Color3.fromHex("06090f")
+		f.BackgroundTransparency = 0.2
+		local st = Kit.stroke(f, 1, Color3.new(1, 1, 1), 0.12, "Rim")
+		st.LineJoinMode = Enum.LineJoinMode.Miter
+		local sg = Kit.grad(st, { Color3.new(1, 1, 1) }, 90, { { 0, 0.2 }, { 1, 0.1 } }, "RimGrad")
 		local list = Kit.list(f, "y", 1, Enum.HorizontalAlignment.Center)
 		local _ = list
 		local label = Kit.label(f, "Label", "plate", "", Color3.new(1, 1, 1))
@@ -113,8 +112,8 @@ function Plates.new(view: MapView.MapView, nodes: Nodes.Nodes): Plates
 		label.Size = UDim2.fromOffset(0, 0)
 		label.RichText = true
 		label.TextXAlignment = Enum.TextXAlignment.Center
-		local lg = Kit.grad(label, { Color3.new(1, 1, 1), Theme.lift(hue, 0.45) }, 90, nil, "Fill")
-		Kit.textStroke(label, 1.5, 0.9)
+		local lg = Kit.grad(label, { Color3.new(1, 1, 1) }, 90, nil, "Fill")
+		Kit.textStroke(label, 0)
 		local over = Kit.child(label, "Overhang", "UIPadding") :: UIPadding
 		over.PaddingRight = UDim.new(0, math.ceil(0.1 * label.TextSize))
 
@@ -127,7 +126,7 @@ function Plates.new(view: MapView.MapView, nodes: Nodes.Nodes): Plates
 		lock.LayoutOrder = 1
 		lock.Size = UDim2.fromOffset(12, 12)
 		lock.Visible = false
-		local amount = Kit.label(row, "Amount", "plateNum", "", Theme.lift(hue, 0.55))
+		local amount = Kit.label(row, "Amount", "plateNum", "", Theme.lift(hue, 0.45))
 		amount.LayoutOrder = 2
 		amount.AutomaticSize = Enum.AutomaticSize.XY
 		amount.Size = UDim2.fromOffset(0, 0)
@@ -212,24 +211,18 @@ function Plates.new(view: MapView.MapView, nodes: Nodes.Nodes): Plates
 			p.amount.Text = w.amount
 			p.lock.Visible = w.locked
 			local hue = Theme.hue(layer)
+			-- Sleek: white hairline plates; a READY node's plate takes the hue on its hairline
 			if w.locked then
 				p.labelGrad.Color = ColorSequence.new(Theme.C.lockedTitle)
-				p.amount.TextColor3 = Theme.C.soft
-				p.strokeGrad.Color = ColorSequence.new(LOCKED_STROKE)
+				p.amount.TextColor3 = Theme.C.lockedTitle
+				p.strokeGrad.Color = ColorSequence.new(Color3.new(1, 1, 1))
 			else
-				p.labelGrad.Color = ColorSequence.new(Color3.new(1, 1, 1), Theme.lift(hue, 0.45))
-				p.amount.TextColor3 = Theme.lift(hue, 0.55)
-				if w.ready then
-					p.strokeGrad.Color = ColorSequence.new({
-						ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
-						ColorSequenceKeypoint.new(0.5, Theme.lift(hue, 0.4)),
-						ColorSequenceKeypoint.new(1, Color3.new(1, 1, 1)),
-					})
-				else
-					p.strokeGrad.Color = ColorSequence.new(Theme.lift(hue, 0.25))
-				end
+				p.labelGrad.Color = ColorSequence.new(Color3.new(1, 1, 1))
+				p.amount.TextColor3 = Theme.lift(hue, 0.45)
+				p.strokeGrad.Color = ColorSequence.new(if w.ready then Theme.lift(hue, 0.3) else Color3.new(1, 1, 1))
 			end
-			p.stroke.Thickness = if w.ready then 2 else 1.5
+			p.stroke.Transparency = if w.ready then 0.35 else 0.12
+			p.stroke.Thickness = 1
 			dirty = true
 		end
 	end

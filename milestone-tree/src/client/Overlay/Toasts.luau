@@ -19,6 +19,7 @@ local Theme = require(Core:WaitForChild("Theme"))
 local Layout = require(Core:WaitForChild("Layout"))
 local Motion = require(Core:WaitForChild("Motion"))
 local Rich = require(Core:WaitForChild("Rich"))
+local Sleek = require(Core:WaitForChild("Sleek"))
 local Kit = require(script.Parent.Parent:WaitForChild("Hud"):WaitForChild("Kit"))
 local ToastModel = require(script.Parent:WaitForChild("ToastModel"))
 
@@ -44,22 +45,18 @@ local KIND: { [string]: { color: Color3, glyph: string } } = {
 
 -- the HUD glass (R10) at alpha .88
 local function glass(f: Frame)
-	f.BackgroundColor3 = Theme.C.glass
-	f.BackgroundTransparency = 0.12
-	f.BorderSizePixel = 0
-	Kit.stroke(f, 1, Color3.new(1, 1, 1), 0.14, "GlassRim")
+	Sleek.plate(f, { alpha = 0.88, line = 0.86, strokeName = "GlassRim" })
 end
 
 local function iconDisc(parent: Instance, name: string, kind: string, d: number): Frame
 	local spec = KIND[kind] or KIND.other
+	-- Sleek: the kind's glyph in its colour, no disc
 	local disc = Kit.frame(parent, name, 3)
 	disc.Size = UDim2.fromOffset(d, d)
-	Kit.gem(disc, spec.color, { hi = 0.6, lo = 0.45 })
-	Kit.stroke(disc, 2, Theme.lift(spec.color, 0.5), 0.9, "Rim")
-	local g = Kit.glyph(disc, "Icon", spec.glyph, Color3.new(1, 1, 1), Theme.shade(spec.color, 0.6))
+	local g = Kit.glyph(disc, "Icon", spec.glyph, spec.color, Sleek.C.top)
 	g.AnchorPoint = Vector2.new(0.5, 0.5)
 	g.Position = UDim2.fromScale(0.5, 0.5)
-	g.Size = UDim2.fromScale(0.5, 0.5)
+	g.Size = UDim2.fromScale(0.62, 0.62)
 	g.ZIndex = 4
 	return disc
 end
@@ -84,7 +81,7 @@ function Toasts.new(root: GuiObject): Toasts
 	more.AnchorPoint = Vector2.new(1, 0)
 	more.AutomaticSize = Enum.AutomaticSize.X
 	glass(more)
-	Kit.corner(more)
+
 	local mc = Kit.frame(more, "Content")
 	mc.AutomaticSize = Enum.AutomaticSize.X
 	mc.Size = UDim2.fromScale(0, 1)
@@ -104,10 +101,9 @@ function Toasts.new(root: GuiObject): Toasts
 	local list = Kit.frame(root, "NotifyList", 22)
 	list.AnchorPoint = Vector2.new(1, 0)
 	list.AutomaticSize = Enum.AutomaticSize.Y
-	list.BackgroundColor3 = Theme.C.panel
+	Sleek.plate(list, { alpha = 0.94, line = 0.86 })
 	list.BackgroundTransparency = 0.04
-	Kit.corner(list, UDim.new(0, 14))
-	Kit.stroke(list, 1.5, Theme.C.strokeHi, 1, "Rim")
+
 	Kit.pad(list, 12, 12, 12, 12)
 	Kit.list(list, "y", 6, Enum.HorizontalAlignment.Left)
 	list.Visible = false
@@ -173,15 +169,17 @@ function Toasts.new(root: GuiObject): Toasts
 		f.AnchorPoint = Vector2.new(1, 0)
 		f.Size = UDim2.fromOffset(w, h)
 		f.Position = UDim2.fromOffset(0, 0)
-		f.BackgroundColor3 = Color3.new(1, 1, 1)
-		f.BackgroundTransparency = 0.02
-		Kit.corner(f, UDim.new(0, 14))
-		Kit.grad(f, { Theme.shade(k, 0.55), Theme.C.panel }, 0, nil, "Back")
-		Kit.stroke(f, 2, k, 1, "Rim")
-		local disc = iconDisc(f, "Icon", t.kind, if compact then 32 else 44)
+		-- Sleek: a dark slab, a 3 du kind-colour bar on the left, corner ticks, the life line along the bottom
+		Sleek.plate(f, { alpha = 0.9, line = 0.86 })
+		Sleek.ticks(f, { len = 10, th = 2, out = 1, color = Color3.new(1, 1, 1), alpha = 0.8, z = 6 })
+		local side = Kit.frame(f, "Side", 4)
+		side.Size = UDim2.new(0, 3, 1, 0)
+		side.BackgroundColor3 = k
+		side.BackgroundTransparency = 0
+		local disc = iconDisc(f, "Icon", t.kind, if compact then 26 else 30)
 		disc.AnchorPoint = Vector2.new(0, 0.5)
-		disc.Position = UDim2.new(0, 14, 0.5, 0)
-		local x0 = 14 + (if compact then 32 else 44) + 12
+		disc.Position = UDim2.new(0, 18, 0.5, 0)
+		local x0 = 18 + (if compact then 26 else 30) + 14
 		local top = Kit.frame(f, "Top", 3)
 		top.Position = UDim2.fromOffset(x0, if compact then 8 else 12)
 		top.Size = UDim2.new(1, -x0 - 12, 0, if compact then 20 else 24)
@@ -191,27 +189,27 @@ function Toasts.new(root: GuiObject): Toasts
 		title.AutomaticSize = Enum.AutomaticSize.X
 		title.Size = UDim2.fromScale(0, 1)
 		title.TextTruncate = Enum.TextTruncate.AtEnd
-		Kit.textStroke(title, 1.8, 0.85)
+		title.FontFace = Font.fromName("Montserrat", Enum.FontWeight.ExtraBold, Enum.FontStyle.Italic)
+		Kit.textStroke(title, 0)
 		local over = Kit.child(title, "Overhang", "UIPadding") :: UIPadding
 		over.PaddingRight = UDim.new(0, 2)
-		local chip, cl = Kit.chip(top, "Count", "badge", "", { h = if compact then 20 else 22, pad = 7, fg = Color3.new(1, 1, 1),
-			bg = Theme.C.deep, bgA = 1, line = k, lineA = 1 })
+		local chip, cl = Kit.chip(top, "Count", "badge", "", { h = if compact then 18 else 20, pad = 6, fg = Theme.lift(k, 0.4),
+			bgA = 0, line = k, lineA = 0.9 })
 		chip.LayoutOrder = 2
 		chip.Visible = false
 		cl.RichText = true
-		local sub = Kit.label(f, "Sub", "small", t.sub, Theme.C.text)
-		sub.TextTransparency = 0.08
+		local sub = Kit.label(f, "Sub", "small", t.sub, Sleek.C.soft)
+		sub.TextTransparency = 0
 		sub.Position = UDim2.fromOffset(x0, if compact then 30 else 40)
 		sub.Size = UDim2.new(1, -x0 - 12, 0, 18)
 		sub.TextXAlignment = Enum.TextXAlignment.Left
 		sub.TextTruncate = Enum.TextTruncate.AtEnd
 		local bar = Kit.frame(f, "Life", 4)
 		bar.AnchorPoint = Vector2.new(0, 1)
-		bar.Position = UDim2.new(0, 14, 1, -1)
-		bar.Size = UDim2.new(1, -28, 0, 3)
+		bar.Position = UDim2.new(0, 3, 1, 0)
+		bar.Size = UDim2.new(1, -3, 0, 2)
 		bar.BackgroundColor3 = k
-		bar.BackgroundTransparency = 0.1
-		Kit.corner(bar)
+		bar.BackgroundTransparency = 0.2
 		pcall(function() f.Interactable = false end)
 		return f
 	end
@@ -230,9 +228,9 @@ function Toasts.new(root: GuiObject): Toasts
 		if sub then sub.Text = t.sub end
 		local bar = v:FindFirstChild("Life") :: Frame?
 		if bar then
-			bar.Size = UDim2.new(1, -28, 0, 3)
+			bar.Size = UDim2.new(1, -3, 0, 2)
 			local life = if Motion.snapshot() then 0 else t.life
-			Motion.tween(bar, TweenInfo.new(life, Enum.EasingStyle.Linear), { Size = UDim2.new(0, 0, 0, 3) }, "toastLife" .. t.id, true)
+			Motion.tween(bar, TweenInfo.new(life, Enum.EasingStyle.Linear), { Size = UDim2.new(0, 0, 0, 2) }, "toastLife" .. t.id, true)
 		end
 	end
 
@@ -305,7 +303,7 @@ function Toasts.new(root: GuiObject): Toasts
 			row.Size = UDim2.new(1, 0, 0, 56)
 			row.BackgroundTransparency = 0
 			row.BackgroundColor3 = Theme.C.panel2
-			Kit.corner(row, UDim.new(0, 10))
+			Kit.corner(row, UDim.new(0, 0)) -- Sleek: square
 			local disc = iconDisc(row, "Icon", t.kind, 32)
 			disc.AnchorPoint = Vector2.new(0, 0.5)
 			disc.Position = UDim2.new(0, 10, 0.5, 0)
