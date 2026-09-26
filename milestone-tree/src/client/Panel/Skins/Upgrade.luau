@@ -18,6 +18,7 @@ local Core = script.Parent.Parent.Parent:WaitForChild("Core")
 local Theme = require(Core:WaitForChild("Theme"))
 local Rich = require(Core:WaitForChild("Rich"))
 local Sleek = require(Core:WaitForChild("Sleek"))
+local Skin = require(Core:WaitForChild("Skin"))
 local Common = require(script.Parent:WaitForChild("Common"))
 local CompactOwned = require(script.Parent:WaitForChild("CompactOwned"))
 local Signatures = require(script.Parent.Parent.Parent:WaitForChild("Signatures"):WaitForChild("Signatures"))
@@ -254,7 +255,20 @@ function Upgrade.skin(rec: any, n: any, ctx: any): boolean
 			verb.TextXAlignment = Enum.TextXAlignment.Left
 			verb.TextYAlignment = Enum.TextYAlignment.Center
 			Common.setText(verb, "BUY")
-			Common.setText(foot, Common.num(co, "numberHeavy", ink, Signatures.unit(n.cur), true) .. "   ")
+			verb.ZIndex = foot.ZIndex + 1
+			local cost = Common.get(foot, "Cost", "TextLabel") :: TextLabel
+			Common.text(cost, "numberHeavy", ink)
+			cost.RichText = true
+			cost.Position = UDim2.new()
+			cost.Size = UDim2.new(1, -12, 1, 0)
+			cost.TextXAlignment = Enum.TextXAlignment.Right
+			cost.TextYAlignment = Enum.TextYAlignment.Center
+			cost.ZIndex = foot.ZIndex + 1
+			Common.setText(cost, Common.num(co, "numberHeavy", ink, Signatures.unit(n.cur), true))
+			Common.setText(foot, "")
+			if Skin.apply(foot, "cta", { tint = Theme.lift(ctx.hue, 0.15), scale = if compact then 0.4 else 0.45 }) then
+				Common.drop(foot, "Fill") -- the skin is the surface (instance budget)
+			end
 		else
 			foot.Size = UDim2.new(1, 0, 0, 24)
 			foot.TextXAlignment = Enum.TextXAlignment.Left
@@ -262,6 +276,8 @@ function Upgrade.skin(rec: any, n: any, ctx: any): boolean
 			Common.drop(foot, "Fill")
 			Common.drop(foot, "Pad")
 			Common.drop(foot, "Verb")
+			Common.drop(foot, "Cost")
+			Skin.clear(foot)
 
 			Common.setText(foot, Common.caps("Cost", p.soft) .. "   " .. Common.num(co, "numberHeavy", C.notYet, Signatures.unit(n.cur)))
 		end

@@ -303,30 +303,20 @@ check(string.find(string.lower(pg.TopbarGui.Root.Status.Label.Text), "reconnecti
 play("s13_none")
 check(string.find(string.lower(pg.TopbarGui.Root.Status.Label.Text), "reconnecting") == nil, "the next view clears RECONNECTING")
 
--- the phone: a full-screen panel switches the map off; the band closes it
+-- the phone: aspect-ratio scaling (Layout.compute) gives it the desktop layout at s .55, never a separate phone design
 Workspace.CurrentCamera.__props.ViewportSize = Vector2.new(844, 390)
 Workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Fire()
 frames(0.5)
+check(Layout.mode ~= "COMPACT" and math.abs(Layout.s - 0.55) < 1e-6, "phone: the desktop layout, scaled (s " .. Layout.s .. ", " .. Layout.mode .. ")")
 n0 = #acts
 nodesF.Node_p.Hit.Activated:Fire()
 frames(0.6)
-check(sheet.Visible and not mapGui.Enabled, "COMPACT: the panel is full screen and MapGui is off")
+check(sheet.Visible and mapGui.Enabled, "phone: the panel opens beside the map, as on desktop")
 local band = pg.TopbarGui.Root:FindFirstChild("PanelBand")
-check(band and band.Visible, "COMPACT: the band carries the title and the close")
-local switchGem = nil
-for _, c in band.Switch:GetChildren() do if string.sub(c.Name, 1, 4) == "Gem_" then switchGem = c end end
-if switchGem then
-	local target = string.sub(switchGem.Name, 5)
-	local s0 = #acts
-	switchGem.Activated:Fire()
-	frames(0.4)
-	check(count("tab", target, s0) == 1 and sheet.Visible, "COMPACT: a READY gem in the band switches to its layer (" .. target .. ")")
-else
-	print("  (no other READY layer in this state: the band switcher is empty)")
-end
-if band then band.Close.Activated:Fire() end
+check(band == nil or not band.Visible, "phone: no separate phone band")
+sheet.Close.Activated:Fire()
 frames(0.5)
-check(not sheet.Visible and mapGui.Enabled and count("tab", "none", n0) == 1, "the band's close closes the panel and the map comes back")
+check(not sheet.Visible and mapGui.Enabled and count("tab", "none", n0) == 1, "phone: the panel's close closes it")
 Workspace.CurrentCamera.__props.ViewportSize = Vector2.new(1920, 1080)
 Workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Fire()
 frames(0.5)

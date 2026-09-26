@@ -48,23 +48,25 @@ local INSETS = {
 	TopbarSafeInsets = { 136, -58, VW - 136 - 76, 58 },
 }
 local GUI = { Frame = true, ScrollingFrame = true, TextLabel = true, TextButton = true, ImageButton = true, TextBox = true, ImageLabel = true, CanvasGroup = true }
+-- x, y, w, h in abs px and k, the scale this object's descendants inherit (the product of the UIScales above them)
 local function absRect(o)
 	local p = rawget(o, "__props")
 	if rawget(o, "__class") == "ScreenGui" then
 		local r = INSETS[p.ScreenInsets and p.ScreenInsets.Name or "CoreUISafeInsets"] or INSETS.CoreUISafeInsets
-		return r[1], r[2], r[3], r[4]
+		return r[1], r[2], r[3], r[4], 1
 	end
 	local parent = p.Parent
-	local px, py, pw, ph = 0, 0, VW, VH
-	if parent and (rawget(parent, "__class") == "ScreenGui" or GUI[rawget(parent, "__class")]) then px, py, pw, ph = absRect(parent) end
+	local px, py, pw, ph, pk = 0, 0, VW, VH, 1
+	if parent and (rawget(parent, "__class") == "ScreenGui" or GUI[rawget(parent, "__class")]) then px, py, pw, ph, pk = absRect(parent) end
 	local s, pos, ap = p.Size, p.Position, p.AnchorPoint
-	local k = 1
-	for _, c in o.__kids do if c.__class == "UIScale" then k = c.__props.Scale or 1 end end
-	local w = if s then s.X.Offset * k + s.X.Scale * pw else 100
-	local h = if s then s.Y.Offset * k + s.Y.Scale * ph else 40
-	local x = px + (if pos then pos.X.Offset + pos.X.Scale * pw else 0) - (if ap then ap.X * w else 0)
-	local y = py + (if pos then pos.Y.Offset + pos.Y.Scale * ph else 0) - (if ap then ap.Y * h else 0)
-	return x, y, math.max(1, w), math.max(1, h)
+	local own = 1
+	for _, c in o.__kids do if c.__class == "UIScale" then own = c.__props.Scale or 1 end end
+	local k = pk * own
+	local w = if s then s.X.Offset * k + s.X.Scale * pw * own else 100
+	local h = if s then s.Y.Offset * k + s.Y.Scale * ph * own else 40
+	local x = px + (if pos then pos.X.Offset * pk + pos.X.Scale * pw else 0) - (if ap then ap.X * w else 0)
+	local y = py + (if pos then pos.Y.Offset * pk + pos.Y.Scale * ph else 0) - (if ap then ap.Y * h else 0)
+	return x, y, math.max(1, w), math.max(1, h), k
 end
 Inst.__index = function(o, k)
 	if (k == "AbsoluteSize" or k == "AbsolutePosition") and (rawget(o, "__class") == "ScreenGui" or GUI[rawget(o, "__class")]) then

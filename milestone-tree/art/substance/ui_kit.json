@@ -1,0 +1,61 @@
+{
+ "about": "substance/kit.py build: the UI kit atlas. rects [x, y, w, h]; slice = 9-slice corner px; tint = multiply by the layer hue.",
+ "size": 1024,
+ "slots": {
+  "cta": {
+   "rect": [
+    512,
+    0,
+    512,
+    128
+   ],
+   "slice": 36,
+   "tint": true,
+   "source": "base"
+  },
+  "button": {
+   "rect": [
+    512,
+    128,
+    384,
+    96
+   ],
+   "slice": 28,
+   "tint": false,
+   "source": "base"
+  },
+  "tile": {
+   "rect": [
+    512,
+    224,
+    160,
+    160
+   ],
+   "slice": 44,
+   "tint": false,
+   "source": "base"
+  },
+  "panel": {
+   "rect": [
+    0,
+    0,
+    512,
+    512
+   ],
+   "slice": 110,
+   "tint": false,
+   "source": "base"
+  },
+  "plate": {
+   "rect": [
+    672,
+    224,
+    256,
+    128
+   ],
+   "slice": 36,
+   "tint": false,
+   "source": "base"
+  }
+ }
+}

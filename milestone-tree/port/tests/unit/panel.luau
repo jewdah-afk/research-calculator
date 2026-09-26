@@ -191,6 +191,7 @@ scriptModule(shared, "Html", "shared/Html")
 M.module(shared, "ZoneMaps", function() return require("../../../src/shared/ZoneMaps") end)
 M.module(shared, "Assets", function() return require("../../../src/shared/Assets") end)
 M.module(shared, "PrefsSchema", function() return require("../../../src/shared/PrefsSchema") end)
+M.module(shared, "UiKit", function() return require("../../../src/shared/UiKit") end)
 local client = Instance.new("Folder"); client.Name = "MilestoneTree"; client.Parent = SPS
 local function folder(parent, name)
 	local f = Instance.new("Folder"); f.Name = name; f.Parent = parent
@@ -200,7 +201,7 @@ scriptModule(client, "Types", "client/Types")
 scriptModule(client, "Style", "client/Style")
 scriptModule(client, "Render", "client/Render")
 local core = folder(client, "Core")
-for _, n in { "Signal", "Prefs", "Layout", "Theme", "Motion", "Sprites", "Recipes", "Rich", "Sleek", "ViewStore", "Audio" } do
+for _, n in { "Signal", "Prefs", "Layout", "Theme", "Motion", "Sprites", "Recipes", "Rich", "Sleek", "Skin", "ViewStore", "Audio" } do
 	scriptModule(core, n, "client/Core/" .. n)
 end
 local panelF = folder(client, "Panel")
@@ -501,10 +502,10 @@ do
 	local order = side and side:FindFirstChild("Order")
 	if order then order.Activated:Fire() end
 	check(fired[#fired] and fired[#fired][1] == "tab" and fired[#fired][2] == "options-tab", "Order opens Options (map.opt)")
-	-- COMPACT: one column, notes on top
+	-- a phone: aspect scaling keeps the desktop layout (the side column stays), only scaled
 	viewport(844, 390)
 	panel.render:refresh()
-	check(ph:FindFirstChild("Notes") ~= nil and body:FindFirstChild("Side") == nil, "COMPACT: notes on top, no side column")
+	check(Layout.mode ~= "COMPACT" and body:FindFirstChild("Side") ~= nil, "phone: the desktop ladder layout, scaled")
 	panel:destroy()
 	viewport(1920, 1080)
 end

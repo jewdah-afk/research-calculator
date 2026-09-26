@@ -14,7 +14,7 @@ const PORT = path.join(__dirname, '..', '..'), ART = path.join(PORT, '..', 'art'
 function assetMap() {
   const map = {};
   const add = (id, file) => { if (id && file && fs.existsSync(file)) map['rbxassetid://' + String(id).replace(/^rbxassetid:\/\//, '')] = 'http://snap.local/f/' + encodeURIComponent(file); };
-  for (const [manifest, base] of [[path.join(ART, 'roblox', 'uploaded.json'), path.join(ART, 'roblox')], [path.join(ART, 'ui', 'uploaded.json'), path.join(ART, 'ui')], [path.join(ART, 'gems', 'uploaded.json'), path.join(ART, 'gems')]]) {
+  for (const [manifest, base] of [[path.join(ART, 'roblox', 'uploaded.json'), path.join(ART, 'roblox')], [path.join(ART, 'ui', 'uploaded.json'), path.join(ART, 'ui')], [path.join(ART, 'gems', 'uploaded.json'), path.join(ART, 'gems')], [path.join(ART, 'substance', 'uploaded.json'), path.join(ART, 'substance')]]) {
     if (!fs.existsSync(manifest)) continue;
     const j = JSON.parse(fs.readFileSync(manifest, 'utf8'));
     for (const a of Object.values(j.assets || j)) if (a && a.assetId && a.file) add(a.assetId, path.join(base, a.file));

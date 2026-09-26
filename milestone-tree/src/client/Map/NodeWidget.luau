@@ -299,6 +299,11 @@ function NodeWidget.new(parent: Frame, layer: string, pos: Vector2): NodeWidget
 	local lock: Frame? = nil
 
 	local function writeZoomed()
+		local bd = badge
+		if bd then
+			local sz = math.max(8, math.floor(math.min((if compact then 22 else 26) * Layout.s, RING * pz * floor.Scale * 0.4) + 0.5))
+			bd.Size = UDim2.fromOffset(sz, sz)
+		end
 		symbol.TextSize = math.clamp(math.floor(symSize * pz + 0.5), 1, 100)
 		symStroke.Thickness = math.max(1, 4 * pz * 0.8)
 		rim.Thickness = math.max(1, 2 * pz)
@@ -456,7 +461,9 @@ function NodeWidget.new(parent: Frame, layer: string, pos: Vector2): NodeWidget
 	end
 
 	local function badgeSize(): number
-		return math.floor((if compact then 22 else 26) * Layout.s + 0.5)
+		-- never more than 40 % of the ring as drawn (a zoomed-out map would otherwise get badges bigger than its gems)
+		local ringPx = RING * pz * floor.Scale
+		return math.max(8, math.floor(math.min((if compact then 22 else 26) * Layout.s, ringPx * 0.4) + 0.5))
 	end
 	local function setBadge(kind: string?)
 		if kind == nil then

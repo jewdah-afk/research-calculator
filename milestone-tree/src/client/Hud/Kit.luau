@@ -27,6 +27,7 @@ local Core = script.Parent.Parent:WaitForChild("Core")
 local Types = require(script.Parent.Parent:WaitForChild("Types"))
 local Theme = require(Core:WaitForChild("Theme"))
 local Motion = require(Core:WaitForChild("Motion"))
+local Skin = require(Core:WaitForChild("Skin"))
 
 type ARect = Types.Rect
 
@@ -484,7 +485,8 @@ function Kit.action(parent: Instance, name: string, text: string, o: { style: st
 	b.AutomaticSize = if o.w then Enum.AutomaticSize.None else Enum.AutomaticSize.X
 	b.BackgroundTransparency = 0
 	b.BackgroundColor3 = Color3.new(1, 1, 1)
-	Kit.corner(b, UDim.new(0, 12))
+	local oc = b:FindFirstChild("Corner")
+	if oc then oc:Destroy() end
 	Kit.pad(b, 0, 16, 0, 16)
 	local style = o.style or "quiet"
 	local hue = o.hue or Theme.C.system
@@ -502,6 +504,11 @@ function Kit.action(parent: Instance, name: string, text: string, o: { style: st
 		Kit.grad(b, { Theme.C.panel3, Theme.C.panel2 }, 90, nil, "Back")
 		Kit.stroke(b, 1.5, Theme.C.strokeHi, 1, "Rim")
 	end
+	-- the Substance kit when it is uploaded (the gradients above stay as the fallback)
+	local tint = if style == "primary" then Theme.lift(hue, 0.1) elseif style == "gold" then Color3.fromHex("ffc233")
+		elseif style == "danger" then Theme.C.danger else nil
+	Skin.apply(b, if tint then "cta" else "button", { tint = tint, scale = math.clamp(h / 110, 0.3, 0.6) })
+	if tint and Skin.ready() then fg = Color3.fromHex("06101b") end
 	local row = Kit.frame(b, "Content")
 	row.AutomaticSize = Enum.AutomaticSize.X
 	row.Size = UDim2.fromScale(if o.w then 1 else 0, 1)
@@ -510,7 +517,7 @@ function Kit.action(parent: Instance, name: string, text: string, o: { style: st
 	l.LayoutOrder = 2
 	l.AutomaticSize = Enum.AutomaticSize.X
 	l.Size = UDim2.fromScale(0, 1)
-	Kit.textStroke(l, if style == "quiet" then 0 else 1.5, 0.8)
+	Kit.textStroke(l, if style == "quiet" or Skin.ready() then 0 else 1.5, 0.8)
 	local over = child(l, "Overhang", "UIPadding") :: UIPadding
 	over.PaddingRight = UDim.new(0, 3)
 	return b, l

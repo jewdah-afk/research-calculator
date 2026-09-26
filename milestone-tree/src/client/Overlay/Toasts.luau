@@ -20,6 +20,7 @@ local Layout = require(Core:WaitForChild("Layout"))
 local Motion = require(Core:WaitForChild("Motion"))
 local Rich = require(Core:WaitForChild("Rich"))
 local Sleek = require(Core:WaitForChild("Sleek"))
+local Skin = require(Core:WaitForChild("Skin"))
 local Kit = require(script.Parent.Parent:WaitForChild("Hud"):WaitForChild("Kit"))
 local ToastModel = require(script.Parent:WaitForChild("ToastModel"))
 
@@ -172,6 +173,7 @@ function Toasts.new(root: GuiObject): Toasts
 		-- Sleek: a dark slab, a 3 du kind-colour bar on the left, corner ticks, the life line along the bottom
 		Sleek.plate(f, { alpha = 0.9, line = 0.86 })
 		Sleek.ticks(f, { len = 10, th = 2, out = 1, color = Color3.new(1, 1, 1), alpha = 0.8, z = 6 })
+		Skin.apply(f, "plate", { scale = 0.5 })
 		local side = Kit.frame(f, "Side", 4)
 		side.Size = UDim2.new(0, 3, 1, 0)
 		side.BackgroundColor3 = k

@@ -27,6 +27,7 @@ local Motion = require(Core:WaitForChild("Motion"))
 local Rich = require(Core:WaitForChild("Rich"))
 local Recipes = require(Core:WaitForChild("Recipes"))
 local Sleek = require(Core:WaitForChild("Sleek"))
+local Skin = require(Core:WaitForChild("Skin"))
 local Kit = require(script.Parent:WaitForChild("Kit"))
 local NodeAtlas = require(game:GetService("ReplicatedStorage"):WaitForChild("MilestoneTree"):WaitForChild("NodeAtlas"))
 
@@ -123,10 +124,18 @@ function Ready.new(parent: GuiObject): Ready
 	tray.Visible = false
 	Sleek.plate(tray, { alpha = 0.88, line = 0.86 })
 	Kit.pad(tray, 12, 18, 10, 18)
-	local trayTicks = Kit.frame(parent, "ReadyTicks", 6)
+	local trayTicks = Kit.frame(parent, "ReadyTicks", 4)
 	trayTicks.AnchorPoint = Vector2.new(1, 1)
 	trayTicks.Visible = false
 	Sleek.ticks(trayTicks, { len = 10, th = 2, out = 1, color = Color3.new(1, 1, 1), alpha = 0.8, z = 6 })
+	-- the tray lays out a list, so its Substance plate lives on this sibling (same rect, drawn under the tray)
+	if Skin.apply(trayTicks, "plate", { scale = 0.5 }) then
+		tray.BackgroundTransparency = 1
+		local hair = tray:FindFirstChild("Hair") :: UIStroke?
+		if hair then hair.Enabled = false end
+		local edge = tray:FindFirstChild("Edge") :: GuiObject?
+		if edge then edge.Visible = false end
+	end
 	Kit.list(tray, "y", 8, Enum.HorizontalAlignment.Left)
 	self.frame = tray
 

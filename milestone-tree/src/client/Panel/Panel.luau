@@ -28,6 +28,7 @@ local Recipes = require(Core:WaitForChild("Recipes"))
 local Motion = require(Core:WaitForChild("Motion"))
 local Rich = require(Core:WaitForChild("Rich"))
 local Sleek = require(Core:WaitForChild("Sleek"))
+local Skin = require(Core:WaitForChild("Skin"))
 local Layout = require(Core:WaitForChild("Layout"))
 local Signal = require(Core:WaitForChild("Signal"))
 local Audio = require(Core:WaitForChild("Audio"))
@@ -584,6 +585,13 @@ function Panel.layout(self: Panel)
 		Sleek.ticks(sheet, { len = 22, th = 2, out = 1, color = if corrupted then C.termLime else WHITE, alpha = 0.85, z = 8 })
 		Sleek.accent(sheet, hue, 40, 88, { name = "TopAccent" })
 	end
+	-- the Substance kit's frame under everything (the corrupted layers keep their terminal slab)
+	if not corrupted and not full then
+		local sk = Skin.apply(sheet, "panel", { scale = 0.6, z = 1 })
+		if sk then sk.ImageTransparency = 0.04 end
+	else
+		Skin.clear(sheet)
+	end
 	if corrupted then
 		local rim = Common.stroke(sheet, 1, C.termLime, 0.35, "Hair")
 		Recipes.dashed(rim, { color = C.termLime })
@@ -688,6 +696,7 @@ function Panel.layout(self: Panel)
 	close.BackgroundColor3 = WHITE
 	close.BackgroundTransparency = 0.97
 	Common.stroke(close, 1, WHITE, 0.78, "Border").LineJoinMode = Enum.LineJoinMode.Miter
+	Skin.apply(close, "button", { scale = 0.35 })
 	Common.drop(close, "X")
 	local cross = Common.get(close, "Cross", "Frame") :: Frame
 	cross.AnchorPoint = Vector2.new(0.5, 0.5)

@@ -27,6 +27,7 @@ local Recipes = require(Core:WaitForChild("Recipes"))
 local Motion = require(Core:WaitForChild("Motion"))
 local Rich = require(Core:WaitForChild("Rich"))
 local Sleek = require(Core:WaitForChild("Sleek"))
+local Skin = require(Core:WaitForChild("Skin"))
 local Layout = require(Core:WaitForChild("Layout"))
 local Prefs = require(Core:WaitForChild("Prefs"))
 local Audio = require(Core:WaitForChild("Audio"))
@@ -337,12 +338,17 @@ function Hero.drawCta(self: Hero, pb: any, ctx: any, compact: boolean)
 		edge.ZIndex = 9
 		Sleek.ticks(cta, { len = 12, th = 2, out = 6, color = Theme.lift(hue, 0.55), alpha = 1, z = 9 })
 		Common.glow(cta, hue, 0.3, 26)
+		if Skin.apply(cta, "cta", { tint = Theme.lift(hue, 0.15), scale = if compact then 0.55 else 0.75 }) then
+			Common.drop(cta, "Edge")
+			Common.drop(cta, "Fill")
+		end
 		if self.shine == nil then self.shine = Recipes.shine(cta, { every = 2.8 }) end
 	else
 		Sleek.plate(cta, { alpha = 0.9, line = 0.8 })
 		Common.drop(cta, "Edge")
 		Sleek.ticks(cta, { len = 10, th = 2, out = 6, color = WHITE, alpha = 0.35, z = 9 })
 		Common.glow(cta, nil)
+		Skin.apply(cta, "button", { scale = if compact then 0.55 else 0.75 })
 		if self.shine then
 			self.shine:stop()
 			self.shine = nil

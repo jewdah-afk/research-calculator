@@ -13,6 +13,7 @@
 
 local Core = script.Parent.Parent.Parent:WaitForChild("Core")
 local Theme = require(Core:WaitForChild("Theme"))
+local Skin = require(Core:WaitForChild("Skin"))
 local Common = require(script.Parent:WaitForChild("Common"))
 
 local Challenge = {}
@@ -42,7 +43,10 @@ function Challenge.skin(rec: any, n: any, ctx: any): boolean
 	local p = Common.surface(root, surface, ctx.hue, 16)
 	Common.glow(root, if st8 == "completable" then C.complete elseif surface == "can" then ctx.hue else nil, 0.45, 16)
 	Common.drop(root, "Gradient")
-	local w = if compact then math.floor((ctx.contentW - 10) / 2) else 330
+	-- the row's cards share its width evenly (a fixed 330 left a ragged gap on the right)
+	local gap = if compact then 10 else 12
+	local per = math.max(1, math.floor((ctx.contentW + gap) / ((if compact then 200 else 300) + gap)))
+	local w = math.floor((ctx.contentW - gap * (per - 1)) / per)
 	root.Size = UDim2.fromOffset(w, 0)
 	root.AutomaticSize = Enum.AutomaticSize.Y
 	root.Visible = true
@@ -129,6 +133,11 @@ function Challenge.button(rec: any, n: any, ctx: any): boolean
 	b.Size = UDim2.fromOffset(0, if ctx.mode == "COMPACT" then 38 else 42)
 	b.AutomaticSize = Enum.AutomaticSize.X
 	Common.glow(b, if st8 == "completable" then C.complete else nil, 0.6, 14)
+	-- the Substance kit: the hue plate for the live states, the dark plate for done / locked
+	local lit = not (st8 == "done" or st8 == "locked")
+	if Skin.apply(b, if lit then "cta" else "button", { tint = if lit then Theme.lift(fill, 0.1) else nil, scale = 0.4 }) and lit then
+		ink = C.ink
+	end
 	Common.text(label, "label", ink)
 	label.TextWrapped = false
 	label.TextXAlignment = Enum.TextXAlignment.Center

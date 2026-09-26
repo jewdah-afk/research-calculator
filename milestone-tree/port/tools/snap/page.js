@@ -178,7 +178,11 @@
     if (!ctx.inList && (ap.X || ap.Y)) tf.push(`translate(${-ap.X * 100}%,${-ap.Y * 100}%)`);
     if (p.Rotation) tf.push(`rotate(${p.Rotation}deg)`);
     if (scale && scale.p.Scale != null && scale.p.Scale !== 1) tf.push(`scale(${scale.p.Scale})`);
-    if (tf.length) s.transform = tf.join(' ');
+    if (tf.length) {
+      s.transform = tf.join(' ');
+      // UIScale grows the object from its anchor point (the engine keeps Position fixed); rotation is about the centre
+      if (scale && scale.p.Scale != null && scale.p.Scale !== 1 && !p.Rotation) s.transformOrigin = `${ap.X * 100}% ${ap.Y * 100}%`;
+    }
     if (p.ClipsDescendants || o.c === 'ScrollingFrame' || o.c === 'CanvasGroup') s.overflow = 'hidden';
     if (o.c === 'CanvasGroup') s.opacity = String(1 - (p.GroupTransparency || 0));
     // background

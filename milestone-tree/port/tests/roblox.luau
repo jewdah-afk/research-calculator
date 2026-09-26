@@ -343,7 +343,7 @@ pg.HudGui.Root.Dock.Options.Activated:Fire()
 frames(0.5)
 check(sheet.Visible, "OPTIONS opens the Options panel after the rejoin")
 
--- a phone-sized screen: the panel is full screen and the map is off
+-- a phone-sized screen: the same layout scaled by aspect ratio (a side sheet beside the map strip)
 local Workspace = game:GetService("Workspace")
 Workspace.CurrentCamera.__props.ViewportSize = E.Vector2.new(844, 390)
 Workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Fire()
@@ -352,12 +352,11 @@ nodesF = pg.MapGui.Root.Box.Nodes
 sheet = pg.PanelGui.Root.Sheet
 openNode("p")
 frames(0.5)
-check(sheet.Visible and not pg.MapGui.Enabled, "844 x 390: the sheet is full screen and MapGui is off")
-local band = pg.TopbarGui.Root.PanelBand
-check(band.Visible and band.Close.Size.X.Offset >= 44, "the band's close is at least 44 du")
-band.Close.Activated:Fire()
+check(sheet.Visible and pg.MapGui.Enabled, "844 x 390: the panel opens beside the map (aspect-scaled desktop layout)")
+check(sheet.Close.Visible and sheet.Close.Size.X.Offset * 0.55 >= 22, "the close button stays a usable size once scaled")
+sheet.Close.Activated:Fire()
 frames(0.5)
-check(pg.MapGui.Enabled and not sheet.Visible, "the band's close brings the map back")
+check(pg.MapGui.Enabled and not sheet.Visible, "the close brings the map back")
 
 check(E.warnings == 0, "no [MilestoneTree] warnings while playing (" .. E.warnings .. ")")
 

@@ -18,6 +18,7 @@ local Layout = require(Core:WaitForChild("Layout"))
 local Motion = require(Core:WaitForChild("Motion"))
 local Rich = require(Core:WaitForChild("Rich"))
 local Sleek = require(Core:WaitForChild("Sleek"))
+local Skin = require(Core:WaitForChild("Skin"))
 local Input = require(script.Parent.Parent:WaitForChild("Input"):WaitForChild("Input"))
 local Kit = require(script.Parent:WaitForChild("Kit"))
 
@@ -119,8 +120,8 @@ function Dock.new(parent: GuiObject): Dock
 	-- the trophies badge and the options dot
 	local badge, badgeLabel = Kit.chip(buttons.Trophies, "Badge", "badge", "", { h = 18, pad = 6, fg = Sleek.C.ink,
 		bg = Sleek.C.gold, bgA = 1 })
-	badge.AnchorPoint = Vector2.new(0, 0.5)
-	badge.Position = UDim2.new(0.5, 0, 0, -2)
+	badge.AnchorPoint = Vector2.new(1, 0.5)
+	badge.Position = UDim2.new(1, 2, 0, -2) -- inside its own tile, so the next tile never covers it
 	local bc = badge:FindFirstChildWhichIsA("UICorner")
 	if bc then bc:Destroy() end
 	badge.ZIndex = 8
@@ -203,6 +204,7 @@ function Dock.new(parent: GuiObject): Dock
 			end
 			local on = active == spec.key
 			Sleek.plate(b, { alpha = 0.86, line = if on then 0.3 else 0.86 })
+			Skin.apply(b, "tile", { scale = bs / 150 })
 			local hair = b:FindFirstChild("Hair") :: UIStroke?
 			if hair then hair.Color = if on then spec.hue else Color3.new(1, 1, 1) end
 			local fl = b:FindFirstChild("Floor") :: Frame?

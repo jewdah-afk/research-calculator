@@ -27,6 +27,7 @@ local Motion = require(Core:WaitForChild("Motion"))
 local Rich = require(Core:WaitForChild("Rich"))
 local Recipes = require(Core:WaitForChild("Recipes"))
 local Sleek = require(Core:WaitForChild("Sleek"))
+local Skin = require(Core:WaitForChild("Skin"))
 local Kit = require(script.Parent:WaitForChild("Kit"))
 
 type ARect = Types.Rect
@@ -72,6 +73,7 @@ function Capsule.new(parent: GuiObject): Capsule
 	Sleek.plate(f, { alpha = 0.88, line = 0.86 })
 	Sleek.ticks(f, { len = 10, th = 2, out = 1, color = Color3.new(1, 1, 1), alpha = 0.8, z = 9 })
 	Sleek.accent(f, GOLD_D, 24, 64, { name = "Accent" })
+	Skin.apply(f, "plate", { scale = 0.5 })
 	self.frame = f
 
 	local coin = Sleek.diamond(f, "Coin", GOLD_D, 44, { fill = 0, inner = false })

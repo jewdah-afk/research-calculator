@@ -264,7 +264,9 @@ local ROLES: { [string]: Role } = {
 }
 Theme.ROLES = ROLES
 -- rendered floors in px (TextSize x UI scale) on every device row, DESIGN.md 9.5
-Theme.FLOOR = { caps = 12, text = 13, body = 14 }
+-- text floors in device points: with aspect scaling (Layout.compute) the design sizes hold down to s .55, so the floors
+-- only catch text the design already sets very small
+Theme.FLOOR = { caps = 7, text = 8, body = 8 }
 Theme.COMPACT_FLOOR = 12
 
 local fonts: { [string]: Font } = {}

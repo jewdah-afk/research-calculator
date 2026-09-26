@@ -1,0 +1,14 @@
+newmtl cta
+Kd 0.8 0.8 0.8
+
+newmtl button
+Kd 0.8 0.8 0.8
+
+newmtl tile
+Kd 0.8 0.8 0.8
+
+newmtl panel
+Kd 0.8 0.8 0.8
+
+newmtl plate
+Kd 0.8 0.8 0.8

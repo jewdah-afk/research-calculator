@@ -1,0 +1,13 @@
+{
+ "about": "Roblox ids of the node atlas, keyed by the PNG sha256 (gems/upload.js).",
+ "assets": {
+  "99bf1587a77197f3f7cb62eb7cf69fc0e4eb5613d9253e9d8b53c0088b2226c1": {
+   "file": "out/ui_kit.png",
+   "creator": "user:5167569069",
+   "uploadedAt": "2026-09-26T03:07:16.861Z",
+   "assetId": "101444218779066",
+   "operationId": "1e203084-3626-4571-b71c-6cc535890b40",
+   "moderation": "Reviewing"
+  }
+ }
+}

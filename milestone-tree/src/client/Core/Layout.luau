@@ -42,22 +42,20 @@ Layout.BOTTOM_BAND_COMPACT = 64
 Layout.STRIP_MIN = 460 -- a side sheet whose map strip is narrower than this (du) goes full screen
 
 -- ------------------------------------------------------------------------------------------------------ the formula
--- the smallest UI scale per mode: text never renders under the DESIGN.md 9.5 floors (Theme.size lifts the rest)
-Layout.S_MIN = { COMPACT = 1.0, MEDIUM = 0.90, WIDE = 0.90 } :: { [string]: number }
--- DESIGN.md 10 verbatim. vw, vh: the viewport in points; userSize: .90 / 1 / 1.15. PreferredTextSize does not
--- change s: the engine enlarges text itself (DESIGN.md 9.5).
+-- Aspect-ratio scaling (the user's call, 2026-09-26): one layout for every device. The UI is designed on a 1920 x 1080
+-- reference canvas and scaled by the tighter axis, so phones, tablets, laptops and consoles all get the same screen,
+-- scaled; nothing is hand-tuned per device. S_FLOOR keeps phone text legible (a 844 x 390 phone gets s .55, a
+-- 1535 x 709 du canvas). The mode only records how much canvas that leaves (MEDIUM when it is narrower or shorter
+-- than the design wants), never a different phone design. userSize is the Interface Size option (.90 / 1 / 1.15).
+Layout.REF = Vector2.new(1920, 1080)
+Layout.S_FLOOR = 0.55
+Layout.S_MIN = { COMPACT = Layout.S_FLOOR, MEDIUM = Layout.S_FLOOR, WIDE = Layout.S_FLOOR } :: { [string]: number }
 function Layout.compute(vw: number, vh: number, userSize: number?): (string, number, Vector2)
-	local mode = if vh < 500 then "COMPACT" elseif vw < 1500 or vh < 860 then "MEDIUM" else "WIDE"
-	local s
-	if mode == "COMPACT" then
-		s = math.clamp(vh / 390, 1.0, 1.3)
-	elseif mode == "MEDIUM" then
-		s = math.clamp(math.min(vw / 1600, vh / 900), 0.90, 1.0)
-	else
-		s = math.clamp(math.min(vw / 1920, vh / 1080), 0.90, 2.0)
-	end
-	s = math.max(s * (userSize or 1), Layout.S_MIN[mode])
-	return mode, s, Vector2.new(vw / s, vh / s)
+	local s = math.min(vw / Layout.REF.X, vh / Layout.REF.Y) * (userSize or 1)
+	s = math.clamp(s, Layout.S_FLOOR, 2.0)
+	local canvas = Vector2.new(vw / s, vh / s)
+	local mode = if canvas.X < 1500 or canvas.Y < 860 then "MEDIUM" else "WIDE"
+	return mode, s, canvas
 end
 -- the map strip left of a side sheet that is too narrow keeps the sheet full screen (DESIGN.md 3.6)
 function Layout.stripIsFull(stripDu: number, mode: string?): boolean

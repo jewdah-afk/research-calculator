@@ -28,6 +28,13 @@ Update 2026-09-26 (supersedes the ornate direction of W1):
   CAN BUY and pulses with a ripple on READY (`Map/NodeWidget.luau`). Without an atlas id the drawn discs stay.
 - **An open panel keeps the tree in view:** the strip frames every shown node (App `frameStrip`) instead of flying to
   the opened node at zoom .9.
+- **Substance-painted buttons (the UI kit):** `art/substance` holds the Painter meshes (`meshes/ui_kit.obj`, one
+  texture set per slot), guides, interim procedural textures and the build → one 1024 atlas → `src/shared/UiKit.luau`.
+  `Core/Skin.luau` draws the slots 9-sliced (CTA and BUY bars, action and START buttons, dock tiles, close, the panel
+  frame, HUD plates); list-layout containers keep the Sleek surface. The user paints and runs `share_art.bat`.
+- **One layout for every screen (aspect-ratio scaling):** `Layout.compute` scales a 1920 × 1080 reference by the
+  tighter axis (floor s .55), so phones, tablets and consoles get the desktop layout scaled. The COMPACT phone
+  design (DESIGN.md 5.10, the band) is no longer selected; its code stays until it is removed on purpose.
 - **Pictures without Studio:** `port/tools/snap` runs the real client on the mock engine and draws its PlayerGui in
   Chromium over the realm tiles (`./test.sh snap home,panel_p`). Use it for every UI change before a push.
 
