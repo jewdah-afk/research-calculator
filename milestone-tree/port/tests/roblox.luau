@@ -37,6 +37,7 @@ local htmlInst
 htmlInst = M.module(shared, "Html", function() return M.withScript(htmlInst, require(W .. "shared/Html")) end)
 M.module(shared, "ZoneMaps", function() return require("../../src/shared/ZoneMaps") end)
 M.module(shared, "PrefsSchema", function() return require("../../src/shared/PrefsSchema") end)
+M.module(shared, "Products", function() return require("../../src/shared/Products") end)
 
 local server = Instance.new("Folder"); server.Name = "MilestoneTree"; server.Parent = SSS
 local function scriptModule(parent, name, wrapPath)
@@ -46,6 +47,7 @@ local function scriptModule(parent, name, wrapPath)
 end
 scriptModule(server, "Config", "server/Config")
 scriptModule(server, "Store", "server/Store")
+scriptModule(server, "Shop", "server/Shop")
 M.module(server, "Session", function() return L.Session end)
 local runtime = Instance.new("Folder"); runtime.Name = "Runtime"; runtime.Parent = server
 M.module(runtime, "JSRT", function() return L.JSRT end)
@@ -194,6 +196,13 @@ local function key(code)
 	frames(0.05)
 end
 
+-- the Shop: test ids for the passes and a product; the player owns 2x Speed before joining
+local Products = require("../../src/shared/Products")
+Products.passes[1].id = 111
+Products.passes[2].id = 112
+Products.products[1].id = 221
+M.passes[1] = { [111] = true }
+
 print("== player joins")
 local p = join()
 frames(1.5)
@@ -307,6 +316,54 @@ check(optButton("export") == nil and optButton("import") == nil and optButton("h
 	"no Export, Import or Hard Reset rows")
 key(M.G.Enum.KeyCode.Escape)
 frames(0.3)
+
+print("== shop")
+local MPS = game:GetService("MarketplaceService")
+local perksRaw = p:GetAttribute("MT_Perks")
+check(type(perksRaw) == "string" and string.find(perksRaw, "speed", 1, true) ~= nil, "a pass owned before joining is a perk (" .. tostring(perksRaw) .. ")")
+local function plain(s) return (string.gsub(string.gsub(s or "", "<[^>]*>", ""), "\u{200A}", "")) end
+check(string.find(plain(pg.TopbarGui.Root.Capsule.Label.Text), "SPEED", 1, true) ~= nil, "the capsule label shows 2x SPEED (" .. plain(pg.TopbarGui.Root.Capsule.Label.Text) .. ")")
+pg.HudGui.Root.Dock.Shop.Activated:Fire()
+frames(0.4)
+local modal = pg.OverlayGui.Root:FindFirstChild("Modal")
+check(modal ~= nil and modal.Visible and modal:GetAttribute("Kind") == "shop", "the dock's SHOP opens the Shop")
+check(modal and modal:FindFirstChild("Item_speed") and modal.Item_speed:FindFirstChild("Owned") ~= nil, "the owned pass reads OWNED")
+check(modal and modal:FindFirstChild("Item_warp8") and modal.Item_warp8:FindFirstChild("Soon") ~= nil, "a product without an id reads SOON")
+local buy = modal and modal:FindFirstChild("Item_supporter") and modal.Item_supporter:FindFirstChild("Buy")
+if buy then buy.Activated:Fire() end
+local last = M.prompts[#M.prompts]
+check(last ~= nil and last[1] == "pass" and last[3] == 112, "BUY on Supporter opens Roblox's pass prompt")
+MPS.PromptGamePassPurchaseFinished:Fire(p, 112, true)
+frames(0.5)
+check(string.find(p:GetAttribute("MT_Perks") or "", "supporter", 1, true) ~= nil, "a pass bought in game counts at once")
+modal = pg.OverlayGui.Root:FindFirstChild("Modal")
+check(modal and modal:FindFirstChild("Item_supporter") and modal.Item_supporter:FindFirstChild("Owned") ~= nil, "the open Shop redraws: Supporter OWNED")
+check(string.find(plain(pg.TopbarGui.Root.Capsule.Label.Text), "SUPPORTER", 1, true) ~= nil, "the capsule label shows SUPPORTER")
+key(M.G.Enum.KeyCode.Escape)
+frames(0.2)
+-- a Time Warp receipt is granted once, even when Roblox sends it again
+local warps = 0
+local InstMT = getmetatable(actor)
+local send = InstMT.SendMessage
+InstMT.SendMessage = function(self2, topic, ...)
+	if topic == "warp" then warps += 1 end
+	return send(self2, topic, ...)
+end
+local info = { ProductId = 221, PlayerId = 1, PurchaseId = "r1", CurrencySpent = 29 }
+local d1 = MPS.ProcessReceipt(info)
+frames(0.5)
+local d2 = MPS.ProcessReceipt(info)
+frames(0.5)
+InstMT.SendMessage = send
+local G = M.G.Enum.ProductPurchaseDecision.PurchaseGranted
+check(d1 == G and d2 == G, "the receipt is granted (twice asked: " .. tostring(d1) .. ", " .. tostring(d2) .. ")")
+check(warps == 1, "the Time Warp went to the game once (" .. warps .. ")")
+check(M.stores.MilestoneTreeNG_v1["receipt_r1"] ~= nil, "the receipt is recorded in the DataStore")
+check(string.find(textOf(pg.OverlayGui), "on its way", 1, true) ~= nil, "a toast says the Time Warp is on its way")
+local w0 = E.warnings
+local unknown = MPS.ProcessReceipt({ ProductId = 999, PlayerId = 1, PurchaseId = "r2" })
+check(unknown == M.G.Enum.ProductPurchaseDecision.NotProcessedYet and E.warnings == w0 + 1, "an unknown product is not granted (and warns)")
+E.warnings = w0
 
 print("== player leaves")
 local store = M.stores.MilestoneTreeNG_v1

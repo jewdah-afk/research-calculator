@@ -175,6 +175,25 @@ function Session:setNotation(mode: string?)
 	self.prev = {} -- every number on screen is sent again in the new notation
 end
 
+-- ------------------------------------------------------------------------------------------------------ perks
+-- the player's game passes (Main/Shop): { speed = 2? }. Speed is the game's own devSpeed (every tick's time counts
+-- speed times, offline catch-up too); without the pass devSpeed is cleared.
+function Session:setPerks(perks: { [string]: any }?)
+	self.perks = perks or {}
+	self:_applyPerks()
+end
+function Session:_applyPerks()
+	local ENV, JS = self.ENV, self.JS
+	if ENV == nil or ENV.player == nil then return end
+	local sp = self.perks and self.perks.speed
+	JS.setk(ENV.player, "devSpeed", if type(sp) == "number" and sp > 1 then sp else nil)
+end
+-- a Time Warp (a developer product): seconds of progress fed through the next ticks the way the game catches up
+-- offline time (a tenth of what is left each tick, at least a second), so it is done in about 3 s
+function Session:addWarp(seconds: number)
+	self.warp = (self.warp or 0) + math.max(0, seconds)
+end
+
 -- ------------------------------------------------------------------------------------------------------ lifecycle
 function Session.new(deps, saveJson: string?, optionsJson: string?, nowMs: number)
 	local self = setmetatable({}, Session)
@@ -205,6 +224,7 @@ function Session:_start(saveJson: string?, optionsJson: string?, nowMs: number)
 	ENV.rbx_boot(nil, saveJson or "", optionsJson or "")
 	self.JS, self.ENV = JS, ENV
 	if self.notation then self:setNotation(self.notation) end
+	if self.perks then self:_applyPerks() end
 	self.prev = {}
 	self.lastPopup = 0
 	-- popups that were on screen when the game was saved are not news
@@ -222,8 +242,26 @@ end
 
 function Session:tick(nowMs: number): boolean
 	local JS, ENV = self.JS, self.ENV
-	JS.NOW = nowMs
+	-- a Time Warp: this tick's clock runs ahead by a slice of it; the game's clock (player.time) is set back to the
+	-- real time afterwards, so only this tick's elapsed time grows
+	-- (it waits while the game still catches up offline time: that code takes max(remain / 10, this tick's time),
+	-- so a slice would count twice)
+	local extra = 0
+	local w = self.warp
+	if w and w > 0 and ENV.player and ENV.player.offTime == nil then
+		extra = math.min(w, math.max(w / 10, 1))
+		self.warp = w - extra
+		if self.warp <= 0.001 then
+			self.warp = 0
+			self.wantSave = true
+		end
+	end
+	JS.NOW = nowMs + extra * 1000
 	local ok, err = pcall(ENV.rbx_tick, nil)
+	if extra > 0 and ENV.player then
+		JS.NOW = nowMs
+		JS.setk(ENV.player, "time", nowMs)
+	end
 	if not ok then
 		self.errors += 1
 		self.lastError = tostring(err)

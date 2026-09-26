@@ -227,7 +227,6 @@ function Inst:IsDescendantOf(a)
 	while o do if o == a then return true end o = o.Parent end
 	return false
 end
-function Inst:GetAttributeChangedSignal() return M.Signal.new() end
 function Inst:ClearAllChildren() for _, c in table.clone(self.__kids) do c:Destroy() end end
 function Inst:SetControlPoints(pts)
 	assert(type(pts) == "table" and #pts >= 2, "Path2D needs 2+ control points")
@@ -490,7 +489,7 @@ function E.buildClient()
 	for _, pair in { { "Html", "shared/Html" } } do
 		if shared:FindFirstChild(pair[1]) == nil then scriptModule(shared, pair[1], pair[2]) end
 	end
-	for _, n in { "Realm", "Assets", "ZoneMaps", "PrefsSchema", "Flags", "AudioIds", "NodeAtlas", "UiKit" } do
+	for _, n in { "Realm", "Assets", "ZoneMaps", "PrefsSchema", "Flags", "AudioIds", "NodeAtlas", "UiKit", "Products" } do
 		if shared:FindFirstChild(n) == nil then
 			M.module(shared, n, function() return require("../../src/shared/" .. n) end)
 		end

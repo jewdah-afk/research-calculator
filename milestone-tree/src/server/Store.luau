@@ -7,7 +7,8 @@
 	the last save on leaving releases it. A save only writes while this server still holds the lock.
 
 	The device options (motion, map detail, labels, interface size) live apart, under "client_<userId>" in the same
-	DataStore: never part of the game save or the export string, and last write wins (no lock).
+	DataStore: never part of the game save or the export string, and last write wins (no lock). Granted
+	developer-product receipts are "receipt_<PurchaseId>" (Store.receiptGranted / markReceipt).
 ]]
 local DataStoreService = game:GetService("DataStoreService")
 local Config = require(script.Parent.Config)
@@ -126,6 +127,26 @@ function Store.savePrefs(userId: number, prefs: { [string]: any }): (boolean, st
 	end)
 	if not ok then return false, tostring(err) end
 	return true, nil
+end
+
+-- developer-product receipts already granted (Roblox retries a receipt until the game answers PurchaseGranted, so a
+-- grant must never repeat): "receipt_<PurchaseId>" in the same DataStore
+function Store.receiptGranted(purchaseId: string): (boolean?, string?)
+	local ok, result = retry(function()
+		return ds():GetAsync("receipt_" .. purchaseId)
+	end)
+	if not ok then return nil, tostring(result) end
+	return result ~= nil, nil
+end
+function Store.markReceipt(purchaseId: string, userId: number, productId: number): (boolean, string?)
+	local ok, err = retry(function()
+		return ds():SetAsync("receipt_" .. purchaseId, { user = userId, product = productId, t = os.time() })
+	end)
+	if not ok then return false, tostring(err) end
+	return true, nil
+end
+function Store.available(): boolean
+	return unavailable == nil
 end
 
 return Store

@@ -55,6 +55,8 @@ local viewEvery = Config.VIEW
 local viewCost = 0           -- running average seconds per screen build
 local sinceTick, sinceView, sinceSave, sinceSent = 0, 0, 0, 0
 local pushNow = false        -- refresh the screen at the next heartbeat (after a button press)
+local perks: { [string]: any } = {} -- from the player's passes (Main/Shop)
+local pendingWarp = 0        -- Time Warp seconds bought before the session started
 local saving = false
 
 local function nowMs(): number
@@ -151,6 +153,11 @@ local function begin(plr: Player)
 	end
 	session = s
 	applyNotation()
+	s:setPerks(perks)
+	if pendingWarp > 0 then
+		s:addWarp(pendingWarp)
+		pendingWarp = 0
+	end
 	pushNow = true
 end
 actor:BindToMessage("start", function(plr: Player)
@@ -167,6 +174,27 @@ actor:BindToMessageParallel("act", function(a, hold)
 	if not session or stopping then return end
 	local ok = session:act(a, nowMs(), hold == true)
 	if ok then pushNow = true end
+end)
+
+-- passes (Main/Shop): { speed = 2? }; kept for a session that is still loading
+actor:BindToMessage("perks", function(p: any)
+	perks = if type(p) == "table" then p else {}
+	if session then
+		session:setPerks(perks)
+		pushNow = true
+	end
+end)
+-- a Time Warp bought (a granted developer product): seconds of progress, fed through the next ticks
+actor:BindToMessage("warp", function(seconds: any, name: any)
+	if type(seconds) ~= "number" or seconds <= 0 then return end
+	if session then
+		session:addWarp(seconds)
+		table.insert(session.notices, string.format("%s: %s of progress is on its way!", tostring(name or "Time Warp"),
+			if seconds >= 3600 then string.format("%g hour%s", seconds / 3600, if seconds == 3600 then "" else "s") else string.format("%d s", seconds)))
+		pushNow = true
+	else
+		pendingWarp += seconds
+	end
 end)
 
 actor:BindToMessageParallel("resync", function()

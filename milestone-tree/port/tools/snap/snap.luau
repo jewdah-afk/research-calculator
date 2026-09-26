@@ -113,6 +113,16 @@ if SCENE == "boot" then
 	-- the loading screen while the server loads the save
 	R.View.OnClientEvent:Fire({ status = "Loading your save..." })
 	frames(2.5)
+elseif SCENE == "shop" then
+	-- the Shop with sample ids (so the prices show) and the 2x Speed pass owned
+	local Products = M.require(RS.MilestoneTree.Products)
+	for i, pp in Products.passes do pp.id = 100 + i end
+	for i, pp in Products.products do pp.id = 200 + i end
+	p:SetAttribute("MT_Perks", '["speed"]')
+	play("s13_none")
+	frames(1)
+	pg.HudGui.Root.Dock.Shop.Activated:Fire()
+	frames(1)
 elseif SCENE == "home" then
 	play("s13_none")
 	frames(3)

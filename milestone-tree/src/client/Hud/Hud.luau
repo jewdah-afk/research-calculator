@@ -37,6 +37,7 @@ export type Hud = {
 	home: Signal.Signal<>,
 	trophies: Signal.Signal<>,
 	options: Signal.Signal<>,
+	shop: Signal.Signal<>,
 	portal: Signal.Signal<>,
 	zoomIn: Signal.Signal<>,
 	zoomOut: Signal.Signal<>,
@@ -64,6 +65,7 @@ function Hud.new(topbar: ScreenGui, hud: ScreenGui): Hud
 	self.home = Signal.new() :: Signal.Signal<>
 	self.trophies = Signal.new() :: Signal.Signal<>
 	self.options = Signal.new() :: Signal.Signal<>
+	self.shop = Signal.new() :: Signal.Signal<>
 	self.portal = Signal.new() :: Signal.Signal<>
 	self.zoomIn = Signal.new() :: Signal.Signal<>
 	self.zoomOut = Signal.new() :: Signal.Signal<>
@@ -92,6 +94,7 @@ function Hud.new(topbar: ScreenGui, hud: ScreenGui): Hud
 	dock.home:Connect(function() self.home:Fire() end)
 	dock.trophies:Connect(function() self.trophies:Fire() end)
 	dock.options:Connect(function() self.options:Fire() end)
+	dock.shop:Connect(function() self.shop:Fire() end)
 	dock.zoomIn:Connect(function() self.zoomIn:Fire() end)
 	dock.zoomOut:Connect(function() self.zoomOut:Fire() end)
 	ready.tap:Connect(function(l: string) self.readyTap:Fire(l) end)
@@ -225,7 +228,7 @@ function Hud.new(topbar: ScreenGui, hud: ScreenGui): Hud
 		register()
 	end
 	function self.destroy(h: Hud)
-		for _, s in { h.home, h.trophies, h.options, h.portal, h.zoomIn, h.zoomOut, h.bandClose, h.gateHold, h.readyMore } do
+		for _, s in { h.home, h.trophies, h.options, h.shop, h.portal, h.zoomIn, h.zoomOut, h.bandClose, h.gateHold, h.readyMore } do
 			s:DisconnectAll()
 		end
 		h.readyTap:DisconnectAll()

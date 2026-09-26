@@ -22,6 +22,7 @@ local ServerStorage = game:GetService("ServerStorage")
 local root = script.Parent
 local Config = require(root:WaitForChild("Config"))
 local Store = require(root:WaitForChild("Store"))
+local Shop = require(root:WaitForChild("Shop"))
 
 local remotes = Instance.new("Folder")
 remotes.Name = "MilestoneTreeRemotes"
@@ -128,6 +129,8 @@ local function start(player: Player)
 		return
 	end
 	a:SendMessage("start", player)
+	-- the player's passes (perks go to the Actor, which keeps them for the session)
+	task.spawn(Shop.refresh, player)
 end
 
 local stopping = 0 -- saves in flight (BindToClose waits for them)
@@ -144,6 +147,10 @@ local function stop(player: Player)
 	stopping -= 1
 end
 
+Shop.start(function(player: Player): Actor?
+	local entry = entries[player]
+	return if entry then entry.actor else nil
+end)
 Players.PlayerAdded:Connect(start)
 Players.PlayerRemoving:Connect(stop)
 for _, p in Players:GetPlayers() do task.spawn(start, p) end

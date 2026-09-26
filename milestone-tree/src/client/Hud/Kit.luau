@@ -12,7 +12,7 @@
 	    Kit.gem(f, c, dark?)                        the gem fill of nodes, gems and emblems (radial, same rule)
 	    Kit.glyph(parent, name, kind, color, bg?)   an icon built from frames (no emoji, no font glyphs): bolt, bang,
 	                                                lock, moon, star, home, gear, plus, minus, x, check, up, down,
-	                                                chev, swirl, bell, warn, clock, save, ring. Scale units of a
+	                                                chev, swirl, bell, warn, clock, save, ring, bag. Scale units of a
 	                                                square holder; size and place the returned Frame.
 	    Kit.spin(inst, seconds, dir?)               a rotation loop (none with reduced motion)
 	    Kit.button(parent, name)                    a transparent TextButton hit area (AutoButtonColor off)
@@ -383,6 +383,12 @@ local DRAW: { [string]: (h: Frame, c: Color3, bg: Color3) -> () } = {
 	end,
 	ring = function(h, c)
 		ring(h, "Ring", 0.5, 0.5, 0.8, 0.8, 0.12, c)
+	end,
+	-- the Shop: a shopping bag (a handle loop over a square body with a notch)
+	bag = function(h, c, bg)
+		ring(h, "Handle", 0.5, 0.24, 0.36, 0.36, 0.05, c)
+		box(h, "Body", 0.5, 0.66, 0.78, 0.52, c, 0.08)
+		box(h, "Strap", 0.5, 0.5, 0.78, 0.06, bg, 0)
 	end,
 	info = function(h, c)
 		ring(h, "Ring", 0.5, 0.5, 0.86, 0.86, 0.09, c)

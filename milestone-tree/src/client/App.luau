@@ -606,6 +606,11 @@ function App.start()
 	view.cameraChanged:Connect(function(cam: any) hud:setZoomPct(cam.z) end)
 	hud:setZoomPct(view:camera().z)
 
+	hud.shop:Connect(function()
+		Audio.play("press")
+		overlay:peek(nil)
+		overlay:modal("shop")
+	end)
 	hud.home:Connect(function()
 		if panelKey == nil then Audio.play("press") end
 		overlay:peek(nil)

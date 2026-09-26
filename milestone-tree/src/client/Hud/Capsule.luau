@@ -4,7 +4,8 @@
 
 	    Capsule   400 x 58 (COMPACT 300 x 44), dark gradient, gold rim and glow
 	      Coin    Ø68 gold disc breaking out on the left, a spinning star (6 s / rev)
-	      Label   "POINTS · NORMAL UNIVERSE" (`caps`, #ffe9a3; not on COMPACT)
+	      Label   "POINTS · NORMAL UNIVERSE" (`caps`, #ffe9a3; not on COMPACT), then the passes in gold
+	              ("· 2× SPEED · SUPPORTER", from the player's MT_Perks attribute)
 	      Row     Amount (R4 gold gradient number, `capsule` role, steps 34 -> 30 -> 26 past 250 du, left anchored)
 	              + Unit ("points" / "pts")
 	      GenPill the rate (Rich.num) on a dark green pill hanging from the rim; hidden when hud.gen is nil
@@ -91,7 +92,7 @@ function Capsule.new(parent: GuiObject): Capsule
 
 	local label = Kit.label(f, "Label", "caps", "", Sleek.C.soft)
 	label.TextXAlignment = Enum.TextXAlignment.Left
-	label.Size = UDim2.fromOffset(300, 13)
+	label.Size = UDim2.fromOffset(420, 13)
 
 	local row = Kit.frame(f, "Row", 6)
 	row.AutomaticSize = Enum.AutomaticSize.X
@@ -308,8 +309,24 @@ function Capsule.new(parent: GuiObject): Capsule
 		end
 	end
 
+	-- the player's passes (MT_Perks, set by the server): 2x SPEED and SUPPORTER ride on the label in gold
+	local function perkText(): string
+		local lp = game:GetService("Players").LocalPlayer
+		local raw = if lp then lp:GetAttribute("MT_Perks") else nil
+		if type(raw) ~= "string" then return "" end
+		local ok, list = pcall(function() return game:GetService("HttpService"):JSONDecode(raw) end)
+		if not ok or type(list) ~= "table" then return "" end
+		local out = ""
+		for _, k in { "speed", "supporter" } do
+			if table.find(list, k) then
+				out ..= '<font color="#ffc93c">' .. Rich.caps(if k == "speed" then "  ·  2× Speed" else "  ·  Supporter") .. "</font>"
+			end
+		end
+		return out
+	end
 	local function writeLabel()
-		label.Text = Rich.caps(if inside then "Points · Prestige Multiverse" else "Points · Normal Universe")
+		label.RichText = true
+		label.Text = Rich.caps(if inside then "Points · Prestige Multiverse" else "Points · Normal Universe") .. perkText()
 		Sleek.accent(f, if inside then Theme.hue("pm") else GOLD_D, 24, 64, { name = "Accent" })
 	end
 
@@ -427,6 +444,10 @@ function Capsule.new(parent: GuiObject): Capsule
 
 	place()
 	writeLabel()
+	do
+		local lp = game:GetService("Players").LocalPlayer
+		if lp then lp:GetAttributeChangedSignal("MT_Perks"):Connect(writeLabel) end
+	end
 	-- the phone band hides the capsule; its detached parts (rate, sparkline, warning) follow it
 	f:GetPropertyChangedSignal("Visible"):Connect(function()
 		local h = hud

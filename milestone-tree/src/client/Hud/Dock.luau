@@ -2,7 +2,7 @@
 --[[
 	Dock: HOME / TROPHIES / OPTIONS at the bottom left (DESIGN.md 4.4) and the zoom capsule after it (mouse only).
 
-	    Dock      Home, Trophies (+ Badge "13/18"), Options (+ Dot while the server cannot save): ImageButtons with the
+	    Dock      Home, Trophies (+ Badge "13/18"), Options (+ Dot while the server cannot save), Shop: ImageButtons with the
 	              hue bevel, a glyph with a hard shadow, the caption pill below (`label`, Title Case)
 	    Zoom      glass: Minus, Pct ("51%", `number`), Plus
 
@@ -28,6 +28,7 @@ export type Dock = {
 	home: Signal.Signal<>,
 	trophies: Signal.Signal<>,
 	options: Signal.Signal<>,
+	shop: Signal.Signal<>,
 	zoomIn: Signal.Signal<>,
 	zoomOut: Signal.Signal<>,
 	changed: Signal.Signal<>,
@@ -46,6 +47,7 @@ local BUTTONS = {
 	{ key = "Home", caption = "Home", hue = Color3.fromHex("2fcf8f"), glyph = "home" },
 	{ key = "Trophies", caption = "Trophies", hue = Color3.fromHex("ffb020"), glyph = "star" },
 	{ key = "Options", caption = "Options", hue = Color3.fromHex("8a7cff"), glyph = "gear" },
+	{ key = "Shop", caption = "Shop", hue = Color3.fromHex("ffc93c"), glyph = "bag" },
 }
 
 function Dock.new(parent: GuiObject): Dock
@@ -53,6 +55,7 @@ function Dock.new(parent: GuiObject): Dock
 	self.home = Signal.new() :: Signal.Signal<>
 	self.trophies = Signal.new() :: Signal.Signal<>
 	self.options = Signal.new() :: Signal.Signal<>
+	self.shop = Signal.new() :: Signal.Signal<>
 	self.zoomIn = Signal.new() :: Signal.Signal<>
 	self.zoomOut = Signal.new() :: Signal.Signal<>
 	self.changed = Signal.new() :: Signal.Signal<>
@@ -105,6 +108,8 @@ function Dock.new(parent: GuiObject): Dock
 				self.home:Fire()
 			elseif spec.key == "Trophies" then
 				self.trophies:Fire()
+			elseif spec.key == "Shop" then
+				self.shop:Fire()
 			else
 				self.options:Fire()
 			end
@@ -188,7 +193,7 @@ function Dock.new(parent: GuiObject): Dock
 		local gap = if compact then 18 else 24
 		local capH = if compact then 20 else 22
 		f.Position = UDim2.new(0, if compact then 12 else 20, 1, if compact then -6 else -8)
-		f.Size = UDim2.fromOffset(3 * bs + 2 * gap, bs + 2 + capH)
+		f.Size = UDim2.fromOffset(#BUTTONS * bs + (#BUTTONS - 1) * gap, bs + 2 + capH)
 		for i, spec in BUTTONS do
 			local b = buttons[spec.key]
 			b.Size = UDim2.fromOffset(bs, bs)
@@ -216,7 +221,7 @@ function Dock.new(parent: GuiObject): Dock
 		Theme.text(badgeLabel, "badge")
 		badge.Size = UDim2.fromOffset(0, if compact then 20 else 22)
 		zoom.Size = UDim2.fromOffset(150, 44)
-		zoom.Position = UDim2.new(0, (if compact then 12 else 20) + 3 * bs + 2 * gap + 24, 1, -(if compact then 6 else 8) - capH - 2 - (bs - 44) / 2)
+		zoom.Position = UDim2.new(0, (if compact then 12 else 20) + #BUTTONS * bs + (#BUTTONS - 1) * gap + 24, 1, -(if compact then 6 else 8) - capH - 2 - (bs - 44) / 2)
 		Theme.text(pct, "number")
 		zoom.Visible = zoomWanted and not compact and Input.kind() == "mouse"
 		self.changed:Fire()
@@ -251,7 +256,7 @@ function Dock.new(parent: GuiObject): Dock
 		place()
 	end
 	function self.destroy(d: Dock)
-		for _, s in { d.home, d.trophies, d.options, d.zoomIn, d.zoomOut, d.changed } do s:DisconnectAll() end
+		for _, s in { d.home, d.trophies, d.options, d.shop, d.zoomIn, d.zoomOut, d.changed } do s:DisconnectAll() end
 		f:Destroy()
 		zoom:Destroy()
 	end

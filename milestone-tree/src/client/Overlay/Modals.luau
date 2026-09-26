@@ -9,6 +9,8 @@
 	      gate       the Multiverse gate: PRESTIGE MULTIVERSE, the context, the GOAL box (+ Goal met chip), what
 	                 happens (the reset list / completes / returns), STAY + HOLD TO ENTER | EXIT | FINISH (1.2 s);
 	                 locked: "Unlock Multiverse (MP) first"; sealed: the requirement with its bar
+	      shop       SHOP: the game passes (OWNED / R$ price / SOON without an id) and the Time Warps; a press opens
+	                 Roblox's purchase prompt (the server grants it, see server/Shop.luau); redraws when MT_Perks changes
 
 	    local modals = Modals.new(root)
 	    modals:open(kind?, data?)      nil closes. data: gate = Gate; any other kind shows data as text with OK
@@ -25,6 +27,10 @@ local Motion = require(Core:WaitForChild("Motion"))
 local Rich = require(Core:WaitForChild("Rich"))
 local Recipes = require(Core:WaitForChild("Recipes"))
 local Kit = require(script.Parent.Parent:WaitForChild("Hud"):WaitForChild("Kit"))
+local HttpService = game:GetService("HttpService")
+local MarketplaceService = game:GetService("MarketplaceService")
+local Players = game:GetService("Players")
+local Products = require(game:GetService("ReplicatedStorage"):WaitForChild("MilestoneTree"):WaitForChild("Products"))
 
 type Action = Types.Action
 
@@ -41,6 +47,7 @@ export type Modals = {
 local Modals = {}
 
 local CRIMSON = Color3.fromHex("ff2e63")
+local GOLD = Color3.fromHex("ffc93c")
 local LAYER_NAMES = {
 	m = "Milestone", mm = "Meta-Milestone", em = "Extra-Milestone", p = "Prestige", pe = "Prestige Energy", sp = "Super Prestige",
 	pb = "Prestige Boost", pp = "Prestige Power", se = "Super Energy", hp = "Hyper Prestige", ep = "Exotic Prestige",
@@ -307,6 +314,87 @@ function Modals.new(root: GuiObject): Modals
 		b.LayoutOrder = 2
 	end
 
+	-- ------------------------------------------------------------------------------------------ shop
+	-- the passes and the Time Warps (shared/Products); owned passes come from the player's MT_Perks attribute. A
+	-- press opens Roblox's purchase prompt; the server grants it (Shop.luau) and the list redraws.
+	local function owned(): { [string]: boolean }
+		local out: { [string]: boolean } = {}
+		local lp = Players.LocalPlayer
+		local raw = if lp then lp:GetAttribute("MT_Perks") else nil
+		if type(raw) == "string" then
+			local ok, list = pcall(function() return HttpService:JSONDecode(raw) end)
+			if ok and type(list) == "table" then
+				for _, k in list do
+					if type(k) == "string" then out[k] = true end
+				end
+			end
+		end
+		return out
+	end
+	local function section(title: string)
+		local l = Kit.label(card, "Section_" .. title, "caps", Rich.caps(title), GOLD)
+		l.LayoutOrder = nextOrder()
+		l.Size = UDim2.new(1, 0, 0, 18)
+		l.TextXAlignment = Enum.TextXAlignment.Left
+	end
+	local function item(key: string, name: string, blurb: string, price: number, id: number?, have: boolean,
+		buy: (id: number) -> ())
+		local r = Kit.frame(card, "Item_" .. key)
+		r.LayoutOrder = nextOrder()
+		r.Size = UDim2.new(1, 0, 0, 74)
+		r.BackgroundColor3 = Theme.C.deep
+		r.BackgroundTransparency = 0.2
+		Kit.stroke(r, 1, Color3.new(1, 1, 1), 0.12, "Hair").LineJoinMode = Enum.LineJoinMode.Miter
+		local nm = Kit.label(r, "Name", "card", name, Color3.new(1, 1, 1))
+		nm.Position = UDim2.fromOffset(16, 12)
+		nm.Size = UDim2.new(1, -190, 0, 24)
+		nm.TextXAlignment = Enum.TextXAlignment.Left
+		local bl = Kit.label(r, "Blurb", "small", blurb, Theme.C.soft)
+		bl.Position = UDim2.fromOffset(16, 38)
+		bl.Size = UDim2.new(1, -190, 0, 30)
+		bl.TextWrapped = true
+		bl.TextXAlignment = Enum.TextXAlignment.Left
+		bl.TextYAlignment = Enum.TextYAlignment.Top
+		if have then
+			local c, _ = Kit.chip(r, "Owned", "caps", Rich.caps("Owned"), { h = 30, pad = 12, fg = Theme.C.bought, bgA = 0,
+				line = Theme.C.bought, lineA = 0.6 })
+			c.AnchorPoint = Vector2.new(1, 0.5)
+			c.Position = UDim2.new(1, -16, 0.5, 0)
+		elseif id == nil then
+			local c, _ = Kit.chip(r, "Soon", "caps", Rich.caps("Soon"), { h = 30, pad = 12, fg = Theme.C.muted, bgA = 0,
+				line = Theme.C.muted, lineA = 0.5 })
+			c.AnchorPoint = Vector2.new(1, 0.5)
+			c.Position = UDim2.new(1, -16, 0.5, 0)
+		else
+			local b = Kit.action(r, "Buy", "R$ " .. tostring(price), { style = "gold", h = 44, w = 150, role = "cta" })
+			b.AnchorPoint = Vector2.new(1, 0.5)
+			b.Position = UDim2.new(1, -16, 0.5, 0)
+			local pid = id :: number
+			b.Activated:Connect(function() buy(pid) end)
+		end
+	end
+	local function buildShop()
+		rim.Color = GOLD
+		head("Shop", "Every purchase supports the game. Thank you!", GOLD, "bag")
+		local have = owned()
+		local lp = Players.LocalPlayer
+		section("Game passes")
+		for _, p in Products.passes do
+			item(p.key, p.name, p.blurb, p.price, p.id, have[p.key] == true, function(id: number)
+				pcall(function() MarketplaceService:PromptGamePassPurchase(lp, id) end)
+			end)
+		end
+		section("Time Warp")
+		for _, p in Products.products do
+			item(p.key, p.name, p.blurb, p.price, p.id, false, function(id: number)
+				pcall(function() MarketplaceService:PromptProductPurchase(lp, id) end)
+			end)
+		end
+		local row = buttonRow()
+		local ok = Kit.action(row, "Close", Rich.caps("Close"), { style = "quiet" })
+		ok.Activated:Connect(close)
+	end
+
 	-- ------------------------------------------------------------------------------------------ API
 	function self.open(_: Modals, k: string?, data: any?)
 		if k == nil then
@@ -321,6 +409,9 @@ function Modals.new(root: GuiObject): Modals
 		Kit.pad(card, if compact then 16 else 22, if compact then 18 else 24, if compact then 16 else 22, if compact then 18 else 24)
 		if k == "gate" then
 			buildGate(data)
+		elseif k == "shop" then
+			card.Size = UDim2.fromOffset(if compact then 560 else 680, 0)
+			buildShop()
 		else
 			para("Body", tostring(data or ""))
 			local row = buttonRow()
@@ -333,6 +424,13 @@ function Modals.new(root: GuiObject): Modals
 		local sc = Motion.scaleOf(card)
 		sc.Scale = 0.96
 		Motion.tween(sc, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Scale = 1 }, "modalOpen")
+	end
+	-- a pass bought while the Shop is open: redraw it (OWNED)
+	local lp = Players.LocalPlayer
+	if lp then
+		lp:GetAttributeChangedSignal("MT_Perks"):Connect(function()
+			if kind == "shop" then self:open("shop") end
+		end)
 	end
 	function self.isOpen(_: Modals): string?
 		return kind

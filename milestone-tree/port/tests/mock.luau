@@ -177,7 +177,19 @@ function Inst:Clone()
 	return c
 end
 function Inst:GetAttribute(k) return self.__attrs[k] end
-function Inst:SetAttribute(k, v) self.__attrs[k] = v end
+function Inst:SetAttribute(k, v)
+	local old = self.__attrs[k]
+	self.__attrs[k] = v
+	local s = rawget(self, "__attrSignals") and self.__attrSignals[k]
+	if s and old ~= v then s:Fire() end
+end
+function Inst:GetAttributeChangedSignal(k)
+	local all = rawget(self, "__attrSignals")
+	if all == nil then all = {}; rawset(self, "__attrSignals", all) end
+	local s = all[k] or Signal.new()
+	all[k] = s
+	return s
+end
 function Inst:GetPropertyChangedSignal(k)
 	local s = self.__propSignals[k] or Signal.new()
 	self.__propSignals[k] = s
@@ -291,6 +303,10 @@ function RunService:IsStudio() return true end
 local Players = game:GetService("Players")
 Players.__props.PlayerAdded = Signal.new()
 Players.__props.PlayerRemoving = Signal.new()
+function Players:GetPlayerByUserId(id)
+	for _, c in Players.__kids do if c.__class == "Player" and c.__props.UserId == id then return c end end
+	return nil
+end
 function Players:GetPlayers() local out = {} for _, c in Players.__kids do if c.__class == "Player" then table.insert(out, c) end end return out end
 
 local UIS = game:GetService("UserInputService")
@@ -329,6 +345,18 @@ function DSS:GetDataStore(name)
 		SetAsync = function(_, key, v) data[key] = M.deep(v) end,
 	}
 end
+-- MarketplaceService: passes owned by M.passes[userId][passId]; prompts are recorded in M.prompts
+M.passes = {}
+M.prompts = {}
+local MPS = game:GetService("MarketplaceService")
+MPS.__props.PromptGamePassPurchaseFinished = Signal.new()
+MPS.__props.PromptProductPurchaseFinished = Signal.new()
+function MPS:UserOwnsGamePassAsync(userId, passId)
+	return M.passes[userId] ~= nil and M.passes[userId][passId] == true
+end
+function MPS:PromptGamePassPurchase(player, id) table.insert(M.prompts, { "pass", player, id }) end
+function MPS:PromptProductPurchase(player, id) table.insert(M.prompts, { "product", player, id }) end
+
 function M.deep(v)
 	if type(v) ~= "table" then return v end
 	local o = {}
