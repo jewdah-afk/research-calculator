@@ -199,6 +199,7 @@ function Upgrade.skin(rec: any, n: any, ctx: any): boolean
 			eff.BackgroundTransparency = 1
 			eff.Size = UDim2.fromOffset(0, 24)
 			Common.drop(eff, "Corner")
+			Common.drop(eff, "Border") -- the BUY card's value well, when it was bought on screen
 			Common.setText(eff, Common.num(ef, "numberHeavy", C.ownedValue))
 		else
 			Common.text(eff, "number", C.text)
@@ -344,7 +345,7 @@ end
 
 -- ------------------------------------------------------------------------------------------------------ Buy All
 -- the BUY ALL button at the right of the UPGRADES title row, once the layer after this one is reached (the view sends
--- the action as n.ba and how many upgrades it would buy now as n.bn). Every mode; dim while nothing is affordable.
+-- the action as n.ba and how many upgrades are affordable one by one as n.bn). Every mode; dim while none is.
 function Upgrade.buyAll(rec: any, n: any, ctx: any)
 	local header = rec.root:FindFirstChild("SectionTitle")
 	if n.cn ~= "upgrades" or type(n.ba) ~= "table" or header == nil or not header:IsA("Frame") then
@@ -386,7 +387,7 @@ function Upgrade.buyAll(rec: any, n: any, ctx: any)
 	l.TextYAlignment = Enum.TextYAlignment.Center
 	l.TextWrapped = false
 	l.FontFace = Font.fromName("Montserrat", Enum.FontWeight.ExtraBold)
-	Common.setText(l, Rich.caps(if on then "Buy all · " .. count else "Buy all"))
+	Common.setText(l, Rich.caps("Buy all")) -- lit or dim; no count (a press may buy fewer: costs share a balance)
 	b:SetAttribute("State", if on then "can" else "notyet")
 	b:SetAttribute("Count", count)
 	local a = n.ba

@@ -347,9 +347,12 @@ function Common.transition(ctx: any, a: any, state: string, root: GuiObject)
 	if ctx.firstSeen(key) or prev == nil or prev == state then return end
 	if prev == "can" and state == "owned" then
 		local Motion = require(Core:WaitForChild("Motion")) :: any
+		-- a card that lays out its own children: Motion.flash animates its outline and restores the resting rim, so a
+		-- second tween here would fight it on the same UIStroke (the later tween wins and ends opaque)
+		local outlined = root:FindFirstChildWhichIsA("UIGridStyleLayout") ~= nil
 		Motion.bump(root, 0.06)
 		local rim = root:FindFirstChild("Border")
-		if rim and rim:IsA("UIStroke") then
+		if rim and rim:IsA("UIStroke") and not outlined then
 			local final = rim.Transparency
 			rim.Transparency = 0
 			rim.Color = Color3.new(1, 1, 1)

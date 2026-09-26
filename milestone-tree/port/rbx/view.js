@@ -213,10 +213,20 @@ function rbx_upgHave(layer, t) {
 // after it is reached (sp opens it on p, mm on sp, ...). Upgrade Perk upgrades (p) stay a choice and are skipped.
 var rbx_BUYALL_AFTER = { p: "sp", sp: "mm", pb: "hp", hp: "ap", ap: "t", t: "hb", hb: "pe", pe: "se", se: "pp", pp: "ep",
 	ep: "mp", mp: "pm", pep: "cp", cp: "cm", ex: "cm" }
+// the next layers that a new game already has "unlocked" (mm, pm, cp, cm): for those only shown / best counts
+var rbx_BUYALL_STARTUNL = null
 function rbx_buyAllOn(l) {
 	var nx = rbx_BUYALL_AFTER[l]
 	if (!nx || !player[l] || !player[nx] || !tmp[nx]) return false
-	if (player[nx].unlocked || tmp[nx].layerShown == true) return true
+	if (rbx_BUYALL_STARTUNL === null) {
+		rbx_BUYALL_STARTUNL = {}
+		for (var k in rbx_BUYALL_AFTER) {
+			var n = rbx_BUYALL_AFTER[k]
+			var sd = layers[n] && layers[n].startData ? layers[n].startData() : null
+			rbx_BUYALL_STARTUNL[n] = sd && sd.unlocked ? true : false
+		}
+	}
+	if ((player[nx].unlocked && !rbx_BUYALL_STARTUNL[nx]) || tmp[nx].layerShown == true) return true
 	return player[nx].best !== undefined && new Decimal(player[nx].best).gt(0)
 }
 // the upgrades Buy All would buy now
@@ -240,8 +250,17 @@ function rbx_buyAll(l) {
 		var ids = rbx_buyAllIds(l)
 		var got = 0
 		for (var i = 0; i < ids.length; i++) {
-			buyUpg(l, ids[i])
-			if (hasUpgrade(l, ids[i])) got++
+			var id = ids[i], U = layers[l].upgrades[id]
+			// tmp's canAfford is from before this pass: an upgrade with its own pay() is checked again against the
+			// live resources (buyUpg re-checks a plain cost itself), or it could be paid with what is already spent
+			if (U.canAfford !== undefined) {
+				var ok = false
+				try { ok = run(U.canAfford, U) ? true : false } catch (e) { ok = false }
+				tmp[l].upgrades[id].canAfford = ok
+			}
+			if (!canAffordUpgrade(l, id)) continue
+			buyUpg(l, id)
+			if (hasUpgrade(l, id)) got++
 		}
 		if (got == 0) break
 		n += got
@@ -266,7 +285,7 @@ function rbx_upgrades(layer) {
 		if (row.length) rows.push({ t: "row", c: row })
 	}
 	var col = { t: "col", c: rows }
-	// Buy All: the action while it is open, and how many upgrades it would buy now
+	// Buy All: the action while it is open, and how many upgrades are affordable one by one (> 0: it lights up)
 	if (rbx_buyAllOn(layer)) {
 		col.ba = rbx_act(["buyall", layer])
 		col.bn = rbx_buyAllIds(layer).length

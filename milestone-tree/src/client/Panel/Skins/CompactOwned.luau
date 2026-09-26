@@ -63,6 +63,7 @@ function CompactOwned.skin(rec: any, n: any, ctx: any): boolean
 	eff.TextWrapped = false
 	eff.TextTruncate = Enum.TextTruncate.AtEnd
 	Common.drop(eff, "Corner")
+	Common.drop(eff, "Border") -- the BUY card's value well
 	local ef = Common.str(n.ef)
 	if ef then
 		Common.text(eff, "numberHeavy", C.ownedValue)

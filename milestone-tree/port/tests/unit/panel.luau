@@ -606,6 +606,12 @@ do
 		local rail = panel.render.recs[rowId].root:FindFirstChild("Rail")
 		check(rail ~= nil and rail:FindFirstChild("Check") ~= nil, "the tier rail turns owned")
 		check(card:FindFirstChild("Foot") == nil and card:FindFirstChild("Bar") == nil, "no BUY bar left on the compact card")
+		local effBorder = false
+		for _, id in cards do
+			local e = panel.render.recs[id].root:FindFirstChild("Eff")
+			if e and e:FindFirstChild("Border") then effBorder = true end
+		end
+		check(not effBorder, "no value-well outline left on an owned card")
 		-- redraw cost: a value-only patch (an owned upgrade's effect moving) redraws that card alone; a state change
 		-- redraws the row
 		local hooks = panel.render.hooks
@@ -661,8 +667,8 @@ do
 		check(b ~= nil and b:GetAttribute("Count") == 2, mode .. ": p shows BUY ALL with 2 to buy")
 		local cap = b and b:FindFirstChild("Caption")
 		local txt = if cap then (string.gsub(string.upper(plainText(cap.Text)), "[^%w]", "")) else ""
-		check(txt == "BUYALL2",
-			mode .. ": the button reads BUY ALL · 2 (" .. txt .. ")")
+		check(txt == "BUYALL",
+			mode .. ": the button reads BUY ALL (" .. txt .. ")")
 		if b then b.Activated:Fire() end
 		local last = fired[#fired]
 		check(last ~= nil and last[1] == "buyall" and last[2] == "p", mode .. ": pressing it sends the buyall action")

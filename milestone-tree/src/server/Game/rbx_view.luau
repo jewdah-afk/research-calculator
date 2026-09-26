@@ -277,12 +277,21 @@ rbx_upgHave = function(this, layer, t)
 	do return player[JS.k(layer)].points end
 end
 rbx_buyAllOn = function(this, l)
-	local nx
+	local nx, k, n, sd
 	nx = rbx_BUYALL_AFTER[JS.k(l)]
 	if ((((not JS.t(nx)) or (not JS.t(player[JS.k(l)]))) or (not JS.t(player[JS.k(nx)]))) or (not JS.t(tmp[JS.k(nx)]))) then
 		do return false end
 	end
-	if (JS.t(player[JS.k(nx)].unlocked) or JS.eq(tmp[JS.k(nx)].layerShown, true)) then
+	if (rbx_BUYALL_STARTUNL == JS.NULL) then
+		rbx_BUYALL_STARTUNL = JS.O({})
+		for _, __k2 in JS.keys(rbx_BUYALL_AFTER) do
+			k = __k2
+			n = rbx_BUYALL_AFTER[k]
+			sd = (if (JS.t(layers[JS.k(n)]) and JS.t(layers[JS.k(n)].startData)) then layers[JS.k(n)]:startData() else JS.NULL)
+			JS.set(rbx_BUYALL_STARTUNL, JS.k(n), (if (JS.t(sd) and JS.t(sd.unlocked)) then true else false))
+		end
+	end
+	if ((JS.t(player[JS.k(nx)].unlocked) and (not JS.t(rbx_BUYALL_STARTUNL[JS.k(nx)]))) or JS.eq(tmp[JS.k(nx)].layerShown, true)) then
 		do return true end
 	end
 	do return ((not (player[JS.k(nx)].best == nil)) and (JS.D(player[JS.k(nx)].best)):gt(0)) end
@@ -308,7 +317,7 @@ rbx_buyAllIds = function(this, l)
 	do return out end
 end
 rbx_buyAll = function(this, l)
-	local n, pass, ids, got, i
+	local n, pass, ids, got, i, id, U, ok
 	if ((not JS.t(rbx_buyAllOn(nil, l))) or (not JS.t(player[JS.k(l)].unlocked))) then
 		do return 0 end
 	end
@@ -317,8 +326,26 @@ rbx_buyAll = function(this, l)
 		ids = rbx_buyAllIds(nil, l)
 		got = 0
 		for i = 0, JS.cap(0, (JS.len(ids)) - 1, 1) do
-			buyUpg(nil, l, ids[JS.k(i)])
-			if hasUpgrade(nil, l, ids[JS.k(i)]) then
+			id = ids[JS.k(i)]
+			U = layers[JS.k(l)].upgrades[JS.k(id)]
+			if (not (U.canAfford == nil)) then
+				ok = false
+				do
+					local __ok3, __e4 = pcall(function()
+						ok = (if JS.t(run(nil, U.canAfford, U)) then true else false)
+					end)
+					if not __ok3 then
+						local e = __e4
+						ok = false
+					end
+				end
+				JS.setk(tmp[JS.k(l)].upgrades[JS.k(id)], "canAfford", ok)
+			end
+			if (not canAffordUpgrade(nil, l, id)) then
+				continue
+			end
+			buyUpg(nil, l, id)
+			if hasUpgrade(nil, l, id) then
 				got = (JS.tonum(got) + 1)
 			end
 		end
@@ -1053,11 +1080,11 @@ rbx_component = function(this, layer, item, ci)
 		do return JS.NULL end
 	end
 	do
-		local __ok2, __e3 = pcall(function()
+		local __ok5, __e6 = pcall(function()
 			n = rbx_componentNode(nil, layer, name, data)
 		end)
-		if not __ok2 then
-			local e = __e3
+		if not __ok5 then
+			local e = __e6
 			n = rbx_err(nil, rbx_str(nil, name), e)
 		end
 	end
@@ -1074,22 +1101,22 @@ rbx_component = function(this, layer, item, ci)
 end
 rbx_componentNode = function(this, layer, name, data)
 	do
-		local __sw4 = name
-		local __ft5 = false
+		local __sw7 = name
+		local __ft8 = false
 		repeat
-			if __ft5 or JS.eq(__sw4, "display-text") then
-				__ft5 = true
+			if __ft8 or JS.eq(__sw7, "display-text") then
+				__ft8 = true
 
 			end
-			if __ft5 or JS.eq(__sw4, "raw-html") then
-				__ft5 = true
+			if __ft8 or JS.eq(__sw7, "raw-html") then
+				__ft8 = true
 				do return JS.O({
 					t = "html",
 					h = rbx_str(nil, data)
 				}, {"t", "h"}) end
 			end
-			if __ft5 or JS.eq(__sw4, "blank") then
-				__ft5 = true
+			if __ft8 or JS.eq(__sw7, "blank") then
+				__ft8 = true
 				if (not JS.t(data)) then
 					do return JS.O({
 						t = "blank",
@@ -1110,134 +1137,134 @@ rbx_componentNode = function(this, layer, name, data)
 					hh = rbx_str(nil, data)
 				}, {"t", "w", "hh"}) end
 			end
-			if __ft5 or JS.eq(__sw4, "display-image") then
-				__ft5 = true
+			if __ft8 or JS.eq(__sw7, "display-image") then
+				__ft8 = true
 				do return JS.O({
 					t = "html",
 					h = ""
 				}, {"t", "h"}) end
 			end
-			if __ft5 or JS.eq(__sw4, "row") then
-				__ft5 = true
+			if __ft8 or JS.eq(__sw7, "row") then
+				__ft8 = true
 				do return rbx_container(nil, "row", layer, data) end
 			end
-			if __ft5 or JS.eq(__sw4, "column") then
-				__ft5 = true
+			if __ft8 or JS.eq(__sw7, "column") then
+				__ft8 = true
 				do return rbx_container(nil, "col", layer, data) end
 			end
-			if __ft5 or JS.eq(__sw4, "layer-proxy") then
-				__ft5 = true
+			if __ft8 or JS.eq(__sw7, "layer-proxy") then
+				__ft8 = true
 				do return rbx_column(nil, data[0], data[1]) end
 			end
-			if __ft5 or JS.eq(__sw4, "infobox") then
-				__ft5 = true
+			if __ft8 or JS.eq(__sw7, "infobox") then
+				__ft8 = true
 				do return rbx_infobox(nil, layer, data) end
 			end
-			if __ft5 or JS.eq(__sw4, "h-line") then
-				__ft5 = true
+			if __ft8 or JS.eq(__sw7, "h-line") then
+				__ft8 = true
 				do return JS.O({
 					t = "hr",
 					w = (if JS.t(data) then rbx_str(nil, data) else JS.NULL)
 				}, {"t", "w"}) end
 			end
-			if __ft5 or JS.eq(__sw4, "v-line") then
-				__ft5 = true
+			if __ft8 or JS.eq(__sw7, "v-line") then
+				__ft8 = true
 				do return JS.O({
 					t = "blank",
 					w = "2px",
 					hh = (if JS.t(data) then rbx_str(nil, data) else "10px")
 				}, {"t", "w", "hh"}) end
 			end
-			if __ft5 or JS.eq(__sw4, "challenges") then
-				__ft5 = true
+			if __ft8 or JS.eq(__sw7, "challenges") then
+				__ft8 = true
 				do return rbx_challenges(nil, layer, data) end
 			end
-			if __ft5 or JS.eq(__sw4, "challenge") then
-				__ft5 = true
+			if __ft8 or JS.eq(__sw7, "challenge") then
+				__ft8 = true
 				do return rbx_challenge(nil, layer, data) end
 			end
-			if __ft5 or JS.eq(__sw4, "upgrades") then
-				__ft5 = true
+			if __ft8 or JS.eq(__sw7, "upgrades") then
+				__ft8 = true
 				do return rbx_upgrades(nil, layer) end
 			end
-			if __ft5 or JS.eq(__sw4, "upgrade") then
-				__ft5 = true
+			if __ft8 or JS.eq(__sw7, "upgrade") then
+				__ft8 = true
 				do return rbx_upgrade(nil, layer, data) end
 			end
-			if __ft5 or JS.eq(__sw4, "milestones") then
-				__ft5 = true
+			if __ft8 or JS.eq(__sw7, "milestones") then
+				__ft8 = true
 				do return rbx_milestones(nil, layer, data) end
 			end
-			if __ft5 or JS.eq(__sw4, "milestone") then
-				__ft5 = true
+			if __ft8 or JS.eq(__sw7, "milestone") then
+				__ft8 = true
 				do return rbx_milestone(nil, layer, data) end
 			end
-			if __ft5 or JS.eq(__sw4, "toggle") then
-				__ft5 = true
+			if __ft8 or JS.eq(__sw7, "toggle") then
+				__ft8 = true
 				do return rbx_toggle(nil, data) end
 			end
-			if __ft5 or JS.eq(__sw4, "prestige-button") then
-				__ft5 = true
+			if __ft8 or JS.eq(__sw7, "prestige-button") then
+				__ft8 = true
 				do return rbx_prestigeButton(nil, layer) end
 			end
-			if __ft5 or JS.eq(__sw4, "main-display") then
-				__ft5 = true
+			if __ft8 or JS.eq(__sw7, "main-display") then
+				__ft8 = true
 				do return rbx_mainDisplay(nil, layer, data) end
 			end
-			if __ft5 or JS.eq(__sw4, "resource-display") then
-				__ft5 = true
+			if __ft8 or JS.eq(__sw7, "resource-display") then
+				__ft8 = true
 				do return rbx_resourceDisplay(nil, layer) end
 			end
-			if __ft5 or JS.eq(__sw4, "buyables") then
-				__ft5 = true
+			if __ft8 or JS.eq(__sw7, "buyables") then
+				__ft8 = true
 				do return rbx_buyables(nil, layer, data) end
 			end
-			if __ft5 or JS.eq(__sw4, "buyable") then
-				__ft5 = true
+			if __ft8 or JS.eq(__sw7, "buyable") then
+				__ft8 = true
 				do return rbx_buyable(nil, layer, data) end
 			end
-			if __ft5 or JS.eq(__sw4, "clickables") then
-				__ft5 = true
+			if __ft8 or JS.eq(__sw7, "clickables") then
+				__ft8 = true
 				do return rbx_clickables(nil, layer, data) end
 			end
-			if __ft5 or JS.eq(__sw4, "clickable") then
-				__ft5 = true
+			if __ft8 or JS.eq(__sw7, "clickable") then
+				__ft8 = true
 				do return rbx_clickable(nil, layer, data) end
 			end
-			if __ft5 or JS.eq(__sw4, "grid") then
-				__ft5 = true
+			if __ft8 or JS.eq(__sw7, "grid") then
+				__ft8 = true
 				do return rbx_grid(nil, layer, data) end
 			end
-			if __ft5 or JS.eq(__sw4, "microtabs") then
-				__ft5 = true
+			if __ft8 or JS.eq(__sw7, "microtabs") then
+				__ft8 = true
 				do return rbx_microtabs(nil, layer, data) end
 			end
-			if __ft5 or JS.eq(__sw4, "bar") then
-				__ft5 = true
+			if __ft8 or JS.eq(__sw7, "bar") then
+				__ft8 = true
 				do return rbx_bar(nil, layer, data) end
 			end
-			if __ft5 or JS.eq(__sw4, "achievements") then
-				__ft5 = true
+			if __ft8 or JS.eq(__sw7, "achievements") then
+				__ft8 = true
 				do return rbx_achievements(nil, layer, data) end
 			end
-			if __ft5 or JS.eq(__sw4, "achievement") then
-				__ft5 = true
+			if __ft8 or JS.eq(__sw7, "achievement") then
+				__ft8 = true
 				do return rbx_achievement(nil, layer, data) end
 			end
-			if __ft5 or JS.eq(__sw4, "upgrade-tree") then
-				__ft5 = true
+			if __ft8 or JS.eq(__sw7, "upgrade-tree") then
+				__ft8 = true
 				do return rbx_thingTree(nil, layer, data, "upgrade") end
 			end
-			if __ft5 or JS.eq(__sw4, "buyable-tree") then
-				__ft5 = true
+			if __ft8 or JS.eq(__sw7, "buyable-tree") then
+				__ft8 = true
 				do return rbx_thingTree(nil, layer, data, "buyable") end
 			end
-			if __ft5 or JS.eq(__sw4, "clickable-tree") then
-				__ft5 = true
+			if __ft8 or JS.eq(__sw7, "clickable-tree") then
+				__ft8 = true
 				do return rbx_thingTree(nil, layer, data, "clickable") end
 			end
-			if __ft5 or JS.eq(__sw4, "rbx-burn") then
-				__ft5 = true
+			if __ft8 or JS.eq(__sw7, "rbx-burn") then
+				__ft8 = true
 				do return rbx_burnBar(nil, data) end
 			end
 		until true
@@ -1342,8 +1369,8 @@ end
 rbx_about = function(this)
 	local keys, key, k, d, i
 	keys = JS.A(0)
-	for _, __k6 in JS.keys(hotkeys) do
-		key = __k6
+	for _, __k9 in JS.keys(hotkeys) do
+		key = __k9
 		k = hotkeys[key]
 		if (JS.t(player[JS.k(k.layer)].unlocked) and JS.t(tmp[JS.k(k.layer)].hotkeys[JS.k(k.id)].unlocked)) then
 			d = rbx_str(nil, k.description)
@@ -1486,8 +1513,8 @@ rbx_achTotal = function(this)
 	local n, a, k
 	n = 0
 	a = layers.ach.achievements
-	for _, __k7 in JS.keys(a) do
-		k = __k7
+	for _, __k10 in JS.keys(a) do
+		k = __k10
 		if (JS.t(a[k]) and (JS.typeof(a[k]) == "object")) then
 			n = (JS.tonum(n) + 1)
 		end
@@ -1607,11 +1634,11 @@ rbx_map = function(this)
 	kids = JS.A(0)
 	for i = 0, JS.cap(0, (JS.len(rbx_MAP)) - 1, 1) do
 		do
-			local __ok8, __e9 = pcall(function()
+			local __ok11, __e12 = pcall(function()
 				n = rbx_mapNode(nil, rbx_MAP[JS.k(i)])
 			end)
-			if not __ok8 then
-				local e = __e9
+			if not __ok11 then
+				local e = __e12
 				n = JS.O({
 					t = "node",
 					id = rbx_MAP[JS.k(i)],
@@ -1690,20 +1717,20 @@ rbx_view = function(this)
 	ended = (if JS.t(tmp.gameEnded) then (not JS.t(player.keepGoing)) else tmp.gameEnded)
 	JS.setk(v, "ended", (if JS.t(ended) then true else false))
 	do
-		local __ok10, __e11 = pcall(function()
+		local __ok13, __e14 = pcall(function()
 			JS.setk(v, "map", rbx_map(nil))
 		end)
-		if not __ok10 then
-			local e = __e11
+		if not __ok13 then
+			local e = __e14
 			JS.setk(v, "map", rbx_err(nil, "map", e))
 		end
 	end
 	do
-		local __ok12, __e13 = pcall(function()
+		local __ok15, __e16 = pcall(function()
 			JS.setk(v, "hud", rbx_hud(nil))
 		end)
-		if not __ok12 then
-			local e = __e13
+		if not __ok15 then
+			local e = __e16
 			JS.setk(v, "hud", rbx_err(nil, "hud", e))
 		end
 	end
@@ -1711,7 +1738,7 @@ rbx_view = function(this)
 	JS.setk(v, "tabName", (if JS.t(ended) then "end" else (if JS.t(open) then open else "none")))
 	JS.setk(v, "tabStyle", JS.O({}))
 	do
-		local __ok14, __e15 = pcall(function()
+		local __ok17, __e18 = pcall(function()
 			if JS.t(ended) then
 				JS.setk(v, "tab", rbx_endScreen(nil))
 			elseif (open == "options-tab") then
@@ -1726,14 +1753,14 @@ rbx_view = function(this)
 				}, {"t", "c"}))
 			end
 		end)
-		if not __ok14 then
-			local e = __e15
+		if not __ok17 then
+			local e = __e18
 			JS.setk(v, "tab", rbx_err(nil, "tab", e))
 		end
 	end
 	keys = JS.A(0)
-	for _, __k16 in JS.keys(hotkeys) do
-		key = __k16
+	for _, __k19 in JS.keys(hotkeys) do
+		key = __k19
 		k = hotkeys[key]
 		if (JS.t(player[JS.k(k.layer)].unlocked) and JS.t(tmp[JS.k(k.layer)].hotkeys[JS.k(k.id)].unlocked)) then
 			JS.m(keys, "push", key)
@@ -1760,6 +1787,7 @@ rbx_BUYALL_AFTER = JS.O({
 	cp = "cm",
 	ex = "cm"
 }, {"p", "sp", "pb", "hp", "ap", "t", "hb", "pe", "se", "pp", "ep", "mp", "pep", "cp", "ex"})
+rbx_BUYALL_STARTUNL = JS.NULL
 rbx_BUY_CUR = JS.O({
 	p = JS.O({
 	[11] = JS.A(2, "p", "points"),

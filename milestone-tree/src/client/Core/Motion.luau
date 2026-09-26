@@ -193,9 +193,8 @@ function Motion.flash(inst: GuiObject)
 			stroke:SetAttribute("FlashT0", nil)
 			stroke:SetAttribute("FlashC0", nil)
 		end
-		if tw then tw.Completed:Connect(function(st: Enum.PlaybackState)
-			if st == Enum.PlaybackState.Completed then done() end
-		end) else done() end
+		-- cleared however the tween ends (a newer flash that cancels this one has already read the resting look)
+		if tw then tw.Completed:Once(done) else done() end
 		return
 	end
 	local f = inst:FindFirstChild("MotionFlash") :: Frame?

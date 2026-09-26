@@ -75,5 +75,37 @@ if closed then
 	check(s.ENV.rbx_buyAll(nil, "p") == 0, "closed: rbx_buyAll itself buys nothing")
 end
 
+-- a new game: the layers after sp / mp / pep / cp / ex start "unlocked" in the game's own data (mm, pm, cp, cm),
+-- which must not open Buy All
+do
+	local s = Session.new(L.deps(), nil, nil, t0)
+	for _, l in { "p", "sp", "mp", "pep", "cp", "ex" } do
+		check(not on(s, l), "a new game: " .. l .. "'s Buy All is closed")
+	end
+end
+
+-- upgrades with their own pay() (pep: points + essence) are checked live: 10 points, 12 (7) and 13 (10) each
+-- affordable alone, one press buys 12 only and the points never go below zero
+do
+	local s = Session.new(L.deps(), nil, nil, t0)
+	local JS, ENV = s.JS, s.ENV
+	local function D(v) return JS.new(ENV.Decimal, v) end
+	local P = ENV.player
+	JS.setk(P.mp, "activeChallenge", 21)
+	JS.setk(P.pm, "best", D(11))
+	JS.setk(P.pm, "essence", D("1e30"))
+	JS.setk(P.pep, "unlocked", true)
+	JS.setk(P.pep, "points", D(10))
+	JS.setk(P.pep, "upgrades", JS.newArr({ 11 }, 1))
+	JS.setk(P.cp, "best", D(1)) -- cp reached: pep's Buy All is open
+	ENV.updateTemp(nil)
+	check(on(s, "pep") and ids(s, "pep") == 2, "pep: Buy All open, 12 and 13 each affordable (" .. ids(s, "pep") .. ")")
+	ENV.rbx_buyAll(nil, "pep")
+	local has12, has13 = ENV.hasUpgrade(nil, "pep", 12) == true, ENV.hasUpgrade(nil, "pep", 13) == true
+	local left = ENV.format(nil, P.pep.points)
+	check(has12 and not has13, "pep: one press buys 12, not 13 as well (12 " .. tostring(has12) .. ", 13 " .. tostring(has13) .. ")")
+	check(left == "3" or left == "3.00", "pep: 3 points left, never negative (" .. tostring(left) .. ")")
+end
+
 print(string.format("buyall: %d checks, %d failures", n, fails))
 if fails > 0 then error("buyall unit test failed", 0) end
