@@ -134,6 +134,9 @@ Inst.__newindex = function(o, k, v)
 		end
 		return
 	end
+	if M.locked and M.locked[o.__class .. "." .. k] then
+		error("The current thread cannot write '" .. k .. "' (lacking capability RobloxScript)", 2)
+	end
 	o.__props[k] = v
 	local s = o.__propSignals[k]
 	if s then s:Fire() end
@@ -374,7 +377,11 @@ end
 M.G = {
 	UDim = UDim, UDim2 = UDim2, Vector2 = Vector2, Color3 = Color3, ColorSequence = ColorSequence,
 	ColorSequenceKeypoint = ColorSequenceKeypoint, Font = Font, DateTime = DateTime, Enum = Enum, Instance = Instance,
-	task = task, game = game, workspace = Workspace, warn = function(...) print("[warn]", ...) end,
+	task = task, game = game, workspace = Workspace, warn = function(...)
+		M.warns = M.warns or {}
+		table.insert(M.warns, table.concat(table.pack(...) :: any, " "))
+		print("[warn]", ...)
+	end,
 }
 local function envFor(inst)
 	return setmetatable({ script = inst, require = M.require }, { __index = function(_, k)

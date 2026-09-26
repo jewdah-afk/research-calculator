@@ -10,13 +10,16 @@
 	the cues the run should make are checked on the engine's play log; with -a noids (every audio asset id nil)
 	nothing may play at all.
 
-	Run from port/: python3 tools/wrap_scripts.py && ./test.sh capture && luau tests/unit/client_smoke.luau [-a nocaps|noids]
+	Run from port/: python3 tools/wrap_scripts.py && ./test.sh capture && luau tests/unit/client_smoke.luau [-a nocaps|noids|locked]
 ]]
 local M = require("../mock")
 local E = require("../engine")(M)
 local ARG = ...
 local NOCAPS = ARG == "nocaps"
 local NOIDS = ARG == "noids"
+-- -a locked: properties the engine has but locks to Roblox's own scripts (Studio refused UIShadow.Transparency with
+-- "lacking capability RobloxScript"); the client must drop the feature, never fail a draw
+local LOCKED = ARG == "locked"
 
 local failures = 0
 local function check(ok, what)
@@ -66,6 +69,7 @@ end
 local p = M.addPlayer("Tester", 1)
 game:GetService("Players").__props.LocalPlayer = p
 if NOCAPS then p:SetAttribute("MT_ForceCaps", "all") end
+if LOCKED then M.locked = { ["UIShadow.Transparency"] = true, ["Path2D.Transparency"] = true } end
 
 -- ------------------------------------------------------------------------------------------------------ helpers
 local frames = E.frames
@@ -421,6 +425,16 @@ end
 -- the one warning expected above: the drawing error
 check(E.warnings <= 2, "no [MilestoneTree] warnings besides the forced drawing error (" .. E.warnings .. ")")
 check((M.errors or 0) == errors0, "no script errors (" .. tostring((M.errors or 0) - errors0) .. ")")
+do
+	local failed = 0
+	for _, w in M.warns or {} do
+		if string.find(w, "drawing the screen failed", 1, true) then
+			failed += 1
+			if failed == 1 then print("  first: " .. w) end
+		end
+	end
+	check(failed == 0, "every patch drew (" .. failed .. " drawing failures)")
+end
 print(string.format("== client smoke: %d tweens made, %d actions sent", E.tweens, #acts))
 if failures > 0 then
 	error("client smoke: " .. failures .. " FAILED", 0)

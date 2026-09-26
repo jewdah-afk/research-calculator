@@ -35969,12 +35969,15 @@ function Recipes.glow(target: GuiObject, o: GlowOpts): Instance?
 		local parent = target.Parent
 		if parent then remove(parent, key) end
 		local s = child(target, "Glow", "UIShadow") :: UIShadow
-		s.Color = o.color
-		s.Transparency = 1 - o.alpha
-		s.BlurRadius = UDim.new(0, blur)
-		s.Spread = UDim2.fromOffset(spread, spread)
-		s.Offset = UDim2.new()
-		return s
+		local ok = pcall(function()
+			s.Color = o.color
+			s.Transparency = 1 - o.alpha
+			s.BlurRadius = UDim.new(0, blur)
+			s.Spread = UDim2.fromOffset(spread, spread)
+			s.Offset = UDim2.new()
+		end)
+		if ok then return s end
+		s:Destroy()
 	end
 	remove(target, "Glow")
 	local parent = target.Parent
@@ -36430,8 +36433,10 @@ function Recipes.curve(parent: GuiObject, pts: { Vector2 }, strokes: { CurveStro
 			for k, s in s2 do
 				local p = curve.parts[k]
 				if p then
-					(p :: Path2D).Color3 = s.c;
-					(p :: Path2D).Transparency = 1 - s.a
+					pcall(function()
+						(p :: Path2D).Color3 = s.c;
+						(p :: Path2D).Transparency = 1 - s.a
+					end)
 				end
 			end
 		end
@@ -38229,9 +38234,15 @@ function Theme.detect(force: boolean?): Caps
 	if detected and not force then return Theme.caps end
 	detected = true
 	local caps = Theme.caps
+	-- each probe writes every property the client sets: a property that exists but is locked to Roblox's own scripts
+	-- ("lacking capability RobloxScript", seen on UIShadow.Transparency in Studio) turns the feature off
 	caps.UIShadow = probe(function()
-		local s = Instance.new("UIShadow")
+		local s = Instance.new("UIShadow") :: any
+		s.Color = Color3.new(1, 1, 1)
+		s.Transparency = 0.5
 		s.BlurRadius = UDim.new(0, 8)
+		s.Spread = UDim2.fromOffset(0, 0)
+		s.Offset = UDim2.new()
 		s:Destroy()
 	end)
 	caps.Radial = probe(function()
@@ -38256,7 +38267,12 @@ function Theme.detect(force: boolean?): Caps
 		s:Destroy()
 	end)
 	caps.Path2D = probe(function()
-		local p = Instance.new("Path2D")
+		local p = Instance.new("Path2D") :: any
+		p.Color3 = Color3.new(1, 1, 1)
+		p.Thickness = 2
+		p.Transparency = 0
+		p.ZIndex = 1
+		p.Visible = true
 		p:SetControlPoints({ Path2DControlPoint.new(UDim2.fromScale(0, 0)), Path2DControlPoint.new(UDim2.fromScale(1, 1)) })
 		p:Destroy()
 	end)

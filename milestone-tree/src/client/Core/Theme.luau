@@ -341,9 +341,15 @@ function Theme.detect(force: boolean?): Caps
 	if detected and not force then return Theme.caps end
 	detected = true
 	local caps = Theme.caps
+	-- each probe writes every property the client sets: a property that exists but is locked to Roblox's own scripts
+	-- ("lacking capability RobloxScript", seen on UIShadow.Transparency in Studio) turns the feature off
 	caps.UIShadow = probe(function()
-		local s = Instance.new("UIShadow")
+		local s = Instance.new("UIShadow") :: any
+		s.Color = Color3.new(1, 1, 1)
+		s.Transparency = 0.5
 		s.BlurRadius = UDim.new(0, 8)
+		s.Spread = UDim2.fromOffset(0, 0)
+		s.Offset = UDim2.new()
 		s:Destroy()
 	end)
 	caps.Radial = probe(function()
@@ -368,7 +374,12 @@ function Theme.detect(force: boolean?): Caps
 		s:Destroy()
 	end)
 	caps.Path2D = probe(function()
-		local p = Instance.new("Path2D")
+		local p = Instance.new("Path2D") :: any
+		p.Color3 = Color3.new(1, 1, 1)
+		p.Thickness = 2
+		p.Transparency = 0
+		p.ZIndex = 1
+		p.Visible = true
 		p:SetControlPoints({ Path2DControlPoint.new(UDim2.fromScale(0, 0)), Path2DControlPoint.new(UDim2.fromScale(1, 1)) })
 		p:Destroy()
 	end)

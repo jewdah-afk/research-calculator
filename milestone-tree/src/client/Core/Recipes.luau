@@ -117,12 +117,15 @@ function Recipes.glow(target: GuiObject, o: GlowOpts): Instance?
 		local parent = target.Parent
 		if parent then remove(parent, key) end
 		local s = child(target, "Glow", "UIShadow") :: UIShadow
-		s.Color = o.color
-		s.Transparency = 1 - o.alpha
-		s.BlurRadius = UDim.new(0, blur)
-		s.Spread = UDim2.fromOffset(spread, spread)
-		s.Offset = UDim2.new()
-		return s
+		local ok = pcall(function()
+			s.Color = o.color
+			s.Transparency = 1 - o.alpha
+			s.BlurRadius = UDim.new(0, blur)
+			s.Spread = UDim2.fromOffset(spread, spread)
+			s.Offset = UDim2.new()
+		end)
+		if ok then return s end
+		s:Destroy()
 	end
 	remove(target, "Glow")
 	local parent = target.Parent
@@ -578,8 +581,10 @@ function Recipes.curve(parent: GuiObject, pts: { Vector2 }, strokes: { CurveStro
 			for k, s in s2 do
 				local p = curve.parts[k]
 				if p then
-					(p :: Path2D).Color3 = s.c;
-					(p :: Path2D).Transparency = 1 - s.a
+					pcall(function()
+						(p :: Path2D).Color3 = s.c;
+						(p :: Path2D).Transparency = 1 - s.a
+					end)
 				end
 			end
 		end
