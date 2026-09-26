@@ -153,6 +153,15 @@ rbx_prestigeButton = function(this, layer)
 	JS.setk(n, "static", (if JS.t(stat) then true else false))
 	JS.setk(n, "pr", (if JS.t(can) then JS.NULL else rbx_prCap(nil, rbx_pr(nil, t.baseAmount, (if JS.t(stat) then t.nextAt else t.requires)))))
 	JS.setk(n, "hk", rbx_hk(nil, layer))
+	if ((not JS.t(can)) and (((not (n.next == JS.NULL)) and (JS.tonum(JS.m(n.next, "indexOf", "Infinity")) >= 0)) or (JS.tonum(JS.m(formatWhole(nil, t.requires), "indexOf", "Infinity")) >= 0))) then
+		JS.setk(n, "next", JS.NULL)
+		JS.setk(n, "pr", JS.NULL)
+		JS.setk(n, "lock", "Locked in this challenge")
+		JS.setk(n, "h", "Locked in this challenge")
+	end
+	if ((not (n.next == JS.NULL)) and (JS.tonum(JS.m(n.next, "indexOf", "Infinity")) >= 0)) then
+		JS.setk(n, "next", JS.NULL)
+	end
 	do return n end
 end
 rbx_resourceDisplay = function(this, layer)
@@ -183,7 +192,7 @@ rbx_resourceDisplay = function(this, layer)
 	}, {"t", "h", "have", "bres", "gen", "best", "total"}) end
 end
 rbx_upgrade = function(this, layer, id)
-	local t, L, req, bought, can, h, ti, ds, ef, co, cn, custom, title, e, cd, cur, n
+	local t, L, req, bought, can, h, ti, ds, ef, co, cn, custom, title, e, cd, cur, n, ci
 	t = tmp[JS.k(layer)].upgrades[JS.k(id)]
 	L = layers[JS.k(layer)].upgrades[JS.k(id)]
 	if (t == nil) then
@@ -260,6 +269,16 @@ rbx_upgrade = function(this, layer, id)
 	JS.setk(n, "co", co)
 	JS.setk(n, "cur", cn)
 	JS.setk(n, "pr", (if (((JS.t(bought) or JS.t(can)) or JS.t(custom)) or (t.cost == nil)) then JS.NULL else rbx_prCap(nil, rbx_pr(nil, rbx_upgHave(nil, layer, t), t.cost))))
+	if ((((not JS.t(bought)) and (not JS.t(custom))) and (not (co == JS.NULL))) and (JS.tonum(JS.m(co, "indexOf", "Infinity")) >= 0)) then
+		JS.setk(n, "lk", true)
+		ci = JS.m(h, "indexOf", "<br>Cost: ")
+		if (JS.tonum(ci) >= 0) then
+			JS.setk(n, "h", (JS.str(JS.m(h, "substring", 0, ci)) .. "<br>Locked: meet the condition above"))
+		end
+		JS.setk(n, "co", JS.NULL)
+		JS.setk(n, "cur", JS.NULL)
+		JS.setk(n, "pr", JS.NULL)
+	end
 	do return n end
 end
 rbx_upgHave = function(this, layer, t)
@@ -1512,7 +1531,7 @@ rbx_mapBranches = function(this, l)
 	do return out end
 end
 rbx_nodeTip = function(this, l)
-	local t, tip
+	local t, tip, need
 	t = tmp[JS.k(l)]
 	tip = rbx_v(nil, t, layers[JS.k(l)], "tooltip")
 	if (tip == "") then
@@ -1524,7 +1543,11 @@ rbx_nodeTip = function(this, l)
 	if JS.t(t.tooltipLocked) then
 		do return rbx_str(nil, t.tooltipLocked) end
 	end
-	do return (((((((("Reach " .. JS.str(formatWhole(nil, t.requires))) .. " ") .. JS.str(rbx_str(nil, t.baseResource))) .. " to unlock (You have ") .. JS.str(formatWhole(nil, t.baseAmount))) .. " ") .. JS.str(rbx_str(nil, t.baseResource))) .. ")") end
+	need = formatWhole(nil, t.requires)
+	if (JS.tonum(JS.m(need, "indexOf", "Infinity")) >= 0) then
+		do return "Can't be unlocked while you're in this challenge" end
+	end
+	do return (((((((("Reach " .. JS.str(need)) .. " ") .. JS.str(rbx_str(nil, t.baseResource))) .. " to unlock (You have ") .. JS.str(formatWhole(nil, t.baseAmount))) .. " ") .. JS.str(rbx_str(nil, t.baseResource))) .. ")") end
 end
 rbx_achTotal = function(this)
 	local n, a, k
@@ -1590,7 +1613,7 @@ rbx_mapNode = function(this, l)
 		res = rbx_str(nil, t.resource),
 		tip = rbx_nodeTip(nil, l),
 		ra = (if JS.t(can) then rbx_act(nil, JS.A(2, "reset", l)) else JS.NULL),
-		req = (if (JS.t(lit) or (t.requires == nil)) then JS.NULL else rbx_nn(nil, formatWhole(nil, t.requires))),
+		req = (if ((JS.t(lit) or (t.requires == nil)) or (JS.tonum(JS.m(formatWhole(nil, t.requires), "indexOf", "Infinity")) >= 0)) then JS.NULL else rbx_nn(nil, formatWhole(nil, t.requires))),
 		rres = (if JS.t(lit) then JS.NULL else rbx_str(nil, t.baseResource)),
 		gain = (if JS.t(can) then formatWhole(nil, t.resetGain) else JS.NULL),
 		pr = (if JS.t(lit) then JS.NULL else rbx_prCap(nil, rbx_pr(nil, t.baseAmount, t.requires))),

@@ -398,7 +398,10 @@ function Hero.drawCta(self: Hero, pb: any, ctx: any, compact: boolean)
 		well.Position = UDim2.new(0, if compact then 14 else 28, 1, -12)
 		local need = Common.str(pb.next)
 		local bres = Common.plain(Common.str(pb.bres) or "")
-		if need then
+		local lock = Common.str(pb.lock)
+		if lock then
+			Common.setText(well, Common.esc(lock))
+		elseif need then
 			Common.setText(well, Common.esc("need ") .. Common.num(if compact then Rich.short(need) else need, "number", C.text, bres, true))
 		else
 			Common.setText(well, Common.esc("Not ready"))

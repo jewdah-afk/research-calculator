@@ -125,6 +125,16 @@ function rbx_prestigeButton(layer) {
 	n.static = stat ? true : false
 	n.pr = can ? null : rbx_prCap(rbx_pr(t.baseAmount, stat ? t.nextAt : t.requires))
 	n.hk = rbx_hk(layer)
+	// an Infinity requirement: the layer cannot reset in the challenge the player is in (pb in AP challenge 1, t in
+	// any T challenge)
+	if (!can && ((n.next !== null && n.next.indexOf("Infinity") >= 0) || formatWhole(t.requires).indexOf("Infinity") >= 0)) {
+		n.next = null
+		n.pr = null
+		n.lock = "Locked in this challenge"
+		n.h = "Locked in this challenge"
+	}
+	// no next step (a challenge that stops this layer's gain): nothing to show rather than "Infinity"
+	if (n.next !== null && n.next.indexOf("Infinity") >= 0) n.next = null
 	return n
 }
 
@@ -196,6 +206,16 @@ function rbx_upgrade(layer, id) {
 	n.co = co
 	n.cur = cn
 	n.pr = bought || can || custom || t.cost === undefined ? null : rbx_prCap(rbx_pr(rbx_upgHave(layer, t), t.cost))
+	// an Infinity cost is the game's lock (p / sp / hp 41-44: the cost shows once the condition in the text is met):
+	// no cost, no progress, the card says it is locked
+	if (!bought && !custom && co !== null && co.indexOf("Infinity") >= 0) {
+		n.lk = true
+		var ci = h.indexOf("<br>Cost: ")
+		if (ci >= 0) n.h = h.substring(0, ci) + "<br>Locked: meet the condition above"
+		n.co = null
+		n.cur = null
+		n.pr = null
+	}
 	return n
 }
 
@@ -970,7 +990,10 @@ function rbx_nodeTip(l) {
 	if (tip === "") return null
 	if (player[l].unlocked) return tip ? rbx_str(tip) : formatWhole(player[l].points) + " " + rbx_str(t.resource)
 	if (t.tooltipLocked) return rbx_str(t.tooltipLocked)
-	return "Reach " + formatWhole(t.requires) + " " + rbx_str(t.baseResource) + " to unlock (You have " + formatWhole(t.baseAmount) + " " + rbx_str(t.baseResource) + ")"
+	var need = formatWhole(t.requires)
+	// an Infinity requirement is the game's lock inside a challenge (pb in AP challenge 1, t in any T challenge)
+	if (need.indexOf("Infinity") >= 0) return "Can't be unlocked while you're in this challenge"
+	return "Reach " + need + " " + rbx_str(t.baseResource) + " to unlock (You have " + formatWhole(t.baseAmount) + " " + rbx_str(t.baseResource) + ")"
 }
 
 // how many achievements the game has
@@ -1024,7 +1047,7 @@ function rbx_mapNode(l) {
 		t: "val", can: can, lit: lit, glow: t.notify && unl ? true : false, pulse: t.prestigeNotify ? true : false,
 		pts: l == "ach" ? formatWhole(player.ach.achievements.length) : formatWhole(player[l].points), res: rbx_str(t.resource),
 		tip: rbx_nodeTip(l), ra: can ? rbx_act(["reset", l]) : null,
-		req: lit || t.requires === undefined ? null : rbx_nn(formatWhole(t.requires)), rres: lit ? null : rbx_str(t.baseResource),
+		req: lit || t.requires === undefined || formatWhole(t.requires).indexOf("Infinity") >= 0 ? null : rbx_nn(formatWhole(t.requires)), rres: lit ? null : rbx_str(t.baseResource),
 		gain: can ? formatWhole(t.resetGain) : null, pr: lit ? null : rbx_prCap(rbx_pr(t.baseAmount, t.requires)),
 		gen: unl && t.passiveGeneration && t.resetGain && new Decimal(t.resetGain).gt(0) ? rbx_nn(format(t.resetGain.times(t.passiveGeneration))) : null,
 		tot: l == "ach" ? rbx_achTotal() : null,

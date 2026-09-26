@@ -233,7 +233,22 @@ function Upgrade.skin(rec: any, n: any, ctx: any): boolean
 		Common.drop(b, "Bar")
 	end
 	local co = Common.str(n.co)
-	if co and state ~= "owned" and state ~= "locked" then
+	if n.lk == true and state ~= "owned" then
+		-- an Infinity cost is the game's lock: the text above says what opens it (the cost shows then)
+		local foot = Common.get(b, "Foot", "TextLabel") :: TextLabel
+		foot.LayoutOrder = 4
+		Common.text(foot, "caps", p.soft)
+		foot.AutomaticSize = Enum.AutomaticSize.None
+		foot.TextYAlignment = Enum.TextYAlignment.Center
+		foot.TextWrapped = false
+		foot.TextTruncate = Enum.TextTruncate.AtEnd
+		foot.Size = UDim2.new(1, 0, 0, 24)
+		foot.TextXAlignment = Enum.TextXAlignment.Left
+		foot.BackgroundTransparency = 1
+		for _, name in { "Fill", "Pad", "Verb", "Cost" } do Common.drop(foot, name) end
+		Skin.clear(foot)
+		Common.setText(foot, Common.caps("Locked", C.notYet) .. "   " .. Common.caps("meet the condition above", p.soft))
+	elseif co and state ~= "owned" and state ~= "locked" then
 		local foot = Common.get(b, "Foot", "TextLabel") :: TextLabel
 		foot.LayoutOrder = 4
 		Common.text(foot, "caps", p.soft)
