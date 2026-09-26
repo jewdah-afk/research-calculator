@@ -1,0 +1,22 @@
+{
+  "speed": {
+    "assetId": 124365077861444,
+    "file": "speed.png"
+  },
+  "supporter": {
+    "assetId": 99548373984898,
+    "file": "supporter.png"
+  },
+  "warp1": {
+    "assetId": 134852138466837,
+    "file": "warp1.png"
+  },
+  "warp8": {
+    "assetId": 110877194725457,
+    "file": "warp8.png"
+  },
+  "warp24": {
+    "assetId": 118614298139912,
+    "file": "warp24.png"
+  }
+}

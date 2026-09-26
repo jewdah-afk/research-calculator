@@ -5,7 +5,7 @@
 //   node tools/snap/render.js --scenes home,panel_p [--out DIR]  run snap.luau for each scene, then draw them
 //
 // Asset ids resolve through art/roblox/uploaded.json (the realm tiles and atlas: run `node roblox/tile.js` in art/
-// once so the files exist), art/ui/uploaded.json when present, and art/gems (the gem sprites) by file name.
+// once so the files exist), art/ui/uploaded.json when present, art/products (the shop icons), and art/gems (the gem sprites) by file name.
 // Unknown ids are listed after the run and drawn as nothing (like an id the engine cannot load).
 const { chromium } = require('playwright');
 const fs = require('fs'), path = require('path'), { execFileSync } = require('child_process');
@@ -14,7 +14,7 @@ const PORT = path.join(__dirname, '..', '..'), ART = path.join(PORT, '..', 'art'
 function assetMap() {
   const map = {};
   const add = (id, file) => { if (id && file && fs.existsSync(file)) map['rbxassetid://' + String(id).replace(/^rbxassetid:\/\//, '')] = 'http://snap.local/f/' + encodeURIComponent(file); };
-  for (const [manifest, base] of [[path.join(ART, 'roblox', 'uploaded.json'), path.join(ART, 'roblox')], [path.join(ART, 'ui', 'uploaded.json'), path.join(ART, 'ui')], [path.join(ART, 'gems', 'uploaded.json'), path.join(ART, 'gems')], [path.join(ART, 'substance', 'uploaded.json'), path.join(ART, 'substance')]]) {
+  for (const [manifest, base] of [[path.join(ART, 'roblox', 'uploaded.json'), path.join(ART, 'roblox')], [path.join(ART, 'ui', 'uploaded.json'), path.join(ART, 'ui')], [path.join(ART, 'gems', 'uploaded.json'), path.join(ART, 'gems')], [path.join(ART, 'substance', 'uploaded.json'), path.join(ART, 'substance')], [path.join(ART, 'products', 'uploaded.json'), path.join(ART, 'products')]]) {
     if (!fs.existsSync(manifest)) continue;
     const j = JSON.parse(fs.readFileSync(manifest, 'utf8'));
     for (const a of Object.values(j.assets || j)) if (a && a.assetId && a.file) add(a.assetId, path.join(base, a.file));

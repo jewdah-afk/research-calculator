@@ -1226,9 +1226,9 @@ return PrefsSchema
           <string name="Source"><![CDATA[--!strict
 --[[
 	Products: the game passes and developer products, one table for the server (ownership, receipts, perks) and the
-	client (the Shop). The ids are filled by port/tools/products.js once they exist on Roblox (Open Cloud), or by hand
-	from the Creator Dashboard (Monetization > Passes / Developer Products). An item without an id shows as
-	"Coming soon" and cannot be bought.
+	client (the Shop). The ids (and the icon image ids) are filled by port/tools/products.js once they exist on Roblox
+	(Open Cloud), or by hand from the Creator Dashboard (Monetization > Passes / Developer Products). An item without
+	an id shows as "Coming soon" and cannot be bought.
 
 	Passes (one-time):
 	    speed      2x Speed      the whole game runs twice as fast (the game's own devSpeed: every second counts as 2)
@@ -1238,24 +1238,24 @@ return PrefsSchema
 	                             the game catches up offline time)
 ]]
 
-export type Pass = { key: string, id: number?, name: string, price: number, blurb: string, icon: string?, speed: number? }
-export type Product = { key: string, id: number?, name: string, price: number, blurb: string, icon: string?, warp: number? }
+export type Pass = { key: string, id: number?, name: string, price: number, blurb: string, icon: number?, speed: number? }
+export type Product = { key: string, id: number?, name: string, price: number, blurb: string, icon: number?, warp: number? }
 
 local Products = {}
 
 Products.passes = {
-	{ key = "speed", id = nil, name = "2x Speed", price = 399, speed = 2,
+	{ key = "speed", id = 1998278588, icon = 124365077861444, name = "2x Speed", price = 399, speed = 2,
 		blurb = "The whole game runs twice as fast, forever. Offline time and Time Warps count double too." },
-	{ key = "supporter", id = nil, name = "Supporter", price = 99,
+	{ key = "supporter", id = 1998128578, icon = 99548373984898, name = "Supporter", price = 99,
 		blurb = "A gold SUPPORTER tag on your points bar and a gold rim. Thank you for supporting the game!" },
 } :: { Pass }
 
 Products.products = {
-	{ key = "warp1", id = nil, name = "Time Warp · 1 hour", price = 29, warp = 3600,
+	{ key = "warp1", id = 3714803203, icon = 134852138466837, name = "Time Warp · 1 hour", price = 29, warp = 3600,
 		blurb = "1 hour of progress, right now." },
-	{ key = "warp8", id = nil, name = "Time Warp · 8 hours", price = 149, warp = 8 * 3600,
+	{ key = "warp8", id = 3714803208, icon = 110877194725457, name = "Time Warp · 8 hours", price = 149, warp = 8 * 3600,
 		blurb = "8 hours of progress, right now." },
-	{ key = "warp24", id = nil, name = "Time Warp · 24 hours", price = 349, warp = 24 * 3600,
+	{ key = "warp24", id = 3714803211, icon = 118614298139912, name = "Time Warp · 24 hours", price = 349, warp = 24 * 3600,
 		blurb = "A whole day of progress, right now." },
 } :: { Product }
 
@@ -48668,7 +48668,7 @@ function Modals.new(root: GuiObject): Modals
 		l.Size = UDim2.new(1, 0, 0, 18)
 		l.TextXAlignment = Enum.TextXAlignment.Left
 	end
-	local function item(key: string, name: string, blurb: string, price: number, id: number?, have: boolean,
+	local function item(key: string, name: string, blurb: string, price: number, id: number?, icon: number?, have: boolean,
 		buy: (id: number) -> ())
 		local r = Kit.frame(card, "Item_" .. key)
 		r.LayoutOrder = nextOrder()
@@ -48676,13 +48676,26 @@ function Modals.new(root: GuiObject): Modals
 		r.BackgroundColor3 = Theme.C.deep
 		r.BackgroundTransparency = 0.2
 		Kit.stroke(r, 1, Color3.new(1, 1, 1), 0.12, "Hair").LineJoinMode = Enum.LineJoinMode.Miter
+		-- the item's icon (the one Roblox shows for the pass / product), text to its right
+		local tx = 16
+		if icon then
+			local im = Instance.new("ImageLabel")
+			im.Name = "Icon"
+			im.BackgroundTransparency = 1
+			im.Image = "rbxassetid://" .. tostring(icon)
+			im.Position = UDim2.fromOffset(9, 9)
+			im.Size = UDim2.fromOffset(56, 56)
+			im.ZIndex = r.ZIndex
+			im.Parent = r
+			tx = 78
+		end
 		local nm = Kit.label(r, "Name", "card", name, Color3.new(1, 1, 1))
-		nm.Position = UDim2.fromOffset(16, 12)
-		nm.Size = UDim2.new(1, -190, 0, 24)
+		nm.Position = UDim2.fromOffset(tx, 12)
+		nm.Size = UDim2.new(1, -174 - tx, 0, 24)
 		nm.TextXAlignment = Enum.TextXAlignment.Left
 		local bl = Kit.label(r, "Blurb", "small", blurb, Theme.C.soft)
-		bl.Position = UDim2.fromOffset(16, 38)
-		bl.Size = UDim2.new(1, -190, 0, 30)
+		bl.Position = UDim2.fromOffset(tx, 38)
+		bl.Size = UDim2.new(1, -174 - tx, 0, 30)
 		bl.TextWrapped = true
 		bl.TextXAlignment = Enum.TextXAlignment.Left
 		bl.TextYAlignment = Enum.TextYAlignment.Top
@@ -48711,13 +48724,13 @@ function Modals.new(root: GuiObject): Modals
 		local lp = Players.LocalPlayer
 		section("Game passes")
 		for _, p in Products.passes do
-			item(p.key, p.name, p.blurb, p.price, p.id, have[p.key] == true, function(id: number)
+			item(p.key, p.name, p.blurb, p.price, p.id, p.icon, have[p.key] == true, function(id: number)
 				pcall(function() MarketplaceService:PromptGamePassPurchase(lp, id) end)
 			end)
 		end
 		section("Time Warp")
 		for _, p in Products.products do
-			item(p.key, p.name, p.blurb, p.price, p.id, false, function(id: number)
+			item(p.key, p.name, p.blurb, p.price, p.id, p.icon, false, function(id: number)
 				pcall(function() MarketplaceService:PromptProductPurchase(lp, id) end)
 			end)
 		end

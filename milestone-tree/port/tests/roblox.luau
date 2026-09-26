@@ -201,6 +201,7 @@ local Products = require("../../src/shared/Products")
 Products.passes[1].id = 111
 Products.passes[2].id = 112
 Products.products[1].id = 221
+Products.products[2].id = nil -- the SOON state
 M.passes[1] = { [111] = true }
 
 print("== player joins")
@@ -329,6 +330,8 @@ local modal = pg.OverlayGui.Root:FindFirstChild("Modal")
 check(modal ~= nil and modal.Visible and modal:GetAttribute("Kind") == "shop", "the dock's SHOP opens the Shop")
 check(modal and modal:FindFirstChild("Item_speed") and modal.Item_speed:FindFirstChild("Owned") ~= nil, "the owned pass reads OWNED")
 check(modal and modal:FindFirstChild("Item_warp8") and modal.Item_warp8:FindFirstChild("Soon") ~= nil, "a product without an id reads SOON")
+local icon = modal and modal:FindFirstChild("Item_warp1") and modal.Item_warp1:FindFirstChild("Icon")
+check(icon ~= nil and icon.Image == "rbxassetid://" .. tostring(Products.products[1].icon), "a shop row shows the item's icon")
 local buy = modal and modal:FindFirstChild("Item_supporter") and modal.Item_supporter:FindFirstChild("Buy")
 if buy then buy.Activated:Fire() end
 local last = M.prompts[#M.prompts]

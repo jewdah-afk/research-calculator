@@ -337,7 +337,7 @@ function Modals.new(root: GuiObject): Modals
 		l.Size = UDim2.new(1, 0, 0, 18)
 		l.TextXAlignment = Enum.TextXAlignment.Left
 	end
-	local function item(key: string, name: string, blurb: string, price: number, id: number?, have: boolean,
+	local function item(key: string, name: string, blurb: string, price: number, id: number?, icon: number?, have: boolean,
 		buy: (id: number) -> ())
 		local r = Kit.frame(card, "Item_" .. key)
 		r.LayoutOrder = nextOrder()
@@ -345,13 +345,26 @@ function Modals.new(root: GuiObject): Modals
 		r.BackgroundColor3 = Theme.C.deep
 		r.BackgroundTransparency = 0.2
 		Kit.stroke(r, 1, Color3.new(1, 1, 1), 0.12, "Hair").LineJoinMode = Enum.LineJoinMode.Miter
+		-- the item's icon (the one Roblox shows for the pass / product), text to its right
+		local tx = 16
+		if icon then
+			local im = Instance.new("ImageLabel")
+			im.Name = "Icon"
+			im.BackgroundTransparency = 1
+			im.Image = "rbxassetid://" .. tostring(icon)
+			im.Position = UDim2.fromOffset(9, 9)
+			im.Size = UDim2.fromOffset(56, 56)
+			im.ZIndex = r.ZIndex
+			im.Parent = r
+			tx = 78
+		end
 		local nm = Kit.label(r, "Name", "card", name, Color3.new(1, 1, 1))
-		nm.Position = UDim2.fromOffset(16, 12)
-		nm.Size = UDim2.new(1, -190, 0, 24)
+		nm.Position = UDim2.fromOffset(tx, 12)
+		nm.Size = UDim2.new(1, -174 - tx, 0, 24)
 		nm.TextXAlignment = Enum.TextXAlignment.Left
 		local bl = Kit.label(r, "Blurb", "small", blurb, Theme.C.soft)
-		bl.Position = UDim2.fromOffset(16, 38)
-		bl.Size = UDim2.new(1, -190, 0, 30)
+		bl.Position = UDim2.fromOffset(tx, 38)
+		bl.Size = UDim2.new(1, -174 - tx, 0, 30)
 		bl.TextWrapped = true
 		bl.TextXAlignment = Enum.TextXAlignment.Left
 		bl.TextYAlignment = Enum.TextYAlignment.Top
@@ -380,13 +393,13 @@ function Modals.new(root: GuiObject): Modals
 		local lp = Players.LocalPlayer
 		section("Game passes")
 		for _, p in Products.passes do
-			item(p.key, p.name, p.blurb, p.price, p.id, have[p.key] == true, function(id: number)
+			item(p.key, p.name, p.blurb, p.price, p.id, p.icon, have[p.key] == true, function(id: number)
 				pcall(function() MarketplaceService:PromptGamePassPurchase(lp, id) end)
 			end)
 		end
 		section("Time Warp")
 		for _, p in Products.products do
-			item(p.key, p.name, p.blurb, p.price, p.id, false, function(id: number)
+			item(p.key, p.name, p.blurb, p.price, p.id, p.icon, false, function(id: number)
 				pcall(function() MarketplaceService:PromptProductPurchase(lp, id) end)
 			end)
 		end

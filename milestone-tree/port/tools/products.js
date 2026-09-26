@@ -26,17 +26,18 @@ if (!/^\d+$/.test(uni || '')) { console.error('usage: node tools/products.js --u
 function items() {
   const src = fs.readFileSync(LUAU, 'utf8');
   const out = [];
-  const re = /\{ key = "(\w+)", id = (nil|\d+), name = "([^"]+)", price = (\d+)[^}]*?blurb = "([^"]+)"/g;
+  const re = /\{ key = "(\w+)", id = (nil|\d+), (?:icon = (\d+), )?name = "([^"]+)", price = (\d+)[^}]*?blurb = "([^"]+)"/g;
   const passesAt = src.indexOf('Products.passes'), productsAt = src.indexOf('Products.products');
   for (let m; (m = re.exec(src));) {
-    out.push({ key: m[1], id: m[2] === 'nil' ? null : +m[2], name: m[3].replace(' · ', ' - '), price: +m[4], blurb: m[5],
+    out.push({ key: m[1], id: m[2] === 'nil' ? null : +m[2], icon: m[3] ? +m[3] : null, name: m[4].replace(' · ', ' - '), price: +m[5], blurb: m[6],
       kind: m.index > productsAt ? 'product' : m.index > passesAt ? 'pass' : null });
   }
   return out.filter(i => i.kind);
 }
-function writeId(key, id) {
+// the item's id and its icon image id (the Shop draws it) into Products.luau
+function writeId(key, id, icon) {
   const src = fs.readFileSync(LUAU, 'utf8');
-  const next = src.replace(new RegExp(`(\\{ key = "${key}", id = )(nil|\\d+)`), `$1${id}`);
+  const next = src.replace(new RegExp(`(\\{ key = "${key}", id = )(nil|\\d+), (?:icon = \\d+, )?`), `$1${id}, ${icon ? `icon = ${icon}, ` : ''}`);
   if (next === src) throw new Error('could not write the id of ' + key);
   fs.writeFileSync(LUAU, next);
 }
@@ -58,7 +59,7 @@ async function existing(kind) {
   for (let page = 0; page < 20; page++) {
     const j = await call('GET', base + (cursor ? `?pageToken=${encodeURIComponent(cursor)}` : ''));
     const list = j.gamePasses || j.developerProducts || j.data || [];
-    for (const it of list) names[it.name] = it.gamePassId || it.productId || it.id;
+    for (const it of list) names[it.name] = { id: it.gamePassId || it.productId || it.id, icon: it.iconAssetId || it.iconImageAssetId || null };
     cursor = j.nextPageToken || '';
     if (!cursor) break;
   }
@@ -86,14 +87,21 @@ async function create(it) {
   const have = { pass: null, product: null };
   let failed = 0;
   for (const it of list) {
-    if (it.id) { console.log(`  = ${it.key}: already ${it.id}`); continue; }
+    if (it.id && it.icon) { console.log(`  = ${it.key}: already ${it.id}`); continue; }
     try {
       if (have[it.kind] === null) have[it.kind] = await existing(it.kind);
-      let id = have[it.kind][it.name];
-      if (id) console.log(`  ~ ${it.key}: "${it.name}" exists on the experience (${id}), adopted`);
+      let found = have[it.kind][it.name], id = it.id || (found && found.id), icon = found && found.icon;
+      if (it.id) console.log(`  = ${it.key}: already ${it.id}${icon ? `, icon ${icon}` : ''}`);
+      else if (id) console.log(`  ~ ${it.key}: "${it.name}" exists on the experience (${id}), adopted`);
       else if (dry) { console.log(`  + ${it.key}: would create ${it.kind} "${it.name}" for R$ ${it.price}`); continue; }
-      else { id = await create(it); console.log(`  + ${it.key}: created ${it.kind} ${id} "${it.name}" R$ ${it.price}`); }
-      writeId(it.key, id);
+      else {
+        id = await create(it);
+        console.log(`  + ${it.key}: created ${it.kind} ${id} "${it.name}" R$ ${it.price}`);
+        have[it.kind] = await existing(it.kind); // the icon id comes with the listing
+        icon = (have[it.kind][it.name] || {}).icon;
+      }
+      if (dry) continue;
+      writeId(it.key, id, icon || it.icon);
     } catch (e) {
       failed++;
       console.error(`  ! ${it.key}: ${e.message}`);

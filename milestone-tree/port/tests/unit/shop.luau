@@ -54,6 +54,12 @@ for _, p in Products.products do keys[p.key] = p end
 check(keys.speed and keys.supporter and keys.warp1 and keys.warp8 and keys.warp24, "passes speed + supporter, warps 1 / 8 / 24 h")
 for _, p in Products.products do check(p.price > 0 and p.warp and p.warp > 0, p.key .. " has a price and a warp") end
 check(Products.pass("speed").speed == 2, "the speed pass is 2x")
+-- the shipped table: every item exists on Roblox (an id) and has its icon (products.js writes both)
+for _, list in { Products.passes, Products.products } :: { { any } } do
+	for _, p in list do check(type(p.id) == "number" and type(p.icon) == "number", p.key .. " has its Roblox id and icon") end
+end
+check(Products.passById(Products.passes[1].id :: number) == Products.passes[1], "passById finds a pass")
+check(Products.productById(Products.products[3].id :: number) == Products.products[3], "productById finds a product")
 
 print(string.format("shop: %d checks, %d failures", n, fails))
 if fails > 0 then error("shop failed") end
