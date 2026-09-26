@@ -415,9 +415,13 @@ function App.start()
 			view:focusWorld(p)
 			return
 		end
-		local zz = math.min(free.w / bb.w, free.h / bb.h, 0.9)
+		-- keep the toast band at the strip's top clear: the tree fits the rect below it
+		local band = 170 * Layout.s
+		local h = math.max(free.h * 0.5, free.h - band)
+		local zz = math.min(free.w / bb.w, h / bb.h, 0.9)
 		local c = Vector2.new(bb.x + bb.w / 2, bb.y + bb.h / 2)
-		view:focusWorld(c:Lerp(p, 0.35), { zoom = zz })
+		-- focusWorld centres its point in the whole free rect; aim higher so the tree sits centred in the lower part
+		view:focusWorld(c:Lerp(p, 0.35) - Vector2.new(0, (free.h - h) / 2 / zz), { zoom = zz })
 	end
 	local function vSize(): MapCamera.Size
 		local cam = view:camera()

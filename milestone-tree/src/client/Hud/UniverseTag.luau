@@ -23,7 +23,7 @@ export type UniverseTag = {
 	frame: Frame,
 	hold: Signal.Signal<>,
 	update: (self: UniverseTag, gate: Types.Gate?) -> (),
-	setTop: (self: UniverseTag, y: number) -> (),
+	setTop: (self: UniverseTag, y: number, x: number?) -> (),
 	destroy: (self: UniverseTag) -> (),
 }
 
@@ -97,8 +97,8 @@ function UniverseTag.new(parent: GuiObject): UniverseTag
 		text.Text = if gate.fin then "Goal met: leaving will finish" else "Goal not met: leaving exits early"
 		verb.Text = Rich.caps(if gate.fin then "Finish" else "Exit")
 	end
-	function self.setTop(_: UniverseTag, y: number)
-		f.Position = UDim2.new(0.5, 0, 0, y)
+	function self.setTop(_: UniverseTag, y: number, x: number?)
+		f.Position = if x then UDim2.fromOffset(x, y) else UDim2.new(0.5, 0, 0, y)
 	end
 	function self.destroy(u: UniverseTag)
 		u.hold:DisconnectAll()

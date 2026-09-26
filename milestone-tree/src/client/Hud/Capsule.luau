@@ -44,6 +44,8 @@ export type Capsule = {
 	setStatus: (self: Capsule, kind: string?) -> (),
 	setUniverse: (self: Capsule, inside: boolean) -> (),
 	setFirstRun: (self: Capsule, b: boolean) -> (),
+	setCentre: (self: Capsule, x: number?) -> (),
+	centre: (self: Capsule) -> number?,
 	bottom: (self: Capsule) -> number, -- du below the Root top where things can hang (pill / status)
 	destroy: (self: Capsule) -> (),
 }
@@ -194,11 +196,18 @@ function Capsule.new(parent: GuiObject): Capsule
 	local savedToken = 0
 
 	local W_WIDE, H_WIDE, W_COMPACT, H_COMPACT = 540, 62, 340, 44
+	-- the capsule's centre: the Root's middle, or a du x (over the map strip while a side sheet is open)
+	local centreX: number? = nil
+	local function at(dx: number, y: number): UDim2
+		local cx = centreX
+		if cx then return UDim2.fromOffset(cx + dx, y) end
+		return UDim2.new(0.5, dx, 0, y)
+	end
 	local function place()
 		compact = Layout.mode == "COMPACT"
 		local w, h = if compact then W_COMPACT else W_WIDE, if compact then H_COMPACT else H_WIDE
 		f.Size = UDim2.fromOffset(w, h)
-		f.Position = UDim2.new(0.5, 0, 0, 4)
+		f.Position = at(0, 4)
 		local cd = if compact then 30 else 40
 		Sleek.diamond(f, "Coin", GOLD_D, cd, { fill = 0, inner = false })
 		coin.Position = UDim2.new(0, if compact then 10 else 16, 0.5, 0)
@@ -222,18 +231,18 @@ function Capsule.new(parent: GuiObject): Capsule
 		divider.Visible = true
 		pill.Size = UDim2.fromOffset(0, 18)
 		pill.AnchorPoint = Vector2.new(0, 0)
-		pill.Position = UDim2.new(0.5, w / 2 - rx, 0, 4 + (if compact then 13 else 36))
+		pill.Position = at(w / 2 - rx, 4 + (if compact then 13 else 36))
 		Theme.text(pillLabel, "number")
 		pillLabel.TextSize = if compact then 13 else 14
 		pillLabel.Size = UDim2.fromScale(0, 1)
 		local gs = if compact then 11 else 12
 		up.Size = UDim2.fromOffset(gs, gs)
 		spark.AnchorPoint = Vector2.new(0, 0)
-		spark.Position = UDim2.new(0.5, w / 2 - rx, 0, 4 + 10)
+		spark.Position = at(w / 2 - rx, 4 + 10)
 		spark.Size = UDim2.fromOffset(rx - 16, 22)
 		-- warn: right of the capsule
 		warn.Size = UDim2.fromOffset(0, if compact then 26 else 30)
-		warn.Position = UDim2.new(0.5, w / 2 + 14, 0, 4 + h / 2)
+		warn.Position = at(w / 2 + 14, 4 + h / 2)
 		Kit.pad(warn, 0, 10, 0, 8)
 		wIcon.Size = UDim2.fromOffset(16, 16)
 		Theme.text(wLabel, "badge")
@@ -292,7 +301,7 @@ function Capsule.new(parent: GuiObject): Capsule
 			iLabel.Text = t
 		end
 		local show = t ~= ""
-		info.Position = UDim2.new(0.5, 0, 0, infoY())
+		info.Position = at(0, infoY())
 		if info.Visible ~= show then
 			info.Visible = show
 			self.changed:Fire()
@@ -348,7 +357,7 @@ function Capsule.new(parent: GuiObject): Capsule
 			warn.Visible = showWarn
 			c.changed:Fire()
 		end
-		status.Position = UDim2.new(0.5, 0, 0, statusY())
+		status.Position = at(0, statusY())
 		writeInfo(h)
 	end
 
@@ -375,10 +384,24 @@ function Capsule.new(parent: GuiObject): Capsule
 		local g = Kit.glyph(status, "Icon", spec.glyph, spec.color, Theme.C.deep)
 		g.LayoutOrder = 1
 		g.Size = UDim2.fromOffset(14, 14)
-		status.Position = UDim2.new(0.5, 0, 0, statusY())
+		status.Position = at(0, statusY())
 		status.Visible = true
 		writeInfo(hud)
 		c.changed:Fire()
+	end
+
+	-- x: the du x to centre on (the map strip's middle while a side sheet is open), nil for the Root's middle
+	function self.setCentre(c: Capsule, x: number?)
+		local w = if compact then W_COMPACT else W_WIDE
+		local nx = if x then math.max(w / 2 + 4, x) else nil
+		if nx == centreX then return end
+		centreX = nx
+		place()
+		local h = hud
+		if h then c:update(h) end
+	end
+	function self.centre(_: Capsule): number?
+		return centreX
 	end
 
 	function self.setUniverse(_: Capsule, b: boolean)

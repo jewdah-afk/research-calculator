@@ -355,12 +355,17 @@
       const inner = el.querySelector(':scope > .in');
       if (!inner) continue;
       const ir = inner.getBoundingClientRect();
+      // client rects are after the UIScale transforms above; min sizes are layout px, so undo that scale
+      let kx = 1, ky = 1;
+      for (let a = el; a; a = a.parentElement) {
+        if (a.offsetWidth > 0 && a.offsetHeight > 0) { const ar = a.getBoundingClientRect(); kx = ar.width / a.offsetWidth; ky = ar.height / a.offsetHeight; break; }
+      }
       let right = 0, bottom = 0;
       for (const c of inner.querySelectorAll(':scope > .g')) {
         if (getComputedStyle(c).display === 'none') continue;
         const r = c.getBoundingClientRect();
-        if (c.dataset.fx === '1') right = Math.max(right, r.right - ir.left);
-        if (c.dataset.fy === '1') bottom = Math.max(bottom, r.bottom - ir.top);
+        if (c.dataset.fx === '1') right = Math.max(right, (r.right - ir.left) / kx);
+        if (c.dataset.fy === '1') bottom = Math.max(bottom, (r.bottom - ir.top) / ky);
       }
       const cs = getComputedStyle(el);
       const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight), padY = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);

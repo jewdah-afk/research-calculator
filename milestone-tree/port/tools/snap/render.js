@@ -118,4 +118,5 @@ async function main() {
   }
   await browser.close();
 }
-main().catch(e => { console.error(e.stack || e.message); process.exit(1); });
+if (require.main === module) main().catch(e => { console.error(e.stack || e.message); process.exit(1); });
+module.exports = { assetMap, insets, serveRoute };

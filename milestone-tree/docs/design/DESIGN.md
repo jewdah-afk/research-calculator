@@ -79,7 +79,7 @@ Mock cheats, all of them Roblox-equivalent:
 | Q-M6 | Gate | One visible entry point: the **portal button** (bottom-right), plus the **rift hotspot** (hover teaser, click = fly + popover). Inside the Multiverse, a **universe tag** under the capsule carries EXIT/FINISH, so it stays reachable while a panel is open. The standalone map gate chip was dropped (it duplicated the portal). |
 | Q-M7 | Start camera / persistence / fly-to | Start = REALM §2.8 solved on the **HUD-safe rect** (1080p: z .505, C (1901,1146)). Phones: touch zoom .34 on the **centroid of the READY nodes**, shifted so no ring sits under the top band; M at 60% down for a new player. Not persisted: every join starts from the rule. `frameNodes(ids)` is used for universe changes and the READY `+N` list. Fly-to follows REALM (SmoothDamp .35 s, z = max(z, .9)) toward the free rect's centre. |
 | Q-M8 | fg z-order / ReducedMotion | REALM z-order: fg and motesNear under Links/Nodes, particles over them at α ≤ .24, never taking input. fg and motesNear fade out (0.2 s) while a side sheet is open. ReducedMotion follows REALM §9.6, plus the UI rules in §8. |
-| Q-L1 | Breakpoints | **WIDE** (canvas 1920×1080 du), **MEDIUM** (≈1600×900 du), **COMPACT** (phones, V.y < 500 pt). s ≥ 1 on COMPACT and ≥ .90 on desktops, and `Theme.size` holds the floors, so no text renders below 12 px (caps) / 13 px (everything else) (§9.5, §10). |
+| Q-L1 | Breakpoints (superseded by aspect scaling, §10) | **WIDE** (canvas 1920×1080 du), **MEDIUM** (≈1600×900 du), **COMPACT** (phones, V.y < 500 pt). s ≥ 1 on COMPACT and ≥ .90 on desktops, and `Theme.size` holds the floors, so no text renders below 12 px (caps) / 13 px (everything else) (§9.5, §10). |
 | Q-L2 | Panel form | WIDE/MEDIUM: a **right side sheet**; the map Box is resized to the free strip and stays live (§3.6). COMPACT, and MEDIUM strips under 460 du: **full screen**, `MapGui.Enabled = false`. Always docked right; never left-docked. |
 | Q-P1 | Sections | Titles come from `cn` (§5.6). Order is the tabFormat order, with main-display, reset and resource-display lifted into the hero. Per-layer exceptions are in §6. |
 | Q-P2 | Buyable bar | Capped buyable: level / limit. Not affordable: **progress-to-afford** (`pr`, server-side, e.g. 91%). Affordable: none (the hold strip lights instead). |
@@ -1206,6 +1206,20 @@ re-typeset:
 ---------------------------------------------------------------------------------------------------------------------
 
 ## 10. Breakpoints and UI scale
+
+> **Superseded (2026-09-26): aspect-ratio scaling.** The shipped client no longer picks a COMPACT phone design. Every
+> device gets the same 1920×1080 du layout, scaled by the tighter axis (`src/client/Core/Layout.luau`, `Layout.compute`):
+>
+> ```lua
+> local s = math.clamp(math.min(V.X / 1920, V.Y / 1080) * userSize, 0.55, 2.0)   -- S_FLOOR .55 keeps phones legible
+> local canvas = V / s
+> local mode = (canvas.X < 1500 or canvas.Y < 860) and "MEDIUM" or "WIDE"     -- COMPACT is never chosen
+> ```
+>
+> An 844×390 phone gets s .55 and a 1535×709 du canvas: the desktop side sheet with the map strip, scaled. Consoles and
+> TVs follow the same rule (4K = s 2.0). `Theme.FLOOR` (rendered caps 7 / text 8 points) replaces the px floors below for
+> s < 1. The COMPACT code paths (band, full-screen phone sheet, COMPACT type sizes) are left in place but unused; the
+> formula, the table and the COMPACT rows below are the original spec, kept for reference.
 
 ```lua
 local V = workspace.CurrentCamera.ViewportSize   -- points; recompute on change

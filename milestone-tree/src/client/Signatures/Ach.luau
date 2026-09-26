@@ -69,8 +69,9 @@ local function shelf(ph: Frame, id: string, store: any, ctx: any): any
 		local sig = tostring(count) .. "|" .. tostring(compact)
 		if big:GetAttribute("Sig") ~= sig then
 			big:SetAttribute("Sig", sig)
-			Recipes.number(big, { text = count :: string, size = if compact then 38 else 64, from = C.white, mid = Theme.lift(GOLD, 0.35), to = GOLD,
-				stroke = if compact then 5 else 7, shadow = if compact then 3 else 5, role = "hero" })
+			-- Sleek: a clean gold count, no outline or drop shadow
+			Recipes.number(big, { text = count :: string, size = if compact then 38 else 56, from = Theme.lift(GOLD, 0.45), to = GOLD,
+				stroke = 0, shadow = 0, role = "hero" })
 		end
 		local eff = Common.label(top, "Effect", "body", C.text, { order = 2 })
 		eff.Size = UDim2.new(1, if compact then -130 else -220, 0, 0)
@@ -98,12 +99,14 @@ local function shelf(ph: Frame, id: string, store: any, ctx: any): any
 			plank.Active = false
 			plank.Size = UDim2.new(1, 0, 0, 0)
 			plank.AutomaticSize = Enum.AutomaticSize.Y
-			plank.BackgroundColor3 = Color3.fromRGB(58, 40, 22)
-			plank.BackgroundTransparency = 0.35
-			Common.corner(plank, 10)
+			-- Sleek: a dark slab with a gold hairline and a lit gold floor line (the shelf edge)
+			plank.BackgroundColor3 = Color3.fromHex("0a0e16")
+			plank.BackgroundTransparency = 0.25
+			Common.drop(plank, "Corner")
+			Common.stroke(plank, 1, GOLD, 0.8, "Line").LineJoinMode = Enum.LineJoinMode.Miter
 			Common.pad(plank, 12, 12, 16, 12)
 			Common.list(plank, true, if compact then 8 else 14, { wraps = true, align = Enum.HorizontalAlignment.Center })
-			local mine: { [string]: boolean } = { List = true, Pad = true, Corner = true }
+			local mine: { [string]: boolean } = { List = true, Pad = true, Corner = true, Line = true }
 			for i = lo, hi do
 				local aid = ids[i]
 				local n = st:get(aid)

@@ -167,7 +167,8 @@ function Toasts.new(root: GuiObject): Toasts
 		local k = spec.color
 		local w, h = width(), if compact then 56 else 72
 		local f = Kit.frame(holder, "Toast_" .. t.id, 1)
-		f.AnchorPoint = Vector2.new(1, 0)
+		-- the holder is anchored at its top right (x is the free rect's right edge); a toast fills the holder's width
+		f.AnchorPoint = Vector2.new(0, 0)
 		f.Size = UDim2.fromOffset(w, h)
 		f.Position = UDim2.fromOffset(0, 0)
 		-- Sleek: a dark slab, a 3 du kind-colour bar on the left, corner ticks, the life line along the bottom

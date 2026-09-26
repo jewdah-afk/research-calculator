@@ -152,6 +152,16 @@ function Hud.new(topbar: ScreenGui, hud: ScreenGui): Hud
 		local side = p ~= nil and p.mode == "side"
 		local full = p ~= nil and p.mode == "full"
 		capsule.frame.Visible = not (full and compact)
+		-- beside a side sheet the capsule (and the universe tag) centre over the map strip (DESIGN.md 4.2)
+		local strip = if side and p then p.strip else nil
+		if strip then
+			local ro = topRoot.AbsolutePosition
+			local s = math.max(Layout.s, 0.01)
+			capsule:setCentre((strip.x + strip.w / 2 - ro.X) / s)
+		else
+			capsule:setCentre(nil)
+		end
+		tag:setTop(capsule:bottom(), capsule:centre())
 		local bl = if full and compact and p then p.layer else nil
 		local bn = if bl and lastMs then (lastMs :: MapState).nodes[bl] else nil
 		band:show(bl, if p then p.title else nil, if bn and type(bn.sym) == "string" then bn.sym else nil)
@@ -167,14 +177,14 @@ function Hud.new(topbar: ScreenGui, hud: ScreenGui): Hud
 
 	function self.updateHud(_: Hud, h: HudState)
 		capsule:update(h)
-		tag:setTop(capsule:bottom())
+		tag:setTop(capsule:bottom(), capsule:centre())
 		soon()
 	end
 	function self.updateMap(_: Hud, ms: MapState)
 		lastMs = ms
 		capsule:setUniverse(ms.inside)
 		tag:update(ms.gate)
-		tag:setTop(capsule:bottom())
+		tag:setTop(capsule:bottom(), capsule:centre())
 		ready:update(ms)
 		portal:update(ms.gate)
 		local list = {}
@@ -192,7 +202,7 @@ function Hud.new(topbar: ScreenGui, hud: ScreenGui): Hud
 	function self.setStatus(_: Hud, kind: string?)
 		capsule:setStatus(kind)
 		dock:setUnsaved(kind == "off")
-		tag:setTop(capsule:bottom())
+		tag:setTop(capsule:bottom(), capsule:centre())
 		soon()
 	end
 	function self.setPanel(_: Hud, p: PanelInfo?)
