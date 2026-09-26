@@ -123,7 +123,9 @@ local function label(parent: Instance, name: string, text: string, size: number,
 	l.FontFace = font
 	l.Size = UDim2.new(1, 0, 0, size + 6)
 	l.TextXAlignment = Enum.TextXAlignment.Center
-	for k, v in props or {} do (l :: any)[k] = v end
+	if props then
+		for k, v in props do (l :: any)[k] = v end
+	end
 	l.Parent = parent
 	return l
 end
@@ -162,9 +164,10 @@ local function build(): ScreenGui
 		NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.5, 0.9), NumberSequenceKeypoint.new(1, 1),
 	})
 	gg.Parent = glow
-	for _, t in { { "TL", 0, 0 }, { "TR", 1, 0 }, { "BL", 0, 1 }, { "BR", 1, 1 } } do
-		tick(back, "Tick" .. t[1], t[2], t[3])
-	end
+	tick(back, "TickTL", 0, 0)
+	tick(back, "TickTR", 1, 0)
+	tick(back, "TickBL", 0, 1)
+	tick(back, "TickBR", 1, 1)
 
 	-- the centre column, scaled to the screen (the design is 1920 x 1080; phones keep it readable)
 	local col = frame(back, "Column", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
@@ -256,8 +259,8 @@ local function step()
 	end
 	if parts.tip then
 		local i = math.floor(t / 4.5) % #TIPS + 1
-		local want = TIPS[i]
-		if parts.tip.Text ~= want then parts.tip.Text = want end
+		local tip = TIPS[i]
+		if parts.tip.Text ~= tip then parts.tip.Text = tip end
 	end
 end
 
@@ -33426,48 +33429,60 @@ end
 
 -- ------------------------------------------------------------------------------------------------------ notation
 -- The player's number notation (the Options setting; not part of the game save). SCIENTIFIC is the game's own
--- format(). SUFFIX shows 1,000 to 1e3003 as 1.23K ... 4.56Ce, and from 1e1,000,000 up (where the game drops the
--- mantissa) suffixes the exponent instead: e1,329,005 -> e1.33M, e1.080e25 -> e10.8Sp. Numbers under 1,000, the
--- 1e3003 to 1e1,000,000 band (1.23e5,000) and the F (tetration) range keep the game's format.
+-- format(). SUFFIX shows 1,000 to 1e303 as 1.23K ... 4.56NoNog (the readable -illion names), and from there suffixes
+-- the exponent with 4 figures: 1e23,537 -> e23.54K, e1,329,005 -> e1.329M, e1.080e25 -> e10.80Sp (close costs stay
+-- apart: e10.93K vs e10.92K). Numbers under 1,000, exponents under 1,000 (2.19e500) and the F (tetration) range keep
+-- the game's format.
 local FIRST = { "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No" }
 local UNITS = { "", "U", "D", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No" }
 local TENS = { "", "Dc", "Vg", "Tg", "Qag", "Qig", "Sxg", "Spg", "Ocg", "Nog" }
 local HUNDREDS = { "", "Ce", "Dce", "Tce", "Qace", "Qice", "Sxce", "Spce", "Occe", "Noce" }
--- the suffix of 1e(3k), k >= 1 (k = 1: K, k = 2: M ... k = 1000: the end of the table)
+-- the suffix of 1e(3k), k >= 1 (k = 1: K, k = 2: M ... k = 100: NoNog)
 local function suffix(k: number): string
 	if k <= 10 then return FIRST[k] end
 	local n = k - 1 -- the -illion index: 1e(3n + 3)
 	return UNITS[n % 10 + 1] .. TENS[math.floor(n / 10) % 10 + 1] .. HUNDREDS[math.floor(n / 100) % 10 + 1]
 end
 Session.suffix = suffix
--- m in [1, 1000) with 3 significant figures ("1.23", "12.3", "123"); nil when it rounds up to 1000
-local function mantissa(m: number): string?
-	local s = if m < 10 then string.format("%.2f", m) elseif m < 100 then string.format("%.1f", m) else string.format("%.0f", m)
+local MAX_K = 100 -- 1e300 (NoNog) is the last suffix; past it the exponent takes the suffix
+-- m in [1, 1000) with `sig` significant figures ("1.23" / "12.3" / "123", or 4: "1.234" / "12.34" / "123.4"); nil
+-- when it rounds up to 1000
+local function mantissa(m: number, sig: number): string?
+	local d = if m < 10 then sig - 1 elseif m < 100 then sig - 2 else sig - 3
+	local s = string.format("%." .. math.max(0, d) .. "f", m)
 	if tonumber(s) :: number >= 1000 then return nil end
 	return s
 end
 local function suffixFormatter(JS, orig)
 	local D = JS.D
+	-- d >= 1000 below 1e303 as mantissa + suffix; nil when it is out of that range
+	local function suffixed(d, sig: number): string?
+		if d:lt(1000) or d:gte("1e303") then return nil end
+		local e = math.floor(d:log10():toNumber() + 1e-9)
+		local k = math.floor(e / 3)
+		local m = d:div(D(10):pow(3 * k)):toNumber()
+		local s = mantissa(m, sig)
+		if s == nil then
+			k += 1
+			s = mantissa(m / 1000, sig) or "1"
+		end
+		if k > MAX_K then return nil end
+		return s .. suffix(k)
+	end
 	local function fmt(this, decimal, precision, small)
 		local d = D(decimal)
 		local sign = JS.tonum(JS.P(d, "sign"))
 		if sign ~= sign or sign == 0 then return orig(this, decimal, precision, small) end
 		if sign < 0 then return "-" .. fmt(this, d:neg(), precision, small) end
 		if d:lt(1000) or d:gte("eeee1000") then return orig(this, decimal, precision, small) end
-		if d:lt("1e3003") then
-			local e = math.floor(d:log10():toNumber() + 1e-9)
-			local k = math.floor(e / 3)
-			local m = d:div(D(10):pow(3 * k)):toNumber()
-			local s = mantissa(m)
-			if s == nil then
-				k += 1
-				s = mantissa(m / 1000) or "1.00"
-			end
-			if k > 1000 then return orig(this, decimal, precision, small) end
-			return s .. suffix(k)
-		end
-		if d:lt("1e1000000") then return orig(this, decimal, precision, small) end
-		return "e" .. fmt(this, d:log10(), precision, small)
+		local s = suffixed(d, 3)
+		if s then return s end
+		-- past 1e303: the exponent, suffixed with 4 figures (and again for its own exponent, far enough up)
+		local E = d:log10()
+		if E:lt(1000) then return orig(this, decimal, precision, small) end
+		local es = suffixed(E, 4)
+		if es then return "e" .. es end
+		return "e" .. fmt(this, E, precision, small)
 	end
 	return fmt
 end

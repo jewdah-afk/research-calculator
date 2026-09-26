@@ -76,7 +76,9 @@ local function label(parent: Instance, name: string, text: string, size: number,
 	l.FontFace = font
 	l.Size = UDim2.new(1, 0, 0, size + 6)
 	l.TextXAlignment = Enum.TextXAlignment.Center
-	for k, v in props or {} do (l :: any)[k] = v end
+	if props then
+		for k, v in props do (l :: any)[k] = v end
+	end
 	l.Parent = parent
 	return l
 end
@@ -115,9 +117,10 @@ local function build(): ScreenGui
 		NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.5, 0.9), NumberSequenceKeypoint.new(1, 1),
 	})
 	gg.Parent = glow
-	for _, t in { { "TL", 0, 0 }, { "TR", 1, 0 }, { "BL", 0, 1 }, { "BR", 1, 1 } } do
-		tick(back, "Tick" .. t[1], t[2], t[3])
-	end
+	tick(back, "TickTL", 0, 0)
+	tick(back, "TickTR", 1, 0)
+	tick(back, "TickBL", 0, 1)
+	tick(back, "TickBR", 1, 1)
 
 	-- the centre column, scaled to the screen (the design is 1920 x 1080; phones keep it readable)
 	local col = frame(back, "Column", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
@@ -209,8 +212,8 @@ local function step()
 	end
 	if parts.tip then
 		local i = math.floor(t / 4.5) % #TIPS + 1
-		local want = TIPS[i]
-		if parts.tip.Text ~= want then parts.tip.Text = want end
+		local tip = TIPS[i]
+		if parts.tip.Text ~= tip then parts.tip.Text = tip end
 	end
 end
 
