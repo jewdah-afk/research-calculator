@@ -12,6 +12,9 @@
 #   ./test.sh sim [seconds]                the Roblox Session end to end: 20 ticks/s, views, a bot, saves, import
 #   ./test.sh roblox                       the Roblox scripts (server, Actor worker, DataStore, client UI) on a mock engine
 #   ./test.sh capture                      full views of chosen saves for the client's offline checks (data/fixtures)
+#   ./test.sh snap [scenes] [WxH]           pictures of the real client UI without Studio (tools/snap): the client on the
+#                                          mock engine, its PlayerGui drawn in Chromium over the realm tiles -> data/snap/*.jpg
+#                                          (scenes: home, fresh, panel_<layer>; needs capture, playwright and art tiles)
 #   ./test.sh all                          all of the above (game/view with 60 states, seed 7)
 # Differences left in `game` / `view` are last-digit float noise (see README).
 set -e
@@ -70,6 +73,10 @@ capture() {
 	node tools/fix_gen.js
 	"$LUAU" -O2 tools/capture.luau | node tools/split_fix.js data/fixtures
 }
+snap() {
+	python3 tools/wrap_scripts.py >/dev/null
+	NODE_PATH=${NODE_PATH:-$(npm root -g)} node tools/snap/render.js --scenes "${1:-home,panel_p}" --size "${2:-1920x1080}"
+}
 roblox() {
 	python3 tools/wrap_scripts.py
 	"$LUAU" tests/roblox.luau
@@ -86,6 +93,7 @@ case ${1:-all} in
 	sim) shift; sim "$@" ;;
 	roblox) roblox ;;
 	capture) capture ;;
+	snap) shift; snap "$@" ;;
 	all) node build.js; timeline; decimal; strings; game; view; html; sim 60; capture; roblox ;;
 	*) echo "unknown test $1"; exit 1 ;;
 esac
