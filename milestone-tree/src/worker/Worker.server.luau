@@ -101,8 +101,28 @@ local function saveNow(release: boolean?)
 	saving = false
 end
 
+-- the player's number notation lives in their device options (MT_Prefs, set by Main after validation)
+local HttpService = game:GetService("HttpService")
+local function applyNotation()
+	local plr = player
+	if session == nil or plr == nil then return end
+	local mode = "SUFFIX"
+	local json = plr:GetAttribute("MT_Prefs")
+	if type(json) == "string" then
+		local ok, prefs = pcall(HttpService.JSONDecode, HttpService, json)
+		if ok and type(prefs) == "table" and (prefs.notation == "SUFFIX" or prefs.notation == "SCIENTIFIC") then
+			mode = prefs.notation
+		end
+	end
+	if session.notation ~= mode then
+		session:setNotation(mode)
+		pushNow = true
+	end
+end
+
 local function begin(plr: Player)
 	player = plr
+	plr:GetAttributeChangedSignal("MT_Prefs"):Connect(applyNotation)
 	viewRemote:FireClient(plr, { status = "Loading your save..." })
 	local rec, err = Store.load(plr.UserId)
 	if not plr.Parent then
@@ -127,6 +147,7 @@ local function begin(plr: Player)
 		table.insert(s.notices, "Your save could not be loaded (" .. tostring(err) .. "). Playing without saving; rejoin to try again.")
 	end
 	session = s
+	applyNotation()
 	pushNow = true
 end
 actor:BindToMessage("start", function(plr: Player)

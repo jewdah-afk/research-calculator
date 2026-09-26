@@ -812,6 +812,7 @@ return NodeAtlas
 	    size          90 | 100 | 115 (Interface size, %)
 	    weather       OFF | RESETS | AMBIENT (weather on resets; AMBIENT also plays now and then on its own)
 	    guide         ON | OFF (hints for significant moments only)
+	    notation      SUFFIX | SCIENTIFIC (how numbers read: 1.23M or 1.23e6; the server formats them)
 	    music, sfx, ambience   0 to 100 in steps of 10
 	    seenPrestige  the layers whose first prestige has played its big moment (a list of layer ids)
 
@@ -834,6 +835,7 @@ PrefsSchema.CHOICES = {
 	size = { 90, 100, 115 },
 	weather = { "OFF", "RESETS", "AMBIENT" },
 	guide = { "ON", "OFF" },
+	notation = { "SUFFIX", "SCIENTIFIC" },
 	music = steps(0, 100, 10),
 	sfx = steps(0, 100, 10),
 	ambience = steps(0, 100, 10),
@@ -846,6 +848,7 @@ PrefsSchema.DEFAULTS = {
 	size = 100,
 	weather = "RESETS",
 	guide = "ON",
+	notation = "SUFFIX",
 	music = 60,
 	sfx = 70,
 	ambience = 60,
@@ -33059,6 +33062,64 @@ local function toJS(JS, v)
 	return JS.newArr(l, n)
 end
 
+-- ------------------------------------------------------------------------------------------------------ notation
+-- The player's number notation (the Options setting; not part of the game save). SCIENTIFIC is the game's own
+-- format(). SUFFIX shows 1,000 to 1e3003 as 1.23K ... 4.56Ce, and from 1e1,000,000 up (where the game drops the
+-- mantissa) suffixes the exponent instead: e1,329,005 -> e1.33M, e1.080e25 -> e10.8Sp. Numbers under 1,000, the
+-- 1e3003 to 1e1,000,000 band (1.23e5,000) and the F (tetration) range keep the game's format.
+local FIRST = { "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No" }
+local UNITS = { "", "U", "D", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No" }
+local TENS = { "", "Dc", "Vg", "Tg", "Qag", "Qig", "Sxg", "Spg", "Ocg", "Nog" }
+local HUNDREDS = { "", "Ce", "Dce", "Tce", "Qace", "Qice", "Sxce", "Spce", "Occe", "Noce" }
+-- the suffix of 1e(3k), k >= 1 (k = 1: K, k = 2: M ... k = 1000: the end of the table)
+local function suffix(k: number): string
+	if k <= 10 then return FIRST[k] end
+	local n = k - 1 -- the -illion index: 1e(3n + 3)
+	return UNITS[n % 10 + 1] .. TENS[math.floor(n / 10) % 10 + 1] .. HUNDREDS[math.floor(n / 100) % 10 + 1]
+end
+Session.suffix = suffix
+-- m in [1, 1000) with 3 significant figures ("1.23", "12.3", "123"); nil when it rounds up to 1000
+local function mantissa(m: number): string?
+	local s = if m < 10 then string.format("%.2f", m) elseif m < 100 then string.format("%.1f", m) else string.format("%.0f", m)
+	if tonumber(s) :: number >= 1000 then return nil end
+	return s
+end
+local function suffixFormatter(JS, orig)
+	local D = JS.D
+	local function fmt(this, decimal, precision, small)
+		local d = D(decimal)
+		local sign = JS.tonum(JS.P(d, "sign"))
+		if sign ~= sign or sign == 0 then return orig(this, decimal, precision, small) end
+		if sign < 0 then return "-" .. fmt(this, d:neg(), precision, small) end
+		if d:lt(1000) or d:gte("eeee1000") then return orig(this, decimal, precision, small) end
+		if d:lt("1e3003") then
+			local e = math.floor(d:log10():toNumber() + 1e-9)
+			local k = math.floor(e / 3)
+			local m = d:div(D(10):pow(3 * k)):toNumber()
+			local s = mantissa(m)
+			if s == nil then
+				k += 1
+				s = mantissa(m / 1000) or "1.00"
+			end
+			if k > 1000 then return orig(this, decimal, precision, small) end
+			return s .. suffix(k)
+		end
+		if d:lt("1e1000000") then return orig(this, decimal, precision, small) end
+		return "e" .. fmt(this, d:log10(), precision, small)
+	end
+	return fmt
+end
+
+function Session:setNotation(mode: string?)
+	local ENV = self.ENV
+	self.notation = mode
+	if ENV == nil then return end
+	local orig = rawget(ENV, "__formatOrig") or ENV.format
+	rawset(ENV, "__formatOrig", orig)
+	ENV.format = if mode == "SUFFIX" then suffixFormatter(self.JS, orig) else orig
+	self.prev = {} -- every number on screen is sent again in the new notation
+end
+
 -- ------------------------------------------------------------------------------------------------------ lifecycle
 function Session.new(deps, saveJson: string?, optionsJson: string?, nowMs: number)
 	local self = setmetatable({}, Session)
@@ -33087,6 +33148,7 @@ function Session:_start(saveJson: string?, optionsJson: string?, nowMs: number)
 	JS.overrides()
 	ENV.rbx_boot(nil, saveJson or "", optionsJson or "")
 	self.JS, self.ENV = JS, ENV
+	if self.notation then self:setNotation(self.notation) end
 	self.prev = {}
 	self.lastPopup = 0
 	-- popups that were on screen when the game was saved are not news
@@ -33509,8 +33571,28 @@ local function saveNow(release: boolean?)
 	saving = false
 end
 
+-- the player's number notation lives in their device options (MT_Prefs, set by Main after validation)
+local HttpService = game:GetService("HttpService")
+local function applyNotation()
+	local plr = player
+	if session == nil or plr == nil then return end
+	local mode = "SUFFIX"
+	local json = plr:GetAttribute("MT_Prefs")
+	if type(json) == "string" then
+		local ok, prefs = pcall(HttpService.JSONDecode, HttpService, json)
+		if ok and type(prefs) == "table" and (prefs.notation == "SUFFIX" or prefs.notation == "SCIENTIFIC") then
+			mode = prefs.notation
+		end
+	end
+	if session.notation ~= mode then
+		session:setNotation(mode)
+		pushNow = true
+	end
+end
+
 local function begin(plr: Player)
 	player = plr
+	plr:GetAttributeChangedSignal("MT_Prefs"):Connect(applyNotation)
 	viewRemote:FireClient(plr, { status = "Loading your save..." })
 	local rec, err = Store.load(plr.UserId)
 	if not plr.Parent then
@@ -33535,6 +33617,7 @@ local function begin(plr: Player)
 		table.insert(s.notices, "Your save could not be loaded (" .. tostring(err) .. "). Playing without saving; rejoin to try again.")
 	end
 	session = s
+	applyNotation()
 	pushNow = true
 end
 actor:BindToMessage("start", function(plr: Player)
@@ -57439,7 +57522,7 @@ return {
 	                  Saves live in Roblox (autosave), so there is no export, import or hard reset.
 	    DISPLAY       "[ Displays ]" becomes the section title; the cyclers and toggles keep the Opt rows
 	    ABOUT         the about node (Skins/Generic)
-	    THIS DEVICE   "Not part of the save": Motion, Map detail, Map labels, Interface size as segmented controls,
+	    THIS DEVICE   "Not part of the save": Numbers (suffix / scientific, formatted by the server), Motion, Map detail, Map labels, Interface size as segmented controls,
 	                  client-only through Prefs (one press); then Music, Sound effects and Ambience volumes (0 to 100
 	                  in steps of 10) as a stepper: - / a 10-cell level bar (a cell sets its level) / the value / +.
 	                  A sound-effects change plays a short tick at the new level
@@ -57467,6 +57550,8 @@ local HEADINGS: { [string]: { title: string, tag: string } } = {
 local TILES: { [string]: boolean } = { save = true }
 
 local DEVICE: { { key: string, title: string, sub: string, values: { any }, labels: { string } } } = {
+	{ key = "notation", title = "Numbers", sub = "1.23M or 1.23e6", values = { "SUFFIX", "SCIENTIFIC" },
+		labels = { "Suffix", "Scientific" } },
 	{ key = "motion", title = "Motion", sub = "Animations and effects", values = { "SYSTEM", "FULL", "REDUCED" },
 		labels = { "System", "Full", "Reduced" } },
 	{ key = "detail", title = "Map detail", sub = "Lower detail runs lighter", values = { "AUTO", "HIGH", "LOW" },
@@ -59009,6 +59094,7 @@ export type Prefs = {
 	size: number, -- 90 | 100 | 115
 	weather: string, -- OFF | RESETS | AMBIENT
 	guide: string, -- ON | OFF
+	notation: string, -- SUFFIX | SCIENTIFIC
 	music: number, -- 0..100, steps of 10
 	sfx: number,
 	ambience: number,

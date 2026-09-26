@@ -9,6 +9,7 @@
 	    size          90 | 100 | 115 (Interface size, %)
 	    weather       OFF | RESETS | AMBIENT (weather on resets; AMBIENT also plays now and then on its own)
 	    guide         ON | OFF (hints for significant moments only)
+	    notation      SUFFIX | SCIENTIFIC (how numbers read: 1.23M or 1.23e6; the server formats them)
 	    music, sfx, ambience   0 to 100 in steps of 10
 	    seenPrestige  the layers whose first prestige has played its big moment (a list of layer ids)
 
@@ -31,6 +32,7 @@ PrefsSchema.CHOICES = {
 	size = { 90, 100, 115 },
 	weather = { "OFF", "RESETS", "AMBIENT" },
 	guide = { "ON", "OFF" },
+	notation = { "SUFFIX", "SCIENTIFIC" },
 	music = steps(0, 100, 10),
 	sfx = steps(0, 100, 10),
 	ambience = steps(0, 100, 10),
@@ -43,6 +45,7 @@ PrefsSchema.DEFAULTS = {
 	size = 100,
 	weather = "RESETS",
 	guide = "ON",
+	notation = "SUFFIX",
 	music = 60,
 	sfx = 70,
 	ambience = 60,

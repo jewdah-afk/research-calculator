@@ -10,6 +10,7 @@
 #   ./test.sh html [dir]                   HTML -> RichText on every string the game showed in `view`
 #   ./test.sh timeline                     2000 ticks of the deterministic bot, JS vs Luau
 #   ./test.sh sim [seconds]                the Roblox Session end to end: 20 ticks/s, views, a bot, saves, import
+#   ./test.sh unit                         every unit test, the client smoke in 4 engine modes, then roblox
 #   ./test.sh roblox                       the Roblox scripts (server, Actor worker, DataStore, client UI) on a mock engine
 #   ./test.sh capture                      full views of chosen saves for the client's offline checks (data/fixtures)
 #   ./test.sh snap [scenes] [WxH]           pictures of the real client UI without Studio (tools/snap): the client on the
@@ -77,6 +78,24 @@ snap() {
 	python3 tools/wrap_scripts.py >/dev/null
 	NODE_PATH=${NODE_PATH:-$(npm root -g)} node tools/snap/render.js --scenes "${1:-home,panel_p}" --size "${2:-1920x1080}"
 }
+# every unit test in tests/unit, the client smoke in each engine mode, then the Roblox scripts; stops at the first failure
+unit() {
+	python3 tools/wrap_scripts.py > /dev/null
+	node tools/camera_cases.js > data/unit/camera_cases.luau
+	for f in tests/unit/*.luau; do
+		local n=$(basename "$f" .luau)
+		[ "$n" = client_smoke ] && continue
+		if ! out=$("$LUAU" "$f" 2>&1); then echo "$out" | tail -20; echo "== unit: $n FAILED"; exit 1; fi
+		echo "$out" | tail -1
+	done
+	for a in x nocaps noids locked; do
+		if ! out=$("$LUAU" tests/unit/client_smoke.luau -a $a 2>&1) || ! echo "$out" | grep -q "all passed"; then
+			echo "$out" | grep -E "FAIL|first:" | head -20; echo "== unit: client_smoke -a $a FAILED"; exit 1
+		fi
+		echo "client smoke ($a): all passed"
+	done
+	roblox
+}
 roblox() {
 	python3 tools/wrap_scripts.py
 	"$LUAU" tests/roblox.luau
@@ -92,6 +111,7 @@ case ${1:-all} in
 	timeline) timeline ;;
 	sim) shift; sim "$@" ;;
 	roblox) roblox ;;
+	unit) unit ;;
 	capture) capture ;;
 	snap) shift; snap "$@" ;;
 	all) node build.js; timeline; decimal; strings; game; view; html; sim 60; capture; roblox ;;

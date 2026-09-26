@@ -104,6 +104,64 @@ local function toJS(JS, v)
 	return JS.newArr(l, n)
 end
 
+-- ------------------------------------------------------------------------------------------------------ notation
+-- The player's number notation (the Options setting; not part of the game save). SCIENTIFIC is the game's own
+-- format(). SUFFIX shows 1,000 to 1e3003 as 1.23K ... 4.56Ce, and from 1e1,000,000 up (where the game drops the
+-- mantissa) suffixes the exponent instead: e1,329,005 -> e1.33M, e1.080e25 -> e10.8Sp. Numbers under 1,000, the
+-- 1e3003 to 1e1,000,000 band (1.23e5,000) and the F (tetration) range keep the game's format.
+local FIRST = { "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No" }
+local UNITS = { "", "U", "D", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No" }
+local TENS = { "", "Dc", "Vg", "Tg", "Qag", "Qig", "Sxg", "Spg", "Ocg", "Nog" }
+local HUNDREDS = { "", "Ce", "Dce", "Tce", "Qace", "Qice", "Sxce", "Spce", "Occe", "Noce" }
+-- the suffix of 1e(3k), k >= 1 (k = 1: K, k = 2: M ... k = 1000: the end of the table)
+local function suffix(k: number): string
+	if k <= 10 then return FIRST[k] end
+	local n = k - 1 -- the -illion index: 1e(3n + 3)
+	return UNITS[n % 10 + 1] .. TENS[math.floor(n / 10) % 10 + 1] .. HUNDREDS[math.floor(n / 100) % 10 + 1]
+end
+Session.suffix = suffix
+-- m in [1, 1000) with 3 significant figures ("1.23", "12.3", "123"); nil when it rounds up to 1000
+local function mantissa(m: number): string?
+	local s = if m < 10 then string.format("%.2f", m) elseif m < 100 then string.format("%.1f", m) else string.format("%.0f", m)
+	if tonumber(s) :: number >= 1000 then return nil end
+	return s
+end
+local function suffixFormatter(JS, orig)
+	local D = JS.D
+	local function fmt(this, decimal, precision, small)
+		local d = D(decimal)
+		local sign = JS.tonum(JS.P(d, "sign"))
+		if sign ~= sign or sign == 0 then return orig(this, decimal, precision, small) end
+		if sign < 0 then return "-" .. fmt(this, d:neg(), precision, small) end
+		if d:lt(1000) or d:gte("eeee1000") then return orig(this, decimal, precision, small) end
+		if d:lt("1e3003") then
+			local e = math.floor(d:log10():toNumber() + 1e-9)
+			local k = math.floor(e / 3)
+			local m = d:div(D(10):pow(3 * k)):toNumber()
+			local s = mantissa(m)
+			if s == nil then
+				k += 1
+				s = mantissa(m / 1000) or "1.00"
+			end
+			if k > 1000 then return orig(this, decimal, precision, small) end
+			return s .. suffix(k)
+		end
+		if d:lt("1e1000000") then return orig(this, decimal, precision, small) end
+		return "e" .. fmt(this, d:log10(), precision, small)
+	end
+	return fmt
+end
+
+function Session:setNotation(mode: string?)
+	local ENV = self.ENV
+	self.notation = mode
+	if ENV == nil then return end
+	local orig = rawget(ENV, "__formatOrig") or ENV.format
+	rawset(ENV, "__formatOrig", orig)
+	ENV.format = if mode == "SUFFIX" then suffixFormatter(self.JS, orig) else orig
+	self.prev = {} -- every number on screen is sent again in the new notation
+end
+
 -- ------------------------------------------------------------------------------------------------------ lifecycle
 function Session.new(deps, saveJson: string?, optionsJson: string?, nowMs: number)
 	local self = setmetatable({}, Session)
@@ -132,6 +190,7 @@ function Session:_start(saveJson: string?, optionsJson: string?, nowMs: number)
 	JS.overrides()
 	ENV.rbx_boot(nil, saveJson or "", optionsJson or "")
 	self.JS, self.ENV = JS, ENV
+	if self.notation then self:setNotation(self.notation) end
 	self.prev = {}
 	self.lastPopup = 0
 	-- popups that were on screen when the game was saved are not news

@@ -7,7 +7,7 @@
 	                  Saves live in Roblox (autosave), so there is no export, import or hard reset.
 	    DISPLAY       "[ Displays ]" becomes the section title; the cyclers and toggles keep the Opt rows
 	    ABOUT         the about node (Skins/Generic)
-	    THIS DEVICE   "Not part of the save": Motion, Map detail, Map labels, Interface size as segmented controls,
+	    THIS DEVICE   "Not part of the save": Numbers (suffix / scientific, formatted by the server), Motion, Map detail, Map labels, Interface size as segmented controls,
 	                  client-only through Prefs (one press); then Music, Sound effects and Ambience volumes (0 to 100
 	                  in steps of 10) as a stepper: - / a 10-cell level bar (a cell sets its level) / the value / +.
 	                  A sound-effects change plays a short tick at the new level
@@ -35,6 +35,8 @@ local HEADINGS: { [string]: { title: string, tag: string } } = {
 local TILES: { [string]: boolean } = { save = true }
 
 local DEVICE: { { key: string, title: string, sub: string, values: { any }, labels: { string } } } = {
+	{ key = "notation", title = "Numbers", sub = "1.23M or 1.23e6", values = { "SUFFIX", "SCIENTIFIC" },
+		labels = { "Suffix", "Scientific" } },
 	{ key = "motion", title = "Motion", sub = "Animations and effects", values = { "SYSTEM", "FULL", "REDUCED" },
 		labels = { "System", "Full", "Reduced" } },
 	{ key = "detail", title = "Map detail", sub = "Lower detail runs lighter", values = { "AUTO", "HIGH", "LOW" },
