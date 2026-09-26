@@ -16,6 +16,10 @@ const SHOTS = {
   // 4 FIX THE CORRUPTION: the corrupted island, its READY nodes, and the CR panel for the CORRUPT card crop
   corrupt: { scene: 's19mv_none', cam: '3290,1060,1.25', hide: ['hud', 'plate_pm', 'plate_pep', 'plate_ex'] },
   panel_cp: { scene: 'panel_cp', cam: 'keep', hide: ['toasts'] },
+  // 6 NUMBERS GO UP: close on the Exotic node and its e1,329,005 plate (the genre in one number)
+  numbers: { scene: 's13_none', cam: '1849,1100,1.1', hide: ['hud', 'plate_mp'] },
+  // 7 YOUR FIRST MILESTONE: a new game's realm around the M node (the first minute, not the endgame)
+  fresh: { scene: 'fresh_none', cam: '1499,1760,0.9', hide: ['hud'] },
   // 5 EXPLORE: the whole realm (the zoom floor)
   explore: { scene: 's13_none', cam: '1920,1280,0.2', hide: ['hud'] },
 };

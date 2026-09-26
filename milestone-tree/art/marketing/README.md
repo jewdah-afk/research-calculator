@@ -16,7 +16,19 @@ realm, gems, node plates and panels are therefore the game's own art and layout,
 | `out/thumb_3.jpg` | 1920 × 1080 | ENTER THE MULTIVERSE: the rift inside the Prestige Multiverse, its nodes lit | same |
 | `out/thumb_4.jpg` | 1920 × 1080 | FIX THE CORRUPTION: the corrupted island (READY nodes) and the real CR panel's CORRUPT card | same |
 | `out/thumb_5.jpg` | 1920 × 1080 | EXPLORE: the whole realm at the zoom floor | same |
+| `out/thumb_6.jpg` | 1920 × 1080 | NUMBERS GO UP: close on the Exotic node, "FROM 10 POINTS TO e1,329,005" (the genre at a glance) | same |
+| `out/thumb_7.jpg` | 1920 × 1080 | ONE TAP TO START: a new game's realm with the START HERE marker (the first minute, not the endgame) | same |
+| `out/thumb_8.jpg` | 1920 × 1080 | BUY ALL: the real P panel's upgrades with the BUY ALL button | same |
+| `out/icon_b_number.png` | 512 × 512 | Icon option B: the M crystal in the rift ring over a big 1e100 (reads as an incremental at 64 px) | `icon_alt.js` |
+| `out/icon_c_tree.png` | 512 × 512 | Icon option C: the tree of layer crystals on glowing links | `icon_alt.js` |
+| `out/icon_options.jpg` | | Icons A, B and C side by side at 512, 150 and 64 px | `icon_alt.js` + the sheet step |
 | `out/video_preview.mp4` | 1920 × 1080 | ~26 s, 30 fps, H.264 High, no audio: the hook pull-back, climbing numbers, the P panel opening, the rift, the realm and an end card (the logo lockup only) | `video.js` → `video_post.py` |
+
+What helps clicks (Roblox docs and creator guides, 2026): the icon decides most of it and shows at ~150 px, so it
+must say the genre at a glance (B does: a big number); Roblox cannot A/B test icons, so swap by hand and compare the
+Analytics click-through week over week. Thumbnails can be tested: upload 2 to 5 and turn on thumbnail personalization
+(+8.5% qualified play-through on average). Show the first minute as well as the endgame (thumb 7), keep text short and
+factual (no "best game" style claims), and nothing that is not in the game.
 
 Thumbnail style: Sleek sci-fi (`art/ui/clean/styles.js` Style 1): 1 px hairline frame, corner ticks and registration
 marks in one accent colour per thumbnail, tracked-caps micro labels, and the caption in Montserrat 900 italic. Key

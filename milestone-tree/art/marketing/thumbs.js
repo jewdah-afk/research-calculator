@@ -1,7 +1,7 @@
-// thumbs.js - the five 1920 x 1080 Roblox thumbnails: a real-client still (stills.js) under a Sleek sci-fi title block
+// thumbs.js - the eight 1920 x 1080 Roblox thumbnails: a real-client still (stills.js) under a Sleek sci-fi title block
 // (art/ui/clean/styles.js Style 1: 1 px hairlines, corner ticks, registration marks, tracked caps micro labels, one
 // accent). Captions are Montserrat 900 italic. Key content stays in the top 80 % (y < 864).
-//   cd art/marketing && node thumbs.js [1..5]       -> out/thumb_<n>.jpg     (also exports logoHtml for video.js)
+//   cd art/marketing && node thumbs.js [1..8]       -> out/thumb_<n>.jpg     (also exports logoHtml for video.js)
 const path = require('path'), fs = require('fs');
 const { withPage, setHtml, url } = require('./lib/page');
 const ST = path.join(__dirname, 'work', 'stills'), OUT = path.join(__dirname, 'out');
@@ -16,6 +16,13 @@ const THUMBS = [
   { n: 4, bg: 'corrupt', accent: '#39ff14', lines: ['FIX THE', 'CORRUPTION'], tag: 'HUNT THE MALWARE. EARN ESSENCE.',
     card: { src: 'panel_cp', crop: [812, 72, 1068, 282], at: [84, 540, 0.74] } },
   { n: 5, bg: 'explore', accent: '#c9a6ff', lines: ['EXPLORE'], tag: 'A LIVING, HAND-PAINTED REALM', side: 'right', maxCs: 168 },
+  // the genre at a glance: real numbers from the same save (a new game starts at 10 points)
+  { n: 6, bg: 'numbers', accent: '#9dff5c', lines: ['NUMBERS', 'GO UP'], tag: 'FROM 10 POINTS TO e1,329,005', side: 'right' },
+  // the first minute, not the endgame: a new game's realm with the START HERE marker on the M crystal
+  { n: 7, bg: 'fresh', accent: '#c58bff', lines: ['ONE TAP', 'TO START'], tag: 'LEARN AS YOU PLAY' },
+  // Buy All on the real P panel
+  { n: 8, bg: 'prestige_bg', accent: '#6fd6ff', lines: ['BUY ALL'], tag: 'EVERY UPGRADE YOU CAN AFFORD. ONE PRESS.',
+    card: { src: 'panel_p', crop: [812, 596, 1060, 452], at: [84, 470, 0.8] } },
 ];
 
 const CSS = `
@@ -82,7 +89,6 @@ function thumbHtml(t) {
     <div class="tick tl"></div><div class="tick tr"></div><div class="tick bl"></div><div class="tick br"></div>
     <div class="reg" style="left:953px;top:29px"></div><div class="reg" style="left:953px;bottom:29px"></div>
     <div class="reg" style="left:29px;top:533px"></div><div class="reg" style="right:29px;top:533px"></div>
-    <div class="micro" style="right:84px;top:66px"><b>0${t.n}</b> / 05 &nbsp; ${t.lines.join(' ')}</div>
     ${big ? logoHtml(46, 84, 92) : logoHtml(24, 84, 70)}
     <div class="cap" style="--cs:${cs}px;top:${capTop}px">${lines}</div>
     <div class="rule" style="top:${capTop + capH + 34}px;width:560px"></div>
