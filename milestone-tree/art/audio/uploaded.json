@@ -1,0 +1,41 @@
+{
+ "about": "Roblox asset ids of the uploaded audio sheets, keyed by the file sha256 (written by art/audio/upload.js). Keep it in git: re-runs skip what is uploaded and follow moderation. `unconfirmed`: creates whose outcome is unknown.",
+ "assets": {
+  "b4cab02412e79a0f07cc43f12e960670a6c3472081826e5040479c2189877a90": {
+   "assetId": "111667343125733",
+   "sheet": "ui",
+   "file": "sheets/ui.ogg",
+   "version": "ab7e208d5ae4",
+   "operationId": "0201fc9b-3809-4e4e-8bce-44b85103a091",
+   "displayName": "Milestone Tree audio ui ab7e208d5ae4",
+   "creator": "user:5167569069",
+   "moderation": "Approved",
+   "uploadedAt": "2026-09-25T23:20:52.676Z",
+   "checkedAt": "2026-09-25T23:23:24.701Z"
+  },
+  "bc90232236235a7ca114746125c5ad88cd8c65099d1aa5cec926ed36bf519da3": {
+   "assetId": "91457771301733",
+   "sheet": "fx",
+   "file": "sheets/fx.ogg",
+   "version": "ab7e208d5ae4",
+   "operationId": "7daa50f4-0d85-4f78-806a-1f38f4fa96c6",
+   "displayName": "Milestone Tree audio fx ab7e208d5ae4",
+   "creator": "user:5167569069",
+   "moderation": "Approved",
+   "uploadedAt": "2026-09-25T23:20:57.167Z",
+   "checkedAt": "2026-09-25T23:23:25.725Z"
+  },
+  "efa52283ef55cfd325e78ee294b927eabba8733f51e2b48e114eb1c4c18b49ee": {
+   "assetId": "72123564730814",
+   "sheet": "bed",
+   "file": "sheets/bed.ogg",
+   "version": "ab7e208d5ae4",
+   "operationId": "3c03e67d-ddfc-482f-a467-f3bb73e88e33",
+   "displayName": "Milestone Tree audio bed ab7e208d5ae4",
+   "creator": "user:5167569069",
+   "moderation": "Approved",
+   "uploadedAt": "2026-09-25T23:21:01.744Z",
+   "checkedAt": "2026-09-25T23:23:27.232Z"
+  }
+ }
+}

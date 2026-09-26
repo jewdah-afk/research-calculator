@@ -387,4 +387,5 @@ if (require.main === module) {
   }
   main().catch(e => { console.error(e.message); process.exit(1); });
 }
-module.exports = { luau, assetMap, jobs, creatorOf, request, Unconfirmed };
+// request / limiter / headers / pollOperation are shared with art/audio/upload.js (the audio sheets)
+module.exports = { luau, assetMap, jobs, creatorOf, request, Unconfirmed, limiter, headers, pollOperation, sleep, API };
