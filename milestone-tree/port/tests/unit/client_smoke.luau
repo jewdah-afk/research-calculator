@@ -117,9 +117,15 @@ end
 -- ------------------------------------------------------------------------------------------------------ the run
 local errors0 = M.errors or 0
 print("== the client starts" .. (if NOCAPS then " (all caps off)" else ""))
+-- ReplicatedFirst's loading screen is up before the client's scripts
+E.runMain("Boot")
+frames(0.1)
+local bootGui = p:FindFirstChild("PlayerGui") and p.PlayerGui:FindFirstChild("MilestoneBoot")
+check(bootGui ~= nil and bootGui.Enabled ~= false, "the ReplicatedFirst loading screen shows first")
 E.runMain("Main")
 frames(0.5)
 local pg = p:FindFirstChild("PlayerGui")
+check(pg:FindFirstChild("MilestoneBoot") ~= nil, "the loading screen stays until the first view")
 local mapGui = pg:FindFirstChild("MapGui")
 check(mapGui ~= nil and pg:FindFirstChild("Backing") ~= nil, "MapGui and the black backing built")
 check(readies >= 1, "asked the server for a full view")
@@ -153,6 +159,8 @@ play("s13_p")
 frames(0.2)
 check(sent("tab", "none", n0), "the layer the last session left open is closed at boot")
 check(not screen.Visible, "the loading screen is gone after the first view")
+frames(1)
+check(pg:FindFirstChild("MilestoneBoot") == nil, "the ReplicatedFirst loading screen faded out and is gone")
 local sheet = pg.PanelGui.Root.Sheet
 check(not sheet.Visible, "the map alone at boot")
 

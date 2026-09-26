@@ -2,7 +2,8 @@
 --[[
 	Screens: the full-screen states of DESIGN.md 7.10-7.12 (mock j).
 
-	    loading    "THE MILESTONE TREE" (R3 gradient), a progress bar from the preload count, LOADING THE REALM...
+	    loading    the ReplicatedFirst BootScreen (src/first) when the place has it: status + progress go to it, and
+	               leaving "loading" fades it out; else the fallback card: THE MILESTONE TREE, a progress bar, LOADING…
 	    fatal      the error text with "Your save is safe on the server."
 	    outOfSync  OUT OF SYNC · the screen stopped updating · RESYNC (fires `resync`)
 	    end        the star emblem, YOU BEAT THE GAME!, the win text on a scrim band, IT TOOK YOU <took>,
@@ -111,6 +112,21 @@ function Screens.new(root: GuiObject): Screens
 		return l
 	end
 
+	-- ReplicatedFirst.MilestoneTreeBoot.BootScreen (the first-frame loading screen), when the place has it
+	local bootMod: any = nil
+	local function bootScreen(): any
+		if bootMod ~= nil then return if bootMod == false then nil else bootMod end
+		local rf = game:GetService("ReplicatedFirst")
+		local folder = rf:FindFirstChild("MilestoneTreeBoot")
+		local m = folder and folder:FindFirstChild("BootScreen")
+		if m and m:IsA("ModuleScript") then
+			local ok, mod = pcall(require, m)
+			bootMod = if ok then mod else false
+		else
+			bootMod = false
+		end
+		return if bootMod == false then nil else bootMod
+	end
 	local function buildLoading(data: any)
 		f.BackgroundColor3 = Theme.C.void
 		f.BackgroundTransparency = 0
@@ -270,6 +286,22 @@ function Screens.new(root: GuiObject): Screens
 	end
 
 	function self.show(_: Screens, k: string?, data: any?)
+		-- the loading screen is the ReplicatedFirst one (up since the first frame); the card below is its fallback
+		local boot = bootScreen()
+		if boot then
+			if k == "loading" then
+				boot.claim()
+				boot.set(data)
+				kind = "loading"
+				clear()
+				f.BackgroundTransparency = 1
+				f:SetAttribute("Kind", k)
+				f.Visible = true
+				return
+			elseif boot.visible() then
+				boot.hide()
+			end
+		end
 		if k == "loading" and kind == "loading" then
 			setLoading(data)
 			return

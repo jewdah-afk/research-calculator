@@ -100,12 +100,20 @@ local function play(name)
 	frames(0.3)
 end
 
+if SCENE == "boot" then
+	E.runMain("Boot")
+	frames(0.2)
+end
 E.runMain("Main")
 frames(0.5)
 local pg = p:FindFirstChild("PlayerGui")
 local nodes = pg.MapGui.Root.Box.Nodes
 
-if SCENE == "home" then
+if SCENE == "boot" then
+	-- the loading screen while the server loads the save
+	R.View.OnClientEvent:Fire({ status = "Loading your save..." })
+	frames(2.5)
+elseif SCENE == "home" then
 	play("s13_none")
 	frames(3)
 elseif SCENE == "fresh" then

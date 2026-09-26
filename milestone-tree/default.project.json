@@ -10,6 +10,9 @@
       },
       "MilestoneTree": { "$path": "src/shared" }
     },
+    "ReplicatedFirst": {
+      "MilestoneTreeBoot": { "$path": "src/first" }
+    },
     "ServerScriptService": {
       "MilestoneTree": { "$path": "src/server" }
     },

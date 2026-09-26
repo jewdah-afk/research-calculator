@@ -522,6 +522,14 @@ function E.buildClient()
 			end
 		end
 	end
+	-- ReplicatedFirst.MilestoneTreeBoot (src/first): the first-frame loading screen; E.runMain("Boot") starts it
+	local RF = game:GetService("ReplicatedFirst")
+	if RF:FindFirstChild("MilestoneTreeBoot") == nil then
+		local boot = Instance.new("Folder"); boot.Name = "MilestoneTreeBoot"; boot.Parent = RF
+		scriptModule(boot, "BootScreen", "first/BootScreen")
+		local ls = Instance.new("LocalScript"); ls.Name = "Boot"; ls.Parent = boot
+		mains.Boot = { inst = ls, path = "first/Boot" }
+	end
 	E.mains = mains
 	return client
 end
