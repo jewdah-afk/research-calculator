@@ -125,7 +125,8 @@ function Buyable.skin(rec: any, n: any, ctx: any): boolean
 	if lvText then
 		local lv = Common.get(label, "Lv", "TextLabel") :: TextLabel
 		Common.text(lv, "big", C.text)
-		local clear = math.min(160, 24 + 22 * #lvText)
+		-- room for "LV " and the digits; a wide card gives a long level (e.g. 21,543,217) the room it needs
+		local clear = math.min(math.max(160, math.floor(w * 0.4)), 28 + 23 * #lvText)
 		lv.AnchorPoint = Vector2.new(1, 0)
 		lv.Position = UDim2.new(1, clear, 0, -4) -- children sit in the padded box: step back out of the padding
 		lv.AutomaticSize = Enum.AutomaticSize.XY

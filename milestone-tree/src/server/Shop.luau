@@ -60,8 +60,11 @@ function Shop.refresh(player: Player)
 			if ok and has then set[p.key] = true end
 		end
 	end
-	owned[player] = set
-	if player.Parent then push(player) end
+	-- the pass checks yield: a player who left meanwhile is not stored again (PlayerRemoving already cleared them)
+	if player.Parent then
+		owned[player] = set
+		push(player)
+	end
 end
 
 -- a developer product purchase: grant it once

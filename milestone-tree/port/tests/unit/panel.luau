@@ -540,6 +540,33 @@ do
 	check(panel.parts.band:FindFirstChild("Accent") ~= nil or not Theme.caps.TileMode, "p: header accent")
 	panel:destroy()
 end
+do
+	-- pp: costs in "Hz of Prestige Power" read "Hz" (the long name ran over the BUY word), and a long buyable level
+	-- (LV 21,543,217) keeps the description clear of it
+	for k in Theme.caps do Theme.caps[k] = false end
+	viewport(1920, 1080)
+	local store = ViewStore.new()
+	local panel = Panel.new(gui, { store = store })
+	panel:update(store, store:apply(fixtures.layer_pp))
+	panel:open("pp", store:map().nodes.pp)
+	local costs, longUnit, lvs = 0, 0, 0
+	local function plainText(t) return (string.gsub(tostring(t or ""), "<[^>]*>", "")) end
+	for _, d in descendants(panel.root) do
+		if d.Name == "Cost" and d.ClassName == "TextLabel" then
+			costs += 1
+			if string.find(string.lower(plainText(d.Text)), "hz of prestige power", 1, true) then longUnit += 1 end
+		elseif d.Name == "Lv" and d.ClassName == "TextLabel" then
+			lvs += 1
+			local num = string.match(plainText(d.Text), "(%S+)%s*$") or ""
+			local pad = d.Parent and d.Parent:FindFirstChild("Clear")
+			local clear = if pad then pad.PaddingRight.Offset else 0
+			check(clear >= 23 * #num, "pp: level " .. num .. " has room (" .. clear .. " du)")
+		end
+	end
+	check(costs > 0 and longUnit == 0, "pp: Hz costs are short (" .. longUnit .. " of " .. costs .. " long)")
+	check(lvs > 0, "pp: the buyable shows its level")
+	panel:destroy()
+end
 print("== buying upgrades on an open panel (the tier turns compact; the flash is no list item)")
 do
 	for k in Theme.caps do Theme.caps[k] = true end

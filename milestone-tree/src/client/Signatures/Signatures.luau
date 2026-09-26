@@ -89,6 +89,8 @@ local UNIT: { [string]: string } = {
 	["exploration points"] = "EX", ["prestige essence"] = "PE", ["prestige essences"] = "PE",
 	["corruption essences"] = "CE", ["corrupted milestones"] = "CM", ["milestones"] = "M",
 	["meta-milestones"] = "MM", ["extra-milestones"] = "EM", ["points"] = "points",
+	-- Prestige Power's upgrades cost its rate ("Hz of Prestige Power"): the hero shows it as "X Hz"
+	["hz of prestige power"] = "Hz",
 }
 
 function Signatures.title(key: string, node: any?): string
