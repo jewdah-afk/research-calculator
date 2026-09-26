@@ -35139,6 +35139,29 @@ local function applyNotation()
 	end
 end
 
+-- a game value (a Decimal or a number) as a TowerNum
+local function toTN(v: any): any
+	if type(v) == "number" then return v end
+	local JS = session.JS
+	local ok, d = pcall(JS.D, v)
+	if not ok or not d then return 0 end
+	return TowerNum.fromEN({ Sign = JS.tonum(JS.P(d, "sign")), Layer = JS.tonum(JS.P(d, "layer")), Exp = JS.tonum(JS.P(d, "mag")) })
+end
+-- the player list (Hud/PlayerList): the points (leaderboard format and its sort key) and the real playtime, on the
+-- Player every PUBLISH_EVERY seconds (serial phase)
+local PUBLISH_EVERY = 3
+local sincePub = PUBLISH_EVERY
+local function publish()
+	local plr = player
+	if not session or not plr or not plr.Parent then return end
+	local ok, x = pcall(function() return toTN(session.ENV.player.points) end)
+	if ok then
+		plr:SetAttribute("MT_Pts", Boards.format(x))
+		plr:SetAttribute("MT_PtsKey", TowerNum.sortKey(x))
+	end
+	plr:SetAttribute("MT_Played", math.floor(playedNow()))
+end
+
 -- the leaderboard keys of this game (serial phase: reads the game, then DataStore calls)
 local function lbKeys(): { [string]: number }
 	local out: { [string]: number } = {}
@@ -35150,17 +35173,7 @@ local function lbKeys(): { [string]: number }
 			local key, v = pair[0], pair[1]
 			local board = Boards.get(tostring(key))
 			if board then
-				local value: any = v
-				if type(v) ~= "number" then
-					local okD, d = pcall(JS.D, v)
-					if okD and d then
-						value = TowerNum.fromEN({ Sign = JS.tonum(JS.P(d, "sign")), Layer = JS.tonum(JS.P(d, "layer")),
-							Exp = JS.tonum(JS.P(d, "mag")) })
-					else
-						value = 0
-					end
-				end
-				out[board.key] = Boards.keyOf(board, value)
+				out[board.key] = Boards.keyOf(board, toTN(v))
 			end
 		end
 	end
@@ -35299,6 +35312,7 @@ RunService.Heartbeat:ConnectParallel(function(dt: number)
 	sinceSave += dt
 	sinceSent += dt
 	sinceLb += dt
+	sincePub += dt
 	if sinceTick >= tickEvery then
 		sinceTick = 0
 		local t0 = os.clock()
@@ -35333,6 +35347,10 @@ RunService.Heartbeat:ConnectParallel(function(dt: number)
 		sinceSave = 0
 		session.wantSave = false
 		task.spawn(saveNow, false)
+	end
+	if sincePub >= PUBLISH_EVERY then
+		sincePub = 0
+		publish()
 	end
 	if sinceLb >= Config.LB_EVERY then
 		sinceLb = 0
@@ -35986,6 +36004,11 @@ function App.start()
 		Audio.play("press")
 		overlay:peek(nil)
 		overlay:modal("shop")
+	end)
+	hud.ranks:Connect(function()
+		Audio.play("press")
+		overlay:peek(nil)
+		overlay:modal("ranks")
 	end)
 	hud.home:Connect(function()
 		if panelKey == nil then Audio.play("press") end
@@ -40887,7 +40910,7 @@ return Band
 	              heavy face (46 du) with a gold glow
 	      Coin    Ø68 gold disc breaking out on the left, a spinning star (6 s / rev)
 	      Label   "POINTS · NORMAL UNIVERSE" (`caps`, #ffe9a3; not on COMPACT), then the passes in gold
-	              ("· 2× SPEED · SUPPORTER", from the player's MT_Perks attribute)
+	              ("· 2× SPEED · SUPPORTER", from the player's MT_Perks attribute); a Supporter gets a gold rim
 	      Row     Amount (R4 gold gradient number, `capsule` role, steps 34 -> 30 -> 26 past 250 du, left anchored)
 	              + Unit ("points" / "pts")
 	      GenPill the rate (Rich.num) on a dark green pill hanging from the rim; hidden when hud.gen is nil
@@ -41217,6 +41240,15 @@ function Capsule.new(parent: GuiObject): Capsule
 	local function writeLabel()
 		label.RichText = true
 		label.Text = Rich.caps(if inside then "Points · Prestige Multiverse" else "Points · Normal Universe") .. perkText()
+		-- the Supporter pass: a gold rim around the bar
+		local lp = game:GetService("Players").LocalPlayer
+		local raw = if lp then lp:GetAttribute("MT_Perks") else nil
+		if type(raw) == "string" and string.find(raw, '"supporter"', 1, true) then
+			Kit.stroke(f, 2, GOLD_D, 0.1, "SupporterRim").LineJoinMode = Enum.LineJoinMode.Miter
+		else
+			local rim = f:FindFirstChild("SupporterRim")
+			if rim then rim:Destroy() end
+		end
 		Sleek.accent(f, if inside then Theme.hue("pm") else GOLD_D, 24, 64, { name = "Accent" })
 	end
 
@@ -41397,6 +41429,7 @@ export type Dock = {
 	trophies: Signal.Signal<>,
 	options: Signal.Signal<>,
 	shop: Signal.Signal<>,
+	ranks: Signal.Signal<>,
 	zoomIn: Signal.Signal<>,
 	zoomOut: Signal.Signal<>,
 	changed: Signal.Signal<>,
@@ -41416,6 +41449,7 @@ local BUTTONS = {
 	{ key = "Trophies", caption = "Trophies", hue = Color3.fromHex("ffb020"), glyph = "star" },
 	{ key = "Options", caption = "Options", hue = Color3.fromHex("8a7cff"), glyph = "gear" },
 	{ key = "Shop", caption = "Shop", hue = Color3.fromHex("ffc93c"), glyph = "bag" },
+	{ key = "Ranks", caption = "Ranks", hue = Color3.fromHex("4fd1ff"), glyph = "podium" },
 }
 
 function Dock.new(parent: GuiObject): Dock
@@ -41424,6 +41458,7 @@ function Dock.new(parent: GuiObject): Dock
 	self.trophies = Signal.new() :: Signal.Signal<>
 	self.options = Signal.new() :: Signal.Signal<>
 	self.shop = Signal.new() :: Signal.Signal<>
+	self.ranks = Signal.new() :: Signal.Signal<>
 	self.zoomIn = Signal.new() :: Signal.Signal<>
 	self.zoomOut = Signal.new() :: Signal.Signal<>
 	self.changed = Signal.new() :: Signal.Signal<>
@@ -41478,6 +41513,8 @@ function Dock.new(parent: GuiObject): Dock
 				self.trophies:Fire()
 			elseif spec.key == "Shop" then
 				self.shop:Fire()
+			elseif spec.key == "Ranks" then
+				self.ranks:Fire()
 			else
 				self.options:Fire()
 			end
@@ -41624,7 +41661,7 @@ function Dock.new(parent: GuiObject): Dock
 		place()
 	end
 	function self.destroy(d: Dock)
-		for _, s in { d.home, d.trophies, d.options, d.shop, d.zoomIn, d.zoomOut, d.changed } do s:DisconnectAll() end
+		for _, s in { d.home, d.trophies, d.options, d.shop, d.ranks, d.zoomIn, d.zoomOut, d.changed } do s:DisconnectAll() end
 		f:Destroy()
 		zoom:Destroy()
 	end
@@ -41662,6 +41699,7 @@ local Signal = require(Core:WaitForChild("Signal"))
 local Layout = require(Core:WaitForChild("Layout"))
 local Kit = require(script.Parent:WaitForChild("Kit"))
 local Capsule = require(script.Parent:WaitForChild("Capsule"))
+local PlayerList = require(script.Parent:WaitForChild("PlayerList"))
 local UniverseTag = require(script.Parent:WaitForChild("UniverseTag"))
 local Band = require(script.Parent:WaitForChild("Band"))
 local Dock = require(script.Parent:WaitForChild("Dock"))
@@ -41678,6 +41716,7 @@ export type Hud = {
 	trophies: Signal.Signal<>,
 	options: Signal.Signal<>,
 	shop: Signal.Signal<>,
+	ranks: Signal.Signal<>,
 	portal: Signal.Signal<>,
 	zoomIn: Signal.Signal<>,
 	zoomOut: Signal.Signal<>,
@@ -41706,6 +41745,7 @@ function Hud.new(topbar: ScreenGui, hud: ScreenGui): Hud
 	self.trophies = Signal.new() :: Signal.Signal<>
 	self.options = Signal.new() :: Signal.Signal<>
 	self.shop = Signal.new() :: Signal.Signal<>
+	self.ranks = Signal.new() :: Signal.Signal<>
 	self.portal = Signal.new() :: Signal.Signal<>
 	self.zoomIn = Signal.new() :: Signal.Signal<>
 	self.zoomOut = Signal.new() :: Signal.Signal<>
@@ -41721,6 +41761,8 @@ function Hud.new(topbar: ScreenGui, hud: ScreenGui): Hud
 	local hudRoot = (hud:FindFirstChild("Root") or hud) :: GuiObject
 
 	local capsule = Capsule.new(topRoot)
+	-- the players in this server, top right (Points | Playtime, highest first)
+	local playerList = PlayerList.new(topRoot)
 	local tag = UniverseTag.new(topRoot)
 	local band = Band.new(topRoot)
 	local dock = Dock.new(hudRoot)
@@ -41735,6 +41777,7 @@ function Hud.new(topbar: ScreenGui, hud: ScreenGui): Hud
 	dock.trophies:Connect(function() self.trophies:Fire() end)
 	dock.options:Connect(function() self.options:Fire() end)
 	dock.shop:Connect(function() self.shop:Fire() end)
+	dock.ranks:Connect(function() self.ranks:Fire() end)
 	dock.zoomIn:Connect(function() self.zoomIn:Fire() end)
 	dock.zoomOut:Connect(function() self.zoomOut:Fire() end)
 	ready.tap:Connect(function(l: string) self.readyTap:Fire(l) end)
@@ -41868,13 +41911,14 @@ function Hud.new(topbar: ScreenGui, hud: ScreenGui): Hud
 		register()
 	end
 	function self.destroy(h: Hud)
-		for _, s in { h.home, h.trophies, h.options, h.shop, h.portal, h.zoomIn, h.zoomOut, h.bandClose, h.gateHold, h.readyMore } do
+		for _, s in { h.home, h.trophies, h.options, h.shop, h.ranks, h.portal, h.zoomIn, h.zoomOut, h.bandClose, h.gateHold, h.readyMore } do
 			s:DisconnectAll()
 		end
 		h.readyTap:DisconnectAll()
 		h.bandSwitch:DisconnectAll()
 		h.readyHold:DisconnectAll()
 		h.warnTap:DisconnectAll()
+		playerList:destroy()
 		for key in parts do Layout.setRect("hud." .. key, nil) end
 		Layout.setRect("hud.topbar", nil)
 		capsule:destroy()
@@ -42287,6 +42331,12 @@ local DRAW: { [string]: (h: Frame, c: Color3, bg: Color3) -> () } = {
 		box(h, "Body", 0.5, 0.66, 0.78, 0.52, c, 0.08)
 		box(h, "Strap", 0.5, 0.5, 0.78, 0.06, bg, 0)
 	end,
+	-- the leaderboards: a podium (the middle step highest)
+	podium = function(h, c)
+		box(h, "Left", 0.2, 0.7, 0.26, 0.4, c, 0.06)
+		box(h, "Mid", 0.5, 0.58, 0.28, 0.64, c, 0.06)
+		box(h, "Right", 0.8, 0.77, 0.26, 0.26, c, 0.06)
+	end,
 	info = function(h, c)
 		ring(h, "Ring", 0.5, 0.5, 0.86, 0.86, 0.09, c)
 		disc(h, "Dot", 0.5, 0.3, 0.14, c)
@@ -42456,6 +42506,254 @@ return Kit
             </Properties>
           </Item>
           <Item class="ModuleScript" referent="101">
+            <Properties>
+              <string name="Name">PlayerList</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	PlayerList: the players in this server, top right (the Roblox player list is off, see App.engineSettings).
+
+	    Chip    "PLAYERS · N" with a caret; a press (or Tab) opens / closes the list
+	    Panel   a Sleek slab: the column heads NAME | POINTS | PLAYTIME, then a row per player sorted by points,
+	            highest first (the local player's row lit). Points and playtime are the server's totals, published
+	            on each Player every few seconds (Worker: MT_Pts the leaderboard-formatted points, MT_PtsKey their
+	            sort key, MT_Played the real seconds played).
+
+	    local list = PlayerList.new(root)
+	    list:setOpen(b)   list:isOpen()   list.frame   list:destroy()
+]]
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+
+local Core = script.Parent.Parent:WaitForChild("Core")
+local Theme = require(Core:WaitForChild("Theme"))
+local Layout = require(Core:WaitForChild("Layout"))
+local Rich = require(Core:WaitForChild("Rich"))
+local Sleek = require(Core:WaitForChild("Sleek"))
+local Kit = require(script.Parent:WaitForChild("Kit"))
+local Boards = require(game:GetService("ReplicatedStorage"):WaitForChild("MilestoneTree"):WaitForChild("Boards"))
+
+export type PlayerList = {
+	frame: Frame,
+	setOpen: (self: PlayerList, b: boolean) -> (),
+	isOpen: (self: PlayerList) -> boolean,
+	destroy: (self: PlayerList) -> (),
+}
+
+local PlayerList = {}
+
+local CYAN = Color3.fromHex("4fd1ff")
+local function nameOf(p: Player): string
+	local d = p.DisplayName
+	return if type(d) == "string" and d ~= "" then d else p.Name
+end
+local function esc(t: string): string
+	return (string.gsub(string.gsub(string.gsub(t, "&", "&amp;"), "<", "&lt;"), ">", "&gt;"))
+end
+local W = 460 -- the panel's width (du)
+local ROW = 34
+
+function PlayerList.new(root: GuiObject): PlayerList
+	local self = {} :: PlayerList
+	local conns: { RBXScriptConnection } = {}
+	local open = false
+
+	local f = Kit.frame(root, "PlayerList", 30)
+	f.AnchorPoint = Vector2.new(1, 0)
+	f.Size = UDim2.fromOffset(W, 0)
+	f.AutomaticSize = Enum.AutomaticSize.Y
+	self.frame = f
+	Kit.list(f, "y", 6, Enum.HorizontalAlignment.Right)
+
+	-- the chip
+	local chip = Kit.button(f, "Chip")
+	chip.LayoutOrder = 1
+	chip.AutoButtonColor = false
+	chip.Size = UDim2.fromOffset(0, 32)
+	chip.AutomaticSize = Enum.AutomaticSize.X
+	chip.BackgroundTransparency = 1
+	Sleek.plate(chip, { alpha = 0.88, line = 0.86, edge = false })
+	Kit.pad(chip, 0, 12, 0, 12)
+	local chipRow = Kit.frame(chip, "Row")
+	chipRow.AutomaticSize = Enum.AutomaticSize.X
+	chipRow.Size = UDim2.fromScale(0, 1)
+	Kit.list(chipRow, "x", 8, Enum.HorizontalAlignment.Left, Enum.VerticalAlignment.Center)
+	local chipLabel = Kit.label(chipRow, "Label", "caps", "", Color3.new(1, 1, 1))
+	chipLabel.LayoutOrder = 1
+	chipLabel.AutomaticSize = Enum.AutomaticSize.X
+	chipLabel.Size = UDim2.fromScale(0, 1)
+	chipLabel.RichText = true
+	local caret = Kit.label(chipRow, "Caret", "caps", "▾", CYAN)
+	caret.LayoutOrder = 2
+	caret.AutomaticSize = Enum.AutomaticSize.X
+	caret.Size = UDim2.fromScale(0, 1)
+
+	-- room under the chip when the capsule's warning chip (SOFTCAP / OVERFLOW) reaches under the panel's corner
+	local spacer = Kit.frame(f, "Spacer", 30)
+	spacer.LayoutOrder = 2
+	spacer.Size = UDim2.fromOffset(1, 0)
+	spacer.Visible = false
+	local extra = 0
+
+	-- the panel
+	local panel = Kit.frame(f, "Panel", 30)
+	panel.LayoutOrder = 3
+	panel.Size = UDim2.fromOffset(W, 0)
+	panel.AutomaticSize = Enum.AutomaticSize.Y
+	panel.Visible = false
+	Sleek.plate(panel, { alpha = 0.92, line = 0.86 })
+	Sleek.accent(panel, CYAN, 18, 60, { name = "Accent" })
+	Kit.pad(panel, 10, 12, 10, 12)
+	Kit.list(panel, "y", 2, Enum.HorizontalAlignment.Left)
+	local heads = Kit.frame(panel, "Heads", 31)
+	heads.LayoutOrder = 0
+	heads.Size = UDim2.new(1, 0, 0, 22)
+	local function col(parent: Instance, name: string, role: string, text: string, color: Color3, x: number, w: number,
+		align: Enum.TextXAlignment): TextLabel
+		local l = Kit.label(parent, name, role, text, color)
+		l.Position = UDim2.new(x, 0, 0, 0)
+		l.Size = UDim2.new(w, 0, 1, 0)
+		l.TextXAlignment = align
+		l.TextTruncate = Enum.TextTruncate.AtEnd
+		return l
+	end
+	col(heads, "Name", "caps", Rich.caps("Player"), Theme.C.soft, 0, 0.38, Enum.TextXAlignment.Left)
+	col(heads, "Points", "caps", Rich.caps("Points"), Theme.C.soft, 0.38, 0.4, Enum.TextXAlignment.Right)
+	col(heads, "Played", "caps", Rich.caps("Playtime"), Theme.C.soft, 0.78, 0.22, Enum.TextXAlignment.Right)
+
+	local me = Players.LocalPlayer
+	local function draw()
+		local list = Players:GetPlayers()
+		chipLabel.Text = Rich.caps("Players") .. '  <font color="#4fd1ff">' .. #list .. "</font>"
+		caret.Text = if open then "▴" else "▾"
+		panel.Visible = open
+		if not open then return end
+		table.sort(list, function(a: Player, b: Player): boolean
+			local ka, kb = tonumber(a:GetAttribute("MT_PtsKey")) or 0, tonumber(b:GetAttribute("MT_PtsKey")) or 0
+			if ka ~= kb then return ka > kb end
+			return nameOf(a) < nameOf(b)
+		end)
+		local keep: { [string]: boolean } = {}
+		for i, p in list do
+			local name = "Row_" .. p.UserId
+			keep[name] = true
+			local r = panel:FindFirstChild(name) :: Frame?
+			if r == nil then
+				local nr = Kit.frame(panel, name, 31)
+				nr.Size = UDim2.new(1, 0, 0, ROW)
+				nr.BackgroundColor3 = Theme.mix(Theme.C.deep, CYAN, 0.18)
+				col(nr, "Name", "card", "", Color3.new(1, 1, 1), 0, 0.38, Enum.TextXAlignment.Left)
+				col(nr, "Points", "numberHeavy", "", Theme.C.text, 0.38, 0.4, Enum.TextXAlignment.Right)
+				col(nr, "Played", "label", "", Theme.C.soft, 0.78, 0.22, Enum.TextXAlignment.Right)
+				r = nr
+			end
+			local row = r :: Frame
+			row.LayoutOrder = i
+			row.BackgroundTransparency = if p == me then 0.15 else 1
+			local pts = p:GetAttribute("MT_Pts")
+			local played = tonumber(p:GetAttribute("MT_Played"))
+			local nl = row:FindFirstChild("Name") :: TextLabel
+			local pl = row:FindFirstChild("Points") :: TextLabel
+			local tl = row:FindFirstChild("Played") :: TextLabel
+			local rank = if i <= 3 then ({ "#ffc93c", "#d7e0ea", "#e39a5b" })[i] else nil
+			nl.RichText = true
+			nl.Text = (if rank then '<font color="' .. rank .. '">' .. i .. "</font>  " else '<font color="#8a94a6">' .. i .. "</font>  ")
+				.. esc(nameOf(p))
+			pl.Text = if type(pts) == "string" then pts else "…"
+			tl.Text = if played then Boards.duration(played) else "…"
+		end
+		for _, c in panel:GetChildren() do
+			if string.sub(c.Name, 1, 4) == "Row_" and not keep[c.Name] then c:Destroy() end
+		end
+	end
+
+	local function place()
+		-- the top right of the top bar row
+		f.Position = UDim2.new(1, -12, 0, 6)
+	end
+	-- while open, its area is a HUD rect (abs space): the toasts stack below it, plates and markers keep clear. Worked
+	-- out from the list's own geometry (the chip, the heads, a row per player) so it holds before layout has run
+	local function register()
+		if not open then
+			Layout.setRect("hud.players", nil)
+			return
+		end
+		local s = math.max(Layout.s, 0.01)
+		local rp, rs = root.AbsolutePosition, root.AbsoluteSize
+		local left = rp.X + rs.X - (12 + W) * s
+		-- on desktop the capsule's warning chip (SOFTCAP / OVERFLOW) reaches y 61 du beside the capsule: the panel
+		-- always starts below that row (a fixed gap: the chip's width varies and is not laid out before it shows)
+		local want = if Layout.mode == "COMPACT" then 0 else 26
+		if want ~= extra then
+			extra = want
+			spacer.Size = UDim2.fromOffset(1, math.max(0, extra - 6))
+			spacer.Visible = extra > 0
+		end
+		local h = 6 + 32 + 6 + extra + 20 + 22 + #Players:GetPlayers() * (ROW + 2)
+		Layout.setRect("hud.players", { x = left, y = rp.Y, w = (12 + W) * s, h = h * s })
+	end
+	root:GetPropertyChangedSignal("AbsoluteSize"):Connect(register)
+	local rectsConn = Layout.rectsChanged:Connect(function()
+		if open then register() end
+	end)
+
+	function self.setOpen(_: PlayerList, b: boolean)
+		open = b
+		draw()
+		register()
+	end
+	function self.isOpen(_: PlayerList): boolean
+		return open
+	end
+
+	chip.Activated:Connect(function() self:setOpen(not open) end)
+	table.insert(conns, UserInputService.InputBegan:Connect(function(io: InputObject, processed: boolean)
+		if processed then return end
+		if io.KeyCode == Enum.KeyCode.Tab then self:setOpen(not open) end
+	end))
+	local watched: { [Player]: { RBXScriptConnection } } = {}
+	table.insert(conns, Players.PlayerAdded:Connect(function() task.defer(register) end))
+	table.insert(conns, Players.PlayerRemoving:Connect(function() task.defer(register) end))
+	local function watch(p: Player)
+		local list = {}
+		for _, a in { "MT_Pts", "MT_Played" } do
+			table.insert(list, p:GetAttributeChangedSignal(a):Connect(function()
+				if open then draw() end
+			end))
+		end
+		watched[p] = list
+		draw()
+	end
+	for _, p in Players:GetPlayers() do watch(p) end
+	table.insert(conns, Players.PlayerAdded:Connect(watch))
+	table.insert(conns, Players.PlayerRemoving:Connect(function(p: Player)
+		local w = watched[p]
+		if w then
+			for _, c in w do c:Disconnect() end
+		end
+		watched[p] = nil
+		task.defer(draw)
+	end))
+	local layoutConn = Layout.changed:Connect(place)
+	function self.destroy(_: PlayerList)
+		for _, c in conns do c:Disconnect() end
+		layoutConn:Disconnect()
+		rectsConn:Disconnect()
+		Layout.setRect("hud.players", nil)
+		for _, list in watched do
+			for _, c in list do c:Disconnect() end
+		end
+		f:Destroy()
+	end
+	place()
+	draw()
+	return self
+end
+
+return PlayerList
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="102">
             <Properties>
               <string name="Name">Portal</string>
               <string name="Source"><![CDATA[--!strict
@@ -42696,7 +42994,7 @@ return Portal
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="102">
+          <Item class="ModuleScript" referent="103">
             <Properties>
               <string name="Name">Ready</string>
               <string name="Source"><![CDATA[--!strict
@@ -43176,7 +43474,7 @@ return Ready
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="103">
+          <Item class="ModuleScript" referent="104">
             <Properties>
               <string name="Name">UniverseTag</string>
               <string name="Source"><![CDATA[--!strict
@@ -43294,11 +43592,11 @@ return UniverseTag
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="104">
+        <Item class="Folder" referent="105">
           <Properties>
             <string name="Name">Input</string>
           </Properties>
-          <Item class="ModuleScript" referent="105">
+          <Item class="ModuleScript" referent="106">
             <Properties>
               <string name="Name">Hotkeys</string>
               <string name="Source"><![CDATA[--!strict
@@ -43402,7 +43700,7 @@ return Hotkeys
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="106">
+          <Item class="ModuleScript" referent="107">
             <Properties>
               <string name="Name">Input</string>
               <string name="Source"><![CDATA[--!strict
@@ -43505,7 +43803,7 @@ return Input
             </Properties>
           </Item>
         </Item>
-        <Item class="LocalScript" referent="107">
+        <Item class="LocalScript" referent="108">
           <Properties>
             <string name="Name">Main</string>
             <string name="Source"><![CDATA[--!strict
@@ -43523,11 +43821,11 @@ App.start()
 ]]></string>
           </Properties>
         </Item>
-        <Item class="Folder" referent="108">
+        <Item class="Folder" referent="109">
           <Properties>
             <string name="Name">Map</string>
           </Properties>
-          <Item class="ModuleScript" referent="109">
+          <Item class="ModuleScript" referent="110">
             <Properties>
               <string name="Name">Ambient</string>
               <string name="Source"><![CDATA[--!strict
@@ -44026,7 +44324,7 @@ return Ambient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="110">
+          <Item class="ModuleScript" referent="111">
             <Properties>
               <string name="Name">Fallback</string>
               <string name="Source"><![CDATA[--!strict
@@ -44250,7 +44548,7 @@ return Fallback
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="111">
+          <Item class="ModuleScript" referent="112">
             <Properties>
               <string name="Name">Fields</string>
               <string name="Source"><![CDATA[--!strict
@@ -44437,7 +44735,7 @@ return Fields
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="112">
+          <Item class="ModuleScript" referent="113">
             <Properties>
               <string name="Name">Links</string>
               <string name="Source"><![CDATA[--!strict
@@ -44765,7 +45063,7 @@ return Links
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="113">
+          <Item class="ModuleScript" referent="114">
             <Properties>
               <string name="Name">MapCamera</string>
               <string name="Source"><![CDATA[--!strict
@@ -45237,7 +45535,7 @@ return MapCamera
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="114">
+          <Item class="ModuleScript" referent="115">
             <Properties>
               <string name="Name">MapInput</string>
               <string name="Source"><![CDATA[--!strict
@@ -45691,7 +45989,7 @@ return MapInput
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="115">
+          <Item class="ModuleScript" referent="116">
             <Properties>
               <string name="Name">MapLogic</string>
               <string name="Source"><![CDATA[--!strict
@@ -46027,7 +46325,7 @@ return MapLogic
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="116">
+          <Item class="ModuleScript" referent="117">
             <Properties>
               <string name="Name">MapView</string>
               <string name="Source"><![CDATA[--!strict
@@ -46968,7 +47266,7 @@ return MapView
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="117">
+          <Item class="ModuleScript" referent="118">
             <Properties>
               <string name="Name">Markers</string>
               <string name="Source"><![CDATA[--!strict
@@ -47215,7 +47513,7 @@ return Markers
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="118">
+          <Item class="ModuleScript" referent="119">
             <Properties>
               <string name="Name">NodeWidget</string>
               <string name="Source"><![CDATA[--!strict
@@ -47969,7 +48267,7 @@ return NodeWidget
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="119">
+          <Item class="ModuleScript" referent="120">
             <Properties>
               <string name="Name">Nodes</string>
               <string name="Source"><![CDATA[--!strict
@@ -48388,7 +48686,7 @@ return Nodes
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="120">
+          <Item class="ModuleScript" referent="121">
             <Properties>
               <string name="Name">Plates</string>
               <string name="Source"><![CDATA[--!strict
@@ -48835,11 +49133,11 @@ return Plates
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="121">
+        <Item class="Folder" referent="122">
           <Properties>
             <string name="Name">Overlay</string>
           </Properties>
-          <Item class="ModuleScript" referent="122">
+          <Item class="ModuleScript" referent="123">
             <Properties>
               <string name="Name">Detail</string>
               <string name="Source"><![CDATA[--!strict
@@ -49142,7 +49440,7 @@ return Detail
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="123">
+          <Item class="ModuleScript" referent="124">
             <Properties>
               <string name="Name">Guide</string>
               <string name="Source"><![CDATA[--!strict
@@ -49389,7 +49687,7 @@ return Guide
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="124">
+          <Item class="ModuleScript" referent="125">
             <Properties>
               <string name="Name">Modals</string>
               <string name="Source"><![CDATA[--!strict
@@ -49403,6 +49701,7 @@ return Guide
 	      gate       the Multiverse gate: PRESTIGE MULTIVERSE, the context, the GOAL box (+ Goal met chip), what
 	                 happens (the reset list / completes / returns), STAY + HOLD TO ENTER | EXIT | FINISH (1.2 s);
 	                 locked: "Unlock Multiverse (MP) first"; sealed: the requirement with its bar
+	      ranks      LEADERBOARDS: a tab per board (24, arrows step through), the player's own best, the top 50
 	      shop       SHOP: the game passes (OWNED / R$ price / SOON without an id) and the Time Warps; a press opens
 	                 Roblox's purchase prompt (the server grants it, see server/Shop.luau); redraws when MT_Perks changes
 
@@ -49425,6 +49724,7 @@ local HttpService = game:GetService("HttpService")
 local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
 local Products = require(game:GetService("ReplicatedStorage"):WaitForChild("MilestoneTree"):WaitForChild("Products"))
+local Boards = require(game:GetService("ReplicatedStorage"):WaitForChild("MilestoneTree"):WaitForChild("Boards"))
 
 type Action = Types.Action
 
@@ -49441,6 +49741,11 @@ export type Modals = {
 local Modals = {}
 
 local CRIMSON = Color3.fromHex("ff2e63")
+local CYAN = Color3.fromHex("4fd1ff")
+local MEDAL = { Color3.fromHex("ffc93c"), Color3.fromHex("d7e0ea"), Color3.fromHex("e39a5b") } -- gold, silver, bronze
+local PAGE_KEEP = 30 -- seconds a board page is kept before it is asked for again
+local boardNow = "points" -- the board the RANKS window shows (remembered for the session)
+local pageCache: { [string]: { t: number, page: any } } = {}
 local GOLD = Color3.fromHex("ffc93c")
 local LAYER_NAMES = {
 	m = "Milestone", mm = "Meta-Milestone", em = "Extra-Milestone", p = "Prestige", pe = "Prestige Energy", sp = "Super Prestige",
@@ -49735,7 +50040,8 @@ function Modals.new(root: GuiObject): Modals
 		buy: (id: number) -> ())
 		local r = Kit.frame(card, "Item_" .. key)
 		r.LayoutOrder = nextOrder()
-		r.Size = UDim2.new(1, 0, 0, 74)
+		-- tall enough for a two-line blurb in Roblox's text (which runs a little taller than the design's)
+		r.Size = UDim2.new(1, 0, 0, 86)
 		r.BackgroundColor3 = Theme.C.deep
 		r.BackgroundTransparency = 0.2
 		Kit.stroke(r, 1, Color3.new(1, 1, 1), 0.12, "Hair").LineJoinMode = Enum.LineJoinMode.Miter
@@ -49746,7 +50052,7 @@ function Modals.new(root: GuiObject): Modals
 			im.Name = "Icon"
 			im.BackgroundTransparency = 1
 			im.Image = "rbxassetid://" .. tostring(icon)
-			im.Position = UDim2.fromOffset(9, 9)
+			im.Position = UDim2.fromOffset(9, 15)
 			im.Size = UDim2.fromOffset(56, 56)
 			im.ZIndex = r.ZIndex
 			im.Parent = r
@@ -49758,7 +50064,7 @@ function Modals.new(root: GuiObject): Modals
 		nm.TextXAlignment = Enum.TextXAlignment.Left
 		local bl = Kit.label(r, "Blurb", "small", blurb, Theme.C.soft)
 		bl.Position = UDim2.fromOffset(tx, 38)
-		bl.Size = UDim2.new(1, -174 - tx, 0, 30)
+		bl.Size = UDim2.new(1, -174 - tx, 0, 42)
 		bl.TextWrapped = true
 		bl.TextXAlignment = Enum.TextXAlignment.Left
 		bl.TextYAlignment = Enum.TextYAlignment.Top
@@ -49802,6 +50108,208 @@ function Modals.new(root: GuiObject): Modals
 		ok.Activated:Connect(close)
 	end
 
+	-- the leaderboards (shared/Boards, server/Leaderboards): the boards as a tab strip (arrows step through them),
+	-- the board's title and the player's own best, the top 50 (rank, avatar, name, value). A page comes from the
+	-- Board remote and is kept PAGE_KEEP seconds here; a page that arrives after the window moved on is dropped
+	local function buildRanks()
+		rim.Color = CYAN
+		head("Leaderboards", "Every stat. Each player's best ever, updated every few minutes.", CYAN, "podium")
+		local compact = Layout.mode == "COMPACT"
+		local tabs = Kit.frame(card, "Tabs")
+		tabs.LayoutOrder = nextOrder()
+		tabs.Size = UDim2.new(1, 0, 0, 44)
+		local prev = Kit.action(tabs, "Prev", "‹", { style = "quiet", h = 36, w = 38, role = "section" })
+		prev.Position = UDim2.fromOffset(0, 4)
+		local nxt = Kit.action(tabs, "Next", "›", { style = "quiet", h = 36, w = 38, role = "section" })
+		nxt.AnchorPoint = Vector2.new(1, 0)
+		nxt.Position = UDim2.new(1, 0, 0, 4)
+		local strip = Instance.new("ScrollingFrame")
+		strip.Name = "Strip"
+		strip.BackgroundTransparency = 1
+		strip.BorderSizePixel = 0
+		strip.Position = UDim2.fromOffset(46, 0)
+		strip.Size = UDim2.new(1, -92, 0, 44)
+		strip.ScrollingDirection = Enum.ScrollingDirection.X
+		strip.ScrollBarThickness = 0
+		strip.CanvasSize = UDim2.new()
+		strip.AutomaticCanvasSize = Enum.AutomaticSize.X
+		strip.ZIndex = card.ZIndex + 1
+		strip.Parent = tabs
+		Kit.list(strip, "x", 6, Enum.HorizontalAlignment.Left, Enum.VerticalAlignment.Top)
+		Kit.pad(strip, 4, 0, 4, 0)
+		local tabOf: { [string]: TextButton } = {}
+		for i, b in Boards.list do
+			local t = Kit.button(strip, "Tab_" .. b.key)
+			t.LayoutOrder = i
+			t.Size = UDim2.fromOffset(0, 36)
+			t.AutomaticSize = Enum.AutomaticSize.X
+			t.BackgroundColor3 = Theme.C.deep
+			t.BackgroundTransparency = 0.2
+			Kit.pad(t, 0, 12, 0, 12)
+			Kit.stroke(t, 1, Color3.new(1, 1, 1), 0.85, "Rim").LineJoinMode = Enum.LineJoinMode.Miter
+			local l = Kit.label(t, "Label", "caps", Rich.caps(b.title), Theme.C.soft)
+			l.AutomaticSize = Enum.AutomaticSize.X
+			l.Size = UDim2.fromScale(0, 1)
+			l.TextYAlignment = Enum.TextYAlignment.Center
+			tabOf[b.key] = t
+		end
+		-- the board's title and the player's own best
+		local info = Kit.frame(card, "Info")
+		info.LayoutOrder = nextOrder()
+		info.Size = UDim2.new(1, 0, 0, 30)
+		local title = Kit.label(info, "Title", "card", "", Color3.new(1, 1, 1))
+		title.Size = UDim2.new(0.55, 0, 1, 0)
+		title.TextXAlignment = Enum.TextXAlignment.Left
+		local you = Kit.label(info, "You", "label", "", CYAN)
+		you.AnchorPoint = Vector2.new(1, 0)
+		you.Position = UDim2.fromScale(1, 0)
+		you.Size = UDim2.new(0.45, 0, 1, 0)
+		you.TextXAlignment = Enum.TextXAlignment.Right
+		you.RichText = true
+		-- the list
+		local list = Instance.new("ScrollingFrame")
+		list.Name = "Rows"
+		list.LayoutOrder = nextOrder()
+		list.BackgroundColor3 = Theme.C.deep
+		list.BackgroundTransparency = 0.35
+		list.BorderSizePixel = 0
+		list.Size = UDim2.new(1, 0, 0, if compact then 220 else 400)
+		list.CanvasSize = UDim2.new()
+		list.AutomaticCanvasSize = Enum.AutomaticSize.Y
+		list.ScrollingDirection = Enum.ScrollingDirection.Y
+		list.ScrollBarThickness = 4
+		list.ScrollBarImageColor3 = CYAN
+		list.ZIndex = card.ZIndex + 1
+		list.Parent = card
+		Kit.stroke(list, 1, Color3.new(1, 1, 1), 0.88, "Rim").LineJoinMode = Enum.LineJoinMode.Miter
+		Kit.pad(list, 6, 10, 6, 6)
+		Kit.list(list, "y", 4, Enum.HorizontalAlignment.Left)
+		local status = Kit.label(card, "Status", "body", "", Theme.C.soft)
+		status.LayoutOrder = nextOrder()
+		status.Size = UDim2.new(1, 0, 0, 0)
+		status.AutomaticSize = Enum.AutomaticSize.Y
+		status.TextWrapped = true
+		status.Visible = false
+
+		local me = if Players.LocalPlayer then Players.LocalPlayer.UserId else 0
+		local token = 0
+		local function row(e: any)
+			local r = Kit.frame(list, "Row_" .. tostring(e.rank))
+			r.LayoutOrder = e.rank
+			r.Size = UDim2.new(1, 0, 0, 44)
+			r.BackgroundColor3 = if e.id == me then Theme.mix(Theme.C.deep, CYAN, 0.18) else Theme.C.panel2
+			r.BackgroundTransparency = if e.id == me then 0.1 else 0.45
+			local medal = MEDAL[e.rank]
+			local rank = Kit.label(r, "Rank", "numberHeavy", "#" .. tostring(e.rank), medal or Theme.C.soft)
+			rank.Position = UDim2.fromOffset(8, 0)
+			rank.Size = UDim2.fromOffset(52, 44)
+			rank.TextXAlignment = Enum.TextXAlignment.Left
+			local av = Instance.new("ImageLabel")
+			av.Name = "Avatar"
+			av.BackgroundColor3 = Theme.C.deep
+			av.BackgroundTransparency = 0.2
+			av.BorderSizePixel = 0
+			av.Image = "rbxthumb://type=AvatarHeadShot&id=" .. tostring(e.id) .. "&w=48&h=48"
+			av.Position = UDim2.fromOffset(62, 5)
+			av.Size = UDim2.fromOffset(34, 34)
+			av.ZIndex = r.ZIndex
+			av.Parent = r
+			if medal then Kit.stroke(av, 2, medal, 0, "Rim") end
+			local name = Kit.label(r, "Name", "card", tostring(e.name), Color3.new(1, 1, 1))
+			name.Position = UDim2.fromOffset(106, 0)
+			name.Size = UDim2.new(0.55, -106, 1, 0)
+			name.TextXAlignment = Enum.TextXAlignment.Left
+			name.TextTruncate = Enum.TextTruncate.AtEnd
+			local value = Kit.label(r, "Value", "numberHeavy", tostring(e.value), medal or Theme.C.text)
+			value.AnchorPoint = Vector2.new(1, 0)
+			value.Position = UDim2.new(1, -8, 0, 0)
+			value.Size = UDim2.new(0.45, -8, 1, 0)
+			value.TextXAlignment = Enum.TextXAlignment.Right
+		end
+		local function show(key: string, page: any)
+			for _, c in list:GetChildren() do
+				if c:IsA("GuiObject") then c:Destroy() end
+			end
+			local b = Boards.get(key)
+			title.Text = if b then b.title else key
+			local mine = if type(page) == "table" then page.you else nil
+			you.Text = if mine then Rich.caps("Your best") .. "   <b>" .. tostring(mine) .. "</b>" else ""
+			if type(page) ~= "table" then
+				status.Text = "Loading…"
+				status.Visible = true
+				return
+			end
+			if not page.ok then
+				status.Text = tostring(page.error or "Leaderboards are unavailable right now.")
+				status.Visible = true
+				return
+			end
+			if #page.entries == 0 then
+				status.Text = "Nobody is on this board yet. Play a little and check back in a few minutes."
+				status.Visible = true
+				return
+			end
+			status.Visible = false
+			for _, e in page.entries do row(e) end
+		end
+		local function select(key: string)
+			boardNow = key
+			for k, t in tabOf do
+				local on = k == key
+				t.BackgroundColor3 = if on then CYAN else Theme.C.deep
+				t.BackgroundTransparency = if on then 0.1 else 0.2
+				local l = t:FindFirstChild("Label") :: TextLabel?
+				if l then l.TextColor3 = if on then Color3.fromHex("06101b") else Theme.C.soft end
+			end
+			-- the selected tab in view
+			local t = tabOf[key]
+			if t then
+				local x = t.AbsolutePosition.X - strip.AbsolutePosition.X + strip.CanvasPosition.X
+				local s = math.max(Layout.s, 0.01)
+				strip.CanvasPosition = Vector2.new(math.max(0, x - strip.AbsoluteSize.X / 2 + t.AbsoluteSize.X / 2), 0)
+				local _ = s
+			end
+			token += 1
+			local mine = token
+			local hit = pageCache[key]
+			if hit and os.clock() - hit.t < PAGE_KEEP then
+				show(key, hit.page)
+				return
+			end
+			show(key, nil)
+			local remotes = game:GetService("ReplicatedStorage"):FindFirstChild("MilestoneTreeRemotes")
+			local fn = remotes and remotes:FindFirstChild("Board")
+			if fn == nil or not fn:IsA("RemoteFunction") then
+				show(key, { ok = false, error = "Leaderboards are not available on this server." })
+				return
+			end
+			task.spawn(function()
+				local ok, page = pcall(function() return (fn :: RemoteFunction):InvokeServer(key) end)
+				if kind ~= "ranks" or token ~= mine then return end -- the window closed or moved on
+				if not ok or type(page) ~= "table" then page = { ok = false, error = "Leaderboards are unavailable right now." } end
+				if page.ok then pageCache[key] = { t = os.clock(), page = page } end
+				show(key, page)
+			end)
+		end
+		for key, t in tabOf do
+			t.Activated:Connect(function() select(key) end)
+		end
+		local function step(d: number)
+			local i = 1
+			for j, b in Boards.list do
+				if b.key == boardNow then i = j end
+			end
+			i = (i - 1 + d) % #Boards.list + 1
+			select(Boards.list[i].key)
+		end
+		prev.Activated:Connect(function() step(-1) end)
+		nxt.Activated:Connect(function() step(1) end)
+		local rowB = buttonRow()
+		local ok = Kit.action(rowB, "Close", Rich.caps("Close"), { style = "quiet" })
+		ok.Activated:Connect(close)
+		select(if Boards.get(boardNow) then boardNow else "points")
+	end
+
 	-- ------------------------------------------------------------------------------------------ API
 	function self.open(_: Modals, k: string?, data: any?)
 		if k == nil then
@@ -49819,6 +50327,9 @@ function Modals.new(root: GuiObject): Modals
 		elseif k == "shop" then
 			card.Size = UDim2.fromOffset(if compact then 560 else 680, 0)
 			buildShop()
+		elseif k == "ranks" then
+			card.Size = UDim2.fromOffset(if compact then 600 else 720, 0)
+			buildRanks()
 		else
 			para("Body", tostring(data or ""))
 			local row = buttonRow()
@@ -49857,7 +50368,7 @@ return Modals
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="125">
+          <Item class="ModuleScript" referent="126">
             <Properties>
               <string name="Name">Overlay</string>
               <string name="Source"><![CDATA[--!strict
@@ -50032,7 +50543,7 @@ return Overlay
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="126">
+          <Item class="ModuleScript" referent="127">
             <Properties>
               <string name="Name">Peek</string>
               <string name="Source"><![CDATA[--!strict
@@ -50349,7 +50860,7 @@ return Peek
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="127">
+          <Item class="ModuleScript" referent="128">
             <Properties>
               <string name="Name">Screens</string>
               <string name="Source"><![CDATA[--!strict
@@ -50708,7 +51219,7 @@ return Screens
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="128">
+          <Item class="ModuleScript" referent="129">
             <Properties>
               <string name="Name">ToastModel</string>
               <string name="Source"><![CDATA[--!strict
@@ -50873,7 +51384,7 @@ return ToastModel
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="129">
+          <Item class="ModuleScript" referent="130">
             <Properties>
               <string name="Name">Toasts</string>
               <string name="Source"><![CDATA[--!strict
@@ -51004,6 +51515,9 @@ function Toasts.new(root: GuiObject): Toasts
 		local ra = root.AbsolutePosition
 		local x = (F.x + F.w - ra.X) / s - 16
 		local y = if compact then 58 else 68
+		-- the open player list (Hud/PlayerList) sits top right: stack below it
+		local pl = Layout.rect("hud.players")
+		if pl then y = math.max(y, (pl.y + pl.h - ra.Y) / s + 10) end
 		holder.Position = UDim2.fromOffset(x, y)
 		holder.Size = UDim2.fromOffset(width(), 0)
 		local now = os.clock()
@@ -51254,7 +51768,7 @@ return Toasts
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="130">
+          <Item class="ModuleScript" referent="131">
             <Properties>
               <string name="Name">Tooltip</string>
               <string name="Source"><![CDATA[--!strict
@@ -51488,11 +52002,11 @@ return Tooltip
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="131">
+        <Item class="Folder" referent="132">
           <Properties>
             <string name="Name">Panel</string>
           </Properties>
-          <Item class="ModuleScript" referent="132">
+          <Item class="ModuleScript" referent="133">
             <Properties>
               <string name="Name">Hero</string>
               <string name="Source"><![CDATA[--!strict
@@ -52085,7 +52599,7 @@ return Hero
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="133">
+          <Item class="ModuleScript" referent="134">
             <Properties>
               <string name="Name">Panel</string>
               <string name="Source"><![CDATA[--!strict
@@ -53107,7 +53621,7 @@ return Panel
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="134">
+          <Item class="ModuleScript" referent="135">
             <Properties>
               <string name="Name">Sections</string>
               <string name="Source"><![CDATA[--!strict
@@ -53348,11 +53862,11 @@ return Sections
 ]]></string>
             </Properties>
           </Item>
-          <Item class="Folder" referent="135">
+          <Item class="Folder" referent="136">
             <Properties>
               <string name="Name">Skins</string>
             </Properties>
-            <Item class="ModuleScript" referent="136">
+            <Item class="ModuleScript" referent="137">
               <Properties>
                 <string name="Name">Achievement</string>
                 <string name="Source"><![CDATA[--!strict
@@ -53411,7 +53925,7 @@ return Achievement
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="137">
+            <Item class="ModuleScript" referent="138">
               <Properties>
                 <string name="Name">Buyable</string>
                 <string name="Source"><![CDATA[--!strict
@@ -53637,7 +54151,7 @@ return Buyable
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="138">
+            <Item class="ModuleScript" referent="139">
               <Properties>
                 <string name="Name">Challenge</string>
                 <string name="Source"><![CDATA[--!strict
@@ -53817,7 +54331,7 @@ return Challenge
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="139">
+            <Item class="ModuleScript" referent="140">
               <Properties>
                 <string name="Name">Clickable</string>
                 <string name="Source"><![CDATA[--!strict
@@ -53881,7 +54395,7 @@ return Clickable
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="140">
+            <Item class="ModuleScript" referent="141">
               <Properties>
                 <string name="Name">Common</string>
                 <string name="Source"><![CDATA[--!strict
@@ -54273,7 +54787,7 @@ return Common
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="141">
+            <Item class="ModuleScript" referent="142">
               <Properties>
                 <string name="Name">CompactOwned</string>
                 <string name="Source"><![CDATA[--!strict
@@ -54359,7 +54873,7 @@ return CompactOwned
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="142">
+            <Item class="ModuleScript" referent="143">
               <Properties>
                 <string name="Name">Generic</string>
                 <string name="Source"><![CDATA[--!strict
@@ -54721,7 +55235,7 @@ return Generic
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="143">
+            <Item class="ModuleScript" referent="144">
               <Properties>
                 <string name="Name">GridTile</string>
                 <string name="Source"><![CDATA[--!strict
@@ -54801,7 +55315,7 @@ return GridTile
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="144">
+            <Item class="ModuleScript" referent="145">
               <Properties>
                 <string name="Name">Milestone</string>
                 <string name="Source"><![CDATA[--!strict
@@ -54933,7 +55447,7 @@ return Milestone
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="145">
+            <Item class="ModuleScript" referent="146">
               <Properties>
                 <string name="Name">Opt</string>
                 <string name="Source"><![CDATA[--!strict
@@ -55020,7 +55534,7 @@ return Opt
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="146">
+            <Item class="ModuleScript" referent="147">
               <Properties>
                 <string name="Name">Perk</string>
                 <string name="Source"><![CDATA[--!strict
@@ -55080,7 +55594,7 @@ return Perk
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="147">
+            <Item class="ModuleScript" referent="148">
               <Properties>
                 <string name="Name">Skins</string>
                 <string name="Source"><![CDATA[--!strict
@@ -55136,7 +55650,7 @@ return Skins
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="148">
+            <Item class="ModuleScript" referent="149">
               <Properties>
                 <string name="Name">Upgrade</string>
                 <string name="Source"><![CDATA[--!strict
@@ -55599,7 +56113,7 @@ return Upgrade
               </Properties>
             </Item>
           </Item>
-          <Item class="ModuleScript" referent="149">
+          <Item class="ModuleScript" referent="150">
             <Properties>
               <string name="Name">Virtual</string>
               <string name="Source"><![CDATA[--!strict
@@ -55864,7 +56378,7 @@ return Virtual
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="150">
+        <Item class="ModuleScript" referent="151">
           <Properties>
             <string name="Name">Render</string>
             <string name="Source"><![CDATA[--!strict
@@ -56791,11 +57305,11 @@ return Render
 ]]></string>
           </Properties>
         </Item>
-        <Item class="Folder" referent="151">
+        <Item class="Folder" referent="152">
           <Properties>
             <string name="Name">Signatures</string>
           </Properties>
-          <Item class="ModuleScript" referent="152">
+          <Item class="ModuleScript" referent="153">
             <Properties>
               <string name="Name">Ach</string>
               <string name="Source"><![CDATA[--!strict
@@ -57046,7 +57560,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="153">
+          <Item class="ModuleScript" referent="154">
             <Properties>
               <string name="Name">Ap</string>
               <string name="Source"><![CDATA[--!strict
@@ -57127,7 +57641,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="154">
+          <Item class="ModuleScript" referent="155">
             <Properties>
               <string name="Name">Badges</string>
               <string name="Source"><![CDATA[--!strict
@@ -57225,7 +57739,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="155">
+          <Item class="ModuleScript" referent="156">
             <Properties>
               <string name="Name">Cp</string>
               <string name="Source"><![CDATA[--!strict
@@ -57738,7 +58252,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="156">
+          <Item class="ModuleScript" referent="157">
             <Properties>
               <string name="Name">Effects</string>
               <string name="Source"><![CDATA[--!strict
@@ -57921,7 +58435,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="157">
+          <Item class="ModuleScript" referent="158">
             <Properties>
               <string name="Name">Energy</string>
               <string name="Source"><![CDATA[--!strict
@@ -58002,7 +58516,7 @@ return { sig("pe"), sig("se") }
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="158">
+          <Item class="ModuleScript" referent="159">
             <Properties>
               <string name="Name">Ex</string>
               <string name="Source"><![CDATA[--!strict
@@ -58504,7 +59018,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="159">
+          <Item class="ModuleScript" referent="160">
             <Properties>
               <string name="Name">Kit</string>
               <string name="Source"><![CDATA[--!strict
@@ -58951,7 +59465,7 @@ return Kit
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="160">
+          <Item class="ModuleScript" referent="161">
             <Properties>
               <string name="Name">M</string>
               <string name="Source"><![CDATA[--!strict
@@ -59987,7 +60501,7 @@ return M
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="161">
+          <Item class="ModuleScript" referent="162">
             <Properties>
               <string name="Name">Mp</string>
               <string name="Source"><![CDATA[--!strict
@@ -60048,7 +60562,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="162">
+          <Item class="ModuleScript" referent="163">
             <Properties>
               <string name="Name">Options</string>
               <string name="Source"><![CDATA[--!strict
@@ -60322,7 +60836,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="163">
+          <Item class="ModuleScript" referent="164">
             <Properties>
               <string name="Name">P</string>
               <string name="Source"><![CDATA[--!strict
@@ -60465,7 +60979,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="164">
+          <Item class="ModuleScript" referent="165">
             <Properties>
               <string name="Name">Pp</string>
               <string name="Source"><![CDATA[--!strict
@@ -60571,7 +61085,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="165">
+          <Item class="ModuleScript" referent="166">
             <Properties>
               <string name="Name">Signatures</string>
               <string name="Source"><![CDATA[--!strict
@@ -60759,7 +61273,7 @@ return Signatures
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="166">
+          <Item class="ModuleScript" referent="167">
             <Properties>
               <string name="Name">Sp</string>
               <string name="Source"><![CDATA[--!strict
@@ -61229,7 +61743,7 @@ return {
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="167">
+          <Item class="ModuleScript" referent="168">
             <Properties>
               <string name="Name">T</string>
               <string name="Source"><![CDATA[--!strict
@@ -61301,7 +61815,7 @@ return {
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="168">
+        <Item class="ModuleScript" referent="169">
           <Properties>
             <string name="Name">Style</string>
             <string name="Source"><![CDATA[--!strict
@@ -61495,7 +62009,7 @@ return Style
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="169">
+        <Item class="ModuleScript" referent="170">
           <Properties>
             <string name="Name">Types</string>
             <string name="Source"><![CDATA[--!strict

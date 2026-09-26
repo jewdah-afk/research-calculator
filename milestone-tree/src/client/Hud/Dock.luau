@@ -29,6 +29,7 @@ export type Dock = {
 	trophies: Signal.Signal<>,
 	options: Signal.Signal<>,
 	shop: Signal.Signal<>,
+	ranks: Signal.Signal<>,
 	zoomIn: Signal.Signal<>,
 	zoomOut: Signal.Signal<>,
 	changed: Signal.Signal<>,
@@ -48,6 +49,7 @@ local BUTTONS = {
 	{ key = "Trophies", caption = "Trophies", hue = Color3.fromHex("ffb020"), glyph = "star" },
 	{ key = "Options", caption = "Options", hue = Color3.fromHex("8a7cff"), glyph = "gear" },
 	{ key = "Shop", caption = "Shop", hue = Color3.fromHex("ffc93c"), glyph = "bag" },
+	{ key = "Ranks", caption = "Ranks", hue = Color3.fromHex("4fd1ff"), glyph = "podium" },
 }
 
 function Dock.new(parent: GuiObject): Dock
@@ -56,6 +58,7 @@ function Dock.new(parent: GuiObject): Dock
 	self.trophies = Signal.new() :: Signal.Signal<>
 	self.options = Signal.new() :: Signal.Signal<>
 	self.shop = Signal.new() :: Signal.Signal<>
+	self.ranks = Signal.new() :: Signal.Signal<>
 	self.zoomIn = Signal.new() :: Signal.Signal<>
 	self.zoomOut = Signal.new() :: Signal.Signal<>
 	self.changed = Signal.new() :: Signal.Signal<>
@@ -110,6 +113,8 @@ function Dock.new(parent: GuiObject): Dock
 				self.trophies:Fire()
 			elseif spec.key == "Shop" then
 				self.shop:Fire()
+			elseif spec.key == "Ranks" then
+				self.ranks:Fire()
 			else
 				self.options:Fire()
 			end
@@ -256,7 +261,7 @@ function Dock.new(parent: GuiObject): Dock
 		place()
 	end
 	function self.destroy(d: Dock)
-		for _, s in { d.home, d.trophies, d.options, d.shop, d.zoomIn, d.zoomOut, d.changed } do s:DisconnectAll() end
+		for _, s in { d.home, d.trophies, d.options, d.shop, d.ranks, d.zoomIn, d.zoomOut, d.changed } do s:DisconnectAll() end
 		f:Destroy()
 		zoom:Destroy()
 	end

@@ -140,6 +140,29 @@ local function applyNotation()
 	end
 end
 
+-- a game value (a Decimal or a number) as a TowerNum
+local function toTN(v: any): any
+	if type(v) == "number" then return v end
+	local JS = session.JS
+	local ok, d = pcall(JS.D, v)
+	if not ok or not d then return 0 end
+	return TowerNum.fromEN({ Sign = JS.tonum(JS.P(d, "sign")), Layer = JS.tonum(JS.P(d, "layer")), Exp = JS.tonum(JS.P(d, "mag")) })
+end
+-- the player list (Hud/PlayerList): the points (leaderboard format and its sort key) and the real playtime, on the
+-- Player every PUBLISH_EVERY seconds (serial phase)
+local PUBLISH_EVERY = 3
+local sincePub = PUBLISH_EVERY
+local function publish()
+	local plr = player
+	if not session or not plr or not plr.Parent then return end
+	local ok, x = pcall(function() return toTN(session.ENV.player.points) end)
+	if ok then
+		plr:SetAttribute("MT_Pts", Boards.format(x))
+		plr:SetAttribute("MT_PtsKey", TowerNum.sortKey(x))
+	end
+	plr:SetAttribute("MT_Played", math.floor(playedNow()))
+end
+
 -- the leaderboard keys of this game (serial phase: reads the game, then DataStore calls)
 local function lbKeys(): { [string]: number }
 	local out: { [string]: number } = {}
@@ -151,17 +174,7 @@ local function lbKeys(): { [string]: number }
 			local key, v = pair[0], pair[1]
 			local board = Boards.get(tostring(key))
 			if board then
-				local value: any = v
-				if type(v) ~= "number" then
-					local okD, d = pcall(JS.D, v)
-					if okD and d then
-						value = TowerNum.fromEN({ Sign = JS.tonum(JS.P(d, "sign")), Layer = JS.tonum(JS.P(d, "layer")),
-							Exp = JS.tonum(JS.P(d, "mag")) })
-					else
-						value = 0
-					end
-				end
-				out[board.key] = Boards.keyOf(board, value)
+				out[board.key] = Boards.keyOf(board, toTN(v))
 			end
 		end
 	end
@@ -300,6 +313,7 @@ RunService.Heartbeat:ConnectParallel(function(dt: number)
 	sinceSave += dt
 	sinceSent += dt
 	sinceLb += dt
+	sincePub += dt
 	if sinceTick >= tickEvery then
 		sinceTick = 0
 		local t0 = os.clock()
@@ -334,6 +348,10 @@ RunService.Heartbeat:ConnectParallel(function(dt: number)
 		sinceSave = 0
 		session.wantSave = false
 		task.spawn(saveNow, false)
+	end
+	if sincePub >= PUBLISH_EVERY then
+		sincePub = 0
+		publish()
 	end
 	if sinceLb >= Config.LB_EVERY then
 		sinceLb = 0

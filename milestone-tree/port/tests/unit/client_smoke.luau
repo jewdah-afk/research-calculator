@@ -577,6 +577,45 @@ do
 	check(where() ~= g0, "a one-finger flick still glides (inertia)")
 	frames(2)
 end
+-- the player list: highest points first, Tab opens and closes it
+do
+	local TN = M.require(RS.TowerNum)
+	local Boards = M.require(RS.MilestoneTree.Boards)
+	local others = {}
+	for i, e in { { "Low", "84150", 60 }, { "High", "ee198188918", 7200 }, { "Mid", "1e10000", 3600 } } do
+		local op = M.addPlayer(e[1], 100 + i)
+		op.__props.DisplayName = e[1]
+		local x = TN.from(e[2])
+		op:SetAttribute("MT_Pts", Boards.format(x))
+		op:SetAttribute("MT_PtsKey", TN.sortKey(x))
+		op:SetAttribute("MT_Played", e[3])
+		table.insert(others, op)
+	end
+	p:SetAttribute("MT_Pts", "e10.80Sp")
+	p:SetAttribute("MT_PtsKey", TN.sortKey(TN.from("1e1.08e25")))
+	p:SetAttribute("MT_Played", 600)
+	local list = pg.TopbarGui.Root.PlayerList
+	UIS.InputBegan:Fire({ UserInputType = Enum.UserInputType.Keyboard, KeyCode = Enum.KeyCode.Tab, Position = Vector2.new(0, 0) }, false)
+	frames(0.1)
+	check(list.Panel.Visible, "Tab opens the player list")
+	local order = {}
+	for _, c in list.Panel:GetChildren() do
+		if string.sub(c.Name, 1, 4) == "Row_" then table.insert(order, c) end
+	end
+	table.sort(order, function(a, b) return a.LayoutOrder < b.LayoutOrder end)
+	local names = {}
+	for _, r in order do table.insert(names, (string.gsub(r:FindFirstChild("Name").Text, "<[^>]*>", ""))) end
+	local want = "1  High|2  Tester|3  Mid|4  Low" -- ee198.2M > e10.80Sp (10^1.08e25) > e10,000 > 84.2K
+	check(table.concat(names, "|") == want, "the list runs from the highest points down (" .. table.concat(names, "|") .. ")")
+	check(order[1] and order[1].Points.Text == "ee198.2M" and order[1].Played.Text == "2h 0m", "a row shows the points and the playtime")
+	check(string.find(list.Chip.Row.Label.Text, "4", 1, true) ~= nil, "the chip counts the players")
+	UIS.InputBegan:Fire({ UserInputType = Enum.UserInputType.Keyboard, KeyCode = Enum.KeyCode.Tab, Position = Vector2.new(0, 0) }, false)
+	frames(0.1)
+	check(not list.Panel.Visible, "Tab closes it again")
+	for _, op in others do M.removePlayer(op) end
+	frames(0.1)
+end
+
 print(string.format("== client smoke: %d tweens made, %d actions sent", E.tweens, #acts))
 if failures > 0 then
 	error("client smoke: " .. failures .. " FAILED", 0)

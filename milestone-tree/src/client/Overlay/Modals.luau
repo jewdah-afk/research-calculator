@@ -9,6 +9,7 @@
 	      gate       the Multiverse gate: PRESTIGE MULTIVERSE, the context, the GOAL box (+ Goal met chip), what
 	                 happens (the reset list / completes / returns), STAY + HOLD TO ENTER | EXIT | FINISH (1.2 s);
 	                 locked: "Unlock Multiverse (MP) first"; sealed: the requirement with its bar
+	      ranks      LEADERBOARDS: a tab per board (24, arrows step through), the player's own best, the top 50
 	      shop       SHOP: the game passes (OWNED / R$ price / SOON without an id) and the Time Warps; a press opens
 	                 Roblox's purchase prompt (the server grants it, see server/Shop.luau); redraws when MT_Perks changes
 
@@ -31,6 +32,7 @@ local HttpService = game:GetService("HttpService")
 local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
 local Products = require(game:GetService("ReplicatedStorage"):WaitForChild("MilestoneTree"):WaitForChild("Products"))
+local Boards = require(game:GetService("ReplicatedStorage"):WaitForChild("MilestoneTree"):WaitForChild("Boards"))
 
 type Action = Types.Action
 
@@ -47,6 +49,11 @@ export type Modals = {
 local Modals = {}
 
 local CRIMSON = Color3.fromHex("ff2e63")
+local CYAN = Color3.fromHex("4fd1ff")
+local MEDAL = { Color3.fromHex("ffc93c"), Color3.fromHex("d7e0ea"), Color3.fromHex("e39a5b") } -- gold, silver, bronze
+local PAGE_KEEP = 30 -- seconds a board page is kept before it is asked for again
+local boardNow = "points" -- the board the RANKS window shows (remembered for the session)
+local pageCache: { [string]: { t: number, page: any } } = {}
 local GOLD = Color3.fromHex("ffc93c")
 local LAYER_NAMES = {
 	m = "Milestone", mm = "Meta-Milestone", em = "Extra-Milestone", p = "Prestige", pe = "Prestige Energy", sp = "Super Prestige",
@@ -341,7 +348,8 @@ function Modals.new(root: GuiObject): Modals
 		buy: (id: number) -> ())
 		local r = Kit.frame(card, "Item_" .. key)
 		r.LayoutOrder = nextOrder()
-		r.Size = UDim2.new(1, 0, 0, 74)
+		-- tall enough for a two-line blurb in Roblox's text (which runs a little taller than the design's)
+		r.Size = UDim2.new(1, 0, 0, 86)
 		r.BackgroundColor3 = Theme.C.deep
 		r.BackgroundTransparency = 0.2
 		Kit.stroke(r, 1, Color3.new(1, 1, 1), 0.12, "Hair").LineJoinMode = Enum.LineJoinMode.Miter
@@ -352,7 +360,7 @@ function Modals.new(root: GuiObject): Modals
 			im.Name = "Icon"
 			im.BackgroundTransparency = 1
 			im.Image = "rbxassetid://" .. tostring(icon)
-			im.Position = UDim2.fromOffset(9, 9)
+			im.Position = UDim2.fromOffset(9, 15)
 			im.Size = UDim2.fromOffset(56, 56)
 			im.ZIndex = r.ZIndex
 			im.Parent = r
@@ -364,7 +372,7 @@ function Modals.new(root: GuiObject): Modals
 		nm.TextXAlignment = Enum.TextXAlignment.Left
 		local bl = Kit.label(r, "Blurb", "small", blurb, Theme.C.soft)
 		bl.Position = UDim2.fromOffset(tx, 38)
-		bl.Size = UDim2.new(1, -174 - tx, 0, 30)
+		bl.Size = UDim2.new(1, -174 - tx, 0, 42)
 		bl.TextWrapped = true
 		bl.TextXAlignment = Enum.TextXAlignment.Left
 		bl.TextYAlignment = Enum.TextYAlignment.Top
@@ -408,6 +416,208 @@ function Modals.new(root: GuiObject): Modals
 		ok.Activated:Connect(close)
 	end
 
+	-- the leaderboards (shared/Boards, server/Leaderboards): the boards as a tab strip (arrows step through them),
+	-- the board's title and the player's own best, the top 50 (rank, avatar, name, value). A page comes from the
+	-- Board remote and is kept PAGE_KEEP seconds here; a page that arrives after the window moved on is dropped
+	local function buildRanks()
+		rim.Color = CYAN
+		head("Leaderboards", "Every stat. Each player's best ever, updated every few minutes.", CYAN, "podium")
+		local compact = Layout.mode == "COMPACT"
+		local tabs = Kit.frame(card, "Tabs")
+		tabs.LayoutOrder = nextOrder()
+		tabs.Size = UDim2.new(1, 0, 0, 44)
+		local prev = Kit.action(tabs, "Prev", "‹", { style = "quiet", h = 36, w = 38, role = "section" })
+		prev.Position = UDim2.fromOffset(0, 4)
+		local nxt = Kit.action(tabs, "Next", "›", { style = "quiet", h = 36, w = 38, role = "section" })
+		nxt.AnchorPoint = Vector2.new(1, 0)
+		nxt.Position = UDim2.new(1, 0, 0, 4)
+		local strip = Instance.new("ScrollingFrame")
+		strip.Name = "Strip"
+		strip.BackgroundTransparency = 1
+		strip.BorderSizePixel = 0
+		strip.Position = UDim2.fromOffset(46, 0)
+		strip.Size = UDim2.new(1, -92, 0, 44)
+		strip.ScrollingDirection = Enum.ScrollingDirection.X
+		strip.ScrollBarThickness = 0
+		strip.CanvasSize = UDim2.new()
+		strip.AutomaticCanvasSize = Enum.AutomaticSize.X
+		strip.ZIndex = card.ZIndex + 1
+		strip.Parent = tabs
+		Kit.list(strip, "x", 6, Enum.HorizontalAlignment.Left, Enum.VerticalAlignment.Top)
+		Kit.pad(strip, 4, 0, 4, 0)
+		local tabOf: { [string]: TextButton } = {}
+		for i, b in Boards.list do
+			local t = Kit.button(strip, "Tab_" .. b.key)
+			t.LayoutOrder = i
+			t.Size = UDim2.fromOffset(0, 36)
+			t.AutomaticSize = Enum.AutomaticSize.X
+			t.BackgroundColor3 = Theme.C.deep
+			t.BackgroundTransparency = 0.2
+			Kit.pad(t, 0, 12, 0, 12)
+			Kit.stroke(t, 1, Color3.new(1, 1, 1), 0.85, "Rim").LineJoinMode = Enum.LineJoinMode.Miter
+			local l = Kit.label(t, "Label", "caps", Rich.caps(b.title), Theme.C.soft)
+			l.AutomaticSize = Enum.AutomaticSize.X
+			l.Size = UDim2.fromScale(0, 1)
+			l.TextYAlignment = Enum.TextYAlignment.Center
+			tabOf[b.key] = t
+		end
+		-- the board's title and the player's own best
+		local info = Kit.frame(card, "Info")
+		info.LayoutOrder = nextOrder()
+		info.Size = UDim2.new(1, 0, 0, 30)
+		local title = Kit.label(info, "Title", "card", "", Color3.new(1, 1, 1))
+		title.Size = UDim2.new(0.55, 0, 1, 0)
+		title.TextXAlignment = Enum.TextXAlignment.Left
+		local you = Kit.label(info, "You", "label", "", CYAN)
+		you.AnchorPoint = Vector2.new(1, 0)
+		you.Position = UDim2.fromScale(1, 0)
+		you.Size = UDim2.new(0.45, 0, 1, 0)
+		you.TextXAlignment = Enum.TextXAlignment.Right
+		you.RichText = true
+		-- the list
+		local list = Instance.new("ScrollingFrame")
+		list.Name = "Rows"
+		list.LayoutOrder = nextOrder()
+		list.BackgroundColor3 = Theme.C.deep
+		list.BackgroundTransparency = 0.35
+		list.BorderSizePixel = 0
+		list.Size = UDim2.new(1, 0, 0, if compact then 220 else 400)
+		list.CanvasSize = UDim2.new()
+		list.AutomaticCanvasSize = Enum.AutomaticSize.Y
+		list.ScrollingDirection = Enum.ScrollingDirection.Y
+		list.ScrollBarThickness = 4
+		list.ScrollBarImageColor3 = CYAN
+		list.ZIndex = card.ZIndex + 1
+		list.Parent = card
+		Kit.stroke(list, 1, Color3.new(1, 1, 1), 0.88, "Rim").LineJoinMode = Enum.LineJoinMode.Miter
+		Kit.pad(list, 6, 10, 6, 6)
+		Kit.list(list, "y", 4, Enum.HorizontalAlignment.Left)
+		local status = Kit.label(card, "Status", "body", "", Theme.C.soft)
+		status.LayoutOrder = nextOrder()
+		status.Size = UDim2.new(1, 0, 0, 0)
+		status.AutomaticSize = Enum.AutomaticSize.Y
+		status.TextWrapped = true
+		status.Visible = false
+
+		local me = if Players.LocalPlayer then Players.LocalPlayer.UserId else 0
+		local token = 0
+		local function row(e: any)
+			local r = Kit.frame(list, "Row_" .. tostring(e.rank))
+			r.LayoutOrder = e.rank
+			r.Size = UDim2.new(1, 0, 0, 44)
+			r.BackgroundColor3 = if e.id == me then Theme.mix(Theme.C.deep, CYAN, 0.18) else Theme.C.panel2
+			r.BackgroundTransparency = if e.id == me then 0.1 else 0.45
+			local medal = MEDAL[e.rank]
+			local rank = Kit.label(r, "Rank", "numberHeavy", "#" .. tostring(e.rank), medal or Theme.C.soft)
+			rank.Position = UDim2.fromOffset(8, 0)
+			rank.Size = UDim2.fromOffset(52, 44)
+			rank.TextXAlignment = Enum.TextXAlignment.Left
+			local av = Instance.new("ImageLabel")
+			av.Name = "Avatar"
+			av.BackgroundColor3 = Theme.C.deep
+			av.BackgroundTransparency = 0.2
+			av.BorderSizePixel = 0
+			av.Image = "rbxthumb://type=AvatarHeadShot&id=" .. tostring(e.id) .. "&w=48&h=48"
+			av.Position = UDim2.fromOffset(62, 5)
+			av.Size = UDim2.fromOffset(34, 34)
+			av.ZIndex = r.ZIndex
+			av.Parent = r
+			if medal then Kit.stroke(av, 2, medal, 0, "Rim") end
+			local name = Kit.label(r, "Name", "card", tostring(e.name), Color3.new(1, 1, 1))
+			name.Position = UDim2.fromOffset(106, 0)
+			name.Size = UDim2.new(0.55, -106, 1, 0)
+			name.TextXAlignment = Enum.TextXAlignment.Left
+			name.TextTruncate = Enum.TextTruncate.AtEnd
+			local value = Kit.label(r, "Value", "numberHeavy", tostring(e.value), medal or Theme.C.text)
+			value.AnchorPoint = Vector2.new(1, 0)
+			value.Position = UDim2.new(1, -8, 0, 0)
+			value.Size = UDim2.new(0.45, -8, 1, 0)
+			value.TextXAlignment = Enum.TextXAlignment.Right
+		end
+		local function show(key: string, page: any)
+			for _, c in list:GetChildren() do
+				if c:IsA("GuiObject") then c:Destroy() end
+			end
+			local b = Boards.get(key)
+			title.Text = if b then b.title else key
+			local mine = if type(page) == "table" then page.you else nil
+			you.Text = if mine then Rich.caps("Your best") .. "   <b>" .. tostring(mine) .. "</b>" else ""
+			if type(page) ~= "table" then
+				status.Text = "Loading…"
+				status.Visible = true
+				return
+			end
+			if not page.ok then
+				status.Text = tostring(page.error or "Leaderboards are unavailable right now.")
+				status.Visible = true
+				return
+			end
+			if #page.entries == 0 then
+				status.Text = "Nobody is on this board yet. Play a little and check back in a few minutes."
+				status.Visible = true
+				return
+			end
+			status.Visible = false
+			for _, e in page.entries do row(e) end
+		end
+		local function select(key: string)
+			boardNow = key
+			for k, t in tabOf do
+				local on = k == key
+				t.BackgroundColor3 = if on then CYAN else Theme.C.deep
+				t.BackgroundTransparency = if on then 0.1 else 0.2
+				local l = t:FindFirstChild("Label") :: TextLabel?
+				if l then l.TextColor3 = if on then Color3.fromHex("06101b") else Theme.C.soft end
+			end
+			-- the selected tab in view
+			local t = tabOf[key]
+			if t then
+				local x = t.AbsolutePosition.X - strip.AbsolutePosition.X + strip.CanvasPosition.X
+				local s = math.max(Layout.s, 0.01)
+				strip.CanvasPosition = Vector2.new(math.max(0, x - strip.AbsoluteSize.X / 2 + t.AbsoluteSize.X / 2), 0)
+				local _ = s
+			end
+			token += 1
+			local mine = token
+			local hit = pageCache[key]
+			if hit and os.clock() - hit.t < PAGE_KEEP then
+				show(key, hit.page)
+				return
+			end
+			show(key, nil)
+			local remotes = game:GetService("ReplicatedStorage"):FindFirstChild("MilestoneTreeRemotes")
+			local fn = remotes and remotes:FindFirstChild("Board")
+			if fn == nil or not fn:IsA("RemoteFunction") then
+				show(key, { ok = false, error = "Leaderboards are not available on this server." })
+				return
+			end
+			task.spawn(function()
+				local ok, page = pcall(function() return (fn :: RemoteFunction):InvokeServer(key) end)
+				if kind ~= "ranks" or token ~= mine then return end -- the window closed or moved on
+				if not ok or type(page) ~= "table" then page = { ok = false, error = "Leaderboards are unavailable right now." } end
+				if page.ok then pageCache[key] = { t = os.clock(), page = page } end
+				show(key, page)
+			end)
+		end
+		for key, t in tabOf do
+			t.Activated:Connect(function() select(key) end)
+		end
+		local function step(d: number)
+			local i = 1
+			for j, b in Boards.list do
+				if b.key == boardNow then i = j end
+			end
+			i = (i - 1 + d) % #Boards.list + 1
+			select(Boards.list[i].key)
+		end
+		prev.Activated:Connect(function() step(-1) end)
+		nxt.Activated:Connect(function() step(1) end)
+		local rowB = buttonRow()
+		local ok = Kit.action(rowB, "Close", Rich.caps("Close"), { style = "quiet" })
+		ok.Activated:Connect(close)
+		select(if Boards.get(boardNow) then boardNow else "points")
+	end
+
 	-- ------------------------------------------------------------------------------------------ API
 	function self.open(_: Modals, k: string?, data: any?)
 		if k == nil then
@@ -425,6 +635,9 @@ function Modals.new(root: GuiObject): Modals
 		elseif k == "shop" then
 			card.Size = UDim2.fromOffset(if compact then 560 else 680, 0)
 			buildShop()
+		elseif k == "ranks" then
+			card.Size = UDim2.fromOffset(if compact then 600 else 720, 0)
+			buildRanks()
 		else
 			para("Body", tostring(data or ""))
 			local row = buttonRow()

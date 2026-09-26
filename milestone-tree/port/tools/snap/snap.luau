@@ -113,6 +113,42 @@ if SCENE == "boot" then
 	-- the loading screen while the server loads the save
 	R.View.OnClientEvent:Fire({ status = "Loading your save..." })
 	frames(2.5)
+elseif SCENE == "ranks" then
+	-- the leaderboards with a sample page (the Board remote answers from here)
+	local fn = Instance.new("RemoteFunction"); fn.Name = "Board"; fn.Parent = remotes
+	local NAMES = { "NovaStrike", "Tester", "pixelmoth", "Quasar_9", "lunarfern", "Kestrel", "EchoVale", "moss_byte", "Orbit",
+		"Tidewalker", "ashgrove", "Vantablack", "Juniper", "zephyr_22", "Cobalt", "Marigold" }
+	local VALUES = { "ee198.2M", "e1.000M", "e184,209", "e10,000", "e3,003", "150NoNogNoce", "4.56NoNog", "84.2K" }
+	M.invokeServer = function(_, key)
+		local entries = {}
+		for i = 1, 30 do
+			entries[i] = { rank = i, id = if i == 2 then 1 else 1000 + i, name = NAMES[(i - 1) % #NAMES + 1],
+				value = VALUES[math.min(#VALUES, math.ceil(i / 4))] }
+		end
+		return { ok = true, board = key, entries = entries, you = VALUES[1] }
+	end
+	play("s13_none")
+	frames(1)
+	pg.HudGui.Root.Dock.Ranks.Activated:Fire()
+	frames(1)
+elseif SCENE == "players" then
+	-- the player list open with a few players (their published totals)
+	local TN = M.require(RS.TowerNum)
+	local Boards = M.require(RS.MilestoneTree.Boards)
+	local list = { { "Tester", 1, "1e1.08e25", 5 * 3600 + 12 * 60 }, { "NovaStrike", 2, "ee198188918", 3 * 86400 + 4 * 3600 },
+		{ "pixelmoth", 3, "84150", 42 * 60 }, { "Quasar_9", 4, "1e10000", 26 * 3600 }, { "lunarfern", 5, "1.5e3002", 9 * 3600 } }
+	for _, e in list do
+		local pl = if e[2] == 1 then p else M.addPlayer(e[1], e[2])
+		pl.__props.DisplayName = e[1]
+		local x = TN.from(e[3])
+		pl:SetAttribute("MT_Pts", Boards.format(x))
+		pl:SetAttribute("MT_PtsKey", TN.sortKey(x))
+		pl:SetAttribute("MT_Played", e[4])
+	end
+	play("s13_none")
+	frames(1)
+	pg.TopbarGui.Root.PlayerList.Chip.Activated:Fire()
+	frames(0.5)
 elseif SCENE == "shop" then
 	-- the Shop with sample ids (so the prices show) and the 2x Speed pass owned
 	local Products = M.require(RS.MilestoneTree.Products)

@@ -7,7 +7,7 @@
 	              heavy face (46 du) with a gold glow
 	      Coin    Ø68 gold disc breaking out on the left, a spinning star (6 s / rev)
 	      Label   "POINTS · NORMAL UNIVERSE" (`caps`, #ffe9a3; not on COMPACT), then the passes in gold
-	              ("· 2× SPEED · SUPPORTER", from the player's MT_Perks attribute)
+	              ("· 2× SPEED · SUPPORTER", from the player's MT_Perks attribute); a Supporter gets a gold rim
 	      Row     Amount (R4 gold gradient number, `capsule` role, steps 34 -> 30 -> 26 past 250 du, left anchored)
 	              + Unit ("points" / "pts")
 	      GenPill the rate (Rich.num) on a dark green pill hanging from the rim; hidden when hud.gen is nil
@@ -337,6 +337,15 @@ function Capsule.new(parent: GuiObject): Capsule
 	local function writeLabel()
 		label.RichText = true
 		label.Text = Rich.caps(if inside then "Points · Prestige Multiverse" else "Points · Normal Universe") .. perkText()
+		-- the Supporter pass: a gold rim around the bar
+		local lp = game:GetService("Players").LocalPlayer
+		local raw = if lp then lp:GetAttribute("MT_Perks") else nil
+		if type(raw) == "string" and string.find(raw, '"supporter"', 1, true) then
+			Kit.stroke(f, 2, GOLD_D, 0.1, "SupporterRim").LineJoinMode = Enum.LineJoinMode.Miter
+		else
+			local rim = f:FindFirstChild("SupporterRim")
+			if rim then rim:Destroy() end
+		end
 		Sleek.accent(f, if inside then Theme.hue("pm") else GOLD_D, 24, 64, { name = "Accent" })
 	end
 

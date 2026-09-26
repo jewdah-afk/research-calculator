@@ -390,6 +390,12 @@ local DRAW: { [string]: (h: Frame, c: Color3, bg: Color3) -> () } = {
 		box(h, "Body", 0.5, 0.66, 0.78, 0.52, c, 0.08)
 		box(h, "Strap", 0.5, 0.5, 0.78, 0.06, bg, 0)
 	end,
+	-- the leaderboards: a podium (the middle step highest)
+	podium = function(h, c)
+		box(h, "Left", 0.2, 0.7, 0.26, 0.4, c, 0.06)
+		box(h, "Mid", 0.5, 0.58, 0.28, 0.64, c, 0.06)
+		box(h, "Right", 0.8, 0.77, 0.26, 0.26, c, 0.06)
+	end,
 	info = function(h, c)
 		ring(h, "Ring", 0.5, 0.5, 0.86, 0.86, 0.09, c)
 		disc(h, "Dot", 0.5, 0.3, 0.14, c)

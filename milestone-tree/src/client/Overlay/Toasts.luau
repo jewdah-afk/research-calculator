@@ -126,6 +126,9 @@ function Toasts.new(root: GuiObject): Toasts
 		local ra = root.AbsolutePosition
 		local x = (F.x + F.w - ra.X) / s - 16
 		local y = if compact then 58 else 68
+		-- the open player list (Hud/PlayerList) sits top right: stack below it
+		local pl = Layout.rect("hud.players")
+		if pl then y = math.max(y, (pl.y + pl.h - ra.Y) / s + 10) end
 		holder.Position = UDim2.fromOffset(x, y)
 		holder.Size = UDim2.fromOffset(width(), 0)
 		local now = os.clock()

@@ -506,7 +506,10 @@ function E.buildClient()
 		inst = M.module(parent, name, function() return M.withScript(inst, require(W .. wrapPath)) end)
 		return inst
 	end
-	for _, pair in { { "Html", "shared/Html" } } do
+	if RS:FindFirstChild("TowerNum") == nil then
+		M.module(RS, "TowerNum", function() return require("../lib").TN end)
+	end
+	for _, pair in { { "Html", "shared/Html" }, { "Boards", "shared/Boards" } } do
 		if shared:FindFirstChild(pair[1]) == nil then scriptModule(shared, pair[1], pair[2]) end
 	end
 	for _, n in { "Realm", "Assets", "ZoneMaps", "PrefsSchema", "Flags", "AudioIds", "NodeAtlas", "UiKit", "Products" } do

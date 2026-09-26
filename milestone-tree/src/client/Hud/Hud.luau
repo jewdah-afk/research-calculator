@@ -22,6 +22,7 @@ local Signal = require(Core:WaitForChild("Signal"))
 local Layout = require(Core:WaitForChild("Layout"))
 local Kit = require(script.Parent:WaitForChild("Kit"))
 local Capsule = require(script.Parent:WaitForChild("Capsule"))
+local PlayerList = require(script.Parent:WaitForChild("PlayerList"))
 local UniverseTag = require(script.Parent:WaitForChild("UniverseTag"))
 local Band = require(script.Parent:WaitForChild("Band"))
 local Dock = require(script.Parent:WaitForChild("Dock"))
@@ -38,6 +39,7 @@ export type Hud = {
 	trophies: Signal.Signal<>,
 	options: Signal.Signal<>,
 	shop: Signal.Signal<>,
+	ranks: Signal.Signal<>,
 	portal: Signal.Signal<>,
 	zoomIn: Signal.Signal<>,
 	zoomOut: Signal.Signal<>,
@@ -66,6 +68,7 @@ function Hud.new(topbar: ScreenGui, hud: ScreenGui): Hud
 	self.trophies = Signal.new() :: Signal.Signal<>
 	self.options = Signal.new() :: Signal.Signal<>
 	self.shop = Signal.new() :: Signal.Signal<>
+	self.ranks = Signal.new() :: Signal.Signal<>
 	self.portal = Signal.new() :: Signal.Signal<>
 	self.zoomIn = Signal.new() :: Signal.Signal<>
 	self.zoomOut = Signal.new() :: Signal.Signal<>
@@ -81,6 +84,8 @@ function Hud.new(topbar: ScreenGui, hud: ScreenGui): Hud
 	local hudRoot = (hud:FindFirstChild("Root") or hud) :: GuiObject
 
 	local capsule = Capsule.new(topRoot)
+	-- the players in this server, top right (Points | Playtime, highest first)
+	local playerList = PlayerList.new(topRoot)
 	local tag = UniverseTag.new(topRoot)
 	local band = Band.new(topRoot)
 	local dock = Dock.new(hudRoot)
@@ -95,6 +100,7 @@ function Hud.new(topbar: ScreenGui, hud: ScreenGui): Hud
 	dock.trophies:Connect(function() self.trophies:Fire() end)
 	dock.options:Connect(function() self.options:Fire() end)
 	dock.shop:Connect(function() self.shop:Fire() end)
+	dock.ranks:Connect(function() self.ranks:Fire() end)
 	dock.zoomIn:Connect(function() self.zoomIn:Fire() end)
 	dock.zoomOut:Connect(function() self.zoomOut:Fire() end)
 	ready.tap:Connect(function(l: string) self.readyTap:Fire(l) end)
@@ -228,13 +234,14 @@ function Hud.new(topbar: ScreenGui, hud: ScreenGui): Hud
 		register()
 	end
 	function self.destroy(h: Hud)
-		for _, s in { h.home, h.trophies, h.options, h.shop, h.portal, h.zoomIn, h.zoomOut, h.bandClose, h.gateHold, h.readyMore } do
+		for _, s in { h.home, h.trophies, h.options, h.shop, h.ranks, h.portal, h.zoomIn, h.zoomOut, h.bandClose, h.gateHold, h.readyMore } do
 			s:DisconnectAll()
 		end
 		h.readyTap:DisconnectAll()
 		h.bandSwitch:DisconnectAll()
 		h.readyHold:DisconnectAll()
 		h.warnTap:DisconnectAll()
+		playerList:destroy()
 		for key in parts do Layout.setRect("hud." .. key, nil) end
 		Layout.setRect("hud.topbar", nil)
 		capsule:destroy()
