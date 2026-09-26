@@ -1,21 +1,20 @@
-# icon_tree.py - icon option D: the game's own painted tree (a 1024 square render of the lit tree, plates and HUD
-# hidden), saturated, vignetted to the tree and downscaled to 512; then out/icon_options.jpg compares A, B, D and C at
+# icon_tree.py - icon option D: the game's own painted tree (a 1024 square render, the canopy filling the frame, plates
+# and HUD hidden), saturated, lightly sharpened, corners darkened, downscaled to 512; then out/icon_options.jpg compares A, B, D and C at
 # 512 / 150 / 64 px. Render the still first:
-#   node -e "require('./lib/snap').still({scene:'s13_none',cam:'1499,1060,0.52',size:'1024x1024',hide:['hud','plates'],out:'work/stills/icon_tree_a.png'})"
+#   node -e "require('./lib/snap').still({scene:'s13_none',cam:'1499,1005,0.63',size:'1024x1024',hide:['hud','plates'],out:'work/stills/icon_tree_full.png'})"
 #   python3 icon_tree.py
-from PIL import Image, ImageDraw, ImageEnhance
+from PIL import Image, ImageDraw, ImageEnhance, ImageFilter
 import numpy as np
 
-im = Image.open('work/stills/icon_tree_a.png').convert('RGB')
-im = ImageEnhance.Contrast(ImageEnhance.Color(im).enhance(1.25)).enhance(1.12)
+im = Image.open('work/stills/icon_tree_full.png').convert('RGB')
+im = ImageEnhance.Brightness(ImageEnhance.Contrast(ImageEnhance.Color(im).enhance(1.3)).enhance(1.12)).enhance(1.06)
+im = im.filter(ImageFilter.UnsharpMask(radius=2, percent=55, threshold=3))     # crisp crystals, no halos
 a = np.asarray(im).astype(np.float32) / 255
 h, w = a.shape[:2]
 y, x = np.mgrid[0:h, 0:w]
-r = np.sqrt(((x - 512) / 470) ** 2 + ((y - 480) / 560) ** 2)
-a = a * np.clip(1 - (r - 0.62) * 1.6, 0.06, 1.0)[..., None]                     # dark edges: the eye goes to the tree
-g = np.exp(-(((x - 512) / 240) ** 2 + ((y - 560) / 380) ** 2))[..., None] * np.array([0.18, 0.06, 0.28])
-a = np.clip(a + g * 0.3, 0, 1)                                                   # a soft violet lift behind the trunk
-Image.fromarray((a * 255).astype(np.uint8)).resize((512, 512), Image.LANCZOS).save('out/icon_d_tree_render.png')
+r = np.sqrt(((x - 512) / 512) ** 2 + ((y - 512) / 512) ** 2)
+a = a * np.clip(1 - (r - 0.95) * 1.2, 0.55, 1)[..., None]                      # only the corners darken: the tree fills it
+Image.fromarray((np.clip(a, 0, 1) * 255).astype(np.uint8)).resize((512, 512), Image.LANCZOS).save('out/icon_d_tree_render.png')
 
 opts = [('A: gem (current)', 'icon_512.png'), ('B: number', 'icon_b_number.png'), ('D: the tree (render)', 'icon_d_tree_render.png'),
         ('C: tree (drawn)', 'icon_c_tree.png')]
