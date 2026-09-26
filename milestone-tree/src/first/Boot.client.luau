@@ -1,6 +1,7 @@
 --!strict
 -- The loading screen from the first frame: replaces Roblox's default one. The game's overlay (Overlay/Screens) drives
--- it from there (status, progress) and fades it out once the player's game is on screen.
+-- it from there (status, the asset preload's progress) and fades it out once the player's game is on screen and its
+-- images are fetched (App + Core/Preload).
 local ReplicatedFirst = game:GetService("ReplicatedFirst")
 local BootScreen = require(script.Parent:WaitForChild("BootScreen"))
 

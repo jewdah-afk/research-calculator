@@ -3,7 +3,8 @@
 	Screens: the full-screen states of DESIGN.md 7.10-7.12 (mock j).
 
 	    loading    the ReplicatedFirst BootScreen (src/first) when the place has it: status + progress go to it, and
-	               leaving "loading" fades it out; else the fallback card: THE MILESTONE TREE, a progress bar, LOADING…
+	               leaving "loading" fades it out (App leaves it once the first view is drawn AND Core/Preload has
+	               fetched the images, or timed out); else the fallback card: THE MILESTONE TREE, a progress bar, LOADING…
 	    fatal      the error text with "Your save is safe on the server."
 	    outOfSync  OUT OF SYNC · the screen stopped updating · RESYNC (fires `resync`)
 	    end        the star emblem, YOU BEAT THE GAME!, the win text on a scrim band, IT TOOK YOU <took>,

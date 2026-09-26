@@ -123,10 +123,52 @@ E.runMain("Boot")
 frames(0.1)
 local bootGui = p:FindFirstChild("PlayerGui") and p.PlayerGui:FindFirstChild("MilestoneBoot")
 check(bootGui ~= nil and bootGui.Enabled ~= false, "the ReplicatedFirst loading screen shows first")
+-- the asset preload behind it (Core/Preload): slow (each asset 0.25 s) in the default and locked runs, a PreloadAsync
+-- that throws with all caps off, one that never returns with -a noids (the timeout, cut to 3 s here, lets it go)
+local PRELOAD = if NOCAPS then "error" elseif NOIDS then "hang" else "slow"
+E.preload, E.preloadDelay = PRELOAD, 0.25
+local Preload = M.require(client.Core.Preload)
+if PRELOAD == "hang" then Preload.TIMEOUT = 3 end
+local function bootLine(): (string, number)
+	local g = p.PlayerGui:FindFirstChild("MilestoneBoot")
+	local bar = g and g.Back.Column.Bar
+	if bar == nil then return "", -1 end
+	return (string.gsub(bar.Status.Text, "\u{200A}", "")), tonumber(string.match(bar.Pct.Text, "%d+")) or -1
+end
 E.runMain("Main")
 frames(0.5)
 local pg = p:FindFirstChild("PlayerGui")
 check(pg:FindFirstChild("MilestoneBoot") ~= nil, "the loading screen stays until the first view")
+do
+	-- every image the client draws and its fonts, once each
+	local ids, fontsN, dup = {}, 0, nil
+	for _, call in E.preloads do
+		for _, item in call do
+			if type(item) == "string" then
+				if ids[item] then dup = item end
+				ids[item] = true
+			elseif item.__class == "TextLabel" and item.FontFace then
+				fontsN += 1
+			end
+		end
+	end
+	local Assets = require("../../../src/shared/Assets")
+	local UiKit = require("../../../src/shared/UiKit")
+	local NodeAtlas = require("../../../src/shared/NodeAtlas")
+	local Products = require("../../../src/shared/Products")
+	local sky = ids[Assets.tiers.HIGH.layers.sky.tiles[1].id] or ids[Assets.tiers.LOW.layers.sky.tiles[1].id]
+	local atlas = ids[Assets.sprites.atlas.HIGH or ""] or ids[Assets.sprites.atlas.LOW or ""]
+	check(#E.preloads >= 2 and sky and ids[UiKit.id] and ids[NodeAtlas.id] and atlas,
+		"PreloadAsync gets the realm tiles, the UI kit, the node and sprite atlases (in batches)")
+	check(ids["rbxassetid://" .. Products.passes[1].icon] and ids["rbxassetid://" .. Products.products[1].icon], "and the Shop icons")
+	check(fontsN >= 2, "and a label per font face (" .. fontsN .. ")")
+	check(dup == nil, "no asset twice (" .. tostring(dup) .. ")")
+end
+local status0, pct0 = bootLine()
+if PRELOAD == "slow" then
+	check(status0 == "LOADING ASSETS", "the loading screen says LOADING ASSETS (" .. status0 .. ")")
+	check(pct0 > 0 and pct0 < 60, "its % follows the preload (" .. pct0 .. "%)")
+end
 local mapGui = pg:FindFirstChild("MapGui")
 check(mapGui ~= nil and pg:FindFirstChild("Backing") ~= nil, "MapGui and the black backing built")
 check(readies >= 1, "asked the server for a full view")
@@ -159,22 +201,29 @@ local n0 = #acts
 play("s13_p")
 frames(0.2)
 check(sent("tab", "none", n0), "the layer the last session left open is closed at boot")
-check(not screen.Visible, "the loading screen is gone after the first view")
--- a fast load: the ReplicatedFirst screen still holds its minimum time, filling the line to 100% by its end
-frames(1)
-local boot = pg:FindFirstChild("MilestoneBoot")
-local function bootText(name: string): string
-	if boot == nil then return "" end
-	for _, d in boot:GetDescendants() do
-		if d.Name == name and d:IsA("TextLabel") then return (string.gsub(d.Text, "\u{200A}", "")) end
-	end
-	return ""
+if PRELOAD == "error" then
+	-- a failed PreloadAsync counts as done: the images load as they show, as before the preload
+	check(not screen.Visible, "the loading screen is gone after the first view (the preload failed at once)")
+else
+	local _, pct1 = bootLine()
+	check(screen.Visible and screen:GetAttribute("Kind") == "loading" and pg:FindFirstChild("MilestoneBoot") ~= nil,
+		"the loading screen stays up after the first view while the assets load")
+	if PRELOAD == "slow" then check(pct1 > pct0, string.format("the %% advances (%d%% -> %d%%)", pct0, pct1)) end
+	-- slow: every asset is back by now; hang: Preload gave up at its timeout
+	frames(if PRELOAD == "hang" then 2.2 else 1.6)
+	check(not screen.Visible, if PRELOAD == "hang" then "a PreloadAsync that never returns holds it no longer than the timeout"
+		else "the loading screen is gone once the preload is done")
 end
-check(boot ~= nil and bootText("Status") == "ENTERING THE TREE", "a fast load keeps the loading screen up (ENTERING THE TREE, " .. bootText("Pct") .. ")")
-local pct1 = tonumber((string.match(bootText("Pct"), "%d+"))) or 0
-check(pct1 < 85, "the line is still filling, evenly (" .. pct1 .. "% at " .. string.format("%.1f", M.now - bootAt) .. " s)")
-frames(bootAt + 4.1 - M.now)
-check(bootText("Pct") == "100%", "the line reaches 100% at the minimum time (" .. bootText("Pct") .. ")")
+-- then the ReplicatedFirst screen still holds its minimum time (4 s from boot), filling the line to 100% by its end
+if M.now - bootAt < 3.5 then
+	local st, pc = bootLine()
+	check(pg:FindFirstChild("MilestoneBoot") ~= nil and st == "ENTERING THE TREE",
+		string.format("a fast load keeps the loading screen up (%s, %d%% at %.1f s)", st, pc, M.now - bootAt))
+	check(pc < 100, "the line is still filling (" .. pc .. "%)")
+end
+frames(math.max(0, bootAt + 4.1 - M.now))
+local _, pcEnd = bootLine()
+check(pcEnd == 100, "the line reaches 100% at the minimum time (" .. pcEnd .. "%)")
 frames(1)
 check(pg:FindFirstChild("MilestoneBoot") == nil, "the ReplicatedFirst loading screen faded out and is gone")
 local sheet = pg.PanelGui.Root.Sheet

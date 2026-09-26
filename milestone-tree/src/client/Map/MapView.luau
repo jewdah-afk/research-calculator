@@ -9,7 +9,7 @@
 	    view:frameStart({ mode, focus, focusY, intro })          the HUD-safe start framing (DESIGN.md 3.3)
 	    view:setRect(absRect?, { animate })                      the Box-resize strip beside a side sheet (3.6)
 	    view:worldToAbs(p), view:absToWorld(q), view:absToMap(q)
-	    view:setTier("LOW"), view:setReduced(b), view:setAmbient(on), view:setForegroundOpen(open), view:preload(cb)
+	    view:setTier("LOW"), view:setReduced(b), view:setAmbient(on), view:setForegroundOpen(open), view:images()
 	    view:step(dt)                                            once a frame (App's PreRender loop)
 
 	The tree (REALM.md 9.1, siblings take ZIndex = their place in the list):
@@ -24,7 +24,6 @@
 	sky or world gets the procedural fallback (Fallback.luau); without the realm atlas there are no ambient sprites.
 ]]
 
-local ContentProvider = game:GetService("ContentProvider")
 local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -144,7 +143,7 @@ export type MapView = {
 	absToMap: (self: MapView, q: Vector2) -> Vector2,
 	safeRect: (self: MapView) -> MapCamera.Rect,
 	freeRect: (self: MapView) -> MapCamera.Rect,
-	preload: (self: MapView, onProgress: ((done: number, total: number) -> ())?) -> (),
+	images: (self: MapView) -> { string },
 	step: (self: MapView, dt: number) -> (),
 	destroy: (self: MapView) -> (),
 }
@@ -840,8 +839,9 @@ function MapView.new(gui: ScreenGui, root: Frame, o: { assets: any?, realm: any?
 	end
 
 	-- ------------------------------------------------------------------------------------------ preload
-	-- PreloadAsync behind the splash, farthest layers first, then the atlas (yields)
-	function self.preload(_: MapView, onProgress: ((done: number, total: number) -> ())?)
+	-- the images the map draws, farthest layers first, then the atlas: Core/Preload fetches them behind the loading
+	-- screen with the rest of the client's
+	function self.images(_: MapView): { string }
 		local list: { string } = {}
 		for _, rec in layers do
 			for _, t in rec.tiles do
@@ -850,18 +850,7 @@ function MapView.new(gui: ScreenGui, root: Frame, o: { assets: any?, realm: any?
 		end
 		local atlas = atlasInfo()
 		if atlas and atlas.id ~= "" then table.insert(list, atlas.id) end
-		local total = #list
-		if total == 0 then
-			if onProgress then onProgress(0, 0) end
-			return
-		end
-		local done = 0
-		pcall(function()
-			ContentProvider:PreloadAsync(list, function()
-				done += 1
-				if onProgress then onProgress(done, total) end
-			end)
-		end)
+		return list
 	end
 
 	-- a sky or world whose painted tiles have not come in after 10 s (a failed or still-moderated upload) gets the

@@ -44,6 +44,7 @@ local Motion = require(Core:WaitForChild("Motion"))
 local Recipes = require(Core:WaitForChild("Recipes"))
 local Prefs = require(Core:WaitForChild("Prefs"))
 local Audio = require(Core:WaitForChild("Audio"))
+local Preload = require(Core:WaitForChild("Preload"))
 local ViewStore = require(Core:WaitForChild("ViewStore"))
 local InputFolder = script.Parent:WaitForChild("Input")
 local Input = require(InputFolder:WaitForChild("Input"))
@@ -75,6 +76,7 @@ local RIFT = Vector2.new(3150, 1350)
 local UNIVERSE_WORD = { [true] = "Lives in the Prestige Multiverse", [false] = "Lives in the Normal Universe" }
 local INTENT_WAIT = 2 -- seconds the client's own open / close waits for map.open to confirm it
 local RECONNECT_AFTER = 6
+local REVEAL_FRAMES = 2 -- Heartbeats between the loading screen's last step and its fade: the realm has drawn
 
 -- the engine settings the client owns (plan 2.1, 4); each on its own, so one missing API never stops the rest
 local function engineSettings()
@@ -153,8 +155,8 @@ function App.start()
 	local readyRemote: RemoteEvent? = nil
 	local lastMs: MapState? = nil
 	local gotFirst = false -- the first full view arrived
-	local firstAt = 0
-	local preloaded = false
+	local preloaded = false -- every image and font is fetched (or Preload gave up at its timeout)
+	local assetsNoted = false -- the status says LOADING ASSETS once the first view waits on them
 	local introDone = false
 	local fatal = false
 	local lastPatchAt = 0
@@ -701,7 +703,7 @@ function App.start()
 		local first = false
 		if changes.full then
 			if not gotFirst then
-				gotFirst, firstAt, first = true, os.clock(), true
+				gotFirst, first = true, true
 			end
 			if outOfSync then
 				outOfSync = false
@@ -812,8 +814,9 @@ function App.start()
 	})
 
 	-- ------------------------------------------------------------------------------------------ the loop
+	-- the loading screen goes when BOTH the first view is on the map and the images are fetched (or timed out)
 	local function loadingDone(): boolean
-		return gotFirst and (preloaded or os.clock() - firstAt > 3)
+		return gotFirst and preloaded
 	end
 	-- the Multiverse rift's hum: loudest with the rift large and central on the map, faint while it is sealed, none
 	-- while a full-screen panel hides the map
@@ -874,12 +877,25 @@ function App.start()
 		mi:step(dt)
 		view:step(dt)
 		Motion.step(dt)
+		if gotFirst and not preloaded and not assetsNoted and not fatal and screenKind == "loading" then
+			assetsNoted = true
+			overlay:screen("loading", "Loading assets")
+		end
 		if not introDone and loadingDone() and not fatal then
 			introDone = true
-			if screenKind == "loading" then setScreen(nil) end
 			frameBoot()
 			Audio.setLive(true)
 			Audio.loop("ambience", 1)
+			-- the framed realm draws under the loading screen for a couple of frames first, so the fade uncovers it
+			-- drawn instead of popping in
+			local left = REVEAL_FRAMES
+			local reveal: RBXScriptConnection? = nil
+			reveal = RunService.Heartbeat:Connect(function()
+				left -= 1
+				if left > 0 then return end
+				if reveal then reveal:Disconnect() end
+				if screenKind == "loading" then setScreen(nil) end
+			end)
 		end
 		riftAt -= dt
 		if riftAt <= 0 and introDone then
@@ -902,8 +918,12 @@ function App.start()
 	end)
 	if not okPre then RunService.RenderStepped:Connect(step) end
 
+	-- every image the client draws (the map's tiles first) and its fonts, behind the loading screen; never longer
+	-- than Preload.TIMEOUT
 	task.spawn(function()
-		view:preload(function(done: number, total: number)
+		local list = Preload.list(view:images(), MapView.chooseTier())
+		if screenKind == "loading" then overlay:screen("loading", "Loading assets") end
+		Preload.run(list, function(done: number, total: number)
 			if screenKind == "loading" then overlay:screen("loading", { done = done, total = total }) end
 		end)
 		preloaded = true

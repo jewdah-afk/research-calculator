@@ -4,14 +4,15 @@
 	No other modules: it runs before ReplicatedStorage has replicated.
 
 	    BootScreen.show()                   build it (idempotent); Boot.client.luau calls it at once
-	    BootScreen.set("Loading your save…") the status line   BootScreen.set({ done = 3, total = 9 }) the progress
+	    BootScreen.set("Loading your save…") the status line   BootScreen.set({ done = 3, total = 9 }) the asset count
 	    BootScreen.hide()                   fill the line, fade out, destroy; never before MIN_SHOW seconds on screen
 	    BootScreen.visible()   BootScreen.claim() (the overlay drives it)   BootScreen.claimed()
 
 	Look (Sleek, DESIGN.md Style 1): the void, a soft violet glow, four corner ticks, a diamond emblem that breathes
 	and turns, THE MILESTONE TREE in tracked heavy italic caps with NG+ in the Milestone violet, a 2 px progress line
-	with the % at its right, the status in caps above it, and a rotating tip under it. The progress never stalls: it
-	creeps towards 90% on its own and jumps to what the game reports.
+	with the % at its right, the status in caps above it, and a rotating tip under it. The % is the client's asset
+	preload (Core/Preload): done / total of the images and fonts, up to 95%; the rest fills as it fades. Until the
+	first count arrives (the client's scripts are still replicating) it creeps towards 15% so it never looks stuck.
 
 	The screen stays at least MIN_SHOW seconds, also when the game is ready sooner (a fast device, a warm cache): the
 	title and the tree get their moment. Once asked to hide it reads ENTERING THE TREE and the line fills to 100% by the
@@ -32,6 +33,8 @@ local MUTED = Color3.fromHex("6b7486")
 local HAIR = Color3.new(1, 1, 1)
 local MIN_SHOW = 4 -- seconds on screen at the least
 BootScreen.MIN_SHOW = MIN_SHOW
+local CREEP = 0.15 -- how far the line creeps before the first asset count
+local LOADED = 0.95 -- every asset fetched; the last 5% fills as the screen fades
 
 local TIPS = {
 	"Tap a node on the tree to open its layer",
@@ -47,6 +50,7 @@ local parts: { [string]: any } = {}
 local status = "Loading the realm"
 local target = 0
 local shown = 0
+local counted = false -- the client reported an asset count: the line follows it from then on
 local started = 0
 local hiding = false
 local hideAt, hideFrom, hold = 0, 0, 0 -- when hide() was asked, the line then, the time left to MIN_SHOW
@@ -204,14 +208,16 @@ local function step()
 	local g = gui
 	if g == nil then return end
 	local t = os.clock() - started
-	-- creep to 90% on its own (fast at first), never past what the game has not confirmed
-	local creep = 0.9 * (1 - math.exp(-t / 4))
+	-- creep to 15% on its own until the client counts its assets; then the count alone moves it (never backwards)
+	local creep = if counted then 0 else CREEP * (1 - math.exp(-t / 4))
 	if hiding then
 		-- the rest of the line fills evenly by the end of the hold (smoothstep), so a fast load still reads as a load
 		local k = math.clamp((os.clock() - hideAt) / hold, 0, 1)
 		shown = hideFrom + (1 - hideFrom) * k * k * (3 - 2 * k)
 	else
-		shown += (math.max(target, creep) - shown) * math.min(1, 0.12)
+		-- paced: never ahead of the MIN_SHOW clock, so a fast load climbs evenly instead of jumping to 95% and waiting
+		local pace = LOADED * math.min(1, t / MIN_SHOW)
+		shown += (math.max(shown, math.min(math.max(target, creep), pace)) - shown) * math.min(1, 0.12)
 	end
 	if parts.fill then parts.fill.Size = UDim2.fromScale(shown, 1) end
 	if parts.pct then parts.pct.Text = string.format("%d%%", math.floor(shown * 100 + 0.5)) end
@@ -249,7 +255,7 @@ function BootScreen.show()
 	local existing = pg:FindFirstChild("MilestoneBoot")
 	if existing then existing:Destroy() end
 	started = os.clock()
-	shown, target, hiding = 0, 0, false
+	shown, target, hiding, counted = 0, 0, false, false
 	local g = build()
 	g.Parent = pg
 	gui = g
@@ -259,17 +265,16 @@ function BootScreen.show()
 	conn = RunService.Heartbeat:Connect(step)
 end
 
--- a status string, or { done, total } for the progress (the preload count)
+-- a status string, or { done, total } for the progress (the asset preload's count)
 function BootScreen.set(data: any)
 	if gui == nil or hiding then return end
 	if type(data) == "string" then
 		status = string.gsub(data, "[%.…]+$", "")
 		if parts.status then parts.status.Text = caps(status) end
-		-- each server step is further along
-		target = math.max(target, 0.35)
 	elseif type(data) == "table" and type(data.done) == "number" and type(data.total) == "number" then
 		local p = if data.total > 0 then math.clamp(data.done / data.total, 0, 1) else 1
-		target = math.max(target, 0.1 + 0.6 * p)
+		counted = true
+		target = math.max(target, LOADED * p)
 	end
 end
 

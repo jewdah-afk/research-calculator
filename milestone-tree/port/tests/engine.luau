@@ -261,8 +261,28 @@ GS.__props.PreferredTransparency = 1
 GS.__props.TopbarInset = Rect.new(120, 0, 1800, 58)
 GS.__props.TouchControlsEnabled = true
 function GS:GetGuiInset() return V2(0, 58), V2(0, 0) end
+-- ContentProvider: PreloadAsync records each call's list (E.preloads) and calls back once per asset with its content
+-- id (an Instance's: a TextLabel's font family). E.preload picks how it behaves: nil = at once, "slow" = each asset
+-- after E.preloadDelay s, "error" = throws, "hang" = never returns (its thread stays suspended for good)
 local CP = game:GetService("ContentProvider")
-function CP:PreloadAsync(list, cb) for _, id in list do if cb then cb(id, nil) end end end
+E.preloads = {}
+E.preload = nil
+E.preloadDelay = 0.1
+function CP:PreloadAsync(list, cb)
+	assert(type(list) == "table", "PreloadAsync needs an array")
+	table.insert(E.preloads, table.clone(list))
+	if E.preload == "error" then error("[mock] PreloadAsync: HTTP 503") end
+	if E.preload == "hang" then
+		coroutine.yield()
+		error("[mock] a hung PreloadAsync was resumed")
+	end
+	for _, item in list do
+		assert(type(item) == "string" or (type(item) == "table" and item.__class), "PreloadAsync takes content ids and Instances")
+		if E.preload == "slow" then M.G.task.wait(E.preloadDelay) end
+		local id = if type(item) == "string" then item else (item.FontFace and item.FontFace.Family) or ""
+		if cb then cb(id, "Success") end
+	end
+end
 local HS = game:GetService("HttpService")
 -- a small real JSON (objects, arrays, strings, numbers, booleans, null), like the engine's: the device prefs round
 -- trip (client -> Prefs remote -> the MT_Prefs attribute -> client) runs for real
