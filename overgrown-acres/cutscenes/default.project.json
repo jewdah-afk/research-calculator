@@ -1,0 +1,23 @@
+{
+  "name": "OvergrownAcresCutscenes",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "Cutscene": {
+        "$path": "src/ReplicatedStorage/Cutscene"
+      }
+    },
+    "ServerScriptService": {
+      "Cutscenes": {
+        "$path": "src/ServerScriptService"
+      }
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "CutsceneClient": {
+          "$path": "src/StarterPlayerScripts/CutsceneClient.client.luau"
+        }
+      }
+    }
+  }
+}
