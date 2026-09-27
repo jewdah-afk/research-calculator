@@ -100,8 +100,9 @@ end
 local function hideLocally(ctx, model: Model)
 	local saved = {}
 	local function set(item: Instance, property: string, value: any)
-		table.insert(saved, { item, property, (item :: any)[property] })
-		(item :: any)[property] = value
+		local target = item :: any
+		table.insert(saved, { item, property, target[property] })
+		target[property] = value
 	end
 	for _, item in model:GetDescendants() do
 		if item:IsA("BasePart") then
@@ -116,9 +117,9 @@ local function hideLocally(ctx, model: Model)
 	end
 	table.insert(ctx.cleanups, function()
 		for _, entry in saved do
-			local item = entry[1]
+			local item = entry[1] :: any
 			if item.Parent then
-				(item :: any)[entry[2]] = entry[3]
+				item[entry[2]] = entry[3]
 			end
 		end
 	end)
