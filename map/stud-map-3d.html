@@ -5,17 +5,17 @@
 :root{
   color-scheme: light;
   --paper:#eef1f3; --card:#ffffff; --ink:#1d2329; --muted:#55606a; --line:#d5dbe0;
-  --red:#d6322b; --yellow:#f5c518; --blue:#1f6fd1; --sky:#bfe3ff;
+  --red:#d6322b; --yellow:#f5c518; --blue:#1f6fd1; --sky:#bfe3ff; --slate:#262e3d; --warn:#c0271f;
 }
 body{background:var(--paper);color:var(--ink);font:500 15px/1.55 Nunito,system-ui,sans-serif;padding-inline:16px;padding-block:20px 48px}
-.wrap{max-width:1320px;margin:0 auto;display:grid;gap:18px}
+.wrap{max-width:1320px;margin:0 auto;display:grid;gap:20px}
 h1{font:400 clamp(28px,4.5vw,44px)/1.05 "Lilita One",Impact,sans-serif;margin:0;text-wrap:balance}
 h1 span{color:var(--red)}
 h2{font:400 24px/1.1 "Lilita One",Impact,sans-serif;margin:0}
 h3{margin:0;font:800 17px/1.25 Nunito,sans-serif}
-.lede{max-width:75ch;color:var(--muted);margin:6px 0 0}
+.lede{max-width:78ch;color:var(--muted);margin:6px 0 0}
 .tag{display:inline-block;font:800 11px/1 Nunito,sans-serif;letter-spacing:.08em;text-transform:uppercase;background:var(--yellow);padding:5px 8px;border-radius:4px}
-.stage{display:grid;grid-template-columns:minmax(0,1fr) 380px;gap:14px;align-items:start}
+.stage{display:grid;grid-template-columns:minmax(0,1fr) 390px;gap:14px;align-items:start}
 @media (max-width:900px){.stage{grid-template-columns:1fr}}
 .viewer{position:relative;border-radius:10px;overflow:hidden;background:var(--sky);height:min(74vh,760px);min-height:420px;box-shadow:0 4px 0 #9aa6b0;touch-action:none}
 .viewer canvas{display:block;width:100%;height:100%;cursor:grab}
@@ -29,58 +29,90 @@ h3{margin:0;font:800 17px/1.25 Nunito,sans-serif}
 @media (max-width:900px){.panel{max-height:none}}
 .panel .num{display:inline-grid;place-items:center;min-width:30px;height:30px;border-radius:5px;color:#fff;font:400 17px "Lilita One",sans-serif;margin-right:8px;vertical-align:middle}
 .meta{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font:500 12.5px/1.45 "JetBrains Mono",ui-monospace,monospace;color:var(--muted)}
-.meta dt{font-weight:500;color:var(--ink)}
+.meta dt{color:var(--ink)}
 .meta dd{margin:0}
-.panel p{margin:0}
-.panel ul{margin:0;padding-left:18px;display:grid;gap:4px}
-.panel h4{margin:6px 0 0;font:800 12px/1 Nunito,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
-.swatches{display:flex;flex-wrap:wrap;gap:6px}
-.sw{display:inline-flex;align-items:center;gap:6px;font:500 12px "JetBrains Mono",monospace;border:1px solid var(--line);border-radius:5px;padding:3px 7px 3px 4px}
-.sw i{width:14px;height:14px;border-radius:3px;border:1px solid rgba(0,0,0,.15)}
+.panel p,.card p{margin:0}
+.panel ul,.card ul{margin:0;padding-left:18px;display:grid;gap:4px}
+.panel h4,.card h4{margin:6px 0 0;font:800 11.5px/1 Nunito,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.icons{display:flex;flex-wrap:wrap;gap:6px}
+.ic{display:inline-flex;align-items:center;gap:6px;font:800 12.5px/1.2 Nunito,sans-serif;background:#f3f5f7;border-radius:6px;padding:3px 9px 3px 3px}
+.ic img{width:30px;height:30px;border-radius:5px;display:block}
+.ic small{font:500 11px "JetBrains Mono",monospace;color:var(--muted)}
+.reset{border-left:4px solid var(--warn);background:#fdf0ef;border-radius:0 6px 6px 0;padding:8px 10px;font-size:14px}
+.reset b{color:var(--warn)}
 .zones{display:flex;flex-wrap:wrap;gap:6px}
-.zbtn{font:800 12.5px/1 Nunito,sans-serif;border:1px solid var(--line);background:#fff;border-radius:6px;padding:7px 9px 7px 7px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;color:var(--ink)}
-.zbtn i{width:12px;height:12px;border-radius:3px}
+.zbtn{font:800 12.5px/1 Nunito,sans-serif;border:1px solid var(--line);background:#fff;border-radius:6px;padding:4px 9px 4px 4px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;color:var(--ink)}
+.zbtn img{width:22px;height:22px;border-radius:4px}
 .zbtn[aria-current="true"]{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
 .guide{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px}
 @media (max-width:420px){.guide{grid-template-columns:1fr}}
-.card{background:var(--card);border-radius:8px;padding:14px 16px;display:grid;gap:8px;border-top:8px solid var(--c);align-content:start}
-.card p{margin:0;font-size:14px}
-.card ul{margin:0;padding-left:18px;font-size:14px;display:grid;gap:3px}
-.card h4{margin:4px 0 0;font:800 11px/1 Nunito,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.card{background:var(--card);border-radius:8px;padding:14px 16px;display:grid;gap:8px;border-top:8px solid var(--c);align-content:start;font-size:14px}
 .card .go{justify-self:start}
-.style{background:var(--card);border-radius:10px;padding:16px 18px;display:grid;gap:8px}
-.style ul{margin:0;padding-left:20px;display:grid;gap:5px}
+.box{background:var(--card);border-radius:10px;padding:16px 18px;display:grid;gap:10px}
+.box ul{margin:0;padding-left:20px;display:grid;gap:5px}
+.tblwrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{font:800 11.5px Nunito,sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+td img{width:32px;height:32px;border-radius:5px;display:block}
+td code{font:500 12.5px "JetBrains Mono",monospace;color:var(--muted)}
+.machine{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:700px){.machine{grid-template-columns:1fr}}
 .fallback{position:absolute;inset:0;display:grid;place-items:center;padding:20px;text-align:center;font-weight:700}
 </style>
 
 <div class="wrap">
   <header>
-    <span class="tag">Rough draft · 3D v0</span>
+    <span class="tag">Rough draft · 3D v1 · icons + resets</span>
     <h1>Stud Incremental <span>3D Map</span></h1>
-    <p class="lede">A 3D block-out of the whole map, built from the 2D draft. Drag to spin, scroll or pinch to zoom, and right-drag (or two-finger drag) to pan. Tap any zone, or pick one from the list, to fly the camera there and read how it should be built. The camera buttons give you fixed "photo" angles, and Tour visits every zone in unlock order.</p>
+    <p class="lede">A 3D block-out of the whole map using the in-game names and icons. Every generator and pad is drawn as a "machine" in the style of the Crystal Core and Stack concepts: a dark base with glowing strips, two side pillars, and the currency's object floating in the middle with its icon above it. Drag to spin, scroll or pinch to zoom, right-drag to pan. Click any zone, or pick one from the list, to fly there and read its build brief. Pads that reset progress are marked with a red hazard ring.</p>
   </header>
 
   <div class="stage">
     <div class="viewer" id="viewer">
       <div class="hud" id="hud"></div>
-      <div class="help" id="help">Drag: rotate · Scroll/pinch: zoom · Right-drag: pan · Click a zone for its brief</div>
+      <div class="help">Drag: rotate · Scroll/pinch: zoom · Right-drag: pan · Click a zone for its brief</div>
     </div>
     <aside class="panel" id="panel" aria-live="polite"></aside>
   </div>
 
   <div class="zones" id="zoneList" aria-label="Fly to zone"></div>
 
-  <section class="style">
+  <section class="box">
+    <h2>Machine style (every pad and generator)</h2>
+    <div class="machine">
+      <ul>
+        <li><b>Base:</b> dark slate (#262E3D) block with chamfered edges, about 20×14 studs, 3 studs tall. A slightly lighter top step (#2F384A) sits on it.</li>
+        <li><b>Glow strips:</b> two Neon strips on the front face of the base, in the currency's colour.</li>
+        <li><b>Pillars:</b> two dark pillars, one on each side, each with a tall Neon panel on the front. <i>Core</i> style (Gems, Lighting, Neon, Glass…) puts angled caps on top that lean in over the centre, like the Crystal Core. <i>Stack</i> style (Stack, Bricks, Welds, Crates…) uses stepped blocks, like the Stack concept.</li>
+      </ul>
+      <ul>
+        <li><b>Centre:</b> an octagonal dark pedestal with a glowing ring, and the currency's object floating above it (slow spin, ±1 stud bob). The object is a 3D version of the icon: a red 2×4 brick for Bricks, a purple gem for Gems, a pink ball for Balls, and so on.</li>
+        <li><b>Icon billboard:</b> the currency icon floats above the machine on a BillboardGui, with the name, the cost and what it gives.</li>
+        <li><b>Reset pads:</b> the ones that wipe progress (Stack, Obbies, Rebirth, Anchor, Union, Publish, Reflectance, Diamond Plate) also get a red-and-black hazard ring around the base and a confirm pop-up listing what gets reset.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="box">
+    <h2>Reset pads: what each one wipes</h2>
+    <div class="tblwrap"><table id="resetTable"><thead><tr><th></th><th>Pad</th><th>Where</th><th>Resets to 0</th><th>Keeps</th></tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <section class="box">
+    <h2>Name key: icon → in-game name → where it lives</h2>
+    <div class="tblwrap"><table id="nameTable"><thead><tr><th></th><th>In-game name</th><th>Code name</th><th>Type</th><th>Where on the map</th></tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <section class="box">
     <h2>Global build style</h2>
     <ul>
-      <li><b>Scale.</b> 1 pixel on the 2D map = 1 Roblox stud. The whole map is about 1200 × 780 studs. Realm One covers X 0–745, the water channel is 55 studs wide, and the Arctic covers X 800–1200. Footprints below use the same numbers.</li>
-      <li><b>Everything is bricks.</b> Floors are baseplates with visible studs (Studs surface texture, or a tiled stud decal at 1 stud = 1 tile on zone floors). Zone floors are 1 plate (1.2 studs) higher than the grey world baseplate, so every zone reads as a separate coloured plate snapped on top.</li>
-      <li><b>Materials.</b> SmoothPlastic for bricks, with Glass/Neon only for glowing parts (portal, pads, orbs, flames). Avoid realistic materials (wood, concrete, grass). The world should look like a toy set.</li>
-      <li><b>Borders.</b> Each zone gets a 1-stud-high curb in a darker shade of its own colour, with 2-stud gaps where the stud trail enters.</li>
-      <li><b>Stud trail.</b> A path of oversized yellow studs (2×2 studs wide, 1 apart) leads from Spawn to every zone in order, so new players can always follow the yellow dots.</li>
-      <li><b>Pads.</b> Every stand-on pad is a raised 1-plate tile with a Neon inner square and a BillboardGui showing the name and cost. Pads stay a consistent size (8×8 studs for main pads, 6×6 for small ones).</li>
-      <li><b>Locked zones.</b> Put a translucent brick wall (Transparency 0.5) with a padlock sign and "Tier X" text across each zone's entrance until the player unlocks it.</li>
-      <li><b>Lighting.</b> Realm One: bright daytime, ClockTime 14, warm sun, soft shadows. Arctic: cooler Ambient (#c9e6ff), light Atmosphere haze and falling snow particles.</li>
+      <li><b>Scale.</b> 1 pixel on the 2D map = 1 Roblox stud. The whole map is about 1200 × 780 studs. Realm One covers X 0–745, the water channel is 55 studs wide, and The Glacier (Realm Two) covers X 800–1200.</li>
+      <li><b>Everything is bricks.</b> Floors are studded baseplates. Zone floors sit 1 plate (1.2 studs) above the grey world baseplate, so each zone reads as a coloured plate snapped on top. Each zone also has a 1-stud curb in a darker shade of its colour.</li>
+      <li><b>Two looks, one world.</b> The ground and buildings are bright toy plastic (SmoothPlastic). The machines are dark slate with Neon glow, so they stand out as the "things you interact with".</li>
+      <li><b>Stud trail.</b> Oversized yellow studs lead from spawn to every zone in unlock order.</li>
+      <li><b>Locked zones.</b> A translucent brick wall (Transparency 0.5) with a padlock and "Stack X" text blocks each entrance until it's unlocked.</li>
+      <li><b>Lighting.</b> Realm One: bright day, ClockTime 14, warm sun. The Glacier: cooler Ambient (#C9E6FF), light Atmosphere haze and falling snow.</li>
     </ul>
   </section>
 
@@ -90,393 +122,473 @@ h3{margin:0;font:800 17px/1.25 Nunito,sans-serif}
   </section>
 </div>
 
+<script>const ICON={"anchor": "data:image/webp;base64,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", "balls": "data:image/webp;base64,UklGRhwEAABXRUJQVlA4IBAEAAAQGACdASpQAFAAPj0aikOiIaEWaZ4gIAPEtABfXvYvXzD/JebRY/7j99uVGRRyS6S23d8yn67/rd7wHo+9AD+if6PrOPQA8sz9oPhK/bv9bPaE1WMP3F23h0uFjIk1ufhpNtu3K++F2yqIqigdZEj2ZNhPtpi/b67NPeTG81EixvI4hJXC83Px1JnzkrkQnh2lKpOENj1SSv5O5cDDTYtdFVE5JMwq2dgiXFD/tSqN57iP5x1IPupUqYmaG4Gt+EzwCU15CuRo82AA/v/K+mRgEHtF4hFXcanS9lnxEtwCieQButvMua9N0WL398lbRTHMdY22u/YnIjM7uspHmH0YlAa6Y8TiPqottZnyTzXc185OviFEPTUlayGBL7jniphiZJm3thgj0HBkl+Jk2retM7ld36vzDB5hYj50opsG4ufa1Fe7NN6Q9oK7d+SaOEH/SldQ99ya6BqS2nvNTSGrGPgmv+0ga9EPoc4VBjxieW4Pb2EZd+ftswYh/JId3v9nE2yG2yP8uzDJN4wL5uWREQ6llM5rXUZEvvBFM38bUqIic69Sc6ebZBOd4Wl9exlC2jv7qfjlEzq/vDc3JHcj/83KHXnBlyNG7zFHF8kji56y4L5/ixtKAYcYa2iv8NIDy0fbSwAtolgRsQZrH2ydMLj/j+HhwECCwYJY+q7vmK99e7TKgQP4TPUGoWOxxQGsJhXX0cqxCH5LkjqCzJz4mxw5tGqCf8YeX2WLIvsF8KwpD6GfVPP1/qof9xxP3zD7komFK/vfbtyALqWwRkpdWmi4r8+v/+mth3Mlhyxo8xCJV8ZBCijMrK7RenbEcDU6fy/79p7uhouJNqIMmz+tm3qj/Fh8glDPk8c9dbmdS0ffgp7C4eJjLz7k2U5ukQAKlJ8okWmfVN3mWsHjXRk9afZeZa8Aab9Zl18/eyT3aECp3qDpRZ7cyouLAppu/rmraBee7JJtiX2Ptl9a/0IDOfHXvXTfMtlljnMq/udAgzhePyGKNCpI/ZwIhlo1R+lX3BDh9yIiWaFyh98C2M78btJE/zGYP07Qn5VTeDzhsTbrvGtTfdJCjxQ7fL0DppSFFYZypmS378Svw0dvy0soNxQ2IweGdIN4K4EBB8Rsoa9DKwnthiylEDzKf2Qe5M6UwBQTbOe1CpQ9VBI45ytBYTIvfbFWXYNqv9AGxlnCVFDydR8QPc+phduTPZz/ebo37JB94mXDqXe1f8fRaf8HtRlw/oSojqDa7KZe6c40QWQXg6QrbVC+GZaVQVQyf/x2Gj+gwaIu42lAS6jSpdlhwG68oR5oZYak+PKXTsbEceEidm0cUjPct56ofDiCtc9hKX/wZ2rj7irjsjf7FbAGWUcBohRsFeOD7+0uwAAAAA==", "bricks": "data:image/webp;base64,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", "builderlevel": "data:image/webp;base64,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", "builderxp": "data:image/webp;base64,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", "buildpoints": "data:image/webp;base64,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", "crates": "data:image/webp;base64,UklGRrYHAABXRUJQVlA4IKoHAACQHwCdASpQAFAAPj0YiUMiIaEXqq7EIAPEtgBOnIAcj5J3xnmY2P+5fgrirTT9refH0IeYN+rH+R6jHmA/YD1fvQ7/nfUA/2/UUeiJ0tH7rei7dC/A3wyfCcz3EnaL9Uf0vmL3w/DTUC9lf5Hf/QBfUX/acbWl0+a9B5oses/RsYnt0pP72c9NF+GJ60zDGF8s7mpeZvtmmX3NOMX7snHqaId3C75WLsfHa5AOMd9iOBm2caPESlLGJqnvvH0JfEPU8Mw309YSemd7KJx6hhe8t4a3vww/ijHQxRM+mpEFxnR7wliLS39vXAd1mN/wZ85g3rN3c5lpOZ8TqxsvqEnJI+t67uAA/v+B2e0OCy5v4RuUALKH6YEEYfbfTvU7z/jmKvrLUbvt/PN1pPNPXeBHOvyt1ygWxbOyVvxXxoc5ja5yNbpdHmoNEl9Kvmb19Dt9aH4cfesYvnXLI7rDdQJXijQCdiqK+QzN5YSb06zr+xZne8v8OGyO+HwVa/fweATmC23qR98nAAwJJl/8ddB75Ad3Tu0x325SAf4PNpxYsISeHcukIUxhOCEnoBIn7F6uptEPGNllcENiiKHihXtImIIqkITepbNMAzOPucNQ65vFk7fnO89p9lm/SL567woNOsY2Ip+Ak/smXHqv8sqZAgLYQru939+Xx5f3W+YFq6OnTGe/AsS/Zoux/pMSx8JhN+eHJf8VUx54bzzTWpzQ/ep+LtJ/e/8wZFMMlvw18mostpYTfxfDAXwgSuEEnulPiTZNb9/RD9YJcxw1PBmouQFfnkowk4GcJdPc9pVQGzFssvW+jpAPjnTyMw9ir3WrsNQ8dxsA9sfYwbHGOuCgF/Kn4E5GFjj+hirwetHeEnC47hNHb6Bw01z0EyEUtweKWxENikyVx17uxC+ZhMSmSYZaLehouAEWTChhvzd/ClJTB35nmwntZXznX/1wkl1qlpVq2P56qqKoDz/VyrXeE+g9x9k9kM+/KXruYbYK0IZRd5xy0k1eaMh1ZPO0x8eWXC3ybiQceCK34kAC71HerhL/VA9uraiYCt1vAXNVxMhjZ2hw3bAPekkL240f/Udg0/I/Y/jZqdoKXL5RgwZ5EW+HHzWRQM8JmsGlEVvpFp6xyraAOTu9kKgyCpt+bt4cF2ybJSdAwXX3FYISACH2tkaOuVvmN7M49NkZk7XjVQLbRJqAK0bJMpvOnLY1NywQTBdXallW7bCqsXDz34V0HSpSPmZP+oB152xkv9CRcS1j0e1NsdDUYxa0t+f+QeK6aK+Jou/SjgxecaKbBf/644F0hu4UEt9l7doPoEz1AXGdVshzT6MxV8XVqHkom2EeqCF6ZvDZZHqW+qMPG1DdJAUEIBP5VzzYA9afv5yMAh3UpQvnyBYtGUsf7MZ9AcsidplPIJLrxHZkcdeN0Gn7nNtRGXVf3xLiWivlHpuCNR6sa2Ey0lK+Ynm99ohwj9oVFLET+wEYIhMC7aA3YptKsR2EDavl3/d7+v1uDilBArkLmOIkvoUgM64Dcg+83K/q2J8gJK908lnh+7MEVzNZjsFqHRI7ec5UlEy1wHlje06am9ii+kFYGYmICf8WSn5Cd+bkdZt86gbMzpjPI5LKOZ9filIfFa3rpk/VkOdJdVpDeZbkVf+U1g0scchlmo2PlJTeIhOv4AxCi3UK7QFL9eSW0r9CAW6Va800fwfbj8xyP6FJaw7Gx/CtnD/aJYJuabbTbF3Y4oOZW077I8KVwhKA3vDAFYajY0pNaEmimvULvziycrDYlHG6HV0UmTnKet6a6Kpt8cISul4KYuEjzxsP3h5HKNOzJDeeuMXiqraO8sRTyy2F+QglprekqL+YWgV/CS38TeImjT+jTG+juYN9EGhDOAK0+qh3wAcu5t4X/V9J/CJDZa7aPMaEbkkhsr/9GQrSC2dAaacbqpC3x1D3MlmxdIKpQx3qbxcCZVB6Ev+2s85SOHG7Qewk2GqzemaW/mIFgLYFOOtqB0SW04pwjcX1ILKnpzHQyPmDXA7flH57e7tPSuvFkAHk2s+tNXorwTsBVyCe3o5iRDAFzATivQJnfXVlGbjw7bnpBBCbomEOcqnythphR2MKXwLEODAK+HPTEUIqgsWeXdjv4FMUCR0HDc8tZVBN4l7hzF6xdCfvKE2frH9tpOoR/8FEHHh/u0WN5iZ9KdWIsBwLxXwaUI7XPcrs6+9xBg7I5urywr8mV/OjVWBIT/JWoZ10o7LprtK3KBOU/PFCmDb4wM+CSKLKd70S+T0gopPG5eTa4d4WsG/xJy499zUllGAxHLuTl/ir/DYMrzB0m9k41ZwxkqmLyLYi3bMk6tUzJ3lG/3+/6hDxpPMoyHuO9I+/W53OgXIv7mfOADYi8Zba2gtcdHjImyPX42v0SFNxxDRiBfs0sKMWhbp5bq2VKnKe3bHf4YTDVG2cuacbF5dS44m2/EAJHg9QYQhwq1lI1UNUru8KXVMkNojQKQ4VO8bv8/mrcx+riJbVbtJT4jOr1n8+8WDeT+Dr0iJCHB/MVWyGAGHC8QFjglOFCRLBHgXrAEpBSPSzQH1iUZsHHfqXzXUrISQwuF270bbF9UzX2xynMUGyZaaAAAA=", "cylinders": "data:image/webp;base64,UklGRhwFAABXRUJQVlA4IBAFAABQGQCdASpQAFAAPj0WiUMiISEZmZ8wIAPEtABkZhgCf+O/GvnmuWIbj8sbvxOent5if1L/bH3oukA/4vUAegB+oHph+yP+5Po/f/+MXVK90l487U9XJK5hqPlazZFF//NR0X158DYLGZ+K7o3adML66nrf5Y4HRdZBYDpFinpqbejXlDU+PYzdWTPUyPwI0iiYQCjb3rp12GCDC0+g7Lo7kdci2Ed7Q7VN3t1IZ0fSrHAZEO28dmXsR/LmQXYm41vCrI/2Em9Fw0gU0y29THFbeK50AP7/ImS1rngv+mHmpstID+wLg8A/PmdXlbWMZRi6BHyEmcCWpP2sWvdvFdGU2OVuLM3NDYMgQHl8jrxwVN9L6kvneOGUbCKdpSRg+QgrMGSxNw8WmJEONTNzT+2G1TQKCAe4nR0k6JFHIitcmaN32Ach6QuxXkNMJZ60qS1yduCm9T0fLDVTLDAyAOBazqxXT855PI0bL/utiKmUAf1ckgBRjiMXy6Dx7hagqHfciKVgf2lCD/IZ5FZrvgz3N/FSKaqXUvEG77EivbJInx1+Li2h58bxCn4fmPiYyyGaKgiV/s/gjW3c1PVjh573PgZvBGZJThYPL9d8G1zJqrNujkBjRs0AIXBYIv6pzbVHydXExncBFC1aAmTNN28qjYFIMQfaxPrdX5fTq7Baq+dbVkvbRdjfMzfZnMO5q6l8ahJskZaIDbdoP1QkZ/tkVq4CHoOJ+spOnFcC3/VkkYwH5cNPqUUu0G//+GjiD16kPfQI77eb5/TyFAo3/v4mBgg0R5RddzpysGXvqcloX62349v9xoxHizkPmr6f+Oq5mqetf452Dr1+mn+6+IfI8NKNAQV8Cbyel2Ba+4f/OHH/DiT7pKePULVNTv3mnfgZCU/jskjZ/82thHFjJE35DpSqK9+4BYzebCo+8gpwrm/d62aI6Jrrx36lK4hPfj1UqD2Q/9RQZUUv/oPNlEgorJX4wgCeQlPUniEKgwXV9yyT+wczI7UHtTWUugeRSoXsXb8wma55cMa4eT/+iu0vd8wsDn2bV6usjTLtfn6fPHSc5gIIGB0vLy7yq7FBOzvEBg26DXQC9d5vC3yX2EjZ/5klzkMWGbrHy8U/b+9Q9JPozb/hPurv4Dto0HtQIn8qnHsF5iLNNWvMmUb96A2zioKQiz5XOl8nrDycbFwZvTPe+xH5bwb4hjGDbPaJTuruco+NWn0/cD3hHyIdzw9ItSub/AQIGe7QqFIs+bHoKd/60haNWJ0lEFCFPx1nFTtm/bEw3M0nqPcyFFHyL6tQRwFVkxb1RehNTcVmap1ylx2jD9j6IAfq5fH/u8Ukmr4/LPoe9KHnAJwvYJhfR+mrCnQsikDuyHJPK47QvqTcDevm48NQgvbEiVKyvIsPacHjl6WZRJxb2u0VsrbHUe0HxWmGYZEWn7NIEPSNdE2AhwN3bLDvOxE8lz1v9AR4N4jQnQUvZPUQ9TlaxR2FJJOR8ueERwNArM+cFUAPVZLfs2RvVE+1qN/EPG/Tzff3fDUguSutxRYN6bUme96uE4k6n0y/huezEy1cx5Hsm9HYJGvmmTP9T11mk80KJvyrHnGZdU1N1Bf4uirfPnrQ7DODiFOqXq0sa1HXE40ScJA4CufyVtsGjo747Efk8xtfaiFbOb5Ezn0opnxk21Q2K6WEiPb1tfYIVL05Me5DW/9/6HL9kNZy0K2MyLKMv6cTAAA=", "diamondplate": "data:image/webp;base64,UklGRiQFAABXRUJQVlA4IBgFAAAQGQCdASpQAFAAPj0WiUMiISEY+t9EIAPEs4BhlfRpB9t3f9J+3r545vN/2Hwv8l/uuS/cF/G/wb+n4h/iroK/zr/F8JjDDTPTRPMt9VejEnBNvHmPr1+N2qYDNbyp6j9FKedtG7npZtmvbNV6FeviXVWqO9CTM7IVZWh/16/WPlpetn0q1CUMblzjL+OO9HhLwfB+6l0xVk5jV3PJvHCIcF3YTmWNfTR2uSi0wS3uocVf3kRK5ZkgskeIchEfYrLp8j0zFn83ogUJqbffzyeIAAD+/xDfCtjljdE/rn9qc9crCe+CuPrmFOOKMrJO8x4GX/9TqAFVKbLeq9z4HezWY3Ox/t7A9nx76Gu9AtiNniaWs1BKyNv59qOKVolvOkKueD1JQTlNgV/hxnF8IxV/Blk3N9q/tuzMkjleAj4O9WHsRyLDauUxYhx76xMu7sdOq3K0UDW/zSBX8UkP6d6XZhRMXkrz65M0WzV3KhKVJWjYq9v/1+FYoYXyjsWPU64/mN8yOK4fpsrt7+eY9eu3g5d0tmw3VN8mSs/+UCQMULEArJXIJTMmday13zLBTwpMOdzoz+bpmsRlcO0Hxvvy6bHMVMlNy2D87bmZOvWv3ff6FotnMJl2AV7nHFJKEyu7kvYSekIENrPXluNuDknNeK6R3GISQNcLhEHodh6dZ6/+ebnJaOJxmna6s3QCOZEovXIJQueU+G9+s/SYmVmlbypJD2bryg/OybYeDEGcs8Z8E1YX6Cm+aCgzdi2PxUKXEHDpXL+ovIKTWsRFbvbiFhUOJSbzTgqT+J7xaMhwkNEyj6374O+Gez2KyhAIc3ragMJqA+HeWWjI9gdb0uoZ/7/01zk+V8CQn1H34fB35ylNtguC3rzSt/rw++npXAlqTzhnedYYM0YEvzojLxA5pNMOj48TzlnAHp+T60bU0Dj7wAPGgYSgzEvcKtx61OZrdMPqUmiJmsyf8saUriQUgs4YEcN8ZrdhX7gyaMkwAbPvVhPU34sirsweGerFIehEJLLltWEFzZE3nKMnYMRqXx5yQP2nWdnwLUsUQgU1yNT+wxd8fRSwD3OlUMTrVefTXecMBnecU+m3PXFitXzY73kuiR0FdiETcr8Htvs8DlY1K0Js9V8CbgdC7tAEtFhU9r4AqEbKvFKZ04B/wNJ7bKLpZc65knkmXDhjzIjxOfN2rcTWSzWPqdDbhXuMpTERWkU0WjIZGbZda97BIvhViMv/QfKM0CQztN3+YNJjw55BqxoP/eklHvIxD8cDO8UR+ekzHehKbD2idRs89eKlEefTwfQudAG4WGU/H67keJMz3XgKLjIkX9dXtcRsy0mxGDeiGfQUh1Pgw+chX6wtFl5eJPxBKkpyYXdg7+SNxGTvAg0t5Hh4Asjh9KhcdYGxNezMzqqmSNvjl8MXsnS2862mP+JBuvsxufKjn7xkwr93Apo+YNNBTIhEs5zdl0qBP5QXddjZBcJcM4X/EOGAZ4Eo2JVfzGvShSvzG6eE1xcdRvMo4sANIjE8A4d9T8DyQslLsiDcwL9x4UnI+uBIz55fiR2lbDF8/Fd8mD8C4I1BtdNXADrWkrnB0+VtLkX4WYDHJs/7M168UkKivklCjpv0a7CnOk04vSzVNM9xPVSmroVB/Evr1Zb+Hs1X1puPrPqzFob2T7dEl13xMrR0t3WN/GBQImFYq0vTgoVv/xZsMOajzOdc1meLDBKcCELbnroYKAAAAA==", "fog": "data:image/webp;base64,UklGRvYDAABXRUJQVlA4IOoDAADQFACdASpQAFAAPjkYiUMiIaEXC6dsIAOEsoBkoC/oc7W7fznunib/13bvsHXGMSnxAUqfW4cSaV5iLtbn/2MhfVLlhItDRjz0gFY9ntxnCqhTyGkLH2gtDCxWa8L8FXJ5Xw7R90NOZ64eaaPJ+I/dMA7kgLee+fekC1UjtQWemIq9rpK8/KGPjtTzqvhids1Jen3nYSP1HIwwUCIxRmG3Eab7Ay5wvvnWn54c7CAAAP7mZOquLNzOy/sBGMEWGf7U89eVhPfVOGSMXMX/7XlnaIFUK1yduZekez82wyr4hJOMIuAcZjGIHutjerUQnPM7eDjGYqiafEfI96J10QyOAM12DyHO7oyqd8wOS392H/Rp9rynG3lA4+cPt1MJd1BR22CiewJ45wr3Z6u2BzF3XdP+b09YtWe68AZxJgk413/uPutMI4xCY+/tEyeprE4mCsbWi6paHU+VzWM0x4FMOCGHqurXW1F4Np1FIzM2yC3QnNpcjgUiAEa03sFFTyUDJHtzUeNK+Apo2aUe/5rdtdpzjwvl0jrzhakIwM6RKw8UtbAQAQuzuK9fKoaUdtLV29wu92CT2qoN2VSyZ1kZfQQ8Q8NOcKry5xh7t9F6n9bZ72Khyx/5Tv8TtPN3XkCnUPesgF1RZkg3HamezjrTyNbM1LfExpzJEjlG3wg6SN5uYnYBLp3xrilL4J3McgNCdeN/mnUqf7hqD3L9c+T8MRRg4xEPpztaiihdNg0g7NH0u5jeHXFXjA8zuH5KjrkubKNKx4tGdmf0lRZKS0zEPkEuvbwO9n03RNWWS1SMEaqkpnOU48jMfdUiOerCrdGHFLZQUyFSy7f6+FAcVEknELbd2f0Bxxul6SwXWwcGFDlmvBWdBQRiksJ8ZmsTwLjcBYKvWhu/6ZyVEm9V/oCJw1DncEMPuCW22/aeszFODZwG2PpEKgZZgJ0IzMv8VbtUoGHJ7y6vMZoxydW+H+Fmc+iP3BykVegHNoJm8fkKw3XdKx7pDdqV8rhZiFmDT+ilATbiXpiJtj2WURPdWF9nQtjrRsR6RiMnFmeF/x692tD5Za1R4553pXgHWVZowP1aHl/FrRgudhITV2/Mno+tBZw7WI934IIpG3DQvHbxO/UQs86Z8ftg215wgKeeTzCOLgselzIv6m1ytgGWRcGm1Ik5qbvYXHLBUKRlZ1qFqcTXBB0DUQe6auv5weHKxHP9SToebY6xB49sWSwYnNTeBCPh/KjUgqRilPsvtJTPtpuvr2bdDvmZlXOgBHFiSZfvG449WWjTRF3kGQaT90kP4JeodkxIAcPCbNRQG42Ap19fYkmeKRwAAAA=", "foil": "data:image/webp;base64,UklGRhoFAABXRUJQVlA4IA4FAABwGQCdASpQAFAAPjkUiUMiISEa3LYAIAOEsQBm3Ew+4+F/lHoWWn/F8B4dGvX6j9tH5mP2m9Zzzi/Ry6jP0AOle8o3Vc16/1Pwd8ZvtaS/cN9ef0nDDtd7/ARVEX+wLTXhUz20hbTGoRCrzzuGtLPYKpy0ljHPu9PYxKqm5++aPxZfGQFthk5jP26ylvq4YydhsiaS9fDUoQ/8Pr8tCVn3vh/PajqUVsxIHEitFinRR/t7ZbE//9f5xW5VWhe7hmCbix7hFY4pzko4vRtOh4ddNuZgAAD+/7DYkhXl5iD705uZr+Et/nE5r9/Pyriqe8/5ov7/+j/nN0F8Tehi2T5W27M75k/o6JfXetVaz/AxtNB2ogr8XQwv/MUTGTeWIQxr/+UcSDi2O6p2TTXarrJ3fuIJQzV/Vic7NgACjNelHvGeFWRfeMvD/O7jYZvH/pMSojC+81zQKBwXIJ4BAsbhdzL1rtkDUg78cCKAmLEFqjXRZH+xbyD7xQCOs4ex/7efvDyTqgfLKI1XPLGEiYz+lfYjojH4yQ9VaIKaB7LuK/sigiuUylxAPhEaYYyGOcjsuoaMaEqpfYHI4pbPBNSCVyAaBi2ctowzyfqW43YN/rV3Ut7EDbC+fFUEL2TnQ0jbZEtM3/dBZ0odh7gZzC9PAEj7DUb+5L7mD6/58T4m6CVdM+BU4xHvAP5/HagwR7MK2pjM9bVFgaviL5H0Ml6xtT+Sfkd6XQURL6uPPK7ModJzYGZ0dTic5LRjHaFIlVynkuarhoaUqm5LZcDCUDvrzshtfzCgpxjqGF/mRkp58W8iOTcDZfQq+owL/5/7jI4n3LPC6qsHEFlwwKSULZGhx7zAhr38kV+nr/ak5mXrmMxreKO7gFzS9nQ5ZJ6lhXzsE8y1V9d+A3yqD5fpp13xUT8Zjn33+cB9CxJi3OOxkEQ/Jm17WDHVOeLPs1llqbLfcWuWSR6NGW865iDUsXaadCm2CRqnwOafPx0VLS1GNzR5+PVGcOP7yVohv5Faj/xLk+aTIPVD21n9DEojCsOrrPMv1P+84St69nqmtwI5wQgWYv9veDMbxMXC0Qp3oyfth7/haaNLr9LU4ySsyZPPVrj/brLeaI95XVlPAqyn6/2Dw1qT9zJaAK2CNAc/jhtGOLuT8p1/Lem8Wd5gOC+OGr47cuLS+mAuiCzSJqD1TWyse9wfzawNjd98Kk1Nn/zu1x5AN0qGZFilYSRTOu7dVzKpsS85+fKdXmX/z8IkucazpIfAzZYQmCoxvaPPC/n/PqVfldg4L9Aglc/vIGF9ookt4Gxs5iry0UJY/2oqFCz4bysf4ahgV0+COB0xQEsEgJtOvP+T698Q8iWmtR7z0QkluKD+SivXZHgz5fhpfxYEFlN9jfG+j5HjyImKI+n3ig93U/vLTB0dB6EFksoQTT6oWhcly9GavyubO6uc8JAz0l90NCEKKEkt9ib+ZC6J0D+XJ32C3EMZ6I4LvC0G/JrZw9JQ7aGrvYbUEZbHK1eWedyh17y9pfRIPGDwL69se/bv2XR7OFaXfTYuQd28Np7Ex55P2q26ARz4wv2QDU9ksGaSuGlc92vO5LfU9LsXrdhEptrV23l3OM+5bPKA1LP0PE7aLToIpHJN8BYfP7beodtGsfqgfDpcS5n+625OVWWqgv8rRSppISfvpewsYiuhBUDluC8VSrwM7Kf4enYUMMslw0q/D+paYAAA", "forcefields": "data:image/webp;base64,UklGRroFAABXRUJQVlA4IK4FAADwGwCdASpQAFAAPj0aiUOiIaEVzHY8IAPEsgBlWKCuPwq/Yfzr0T69/kd7mQhYS9SO2r8x37Uesx/mfUf/gPUA/tfUUfqB7AHSu/ut6XmrLKAeCvh59oSSrgPsl+y8se9fa63oTMnFxpiZqHl27WuGu6j8d/btcpk+9kcCN305QUlPUUV2EWjwz5vUQeyBll/Jh1dR1yQqAsFlfsZQTcwpRChdzi+88duhw7mHkn6HJpbYK4/w3NcUc/u24cTxK3rmSlPqwbrjhTpKPovOra8t//9fbmDsqn0A9IH7siYYAySYfDkemLyAAP7/5/XU8y2F1NFw2RvSq8Dt0oZp9PXEeqogPz3nz/+/mPrrGDLGc/YB9yEz/1rd9gEjC9/qBneFttuWIbT22AqIOhERqPzMl3911SB9+XI8Kartz+W7n+dSrC0CQtY8QHT4mI+DlnCikOAJ5jdRlOENEQpeu5laCPcPt50mGAPHHtuCoBFhEeXLSRwpmMdo+mv+fjsC/8TFL8Pcsufim+fMZ3Jn/7/c/cvaqeGCYnBLl9KtTMoEIZaZAqlvdJBbB8Pu9VtxER6qZJlVTpLOktY53dd3xDCxl/e4mjZQiMwyVb1DkMg/2kiIXMRMjGQP/0rG1RI2xrt+elGj6IdWsepZzFYiuZ/ZlG6B2KKG4b/jJBzdj+WKrd9vjiQhCRdnnEEascyT7cpio/BHjMaewhC4AmorvPdRR/bhtZXyvxcxBFPNrdYoaioM9fvM7+/F/T1/G6xhYO+pERhtXqg5WSIBQkbLw+by0xYDW0l9eZNJA8ubmTzeUWygMgKjd/EA0pIQQPwSp+/xjSYbT6qstDS8qJ+TSnFl7lHdaKAhkljuc6LjStQJQO5DvobEVXMZj2WQ79zCf3B2eEy7ngkFzMWQsm9kpWv54auk1ngQEyVs5tdRugeCnc2/yXv+IfKeU1STZHjymINzyaU05gHBnMPUwxzZOLIacjsr/G5brXt6pLWNTC3f6EBdoKGvTDdrLfy6DHXtFOV/v/+bPuTmelaB1NIwo9sv5f9UroVxBgaFcxwh+nw6jRF5coK2CwMAHP0HIG55kWttpFLq+FAmC84AtYPEsYsmDeX8EuiWyfu6vwg6s/Kyb6ZYUt9JxamqOdDQwdGgGcGBeeN41VHJ/KYzL/AOqW+pPZnPyKIbXQnkEuCxYDxKMQpLa7GmtMdB0PspDuz9gLTuutXhbIyEPwUP1NBfw+XNbqryibIf/XxCbLIlZRxPseFBXqdwvF7MiU+g7GMxWPl/niy6joGFJdkwFwelVBVV+YoFEckUOm1Qcv0L4EY0sxB+x9a32GdXZwtpm6hVy9ZpWWzALL+KhjKjnHPq6ngP6qm/7NktaREAS8RupSM6TM2h9VBKUO/AwrfEQ+Z3eg9Q/80HSpc1P6pp9MM0Uz1XaCt4JMeN5HFsSfiiKoZl+xuBBxZ9tQ2X038lSZPe5TCRHvXbSkI4+fXJ3e9APfFF1PL1uwy/LKyRCoPNWh094VB3JmztsskBxwa5ZnrRdN/TR3AQMPwq2tZMvV9+D63QRdEmlMaLA4o5Uq+DLlfGMFfcClnUier7NU/WsXKWz5L3YoHxhBSFytp/vH1Ntup8AS073f6NoMbcohryztZrr0agFv2I59dH/0kO6rnSURk4r/5ZiF2TGYB+GAXoC7FfOAmhrJF8i8mmlChcW4NT6JdonEN5iiiOKoJpJhe185QwtlXCu7I29saFrIeaIRvRahWu2DviJQzHlae9wAfydm5+blKYPd8Wov/g6LSfONX1Skzch1TdDpMaIxoV78brzRBPr9ZiK9BrCqHP53u6Tnmd2jl7s6AEmZh8I1LbGsCI5ClGUQpV3qdNFgcJ9P4lSXJl/aXeFrVmzdSbuR5kat7v9GZetZly7kf4zphVVPBvfXuFpJdLLZn2qYAAAA==", "frostpoints": "data:image/webp;base64,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", "gems": "data:image/webp;base64,UklGRsYFAABXRUJQVlA4ILoFAACQHACdASpQAFAAPj0YiUMiIaEXrK4kIAPEtABjWuiunvc+t/Zn7k9d/t34d5hdBvZX/D6R/mAfpx+rPW18wH7PetV6OPOM6hz0APLS/dL4Pv8H/2fStvCj8B4W+If2JIupb/0HDv2APZt/fuByHrmmeTb6y9GlCP/rSgcxPoFnofg3VDHfHdbYMGNsZqlMF8s6V9FTsWeWw7uIfn4gT5Tlfh63GD67SJB9uCm7w+16ScOaCkGa26d95x/fY6yJ9SloEkUQvU5scfzvYxHw806+kcDgnEkkPS35+qQ6+ZWpeafV7T6rHi4nyj+moXQA/v7+xeKdLxhF86F6rO+yjw56NT+GA5XU/rGSXdt+Ay6d9s1qucpiieazEzRO9X8aif6BjLFoip9OU5x9fsNOz1yhK+gdUGOpgVrJN8wthNCu/7oUlOiPaoK63oa5vWKyRT+OPrLnf3GLIgLl5xPd/z5t7ezsrt8gbvtIDoeZ0d8gCEephJydtuBU8g9oq1rlPPbaKHNTvUiF8b4rhn/tiHMq46KFupCQ0yxYCF6M53iAv4Mbent4Wx3gk0duO1mMiQb1QYt0+U4sanPVWy6atyEZL25h6mmC13/VMJ9Im8H75o6JFSU2yBYKzs1AAyD1JVsQW8ZU8Lyt7wthCsxn2r1s0VrwIw+IvEzW6k4YRnbc0PmpIi/1Fl31rSZMJUNsylJ0df14TmaqzSrYWSnjVNsd2TCXDCDI6QMa4CH4wk4HImfi9V2ai+5ykv9Whjlaa+bLXcvMjNT2PcUBbxHpmu1qYPK3bG2vzrJCI7oxqxPI7qr3lXqmeSyXlxkHzrDo2YU95DdTxCj1QH6XD7HLiLFirsw6jIeYW76kC4m4ej7f7LWDEf1VtqJaTySbqYtflFqQ0oNKQN9/gejw3stf/FAnPvqffW3CEeHMfA5dpWsC1MaqwvwMUXFMeozoVZ7K8How1pUBLx287x/77EBSRAxfEZM3YE7+Z8bjVLakAlEhQFAJbIU2pt1/za8eAuSi0NWEkx1BSmvOqRPz3TtP66U8/QhHnCaAEpRvF82C8nw9h3R9HhxF1+fn4GzUZfNX+RK/lwEBq94Nzi7Mnsi0Bp67m7T64jCl/ddgW0VzsNMN+eZAHGdOpkjugz1RRIrUCnA/rgBhMBUznNUzr+YyUL7IqOhTv+wM0jAhlVKMIJpZ1RPaqqXiXHxw60+4KoI/y/F+QtnqNsqJ6CaWVxhZh3ctZK0orUY+ulHXyCfBEs238nWie6dkPNwHgtKDpMowJlMpe9gEDe5+/wx8RyVOyGKjCd/rN+W4JqzSwW5c7VLP70HdwqPGT8Fst6/6G1CwbVCRq0r+9+ZCjE3kLNAwO6HBCs+u1N0/0fAZqChiyncuSC/3F75nmXfdg6HH+WbIhPQVr7dpXNYTjdxDz07xNwH5j8SieScXoZF15YbF/voz+eAnE+qc6sezar7kRyCeCE9RvqMB3wGhNDJuBF7jXiNwTRiZTLcniujrQ724qC28Xxp4Ide7LzE/rKbnkX9k67kGXwXbuT2VhPxlyCXFGb8i871ZiNBHZgDIxTLNjt8D1GenPOpHRtf4doIv80eYWcOT5q5gLYOrW76N2mrXaGlH4evAaSl8uH+m0I1v279k3DErIe6eoP0nJipipqqthqRg/ri9QwbVtJSs2bOOX/A0zgS03SzDWTvwjCoQSu+l3pzmWuva6C/6VB1XOoxMd80IZ2HBm/SKPxXOu1LIxgnCk/GmRolCchB8fXCZ6IHvkI3v0HhV8hqLaPfSyI2xmGxVnRNk+VkM1jda6jc6xKAu+rAYFH1vv8JgYLA8j+8I3sCQsUVm1euAcDz31M8utaaTWl2A+VDLmaocpTx2FyLoMYKA8j3mwvD4VhNlAb4g+t0MEMUhAX3G8zsyELDQQChNZVmmA9DICSAJcwMIMY6ri+HkOBloAAAAAA==", "glacier": "data:image/webp;base64,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", "glass": "data:image/webp;base64,UklGRrQEAABXRUJQVlA4IKgEAAAwFgCdASpQAFAAPj0YiUMiIaEY+24sIAPEsQBiTOZfL5G1W/u++in7hG/oD0Sf0z64nmM/Y31ufSn/0PTV6hbeP/3W9Gbr/7ygylhhjov42s7ZzRD/7oSVZBLgd2YGvaw5dnyi8NfEHH/+dPXPaZ5vEU9qaBifU4vLbYqw4XbbVzKsEvTX6Lq3+S2L5M3+cK9AlPQKWTrLFP7fXU8Dtdgifc6lXYqvOt/r8JRlbbtJdxen1h4qxXwq8VwA/v8R7mLA3pgCmcGXsD3BcdvNoJNA4wGNAnXAHpIMUo0ZlN9SvX/+Of0l0X8sgLg9q96h0YeL0gYyqwmD5rlKAYgGB9Xy395WDwIFZ0eCyqcOrJuVOO/cHMQKC5W9PTAjgxZ8+ZrPuIkP/PnU2FGydCFDUimUCwWjbZSV/1dldP/e23p3eXSPifHhHQUGWX3xVUoeipRoJH8Pfperb9y0MrG7nKf3pZb/v5Se+tGiVveBT/ppp/2mzZlARg8UaKpOVXMtb+kL20odrubR17z5fTZsWdJ4c+9zcwTTXWn3zvs3ajeS8yxB4qfLXZ6Remi88j5FScZ01IP3ip5900G0y/Tj8kw/M2t/ocdmqeK+OsrfAo1xyZDhfZ3OQ3ApCjHHGDlBh5QIrMn+XXb+ubdTU4C7PNlxfhbDDyDhwIu143OLIK1InS2PR3CXyh/xUaXDEY2eg13rLFU7Fl/j5JijIKjZxrI6nsgEBO2048xqLnj89sF20I3tU76E6Vq7naSG+D6ZNtTu5REUxvJoMxlo4mjUH9o3ilmvo7qNgO0NTXaS+q7AkkOgwKxJHER/G5fJtoyvV2fyowXafkxsDEAcPZoHHxsGHULQBQ5iX6uZzVVSCG4HCHOfiG0uIGCfnc3T2C9/rQZBjhyQ52W6XD7LTKMPzb7unbswogb4qqZCMCRuPYt0kAIafjFSC84YKp30yrSEPqbruaGlw5jB4w5eExt+V7+GSwTwJz82rrVkjbD10wPK8Ii8I9rQbOWg27uC0HUWoSiobs8WiyESZo8iPnfEmJOZzCvUKhZS/RHB/v3rAWexHNB0GwMqvVC5y3mZEqDjhC7gzdKNHgpvyAEUsxCagCJcfJa2MtX4HeLXERvQI/CtMvmT3UB7MOaE6En9CWbPPGZJaNzCuvo3dtpW+QqXz36YBN4Wkup5FQtMD2POUX1hv2fpxunAd5fpaHc5zwTEJ/VI4/vAokK64rpnAA11TDsr5qeQTO2h8ogHscf5caguAzH5rmbHJ5IObZQX0spHLRHaVT3GecQsTb+t9Sxbq82NdWUoRDk8CiOXnAvNL4RrEPNOpGZHMsZAtWfqgEXe3Ohjrty4cUrXDsC1spTWs9ztKoT35YILoA7ZUoqGIaNy84l57lpkNsTtFbMrWPRimoFQziF26ew7Pys/QKVbiYHFji+WmyQ3Tn9cKSedSwvnw2dylv5en61ot0e0Y5ZPmnioaN/xaThHpwlF+Bvd1i9CQD3drPVr5nitk/uRxymUBROnsZH6vUzwE+t4nwpPxyrwv+m+Xzuu9t4k/iEJngIsOe8KuoKGhEF75R5sVDaRr3M3QJQ4AAAA", "hats": "data:image/webp;base64,UklGRogFAABXRUJQVlA4IHwFAACQGwCdASpQAFAAPj0WiUMiISEY+t7kIAPEtQBmZuBuLvZ+4eZtY37z+KOVsOLYY9RH5f/2nqi9LnzN/sJ+yXvY+in/I/3D1quo89ADy4vZR8qGsg9BIopwvwy4p/ggqbLg0y7jxjLWjP6m/7iTP/UuiYQ58FaG/hXO/+TTp2AgRZ2Mj9VRdLvXZh8dWmv7UfLe748aDjsXaZV/MSpx5ERY0do4MeYmU9QfrE9E34Jw9wjgP4C2jexHjUKt+MDcDwpJG9gzcpb7wxWd6eFBYJiodI5Bqfuv4aA9fyOwhM5g9a6kQ7EAAP7+67qQpJsLAzb5vcmNCWTqWxIm8bZP174WHscqdJeRt2FTeYv0nfDH3zawhp+gnZVjQYPSppEmKNzw/4qO2O0Fhh8t3+x1S8Chfr+UpEuPEKhvp4En/7f8Qw6inibD2/atcJGf8VHdfmYhTDdy3RuoWp4fiO3c/Q8R60qi30T4eFDfxa3+OeMp5lH628LJ+1WddSIfachkMN7Jl/hO3uTlKP/+uvw533B0Pp9G8vOjT1eSq20biuvE5TPWVFVDpz3NnMXcoB8f/g5XJhsNhehWgMecLuvsLQOeb33W/3xAcsp8yoXvNlQO+0eadx6ISHBE35NokrLe0v/EjEaqx90vzj2FQtOMK4pqfPAwbcbjwHl6Y3eQK9hDBCk5QW/3WvY8DPuTn3xjlpZh3+EQCp8RsdrmJdM+KdD/3ALkv44g/H+ynnqXfUCxUEuCZ8jspro37+VkuGigeuDdFCHYFQO6eVol4nFoMpj/kT6KgsA1MTK45qggP6rn3ov3AGeeGvc9I0M8YqnjRDprN9fT+rnJVA3A231SRoF/j9eP/uv+MjDgJsXEQFyK4Erk85CS+/0pg2CQm/InafbZ8yPbGn3dbUH1Qq/8i3n5Y5w4HQdHlbrlSE1fSQF6vE79j5wT50b/as2AyJ2fOAsE/fud8+Yz3mwDSXuyBWjyI1T3bqtEoJmxtifAmrFFF3ElDxIBAqLz0FL38o5ctnkZ0KxNe51L+RuvPKJGHKJcdeAWwv5+3X3Di0AHHqHs5rA5sJmdOmt0qBzZ7D1Qv9QFe26q4lqrJ1WApQBvWhqQs1A8AnNViehZkyU3boaEZLfa6FmtjIcwkTjwsfwJD0Lvvfa/qAg55dJTcK8kd0cWuE49LSkxQYGUJVqW6paXrjoVM7T+Ern8H9zWCkNBG60u9WP7WbUoz8woahBxaGIz+cPQ4heyV16tHHbtXhErJyaS6eqS+UkC0fy1WrU9f/KvnX3HChB3SahI5qrC4qvOnM4OBrSeEe/n/rz0I49IOscH96C7NABBR4pw7i33fK5djdrgb4oMUvOnzlFfQtmGMM8rrey9FAyznA06OEHSR3V2le6m8PbDp1jFi6X1NhTq+nQQrYgDVGq+LJ3hx2ic4Yt/cs3TZ+NkW9SKCkWhm2XTyA2X01bMu35msf4DqmZ+/yKYoyf0OnvM9v8BQpaIy0cFQR5P5lpV+iGeV3/oI9Vhtb9gTHJoTwkBkkEnwqNBKoS2gs0Xboq6VMAowqkL//vRyWZFSv5RPh+Ey6heN9H6lJrSwKu1SrM8RVfsysQz63CEfzak702kwo0eoIt63gn6/e0oLwH8En73rvLyqzwbZCFh+d2zWUz3RzMqi4DuKIJwnCoGgh2m+yIGQh2u7zVlNF/1fck0HK+FAUJ18aCpSYg6pbq2qVeTARAE/N66Sy1e2ku0JgpvfgaJMD7Azw39E2vdRcRLIDFcMYBwHUMKOZbIB3vvvuYFvegoHJ97KeuYRpMMvx0XyTfDlJSGh+It02VB1noGrw3OVt4SEs1J4m74PP9IF7I8tc9dWGazHDOAwjl/bwF5wAA=", "lighting": "data:image/webp;base64,UklGRpgEAABXRUJQVlA4IIwEAADwFwCdASpQAFAAPj0YikMiIaEXrK3YIAPEtABpzMbu/yo+xfkV7J9cft34M4k43kKrxJulb5h/2Z/YDsc+gB/Xf7d1qHoPfsz6YX7lfCd+137h+0nqx7B+fwB/n1R3D12/DEYTS/LbS1ufJwo9f21V1w6JWPLFF3yqjuNTxHNHXSi8wpT8PBi6+tIcBM97bvvy4eskjObqGgCyUm7pWxrLBYlOUpq4e0+s+FOy/0Cto9IUu7ISloLV6hfUZ46zjeXoGwgPP3N+AAD+/7ZwdOlzQmFEmZrkc+z7ElYdYr12MXlPnvlLb/ROXqb1PK0KYE9L3TZds8jbqIcZjSgW5+p5cY4j34ilKk56sMe76wRAeSJH6FndPerFRSJ59IxK0cLYRoFUJ7eKngKpuW9fdyuDh3WX4/6c7d5CtkFjvj1FQe4q7/4EkU+UBj2ShkjSXnrjmg6aXGIFdemP8Lu/0aKcFHtMi/hZ/P6KhUpPHxuq3SjpIz5mwYUIvn6bSH/v+gcDHDOo0aIqmf4W3diIktk+XhDsrkjCdd8st/wKLJUtFCxqRh3ChcJqNAEtwCFMLNmDW90aIxmkz4RB/ch1lGlq/zYD74SYucj/PAIkdm4MROOwHKC3xvukeW7hufwepi3N9rHNrjx8WHAByEqkPqb/Wsolh5GSBquGNk47ZM4sjiwPBVKhMLnjzA+AAGQH6KukFVMnPSzLDhrv/1NPET9ElqUzYIsd0ZwyvqpJXWADqeHoqj3DO5y/m15JJMKJ9m2gKNb+CsJwyxUacne9gT3V/NDfNnvfxPdv7zmVzO4cAhjIGU7Jh0vP7H9zPakdgJsIf91AQ9Bbw3LC3MwpJpKiLzmSn5N87VNR+VeskEWcyUSwOfJqC7iyC20IOWR8kG9j/d82Mr1Ejv5IkixRURK9xv8EO68ZVeX/Ps66qdJQp34qlSdHNyFeOGsIL7hBWCX5zyUK7E4p+sQdkm3Rc09E6WLSeC6I25u1WyPHtrbLZYpQlcm/MldoPch6/qYtA9phoZmu19xjwjhZpSJ/Ly0iNQOMNmx6nCcnwsH4z4fu60vCEQVO+VWDGOLHIDV8IiwAJSiJX4J+Inu4pt4vl2pvF5sV8FP8uBFnm19BWoxJrnVdtXJhsr+MCus5HCHwY6/3AzKOB6jP3IkDov/7Th4Nu8jcfn5ukULWvNP/4NZypZPPi66Q/TRtbhT/3+sar4aiyKO1fMOsOyxHNQBDJZOwf8ODWRP5pDDc4w8drUg+wa6qnR3GQN9QR+Dzktlbi9+a3m/QGu15DebpMRWzny+QSJswWEISrmWC4rjXbiOWSEPK9ddRbxaoaSjZre9z58cN9na+qHXramwmp1S//8NdJG0jEhnnPebFXf+sOIFC8Gz2C45INow5txiNZsmczv48Q6fMKPRG7BO16HAjt9XEQnocFCh0VgrLF8NEzXniMT+pZy+6kgyA31e9O7z8Eu9XS5cFpCSfMknmOsNy7aIzimt4ZI8CzuDhKhDr9nGTzfu+MLAYi1c31SWlxrZW5T9vZ61ZDKm06AwAAAA=", "lootcrates": "data:image/webp;base64,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", "meteors": "data:image/webp;base64,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", "neon": "data:image/webp;base64,UklGRlIEAABXRUJQVlA4IEYEAAAwGACdASpQAFAAPj0ci0OiIaEUfJWMIAPEtgBqIdE9V+Wb5VKi/Rfuj+RXOLyT5aPG3+26QHmAfqV0if2H9QH7M/sB7yXoA9AD9uOsA9ADy1P21+Df9wv209o/MINunxK+oJLhwH8V+237HhzlTsLtMY0qUuFBnxLCjxAazl5LTEmh+OC9nnMQY8rlNXrIkjlBI8OQnNW087LeVTa6WOKj6N/20/6PF7rvgmdEjL+awd3L/4gOz5b1xMEMksnLMlM4jK9YqWT3iLyAAP7vAPFzOCPxwPov/f5znIvz+Q3uZ1j4vL8YsYsLnri+8u9V2avK+AQ9Yz4I9V5mFoNxvMtEiLlYe1tyaFdaeSzKrmNbWUN7a3m96YYZsCQ6NkJQFts/z/8mOKIckckX9n00j91rfdHm8s/R3Ot2FCk71+x9aGN/OG3wY6/jDEn4qpsa2CQv4VdffqVD/sSAFs04viXIjBhkHc8PMLH7Kz4NJlXxJ6OkedJEUtsgAL1SjtVNpLabPU/uuml9vQXEpq0YiYSHG0Kzd32/Jkw6j0PysQn+7uPZeLUlOjQcqiHePOwcgPaghMFSKpCp+OFSvDXz5DcRnKPVM+Q/NMfD4OrnJMZNAXeBN51anSGZDEYWm/yMLhc2EloMsonIX0Gr8PvaQPCq4vV/MyFeZyUjoZByVZ35aB3Ay09AJ75jAea4ZERrG6Kyfc8yQlgTgsJryel4Ic2TEC4Yyu/Qc2vBb4lXj8oEB/f+GgnwfMya9SnmXW2tNXR8HxKBepjYeUR6aCPlkHIa2XrGPTuf+Vs2cXbrSc/1HU94rKhKnM9KR45b9kQoCCTJg1Ld2N4Taa0Mp4JMCZiO4I1QzZsEe0vJtndF5VunWgYnazmPY2N8kNwoxfsW1UspraSS9y13eNnoRhWhVA11xmQ6U7iebe0FQvB57pSJvEr7UF75so7sEOEOy41gzYYiPj9kOCCiZDEXHU++AluWfbQQ14hY9kbEpcCA0v3CRZSFTV/BS3e/+NxR7hyw9sD5lbJaJmOxiNdE3pVV1tpU9qFo0UuxvRliw9Ovwril/a90+F9mdi8CDF0XYBJhLI9C0igVJmca5DNkQEnjPKAg4TYYHri7Vj/7Fq1Y8VInaDh+tda/WGN/+UYhImBpTNyuVqJshLv8hyhNZs0xHOCq6RD+ttUZa2LjH9V7BkZOs1bU3Pwj4BuhAoKxgo3WBwIJjaBEoj3jCc+O9E9hzp2IXjGanV8qJJnolEQl/Tn4E4SLb/Qy5hQ9yieyJrt+1PgLGnjicflVydz/F4k0tH9Y5sUrLuCrh978vJRUoJ742LBOuzFTLzWtD4ERGXBo6gvfkSu/HZkpfsrBNWyeWmioJxBV4fhMaEyKHiZVw8RWHq0UtKzRxjoMpB4S6pf+rUcXR3Yq5QDZPnKBuRi4le/yQP3KjODs+xFVkHdBSPAAnYIWMwAAAA==", "noobs": "data:image/webp;base64,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", "obbies": "data:image/webp;base64,UklGRpAFAABXRUJQVlA4IIQFAADwHgCdASpQAFAAPj0aikMiIaEWbM4gIAPEtgBlHMz/ZuliuN2/5M/l8qr9a+535EdIIiL0m97/zf9P/IDtAfmT/Je4B+nv9w9CX1MeYb+N/4D9jPRA90XoD/1H/T9ZF+uXsH/sB6bP7LfBp+2n7EfAN+vn/4usHhX4xvY6gX8b+6P53wcvEfau/ve/bcs/qf+mtl80byx6hP6wnft0rScCqJsFmO6IEXxEKaDZp+8ka/ugXO9edG4zpBEfuxN2g/blvQV0QfMZ8I7eHuncV2D3/iL62CEiC3kmtU8u28q/q8XRrZZi/kefcP0S4euBRTJKuTzJWbGL6DiUeXOIfemwAP7+1aTQ5Y4U58fd6OXLR4Pv6XRPkYDZkp2cHk7dz+X9gMr21AlftidOSn/xSz5UOjGL9gK4I/ZIf8V7aqPaCKKrXeWWVJ6/4XaVELJgiD9u97WT77S2ROR5EGU/sWPBgguurJz6uOrSHRbUN/vyLouvmMOtGDZVKbafs2I6sWE8MD94X6GlNrHfAmXmNUqhRllFRCO3pHneKrYPAvMJsPRbU//d//fL/3lb7fvYC9/R6kt/WDW4YW5qwdqMPGpdl0T+YsOtSFeg8/iyACKvJ41VciLX/K8/2jrv6V+xVoS5xFpRXTX4p9fgeB6sq3Y5PLgrQzIfZ0PWoscRn46Y4f885A+ZF8W/+CJS8O710iJ0z/NkuOMaUsJanMtkSnZcMQxsQ1/RQkvgVxkndZCCyPhL070AZaN5YhlZ+/9aVe7GalwVj+afAiJON3DSxr4iuSaEX3xDdnuXoDI1TF3NLvCzGvZ86O4izJv+r/RZw8T+hS//vvo6p1eS0LKZcoxb/c4JjgU/Zgl9OfzKzJl/VNpu6UUYeYvKF1DF+r0o6PCzQqCdF+QU36GzWeS7hOt72o4kgMv+WL3+rRASyDJWKyKKL08/7MeHdpqxYuv++AmMZhQmG+XxEl7A/iPBE3hUmD8T7D+L5RE0lnRDm1Wfn3M/AW4sGbWZeBvF6ID3xcJi/MHn8dk4jbELFwL8hIPHqjgh9pEPBUo7CNdKIm/VUZyZsW8EnZvjv98Da/F6GzkVviYo2k/32YyjaVcVWjHpOu/3VFHgOMMDcQgj8ZhZaPz+SQFDwNUwENldGbfu89rLEeA9YJqrL/RSqJ99MMq/Q7q84El/Oe7H6Ga1z/friwhCgmUSYxTmTsCk8Zkjj/vInI58jLnaUnk+lN9XN9BQGLI1JvCEKSTk83Iajo0HCqYecgO4TwiQ7hJ2ukr0VpVPSXcFF+yMBQM9EAgNFCZBThqdx5XNyDtaliUrdM7n7cF8oDN9WrX13xvfYgOQbLLsOzvl74oQEIBFX8nhOHRUmBN454oXpiJTDRsTA8+VEuSYdfxEQMBI9cIc8cvJmPYJ5rCNNIgX+i/LAerQtUFs7MWNRKuM0bKtISTDHovx5pCh3lJrEkJ7rkYy6AZ8CIuXOEag8QRKjvCO5pI26C4FFS/Kz1tZcJIJqDEZY6jzvAkpzz3XX6yWRaaJUAyfYzGgBYqfxfs5Wz2gsvfS4slIXcnUl8GbNdxeP7s+NRMArrPBjhAvNdwpPD1qCQsQbabYEP2F6QM3BeT3mBdEAKbcwI2Auels/TG4dFEVQGPMPAb38+wJDyQ2HmW9Xl6X1YeZLHgIkUMsKVGABBJQ2XetxwACHtSrhAxOVJ50GA3H9CRxr7EkSiBTM3lv7OAMZRiVxXezLt819JibKtM+Rb3h6bQ5EafMcQG7+7glmqoUGuzKeECyX435+oQXdYU1pRyaaSoJ7w4GErJnmsahHiAVxyncmXCZNh3Yu4BMEYM2GRCw6wk53QZsZxT2nPzuZ9kvqPAQUd+htWvIdjaKJURzYYAAAA==", "oofs": "data:image/webp;base64,UklGRoYFAABXRUJQVlA4IHoFAACwHQCdASpQAFAAPj0WiUMiISEY+b7kIAPEtgBkwqC/K+iGpJ13zhqj/avv7w7h8u0z9x65fRR+b/Qv/x3VT8xf8n/vv7Ie7B/ZvWB/lfUP/uH+O61X9QPY9/ZL02fZC/br9kvaIvFX7nkV+UHFrtYf4aCp5VrSZ9T+wSxUttWdBin+n+mHpjKOkr6H2qYTm7Z3xMm44d9yL0JKmO7FPzOmk5Q0NHYyTRJ96DtCW8h/aEgP/Tig3an3Ol47whUiqt/p7PTuvJkoco3ef9cT+pAOhKxYqEL77uLt+B/3CUCMoCJyvksjDzQTwE2HLHKGPLANzOUytIAA/v9PS+ZjrdIHoGKxfvLyjxmX+vi7Tfgc/Y1qhpsk9gU59tn18uVDYkULvQWRuw1Ud+Tyvxk8QgkTdfHEyN0/4XB0ZfdswKc9qH/ar6PZk05JDLneNsQR/pJWJOcOXbO2/lumd94Ad7QO2ZdBz1XLJxy3bPo/boOR4GRY5DTDfLdCTi7BWco+czpZo8/Enle72/l29M6pVKCSPW6MPFt4+liHYWiN9COWvZxk788rBNIrdR4Z6b+VTOiuj/RRoF0U6lsG7jZwnGQzMrcaeaABiVAvXctezWUYZTt3/uBg3evP0ko3LngsrnmQhf9HdflYm7ZCEYtPyrpmuxQk+pEiLWY/aOGLXlNTWkhL2M2ZIvTNfNt9B/EM/K7+yxSIhBkdzW9oTH/+2AeTEkgDsz/Se7pqPIX2W49LVIybghwAWEq7bEEQC8Ww4HtDHJLGSSNjEWRVfXUtejmvWd3TQbwPbPhGnVuFcOK3MyYnUaESSgbN5KBmdr3U43fNI7J8bFFw0ZT8W/JvTctajXTc3cmpPHrvWadXBQEX6QlJT6bpYQA61QvzpGwrra5xmgbA7QD9op0fvXU9oRe66VXQagdjNQnlLn09gh8vyuCckfRHAUCch/0Ja9Ul+G4pk03bMcLA/WKvf5H3he4HeKlyu3YqxNA2NEurf2ZvXhv07F12cabR9TLA2Y33RhPG849FHPzyTbGn3NT4pWMuqHO5XcvcKy6Z3VS3VTRpD5hcKwcoP7K3Fu0kO3P270X7+eVlmdT8h59el+NgH0TnX4jZwlc4lp/11n59Y/kV0X8eac8KZQauovbXW5/X0ApvRTCrnjg/39MSrSe0HHFRH0EzRmiN1tArEkYcfV85ZO/7xCve86hIlQxY84e6iTVQ5sAwWOfq27FWtedNWLNFLbUYttkkMDHrP5DHxmHdwMfKsmRpimqJ/WLlJ512vdJzEmWyoLfCfuoHkelOLqZ9548PrmL4Dklc6MdK+Ht1kS99FMbH3+j9ocjMt+M95maZb5NefNmVXP1OKIIhl5uWmTdHOC8gUdAUkHKmMbht1RiscSZSaK+lAbWA1aBVwyPEVjhq/KYEeiNJwohD/Xi7/GyFQMxzWzAfeq/VNHkWt8XJ1X37Kbk/9HB4y/Ru/fCN/ZzH4i/JFKSqcbgr/mngDytx476RPrRdEDjsStgOefG0BZshijjv+mpbDP52Jv5k5heqvjVUDKNJ4KMYs4O+dRtOva4Rkqul5rK2rhz31kXEXMNZVmnCegnJ+3WI8EArFSTp6HKwbShOVHTfP4iHM0TawXC+vj0ZlTPnyVDwMd7rxXOaOfdztFL5Nf+NUu90ee7Kc/HNqc+Ll7r8sszTVWE89F5GfY3sWzlDCeoh1lrtBeXAL/Xp77/zvW4Xo/+A4Tw85ImJhppR0kJVf0temcGOWtUs69tqj/lcRAFSGHUMmA1teCEZ/eW5NWlbsyRbwob+febZHcZ/Tk8K1FMr1yz9dg57Me2RKUYXAt5614WB7XOyn5FCir1zAPA3T8tLlu0fxQgGPZAA", "publish": "data:image/webp;base64,UklGRrQEAABXRUJQVlA4IKgEAABwGgCdASpQAFAAPj0WiUMiISEaO4XEIAPEtQBlHNv/jtNU7f+RXsgUt+vfiXeJjwdf2Q31N+YB+lX6l9gTzC/tx6zPol/yvqAf2P/QdYr6AHlt/tV8LX7d/sP7VVZBbwnB/SJ9Lwud6eZg0kVAszy6gf4W3bePb7BF4Im6vEeR3GqKIryw2ybVxiJHZHu35khpk5I9+jaB0T/oy9twlm9wT26ccunX8vPrApHGNzuE5iPuJYMgbPv+XskhABWJb48VSLO9F1Q/ngJE/Kmi8xuBNYkcsf0NSAWYXHCWAP7/If0vtgiq4M9CqMG5IV9kQM8JS6Bh42u22+QNwr9JNy8Bsaxs0h2VWd+npw/UMfj8V4jZajRe65c/5+be0VcowZfkYeCuygm73JNsQeC1OpRw9FaXxRP+rvLnjdwfkWY0b/m2hApxC2lcyqGIwpDzaSVktt4pAM5FrjPh1J2C8Ca/P9bu46ItZNYIy1Q1xvBHD66YAlltlW1u7xcNUnt5dobg2uduXwo1FKI2hcK3lDkE/Ytk3ONp6dVhPjE18IgTzbuxvMp2V48LZiXpgV88qtybm837uwI/Rk8Xabs4+rZdoc3lNDG9DyH0VpwTJLL1410dprcHgChvbu4AdTTCU/KYvU8avfgsrNhm4G4YT76bmXlRgSsaAiIivNCquozIxq2pu1dI857iPJkSZatRcaTxNkzTtW3zoL+X/WvgIOWvCb/TDI2vF3dWoTKG/vCbonGWS+ClI+Pp8/SIFIEo6J+Ou/v0iG8t1Y6gjWxDCMMv6wiZBsHsAjIoCSK4fEdZnm/046Rboz7Mak6TqvMTuVoTc5Wm4xK603s/Hui2thZET21a1RHuQIXiunho+t+89PJbYUbZw26SBvoh11Qfud2skK30QdWWnhv0MPhXidfcn/TfNgux51bdAjBJqZ+iahX1w20Z8tS3dFC6l9q++WiJN6S0aFZ4kpyqPx5RzQdAAQsBrk8FJ1DlL3BSlWP41oL40uMcieaYQov+7X0PsnqdBIjWPhC3evfhX1woeuvz9mbof9mp7b/mocVdEY9XuZ8/tZU2S4BYLybTB64lyK1G0NvfhZTta75XaYuuQ8YfJ3CsYP/pOEQMzGc0UaL+q/5IUgCV+a6g5xvtEEM09wiXeMQNEwXAeH4NrtY5Phvq/Rh+135cgqgQypy6D9v32e59snuZpx6pIOS/TN0Z+4tA8IQic46WKivJIpKgK6PoXR+yMEYbz6Jll+e8uLNLweNI/K8QcghnmZSkNRaIll74/VTZKNJx1DImBedu7ZaCl/wXD8yxQaatsu+xF+8CK3ONl1sqP2UA/TfncL0X1mNLJ5unxtMGlwDS11bo0LTdidtemWJEElQTXTEY3IW8t97N2yPhcm6i+9n2EDBNgALg9dMM9tsdigVUFlaNNP+K9s9zdGq8yczXWM/Hpt6pdoSWjZ4cHBYditieJxckEm12E/dj3k/q1KNQiPivMBgncCdHXKi/4JiS7evMWe03mE97WVHGt/dIq1upQ4t0pAfChqF0jGBbqlW2XF7KqEP2gi/8jgy3OTINoqf/6tYBpFaAVVWVIAAA", "rebirth": "data:image/webp;base64,UklGRsoFAABXRUJQVlA4IL4FAADwGwCdASpQAFAAPj0YiUMiIaEXC6bYIAPEtgBi4qC/QNQa6l5m1Sfpf4GyfPoryC+or8pf6r3AP0y/UP1gPUl+sHqF8670Mf6D1Cf7N1BHoAeWf+3nwefuX6S///uwHSpal+R/ER7M/1XmJ3m7Be/RD4kc8rfo8FafRbtMkRquJ/IyMGio/DmXQ+0lTDOnJaDIVhelZDWRyhT3fJb0DSG1JZHLvqOpSlIYiOlSkT8Dwi6/O2pg0CrvW7MmJICsCX6H8cPVXFTsg9cVo/43aBgH/9qcfMgC7VWlUbPcvRLixddbAy+NXqQAAP7/MdGcmDhOeI535Z9npuI1nj19DNdhILLfk7rywFRX/T6BrOI18T2fMciUqNgnZe8Wk9pjsvt38c8LgBF/Drn5IjJ1QSmAValEZqn41o5jVXRkQ1Knpip9xw3PkSUvjolYRRKVPYRLc4ny8BPjJleu+z53wX1fdh68dfJ7dT1OcCLgHl2lRFlA0O8omhNa+tOtJuZL6xdaLQC6pfxfMAOKgt2E/10Pvdfnm8npfps7OSfppFDD5Yalmq/y+GEZoycP7AVuhDZ7foXVt9pMlCIzphbvv6/jNC7HwG2m+pdprevt9+aVhc2WZFNuvHCXQtyO9STftcZvtu1Qn7Ujq7fevbSTTGeP47rAbwcxn54kJTsUToCdTCSic1EZBaUVpz7gSk9GW7RO3sH9jZT71xuV6gs3sQyy1qkG2biDdpcDev4QO36PijjA95c6bEe89dNUdt7k2aovQMZLm0iWyNZBbbr9Z/x8K4XrQgpq7lrQQ7TVVJ5/9mrldYtGpesO//Q6svB1qVPnOLrWviJvIKUCgrNXQMXXCrfUAjwd1+5J/yDqYx1kAT5YHD0Ja65vjh9RMkba7pfmGLfd4+yKaPpJpUMWkvRXl9v+KxrM0n8N+tFynjj0Mv39MfINr2wgcHYcCxU4/cK97/1xmvEKUOe31e/KXFPXEvjhiNzoWX2gNO92Xv6V5Etua/cpPJPMxPTkx7fTuf58Om/hmzfXibhS+o5TUJ0gZSsiWImurZAMLNTVVPkveCG7KatP3+rzDHB1Ean+H1MQulS704fyJKUDobsfwn12tB0CeNO2iYtHw9MCDKj1caXfUW9EMtUc8SnCDA13489doMK81g3+AUD57wlc8lC1V0VOHzP+GmfTJxoI/PP45Qi/bhILgLPc8kOEvVlS0WvMu4T71/WaEfq33bBaZovibewYqEl7VAHmFdzfue7ee9YTd4TSAkkMjEqk+h747ZfjH/qjqNO81NLFmY7AICeWTuIboMPcboR3EjwGOjsSYwXtYzDElcf/+NxvVvhwagYL2sZci8CDIbZ+Lw+LfaXuVj/kzVPBOvYdaxzUtKNXW8VVr2I7hnwUBy0OJKcH2GIJSO0t18/3HPY6lF4Ln9fY/6TLmx00K3Xu3zlp1VrEKYpysjgCeXMEqWBSYoaCawjYPzEDO93D4XqJBvTkBOatCoUZwe+wbaoAr2iqsjfHLewHHkTzoynD0UpG7hsaRMUyQ3Eq1+M/2AoYO1x8wrDbf2R1yGSfAX0Hs7drYhpmn2yXGKVxJ0tnbICRReb49R738jtX8txB6gLDY2FHhXrv1KnPhwQVGwR6nI1ml6n0dGS2emeIfOa4jP/qcmEFs943CztcUNXGBGxcj7F5e6OkNimy9uyffYnV32Ej5XyZ0PnfzSukxGX4KNBbZ4YfyIDRGtu6h14VIvdknst417tkgxuEkmqwB3jYFIKSS0vtzmtsPubomC19K+o6+1251nWNL90JfurxFIMFfw+62+1jGPbat6K8EKLtAvtH2t/3hsE8fftTJ3qd6EBw5gsa3D12WZ+Q2ydda1sQwesB3b8qmM4kEoCb/XyydDa8b7D3qwI2aUOdABzBFoFafKSdTmiNaIgjTEffHPBXBPJWOQyD6wJ8huBioB1DJAAAAAA=", "reflectance": "data:image/webp;base64,UklGRoIFAABXRUJQVlA4IHYFAACQGgCdASpQAFAAPj0YiUMiIaEXC6ZIIAPEoAzmhWUL9PYon8eBZ4ofS38wHnF6cNvNVeUfePCfxt+9JT3cFqQdx/7LzL7+/gDkx30whjKP6kteE7V8+3oqaXnqL0bUB26XRVG7lSO6cGzsGy7Sh40/Qaq8pZLex6+j1vg3FgDx5IuV9jwEpwzuQ7GpVHCAyEIAa6KuB4xfjWOQRSWscMSD4QsyMqZ+h+9kn0tnW3Mm5Hs3ggTn8Dt6rA1JvdWkrmAVGZzxdp56+eNBP3qe+RNPQX+km9HeNQDFNrUhogD+/zHn96C829E5NUMds1YAxo79KbtJVLP/NX1ceBZHfzdPdA1R/5ZNV/6v4zzA3HjB2glrPWAaC+9/VTrKlNCtxLRV8nsFt10HeMco1YDPUJ/7rFR6waKQDfNMuWL+7z4EmwUK5X0NkKRWm/j+H55xDYHsQdCsUIOJ3i8J8SgkTM8Kl9eOfGvpl49piWe69kezw8u2L5McsTzY+mRewGtmVUnw6qc20eL5RKYHNBBo+4lNqQlWmIx/LYUt8sjvaioJ4O9n/4qmNUIQnC/R23Fn584SvwkVkfAErtxRMeLGCPv7w9HjJPydSIKE0OvoWdrsvs58HKhCg5PCViKHnvVvPgD9xr5ELCosXSorFO9j+sp4dhn+0hc5mlCUt9AbU/prROth4S6IuRMftA2mAf4ax6ydM1K0VpFYGjtChwiW6QUlgrTbSasSOIaSbjzWFpOxR2abu205J6SZVNAEQxJKVbDQmcchxy47s7x5iZjXczm6TGSI0ucv1QvnfRvLyz2oOLK6nnfQukd3mFB7LmmZGFlPGwwd1HxzjUMfcojUfN5r7NQJvvlu70IlHejvgIV7uv5FPFp7OVzq4zczPWrUQ+u2qvoe2Em7P4FlC97JgAvriGPjk6fAR2E3MvxfD+xQPWq2oEufo4rtpP+iGLWWBft1Z4PnPCyG5/5gIf5ULq97O8zgAe9Min1zu0QOH9hry8wIs8GiQbCtWt4Zbk+dL0LwWMYHtgd3LFwPkrlFEg4iIOqiY59WZAAnW/Ux/y2iHuGOJUKNEwBLBg0RML9BrMxJy/sVENNNUKBb9OFl+/XIzgthY+sjx4tOtcRqqY/yQ09uFqMe3Ci2h/GOVb/ItU8Wbairwr0jFr2MOIhEdhZqjj/yBfNOiQOpopUwplqz9f53pytYaDMwcztu6d95jE9B6P8eqIVFOIxOji+116bNpGgZIcrcPS/PYNSOyFNX5JMdiAS9hU8dcQX/caSkIP/9Oy4+O2OAIVQ8RxRwgld8lxt8lKTuy5K65b/Y8Kt3OMJTMT+ePdtu3Rday9hDA/ZMUgsFc/Ey/aInPfAGF9YKkAGBWxctxAYpBjct8uWEX580BH0vxIWXbdr6ShOe/DtW/ikBhQBBtAuDz93kamyQL/m9OhsMXsjaouy89wWzBMELbiSAFp5DeEH68yeQ6xslGywQU6m85v32isiltJthjUE/iA1+WjZgW75VoD0b3+jxjJH7nG9fIE32vM7AiTWd9es4kpw2jtNZdh9ab8l9WltwBY3qSCHF4CaMyKtSj9jRaetGVFgGkLrpEdpM9VKtbppTUAcSs0rK86PJ5b5Ej4a1lB4aP2hIyPFPc6AA/rpT4tVt6EM+wPAHmo3D/lQKZxtEQCp72xL4aC2H2kZA5F6x1D62VMBsKZj+tyvr5kU9U5SnvWL2/J3+/ngYJnLk0DEq7OjZXx6PhQcKL+EYjFZPH/xk+W0lXfUM1OMTLbe4wDRb8JMkU7pgOWHT5EYpGKh0vBd3QJ42Uu9mnHLbBoGJuajt6SZ07WGJ+oINZHxarTvbl+h1afisFokGX+WJhyAJKAA=", "sparkles": "data:image/webp;base64,UklGRrQFAABXRUJQVlA4IKgFAADQGwCdASpQAFAAPj0aikMiIaEVyq68IAPEtgBjeMz/TdWx7N5wNT/sH4q5bmQPOK405wHmAfp50gPMf+1HrLegz/Geov/hvSd9Rb0APLm9jv92/SEzCXtJ/wvhf46fb8liw79nvzfC7tgbs7CPTHtAftQdekakiVjkuOJyG2P4UcJacx0XmjFTr4nCRM9vFcChHE+At7yKrFw4quRnPd6OCfP4BOoY129voAbmxbQMU2grQNgh7WHG7FMgDS5i+562cew+O7R5tWJ8g1JmqLnSpfwr3X/ok3hCFjzMKkptLDiB4ffPA/AA/vdmnhYd4sWnoJw8y5MkNG2faVleewYdLuWhgtTEjo9qvwH+js8y095hFbl/HO0X5W89AqQwkzwHNcgZujZaOZs0lOOyVTlgrW6Lg5itkf28NRFRu5tcYC8D9NXB74Ug+STYlBY/aEJS2MQW+1jY7jOTwE7lkHMqC0ceckjOb4/3QGh7MGMya1edBUfFX7C+euB8JKRPdgKUfi3qJDYij3nt4WZYHVNvcq88NBAEkpKDjeqbP39/gjFYz9MyB8gWKa7HHVxjSeDrebjFB+vnWvVf7eFGoV8wb1qyGHQ3zk92mLF2pz64FacWMS/nKpCrvTPbPaG/dbtyCYMkgyYL2KExsi2IMxadPiKhNP8jGI6yWyDEl7v5L7/EG+/LbyL/WJqXZvGaERxfgnMYcCmE0uMKxTJK1u31vkl3pj2OngHzlwRbK3iwzTKGufhXktKYI68T9SZuM8ouYAJxMQL3M5XRmwa4Qu1g2m9D/0IlH/SB+uhMi1/wu0MexIiyBUBdxwvdvn6EaNXpNhP26TogSkQVcMZGp77lPEJxPsV3pbYGevqSHZzCgozvxgdnYk1R5yC2AIBC1opduOv7N2RlZXffcfTzHyZPX/3jg/ADOVSNe2CZyhycWNcjruvUvSy7+MzuD/uzOifINMqu+F5/UWMK2AKRNQlBFGDjHlfH+H2Jilv+W+VQ0pW8i8KdIQdoH63aRuIPu2L+CWDocXvABv6gm0T+TmrRW8UKGoZo5gZ/xlYuqqvaFpJBbrgeZJ77+xz4GQmH+RZ2bfv1lj8J9jZHKBEGrVy/IGIwvoAlCqzlbuTBF34LaO6EHvC2xYDx3oss/mX69PFty6iDQ66V6az8PcGsWFIUJ06PhGlYCkTqiGGnQOegdGna6X2+kwc5pGhtqNW21J/D2dxsUAXBVpJ4rmvUxEEeR/XP441aLug/RzRn3gN9O6kKSCL/YtEFwDVfgnTQWuBb1OHueHBLzOb7/KGSDfhgwWDBu9HNJCXdP6tmC/gyzDC4n9EAQWAwLG9fvzmwCYSAHT59UQR32zFcwL66TT1vaNj+CqKS2zd0/8c/c7T99rX3WT8fc6PavV4qyN6RCq/D5MQ3/4/mpEvL95zKRKCIwJ+osNnAdou7BgquGXa0Gj1f7Y+fXy9uhdbfMaoHuzlFQOP4mJooNNswrY+6NojyWCT0tzr7NhmGnVWGSWceoHk1o7swkHChZNKp3K08OtoNsunourkr9/5C5xCMnQ19raR/eE8xGmsZzZD0OuNAXdliuPYVPs4bvFcL7+5FfYdDvjU8p2AQhEudcxe0t/NSMgn4RgJ/tKI8CvSl5HJb034Wn3Dq9YFpXcpPokFWrW1d+u9Fp/7oKLTupudTCCjjJlpo3j++wfelnw5boz+xBPzrpn5kPj7LbqGyd31myES8awCda/GixUMHw5BE5jOWTk1IWsVCBwI9hZxY89ZFLqBZiH8KaDf1rOuavMM4l/IwuPVaLV0OwQmN0Y3tpn8zHJwhA3dR1zD+5/vFb1/WWfPL8lKFiGnrv9ogSw0uzy+8ED9Of+204GQYHkcr5oCGwJTJ+ahzlm1Jj/4De+J+x2RhaVTLoDre++NboAeeJMqplSY+14AAAA==", "stack": "data:image/webp;base64,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", "studs": "data:image/webp;base64,UklGRvQDAABXRUJQVlA4IOgDAAAwFQCdASpQAFAAPj0aikMiIaEVyc88IAPEs4BnkxifffZnAFKP/jvC3yXhJz/v1nmh4R7Wf99yYb6jxZ6ado0+X/dDRcJeaLv9HUkK8ZB27+LEPzWwKN1pdO+SENzqBqSh1A0/OGS5uhTpjcG8cYajMYJienIeoTHyVuH7tQAgigUDg0sAcSg3vF6/KSJut4XaRLPgYJdc8D1Fi7t+WcE8wsb7wqRWMhYDscbS1pPdjCLQAP7+wYPgAUNseP7U8Wdj2PoL0VaTwHDinkkq+12mXL+v4ur6JjsrBy5n++xkNfShR21PHyiX9QB+YojwdUFmJAnIy+/2HMf6JQmAmqAlwVdm5tcwCXbpkv51ua2qE+3LiXxOwE11M/D9y5dyQMfGHt7RH/G3pp7t3NtxjK2IgDN+1YDjG66jDZFbonPAdFSO6Vqr5WZ/ebhyu5k696GB5Uuw0heci2bYNKftWqd6RZfM/uiA9fd4r8MKa0cwH16dt7Y8wpHkW5dV0rPjajrSMzFYKayUkRfMXTNbMYugfqPBovc50yD9h3q/QpCS/1LO4xxhDX766/Kz4HJeR4AWJt3gqKGe+sunmDbrY1Q/lPaZoAg2SvKB93oTxG92seAbuU1X4e973IPQBwpJZPNU5l/RkXp523q7iIRzmp9IzoQQ35R1nu8/NrRPNXS8A9L8h9yRsNLTFEpnJ3/PawRyc/NEBJtOoyuhWJEieubOrqIzqn8IfzVzswPKEeUVarynGlhabPm2w0zV5OfYHX8Z4dVbS3lwc/wt8ofM562qWq63OVci0j0QTsEMSFitTm6SAPEuwsJ0o4P/lDjLmN+AAfgD4ax/Ahcjgye8Q3eb8i7de29P1PUpJbiInatsfjeXQTOsSJsVnJ+9REZFQTgeS/5X7KD5j9yFKVPx0+2RHoz6tYWs0OU0iFj0Ov7bw0pteZGgD9fL6Dz3EmwA9ph7DE5YOee7JcvDpYzbzjtooUbpMOB4ofSlBc67ttxxMXuFPm3v7rRitBy2TmLquY1ZWH5o9SBZrL7rHkJ2HwNlhs9FN7Fnl1RVXB/drDWjNff781ITAxsRqG7D3iUvWLfjFFevj3+81HmZV8wwOl2zI9iqkNMcwYzYKnPSUYihsPbXF/HDl6FM6Py0+UJY+bWnFcR4Y/dKs39mD2LS7BBm14tTvIxRDp84wZdoHu8W7/l/ZcsgrmEjto3TiCyjGdyf+l5KIzPxVhvopBPasCGqhbfSi3T3cgOcq3FVUJxmi8UXxu4YQEIbbeP1BwXluiwpQXIjy+8h7mXL8+oA4v1DvF9mc9wNmeX3PTqZQDXduRc3P78igAAA", "theglacier": "data:image/webp;base64,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", "thrusters": "data:image/webp;base64,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", "tix": "data:image/webp;base64,UklGRsYFAABXRUJQVlA4ILoFAADwGwCdASpQAFAAPj0YiEMiIaEY+26IIAPEtQBiLuBcp/YPNZrP9k/C/ATnphD7aD9qvUR+xf66e8x6M/9H6gH+g/wHWh+gB0pflDXN3w38jUD2uR1Eev/9j5Zd7PwK/kvJF/ZN/pAB+Y/0n/f20qaT5LdQf+R/3NKv/07r48JRq2F1zX7e+8gsK8oh13N3v1ezb///eOIb31JgAfdO1n1MvyELjk+eSwrJ9QMi+YZMmPE8AzN1HxiGk/TiOcJCybLU7GlWRnqi6sqm1QJdRBXf4Z1f98kRo74zbByP3/8gTL5Jy4KYzjxAAP7/acEVmFQwGe0LxbRKFHXnQ676JXog8VOANAmfW9cRbfnAmNtr6YpJjFgN6qzx11H6c+2h56HVe0wrr6jvXYYP3ke4wJWaD2L9EG9MrI3UF/7Ff5H9OsnzgeNzr7XPp6w5jdj8GF/R/vpK6TIzsr3HUFEZX0dlLvo6a/N5+yJ1PRZAiy9zX+/LNDdXQvQfWBe/PW/ig3xCbDivY1N52vzJC/mR91PjNfn7XlpZet1nkMRVn5qbxg5y1Tt3YOPsDN77gQVT8JD8Ad6UmwHI1ErroSAz6E8H37g+iTcwyzKEWQjxwdPsEbnxp6MyjBnkbWSzbE0TPApIJqJQcRsiGvhV0jBu0IMHFiYw9388u5lCAs9aLXjooWk8gD676LGVK+BHE+TD7Zpewf+vlyJ9C9pC8zQ43wv6r7LsITCpinOk6hFI1bWB2OIBfGtZ6/Er0T33JTtmj7IizMwbCCoUwVgPFIcyDd/Fuc1j3GMxkYcPCoeZwyn3o/A8l/cd54LS/iKBkVx/ETxO15g+ftiq/n+kd84CtzlFG+lDi1/+oln1jP3d4fR46BC51T7yhpVfvi8xNCImGcqu/JXBnkap9c3GIaX30I75X+5i82PvaYwJ4ph+uib00A9C3DmL4iJ/uqWqKHC2MH8hFqZUgEqX+isfKeTNUybm6jeKg29jwBOjfFv7sTiKTSf+ThA7xr1amdA+3a+SW1scRtRlOnjCn6xEkr7qPMgUG0kd5vFLl02y9Ws8llTnNZrRJTaEHIIPLie5592i6oYLN1b0f7d3l+Sc9fflWFDhaeW+VAyLLE3ObYRdhmuwVS7AvpA1nfA9sNXUjHZrv+Op8gkPcSj7uY7MgvHgfa14xJ82qcWQvXcar4aeG8UDS2O6ZbYbdW12b6TskNGBEKlQu41cqnX9LwPXUz6Ks6Kp8GaqqLyDM7lT28WTaHl+cm59IHzGX51edaQI5FQiSpHFXvX4a58FV2meLIe0KrZNicC5xg3kOVS0w8R+VdOAcQ7O8+LzCfnbWKRilZb2FAZyh1OTy9Whp6esA/Y6uefw/Kjitsb3OT1ifM7WgQh6Ajl7+X2hdodPgIp/0Tm7fPMnLejED/beQZ9Jj+F//q0PU+INlZFaj0cyvCL+thXvm94uRxn+fgmIC9xN8atMJs+6gjLN1X2Nvf/8WvP8c4zxt6VFld3h3EaZTuXhcd/T+wq4PsImbl5Jv6Vjx9K8qwsSRqVFm4CjTKr7U0SuqN49/PcpzGLXAdrvwJCapGIBopqJECWBSlFjoWxMXjkhi2BN9ggA5rbVNiwDacLezHYy0vX7hNELLYzoOX3THGwYWjjc9anMDb+jbjajRyTEb4/X5qKdu/StfyTamurPR+YxV0kuLx12nRhXiXqkwvZbOEY4qzUYrg6/Ae96v8F02OAbIVs+Ka2jtRa/ZjCe/+VgyG+a/w18HS0iDuykUON1D+SzekJf6PSXXTMXbs4jk00JKbr7itKx7AALT88KQUJwNn2grEqRynv4sLmZGF3R0K8d+GeB2+d/P3YibIcHh2S8Qwy1yPiphlsNuN0dOnWDBMqLtBVh1kP6mNz0MJAg1KtjkpiF/l6PHxzOjMHCwUj/gOWHmHXaJ3/W4ALiFbttzVFQLstOUuAAAA==", "tools": "data:image/webp;base64,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", "union": "data:image/webp;base64,UklGRrQFAABXRUJQVlA4IKgFAAAQGgCdASpQAFAAPj0YiUMiIaEYW7aoIAPEswBiiPYtrxa/E+aVVn7rwYKCoS+3I8zX7Res36L/8d5wHW0+g70p37o+k7WROfZmj+wr79UZ9X4ntOFNK8peoOwvbpSZqPkAeTDFa+zLW+CJGSLIifFzMxbD8B1mXSuFHyzE5dC05l6SQrnL/8qztXwGUmB9vejuAv4JMMcJO2k3ilpdV7JSJR0HWLfWBx6KBjALz5aFTBQwabidtYUccugQXd3BDyPf7OBrKJOc2x9AgtI9Z8CoB1MIE1mn2ywAAP7/q+Yq2dIsVuD/7ArKA/ZYm0RfO0BXS2/Wy7lPz4/vVYd1XNRQQ/1BH/n48kOHALtxwcXXVTYS7lDP+983ptOTlnf4r5lSJ89X2L3a/kqj24iI7E8T+rC714R73nuxD8zZ2oW235w465mmWE8wq+JwgsIDDALwfbLnGVpP+mz0AC/wEOgL/AQBm6+thsutgNsu/N4GqSpYR/pl3IbJACGsDDrXIf5nCHRmlXUcZBqmML7qUegEbiQsJo2KjAQ33AL8kG1KAxKtVOdrh/zKZpIT/i+UiVfyphe/bemnHNnPDK85w2+2xCiR8QqMHfsQF5B5ZdZ9+ef11ElqhOqHbF5oLXr+e3PYWpii8JKwbSTT1hIzn9wyn2ce/UP217mky/nWUd/3eMoTcaKQE1cyBydIJtDT9HkPBsqbxOVzkbXyO1gwsS2ym6yJwLC7cGsp92e1lXIwTALvHI+oBuhiDO5aO8a63elhu+r5fbp0IKaPdqPuprO6KKmDLvF1nCZxAy8RZrU9P4pOXVOLx5OPiJQX9UciSXF8sU3X9erXLj4ggKk0M2H44zePziay4pxkntskyqQGwi1PqL9Kd/y0rZwvOH/XL5xZ2IYIJzHBEQjtS7oOmgudL/wzFRgWrYtWuE8rfvTdwUuM/SPOn9Fcp7Pe9OkeTWy/bRzNQBlgaHk5P+0uWmzH9CGo6Af03uFz9CT/uyIBx11g/gXth/W65XNOpXEgPMgLY0+T7QCRDRDZAQYTkf6wYUBomhzCLCqUvPXBCfvl7sln9QmkqvcZRsbn8Pzuy+6fh5dnTeOt/NMOmoqJ3bkJpbCWZI4y90tKXhEtYnDRo5UnnKkCdPFBq+52RlF1wCCWaKNiX6E3uFXTQz1KrGklwNj8PcZ6yeXr8vzE4oFR/asEYxwOOL2pI9tzm05t247aYTrMsEc+8ZpQHBF9Ufzp8ZbYREI8B2LlMuqOXKGzAKTZYVrw5/5AMiHpPvwMiVjwr6r+6UUw7JuS66h5LPvzXrbI/zjYrFCyHCxYoT+pijiXzpufsV+mXzU93T3YZEbr9seapdz2Bx4K9NcOJRy7+2Q/h73K9kggXEmV5f61P+YauI1pvoGKY5SW35MPoKbSYC29zsH3I/cp2gHsnVnQW5+THvycbq8ITdJVYu/UKhLPYNFkxpFmirQnqU/I+pzb228f6jPObgXop6JeuJa8lMleO2v3KpbWK0A9X0UsLBcOzeWoldvz9Xiprhvb5vkhfdgTlDHNOp5nWbM1RDWTT8D5XkPeyBGeaBWQdOoBDMPPufBcd3f6EkKL45SB1KTDmegr8INKO9FnqqBaorfGShlq2WfCNp2ptjIwSP7oYqE//6FlHaTS9sEn3J3qXtHeuku8WaKwZ0fdacJBDdSHahr0AdID/XjErx/PLDlkQN1IvawQG0VxMSMAcCcasbuqsjpLIhVXngvg/+E4iY+IRgwKcZhlXymL7/yHyZHF5mIrwB4PHanK1xvJFxnBik4AugP/nBeF8bjdRyAsTpUVN3f0DGYNWTtXbyXBwwAybPmrzYp51F2BQJrdLIzfPr4FtcKfaT9U20yoEiOu3JXzxWmSkLs9HgmH10wMRek/Giuxygx3RXO+v59LrDgmBsinEQ+5QYAAAA==", "welds": "data:image/webp;base64,UklGRngEAABXRUJQVlA4IGwEAADwFACdASpQAFAAPj0YikOiIaEXqV50IAPEsoBkSDlD5EKes2/nmA867z6L6En5TZQmXgLmQxG01LyhfUvsDoe/9A3ZYI8+z5sfQVHdVbaW6mOZnwIqV9RTG8dPBtuH3521CBGZnPXgAtEw+K7P98UL/PSfF2m2khkqILuIq8WkUOzV0eY/HAQ8YrT7hClTnsRnw2C3wSYYF2KO4w5H5oNiRPyG4P/4Y+agKpNKwtoNgAD+/tcgpse7R8xgAfP7U4s2PY/xMebrpaXhADQniCbGzV3KLjjMkK1NC9tGrS9f7GO3/3plbDDOXd9m9hr2R3oT4dHNMRz9ZNx/rLWW3Rgnn2JDRyDKLTiFRherkoHRL34AgMCQXvpsdEYkzifvSXELkSix4rx7ltUemD5kyYUySjCGcz22qtX0NADDCLdkJkAkYuhKoA8GRZK8yJ16gPsF39rwHl33TvAZYlYOgAFBw5YdNaizMO5eu20tGZ4NcEyH8zYgYXquJQja6XKbHK2wB1Ndn3HALFz9S/yBixo7zg79pKeHNJK2wiYQ54pjMUdSt4+rXD5+9uAUND6lVEgEcX0+EAyBuLCQgaP8XGPA85aGexDMzoZp++LazbqfHHPv05NYfszPd/LWjRkPbPqgy2DgCCsEbzQnuXCspgmX+N1p7toJ+o+4r+EUcnb/nVTb/FK6wbJoIgl2qFvBRDs/9BlNM9Nn60gYDfCjf2Ea02gFyLXf1+GatVtCdm65UZ0vixwhV82WV6GaKVC1rij4FOdDW9YcDVV9tVRubmwK/L3GmF2dM2u58qgARznmFJgzpF8hP+g3BajAeQvgVJj5LOXX3ZIDN/PGeugnZDtXcrRzrvCgJhQHRbsbmq1Miof1yY+qXXOxdFU91z6ZLDwCWGqB5z3Yt6mvo5BAVEYGcPVRlj5eM0p0UP1ks3QxPmP5Wdy6MD/IuNfSaZoFdRk7oXTIFdWnyXAjrU2lWcWzQ9P7rZP5PEXYSFFer8EgAfWjcgWPMxXvRLnvh3SESP8lsP9AOUx5Zot//UbEDdRIqaw/f37C/qW+rmab1o0zFxv6d8ykEsk92VNmOKUDLV022sS8nGlqYou0jFKGaYAgvqxa51Y6/CQne1oLFN6hqo4qzCVyWv5R6ZtSvCMJM6clPRhTyPl/mXY4AeJ6fG/Ta2kUDNTHPwMGsdOp30h2N1WrrlFp2Yfxc/ib2vcoHzrrMR2VJbPZA2fMlosiE2nJDxF8YWNpkTqT6Fq9c+d0vLwLmgeEp2nyE8XV7YwBtNBGWT/CTYjV8YfnSPYvprJ0DozDls9pZh/PMuhL9rjVj6DByb32dqr4nQWDevGZG6E8UGrDbSLl5xitjbtqdoK0lCw8yjmwLitREzdwceNmj0r51uT79BlANrqsJ9vR/ZjcUqnlVBR/cwYvyVgIHx3HkaI7pxzVD0l38FMqTFLLKACIPIznPNgihrt9/9O/dMxtGk2xiPvhsw9canK557Pdv9f/JCN4pfgk9AAA"};</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script>
-/* ---------- ZONE DATA (svg coords = studs) ---------- */
-const ZONES = [
- {id:1,name:"Spawn Plaza",realm:"Realm One",c:"#d6322b",r:[300,300,180,160],gate:"Start (Tier 0)",
-  sum:"Where every player spawns. It's the hub of Realm One, and every path leaves from here.",
-  look:"A big red studded plaza. In the middle is a white round spawn pad with a red 2×2 brick logo inlaid. A giant red 2×4 brick monument (12 studs tall, with oversized studs on top) stands in the north-west corner as the landmark you can see from anywhere. A tall green battery-shaped Energy generator pulses in the south-west corner. The yellow Tier pad sits in the south-east corner, glowing.",
-  build:["Floor: red plate 180×160, darker red 1-stud curb with 4 exits (N, E, S, W).","Spawn pad: white cylinder, 30-stud diameter, 1 stud tall, with a Neon red inner disc.","Tier pad: yellow 8×8 pad plus a billboard showing 'Tier N → N+1' and the cost bar. It's the most important pad in the game, so give it a slow Neon pulse.","Energy generator: a green cylinder 12 studs wide and 35 tall with a silver cap and 3 Neon bands that light up as Energy grows.","4 lamp posts (dark grey poles, glowing yellow 2×2 heads) at the corners.","Monument: a red 2×4 brick scaled up to 30×30×24 studs with 8 cylinder studs on top."],
-  feel:"Busy and bright. Light upbeat music. A few sparkle particles float up from the spawn pad."},
- {id:2,name:"Brick Forge",realm:"Realm One",c:"#f07b1d",r:[520,300,160,110],gate:"Tier 1",
-  sum:"Flame and Realm Points pads. Right next to spawn, so it's the first new area players walk to.",
-  look:"A chunky brown brick forge building with an orange-tile roof and a square chimney. A Neon-orange flame flickers out of the top. Two pads sit side by side in front of it: an orange Flame pad and a purple Realm Points pad. A small grey anvil made of stacked bricks sits beside the door.",
-  build:["Floor: orange plate 160×110.","Forge: brown brick box 70×40×50 with an open front arch (glowing orange inside), and a chimney of 15×40×15 on the back-right corner.","Flame: 3 stacked Neon cones (orange, yellow, red), scaled so it flickers.","Flame pad (orange) and Realm Points pad (purple): both 8×8, spaced 10 studs apart, with billboards.","Props: anvil, 2 barrels of coal (black 1×1 studs), a rack of hammers."],
-  feel:"Warm. Fire crackle sound, ember particles out of the chimney, orange PointLight inside the arch."},
- {id:3,name:"Power Press",realm:"Realm One",c:"#f5c518",r:[520,430,160,90],gate:"Tier 2",
-  sum:"Power pad. Directly south of the Forge because Flame feeds Power.",
-  look:"A yellow industrial plate with a big hydraulic press machine: two grey pillars, a crossbeam, and a heavy yellow-and-black striped piston slamming down onto an anvil block. The Power pad sits beside it, glowing yellow-white.",
-  build:["Floor: yellow plate 160×90, with black-and-yellow hazard stripes along the edges.","Press frame: 2 grey pillars 7×45×7, top beam 60×7×15.","Piston: 30×15×12 block that tweens down and up every 2 seconds (TweenService), with a camera shake + dust puff when it lands.","Power pad: 8×8 on the east side.","Props: stacks of steel beams, a lever box, warning signs."],
-  feel:"Heavy thud sound on each slam, sparks at impact."},
- {id:4,name:"Rune Pack Row",realm:"Realm One",c:"#7a4bc4",r:[40,40,660,130],gate:"Beginner & Royal T1 · Basic T3 · Color T6 · Nature T9",
-  sum:"All 5 Realm One rune packs on one long purple street, ordered by unlock from east (close to spawn) to west.",
-  look:"A long purple avenue lined with 5 white round pedestals. Above each one a giant rune crate floats and slowly spins, each crate a different colour with the pack name on a billboard. A purple brick archway reading 'RUNES' marks each end. Lamp posts with purple Neon heads run along the back wall.",
-  build:["Floor: purple plate 660×130.","Pedestals: white cylinders 40 studs wide and 15 tall, 125 studs apart.","Crates (floating 20 studs up, spin 20°/s, bob ±1 stud): Beginner = lime green, Royal = gold with red trim, Basic = grey, Color = pink with rainbow edges, Nature = green with leaf bricks on top.","Each pedestal has its pad in front (6×6) and a billboard: pack name, currency, cost per open (e.g. 'Basic · 1e3 Flame').","Locked packs show a padlock over the crate until the tier is reached."],
-  feel:"Magical. Sparkle particles around each crate, a small chime when a pack opens."},
- {id:5,name:"Mob Arena",realm:"Realm One",c:"#3aa655",r:[40,200,230,200],gate:"Tier 4",
-  sum:"Mob Zone: XP, mobs, auto-attack, Loot and chest spawns.",
-  look:"A grassy green plate with a round fighting ring in the centre, fenced by white brick posts. Blocky red cube mobs with black eyes hop around inside it. A treasure chest (brown box, gold lid) spawns in a corner. Blocky trees (brown trunk, green cube leaves) stand in the corners.",
-  build:["Floor: green plate 230×200.","Ring: 100-stud diameter, darker-green inner floor, 16 white fence posts (5×15×5).","Mobs: 10×10×10 red cubes with 2 black 2×2 eyes, hopping; their level shows on a billboard.","Chest spawn: brown 15×10×10 box with gold lid and a glow when it's up.","4 trees, a scoreboard sign showing Mob Level, and a small bench."],
-  feel:"Punchy hit sounds, damage numbers, a poof of bricks when a mob dies."},
- {id:6,name:"Prism Lab",realm:"Realm One",c:"#e5579b",r:[40,420,230,130],gate:"Tier 5 (x2 pad and talent prism button at Tier 6)",
-  sum:"Prisms generator, x2 pad and the Talent Tree board.",
-  look:"A clean white laboratory building with a pink roof. Out front, a big glassy pink prism (octahedron) floats and turns, casting coloured light. Along the south edge stands a tall dark Talent Tree wall with coloured studs arranged as a branching tree. A gold x2 pad sits by the door.",
-  build:["Floor: pink plate 230×130.","Lab: white 80×35×50 box, pink roof, blue glass windows, a door arch.","Prism: Glass octahedron (use a mesh or wedge parts) 20 studs tall, Neon pink core, spinning slowly.","Talent Tree board: dark grey wall 70×40×5 with rows of coloured 3×3 stud buttons connected by lines (just the visual, the real UI is on screen).","x2 pad: gold 6×6, locked until Tier 6."],
-  feel:"Soft hum, rainbow light beams off the prism, science-y beeps."},
- {id:7,name:"Orb Garden",realm:"Realm One",c:"#1aa39a",r:[300,490,180,100],gate:"Tier 7",
-  sum:"Orbs generation. Between Spawn and the Cube Merger, since orbs come off cubes.",
-  look:"A calm teal garden. Glowing teal and white orbs float over low brick planters, drifting up and down. A round stone fountain sits in the middle with a Neon teal orb on top. Square green hedge bricks line the edges.",
-  build:["Floor: teal plate 180×100.","Fountain: grey cylinder 25 wide, water surface (light blue), glowing orb 8 studs across on top.","Floating orbs: 6–8 Neon spheres (4–6 studs) that bob and slowly orbit.","Hedges: green 5×5 bricks in lines; flower studs (1×1 cylinders in pink/yellow)."],
-  feel:"Chill. Soft chime ambience, gentle glow particles."},
- {id:8,name:"Cube Merger",realm:"Realm One",c:"#1f6fd1",r:[300,620,180,120],gate:"Tier 8",
-  sum:"Merger, Cubes, Accelerator and Gears.",
-  look:"A blue factory plate. A long black conveyor belt carries coloured cubes into a big blue merger machine with a hopper on top and a glowing window. Giant grey gears turn on the side of the machine. A lit-up Accelerator dial sits on a control panel.",
-  build:["Floor: blue plate 180×120.","Conveyor: black 150×7×20 belt with grey side rails (use a moving texture or tween cubes along it).","Cubes: 6×6×6 in white/blue/purple depending on cube level.","Merger: 40×35×40 blue box, silver hopper on top, Neon window on the front, output chute.","Gears: 2–3 grey cylinder gears (with square teeth blocks), 20–30 studs across, rotating.","Control panel: small desk with big red button and the Accelerator dial."],
-  feel:"Mechanical clanks, conveyor whirr, steam puffs from the machine."},
- {id:9,name:"Sphere Tower",realm:"Realm One",c:"#2b3a8f",r:[520,560,160,120],gate:"Tier 9 (Hail at Tier 10)",
-  sum:"Spheres levels. A tall tower you can see from spawn as the next goal.",
-  look:"A navy plate with a stacked, wedding-cake tower of round brick layers that get smaller as they go up (navy, blue, navy, blue). A huge glowing blue sphere sits on top, with two thin rings orbiting it. It's the tallest thing in Realm One.",
-  build:["Floor: navy plate 160×120.","Tower: 4 cylinder tiers (60, 50, 40, 30 studs across, 25 studs tall each), alternating navy #2b3a8f and blue #1f6fd1.","Sphere: Neon blue ball, 25 studs across, on top (~110 studs high total).","Rings: 2 thin Neon rings rotating around the sphere at different angles.","Sphere Level pad at the base, a spiral stair decoration around the tower."],
-  feel:"Epic. A low hum that gets louder near the tower, and blue light at night."},
- {id:10,name:"Challenge Gates",realm:"Realm One",c:"#3b4148",r:[40,580,230,160],gate:"C1 Tier 6 · C2 Tier 8 · C3 1e393 Energy · C4 1e96 Energy",
-  sum:"Four challenge doors, C1–C4. Entering resets you to Tier 0 with a handicap. Clearing one gives a permanent boost.",
-  look:"A dark charcoal plate that feels serious. Four tall yellow stone archways stand in a row. Each arch holds a glowing portal door in its own colour (C1 red, C2 blue, C3 green, C4 purple). Big stone number plaques sit above each arch. Torches with orange flames stand between the arches.",
-  build:["Floor: dark grey plate 230×160 with cracked-tile detail (random slightly darker bricks).","Arches: 2 yellow pillars 7×45×7 plus a lintel 40×7×7, spaced 52 studs apart.","Doors: Neon translucent panel (Transparency 0.4) in the challenge colour.","Plaque above each arch: challenge name + goal ('C2 · Reach Tier 8').","Completed challenges swap the door for a gold checkmark and a trophy on a pedestal."],
-  feel:"Tense. Deeper music, a faint wind, glowing embers."},
- {id:11,name:"Ascension Portal",realm:"Bridge",c:"#7a4bc4",r:[690,340,130,80],gate:"Energy > 1e2283 (~7 h in)",
-  sum:"A studded wooden bridge over the water channel with a giant purple portal ring in the middle. It's the only way to Realm Two.",
-  look:"A tan brick bridge crosses the blue water. Halfway across, a huge standing purple ring glows, with a swirling light-purple portal surface inside. Before Ascension the portal is dark and a stone gate blocks the bridge. After it, the ring lights up and you walk through to the Arctic.",
-  build:["Bridge: tan plate 130×40 studs, with brick side rails and lamp posts.","Portal ring: purple Neon torus, 80 studs tall, standing upright across the bridge, spinning slowly.","Portal surface: translucent disc with a swirl texture and particle vortex.","Lock gate: grey brick wall with 'Ascend: Energy > 1e2283' sign, removed after Ascension One.","Water channel: 55 studs wide, blue with a wave texture, flowing the length of the map."],
-  feel:"Big moment. Rising choir sound near the portal, white flash on teleport."},
- {id:12,name:"Frost Pack Row",realm:"Realm Two · Arctic",c:"#5aa6e0",r:[830,30,340,120],gate:"Polychrome A1 · Cryo Freeze 3 · Arctic Chromatize 7 · Galactic Chromatize 750",
-  sum:"The late-game rune packs. They sit on ice pedestals along the north edge of the Arctic.",
-  look:"An icy blue plate with 4 frosted, see-through ice pedestals. Above each one floats a rune crate: Polychrome is purple with rainbow edges, Cryo is pale cyan and frosty, Arctic is pure white with blue trim, and Galactic is deep space-purple with star specks. Icicles hang off a blue archway behind them. Add a sign: 'Droplets & Prisms runes: Nature, Polychrome, Cryo, Arctic'.",
-  build:["Floor: blue plate 340×120 with snow patches.","Pedestals: Glass/Ice material cylinders, 30 wide × 15 tall.","Crates: 20-stud cubes floating 20 studs up, spinning.","Billboards with currency and cost (e.g. 'Cryo · 50 Arctic Points')."],
-  feel:"Crisp. Frost sparkle particles, soft wind chimes."},
- {id:13,name:"Droplet Well",realm:"Realm Two · Arctic",c:"#9fd8f2",r:[830,190,150,150],gate:"Ascension One (Tier 10+ runs on Droplets)",
-  sum:"Droplets generator plus the Water and Ice multiplier buttons. This is the first thing you see coming off the portal.",
-  look:"A pale-ice plate with a big round stone well in the middle, filled with glowing blue water. Blue droplet shapes rise out of it and float up. A blue Water button and a cyan Ice button sit on either side like big arcade buttons.",
-  build:["Floor: light ice plate 150×150.","Well: light-grey brick ring 60 wide × 15 tall, water disc inside (Neon blue, slightly transparent), a small roof on 2 posts with a bucket.","Droplets: stretched blue spheres that rise and fade.","Water button (blue) and Ice button (cyan): 10×10 pads with a big round cap. Ice shows 'Needs Freeze 2' until unlocked."],
-  feel:"Water drip sounds and a splash on button press."},
- {id:14,name:"Freeze Works",realm:"Realm Two · Arctic",c:"#62b8c9",r:[1000,190,170,150],gate:"F1–3 Tier 11 · F4–6 Tier 12 · F7–9 Tier 13",
-  sum:"All 9 Freeze upgrades as a 3×3 grid of pads, one row per tier. Icicles and Haze unlock at Tier 13.",
-  look:"A teal plate with a 3×3 grid of square ice pads. Behind each pad stands an ice pillar, and pillars get taller row by row (Tier 11 short, Tier 13 tall), so it looks like a staircase of ice. Jagged icicle spikes ring the edge of the plate.",
-  build:["Floor: teal plate 170×150.","Pads: 9 pads 25×25 on a grid, labelled F1–F9 with cost in Droplets.","Ice pillars: Glass/Ice, 10, 20 and 30 studs tall for rows 1–3. They go solid white when bought.","Icicle spikes: white/cyan cones (wedge stacks) around the border."],
-  feel:"Cracking-ice sound when you buy one, a frosty burst particle."},
- {id:15,name:"Chromatizer",realm:"Realm Two · Arctic",c:"#b690e8",r:[830,430,340,120],gate:"Prisms_Chromatizer talent (Prisms ≥ 5e43)",
-  sum:"The Chromatize pad. Chromatize 1 or higher starts Chromium generation.",
-  look:"A lavender plate with a big white-and-chrome machine in the middle. Rainbow Neon rings (red, orange, yellow, green, blue, purple) spin around it at different speeds. Metallic silver Chromium crystals poke out of the ground around it. The Chromatize pad is in front, with a counter showing the Chromatize level.",
-  build:["Floor: lavender plate 340×120.","Machine: white/silver box 60×40×50 with a glass dome on top.","Rings: 6 thin Neon rings in rainbow order around the machine, each tilted and spinning.","Crystals: silver metallic octahedrons/wedges, 5–15 studs, in clusters.","Chromatize pad: 8×8 with a level counter billboard. Add a Chroma pad (locked until Chromatize 1000)."],
-  feel:"Electric hum, rainbow sparkles, a pitch-rising sound on Chromatize."},
- {id:16,name:"Chromify Spire",realm:"Realm Two · Arctic",c:"#f0c94a",r:[880,590,240,160],gate:"Chromify 1 Light · 2 Ascended · 3 Reflection",
-  sum:"The end-game tower. Its floors unlock as you go up, with the Light, Ascended and Reflection pads at its base.",
-  look:"A golden plate with a three-tier spire: a wide white base, a gold middle tier and a thin white top, finished with a glowing gold spike that shines like a beacon. Three pads sit around the base: a white Light pad, a gold Ascended pad and a silver Reflection pad. Each floor lights up once you unlock its Chromify level.",
-  build:["Floor: gold plate 240×160.","Spire: cylinders 100 / 75 / 50 studs across, 30 studs tall each, with gold trim rings.","Top: Neon gold spike (cone), 30 studs, with a beam of light pointing up.","Pads: Light (white), Ascended (gold), Reflection (silver mirror). Each is 8×8 and locked by its Chromify level.","Each floor's windows go from dark to glowing as you unlock it."],
-  feel:"Heavenly. Choir pad music and a light beam you can see from spawn in Realm Two."}
+/* ---------- NAME KEY ---------- */
+const NAMES=[
+ ["studs","Studs","Energy","Currency","Spawn Plaza · Studs machine"],
+ ["stack","Stack","Tier","System · reset","Spawn Plaza · Stack machine"],
+ ["bricks","Bricks","Flame","Currency","Brick Forge"],
+ ["buildpoints","Build Points","Realm Points","Currency","Brick Forge"],
+ ["welds","Welds","Power","Currency","Weld Works"],
+ ["hats","Hats","Runes","System","Hat Shop Row, Frost Hat Row"],
+ ["tix","Tix","Tickets","Currency","Hat Shop Row (Beginner/Royal/Galactic cost)"],
+ ["noobs","Noobs","Mobs","System","Noob Arena"],
+ ["oofs","Oofs","Flesh","Currency","Noob Arena"],
+ ["builderxp","Builder XP","XP","Currency","Noob Arena"],
+ ["builderlevel","Builder Level","Level","Currency","Noob Arena scoreboard"],
+ ["lootcrates","Loot Crates","Loot","Currency","Noob Arena chest"],
+ ["gems","Gems","Prisms","Currency","Gem Lab"],
+ ["cylinders","Cylinders","Orbs","Currency","Cylinder Garden"],
+ ["crates","Crates","Cubes (merger)","System","Crate Merger"],
+ ["tools","Tools","Gears","System","Crate Merger"],
+ ["thrusters","Thrusters","Accelerator","System","Crate Merger"],
+ ["balls","Balls","Spheres","Currency","Ball Tower"],
+ ["meteors","Meteors","Hail","Currency","Ball Tower (Stack 10)"],
+ ["obbies","Obbies","Challenges","System · reset","Obby Gates"],
+ ["rebirth","Rebirth","Ascension","System · reset","Rebirth Portal"],
+ ["theglacier","The Glacier","Realm Two (Arctic)","System","Right half of the map"],
+ ["glass","Glass","Droplets","Currency","Glass Well"],
+ ["glacier","Glacier","Water","Currency","Glass Well"],
+ ["diamondplate","Diamond Plate","Ice","Currency · reset","Glass Well"],
+ ["frostpoints","Frost Points","Arctic Points","Currency","Frost Hat Row (Cryo cost)"],
+ ["anchor","Anchor","Freeze","System · reset","Anchor Works"],
+ ["forcefields","Force Fields","Icicles","Currency","Anchor Works"],
+ ["fog","Fog","Haze","Currency","Anchor Works"],
+ ["union","Union","Chromatize","System · reset","Union Machine"],
+ ["neon","Neon","Chromium","Currency","Union Machine"],
+ ["foil","Foil","Chroma","Currency","Union Machine / Publish Spire"],
+ ["publish","Publish","Chromify","System · reset","Publish Spire"],
+ ["lighting","Lighting","Light","Currency","Publish Spire"],
+ ["reflectance","Reflectance","Reflection","Currency · reset","Publish Spire"],
+ ["sparkles","Sparkles","Shine","Currency","Publish Spire"],
 ];
 
-/* ---------- PANEL + GUIDE ---------- */
-const $ = s=>document.querySelector(s);
-const esc = s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;");
-function detailHTML(z,full){
-  const [x,y,w,h]=z.r;
-  return `<h3><span class="num" style="background:${z.c}">${z.id}</span>${esc(z.name)}</h3>
+/* ---------- ZONE DATA (svg coords = studs) ---------- */
+const ZONES = [
+ {id:1,name:"Spawn Plaza",icon:"studs",realm:"Realm One",c:"#d6322b",r:[300,300,180,160],gate:"Start (Stack 0)",icons:["studs","stack"],
+  sum:"Where every player spawns. It holds the two machines everyone uses from second one: Studs and Stack.",
+  look:"A big red studded plaza. In the middle is a white round spawn pad with a red Neon disc. In the north-west corner sits the grey Studs machine: a chunky grey stud-cube floats between two white-glowing pillars. In the south-east corner is the largest machine on the map, the Stack machine: three coral bricks stacked like a wedding cake (dark red at the bottom, peach at the top with studs), with stepped dark pillars and red-orange glow, copied straight from the Stack concept. A giant red 2×4 brick monument stands in the north-east corner as a landmark.",
+  build:["Floor: red plate 180×160, darker red curb with 4 exits.","Spawn pad: white cylinder 30 studs across, 1 stud tall, red Neon inner disc.","Studs machine (Core style, white/grey glow) 20×14 base. Centre: grey rounded cube with one big stud on top, like the Studs icon.","Stack machine (Stack style, coral glow). Scale it 1.5× so it reads as the main goal. Its billboard shows 'Stack N → N+1' and a progress bar.","Monument: red 2×4 brick scaled to 30×24×15 studs with 8 cylinder studs on top.","4 lamp posts at the corners (dark poles, yellow 2×2 glowing heads)."],
+  resets:"stack", feel:"Busy and bright. Sparkles float up from the spawn pad, and the Stack machine hums and pulses when you can afford it."},
+ {id:2,name:"Brick Forge",icon:"bricks",realm:"Realm One",c:"#f07b1d",r:[520,300,160,110],gate:"Stack 1",icons:["bricks","buildpoints"],
+  sum:"Bricks and Build Points. It's right next to spawn, so it's the first new area players walk to.",
+  look:"A chunky brown brick forge with an orange-tile roof and a chimney with Neon flames. In front of it stand two machines. The Bricks machine has a glossy red 2×4 brick spinning in the middle with red glow strips. The Build Points machine has a green blueprint board with bar-chart bars, and green glow.",
+  build:["Floor: orange plate 160×110.","Forge: brown box 70×40×50, open front arch glowing orange, chimney 15×40×15 with 3 stacked Neon flame cones.","Bricks machine (Stack style, red glow #FF3B30).","Build Points machine (Core style, green glow #34C759).","Props: anvil, coal barrels, a rack of hammers."],
+  feel:"Warm fire crackle and ember particles from the chimney."},
+ {id:3,name:"Weld Works",icon:"welds",realm:"Realm One",c:"#f5c518",r:[520,430,160,90],gate:"Stack 2",icons:["welds"],
+  sum:"The Welds machine, directly south of the forge because Bricks feed Welds.",
+  look:"A yellow industrial plate with hazard-stripe edges. A big hydraulic press slams down on an anvil block, throwing sparks. Next to it, the Welds machine holds a floating steel L-bracket (the Welds icon) between blue-glowing pillars.",
+  build:["Floor: yellow plate 160×90 with black/yellow hazard edges.","Press: 2 grey pillars, crossbeam, yellow piston that tweens down every 2 s (camera shake + spark burst on impact).","Welds machine (Stack style, steel-blue glow #6FA8DC). Centre: brushed-metal L-bracket.","Props: steel beam stacks, a welding cart with a torch that sparks."],
+  feel:"Heavy thud and welding sparks."},
+ {id:4,name:"Hat Shop Row",icon:"hats",realm:"Realm One",c:"#7a4bc4",r:[40,40,660,130],gate:"Beginner & Royal Stack 1 · Basic Stack 3 · Color Stack 6 · Nature Stack 9",icons:["hats","tix","bricks","buildpoints","balls"],
+  sum:"The 5 Realm One hat packs (runes), all on one purple street. They're ordered by unlock, going west from spawn.",
+  look:"A long purple avenue with 5 hat machines in a row. Each one has a big glossy top hat floating and spinning in the middle, coloured for its pack: Beginner lime, Royal gold, Basic grey, Color pink, Nature green. Purple arches reading 'HATS' stand at both ends, and purple Neon lamp posts run along the back.",
+  build:["Floor: purple plate 660×130.","5 hat machines (Core style), 125 studs apart. Glow colour matches the pack.","Hat: tall crown, wide brim, pink band, like the Hats icon, spinning at 20°/s.","Billboard per machine: pack name, the currency icon it costs (Tix, Bricks, Build Points or Balls), and cost per open.","Locked packs show a padlock over the hat until their Stack is reached."],
+  feel:"Magical sparkles around each hat, and a pop sound plus hat confetti on each open."},
+ {id:5,name:"Noob Arena",icon:"noobs",realm:"Realm One",c:"#3aa655",r:[40,200,230,200],gate:"Stack 4",icons:["noobs","oofs","builderxp","builderlevel","lootcrates"],
+  sum:"The mob zone. Classic noobs spawn here. Fighting them gives Oofs and Builder XP, and Loot Crates drop.",
+  look:"A grassy green plate with a round fighting ring fenced by white brick posts. Classic noobs (yellow head, blue torso, green legs) wander and hop inside. Two machines face the ring: Oofs, with a yellow smiley head floating in it, and Builder XP, with a green star. A golden Loot Crate chest sits in the corner, and a scoreboard shows Builder Level.",
+  build:["Floor: green plate 230×200.","Ring: 100 studs across, darker inner floor, 16 white fence posts.","Noobs: classic R6 noob rigs with a level billboard. They 'oof' and fall apart into bricks on death.","Oofs machine (Core style, yellow glow) and Builder XP machine (Core style, lime glow).","Loot Crate chest: wooden chest with gold trim that glows when it's ready.","Scoreboard: dark panel with the Builder Level shield icon."],
+  feel:"Punchy hits, 'oof' sound on kill, damage numbers."},
+ {id:6,name:"Gem Lab",icon:"gems",realm:"Realm One",c:"#e5579b",r:[40,420,230,130],gate:"Stack 5 (x2 pad and talent Gem button at Stack 6)",icons:["gems"],
+  sum:"The Gems machine, the x2 pad and the Talent Tree board.",
+  look:"A clean white lab with a pink roof. Out front is the Gems machine, which should match the Crystal Core concept exactly, but purple: a tall faceted purple gem floats between two pillars whose angled caps lean in over it, with violet glow panels and strips. Along the south edge stands a dark Talent Tree wall with glowing buttons laid out as a branching tree.",
+  build:["Floor: pink plate 230×130.","Lab: white 80×35×50 building with a pink roof and blue glass windows.","Gems machine (Core style, purple glow #A259FF), scaled 1.3×. The gem is Glass + Neon core, elongated diamond shape.","Talent Tree board: dark wall 70×40 with rows of coloured glowing buttons.","x2 pad: small gold pad with a 'x2' billboard, locked until Stack 6."],
+  feel:"Soft hum, and light beams scattering off the gem."},
+ {id:7,name:"Cylinder Garden",icon:"cylinders",realm:"Realm One",c:"#1aa39a",r:[300,490,180,100],gate:"Stack 7",icons:["cylinders"],
+  sum:"Cylinders generation. It sits between Spawn and the Crate Merger.",
+  look:"A calm teal garden. Glossy teal cylinders float in a slow ring above square hedges and flower studs. The Cylinders machine in the middle has a fat teal cylinder spinning on its pedestal, with teal glow.",
+  build:["Floor: teal plate 180×100.","Cylinders machine (Core style, teal glow #2EE6C9) in the centre.","6–8 floating teal cylinders orbiting slowly.","Green hedge bricks and 1×1 flower studs along the edges."],
+  feel:"Chill wind chimes and soft glow particles."},
+ {id:8,name:"Crate Merger",icon:"crates",realm:"Realm One",c:"#1f6fd1",r:[300,620,180,120],gate:"Stack 8",icons:["crates","tools","thrusters"],
+  sum:"Crates (the cube merger), Tools (gears) and Thrusters (accelerator).",
+  look:"A blue factory plate. A black conveyor carries wooden crates into a big blue merger machine that merges them into bigger crates. Crossed hammer-and-wrench Tools spin on a machine beside it. A Thrusters machine has a rocket thruster firing an orange flame.",
+  build:["Floor: blue plate 180×120.","Conveyor: 150-stud black belt with grey rails and wooden crates riding it (they get bigger and darker as they level up).","Merger: blue 40×35×40 box with a silver hopper, glowing window and output chute.","Tools machine (Stack style, orange glow) with a crossed hammer and wrench.","Thrusters machine (Core style, orange/white glow) with a rocket and a flame particle."],
+  feel:"Clanks, conveyor whirr, and a rocket roar from the Thrusters machine."},
+ {id:9,name:"Ball Tower",icon:"balls",realm:"Realm One",c:"#2b3a8f",r:[520,560,160,120],gate:"Stack 9 (Meteors at Stack 10)",icons:["balls","meteors"],
+  sum:"Balls levels. It's the tallest thing in Realm One, so you can see it from spawn as a goal.",
+  look:"A navy plate with a wedding-cake tower of round layers that get smaller going up (navy and blue with gold trim). A huge glossy pink ball sits on top, circled by two glowing rings. At the base are a Balls machine (pink ball) and a Meteors machine: a flaming orange rock with a fire trail, which unlocks at Stack 10.",
+  build:["Floor: navy plate 160×120.","Tower: 4 tiers (60/50/40/30 studs across, 25 tall each) with gold trim rings.","Top ball: glossy pink #FF2FA8, 25 studs across, with a white highlight. Rings orbit it.","Balls machine (Core style, pink glow).","Meteors machine (Core style, orange-red glow) with a fire particle trail."],
+  feel:"Epic low hum near the tower, and meteor whooshes."},
+ {id:10,name:"Obby Gates",icon:"obbies",realm:"Realm One",c:"#3b4148",r:[40,580,230,160],gate:"C1 Stack 6 · C2 Stack 8 · C3 1e393 Studs · C4 1e96 Studs",icons:["obbies"],
+  sum:"The four Obbies (challenges). Each one resets you to Stack 0 with a handicap, and clearing it gives a permanent boost.",
+  look:"A dark charcoal plate. Four tall yellow archways stand in a row, each with a glowing portal door (Obby 1 red, 2 blue, 3 green, 4 purple) and a checkered flag on top. In front of each door, a short staircase of orange floating obby blocks leads up to it, like the Obbies icon. Torches stand between the arches.",
+  build:["Floor: dark grey plate 230×160 with cracked-tile detail.","4 arches: yellow pillars and lintel, Neon translucent door, checkered flag on a pole.","Orange obby steps (3 blocks each) in front of each door.","Plaque above each arch: 'Obby 2 · Reach Stack 8', etc.","Completed obbies swap the door for a gold trophy."],
+  resets:"obbies", feel:"Tense music, faint wind and glowing embers."},
+ {id:11,name:"Rebirth Portal",icon:"rebirth",realm:"Bridge",c:"#7a4bc4",r:[690,340,130,80],gate:"Studs > 1e2283 (~7 h in)",icons:["rebirth","theglacier"],
+  sum:"A tan bridge over the water with a giant purple-pink Rebirth ring. Going through it is the only way into The Glacier.",
+  look:"A studded tan bridge crosses the water. Halfway across, a huge upright ring in the Rebirth colours (purple fading to pink) spins with a swirling portal inside. On the far side, an ice-brick archway (The Glacier icon: a frosty gate with a blue swirl) welcomes you into Realm Two.",
+  build:["Bridge: tan plate 130×40 with brick rails and purple lamps.","Rebirth ring: Neon torus 80 studs tall, standing upright, slowly rotating, with a particle vortex inside.","Lock gate: grey wall with 'Rebirth: 1e2283 Studs', removed after the first Rebirth.","Glacier gate: translucent ice-brick arch with a blue swirl, on the Glacier side of the bridge."],
+  resets:"rebirth", feel:"A rising choir near the ring and a white flash on teleport."},
+ {id:12,name:"Frost Hat Row",icon:"hats",realm:"The Glacier",c:"#5aa6e0",r:[830,30,340,120],gate:"Polychrome after Rebirth · Cryo Anchor 3 · Arctic Union 7 · Galactic Union 750",icons:["hats","gems","frostpoints","neon","tix"],
+  sum:"The late-game hat packs, on ice-blue machines along the north edge of The Glacier.",
+  look:"An icy blue plate with 4 hat machines whose pillars are made of ice, with frost-blue glow. The hats: Polychrome is purple with a rainbow band, Cryo is pale cyan and frosted, Arctic is white with blue trim, and Galactic is deep space-purple with star specks. Icicles hang off an archway behind them. Add a sign: 'Glass & Gems hats: Nature, Polychrome, Cryo, Arctic'.",
+  build:["Floor: blue plate 340×120 with snow patches.","4 hat machines (Core style), with ice pillars instead of dark ones.","Billboards with cost icons: Polychrome = Gems, Cryo = Frost Points, Arctic = Neon, Galactic = Tix."],
+  feel:"Frost sparkle and soft chimes."},
+ {id:13,name:"Glass Well",icon:"glass",realm:"The Glacier",c:"#9fd8f2",r:[830,190,150,150],gate:"After first Rebirth (Stack 10+ runs on Glass)",icons:["glass","glacier","diamondplate"],
+  sum:"Glass generation plus the Glacier and Diamond Plate buttons. It's the first thing you see coming off the portal.",
+  look:"A pale-ice plate with a stone well full of glowing water. Glass slabs rise out of it and float up. Around the well are three machines: Glass (a cyan glass slab), Glacier (a blue ice-crystal cluster) and Diamond Plate (a silver tread plate). Diamond Plate gets a hazard ring because it resets Glass and Glacier.",
+  build:["Floor: light ice plate 150×150.","Well: grey brick ring 60 across, glowing blue water inside, small roof with a bucket.","Glass machine (Core style, cyan glow).","Glacier machine (Core style, blue glow) with an ice crystal cluster.","Diamond Plate machine (Stack style, silver glow) with a hazard ring. Locked until Anchor 2."],
+  resets:"diamondplate", feel:"Water drips and a glassy clink on each buy."},
+ {id:14,name:"Anchor Works",icon:"anchor",realm:"The Glacier",c:"#62b8c9",r:[1000,190,170,150],gate:"Anchor 1–3 Stack 11 · 4–6 Stack 12 · 7–9 Stack 13",icons:["anchor","forcefields","fog"],
+  sum:"All 9 Anchors (Freeze) as a 3×3 grid of small anchor machines, one row per Stack. Force Fields and Fog unlock at Stack 13.",
+  look:"A teal plate with a 3×3 grid of small dark machines, each with a blue anchor floating in it. The glow gets brighter row by row (Stack 11 dim, Stack 13 bright). At the back, a Force Fields machine holds a purple glass dome with a tiny cube inside, and a Fog machine puffs lavender clouds. Ice spikes ring the plate.",
+  build:["Floor: teal plate 170×150.","9 Anchor machines (Stack style, blue glow), each 0.6× size, labelled Anchor 1–9 with cost in Glass. Hazard rings on all of them.","Force Fields machine (Core style, purple glow).","Fog machine (Core style, lavender glow) with a cloud particle emitter.","Ice spikes around the border."],
+  resets:"anchor", feel:"Heavy chain clank and an ice crack on purchase."},
+ {id:15,name:"Union Machine",icon:"union",realm:"The Glacier",c:"#b690e8",r:[830,430,340,120],gate:"Talent Union unlock (Gems ≥ 5e43)",icons:["union","neon","foil"],
+  sum:"Union (Chromatize). Union 1 or higher starts Neon generation.",
+  look:"A lavender plate with the biggest machine in The Glacier: a white-and-chrome body with a glass dome, surrounded by rainbow Neon rings spinning at different angles. Two teal cubes merge into one on top, like the Union icon. On either side stand a Neon machine (a green lightning bolt) and a Foil machine (a shimmering pink-cyan foil sheet).",
+  build:["Floor: lavender plate 340×120.","Union core: white/silver 60×40×50 with a glass dome, 6 rainbow rings and the merged-teal-cubes centrepiece. Hazard ring at the pad.","Neon machine (Core style, green glow #39FF14).","Foil machine (Core style, iridescent pink/cyan). Locked until Union 1000."],
+  resets:"union", feel:"Electric hum, and a rising pitch when you Union."},
+ {id:16,name:"Publish Spire",icon:"publish",realm:"The Glacier",c:"#f0c94a",r:[880,590,240,160],gate:"Publish 1 Lighting · 2 Foil pad · 3 Reflectance",icons:["publish","lighting","foil","reflectance","sparkles"],
+  sum:"The end-game tower. Publish (Chromify) plus the Lighting, Foil and Reflectance machines.",
+  look:"A golden plate with a 3-tier spire: white base, gold middle, white top, and a glowing gold tip shooting a beam of light into the sky. The Publish machine (a blue up-arrow rising out of a tray) sits front and centre. Around it are Lighting (a glowing bulb), Foil and Reflectance (a mirror). Sparkles particles drift around the whole plate.",
+  build:["Floor: gold plate 240×160.","Spire: 100/75/50-stud tiers, 30 tall each, gold trim rings and windows that light up per Publish level.","Publish machine (Stack style, blue glow) with a hazard ring.","Lighting machine (Core style, warm yellow).","Reflectance machine (Core style, silver/ice-blue) with a hazard ring.","Sparkles: gold four-point star particles everywhere on the plate."],
+  resets:"publish", feel:"Choir music and a light beam you can see from anywhere in The Glacier."}
+];
+
+const RESETS={
+ stack:{icon:"stack",name:"Stack",where:"Spawn Plaza",wipes:"Studs, Bricks, Welds, Oofs (and Noob level), Cylinders, Balls (and Ball levels), Crates/merger level, Tools, Thrusters, plus all their upgrades. From Stack 11 up it also wipes Glass, Glacier, Diamond Plate, Neon, Force Fields and all Anchors.",keeps:"Build Points, Gems, Hats, Tix, talents"},
+ obbies:{icon:"obbies",name:"Obbies (entering)",where:"Obby Gates",wipes:"Everything a Stack does, plus talents (except 16 kept ones), Build Points and their upgrades, Gems, and Stack back to 0.",keeps:"Hats, Tix, finished Obbies"},
+ rebirth:{icon:"rebirth",name:"Rebirth",where:"Rebirth Portal",wipes:"Everything a Stack does, talents, Build Points, almost all Hats (all but the ultra-rare ones), Gems, Stack, Builder XP and Level, Obby completions. One-time.",keeps:"Ultra-rare Hats, Tix; unlocks The Glacier"},
+ diamondplate:{icon:"diamondplate",name:"Diamond Plate",where:"Glass Well",wipes:"Glass and Glacier.",keeps:"Everything else"},
+ anchor:{icon:"anchor",name:"Anchor 1–9",where:"Anchor Works",wipes:"Everything a Stack does, plus Gems, Glass, Glacier, Diamond Plate, Glass upgrades, talents (except kept) and Neon.",keeps:"Stack level"},
+ union:{icon:"union",name:"Union",where:"Union Machine",wipes:"Talents (except kept), Gems, Neon, Foil.",keeps:"Stack, Glass side"},
+ publish:{icon:"publish",name:"Publish",where:"Publish Spire",wipes:"Talents, Gems, Neon, Foil, Lighting, Reflectance, Sparkles and their upgrades.",keeps:"Stack, Union level"},
+ reflectance:{icon:"reflectance",name:"Reflectance",where:"Publish Spire",wipes:"Neon, Foil, Lighting, and talents (except kept).",keeps:"Gems, Publish level"}
+};
+
+/* ---------- PAGE ---------- */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;");
+const nameOf=k=>(NAMES.find(n=>n[0]===k)||[k,k])[1];
+const img=(k,a)=>`<img src="${ICON[k]}" alt="${a==null?esc(nameOf(k)):a}">`;
+const iconRow=z=>`<div class="icons">${z.icons.map(k=>{const n=NAMES.find(x=>x[0]===k);return `<span class="ic">${img(k,"")}<span>${esc(n[1])}<br><small>${esc(n[2])}</small></span></span>`}).join("")}</div>`;
+function resetBox(z){if(!z.resets)return"";const r=RESETS[z.resets];let h=`<div class="reset"><b>Reset pad · ${esc(r.name)}:</b> wipes ${esc(r.wipes)} <br><b>Keeps:</b> ${esc(r.keeps)}.</div>`;
+  if(z.id===16)h+=`<div class="reset"><b>Reset pad · Reflectance:</b> wipes ${esc(RESETS.reflectance.wipes)}</div>`;return h}
+function detailHTML(z){const [x,y,w,h]=z.r;
+  return `<h3><span class="num" style="background:${z.c}">${z.id}</span>${esc(z.name)}</h3>${iconRow(z)}
   <dl class="meta"><dt>Realm</dt><dd>${esc(z.realm)}</dd><dt>Unlock</dt><dd>${esc(z.gate)}</dd><dt>Footprint</dt><dd>${w}×${h} studs</dd><dt>Position</dt><dd>X ${x}–${x+w}, Z ${y}–${y+h}</dd></dl>
-  <p><b>${esc(z.sum)}</b></p>
+  <p><b>${esc(z.sum)}</b></p>${resetBox(z)}
   <h4>How it looks</h4><p>${esc(z.look)}</p>
   <h4>Build list</h4><ul>${z.build.map(b=>`<li>${esc(b)}</li>`).join("")}</ul>
-  <h4>Feel & effects</h4><p>${esc(z.feel)}</p>
-  <div class="swatches"><span class="sw"><i style="background:${z.c}"></i>${z.c}</span></div>`;
-}
-function overviewHTML(){
-  return `<h3>Whole map</h3>
-  <p>Realm One (grey baseplate, left) holds zones 1–10 around Spawn Plaza. The Ascension Portal (11) sits on a bridge over the water channel. The Arctic (snow baseplate, right) holds zones 12–16.</p>
-  <p>Zones are numbered in unlock order. The yellow stud trail connects them, starting from spawn.</p>
-  <h4>Pick a zone</h4><p>Click any coloured plate in the 3D view, or use the zone buttons under the viewer.</p>`;
-}
-const panel=$("#panel");
-panel.innerHTML=overviewHTML();
-const zoneList=$("#zoneList"), guide=$("#guide");
+  <h4>Feel & effects</h4><p>${esc(z.feel)}</p>`}
+function overviewHTML(){return `<h3>Whole map</h3>
+  <p>Realm One (grey baseplate, left) holds zones 1–10 around Spawn Plaza. The Rebirth Portal (11) sits on the bridge over the water. The Glacier (snow baseplate, right) holds zones 12–16.</p>
+  <p>Every dark machine with glowing strips is something players interact with, and its icon floats above it. Red-and-black hazard rings mark reset pads.</p>
+  <h4>Pick a zone</h4><p>Click any coloured plate or label in the 3D view, or use the zone buttons under the viewer.</p>`}
+const panel=$("#panel");panel.innerHTML=overviewHTML();
 ZONES.forEach(z=>{
-  const b=document.createElement("button");b.className="zbtn";b.id="zb"+z.id;
-  b.innerHTML=`<i style="background:${z.c}"></i>${z.id}. ${esc(z.name)}`;
-  b.onclick=()=>{selectZone(z);document.getElementById("viewer").scrollIntoView({behavior:"smooth",block:"nearest"})};
-  zoneList.appendChild(b);
-  const c=document.createElement("article");c.className="card";c.style.setProperty("--c",z.c);
-  const [x,y,w,h]=z.r;
-  c.innerHTML=`<h3>${z.id}. ${esc(z.name)}</h3>
-   <div class="meta"><span>${esc(z.realm)} · ${w}×${h} studs</span></div>
-   <div class="meta"><span>Unlock: ${esc(z.gate)}</span></div>
-   <p>${esc(z.look)}</p><h4>Build list</h4><ul>${z.build.map(b=>`<li>${esc(b)}</li>`).join("")}</ul>
-   <h4>Feel</h4><p>${esc(z.feel)}</p>
+  const b=document.createElement("button");b.className="zbtn";b.id="zb"+z.id;b.type="button";
+  b.innerHTML=`${img(z.icon,"")}${z.id}. ${esc(z.name)}`;
+  b.onclick=()=>{selectZone(z);$("#viewer").scrollIntoView({behavior:"smooth",block:"nearest"})};$("#zoneList").appendChild(b);
+  const c=document.createElement("article");c.className="card";c.style.setProperty("--c",z.c);const [x,y,w,h]=z.r;
+  c.innerHTML=`<h3>${z.id}. ${esc(z.name)}</h3>${iconRow(z)}<div class="meta"><span>${esc(z.realm)} · ${w}×${h} studs · Unlock: ${esc(z.gate)}</span></div>
+   ${resetBox(z)}<p>${esc(z.look)}</p><h4>Build list</h4><ul>${z.build.map(b=>`<li>${esc(b)}</li>`).join("")}</ul><h4>Feel</h4><p>${esc(z.feel)}</p>
    <button class="chipbtn go" type="button">View in 3D</button>`;
-  c.querySelector(".go").onclick=()=>{selectZone(z);document.getElementById("viewer").scrollIntoView({behavior:"smooth",block:"center"})};
-  guide.appendChild(c);
+  c.querySelector(".go").onclick=()=>{selectZone(z);$("#viewer").scrollIntoView({behavior:"smooth",block:"center"})};$("#guide").appendChild(c);
 });
+$("#resetTable tbody").innerHTML=Object.values(RESETS).map(r=>`<tr><td>${img(r.icon,"")}</td><td><b>${esc(r.name)}</b></td><td>${esc(r.where)}</td><td>${esc(r.wipes)}</td><td>${esc(r.keeps)}</td></tr>`).join("");
+$("#nameTable tbody").innerHTML=NAMES.map(n=>`<tr><td>${img(n[0],"")}</td><td><b>${esc(n[1])}</b></td><td><code>${esc(n[2])}</code></td><td>${esc(n[3])}</td><td>${esc(n[4])}</td></tr>`).join("");
 
 /* ---------- 3D ---------- */
-const viewer=$("#viewer");
-let selectZone=()=>{};
-if(!window.THREE||!THREE.OrbitControls){
-  viewer.insertAdjacentHTML("beforeend",'<div class="fallback">The 3D viewer could not load. The zone guide below still has every description.</div>');
-} else (document.fonts?document.fonts.ready:Promise.resolve()).then(init);
+const viewer=$("#viewer");let selectZone=()=>{};
+if(!window.THREE||!THREE.OrbitControls){viewer.insertAdjacentHTML("beforeend",'<div class="fallback">The 3D viewer could not load. The zone guide below still has every description.</div>')}
+else (document.fonts?document.fonts.ready:Promise.resolve()).then(init);
 
 function init(){
 const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
-const S=0.2; // svg px -> world units
-const W=(sx,sy)=>[(sx-600)*S,(sy-390)*S];
+const S=0.2,W=(sx,sy)=>[(sx-600)*S,(sy-390)*S];
 const renderer=new THREE.WebGLRenderer({antialias:true});
-renderer.setPixelRatio(Math.min(devicePixelRatio,2));
-renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
-renderer.outputEncoding=THREE.sRGBEncoding;
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.outputEncoding=THREE.sRGBEncoding;
 viewer.prepend(renderer.domElement);
-const scene=new THREE.Scene();
-scene.background=new THREE.Color("#bfe3ff");
-scene.fog=new THREE.Fog("#bfe3ff",260,520);
-const camera=new THREE.PerspectiveCamera(42,1,0.5,1200);
-camera.position.set(-10,185,215);
+const scene=new THREE.Scene();scene.background=new THREE.Color("#bfe3ff");scene.fog=new THREE.Fog("#bfe3ff",280,560);
+const camera=new THREE.PerspectiveCamera(42,1,.5,1200);camera.position.set(-10,185,215);
 const controls=new THREE.OrbitControls(camera,renderer.domElement);
-controls.enableDamping=true;controls.dampingFactor=.08;controls.maxPolarAngle=Math.PI*0.49;controls.minDistance=12;controls.maxDistance=420;
-controls.target.set(0,0,0);
+controls.enableDamping=true;controls.dampingFactor=.08;controls.maxPolarAngle=Math.PI*.49;controls.minDistance=8;controls.maxDistance=420;
+scene.add(new THREE.HemisphereLight("#ffffff","#8a9aa8",.75));
+const sun=new THREE.DirectionalLight("#fff6e0",.85);sun.position.set(-80,160,90);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);
+Object.assign(sun.shadow.camera,{left:-140,right:140,top:100,bottom:-100,near:10,far:400});sun.shadow.bias=-.0008;scene.add(sun);
 
-scene.add(new THREE.HemisphereLight("#ffffff","#8a9aa8",0.75));
-const sun=new THREE.DirectionalLight("#fff6e0",0.85);
-sun.position.set(-80,160,90);sun.castShadow=true;
-sun.shadow.mapSize.set(2048,2048);
-Object.assign(sun.shadow.camera,{left:-140,right:140,top:100,bottom:-100,near:10,far:400});
-sun.shadow.bias=-0.0008;
-scene.add(sun);
-
+let P=scene;
 const mats={};
-function mat(c,o){const k=c+JSON.stringify(o||{});if(!mats[k]){const m=new THREE.MeshStandardMaterial(Object.assign({color:c,roughness:.5,metalness:0},o||{}));if(o&&o.emissive===true){m.emissive=new THREE.Color(c);m.emissiveIntensity=o.ei||0.8;}mats[k]=m;}return mats[k]}
-function add(geo,c,x,y,z,o){const m=new THREE.Mesh(geo,mat(c,o&&o.m));m.position.set(x,y,z);m.castShadow=!(o&&o.noShadow);m.receiveShadow=true;scene.add(m);return m}
-const glow=(ei)=>({m:{emissive:true,ei:ei||0.9}});
-function box(w,h,d,c,x,y,z,o){return add(new THREE.BoxGeometry(w,h,d),c,x,y+h/2,z,o)}
-function cyl(r,h,c,x,y,z,o,rt,seg){return add(new THREE.CylinderGeometry(rt==null?r:rt,r,h,seg||24),c,x,y+h/2,z,o)}
-function sph(r,c,x,y,z,o){return add(new THREE.SphereGeometry(r,20,14),c,x,y,z,o)}
-function cone(r,h,c,x,y,z,o,seg){return add(new THREE.ConeGeometry(r,h,seg||16),c,x,y+h/2,z,o)}
+function mat(c,o){const k=c+JSON.stringify(o||{});if(!mats[k]){const oo=Object.assign({},o||{});const em=oo.emissive,ei=oo.ei;delete oo.emissive;delete oo.ei;
+  const m=new THREE.MeshStandardMaterial(Object.assign({color:c,roughness:.5,metalness:0},oo));if(em){m.emissive=new THREE.Color(c);m.emissiveIntensity=ei||.8}mats[k]=m}return mats[k]}
+function add(geo,c,x,y,z,o){const m=new THREE.Mesh(geo,mat(c,o&&o.m));m.position.set(x,y,z);m.castShadow=!(o&&o.noShadow);m.receiveShadow=true;P.add(m);return m}
+const G=(ei)=>({m:{emissive:true,ei:ei||.9}});
+const box=(w,h,d,c,x,y,z,o)=>add(new THREE.BoxGeometry(w,h,d),c,x,y+h/2,z,o);
+const cyl=(r,h,c,x,y,z,o,rt,seg)=>add(new THREE.CylinderGeometry(rt==null?r:rt,r,h,seg||24),c,x,y+h/2,z,o);
+const sph=(r,c,x,y,z,o)=>add(new THREE.SphereGeometry(r,22,16),c,x,y,z,o);
+const cone=(r,h,c,x,y,z,o,seg)=>add(new THREE.ConeGeometry(r,h,seg||16),c,x,y+h/2,z,o);
+const shade=(hex,f)=>{const c=new THREE.Color(hex);c.multiplyScalar(f);c.r=Math.min(1,c.r);c.g=Math.min(1,c.g);c.b=Math.min(1,c.b);return"#"+c.getHexString()};
+function sub(fn){const g=new THREE.Group();const prev=P;P=g;fn();P=prev;P.add(g);return g}
 
-/* studs (instanced) */
+/* studs */
 const studs=[];
 function studGrid(x0,z0,w,d,y,color,sp){sp=sp||4;const nx=Math.floor(w/sp),nz=Math.floor(d/sp);const ox=x0+(w-(nx-1)*sp)/2,oz=z0+(d-(nz-1)*sp)/2;
-  for(let i=0;i<nx;i++)for(let j=0;j<nz;j++)studs.push([ox+i*sp,y,oz+j*sp,color,1]);}
-const shade=(hex,f)=>{const c=new THREE.Color(hex);c.multiplyScalar(f);c.r=Math.min(1,c.r);c.g=Math.min(1,c.g);c.b=Math.min(1,c.b);return "#"+c.getHexString()};
+  for(let i=0;i<nx;i++)for(let j=0;j<nz;j++)studs.push([ox+i*sp,y,oz+j*sp,color,1])}
+
+/* icon textures */
+const texLoader=new THREE.TextureLoader();const texCache={};
+function iconTex(k){if(!texCache[k]){const t=texLoader.load(ICON[k]);t.encoding=THREE.sRGBEncoding;texCache[k]=t}return texCache[k]}
+function iconSprite(k,x,y,z,s){const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:iconTex(k)}));sp.scale.set(s,s,1);sp.position.set(x,y,z);P.add(sp);return sp}
+
+const spin=[],bob=[],custom=[];
+
+/* ---- centrepieces (built around origin) ---- */
+const metal={m:{metalness:.7,roughness:.25}};
+const CP={
+ studs:()=>{box(2.6,2.6,2.6,"#d5dbe0",0,-1.3,0,{m:{roughness:.3}});cyl(.8,.5,"#e6eaee",0,1.3,0)},
+ stack:()=>{box(3.4,1.5,2.6,"#e0503f",0,-2.2,0);box(2.9,1.4,2.2,"#f07a64",0,-.7,0);box(2.4,1.3,1.8,"#f8b89a",0,.7,0);for(const a of[-.55,.55])for(const b of[-.45,.45])cyl(.28,.3,"#f8b89a",a,2,b)},
+ bricks:()=>{box(3.8,1.6,1.9,"#e0261f",0,-.8,0,{m:{roughness:.25}});for(let i=0;i<4;i++)for(const b of[-.47,.47])cyl(.33,.4,"#e0261f",-1.42+i*.95,.8,b)},
+ buildpoints:()=>{const g=sub(()=>{box(3.4,2.4,.3,"#2fa84f",0,-1.2,0);[.6,1,1.5].forEach((h,i)=>box(.45,h,.12,"#c9f7b8",-.7+i*.7,-.8,.2))});g.rotation.x=-.25},
+ welds:()=>{box(3.2,.55,1.7,"#a9bccf",0,-1.3,0,metal);box(.55,2.6,1.7,"#a9bccf",-1.3,-1.3,0,metal)},
+ oofs:()=>{cyl(1.35,2.3,"#f5c518",0,-1.15,0,{m:{roughness:.3}});cyl(.7,.45,"#f5c518",0,1.15,0);box(.3,.45,.1,"#1d2329",-.45,.1,1.33);box(.3,.45,.1,"#1d2329",.45,.1,1.33);box(1.1,.18,.1,"#1d2329",0,-.55,1.33)},
+ gems:()=>{const g=add(new THREE.OctahedronGeometry(1.7,0),"#9b5cff",0,0,0,{m:{emissive:true,ei:.35,roughness:.1,metalness:.2,transparent:true,opacity:.92}});g.scale.y=1.55},
+ cylinders:()=>{cyl(1.4,2.2,"#17b8a4",0,-1.1,0,{m:{roughness:.25}});cyl(1.2,.06,"#7ff5e4",0,1.1,0)},
+ balls:()=>sph(1.6,"#ff2fa8",0,0,0,{m:{roughness:.2}}),
+ tix:()=>{const t=box(3.4,1.9,.35,"#f2b04a",0,-.95,0);t.rotation.z=.2;box(1.6,.9,.4,"#ffe2a0",0,-.45,0).rotation.z=.2},
+ glass:()=>box(3.2,1,2.4,"#9fe6ff",0,-.5,0,{m:{transparent:true,opacity:.75,roughness:.05,metalness:.1}}),
+ glacier:()=>{[[0,0,2.8],[-.8,.3,2],[.8,-.2,2.2],[.2,.8,1.6]].forEach(([x,z,h],i)=>{const c=cone(.55,h,"#4fb8f0",x,-1.6,z,{m:{roughness:.1,transparent:true,opacity:.9}},5);c.rotation.z=(i-1.5)*.18})},
+ diamondplate:()=>{const p=box(3,3,.3,"#b9c6d2",0,-1.5,0,metal);p.rotation.z=.25},
+ forcefields:()=>{add(new THREE.SphereGeometry(1.7,24,12,0,Math.PI*2,0,Math.PI/2),"#b98cff",0,-1,0,{m:{transparent:true,opacity:.55,roughness:.05}});box(.8,.8,.8,"#7a4bc4",0,-1,0);cyl(1.8,.3,"#7a4bc4",0,-1.3,0)},
+ frostpoints:()=>{for(let i=0;i<3;i++){const b=box(3.4,.35,.35,"#bfe6ff",0,-.17,0,{m:{emissive:true,ei:.3}});b.rotation.z=i*Math.PI/3}},
+ neon:()=>{const a=box(.55,1.9,.4,"#39ff14",.35,-.2,0,G(1));a.rotation.z=-.5;const b=box(.55,1.9,.4,"#39ff14",-.35,-1.8,0,G(1));b.rotation.z=-.5;box(1.2,.4,.4,"#39ff14",0,-.3,0,G(1))},
+ foil:()=>{const f=box(2.8,2.8,.15,"#f2a5d8",0,-1.4,0,{m:{metalness:.8,roughness:.15,emissive:true,ei:.15}});f.rotation.set(.3,.4,.5)},
+ lighting:()=>{sph(1.2,"#ffe14d",0,.3,0,G(1.1));cyl(.55,.9,"#9aa4ad",0,-1.6,0,metal)},
+ reflectance:()=>{box(2.8,2.8,.35,"#c9d1d8",0,-1.4,0,metal);box(2.3,2.3,.1,"#dff4ff",0,-1.15,.2,{m:{metalness:1,roughness:0}})},
+ union:()=>{box(1.8,1.8,1.8,"#3fd6b6",-.6,-.9,0,{m:{roughness:.25}});box(1.8,1.8,1.8,"#27b39a",.6,-.3,.3,{m:{roughness:.25}})},
+ publish:()=>{box(3.2,.35,2,"#1f6fd1",0,-1.8,0);box(.9,1.4,.9,"#2e8fff",0,-1.4,0,G(.4));cone(1.3,1.5,"#2e8fff",0,0,0,G(.4),4).rotation.y=Math.PI/4},
+ anchor:()=>{box(.4,2.8,.4,"#2e7fe0",0,-1.4,0,metal);box(1.8,.35,.35,"#2e7fe0",0,.6,0,metal);const t=add(new THREE.TorusGeometry(1.1,.2,8,20,Math.PI),"#2e7fe0",0,-1.2,0,metal);t.rotation.z=Math.PI;add(new THREE.TorusGeometry(.35,.12,8,16),"#2e7fe0",0,1.6,0,metal)},
+ rebirth:()=>{add(new THREE.TorusGeometry(1.4,.35,12,32),"#a855f7",0,0,0,G(.6));sph(.5,"#ff5fd0",0,0,0,G(1))},
+ hat:(c)=>{cyl(1.15,2,c,0,-1,0,{m:{roughness:.3}},1.05);cyl(1.9,.22,c,0,-1.1,0);cyl(1.17,.4,"#ff5fa0",0,-.8,0)},
+ crates:()=>{box(2,1.8,1.8,"#b8733a",-.5,-1.2,0);box(1.6,1.5,1.5,"#9c5e2c",.8,-1.2,.3);box(2.02,.2,1.82,"#7a4521",-.5,-.3,0)},
+ tools:()=>{const a=box(.35,3,.35,"#c9772b",0,-1.5,0);a.rotation.z=.7;const b=box(.35,3,.35,"#9aa4ad",0,-1.5,0,metal);b.rotation.z=-.7;box(1.1,.6,.6,"#6f7c86",-1,.5,0,metal).rotation.z=.7},
+ thrusters:()=>{const g=sub(()=>{cyl(.8,2.4,"#d5dbe0",0,-1.2,0,metal);cone(.8,1,"#e6eaee",0,1.2,0,metal);const f=cone(.7,1.6,"#ff8a1a",0,-2.8,0,G(1.2));f.rotation.x=Math.PI;custom.push(t=>f.scale.y=1+.3*Math.sin(t*20))});g.rotation.z=.6},
+ meteors:()=>{sph(1.3,"#d9481a",0,0,0,G(.5));const c=cone(1.1,2.6,"#ffae3d",1.2,-1.3,0,{m:{emissive:true,ei:1,transparent:true,opacity:.7}});c.rotation.z=Math.PI/2+.5},
+ builderxp:()=>{const s=new THREE.Shape();for(let i=0;i<10;i++){const r=i%2?0.7:1.6,a=i/10*Math.PI*2+Math.PI/2;i?s.lineTo(Math.cos(a)*r,Math.sin(a)*r):s.moveTo(Math.cos(a)*r,Math.sin(a)*r)}
+   const g=new THREE.ExtrudeGeometry(s,{depth:.5,bevelEnabled:true,bevelSize:.12,bevelThickness:.12,bevelSegments:2});g.center();add(g,"#4ad13a",0,0,0,{m:{roughness:.3}})},
+ fog:()=>{[[-.7,0,1],[.6,.2,1.1],[0,.6,.9]].forEach(([x,y,r])=>{const s=sph(r,"#c7c1ee",x,y,0,{m:{roughness:.6}});s.scale.set(1.4,.7,1)})},
+ lootcrates:()=>{box(2.6,1.6,1.8,"#a8672e",0,-1.2,0);box(2.7,.8,1.9,"#e3b22b",0,.4,0,{m:{metalness:.5,roughness:.3}})},
+};
+
+/* ---- machine (Crystal Core / Stack concept) ---- */
+function machine(o){ // {x,z,y,rot,glow,cp,icon,scale,style,reset,color}
+  const g=new THREE.Group();g.position.set(o.x,o.y==null?T:o.y,o.z);g.rotation.y=o.rot||0;g.scale.setScalar(o.scale||1);scene.add(g);const prev=P;P=g;
+  const base=o.ice?"#bfe6f5":"#262e3d",base2=o.ice?"#d6f1fb":"#2f384a",gl=o.glow;
+  if(o.reset){for(let i=0;i<20;i++){const a=i/20*Math.PI*2;const b=box(1.35,.35,.8,i%2?"#1d2329":"#e0261f",Math.cos(a)*7.2,0,Math.sin(a)*6,{noShadow:true});b.rotation.y=-a+Math.PI/2}}
+  box(10,1.3,7,base,0,0,0,{m:{roughness:.45}});box(9,.45,6,base2,0,1.3,-.1);
+  [-2.7,2.7].forEach(x=>box(2.2,.45,.1,gl,x,.42,3.51,G(1.1)));
+  cyl(1.35,.55,"#1f2633",0,1.75,.4,null,1.15,8);cyl(.85,.1,gl,0,2.3,.4,G(1.2),null,8);
+  [-1,1].forEach(s=>{
+    if(o.style==="stack"){box(1.9,5.2,1.7,base,s*3.5,1.75,-.6);box(1.4,6.6,1.4,base,s*3.2,1.75,-.9);box(1.3,1.3,1.3,base,s*3.2,8.35,-.9);box(1,2.9,.1,gl,s*3.5,3,.26,G(1.1))}
+    else{box(1.9,4.6,1.7,base,s*3.4,1.75,-.5);box(1,2.8,.1,gl,s*3.4,2.6,.36,G(1.1));
+      const u=box(1.5,3.6,1.4,base,s*3.1,6.4,-.5);u.rotation.z=-s*.5;u.position.x=s*2.6}});
+  const piece=sub(CP[o.cp]||(()=>o.cpfn()));piece.position.set(0,5.4,.4);piece.scale.setScalar(o.cpScale||1);
+  if(!o.still){spin.push(piece);bob.push([piece,5.4,Math.random()*6])}
+  if(o.icon)iconSprite(o.icon,0,11.6,.4,3.6);
+  P=prev;return g}
 
 /* ground */
 const T=1.2;
-box(149,2,160,"#7a8791",-45.5,-2,0);          // realm one baseplate x -120..29
-studGrid(-120,-80,149,160,0,"#86939d");
-box(80,2,160,"#e9f4fa",80,-2,0);               // arctic x 40..120
-studGrid(40,-80,80,160,0,"#f4fbff");
-const water=box(11,1.4,160,"#3f9fd6",34.5,-2.2,0,{m:{roughness:.15,metalness:.1}});
+box(149,2,160,"#7a8791",-45.5,-2,0);studGrid(-120,-80,149,160,0,"#86939d");
+box(80,2,160,"#e9f4fa",80,-2,0);studGrid(40,-80,80,160,0,"#f4fbff");
+box(11,1.4,160,"#3f9fd6",34.5,-2.2,0,{m:{roughness:.15,metalness:.1}});
 const water2=box(11,.2,160,"#6cc0ea",34.5,-.9,0,{m:{transparent:true,opacity:.55,roughness:.1},noShadow:true});
 
-/* zone plates + picking */
+/* zone plates */
 const pickables=[];const zoneWorld={};
-ZONES.forEach(z=>{
-  const [x,y,w,h]=z.r;const [cx,cz]=W(x+w/2,y+h/2);const ww=w*S,dd=h*S;
-  zoneWorld[z.id]={cx,cz,w:ww,d:dd};
-  if(z.id===11)return;
-  const p=box(ww,T,dd,z.c,cx,0,cz);p.userData.zone=z;pickables.push(p);
-  // curb
-  const cc=shade(z.c,.72);
-  box(ww,0.5,0.8,cc,cx,T,cz-dd/2+0.4);box(ww,0.5,0.8,cc,cx,T,cz+dd/2-0.4);
-  box(0.8,0.5,dd,cc,cx-ww/2+0.4,T,cz);box(0.8,0.5,dd,cc,cx+ww/2-0.4,T,cz);
-  studGrid(cx-ww/2+1,cz-dd/2+1,ww-2,dd-2,T,shade(z.c,1.08));
-});
-const inZone=(X,Z)=>ZONES.some(z=>{if(z.id===11)return false;const q=zoneWorld[z.id];return Math.abs(X-q.cx)<q.w/2&&Math.abs(Z-q.cz)<q.d/2});
-
-/* stud trail (svg segments) */
-const trail=[[390,380,600,380],[600,380,600,470],[390,380,390,180],[390,250,170,250],[170,250,170,480],[390,380,390,540],[390,540,390,660],[390,540,600,540],[600,540,600,600],[170,480,170,650],[600,380,1000,380],[880,380,880,150],[1000,380,1000,580],[1000,580,1000,690],[880,150,1080,150]];
-const trailPts=[];
-trail.forEach(([a,b,c,d])=>{const L=Math.hypot(c-a,d-b),n=Math.max(1,Math.round(L/22));for(let i=0;i<=n;i++){const [X,Z]=W(a+(c-a)*i/n,b+(d-b)*i/n);trailPts.push([X,Z])}});
-trailPts.forEach(([X,Z])=>{let y=inZone(X,Z)?T:0;if(X>18&&X<44&&Math.abs(Z+2)<4)y=1.6;if(X>29&&X<40&&!(Math.abs(Z+2)<4))return;studs.push([X,y,Z,"#f5c518",1.7])});
-
-/* ----- zone builds ----- */
-const spin=[],bob=[],custom=[];
+ZONES.forEach(z=>{const [x,y,w,h]=z.r;const [cx,cz]=W(x+w/2,y+h/2);const ww=w*S,dd=h*S;zoneWorld[z.id]={cx,cz,w:ww,d:dd};if(z.id===11)return;
+  const p=box(ww,T,dd,z.c,cx,0,cz);p.userData.zone=z;pickables.push(p);const cc=shade(z.c,.72);
+  box(ww,.5,.8,cc,cx,T,cz-dd/2+.4);box(ww,.5,.8,cc,cx,T,cz+dd/2-.4);box(.8,.5,dd,cc,cx-ww/2+.4,T,cz);box(.8,.5,dd,cc,cx+ww/2-.4,T,cz);
+  studGrid(cx-ww/2+1,cz-dd/2+1,ww-2,dd-2,T,shade(z.c,1.08))});
 const Z=id=>zoneWorld[id];
-function lamp(x,z,y,head){cyl(.35,7,"#3b4148",x,y,z);box(1.4,1.4,1.4,head||"#ffd84d",x,y+7,z,glow(.9))}
+const inZone=(X,Zz)=>ZONES.some(z=>{if(z.id===11)return false;const q=Z(z.id);return Math.abs(X-q.cx)<q.w/2&&Math.abs(Zz-q.cz)<q.d/2});
+
+/* trail */
+[[390,380,600,380],[600,380,600,470],[390,380,390,180],[390,250,170,250],[170,250,170,480],[390,380,390,540],[390,540,390,660],[390,540,600,540],[600,540,600,600],[170,480,170,650],[600,380,1000,380],[880,380,880,150],[1000,380,1000,580],[1000,580,1000,690],[880,150,1080,150]]
+.forEach(([a,b,c,d])=>{const L=Math.hypot(c-a,d-b),n=Math.max(1,Math.round(L/22));for(let i=0;i<=n;i++){const [X,Zz]=W(a+(c-a)*i/n,b+(d-b)*i/n);let y=inZone(X,Zz)?T:0;
+  if(X>18&&X<44&&Math.abs(Zz+2)<4)y=1.6;if(X>29&&X<40&&!(Math.abs(Zz+2)<4))continue;studs.push([X,y,Zz,"#f5c518",1.7])}});
+
+function lamp(x,z,y,head){cyl(.35,7,"#3b4148",x,y,z);box(1.4,1.4,1.4,head||"#ffd84d",x,y+7,z,G(.9))}
 function tree(x,z,y){box(1.2,4,1.2,"#7a4a26",x,y,z);box(4.5,3.5,4.5,"#2f8f45",x,y+4,z);box(3,2.5,3,"#3aa655",x,y+7.5,z)}
 function pine(x,z,y){box(1,2,1,"#6b4a30",x,y,z);cone(3.2,5,"#2e7d5b",x,y+2,z,null,6);cone(2.3,4,"#f4fbff",x,y+5.3,z,null,6)}
-function pad(w,d,c,x,z,y){box(w,.5,d,shade(c,.8),x,y,z);box(w*.7,.2,d*.7,c,x,y+.5,z,glow(.7))}
-function brickTop(x,z,y,w,d,c,h){box(w,h,d,c,x,y,z);const sx=w/2,sz=d/2;for(const i of[-1,1])for(const j of[-1,1])cyl(Math.min(w,d)*.16,h*.14,c,x+i*sx/2,y+h,z+j*sz/2)}
+function noob(x,z,y){return sub(()=>{box(.9,1.4,.5,"#3aa655",-.5,0,0);box(.9,1.4,.5,"#3aa655",.5,0,0);box(2,1.8,.9,"#1f6fd1",0,1.4,0);box(.7,1.6,.6,"#f5c518",-1.4,1.6,0);box(.7,1.6,.6,"#f5c518",1.4,1.6,0);
+  cyl(.6,1,"#f5c518",0,3.2,0);box(.16,.22,.05,"#111",-.2,3.7,.6);box(.16,.22,.05,"#111",.2,3.7,.6)})}
 
 // 1 Spawn
-{const q=Z(1),y=T;cyl(6,.6,"#ffffff",q.cx,y,q.cz);cyl(3.8,.25,"#d6322b",q.cx,y+.6,q.cz,glow(.5));
- brickTop(q.cx-11,q.cz-9,y,10,6,"#c42a24",6);
- const bat=cyl(2.4,7,"#3aa655",q.cx-12,y,q.cz+9);cyl(1.2,1,"#c9d1d8",q.cx-12,y+7,q.cz+9);
- [2,4,6].forEach(h=>{const r=cyl(2.5,.4,"#9dff9d",q.cx-12,y+h-.2,q.cz+9,glow(1));custom.push(t=>{r.material.emissiveIntensity=.5+.5*Math.sin(t*3+h)})});
- pad(7,6,"#f5c518",q.cx+11,q.cz+10,y);
- [[-16,-14],[16,-14],[-16,14],[16,14]].forEach(([a,b])=>lamp(q.cx+a,q.cz+b,y));}
+{const q=Z(1),y=T;cyl(6,.6,"#ffffff",q.cx,y,q.cz);cyl(3.8,.25,"#d6322b",q.cx,y+.6,q.cz,G(.5));
+ machine({x:q.cx-11,z:q.cz-8,glow:"#f2f6ff",cp:"studs",icon:"studs",rot:.5});
+ machine({x:q.cx+9,z:q.cz+8,glow:"#ff6a4d",cp:"stack",icon:"stack",style:"stack",scale:1.45,rot:-.6,reset:true});
+ const mo=box(10,5,6,"#c42a24",q.cx+11,y,q.cz-10);for(let i=0;i<4;i++)for(const b of[-1.5,1.5])cyl(1,.8,"#c42a24",q.cx+7.3+i*2.5,y+5,q.cz-10+b);
+ [[-16,-14],[16,14],[-16,14],[4,-14]].forEach(([a,b])=>lamp(q.cx+a,q.cz+b,y))}
 // 2 Forge
-{const q=Z(2),y=T;box(14,8,10,"#8a4b2a",q.cx+6,y,q.cz-3);box(15,1.4,11,"#d9651c",q.cx+6,y+8,q.cz-3);
- box(5,4.5,.4,"#ff9a3c",q.cx+6,y,q.cz+2.05,glow(1));
- box(3,8,3,"#6d3a20",q.cx+11,y+8,q.cz-6);
- const f1=cone(1.4,3.5,"#ff7a1a",q.cx+11,y+16,q.cz-6,glow(1.2));const f2=cone(.9,2.6,"#ffd84d",q.cx+11,y+16.2,q.cz-6,glow(1.3));
- custom.push(t=>{const s=1+.18*Math.sin(t*11)+.1*Math.sin(t*17);f1.scale.set(1,s,1);f2.scale.set(1,1.1+.2*Math.sin(t*13),1)});
- pad(6,5,"#f07b1d",q.cx-8,q.cz-4,y);pad(6,5,"#8b5bd6",q.cx-8,q.cz+5,y);
- box(3,1.2,1.6,"#5c6770",q.cx+1,y,q.cz+6);box(4,.9,1.6,"#6f7c86",q.cx+1,y+1.2,q.cz+6);}
-// 3 Power Press
-{const q=Z(3),y=T;box(1.5,9,1.5,"#7a8791",q.cx-9,y,q.cz);box(1.5,9,1.5,"#7a8791",q.cx+1,y,q.cz);box(12,1.5,3,"#5c6770",q.cx-4,y+9,q.cz);
- box(7,1,4,"#3b4148",q.cx-4,y,q.cz);const pis=box(6,3,2.6,"#f5c518",q.cx-4,y+5,q.cz);{const st=new THREE.Mesh(new THREE.BoxGeometry(6.05,.6,2.65),mat("#1d2329"));st.position.y=.6;pis.add(st)}
- custom.push(t=>{const k=(t%2)/2;const h=k<.15?5-(k/.15)*4:1+((k-.15)/.85)*4;pis.position.y=y+h+1.5});
- pad(6,5,"#fff27a",q.cx+9,q.cz,y);}
-// 4 Rune Pack Row
-{const q=Z(4),y=T;const packs=[[120,"#9be15d","Beginner"],[245,"#f5c518","Royal"],[370,"#aab4bd","Basic"],[495,"#e5579b","Color"],[620,"#2f9c4a","Nature"]];
- packs.forEach(([sx,c,n],i)=>{const [X,Zz]=W(sx,112);cyl(4,3,"#ffffff",X,y,Zz);const cr=box(5,5,5,c,X,y+6,Zz,{m:{roughness:.35}});
-  spin.push(cr);bob.push([cr,y+8.5,i]);pad(4,3,c,X,Zz+7.5,y);label(n,X,y+15,Zz,c,.55)});
+{const q=Z(2),y=T;box(14,8,10,"#8a4b2a",q.cx+7,y,q.cz-4);box(15,1.4,11,"#d9651c",q.cx+7,y+8,q.cz-4);box(5,4.5,.4,"#ff9a3c",q.cx+7,y,q.cz+1.05,G(1));box(3,8,3,"#6d3a20",q.cx+12,y+8,q.cz-7);
+ const f1=cone(1.4,3.5,"#ff7a1a",q.cx+12,y+16,q.cz-7,G(1.2));custom.push(t=>f1.scale.set(1,1+.2*Math.sin(t*11),1));
+ machine({x:q.cx-9,z:q.cz-4,glow:"#ff3b30",cp:"bricks",icon:"bricks",style:"stack",scale:.8,rot:.3});
+ machine({x:q.cx-1,z:q.cz+6,glow:"#34c759",cp:"buildpoints",icon:"buildpoints",scale:.75})}
+// 3 Weld Works
+{const q=Z(3),y=T;box(1.5,9,1.5,"#7a8791",q.cx-11,y,q.cz);box(1.5,9,1.5,"#7a8791",q.cx-1,y,q.cz);box(12,1.5,3,"#5c6770",q.cx-6,y+9,q.cz);box(7,1,4,"#3b4148",q.cx-6,y,q.cz);
+ const pis=box(6,3,2.6,"#f5c518",q.cx-6,y+5,q.cz);custom.push(t=>{const k=(t%2)/2;pis.position.y=y+1.5+(k<.15?5-(k/.15)*4:1+((k-.15)/.85)*4)});
+ machine({x:q.cx+8,z:q.cz+1,glow:"#6fa8dc",cp:"welds",icon:"welds",style:"stack",scale:.85,rot:-.3})}
+// 4 Hat Shop Row
+{const q=Z(4),y=T;[[120,"#9be15d","tix"],[245,"#f5c518","tix"],[370,"#aab4bd","bricks"],[495,"#ff5fb0","buildpoints"],[620,"#2f9c4a","balls"]].forEach(([sx,c,cost],i)=>{const [X,Zz]=W(sx,105);
+  machine({x:X,z:Zz,glow:c,cpfn:()=>CP.hat(c),icon:"hats",scale:1.05});iconSprite(cost,X+4.2,y+9.2,Zz+2,2)});
+ ["Beginner","Royal","Basic","Color","Nature"].forEach((n,i)=>{const [X,Zz]=W([120,245,370,495,620][i],105);label(n,X,y+17.5,Zz,"#7a4bc4",.5)});
  [q.cx-64,q.cx+64].forEach(X=>{box(1.6,9,1.6,"#5a3596",X,y,q.cz-7);box(1.6,9,1.6,"#5a3596",X,y,q.cz+7);box(1.8,1.8,16,"#5a3596",X,y+9,q.cz)});
- for(let i=0;i<7;i++)lamp(q.cx-54+i*18,q.cz-11,y,"#c8a8ff");}
-// 5 Mob Arena
-{const q=Z(5),y=T;cyl(10,.15,"#2c8544",q.cx,y,q.cz+1);for(let i=0;i<16;i++){const a=i/16*Math.PI*2;box(1,3,1,"#ffffff",q.cx+Math.cos(a)*10,y,q.cz+1+Math.sin(a)*10)}
- for(let i=0;i<5;i++){const m=box(2,2,2,"#d6322b",q.cx+(i-2)*3.2,y,q.cz+1+((i%2)?3:-3));[-.45,.45].forEach(ex=>{const e=new THREE.Mesh(new THREE.BoxGeometry(.45,.45,.1),mat("#111111"));e.position.set(ex,.3,1.02);m.add(e)});custom.push(t=>{m.position.y=y+1+Math.abs(Math.sin(t*3+i))*1.6;m.rotation.y=Math.sin(t*.7+i)})}
- box(3,2,2,"#8a5a2b",q.cx-18,y,q.cz-15);box(3.1,.8,2.1,"#e3b22b",q.cx-18,y+2,q.cz-15,glow(.4));
- tree(q.cx+19,q.cz-16,y);tree(q.cx+19,q.cz+15,y);tree(q.cx-19,q.cz+15,y);}
-// 6 Prism Lab
-{const q=Z(6),y=T;box(16,7,10,"#f4f4f4",q.cx-10,y,q.cz-3);box(17,1.2,11,"#e5579b",q.cx-10,y+7,q.cz-3);
- for(let i=0;i<3;i++)box(2.4,2,.2,"#8cc7ff",q.cx-15+i*5,y+3.5,q.cz+2.05,{m:{roughness:.1}});
- const pr=add(new THREE.OctahedronGeometry(3.4),"#ff8fc6",q.cx+12,y+7,q.cz-4,{m:{transparent:true,opacity:.8,roughness:.05,emissive:true,ei:.35}});spin.push(pr);bob.push([pr,y+7,2]);
- cyl(2,1,"#ffffff",q.cx+12,y,q.cz-4);
- box(14,8,1,"#2b2f36",q.cx+10,y,q.cz+9);
- const tc=["#f5c518","#3aa655","#1f6fd1","#e5579b","#f07b1d"];for(let r=0;r<4;r++)for(let k=0;k<=r;k++){const b=box(1.2,1.2,.4,tc[(r+k)%5],q.cx+10+(k-r/2)*2.6,y+1.2+(3-r)*1.7,q.cz+8.4,glow(.5))}
- pad(4,4,"#ffd84d",q.cx-16,q.cz+8,y);}
-// 7 Orb Garden
-{const q=Z(7),y=T;cyl(5,1.2,"#b9c3cb",q.cx,y,q.cz);cyl(4.3,.2,"#6cc0ea",q.cx,y+1.2,q.cz,{m:{roughness:.1}});cyl(.6,3,"#b9c3cb",q.cx,y+1.2,q.cz);sph(1.6,"#4ff0e0",q.cx,y+5.6,q.cz,glow(1));
- for(let i=0;i<7;i++){const a=i/7*Math.PI*2;const o=sph(.9+(i%3)*.3,i%2?"#bff8f2":"#35d9c9",q.cx+Math.cos(a)*11,y+4,q.cz+Math.sin(a)*6.5,glow(.9));custom.push(t=>{const b=a+t*.25;o.position.set(q.cx+Math.cos(b)*11,y+4+Math.sin(t*1.5+i)*1.2,q.cz+Math.sin(b)*6.5)})}
+ for(let i=0;i<7;i++)lamp(q.cx-54+i*18,q.cz-11,y,"#c8a8ff")}
+// 5 Noob Arena
+{const q=Z(5),y=T;const rx=q.cx+5,rz=q.cz+2;cyl(10,.15,"#2c8544",rx,y,rz);for(let i=0;i<16;i++){const a=i/16*Math.PI*2;box(1,3,1,"#ffffff",rx+Math.cos(a)*10,y,rz+Math.sin(a)*10)}
+ for(let i=0;i<5;i++){const n=noob(0,0,0);n.scale.setScalar(.8);custom.push(t=>{const a=i*1.3+t*.3;n.position.set(rx+Math.cos(a)*(3+i*1.1),y+Math.abs(Math.sin(t*3+i))*.8,rz+Math.sin(a)*(3+i*1.1));n.rotation.y=-a})}
+ machine({x:q.cx-15,z:q.cz-11,glow:"#ffd60a",cp:"oofs",icon:"oofs",scale:.7,rot:.7});
+ machine({x:q.cx-15,z:q.cz+12,glow:"#7be84f",cp:"builderxp",icon:"builderxp",scale:.7,rot:.9});
+ box(3,2,2,"#a8672e",q.cx+18,y,q.cz-15);box(3.1,.8,2.1,"#e3b22b",q.cx+18,y+2,q.cz-15,G(.4));iconSprite("lootcrates",q.cx+18,y+6,q.cz-15,2.4);
+ box(6,4,.6,"#262e3d",q.cx+17,y+2,q.cz+17);iconSprite("builderlevel",q.cx+17,y+4,q.cz+16.4,2.6);box(.5,2,.5,"#262e3d",q.cx+17,y,q.cz+17);
+ tree(q.cx+19,q.cz+3,y)}
+// 6 Gem Lab
+{const q=Z(6),y=T;box(16,7,9,"#f4f4f4",q.cx-11,y,q.cz-6);box(17,1.2,10,"#e5579b",q.cx-11,y+7,q.cz-6);for(let i=0;i<3;i++)box(2.4,2,.2,"#8cc7ff",q.cx-16+i*5,y+3.5,q.cz-1.45,{m:{roughness:.1}});
+ machine({x:q.cx+11,z:q.cz-4,glow:"#a259ff",cp:"gems",icon:"gems",scale:1.1,rot:-.3});
+ box(14,8,1,"#2b2f36",q.cx-9,y,q.cz+9);const tc=["#f5c518","#3aa655","#1f6fd1","#e5579b","#f07b1d"];
+ for(let r=0;r<4;r++)for(let k=0;k<=r;k++)box(1.2,1.2,.4,tc[(r+k)%5],q.cx-9+(k-r/2)*2.6,y+1.2+(3-r)*1.7,q.cz+8.4,G(.5));
+ box(4,.5,4,"#b89410",q.cx+2,y,q.cz+8);box(3,.2,3,"#ffd84d",q.cx+2,y+.5,q.cz+8,G(.7))}
+// 7 Cylinder Garden
+{const q=Z(7),y=T;machine({x:q.cx,z:q.cz-1,glow:"#2ee6c9",cp:"cylinders",icon:"cylinders",scale:.85});
+ for(let i=0;i<7;i++){const a0=i/7*Math.PI*2;const o=cyl(.8,1.2,"#17b8a4",0,0,0,{m:{roughness:.25}});custom.push(t=>{const b=a0+t*.25;o.position.set(q.cx+Math.cos(b)*12,y+5+Math.sin(t*1.5+i)*1.2,q.cz+Math.sin(b)*6.5);o.rotation.z=t+i})}
  for(let i=0;i<6;i++){box(3,2,3,"#2f8f45",q.cx-15+i*6,y,q.cz+8.5);cyl(.4,.6,i%2?"#ff7eb6":"#ffe14d",q.cx-15+i*6,y+2,q.cz+8.5)}}
-// 8 Cube Merger
-{const q=Z(8),y=T;box(26,1.4,4,"#22262b",q.cx-3,y,q.cz-3);box(26,.5,.4,"#9aa4ad",q.cx-3,y+1.4,q.cz-5);box(26,.5,.4,"#9aa4ad",q.cx-3,y+1.4,q.cz-1);
- box(8,7,8,"#16539e",q.cx+11,y,q.cz-2);cone(3,3,"#c9d1d8",q.cx+11,y+7,q.cz-2,null,4).rotation.y=Math.PI/4;box(4,2,.2,"#7fd0ff",q.cx+11,y+3.5,q.cz+2.05,glow(1));
- const cc=["#ffffff","#7fb6ff","#b690e8"];for(let i=0;i<5;i++){const c=box(1.6,1.6,1.6,cc[i%3],0,y+1.4,q.cz-3);custom.push(t=>{const k=((t*.12+i/5)%1);c.position.x=q.cx-16+k*22;c.rotation.y=k*3})}
- [[q.cx-12,5,3.2],[q.cx-5,6.5,2.2]].forEach(([X,Zo,r])=>{const g=add(new THREE.CylinderGeometry(r,r,.8,10),"#8d98a2",X,y+r+.2,q.cz+Zo);g.rotation.x=Math.PI/2;spin.push(g);g.userData.axis="y"});
- box(3,2,2,"#3b4148",q.cx+2,y,q.cz+7);cyl(.5,.5,"#d6322b",q.cx+2,y+2,q.cz+7);}
-// 9 Sphere Tower
-{const q=Z(9),y=T;const tiers=[[6,"#2b3a8f"],[5,"#1f6fd1"],[4,"#2b3a8f"],[3,"#1f6fd1"]];let h=y;tiers.forEach(([r,c])=>{cyl(r,5,c,q.cx,h,q.cz);cyl(r+.2,.4,"#f5c518",q.cx,h+5,q.cz);h+=5.4});
- const s=sph(3.6,"#4aa3ff",q.cx,h+3.6,q.cz,glow(.8));
- for(let i=0;i<2;i++){const r=add(new THREE.TorusGeometry(5.6+i,.18,8,48),"#bfe3ff",q.cx,h+3.6,q.cz,glow(1));r.rotation.x=Math.PI/2+(i?.5:-.4);custom.push(t=>{r.rotation.z=t*(i?.8:-.6)})}
- pad(5,4,"#4aa3ff",q.cx+10,q.cz+8,y);}
-// 10 Challenge Gates
+// 8 Crate Merger
+{const q=Z(8),y=T;box(24,1.4,4,"#22262b",q.cx-5,y,q.cz-6);box(24,.5,.4,"#9aa4ad",q.cx-5,y+1.4,q.cz-8);box(24,.5,.4,"#9aa4ad",q.cx-5,y+1.4,q.cz-4);
+ box(8,7,8,"#16539e",q.cx+11,y,q.cz-6);cone(3,3,"#c9d1d8",q.cx+11,y+7,q.cz-6,null,4).rotation.y=Math.PI/4;box(4,2,.2,"#7fd0ff",q.cx+11,y+3.5,q.cz-1.95,G(1));
+ iconSprite("crates",q.cx+11,y+14,q.cz-6,3.6);
+ for(let i=0;i<5;i++){const c=box(1.6,1.6,1.6,i%2?"#b8733a":"#9c5e2c",0,y+1.4,q.cz-6);custom.push(t=>{const k=((t*.12+i/5)%1);c.position.x=q.cx-17+k*22})}
+ machine({x:q.cx-10,z:q.cz+6,glow:"#ff9f1c",cp:"tools",icon:"tools",style:"stack",scale:.7});
+ machine({x:q.cx+4,z:q.cz+7,glow:"#ffb347",cp:"thrusters",icon:"thrusters",scale:.7})}
+// 9 Ball Tower
+{const q=Z(9),y=T;const tx=q.cx+6;let h=y;[[6,"#2b3a8f"],[5,"#1f6fd1"],[4,"#2b3a8f"],[3,"#1f6fd1"]].forEach(([r,c])=>{cyl(r,5,c,tx,h,q.cz-2);cyl(r+.2,.4,"#f5c518",tx,h+5,q.cz-2);h+=5.4});
+ sph(3.6,"#ff2fa8",tx,h+3.6,q.cz-2,{m:{roughness:.2}});
+ for(let i=0;i<2;i++){const r=add(new THREE.TorusGeometry(5.6+i,.18,8,48),"#ffc2e8",tx,h+3.6,q.cz-2,G(1));r.rotation.x=Math.PI/2+(i?.5:-.4);custom.push(t=>{r.rotation.z=t*(i?.8:-.6)})}
+ machine({x:q.cx-9,z:q.cz-5,glow:"#ff2fa8",cp:"balls",icon:"balls",scale:.7,rot:.4});
+ machine({x:q.cx-9,z:q.cz+7,glow:"#ff5a1f",cp:"meteors",icon:"meteors",scale:.7,rot:.6})}
+// 10 Obby Gates
 {const q=Z(10),y=T;const dc=["#ff4a3d","#3d8bff","#3ddc6a","#a36bff"];
- for(let i=0;i<4;i++){const X=q.cx-15.6+i*10.4,Zz=q.cz+4;box(1.4,9,1.4,"#e0b21a",X-3.8,y,Zz);box(1.4,9,1.4,"#e0b21a",X+3.8,y,Zz);box(9,1.4,1.6,"#e0b21a",X,y+9,Zz);
-  box(6.2,8.6,.3,dc[i],X,y,Zz,{m:{transparent:true,opacity:.6,emissive:true,ei:.8},noShadow:true});label("C"+(i+1),X,y+13,Zz,dc[i],.4);
-  if(i<3){cyl(.3,4,"#5c3a1f",X+5.2,y,Zz+3);const fl=cone(.6,1.5,"#ff9a3c",X+5.2,y+4,Zz+3,glow(1.2));custom.push(t=>fl.scale.y=1+.3*Math.sin(t*12+i))}}
- for(let i=0;i<14;i++)box(3,.1,3,"#30353b",q.cx-20+(i*7.3)%40,T,q.cz-12+((i*5.1)%12),{noShadow:true});}
-// 11 Portal + bridge
-{const [bx,bz]=W(755,380);box(26,1.6,8,"#c9a36b",bx,-.2,bz);studGrid(bx-13,bz-4,26,8,1.4,"#d8b67e");
- box(26,1.4,.6,"#8a6a3f",bx,1.4,bz-3.7);box(26,1.4,.6,"#8a6a3f",bx,1.4,bz+3.7);
+ for(let i=0;i<4;i++){const X=q.cx-15.6+i*10.4,Zz=q.cz-2;box(1.4,9,1.4,"#e0b21a",X-3.8,y,Zz);box(1.4,9,1.4,"#e0b21a",X+3.8,y,Zz);box(9,1.4,1.6,"#e0b21a",X,y+9,Zz);
+  box(6.2,8.6,.3,dc[i],X,y,Zz,{m:{transparent:true,opacity:.6,emissive:true,ei:.8},noShadow:true});
+  box(.2,3,.2,"#1d2329",X+2.5,y+10.4,Zz);for(let a=0;a<2;a++)for(let b=0;b<2;b++)box(.6,.6,.08,(a+b)%2?"#1d2329":"#ffffff",X+2.9+a*.6,y+12.2+b*.6,Zz);
+  [0,1,2].forEach(k=>box(2.2,.7,1.6,"#ff8a1a",X,y+.6+k*1.3,Zz+9-k*2.4));
+  const ring=[];for(let j=0;j<16;j++){const a=j/16*Math.PI*2;const b=box(1,.3,.6,j%2?"#1d2329":"#e0261f",X+Math.cos(a)*3.6,y,Zz+10+Math.sin(a)*2.6,{noShadow:true});b.rotation.y=-a+Math.PI/2}
+  label("Obby "+(i+1),X,y+15.5,Zz,dc[i],.4)}
+ iconSprite("obbies",q.cx-24,y+6,q.cz-12,3)}
+// 11 Rebirth portal + bridge
+{const [bx,bz]=W(755,380);box(26,1.6,8,"#c9a36b",bx,-.2,bz);studGrid(bx-13,bz-4,26,8,1.4,"#d8b67e");box(26,1.4,.6,"#8a6a3f",bx,1.4,bz-3.7);box(26,1.4,.6,"#8a6a3f",bx,1.4,bz+3.7);
  [bx-11,bx+11].forEach(X=>{lamp(X,bz-3.7,1.4,"#c8a8ff");lamp(X,bz+3.7,1.4,"#c8a8ff")});
- const [px,pz]=W(772,380);
- const ring=add(new THREE.TorusGeometry(7.5,1.1,14,48),"#7a4bc4",px,9.6,pz,glow(.7));ring.rotation.y=Math.PI/2;
- const disc=add(new THREE.CircleGeometry(6.6,40),"#c8a8ff",px,9.6,pz,{m:{transparent:true,opacity:.55,side:THREE.DoubleSide,emissive:true,ei:.9},noShadow:true});disc.rotation.y=Math.PI/2;
- custom.push(t=>{ring.rotation.x=t*.4;disc.material.opacity=.45+.15*Math.sin(t*2)});
- box(2,3,8,"#6f7c86",px-9,1.4,pz);box(2,3,8,"#6f7c86",px+9,1.4,pz);
- const pp=[];for(let i=0;i<40;i++){const p=sph(.25,"#ffffff",px,9.6,pz,glow(1));p.castShadow=false;pp.push(p)}
- custom.push(t=>pp.forEach((p,i)=>{const a=i*2.4+t*(1+i%3*.4),r=1+((t*.6+i*.13)%1)*5.5;p.position.set(px,9.6+Math.sin(a)*r,pz+Math.cos(a)*r)}));}
-// 12 Frost Pack Row
-{const q=Z(12),y=T;const packs=[[881,"#b36bff","Polychrome"],[963,"#9fe6ff","Cryo"],[1045,"#ffffff","Arctic"],[1127,"#2b1a5c","Galactic"]];
- packs.forEach(([sx,c,n],i)=>{const [X,Zz]=W(sx,100);cyl(3.2,3,"#bfeaff",X,y,Zz,{m:{transparent:true,opacity:.8,roughness:.1}});
-  const cr=box(4.5,4.5,4.5,c,X,y+6,Zz,{m:{roughness:.25,emissive:n==="Galactic",ei:.25}});spin.push(cr);bob.push([cr,y+8.2,i+3]);pad(3.6,2.6,c==="#ffffff"?"#dff3ff":c,X,Zz+6.5,y);label(n,X,y+14,Zz,c==="#ffffff"?"#5aa6e0":c,.5)});
- box(66,1.5,1.5,"#3f86c0",q.cx,y+10,q.cz-10);box(1.5,10,1.5,"#3f86c0",q.cx-33,y,q.cz-10);box(1.5,10,1.5,"#3f86c0",q.cx+33,y,q.cz-10);
- for(let i=0;i<14;i++)cone(.45,1.8+(i%3)*.6,"#e8f8ff",q.cx-31+i*4.8,y+8.5-(i%3)*.6,q.cz-10,null,5).rotation.x=Math.PI;}
-// 13 Droplet Well
-{const q=Z(13),y=T;cyl(6,3,"#cfdde6",q.cx,y,q.cz);cyl(5,.3,"#2f8fe0",q.cx,y+2.6,q.cz,glow(.5));
- box(.8,8,.8,"#8a6a3f",q.cx-5.5,y,q.cz);box(.8,8,.8,"#8a6a3f",q.cx+5.5,y,q.cz);cone(8,3,"#3f86c0",q.cx,y+8,q.cz,null,4).rotation.y=Math.PI/4;
- for(let i=0;i<8;i++){const d=sph(.6,"#6cc0ea",q.cx,y,q.cz,glow(.6));d.scale.y=1.5;custom.push(t=>{const k=(t*.35+i/8)%1;d.position.set(q.cx+Math.cos(i*2.1)*2.5*k,y+3+k*12,q.cz+Math.sin(i*2.1)*2.5*k);d.scale.setScalar(1-k*.8);d.scale.y*=1.5})}
- cyl(2,1,"#1f6fd1",q.cx-10,y,q.cz+10);cyl(1.5,.6,"#4aa3ff",q.cx-10,y+1,q.cz+10,glow(.8));
- cyl(2,1,"#27a3b8",q.cx+10,y,q.cz+10);cyl(1.5,.6,"#9ff4ff",q.cx+10,y+1,q.cz+10,glow(.8));
- pine(q.cx-11,q.cz-11,y);pine(q.cx+11,q.cz-11,y);}
-// 14 Freeze Works
-{const q=Z(14),y=T;for(let r=0;r<3;r++)for(let c=0;c<3;c++){const X=q.cx-9+c*9,Zz=q.cz-8+r*8.5;pad(5,5,"#bff4ff",X,Zz+1.5,y);
-  box(1.8,2+r*2.5,1.8,"#d6f6ff",X,y,Zz-2,{m:{transparent:true,opacity:.75,roughness:.05}})}
- for(let i=0;i<22;i++){const a=i/22*Math.PI*2;cone(.8,2+(i%4),"#f4fdff",q.cx+Math.cos(a)*15.5,y,q.cz+Math.sin(a)*13.5,null,5)}}
-// 15 Chromatizer
-{const q=Z(15),y=T;box(12,7,9,"#eef0f6",q.cx,y,q.cz-2,{m:{metalness:.3,roughness:.3}});add(new THREE.SphereGeometry(4,24,12,0,Math.PI*2,0,Math.PI/2),"#bfe8ff",q.cx,y+7,q.cz-2,{m:{transparent:true,opacity:.6,roughness:.05}});
- const rb=["#ff4a3d","#ff9a3c","#ffe14d","#3ddc6a","#3d8bff","#a36bff"];rb.forEach((c,i)=>{const r=add(new THREE.TorusGeometry(9+i*.9,.22,8,64),c,q.cx,y+5,q.cz-2,glow(1));custom.push(t=>{r.rotation.x=Math.PI/2+Math.sin(t*.5+i)*.5;r.rotation.y=t*(.2+i*.07)})});
- for(let i=0;i<9;i++){const X=q.cx-28+((i*13)%56),Zz=q.cz-8+((i*7)%16);add(new THREE.OctahedronGeometry(1+(i%3)*.6),"#c9d1d8",X,y+1.2,Zz,{m:{metalness:.9,roughness:.2}})}
- pad(6,5,"#b690e8",q.cx,q.cz+8,y);pad(4,4,"#ff9ad0",q.cx+18,q.cz+8,y);}
-// 16 Chromify Spire
-{const q=Z(16),y=T;let h=y;[[10,"#fbfbf2"],[7.5,"#f0c94a"],[5,"#fbfbf2"]].forEach(([r,c],i)=>{cyl(r,6,c,q.cx,h,q.cz,null,r*.92);cyl(r*.95,.5,"#d9a92a",q.cx,h+6,q.cz);
-  for(let k=0;k<8;k++){const a=k/8*Math.PI*2;const w=box(1,1.6,.3,"#ffe89a",q.cx+Math.cos(a)*r*.93,h+2.2,q.cz+Math.sin(a)*r*.93,glow(.6+i*.2));w.rotation.y=-a+Math.PI/2}h+=6.5});
- cone(2.4,7,"#ffd84d",q.cx,h,q.cz,glow(1),8);
- const beam=cyl(.9,60,"#fff3b0",q.cx,h+6,q.cz,{m:{transparent:true,opacity:.28,emissive:true,ei:1},noShadow:true});beam.castShadow=false;
- pad(5,5,"#ffffff",q.cx-15,q.cz+9,y);pad(5,5,"#f5c518",q.cx,q.cz+13,y);pad(5,5,"#c9d1d8",q.cx+15,q.cz+9,y);
- pine(q.cx-20,q.cz-11,y);pine(q.cx+20,q.cz-11,y);}
+ const [px,pz]=W(772,380);const ring=add(new THREE.TorusGeometry(7.5,1.1,14,48),"#a855f7",px-6,9.6,pz,G(.7));ring.rotation.y=Math.PI/2;
+ const ring2=add(new THREE.TorusGeometry(6.2,.4,10,48),"#ff5fd0",px-6,9.6,pz,G(1));ring2.rotation.y=Math.PI/2;
+ const disc=add(new THREE.CircleGeometry(6,40),"#e3c4ff",px-6,9.6,pz,{m:{transparent:true,opacity:.5,side:THREE.DoubleSide,emissive:true,ei:.9},noShadow:true});disc.rotation.y=Math.PI/2;
+ custom.push(t=>{ring.rotation.x=t*.4;ring2.rotation.x=-t*.7;disc.material.opacity=.4+.15*Math.sin(t*2)});iconSprite("rebirth",px-6,21,pz,4);
+ // glacier gate
+ const gx=42.5;box(2.4,11,2.4,"#d6f1fb",gx,0,pz-5.5,{m:{transparent:true,opacity:.85,roughness:.05}});box(2.4,11,2.4,"#d6f1fb",gx,0,pz+5.5,{m:{transparent:true,opacity:.85,roughness:.05}});
+ box(2.8,2.6,13.6,"#d6f1fb",gx,11,pz,{m:{transparent:true,opacity:.85,roughness:.05}});cone(1.4,2.6,"#eaf8ff",gx,13.6,pz,null,4);
+ const sw=add(new THREE.CircleGeometry(4.4,32),"#4fb8f0",gx,5.6,pz,{m:{transparent:true,opacity:.45,side:THREE.DoubleSide,emissive:true,ei:.6},noShadow:true});sw.rotation.y=Math.PI/2;
+ iconSprite("theglacier",gx,20,pz,3.6)}
+// 12 Frost Hat Row
+{const q=Z(12),y=T;[[881,"#b36bff","gems"],[963,"#9fe6ff","frostpoints"],[1045,"#f4fbff","neon"],[1127,"#3a1f7a","tix"]].forEach(([sx,c,cost])=>{const [X,Zz]=W(sx,95);
+  machine({x:X,z:Zz,glow:c==="#f4fbff"?"#7fd0ff":c,cpfn:()=>CP.hat(c),icon:"hats",ice:true,scale:.95});iconSprite(cost,X+4,y+8.8,Zz+2,2)});
+ ["Polychrome","Cryo","Arctic","Galactic"].forEach((n,i)=>{const [X,Zz]=W([881,963,1045,1127][i],95);label(n,X,y+16.5,Zz,"#1f6fd1",.45)});
+ box(66,1.5,1.5,"#3f86c0",q.cx,y+10,q.cz-10.5);box(1.5,10,1.5,"#3f86c0",q.cx-33,y,q.cz-10.5);box(1.5,10,1.5,"#3f86c0",q.cx+33,y,q.cz-10.5);
+ for(let i=0;i<14;i++){const c=cone(.45,1.8+(i%3)*.6,"#e8f8ff",q.cx-31+i*4.8,y+8.3-(i%3)*.6,q.cz-10.5,null,5);c.rotation.x=Math.PI}}
+// 13 Glass Well
+{const q=Z(13),y=T;cyl(5,3,"#cfdde6",q.cx,y,q.cz-3);cyl(4.1,.3,"#2f8fe0",q.cx,y+2.6,q.cz-3,G(.5));box(.8,8,.8,"#8a6a3f",q.cx-4.6,y,q.cz-3);box(.8,8,.8,"#8a6a3f",q.cx+4.6,y,q.cz-3);
+ cone(7,3,"#3f86c0",q.cx,y+8,q.cz-3,null,4).rotation.y=Math.PI/4;
+ for(let i=0;i<6;i++){const d=box(1.2,.4,.9,"#9fe6ff",0,0,0,{m:{transparent:true,opacity:.8,roughness:.05}});custom.push(t=>{const k=(t*.3+i/6)%1;d.position.set(q.cx+Math.cos(i*2.1)*2*k,y+3+k*12,q.cz-3+Math.sin(i*2.1)*2*k);d.rotation.y=t+i;d.scale.setScalar(1.2-k)})}
+ machine({x:q.cx-9,z:q.cz+9,glow:"#5ee0ff",cp:"glass",icon:"glass",scale:.6,rot:.4});
+ machine({x:q.cx,z:q.cz+10,glow:"#3d9bff",cp:"glacier",icon:"glacier",scale:.6});
+ machine({x:q.cx+9,z:q.cz+9,glow:"#c9d6e2",cp:"diamondplate",icon:"diamondplate",style:"stack",scale:.6,rot:-.4,reset:true});
+ pine(q.cx-12,q.cz-12,y);pine(q.cx+12,q.cz-12,y)}
+// 14 Anchor Works
+{const q=Z(14),y=T;for(let r=0;r<3;r++)for(let c=0;c<3;c++){const m=machine({x:q.cx-10+c*10,z:q.cz-6+r*8,glow:["#5d8fd6","#3d8bff","#8fd0ff"][r],cp:"anchor",style:"stack",scale:.45,reset:true,icon:r===0&&c===1?"anchor":null})}
+ machine({x:q.cx-9,z:q.cz-12.5,glow:"#b98cff",cp:"forcefields",icon:"forcefields",scale:.5});
+ machine({x:q.cx+9,z:q.cz-12.5,glow:"#c7c1ee",cp:"fog",icon:"fog",scale:.5});
+ for(let i=0;i<22;i++){const a=i/22*Math.PI*2;cone(.7,1.8+(i%4)*.7,"#f4fdff",q.cx+Math.cos(a)*16,y,q.cz+Math.sin(a)*14,null,5)}}
+// 15 Union Machine
+{const q=Z(15),y=T;box(12,7,9,"#eef0f6",q.cx,y,q.cz-3,{m:{metalness:.3,roughness:.3}});add(new THREE.SphereGeometry(4,24,12,0,Math.PI*2,0,Math.PI/2),"#bfe8ff",q.cx,y+7,q.cz-3,{m:{transparent:true,opacity:.55,roughness:.05}});
+ const u=sub(CP.union);u.position.set(q.cx,y+9.5,q.cz-3);u.scale.setScalar(1.3);spin.push(u);
+ ["#ff4a3d","#ff9a3c","#ffe14d","#3ddc6a","#3d8bff","#a36bff"].forEach((c,i)=>{const r=add(new THREE.TorusGeometry(9+i*.9,.22,8,64),c,q.cx,y+5,q.cz-3,G(1));custom.push(t=>{r.rotation.x=Math.PI/2+Math.sin(t*.5+i)*.5;r.rotation.y=t*(.2+i*.07)})});
+ iconSprite("union",q.cx,y+17,q.cz-3,4);
+ for(let i=0;i<20;i++){const a=i/20*Math.PI*2;const b=box(1.35,.35,.8,i%2?"#1d2329":"#e0261f",q.cx+Math.cos(a)*5,y,q.cz+8+Math.sin(a)*2.6,{noShadow:true});b.rotation.y=-a+Math.PI/2}
+ box(5,.5,3.6,"#262e3d",q.cx,y,q.cz+8);box(3.6,.2,2.4,"#b690e8",q.cx,y+.5,q.cz+8,G(.8));
+ machine({x:q.cx-25,z:q.cz+1,glow:"#39ff14",cp:"neon",icon:"neon",scale:.8,rot:.3});
+ machine({x:q.cx+25,z:q.cz+1,glow:"#f2a5d8",cp:"foil",icon:"foil",scale:.8,rot:-.3})}
+// 16 Publish Spire
+{const q=Z(16),y=T;const sx=q.cx,sz=q.cz-5;let h=y;[[9,"#fbfbf2"],[6.8,"#f0c94a"],[4.6,"#fbfbf2"]].forEach(([r,c],i)=>{cyl(r,6,c,sx,h,sz,null,r*.92);cyl(r*.95,.5,"#d9a92a",sx,h+6,sz);
+  for(let k=0;k<8;k++){const a=k/8*Math.PI*2;const w=box(1,1.6,.3,"#ffe89a",sx+Math.cos(a)*r*.93,h+2.2,sz+Math.sin(a)*r*.93,G(.6+i*.2));w.rotation.y=-a+Math.PI/2}h+=6.5});
+ cone(2.2,7,"#ffd84d",sx,h,sz,G(1),8);cyl(.9,60,"#fff3b0",sx,h+6,sz,{m:{transparent:true,opacity:.28,emissive:true,ei:1},noShadow:true});
+ machine({x:q.cx,z:q.cz+10,glow:"#2e8fff",cp:"publish",icon:"publish",style:"stack",scale:.75,reset:true});
+ machine({x:q.cx-16,z:q.cz+6,glow:"#ffd84d",cp:"lighting",icon:"lighting",scale:.65,rot:.5});
+ machine({x:q.cx+16,z:q.cz+6,glow:"#dff4ff",cp:"reflectance",icon:"reflectance",scale:.65,rot:-.5,reset:true});
+ machine({x:q.cx-17,z:q.cz-9,glow:"#f2a5d8",cp:"foil",icon:"foil",scale:.5,rot:.8});
+ const sp=[];for(let i=0;i<14;i++){const s=add(new THREE.OctahedronGeometry(.45,0),"#ffe9a8",0,0,0,G(1));s.scale.set(.5,1.4,.5);sp.push(s)}
+ custom.push(t=>sp.forEach((s,i)=>{const a=i*.9+t*.2;s.position.set(sx+Math.cos(a)*(11+i%3*2),y+3+((t*.5+i*.37)%1)*14,sz+Math.sin(a)*(9+i%3));s.rotation.y=t*2}));
+ iconSprite("sparkles",sx+12,y+14,sz-4,2.4)}
 
-/* arctic decor + snow */
+/* decor + snow */
 [[45,-75],[118,-75],[45,75],[118,75],[118,0],[50,40]].forEach(([x,z])=>pine(x,z,0));
 [[-115,-75],[-115,75],[25,-75],[25,72],[-60,76]].forEach(([x,z])=>tree(x,z,0));
-const snowN=reduce?0:700,sg=new THREE.BufferGeometry(),sp=new Float32Array(snowN*3);
-for(let i=0;i<snowN;i++){sp[i*3]=40+Math.random()*80;sp[i*3+1]=Math.random()*60;sp[i*3+2]=-80+Math.random()*160}
-sg.setAttribute("position",new THREE.BufferAttribute(sp,3));
-const snow=new THREE.Points(sg,new THREE.PointsMaterial({color:"#ffffff",size:.5}));scene.add(snow);
+const snowN=reduce?0:700,sg=new THREE.BufferGeometry(),spos=new Float32Array(snowN*3);
+for(let i=0;i<snowN;i++){spos[i*3]=40+Math.random()*80;spos[i*3+1]=Math.random()*60;spos[i*3+2]=-80+Math.random()*160}
+sg.setAttribute("position",new THREE.BufferAttribute(spos,3));scene.add(new THREE.Points(sg,new THREE.PointsMaterial({color:"#ffffff",size:.5})));
 
 /* build studs */
-{const g=new THREE.CylinderGeometry(1.1,1.1,.6,12);g.translate(0,.3,0);
- const im=new THREE.InstancedMesh(g,new THREE.MeshStandardMaterial({roughness:.45}),studs.length);
+{const g=new THREE.CylinderGeometry(1.1,1.1,.6,12);g.translate(0,.3,0);const im=new THREE.InstancedMesh(g,new THREE.MeshStandardMaterial({roughness:.45}),studs.length);
  const m=new THREE.Matrix4(),col=new THREE.Color(),sc=new THREE.Vector3(),q=new THREE.Quaternion(),p=new THREE.Vector3();
- studs.forEach((s,i)=>{p.set(s[0],s[1],s[2]);sc.set(s[4],s[4]===1?1:1.3,s[4]);m.compose(p,q,sc);im.setMatrixAt(i,m);im.setColorAt(i,col.set(s[3]))});
- im.receiveShadow=true;im.castShadow=false;scene.add(im);}
+ studs.forEach((s,i)=>{p.set(s[0],s[1],s[2]);sc.set(s[4],s[4]===1?1:1.3,s[4]);m.compose(p,q,sc);im.setMatrixAt(i,m);im.setColorAt(i,col.set(s[3]))});im.receiveShadow=true;scene.add(im)}
 
 /* labels */
-function label(text,x,y,z,color,scale){
-  const cv=document.createElement("canvas");const ctx=cv.getContext("2d");const fs=56;ctx.font=`800 ${fs}px Nunito, sans-serif`;
-  const tw=ctx.measureText(text).width;cv.width=Math.ceil(tw+48);cv.height=92;
-  ctx.font=`800 ${fs}px Nunito, sans-serif`;ctx.fillStyle="#ffffff";roundRect(ctx,4,4,cv.width-8,cv.height-8,16);ctx.fill();
-  ctx.fillStyle=color;ctx.fillRect(4,cv.height-16,cv.width-8,8);ctx.fillStyle="#1d2329";ctx.textBaseline="middle";ctx.fillText(text,24,cv.height/2-2);
+function label(text,x,y,z,color,scale,iconKey){
+  const cv=document.createElement("canvas");const ctx=cv.getContext("2d");const fs=56,pad=iconKey?92:24;ctx.font=`800 ${fs}px Nunito, sans-serif`;
+  cv.width=Math.ceil(ctx.measureText(text).width+pad+24);cv.height=92;ctx.font=`800 ${fs}px Nunito, sans-serif`;
+  ctx.fillStyle="#ffffff";rr(ctx,4,4,cv.width-8,cv.height-8,16);ctx.fill();ctx.fillStyle=color;ctx.fillRect(4,cv.height-16,cv.width-8,8);
+  ctx.fillStyle="#1d2329";ctx.textBaseline="middle";ctx.fillText(text,pad,cv.height/2-2);
   const tex=new THREE.CanvasTexture(cv);tex.encoding=THREE.sRGBEncoding;tex.anisotropy=4;
-  const s=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,depthWrite:false}));const k=(scale||1)*0.09;s.scale.set(cv.width*k,cv.height*k,1);s.position.set(x,y,z);scene.add(s);return s}
-function roundRect(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath()}
-const labelH={4:20,9:40,11:22,12:20,16:34,1:16,5:14};
-ZONES.forEach(z=>{const q=Z(z.id);const s=label(z.id+"  "+z.name,q.cx,labelH[z.id]||15,q.cz,z.c,.72);s.userData.zone=z;pickables.push(s)});
-label("REALM ONE",-45,4,88,"#d6322b",1.2);label("REALM TWO · ARCTIC",80,4,88,"#1f6fd1",1.2);
+  const s=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,depthWrite:false}));const k=(scale||1)*.09;s.scale.set(cv.width*k,cv.height*k,1);s.position.set(x,y,z);scene.add(s);
+  if(iconKey){const im=new Image();im.onload=()=>{ctx.drawImage(im,14,10,66,66);tex.needsUpdate=true};im.src=ICON[iconKey]}
+  return s}
+function rr(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath()}
+const labelH={1:24,4:26,5:18,9:40,11:28,12:25,14:18,15:24,16:36};
+ZONES.forEach(z=>{const q=Z(z.id);const s=label(z.id+"  "+z.name,q.cx,labelH[z.id]||19,q.cz,z.c,.72,z.icon);s.userData.zone=z;pickables.push(s)});
+label("REALM ONE",-45,4,88,"#d6322b",1.2);label("THE GLACIER",80,4,88,"#1f6fd1",1.1,"theglacier");
 
-/* camera views */
-const views={
-  Overview:{p:[-10,185,215],t:[0,0,0]},
-  "Top-down":{p:[0,250,1],t:[0,0,0]},
-  "Realm One":{p:[-45,95,110],t:[-45,0,0]},
-  Arctic:{p:[160,95,95],t:[80,0,0]},
-  "From spawn":{p:[-42,14,18],t:[20,6,-5]},
-  "Side (south)":{p:[0,40,190],t:[0,6,0]},
-  "Side (west)":{p:[-210,55,0],t:[0,6,0]},
-};
+/* views */
+const views={Overview:{p:[-10,185,215],t:[0,0,0]},"Top-down":{p:[0,250,1],t:[0,0,0]},"Realm One":{p:[-45,95,110],t:[-45,0,0]},"The Glacier":{p:[160,95,95],t:[80,0,0]},
+ "From spawn":{p:[-44,12,16],t:[20,6,-5]},"Side (south)":{p:[0,40,190],t:[0,6,0]},"Side (west)":{p:[-210,55,0],t:[0,6,0]},"Machine close-up":{p:[-15,10,20],t:[-34,6,6]}};
 let anim=null;
-function flyTo(p,t,dur){const p0=camera.position.clone(),t0=controls.target.clone(),p1=new THREE.Vector3(...p),t1=new THREE.Vector3(...t);
-  if(reduce||dur===0){camera.position.copy(p1);controls.target.copy(t1);return}
-  anim={p0,t0,p1,t1,s:performance.now(),d:dur||1200}}
+function flyTo(p,t,dur){const p1=new THREE.Vector3(...p),t1=new THREE.Vector3(...t);if(reduce||dur===0){camera.position.copy(p1);controls.target.copy(t1);return}
+  anim={p0:camera.position.clone(),t0:controls.target.clone(),p1,t1,s:performance.now(),d:dur||1200}}
 const hud=$("#hud");let tourOn=false,tourTimer=null;
 Object.keys(views).forEach(k=>{const b=document.createElement("button");b.type="button";b.textContent=k;b.onclick=()=>{stopTour();panel.innerHTML=overviewHTML();markZone(null);flyTo(views[k].p,views[k].t)};hud.appendChild(b)});
 const tb=document.createElement("button");tb.type="button";tb.textContent="▶ Tour";tb.setAttribute("aria-pressed","false");hud.appendChild(tb);
-const rb=document.createElement("button");rb.type="button";rb.textContent="Auto-spin";rb.setAttribute("aria-pressed","false");hud.appendChild(rb);
-rb.onclick=()=>{controls.autoRotate=!controls.autoRotate;controls.autoRotateSpeed=.8;rb.setAttribute("aria-pressed",String(controls.autoRotate))};
+const rbt=document.createElement("button");rbt.type="button";rbt.textContent="Auto-spin";rbt.setAttribute("aria-pressed","false");hud.appendChild(rbt);
+rbt.onclick=()=>{controls.autoRotate=!controls.autoRotate;controls.autoRotateSpeed=.8;rbt.setAttribute("aria-pressed",String(controls.autoRotate))};
 function stopTour(){tourOn=false;clearTimeout(tourTimer);tb.setAttribute("aria-pressed","false");tb.textContent="▶ Tour"}
-tb.onclick=()=>{if(tourOn){stopTour();return}tourOn=true;tb.setAttribute("aria-pressed","true");tb.textContent="■ Stop tour";let i=0;
-  const step=()=>{if(!tourOn)return;selectZone(ZONES[i],true);i=(i+1)%ZONES.length;tourTimer=setTimeout(step,5000)};step()};
+tb.onclick=()=>{if(tourOn){stopTour();return}tourOn=true;tb.setAttribute("aria-pressed","true");tb.textContent="■ Stop tour";let i=0;const step=()=>{if(!tourOn)return;selectZone(ZONES[i],true);i=(i+1)%ZONES.length;tourTimer=setTimeout(step,5500)};step()};
 function markZone(z){document.querySelectorAll(".zbtn").forEach(b=>b.setAttribute("aria-current",String(!!z&&b.id==="zb"+z.id)))}
-selectZone=(z,fromTour)=>{if(!fromTour)stopTour();const q=Z(z.id);const span=Math.max(q.w,q.d);
-  const dist=Math.min(Math.max(span*1.25,38),130);const tall={9:14,16:14,11:8}[z.id]||3;
-  flyTo([q.cx+dist*.45,dist*.75+tall,q.cz+dist*.8],[q.cx,tall,q.cz]);panel.innerHTML=detailHTML(z);panel.scrollTop=0;markZone(z)};
+selectZone=(z,fromTour)=>{if(!fromTour)stopTour();const q=Z(z.id);const span=Math.max(q.w,q.d);const dist=Math.min(Math.max(span*1.15,34),125);const tall={9:14,16:14,11:8}[z.id]||3;
+  flyTo([q.cx+dist*.4,dist*.7+tall,q.cz+dist*.8],[q.cx,tall,q.cz]);panel.innerHTML=detailHTML(z);panel.scrollTop=0;markZone(z)};
 
 /* picking */
 const ray=new THREE.Raycaster(),mv=new THREE.Vector2();let down=null;
 renderer.domElement.addEventListener("pointerdown",e=>{down=[e.clientX,e.clientY];stopTour()});
-renderer.domElement.addEventListener("pointerup",e=>{if(!down||Math.hypot(e.clientX-down[0],e.clientY-down[1])>6)return;
-  const r=renderer.domElement.getBoundingClientRect();mv.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);ray.setFromCamera(mv,camera);
-  const hit=ray.intersectObjects(pickables,false)[0];if(hit)selectZone(hit.object.userData.zone)});
+renderer.domElement.addEventListener("pointerup",e=>{if(!down||Math.hypot(e.clientX-down[0],e.clientY-down[1])>6)return;const r=renderer.domElement.getBoundingClientRect();
+  mv.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);ray.setFromCamera(mv,camera);const hit=ray.intersectObjects(pickables,false)[0];if(hit)selectZone(hit.object.userData.zone)});
 
-/* resize + loop */
 function resize(){const w=viewer.clientWidth,h=viewer.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix()}
 new ResizeObserver(resize).observe(viewer);resize();
 const clock=new THREE.Clock();
-function frame(){const t=clock.getElapsedTime();
-  if(anim){let k=Math.min(1,(performance.now()-anim.s)/anim.d);const e=k<.5?4*k*k*k:1-Math.pow(-2*k+2,3)/2;camera.position.lerpVectors(anim.p0,anim.p1,e);controls.target.lerpVectors(anim.t0,anim.t1,e);if(k>=1)anim=null}
-  if(!reduce){spin.forEach(m=>{if(m.userData.axis==="y")m.rotation.y+=.02;else m.rotation.y+=.012});
-   bob.forEach(([m,base,i])=>m.position.y=base+Math.sin(t*1.4+i)*.8);custom.forEach(f=>f(t));
-   water2.material.opacity=.45+.12*Math.sin(t*1.3);
+(function frame(){const t=clock.getElapsedTime();
+  if(anim){const k=Math.min(1,(performance.now()-anim.s)/anim.d),e=k<.5?4*k*k*k:1-Math.pow(-2*k+2,3)/2;camera.position.lerpVectors(anim.p0,anim.p1,e);controls.target.lerpVectors(anim.t0,anim.t1,e);if(k>=1)anim=null}
+  if(!reduce){spin.forEach(m=>m.rotation.y+=.012);bob.forEach(([m,b,i])=>m.position.y=b+Math.sin(t*1.4+i)*.5);custom.forEach(f=>f(t));water2.material.opacity=.45+.12*Math.sin(t*1.3);
    if(snowN){const a=sg.attributes.position.array;for(let i=0;i<snowN;i++){a[i*3+1]-=.06;if(a[i*3+1]<0)a[i*3+1]=60}sg.attributes.position.needsUpdate=true}}
-  controls.update();renderer.render(scene,camera);requestAnimationFrame(frame)}
-frame();
+  controls.update();renderer.render(scene,camera);requestAnimationFrame(frame)})();
 }
 </script>
