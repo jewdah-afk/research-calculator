@@ -1,0 +1,269 @@
+<title>Stud Incremental Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@500;700;800&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+:root{
+  color-scheme: light;
+  --plate:#6f7c86; --plate-dk:#5d6972; --ink:#1d2329; --paper:#eef1f3; --card:#ffffff; --muted:#56616b;
+  --red:#d6322b; --yellow:#f5c518; --blue:#1f6fd1; --green:#3aa655; --orange:#f07b1d; --purple:#7a4bc4;
+  --ice:#9fd8f2; --snow:#e8f6fc; --water:#4fa9d9; --pink:#e5579b; --teal:#1aa39a;
+}
+body{background:var(--paper);color:var(--ink);font:500 15px/1.55 Nunito,system-ui,sans-serif;padding-inline:16px;padding-block:24px 48px}
+.wrap{max-width:1180px;margin:0 auto;display:grid;gap:22px}
+h1{font:400 clamp(30px,5vw,48px)/1.05 "Lilita One",Impact,sans-serif;margin:0;letter-spacing:.5px;text-wrap:balance}
+h1 span{color:var(--red)}
+h2{font:400 24px/1.1 "Lilita One",Impact,sans-serif;margin:0}
+.lede{max-width:68ch;color:var(--muted);margin:6px 0 0}
+.tag{display:inline-block;font:700 11px/1 Nunito,sans-serif;letter-spacing:.08em;text-transform:uppercase;background:var(--yellow);color:var(--ink);padding:5px 8px;border-radius:4px}
+.mapbox{overflow-x:auto;border-radius:10px;background:var(--plate-dk);box-shadow:0 4px 0 #3f484f}
+.mapbox svg{display:block;min-width:900px;width:100%;height:auto}
+svg text{font-family:Nunito,system-ui,sans-serif}
+.legend{display:flex;flex-wrap:wrap;gap:8px 18px;font-size:13px;color:var(--muted)}
+.legend i{display:inline-block;width:14px;height:14px;border-radius:3px;vertical-align:-2px;margin-right:6px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+.zone{background:var(--card);border-radius:8px;padding:14px 16px;display:grid;gap:6px;border-top:8px solid var(--c)}
+.zone h3{margin:0;font:800 16px/1.2 Nunito,sans-serif;display:flex;gap:8px;align-items:baseline}
+.zone h3 b{font:400 15px "Lilita One",sans-serif;background:var(--c);color:#fff;min-width:26px;text-align:center;border-radius:4px;padding:1px 5px}
+.zone .gate{font:500 12px "JetBrains Mono",ui-monospace,monospace;color:var(--muted)}
+.zone p{margin:0;font-size:14px}
+.notes{background:var(--card);border-radius:8px;padding:16px 18px}
+.notes ul{margin:8px 0 0;padding-left:20px;display:grid;gap:4px}
+.section-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+</style>
+
+<div class="wrap">
+  <header>
+    <span class="tag">Rough draft · v0</span>
+    <h1>Stud Incremental <span>Map</span></h1>
+    <p class="lede">Top-down layout of every section, laid out on a grey baseplate. Each zone is a coloured plate, numbered in the order players unlock it. Realm One sits on the left. Crossing the Ascension Portal takes you over the water to the Arctic (Realm Two) plate on the right. Gates come from the real tier unlocks in the game scripts.</p>
+  </header>
+
+  <div class="mapbox">
+  <svg viewBox="0 0 1200 780" role="img" aria-label="Top-down map of Stud Incremental zones">
+    <defs>
+      <pattern id="studs" width="20" height="20" patternUnits="userSpaceOnUse">
+        <circle cx="10" cy="10" r="5.5" fill="#7e8b95"/><circle cx="9" cy="9" r="4" fill="#86939d"/>
+      </pattern>
+      <pattern id="zstud" width="20" height="20" patternUnits="userSpaceOnUse">
+        <circle cx="10" cy="10" r="5.5" fill="#000" fill-opacity=".12"/><circle cx="9" cy="9" r="4" fill="#fff" fill-opacity=".22"/>
+      </pattern>
+      <pattern id="waves" width="30" height="14" patternUnits="userSpaceOnUse">
+        <path d="M0 7 q7.5 -6 15 0 t15 0" fill="none" stroke="#bfe6f7" stroke-width="2" stroke-opacity=".6"/>
+      </pattern>
+      <filter id="sh" x="-5%" y="-5%" width="110%" height="115%"><feDropShadow dx="0" dy="4" stdDeviation="0" flood-color="#000" flood-opacity=".28"/></filter>
+    </defs>
+
+    <!-- baseplate -->
+    <rect width="1200" height="780" fill="var(--plate)"/>
+    <rect width="1200" height="780" fill="url(#studs)"/>
+    <!-- arctic ground -->
+    <rect x="800" y="0" width="400" height="780" fill="var(--snow)"/>
+    <rect x="800" y="0" width="400" height="780" fill="url(#zstud)"/>
+    <!-- water channel -->
+    <rect x="745" y="0" width="55" height="780" fill="var(--water)"/>
+    <rect x="745" y="0" width="55" height="780" fill="url(#waves)"/>
+
+    <!-- stud trail (path players walk) -->
+    <g fill="none" stroke="#f5c518" stroke-width="10" stroke-linecap="round" stroke-dasharray="1 18" opacity=".95">
+      <path d="M390 380 H600"/>
+      <path d="M600 380 V470"/>
+      <path d="M390 380 V180"/>
+      <path d="M390 250 H170"/>
+      <path d="M170 250 V480"/>
+      <path d="M390 380 V540"/>
+      <path d="M390 540 V660"/>
+      <path d="M390 540 H600 V600"/>
+      <path d="M170 480 V650"/>
+      <path d="M600 380 H705"/>
+      <path d="M705 380 H880"/>
+      <path d="M880 380 V150"/>
+      <path d="M880 380 H1000"/>
+      <path d="M1000 380 V580"/>
+      <path d="M1000 580 V690"/>
+      <path d="M880 150 H1080"/>
+    </g>
+
+    <!-- ZONES: realm one -->
+    <g filter="url(#sh)">
+      <!-- 4 rune pack row -->
+      <rect x="40" y="40" width="660" height="130" rx="6" fill="var(--purple)"/>
+      <!-- 1 spawn -->
+      <rect x="300" y="300" width="180" height="160" rx="6" fill="var(--red)"/>
+      <!-- 2 forge -->
+      <rect x="520" y="300" width="160" height="110" rx="6" fill="var(--orange)"/>
+      <!-- 3 power -->
+      <rect x="520" y="430" width="160" height="90" rx="6" fill="var(--yellow)"/>
+      <!-- 5 mob arena -->
+      <rect x="40" y="200" width="230" height="200" rx="6" fill="var(--green)"/>
+      <!-- 6 prism lab -->
+      <rect x="40" y="420" width="230" height="130" rx="6" fill="var(--pink)"/>
+      <!-- 7 orbs -->
+      <rect x="300" y="490" width="180" height="100" rx="6" fill="var(--teal)"/>
+      <!-- 8 cubes -->
+      <rect x="300" y="620" width="180" height="120" rx="6" fill="var(--blue)"/>
+      <!-- 9 spheres -->
+      <rect x="520" y="560" width="160" height="120" rx="6" fill="#2b3a8f"/>
+      <!-- 10 challenges -->
+      <rect x="40" y="580" width="230" height="160" rx="6" fill="#3b4148"/>
+    </g>
+    <g fill="url(#zstud)">
+      <rect x="40" y="40" width="660" height="130" rx="6"/>
+      <rect x="300" y="300" width="180" height="160" rx="6"/>
+      <rect x="520" y="300" width="160" height="110" rx="6"/>
+      <rect x="520" y="430" width="160" height="90" rx="6"/>
+      <rect x="40" y="200" width="230" height="200" rx="6"/>
+      <rect x="40" y="420" width="230" height="130" rx="6"/>
+      <rect x="300" y="490" width="180" height="100" rx="6"/>
+      <rect x="300" y="620" width="180" height="120" rx="6"/>
+      <rect x="520" y="560" width="160" height="120" rx="6"/>
+      <rect x="40" y="580" width="230" height="160" rx="6"/>
+    </g>
+
+    <!-- rune pack pedestals -->
+    <g font-weight="800" font-size="12" text-anchor="middle">
+      <g><rect x="70"  y="85" width="100" height="62" rx="5" fill="#fff"/><text x="120" y="108" fill="#1d2329">Beginner</text><text x="120" y="126" fill="#56616b" font-size="10.5" font-weight="700">1 Ticket · T1</text></g>
+      <g><rect x="195" y="85" width="100" height="62" rx="5" fill="#fff"/><text x="245" y="108" fill="#1d2329">Royal</text><text x="245" y="126" fill="#56616b" font-size="10.5" font-weight="700">50 Tickets · T1</text></g>
+      <g><rect x="320" y="85" width="100" height="62" rx="5" fill="#fff"/><text x="370" y="108" fill="#1d2329">Basic</text><text x="370" y="126" fill="#56616b" font-size="10.5" font-weight="700">1e3 Flame · T3</text></g>
+      <g><rect x="445" y="85" width="100" height="62" rx="5" fill="#fff"/><text x="495" y="108" fill="#1d2329">Color</text><text x="495" y="126" fill="#56616b" font-size="10.5" font-weight="700">2.5e4 RP · T6</text></g>
+      <g><rect x="570" y="85" width="100" height="62" rx="5" fill="#fff"/><text x="620" y="108" fill="#1d2329">Nature</text><text x="620" y="126" fill="#56616b" font-size="10.5" font-weight="700">5e27 Spheres · T9</text></g>
+    </g>
+
+    <!-- spawn detail: spawn pad + tier pad -->
+    <circle cx="390" cy="380" r="26" fill="#fff" fill-opacity=".9"/>
+    <text x="390" y="385" text-anchor="middle" font-size="12" font-weight="800" fill="#d6322b">SPAWN</text>
+    <rect x="428" y="420" width="44" height="30" rx="4" fill="#f5c518"/>
+    <text x="450" y="439" text-anchor="middle" font-size="10" font-weight="800" fill="#1d2329">TIER</text>
+
+    <!-- mob arena ring -->
+    <circle cx="155" cy="315" r="48" fill="none" stroke="#fff" stroke-width="4" stroke-dasharray="6 6" opacity=".85"/>
+    <!-- challenge gates -->
+    <g fill="#f5c518" font-size="12" font-weight="800" text-anchor="middle">
+      <rect x="58" y="665" width="42" height="56" rx="4"/><rect x="110" y="665" width="42" height="56" rx="4"/>
+      <rect x="162" y="665" width="42" height="56" rx="4"/><rect x="214" y="665" width="42" height="56" rx="4"/>
+    </g>
+    <g font-size="14" font-weight="800" text-anchor="middle" fill="#1d2329">
+      <text x="79" y="698">C1</text><text x="131" y="698">C2</text><text x="183" y="698">C3</text><text x="235" y="698">C4</text>
+    </g>
+
+    <!-- ascension portal on bridge -->
+    <rect x="690" y="360" width="130" height="40" fill="#c9a36b"/>
+    <rect x="690" y="360" width="130" height="40" fill="url(#zstud)"/>
+    <circle cx="772" cy="380" r="40" fill="#fff" filter="url(#sh)"/>
+    <circle cx="772" cy="380" r="33" fill="#7a4bc4"/>
+    <circle cx="772" cy="380" r="22" fill="#c8a8ff"/>
+    <circle cx="772" cy="380" r="10" fill="#fff"/>
+
+    <!-- ZONES: arctic -->
+    <g filter="url(#sh)">
+      <rect x="830" y="30" width="340" height="120" rx="6" fill="#5aa6e0"/>
+      <rect x="830" y="190" width="150" height="150" rx="6" fill="var(--ice)"/>
+      <rect x="1000" y="190" width="170" height="150" rx="6" fill="#62b8c9"/>
+      <rect x="830" y="430" width="340" height="120" rx="6" fill="#b690e8"/>
+      <rect x="880" y="590" width="240" height="160" rx="6" fill="#f0c94a"/>
+    </g>
+    <g fill="url(#zstud)">
+      <rect x="830" y="30" width="340" height="120" rx="6"/>
+      <rect x="830" y="190" width="150" height="150" rx="6"/>
+      <rect x="1000" y="190" width="170" height="150" rx="6"/>
+      <rect x="830" y="430" width="340" height="120" rx="6"/>
+      <rect x="880" y="590" width="240" height="160" rx="6"/>
+    </g>
+    <!-- arctic pack pedestals -->
+    <g font-weight="800" font-size="11.5" text-anchor="middle">
+      <g><rect x="845" y="70" width="72" height="60" rx="5" fill="#fff"/><text x="881" y="93" fill="#1d2329">Polychrome</text><text x="881" y="110" fill="#56616b" font-size="10">1e15 Prisms</text></g>
+      <g><rect x="927" y="70" width="72" height="60" rx="5" fill="#fff"/><text x="963" y="93" fill="#1d2329">Cryo</text><text x="963" y="110" fill="#56616b" font-size="10">50 AP</text></g>
+      <g><rect x="1009" y="70" width="72" height="60" rx="5" fill="#fff"/><text x="1045" y="93" fill="#1d2329">Arctic</text><text x="1045" y="110" fill="#56616b" font-size="10">1e6 Chromium</text></g>
+      <g><rect x="1091" y="70" width="72" height="60" rx="5" fill="#fff"/><text x="1127" y="93" fill="#1d2329">Galactic</text><text x="1127" y="110" fill="#56616b" font-size="10">500 Tickets</text></g>
+    </g>
+    <!-- freeze pads 1-9 -->
+    <g>
+      <rect x="1015" y="255" width="140" height="72" rx="4" fill="#fff" fill-opacity=".35"/>
+    </g>
+    <g font-size="11" font-weight="800" text-anchor="middle" fill="#0f4f5c">
+      <text x="1038" y="277">F1</text><text x="1085" y="277">F2</text><text x="1132" y="277">F3</text>
+      <text x="1038" y="299">F4</text><text x="1085" y="299">F5</text><text x="1132" y="299">F6</text>
+      <text x="1038" y="321">F7</text><text x="1085" y="321">F8</text><text x="1132" y="321">F9</text>
+    </g>
+    <!-- chromify spire -->
+    <circle cx="1000" cy="680" r="34" fill="#fff" fill-opacity=".85"/>
+    <circle cx="1000" cy="680" r="18" fill="#f5c518"/>
+
+    <!-- LABELS -->
+    <g font-weight="800" fill="#fff">
+      <text x="56" y="66" font-size="17">④ Rune Pack Row</text>
+      <text x="316" y="324" font-size="17">① Spawn Plaza</text>
+      <text x="534" y="324" font-size="15">② Brick Forge</text>
+      <text x="534" y="344" font-size="11" fill-opacity=".9">Flame + Realm Pts pads</text>
+      <text x="534" y="454" font-size="15" fill="#1d2329">③ Power Press</text>
+      <text x="534" y="474" font-size="11" fill="#1d2329">Power pad</text>
+      <text x="56" y="224" font-size="17">⑤ Mob Arena</text>
+      <text x="56" y="390" font-size="11">XP · mobs · auto-attack · Loot</text>
+      <text x="56" y="444" font-size="16">⑥ Prism Lab</text>
+      <text x="56" y="464" font-size="11">Prisms gen · x2 pad · Talent Tree</text>
+      <text x="316" y="514" font-size="16">⑦ Orb Garden</text>
+      <text x="316" y="644" font-size="16">⑧ Cube Merger</text>
+      <text x="316" y="664" font-size="11">Merger · Cubes · Gears</text>
+      <text x="534" y="584" font-size="16">⑨ Sphere Tower</text>
+      <text x="56" y="604" font-size="16">⑩ Challenge Gates</text>
+      <text x="56" y="624" font-size="11">Resets to T0 · permanent boosts</text>
+      <text x="846" y="54" font-size="16">⑫ Frost Pack Row</text>
+      <text x="846" y="214" font-size="15" fill="#0f4f5c">⑬ Droplet Well</text>
+      <text x="846" y="234" font-size="11" fill="#0f4f5c">Droplets · Water · Ice</text>
+      <text x="1014" y="214" font-size="15">⑭ Freeze Works</text>
+      <text x="1014" y="234" font-size="11">Freeze 1–9 · Icicles</text>
+      <text x="846" y="454" font-size="16">⑮ Chromatizer</text>
+      <text x="846" y="474" font-size="11">Chromatize · Chromium gen</text>
+      <text x="896" y="614" font-size="16" fill="#1d2329">⑯ Chromify Spire</text>
+      <text x="896" y="634" font-size="11" fill="#1d2329">Light · Ascended · Reflection · Chroma</text>
+    </g>
+    <g font-weight="800" text-anchor="middle">
+      <rect x="712" y="425" width="120" height="38" rx="5" fill="#1d2329" fill-opacity=".85"/>
+      <text x="772" y="441" font-size="12" fill="#fff">⑪ Ascension Portal</text>
+      <text x="772" y="455" font-size="10" fill="#c8a8ff">Energy &gt; 1e2283</text>
+    </g>
+    <!-- realm banners -->
+    <g font-family="Lilita One, Impact, sans-serif" font-size="22">
+      <text x="40" y="772" fill="#fff" fill-opacity=".85">REALM ONE · STUD CITY</text>
+      <text x="1170" y="772" fill="#1f6fd1" text-anchor="end">REALM TWO · ARCTIC</text>
+    </g>
+  </svg>
+  </div>
+
+  <div class="legend">
+    <span><i style="background:#f5c518"></i>Yellow stud trail = walking path from spawn</span>
+    <span><i style="background:#fff;border:1px solid #bbb"></i>White pedestals = rune packs (currency · unlock)</span>
+    <span><i style="background:#4fa9d9"></i>Water = realm border (crossed only via portal)</span>
+  </div>
+
+  <section class="grid" aria-label="Zones">
+    <div class="section-head" style="grid-column:1/-1"><h2>Realm One · Stud City</h2></div>
+    <article class="zone" style="--c:var(--red)"><h3><b>1</b>Spawn Plaza</h3><div class="gate">Unlock: start · T0</div><p>Spawn point, passive Energy generator and the Tier pad. Everything branches off from here, so keep it central and roomy.</p></article>
+    <article class="zone" style="--c:var(--orange)"><h3><b>2</b>Brick Forge</h3><div class="gate">Unlock: Tier 1</div><p>Flame pad and Realm Points pad. Stand-on pads, so make them big bright tiles.</p></article>
+    <article class="zone" style="--c:var(--yellow)"><h3><b>3</b>Power Press</h3><div class="gate">Unlock: Tier 2</div><p>Power pad. Right next to the Forge because Flame feeds Power.</p></article>
+    <article class="zone" style="--c:var(--purple)"><h3><b>4</b>Rune Pack Row</h3><div class="gate">Beginner/Royal T1 · Basic T3 · Color T6 · Nature T9</div><p>One long strip of pack pedestals, ordered left to right by unlock so players walk further as they progress.</p></article>
+    <article class="zone" style="--c:var(--green)"><h3><b>5</b>Mob Arena</h3><div class="gate">Unlock: Tier 4</div><p>Mob Zone with XP, auto-attack and Loot. Fenced ring in the middle for mob spawns, plus a chest spawn spot.</p></article>
+    <article class="zone" style="--c:var(--pink)"><h3><b>6</b>Prism Lab</h3><div class="gate">Unlock: Tier 5 (x2 pad + talent prism button T6)</div><p>Prisms generator, x2 pad and the Talent Tree board.</p></article>
+    <article class="zone" style="--c:var(--teal)"><h3><b>7</b>Orb Garden</h3><div class="gate">Unlock: Tier 7</div><p>Orbs generation. Sits between Spawn and the Cube Merger since orbs spawn from cubes.</p></article>
+    <article class="zone" style="--c:var(--blue)"><h3><b>8</b>Cube Merger</h3><div class="gate">Unlock: Tier 8</div><p>Merger, Cubes, Accelerator and Gears. A good spot for a big conveyor-style stud machine.</p></article>
+    <article class="zone" style="--c:#2b3a8f"><h3><b>9</b>Sphere Tower</h3><div class="gate">Unlock: Tier 9 (Hail T10)</div><p>Spheres levels. Tall build so it's visible from spawn as a goal.</p></article>
+    <article class="zone" style="--c:#3b4148"><h3><b>10</b>Challenge Gates</h3><div class="gate">C1 T6 · C2 T8 · C3 1e393 · C4 1e96 Energy</div><p>Four doors, C1–C4. Entering resets you to Tier 0 with a restriction; clearing gives a permanent boost.</p></article>
+    <article class="zone" style="--c:#7a4bc4"><h3><b>11</b>Ascension Portal</h3><div class="gate">Unlock: Energy &gt; 1e2283 (~7 h)</div><p>On the bridge over the water. Ascension One unlocks Droplets and the Arctic side.</p></article>
+
+    <div class="section-head" style="grid-column:1/-1"><h2>Realm Two · Arctic</h2></div>
+    <article class="zone" style="--c:#5aa6e0"><h3><b>12</b>Frost Pack Row</h3><div class="gate">Polychrome A1 · Cryo Freeze3 · Arctic Chromatize 7 · Galactic Chromatize 750</div><p>Late-game packs. Nature, Polychrome, Cryo and Arctic carry the Droplets/Prisms runes, so add a sign here as a hint.</p></article>
+    <article class="zone" style="--c:var(--ice)"><h3><b>13</b>Droplet Well</h3><div class="gate">Unlock: Ascension One (Tier 10+ uses Droplets)</div><p>Droplets gen plus the Water and Ice multiplier buttons. Ice needs Freeze 2.</p></article>
+    <article class="zone" style="--c:#62b8c9"><h3><b>14</b>Freeze Works</h3><div class="gate">F1–3 T11 · F4–6 T12 · F7–9 T13</div><p>A 3×3 grid of Freeze pads, one row per tier. Icicles and Haze at T13.</p></article>
+    <article class="zone" style="--c:#b690e8"><h3><b>15</b>Chromatizer</h3><div class="gate">Unlock: Prisms_Chromatizer talent (5e43 Prisms)</div><p>Chromatize pad. Chromatize 1+ starts Chromium generation.</p></article>
+    <article class="zone" style="--c:#f0c94a"><h3><b>16</b>Chromify Spire</h3><div class="gate">Chromify 1 Light · 2 Ascended · 3 Reflection</div><p>End-game tower. The pads unlock floor by floor as you go up, with the Chroma pad at Chromatize 1000.</p></article>
+  </section>
+
+  <aside class="notes">
+    <h2>Build notes</h2>
+    <ul>
+      <li>This is a layout sketch only. Sizes are relative, so scale the whole thing up to whatever fits your baseplate in Studio.</li>
+      <li>The numbers follow unlock order. Zones that unlock close together sit close together, so new players never walk far for their next goal.</li>
+      <li>Stud theme ideas: every floor is a studded baseplate, zone borders are 1-stud-high walls in the zone colour, and pads are 2×2 or 4×4 tiles.</li>
+      <li>Realm Two can also be a separate place or a teleport instead of being across the water. The portal spot works for either.</li>
+    </ul>
+  </aside>
+</div>
