@@ -559,7 +559,8 @@ function label(text,x,y,z,color,scale,iconKey){
   return s}
 function rr(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath()}
 const labelH={1:24,4:26,5:18,9:40,11:28,12:25,14:18,15:24,16:36};
-ZONES.forEach(z=>{const q=Z(z.id);const s=label(z.id+"  "+z.name,q.cx,labelH[z.id]||19,q.cz,z.c,.72,z.icon);s.userData.zone=z;pickables.push(s)});
+const zoneLabels={};ZONES.forEach(z=>{const q=Z(z.id);const s=label(z.id+"  "+z.name,q.cx,labelH[z.id]||19,q.cz,z.c,.72,z.icon);s.userData.zone=z;pickables.push(s);zoneLabels[z.id]=s});
+const showLabels=id=>Object.entries(zoneLabels).forEach(([k,s])=>s.visible=id==null||+k===id);
 label("REALM ONE",-45,4,88,"#d6322b",1.2);label("THE GLACIER",80,4,88,"#1f6fd1",1.1,"theglacier");
 
 /* views */
@@ -569,7 +570,7 @@ let anim=null;
 function flyTo(p,t,dur){const p1=new THREE.Vector3(...p),t1=new THREE.Vector3(...t);if(reduce||dur===0){camera.position.copy(p1);controls.target.copy(t1);return}
   anim={p0:camera.position.clone(),t0:controls.target.clone(),p1,t1,s:performance.now(),d:dur||1200}}
 const hud=$("#hud");let tourOn=false,tourTimer=null;
-Object.keys(views).forEach(k=>{const b=document.createElement("button");b.type="button";b.textContent=k;b.onclick=()=>{stopTour();panel.innerHTML=overviewHTML();markZone(null);flyTo(views[k].p,views[k].t)};hud.appendChild(b)});
+Object.keys(views).forEach(k=>{const b=document.createElement("button");b.type="button";b.textContent=k;b.onclick=()=>{stopTour();panel.innerHTML=overviewHTML();markZone(null);showLabels(null);flyTo(views[k].p,views[k].t)};hud.appendChild(b)});
 const tb=document.createElement("button");tb.type="button";tb.textContent="▶ Tour";tb.setAttribute("aria-pressed","false");hud.appendChild(tb);
 const rbt=document.createElement("button");rbt.type="button";rbt.textContent="Auto-spin";rbt.setAttribute("aria-pressed","false");hud.appendChild(rbt);
 rbt.onclick=()=>{controls.autoRotate=!controls.autoRotate;controls.autoRotateSpeed=.8;rbt.setAttribute("aria-pressed",String(controls.autoRotate))};
@@ -577,13 +578,13 @@ function stopTour(){tourOn=false;clearTimeout(tourTimer);tb.setAttribute("aria-p
 tb.onclick=()=>{if(tourOn){stopTour();return}tourOn=true;tb.setAttribute("aria-pressed","true");tb.textContent="■ Stop tour";let i=0;const step=()=>{if(!tourOn)return;selectZone(ZONES[i],true);i=(i+1)%ZONES.length;tourTimer=setTimeout(step,5500)};step()};
 function markZone(z){document.querySelectorAll(".zbtn").forEach(b=>b.setAttribute("aria-current",String(!!z&&b.id==="zb"+z.id)))}
 selectZone=(z,fromTour)=>{if(!fromTour)stopTour();const q=Z(z.id);const span=Math.max(q.w,q.d);const dist=Math.min(Math.max(span*1.15,34),125);const tall={9:14,16:14,11:8}[z.id]||3;
-  flyTo([q.cx+dist*.4,dist*.7+tall,q.cz+dist*.8],[q.cx,tall,q.cz]);panel.innerHTML=detailHTML(z);panel.scrollTop=0;markZone(z)};
+  flyTo([q.cx+dist*.35,dist*.95+tall,q.cz+dist*.7],[q.cx,tall,q.cz]);showLabels(z.id);panel.innerHTML=detailHTML(z);panel.scrollTop=0;markZone(z)};
 
 /* picking */
 const ray=new THREE.Raycaster(),mv=new THREE.Vector2();let down=null;
 renderer.domElement.addEventListener("pointerdown",e=>{down=[e.clientX,e.clientY];stopTour()});
 renderer.domElement.addEventListener("pointerup",e=>{if(!down||Math.hypot(e.clientX-down[0],e.clientY-down[1])>6)return;const r=renderer.domElement.getBoundingClientRect();
-  mv.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);ray.setFromCamera(mv,camera);const hit=ray.intersectObjects(pickables,false)[0];if(hit)selectZone(hit.object.userData.zone)});
+  mv.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);ray.setFromCamera(mv,camera);const hit=ray.intersectObjects(pickables,false).find(h=>h.object.visible);if(hit)selectZone(hit.object.userData.zone)});
 
 function resize(){const w=viewer.clientWidth,h=viewer.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix()}
 new ResizeObserver(resize).observe(viewer);resize();
