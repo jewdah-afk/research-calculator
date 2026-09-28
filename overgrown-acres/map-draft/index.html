@@ -159,6 +159,7 @@ select { width: 100%; font: 500 13px var(--body); color: var(--paper); backgroun
       <label><input type="checkbox" id="layer-roof" checked> Cabin roof</label>
       <label><input type="checkbox" id="layer-markers"> Cutscene marks</label>
       <label><input type="checkbox" id="layer-roots"> Root network</label>
+      <label><input type="checkbox" id="layer-basement"> Basement (arc 2)</label>
     </div>
   </div>
   <div class="section">
@@ -287,7 +288,7 @@ function heightAt(x, z) {
 
 // ---------- renderer / scene ----------
 const stage = document.getElementById('stage');
-const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance', logarithmicDepthBuffer: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
@@ -298,7 +299,7 @@ stage.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
 scene.fog = new THREE.FogExp2(0x9fb49a, 0.007);
-const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.3, 900);
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.5, 900);
 camera.position.set(70, 95, 150);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.target.set(0, 0, 0);
@@ -393,6 +394,7 @@ function groundColor(x, z, h) {
   return c;
 }
 const TERRAIN_RES = 220;
+let terrainMesh;
 {
   const geo = new THREE.PlaneGeometry(HALF * 2, HALF * 2, TERRAIN_RES, TERRAIN_RES);
   geo.rotateX(-Math.PI / 2);
@@ -404,7 +406,7 @@ const TERRAIN_RES = 220;
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   geo.computeVertexNormals();
   const t = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, flatShading: true }));
-  t.receiveShadow = true; scene.add(t);
+  t.receiveShadow = true; scene.add(t); terrainMesh = t;
 }
 
 // ===========================================================================
@@ -497,6 +499,7 @@ instanced(new THREE.ConeGeometry(1, 1, 7), white, pines);
 instanced(new THREE.DodecahedronGeometry(1, 0), white, rocks);
 
 // grass tufts + flowers around the clearings and trails
+const grassMeshes = [];
 {
   const tufts = [], flowers = [];
   const tuftCol = [0x6f8f3b, 0x7ea244, 0x5d7c33].map(c => new THREE.Color(c));
@@ -511,8 +514,8 @@ instanced(new THREE.DodecahedronGeometry(1, 0), white, rocks);
     tufts.push({ x, y: heightAt(x, z) + s * 0.4, z, s, sy: s * rr(1.2, 2), ry: rr(0, 6), c: pick(tuftCol) });
     if (rand() < 0.06) flowers.push({ x: x + 0.2, y: heightAt(x, z) + 0.45, z, s: 0.12, c: pick(flowerCol) });
   }
-  instanced(new THREE.ConeGeometry(0.5, 1, 3), white, tufts, false);
-  instanced(new THREE.IcosahedronGeometry(1, 0), new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x222222, flatShading: true }), flowers, false);
+  grassMeshes.push(instanced(new THREE.ConeGeometry(0.5, 1, 3), white, tufts, false));
+  grassMeshes.push(instanced(new THREE.IcosahedronGeometry(1, 0), new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0x222222, flatShading: true }), flowers, false));
 }
 
 // ===========================================================================
@@ -524,11 +527,11 @@ const LOG = 0x7a5436, LOG_OLD = 0x6a4a31, LOG_NEW = 0xa0754a;
 const logGeo = new THREE.CylinderGeometry(1, 1, 1, 7);
 logGeo.rotateZ(Math.PI / 2);
 // Builds a log wall along local X, skipping any openings (doors, windows, holes).
-function logWall(len, openings, color, parent, jitter = true) {
+function logWall(len, openings, color, parent, jitter = true, yOff = 0) {
   const g = new THREE.Group(); parent.add(g);
   const step = WALL_H / ROWS, r = step * 0.62;
   for (let i = 0; i < ROWS; i++) {
-    const y = FLOOR + r + i * step;
+    const y = FLOOR + r + i * step + yOff;
     let segs = [[-len / 2 - 0.35, len / 2 + 0.35]];
     for (const o of openings) {
       if (y + r * 0.4 < o.y0 || y - r * 0.4 > o.y1) continue;
@@ -543,14 +546,15 @@ function logWall(len, openings, color, parent, jitter = true) {
   return g;
 }
 function place(g, x, z, rotY) { g.position.set(x, 0, z); g.rotation.y = rotY; return g; }
+const HALF_LOG = WALL_H / ROWS / 2;
 const frontOpen = [{ x0: 0.4, x1: 2.2, y0: 0, y1: 3.0 }, { x0: -4.3, x1: -2.7, y0: 1.7, y1: 3.0 }];
 place(logWall(CW, frontOpen, LOG, cabin), 0, CD / 2, 0);
 place(logWall(CW, [{ x0: -3.5, x1: -2.1, y0: 1.8, y1: 3.0 }], LOG, cabin), 0, -CD / 2, Math.PI);
-place(logWall(CD, [{ x0: -0.8, x1: 0.8, y0: 1.7, y1: 3.0 }], LOG, cabin), -CW / 2, 0, Math.PI / 2);
+place(logWall(CD, [{ x0: -0.8, x1: 0.8, y0: 1.7, y1: 3.0 }], LOG, cabin, true, HALF_LOG), -CW / 2, 0, Math.PI / 2);
 // East wall: broken on Day 1, patched with fresh logs afterwards.
-only(place(logWall(CD, [{ x0: -1.2, x1: 2.4, y0: 1.1, y1: 5 }], LOG_OLD, cabin), CW / 2, 0, -Math.PI / 2), ['day1']);
+only(place(logWall(CD, [{ x0: -1.2, x1: 2.4, y0: 1.1, y1: 5 }], LOG_OLD, cabin, true, HALF_LOG), CW / 2, 0, -Math.PI / 2), ['day1']);
 {
-  const repaired = place(logWall(CD, [], LOG, cabin), CW / 2, 0, -Math.PI / 2);
+  const repaired = place(logWall(CD, [], LOG, cabin, true, HALF_LOG), CW / 2, 0, -Math.PI / 2);
   only(repaired, ['settled', 'defense', 'after']);
   // tint the patched logs lighter
   repaired.children.forEach((m) => { const y = m.position.y, x = m.position.x; if (y > 1.1) m.material = M(LOG_NEW); });
@@ -559,8 +563,8 @@ only(place(logWall(CD, [{ x0: -1.2, x1: 2.4, y0: 1.1, y1: 5 }], LOG_OLD, cabin),
 }
 // floor + foundation stones + porch
 box(CW, 0.3, CD, 0x6b5238, 0, FLOOR - 0.15, 0, cabin);
-for (const [x, z] of [[-CW / 2, -CD / 2], [CW / 2, -CD / 2], [-CW / 2, CD / 2], [CW / 2, CD / 2], [0, -CD / 2], [0, CD / 2]]) box(1, 0.5, 1, 0x7f7b70, x, 0.2, z, cabin);
-box(CW + 0.6, 0.2, 2.2, 0x735638, 0, FLOOR - 0.1, CD / 2 + 1.3, cabin);
+for (const [x, z] of [[-CW / 2, -CD / 2], [CW / 2, -CD / 2], [-CW / 2, CD / 2], [CW / 2, CD / 2], [0, -CD / 2], [0, CD / 2]]) box(1, 0.4, 1, 0x7f7b70, x, 0.15, z, cabin);
+box(CW + 0.6, 0.2, 2.0, 0x735638, 0, FLOOR - 0.12, CD / 2 + 1.35, cabin);
 for (let i = 0; i < 2; i++) box(2, 0.18, 0.5, 0x6d5134, 1.3, 0.12 + i * 0.16, CD / 2 + 2.6 + 0.35 * (1 - i), cabin);
 for (const x of [-CW / 2, CW / 2]) cyl(0.14, 0.14, 3.2, 0x5a4029, x, FLOOR + 1.6, CD / 2 + 2.2, cabin);
 // porch bench
@@ -585,6 +589,8 @@ for (const [x, z, ry] of [[-3.5, CD / 2, 0], [2.8, -CD / 2, 0], [-CW / 2, 0, Mat
     for (let j = 0; j < 3; j++) { const s = box(0.08, rr(0.9, 1.5), 0.05, scarMat, bx + j * 0.22, 1.1 + rr(-0.2, 0.2), 0, scars); s.rotation.z = rr(0.3, 0.6); }
   }
 }
+// No attic: open tie beams straight up to the roof boards.
+for (let x = -4.5; x <= 4.5; x += 3) box(0.28, 0.28, CD + 0.4, 0x4a3524, x, FLOOR + WALL_H - 0.1, 0, cabin);
 // Roof (hidden by the cutaway toggle)
 const roof = group(0, 0, 0, cabin);
 {
@@ -594,7 +600,7 @@ const roof = group(0, 0, 0, cabin);
   for (const side of [-1, 1]) {
     for (let r = 0; r < rowsN; r++) {
       const t = (r + 0.5) / rowsN; const along = slope * t;
-      const y = topY - Math.sin(ang) * along + 0.12, z = side * Math.cos(ang) * along;
+      const y = topY - Math.sin(ang) * along + 0.12 + (r % 2) * 0.06, z = side * Math.cos(ang) * along;
       const hole = side === 1 && r >= 2 && r <= 4;
       const segs = hole ? [[-CW / 2 - OVER, 0.5], [3.4, CW / 2 + OVER]] : [[-CW / 2 - OVER, CW / 2 + OVER]];
       const mk = (a, b, color, st) => { const s = box(b - a, 0.16, slope / rowsN + 0.12, color, (a + b) / 2, y, z, roof); s.rotation.x = side * ang; if (st) only(s, st); return s; };
@@ -629,11 +635,94 @@ for (let i = 0; i < 7; i++) {
 for (let i = 0; i < 5; i++) { const z = -3.8 + i * 1.9, x = -CW / 2 - 0.45; vine(cabin, [[x, 0.2, z], [x, 1.5, z + 0.4], [x, 2.7, z - 0.3], [x, 3.8, z + 0.2]], ['day1']); }
 
 // ---------- cabin interior ----------
+// ---------- cellar doors (west side, locked from the outside) + secret lab ----------
+const CELLAR = { x: -CW / 2 - 1.7, z: 2.2 };
+const cellarHinges = [];
+const beforeCellar = cabin.children.length;
+const basement = group(0, 0, 0, cabin); basement.visible = false;
+{
+  // stone frame the two wooden panels sit on
+  const stone = 0x7a766c;
+  box(3.0, 0.7, 0.35, stone, CELLAR.x, 0.35, CELLAR.z - 1.45, cabin);
+  box(3.0, 0.7, 0.35, stone, CELLAR.x, 0.35, CELLAR.z + 1.45, cabin);
+  box(0.35, 0.7, 2.55, stone, CELLAR.x - 1.35, 0.35, CELLAR.z, cabin);
+  const pit = box(2.6, 0.05, 2.6, 0x0a0806, CELLAR.x + 0.1, 0.1, CELLAR.z, cabin); pit.castShadow = false;
+  // two panels hinged on the outer edges
+  for (const side of [-1, 1]) {
+    const hinge = group(CELLAR.x + 0.1, 0.78, CELLAR.z + side * 1.28, cabin);
+    for (let k = 0; k < 4; k++) box(2.6, 0.12, 0.3, k % 2 ? 0x6e4d2e : 0x7c5836, 0, 0, -side * (0.17 + k * 0.31), hinge);
+    box(0.12, 0.16, 1.25, 0x4a3522, -0.9, 0.06, -side * 0.64, hinge); box(0.12, 0.16, 1.25, 0x4a3522, 0.9, 0.06, -side * 0.64, hinge);
+    box(0.5, 0.05, 0.08, 0x3b3f42, -0.9, 0.08, -side * 0.02, hinge, { metalness: 0.5 }); box(0.5, 0.05, 0.08, 0x3b3f42, 0.9, 0.08, -side * 0.02, hinge, { metalness: 0.5 });
+    // handle ring on each panel, near the seam
+    const ring = mesh(new THREE.TorusGeometry(0.12, 0.03, 5, 10), M(0x3b3f42, { metalness: 0.6 }), 0, 0.12, -side * 1.05, hinge, false); ring.rotation.x = Math.PI / 2;
+    hinge.userData.side = side;
+    cellarHinges.push(hinge);
+  }
+  // chain + padlock across the seam: locked from outside until the old lady's key is found
+  const lock = group(CELLAR.x + 0.1, 0.9, CELLAR.z, cabin);
+  for (let k = -3; k <= 3; k++) { const l = mesh(new THREE.TorusGeometry(0.07, 0.022, 4, 8), M(0x55585a, { metalness: 0.7 }), 0, 0, k * 0.1, lock, false); l.rotation.y = k % 2 ? Math.PI / 2 : 0; }
+  box(0.22, 0.26, 0.1, 0xa7832e, 0, -0.12, 0, lock, { metalness: 0.7, roughness: 0.4 });
+  const shackle = mesh(new THREE.TorusGeometry(0.08, 0.02, 4, 10, Math.PI), M(0x9a9da0, { metalness: 0.8 }), 0, 0.02, 0, lock, false);
+  cellarHinges.lock = lock;
+
+  // Everything below is underground, shown with the Basement layer (the ground turns see-through).
+  const LAB_Y = -4.4, LH = 3.4, LX = 10.5, LZ = 8.2;
+  const wallC = 0x6a665c, floorC = 0x4f4b44;
+  box(LX, 0.3, LZ, floorC, 0, LAB_Y - 0.15, 0, basement);
+  box(LX, LH, 0.4, wallC, 0, LAB_Y + LH / 2, -LZ / 2, basement);
+  box(LX, LH, 0.4, wallC, 0, LAB_Y + LH / 2, LZ / 2, basement);
+  box(0.4, LH, LZ - 0.8, wallC, LX / 2, LAB_Y + LH / 2, 0, basement);
+  box(0.4, LH, 4.9, wallC, -LX / 2, LAB_Y + LH / 2, -1.45, basement);
+  // stairs from the cellar doors, down and in under the cabin
+  const STEPS = 10;
+  for (let i = 0; i < STEPS; i++) {
+    const x = CELLAR.x + 0.4 + i * ((-LX / 2 + 1.2 - CELLAR.x) / STEPS);
+    box(Math.abs((-LX / 2 + 1.2 - CELLAR.x) / STEPS) * 0.98, 0.3, 2.2, 0x7a6a55, x, 0.2 - (i + 1) * ((0.2 - LAB_Y) / STEPS), CELLAR.z, basement);
+  }
+  // stone pillars and a beam ceiling line
+  for (const x of [-2.5, 2.5]) box(0.45, LH, 0.45, 0x5c584f, x, LAB_Y + LH / 2, 0, basement);
+  // long workbench with jars along the north wall
+  box(7.5, 0.16, 1.1, 0x5b3f24, 0.5, LAB_Y + 1.1, -LZ / 2 + 0.8, basement);
+  for (const x of [-3, 0.5, 4]) box(0.14, 1.1, 0.9, 0x4a3522, x, LAB_Y + 0.55, -LZ / 2 + 0.8, basement);
+  const jarGlow = glowMat(0x9fe07a, 0x7fd65a, 1.0, 1.8), jarPurple = glowMat(0xc58ad6, 0xc65bd6, 1.0, 1.8);
+  for (let i = 0; i < 12; i++) cyl(0.13, 0.13, rr(0.3, 0.55), i % 4 === 0 ? jarGlow : i % 5 === 0 ? jarPurple : M(pick([0xc9c1a0, 0x8a9f8a, 0xb8864a]), { transparent: true, opacity: 0.8 }), -3 + i * 0.6, LAB_Y + 1.4, -LZ / 2 + 0.7 + (i % 2) * 0.25, basement);
+  box(7.5, 0.1, 0.45, 0x5b3f24, 0.5, LAB_Y + 2.5, -LZ / 2 + 0.35, basement); // shelf
+  for (let i = 0; i < 10; i++) box(0.3, rr(0.3, 0.5), 0.3, pick([0x8a6a3a, 0x6d2f2a, 0x2f4d5f, 0xc9c1a0]), -3 + i * 0.75, LAB_Y + 2.75, -LZ / 2 + 0.35, basement);
+  // glass specimen tank in the middle, a plant growing inside
+  cyl(0.9, 1, 0.3, 0x3b3f42, 0, LAB_Y + 0.15, 0.6, basement, 12);
+  mesh(new THREE.CylinderGeometry(0.85, 0.85, 2.2, 14, 1, true), new THREE.MeshStandardMaterial({ color: 0xbfe6f0, transparent: true, opacity: 0.25, roughness: 0.05, side: THREE.DoubleSide }), 0, LAB_Y + 1.4, 0.6, basement, false);
+  cyl(0.9, 0.9, 0.2, 0x3b3f42, 0, LAB_Y + 2.6, 0.6, basement, 12);
+  const specimen = new THREE.CatmullRomCurve3([[0, 0.3, 0], [0.2, 0.9, 0.1], [-0.15, 1.5, -0.1], [0.1, 2, 0]].map(q => new THREE.Vector3(q[0], LAB_Y + q[1], 0.6 + q[2])));
+  mesh(new THREE.TubeGeometry(specimen, 16, 0.08, 5, false), M(0x4b2d5c), 0, 0, 0, basement);
+  mesh(new THREE.IcosahedronGeometry(0.28, 1), jarPurple, 0.1, LAB_Y + 2.05, 0.6, basement);
+  // seed drawer cabinet on the east wall
+  const drawers = group(LX / 2 - 0.5, LAB_Y, 1, basement);
+  box(0.8, 2.4, 3, 0x5b3f24, 0, 1.2, 0, drawers);
+  for (let r = 0; r < 5; r++) for (let c = 0; c < 4; c++) { box(0.05, 0.36, 0.62, 0x7a5a38, -0.42, 0.3 + r * 0.45, -1.1 + c * 0.73, drawers); box(0.06, 0.06, 0.12, 0xb8a060, -0.46, 0.3 + r * 0.45, -1.1 + c * 0.73, drawers, { metalness: 0.5 }); }
+  // desk + chalkboard on the south wall
+  box(2.2, 0.12, 1, 0x5b3f24, 2.2, LAB_Y + 1.1, LZ / 2 - 0.8, basement);
+  for (const [dx, dz] of [[-1, -0.4], [1, -0.4], [-1, 0.4], [1, 0.4]]) box(0.1, 1.1, 0.1, 0x4a3522, 2.2 + dx, LAB_Y + 0.55, LZ / 2 - 0.8 + dz, basement);
+  for (let i = 0; i < 4; i++) box(0.4, 0.01, 0.5, 0xf1ead4, 1.6 + i * 0.35, LAB_Y + 1.17 + i * 0.005, LZ / 2 - 0.85, basement).rotation.y = rr(-0.3, 0.3);
+  cyl(0.12, 0.14, 0.32, glowMat(0xe8c077, 0xffa640, 1.2, 2.2), 3.0, LAB_Y + 1.33, LZ / 2 - 0.6, basement);
+  const chalk = canvasTex(256, 160, (g, w, h) => {
+    g.fillStyle = '#23302a'; g.fillRect(0, 0, w, h); g.strokeStyle = 'rgba(235,235,220,0.85)'; g.fillStyle = 'rgba(235,235,220,0.85)'; g.lineWidth = 2;
+    g.beginPath(); g.arc(128, 70, 14, 0, 7); g.stroke();
+    for (let k = 0; k < 7; k++) { const a = k / 7 * 6.28; g.beginPath(); g.moveTo(128 + Math.cos(a) * 14, 70 + Math.sin(a) * 14); g.quadraticCurveTo(128 + Math.cos(a + 0.5) * 50, 70 + Math.sin(a + 0.5) * 40, 128 + Math.cos(a) * 95, 70 + Math.sin(a) * 60); g.stroke(); }
+    g.font = 'italic 18px Georgia, serif'; g.textAlign = 'center'; g.fillText('?', 128, 76); g.fillText('lab idea: TBD', 128, 150);
+  });
+  const board = mesh(new THREE.PlaneGeometry(2.8, 1.75), new THREE.MeshStandardMaterial({ map: chalk }), -1.2, LAB_Y + 2, LZ / 2 - 0.22, basement, false); board.rotation.y = Math.PI;
+  // a root has pushed through the lab wall: the network reaches down here too
+  const root = new THREE.CatmullRomCurve3([[LX / 2 - 0.2, LAB_Y + 2.8, -3], [LX / 2 - 1.2, LAB_Y + 2.2, -2.4], [LX / 2 - 1.6, LAB_Y + 0.8, -1.4], [LX / 2 - 2.6, LAB_Y + 0.1, -1.6]].map(q => new THREE.Vector3(...q)));
+  mesh(new THREE.TubeGeometry(root, 20, 0.2, 6, false), new THREE.MeshStandardMaterial({ color: 0x2a1a24, emissive: 0x9b2fb0, emissiveIntensity: 0.7, flatShading: true }), 0, 0, 0, basement);
+  const labLight = new THREE.PointLight(0xb98cff, 10, 14, 1.6); labLight.position.set(0, LAB_Y + 2.6, 0); basement.add(labLight);
+}
+
+const cellarParts = new Set(cabin.children.slice(beforeCellar));
 const inside = group(0, FLOOR, 0, cabin);
 {
   // rug
-  box(4.2, 0.03, 3, 0x7a3f33, 0.4, 0.02, 0.4, inside);
-  box(3.8, 0.035, 2.6, 0x9c5a3c, 0.4, 0.03, 0.4, inside);
+  box(4.2, 0.03, 3, 0x7a3f33, 0.4, 0.03, 0.4, inside);
+  box(3.8, 0.03, 2.6, 0x9c5a3c, 0.4, 0.075, 0.4, inside);
   // bed against the west wall
   const bed = group(-4.4, 0, -2.2, inside);
   box(2.1, 0.5, 3.2, 0x5b3d25, 0, 0.35, 0, bed); box(1.95, 0.25, 3.0, 0xdcd3bc, 0, 0.72, 0, bed);
@@ -677,14 +766,14 @@ const inside = group(0, FLOOR, 0, cabin);
   const frame = group(-0.8, 2.6, -CD / 2 + 0.42, inside);
   box(0.9, 0.7, 0.05, 0x3b2a1b, 0, 0, 0, frame);
   only(box(0.08, 0.08, 0.1, 0x9a9a9a, 0, 0.2, 0.02, frame), ['day1', 'settled', 'defense']); // nail
-  only(box(0.9, 0.7, 0.05, 0x3b2a1b, 0, 0, 0, frame), ['day1', 'settled', 'defense']).material = M(0x2c2016);
+  only(box(0.72, 0.52, 0.03, 0x2c2016, 0, 0, 0.04, frame), ['day1', 'settled', 'defense']);
   const photoTex = canvasTex(128, 100, (g, w, h) => {
     g.fillStyle = '#c9b48a'; g.fillRect(0, 0, w, h); g.fillStyle = '#7a5b3c'; g.fillRect(20, 30, 88, 50);
     g.fillStyle = '#4a3522'; g.beginPath(); g.moveTo(14, 32); g.lineTo(64, 8); g.lineTo(114, 32); g.fill();
     g.fillStyle = '#e9dcc0'; g.fillRect(46, 50, 14, 12); g.fillStyle = '#3a2a1c';
     for (const [x, s] of [[34, 1], [88, 0.85]]) { g.beginPath(); g.arc(x, 62 - 8 * s, 6 * s, 0, 7); g.fill(); g.fillRect(x - 6 * s, 62, 12 * s, 26 * s); }
   });
-  only(mesh(new THREE.PlaneGeometry(0.78, 0.6), new THREE.MeshBasicMaterial({ map: photoTex }), 0, 0, 0.035, frame, false), ['after']);
+  only(mesh(new THREE.PlaneGeometry(0.78, 0.6), new THREE.MeshBasicMaterial({ map: photoTex }), 0, 0, 0.06, frame, false), ['after']);
   // shelf with the old lady's books and a coat hook by the door
   box(1.6, 0.08, 0.35, 0x6f5536, -5.6, 2.4, 2.4, inside).rotation.y = Math.PI / 2;
   for (let i = 0; i < 5; i++) box(0.15, 0.4, 0.3, pick([0x6d2f2a, 0x2f4d5f, 0x5b6b35, 0x8a6a3a]), -5.6, 2.64, 1.8 + i * 0.22, inside);
@@ -699,7 +788,7 @@ const shed = ground(SHED.x, SHED.z, scene); shed.rotation.y = -0.25;
   const PL = 0x6e5236;
   box(5.4, 0.2, 4.2, 0x5d4630, 0, 0.1, 0, shed);
   box(5.4, 3.2, 0.2, PL, 0, 1.7, -2, shed);
-  box(0.2, 3.2, 4.2, PL, -2.6, 1.7, 0, shed); box(0.2, 3.2, 4.2, PL, 2.6, 1.7, 0, shed);
+  box(0.2, 3.2, 4.0, PL, -2.6, 1.7, 0.1, shed); box(0.2, 3.2, 4.0, PL, 2.6, 1.7, 0.1, shed);
   for (let i = 0; i < 8; i++) box(0.05, 3, 0.05, 0x4c3824, -2.2 + i * 0.63, 1.7, -1.88, shed);
   const r = box(6.2, 0.18, 5.2, 0x4f5552, 0, 3.55, 0.2, shed); r.rotation.x = 0.16;
   // Day 1: cluttered junk, tarp, tipped crates
@@ -726,7 +815,7 @@ const garden = ground(GARDEN.x, GARDEN.z, scene);
 const GW = 16, GD = 12;
 {
   // low wooden border
-  for (const [x, z, w, d] of [[0, -GD / 2, GW, 0.3], [0, GD / 2, GW, 0.3], [-GW / 2, 0, 0.3, GD], [GW / 2, 0, 0.3, GD]]) box(w, 0.35, d, 0x6b5033, x, 0.18, z, garden);
+  for (const [x, z, w, d] of [[0, -GD / 2, GW, 0.3], [0, GD / 2, GW, 0.3], [-GW / 2, 0, 0.3, GD - 0.3], [GW / 2, 0, 0.3, GD - 0.3]]) box(w, 0.35, d, 0x6b5033, x, 0.18, z, garden);
   // six raised beds
   const beds = [];
   for (let i = 0; i < 3; i++) for (let j = 0; j < 2; j++) {
@@ -734,7 +823,7 @@ const GW = 16, GD = 12;
     const bed = group(bx, 0, bz, garden); beds.push(bed);
     const broken = (i === 2 && j === 0) || (i === 0 && j === 1);
     box(4, 0.25, 1.9, 0x4a3524, 0, 0.18, 0, bed); // soil
-    const sides = [[0, -0.95, 4.2, 0.18], [0, 0.95, 4.2, 0.18], [-2.05, 0, 0.18, 2], [2.05, 0, 0.18, 2]];
+    const sides = [[0, -0.95, 4.2, 0.18], [0, 0.95, 4.2, 0.18], [-2.01, 0, 0.18, 1.72], [2.01, 0, 0.18, 1.72]];
     sides.forEach(([x, z, w, d], k) => {
       const s = box(w, 0.5, d, 0x7a5b39, x, 0.25, z, bed);
       if (broken && k === 1) { only(s, ['settled', 'defense', 'after']); const b = box(w * 0.6, 0.45, d, 0x5e452c, x - 0.8, 0.12, z + 0.35, bed); b.rotation.set(0.9, 0.2, 0.2); only(b, ['day1']); }
@@ -752,10 +841,24 @@ const GW = 16, GD = 12;
     if (Math.abs(x - CABIN.x) < 6.8 && Math.abs(z - CABIN.z) < 5.4) continue;
     const s = rr(0.35, 0.8); weeds.push({ x, y: heightAt(x, z) + s * 0.5, z, s, sy: s * 2, ry: rr(0, 6), c: new THREE.Color(0x5a7430) });
   }
-  only(instanced(new THREE.ConeGeometry(0.4, 1, 4), white, weeds, false), ['day1']);
-  // tipped, broken planters
+  grassMeshes.push(only(instanced(new THREE.ConeGeometry(0.4, 1, 4), white, weeds, false), ['day1']));
+  // Broken planters along the south border: cracked wooden planter boxes and tipped clay pots.
+  // Day 1 they're smashed; once settled they're fixed and planted with flowers.
   const pots = group(0, 0, 0, garden); only(pots, ['day1']);
-  for (let i = 0; i < 6; i++) { const p = cyl(0.35, 0.25, 0.6, 0xa35d3c, GW / 2 - 1 - i * 0.7, 0.3, GD / 2 + 0.9, pots); p.rotation.z = i % 2 ? 1.4 : 0.2; }
+  const fixedPots = group(0, 0, 0, garden); only(fixedPots, ['settled', 'defense', 'after']);
+  for (let i = 0; i < 3; i++) {
+    const px = -5 + i * 5, pz = GD / 2 + 1.2;
+    // smashed planter box: a missing side, split boards and spilled soil
+    box(1.8, 0.5, 0.12, 0x6e5234, px, 0.25, pz - 0.35, pots); box(0.12, 0.5, 0.7, 0x6e5234, px - 0.85, 0.25, pz, pots);
+    const split = box(1.2, 0.1, 0.12, 0x5e452c, px + 0.5, 0.08, pz + 0.7, pots); split.rotation.y = 0.5;
+    const soil = mesh(new THREE.DodecahedronGeometry(0.5, 0), M(0x4a3524), px + 0.2, 0.05, pz + 0.3, pots); soil.scale.set(1.6, 0.25, 1.1);
+    const pot = cyl(0.3, 0.22, 0.5, 0xa35d3c, px + 1.3, 0.25, pz + 0.3, pots); pot.rotation.z = 1.4;
+    for (let k = 0; k < 3; k++) { const shard = box(0.18, 0.04, 0.12, 0xa35d3c, px + 1.6 + rr(0, 0.5), 0.03, pz + rr(-0.2, 0.6), pots); shard.rotation.y = rr(0, 6); }
+    // repaired version
+    box(1.8, 0.5, 0.8, 0x7a5b39, px, 0.25, pz, fixedPots);
+    for (let k = 0; k < 5; k++) mesh(new THREE.IcosahedronGeometry(0.16, 0), M(pick([0xe6a7c5, 0xf1e7a8, 0xb6c9f0, 0xe9b863])), px - 0.7 + k * 0.35, 0.62, pz + rr(-0.15, 0.15), fixedPots, false);
+    cyl(0.3, 0.22, 0.5, 0xa35d3c, px + 1.3, 0.25, pz + 0.3, fixedPots);
+  }
   // Settled: crops. One plant grew from the camper's seed and didn't come out right.
   const crops = group(0, 0, 0, garden); only(crops, ['settled', 'defense', 'after']);
   beds.forEach((bed, bi) => {
@@ -775,13 +878,18 @@ const GW = 16, GD = 12;
   for (let i = 0; i < 7; i++) { const p = stem.getPoint(0.25 + i * 0.11); const l = mesh(new THREE.IcosahedronGeometry(0.28, 0), M(0x5d3a78), p.x + rr(-0.4, 0.4), p.y, p.z + rr(-0.4, 0.4), mutant); l.scale.set(1.6, 0.4, 0.9); l.rotation.y = rr(0, 6); }
   mesh(new THREE.IcosahedronGeometry(0.42, 1), mutGlow, 0, 3.15, 0, mutant);
   mesh(new THREE.IcosahedronGeometry(0.2, 0), mutGlow, 0.45, 2.1, 0.2, mutant);
-  // the old watering area: hand pump, trough and a rain barrel
+  // the old watering area: a stone well with a little roof, crank and bucket, plus a trough and rain barrel
   const w = group(PUMP.x - GARDEN.x, heightAt(PUMP.x, PUMP.z) - heightAt(GARDEN.x, GARDEN.z), PUMP.z - GARDEN.z, garden);
-  box(1.4, 0.3, 1.4, 0x7d786c, 0, 0.15, 0, w); cyl(0.18, 0.2, 1.6, 0x3e4a4f, 0, 1.1, 0, w, 8);
-  const handle = box(0.9, 0.08, 0.08, 0x3e4a4f, 0.4, 1.8, 0, w); handle.rotation.z = -0.4;
-  box(0.2, 0.12, 0.3, 0x3e4a4f, 0, 1.55, 0.25, w);
-  box(2.2, 0.6, 0.9, 0x6b5033, 0, 0.3, 1.4, w); box(2, 0.05, 0.7, 0x4d7a8a, 0, 0.55, 1.4, w, { roughness: 0.2 });
-  cyl(0.5, 0.45, 1.2, 0x6f5132, 1.6, 0.6, -0.6, w, 10);
+  for (let k = 0; k < 14; k++) { const a = k / 14 * Math.PI * 2; for (let r = 0; r < 3; r++) { const st = box(0.62, 0.34 + (k % 3) * 0.015, 0.42, pick([0x7d786c, 0x6f6a60, 0x8a857a]), Math.cos(a + r * 0.22) * 1.25, 0.17 + r * 0.34, Math.sin(a + r * 0.22) * 1.25, w); st.rotation.y = -a - r * 0.22; } }
+  const water = mesh(new THREE.CircleGeometry(1.0, 16), new THREE.MeshStandardMaterial({ color: 0x1e3a44, roughness: 0.15 }), 0, 0.55, 0, w, false); water.rotation.x = -Math.PI / 2;
+  for (const s of [-1, 1]) box(0.2, 2.6, 0.2, 0x5a4029, s * 1.3, 1.3, 0, w);
+  for (const s of [-1, 1]) { const rf = box(3.2, 0.12, 1.3, 0x55423a, 0, 2.85, s * 0.5, w); rf.rotation.x = s * 0.55; }
+  cyl(0.1, 0.1, 2.6, 0x6b4a2b, 0, 2.1, 0, w, 6).rotation.z = Math.PI / 2; // crank axle
+  box(0.08, 0.5, 0.08, 0x6b4a2b, 1.45, 1.9, 0, w); box(0.08, 0.08, 0.35, 0x6b4a2b, 1.45, 1.65, 0.15, w);
+  cyl(0.02, 0.02, 1.1, 0xc9b88a, 0, 1.55, 0, w, 4); // rope
+  cyl(0.22, 0.18, 0.35, 0x6f5132, 0, 0.95, 0, w, 8); // bucket
+  box(2.2, 0.6, 0.9, 0x6b5033, 0, 0.3, 2.2, w); box(2, 0.05, 0.7, 0x4d7a8a, 0, 0.55, 2.2, w, { roughness: 0.2 });
+  cyl(0.5, 0.45, 1.2, 0x6f5132, 2.2, 0.6, -0.8, w, 10);
 }
 
 // ===========================================================================
@@ -820,7 +928,7 @@ const creatures = [];
   const pathMat = new THREE.MeshBasicMaterial({ color: 0xd06be0, transparent: true, opacity: 0.35, depthWrite: false });
   spawnAngles.forEach((a, i) => {
     const sx = CX + Math.cos(a) * 42, sz = CZ + Math.sin(a) * 38; const sy = heightAt(sx, sz);
-    const crack = mesh(new THREE.CircleGeometry(2.4, 12), new THREE.MeshBasicMaterial({ color: 0xc65bd6, transparent: true, opacity: 0.55 }), sx, sy + 0.08, sz, defense, false);
+    const crack = mesh(new THREE.CircleGeometry(2.4, 12), new THREE.MeshBasicMaterial({ color: 0xc65bd6, transparent: true, opacity: 0.55, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }), sx, sy + 0.15, sz, defense, false);
     crack.rotation.x = -Math.PI / 2; crack.userData.pulse = i;
     for (let k = 0; k < 5; k++) {
       const ang = rr(0, 6.28); const c = new THREE.CatmullRomCurve3([
@@ -894,7 +1002,7 @@ const embers = { geo: new THREE.BufferGeometry(), data: [] };
     const geo = new THREE.ExtrudeGeometry(shape, { depth: 3.4, bevelEnabled: false }); geo.translate(0, 0, -1.7);
     const g = group(Math.cos(a) * r, 0, Math.sin(a) * r, parent, -a - Math.PI / 2);
     mesh(geo, M(color), 0, 0, 0, g);
-    const door = mesh(new THREE.PlaneGeometry(1.2, 1.5), M(0x241d16), 0, 0.75, 1.72, g, false); door.material.side = THREE.DoubleSide;
+    const door = mesh(new THREE.PlaneGeometry(1.2, 1.5), M(0x241d16), 0, 0.75, 1.76, g, false); door.material.side = THREE.DoubleSide;
     cyl(0.05, 0.05, 2.8, 0x5a4029, 0, 1.3, 1.9, g, 5);
     return g;
   }
@@ -910,7 +1018,7 @@ const embers = { geo: new THREE.BufferGeometry(), data: [] };
   const sign = mesh(new THREE.PlaneGeometry(1.4, 0.5), new THREE.MeshStandardMaterial({ map: signTex('SEEDS', '#8b3f4d') }), 0, 1.7, 1.52, theo, false);
   // what's left: flattened grass, one seed, one folded note
   const left = group(Math.cos(-0.7) * 12, 0, Math.sin(-0.7) * 12, camp); only(left, ['after']);
-  const flat = mesh(new THREE.CircleGeometry(2.6, 16), M(0xa8a869), 0, 0.05, 0, left, false); flat.rotation.x = -Math.PI / 2;
+  const flat = mesh(new THREE.CircleGeometry(2.6, 16), new THREE.MeshStandardMaterial({ color: 0xa8a869, flatShading: true, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }), 0, 0.12, 0, left, false); flat.rotation.x = -Math.PI / 2;
   box(0.4, 0.02, 0.3, 0xf1ead4, 0, 0.08, 0, left); mesh(new THREE.SphereGeometry(0.09, 6, 5), glowMat(0x6b4a2b, 0xc65bd6, 0.5, 1.5), 0.05, 0.14, 0, left, false);
   // tool camper's stall (west)
   const tools = group(Math.cos(2.9) * 9, 0, Math.sin(2.9) * 9, camp, -2.9 - Math.PI / 2);
@@ -919,14 +1027,14 @@ const embers = { geo: new THREE.BufferGeometry(), data: [] };
   for (let i = 0; i < 4; i++) { const t = box(0.08, 0.08, 0.9, 0x7a5a38, -0.9 + i * 0.6, 1.06, 0, tools); box(0.35, 0.12, 0.12, 0x8d9295, -0.9 + i * 0.6, 1.08, 0.45, tools, { metalness: 0.4 }); }
   box(1, 0.8, 0.8, 0x7b5d3b, 1.8, 0.4, 0.2, tools);
   // crates, barrels, sacks, clothesline, notice board
-  for (let i = 0; i < 7; i++) box(0.9, 0.9, 0.9, pick([0x7b5d3b, 0x6a4f33]), -7 + (i % 3) * 0.95, 0.45 + Math.floor(i / 3) * 0.9, 7 + (i % 2) * 0.2, camp).rotation.y = rr(-0.2, 0.2);
+  for (let i = 0; i < 7; i++) box(0.9, 0.9, 0.9, pick([0x7b5d3b, 0x6a4f33]), -7 + (i % 3) * 0.95, 0.45 + Math.floor(i / 3) * 0.92, 7 + (i % 2) * 0.2, camp).rotation.y = rr(-0.2, 0.2);
   for (let i = 0; i < 3; i++) cyl(0.45, 0.45, 1.1, 0x6f5132, -4 + i * 1, 0.55, 8.5, camp, 10);
   for (const x of [5, 11]) cyl(0.06, 0.06, 2.4, 0x5a4029, x, 1.2, 7, camp, 5);
   for (let i = 0; i < 4; i++) { const cl = mesh(new THREE.PlaneGeometry(0.9, 1.1), M(pick([0xd8cdb6, 0x5d7a8a, 0xa14e3c]), { side: THREE.DoubleSide }), 6.1 + i * 1.3, 1.6, 7, camp, false); cl.rotation.y = 0.05; }
   const board = group(-3, 0, -7, camp, 0.3);
   for (const x of [-1, 1]) cyl(0.08, 0.08, 2.4, 0x5a4029, x, 1.2, 0, board, 5);
   box(2.4, 1.4, 0.1, 0x6f5536, 0, 1.6, 0, board);
-  for (let i = 0; i < 5; i++) box(0.35, 0.45, 0.02, 0xece5cf, -0.8 + i * 0.4 + rr(-0.05, 0.05), 1.6 + rr(-0.35, 0.35), 0.07, board).rotation.z = rr(-0.2, 0.2);
+  for (let i = 0; i < 5; i++) box(0.35, 0.45, 0.02, 0xece5cf, -0.8 + i * 0.4 + rr(-0.05, 0.05), 1.6 + rr(-0.35, 0.35), 0.09, board).rotation.z = rr(-0.2, 0.2);
   // Rowan's spot: set apart, facing the dark treeline
   const rowanSpot = group(-15, 0, -8, camp, 0.8);
   const lean = box(3, 0.08, 2.4, 0x4f6a3f, 0, 1.4, 0, rowanSpot); lean.rotation.x = 0.7;
@@ -1118,6 +1226,7 @@ const sky = new THREE.Mesh(new THREE.SphereGeometry(600, 24, 12), new THREE.Shad
   vertexShader: 'varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.); }',
   fragmentShader: 'uniform vec3 top; uniform vec3 bottom; varying vec3 vP; void main(){ float t = smoothstep(-0.05, 0.6, vP.y); gl_FragColor = vec4(mix(bottom, top, t), 1.); }',
 }));
+sky.renderOrder = -1;
 scene.add(sky);
 const moonDisc = mesh(new THREE.CircleGeometry(9, 24), new THREE.MeshBasicMaterial({ color: 0xf2f0e2, fog: false }), 0, 0, 0, scene, false);
 
@@ -1134,7 +1243,7 @@ const PLACES = [
   { id: 'cabin', name: 'The Cabin', zone: 'Cabin clearing', pos: at(CABIN.x, CABIN.z, 8), view: [16, 12, 22],
     quote: 'Small. Old. And almost completely swallowed by the forest.',
     dims: `Footprint ${CW * STUDS} × ${CD * STUDS} studs · walls ~1.9 studs thick`,
-    build: ['Log walls, much thicker than a cabin needs. They are secretly built to hold.', 'Day 1: broken east wall, hole in the roof, vines everywhere.', 'Old root scratch marks low on the back wall. Inspecting them only says "Probably animals."'],
+    build: ['Log walls, much thicker than a cabin needs. They are secretly built to hold.', 'No attic: open beams straight up to the roof.', 'Locked cellar doors on the west side lead to the basement.', 'Day 1: broken east wall, hole in the roof, vines everywhere.', 'Old root scratch marks low on the back wall. Inspecting them only says "Probably animals."'],
     play: ['Repairs here become cabin HP on the defense night.', 'Window glow at night doubles as a "home" beacon from the trail.'] },
   { id: 'inside', name: 'Inside the Cabin', zone: 'Cabin clearing', pos: at(CABIN.x, CABIN.z, 3), view: [7, 14, 9], cutaway: true,
     quote: 'Across from it was a wooden table with two chairs, one of them slightly pulled away as if someone had only just stood up.',
@@ -1151,11 +1260,21 @@ const PLACES = [
     dims: `${GW * STUDS} × ${GD * STUDS} studs · 6 raised beds`,
     build: ['Day 1: weeds and roots hide the beds and the broken planters.', 'Settled: crops in every bed, plus one plant from the camper\'s seed that grew wrong.'],
     play: ['Core farming loop: clear, plant, wait, harvest.', 'Planted plants can fight back on the defense night.'] },
-  { id: 'pump', name: 'Old Watering Area', zone: 'Cabin clearing', pos: at(PUMP.x, PUMP.z, 3), view: [6, 5, 7],
+  { id: 'well', name: 'The Old Well', zone: 'Cabin clearing', pos: at(PUMP.x, PUMP.z, 4), view: [7, 6, 9],
     quote: 'An old watering area.',
-    dims: 'Hand pump · trough · rain barrel',
-    build: ['Rusty hand pump that refills the watering can.'],
-    play: ['Upgrade path: pump → sprinkler line to the beds.'] },
+    dims: 'Well ring ~7 studs across · trough · rain barrel',
+    build: ['Stone well with a little shingled roof, crank, rope and bucket.', 'Trough and rain barrel beside it.'],
+    play: ['Fill the watering can here.', 'Upgrade path: well → rope pulley → pipe line out to the beds.'] },
+  { id: 'cellar', name: 'Cellar Doors', zone: 'Cabin clearing', pos: at(CABIN.x + CELLAR.x, CABIN.z + CELLAR.z, 2.5), view: [-7, 6, 8],
+    quote: 'Two wooden panels, chained shut from the outside.',
+    dims: 'Hatch ~7.5 × 7.5 studs · west side of the cabin',
+    build: ['Two wooden panels on a low stone frame, hinged on the outer edges.', 'Chain and brass padlock across the seam. It stays locked all of arc 1.'],
+    play: ['Needs the old lady\'s key (where it turns up is still to decide).', 'Opens in arc 2: stairs lead down to her secret lab.'] },
+  { id: 'lab', name: "The Old Lady's Lab", zone: 'Under the cabin · arc 2', basement: true, pos: at(CABIN.x, CABIN.z, -3), view: [-11, 15, 13],
+    quote: 'The cabin had been where she lived.',
+    dims: 'Room ~26 × 20 studs · ~11 studs below the floor',
+    build: ['Placeholder layout (the lab idea is still to be written): stairs from the cellar doors, a workbench of jars, a glass specimen tank, a seed drawer cabinet, a desk of notes and a chalkboard.', 'A glowing root has pushed through the east wall: the network reaches down here too.'],
+    play: ['Turn on the Basement layer to see it through the ground.'] },
   { id: 'trail', name: 'The Trail North', zone: 'Trail', pos: at(1, -24, 4), view: [14, 12, 16],
     quote: 'The forest became brighter as the path opened up.',
     dims: 'Trail ~4 studs wide · ~350 studs to camp',
@@ -1247,6 +1366,7 @@ function focusPlace(id, instant = false) {
   showCard(p);
   if (matchMedia('(max-width: 760px)').matches) { ctl.classList.add('collapsed'); $('toggle-controls').setAttribute('aria-expanded', 'false'); }
   if (p.cutaway) { $('layer-roof').checked = false; roof.visible = false; }
+  if (p.basement) { $('layer-basement').checked = true; setBasement(true); }
   flyTo(p.pos.clone().setY(p.pos.y - (p.later ? 8 : 2)), p.view, instant ? 0.0001 : 1.4);
   places.value = id;
 }
@@ -1261,6 +1381,7 @@ function setState(s) {
   $('state-tag').style.color = s === 'defense' ? 'var(--root)' : 'var(--moss)';
   if (s === 'defense') { setTime(23); }
   rootNet.visible = $('layer-roots').checked || s === 'after';
+  if (typeof applyBasementHide === 'function') applyBasementHide();
 }
 document.querySelectorAll('#state-seg button').forEach(b => b.addEventListener('click', () => setState(b.dataset.state)));
 
@@ -1309,6 +1430,21 @@ function applyLighting() {
 $('layer-labels').addEventListener('change', (e) => { labelsEl.hidden = !e.target.checked; });
 $('layer-roof').addEventListener('change', (e) => { roof.visible = e.target.checked; });
 $('layer-markers').addEventListener('change', (e) => { markers.visible = e.target.checked; });
+// X-ray view: the ground turns see-through and everything above the lab steps aside.
+function applyBasementHide() {
+  if (!basement.visible) return;
+  cabin.children.forEach((c) => { if (!cellarParts.has(c)) c.visible = false; });
+  grassMeshes.forEach((g) => { g.visible = false; });
+}
+function setBasement(on) {
+  basement.visible = on;
+  if (on) applyBasementHide();
+  else { cabin.children.forEach((c) => { c.visible = true; }); grassMeshes.forEach((g) => { g.visible = true; }); roof.visible = $('layer-roof').checked; tagged.forEach(({ obj, states }) => { obj.visible = states.includes(storyState); }); }
+  cellarHinges.forEach((h) => { h.rotation.x = on ? h.userData.side * 1.9 : 0; });
+  cellarHinges.lock.visible = !on;
+  const m = terrainMesh.material; m.transparent = on; m.opacity = on ? 0.28 : 1; m.depthWrite = !on; m.needsUpdate = true;
+}
+$('layer-basement').addEventListener('change', (e) => setBasement(e.target.checked));
 $('layer-roots').addEventListener('change', (e) => { rootNet.visible = e.target.checked || storyState === 'after'; });
 
 // phone: collapsible controls
@@ -1462,7 +1598,7 @@ function animate() {
   defense.children.forEach((c) => { if (c.userData.pulse !== undefined) c.material.opacity = 0.35 + Math.sin(t * 2.4 + c.userData.pulse) * 0.25; });
   // labels
   if (!labelsEl.hidden) {
-    PLACES.forEach((p) => placeLabel(p.el, p.pos, p.later ? 420 : 240));
+    PLACES.forEach((p) => { if ((p.basement && !basement.visible) || (basement.visible && (p.id === 'cabin' || p.id === 'inside'))) { p.el.style.display = 'none'; return; } placeLabel(p.el, p.pos, p.later ? 420 : 240); });
     if (storyState === 'defense') placeLabel(dangerLabel, at(CLEARING.x - 38, CLEARING.z - 8, 4)); else dangerLabel.style.display = 'none';
     markerLabels.forEach(({ g, b }) => { if (!markers.visible) { b.style.display = 'none'; return; } placeLabel(b, g.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0, 3.2, 0)), 120); });
   }
@@ -1481,5 +1617,5 @@ $('loading').remove();
 animate();
 // Open on the cabin clearing with its card.
 setTimeout(() => focusPlace('cabin'), 400);
-window.__map = { setState, setTime, setMode, focusPlace, camera, controls, roof, renderer };
+window.__map = { setState, setTime, setMode, focusPlace, setBasement, camera, controls, roof, renderer };
 </script>
