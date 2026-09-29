@@ -1,6 +1,6 @@
 # GALAXY INCREMENTAL — Master Conversion Spec
 
-> **Status:** Draft v1 (pre-production) · **Scope:** Full presentation conversion of the existing *Ascension Incremental / Stud Incremental* place (`AI_copy.rbxl`) into **Galaxy Incremental**.
+> **Status:** Draft v1.1 (pre-production) · **Scope:** Full presentation conversion of the existing *Ascension Incremental / Stud Incremental* place (`AI_copy.rbxl`) into **Galaxy Incremental**.
 > **Source of truth for numbers:** [`reference/Stud_Incremental_Balance.md`](reference/Stud_Incremental_Balance.md). It covers all 444 scripts, every formula, every rune and all 248 upgrade configs.
 > **Source of truth for structure:** the place file itself. Section 3 is the extracted map (445 script instances, 48 remotes, 28,547 instances).
 
@@ -79,7 +79,7 @@ PARACOSM → MULTIVERSE (Galactic Expedition endgame)
 
 ## 2. Non-negotiables (MUST)
 
-1. **No formula, constant, cost, cap, cooldown, chance, requirement or reset list changes** unless a ticket explicitly authorizes it and the Balance Auditor signs off (§20). This includes the known bugs (§19). The live balance depends on them.
+1. **No formula, constant, cost, cap, cooldown, chance, requirement or reset list changes** (the one sanctioned exception is §19.1, Discovery counts past 1e308) unless a ticket explicitly authorizes it and the Balance Auditor signs off (§20). This includes the known bugs (§19). The live balance depends on them.
 2. **No datastore key or stat instance name changes.** `Stats.Energy` stays `Energy`. `Game_Key = "Release_1"` stays. A rename that touches a saved key wipes or corrupts real player saves.
 3. **No remote event renames.** 48 remotes are referenced by name through `Framework:GetEvent`, which auto-creates missing events, so a typo fails silently.
 4. **All player-facing text goes through the Lexicon** (§4.2). No new hardcoded display strings anywhere.
@@ -1639,6 +1639,62 @@ These exist in the live balance (balance sheet §"Known bugs"). **Default: do no
 
 The balance sheet's two applied changes (rune payout swap; Epoch 11 cost 5e60→1e52) are considered **part of the frozen baseline**. Confirm with the owner that the target build includes them (§23).
 
+### 19.1 SANCTIONED ENGINE CHANGE: Discovery counts past 1e308 (MUST)
+
+This is the **one** approved change to frozen engine code. Currencies already use EternityNum (EN), but **rune counts never got fixed**, so a common object like Meteor or Aries can overflow past about 1.8e308.
+
+**The problem today (confirmed in the place file):**
+- `Datastore.Reconcile` defaults every rune to the **number** `0`, so `MakeFolder` creates a `NumberValue` (a double). Currencies default to the **string** `"0"`, which creates a `StringValue` holding EN. Runes are the odd one out.
+- Every rune write is plain arithmetic:
+  - `Libraries.Runes` payout: `runeVal.Value += amount`, plus `Pending[...] = math.floor((… or 0) + Reward_Amount)`
+  - `GlobalRune/AncientRune/MadnessRune/UltraRune`: `+= 1`
+  - `ProductHandler.Functions`: `+= 1` / `+= 50`
+  - `CodeServer`: `+= Value`
+  - `ServerStorage.Modules.Freeze`: creates `Runes.Cryo` as a NumberValue, then `+= 1`
+  - `runeStarring`: `Value -= compAmount` and `Value * percentage`
+  - `Resets` (Supernova rune wipe): `= 0`
+  - `ChatCommands`
+- Past 1.8e308 a double becomes `inf`. The count sticks there, `inf - x` stays `inf`, the Catalog shows garbage, and **saving `inf` to the DataStore is unsafe**: JSON has no infinity, so the save may fail or write a bad value. The Architect must reproduce this in Studio before choosing the migration clamp below.
+- The scan pipeline is plain numbers too:
+  - `Formulas.Rune_Bulk` is number math with sequential exponents (`^Planet_RuneBulk2 ^Oscillon ^Cyclone ^Prisms_RuneBulk3 ^Tickets_RuneBulk4 ^Chromium_RPS6`), ending in `floor(v)`.
+  - `Potential_Opens = Bulk × Chance`, with `math.round`.
+  - `Stats.Runes_Opened += Bulk` is a NumberValue.
+  - `Rune_Afford` uses `EN.toNumber`, which returns 1.8e308 at the top end.
+
+**The fix: store and move rune counts as EN; evaluate effects as clamped numbers.**
+
+1. **Storage.** In `Reconcile`, rune defaults become `"0"` (StringValue, EN format `"layer;exp"`). **Migration:** if a loaded rune value is a number, convert it with `EN.toString(EN.convert(v))`. If it is `inf`/NaN or ≥ 1.79e308, store the EN of 1.79e308, since the true value is already lost. This exact pattern already exists in `Reconcile` for `Tickets` (`if typeof(Stats.Tickets) == "number" then … EN.toString(EN.convert(...))`). Apply it to the whole `Runes` table, including `Cryo`.
+2. **One accessor.** Add `Shared.Modules.RuneMath`:
+   - `RuneMath.get(Player, name) -> EN`
+   - `RuneMath.add(Player, name, amount)` (amount: number | EN)
+   - `RuneMath.sub`, `RuneMath.mul(Player, name, factor)`, `RuneMath.set(Player, name, 0)`
+   - `RuneMath.gte(Player, name, n) -> bool`
+   - `RuneMath.num(A) -> number = math.min(EN.toNumber(EN.convert(A)), 1.79e308)`
+
+   **Every** rune read and write goes through it. That covers: payout, the 4 special pools, ProductHandler, CodeServer, Freeze module, runeStarring, the Resets rune wipe, ChatCommands, and the 75 upgrade modules with `Runes.X.Value` requirements (54 of them are `Runes.Vanguard.Value >= 1e18`). It also covers the Automations gates (`Refraction > 0`, `Vanguard < 1e19`, `Vanguard >= 1e18`), the 13 `UI.Runes.Holder.*.Handler` LocalScripts, `Client.Modules.Runes`, `Store.Runes` and the `Talent Tree` client. The upgrade engine already handles string currencies for `MultiBuy isRune` costs (`typeof(Currency.Value) == "string"` → `EN.sub`), so MultiBuy only needs verifying, not rewriting.
+3. **Effects stay number math, which leaves balance unchanged.** Wrap every `RuneFormulas` function once at module load: `fn(A, ...) → fn(RuneMath.num(A), ...)`. Every rune effect is clamped at ≤ 1e300 (most much lower), so a count of 1e400 gives exactly the capped effect a count of 1e308 gives today. The 6 C2-damped call sites in `Formulas` that do `Runes.X.Value ^ 0.33` inline become `RuneMath.num(Runes.X.Value) ^ 0.33`. `Cooldowns` (Icequake, Refraction, etc.) goes through the wrapped `RuneFormulas`, so it needs no change.
+4. **Payout pipeline.**
+   - `Pending` accumulates as EN (`EN.add`) and is flushed with `RuneMath.add`.
+   - `Reward_Amount` (including the ×2/×3 Echo Scan multipliers) is computed in EN whenever `Bulk × Chance` could reach 1e300 or more.
+   - Pity logic (`Potential < 1`) keeps its current number path. It only runs when the potential is below 1, where doubles are exact.
+5. **Bulk audit (decide in M0).** Multiply the bulk caps and exponents from the balance sheet: multiplicative caps like Disarray 1e12, Immortality 1e9, Zephyr 1e6 and Vanguard 4000×15000, then the sequential exponents. `Rune_Bulk` can plausibly exceed 1e308 late in the game. If the Balance Auditor confirms it's reachable:
+   - port `Formulas.Rune_Bulk` to EN (`EN.mul`, `EN.pow` for the exponent chain, `EN.floor`);
+   - make `Rune_Afford` return EN;
+   - clamp `Bulk = min(Afford, Rune_Bulk)` in EN;
+   - store `Stats.Runes_Opened` as EN (the same migration as step 1);
+   - pass `Runes_Opened/1e8` for the `Flesh_Prisms` boost through `RuneMath.num`.
+
+   If it isn't reachable, leave `Rune_Bulk` as a number and record why in the audit.
+6. **Display.** `EN.Format` already accepts EN strings. The Star Catalog, Survey panels and toasts show counts like `1.2e412`. Leaderboards that rank rune counts (if any) sort by EN comparison, never `tonumber`.
+
+**Acceptance tests (QA, blocking):**
+- **Golden test:** for 10,000 random rune-count vectors below 1e300, every `Formulas.*` and `RuneFormulas.*` output is **bit-identical** before and after the change. This proves balance is untouched.
+- **Overflow test:** set `Noob = 1e300`, then scan with a bulk of 1e10 for 10 minutes. The count exceeds 1e308, stays finite and monotonic, and survives a rejoin (save → load → same EN string). Effects equal their caps.
+- **Migration test:** legacy saves holding numbers `0`, `12345`, `1e250` and `math.huge` load as `"0"`, the EN of 12345, the EN of 1e250 and the EN of 1.79e308 respectively. No save errors.
+- **Spend test:** runeStarring pays with and halves/zeroes counts of 1e400. MultiBuy upgrades priced in runes deduct correctly at 1e400.
+- **Requirement test:** `Vanguard = 1e400` passes every `>= 1e18` gate and correctly **fails** `Vanguard < 1e19`.
+- **Grep gate:** no `Runes%.[%w_]+%.Value%s*[%+%-%*/]` and no raw comparison of `Runes.*.Value` anywhere outside `RuneMath`.
+
 ---
 
 ## 20. Agent Structure
@@ -1681,7 +1737,7 @@ The project runs as a multi-agent pipeline. Agents validate **inside Studio** th
 
 ### 20.3 Frozen-module hash check
 
-Maintain `docs/galaxy-incremental/frozen-manifest.json` (to be created in M0): SHA-256 of each frozen script's `Source` (Formulas, RuneFormulas, RuneInfo, Resets, Cooldowns, Automations, Upgrades engine + all 248 upgrade modules' numeric fields, Runes + 9 packs, 4 special pools, Datastore, Reconcile, Mob, MobsHandler, Merger, MultiplierButtons, ProductHandler, Freeze, runeStarring, Ascensions, RealmHandling logic). Upgrade and rune modules may change **only** display fields (`Name`, `Description`, display color). The check parses the module and compares numeric/logic fields, not raw text.
+Maintain `docs/galaxy-incremental/frozen-manifest.json` (to be created in M0): SHA-256 of each frozen script's `Source` (Formulas, RuneFormulas, RuneInfo, Resets, Cooldowns, Automations, Upgrades engine + all 248 upgrade modules' numeric fields, Runes + 9 packs, 4 special pools, Datastore, Reconcile, Mob, MobsHandler, Merger, MultiplierButtons, ProductHandler, Freeze, runeStarring, Ascensions, RealmHandling logic). Upgrade and rune modules may change **only** display fields (`Name`, `Description`, display color). The check parses the module and compares numeric/logic fields, not raw text. Exception: the §19.1 rune-count edits, which are re-hashed once after the golden test passes.
 
 ---
 
@@ -1689,7 +1745,7 @@ Maintain `docs/galaxy-incremental/frozen-manifest.json` (to be created in M0): S
 
 | Milestone | Goal | Exit criteria |
 |---|---|---|
-| **M0 · Foundation** | extract the place to a Rojo/Wally-style project (or keep the place-first workflow), frozen manifest, Lexicon + Theme + PresentationBus skeletons, QA harness | frozen hashes committed; a fresh account plays to Epoch 3 on the unchanged game through the new Lexicon with **zero legacy terms** in the touched UI |
+| **M0 · Foundation** | **§19.1 EN rune counts (engine change + golden/overflow/migration tests)**, extract the place to a Rojo/Wally-style project (or keep the place-first workflow), frozen manifest, Lexicon + Theme + PresentationBus skeletons, QA harness | frozen hashes committed; a fresh account plays to Epoch 3 on the unchanged game through the new Lexicon with **zero legacy terms** in the touched UI |
 | **M1 · Vertical Slice (Epoch 0–3)** | Observatory + Starlight Core + Stellar Forge + Gravity Well + Research Array + Stellar Survey bay; new HUD; Epoch cinematic; Discovery Reveal; Frontier lighting and sky L0–L1 | Playtest: a new player reaches Epoch 3 without help; Final Art Director pass on slice; perf budgets met on Low |
 | **M2 · Realm I complete (Epoch 0–10)** | all 8 platforms, 6 Frontier bays, Anomalies, Orbs, Cubes, Planetarium, Trials, Cosmology Isle + Viewer, Catalog, Supply Depot | full Realm I Visual QA set; Economy QA report; Consistency lint clean for Realm I |
 | **M3 · Supernova + Realm II** | Supernova cinematic, Cosmic Dust swarm, Expanse, Nebula Engine, Absolute Zero, Cryo Reactor, Deep Space bay, Collapse Monument I–IX, Shatter Star | reset matrix tests pass; save/load across Supernova verified |
@@ -1799,4 +1855,5 @@ Presenters sync to these (from `Shared.Modules.Cooldowns`): Starlight/XP/Planets
 *End of spec v1. Owners: System Architect (structure), Cosmic Design Director (identity). Update the version and changelog below on every revision.*
 
 ### Changelog
+- **v1.1:** added §19.1: rune counts move to EternityNum so Discoveries can exceed 1e308 (storage, migration, `RuneMath` accessor, wrapped `RuneFormulas`, payout pipeline, Bulk audit, acceptance tests).
 - **v1:** initial master spec: full Lexicon (currencies, layers, 9 surveys, 134 discoveries, 247 upgrades, anomalies), collision rulings, Epoch/Collapse/Galaxy/Reality progression, world/sky/UI/rendering/perf/audio specs, bug policy, 20-agent structure, roadmap, QA.
