@@ -1,0 +1,753 @@
+<title>Stud Incremental World</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Russo+One&family=Nunito:wght@500;700;800&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: full-bleed 3D stud world. Floating HUD chips top, zone/reset panel right (bottom sheet on phones), progression scrubber bottom. Single committed look: Roblox-sky world, navy + coral UI from the Stack pedestal. */
+:root{
+  color-scheme: dark;
+  --ink:#0E1424;        /* panel ground */
+  --ink2:#18223A;       /* raised */
+  --line:#2B3A5E;       /* hairline */
+  --coral:#FF5B4D;      /* Stack glow, primary accent */
+  --peach:#FFC8A8;      /* Stack top brick */
+  --text:#F2F5FF; --mid:#A9B4D0; --low:#6D7A9C;
+  --ok:#6BE38F; --warn:#FF8A65;
+  --f-display:"Russo One","Arial Black",system-ui,sans-serif;
+  --f-body:"Nunito","Segoe UI",system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:#8FC9F2;color:var(--text);font-family:var(--f-body);overflow:hidden}
+#app{position:fixed;inset:0}
+canvas#world{display:block;width:100%;height:100%;touch-action:none}
+.ui{position:absolute;z-index:2;pointer-events:none;inset:0;padding:max(14px,env(safe-area-inset-top,0px)) 16px max(14px,env(safe-area-inset-bottom,0px))}
+.ui>*{pointer-events:auto}
+.card{background:rgba(14,20,36,.88);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 30px rgba(8,12,30,.35)}
+
+/* title */
+.brand{position:absolute;left:16px;top:max(14px,env(safe-area-inset-top,0px));padding:12px 16px;display:flex;gap:12px;align-items:center}
+.brand .logo{width:38px;height:38px;flex:none}
+.brand h1{font-family:var(--f-display);font-weight:400;font-size:20px;letter-spacing:.06em;margin:0;line-height:1}
+.brand p{margin:3px 0 0;font-size:12px;color:var(--mid)}
+
+/* HUD chips */
+.hud{position:absolute;left:16px;top:86px;display:flex;flex-wrap:wrap;gap:6px;max-width:min(620px,calc(100% - 32px))}
+.chip{display:flex;align-items:center;gap:7px;padding:5px 10px 5px 6px;border-radius:999px;background:rgba(14,20,36,.82);border:1px solid var(--line);font-size:12px;font-weight:700;animation:pop .35s ease-out}
+.chip b{font-family:var(--f-mono);font-weight:500;color:var(--c)}
+.ico{width:18px;height:18px;border-radius:5px;background:var(--c);box-shadow:inset 0 -3px 0 rgba(0,0,0,.25),inset 0 2px 0 rgba(255,255,255,.45);flex:none}
+@keyframes pop{from{transform:scale(.6);opacity:0}to{transform:none;opacity:1}}
+
+/* side panel */
+.panel{position:absolute;right:16px;top:max(14px,env(safe-area-inset-top,0px));width:min(380px,calc(100% - 32px));max-height:calc(100% - 150px);display:flex;flex-direction:column;overflow:hidden}
+.tabs{display:flex;border-bottom:1px solid var(--line)}
+.tab{flex:1;background:none;border:0;color:var(--mid);font-family:var(--f-display);font-size:12px;letter-spacing:.1em;padding:12px 8px;cursor:pointer}
+.tab[aria-selected=true]{color:var(--text);box-shadow:inset 0 -2px 0 var(--coral)}
+.pbody{overflow:auto;padding:16px;display:grid;gap:12px;align-content:start}
+.eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--low);font-weight:800}
+.zname{font-family:var(--f-display);font-size:22px;line-height:1.1;margin:2px 0 0;color:var(--zc,var(--text))}
+.zsub{font-size:13px;color:var(--mid)}
+.state{display:inline-flex;gap:6px;align-items:center;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;padding:4px 9px;border-radius:999px;background:var(--ink2);border:1px solid var(--line);width:max-content}
+.state.on{color:var(--ok);border-color:rgba(107,227,143,.4)}
+.state.off{color:var(--warn);border-color:rgba(255,138,101,.4)}
+.facts{display:grid;gap:6px;margin:0;padding:0;list-style:none;font-size:13px}
+.facts li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;padding:7px 10px;background:var(--ink2);border-radius:6px}
+.facts li span:last-child{font-family:var(--f-mono);font-size:12px;color:var(--peach);text-align:right}
+.blurb{font-size:13px;line-height:1.55;color:var(--mid);margin:0}
+.tbl{width:100%;border-collapse:collapse;font-size:12px}
+.tbl th{text-align:left;color:var(--low);font-weight:800;font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding:4px 6px;border-bottom:1px solid var(--line)}
+.tbl td{padding:5px 6px;border-bottom:1px solid rgba(43,58,94,.5)}
+.tbl td.n{font-family:var(--f-mono);text-align:right;color:var(--peach)}
+.flag{font-size:12px;color:var(--warn);border-left:2px solid var(--warn);padding-left:10px;margin:0}
+.rung{display:grid;gap:4px;padding:10px 12px;border-radius:8px;background:var(--ink2);border-left:3px solid var(--rc)}
+.rung h3{margin:0;font-family:var(--f-display);font-weight:400;font-size:14px;color:var(--rc)}
+.rung .g{font-family:var(--f-mono);font-size:11px;color:var(--mid)}
+.rung .l{font-size:12px;color:var(--mid)}
+.rung .l b{color:var(--warn);font-weight:800}
+.rung .k{font-size:12px;color:var(--mid)}
+.rung .k b{color:var(--ok);font-weight:800}
+.hint{font-size:12px;color:var(--low)}
+
+/* scrubber */
+.scrub{position:absolute;left:16px;right:16px;bottom:max(14px,env(safe-area-inset-bottom,0px));margin:0 auto;max-width:880px;padding:12px 14px;display:grid;grid-template-columns:auto 1fr auto;gap:8px 14px;align-items:center}
+.scrub .now{font-family:var(--f-display);font-size:16px;letter-spacing:.04em;min-width:150px}
+.scrub .now small{display:block;font-family:var(--f-body);font-size:11px;color:var(--mid);letter-spacing:0;font-weight:700}
+.btns{display:flex;gap:6px}
+.btn{background:var(--ink2);border:1px solid var(--line);color:var(--text);border-radius:8px;height:36px;min-width:36px;padding:0 10px;font-weight:800;cursor:pointer;font-family:var(--f-body)}
+.btn:hover{border-color:var(--coral)}
+.btn.primary{background:var(--coral);border-color:var(--coral);color:#1a0a08}
+input[type=range]{width:100%;accent-color:var(--coral);height:28px}
+.ticks{grid-column:1/-1;display:flex;justify-content:space-between;font-family:var(--f-mono);font-size:10px;color:var(--low);margin-top:-6px;overflow:hidden}
+button:focus-visible,input:focus-visible,.lbl:focus-visible{outline:2px solid var(--peach);outline-offset:2px}
+
+/* world labels */
+#labels{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:1}
+.lbl{position:absolute;transform:translate(-50%,-100%);pointer-events:auto;cursor:pointer;white-space:nowrap;padding:4px 9px;border-radius:7px;background:rgba(14,20,36,.82);border:1px solid rgba(255,255,255,.12);font-size:12px;font-weight:800;color:#fff;display:flex;gap:6px;align-items:center;transition:opacity .25s}
+.lbl .ico{width:12px;height:12px;border-radius:3px}
+.lbl.locked{color:#aab3c8;background:rgba(40,46,64,.7)}
+.lbl.locked::after{content:"LOCKED";font-size:9px;letter-spacing:.1em;color:var(--warn)}
+.lbl.sel{border-color:var(--coral);box-shadow:0 0 0 2px rgba(255,91,77,.35)}
+
+.toast{position:absolute;left:50%;top:40%;transform:translate(-50%,-50%);font-family:var(--f-display);font-size:clamp(22px,5vw,44px);letter-spacing:.06em;color:#fff;text-shadow:0 4px 0 rgba(0,0,0,.25),0 0 30px rgba(255,91,77,.8);pointer-events:none;opacity:0;transition:opacity .3s,transform .3s;text-align:center}
+.toast.show{opacity:1;transform:translate(-50%,-60%)}
+.toast small{display:block;font-family:var(--f-body);font-size:14px;font-weight:800;letter-spacing:.08em;color:var(--peach)}
+#err{position:absolute;inset:0;display:none;place-items:center;padding:24px;text-align:center;background:#0E1424;color:var(--mid);font-size:14px}
+
+@media (max-width:760px){
+  .brand{padding:9px 12px}.brand h1{font-size:16px}.brand .logo{width:30px;height:30px}
+  .hud{top:66px}
+  .panel{top:auto;bottom:128px;right:16px;left:16px;width:auto;max-height:30vh}
+  .hud .chip:nth-child(n+7){display:none}
+  .scrub{grid-template-columns:1fr auto;padding:10px 12px}
+  .scrub .now{grid-column:1/-1;min-width:0}
+  .ticks{display:none}
+  .lbl{font-size:11px;padding:3px 7px}
+}
+@media (prefers-reduced-motion:reduce){.chip{animation:none}.toast{transition:none}}
+</style>
+
+<div id="app">
+  <canvas id="world" aria-label="3D low-poly Stud Incremental map"></canvas>
+  <div id="labels"></div>
+  <div class="ui">
+    <div class="brand card">
+      <svg class="logo" viewBox="0 0 40 40" aria-hidden="true"><rect x="3" y="14" width="34" height="22" rx="3" fill="#E8453C"/><rect x="3" y="30" width="34" height="6" rx="2" fill="#B8322B"/><rect x="8" y="8" width="9" height="8" rx="2" fill="#FF7A6B"/><rect x="23" y="8" width="9" height="8" rx="2" fill="#FF7A6B"/><rect x="8" y="8" width="9" height="3" rx="1.5" fill="#FFB3A8"/><rect x="23" y="8" width="9" height="3" rx="1.5" fill="#FFB3A8"/></svg>
+      <div><h1>STUD INCREMENTAL</h1><p>World map · every system in the game</p></div>
+    </div>
+    <div class="hud" id="hud" aria-label="Currencies unlocked at this point"></div>
+
+    <aside class="panel card" aria-label="Details">
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" id="tabZone" aria-selected="true">ZONE</button>
+        <button class="tab" role="tab" id="tabResets" aria-selected="false">RESET LADDER</button>
+      </div>
+      <div class="pbody" id="pbody"></div>
+    </aside>
+
+    <div class="scrub card">
+      <div class="now" id="now">STACK 7<small>~67 min in</small></div>
+      <input id="step" type="range" min="0" max="15" step="1" value="7" aria-label="Progression">
+      <div class="btns">
+        <button class="btn" id="prev" aria-label="Previous step">◀</button>
+        <button class="btn primary" id="play" aria-label="Play progression">PLAY</button>
+        <button class="btn" id="next" aria-label="Next step">▶</button>
+      </div>
+      <div class="ticks" aria-hidden="true"><span>S0</span><span>S2</span><span>S4</span><span>S6</span><span>S8</span><span>S10</span><span>REBIRTH</span><span>S12</span><span>ENDGAME</span></div>
+    </div>
+    <div class="toast" id="toast"></div>
+  </div>
+  <div id="err">The 3D view needs WebGL. Try a current browser on a device with graphics acceleration.</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(() => {
+if (!window.THREE || !THREE.OrbitControls) { document.getElementById('err').style.display='grid'; return; }
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* =====================================================================
+   DATA — names from the Stud icon sheet, numbers from the balance sheet
+   ===================================================================== */
+const C = { studs:'#D9DDE6', bricks:'#E8453C', welds:'#8FA3C0', bp:'#2FBF5B', oofs:'#FFD23F', gems:'#8A4DFF',
+  cyl:'#17B3A3', balls:'#FF3FA4', tix:'#F2B63D', glass:'#7FD6FF', glacier:'#4AA8FF', plate:'#C9D2DE',
+  ff:'#B07CFF', frost:'#9FD8FF', neon:'#5BE04A', foil:'#FF8FD0', light:'#FFD84A', refl:'#BFD9FF',
+  spark:'#FFB347', fog:'#B9B3E6', meteor:'#FF6A2B', loot:'#D99A2B', xp:'#58D66B', level:'#3E8BFF', stack:'#FF5B4D',
+  obby:'#FF9A2E', rebirth:'#A24DFF', anchor:'#3F7BFF', union:'#34D6B0', publish:'#2FA8FF', noob:'#FFD23F', crate:'#C97B3A', tools:'#E0782A', thr:'#FF7A2B', hats:'#9B3DFF' };
+
+// Progression steps (u index). Stack shown = max reached at that step.
+const STEPS = [
+  {name:'STACK 0',  t:'Just spawned', stack:0},
+  {name:'STACK 1',  t:'6 s', stack:1},
+  {name:'STACK 2',  t:'~1–2 min', stack:2},
+  {name:'STACK 3',  t:'5.5 min', stack:3},
+  {name:'STACK 4',  t:'~10 min', stack:4},
+  {name:'STACK 5',  t:'~17 min', stack:5},
+  {name:'STACK 6',  t:'~27 min', stack:6},
+  {name:'STACK 7',  t:'~67 min', stack:7},
+  {name:'STACK 8',  t:'~1.4 h', stack:8},
+  {name:'STACK 9',  t:'~1.8 h', stack:9},
+  {name:'STACK 10', t:'~3.1 h', stack:10},
+  {name:'REBIRTH',  t:'~7.1 h · Studs > 1e2283', stack:10, rebirth:true},
+  {name:'STACK 11', t:'~0.5 day · Anchors I–III', stack:11, anchor:3},
+  {name:'STACK 12', t:'+1.4 days · Anchors IV–VI', stack:12, anchor:6},
+  {name:'STACK 13', t:'Max stack · Anchors VII–IX', stack:13, anchor:9},
+  {name:'ENDGAME',  t:'Union 1000 · Publish 3', stack:13, anchor:9, end:true},
+];
+const STUDS_AT = ['88','4.1e5','2.2e9','8.0e14','3.3e23','6.1e39','2.0e64','2.41e152','5.5e275','3.0e977','1.1e1500','9.4e2282','4.2e3100','8.8e3400','1.9e3610','2.5e3900'];
+
+// Currency chips: [label, color, unlock step, sample value fn]
+const CUR = [
+  ['Studs',C.studs,0,u=>STUDS_AT[u]],
+  ['Bricks',C.bricks,1,u=>['','4.4e3','9.1e8','2.6e14','1.2e22','3.3e38','8.0e62','1.2e40','7.7e90','2.1e160','6.0e300','9.9e999','1.4e1400','3.0e1700','8.1e2000','5.0e2400'][u]],
+  ['Build Points',C.bp,1,u=>['','12','3.1e3','8.8e5','4.0e8','6.2e11','9.0e14','3.1e21','7.5e40','1.1e88','5.0e140','8.1e260','9.9e500','2.2e800','6.0e1100','1.0e1500'][u]],
+  ['Tix',C.tix,1,u=>['','3','41','960','2.2e4','7.7e5','1.9e7','4.4e9','9.0e11','6.2e14','3.0e18','1.1e24','8.0e40','2.2e70','5.0e110','1.0e240'][u]],
+  ['Welds',C.welds,2,u=>['','','6','2.1e4','8.8e9','1.4e19','6.0e27','8.8e33','2.1e60','9.0e110','4.4e180','8.8e300','2.0e500','7.0e800','1.2e1100','4.0e1500'][u]],
+  ['Oofs',C.oofs,4,u=>['','','','','930','4.0e7','1.1e14','5.5e21','2.0e40','8.8e77','3.0e130','9.0e250','1.0e400','5.0e700','7.0e900','2.0e1300'][u]],
+  ['Builder Level',C.level,4,u=>['','','','','3','9','17','31','58','96','140','190','260','330','410','520'][u]],
+  ['Gems',C.gems,5,u=>['','','','','','40','9.9e3','7.0e12','3.3e18','1.2e24','8.0e29','4.1e31','1.1e36','9.0e40','4.4e45','3.0e120'][u]],
+  ['Cylinders',C.cyl,7,u=>['','','','','','','','850','3.0e8','9.1e19','4.0e42','8.0e90','1.0e140','3.0e200','9.0e260','1.0e300'][u]],
+  ['Crates',C.crate,8,u=>['','','','','','','','','Lv 12','Lv 41','Lv 180','Lv 900','Lv 1.3e3','Lv 1.4e3','Lv 1.5e3','Lv 2.0e3'][u]],
+  ['Balls',C.balls,9,u=>['','','','','','','','','','2.5e6','7.7e30','1.1e75','5.0e120','9.0e190','3.0e260','9.0e300'][u]],
+  ['Glass',C.glass,11,u=>['','','','','','','','','','','','1.0','4.0e30','9.0e110','3.0e200','1.0e260'][u]],
+  ['Glacier',C.glacier,11,u=>['','','','','','','','','','','','2','8.0e20','4.0e60','1.0e110','4.0e150'][u]],
+  ['Diamond Plate',C.plate,12,u=>['','','','','','','','','','','','','3.0e9','8.0e25','5.0e40','2.0e60'][u]],
+  ['Frost Points',C.frost,12,u=>['','','','','','','','','','','','','6.0e3','9.0e8','1.0e15','8.0e30'][u]],
+  ['Force Fields',C.ff,14,u=>['','','','','','','','','','','','','','','1.1e4','9.0e12'][u]],
+  ['Neon',C.neon,15,u=>'4.0e26'],
+  ['Foil',C.foil,15,u=>'6.6e80'],
+  ['Lighting',C.light,15,u=>'2.0e22'],
+  ['Reflectance',C.refl,15,u=>'4.1e3'],
+];
+
+const HAT_PACKS = [
+  ['Beginner Hats','1 Tix','Stack 1',1,'#3DA5FF'],
+  ['Royal Hats','50 Tix','Stack 1',1,'#F2B63D'],
+  ['Basic Hats','1e3 Bricks','Stack 3',3,'#E8453C'],
+  ['Color Hats','2.5e4 Build Points','Stack 6',6,'#FF3FA4'],
+  ['Nature Hats','5e27 Balls','Stack 9',9,'#3FBF4F'],
+  ['Polychrome Hats','1e15 Gems','Rebirth',11,'#B07CFF'],
+  ['Cryo Hats','50 Frost Points','Rebirth + Anchor III',12,'#9FD8FF'],
+  ['Arctic Hats','1e6 Neon','Union 7',15,'#5BE04A'],
+  ['Galactic Hats','500 Tix','Union 750',15,'#9B3DFF'],
+];
+
+const TIER_COST = [['0','100 Studs'],['1','1e6 Studs'],['2','5e9 Studs'],['3','2.5e15 Studs'],['4','7.5e23 Studs'],['5','1e40 Studs'],['6','1e65 Studs'],['7','1e153 Studs'],['8','1e276 Studs'],['9','1e978 Studs'],['10','1e52 Glass'],['11','7.5e113 Glass'],['12','1e195 Glass'],['13','hard cap']];
+const ANCHORS = [['I','1e19','S11'],['II','2.5e34','S11'],['III','5e51','S11'],['IV','2.5e109','S12'],['V','7.5e136','S12'],['VI','2.5e185','S12'],['VII','1e234','S13'],['VIII','5e278','S13'],['IX','2 ⚠','S13']];
+const UNION = [['1','1e43'],['2','1e50'],['3','1e55'],['4','1e60'],['5','1e65'],['6','1e70'],['7','1e85'],['8','1e95'],['9','1e105'],['10','5e178'],['11+','≈1e89 ⚠']];
+
+const RESETS = [
+  {n:'Welds · Compress', c:C.welds, g:'Bricks > 50', l:'Studs, Bricks', k:'everything else'},
+  {n:'Stack', c:C.stack, g:'Studs > Stack cost (Glass from Stack 10) · not spent', l:'Studs, Bricks, Welds + upgrades, Oofs + upgrades, Noob level, Cylinders + upgrades, Crates, Thrusters, Tools, Balls + upgrades · past Stack 10 also Glass, Glacier, Diamond Plate, Neon, Force Fields, Anchors', k:'Build Points, Gems, Hats, Gem tree, Tix'},
+  {n:'Obbies 1–4', c:C.obby, g:'Enter any time', l:'Stack reset set, Stack → 0, Gem tree (except 16 kept nodes), Build Points + upgrades, Gems', k:'Hats, Tix, the 16 kept nodes'},
+  {n:'Rebirth', c:C.rebirth, g:'Studs > 1e2283 · once', l:'Stack reset set, Stack, Gem tree (except 16), Build Points, every hat with chance ≥ 1e-8, Gems, Builder XP & Level, Obby completions', k:'Ultra-rare hats, Tix, 16 kept nodes'},
+  {n:'Anchor I–IX', c:C.anchor, g:'Glass price table · Stack 11–13', l:'Stack reset set (not Stack), Gems, Glass, Glacier, Diamond Plate, Glass upgrades, Gem tree (except 16), Neon', k:'Stack, Hats, Anchors owned'},
+  {n:'Force Fields', c:C.ff, g:'Stack 13 · Diamond Plate > 1e17', l:'Glass, Glacier, Diamond Plate', k:'everything else'},
+  {n:'Union', c:C.union, g:'Gems > Union cost · not spent', l:'Gem tree (except 16), Gems, Neon, Foil', k:'Stack, Glacier progress, Hats'},
+  {n:'Publish', c:C.publish, g:'Foil > 1e23 / 7.5e36 / 1e78', l:'Gem tree (except 19), Gems, Neon, Foil, Lighting, Reflectance, Sparkles + their upgrades', k:'Union, Stack, Hats, 19 kept nodes'},
+  {n:'Reflectance', c:C.refl, g:'Publish 3 · Lighting > 1e20', l:'Gem tree (except 19), Neon, Foil, Lighting + upgrades', k:'Reflectance, Publish, Union, Gems'},
+];
+
+/* =====================================================================
+   THREE SETUP
+   ===================================================================== */
+const canvas = document.getElementById('world');
+let renderer;
+try { renderer = new THREE.WebGLRenderer({canvas, antialias:true, powerPreference:'high-performance'}); }
+catch(e){ document.getElementById('err').style.display='grid'; return; }
+const DPR = Math.min(2, devicePixelRatio||1);
+renderer.setPixelRatio(DPR);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+
+const scene = new THREE.Scene();
+// sky gradient
+(function(){ const c=document.createElement('canvas'); c.width=4; c.height=256; const g=c.getContext('2d');
+  const gr=g.createLinearGradient(0,0,0,256); gr.addColorStop(0,'#3F8FE0'); gr.addColorStop(.55,'#8FC9F2'); gr.addColorStop(1,'#DDF0FF');
+  g.fillStyle=gr; g.fillRect(0,0,4,256); const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding; scene.background=t; })();
+scene.fog = new THREE.Fog(0xCFE8FF, 220, 520);
+
+const camera = new THREE.PerspectiveCamera(42, 1, 0.5, 1200);
+camera.position.set(58, 118, 178);
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.dampingFactor = .08;
+controls.maxPolarAngle = 1.38; controls.minDistance = 18; controls.maxDistance = 360;
+controls.target.set(62, 6, -16);
+controls.autoRotate = !reduce; controls.autoRotateSpeed = .35;
+
+scene.add(new THREE.HemisphereLight(0xE6F4FF, 0x5C7F3F, .85));
+const sun = new THREE.DirectionalLight(0xFFF3DD, 1.35);
+sun.position.set(90, 160, 70); sun.castShadow = true;
+sun.shadow.mapSize.set(2048,2048);
+Object.assign(sun.shadow.camera,{left:-150,right:220,top:150,bottom:-150,near:10,far:450});
+sun.shadow.bias = -0.0006; sun.shadow.normalBias = .4;
+scene.add(sun); scene.add(sun.target); sun.target.position.set(30,0,-10);
+
+/* ---------- materials & primitives ---------- */
+const matCache = {};
+function M(color, o={}){ const k=color+JSON.stringify(o); if(matCache[k]) return matCache[k];
+  const m = new THREE.MeshStandardMaterial(Object.assign({color:new THREE.Color(color), flatShading:true, roughness:.55, metalness:.05}, o));
+  if(o.emissive) m.emissive = new THREE.Color(o.emissive);
+  return matCache[k]=m; }
+const GEO = { box:new THREE.BoxGeometry(1,1,1), stud:new THREE.CylinderGeometry(.32,.32,.2,10), cyl:new THREE.CylinderGeometry(.5,.5,1,12),
+  ico:new THREE.IcosahedronGeometry(1,0), ico1:new THREE.IcosahedronGeometry(1,1), oct:new THREE.OctahedronGeometry(1,0), cone:new THREE.ConeGeometry(.5,1,8), sph:new THREE.SphereGeometry(1,10,8) };
+function mesh(geo, mat, x=0,y=0,z=0, sx=1,sy=1,sz=1, cast=true){ const m=new THREE.Mesh(geo,mat); m.position.set(x,y,z); m.scale.set(sx,sy,sz); m.castShadow=cast; m.receiveShadow=true; return m; }
+function box(w,h,d,color,x=0,y=0,z=0,o){ return mesh(GEO.box, typeof color==='string'?M(color,o):color, x,y+h/2,z, w,h,d); }
+// LEGO-style brick with studs. w,d in studs, sp = stud pitch
+function brick(w,d,h,color,sp=1,studs=true,o){ const g=new THREE.Group(); const mt=M(color,o);
+  g.add(mesh(GEO.box, mt, 0,h/2,0, w*sp-.04, h, d*sp-.04));
+  if(studs){ for(let i=0;i<w;i++) for(let j=0;j<d;j++){ const s=mesh(GEO.stud, mt, (i-(w-1)/2)*sp, h+.1*sp, (j-(d-1)/2)*sp, sp,sp,sp); s.castShadow=false; g.add(s);} }
+  return g; }
+function add(p,...c){ c.forEach(x=>p.add(x)); return p; }
+function at(o,x,y,z){ o.position.set(x,y,z); return o; }
+
+const anim = []; // per-frame callbacks (t, dt)
+
+/* ---------- world: baseplate, sky, clouds ---------- */
+const world = new THREE.Group(); scene.add(world);
+(function baseplate(){
+  const S=132, sp=2.2, n=Math.floor(S/sp);
+  const base = new THREE.Group();
+  base.add(mesh(GEO.box, M('#4B974B'), 0,-1.5,0, S,3,S));
+  base.add(mesh(GEO.box, M('#3E7F3E'), 0,-4.2,0, S-2,2.4,S-2));
+  // underside rocks
+  const r=seeded(4); for(let i=0;i<22;i++){ const s=4+r()*9; const m=mesh(GEO.ico, M(r()<.5?'#6B5A48':'#7D6A55'), (r()-.5)*S*.8, -6-s*.6, (r()-.5)*S*.8, s,s*1.2,s); base.add(m);}
+  const inst = new THREE.InstancedMesh(new THREE.CylinderGeometry(.62,.62,.32,8), M('#4B974B'), n*n);
+  const d=new THREE.Object3D(); let k=0;
+  for(let i=0;i<n;i++) for(let j=0;j<n;j++){ d.position.set((i-(n-1)/2)*sp,.16,(j-(n-1)/2)*sp); d.updateMatrix(); inst.setMatrixAt(k++, d.matrix);}
+  inst.receiveShadow = true; base.add(inst);
+  world.add(base);
+})();
+function seeded(s){ return ()=>((s=(s*1664525+1013904223)>>>0)/4294967296); }
+
+// paths (grey tiles) from hub to zones, added after zones defined
+function path(x1,z1,x2,z2){ const dx=x2-x1, dz=z2-z1, L=Math.hypot(dx,dz); const g=new THREE.Group();
+  const steps=Math.floor(L/4.4); for(let i=1;i<steps;i++){ const t=i/steps; const b=brick(2,2,.35,i%2?'#A3A2A5':'#B9B8BC',1.6,true); b.position.set(x1+dx*t,0,z1+dz*t); b.rotation.y=Math.atan2(dx,dz); g.add(b);} world.add(g); }
+
+// brick clouds
+(function clouds(){ const r=seeded(99);
+  for(let i=0;i<14;i++){ const g=new THREE.Group(); const n=3+Math.floor(r()*4);
+    for(let j=0;j<n;j++){ const b=brick(2+Math.floor(r()*3),2,1.4,'#FFFFFF',2.2,true,{roughness:.9}); b.position.set(j*3.6-(n*1.8), (j%2)*1.4, (r()-.5)*4); g.add(b);}
+    const ang=r()*Math.PI*2, R=150+r()*140; g.position.set(Math.cos(ang)*R, 45+r()*50, Math.sin(ang)*R); g.traverse(o=>{o.castShadow=false});
+    world.add(g); const sp=.6+r()*.8; anim.push((t,dt)=>{ g.position.x+=dt*sp; if(g.position.x>320) g.position.x=-320; }); }
+})();
+
+/* =====================================================================
+   ZONES
+   ===================================================================== */
+const zones = []; const pickables = [];
+function zone(def, build){ const g=new THREE.Group(); build(g); g.position.set(def.x, def.y||0, def.z); if(def.ry) g.rotation.y=def.ry;
+  (def.parent||world).add(g); def.group=g; def.labelY = def.labelY||12; zones.push(def);
+  g.traverse(o=>{ if(o.isMesh){ o.userData.zone=def; o.userData.orig=o.material; o.userData.cast=o.castShadow; pickables.push(o);} }); return def; }
+
+/* --- STACK (Tier) — the pedestal from the reference --- */
+const stackBricks = [];
+const Zstack = zone({id:'stack', name:'Stack', sub:'Tier · the main prestige', c:C.stack, x:0, z:0, u:0, labelY:37,
+  blurb:'Stand on the pad when you can afford the next Stack. It resets your early currencies and multiplies everything. Each Stack adds a brick to the pedestal.',
+  facts:[['Levels','0 → 13'],['Stack 10+ paid in','Glass'],['Cooldown','1 s'],['Cost is','checked, not spent']],
+  table:{h:['Stack','To advance'],rows:TIER_COST}}, g=>{
+  const navy='#1F2A44', glow={emissive:'#FF4A3A', emissiveIntensity:1.6};
+  add(g, box(26,2.6,17,navy,0,0,0), box(23,1.4,14,'#26324F',0,2.6,0));
+  // glow panels on base front/back
+  [-7,7].forEach(x=>{ g.add(box(4.2,.9,.2,M('#FF6A5A',glow),x,.85,8.55)); g.add(box(4.2,.9,.2,M('#FF6A5A',glow),x,.85,-8.55)); });
+  // stepped towers
+  [-1,1].forEach(s=>{ const x=s*10.2;
+    add(g, box(3.4,6,4.4,navy,x,4,-2), box(3.2,8.5,3.8,navy,x+s*-.1,4,1.2), box(3,4.5,3,'#26324F',x+s*1.6,4,-4.2));
+    g.add(box(.2,4.6,1.6,M('#FF6A5A',glow),x-s*1.72,6.2,1.2));
+  });
+  // stacked bricks (up to 14)
+  const cols=['#E8453C','#EC5445','#EF6350','#F2735D','#F4826A','#F59078','#F69E86','#F7AB94','#F8B7A1','#F9C2AE','#FACBBA','#FBD3C5','#FCDBD0','#FDE3DA'];
+  for(let i=0;i<14;i++){ const w=Math.max(3,8-i*.36), h=2.1; const b=brick(Math.round(w),Math.max(2,Math.round(w*.62)),h,cols[i],1.5,true);
+    b.position.set(0,4+i*h,0); b.userData.baseY=4+i*h; b.scale.setScalar(.001); b.visible=false; g.add(b); stackBricks.push(b);}
+});
+
+/* --- BRICKS (Flame) forge --- */
+zone({id:'bricks', name:'Bricks', sub:'Flame', c:C.bricks, x:-34, z:22, u:1,
+  blurb:'Spend 50 Studs on the pad to fire a batch of Bricks. Bricks multiply Studs and, past 1M, Builder XP.',
+  facts:[['Unlocks','Stack 1'],['Cost','50 Studs'],['Studs bonus','×(1 + 0.5·Bricks)'],['XP bonus','Bricks^0.03 after 1e6']]}, g=>{
+  g.add(at(brick(4,2,2.4,'#E8453C',2.2),0,0,0)); g.add(at(brick(4,2,2.4,'#D63A32',2.2),0,2.4,0)); g.add(at(brick(2,2,2.4,'#F05A4F',2.2),0,4.8,0));
+  // kiln
+  add(g, box(7,6,7,'#4A4F5E',-9,0,0), box(3.2,2.6,.3,M('#FF7A2B',{emissive:'#FF5A10',emissiveIntensity:2}),-9,1.2,3.55), box(1.6,5,1.6,'#3A3F4C',-10.5,6,-2));
+  const embers=[]; for(let i=0;i<10;i++){ const e=mesh(GEO.box,M('#FFB347',{emissive:'#FF7A1A',emissiveIntensity:2}),-10.5,11,-2,.35,.35,.35,false); g.add(e); embers.push([e,Math.random()*4]); }
+  anim.push((t)=>embers.forEach(([e,o])=>{ const p=((t*.6+o)%4)/4; e.position.y=11+p*9; e.position.x=-10.5+Math.sin(t+o)*p*1.5; e.scale.setScalar(.35*(1-p)+.05); }));
+});
+
+/* --- WELDS (Power) --- */
+zone({id:'welds', name:'Welds', sub:'Power', c:C.welds, x:-44, z:-8, u:2,
+  blurb:'Compress your Bricks into Welds. It wipes Studs and Bricks, and Welds raise your hit damage on Noobs.',
+  facts:[['Unlocks','Stack 2'],['Needs','Bricks > 50'],['Resets','Studs, Bricks'],['Damage bonus','Welds^0.075 (^0.175 upgraded)']]}, g=>{
+  const steel='#8FA3C0', dark='#5E6F8A';
+  for(let i=0;i<3;i++){ const L=new THREE.Group(); add(L, box(6,1.2,3,steel,0,0,0), box(1.2,5,3,dark,-2.4,1.2,0)); L.position.set(0,i*6.4,0); L.rotation.y=i*.6; g.add(L);}
+  const sparks=[]; for(let i=0;i<14;i++){ const s=mesh(GEO.box,M('#FFF3A0',{emissive:'#FFD84A',emissiveIntensity:3}),0,0,0,.2,.2,.2,false); g.add(s); sparks.push(s);}
+  anim.push((t)=>sparks.forEach((s,i)=>{ const p=((t*1.7+i*.37)%1); s.position.set(-2.3+Math.cos(i)*p*3,6.4+Math.sin(i*2)*p*2+p*1.5,1.6+Math.sin(i)*p*2); s.visible=p<.6; }));
+});
+
+/* --- BUILD POINTS (Realm Points) --- */
+zone({id:'bp', name:'Build Points', sub:'Realm Points · research board', c:C.bp, x:34, z:22, u:1,
+  blurb:'Build Points buy the 14 research upgrades that feed Studs, Bricks, Welds and more. After Rebirth they gain ×10 and auto-buy from Union 1.',
+  facts:[['Unlocks','Stack 1'],['Cooldown','1 s (÷3 at 2.5e14 Balls)'],['Upgrades','14'],['After Rebirth','×10']]}, g=>{
+  g.add(at(brick(6,4,1,'#2FBF5B',2),0,0,0));
+  const board=new THREE.Group(); add(board, box(12,8,.8,'#1E8E42',0,0,0), box(11,7,.2,'#13331F',0,.5,.5));
+  [1.2,2.2,3.4,4.8,6].forEach((h,i)=>board.add(box(1.4,h,.3,M('#FFD84A',{emissive:'#B89010',emissiveIntensity:.4}),-4+i*2,.8,.7)));
+  board.position.set(0,2,-2); board.rotation.x=-.12; g.add(board);
+});
+
+/* --- NOOBS arena (mobs / Oofs) --- */
+const noobs=[];
+function noob(){ const n=new THREE.Group(); add(n, box(1.9,1.9,1,'#1F6FD1',0,2,0), box(.9,2,1,'#3FA34D',-.5,0,0), box(.9,2,1,'#3FA34D',.5,0,0), box(.8,1.9,.9,'#F5C93A',-1.4,2,0), box(.8,1.9,.9,'#F5C93A',1.4,2,0), box(1.3,1.3,1.3,'#F5C93A',0,3.9,0));
+  const face=box(.7,.12,.05,'#1b1b1b',0,4.2,.66); n.add(face); n.add(box(.16,.3,.05,'#1b1b1b',-.3,4.75,.66)); n.add(box(.16,.3,.05,'#1b1b1b',.3,4.75,.66)); return n; }
+zone({id:'noobs', name:'Noobs', sub:'Mobs · drop Oofs', c:C.noob, x:46, z:-10, u:4,
+  blurb:'Fight Noobs for Oofs. Kill 15 at your max level to push the level up. Every hit has a 1-in-10,000 chance to spawn a Loot Crate chest.',
+  facts:[['Unlocks','Stack 4'],['HP (L<1000)','10–20 · 2^(L−1)'],['Kills per level','15'],['Oof drop','1–3 · 1.5^(L−1)'],['Chest chance','1 / 10,000 (runes lower it)']]}, g=>{
+  g.add(at(brick(8,8,.5,'#9A9A9E',2,true),0,0,0));
+  for(let i=0;i<16;i++){ const a=i/16*Math.PI*2; g.add(box(.8,3,.8,'#6B6F7A',Math.cos(a)*9,.5,Math.sin(a)*9)); }
+  const ring=mesh(new THREE.TorusGeometry(9,.25,6,32),M('#FF5B4D',{emissive:'#FF3B2A',emissiveIntensity:.8}),0,3.4,0); ring.rotation.x=Math.PI/2; g.add(ring);
+  for(let i=0;i<4;i++){ const n=noob(); n.position.y=.5; g.add(n); noobs.push([n,i*Math.PI/2]); }
+  anim.push((t)=>noobs.forEach(([n,o])=>{ const a=t*.35+o; n.position.x=Math.cos(a)*5; n.position.z=Math.sin(a)*5; n.rotation.y=-a; n.position.y=.5+Math.abs(Math.sin(t*6+o))*.35; }));
+});
+
+/* --- GEMS (Prisms + talent tree) --- */
+const gems=[];
+function gem(color,s){ const m=mesh(GEO.oct, M(color,{emissive:color,emissiveIntensity:.35,roughness:.25,metalness:.2}),0,0,0,s,s*1.35,s); return m; }
+zone({id:'gems', name:'Gems', sub:'Prisms · the Gem tree (talents)', c:C.gems, x:0, z:46, u:5,
+  blurb:'Gems generate on a timer from Stack 5 and buy the ~110-node Gem tree. 16 nodes survive every reset. Buying the Union node at 5e43 Gems opens Union.',
+  facts:[['Unlocks','Stack 5'],['Timer','15 s ÷ Thrusters'],['×2 pad','Stack 6'],['Union node','5e43 Gems']]}, g=>{
+  g.add(at(brick(10,6,.6,'#5A4FA0',2),0,0,0));
+  const nodes=[[0,0],[ -6,4],[6,4],[-9,9],[-3,9],[3,9],[9,9]];
+  nodes.forEach(([x,z],i)=>{ g.add(at(brick(2,2,1.4,'#3B3570',1.4),x,.6,-z+4)); const m=gem(i===0?'#B07CFF':'#8A4DFF',1.1); m.position.set(x,4,-z+4); g.add(m); gems.push(m); });
+  [[0,0,-6,4],[0,0,6,4],[-6,4,-9,9],[-6,4,-3,9],[6,4,3,9],[6,4,9,9]].forEach(([a,b,c,d])=>{ const L=Math.hypot(c-a,d-b); const r=box(.5,.4,L,'#C7B8FF',(a+c)/2,1.9,-(b+d)/2+4); r.rotation.y=Math.atan2(c-a,-(d-b)); g.add(r); });
+  const big=gem('#7A3CFF',2.4); big.position.set(0,9,-6); g.add(big); gems.push(big);
+  anim.push((t)=>gems.forEach((m,i)=>{ m.rotation.y=t*(.6+i*.05); m.position.y=(i===gems.length-1?9:4)+Math.sin(t*1.5+i)*.3; }));
+});
+
+/* --- CYLINDERS (Orbs) --- */
+const cyls=[];
+zone({id:'cyl', name:'Cylinders', sub:'Orbs', c:C.cyl, x:-30, z:-40, u:7,
+  blurb:'Cylinders tick up every second from Stack 7. Past 20 they multiply Studs, past 500 Bricks, past 1e4 Welds. Three permanent upgrades here survive Stack resets.',
+  facts:[['Unlocks','Stack 7'],['Studs bonus','Cylinders/20'],['Rebirth bonus','×5e4'],['Permanent','Hat Bulk, Luck, Speed']]}, g=>{
+  g.add(at(brick(8,6,.6,'#0E7F74',2),0,0,0));
+  [[0,0,6],[-5,-3,4],[5,-3,4.5],[-4,4,3],[4.5,4,3.5]].forEach(([x,z,h])=>{ const c=mesh(GEO.cyl,M('#17B3A3',{roughness:.3}),x,.6+h/2,z,4,h,4); g.add(c); const top=mesh(GEO.cyl,M('#5EE6D6',{roughness:.3}),x,.6+h+.15,z,3,.3,3); g.add(top); cyls.push([c,top,h]); });
+  anim.push((t)=>cyls.forEach(([c,top,h],i)=>{ c.rotation.y=top.rotation.y=t*(.5+i*.1); }));
+});
+
+/* --- CRATES (Cubes / Merger) --- */
+const crates=[];
+function crate(s){ const g=new THREE.Group(); g.add(mesh(GEO.box,M('#C97B3A'),0,s/2,0,s,s,s)); [[0,0],[1,0],[0,1]].forEach(([a,b])=>{});
+  const e=M('#8C5324'); g.add(mesh(GEO.box,e,0,s/2,s/2,s*1.02,s*.18,.06)); g.add(mesh(GEO.box,e,0,s/2,-s/2,s*1.02,s*.18,.06)); g.add(mesh(GEO.box,e,s/2,s/2,0,.06,s*.18,s*1.02)); g.add(mesh(GEO.box,e,-s/2,s/2,0,.06,s*.18,s*1.02)); return g; }
+zone({id:'crates', name:'Crates', sub:'Cubes · the Merger', c:C.crate, x:30, z:-40, u:8,
+  blurb:'Crates roll off the belt and merge into higher levels. Crate level multiplies Studs by 3^(L−1), Welds by 2^(L−1) and Cylinders by 1.5^(L−1).',
+  facts:[['Unlocks','Stack 8'],['Spawn timer','2–20 s'],['Studs bonus','3^(L−1)'],['Milestones','L 20, 35, 55, 400, 1350, 1440']]}, g=>{
+  add(g, box(22,1.4,4,'#2A2E38',0,0,0)); for(let i=0;i<11;i++) g.add(box(.3,.1,4.1,'#F2B63D',-10+i*2,1.4,0));
+  for(let i=0;i<5;i++){ const c=crate(2.4); c.position.set(-10+i*4.4,1.45,0); g.add(c); crates.push(c);}
+  const big=crate(5.5); big.position.set(14,0,0); g.add(big);
+  anim.push((t,dt)=>crates.forEach(c=>{ c.position.x+=dt*3; if(c.position.x>10){ c.position.x=-11; } const s=c.position.x>8?Math.max(.05,1-(c.position.x-8)/2):1; c.scale.setScalar(s); }));
+});
+
+/* --- BALLS (Spheres) --- */
+const balls=[];
+zone({id:'balls', name:'Balls', sub:'Spheres · milestones', c:C.balls, x:0, z:-40, u:9,
+  blurb:'Balls unlock at Stack 9 and carry the long milestone list: ×25 Studs at 100, ×5 Balls at 1e7, faster Build Points at 2.5e14, luck and speed at 1e69, and more.',
+  facts:[['Unlocks','Stack 9'],['Level cost','25·4^level'],['Per level','×1.5 Balls'],['Glass bonus','×(Glass + 1)']]}, g=>{
+  g.add(at(brick(8,8,.6,'#B0277A',2),0,0,0));
+  const mats=[M('#FF3FA4',{roughness:.25}),M('#FF6FBE',{roughness:.25}),M('#E0208A',{roughness:.25})];
+  for(let i=0;i<6;i++){ const b=mesh(GEO.ico1,mats[i%3],0,0,0,1.4,1.4,1.4); g.add(b); balls.push([b,i]); }
+  const planet=mesh(GEO.ico1,M('#FF3FA4',{roughness:.2,emissive:'#6A0A3A',emissiveIntensity:.4}),0,8,0,4,4,4); g.add(planet);
+  const ringB=mesh(new THREE.TorusGeometry(6,.35,4,28),M('#FFC8E6'),0,8,0); ringB.rotation.x=1.2; g.add(ringB);
+  anim.push((t)=>{ planet.rotation.y=t*.3; ringB.rotation.z=t*.2; balls.forEach(([b,i])=>{ const a=i/6*Math.PI*2+t*.4; b.position.set(Math.cos(a)*6,1.9+Math.abs(Math.sin(t*3+i))*3,Math.sin(a)*6); }); });
+});
+
+/* --- TOOLS (Gears) --- */
+zone({id:'tools', name:'Tools', sub:'Gears · faster timers', c:C.tools, x:-52, z:34, u:2,
+  blurb:'Each Tools level shaves 0.025 s off most generation timers. Costs climb ×1000 per level.',
+  facts:[['Cost','1e7 · 1000^level Studs'],['Effect','−0.025 s per level']]}, g=>{
+  g.add(at(brick(4,4,.6,'#6E4A2A',2),0,0,0));
+  const gear=new THREE.Group(); gear.add(mesh(GEO.cyl,M('#9AA6B8',{metalness:.5,roughness:.35}),0,0,0,5,1,5)); for(let i=0;i<10;i++){ const a=i/10*Math.PI*2; const tt=mesh(GEO.box,M('#9AA6B8',{metalness:.5,roughness:.35}),Math.cos(a)*2.8,0,Math.sin(a)*2.8,1,1,1); tt.rotation.y=-a; gear.add(tt);}
+  gear.position.set(0,5,0); gear.rotation.x=Math.PI/2; g.add(gear);
+  add(g, box(.8,6,.8,'#8C5A2B',-4,.6,1.5), box(3,1.4,1.4,'#7D8796',-4,6.2,1.5), box(.8,5,.8,'#8C5A2B',4,.6,1.5), box(2.4,.8,.8,'#E0782A',4,5.6,1.5));
+  anim.push((t)=>{ gear.rotation.y=t*1.2; });
+});
+
+/* --- THRUSTERS (Accelerator) --- */
+zone({id:'thr', name:'Thrusters', sub:'Accelerator · Gem & Crate speed', c:C.thr, x:54, z:30, u:8,
+  blurb:'A late Realm One purchase. Thruster levels speed up Gem generation (+10% each) and Crate spawns (+5% each), with 30 to 60 levels.',
+  facts:[['Cost','1e243 · 75^level Studs'],['Levels','30 → 60'],['Gem speed','+0.1× per level']]}, g=>{
+  g.add(at(brick(6,6,.6,'#3A3F4C',2),0,0,0));
+  const ring=mesh(new THREE.TorusGeometry(5,.6,6,24),M('#7D8796',{metalness:.5,roughness:.3}),0,6,0); g.add(ring);
+  const orb=mesh(GEO.ico,M('#FFE08A',{emissive:'#FF9A2B',emissiveIntensity:2}),5,6,0,.8,.8,.8,false); g.add(orb);
+  const rocket=new THREE.Group(); add(rocket, mesh(GEO.cyl,M('#C9D2DE',{metalness:.4}),0,2,0,2,4,2), mesh(GEO.cone,M('#E8453C'),0,4.8,0,2,1.6,2)); const flame=mesh(GEO.cone,M('#FFB347',{emissive:'#FF6A10',emissiveIntensity:2.5}),0,-.4,0,1.4,2.2,1.4,false); flame.rotation.x=Math.PI; rocket.add(flame); rocket.position.set(0,1.4,0); g.add(rocket);
+  anim.push((t)=>{ const a=t*3; orb.position.set(Math.cos(a)*5,6+Math.sin(a)*5*0,Math.sin(a)*5); ring.rotation.x=Math.PI/2; flame.scale.y=2.2+Math.sin(t*30)*.4; });
+});
+
+/* --- OBBIES (Challenges) --- */
+function checker(){ const c=document.createElement('canvas'); c.width=c.height=32; const x=c.getContext('2d'); for(let i=0;i<4;i++)for(let j=0;j<4;j++){ x.fillStyle=(i+j)%2?'#111':'#fff'; x.fillRect(i*8,j*8,8,8);} const t=new THREE.CanvasTexture(c); t.magFilter=THREE.NearestFilter; t.encoding=THREE.sRGBEncoding; return new THREE.MeshStandardMaterial({map:t,side:THREE.DoubleSide,flatShading:true}); }
+const flagMat=checker();
+zone({id:'obby', name:'Obbies', sub:'Challenges 1–4', c:C.obby, x:-52, z:-34, u:0,
+  blurb:'Four challenge runs, each restarting from Stack 0 with a handicap. Clear one and its reward stays for good.',
+  facts:[],
+  table:{h:['Obby','Handicap','Goal','Reward'],rows:[['1','Studs ^0.425','Stack 6','Studs ×1e12'],['2','Hats ^0.33','Stack 8','×20 most'],['3','No Bricks / BP','1e393 Studs','Studs ^1.1'],['4','All ^0.5','1e96 Studs','Gems ×15']]}}, g=>{
+  for(let o=0;o<4;o++){ const lane=new THREE.Group(); const cols=['#FF9A2E','#FFB347','#FF7A2B','#FFC266'];
+    for(let s=0;s<5;s++){ lane.add(at(brick(2,2,1.2+s*1.3,cols[s%4],1.6),s*3.4,0,0)); }
+    const pole=box(.3,5,.3,'#DDDDDD',14.2,7.7,0); lane.add(pole); const flag=mesh(new THREE.PlaneGeometry(3,2),flagMat,15.7,11.4,0); lane.add(flag);
+    lane.position.set(-6,0,-9+o*5.2); g.add(lane);
+    anim.push((t)=>{ flag.rotation.y=Math.sin(t*3+o)*.25; }); }
+});
+
+/* --- HATS (Runes) shop row --- */
+const hatMeshes=[];
+function hat(color, kind){ const h=new THREE.Group(); const m=M(color,{roughness:.35});
+  h.add(mesh(GEO.cyl,m,0,.15,0,4,.3,4));
+  if(kind%3===0){ h.add(mesh(GEO.cyl,m,0,1.6,0,2.4,2.8,2.4)); h.add(mesh(GEO.cyl,M('#1b1b1b'),0,.55,0,2.46,.5,2.46)); }
+  else if(kind%3===1){ h.add(mesh(new THREE.CylinderGeometry(.9,1.3,1.6,8),m,0,1.1,0)); for(let i=0;i<5;i++){ const a=i/5*Math.PI*2; h.add(mesh(GEO.cone,M('#FFD84A',{emissive:'#B08010',emissiveIntensity:.3}),Math.cos(a)*1.05,2.3,Math.sin(a)*1.05,.5,.9,.5)); } }
+  else { h.add(mesh(GEO.cone,m,0,1.9,0,2.6,3.4,2.6)); h.add(mesh(GEO.sph,M('#FFFFFF'),0,3.7,0,.4,.4,.4)); }
+  return h; }
+zone({id:'hats', name:'Hats', sub:'Runes · 9 hat packs', c:C.hats, x:0, z:58, u:1, labelY:14,
+  blurb:'Stand on a pack to open hats in bulk. Every hat is a permanent multiplier. Rare hats past luck range are "deep" drops that luck cannot touch.',
+  facts:[['Packs','9 + 4 special pools'],['Hat types','134'],['Opens per tick','Hat Bulk'],['Speed floor','1/60 s']],
+  table:{h:['Pack','Cost / open','Unlock'],rows:HAT_PACKS.map(p=>[p[0],p[1],p[2]])}}, g=>{
+  HAT_PACKS.forEach((p,i)=>{ const a=(i-4)*.22; const x=Math.sin(a)*52, z=Math.cos(a)*52-52;
+    const st=new THREE.Group(); st.add(at(brick(3,3,1.2,'#6B6F7A',1.8),0,0,0)); st.add(at(brick(2,2,2.4,'#4C505A',1.6),0,1.2,0));
+    const h=hat(p[4],i); h.position.y=4.2; st.add(h); st.position.set(x,0,z); st.rotation.y=-a; g.add(st); hatMeshes.push([h,i,st,p]); });
+  anim.push((t)=>hatMeshes.forEach(([h,i])=>{ h.rotation.y=t*.8+i; h.position.y=4.2+Math.sin(t*2+i)*.35; }));
+});
+
+/* --- LOOT (Loot crates secret stat) --- */
+zone({id:'loot', name:'Loot Crates', sub:'Loot · 10 min claim', c:C.loot, x:22, z:40, u:4,
+  blurb:'Claim every 10 minutes. Each Loot boosts Studs, Oofs and Gems.',
+  facts:[['Unlocks','Stack 4'],['Recharge','10 min'],['Studs bonus','×(1 + min(0.05·Loot, 1000))']]}, g=>{
+  const c=crate(4); c.traverse(o=>{ if(o.isMesh) o.material=o.material===M('#C97B3A')?M('#D99A2B',{metalness:.3,roughness:.35}):M('#8A5A12'); }); g.add(c);
+  const beam=mesh(GEO.cyl,new THREE.MeshBasicMaterial({color:0xFFE08A,transparent:true,opacity:.18,depthWrite:false}),0,20,0,3,40,3,false); g.add(beam);
+  anim.push((t)=>{ beam.material.opacity=.12+.08*Math.sin(t*2); });
+});
+
+/* --- REBIRTH portal (Ascension) --- */
+let rebirthGroup;
+zone({id:'rebirth', name:'Rebirth', sub:'Ascension · one time', c:C.rebirth, x:0, z:-57, u:11, labelY:22,
+  blurb:'At 1e2283 Studs the Rebirth portal opens. It wipes Realm One progress once and unlocks Glass, the Polychrome hats and the road to The Glacier.',
+  facts:[['Needs','Studs > 1e2283'],['Build Points','×10'],['Gems','×3'],['Cylinders','×5e4'],['Realm One hats','luck ×2, bulk +10']]}, g=>{
+  rebirthGroup=g; g.add(at(brick(8,6,1,'#3A2A5E',2.2),0,0,0));
+  const ring=mesh(new THREE.TorusGeometry(8,1,6,24),M('#A24DFF',{emissive:'#7A2BFF',emissiveIntensity:.6}),0,10,0); g.add(ring);
+  const disc=mesh(new THREE.CircleGeometry(7.2,24),new THREE.MeshBasicMaterial({color:0xC89BFF,transparent:true,opacity:.35,side:THREE.DoubleSide}),0,10,0,1,1,1,false); g.add(disc);
+  const arr=new THREE.Group(); [0,Math.PI].forEach(o=>{ const arc=mesh(new THREE.TorusGeometry(5,.55,5,16,Math.PI*.8),M('#E6D2FF',{emissive:'#B07CFF',emissiveIntensity:.8}),0,0,0); arc.rotation.z=o; arr.add(arc); const tip=mesh(GEO.cone,M('#E6D2FF',{emissive:'#B07CFF',emissiveIntensity:.8}),Math.cos(o)*5,Math.sin(o)*5,0,1.8,2,1.8); tip.rotation.z=o+Math.PI; arr.add(tip); });
+  arr.position.set(0,10,.8); g.add(arr);
+  anim.push((t)=>{ arr.rotation.z=-t*1.2; disc.material.opacity=.25+.15*Math.sin(t*2); });
+});
+
+/* --- GLACIER teleporter on hub --- */
+zone({id:'teleport', name:'Glacier Gate', sub:'Teleporter to Realm Two', c:C.glass, x:60, z:-40, u:11,
+  blurb:'The gate to The Glacier opens at 1e3003 Studs (about 10.7 hours in) or with the Realm Two purchase.',
+  facts:[['Opens at','Studs > 1e3003'],['Or buy','5e31 Gems (redundant)']]}, g=>{
+  add(g, box(2.4,12,2.4,'#DDEFFF',-5,0,0), box(2.4,12,2.4,'#DDEFFF',5,0,0), box(12.4,2.4,2.4,'#BFE4FF',0,12,0));
+  const f=mesh(new THREE.PlaneGeometry(7.6,12),new THREE.MeshBasicMaterial({color:0x9FE0FF,transparent:true,opacity:.45,side:THREE.DoubleSide}),0,6,0,1,1,1,false); g.add(f);
+  anim.push((t)=>{ f.material.opacity=.3+.15*Math.sin(t*3); });
+});
+
+/* =====================================================================
+   THE GLACIER — Realm Two floating island
+   ===================================================================== */
+const glacier = new THREE.Group(); glacier.position.set(122,26,-26); world.add(glacier);
+(function island(){
+  const top=mesh(GEO.box,M('#EAF6FF',{roughness:.7}),0,-1.5,0,86,3,70); glacier.add(top);
+  const r=seeded(12);
+  for(let i=0;i<26;i++){ const s=5+r()*10; const c=mesh(GEO.cone,M(r()<.5?'#BFE4FF':'#9FD2F5'),(r()-.5)*74,-3-s*1.2,(r()-.5)*58,s,s*2.6,s); c.rotation.x=Math.PI; c.rotation.y=r()*3; glacier.add(c);}
+  for(let i=0;i<10;i++){ const s=3+r()*5; glacier.add(mesh(GEO.ico,M('#D6EEFF'),(r()-.5)*80,0,(r()<.5?-1:1)*(30+r()*4),s,s*.6,s)); }
+  const inst=new THREE.InstancedMesh(new THREE.CylinderGeometry(.6,.6,.3,8),M('#EAF6FF',{roughness:.7}),38*31); const d=new THREE.Object3D(); let k=0;
+  for(let i=0;i<38;i++) for(let j=0;j<31;j++){ d.position.set(-41+i*2.2,.15,-33+j*2.2); d.updateMatrix(); inst.setMatrixAt(k++,d.matrix);} inst.receiveShadow=true; glacier.add(inst);
+  anim.push((t)=>{ glacier.position.y=26+Math.sin(t*.4)*1.2; });
+})();
+function gz(def, build){ def.parent=glacier; return zone(def, build); }
+
+gz({id:'glass', name:'Glass', sub:'Droplets · Realm Two main currency', c:C.glass, x:-30, z:-20, u:11,
+  blurb:'After Rebirth, Glass is the new main number and pays for Stacks 10 to 13 and every Anchor.',
+  facts:[['Unlocks','Rebirth'],['Tick','0.5 s'],['Glacier bonus','×(1 + 0.5·Glacier)'],['Force Field bonus','×(Force Fields + 1)²']]}, g=>{
+  const gm=M('#7FD6FF',{transparent:true,opacity:.72,roughness:.05,metalness:.1});
+  [[0,0,0,4],[4.5,0,1,3],[-3.5,0,2,2.6],[1,4,.5,3],[5,3,3,2]].forEach(([x,y,z,s])=>g.add(mesh(GEO.box,gm,x,y+s/2,z,s,s,s)));
+});
+gz({id:'glacierw', name:'Glacier', sub:'Water · condenser buttons', c:C.glacier, x:-12, z:-22, u:11,
+  blurb:'Buy Glacier buttons with Glass. Button n costs 25·7.5^(n−1) Glass and gives 3^(n−1) times more.',
+  facts:[['Button cost','25 · 7.5^(n−1) Glass'],['Button gain','3^(n−1) × formula'],['Glass bonus','×(1 + 0.5·Glacier)']]}, g=>{
+  [[0,0,5],[3,2,3.5],[-3,1,4],[1.5,-3,3],[-2,-3,2.4]].forEach(([x,z,h])=>{ const c=mesh(GEO.cone,M('#4AA8FF',{roughness:.2}),x,h/2,z,2,h,2); c.rotation.y=x; g.add(c); });
+  for(let i=0;i<4;i++) g.add(at(brick(2,2,.8,i<3?'#4AA8FF':'#2A5E8F',1.4),-5+i*3.4,0,5));
+});
+gz({id:'plate', name:'Diamond Plate', sub:'Ice · wipes Glass & Glacier', c:C.plate, x:6, z:-22, u:12,
+  blurb:'Diamond Plate buttons cost Glacier and wipe your Glass and Glacier. Plate multiplies Glacier and Balls.',
+  facts:[['Unlocks','Anchor II'],['Button cost','1e8 · 250^(n−1) Glacier'],['Resets','Glass, Glacier'],['Glacier bonus','×(1 + Plate)']]}, g=>{
+  for(let i=0;i<3;i++) for(let j=0;j<3;j++){ const p=box(3.6,.6+((i+j)%2)*.3,3.6,M('#C9D2DE',{metalness:.7,roughness:.3}),(i-1)*3.9,0,(j-1)*3.9); g.add(p); const dmd=mesh(GEO.oct,M('#E9EEF5',{metalness:.8,roughness:.2}),(i-1)*3.9,1,(j-1)*3.9,.9,.2,.9); g.add(dmd);}
+});
+gz({id:'ff', name:'Force Fields', sub:'Icicles · Stack 13 shatter', c:C.ff, x:24, z:-20, u:14,
+  blurb:'At Stack 13 with over 1e17 Diamond Plate, trade it all for Force Fields. They square into Glass and boost Gems, Glacier and Plate.',
+  facts:[['Unlocks','Stack 13'],['Needs','Diamond Plate > 1e17'],['Gain base','(log10(Plate/1e17))^5'],['Resets','Glass, Glacier, Plate']]}, g=>{
+  g.add(at(brick(4,4,.6,'#5A3E8F',1.8),0,0,0)); g.add(at(brick(2,2,2,'#8A4DFF',1.6),0,.6,0));
+  const dome=mesh(new THREE.SphereGeometry(5,14,8,0,Math.PI*2,0,Math.PI/2),new THREE.MeshStandardMaterial({color:0xB07CFF,transparent:true,opacity:.35,flatShading:true,roughness:.1,emissive:0x5A2BB0,emissiveIntensity:.4}),0,.6,0,1,1,1,false); g.add(dome);
+  anim.push((t)=>{ dome.material.opacity=.28+.1*Math.sin(t*2.2); });
+});
+gz({id:'frost', name:'Frost Points', sub:'Arctic Points · Cryo reactor', c:C.frost, x:-30, z:4, u:12,
+  blurb:'Frost Points buy the Frost board and pay for Cryo hats. Anchors II and IV raise their gain.',
+  facts:[['Unlocks','Stack 11'],['Timer','1–2 s'],['Cryo hats','50 Frost Points each']]}, g=>{
+  const flake=new THREE.Group(); for(let i=0;i<6;i++){ const arm=new THREE.Group(); arm.add(mesh(GEO.box,M('#9FD8FF',{emissive:'#4AA8FF',emissiveIntensity:.3}),0,3,0,.6,6,.6)); [1.8,3.4].forEach(y=>{ const b1=mesh(GEO.box,M('#DDF3FF'),.7,y+.6,0,.4,1.8,.4); b1.rotation.z=-.7; const b2=b1.clone(); b2.position.x=-.7; b2.rotation.z=.7; arm.add(b1,b2); }); arm.rotation.z=i*Math.PI/3; flake.add(arm);}
+  flake.position.y=8; g.add(flake); g.add(at(brick(3,3,1,'#6FA9D6',1.8),0,0,0));
+  anim.push((t)=>{ flake.rotation.y=t*.6; });
+});
+const chainLinks=[];
+gz({id:'anchor', name:'Anchor I–IX', sub:'Freeze · one-time upgrades', c:C.anchor, x:-10, z:6, u:12, labelY:18,
+  blurb:'Nine one-time Anchors bought with Glass. Each one resets your Realm Two run but adds a permanent multiplier. A chain link lights per Anchor.',
+  facts:[],
+  table:{h:['Anchor','Glass','Needs'],rows:ANCHORS},
+  flag:'Anchor IX is written 2,5e313 in the source, so it costs 2 Glass. Owner decides.'}, g=>{
+  const am=M('#3F7BFF',{metalness:.5,roughness:.35});
+  add(g, mesh(GEO.box,am,0,8,0,1.4,10,1.4), mesh(GEO.box,am,0,12,0,5,1.2,1.4));
+  const arc=mesh(new THREE.TorusGeometry(4,.8,6,16,Math.PI),am,0,4.2,0); arc.rotation.z=Math.PI; g.add(arc);
+  [-1,1].forEach(s=>{ const tip=mesh(GEO.cone,am,s*4,5.3,0,1.8,2,1.4); tip.rotation.z=s*.9; g.add(tip); });
+  g.add(mesh(new THREE.TorusGeometry(1.4,.4,6,12),am,0,14.4,0));
+  for(let i=0;i<9;i++){ const l=mesh(new THREE.TorusGeometry(.9,.28,5,10),M('#4A5570'),6+i*1.35,1+i*1.45,0); l.rotation.y=i%2?Math.PI/2:0; l.userData.idx=i; g.add(l); chainLinks.push(l);}
+});
+let unionShape;
+gz({id:'union', name:'Union', sub:'Chromatize · the big loop', c:C.union, x:10, z:8, u:15, labelY:18,
+  blurb:'Union trades your Gem tree progress for permanent Union levels. Neon unlocks at 1, Arctic hats at 7, Galactic hats at 750, Foil at 1000.',
+  facts:[['Needs','Union node + Gems > cost'],['Gem bonus','×3 per Union (cap 1e300)'],['Cooldown','1 s']],
+  table:{h:['Union','Gems needed'],rows:UNION},
+  flag:'Past Union 10 the formula is cheaper than Union 10 itself. Show the real next cost only.'}, g=>{
+  unionShape=new THREE.Group(); const um=M('#34D6B0',{roughness:.3});
+  [[0,0,0,4],[3,1.5,1,3],[-2.5,2.5,-1,3],[.5,4,2,2.6],[-1,-.5,2.6,2.2]].forEach(([x,y,z,s])=>unionShape.add(mesh(GEO.box,um,x,y+s/2,z,s,s,s)));
+  unionShape.position.y=1; g.add(unionShape);
+});
+gz({id:'publish', name:'Publish', sub:'Chromify · 3 levels', c:C.publish, x:30, z:8, u:15, labelY:20,
+  blurb:'Publish the game: the deepest reset. Level 1 opens Lighting, 2 opens the Ascended claim, 3 opens Reflectance.',
+  facts:[['Level 1','1e23 Foil'],['Level 2','7.5e36 Foil'],['Level 3','1e78 Foil'],['Level 4','wall']]}, g=>{
+  const up=new THREE.Group(); const pm=M('#2FA8FF',{emissive:'#1060B0',emissiveIntensity:.5}); up.add(mesh(GEO.box,pm,0,4,0,3,8,2)); const tip=mesh(new THREE.ConeGeometry(4,4.5,4),pm,0,10,0); tip.rotation.y=Math.PI/4; up.add(tip); g.add(up);
+  g.add(at(brick(4,3,.8,'#1C5F99',1.8),0,0,0));
+  anim.push((t)=>{ up.position.y=.8+Math.abs(Math.sin(t*1.8))*1.6; });
+});
+gz({id:'neon', name:'Neon', sub:'Chromium', c:C.neon, x:-30, z:22, u:15,
+  blurb:'Neon unlocks at Union 1. It powers the Neon half of the Gem tree and boosts Gems by 5% per Neon.', facts:[['Unlocks','Union 1'],['Timer','≤ 10 s'],['Gem bonus','×(1 + 0.05·Neon)']]}, g=>{
+  const s=new THREE.Shape(); s.moveTo(1,6); s.lineTo(-2,0.5); s.lineTo(0.2,0.5); s.lineTo(-1,-5); s.lineTo(2.4,1.2); s.lineTo(0.2,1.2); s.lineTo(1,6);
+  const bolt=mesh(new THREE.ExtrudeGeometry(s,{depth:1,bevelEnabled:false}),M('#5BE04A',{emissive:'#2FB020',emissiveIntensity:1}),0,7,0); g.add(bolt); g.add(at(brick(3,3,.8,'#2F6F2A',1.8),0,0,0));
+  anim.push((t)=>{ bolt.rotation.y=t; });
+});
+gz({id:'foil', name:'Foil', sub:'Chroma', c:C.foil, x:-14, z:24, u:15,
+  blurb:'Foil opens at Union 1000 and buys about 60 late Gem tree nodes. Publish is paid in Foil.', facts:[['Unlocks','Union 1000'],['Claim','every 10 s']]}, g=>{
+  const fm=new THREE.MeshStandardMaterial({color:0xFF8FD0,flatShading:true,metalness:.8,roughness:.15,side:THREE.DoubleSide});
+  const f=mesh(new THREE.PlaneGeometry(6,6,2,2),fm,0,6,0); f.rotation.x=-.5; g.add(f); g.add(at(brick(3,3,.8,'#6A3A5A',1.8),0,0,0));
+  anim.push((t)=>{ f.rotation.z=t*.7; fm.color.setHSL((t*.08)%1,.8,.72); });
+});
+gz({id:'light', name:'Lighting', sub:'Light', c:C.light, x:4, z:26, u:15,
+  blurb:'Lighting unlocks at Publish 1 and feeds Foil and Reflectance.', facts:[['Unlocks','Publish 1'],['Claim','every 2 s']]}, g=>{
+  g.add(mesh(GEO.ico1,M('#FFE27A',{emissive:'#FFC21A',emissiveIntensity:1.2}),0,6,0,2.6,3,2.6)); g.add(mesh(GEO.cyl,M('#9AA6B8',{metalness:.5}),0,3,0,2.2,1.8,2.2)); g.add(at(brick(3,3,.8,'#6A5A2A',1.8),0,0,0));
+  const pl=new THREE.PointLight(0xFFD84A,1.2,26); pl.position.set(0,6,0); g.add(pl);
+});
+gz({id:'refl', name:'Reflectance', sub:'Reflection', c:C.refl, x:20, z:26, u:15,
+  blurb:'Reflectance needs Publish 3 and 1e20 Lighting. Each reset adds Reflectance, which boosts Foil and Lighting.', facts:[['Needs','Publish 3, Lighting > 1e20'],['Resets','Neon, Foil, Lighting']]}, g=>{
+  add(g, box(7,9,.8,'#9AA6B8',0,1,0)); g.add(mesh(GEO.box,M('#DDEBFF',{metalness:1,roughness:.05,emissive:'#6A8FC0',emissiveIntensity:.35}),0,5.5,.45,6,8,.1)); g.add(at(brick(4,2,.8,'#4A5570',1.8),0,0,0));
+});
+gz({id:'spark', name:'Sparkles', sub:'Shine · 30 s claim', c:C.spark, x:34, z:-4, u:15,
+  blurb:'A 30 second claim unlocked by a Gem tree node. Sparkles boost Lighting.', facts:[['Claim','every 30 s']]}, g=>{
+  const s=[]; for(let i=0;i<3;i++){ const st=mesh(GEO.oct,M('#FFB347',{emissive:'#FF8A1A',emissiveIntensity:1}),i*2.5-2.5,4+i*1.5,0,.8,2,.8); g.add(st); s.push(st);}
+  anim.push((t)=>s.forEach((m,i)=>{ m.rotation.y=t*2+i; m.scale.setScalar(.8+.2*Math.sin(t*4+i)); }));
+});
+gz({id:'fog', name:'Fog', sub:'Haze · 24 h claim', c:C.fog, x:34, z:22, u:14,
+  blurb:'A once-a-day claim from Stack 13 that boosts Glass, Glacier, Diamond Plate and Hat luck.', facts:[['Unlocks','Stack 13'],['Recharge','24 h']]}, g=>{
+  const puff=M('#C9C3F2',{roughness:.9}); [[0,3,0,2.6],[2.4,3.4,.5,2],[-2.4,3.2,-.4,2.2],[1,5,0,1.8]].forEach(([x,y,z,s])=>g.add(mesh(GEO.ico1,puff,x,y,z,s,s*.8,s)));
+});
+zone({id:'meteor', name:'Meteors', sub:'Hail · 24 h claim', c:C.meteor, x:-16, z:32, u:10,
+  blurb:'Unlocks at Stack 10. Claim once a day; Meteors boost Gems, Glass and Hat speed.', facts:[['Unlocks','Stack 10'],['Recharge','24 h']]}, g=>{
+  g.add(at(brick(3,3,.8,'#5A3A2A',1.8),0,0,0)); const m=mesh(GEO.ico,M('#8A3A1A',{emissive:'#FF4A10',emissiveIntensity:.8}),0,5,0,2.2,2.2,2.2); g.add(m); anim.push((t)=>{ m.rotation.x=t; m.rotation.y=t*.7; });
+});
+
+// sky meteors (visible from Stack 10)
+const skyMeteors=[]; (function(){ for(let i=0;i<5;i++){ const m=new THREE.Group(); m.add(mesh(GEO.ico,M('#8A3A1A',{emissive:'#FF5A10',emissiveIntensity:1.4}),0,0,0,2,2,2,false)); const tr=mesh(GEO.cone,new THREE.MeshBasicMaterial({color:0xFF9A3C,transparent:true,opacity:.55}),0,4,0,2.2,8,2.2,false); m.add(tr); m.visible=false; world.add(m); skyMeteors.push([m,i*1.7]); } })();
+anim.push((t)=>skyMeteors.forEach(([m,o])=>{ if(!m.visible) return; const p=((t*.18+o/5)%1); m.position.set(-120+p*200+o*10,140-p*150,-160+o*60); m.rotation.z=-.9; }));
+
+// paths
+[[0,0,-34,22],[0,0,34,22],[0,0,-44,-8],[0,0,46,-10],[0,0,0,46],[0,0,-30,-40],[0,0,30,-40],[0,0,0,-40],[0,0,-52,34],[0,0,54,30],[0,0,-52,-34],[0,-40,0,-52],[30,-40,60,-40],[0,0,22,40]].forEach(p=>path(...p));
+
+/* =====================================================================
+   LOCK STATE, STEP LOGIC
+   ===================================================================== */
+const lockedMat = new THREE.MeshStandardMaterial({color:0x8A93A8, transparent:true, opacity:.38, flatShading:true, roughness:.8, depthWrite:false});
+function setLocked(def, locked){ if(def.locked===locked) return; def.locked=locked;
+  def.group.traverse(o=>{ if(o.isMesh){ o.material = locked ? lockedMat : o.userData.orig; o.castShadow = !locked && o.userData.cast; } if(o.isPointLight) o.visible=!locked; }); }
+
+let step=7, stackShown=-1, playing=false, playTimer=0;
+const T0=performance.now();
+function applyStep(s, announce){
+  const prev=step; step=s; const st=STEPS[s];
+  zones.forEach(z=>setLocked(z, s < z.u));
+  // hat stands individually
+  hatMeshes.forEach(([h,i,stand,p])=>{ const lock=s<p[3]; stand.traverse(o=>{ if(o.isMesh) o.material = lock?lockedMat:o.userData.orig; }); });
+  // stack bricks
+  stackBricks.forEach((b,i)=>{ const on = i <= st.stack; if(on && !b.visible){ b.visible=true; b.userData.pop=0; } if(!on){ b.visible=false; b.scale.setScalar(.001);} });
+  // studs only on top brick
+  stackBricks.forEach((b,i)=>b.children.forEach((c,k)=>{ if(k>0) c.visible = i===st.stack; }));
+  // anchors
+  chainLinks.forEach(l=>{ l.material = (st.anchor||0) > l.userData.idx ? M('#8FC0FF',{emissive:'#3F7BFF',emissiveIntensity:1.4,metalness:.4}) : (s<12?lockedMat:M('#4A5570')); });
+  if(unionShape) unionShape.scale.setScalar(st.end?1.25:1);
+  skyMeteors.forEach(([m])=>m.visible = s>=10);
+  // HUD
+  const hud=document.getElementById('hud'); hud.innerHTML='';
+  CUR.filter(c=>s>=c[2]).forEach(([n,col,u,f])=>{ const v=f(s); if(!v) return; const d=document.createElement('div'); d.className='chip'; d.style.setProperty('--c',col); d.innerHTML=`<span class="ico"></span>${n} <b>${v}</b>`; hud.appendChild(d); });
+  document.getElementById('now').innerHTML = `${st.name}<small>${st.t}</small>`;
+  document.getElementById('step').value=s;
+  if(announce && s>prev){ const newly=zones.filter(z=>z.u===s).map(z=>z.name); toast(st.name, newly.length?('Unlocked: '+newly.join(' · ')):''); }
+  if(selected) renderZone(selected);
+}
+let toastT; function toast(a,b){ const el=document.getElementById('toast'); el.innerHTML=`${a}${b?`<small>${b}</small>`:''}`; el.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>el.classList.remove('show'),1700); }
+
+/* ---------- panel ---------- */
+const pbody=document.getElementById('pbody'); let selected=null, tab='zone';
+function zoneWorldPos(z){ const v=new THREE.Vector3(); z.group.getWorldPosition(v); return v; }
+function renderZone(z){
+  const locked = step < z.u; const need = STEPS[z.u]?.name || '';
+  pbody.innerHTML = `
+    <div><div class="eyebrow">${z.sub}</div><h2 class="zname" style="--zc:${z.c}">${z.name}</h2></div>
+    <span class="state ${locked?'off':'on'}">${locked?('Locked · opens at '+need):'Unlocked'}</span>
+    <p class="blurb">${z.blurb}</p>
+    ${z.facts&&z.facts.length?`<ul class="facts">${z.facts.map(([a,b])=>`<li><span>${a}</span><span>${b}</span></li>`).join('')}</ul>`:''}
+    ${z.table?`<table class="tbl"><thead><tr>${z.table.h.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${z.table.rows.map(r=>`<tr>${r.map((c,i)=>`<td class="${i>0&&z.table.h.length<=3&&i===1?'n':''}">${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`:''}
+    ${z.flag?`<p class="flag">${z.flag}</p>`:''}
+    <p class="hint">Drag to orbit · scroll or pinch to zoom · tap any build or label.</p>`;
+}
+function renderResets(){
+  pbody.innerHTML = `<div><div class="eyebrow">Shallow → deep</div><h2 class="zname">Reset Ladder</h2></div>` +
+    RESETS.map(r=>`<div class="rung" style="--rc:${r.c}"><h3>${r.n}</h3><span class="g">${r.g}</span><span class="l"><b>Resets</b> ${r.l}</span><span class="k"><b>Keeps</b> ${r.k}</span></div>`).join('') +
+    `<p class="hint">Reset lists mirror Resets.lua. Numbers from Stud_Incremental_Balance.md.</p>`;
+}
+function setTab(t){ tab=t; document.getElementById('tabZone').setAttribute('aria-selected',t==='zone'); document.getElementById('tabResets').setAttribute('aria-selected',t==='resets'); t==='zone'?renderZone(selected||Zstack):renderResets(); }
+document.getElementById('tabZone').onclick=()=>setTab('zone');
+document.getElementById('tabResets').onclick=()=>setTab('resets');
+
+/* ---------- camera fly ---------- */
+let fly=null;
+function select(z, flyTo=true){ selected=z; labels.forEach(l=>l.el.classList.toggle('sel', l.z===z)); if(tab!=='zone') setTab('zone'); else renderZone(z);
+  if(flyTo){ const p=zoneWorldPos(z); const dir=camera.position.clone().sub(controls.target).normalize(); const dist = z.parent===glacier? 72 : (z.id==='hats'?80:(z.id==='stack'?60:45));
+    fly={s:performance.now(), fromT:controls.target.clone(), toT:p.clone().add(new THREE.Vector3(0,3,0)), fromC:camera.position.clone(), toC:p.clone().add(dir.multiplyScalar(dist)).add(new THREE.Vector3(0,dist*.35,0))}; controls.autoRotate=false; } }
+
+/* ---------- labels ---------- */
+const labelsEl=document.getElementById('labels'); const labels=[];
+zones.forEach(z=>{ const el=document.createElement('div'); el.className='lbl'; el.tabIndex=0; el.setAttribute('role','button'); el.innerHTML=`<span class="ico" style="--c:${z.c};background:${z.c}"></span>${z.name}`;
+  el.addEventListener('click',()=>select(z)); el.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); select(z);} });
+  labelsEl.appendChild(el); labels.push({z,el}); });
+const tmpV=new THREE.Vector3();
+function updateLabels(){ const w=renderer.domElement.clientWidth, h=renderer.domElement.clientHeight;
+  labels.forEach(({z,el})=>{ z.group.getWorldPosition(tmpV); tmpV.y+=z.labelY; const dist=tmpV.distanceTo(camera.position); tmpV.project(camera);
+    const vis = tmpV.z<1 && Math.abs(tmpV.x)<1.1 && Math.abs(tmpV.y)<1.1 && dist<300;
+    el.style.display = vis?'flex':'none'; if(!vis) return;
+    el.style.left=((tmpV.x*.5+.5)*w)+'px'; el.style.top=((-tmpV.y*.5+.5)*h)+'px';
+    el.classList.toggle('locked', step<z.u); el.style.opacity = dist>200? .55 : 1; el.style.zIndex = String(1000-Math.round(dist)); }); }
+
+/* ---------- picking ---------- */
+const ray=new THREE.Raycaster(), mouse=new THREE.Vector2(); let downAt=null;
+renderer.domElement.addEventListener('pointerdown',e=>{ downAt=[e.clientX,e.clientY]; controls.autoRotate=false; });
+renderer.domElement.addEventListener('pointerup',e=>{ if(!downAt) return; const moved=Math.hypot(e.clientX-downAt[0],e.clientY-downAt[1]); downAt=null; if(moved>6) return;
+  const r=renderer.domElement.getBoundingClientRect(); mouse.set(((e.clientX-r.left)/r.width)*2-1, -((e.clientY-r.top)/r.height)*2+1); ray.setFromCamera(mouse,camera);
+  const hit=ray.intersectObjects(pickables,false)[0]; if(hit) select(hit.object.userData.zone); });
+
+/* ---------- scrubber ---------- */
+const slider=document.getElementById('step');
+slider.addEventListener('input',e=>applyStep(+e.target.value,true));
+document.getElementById('prev').onclick=()=>{ stopPlay(); applyStep(Math.max(0,step-1),false); };
+document.getElementById('next').onclick=()=>{ stopPlay(); applyStep(Math.min(15,step+1),true); };
+const playBtn=document.getElementById('play');
+function stopPlay(){ playing=false; playBtn.textContent='PLAY'; }
+playBtn.onclick=()=>{ if(playing){ stopPlay(); return; } playing=true; playBtn.textContent='PAUSE'; if(step>=15) applyStep(0,false); playTimer=0; };
+
+/* ---------- resize & loop ---------- */
+function resize(){ const w=innerWidth,h=innerHeight; renderer.setSize(w,h,false); camera.aspect=w/h; camera.fov = w<700?55:42; camera.updateProjectionMatrix(); }
+addEventListener('resize',resize); resize();
+
+let last=performance.now();
+function frame(now){
+  const dt=Math.min(.05,(now-last)/1000); last=now; const t=(now-T0)/1000;
+  if(!reduce) anim.forEach(f=>f(t,dt));
+  // stack pop-in
+  stackBricks.forEach((b,i)=>{ if(b.visible && b.userData.pop!==undefined && b.userData.pop<1){ b.userData.pop=Math.min(1,b.userData.pop+dt*(reduce?99:3.2)); const p=b.userData.pop; const e=1+2.2*Math.pow(p-1,3)+1.2*Math.pow(p-1,2); b.scale.setScalar(Math.max(.001,e)); b.position.y=b.userData.baseY+(1-p)*6; } });
+  // stack glow pulse
+  if(playing){ playTimer+=dt; if(playTimer>1.6){ playTimer=0; if(step<15) applyStep(step+1,true); else stopPlay(); } }
+  if(fly){ fly.t=Math.min(1,(now-fly.s)/1100); const k=fly.t<.5?2*fly.t*fly.t:1-Math.pow(-2*fly.t+2,2)/2; controls.target.lerpVectors(fly.fromT,fly.toT,k); camera.position.lerpVectors(fly.fromC,fly.toC,k); if(fly.t>=1) fly=null; }
+  controls.update(); renderer.render(scene,camera); updateLabels();
+  requestAnimationFrame(frame);
+}
+applyStep(7,false); select(Zstack,false); requestAnimationFrame(frame);
+})();
+</script>
