@@ -1,0 +1,370 @@
+<title>Galaxy Incremental Reset Ladder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Michroma&family=Jura:wght@400;500;600;700&family=Roboto+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: observatory instrument console. HUD strip on top, Cosmic Core viewport + Epoch log side by side, then the reset ladder driving a confirm sheet. Single committed dark look (deep space). */
+:root{
+  color-scheme: dark;
+  --space:#05060B;       /* page ground */
+  --panel:#0B0E18;       /* instrument panel */
+  --raised:#121828;      /* selected / raised */
+  --hair:#232B45;        /* hairline */
+  --lumen:#7FE3FF;       /* luminous line / primary accent */
+  --brass:#C9A45C;       /* observatory brass, secondary accent */
+  --text:#EAF2FF; --mid:#9AA7C7; --low:#5E6A8A;
+  --starlight:#FFE7A3; --solar:#FF9A3C; --gravity:#9B6BFF; --cosmic:#4FE3FF;
+  --dust:#E8D9FF; --dark:#8A55FF; --astral:#F7B2FF; --radiance:#FFFFFF; --warn:#FF6B6B; --ok:#7CF2B0;
+  --f-display:"Michroma","Eurostile","Segoe UI",sans-serif;
+  --f-body:"Jura","Segoe UI",system-ui,sans-serif;
+  --f-mono:"Roboto Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+*{box-sizing:border-box}
+html{background:var(--space)}
+body{margin:0;background:var(--space);color:var(--text);font-family:var(--f-body);font-size:15px;line-height:1.5;padding-inline:16px;padding-block:20px 48px}
+.wrap{max-width:1180px;margin:0 auto;display:grid;gap:18px}
+h1,h2,h3{font-family:var(--f-display);font-weight:400;letter-spacing:.06em;text-wrap:balance;margin:0}
+h1{font-size:clamp(18px,2.6vw,24px)}
+h2{font-size:13px;color:var(--mid);text-transform:uppercase;letter-spacing:.18em}
+.label{font-size:11px;text-transform:uppercase;letter-spacing:.16em;color:var(--low)}
+.mono,.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.panel{background:var(--panel);border:1px solid var(--hair);position:relative;min-width:0}
+.panel::before,.panel::after{content:"";position:absolute;width:10px;height:10px;border-color:var(--lumen);border-style:solid;opacity:.55}
+.panel::before{top:-1px;left:-1px;border-width:1px 0 0 1px}
+.panel::after{bottom:-1px;right:-1px;border-width:0 1px 1px 0}
+.phead{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:12px 16px;border-bottom:1px solid var(--hair);flex-wrap:wrap}
+.meta{font-family:var(--f-mono);font-size:11px;color:var(--low)}
+
+/* HUD */
+.hud{display:grid;grid-template-columns:1fr auto;gap:10px 24px;padding:14px 16px;align-items:center}
+.hud .epochline{display:flex;gap:14px;align-items:center;flex-wrap:wrap;min-width:0}
+.gauge{flex:1;min-width:160px;height:8px;background:repeating-linear-gradient(90deg,var(--hair) 0 1px,transparent 1px 10%);border:1px solid var(--hair);position:relative}
+.gauge i{position:absolute;inset:0 auto 0 0;background:linear-gradient(90deg,transparent,var(--lumen));box-shadow:0 0 12px var(--lumen)}
+.hero{grid-column:1/-1;display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+.hero .big{font-family:var(--f-mono);font-size:clamp(28px,5vw,44px);color:var(--starlight);text-shadow:0 0 18px rgba(255,231,163,.35)}
+.hero .rate{font-family:var(--f-mono);color:var(--mid)}
+.strip{grid-column:1/-1;display:flex;gap:8px 22px;flex-wrap:wrap;font-family:var(--f-mono);font-size:13px;color:var(--mid)}
+.strip b{font-weight:500}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:1px}
+
+/* Core + log */
+.split{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:18px}
+@media (max-width:860px){.split{grid-template-columns:1fr}}
+.viewport{position:relative;aspect-ratio:4/3;max-width:100%;background:radial-gradient(ellipse at center,#0A0F20 0%,var(--space) 70%);overflow:hidden}
+canvas{display:block;width:100%;height:100%}
+.vp-overlay{position:absolute;left:14px;top:12px;right:14px;display:flex;justify-content:space-between;gap:10px;pointer-events:none;flex-wrap:wrap}
+.vp-title{font-family:var(--f-display);font-size:clamp(13px,1.8vw,17px);letter-spacing:.1em;text-shadow:0 0 12px rgba(127,227,255,.5)}
+.controls{display:flex;flex-direction:column;gap:10px;padding:14px 16px;border-top:1px solid var(--hair)}
+input[type=range]{width:100%;accent-color:var(--lumen)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{font-family:var(--f-mono);font-size:11px;padding:4px 8px;border:1px solid var(--hair);background:transparent;color:var(--mid);cursor:pointer;border-radius:2px}
+.chip[aria-pressed=true]{border-color:var(--lumen);color:var(--text);background:var(--raised)}
+.chip:focus-visible,.rung:focus-visible,input:focus-visible{outline:1px solid var(--lumen);outline-offset:2px}
+
+.log{max-height:520px;overflow:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{font-weight:500;text-align:left;color:var(--low);font-size:10px;letter-spacing:.14em;text-transform:uppercase;padding:8px 10px;border-bottom:1px solid var(--hair);position:sticky;top:0;background:var(--panel)}
+td{padding:7px 10px;border-bottom:1px solid rgba(35,43,69,.6);vertical-align:top}
+td.num{text-align:right;white-space:nowrap}
+tr.cur td{background:var(--raised)}
+tr.cur td:first-child{box-shadow:inset 2px 0 0 var(--lumen)}
+tr.nova td{color:var(--solar);font-family:var(--f-display);font-size:11px;letter-spacing:.12em}
+
+/* Ladder + sheet */
+.ladder{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:18px}
+@media (max-width:860px){.ladder{grid-template-columns:1fr}}
+.rungs{display:flex;flex-direction:column}
+.rung{all:unset;display:grid;grid-template-columns:34px 1fr auto;gap:10px;align-items:center;padding:11px 14px;border-bottom:1px solid var(--hair);cursor:pointer}
+.rung:hover{background:rgba(127,227,255,.04)}
+.rung[aria-selected=true]{background:var(--raised);box-shadow:inset 2px 0 0 var(--c,var(--lumen))}
+.rung .ix{font-family:var(--f-mono);font-size:11px;color:var(--low)}
+.rung .nm{font-family:var(--f-display);font-size:12px;letter-spacing:.08em}
+.rung .int{display:block;font-family:var(--f-mono);font-size:11px;color:var(--low);letter-spacing:0;margin-top:2px}
+.rung .tag{font-family:var(--f-mono);font-size:10px;color:var(--mid);border:1px solid var(--hair);padding:2px 6px;white-space:nowrap}
+.sheet{padding:18px;display:grid;gap:16px;align-content:start}
+.sheet h3{font-size:clamp(16px,2.2vw,20px);color:var(--c,var(--text))}
+.gate{font-family:var(--f-mono);font-size:13px;color:var(--mid);border:1px solid var(--hair);padding:10px 12px;background:rgba(0,0,0,.25)}
+.cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+@media (max-width:640px){.cols{grid-template-columns:1fr}}
+.col{border-top:1px solid var(--hair);padding-top:10px;min-width:0}
+.col ul{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:5px;font-size:13px}
+.col li{padding-left:14px;position:relative}
+.col li::before{position:absolute;left:0;font-family:var(--f-mono)}
+.gain li::before{content:"+";color:var(--ok)}
+.lose li::before{content:"×";color:var(--warn)}
+.keep li::before{content:"•";color:var(--brass)}
+.gain .label{color:var(--ok)} .lose .label{color:var(--warn)} .keep .label{color:var(--brass)}
+.costs{overflow-x:auto}
+.costs table td,.costs table th{padding:5px 8px}
+.btnrow{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.cta{font-family:var(--f-display);font-size:12px;letter-spacing:.14em;padding:11px 18px;border:1px solid var(--c,var(--lumen));background:transparent;color:var(--text);cursor:pointer;border-radius:0}
+.cta:hover{background:rgba(127,227,255,.07)}
+.note{font-size:12px;color:var(--low)}
+.flag{font-size:12px;color:var(--warn);border-left:2px solid var(--warn);padding-left:10px}
+.foot{font-size:12px;color:var(--low);display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header class="foot" style="font-size:12px">
+    <span class="label">Galaxy Incremental · Example render · Phase 1: resets &amp; balance</span>
+    <span class="meta">OBS-01 · RA 14h 29m · Numbers from Stud_Incremental_Balance.md</span>
+  </header>
+
+  <!-- HUD mock -->
+  <section class="panel hud" aria-label="HUD mockup">
+    <div class="epochline">
+      <h1 id="hudEpoch">EPOCH 7 · NEBULA</h1>
+      <div class="gauge" aria-hidden="true"><i id="hudGauge" style="width:64%"></i></div>
+      <span class="mono" id="hudPct" style="color:var(--lumen)">64%</span>
+    </div>
+    <span class="meta" id="hudNext">NEXT 1e276 STARLIGHT</span>
+    <div class="hero"><span class="label">Starlight</span><span class="big" id="hudBig">2.41e152</span><span class="rate">+3.9e150/s</span></div>
+    <div class="strip" id="hudStrip"></div>
+  </section>
+
+  <!-- Core + Epoch log -->
+  <section class="split">
+    <div class="panel">
+      <div class="phead"><h2>Cosmic Core</h2><span class="meta" id="coreMeta">state 7/14</span></div>
+      <div class="viewport">
+        <canvas id="core" aria-label="Rendered Cosmic Core for the selected Epoch"></canvas>
+        <div class="vp-overlay"><span class="vp-title" id="vpTitle">NEBULA</span><span class="meta" id="vpSub">E7 · ~67 min</span></div>
+      </div>
+      <div class="controls">
+        <label class="label" for="epoch">Scrub progression (Epoch / Supernova)</label>
+        <input id="epoch" type="range" min="0" max="14" step="1" value="7">
+        <div class="chips" id="quick"></div>
+      </div>
+    </div>
+
+    <div class="panel log">
+      <div class="phead"><h2>Epoch Log</h2><span class="meta">Tier 0–13 · costs unchanged</span></div>
+      <table>
+        <thead><tr><th>E</th><th>Name</th><th style="text-align:right">Advance cost</th><th style="text-align:right">Reached</th></tr></thead>
+        <tbody id="epochRows"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Reset ladder + confirm sheet -->
+  <section class="ladder">
+    <div class="panel">
+      <div class="phead"><h2>Reset Ladder</h2><span class="meta">shallow → deep</span></div>
+      <div class="rungs" role="listbox" aria-label="Resets" id="rungs"></div>
+    </div>
+    <div class="panel" aria-live="polite">
+      <div class="phead"><h2>Confirm Sheet</h2><span class="meta" id="sheetSrc">generated from Resets.lua</span></div>
+      <div class="sheet" id="sheet"></div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <span>Display names from SPEC.md §5. Reset lists mirror <span class="mono">Shared/Modules/Resets.lua</span> and <span class="mono">Scripts/Ascensions.lua</span>.</span>
+    <span class="mono">Placeholder visuals. Final art per SPEC §11–16.</span>
+  </footer>
+</div>
+
+<script>
+(() => {
+/* ---------------- data (from the balance sheet) ---------------- */
+const EPOCHS = [
+  {n:"Particle",        cost:"100",       cur:"Starlight", t:"0 s"},
+  {n:"Dust Cloud",      cost:"1e6",       cur:"Starlight", t:"6 s"},
+  {n:"Protostar",       cost:"5e9",       cur:"Starlight", t:"~1–2 min"},
+  {n:"Star System",     cost:"2.5e15",    cur:"Starlight", t:"5.5 min"},
+  {n:"Constellation",   cost:"7.5e23",    cur:"Starlight", t:"~10 min"},
+  {n:"Planetary Age",   cost:"1e40",      cur:"Starlight", t:"~17 min"},
+  {n:"Solar System",    cost:"1e65",      cur:"Starlight", t:"~27 min"},
+  {n:"Nebula",          cost:"1e153",     cur:"Starlight", t:"~67 min"},
+  {n:"Galaxy",          cost:"1e276",     cur:"Starlight", t:"~1.4 h"},
+  {n:"Galaxy Cluster",  cost:"1e978",     cur:"Starlight", t:"~1.8 h"},
+  {n:"Supercluster",    cost:"1e52",      cur:"Cosmic Dust", t:"~3.1 h"},
+  {n:"SUPERNOVA",       cost:"1e2283",    cur:"Starlight", t:"~7.1 h", nova:true},
+  {n:"Universe",        cost:"7.5e113",   cur:"Cosmic Dust", t:"~0.5 day"},
+  {n:"Multiverse",      cost:"1e195",     cur:"Cosmic Dust", t:"+1.4 days"},
+  {n:"Beyond",          cost:"cap",       cur:"", t:"—"},
+];
+// slider index -> {epoch label, tier}
+const stateLabel = i => EPOCHS[i].nova ? "SUPERNOVA" : `EPOCH ${i>11?i-1:i} · ${EPOCHS[i].n.toUpperCase()}`;
+const tierOf = i => i>11 ? i-1 : (i===11 ? null : i);
+
+const COLORS = {starlight:"#FFE7A3",solar:"#FF9A3C",gravity:"#9B6BFF",cosmic:"#4FE3FF",dust:"#E8D9FF",dark:"#8A55FF",astral:"#F7B2FF",radiance:"#FFFFFF",planets:"#5FB0FF",prisms:"#F7B2FF"};
+
+const EPOCH_RESET = ["Starlight","Solar Energy","Gravity + Gravity upgrades","Biomass + Bio upgrades, Threat Level → 1","Celestial Orbs + Orb upgrades","Space Cubes (Cube Tier → 1)","Particle Accelerator, Orbital Gyros","Planets, Planet Grade, Planetary upgrades"];
+const RESETS = [
+  { id:"compress", name:"Gravity Well · Compress", int:"Power", c:COLORS.gravity, tag:"E ≥ 2",
+    gate:"Solar Energy > 50",
+    gain:["+Gravity (Formulas.Power)"],
+    lose:["Starlight","Solar Energy"],
+    keep:["Everything else"] },
+  { id:"epoch", name:"Advance Epoch", int:"Tier", c:COLORS.cosmic, tag:"E 0→13",
+    gate:"Starlight > Tier_Cost(E) · from Epoch 10: Cosmic Dust > Tier_Cost(E) · not deducted · 1 s CD",
+    gain:["+1 Epoch (new unlocks per Epoch Log)"],
+    lose:[...EPOCH_RESET, "Past Epoch 10 also: Cosmic Dust, Nebula Gas, Frozen Matter, Dark Matter, Stellar Shards, Collapse I–IX, Dust upgrades"],
+    keep:["Cosmic Points + Research","Prisms","Discoveries","Cosmology","Star Charts"],
+    flag:"Past Epoch 10 the engine sets Freeze1–9 to false (they are numeric elsewhere). Known bug; show what the engine does." },
+  { id:"trial", name:"Cosmic Trials I–IV", int:"C1–C4", c:COLORS.starlight, tag:"4 trials",
+    gate:"Enter any time · Light: Epoch 6 · Entropy: Epoch 8 · Void: 1e393 Starlight · Gravity: 1e96 Starlight",
+    gain:["Permanent trial reward (e.g. Light: Starlight ×1e12, Prisms ×2)"],
+    lose:["Epoch reset set","Epoch → 0","Cosmology except 16 anchored nodes (KEEP16)","Cosmic Points + Research upgrades","Prisms"],
+    keep:["Discoveries","Star Charts","16 anchored Cosmology nodes"] },
+  { id:"nova", name:"SUPERNOVA", int:"AscensionOne", c:COLORS.solar, tag:"one-time",
+    gate:"Starlight > 1e2283 · one time only",
+    gain:["Cosmic Dust generation","Spectral survey","Cosmic Points ×10, Prisms ×3, Orbs ×5e4","Realm I luck ×2, scan bulk +10"],
+    lose:["Epoch reset set","Epoch, Furthest Epoch → 0","Cosmology except KEEP16","Cosmic Points + Research","Every Discovery with chance ≥ 1e-8","Prisms","Astronomy XP, Observer Level","Trials I–IV completions"],
+    keep:["Deep-Field Discoveries (chance < 1e-8)","Star Charts","KEEP16 nodes"] },
+  { id:"collapse", name:"Gravitational Collapse I–IX", int:"Freeze1–9", c:COLORS.dust, tag:"E ≥ 11",
+    gate:"One-level upgrades bought with Cosmic Dust (table below)",
+    gain:["Permanent multipliers; monument changes form each level"],
+    lose:["Epoch reset set (not Epoch itself)","Prisms","Cosmic Dust, Nebula Gas, Frozen Matter","Dust upgrades","Cosmology except KEEP16","Dark Matter"],
+    keep:["Epoch","Discoveries","Collapse levels owned"],
+    table:{head:["Lv","Object","Cost (Cosmic Dust)","Gate"],rows:[["I","Dense Star","1e19","E11"],["II","White Dwarf","2.5e34","E11"],["III","Neutron Star","5e51","E11"],["IV","Pulsar","2.5e109","E12"],["V","Magnetar","7.5e136","E12"],["VI","Black Hole","2.5e185","E12"],["VII","Supermassive BH","1e234","E13"],["VIII","Singularity","5e278","E13"],["IX","???","2 ⚠","E13"]]},
+    flag:"Collapse IX price is written 2,5e313 in the source, so it costs 2. Owner decision (SPEC §19)." },
+  { id:"shards", name:"Shatter Star", int:"Icicles", c:"#D8F6FF", tag:"E 13",
+    gate:"Epoch 13 · Frozen Matter > 1e17 · 5 s CD · gain = Icicles(P, log10(Frozen/1e17)^5)",
+    gain:["+Stellar Shards"],
+    lose:["Cosmic Dust","Nebula Gas","Frozen Matter"],
+    keep:["Everything else"] },
+  { id:"galaxy", name:"Galaxy Formation", int:"Chromatize", c:COLORS.dark, tag:"rank 1–1000",
+    gate:"Galaxy Forge owned · Prisms > Chromatize_Cost(rank) · not deducted · 1 s CD",
+    gain:["+1 Galaxy Rank (Dark Matter at 1, Galactic Expedition at 750, Astral Matter at 1000)"],
+    lose:["Cosmology except KEEP16 (Galaxy Forge re-set to 1)","Prisms","Dark Matter","Astral Matter"],
+    keep:["Epoch & Realm II progress","Discoveries","KEEP16 nodes"],
+    table:{head:["Rank","Prisms needed"],rows:[["1","1e43"],["2","1e50"],["3","1e55"],["4","1e60"],["5","1e65"],["6","1e70"],["7","1e85"],["8","1e95"],["9","1e105"],["10","5e178"],["11+","(1e40·150^r)^1.4 ≈ 1e89 at 11 ⚠"]]},
+    flag:"Cost past rank 10 dips below rank 10 (non-monotonic). Show the real next cost only." },
+  { id:"break", name:"Reality Break", int:"Chromify", c:COLORS.radiance, tag:"breach 1–3",
+    gate:"Reality Engine owned · Astral Matter > 1e23 / 7.5e36 / 1e78 (breach 1/2/3) · breach 4 is a wall",
+    gain:["+1 Breach · B1 Radiance Beacon · B2 Convergence Beacon · B3 Reality Echo"],
+    lose:["Cosmology except KEEP19","Prisms, Dark Matter, Astral Matter","Radiance, Reality Echo, Luminance","Radiance & Echo upgrades"],
+    keep:["Galaxy Rank","Epoch","Discoveries","KEEP19 nodes"] },
+  { id:"echo", name:"Reality Echo", int:"Reflection", c:"#C8C8FF", tag:"breach ≥ 3",
+    gate:"Breach ≥ 3 · Radiance > 1e20",
+    gain:["+Reality Echo (Formulas.Reflection)","A ghost galaxy joins the sky ring"],
+    lose:["Cosmology except KEEP19 (Galaxy Forge re-set)","Dark Matter, Astral Matter, Radiance","Radiance upgrades"],
+    keep:["Reality Echo","Breach","Galaxy Rank","Prisms"] },
+];
+
+/* ---------------- HUD ---------------- */
+const strip = [["Solar Energy","1.2e40",COLORS.solar],["Gravity","8.8e33",COLORS.gravity],["Cosmic Points","3.1e21",COLORS.cosmic],["Star Charts","4.4e9","#8FD3FF"],["Prisms","7.0e12",COLORS.prisms]];
+document.getElementById("hudStrip").innerHTML = strip.map(([k,v,c])=>`<span><span class="dot" style="background:${c}"></span>${k} <b style="color:${c}">${v}</b></span>`).join("");
+
+/* ---------------- Epoch log ---------------- */
+const rows = document.getElementById("epochRows");
+rows.innerHTML = EPOCHS.map((e,i)=> e.nova
+  ? `<tr class="nova" data-i="${i}"><td>✶</td><td colspan="2">SUPERNOVA · Starlight &gt; 1e2283</td><td class="num mono">${e.t}</td></tr>`
+  : `<tr data-i="${i}"><td class="mono">${tierOf(i)}</td><td>${e.n}</td><td class="num">${e.cost==="cap"?"hard cap":e.cost+" "+(e.cur==="Cosmic Dust"?"Dust":"SL")}</td><td class="num mono">${e.t}</td></tr>`).join("");
+
+const quick = document.getElementById("quick");
+[[0,"E0"],[3,"E3"],[6,"E6"],[8,"E8"],[10,"E10"],[11,"Supernova"],[12,"E11"],[14,"E13"]].forEach(([i,l])=>{
+  const b=document.createElement("button"); b.className="chip"; b.textContent=l; b.dataset.i=i;
+  b.addEventListener("click",()=>setState(i)); quick.appendChild(b);
+});
+
+/* ---------------- Canvas core ---------------- */
+const cv=document.getElementById("core"), ctx=cv.getContext("2d");
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+let W=0,H=0,DPR=1, state=7, t0=performance.now(), novaStart=0;
+function resize(){const r=cv.getBoundingClientRect();DPR=Math.min(2,devicePixelRatio||1);W=r.width;H=r.height;cv.width=W*DPR;cv.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0);}
+new ResizeObserver(resize).observe(cv);
+
+// seeded random for stable starfields
+function rng(seed){let s=seed>>>0;return()=>((s=(s*1664525+1013904223)>>>0)/4294967296);}
+const BG = (()=>{const r=rng(7);return Array.from({length:260},()=>({x:r(),y:r(),m:r()}));})();
+
+function glow(x,y,r,col,a=1){const g=ctx.createRadialGradient(x,y,0,x,y,r);g.addColorStop(0,col);g.addColorStop(1,"rgba(0,0,0,0)");ctx.globalAlpha=a;ctx.fillStyle=g;ctx.beginPath();ctx.arc(x,y,r,0,7);ctx.fill();ctx.globalAlpha=1;}
+function ring(x,y,rx,ry,rot,col,a){ctx.save();ctx.translate(x,y);ctx.rotate(rot);ctx.strokeStyle=col;ctx.globalAlpha=a;ctx.lineWidth=1;ctx.beginPath();ctx.ellipse(0,0,rx,ry,0,0,7);ctx.stroke();ctx.restore();ctx.globalAlpha=1;}
+function star(x,y,r,col){glow(x,y,r*4,col,.35);glow(x,y,r*1.6,col,.9);ctx.fillStyle="#fff";ctx.beginPath();ctx.arc(x,y,r*.55,0,7);ctx.fill();}
+function spiral(x,y,R,rot,seed,col,n=700){const r=rng(seed);for(let i=0;i<n;i++){const arm=i%2,d=Math.pow(r(),.8)*R,a=d/R*5.2+arm*Math.PI+rot+(r()-.5)*.55;const px=x+Math.cos(a)*d,py=y+Math.sin(a)*d*.55;ctx.globalAlpha=.25+.6*(1-d/R);ctx.fillStyle=r()<.15?col:"#dfe8ff";ctx.fillRect(px,py,1.2,1.2);}ctx.globalAlpha=1;glow(x,y,R*.3,col,.6);}
+
+function draw(now){
+  const t=(now-t0)/1000, cx=W/2, cy=H/2+8, S=Math.min(W,H);
+  ctx.clearRect(0,0,W,H);
+  // starfield density grows with progression
+  const density = Math.min(1, .12 + state/14);
+  BG.forEach((s,i)=>{ if(i/BG.length>density) return; ctx.globalAlpha=.25+.6*s.m*(reduce?1:(.7+.3*Math.sin(t*2+i))); ctx.fillStyle="#cfe0ff"; ctx.fillRect(s.x*W,s.y*H,1.1,1.1);});
+  ctx.globalAlpha=1;
+  const spin = reduce?0:t;
+  const e = state;
+  // containment gimbals (Realm I)
+  const gimbals = (r)=>{ring(cx,cy,r,r*.32,spin*.4,"#7FE3FF",.35);ring(cx,cy,r*.92,r*.3,-spin*.3+1,"#C9A45C",.3);ring(cx,cy,r*.84,r*.84,0,"#7FE3FF",.12);};
+
+  if(e===0){gimbals(S*.2);star(cx,cy,3+Math.sin(t*3)*.6,COLORS.starlight);}
+  else if(e===1){gimbals(S*.22);const r=rng(3);for(let i=0;i<260;i++){const a=r()*7+spin*(.3+r()*.3),d=S*(.05+r()*.17);ctx.globalAlpha=.5;ctx.fillStyle="#E8D9FF";ctx.fillRect(cx+Math.cos(a)*d,cy+Math.sin(a)*d*.5,1.3,1.3);}ctx.globalAlpha=1;star(cx,cy,4,COLORS.starlight);}
+  else if(e===2){gimbals(S*.22);glow(cx,cy,S*.16,"#FF9A3C",.35);ctx.strokeStyle="#BFEFFF";ctx.globalAlpha=.6;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(cx,cy-S*.3);ctx.lineTo(cx,cy+S*.3);ctx.stroke();ctx.globalAlpha=1;star(cx,cy,7,COLORS.starlight);}
+  else if(e>=3&&e<=7){
+    if(e===7){glow(cx-S*.15,cy-S*.05,S*.35,"#FF5FD2",.22);glow(cx+S*.18,cy+S*.06,S*.32,"#4FE3FF",.2);glow(cx,cy+S*.1,S*.3,"#9B6BFF",.2);}
+    const n = e===3?2:e===4?3:e===5?4:8;
+    for(let k=0;k<n;k++){const R=S*(.09+k*.045);ring(cx,cy,R,R*.42,0,"#7FE3FF",.22);const a=spin*(1.2/(k+1))+k*1.7;const px=cx+Math.cos(a)*R,py=cy+Math.sin(a)*R*.42;const pc=["#5FB0FF","#FF9A3C","#7CF2B0","#E8D9FF","#FFD27A","#B7C8FF","#BDEBFF","#F7B2FF"][k];glow(px,py,5,pc,.8);ctx.fillStyle=pc;ctx.beginPath();ctx.arc(px,py,2.2+(e>=5?1:0),0,7);ctx.fill();if(e>=5&&k%2===1)ring(px,py,6,2.4,.3,pc,.8);}
+    if(e>=6){const r=rng(11);for(let i=0;i<120;i++){const a=r()*7+spin*.15,d=S*(.225+r()*.02);ctx.globalAlpha=.5;ctx.fillStyle="#9AA7C7";ctx.fillRect(cx+Math.cos(a)*d,cy+Math.sin(a)*d*.42,1,1);}ctx.globalAlpha=1;}
+    if(e===4){const r=rng(21);ctx.strokeStyle="#C9A45C";ctx.globalAlpha=.45;ctx.beginPath();for(let i=0;i<6;i++){const a=i/6*7+.3,d=S*(.3+r()*.08);const px=cx+Math.cos(a)*d,py=cy+Math.sin(a)*d*.6;ctx.moveTo(cx,cy);ctx.lineTo(px,py);}ctx.stroke();ctx.globalAlpha=1;for(let i=0;i<6;i++){const a=i/6*7+.3,d=S*(.3+rng(21+i)()*.08);star(cx+Math.cos(a)*d,cy+Math.sin(a)*d*.6,1.6,"#FFE7A3");}}
+    star(cx,cy,6+e*.4,COLORS.starlight);
+  }
+  else if(e===8){spiral(cx,cy,S*.36,spin*.08,5,"#FFE7A3",900);}
+  else if(e===9){[[0,0,.2],[-.25,-.12,.12],[.26,.1,.13],[.08,.22,.09],[-.2,.18,.08]].forEach(([dx,dy,r],k)=>spiral(cx+dx*S,cy+dy*S,S*r,spin*.08+k,9+k,["#FFE7A3","#9B6BFF","#4FE3FF","#F7B2FF","#FF9A3C"][k],300));}
+  else if(e===10){const r=rng(31);const nodes=Array.from({length:26},()=>({x:cx+(r()-.5)*S*.9,y:cy+(r()-.5)*S*.6}));ctx.strokeStyle="#9B6BFF";ctx.globalAlpha=.35;ctx.beginPath();nodes.forEach((a,i)=>nodes.slice(i+1).forEach(b=>{if(Math.hypot(a.x-b.x,a.y-b.y)<S*.2){ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);}}));ctx.stroke();ctx.globalAlpha=1;nodes.forEach(n=>glow(n.x,n.y,6,"#E8D9FF",.9));}
+  else if(e===11){ // supernova
+    const p = reduce?0.6:((t-novaStart)%5)/5;
+    if(p<.35){const k=1-p/.35;glow(cx,cy,S*.25*k+4,"#FFE7A3",.8);star(cx,cy,3+k*8,"#FFE7A3");}
+    else{const q=(p-.35)/.65;ctx.globalAlpha=Math.max(0,.9-q);ctx.fillStyle="#fff";if(q<.12){ctx.globalAlpha=1-q/.12;ctx.fillRect(0,0,W,H);}ctx.globalAlpha=1;
+      const R=S*.05+q*S*.6;ctx.strokeStyle="#FF9A3C";ctx.lineWidth=3*(1-q)+1;ctx.globalAlpha=1-q;ctx.beginPath();ctx.arc(cx,cy,R,0,7);ctx.stroke();
+      const r=rng(41);for(let i=0;i<180;i++){const a=r()*7,d=R*(.75+r()*.3);ctx.fillStyle=r()<.5?"#FF9A3C":"#FFE7A3";ctx.fillRect(cx+Math.cos(a)*d,cy+Math.sin(a)*d,1.6,1.6);}ctx.globalAlpha=1;
+      glow(cx,cy,8,"#E8D9FF",q);}
+  }
+  else if(e===12){ctx.strokeStyle="#7FE3FF";ctx.globalAlpha=.5;ctx.beginPath();ctx.arc(cx,cy,S*.34,0,7);ctx.stroke();ctx.globalAlpha=1;glow(cx,cy,S*.34,"#1B2450",.8);const r=rng(51);for(let i=0;i<14;i++){const a=r()*7,d=r()*S*.28;spiral(cx+Math.cos(a)*d,cy+Math.sin(a)*d,S*.035,spin*.1+i,60+i,"#E8D9FF",40);}}
+  else if(e===13){[[-.2,0,"#7FE3FF"],[.18,-.08,"#9B6BFF"],[.05,.2,"#F7B2FF"]].forEach(([dx,dy,c],k)=>{const x=cx+dx*S,y=cy+dy*S,R=S*.2;glow(x,y,R,"#141B38",.9);ctx.strokeStyle=c;ctx.globalAlpha=.6;ctx.beginPath();ctx.arc(x,y,R,0,7);ctx.stroke();ctx.globalAlpha=1;spiral(x,y,R*.4,spin*.1+k,70+k,c,160);});}
+  else if(e===14){const g=ctx.createLinearGradient(0,cy-S*.3,0,cy+S*.3);g.addColorStop(0,"rgba(255,255,255,0)");g.addColorStop(.5,"rgba(255,255,255,.95)");g.addColorStop(1,"rgba(255,255,255,0)");ctx.fillStyle=g;ctx.fillRect(cx-1.5,cy-S*.36,3,S*.72);glow(cx,cy,S*.3,"#FFFFFF",.18+(reduce?0:.06*Math.sin(t*2)));}
+
+  if(!reduce) requestAnimationFrame(draw);
+}
+
+function fmtNext(i){ if(EPOCHS[i].nova) return "GO SUPERNOVA · STARLIGHT > 1e2283"; if(EPOCHS[i].cost==="cap") return "FINAL EPOCH"; return `NEXT ${EPOCHS[i].cost} ${EPOCHS[i].cur.toUpperCase()}`; }
+function setState(i){
+  state=+i; document.getElementById("epoch").value=state; novaStart=(performance.now()-t0)/1000;
+  const lab=stateLabel(state);
+  document.getElementById("vpTitle").textContent = EPOCHS[state].nova?"SUPERNOVA":EPOCHS[state].n.toUpperCase();
+  document.getElementById("vpSub").textContent = `${EPOCHS[state].nova?"Ascension One":"E"+tierOf(state)} · ${EPOCHS[state].t}`;
+  document.getElementById("coreMeta").textContent = `state ${state}/14`;
+  document.getElementById("hudEpoch").textContent = lab;
+  document.getElementById("hudNext").textContent = fmtNext(state);
+  const pct = [12,31,44,58,64,52,71,64,48,39,57,92,44,26,100][state];
+  document.getElementById("hudGauge").style.width=pct+"%"; document.getElementById("hudPct").textContent=pct+"%";
+  const post = state>=12;
+  document.getElementById("hudBig").textContent = post? "3.07e98" : ["88","4.1e5","2.2e9","8.0e14","3.3e23","6.1e39","2.0e64","2.41e152","5.5e275","3.0e977","1.1e1500","9.4e2282"][state]||"—";
+  document.getElementById("hudBig").style.color = post? "var(--dust)":"var(--starlight)";
+  document.getElementById("hudBig").previousElementSibling.textContent = post? "Cosmic Dust":"Starlight";
+  rows.querySelectorAll("tr").forEach(r=>r.classList.toggle("cur",+r.dataset.i===state));
+  quick.querySelectorAll(".chip").forEach(c=>c.setAttribute("aria-pressed",+c.dataset.i===state));
+  if(reduce) requestAnimationFrame(draw);
+}
+document.getElementById("epoch").addEventListener("input",e=>setState(e.target.value));
+rows.addEventListener("click",e=>{const tr=e.target.closest("tr");if(tr)setState(tr.dataset.i);});
+
+/* ---------------- Ladder + sheet ---------------- */
+const rungs=document.getElementById("rungs"), sheet=document.getElementById("sheet");
+RESETS.forEach((r,i)=>{
+  const b=document.createElement("button"); b.className="rung"; b.setAttribute("role","option"); b.style.setProperty("--c",r.c);
+  b.innerHTML=`<span class="ix">${String(i+1).padStart(2,"0")}</span><span><span class="nm" style="color:${r.c}">${r.name}</span><span class="int">${r.int}</span></span><span class="tag">${r.tag}</span>`;
+  b.addEventListener("click",()=>pick(i)); rungs.appendChild(b);
+});
+function li(a){return a.map(x=>`<li>${x}</li>`).join("");}
+function pick(i){
+  const r=RESETS[i];
+  rungs.querySelectorAll(".rung").forEach((b,k)=>b.setAttribute("aria-selected",k===i));
+  sheet.style.setProperty("--c",r.c);
+  sheet.innerHTML=`
+    <div><span class="label">Reset · internal <span class="mono">${r.int}</span></span><h3>${r.name}</h3></div>
+    <div class="gate">${r.gate}</div>
+    <div class="cols">
+      <div class="col gain"><span class="label">You gain</span><ul>${li(r.gain)}</ul></div>
+      <div class="col lose"><span class="label">Resets to zero</span><ul>${li(r.lose)}</ul></div>
+      <div class="col keep"><span class="label">Survives</span><ul>${li(r.keep)}</ul></div>
+    </div>
+    ${r.table?`<div class="costs"><table><thead><tr>${r.table.head.map(h=>`<th>${h}</th>`).join("")}</tr></thead><tbody>${r.table.rows.map(row=>`<tr>${row.map((c,k)=>`<td class="${k>=2||r.table.head.length===2&&k===1?"num":""}">${c}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`:""}
+    ${r.flag?`<div class="flag">${r.flag}</div>`:""}
+    <div class="btnrow"><button class="cta" type="button">${r.id==="nova"?"GO SUPERNOVA":r.id==="galaxy"?"FORM GALAXY":r.id==="break"?"BREAK REALITY":r.id==="echo"?"ECHO":r.id==="shards"?"SHATTER":r.id==="collapse"?"COLLAPSE":r.id==="trial"?"ENTER TRIAL":r.id==="compress"?"COMPRESS":"ADVANCE EPOCH"}</button><span class="note">Mockup only. The real button fires the existing server path; the cinematic plays after the server confirms.</span></div>`;
+}
+pick(3);
+resize(); setState(7); requestAnimationFrame(draw);
+})();
+</script>
