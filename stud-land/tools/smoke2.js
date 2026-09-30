@@ -21,6 +21,7 @@ async function open(browser, viewport, touch) {
   await page.goto(URL);
   await page.waitForSelector('#tPlay:not([disabled])');
   await page.click('#tPlay', { force: true });
+  await page.evaluate(() => { if (typeof CINE !== 'undefined' && CINE.on) CINE.skip(); }); // the first-play intro is covered by tools/wow.js
   await page.evaluate(() => { WORLD.perf.locked = true; });
   await page.waitForTimeout(1200);
   return { page, errors, ctx };

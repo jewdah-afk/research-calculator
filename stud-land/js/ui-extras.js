@@ -100,6 +100,7 @@ const UIX = (() => {
         $('pbHud').onclick = () => { document.body.classList.add('photo-clean'); setTimeout(() => window.addEventListener('pointerdown', () => document.body.classList.remove('photo-clean'), { once: true }), 50); };
         $('pbSnap').onclick = () => photo.snap();
         $('pbExit').onclick = () => photo.exit();
+        $('pbTour').onclick = () => { if (typeof CINE !== 'undefined') CINE.tour(); };
     }
 
     // ---------------- colour grade ----------------

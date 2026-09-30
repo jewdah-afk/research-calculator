@@ -162,7 +162,7 @@ const ENVFX = (() => {
         for (const [x, y] of buoySpots()) {
             const bob = Math.sin(R.T * 1.8 + x) * 0.04; const s = R.P(x, y, 0); if (!R.onScreen(s[0], s[1], 40)) continue;
             R.box(x, y, -0.05 + bob, 0.09, 0.09, 0.18, '#ff4d4d', { lw: 1.2 }); R.box(x, y, 0.13 + bob, 0.06, 0.06, 0.12, '#ffffff', { lw: 1.2 });
-            const on = Math.sin(R.T * 3 + x) > 0.6; if (on) { const c = R.P(x, y, 0.3 + bob); R.g.fillStyle = '#fff1a8'; R.g.beginPath(); R.g.arc(c[0], c[1], 2.5, 0, 7); R.g.fill(); if (env.night > 0.2) R.light([x, y, 0.3, '#fff1a8', 0.7]); }
+            const on = Math.sin(R.T * 3 + x) > 0.6; if (on) { const c = R.P(x, y, 0.3 + bob); R.g.fillStyle = '#fff1a8'; R.g.beginPath(); R.g.arc(c[0], c[1], 2.5, 0, 7); R.g.fill(); if (env.night > 0.2) R.light([x, y, 0.3, '#fff1a8', 0.7, true]); }
         }
     }
     const ducks = { a: 0 };

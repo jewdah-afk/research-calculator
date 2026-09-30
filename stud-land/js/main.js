@@ -448,7 +448,7 @@ function boot() {
     HUD.init(); UIX.init();
     initInput(); initDevBar();
     GAME.prevBuilt = new Set(); checkPlots(true);
-    META.init();
+    META.init(); CITY.init();
     WORLD.on('autoQuality', (q) => { HUD.toast(`Graphics set to ${q.toUpperCase()} to keep things smooth`); try { SETTINGS.set('quality', q); } catch (e) { } });
     const start = HUD.focus && WORLD.builtPlots().has(HUD.focus.key) ? HUD.focus : PLOTS.get('0,0');
     const cam = WORLD.cam;
@@ -461,7 +461,9 @@ function boot() {
     UIX.titleProgress(0.7, 'Painting the islands...');
     setTimeout(() => {
         UIX.titleReady(() => {
-            // camera swoops in from high above while the title fades
+            // a new save gets the full intro (cloud dive, the city builds itself, parachute, HUD slam);
+            // a returning player gets a quick camera swoop so they are playing within a second
+            if (!loaded && !META.state().introSeen) { CINE.intro({ fresh: true }); return; }
             cam.zoom = 0.3; cam.angle = -0.9; cam.tAngle = 0; cam.tZoom = defaultZoom();
             FX.sfx('camWhoosh');
             if (offline) setTimeout(() => HUD.offline(offline), 900);

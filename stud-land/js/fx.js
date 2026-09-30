@@ -248,27 +248,43 @@ const FX = (() => {
     });
     def({
         id: 'plotBuilt', name: 'New plot built', tier: 'hero', category: 'Gameplay', trigger: 'A plot is built (its baseplate would show in Upgrade Land)',
-        durationMs: 2400, sound: 'plotBuilt (brick rain, fanfare) + rise + splash + stinger plot', haptic: 'big',
-        desc: 'Cinema bars slide in, the camera flies to the plot, bricks rain from the sky, the island drops in with a bounce and a splash, fireworks go up (at night) and a NEW PLOT banner slams in.',
-        spec: { letterbox: 'bars 9% of height, slide 0.35 s, hold 2.2 s', camera: 'fly to plot centre, exponential ease 4/s', island: 'drops 6 u with easeOutBounce over 0.9 s while scaling 0.6 to 1 in 0.5 s', rain: '40 bricks from 6 to 11 u high, gravity 7, bounce 35%', splash: 'white ring 5 u at 0.65 s + 30 droplets', fireworks: '5 rockets at night, 26 sparks each', banner: 'NEW PLOT! 64 px + name 36 px, cubic-bezier(.2,1.6,.4,1) 0.5 s, out at 2.4 s', confetti: '70 pieces from the top of the screen' },
-        roblox: 'Letterbox: two Frames tweened in from screen edges. Camera: CameraType Scriptable, tween CFrame to a preset angle over the plot, restore after. Island: model starts above, tween with Bounce easing. ParticleEmitters for rain and splash, Fireworks as simple Parts with trails. Banner: TextLabels with UIStroke and UIScale tween (Back, Out).',
+        durationMs: 2400, sound: 'rise, then a tick per tile climbing in pitch, splash + plotBuilt fanfare on landing, stinger plot', haptic: 'big',
+        desc: 'Cinema bars slide in and the camera flies to the plot. The island builds itself: 25 tiles fall from the sky in a spiral from the centre, each landing with a puff and a click that climbs in pitch. When the last tile lands the plate slams, a shockwave rolls out over the sea, the machines pop up one by one, fireworks go up (at night) and a NEW PLOT banner slams in.',
+        spec: { letterbox: 'bars 9% of height, slide 0.35 s, hold 2.2 s', camera: 'fly to plot centre, exponential ease 4/s', tiles: '25 tiles, spiral order from the centre, 35 ms apart, fall 6 u with gravity 44 u/s2, 0.18 u bounce over 0.16 s', tileLanding: 'puff in the theme colour + tick at pitch 0.8 + 0.05 per tile (every tile on high, every 2nd on medium, none on low)', slam: 'after the last tile + 0.75 s: shake 0.8, hit-stop 80 ms, white ring 5 u + currency ring 3.5 u, 30 droplets', machines: 'pop in 60 ms steps, cubic overshoot to 1.1 then settle over 0.4 s', fireworks: '5 rockets at night, 26 sparks each', banner: 'NEW PLOT! 64 px + name 36 px, cubic-bezier(.2,1.6,.4,1) 0.5 s, out at 2.4 s', confetti: '70 pieces from the top of the screen' },
+        roblox: 'Letterbox: two Frames tweened in from screen edges. Camera: CameraType Scriptable, tween CFrame to a preset angle over the plot, restore after. Tiles: the baseplate is 25 Parts; each starts 6 studs x 4 up, anchored, and a task.delay(i * 0.035) TweenService tween with Quad In easing drops it, then a short Back Out bounce; play a Sound with PlaybackSpeed 0.8 + i * 0.05 on each landing. On the last one: Camera shake module, a ring ParticleEmitter burst on the water, and a Scale tween (Back Out) on each machine model.',
         run(c) {
             const p = c.plot; const cx = p.x0 + 2.5, cy = p.y0 + 2.5;
-            R.plotAnim.set(p.key, { t0: R.T }); R.textureFor(p); R.refreshBuilt(); R.computeBounds(); R.syncFigs();
+            R.plotAnim.set(p.key, { t0: R.T, delay: c.delay || 0, fx: true }); R.textureFor(p); R.refreshBuilt(); R.computeBounds(); R.syncFigs();
             if (c.focus !== false) { R.cam.tx = cx; R.cam.ty = cy; }
             letterbox(2300); zoomPunch(0.05);
-            for (let i = 0; i < 40 * R.FXD.amount(); i++) R.spawn({ x: cx + (Math.random() - 0.5) * 4.6, y: cy + (Math.random() - 0.5) * 4.6, z: 6 + Math.random() * 5, vx: 0, vy: 0, vz: -2, life: 2.4, col: [p.color, '#ffd23f', '#ffffff', '#e8453c', '#4aa8ff'][i % 5], size: 0.1, grav: 7, brick: true, bounce: true });
             sfx('rise', cx, cy);
-            setTimeout(() => {
-                R.FXD.shake(0.8); R.hitstop(80);
-                R.ring(cx, cy, 0.05, '#ffffff', 5, 1);
-                for (let i = 0; i < 30 * R.FXD.amount(); i++) R.spawn({ x: cx + (Math.random() - 0.5) * 5, y: cy + (Math.random() - 0.5) * 5, z: 0.1, vx: (Math.random() - 0.5), vy: (Math.random() - 0.5), vz: 2 + Math.random() * 3, life: 0.9, col: '#d9f4ff', size: 0.06, grav: 9 });
-                sfx('splash', cx, cy);
-            }, 650);
-            if (R.env.night > 0.35) setTimeout(() => launchFireworks(cx, cy, 5), 900);
-            throwConfetti(70);
+            if (R.env.night > 0.35) setTimeout(() => launchFireworks(cx, cy, 5), 1800);
+            setTimeout(() => throwConfetti(70), 1300);
             sfx('plotBuilt', cx, cy); if (AUDIO.stinger) AUDIO.stinger('plot'); haptic('big');
         },
+    });
+    // Each tile of an assembling plate lands: a puff of theme dust and a click that climbs in pitch.
+    // Clicks are rate limited so many plates assembling at once (the intro) stay a rattle, not a roar.
+    let lastTick = 0, lastSlam = 0;
+    WORLD.use('tile', (p, o) => {
+        const th = R.THEMES[p.theme] || R.THEMES.meadow;
+        const x = p.x0 + o.i + 0.5, y = p.y0 + o.j + 0.5;
+        if (R.FXD.amount() > 0.3 && (!o.quiet || o.k % 4 === 0)) { R.puff(x, y, R.TOP, th.alt); if (o.k % 3 === 0) R.burst(x, y, R.TOP + 0.05, th.base, 3, 1.2); }
+        const every = R.Q.name === 'low' ? 0 : R.Q.name === 'medium' ? 2 : 1, now = performance.now();
+        if (every && o.k % every === 0 && !quiet() && now - lastTick > 28) { lastTick = now; sfx('tick', x, y, { vol: o.quiet ? 0.25 : 0.45, pitch: 0.8 + o.k * 0.05 }); }
+    });
+    // The whole plate has landed: the slam. Quiet plates (the intro ripple) get a ring and a small splash.
+    WORLD.use('assembled', (p, an) => {
+        const cx = p.x0 + 2.5, cy = p.y0 + 2.5;
+        if (quiet()) return;
+        const now = performance.now();
+        if (an && an.quiet || now - lastSlam < 350) { R.ring(cx, cy, 0.05, '#ffffff', 4, 0.8); if (now - lastSlam > 120) { lastSlam = now; sfx('splash', cx, cy, { vol: 0.35 }); } return; }
+        lastSlam = now;
+        R.FXD.shake(0.8); R.hitstop(80);
+        R.ring(cx, cy, 0.05, '#ffffff', 5, 1); R.ring(cx, cy, 0.06, p.color || '#ffd23f', 3.5, 0.8);
+        for (let i = 0; i < 30 * R.FXD.amount(); i++) R.spawn({ x: cx + (Math.random() - 0.5) * 5.4, y: cy + (Math.random() - 0.5) * 5.4, z: 0.1, vx: (Math.random() - 0.5), vy: (Math.random() - 0.5), vz: 2 + Math.random() * 3, life: 0.9, col: '#d9f4ff', size: 0.06, grav: 9 });
+        sfx('splash', cx, cy); sfx('buy', cx, cy, { big: true });
+        haptic('big');
     });
     def({
         id: 'maxPlot', name: 'Plot maxed (dev)', tier: 'support', category: 'Gameplay', trigger: 'MAX NEXT PLOT in the dev bar',
@@ -408,5 +424,5 @@ const FX = (() => {
         { id: 'uiTicker', name: 'Counter ticker', spec: 'shown value eases 25% of the gap per frame toward the real value; drops snap instantly', roblox: 'Heartbeat lerp of a displayed number, format each frame; snap on spend.' },
         { id: 'uiRate', name: 'Rate pill bump', spec: 'when the rate rises, scale 1.15 and back in 250 ms, green flash', roblox: 'UIScale tween Back Out 0.25 s when the rate goes up.' },
     ];
-    return { play, CATALOG, byId, UI_MOTION, sfx, haptic, launchFireworks, throwConfetti, drones };
+    return { play, def, CATALOG, byId, UI_MOTION, sfx, haptic, launchFireworks, throwConfetti, drones, letterbox, flash };
 })();

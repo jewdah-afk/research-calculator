@@ -462,3 +462,41 @@ body.sheet-open .guide { display: none; }
 .lab-more { width: auto; padding: 0 8px; font-size: 12px; }
 @media (max-width: 720px) { #badgePop { top: calc(var(--top) + 150px); gap: 8px; padding: 8px 12px 8px 8px; } #badgePop .bp-icon { width: 40px; height: 40px; font-size: 22px; } #badgePop .bp-name { font-size: 18px; } }
 #photobar .dbtn { color: var(--ink); }
+
+/* ---------- cinematics: intro, HUD slam, tour ---------- */
+body.intro #hud, body.intro #devbar, body.intro #toasts, body.intro #sheet { opacity: 0; pointer-events: none !important; }
+body.intro #hud *, body.intro #devbar * { pointer-events: none !important; }
+#cineSkip { position: fixed; z-index: 50; right: calc(16px + env(safe-area-inset-right)); bottom: calc(9vh + 14px + env(safe-area-inset-bottom)); display: none; font-size: 15px; min-height: 44px; padding: 0 18px; }
+#cineSkip.on { display: block; animation: capIn .4s .8s both; }
+#cineCap { position: fixed; z-index: 46; left: 0; right: 0; top: calc(9vh + 18px); text-align: center; pointer-events: none; opacity: 0; transition: opacity .35s; }
+#cineCap.on { opacity: 1; }
+#cineCap .ck { font-family: "Luckiest Guy"; font-size: 22px; letter-spacing: 2px; color: #fff; text-shadow: 0 3px 0 var(--ink), 2px 2px 0 var(--ink), -2px 2px 0 var(--ink), 2px -2px 0 var(--ink), -2px -2px 0 var(--ink); }
+#cineCap .ct { font-family: "Luckiest Guy"; font-size: 72px; line-height: 1; color: var(--yellow); margin-top: 6px; text-shadow: 0 6px 0 var(--ink), 4px 4px 0 var(--ink), -4px 4px 0 var(--ink), 4px -4px 0 var(--ink), -4px -4px 0 var(--ink), 0 -4px 0 var(--ink), 4px 0 0 var(--ink), -4px 0 0 var(--ink); }
+#cineCap.no-title .ct { display: none; }
+#cineCap.on .ck { animation: capIn .5s cubic-bezier(.2,1.4,.4,1) both; }
+#cineCap.on .ct { animation: bIn .55s .15s cubic-bezier(.2,1.6,.4,1) both; }
+body.touring #cineCap { top: auto; bottom: calc(9vh + 18px); left: calc(24px + env(safe-area-inset-left)); right: auto; text-align: left; }
+body.touring #cineCap .ct { font-size: 44px; }
+body.touring #photobar { opacity: 0; pointer-events: none; }
+@keyframes capIn { from { opacity: 0; translate: 0 14px; } to { opacity: 1; translate: 0 0; } }
+/* the HUD slams in piece by piece after the builder lands */
+body.hud-in #topleft { animation: slamTop .55s cubic-bezier(.2,1.5,.4,1) both; }
+body.hud-in #guide { animation: slamTop .5s .32s cubic-bezier(.2,1.5,.4,1) both; }
+body.hud-in #tiles .tile { animation: slamRight .5s cubic-bezier(.2,1.5,.4,1) both; }
+body.hud-in #tiles .tile:nth-child(2) { animation-delay: .07s; }
+body.hud-in #tiles .tile:nth-child(3) { animation-delay: .14s; }
+body.hud-in #tiles .tile:nth-child(4) { animation-delay: .21s; }
+body.hud-in #tiles .tile:nth-child(5) { animation-delay: .28s; }
+body.hud-in #zonebar { animation: slamUp .55s .18s cubic-bezier(.2,1.4,.4,1) both; }
+body.hud-in #leftdock { animation: slamLeft .5s .26s cubic-bezier(.2,1.5,.4,1) both; }
+body.hud-in #camctl { animation: capIn .4s .4s both; }
+body.hud-in #devbar { animation: slamTop .4s .45s both; }
+@keyframes slamTop { from { translate: 0 -160%; scale: 1.15; } 70% { translate: 0 6px; scale: 1; } to { translate: 0 0; scale: 1; } }
+@keyframes slamRight { from { translate: 170% 0; rotate: 8deg; } 70% { translate: -6px 0; rotate: -2deg; } to { translate: 0 0; rotate: 0deg; } }
+@keyframes slamLeft { from { translate: -170% 0; } 70% { translate: 6px 0; } to { translate: 0 0; } }
+@keyframes slamUp { from { translate: 0 180%; } 70% { translate: 0 -6px; } to { translate: 0 0; } }
+@media (max-width: 700px) { #cineCap .ct { font-size: 46px; } #cineCap .ck { font-size: 17px; } body.touring #cineCap .ct { font-size: 32px; } }
+@media (prefers-reduced-motion: reduce) { body.hud-in * { animation-duration: .01s !important; animation-delay: 0s !important; } }
+/* hero cinematics (tier celebration): the HUD steps aside while the camera shows the city */
+#hud, #devbar { transition: opacity .35s; }
+body.cine #hud, body.cine #devbar, body.cine #toasts { opacity: 0; pointer-events: none; }

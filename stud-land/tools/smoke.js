@@ -25,6 +25,7 @@ async function run(name, viewport, script) {
   if (name === 'desk') { await page.waitForTimeout(600); await page.screenshot({ path: path.join(OUT, 'desk-00-title.png') }); }
   await page.waitForSelector('#tPlay:not([disabled])');
   await page.click('#tPlay', { force: true });
+  await page.evaluate(() => { if (typeof CINE !== 'undefined' && CINE.on) CINE.skip(); }); // the first-play intro is covered by tools/wow.js
   await page.evaluate(() => { WORLD.perf.locked = true; }); // headless renders on the CPU; keep HIGH for screenshots
   await page.waitForTimeout(1500);
   await script(page, (n) => page.screenshot({ path: path.join(OUT, `${name}-${n}.png`) }));

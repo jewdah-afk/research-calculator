@@ -18,6 +18,9 @@
 <div id="vignette"></div>
 <div id="flash"></div>
 <div id="letterbox"><div class="lb-top"></div><div class="lb-bot"></div></div>
+<!-- cinematic caption card and skip button (intro and tour) -->
+<div id="cineCap"><div class="ck"></div><div class="ct"></div></div>
+<button id="cineSkip" class="dbtn">SKIP &#9656;&#9656;</button>
 
 <header id="devbar">
   <span class="devchip">DEV</span>
@@ -105,6 +108,7 @@
   <div class="seg" id="pbFilter"><button data-f="none" class="on">NONE</button><button data-f="warm">WARM</button><button data-f="cool">COOL</button><button data-f="vivid">VIVID</button><button data-f="noir">NOIR</button></div>
   <button class="dbtn" id="pbTilt">TILT: ON</button>
   <button class="dbtn" id="pbHud">HIDE ALL</button>
+  <button class="dbtn" id="pbTour" title="Fly over every plot you have built">TOUR</button>
   <button class="dbtn primary" id="pbSnap">SNAP</button>
   <button class="dbtn" id="pbExit">EXIT</button>
 </div>
@@ -149,8 +153,10 @@
 <script src="js/props.js"></script>
 <script src="js/env.js"></script>
 <script src="js/walk.js"></script>
+<script src="js/city.js"></script>
 <script src="js/hud.js"></script>
 <script src="js/ui-extras.js"></script>
+<script src="js/cine.js"></script>
 <script src="js/lab.js"></script>
 <script src="js/main.js"></script>
 </body>

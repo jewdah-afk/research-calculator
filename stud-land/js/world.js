@@ -20,6 +20,7 @@ const WORLD = (() => {
     let selectedId = null;
     let hoverKey = null;
     const lights = [];
+    const view = { signs: true }; // cinematics hide the plot signs
     // Quality presets. Every optional layer checks Q, so one switch scales the whole look.
     const QUALITY = {
         low:    { shadows: false, caustics: false, props: true,  propAnim: false, weather: false, windows: false, particles: 0.35, sparkle: false, dprCap: 1 },
@@ -30,7 +31,7 @@ const WORLD = (() => {
     const Q = { name: 'high', ...QUALITY.high };
     function setQuality(name) { Object.assign(Q, QUALITY[name] || QUALITY.high, { name }); perf.cap = Q.dprCap; resize(); sprites.clear(); spriteView = ''; }
     // Plug-in points. Modules (fx, props, walk, weather) add functions here instead of editing the core.
-    const HOOKS = { update: [], underPlates: [], afterPlates: [], shadows: [], items: [], afterItems: [], sky: [], post: [], ui: [], grow: [] };
+    const HOOKS = { update: [], underPlates: [], afterPlates: [], shadows: [], items: [], afterItems: [], sky: [], post: [], ui: [], grow: [], tile: [], assembled: [], landed: [], bloom: [] };
     function use(name, fn) { HOOKS[name].push(fn); }
     // Simple named events for moments modules care about (whale surfaced, and so on).
     const EVT = {};
@@ -275,11 +276,7 @@ const WORLD = (() => {
         const c = P(cx, cy, 0); if (!onScreen(c[0], c[1], 5 * K + 60)) return;
         if (!built) return drawGhost(p);
         const an = plotAnim.get(p.key); let dz = 0, sc = 1;
-        if (an) {
-            const t = (T - an.t0);
-            if (t > 1.6) plotAnim.delete(p.key);
-            else { const k = Math.min(1, t / 0.9); dz = (1 - easeOutBounce(k)) * 6; sc = 0.6 + 0.4 * Math.min(1, t / 0.5); }
-        }
+        if (an) { if (drawAssembly(p, an)) return; plotAnim.delete(p.key); popMachines(p, an); }
         const th = THEMES[p.theme] || THEMES.meadow;
         const inset = INSET + (1 - sc) * 2.5;
         // underwater silhouette and foam
@@ -315,6 +312,41 @@ const WORLD = (() => {
         if (hoverKey === p.key) { g.globalAlpha = 0.18 + 0.08 * Math.sin(T * 4); poly(plateCorners(p, dz + TOP, inset), '#ffffff'); g.globalAlpha = 1; }
         if (p.key === '7,2') { g.save(); g.globalCompositeOperation = 'lighter'; poly(plateCorners(p, dz + TOP, inset), null, `rgba(255,80,40,${0.45 + 0.25 * Math.sin(T * 2.5)})`, Math.max(2, 5 * cam.zoom)); g.restore(); }
         void o;
+    }
+    // Plot assembly: the island builds itself from 25 tiles that fall from the sky in a spiral from the
+    // centre, 35 ms apart, each landing with dust and a click that climbs in pitch. Returns true while
+    // the assembly is still running (then the finished plate takes over).
+    const SPIRAL = (() => { const c = []; for (let i = 0; i < 5; i++) for (let j = 0; j < 5; j++) c.push([i, j, Math.hypot(i - 2, j - 2), Math.atan2(j - 2, i - 2)]); c.sort((a, b) => a[2] - b[2] || a[3] - b[3]); return c; })();
+    function drawAssembly(p, an) {
+        const th = THEMES[p.theme] || THEMES.meadow;
+        const t = T - an.t0 - (an.delay || 0);
+        if (t < 0) { drawGhost(p); return true; }
+        an.landed = an.landed || new Set();
+        const order = SPIRAL.map(([i, j], k) => ({ i, j, k, d: k * 0.035 })).sort((a, b) => depth(p.x0 + a.i + 0.5, p.y0 + a.j + 0.5) - depth(p.x0 + b.i + 0.5, p.y0 + b.j + 0.5));
+        let done = true;
+        drawGhost(p);
+        for (const o of order) {
+            const lt = t - o.d; if (lt < 0) { done = false; continue; }
+            const fall = 6 - 0.5 * 44 * lt * lt;                  // falls from 6 units with gravity 44
+            let z = Math.max(0, fall);
+            if (fall <= 0) {
+                if (!an.landed.has(o.k)) { an.landed.add(o.k); o.quiet = an.quiet; run('tile', p, o); }
+                const bt = lt - Math.sqrt(12 / 44); z = Math.max(0, Math.sin(Math.min(1, bt / 0.16) * Math.PI) * 0.18 * Math.exp(-bt * 6));
+            } else done = false;
+            // edge tiles give up the plate inset on their outer side so the finished plate lines up
+            const l = o.i === 0 ? INSET : 0, r = o.i === 4 ? INSET : 0, f = o.j === 0 ? INSET : 0, b = o.j === 4 ? INSET : 0;
+            const cx = p.x0 + o.i + 0.5 + (l - r) / 2, cy = p.y0 + o.j + 0.5 + (f - b) / 2;
+            const e = l || r || f || b;
+            box(cx, cy, z - 0.22, 0.49 - (l + r) / 2, 0.49 - (f + b) / 2, TOP + 0.22, e ? th.pad : th.base, { topCol: (o.i + o.j) % 2 ? th.base : th.alt, seams: 2, lw: Math.max(1, 1.2 * cam.zoom) });
+        }
+        if (done && t > SPIRAL.length * 0.035 + 0.75) return false;
+        return true;
+    }
+    // After assembling, machines pop up one by one with an overshoot.
+    function popMachines(p, an) {
+        let i = 0;
+        for (const n of p.nodes) if (isNodeUnlocked(n)) { nodeAnim.set(n.id, { t0: T + 0.05 + i * 0.06, kind: 'spawn' }); i++; }
+        run('assembled', p, an);
     }
     function drawGhost(p) {
         const z = 0.02;
@@ -515,6 +547,7 @@ const WORLD = (() => {
             if (t > 0.9) nodeAnim.delete(n.id);
             else if (an.kind === 'grow' || an.kind === 'buy') { sq = 1 + 0.28 * Math.exp(-t * 7) * Math.sin(t * 28); drop = an.kind === 'grow' ? Math.max(0, 1 - t / 0.18) * 1.2 : 0; }
             else if (an.kind === 'reset') sq = Math.min(1, t / 0.6);
+            else if (an.kind === 'spawn') { if (t < 0) return null; const k = Math.min(1, t / 0.4); sq = Math.max(0.05, 1 + 2.7 * Math.pow(k - 1, 3) + 1.7 * Math.pow(k - 1, 2)); }
         }
         const LOD = K < 34, STUDS = K >= 40;
         let bb;
@@ -687,6 +720,11 @@ const WORLD = (() => {
                 if (f.wait <= 0) { const fc = freeCells(PLOTS.get(f.plot)); const c = fc[(Math.random() * fc.length) | 0]; f.tx = c[0] + (Math.random() - 0.5) * 0.4; f.ty = c[1] + (Math.random() - 0.5) * 0.4; f.wait = 1 + Math.random() * 4; }
             } else { const s = Math.min(d, 0.7 * dt); f.x += dx / d * s; f.y += dy / d * s; f.walk += dt * 10; }
         }
+        if (builder.chute) {
+            builder.hop = Math.max(0, builder.hop - dt * 1.25); builder.x += Math.sin(T * 1.7) * dt * 0.15;
+            if (builder.hop === 0) { builder.chute = false; builder.tx = builder.x; builder.ty = builder.y; run('landed', builder); }
+            return;
+        }
         const bd = Math.hypot(builder.tx - builder.x, builder.ty - builder.y);
         if (bd > 0.05) {
             const sp = bd > 5 ? 9 : 2.4;
@@ -700,6 +738,14 @@ const WORLD = (() => {
         if (!onScreen(base[0], base[1], 40)) return;
         const sw = Math.sin(f.walk) * 2.2 * s;
         g.fillStyle = 'rgba(0,0,0,0.25)'; const sh = P(f.x, f.y, TOP); g.beginPath(); g.ellipse(sh[0], sh[1], 5 * s, 2.5 * s, 0, 0, 7); g.fill();
+        if (f.chute && f.hop > 0.02) {
+            // parachute canopy with stripes and strings
+            const cx = base[0], cy = base[1] - 50 * s, rw = 28 * s;
+            g.strokeStyle = INK; g.lineWidth = Math.max(1, 1.2 * s);
+            g.beginPath(); g.moveTo(cx - rw * 0.9, cy); g.lineTo(base[0] - 3 * s, base[1] - 16 * s); g.moveTo(cx + rw * 0.9, cy); g.lineTo(base[0] + 3 * s, base[1] - 16 * s); g.moveTo(cx, cy); g.lineTo(base[0], base[1] - 16 * s); g.stroke();
+            for (let i = 0; i < 4; i++) { g.fillStyle = i % 2 ? '#ffffff' : '#e8453c'; g.beginPath(); g.moveTo(cx, cy); g.arc(cx, cy, rw, Math.PI + i * Math.PI / 4, Math.PI + (i + 1) * Math.PI / 4); g.closePath(); g.fill(); }
+            g.beginPath(); g.arc(cx, cy, rw, Math.PI, 0); g.closePath(); g.lineWidth = Math.max(1.4, 2 * s); g.stroke();
+        }
         g.lineWidth = Math.max(1, 1.2 * s); g.strokeStyle = INK;
         // legs
         g.fillStyle = isBuilder ? '#3b5bdb' : '#2b3a67';
@@ -763,7 +809,7 @@ const WORLD = (() => {
         const m = P(x, y, 0.45 + bob), m2 = P(x + dir[0] * 0.35, y + dir[1] * 0.35, 0.3 + bob), m3 = P(x, y, 0.72 + bob);
         poly([m3, m2, m], sail, INK, Math.max(1, 1.2 * cam.zoom));
         if (skin === 'pirate') { g.fillStyle = '#ffffff'; g.beginPath(); g.arc((m[0] + m2[0] + m3[0]) / 3, (m[1] + m2[1] + m3[1]) / 3, Math.max(1.5, 0.04 * K), 0, 7); g.fill(); }
-        if (env.night > 0.3) lights.push([x, y, 0.3, '#ffd27a', 0.6]);
+        if (env.night > 0.3) lights.push([x, y, 0.3, '#ffd27a', 0.6, true]);
     }
     function drawWhale() {
         if (T > whale.next && builtCache.size > 0 && !FXD.inHero()) {
@@ -849,7 +895,7 @@ const WORLD = (() => {
         box(x, y, 1.54, 0.2, 0.2, 0.08, '#e8453c');
         const lamp = P(x, y, 1.43);
         if (env.night > 0.15) {
-            lights.push([x, y, 1.43, '#fff1a8', 1.4]);
+            lights.push([x, y, 1.43, '#fff1a8', 1.4, true]);
             const a = T * 0.9; const L = 9 * K, spread = 0.12;
             g.save(); g.globalCompositeOperation = 'lighter';
             const gr = g.createLinearGradient(lamp[0], lamp[1], lamp[0] + Math.cos(a) * L, lamp[1] + Math.sin(a) * L * SQ);
@@ -1008,10 +1054,16 @@ const WORLD = (() => {
         if (env.night < 0.15 && lights.every(l => l[4] < 1)) { lights.length = 0; return; }
         g.save(); g.globalCompositeOperation = 'lighter';
         let nl = 0;
-        for (const [x, y, z, col, str] of lights) {
+        for (const [x, y, z, col, str, refl] of lights) {
             if (nl > 90) break;
             const s = P(x, y, z); if (!onScreen(s[0], s[1], 80)) continue;
             nl++;
+            if (refl && env.night > 0.2) {
+                // harbour reflection: a wobbling vertical streak on the water under the light
+                const w0 = P(x, y, 0); const len = (0.4 + z * 0.9) * K, a = 0.35 * env.night * Math.min(1, str);
+                g.globalAlpha = a; g.fillStyle = hexA(col, 0.9);
+                for (let k = 0; k < 7; k++) { const yy = w0[1] + 4 + k * len / 7, wob = Math.sin(T * 3 + k * 1.7 + x) * 3; const ww = Math.max(1.5, (0.1 - k * 0.011) * K); g.fillRect(w0[0] - ww / 2 + wob, yy, ww, len / 10); }
+            }
             const r = (0.55 + 0.25 * str) * K; const a = Math.min(1, Math.max(env.night, str >= 1 ? 0.5 : 0) * 0.6 * str);
             g.globalAlpha = a; g.drawImage(glowSprite(col), s[0] - r, s[1] - r * 0.8, r * 2, r * 1.6);
         }
@@ -1046,6 +1098,7 @@ const WORLD = (() => {
     // ---------- plot signs (the per plot total/s header) ----------
     let signInfo = new Map();
     function drawSigns() {
+        if (!view.signs) return;
         const zs = Math.min(1.15, Math.max(0.72, cam.zoom));
         const items = [];
         for (const p of PLOTS.values()) {
@@ -1271,6 +1324,7 @@ const WORLD = (() => {
         drawNight(); mark('night');
         drawRain(dt);
         run('post', plist);
+        run('bloom', cv);
         drawSigns(); mark('signs');
         run('ui', plist);
         drawFlyers(dt);
@@ -1313,7 +1367,7 @@ const WORLD = (() => {
         P, depth, unproject, onScreen, box, stud, poly, roundRect, tone, stamp, camStill, sparkle, drawStar, glowSprite, plateCorners, hull,
         spawn, burst, puff, spark, ring, floatText, fly, flashScreen, shadow, light: (l) => lights.push(l), hit: (h) => hits.push(h),
         builtCache: () => builtCache, plotVisibleGhost, freeCells, hashKey, rng, bricksFor, nodeAnim, lastCount, plotAnim, textureFor,
-        FXD, DIRECTOR, figs, builder, sendBuilder, refreshBuilt, computeBounds, syncFigs, easeOutBounce, hitstop, parts,
+        FXD, DIRECTOR, figs, builder, sendBuilder, view, refreshBuilt, computeBounds, syncFigs, easeOutBounce, hitstop, parts,
     };
     return {
         R, use, on, emit, setQuality, QUALITY, Q, perf,

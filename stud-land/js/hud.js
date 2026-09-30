@@ -473,6 +473,7 @@ const HUD = (() => {
         body.appendChild(opt('Day length', seg([[6, '6 MIN'], [12, '12 MIN'], [24, '24 MIN']], SETTINGS.get('dayLen'), v => SETTINGS.set('dayLen', v))));
         body.appendChild(el('div', 'note', 'Offline gain pays at most 3 minutes (5 with the pass) no matter how long you were away, so coming back never skips a pile of upgrades. Random and self limiting currencies (copper, silver, gold, lapis, diamonds, essence and more) do not pay offline, same as Upgrade Land.'));
         const help = el('button', 'big', '<span>CONTROLS AND SHORTCUTS</span>'); help.style.background = 'var(--blue)'; help.onclick = () => openPanel('help'); body.appendChild(help);
+        const rep = el('button', 'big', '<span>REPLAY INTRO</span>'); rep.style.background = 'var(--orange, #ff9a2e)'; rep.onclick = () => { closePanel(); if (typeof CINE !== 'undefined') CINE.intro({ fresh: false }); }; body.appendChild(rep);
         const wipe = el('button', 'big purple'); wipe.innerHTML = '<i class="fill"></i><span>HOLD TO WIPE SAVE</span>'; wipe.style.background = 'var(--red)';
         holdButton(wipe, 1200, () => ACTIONS.wipe());
         body.appendChild(wipe);
