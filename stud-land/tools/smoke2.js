@@ -60,6 +60,7 @@ const shot = (page, name) => page.screenshot({ path: path.join(OUT, name + '.png
     await page.click('#dvLab'); await page.waitForTimeout(400);
     const n = await page.evaluate(async () => { let k = 0; for (const e of FX.CATALOG) { try { FX.play(e.id, { force: true, ...(e.id === 'reset' ? { node: TREE_NODES.find(n => n.type === 'reset'), gain: 5, resetIds: new Set() } : {}), ...(e.id === 'plotBuilt' ? { plot: PLOTS.get('0,0') } : {}), node: e.id === 'reset' ? TREE_NODES.find(n => n.type === 'reset') : HUD.focus.upgrades[0] }); k++; } catch (err) { console.error('fx ' + e.id + ' ' + err.message); } } return k; });
     console.log('fx played', n);
+    await page.evaluate(() => { CINE.stop(); if (UIX.photo.on) UIX.photo.exit(); }); await page.waitForTimeout(300); // the sweep includes the intro and tour cinematics
     await page.waitForTimeout(700); await shot(page, 'v2-08-lab-world');
     for (const t of ['ui', 'sound', 'haptic', 'systems', 'export']) { await page.evaluate((t) => { [...document.querySelectorAll('#drawerTabs button')].find(b => b.textContent === ({ ui: 'UI MOTION', sound: 'SOUND', haptic: 'HAPTICS', systems: 'SYSTEMS', export: 'EXPORT' })[t]).click(); }, t); await page.waitForTimeout(250); }
     await shot(page, 'v2-09-lab-export');

@@ -112,6 +112,10 @@ const CINE = (() => {
     // ---------- intro ----------
     function intro(opts = {}) {
         if (S.on) stop();
+        if (typeof UIX !== 'undefined' && UIX.photo.on) UIX.photo.exit();
+        if (typeof WALK !== 'undefined' && WALK.on) WALK.exit();
+        if (typeof HUD !== 'undefined') { HUD.closeSheet(); HUD.closePanel(); }
+        if (typeof LAB !== 'undefined' && LAB.open) LAB.close();
         const home = PLOTS.get('0,0'); const cx = home.x0 + 2.5, cy = home.y0 + 2.5;
         if (R.DIRECTOR.mode === 'minimal') { hudIn(true); return; }
         makeClouds();
@@ -167,7 +171,7 @@ const CINE = (() => {
         const sk = $('cineSkip'); if (sk) sk.classList.remove('on');
         if (!instant) {
             b.classList.add('hud-in');
-            [0, 90, 180, 270, 360].forEach((d, i) => setTimeout(() => FX.sfx('tick', undefined, undefined, { vol: 0.5, pitch: 0.9 + i * 0.12 }), d));
+            [0, 90, 180, 270, 360].forEach((d, i) => setTimeout(() => FX.sfx('tick', undefined, undefined, { vol: 0.5, pitch: i * 2 }), d));
             setTimeout(() => FX.sfx('camWhoosh', undefined, undefined, { vol: 0.5 }), 60);
             setTimeout(() => b.classList.remove('hud-in'), 1500);
         }

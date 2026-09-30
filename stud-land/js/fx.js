@@ -243,14 +243,14 @@ const FX = (() => {
                 R.floatText(x, y, R.TOP + 2, `+${formatNum(c.gain)} ${curName(n.targetCurrency)}`, col, true);
                 flash(hexA(col, 0.28));
             }, 650);
-            sfx('reset', x, y); sfx('crumble', x, y); if (AUDIO.stinger) AUDIO.stinger('reset'); haptic('big');
+            sfx('reset', x, y); if (AUDIO.stinger) AUDIO.stinger('reset'); haptic('big');
         },
     });
     def({
         id: 'plotBuilt', name: 'New plot built', tier: 'hero', category: 'Gameplay', trigger: 'A plot is built (its baseplate would show in Upgrade Land)',
-        durationMs: 2400, sound: 'rise, then a tick per tile climbing in pitch, splash + plotBuilt fanfare on landing, stinger plot', haptic: 'big',
+        durationMs: 2400, sound: 'rise, then a tick per tile climbing half a semitone each (12 over the plate), splash + plotBuilt fanfare on landing, stinger plot', haptic: 'big',
         desc: 'Cinema bars slide in and the camera flies to the plot. The island builds itself: 25 tiles fall from the sky in a spiral from the centre, each landing with a puff and a click that climbs in pitch. When the last tile lands the plate slams, a shockwave rolls out over the sea, the machines pop up one by one, fireworks go up (at night) and a NEW PLOT banner slams in.',
-        spec: { letterbox: 'bars 9% of height, slide 0.35 s, hold 2.2 s', camera: 'fly to plot centre, exponential ease 4/s', tiles: '25 tiles, spiral order from the centre, 35 ms apart, fall 6 u with gravity 44 u/s2, 0.18 u bounce over 0.16 s', tileLanding: 'puff in the theme colour + tick at pitch 0.8 + 0.05 per tile (every tile on high, every 2nd on medium, none on low)', slam: 'after the last tile + 0.75 s: shake 0.8, hit-stop 80 ms, white ring 5 u + currency ring 3.5 u, 30 droplets', machines: 'pop in 60 ms steps, cubic overshoot to 1.1 then settle over 0.4 s', fireworks: '5 rockets at night, 26 sparks each', banner: 'NEW PLOT! 64 px + name 36 px, cubic-bezier(.2,1.6,.4,1) 0.5 s, out at 2.4 s', confetti: '70 pieces from the top of the screen' },
+        spec: { letterbox: 'bars 9% of height, slide 0.35 s, hold 2.2 s', camera: 'fly to plot centre, exponential ease 4/s', tiles: '25 tiles, spiral order from the centre, 35 ms apart, fall 6 u with gravity 44 u/s2, 0.18 u bounce over 0.16 s', tileLanding: 'puff in the theme colour + tick at -3 + 0.5 semitones per tile (every tile on high, every 2nd on medium, none on low)', slam: 'after the last tile + 0.75 s: shake 0.8, hit-stop 80 ms, white ring 5 u + currency ring 3.5 u, 30 droplets', machines: 'pop in 60 ms steps, cubic overshoot to 1.1 then settle over 0.4 s', fireworks: '5 rockets at night, 26 sparks each', banner: 'NEW PLOT! 64 px + name 36 px, cubic-bezier(.2,1.6,.4,1) 0.5 s, out at 2.4 s', confetti: '70 pieces from the top of the screen' },
         roblox: 'Letterbox: two Frames tweened in from screen edges. Camera: CameraType Scriptable, tween CFrame to a preset angle over the plot, restore after. Tiles: the baseplate is 25 Parts; each starts 6 studs x 4 up, anchored, and a task.delay(i * 0.035) TweenService tween with Quad In easing drops it, then a short Back Out bounce; play a Sound with PlaybackSpeed 0.8 + i * 0.05 on each landing. On the last one: Camera shake module, a ring ParticleEmitter burst on the water, and a Scale tween (Back Out) on each machine model.',
         run(c) {
             const p = c.plot; const cx = p.x0 + 2.5, cy = p.y0 + 2.5;
@@ -271,7 +271,7 @@ const FX = (() => {
         const x = p.x0 + o.i + 0.5, y = p.y0 + o.j + 0.5;
         if (R.FXD.amount() > 0.3 && (!o.quiet || o.k % 4 === 0)) { R.puff(x, y, R.TOP, th.alt); if (o.k % 3 === 0) R.burst(x, y, R.TOP + 0.05, th.base, 3, 1.2); }
         const every = R.Q.name === 'low' ? 0 : R.Q.name === 'medium' ? 2 : 1, now = performance.now();
-        if (every && o.k % every === 0 && !quiet() && now - lastTick > 28) { lastTick = now; sfx('tick', x, y, { vol: o.quiet ? 0.25 : 0.45, pitch: 0.8 + o.k * 0.05 }); }
+        if (every && o.k % every === 0 && !quiet() && now - lastTick > 28) { lastTick = now; sfx('tick', x, y, { vol: o.quiet ? 0.25 : 0.45, pitch: -3 + o.k * 0.5 }); }
     });
     // The whole plate has landed: the slam. Quiet plates (the intro ripple) get a ring and a small splash.
     WORLD.use('assembled', (p, an) => {

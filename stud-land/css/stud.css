@@ -500,3 +500,26 @@ body.hud-in #devbar { animation: slamTop .4s .45s both; }
 /* hero cinematics (tier celebration): the HUD steps aside while the camera shows the city */
 #hud, #devbar { transition: opacity .35s; }
 body.cine #hud, body.cine #devbar, body.cine #toasts { opacity: 0; pointer-events: none; }
+/* milestone takeover */
+#milestone { position: fixed; inset: 0; z-index: 47; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; visibility: hidden; opacity: 0; }
+#milestone.on { visibility: visible; animation: msLife 2.3s ease forwards; }
+#milestone .ms-burst { position: absolute; left: 50%; top: 50%; width: 130vmin; height: 130vmin; margin: -65vmin 0 0 -65vmin; border-radius: 50%;
+  background: repeating-conic-gradient(rgba(255,222,90,0.55) 0 15deg, rgba(255,222,90,0) 15deg 30deg);
+  -webkit-mask: radial-gradient(circle, #000 12%, transparent 62%); mask: radial-gradient(circle, #000 12%, transparent 62%); }
+#milestone.on .ms-burst { animation: msSpin 10s linear infinite, msBurstIn .45s cubic-bezier(.2,1.4,.4,1) both; }
+#milestone .ms-k, #milestone .ms-n, #milestone .ms-c { position: relative; font-family: "Luckiest Guy"; color: #fff; text-align: center; }
+#milestone .ms-k { font-size: 22px; letter-spacing: 3px; margin-bottom: 10px; color: var(--yellow); text-shadow: 0 3px 0 var(--ink), 2px 2px 0 var(--ink), -2px 2px 0 var(--ink), 2px -2px 0 var(--ink), -2px -2px 0 var(--ink); }
+#milestone .ms-n { font-size: 76px; line-height: 1.02; padding: 0 16px; text-shadow: 0 6px 0 var(--ink), 4px 4px 0 var(--ink), -4px 4px 0 var(--ink), 4px -4px 0 var(--ink), -4px -4px 0 var(--ink), 0 -4px 0 var(--ink), 4px 0 0 var(--ink), -4px 0 0 var(--ink); }
+#milestone .ms-c { font-size: 30px; color: var(--yellow); text-shadow: 0 4px 0 var(--ink), 2px 2px 0 var(--ink), -2px 2px 0 var(--ink), 2px -2px 0 var(--ink), -2px -2px 0 var(--ink); }
+#milestone.on .ms-k { animation: capIn .4s both; }
+#milestone.on .ms-n { animation: bIn .5s .1s cubic-bezier(.2,1.6,.4,1) both; }
+#milestone.on .ms-c { animation: capIn .4s .3s both; }
+@keyframes msLife { 0% { opacity: 0; } 8% { opacity: 1; } 82% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes msSpin { to { rotate: 360deg; } }
+@keyframes msBurstIn { from { scale: 0.2; } to { scale: 1; } }
+.ms-coin { position: fixed; z-index: 48; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #fff6b0, #ffd23f 45%, #e0a100); border: 2.5px solid var(--ink); pointer-events: none; animation: msCoin 1.1s cubic-bezier(.3,.6,.5,1) both; }
+@keyframes msCoin { 0% { translate: 0 0; scale: 0.4; } 35% { translate: calc(var(--dx) * 0.5) calc(var(--dy) * -0.6); scale: 1.1; } 100% { translate: var(--dx) var(--dy); scale: 0.8; opacity: 0; } }
+@media (max-width: 700px) { #milestone .ms-n { font-size: 48px; } #milestone .ms-c { font-size: 22px; } #milestone .ms-k { font-size: 16px; } }
+@media (prefers-reduced-motion: reduce) { #milestone.on .ms-burst { animation: none; } }
+/* short landscape phones: keep toasts clear of the camera controls on the right */
+@media (max-height: 500px) and (min-width: 721px) { #toasts { left: calc(50% - 90px); width: min(400px, calc(100% - 460px)); } }

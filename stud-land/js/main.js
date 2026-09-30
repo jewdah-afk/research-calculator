@@ -348,6 +348,7 @@ function initInput() {
         const h = WORLD.pick(x, y);
         if (WALK.on && (!h || h.type === 'plot')) { HUD.closeSheet(); WALK.tapTo(x, y); return; }
         if (!h) { HUD.closeSheet(); return; }
+        if ((h.type === 'star' || h.type === 'serpent') && SKY.tap(h)) return;
         if (h.type === 'code') { META.collect(h.id); return; }
         if (h.type === 'whale') { META.bump('whales'); META.secret('WHALE'); FX.play('splash', { x: WORLD.unproject(x, y, 0)[0], y: WORLD.unproject(x, y, 0)[1], force: true }); return; }
         if (h.type === 'node') { AUDIO.tap(); HUD.openNode(h.id); const n = NODE_MAP.get(h.id); HUD.focus = PLOTS.get(plotKeyOf(n.coords[0], n.coords[1])) || HUD.focus; }
@@ -368,6 +369,7 @@ function initInput() {
     window.addEventListener('keydown', e => {
         if (e.target && (e.target.tagName === 'INPUT')) return;
         if (document.getElementById('title')) return;
+        if (typeof CINE !== 'undefined' && CINE.on === 'intro') return; // Esc skips it (cine.js); nothing else fires under the intro
         const k = e.key.toLowerCase(); const step = 1.2 / cam.zoom;
         if (k === 'v') { HUD.closeSheet(); WALK.toggle(); return; }
         if (k === 'p') { if (UIX.photo.on) UIX.photo.exit(); else UIX.photo.enter(); return; }

@@ -30,7 +30,13 @@ This draft doubles as the **build reference for the Roblox version**:
 - **Weather and time.**
   - A day and night cycle with a colour grade.
   - Clear, rain with a rainbow after, storms with lightning, dawn fog, rare night snow, gusting wind.
-- **Effects.** 27 catalogued effects under an attention budget (hero, support, ambient), including:
+- **First impression (the wow layer).**
+  - A first-play intro: dive through the clouds, watch the city build itself tile by tile, the builder parachutes in and the HUD slams into place. Replay it from Settings.
+  - Every new plot assembles from 25 falling tiles, then its machines pop up.
+  - The city grows through Village, Town, City and Metropolis, each with a one-time celebration: a STUD CITY hillside sign that gains a letter per plot, a downtown skyline with a live billboard and searchlights, and the Stud Express train looping the city.
+  - Golden-hour god rays over a painted sunset sea, aurora on the night water, light reflections, tappable shooting stars, a brick sea serpent, milestone takeovers from 1K to a googol, and bloom on Ultra.
+  - Photo mode TOUR flies over every plot you own.
+- **Effects.** 39 catalogued effects under an attention budget (hero, support, ambient), including:
   - hit-stop, letterbox, zoom punch and camera shake on hero moments
   - flash limits
   - Full, Reduced and Minimal modes
@@ -40,7 +46,7 @@ This draft doubles as the **build reference for the Roblox version**:
   - Proximity prompts: hold E to keep buying.
   - Footsteps change with the surface, and you can wear trails.
 - **Meta (cosmetic only).**
-  - 26 badges.
+  - 32 badges.
   - 8 hidden golden code bricks, plus 5 secret codes and a launch code.
   - A wardrobe of hats, outfits, trails and boat paint.
   - A next goal guide.
@@ -53,7 +59,7 @@ This draft doubles as the **build reference for the Roblox version**:
   - Photo mode with a time slider, filters, tilt-shift and snapshot.
   - Settings for quality, UI size, reduce flashing and five volume buses.
   - Phone portrait and landscape layouts.
-- **Sound.** Synthesized: adaptive generative music, per-theme ambience, weather audio, spatial effects and haptics.
+- **Sound.** Synthesized: adaptive generative music, per-theme ambience, weather audio, spatial effects and haptics. 75 catalogued sounds and 14 haptics.
 - **Offline gain** is capped at 3:00, or 5:00 with the Offline Pass toggle.
 
 ## Dev bar
@@ -77,6 +83,7 @@ This draft doubles as the **build reference for the Roblox version**:
 | Buy / max / buy mode / buy all | B, M, 1 to 4, Space (or hold BUY) | Card buttons, hold BUY |
 | Walk mode | V, then WASD, Shift, Space, hold E | WALK, joystick, JUMP, action button |
 | Photo mode / FX Lab / help | P, L, ? | PHOTO button |
+| Skip the intro | Esc | SKIP |
 | Close | Esc | X |
 
 ## Tests and tools
@@ -85,6 +92,9 @@ This draft doubles as the **build reference for the Roblox version**:
 NODE_PATH=$(npm root -g) node tools/parity-test.js path/to/upgtree/index.html   # math parity
 NODE_PATH=$(npm root -g) node tools/smoke.js shots/      # core flow + screenshots
 NODE_PATH=$(npm root -g) node tools/smoke2.js shots/     # v2 systems + screenshots
+NODE_PATH=$(npm root -g) node tools/wow.js shots/ [phone] # intro, tour, replay
+NODE_PATH=$(npm root -g) node tools/wow-city.js shots/   # tiers, train, sign, downtown
+NODE_PATH=$(npm root -g) node tools/wow-sky.js shots/    # sky and sea spectacle, sound ids
 node tools/balance.js 16 --write-benchmark               # bot timeline
 ```
 

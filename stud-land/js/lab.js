@@ -37,7 +37,9 @@ const LAB = (() => {
     }
     function renderWorld(body) {
         body.appendChild(el('div', 'lab-note', 'Tiers: HERO one at a time and may move the camera; SUPPORT at most 3 starts per 250 ms; AMBIENT background, first to go when the budget is tight. PLAY forces the effect on the focused plot.'));
-        for (const cat of ['Gameplay', 'World', 'Weather', 'UI']) {
+        const order = ['Gameplay', 'Cinematic', 'City', 'World', 'Sea', 'Sky', 'Weather', 'Render', 'UI'];
+        const cats = order.concat([...new Set(FX.CATALOG.map(e => e.category))].filter(c => !order.includes(c)));
+        for (const cat of cats) {
             const list = FX.CATALOG.filter(e => e.category === cat); if (!list.length) continue;
             body.appendChild(el('div', 'hsec', cat.toUpperCase()));
             for (const e of list) {

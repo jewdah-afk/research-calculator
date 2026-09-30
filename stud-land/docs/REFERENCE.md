@@ -19,15 +19,18 @@ This HTML draft is the spec for the Roblox game. Every number below comes from t
 | Plots | `js/plots.js` | Groups nodes into 5x5 plots, build rules, progression order, level caps |
 | Bot | `js/bot.js` | Greedy autoplayer for SIM and balance |
 | Renderer core | `js/world.js` | Projection, camera, plates, machines, sea, sun and shadows, sprite atlas, particles, signs, hooks |
-| Effects | `js/fx.js` | The effects catalog (27 entries) and UI motion list, drones, fireworks, confetti, lightning, income pops |
+| Effects | `js/fx.js` | The effects catalog (27 core entries, 39 with the wow layer) and UI motion list, drones, fireworks, confetti, lightning, income pops, plot assembly hooks |
 | Props | `js/props.js` | 50 themed prop types placed on free cells |
 | Weather and life | `js/env.js` | Weather director, fog, snow, storm tint, balloon, plane banner, fish, buoys, ducks |
 | Walk mode | `js/walk.js` | Avatar, collision, proximity prompt, footsteps, trails |
+| City | `js/city.js` | City tiers, STUD CITY sign, downtown skyline, billboard, searchlights, Stud Express train, bridge traffic |
+| Sky and sea | `js/sky.js` | God rays and sunset sea, aurora, shooting stars, sea serpent, milestone takeovers, bloom |
+| Cinematics | `js/cine.js` | First-play intro and the photo-mode tour |
 | Meta | `js/meta.js` | Badges, code bricks, secret codes, wardrobe, next goal guide, stats history |
 | HUD | `js/hud.js` | Counters, stack, zone bar, machine card, panels, settings |
 | Extras | `js/ui-extras.js` | Minimap, photo mode, colour grade, title screen, weather button |
 | FX Lab | `js/lab.js` | The living style guide and JSON export |
-| Sound | `js/audio.js` | Synth engine: buses, reverb, music, catalog, haptics |
+| Sound | `js/audio.js` | Synth engine: buses, reverb, music, 75 catalogued sounds, 14 haptics, voice cap 24 |
 | Glue | `js/main.js` | Loop, input, dev bar, actions, save, offline, title flow |
 
 **Rule:** nothing outside `engine.js` changes currencies or levels, except the explicit dev tools (MAX NEXT PLOT, SIM, BOT). Every other feature reads state and listens to engine events (`buy`, `reset`, `currency`).
@@ -42,9 +45,16 @@ This HTML draft is the spec for the Roblox game. Every number below comes from t
 6. `afterItems`
 7. `sky`
 8. `post`
-9. `ui`
+9. `bloom` (gets the canvas; used for Ultra bloom)
+10. `ui`
 
-Separately, `grow` fires whenever a machine gains a brick. Named events use `WORLD.on` and `WORLD.emit`: `whale`, `autoQuality`.
+Moment hooks fire when something happens rather than every frame:
+- `grow`: a machine gains a brick.
+- `tile`: one tile of an assembling plate lands (plot, tile index).
+- `assembled`: the last tile landed; machines start popping up (plot, assembly state).
+- `landed`: the parachuting builder touched down.
+
+Named events use `WORLD.on` and `WORLD.emit`: `whale`, `autoQuality`. `R.view.signs` hides the plot signs during cinematics.
 
 In Roblox the same split becomes:
 - **ModuleScripts:** Engine (shared), Plots, Effects (client), Props (server builds, client animates), Weather (server state, client visuals), Walk (character), Meta (server authority), HUD (client).
@@ -279,6 +289,16 @@ The full list, with specs and Roblox recipes, is in **FX LAB > WORLD FX** and in
 | fireworks | support | New plot at night |
 | lightning | support | Storms |
 | splash, confetti, shockwave | support | Building blocks for the others |
+| introCinematic | hero | First play on a new save, REPLAY INTRO in Settings |
+| tourCinematic | hero | TOUR in photo mode |
+| cityTier | hero | 5, 12 and 24 plots built, once each |
+| citySign | support | A letter lands per plot until STUD CITY is complete |
+| studExpress, downtown | ambient | Town and up |
+| godRays | ambient | Sunrise and sunset |
+| aurora, shootingStar | ambient | Night |
+| seaSerpent | support | Every 6 to 10 minutes |
+| milestone | hero | Studs pass 1K, 1M ... a googol, first time |
+| bloom | ambient | Ultra quality |
 
 ## 9. HUD and UI
 
@@ -321,7 +341,7 @@ The full list, with specs and Roblox recipes, is in **FX LAB > WORLD FX** and in
 **Panels:**
 - REBUILD: every portal with GO TO and HOLD.
 - PLOTS: progress, with GO or LOOK.
-- BADGES: 26 badges.
+- BADGES: 32 badges (26 core, 3 city tiers, 3 sky and sea).
 - CODES: letter slots, redeem box, secrets with hints, wardrobe.
 - STATS: a log chart of Studs and Studs/s, plus counters.
 - SETTINGS: quality, tilt-shift, vignette, colour grade, UI size S/M/L/XL, reduce flashing, five volume sliders, effects mode, vibration, names, offline pass, day length, controls, hold to wipe (1.2 s).
@@ -391,6 +411,8 @@ The full list, with specs and Roblox recipes, is in **FX LAB > WORLD FX** and in
 - **Ambience** follows the focused plot theme and the weather.
 - **Pitch ladder:** buys climb a semitone (1.0595) per quick buy, up to 14 steps, and reset after 0.9 s idle.
 - **Spatial:** pan follows the effect's screen position.
+- **API:** `AUDIO.play(id, { pan, vol, pitch, rate, dist })`. `pitch` is in semitones, `rate` is a speed multiplier. At most 24 voices; low-priority sounds (footsteps, chug) are skipped under load instead of cutting others off.
+- **Wow layer sounds:** `whistle`, `chug`, `tierUp` (also `AUDIO.stinger('tier')`), `letterDrop`, `towerRise`, `shootingStar`, `serpent`, `milestone`, `searchlight`. Plot tiles tick at -3 + 0.5 semitones per tile, so a plate plays a rising octave as it builds.
 
 Every sound and haptic is in FX LAB > SOUND and HAPTICS. Each entry has how it is synthesized and which Roblox asset and SoundGroup settings to use.
 
@@ -404,6 +426,7 @@ Every sound and haptic is in FX LAB > SOUND and HAPTICS. Each entry has how it i
   - no belts flow under 40
   - no props under 18
 - **Caps:** 700 particles, 90 glows, 14 drones. Ambience runs only on screen.
+- **Wow layer costs:** track segments, towers, sign columns and serpent segments are depth-sorted items culled off screen; god rays and aurora skip on low quality; bloom only on Ultra; the intro clouds are 8 pre-rendered sprites.
 - **Caustics** render at one-third resolution every other frame.
 - **Auto quality.** If frames average over 30 ms for 3 s, the canvas resolution drops half a step. After that the preset drops: ultra, high, medium, low.
 - **Roblox:**
@@ -412,11 +435,62 @@ Every sound and haptic is in FX LAB > SOUND and HAPTICS. Each entry has how it i
   - Lights off by distance.
   - Props as MeshParts with RenderFidelity Automatic.
 
-## 14. Tools
+## 14. The wow layer (first impressions and spectacle)
+
+Everything here is cosmetic and exists to make a new player stop and stare. None of it reads or writes game math beyond counting built plots and reading the Studs total.
+
+**Plot assembly** (`world.js` + `fx.js`)
+- A new plate builds itself from 25 tiles that fall 6 u with gravity 44 u/s2, in a spiral from the centre, 35 ms apart, each bouncing 0.18 u.
+- Every landing puffs theme dust and ticks half a semitone higher. The last one slams: shake 0.8, hit-stop 80 ms, two rings, 30 droplets.
+- Then the machines pop up 60 ms apart with a cubic overshoot to 1.1.
+- Roblox: the baseplate is 25 Parts dropped with `task.delay(i * 0.035)` tweens (Quad In, then Back Out).
+
+**First-play intro** (`cine.js`, about 7 s, SKIP or Esc)
+
+| Time | Beat |
+| --- | --- |
+| 0 to 2.7 s | Dive through 34 cartoon cloud cards (near white, far blue) that push outward; "SOMEWHERE IN THE BRICK SEA" |
+| 0.3 to 6.5 s | Camera eases in: zoom 0.2 to 1.12 x default, angle -1.25 rad to 0, 7 u sideways, cubic in-out |
+| 2.3 s | Stud Square starts assembling; every other built plot follows 0.32 s later per plot of distance |
+| 4.2 s | "WELCOME TO / STUD VILLAGE" (the tier name; "WELCOME BACK TO" on a replay) |
+| 4.3 s | Blueprint beam on the first machine until it is bought |
+| about 6.4 s | Builder lands by parachute (from 8 u at 1.25 u/s) |
+| landing + 0.25 s | HUD slams in: counters drop, tiles slide 70 ms apart, zone bar rises, dock slides, then the guide pulses |
+
+- Roblox: Scriptable camera tween, a ScreenGui cloud layer, a parachute Model on the character, HUD frames tweened with Back Out. Save `IntroSeen`.
+- Photo mode **TOUR** flies a nearest-neighbour path over up to 16 plots: 1.3 s flight, then a slow push in while orbiting at 0.1 rad/s, with a location card.
+
+**The city grows** (`city.js`)
+
+| Tier | Plots | What appears |
+| --- | --- | --- |
+| Village | 1 to 4 | STUD on the hillside sign, a letter per plot |
+| Town | 5 to 11 | STUD CITY complete, downtown islet with 2 towers, billboard, Stud Express |
+| City | 12 to 23 | 3 more towers |
+| Metropolis | 24+ | 4 more towers (9), searchlights at night |
+
+- Each tier plays one hero celebration: the camera pulls back to frame the whole city, the HUD steps aside, "YOUR CITY GREW INTO / STUD TOWN", 7 firework volleys, confetti, towers growing 0.35 s apart. It is saved (`tierMax`) so it never repeats, and each tier has a badge.
+- The sign stands on a brick hill behind Stud Square (centre -12, -12), letters 1 u tall, chase-lit at night.
+- Downtown sits behind the sign (centre about -15.3, -15.3): glass bands by day, lit rooms at night, red aviation lights, a helipad, a live Studs/s billboard.
+- The Stud Express runs 0.9 u outside the built bounds at z 1.1 (never closer than -4.4, to clear the lighthouse), 2.2 u/s, 4 cars, smoke, headlight reflections, a whistle when it comes into view.
+- Cars cross the long bridge to the Red canyon plots.
+
+**Sky and sea** (`sky.js`)
+- **Golden hour** (peaks at 7:00 and 18:12): 7 god rays and a glare from the sun side; the sea is painted orange to pink to violet with a flickering glitter path under the islands.
+- **Night:** 5 aurora ribbons reflected on the sea; lights by the water (lighthouse, boat, buoys, train, cars) cast wobbling reflection streaks.
+- **Shooting stars** every 8 to 16 s. The whole streak is tappable (Make a Wish badge).
+- **Brick sea serpent** every 6 to 10 minutes: it finds the longest straight run of open sea on screen and swims it, humps rolling, splashing, blinking. Tap it (Serpent Spotter badge).
+- **Milestones:** the first time Studs pass 1K, 1M ... 1e33, 1e50, 1e75, a googol and on to 1e300, a sunburst takeover names the number in words, coins spray from the counter.
+- **Bloom (Ultra):** quarter-resolution contrast-crushed blur added back, 16% by day to 42% at night.
+
+## 15. Tools
 
 | Command | What it checks |
 | --- | --- |
 | `node tools/parity-test.js <upgtree index.html>` | Engine matches Upgrade Land bit for bit |
 | `node tools/smoke.js <dir>` | Core flow, dev bar, panels, phone, screenshots |
 | `node tools/smoke2.js <dir>` | Walk, photo, FX Lab (plays all effects), codes, badges, weather, phone walk |
+| `node tools/wow.js <dir> [phone]` | First-play intro beats, tour, replay intro |
+| `node tools/wow-city.js <dir>` | Tier celebrations, train, sign, downtown by day and night |
+| `node tools/wow-sky.js <dir>` | God rays, aurora, shooting star and serpent taps, milestone, bloom; every sound id the game uses exists |
 | `node tools/balance.js 16 --write-benchmark` | Bot timeline for the TIMELINE panel |
