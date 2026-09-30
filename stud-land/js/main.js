@@ -1,7 +1,7 @@
 // Boot, game loop, input and the actions the HUD and dev bar call.
 // The engine runs on a fixed 100 ms tick, exactly like Upgrade Land. Speed and the bot only change
 // how many ticks run per frame, never the math inside a tick.
-function META() {
+function SAVE_META() {
     if (!gameState.studMeta || typeof gameState.studMeta !== 'object') gameState.studMeta = {};
     const m = gameState.studMeta;
     if (typeof m.playMs !== 'number') m.playMs = 0;
@@ -57,6 +57,7 @@ function computeSignInfo() {
             else { const c = pm.cost; const r = calculateGainRate(c); info.rateText = r > 0 ? `+${formatNum(r)} ${curName(c)}/s` : `${curName(c)}: ${formatNum(getCurr(c))}`; }
             const st = plotStats(p);
             info.frac = st.max ? Math.min(1, st.lv / st.max) : 0; info.ready = st.affordable;
+            info.popCur = pm.prod && calculateGainRate(pm.prod) > 0 ? pm.prod : null;
         } else if (!p.soon) {
             let need = plotReqsValid(p) ? p.buildReqs.map(id => NODE_MAP.get(id)).find(n => getLevel(n.id) < 1) : null;
             if (!need) {
@@ -87,17 +88,16 @@ function computeBest() {
 function checkPlots(initial) {
     if (updateDecorationUnlocks() || initial) { }
     WORLD.refreshBuilt();
-    const built = WORLD.builtPlots(); const m = META();
+    const built = WORLD.builtPlots(); const m = SAVE_META();
     const fresh = [];
     for (const k of built) if (!GAME.prevBuilt.has(k)) fresh.push(k);
     for (const k of fresh) {
         if (m.plotBuiltAt[k] === undefined) { m.plotBuiltAt[k] = m.playMs; m.plotHow[k] = initial ? 'loaded' : GAME.botOn ? 'bot' : GAME.mode; }
     }
     if (!initial && fresh.length) {
-        fresh.forEach((k, i) => WORLD.onPlotBuilt(PLOTS.get(k), i === fresh.length - 1));
+        fresh.forEach((k, i) => FX.play('plotBuilt', { plot: PLOTS.get(k), focus: i === fresh.length - 1, force: i > 0 || fresh.length > 1 }));
         const last = PLOTS.get(fresh[fresh.length - 1]);
         HUD.banner(fresh.length > 1 ? `${last.name} +${fresh.length - 1} more` : last.name);
-        AUDIO.plotBuilt(); HAPTIC.big();
         HUD.focus = last;
     }
     if (fresh.length || initial) { GAME.prevBuilt = new Set(built); WORLD.computeBounds(); WORLD.syncFigs(); }
@@ -138,7 +138,7 @@ const ACTIONS = {
     focusNode(id) { const n = NODE_MAP.get(id); if (!n) return; WORLD.cam.tx = n.coords[0]; WORLD.cam.ty = n.coords[1]; HUD.openNode(id); },
     focusPlot(key) { const p = PLOTS.get(key); if (!p) return; WORLD.cam.tx = p.x0 + 2.5; WORLD.cam.ty = p.y0 + 2.5; HUD.focus = p; AUDIO.tap(); },
     wipe() {
-        stopSim(); wipeGame(); META(); GAME.prevBuilt = new Set(); BOT.clear();
+        stopSim(); wipeGame(); SAVE_META(); GAME.prevBuilt = new Set(); BOT.clear();
         HUD.closePanel(); HUD.closeSheet(); checkPlots(true); WORLD.cam.tx = 0; WORLD.cam.ty = 0; HUD.toast('Save wiped. Fresh start!');
         saveGame();
     },
@@ -170,8 +170,7 @@ const ACTIONS = {
         }
         clearCaches(true); needsNodeUpdate = true;
         ACTIONS.focusPlot(p.key);
-        if (!quietFx()) WORLD.celebrate(touched);
-        AUDIO.maxed(); HAPTIC.maxed();
+        if (!quietFx()) FX.play('maxPlot', { nodes: touched, force: true });
         HUD.toast(`Maxed ${p.name}: +${formatNum(total)} levels on ${touched.length} machines`, '#fff3b0');
         if (limited) HUD.toast(`${limited} machine${limited > 1 ? 's' : ''} stopped where the next price passes what a wallet can hold`, '#ffe3c2');
         checkPlots(false);
@@ -237,15 +236,15 @@ function stopSim(found) {
     HUD.sim(false);
     const realMs = performance.now() - s.t0;
     if (found) {
-        META().sims.push({ key: found.key, name: found.name, simMs: s.ms, realMs });
+        SAVE_META().sims.push({ key: found.key, name: found.name, simMs: s.ms, realMs });
         HUD.toast(`Bot built ${found.name} after ${formatTime(s.ms)} of play`, '#d8f7e4');
     } else if (s.ms >= SIM_LIMIT_MS) HUD.toast(`Bot found no new plot in ${formatTime(s.ms)} of play. Try MAX NEXT PLOT.`, '#ffd9d9');
     else HUD.toast(`Sim stopped after ${formatTime(s.ms)} of play`);
-    for (const k of WORLD.builtPlots()) if (!s.startBuilt.has(k) && !META().plotHow[k]) META().plotHow[k] = 'sim';
+    for (const k of WORLD.builtPlots()) if (!s.startBuilt.has(k) && !SAVE_META().plotHow[k]) SAVE_META().plotHow[k] = 'sim';
     checkPlots(false);
 }
 function simStep() {
-    const s = GAME.sim; const t0 = performance.now(); const m = META();
+    const s = GAME.sim; const t0 = performance.now(); const m = SAVE_META();
     while (performance.now() - t0 < 26) {
         BOT.run(5000); m.playMs += 5000; s.ms += 5000;
         updateDecorationUnlocks();
@@ -261,33 +260,33 @@ function simStep() {
 
 // ---------- engine events to effects ----------
 function fxBuy(e) {
-    WORLD.onBuy(e);
-    AUDIO.buy(e.newLevel >= getMaxLevel(e.node));
-    if (e.newLevel >= getMaxLevel(e.node)) { AUDIO.maxed(); HAPTIC.maxed(); } else HAPTIC.buy();
-    const s = WORLD.screenOf(e.node.coords[0], e.node.coords[1]);
+    const maxed = e.newLevel >= getMaxLevel(e.node);
     let from = $('heroIcon');
     if (e.node.costCurrency !== 'P') { const row = [...document.querySelectorAll('.srow')].find(r => r.querySelector('img') && r.querySelector('img').src === curIcon(e.node.costCurrency, 64)); if (row) from = row; }
-    const r = from.getBoundingClientRect();
-    WORLD.fly(r.left + r.width / 2, r.top + r.height / 2, s[0], s[1], curHex(e.node.costCurrency), 4);
+    FX.play('buy', { node: e.node, bought: e.bought, big: maxed, fromEl: from });
+    if (maxed) FX.play('maxed', { node: e.node, force: true });
 }
 EVENTS.on('buy', (e) => {
+    META.bump(e.isAutomated ? 'autoBuys' : 'buys');
+    GAME.activity = Math.min(1, (GAME.activity || 0) + (e.isAutomated ? 0.01 : 0.12));
     if (quietFx()) return;
     if (e.isAutomated) {
-        WORLD.onBuy(e);
+        FX.play('autoBuy', { node: e.node });
         const now = performance.now(); if (now - GAME.lastAutoSfx > 180) { GAME.lastAutoSfx = now; AUDIO.autoTick(); }
         return;
     }
     if (GAME.cascade) { GAME.cascade.push(e); return; }
     if (GAME.mode === 'max') return;
-    if (GAME.botOn) { if (Math.random() < 0.25) WORLD.onBuy(e); return; }
+    if (GAME.botOn) { if (Math.random() < 0.25) FX.play('buy', { node: e.node, bought: e.bought }); return; }
     fxBuy(e);
 });
 EVENTS.on('reset', (e) => {
+    META.bump('resets');
     if (quietFx()) return;
-    WORLD.onReset(e); AUDIO.reset(); HAPTIC.big();
+    FX.play('reset', e);
     if (!GAME.botOn) HUD.toast(`Rebuilt! +${formatNum(e.gain)} ${curName(e.node.targetCurrency)}`, '#efe2ff');
 });
-EVENTS.on('currency', (k) => { if (quietFx() || k === 'P') return; HUD.toast(`New: ${curName(k)}`, '#e6f4ff'); });
+EVENTS.on('currency', (k) => { if (quietFx() || k === 'P') return; HUD.toast(`New: ${curName(k)}`, '#e6f4ff'); FX.play('newCurrency', { key: k, x: HUD.focus ? HUD.focus.x0 + 2.5 : 0, y: HUD.focus ? HUD.focus.y0 + 2.5 : 0 }); });
 
 // ---------- input ----------
 function initInput() {
@@ -318,6 +317,7 @@ function initInput() {
             cam.tAngle = pinch.ang + (ang - pinch.a); syncRot();
             return;
         }
+        if (drag && WALK.on) { drag.moved += Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y); drag.x = e.clientX; drag.y = e.clientY; return; }
         if (drag) {
             const w0 = WORLD.unproject(drag.x, drag.y), w1 = WORLD.unproject(e.clientX, e.clientY);
             cam.x += w0[0] - w1[0]; cam.y += w0[1] - w1[1]; cam.tx = cam.ty = null;
@@ -346,10 +346,16 @@ function initInput() {
     }, { passive: false });
     function tap(x, y) {
         const h = WORLD.pick(x, y);
+        if (WALK.on && (!h || h.type === 'plot')) { HUD.closeSheet(); WALK.tapTo(x, y); return; }
         if (!h) { HUD.closeSheet(); return; }
+        if (h.type === 'code') { META.collect(h.id); return; }
+        if (h.type === 'whale') { META.bump('whales'); META.secret('WHALE'); FX.play('splash', { x: WORLD.unproject(x, y, 0)[0], y: WORLD.unproject(x, y, 0)[1], force: true }); return; }
         if (h.type === 'node') { AUDIO.tap(); HUD.openNode(h.id); const n = NODE_MAP.get(h.id); HUD.focus = PLOTS.get(plotKeyOf(n.coords[0], n.coords[1])) || HUD.focus; }
         else if (h.type === 'plot') ACTIONS.focusPlot(h.key);
-        else if (h.type === 'lighthouse') { AUDIO.maxed(); HUD.toast(WORLD.env.night > 0.3 ? 'The keeper waves. Safe sailing!' : 'The lighthouse keeper is napping until dark.'); }
+        else if (h.type === 'lighthouse') {
+            if (WORLD.env.night > 0.3) { HUD.toast('The keeper waves and flashes a code at you.'); META.secret('LIGHTHOUSE'); FX.sfx('foghorn'); }
+            else { HUD.toast('The lighthouse keeper is napping until dark.'); AUDIO.tap(); }
+        }
     }
     const rot = $('camRot');
     function syncRot() { let a = cam.tAngle; a = Math.atan2(Math.sin(a), Math.cos(a)); rot.value = Math.round(a * 180 / Math.PI); }
@@ -361,7 +367,15 @@ function initInput() {
     $('camHome').onclick = () => { const p = HUD.focus || PLOTS.get('0,0'); ACTIONS.focusPlot(p.key); cam.tZoom = defaultZoom(); };
     window.addEventListener('keydown', e => {
         if (e.target && (e.target.tagName === 'INPUT')) return;
+        if (document.getElementById('title')) return;
         const k = e.key.toLowerCase(); const step = 1.2 / cam.zoom;
+        if (k === 'v') { HUD.closeSheet(); WALK.toggle(); return; }
+        if (k === 'p') { if (UIX.photo.on) UIX.photo.exit(); else UIX.photo.enter(); return; }
+        if (k === 'l') { LAB.toggle(); return; }
+        if (k === '?' || (k === '/' && e.shiftKey)) { HUD.openPanel('help'); return; }
+        if (WALK.on && ['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', 'e', 'shift'].includes(k)) return;
+        if (k === 'escape' && UIX.photo.on) { UIX.photo.exit(); return; }
+        if (k === 'escape' && LAB.open) { LAB.close(); return; }
         const move = (dx, dy) => { const c = Math.cos(cam.angle + Math.PI / 4), s = Math.sin(cam.angle + Math.PI / 4); cam.x += dx * c + dy * s; cam.y += -dx * s + dy * c; cam.tx = cam.ty = null; };
         if (k === 'q') turn(-Math.PI / 2); else if (k === 'e') turn(Math.PI / 2);
         else if (k === 'arrowleft' || k === 'a') move(-step, 0); else if (k === 'arrowright' || k === 'd') move(step, 0);
@@ -389,6 +403,7 @@ function initDevBar() {
     $('dvAway').onclick = () => ACTIONS.away(1);
     $('dvNames').onclick = () => { SETTINGS.set('names', SETTINGS.get('names') === 'ul' ? 'stud' : 'ul'); AUDIO.tap(); };
     $('dvTime').onclick = () => { WORLD.env.tod = (WORLD.env.tod + 6) % 24; AUDIO.tap(); };
+    $('dvLab').onclick = () => { AUDIO.unlock(); LAB.toggle(); };
 }
 
 // ---------- boot ----------
@@ -398,7 +413,7 @@ function frame(now) {
     if (GAME.sim) simStep();
     else {
         GAME.acc += dt * 1000 * GAME.speed;
-        const t0 = performance.now(); const m = META();
+        const t0 = performance.now(); const m = SAVE_META();
         while (GAME.acc >= STUD_CONFIG.GAME_TICK_MS) {
             GAME.acc -= STUD_CONFIG.GAME_TICK_MS;
             if (GAME.botOn) BOT.run(STUD_CONFIG.GAME_TICK_MS); else BOT.tick(STUD_CONFIG.GAME_TICK_MS);
@@ -407,7 +422,14 @@ function frame(now) {
         }
         checkPlots(false);
     }
-    if (now - _lastInfo > 250) { _lastInfo = now; computeSignInfo(); computeBest(); WORLD.setFocus(HUD.focus ? HUD.focus.key : null); }
+    if (now - _lastInfo > 250) {
+        _lastInfo = now; computeSignInfo(); computeBest(); WORLD.setFocus(HUD.focus ? HUD.focus.key : null);
+        // music follows what you are doing: busier when buying, and it takes the colour of the plot you look at
+        GAME.activity = Math.max(0, (GAME.activity || 0) - 0.02);
+        if (AUDIO.setMusicIntensity) AUDIO.setMusicIntensity(Math.min(1, 0.25 + GAME.activity + (WORLD.FXD.inHero() ? 0.3 : 0)));
+        if (AUDIO.setTheme && HUD.focus && HUD.focus.theme !== GAME.theme) { GAME.theme = HUD.focus.theme; AUDIO.setTheme(GAME.theme); }
+    }
+    META.tick(dt); UIX.tick(dt);
     WORLD.draw(dt, nodeState);
     HUD.heroFrame();
     if (now - _lastHud > 100) { _lastHud = now; HUD.update(); }
@@ -415,24 +437,37 @@ function frame(now) {
     requestAnimationFrame(frame);
 }
 function boot() {
+    UIX.buildLogo();
+    UIX.titleProgress(0.35, 'Loading the Upgrade Land engine...');
     const loaded = loadGame();
-    META();
+    SAVE_META();
     let offline = null;
     if (loaded) offline = processOfflineProgress(Date.now());
     gameState.offlineTimestamp = Date.now();
     WORLD.init();
-    HUD.init();
+    HUD.init(); UIX.init();
     initInput(); initDevBar();
     GAME.prevBuilt = new Set(); checkPlots(true);
+    META.init();
+    WORLD.on('autoQuality', (q) => { HUD.toast(`Graphics set to ${q.toUpperCase()} to keep things smooth`); try { SETTINGS.set('quality', q); } catch (e) { } });
     const start = HUD.focus && WORLD.builtPlots().has(HUD.focus.key) ? HUD.focus : PLOTS.get('0,0');
-    WORLD.cam.x = start.x0 + 2.5; WORLD.cam.y = start.y0 + 2.5; WORLD.cam.zoom = WORLD.cam.tZoom = defaultZoom();
+    const cam = WORLD.cam;
+    cam.x = start.x0 + 2.5; cam.y = start.y0 + 2.5; cam.zoom = cam.tZoom = defaultZoom();
     computeSignInfo();
     window.addEventListener('resize', () => WORLD.resize());
     document.addEventListener('visibilitychange', () => { if (document.hidden) saveGame(); });
     window.addEventListener('pagehide', () => saveGame());
-    if (offline) setTimeout(() => HUD.offline(offline), 400);
-    else if (!loaded) setTimeout(() => HUD.toast('Tap the blue blueprint to build your first machine!', '#fff3b0'), 900);
     requestAnimationFrame(t => { _last = t; frame(t); });
+    UIX.titleProgress(0.7, 'Painting the islands...');
+    setTimeout(() => {
+        UIX.titleReady(() => {
+            // camera swoops in from high above while the title fades
+            cam.zoom = 0.3; cam.angle = -0.9; cam.tAngle = 0; cam.tZoom = defaultZoom();
+            FX.sfx('camWhoosh');
+            if (offline) setTimeout(() => HUD.offline(offline), 900);
+            else if (!loaded) setTimeout(() => HUD.toast('Tap the blue blueprint to build your first machine!', '#fff3b0'), 1200);
+        });
+    }, 450);
 }
 (document.fonts && document.fonts.load ? Promise.all([document.fonts.load('20px "Luckiest Guy"'), document.fonts.load('600 16px "Fredoka"')]).catch(() => { }) : Promise.resolve())
     .then(() => boot(), () => boot());

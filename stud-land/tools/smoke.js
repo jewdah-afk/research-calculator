@@ -22,7 +22,11 @@ async function run(name, viewport, script) {
   page.on('console', m => { if (m.type() === 'error' || m.type() === 'warning') errors.push(m.type() + ': ' + m.text()); });
   await page.goto(URL);
   await page.waitForFunction(() => typeof GAME !== 'undefined' && document.getElementById('heroNum').textContent !== '');
-  await page.waitForTimeout(800);
+  if (name === 'desk') { await page.waitForTimeout(600); await page.screenshot({ path: path.join(OUT, 'desk-00-title.png') }); }
+  await page.waitForSelector('#tPlay:not([disabled])');
+  await page.click('#tPlay', { force: true });
+  await page.evaluate(() => { WORLD.perf.locked = true; }); // headless renders on the CPU; keep HIGH for screenshots
+  await page.waitForTimeout(1500);
   await script(page, (n) => page.screenshot({ path: path.join(OUT, `${name}-${n}.png`) }));
   await browser.close();
   return errors;
@@ -66,7 +70,7 @@ const clickNode = async (page, id) => {
     await page.click('#dvSim'); await page.waitForTimeout(1500); await shot('01-simming');
     await page.waitForFunction(() => !GAME.sim, null, { timeout: 120000 });
     await page.waitForTimeout(1200); await shot('02-sim-done');
-    const r = await page.evaluate(() => JSON.stringify(META().sims)); console.log('sims', r);
+    const r = await page.evaluate(() => JSON.stringify(SAVE_META().sims)); console.log('sims', r);
   }));
   all.push(...await run('phone', { width: 390, height: 844 }, async (page, shot) => {
     await shot('01-fresh');

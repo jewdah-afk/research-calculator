@@ -236,3 +236,229 @@ button { font: inherit; color: inherit; cursor: pointer; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001s !important; animation-iteration-count: 1 !important; transition: none !important; }
 }
+
+/* =================================================================================
+   v2 layers: post effects, guide, dock, walk, photo, drawer (FX Lab), badges, title
+   ================================================================================= */
+:root { --ui: 1; }
+#topleft, #tiles, #zonebar, #camctl, #leftdock, #guide, .sheet, .panel-card, .drawer, #toasts, #badgePop, #walkui, #photobar { zoom: var(--ui); }
+
+/* post layers */
+#grade { position: fixed; inset: 0; pointer-events: none; z-index: 2; mix-blend-mode: soft-light; opacity: 0; transition: opacity 2s, background 2s; }
+#vignette { position: fixed; inset: 0; pointer-events: none; z-index: 3; background: radial-gradient(ellipse at 50% 55%, rgba(0,0,0,0) 55%, rgba(10,8,40,0.38) 100%); transition: opacity .6s; }
+#tilt { position: fixed; inset: 0; pointer-events: none; z-index: 2; display: none; }
+#tilt > div { position: absolute; left: 0; right: 0; height: 26%; backdrop-filter: blur(3.5px); -webkit-backdrop-filter: blur(3.5px); }
+#tilt .tilt-top { top: 0; -webkit-mask-image: linear-gradient(#000, transparent); mask-image: linear-gradient(#000, transparent); }
+#tilt .tilt-bot { bottom: 0; -webkit-mask-image: linear-gradient(transparent, #000); mask-image: linear-gradient(transparent, #000); }
+body.tilt #tilt { display: block; }
+body.novignette #vignette { opacity: 0; }
+#letterbox { position: fixed; inset: 0; pointer-events: none; z-index: 44; }
+#letterbox > div { position: absolute; left: 0; right: 0; height: 9vh; background: #0b0820; transition: transform .35s cubic-bezier(.3,.7,.3,1); }
+#letterbox .lb-top { top: 0; transform: translateY(-100%); }
+#letterbox .lb-bot { bottom: 0; transform: translateY(100%); }
+#letterbox.on .lb-top, #letterbox.on .lb-bot { transform: none; }
+#world.f-warm { filter: sepia(.22) saturate(1.25) hue-rotate(-8deg); }
+#world.f-cool { filter: saturate(1.1) hue-rotate(12deg) brightness(1.03); }
+#world.f-vivid { filter: saturate(1.45) contrast(1.08); }
+#world.f-noir { filter: grayscale(1) contrast(1.2); }
+
+/* next goal guide */
+.guide { position: absolute; left: 50%; top: calc(var(--top) + env(safe-area-inset-top)); transform: translateX(-50%); display: flex; align-items: center; gap: 10px; max-width: min(520px, calc(100% - 440px)); padding: 6px 8px 6px 6px; background: rgba(255,250,240,0.96); border: 3px solid var(--ink); border-radius: 14px; box-shadow: 0 4px 0 var(--ink); text-align: left; }
+.guide:active { transform: translate(-50%, 3px); box-shadow: 0 1px 0 var(--ink); }
+.g-icon { flex: none; width: 34px; height: 34px; border-radius: 9px; border: 3px solid var(--ink); background: var(--yellow); display: grid; place-items: center; font-size: 18px; }
+.g-text { min-width: 0; display: flex; flex-direction: column; }
+.g-text b { font-family: "Luckiest Guy"; font-weight: 400; font-size: 16px; line-height: 1.1; padding-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.g-text i { font-style: normal; font-weight: 600; font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.g-go { flex: none; font-family: "Luckiest Guy"; font-size: 14px; color: #fff; text-shadow: 0 2px 0 var(--ink); background: var(--green); border: 3px solid var(--ink); border-radius: 9px; padding: 6px 9px 3px; }
+.guide.pulse .g-icon { animation: gpulse 1s ease-in-out 2; }
+@keyframes gpulse { 50% { transform: scale(1.18) rotate(-6deg); } }
+#toasts { top: calc(var(--top) + 66px + env(safe-area-inset-top)); }
+
+/* more tiles */
+.t-badge { background: linear-gradient(#ffd23f, #f2a900); }
+.t-codes { background: linear-gradient(#ff7ae0, #d94ab8); }
+#tiles { gap: 10px; }
+.tile { height: 72px; }
+
+/* left dock: minimap + walk/photo */
+#leftdock { position: absolute; left: calc(12px + env(safe-area-inset-left)); bottom: calc(12px + env(safe-area-inset-bottom)); display: flex; align-items: flex-end; gap: 8px; }
+.mm-wrap { position: relative; border: 3px solid var(--ink); border-radius: 14px; box-shadow: 0 4px 0 var(--ink); overflow: hidden; background: #2aa9c9; cursor: pointer; }
+#minimap { display: block; width: 180px; height: 132px; }
+.mm-label { position: absolute; left: 6px; top: 5px; font-family: "Luckiest Guy"; font-size: 12px; color: #fff; text-shadow: 0 2px 0 var(--ink); pointer-events: none; }
+.dock-btns { display: flex; flex-direction: column; gap: 8px; }
+.dock { width: 64px; height: 58px; border: 3px solid var(--ink); border-radius: 12px; box-shadow: 0 4px 0 var(--ink); display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: "Luckiest Guy"; font-size: 13px; color: #fff; text-shadow: 0 2px 0 var(--ink); padding-top: 3px; }
+.dock .ticon { font-size: 22px; }
+.dock.walk { background: linear-gradient(#39d98a, #1faa63); }
+.dock.photo { background: linear-gradient(#5b6bff, #3b46d6); }
+.dock:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--ink); }
+body.walking .dock.walk { background: linear-gradient(#ff9a2e, #e8791a); }
+@media (max-width: 1180px) { #leftdock { bottom: calc(var(--zb-h) + 34px + env(safe-area-inset-bottom)); } }
+
+/* walk mode controls */
+#walkui { display: none; }
+body.walking #walkui { display: block; }
+#joy { position: fixed; z-index: 21; left: calc(24px + env(safe-area-inset-left)); bottom: calc(var(--zb-h) + 40px); width: 124px; height: 124px; border-radius: 50%; background: rgba(255,250,240,0.35); border: 3px solid rgba(27,21,48,0.7); touch-action: none; display: none; }
+#joyKnob { position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; margin: -28px 0 0 -28px; border-radius: 50%; background: var(--paper); border: 3px solid var(--ink); box-shadow: 0 4px 0 var(--ink); }
+.wbtn { position: fixed; z-index: 21; font-family: "Luckiest Guy"; font-size: 16px; border: 3px solid var(--ink); border-radius: 50%; box-shadow: 0 4px 0 var(--ink); background: var(--paper); display: none; touch-action: none; }
+#btnJump { right: calc(120px + env(safe-area-inset-right)); bottom: calc(var(--zb-h) + 44px); width: 70px; height: 70px; }
+#btnAct { right: calc(24px + env(safe-area-inset-right)); bottom: calc(var(--zb-h) + 70px); width: 90px; height: 90px; background: var(--yellow); font-size: 15px; padding: 0 6px; line-height: 1.05; }
+#btnAct.dim { background: #c9ced6; }
+#btnWalkExit { position: fixed; z-index: 21; left: 50%; transform: translateX(-50%); top: calc(var(--top) + 60px); display: none; }
+body.walking #btnWalkExit { display: block; }
+body.walking #guide { display: none; }
+@media (pointer: coarse) { body.walking #joy, body.walking .wbtn { display: block; } body.walking #camctl { display: none; } }
+
+/* photo mode */
+#photobar { position: fixed; z-index: 30; left: 50%; bottom: calc(14px + env(safe-area-inset-bottom)); transform: translateX(-50%); display: none; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; width: max-content; max-width: calc(100% - 2 * var(--gut)); background: rgba(35,28,61,0.92); border: 3px solid #000; border-radius: 16px; padding: 10px 12px; color: #fff; }
+.pb-title { font-family: "Luckiest Guy"; font-size: 15px; color: #ffe89a; }
+.pb-l { font-family: "Luckiest Guy"; font-size: 14px; display: flex; align-items: center; gap: 6px; }
+.pb-l input { width: 140px; accent-color: var(--yellow); }
+#photobar .seg button { font-size: 13px; padding: 7px 7px 5px; min-width: 0; color: var(--ink); }
+body.photo #photobar { display: flex; }
+body.photo #hud, body.photo #devbar, body.photo #toasts, body.photo #sheet { display: none !important; }
+body.photo-clean #photobar { opacity: 0; pointer-events: none; }
+
+/* right drawer (FX Lab) */
+.drawer { position: fixed; z-index: 38; top: calc(48px + env(safe-area-inset-top)); right: 0; bottom: 0; width: min(460px, 100%); display: flex; flex-direction: column; background: var(--paper); border-left: 3px solid var(--ink); box-shadow: -6px 0 0 rgba(27,21,48,0.25); animation: drIn .22s ease-out; }
+@keyframes drIn { from { transform: translateX(30px); opacity: 0; } to { transform: none; opacity: 1; } }
+.drawer .panel-head { background: #231c3d; }
+.drawer-tabs { display: flex; gap: 6px; padding: 8px 10px; border-bottom: 3px solid var(--ink); background: var(--paper-2); overflow-x: auto; scrollbar-width: none; flex: none; }
+.drawer-tabs button { flex: none; font-family: "Luckiest Guy"; font-size: 13px; padding: 7px 10px 4px; border: 3px solid var(--ink); border-radius: 9px; background: var(--paper); }
+.drawer-tabs button.on { background: var(--yellow); }
+.lab-item { background: #fff; border: 3px solid var(--ink); border-radius: 12px; box-shadow: 0 3px 0 var(--ink); padding: 8px 10px; }
+.lab-top { display: flex; align-items: center; gap: 8px; }
+.lab-top .grow { flex: 1; min-width: 0; }
+.lab-name { font-family: "Luckiest Guy"; font-size: 16px; line-height: 1.1; }
+.lab-trig { font-size: 13px; font-weight: 600; color: var(--muted); }
+.tier { flex: none; font-family: "Luckiest Guy"; font-size: 11px; padding: 3px 6px 1px; border: 2px solid var(--ink); border-radius: 6px; }
+.tier.hero { background: #ff4d4d; color: #fff; } .tier.support { background: var(--yellow); } .tier.ambient { background: #bfe0ff; }
+.lab-play { flex: none; font-family: "Luckiest Guy"; font-size: 14px; padding: 7px 10px 4px; border: 3px solid var(--ink); border-radius: 9px; background: var(--green); color: #fff; text-shadow: 0 2px 0 var(--ink); box-shadow: 0 3px 0 var(--ink); }
+.lab-play:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--ink); }
+.lab-more { flex: none; width: 34px; height: 34px; border: 3px solid var(--ink); border-radius: 9px; background: var(--paper); font-family: "Luckiest Guy"; font-size: 16px; }
+.lab-spec { display: none; margin-top: 8px; font-size: 13px; line-height: 1.4; }
+.lab-item.open .lab-spec { display: block; }
+.lab-spec dt { font-family: "Luckiest Guy"; font-size: 12px; color: var(--muted); margin-top: 6px; letter-spacing: .5px; }
+.lab-spec dd { margin: 1px 0 0; font-weight: 600; }
+.lab-spec code, .data-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; background: #f3efe6; border: 2px solid #e3dccb; border-radius: 6px; padding: 1px 4px; word-break: break-word; }
+.data-code { display: block; white-space: pre-wrap; padding: 6px 8px; margin-top: 3px; }
+.lab-stage { display: flex; align-items: center; justify-content: center; gap: 12px; min-height: 96px; background: repeating-conic-gradient(#f3efe6 0 25%, #fffaf0 0 50%) 0 0 / 20px 20px; border: 3px dashed #d9d2c2; border-radius: 12px; }
+.lab-note { font-size: 13px; font-weight: 600; color: var(--muted); }
+
+/* badges and codes */
+.bgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.bcard { background: #fff; border: 3px solid var(--ink); border-radius: 12px; box-shadow: 0 3px 0 var(--ink); padding: 8px; display: flex; gap: 8px; align-items: center; }
+.bcard .bi { flex: none; width: 40px; height: 40px; border-radius: 10px; border: 3px solid var(--ink); display: grid; place-items: center; font-size: 20px; background: var(--yellow); }
+.bcard.locked { opacity: .55; } .bcard.locked .bi { background: #c9ced6; filter: grayscale(1); }
+.bcard .bn { font-family: "Luckiest Guy"; font-size: 14px; line-height: 1.1; }
+.bcard .bd { font-size: 12px; font-weight: 600; color: var(--muted); line-height: 1.2; }
+.slots { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+.slot { width: 40px; height: 46px; border: 3px solid var(--ink); border-radius: 9px; display: grid; place-items: center; font-family: "Luckiest Guy"; font-size: 24px; background: #e3dccb; color: transparent; box-shadow: 0 3px 0 var(--ink); }
+.slot.on { background: var(--yellow); color: var(--ink); }
+.redeem { display: flex; gap: 8px; }
+.redeem input { flex: 1; min-width: 0; font-family: "Luckiest Guy"; font-size: 18px; letter-spacing: 2px; text-transform: uppercase; padding: 10px 12px 7px; border: 3px solid var(--ink); border-radius: 12px; background: #fff; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chipb { font-family: "Luckiest Guy"; font-size: 13px; padding: 7px 10px 4px; border: 3px solid var(--ink); border-radius: 9px; background: var(--paper); box-shadow: 0 3px 0 var(--ink); display: flex; align-items: center; gap: 6px; }
+.chipb.on { background: var(--yellow); }
+.chipb.lock { opacity: .4; box-shadow: none; }
+.chipb i { width: 14px; height: 14px; border-radius: 4px; border: 2px solid var(--ink); display: inline-block; }
+.hsec { font-family: "Luckiest Guy"; font-size: 16px; margin-top: 6px; }
+.hint { font-size: 13px; font-weight: 600; color: var(--muted); display: flex; gap: 8px; align-items: baseline; }
+.hint b { font-family: "Luckiest Guy"; font-weight: 400; color: var(--ink); font-size: 14px; flex: none; }
+.hint.done b { color: var(--green-d); }
+
+/* badge pop */
+#badgePop { position: fixed; z-index: 48; left: 50%; top: calc(var(--top) + 8px); transform: translate(-50%, -140%) rotate(-4deg); display: flex; align-items: center; gap: 12px; padding: 10px 16px 10px 10px; background: var(--paper); border: 3px solid var(--ink); border-radius: 16px; box-shadow: 0 6px 0 var(--ink); pointer-events: none; transition: transform .5s cubic-bezier(.2,1.6,.4,1); }
+#badgePop.show { transform: translate(-50%, 0) rotate(0); }
+.bp-icon { width: 52px; height: 52px; border-radius: 12px; border: 3px solid var(--ink); background: var(--yellow); display: grid; place-items: center; font-size: 28px; }
+.bp-kicker { font-family: "Luckiest Guy"; font-size: 12px; color: var(--orange); }
+.bp-name { font-family: "Luckiest Guy"; font-size: 22px; line-height: 1; }
+.bp-desc { font-size: 13px; font-weight: 600; color: var(--muted); }
+
+/* machine card v2: tabs, preview, data */
+.sh-tabs { display: flex; gap: 6px; }
+.sh-tabs button { font-family: "Luckiest Guy"; font-size: 13px; padding: 6px 10px 3px; border: 3px solid var(--ink); border-radius: 9px; background: var(--paper); }
+.sh-tabs button.on { background: var(--yellow); }
+.pv { display: flex; flex-direction: column; gap: 4px; background: #f7f2e6; border: 2px solid #e3dccb; border-radius: 10px; padding: 6px 8px; }
+.pv-row { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; }
+.pv-row img { width: 20px; height: 20px; }
+.pv-row .from { color: var(--muted); }
+.pv-row .to { font-family: "Luckiest Guy"; font-weight: 400; font-size: 16px; }
+.pv-row .pct { margin-left: auto; font-family: "Luckiest Guy"; font-weight: 400; font-size: 14px; color: var(--green-d); }
+.pv-title { font-family: "Luckiest Guy"; font-size: 12px; color: var(--muted); letter-spacing: .5px; }
+
+/* stats */
+.chart { width: 100%; height: 150px; border: 3px solid var(--ink); border-radius: 12px; background: #fff; display: block; }
+.kv { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-weight: 700; font-size: 14px; }
+.kv span:nth-child(even) { font-family: "Luckiest Guy"; font-weight: 400; font-size: 16px; text-align: right; }
+
+/* title screen */
+#title { position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; background: linear-gradient(#5cc8e6, #2aa9c9 55%, #1f8fb3); overflow: hidden; transition: opacity .6s, transform .6s; }
+#title.gone { opacity: 0; transform: scale(1.06); pointer-events: none; }
+.t-sky { position: absolute; inset: 0; background: repeating-radial-gradient(circle at 50% 120%, rgba(255,255,255,0.08) 0 18px, rgba(255,255,255,0) 18px 40px); }
+.t-logo { position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.t-row { display: flex; gap: 6px; }
+.brick { position: relative; font-family: "Luckiest Guy"; font-size: clamp(34px, 8vw, 72px); color: #fff; text-shadow: 0 4px 0 var(--ink), 3px 3px 0 var(--ink), -3px 3px 0 var(--ink), 3px -3px 0 var(--ink), -3px -3px 0 var(--ink); width: 1.05em; height: 1.2em; display: grid; place-items: center; padding-top: .12em; border: 4px solid var(--ink); border-radius: 10px; box-shadow: 0 6px 0 var(--ink); animation: brickIn .7s cubic-bezier(.2,1.6,.4,1) both; }
+.brick::before, .brick::after { content: ""; position: absolute; top: -12px; width: 26%; height: 10px; border: 3px solid var(--ink); border-bottom: 0; border-radius: 6px 6px 0 0; background: inherit; }
+.brick::before { left: 16%; } .brick::after { right: 16%; }
+.t-row.small .brick { font-size: clamp(18px, 3.6vw, 30px); width: 1.1em; border-radius: 7px; border-width: 3px; box-shadow: 0 4px 0 var(--ink); }
+.t-row.small .brick::before, .t-row.small .brick::after { top: -8px; height: 6px; border-width: 2px; }
+.brick.space { visibility: hidden; width: .4em; }
+@keyframes brickIn { from { transform: translateY(-120vh) rotate(-20deg); } 70% { transform: translateY(6px) rotate(2deg); } to { transform: none; } }
+.t-bar { width: min(320px, 70vw); height: 18px; border: 3px solid var(--ink); border-radius: 10px; background: var(--paper-2); overflow: hidden; box-shadow: 0 4px 0 var(--ink); }
+.t-bar i { display: block; height: 100%; width: 0; background: var(--green); border-right: 3px solid var(--ink); transition: width .25s; }
+.t-tip { font-weight: 700; font-size: 15px; color: #fff; text-shadow: 0 2px 0 var(--ink); min-height: 20px; text-align: center; padding: 0 16px; }
+.t-play { font-family: "Luckiest Guy"; font-size: 26px; color: var(--ink); background: var(--yellow); border: 4px solid var(--ink); border-radius: 16px; box-shadow: 0 6px 0 var(--ink); padding: 14px 28px 10px; animation: tplay 1.2s ease-in-out infinite; }
+.t-play[disabled] { opacity: .5; animation: none; }
+@keyframes tplay { 50% { transform: scale(1.06); } }
+.t-foot { position: absolute; bottom: calc(14px + env(safe-area-inset-bottom)); left: 16px; right: 16px; text-align: center; font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.9); }
+
+/* help */
+.keys { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; align-items: center; font-weight: 600; font-size: 14px; }
+.keys kbd { font-family: "Luckiest Guy"; font-size: 13px; padding: 4px 8px 2px; border: 2px solid var(--ink); border-radius: 7px; background: var(--paper); box-shadow: 0 2px 0 var(--ink); justify-self: start; }
+
+/* responsive for the new pieces */
+@media (max-width: 720px) {
+  .guide { top: auto; bottom: calc(var(--zb-h) + 86px + env(safe-area-inset-bottom)); max-width: calc(100% - 2 * var(--gut)); width: calc(100% - 2 * var(--gut)); }
+  #toasts { bottom: calc(var(--zb-h) + 146px + env(safe-area-inset-bottom)); }
+  .mm-wrap { display: none; }
+  #leftdock { bottom: calc(var(--zb-h) + 140px + env(safe-area-inset-bottom)); }
+  .dock { width: 58px; height: 52px; }
+  .tile { width: 64px; height: 58px; }
+  #tiles { gap: 8px; }
+  #camctl { bottom: calc(var(--zb-h) + 140px + env(safe-area-inset-bottom)); }
+  .pb-l input { width: 100px; }
+}
+@media (max-height: 500px) {
+  #tiles { display: grid; grid-template-columns: repeat(2, 60px); }
+  .tile { width: 60px; height: 52px; font-size: 11px; }
+  .guide { top: calc(var(--top) + env(safe-area-inset-top)); max-width: calc(100% - 520px); }
+  .mm-wrap { display: none; }
+  #leftdock { bottom: calc(var(--zb-h) + 20px); }
+  .dock { width: 54px; height: 46px; font-size: 11px; }
+  .dock .ticon { font-size: 18px; }
+}
+
+.rate-pill.bump { animation: rbump .25s cubic-bezier(.2,1.6,.4,1); }
+@keyframes rbump { 50% { transform: scale(1.15); background: #5ff0a8; } }
+
+/* v2 layout fixes */
+#badgePop { opacity: 0; visibility: hidden; transform: translate(-50%, -24px) rotate(-4deg); transition: transform .5s cubic-bezier(.2,1.6,.4,1), opacity .2s, visibility .2s; }
+#badgePop.show { opacity: 1; visibility: visible; transform: translate(-50%, 0) rotate(0); }
+#toasts { top: auto; bottom: calc(var(--zb-h) + 40px + env(safe-area-inset-bottom)); flex-direction: column-reverse; width: min(460px, calc(100% - 2 * var(--gut))); }
+body.sheet-open .guide { display: none; }
+@media (max-width: 1400px) { #leftdock { bottom: calc(var(--zb-h) + 34px + env(safe-area-inset-bottom)); } }
+@media (max-width: 720px) {
+  .guide { top: auto; bottom: calc(var(--zb-h) + 22px + env(safe-area-inset-bottom)); }
+  #leftdock { bottom: calc(var(--zb-h) + 86px + env(safe-area-inset-bottom)); }
+  .dock-btns { flex-direction: row; }
+  #camctl { bottom: calc(var(--zb-h) + 86px + env(safe-area-inset-bottom)); }
+  #camRot, #camIn, #camOut { display: none; }
+  #toasts { bottom: calc(var(--zb-h) + 150px + env(safe-area-inset-bottom)); }
+}
+@media (pointer: coarse) { body.walking #leftdock { display: none; } }
+@media (max-height: 500px) { .tile { font-size: 12px; } }
+
+#btnWalkExit { top: calc(var(--top) + 6px + env(safe-area-inset-top)); }
+.lab-more { width: auto; padding: 0 8px; font-size: 12px; }
+@media (max-width: 720px) { #badgePop { top: calc(var(--top) + 150px); gap: 8px; padding: 8px 12px 8px 8px; } #badgePop .bp-icon { width: 40px; height: 40px; font-size: 22px; } #badgePop .bp-name { font-size: 18px; } }
+#photobar .dbtn { color: var(--ink); }

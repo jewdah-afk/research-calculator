@@ -20,6 +20,23 @@ const WORLD = (() => {
     let selectedId = null;
     let hoverKey = null;
     const lights = [];
+    // Quality presets. Every optional layer checks Q, so one switch scales the whole look.
+    const QUALITY = {
+        low:    { shadows: false, caustics: false, props: true,  propAnim: false, weather: false, windows: false, particles: 0.35, sparkle: false, dprCap: 1 },
+        medium: { shadows: true,  caustics: false, props: true,  propAnim: false, weather: true,  windows: true,  particles: 0.7,  sparkle: true,  dprCap: 1.5 },
+        high:   { shadows: true,  caustics: true,  props: true,  propAnim: true,  weather: true,  windows: true,  particles: 1,    sparkle: true,  dprCap: 2 },
+        ultra:  { shadows: true,  caustics: true,  props: true,  propAnim: true,  weather: true,  windows: true,  particles: 1.25, sparkle: true,  dprCap: 2 },
+    };
+    const Q = { name: 'high', ...QUALITY.high };
+    function setQuality(name) { Object.assign(Q, QUALITY[name] || QUALITY.high, { name }); perf.cap = Q.dprCap; resize(); sprites.clear(); spriteView = ''; }
+    // Plug-in points. Modules (fx, props, walk, weather) add functions here instead of editing the core.
+    const HOOKS = { update: [], underPlates: [], afterPlates: [], shadows: [], items: [], afterItems: [], sky: [], post: [], ui: [], grow: [] };
+    function use(name, fn) { HOOKS[name].push(fn); }
+    // Simple named events for moments modules care about (whale surfaced, and so on).
+    const EVT = {};
+    function on(name, fn) { (EVT[name] = EVT[name] || []).push(fn); }
+    function emit(name, data) { for (const fn of (EVT[name] || [])) { try { fn(data); } catch (e) { console.warn(name, e); } } }
+    function run(name, a, b) { const l = HOOKS[name]; for (let i = 0; i < l.length; i++) { try { l[i](a, b); } catch (e) { console.warn(name, e); } } }
 
     // ---------- projection ----------
     function setupFrame() { const phi = cam.angle + Math.PI / 4; cosA = Math.cos(phi); sinA = Math.sin(phi); K = BASE * cam.zoom; }
@@ -41,11 +58,11 @@ const WORLD = (() => {
     // ---------- effects director (attention budget) ----------
     function nowMs() { return performance.now(); }
     const FXD = {
-        amount() { return DIRECTOR.mode === 'full' ? 1 : DIRECTOR.mode === 'reduced' ? 0.45 : 0; },
+        amount() { return (DIRECTOR.mode === 'full' ? 1 : DIRECTOR.mode === 'reduced' ? 0.45 : 0) * Q.particles; },
         hero(ms) { const n = nowMs(); if (n < DIRECTOR.heroUntil) return false; DIRECTOR.heroUntil = n + ms; return true; },
         inHero() { return nowMs() < DIRECTOR.heroUntil; },
         support() { const n = nowMs(); DIRECTOR.sup = DIRECTOR.sup.filter(t => n - t < 250); if (DIRECTOR.sup.length >= 3) return false; DIRECTOR.sup.push(n); return true; },
-        flash() { if (DIRECTOR.mode !== 'full') return false; const n = nowMs(); DIRECTOR.flashes = DIRECTOR.flashes.filter(t => n - t < 1000); if (DIRECTOR.flashes.length >= 2) return false; DIRECTOR.flashes.push(n); return true; },
+        flash() { if (DIRECTOR.mode !== 'full' || DIRECTOR.noFlash) return false; const n = nowMs(); DIRECTOR.flashes = DIRECTOR.flashes.filter(t => n - t < 1000); if (DIRECTOR.flashes.length >= 2) return false; DIRECTOR.flashes.push(n); return true; },
         shake(a) { if (DIRECTOR.mode !== 'full') return; cam.kick = Math.min(1, cam.kick + a); },
     };
 
@@ -212,6 +229,18 @@ const WORLD = (() => {
             const f = [bot[a], bot[b], top[b], top[a]];
             poly(f, opt.alpha ? null : tone(col, nu < 0 ? -0.12 : -0.3), ink, lw);
             if (opt.alpha) { g.globalAlpha = opt.alpha; poly(f, tone(col, nu < 0 ? -0.12 : -0.3)); g.globalAlpha = 1; }
+            if (opt.windows) {
+                g.fillStyle = '#ffe39a';
+                for (let i = 0; i < opt.windows; i++) {
+                    const z0 = z + h * (i + 0.3) / opt.windows, z1 = z + h * (i + 0.7) / opt.windows;
+                    for (const u of [0.22, 0.58]) {
+                        const ax = cs[a][0] + (cs[b][0] - cs[a][0]) * u, ay = cs[a][1] + (cs[b][1] - cs[a][1]) * u;
+                        const bx = cs[a][0] + (cs[b][0] - cs[a][0]) * (u + 0.2), by = cs[a][1] + (cs[b][1] - cs[a][1]) * (u + 0.2);
+                        const q = [P(ax, ay, z0), P(bx, by, z0), P(bx, by, z1), P(ax, ay, z1)];
+                        g.beginPath(); g.moveTo(q[0][0], q[0][1]); for (let k = 1; k < 4; k++) g.lineTo(q[k][0], q[k][1]); g.closePath(); g.fill();
+                    }
+                }
+            }
             if (opt.seams && h > 0.2) {
                 g.strokeStyle = 'rgba(0,0,0,0.28)'; g.lineWidth = Math.max(1, cam.zoom);
                 const n = opt.seams;
@@ -316,6 +345,103 @@ const WORLD = (() => {
         }
     }
 
+    // ---------- sun, shadows, shallows, caustics ----------
+    // The sun crosses the sky with the day cycle: long soft shadows at dawn and dusk, short at noon,
+    // a faint moon shadow at night. Every standing thing adds a footprint; each plot fills them in one path.
+    const sun = { x: 0.6, y: -0.8, len: 1, alpha: 0.2 };
+    function updateSun() {
+        const day = (env.tod - 6) / 12;                     // 0 sunrise, 1 sunset
+        const up = day > 0 && day < 1;
+        const a = (up ? day : ((env.tod + 6) % 24) / 12) * Math.PI + Math.PI * 0.8;
+        const elev = Math.max(0.16, Math.sin((up ? day : ((env.tod + 6) % 24) / 12) * Math.PI));
+        sun.x = Math.cos(a); sun.y = Math.sin(a); sun.len = Math.min(2.4, 0.55 / Math.tan(elev * 1.2));
+        sun.alpha = up ? 0.2 * (1 - env.rain * 0.6) : 0.07 * env.night;
+    }
+    const shadowList = [];
+    function shadow(x, y, hw, hd, h) { shadowList.push(x, y, hw, hd, h); }
+    function hull(pts) {
+        pts.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+        const cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+        const lo = [], up = [];
+        for (const p of pts) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); }
+        for (let i = pts.length - 1; i >= 0; i--) { const p = pts[i]; while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); }
+        up.pop(); lo.pop(); return lo.concat(up);
+    }
+    function drawShadowsFor(p) {
+        if (!shadowList.length) return;
+        const pts = plateCorners(p, TOP, INSET);
+        g.save(); g.beginPath(); g.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < 4; i++) g.lineTo(pts[i][0], pts[i][1]); g.closePath(); g.clip();
+        g.beginPath();
+        for (let i = 0; i < shadowList.length; i += 5) {
+            const x = shadowList[i], y = shadowList[i + 1], hw = shadowList[i + 2], hd = shadowList[i + 3], h = shadowList[i + 4];
+            const ox = -sun.x * h * sun.len, oy = -sun.y * h * sun.len;
+            const c = [[x - hw, y - hd], [x + hw, y - hd], [x + hw, y + hd], [x - hw, y + hd]];
+            const hl = hull(c.concat(c.map(q => [q[0] + ox, q[1] + oy])));
+            const s0 = P(hl[0][0], hl[0][1], TOP); g.moveTo(s0[0], s0[1]);
+            for (let j = 1; j < hl.length; j++) { const q = P(hl[j][0], hl[j][1], TOP); g.lineTo(q[0], q[1]); }
+            g.closePath();
+        }
+        g.fillStyle = `rgba(20,16,60,${sun.alpha})`; g.fill('nonzero');
+        g.restore();
+        shadowList.length = 0;
+    }
+    // Plot footprints of every standing thing, so shadows can be drawn under them before they stand up.
+    function collectShadows(p, state) {
+        for (const n of p.nodes) {
+            if (!isNodeUnlocked(n)) continue;
+            const [x, y] = n.coords;
+            if (n.type === 'reset') { shadow(x, y, 0.3, 0.3, 1); continue; }
+            if (n.type === 'info') { shadow(x, y, 0.04, 0.04, 0.6); continue; }
+            const st = state(n); const c = bricksFor(st.lvl, st.cap || st.max); if (!c) continue;
+            const small = n.height === 0.5;
+            shadow(x, y, small ? 0.17 : 0.3, small ? 0.17 : 0.3, c * (small ? 0.1 : 0.14) + 0.06);
+        }
+        run('shadows', p);
+    }
+    // Light sandy shallows ring every built island, drawn on the sea before the plates.
+    function drawShallows(list) {
+        g.lineJoin = 'round';
+        const lw = 0.5 * K;
+        g.beginPath();
+        for (const p of list) { if (!builtCache.has(p.key)) continue; const q = plateCorners(p, 0, INSET - 0.25); g.moveTo(q[0][0], q[0][1]); for (let i = 1; i < 4; i++) g.lineTo(q[i][0], q[i][1]); g.closePath(); }
+        g.fillStyle = env.night > 0.5 ? 'rgba(60,120,160,0.35)' : 'rgba(150,240,235,0.42)'; g.fill();
+        g.strokeStyle = env.night > 0.5 ? 'rgba(60,120,160,0.28)' : 'rgba(170,245,240,0.35)'; g.lineWidth = lw; g.stroke();
+        g.lineJoin = 'miter';
+    }
+    // Caustics: a tiling light pattern mapped onto the sea plane, two layers drifting apart.
+    let causticPat = null;
+    function causticTile() {
+        const S = 256, c = document.createElement('canvas'); c.width = c.height = S; const t = c.getContext('2d');
+        const r = rng(9173); t.strokeStyle = 'rgba(255,255,255,0.9)'; t.lineCap = 'round';
+        for (let i = 0; i < 38; i++) {
+            const x0 = r() * S, y0 = r() * S, len = 20 + r() * 50, a = r() * 6.28, bend = (r() - 0.5) * 2;
+            t.lineWidth = 1 + r() * 2.2;
+            for (const ox of [-S, 0, S]) for (const oy of [-S, 0, S]) { t.beginPath(); t.moveTo(x0 + ox, y0 + oy); t.quadraticCurveTo(x0 + ox + Math.cos(a + bend) * len, y0 + oy + Math.sin(a + bend) * len, x0 + ox + Math.cos(a) * len * 1.6, y0 + oy + Math.sin(a) * len * 1.6); t.stroke(); }
+        }
+        return c;
+    }
+    // Drawn into a one-third resolution buffer every other frame, then stretched over the sea in one
+    // additive stamp: the light pattern is soft anyway, and this costs a fraction of two full-screen fills.
+    const cbuf = { c: null, g: null, frame: 0 };
+    function drawCaustics() {
+        if (!Q.caustics || env.night > 0.7) return;
+        const bw = Math.ceil(W / 3), bh = Math.ceil(H / 3);
+        if (!cbuf.c) { cbuf.c = document.createElement('canvas'); cbuf.g = cbuf.c.getContext('2d'); }
+        if (cbuf.c.width !== bw || cbuf.c.height !== bh) { cbuf.c.width = bw; cbuf.c.height = bh; cbuf.frame = 0; }
+        if ((cbuf.frame++ & 1) === 0) {
+            const t = cbuf.g; if (!causticPat) causticPat = t.createPattern(causticTile(), 'repeat');
+            t.setTransform(1, 0, 0, 1, 0, 0); t.clearRect(0, 0, bw, bh);
+            const sc = 1 / 64 * 1.6 / 3;
+            for (const [dx, dy, s2] of [[T * 0.05, T * 0.03, 1], [-T * 0.04, T * 0.05, 0.7]]) {
+                const o = P(dx * 10, dy * 10, 0);
+                causticPat.setTransform(new DOMMatrix([K * cosA * sc * s2, K * SQ * sinA * sc * s2, -K * sinA * sc * s2, K * SQ * cosA * sc * s2, o[0] / 3, o[1] / 3]));
+                t.fillStyle = causticPat; t.fillRect(0, 0, bw, bh);
+            }
+        }
+        g.save(); g.globalCompositeOperation = 'lighter'; g.globalAlpha = 0.09 * (1 - env.night) * (1 - env.rain * 0.5);
+        g.drawImage(cbuf.c, 0, 0, W, H); g.restore();
+    }
+
     // ---------- sprite cache ----------
     // A machine looks the same wherever it stands, so while the camera is still each look
     // (colour, bricks, maxed, trim) is drawn once into an offscreen canvas and stamped after that.
@@ -380,7 +506,7 @@ const WORLD = (() => {
         const col = curHex(n.costCurrency || 'P');
         const count = bricksFor(lvl, it.cap || max);
         const prev = lastCount.get(n.id);
-        if (prev !== undefined && count > prev) nodeAnim.set(n.id, { t0: T, kind: 'grow' });
+        if (prev !== undefined && count > prev) { nodeAnim.set(n.id, { t0: T, kind: 'grow' }); run('grow', n, count); }
         lastCount.set(n.id, count);
         let sq = 1, drop = 0;
         const an = nodeAnim.get(n.id);
@@ -404,8 +530,9 @@ const WORLD = (() => {
             const maxed = lvl >= max;
             const ztop = zBase + h;
             const trim = TRIM[n.borderColor];
+            const lit = Q.windows && env.night > 0.35 && !small && K >= 30;
             const body = () => {
-                const b = box(x, y, zBase, hw * (2 - sq) ** 0.5, hw * (2 - sq) ** 0.5, h, col, { seams: K < 44 ? 0 : count, topCol: maxed ? '#ffd23f' : tone(col, 0.1) });
+                const b = box(x, y, zBase, hw * (2 - sq) ** 0.5, hw * (2 - sq) ** 0.5, h, col, { seams: K < 44 ? 0 : count, windows: lit ? count : 0, topCol: maxed ? '#ffd23f' : tone(col, 0.1) });
                 // trim band on the top edge (the original border colour)
                 if (trim && !LOD) box(x, y, ztop - 0.05, hw + 0.005, hw + 0.005, 0.05, trim, { lw: 0.8 });
                 if (STUDS) {
@@ -417,7 +544,7 @@ const WORLD = (() => {
                 }
                 return b;
             };
-            bb = (camStill() && sq === 1 && drop === 0) ? stamp(`m${col}${count}${maxed ? 1 : 0}${trim || ''}${small ? 1 : 0}${kind === 'producer' ? 'p' : ''}`, x, y, zBase, { hw: hw + 0.02, h: h + 0.32 }, body) : body();
+            bb = (camStill() && sq === 1 && drop === 0) ? stamp(`m${col}${count}${maxed ? 1 : 0}${trim || ''}${small ? 1 : 0}${kind === 'producer' ? 'p' : ''}${lit ? 'n' : ''}`, x, y, zBase, { hw: hw + 0.02, h: h + 0.32 }, body) : body();
             // moving accents (gears, arms, flags) only where you are looking
             if (STUDS && (it.focus || K > 80)) accent(n, kind, x, y, ztop, hw, it);
             if (maxed && DIRECTOR.mode !== 'minimal') {
@@ -475,9 +602,18 @@ const WORLD = (() => {
         const grd = g.createRadialGradient(0, 0, 1, 0, 0, r);
         grd.addColorStop(0, ready ? '#ffffff' : 'rgba(255,255,255,0.3)'); grd.addColorStop(0.5, hexA(col, ready ? 0.85 : 0.35)); grd.addColorStop(1, hexA(col, 0));
         g.fillStyle = grd; g.beginPath(); g.ellipse(0, 0, r * 0.62, r * 1.05, 0, 0, 7); g.fill();
-        if (ready && DIRECTOR.mode !== 'minimal') {
+        if (DIRECTOR.mode !== 'minimal') {
+            // three spiral arms turning inside the arch; faster and brighter when a rebuild is ready
             g.globalCompositeOperation = 'lighter';
-            for (let i = 0; i < 6; i++) { const a = T * 2.2 + i * Math.PI / 3; g.fillStyle = hexA(col, 0.8); g.beginPath(); g.arc(Math.cos(a) * r * 0.5, Math.sin(a) * r * 0.85, Math.max(1.5, 0.035 * K), 0, 7); g.fill(); }
+            g.scale(0.62, 1.05); g.lineCap = 'round';
+            const spin = T * (ready ? 3 : 0.8);
+            for (let arm = 0; arm < 3; arm++) {
+                g.strokeStyle = hexA(arm === 0 ? '#ffffff' : col, ready ? 0.75 : 0.3); g.lineWidth = Math.max(1, r * 0.09);
+                g.beginPath();
+                for (let k = 0; k <= 14; k++) { const u = k / 14; const a = spin + arm * 2.094 + u * 4.2; const rr = r * (0.95 - u * 0.85); if (k) g.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); else g.moveTo(Math.cos(a) * rr, Math.sin(a) * rr); }
+                g.stroke();
+            }
+            if (ready) for (let i = 0; i < 6; i++) { const a = -T * 2.2 + i * Math.PI / 3; const rr = r * (0.9 - ((T * 0.8 + i / 6) % 1) * 0.8); g.fillStyle = hexA(col, 0.9); g.beginPath(); g.arc(Math.cos(a) * rr, Math.sin(a) * rr, Math.max(1.5, 0.04 * K), 0, 7); g.fill(); }
         }
         g.restore();
         if (env.night > 0.2 || ready) lights.push([x, y, ZB + 0.44, col, ready ? 1 : 0.4]);
@@ -620,17 +756,20 @@ const WORLD = (() => {
         const w1 = P(x - dir[0] * 1.2 - dir[1] * 0.3, y - dir[1] * 1.2 - dir[0] * 0.3, 0), w2 = P(x - dir[0] * 1.2 + dir[1] * 0.3, y - dir[1] * 1.2 + dir[0] * 0.3, 0);
         g.beginPath(); g.moveTo(w1[0], w1[1]); g.lineTo(s[0], s[1]); g.lineTo(w2[0], w2[1]); g.stroke();
         const bob = Math.sin(T * 2) * 0.03;
-        box(x, y, bob, dir[0] ? 0.42 : 0.2, dir[1] ? 0.42 : 0.2, 0.16, '#e8453c', { topCol: '#c98f55' });
+        const skin = typeof META !== 'undefined' ? META.cosmetic('boat') : 'red';
+        const hull = skin === 'pirate' ? '#3a2a1a' : skin === 'gold' ? '#ffd23f' : '#e8453c', sail = skin === 'pirate' ? '#1b1530' : '#ffffff';
+        box(x, y, bob, dir[0] ? 0.42 : 0.2, dir[1] ? 0.42 : 0.2, 0.16, hull, { topCol: '#c98f55' });
         box(x, y, 0.16 + bob, 0.03, 0.03, 0.55, '#8a5a2f', { lw: 0.8 });
         const m = P(x, y, 0.45 + bob), m2 = P(x + dir[0] * 0.35, y + dir[1] * 0.35, 0.3 + bob), m3 = P(x, y, 0.72 + bob);
-        poly([m3, m2, m], '#ffffff', INK, Math.max(1, 1.2 * cam.zoom));
+        poly([m3, m2, m], sail, INK, Math.max(1, 1.2 * cam.zoom));
+        if (skin === 'pirate') { g.fillStyle = '#ffffff'; g.beginPath(); g.arc((m[0] + m2[0] + m3[0]) / 3, (m[1] + m2[1] + m3[1]) / 3, Math.max(1.5, 0.04 * K), 0, 7); g.fill(); }
         if (env.night > 0.3) lights.push([x, y, 0.3, '#ffd27a', 0.6]);
     }
     function drawWhale() {
         if (T > whale.next && builtCache.size > 0 && !FXD.inHero()) {
             const b = worldBounds; const side = Math.random() < 0.5;
             whale.x = side ? b.x0 - 3 : b.x1 + 3; whale.y = b.y0 + Math.random() * (b.y1 - b.y0);
-            whale.t0 = T; whale.next = T + 150 + Math.random() * 150; AUDIO.whale();
+            whale.t0 = T; whale.next = T + 150 + Math.random() * 150; AUDIO.whale(); emit('whale', whale);
         }
         const t = T - whale.t0; if (t > 7) return;
         const up = Math.sin(Math.min(1, t / 7) * Math.PI);
@@ -639,6 +778,7 @@ const WORLD = (() => {
         g.fillStyle = '#3d6fb3'; g.strokeStyle = INK; g.lineWidth = Math.max(1.4, 2 * cam.zoom);
         g.beginPath(); g.ellipse(s[0], s[1], r, r * 0.42, 0, Math.PI, 0); g.fill(); g.stroke();
         g.fillStyle = '#ffffff'; g.beginPath(); g.arc(s[0] + r * 0.45, s[1] - r * 0.16, r * 0.06, 0, 7); g.fill();
+        if (up > 0.3) hits.push({ type: 'whale', x0: s[0] - r, y0: s[1] - r * 0.6, x1: s[0] + r, y1: s[1] + 4 });
         if (t > 1.5 && t < 4.5 && Math.random() < 0.6 * FXD.amount()) { const sp = unproject(s[0], s[1] - r * 0.4, 0); spawn({ x: sp[0], y: sp[1], z: up * 0.6 + 0.4, vx: (Math.random() - 0.5) * 0.8, vy: (Math.random() - 0.5) * 0.8, vz: 3 + Math.random() * 2, life: 1.2, col: Math.random() < 0.3 ? '#ffd23f' : '#d9f4ff', size: 0.07, grav: 7 }); }
     }
     function drawBirds() {
@@ -1007,18 +1147,30 @@ const WORLD = (() => {
     // ---------- frame ----------
     // If a device cannot hold the frame rate, drop the canvas resolution a step (never the math).
     const perf = { ema: 16, slowFor: 0, cap: 2 };
+    // First the canvas resolution drops half a step at a time, then the quality preset steps down.
     function adapt(dt) {
         perf.ema += (dt * 1000 - perf.ema) * 0.05;
-        if (perf.ema > 30 && perf.cap > 1) { perf.slowFor += dt; if (perf.slowFor > 3) { perf.cap = Math.max(1, perf.cap - 0.5); perf.slowFor = 0; perf.ema = 16; resize(); } }
-        else perf.slowFor = 0;
+        if (perf.ema > 30 && !perf.locked) {
+            perf.slowFor += dt;
+            if (perf.slowFor > 3) {
+                perf.slowFor = 0; perf.ema = 16;
+                if (perf.cap > 1) { perf.cap = Math.max(1, perf.cap - 0.5); resize(); }
+                else { const order = ['ultra', 'high', 'medium', 'low']; const i = order.indexOf(Q.name); if (i >= 0 && i < 3) { setQuality(order[i + 1]); emit('autoQuality', Q.name); } }
+            }
+        } else perf.slowFor = 0;
     }
     function resize() {
-        DPR = Math.min(window.devicePixelRatio || 1, W * H > 1.2e6 ? 1.5 : 2, perf.cap);
+        DPR = Math.min(window.devicePixelRatio || 1, W * H > 1.2e6 ? 1.5 : 2, perf.cap, Q.dprCap);
         W = cv.clientWidth; H = cv.clientHeight;
         cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
     }
+    // Hit-stop: on hero moments the world nearly freezes for a beat, then snaps back.
+    let hitUntil = 0;
+    function hitstop(ms) { if (DIRECTOR.mode === 'full') hitUntil = performance.now() + ms; }
     function draw(dt, state) {
-        T += dt; dtS = dt; adapt(dt);
+        adapt(dt);
+        if (performance.now() < hitUntil) dt *= 0.04;
+        T += dt; dtS = dt;
         // camera easing
         cam.angle += (cam.tAngle - cam.angle) * Math.min(1, dt * 8);
         cam.zoom += (cam.tZoom - cam.zoom) * Math.min(1, dt * 10);
@@ -1033,16 +1185,21 @@ const WORLD = (() => {
         if (env.rainbow > 0) env.rainbow = Math.max(0, env.rainbow - dt);
         AUDIO.setNight(env.night); AUDIO.setRain(env.rain);
 
+        updateSun();
+        run('update', dt);
         setupFrame(); texBudget = 1;
         g.setTransform(DPR, 0, 0, DPR, 0, 0);
         hits = [];
         const prof = dbg.on ? {} : null; let pt = performance.now();
         const mark = (k) => { if (!prof) return; const n = performance.now(); prof[k] = (prof[k] || 0) + n - pt; pt = n; };
         drawSky(); mark('sky');
+        drawCaustics();
         drawSea(); mark('sea');
         // pass A: plates
         const plist = [...PLOTS.values()].filter(p => builtCache.has(p.key) || plotVisibleGhost(p));
         plist.sort((a, b) => depth(a.x0 + 2.5, a.y0 + 2.5) - depth(b.x0 + 2.5, b.y0 + 2.5));
+        drawShallows(plist);
+        run('underPlates', plist);
         const bp = boatPos();
         let boatDone = false, whaleDone = false;
         const wd = depth(whale.x, whale.y);
@@ -1058,6 +1215,14 @@ const WORLD = (() => {
         drawLighthouse(); mark('plates');
         drawBridges();
         for (const p of plist) if (builtCache.has(p.key) && !plotAnim.has(p.key)) drawLinks(p);
+        run('afterPlates', plist);
+        if (Q.shadows && sun.alpha > 0.01 && K >= 22) {
+            for (const p of plist) {
+                if (!builtCache.has(p.key) || plotAnim.has(p.key)) continue;
+                const c = P(p.x0 + 2.5, p.y0 + 2.5, TOP); if (!onScreen(c[0], c[1], 3.6 * K)) continue;
+                collectShadows(p, state); drawShadowsFor(p);
+            }
+        }
         drawClouds(true); mark('links');
         // pass B: everything standing up, sorted by depth
         const items = [];
@@ -1074,8 +1239,10 @@ const WORLD = (() => {
         }
         for (const f of figs) if (builtCache.has(f.plot)) items.push({ fig: f, d: depth(f.x, f.y) });
         items.push({ fig: builder, builder: true, d: depth(builder.x, builder.y) });
+        run('items', items, plist);
         items.sort((a, b) => a.d - b.d); mark('collect');
         for (const it of items) {
+            if (it.draw) { it.draw(); continue; }
             if (it.fig) { drawFig(it.fig, it.builder); continue; }
             if (it.lamp) { drawLamp(it.x, it.y); continue; }
             const n = it.n;
@@ -1097,11 +1264,15 @@ const WORLD = (() => {
         mark('items');
         ambientTick(dt); updateParts(dt); updateFigs(dt);
         drawParts(); mark('parts');
+        run('afterItems', plist);
         drawClouds(false);
         drawBirds();
+        run('sky', plist);
         drawNight(); mark('night');
         drawRain(dt);
+        run('post', plist);
         drawSigns(); mark('signs');
+        run('ui', plist);
         drawFlyers(dt);
         if (prof) dbg.last = prof;
     }
@@ -1127,67 +1298,6 @@ const WORLD = (() => {
     }
     function easeOutBounce(x) { const n1 = 7.5625, d1 = 2.75; if (x < 1 / d1) return n1 * x * x; if (x < 2 / d1) return n1 * (x -= 1.5 / d1) * x + 0.75; if (x < 2.5 / d1) return n1 * (x -= 2.25 / d1) * x + 0.9375; return n1 * (x -= 2.625 / d1) * x + 0.984375; }
 
-    // ---------- events from the game ----------
-    function onBuy(e) {
-        const n = e.node; const [x, y] = n.coords;
-        if (e.isAutomated) {
-            if (FXD.support() && Math.random() < 0.35) { burst(x, y, TOP + 0.6, curHex(n.costCurrency), 2, 1.2); }
-            return;
-        }
-        nodeAnim.set(n.id, { t0: T, kind: 'buy' });
-        if (FXD.support()) {
-            burst(x, y, TOP + 0.7, curHex(n.costCurrency), 7 + Math.min(10, e.bought));
-            floatText(x, y, TOP + 1.3, `+${formatNum(e.bought)} LV`, '#ffffff');
-        }
-        sendBuilder(x, y);
-        if (e.newLevel >= getMaxLevel(n)) {
-            ring(x, y, TOP + 0.05, '#ffd23f', 1.8, 0.8);
-            burst(x, y, TOP + 0.9, '#ffd23f', 14, 2.8);
-            floatText(x, y, TOP + 1.8, 'MAXED!', '#ffd23f', true);
-            if (FXD.flash()) flashScreen('rgba(255,230,120,0.18)');
-        }
-    }
-    function onReset(e) {
-        FXD.hero(1400); FXD.shake(0.6);
-        for (const id of e.resetIds) {
-            const n = NODE_MAP.get(id); if (!n || !builtCache.has(plotKeyOf(n.coords[0], n.coords[1]))) continue;
-            if (Math.random() < 0.5 * FXD.amount()) for (let i = 0; i < 2; i++) spawn({ x: n.coords[0], y: n.coords[1], z: TOP + 0.4, vx: (Math.random() - 0.5) * 2, vy: (Math.random() - 0.5) * 2, vz: 2 + Math.random() * 2, life: 1.2, col: curHex(n.costCurrency || 'P'), size: 0.09, grav: 9, brick: true, bounce: true });
-            nodeAnim.set(id, { t0: T + Math.random() * 0.3, kind: 'reset' });
-            lastCount.set(id, 0);
-        }
-        const [x, y] = e.node.coords;
-        ring(x, y, TOP + 0.1, curHex(e.node.targetCurrency), 6, 1.1);
-        ring(x, y, TOP + 0.1, '#ffffff', 3.5, 0.8);
-        burst(x, y, TOP + 0.8, curHex(e.node.targetCurrency), 26, 3.2);
-        floatText(x, y, TOP + 2, `+${formatNum(e.gain)} ${curName(e.node.targetCurrency)}`, curHex(e.node.targetCurrency), true);
-        if (FXD.flash()) flashScreen(hexA(curHex(e.node.targetCurrency), 0.28));
-    }
-    function onPlotBuilt(p, focus) {
-        plotAnim.set(p.key, { t0: T });
-        textureFor(p);
-        refreshBuilt(); computeBounds(); syncFigs();
-        const cx = p.x0 + 2.5, cy = p.y0 + 2.5;
-        if (focus) { cam.tx = cx; cam.ty = cy; }
-        setTimeout(() => {
-            FXD.shake(0.8);
-            ring(cx, cy, 0.05, '#ffffff', 5, 1);
-            for (let i = 0; i < 30 * FXD.amount(); i++) spawn({ x: cx + (Math.random() - 0.5) * 5, y: cy + (Math.random() - 0.5) * 5, z: 0.1, vx: (Math.random() - 0.5), vy: (Math.random() - 0.5), vz: 2 + Math.random() * 3, life: 0.9, col: '#d9f4ff', size: 0.06, grav: 9 });
-            AUDIO.splash();
-        }, 650);
-        // bricks rain onto the new plot
-        for (let i = 0; i < 40 * FXD.amount(); i++) {
-            spawn({ x: cx + (Math.random() - 0.5) * 4.6, y: cy + (Math.random() - 0.5) * 4.6, z: 6 + Math.random() * 5, vx: 0, vy: 0, vz: -2, life: 2.4, col: [p.color, '#ffd23f', '#ffffff', '#e8453c', '#4aa8ff'][i % 5], size: 0.1, grav: 7, brick: true, bounce: true });
-        }
-    }
-    function celebrate(nodes) {
-        const list = nodes.slice(0, 40);
-        list.forEach((n, i) => setTimeout(() => {
-            nodeAnim.set(n.id, { t0: T, kind: 'buy' });
-            if (FXD.amount() > 0) burst(n.coords[0], n.coords[1], TOP + 0.7, curHex(n.costCurrency), 4, 1.8);
-            if (i % 4 === 0) AUDIO.buy(true);
-        }, i * 45));
-        if (list.length) { const n = list[list.length - 1]; sendBuilder(n.coords[0], n.coords[1]); }
-    }
     let flashEl = null;
     function flashScreen(col) { if (!flashEl) flashEl = document.getElementById('flash'); if (!flashEl) return; flashEl.style.background = col; flashEl.classList.remove('go'); void flashEl.offsetWidth; flashEl.classList.add('go'); }
 
@@ -1195,9 +1305,20 @@ const WORLD = (() => {
     function screenOf(x, y, z = TOP + 0.6) { setupFrame(); return P(x, y, z); }
     function focusPlot() { const [x, y] = unproject(W / 2, H / 2); return PLOTS.get(plotKeyOf(x, y)); }
     function init() { resize(); refreshBuilt(); computeBounds(); syncFigs(); for (const k of builtCache) textureFor(PLOTS.get(k)); }
+    // Everything a module needs to draw into the world, with live getters for per-frame values.
+    const R = {
+        get g() { return g; }, get K() { return K; }, get T() { return T; }, get dt() { return dtS; }, get W() { return W; }, get H() { return H; }, get DPR() { return DPR; },
+        get cosA() { return cosA; }, get sinA() { return sinA; }, get focusedKey() { return focusedKey; }, get selectedId() { return selectedId; }, get worldBounds() { return worldBounds; },
+        cam, env, Q, sun, TOP, INSET, SQ, ZH, INK, EDGES, THEMES,
+        P, depth, unproject, onScreen, box, stud, poly, roundRect, tone, stamp, camStill, sparkle, drawStar, glowSprite, plateCorners, hull,
+        spawn, burst, puff, spark, ring, floatText, fly, flashScreen, shadow, light: (l) => lights.push(l), hit: (h) => hits.push(h),
+        builtCache: () => builtCache, plotVisibleGhost, freeCells, hashKey, rng, bricksFor, nodeAnim, lastCount, plotAnim, textureFor,
+        FXD, DIRECTOR, figs, builder, sendBuilder, refreshBuilt, computeBounds, syncFigs, easeOutBounce, hitstop, parts,
+    };
     return {
-        cam, env, DIRECTOR, FXD, init, resize, draw, pick, unproject, screenOf, focusPlot, refreshBuilt, builtPlots, onBuy, onReset, onPlotBuilt, fly, flashScreen,
+        R, use, on, emit, setQuality, QUALITY, Q, perf,
+        cam, env, DIRECTOR, FXD, init, resize, draw, pick, unproject, screenOf, focusPlot, refreshBuilt, builtPlots, fly, flashScreen,
         setSelected(id) { selectedId = id; }, setHover(k) { hoverKey = k; }, setFocus(k) { focusedKey = k; }, setSignInfo(m) { signInfo = m; }, get W() { return W; }, get H() { return H; }, get K() { return K; },
-        computeBounds, syncFigs, sendBuilder, burst, floatText, ring, TOP, nodeKind, celebrate, dbg,
+        computeBounds, syncFigs, sendBuilder, burst, floatText, ring, TOP, nodeKind, dbg,
     };
 })();

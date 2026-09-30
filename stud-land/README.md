@@ -3,96 +3,93 @@
 Stud City Incremental, playable, built on the real Upgrade Land engine (Andy175, galaxy.click/play/873). It includes the latest Red update (red v1.3).
 Open `index.html` in a browser. No build step and no server needed.
 
+This draft doubles as the **build reference for the Roblox version**:
+- `docs/REFERENCE.md` covers every system with exact numbers and Roblox equivalents.
+- `docs/LUA_PORT.md` covers the math port.
+- The in-game **FX LAB** plays and documents every effect, sound, haptic and UI motion, and exports them all as JSON.
+
 ## What is in it
 
 - **The whole game, same math.**
-  - All 722 nodes from Upgrade Land (697 upgrades, 15 rebuild portals, 10 info signs) and all 63 currencies, run by a port of its engine.
-  - The data is byte-identical to the live game at andyyim175.github.io/upgtree (checked 2026-09-30). Upstream has no newer commits. Yellow and Blue plates are listed in the data as coming soon.
-  - `tools/parity-test.js` proves bit-for-bit parity with the original page.
-- **Every baseplate is an island plot** in an isometric LEGO archipelago.
-  - Each upgrade is a brick machine standing on its original tree spot. It grows a brick per step of level, and its top turns gold at max.
-  - Machines you can't buy yet show as blue holograms.
-  - Plots you can't reach yet show as dashed blueprints on the water, with what they need.
-- **Plot signs** show each plot's headline: its gain per second, or its rebuild gain. Under that sit a level bar and a badge counting affordable machines.
-- **World life:**
-  - Each plot has a themed floor with studs and conveyor belts.
-  - Studs ride the belts on the plot you are looking at.
-  - Wandering minifigs, plus a builder minifig who runs to whatever you buy and hammers it.
-  - Gulls, drifting clouds with shadows, and a boat circling the islands.
-  - A lighthouse whose beam sweeps the sea at night.
-  - A waterfall off Brick Grove Falls.
-  - A whale that surfaces every few minutes and spouts studs.
-  - Rain showers, followed by a rainbow.
-  - A 12 minute day and night cycle. At night the sea reflects stars, lamps and machines glow, and fireflies come out.
-  - Themed particles: embers on the Red canyon and the forge, sparks at the battery farm, petals, bubbles, gem twinkles.
-- **Effects follow an attention budget:**
-  - One hero moment at a time (new plot, rebuild).
-  - At most 3 support effects per quarter second.
-  - A flash limiter.
-  - Effects can be set to Full, Reduced or Minimal. Reduced is the default when the device asks for reduced motion.
-- **Sound is all synthesized:**
-  - Brick snaps climb a semitone per quick buy.
-  - Chimes on max, a brick rain and fanfare for new plots, a whoosh and boom on rebuild.
-  - Background: sea wash, a soft chord pad, birds by day and crickets by night.
-  - Ambient sound ducks during big moments.
-  - Phones also vibrate on buys.
-- **Offline gain is capped at 3:00**, or 5:00 with the Offline Pass toggle in Settings.
+  - All 722 Upgrade Land nodes (697 upgrades, 15 rebuild portals, 10 info signs) and all 63 currencies, run by a port of its engine.
+  - `tools/parity-test.js` proves bit-for-bit parity with the original.
+  - The data is byte-identical to the live game (checked 2026-09-30). Yellow and Blue plates are listed as coming soon.
+- **World.** An isometric LEGO archipelago. Every baseplate is a themed island.
+  - Studded floors with baked conveyor belts.
+  - Brick machines that grow with level and turn gold at max, with lit windows at night.
+  - Portals with spinning spirals, and 50 kinds of themed props (turbines, windmills, fountains, minecarts, lava pools, palms, stalls, obelisks and more).
+  - Sun shadows that swing with the clock.
+  - Shallows, caustics and foam on the sea.
+- **Life.**
+  - Wandering minifigs, and a builder who runs to what you buy.
+  - Automation drones carrying bricks.
+  - Boat, whale, gulls, balloon, and a plane towing a banner.
+  - Jumping fish, buoys, a duck family.
+  - A lighthouse and a waterfall.
+  - Fireflies and theme particles.
+- **Weather and time.**
+  - A day and night cycle with a colour grade.
+  - Clear, rain with a rainbow after, storms with lightning, dawn fog, rare night snow, gusting wind.
+- **Effects.** 27 catalogued effects under an attention budget (hero, support, ambient), including:
+  - hit-stop, letterbox, zoom punch and camera shake on hero moments
+  - flash limits
+  - Full, Reduced and Minimal modes
+- **Walk mode.**
+  - Your own minifig. WASD, joystick or tap to move; sprint and jump.
+  - Locked plots are walls that tell you what they need.
+  - Proximity prompts: hold E to keep buying.
+  - Footsteps change with the surface, and you can wear trails.
+- **Meta (cosmetic only).**
+  - 26 badges.
+  - 8 hidden golden code bricks, plus 5 secret codes and a launch code.
+  - A wardrobe of hats, outfits, trails and boat paint.
+  - A next goal guide.
+  - A stats panel with a chart.
+- **HUD.**
+  - Brick-letter title screen.
+  - Ticker counters.
+  - Machine cards with a live next-press preview, hold-to-buy, and a DATA tab with the raw formulas.
+  - Minimap.
+  - Photo mode with a time slider, filters, tilt-shift and snapshot.
+  - Settings for quality, UI size, reduce flashing and five volume buses.
+  - Phone portrait and landscape layouts.
+- **Sound.** Synthesized: adaptive generative music, per-theme ambience, weather audio, spatial effects and haptics.
+- **Offline gain** is capped at 3:00, or 5:00 with the Offline Pass toggle.
 
-## Dev bar (top)
+## Dev bar
 
 | Button | What it does |
 | --- | --- |
-| MAX NEXT PLOT | Maxes every machine on the next unfinished plot, in progression order. Endless towers stop at the last level a player could ever pay for. 52 presses build all 39 plots. |
-| SIM TO NEXT PLOT | The bot plays at warp speed until a new plot is built, then reports the play time. |
-| SPEED | x1, x3, x10 or x100 game speed. The ticks are the same 100 ms ticks, just more of them. |
-| BOT | The bot plays at the current speed. |
-| TIMELINE | Your play time per plot next to the bot benchmark, plus every sim run. |
-| AWAY 1H | Pretends you were away an hour, to show the offline cap. |
-| NAMES | Switches between Stud City and Upgrade Land names. |
-| TIME +6H | Skips ahead in the day and night cycle. |
+| MAX NEXT PLOT | Maxes every machine on the next unfinished plot (endless towers stop at the last payable level). 52 presses build all 39 plots |
+| SIM TO NEXT PLOT | The bot plays at warp speed until a new plot is built, then reports the play time |
+| SPEED / BOT | x1 to x100 game speed; the bot plays for you |
+| FX LAB | Every effect, sound, haptic and UI motion: play, read the spec and Roblox recipe, export JSON |
+| TIMELINE | Your play time per plot next to the bot benchmark |
+| WEATHER | Auto, clear, rain, storm, fog, snow |
+| TIME +6H / AWAY 1H / NAMES | Day cycle skip, offline cap test, Stud City or Upgrade Land names |
 
 ## Controls
 
 | Action | Mouse and keyboard | Touch |
 | --- | --- | --- |
-| Pan | Drag, or WASD / arrow keys | Drag |
-| Zoom | Wheel, or + / - | Pinch |
-| Turn the map | Q and E, or the slider bottom right | Two-finger twist |
-| Open a machine | Click it | Tap it |
-| Buy / Max the open machine | B / M | Card buttons |
-| Buy mode | 1 to 4 | Buy mode buttons |
-| Buy everything affordable on the plot | Space | BUY ALL |
-| Rebuild (reset) | Hold the button | Hold the button |
-
-## Files
-
-| File | Contents |
-| --- | --- |
-| `js/ul-data.js` | Upgrade Land tree data, copied unchanged |
-| `js/engine.js` | Engine port: gain, buy, automation, resets, offline, save |
-| `js/plots.js` | Plots: which machines sit where, build rules, progression order |
-| `js/bot.js` | The greedy autoplayer |
-| `js/benchmark.js` | Bot timeline, generated by `tools/balance.js` |
-| `js/format.js` | Number format, Stud City names and colours |
-| `js/world.js` | Renderer, ambience, VFX, effects director |
-| `js/audio.js` | Synth sound and haptics |
-| `js/hud.js` | HUD, machine card, panels |
-| `js/main.js` | Loop, input, dev actions |
-| `docs/LUA_PORT.md` | How to move the engine to Luau and keep parity |
+| Pan / zoom / turn | Drag or WASD, wheel, Q and E | Drag, pinch, twist |
+| Open a machine | Click | Tap |
+| Buy / max / buy mode / buy all | B, M, 1 to 4, Space (or hold BUY) | Card buttons, hold BUY |
+| Walk mode | V, then WASD, Shift, Space, hold E | WALK, joystick, JUMP, action button |
+| Photo mode / FX Lab / help | P, L, ? | PHOTO button |
+| Close | Esc | X |
 
 ## Tests and tools
 
 ```
-# parity with the original (needs the upgtree index.html)
-NODE_PATH=$(npm root -g) node tools/parity-test.js path/to/upgtree/index.html
-# browser smoke test with screenshots
-NODE_PATH=$(npm root -g) node tools/smoke.js shots/
-# bot timeline from a fresh save, rewrites js/benchmark.js
-node tools/balance.js 16 --write-benchmark
+NODE_PATH=$(npm root -g) node tools/parity-test.js path/to/upgtree/index.html   # math parity
+NODE_PATH=$(npm root -g) node tools/smoke.js shots/      # core flow + screenshots
+NODE_PATH=$(npm root -g) node tools/smoke2.js shots/     # v2 systems + screenshots
+node tools/balance.js 16 --write-benchmark               # bot timeline
 ```
 
 ## Known limits
 
-- **The bot stalls.** It builds 14 plots, reaching Cookie Cove at 3h41m of play. Then its € income can't reach the 30 € and 125 € Prestige unlocks. Real play, or MAX NEXT PLOT, is needed past that point.
-- **Fragments hit the number limit on purpose.** The Finale is built to fill fragments past 1.7e308, which is what unlocks the World Two reset. No other currency overflows, even with every plot maxed.
+- **The bot stalls.** It builds 14 plots, reaching Cookie Cove at 3h41m of play. Past that, use real play or MAX NEXT PLOT.
+- **Fragments hit the number limit on purpose.** The Finale is built to fill them past 1.7e308, which unlocks the World Two reset.
 - **No license.** The upgtree repository has no license file. Get Andy175's go-ahead before shipping anything built on this data.

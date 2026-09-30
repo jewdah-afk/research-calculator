@@ -12,7 +12,12 @@
 </head>
 <body>
 <canvas id="world" aria-label="Stud City world"></canvas>
+<!-- post layers: colour grade, tilt-shift blur bands, vignette, flash, cinema bars -->
+<div id="grade"></div>
+<div id="tilt"><div class="tilt-top"></div><div class="tilt-bot"></div></div>
+<div id="vignette"></div>
 <div id="flash"></div>
+<div id="letterbox"><div class="lb-top"></div><div class="lb-bot"></div></div>
 
 <header id="devbar">
   <span class="devchip">DEV</span>
@@ -20,16 +25,18 @@
   <button class="dbtn" id="dvSim" title="Let the bot play at warp speed until a new plot is built, then report the play time">SIM TO NEXT PLOT</button>
   <button class="dbtn" id="dvSpeed" title="Game speed">SPEED x1</button>
   <button class="dbtn" id="dvBot" title="Bot plays for you at the current speed">BOT OFF</button>
+  <button class="dbtn lab" id="dvLab" title="Every effect, sound, haptic and UI motion with its spec and Roblox recipe">FX LAB</button>
   <button class="dbtn" id="dvTimeline">TIMELINE</button>
+  <button class="dbtn" id="dvWeather" title="Cycle the weather">WEATHER: AUTO</button>
+  <button class="dbtn" id="dvTime" title="Skip 6 hours of the day and night cycle">TIME +6H</button>
   <button class="dbtn" id="dvAway" title="Pretend you were away for 1 hour to test the offline cap">AWAY 1H</button>
   <button class="dbtn" id="dvNames" title="Switch between Stud City and Upgrade Land names">NAMES: STUD</button>
-  <button class="dbtn" id="dvTime" title="Skip 6 hours of the day and night cycle">TIME +6H</button>
   <span class="devclock" id="dvClock">0s</span>
 </header>
 
 <div id="hud">
   <div id="topleft">
-    <div class="hero" id="hero">
+    <div class="hero" id="hero" role="button" tabindex="0" title="Open stats">
       <img class="hero-icon" id="heroIcon" alt="">
       <div class="hero-text">
         <div class="hero-label" id="heroLabel">STUDS</div>
@@ -41,11 +48,23 @@
     <button class="more" id="stackMore">MORE</button>
   </div>
 
+  <button id="guide" class="guide" title="Your next goal"><span class="g-icon" id="guideIcon">&#9650;</span><span class="g-text"><b id="guideText">Tap the blueprint</b><i id="guideSub"></i></span><span class="g-go">GO</span></button>
+
   <nav id="tiles">
     <button class="tile t-reset" id="tReset"><span class="ticon">&#10227;</span><span>REBUILD</span><b class="badge hidden" id="tResetBadge">0</b></button>
     <button class="tile t-index" id="tIndex"><span class="ticon">&#9638;</span><span>PLOTS</span></button>
+    <button class="tile t-badge" id="tBadges"><span class="ticon">&#9733;</span><span>BADGES</span><b class="badge hidden" id="tBadgeCount">0</b></button>
+    <button class="tile t-codes" id="tCodes"><span class="ticon">&#10022;</span><span>CODES</span><b class="badge hidden" id="tCodeBadge">!</b></button>
     <button class="tile t-set" id="tSet"><span class="ticon">&#9881;</span><span>SETTINGS</span></button>
   </nav>
+
+  <div id="leftdock">
+    <div class="mm-wrap" id="mmWrap"><canvas id="minimap" width="180" height="132" aria-label="Minimap"></canvas><span class="mm-label">MAP</span></div>
+    <div class="dock-btns">
+      <button class="dock walk" id="btnWalk" title="Walk mode (V)"><span class="ticon">&#9823;</span><span>WALK</span></button>
+      <button class="dock photo" id="btnPhoto" title="Photo mode (P)"><span class="ticon">&#9673;</span><span>PHOTO</span></button>
+    </div>
+  </div>
 
   <div id="camctl">
     <button class="cbtn" id="camL" title="Turn left (Q)">&#10226;</button>
@@ -71,9 +90,30 @@
   </div>
 </div>
 
+<!-- walk mode controls (touch) -->
+<div id="walkui">
+  <div id="joy"><div id="joyKnob"></div></div>
+  <button id="btnJump" class="wbtn">JUMP</button>
+  <button id="btnAct" class="wbtn act">USE</button>
+  <button id="btnWalkExit" class="dbtn">EXIT WALK</button>
+</div>
+
+<!-- photo mode toolbar -->
+<div id="photobar">
+  <span class="pb-title">PHOTO MODE</span>
+  <label class="pb-l">TIME <input type="range" id="pbTime" min="0" max="24" step="0.1"></label>
+  <div class="seg" id="pbFilter"><button data-f="none" class="on">NONE</button><button data-f="warm">WARM</button><button data-f="cool">COOL</button><button data-f="vivid">VIVID</button><button data-f="noir">NOIR</button></div>
+  <button class="dbtn" id="pbTilt">TILT: ON</button>
+  <button class="dbtn" id="pbHud">HIDE ALL</button>
+  <button class="dbtn primary" id="pbSnap">SNAP</button>
+  <button class="dbtn" id="pbExit">EXIT</button>
+</div>
+
 <section id="sheet" class="sheet hidden" aria-live="polite"></section>
 <section id="panel" class="panel hidden"><div class="panel-card"><header class="panel-head"><h2 id="panelTitle"></h2><button class="x" id="panelX" aria-label="Close">&times;</button></header><div class="panel-body" id="panelBody"></div></div></section>
+<aside id="drawer" class="drawer hidden"><header class="panel-head"><h2 id="drawerTitle">FX LAB</h2><button class="x" id="drawerX" aria-label="Close">&times;</button></header><div class="drawer-tabs" id="drawerTabs"></div><div class="panel-body" id="drawerBody"></div></aside>
 <div id="toasts"></div>
+<div id="badgePop"><span class="bp-icon">&#9733;</span><div><div class="bp-kicker">BADGE UNLOCKED</div><div class="bp-name">Name</div><div class="bp-desc">Desc</div></div></div>
 <div id="banner" class="hidden"><div class="b1">NEW PLOT!</div><div class="b2" id="bannerName"></div></div>
 <section id="modal" class="modal hidden"><div class="modal-card" id="modalCard"></div></section>
 <div id="simbox" class="hidden">
@@ -83,6 +123,19 @@
   <button class="dbtn" id="simStop">STOP</button>
 </div>
 
+<!-- title screen -->
+<section id="title">
+  <div class="t-sky"></div>
+  <div class="t-logo" aria-label="Stud City Incremental">
+    <div class="t-row" id="tRow1"></div>
+    <div class="t-row small" id="tRow2"></div>
+  </div>
+  <div class="t-bar"><i id="tBar"></i></div>
+  <div class="t-tip" id="tTip">Laying the baseplates...</div>
+  <button class="t-play" id="tPlay" disabled>TAP TO PLAY</button>
+  <div class="t-foot">Rough draft on the Upgrade Land engine by Andy175. Same math, new world.</div>
+</section>
+
 <script src="js/ul-data.js"></script>
 <script src="js/format.js"></script>
 <script src="js/engine.js"></script>
@@ -91,7 +144,14 @@
 <script src="js/benchmark.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/world.js"></script>
+<script src="js/fx.js"></script>
+<script src="js/meta.js"></script>
+<script src="js/props.js"></script>
+<script src="js/env.js"></script>
+<script src="js/walk.js"></script>
 <script src="js/hud.js"></script>
+<script src="js/ui-extras.js"></script>
+<script src="js/lab.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>
