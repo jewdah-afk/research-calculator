@@ -1,4 +1,4 @@
-// Parity test: runs the original Upgrade Land page and the Stud Land engine side by side in
+// Parity test: runs the original Upgrade Land page and the Stud City Incremental engine side by side in
 // headless Chromium with a seeded Math.random and a fake clock, applies the same actions to
 // both, and compares every currency and every level exactly after every step.
 //

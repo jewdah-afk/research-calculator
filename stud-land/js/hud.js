@@ -1,4 +1,4 @@
-// Stud Land HUD (DOM). Reads game state and calls ACTIONS (defined in main.js) for anything that
+// Stud City Incremental HUD (DOM). Reads game state and calls ACTIONS (defined in main.js) for anything that
 // changes it. Text updates are throttled and only touch the DOM when a string actually changes.
 const $ = (id) => document.getElementById(id);
 function el(tag, cls, html) { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; }
@@ -269,7 +269,7 @@ const HUD = (() => {
         body.appendChild(opt('Volume', vol));
         body.appendChild(opt('Effects', seg([['full', 'FULL'], ['reduced', 'REDUCED'], ['minimal', 'MINIMAL']], SETTINGS.get('fx'), v => SETTINGS.set('fx', v))));
         body.appendChild(opt('Vibration', seg([[true, 'ON'], [false, 'OFF']], SETTINGS.get('haptics'), v => SETTINGS.set('haptics', v))));
-        body.appendChild(opt('Names', seg([['stud', 'STUD LAND'], ['ul', 'UPGRADE LAND']], SETTINGS.get('names'), v => SETTINGS.set('names', v))));
+        body.appendChild(opt('Names', seg([['stud', 'STUD CITY'], ['ul', 'UPGRADE LAND']], SETTINGS.get('names'), v => SETTINGS.set('names', v))));
         body.appendChild(opt('Offline time', seg([[false, '3:00'], [true, 'PASS 5:00']], SETTINGS.get('pass'), v => SETTINGS.set('pass', v))));
         body.appendChild(opt('Day length', seg([[6, '6 MIN'], [12, '12 MIN'], [24, '24 MIN']], SETTINGS.get('dayLen'), v => SETTINGS.set('dayLen', v))));
         body.appendChild(el('div', 'note', 'Offline gain pays at most 3 minutes (5 with the pass) no matter how long you were away, so coming back never skips a pile of upgrades. Random and self limiting currencies (copper, silver, gold, lapis, diamonds, essence and more) do not pay offline, same as Upgrade Land.'));

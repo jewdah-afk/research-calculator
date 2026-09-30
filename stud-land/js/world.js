@@ -1,4 +1,4 @@
-// Stud Land world: an isometric LEGO archipelago drawn on one canvas.
+// Stud City Incremental world: an isometric LEGO archipelago drawn on one canvas.
 // Every Upgrade Land baseplate is an island plot. Every upgrade is a brick machine standing on its
 // original tree coordinate, and it grows a brick per step of level. Nothing here changes game math:
 // it only reads state and listens to engine events.

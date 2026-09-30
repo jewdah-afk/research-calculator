@@ -1,15 +1,15 @@
-// Stud Land engine: a DOM-free port of the Upgrade Land engine.
+// Stud City Incremental engine: a DOM-free port of the Upgrade Land engine.
 // Every function that touches the math is copied line for line from the original
 // (andyyim175/upgtree index.html) so results match bit for bit. Only rendering,
 // sound and DOM calls were removed; they are replaced by the EVENTS hooks below.
 // Global names (gameState, getCurr, getLevel, calculateGainRate, getResetGain,
 // formatNum, buyMode) are kept because the node formulas in ul-data.js call them.
 
-// ==================== CONFIG (Stud Land changes live here, nowhere else) ====================
+// ==================== CONFIG (Stud City Incremental changes live here, nowhere else) ====================
 const STUD_CONFIG = {
     GAME_TICK_MS: 100,            // same as the original
     AUTOMATION_INTERVAL_MS: 200,  // same as the original
-    // Offline: the Stud Land dev asked for a hard cap of 2 to 5 minutes instead of the
+    // Offline: the Stud City Incremental dev asked for a hard cap of 2 to 5 minutes instead of the
     // original softcap (which paid about 6 minutes for 1 hour away and 14 minutes for 8 hours).
     OFFLINE_CAP_SECONDS: 180,
     OFFLINE_MODE: 'stud_cap',     // 'stud_cap' (hard cap above) or 'original' (Upgrade Land softcap)

@@ -144,7 +144,7 @@ const ACTIONS = {
     },
     maxNextPlot() {
         // next plot with a machine that can still go up (machines stopped early for overflow count as done)
-        const canRise = (n) => { const l = getLevel(n.id), c = capLevel(n); return isNodeUnlocked(n) && l < c && isFinite(c) && finiteLevel(n, l, c) > l; };
+        const canRise = (n) => { const l = getLevel(n.id), c = maxCap(n); return isNodeUnlocked(n) && l < c && isFinite(c) && finiteLevel(n, l, c) > l; };
         const p = PLOT_ORDER.find(q => !q.soon && q.upgrades.some(canRise));
         if (!p) { HUD.toast('Nothing left to max right now'); AUDIO.deny(); return; }
         GAME.mode = 'max';
@@ -155,10 +155,10 @@ const ACTIONS = {
             let changed = false;
             for (const n of p.upgrades) {
                 if (!isNodeUnlocked(n)) continue;
-                const cap = capLevel(n), l = getLevel(n.id);
+                const base = capLevel(n), cap = maxCap(n), l = getLevel(n.id);
                 if (l >= cap || !isFinite(cap)) continue;
                 const lv = finiteLevel(n, l, cap);
-                if (lv < cap) limited++;
+                if (lv < base) limited++;
                 if (lv <= l) continue;
                 gameState.levels[n.id] = lv; total += lv - l; changed = true;
                 if (!touched.includes(n)) touched.push(n);
@@ -173,7 +173,7 @@ const ACTIONS = {
         if (!quietFx()) WORLD.celebrate(touched);
         AUDIO.maxed(); HAPTIC.maxed();
         HUD.toast(`Maxed ${p.name}: +${formatNum(total)} levels on ${touched.length} machines`, '#fff3b0');
-        if (limited) HUD.toast(`${limited} machine${limited > 1 ? 's' : ''} stopped early where the numbers would pass 1.8e308`, '#ffe3c2');
+        if (limited) HUD.toast(`${limited} machine${limited > 1 ? 's' : ''} stopped where the next price passes what a wallet can hold`, '#ffe3c2');
         checkPlots(false);
         GAME.mode = 'play';
     },
@@ -200,7 +200,18 @@ const ACTIONS = {
         AUDIO.maxed();
     },
 };
-// Highest level in (from, to] that keeps every number this machine touches finite. Some machines
+// Highest level a player could ever pay for: past it the next price is bigger than the most any
+// wallet can hold (about 1.8e308). Endless towers like Loop Lagoon list a max of 1000, but their
+// price passes that limit long before (I05 would cost about 10^1880 at level 629), so MAX stops here.
+function priceLevel(n, from, to) {
+    const price = (L) => { const c = n.bulkFinalCost ? n.costFormula(L, getLevel, getCurr) : n.costFormula(L - 1, getLevel, getCurr); return (typeof c === 'number' && c === c) ? c : Infinity; };
+    if (price(to) <= Number.MAX_VALUE) return to;
+    let lo = from, hi = to;
+    while (hi - lo > 1) { const mid = Math.floor((lo + hi) / 2); if (price(mid) <= Number.MAX_VALUE) lo = mid; else hi = mid; }
+    return lo;
+}
+function maxCap(n) { const c = capLevel(n); return isFinite(c) ? Math.min(c, priceLevel(n, getLevel(n.id), c)) : c; }
+// Safety net: highest level in (from, to] that keeps every number this machine touches finite. Some machines
 // overflow long before their data max (x3 per level to level 1000 is 3^1000), so MAX stops there.
 function finiteLevel(n, from, to) {
     const keys = []; for (const e of (n.effects || [])) { const c = e.currency || e.targetCurrency; if (c && !keys.includes(c)) keys.push(c); }

@@ -1,4 +1,4 @@
-# Porting the Stud Land engine to Luau
+# Porting the Stud City Incremental engine to Luau
 
 The HTML draft runs the real Upgrade Land math. This note is for whoever builds it in Roblox.
 It covers the number type, the loop, and every JS behaviour the formulas lean on that Luau does differently.
@@ -70,13 +70,18 @@ Use one `Random.new()` and `:NextNumber()`. The odds are what matter. Draw-for-d
 
 A transpiler is the safest path for 1,360 formulas: parse `ul-data.js` with a JS parser and emit Luau with helpers for items 1 to 5. Hand-porting that many invites typos, and parity testing will catch any that slip through.
 
-## Stud Land changes (the only ones)
+## Stud City Incremental changes (the only ones)
 
 - **Offline:** hard cap of 3:00 (5:00 with the Offline Pass). It replaces the original softcap, which paid about 6 minutes for an hour away. It lives in `STUD_CONFIG.OFFLINE_CAP_SECONDS`. The payout rule is unchanged: rate times seconds, skipping the random and self-limiting currencies.
 - **Display names only:** P shows as Studs, R as Blueprints, € as Golden Bricks, α as Alpha Bricks, and so on (`js/format.js`). Save keys keep the Upgrade Land ids.
-- **Plot build rule:** a plot is built when its Upgrade Land baseplate decoration would show. Eight baseplates point at ids that do not exist in the data (B12, +B13, +B14, P16, A50, +B12, +B11, +B15), so in the original their backgrounds never appear. In Stud Land those plots count as built once any machine on them has a level.
+- **Plot build rule:** a plot is built when its Upgrade Land baseplate decoration would show. Eight baseplates point at ids that do not exist in the data (B12, +B13, +B14, P16, A50, +B12, +B11, +B15), so in the original their backgrounds never appear. In Stud City those plots count as built once any machine on them has a level.
 
 ## Dev tools that are not game rules
 
-- **MAX NEXT PLOT** sets levels directly and never touches the formulas. Each machine goes to its base max level from the data, but stops early if a higher level would push a number past 1.8e308. It does not follow machines that raise each other's max, because that chain runs to around 1e189. 52 presses build all 39 plots.
+- **MAX NEXT PLOT** sets levels directly and never touches the formulas. Each machine goes to its max level from the data, with two stops:
+  - It does not follow machines that raise each other's max, because that chain runs to around 1e189.
+  - It stops at the last level a player could ever pay for, where the next price would be bigger than the most any wallet can hold (about 1.8e308). This only bites on endless towers, which list a max of 1000 but price out long before. Loop Lagoon's I05 stops at 130 instead of 1000: level 629 would cost about 10^1880 Loops.
+
+  52 presses build all 39 plots.
+- **The only currency that reaches the number limit is `fragment`, and that is by design.** The Finale's 24 machines stack x2.4e13 each until fragments pass 1.7e308, and the World Two reset (`U1_RESET`) only pays when `fragment > 1.7e308`.
 - **SIM TO NEXT PLOT and BOT** play through `buyUpgrade` and `executeReset` only. The greedy bot reaches 14 plots, ending with Cookie Cove at 3h41m of play, and then stalls. `js/benchmark.js` has the times.

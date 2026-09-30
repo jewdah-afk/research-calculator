@@ -1,4 +1,4 @@
-// Display layer only: number formatting, Stud Land names and colors for currencies.
+// Display layer only: number formatting, Stud City names and colors for currencies.
 // Internal ids stay the Upgrade Land ones (P, R, €, α ...) so saves and the Lua port line up.
 const SUFFIXES = ['', 'K', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx', 'Sp', 'Oc', 'No', 'Dc', 'UDc', 'DDc', 'TDc', 'QaDc', 'QiDc', 'SxDc', 'SpDc', 'OcDc', 'NoDc', 'Vg'];
 function formatNum(x) {
@@ -31,7 +31,7 @@ function formatTime(ms) {
 }
 function formatClock(sec) { sec = Math.round(sec); return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`; }
 
-// Stud Land names. Anything not listed keeps its Upgrade Land name.
+// Stud City names. Anything not listed keeps its Upgrade Land name.
 const STUD_NAMES = {
     P: 'Studs', R: 'Blueprints', '€': 'Golden Bricks', A: 'Sky Bricks', E: 'Charge',
     'α': 'Alpha Bricks', 'β': 'Beta Bricks', '¤': 'Sticker Power', '∞': 'Loops', '♦': 'Loop Shards',

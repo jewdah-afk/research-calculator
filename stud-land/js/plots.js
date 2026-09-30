@@ -1,10 +1,10 @@
-// Stud Land plots. Upgrade Land lays its tree out on 5 x 5 baseplates (one unit = 160 px in the
-// original canvas). Every baseplate becomes one Stud Land plot. This file only reads the data:
+// Stud City Incremental plots. Upgrade Land lays its tree out on 5 x 5 baseplates (one unit = 160 px in the
+// original canvas). Every baseplate becomes one Stud City Incremental plot. This file only reads the data:
 // which nodes sit on which plot, what the plot is called, and when it counts as built.
 const PLOT_SIZE = 5;
 
 // Display info per plot, keyed by grid cell "gx,gy" where gx = floor((x + 2.5) / 5).
-// name: Stud Land name, ul: the Upgrade Land baseplate it comes from, theme: world look.
+// name: Stud City Incremental name, ul: the Upgrade Land baseplate it comes from, theme: world look.
 const PLOT_INFO = {
     '0,0':   { name: 'Stud Square',        ul: 'Point baseplate',            theme: 'meadow',   color: '#3fbf5f' },
     '-1,0':  { name: 'Stud Square East',   ul: 'Point baseplate: extension', theme: 'meadow',   color: '#58c96f' },
