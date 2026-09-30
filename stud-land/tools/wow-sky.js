@@ -38,9 +38,14 @@ const USED = [...new Set(fs.readdirSync(path.join(__dirname, '..', 'js')).filter
   await page.evaluate(() => { FX.play('shootingStar', { force: true }); }); await waitT(0.45); await shot('3-shooting-star');
   // tap the star through the real input path (centre of its hit box, found right after launch)
   const find = (type) => page.evaluate((type) => { let sx = 0, sy = 0, n = 0; for (let y = 0; y < WORLD.H; y += 6) for (let x = 0; x < WORLD.W; x += 6) { const h = WORLD.pick(x, y); if (h && h.type === type) { sx += x; sy += y; n++; } } return n ? [sx / n, sy / n] : null; }, type);
-  await page.evaluate(() => SKY.launchStar(true));
-  const sp = await find('star');
-  if (sp) await page.mouse.click(sp[0], sp[1]);
+  // the star moves 820 px/s and headless frames are slow, so allow a few tries through the real input path
+  let sp = null;
+  for (let tries = 0; tries < 4 && !(await page.evaluate(() => !!META.state().counters.wishes)); tries++) {
+    await page.evaluate(() => SKY.launchStar(true));
+    sp = await find('star');
+    if (sp) await page.mouse.click(sp[0], sp[1]);
+    await page.waitForTimeout(400);
+  }
   await waitT(0.3);
   await page.evaluate(() => { WORLD.env.tod = 11; WORLD.cam.tZoom = 0.8; }); await waitT(1.5); await page.evaluate(() => { FX.play('seaSerpent', { force: true }); }); await waitT(4.5); await shot('4-serpent');
   const sp2 = await find('serpent');

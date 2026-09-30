@@ -61,6 +61,7 @@ const HUD = (() => {
         $('drawerX').onclick = () => LAB.close();
         WALK.bindTouch();
         $('panelX').onclick = closePanel;
+        $('panelBody').addEventListener('scroll', () => spy(), { passive: true });
         $('panel').addEventListener('pointerdown', e => { if (e.target.id === 'panel') closePanel(); });
         $('buySeg').querySelectorAll('button').forEach(b => b.onclick = () => { const m = b.dataset.m === 'MAX' ? 'MAX' : Number(b.dataset.m); ACTIONS.setBuyMode(m); AUDIO.tap(); });
         $('buyAll').onclick = () => { if (focus) ACTIONS.buyAll(focus); };
@@ -152,27 +153,29 @@ const HUD = (() => {
     }
     function updateZone() {
         const p = focus; if (!p) return;
-        const tab = $('zbTab'); setText(tab, p.name.toUpperCase()); if (tab._c !== p.color) { tab._c = p.color; tab.style.background = p.color; }
+        const tab = $('zbTab'); setText(tab, p.name.toUpperCase()); if (tab._c !== p.color) { tab._c = p.color; tab.style.background = grad(p.color); }
         const info = ACTIONS.signInfo().get(p.key) || {};
         setText($('zbRate'), info.rateText || '');
         const st = plotStats(p);
         setText($('zbLv'), `LV ${formatNum(st.lv)} / ${formatNum(st.max)}`);
         $('zbFill').style.width = (st.max ? Math.min(100, 100 * st.lv / st.max) : 0).toFixed(1) + '%';
-        $('buyAll').classList.toggle('dim', st.affordable === 0);
+        $('buyAll').classList.toggle('dim', st.affordable === 0); $('buyAll').classList.toggle('shine', st.affordable > 0);
         setText($('buyAll'), st.affordable ? `BUY ALL (${st.affordable})` : 'BUY ALL');
     }
 
     // ---------- machine sheet ----------
+    // A plot-coloured card gradient (light top-left, deep bottom-right), like the shop cards.
+    function grad(hex) { return `linear-gradient(160deg, ${shade(hex, 0.38)} 0%, ${hex} 52%, ${shade(hex, -0.28)} 100%)`; }
+    function nodeColor(n) { const p = PLOTS.get(plotKeyOf(n.coords[0], n.coords[1])); return n.type === 'reset' ? '#a24cf0' : n.type === 'info' ? '#36aef5' : (p ? p.color : '#3fbf5f'); }
     function openNode(id) {
         const n = NODE_MAP.get(id); if (!n) return;
         sheetId = id; WORLD.setSelected(id); document.body.classList.add('sheet-open');
         const sh = $('sheet'); sh.classList.remove('hidden'); sh.innerHTML = ''; sh.style.animation = 'none'; void sh.offsetWidth; sh.style.animation = '';
         const p = PLOTS.get(plotKeyOf(n.coords[0], n.coords[1]));
-        const head = el('div', 'sh-head'); head.style.background = n.type === 'reset' ? '#8a4fe0' : n.type === 'info' ? '#4aa8ff' : (p ? p.color : '#3fbf5f');
-        head.innerHTML = `<span class="sh-code">${esc(n.code || n.id)}</span><div class="sh-name">${esc(n.type === 'reset' ? 'REBUILD' : n.name)}</div>`;
-        const x = el('button', 'x', '&times;'); x.setAttribute('aria-label', 'Close'); x.onclick = closeSheet; head.appendChild(x);
+        const title = el('div', 'frame-title', `<span class="ft-icon card" style="--g:${grad(nodeColor(n))}">${n.type === 'reset' ? '&#10227;' : n.type === 'info' ? 'i' : '&#9635;'}</span><h2>${esc(p ? p.name : 'Machine')}</h2>`);
+        const x = el('button', 'x', 'X'); x.setAttribute('aria-label', 'Close'); x.onclick = closeSheet;
         const body = el('div', 'sh-body'); body.id = 'shBody';
-        sh.append(head, body);
+        sh.append(title, x, body);
         AUDIO.open();
         refreshSheet(true);
     }
@@ -181,25 +184,31 @@ const HUD = (() => {
         const n = NODE_MAP.get(sheetId); const body = $('shBody'); if (!n || !body) return;
         if (n.type === 'upgrade') return sheetUpgrade(n, body, full);
         if (n.type === 'reset') return sheetReset(n, body, full);
-        if (full) body.innerHTML = `<div class="sh-desc">${esc(n.name)}</div><div class="sh-note">${esc(n.desc || '')}</div><div class="sh-desc" id="shInfo"></div>`;
+        if (full) body.innerHTML = `<div class="sh-hero card c-blue"><span class="medal sx">i</span><div class="grow"><div class="sh-kick"><span class="sh-code">${esc(n.code || n.id)}</span><span class="sh-type">INFO SIGN</span></div><div class="sh-name">${esc(n.name)}</div></div></div>
+          <div class="sh-note">${esc(n.desc || '')}</div><div class="sh-desc" id="shInfo"></div>`;
         try { setText($('shInfo'), n.getInfoText ? n.getInfoText() : ''); } catch (e) { }
     }
+    const tabsHtml = () => `<div class="sh-tabs seg"><button data-t="info" class="${sheetTab === 'info' ? 'on' : ''}">INFO</button><button data-t="data" class="${sheetTab === 'data' ? 'on' : ''}">DATA FOR THE PORT</button></div>`;
     function sheetUpgrade(n, body, full) {
         const lvl = getLevel(n.id), max = getMaxLevel(n), unlocked = isNodeUnlocked(n);
         if (full || body._state !== (unlocked ? 'u' : 'l')) {
-            body._state = unlocked ? 'u' : 'l';
+            body._state = unlocked ? 'u' : 'l'; pvSig = '';
             const makes = [];
             for (const e of (n.effects || [])) { const c = e.currency || e.targetCurrency; if (c && !makes.includes(c)) makes.push(c); }
-            body.innerHTML = `<div class="sh-tabs"><button data-t="info" class="${sheetTab === 'info' ? 'on' : ''}">INFO</button><button data-t="data" class="${sheetTab === 'data' ? 'on' : ''}">DATA (FOR THE PORT)</button></div>
+            body.innerHTML = `<div class="sh-hero card" style="--g:${grad(nodeColor(n))}">
+                <span class="medal"><img alt="" src="${curIcon(n.costCurrency, 96)}"></span>
+                <div class="grow"><div class="sh-kick"><span class="sh-code">${esc(n.code || n.id)}</span><span class="sh-type">${unlocked ? 'MACHINE' : 'LOCKED'}</span></div>
+                <div class="sh-name">${esc(n.name)}</div>
+                <div class="sh-lv"><span id="shLv"></span><div class="bar" id="shBar"><i id="shFill"></i></div></div></div></div>
+              ${tabsHtml()}
               <div id="shData" ${sheetTab === 'data' ? '' : 'hidden'}>${dataTab(n)}</div>
-              <div id="shInfoTab" ${sheetTab === 'info' ? '' : 'hidden'}>
+              <div id="shInfoTab" class="sec" ${sheetTab === 'info' ? '' : 'hidden'}>
               <div class="sh-desc">${esc(n.desc || '')}</div>
-              ${makes.length ? `<div class="sh-note">Boosts: ${makes.map(c => `<span class="tag">${esc(curName(c))}</span>`).join('')}</div>` : ''}
-              ${unlocked ? `<div class="pv" id="shPv"></div>` : ''}
-              <div class="sh-lv"><span id="shLv"></span><div class="zb-bar"><i id="shFill"></i></div></div>
-              ${unlocked ? `<div class="sh-cost"><img alt="" src="${curIcon(n.costCurrency, 64)}"><span>Cost</span><b id="shCost"></b><span class="have" id="shHave"></span></div>
-              <div class="sh-btns"><button class="big" id="shBuy"><span></span></button><button class="big max" id="shMax"><span></span></button></div>`
-                : `<div class="sh-note">LOCKED. Build these first: ${(n.reqs || []).map(([x, y]) => { const r = COORD_MAP.get(`${x},${y}`); return r ? `<span class="tag">${esc(r.code || r.id)} ${esc(r.name).slice(0, 24)}</span>` : ''; }).join('')}</div>`}
+              ${makes.length ? `<div class="sh-note">Boosts ${makes.map(c => `<span class="tag">${esc(curName(c))}</span>`).join('')}</div>` : ''}
+              ${unlocked ? `<div class="pv" id="shPv"></div>
+              <div class="sh-cost"><img alt="" src="${curIcon(n.costCurrency, 64)}"><span>You have</span><b id="shHave"></b><span class="have">${esc(curName(n.costCurrency))}</span></div>
+              <div class="sh-btns"><button class="big" id="shBuy"><span class="bl"></span><span class="bp"><img alt="" src="${curIcon(n.costCurrency, 64)}"><b id="shCost"></b></span></button><button class="big max" id="shMax"><span class="bl"></span><span class="bp" id="shMaxN"></span></button></div>`
+                : `<div class="sh-note">Build these first: ${(n.reqs || []).map(([x, y]) => { const r = COORD_MAP.get(`${x},${y}`); return r ? `<span class="tag">${esc(r.code || r.id)} ${esc(r.name).slice(0, 24)}</span>` : ''; }).join('')}</div>`}
               <div class="sh-note">Hold BUY to keep buying. Upgrade Land id ${esc(n.id)}, tree spot ${n.coords.join(', ')}</div></div>`;
             bindTabs(body);
             if (unlocked) {
@@ -207,19 +216,23 @@ const HUD = (() => {
                 $('shMax').onclick = () => ACTIONS.buy(n.id, 'MAX');
             }
         }
-        setText($('shLv'), lvl >= max ? `MAX ${formatNum(lvl)}` : `LV ${formatNum(lvl)} / ${formatNum(max)}`);
+        setText($('shLv'), lvl >= max ? `MAX ${formatNum(lvl)}` : `LV ${formatNum(lvl)}/${formatNum(max)}`);
         $('shFill').style.width = Math.min(100, 100 * lvl / max).toFixed(1) + '%';
-        $('shFill').style.background = lvl >= max ? 'var(--yellow)' : '';
+        $('shBar').classList.toggle('gold', lvl >= max);
         if (!unlocked) return;
         const pv = previewBuy(n, buyMode), pm = previewBuy(n, 'MAX');
         if (lvl < max && sheetTab === 'info') renderPreview(n, pv.levels || 1, !pv.levels);
+        else if (lvl >= max) { const box = $('shPv'); if (box && box._max !== 1) { box._max = 1; pvSig = ''; box.innerHTML = '<div class="pv-title">MAXED OUT</div><div class="pv-row">This machine is as big as it gets. Its roof turned gold.</div>'; } }
         const have = getCurr(n.costCurrency);
-        setText($('shCost'), lvl >= max ? 'MAXED' : formatNum(pv.levels ? pv.cost : pv.firstCost));
-        setText($('shHave'), `you have ${formatNum(have)} ${curName(n.costCurrency)}`);
+        setText($('shHave'), formatNum(have));
         const b = $('shBuy'), m = $('shMax');
         const bl = lvl >= max ? 'MAXED' : pv.levels ? `BUY +${formatNum(pv.levels)}` : `NEED ${formatNum(Math.max(0, pv.firstCost - have))}`;
-        setText(b.firstChild, bl); b.classList.toggle('off', !pv.levels);
-        setText(m.firstChild, lvl >= max ? 'MAXED' : pm.levels ? `MAX +${formatNum(pm.levels)}` : 'MAX');
+        setText(b.querySelector('.bl'), bl);
+        setText($('shCost'), lvl >= max ? '-' : formatNum(pv.levels ? pv.cost : pv.firstCost));
+        b.querySelector('.bp').classList.toggle('hidden', lvl >= max);
+        b.classList.toggle('off', !pv.levels); b.classList.toggle('shine', !!pv.levels);
+        setText(m.querySelector('.bl'), lvl >= max ? 'MAXED' : 'MAX');
+        setText($('shMaxN'), lvl >= max ? '' : pm.levels ? `+${formatNum(pm.levels)} LV` : 'not yet');
         m.classList.toggle('off', !pm.levels);
     }
     function sheetReset(n, body, full) {
@@ -227,21 +240,23 @@ const HUD = (() => {
         if (full) {
             const list = getResettedCoordsList(n).filter(e => e.id);
             const curr = (n.resetCurrencies || []).map(c => `<span class="tag">${esc(curName(c))}</span>`).join('');
-            body.innerHTML = `<div class="sh-tabs"><button data-t="info" class="${sheetTab === 'info' ? 'on' : ''}">INFO</button><button data-t="data" class="${sheetTab === 'data' ? 'on' : ''}">DATA (FOR THE PORT)</button></div>
-              <div id="shData" ${sheetTab === 'data' ? '' : 'hidden'}>${dataTab(n)}</div><div id="shInfoTab" ${sheetTab === 'info' ? '' : 'hidden'}><div class="sh-desc">${esc(n.name)}</div>
+            body.innerHTML = `<div class="sh-hero card c-purple"><span class="medal"><img alt="" src="${curIcon(n.targetCurrency, 96)}"></span>
+                <div class="grow"><div class="sh-kick"><span class="sh-code">${esc(n.code || n.id)}</span><span class="sh-type">REBUILD PORTAL</span></div><div class="sh-name">${esc(n.name)}</div></div></div>
+              ${tabsHtml()}
+              <div id="shData" ${sheetTab === 'data' ? '' : 'hidden'}>${dataTab(n)}</div><div id="shInfoTab" class="sec" ${sheetTab === 'info' ? '' : 'hidden'}>
               <div class="sh-cost"><img alt="" src="${curIcon(n.targetCurrency, 64)}"><span>You get</span><b id="shGain"></b><span class="have" id="shHave"></span></div>
               <div class="sh-list">Resets ${curr || 'no currencies'} and ${list.length} machines.</div>
               <div class="sh-btns"><button class="big purple" id="shReset"><i class="fill"></i><span>HOLD TO REBUILD</span></button></div></div>`;
             bindTabs(body);
             holdButton($('shReset'), 700, () => ACTIONS.reset(n.id));
         }
-        setText($('shGain'), '+' + formatNum(gain) + ' ' + curName(n.targetCurrency));
-        setText($('shHave'), `you have ${formatNum(getCurr(n.targetCurrency))}`);
-        const b = $('shReset'); b.classList.toggle('off', !(gain > 0)); setText(b.querySelector('span'), gain > 0 ? 'HOLD TO REBUILD' : 'NOT READY YET');
+        setText($('shGain'), '+' + formatNum(gain));
+        setText($('shHave'), `you have ${formatNum(getCurr(n.targetCurrency))} ${curName(n.targetCurrency)}`);
+        const b = $('shReset'); b.classList.toggle('off', !(gain > 0)); b.classList.toggle('shine', gain > 0); setText(b.querySelector('span'), gain > 0 ? 'HOLD TO REBUILD' : 'NOT READY YET');
     }
     let sheetTab = 'info';
     function bindTabs(body) {
-        body.querySelectorAll('.sh-tabs button').forEach(b => b.onclick = () => { sheetTab = b.dataset.t; AUDIO.tap(); refreshSheet(true); });
+        body.querySelectorAll('.sh-tabs button').forEach(b => b.onclick = () => { sheetTab = b.dataset.t; AUDIO.tap(); pvSig = ''; refreshSheet(true); });
     }
     // Press and hold: buys once, waits, then repeats faster and faster (the tycoon "hold to buy" pattern).
     function holdRepeat(btn, fn) {
@@ -314,14 +329,21 @@ const HUD = (() => {
     }
 
     // ---------- panels ----------
-    function openPanel(kind) { panelKind = kind; $('panel').classList.remove('hidden'); AUDIO.open(); renderPanel(); }
-    function closePanel() { if (!panelKind) return; panelKind = null; $('panel').classList.add('hidden'); AUDIO.close(); }
+    // Every panel is the same frame: a title tab over the top edge, the red X, a scrolling body made
+    // of sections (centred "icon TITLE icon" headers), and, when there are two or more sections,
+    // arrow tabs down the left side that jump to each one and light up as you scroll.
+    const PANEL_META = {
+        reset: ['Rebuild!', '&#10227;', 'purple'], index: ['Plots!', '&#9638;', 'blue'], settings: ['Settings', '&#9881;', 'gray'], timeline: ['Timeline', '&#9719;', 'navy'],
+        badges: ['Badges!', '&#9733;', 'gold'], codes: ['Codes!', '&#10022;', 'pink'], stats: ['Stats', '&#8599;', 'green'], help: ['Controls', '?', 'navy'],
+    };
+    const secs = [];
+    function openPanel(kind) { if (panelKind !== kind) renderPanel.last = null; panelKind = kind; $('panel').classList.remove('hidden'); AUDIO.open(); renderPanel(); }
+    function closePanel() { if (!panelKind) return; panelKind = null; renderPanel.last = null; $('panel').classList.add('hidden'); AUDIO.close(); }
     function renderPanel() {
-        const body = $('panelBody'); body.innerHTML = '';
-        const head = document.querySelector('.panel-head');
-        const titles = { reset: 'REBUILD', index: 'PLOTS', settings: 'SETTINGS', timeline: 'BALANCE TIMELINE', badges: 'BADGES', codes: 'CODES AND WARDROBE', stats: 'STATS', help: 'CONTROLS' };
-        const colors = { reset: '#8a4fe0', index: '#2f8fe0', settings: '#8b96a3', timeline: '#231c3d', badges: '#e0a100', codes: '#d94ab8', stats: '#1faa63', help: '#231c3d' };
-        setText($('panelTitle'), titles[panelKind]); head.style.background = colors[panelKind];
+        const body = $('panelBody'), keep = body.scrollTop, same = renderPanel.last === panelKind; renderPanel.last = panelKind;
+        body.innerHTML = ''; $('panelFoot').innerHTML = ''; secs.length = 0;
+        const [title, icon, color] = PANEL_META[panelKind];
+        setText($('panelTitle'), title); const ic = $('panelIcon'); ic.innerHTML = icon; ic.className = 'ft-icon card c-' + color;
         if (panelKind === 'reset') panelReset(body);
         else if (panelKind === 'index') panelIndex(body);
         else if (panelKind === 'settings') panelSettings(body);
@@ -330,38 +352,74 @@ const HUD = (() => {
         else if (panelKind === 'codes') panelCodes(body);
         else if (panelKind === 'stats') panelStats(body);
         else if (panelKind === 'help') panelHelp(body);
+        buildRail();
+        body.scrollTop = same ? keep : 0;
+        spy();
+    }
+    function section(body, id, title, icon, color) {
+        const s = el('section', 'sec'); s.dataset.sec = id;
+        s.appendChild(el('div', 'sechead', `<i class="si c-${color}">${icon}</i><span>${esc(title)}</span><i class="si c-${color}">${icon}</i>`));
+        body.appendChild(s); secs.push({ id, title, icon, color, el: s }); return s;
+    }
+    function buildRail() {
+        const rail = $('panelRail'); rail.innerHTML = '';
+        rail.classList.toggle('hidden', secs.length < 2);
+        for (const r of secs) {
+            const b = el('button', 'rtab c-' + r.color, `<span>${r.icon}</span>`); b.title = r.title; b.setAttribute('aria-label', r.title);
+            b.onclick = () => { $('panelBody').scrollTo({ top: r.el.offsetTop - 26, behavior: 'smooth' }); AUDIO.tap(); };
+            rail.appendChild(b); r.btn = b;
+        }
+    }
+    function spy() {
+        const body = $('panelBody'); if (secs.length < 2) return;
+        let cur = secs[0]; for (const r of secs) if (r.el.offsetTop - body.scrollTop <= 90) cur = r;
+        if (body.scrollTop + body.clientHeight >= body.scrollHeight - 4) cur = secs[secs.length - 1];
+        for (const r of secs) r.btn && r.btn.classList.toggle('on', r === cur);
     }
     const live = [];
     function refreshPanelLive() { for (const f of live) f(); }
     function panelReset(body) {
         live.length = 0;
+        const sec = section(body, 'portals', 'PORTALS', '&#10227;', 'purple');
         const nodes = TREE_NODES.filter(n => n.type === 'reset' && isNodeUnlocked(n) && WORLD.builtPlots().has(plotKeyOf(n.coords[0], n.coords[1])));
-        if (!nodes.length) body.appendChild(el('div', 'note', 'No rebuild portals yet. Research is the first one: it sits on Blueprint Lab once Studs reach 2,500.'));
+        if (!nodes.length) sec.appendChild(el('div', 'note', 'No rebuild portals yet. Research is the first one: it sits on Blueprint Lab once Studs reach 2,500.'));
         for (const n of nodes) {
-            const r = el('div', 'row');
-            r.innerHTML = `<div class="chip" style="background:${curHex(n.targetCurrency)}"></div><div class="grow"><div class="t1">${esc(n.code || n.id)}: ${esc(curName(n.targetCurrency))}</div><div class="t2"></div></div>
-              <button class="sbtn">GO TO</button><button class="sbtn go"><i class="fill" style="position:absolute;inset:0;width:0;background:rgba(255,255,255,.35)"></i><span style="position:relative">HOLD</span></button>`;
+            const r = el('div', 'row card c-purple');
+            r.innerHTML = `<span class="medal"><img alt="" src="${curIcon(n.targetCurrency, 96)}"></span><div class="grow"><div class="t1">${esc(n.code || n.id)}: ${esc(curName(n.targetCurrency))}</div><div class="t2"></div></div>
+              <div class="acts"><button class="sbtn navy">GO TO</button><button class="sbtn"><i class="fill"></i><span>HOLD</span></button></div>`;
             const [goto, hold] = r.querySelectorAll('.sbtn');
             goto.onclick = () => { closePanel(); ACTIONS.focusNode(n.id); };
             holdButton(hold, 700, () => ACTIONS.reset(n.id));
             const t2 = r.querySelector('.t2');
-            const upd = () => { const g = getEffectiveResetGain(n); setText(t2, g > 0 ? `+${formatNum(g)} now, you have ${formatNum(getCurr(n.targetCurrency))}` : `not ready, you have ${formatNum(getCurr(n.targetCurrency))}`); hold.classList.toggle('off', !(g > 0)); };
-            upd(); live.push(upd); body.appendChild(r);
+            const upd = () => { const g = getEffectiveResetGain(n); setText(t2, g > 0 ? `+${formatNum(g)} now, you have ${formatNum(getCurr(n.targetCurrency))}` : `not ready, you have ${formatNum(getCurr(n.targetCurrency))}`); hold.classList.toggle('off', !(g > 0)); hold.classList.toggle('shine', g > 0); };
+            upd(); live.push(upd); sec.appendChild(r);
         }
     }
     function panelIndex(body) {
         live.length = 0;
-        const built = WORLD.builtPlots();
-        for (const p of PLOT_ORDER) {
-            const isBuilt = built.has(p.key);
-            const r = el('div', 'row' + (isBuilt ? '' : ' locked'));
-            r.innerHTML = `<div class="chip" style="background:${p.color}"></div><div class="grow"><div class="t1">${esc(p.name)}</div><div class="t2">${esc(p.ul)}</div><div class="zb-bar mini"><i></i></div></div>`;
-            const btn = el('button', 'sbtn', isBuilt ? 'GO' : p.soon ? 'SOON' : 'LOOK');
-            btn.onclick = () => { closePanel(); ACTIONS.focusPlot(p.key); };
-            r.appendChild(btn);
-            const fill = r.querySelector('i'), t2 = r.querySelector('.t2');
-            const upd = () => { const s = plotStats(p); fill.style.width = (s.max ? Math.min(100, 100 * s.lv / s.max) : 0) + '%'; setText(t2, `${p.ul}, ${isBuilt ? `LV ${formatNum(s.lv)}/${formatNum(s.max)}` : p.soon ? 'not in the game yet' : 'not built'}`); };
-            upd(); live.push(upd); body.appendChild(r);
+        const built = WORLD.builtPlots(), info = ACTIONS.signInfo();
+        const groups = [['built', 'BUILT', '&#9638;', 'green', p => built.has(p.key)], ['next', 'NOT BUILT YET', '&#9873;', 'blue', p => !built.has(p.key) && !p.soon], ['soon', 'COMING SOON', '&#8230;', 'gray', p => p.soon]];
+        for (const [id, title, icon, color, test] of groups) {
+            const list = PLOT_ORDER.filter(test); if (!list.length) continue;
+            const sec = section(body, id, `${title} (${list.length})`, icon, color);
+            const grid = el('div', 'grid2'); sec.appendChild(grid);
+            for (const p of list) {
+                const isBuilt = built.has(p.key);
+                const c = el('div', 'pcard card' + (isBuilt ? '' : p.soon ? ' soon' : ' locked'));
+                if (isBuilt) c.style.setProperty('--g', grad(p.color));
+                c.innerHTML = `<div class="t1">${esc(p.name)}</div><div class="t2"></div><div class="bar"><i></i></div><div class="pc-foot"><span class="pc-lv"></span></div>`;
+                const btn = el('button', 'sbtn' + (isBuilt ? '' : ' navy'), isBuilt ? 'GO' : p.soon ? 'SOON' : 'LOOK');
+                btn.onclick = () => { closePanel(); ACTIONS.focusPlot(p.key); };
+                c.querySelector('.pc-foot').appendChild(btn);
+                const fill = c.querySelector('.bar i'), t2 = c.querySelector('.t2'), lv = c.querySelector('.pc-lv');
+                const upd = () => {
+                    const s = plotStats(p); fill.style.width = (s.max ? Math.min(100, 100 * s.lv / s.max) : 0) + '%';
+                    const why = !isBuilt && info.get(p.key) && info.get(p.key).lockText;
+                    setText(t2, isBuilt ? p.ul : p.soon ? 'Not in Upgrade Land yet' : (why || p.ul));
+                    setText(lv, isBuilt ? `LV ${formatNum(s.lv)}/${formatNum(s.max)}` : p.soon ? 'SOON' : 'LOCKED');
+                };
+                upd(); live.push(upd); grid.appendChild(c);
+            }
         }
     }
     function seg(opts, cur, onPick) {
@@ -373,67 +431,80 @@ const HUD = (() => {
     function panelBadges(body) {
         live.length = 0;
         const got = META.state().badges;
-        body.appendChild(el('div', 'note', `${Object.keys(got).length} of ${META.BADGES.length} badges. In Roblox each one maps to a BadgeService badge plus this in-game list.`));
-        const grid = el('div', 'bgrid');
-        for (const b of META.BADGES) {
-            const on = got[b.id] !== undefined;
-            const c = el('div', 'bcard' + (on ? '' : ' locked'), `<div class="bi">${b.icon}</div><div><div class="bn">${esc(b.name)}</div><div class="bd">${esc(b.desc)}${on ? `<br>at ${formatTime(got[b.id])} of play` : ''}</div></div>`);
-            grid.appendChild(c);
-        }
-        body.appendChild(grid);
+        const earned = META.BADGES.filter(b => got[b.id] !== undefined), locked = META.BADGES.filter(b => got[b.id] === undefined);
+        const card = (b, on) => el('div', 'bcard card' + (on ? ' c-gold' : ' locked'), `<span class="medal">${b.icon}</span><div><div class="bn">${esc(b.name)}</div><div class="bd">${esc(b.desc)}${on ? `<br>at ${formatTime(got[b.id])} of play` : ''}</div></div>`);
+        const s1 = section(body, 'earned', `EARNED ${earned.length}/${META.BADGES.length}`, '&#9733;', 'gold');
+        if (!earned.length) s1.appendChild(el('div', 'note', 'Nothing yet. Buy your first machine to earn First Brick.'));
+        const g1 = el('div', 'grid3'); earned.forEach(b => g1.appendChild(card(b, true))); s1.appendChild(g1);
+        if (locked.length) { const s2 = section(body, 'locked', 'STILL TO EARN', '?', 'navy'); const g2 = el('div', 'grid3'); locked.forEach(b => g2.appendChild(card(b, false))); s2.appendChild(g2); }
+        body.appendChild(el('div', 'note', 'In Roblox each badge maps to a BadgeService badge plus this in-game list.'));
     }
     function panelCodes(body) {
         live.length = 0;
         const ms = META.state();
-        body.appendChild(el('div', 'hsec', 'GOLDEN CODE BRICKS'));
-        const slots = el('div', 'slots');
-        for (const s of META_SPOTS) slots.appendChild(el('div', 'slot' + (ms.found.includes(s.id) ? ' on' : ''), s.letter));
-        body.appendChild(slots);
-        body.appendChild(el('div', 'note', `Found ${ms.found.length} of 8. They hide on the islands as small golden bricks: tap one, or walk into it in walk mode.`));
-        body.appendChild(el('div', 'hsec', 'REDEEM A CODE'));
-        const rd = el('div', 'redeem'); const inp = el('input'); inp.placeholder = 'ENTER CODE'; inp.maxLength = 16; inp.setAttribute('aria-label', 'Code');
-        const go = el('button', 'lab-play', 'REDEEM'); const msg = el('div', 'note');
+        // redeem card, straight from the shop reference
+        const s1 = section(body, 'redeem', 'CODES', '&#10022;', 'gold');
+        const rc = el('div', 'redeem-card card c-gold');
+        rc.innerHTML = '<div class="redeem-title">REDEEM CODES!</div><div class="redeem-sub">Secret codes hide all over Stud City. BRICKS is free for everyone.</div>';
+        const rd = el('div', 'redeem'); const inp = el('input'); inp.placeholder = 'Enter code...'; inp.maxLength = 16; inp.setAttribute('aria-label', 'Code');
+        const go = el('button', 'sbtn shine', 'Claim!'); const msg = el('div', 'redeem-msg');
         const doIt = () => { const r = META.redeem(inp.value); msg.textContent = r.msg; if (r.ok) { AUDIO.maxed && AUDIO.maxed(); inp.value = ''; setTimeout(renderPanel, 700); } else AUDIO.deny(); };
         go.onclick = doIt; inp.onkeydown = (e) => { if (e.key === 'Enter') doIt(); };
-        rd.append(inp, go); body.append(rd, msg);
-        body.appendChild(el('div', 'hsec', 'SECRETS'));
+        rd.append(inp, go); rc.append(rd, msg); s1.appendChild(rc);
+        // golden letter bricks
+        const s2 = section(body, 'bricks', `CODE BRICKS ${ms.found.length}/8`, '&#9635;', 'orange');
+        const slots = el('div', 'slots');
+        for (const sp of META_SPOTS) slots.appendChild(el('div', 'slot' + (ms.found.includes(sp.id) ? ' on' : ''), sp.letter));
+        s2.appendChild(slots);
+        s2.appendChild(el('div', 'note', 'They hide on the islands as small golden bricks: tap one, or walk into it in walk mode. All 8 spell a code.'));
+        // secrets
+        const s3 = section(body, 'secrets', 'SECRETS', '?', 'purple');
         for (const [code, c] of Object.entries(META.CODES)) {
             const found = code === 'BRICKS' || ms.secrets.includes(code), used = ms.redeemed.includes(code);
-            body.appendChild(el('div', 'hint' + (used ? ' done' : ''), `<b>${found ? esc(code) : '????????'}</b><span>${used ? 'Redeemed: ' + esc(c.label) : found ? 'Found! Redeem it above. Reward: ' + esc(c.label) : esc(c.hint)}</span>`));
+            s3.appendChild(el('div', 'hint' + (used ? ' done' : ''), `<b>${found ? esc(code) : '????????'}</b><span>${used ? 'Redeemed: ' + esc(c.label) : found ? 'Found! Redeem it above. Reward: ' + esc(c.label) : esc(c.hint)}</span>`));
         }
-        body.appendChild(el('div', 'hsec', 'WARDROBE (WALK MODE MINIFIG AND BOAT)'));
-        const names = { hat: 'HAT', torso: 'OUTFIT', trail: 'TRAIL', boat: 'BOAT' };
+        // wardrobe as item cards
+        const s4 = section(body, 'wardrobe', 'WARDROBE', '&#9819;', 'pink');
+        s4.appendChild(el('div', 'note', 'Your walk mode minifig and your boat. Codes unlock new items.'));
+        const cats = { hat: ['HAT', 'pink', '&#9819;'], torso: ['OUTFIT', 'blue', ''], trail: ['TRAIL', 'purple', '&#10022;'], boat: ['BOAT', 'teal', '&#8779;'] };
+        const from = (k, v) => { for (const [code, c] of Object.entries(META.CODES)) if (c.reward.some(([a, b]) => a === k && b === v)) return code; return null; };
+        const grid = el('div', 'grid2'); s4.appendChild(grid);
         for (const [k, list] of Object.entries(META.WARDROBE)) {
-            body.appendChild(el('div', 'lab-trig', names[k]));
-            const row = el('div', 'chips'); const owned = META.owned(k); const wear = META.cosmetic(k);
+            const [cat, col, glyph] = cats[k]; const owned = META.owned(k), wear = META.cosmetic(k);
             for (const [v, label] of list) {
-                const own = owned.includes(v);
-                const b = el('button', 'chipb' + (wear === v ? ' on' : '') + (own ? '' : ' lock'), (k === 'torso' ? `<i style="background:${v}"></i>` : '') + esc(own ? label : 'LOCKED'));
-                if (own) b.onclick = () => { META.setCosmetic(k, v); AUDIO.tap(); renderPanel(); };
-                row.appendChild(b);
+                const own = owned.includes(v), on = wear === v;
+                const code = own ? null : from(k, v), known = code && (code === 'BRICKS' || ms.secrets.includes(code));
+                const c = el('div', 'wcard card ' + (own ? 'c-' + col : 'lock'));
+                const icon = k === 'torso' ? `<i class="swatch" style="background:${esc(v)}"></i>` : `<span class="sx">${glyph}</span>`;
+                c.innerHTML = `<span class="medal ${own ? '' : 'dark'}">${icon}</span><div class="wc-body"><div class="wc-cat">${cat}${own ? '' : known ? ` &#183; CODE ${esc(code)}` : ' &#183; SECRET CODE'}</div><div class="wc-name">${esc(label)}</div></div>`;
+                const b = el('button', 'sbtn' + (on ? ' gold' : own ? '' : ' off'), on ? 'EQUIPPED' : own ? 'EQUIP' : 'LOCKED');
+                if (own && !on) b.onclick = () => { META.setCosmetic(k, v); AUDIO.tap(); renderPanel(); };
+                c.querySelector('.wc-body').appendChild(b); grid.appendChild(c);
             }
-            body.appendChild(row);
         }
+        $('panelFoot').appendChild(el('div', 'pthanks', '<b>&#9829;</b> THANKS FOR PLAYING STUD CITY! <b>&#9829;</b>'));
     }
     function panelStats(body) {
         live.length = 0;
-        const cv = el('canvas', 'chart'); cv.width = 540; cv.height = 150; body.appendChild(cv);
-        body.appendChild(el('div', 'note', 'Studs held (yellow) and Studs per second (green) over the last 30 minutes, log scale (orders of magnitude).'));
-        const kv = el('div', 'kv'); body.appendChild(kv);
+        const sec = section(body, 'stats', 'YOUR CITY', '&#8599;', 'green');
+        const cv = el('canvas', 'chart'); cv.width = 560; cv.height = 150; sec.appendChild(cv);
+        sec.appendChild(el('div', 'note', 'Studs held (gold) and Studs per second (green) over the last 30 minutes, log scale (orders of magnitude).'));
+        const kv = el('div', 'kv'); sec.appendChild(kv);
         const draw = () => {
             const g = cv.getContext('2d'), h = META.history, W0 = cv.width, H0 = cv.height;
-            g.clearRect(0, 0, W0, H0); g.fillStyle = '#fffaf0'; g.fillRect(0, 0, W0, H0);
-            g.strokeStyle = '#efe7d6'; g.lineWidth = 1; for (let i = 1; i < 5; i++) { g.beginPath(); g.moveTo(0, H0 * i / 5); g.lineTo(W0, H0 * i / 5); g.stroke(); }
+            g.clearRect(0, 0, W0, H0); g.fillStyle = '#0f1426'; g.fillRect(0, 0, W0, H0);
+            g.strokeStyle = '#26325a'; g.lineWidth = 1; for (let i = 1; i < 5; i++) { g.beginPath(); g.moveTo(0, H0 * i / 5); g.lineTo(W0, H0 * i / 5); g.stroke(); }
             if (h.length > 1) {
                 const vals = h.flatMap(q => [q.p, q.r]);
                 let mn = Math.min(...vals), mx = Math.max(...vals); if (mx - mn < 1) { mx += 0.5; mn -= 0.5; }
                 const y = (v) => H0 - 10 - (v - mn) / (mx - mn) * (H0 - 26);
-                for (const [key, col] of [['p', '#ffb300'], ['r', '#1faa63']]) {
-                    g.strokeStyle = col; g.lineWidth = 3; g.lineJoin = 'round'; g.beginPath();
+                for (const [key, col] of [['p', '#ffd84a'], ['r', '#a8ff5a']]) {
+                    g.strokeStyle = '#141024'; g.lineWidth = 7; g.lineJoin = 'round'; g.beginPath();
                     h.forEach((q, i) => { const x = i / (h.length - 1) * (W0 - 12) + 6; if (i) g.lineTo(x, y(q[key])); else g.moveTo(x, y(q[key])); }); g.stroke();
+                    g.strokeStyle = col; g.lineWidth = 3.5; g.stroke();
                 }
-                g.fillStyle = '#6b6480'; g.font = '600 12px Fredoka'; g.fillText(`1e${mx.toFixed(1)}`, 6, 14); g.fillText(`1e${mn.toFixed(1)}`, 6, H0 - 4);
-            } else { g.fillStyle = '#6b6480'; g.font = '600 14px Fredoka'; g.fillText('Collecting data, one point every 5 seconds...', 12, H0 / 2); }
+                g.fillStyle = '#93a0c6'; g.font = '700 13px Fredoka'; g.fillText(`1e${mx.toFixed(1)}`, 6, 15); g.fillText(`1e${mn.toFixed(1)}`, 6, H0 - 4);
+            } else { g.fillStyle = '#93a0c6'; g.font = '700 14px Fredoka'; g.fillText('Collecting data, one point every 5 seconds...', 12, H0 / 2); }
             const m = SAVE_META(), ms = META.state(); let owned = 0, maxed = 0; for (const n of TREE_NODES) if (n.type === 'upgrade' && getLevel(n.id) > 0) { owned++; if (getLevel(n.id) >= getMaxLevel(n)) maxed++; }
             const rows = [['Play time', formatTime(m.playMs)], ['Studs per second', formatNum(calculateGainRate('P'))], ['Machines owned', `${owned} / 697`], ['Machines maxed', owned ? maxed : 0], ['Plots built', `${WORLD.builtPlots().size} / 39`],
                 ['Currencies found', `${gameState.discoveredCurrencies.length} / 63`], ['Manual buys', formatNum(ms.counters.buys || 0)], ['Drone deliveries', formatNum(ms.counters.autoBuys || 0)], ['Rebuilds', formatNum(ms.counters.resets || 0)], ['Badges', `${Object.keys(ms.badges).length} / ${META.BADGES.length}`], ['Code bricks', `${ms.found.length} / 8`]];
@@ -443,45 +514,49 @@ const HUD = (() => {
     }
     function panelHelp(body) {
         live.length = 0;
+        const sec = section(body, 'keys', 'CONTROLS', '?', 'navy');
         const rows = [['Drag / WASD', 'Pan the camera'], ['Wheel / pinch', 'Zoom'], ['Q  E  / twist', 'Turn the map 90 degrees'], ['Click a machine', 'Open its card'], ['B / M', 'Buy / Max the open machine'], ['Hold BUY', 'Keep buying'], ['1 2 3 4', 'Buy mode x1 x5 x10 MAX'], ['Space', 'Buy all on the plot'],
-            ['V', 'Walk mode on and off'], ['WASD + Shift', 'Walk, sprint (walk mode)'], ['Space', 'Jump (walk mode)'], ['E (hold)', 'Use what is near you (walk mode)'], ['P', 'Photo mode'], ['L', 'FX Lab'], ['?', 'This help'], ['Esc', 'Close cards and panels']];
-        body.appendChild(el('div', 'keys', rows.map(([k, d]) => `<kbd>${esc(k)}</kbd><span>${esc(d)}</span>`).join('')));
+            ['V', 'Walk mode on and off'], ['WASD + Shift', 'Walk, sprint (walk mode)'], ['Space', 'Jump (walk mode)'], ['E (hold)', 'Use what is near you (walk mode)'], ['P', 'Photo mode'], ['L', 'FX Lab'], ['?', 'This help'], ['Esc', 'Close cards and panels, skip the intro']];
+        sec.appendChild(el('div', 'keys', rows.map(([k, d]) => `<kbd>${esc(k)}</kbd><span>${esc(d)}</span>`).join('')));
     }
     function panelSettings(body) {
         live.length = 0;
-        body.appendChild(el('div', 'hsec', 'GRAPHICS'));
-        body.appendChild(opt('Quality', seg([['low', 'LOW'], ['medium', 'MED'], ['high', 'HIGH'], ['ultra', 'ULTRA']], SETTINGS.get('quality'), v => { SETTINGS.set('quality', v); if (v === 'ultra' && !SETTINGS.get('tilt')) SETTINGS.set('tilt', true); })));
-        body.appendChild(opt('Tilt-shift (miniature look)', seg([[true, 'ON'], [false, 'OFF']], SETTINGS.get('tilt'), v => SETTINGS.set('tilt', v))));
-        body.appendChild(opt('Vignette', seg([[true, 'ON'], [false, 'OFF']], SETTINGS.get('vignette'), v => SETTINGS.set('vignette', v))));
-        body.appendChild(opt('Colour grade by time of day', seg([[true, 'ON'], [false, 'OFF']], SETTINGS.get('grade'), v => SETTINGS.set('grade', v))));
-        body.appendChild(opt('UI size', seg([[0.85, 'S'], [1, 'M'], [1.15, 'L'], [1.3, 'XL']], SETTINGS.get('ui'), v => SETTINGS.set('ui', v))));
-        body.appendChild(opt('Reduce flashing', seg([[false, 'OFF'], [true, 'ON']], SETTINGS.get('noFlash'), v => SETTINGS.set('noFlash', v))));
-        body.appendChild(el('div', 'hsec', 'SOUND'));
-        body.appendChild(opt('Sound', seg([[false, 'ON'], [true, 'OFF']], SETTINGS.get('muted'), v => SETTINGS.set('muted', v))));
+        const g = section(body, 'graphics', 'GRAPHICS', '&#9635;', 'blue');
+        g.appendChild(opt('Quality', seg([['low', 'LOW'], ['medium', 'MED'], ['high', 'HIGH'], ['ultra', 'ULTRA']], SETTINGS.get('quality'), v => { SETTINGS.set('quality', v); if (v === 'ultra' && !SETTINGS.get('tilt')) SETTINGS.set('tilt', true); })));
+        g.appendChild(opt('Tilt-shift (miniature look)', seg([[true, 'ON'], [false, 'OFF']], SETTINGS.get('tilt'), v => SETTINGS.set('tilt', v))));
+        g.appendChild(opt('Vignette', seg([[true, 'ON'], [false, 'OFF']], SETTINGS.get('vignette'), v => SETTINGS.set('vignette', v))));
+        g.appendChild(opt('Colour grade by time of day', seg([[true, 'ON'], [false, 'OFF']], SETTINGS.get('grade'), v => SETTINGS.set('grade', v))));
+        g.appendChild(opt('UI size', seg([[0.85, 'S'], [1, 'M'], [1.15, 'L'], [1.3, 'XL']], SETTINGS.get('ui'), v => SETTINGS.set('ui', v))));
+        g.appendChild(opt('Reduce flashing', seg([[false, 'OFF'], [true, 'ON']], SETTINGS.get('noFlash'), v => SETTINGS.set('noFlash', v))));
+        const so = section(body, 'sound', 'SOUND', '&#9835;', 'green');
+        so.appendChild(opt('Sound', seg([[false, 'ON'], [true, 'OFF']], SETTINGS.get('muted'), v => SETTINGS.set('muted', v))));
         const vol = el('input'); vol.type = 'range'; vol.min = 0; vol.max = 1; vol.step = 0.05; vol.value = SETTINGS.get('volume'); vol.oninput = () => SETTINGS.set('volume', Number(vol.value));
-        body.appendChild(opt('Master', vol));
+        so.appendChild(opt('Master', vol));
         for (const [k, label] of [['music', 'Music'], ['sfx', 'Effects'], ['ambient', 'Ambience'], ['ui', 'Interface']]) {
             const r = el('input'); r.type = 'range'; r.min = 0; r.max = 1; r.step = 0.05; r.value = (SETTINGS.get('bus') || {})[k] ?? 0.7;
             r.oninput = () => { const b = { ...(SETTINGS.get('bus') || {}) }; b[k] = Number(r.value); SETTINGS.set('bus', b); };
-            body.appendChild(opt(label, r));
+            so.appendChild(opt(label, r));
         }
-        body.appendChild(el('div', 'hsec', 'GAME'));
-        body.appendChild(opt('Effects', seg([['full', 'FULL'], ['reduced', 'REDUCED'], ['minimal', 'MINIMAL']], SETTINGS.get('fx'), v => SETTINGS.set('fx', v))));
-        body.appendChild(opt('Vibration', seg([[true, 'ON'], [false, 'OFF']], SETTINGS.get('haptics'), v => SETTINGS.set('haptics', v))));
-        body.appendChild(opt('Names', seg([['stud', 'STUD CITY'], ['ul', 'UPGRADE LAND']], SETTINGS.get('names'), v => SETTINGS.set('names', v))));
-        body.appendChild(opt('Offline time', seg([[false, '3:00'], [true, 'PASS 5:00']], SETTINGS.get('pass'), v => SETTINGS.set('pass', v))));
-        body.appendChild(opt('Day length', seg([[6, '6 MIN'], [12, '12 MIN'], [24, '24 MIN']], SETTINGS.get('dayLen'), v => SETTINGS.set('dayLen', v))));
-        body.appendChild(el('div', 'note', 'Offline gain pays at most 3 minutes (5 with the pass) no matter how long you were away, so coming back never skips a pile of upgrades. Random and self limiting currencies (copper, silver, gold, lapis, diamonds, essence and more) do not pay offline, same as Upgrade Land.'));
-        const help = el('button', 'big', '<span>CONTROLS AND SHORTCUTS</span>'); help.style.background = 'var(--blue)'; help.onclick = () => openPanel('help'); body.appendChild(help);
-        const rep = el('button', 'big', '<span>REPLAY INTRO</span>'); rep.style.background = 'var(--orange, #ff9a2e)'; rep.onclick = () => { closePanel(); if (typeof CINE !== 'undefined') CINE.intro({ fresh: false }); }; body.appendChild(rep);
-        const wipe = el('button', 'big purple'); wipe.innerHTML = '<i class="fill"></i><span>HOLD TO WIPE SAVE</span>'; wipe.style.background = 'var(--red)';
+        const ga = section(body, 'game', 'GAME', '&#9881;', 'orange');
+        ga.appendChild(opt('Effects', seg([['full', 'FULL'], ['reduced', 'REDUCED'], ['minimal', 'MINIMAL']], SETTINGS.get('fx'), v => SETTINGS.set('fx', v))));
+        ga.appendChild(opt('Vibration', seg([[true, 'ON'], [false, 'OFF']], SETTINGS.get('haptics'), v => SETTINGS.set('haptics', v))));
+        ga.appendChild(opt('Names', seg([['stud', 'STUD CITY'], ['ul', 'UPGRADE LAND']], SETTINGS.get('names'), v => SETTINGS.set('names', v))));
+        ga.appendChild(opt('Offline time', seg([[false, '3:00'], [true, 'PASS 5:00']], SETTINGS.get('pass'), v => SETTINGS.set('pass', v))));
+        ga.appendChild(opt('Day length', seg([[6, '6 MIN'], [12, '12 MIN'], [24, '24 MIN']], SETTINGS.get('dayLen'), v => SETTINGS.set('dayLen', v))));
+        ga.appendChild(el('div', 'note', 'Offline gain pays at most 3 minutes (5 with the pass) no matter how long you were away, so coming back never skips a pile of upgrades. Random and self limiting currencies (copper, silver, gold, lapis, diamonds, essence and more) do not pay offline, same as Upgrade Land.'));
+        const mo = section(body, 'more', 'MORE', '&#8230;', 'navy');
+        const row = el('div', 'btn-row'); mo.appendChild(row);
+        const help = el('button', 'big blue', '<span>CONTROLS</span>'); help.onclick = () => openPanel('help'); row.appendChild(help);
+        const rep = el('button', 'big max', '<span>REPLAY INTRO</span>'); rep.onclick = () => { closePanel(); if (typeof CINE !== 'undefined') CINE.intro({ fresh: false }); }; row.appendChild(rep);
+        const wipe = el('button', 'big red'); wipe.innerHTML = '<i class="fill"></i><span>HOLD TO WIPE SAVE</span>';
         holdButton(wipe, 1200, () => ACTIONS.wipe());
-        body.appendChild(wipe);
+        row.appendChild(wipe);
     }
     function panelTimeline(body) {
         live.length = 0;
         const m = SAVE_META();
-        body.appendChild(el('div', 'note', `Play time on this save: <b>${formatTime(m.playMs)}</b>. "You" is the play time when each plot got built on this save (MAX NEXT PLOT and SIM count too). "Bot" is a fresh save played by the greedy bot in tools/balance.js. It is a rough pacing guide, not a target.`));
+        const sec = section(body, 'plots', 'PLOT TIMES', '&#9719;', 'navy');
+        sec.appendChild(el('div', 'note', `Play time on this save: <b>${formatTime(m.playMs)}</b>. "You" is the play time when each plot got built on this save (MAX NEXT PLOT and SIM count too). "Bot" is a fresh save played by the greedy bot in tools/balance.js. It is a rough pacing guide, not a target.`));
         const t = el('table', 'tbl');
         t.innerHTML = '<thead><tr><th>Plot</th><th>You</th><th>Bot</th><th>How</th></tr></thead>';
         const tb = el('tbody');
@@ -492,12 +567,12 @@ const HUD = (() => {
             tr.innerHTML = `<td>${esc(p.name)}</td><td class="n">${you !== undefined ? formatTime(you) : '-'}</td><td class="n">${bot !== undefined && bot !== false ? formatTime(bot) : 'not reached'}</td><td>${esc(m.plotHow[p.key] || '')}</td>`;
             tb.appendChild(tr);
         }
-        t.appendChild(tb); body.appendChild(t);
+        t.appendChild(tb); sec.appendChild(t);
         if (m.sims.length) {
-            body.appendChild(el('div', 'note', '<b>Sim runs on this save</b>'));
+            const s2 = section(body, 'sims', 'SIM RUNS', '&#9654;', 'purple');
             const t2 = el('table', 'tbl'); t2.innerHTML = '<thead><tr><th>Reached</th><th>Bot play time</th><th>Real time</th></tr></thead>';
             const b2 = el('tbody'); for (const s of m.sims.slice(-12).reverse()) { const tr = el('tr'); tr.innerHTML = `<td>${esc(s.name)}</td><td class="n">${formatTime(s.simMs)}</td><td class="n">${(s.realMs / 1000).toFixed(1)}s</td>`; b2.appendChild(tr); }
-            t2.appendChild(b2); body.appendChild(t2);
+            t2.appendChild(b2); s2.appendChild(t2);
         }
         if (typeof BOT_BENCHMARK !== 'undefined') body.appendChild(el('div', 'note', esc(BOT_BENCHMARK.note)));
     }
@@ -505,7 +580,7 @@ const HUD = (() => {
     // ---------- toasts, banner, modal, sim ----------
     function toast(msg, color) {
         const box = $('toasts'); while (box.children.length > 3) box.firstChild.remove();
-        const t = el('div', 'toast'); t.textContent = msg; if (color) t.style.background = color;
+        const t = el('div', 'toast'); t.textContent = msg; if (color) t.style.setProperty('--tc', color);
         box.appendChild(t); setTimeout(() => t.remove(), 3000);
     }
     let bannerTimer = 0;

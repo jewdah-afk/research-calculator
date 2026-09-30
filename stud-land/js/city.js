@@ -320,7 +320,7 @@ const CITY = (() => {
         const x = X(); const t = tierIndex();
         if (x.tierMax === undefined) x.tierMax = t;
         if (t > x.tierMax) { x.tierMax = t; pending = t; }
-        if (pending >= 0 && !R.FXD.inHero() && !(typeof CINE !== 'undefined' && CINE.on)) {
+        if (pending >= 0 && !R.FXD.inHero() && !(typeof CINE !== 'undefined' && CINE.on) && !(typeof HUD !== 'undefined' && HUD.panelKind)) {
             const quiet = typeof GAME !== 'undefined' && (GAME.sim || GAME.speed >= 10);
             if (!quiet) FX.play('cityTier', { tier: pending, force: true });
             pending = -1;

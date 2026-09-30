@@ -47,7 +47,7 @@ const shot = (page, name) => page.screenshot({ path: path.join(OUT, name + '.png
     await page.evaluate(() => { for (const s of META_SPOTS) META.collect(s.id); });
     await page.waitForTimeout(1500);
     await page.click('#tCodes'); await page.waitForTimeout(400);
-    await page.fill('.redeem input', 'studcity'); await page.click('.redeem .lab-play'); await page.waitForTimeout(900); await shot(page, 'v2-03-codes');
+    await page.fill('.redeem input', 'studcity'); await page.click('.redeem .sbtn'); await page.waitForTimeout(900); await shot(page, 'v2-03-codes');
     await page.click('#panelX');
     await page.click('#tBadges'); await page.waitForTimeout(400); await shot(page, 'v2-04-badges'); await page.click('#panelX');
     await page.click('#hero'); await page.waitForTimeout(600); await shot(page, 'v2-05-stats'); await page.click('#panelX');

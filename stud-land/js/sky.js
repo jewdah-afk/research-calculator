@@ -254,7 +254,7 @@ const SKY = (() => {
         const x = X(); const r = reached();
         if (x.milestone === undefined) { x.milestone = r; return; }
         if (r > x.milestone) { x.milestone = r; msPending = r; }
-        if (msPending > 0 && !R.FXD.inHero() && !cineOn()) { if (!quiet()) FX.play('milestone', { e: msPending, force: true }); msPending = -1; }
+        if (msPending > 0 && !R.FXD.inHero() && !cineOn() && !(typeof HUD !== 'undefined' && HUD.panelKind)) { if (!quiet()) FX.play('milestone', { e: msPending, force: true }); msPending = -1; }
     }
     function showMilestone(c) {
         const e = c.e || 6; const el = $('milestone'); if (!el) return;

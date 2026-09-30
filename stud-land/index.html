@@ -40,7 +40,7 @@
 <div id="hud">
   <div id="topleft">
     <div class="hero" id="hero" role="button" tabindex="0" title="Open stats">
-      <img class="hero-icon" id="heroIcon" alt="">
+      <span class="medal"><img class="hero-icon" id="heroIcon" alt=""></span>
       <div class="hero-text">
         <div class="hero-label" id="heroLabel">STUDS</div>
         <div class="hero-num" id="heroNum">0</div>
@@ -48,28 +48,28 @@
       <div class="rate-pill" id="heroRate">+0/s</div>
     </div>
     <div class="stack" id="stack"></div>
-    <button class="more" id="stackMore">MORE</button>
+    <button class="more dbtn" id="stackMore">MORE</button>
   </div>
 
-  <button id="guide" class="guide" title="Your next goal"><span class="g-icon" id="guideIcon">&#9650;</span><span class="g-text"><b id="guideText">Tap the blueprint</b><i id="guideSub"></i></span><span class="g-go">GO</span></button>
+  <button id="guide" class="guide card c-gold" title="Your next goal"><span class="g-icon medal" id="guideIcon">&#9650;</span><span class="g-text"><span class="g-kick">NEXT GOAL</span><b id="guideText">Tap the blueprint</b><i id="guideSub"></i></span><span class="g-go shine">GO</span></button>
 
   <nav id="tiles">
-    <button class="tile t-reset" id="tReset"><span class="ticon">&#10227;</span><span>REBUILD</span><b class="badge hidden" id="tResetBadge">0</b></button>
-    <button class="tile t-index" id="tIndex"><span class="ticon">&#9638;</span><span>PLOTS</span></button>
-    <button class="tile t-badge" id="tBadges"><span class="ticon">&#9733;</span><span>BADGES</span><b class="badge hidden" id="tBadgeCount">0</b></button>
-    <button class="tile t-codes" id="tCodes"><span class="ticon">&#10022;</span><span>CODES</span><b class="badge hidden" id="tCodeBadge">!</b></button>
-    <button class="tile t-set" id="tSet"><span class="ticon">&#9881;</span><span>SETTINGS</span></button>
+    <button class="tile card t-reset" id="tReset"><span class="ticon">&#10227;</span><span class="tl">REBUILD</span><b class="badge hidden" id="tResetBadge">0</b></button>
+    <button class="tile card t-index" id="tIndex"><span class="ticon">&#9638;</span><span class="tl">PLOTS</span></button>
+    <button class="tile card t-badge" id="tBadges"><span class="ticon">&#9733;</span><span class="tl">BADGES</span><b class="badge hidden" id="tBadgeCount">0</b></button>
+    <button class="tile card t-codes" id="tCodes"><span class="ticon">&#10022;</span><span class="tl">CODES</span><b class="badge hidden" id="tCodeBadge">!</b></button>
+    <button class="tile card t-set" id="tSet"><span class="ticon">&#9881;</span><span class="tl">SETTINGS</span></button>
   </nav>
 
   <div id="leftdock">
-    <div class="mm-wrap" id="mmWrap"><canvas id="minimap" width="180" height="132" aria-label="Minimap"></canvas><span class="mm-label">MAP</span></div>
+    <div class="mm-wrap frame" id="mmWrap"><canvas id="minimap" width="180" height="132" aria-label="Minimap"></canvas><span class="mm-label">MAP</span></div>
     <div class="dock-btns">
-      <button class="dock walk" id="btnWalk" title="Walk mode (V)"><span class="ticon">&#9823;</span><span>WALK</span></button>
-      <button class="dock photo" id="btnPhoto" title="Photo mode (P)"><span class="ticon">&#9673;</span><span>PHOTO</span></button>
+      <button class="dock card walk" id="btnWalk" title="Walk mode (V)"><span class="ticon">&#9823;</span><span>WALK</span></button>
+      <button class="dock card photo" id="btnPhoto" title="Photo mode (P)"><span class="ticon">&#9673;</span><span>PHOTO</span></button>
     </div>
   </div>
 
-  <div id="camctl">
+  <div id="camctl" class="frame">
     <button class="cbtn" id="camL" title="Turn left (Q)">&#10226;</button>
     <input type="range" id="camRot" min="-180" max="180" step="1" value="0" aria-label="Turn the map">
     <button class="cbtn" id="camR" title="Turn right (E)">&#10227;</button>
@@ -78,7 +78,7 @@
     <button class="cbtn" id="camHome" title="Back to the focused plot">&#8962;</button>
   </div>
 
-  <div id="zonebar">
+  <div id="zonebar" class="frame">
     <div class="zb-info">
       <div class="zb-tab" id="zbTab">STUD SQUARE</div>
       <div class="zb-rate" id="zbRate">+0 Studs/s</div>
@@ -102,7 +102,7 @@
 </div>
 
 <!-- photo mode toolbar -->
-<div id="photobar">
+<div id="photobar" class="frame">
   <span class="pb-title">PHOTO MODE</span>
   <label class="pb-l">TIME <input type="range" id="pbTime" min="0" max="24" step="0.1"></label>
   <div class="seg" id="pbFilter"><button data-f="none" class="on">NONE</button><button data-f="warm">WARM</button><button data-f="cool">COOL</button><button data-f="vivid">VIVID</button><button data-f="noir">NOIR</button></div>
@@ -113,16 +113,16 @@
   <button class="dbtn" id="pbExit">EXIT</button>
 </div>
 
-<section id="sheet" class="sheet hidden" aria-live="polite"></section>
-<section id="panel" class="panel hidden"><div class="panel-card"><header class="panel-head"><h2 id="panelTitle"></h2><button class="x" id="panelX" aria-label="Close">&times;</button></header><div class="panel-body" id="panelBody"></div></div></section>
-<aside id="drawer" class="drawer hidden"><header class="panel-head"><h2 id="drawerTitle">FX LAB</h2><button class="x" id="drawerX" aria-label="Close">&times;</button></header><div class="drawer-tabs" id="drawerTabs"></div><div class="panel-body" id="drawerBody"></div></aside>
+<section id="sheet" class="sheet frame hidden" aria-live="polite"></section>
+<section id="panel" class="panel hidden"><div class="pwrap"><nav class="rail" id="panelRail" aria-label="Sections"></nav><div class="panel-card frame"><div class="frame-title"><span class="ft-icon card" id="panelIcon"></span><h2 id="panelTitle"></h2></div><button class="x" id="panelX" aria-label="Close">X</button><div class="panel-body" id="panelBody"></div><div class="panel-foot" id="panelFoot"></div></div></div></section>
+<aside id="drawer" class="drawer hidden"><header class="panel-head"><h2 id="drawerTitle">FX LAB</h2><button class="x" id="drawerX" aria-label="Close">X</button></header><div class="drawer-tabs" id="drawerTabs"></div><div class="panel-body" id="drawerBody"></div></aside>
 <div id="toasts"></div>
-<div id="badgePop"><span class="bp-icon">&#9733;</span><div><div class="bp-kicker">BADGE UNLOCKED</div><div class="bp-name">Name</div><div class="bp-desc">Desc</div></div></div>
+<div id="badgePop" class="card c-gold"><span class="bp-icon medal">&#9733;</span><div><div class="bp-kicker">BADGE UNLOCKED</div><div class="bp-name">Name</div><div class="bp-desc">Desc</div></div></div>
 <!-- milestone takeover: sunburst, kicker, number in words, currency -->
 <div id="milestone" aria-live="polite"><div class="ms-burst"></div><div class="ms-k">MILESTONE</div><div class="ms-n">ONE MILLION</div><div class="ms-c">STUDS</div></div>
 <div id="banner" class="hidden"><div class="b1">NEW PLOT!</div><div class="b2" id="bannerName"></div></div>
-<section id="modal" class="modal hidden"><div class="modal-card" id="modalCard"></div></section>
-<div id="simbox" class="hidden">
+<section id="modal" class="modal hidden"><div class="modal-card frame" id="modalCard"></div></section>
+<div id="simbox" class="frame hidden">
   <div class="sim-title">BOT IS PLAYING</div>
   <div class="sim-time" id="simTime">0s</div>
   <div class="sim-sub" id="simSub">looking for the next plot</div>

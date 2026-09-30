@@ -422,6 +422,9 @@ const FX = (() => {
         { id: 'uiBadge', name: 'Badge pulse', spec: 'scale 1 to 1.18 to 1 in the last 20% of a 1.6 s loop', roblox: 'Looping tween with DelayTime, or a Heartbeat sine gated to one pulse per 1.6 s.' },
         { id: 'uiHold', name: 'Hold to confirm', spec: 'white fill grows 0 to 100% width over 700 ms (1200 ms to wipe); release cancels', roblox: 'Frame Size tween on InputBegan, cancel on InputEnded; fire at completion.' },
         { id: 'uiTicker', name: 'Counter ticker', spec: 'shown value eases 25% of the gap per frame toward the real value; drops snap instantly', roblox: 'Heartbeat lerp of a displayed number, format each frame; snap on spend.' },
+        { id: 'uiTitle', name: 'Panel title tab', spec: 'panel pops 0.88 to 1 (0.28 s, cubic-bezier(.2,1.4,.4,1)); the title tab drops 12 px and scales 0.8 to 1, 0.06 s later (0.38 s, overshoot)', roblox: 'UIScale 0.88 to 1 with Back Out 0.28 s on the panel; the title Frame Position and UIScale tweened with Back Out 0.38 s after task.wait(0.06).' },
+        { id: 'uiRail', name: 'Side tab select', spec: 'the active arrow tab slides 10 px out (0.15 s, overshoot); others drop to 85% saturation; follows the scroll position', roblox: 'Tween Position.X.Offset -10 with Back Out 0.15 s; ImageColor3 darkened on the others.' },
+        { id: 'uiShine', name: 'Shine sweep', spec: 'white diagonal band crosses a ready button in the last 38% of a 3.4 s loop', roblox: 'ClipsDescendants button, child Frame with a white UIGradient, Position tween -0.7 to 1.3 on a loop with DelayTime 2.1.' },
         { id: 'uiRate', name: 'Rate pill bump', spec: 'when the rate rises, scale 1.15 and back in 250 ms, green flash', roblox: 'UIScale tween Back Out 0.25 s when the rate goes up.' },
     ];
     return { play, def, CATALOG, byId, UI_MOTION, sfx, haptic, launchFireworks, throwConfetti, drones, letterbox, flash };
