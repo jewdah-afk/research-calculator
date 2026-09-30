@@ -129,6 +129,8 @@ const META = (() => {
     }
     function announce(b) {
         if (typeof GAME !== 'undefined' && GAME.sim) return;
+        // never talk over a cinematic caption: wait until it is done
+        if (document.body.classList.contains('cine') || document.body.classList.contains('intro')) { setTimeout(() => announce(b), 700); return; }
         FX.play('achievement', { force: true });
         const el = document.getElementById('badgePop'); if (!el) return;
         el.querySelector('.bp-icon').textContent = b.icon; el.querySelector('.bp-name').textContent = b.name; el.querySelector('.bp-desc').textContent = b.desc;

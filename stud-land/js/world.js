@@ -62,6 +62,8 @@ const WORLD = (() => {
         amount() { return (DIRECTOR.mode === 'full' ? 1 : DIRECTOR.mode === 'reduced' ? 0.45 : 0) * Q.particles; },
         hero(ms) { const n = nowMs(); if (n < DIRECTOR.heroUntil) return false; DIRECTOR.heroUntil = n + ms; return true; },
         inHero() { return nowMs() < DIRECTOR.heroUntil; },
+        // a forced hero (several plots at once, Lab PLAY) still holds the slot, so queued moments wait
+        claim(ms) { DIRECTOR.heroUntil = Math.max(DIRECTOR.heroUntil, nowMs() + ms); },
         support() { const n = nowMs(); DIRECTOR.sup = DIRECTOR.sup.filter(t => n - t < 250); if (DIRECTOR.sup.length >= 3) return false; DIRECTOR.sup.push(n); return true; },
         flash() { if (DIRECTOR.mode !== 'full' || DIRECTOR.noFlash) return false; const n = nowMs(); DIRECTOR.flashes = DIRECTOR.flashes.filter(t => n - t < 1000); if (DIRECTOR.flashes.length >= 2) return false; DIRECTOR.flashes.push(n); return true; },
         shake(a) { if (DIRECTOR.mode !== 'full') return; cam.kick = Math.min(1, cam.kick + a); },

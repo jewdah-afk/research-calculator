@@ -24,7 +24,7 @@ const FX = (() => {
     function haptic(id) { if (typeof HAPTIC === 'undefined') return; if (HAPTIC.play) HAPTIC.play(id); else if (HAPTIC[id]) HAPTIC[id](); }
     function play(id, ctx = {}) {
         const e = byId[id]; if (!e) return false;
-        if (e.tier === 'hero' && !ctx.force && !R.FXD.hero(e.durationMs)) return false;
+        if (e.tier === 'hero') { if (ctx.force) R.FXD.claim(e.durationMs); else if (!R.FXD.hero(e.durationMs)) return false; }
         if (e.tier === 'support' && !ctx.force && !R.FXD.support()) { if (e.fallback) e.fallback(ctx); return false; }
         if (e.tier === 'ambient' && R.FXD.amount() === 0 && !ctx.force) return false;
         try { e.run(ctx); } catch (err) { console.warn('fx', id, err); }

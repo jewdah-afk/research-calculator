@@ -169,6 +169,8 @@ const SKY = (() => {
         if (p && R.builtCache().has(k) && x > p.x0 - 0.45 && x < p.x0 + 5.45 && y > p.y0 - 0.45 && y < p.y0 + 5.45) return true;
         for (const [dx, dy] of [[0.6, 0], [-0.6, 0], [0, 0.6], [0, -0.6]]) { const q = PLOTS.get(plotKeyOf(x + dx, y + dy)); if (q && R.builtCache().has(q.key) && x + dx > q.x0 && x + dx < q.x0 + 5 && y + dy > q.y0 && y + dy < q.y0 + 5) return true; }
         if (x > -18.5 && x < -9 && y > -18.5 && y < -9) return true;
+        // islands are drawn under everything that stands up, so never swim right behind one (it would show through)
+        for (let d = 0.4; d <= 1.8; d += 0.35) { const fx = x + R.sinA * d, fy = y + R.cosA * d; const q = PLOTS.get(plotKeyOf(fx, fy)); if (q && R.builtCache().has(q.key) && fx > q.x0 && fx < q.x0 + 5 && fy > q.y0 && fy < q.y0 + 5) return true; }
         return false;
     }
     // Pick the longest straight run of open sea that is on screen, along either axis.
@@ -323,7 +325,7 @@ const SKY = (() => {
     FX.def({ id: 'seaSerpent', name: 'Brick sea serpent', tier: 'support', category: 'Sea', trigger: 'Every 6 to 10 minutes, through open sea in view',
         durationMs: 14500, sound: 'serpent when it first shows, again when tapped', haptic: 'none',
         desc: 'A green brick serpent with yellow spines swims past: its head rides above the water, its body arches out in humps that roll backwards, each one breaking the surface with a little splash and a foam collar. It blinks and flicks a red tongue. Tap it and it winks and dives (Serpent Spotter badge).',
-        spec: { body: '7 segments 0.5 u apart, humps sin(2.4t - 0.95 i) x 0.42 u', speed: '1.1 u/s for about 16 u', path: 'the longest straight run of open, on-screen sea (0.45 u clear of plots), up to 18 u; if none, 2.8 u off the city edge', emerge: '1.4 s smoothstep in and out' },
+        spec: { body: '7 segments 0.5 u apart, humps sin(2.4t - 0.95 i) x 0.42 u', speed: '1.1 u/s for about 16 u', path: 'the longest straight run of open, on-screen sea (0.45 u clear of plots, and never within 1.8 u behind one from the camera), up to 18 u; if none, 2.8 u off the city edge', emerge: '1.4 s smoothstep in and out' },
         roblox: 'A Model of 7 brick segments; each Heartbeat set every segment CFrame from a path and a sine for height (below the water surface when negative). Splash ParticleEmitter at the surface crossing. ClickDetector on the head.',
         run() { serp.on = null; startSerpent(); } });
     FX.def({ id: 'milestone', name: 'Milestone takeover', tier: 'hero', category: 'Gameplay', trigger: 'Studs pass 1K, 1M, 1B ... 1e33, then 1e50, 1e75, a googol, 1e150 ... 1e300 for the first time',

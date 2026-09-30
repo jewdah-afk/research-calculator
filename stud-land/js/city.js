@@ -344,7 +344,7 @@ const CITY = (() => {
         const u = corners.map(([x, y]) => x * R.cosA - y * R.sinA), v = corners.map(([x, y]) => (x * R.sinA + y * R.cosA) * R.SQ);
         const fit = Math.min(R.W / ((Math.max(...u) - Math.min(...u)) * 64), R.H / ((Math.max(...v) - Math.min(...v) + 3) * 64));
         cam.tx = (x0 + x1) / 2; cam.ty = (y0 + y1) / 2; cam.tZoom = Math.max(0.18, Math.min(0.9, fit * 0.92));
-        FX.letterbox(3600); document.body.classList.add('cine'); setTimeout(() => document.body.classList.remove('cine'), 4100);
+        FX.letterbox(3600); document.body.classList.add('cine'); R.view.signs = false; setTimeout(() => { document.body.classList.remove('cine'); if (!(typeof CINE !== 'undefined' && CINE.on)) R.view.signs = true; }, 4100);
         if (typeof CINE !== 'undefined' && CINE.caption) { CINE.caption('YOUR CITY GREW INTO', t.title); setTimeout(() => CINE.caption('', ''), 3400); }
         snd('tierUp', undefined, undefined, { vol: 0.9 }, 'plotBuilt');
         if (typeof AUDIO !== 'undefined' && AUDIO.stinger && !(ids && ids.has('tierUp'))) AUDIO.stinger('plot');
@@ -358,7 +358,7 @@ const CITY = (() => {
         id: 'cityTier', name: 'City grows a tier', tier: 'hero', category: 'City', trigger: 'Built plots reach 5 (Town), 12 (City) or 24 (Metropolis), once per save',
         durationMs: 4200, sound: 'tierUp stinger, towerRise per new tower, fireworks', haptic: 'big',
         desc: 'The camera pulls all the way back to show the whole archipelago, cinema bars slide in, "YOUR CITY GREW INTO / STUD TOWN" slams in, fireworks go up across your plots, confetti falls, and new skyscrapers grow out of the downtown islet one after another. Then the camera flies back to where you were.',
-        spec: { tiers: 'Village 1 to 4 plots, Town 5 to 11, City 12 to 23, Metropolis 24+', camera: 'fit every built plot + downtown + sign, 92% of the screen, zoom 0.18 to 0.9, back after 4.2 s', towers: 'Town 2, City +3, Metropolis +4; each grows over 1.4 s (cubic out), 0.35 s apart, starting 0.9 s in', fireworks: '7 volleys of 3 rockets on random built plots, 260 ms apart', confetti: 110, saved: 'META tierMax, so each tier celebrates once' },
+        spec: { tiers: 'Village 1 to 4 plots, Town 5 to 11, City 12 to 23, Metropolis 24+', camera: 'fit every built plot + downtown + sign, 92% of the screen, zoom 0.18 to 0.9, back after 4.2 s; HUD and plot signs hidden meanwhile', towers: 'Town 2, City +3, Metropolis +4; each grows over 1.4 s (cubic out), 0.35 s apart, starting 0.9 s in', fireworks: '7 volleys of 3 rockets on random built plots, 260 ms apart', confetti: 110, saved: 'META tierMax, so each tier celebrates once' },
         roblox: 'Server counts built plots and sets a TierIndex attribute on the player; the client listens and plays: Camera to Scriptable, tween out to a CFrame that frames the island bounds (compute from the plot parts), ScreenGui caption with UIScale Back Out, Firework parts with Trails, then tween each skyscraper Model from Size Y 0 (scale with PivotTo + ScaleTo) over 1.4 s. Award a Badge per tier with BadgeService.',
         run: celebrate,
     });

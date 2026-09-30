@@ -249,7 +249,7 @@ In Roblox:
 ## 8. Effects and the attention budget
 
 - **Tiers:**
-  - HERO: one at a time.
+  - HERO: one at a time. A forced hero (several plots built at once, Lab PLAY) still claims the slot, so queued moments (tier celebration, milestone, whale, serpent) wait their turn, and badge pops wait for cinematic captions.
   - SUPPORT: at most 3 starts per 250 ms.
   - AMBIENT: first to go.
 - **Limits:**
