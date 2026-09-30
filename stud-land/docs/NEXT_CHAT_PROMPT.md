@@ -1,6 +1,6 @@
 # Stud City Incremental: brief for the next session (Roblox Studio)
 
-Paste this whole file into the new chat, and attach:
+Start the new chat on my computer (Claude desktop app, or Claude Code running there) with our place open in Roblox Studio and the Studio MCP connected, so you can see the real icons. Paste this whole file into it, and attach:
 1. The Shop reference screenshot (the dark "Shop!" panel with Featured, Gamepasses, Cash and Codes).
 2. The current Studio HUD screenshot (Welcome Back popup open, 58.3B Studs).
 3. The two screen recordings (ScreenRecording 17-31-34 and 19-38-35).
@@ -11,10 +11,11 @@ My Roblox user ID: 5167569069.
 
 ---
 
-## 1. The goal in two lines
+## 1. The goal
 
 1. **World, effects, sound: copy the artifact game.** Bring its map design, visual hierarchy, VFX, GFX and SFX into our real Roblox game as the hero layer over everything.
 2. **UI and HUD: keep ours, upgrade it.** Same layout, same icons, same buttons and screens we already have in Studio. Rebuild every frame, bar, button, pill and panel around them to AAA quality, in the style of the Shop reference. Do not replace our UI with the artifact's UI.
+3. **Same build as the reference, your own design.** Use the same UICorner radii, UIStroke outlines, UIGradient fills, backgrounds (halftone, gloss, ink drop shadow), fonts and motion as the Shop reference, everything it does. But make the design your own: an original take in that style, not a copy of the reference.
 
 Work directly in Roblox Studio on the open place (Studio MCP), or through Open Cloud with the API key. Work on a copy or a test place first, never on the live place without asking.
 
@@ -29,7 +30,7 @@ Work directly in Roblox Studio on the open place (Studio MCP), or through Open C
 
 ## 3. The style to apply (from the Shop reference)
 
-Apply this language to every frame of our UI:
+Apply this language to every frame of our UI. Same corners, strokes, gradients and backgrounds as the reference, but make the result your own:
 
 - **Frames:** dark navy window (about #2b3a62 at the top to #171f38 at the bottom), thick near-black outline (#141024, 4 px), a thin light inner line, and a hard ink drop shadow under it.
 - **Title tab:** hangs over the top-left edge, with a tilted 3D icon sticker and a big outlined title ("Shop!").
@@ -170,6 +171,7 @@ Badge pops and overlays wait for hero moments and open panels.
 
 ## 7. How to work
 
+- Work on my computer with the place open in Studio. Look at our real icons in the place first, and read their asset ids from the existing ImageLabels. Never guess, recreate or swap them.
 - Prefer the Roblox Studio MCP on the open place.
 - Otherwise, Open Cloud with the API key works:
   - upload images and sounds as assets
