@@ -1,94 +1,44 @@
 --!nonstrict
--- Authoritative game server: saving, per-player spawn loops, orb validation, and every purchase.
+-- Core game loop per player: spawners, orb validation, actions, tutorial, state sync.
 -- The client only simulates the board physics and reports where each orb landed.
 
 local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
-local DataStoreService = game:GetService("DataStoreService")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local Economy = require(Shared.OrbEconomy)
 local F = require(Shared.OrbFormulas)
-local Remotes = require(Shared.Remotes)
+local Balance = require(Shared.Balance)
+local Events = require(Shared.Events)
+local Tutorial = require(Shared.Tutorial)
 
-local STORE_NAME = "OrbGame_v1"
-local AUTOSAVE_SECONDS = 60
+local GameService = {}
+
 local MIN_FALL_SECONDS = 0.4 -- an orb can't be collected faster than this after spawning
 local MAX_PENDING = 600 -- hard cap on tracked orbs per player (duplicates can exceed spawn cap)
 local ACTIONS_PER_SECOND = 40
 local STATE_PUSH_HZ = 5
+local ORB_TIMEOUT = 120 -- forget orbs that never came back (lag / tab-out)
 
-local store = nil
-pcall(function()
-	store = DataStoreService:GetDataStore(STORE_NAME)
-end)
+local R -- remotes
+local DataService, LeaderboardService
+local sessions = {} -- [Player] = session
 
-local R = Remotes.server()
+---------------------------------------------------------------- helpers
 
-type Session = {
-	data: any,
-	pending: { [number]: { orb: any, t: number } },
-	pendingCount: number, -- rarity orbs only (spawn cap)
-	nextId: number,
-	spawnAcc: { number },
-	secondAcc: number,
-	stateAcc: number,
-	dirty: boolean,
-	actionBudget: number,
-	rng: Random,
-	loaded: boolean,
-}
-local sessions: { [Player]: Session } = {}
-
----------------------------------------------------------------- persistence
-
-local function load(player: Player)
-	local saved
-	if store then
-		local ok, res = pcall(function()
-			return store:GetAsync(tostring(player.UserId))
-		end)
-		if ok then
-			saved = res
-		else
-			warn("[OrbGame] load failed for", player.Name, res)
-		end
-	end
-	return if saved then Economy.deserialize(saved) else Economy.newData("orig")
-end
-
-local function save(player: Player)
+local function pushState(player)
 	local s = sessions[player]
-	if not (s and s.loaded and store) then
-		return
-	end
-	local payload = Economy.serialize(s.data)
-	local ok, err = pcall(function()
-		store:SetAsync(tostring(player.UserId), payload)
-	end)
-	if not ok then
-		warn("[OrbGame] save failed for", player.Name, err)
-	end
-end
-
----------------------------------------------------------------- state sync
-
-local function pushState(player: Player)
-	local s = sessions[player]
-	if s then
+	if s and s.data then
 		R.State:FireClient(player, Economy.serialize(s.data))
 		s.dirty = false
 	end
 end
 
-local function notify(player: Player, kind: string, payload: any)
+local function notify(player, kind, payload)
 	R.Notify:FireClient(player, kind, payload)
 end
 
----------------------------------------------------------------- orbs
-
-local function track(s: Session, orb)
+local function track(s, orb)
 	if s.pendingCount >= MAX_PENDING then
 		return nil
 	end
@@ -100,7 +50,7 @@ local function track(s: Session, orb)
 	return s.nextId
 end
 
-local function clearBoard(player: Player)
+local function clearBoard(player)
 	local s = sessions[player]
 	if s then
 		s.pending = {}
@@ -109,7 +59,7 @@ local function clearBoard(player: Player)
 	end
 end
 
-local function spawnFor(player: Player, s: Session, spawner: number)
+local function spawnFor(player, s, spawner)
 	local before = s.data.highestRarity
 	local orbs = Economy.rollSpawn(s.data, spawner, s.pendingCount, s.rng)
 	if #orbs == 0 then
@@ -131,37 +81,12 @@ local function spawnFor(player: Player, s: Session, spawner: number)
 	s.dirty = true
 end
 
-R.Collect.OnServerEvent:Connect(function(player: Player, batch)
-	local s = sessions[player]
-	if not (s and type(batch) == "table") then
-		return
-	end
-	local now = os.clock()
-	for i, entry in batch do
-		if i > 200 then
-			break
-		end
-		if type(entry) == "table" and type(entry[1]) == "number" and type(entry[2]) == "number" then
-			local p = s.pending[entry[1]]
-			if p and now - p.t >= MIN_FALL_SECONDS then
-				s.pending[entry[1]] = nil
-				if p.orb.kind == "orb" then
-					s.pendingCount -= 1
-				end
-				Economy.collect(s.data, p.orb, math.clamp(entry[2], 0, 400), s.rng)
-				s.dirty = true
-			end
-		end
-	end
-end)
-
----------------------------------------------------------------- actions
-
 local function num(x, lo, hi)
 	return type(x) == "number" and x == x and x >= lo and x <= hi and math.floor(x) == x
 end
 
--- name -> handler(player, session, ...) -> boolean
+---------------------------------------------------------------- actions (whitelist)
+
 local ACTIONS = {
 	buyMain = function(_, s, kind, count)
 		return num(kind, 1, 3) and Economy.buyMain(s.data, kind, num(count, 1, 1e9) and count or 1)
@@ -224,12 +149,11 @@ local ACTIONS = {
 		end
 		local ok = Economy.buyBoost(s.data, id)
 		if ok and id == 5 then
-			-- duplicate every tracked orb; the client clones them at the source position
-			local pairs_ = {}
 			local snapshot = {}
 			for oid, entry in s.pending do
 				table.insert(snapshot, { oid, entry.orb })
 			end
+			local pairs_ = {}
 			for _, it in snapshot do
 				local newId = track(s, table.clone(it[2]))
 				if newId then
@@ -258,6 +182,9 @@ local ACTIONS = {
 	buyWeatherMoney = function(_, s)
 		return Economy.buyWeatherMoney(s.data)
 	end,
+	buyStormLevel = function(_, s)
+		return Economy.buyStormLevel(s.data)
+	end,
 	buyAutomation = function(_, s, idx)
 		return num(idx, 1, 4) and Economy.buyAutomation(s.data, idx)
 	end,
@@ -284,130 +211,191 @@ local ACTIONS = {
 	setDifficulty = function(_, s, diff)
 		return type(diff) == "string" and Economy.setDifficulty(s.data, diff)
 	end,
+	skipTutorial = function(_, s)
+		Tutorial.finish(s.data)
+		return true
+	end,
 }
-
-R.Action.OnServerInvoke = function(player: Player, name, ...)
-	local s = sessions[player]
-	local handler = type(name) == "string" and ACTIONS[name]
-	if not (s and s.loaded and handler) then
-		return false
-	end
-	if s.actionBudget <= 0 then
-		return false
-	end
-	s.actionBudget -= 1
-	local ok, result = pcall(handler, player, s, ...)
-	if not ok then
-		warn("[OrbGame] action", name, "errored:", result)
-		return false
-	end
-	if result then
-		Economy.refresh(s.data)
-		pushState(player)
-	end
-	return result == true
-end
+GameService.ACTIONS = ACTIONS -- exposed so new features can register actions
 
 ---------------------------------------------------------------- lifecycle
 
-local function onJoin(player: Player)
-	local s: Session = {
+local function onJoin(player)
+	local s = {
 		data = nil,
+		canSave = false,
 		pending = {},
 		pendingCount = 0,
 		nextId = 0,
 		spawnAcc = table.create(7, 0),
 		secondAcc = 0,
 		stateAcc = 0,
+		lbAcc = 0,
 		dirty = true,
 		actionBudget = ACTIONS_PER_SECOND,
 		rng = Random.new(),
-		loaded = false,
 	}
 	sessions[player] = s
-	s.data = load(player)
-	Economy.refresh(s.data)
-	s.loaded = true
-	pushState(player)
-	R.Board:FireClient(player, "rebuild")
-end
-
-Players.PlayerAdded:Connect(onJoin)
-for _, p in Players:GetPlayers() do
-	task.spawn(onJoin, p)
-end
-
-Players.PlayerRemoving:Connect(function(player)
-	save(player)
-	sessions[player] = nil
-end)
-
-game:BindToClose(function()
-	if RunService:IsStudio() and not store then
+	LeaderboardService.attach(player)
+	local data, canSave = DataService.load(player)
+	if not player.Parent or not data then
+		sessions[player] = nil
 		return
 	end
-	for player in sessions do
-		save(player)
+	s.data, s.canSave = data, canSave
+	Economy.refresh(data)
+	pushState(player)
+	R.Board:FireClient(player, "rebuild")
+	R.Events:FireClient(player, Balance.ctx.events)
+	if not canSave then
+		notify(player, "announce", "Your save couldn't be loaded right now. Progress this session won't be saved — please rejoin in a minute.")
 	end
-end)
+end
 
-task.spawn(function()
-	while true do
-		task.wait(AUTOSAVE_SECONDS)
-		for player in sessions do
-			task.spawn(save, player)
-		end
+local function onLeave(player)
+	local s = sessions[player]
+	sessions[player] = nil
+	if s and s.data and s.canSave then
+		DataService.save(player, s.data, true)
+		LeaderboardService.submit(player, s.data)
 	end
-end)
+end
 
----------------------------------------------------------------- main loop
-
-RunService.Heartbeat:Connect(function(dt)
+function GameService.saveAll(release: boolean)
 	for player, s in sessions do
-		if not s.loaded then
-			continue
+		if s.data and s.canSave then
+			DataService.save(player, s.data, release)
 		end
-		local d = s.data
-		-- spawners
-		for sp = 1, d.spawnersUnlocked do
-			s.spawnAcc[sp] += dt * 1000
-			local interval = d.spawnIntervals[sp]
-			local guard = 0
-			while s.spawnAcc[sp] >= interval and guard < 20 do
-				s.spawnAcc[sp] -= interval
-				guard += 1
-				spawnFor(player, s, sp)
+	end
+end
+
+function GameService.broadcast(kind, payload)
+	for player in sessions do
+		notify(player, kind, payload)
+	end
+end
+
+function GameService.init(remotes, services)
+	R = remotes
+	DataService = services.DataService
+	LeaderboardService = services.LeaderboardService
+
+	R.Collect.OnServerEvent:Connect(function(player, batch)
+		local s = sessions[player]
+		if not (s and s.data and type(batch) == "table") then
+			return
+		end
+		local now = os.clock()
+		for i, entry in batch do
+			if i > 200 then
+				break
 			end
-		end
-		-- automation
-		Economy.tickAutomation(d, dt)
-		-- once per second
-		s.secondAcc += dt
-		if s.secondAcc >= 1 then
-			s.secondAcc -= 1
-			s.actionBudget = ACTIONS_PER_SECOND
-			Economy.tickSecond(d, {
-				onObstacleChange = function()
-					R.Board:FireClient(player, "rebuild")
-				end,
-			})
-			-- forget orbs that never came back (lag / tab-out) so the cap frees up
-			local now = os.clock()
-			for id, p in s.pending do
-				if now - p.t > 120 then
-					s.pending[id] = nil
+			if type(entry) == "table" and type(entry[1]) == "number" and type(entry[2]) == "number" and entry[2] == entry[2] then
+				local p = s.pending[entry[1]]
+				if p and now - p.t >= MIN_FALL_SECONDS then
+					s.pending[entry[1]] = nil
 					if p.orb.kind == "orb" then
 						s.pendingCount -= 1
 					end
+					Economy.collect(s.data, p.orb, math.clamp(entry[2], 0, 400), s.rng)
+					s.dirty = true
 				end
 			end
-			s.dirty = true
 		end
-		-- state push
-		s.stateAcc += dt
-		if s.dirty and s.stateAcc >= 1 / STATE_PUSH_HZ then
-			s.stateAcc = 0
+	end)
+
+	R.Action.OnServerInvoke = function(player, name, ...)
+		local s = sessions[player]
+		local handler = type(name) == "string" and ACTIONS[name]
+		if not (s and s.data and handler) or s.actionBudget <= 0 then
+			return false
+		end
+		s.actionBudget -= 1
+		local ok, result = pcall(handler, player, s, ...)
+		if not ok then
+			warn("[GameService] action", name, "errored:", result)
+			return false
+		end
+		if result then
+			Economy.refresh(s.data)
+			Tutorial.advance(s.data)
 			pushState(player)
 		end
+		return result == true
 	end
-end)
+
+	Players.PlayerAdded:Connect(onJoin)
+	Players.PlayerRemoving:Connect(onLeave)
+	for _, p in Players:GetPlayers() do
+		task.spawn(onJoin, p)
+	end
+
+	-- autosave + daily backups
+	task.spawn(function()
+		while true do
+			task.wait(60)
+			for player, s in sessions do
+				if s.data and s.canSave then
+					task.spawn(DataService.save, player, s.data, false)
+					DataService.backup(player, s.data)
+				end
+			end
+		end
+	end)
+
+	RunService.Heartbeat:Connect(function(dt)
+		Balance.ctx.now = os.time()
+		local speed = Events.spawnSpeed(Balance.ctx)
+		for player, s in sessions do
+			local d = s.data
+			if not d then
+				continue
+			end
+			for sp = 1, d.spawnersUnlocked do
+				s.spawnAcc[sp] += dt * 1000 * speed
+				local interval = d.spawnIntervals[sp]
+				local guard = 0
+				while s.spawnAcc[sp] >= interval and guard < 20 do
+					s.spawnAcc[sp] -= interval
+					guard += 1
+					spawnFor(player, s, sp)
+				end
+			end
+			Economy.tickAutomation(d, dt)
+			s.secondAcc += dt
+			if s.secondAcc >= 1 then
+				s.secondAcc -= 1
+				s.actionBudget = ACTIONS_PER_SECOND
+				Economy.tickSecond(d, {
+					onObstacleChange = function()
+						R.Board:FireClient(player, "rebuild")
+					end,
+				})
+				Tutorial.advance(d)
+				local now = os.clock()
+				for id, p in s.pending do
+					if now - p.t > ORB_TIMEOUT then
+						s.pending[id] = nil
+						if p.orb.kind == "orb" then
+							s.pendingCount -= 1
+						end
+					end
+				end
+				LeaderboardService.updateStats(player, d)
+				s.lbAcc += 1
+				if s.lbAcc >= 300 and s.canSave then
+					s.lbAcc = 0
+					LeaderboardService.submit(player, d)
+				end
+				s.dirty = true
+			end
+			s.stateAcc += dt
+			if s.dirty and s.stateAcc >= 1 / STATE_PUSH_HZ then
+				s.stateAcc = 0
+				pushState(player)
+			end
+		end
+	end)
+end
+
+return GameService

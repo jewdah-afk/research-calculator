@@ -5,7 +5,8 @@
 --   Spawn   (RemoteEvent)    server -> client : { {id, kind, rarity, variant, spawner} }
 --   Collect (RemoteEvent)    client -> server : { {id, x}, ... } orbs that reached the bottom
 --   Board   (RemoteEvent)    server -> client : "rebuild" | "clear" | "duplicate", payload
---   Notify  (RemoteEvent)    server -> client : kind, payload (toasts: newRarity, tier, weather)
+--   Notify  (RemoteEvent)    server -> client : kind, payload (toasts: newRarity, tier, weather, event)
+--   Events / Leaderboards / Admin : see SPEC below
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -17,6 +18,9 @@ local SPEC = {
 	Collect = "RemoteEvent",
 	Board = "RemoteEvent",
 	Notify = "RemoteEvent",
+	Events = "RemoteEvent", -- server -> client : active global events list
+	Leaderboards = "RemoteEvent", -- server -> client : { board = { {name, value, display}, ... } }
+	Admin = "RemoteFunction", -- client -> server : (command, ...) admin-only, verified server-side
 }
 
 function Remotes.server()
