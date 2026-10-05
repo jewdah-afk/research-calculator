@@ -7,6 +7,7 @@ UI, art, sounds, board geometry and saving are not included. Build them in Studi
 |---|---|
 | `src/shared/OrbConfig.luau` | Every tuning number: rarities (odds, value, radius), upgrades, spawners, boosts, weather, tiers, skill tree, difficulties |
 | `src/shared/OrbFormulas.luau` | Pure math: luck, rarity roll, variants, payouts, slot multipliers, rebirth cost, TP/QP, number formatting |
+| `src/shared/Big.luau` | Wrapper around **EternityNum**. Place the EternityNum ModuleScript at `ReplicatedStorage.Modules.EternityNum` |
 | `src/shared/OrbEconomy.luau` | Server-side state and actions (`newData`, `rollSpawn`, `collect`, `buyMain`, `rebirth`, `tier`, `buyBoost`, `rollWeather`, `buySkill`, …) |
 
 ## Wiring it up
@@ -28,3 +29,9 @@ Change any of these if you want the intended design instead:
 7. AUTO-1 and AUTO-2 cost scaling is randomised once per save, between 1.8 and 1.9.
 
 Left out: tutorial, statistics/history graphs and the BST-4 auto-potion (it's only a UI toggle in the source).
+
+## Big numbers (EternityNum)
+`money`, `totalMoney`, `diamonds`, `totalDiamonds`, `moneyMultiplier`, every money cost, the rebirth cost and TP costs are EternityNum values, used only through `Big`. Luck, odds and weather stay as plain numbers because the rarity table stops at 1e70.
+- Display: `Formulas.format(x)` calls `EternityNum.short` for Big values.
+- Saving: `Big.serialize(x)` returns a string for the DataStore, and `Big.deserialize(s)` turns it back.
+- `Big` uses `add/sub/mul/div/pow/me/meeq/le/leeq/short/toString`. If your EternityNum build also has `convert`, `log10`, `floor`, `toNumber` or `fromString`, `Big` picks them up automatically and otherwise falls back.

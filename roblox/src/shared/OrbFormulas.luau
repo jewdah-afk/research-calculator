@@ -3,6 +3,7 @@
 -- and returns numbers; nothing here mutates state.
 
 local Config = require(script.Parent.OrbConfig)
+local Big = require(script.Parent.Big)
 
 local F = {}
 
@@ -189,21 +190,21 @@ end
 
 ---------------------------------------------------------------- payouts
 
--- Money multiplier actually applied when an orb is collected.
+-- Money multiplier (Big) actually applied when an orb is collected.
 -- NOTE: the original applies neither weather money nor MN-5 here (they only show in the UI).
-function F.orbMoneyMult(data): number
-	local m = data.moneyMultiplier * data.weatherMoney * (data.boostTimes.money > 0 and 2 or 1)
+function F.orbMoneyMult(data)
+	local m = data.weatherMoney * (data.boostTimes.money > 0 and 2 or 1)
 	if data.mechanics >= 3 then
 		m *= Config.Base.RarityMoneyBonus ^ data.highestRarity
 	end
 	if data.tiers >= 1 then
 		m *= 1.05 ^ F.skill(data, "MN-1")
 	end
-	return m
+	return Big.mul(data.moneyMultiplier, m)
 end
 
-function F.orbMoney(data, rarity: number, slot: number, variant: string?): number
-	return Rarities[rarity].value * F.orbMoneyMult(data) * slot * F.variantMult(variant)
+function F.orbMoney(data, rarity: number, slot: number, variant: string?)
+	return Big.mul(F.orbMoneyMult(data), Rarities[rarity].value * slot * F.variantMult(variant))
 end
 
 -- Difficulty and rebirth part of the diamond multiplier.
@@ -231,17 +232,17 @@ end
 
 ---------------------------------------------------------------- rebirth / tier
 
-function F.rebirthCost(data, rebirths: number?): number
+function F.rebirthCost(data, rebirths: number?)
 	local d = Config.Difficulties[data.difficulty]
 	local n = rebirths or data.rebirths
-	return d.rebScaling ^ n * d.rebBase / 2 ^ F.skill(data, "MN-5")
+	return Big.mul(Big.pow(d.rebScaling, n), d.rebBase / 2 ^ F.skill(data, "MN-5"))
 end
 
 -- Rebirths gained by a bulk rebirth (MAX-3) with current money (>= 1).
 function F.bulkRebirths(data): number
 	local d = Config.Difficulties[data.difficulty]
 	local base = d.rebBase / 2 ^ F.skill(data, "MN-5")
-	local target = math.floor(math.log(data.money / base) / math.log(d.rebScaling) + 1)
+	local target = math.floor((Big.log10(data.money) - math.log10(base)) / math.log10(d.rebScaling) + 1)
 	return math.max(target - data.rebirths, 1)
 end
 
@@ -310,9 +311,9 @@ function F.spentPoints(data): (number, number)
 	return tp, qp
 end
 
-function F.tpSourceCost(name: string, bought: number): number
+function F.tpSourceCost(name: string, bought: number)
 	local s = Config.TPSources[name]
-	return s.baseCost * s.costMult ^ bought
+	return Big.mul(Big.pow(s.costMult, bought), s.baseCost)
 end
 
 ---------------------------------------------------------------- formatting
@@ -326,7 +327,10 @@ local SUFFIX = { "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc", "
 	"QiOg", "SxOg", "SpOg", "OcOg", "NoOg", "Ng", "UNg", "DNg", "TNg", "QaNg", "QiNg", "SxNg", "SpNg", "OcNg", "NoNg",
 	"Ce", "UCe" }
 
-function F.format(x: number, decimals: number?): string
+function F.format(x: any, decimals: number?): string
+	if type(x) == "table" then
+		return Big.format(x)
+	end
 	if x == math.huge then
 		return "Infinity"
 	end
