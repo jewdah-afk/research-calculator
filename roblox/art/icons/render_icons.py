@@ -343,6 +343,193 @@ def icon_gear():
     gloss(-0.5, 0.55, 0.16, 0.05, rot=-40, alpha=0.7)
 
 
+# ------------------------------------------------------------------ v2 hero icons (layered build)
+
+def fillet(pts, r, n=6):
+    """Round every corner of a polygon with an arc of radius r."""
+    out = []
+    m = len(pts)
+    for i in range(m):
+        p0, p1, p2 = pts[i - 1], pts[i], pts[(i + 1) % m]
+        v1 = (p0[0] - p1[0], p0[1] - p1[1]); v2 = (p2[0] - p1[0], p2[1] - p1[1])
+        l1 = math.hypot(*v1); l2 = math.hypot(*v2)
+        d = min(r, l1 * 0.45, l2 * 0.45)
+        a = (p1[0] + v1[0] / l1 * d, p1[1] + v1[1] / l1 * d)
+        b = (p1[0] + v2[0] / l2 * d, p1[1] + v2[1] / l2 * d)
+        for k in range(n + 1):  # quadratic bezier a -> p1 -> b
+            t = k / n
+            out.append(((1 - t) ** 2 * a[0] + 2 * (1 - t) * t * p1[0] + t * t * b[0],
+                        (1 - t) ** 2 * a[1] + 2 * (1 - t) * t * p1[1] + t * t * b[1]))
+    return out
+
+
+def scale_pts(pts, k, cx=0.0, cz=0.0):
+    return [(cx + (x - cx) * k, cz + (z - cz) * k) for x, z in pts]
+
+
+def layered(pts, base_light, base_dark, face_light, face_dark, name, depth=0.42, inset=0.84,
+            cx=0.0, cz=0.0, bevel=0.1, face_bevel=0.06, **kw):
+    """Sculpted look: deep coloured body + a lighter, slightly smaller face plate on top."""
+    body = shape(pts, depth, name + "Body")
+    finish(body, mat(name + "B", base_light, base_dark, **kw), bevel=bevel, segs=8)
+    face = shape(scale_pts(pts, inset, cx, cz), 0.08, name + "Face", y=-depth / 2 - 0.02)
+    finish(face, mat(name + "F", face_light, face_dark, **kw), bevel=face_bevel, segs=6)
+    return body, face
+
+
+def sparkle(x, z, s, y=-1.2, color=(1, 1, 1)):
+    sp = shape(star_pts(4, s, s * 0.2), 0.04, "Spark", y=y)
+    sp.location = (x, 0, z)
+    finish(sp, glow_mat(color, 5), bevel=0)
+
+
+def icon_star():
+    pts = fillet(star_pts(5, 1.12, 0.52), 0.16)
+    layered(pts, (1.0, 0.5, 0.0), (0.7, 0.12, 0.0), (1.0, 0.78, 0.02), (1.0, 0.45, 0.0), "Star",
+            depth=0.5, inset=0.78, bevel=0.14, face_bevel=0.1, rough=0.2)
+    # centre jewel
+    j = add("primitive_uv_sphere_add", radius=0.17, location=(0, -0.42, 0.02), segments=48, ring_count=24)
+    j.scale = (1, 0.4, 1)
+    finish(j, mat("Jewel", (1.0, 1.0, 0.75), (1.0, 0.75, 0.1), emit=0.4, coat=1.0), bevel=0)
+    gloss(-0.22, 0.48, 0.16, 0.05, rot=-55, alpha=0.9)
+    gloss(-0.62, 0.12, 0.1, 0.035, rot=-15, alpha=0.6)
+    sparkle(0.85, 0.85, 0.22)
+    sparkle(-0.95, -0.75, 0.14)
+
+
+def icon_gear():
+    teeth = 8
+    pts = []
+    for i in range(teeth):
+        a0 = i * 2 * math.pi / teeth
+        for da, r in ((-0.20, 0.78), (-0.13, 1.08), (0.13, 1.08), (0.20, 0.78)):
+            a = a0 + da
+            pts.append((r * math.cos(a), r * math.sin(a)))
+    pts = fillet(pts, 0.07, 4)
+    steel = dict(rough=0.22, metal=0.85)
+    layered(pts, (0.55, 0.6, 0.75), (0.12, 0.13, 0.22), (0.85, 0.88, 0.98), (0.4, 0.43, 0.56), "Gear",
+            depth=0.42, inset=0.9, bevel=0.06, face_bevel=0.04, **steel)
+    # raised inner ring
+    ring = add("primitive_torus_add", major_radius=0.5, minor_radius=0.09, major_segments=64, minor_segments=16, location=(0, -0.3, 0))
+    ring.rotation_euler = (math.radians(90), 0, 0)
+    finish(ring, mat("Ring", (0.95, 0.97, 1.0), (0.45, 0.48, 0.6), **steel), bevel=0)
+    # hub + dark hole
+    hub = add("primitive_cylinder_add", radius=0.36, depth=0.5, vertices=64, location=(0, -0.05, 0))
+    hub.rotation_euler = (math.radians(90), 0, 0)
+    finish(hub, mat("Hub", (0.2, 0.75, 1.0), (0.0, 0.2, 0.55), rough=0.2, metal=0.4), bevel=0.04)
+    hole = add("primitive_cylinder_add", radius=0.16, depth=0.6, vertices=48, location=(0, -0.1, 0))
+    hole.rotation_euler = (math.radians(90), 0, 0)
+    finish(hole, mat("Hole", (0.08, 0.06, 0.15), (0.02, 0.01, 0.05), rough=0.7), bevel=0.02)
+    # bolt holes on the face
+    for k in range(4):
+        a = math.radians(45 + k * 90)
+        b = add("primitive_cylinder_add", radius=0.065, depth=0.1, vertices=32, location=(0.68 * math.cos(a), -0.27, 0.68 * math.sin(a)))
+        b.rotation_euler = (math.radians(90), 0, 0)
+        finish(b, mat("Bolt", (0.3, 0.32, 0.45), (0.08, 0.08, 0.14), metal=0.6), bevel=0.02)
+    gloss(-0.45, 0.55, 0.2, 0.05, rot=-40, alpha=0.8)
+    gloss(-0.1, 0.18, 0.12, 0.04, y=-0.45, rot=-40, alpha=0.7)
+
+
+def icon_cash():
+    paper = dict(rough=0.4, coat=0.25)
+    bill_l, bill_d = (0.2, 0.85, 0.3), (0.0, 0.32, 0.08)
+    face_l, face_d = (0.55, 1.0, 0.5), (0.1, 0.55, 0.15)
+    ink = mat("Ink", (0.02, 0.42, 0.1), (0.0, 0.22, 0.04), rough=0.5)
+    # bundle: back bills peeking (fanned), front bill is the hero
+    for i, (rot, dx, dz) in enumerate(((16, 0.22, 0.2), (7, 0.1, 0.1))):
+        b = shape(fillet(rounded_rect(1.95, 1.1, 0.1), 0.05), 0.12, f"Back{i}", y=0.35 - i * 0.12)
+        b.location = (dx, 0, dz)
+        b.rotation_euler = (0, math.radians(rot), 0)
+        finish(b, mat(f"BB{i}", bill_l, bill_d, **paper), bevel=0.03, segs=4)
+    front = rounded_rect(1.95, 1.1, 0.1)
+    body, face = layered(front, bill_l, bill_d, face_l, face_d, "Bill", depth=0.16, inset=0.86, bevel=0.035, face_bevel=0.02, **paper)
+    for o in (body, face):
+        o.rotation_euler = (0, math.radians(-4), 0)
+    # corner pips + centre medallion with big $
+    for x, z in ((-0.72, 0.36), (0.72, 0.36), (-0.72, -0.36), (0.72, -0.36)):
+        c = add("primitive_cylinder_add", radius=0.1, depth=0.04, vertices=32, location=(x, -0.17, z))
+        c.rotation_euler = (math.radians(90), 0, 0)
+        finish(c, ink, bevel=0.01)
+    md = add("primitive_cylinder_add", radius=0.36, depth=0.08, vertices=64, location=(0, -0.18, 0))
+    md.rotation_euler = (math.radians(90), 0, 0)
+    finish(md, mat("Medal", (0.95, 1.0, 0.9), (0.55, 0.85, 0.5), rough=0.3), bevel=0.025)
+    text("$", 0.6, 0.05, (0, -0.24, -0.02), ink, bevel=0.015)
+    # gold band
+    band = shape(rounded_rect(0.3, 1.24, 0.04), 0.3, "Band", y=-0.05)
+    band.location = (0.62, 0, 0)
+    finish(band, mat("BandM", (1.0, 0.8, 0.15), (0.8, 0.3, 0.0), rough=0.25, metal=0.4), bevel=0.04)
+    # coin stack in front
+    gold = mat("Gold", **GOLD)
+    for k, (x, z) in enumerate(((-0.5, -0.72), (-0.5, -0.6), (-0.5, -0.48))):
+        c = add("primitive_cylinder_add", radius=0.36, depth=0.12, vertices=64, location=(x, -0.55, z))
+        finish(c, gold, bevel=0.03)
+    coin(0.05, -0.64, 0.36, -0.75)
+    gloss(-0.5, 0.36, 0.34, 0.05, y=-0.3, rot=-10, alpha=0.55)
+    sparkle(0.95, 0.75, 0.18)
+
+
+def icon_storm():
+    cloud_l, cloud_d = (0.62, 0.66, 0.95), (0.16, 0.16, 0.42)
+    top_l, top_d = (0.95, 0.96, 1.0), (0.55, 0.58, 0.85)
+    # silhouette from overlapping puffs (union via 2D) -> layered cloud with flat-ish bottom
+    puffs = ((-0.62, 0.0, 0.42), (-0.15, 0.32, 0.56), (0.42, 0.18, 0.5), (0.88, -0.05, 0.32), (0.1, -0.1, 0.48), (-0.95, -0.12, 0.28))
+    for i, (x, z, r) in enumerate(puffs):
+        s = add("primitive_uv_sphere_add", radius=r, location=(x, 0.1, z), segments=48, ring_count=24)
+        s.scale = (1, 0.5, 1)
+        finish(s, mat(f"CloudB{i}", cloud_l, cloud_d, rough=0.55, coat=0.1), bevel=0)
+        t = add("primitive_uv_sphere_add", radius=r * 0.8, location=(x - r * 0.06, -0.12, z + r * 0.12), segments=48, ring_count=24)
+        t.scale = (1, 0.45, 1)
+        finish(t, mat(f"CloudT{i}", top_l, top_d, rough=0.5, coat=0.15), bevel=0)
+    # rain drops
+    for x, z in ((-0.55, -0.72), (0.55, -0.75), (-0.2, -0.95)):
+        d = add("primitive_uv_sphere_add", radius=0.08, location=(x, -0.2, z), segments=32, ring_count=16)
+        d.scale = (0.8, 0.6, 1.4)
+        finish(d, mat("Drop", (0.3, 0.8, 1.0), (0.0, 0.3, 0.8), emit=0.3, coat=1.0), bevel=0)
+    # hero bolt in front
+    bolt = fillet([(-0.02, -0.05), (0.42, -0.05), (0.18, -0.48), (0.46, -0.48), (-0.18, -1.3), (-0.02, -0.68), (-0.3, -0.68)], 0.035, 3)
+    layered(bolt, (1.0, 0.6, 0.0), (0.8, 0.2, 0.0), (1.0, 0.95, 0.3), (1.0, 0.65, 0.0), "Bolt",
+            depth=0.24, inset=0.82, cx=0.08, cz=-0.62, bevel=0.05, face_bevel=0.03, emit=0.4)
+    for o in bpy.context.scene.objects:
+        if o.name.startswith("Bolt"):
+            o.location.y -= 0.55
+    gloss(-0.35, 0.68, 0.24, 0.06, rot=-12, alpha=0.7)
+    sparkle(0.6, -0.25, 0.12, color=(1, 0.95, 0.5))
+
+
+def icon_clover():
+    body_l, body_d = (0.04, 0.55, 0.1), (0.0, 0.2, 0.03)
+    face_l, face_d = (0.22, 0.92, 0.12), (0.02, 0.45, 0.06)
+    for a in (0, 90, 180, 270):
+        r = math.radians(a + 90)
+        pts = heart(0.66)
+        b, f = layered(pts, body_l, body_d, face_l, face_d, f"Leaf{a}", depth=0.34, inset=0.8,
+                       cz=0.05, bevel=0.12, face_bevel=0.08, rough=0.28)
+        for o in (b, f):
+            o.location = (0.47 * math.cos(r), o.location.y, 0.47 * math.sin(r) + 0.15)
+            o.rotation_euler = (0, -r + math.pi / 2, 0)
+        # centre crease on each leaf
+        c = shape(fillet([(-0.025, 0.0), (0.025, 0.0), (0.02, 0.42), (-0.02, 0.42)], 0.01, 2), 0.04, f"Crease{a}", y=-0.24)
+        c.location = (0.1 * math.cos(r), 0, 0.1 * math.sin(r) + 0.15)
+        c.rotation_euler = (0, -r + math.pi / 2, 0)
+        finish(c, mat("Crease", (0.05, 0.55, 0.1), (0.0, 0.3, 0.05)), bevel=0.01)
+    # curved stem
+    stem = []
+    for k in range(13):
+        t = k / 12
+        stem.append((0.05 + 0.35 * t * t, 0.1 - 1.15 * t))
+    stem_pts = [(x - 0.06, z) for x, z in stem] + [(x + 0.06, z) for x, z in reversed(stem)]
+    st = shape(stem_pts, 0.16, "Stem", y=0.08)
+    finish(st, mat("Stem", body_l, body_d), bevel=0.05)
+    # golden lucky centre
+    g = add("primitive_uv_sphere_add", radius=0.16, location=(0, -0.3, 0.15), segments=48, ring_count=24)
+    g.scale = (1, 0.5, 1)
+    finish(g, mat("Lucky", (1.0, 0.9, 0.3), (0.9, 0.45, 0.0), metal=0.6, emit=0.2, coat=1.0), bevel=0)
+    gloss(-0.68, 0.7, 0.16, 0.05, rot=-40, alpha=0.85)
+    gloss(0.32, 0.86, 0.12, 0.04, rot=25, alpha=0.6)
+    sparkle(0.95, 0.95, 0.2, color=(1, 0.95, 0.5))
+    sparkle(-0.95, -0.6, 0.13)
+
+
 ICONS = {
     "cash": icon_cash, "gem": icon_gem, "clover": icon_clover, "bolt": icon_bolt,
     "fastdrop": icon_fastdrop, "star": icon_star, "tier": icon_tier, "storm": icon_storm,
