@@ -1,0 +1,578 @@
+<roblox version="4"><Item class="Workspace" referent="RBX4"><Properties><string name="Name">Workspace</string></Properties></Item><Item class="ReplicatedStorage" referent="RBX6"><Properties><string name="Name">ReplicatedStorage</string></Properties><Item class="Folder" referent="RBX5"><Properties><string name="Name">BallGuys</string></Properties><Item class="ModuleScript" referent="RBX1"><Properties><string name="Name">Config</string><ProtectedString name="Source"><![CDATA[-- Ball Guys–style merge rules. Tweak numbers here; nothing else hardcodes them.
+
+local Config = {}
+
+-- 11 tiers, smallest -> biggest (matches the prototype's progression bar).
+-- radius is in studs; points are awarded when a merge CREATES this tier.
+Config.Tiers = {
+	{ name = "Blue",     color = Color3.fromRGB(110, 190, 235), radius = 1.0, points = 1 },
+	{ name = "Green",    color = Color3.fromRGB(110, 205, 95),  radius = 1.3, points = 3 },
+	{ name = "Purple",   color = Color3.fromRGB(175, 120, 225), radius = 1.7, points = 6 },
+	{ name = "Pink",     color = Color3.fromRGB(225, 100, 185), radius = 2.1, points = 10 },
+	{ name = "Red",      color = Color3.fromRGB(215, 50, 55),   radius = 2.6, points = 15 },
+	{ name = "Orange",   color = Color3.fromRGB(220, 135, 45),  radius = 3.1, points = 21 },
+	{ name = "Yellow",   color = Color3.fromRGB(220, 200, 70),  radius = 3.7, points = 28 },
+	{ name = "White",    color = Color3.fromRGB(225, 228, 235), radius = 4.3, points = 36 },
+	{ name = "Black",    color = Color3.fromRGB(35, 40, 50),    radius = 5.0, points = 45 },
+	{ name = "Gold",     color = Color3.fromRGB(215, 175, 40),  radius = 5.8, points = 55 },
+	{ name = "Cyan",     color = Color3.fromRGB(40, 215, 205),  radius = 6.7, points = 66 },
+}
+Config.MaxTier = #Config.Tiers
+
+-- Two max-tier balls touching: both vanish for a bonus (classic merge-game finale).
+Config.MaxTierClearBonus = 100
+
+-- Only small tiers can be dropped. Weights = relative odds.
+Config.DropPool = { [1] = 30, [2] = 25, [3] = 20, [4] = 15, [5] = 10 }
+
+-- Drop pacing
+Config.DropCooldown = 0.5 -- seconds between drops
+
+-- Combos: merges within ComboWindow seconds of each other chain.
+-- Merge points are multiplied by (1 + (chain-1) * ComboStep), capped.
+Config.ComboWindow = 1.0
+Config.ComboStep = 0.5
+Config.ComboMaxMultiplier = 5
+
+-- Lose rule: a ball (not the one just dropped) staying above the
+-- danger line for GraceTime seconds ends the run. A ball leaving the cup ends it instantly.
+Config.DangerGraceTime = 2.0
+Config.FreshDropImmunity = 1.5 -- seconds a newly dropped ball is ignored
+
+-- Abilities (charges per run). Sniper deletes one ball; Swap trades current & next.
+Config.Abilities = {
+	Sniper = { charges = 1, earnEveryPoints = 500 },
+	Swap   = { charges = 2, earnEveryPoints = 300 },
+}
+
+return Config
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX2"><Properties><string name="Name">MergeGame</string><ProtectedString name="Source"><![CDATA[-- Game layer for the merge mode: queue, drops, merges, combos, score,
+-- danger line, abilities. It does NOT do physics — it drives YOUR jelly sim
+-- through a small adapter (see SimAdapter below).
+--
+-- SimAdapter you provide (wrap your existing soft-body code):
+--   spawnBall(tier: number, position: Vector2): any        -> returns a ball handle
+--   removeBall(ball: any)
+--   getCenter(ball: any): Vector2
+--   getTouchingPairs(): { {any} }                          -> pairs of balls currently in contact
+--   isOutsideCup(ball: any): boolean
+-- Coordinates are 2D in cup space (y up). DangerY is the height of the pink line.
+
+local Config = require(script.Parent.Config)
+
+export type SimAdapter = {
+	spawnBall: (tier: number, position: Vector2) -> any,
+	removeBall: (ball: any) -> (),
+	getCenter: (ball: any) -> Vector2,
+	getTouchingPairs: () -> { { any } },
+	isOutsideCup: (ball: any) -> boolean,
+}
+
+local MergeGame = {}
+MergeGame.__index = MergeGame
+
+local function rollTier(rng: Random): number
+	local total = 0
+	for _, w in Config.DropPool do total += w end
+	local r = rng:NextNumber() * total
+	for tier, w in Config.DropPool do
+		r -= w
+		if r <= 0 then return tier end
+	end
+	return 1
+end
+
+function MergeGame.new(sim: SimAdapter, dangerY: number, seed: number?)
+	local self = setmetatable({}, MergeGame)
+	self.sim = sim
+	self.dangerY = dangerY
+	self.rng = Random.new(seed or os.clock() * 1e6)
+	self.balls = {} :: { [any]: { tier: number, droppedAt: number, dangerSince: number? } }
+	self.score = 0
+	self.chain = 0
+	self.lastMergeAt = -math.huge
+	self.lastDropAt = -math.huge
+	self.current = rollTier(self.rng)
+	self.next = rollTier(self.rng)
+	self.charges = {}
+	self.nextChargeAt = {}
+	for name, a in Config.Abilities do
+		self.charges[name] = a.charges
+		self.nextChargeAt[name] = a.earnEveryPoints
+	end
+	self.over = false
+	-- Hook these from UI/effects code.
+	self.onMerge = Instance.new("BindableEvent")    -- (newTier, position, points, chain)
+	self.onScore = Instance.new("BindableEvent")    -- (score)
+	self.onQueue = Instance.new("BindableEvent")    -- (current, next)
+	self.onCharges = Instance.new("BindableEvent")  -- (charges table)
+	self.onGameOver = Instance.new("BindableEvent") -- (score)
+	return self
+end
+
+function MergeGame:_track(ball: any, tier: number, now: number)
+	self.balls[ball] = { tier = tier, droppedAt = now, dangerSince = nil }
+end
+
+-- Player releases at x (cup space). Returns false if on cooldown or game over.
+function MergeGame:Drop(x: number, spawnY: number): boolean
+	local now = os.clock()
+	if self.over or now - self.lastDropAt < Config.DropCooldown then return false end
+	self.lastDropAt = now
+	local tier = self.current
+	self:_track(self.sim.spawnBall(tier, Vector2.new(x, spawnY)), tier, now)
+	self.current, self.next = self.next, rollTier(self.rng)
+	self.onQueue:Fire(self.current, self.next)
+	return true
+end
+
+function MergeGame:UseSwap(): boolean
+	if self.over or self.charges.Swap <= 0 then return false end
+	self.charges.Swap -= 1
+	self.current, self.next = self.next, self.current
+	self.onQueue:Fire(self.current, self.next)
+	self.onCharges:Fire(self.charges)
+	return true
+end
+
+-- Sniper: remove the tapped ball (no points).
+function MergeGame:UseSniper(ball: any): boolean
+	if self.over or self.charges.Sniper <= 0 or not self.balls[ball] then return false end
+	self.charges.Sniper -= 1
+	self.balls[ball] = nil
+	self.sim.removeBall(ball)
+	self.onCharges:Fire(self.charges)
+	return true
+end
+
+function MergeGame:_addPoints(points: number)
+	self.score += points
+	for name, a in Config.Abilities do
+		while self.score >= self.nextChargeAt[name] do
+			self.charges[name] += 1
+			self.nextChargeAt[name] += a.earnEveryPoints
+			self.onCharges:Fire(self.charges)
+		end
+	end
+	self.onScore:Fire(self.score)
+end
+
+function MergeGame:_merge(a: any, b: any, now: number)
+	local tier = self.balls[a].tier
+	local pa, pb = self.sim.getCenter(a), self.sim.getCenter(b)
+	local mid = (pa + pb) / 2
+	self.balls[a], self.balls[b] = nil, nil
+	self.sim.removeBall(a)
+	self.sim.removeBall(b)
+
+	self.chain = if now - self.lastMergeAt <= Config.ComboWindow then self.chain + 1 else 1
+	self.lastMergeAt = now
+	local mult = math.min(1 + (self.chain - 1) * Config.ComboStep, Config.ComboMaxMultiplier)
+
+	if tier >= Config.MaxTier then
+		local pts = math.floor(Config.MaxTierClearBonus * mult)
+		self:_addPoints(pts)
+		self.onMerge:Fire(0, mid, pts, self.chain)
+		return
+	end
+	local newTier = tier + 1
+	local merged = self.sim.spawnBall(newTier, mid)
+	self:_track(merged, newTier, now)
+	self.balls[merged].droppedAt = -math.huge -- merged balls aren't immune
+	local pts = math.floor(Config.Tiers[newTier].points * mult)
+	self:_addPoints(pts)
+	self.onMerge:Fire(newTier, mid, pts, self.chain)
+end
+
+-- Call every frame AFTER your sim steps.
+function MergeGame:Step()
+	if self.over then return end
+	local now = os.clock()
+
+	-- Merges: each ball merges at most once per step.
+	local used = {}
+	for _, pair in self.sim.getTouchingPairs() do
+		local a, b = pair[1], pair[2]
+		local ia, ib = self.balls[a], self.balls[b]
+		if ia and ib and not used[a] and not used[b] and ia.tier == ib.tier then
+			used[a], used[b] = true, true
+			self:_merge(a, b, now)
+		end
+	end
+
+	-- Lose checks.
+	for ball, info in self.balls do
+		if self.sim.isOutsideCup(ball) then return self:_end() end
+		local fresh = now - info.droppedAt < Config.FreshDropImmunity
+		local top = self.sim.getCenter(ball).Y + Config.Tiers[info.tier].radius
+		if not fresh and top > self.dangerY then
+			info.dangerSince = info.dangerSince or now
+			if now - info.dangerSince >= Config.DangerGraceTime then return self:_end() end
+		else
+			info.dangerSince = nil
+		end
+	end
+end
+
+-- 0..1 for the "danger" warning effect (flash the line as it nears 1).
+function MergeGame:DangerLevel(): number
+	local now, worst = os.clock(), 0
+	for _, info in self.balls do
+		if info.dangerSince then
+			worst = math.max(worst, (now - info.dangerSince) / Config.DangerGraceTime)
+		end
+	end
+	return math.min(worst, 1)
+end
+
+function MergeGame:_end()
+	self.over = true
+	self.onGameOver:Fire(self.score)
+end
+
+return MergeGame
+]]></ProtectedString></Properties></Item><Item class="ModuleScript" referent="RBX3"><Properties><string name="Name">SimpleSim</string><ProtectedString name="Source"><![CDATA[-- Placeholder physics: rigid circles (Verlet) in a trapezoid-ish cup.
+-- Swap this for your jelly sim by implementing the same adapter functions.
+
+local Config = require(script.Parent.Config)
+
+local SimpleSim = {}
+SimpleSim.__index = SimpleSim
+
+export type Ball = { pos: Vector2, prev: Vector2, r: number, tier: number }
+
+function SimpleSim.new(cupWidth: number, cupHeight: number)
+	local self = setmetatable({}, SimpleSim)
+	self.w, self.h = cupWidth, cupHeight -- cup spans x in [-w/2, w/2], y in [0, h]
+	self.balls = {} :: { [Ball]: boolean }
+	self.gravity = Vector2.new(0, -60)
+	self.substeps = 4
+	return self
+end
+
+function SimpleSim:spawnBall(tier: number, position: Vector2): Ball
+	local b = { pos = position, prev = position, r = Config.Tiers[tier].radius, tier = tier }
+	self.balls[b] = true
+	return b
+end
+
+function SimpleSim:removeBall(b: Ball) self.balls[b] = nil end
+function SimpleSim:getCenter(b: Ball): Vector2 return b.pos end
+function SimpleSim:isOutsideCup(b: Ball): boolean
+	return b.pos.Y < -5 or math.abs(b.pos.X) > self.w / 2 + 5
+end
+
+function SimpleSim:getTouchingPairs(): { { Ball } }
+	local list, pairs_ = {}, {}
+	for b in self.balls do table.insert(list, b) end
+	for i = 1, #list do
+		for j = i + 1, #list do
+			local a, b = list[i], list[j]
+			if (a.pos - b.pos).Magnitude <= a.r + b.r + 0.05 then
+				table.insert(pairs_, { a, b })
+			end
+		end
+	end
+	return pairs_
+end
+
+function SimpleSim:Step(dt: number)
+	dt = math.min(dt, 1 / 30)
+	local h = dt / self.substeps
+	local list = {}
+	for b in self.balls do table.insert(list, b) end
+	for _ = 1, self.substeps do
+		for _, b in list do
+			local vel = (b.pos - b.prev) * 0.995
+			b.prev = b.pos
+			b.pos += vel + self.gravity * h * h
+		end
+		for i = 1, #list do
+			for j = i + 1, #list do
+				local a, b = list[i], list[j]
+				local d = b.pos - a.pos
+				local dist, minD = d.Magnitude, a.r + b.r
+				if dist < minD and dist > 1e-6 then
+					local n = d / dist
+					local push = (minD - dist)
+					local ma, mb = a.r * a.r, b.r * b.r
+					a.pos -= n * push * mb / (ma + mb)
+					b.pos += n * push * ma / (ma + mb)
+				end
+			end
+		end
+		local half = self.w / 2
+		for _, b in list do
+			if b.pos.Y - b.r < 0 then b.pos = Vector2.new(b.pos.X, b.r) end
+			if b.pos.X - b.r < -half then b.pos = Vector2.new(-half + b.r, b.pos.Y) end
+			if b.pos.X + b.r > half then b.pos = Vector2.new(half - b.r, b.pos.Y) end
+		end
+	end
+end
+
+-- Adapter in the shape MergeGame expects.
+function SimpleSim:Adapter()
+	return {
+		spawnBall = function(t, p) return self:spawnBall(t, p) end,
+		removeBall = function(b) self:removeBall(b) end,
+		getCenter = function(b) return self:getCenter(b) end,
+		getTouchingPairs = function() return self:getTouchingPairs() end,
+		isOutsideCup = function(b) return self:isOutsideCup(b) end,
+	}
+end
+
+return SimpleSim
+]]></ProtectedString></Properties></Item></Item></Item><Item class="StarterPlayer" referent="RBX9"><Properties><string name="Name">StarterPlayer</string></Properties><Item class="StarterPlayerScripts" referent="RBX8"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="LocalScript" referent="RBX7"><Properties><string name="Name">MergeClient</string><ProtectedString name="Source"><![CDATA[-- LocalScript (StarterPlayerScripts). Single-player merge mode rendered in a ScreenGui.
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+local Modules = game:GetService("ReplicatedStorage"):WaitForChild("BallGuys")
+local Config = require(Modules.Config)
+local MergeGame = require(Modules.MergeGame)
+local SimpleSim = require(Modules.SimpleSim)
+
+local CUP_W, CUP_H = 30, 40
+local DANGER_Y, SPAWN_Y = CUP_H - 2, CUP_H + 2
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "MergeGui"
+gui.IgnoreGuiInset = true
+gui.ResetOnSpawn = false
+gui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
+
+local bg = Instance.new("Frame")
+bg.Size = UDim2.fromScale(1, 1)
+bg.BackgroundColor3 = Color3.fromRGB(214, 218, 224)
+bg.Parent = gui
+
+-- Cup area (studs -> pixels via `scale`, recomputed on resize)
+local cup = Instance.new("Frame")
+cup.AnchorPoint = Vector2.new(0.5, 1)
+cup.BackgroundColor3 = Color3.fromRGB(235, 237, 241)
+cup.BorderSizePixel = 0
+cup.Parent = bg
+local cupStroke = Instance.new("UIStroke")
+cupStroke.Thickness = 6
+cupStroke.Color = Color3.fromRGB(25, 28, 36)
+cupStroke.Parent = cup
+
+local line = Instance.new("Frame")
+line.BackgroundColor3 = Color3.fromRGB(230, 90, 120)
+line.BorderSizePixel = 0
+line.Parent = cup
+
+local aim = Instance.new("Frame")
+aim.BackgroundColor3 = Color3.new(1, 1, 1)
+aim.BackgroundTransparency = 0.5
+aim.BorderSizePixel = 0
+aim.Parent = cup
+
+local function label(text, pos, anchor)
+	local l = Instance.new("TextLabel")
+	l.BackgroundTransparency = 1
+	l.Font = Enum.Font.GothamBlack
+	l.TextScaled = true
+	l.TextColor3 = Color3.fromRGB(25, 28, 36)
+	l.Size = UDim2.fromScale(0.3, 0.06)
+	l.Position = pos
+	l.AnchorPoint = anchor or Vector2.zero
+	l.Text = text
+	l.Parent = bg
+	return l
+end
+local scoreLabel = label("0", UDim2.fromScale(0.5, 0.02), Vector2.new(0.5, 0))
+local comboLabel = label("", UDim2.fromScale(0.5, 0.08), Vector2.new(0.5, 0))
+comboLabel.TextColor3 = Color3.fromRGB(230, 90, 150)
+
+local function button(text, pos)
+	local b = Instance.new("TextButton")
+	b.Size = UDim2.fromScale(0.14, 0.06)
+	b.Position = pos
+	b.AnchorPoint = Vector2.new(1, 0)
+	b.BackgroundColor3 = Color3.fromRGB(255, 120, 165)
+	b.TextColor3 = Color3.new(1, 1, 1)
+	b.Font = Enum.Font.GothamBold
+	b.TextScaled = true
+	b.Text = text
+	Instance.new("UICorner").Parent = b
+	b.Parent = bg
+	return b
+end
+local swapBtn = button("Swap", UDim2.fromScale(0.98, 0.2))
+local sniperBtn = button("Sniper", UDim2.fromScale(0.98, 0.28))
+
+local nextBox = Instance.new("Frame")
+nextBox.Size = UDim2.fromScale(0.1, 0.1)
+nextBox.Position = UDim2.fromScale(0.98, 0.04)
+nextBox.AnchorPoint = Vector2.new(1, 0)
+nextBox.BackgroundColor3 = Color3.fromRGB(40, 44, 56)
+Instance.new("UICorner").Parent = nextBox
+nextBox.Parent = bg
+local nextDot = Instance.new("Frame")
+nextDot.AnchorPoint = Vector2.new(0.5, 0.5)
+nextDot.Position = UDim2.fromScale(0.5, 0.5)
+nextDot.Parent = nextBox
+local nextCorner = Instance.new("UICorner")
+nextCorner.CornerRadius = UDim.new(1, 0)
+nextCorner.Parent = nextDot
+
+local overFrame = Instance.new("TextButton")
+overFrame.Size = UDim2.fromScale(1, 1)
+overFrame.BackgroundColor3 = Color3.new(0, 0, 0)
+overFrame.BackgroundTransparency = 0.4
+overFrame.TextColor3 = Color3.new(1, 1, 1)
+overFrame.Font = Enum.Font.GothamBlack
+overFrame.TextSize = 36
+overFrame.Visible = false
+overFrame.ZIndex = 10
+overFrame.Parent = bg
+
+-- State
+local scale = 10
+local sim, game_
+local visuals = {}
+local aimX = 0
+local sniperArmed = false
+
+local function circleFrame(tier)
+	local f = Instance.new("Frame")
+	f.AnchorPoint = Vector2.new(0.5, 0.5)
+	f.BackgroundColor3 = Config.Tiers[tier].color
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(1, 0)
+	c.Parent = f
+	local s = Instance.new("UIStroke")
+	s.Thickness = 3
+	s.Color = Color3.fromRGB(25, 28, 36)
+	s.Parent = f
+	return f
+end
+
+local function toGui(p: Vector2)
+	return UDim2.fromOffset((p.X + CUP_W / 2) * scale, (CUP_H - p.Y) * scale)
+end
+
+local function layout()
+	local vp = bg.AbsoluteSize
+	scale = math.min(vp.X * 0.8 / CUP_W, vp.Y * 0.7 / (CUP_H + 6))
+	cup.Size = UDim2.fromOffset(CUP_W * scale, CUP_H * scale)
+	cup.Position = UDim2.new(0.5, 0, 0.95, 0)
+	line.Size = UDim2.fromOffset(CUP_W * scale, 3)
+	line.Position = UDim2.fromOffset(0, (CUP_H - DANGER_Y) * scale)
+	aim.Size = UDim2.fromOffset(2, CUP_H * scale)
+end
+bg:GetPropertyChangedSignal("AbsoluteSize"):Connect(layout)
+
+local function refreshQueue()
+	local t = Config.Tiers[game_.next]
+	nextDot.BackgroundColor3 = t.color
+	nextDot.Size = UDim2.fromScale(0.25 + 0.06 * game_.next, 0.25 + 0.06 * game_.next)
+	nextDot.SizeConstraint = Enum.SizeConstraint.RelativeYY
+end
+
+local function refreshCharges()
+	swapBtn.Text = ("Swap (%d)"):format(game_.charges.Swap)
+	sniperBtn.Text = sniperArmed and "Tap a ball" or ("Sniper (%d)"):format(game_.charges.Sniper)
+end
+
+local function newRun()
+	for _, f in visuals do f:Destroy() end
+	visuals = {}
+	sim = SimpleSim.new(CUP_W, CUP_H)
+	game_ = MergeGame.new(sim:Adapter(), DANGER_Y)
+	sniperArmed = false
+	scoreLabel.Text = "0"
+	comboLabel.Text = ""
+	overFrame.Visible = false
+	game_.onScore.Event:Connect(function(s) scoreLabel.Text = tostring(s) end)
+	game_.onQueue.Event:Connect(refreshQueue)
+	game_.onCharges.Event:Connect(refreshCharges)
+	game_.onMerge.Event:Connect(function(_, _, pts, chain)
+		comboLabel.Text = chain > 1 and ("COMBO x%d  +%d"):format(chain, pts) or ("+%d"):format(pts)
+	end)
+	game_.onGameOver.Event:Connect(function(s)
+		overFrame.Text = ("GAME OVER\nScore: %d\n\nTap to play again"):format(s)
+		overFrame.Visible = true
+	end)
+	refreshQueue()
+	refreshCharges()
+end
+
+-- Input: drag to aim, release to drop. Works for mouse and touch.
+local function pointerToCupX(screenX)
+	local x = (screenX - cup.AbsolutePosition.X) / scale - CUP_W / 2
+	local r = Config.Tiers[game_.current].radius
+	return math.clamp(x, -CUP_W / 2 + r, CUP_W / 2 - r)
+end
+
+local function nearestBall(screenPos: Vector2)
+	local best, bestD = nil, math.huge
+	for b in sim.balls do
+		local f = visuals[b]
+		if f then
+			local c = f.AbsolutePosition + f.AbsoluteSize / 2
+			local d = (c - screenPos).Magnitude
+			if d < bestD and d < f.AbsoluteSize.X then best, bestD = b, d end
+		end
+	end
+	return best
+end
+
+local function isPointer(input)
+	return input.UserInputType == Enum.UserInputType.MouseButton1
+		or input.UserInputType == Enum.UserInputType.Touch
+		or input.UserInputType == Enum.UserInputType.MouseMovement
+end
+
+UserInputService.InputChanged:Connect(function(input)
+	if isPointer(input) and game_ then aimX = pointerToCupX(input.Position.X) end
+end)
+UserInputService.InputEnded:Connect(function(input, processed)
+	if processed or game_.over then return end
+	if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
+	if sniperArmed then
+		local b = nearestBall(Vector2.new(input.Position.X, input.Position.Y))
+		if b then game_:UseSniper(b) end
+		sniperArmed = false
+		refreshCharges()
+		return
+	end
+	aimX = pointerToCupX(input.Position.X)
+	game_:Drop(aimX, SPAWN_Y)
+end)
+
+swapBtn.Activated:Connect(function() game_:UseSwap() end)
+sniperBtn.Activated:Connect(function()
+	if game_.charges.Sniper > 0 then sniperArmed = not sniperArmed; refreshCharges() end
+end)
+overFrame.Activated:Connect(newRun)
+
+RunService.RenderStepped:Connect(function(dt)
+	if not game_ then return end
+	if not game_.over then
+		sim:Step(dt)
+		game_:Step()
+	end
+	-- Sync visuals
+	for b in sim.balls do
+		local f = visuals[b]
+		if not f then
+			f = circleFrame(b.tier)
+			f.Parent = cup
+			visuals[b] = f
+		end
+		f.Size = UDim2.fromOffset(b.r * 2 * scale, b.r * 2 * scale)
+		f.Position = toGui(b.pos)
+	end
+	for b, f in visuals do
+		if not sim.balls[b] then f:Destroy(); visuals[b] = nil end
+	end
+	aim.Position = UDim2.fromOffset((aimX + CUP_W / 2) * scale, 0)
+	local d = game_:DangerLevel()
+	line.BackgroundTransparency = d > 0 and (math.sin(os.clock() * 20) * 0.5 + 0.5) * (1 - d) or 0.3
+end)
+
+layout()
+newRun()
+]]></ProtectedString></Properties></Item></Item></Item></roblox>
