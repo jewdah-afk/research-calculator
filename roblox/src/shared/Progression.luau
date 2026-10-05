@@ -8,7 +8,7 @@ local Config = require(script.Parent.OrbConfig)
 
 local Progression = {}
 
-local GENERATED = 450 -- rarities after the hand-tuned 50 (raise freely; cost is a tiny table)
+local GENERATED = 1950 -- rarities after the hand-tuned 50 (raise freely; ~2k rows is still tiny)
 local PREFIXES = { "Eternal", "Omega", "Primordial", "Singularity", "Paradox", "Apex", "Mythos", "Zenith", "Oblivion", "Genesis" }
 local ROMAN = { "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X" }
 
@@ -83,18 +83,65 @@ end
 Progression.Rarities = rarities
 Progression.HandTunedRarities = #Config.Rarities
 
--- Tier requirements: own `count` of rarity index `rarity` (orbsObtained is lifetime, kept across tiers).
--- Tiers 1-4 are hand-tuned; after that each tier asks for a rarity 5 steps further, scaling count.
-function Progression.tierRequirement(nextTier: number)
+-- Tier requirements.
+-- Tiers 1-4 (hand-tuned): own `count` of rarity `rarity` (lifetime counts, as in the original).
+-- Tiers 5+ (generated, RELATIVE): when you tier up we remember your luck (tierLuckLog). The next
+-- tier asks for TIER_COUNT orbs of a rarity at least TIER_DELTA orders of magnitude beyond that
+-- luck, collected since the last tier. The target follows the player's real progress, so it can
+-- never wall (it is always a fixed distance ahead) and never trivialise (you must out-grow your
+-- previous peak after the tier reset) — no matter what future content changes about growth speed.
+Progression.TIER_DELTA = 5 -- minimum orders of magnitude beyond your luck at the last tier-up
+Progression.TIER_DELTA_SHARE = 0.15 -- ...or this share of that luck (log10), whichever is larger (tuned by QA)
+Progression.TIER_DELTA_EASE = 30 -- share halves by generated tier 30, thirds by 60 ...
+Progression.TIER_DELTA_GROWTH = 0.05 -- extra orders per generated tier
+Progression.TIER_MIN_STEP = 1.5 -- target always moves at least this far past the previous one
+Progression.TIER_COUNT = 10
+-- Pacing floor for generated tiers: you must spend at least this long in a tier (UI shows a countdown).
+-- Late-game growth snowballs (bulk rebirth + rebirth keep), so without a floor tiers would shrink to minutes.
+Progression.TIER_MIN_MINUTES = 10
+Progression.TIER_MIN_MINUTES_GROWTH = 0.5
+Progression.TIER_MIN_MINUTES_MAX = 60
+
+function Progression.tierMinSeconds(nextTier: number): number
+	if nextTier <= #Config.Tiers.Requirements then
+		return 0
+	end
+	local n = nextTier - #Config.Tiers.Requirements
+	return 60 * math.min(Progression.TIER_MIN_MINUTES + Progression.TIER_MIN_MINUTES_GROWTH * (n - 1), Progression.TIER_MIN_MINUTES_MAX)
+end
+
+local function rarityAtOdds(oddsLog: number): number
+	for k, r in rarities do
+		if r.oneInLog >= oddsLog then
+			return k
+		end
+	end
+	return #rarities
+end
+Progression.rarityAtOdds = rarityAtOdds
+
+function Progression.isRelativeTier(nextTier: number): boolean
+	return nextTier > #Config.Tiers.Requirements
+end
+
+-- Called when a player reaches `tier`; returns the odds target for tier+1 (relative tiers only).
+function Progression.nextTierOdds(tier: number, luckLogAtTier: number, prevOdds: number?): number
+	local n = tier + 1 - #Config.Tiers.Requirements
+	local base = prevOdds or rarities[Config.Tiers.Requirements[#Config.Tiers.Requirements].rarity].oneInLog
+	-- share eases off slowly with tier count so growth requirements stay sub-linear forever (no walls)
+	local share = Progression.TIER_DELTA_SHARE / (1 + n / Progression.TIER_DELTA_EASE)
+	local delta = math.max(Progression.TIER_DELTA, share * math.max(luckLogAtTier, 0))
+	return math.max(base + Progression.TIER_MIN_STEP, luckLogAtTier + delta + Progression.TIER_DELTA_GROWTH * n)
+end
+
+-- Requirement for the player's NEXT tier. `data` needed for relative tiers.
+function Progression.tierRequirement(nextTier: number, data)
 	local hand = Config.Tiers.Requirements[nextTier]
 	if hand then
-		return hand
+		return { rarity = hand.rarity, count = hand.count, relative = false }
 	end
-	local extra = nextTier - #Config.Tiers.Requirements
-	return {
-		rarity = math.min(38 + extra * 5, #rarities),
-		count = math.floor(25 * 1.5 ^ math.min(extra, 20)),
-	}
+	local odds = data and data.tierReqOdds or (rarities[Config.Tiers.Requirements[#Config.Tiers.Requirements].rarity].oneInLog + 7)
+	return { rarity = rarityAtOdds(odds), count = Progression.TIER_COUNT, relative = true }
 end
 
 -- Which board layout a tier uses (layouts 0..4 exist; tiers beyond 4 reuse 4).

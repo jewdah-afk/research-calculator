@@ -16,7 +16,7 @@ local Big = require(script.Parent.Big)
 local Progression = require(script.Parent.Progression)
 
 local Economy = {}
-Economy.SAVE_VERSION = 1
+Economy.SAVE_VERSION = 3
 
 local BIG_FIELDS = { "money", "totalMoney", "diamonds", "totalDiamonds", "moneyMultiplier", "diamondLuckCost" }
 
@@ -62,6 +62,7 @@ function Economy.newData(difficulty: string?, rng: Random?)
 		autoPotion = { money = false, luck = false },
 
 		weatherPoints = 0,
+		stormLevel = 0, -- endless weather upgrade: +10% weather effects per level (bonus-budgeted)
 		weatherUnlocked = 1,
 		weatherRolled = 0,
 		weatherPower = 0,
@@ -90,6 +91,10 @@ function Economy.newData(difficulty: string?, rng: Random?)
 		qpBought = 0,
 
 		timePlayed = 0,
+		tutorialStep = 1, -- see Tutorial.luau; 0 = finished/skipped
+		tierReqOdds = 0, -- relative tiers: odds target (log10) for the next tier
+		tierProgress = 0, -- relative tiers: qualifying orbs collected since the last tier
+		tierStartTime = 0, -- timePlayed when the current tier began (pacing floor)
 		totalLuckLog = 0, -- cached for UI
 	}
 end
@@ -137,8 +142,38 @@ function Economy.deserialize(saved)
 			data.skills[cat][i] = data.skills[cat][i] or 0
 		end
 	end
+	Economy.migrate(data, tonumber(saved.version) or 1)
 	Economy.refresh(data)
 	return data
+end
+
+-- Versioned save migrations. Add a step whenever saved data changes shape; never edit old steps.
+Economy.MIGRATIONS = {
+	[2] = function(data)
+		-- v2 -> v3: relative tiers. Players already past tier 4 get a target from their current luck.
+		data.tierProgress = data.tierProgress or 0
+		if data.tiers >= 4 and (data.tierReqOdds or 0) <= 0 then
+			Economy.refresh(data)
+			data.tierReqOdds = Progression.nextTierOdds(data.tiers, data.totalLuckLog, nil)
+		end
+	end,
+	[1] = function(data)
+		-- v1 -> v2: storm level + tutorial added. Veterans skip the tutorial.
+		data.stormLevel = data.stormLevel or 0
+		if data.rebirths > 0 or data.tiers > 0 then
+			data.tutorialStep = 0
+		end
+	end,
+}
+
+function Economy.migrate(data, fromVersion: number)
+	for v = fromVersion, Economy.SAVE_VERSION - 1 do
+		local step = Economy.MIGRATIONS[v]
+		if step then
+			step(data)
+		end
+	end
+	data.version = Economy.SAVE_VERSION
 end
 
 ---------------------------------------------------------------- derived
@@ -204,6 +239,10 @@ function Economy.collect(data, orb, x: number, rng: Random?)
 		data.money = Big.add(data.money, gain)
 		data.totalMoney = Big.add(data.totalMoney, gain)
 		data.orbsObtained[orb.rarity] = (data.orbsObtained[orb.rarity] or 0) + 1
+		local req = F.tierRequirement(data)
+		if req.relative and orb.rarity >= req.rarity then
+			data.tierProgress += 1
+		end
 		if data.tiers >= 2 and (rng or Random.new()):NextNumber() < Config.Automation.PointChance then
 			data.automationPoints += orb.rarity
 		end
@@ -485,7 +524,14 @@ function Economy.tier(data): boolean
 	if data.mechanics < 4 or not F.canTier(data) then
 		return false
 	end
+	local luckAtTier = data.totalLuckLog
 	data.tiers += 1
+	data.tierStartTime = data.timePlayed
+	if Progression.isRelativeTier(data.tiers + 1) then
+		local prev = data.tierReqOdds > 0 and data.tierReqOdds or nil
+		data.tierReqOdds = Progression.nextTierOdds(data.tiers, luckAtTier, prev)
+		data.tierProgress = 0
+	end
 	local rl3 = F.skill(data, "RL-3")
 	data.rebirths = rl3 >= 1 and math.floor(data.rebirths * (F.skillDef("RL-3")).values[rl3] / 100) or 0
 	data.diamonds = Big.new(0)
@@ -580,6 +626,26 @@ function Economy.unlockWeather(data): boolean
 	data.weatherPoints -= c.unlock
 	data.weatherUnlocked += 1
 	c.unlock = math.round(c.unlock * 2)
+	return true
+end
+
+-- Endless weather sink: storm levels never cap; their effect is bonus-budgeted (Balance), so
+-- grinding storm levels speeds you up but can never break the core curve.
+function Economy.stormLevelCost(data): number
+	return math.floor(10 * 1.6 ^ data.stormLevel)
+end
+
+function Economy.buyStormLevel(data): boolean
+	if data.mechanics < 5 then
+		return false
+	end
+	local cost = Economy.stormLevelCost(data)
+	if data.weatherPoints < cost then
+		return false
+	end
+	data.weatherPoints -= cost
+	data.stormLevel += 1
+	Economy.refresh(data)
 	return true
 end
 

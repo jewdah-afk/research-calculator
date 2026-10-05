@@ -93,10 +93,17 @@ function Big.serialize(a): string
 end
 
 function Big.deserialize(s: string)
-	if EN.fromString then
-		return EN.fromString(s)
+	-- never let one corrupt value break a player's load: fall back to the plain number, then 0
+	local ok, v = pcall(function()
+		if EN.fromString then
+			return EN.fromString(s)
+		end
+		return Big.new(s)
+	end)
+	if ok and v ~= nil then
+		return v
 	end
-	return Big.new(s)
+	return Big.new(tonumber(s) or 0)
 end
 
 return Big

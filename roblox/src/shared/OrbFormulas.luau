@@ -6,6 +6,8 @@
 local Config = require(script.Parent.OrbConfig)
 local Progression = require(script.Parent.Progression)
 local Big = require(script.Parent.Big)
+local Balance = require(script.Parent.Balance)
+require(script.Parent.Bonuses) -- registers weather/storm/event bonus sources
 
 local F = {}
 local Rarities = Progression.Rarities
@@ -91,9 +93,8 @@ function F.totalLuckLog(data): (number, number)
 	if data.tiers >= 1 then
 		l += F.skill(data, "MN-2") * math.log10(1.1) + F.skill(data, "MN-5") * math.log10(1.3)
 	end
-	if data.mechanics >= 5 then
-		l += math.log10((F.weatherMults(data)))
-	end
+	-- everything non-core (weather, storm level, events, future content) goes through the bonus budget
+	l += Balance.bonusLog(data, "luck", l)
 	-- RL-2: when below best luck, close the gap (never exceeding best)
 	local rl2 = F.skill(data, "RL-2")
 	if rl2 > 0 and l < data.bestLuckLog then
@@ -205,7 +206,8 @@ function F.orbMoneyMult(data)
 	if data.tiers >= 1 then
 		m = Big.mul(m, Big.pow(1.05, F.skill(data, "MN-1")))
 	end
-	return m
+	local coreLog = Big.log10(m)
+	return Big.mul(m, Big.pow(10, Balance.bonusLog(data, "cash", coreLog)))
 end
 
 function F.rarityValue(k: number)
@@ -234,6 +236,8 @@ function F.diamondGain(data, slot: number, variant: string?)
 	if data.tiers >= 1 then
 		base = Big.mul(base, slot)
 	end
+	local coreLog = Big.log10(base)
+	base = Big.mul(base, Big.pow(10, Balance.bonusLog(data, "gems", math.max(coreLog - 1, 0))))
 	return Big.add(base, 0.15 * data.tiers)
 end
 
@@ -256,12 +260,26 @@ function F.bulkRebirths(data): number
 end
 
 function F.tierRequirement(data)
-	return Progression.tierRequirement(data.tiers + 1)
+	return Progression.tierRequirement(data.tiers + 1, data)
+end
+
+-- progress toward the next tier: lifetime count (hand tiers) or "this rarity or rarer since last tier"
+function F.tierProgress(data): number
+	local req = F.tierRequirement(data)
+	if req.relative then
+		return data.tierProgress or 0
+	end
+	return data.orbsObtained[req.rarity] or 0
+end
+
+-- seconds left before a generated tier may be taken (pacing floor); 0 for hand tiers
+function F.tierTimeLeft(data): number
+	local need = Progression.tierMinSeconds(data.tiers + 1)
+	return math.max(need - (data.timePlayed - (data.tierStartTime or 0)), 0)
 end
 
 function F.canTier(data): boolean
-	local req = F.tierRequirement(data)
-	return (data.orbsObtained[req.rarity] or 0) >= req.count
+	return F.tierProgress(data) >= F.tierRequirement(data).count and F.tierTimeLeft(data) <= 0
 end
 
 function F.baseLuckLog(data): number
