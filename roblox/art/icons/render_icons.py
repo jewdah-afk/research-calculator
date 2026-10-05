@@ -487,9 +487,9 @@ def icon_storm():
             depth=0.24, inset=0.82, cx=0.08, cz=-0.62, bevel=0.05, face_bevel=0.03, emit=0.4)
     for o in bpy.context.scene.objects:
         if o.name.startswith("Bolt"):
-            o.location.y -= 0.55
+            o.location.y += 0.5  # behind the cloud: bolt strikes out from underneath
     gloss(-0.35, 0.68, 0.24, 0.06, rot=-12, alpha=0.7)
-    sparkle(0.6, -0.25, 0.12, color=(1, 0.95, 0.5))
+    sparkle(0.5, -0.95, 0.12, color=(1, 0.95, 0.5))
 
 
 def icon_clover():
