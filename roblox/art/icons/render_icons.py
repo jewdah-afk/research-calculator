@@ -401,33 +401,29 @@ def icon_gear():
     teeth = 8
     pts = []
     for i in range(teeth):
-        a0 = i * 2 * math.pi / teeth
-        for da, r in ((-0.20, 0.78), (-0.13, 1.08), (0.13, 1.08), (0.20, 0.78)):
+        a0 = i * 2 * math.pi / teeth + math.pi / 8
+        for da, r in ((-0.24, 0.74), (-0.15, 1.08), (0.15, 1.08), (0.24, 0.74)):
             a = a0 + da
             pts.append((r * math.cos(a), r * math.sin(a)))
-    pts = fillet(pts, 0.07, 4)
-    steel = dict(rough=0.22, metal=0.85)
-    layered(pts, (0.55, 0.6, 0.75), (0.12, 0.13, 0.22), (0.85, 0.88, 0.98), (0.4, 0.43, 0.56), "Gear",
-            depth=0.42, inset=0.9, bevel=0.06, face_bevel=0.04, **steel)
-    # raised inner ring
-    ring = add("primitive_torus_add", major_radius=0.5, minor_radius=0.09, major_segments=64, minor_segments=16, location=(0, -0.3, 0))
-    ring.rotation_euler = (math.radians(90), 0, 0)
-    finish(ring, mat("Ring", (0.95, 0.97, 1.0), (0.45, 0.48, 0.6), **steel), bevel=0)
-    # hub + dark hole
-    hub = add("primitive_cylinder_add", radius=0.36, depth=0.5, vertices=64, location=(0, -0.05, 0))
-    hub.rotation_euler = (math.radians(90), 0, 0)
-    finish(hub, mat("Hub", (0.2, 0.75, 1.0), (0.0, 0.2, 0.55), rough=0.2, metal=0.4), bevel=0.04)
-    hole = add("primitive_cylinder_add", radius=0.16, depth=0.6, vertices=48, location=(0, -0.1, 0))
-    hole.rotation_euler = (math.radians(90), 0, 0)
-    finish(hole, mat("Hole", (0.08, 0.06, 0.15), (0.02, 0.01, 0.05), rough=0.7), bevel=0.02)
-    # bolt holes on the face
-    for k in range(4):
-        a = math.radians(45 + k * 90)
-        b = add("primitive_cylinder_add", radius=0.065, depth=0.1, vertices=32, location=(0.68 * math.cos(a), -0.27, 0.68 * math.sin(a)))
-        b.rotation_euler = (math.radians(90), 0, 0)
-        finish(b, mat("Bolt", (0.3, 0.32, 0.45), (0.08, 0.08, 0.14), metal=0.6), bevel=0.02)
-    gloss(-0.45, 0.55, 0.2, 0.05, rot=-40, alpha=0.8)
-    gloss(-0.1, 0.18, 0.12, 0.04, y=-0.45, rot=-40, alpha=0.7)
+    pts = fillet(pts, 0.12, 8)
+    steel = dict(rough=0.25, metal=0.85)
+    body, face = layered(pts, (0.5, 0.55, 0.68), (0.1, 0.11, 0.18), (0.82, 0.85, 0.95), (0.38, 0.41, 0.54), "Gear",
+                         depth=0.46, inset=0.9, bevel=0.05, face_bevel=0.025, **steel)
+    # real see-through centre hole (boolean cut through body + face)
+    cutter = add("primitive_cylinder_add", radius=0.3, depth=2.0, vertices=64)
+    cutter.rotation_euler = (math.radians(90), 0, 0)
+    for o in (body, face):
+        b = o.modifiers.new("Hole", "BOOLEAN")
+        b.operation = "DIFFERENCE"
+        b.object = cutter
+        o.modifiers.move(len(o.modifiers) - 1, 0)  # cut before bevel so the hole edge is rounded
+    cutter.hide_render = True
+    # bevelled collar around the hole
+    collar = add("primitive_torus_add", major_radius=0.36, minor_radius=0.07, major_segments=64, minor_segments=16, location=(0, -0.3, 0))
+    collar.rotation_euler = (math.radians(90), 0, 0)
+    finish(collar, mat("Collar", (0.95, 0.97, 1.0), (0.45, 0.48, 0.6), **steel), bevel=0)
+    gloss(-0.42, 0.6, 0.22, 0.05, rot=-38, alpha=0.8)
+    gloss(-0.72, 0.1, 0.08, 0.04, rot=-70, alpha=0.6)
 
 
 def icon_cash():
