@@ -14,9 +14,10 @@ local Config = require(script.Parent.OrbConfig)
 local F = require(script.Parent.OrbFormulas)
 local Big = require(script.Parent.Big)
 local Progression = require(script.Parent.Progression)
+local Prestige = require(script.Parent.Prestige)
 
 local Economy = {}
-Economy.SAVE_VERSION = 3
+Economy.SAVE_VERSION = 4
 
 local BIG_FIELDS = { "money", "totalMoney", "diamonds", "totalDiamonds", "moneyMultiplier", "diamondLuckCost" }
 
@@ -95,6 +96,7 @@ function Economy.newData(difficulty: string?, rng: Random?)
 		tierReqOdds = 0, -- relative tiers: odds target (log10) for the next tier
 		tierProgress = 0, -- relative tiers: qualifying orbs collected since the last tier
 		tierStartTime = 0, -- timePlayed when the current tier began (pacing floor)
+		prestige = Prestige.newState(), -- ascension / transcension / ... (see Prestige.luau)
 		totalLuckLog = 0, -- cached for UI
 	}
 end
@@ -143,12 +145,17 @@ function Economy.deserialize(saved)
 		end
 	end
 	Economy.migrate(data, tonumber(saved.version) or 1)
+	Prestige.ensure(data)
 	Economy.refresh(data)
 	return data
 end
 
 -- Versioned save migrations. Add a step whenever saved data changes shape; never edit old steps.
 Economy.MIGRATIONS = {
+	[3] = function(data)
+		-- v3 -> v4: prestige layers
+		Prestige.ensure(data)
+	end,
 	[2] = function(data)
 		-- v2 -> v3: relative tiers. Players already past tier 4 get a target from their current luck.
 		data.tierProgress = data.tierProgress or 0
@@ -508,11 +515,12 @@ function Economy.rebirth(data): boolean
 	if data.mechanics < 1 then
 		return false
 	end
-	local gained = if F.skill(data, "MAX-3") >= 1 then F.bulkRebirths(data) else 1
-	if not Big.gt(data.money, F.rebirthCost(data, data.rebirths + gained - 1)) then
+	local bought = if F.skill(data, "MAX-3") >= 1 then F.bulkRebirths(data) else 1
+	if not Big.gt(data.money, F.rebirthCost(data, data.rebirths + bought - 1)) then
 		return false
 	end
-	data.rebirths += gained
+	-- prestige magnifies rebirths: each rebirth bought grants (1 + 0.25*lifetimeAP + echo) rebirths
+	data.rebirths += math.floor(bought * Prestige.rebirthGainMult(data))
 	data.diamonds = Big.floor(Big.mul(data.diamonds, Config.Rebirth.DiamondKeep))
 	currencyReset(data, F.skill(data, "RL-4") < 1)
 	keepLevels(data)
@@ -792,6 +800,70 @@ function Economy.setDifficulty(data, difficulty: string): boolean
 	end
 	data.difficulty = difficulty
 	return true
+end
+
+---------------------------------------------------------------- prestige layers
+
+function Economy.prestigePending(data, layerId: string): number
+	return Prestige.pending(data, layerId)
+end
+
+-- Ascend / transcend / ...: bank points, then reset everything the layer resets.
+function Economy.prestige(data, layerId: string): boolean
+	local L = Prestige.byId[layerId]
+	if not L then
+		return false
+	end
+	local pts = Prestige.pending(data, layerId)
+	if pts < 1 then
+		return false
+	end
+	local st = data.prestige[layerId]
+	st.points += pts
+	st.lifetime += pts
+	st.count += 1
+	local r = L.resets
+	-- reset layers below (lower index) first
+	for i = L.index - 1, 1, -1 do
+		local below = Prestige.LAYERS[i]
+		if r[below.id] then
+			data.prestige[below.id] = { points = 0, lifetime = 0, count = 0, shop = {} }
+		end
+	end
+	if r.tiers then
+		data.tiers = 0
+		data.tierReqOdds = 0
+		data.tierProgress = 0
+		data.tierStartTime = data.timePlayed
+		-- tier points shrink with tiers, so refund the TP skill trees
+		for cat, def in Config.SkillTree do
+			if def.currency == "TP" then
+				data.skills[cat] = zeros(#def.upgrades)
+			end
+		end
+	end
+	if r.rebirths then
+		data.rebirths = 0
+	end
+	if r.gems then
+		data.diamonds = Big.new(0)
+		data.boostUses = zeros(6)
+	end
+	if r.run then
+		data.mainLevels, data.intervalLevels, data.spawnerLuckLevels = { 0, 0, 0 }, zeros(7), zeros(7)
+		currencyReset(data, true)
+		data.spawnersUnlocked = math.max(1, Prestige.startSpawners(data))
+	end
+	Economy.refresh(data)
+	return true
+end
+
+function Economy.buyPrestigeUpgrade(data, upgradeId: string): boolean
+	local ok = Prestige.buy(data, upgradeId)
+	if ok then
+		Economy.refresh(data)
+	end
+	return ok
 end
 
 Economy.Progression = Progression

@@ -7,6 +7,7 @@ local Config = require(script.Parent.OrbConfig)
 local Progression = require(script.Parent.Progression)
 local Big = require(script.Parent.Big)
 local Balance = require(script.Parent.Balance)
+local Prestige = require(script.Parent.Prestige)
 require(script.Parent.Bonuses) -- registers weather/storm/event bonus sources
 
 local F = {}
@@ -86,7 +87,7 @@ end
 
 -- Returns (current total luck log10, new best luck log10)
 function F.totalLuckLog(data): (number, number)
-	local l = data.baseLuckLog + data.diamondLuckLog
+	local l = data.baseLuckLog + data.diamondLuckLog + Prestige.luckLog(data)
 	if data.boostTimes.luck > 0 then
 		l += LOG2
 	end
@@ -206,6 +207,7 @@ function F.orbMoneyMult(data)
 	if data.tiers >= 1 then
 		m = Big.mul(m, Big.pow(1.05, F.skill(data, "MN-1")))
 	end
+	m = Big.mul(m, Big.pow(10, Prestige.cashLog(data)))
 	local coreLog = Big.log10(m)
 	return Big.mul(m, Big.pow(10, Balance.bonusLog(data, "cash", coreLog)))
 end
@@ -236,6 +238,7 @@ function F.diamondGain(data, slot: number, variant: string?)
 	if data.tiers >= 1 then
 		base = Big.mul(base, slot)
 	end
+	base = Big.mul(base, Big.pow(10, Prestige.gemLog(data)))
 	local coreLog = Big.log10(base)
 	base = Big.mul(base, Big.pow(10, Balance.bonusLog(data, "gems", math.max(coreLog - 1, 0))))
 	return Big.add(base, 0.15 * data.tiers)

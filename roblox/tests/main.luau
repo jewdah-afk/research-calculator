@@ -9,6 +9,7 @@ local Shared = {
 	OrbFormulas = require("./OrbFormulas"),
 	OrbEconomy = require("./OrbEconomy"),
 	Tutorial = require("./Tutorial"),
+	Prestige = require("./Prestige"),
 }
 local tiers = tonumber((...)) or 30
 

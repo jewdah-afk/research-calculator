@@ -211,6 +211,21 @@ local ACTIONS = {
 	setDifficulty = function(_, s, diff)
 		return type(diff) == "string" and Economy.setDifficulty(s.data, diff)
 	end,
+	prestige = function(p, s, layerId)
+		if type(layerId) ~= "string" then
+			return false
+		end
+		local ok = Economy.prestige(s.data, layerId)
+		if ok then
+			clearBoard(p)
+			R.Board:FireClient(p, "rebuild")
+			notify(p, "prestige", layerId)
+		end
+		return ok
+	end,
+	buyPrestigeUpgrade = function(_, s, id)
+		return type(id) == "string" and #id < 16 and Economy.buyPrestigeUpgrade(s.data, id)
+	end,
 	skipTutorial = function(_, s)
 		Tutorial.finish(s.data)
 		return true

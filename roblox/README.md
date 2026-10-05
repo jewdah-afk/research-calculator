@@ -112,6 +112,19 @@ roblox/
 - **Web build:** time per rebirth settles at 1.5–4 minutes through 3,600+ rebirths.
 - **Roblox build:** tiers 1–150 never wall. Late tiers sit at the 60-minute floor, and the bot is at rarity #553 of 2,000 at tier 150.
 
+## Prestige layers (Ascension → Transcension → …)
+
+`shared/Prestige.luau` defines the layers as data. Adding one is a new entry in `LAYERS`; if it should magnify something new, add a line in `gainMult`.
+
+| Layer | Points | Passive (lifetime points) | Resets |
+|---|---|---|---|
+| Ascension | AP = ⌊√(rebirths / 250)⌋ × magnifiers | +0.25× rebirths per click per AP (stacks with bulk rebirth) | cash, upgrades, spawners, gems, rebirths (keeps tiers) |
+| Transcension | TrP = ⌊√(lifetime AP / 40)⌋ | +0.25× AP per ascension per TrP | everything above, plus tiers and Ascension (TP trees refunded) |
+
+- **Shops:** each layer has a shop paid with unspent points. Ascension: ×2 luck, ×3 cash, rebirth echo, head start, ×2 gems. Transcension: ×2 AP, ×10 luck, ×10 cash.
+- **Passives use lifetime points,** so spending in a shop never weakens them.
+- **Prestige effects count as core progression,** not capped bonuses. These layers are meant to be the backbone of the late game.
+
 ## Systems
 
 | System | Where | Notes |

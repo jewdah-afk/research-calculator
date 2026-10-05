@@ -17,6 +17,7 @@ local Remotes = require(Shared.Remotes)
 local Balance = require(Shared.Balance)
 local Events = require(Shared.Events)
 local Tutorial = require(Shared.Tutorial)
+local Prestige = require(Shared.Prestige)
 
 local Kit = require(script.Parent.UI.Kit)
 local SkillText = require(script.Parent.UI.SkillText)
@@ -990,6 +991,64 @@ task.spawn(function()
 	adminBtn.ZIndex = 30
 end)
 
+
+---------------------------------------------------------------- prestige (ascension, transcension, ...)
+
+local prBody = modal("Prestige", "PRESTIGE", C.Purple, C.Pink)
+local prList = Kit.scroll({ dim = UDim2.fromScale(1, 1), gap = 8, parent = prBody })
+local prRows = {}
+for li, L in Prestige.LAYERS do
+	local head = Kit.card({ dim = UDim2.new(1, -6, 0, 74), order = li * 100, parent = prList })
+	local title = text({ text = string.upper(L.name), size = 18, outline = 2.5, pos = UDim2.fromOffset(10, 6), dim = UDim2.new(1, -190, 0, 22), parent = head })
+	local info = text({ text = "", rich = true, size = 12, font = Fonts.Bold, color = C.Sub, wrap = true, pos = UDim2.fromOffset(10, 30), dim = UDim2.new(1, -190, 0, 38), parent = head })
+	local go = Kit.button({ text = "", size = 14, color1 = C.Storm, color2 = C.Purple, dim = UDim2.fromOffset(160, 50), anchor = Vector2.new(1, 0.5), pos = UDim2.new(1, -10, 0.5, 0), parent = head, onClick = function()
+		act("prestige", L.id)
+	end })
+	go.Label.TextWrapped = true
+	local shop = {}
+	for ui, u in L.shop do
+		local c = Kit.card({ dim = UDim2.new(1, -6, 0, 46), order = li * 100 + ui, parent = prList })
+		text({ text = u.name, size = 14, outline = 2, pos = UDim2.fromOffset(16, 4), dim = UDim2.new(1, -150, 0, 18), parent = c })
+		local d2 = text({ text = "", size = 11, font = Fonts.Bold, color = C.Sub, pos = UDim2.fromOffset(16, 24), dim = UDim2.new(1, -150, 0, 16), parent = c })
+		local b = Kit.button({ text = "", size = 13, dim = UDim2.fromOffset(110, 32), anchor = Vector2.new(1, 0.5), pos = UDim2.new(1, -10, 0.5, 0), parent = c, onClick = function()
+			act("buyPrestigeUpgrade", u.id)
+		end })
+		shop[u.id] = { card = c, desc = d2, button = b, def = u }
+	end
+	prRows[L.id] = { head = head, title = title, info = info, go = go, shop = shop }
+end
+onState(function(d)
+	if not d.prestige then
+		return
+	end
+	for li, L in Prestige.LAYERS do
+		local row, st = prRows[L.id], d.prestige[L.id]
+		local below = Prestige.LAYERS[li - 1]
+		-- a layer shows once the one below has been used at least once (ascension: once rebirths unlock)
+		local visible = (li == 1 and d.mechanics >= 1) or (below and d.prestige[below.id].count > 0) or st.count > 0
+		row.head.Visible = visible
+		local pending = Prestige.pending(d, L.id)
+		local need = L.source == "rebirths" and (fmt(L.need) .. " rebirths") or (fmt(L.need) .. " lifetime " .. Prestige.LAYERS[li - 1].point)
+		row.info.Text = string.format('<font color="#e3a6ff">%s %s</font> · lifetime %s · passive <font color="#7cff5b">+%s%% %s</font> · needs %s',
+			fmt(st.points), L.point, fmt(st.lifetime), fmt(L.perPoint * 100 * st.lifetime), L.passiveTarget == "rebirthGain" and "rebirths/click" or "AP gain", need)
+		Kit.setLabel(row.go, pending > 0 and string.format("%s\n+%s %s", string.upper(L.name), fmt(pending), L.point) or "NOT READY")
+		Kit.setAffordable(row.go, pending > 0)
+		for id, sh in row.shop do
+			sh.card.Visible = visible
+			local lv = st.shop[id] or 0
+			local cost = Prestige.cost(d, id)
+			sh.desc.Text = sh.def.desc .. "  ·  LV " .. lv
+			Kit.setLabel(sh.button, cost and (fmt(cost) .. " " .. L.point) or "MAXED")
+			Kit.setAffordable(sh.button, cost ~= nil and st.points >= cost)
+		end
+	end
+end)
+local prBtn = Kit.button({ text = "", color1 = C.Storm, color2 = C.Purple, dim = UDim2.fromOffset(48, 48), pos = UDim2.fromOffset(1280 - M - 48 - 112, M), parent = canvas, onClick = function()
+	openModal("Prestige")
+end })
+Kit.icon("tier", 40, { parent = prBtn, anchor = Vector2.new(0.5, 0.5), pos = UDim2.fromScale(0.5, 0.5), z = 4 })
+toastHost.Position -= UDim2.fromOffset(56, 0)
+
 ---------------------------------------------------------------- server events
 
 R.State.OnClientEvent:Connect(function(serialized)
@@ -1019,6 +1078,9 @@ R.Notify.OnClientEvent:Connect(function(kind, payload)
 		if def then
 			toast("EVENT STARTED", def.name, "by " .. tostring(payload.by), Color3.fromRGB(def.color[1], def.color[2], def.color[3]))
 		end
+	elseif kind == "prestige" then
+		local L = Prestige.byId[payload]
+		toast(string.upper(L.name) .. "!", "+" .. L.point .. " BANKED", "magnified", C.Storm)
 	elseif kind == "announce" then
 		toast("ANNOUNCEMENT", tostring(payload), nil, C.Cyan)
 	end

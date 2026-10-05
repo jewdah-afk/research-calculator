@@ -276,6 +276,80 @@ return function(Shared)
 		eq(d.tutorialStep, #T.STEPS)
 	end)
 
+	-- prestige layers --------------------------------------------------------------------
+	test("ascension: points from rebirths with diminishing returns", function()
+		local Pr = Shared.Prestige
+		local d = E.newData()
+		d.rebirths = 249
+		eq(Pr.pending(d, "ascension"), 0, "below threshold")
+		d.rebirths = 250
+		eq(Pr.pending(d, "ascension"), 1)
+		d.rebirths = 250 * 16
+		eq(Pr.pending(d, "ascension"), 4, "sqrt scaling")
+	end)
+	test("ascending banks points, resets the run, keeps tiers", function()
+		local d = E.newData()
+		d.rebirths = 1000
+		d.tiers = 3
+		d.money = Big.pow(10, 50)
+		d.mainLevels[1] = 40
+		eq(E.prestige(d, "ascension"), true)
+		eq(d.prestige.ascension.points, 2)
+		eq(d.prestige.ascension.lifetime, 2)
+		eq(d.rebirths, 0)
+		eq(d.tiers, 3, "ascension keeps tiers")
+		eq(d.mainLevels[1], 0)
+		truthy(Big.lt(d.money, 1))
+		eq(E.prestige(d, "ascension"), false, "nothing pending right after")
+	end)
+	test("each lifetime AP gives +0.25x rebirths per click", function()
+		local d = E.newData()
+		d.mechanics = 1
+		d.prestige.ascension.lifetime = 4 -- 1 + 0.25*4 = 2x
+		d.money = Big.mul(F.rebirthCost(d, 0), 1.01)
+		eq(E.rebirth(d), true)
+		eq(d.rebirths, 2)
+	end)
+	test("spending AP never lowers the passive", function()
+		local Pr = Shared.Prestige
+		local d = E.newData()
+		d.prestige.ascension.points, d.prestige.ascension.lifetime = 10, 10
+		local before = Pr.rebirthGainMult(d)
+		eq(E.buyPrestigeUpgrade(d, "AS-LUCK"), true)
+		truthy(Pr.rebirthGainMult(d) >= before)
+		eq(d.prestige.ascension.points, 9)
+	end)
+	test("ascension shop luck is core luck", function()
+		local d = E.newData()
+		E.refresh(d)
+		local base = d.totalLuckLog
+		d.prestige.ascension.points = 1
+		E.buyPrestigeUpgrade(d, "AS-LUCK")
+		near(d.totalLuckLog, base + math.log10(2), 1e-9)
+	end)
+	test("transcension magnifies AP gain and resets ascension + tiers", function()
+		local Pr = Shared.Prestige
+		local d = E.newData()
+		d.prestige.ascension.lifetime = 160 -- (160/40)^0.5 = 2 TrP
+		d.tiers = 5
+		d.skills.main[1] = 3
+		eq(Pr.pending(d, "transcension"), 2)
+		eq(E.prestige(d, "transcension"), true)
+		eq(d.prestige.ascension.lifetime, 0)
+		eq(d.tiers, 0)
+		eq(d.skills.main[1], 0, "TP trees refunded with tiers")
+		d.rebirths = 250 * 4 -- 2 AP base
+		eq(Pr.pending(d, "ascension"), 3, "x(1 + 0.25*2) = 3")
+	end)
+	test("old saves get prestige state", function()
+		local d = E.newData()
+		local s = E.serialize(d)
+		s.version = 3
+		s.prestige = nil
+		local d2 = E.deserialize(s)
+		truthy(d2.prestige and d2.prestige.ascension and d2.prestige.transcension)
+	end)
+
 	-- formatting -------------------------------------------------------------------------
 	test("format handles tiny, huge and zero", function()
 		eq(F.format(0), "0")
