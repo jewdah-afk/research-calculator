@@ -1,10 +1,15 @@
 --!nonstrict
 -- Thin wrapper around EternityNum so the economy never talks to the library directly.
--- Put the EternityNum ModuleScript at ReplicatedStorage.Modules.EternityNum (or change the path below).
+-- Put the EternityNum ModuleScript next to this module (ReplicatedStorage.Shared.EternityNum),
+-- or at ReplicatedStorage.Modules.EternityNum.
 -- EternityNum functions accept EN tables, plain numbers and numeric strings.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local EN = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("EternityNum"))
+local ENModule = script.Parent:FindFirstChild("EternityNum")
+	or (ReplicatedStorage:FindFirstChild("Modules") and ReplicatedStorage.Modules:FindFirstChild("EternityNum"))
+	or script.Parent:WaitForChild("EternityNum", 10)
+assert(ENModule, "[OrbGame] EternityNum module not found: put it in ReplicatedStorage.Shared")
+local EN = require(ENModule)
 
 local Big = {}
 

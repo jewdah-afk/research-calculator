@@ -62,8 +62,8 @@ OrbConfig.Rarities = {
 -- Board / collection
 OrbConfig.Board = {
 	Width = 400,
-	Height = 800,
-	CollectY = 775, -- orb is cashed in once its centre passes this y (y grows downward)
+	Height = 600, -- board is 400 x 600 logical px (shorter than the 400x800 original to fit the HUD)
+	CollectY = 580, -- orb is cashed in once its centre passes this y (y grows downward)
 	SpawnXMin = 50,
 	SpawnXMax = 350,
 	SpawnY = 30,
@@ -150,7 +150,7 @@ OrbConfig.Tiers = {
 		[4] = { zones = { { -math.huge, 66, 4 }, { 155, 244, 2.25 }, { 333, math.huge, 4 } }, default = 3 },
 	},
 	-- Tier 3 board also collects orbs in the two side pockets (x<=55 or x>=345, 450<=y<=500)
-	Tier3Pockets = { leftX = 55, rightX = 345, yMin = 450, yMax = 500 },
+	Tier3Pockets = { leftX = 55, rightX = 345, yMin = 340, yMax = 376 },
 }
 
 -- Boosts paid in diamonds. cost = baseCost + uses * increment; uses reset on Tier.

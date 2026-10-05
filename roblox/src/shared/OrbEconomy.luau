@@ -1,45 +1,50 @@
 --!nonstrict
--- Server-authoritative game state + actions. Board physics, UI and saving are left to the
--- caller: call the hooks below from your spawn loop, collection detector and remotes.
+-- Server-authoritative game state + every player action.
+-- Money/diamond-like values are Big (EternityNum); luck is stored in log10.
 --
---   Economy.newData(difficulty)                -> fresh save table (DataStore-safe, plain values)
---   Economy.tickSecond(data, hooks)            -> once per second (boost/weather timers)
---   Economy.tickAutomation(data, dt)           -> every frame / 0.1 s
---   Economy.rollSpawn(data, spawner, orbCount) -> what a spawner produces this cycle
---   Economy.collect(data, orb, x, y)           -> cash in an orb that hit the bottom
---   Economy.buy*/rebirth/tier/...              -> player actions, return true on success
+--   Economy.newData(difficulty, rng)          fresh save
+--   Economy.serialize(data) / deserialize(t)  DataStore-safe plain tables
+--   Economy.tickSecond(data, hooks)            once per second
+--   Economy.tickAutomation(data, dt)           every frame
+--   Economy.rollSpawn(data, spawner, orbCount) orbs a spawner produces this cycle
+--   Economy.collect(data, orb, x)              pay out an orb that reached the bottom
+--   Economy.<action>(data, ...)                purchases / resets; return true on success
 
 local Config = require(script.Parent.OrbConfig)
 local F = require(script.Parent.OrbFormulas)
 local Big = require(script.Parent.Big)
+local Progression = require(script.Parent.Progression)
 
 local Economy = {}
+Economy.SAVE_VERSION = 1
 
-local function copy<T>(t: T): T
-	return table.clone(t :: any) :: any
+local BIG_FIELDS = { "money", "totalMoney", "diamonds", "totalDiamonds", "moneyMultiplier", "diamondLuckCost" }
+
+local function zeros(n: number): { number }
+	return table.create(n, 0)
 end
 
 function Economy.newData(difficulty: string?, rng: Random?)
 	local r = rng or Random.new()
 	local skills = {}
 	for cat, def in Config.SkillTree do
-		skills[cat] = table.create(#def.upgrades, 0)
+		skills[cat] = zeros(#def.upgrades)
 	end
-	local data = {
+	return {
+		version = Economy.SAVE_VERSION,
 		difficulty = difficulty or "orig",
-		-- Big (EternityNum) values: money, totalMoney, diamonds, totalDiamonds, moneyMultiplier, diamondLuckCost
 		money = Big.new(0),
 		totalMoney = Big.new(0),
 		diamonds = Big.new(0),
 		totalDiamonds = Big.new(0),
 		moneyMultiplier = Big.new(1),
-		baseLuck = 1,
-		bestLuck = 1,
-		diamondLuck = 1,
-		diamondChance = Config.Base.DiamondChance,
 		diamondLuckCost = Big.new(Config.Base.DiamondLuckCost),
+		baseLuckLog = 0,
+		bestLuckLog = 0,
+		diamondLuckLog = 0,
+		diamondChance = Config.Base.DiamondChance,
 		highestRarity = 0,
-		orbsObtained = table.create(#Config.Rarities, 0),
+		orbsObtained = {}, -- [rarityIndex] = count (sparse; endless)
 		orbsSpawned = 0,
 
 		mechanics = 0,
@@ -47,15 +52,14 @@ function Economy.newData(difficulty: string?, rng: Random?)
 		tiers = 0,
 
 		spawnersUnlocked = 1,
-		spawnIntervals = copy(Config.Spawners.BaseInterval),
-		spawnerLuck = copy(Config.Spawners.BaseLuck),
-		-- levels: main = {money, luck, diamond}; per spawner {interval, luck}
+		spawnIntervals = table.clone(Config.Spawners.BaseInterval),
 		mainLevels = { 0, 0, 0 },
-		intervalLevels = table.create(7, 0),
-		spawnerLuckLevels = table.create(7, 0),
+		intervalLevels = zeros(7),
+		spawnerLuckLevels = zeros(7),
 
 		boostTimes = { money = 0, luck = 0, duplicate = 0, obstacle = 0 },
-		boostUses = table.create(6, 0),
+		boostUses = zeros(6),
+		autoPotion = { money = false, luck = false },
 
 		weatherPoints = 0,
 		weatherUnlocked = 1,
@@ -63,7 +67,7 @@ function Economy.newData(difficulty: string?, rng: Random?)
 		weatherPower = 0,
 		weatherMoney = 1,
 		weatherRollCooldown = 0,
-		weatherDuration = table.create(#Config.Weather, 0),
+		weatherDuration = zeros(#Config.Weather),
 		weatherCosts = {
 			roll = Config.WeatherShop.RollBaseCost,
 			unlock = Config.WeatherShop.UnlockBaseCost,
@@ -86,21 +90,63 @@ function Economy.newData(difficulty: string?, rng: Random?)
 		qpBought = 0,
 
 		timePlayed = 0,
-		-- derived each tick, cached for UI
-		totalLuck = 1,
+		totalLuckLog = 0, -- cached for UI
 	}
+end
+
+---------------------------------------------------------------- save / load
+
+function Economy.serialize(data)
+	local out = table.clone(data)
+	for _, k in BIG_FIELDS do
+		out[k] = Big.serialize(data[k])
+	end
+	-- sparse rarity counts -> string keys for DataStore JSON
+	local obt = {}
+	for k, v in data.orbsObtained do
+		obt[tostring(k)] = v
+	end
+	out.orbsObtained = obt
+	return out
+end
+
+function Economy.deserialize(saved)
+	local data = Economy.newData(saved and saved.difficulty)
+	if type(saved) ~= "table" then
+		return data
+	end
+	for k, v in saved do
+		if data[k] ~= nil and type(v) == type(data[k]) or (table.find(BIG_FIELDS, k) and type(v) == "string") then
+			data[k] = v
+		end
+	end
+	for _, k in BIG_FIELDS do
+		if type(saved[k]) == "string" then
+			data[k] = Big.deserialize(saved[k])
+		end
+	end
+	local obt = {}
+	for k, v in saved.orbsObtained or {} do
+		obt[tonumber(k)] = v
+	end
+	data.orbsObtained = obt
+	-- make sure new skill slots exist if the tree grew
+	for cat, def in Config.SkillTree do
+		data.skills[cat] = data.skills[cat] or {}
+		for i = 1, #def.upgrades do
+			data.skills[cat][i] = data.skills[cat][i] or 0
+		end
+	end
+	Economy.refresh(data)
 	return data
 end
 
-export type Data = typeof(Economy.newData())
-
 ---------------------------------------------------------------- derived
 
-function Economy.refresh(data: Data)
-	local luck, best = F.totalLuck(data)
-	data.totalLuck = luck
-	data.bestLuck = best
-	-- SPW-1 auto-unlocks spawners 6 and 7
+function Economy.refresh(data)
+	data.baseLuckLog = F.baseLuckLog(data) + data.mainLevels[2] * math.log10(Config.Main.Luck.effect)
+	local l, best = F.totalLuckLog(data)
+	data.totalLuckLog, data.bestLuckLog = l, best
 	if data.spawnersUnlocked == 5 and F.skill(data, "SPW-1") >= 1 then
 		data.spawnersUnlocked = 6
 	end
@@ -109,7 +155,7 @@ function Economy.refresh(data: Data)
 	end
 end
 
-function Economy.points(data: Data)
+function Economy.points(data)
 	local spentTP, spentQP = F.spentPoints(data)
 	local maxTP, maxQP = F.maxTP(data), F.maxQP(data)
 	return { maxTP = maxTP, tp = maxTP - spentTP, maxQP = maxQP, qp = maxQP - spentQP }
@@ -117,11 +163,8 @@ end
 
 ---------------------------------------------------------------- spawning
 
-export type Orb = { kind: "orb" | "diamond" | "weather", rarity: number?, variant: string? }
-
--- Returns 0..2 orbs for one spawner cycle. `orbCount` = rarity orbs currently on the board.
--- Spawner timer: wait data.spawnIntervals[spawner] ms between cycles.
-function Economy.rollSpawn(data: Data, spawner: number, orbCount: number, rng: Random?): { Orb }
+-- Returns 0..2 orbs: { kind = "orb"|"diamond"|"weather", rarity?, variant? }
+function Economy.rollSpawn(data, spawner: number, orbCount: number, rng: Random?)
 	local r = rng or Random.new()
 	local out = {}
 	if spawner > data.spawnersUnlocked then
@@ -136,12 +179,11 @@ function Economy.rollSpawn(data: Data, spawner: number, orbCount: number, rng: R
 			table.insert(out, { kind = "weather", variant = F.rollVariant(data, r:NextNumber()) })
 			return
 		end
-		if r:NextNumber() < data.diamondChance then
+		if r:NextNumber() < F.diamondChance(data) then
 			table.insert(out, { kind = "diamond", variant = F.rollVariant(data, r:NextNumber()) })
 			return
 		end
-		Economy.refresh(data)
-		local rarity = F.rollRarity(data.totalLuck * data.spawnerLuck[spawner], r:NextNumber())
+		local rarity = F.rollRarity(data.totalLuckLog + F.spawnerLuckLog(data, spawner), r:NextNumber())
 		if rarity > data.highestRarity then
 			data.highestRarity = rarity
 		end
@@ -149,24 +191,21 @@ function Economy.rollSpawn(data: Data, spawner: number, orbCount: number, rng: R
 		table.insert(out, { kind = "orb", rarity = rarity, variant = F.rollVariant(data, r:NextNumber()) })
 	end
 	one()
-	-- SPW-4 double drop
 	if r:NextNumber() < F.skill(data, "SPW-4") * 0.1 then
 		one()
 	end
 	return out
 end
 
--- Called when an orb on the board meets F.isCollected(). Returns what was gained.
-function Economy.collect(data: Data, orb: Orb, x: number, rng: Random?)
+function Economy.collect(data, orb, x: number, rng: Random?)
 	local slot = F.slotMult(data.tiers, x)
 	if orb.kind == "orb" then
-		local rarity = orb.rarity :: number
-		local gain = F.orbMoney(data, rarity, slot, orb.variant)
+		local gain = F.orbMoney(data, orb.rarity, slot, orb.variant)
 		data.money = Big.add(data.money, gain)
 		data.totalMoney = Big.add(data.totalMoney, gain)
-		data.orbsObtained[rarity] += 1
+		data.orbsObtained[orb.rarity] = (data.orbsObtained[orb.rarity] or 0) + 1
 		if data.tiers >= 2 and (rng or Random.new()):NextNumber() < Config.Automation.PointChance then
-			data.automationPoints += rarity
+			data.automationPoints += orb.rarity
 		end
 		return { money = gain, slot = slot }
 	elseif orb.kind == "diamond" then
@@ -174,22 +213,29 @@ function Economy.collect(data: Data, orb: Orb, x: number, rng: Random?)
 		data.diamonds = Big.add(data.diamonds, gain)
 		data.totalDiamonds = Big.add(data.totalDiamonds, gain)
 		return { diamonds = gain, slot = slot }
-	else
-		local gain = F.variantMult(orb.variant)
-		data.weatherPoints += gain
-		return { weatherPoints = gain }
 	end
+	local gain = F.variantMult(orb.variant)
+	data.weatherPoints += gain
+	return { weatherPoints = gain }
 end
 
 ---------------------------------------------------------------- timers
 
--- Call once per second. `hooks.onObstacleChange()` should rebuild the board
--- (obstacle remover starts, active phase ends, or cooldown ends).
-function Economy.tickSecond(data: Data, hooks: { onObstacleChange: (() -> ())? }?)
+function Economy.tickSecond(data, hooks)
 	local b = data.boostTimes
+	-- BST-4 auto potion: re-buy a 1 min potion the moment it runs out
+	local hadMoney, hadLuck = b.money > 0, b.luck > 0
 	b.money = math.max(b.money - 1, 0)
 	b.luck = math.max(b.luck - 1, 0)
 	b.duplicate = math.max(b.duplicate - 1, 0)
+	if F.skill(data, "BST-4") >= 1 then
+		if hadMoney and b.money == 0 and data.autoPotion.money then
+			Economy.buyBoost(data, 1)
+		end
+		if hadLuck and b.luck == 0 and data.autoPotion.luck then
+			Economy.buyBoost(data, 3)
+		end
+	end
 	for i = 1, #data.weatherDuration do
 		data.weatherDuration[i] = math.max(data.weatherDuration[i] - 1, 0)
 	end
@@ -204,219 +250,227 @@ function Economy.tickSecond(data: Data, hooks: { onObstacleChange: (() -> ())? }
 	Economy.refresh(data)
 end
 
--- True while the obstacle-remover boost's active phase is running.
-function Economy.obstaclesRemoved(data: Data): boolean
+function Economy.obstaclesRemoved(data): boolean
 	return data.boostTimes.obstacle > Config.Boosts[6].downtime
 end
 
-function Economy.tickAutomation(data: Data, dt: number)
+function Economy.tickAutomation(data, dt: number)
 	local a = data.automation
 	for i = 1, 2 do
 		if a.levels[i] > 0 and a.enabled[i] then
+			a.timers[i] -= dt
 			if a.timers[i] <= 0 then
 				Economy.runAutomation(data, i)
 				a.timers[i] = F.automationInterval(a.levels[i])
-			else
-				a.timers[i] -= dt
 			end
 		end
 	end
 end
 
----------------------------------------------------------------- main upgrades
+---------------------------------------------------------------- main + spawner upgrades
 
-local function payMoney(data: Data, cost): boolean
-	if Big.gte(data.money, cost) then
-		data.money = Big.sub(data.money, cost)
+local MAIN = { Config.Main.Money, Config.Main.Luck, Config.Main.Diamond }
+
+local function pay(data, field: string, cost): boolean
+	if Big.gte(data[field], cost) then
+		data[field] = Big.sub(data[field], cost)
 		return true
 	end
 	return false
 end
 
-local function payDiamonds(data: Data, cost): boolean
-	if Big.gte(data.diamonds, cost) then
-		data.diamonds = Big.sub(data.diamonds, cost)
-		return true
-	end
-	return false
-end
-
--- Cost = base * mult^level. The original floors each step for money/spawner costs; the
--- difference is < 1 coin per level so we use the closed form (fast at any level, works in Big).
-local function scaledCost(base: number, mult: number, level: number)
-	return Big.floor(Big.mul(Big.pow(mult, level), base))
-end
-
-local function mainCost(kind: number, level: number)
-	local def = ({ Config.Main.Money, Config.Main.Luck, Config.Main.Diamond })[kind]
-	return scaledCost(def.baseCost, def.costMult, level)
-end
-
-function Economy.mainUpgradeCost(data: Data, kind: number)
-	return mainCost(kind, data.mainLevels[kind])
-end
-
--- kind: 1 = money multiplier, 2 = luck, 3 = diamond chance
-function Economy.buyMain(data: Data, kind: number): boolean
-	if not payMoney(data, Economy.mainUpgradeCost(data, kind)) then
-		return false
-	end
-	data.mainLevels[kind] += 1
+local function applyMain(data, kind: number, n: number)
+	data.mainLevels[kind] += n
 	if kind == 1 then
-		data.moneyMultiplier = Big.mul(data.moneyMultiplier, Config.Main.Money.effect)
-	elseif kind == 2 then
-		data.baseLuck *= Config.Main.Luck.effect
-	else
-		data.diamondChance += Config.Main.Diamond.effect
+		data.moneyMultiplier = Big.mul(data.moneyMultiplier, Big.pow(Config.Main.Money.effect, n))
+	elseif kind == 3 then
+		data.diamondChance += Config.Main.Diamond.effect * n
 	end
+	Economy.refresh(data) -- luck derives from mainLevels[2]
+end
+
+local function mainMax(data, kind: number): number
+	if kind == 3 then
+		local left = (F.DIAMOND_CHANCE_CAP - data.diamondChance) / Config.Main.Diamond.effect
+		return math.max(math.floor(left + 1e-9), 0)
+	end
+	return math.huge
+end
+
+function Economy.mainUpgradeCost(data, kind: number)
+	local d = MAIN[kind]
+	return F.scaledCost(d.baseCost, d.costMult, data.mainLevels[kind])
+end
+
+-- kind: 1 = money multiplier, 2 = luck, 3 = diamond chance. Buys `count` levels (default 1), or as many as affordable.
+function Economy.buyMain(data, kind: number, count: number?): boolean
+	local d = MAIN[kind]
+	if not d then
+		return false
+	end
+	local want = math.min(count or 1, mainMax(data, kind))
+	local n = F.affordableLevels(data.money, d.baseCost, d.costMult, data.mainLevels[kind], want)
+	if n < 1 then
+		return false
+	end
+	if not pay(data, "money", F.geometricSum(d.baseCost, d.costMult, data.mainLevels[kind], n)) then
+		return false
+	end
+	applyMain(data, kind, n)
 	return true
 end
 
-function Economy.intervalCost(data: Data, s: number)
-	return scaledCost(Config.Spawners.IntervalBaseCost[s], F.intervalCostMult(s), data.intervalLevels[s])
-end
-
-function Economy.spawnerLuckCost(data: Data, s: number)
-	return scaledCost(Config.Spawners.LuckBaseCost[s], Config.Spawners.LuckCostMult, data.spawnerLuckLevels[s])
-end
-
-function Economy.buyInterval(data: Data, s: number): boolean
+local function intervalMaxLevels(data, s: number): number
 	local S = Config.Spawners
-	if data.spawnIntervals[s] <= S.MinInterval or not payMoney(data, Economy.intervalCost(data, s)) then
+	local cap = math.ceil(math.log(S.MinInterval / S.BaseInterval[s]) / math.log(S.IntervalFactor))
+	return math.max(cap - data.intervalLevels[s], 0)
+end
+
+function Economy.intervalCost(data, s: number)
+	return F.scaledCost(Config.Spawners.IntervalBaseCost[s], F.intervalCostMult(s), data.intervalLevels[s])
+end
+
+function Economy.spawnerLuckCost(data, s: number)
+	return F.scaledCost(Config.Spawners.LuckBaseCost[s], Config.Spawners.LuckCostMult, data.spawnerLuckLevels[s])
+end
+
+local function refreshInterval(data, s: number)
+	local S = Config.Spawners
+	data.spawnIntervals[s] = math.max(S.BaseInterval[s] * S.IntervalFactor ^ data.intervalLevels[s], S.MinInterval)
+end
+
+function Economy.buyInterval(data, s: number, count: number?): boolean
+	if s > data.spawnersUnlocked then
 		return false
 	end
-	data.intervalLevels[s] += 1
-	data.spawnIntervals[s] = math.max(data.spawnIntervals[s] * S.IntervalFactor, S.MinInterval)
+	local base, mult = Config.Spawners.IntervalBaseCost[s], F.intervalCostMult(s)
+	local n = F.affordableLevels(data.money, base, mult, data.intervalLevels[s], math.min(count or 1, intervalMaxLevels(data, s)))
+	if n < 1 or not pay(data, "money", F.geometricSum(base, mult, data.intervalLevels[s], n)) then
+		return false
+	end
+	data.intervalLevels[s] += n
+	refreshInterval(data, s)
 	return true
 end
 
-function Economy.buySpawnerLuck(data: Data, s: number): boolean
-	if not payMoney(data, Economy.spawnerLuckCost(data, s)) then
+function Economy.buySpawnerLuck(data, s: number, count: number?): boolean
+	if s > data.spawnersUnlocked then
 		return false
 	end
-	data.spawnerLuckLevels[s] += 1
-	data.spawnerLuck[s] *= Config.Spawners.LuckFactor
+	local base, mult = Config.Spawners.LuckBaseCost[s], Config.Spawners.LuckCostMult
+	local n = F.affordableLevels(data.money, base, mult, data.spawnerLuckLevels[s], count or 1)
+	if n < 1 or not pay(data, "money", F.geometricSum(base, mult, data.spawnerLuckLevels[s], n)) then
+		return false
+	end
+	data.spawnerLuckLevels[s] += n
 	return true
 end
 
-function Economy.buySpawner(data: Data, s: number): boolean
+function Economy.buySpawner(data, s: number): boolean
 	local cost = Config.Spawners.UnlockCost[s]
-	if cost == nil or data.spawnersUnlocked ~= s - 1 or not payMoney(data, cost) then
+	if cost == nil or data.spawnersUnlocked ~= s - 1 or not pay(data, "money", cost) then
 		return false
 	end
 	data.spawnersUnlocked = s
 	return true
 end
 
--- Buy-max: money > luck > diamond, repeat until nothing affordable
-function Economy.maxBuyMain(data: Data)
-	while Economy.buyMain(data, 1) or Economy.buyMain(data, 2) or Economy.buyMain(data, 3) do
-	end
-end
-
-function Economy.maxBuySpawner(data: Data, s: number)
-	while Economy.buyInterval(data, s) or Economy.buySpawnerLuck(data, s) do
-	end
-end
-
--- Buys the cheapest-index affordable spawner upgrade one at a time (interval before luck)
-function Economy.maxBuyAllSpawners(data: Data)
-	local bought = true
-	while bought do
-		bought = false
-		for s = 1, data.spawnersUnlocked do
-			if Economy.buyInterval(data, s) or Economy.buySpawnerLuck(data, s) then
-				bought = true
-				break
-			end
+-- Max-buy keeps the original priority (money > luck > diamond; interval > luck) but buys in
+-- bulk so it stays instant at any money amount.
+function Economy.maxBuyMain(data)
+	for _ = 1, 64 do
+		if not (Economy.buyMain(data, 1, math.huge) or Economy.buyMain(data, 2, math.huge) or Economy.buyMain(data, 3, math.huge)) then
+			break
 		end
 	end
 end
 
-function Economy.maxBuyAll(data: Data)
-	Economy.maxBuyMain(data)
+function Economy.maxBuySpawner(data, s: number)
+	for _ = 1, 64 do
+		if not (Economy.buyInterval(data, s, math.huge) or Economy.buySpawnerLuck(data, s, math.huge)) then
+			break
+		end
+	end
+end
+
+function Economy.maxBuyAllSpawners(data)
+	for _ = 1, 64 do
+		local any = false
+		for s = 1, data.spawnersUnlocked do
+			any = Economy.buyInterval(data, s, math.huge) or Economy.buySpawnerLuck(data, s, math.huge) or any
+		end
+		if not any then
+			break
+		end
+	end
+end
+
+function Economy.maxBuyAll(data)
+	if F.skill(data, "MAX-5") >= 1 then
+		Economy.maxBuyMain(data)
+	end
 	Economy.maxBuyAllSpawners(data)
 end
 
-function Economy.buyDiamondLuck(data: Data): boolean
-	if not payDiamonds(data, data.diamondLuckCost) then
+function Economy.buyDiamondLuck(data): boolean
+	if not pay(data, "diamonds", data.diamondLuckCost) then
 		return false
 	end
 	data.diamondLuckCost = Big.mul(data.diamondLuckCost, 2)
-	data.diamondLuck *= Config.Base.DiamondLuckEffect
+	data.diamondLuckLog += math.log10(Config.Base.DiamondLuckEffect)
+	Economy.refresh(data)
 	return true
 end
 
-function Economy.unlockMechanic(data: Data): boolean
+function Economy.unlockMechanic(data): boolean
 	local m = Config.Mechanics[data.mechanics + 1]
-	if not m or Big.lt(data.diamonds, m.cost) then
+	if not m then
 		return false
 	end
-	if m.minRebirths and data.rebirths < m.minRebirths then
+	if (m.minRebirths and data.rebirths < m.minRebirths) or (m.minTiers and data.tiers < m.minTiers) then
 		return false
 	end
-	if m.minTiers and data.tiers < m.minTiers then
+	if not pay(data, "diamonds", m.cost) then
 		return false
 	end
-	data.diamonds = Big.sub(data.diamonds, m.cost)
 	data.mechanics += 1
 	return true
 end
 
 ---------------------------------------------------------------- resets
 
--- Shared by rebirth/tier/respec. `onClearBoard` is up to the caller (delete all orbs).
-local function currencyReset(data: Data, resetBoosts: boolean)
+local function currencyReset(data, resetBoosts: boolean)
 	data.money = Big.new(0)
 	data.moneyMultiplier = Big.pow(2, data.tiers)
-	data.baseLuck = 2 ^ data.rebirths * 3 ^ data.tiers
 	data.diamondChance = Config.Base.DiamondChance
-	data.spawnIntervals = copy(Config.Spawners.BaseInterval)
-	data.spawnerLuck = copy(Config.Spawners.BaseLuck)
+	data.spawnIntervals = table.clone(Config.Spawners.BaseInterval)
 	if resetBoosts then
 		data.boostTimes = { money = 0, luck = 0, duplicate = 0, obstacle = 0 }
 	end
 end
 
--- RL-1: keep a % of every upgrade level and re-apply its effect.
-local function keepLevels(data: Data)
+-- RL-1: keep % of upgrade levels on rebirth
+local function keepLevels(data)
 	local rl1 = F.skill(data, "RL-1")
-	local pct = 0
-	if rl1 >= 1 then
-		pct = (F.skillDef("RL-1") :: any).values[rl1] / 100
-	end
+	local pct = rl1 >= 1 and (F.skillDef("RL-1")).values[rl1] / 100 or 0
 	local main, intv, luck = data.mainLevels, data.intervalLevels, data.spawnerLuckLevels
-	data.mainLevels, data.intervalLevels, data.spawnerLuckLevels = { 0, 0, 0 }, table.create(7, 0), table.create(7, 0)
+	data.mainLevels, data.intervalLevels, data.spawnerLuckLevels = { 0, 0, 0 }, zeros(7), zeros(7)
 	for k = 1, 3 do
-		local kept = math.floor(main[k] * pct)
-		data.mainLevels[k] = kept
-		if k == 1 then
-			data.moneyMultiplier = Big.mul(data.moneyMultiplier, Big.pow(Config.Main.Money.effect, kept))
-		elseif k == 2 then
-			data.baseLuck *= Config.Main.Luck.effect ^ kept
-		else
-			data.diamondChance += Config.Main.Diamond.effect * kept
-		end
+		applyMain(data, k, math.floor(main[k] * pct))
 	end
-	local S = Config.Spawners
 	for s = 1, 7 do
-		local ki = math.floor(intv[s] * pct)
-		data.intervalLevels[s] = ki
-		data.spawnIntervals[s] = math.max(S.BaseInterval[s] * S.IntervalFactor ^ ki, S.MinInterval)
-		local kl = math.floor(luck[s] * pct)
-		data.spawnerLuckLevels[s] = kl
-		data.spawnerLuck[s] = S.BaseLuck[s] * S.LuckFactor ^ kl
+		data.intervalLevels[s] = math.floor(intv[s] * pct)
+		refreshInterval(data, s)
+		data.spawnerLuckLevels[s] = math.floor(luck[s] * pct)
 	end
 end
 
-function Economy.rebirth(data: Data): boolean
+function Economy.rebirth(data): boolean
 	if data.mechanics < 1 then
 		return false
 	end
-	local bulk = F.skill(data, "MAX-3") >= 1
-	local gained = if bulk then F.bulkRebirths(data) else 1
-	local cost = F.rebirthCost(data, data.rebirths + gained - 1)
-	if not Big.gt(data.money, cost) then
+	local gained = if F.skill(data, "MAX-3") >= 1 then F.bulkRebirths(data) else 1
+	if not Big.gt(data.money, F.rebirthCost(data, data.rebirths + gained - 1)) then
 		return false
 	end
 	data.rebirths += gained
@@ -427,17 +481,13 @@ function Economy.rebirth(data: Data): boolean
 	return true
 end
 
-function Economy.tier(data: Data): boolean
+function Economy.tier(data): boolean
 	if data.mechanics < 4 or not F.canTier(data) then
 		return false
 	end
 	data.tiers += 1
 	local rl3 = F.skill(data, "RL-3")
-	if rl3 >= 1 then
-		data.rebirths = math.floor(data.rebirths * (F.skillDef("RL-3") :: any).values[rl3] / 100)
-	else
-		data.rebirths = 0
-	end
+	data.rebirths = rl3 >= 1 and math.floor(data.rebirths * (F.skillDef("RL-3")).values[rl3] / 100) or 0
 	data.diamonds = Big.new(0)
 	data.weatherPoints = 0
 	data.automationPoints = 0
@@ -448,8 +498,8 @@ function Economy.tier(data: Data): boolean
 		data.weatherMoney = 1
 	end
 	data.spawnersUnlocked = 1
-	data.boostUses = table.create(6, 0)
-	data.mainLevels, data.intervalLevels, data.spawnerLuckLevels = { 0, 0, 0 }, table.create(7, 0), table.create(7, 0)
+	data.boostUses = zeros(6)
+	data.mainLevels, data.intervalLevels, data.spawnerLuckLevels = { 0, 0, 0 }, zeros(7), zeros(7)
 	currencyReset(data, true)
 	Economy.refresh(data)
 	return true
@@ -457,26 +507,20 @@ end
 
 ---------------------------------------------------------------- boosts
 
--- Returns true on success. For id 5 the caller must duplicate every orb on the board
--- (ignores the cap). For id 6 the caller rebuilds the board with obstacles removed.
-function Economy.buyBoost(data: Data, id: number): boolean
-	if data.mechanics < 2 then
-		return false
-	end
-	local cost = F.boostCost(data, id)
-	local b = data.boostTimes
-	if Big.lt(data.diamonds, cost) then
-		return false
-	end
-	if id == 5 and b.duplicate ~= 0 then
-		return false
-	end
-	if id == 6 and (b.obstacle ~= 0 or F.skill(data, "BST-3") < 1) then
-		return false
-	end
-	data.diamonds = Big.sub(data.diamonds, cost)
-	data.boostUses[id] += 1
+-- id 5 (duplicate) and 6 (obstacle remover) need the caller to act on the board afterwards.
+function Economy.buyBoost(data, id: number): boolean
 	local def = Config.Boosts[id]
+	if data.mechanics < 2 or not def then
+		return false
+	end
+	local b = data.boostTimes
+	if (id == 5 and b.duplicate ~= 0) or (id == 6 and (b.obstacle ~= 0 or F.skill(data, "BST-3") < 1)) then
+		return false
+	end
+	if not pay(data, "diamonds", F.boostCost(data, id)) then
+		return false
+	end
+	data.boostUses[id] += 1
 	if def.kind == "Money" then
 		b.money += def.seconds
 	elseif def.kind == "Luck" then
@@ -490,10 +534,17 @@ function Economy.buyBoost(data: Data, id: number): boolean
 	return true
 end
 
+function Economy.setAutoPotion(data, which: string, on: boolean): boolean
+	if data.autoPotion[which] == nil then
+		return false
+	end
+	data.autoPotion[which] = on == true
+	return true
+end
+
 ---------------------------------------------------------------- weather
 
--- Returns the 1-based weather index rolled, or nil. Apply after your 2 s roll animation if wanted.
-function Economy.rollWeather(data: Data, rng: Random?): number?
+function Economy.rollWeather(data, rng: Random?): number?
 	if data.mechanics < 5 or data.weatherRollCooldown > 0 then
 		return nil
 	end
@@ -505,11 +556,9 @@ function Economy.rollWeather(data: Data, rng: Random?): number?
 	data.weatherCosts.roll += Config.WeatherShop.RollCostStep
 	data.weatherRollCooldown = Config.WeatherShop.RollCooldown
 	data.weatherRolled += 1
-
 	local odds = Config.WeatherOdds[data.weatherUnlocked]
 	local r = (rng or Random.new()):NextNumber()
-	local pick = data.weatherUnlocked
-	local acc = 0
+	local pick, acc = data.weatherUnlocked, 0
 	for i, p in odds do
 		acc += p
 		if r < acc then
@@ -523,9 +572,9 @@ function Economy.rollWeather(data: Data, rng: Random?): number?
 	return pick
 end
 
-function Economy.unlockWeather(data: Data): boolean
+function Economy.unlockWeather(data): boolean
 	local c = data.weatherCosts
-	if data.weatherPoints < c.unlock or data.weatherUnlocked >= Config.WeatherShop.MaxUnlockable then
+	if data.mechanics < 5 or data.weatherPoints < c.unlock or data.weatherUnlocked >= Config.WeatherShop.MaxUnlockable then
 		return false
 	end
 	data.weatherPoints -= c.unlock
@@ -534,9 +583,9 @@ function Economy.unlockWeather(data: Data): boolean
 	return true
 end
 
-function Economy.buyWeatherMoney(data: Data): boolean
+function Economy.buyWeatherMoney(data): boolean
 	local c = data.weatherCosts
-	if data.weatherPoints < c.money then
+	if data.mechanics < 5 or data.weatherPoints < c.money then
 		return false
 	end
 	data.weatherPoints -= c.money
@@ -547,19 +596,16 @@ end
 
 ---------------------------------------------------------------- automation
 
-function Economy.buyAutomation(data: Data, idx: number): boolean
+function Economy.buyAutomation(data, idx: number): boolean
 	local a = data.automation
+	if not a.levels[idx] or data.tiers < 2 then
+		return false
+	end
+	if (idx == 3 and F.skill(data, "MAX-1") < 1) or (idx == 4 and F.skill(data, "MAX-2") < 1) or (idx >= 3 and a.levels[idx] >= 1) then
+		return false
+	end
 	local cost = F.automationCost(data, idx)
 	if data.automationPoints < cost then
-		return false
-	end
-	if idx == 3 and F.skill(data, "MAX-1") < 1 then
-		return false
-	end
-	if idx == 4 and F.skill(data, "MAX-2") < 1 then
-		return false
-	end
-	if idx >= 3 and a.levels[idx] >= 1 then
 		return false
 	end
 	data.automationPoints -= cost
@@ -570,7 +616,16 @@ function Economy.buyAutomation(data: Data, idx: number): boolean
 	return true
 end
 
-function Economy.runAutomation(data: Data, idx: number)
+function Economy.toggleAutomation(data, idx: number): boolean
+	local a = data.automation
+	if idx ~= 1 and idx ~= 2 then
+		return false
+	end
+	a.enabled[idx] = not a.enabled[idx]
+	return true
+end
+
+function Economy.runAutomation(data, idx: number)
 	local a = data.automation
 	if idx == 1 then
 		if a.levels[3] >= 1 and F.skill(data, "MAX-1") >= 1 then
@@ -580,49 +635,43 @@ function Economy.runAutomation(data: Data, idx: number)
 			Economy.buyMain(data, 2)
 			Economy.buyMain(data, 3)
 		end
+	elseif a.levels[4] >= 1 and F.skill(data, "MAX-2") >= 1 then
+		Economy.maxBuyAllSpawners(data)
 	else
-		if a.levels[4] >= 1 and F.skill(data, "MAX-2") >= 1 then
-			Economy.maxBuyAllSpawners(data)
-		else
-			for s = 1, data.spawnersUnlocked do
-				Economy.buyInterval(data, s)
-				Economy.buySpawnerLuck(data, s)
-			end
+		for s = 1, data.spawnersUnlocked do
+			Economy.buyInterval(data, s)
+			Economy.buySpawnerLuck(data, s)
 		end
 	end
 end
 
----------------------------------------------------------------- TP / QP / skill tree
+---------------------------------------------------------------- TP / QP / skills
 
-function Economy.gainTP(data: Data, source: string): boolean
+function Economy.gainTP(data, source: string): boolean
 	local s = Config.TPSources[source]
+	if not s or (s.unlockMaxTP and F.maxTP(data) < s.unlockMaxTP) then
+		return false
+	end
 	local cost = F.tpSourceCost(source, data.tpBought[source])
-	local have
 	if source == "Money" then
-		have = data.money
+		if not pay(data, "money", cost) then
+			return false
+		end
 	elseif source == "Diamonds" then
-		have = data.diamonds
-	elseif source == "WeatherRolls" then
-		have = data.weatherRolled
+		if not pay(data, "diamonds", cost) then
+			return false
+		end
 	else
-		have = data.orbsSpawned
-	end
-	if s.unlockMaxTP and F.maxTP(data) < s.unlockMaxTP then
-		return false
-	end
-	if Big.lt(have, cost) then
-		return false
-	end
-	if source == "Money" then
-		data.money = Big.sub(data.money, cost)
-	elseif source == "Diamonds" then
-		data.diamonds = Big.sub(data.diamonds, cost)
+		local have = source == "WeatherRolls" and data.weatherRolled or data.orbsSpawned
+		if Big.lt(have, cost) then
+			return false
+		end
 	end
 	data.tpBought[source] += 1
 	return true
 end
 
-function Economy.gainQP(data: Data): boolean
+function Economy.gainQP(data): boolean
 	local q = Config.QPSources.HighestRarity
 	if data.highestRarity < q.baseCost + q.step * data.qpBought then
 		return false
@@ -631,13 +680,13 @@ function Economy.gainQP(data: Data): boolean
 	return true
 end
 
-function Economy.buySkill(data: Data, id: string): boolean
-	local upg, cat, idx = F.skillDef(id)
-	local lvl = data.skills[cat][idx]
-	if lvl >= F.skillMaxLevel(upg) then
+function Economy.buySkill(data, id: string): boolean
+	local ok, upg, cat, idx = pcall(F.skillDef, id)
+	if not ok or not upg then
 		return false
 	end
-	if upg.tier4 and data.tiers < 4 then
+	local lvl = data.skills[cat][idx]
+	if data.tiers < 1 or lvl >= F.skillMaxLevel(upg) or (upg.tier4 and data.tiers < 4) then
 		return false
 	end
 	for _, req in upg.req or {} do
@@ -646,7 +695,7 @@ function Economy.buySkill(data: Data, id: string): boolean
 		end
 	end
 	local pts = Economy.points(data)
-	local have = if Config.SkillTree[cat].currency == "QP" then pts.qp else pts.tp
+	local have = Config.SkillTree[cat].currency == "QP" and pts.qp or pts.tp
 	if have < F.skillCost(upg, lvl) then
 		return false
 	end
@@ -655,27 +704,29 @@ function Economy.buySkill(data: Data, id: string): boolean
 	return true
 end
 
--- Refunds TP trees (QP trees are permanent). Costs 2 rebirths and a full currency/upgrade reset.
-function Economy.respec(data: Data)
+-- Refund TP trees (QP trees are permanent): -2 rebirths and a full currency/upgrade reset.
+function Economy.respec(data): boolean
 	for cat, def in Config.SkillTree do
 		if def.currency == "TP" then
-			data.skills[cat] = table.create(#def.upgrades, 0)
+			data.skills[cat] = zeros(#def.upgrades)
 		end
 	end
 	data.rebirths = math.max(data.rebirths - 2, 0)
 	data.diamonds = Big.new(0)
 	data.spawnersUnlocked = 1
-	data.mainLevels, data.intervalLevels, data.spawnerLuckLevels = { 0, 0, 0 }, table.create(7, 0), table.create(7, 0)
+	data.mainLevels, data.intervalLevels, data.spawnerLuckLevels = { 0, 0, 0 }, zeros(7), zeros(7)
 	currencyReset(data, true)
 	Economy.refresh(data)
+	return true
 end
 
-function Economy.setDifficulty(data: Data, difficulty: string): boolean
-	if data.rebirths ~= 0 or not Config.Difficulties[difficulty] then
+function Economy.setDifficulty(data, difficulty: string): boolean
+	if data.rebirths ~= 0 or data.tiers ~= 0 or not Config.Difficulties[difficulty] then
 		return false
 	end
 	data.difficulty = difficulty
 	return true
 end
 
+Economy.Progression = Progression
 return Economy

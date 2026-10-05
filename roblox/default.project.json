@@ -1,0 +1,23 @@
+{
+  "name": "OrbGame",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "Shared": {
+        "$path": "src/shared"
+      }
+    },
+    "ServerScriptService": {
+      "OrbServer": {
+        "$path": "src/server"
+      }
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "OrbClient": {
+          "$path": "src/client"
+        }
+      }
+    }
+  }
+}

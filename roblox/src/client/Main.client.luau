@@ -1,0 +1,841 @@
+--!nonstrict
+-- Client entry: builds the HUD (Figma "Clean Dark Blocky" layout on a 1280x720 canvas),
+-- runs the plinko board, and talks to the server through OrbRemotes.
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Config = require(Shared.OrbConfig)
+local F = require(Shared.OrbFormulas)
+local Economy = require(Shared.OrbEconomy)
+local Big = require(Shared.Big)
+local Progression = require(Shared.Progression)
+local Remotes = require(Shared.Remotes)
+
+local Kit = require(script.Parent.UI.Kit)
+local SkillText = require(script.Parent.UI.SkillText)
+local Board = require(script.Parent.Board)
+
+local C, Fonts = Kit.Colors, Kit.Fonts
+local new, text = Kit.new, Kit.text
+local R = Remotes.client()
+local player = Players.LocalPlayer
+
+local data = nil -- latest deserialized state from the server
+local refreshers = {} -- functions run on every state update
+
+local function onState(fn)
+	table.insert(refreshers, fn)
+end
+
+local function act(name, ...)
+	local args = table.pack(...)
+	task.spawn(function()
+		R.Action:InvokeServer(name, table.unpack(args, 1, args.n))
+	end)
+end
+
+local fmt, fmtLog = F.format, F.formatLog
+local function rarityColor(k)
+	local c = Progression.Rarities[k].color
+	return Color3.fromRGB(c[1], c[2], c[3])
+end
+
+---------------------------------------------------------------- root canvas
+
+local gui = new("ScreenGui", { Name = "OrbHUD", IgnoreGuiInset = true, ResetOnSpawn = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling, Parent = player:WaitForChild("PlayerGui") })
+local canvas = new("Frame", { Name = "Canvas", BackgroundTransparency = 1, Size = UDim2.fromOffset(1280, 720), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Parent = gui })
+local uiScale = new("UIScale", { Parent = canvas })
+local function rescale()
+	local vp = workspace.CurrentCamera.ViewportSize
+	uiScale.Scale = math.min(vp.X / 1280, vp.Y / 720)
+end
+rescale()
+workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(rescale)
+
+local M, CX = 16, 640
+
+---------------------------------------------------------------- top bar
+
+local currencyRow = new("Frame", { Name = "Currencies", BackgroundTransparency = 1, Position = UDim2.fromOffset(M, M), Size = UDim2.fromOffset(440, 48), Parent = canvas }, { Kit.list(Enum.FillDirection.Horizontal, 10) })
+local function currencyChip(icon, label, c1, order)
+	local chip = new("Frame", { Name = label, BackgroundColor3 = C.Panel, BackgroundTransparency = 0.16, Size = UDim2.fromOffset(136, 48), AutomaticSize = Enum.AutomaticSize.X, LayoutOrder = order, Parent = currencyRow }, {
+		Kit.corner(6), Kit.stroke(3), Kit.padding(4, 12, 0, 0), Kit.list(Enum.FillDirection.Horizontal, 6, nil, Enum.VerticalAlignment.Center),
+	})
+	Kit.icon(icon, 44, { parent = chip, order = 1 })
+	local col = new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(80, 40), AutomaticSize = Enum.AutomaticSize.X, LayoutOrder = 2, Parent = chip }, { Kit.list(Enum.FillDirection.Vertical, -2) })
+	text({ text = label, size = 10, color = c1, font = Fonts.Bold, auto = Enum.AutomaticSize.X, dim = UDim2.fromOffset(0, 12), parent = col })
+	local v = text({ text = "0", size = 20, font = Fonts.HeavyItalic, outline = 2.5, auto = Enum.AutomaticSize.X, dim = UDim2.fromOffset(0, 24), order = 2, parent = col })
+	return chip, v
+end
+local _, cashValue = currencyChip("cash", "CASH", C.Cash, 1)
+local _, gemValue = currencyChip("gem", "GEMS", C.Gem, 2)
+local stormChip, stormValue = currencyChip("storm", "STORM", C.Storm, 3)
+
+local income = new("Frame", { Name = "IncomeSlab", BackgroundColor3 = Color3.fromRGB(5, 2, 13), BackgroundTransparency = 0.28, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(CX, M), Size = UDim2.fromOffset(340, 128), Parent = canvas }, {
+	Kit.corner(4), Kit.stroke(1.5, C.Cyan, 0.5), Kit.list(Enum.FillDirection.Vertical, 2, Enum.HorizontalAlignment.Center), Kit.padding(12, 12, 4, 8),
+})
+local incomeText = text({ text = "$0/s", size = 42, font = Fonts.HeavyItalic, outline = 3, alignX = Enum.TextXAlignment.Center, gradient = { Color3.fromRGB(27, 108, 122), C.Cyan }, dim = UDim2.new(1, 0, 0, 48), parent = income })
+new("Frame", { BackgroundColor3 = C.White, BackgroundTransparency = 0.4, BorderSizePixel = 0, Size = UDim2.new(0.9, 0, 0, 2), LayoutOrder = 1, Parent = income })
+local statLuck = text({ text = "", rich = true, size = 14, font = Fonts.HeavyItalic, outline = 2, alignX = Enum.TextXAlignment.Center, order = 2, parent = income })
+local statCash = text({ text = "", rich = true, size = 14, font = Fonts.HeavyItalic, outline = 2, alignX = Enum.TextXAlignment.Center, order = 3, parent = income })
+local statBonus = text({ text = "", rich = true, size = 14, font = Fonts.HeavyItalic, outline = 2, alignX = Enum.TextXAlignment.Center, order = 4, parent = income })
+
+local settingsBtn = Kit.button({ text = "", color1 = C.Steel, color2 = C.SteelDark, dim = UDim2.fromOffset(48, 48), pos = UDim2.fromOffset(1280 - M - 48, M), parent = canvas })
+Kit.icon("gear", 40, { parent = settingsBtn, anchor = Vector2.new(0.5, 0.5), pos = UDim2.fromScale(0.5, 0.5), z = 4 })
+
+-- toast stack (right of income, left of settings)
+local toastHost = new("Frame", { Name = "Toasts", BackgroundTransparency = 1, Position = UDim2.fromOffset(1280 - M - 48 - 12 - 300, M - 6), Size = UDim2.fromOffset(300, 200), Parent = canvas }, { Kit.list(Enum.FillDirection.Vertical, 6) })
+local function toast(title, big, sub, color)
+	local t = new("Frame", { BackgroundColor3 = C.Panel, BackgroundTransparency = 0.1, Size = UDim2.fromOffset(300, 64), Parent = toastHost }, { Kit.corner(8), Kit.stroke(4) })
+	local orb = new("Frame", { Size = UDim2.fromOffset(38, 38), Position = UDim2.fromOffset(16, 13), BackgroundColor3 = color or C.Gold, Parent = t }, { Kit.corner(999), Kit.stroke(3) })
+	text({ text = title, size = 11, font = Fonts.Bold, color = C.Gold, pos = UDim2.fromOffset(66, 8), dim = UDim2.new(1, -76, 0, 14), parent = t })
+	text({ text = big, size = 24, font = Fonts.HeavyItalic, outline = 3, color = color or C.Gold, pos = UDim2.fromOffset(66, 22), dim = UDim2.new(1, -76, 0, 28), parent = t })
+	if sub then
+		text({ text = sub, size = 12, font = Fonts.HeavyItalic, outline = 2, alignX = Enum.TextXAlignment.Right, pos = UDim2.new(1, -12, 0, 40), anchor = Vector2.new(1, 0), dim = UDim2.fromOffset(120, 16), parent = t })
+	end
+	orb.Size = UDim2.fromOffset(0, 0)
+	TweenService:Create(orb, TweenInfo.new(0.35, Enum.EasingStyle.Back), { Size = UDim2.fromOffset(38, 38) }):Play()
+	task.delay(4, function()
+		t:Destroy()
+	end)
+end
+
+---------------------------------------------------------------- columns
+
+local COL_TOP = M + 128 + 16
+local DOCK_H = 76
+local COL_H = 720 - M - DOCK_H - 16 - COL_TOP
+local PW = 360
+
+---------------------------------------------------------------- left: upgrades panel
+
+local upgradesPanel, upBody = Kit.panel({ name = "UpgradesPanel", title = "UPGRADES", color1 = C.Pink, color2 = C.Purple, dim = UDim2.fromOffset(PW, COL_H), pos = UDim2.fromOffset(M, COL_TOP), parent = canvas })
+local tabRow = new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30), Parent = upBody }, { Kit.list(Enum.FillDirection.Horizontal, 6) })
+local pages = {}
+local tabButtons = {}
+local function showTab(name)
+	for n, p in pages do
+		p.Visible = n == name
+	end
+	for n, b in tabButtons do
+		if n == name then
+			Kit.setButtonColors(b, C.Pink, C.RedDark)
+		else
+			Kit.setButtonColors(b, C.Tab, C.TabDark)
+		end
+	end
+end
+for i, name in { "MAIN", "SPAWNERS", "GEMS" } do
+	tabButtons[name] = Kit.button({ text = name, size = 13, dim = UDim2.new(1 / 3, -4, 1, 0), order = i, parent = tabRow, onClick = function()
+		showTab(name)
+	end })
+	pages[name] = Kit.scroll({ name = name, dim = UDim2.new(1, 0, 1, -38), pos = UDim2.fromOffset(0, 38), parent = upBody })
+end
+
+-- generic upgrade card: icon | title + level + effect + bar | buy button
+local function upgradeCard(parent, icon, title, order, onBuy)
+	local card = Kit.card({ name = title, dim = UDim2.new(1, -6, 0, 62), order = order, parent = parent })
+	local ic = new("Frame", { BackgroundColor3 = Color3.fromRGB(20, 15, 33), Size = UDim2.fromOffset(46, 46), Position = UDim2.fromOffset(8, 8), Parent = card }, { Kit.corner(6), Kit.stroke(2.5) })
+	Kit.icon(icon, 58, { parent = ic, anchor = Vector2.new(0.5, 0.5), pos = UDim2.fromScale(0.5, 0.5), z = 3 })
+	local t = text({ text = title, size = 15, outline = 2, pos = UDim2.fromOffset(62, 6), dim = UDim2.new(1, -160, 0, 18), parent = card })
+	local lvl = text({ text = "", size = 10, font = Fonts.Bold, color = C.Cash, pos = UDim2.fromOffset(62, 6), dim = UDim2.new(1, -160, 0, 18), alignX = Enum.TextXAlignment.Right, parent = card })
+	local eff = text({ text = "", rich = true, size = 13, font = Fonts.HeavyItalic, pos = UDim2.fromOffset(62, 24), dim = UDim2.new(1, -160, 0, 16), parent = card })
+	local barFrame, setBar = Kit.bar({ dim = UDim2.new(1, -160, 0, 9), parent = card })
+	barFrame.Position = UDim2.fromOffset(62, 44)
+	local btn = Kit.button({ text = "$0", size = 14, dim = UDim2.fromOffset(86, 34), anchor = Vector2.new(1, 0.5), pos = UDim2.new(1, -8, 0.5, 0), parent = card, onClick = onBuy })
+	return { card = card, title = t, level = lvl, effect = eff, setBar = setBar, button = btn }
+end
+
+-- MAIN tab
+local mainCards = {
+	upgradeCard(pages.MAIN, "cash", "CASH BOOST", 1, function()
+		act("buyMain", 1)
+	end),
+	upgradeCard(pages.MAIN, "clover", "LUCKY ORB", 2, function()
+		act("buyMain", 2)
+	end),
+	upgradeCard(pages.MAIN, "gem", "GEM DRILL", 3, function()
+		act("buyMain", 3)
+	end),
+}
+local mainMax = Kit.button({ text = "BUY MAX", size = 16, color1 = C.Gold, color2 = C.GoldDark, dim = UDim2.new(1, -6, 0, 36), order = 10, parent = pages.MAIN, onClick = function()
+	act("maxBuyMain")
+end })
+local allMax = Kit.button({ text = "BUY EVERYTHING", size = 16, color1 = C.Cyan, color2 = C.GemDark, dim = UDim2.new(1, -6, 0, 36), order = 11, parent = pages.MAIN, onClick = function()
+	act("maxBuyAll")
+end })
+
+local function effectText(cur, nxt, color)
+	return string.format('<font color="#7d7696">%s</font> <font color="%s">▶ %s</font>', cur, color, nxt)
+end
+
+onState(function(d)
+	local lv = d.mainLevels
+	local mm = F.orbMoneyMult(d)
+	local c1 = mainCards[1]
+	c1.level.Text = "LV " .. lv[1]
+	c1.effect.Text = effectText("x" .. fmt(d.moneyMultiplier, 2), "x" .. fmt(Big.mul(d.moneyMultiplier, Config.Main.Money.effect), 2), "#7cff5b")
+	c1.setBar((lv[1] % 10) / 10)
+	local cost1 = Economy.mainUpgradeCost(d, 1)
+	Kit.setLabel(c1.button, "$" .. fmt(cost1))
+	Kit.setAffordable(c1.button, Big.gte(d.money, cost1))
+
+	local c2 = mainCards[2]
+	local luckNow = d.mainLevels[2] * math.log10(Config.Main.Luck.effect)
+	c2.level.Text = "LV " .. lv[2]
+	c2.effect.Text = effectText("x" .. fmtLog(luckNow, 2), "x" .. fmtLog(luckNow + math.log10(Config.Main.Luck.effect), 2), "#ffe14a")
+	c2.setBar((lv[2] % 10) / 10)
+	local cost2 = Economy.mainUpgradeCost(d, 2)
+	Kit.setLabel(c2.button, "$" .. fmt(cost2))
+	Kit.setAffordable(c2.button, Big.gte(d.money, cost2))
+
+	local c3 = mainCards[3]
+	local dc = F.diamondChance(d)
+	c3.level.Text = "LV " .. lv[3]
+	local capped = dc >= F.DIAMOND_CHANCE_CAP
+	c3.effect.Text = capped and '<font color="#5cf2ff">MAXED 25%</font>' or effectText(string.format("%.1f%%", dc * 100), string.format("%.1f%%", (dc + Config.Main.Diamond.effect) * 100), "#5cf2ff")
+	c3.setBar(dc / F.DIAMOND_CHANCE_CAP)
+	local cost3 = Economy.mainUpgradeCost(d, 3)
+	Kit.setLabel(c3.button, capped and "MAX" or "$" .. fmt(cost3))
+	Kit.setAffordable(c3.button, not capped and Big.gte(d.money, cost3))
+
+	mainMax.Visible = F.skill(d, "MAX-1") >= 1
+	allMax.Visible = F.skill(d, "MAX-4") >= 1
+	local _ = mm
+end)
+
+-- SPAWNERS tab
+local spawnerRows = {}
+for s = 1, 7 do
+	local card = Kit.card({ name = "Spawner" .. s, dim = UDim2.new(1, -6, 0, 96), order = s, parent = pages.SPAWNERS })
+	local title = text({ text = "SPAWNER " .. s, size = 15, outline = 2, pos = UDim2.fromOffset(10, 6), dim = UDim2.new(1, -20, 0, 18), parent = card })
+	local info = text({ text = "", rich = true, size = 12, font = Fonts.HeavyItalic, pos = UDim2.fromOffset(10, 24), dim = UDim2.new(1, -20, 0, 16), parent = card })
+	local speed = Kit.button({ text = "", size = 12, dim = UDim2.new(0.5, -14, 0, 40), pos = UDim2.fromOffset(10, 46), parent = card, onClick = function()
+		act("buyInterval", s)
+	end })
+	local luck = Kit.button({ text = "", size = 12, dim = UDim2.new(0.5, -14, 0, 40), pos = UDim2.new(0.5, 4, 0, 46), parent = card, onClick = function()
+		act("buySpawnerLuck", s)
+	end })
+	local unlock = Kit.button({ text = "", size = 15, color1 = C.Gold, color2 = C.GoldDark, dim = UDim2.new(1, -20, 0, 40), pos = UDim2.fromOffset(10, 46), parent = card, onClick = function()
+		act("buySpawner", s)
+	end })
+	local maxBtn = Kit.button({ text = "MAX", size = 11, color1 = C.Gold, color2 = C.GoldDark, dim = UDim2.fromOffset(52, 20), anchor = Vector2.new(1, 0), pos = UDim2.new(1, -8, 0, 6), parent = card, onClick = function()
+		act("maxBuySpawner", s)
+	end })
+	spawnerRows[s] = { card = card, title = title, info = info, speed = speed, luck = luck, unlock = unlock, max = maxBtn }
+end
+onState(function(d)
+	for s, row in spawnerRows do
+		local unlocked = s <= d.spawnersUnlocked
+		local nextUp = s == d.spawnersUnlocked + 1
+		row.card.Visible = unlocked or nextUp
+		row.speed.Visible, row.luck.Visible = unlocked, unlocked
+		row.max.Visible = unlocked and F.skill(d, "MAX-2") >= 1
+		row.unlock.Visible = nextUp
+		if unlocked then
+			row.info.Text = string.format('<font color="#7d7696">every</font> <font color="#5cf2ff">%.2fs</font>  <font color="#7d7696">luck</font> <font color="#ffe14a">x%s</font>', d.spawnIntervals[s] / 1000, fmtLog(F.spawnerLuckLog(d, s), 2))
+			local atMin = d.spawnIntervals[s] <= Config.Spawners.MinInterval
+			local ic = Economy.intervalCost(d, s)
+			Kit.setLabel(row.speed, atMin and "SPEED MAXED" or "SPEED  $" .. fmt(ic))
+			Kit.setAffordable(row.speed, not atMin and Big.gte(d.money, ic))
+			local lc = Economy.spawnerLuckCost(d, s)
+			Kit.setLabel(row.luck, "LUCK  $" .. fmt(lc))
+			Kit.setAffordable(row.luck, Big.gte(d.money, lc))
+		elseif nextUp then
+			local cost = Config.Spawners.UnlockCost[s]
+			if cost then
+				row.info.Text = '<font color="#7d7696">locked</font>'
+				Kit.setLabel(row.unlock, "UNLOCK  $" .. fmt(cost))
+				row.unlock.Active = true
+			else
+				row.info.Text = '<font color="#7d7696">unlocks from the Skill Tree (Expansion)</font>'
+				Kit.setLabel(row.unlock, "SKILL TREE")
+			end
+		end
+	end
+end)
+
+-- GEMS tab: mechanic unlocks, gem luck, boosts
+local mechCard = Kit.card({ name = "Mechanic", dim = UDim2.new(1, -6, 0, 70), order = 1, parent = pages.GEMS })
+local mechTitle = text({ text = "", size = 15, outline = 2, pos = UDim2.fromOffset(10, 6), dim = UDim2.new(1, -120, 0, 18), parent = mechCard })
+local mechInfo = text({ text = "", size = 12, font = Fonts.Bold, color = C.Sub, pos = UDim2.fromOffset(10, 26), dim = UDim2.new(1, -120, 0, 36), wrap = true, parent = mechCard })
+local mechBtn = Kit.button({ text = "", size = 14, dim = UDim2.fromOffset(96, 40), anchor = Vector2.new(1, 0.5), pos = UDim2.new(1, -8, 0.5, 0), parent = mechCard, onClick = function()
+	act("unlockMechanic")
+end })
+local MECH_TEXT = {
+	"Rebirth: reset cash for permanent x2 luck per rebirth.",
+	"Boosts: spend gems on timed potions.",
+	"Rarity Bonus: x1.06 money per rarity discovered.",
+	"Tiers: big resets with new boards, perks and skill points.",
+	"Weather: storm orbs, weather rolls and their boosts.",
+}
+local gemLuck = upgradeCard(pages.GEMS, "clover", "GEM LUCK", 2, function()
+	act("buyDiamondLuck")
+end)
+
+local boostRows = {}
+local BOOST_NAMES = { "2x CASH · 1m", "2x CASH · 5m", "2x LUCK · 1m", "2x LUCK · 5m", "DUPLICATE ORBS", "CLEAR PATH" }
+local BOOST_ICONS = { "cash", "cash", "clover", "clover", "spawn", "fastdrop" }
+for id = 1, 6 do
+	local card = Kit.card({ name = "Boost" .. id, dim = UDim2.new(1, -6, 0, 48), order = 10 + id, parent = pages.GEMS })
+	Kit.icon(BOOST_ICONS[id], 40, { parent = card, pos = UDim2.fromOffset(6, 4) })
+	local t = text({ text = BOOST_NAMES[id], size = 14, outline = 2, pos = UDim2.fromOffset(52, 4), dim = UDim2.new(1, -160, 0, 18), parent = card })
+	local timer = text({ text = "", size = 12, font = Fonts.HeavyItalic, color = C.Cash, pos = UDim2.fromOffset(52, 24), dim = UDim2.new(1, -160, 0, 16), parent = card })
+	local b = Kit.button({ text = "", size = 13, dim = UDim2.fromOffset(92, 34), anchor = Vector2.new(1, 0.5), pos = UDim2.new(1, -8, 0.5, 0), parent = card, onClick = function()
+		act("buyBoost", id)
+	end })
+	boostRows[id] = { card = card, title = t, timer = timer, button = b }
+end
+local potionRow = new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, -6, 0, 32), LayoutOrder = 30, Parent = pages.GEMS }, { Kit.list(Enum.FillDirection.Horizontal, 6) })
+local potionBtns = {}
+for i, which in { "money", "luck" } do
+	potionBtns[which] = Kit.button({ text = "", size = 12, dim = UDim2.new(0.5, -3, 1, 0), order = i, parent = potionRow, onClick = function()
+		act("setAutoPotion", which, not (data and data.autoPotion[which]))
+	end })
+end
+
+local function clock(sec)
+	return string.format("%d:%02d", math.floor(sec / 60), sec % 60)
+end
+
+onState(function(d)
+	local m = Config.Mechanics[d.mechanics + 1]
+	mechCard.Visible = m ~= nil
+	if m then
+		mechTitle.Text = "UNLOCK " .. string.upper(m.name)
+		local req = {}
+		if m.minRebirths then
+			table.insert(req, "needs " .. m.minRebirths .. " rebirths")
+		end
+		if m.minTiers then
+			table.insert(req, "needs tier " .. m.minTiers)
+		end
+		mechInfo.Text = MECH_TEXT[d.mechanics + 1] .. (#req > 0 and (" (" .. table.concat(req, ", ") .. ")") or "")
+		Kit.setLabel(mechBtn, fmt(m.cost) .. " GEMS")
+		Kit.setAffordable(mechBtn, Big.gte(d.diamonds, m.cost) and (not m.minRebirths or d.rebirths >= m.minRebirths) and (not m.minTiers or d.tiers >= m.minTiers))
+	end
+	gemLuck.level.Text = "x" .. fmtLog(d.diamondLuckLog, 2)
+	gemLuck.effect.Text = effectText("x" .. fmtLog(d.diamondLuckLog, 2), "x" .. fmtLog(d.diamondLuckLog + math.log10(1.1), 2), "#ffe14a") .. ' <font color="#7d7696">(kept on tier)</font>'
+	Kit.setLabel(gemLuck.button, fmt(d.diamondLuckCost) .. " ◆")
+	Kit.setAffordable(gemLuck.button, Big.gte(d.diamonds, d.diamondLuckCost))
+	local b = d.boostTimes
+	for id, row in boostRows do
+		local visible = d.mechanics >= 2 and (id ~= 6 or F.skill(d, "BST-3") >= 1)
+		row.card.Visible = visible
+		if visible then
+			local cost = F.boostCost(d, id)
+			Kit.setLabel(row.button, cost .. " ◆")
+			local blocked = (id == 5 and b.duplicate > 0) or (id == 6 and b.obstacle > 0)
+			Kit.setAffordable(row.button, not blocked and Big.gte(d.diamonds, cost))
+			if id <= 2 then
+				row.timer.Text = b.money > 0 and ("active " .. clock(b.money)) or ""
+			elseif id <= 4 then
+				row.timer.Text = b.luck > 0 and ("active " .. clock(b.luck)) or ""
+			elseif id == 5 then
+				row.timer.Text = b.duplicate > 0 and ("cooldown " .. clock(b.duplicate)) or "ready"
+			else
+				row.timer.Text = b.obstacle > Config.Boosts[6].downtime and ("active " .. clock(b.obstacle - Config.Boosts[6].downtime)) or (b.obstacle > 0 and "cooldown" or "ready")
+			end
+		end
+	end
+	potionRow.Visible = F.skill(d, "BST-4") >= 1
+	for which, btn in potionBtns do
+		local on = d.autoPotion[which]
+		Kit.setLabel(btn, "AUTO " .. string.upper(which) .. (on and " ON" or " OFF"))
+		Kit.setButtonColors(btn, on and C.Cash or C.Tab, on and C.CashDark or C.TabDark)
+	end
+end)
+showTab("MAIN")
+
+---------------------------------------------------------------- right: rarities
+
+local rarityPanel, rBody = Kit.panel({ name = "RarityPanel", title = "RARITIES", color1 = Color3.fromRGB(43, 47, 85), color2 = Color3.fromRGB(27, 30, 58), dim = UDim2.fromOffset(PW, COL_H), pos = UDim2.fromOffset(1280 - M - PW, COL_TOP), parent = canvas })
+local discovered = text({ text = "", rich = true, size = 12, font = Fonts.Bold, color = C.Sub, dim = UDim2.new(1, 0, 0, 16), parent = rBody })
+local rarityList = Kit.scroll({ name = "List", dim = UDim2.new(1, 0, 1, -86), pos = UDim2.fromOffset(0, 20), gap = 2, parent = rBody })
+local bestStrip = new("Frame", { BackgroundColor3 = C.White, Size = UDim2.new(1, 0, 0, 56), Position = UDim2.new(0, 0, 1, -56), Parent = rBody }, {
+	Kit.corner(5), Kit.stroke(2.5), Kit.gradient(Color3.fromRGB(42, 27, 68), Color3.fromRGB(26, 17, 41)),
+})
+text({ text = "BEST", size = 10, font = Fonts.Bold, color = C.Sub, pos = UDim2.fromOffset(12, 8), dim = UDim2.fromOffset(100, 12), parent = bestStrip })
+local bestText = text({ text = "", size = 17, font = Fonts.HeavyItalic, outline = 2, color = C.GoldDark, pos = UDim2.fromOffset(12, 22), dim = UDim2.new(0.6, -12, 0, 22), parent = bestStrip })
+text({ text = "LUCK", size = 10, font = Fonts.Bold, color = C.Sub, pos = UDim2.new(0.6, 0, 0, 8), dim = UDim2.fromOffset(100, 12), parent = bestStrip })
+local luckText = text({ text = "", size = 17, font = Fonts.HeavyItalic, outline = 2, color = C.Cyan, pos = UDim2.new(0.6, 0, 0, 22), dim = UDim2.new(0.4, -12, 0, 22), parent = bestStrip })
+
+local rarityRows = {}
+local function rarityRow(k)
+	local row = new("Frame", { Name = "R" .. k, BackgroundColor3 = C.White, BackgroundTransparency = k % 2 == 0 and 0.97 or 1, Size = UDim2.new(1, -6, 0, 24), LayoutOrder = k, Parent = rarityList }, { Kit.corner(4) })
+	local dot = new("Frame", { Size = UDim2.fromOffset(14, 14), Position = UDim2.fromOffset(6, 5), BackgroundColor3 = rarityColor(k), Parent = row }, { Kit.corner(3), Kit.stroke(2) })
+	local name = text({ text = "", size = 14, outline = 2, pos = UDim2.fromOffset(28, 0), dim = UDim2.new(1, -130, 1, 0), parent = row })
+	local odds = text({ text = "", size = 13, font = Fonts.HeavyItalic, alignX = Enum.TextXAlignment.Right, pos = UDim2.new(1, -8, 0, 0), anchor = Vector2.new(1, 0), dim = UDim2.fromOffset(100, 24), parent = row })
+	rarityRows[k] = { row = row, dot = dot, name = name, odds = odds }
+	return rarityRows[k]
+end
+onState(function(d)
+	local show = math.min(math.max(d.highestRarity + 3, 10), #Progression.Rarities)
+	local luck = d.totalLuckLog + F.spawnerLuckLog(d, 1)
+	local found = 0
+	for k = 1, show do
+		local r = rarityRows[k] or rarityRow(k)
+		local got = (d.orbsObtained[k] or 0) > 0
+		if got then
+			found += 1
+		end
+		local c = rarityColor(k)
+		r.name.Text = got and string.upper(Progression.Rarities[k].name) or "???"
+		r.name.TextColor3 = got and c or C.Dim
+		r.dot.BackgroundColor3 = got and c or Color3.fromRGB(42, 37, 56)
+		r.odds.Text = "1/" .. fmtLog(F.oneInLog(luck, k), 1)
+		r.odds.TextColor3 = got and c or C.Dim
+	end
+	for k, r in rarityRows do
+		r.row.Visible = k <= show
+	end
+	discovered.Text = string.format('DISCOVERED <font color="#5cf2ff">%d/%d</font>', found, #Progression.Rarities)
+	bestText.Text = d.highestRarity > 0 and string.upper(Progression.Rarities[d.highestRarity].name) or "-"
+	bestText.TextColor3 = d.highestRarity > 0 and rarityColor(d.highestRarity) or C.Sub
+	luckText.Text = "x" .. fmtLog(d.totalLuckLog, 2)
+end)
+
+---------------------------------------------------------------- board
+
+local BOARD_W = 1280 - 2 * (M + PW) - 2 * 64
+local boardFrame = new("Frame", { Name = "Board", BackgroundColor3 = C.Panel, BackgroundTransparency = 0.16, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(CX, COL_TOP), Size = UDim2.fromOffset(BOARD_W, COL_H), Parent = canvas }, {
+	Kit.corner(8), Kit.stroke(4),
+})
+local playArea = new("Frame", { Name = "PlayAreaHolder", BackgroundColor3 = C.White, Position = UDim2.fromOffset(8, 8), Size = UDim2.new(1, -16, 1, -16), ClipsDescendants = true, Parent = boardFrame }, {
+	Kit.corner(4), Kit.gradient(Color3.fromRGB(34, 18, 74), Color3.fromRGB(18, 11, 36)),
+})
+local board = Board.new(playArea)
+local capLabel = text({ text = "", rich = true, size = 12, font = Fonts.HeavyItalic, outline = 1.5, alignX = Enum.TextXAlignment.Right, anchor = Vector2.new(1, 0), pos = UDim2.new(1, -14, 0, 12), dim = UDim2.fromOffset(160, 16), parent = boardFrame })
+capLabel.ZIndex = 10
+
+-- floating "+$" popups
+local function popup(x, msg, color)
+	local p = text({ text = msg, size = 14, font = Fonts.HeavyItalic, outline = 2, color = color, alignX = Enum.TextXAlignment.Center, anchor = Vector2.new(0.5, 1), pos = UDim2.new(x / Config.Board.Width, 0, 1, -44), dim = UDim2.fromOffset(120, 16), parent = playArea })
+	p.ZIndex = 20
+	TweenService:Create(p, TweenInfo.new(0.9), { Position = p.Position - UDim2.fromOffset(0, 40), TextTransparency = 1 }):Play()
+	task.delay(0.9, function()
+		p:Destroy()
+	end)
+end
+
+local collectQueue = {}
+board.onCollect = function(id, x, orb)
+	table.insert(collectQueue, { id, x })
+	if data then
+		local slot = F.slotMult(data.tiers, x)
+		if orb.kind == "orb" then
+			popup(x, "+$" .. fmt(F.orbMoney(data, orb.rarity, slot, orb.variant)), C.Cash)
+		elseif orb.kind == "diamond" then
+			popup(x, "+" .. fmt(F.diamondGain(data, slot, orb.variant), 1) .. "◆", C.Gem)
+		else
+			popup(x, "+" .. F.variantMult(orb.variant) .. "ϟ", C.Storm)
+		end
+	end
+end
+task.spawn(function()
+	while true do
+		task.wait(0.1)
+		if #collectQueue > 0 then
+			local batch = collectQueue
+			collectQueue = {}
+			R.Collect:FireServer(batch)
+		end
+	end
+end)
+
+local function rebuildBoard()
+	if data then
+		board:setLayout(data.tiers, Economy.obstaclesRemoved(data), F.skill(data, "BST-3") > 1 and Economy.obstaclesRemoved(data))
+	end
+end
+
+R.Spawn.OnClientEvent:Connect(function(list)
+	if data then
+		board:spawn(list, data)
+	end
+end)
+R.Board.OnClientEvent:Connect(function(kind, payload)
+	if kind == "clear" then
+		board:clear()
+	elseif kind == "rebuild" then
+		rebuildBoard()
+	elseif kind == "duplicate" and data then
+		board:duplicate(payload, data)
+	end
+end)
+onState(function(d)
+	capLabel.Text = string.format('<font color="#7d7696">ORBS</font> <font color="#5cf2ff">%d / %d</font>', board.count, F.spawnCap(d))
+end)
+
+---------------------------------------------------------------- modals
+
+local modalLayer = new("Frame", { Name = "Modals", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 50, Parent = canvas })
+local dim = new("TextButton", { Text = "", AutoButtonColor = false, BackgroundColor3 = C.Black, BackgroundTransparency = 0.45, Size = UDim2.fromScale(1, 1), Visible = false, ZIndex = 50, Parent = modalLayer })
+local modals = {}
+local function openModal(name)
+	for n, m in modals do
+		m.Visible = n == name
+	end
+	dim.Visible = name ~= nil
+end
+dim.Activated:Connect(function()
+	openModal(nil)
+end)
+local function modal(name, title, c1, c2)
+	local p, body = Kit.panel({ name = name, title = title, color1 = c1, color2 = c2, dim = UDim2.fromOffset(700, 470), anchor = Vector2.new(0.5, 0.5), pos = UDim2.fromScale(0.5, 0.5), z = 51, parent = modalLayer, onClose = function()
+		openModal(nil)
+	end })
+	p.Visible = false
+	modals[name] = p
+	return body
+end
+
+-- STORM (weather)
+local stormBody = modal("Storm", "STORM", C.StormDark, C.Purple)
+local stormLocked = text({ text = "Unlock Weather in the GEMS tab (needs Tier 2).", size = 16, outline = 2, color = C.Sub, alignX = Enum.TextXAlignment.Center, dim = UDim2.fromScale(1, 1), parent = stormBody })
+local stormContent = new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Parent = stormBody })
+local weatherList = Kit.scroll({ dim = UDim2.new(0.58, 0, 1, 0), gap = 4, parent = stormContent })
+local weatherRows = {}
+for i, w in Config.Weather do
+	local row = Kit.card({ dim = UDim2.new(1, -6, 0, 44), order = i, parent = weatherList })
+	local n = text({ text = string.upper(w.name), size = 14, outline = 2, pos = UDim2.fromOffset(10, 4), dim = UDim2.new(1, -20, 0, 18), parent = row })
+	local info = text({ text = "", rich = true, size = 11, font = Fonts.Bold, color = C.Sub, pos = UDim2.fromOffset(10, 22), dim = UDim2.new(1, -20, 0, 16), parent = row })
+	weatherRows[i] = { row = row, name = n, info = info }
+end
+local stormSide = new("Frame", { BackgroundTransparency = 1, Position = UDim2.new(0.6, 0, 0, 0), Size = UDim2.new(0.4, 0, 1, 0), Parent = stormContent }, { Kit.list(Enum.FillDirection.Vertical, 8) })
+local stormPts = text({ text = "", size = 22, font = Fonts.HeavyItalic, outline = 3, color = C.Storm, order = 1, parent = stormSide })
+local stormMult = text({ text = "", rich = true, size = 13, font = Fonts.HeavyItalic, wrap = true, dim = UDim2.new(1, 0, 0, 52), order = 2, parent = stormSide })
+local rollBtn = Kit.button({ text = "", size = 15, color1 = C.Storm, color2 = C.StormDark, dim = UDim2.new(1, 0, 0, 44), order = 3, parent = stormSide, onClick = function()
+	act("rollWeather")
+end })
+local unlockWBtn = Kit.button({ text = "", size = 13, dim = UDim2.new(1, 0, 0, 38), order = 4, parent = stormSide, onClick = function()
+	act("unlockWeather")
+end })
+local wMoneyBtn = Kit.button({ text = "", size = 13, dim = UDim2.new(1, 0, 0, 38), order = 5, parent = stormSide, onClick = function()
+	act("buyWeatherMoney")
+end })
+onState(function(d)
+	local unlocked = d.mechanics >= 5
+	stormLocked.Visible = not unlocked
+	stormContent.Visible = unlocked
+	stormChip.Visible = unlocked
+	if not unlocked then
+		return
+	end
+	local odds = Config.WeatherOdds[d.weatherUnlocked]
+	for i, row in weatherRows do
+		local w = Config.Weather[i]
+		local open = i <= d.weatherUnlocked
+		row.name.Text = open and string.upper(w.name) or "???"
+		local fx = {}
+		if w.luck > 0 then table.insert(fx, '<font color="#9bff3d">+' .. w.luck .. "x luck</font>") end
+		if w.money > 0 then table.insert(fx, '<font color="#7cff5b">+' .. w.money .. "x cash</font>") end
+		if w.diamonds > 0 then table.insert(fx, '<font color="#5cf2ff">+' .. w.diamonds .. "x gems</font>") end
+		local active = d.weatherDuration[i] > 0 and ('  <font color="#ffe14a">' .. clock(d.weatherDuration[i]) .. "</font>") or ""
+		row.info.Text = open and (string.format("%.2f%%  ", (odds[i] or 0) * 100) .. table.concat(fx, " ") .. active) or "locked"
+	end
+	stormPts.Text = d.weatherPoints .. " ϟ"
+	local wl, wm, wd = F.weatherMults(d)
+	stormMult.Text = string.format('<font color="#9bff3d">x%.2f luck</font>  <font color="#7cff5b">x%.2f cash</font>  <font color="#5cf2ff">x%.2f gems</font>', wl, wm, wd)
+	local price = F.weatherRollPrice(d)
+	Kit.setLabel(rollBtn, d.weatherRollCooldown > 0 and ("ROLL  (" .. d.weatherRollCooldown .. "s)") or ("ROLL  " .. price .. " ϟ"))
+	local maxed = d.weatherUnlocked >= Config.WeatherShop.MaxUnlockable
+	Kit.setLabel(unlockWBtn, maxed and "ALL WEATHER UNLOCKED" or ("NEW WEATHER  " .. d.weatherCosts.unlock .. " ϟ"))
+	Kit.setAffordable(unlockWBtn, not maxed and d.weatherPoints >= d.weatherCosts.unlock)
+	Kit.setLabel(wMoneyBtn, string.format("x%.2f CASH  %d ϟ", d.weatherMoney * 1.1, d.weatherCosts.money))
+	Kit.setAffordable(wMoneyBtn, d.weatherPoints >= d.weatherCosts.money)
+end)
+
+-- SKILLS
+local skillBody = modal("Skills", "SKILL TREE", C.Cash, C.CashDark)
+local skillHeader = text({ text = "", rich = true, size = 16, font = Fonts.HeavyItalic, outline = 2, dim = UDim2.new(1, 0, 0, 20), parent = skillBody })
+local skillLocked = text({ text = "Reach Tier 1 to open the Skill Tree.", size = 16, outline = 2, color = C.Sub, alignX = Enum.TextXAlignment.Center, dim = UDim2.fromScale(1, 1), parent = skillBody })
+local skillGrid = new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 26), Size = UDim2.new(1, 0, 1, -110), Parent = skillBody }, { Kit.list(Enum.FillDirection.Horizontal, 6) })
+local skillButtons = {}
+local CAT_ORDER = { "main", "spawner", "boost", "max", "rless" }
+local CAT_TITLE = { main = "MULTIPLIERS", spawner = "SPAWNERS", boost = "BOOSTS", max = "MAX BUY (QP)", rless = "KEEP (QP)" }
+for ci, cat in CAT_ORDER do
+	local col = new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(0.2, -5, 1, 0), LayoutOrder = ci, Parent = skillGrid }, { Kit.list(Enum.FillDirection.Vertical, 5) })
+	text({ text = CAT_TITLE[cat], size = 12, font = Fonts.Bold, color = C.Sub, alignX = Enum.TextXAlignment.Center, parent = col })
+	for idx, upg in Config.SkillTree[cat].upgrades do
+		local info = SkillText[upg.id] or { upg.id, "" }
+		local card = new("TextButton", { Text = "", AutoButtonColor = true, BackgroundColor3 = C.White, Size = UDim2.new(1, 0, 0, 52), LayoutOrder = idx + 1, Parent = col }, {
+			Kit.corner(5), Kit.stroke(2.5), Kit.gradient(C.Card, C.CardDark),
+		})
+		local nm = text({ text = info[1], size = 12, outline = 1.5, pos = UDim2.fromOffset(6, 3), dim = UDim2.new(1, -12, 0, 14), parent = card })
+		local lv = text({ text = "", size = 11, font = Fonts.HeavyItalic, color = C.Gold, pos = UDim2.fromOffset(6, 18), dim = UDim2.new(1, -12, 0, 13), parent = card })
+		local cost = text({ text = "", size = 11, font = Fonts.Bold, color = C.Sub, pos = UDim2.fromOffset(6, 33), dim = UDim2.new(1, -12, 0, 13), parent = card })
+		card.Activated:Connect(function()
+			act("buySkill", upg.id)
+		end)
+		local tip = info[2]
+		card.MouseEnter:Connect(function()
+			skillHeader.Text = '<font color="#ffe14a">' .. info[1] .. "</font>  " .. tip
+		end)
+		skillButtons[upg.id] = { card = card, level = lv, cost = cost, upg = upg, cat = cat }
+	end
+end
+local skillFooter = new("Frame", { BackgroundTransparency = 1, Position = UDim2.new(0, 0, 1, -76), Size = UDim2.new(1, 0, 0, 76), Parent = skillBody }, { Kit.list(Enum.FillDirection.Horizontal, 6) })
+local tpButtons = {}
+for i, src in { "Money", "Diamonds", "WeatherRolls", "OrbsSpawned" } do
+	tpButtons[src] = Kit.button({ text = "", size = 11, color1 = C.Cyan, color2 = C.GemDark, dim = UDim2.new(1 / 6, -5, 0, 70), order = i, parent = skillFooter, onClick = function()
+		act("gainTP", src)
+	end })
+	tpButtons[src].Label.TextWrapped = true
+end
+local qpBtn = Kit.button({ text = "", size = 11, color1 = C.Storm, color2 = C.StormDark, dim = UDim2.new(1 / 6, -5, 0, 70), order = 5, parent = skillFooter, onClick = function()
+	act("gainQP")
+end })
+qpBtn.Label.TextWrapped = true
+local respecBtn = Kit.button({ text = "RESPEC\n-2 rebirths", size = 11, color1 = C.Red, color2 = C.RedDark, dim = UDim2.new(1 / 6, -5, 0, 70), order = 6, parent = skillFooter, onClick = function()
+	act("respec")
+end })
+respecBtn.Label.TextWrapped = true
+local TP_LABEL = { Money = "TP for $%s", Diamonds = "TP for %s ◆", WeatherRolls = "TP at %s rolls", OrbsSpawned = "TP at %s orbs" }
+onState(function(d)
+	local open = d.tiers >= 1
+	skillLocked.Visible = not open
+	skillGrid.Visible, skillFooter.Visible = open, open
+	if not open then
+		skillHeader.Text = ""
+		return
+	end
+	local pts = Economy.points(d)
+	if skillHeader.Text == "" or skillHeader.Text:find("TP ") then
+		skillHeader.Text = string.format('<font color="#5cf2ff">%d / %d TP</font>   <font color="#e3a6ff">%d / %d QP</font>', pts.tp, pts.maxTP, pts.qp, pts.maxQP)
+	end
+	for id, b in skillButtons do
+		local lvl = d.skills[b.cat][table.find(Config.SkillTree[b.cat].upgrades, b.upg)]
+		local maxL = F.skillMaxLevel(b.upg)
+		b.level.Text = maxL == math.huge and ("LV " .. lvl) or (lvl .. "/" .. maxL)
+		local locked = b.upg.tier4 and d.tiers < 4
+		local cur = Config.SkillTree[b.cat].currency
+		b.cost.Text = locked and "TIER 4" or (lvl >= maxL and "MAXED" or (F.skillCost(b.upg, lvl) .. " " .. cur))
+		local reqOk = true
+		for _, req in b.upg.req or {} do
+			reqOk = reqOk and F.skill(d, req) >= 1
+		end
+		b.card.BackgroundTransparency = (locked or not reqOk) and 0.5 or 0
+	end
+	for src, btn in tpButtons do
+		local s = Config.TPSources[src]
+		local gated = s.unlockMaxTP and F.maxTP(d) < s.unlockMaxTP
+		local cost = F.tpSourceCost(src, d.tpBought[src])
+		Kit.setLabel(btn, gated and ("needs " .. s.unlockMaxTP .. " max TP") or string.format(TP_LABEL[src], fmt(cost)))
+	end
+	local q = Config.QPSources.HighestRarity
+	local need = q.baseCost + q.step * d.qpBought
+	Kit.setLabel(qpBtn, "QP at rarity #" .. need)
+end)
+
+-- TIER (+ automation)
+local tierBody = modal("Tier", "TIER UP", C.Pink, C.RedDark)
+local tierInfo = text({ text = "", rich = true, size = 18, font = Fonts.HeavyItalic, outline = 2, wrap = true, dim = UDim2.new(1, 0, 0, 70), parent = tierBody })
+local tierBarFrame, setTierBar = Kit.bar({ dim = UDim2.new(1, 0, 0, 16), parent = tierBody, color1 = C.Pink, color2 = C.RedDark })
+tierBarFrame.Position = UDim2.fromOffset(0, 76)
+local tierPerks = text({ text = "", rich = true, size = 13, font = Fonts.Bold, color = C.Sub, wrap = true, pos = UDim2.fromOffset(0, 100), dim = UDim2.new(1, 0, 0, 60), parent = tierBody })
+local tierBtn = Kit.button({ text = "TIER UP", size = 20, color1 = C.Pink, color2 = C.RedDark, dim = UDim2.new(1, 0, 0, 46), pos = UDim2.fromOffset(0, 162), parent = tierBody, onClick = function()
+	act("tier")
+end })
+local autoTitle = text({ text = "AUTOMATION", size = 16, outline = 2, pos = UDim2.fromOffset(0, 220), parent = tierBody })
+local autoRow = new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 244), Size = UDim2.new(1, 0, 0, 120), Parent = tierBody }, { Kit.list(Enum.FillDirection.Horizontal, 6) })
+local AUTO_NAMES = { "AUTO MAIN", "AUTO SPAWNERS", "SMART MAIN", "SMART SPAWNERS" }
+local autoButtons, autoToggles = {}, {}
+for i = 1, 4 do
+	local col = new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(0.25, -5, 1, 0), LayoutOrder = i, Parent = autoRow }, { Kit.list(Enum.FillDirection.Vertical, 4) })
+	autoButtons[i] = Kit.button({ text = "", size = 11, color1 = C.Cyan, color2 = C.GemDark, dim = UDim2.new(1, 0, 0, 60), order = 1, parent = col, onClick = function()
+		act("buyAutomation", i)
+	end })
+	autoButtons[i].Label.TextWrapped = true
+	if i <= 2 then
+		autoToggles[i] = Kit.button({ text = "", size = 11, dim = UDim2.new(1, 0, 0, 26), order = 2, parent = col, onClick = function()
+			act("toggleAutomation", i)
+		end })
+	end
+end
+local autoPts = text({ text = "", size = 12, font = Fonts.Bold, color = C.Sub, pos = UDim2.fromOffset(160, 222), dim = UDim2.new(1, -160, 0, 16), parent = tierBody })
+onState(function(d)
+	if d.mechanics < 4 then
+		tierInfo.Text = "Unlock Tiers in the GEMS tab (needs 15 rebirths)."
+		tierBtn.Visible, tierBarFrame.Visible = false, false
+	else
+		local req = F.tierRequirement(d)
+		local have = d.orbsObtained[req.rarity] or 0
+		local rName = string.upper(Progression.Rarities[req.rarity].name)
+		local c = rarityColor(req.rarity)
+		tierInfo.Text = string.format('TIER %d ▶ %d<br/><font color="#7d7696">collect</font> <font color="#%s">%s</font> <font color="#5cf2ff">%s / %s</font>', d.tiers, d.tiers + 1, c:ToHex(), rName, fmt(have), fmt(req.count))
+		setTierBar(have / req.count)
+		tierBtn.Visible, tierBarFrame.Visible = true, true
+		Kit.setAffordable(tierBtn, F.canTier(d))
+		Kit.setLabel(tierBtn, F.canTier(d) and "TIER UP" or "NOT READY")
+	end
+	tierPerks.Text = string.format("Each tier: x2 cash, x3 luck, +1 TP, +1 QP, a new board. Resets cash, gems, rebirths, upgrades. Current: x%s cash, x%s luck from tiers.", fmtLog(d.tiers * math.log10(2), 0), fmtLog(d.tiers * math.log10(3), 0))
+	local autoOpen = d.tiers >= 2
+	autoTitle.Visible, autoRow.Visible, autoPts.Visible = autoOpen, autoOpen, autoOpen
+	autoPts.Text = "points: " .. fmt(d.automationPoints) .. "  (10% chance per orb, tier 2+)"
+	for i, b in autoButtons do
+		local lvl = d.automation.levels[i]
+		local oneShot = i >= 3
+		local needSkill = (i == 3 and F.skill(d, "MAX-1") < 1) or (i == 4 and F.skill(d, "MAX-2") < 1)
+		local label = AUTO_NAMES[i] .. "\n"
+		if oneShot and lvl >= 1 then
+			label ..= "OWNED"
+		elseif needSkill then
+			label ..= "needs " .. (i == 3 and "Quick Hands" or "Spawner Rush")
+		else
+			label ..= fmt(F.automationCost(d, i)) .. " pts" .. (not oneShot and string.format("\nevery %.1fs", F.automationInterval(lvl + 1)) or "")
+		end
+		Kit.setLabel(b, label)
+		Kit.setAffordable(b, not needSkill and not (oneShot and lvl >= 1) and d.automationPoints >= F.automationCost(d, i))
+	end
+	for i, t in autoToggles do
+		local on = d.automation.enabled[i]
+		Kit.setLabel(t, d.automation.levels[i] > 0 and (on and "ON" or "OFF") or "-")
+		Kit.setButtonColors(t, on and C.Cash or C.Tab, on and C.CashDark or C.TabDark)
+	end
+end)
+
+-- SETTINGS
+local settingsBody = modal("Settings", "SETTINGS", C.Steel, C.SteelDark)
+text({ text = "DIFFICULTY (only before your first rebirth)", size = 14, outline = 2, parent = settingsBody })
+local diffRow = new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 26), Size = UDim2.new(1, 0, 0, 40), Parent = settingsBody }, { Kit.list(Enum.FillDirection.Horizontal, 6) })
+local diffButtons = {}
+for i, key in { "baby", "easy", "orig", "hard", "extreme" } do
+	diffButtons[key] = Kit.button({ text = string.upper(key == "orig" and "normal" or key), size = 13, dim = UDim2.new(0.2, -5, 1, 0), order = i, parent = diffRow, onClick = function()
+		act("setDifficulty", key)
+	end })
+end
+local statsText = text({ text = "", rich = true, size = 14, font = Fonts.Bold, color = C.Sub, wrap = true, pos = UDim2.fromOffset(0, 84), dim = UDim2.new(1, 0, 0, 200), alignY = Enum.TextYAlignment.Top, parent = settingsBody })
+onState(function(d)
+	for key, b in diffButtons do
+		local on = d.difficulty == key
+		Kit.setButtonColors(b, on and C.Cyan or C.Tab, on and C.GemDark or C.TabDark)
+	end
+	statsText.Text = string.format(
+		'TIME PLAYED <font color="#ffffff">%s</font><br/>REBIRTHS <font color="#ffffff">%s</font>   TIERS <font color="#ffffff">%d</font><br/>TOTAL CASH <font color="#7cff5b">$%s</font><br/>TOTAL GEMS <font color="#5cf2ff">%s</font><br/>ORBS DROPPED <font color="#ffffff">%s</font><br/>BEST LUCK <font color="#ffe14a">x%s</font>',
+		clock(d.timePlayed), fmt(d.rebirths), d.tiers, fmt(d.totalMoney), fmt(d.totalDiamonds), fmt(d.orbsSpawned), fmtLog(d.bestLuckLog, 2))
+end)
+settingsBtn.Activated:Connect(function()
+	openModal("Settings")
+end)
+
+---------------------------------------------------------------- dock
+
+local dock = new("Frame", { Name = "Dock", BackgroundColor3 = C.White, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0, CX, 0, 720 - M + 2), Size = UDim2.fromOffset(560, DOCK_H), Parent = canvas }, {
+	Kit.corner(8), Kit.stroke(4), new("UIGradient", { Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(58, 31, 168)),
+		ColorSequenceKeypoint.new(0.5, Color3.fromRGB(176, 23, 59)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(58, 31, 168)),
+	}) }),
+})
+Kit.texture(dock, "studTile", 0.6, 48)
+local function dockTab(i, icon, label, onClick)
+	local slot = new("TextButton", { Name = label, Text = "", AutoButtonColor = true, BackgroundColor3 = Color3.fromRGB(18, 11, 32), BackgroundTransparency = 0.15, Size = UDim2.fromOffset(96, 40), Position = UDim2.fromOffset(14 + (i - 1) * 106, 26), Parent = dock }, { Kit.corner(5), Kit.stroke(2) })
+	Kit.icon(icon, 64, { parent = slot, anchor = Vector2.new(0.5, 0.5), pos = UDim2.new(0.5, 0, 0, -6), z = 5 })
+	text({ text = label, size = 15, outline = 2.5, alignX = Enum.TextXAlignment.Center, dim = UDim2.new(1, 0, 0, 18), pos = UDim2.new(0, 0, 1, -21), parent = slot }).ZIndex = 6
+	local badge = new("Frame", { Name = "Badge", Size = UDim2.fromOffset(22, 22), Position = UDim2.new(1, -10, 0, -16), BackgroundColor3 = C.White, Visible = false, ZIndex = 7, Parent = slot }, { Kit.corner(4), Kit.stroke(2.5), Kit.gradient(C.Red, C.RedDark) })
+	local bt = text({ text = "!", size = 13, outline = 1.5, alignX = Enum.TextXAlignment.Center, dim = UDim2.fromScale(1, 1), parent = badge })
+	bt.ZIndex = 8
+	slot.Activated:Connect(onClick)
+	return badge, bt
+end
+dockTab(1, "spawn", "SPAWN", function()
+	showTab("SPAWNERS")
+end)
+local stormBadge = dockTab(2, "storm", "STORM", function()
+	openModal("Storm")
+end)
+local skillBadge, skillBadgeText = dockTab(3, "star", "SKILLS", function()
+	openModal("Skills")
+end)
+local tierBadge = dockTab(4, "tier", "TIER", function()
+	openModal("Tier")
+end)
+local rebirthBtn = Kit.button({ text = "", size = 18, color1 = C.Gold, color2 = C.GoldDark, dim = UDim2.fromOffset(118, 58), anchor = Vector2.new(1, 0.5), pos = UDim2.new(1, -10, 0.5, 0), parent = dock, onClick = function()
+	act("rebirth")
+end })
+rebirthBtn.ClipsDescendants = false
+Kit.icon("rebirth", 52, { parent = rebirthBtn, anchor = Vector2.new(0.5, 0.5), pos = UDim2.fromOffset(-4, -6), z = 5 })
+rebirthBtn.Label.Position = UDim2.fromOffset(0, -8)
+local rebirthCost = text({ text = "", size = 13, font = Fonts.HeavyItalic, color = Color3.fromRGB(90, 42, 0), alignX = Enum.TextXAlignment.Center, pos = UDim2.new(0, 0, 1, -20), dim = UDim2.new(1, 0, 0, 16), parent = rebirthBtn })
+rebirthCost.ZIndex = 4
+onState(function(d)
+	if d.mechanics < 1 then
+		Kit.setLabel(rebirthBtn, "LOCKED")
+		rebirthCost.Text = "50 gems"
+		Kit.setButtonColors(rebirthBtn, C.Tab, C.TabDark)
+	else
+		local gained = F.skill(d, "MAX-3") >= 1 and F.bulkRebirths(d) or 1
+		Kit.setLabel(rebirthBtn, gained > 1 and ("REBIRTH x" .. fmt(gained)) or "REBIRTH")
+		local cost = F.rebirthCost(d, d.rebirths + gained - 1)
+		rebirthCost.Text = "$" .. fmt(cost)
+		local ok = Big.gt(d.money, cost)
+		Kit.setButtonColors(rebirthBtn, ok and C.Gold or C.Tab, ok and C.GoldDark or C.TabDark)
+	end
+	stormBadge.Visible = d.mechanics >= 5 and d.weatherPoints >= F.weatherRollPrice(d) and d.weatherRollCooldown == 0
+	local pts = Economy.points(d)
+	skillBadge.Visible = d.tiers >= 1 and (pts.tp > 0 or pts.qp > 0)
+	skillBadgeText.Text = tostring(math.max(pts.tp, 0) + math.max(pts.qp, 0))
+	tierBadge.Visible = d.mechanics >= 4 and F.canTier(d)
+end)
+
+---------------------------------------------------------------- income + stat lines
+
+local lastMoneyLog, lastT, rateLog = nil, os.clock(), -math.huge
+onState(function(d)
+	cashValue.Text = "$" .. fmt(d.money)
+	gemValue.Text = fmt(d.diamonds)
+	stormValue.Text = tostring(d.weatherPoints)
+	-- income: smoothed growth of total money (never negative across resets)
+	local nowLog, now = Big.log10(d.totalMoney), os.clock()
+	if lastMoneyLog and now - lastT >= 1 and nowLog > -math.huge then
+		local deltaLog = nowLog + math.log10(math.max(1 - 10 ^ ((lastMoneyLog or -math.huge) - nowLog), 1e-12))
+		local inst = deltaLog - math.log10(now - lastT)
+		rateLog = if rateLog == -math.huge then inst else math.log10(0.7 * 10 ^ (rateLog - inst) + 0.3) + inst
+		lastMoneyLog, lastT = nowLog, now
+	elseif not lastMoneyLog then
+		lastMoneyLog, lastT = nowLog, now
+	end
+	incomeText.Text = rateLog > -math.huge and ("$" .. fmtLog(rateLog, 2) .. "/s") or "$0/s"
+	statLuck.Text = string.format('<font color="#9bff3d">x%s</font> <font color="#22b33a">LUCK</font>', fmtLog(d.totalLuckLog, 2))
+	statCash.Text = string.format('<font color="#ff7ae6">x%s</font> <font color="#a33bff">CASH MULTI</font>', fmt(F.orbMoneyMult(d), 2))
+	statBonus.Text = d.mechanics >= 3 and string.format('<font color="#ff5a7a">x%s</font> <font color="#c4143b">RARITY BONUS</font>', fmtLog(d.highestRarity * math.log10(Config.Base.RarityMoneyBonus), 2)) or '<font color="#7d7696">rarity bonus locked</font>'
+end)
+
+---------------------------------------------------------------- server events
+
+R.State.OnClientEvent:Connect(function(serialized)
+	local first = data == nil
+	data = Economy.deserialize(serialized)
+	for _, fn in refreshers do
+		local ok, err = pcall(fn, data)
+		if not ok then
+			warn("[OrbHUD]", err)
+		end
+	end
+	if first then
+		rebuildBoard()
+	end
+end)
+
+R.Notify.OnClientEvent:Connect(function(kind, payload)
+	if kind == "newRarity" then
+		local r = Progression.Rarities[payload]
+		toast("NEW RARITY DISCOVERED", string.upper(r.name), "1/" .. fmtLog(r.oneInLog, 0), rarityColor(payload))
+	elseif kind == "tier" then
+		toast("TIER UP!", "TIER " .. payload, "new board", C.Pink)
+	elseif kind == "weather" then
+		toast("WEATHER ROLLED", string.upper(Config.Weather[payload].name), nil, C.Storm)
+	end
+end)
+
+-- live timers between state pushes
+RunService.Heartbeat:Connect(function()
+	if data then
+		capLabel.Text = string.format('<font color="#7d7696">ORBS</font> <font color="#5cf2ff">%d / %d</font>', board.count, F.spawnCap(data))
+	end
+end)
