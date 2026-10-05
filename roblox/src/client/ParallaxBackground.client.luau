@@ -15,12 +15,12 @@ local UserInputService = game:GetService("UserInputService")
 local LAYERS = {
 	-- name, image, scroll speed (px/s at 1280 width), mouse depth, effect
 	{ name = "Sky", image = "rbxassetid://0", speed = 0, depth = 0.005, effect = "none" },
-	{ name = "Stars", image = "rbxassetid://0", speed = 4, depth = 0.01, effect = "twinkle" },
-	{ name = "FarSkyline", image = "rbxassetid://0", speed = 10, depth = 0.02, effect = "none" },
-	{ name = "Islands", image = "rbxassetid://0", speed = 24, depth = 0.04, effect = "bob" },
-	{ name = "NearCubes", image = "rbxassetid://0", speed = 60, depth = 0.07, effect = "sway" },
-	{ name = "RaysFog", image = "rbxassetid://0", speed = 120, depth = 0.1, effect = "pulse" },
-	{ name = "Sparkles", image = "rbxassetid://0", speed = 200, depth = 0.14, effect = "pulse" },
+	{ name = "Aurora", image = "rbxassetid://0", speed = 4, depth = 0.01, effect = "pulse" },
+	{ name = "FarRidge", image = "rbxassetid://0", speed = 10, depth = 0.02, effect = "none" },
+	{ name = "NearRidge", image = "rbxassetid://0", speed = 24, depth = 0.04, effect = "none" },
+	{ name = "BokehOrbs", image = "rbxassetid://0", speed = 60, depth = 0.08, effect = "sway" },
+	{ name = "GridWatermark", image = "rbxassetid://0", speed = 0, depth = 0, effect = "none" },
+	{ name = "Sparkles", image = "rbxassetid://0", speed = 30, depth = 0.14, effect = "twinkle" },
 }
 
 local SPARKLE_COUNT = 40
