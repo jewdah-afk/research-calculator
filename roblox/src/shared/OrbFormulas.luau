@@ -243,20 +243,41 @@ end
 
 ---------------------------------------------------------------- rebirth / tier
 
-local function rebirthBaseLog(data): (number, number)
+-- Rebirth cost (log10):  base + min(r, 25)*log(scale) + max(r - 25, 0)*log(lateScale)
+-- The first 25 use the original scaling; after that the endless scale (2.5x) is below the rate
+-- income grows per rebirth (~2.86x, derived in README), so rebirths are reachable forever.
+F.REBIRTH_LATE_FROM = 25
+F.REBIRTH_LATE_SCALE = 3.5 -- Roblox keeps the original scale: tiers (x2 cash, x3 luck each) supply the endless growth
+
+local function rebirthParts(data): (number, number, number)
 	local d = Config.Difficulties[data.difficulty]
-	return math.log10(d.rebBase) - F.skill(data, "MN-5") * LOG2, math.log10(d.rebScaling)
+	return math.log10(d.rebBase) - F.skill(data, "MN-5") * LOG2, math.log10(d.rebScaling), math.log10(F.REBIRTH_LATE_SCALE)
 end
+
+local function rebirthCostLog(data, r: number): number
+	local b, s, late = rebirthParts(data)
+	local early = math.min(r, F.REBIRTH_LATE_FROM)
+	return b + early * s + math.max(r - F.REBIRTH_LATE_FROM, 0) * late
+end
+F.rebirthCostLog = rebirthCostLog
 
 function F.rebirthCost(data, rebirths: number?)
-	local b, s = rebirthBaseLog(data)
-	return Big.pow(10, b + (rebirths or data.rebirths) * s)
+	return Big.pow(10, rebirthCostLog(data, rebirths or data.rebirths))
 end
 
+-- How many rebirths current money buys (inverse of the piecewise cost; >= 1)
 function F.bulkRebirths(data): number
-	local b, s = rebirthBaseLog(data)
-	local target = math.floor((Big.log10(data.money) - b) / s + 1)
-	return math.max(target - data.rebirths, 1)
+	local b, s, late = rebirthParts(data)
+	local m = Big.log10(data.money)
+	local r
+	local atLate = b + F.REBIRTH_LATE_FROM * s
+	if m < atLate then
+		r = math.floor((m - b) / s)
+	else
+		r = F.REBIRTH_LATE_FROM + math.floor((m - atLate) / late)
+	end
+	-- r = highest index whose cost is below money; buying up to it means r+1 total rebirths
+	return math.max(r + 1 - data.rebirths, 1)
 end
 
 function F.tierRequirement(data)

@@ -90,6 +90,28 @@ roblox/
 4. **Big numbers.** Luck and odds are log10 numbers; money and gems are EternityNum. Nothing overflows.
 5. **The pacing simulator is the guard.** After any balance change, run `tests/run.sh 100`. It fails if any tier from 6 on takes under 9.5 or over 300 minutes for the greedy bot.
 
+## The forever formulas (all in log10)
+
+| Quantity | Formula |
+|---|---|
+| Rarity odds, k > 50 | `odds(k) = odds(k-1) + 2.5 + 0.02(k-50)` |
+| Rarity value, k > 50 | `value(k) = value(k-1) + 0.8 · (2.5 + 0.02(k-50))` (value is a fixed 0.8 share of each odds step) |
+| Luck | `0.301·rebirths + 0.477·tiers + 0.0792·luckLevels + 0.0414·gemLuckLevels + skills + budgeted bonuses` |
+| Cash multiplier | `0.0607·cashLevels + 0.301·tiers + 0.0253·rarityBonus·best + skills + budgeted bonuses` |
+| Rebirth cost | `log(4000) + min(r,25)·log(3.5) + max(r−25,0)·log(lateScale)`. The web build uses lateScale 2.5; Roblox keeps 3.5 because tiers supply growth. |
+| Next tier (5+) | `max(previous + 1.5, luckAtTier + max(5, 0.15·luck/(1+n/30)))`, 10 orbs, plus a minimum time of 10 + 0.5n minutes (max 60) |
+
+**Why it never stalls:**
+- A player's money per run settles at about 0.8 × luck, because rarity value is 0.8 × odds.
+- Cash and luck upgrades bought with that money then feed back into both.
+- That gives about 0.457 orders of money per rebirth.
+- So any rebirth cost slope below 0.457 per rebirth (2.86× each) is reachable forever. The web build's 2.5× has margin.
+- In Roblox, each tier adds a permanent ×2 cash and ×3 luck on top. Relative tiers keep that from snowballing.
+
+**Verified by the pacing sim:**
+- **Web build:** time per rebirth settles at 1.5–4 minutes through 3,600+ rebirths.
+- **Roblox build:** tiers 1–150 never wall. Late tiers sit at the 60-minute floor, and the bot is at rarity #553 of 2,000 at tier 150.
+
 ## Systems
 
 | System | Where | Notes |

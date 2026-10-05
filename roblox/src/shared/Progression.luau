@@ -67,8 +67,10 @@ do
 	local last = rarities[#rarities]
 	local oddsLog, valueLog = last.oneInLog, last.valueLog
 	for k = 1, GENERATED do
-		oddsLog += 2.5 + 0.02 * k
-		valueLog += 2.0 + 0.012 * k
+		-- value grows in a FIXED proportion (0.8) to odds, so income keeps pace with the curve forever
+		local step = 2.5 + 0.02 * k
+		oddsLog += step
+		valueLog += 0.8 * step
 		local prefix = PREFIXES[((k - 1) % #PREFIXES) + 1]
 		local cycle = math.floor((k - 1) / #PREFIXES) + 1
 		table.insert(rarities, {
