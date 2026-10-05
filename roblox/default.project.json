@@ -18,6 +18,17 @@
           "$path": "src/client"
         }
       }
+    },
+    "ServerStorage": {
+      "Tests": {
+        "$className": "Folder",
+        "UnitTests": {
+          "$path": "tests/UnitTests.luau"
+        },
+        "PacingSim": {
+          "$path": "tests/PacingSim.luau"
+        }
+      }
     }
   }
 }

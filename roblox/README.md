@@ -74,12 +74,39 @@ roblox/
 - **More rarities:** raise `GENERATED` in `Progression.luau`.
 - **New board for a tier:** add a `LAYOUTS[n]` entry in `Board.luau` and `OrbConfig.Tiers.Slots[n]`, and raise `Tiers.Max`.
 
+## Infinite-play design (read this before adding features)
+
+1. **Core vs bonus.** Core progression is upgrades, rebirths, tiers, the rarity bonus and the skill tree, and it applies in full. Everything else is a **bonus source** registered in `Balance.luau`: weather, storm levels, admin events, and any future feature or gamepass. Bonuses are summed per stat (cash, luck and gems), then soft-capped against a budget that scales with the player's own core progress. A new feature can speed players up by a bounded amount but can never leapfrog the curve.
+   ```lua
+   -- adding a feature that boosts luck:
+   Balance.register("pets", "luck", function(data, ctx) return petLuckLog10(data) end)
+   ```
+2. **Relative tiers.**
+   - Tiers 1–4 are the original fixed requirements.
+   - From tier 5 on, each tier asks for 10 orbs at a rarity a set distance beyond the luck you had at your last tier-up (max of 5 orders of magnitude or a share of that luck that eases off), collected since that tier.
+   - The target follows real progress, so it can't wall and can't be trivialised, whatever future content does to growth speed.
+   - There's also a minimum time per tier: 10 minutes, plus 0.5 per tier, up to 60, shown as a countdown.
+3. **Endless sinks.** Rarities are generated to #2000, and you can raise `GENERATED` freely. Rebirths, storm levels, skill multipliers and TP sources never cap.
+4. **Big numbers.** Luck and odds are log10 numbers; money and gems are EternityNum. Nothing overflows.
+5. **The pacing simulator is the guard.** After any balance change, run `tests/run.sh 100`. It fails if any tier from 6 on takes under 9.5 or over 300 minutes for the greedy bot.
+
+## Systems
+
+| System | Where | Notes |
+|---|---|---|
+| Saving | `server/Services/DataService.luau` | Session locking through UpdateAsync, so two servers can never write the same player. Retries with backoff, versioned migrations (`Economy.MIGRATIONS`), and a daily backup in `OrbGame_backup_v1`. |
+| Game loop | `server/Services/GameService.luau` | Spawners, orb validation, the action whitelist (`GameService.ACTIONS`; add new actions here), autosave every 60s, and the tutorial. |
+| Events | `shared/Events.luau`, `server/Services/EventService.luau` | Admin-dropped global events, synced to every server through MessagingService and a DataStore. Dropping the same type again extends it instead of stacking. Events are capped at 24h each, and "frenzy" spawn speed at 2×. |
+| Admin | `server/Services/AdminService.luau` | **Edit `USER_IDS` / `GROUP_ID`.** The place owner is always an admin. The in-game ADMIN button only appears for admins, and every command is re-checked on the server. Announcements go through Roblox's text filter. |
+| Leaderboards | `server/Services/LeaderboardService.luau` | Global boards for total cash, tiers, rebirths and best rarity, refreshed every 2 minutes, plus player-list leaderstats. Cash is stored as log10 × 100 to fit OrderedDataStore integers. |
+| Tutorial | `shared/Tutorial.luau` | 7 steps. The server advances them only when the real action happens, so they can't be faked. The client highlights the target panel, and players can skip. Existing players skip it automatically through a migration. |
+| QA | `tests/` | 27 unit tests plus the pacing sim. Run them from the command line with `tests/run.sh`, or in Studio with `ServerScriptService.OrbServer.Dev.TestRunner` and its attribute `Run=true`. |
+
 ## Testing
 
-The game logic is plain Luau and was tested outside Roblox with the standalone `luau` CLI, using small stand-ins for EternityNum and `Random`:
-- a 3-hour simulated playthrough
-- bulk buying with 10^5000 money (under 1ms)
-- 5,000 rebirths and tier 40
-- save and load round-trips
+```
+LUAU=/path/to/luau ./tests/run.sh 100     # unit tests + 100-tier pacing simulation
+```
+The latest run: 27/27 unit tests passed. The pacing sim reached tier 100 in about 107h of game time; after the original tiers, generated tiers take 14–38 minutes each and stretch slowly.
 
-Every file compiles, but nothing has been run inside Roblox Studio yet. Expect some small fixes on first Play, most likely UI sizes and positions.
+The code compiles and the logic is tested from the command line, but nothing has run inside Studio yet. Things only Studio can exercise are untested: DataStore, MessagingService, the UI layout and the board physics feel. Expect small fixes on first Play.

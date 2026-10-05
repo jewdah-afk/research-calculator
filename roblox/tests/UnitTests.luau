@@ -252,6 +252,30 @@ return function(Shared)
 		truthy(Big.lt(d.money, 1))
 	end)
 
+	-- tutorial -------------------------------------------------------------------------
+	test("tutorial advances only when the real action happened", function()
+		local T = Shared.Tutorial
+		local d = E.newData()
+		eq(d.tutorialStep, 1)
+		eq(T.advance(d), false, "nothing done yet")
+		d.totalMoney = Big.new(100)
+		eq(T.advance(d), true)
+		eq(d.tutorialStep, 2)
+		d.mainLevels[1] = 1
+		d.mainLevels[2] = 1
+		T.advance(d)
+		eq(d.tutorialStep, 4, "skips through already-satisfied steps")
+		T.finish(d)
+		eq(T.current(d), nil)
+	end)
+	test("tutorial final step never auto-advances past itself", function()
+		local T = Shared.Tutorial
+		local d = E.newData()
+		d.tutorialStep = #T.STEPS
+		T.advance(d)
+		eq(d.tutorialStep, #T.STEPS)
+	end)
+
 	-- formatting -------------------------------------------------------------------------
 	test("format handles tiny, huge and zero", function()
 		eq(F.format(0), "0")

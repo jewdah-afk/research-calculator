@@ -14,6 +14,9 @@ local Economy = require(Shared.OrbEconomy)
 local Big = require(Shared.Big)
 local Progression = require(Shared.Progression)
 local Remotes = require(Shared.Remotes)
+local Balance = require(Shared.Balance)
+local Events = require(Shared.Events)
+local Tutorial = require(Shared.Tutorial)
 
 local Kit = require(script.Parent.UI.Kit)
 local SkillText = require(script.Parent.UI.SkillText)
@@ -518,6 +521,17 @@ end })
 local wMoneyBtn = Kit.button({ text = "", size = 13, dim = UDim2.new(1, 0, 0, 38), order = 5, parent = stormSide, onClick = function()
 	act("buyWeatherMoney")
 end })
+local stormLvlBtn = Kit.button({ text = "", size = 13, color1 = C.Storm, color2 = C.StormDark, dim = UDim2.new(1, 0, 0, 38), order = 6, parent = stormSide, onClick = function()
+	act("buyStormLevel")
+end })
+onState(function(d)
+	if d.mechanics < 5 then
+		return
+	end
+	local cost = Economy.stormLevelCost(d)
+	Kit.setLabel(stormLvlBtn, string.format("STORM LV %d  %s ϟ", d.stormLevel + 1, fmt(cost)))
+	Kit.setAffordable(stormLvlBtn, d.weatherPoints >= cost)
+end)
 onState(function(d)
 	local unlocked = d.mechanics >= 5
 	stormLocked.Visible = not unlocked
@@ -664,10 +678,12 @@ onState(function(d)
 		tierBtn.Visible, tierBarFrame.Visible = false, false
 	else
 		local req = F.tierRequirement(d)
-		local have = d.orbsObtained[req.rarity] or 0
+		local have = F.tierProgress(d)
+		local waitLeft = F.tierTimeLeft(d)
 		local rName = string.upper(Progression.Rarities[req.rarity].name)
 		local c = rarityColor(req.rarity)
-		tierInfo.Text = string.format('TIER %d ▶ %d<br/><font color="#7d7696">collect</font> <font color="#%s">%s</font> <font color="#5cf2ff">%s / %s</font>', d.tiers, d.tiers + 1, c:ToHex(), rName, fmt(have), fmt(req.count))
+		tierInfo.Text = string.format('TIER %d ▶ %d<br/><font color="#7d7696">collect</font> <font color="#%s">%s%s</font> <font color="#5cf2ff">%s / %s</font>%s', d.tiers, d.tiers + 1, c:ToHex(), rName, req.relative and " or rarer" or "", fmt(math.floor(have)), fmt(req.count),
+			waitLeft > 0 and string.format('  <font color="#ffe14a">ready in %s</font>', clock(math.ceil(waitLeft))) or "")
 		setTierBar(have / req.count)
 		tierBtn.Visible, tierBarFrame.Visible = true, true
 		Kit.setAffordable(tierBtn, F.canTier(d))
@@ -806,6 +822,174 @@ onState(function(d)
 	statBonus.Text = d.mechanics >= 3 and string.format('<font color="#ff5a7a">x%s</font> <font color="#c4143b">RARITY BONUS</font>', fmtLog(d.highestRarity * math.log10(Config.Base.RarityMoneyBonus), 2)) or '<font color="#7d7696">rarity bonus locked</font>'
 end)
 
+
+---------------------------------------------------------------- events banner
+
+local eventBar = new("Frame", { Name = "EventBar", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(CX, M + 132), Size = UDim2.fromOffset(600, 26), Parent = canvas }, {
+	Kit.list(Enum.FillDirection.Horizontal, 6, Enum.HorizontalAlignment.Center),
+})
+local activeEvents = {}
+local function renderEvents()
+	for _, c in eventBar:GetChildren() do
+		if c:IsA("Frame") then
+			c:Destroy()
+		end
+	end
+	local now = os.time()
+	for _, ev in activeEvents do
+		local def = Events.TYPES[ev.id]
+		if def and (ev.endsAt or 0) > now then
+			local col = Color3.fromRGB(def.color[1], def.color[2], def.color[3])
+			local chip = new("Frame", { BackgroundColor3 = C.Panel, BackgroundTransparency = 0.1, Size = UDim2.fromOffset(150, 26), AutomaticSize = Enum.AutomaticSize.X, Parent = eventBar }, {
+				Kit.corner(6), Kit.stroke(2.5, col), Kit.padding(8, 8, 0, 0),
+			})
+			text({ text = string.format("%s  %s", def.name, clock(ev.endsAt - now)), size = 12, font = Fonts.HeavyItalic, outline = 1.5, color = col, auto = Enum.AutomaticSize.X, dim = UDim2.new(0, 0, 1, 0), parent = chip })
+		end
+	end
+end
+R.Events.OnClientEvent:Connect(function(list)
+	activeEvents = list or {}
+	Balance.setEvents(activeEvents) -- client-side displays (luck, payouts) match the server
+	renderEvents()
+end)
+task.spawn(function()
+	while true do
+		task.wait(1)
+		Balance.ctx.now = os.time()
+		renderEvents()
+	end
+end)
+
+---------------------------------------------------------------- tutorial
+
+local tutor = new("Frame", { Name = "Tutorial", BackgroundColor3 = C.Panel, BackgroundTransparency = 0.05, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0, CX, 0, 720 - M - DOCK_H - 26), Size = UDim2.fromOffset(470, 70), Visible = false, ZIndex = 40, Parent = canvas }, {
+	Kit.corner(8), Kit.stroke(4, C.Cyan),
+})
+local tutorText = text({ text = "", size = 15, outline = 2, wrap = true, pos = UDim2.fromOffset(14, 8), dim = UDim2.new(1, -110, 1, -16), parent = tutor })
+tutorText.ZIndex = 41
+local tutorStep = text({ text = "", size = 11, font = Fonts.Bold, color = C.Cyan, pos = UDim2.new(1, -92, 0, 10), dim = UDim2.fromOffset(80, 14), alignX = Enum.TextXAlignment.Right, parent = tutor })
+tutorStep.ZIndex = 41
+local tutorSkip = Kit.button({ text = "SKIP", size = 12, color1 = C.Tab, color2 = C.TabDark, dim = UDim2.fromOffset(80, 28), anchor = Vector2.new(1, 1), pos = UDim2.new(1, -10, 1, -10), z = 41, parent = tutor, onClick = function()
+	act("skipTutorial")
+end })
+local highlight = Kit.stroke(4, C.Cyan)
+highlight.Name = "TutorialHighlight"
+local function targetFrame(name)
+	if name == "Board" then return boardFrame end
+	if name == "UpgradesPanel" then return upgradesPanel end
+	if name == "Dock" then return dock end
+	return nil
+end
+local pulse = 0
+RunService.Heartbeat:Connect(function(dt)
+	pulse += dt
+	highlight.Transparency = 0.25 + 0.5 * (0.5 + 0.5 * math.sin(pulse * 5))
+end)
+onState(function(d)
+	local step, i = Tutorial.current(d)
+	tutor.Visible = step ~= nil
+	if not step then
+		highlight.Parent = nil
+		return
+	end
+	tutorText.Text = step.text
+	tutorStep.Text = string.format("STEP %d/%d", i, #Tutorial.STEPS)
+	Kit.setLabel(tutorSkip, step.final and "DONE" or "SKIP")
+	local target = targetFrame(step.target)
+	highlight.Parent = target
+end)
+
+---------------------------------------------------------------- leaderboards
+
+local lbBody = modal("Leaders", "LEADERBOARDS", C.Gold, C.GoldDark)
+local lbTabs = new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30), Parent = lbBody }, { Kit.list(Enum.FillDirection.Horizontal, 6) })
+local lbList = Kit.scroll({ dim = UDim2.new(1, 0, 1, -38), pos = UDim2.fromOffset(0, 38), gap = 2, parent = lbBody })
+local lbData, lbCurrent = {}, "cash"
+local LB_ORDER = { "cash", "tiers", "rebirths", "rarity" }
+local LB_LABEL = { cash = "CASH", tiers = "TIERS", rebirths = "REBIRTHS", rarity = "RARITY" }
+local lbTabButtons = {}
+local function renderLB()
+	for _, c in lbList:GetChildren() do
+		if c:IsA("Frame") then
+			c:Destroy()
+		end
+	end
+	for id, b in lbTabButtons do
+		Kit.setButtonColors(b, id == lbCurrent and C.Gold or C.Tab, id == lbCurrent and C.GoldDark or C.TabDark)
+	end
+	local board = lbData[lbCurrent]
+	if not board or #board.rows == 0 then
+		text({ text = "No scores yet (leaderboards refresh every 2 minutes).", size = 14, color = C.Sub, outline = 1.5, parent = new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, -6, 0, 30), Parent = lbList }) })
+		return
+	end
+	for _, row in board.rows do
+		local r = new("Frame", { BackgroundColor3 = C.White, BackgroundTransparency = row.rank % 2 == 0 and 0.97 or 1, Size = UDim2.new(1, -6, 0, 26), LayoutOrder = row.rank, Parent = lbList }, { Kit.corner(4) })
+		local medal = row.rank == 1 and C.Gold or row.rank == 2 and Color3.fromRGB(200, 205, 220) or row.rank == 3 and Color3.fromRGB(255, 154, 80) or C.Sub
+		text({ text = "#" .. row.rank, size = 14, font = Fonts.HeavyItalic, outline = 1.5, color = medal, pos = UDim2.fromOffset(8, 0), dim = UDim2.new(0, 44, 1, 0), parent = r })
+		text({ text = row.name, size = 14, outline = 1.5, color = row.name == player.Name and C.Cyan or C.White, pos = UDim2.fromOffset(56, 0), dim = UDim2.new(1, -220, 1, 0), parent = r })
+		text({ text = row.display, size = 14, font = Fonts.HeavyItalic, outline = 1.5, color = C.Gold, alignX = Enum.TextXAlignment.Right, anchor = Vector2.new(1, 0), pos = UDim2.new(1, -8, 0, 0), dim = UDim2.fromOffset(160, 26), parent = r })
+	end
+end
+for i, id in LB_ORDER do
+	lbTabButtons[id] = Kit.button({ text = LB_LABEL[id], size = 13, dim = UDim2.new(0.25, -5, 1, 0), order = i, parent = lbTabs, onClick = function()
+		lbCurrent = id
+		renderLB()
+	end })
+end
+R.Leaderboards.OnClientEvent:Connect(function(boards)
+	lbData = boards or {}
+	renderLB()
+end)
+renderLB()
+local lbBtn = Kit.button({ text = "", color1 = C.Gold, color2 = C.GoldDark, dim = UDim2.fromOffset(48, 48), pos = UDim2.fromOffset(1280 - M - 48 - 56, M), parent = canvas, onClick = function()
+	openModal("Leaders")
+end })
+Kit.icon("star", 40, { parent = lbBtn, anchor = Vector2.new(0.5, 0.5), pos = UDim2.fromScale(0.5, 0.5), z = 4 })
+toastHost.Position -= UDim2.fromOffset(56, 0)
+
+---------------------------------------------------------------- admin panel (only shown to admins; server re-checks every call)
+
+task.spawn(function()
+	local ok, isAdmin = pcall(function()
+		return R.Admin:InvokeServer("isAdmin")
+	end)
+	if not (ok and isAdmin) then
+		return
+	end
+	local body = modal("Admin", "ADMIN · EVENTS", C.Red, C.RedDark)
+	local status = text({ text = "", size = 12, font = Fonts.Bold, color = C.Sub, dim = UDim2.new(1, 0, 0, 16), parent = body })
+	local grid = new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 22), Size = UDim2.new(1, 0, 0, 230), Parent = body }, {
+		new("UIGridLayout", { CellSize = UDim2.new(1 / 3, -6, 0, 70), CellPadding = UDim2.fromOffset(6, 6), SortOrder = Enum.SortOrder.LayoutOrder }),
+	})
+	local minutesBox = new("TextBox", { PlaceholderText = "minutes (blank = default)", Text = "", ClearTextOnFocus = false, FontFace = Fonts.Bold, TextSize = 14, TextColor3 = C.White, PlaceholderColor3 = C.Sub, BackgroundColor3 = C.Card, Position = UDim2.fromOffset(0, 262), Size = UDim2.new(0.5, -4, 0, 36), Parent = body }, { Kit.corner(5), Kit.stroke(2.5) })
+	Kit.button({ text = "STOP ALL EVENTS", size = 13, color1 = C.Red, color2 = C.RedDark, dim = UDim2.new(0.5, -4, 0, 36), pos = UDim2.new(0.5, 4, 0, 262), parent = body, onClick = function()
+		local okStop = R.Admin:InvokeServer("stop")
+		status.Text = okStop and "stopped all events" or "failed"
+	end })
+	local announceBox = new("TextBox", { PlaceholderText = "announcement to every server player", Text = "", ClearTextOnFocus = false, FontFace = Fonts.Bold, TextSize = 14, TextColor3 = C.White, PlaceholderColor3 = C.Sub, BackgroundColor3 = C.Card, Position = UDim2.fromOffset(0, 306), Size = UDim2.new(0.75, -4, 0, 36), Parent = body }, { Kit.corner(5), Kit.stroke(2.5) })
+	Kit.button({ text = "SEND", size = 13, color1 = C.Cyan, color2 = C.GemDark, dim = UDim2.new(0.25, -4, 0, 36), pos = UDim2.new(0.75, 4, 0, 306), parent = body, onClick = function()
+		local okA, err = R.Admin:InvokeServer("announce", announceBox.Text)
+		status.Text = okA and "announced" or ("announce failed: " .. tostring(err))
+		if okA then
+			announceBox.Text = ""
+		end
+	end })
+	local okT, types = R.Admin:InvokeServer("types")
+	if okT then
+		for i, t in types do
+			local col = Color3.fromRGB(t.color[1], t.color[2], t.color[3])
+			Kit.button({ text = t.name .. "\n" .. t.minutes .. " min", size = 13, color1 = col, color2 = col:Lerp(Color3.new(0, 0, 0), 0.45), order = i, parent = grid, onClick = function()
+				local okS, err = R.Admin:InvokeServer("start", t.id, tonumber(minutesBox.Text))
+				status.Text = okS and ("started " .. t.name) or ("failed: " .. tostring(err))
+			end }).Label.TextWrapped = true
+		end
+	end
+	local adminBtn = Kit.button({ text = "ADMIN", size = 12, color1 = C.Red, color2 = C.RedDark, dim = UDim2.fromOffset(64, 28), pos = UDim2.fromOffset(1280 - M - 64, M + 56), parent = canvas, onClick = function()
+		openModal("Admin")
+	end })
+	adminBtn.ZIndex = 30
+end)
+
 ---------------------------------------------------------------- server events
 
 R.State.OnClientEvent:Connect(function(serialized)
@@ -830,6 +1014,13 @@ R.Notify.OnClientEvent:Connect(function(kind, payload)
 		toast("TIER UP!", "TIER " .. payload, "new board", C.Pink)
 	elseif kind == "weather" then
 		toast("WEATHER ROLLED", string.upper(Config.Weather[payload].name), nil, C.Storm)
+	elseif kind == "event" then
+		local def = Events.TYPES[payload.id]
+		if def then
+			toast("EVENT STARTED", def.name, "by " .. tostring(payload.by), Color3.fromRGB(def.color[1], def.color[2], def.color[3]))
+		end
+	elseif kind == "announce" then
+		toast("ANNOUNCEMENT", tostring(payload), nil, C.Cyan)
 	end
 end)
 
