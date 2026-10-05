@@ -533,7 +533,7 @@ ICONS = {
 }
 
 
-def add_outline(path, px=12, shadow=8):
+def add_outline(path, px=5, shadow=0):
     """UIStroke-style outline: dilate alpha, fill near-black, plus a hard drop shadow."""
     from PIL import Image, ImageFilter
     im = Image.open(path).convert("RGBA")
@@ -541,8 +541,9 @@ def add_outline(path, px=12, shadow=8):
     stroke = a.filter(ImageFilter.MaxFilter(px * 2 + 1)).filter(ImageFilter.GaussianBlur(1))
     out = Image.new("RGBA", im.size, (0, 0, 0, 0))
     sh = Image.new("RGBA", im.size, (0, 0, 0, 0))
-    sh.putalpha(stroke.point(lambda v: int(v * 0.5)))
-    out.alpha_composite(sh, (0, shadow))
+    if shadow:
+        sh.putalpha(stroke.point(lambda v: int(v * 0.5)))
+        out.alpha_composite(sh, (0, shadow))
     black = Image.new("RGBA", im.size, (10, 6, 20, 255))
     black.putalpha(stroke)
     out.alpha_composite(black)
