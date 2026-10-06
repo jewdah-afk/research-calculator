@@ -1,0 +1,426 @@
+[
+ {
+  "id": "rod_simple",
+  "speedBonus": 1,
+  "monetaPerCatch": 1,
+  "cost": [],
+  "tier": 0
+ },
+ {
+  "id": "rod_normal",
+  "speedBonus": 0.9,
+  "monetaPerCatch": 3,
+  "cost": [
+   {
+    "fishId": "fish_silver",
+    "count": 10
+   },
+   {
+    "fishId": "fish_blue_grey",
+    "count": 10
+   }
+  ],
+  "tier": 1
+ },
+ {
+  "id": "rod_reinforced",
+  "speedBonus": 0.85,
+  "monetaPerCatch": 4,
+  "cost": [
+   {
+    "fishId": "fish_tan",
+    "count": 25
+   },
+   {
+    "fishId": "gudgeon",
+    "count": 25
+   }
+  ],
+  "tier": 1
+ },
+ {
+  "id": "rod_pro",
+  "speedBonus": 0.8,
+  "monetaPerCatch": 5,
+  "cost": [
+   {
+    "fishId": "fish_lavender",
+    "count": 50
+   },
+   {
+    "fishId": "stickleback",
+    "count": 50
+   }
+  ],
+  "tier": 1
+ },
+ {
+  "id": "rod_fiberglass",
+  "speedBonus": 0.75,
+  "monetaPerCatch": 7,
+  "cost": [
+   {
+    "fishId": "perch_tan",
+    "count": 35
+   },
+   {
+    "fishId": "bass_orange",
+    "count": 35
+   }
+  ],
+  "tier": 2
+ },
+ {
+  "id": "rod_carbon",
+  "speedBonus": 0.7,
+  "monetaPerCatch": 8,
+  "cost": [
+   {
+    "fishId": "snapper_red",
+    "count": 45
+   },
+   {
+    "fishId": "sunfish_gold",
+    "count": 45
+   }
+  ],
+  "tier": 2
+ },
+ {
+  "id": "rod_mechanic",
+  "speedBonus": 0.65,
+  "monetaPerCatch": 9,
+  "cost": [
+   {
+    "fishId": "clownfish_orange",
+    "count": 50
+   },
+   {
+    "fishId": "tetra_neon",
+    "count": 50
+   }
+  ],
+  "tier": 2
+ },
+ {
+  "id": "rod_coco",
+  "speedBonus": 0.6,
+  "monetaPerCatch": 11,
+  "cost": [
+   {
+    "fishId": "perch_pink",
+    "count": 40
+   },
+   {
+    "fishId": "bullhead",
+    "count": 40
+   }
+  ],
+  "tier": 3
+ },
+ {
+  "id": "rod_roots",
+  "speedBonus": 0.58,
+  "monetaPerCatch": 12,
+  "cost": [
+   {
+    "fishId": "perch_dark_green",
+    "count": 45
+   },
+   {
+    "fishId": "f_gold_fresh",
+    "count": 45
+   }
+  ],
+  "tier": 3
+ },
+ {
+  "id": "rod_banana",
+  "speedBonus": 0.55,
+  "monetaPerCatch": 13,
+  "cost": [
+   {
+    "fishId": "perch_teal",
+    "count": 50
+   },
+   {
+    "fishId": "whitefish",
+    "count": 50
+   }
+  ],
+  "tier": 3
+ },
+ {
+  "id": "rod_lizard",
+  "speedBonus": 0.52,
+  "monetaPerCatch": 16,
+  "cost": [
+   {
+    "fishId": "perch_lime",
+    "count": 40
+   },
+   {
+    "fishId": "veiltail_brown",
+    "count": 30
+   }
+  ],
+  "tier": 4,
+  "evolutionRequired": 0
+ },
+ {
+  "id": "rod_pirate",
+  "speedBonus": 0.5,
+  "monetaPerCatch": 17,
+  "cost": [
+   {
+    "fishId": "perch_black",
+    "count": 20
+   },
+   {
+    "fishId": "mandarin_fish",
+    "count": 60
+   }
+  ],
+  "tier": 4,
+  "evolutionRequired": 0
+ },
+ {
+  "id": "rod_skeleton",
+  "speedBonus": 0.45,
+  "monetaPerCatch": 18,
+  "cost": [
+   {
+    "fishId": "perch_lavender",
+    "count": 30
+   },
+   {
+    "fishId": "ghost_blob_pink",
+    "count": 50
+   }
+  ],
+  "tier": 4,
+  "evolutionRequired": 0
+ },
+ {
+  "id": "rod_green",
+  "speedBonus": 0.42,
+  "monetaPerCatch": 19,
+  "cost": [
+   {
+    "fishId": "grayling",
+    "count": 35
+   },
+   {
+    "fishId": "boxfish_blue",
+    "count": 35
+   },
+   {
+    "fishId": "perch_gold",
+    "count": 15
+   }
+  ],
+  "tier": 5,
+  "evolutionRequired": 0
+ },
+ {
+  "id": "rod_blue",
+  "speedBonus": 0.41,
+  "monetaPerCatch": 20,
+  "cost": [
+   {
+    "fishId": "discus_pink",
+    "count": 50
+   },
+   {
+    "fishId": "tang_blue",
+    "count": 50
+   },
+   {
+    "fishId": "perch_magenta",
+    "count": 15
+   }
+  ],
+  "tier": 5,
+  "evolutionRequired": 0
+ },
+ {
+  "id": "rod_shark",
+  "speedBonus": 0.4,
+  "monetaPerCatch": 21,
+  "cost": [
+   {
+    "fishId": "swallowtail_purple",
+    "count": 50
+   },
+   {
+    "fishId": "arctic_char",
+    "count": 40
+   },
+   {
+    "fishId": "mandarin_fish",
+    "count": 100
+   }
+  ],
+  "tier": 5,
+  "evolutionRequired": 0
+ },
+ {
+  "id": "rod_infernal",
+  "speedBonus": 0.35,
+  "monetaPerCatch": 23,
+  "cost": [
+   {
+    "fishId": "perch_purple",
+    "count": 50
+   },
+   {
+    "fishId": "veiltail_orange",
+    "count": 50
+   },
+   {
+    "fishId": "ghost_angel_purple",
+    "count": 25
+   },
+   {
+    "fishId": "ghost_axolotl_pink",
+    "count": 10
+   }
+  ],
+  "tier": 6,
+  "evolutionRequired": 0
+ },
+ {
+  "id": "rod_void_v2",
+  "speedBonus": 0.3,
+  "monetaPerCatch": 24,
+  "cost": [
+   {
+    "fishId": "perch_yellow_green",
+    "count": 60
+   },
+   {
+    "fishId": "lionfish_green",
+    "count": 40
+   },
+   {
+    "fishId": "ghost_whale_purple",
+    "count": 15
+   }
+  ],
+  "tier": 6,
+  "evolutionRequired": 0
+ },
+ {
+  "id": "rod_rune",
+  "speedBonus": 0.25,
+  "monetaPerCatch": 25,
+  "cost": [
+   {
+    "fishId": "perch_neon_green",
+    "count": 75
+   },
+   {
+    "fishId": "swallowtail_pink",
+    "count": 75
+   },
+   {
+    "fishId": "ghost_shark_blue",
+    "count": 25
+   },
+   {
+    "fishId": "sub_shark",
+    "count": 5
+   }
+  ],
+  "tier": 7,
+  "evolutionRequired": 0
+ },
+ {
+  "id": "rod_ancient",
+  "speedBonus": 0.2,
+  "monetaPerCatch": 26,
+  "cost": [
+   {
+    "fishId": "swallowtail_teal",
+    "count": 90
+   },
+   {
+    "fishId": "veiltail_purple",
+    "count": 90
+   },
+   {
+    "fishId": "eel_moray",
+    "count": 20
+   }
+  ],
+  "tier": 7,
+  "evolutionRequired": 0
+ },
+ {
+  "id": "rod_abyssal_v2",
+  "speedBonus": 0.18,
+  "monetaPerCatch": 27,
+  "cost": [
+   {
+    "fishId": "swallowtail_green",
+    "count": 100
+   },
+   {
+    "fishId": "ocean_whale_maroon",
+    "count": 40
+   },
+   {
+    "fishId": "sea_angel",
+    "count": 2
+   }
+  ],
+  "tier": 7,
+  "evolutionRequired": 0
+ },
+ {
+  "id": "rod_prism",
+  "speedBonus": 0.15,
+  "monetaPerCatch": 28,
+  "cost": [
+   {
+    "fishId": "ocean_whale_purple",
+    "count": 100
+   },
+   {
+    "fishId": "ghost_shark_blue",
+    "count": 75
+   },
+   {
+    "fishId": "golden_creature",
+    "count": 2
+   },
+   {
+    "fishId": "sub_whale",
+    "count": 5
+   }
+  ],
+  "tier": 8,
+  "evolutionRequired": 0
+ },
+ {
+  "id": "rod_divine",
+  "speedBonus": 0.1,
+  "monetaPerCatch": 30,
+  "cost": [
+   {
+    "fishId": "cosmic_seraph_purple",
+    "count": 100
+   },
+   {
+    "fishId": "dragonfish_black",
+    "count": 2
+   },
+   {
+    "fishId": "cosmic_wraith",
+    "count": 25
+   }
+  ],
+  "tier": 8,
+  "evolutionRequired": 5
+ }
+]

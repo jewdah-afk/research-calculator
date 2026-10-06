@@ -1,0 +1,1671 @@
+{
+ "elven-assassin": {
+  "health": 74,
+  "attack": 15,
+  "defense": 1,
+  "speed": 58,
+  "xpBase": 136,
+  "skillPointReward": 1
+ },
+ "zombie-cultist": {
+  "health": 82,
+  "attack": 14,
+  "defense": 1,
+  "speed": 42,
+  "xpBase": 150,
+  "skillPointReward": 1
+ },
+ "shardsoul-slayer": {
+  "health": 82,
+  "attack": 14,
+  "defense": 1,
+  "speed": 46,
+  "xpBase": 150,
+  "skillPointReward": 1
+ },
+ "masked-forest-spirit": {
+  "health": 50,
+  "attack": 10,
+  "defense": 0,
+  "speed": 40,
+  "xpBase": 100,
+  "skillPointReward": 1,
+  "spriteSheet": "masked_forest_spirit",
+  "columns": 4,
+  "rows": 6,
+  "frameWidth": 64,
+  "frameHeight": 64,
+  "animations": {
+   "idle": {
+    "row": 0,
+    "frames": 4,
+    "speed": 150
+   },
+   "walk": {
+    "row": 1,
+    "frames": 4,
+    "speed": 100
+   },
+   "attack": {
+    "row": 2,
+    "frames": 4,
+    "speed": 80
+   }
+  }
+ },
+ "twig-blight": {
+  "health": 40,
+  "attack": 12,
+  "defense": 0,
+  "speed": 40,
+  "xpBase": 100,
+  "skillPointReward": 1,
+  "spriteSheet": "twig_blight",
+  "columns": 8,
+  "rows": 5,
+  "frameWidth": 48,
+  "frameHeight": 48,
+  "animations": {
+   "idle": {
+    "row": 0,
+    "frames": 4,
+    "speed": 150
+   },
+   "walk": {
+    "row": 1,
+    "frames": 4,
+    "speed": 100
+   },
+   "damage": {
+    "row": 3,
+    "frames": 5,
+    "speed": 100
+   },
+   "death": {
+    "row": 4,
+    "frames": 5,
+    "speed": 100
+   }
+  }
+ },
+ "giant-fly": {
+  "health": 60,
+  "attack": 10,
+  "defense": 0,
+  "speed": 60,
+  "xpBase": 100,
+  "skillPointReward": 1,
+  "spriteSheet": "giant_fly",
+  "columns": 4,
+  "rows": 4,
+  "frameWidth": 48,
+  "frameHeight": 48,
+  "animations": {
+   "idle": {
+    "row": 0,
+    "frames": 4,
+    "speed": 100
+   },
+   "fly": {
+    "row": 1,
+    "frames": 4,
+    "speed": 80
+   }
+  }
+ },
+ "cobra": {
+  "health": 68,
+  "attack": 14,
+  "defense": 1,
+  "speed": 62,
+  "xpBase": 130,
+  "skillPointReward": 1,
+  "spriteSheet": "cobra",
+  "columns": 8,
+  "rows": 5,
+  "frameWidth": 32,
+  "frameHeight": 32,
+  "animations": {
+   "idle": {
+    "row": 0,
+    "frames": 8,
+    "speed": 120
+   },
+   "move": {
+    "row": 1,
+    "frames": 8,
+    "speed": 95
+   },
+   "attack": {
+    "row": 2,
+    "frames": 5,
+    "speed": 95
+   },
+   "damage": {
+    "row": 3,
+    "frames": 4,
+    "speed": 100
+   },
+   "death": {
+    "row": 4,
+    "frames": 6,
+    "speed": 100
+   }
+  }
+ },
+ "ghoul": {
+  "health": 72,
+  "attack": 14,
+  "defense": 1,
+  "speed": 60,
+  "xpBase": 132,
+  "skillPointReward": 1,
+  "spriteSheet": "ghoul",
+  "columns": 8,
+  "rows": 5,
+  "frameWidth": 32,
+  "frameHeight": 32,
+  "animations": {
+   "idle": {
+    "row": 0,
+    "frames": 4,
+    "speed": 120
+   },
+   "move": {
+    "row": 1,
+    "frames": 8,
+    "speed": 95
+   },
+   "attack": {
+    "row": 2,
+    "frames": 5,
+    "speed": 95
+   },
+   "damage": {
+    "row": 3,
+    "frames": 4,
+    "speed": 100
+   },
+   "death": {
+    "row": 4,
+    "frames": 6,
+    "speed": 100
+   }
+  }
+ },
+ "skeleton-warrior": {
+  "health": 74,
+  "attack": 15,
+  "defense": 1,
+  "speed": 58,
+  "xpBase": 136,
+  "skillPointReward": 1,
+  "spriteSheet": "skeleton-warrior",
+  "columns": 10,
+  "rows": 10,
+  "frameWidth": 32,
+  "frameHeight": 32,
+  "animations": {
+   "idle": {
+    "row": 0,
+    "frames": 10,
+    "speed": 110
+   },
+   "move": {
+    "row": 1,
+    "frames": 5,
+    "speed": 95
+   },
+   "attack": {
+    "row": 2,
+    "frames": 10,
+    "speed": 90
+   },
+   "damage": {
+    "row": 3,
+    "frames": 5,
+    "speed": 100
+   },
+   "death": {
+    "row": 4,
+    "frames": 10,
+    "speed": 95
+   }
+  }
+ },
+ "mummy": {
+  "health": 82,
+  "attack": 16,
+  "defense": 2,
+  "speed": 56,
+  "xpBase": 150,
+  "skillPointReward": 1,
+  "spriteSheet": "mummy",
+  "columns": 6,
+  "rows": 9,
+  "frameWidth": 32,
+  "frameHeight": 32,
+  "animations": {
+   "idle": {
+    "row": 0,
+    "frames": 3,
+    "speed": 120
+   },
+   "move": {
+    "row": 1,
+    "frames": 5,
+    "speed": 95
+   },
+   "attack": {
+    "row": 2,
+    "frames": 6,
+    "speed": 95
+   },
+   "damage": {
+    "row": 3,
+    "frames": 4,
+    "speed": 100
+   },
+   "death": {
+    "row": 4,
+    "frames": 5,
+    "speed": 100
+   }
+  }
+ },
+ "anubis-warrior": {
+  "health": 86,
+  "attack": 17,
+  "defense": 2,
+  "speed": 58,
+  "xpBase": 154,
+  "skillPointReward": 1,
+  "spriteSheet": "anubis-warrior",
+  "columns": 8,
+  "rows": 7,
+  "frameWidth": 32,
+  "frameHeight": 32,
+  "animations": {
+   "idle": {
+    "row": 0,
+    "frames": 4,
+    "speed": 120
+   },
+   "move": {
+    "row": 1,
+    "frames": 8,
+    "speed": 95
+   },
+   "attackRange": {
+    "row": 2,
+    "frames": 5,
+    "speed": 95
+   },
+   "attackClose": {
+    "row": 3,
+    "frames": 4,
+    "speed": 100
+   },
+   "damage": {
+    "row": 4,
+    "frames": 4,
+    "speed": 100
+   },
+   "death": {
+    "row": 5,
+    "frames": 5,
+    "speed": 100
+   },
+   "rangeEffect": {
+    "row": 6,
+    "frames": 6,
+    "speed": 90
+   }
+  }
+ },
+ "fishfolk-archpriest": {
+  "health": 96,
+  "attack": 17,
+  "defense": 2,
+  "speed": 56,
+  "xpBase": 172,
+  "skillPointReward": 2,
+  "spriteSheet": "fishfolk-archpriest",
+  "columns": 9,
+  "rows": 6,
+  "frameWidth": 32,
+  "frameHeight": 32,
+  "animations": {
+   "idle": {
+    "row": 0,
+    "frames": 4,
+    "speed": 120
+   },
+   "move": {
+    "row": 1,
+    "frames": 4,
+    "speed": 95
+   },
+   "attack": {
+    "row": 2,
+    "frames": 7,
+    "speed": 90
+   },
+   "heal": {
+    "row": 3,
+    "frames": 9,
+    "speed": 90
+   },
+   "damage": {
+    "row": 4,
+    "frames": 4,
+    "speed": 100
+   },
+   "death": {
+    "row": 5,
+    "frames": 4,
+    "speed": 105
+   }
+  }
+ },
+ "fishfolk-whipe": {
+  "health": 108,
+  "attack": 18,
+  "defense": 2,
+  "speed": 60,
+  "xpBase": 176,
+  "skillPointReward": 2,
+  "spriteSheet": "fishfolk-whipe",
+  "columns": 8,
+  "rows": 5,
+  "frameWidth": 32,
+  "frameHeight": 32,
+  "animations": {
+   "idle": {
+    "row": 0,
+    "frames": 4,
+    "speed": 120
+   },
+   "move": {
+    "row": 1,
+    "frames": 8,
+    "speed": 95
+   },
+   "attack": {
+    "row": 2,
+    "frames": 7,
+    "speed": 92
+   },
+   "damage": {
+    "row": 3,
+    "frames": 4,
+    "speed": 100
+   },
+   "death": {
+    "row": 4,
+    "frames": 4,
+    "speed": 105
+   }
+  }
+ },
+ "fishfolk-inkbender": {
+  "health": 102,
+  "attack": 19,
+  "defense": 2,
+  "speed": 58,
+  "xpBase": 182,
+  "skillPointReward": 2,
+  "spriteSheet": "fishfolk-inkbender",
+  "columns": 16,
+  "rows": 5,
+  "frameWidth": 32,
+  "frameHeight": 32,
+  "animations": {
+   "idle": {
+    "row": 0,
+    "frames": 8,
+    "speed": 118
+   },
+   "move": {
+    "row": 1,
+    "frames": 8,
+    "speed": 94
+   },
+   "damage": {
+    "row": 2,
+    "frames": 6,
+    "speed": 98
+   },
+   "death": {
+    "row": 3,
+    "frames": 8,
+    "speed": 102
+   },
+   "attack": {
+    "row": 4,
+    "frames": 16,
+    "speed": 86
+   }
+  }
+ },
+ "fishfolk-brute": {
+  "health": 132,
+  "attack": 22,
+  "defense": 3,
+  "speed": 52,
+  "xpBase": 210,
+  "skillPointReward": 3,
+  "spriteSheet": "fishfolk-brute",
+  "columns": 8,
+  "rows": 6,
+  "frameWidth": 32,
+  "frameHeight": 32,
+  "animations": {
+   "idle": {
+    "row": 0,
+    "frames": 4,
+    "speed": 118
+   },
+   "taunt": {
+    "row": 1,
+    "frames": 5,
+    "speed": 96
+   },
+   "move": {
+    "row": 2,
+    "frames": 8,
+    "speed": 94
+   },
+   "attack": {
+    "row": 3,
+    "frames": 8,
+    "speed": 90
+   },
+   "damage": {
+    "row": 4,
+    "frames": 4,
+    "speed": 100
+   },
+   "death": {
+    "row": 5,
+    "frames": 6,
+    "speed": 105
+   }
+  }
+ },
+ "fishfolk-horror": {
+  "health": 154,
+  "attack": 25,
+  "defense": 3,
+  "speed": 54,
+  "xpBase": 235,
+  "skillPointReward": 4,
+  "spriteSheet": "fishfolk-horror",
+  "columns": 11,
+  "rows": 5,
+  "frameWidth": 64,
+  "frameHeight": 64,
+  "animations": {
+   "idle": {
+    "row": 0,
+    "frames": 8,
+    "speed": 118
+   },
+   "move": {
+    "row": 1,
+    "frames": 8,
+    "speed": 94
+   },
+   "attack": {
+    "row": 2,
+    "frames": 8,
+    "speed": 90
+   },
+   "damage": {
+    "row": 3,
+    "frames": 5,
+    "speed": 98
+   },
+   "death": {
+    "row": 4,
+    "frames": 11,
+    "speed": 104
+   }
+  }
+ },
+ "fishfolk-pugilist": {
+  "health": 126,
+  "attack": 23,
+  "defense": 3,
+  "speed": 58,
+  "xpBase": 205,
+  "skillPointReward": 3,
+  "spriteSheet": "fishfolk-pugilist",
+  "columns": 8,
+  "rows": 8,
+  "frameWidth": 128,
+  "frameHeight": 96,
+  "animations": {
+   "idle": {
+    "row": 0,
+    "frames": 8,
+    "speed": 118
+   },
+   "move": {
+    "row": 1,
+    "frames": 8,
+    "speed": 94
+   },
+   "attackLeft": {
+    "row": 2,
+    "frames": 6,
+    "speed": 90
+   },
+   "attackRight": {
+    "row": 3,
+    "frames": 6,
+    "speed": 90
+   },
+   "charge": {
+    "row": 4,
+    "frames": 8,
+    "speed": 92
+   },
+   "release": {
+    "row": 5,
+    "frames": 8,
+    "speed": 88
+   },
+   "damage": {
+    "row": 6,
+    "frames": 4,
+    "speed": 98
+   },
+   "death": {
+    "row": 7,
+    "frames": 8,
+    "speed": 104
+   }
+  }
+ },
+ "sea-horror": {
+  "health": 118,
+  "attack": 21,
+  "defense": 2,
+  "speed": 56,
+  "xpBase": 194,
+  "skillPointReward": 3,
+  "spriteSheet": "sea-horror",
+  "columns": 8,
+  "rows": 4,
+  "frameWidth": 32,
+  "frameHeight": 32,
+  "animations": {
+   "idle": {
+    "row": 0,
+    "frames": 8,
+    "speed": 118
+   },
+   "move": {
+    "row": 1,
+    "frames": 8,
+    "speed": 94
+   },
+   "attack": {
+    "row": 2,
+    "frames": 8,
+    "speed": 90
+   },
+   "death": {
+    "row": 3,
+    "frames": 8,
+    "speed": 102
+   }
+  }
+ },
+ "sea-gramlin": {
+  "health": 102,
+  "attack": 19,
+  "defense": 2,
+  "speed": 62,
+  "xpBase": 176,
+  "skillPointReward": 2,
+  "spriteSheet": "sea-gramlin",
+  "columns": 16,
+  "rows": 5,
+  "frameWidth": 32,
+  "frameHeight": 32,
+  "animations": {
+   "idle": {
+    "row": 0,
+    "frames": 16,
+    "speed": 112
+   },
+   "move": {
+    "row": 1,
+    "frames": 8,
+    "speed": 92
+   },
+   "attack": {
+    "row": 2,
+    "frames": 8,
+    "speed": 90
+   },
+   "damage": {
+    "row": 3,
+    "frames": 4,
+    "speed": 96
+   },
+   "death": {
+    "row": 4,
+    "frames": 5,
+    "speed": 102
+   }
+  }
+ },
+ "elemental": {
+  "health": 110,
+  "attack": 21,
+  "defense": 2,
+  "speed": 60,
+  "xpBase": 188,
+  "skillPointReward": 3,
+  "spriteSheet": "elemental",
+  "columns": 8,
+  "rows": 6,
+  "frameWidth": 96,
+  "frameHeight": 32,
+  "animations": {
+   "idle": {
+    "row": 0,
+    "frames": 8,
+    "speed": 114
+   },
+   "move": {
+    "row": 1,
+    "frames": 8,
+    "speed": 92
+   },
+   "attack": {
+    "row": 2,
+    "frames": 8,
+    "speed": 90
+   },
+   "damage": {
+    "row": 3,
+    "frames": 4,
+    "speed": 98
+   },
+   "death": {
+    "row": 4,
+    "frames": 8,
+    "speed": 102
+   },
+   "special": {
+    "row": 5,
+    "frames": 8,
+    "speed": 84
+   }
+  }
+ },
+ "frost-wisp": {
+  "health": 108,
+  "attack": 23,
+  "defense": 2,
+  "speed": 72,
+  "xpBase": 196,
+  "skillPointReward": 3,
+  "spriteSheet": "frost-wisp",
+  "columns": 8,
+  "rows": 5,
+  "frameWidth": 32,
+  "frameHeight": 32,
+  "animations": {
+   "idle": {
+    "row": 0,
+    "frames": 5,
+    "speed": 114
+   },
+   "move": {
+    "row": 0,
+    "frames": 5,
+    "speed": 96
+   },
+   "attack": {
+    "row": 1,
+    "frames": 8,
+    "speed": 90
+   },
+   "damage": {
+    "row": 2,
+    "frames": 4,
+    "speed": 98
+   },
+   "death": {
+    "row": 3,
+    "frames": 7,
+    "speed": 102
+   },
+   "respawn": {
+    "row": 4,
+    "frames": 5,
+    "speed": 96
+   }
+  }
+ },
+ "arctic-whisper": {
+  "health": 116,
+  "attack": 22,
+  "defense": 2,
+  "speed": 66,
+  "xpBase": 200,
+  "skillPointReward": 3,
+  "spriteSheet": "arctic-whisper",
+  "columns": 8,
+  "rows": 5,
+  "frameWidth": 32,
+  "frameHeight": 32,
+  "animations": {
+   "idle": {
+    "row": 0,
+    "frames": 8,
+    "speed": 114
+   },
+   "move": {
+    "row": 1,
+    "frames": 4,
+    "speed": 96
+   },
+   "attack": {
+    "row": 2,
+    "frames": 8,
+    "speed": 92
+   },
+   "damage": {
+    "row": 3,
+    "frames": 4,
+    "speed": 98
+   },
+   "death": {
+    "row": 4,
+    "frames": 4,
+    "speed": 104
+   }
+  }
+ },
+ "frosty-slime": {
+  "health": 168,
+  "attack": 26,
+  "defense": 3,
+  "speed": 48,
+  "xpBase": 246,
+  "skillPointReward": 4,
+  "spriteSheet": "frosty-slime",
+  "columns": 16,
+  "rows": 7,
+  "frameWidth": 64,
+  "frameHeight": 96,
+  "animations": {
+   "idle": {
+    "row": 0,
+    "frames": 8,
+    "speed": 114
+   },
+   "move": {
+    "row": 1,
+    "frames": 8,
+    "speed": 96
+   },
+   "attack": {
+    "row": 3,
+    "frames": 16,
+    "speed": 90
+   },
+   "damage": {
+    "row": 4,
+    "frames": 8,
+    "speed": 98
+   },
+   "death": {
+    "row": 6,
+    "frames": 9,
+    "speed": 104
+   }
+  }
+ },
+ "frozy-cube": {
+  "health": 114,
+  "attack": 22,
+  "defense": 2,
+  "speed": 60,
+  "xpBase": 198,
+  "skillPointReward": 3,
+  "spriteSheet": "frozy-cube",
+  "columns": 8,
+  "rows": 10,
+  "frameWidth": 64,
+  "frameHeight": 32,
+  "animations": {
+   "idle": {
+    "row": 0,
+    "frames": 8,
+    "speed": 114
+   },
+   "move": {
+    "row": 2,
+    "frames": 8,
+    "speed": 96
+   },
+   "attack": {
+    "row": 4,
+    "frames": 8,
+    "speed": 92
+   },
+   "damage": {
+    "row": 7,
+    "frames": 6,
+    "speed": 98
+   },
+   "death": {
+    "row": 9,
+    "frames": 6,
+    "speed": 104
+   }
+  }
+ },
+ "ice-fire-guardian": {
+  "health": 134,
+  "attack": 25,
+  "defense": 3,
+  "speed": 60,
+  "xpBase": 220,
+  "skillPointReward": 4,
+  "spriteSheet": "ice-fire-guardian",
+  "columns": 16,
+  "rows": 7,
+  "frameWidth": 128,
+  "frameHeight": 96,
+  "animations": {
+   "idle": {
+    "row": 0,
+    "frames": 8,
+    "speed": 114
+   },
+   "move": {
+    "row": 1,
+    "frames": 8,
+    "speed": 96
+   },
+   "attack": {
+    "row": 2,
+    "frames": 6,
+    "speed": 92
+   },
+   "damage": {
+    "row": 5,
+    "frames": 4,
+    "speed": 98
+   },
+   "death": {
+    "row": 6,
+    "frames": 8,
+    "speed": 104
+   }
+  }
+ },
+ "frogfolk-wizard": {
+  "health": 132,
+  "attack": 27,
+  "defense": 3,
+  "speed": 62,
+  "xpBase": 232,
+  "skillPointReward": 4,
+  "spriteSheet": "frogfolk-wizard",
+  "columns": 8,
+  "rows": 5,
+  "frameWidth": 64,
+  "frameHeight": 64,
+  "animations": {
+   "idle": {
+    "row": 0,
+    "frames": 8,
+    "speed": 114
+   },
+   "move": {
+    "row": 1,
+    "frames": 8,
+    "speed": 96
+   },
+   "attack": {
+    "row": 2,
+    "frames": 8,
+    "speed": 90
+   },
+   "damage": {
+    "row": 3,
+    "frames": 7,
+    "speed": 98
+   },
+   "death": {
+    "row": 4,
+    "frames": 6,
+    "speed": 104
+   }
+  }
+ },
+ "frogfolk-brute": {
+  "health": 168,
+  "attack": 30,
+  "defense": 4,
+  "speed": 54,
+  "xpBase": 260,
+  "skillPointReward": 4,
+  "spriteSheet": "frogfolk-brute",
+  "columns": 8,
+  "rows": 6,
+  "frameWidth": 160,
+  "frameHeight": 64,
+  "animations": {
+   "idle": {
+    "row": 0,
+    "frames": 8,
+    "speed": 114
+   },
+   "move": {
+    "row": 1,
+    "frames": 6,
+    "speed": 96
+   },
+   "attack": {
+    "row": 3,
+    "frames": 8,
+    "speed": 90
+   },
+   "damage": {
+    "row": 4,
+    "frames": 4,
+    "speed": 98
+   },
+   "death": {
+    "row": 5,
+    "frames": 8,
+    "speed": 104
+   }
+  }
+ },
+ "frogfolk-chieftain": {
+  "health": 190,
+  "attack": 32,
+  "defense": 5,
+  "speed": 58,
+  "xpBase": 310,
+  "skillPointReward": 5,
+  "spriteSheet": "frogfolk-chieftain",
+  "columns": 8,
+  "rows": 7,
+  "frameWidth": 64,
+  "frameHeight": 64,
+  "animations": {
+   "idle": {
+    "row": 0,
+    "frames": 8,
+    "speed": 114
+   },
+   "move": {
+    "row": 1,
+    "frames": 8,
+    "speed": 96
+   },
+   "attack": {
+    "row": 3,
+    "frames": 8,
+    "speed": 90
+   },
+   "damage": {
+    "row": 5,
+    "frames": 4,
+    "speed": 98
+   },
+   "death": {
+    "row": 6,
+    "frames": 8,
+    "speed": 104
+   }
+  }
+ },
+ "ghost": {
+  "health": 158,
+  "attack": 31,
+  "defense": 4,
+  "speed": 66,
+  "xpBase": 286,
+  "skillPointReward": 5,
+  "spriteSheet": "ghost",
+  "columns": 10,
+  "rows": 14,
+  "frameWidth": 32,
+  "frameHeight": 32,
+  "animations": {
+   "idle": {
+    "row": 0,
+    "frames": 7,
+    "speed": 114
+   },
+   "move": {
+    "row": 1,
+    "frames": 7,
+    "speed": 92
+   },
+   "turnBack": {
+    "row": 2,
+    "frames": 9,
+    "speed": 78
+   },
+   "attack": {
+    "row": 3,
+    "frames": 8,
+    "speed": 88
+   },
+   "respawn": {
+    "row": 4,
+    "frames": 10,
+    "speed": 92
+   },
+   "damage": {
+    "row": 5,
+    "frames": 5,
+    "speed": 92
+   },
+   "death": {
+    "row": 6,
+    "frames": 9,
+    "speed": 98
+   }
+  }
+ },
+ "doppelganger": {
+  "health": 190,
+  "attack": 35,
+  "defense": 5,
+  "speed": 68,
+  "xpBase": 342,
+  "skillPointReward": 6,
+  "spriteSheet": "doppelganger",
+  "columns": 8,
+  "rows": 11,
+  "frameWidth": 64,
+  "frameHeight": 32,
+  "animations": {
+   "idle": {
+    "row": 4,
+    "frames": 8,
+    "speed": 112
+   },
+   "move": {
+    "row": 5,
+    "frames": 6,
+    "speed": 92
+   },
+   "attack": {
+    "row": 6,
+    "frames": 8,
+    "speed": 88
+   },
+   "damage": {
+    "row": 7,
+    "frames": 4,
+    "speed": 96
+   },
+   "death": {
+    "row": 8,
+    "frames": 8,
+    "speed": 104
+   },
+   "transform": {
+    "row": 9,
+    "frames": 8,
+    "speed": 88
+   },
+   "transformBack": {
+    "row": 10,
+    "frames": 8,
+    "speed": 88
+   }
+  }
+ },
+ "black-pudding": {
+  "health": 176,
+  "attack": 33,
+  "defense": 5,
+  "speed": 48,
+  "xpBase": 304,
+  "skillPointReward": 5,
+  "spriteSheet": "black-pudding",
+  "columns": 8,
+  "rows": 6,
+  "frameWidth": 64,
+  "frameHeight": 32,
+  "animations": {
+   "idle": {
+    "row": 0,
+    "frames": 8,
+    "speed": 100
+   },
+   "move": {
+    "row": 1,
+    "frames": 8,
+    "speed": 100
+   },
+   "attack": {
+    "row": 2,
+    "frames": 8,
+    "speed": 92
+   },
+   "attack2": {
+    "row": 3,
+    "frames": 8,
+    "speed": 92
+   },
+   "damage": {
+    "row": 4,
+    "frames": 8,
+    "speed": 96
+   },
+   "death": {
+    "row": 5,
+    "frames": 8,
+    "speed": 100
+   }
+  }
+ },
+ "giant-black-pudding": {
+  "health": 238,
+  "attack": 39,
+  "defense": 7,
+  "speed": 38,
+  "xpBase": 430,
+  "skillPointReward": 8,
+  "spriteSheet": "giant-black-pudding",
+  "columns": 16,
+  "rows": 7,
+  "frameWidth": 224,
+  "frameHeight": 128,
+  "animations": {
+   "respawn": {
+    "row": 0,
+    "frames": 16,
+    "speed": 96
+   },
+   "idle": {
+    "row": 1,
+    "frames": 16,
+    "speed": 100
+   },
+   "move": {
+    "row": 2,
+    "frames": 16,
+    "speed": 100
+   },
+   "attack": {
+    "row": 3,
+    "frames": 16,
+    "speed": 90
+   },
+   "attack2": {
+    "row": 4,
+    "frames": 16,
+    "speed": 90
+   },
+   "damage": {
+    "row": 5,
+    "frames": 16,
+    "speed": 96
+   },
+   "death": {
+    "row": 6,
+    "frames": 16,
+    "speed": 100
+   }
+  }
+ },
+ "hell-critter": {
+  "health": 198,
+  "attack": 37,
+  "defense": 5,
+  "speed": 70,
+  "xpBase": 360,
+  "skillPointReward": 6,
+  "spriteSheet": "hell-critter",
+  "columns": 8,
+  "rows": 12,
+  "frameWidth": 32,
+  "frameHeight": 32,
+  "animations": {
+   "idle": {
+    "row": 0,
+    "frames": 5,
+    "speed": 120
+   },
+   "move": {
+    "row": 1,
+    "frames": 8,
+    "speed": 92
+   },
+   "attack": {
+    "row": 2,
+    "frames": 5,
+    "speed": 88
+   },
+   "damage": {
+    "row": 3,
+    "frames": 8,
+    "speed": 94
+   },
+   "death": {
+    "row": 4,
+    "frames": 5,
+    "speed": 100
+   },
+   "playfulJumping": {
+    "row": 5,
+    "frames": 4,
+    "speed": 110
+   }
+  }
+ },
+ "imp": {
+  "health": 172,
+  "attack": 40,
+  "defense": 4,
+  "speed": 62,
+  "xpBase": 350,
+  "skillPointReward": 6,
+  "spriteSheet": "imp",
+  "columns": 8,
+  "rows": 12,
+  "frameWidth": 32,
+  "frameHeight": 32,
+  "animations": {
+   "idle": {
+    "row": 0,
+    "frames": 7,
+    "speed": 120
+   },
+   "move": {
+    "row": 1,
+    "frames": 8,
+    "speed": 92
+   },
+   "attack": {
+    "row": 2,
+    "frames": 6,
+    "speed": 88
+   },
+   "damage": {
+    "row": 3,
+    "frames": 4,
+    "speed": 96
+   },
+   "death": {
+    "row": 4,
+    "frames": 6,
+    "speed": 100
+   },
+   "projectile": {
+    "row": 5,
+    "frames": 7,
+    "speed": 70
+   }
+  }
+ },
+ "cacodaemon": {
+  "health": 224,
+  "attack": 44,
+  "defense": 6,
+  "speed": 58,
+  "xpBase": 390,
+  "skillPointReward": 6,
+  "spriteSheet": "cacodaemon",
+  "columns": 8,
+  "rows": 4,
+  "frameWidth": 64,
+  "frameHeight": 64,
+  "animations": {
+   "idle": {
+    "row": 0,
+    "frames": 6,
+    "speed": 120
+   },
+   "charge": {
+    "row": 1,
+    "frames": 6,
+    "speed": 100
+   },
+   "damage": {
+    "row": 2,
+    "frames": 4,
+    "speed": 96
+   },
+   "death": {
+    "row": 3,
+    "frames": 8,
+    "speed": 100
+   }
+  }
+ },
+ "cultist": {
+  "health": 180,
+  "attack": 0,
+  "defense": 6,
+  "speed": 46,
+  "xpBase": 0,
+  "skillPointReward": 0,
+  "spriteSheet": "cultist",
+  "columns": 9,
+  "rows": 5,
+  "frameWidth": 32,
+  "frameHeight": 32,
+  "animations": {
+   "idle": {
+    "row": 0,
+    "frames": 4,
+    "speed": 130
+   },
+   "move": {
+    "row": 1,
+    "frames": 5,
+    "speed": 100
+   },
+   "ritual": {
+    "row": 2,
+    "frames": 9,
+    "speed": 105
+   },
+   "sacrifice": {
+    "row": 3,
+    "frames": 6,
+    "speed": 165
+   },
+   "damage": {
+    "row": 4,
+    "frames": 4,
+    "speed": 100
+   }
+  }
+ },
+ "cultist-brute": {
+  "health": 260,
+  "attack": 48,
+  "defense": 9,
+  "speed": 58,
+  "xpBase": 420,
+  "skillPointReward": 7,
+  "spriteSheet": "cultist-brute",
+  "columns": 6,
+  "rows": 5,
+  "frameWidth": 32,
+  "frameHeight": 32,
+  "animations": {
+   "idle": {
+    "row": 0,
+    "frames": 4,
+    "speed": 125
+   },
+   "move": {
+    "row": 1,
+    "frames": 5,
+    "speed": 98
+   },
+   "attack": {
+    "row": 2,
+    "frames": 6,
+    "speed": 90
+   },
+   "damage": {
+    "row": 3,
+    "frames": 4,
+    "speed": 100
+   },
+   "death": {
+    "row": 4,
+    "frames": 5,
+    "speed": 105
+   }
+  }
+ },
+ "the-archivist": {
+  "health": 980,
+  "attack": 68,
+  "defense": 15,
+  "speed": 52,
+  "xpBase": 1400,
+  "skillPointReward": 24,
+  "spriteSheet": "cultist-horror",
+  "columns": 16,
+  "rows": 7,
+  "frameWidth": 96,
+  "frameHeight": 96,
+  "animations": {
+   "transform": {
+    "row": 0,
+    "frames": 16,
+    "speed": 140
+   },
+   "idle": {
+    "row": 1,
+    "frames": 16,
+    "speed": 125
+   },
+   "move": {
+    "row": 2,
+    "frames": 4,
+    "speed": 95
+   },
+   "damage": {
+    "row": 3,
+    "frames": 5,
+    "speed": 100
+   },
+   "death": {
+    "row": 4,
+    "frames": 10,
+    "speed": 100
+   },
+   "attack1": {
+    "row": 5,
+    "frames": 12,
+    "speed": 90
+   },
+   "attack2": {
+    "row": 6,
+    "frames": 12,
+    "speed": 90
+   }
+  }
+ },
+ "witch": {
+  "health": 88,
+  "attack": 17,
+  "defense": 2,
+  "speed": 56,
+  "xpBase": 160,
+  "skillPointReward": 2,
+  "spriteSheet": "witch",
+  "columns": 10,
+  "rows": 6,
+  "frameWidth": 32,
+  "frameHeight": 32,
+  "animations": {
+   "idle": {
+    "row": 0,
+    "frames": 4,
+    "speed": 120
+   },
+   "move": {
+    "row": 1,
+    "frames": 8,
+    "speed": 95
+   },
+   "attack": {
+    "row": 2,
+    "frames": 8,
+    "speed": 95
+   },
+   "damage": {
+    "row": 3,
+    "frames": 4,
+    "speed": 100
+   },
+   "death": {
+    "row": 4,
+    "frames": 10,
+    "speed": 95
+   }
+  }
+ },
+ "anubis": {
+  "health": 104,
+  "attack": 20,
+  "defense": 3,
+  "speed": 54,
+  "xpBase": 185,
+  "skillPointReward": 3,
+  "spriteSheet": "anubis",
+  "columns": 12,
+  "rows": 14,
+  "frameWidth": 64,
+  "frameHeight": 96,
+  "animations": {
+   "idle": {
+    "row": 0,
+    "frames": 12,
+    "speed": 100
+   },
+   "attack": {
+    "row": 3,
+    "frames": 12,
+    "speed": 90
+   },
+   "damage": {
+    "row": 5,
+    "frames": 12,
+    "speed": 95
+   },
+   "death": {
+    "row": 7,
+    "frames": 12,
+    "speed": 100
+   }
+  }
+ },
+ "flower-monster": {
+  "health": 75,
+  "attack": 12,
+  "defense": 1,
+  "speed": 54,
+  "xpBase": 130,
+  "skillPointReward": 1,
+  "spriteSheet": "flower_monster",
+  "columns": 8,
+  "rows": 5,
+  "frameWidth": 32,
+  "frameHeight": 32,
+  "animations": {
+   "idle": {
+    "row": 0,
+    "frames": 4,
+    "speed": 130
+   },
+   "run": {
+    "row": 1,
+    "frames": 8,
+    "speed": 90
+   },
+   "hide": {
+    "row": 3,
+    "frames": 3,
+    "speed": 160
+   },
+   "emerge": {
+    "row": 3,
+    "frames": 5,
+    "speed": 90
+   },
+   "death": {
+    "row": 4,
+    "frames": 1,
+    "speed": 180
+   }
+  }
+ },
+ "harpy": {
+  "health": 70,
+  "attack": 13,
+  "defense": 1,
+  "speed": 68,
+  "xpBase": 140,
+  "skillPointReward": 1,
+  "spriteSheet": "harpy",
+  "columns": 7,
+  "rows": 5,
+  "frameWidth": 64,
+  "frameHeight": 64,
+  "animations": {
+   "idle": {
+    "row": 0,
+    "frames": 5,
+    "speed": 120
+   },
+   "attack": {
+    "row": 2,
+    "frames": 5,
+    "speed": 90
+   },
+   "damage": {
+    "row": 3,
+    "frames": 5,
+    "speed": 95
+   },
+   "death": {
+    "row": 4,
+    "frames": 8,
+    "speed": 95
+   }
+  }
+ },
+ "ice-harpy": {
+  "health": 86,
+  "attack": 17,
+  "defense": 1,
+  "speed": 70,
+  "xpBase": 158,
+  "skillPointReward": 2,
+  "spriteSheet": "ice-harpy",
+  "columns": 7,
+  "rows": 5,
+  "frameWidth": 64,
+  "frameHeight": 64,
+  "animations": {
+   "idle": {
+    "row": 0,
+    "frames": 5,
+    "speed": 120
+   },
+   "attack": {
+    "row": 2,
+    "frames": 5,
+    "speed": 90
+   },
+   "damage": {
+    "row": 3,
+    "frames": 5,
+    "speed": 95
+   },
+   "death": {
+    "row": 4,
+    "frames": 8,
+    "speed": 95
+   }
+  }
+ }
+}

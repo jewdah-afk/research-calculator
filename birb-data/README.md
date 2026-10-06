@@ -4,13 +4,31 @@ Formulas and balance data for the Roblox remake of Birb. Everything here was tak
 
 | File | What it is |
 |---|---|
-| `CORE_FORMULAS.md` | The core loop with exact formulas: cost curves, popcorn spawning and type odds, popcorn value, golden popcorn, and rebirb feathers |
-| `UPGRADES.md` | Readable table of all 160 upgrades, with currency, base cost, growth, max level and effect |
-| `upgrades.json` | The same upgrade data in machine-readable form. Load it in Roblox as the source of truth |
-| `BirbFormulas.luau` | Luau port of the core formulas, ready to drop into a ModuleScript |
+| `CORE_FORMULAS.md` | The core loop: upgrade costs, popcorn spawning and odds, popcorn value, golden popcorn, and rebirb feathers |
+| `SYSTEMS.md` | Every other system: mining and the crow, the nest (twigs, cultivation, carpentry), fishing, Sparrow, Seagull, Dave, Red Panda, evolution, Parrot combat and enemies, equipment, sacrifice, the Quest Merchant, and the Echo field |
+| `UPGRADES.md` / `upgrades.json` | All 160 shop and tree upgrades, with currency, base cost, growth, max level and effect |
+| `data/*.json` | Raw game tables: fish (426), rods, baits, artifacts (47), enemy base stats (43), enemy type modifiers, sacrifice milestones, and quests (33) |
+| `BirbFormulas.luau` | Luau port of the core loop |
+| `BirbSystems.luau` | Luau port of the system formulas: mining, nest, companions, fishing, enemies, equipment, evolution and echo |
 
-**How it was checked:** `BirbFormulas.cost` was compared against the game's own cost function for every upgrade at levels 0–30. All 4,960 values match exactly.
+## How it was checked
 
-**Not covered yet:** mining curves, the nest, fishing and companion XP, combat and evolution bosses, expeditions, and the Echo field. `CORE_FORMULAS.md` §7 lists them.
+Each Luau module was run against the game's own functions, copied word for word out of the bundles:
 
-**Note for Roblox:** the original game uses big-number math. Roblox numbers top out around 1.8e308, so late-game values may need a big-number library.
+- **`BirbFormulas.cost`:** 4,960 values (every upgrade at levels 0–30). All match exactly.
+- **`BirbSystems`:** 3,347 values. All match.
+  - Mine costs (levels 1–200), ore and giant HP, rewards and XP (areas 0–20), and mine node costs.
+  - Nest twig, peck, tree-box and carpentry costs.
+  - Parrot and Seagull XP curves.
+  - Every enemy type on floors 1–12, normal and boss.
+
+## Not covered
+
+- **Rendering, animation and multiplayer code.** These aren't game balance.
+- **Per-enemy attack patterns.** Those are AI behavior, not stats.
+- **The aquarium.** Its modifier table is used through `getModifierMultiplier`, but the table itself isn't exported.
+- **Artifact infusion caps.** These come from the wiki and weren't checked against the code.
+
+## Note for Roblox
+
+The original game uses big-number math. Roblox numbers top out around 1.8e308, so late-game values may need a big-number library.

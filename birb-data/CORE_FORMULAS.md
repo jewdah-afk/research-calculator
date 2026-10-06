@@ -165,15 +165,9 @@ i    = log10(x + 1) / 16
 | Evolution cap | 5 evolutions, or 6 after rescuing the Castle monster |
 | Seed Fertilizer | `1 + 0.8·log10(1 + feathers/20000)` |
 
-## 7. Not decoded yet
+## 7. Other systems
 
-These systems exist in the same bundles, but I haven't pulled them apart yet:
-- Mine (ore value and mining power anchor curves, crow, giants)
-- Nest (twigs and pecks)
-- Fishing, Seagull, Parrot, Red Panda and Dave XP curves
-- Combat and evolution bosses
-- Expeditions, the Quest Merchant and the Sacrifice Room
-- Echo field (the archivist tree generator)
+Mining, the nest, fishing, the companions, evolution, Parrot combat, expeditions, sacrifice, the Quest Merchant and the Echo field are all in `SYSTEMS.md`.
 
 ---
 

@@ -1,0 +1,5717 @@
+[
+ {
+  "id": "fish_silver",
+  "rarity": "common",
+  "color": "#C0C0C0",
+  "weight": 50,
+  "sellValue": 10,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.05
+  },
+  "minTier": 0,
+  "type": "coastal"
+ },
+ {
+  "id": "fish_grey_blue",
+  "rarity": "common",
+  "color": "#708090",
+  "weight": 48,
+  "sellValue": 12,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.05
+  },
+  "minTier": 0,
+  "type": "coastal"
+ },
+ {
+  "id": "fish_lavender",
+  "rarity": "common",
+  "color": "#E6E6FA",
+  "weight": 45,
+  "sellValue": 15,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.05
+  },
+  "minTier": 0,
+  "type": "coastal"
+ },
+ {
+  "id": "fish_purple_grey",
+  "rarity": "common",
+  "color": "#9370DB",
+  "weight": 42,
+  "sellValue": 18,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.05
+  },
+  "minTier": 0,
+  "type": "coastal"
+ },
+ {
+  "id": "fish_pale_pink",
+  "rarity": "common",
+  "color": "#FFB6C1",
+  "weight": 40,
+  "sellValue": 20,
+  "effect": {
+   "type": "pickup_mult",
+   "value": 1.05
+  },
+  "minTier": 0,
+  "type": "coastal"
+ },
+ {
+  "id": "fish_tan",
+  "rarity": "common",
+  "color": "#D2B48C",
+  "weight": 38,
+  "sellValue": 22,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.06
+  },
+  "minTier": 0,
+  "type": "coastal"
+ },
+ {
+  "id": "fish_flesh_tan",
+  "rarity": "common",
+  "color": "#FFE4B5",
+  "weight": 35,
+  "sellValue": 25,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.06
+  },
+  "minTier": 1,
+  "type": "coastal"
+ },
+ {
+  "id": "fish_red_brown",
+  "rarity": "common",
+  "color": "#A52A2A",
+  "weight": 32,
+  "sellValue": 28,
+  "effect": {
+   "type": "feather_mult",
+   "value": 1.05
+  },
+  "minTier": 1,
+  "type": "coastal"
+ },
+ {
+  "id": "fish_pale_green",
+  "rarity": "common",
+  "color": "#98FB98",
+  "weight": 30,
+  "sellValue": 30,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.06
+  },
+  "minTier": 1,
+  "type": "coastal"
+ },
+ {
+  "id": "fish_olive",
+  "rarity": "common",
+  "color": "#808000",
+  "weight": 28,
+  "sellValue": 35,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.08
+  },
+  "minTier": 1,
+  "type": "coastal"
+ },
+ {
+  "id": "catfish_brown",
+  "rarity": "uncommon",
+  "color": "#8B4513",
+  "weight": 15,
+  "sellValue": 80,
+  "effect": {
+   "type": "pickup_mult",
+   "value": 1.15
+  },
+  "minTier": 2,
+  "type": "coastal"
+ },
+ {
+  "id": "fish_pale_yellow",
+  "rarity": "common",
+  "color": "#FFFACD",
+  "weight": 40,
+  "sellValue": 12,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.05
+  },
+  "minTier": 0,
+  "type": "coastal"
+ },
+ {
+  "id": "fish_peach",
+  "rarity": "common",
+  "color": "#FFDAB9",
+  "weight": 38,
+  "sellValue": 14,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.05
+  },
+  "minTier": 0,
+  "type": "coastal"
+ },
+ {
+  "id": "fish_lime",
+  "rarity": "common",
+  "color": "#32CD32",
+  "weight": 35,
+  "sellValue": 16,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.05
+  },
+  "minTier": 1,
+  "type": "coastal"
+ },
+ {
+  "id": "fish_yellow_tan",
+  "rarity": "common",
+  "color": "#F0E68C",
+  "weight": 32,
+  "sellValue": 18,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.05
+  },
+  "minTier": 1,
+  "type": "coastal"
+ },
+ {
+  "id": "fish_bright_green",
+  "rarity": "common",
+  "color": "#00FF00",
+  "weight": 30,
+  "sellValue": 20,
+  "effect": {
+   "type": "pickup_mult",
+   "value": 1.05
+  },
+  "minTier": 1,
+  "type": "coastal"
+ },
+ {
+  "id": "fish_gold",
+  "rarity": "uncommon",
+  "color": "#FFD700",
+  "weight": 12,
+  "sellValue": 100,
+  "effect": {
+   "type": "feather_mult",
+   "value": 1.1
+  },
+  "minTier": 2,
+  "type": "coastal"
+ },
+ {
+  "id": "fish_bronze",
+  "rarity": "uncommon",
+  "color": "#CD7F32",
+  "weight": 10,
+  "sellValue": 120,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.12
+  },
+  "minTier": 2,
+  "type": "coastal"
+ },
+ {
+  "id": "fish_brown_tan",
+  "rarity": "common",
+  "color": "#A52A2A",
+  "weight": 28,
+  "sellValue": 25,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.06
+  },
+  "minTier": 1,
+  "type": "coastal"
+ },
+ {
+  "id": "fish_green_olive",
+  "rarity": "common",
+  "color": "#556B2F",
+  "weight": 26,
+  "sellValue": 28,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.06
+  },
+  "minTier": 1,
+  "type": "coastal"
+ },
+ {
+  "id": "fish_green_purple",
+  "rarity": "uncommon",
+  "color": "#6B8E23",
+  "weight": 8,
+  "sellValue": 150,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.15
+  },
+  "minTier": 2,
+  "type": "coastal"
+ },
+ {
+  "id": "fish_tan_red_fins",
+  "rarity": "common",
+  "color": "#D2B48C",
+  "weight": 24,
+  "sellValue": 32,
+  "effect": {
+   "type": "feather_mult",
+   "value": 1.06
+  },
+  "minTier": 1,
+  "type": "coastal"
+ },
+ {
+  "id": "fish_blue_grey",
+  "rarity": "common",
+  "color": "#778899",
+  "weight": 40,
+  "sellValue": 15,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.05
+  },
+  "minTier": 0,
+  "type": "coastal"
+ },
+ {
+  "id": "fish_moss_green",
+  "rarity": "common",
+  "color": "#8A9A5B",
+  "weight": 35,
+  "sellValue": 20,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.05
+  },
+  "minTier": 0,
+  "type": "coastal"
+ },
+ {
+  "id": "fish_khaki",
+  "rarity": "uncommon",
+  "color": "#BDB76B",
+  "weight": 15,
+  "sellValue": 60,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.1
+  },
+  "minTier": 1,
+  "type": "coastal"
+ },
+ {
+  "id": "perch_tan",
+  "rarity": "common",
+  "color": "#D2B48C",
+  "weight": 30,
+  "sellValue": 25,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.08
+  },
+  "minTier": 1,
+  "type": "reef"
+ },
+ {
+  "id": "perch_pink",
+  "rarity": "uncommon",
+  "color": "#FFC0CB",
+  "weight": 15,
+  "sellValue": 100,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.15
+  },
+  "minTier": 2,
+  "type": "reef"
+ },
+ {
+  "id": "perch_teal",
+  "rarity": "uncommon",
+  "color": "#008080",
+  "weight": 12,
+  "sellValue": 120,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.15
+  },
+  "minTier": 2,
+  "type": "reef"
+ },
+ {
+  "id": "perch_black",
+  "rarity": "uncommon",
+  "color": "#000000",
+  "weight": 10,
+  "sellValue": 180,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.2
+  },
+  "minTier": 3,
+  "type": "reef"
+ },
+ {
+  "id": "swallowtail_purple",
+  "rarity": "rare",
+  "color": "#800080",
+  "weight": 6,
+  "sellValue": 350,
+  "effect": {
+   "type": "feather_mult",
+   "value": 1.2
+  },
+  "minTier": 4,
+  "type": "reef"
+ },
+ {
+  "id": "perch_dark_green",
+  "rarity": "uncommon",
+  "color": "#006400",
+  "weight": 15,
+  "sellValue": 110,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.15
+  },
+  "minTier": 2,
+  "type": "reef"
+ },
+ {
+  "id": "perch_gold",
+  "rarity": "rare",
+  "color": "#FFD700",
+  "weight": 4,
+  "sellValue": 600,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.35
+  },
+  "minTier": 5,
+  "type": "reef"
+ },
+ {
+  "id": "perch_green_spotted",
+  "rarity": "rare",
+  "color": "#2E8B57",
+  "weight": 3,
+  "sellValue": 700,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.35
+  },
+  "minTier": 5,
+  "type": "reef"
+ },
+ {
+  "id": "perch_lavender",
+  "rarity": "uncommon",
+  "color": "#E6E6FA",
+  "weight": 12,
+  "sellValue": 130,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.2
+  },
+  "minTier": 3,
+  "type": "reef"
+ },
+ {
+  "id": "perch_lime",
+  "rarity": "uncommon",
+  "color": "#32CD32",
+  "weight": 11,
+  "sellValue": 140,
+  "effect": {
+   "type": "pickup_mult",
+   "value": 1.2
+  },
+  "minTier": 3,
+  "type": "reef"
+ },
+ {
+  "id": "perch_magenta",
+  "rarity": "rare",
+  "color": "#FF00FF",
+  "weight": 5,
+  "sellValue": 550,
+  "effect": {
+   "type": "feather_mult",
+   "value": 1.3
+  },
+  "minTier": 5,
+  "type": "reef"
+ },
+ {
+  "id": "perch_moss_green",
+  "rarity": "uncommon",
+  "color": "#8A9A5B",
+  "weight": 15,
+  "sellValue": 120,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.18
+  },
+  "minTier": 2,
+  "type": "reef"
+ },
+ {
+  "id": "perch_neon_green",
+  "rarity": "epic",
+  "color": "#39FF14",
+  "weight": 1,
+  "sellValue": 1500,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.4
+  },
+  "minTier": 6,
+  "type": "reef"
+ },
+ {
+  "id": "perch_pale_pink",
+  "rarity": "uncommon",
+  "color": "#FFB6C1",
+  "weight": 12,
+  "sellValue": 150,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.22
+  },
+  "minTier": 3,
+  "type": "reef"
+ },
+ {
+  "id": "perch_purple",
+  "rarity": "rare",
+  "color": "#800080",
+  "weight": 4,
+  "sellValue": 650,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.35
+  },
+  "minTier": 5,
+  "type": "reef"
+ },
+ {
+  "id": "perch_white",
+  "rarity": "uncommon",
+  "color": "#FFFFFF",
+  "weight": 14,
+  "sellValue": 135,
+  "effect": {
+   "type": "pickup_mult",
+   "value": 1.25
+  },
+  "minTier": 3,
+  "type": "reef"
+ },
+ {
+  "id": "perch_yellow_green",
+  "rarity": "rare",
+  "color": "#7FFF00",
+  "weight": 5,
+  "sellValue": 500,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.32
+  },
+  "minTier": 5,
+  "type": "reef"
+ },
+ {
+  "id": "swallowtail_green",
+  "rarity": "rare",
+  "color": "#00FF7F",
+  "weight": 3,
+  "sellValue": 800,
+  "effect": {
+   "type": "feather_mult",
+   "value": 1.45
+  },
+  "minTier": 6,
+  "type": "reef"
+ },
+ {
+  "id": "swallowtail_pink",
+  "rarity": "rare",
+  "color": "#FF69B4",
+  "weight": 4,
+  "sellValue": 750,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.38
+  },
+  "minTier": 6,
+  "type": "reef"
+ },
+ {
+  "id": "swallowtail_teal",
+  "rarity": "rare",
+  "color": "#008080",
+  "weight": 3,
+  "sellValue": 850,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.42
+  },
+  "minTier": 6,
+  "type": "reef"
+ },
+ {
+  "id": "veiltail_brown",
+  "rarity": "uncommon",
+  "color": "#8B4513",
+  "weight": 12,
+  "sellValue": 180,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.25
+  },
+  "minTier": 3,
+  "type": "reef"
+ },
+ {
+  "id": "veiltail_orange",
+  "rarity": "rare",
+  "color": "#FFA500",
+  "weight": 5,
+  "sellValue": 620,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.38
+  },
+  "minTier": 5,
+  "type": "reef"
+ },
+ {
+  "id": "veiltail_pale_pink",
+  "rarity": "uncommon",
+  "color": "#FFD1DC",
+  "weight": 14,
+  "sellValue": 160,
+  "effect": {
+   "type": "pickup_mult",
+   "value": 1.28
+  },
+  "minTier": 3,
+  "type": "reef"
+ },
+ {
+  "id": "veiltail_purple",
+  "rarity": "rare",
+  "color": "#8A2BE2",
+  "weight": 3,
+  "sellValue": 750,
+  "effect": {
+   "type": "feather_mult",
+   "value": 1.48
+  },
+  "minTier": 6,
+  "type": "reef"
+ },
+ {
+  "id": "veiltail_cyan",
+  "rarity": "rare",
+  "color": "#00FFFF",
+  "weight": 4.5,
+  "sellValue": 680,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.35
+  },
+  "minTier": 5,
+  "type": "reef"
+ },
+ {
+  "id": "snapper_red",
+  "rarity": "uncommon",
+  "color": "#FF0000",
+  "weight": 15,
+  "sellValue": 150,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.18
+  },
+  "minTier": 1,
+  "type": "river"
+ },
+ {
+  "id": "bass_orange",
+  "rarity": "uncommon",
+  "color": "#FFA500",
+  "weight": 18,
+  "sellValue": 130,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.15
+  },
+  "minTier": 1,
+  "type": "river"
+ },
+ {
+  "id": "sunfish_gold",
+  "rarity": "uncommon",
+  "color": "#FFD700",
+  "weight": 20,
+  "sellValue": 110,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.15
+  },
+  "minTier": 1,
+  "type": "river"
+ },
+ {
+  "id": "tetra_blue",
+  "rarity": "common",
+  "color": "#0000FF",
+  "weight": 35,
+  "sellValue": 40,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.07
+  },
+  "minTier": 0,
+  "type": "river"
+ },
+ {
+  "id": "bass_crimson",
+  "rarity": "uncommon",
+  "color": "#DC143C",
+  "weight": 14,
+  "sellValue": 160,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.18
+  },
+  "minTier": 2,
+  "type": "river"
+ },
+ {
+  "id": "bass_white",
+  "rarity": "uncommon",
+  "color": "#F5F5F5",
+  "weight": 16,
+  "sellValue": 140,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.15
+  },
+  "minTier": 1,
+  "type": "river"
+ },
+ {
+  "id": "bass_yellow",
+  "rarity": "uncommon",
+  "color": "#FFD700",
+  "weight": 15,
+  "sellValue": 150,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.15
+  },
+  "minTier": 2,
+  "type": "river"
+ },
+ {
+  "id": "catfish_albino",
+  "rarity": "rare",
+  "color": "#FAFAD2",
+  "weight": 6,
+  "sellValue": 650,
+  "effect": {
+   "type": "feather_mult",
+   "value": 1.35
+  },
+  "minTier": 4,
+  "type": "river"
+ },
+ {
+  "id": "catfish_gold_river",
+  "rarity": "rare",
+  "color": "#FFD700",
+  "weight": 5,
+  "sellValue": 750,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.4
+  },
+  "minTier": 4,
+  "type": "river"
+ },
+ {
+  "id": "catfish_tan_river",
+  "rarity": "uncommon",
+  "color": "#D2B48C",
+  "weight": 18,
+  "sellValue": 120,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.12
+  },
+  "minTier": 1,
+  "type": "river"
+ },
+ {
+  "id": "discus_red",
+  "rarity": "rare",
+  "color": "#FF4500",
+  "weight": 4.5,
+  "sellValue": 800,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.45
+  },
+  "minTier": 5,
+  "type": "river"
+ },
+ {
+  "id": "goldfish_black_moor",
+  "rarity": "uncommon",
+  "color": "#000000",
+  "weight": 12,
+  "sellValue": 180,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.2
+  },
+  "minTier": 3,
+  "type": "river"
+ },
+ {
+  "id": "goldfish_calico",
+  "rarity": "uncommon",
+  "color": "#D2691E",
+  "weight": 14,
+  "sellValue": 160,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.18
+  },
+  "minTier": 2,
+  "type": "river"
+ },
+ {
+  "id": "guppy_purple",
+  "rarity": "uncommon",
+  "color": "#8A2BE2",
+  "weight": 18,
+  "sellValue": 110,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.15
+  },
+  "minTier": 1,
+  "type": "river"
+ },
+ {
+  "id": "minnow_brown",
+  "rarity": "common",
+  "color": "#8B4513",
+  "weight": 45,
+  "sellValue": 20,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.05
+  },
+  "minTier": 0,
+  "type": "river"
+ },
+ {
+  "id": "rasbora_purple",
+  "rarity": "uncommon",
+  "color": "#9370DB",
+  "weight": 16,
+  "sellValue": 130,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.15
+  },
+  "minTier": 2,
+  "type": "river"
+ },
+ {
+  "id": "rockfish_spiky_red",
+  "rarity": "rare",
+  "color": "#FF0000",
+  "weight": 5,
+  "sellValue": 700,
+  "effect": {
+   "type": "feather_mult",
+   "value": 1.4
+  },
+  "minTier": 4,
+  "type": "river"
+ },
+ {
+  "id": "snapper_orange_river",
+  "rarity": "uncommon",
+  "color": "#FFA500",
+  "weight": 14,
+  "sellValue": 170,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.2
+  },
+  "minTier": 3,
+  "type": "river"
+ },
+ {
+  "id": "snapper_pink_river",
+  "rarity": "uncommon",
+  "color": "#FFC0CB",
+  "weight": 15,
+  "sellValue": 160,
+  "effect": {
+   "type": "pickup_mult",
+   "value": 1.2
+  },
+  "minTier": 2,
+  "type": "river"
+ },
+ {
+  "id": "sunfish_green_river",
+  "rarity": "uncommon",
+  "color": "#32CD32",
+  "weight": 18,
+  "sellValue": 120,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.15
+  },
+  "minTier": 1,
+  "type": "river"
+ },
+ {
+  "id": "sunfish_tan_river",
+  "rarity": "uncommon",
+  "color": "#D2B48C",
+  "weight": 20,
+  "sellValue": 110,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.15
+  },
+  "minTier": 2,
+  "type": "river"
+ },
+ {
+  "id": "sunfish_white_river",
+  "rarity": "uncommon",
+  "color": "#F8F8FF",
+  "weight": 19,
+  "sellValue": 115,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.15
+  },
+  "minTier": 1,
+  "type": "river"
+ },
+ {
+  "id": "tetra_dark",
+  "rarity": "uncommon",
+  "color": "#2F4F4F",
+  "weight": 15,
+  "sellValue": 140,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.15
+  },
+  "minTier": 2,
+  "type": "river"
+ },
+ {
+  "id": "tetra_silver_river",
+  "rarity": "common",
+  "color": "#C0C0C0",
+  "weight": 40,
+  "sellValue": 30,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.06
+  },
+  "minTier": 0,
+  "type": "river"
+ },
+ {
+  "id": "trout_spotted",
+  "rarity": "uncommon",
+  "color": "#556B2F",
+  "weight": 12,
+  "sellValue": 200,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.25
+  },
+  "minTier": 3,
+  "type": "river"
+ },
+ {
+  "id": "bullhead",
+  "rarity": "uncommon",
+  "color": "#4B3621",
+  "weight": 20,
+  "sellValue": 140,
+  "effect": {
+   "type": "pickup_mult",
+   "value": 1.15
+  },
+  "minTier": 2,
+  "type": "freshwater"
+ },
+ {
+  "id": "arctic_char",
+  "rarity": "rare",
+  "color": "#CD5C5C",
+  "weight": 6,
+  "sellValue": 550,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.3
+  },
+  "minTier": 4,
+  "type": "freshwater"
+ },
+ {
+  "id": "grayling",
+  "rarity": "rare",
+  "color": "#778899",
+  "weight": 5,
+  "sellValue": 600,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.35
+  },
+  "minTier": 4,
+  "type": "freshwater"
+ },
+ {
+  "id": "gudgeon",
+  "rarity": "common",
+  "color": "#8B8589",
+  "weight": 45,
+  "sellValue": 30,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.06
+  },
+  "minTier": 0,
+  "type": "freshwater"
+ },
+ {
+  "id": "huchen",
+  "rarity": "legendary",
+  "color": "#8B0000",
+  "weight": 0.05,
+  "sellValue": 15000,
+  "effect": {
+   "type": "feather_mult",
+   "value": 1.75
+  },
+  "minTier": 7,
+  "type": "freshwater"
+ },
+ {
+  "id": "loach",
+  "rarity": "common",
+  "color": "#556B2F",
+  "weight": 40,
+  "sellValue": 35,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.07
+  },
+  "minTier": 0,
+  "type": "freshwater"
+ },
+ {
+  "id": "minnow_eur",
+  "rarity": "common",
+  "color": "#2E8B57",
+  "weight": 50,
+  "sellValue": 20,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.05
+  },
+  "minTier": 0,
+  "type": "freshwater"
+ },
+ {
+  "id": "stickleback",
+  "rarity": "common",
+  "color": "#4682B4",
+  "weight": 48,
+  "sellValue": 25,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.05
+  },
+  "minTier": 0,
+  "type": "freshwater"
+ },
+ {
+  "id": "whitefish",
+  "rarity": "uncommon",
+  "color": "#F5F5F5",
+  "weight": 15,
+  "sellValue": 130,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.15
+  },
+  "minTier": 2,
+  "type": "freshwater"
+ },
+ {
+  "id": "f_blue_small",
+  "rarity": "common",
+  "color": "#B0C4DE",
+  "weight": 55,
+  "sellValue": 15,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.04
+  },
+  "minTier": 0,
+  "type": "freshwater"
+ },
+ {
+  "id": "f_gold_fresh",
+  "rarity": "uncommon",
+  "color": "#FFD700",
+  "weight": 18,
+  "sellValue": 120,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.15
+  },
+  "minTier": 2,
+  "type": "freshwater"
+ },
+ {
+  "id": "f_lavender_fresh",
+  "rarity": "rare",
+  "color": "#9370DB",
+  "weight": 6,
+  "sellValue": 650,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.35
+  },
+  "minTier": 4,
+  "type": "freshwater"
+ },
+ {
+  "id": "swallowtail_silver",
+  "rarity": "rare",
+  "color": "#C0C0C0",
+  "weight": 5,
+  "sellValue": 700,
+  "effect": {
+   "type": "feather_mult",
+   "value": 1.4
+  },
+  "minTier": 4,
+  "type": "freshwater"
+ },
+ {
+  "id": "fish_olive_tan",
+  "rarity": "uncommon",
+  "color": "#808000",
+  "weight": 15,
+  "sellValue": 90,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.12
+  },
+  "minTier": 2,
+  "type": "freshwater"
+ },
+ {
+  "id": "fish_orange_round",
+  "rarity": "uncommon",
+  "color": "#FFA500",
+  "weight": 12,
+  "sellValue": 120,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.15
+  },
+  "minTier": 2,
+  "type": "freshwater"
+ },
+ {
+  "id": "fish_silver_blue",
+  "rarity": "uncommon",
+  "color": "#B0C4DE",
+  "weight": 14,
+  "sellValue": 110,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.15
+  },
+  "minTier": 2,
+  "type": "freshwater"
+ },
+ {
+  "id": "fish_tan_gold",
+  "rarity": "uncommon",
+  "color": "#DAA520",
+  "weight": 10,
+  "sellValue": 150,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.18
+  },
+  "minTier": 3,
+  "type": "freshwater"
+ },
+ {
+  "id": "clownfish_orange",
+  "rarity": "uncommon",
+  "color": "#FF4500",
+  "weight": 15,
+  "sellValue": 240,
+  "effect": {
+   "type": "pickup_mult",
+   "value": 1.2
+  },
+  "minTier": 1,
+  "type": "exotic_reef"
+ },
+ {
+  "id": "tetra_neon",
+  "rarity": "uncommon",
+  "color": "#00FFFF",
+  "weight": 18,
+  "sellValue": 200,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.2
+  },
+  "minTier": 1,
+  "type": "exotic_reef"
+ },
+ {
+  "id": "mandarin_fish",
+  "rarity": "rare",
+  "color": "#FF8C00",
+  "weight": 6,
+  "sellValue": 700,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.4
+  },
+  "minTier": 3,
+  "type": "exotic_reef"
+ },
+ {
+  "id": "betta_red",
+  "rarity": "uncommon",
+  "color": "#FF0000",
+  "weight": 12,
+  "sellValue": 220,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.25
+  },
+  "minTier": 1,
+  "type": "exotic_reef"
+ },
+ {
+  "id": "boxfish_blue",
+  "rarity": "rare",
+  "color": "#0000CD",
+  "weight": 8,
+  "sellValue": 600,
+  "effect": {
+   "type": "pickup_mult",
+   "value": 1.3
+  },
+  "minTier": 4,
+  "type": "exotic_reef"
+ },
+ {
+  "id": "discus_pink",
+  "rarity": "rare",
+  "color": "#FF69B4",
+  "weight": 7,
+  "sellValue": 680,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.35
+  },
+  "minTier": 4,
+  "type": "exotic_reef"
+ },
+ {
+  "id": "tang_blue",
+  "rarity": "rare",
+  "color": "#4169E1",
+  "weight": 6,
+  "sellValue": 750,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.38
+  },
+  "minTier": 4,
+  "type": "exotic_reef"
+ },
+ {
+  "id": "eel_moray",
+  "rarity": "epic",
+  "color": "#556B2F",
+  "weight": 2,
+  "sellValue": 1200,
+  "effect": {
+   "type": "feather_mult",
+   "value": 1.5
+  },
+  "minTier": 6,
+  "type": "exotic_reef"
+ },
+ {
+  "id": "lionfish_green",
+  "rarity": "rare",
+  "color": "#32CD32",
+  "weight": 5,
+  "sellValue": 650,
+  "effect": {
+   "type": "feather_mult",
+   "value": 1.4
+  },
+  "minTier": 5,
+  "type": "exotic_reef"
+ },
+ {
+  "id": "cowfish_pink",
+  "rarity": "rare",
+  "color": "#FFB6C1",
+  "weight": 6,
+  "sellValue": 680,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.35
+  },
+  "minTier": 4,
+  "type": "exotic_reef"
+ },
+ {
+  "id": "gramma_royal",
+  "rarity": "rare",
+  "color": "#800080",
+  "weight": 7,
+  "sellValue": 650,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.35
+  },
+  "minTier": 4,
+  "type": "exotic_reef"
+ },
+ {
+  "id": "puffer_teal_reef",
+  "rarity": "uncommon",
+  "color": "#008080",
+  "weight": 10,
+  "sellValue": 250,
+  "effect": {
+   "type": "pickup_mult",
+   "value": 1.25
+  },
+  "minTier": 3,
+  "type": "exotic_reef"
+ },
+ {
+  "id": "tang_blue_yellow_reef",
+  "rarity": "rare",
+  "color": "#4169E1",
+  "weight": 5,
+  "sellValue": 780,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.4
+  },
+  "minTier": 5,
+  "type": "exotic_reef"
+ },
+ {
+  "id": "triggerfish_green",
+  "rarity": "rare",
+  "color": "#32CD32",
+  "weight": 6,
+  "sellValue": 720,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.38
+  },
+  "minTier": 4,
+  "type": "exotic_reef"
+ },
+ {
+  "id": "triggerfish_red",
+  "rarity": "rare",
+  "color": "#FF4500",
+  "weight": 5.5,
+  "sellValue": 750,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.4
+  },
+  "minTier": 4,
+  "type": "exotic_reef"
+ },
+ {
+  "id": "ghost_axolotl_pink",
+  "rarity": "epic",
+  "color": "#FFB6C1",
+  "weight": 1,
+  "sellValue": 2500,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.8
+  },
+  "minTier": 4,
+  "type": "spirit"
+ },
+ {
+  "id": "ghost_whale_purple",
+  "rarity": "epic",
+  "color": "#9370DB",
+  "weight": 0.8,
+  "sellValue": 3500,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.8
+  },
+  "minTier": 4,
+  "type": "spirit"
+ },
+ {
+  "id": "ghost_shark_blue",
+  "rarity": "epic",
+  "color": "#4169E1",
+  "weight": 0.5,
+  "sellValue": 5000,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.8
+  },
+  "minTier": 4,
+  "type": "spirit"
+ },
+ {
+  "id": "ghost_angel_purple",
+  "rarity": "epic",
+  "color": "#8A2BE2",
+  "weight": 0.8,
+  "sellValue": 3000,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.8
+  },
+  "minTier": 4,
+  "type": "spirit"
+ },
+ {
+  "id": "ghost_blob_pink",
+  "rarity": "rare",
+  "color": "#FFB6C1",
+  "weight": 3,
+  "sellValue": 600,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.4
+  },
+  "minTier": 3,
+  "type": "spirit"
+ },
+ {
+  "id": "ghost_eel_skeleton",
+  "rarity": "epic",
+  "color": "#F5F5DC",
+  "weight": 1.2,
+  "sellValue": 2200,
+  "effect": {
+   "type": "speed_mult",
+   "value": 1.65
+  },
+  "minTier": 4,
+  "type": "spirit"
+ },
+ {
+  "id": "ghost_angel_white",
+  "rarity": "legendary",
+  "color": "#FFFFFF",
+  "weight": 0.07,
+  "sellValue": 12000,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.85
+  },
+  "minTier": 5,
+  "type": "spirit"
+ },
+ {
+  "id": "ghost_fish_gold",
+  "rarity": "legendary",
+  "color": "#FFD700",
+  "weight": 0.001,
+  "sellValue": 25000,
+  "effect": {
+   "type": "feather_mult",
+   "value": 2.25
+  },
+  "minTier": 7,
+  "type": "spirit"
+ },
+ {
+  "id": "ghost_fish_gold_skeleton",
+  "rarity": "rare",
+  "color": "#BDB76B",
+  "weight": 2,
+  "sellValue": 1200,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.55
+  },
+  "minTier": 4,
+  "type": "spirit"
+ },
+ {
+  "id": "ghost_fish_pink_long",
+  "rarity": "rare",
+  "color": "#FFB6C1",
+  "weight": 5,
+  "sellValue": 800,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.4
+  },
+  "minTier": 4,
+  "type": "spirit"
+ },
+ {
+  "id": "ghost_orb_white",
+  "rarity": "rare",
+  "color": "#FFFFFF",
+  "weight": 6,
+  "sellValue": 900,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.4
+  },
+  "minTier": 3,
+  "type": "spirit"
+ },
+ {
+  "id": "ghost_shark_pink",
+  "rarity": "epic",
+  "color": "#FFB6C1",
+  "weight": 0.6,
+  "sellValue": 4500,
+  "effect": {
+   "type": "feather_mult",
+   "value": 1.85
+  },
+  "minTier": 5,
+  "type": "spirit"
+ },
+ {
+  "id": "ghost_skeleton_green_long",
+  "rarity": "rare",
+  "color": "#8FBC8F",
+  "weight": 4,
+  "sellValue": 1100,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.5
+  },
+  "minTier": 4,
+  "type": "spirit"
+ },
+ {
+  "id": "ghost_skeleton_purple",
+  "rarity": "rare",
+  "color": "#9370DB",
+  "weight": 3,
+  "sellValue": 1300,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.6
+  },
+  "minTier": 5,
+  "type": "spirit"
+ },
+ {
+  "id": "jellyfish_blue",
+  "rarity": "uncommon",
+  "color": "#4169E1",
+  "weight": 15,
+  "sellValue": 200,
+  "effect": {
+   "type": "speed_mult",
+   "value": 1.2
+  },
+  "minTier": 2,
+  "type": "ocean"
+ },
+ {
+  "id": "ocean_whale_lavender",
+  "rarity": "rare",
+  "color": "#E6E6FA",
+  "weight": 5,
+  "sellValue": 800,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.4
+  },
+  "minTier": 4,
+  "type": "ocean"
+ },
+ {
+  "id": "ocean_whale_maroon",
+  "rarity": "rare",
+  "color": "#800000",
+  "weight": 4,
+  "sellValue": 900,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.4
+  },
+  "minTier": 5,
+  "type": "ocean"
+ },
+ {
+  "id": "ocean_whale_purple",
+  "rarity": "rare",
+  "color": "#4B0082",
+  "weight": 3,
+  "sellValue": 1100,
+  "effect": {
+   "type": "feather_mult",
+   "value": 1.4
+  },
+  "minTier": 6,
+  "type": "ocean"
+ },
+ {
+  "id": "ocean_blue_longfin",
+  "rarity": "rare",
+  "color": "#4169E1",
+  "weight": 6,
+  "sellValue": 700,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.35
+  },
+  "minTier": 4,
+  "type": "ocean"
+ },
+ {
+  "id": "ocean_lavender_round",
+  "rarity": "uncommon",
+  "color": "#E6E6FA",
+  "weight": 12,
+  "sellValue": 240,
+  "effect": {
+   "type": "feather_mult",
+   "value": 1.22
+  },
+  "minTier": 3,
+  "type": "ocean"
+ },
+ {
+  "id": "ocean_red_blue",
+  "rarity": "uncommon",
+  "color": "#FF4500",
+  "weight": 12,
+  "sellValue": 280,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.25
+  },
+  "minTier": 3,
+  "type": "ocean"
+ },
+ {
+  "id": "whale_blue_green_ocean",
+  "rarity": "legendary",
+  "color": "#008B8B",
+  "weight": 0.002,
+  "sellValue": 20000,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 3
+  },
+  "minTier": 7,
+  "type": "ocean"
+ },
+ {
+  "id": "whale_blue_small_ocean",
+  "rarity": "rare",
+  "color": "#4682B4",
+  "weight": 5,
+  "sellValue": 900,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.4
+  },
+  "minTier": 4,
+  "type": "ocean"
+ },
+ {
+  "id": "whale_dark_teal_ocean",
+  "rarity": "rare",
+  "color": "#008080",
+  "weight": 4,
+  "sellValue": 1000,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.45
+  },
+  "minTier": 5,
+  "type": "ocean"
+ },
+ {
+  "id": "whale_magenta_ocean",
+  "rarity": "legendary",
+  "color": "#FF00FF",
+  "weight": 0.05,
+  "sellValue": 18000,
+  "effect": {
+   "type": "feather_mult",
+   "value": 2
+  },
+  "minTier": 7,
+  "type": "ocean"
+ },
+ {
+  "id": "squid",
+  "rarity": "rare",
+  "color": "#FFC0CB",
+  "weight": 6,
+  "sellValue": 620,
+  "effect": {
+   "type": "pickup_mult",
+   "value": 1.35
+  },
+  "minTier": 3,
+  "type": "creature"
+ },
+ {
+  "id": "alien_octopus",
+  "rarity": "rare",
+  "color": "#7B68EE",
+  "weight": 5,
+  "sellValue": 750,
+  "effect": {
+   "type": "feather_mult",
+   "value": 1.45
+  },
+  "minTier": 4,
+  "type": "creature"
+ },
+ {
+  "id": "ammonite",
+  "rarity": "uncommon",
+  "color": "#DEB887",
+  "weight": 15,
+  "sellValue": 150,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.15
+  },
+  "minTier": 1,
+  "type": "creature"
+ },
+ {
+  "id": "devils_hole_pupfish",
+  "rarity": "uncommon",
+  "color": "#4169E1",
+  "weight": 15,
+  "sellValue": 160,
+  "effect": {
+   "type": "speed_mult",
+   "value": 1.2
+  },
+  "minTier": 2,
+  "type": "creature"
+ },
+ {
+  "id": "eel_garden",
+  "rarity": "uncommon",
+  "color": "#F5DEB3",
+  "weight": 16,
+  "sellValue": 130,
+  "effect": {
+   "type": "pickup_mult",
+   "value": 1.18
+  },
+  "minTier": 1,
+  "type": "creature"
+ },
+ {
+  "id": "energized_fish",
+  "rarity": "rare",
+  "color": "#FFFF00",
+  "weight": 6,
+  "sellValue": 720,
+  "effect": {
+   "type": "speed_mult",
+   "value": 1.4
+  },
+  "minTier": 4,
+  "type": "creature"
+ },
+ {
+  "id": "fairy_wrasse",
+  "rarity": "uncommon",
+  "color": "#EE82EE",
+  "weight": 14,
+  "sellValue": 180,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.2
+  },
+  "minTier": 2,
+  "type": "creature"
+ },
+ {
+  "id": "golden_creature",
+  "rarity": "legendary",
+  "color": "#FFD700",
+  "weight": 0.005,
+  "sellValue": 50000,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 3.5
+  },
+  "minTier": 7,
+  "type": "creature"
+ },
+ {
+  "id": "green_oyster",
+  "rarity": "rare",
+  "color": "#006400",
+  "weight": 5,
+  "sellValue": 550,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.35
+  },
+  "minTier": 3,
+  "type": "creature"
+ },
+ {
+  "id": "purple_jellyfish",
+  "rarity": "rare",
+  "color": "#9400D3",
+  "weight": 4.5,
+  "sellValue": 680,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.4
+  },
+  "minTier": 4,
+  "type": "creature"
+ },
+ {
+  "id": "red_star",
+  "rarity": "uncommon",
+  "color": "#FF0000",
+  "weight": 18,
+  "sellValue": 110,
+  "effect": {
+   "type": "pickup_mult",
+   "value": 1.15
+  },
+  "minTier": 1,
+  "type": "creature"
+ },
+ {
+  "id": "royal_shrimp",
+  "rarity": "rare",
+  "color": "#FFD700",
+  "weight": 6,
+  "sellValue": 700,
+  "effect": {
+   "type": "feather_mult",
+   "value": 1.35
+  },
+  "minTier": 3,
+  "type": "creature"
+ },
+ {
+  "id": "sea_slug",
+  "rarity": "uncommon",
+  "color": "#40E0D0",
+  "weight": 22,
+  "sellValue": 90,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.12
+  },
+  "minTier": 1,
+  "type": "creature"
+ },
+ {
+  "id": "dead_fish",
+  "rarity": "common",
+  "color": "#BDB76B",
+  "weight": 10,
+  "sellValue": 1,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 0.5
+  },
+  "minTier": 0,
+  "type": "creature"
+ },
+ {
+  "id": "gray_puffer_fish",
+  "rarity": "uncommon",
+  "color": "#808080",
+  "weight": 15,
+  "sellValue": 180,
+  "effect": {
+   "type": "pickup_mult",
+   "value": 1.2
+  },
+  "minTier": 1,
+  "type": "creature"
+ },
+ {
+  "id": "puffer_fish_standard",
+  "rarity": "uncommon",
+  "color": "#DAA520",
+  "weight": 12,
+  "sellValue": 220,
+  "effect": {
+   "type": "feather_mult",
+   "value": 1.2
+  },
+  "minTier": 2,
+  "type": "creature"
+ },
+ {
+  "id": "runic_moonfish",
+  "rarity": "rare",
+  "color": "#9370DB",
+  "weight": 5,
+  "sellValue": 850,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.5
+  },
+  "minTier": 4,
+  "type": "creature"
+ },
+ {
+  "id": "crab_gold",
+  "rarity": "uncommon",
+  "color": "#FFD700",
+  "weight": 15,
+  "sellValue": 180,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.15
+  },
+  "minTier": 2,
+  "type": "crab"
+ },
+ {
+  "id": "crab_lava",
+  "rarity": "rare",
+  "color": "#FF4500",
+  "weight": 6,
+  "sellValue": 720,
+  "effect": {
+   "type": "speed_mult",
+   "value": 1.4
+  },
+  "minTier": 4,
+  "type": "crab"
+ },
+ {
+  "id": "crab_vampire",
+  "rarity": "rare",
+  "color": "#4B0082",
+  "weight": 5,
+  "sellValue": 850,
+  "effect": {
+   "type": "feather_mult",
+   "value": 1.45
+  },
+  "minTier": 5,
+  "type": "crab"
+ },
+ {
+  "id": "crab_yeti",
+  "rarity": "epic",
+  "color": "#F0F8FF",
+  "weight": 0.8,
+  "sellValue": 2500,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.8
+  },
+  "minTier": 6,
+  "type": "crab"
+ },
+ {
+  "id": "lobster_red",
+  "rarity": "uncommon",
+  "color": "#FF0000",
+  "weight": 12,
+  "sellValue": 140,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.15
+  },
+  "minTier": 2,
+  "type": "crab"
+ },
+ {
+  "id": "trilobite",
+  "rarity": "legendary",
+  "color": "#556B2F",
+  "weight": 0.05,
+  "sellValue": 9500,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.75
+  },
+  "minTier": 7,
+  "type": "crab"
+ },
+ {
+  "id": "crab_spider",
+  "rarity": "rare",
+  "color": "#BC8F8F",
+  "weight": 7.5,
+  "sellValue": 650,
+  "effect": {
+   "type": "pickup_mult",
+   "value": 1.35
+  },
+  "minTier": 3,
+  "type": "crab"
+ },
+ {
+  "id": "shrimp_tiger",
+  "rarity": "common",
+  "color": "#FF8C00",
+  "weight": 35,
+  "sellValue": 45,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.08
+  },
+  "minTier": 0,
+  "type": "crab"
+ },
+ {
+  "id": "lobster_green",
+  "rarity": "uncommon",
+  "color": "#006400",
+  "weight": 15,
+  "sellValue": 180,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.15
+  },
+  "minTier": 2,
+  "type": "crab"
+ },
+ {
+  "id": "crab_purple",
+  "rarity": "rare",
+  "color": "#800080",
+  "weight": 6,
+  "sellValue": 680,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.35
+  },
+  "minTier": 4,
+  "type": "crab"
+ },
+ {
+  "id": "crab_white",
+  "rarity": "rare",
+  "color": "#FFFFFF",
+  "weight": 5,
+  "sellValue": 800,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.45
+  },
+  "minTier": 5,
+  "type": "crab"
+ },
+ {
+  "id": "crab_yellow",
+  "rarity": "rare",
+  "color": "#FFD700",
+  "weight": 7,
+  "sellValue": 600,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.35
+  },
+  "minTier": 4,
+  "type": "crab"
+ },
+ {
+  "id": "crayfish_red",
+  "rarity": "uncommon",
+  "color": "#FF4500",
+  "weight": 14,
+  "sellValue": 180,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.22
+  },
+  "minTier": 3,
+  "type": "crab"
+ },
+ {
+  "id": "lobster_white",
+  "rarity": "epic",
+  "color": "#E5E4E2",
+  "weight": 0.8,
+  "sellValue": 3500,
+  "effect": {
+   "type": "feather_mult",
+   "value": 1.85
+  },
+  "minTier": 6,
+  "type": "crab"
+ },
+ {
+  "id": "crab_mech",
+  "rarity": "uncommon",
+  "color": "#B87333",
+  "weight": 15,
+  "sellValue": 180,
+  "effect": {
+   "type": "pickup_mult",
+   "value": 1.18
+  },
+  "minTier": 1,
+  "type": "mechanical"
+ },
+ {
+  "id": "fish_robot",
+  "rarity": "uncommon",
+  "color": "#708090",
+  "weight": 12,
+  "sellValue": 220,
+  "effect": {
+   "type": "speed_mult",
+   "value": 1.25
+  },
+  "minTier": 2,
+  "type": "mechanical"
+ },
+ {
+  "id": "octobot",
+  "rarity": "rare",
+  "color": "#4682B4",
+  "weight": 6,
+  "sellValue": 800,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.45
+  },
+  "minTier": 4,
+  "type": "mechanical"
+ },
+ {
+  "id": "turtle_mech",
+  "rarity": "uncommon",
+  "color": "#8B4513",
+  "weight": 14,
+  "sellValue": 160,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.2
+  },
+  "minTier": 2,
+  "type": "mechanical"
+ },
+ {
+  "id": "mech_fish_gold",
+  "rarity": "rare",
+  "color": "#FFD700",
+  "weight": 5,
+  "sellValue": 950,
+  "effect": {
+   "type": "feather_mult",
+   "value": 1.5
+  },
+  "minTier": 4,
+  "type": "mechanical"
+ },
+ {
+  "id": "sub_shark",
+  "rarity": "rare",
+  "color": "#C0C0C0",
+  "weight": 4,
+  "sellValue": 1200,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.6
+  },
+  "minTier": 6,
+  "type": "mechanical"
+ },
+ {
+  "id": "sub_whale",
+  "rarity": "rare",
+  "color": "#4682B4",
+  "weight": 3,
+  "sellValue": 1500,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.6
+  },
+  "minTier": 7,
+  "type": "mechanical"
+ },
+ {
+  "id": "anchor_hook",
+  "rarity": "uncommon",
+  "color": "#8B4513",
+  "weight": 15,
+  "sellValue": 120,
+  "effect": {
+   "type": "pickup_mult",
+   "value": 1.15
+  },
+  "minTier": 1,
+  "type": "mechanical"
+ },
+ {
+  "id": "clock_compass",
+  "rarity": "rare",
+  "color": "#DAA520",
+  "weight": 6,
+  "sellValue": 800,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.4
+  },
+  "minTier": 4,
+  "type": "mechanical"
+ },
+ {
+  "id": "depth_charge",
+  "rarity": "uncommon",
+  "color": "#2F4F4F",
+  "weight": 10,
+  "sellValue": 300,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.3
+  },
+  "minTier": 3,
+  "type": "mechanical"
+ },
+ {
+  "id": "drill_missile",
+  "rarity": "rare",
+  "color": "#708090",
+  "weight": 4.5,
+  "sellValue": 1100,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.55
+  },
+  "minTier": 5,
+  "type": "mechanical"
+ },
+ {
+  "id": "fish_mech_copper",
+  "rarity": "uncommon",
+  "color": "#B87333",
+  "weight": 14,
+  "sellValue": 240,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.25
+  },
+  "minTier": 2,
+  "type": "mechanical"
+ },
+ {
+  "id": "fish_mech_iron",
+  "rarity": "uncommon",
+  "color": "#708090",
+  "weight": 16,
+  "sellValue": 200,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.15
+  },
+  "minTier": 2,
+  "type": "mechanical"
+ },
+ {
+  "id": "fish_mech_round",
+  "rarity": "uncommon",
+  "color": "#C0C0C0",
+  "weight": 18,
+  "sellValue": 180,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.15
+  },
+  "minTier": 1,
+  "type": "mechanical"
+ },
+ {
+  "id": "mech_shell_gold",
+  "rarity": "rare",
+  "color": "#FFD700",
+  "weight": 5,
+  "sellValue": 950,
+  "effect": {
+   "type": "feather_mult",
+   "value": 1.5
+  },
+  "minTier": 5,
+  "type": "mechanical"
+ },
+ {
+  "id": "mech_shell_iron",
+  "rarity": "uncommon",
+  "color": "#708090",
+  "weight": 15,
+  "sellValue": 250,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.28
+  },
+  "minTier": 3,
+  "type": "mechanical"
+ },
+ {
+  "id": "mechanical_cross",
+  "rarity": "rare",
+  "color": "#DAA520",
+  "weight": 7,
+  "sellValue": 700,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.4
+  },
+  "minTier": 4,
+  "type": "mechanical"
+ },
+ {
+  "id": "piston_shaft",
+  "rarity": "uncommon",
+  "color": "#C0C0C0",
+  "weight": 12,
+  "sellValue": 280,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.22
+  },
+  "minTier": 3,
+  "type": "mechanical"
+ },
+ {
+  "id": "sea_watch",
+  "rarity": "rare",
+  "color": "#C0C0C0",
+  "weight": 4,
+  "sellValue": 1200,
+  "effect": {
+   "type": "feather_mult",
+   "value": 1.6
+  },
+  "minTier": 6,
+  "type": "mechanical"
+ },
+ {
+  "id": "spider_drone",
+  "rarity": "legendary",
+  "color": "#4B0082",
+  "weight": 0.1,
+  "sellValue": 15000,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.8
+  },
+  "minTier": 6,
+  "type": "mechanical"
+ },
+ {
+  "id": "sub_scout",
+  "rarity": "rare",
+  "color": "#4682B4",
+  "weight": 4.5,
+  "sellValue": 1000,
+  "effect": {
+   "type": "pickup_mult",
+   "value": 1.45
+  },
+  "minTier": 5,
+  "type": "mechanical"
+ },
+ {
+  "id": "torpedo_mini",
+  "rarity": "rare",
+  "color": "#708090",
+  "weight": 5.5,
+  "sellValue": 850,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.42
+  },
+  "minTier": 4,
+  "type": "mechanical"
+ },
+ {
+  "id": "cosmic_seraph_purple",
+  "rarity": "legendary",
+  "color": "#4B0082",
+  "weight": 0.008,
+  "sellValue": 22000,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.8
+  },
+  "minTier": 6,
+  "type": "cosmic"
+ },
+ {
+  "id": "comet_orange",
+  "rarity": "uncommon",
+  "color": "#FF4500",
+  "weight": 12,
+  "sellValue": 220,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.18
+  },
+  "minTier": 1,
+  "type": "cosmic"
+ },
+ {
+  "id": "cosmic_axolotl",
+  "rarity": "rare",
+  "color": "#FF69B4",
+  "weight": 5.5,
+  "sellValue": 850,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.45
+  },
+  "minTier": 4,
+  "type": "cosmic"
+ },
+ {
+  "id": "cosmic_butterfly",
+  "rarity": "uncommon",
+  "color": "#FFFFE0",
+  "weight": 15,
+  "sellValue": 180,
+  "effect": {
+   "type": "pickup_mult",
+   "value": 1.25
+  },
+  "minTier": 2,
+  "type": "cosmic"
+ },
+ {
+  "id": "cosmic_crescent",
+  "rarity": "rare",
+  "color": "#00BFFF",
+  "weight": 4.5,
+  "sellValue": 950,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.5
+  },
+  "minTier": 5,
+  "type": "cosmic"
+ },
+ {
+  "id": "cosmic_jellyfish",
+  "rarity": "rare",
+  "color": "#1E90FF",
+  "weight": 4,
+  "sellValue": 1100,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.55
+  },
+  "minTier": 5,
+  "type": "cosmic"
+ },
+ {
+  "id": "cosmic_wraith",
+  "rarity": "rare",
+  "color": "#800080",
+  "weight": 3.5,
+  "sellValue": 1200,
+  "effect": {
+   "type": "feather_mult",
+   "value": 1.6
+  },
+  "minTier": 6,
+  "type": "cosmic"
+ },
+ {
+  "id": "flying_fish_cosmic",
+  "rarity": "uncommon",
+  "color": "#4682B4",
+  "weight": 18,
+  "sellValue": 160,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.2
+  },
+  "minTier": 2,
+  "type": "cosmic"
+ },
+ {
+  "id": "cosmic_cluster_green",
+  "rarity": "rare",
+  "color": "#00FF7F",
+  "weight": 5,
+  "sellValue": 850,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.4
+  },
+  "minTier": 4,
+  "type": "cosmic"
+ },
+ {
+  "id": "cosmic_debris_orange",
+  "rarity": "common",
+  "color": "#FF8C00",
+  "weight": 45,
+  "sellValue": 15,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.05
+  },
+  "minTier": 0,
+  "type": "cosmic"
+ },
+ {
+  "id": "cosmic_debris_purple",
+  "rarity": "common",
+  "color": "#9370DB",
+  "weight": 42,
+  "sellValue": 18,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.05
+  },
+  "minTier": 0,
+  "type": "cosmic"
+ },
+ {
+  "id": "cosmic_debris_red",
+  "rarity": "common",
+  "color": "#FF0000",
+  "weight": 40,
+  "sellValue": 20,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.05
+  },
+  "minTier": 1,
+  "type": "cosmic"
+ },
+ {
+  "id": "cosmic_fish_green",
+  "rarity": "uncommon",
+  "color": "#32CD32",
+  "weight": 15,
+  "sellValue": 180,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.15
+  },
+  "minTier": 2,
+  "type": "cosmic"
+ },
+ {
+  "id": "cosmic_fish_pink",
+  "rarity": "uncommon",
+  "color": "#FF69B4",
+  "weight": 14,
+  "sellValue": 200,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.18
+  },
+  "minTier": 2,
+  "type": "cosmic"
+ },
+ {
+  "id": "cosmic_fish_teal",
+  "rarity": "rare",
+  "color": "#008080",
+  "weight": 6,
+  "sellValue": 700,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.35
+  },
+  "minTier": 4,
+  "type": "cosmic"
+ },
+ {
+  "id": "cosmic_fragment_purple",
+  "rarity": "epic",
+  "color": "#4B0082",
+  "weight": 0.9,
+  "sellValue": 2500,
+  "effect": {
+   "type": "feather_mult",
+   "value": 1.75
+  },
+  "minTier": 5,
+  "type": "cosmic"
+ },
+ {
+  "id": "cosmic_leaf_pale",
+  "rarity": "uncommon",
+  "color": "#FFFACD",
+  "weight": 18,
+  "sellValue": 140,
+  "effect": {
+   "type": "pickup_mult",
+   "value": 1.15
+  },
+  "minTier": 1,
+  "type": "cosmic"
+ },
+ {
+  "id": "cosmic_pixie_green",
+  "rarity": "rare",
+  "color": "#ADFF2F",
+  "weight": 5.5,
+  "sellValue": 800,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.4
+  },
+  "minTier": 4,
+  "type": "cosmic"
+ },
+ {
+  "id": "cosmic_shard_blue",
+  "rarity": "uncommon",
+  "color": "#4169E1",
+  "weight": 20,
+  "sellValue": 120,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.12
+  },
+  "minTier": 1,
+  "type": "cosmic"
+ },
+ {
+  "id": "cosmic_shard_cyan",
+  "rarity": "uncommon",
+  "color": "#00FFFF",
+  "weight": 18,
+  "sellValue": 150,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.15
+  },
+  "minTier": 2,
+  "type": "cosmic"
+ },
+ {
+  "id": "cosmic_shard_lavender",
+  "rarity": "uncommon",
+  "color": "#E6E6FA",
+  "weight": 16,
+  "sellValue": 170,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.18
+  },
+  "minTier": 2,
+  "type": "cosmic"
+ },
+ {
+  "id": "cosmic_shard_maroon",
+  "rarity": "uncommon",
+  "color": "#800000",
+  "weight": 14,
+  "sellValue": 190,
+  "effect": {
+   "type": "pickup_mult",
+   "value": 1.2
+  },
+  "minTier": 3,
+  "type": "cosmic"
+ },
+ {
+  "id": "cosmic_shard_white",
+  "rarity": "rare",
+  "color": "#FFFFFF",
+  "weight": 4,
+  "sellValue": 1000,
+  "effect": {
+   "type": "feather_mult",
+   "value": 1.5
+  },
+  "minTier": 5,
+  "type": "cosmic"
+ },
+ {
+  "id": "cosmic_wisp_purple",
+  "rarity": "uncommon",
+  "color": "#8A2BE2",
+  "weight": 15,
+  "sellValue": 210,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.2
+  },
+  "minTier": 3,
+  "type": "cosmic"
+ },
+ {
+  "id": "star_spirit_pink",
+  "rarity": "epic",
+  "color": "#FFB6C1",
+  "weight": 1.2,
+  "sellValue": 2000,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.7
+  },
+  "minTier": 4,
+  "type": "cosmic"
+ },
+ {
+  "id": "abyssal_serpent_blue",
+  "rarity": "rare",
+  "color": "#00008B",
+  "weight": 3,
+  "sellValue": 1200,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.5
+  },
+  "minTier": 4,
+  "type": "abyssal"
+ },
+ {
+  "id": "viperfish_black",
+  "rarity": "uncommon",
+  "color": "#1A1A1A",
+  "weight": 15,
+  "sellValue": 240,
+  "effect": {
+   "type": "feather_mult",
+   "value": 1.3
+  },
+  "minTier": 3,
+  "type": "abyssal"
+ },
+ {
+  "id": "abyssal_eel_orange",
+  "rarity": "uncommon",
+  "color": "#FF4500",
+  "weight": 18,
+  "sellValue": 200,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.25
+  },
+  "minTier": 2,
+  "type": "abyssal"
+ },
+ {
+  "id": "angler_green",
+  "rarity": "rare",
+  "color": "#00FF7F",
+  "weight": 6,
+  "sellValue": 800,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.4
+  },
+  "minTier": 4,
+  "type": "abyssal"
+ },
+ {
+  "id": "blobfish_deep",
+  "rarity": "uncommon",
+  "color": "#2F4F4F",
+  "weight": 20,
+  "sellValue": 150,
+  "effect": {
+   "type": "pickup_mult",
+   "value": 1.2
+  },
+  "minTier": 1,
+  "type": "abyssal"
+ },
+ {
+  "id": "gulper_eel",
+  "rarity": "rare",
+  "color": "#3D2B1F",
+  "weight": 5,
+  "sellValue": 950,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.45
+  },
+  "minTier": 5,
+  "type": "abyssal"
+ },
+ {
+  "id": "sea_angel",
+  "rarity": "legendary",
+  "color": "#00FFFF",
+  "weight": 0.001,
+  "sellValue": 28000,
+  "effect": {
+   "type": "xp_mult",
+   "value": 2.5
+  },
+  "minTier": 7,
+  "type": "abyssal"
+ },
+ {
+  "id": "viper_silver",
+  "rarity": "rare",
+  "color": "#C0C0C0",
+  "weight": 7,
+  "sellValue": 750,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.35
+  },
+  "minTier": 4,
+  "type": "abyssal"
+ },
+ {
+  "id": "tube_worm_red",
+  "rarity": "epic",
+  "color": "#FF0000",
+  "weight": 1.5,
+  "sellValue": 2400,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.75
+  },
+  "minTier": 4,
+  "type": "abyssal"
+ },
+ {
+  "id": "abyssal_blob_brown",
+  "rarity": "uncommon",
+  "color": "#5C4033",
+  "weight": 15,
+  "sellValue": 150,
+  "effect": {
+   "type": "pickup_mult",
+   "value": 1.25
+  },
+  "minTier": 3,
+  "type": "abyssal"
+ },
+ {
+  "id": "abyssal_fish_black",
+  "rarity": "rare",
+  "color": "#000000",
+  "weight": 8,
+  "sellValue": 600,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.4
+  },
+  "minTier": 4,
+  "type": "abyssal"
+ },
+ {
+  "id": "abyssal_fish_brown",
+  "rarity": "uncommon",
+  "color": "#8B4513",
+  "weight": 12,
+  "sellValue": 200,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.25
+  },
+  "minTier": 3,
+  "type": "abyssal"
+ },
+ {
+  "id": "abyssal_fish_silver",
+  "rarity": "epic",
+  "color": "#E5E4E2",
+  "weight": 2,
+  "sellValue": 2200,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.6
+  },
+  "minTier": 4,
+  "type": "abyssal"
+ },
+ {
+  "id": "abyssal_fish_teal",
+  "rarity": "rare",
+  "color": "#008080",
+  "weight": 6,
+  "sellValue": 700,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.45
+  },
+  "minTier": 4,
+  "type": "abyssal"
+ },
+ {
+  "id": "abyssal_spine_dark",
+  "rarity": "rare",
+  "color": "#2F4F4F",
+  "weight": 5,
+  "sellValue": 750,
+  "effect": {
+   "type": "feather_mult",
+   "value": 1.45
+  },
+  "minTier": 4,
+  "type": "abyssal"
+ },
+ {
+  "id": "abyssal_worm_dark",
+  "rarity": "epic",
+  "color": "#4B0082",
+  "weight": 1.5,
+  "sellValue": 2500,
+  "effect": {
+   "type": "pickup_mult",
+   "value": 1.7
+  },
+  "minTier": 4,
+  "type": "abyssal"
+ },
+ {
+  "id": "angler_silver",
+  "rarity": "rare",
+  "color": "#C0C0C0",
+  "weight": 4,
+  "sellValue": 800,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.5
+  },
+  "minTier": 3,
+  "type": "abyssal"
+ },
+ {
+  "id": "bobbit_worm",
+  "rarity": "legendary",
+  "color": "#8B0000",
+  "weight": 0.1,
+  "sellValue": 12000,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.8
+  },
+  "minTier": 4,
+  "type": "abyssal"
+ },
+ {
+  "id": "dragonfish_black",
+  "rarity": "legendary",
+  "color": "#1A1A1A",
+  "weight": 0.02,
+  "sellValue": 40000,
+  "effect": {
+   "type": "xp_mult",
+   "value": 2.1
+  },
+  "minTier": 7,
+  "type": "abyssal"
+ },
+ {
+  "id": "lanternfish_blue",
+  "rarity": "rare",
+  "color": "#0000FF",
+  "weight": 5,
+  "sellValue": 650,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.4
+  },
+  "minTier": 3,
+  "type": "abyssal"
+ },
+ {
+  "id": "prawn_purple",
+  "rarity": "uncommon",
+  "color": "#800080",
+  "weight": 10,
+  "sellValue": 250,
+  "effect": {
+   "type": "feather_mult",
+   "value": 1.3
+  },
+  "minTier": 3,
+  "type": "abyssal"
+ },
+ {
+  "id": "prawn_red",
+  "rarity": "uncommon",
+  "color": "#FF4500",
+  "weight": 10,
+  "sellValue": 250,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.3
+  },
+  "minTier": 3,
+  "type": "abyssal"
+ },
+ {
+  "id": "sea_slug_yellow",
+  "rarity": "rare",
+  "color": "#FFFF00",
+  "weight": 4,
+  "sellValue": 700,
+  "effect": {
+   "type": "pickup_mult",
+   "value": 1.5
+  },
+  "minTier": 3,
+  "type": "abyssal"
+ },
+ {
+  "id": "snail_blue",
+  "rarity": "common",
+  "color": "#4682B4",
+  "weight": 25,
+  "sellValue": 50,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.1
+  },
+  "minTier": 2,
+  "type": "abyssal"
+ },
+ {
+  "id": "fish_blue_standard",
+  "rarity": "common",
+  "color": "#4169E1",
+  "weight": 45,
+  "sellValue": 20,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.05
+  },
+  "minTier": 0,
+  "type": "freshwater"
+ },
+ {
+  "id": "fish_brown_dark",
+  "rarity": "common",
+  "color": "#5C4033",
+  "weight": 42,
+  "sellValue": 22,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.05
+  },
+  "minTier": 0,
+  "type": "freshwater"
+ },
+ {
+  "id": "fish_brown_standard",
+  "rarity": "common",
+  "color": "#8B4513",
+  "weight": 48,
+  "sellValue": 18,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.05
+  },
+  "minTier": 0,
+  "type": "freshwater"
+ },
+ {
+  "id": "fish_dark_grey",
+  "rarity": "uncommon",
+  "color": "#2F4F4F",
+  "weight": 15,
+  "sellValue": 120,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.15
+  },
+  "minTier": 2,
+  "type": "freshwater"
+ },
+ {
+  "id": "fish_grey_standard",
+  "rarity": "common",
+  "color": "#808080",
+  "weight": 50,
+  "sellValue": 15,
+  "effect": {
+   "type": "pickup_mult",
+   "value": 1.05
+  },
+  "minTier": 0,
+  "type": "freshwater"
+ },
+ {
+  "id": "fish_lavender_standard",
+  "rarity": "uncommon",
+  "color": "#E6E6FA",
+  "weight": 12,
+  "sellValue": 150,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.15
+  },
+  "minTier": 2,
+  "type": "freshwater"
+ },
+ {
+  "id": "fish_tan_fresh",
+  "rarity": "common",
+  "color": "#D2B48C",
+  "weight": 40,
+  "sellValue": 25,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.06
+  },
+  "minTier": 1,
+  "type": "freshwater"
+ },
+ {
+  "id": "fish_white_fresh",
+  "rarity": "uncommon",
+  "color": "#FFFFFF",
+  "weight": 10,
+  "sellValue": 180,
+  "effect": {
+   "type": "feather_mult",
+   "value": 1.15
+  },
+  "minTier": 3,
+  "type": "freshwater"
+ },
+ {
+  "id": "blue_guppy",
+  "rarity": "common",
+  "color": "#00BFFF",
+  "weight": 35,
+  "sellValue": 30,
+  "effect": {
+   "type": "speed_mult",
+   "value": 1.05
+  },
+  "minTier": 0,
+  "type": "creature"
+ },
+ {
+  "id": "blue_moonfish",
+  "rarity": "rare",
+  "color": "#4169E1",
+  "weight": 5,
+  "sellValue": 750,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.4
+  },
+  "minTier": 4,
+  "type": "creature"
+ },
+ {
+  "id": "blue_prawn",
+  "rarity": "uncommon",
+  "color": "#1E90FF",
+  "weight": 12,
+  "sellValue": 200,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.2
+  },
+  "minTier": 2,
+  "type": "crab"
+ },
+ {
+  "id": "normal_moonfish",
+  "rarity": "uncommon",
+  "color": "#F0F8FF",
+  "weight": 15,
+  "sellValue": 180,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.15
+  },
+  "minTier": 2,
+  "type": "creature"
+ },
+ {
+  "id": "normal_oyster",
+  "rarity": "common",
+  "color": "#F5F5DC",
+  "weight": 25,
+  "sellValue": 60,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.08
+  },
+  "minTier": 2,
+  "type": "crab"
+ },
+ {
+  "id": "prawn_creature",
+  "rarity": "common",
+  "color": "#FFB6C1",
+  "weight": 30,
+  "sellValue": 40,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.05
+  },
+  "minTier": 1,
+  "type": "crab"
+ },
+ {
+  "id": "small_crab_creature",
+  "rarity": "common",
+  "color": "#BC8F8F",
+  "weight": 28,
+  "sellValue": 50,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.06
+  },
+  "minTier": 1,
+  "type": "crab"
+ },
+ {
+  "id": "hermit_crab_small",
+  "rarity": "uncommon",
+  "color": "#D2B48C",
+  "weight": 12,
+  "sellValue": 220,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.15
+  },
+  "minTier": 2,
+  "type": "crab"
+ },
+ {
+  "id": "ocean_blue_dark",
+  "rarity": "uncommon",
+  "color": "#00008B",
+  "weight": 14,
+  "sellValue": 250,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.18
+  },
+  "minTier": 3,
+  "type": "ocean"
+ },
+ {
+  "id": "ocean_blue_green",
+  "rarity": "rare",
+  "color": "#008080",
+  "weight": 6,
+  "sellValue": 700,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.35
+  },
+  "minTier": 4,
+  "type": "ocean"
+ },
+ {
+  "id": "ocean_blue_navy",
+  "rarity": "common",
+  "color": "#000080",
+  "weight": 35,
+  "sellValue": 45,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.07
+  },
+  "minTier": 2,
+  "type": "ocean"
+ },
+ {
+  "id": "ocean_blue_pale",
+  "rarity": "common",
+  "color": "#ADD8E6",
+  "weight": 38,
+  "sellValue": 40,
+  "effect": {
+   "type": "speed_mult",
+   "value": 1.06
+  },
+  "minTier": 2,
+  "type": "ocean"
+ },
+ {
+  "id": "ocean_blue_tiny",
+  "rarity": "common",
+  "color": "#4169E1",
+  "weight": 45,
+  "sellValue": 25,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.05
+  },
+  "minTier": 2,
+  "type": "ocean"
+ },
+ {
+  "id": "ocean_cyan",
+  "rarity": "uncommon",
+  "color": "#00FFFF",
+  "weight": 12,
+  "sellValue": 300,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.25
+  },
+  "minTier": 3,
+  "type": "ocean"
+ },
+ {
+  "id": "ocean_grey_blue_alt",
+  "rarity": "common",
+  "color": "#708090",
+  "weight": 40,
+  "sellValue": 50,
+  "effect": {
+   "type": "pickup_mult",
+   "value": 1.08
+  },
+  "minTier": 2,
+  "type": "ocean"
+ },
+ {
+  "id": "ocean_purple_green",
+  "rarity": "rare",
+  "color": "#8A2BE2",
+  "weight": 5,
+  "sellValue": 850,
+  "effect": {
+   "type": "feather_mult",
+   "value": 1.4
+  },
+  "minTier": 5,
+  "type": "ocean"
+ },
+ {
+  "id": "ocean_purple_striped",
+  "rarity": "rare",
+  "color": "#9932CC",
+  "weight": 4.5,
+  "sellValue": 900,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.45
+  },
+  "minTier": 5,
+  "type": "ocean"
+ },
+ {
+  "id": "ocean_purple_tiny",
+  "rarity": "common",
+  "color": "#DA70D6",
+  "weight": 42,
+  "sellValue": 35,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.08
+  },
+  "minTier": 3,
+  "type": "ocean"
+ },
+ {
+  "id": "ocean_purple_white",
+  "rarity": "uncommon",
+  "color": "#9370DB",
+  "weight": 10,
+  "sellValue": 350,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.3
+  },
+  "minTier": 4,
+  "type": "ocean"
+ },
+ {
+  "id": "ocean_teal_white",
+  "rarity": "uncommon",
+  "color": "#00CED1",
+  "weight": 11,
+  "sellValue": 320,
+  "effect": {
+   "type": "pickup_mult",
+   "value": 1.25
+  },
+  "minTier": 4,
+  "type": "ocean"
+ },
+ {
+  "id": "ocean_white_blue",
+  "rarity": "uncommon",
+  "color": "#F0F8FF",
+  "weight": 15,
+  "sellValue": 280,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.2
+  },
+  "minTier": 3,
+  "type": "ocean"
+ },
+ {
+  "id": "ocean_white_pale",
+  "rarity": "common",
+  "color": "#E5E4E2",
+  "weight": 30,
+  "sellValue": 60,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.1
+  },
+  "minTier": 4,
+  "type": "ocean"
+ },
+ {
+  "id": "angelfish_blue_yellow",
+  "rarity": "rare",
+  "color": "#4169E1",
+  "weight": 5,
+  "sellValue": 800,
+  "effect": {
+   "type": "pickup_mult",
+   "value": 1.4
+  },
+  "minTier": 4,
+  "type": "exotic_reef"
+ },
+ {
+  "id": "angelfish_yellow_purple",
+  "rarity": "rare",
+  "color": "#FFD700",
+  "weight": 4.5,
+  "sellValue": 900,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.45
+  },
+  "minTier": 5,
+  "type": "exotic_reef"
+ },
+ {
+  "id": "cichlid_brown",
+  "rarity": "uncommon",
+  "color": "#8B4513",
+  "weight": 15,
+  "sellValue": 250,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.25
+  },
+  "minTier": 2,
+  "type": "exotic_reef"
+ },
+ {
+  "id": "damselfish_bicolor",
+  "rarity": "common",
+  "color": "#BC8F8F",
+  "weight": 30,
+  "sellValue": 120,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.15
+  },
+  "minTier": 2,
+  "type": "exotic_reef"
+ },
+ {
+  "id": "damselfish_blue_tail",
+  "rarity": "common",
+  "color": "#00BFFF",
+  "weight": 32,
+  "sellValue": 100,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.12
+  },
+  "minTier": 2,
+  "type": "exotic_reef"
+ },
+ {
+  "id": "discus_orange",
+  "rarity": "rare",
+  "color": "#FFA500",
+  "weight": 6,
+  "sellValue": 750,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.35
+  },
+  "minTier": 3,
+  "type": "exotic_reef"
+ },
+ {
+  "id": "dottyback_purple",
+  "rarity": "uncommon",
+  "color": "#800080",
+  "weight": 12,
+  "sellValue": 300,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.3
+  },
+  "minTier": 3,
+  "type": "exotic_reef"
+ },
+ {
+  "id": "goldfish_red_reef",
+  "rarity": "uncommon",
+  "color": "#FF0000",
+  "weight": 14,
+  "sellValue": 280,
+  "effect": {
+   "type": "feather_mult",
+   "value": 1.25
+  },
+  "minTier": 3,
+  "type": "exotic_reef"
+ },
+ {
+  "id": "wrasse_blue_yellow",
+  "rarity": "uncommon",
+  "color": "#4169E1",
+  "weight": 10,
+  "sellValue": 350,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.35
+  },
+  "minTier": 4,
+  "type": "exotic_reef"
+ },
+ {
+  "id": "wrasse_green_reef",
+  "rarity": "uncommon",
+  "color": "#32CD32",
+  "weight": 12,
+  "sellValue": 320,
+  "effect": {
+   "type": "pickup_mult",
+   "value": 1.3
+  },
+  "minTier": 4,
+  "type": "exotic_reef"
+ },
+ {
+  "id": "ghost_blob_blue",
+  "rarity": "rare",
+  "color": "#ADD8E6",
+  "weight": 3,
+  "sellValue": 1200,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.6
+  },
+  "minTier": 4,
+  "type": "spirit"
+ },
+ {
+  "id": "ghost_blob_white",
+  "rarity": "rare",
+  "color": "#FFFFFF",
+  "weight": 2.5,
+  "sellValue": 1400,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.65
+  },
+  "minTier": 5,
+  "type": "spirit"
+ },
+ {
+  "id": "ghost_blob_yellow",
+  "rarity": "rare",
+  "color": "#FFFFE0",
+  "weight": 2.8,
+  "sellValue": 1300,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.6
+  },
+  "minTier": 4,
+  "type": "spirit"
+ },
+ {
+  "id": "ghost_eye_purple",
+  "rarity": "epic",
+  "color": "#8A2BE2",
+  "weight": 1,
+  "sellValue": 2800,
+  "effect": {
+   "type": "pickup_mult",
+   "value": 1.9
+  },
+  "minTier": 6,
+  "type": "spirit"
+ },
+ {
+  "id": "ghost_fish_green_round",
+  "rarity": "rare",
+  "color": "#90EE90",
+  "weight": 4,
+  "sellValue": 1100,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.2
+  },
+  "minTier": 5,
+  "type": "spirit"
+ },
+ {
+  "id": "ghost_fish_pink_round",
+  "rarity": "rare",
+  "color": "#FFB6C1",
+  "weight": 4.5,
+  "sellValue": 1000,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.5
+  },
+  "minTier": 4,
+  "type": "spirit"
+ },
+ {
+  "id": "ghost_fish_tan",
+  "rarity": "uncommon",
+  "color": "#F4A460",
+  "weight": 12,
+  "sellValue": 400,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.35
+  },
+  "minTier": 3,
+  "type": "spirit"
+ },
+ {
+  "id": "ghost_fish_yellow_small",
+  "rarity": "common",
+  "color": "#FFFACD",
+  "weight": 25,
+  "sellValue": 150,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.2
+  },
+  "minTier": 3,
+  "type": "spirit"
+ },
+ {
+  "id": "ghost_octopus_pink",
+  "rarity": "epic",
+  "color": "#FFB6C1",
+  "weight": 0.8,
+  "sellValue": 4500,
+  "effect": {
+   "type": "feather_mult",
+   "value": 2.1
+  },
+  "minTier": 6,
+  "type": "spirit"
+ },
+ {
+  "id": "ghost_skeleton_green",
+  "rarity": "rare",
+  "color": "#556B2F",
+  "weight": 3.5,
+  "sellValue": 1500,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.7
+  },
+  "minTier": 5,
+  "type": "spirit"
+ },
+ {
+  "id": "ghost_wisp_green",
+  "rarity": "uncommon",
+  "color": "#00FA9A",
+  "weight": 15,
+  "sellValue": 350,
+  "effect": {
+   "type": "speed_mult",
+   "value": 1.35
+  },
+  "minTier": 3,
+  "type": "spirit"
+ },
+ {
+  "id": "gear_large",
+  "rarity": "uncommon",
+  "color": "#708090",
+  "weight": 14,
+  "sellValue": 200,
+  "effect": {
+   "type": "pickup_mult",
+   "value": 1.28
+  },
+  "minTier": 2,
+  "type": "mechanical"
+ },
+ {
+  "id": "pipe_joint",
+  "rarity": "common",
+  "color": "#B87333",
+  "weight": 35,
+  "sellValue": 100,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.15
+  },
+  "minTier": 1,
+  "type": "mechanical"
+ },
+ {
+  "id": "mech_shell_gold_real",
+  "rarity": "rare",
+  "color": "#FFD700",
+  "weight": 5,
+  "sellValue": 1200,
+  "effect": {
+   "type": "feather_mult",
+   "value": 1.75
+  },
+  "minTier": 6,
+  "type": "mechanical"
+ },
+ {
+  "id": "crab_black",
+  "rarity": "uncommon",
+  "color": "#000000",
+  "weight": 15,
+  "sellValue": 220,
+  "effect": {
+   "type": "speed_mult",
+   "value": 1.25
+  },
+  "minTier": 3,
+  "type": "crab"
+ },
+ {
+  "id": "crab_fiddler",
+  "rarity": "uncommon",
+  "color": "#D2B48C",
+  "weight": 18,
+  "sellValue": 180,
+  "effect": {
+   "type": "pickup_mult",
+   "value": 1.2
+  },
+  "minTier": 2,
+  "type": "crab"
+ },
+ {
+  "id": "crab_green",
+  "rarity": "common",
+  "color": "#00FF7F",
+  "weight": 32,
+  "sellValue": 110,
+  "effect": {
+   "type": "pickup_mult",
+   "value": 1.15
+  },
+  "minTier": 2,
+  "type": "crab"
+ },
+ {
+  "id": "crab_hermit_standard",
+  "rarity": "uncommon",
+  "color": "#DEB887",
+  "weight": 16,
+  "sellValue": 200,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.25
+  },
+  "minTier": 3,
+  "type": "crab"
+ },
+ {
+  "id": "crab_orange",
+  "rarity": "common",
+  "color": "#FF8C00",
+  "weight": 30,
+  "sellValue": 130,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.18
+  },
+  "minTier": 2,
+  "type": "crab"
+ },
+ {
+  "id": "crab_pink",
+  "rarity": "uncommon",
+  "color": "#FFC0CB",
+  "weight": 14,
+  "sellValue": 240,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.3
+  },
+  "minTier": 4,
+  "type": "crab"
+ },
+ {
+  "id": "crab_red_alt",
+  "rarity": "rare",
+  "color": "#FF0000",
+  "weight": 6,
+  "sellValue": 800,
+  "effect": {
+   "type": "feather_mult",
+   "value": 1.5
+  },
+  "minTier": 5,
+  "type": "crab"
+ },
+ {
+  "id": "crayfish_brown",
+  "rarity": "common",
+  "color": "#8B4513",
+  "weight": 35,
+  "sellValue": 150,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.2
+  },
+  "minTier": 3,
+  "type": "crab"
+ },
+ {
+  "id": "krill_tiny",
+  "rarity": "common",
+  "color": "#FFB6C1",
+  "weight": 50,
+  "sellValue": 20,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.08
+  },
+  "minTier": 0,
+  "type": "crab"
+ },
+ {
+  "id": "plankton_tiny",
+  "rarity": "common",
+  "color": "#00FFFF",
+  "weight": 55,
+  "sellValue": 15,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.1
+  },
+  "minTier": 0,
+  "type": "crab"
+ },
+ {
+  "id": "shrimp_pink_creature",
+  "rarity": "common",
+  "color": "#FFC0CB",
+  "weight": 38,
+  "sellValue": 45,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.1
+  },
+  "minTier": 1,
+  "type": "crab"
+ },
+ {
+  "id": "jellyfish_blue_deep",
+  "rarity": "rare",
+  "color": "#000080",
+  "weight": 5,
+  "sellValue": 900,
+  "effect": {
+   "type": "speed_mult",
+   "value": 1.6
+  },
+  "minTier": 6,
+  "type": "abyssal"
+ },
+ {
+  "id": "bridge_lance_tetra",
+  "rarity": "uncommon",
+  "color": "#547cca",
+  "weight": 18,
+  "sellValue": 200,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.2
+  },
+  "minTier": 1,
+  "type": "river"
+ },
+ {
+  "id": "bridge_crown_carp",
+  "rarity": "uncommon",
+  "color": "#b47563",
+  "weight": 15,
+  "sellValue": 240,
+  "effect": {
+   "type": "pickup_mult",
+   "value": 1.2
+  },
+  "minTier": 1,
+  "type": "freshwater"
+ },
+ {
+  "id": "bridge_hatchetfish",
+  "rarity": "common",
+  "color": "#83b7c2",
+  "weight": 30,
+  "sellValue": 120,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.15
+  },
+  "minTier": 2,
+  "type": "river"
+ },
+ {
+  "id": "bridge_moon_discus",
+  "rarity": "rare",
+  "color": "#9297bd",
+  "weight": 6,
+  "sellValue": 750,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.35
+  },
+  "minTier": 3,
+  "type": "freshwater"
+ },
+ {
+  "id": "bridge_crystal_puffer",
+  "rarity": "uncommon",
+  "color": "#b4daec",
+  "weight": 10,
+  "sellValue": 250,
+  "effect": {
+   "type": "pickup_mult",
+   "value": 1.25
+  },
+  "minTier": 3,
+  "type": "exotic_reef"
+ },
+ {
+  "id": "bridge_banner_triggerfish",
+  "rarity": "rare",
+  "color": "#6aa8a7",
+  "weight": 5.5,
+  "sellValue": 750,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.4
+  },
+  "minTier": 4,
+  "type": "reef"
+ },
+ {
+  "id": "bridge_veil_betta",
+  "rarity": "uncommon",
+  "color": "#be77c7",
+  "weight": 12,
+  "sellValue": 220,
+  "effect": {
+   "type": "reel_speed_mult",
+   "value": 1.25
+  },
+  "minTier": 1,
+  "type": "freshwater"
+ },
+ {
+  "id": "bridge_comet_angelfish",
+  "rarity": "rare",
+  "color": "#dfc67e",
+  "weight": 5,
+  "sellValue": 800,
+  "effect": {
+   "type": "pickup_mult",
+   "value": 1.4
+  },
+  "minTier": 4,
+  "type": "exotic_reef"
+ },
+ {
+  "id": "bridge_bishop_fish",
+  "rarity": "rare",
+  "color": "#e6a59c",
+  "weight": 4.5,
+  "sellValue": 900,
+  "effect": {
+   "type": "xp_mult",
+   "value": 1.45
+  },
+  "minTier": 5,
+  "type": "exotic_reef"
+ },
+ {
+  "id": "bridge_lily_dragonfish",
+  "rarity": "rare",
+  "color": "#55988b",
+  "weight": 6,
+  "sellValue": 700,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.4
+  },
+  "minTier": 3,
+  "type": "creature"
+ },
+ {
+  "id": "bridge_sickle_moray",
+  "rarity": "epic",
+  "color": "#b4a0d3",
+  "weight": 2,
+  "sellValue": 1200,
+  "effect": {
+   "type": "feather_mult",
+   "value": 1.5
+  },
+  "minTier": 6,
+  "type": "exotic_reef"
+ },
+ {
+  "id": "bridge_crowned_dragonfish",
+  "rarity": "mythic",
+  "color": "#c08b94",
+  "weight": 0.0001,
+  "sellValue": 40000,
+  "effect": {
+   "type": "xp_mult",
+   "value": 2.1
+  },
+  "minTier": 7,
+  "type": "abyssal"
+ },
+ {
+  "id": "bridge_lantern_angler",
+  "rarity": "rare",
+  "color": "#d9b983",
+  "weight": 6,
+  "sellValue": 800,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.4
+  },
+  "minTier": 4,
+  "type": "abyssal"
+ },
+ {
+  "id": "bridge_ghost_hammerhead",
+  "rarity": "epic",
+  "color": "#c0d5da",
+  "weight": 0.5,
+  "sellValue": 5000,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.8
+  },
+  "minTier": 4,
+  "type": "spirit"
+ },
+ {
+  "id": "bridge_royal_axolotl",
+  "rarity": "mythic",
+  "color": "#e6d2e8",
+  "weight": 0.0002,
+  "sellValue": 2500,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.8
+  },
+  "minTier": 4,
+  "type": "spirit"
+ },
+ {
+  "id": "exp_f1_sylvan_minnow",
+  "rarity": "common",
+  "color": "#7FBF7F",
+  "weight": 1,
+  "sellValue": 300,
+  "effect": {
+   "type": "parrot_damage_mult",
+   "value": 1.01
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 1,
+  "expeditionCatchChance": 0.022222222222222223
+ },
+ {
+  "id": "exp_f1_fernfin_darter",
+  "rarity": "common",
+  "color": "#8ACF8A",
+  "weight": 1,
+  "sellValue": 340,
+  "effect": {
+   "type": "parrot_life_regen_mult",
+   "value": 1.015
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 1,
+  "expeditionCatchChance": 0.016666666666666666
+ },
+ {
+  "id": "exp_f1_twigtail_skimmer",
+  "rarity": "common",
+  "color": "#A2D39C",
+  "weight": 1,
+  "sellValue": 380,
+  "effect": {
+   "type": "parrot_hp_mult",
+   "value": 1.02
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 1,
+  "expeditionCatchChance": 0.0125
+ },
+ {
+  "id": "exp_f1_mossveil_guppy",
+  "rarity": "common",
+  "color": "#6FAF6F",
+  "weight": 1,
+  "sellValue": 430,
+  "effect": {
+   "type": "parrot_skill_point_mult",
+   "value": 1.025
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 1,
+  "expeditionCatchChance": 0.009523809523809525
+ },
+ {
+  "id": "exp_f1_petalflash_tetra",
+  "rarity": "common",
+  "color": "#9BE7A8",
+  "weight": 1,
+  "sellValue": 480,
+  "effect": {
+   "type": "parrot_attack_speed_mult",
+   "value": 1.03
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 1,
+  "expeditionCatchChance": 0.007692307692307693
+ },
+ {
+  "id": "exp_f1_dewscale_sproutfish",
+  "rarity": "common",
+  "color": "#B2E6B2",
+  "weight": 1,
+  "sellValue": 540,
+  "effect": {
+   "type": "parrot_move_speed_mult",
+   "value": 1.035
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 1,
+  "expeditionCatchChance": 0.00625
+ },
+ {
+  "id": "exp_f1_barkback_koi",
+  "rarity": "common",
+  "color": "#5D8F5D",
+  "weight": 1,
+  "sellValue": 610,
+  "effect": {
+   "type": "parrot_damage_mult",
+   "value": 1.04
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 1,
+  "expeditionCatchChance": 0.005
+ },
+ {
+  "id": "exp_f1_cloverbite_runner",
+  "rarity": "common",
+  "color": "#8FCC7A",
+  "weight": 1,
+  "sellValue": 700,
+  "effect": {
+   "type": "parrot_life_regen_mult",
+   "value": 1.045
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 1,
+  "expeditionCatchChance": 0.004
+ },
+ {
+  "id": "exp_f1_emerald_glenperch",
+  "rarity": "uncommon",
+  "color": "#22C55E",
+  "weight": 1,
+  "sellValue": 820,
+  "effect": {
+   "type": "parrot_hp_mult",
+   "value": 1.05
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 1,
+  "expeditionCatchChance": 0.003076923076923077
+ },
+ {
+  "id": "exp_f1_thistlejaw_hunter",
+  "rarity": "uncommon",
+  "color": "#39B54A",
+  "weight": 1,
+  "sellValue": 980,
+  "effect": {
+   "type": "parrot_skill_point_mult",
+   "value": 1.06
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 1,
+  "expeditionCatchChance": 0.002352941176470588
+ },
+ {
+  "id": "exp_f1_bramblestripe_pikelet",
+  "rarity": "uncommon",
+  "color": "#45A06A",
+  "weight": 1,
+  "sellValue": 1150,
+  "effect": {
+   "type": "parrot_attack_speed_mult",
+   "value": 1.07
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 1,
+  "expeditionCatchChance": 0.0017391304347826088
+ },
+ {
+  "id": "exp_f1_mooncap_shiner",
+  "rarity": "uncommon",
+  "color": "#76D7A8",
+  "weight": 1,
+  "sellValue": 1350,
+  "effect": {
+   "type": "parrot_move_speed_mult",
+   "value": 1.08
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 1,
+  "expeditionCatchChance": 0.0012903225806451613
+ },
+ {
+  "id": "exp_f1_rootwhorl_carp",
+  "rarity": "uncommon",
+  "color": "#4E9F3D",
+  "weight": 1,
+  "sellValue": 1600,
+  "effect": {
+   "type": "parrot_damage_mult",
+   "value": 1.09
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 1,
+  "expeditionCatchChance": 0.0009523809523809524
+ },
+ {
+  "id": "exp_f1_hollowfin_bass",
+  "rarity": "uncommon",
+  "color": "#6FBF73",
+  "weight": 1,
+  "sellValue": 1900,
+  "effect": {
+   "type": "parrot_life_regen_mult",
+   "value": 1.1
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 1,
+  "expeditionCatchChance": 0.000689655172413793
+ },
+ {
+  "id": "exp_f1_mycelion_swimmer",
+  "rarity": "rare",
+  "color": "#3B82F6",
+  "weight": 1,
+  "sellValue": 2300,
+  "effect": {
+   "type": "parrot_hp_mult",
+   "value": 1.12
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 1,
+  "expeditionCatchChance": 0.00045454545454545455
+ },
+ {
+  "id": "exp_f1_ivycrest_trout",
+  "rarity": "rare",
+  "color": "#60A5FA",
+  "weight": 1,
+  "sellValue": 2800,
+  "effect": {
+   "type": "parrot_skill_point_mult",
+   "value": 1.14
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 1,
+  "expeditionCatchChance": 0.0003125
+ },
+ {
+  "id": "exp_f1_spiritbud_ray",
+  "rarity": "rare",
+  "color": "#4F46E5",
+  "weight": 1,
+  "sellValue": 3600,
+  "effect": {
+   "type": "parrot_attack_speed_mult",
+   "value": 1.16
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 1,
+  "expeditionCatchChance": 0.00020833333333333335
+ },
+ {
+  "id": "exp_f1_whisperleaf_piran",
+  "rarity": "rare",
+  "color": "#2563EB",
+  "weight": 1,
+  "sellValue": 4600,
+  "effect": {
+   "type": "parrot_move_speed_mult",
+   "value": 1.18
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 1,
+  "expeditionCatchChance": 0.0001388888888888889
+ },
+ {
+  "id": "exp_f1_faebloom_serpent",
+  "rarity": "rare",
+  "color": "#1D4ED8",
+  "weight": 1,
+  "sellValue": 6200,
+  "effect": {
+   "type": "parrot_damage_mult",
+   "value": 1.2
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 1,
+  "expeditionCatchChance": 0.00009523809523809524
+ },
+ {
+  "id": "exp_f1_dreamfern_eel",
+  "rarity": "epic",
+  "color": "#A855F7",
+  "weight": 1,
+  "sellValue": 9000,
+  "effect": {
+   "type": "parrot_life_regen_mult",
+   "value": 1.23
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 1,
+  "expeditionCatchChance": 0.00005555555555555556
+ },
+ {
+  "id": "exp_f1_elderwood_sturgeon",
+  "rarity": "epic",
+  "color": "#C084FC",
+  "weight": 1,
+  "sellValue": 15000,
+  "effect": {
+   "type": "parrot_hp_mult",
+   "value": 1.27
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 1,
+  "expeditionCatchChance": 0.000011111111111111112
+ },
+ {
+  "id": "exp_f1_gladewarden_leviathan",
+  "rarity": "epic",
+  "color": "#9333EA",
+  "weight": 1,
+  "sellValue": 40000,
+  "effect": {
+   "type": "parrot_skill_point_mult",
+   "value": 1.32
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 1,
+  "expeditionCatchChance": 0.0000013333333333333334
+ },
+ {
+  "id": "exp_f1_ancientsap_oracle",
+  "rarity": "legendary",
+  "color": "#F59E0B",
+  "weight": 1,
+  "sellValue": 150000,
+  "effect": {
+   "type": "parrot_attack_speed_mult",
+   "value": 1.4
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 1,
+  "expeditionCatchChance": 5e-8
+ },
+ {
+  "id": "exp_f1_worldroot_phantom",
+  "rarity": "legendary",
+  "color": "#FBBF24",
+  "weight": 1,
+  "sellValue": 1000000,
+  "effect": {
+   "type": "parrot_move_speed_mult",
+   "value": 1.6
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 1,
+  "expeditionCatchChance": 2.5e-9
+ },
+ {
+  "id": "exp_f2_duskmote_guppy",
+  "rarity": "common",
+  "color": "#A855F7",
+  "weight": 1,
+  "sellValue": 1200,
+  "effect": {
+   "type": "parrot_damage_mult",
+   "value": 1.1
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 2,
+  "expeditionCatchChance": 0.016666666666666666
+ },
+ {
+  "id": "exp_f2_violet_hexfin",
+  "rarity": "common",
+  "color": "#C084FC",
+  "weight": 1,
+  "sellValue": 1300,
+  "effect": {
+   "type": "parrot_life_regen_mult",
+   "value": 1.11
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 2,
+  "expeditionCatchChance": 0.013333333333333334
+ },
+ {
+  "id": "exp_f2_lilac_runelet",
+  "rarity": "common",
+  "color": "#D8B4FE",
+  "weight": 1,
+  "sellValue": 1425,
+  "effect": {
+   "type": "parrot_hp_mult",
+   "value": 1.12
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 2,
+  "expeditionCatchChance": 0.010526315789473684
+ },
+ {
+  "id": "exp_f2_gloamwhorl_fry",
+  "rarity": "common",
+  "color": "#9333EA",
+  "weight": 1,
+  "sellValue": 1575,
+  "effect": {
+   "type": "parrot_skill_point_mult",
+   "value": 1.13
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 2,
+  "expeditionCatchChance": 0.008333333333333333
+ },
+ {
+  "id": "exp_f2_spellwake_tetra",
+  "rarity": "common",
+  "color": "#8B5CF6",
+  "weight": 1,
+  "sellValue": 1725,
+  "effect": {
+   "type": "parrot_attack_speed_mult",
+   "value": 1.15
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 2,
+  "expeditionCatchChance": 0.006896551724137931
+ },
+ {
+  "id": "exp_f2_amethyst_driftling",
+  "rarity": "common",
+  "color": "#7C3AED",
+  "weight": 1,
+  "sellValue": 1900,
+  "effect": {
+   "type": "parrot_move_speed_mult",
+   "value": 1.16
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 2,
+  "expeditionCatchChance": 0.005714285714285714
+ },
+ {
+  "id": "exp_f2_nightbloom_koi",
+  "rarity": "common",
+  "color": "#6D28D9",
+  "weight": 1,
+  "sellValue": 2125,
+  "effect": {
+   "type": "parrot_damage_mult",
+   "value": 1.18
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 2,
+  "expeditionCatchChance": 0.004545454545454545
+ },
+ {
+  "id": "exp_f2_moonveil_darter",
+  "rarity": "common",
+  "color": "#A78BFA",
+  "weight": 1,
+  "sellValue": 2400,
+  "effect": {
+   "type": "parrot_life_regen_mult",
+   "value": 1.2
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 2,
+  "expeditionCatchChance": 0.0035714285714285713
+ },
+ {
+  "id": "exp_f2_dusksigil_perch",
+  "rarity": "uncommon",
+  "color": "#8B5CF6",
+  "weight": 1,
+  "sellValue": 2750,
+  "effect": {
+   "type": "parrot_hp_mult",
+   "value": 1.22
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 2,
+  "expeditionCatchChance": 0.002777777777777778
+ },
+ {
+  "id": "exp_f2_hexpetal_pikelet",
+  "rarity": "uncommon",
+  "color": "#7E22CE",
+  "weight": 1,
+  "sellValue": 3200,
+  "effect": {
+   "type": "parrot_skill_point_mult",
+   "value": 1.24
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 2,
+  "expeditionCatchChance": 0.002127659574468085
+ },
+ {
+  "id": "exp_f2_voidbloom_shiner",
+  "rarity": "uncommon",
+  "color": "#6B21A8",
+  "weight": 1,
+  "sellValue": 3700,
+  "effect": {
+   "type": "parrot_attack_speed_mult",
+   "value": 1.26
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 2,
+  "expeditionCatchChance": 0.0016129032258064516
+ },
+ {
+  "id": "exp_f2_starchant_carp",
+  "rarity": "uncommon",
+  "color": "#C4B5FD",
+  "weight": 1,
+  "sellValue": 4300,
+  "effect": {
+   "type": "parrot_move_speed_mult",
+   "value": 1.28
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 2,
+  "expeditionCatchChance": 0.0012195121951219512
+ },
+ {
+  "id": "exp_f2_witchfen_runner",
+  "rarity": "uncommon",
+  "color": "#9333EA",
+  "weight": 1,
+  "sellValue": 5050,
+  "effect": {
+   "type": "parrot_damage_mult",
+   "value": 1.3
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 2,
+  "expeditionCatchChance": 0.0009090909090909091
+ },
+ {
+  "id": "exp_f2_ebonhalo_bass",
+  "rarity": "uncommon",
+  "color": "#581C87",
+  "weight": 1,
+  "sellValue": 5900,
+  "effect": {
+   "type": "parrot_life_regen_mult",
+   "value": 1.33
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 2,
+  "expeditionCatchChance": 0.0006666666666666666
+ },
+ {
+  "id": "exp_f2_runeshade_trout",
+  "rarity": "rare",
+  "color": "#4F46E5",
+  "weight": 1,
+  "sellValue": 7000,
+  "effect": {
+   "type": "parrot_hp_mult",
+   "value": 1.36
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 2,
+  "expeditionCatchChance": 0.0004347826086956522
+ },
+ {
+  "id": "exp_f2_velvet_oraclefish",
+  "rarity": "rare",
+  "color": "#6366F1",
+  "weight": 1,
+  "sellValue": 8600,
+  "effect": {
+   "type": "parrot_skill_point_mult",
+   "value": 1.4
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 2,
+  "expeditionCatchChance": 0.0002941176470588235
+ },
+ {
+  "id": "exp_f2_nocturne_ray",
+  "rarity": "rare",
+  "color": "#4338CA",
+  "weight": 1,
+  "sellValue": 10800,
+  "effect": {
+   "type": "parrot_attack_speed_mult",
+   "value": 1.45
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 2,
+  "expeditionCatchChance": 0.0002
+ },
+ {
+  "id": "exp_f2_astral_veilfin",
+  "rarity": "rare",
+  "color": "#7C3AED",
+  "weight": 1,
+  "sellValue": 13800,
+  "effect": {
+   "type": "parrot_move_speed_mult",
+   "value": 1.5
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 2,
+  "expeditionCatchChance": 0.00013157894736842105
+ },
+ {
+  "id": "exp_f2_umbral_serpent",
+  "rarity": "rare",
+  "color": "#312E81",
+  "weight": 1,
+  "sellValue": 18200,
+  "effect": {
+   "type": "parrot_damage_mult",
+   "value": 1.56
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 2,
+  "expeditionCatchChance": 0.00008695652173913044
+ },
+ {
+  "id": "exp_f2_dreamhex_eel",
+  "rarity": "epic",
+  "color": "#A855F7",
+  "weight": 1,
+  "sellValue": 26000,
+  "effect": {
+   "type": "parrot_life_regen_mult",
+   "value": 1.64
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 2,
+  "expeditionCatchChance": 0.000052631578947368424
+ },
+ {
+  "id": "exp_f2_crownshadow_sturgeon",
+  "rarity": "epic",
+  "color": "#C084FC",
+  "weight": 1,
+  "sellValue": 48000,
+  "effect": {
+   "type": "parrot_hp_mult",
+   "value": 1.74
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 2,
+  "expeditionCatchChance": 0.000008333333333333334
+ },
+ {
+  "id": "exp_f2_twilight_leviathan",
+  "rarity": "epic",
+  "color": "#7E22CE",
+  "weight": 1,
+  "sellValue": 125000,
+  "effect": {
+   "type": "parrot_skill_point_mult",
+   "value": 1.86
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 2,
+  "expeditionCatchChance": 0.000001111111111111111
+ },
+ {
+  "id": "exp_f2_liliths_oracle",
+  "rarity": "legendary",
+  "color": "#F59E0B",
+  "weight": 1,
+  "sellValue": 450000,
+  "effect": {
+   "type": "parrot_attack_speed_mult",
+   "value": 2
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 2,
+  "expeditionCatchChance": 4.166666666666667e-8
+ },
+ {
+  "id": "exp_f2_nebulashade_phantom",
+  "rarity": "legendary",
+  "color": "#FBBF24",
+  "weight": 1,
+  "sellValue": 2200000,
+  "effect": {
+   "type": "parrot_move_speed_mult",
+   "value": 2.2
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 2,
+  "expeditionCatchChance": 2.222222222222222e-9
+ },
+ {
+  "id": "exp_f4_tideglimmer_sprat",
+  "rarity": "common",
+  "color": "#38BDF8",
+  "weight": 1,
+  "sellValue": 1800,
+  "effect": {
+   "type": "parrot_damage_mult",
+   "value": 1.18
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 4,
+  "expeditionCatchChance": 0.01818181818181818
+ },
+ {
+  "id": "exp_f4_brinewhisp_niblet",
+  "rarity": "common",
+  "color": "#67E8F9",
+  "weight": 1,
+  "sellValue": 1950,
+  "effect": {
+   "type": "parrot_life_regen_mult",
+   "value": 1.2
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 4,
+  "expeditionCatchChance": 0.014285714285714285
+ },
+ {
+  "id": "exp_f4_coralcrown_minnow",
+  "rarity": "common",
+  "color": "#A5F3FC",
+  "weight": 1,
+  "sellValue": 2100,
+  "effect": {
+   "type": "parrot_hp_mult",
+   "value": 1.22
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 4,
+  "expeditionCatchChance": 0.011111111111111112
+ },
+ {
+  "id": "exp_f4_kelpshade_guppy",
+  "rarity": "common",
+  "color": "#22D3EE",
+  "weight": 1,
+  "sellValue": 2300,
+  "effect": {
+   "type": "parrot_skill_point_mult",
+   "value": 1.24
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 4,
+  "expeditionCatchChance": 0.008695652173913044
+ },
+ {
+  "id": "exp_f4_moonfoam_tetra",
+  "rarity": "common",
+  "color": "#0EA5E9",
+  "weight": 1,
+  "sellValue": 2550,
+  "effect": {
+   "type": "parrot_attack_speed_mult",
+   "value": 1.26
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 4,
+  "expeditionCatchChance": 0.007142857142857143
+ },
+ {
+  "id": "exp_f4_wavechant_drifter",
+  "rarity": "common",
+  "color": "#0891B2",
+  "weight": 1,
+  "sellValue": 2800,
+  "effect": {
+   "type": "parrot_move_speed_mult",
+   "value": 1.28
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 4,
+  "expeditionCatchChance": 0.0058823529411764705
+ },
+ {
+  "id": "exp_f4_reefspark_koi",
+  "rarity": "common",
+  "color": "#0284C7",
+  "weight": 1,
+  "sellValue": 3050,
+  "effect": {
+   "type": "popcorn_mult",
+   "value": 1.3
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 4,
+  "expeditionCatchChance": 0.004761904761904762
+ },
+ {
+  "id": "exp_f4_seafable_darter",
+  "rarity": "common",
+  "color": "#0369A1",
+  "weight": 1,
+  "sellValue": 3350,
+  "effect": {
+   "type": "seed_mult",
+   "value": 1.3
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 4,
+  "expeditionCatchChance": 0.0038461538461538464
+ },
+ {
+  "id": "exp_f4_abysslace_perch",
+  "rarity": "uncommon",
+  "color": "#06B6D4",
+  "weight": 1,
+  "sellValue": 3800,
+  "effect": {
+   "type": "parrot_hp_mult",
+   "value": 1.34
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 4,
+  "expeditionCatchChance": 0.0029411764705882353
+ },
+ {
+  "id": "exp_f4_riptide_hexfin",
+  "rarity": "uncommon",
+  "color": "#0891B2",
+  "weight": 1,
+  "sellValue": 4450,
+  "effect": {
+   "type": "parrot_skill_point_mult",
+   "value": 1.36
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 4,
+  "expeditionCatchChance": 0.0022222222222222222
+ },
+ {
+  "id": "exp_f4_stormveil_shiner",
+  "rarity": "uncommon",
+  "color": "#0E7490",
+  "weight": 1,
+  "sellValue": 5200,
+  "effect": {
+   "type": "parrot_attack_speed_mult",
+   "value": 1.38
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 4,
+  "expeditionCatchChance": 0.0016666666666666668
+ },
+ {
+  "id": "exp_f4_sirencrest_carp",
+  "rarity": "uncommon",
+  "color": "#155E75",
+  "weight": 1,
+  "sellValue": 6100,
+  "effect": {
+   "type": "parrot_move_speed_mult",
+   "value": 1.4
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 4,
+  "expeditionCatchChance": 0.00125
+ },
+ {
+  "id": "exp_f4_duskcurrent_runner",
+  "rarity": "uncommon",
+  "color": "#0C4A6E",
+  "weight": 1,
+  "sellValue": 7050,
+  "effect": {
+   "type": "parrot_damage_mult",
+   "value": 1.42
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 4,
+  "expeditionCatchChance": 0.000925925925925926
+ },
+ {
+  "id": "exp_f4_shellbloom_bass",
+  "rarity": "uncommon",
+  "color": "#164E63",
+  "weight": 1,
+  "sellValue": 8200,
+  "effect": {
+   "type": "parrot_life_regen_mult",
+   "value": 1.45
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 4,
+  "expeditionCatchChance": 0.000689655172413793
+ },
+ {
+  "id": "exp_f4_tridentscale_trout",
+  "rarity": "rare",
+  "color": "#3B82F6",
+  "weight": 1,
+  "sellValue": 9800,
+  "effect": {
+   "type": "parrot_hp_mult",
+   "value": 1.5
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 4,
+  "expeditionCatchChance": 0.00045454545454545455
+ },
+ {
+  "id": "exp_f4_fathom_oraclefish",
+  "rarity": "rare",
+  "color": "#2563EB",
+  "weight": 1,
+  "sellValue": 12000,
+  "effect": {
+   "type": "parrot_skill_point_mult",
+   "value": 1.55
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 4,
+  "expeditionCatchChance": 0.00030303030303030303
+ },
+ {
+  "id": "exp_f4_ripjaw_ray",
+  "rarity": "rare",
+  "color": "#1D4ED8",
+  "weight": 1,
+  "sellValue": 15200,
+  "effect": {
+   "type": "parrot_attack_speed_mult",
+   "value": 1.6
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 4,
+  "expeditionCatchChance": 0.00020408163265306123
+ },
+ {
+  "id": "exp_f4_tideshadow_veilfin",
+  "rarity": "rare",
+  "color": "#1E40AF",
+  "weight": 1,
+  "sellValue": 19400,
+  "effect": {
+   "type": "parrot_move_speed_mult",
+   "value": 1.66
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 4,
+  "expeditionCatchChance": 0.00013513513513513514
+ },
+ {
+  "id": "exp_f4_crownwake_serpent",
+  "rarity": "rare",
+  "color": "#F59E0B",
+  "weight": 1,
+  "sellValue": 24600,
+  "effect": {
+   "type": "golden_popcorn_mult",
+   "value": 1.75
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 4,
+  "expeditionCatchChance": 0.00008928571428571429
+ },
+ {
+  "id": "exp_f4_nautilorn_eel",
+  "rarity": "epic",
+  "color": "#A855F7",
+  "weight": 1,
+  "sellValue": 39000,
+  "effect": {
+   "type": "parrot_life_regen_mult",
+   "value": 1.85
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 4,
+  "expeditionCatchChance": 0.000054054054054054054
+ },
+ {
+  "id": "exp_f4_thalassarch_sturgeon",
+  "rarity": "epic",
+  "color": "#C084FC",
+  "weight": 1,
+  "sellValue": 72000,
+  "effect": {
+   "type": "parrot_hp_mult",
+   "value": 2
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 4,
+  "expeditionCatchChance": 0.000009090909090909091
+ },
+ {
+  "id": "exp_f4_deepsong_leviathan",
+  "rarity": "epic",
+  "color": "#9333EA",
+  "weight": 1,
+  "sellValue": 180000,
+  "effect": {
+   "type": "parrot_skill_point_mult",
+   "value": 2.15
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 4,
+  "expeditionCatchChance": 0.000001176470588235294
+ },
+ {
+  "id": "exp_f4_sovereign_of_tides",
+  "rarity": "legendary",
+  "color": "#F59E0B",
+  "weight": 1,
+  "sellValue": 620000,
+  "effect": {
+   "type": "parrot_attack_speed_mult",
+   "value": 2.35
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 4,
+  "expeditionCatchChance": 4.545454545454546e-8
+ },
+ {
+  "id": "exp_f4_mythic_mariana_phantom",
+  "rarity": "legendary",
+  "color": "#FBBF24",
+  "weight": 1,
+  "sellValue": 2800000,
+  "effect": {
+   "type": "parrot_move_speed_mult",
+   "value": 2.6
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 4,
+  "expeditionCatchChance": 2.380952380952381e-9
+ },
+ {
+  "id": "exp_f6_frostpin_sprat",
+  "rarity": "common",
+  "color": "#60A5FA",
+  "weight": 1,
+  "sellValue": 2800,
+  "effect": {
+   "type": "parrot_damage_mult",
+   "value": 1.3
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 6,
+  "expeditionCatchChance": 0.019230769230769232
+ },
+ {
+  "id": "exp_f6_glacierdart_minnow",
+  "rarity": "common",
+  "color": "#93C5FD",
+  "weight": 1,
+  "sellValue": 3000,
+  "effect": {
+   "type": "parrot_life_regen_mult",
+   "value": 1.32
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 6,
+  "expeditionCatchChance": 0.015625
+ },
+ {
+  "id": "exp_f6_snowglass_char",
+  "rarity": "common",
+  "color": "#DBEAFE",
+  "weight": 1,
+  "sellValue": 3250,
+  "effect": {
+   "type": "parrot_hp_mult",
+   "value": 1.34
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 6,
+  "expeditionCatchChance": 0.0125
+ },
+ {
+  "id": "exp_f6_hailwhorl_fry",
+  "rarity": "common",
+  "color": "#7DD3FC",
+  "weight": 1,
+  "sellValue": 3550,
+  "effect": {
+   "type": "parrot_skill_point_mult",
+   "value": 1.36
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 6,
+  "expeditionCatchChance": 0.01
+ },
+ {
+  "id": "exp_f6_aurora_tetra",
+  "rarity": "common",
+  "color": "#67E8F9",
+  "weight": 1,
+  "sellValue": 3900,
+  "effect": {
+   "type": "parrot_attack_speed_mult",
+   "value": 1.38
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 6,
+  "expeditionCatchChance": 0.00819672131147541
+ },
+ {
+  "id": "exp_f6_rimewake_drifter",
+  "rarity": "common",
+  "color": "#38BDF8",
+  "weight": 1,
+  "sellValue": 4300,
+  "effect": {
+   "type": "parrot_move_speed_mult",
+   "value": 1.4
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 6,
+  "expeditionCatchChance": 0.006666666666666667
+ },
+ {
+  "id": "exp_f6_icefang_koi",
+  "rarity": "common",
+  "color": "#0EA5E9",
+  "weight": 1,
+  "sellValue": 4750,
+  "effect": {
+   "type": "parrot_damage_mult",
+   "value": 1.43
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 6,
+  "expeditionCatchChance": 0.005263157894736842
+ },
+ {
+  "id": "exp_f6_polar_flicker",
+  "rarity": "common",
+  "color": "#BFDBFE",
+  "weight": 1,
+  "sellValue": 5250,
+  "effect": {
+   "type": "parrot_life_regen_mult",
+   "value": 1.46
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 6,
+  "expeditionCatchChance": 0.00425531914893617
+ },
+ {
+  "id": "exp_f6_sleetcrest_perch",
+  "rarity": "uncommon",
+  "color": "#22D3EE",
+  "weight": 1,
+  "sellValue": 5900,
+  "effect": {
+   "type": "parrot_hp_mult",
+   "value": 1.5
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 6,
+  "expeditionCatchChance": 0.003125
+ },
+ {
+  "id": "exp_f6_shiveroracle_shiner",
+  "rarity": "uncommon",
+  "color": "#06B6D4",
+  "weight": 1,
+  "sellValue": 6900,
+  "effect": {
+   "type": "parrot_skill_point_mult",
+   "value": 1.54
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 6,
+  "expeditionCatchChance": 0.002325581395348837
+ },
+ {
+  "id": "exp_f6_cryosting_darter",
+  "rarity": "uncommon",
+  "color": "#0891B2",
+  "weight": 1,
+  "sellValue": 8100,
+  "effect": {
+   "type": "parrot_attack_speed_mult",
+   "value": 1.58
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 6,
+  "expeditionCatchChance": 0.0017241379310344827
+ },
+ {
+  "id": "exp_f6_winterveil_carp",
+  "rarity": "uncommon",
+  "color": "#0284C7",
+  "weight": 1,
+  "sellValue": 9500,
+  "effect": {
+   "type": "parrot_move_speed_mult",
+   "value": 1.62
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 6,
+  "expeditionCatchChance": 0.001282051282051282
+ },
+ {
+  "id": "exp_f6_coldsnap_runner",
+  "rarity": "uncommon",
+  "color": "#2563EB",
+  "weight": 1,
+  "sellValue": 11100,
+  "effect": {
+   "type": "parrot_damage_mult",
+   "value": 1.66
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 6,
+  "expeditionCatchChance": 0.0009523809523809524
+ },
+ {
+  "id": "exp_f6_whiteout_bass",
+  "rarity": "uncommon",
+  "color": "#1D4ED8",
+  "weight": 1,
+  "sellValue": 12900,
+  "effect": {
+   "type": "parrot_life_regen_mult",
+   "value": 1.7
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 6,
+  "expeditionCatchChance": 0.0007042253521126761
+ },
+ {
+  "id": "exp_f6_hoarfrost_trout",
+  "rarity": "rare",
+  "color": "#93C5FD",
+  "weight": 1,
+  "sellValue": 15800,
+  "effect": {
+   "type": "parrot_hp_mult",
+   "value": 1.72
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 6,
+  "expeditionCatchChance": 0.00046511627906976747
+ },
+ {
+  "id": "exp_f6_starfrost_oraclefish",
+  "rarity": "rare",
+  "color": "#60A5FA",
+  "weight": 1,
+  "sellValue": 19500,
+  "effect": {
+   "type": "parrot_skill_point_mult",
+   "value": 1.8
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 6,
+  "expeditionCatchChance": 0.0003076923076923077
+ },
+ {
+  "id": "exp_f6_avalanche_ray",
+  "rarity": "rare",
+  "color": "#3B82F6",
+  "weight": 1,
+  "sellValue": 24400,
+  "effect": {
+   "type": "parrot_attack_speed_mult",
+   "value": 1.88
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 6,
+  "expeditionCatchChance": 0.00020833333333333335
+ },
+ {
+  "id": "exp_f6_northwind_veilfin",
+  "rarity": "rare",
+  "color": "#2563EB",
+  "weight": 1,
+  "sellValue": 30400,
+  "effect": {
+   "type": "parrot_move_speed_mult",
+   "value": 1.96
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 6,
+  "expeditionCatchChance": 0.00014492753623188405
+ },
+ {
+  "id": "exp_f6_crownfrost_serpent",
+  "rarity": "rare",
+  "color": "#1D4ED8",
+  "weight": 1,
+  "sellValue": 38000,
+  "effect": {
+   "type": "parrot_damage_mult",
+   "value": 2.05
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 6,
+  "expeditionCatchChance": 0.0000980392156862745
+ },
+ {
+  "id": "exp_f6_everfrost_eel",
+  "rarity": "epic",
+  "color": "#A78BFA",
+  "weight": 1,
+  "sellValue": 62000,
+  "effect": {
+   "type": "parrot_life_regen_mult",
+   "value": 2.15
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 6,
+  "expeditionCatchChance": 0.00005714285714285714
+ },
+ {
+  "id": "exp_f6_glaciarch_sturgeon",
+  "rarity": "epic",
+  "color": "#C4B5FD",
+  "weight": 1,
+  "sellValue": 118000,
+  "effect": {
+   "type": "parrot_hp_mult",
+   "value": 2.35
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 6,
+  "expeditionCatchChance": 0.000010204081632653061
+ },
+ {
+  "id": "exp_f6_borealis_leviathan",
+  "rarity": "epic",
+  "color": "#818CF8",
+  "weight": 1,
+  "sellValue": 280000,
+  "effect": {
+   "type": "parrot_skill_point_mult",
+   "value": 2.55
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 6,
+  "expeditionCatchChance": 0.000001282051282051282
+ },
+ {
+  "id": "exp_f6_throne_of_winter",
+  "rarity": "legendary",
+  "color": "#7DD3FC",
+  "weight": 1,
+  "sellValue": 980000,
+  "effect": {
+   "type": "parrot_attack_speed_mult",
+   "value": 2.85
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 6,
+  "expeditionCatchChance": 5.4054054054054056e-8
+ },
+ {
+  "id": "exp_f6_absolute_zero_phantom",
+  "rarity": "legendary",
+  "color": "#E0F2FE",
+  "weight": 1,
+  "sellValue": 4600000,
+  "effect": {
+   "type": "parrot_move_speed_mult",
+   "value": 3.15
+  },
+  "minTier": 8,
+  "type": "expedition",
+  "expeditionFloor": 6,
+  "expeditionCatchChance": 2.777777777777778e-9
+ },
+ {
+  "id": "exp_f10_vigil_minnow",
+  "rarity": "common",
+  "color": "#79afc9",
+  "weight": 1,
+  "sellValue": 9000,
+  "effect": {
+   "type": "parrot_damage_mult",
+   "value": 2
+  },
+  "catchWeight": 0.015384615384615385
+ },
+ {
+  "id": "exp_f10_moss_guppy",
+  "rarity": "common",
+  "color": "#7fbac4",
+  "weight": 1,
+  "sellValue": 10200,
+  "effect": {
+   "type": "parrot_life_regen_mult",
+   "value": 2.05
+  },
+  "catchWeight": 0.011764705882352941
+ },
+ {
+  "id": "exp_f10_firefly_tetra",
+  "rarity": "common",
+  "color": "#efaa56",
+  "weight": 1,
+  "sellValue": 11600,
+  "effect": {
+   "type": "parrot_hp_mult",
+   "value": 2.1
+  },
+  "catchWeight": 0.00909090909090909
+ },
+ {
+  "id": "exp_f10_bark_carp",
+  "rarity": "common",
+  "color": "#8698b0",
+  "weight": 1,
+  "sellValue": 13200,
+  "effect": {
+   "type": "parrot_skill_point_mult",
+   "value": 2.15
+  },
+  "catchWeight": 0.006666666666666667
+ },
+ {
+  "id": "exp_f10_leaf_angelfish",
+  "rarity": "uncommon",
+  "color": "#8bddf7",
+  "weight": 1,
+  "sellValue": 15800,
+  "effect": {
+   "type": "parrot_attack_speed_mult",
+   "value": 2.2
+  },
+  "catchWeight": 0.004545454545454545
+ },
+ {
+  "id": "exp_f10_spore_puffer",
+  "rarity": "uncommon",
+  "color": "#c9e8ed",
+  "weight": 1,
+  "sellValue": 19200,
+  "effect": {
+   "type": "parrot_move_speed_mult",
+   "value": 2.25
+  },
+  "catchWeight": 0.002777777777777778
+ },
+ {
+  "id": "exp_f10_root_catfish",
+  "rarity": "uncommon",
+  "color": "#bed0d8",
+  "weight": 1,
+  "sellValue": 24500,
+  "effect": {
+   "type": "parrot_damage_mult",
+   "value": 2.35
+  },
+  "catchWeight": 0.0016666666666666668
+ },
+ {
+  "id": "exp_f10_gloom_eel",
+  "rarity": "uncommon",
+  "color": "#42628b",
+  "weight": 1,
+  "sellValue": 31500,
+  "effect": {
+   "type": "parrot_life_regen_mult",
+   "value": 2.45
+  },
+  "catchWeight": 0.001
+ },
+ {
+  "id": "exp_f10_veil_ray",
+  "rarity": "rare",
+  "color": "#8bddf7",
+  "weight": 1,
+  "sellValue": 42000,
+  "effect": {
+   "type": "parrot_hp_mult",
+   "value": 2.55
+  },
+  "catchWeight": 0.0005555555555555556
+ },
+ {
+  "id": "exp_f10_lantern_jelly",
+  "rarity": "rare",
+  "color": "#ffe5a0",
+  "weight": 1,
+  "sellValue": 59000,
+  "effect": {
+   "type": "parrot_skill_point_mult",
+   "value": 2.65
+  },
+  "catchWeight": 0.00028571428571428574
+ },
+ {
+  "id": "exp_f10_mushroom_fish",
+  "rarity": "rare",
+  "color": "#8bddf7",
+  "weight": 1,
+  "sellValue": 87000,
+  "effect": {
+   "type": "parrot_attack_speed_mult",
+   "value": 2.8
+  },
+  "catchWeight": 0.000125
+ },
+ {
+  "id": "exp_f10_watcher_fish",
+  "rarity": "epic",
+  "color": "#efaa56",
+  "weight": 1,
+  "sellValue": 160000,
+  "effect": {
+   "type": "parrot_move_speed_mult",
+   "value": 3
+  },
+  "catchWeight": 0.00005555555555555556
+ },
+ {
+  "id": "exp_f10_branch_dragonfish",
+  "rarity": "epic",
+  "color": "#8698b0",
+  "weight": 1,
+  "sellValue": 340000,
+  "effect": {
+   "type": "parrot_damage_mult",
+   "value": 3.2
+  },
+  "catchWeight": 0.00001
+ },
+ {
+  "id": "exp_f10_moon_serpent",
+  "rarity": "mythic",
+  "color": "#dcf9f5",
+  "weight": 1,
+  "sellValue": 1600000,
+  "effect": {
+   "type": "parrot_move_speed_mult",
+   "value": 3.5
+  },
+  "catchWeight": 5.555555555555556e-9
+ },
+ {
+  "id": "exp_f10_lake_guardian",
+  "rarity": "mythic",
+  "color": "#8bddf7",
+  "weight": 1,
+  "sellValue": 6200000,
+  "effect": {
+   "type": "parrot_damage_mult",
+   "value": 3.8
+  },
+  "catchWeight": 2.7777777777777777e-10
+ }
+]
