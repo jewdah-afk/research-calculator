@@ -1026,8 +1026,8 @@ do
 		local sess = d._session or {}
 		local st = Runes.stats(d, sess.hasPass)
 		local s = d.runes
-		runeStats.Text = string.format('Opened <font color="#5cf2ff">%s</font> · bulk <font color="#5cf2ff">%s</font> · <font color="#5cf2ff">%.2f</font> rolls/s · luck <font color="#7cff5b">x%.2f</font> · clone %d%%\n%s',
-			fmt(s.opened), fmt(st.bulk), st.rate, st.luck, math.floor(st.clone * 100 + 0.5),
+		runeStats.Text = string.format('Opened <font color="#5cf2ff">%s</font> · bulk <font color="#5cf2ff">%s</font> · <font color="#5cf2ff">%.2f</font> rolls/s · luck <font color="#7cff5b">x%.2f</font> · clone %d%% (+%d)\n%s',
+			fmt(s.opened), fmt(st.bulk), st.rate, st.luck, math.floor(st.clone * 100 + 0.5), st.cloneAmount,
 			sess.hasPass and '<font color="#ffd64a">AUTO-ROLL x2 active anywhere</font>' or (sess.onPad and '<font color="#7cff5b">On the pad: auto-rolling</font>' or "Stand on the altar pad to auto-roll ($10 per rune)"))
 		passBtn.Visible = not sess.hasPass
 		for i, r in Runes.LIST do

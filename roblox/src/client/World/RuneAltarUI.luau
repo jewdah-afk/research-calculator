@@ -2,7 +2,7 @@
 -- The Rune Altar's in-world UI (client-only, nothing replicated):
 --   * a floating rune crystal above the pedestal
 --   * three panels around it, like a shop display:
---       left   ATTRIBUTES (luck, bulk, speed, clone, lucky tick) + STATISTICS (opened, rolls, pad time, ...)
+--       left   ATTRIBUTES (luck, bulk, speed, clone, tickrate) + STATISTICS (opened, rolls, pad time, ...)
 --       centre [EVOLUTION] STARTER RUNE + every rune with its odds at your current luck
 --       right  LAST DROP + MILESTONES + PAD TIME progress
 --   * panels fade in when you walk onto the pad and fade out when you leave
@@ -212,8 +212,8 @@ function AltarUI.refresh(d)
 	L.a_bulk.TextColor3 = Color3.fromRGB(255, 92, 170)
 	L.a_speed.Text = string.format("x%.2f RUNE SPEED", st.rate / Runes.BASE_RATE)
 	L.a_speed.TextColor3 = Color3.fromRGB(92, 242, 255)
-	L.a_clone.Text = math.floor(st.clone * 100 + 0.5) .. "% RUNE CLONE"
-	L.a_tick.Text = string.format("x%.1f LUCKY TICK", st.tickLuck)
+	L.a_clone.Text = string.format("%d%% CLONE · +%d COPIES", math.floor(st.clone * 100 + 0.5), st.cloneAmount)
+	L.a_tick.Text = string.format("x%.2f TICKRATE", st.tickrate)
 	L.a_tick.TextColor3 = Color3.fromRGB(124, 255, 91)
 	L.a_auto.Text = sess.hasPass and "AUTO-ROLL x2 (PASS)" or (sess.onPad and "AUTO-ROLL ON PAD" or "STEP ON THE PAD")
 	L.a_auto.TextColor3 = PURPLE_EDGE

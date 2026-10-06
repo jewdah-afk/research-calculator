@@ -9,7 +9,8 @@
 --   rolls/s = BASE_RATE x 1.05^(orb-drop milestones) x gem Speed x (x2 with the Auto-Roll pass)
 --   runes per roll (bulk) = (1 + opening milestones(max +4) + gem Bulk + playtime(+1..+4))
 --                           x 1.15^(opening milestones) x playtime bulk multipliers
---   luck = 1.10^(orb-drop milestones) x gem Luck x playtime luck multipliers (x Lucky Tick)
+--   luck = 1.10^(orb-drop milestones) x gem Luck x playtime luck multipliers
+--   rolls/s also x gem Tickrate (x1.10 per level); Clone = chance per rune x extra copies per hit
 -- Free auto-roll works while standing on the altar pad; the Robux pass rolls anywhere at x2.
 -- Everything here is pure math so the browser preview can port it 1:1.
 
@@ -44,8 +45,10 @@ Runes.FORGE = {
 	{ id = "bulk", name = "Rune Bulk", desc = "+1 rune per roll", base = 1, growth = 2.5, max = 16 },
 	{ id = "speed", name = "Rune Speed", desc = "x1.08 rolls per second", base = 5, growth = 2.6, max = 13 },
 	{ id = "luck", name = "Rune Luck", desc = "x1.12 rune luck", base = 2, growth = 2.5, max = 16 },
-	{ id = "clone", name = "Rune Clone", desc = "+2% chance each rune is doubled", base = 25, growth = 2.8, max = 11 },
-	{ id = "tick", name = "Lucky Tick", desc = "every 25th roll gets +50% luck", base = 50, growth = 3, max = 10 },
+	-- Clone: each rune has CHANCE to clone; a hit adds AMOUNT extra copies
+	{ id = "cloneChance", name = "Clone Chance", desc = "+3% chance a rune clones", base = 10, growth = 2.6, max = 15 },
+	{ id = "cloneAmount", name = "Clone Amount", desc = "+1 extra copy per clone", base = 50, growth = 3.2, max = 9 },
+	{ id = "tickrate", name = "Tickrate", desc = "x1.10 opening speed", base = 30, growth = 2.9, max = 11 },
 }
 Runes.forgeById = {}
 for _, u in Runes.FORGE do
@@ -85,7 +88,7 @@ function Runes.newState()
 		rolls = 0,
 		acc = 0,
 		carry = { rebirth = 0, ap = 0, trp = 0 },
-		forge = { bulk = 0, speed = 0, luck = 0, clone = 0, tick = 0 },
+		forge = { bulk = 0, speed = 0, luck = 0, cloneChance = 0, cloneAmount = 0, tickrate = 0 },
 	}
 end
 
@@ -102,6 +105,15 @@ function Runes.ensure(data)
 	end
 	for k in fresh.carry do
 		s.carry[k] = s.carry[k] or 0
+	end
+	-- older saves: clone -> cloneChance, tick (old Lucky Tick) -> tickrate
+	if s.forge.clone then
+		s.forge.cloneChance = math.max(s.forge.cloneChance or 0, s.forge.clone)
+		s.forge.clone = nil
+	end
+	if s.forge.tick then
+		s.forge.tickrate = math.max(s.forge.tickrate or 0, s.forge.tick)
+		s.forge.tick = nil
 	end
 	for k in fresh.forge do
 		s.forge[k] = s.forge[k] or 0
@@ -160,10 +172,11 @@ function Runes.stats(data, hasPass: boolean?)
 	local f = s.forge
 	return {
 		bulk = math.max(1, math.floor((1 + math.min(4, mOpen) + f.bulk + ptAdd) * 1.15 ^ mOpen * ptBulk)),
-		rate = Runes.BASE_RATE * 1.05 ^ mBalls * 1.08 ^ f.speed * (hasPass and Runes.PASS_SPEED or 1),
+		rate = Runes.BASE_RATE * 1.05 ^ mBalls * 1.08 ^ f.speed * 1.10 ^ f.tickrate * (hasPass and Runes.PASS_SPEED or 1),
+		tickrate = 1.10 ^ f.tickrate,
 		luck = 1.10 ^ mBalls * 1.12 ^ f.luck * ptLuck,
-		clone = math.min(0.5, 0.02 * f.clone),
-		tickLuck = 1 + 0.5 * f.tick,
+		clone = math.min(0.45, 0.03 * f.cloneChance), -- chance a rune clones
+		cloneAmount = 1 + f.cloneAmount, -- extra copies when it does
 		openMilestones = mOpen,
 		ballMilestones = mBalls,
 		nextOpen = Runes.milestone(mOpen + 1),
@@ -248,10 +261,8 @@ function Runes.open(data, rolls: number, hasPass: boolean?, rng)
 	local r = rng or Random.new()
 	if n <= 250 then
 		for k = 1, n do
-			local rollIndex = s.rolls + math.ceil(k / st.bulk)
-			local luck = st.luck * ((rollIndex % 25 == 0) and st.tickLuck or 1)
-			local i = pick(luck, r:NextNumber())
-			add(i, (r:NextNumber() < st.clone) and 2 or 1)
+			local i = pick(st.luck, r:NextNumber())
+			add(i, (r:NextNumber() < st.clone) and 1 + st.cloneAmount or 1)
 		end
 	else
 		-- expected counts, rarest first, with the fraction resolved randomly
@@ -270,7 +281,7 @@ function Runes.open(data, rolls: number, hasPass: boolean?, rng)
 			add(1, left)
 		end
 		for i, c in gained do
-			gained[i] = c + math.floor(c * st.clone + r:NextNumber())
+			gained[i] = c + math.floor(c * st.clone * st.cloneAmount + r:NextNumber())
 		end
 	end
 	for i, c in gained do

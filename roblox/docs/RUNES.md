@@ -29,9 +29,10 @@ The code is in `shared/Runes.luau`. The server runs it from `GameService` and th
 - **Cash runes** count as a bonus, so `Balance.bonusLog` softcaps them like every other bonus.
 
 ## How fast you roll
-- **rolls/second** = 0.5 × 1.05^(orb-drop milestones) × 1.08^(Forge Speed) × 2 with the Auto-Roll pass
+- **rolls/second** = 0.5 × 1.05^(orb-drop milestones) × 1.08^(Forge Speed) × 1.10^(Forge Tickrate) × 2 with the Auto-Roll pass
+- **clone**: each rune has (Clone Chance) to clone; a hit adds (1 + Clone Amount) extra copies
 - **runes per roll (bulk)** = (1 + opening milestones, max +4 + Forge Bulk + pad-time +N) × 1.15^(opening milestones) × pad-time bulk multipliers
-- **rune luck** = 1.10^(orb-drop milestones) × 1.12^(Forge Luck) × pad-time luck multipliers (× Lucky Tick on every 25th roll)
+- **rune luck** = 1.10^(orb-drop milestones) × 1.12^(Forge Luck) × pad-time luck multipliers
 
 ### Milestones (10, 100, 500, 1K, 5K, 10K, 50K, … forever)
 - **Runes opened:** each milestone gives ×1.15 bulk. The first 4 also give +1 bulk each, so bulk reaches 5 before the multipliers apply.
@@ -63,8 +64,9 @@ The code is in `shared/Runes.luau`. The server runs it from `GameService` and th
 | Rune Bulk | +1 rune per roll | 1 × 2.5^lv | 16 (last ≈ 930K) |
 | Rune Speed | ×1.08 rolls/s | 5 × 2.6^lv | 13 |
 | Rune Luck | ×1.12 luck | 2 × 2.5^lv | 16 |
-| Rune Clone | +2% chance each rune is doubled | 25 × 2.8^lv | 11 (22%) |
-| Lucky Tick | every 25th roll gets +50% luck | 50 × 3^lv | 10 |
+| Clone Chance | +3% chance a rune clones | 10 × 2.6^lv | 15 (45%) |
+| Clone Amount | +1 extra copy per clone | 50 × 3.2^lv | 9 (+10 copies) |
+| Tickrate | ×1.10 opening speed | 30 × 2.9^lv | 11 (×2.85) |
 
 ### Auto-Roll
 - **Free:** standing on the pad, ×1 speed.

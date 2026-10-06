@@ -411,6 +411,19 @@ return function(Shared)
 		truthy(Ru.level(1e6) > Ru.level(1e5))
 		truthy(Ru.boost(echo, 1e9) > Ru.boost(echo, 1e6))
 	end)
+	test("runes: clone chance + amount, tickrate speeds opening", function()
+		local Ru = Shared.Runes
+		local d = E.newData()
+		d.runes.forge.cloneChance, d.runes.forge.cloneAmount, d.runes.forge.tickrate = 5, 2, 3
+		local st = Ru.stats(d)
+		near(st.clone, 0.15, 1e-9)
+		eq(st.cloneAmount, 3)
+		near(st.rate, 0.5 * 1.1 ^ 3, 1e-9)
+		d.runes.forge = { clone = 4, tick = 2 } -- old save
+		Ru.ensure(d)
+		eq(d.runes.forge.cloneChance, 4)
+		eq(d.runes.forge.tickrate, 2)
+	end)
 	test("runes cost $10 each and stop when cash runs out", function()
 		local Ru = Shared.Runes
 		local d = E.newData()
