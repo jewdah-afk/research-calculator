@@ -519,7 +519,7 @@ function Economy.rebirth(data): boolean
 	if not Big.gt(data.money, F.rebirthCost(data, data.rebirths + bought - 1)) then
 		return false
 	end
-	-- prestige magnifies rebirths: each rebirth bought grants (1 + 0.25*lifetimeAP + echo) rebirths
+	-- ascension magnifies rebirths: each rebirth bought grants (1 + 0.1*lifetimeAP + echo) rebirths
 	data.rebirths += math.floor(bought * Prestige.rebirthGainMult(data))
 	data.diamonds = Big.floor(Big.mul(data.diamonds, Config.Rebirth.DiamondKeep))
 	currencyReset(data, F.skill(data, "RL-4") < 1)
@@ -843,7 +843,8 @@ function Economy.prestige(data, layerId: string): boolean
 		end
 	end
 	if r.rebirths then
-		data.rebirths = 0
+		-- Rebirth Memory keeps a slice (only when ascending; higher layers wipe it)
+		data.rebirths = if layerId == "ascension" then math.floor(data.rebirths * Prestige.keepRebirths(data)) else 0
 	end
 	if r.gems then
 		data.diamonds = Big.new(0)

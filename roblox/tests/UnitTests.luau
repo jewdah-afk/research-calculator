@@ -277,38 +277,50 @@ return function(Shared)
 	end)
 
 	-- prestige layers --------------------------------------------------------------------
-	test("ascension: points from rebirths with diminishing returns", function()
+	test("ascension is tier-like: 1 AP each, requirement climbs x1.6", function()
 		local Pr = Shared.Prestige
 		local d = E.newData()
 		d.rebirths = 249
 		eq(Pr.pending(d, "ascension"), 0, "below threshold")
-		d.rebirths = 250
-		eq(Pr.pending(d, "ascension"), 1)
-		d.rebirths = 250 * 16
-		eq(Pr.pending(d, "ascension"), 4, "sqrt scaling")
+		d.rebirths = 10 ^ 6
+		eq(Pr.pending(d, "ascension"), 1, "always exactly 1, however far past")
+		eq(Pr.requirement(d, "ascension"), 250)
+		d.prestige.ascension.count = 2
+		eq(Pr.requirement(d, "ascension"), 640)
 	end)
-	test("ascending banks points, resets the run, keeps tiers", function()
+	test("ascending banks 1 AP, resets the run, keeps tiers", function()
 		local d = E.newData()
 		d.rebirths = 1000
 		d.tiers = 3
 		d.money = Big.pow(10, 50)
 		d.mainLevels[1] = 40
 		eq(E.prestige(d, "ascension"), true)
-		eq(d.prestige.ascension.points, 2)
-		eq(d.prestige.ascension.lifetime, 2)
+		eq(d.prestige.ascension.points, 1)
+		eq(d.prestige.ascension.lifetime, 1)
 		eq(d.rebirths, 0)
 		eq(d.tiers, 3, "ascension keeps tiers")
 		eq(d.mainLevels[1], 0)
 		truthy(Big.lt(d.money, 1))
 		eq(E.prestige(d, "ascension"), false, "nothing pending right after")
 	end)
-	test("each lifetime AP gives +0.25x rebirths per click", function()
+	test("each lifetime AP gives +0.1x rebirths per click", function()
 		local d = E.newData()
 		d.mechanics = 1
-		d.prestige.ascension.lifetime = 4 -- 1 + 0.25*4 = 2x
+		d.prestige.ascension.lifetime = 10 -- 1 + 0.1*10 = 2x
 		d.money = Big.mul(F.rebirthCost(d, 0), 1.01)
 		eq(E.rebirth(d), true)
 		eq(d.rebirths, 2)
+	end)
+	test("first shop levels cost 1 AP; lines scale differently", function()
+		local Pr = Shared.Prestige
+		local d = E.newData()
+		eq(Pr.cost(d, "AS-MOMENTUM"), 1)
+		eq(Pr.cost(d, "AS-LUCK"), 1)
+		eq(Pr.cost(d, "AS-CASH"), 1)
+		d.prestige.ascension.shop = { ["AS-MOMENTUM"] = 3, ["AS-LUCK"] = 3, ["AS-CASH"] = 3 }
+		eq(Pr.cost(d, "AS-MOMENTUM"), 8, "soft: (1+3)^1.5")
+		eq(Pr.cost(d, "AS-LUCK"), 4, "linear: 1+3")
+		eq(Pr.cost(d, "AS-CASH"), 8, "exp: 2^3")
 	end)
 	test("spending AP never lowers the passive", function()
 		local Pr = Shared.Prestige
@@ -319,7 +331,7 @@ return function(Shared)
 		truthy(Pr.rebirthGainMult(d) >= before)
 		eq(d.prestige.ascension.points, 9)
 	end)
-	test("ascension shop luck is core luck", function()
+	test("ascension shop luck is core luck (cache invalidates on buy)", function()
 		local d = E.newData()
 		E.refresh(d)
 		local base = d.totalLuckLog
@@ -327,19 +339,27 @@ return function(Shared)
 		E.buyPrestigeUpgrade(d, "AS-LUCK")
 		near(d.totalLuckLog, base + math.log10(2), 1e-9)
 	end)
-	test("transcension magnifies AP gain and resets ascension + tiers", function()
+	test("rebirth memory keeps a slice of rebirths on ascend", function()
+		local d = E.newData()
+		d.rebirths = 1000
+		d.prestige.ascension.shop["AS-MEMORY"] = 2
+		eq(E.prestige(d, "ascension"), true)
+		eq(d.rebirths, 100)
+	end)
+	test("transcension: 1 TrP, magnifies AP gain, resets ascension + tiers", function()
 		local Pr = Shared.Prestige
 		local d = E.newData()
-		d.prestige.ascension.lifetime = 160 -- (160/40)^0.5 = 2 TrP
+		d.prestige.ascension.lifetime = 10
 		d.tiers = 5
 		d.skills.main[1] = 3
-		eq(Pr.pending(d, "transcension"), 2)
+		eq(Pr.pending(d, "transcension"), 1)
 		eq(E.prestige(d, "transcension"), true)
 		eq(d.prestige.ascension.lifetime, 0)
 		eq(d.tiers, 0)
 		eq(d.skills.main[1], 0, "TP trees refunded with tiers")
-		d.rebirths = 250 * 4 -- 2 AP base
-		eq(Pr.pending(d, "ascension"), 3, "x(1 + 0.25*2) = 3")
+		d.prestige.transcension.lifetime = 4 -- 1 + 0.25*4 = 2
+		d.rebirths = 250
+		eq(Pr.pending(d, "ascension"), 2)
 	end)
 	test("old saves get prestige state", function()
 		local d = E.newData()

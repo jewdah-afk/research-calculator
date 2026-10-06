@@ -116,14 +116,26 @@ roblox/
 
 `shared/Prestige.luau` defines the layers as data. Adding one is a new entry in `LAYERS`; if it should magnify something new, add a line in `gainMult`.
 
-| Layer | Points | Passive (lifetime points) | Resets |
-|---|---|---|---|
-| Ascension | AP = ⌊√(rebirths / 250)⌋ × magnifiers | +0.25× rebirths per click per AP (stacks with bulk rebirth) | cash, upgrades, spawners, gems, rebirths (keeps tiers) |
-| Transcension | TrP = ⌊√(lifetime AP / 40)⌋ | +0.25× AP per ascension per TrP | everything above, plus tiers and Ascension (TP trees refunded) |
+Each layer works like a tier: one prestige gives exactly **1 point** (times magnifiers from the layer above), and the requirement climbs ×growth every time.
 
-- **Shops:** each layer has a shop paid with unspent points. Ascension: ×2 luck, ×3 cash, rebirth echo, head start, ×2 gems. Transcension: ×2 AP, ×10 luck, ×10 cash.
+| Layer | Requirement for the next one | Passive (lifetime points) | Resets |
+|---|---|---|---|
+| Ascension | 250 × 1.6^ascensions rebirths (250, 400, 640, …) | +0.1× rebirths per click per AP (stacks with bulk rebirth) | cash, upgrades, spawners, gems, rebirths (keeps tiers) |
+| Transcension | 10 × 1.8^transcensions lifetime AP | +0.25× AP per ascension per TrP | everything above, plus tiers and Ascension (TP trees refunded) |
+
+- **Shops:** the first level of the opening upgrades costs 1 point. After that, each line scales differently: `exp` (cost·g^lv), `lin` (cost + step·lv) or `soft` (cost·(1+lv)^g).
+  - **Ascension:**
+    - Momentum (×5 cash, ×3 luck; soft): the first point you buy gets the run rebuilt fast.
+    - Ascended Luck (×2; linear)
+    - Ascended Cash (×10; exponential)
+    - Rebirth Echo
+    - Head Start
+    - Gem Vein
+    - Rebirth Memory (keep 5% of rebirths per level, max 25%)
+  - **Transcension:** AP Surge, Eternal Luck, Eternal Cash.
+- **Performance:** shop effects are summed once and cached per player, using a fingerprint of their levels. The economy reads them every frame at no cost, so adding more upgrades doesn't add lag.
 - **Passives use lifetime points,** so spending in a shop never weakens them.
-- **Prestige effects count as core progression,** not capped bonuses. These layers are meant to be the backbone of the late game.
+- **Prestige effects count as core progression,** not capped bonuses.
 
 ## Systems
 

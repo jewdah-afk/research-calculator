@@ -1,17 +1,22 @@
 --!nonstrict
 -- Stacked prestige layers (Ascension, Transcension, ... add more by appending to LAYERS).
 --
--- Each layer:
---   * earns POINTS from the layer below's resource:  floor( (resource / need) ^ exponent * gainMult )
---   * has a PASSIVE that magnifies the layer below:  +perPoint x per lifetime point earned
---       Ascension:     rebirths per rebirth click   = 1 + 0.25 * lifetimeAP
---       Transcension:  ascension points per ascend   = 1 + 0.25 * lifetimeTrP
+-- Each layer works like a TIER:
+--   * one prestige = +1 point (times magnifiers from the layer above)
+--   * the requirement climbs with every prestige:  need * growth ^ count
+--       Ascension #1 at 250 rebirths, #2 at 400, #3 at 640, ...
+--   * PASSIVE per lifetime point magnifies the layer below:
+--       Ascension:     rebirths per rebirth click = 1 + 0.1 * lifetimeAP (+ echo)
+--       Transcension:  AP per ascension           = 1 + 0.25 * lifetimeTrP
 --     (lifetime points, so spending in the shop never weakens the passive)
---   * has its own SHOP of upgrades bought with unspent points
+--   * SHOP: the first levels cost 1 point, then each line scales differently
+--       scale = "exp"  cost * growth ^ lv        (gets steep)
+--       scale = "lin"  cost + step * lv          (stays affordable)
+--       scale = "soft" cost * (1 + lv) ^ growth  (polynomial, in between)
 --   * RESETS a configurable set of lower progress
 --
--- All layer effects on luck/cash are CORE progression (applied in full, not bonus-budgeted):
--- prestige layers are the backbone of the late game, like rebirths and tiers.
+-- Effects are summed once per change and cached (see effects()), so the economy
+-- can read them every frame for free no matter how many shop items exist.
 
 local Big = require(script.Parent.Big)
 
@@ -22,19 +27,22 @@ Prestige.LAYERS = {
 		id = "ascension",
 		name = "Ascension",
 		point = "AP",
-		-- points from rebirths: floor((rebirths / need) ^ exponent)
 		source = "rebirths",
 		need = 250,
-		exponent = 0.5,
-		perPoint = 0.25, -- +0.25x rebirths per click, per lifetime AP
+		growth = 1.6, -- requirement x1.6 per ascension, like a tier
+		perPoint = 0.1, -- +0.1x rebirths per click, per lifetime AP
 		passiveTarget = "rebirthGain",
 		resets = { run = true, rebirths = true, gems = true, tiers = false },
 		shop = {
-			{ id = "AS-LUCK", name = "Ascended Luck", desc = "x2 luck per level", cost = 1, growth = 2, luckLog = math.log10(2) },
-			{ id = "AS-CASH", name = "Ascended Cash", desc = "x3 cash per level", cost = 1, growth = 2, cashLog = math.log10(3) },
-			{ id = "AS-ECHO", name = "Rebirth Echo", desc = "+0.1x rebirths per click per level", cost = 2, growth = 2.5, rebirthGain = 0.1 },
-			{ id = "AS-START", name = "Head Start", desc = "Start every run with 3 spawners unlocked", cost = 3, growth = 1, max = 1, startSpawners = 3 },
-			{ id = "AS-GEMS", name = "Gem Vein", desc = "x2 gems per level", cost = 2, growth = 2, gemLog = math.log10(2) },
+			-- the opener: 1 AP and you rebuild the run several times faster
+			{ id = "AS-MOMENTUM", name = "Momentum", desc = "x5 cash, x3 luck per level", cost = 1, scale = "soft", growth = 1.5, cashLog = math.log10(5), luckLog = math.log10(3) },
+			-- two more that start at 1 AP but scale differently
+			{ id = "AS-LUCK", name = "Ascended Luck", desc = "x2 luck per level", cost = 1, scale = "lin", step = 1, luckLog = math.log10(2) },
+			{ id = "AS-CASH", name = "Ascended Cash", desc = "x10 cash per level", cost = 1, scale = "exp", growth = 2, cashLog = 1 },
+			{ id = "AS-ECHO", name = "Rebirth Echo", desc = "+0.1x rebirths per click per level", cost = 2, scale = "exp", growth = 2, rebirthGain = 0.1 },
+			{ id = "AS-START", name = "Head Start", desc = "Start every run with 3 spawners", cost = 2, max = 1, startSpawners = 3 },
+			{ id = "AS-GEMS", name = "Gem Vein", desc = "x2 gems per level", cost = 2, scale = "lin", step = 2, gemLog = math.log10(2) },
+			{ id = "AS-MEMORY", name = "Rebirth Memory", desc = "Keep 5% of rebirths when you ascend", cost = 3, scale = "exp", growth = 2, max = 5, keepRebirths = 0.05 },
 		},
 	},
 	{
@@ -42,15 +50,15 @@ Prestige.LAYERS = {
 		name = "Transcension",
 		point = "TrP",
 		source = "ascensionLifetime", -- lifetime AP earned
-		need = 40,
-		exponent = 0.5,
+		need = 10,
+		growth = 1.8,
 		perPoint = 0.25, -- +0.25x AP per ascension, per lifetime TrP
 		passiveTarget = "ascensionGain",
 		resets = { run = true, rebirths = true, gems = true, tiers = true, ascension = true },
 		shop = {
-			{ id = "TR-SURGE", name = "AP Surge", desc = "x2 AP per ascension per level", cost = 1, growth = 3, apMult = 2 },
-			{ id = "TR-LUCK", name = "Eternal Luck", desc = "x10 luck per level", cost = 1, growth = 2, luckLog = 1 },
-			{ id = "TR-CASH", name = "Eternal Cash", desc = "x10 cash per level", cost = 1, growth = 2, cashLog = 1 },
+			{ id = "TR-SURGE", name = "AP Surge", desc = "x2 AP per ascension per level", cost = 1, scale = "exp", growth = 3, apMult = 2 },
+			{ id = "TR-LUCK", name = "Eternal Luck", desc = "x10 luck per level", cost = 1, scale = "lin", step = 1, luckLog = 1 },
+			{ id = "TR-CASH", name = "Eternal Cash", desc = "x100 cash per level", cost = 1, scale = "exp", growth = 2, cashLog = 2 },
 		},
 	},
 }
@@ -92,54 +100,86 @@ local function level(data, layerId, upgradeId)
 end
 Prestige.level = level
 
--- sum an effect field across all shops: sum(level * field)
-local function shopSum(data, field)
-	local total = 0
+---------------------------------------------------------------- cached effects
+
+local FIELDS = { "luckLog", "cashLog", "gemLog", "rebirthGain", "keepRebirths" }
+local cache = setmetatable({}, { __mode = "k" }) -- [data] = { key, effects }
+
+-- cheap fingerprint of everything effects depend on (levels + lifetime points)
+local function keyOf(data)
+	local parts = {}
+	for _, L in Prestige.LAYERS do
+		local st = data.prestige[L.id]
+		table.insert(parts, st.lifetime)
+		for _, u in L.shop do
+			table.insert(parts, st.shop[u.id] or 0)
+		end
+	end
+	return table.concat(parts, ",")
+end
+
+local EMPTY = { luckLog = 0, cashLog = 0, gemLog = 0, rebirthGain = 0, keepRebirths = 0, startSpawners = 1, apMult = 1 }
+
+function Prestige.effects(data)
+	if not data.prestige then
+		return EMPTY
+	end
+	local key = keyOf(data)
+	local c = cache[data]
+	if c and c.key == key then
+		return c.fx
+	end
+	local fx = { startSpawners = 1, apMult = 1 }
+	for _, f in FIELDS do
+		fx[f] = 0
+	end
 	for _, L in Prestige.LAYERS do
 		for _, u in L.shop do
-			if u[field] then
-				total += level(data, L.id, u.id) * u[field]
+			local lv = level(data, L.id, u.id)
+			if lv > 0 then
+				for _, f in FIELDS do
+					if u[f] then
+						fx[f] += lv * u[f]
+					end
+				end
+				if u.startSpawners then
+					fx.startSpawners = math.max(fx.startSpawners, u.startSpawners)
+				end
+				if u.apMult then
+					fx.apMult *= u.apMult ^ lv
+				end
 			end
 		end
 	end
-	return total
+	cache[data] = { key = key, fx = fx }
+	return fx
 end
 
 ---------------------------------------------------------------- effects used by the economy
 
--- rebirths granted per rebirth click (before bulk): 1 + 0.25*lifetimeAP + echo levels
+-- rebirths granted per rebirth click (before bulk): 1 + 0.1*lifetimeAP + echo levels
 function Prestige.rebirthGainMult(data): number
 	if not data.prestige then
 		return 1
 	end
-	local asc = data.prestige.ascension
-	return 1 + byId.ascension.perPoint * asc.lifetime + shopSum(data, "rebirthGain")
+	return 1 + byId.ascension.perPoint * data.prestige.ascension.lifetime + Prestige.effects(data).rebirthGain
 end
 
 -- core luck/cash/gem log10 added by prestige shops
 function Prestige.luckLog(data): number
-	return data.prestige and shopSum(data, "luckLog") or 0
+	return Prestige.effects(data).luckLog
 end
 function Prestige.cashLog(data): number
-	return data.prestige and shopSum(data, "cashLog") or 0
+	return Prestige.effects(data).cashLog
 end
 function Prestige.gemLog(data): number
-	return data.prestige and shopSum(data, "gemLog") or 0
+	return Prestige.effects(data).gemLog
 end
-
 function Prestige.startSpawners(data): number
-	local best = 1
-	if not data.prestige then
-		return best
-	end
-	for _, L in Prestige.LAYERS do
-		for _, u in L.shop do
-			if u.startSpawners and level(data, L.id, u.id) > 0 then
-				best = math.max(best, u.startSpawners)
-			end
-		end
-	end
-	return best
+	return Prestige.effects(data).startSpawners
+end
+function Prestige.keepRebirths(data): number
+	return math.min(Prestige.effects(data).keepRebirths, 0.5)
 end
 
 ---------------------------------------------------------------- point gain
@@ -161,24 +201,26 @@ local function gainMult(data, L): number
 		m *= 1 + above.perPoint * data.prestige[above.id].lifetime
 	end
 	if L.id == "ascension" then
-		for _, u in byId.transcension.shop do
-			if u.apMult then
-				m *= u.apMult ^ level(data, "transcension", u.id)
-			end
-		end
+		m *= Prestige.effects(data).apMult
 	end
 	return m
 end
 
--- points you'd get by prestiging this layer right now
+-- resource needed for this layer's next prestige (climbs like a tier)
+function Prestige.requirement(data, layerId: string): number
+	Prestige.ensure(data)
+	local L = byId[layerId]
+	return math.floor(L.need * L.growth ^ data.prestige[layerId].count + 0.5)
+end
+
+-- points you'd get by prestiging this layer right now (1 x magnifiers, or 0)
 function Prestige.pending(data, layerId: string): number
 	Prestige.ensure(data)
 	local L = byId[layerId]
-	local v = sourceValue(data, L)
-	if v < L.need then
+	if sourceValue(data, L) < Prestige.requirement(data, layerId) then
 		return 0
 	end
-	return math.floor((v / L.need) ^ L.exponent * gainMult(data, L))
+	return math.max(1, math.floor(gainMult(data, L)))
 end
 
 ---------------------------------------------------------------- shop
@@ -191,7 +233,15 @@ function Prestige.cost(data, upgradeId: string): number?
 				if u.max and lv >= u.max then
 					return nil
 				end
-				return math.floor(u.cost * u.growth ^ lv + 0.5), L, u
+				local c = u.cost
+				if u.scale == "lin" then
+					c = u.cost + (u.step or 1) * lv
+				elseif u.scale == "soft" then
+					c = u.cost * (1 + lv) ^ (u.growth or 1)
+				elseif u.scale == "exp" then
+					c = u.cost * (u.growth or 2) ^ lv
+				end
+				return math.floor(c + 0.5), L, u
 			end
 		end
 	end

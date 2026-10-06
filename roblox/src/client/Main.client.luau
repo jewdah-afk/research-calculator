@@ -1028,7 +1028,8 @@ onState(function(d)
 		local visible = (li == 1 and d.mechanics >= 1) or (below and d.prestige[below.id].count > 0) or st.count > 0
 		row.head.Visible = visible
 		local pending = Prestige.pending(d, L.id)
-		local need = L.source == "rebirths" and (fmt(L.need) .. " rebirths") or (fmt(L.need) .. " lifetime " .. Prestige.LAYERS[li - 1].point)
+		local req = Prestige.requirement(d, L.id)
+		local need = L.source == "rebirths" and (fmt(req) .. " rebirths") or (fmt(req) .. " lifetime " .. Prestige.LAYERS[li - 1].point)
 		row.info.Text = string.format('<font color="#e3a6ff">%s %s</font> · lifetime %s · passive <font color="#7cff5b">+%s%% %s</font> · needs %s',
 			fmt(st.points), L.point, fmt(st.lifetime), fmt(L.perPoint * 100 * st.lifetime), L.passiveTarget == "rebirthGain" and "rebirths/click" or "AP gain", need)
 		Kit.setLabel(row.go, pending > 0 and string.format("%s\n+%s %s", string.upper(L.name), fmt(pending), L.point) or "NOT READY")
