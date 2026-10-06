@@ -1,10 +1,10 @@
 # Icons
 
-The icons are hand-drawn SVG vectors in the chunky mobile-game style: a thick black outline with a hard drop, a flat base tone, a darker rim along the bottom-right, a lighter band along the top, and one white highlight.
+The icons are PNGs drawn in a flat vector style in the chunky mobile-game style: a thick black outline with a hard drop, a flat base tone, a darker rim along the bottom-right, a lighter band along the top, and one white highlight.
 
 - **Source:** `art/vector/icons.mjs`. Each icon is built from a few shapes on a 128px grid.
-- **Build:** run `NODE_PATH=<dir with playwright> node art/vector/build.mjs`. It writes `art/vector/svg/*.svg`, 256px PNGs to `art/icons/` (for Roblox Decals) and `art/icons_sheet.png`.
-- **Preview:** run `node art/vector/embed.mjs docs/preview.html` to swap the set into the preview page.
+- **Build:** run `NODE_PATH=<dir with playwright> node art/vector/build.mjs`. It writes 256px PNGs to `art/icons/` (for Roblox Decals) and `art/icons_sheet.png`.
+- **Preview:** run `node art/vector/embed.mjs docs/preview.html` to embed the PNGs into the preview page.
 
 **In Roblox:** upload the PNGs as Decals and put their asset ids in `client/UI/Assets.luau`.
 

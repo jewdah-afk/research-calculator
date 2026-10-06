@@ -1,13 +1,10 @@
-// node art/vector/build.mjs  ->  art/vector/svg/*.svg, art/icons/*.png (256px), art/icons_sheet.png
+// node art/vector/build.mjs  ->  art/icons/*.png (256px), art/icons_sheet.png
 import { ICONS } from './icons.mjs';
-import { mkdirSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(process.env.NODE_PATH ? join(process.env.NODE_PATH, 'x') : import.meta.url);
-mkdirSync(join(here, 'svg'), { recursive: true });
-for (const [k, s] of Object.entries(ICONS)) writeFileSync(join(here, 'svg', k + '.svg'), s);
 const { chromium } = require('playwright');
 const b = await chromium.launch();
 const p = await b.newPage({ deviceScaleFactor: 2 });
