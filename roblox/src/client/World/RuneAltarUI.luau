@@ -23,6 +23,12 @@ local AltarUI = {}
 local SHOW_DISTANCE = 26
 local FONT = Enum.Font.FredokaOne
 local PURPLE_EDGE = Color3.fromRGB(227, 166, 255)
+-- one colour per stat, everywhere (see docs/UI_STYLE.md "Stat colours")
+local SC = {
+	luck = Color3.fromRGB(76, 240, 90), bulk = Color3.fromRGB(255, 72, 72), speed = Color3.fromRGB(58, 168, 255),
+	clone = Color3.fromRGB(255, 216, 74), tick = Color3.fromRGB(196, 125, 255), opened = Color3.fromRGB(92, 242, 255),
+	found = Color3.fromRGB(255, 138, 61), pad = Color3.fromRGB(255, 177, 58), milestone = Color3.fromRGB(255, 92, 170),
+}
 
 local folder, center, crystal, light
 local panels = {} -- { group = CanvasGroup, ... }
@@ -207,14 +213,15 @@ function AltarUI.refresh(d)
 	local s = d.runes
 	local L = labels
 	L.a_luck.Text = string.format("x%.2f RUNE LUCK", st.luck)
-	L.a_luck.TextColor3 = Color3.fromRGB(255, 214, 74)
+	L.a_luck.TextColor3 = SC.luck
 	L.a_bulk.Text = "x" .. short(st.bulk) .. " RUNE BULK"
-	L.a_bulk.TextColor3 = Color3.fromRGB(255, 92, 170)
+	L.a_bulk.TextColor3 = SC.bulk
 	L.a_speed.Text = string.format("x%.2f RUNE SPEED", st.rate / Runes.BASE_RATE)
-	L.a_speed.TextColor3 = Color3.fromRGB(92, 242, 255)
+	L.a_speed.TextColor3 = SC.speed
 	L.a_clone.Text = string.format("%d%% CLONE · +%d COPIES", math.floor(st.clone * 100 + 0.5), st.cloneAmount)
+	L.a_clone.TextColor3 = SC.clone
 	L.a_tick.Text = string.format("x%.2f TICKRATE", st.tickrate)
-	L.a_tick.TextColor3 = Color3.fromRGB(124, 255, 91)
+	L.a_tick.TextColor3 = SC.tick
 	L.a_auto.Text = sess.hasPass and "AUTO-ROLL x2 (PASS)" or (sess.onPad and "AUTO-ROLL ON PAD" or "STEP ON THE PAD")
 	L.a_auto.TextColor3 = PURPLE_EDGE
 
@@ -226,11 +233,12 @@ function AltarUI.refresh(d)
 	end
 	L.s_opened.Text = short(s.opened) .. " OPENED"
 	L.s_rolls.Text = short(s.rolls) .. " ROLLS"
+	L.s_opened.TextColor3, L.s_rolls.TextColor3 = SC.opened, SC.opened
 	L.s_padlbl.Text = "PAD TIME"
 	L.s_disc.Text = found .. "/" .. #Runes.LIST .. " DISCOVERED"
-	L.s_disc.TextColor3 = Color3.fromRGB(124, 255, 91)
+	L.s_disc.TextColor3 = SC.found
 	L.s_ms.Text = st.openMilestones .. " OPENING · " .. st.ballMilestones .. " ORB MILESTONES"
-	L.s_ms.TextColor3 = Color3.fromRGB(255, 92, 170)
+	L.s_ms.TextColor3 = SC.milestone
 	L.s_evo.Text = "EVOLUTION: " .. string.upper(Runes.evolution(st.openMilestones))
 	L.s_evo.TextColor3 = Color3.fromRGB(255, 79, 122)
 
@@ -267,7 +275,7 @@ function AltarUI.tickTimer()
 	end
 	local secs = d.runes.padSeconds
 	labels.s_pad.Text = string.format("%dh %dm %ds", secs // 3600, (secs // 60) % 60, secs % 60)
-	labels.s_pad.TextColor3 = Color3.fromRGB(255, 214, 74)
+	labels.s_pad.TextColor3 = SC.pad
 	local nextPT, prev
 	local count = 0
 	for _, p in Runes.PLAYTIME do
@@ -281,6 +289,7 @@ function AltarUI.tickTimer()
 	if nextPT then
 		local what = nextPT.bulkAdd and ("+" .. nextPT.bulkAdd .. " BULK") or nextPT.bulk and ("x" .. nextPT.bulk .. " BULK") or ("x" .. nextPT.luck .. " LUCK")
 		labels.p_next.Text = "NEXT: " .. what
+		labels.p_next.TextColor3 = nextPT.luck and SC.luck or SC.bulk
 		labels.p_at.Text = "at " .. (nextPT.minutes >= 60 and (nextPT.minutes / 60 .. "h") or (nextPT.minutes .. "m")) .. " on the pad"
 		local from = prev and prev.minutes * 60 or 0
 		labels.p_fill.Size = UDim2.fromScale(math.clamp((secs - from) / (nextPT.minutes * 60 - from), 0, 1), 1)

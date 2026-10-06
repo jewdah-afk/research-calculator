@@ -65,3 +65,21 @@ Sub-text   #b9bdc8 body face, no outline
 - **Primary action colour:** green means "spend", only ever. Only one green button per card.
 - **Locked and undiscovered:** dark tile with "???". Found items get their rarity colour and a sunburst.
 - **Biggest text:** big numbers (counts, multipliers) are the largest text inside a card. Labels sit above them, smaller and muted.
+
+## 6. Stat colours (one per stat, used everywhere)
+Every place a stat appears uses its colour: label, value, icon tile and progress bar.
+
+| Stat | Colour |
+|---|---|
+| Rune luck | green #4cf05a |
+| Rune bulk | red #ff4848 |
+| Rune speed / rolls per second | blue #3aa8ff |
+| Clone (chance and amount) | yellow #ffd84a |
+| Tickrate | purple #c47dff |
+| Opened / rolls | cyan #5cf2ff |
+| Discovered | orange #ff8a3d |
+| Pad time | amber #ffb13a |
+| Milestones | pink #ff5caa |
+| Gems | cyan #5cf2ff |
+| Cash | gold #ffd84a |
+| Boost amounts ("+25% cash") | lime #7cff5b |
