@@ -83,3 +83,19 @@ Every place a stat appears uses its colour: label, value, icon tile and progress
 | Gems | cyan #5cf2ff |
 | Cash | gold #ffd84a |
 | Boost amounts ("+25% cash") | lime #7cff5b |
+
+## 7. Corrections from a zoomed-in pass (these win over sections 1–3)
+- **Studs:** hollow outlined squares, not filled bumps. Each is a 9px square with a 1.6px light outline (~20% white), a faint dark fill, and a darker bottom-right inner edge. They sit on a 16px grid.
+- **Header:**
+  - **Brush slashes:** 3–4 translucent curved white slashes (~20%) sweep diagonally across the right half. They replace neat gloss bands.
+  - **Bottom lip:** a thick darker band (~11px, navy for blue headers, deep purple for purple ones) above the 4px black rule.
+  - **Size and title:** the header is about 58px tall, with a 32px title.
+- **Title font:** wide and round (Fredoka 700 / Fredoka One), not condensed. Fill is white fading to light grey (#fff → #c3c6cf), with a heavy black outline and a 3px drop.
+- **Close button:** a fat outlined "X" in the same title treatment. The red gets the same studs and a dark red bottom lip.
+- **Window body:** semi-transparent charcoal (~85%) with the world blurred behind it. A large tribal swoosh emblem sits at ~7% white.
+- **Cards:**
+  - **Border:** double: 3px black outside, then a 2px light grey rim (#b2b6c0 at ~55%) inside.
+  - **Lattice:** diamond pattern drawn with dark lines (~28% black) plus a faint light inner line.
+  - **Feature cards:** a lower-left corner with a sunburst and halftone squares.
+- **Tiles:** no black outline. They have a 2.5px rim in a lighter tint of their own colour, a thin outer dark ring, and alternating light/dark sunburst rays over a soft top-to-bottom gradient.
+- **Buttons:** flatter and brighter, with a 2px inner light rim and a small bottom shade. The buy button is neon green (#3dff7a → #0ff52e).
