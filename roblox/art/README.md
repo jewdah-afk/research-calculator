@@ -1,12 +1,13 @@
 # Icons
 
-The icons are PNGs drawn in a flat vector style in the chunky mobile-game style: a thick black outline with a hard drop, a flat base tone, a darker rim along the bottom-right, a lighter band along the top, and one white highlight.
+The icons are the painted set in `art/source/icon_sheet.png`, cut out into transparent PNGs.
 
-- **Source:** `art/vector/icons.mjs`. Each icon is a few shapes on a 128 grid; facets are placed by hand and every part draws its own outline over the parts behind it.
-- **Build:** `NODE_PATH=<dir with playwright> node art/vector/build.mjs` writes `art/icons/*.png` (512px, for Roblox), `art/icons/ui/*.png` (128px, for the preview) and `art/icons_sheet.png` (review sheet, also at UI sizes on tiles). The build fails if any icon reaches the edge of its canvas.
+- **Cut:** `python3 art/cut_icons.py art/source/icon_sheet.png <dir>` finds each icon on the sheet, removes the background and the name labels, and saves `<name>.png`.
+- **Export:** `python3 art/export_icons.py <dir>` writes `art/icons/*.png` (512px, for Roblox) and `art/icons/ui/*.png` (128px, for the preview).
 - **Preview:** `node art/vector/embed.mjs docs/preview.html` embeds the 128px PNGs.
-- **Figma:** every icon is an editable vector component in https://www.figma.com/design/x27MW6WNYnrQj1dR1yYHd7 (page "Icons").
 - **Stat icons:** Rune Bulk = `rune_bulk`, Rune Speed = `bolt_blue`, Rune Luck = `clover`, Clone Chance = `dice`, Clone Amount = `clone`, Tickrate = `stopwatch`.
+- **To replace one icon:** drop a transparent PNG with the same name into the cut folder and run the export again.
+- The older vector set (`art/vector/icons.mjs`, Figma file https://www.figma.com/design/x27MW6WNYnrQj1dR1yYHd7) is kept for reference; its build now writes to `art/vector/out/` so it never overwrites these.
 
 **In Roblox:** upload the PNGs as Decals and put their asset ids in `client/UI/Assets.luau`.
 

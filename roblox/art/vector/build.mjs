@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(process.env.NODE_PATH ? join(process.env.NODE_PATH, 'x') : import.meta.url);
 const { chromium } = require('playwright');
-const out = join(here, '../icons'), ui = join(out, 'ui');
+const out = join(here, 'out'), ui = join(out, 'ui');
 mkdirSync(ui, { recursive: true });
 
 const b = await chromium.launch();
@@ -42,7 +42,7 @@ await p.setContent(`<body style="margin:0;padding:20px;background:#2e3036;font:6
 ${names.map(k => tile('#9aa0ab', k, 44)).join('')}</div>
 <div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;background:#3a3c43;padding:14px;border-radius:10px">
 ${names.map(k => ICONS[k].replace('width="128" height="128"', 'width="18" height="18"')).join('')}</div></body>`);
-await p.screenshot({ path: join(here, '../icons_sheet.png'), fullPage: true });
+await p.screenshot({ path: join(here, 'out/sheet.png'), fullPage: true });
 await b.close();
 console.log('built', names.length, 'icons');
 if (bad.length) { console.error('CLIPPING:\n' + bad.join('\n')); process.exit(1); }
