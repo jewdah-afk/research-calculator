@@ -92,6 +92,25 @@ Unlocks.STANDS = {
 			return if d.tiers >= 1 then "teaser" else "hidden"
 		end,
 	},
+	-- beside the Mega Board: the Rune Altar (stand on its pad to auto-roll) and the gem Rune Forge
+	{
+		id = "runes", name = "RUNE ALTAR", color = { 120, 220, 255 }, pos = { -150, -150 }, pad = true,
+		state = function(d)
+			if Big.gte(d.totalMoney, 10) or (d.runes and d.runes.opened > 0) then
+				return "open"
+			end
+			return if Big.gt(d.totalMoney, 0) then "teaser" else "hidden"
+		end,
+	},
+	{
+		id = "forge", name = "RUNE FORGE", color = { 92, 242, 255 }, pos = { 150, -150 },
+		state = function(d)
+			if Big.gt(d.totalDiamonds, 0) and d.runes and d.runes.opened > 0 then
+				return "open"
+			end
+			return if d.runes and d.runes.opened > 0 then "teaser" else "hidden"
+		end,
+	},
 	-- "close" = 10 rebirths / 5 AP off the requirement, so it pops up just before you can use it
 	{ id = "ascension", name = "ASCENSION", color = { 227, 166, 255 }, state = prestigeState("ascension", 10) },
 	{ id = "transcension", name = "TRANSCENSION", color = { 255, 255, 255 }, state = prestigeState("transcension", 5) },

@@ -15,6 +15,7 @@ local F = require(script.Parent.OrbFormulas)
 local Big = require(script.Parent.Big)
 local Progression = require(script.Parent.Progression)
 local Prestige = require(script.Parent.Prestige)
+local Runes = require(script.Parent.Runes)
 
 local Economy = {}
 Economy.SAVE_VERSION = 4
@@ -96,6 +97,7 @@ function Economy.newData(difficulty: string?, rng: Random?)
 		tierReqOdds = 0, -- relative tiers: odds target (log10) for the next tier
 		tierProgress = 0, -- relative tiers: qualifying orbs collected since the last tier
 		tierStartTime = 0, -- timePlayed when the current tier began (pacing floor)
+		runes = Runes.newState(), -- starter runes (see Runes.luau)
 		unlocked = {}, -- world stands that have been revealed (see Unlocks.luau)
 		prestige = Prestige.newState(), -- ascension / transcension / ... (see Prestige.luau)
 		totalLuckLog = 0, -- cached for UI
@@ -147,6 +149,7 @@ function Economy.deserialize(saved)
 	end
 	Economy.migrate(data, tonumber(saved.version) or 1)
 	Prestige.ensure(data)
+	Runes.ensure(data)
 	Economy.refresh(data)
 	return data
 end
@@ -520,8 +523,9 @@ function Economy.rebirth(data): boolean
 	if not Big.gt(data.money, F.rebirthCost(data, data.rebirths + bought - 1)) then
 		return false
 	end
-	-- ascension magnifies rebirths: each rebirth bought grants (1 + 0.1*lifetimeAP + echo) rebirths
-	data.rebirths += math.floor(bought * Prestige.rebirthGainMult(data))
+	-- ascension magnifies rebirths: each rebirth bought grants (1 + 0.1*lifetimeAP + echo) rebirths;
+	-- Echo/Prism runes add a % on top that builds up as a fraction until it makes whole rebirths
+	data.rebirths += Runes.applyPoints(data, "rebirth", math.floor(bought * Prestige.rebirthGainMult(data)))
 	data.diamonds = Big.floor(Big.mul(data.diamonds, Config.Rebirth.DiamondKeep))
 	currencyReset(data, F.skill(data, "RL-4") < 1)
 	keepLevels(data)
@@ -820,6 +824,7 @@ function Economy.prestige(data, layerId: string): boolean
 		return false
 	end
 	local st = data.prestige[layerId]
+	Prestige.consumeCarry(data, layerId, pts)
 	st.points += pts
 	st.lifetime += pts
 	st.count += 1
@@ -868,5 +873,17 @@ function Economy.buyPrestigeUpgrade(data, upgradeId: string): boolean
 	return ok
 end
 
+---------------------------------------------------------------- runes
+
+function Economy.runeRoll(data, hasPass: boolean?, rng)
+	local _, n = Runes.open(data, 1, hasPass, rng)
+	return n > 0
+end
+
+function Economy.buyRuneForge(data, id: string): boolean
+	return Runes.buyForge(data, id)
+end
+
+Economy.Runes = Runes
 Economy.Progression = Progression
 return Economy

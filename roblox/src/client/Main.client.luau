@@ -24,6 +24,7 @@ local SkillText = require(script.Parent.UI.SkillText)
 local MegaBoardClient = require(script.Parent.World.MegaBoardClient)
 local Stands = require(script.Parent.World.Stands)
 local Unlocks = require(Shared.Unlocks)
+local Runes = require(Shared.Runes)
 
 local C, Fonts = Kit.Colors, Kit.Fonts
 local new, text = Kit.new, Kit.text
@@ -915,8 +916,8 @@ local lbBody = modal("Leaders", "LEADERBOARDS", C.Gold, C.GoldDark)
 local lbTabs = new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30), Parent = lbBody }, { Kit.list(Enum.FillDirection.Horizontal, 6) })
 local lbList = Kit.scroll({ dim = UDim2.new(1, 0, 1, -38), pos = UDim2.fromOffset(0, 38), gap = 2, parent = lbBody })
 local lbData, lbCurrent = {}, "cash"
-local LB_ORDER = { "cash", "tiers", "rebirths", "rarity" }
-local LB_LABEL = { cash = "CASH", tiers = "TIERS", rebirths = "REBIRTHS", rarity = "RARITY" }
+local LB_ORDER = { "cash", "tiers", "rebirths", "runes", "rarity" }
+local LB_LABEL = { cash = "CASH", tiers = "TIERS", rebirths = "REBIRTHS", runes = "RUNES", rarity = "RARITY" }
 local lbTabButtons = {}
 local function renderLB()
 	for _, c in lbList:GetChildren() do
@@ -941,7 +942,7 @@ local function renderLB()
 	end
 end
 for i, id in LB_ORDER do
-	lbTabButtons[id] = Kit.button({ text = LB_LABEL[id], size = 13, dim = UDim2.new(0.25, -5, 1, 0), order = i, parent = lbTabs, onClick = function()
+	lbTabButtons[id] = Kit.button({ text = LB_LABEL[id], size = 13, dim = UDim2.new(0.2, -5, 1, 0), order = i, parent = lbTabs, onClick = function()
 		lbCurrent = id
 		renderLB()
 	end })
@@ -956,6 +957,106 @@ local lbBtn = Kit.button({ text = "", color1 = C.Gold, color2 = C.GoldDark, dim 
 end })
 Kit.icon("star", 40, { parent = lbBtn, anchor = Vector2.new(0.5, 0.5), pos = UDim2.fromScale(0.5, 0.5), z = 4 })
 toastHost.Position -= UDim2.fromOffset(56, 0)
+
+---------------------------------------------------------------- runes (altar + forge)
+local runeTab -- set inside the block below (kept in its own scope: Luau caps top-level locals)
+do
+
+	local runeBody = modal("Runes", "STARTER RUNES", Color3.fromRGB(70, 160, 255), Color3.fromRGB(40, 60, 160))
+	local runeTabs = new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30), Parent = runeBody }, { Kit.list(Enum.FillDirection.Horizontal, 6) })
+	local runePages, runeTabBtns = {}, {}
+	runeTab = function(name)
+		for n, pg in runePages do
+			pg.Visible = n == name
+		end
+		for n, b in runeTabBtns do
+			Kit.setButtonColors(b, n == name and C.Cyan or C.Tab, n == name and C.GemDark or C.TabDark)
+		end
+	end
+	for i, name in { "RUNES", "FORGE", "BONUSES" } do
+		runeTabBtns[name] = Kit.button({ text = name, size = 13, dim = UDim2.new(1 / 3, -4, 1, 0), order = i, parent = runeTabs, onClick = function()
+			runeTab(name)
+		end })
+		runePages[name] = Kit.scroll({ name = name, dim = UDim2.new(1, 0, 1, -38), pos = UDim2.fromOffset(0, 38), gap = 6, parent = runeBody })
+	end
+	-- RUNES page: stats strip, roll buttons, 10 rune cards
+	local runeStats = text({ text = "", rich = true, size = 13, font = Fonts.Bold, color = C.Sub, wrap = true, dim = UDim2.new(1, -6, 0, 40), order = 1, parent = runePages.RUNES })
+	local rollRow = new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, -6, 0, 40), LayoutOrder = 2, Parent = runePages.RUNES }, { Kit.list(Enum.FillDirection.Horizontal, 6) })
+	local rollBtn = Kit.button({ text = "ROLL", size = 15, color1 = C.Cyan, color2 = C.GemDark, dim = UDim2.new(0.5, -3, 1, 0), order = 1, parent = rollRow, onClick = function()
+		act("runeRoll")
+	end })
+	local passBtn = Kit.button({ text = "AUTO-ROLL x2 (R$)", size = 13, color1 = C.Gold, color2 = C.GoldDark, dim = UDim2.new(0.5, -3, 1, 0), order = 2, parent = rollRow, onClick = function()
+		act("promptAutoRoll")
+	end })
+	local runeCards = {}
+	for i, r in Runes.LIST do
+		local card = Kit.card({ dim = UDim2.new(1, -6, 0, 44), order = 10 + i, parent = runePages.RUNES })
+		local dot = new("Frame", { Size = UDim2.fromOffset(26, 26), Position = UDim2.fromOffset(12, 9), BackgroundColor3 = Color3.fromRGB(r.color[1], r.color[2], r.color[3]), Rotation = 45, Parent = card }, { Kit.corner(4), Kit.stroke(2) })
+		local nm = text({ text = "", size = 15, outline = 2, pos = UDim2.fromOffset(50, 4), dim = UDim2.new(0.5, -50, 0, 18), parent = card })
+		local odds = text({ text = "1/" .. fmt(r.oneIn), size = 11, font = Fonts.Bold, color = C.Sub, pos = UDim2.fromOffset(50, 23), dim = UDim2.new(0.5, -50, 0, 16), parent = card })
+		local info = text({ text = "", rich = true, size = 12, font = Fonts.Bold, alignX = Enum.TextXAlignment.Right, pos = UDim2.new(0.5, 0, 0, 4), dim = UDim2.new(0.5, -12, 1, -8), wrap = true, parent = card })
+		runeCards[i] = { dot = dot, name = nm, info = info, odds = odds }
+	end
+	-- FORGE page: gem upgrades
+	local forgeRows = {}
+	for i, u in Runes.FORGE do
+		local card = Kit.card({ dim = UDim2.new(1, -6, 0, 50), order = i, parent = runePages.FORGE })
+		text({ text = u.name, size = 15, outline = 2, pos = UDim2.fromOffset(14, 4), dim = UDim2.new(1, -160, 0, 18), parent = card })
+		local d = text({ text = "", size = 11, font = Fonts.Bold, color = C.Sub, pos = UDim2.fromOffset(14, 26), dim = UDim2.new(1, -160, 0, 16), parent = card })
+		local b = Kit.button({ text = "", size = 13, color1 = C.Gem, color2 = C.GemDark, dim = UDim2.fromOffset(130, 34), anchor = Vector2.new(1, 0.5), pos = UDim2.new(1, -10, 0.5, 0), parent = card, onClick = function()
+			act("buyRuneForge", u.id)
+		end })
+		forgeRows[u.id] = { desc = d, button = b, def = u }
+	end
+	-- BONUSES page: milestones + playtime
+	local msText = text({ text = "", rich = true, size = 13, font = Fonts.Bold, wrap = true, dim = UDim2.new(1, -6, 0, 92), order = 1, parent = runePages.BONUSES })
+	local ptRows = {}
+	for i, p in Runes.PLAYTIME do
+		local label = p.bulkAdd and ("+" .. p.bulkAdd .. " bulk") or p.bulk and ("x" .. p.bulk .. " bulk") or ("x" .. p.luck .. " luck")
+		local when = p.minutes >= 60 and (p.minutes / 60 .. " hour" .. (p.minutes > 60 and "s" or "")) or (p.minutes .. " min")
+		ptRows[i] = text({ text = when .. " on the pad: " .. label, rich = true, size = 13, font = Fonts.Bold, dim = UDim2.new(1, -6, 0, 18), order = 10 + i, parent = runePages.BONUSES })
+	end
+	runeTab("RUNES")
+
+	onState(function(d)
+		if not d.runes then
+			return
+		end
+		local sess = d._session or {}
+		local st = Runes.stats(d, sess.hasPass)
+		local s = d.runes
+		runeStats.Text = string.format('Opened <font color="#5cf2ff">%s</font> · bulk <font color="#5cf2ff">%s</font> · <font color="#5cf2ff">%.2f</font> rolls/s · luck <font color="#7cff5b">x%.2f</font> · clone %d%%\n%s',
+			fmt(s.opened), fmt(st.bulk), st.rate, st.luck, math.floor(st.clone * 100 + 0.5),
+			sess.hasPass and '<font color="#ffd64a">AUTO-ROLL x2 active anywhere</font>' or (sess.onPad and '<font color="#7cff5b">On the pad: auto-rolling</font>' or "Stand on the altar pad to auto-roll ($10 per rune)"))
+		passBtn.Visible = not sess.hasPass
+		for i, r in Runes.LIST do
+			local c, card = s.counts[i] or 0, runeCards[i]
+			local found = c > 0
+			card.name.Text = found and string.upper(r.name) or "???"
+			card.dot.BackgroundColor3 = found and Color3.fromRGB(r.color[1], r.color[2], r.color[3]) or Color3.fromRGB(10, 8, 18)
+			local boost = Runes.boost(r, c)
+			local what = r.stat == "cash" and "cash" or r.stat == "rebirth" and "rebirth pts" or r.stat == "ap" and "AP" or "TrP"
+			if r.cap then
+				card.info.Text = string.format('x%s · <font color="#7cff5b">+%g%% %s</font>%s', fmt(c), boost * 100, what, c >= r.cap and ' <font color="#ffd64a">MAX</font>' or (" (max +" .. r.cap * r.per * 100 .. "%)"))
+			else
+				card.info.Text = string.format('x%s · LV %d · <font color="#7cff5b">+%g%% %s</font>\nnext LV at %s', fmt(c), Runes.level(c), boost * 100, what, fmt(Runes.nextLevelAt(c)))
+			end
+		end
+		for id, row in forgeRows do
+			local lv = s.forge[id]
+			local cost = Runes.forgeCost(d, id)
+			row.desc.Text = row.def.desc .. "  ·  LV " .. lv .. "/" .. row.def.max
+			Kit.setLabel(row.button, cost and (Big.format(cost) .. " GEMS") or "MAXED")
+			Kit.setAffordable(row.button, cost ~= nil and Big.gte(d.diamonds, cost))
+		end
+		msText.Text = string.format('<font color="#ffd64a">OPENING MILESTONES</font> %d reached · next at %s opened\neach: x1.15 bulk, +1 bulk (first 4)\n<font color="#ffd64a">ORB MILESTONES</font> %d reached · next at %s orbs dropped\neach: x1.05 rune speed, x1.10 rune luck\n<font color="#ffd64a">PAD TIME</font> %s',
+			st.openMilestones, fmt(st.nextOpen), st.ballMilestones, fmt(st.nextBalls), F.formatTime and F.formatTime(s.padSeconds) or (math.floor(s.padSeconds / 60) .. " min"))
+		for i, p in Runes.PLAYTIME do
+			local done = s.padSeconds >= p.minutes * 60
+			ptRows[i].TextColor3 = done and C.Cash or C.Sub
+		end
+	end)
+end
 
 ---------------------------------------------------------------- world: stands + progressive HUD
 
@@ -981,6 +1082,9 @@ Stands.init(workspace:WaitForChild("OrbWorld"), {
 			openModal(data and data.mechanics >= 4 and "Tier" or "Skills")
 		elseif id == "weather" then
 			openModal("Storm")
+		elseif id == "runes" or id == "forge" then
+			openModal("Runes")
+			runeTab(id == "forge" and "FORGE" or "RUNES")
 		else
 			openModal("Prestige")
 		end
@@ -1119,6 +1223,7 @@ toastHost.Position -= UDim2.fromOffset(56, 0)
 R.State.OnClientEvent:Connect(function(serialized)
 	local first = data == nil
 	data = Economy.deserialize(serialized)
+	data._session = type(serialized) == "table" and serialized._session or {}
 	for _, fn in refreshers do
 		local ok, err = pcall(fn, data)
 		if not ok then
@@ -1155,6 +1260,16 @@ R.Notify.OnClientEvent:Connect(function(kind, payload)
 		local r = Progression.Rarities[payload.rarity]
 		if r then
 			toast(string.upper(tostring(payload.name)) .. " ROLLED", string.upper((payload.variant and payload.variant .. " " or "") .. r.name), "1/" .. fmtLog(r.oneInLog, 0), rarityColor(payload.rarity))
+		end
+	elseif kind == "rune" and type(payload) == "table" then
+		local r = Runes.LIST[payload.id]
+		if r then
+			toast("RARE RUNE!", string.upper(r.name) .. (payload.count > 1 and (" x" .. payload.count) or ""), "1/" .. fmt(r.oneIn), Color3.fromRGB(r.color[1], r.color[2], r.color[3]))
+		end
+	elseif kind == "runeDrop" and type(payload) == "table" then
+		local r = Runes.LIST[payload.id]
+		if r then
+			toast(string.upper(tostring(payload.name)) .. " FOUND", string.upper(r.name) .. " RUNE", "1/" .. fmt(r.oneIn), Color3.fromRGB(r.color[1], r.color[2], r.color[3]))
 		end
 	elseif kind == "announce" then
 		toast("ANNOUNCEMENT", tostring(payload), nil, C.Cyan)

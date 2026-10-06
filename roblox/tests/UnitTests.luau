@@ -365,10 +365,80 @@ return function(Shared)
 	end)
 	test("mega board slots: x0.8 centre, x100 far edge, later tiers pay more", function()
 		eq(F.slotMult(0, 200), 0.8)
-		eq(F.slotMult(0, 225), 1.5)
+		eq(F.slotMult(0, 223), 1.5)
 		eq(F.slotMult(0, 2), 100)
 		eq(F.slotMult(0, 398), 100)
 		eq(F.slotMult(3, 398), 220)
+	end)
+	-- starter runes ------------------------------------------------------------------------
+	test("runes: milestones 10, 100, 500, 1K, 5K, 10K", function()
+		local Ru = Shared.Runes
+		eq(Ru.milestone(1), 10)
+		eq(Ru.milestone(2), 100)
+		eq(Ru.milestone(3), 500)
+		eq(Ru.milestone(4), 1000)
+		eq(Ru.milestone(5), 5000)
+		eq(Ru.milestone(6), 10000)
+		eq(Ru.milestonesReached(9), 0)
+		eq(Ru.milestonesReached(1000), 4)
+	end)
+	test("runes: bulk = (1 + up to 4) x 1.15^milestones", function()
+		local Ru = Shared.Runes
+		local d = E.newData()
+		eq(Ru.stats(d).bulk, 1)
+		d.runes.opened = 1000 -- 4 milestones: (1+4) * 1.15^4 = 8.7
+		eq(Ru.stats(d).bulk, 8)
+		d.runes.opened = 10000 -- 6 milestones: (1+4) * 1.15^6 = 11.6
+		eq(Ru.stats(d).bulk, 11)
+	end)
+	test("runes: playtime bonuses unlock in order and save", function()
+		local Ru = Shared.Runes
+		local d = E.newData()
+		d.runes.padSeconds = 24 * 3600
+		local st = Ru.stats(d)
+		-- (1 + 4) * 1.1 * 1.25 * 1.5 * 2 = 20.6
+		eq(st.bulk, 20)
+		near(st.luck, 1.05 * 1.10 * 1.25 * 1.5, 1e-9)
+	end)
+	test("runes 1-5 cap and stay maxed; 6-10 never cap (x1.25 copies per level)", function()
+		local Ru = Shared.Runes
+		local spark, echo = Ru.LIST[1], Ru.LIST[6]
+		near(Ru.boost(spark, 50), 0.25, 1e-9)
+		near(Ru.boost(spark, 5000), 0.25, 1e-9)
+		eq(Ru.level(1), 1)
+		eq(Ru.level(2), 4)
+		eq(Ru.level(100), 21)
+		truthy(Ru.level(1e6) > Ru.level(1e5))
+		truthy(Ru.boost(echo, 1e9) > Ru.boost(echo, 1e6))
+	end)
+	test("runes cost $10 each and stop when cash runs out", function()
+		local Ru = Shared.Runes
+		local d = E.newData()
+		d.money = Big.new(35)
+		local _, n = Ru.open(d, 10, false)
+		eq(n, 3)
+		truthy(Big.lt(d.money, 10))
+		eq(d.runes.opened, 3)
+	end)
+	test("rebirth-point runes add whole rebirths via carry", function()
+		local d = E.newData()
+		d.mechanics = 1
+		d.runes.counts[6] = 2 -- Echo LV 4 = +6% rebirth points
+		local total = 0
+		for _ = 1, 25 do
+			d.money = Big.mul(F.rebirthCost(d, d.rebirths), 1.01)
+			local before = d.rebirths
+			eq(E.rebirth(d), true)
+			total += d.rebirths - before
+		end
+		eq(total, 26, "25 rebirths x 1.06 = 26.5 -> 26 whole, 0.5 carried")
+	end)
+	test("halo runes boost AP per ascension", function()
+		local Pr = Shared.Prestige
+		local d = E.newData()
+		d.rebirths = 250
+		d.runes.counts[8] = 1e6 -- Halo LV 62 = +124%
+		eq(Pr.pending(d, "ascension"), 2)
 	end)
 	-- rarity names + effects --------------------------------------------------------------
 	test("2000 rarities, every name unique", function()

@@ -3,6 +3,7 @@
 -- The client only simulates the board physics and reports where each orb landed.
 
 local Players = game:GetService("Players")
+local MarketplaceService = game:GetService("MarketplaceService")
 local RunService = game:GetService("RunService")
 
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
@@ -13,6 +14,9 @@ local Events = require(Shared.Events)
 local Tutorial = require(Shared.Tutorial)
 local Unlocks = require(Shared.Unlocks)
 local Progression = require(Shared.Progression)
+local Runes = require(Shared.Runes)
+
+local ALTAR = Unlocks.byId.runes.pos -- {x, z}
 
 local GameService = {}
 
@@ -35,7 +39,9 @@ local sessions = {} -- [Player] = session
 local function pushState(player)
 	local s = sessions[player]
 	if s and s.data then
-		R.State:FireClient(player, Economy.serialize(s.data))
+		local out = Economy.serialize(s.data)
+		out._session = { onPad = s.onPad == true, hasPass = s.hasPass == true }
+		R.State:FireClient(player, out)
 		s.dirty = false
 	end
 end
@@ -136,6 +142,37 @@ local function spawnFor(player, s, spawner)
 		notify(player, "newRarity", s.data.highestRarity)
 	end
 	s.dirty = true
+end
+
+-- standing on the Rune Altar pad (server-side check, never trust the client)
+local function onPad(player)
+	local ch = player.Character
+	local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
+	if not hrp then
+		return false
+	end
+	local p = hrp.Position
+	return Vector2.new(p.X - ALTAR[1], p.Z - ALTAR[2]).Magnitude <= Runes.PAD_RADIUS and p.Y < 12
+end
+
+local function checkPass(player, s)
+	if Runes.AUTO_PASS_ID == 0 then
+		return
+	end
+	local ok, owns = pcall(MarketplaceService.UserOwnsGamePassAsync, MarketplaceService, player.UserId, Runes.AUTO_PASS_ID)
+	s.hasPass = ok and owns or false
+end
+
+-- tell the player about rare runes; server-wide shout for Halo and rarer
+local function announceRunes(player, gained)
+	for i, c in gained do
+		if i >= 6 then
+			notify(player, "rune", { id = i, count = c })
+			if i >= 8 then
+				GameService.broadcast("runeDrop", { name = player.DisplayName, id = i })
+			end
+		end
+	end
 end
 
 local function num(x, lo, hi)
@@ -283,6 +320,23 @@ local ACTIONS = {
 	buyPrestigeUpgrade = function(_, s, id)
 		return type(id) == "string" and #id < 16 and Economy.buyPrestigeUpgrade(s.data, id)
 	end,
+	runeRoll = function(p, s)
+		if not (onPad(p) or s.hasPass) then
+			return false
+		end
+		local gained, n = Runes.open(s.data, 1, s.hasPass, s.rng)
+		announceRunes(p, gained)
+		return n > 0
+	end,
+	buyRuneForge = function(_, s, id)
+		return type(id) == "string" and #id < 12 and Economy.buyRuneForge(s.data, id)
+	end,
+	promptAutoRoll = function(p)
+		if Runes.AUTO_PASS_ID ~= 0 then
+			MarketplaceService:PromptGamePassPurchase(p, Runes.AUTO_PASS_ID)
+		end
+		return false
+	end,
 	skipTutorial = function(_, s)
 		Tutorial.finish(s.data)
 		return true
@@ -306,6 +360,7 @@ local function onJoin(player)
 		dirty = true,
 		actionBudget = ACTIONS_PER_SECOND,
 		rng = Random.new(),
+		hasPass = false,
 		ghostQueue = { rare = {}, common = {} },
 		ghostAcc = 0,
 	}
@@ -317,6 +372,7 @@ local function onJoin(player)
 		return
 	end
 	s.data, s.canSave = data, canSave
+	task.spawn(checkPass, player, s)
 	Economy.refresh(data)
 	Unlocks.update(data)
 	pushState(player)
@@ -376,6 +432,14 @@ function GameService.init(remotes, services)
 					s.dirty = true
 				end
 			end
+		end
+	end)
+
+	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, passId, bought)
+		local s = sessions[player]
+		if s and bought and passId == Runes.AUTO_PASS_ID then
+			s.hasPass = true
+			notify(player, "announce", "Auto-Roll unlocked: runes roll anywhere at x2 speed!")
 		end
 	end)
 
@@ -450,6 +514,12 @@ function GameService.init(remotes, services)
 					end,
 				})
 				Tutorial.advance(d)
+				local pad = onPad(player)
+				local gained, opened = Runes.tick(d, 1, pad, s.hasPass, s.rng)
+				if opened > 0 then
+					announceRunes(player, gained)
+				end
+				s.onPad = pad
 				for _, id in Unlocks.update(d) do
 					notify(player, "unlock", id)
 				end

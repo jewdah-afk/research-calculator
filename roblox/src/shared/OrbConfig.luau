@@ -150,20 +150,20 @@ OrbConfig.Tiers = {
 		[3] = { zones = { { -math.huge, 66, 4 }, { 155, 244, 2.25 }, { 333, math.huge, 4 } }, default = 3 },
 		[4] = { zones = { { -math.huge, 66, 4 }, { 155, 244, 2.25 }, { 333, math.huge, 4 } }, default = 3 },
 	},
-	-- Mega Board slot strip (symmetric, by distance from the centre x=200). Landing odds measured
-	-- with the board's own physics (200k drops): EV ~ x1.37, i.e. the x1.4 average the economy
-	-- was tuned on. The far edges are ~1 in 6,000.
+	-- Mega Board slot strip (symmetric, by distance from the centre x=200). Widths fitted to the
+	-- board's own physics (200k simulated drops, every orb the same size): EV ~ x1.37, the x1.4
+	-- average the economy was tuned on. The far edges are ~1 in 5,900.
 	MegaSlots = {
-		{ upTo = 10, mult = 0.8 }, -- 58%
-		{ upTo = 20, mult = 1 }, -- 20%
-		{ upTo = 30, mult = 1.5 }, -- 12%
-		{ upTo = 45, mult = 2 }, -- 3.4%
-		{ upTo = 60, mult = 3 }, -- 2.4%
-		{ upTo = 80, mult = 5 }, -- 2.2%
-		{ upTo = 100, mult = 10 }, -- 1%
-		{ upTo = 140, mult = 20 }, -- 0.5%
-		{ upTo = 175, mult = 40 }, -- 0.13%
-		{ upTo = math.huge, mult = 100 }, -- ~1/6,000
+		{ upTo = 17, mult = 0.8 }, -- 58%
+		{ upTo = 21, mult = 1 }, -- 20%
+		{ upTo = 25, mult = 1.5 }, -- 12%
+		{ upTo = 40, mult = 2 }, -- 3.5%
+		{ upTo = 62, mult = 3 }, -- 2.3%
+		{ upTo = 96, mult = 5 }, -- 2.2%
+		{ upTo = 150, mult = 10 }, -- 1%
+		{ upTo = 167, mult = 20 }, -- 0.5%
+		{ upTo = 188, mult = 40 }, -- 0.13%
+		{ upTo = math.huge, mult = 100 }, -- ~0.017%
 	},
 	-- later tiers pay more on the same strip (matches the old per-tier boards' averages)
 	SlotScale = { [0] = 1, 1.3, 1.4, 2.2, 2.2 },

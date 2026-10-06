@@ -12,7 +12,10 @@ MegaBoard.H = 260
 MegaBoard.STUD = 1.1 -- studs per logical unit -> 440 x 286 studs
 MegaBoard.TILT = 12 -- degrees leaning back
 MegaBoard.BOTTOM = Vector3.new(0, 10, -190) -- world position of the bottom-centre of the play area
-MegaBoard.ORB_SCALE = 0.4 -- orbs are drawn/simulated smaller on the huge board
+MegaBoard.ORB_SCALE = 0.55 -- board scale for orbs
+-- every orb is the same size (the size of the very first orb), whatever its rarity: bigger orbs
+-- bounced differently, so a uniform size keeps the slot odds identical for everyone
+MegaBoard.ORB_R = 5 * MegaBoard.ORB_SCALE
 MegaBoard.SPAWN_Y = 12
 MegaBoard.COLLECT_Y = 246
 MegaBoard.SLOT_H = 14 -- logical height of the slot strip at the bottom

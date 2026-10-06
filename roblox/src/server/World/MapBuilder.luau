@@ -212,14 +212,23 @@ end
 
 local function buildStands()
 	local f = folder("Stands")
-	for i, s in Unlocks.STANDS do
+	local pathIndex = 0
+	for _, s in Unlocks.STANDS do
+		if not s.pos then
+			pathIndex += 1
+		end
+		local i = pathIndex
 		local m = Instance.new("Model")
 		m.Name = s.id
 		m:SetAttribute("StandId", s.id)
-		local pos = standPosition(i)
+		local pos = if s.pos then Vector3.new(s.pos[1], 0, s.pos[2]) else standPosition(i)
 		local facing = CFrame.lookAt(pos, Vector3.new(0, 0, pos.Z)) -- face the path
 		local col = rgb(s.color)
 		part({ Name = "Base", Size = Vector3.new(18, 1.5, 18), CFrame = facing * CFrame.new(0, 0.75, 0), Color = Color3.fromRGB(40, 32, 60), Parent = m })
+		if s.pad then
+			-- glowing ring you stand on to auto-roll (server checks Runes.PAD_RADIUS)
+			part({ Name = "Pad", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.4, 28, 28), CFrame = CFrame.new(pos + Vector3.new(0, 0.2, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color = col, Material = Enum.Material.Neon, Transparency = 0.45, CanCollide = false, Parent = m })
+		end
 		part({ Name = "Pedestal", Size = Vector3.new(10, 5, 10), CFrame = facing * CFrame.new(0, 4, 0), Color = Color3.fromRGB(60, 50, 90), Parent = m })
 		local display = part({ Name = "Display", Shape = Enum.PartType.Ball, Size = Vector3.new(6, 6, 6), CFrame = facing * CFrame.new(0, 10, 0), Color = col, Material = Enum.Material.Neon, CanCollide = false, Parent = m })
 		display:SetAttribute("Spin", true)
@@ -321,11 +330,18 @@ local function buildSky()
 	-- layer 4: chunky cartoon clouds drifting at three heights
 	local f = folder("Clouds")
 	local rng = Random.new(11)
-	for layer, h in { 160, 260, 380 } do
-		for _ = 1, 10 - layer * 2 + 6 do
+	-- kept outside the fence and never in front of / around the Mega Board
+	for layer, h in { 170, 280, 400 } do
+		local placed, tries = 0, 0
+		while placed < 16 - layer * 2 and tries < 200 do
+			tries += 1
 			local a = rng:NextNumber(0, math.pi * 2)
-			local r = rng:NextNumber(150, 650)
-			cloudPuff(f, Vector3.new(math.cos(a) * r, h + rng:NextNumber(-20, 20), math.sin(a) * r), 18 + layer * 8, rng)
+			local r = rng:NextNumber(420, 750)
+			local x, z = math.cos(a) * r, math.sin(a) * r
+			if not (z < 0 and math.abs(x) < 420) then
+				placed += 1
+				cloudPuff(f, Vector3.new(x, h + rng:NextNumber(-20, 20), z), 18 + layer * 8, rng)
+			end
 		end
 	end
 	-- layer 5: distant mountain ranges (two depths, cooler colour further away)

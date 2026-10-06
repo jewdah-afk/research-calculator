@@ -12,6 +12,7 @@ local Shared = {
 	Prestige = require("./Prestige"),
 	Unlocks = require("./Unlocks"),
 	RarityStyle = require("./RarityStyle"),
+	Runes = require("./Runes"),
 }
 local tiers = tonumber((...)) or 30
 

@@ -6,6 +6,7 @@
 local Config = require(script.Parent.OrbConfig)
 local Balance = require(script.Parent.Balance)
 local Events = require(script.Parent.Events)
+local Runes = require(script.Parent.Runes)
 
 local Bonuses = {}
 
@@ -37,6 +38,11 @@ Balance.register("weather_gems", "gems", function(data, ctx)
 	return math.log10(1 + weatherSum(data, "diamonds") * weatherScale(data, ctx))
 end)
 -- (weather "money" stays display-only, matching the original game's balance)
+
+-- Starter runes 1-5: small capped cash boosts
+Balance.register("runes_cash", "cash", function(data)
+	return math.log10(1 + Runes.totals(data).cash)
+end)
 
 -- Admin events
 for _, stat in Balance.STATS do

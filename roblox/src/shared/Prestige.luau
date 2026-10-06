@@ -19,6 +19,7 @@
 -- can read them every frame for free no matter how many shop items exist.
 
 local Big = require(script.Parent.Big)
+local Runes = require(script.Parent.Runes)
 
 local Prestige = {}
 
@@ -214,6 +215,18 @@ function Prestige.requirement(data, layerId: string): number
 	return math.floor(L.need * L.growth ^ data.prestige[layerId].count + 0.5)
 end
 
+-- rune stat that boosts each layer's points (Halo/Crown -> AP, Eternity -> TrP)
+local RUNE_STAT = { ascension = "ap", transcension = "trp" }
+
+local function rawGain(data, L): number
+	local stat = RUNE_STAT[L.id]
+	local m = gainMult(data, L)
+	if stat and data.runes then
+		m = m * (1 + Runes.totals(data)[stat]) + (data.runes.carry[stat] or 0)
+	end
+	return m
+end
+
 -- points you'd get by prestiging this layer right now (1 x magnifiers, or 0)
 function Prestige.pending(data, layerId: string): number
 	Prestige.ensure(data)
@@ -221,7 +234,15 @@ function Prestige.pending(data, layerId: string): number
 	if sourceValue(data, L) < Prestige.requirement(data, layerId) then
 		return 0
 	end
-	return math.max(1, math.floor(gainMult(data, L)))
+	return math.max(1, math.floor(rawGain(data, L) + 1e-9))
+end
+
+-- after a prestige: keep the leftover fraction of rune-boosted points for next time
+function Prestige.consumeCarry(data, layerId: string, pts: number)
+	local stat = RUNE_STAT[layerId]
+	if stat and data.runes then
+		data.runes.carry[stat] = math.max(0, rawGain(data, byId[layerId]) - pts)
+	end
 end
 
 ---------------------------------------------------------------- shop

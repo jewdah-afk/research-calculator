@@ -28,6 +28,11 @@ local BOARDS = {
 	end, display = function(v)
 		return F.format(v)
 	end },
+	{ id = "runes", title = "RUNES OPENED", value = function(d)
+		return d.runes and math.min(d.runes.opened, 2 ^ 52) or 0
+	end, display = function(v)
+		return F.format(v)
+	end },
 	{ id = "rarity", title = "BEST RARITY", value = function(d)
 		return d.highestRarity
 	end, display = function(v)

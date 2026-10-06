@@ -293,10 +293,11 @@ function Mega:_add(key, info, x, y, vx, vy, data, ghost, owner)
 	if self.orbs[key] then
 		return
 	end
-	local base = if info.kind == "orb" then (data and F.orbRadius(data, info.rarity) or Progression.Rarities[info.rarity].radius) else Config.Board.SpecialOrbRadius
+	-- one size for every orb (SPW-5 still shrinks your own a little)
+	local shrink = if data and info.kind == "orb" then F.orbRadius(data, 1) / Progression.Rarities[1].radius else 1
 	local o = {
 		key = key, id = key, kind = info.kind, rarity = info.rarity, variant = info.variant,
-		x = x, y = y, vx = vx or 0, vy = vy or 0, r = base * MB.ORB_SCALE, rest = MB.ORB_REST,
+		x = x, y = y, vx = vx or 0, vy = vy or 0, r = MB.ORB_R * shrink, rest = MB.ORB_REST,
 		stillT = 0, ghost = ghost, owner = owner, rare = info.rare,
 	}
 	self:_dress(o)
