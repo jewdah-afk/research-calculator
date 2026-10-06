@@ -363,6 +363,35 @@ return function(Shared)
 		d.rebirths = 250
 		eq(Pr.pending(d, "ascension"), 2)
 	end)
+	test("mega board slots: x0.8 centre, x100 far edge, later tiers pay more", function()
+		eq(F.slotMult(0, 200), 0.8)
+		eq(F.slotMult(0, 225), 1.5)
+		eq(F.slotMult(0, 2), 100)
+		eq(F.slotMult(0, 398), 100)
+		eq(F.slotMult(3, 398), 220)
+	end)
+	-- rarity names + effects --------------------------------------------------------------
+	test("2000 rarities, every name unique", function()
+		local seen = {}
+		for k, r in P.Rarities do
+			truthy(not seen[r.name], "duplicate name " .. r.name .. " at #" .. k)
+			seen[r.name] = true
+		end
+		truthy(#P.Rarities >= 2000)
+		eq(P.Rarities[1].name, "Pebble")
+		eq(P.Rarities[50].name, "The Absolute")
+	end)
+	test("effects never get worse as rarity climbs", function()
+		local keys = { "glow", "sparkles", "rings", "moons", "starburst" }
+		for k = 2, #P.Rarities do
+			local a, b = P.Rarities[k - 1].fx, P.Rarities[k].fx
+			truthy(b.level >= a.level, "level drops at #" .. k)
+			for _, key in keys do
+				truthy(b[key] >= a[key], key .. " drops at #" .. k)
+			end
+		end
+		eq(P.Rarities[2000].fx.horizon, true)
+	end)
 	-- progressive reveal ------------------------------------------------------------------
 	test("new player sees only the board: every stand hidden", function()
 		local U = Shared.Unlocks

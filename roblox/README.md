@@ -162,6 +162,35 @@ Each layer works like a tier: one prestige gives exactly **1 point** (times magn
 - **Rare drops:** at least 1/10,000, and within 2 of the player's best rarity. They get a server-wide toast (at most one per player per 15s), a name tag above the orb, a neon glow, and a particle burst where they land.
 - **Slot multipliers:** each player sees their own multipliers (from their tier) on the slot panels.
 
+## Rarities: names and effects
+
+- **Names:** 1–50 are hand-named and climb from everyday things to the cosmic: Pebble → Marble → … → Phoenix → … → Black Hole → … → The Absolute. Rarities 51–2000 get unique generated titles such as "Shattered Crown", "Citadel of the Deep" or "The Cursed Dream" (`shared/RarityStyle.luau`).
+- **Effect level:** every rarity has an `fx` table. The level goes up every 5 rarities until #50, then every 130 rarities until #2000, and each level adds something:
+
+  | Levels | Effect added |
+  |---|---|
+  | 0–3 | plain → polished glass → glow → three-colour gradient |
+  | 4–6 | sparkles → neon core → comet trail |
+  | 7–9 | rings → aura → pulse |
+  | 10–12 | orbiting moons → rainbow → two rings |
+  | 13–15 | lightning → supercharged → starburst |
+  | 16–24 | triple rings → outline → event horizon (dark core, blazing rim) → … → "Singular" |
+
+  Effects never get weaker as rarity climbs; unit tests check this.
+- **Performance:** full effects go on 24 orbs at a time. Outlines use Highlight, which is capped at 8.
+
+## Mega Board payouts
+
+The board is a 16-row Plinko pyramid with guide rails. Orbs drop from the top centre, bounce off low-restitution pegs with sideways damping, and settle into a bell curve. Over 200k simulated drops:
+
+| Slot (from centre) | x0.8 | x1 | x1.5 | x2 | x3 | x5 | x10 | x20 | x40 | **x100** |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Chance | 58% | 20% | 12% | 3.4% | 2.4% | 2.2% | 1% | 0.5% | 0.13% | **~1/6,000** |
+
+- **Average payout:** about x1.37, which matches the x1.4 average the economy and pacing sim are tuned on.
+- **Later tiers:** the same strip pays more, ×1.3 / ×1.4 / ×2.2, matching the old per-tier boards. Tier 3 or higher pays x220 on the edge.
+- **Orbs are 40% of their old size** on the Mega Board.
+
 ## Systems
 
 | System | Where | Notes |

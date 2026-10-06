@@ -176,13 +176,14 @@ end
 ---------------------------------------------------------------- board
 
 function F.slotMult(tier: number, x: number): number
-	local slot = Config.Tiers.Slots[Progression.boardForTier(tier)]
-	for _, z in slot.zones do
-		if x > z[1] and x < z[2] then
-			return z[3]
+	local d = math.abs(x - 200)
+	local scale = Config.Tiers.SlotScale[Progression.boardForTier(tier)] or 1
+	for _, band in Config.Tiers.MegaSlots do
+		if d < band.upTo then
+			return math.floor(band.mult * scale * 10 + 0.5) / 10
 		end
 	end
-	return slot.default
+	return 1
 end
 
 function F.isCollected(tier: number, x: number, y: number): boolean

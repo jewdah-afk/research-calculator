@@ -5,47 +5,24 @@
 --   * Tiers: the 4 hand-tuned tier requirements, then generated ones.
 
 local Config = require(script.Parent.OrbConfig)
+local RarityStyle = require(script.Parent.RarityStyle)
 
 local Progression = {}
 
 local GENERATED = 1950 -- rarities after the hand-tuned 50 (raise freely; ~2k rows is still tiny)
-local PREFIXES = { "Eternal", "Omega", "Primordial", "Singularity", "Paradox", "Apex", "Mythos", "Zenith", "Oblivion", "Genesis" }
-local ROMAN = { "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X" }
 
-local function roman(n: number): string
-	if n <= #ROMAN then
-		return ROMAN[n]
-	end
-	return tostring(n)
-end
-
--- Hand-tuned rarity colours (cycle for generated ones via HSV)
+-- Base colours for rarities 1-50, matched to their names (Pebble grey ... The Absolute white-gold)
 local BASE_COLORS = {
-	"#bbbbbb", "#bbbbbb", "#45bb45", "#45bb45", "#4545bb", "#4545bb", "#8845bb", "#8845bb", "#ff8800", "#ff8800",
-	"#ff0000", "#ff0000", "#ff7b00", "#bb24bb", "#4800ff", "#000000", "#8200ff", "#000042", "#00c8ff", "#0084ff",
-	"#82ff49", "#14c98d", "#ffffff", "#ffe500", "#ff0000", "#5c0000", "#333333", "#111111", "#c307eb", "#11053a",
-	"#d946ff", "#ffffff", "#0ba67f", "#07fbdd", "#ef9a1f", "#fcf046", "#52e5f6", "#ffffff", "#0c1381", "#635cdd",
-	"#9f0811", "#fb0102", "#fe4dfe", "#e167cf", "#ffa700", "#ff4000", "#1cd328", "#03660f", "#ffd600", "#ffc800",
+	"#9a968f", "#d8d2e6", "#4fbf4f", "#7fd6ff", "#c8733a", "#c9d1dc", "#ffcc33", "#3fae7a", "#ffa21f", "#2f6bff",
+	"#e0193a", "#18c46a", "#9b4dff", "#bff6ff", "#8fe8ff", "#ff6a1f", "#ffe14d", "#1fa7d6", "#7dff2e", "#b9b4ff",
+	"#2fbf8f", "#ff5a1f", "#1d5f7a", "#d4a64a", "#0e3d8c", "#fff4b0", "#ffb3f0", "#2a1a3d", "#4dffb8", "#9fe4ff",
+	"#ff8a3d", "#c6a8ff", "#ff3df0", "#ff5cc8", "#ffb000", "#120a1f", "#7a3dff", "#ff2e63", "#3b2a6b", "#00ffd5",
+	"#ffd23d", "#ff4fd8", "#9c8cff", "#ffe066", "#a8f0ff", "#fff07a", "#ffffff", "#ff9ef5", "#7af7ff", "#fff8e0",
 }
 
 local function hexToRGB(h: string): { number }
 	h = h:gsub("#", "")
 	return { tonumber(h:sub(1, 2), 16), tonumber(h:sub(3, 4), 16), tonumber(h:sub(5, 6), 16) }
-end
-
-local function hsv(h: number, s: number, v: number): { number }
-	local i = math.floor(h * 6)
-	local f = h * 6 - i
-	local p, q, t = v * (1 - s), v * (1 - f * s), v * (1 - (1 - f) * s)
-	local r, g, b
-	i = i % 6
-	if i == 0 then r, g, b = v, t, p
-	elseif i == 1 then r, g, b = q, v, p
-	elseif i == 2 then r, g, b = p, v, t
-	elseif i == 3 then r, g, b = p, q, v
-	elseif i == 4 then r, g, b = t, p, v
-	else r, g, b = v, p, q end
-	return { math.floor(r * 255), math.floor(g * 255), math.floor(b * 255) }
 end
 
 -- Rarity list: { name, oneInLog, valueLog, radius, color = {r,g,b} }
@@ -58,6 +35,7 @@ for i, r in Config.Rarities do
 		radius = r.radius,
 		color = hexToRGB(BASE_COLORS[i] or "#ffffff"),
 	})
+	rarities[i].fx = RarityStyle.fx(i, rarities[i].color)
 end
 
 -- Generated rarities keep the late-game rhythm of the hand-tuned table:
@@ -71,14 +49,15 @@ do
 		local step = 2.5 + 0.02 * k
 		oddsLog += step
 		valueLog += 0.8 * step
-		local prefix = PREFIXES[((k - 1) % #PREFIXES) + 1]
-		local cycle = math.floor((k - 1) / #PREFIXES) + 1
+		local i = #rarities + 1
+		local fx = RarityStyle.fx(i, nil)
 		table.insert(rarities, {
-			name = prefix .. " " .. roman(cycle),
+			name = RarityStyle.name(i),
 			oneInLog = oddsLog,
 			valueLog = valueLog,
 			radius = 15,
-			color = hsv((k * 0.137) % 1, 0.75, 1),
+			color = fx.colors[1],
+			fx = fx,
 		})
 	end
 end

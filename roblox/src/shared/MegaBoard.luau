@@ -2,7 +2,7 @@
 -- Geometry of the one shared Mega Board, used by the server (to build it) and by every client
 -- (to simulate and draw orbs on it). Physics runs in logical units, then maps onto the board.
 --
---   logical space: x 0..W (same x as the old board, so slot payouts are unchanged), y 0..H downward
+--   logical space: x 0..W (slot payouts use x), y 0..H downward
 --   world space:   board stands at the north end of the plaza, leaning back TILT degrees
 
 local MegaBoard = {}
@@ -12,7 +12,7 @@ MegaBoard.H = 260
 MegaBoard.STUD = 1.1 -- studs per logical unit -> 440 x 286 studs
 MegaBoard.TILT = 12 -- degrees leaning back
 MegaBoard.BOTTOM = Vector3.new(0, 10, -190) -- world position of the bottom-centre of the play area
-MegaBoard.ORB_SCALE = 0.55 -- orbs are drawn/simulated smaller on the huge board
+MegaBoard.ORB_SCALE = 0.4 -- orbs are drawn/simulated smaller on the huge board
 MegaBoard.SPAWN_Y = 12
 MegaBoard.COLLECT_Y = 246
 MegaBoard.SLOT_H = 14 -- logical height of the slot strip at the bottom
@@ -27,25 +27,36 @@ function MegaBoard.toWorld(x: number, y: number, depth: number?): Vector3
 	return MegaBoard.CF:PointToWorldSpace(Vector3.new((x - MegaBoard.W / 2) * S, (MegaBoard.H - y) * S, depth or 0))
 end
 
--- staggered peg field; spacing leaves room for the biggest orb (r 15 * 0.55)
-local PEG_R = 3
-local ROWS, COLS = 11, 16
-local TOP, BOTTOM = 40, 220
+-- Classic Plinko pyramid: orbs enter at the top centre and fan out row by row, so the far
+-- slots are genuinely rare. Low bounce + sideways damping keeps it a real bell curve
+-- (measured over 200k drops: see OrbConfig.Tiers.MegaSlots).
+local ROWS, SP, TOP, BOTTOM = 16, 22, 30, 226
+MegaBoard.PEG_REST = 0.22
+MegaBoard.ORB_REST = 0.22
+MegaBoard.DAMP = 0.65 -- sideways speed kept after each peg hit
+MegaBoard.SPAWN_X0, MegaBoard.SPAWN_X1 = 196, 204
 
 function MegaBoard.pegs()
 	local out = {}
-	local sx = MegaBoard.W / COLS
 	for r = 0, ROWS - 1 do
 		local y = TOP + r * (BOTTOM - TOP) / (ROWS - 1)
-		local off = (r % 2 == 1) and sx / 2 or 0
-		local n = (r % 2 == 1) and COLS - 1 or COLS
+		local n = r + 3
 		for c = 0, n - 1 do
-			table.insert(out, { x = off + sx / 2 + c * sx, y = y, r = PEG_R, rest = 0.5 })
+			table.insert(out, { x = MegaBoard.W / 2 + (c - (n - 1) / 2) * SP, y = y, r = 3, rest = MegaBoard.PEG_REST })
 		end
 	end
-	-- a few big gold bumpers for drama
-	for _, p in { { 100, 130 }, { 300, 130 }, { 200, 75 } } do
-		table.insert(out, { x = p[1], y = p[2], r = 9, rest = 1.1, big = true })
+	return out
+end
+
+-- guide rails along the pyramid's sides (segments, logical units)
+function MegaBoard.rails()
+	local out = {}
+	for _, side in { -1, 1 } do
+		table.insert(out, {
+			x1 = MegaBoard.W / 2 + side * (1.5 * SP + SP * 0.6), y1 = TOP - 12,
+			x2 = MegaBoard.W / 2 + side * ((ROWS + 2) / 2 * SP - SP * 0.2), y2 = BOTTOM - 4,
+			half = 2,
+		})
 	end
 	return out
 end
@@ -69,9 +80,17 @@ function MegaBoard.buckets(pegs)
 	return grid
 end
 
--- slot dividers (logical x) shared by everyone; the payout per slot is per-player (their tier)
-function MegaBoard.slotEdges()
-	return { 0, 66, 155, 244, 333, 400 }
+-- slot dividers (logical x), built from the symmetric MegaSlots bands; payout per slot is per-player
+function MegaBoard.slotEdges(bands)
+	local out = { 0, MegaBoard.W }
+	for _, band in bands do
+		if band.upTo < MegaBoard.W / 2 then
+			table.insert(out, MegaBoard.W / 2 - band.upTo)
+			table.insert(out, MegaBoard.W / 2 + band.upTo)
+		end
+	end
+	table.sort(out)
+	return out
 end
 
 return MegaBoard

@@ -10,6 +10,7 @@ local Lighting = game:GetService("Lighting")
 local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
 local MB = require(Shared.MegaBoard)
 local Unlocks = require(Shared.Unlocks)
+local Config = require(Shared.OrbConfig)
 
 local MapBuilder = {}
 
@@ -156,12 +157,12 @@ local function buildBoard()
 	for _, p in MB.pegs() do
 		local d = p.r * 2 * S
 		part({
-			Name = p.big and "Bumper" or "Peg",
+			Name = "Peg",
 			Shape = Enum.PartType.Cylinder,
-			Size = Vector3.new(p.big and 5 or 4, d, d),
-			CFrame = CFrame.new(MB.toWorld(p.x, p.y, (p.big and 5 or 4) / 2)) * (cf - cf.Position) * CFrame.Angles(0, math.rad(90), 0),
-			Color = p.big and Color3.fromRGB(255, 196, 60) or Color3.fromRGB(233, 228, 255),
-			Material = p.big and Enum.Material.Neon or Enum.Material.SmoothPlastic,
+			Size = Vector3.new(4, d, d),
+			CFrame = CFrame.new(MB.toWorld(p.x, p.y, 2)) * (cf - cf.Position) * CFrame.Angles(0, math.rad(90), 0),
+			Color = Color3.fromRGB(233, 228, 255),
+			Material = Enum.Material.SmoothPlastic,
 			CanCollide = false,
 			CastShadow = false,
 			Parent = pegs,
@@ -169,7 +170,12 @@ local function buildBoard()
 	end
 	-- slot strip: dividers + one panel per slot (clients write their own multipliers on them)
 	local slots = folder("Slots", f)
-	local edges = MB.slotEdges()
+	-- gold guide rails along the pyramid's sides
+	for _, r in MB.rails() do
+		local a, b = MB.toWorld(r.x1, r.y1, 2), MB.toWorld(r.x2, r.y2, 2)
+		part({ Name = "Rail", Size = Vector3.new(r.half * 2 * S, (b - a).Magnitude, 4), CFrame = CFrame.lookAt((a + b) / 2, (a + b) / 2 + cf.LookVector, b - a), Color = Color3.fromRGB(255, 196, 60), Material = Enum.Material.Metal, Parent = f })
+	end
+	local edges = MB.slotEdges(Config.Tiers.MegaSlots)
 	for i, x in edges do
 		part({ Name = "Divider", Size = Vector3.new(2, MB.SLOT_H * S, 4), CFrame = (cf - cf.Position) + MB.toWorld(x, MB.H - MB.SLOT_H / 2, 2), Color = Color3.fromRGB(255, 196, 60), Material = Enum.Material.Metal, Parent = slots })
 		if i < #edges then

@@ -4,59 +4,60 @@
 
 local OrbConfig = {}
 
--- Rarity tiers. `oneIn` is the base 1-in-N chance at 1x luck, `value` is money per orb,
+-- Rarity tiers 1-50 (names climb from everyday things to gems, elements, beasts, cosmos, divine).
+-- Looks/effects for every rarity come from RarityStyle.luau. `oneIn` is the base 1-in-N chance at 1x luck, `value` is money per orb,
 -- `radius` is orb radius in board pixels (board is 400 x 800).
 OrbConfig.Rarities = {
-	{ name = "Common", oneIn = 1, value = 1, radius = 5 },
-	{ name = "Uncommon", oneIn = 4, value = 4, radius = 6 },
-	{ name = "Rare", oneIn = 15, value = 14, radius = 6 },
-	{ name = "Epic", oneIn = 50, value = 35, radius = 6 },
-	{ name = "Legendary", oneIn = 250, value = 145, radius = 7 },
-	{ name = "Mythical", oneIn = 1200, value = 450, radius = 7 },
-	{ name = "Exotic", oneIn = 7000, value = 1600, radius = 7 },
-	{ name = "Ethereal", oneIn = 30000, value = 4800, radius = 8 },
-	{ name = "Galactic", oneIn = 140000, value = 16000, radius = 8 },
-	{ name = "Divine", oneIn = 750000, value = 60000, radius = 9 },
-	{ name = "Transcendental", oneIn = 6e6, value = 4e5, radius = 9 },
-	{ name = "Angelic", oneIn = 2e7, value = 8.25e5, radius = 9 },
-	{ name = "Demonic", oneIn = 4.5e8, value = 1.1e7, radius = 10 },
-	{ name = "Void", oneIn = 7e9, value = 6.7e7, radius = 10 },
-	{ name = "Antimatter", oneIn = 2.5e12, value = 1.57e9, radius = 10 },
-	{ name = "Quantum", oneIn = 7e13, value = 1.62e10, radius = 10 },
-	{ name = "Extreme", oneIn = 1.5e15, value = 1.64e11, radius = 11 },
-	{ name = "Radiant", oneIn = 3e16, value = 1.72e12, radius = 11 },
-	{ name = "Celestial", oneIn = 5.8e17, value = 1.78e13, radius = 11 },
-	{ name = "Ascended", oneIn = 1e20, value = 9e14, radius = 11 },
-	{ name = "Forsaken", oneIn = 8e21, value = 1.85e16, radius = 11 },
-	{ name = "Astral", oneIn = 7.5e23, value = 4e17, radius = 12 },
-	{ name = "Supernova", oneIn = 1.6e26, value = 1.7e19, radius = 12 },
-	{ name = "Toxic", oneIn = 5.5e27, value = 2.9e20, radius = 12 },
-	{ name = "Nuclear", oneIn = 4e29, value = 7.9e21, radius = 12 },
-	{ name = "Lightning", oneIn = 3.2e30, value = 3e22, radius = 12 },
-	{ name = "Duke", oneIn = 2.4e32, value = 6e23, radius = 13 },
-	{ name = "Prince", oneIn = 5e33, value = 3.5e24, radius = 13 },
-	{ name = "King", oneIn = 1.5e35, value = 3.3e25, radius = 13 },
-	{ name = "Fusion", oneIn = 5e37, value = 1.9e27, radius = 13 },
-	{ name = "Fusion Mk. II", oneIn = 8e38, value = 9e27, radius = 13 },
-	{ name = "Fusion Mk. III", oneIn = 1.5e40, value = 5e28, radius = 14 },
-	{ name = "Fusion Mk. IV", oneIn = 2e41, value = 2.7e29, radius = 14 },
-	{ name = "Fusion Mk. V", oneIn = 6e42, value = 2.6e30, radius = 14 },
-	{ name = "Earth", oneIn = 5e44, value = 1e32, radius = 14 },
-	{ name = "City", oneIn = 1e46, value = 7e32, radius = 14 },
-	{ name = "Magma", oneIn = 1e47, value = 4e33, radius = 14 },
-	{ name = "Volcano", oneIn = 5e48, value = 8e34, radius = 14 },
-	{ name = "Earthquake", oneIn = 1e50, value = 8e35, radius = 14 },
-	{ name = "Country", oneIn = 2.8e51, value = 1e37, radius = 15 },
-	{ name = "Space", oneIn = 2.8e53, value = 5e38, radius = 15 },
-	{ name = "Planet", oneIn = 1.7e54, value = 1.2e39, radius = 15 },
-	{ name = "Solar System", oneIn = 5e55, value = 1.5e40, radius = 15 },
-	{ name = "Nebula", oneIn = 1e57, value = 1.2e41, radius = 15 },
-	{ name = "Galaxy", oneIn = 5e58, value = 1.8e42, radius = 15 },
-	{ name = "Universal", oneIn = 2.5e60, value = 1.8e43, radius = 15 },
-	{ name = "Timeless", oneIn = 2.5e62, value = 1.8e44, radius = 15 },
-	{ name = "Infinity", oneIn = 5e64, value = 1.8e45, radius = 15 },
-	{ name = "Absolute Infinity", oneIn = 2.5e67, value = 1.8e46, radius = 15 },
-	{ name = "Finality", oneIn = 2.5e70, value = 1.8e49, radius = 15 },
+	{ name = "Pebble", oneIn = 1, value = 1, radius = 5 },
+	{ name = "Marble", oneIn = 4, value = 4, radius = 6 },
+	{ name = "Clover", oneIn = 15, value = 14, radius = 6 },
+	{ name = "Bubble", oneIn = 50, value = 35, radius = 6 },
+	{ name = "Copper", oneIn = 250, value = 145, radius = 7 },
+	{ name = "Silver", oneIn = 1200, value = 450, radius = 7 },
+	{ name = "Gold", oneIn = 7000, value = 1600, radius = 7 },
+	{ name = "Jade", oneIn = 30000, value = 4800, radius = 8 },
+	{ name = "Amber", oneIn = 140000, value = 16000, radius = 8 },
+	{ name = "Sapphire", oneIn = 750000, value = 60000, radius = 9 },
+	{ name = "Ruby", oneIn = 6e6, value = 4e5, radius = 9 },
+	{ name = "Emerald", oneIn = 2e7, value = 8.25e5, radius = 9 },
+	{ name = "Amethyst", oneIn = 4.5e8, value = 1.1e7, radius = 10 },
+	{ name = "Diamond", oneIn = 7e9, value = 6.7e7, radius = 10 },
+	{ name = "Frostbite", oneIn = 2.5e12, value = 1.57e9, radius = 10 },
+	{ name = "Ember", oneIn = 7e13, value = 1.62e10, radius = 10 },
+	{ name = "Thunderstrike", oneIn = 1.5e15, value = 1.64e11, radius = 11 },
+	{ name = "Tidal", oneIn = 3e16, value = 1.72e12, radius = 11 },
+	{ name = "Venom", oneIn = 5.8e17, value = 1.78e13, radius = 11 },
+	{ name = "Phantom", oneIn = 1e20, value = 9e14, radius = 11 },
+	{ name = "Wyvern", oneIn = 8e21, value = 1.85e16, radius = 11 },
+	{ name = "Phoenix", oneIn = 7.5e23, value = 4e17, radius = 12 },
+	{ name = "Kraken", oneIn = 1.6e26, value = 1.7e19, radius = 12 },
+	{ name = "Titan", oneIn = 5.5e27, value = 2.9e20, radius = 12 },
+	{ name = "Leviathan", oneIn = 4e29, value = 7.9e21, radius = 12 },
+	{ name = "Seraph", oneIn = 3.2e30, value = 3e22, radius = 12 },
+	{ name = "Archon", oneIn = 2.4e32, value = 6e23, radius = 13 },
+	{ name = "Eclipse", oneIn = 5e33, value = 3.5e24, radius = 13 },
+	{ name = "Aurora", oneIn = 1.5e35, value = 3.3e25, radius = 13 },
+	{ name = "Comet", oneIn = 5e37, value = 1.9e27, radius = 13 },
+	{ name = "Supernova", oneIn = 8e38, value = 9e27, radius = 13 },
+	{ name = "Pulsar", oneIn = 1.5e40, value = 5e28, radius = 14 },
+	{ name = "Quasar", oneIn = 2e41, value = 2.7e29, radius = 14 },
+	{ name = "Nebula", oneIn = 6e42, value = 2.6e30, radius = 14 },
+	{ name = "Starforge", oneIn = 5e44, value = 1e32, radius = 14 },
+	{ name = "Black Hole", oneIn = 1e46, value = 7e32, radius = 14 },
+	{ name = "Wormhole", oneIn = 1e47, value = 4e33, radius = 14 },
+	{ name = "Event Horizon", oneIn = 5e48, value = 8e34, radius = 14 },
+	{ name = "Dark Matter", oneIn = 1e50, value = 8e35, radius = 14 },
+	{ name = "Antimatter", oneIn = 2.8e51, value = 1e37, radius = 15 },
+	{ name = "Chrono", oneIn = 2.8e53, value = 5e38, radius = 15 },
+	{ name = "Paradox", oneIn = 1.7e54, value = 1.2e39, radius = 15 },
+	{ name = "Dreamweaver", oneIn = 5e55, value = 1.5e40, radius = 15 },
+	{ name = "Astral Crown", oneIn = 1e57, value = 1.2e41, radius = 15 },
+	{ name = "Celestial", oneIn = 5e58, value = 1.8e42, radius = 15 },
+	{ name = "Godspark", oneIn = 2.5e60, value = 1.8e43, radius = 15 },
+	{ name = "Genesis", oneIn = 2.5e62, value = 1.8e44, radius = 15 },
+	{ name = "Omniverse", oneIn = 5e64, value = 1.8e45, radius = 15 },
+	{ name = "Infinity", oneIn = 2.5e67, value = 1.8e46, radius = 15 },
+	{ name = "The Absolute", oneIn = 2.5e70, value = 1.8e49, radius = 15 },
 }
 
 -- Board / collection
@@ -149,6 +150,23 @@ OrbConfig.Tiers = {
 		[3] = { zones = { { -math.huge, 66, 4 }, { 155, 244, 2.25 }, { 333, math.huge, 4 } }, default = 3 },
 		[4] = { zones = { { -math.huge, 66, 4 }, { 155, 244, 2.25 }, { 333, math.huge, 4 } }, default = 3 },
 	},
+	-- Mega Board slot strip (symmetric, by distance from the centre x=200). Landing odds measured
+	-- with the board's own physics (200k drops): EV ~ x1.37, i.e. the x1.4 average the economy
+	-- was tuned on. The far edges are ~1 in 6,000.
+	MegaSlots = {
+		{ upTo = 10, mult = 0.8 }, -- 58%
+		{ upTo = 20, mult = 1 }, -- 20%
+		{ upTo = 30, mult = 1.5 }, -- 12%
+		{ upTo = 45, mult = 2 }, -- 3.4%
+		{ upTo = 60, mult = 3 }, -- 2.4%
+		{ upTo = 80, mult = 5 }, -- 2.2%
+		{ upTo = 100, mult = 10 }, -- 1%
+		{ upTo = 140, mult = 20 }, -- 0.5%
+		{ upTo = 175, mult = 40 }, -- 0.13%
+		{ upTo = math.huge, mult = 100 }, -- ~1/6,000
+	},
+	-- later tiers pay more on the same strip (matches the old per-tier boards' averages)
+	SlotScale = { [0] = 1, 1.3, 1.4, 2.2, 2.2 },
 	-- Tier 3 board also collects orbs in the two side pockets (x<=55 or x>=345, 450<=y<=500)
 	Tier3Pockets = { leftX = 55, rightX = 345, yMin = 340, yMax = 376 },
 }
