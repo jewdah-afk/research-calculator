@@ -11,8 +11,7 @@
   --r-grey:#9aa0ab; --r-green:#3fdc5a; --r-blue:#3a9bff; --r-purple:#b45cff; --r-gold:#ffc63a; --r-red:#ff4f6a; --r-cyan:#5cf2ff;
   --display:"Fredoka","Trebuchet MS",system-ui,sans-serif;
   --body:"Fredoka",system-ui,-apple-system,sans-serif;
-  --studs:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Crect x='3.5' y='3.5' width='9' height='9' rx='2' fill='black' fill-opacity='.07' stroke='white' stroke-opacity='.2' stroke-width='1.6'/%3E%3Cpath d='M4.5 12.5h8v-8' fill='none' stroke='black' stroke-opacity='.16' stroke-width='1.2'/%3E%3C/svg%3E");
-  --brush:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 600 80' preserveAspectRatio='none'%3E%3Cg fill='white' fill-opacity='.2'%3E%3Cpath d='M230 80C280 40 330 10 390 0h55C385 18 335 45 300 80z'/%3E%3Cpath d='M330 80C385 35 440 8 490 0h36C470 22 420 50 385 80z'/%3E%3Cpath d='M430 80c45-35 90-62 135-80h25C540 25 495 55 470 80z'/%3E%3Cpath d='M170 80C200 55 230 40 265 28c-20 18-35 35-45 52z'/%3E%3C/g%3E%3C/svg%3E");
+  --brush:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 600 80' preserveAspectRatio='none'%3E%3Cg fill='white' fill-opacity='.12'%3E%3Cpath d='M230 80C280 40 330 10 390 0h55C385 18 335 45 300 80z'/%3E%3Cpath d='M330 80C385 35 440 8 490 0h36C470 22 420 50 385 80z'/%3E%3Cpath d='M430 80c45-35 90-62 135-80h25C540 25 495 55 470 80z'/%3E%3Cpath d='M170 80C200 55 230 40 265 28c-20 18-35 35-45 52z'/%3E%3C/g%3E%3C/svg%3E");
   --lattice:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='30' height='30'%3E%3Cpath d='M0 15L15 0L30 15L15 30Z' fill='none' stroke='black' stroke-opacity='.28' stroke-width='3'/%3E%3Cpath d='M1.5 15L15 1.5L28.5 15L15 28.5Z' fill='none' stroke='white' stroke-opacity='.07' stroke-width='1'/%3E%3C/svg%3E");
   --swoosh:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 240'%3E%3Cg fill='white' fill-opacity='.075'%3E%3Cpath d='M60 20c90 10 170 60 220 130 30 45 70 70 120 75-60 15-120-10-160-60C200 105 140 55 60 20z'/%3E%3Cpath d='M20 90c25-35 75-40 100-10 20 25 5 60-25 60 20-15 20-40 0-50-25-12-55 0-75 0z'/%3E%3Cpath d='M95 150c40-10 90 5 120 40-35-20-80-25-120-40z'/%3E%3Cpath d='M300 210c30 5 60 0 85-15-15 25-50 35-85 15z'/%3E%3C/g%3E%3C/svg%3E");
   --ol:0 0 0 var(--ink),2px 0 0 var(--ink),-2px 0 0 var(--ink),0 2px 0 var(--ink),0 -2px 0 var(--ink),2px 2px 0 var(--ink),-2px 2px 0 var(--ink),2px -2px 0 var(--ink),-2px -2px 0 var(--ink),0 4px 0 var(--ink);
@@ -32,17 +31,22 @@ body{background:#8fd0ff;color:var(--fg);font-family:var(--body);font-weight:600;
   background:var(--swoosh) left -30px bottom -20px/115% auto no-repeat,linear-gradient(rgba(46,46,52,.84),rgba(34,35,40,.88));
   -webkit-backdrop-filter:blur(6px) saturate(1.1);backdrop-filter:blur(6px) saturate(1.1);
   box-shadow:0 6px 0 rgba(0,0,0,.45),0 10px 24px rgba(0,0,0,.35)}
-.hdr{position:relative;display:flex;align-items:stretch;min-height:58px;border-bottom:4px solid var(--ink);overflow:hidden;animation:studs 3s linear infinite;
-  background:var(--brush) 0 0/100% 100% no-repeat,
-    var(--studs) 0 0/16px 16px,linear-gradient(color-mix(in srgb,var(--h1,var(--blue1)) 70%,#fff),var(--h1,var(--blue1)) 30%,var(--h2,var(--blue2)) 85%,color-mix(in srgb,var(--h2,var(--blue2)) 80%,#000));
-  box-shadow:inset 0 2px 0 rgba(255,255,255,.45),inset 0 -11px 0 rgba(10,30,90,.42)}
-.hdr.purple{box-shadow:inset 0 2px 0 rgba(255,255,255,.45),inset 0 -11px 0 rgba(50,10,90,.42)}
+.hdr{position:relative;display:flex;align-items:stretch;min-height:58px;border-bottom:4px solid var(--ink);overflow:hidden;animation:hdrflow 7s ease-in-out infinite alternate;
+  background:linear-gradient(rgba(255,255,255,.2),rgba(255,255,255,.04) 46%,transparent 52%) 0 0/100% 100%,
+    linear-gradient(110deg,transparent 35%,rgba(255,255,255,.22) 44%,rgba(255,255,255,.08) 50%,transparent 58%) 0 0/300% 100%,
+    var(--brush) 0 0/100% 100% no-repeat,
+    linear-gradient(var(--h1,var(--blue1)),color-mix(in srgb,var(--h1,var(--blue1)),var(--h2,var(--blue2))) 40%,var(--h2,var(--blue2)) 78%,color-mix(in srgb,var(--h2,var(--blue2)) 78%,#000));
+  --lip:rgba(10,30,90,.45);
+  box-shadow:inset 0 3px 0 rgba(255,255,255,.55),inset 0 5px 6px rgba(255,255,255,.18),inset 3px 0 0 rgba(255,255,255,.14),inset -3px 0 0 rgba(0,0,0,.12),
+    inset 0 -12px 0 var(--lip),inset 0 -15px 8px rgba(0,0,0,.12)}
+.hdr.purple{--lip:rgba(50,10,90,.45)} .hdr.gold{--lip:rgba(110,55,0,.4)}
+@keyframes hdrflow{0%{background-position:0 0,120% 0,0 0,0 0}100%{background-position:0 0,-20% 0,0 0,0 0}}
 .hdr h2{position:relative;z-index:1;display:flex;align-items:center;gap:10px;flex:1;margin:0;padding:6px 20px 14px;font:700 32px/1.1 var(--display);letter-spacing:.01em;align-self:center;text-transform:uppercase}
 .gt,.hdr h2 .t{background:linear-gradient(#fff 45%,#d2d4dc 60%,#c3c6cf);-webkit-background-clip:text;background-clip:text;color:transparent;
   filter:drop-shadow(2.4px 0 0 var(--ink)) drop-shadow(-2.4px 0 0 var(--ink)) drop-shadow(0 2.4px 0 var(--ink)) drop-shadow(0 -2.4px 0 var(--ink)) drop-shadow(0 3px 0 var(--ink))}
 .hdr.purple{--h1:var(--purple1);--h2:var(--purple2)} .hdr.gold{--h1:var(--gold1);--h2:var(--gold2)}
 .close{all:unset;font-weight:700;position:relative;z-index:1;cursor:pointer;width:56px;display:grid;place-items:center;border-left:3px solid var(--ink);
-  background:var(--studs) 0 0/16px 16px,linear-gradient(#ff6a5c,#ff3b30 55%,#e0261c);box-shadow:inset 0 2px 0 rgba(255,255,255,.45),inset 0 -9px 0 rgba(90,8,8,.55);
+  background:linear-gradient(rgba(255,255,255,.32),rgba(255,255,255,.08) 46%,transparent 52%),linear-gradient(#ff6a5c,#ff3b30 55%,#e0261c);box-shadow:inset 0 3px 0 rgba(255,255,255,.5),inset 3px 0 0 rgba(255,255,255,.12),inset 0 -12px 0 rgba(90,8,8,.5),inset 0 -15px 8px rgba(0,0,0,.12);
   font:400 28px/1 var(--display);text-shadow:var(--ol)}
 .close .ico{filter:drop-shadow(0 3px 0 var(--ink))}
 .close .gt,.hdr h2 .t{text-shadow:none}
@@ -81,7 +85,6 @@ body{background:#8fd0ff;color:var(--fg);font-family:var(--body);font-weight:600;
 .tile.sm{width:34px;height:34px;border-radius:6px} .tile.sm .gem{width:12px;height:12px;border-width:2px}
 
 /* ---- buttons: outlined, bottom lip, press-down ---- */
-@keyframes studs{to{background-position:0 0,16px 16px,0 0}}
 @keyframes sweep{from{transform:translateX(-120%) skewX(-20deg)}to{transform:translateX(320%) skewX(-20deg)}}
 @keyframes pulse{50%{box-shadow:inset 0 2px 0 rgba(255,255,255,.5),inset 0 -4px 0 rgba(0,0,0,.28),0 3px 0 var(--ink),0 0 18px 2px var(--glow,rgba(255,216,74,.7))}}
 @keyframes bob{50%{transform:translateY(-3px) rotate(-4deg)}}
@@ -94,9 +97,9 @@ body{background:#8fd0ff;color:var(--fg);font-family:var(--body);font-weight:600;
 .ico{display:inline-block;vertical-align:middle;flex:none}
 button .ico{margin:-6px 0;width:24px;height:24px}
 button{--b1:var(--sec1);--b2:var(--sec2);font:700 15px/1 var(--display);letter-spacing:.02em;color:#fff;cursor:pointer;text-shadow:var(--ol-sm);
-  display:inline-flex;align-items:center;justify-content:center;gap:7px;background:linear-gradient(rgba(255,255,255,.38),rgba(255,255,255,.06) 48%,transparent 52%),var(--studs) 0 0/14px 14px,linear-gradient(var(--b1),var(--b2) 70%,color-mix(in srgb,var(--b2) 75%,#000));border:3px solid var(--ink);border-radius:9px;padding:8px 12px 10px;
-  box-shadow:inset 0 0 0 2px rgba(255,255,255,.38),inset 0 -5px 0 rgba(0,0,0,.18),0 3px 0 var(--ink);transition:transform .06s}
-button:hover{filter:brightness(1.08)} button:active{transform:translateY(3px);box-shadow:inset 0 2px 0 rgba(255,255,255,.4),inset 0 -2px 0 rgba(0,0,0,.28),0 0 0 var(--ink)}
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;background:linear-gradient(rgba(255,255,255,.4),rgba(255,255,255,.1) 46%,transparent 52%),linear-gradient(var(--b1),var(--b2) 70%,color-mix(in srgb,var(--b2) 75%,#000));border:3px solid var(--ink);border-radius:9px;padding:8px 12px 10px;
+  box-shadow:inset 0 3px 0 rgba(255,255,255,.5),inset 2px 0 0 rgba(255,255,255,.18),inset -2px 0 0 rgba(255,255,255,.1),inset 0 -6px 0 rgba(0,0,0,.22),0 4px 0 var(--ink),0 6px 8px rgba(0,0,0,.25);transition:transform .06s}
+button:hover{filter:brightness(1.08)} button:active{transform:translateY(4px);box-shadow:inset 0 2px 0 rgba(255,255,255,.4),inset 0 -2px 0 rgba(0,0,0,.28),0 0 0 var(--ink)}
 button:focus-visible{outline:3px solid #fff;outline-offset:2px}
 button:disabled{--b1:#5b5e66;--b2:#40434a;cursor:not-allowed;filter:none}
 button.buy{--b1:#3dff7a;--b2:#0ff52e} button.on{--b1:var(--gold1);--b2:var(--gold2);animation:pulse 2s ease-in-out infinite} button.red{--b1:var(--red1);--b2:var(--red2)} button.pur{--b1:var(--purple1);--b2:var(--purple2)}
@@ -663,9 +666,7 @@ const INK='#0b0c10';
 function txt(g,t,x,y,size,color,align='center',stroke){ stroke=stroke||Math.max(4,size*.22); g.font=F_DISP.replace('{s}',size); g.textAlign=align; g.textBaseline='middle'; g.lineJoin='round';
   g.lineWidth=stroke; g.strokeStyle=INK; g.strokeText(t,x,y+size*.08); g.strokeText(t,x,y); g.fillStyle=color; g.fillText(t,x,y); }
 function sub(g,t,x,y,size,color='#b9bdc8',align='center'){ g.font=`600 ${size}px Fredoka, sans-serif`; g.textAlign=align; g.textBaseline='middle'; g.fillStyle=color; g.fillText(t,x,y); }
-function studs(g,x,y,w,h){ g.save(); g.beginPath(); g.rect(x,y,w,h); g.clip(); g.lineWidth=1.8;
-  for(let yy=y+4;yy<y+h;yy+=17) for(let xx=x+4;xx<x+w;xx+=17){ rr(g,xx,yy,10,10,2.5); g.fillStyle='rgba(0,0,0,.07)'; g.fill(); g.strokeStyle='rgba(255,255,255,.22)'; g.stroke();
-    g.strokeStyle='rgba(0,0,0,.16)'; g.beginPath(); g.moveTo(xx+1,yy+10); g.lineTo(xx+10,yy+10); g.lineTo(xx+10,yy+1); g.stroke(); } g.restore(); }
+function gloss(g,x,y,w,h){ const gr=g.createLinearGradient(0,y,0,y+h); gr.addColorStop(0,'rgba(255,255,255,.34)'); gr.addColorStop(.46,'rgba(255,255,255,.1)'); gr.addColorStop(.52,'rgba(255,255,255,0)'); g.fillStyle=gr; g.fillRect(x,y,w,h); }
 function brush(g,x,y,w,h){ g.save(); g.beginPath(); g.rect(x,y,w,h); g.clip(); g.fillStyle='rgba(255,255,255,.13)';
   [[.42,.07],[.55,.05],[.7,.04]].forEach(([f,wd])=>{ g.beginPath(); g.moveTo(x+w*f,y+h); g.quadraticCurveTo(x+w*(f+.05),y+h*.4,x+w*(f+.13),y); g.lineTo(x+w*(f+.13+wd),y); g.quadraticCurveTo(x+w*(f+.06+wd),y+h*.45,x+w*(f+wd*.8),y+h); g.fill(); }); g.restore(); }
 function lattice(g,x,y,w,h){ g.save(); g.beginPath(); g.rect(x,y,w,h); g.clip(); g.strokeStyle='rgba(0,0,0,.25)'; g.lineWidth=3; for(let k=-h;k<w+h;k+=28){ g.beginPath(); g.moveTo(x+k,y); g.lineTo(x+k+h,y+h); g.moveTo(x+k+h,y); g.lineTo(x+k,y+h); g.stroke(); } g.restore(); }
@@ -677,9 +678,9 @@ function win(g,x,y,w,h,title,color='blue',hh=58){
   let gr=g.createLinearGradient(0,by,0,by+bh); gr.addColorStop(0,'rgba(46,46,52,.92)'); gr.addColorStop(1,'rgba(34,35,40,.94)'); g.fillStyle=gr; g.fillRect(bx,by,bw,bh);
   g.fillStyle='rgba(255,255,255,.07)'; g.beginPath(); g.moveTo(bx,by+bh*.25); g.bezierCurveTo(bx+bw*.45,by+bh*.3,bx+bw*.5,by+bh*.95,bx+bw*1.05,by+bh*.9); g.lineTo(bx+bw*1.05,by+bh*.98); g.bezierCurveTo(bx+bw*.45,by+bh*1.05,bx+bw*.4,by+bh*.4,bx,by+bh*.33); g.fill();
   if(title){ const [c1,c2]=HEAD[color]; gr=g.createLinearGradient(0,by,0,by+hh); gr.addColorStop(0,c1); gr.addColorStop(1,c2); g.fillStyle=gr; g.fillRect(bx,by,bw,hh);
-    studs(g,bx,by,bw,hh); brush(g,bx,by,bw,hh);
-    const t=performance.now()/1000, sx=bx+((t*.35)%1.6-.3)*bw; const sg=g.createLinearGradient(sx-60,0,sx+60,0); sg.addColorStop(0,'rgba(255,255,255,0)'); sg.addColorStop(.5,'rgba(255,255,255,.22)'); sg.addColorStop(1,'rgba(255,255,255,0)'); g.fillStyle=sg; g.fillRect(bx,by,bw,hh);
-    g.fillStyle='rgba(255,255,255,.45)'; g.fillRect(bx,by,bw,2); g.fillStyle='rgba(10,20,70,.38)'; g.fillRect(bx,by+hh-10,bw,10); g.fillStyle=INK; g.fillRect(bx,by+hh,bw,4);
+    gloss(g,bx,by,bw,hh); brush(g,bx,by,bw,hh);
+    const t=performance.now()/1000, sx=bx+((t*.12)%1.6-.3)*bw; const sg=g.createLinearGradient(sx-60,0,sx+60,0); sg.addColorStop(0,'rgba(255,255,255,0)'); sg.addColorStop(.5,'rgba(255,255,255,.22)'); sg.addColorStop(1,'rgba(255,255,255,0)'); g.fillStyle=sg; g.fillRect(bx,by,bw,hh);
+    g.fillStyle='rgba(255,255,255,.55)'; g.fillRect(bx,by,bw,3); g.fillStyle='rgba(10,20,70,.42)'; g.fillRect(bx,by+hh-12,bw,12); g.fillStyle='rgba(0,0,0,.12)'; g.fillRect(bx,by+hh-16,bw,4); g.fillStyle=INK; g.fillRect(bx,by+hh,bw,4);
     txt(g,title,bx+18,by+hh/2+1,32,'#ffffff','left'); }
   g.restore(); return {x:bx+12,y:by+(title?hh+14:12),w:bw-24,h:bh-(title?hh+26:24)}; }
 function card(g,x,y,w,h,done){ rr(g,x,y,w,h,10); g.fillStyle=INK; g.fill(); g.save(); rr(g,x+3,y+3,w-6,h-6,8); g.clip();

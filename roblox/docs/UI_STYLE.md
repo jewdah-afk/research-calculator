@@ -7,16 +7,16 @@ Every window, card, button and in-world panel follows these rules, in both the b
 | Element | Observed detail |
 |---|---|
 | **Window frame** | Thick black outline (~4px at 1x) with rounded corners (~12px). Charcoal body (#2e3036 → #26282d top to bottom). A faint giant swoosh/emblem watermark in the body (white at ~5%). |
-| **Header bar** | Full-width, ~56px tall. Sky-blue vertical gradient (#63ccff → #2b8de6). A fine embossed grid of small rounded squares (studs) in a lighter blue (~12% white). Two soft diagonal gloss streaks. A 3px black rule on the bottom edge. |
+| **Header bar** | Full-width, ~56px tall. Sky-blue vertical gradient (#63ccff → #2b8de6). No studs. A glossy top half (~20% white fading out at the middle), a slow diagonal sheen that drifts across (7s, back and forth), a 3px lit top edge and a 12px darker bottom lip. Two soft diagonal gloss streaks. A 3px black rule on the bottom edge. |
 | **Title** | "SHOP": heavy rounded display face, white, thick dark navy/black outline (~3–4px), hard 2–3px drop shadow straight down. Left-aligned with ~24px inset. |
-| **Close button** | Square, flush in the header's top-right, same height as the header. Red gradient (#ff4b4b → #d31b1b), same stud texture. A 3px black divider on its left. White chunky "X" with a black outline. |
+| **Close button** | Square, flush in the header's top-right, same height as the header. Red gradient (#ff4b4b → #d31b1b), same gloss and lip, no studs. A 3px black divider on its left. White chunky "X" with a black outline. |
 | **Item card** | Inset panel inside the body. Darker charcoal (#3a3c43) with a diamond-lattice pattern (thin lines, ~6% white). 3px black border, 6px radius. A 1px light bevel on the top inner edge and a darker inner bottom edge. |
 | **Card title** | "Starter Pack": same display face, white, outlined, top-left. |
 | **Left art area** | A halftone dot field that fades out to the right, with a grey sunburst (radiating rays) behind it. |
 | **Item tiles** | Squares in rarity colours: grey, green, blue, purple. A sunburst of lighter rays from the centre. A darker 3px bottom lip that makes a 3D block. Black outline. "???" sits over the top edge in white with a black outline. |
 | **Small icon tile** | Pink/purple square holding the gift icon. Same black outline. |
 | **Price button** | Bright green (#46ef55 → #1db52c), black outline, white "199" with a currency glyph, both outlined. A light bevel along the top edge. Wide and short, aligned to the right of the card. |
-| **Overall** | Toy-like and chunky. Every shape has a black outline, a bevel or lip, and saturated primaries over neutral charcoal. Texture (studs, lattice, halftone, sunburst) is subtle and never fights the text. |
+| **Overall** | Toy-like and chunky. Every shape has a black outline, a bevel or lip, and saturated primaries over neutral charcoal. Texture (gloss, lattice, halftone, sunburst) is subtle and never fights the text. |
 
 ## 2. Tokens
 
@@ -85,13 +85,13 @@ Every place a stat appears uses its colour: label, value, icon tile and progress
 | Boost amounts ("+25% cash") | lime #7cff5b |
 
 ## 7. Corrections from a zoomed-in pass (these win over sections 1–3)
-- **Studs:** hollow outlined squares, not filled bumps. Each is a 9px square with a 1.6px light outline (~20% white), a faint dark fill, and a darker bottom-right inner edge. They sit on a 16px grid.
+- **No studs anywhere in the UI.** Headers, buttons and the close button use smooth gradients with a glossy top half, a lit top edge and a dark bottom lip for depth. Headers also have a slow drifting sheen.
 - **Header:**
   - **Brush slashes:** 3–4 translucent curved white slashes (~20%) sweep diagonally across the right half. They replace neat gloss bands.
   - **Bottom lip:** a thick darker band (~11px, navy for blue headers, deep purple for purple ones) above the 4px black rule.
   - **Size and title:** the header is about 58px tall, with a 32px title.
 - **Title font:** wide and round (Fredoka 700 / Fredoka One), not condensed. Fill is white fading to light grey (#fff → #c3c6cf), with a heavy black outline and a 3px drop.
-- **Close button:** a fat outlined "X" in the same title treatment. The red gets the same studs and a dark red bottom lip.
+- **Close button:** a fat outlined "X" in the same title treatment. The red gets the same gloss and a dark red bottom lip.
 - **Window body:** semi-transparent charcoal (~85%) with the world blurred behind it. A large tribal swoosh emblem sits at ~7% white.
 - **Cards:**
   - **Border:** double: 3px black outside, then a 2px light grey rim (#b2b6c0 at ~55%) inside.

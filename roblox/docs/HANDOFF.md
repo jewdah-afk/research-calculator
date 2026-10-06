@@ -30,9 +30,9 @@ This doc is the starting point for anyone picking the project up. Branch: `roblo
 ## 3. UI rules (short version)
 - **Windows:**
   - black 4px frame
-  - studded header with brush slashes and a dark bottom lip
+  - glossy gradient header (no studs) with a slow drifting sheen, brush slashes and a dark bottom lip
   - round bold title (white → grey) with a heavy outline
-  - red studded X close button
+  - red glossy X close button
 - **Cards:** double border (black outside, grey rim inside) with the diamond lattice.
 - **Colours:**
   - green buttons mean "spend"
