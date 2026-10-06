@@ -4,7 +4,13 @@
 -- (sunflower/desert/archivist) nodes, plus resource fields used below.
 -- Upgrade definitions (baseCost, costMultiplier, maxLevel, tree, ...) live in upgrades.json.
 
+-- Currency balances (popcorn, goldenPopcorn, goldenFeathers, seeds, ...) are EternityNum values,
+-- exactly where the original game uses break_eternity Decimals. Costs and multipliers stay plain
+-- numbers, as in the original (they are capped at ~1.8e308 there too).
+local EN = require((if script then script.Parent.EternityNum else "./EternityNum") :: any)
+
 local F = {}
+F.EN = EN
 
 local function has(s, id: string): boolean
 	return s.owned ~= nil and s.owned[id] == true
@@ -152,11 +158,11 @@ function F.totalPopcornMultiplier(s): number
 	if has(s, "d_kernel_polish") then t *= 2 end
 	t *= s.fishPopcornMult or 1
 	if (s.evolutionCount or 0) >= 2 then t *= s.evolutionCount end
-	if has(s, "d_seed_synergy") then t *= 1 + 1.3 * math.log10(1 + (s.seeds or 0) / 5e4) end
+	if has(s, "d_seed_synergy") then t *= 1 + 1.3 * math.log10(1 + EN.toNumber(s.seeds or 0) / 5e4) end
 	t *= math.max(1, s.grainSiloMultiplier or 1)
 	if has(s, "d_trophy_bonus") then t *= 1 + 3 * math.log10(1 + (s.highestFishWeight or 0)) end
 	t *= s.sparrowDrainMultiplier or 1
-	if has(s, "d_golden_butter") then t *= 1 + 0.5 * math.log10((s.goldenFeathers or 0) + 1) end
+	if has(s, "d_golden_butter") then t *= 1 + 0.5 * math.log10(EN.toNumber(s.goldenFeathers or 0) + 1) end
 	t *= s.sacrificeMultiplier or 1
 	t *= s.questPopcornMultiplier or 1
 	return t
@@ -170,9 +176,11 @@ function F.popcornGain(s, baseValue: number, inDesert: boolean): number
 end
 
 -- Rebirb ------------------------------------------------------------------------
-local function A(x: number): number
-	if x <= 0 then return 0 end
-	local i = math.log10(x + 1) / 16
+-- Archivist curve, input may be EN (game: qr(x).add(1).log10()/16)
+local function A(x: any): number
+	x = EN.convert(x)
+	if EN.leeq(x, 0) then return 0 end
+	local i = EN.toNumber(EN.log10(EN.add(x, 1))) / 16
 	return 6 * (if i <= 1 then i else 1 + math.log(1 + (i - 1)) / 10)
 end
 F.archivistCurve = A
@@ -182,8 +190,9 @@ function F.playtimeMultiplier(s): number
 	return math.min(10, 1 + 0.01 * ((s.playTimeSeconds or 0) / 60))
 end
 
-function F.rebirbFeathers(s): number
-	local base = math.floor((s.popcorn or 0) / 1000)
+-- Golden feathers from a rebirb, as EN (game: Fl(kr(popcorn).div(1000)) ... Fl(kr(e).mul(a).mul(r)))
+function F.rebirbFeathers(s): { number }
+	local base = EN.floor(EN.div(s.popcorn or 0, 1000))
 	local fl = F.level(s, "s_more_feathers")
 	local featherEffect = if fl > 0 then F.moreFeathers(fl) else 1
 	local a = F.playtimeMultiplier(s) + (featherEffect - 1)
@@ -193,7 +202,51 @@ function F.rebirbFeathers(s): number
 	local evo = s.evolutionCount or 0
 	local auric = if has(s, "d_archivist_auric_rebirb") then 1 + A(s.goldenPopcorn or 0) else 1
 	local payout = (s.roomMultiplier or 1) * (s.fishFeatherMult or 1) * (if evo >= 2 then evo else 1) * auric
-	return math.floor(base * a * payout)
+	return EN.floor(EN.mul(EN.mul(base, a), payout))
+end
+
+-- Wallet helpers ------------------------------------------------------------------
+function F.canAfford(balance: any, cost: number): boolean
+	return EN.meeq(balance, cost)
+end
+
+-- Buy one level: returns new balance and new level, or nil when unaffordable/maxed
+function F.buy(s, def, wallet: { [string]: any }): boolean
+	local L = F.level(s, def.id)
+	if L >= F.maxLevel(s, def) then return false end
+	local cost = F.discountedCost(s, def, L)
+	local cur = def.costCurrency
+	if not F.canAfford(wallet[cur] or 0, cost) then return false end
+	if not (cur == "sunflowerSeeds" and has(s, "d_free_seeds")) then
+		wallet[cur] = EN.sub(wallet[cur], cost)
+	end
+	s.upgrades = s.upgrades or {}
+	s.upgrades[def.id] = L + 1
+	return true
+end
+
+-- Buy as many levels as affordable (the game's "BUY ALL"): exact per-level costs,
+-- walking exact per-level costs (handles the special curves, e.g. Popcorn Value / Echo Value).
+function F.buyAll(s, def, wallet: { [string]: any }): number
+	local L0 = F.level(s, def.id)
+	local maxL = F.maxLevel(s, def)
+	if L0 >= maxL then return 0 end
+	local cur = def.costCurrency
+	local free = cur == "sunflowerSeeds" and has(s, "d_free_seeds")
+	local bal = wallet[cur] or 0
+	local total, L = EN.ZERO, L0
+	while L < maxL do
+		local c = F.discountedCost(s, def, L)
+		local nextTotal = if free then total else EN.add(total, c)
+		if not EN.meeq(bal, if free then c else nextTotal) then break end
+		total = nextTotal
+		L += 1
+	end
+	if L == L0 then return 0 end
+	if not free then wallet[cur] = EN.sub(bal, total) end
+	s.upgrades = s.upgrades or {}
+	s.upgrades[def.id] = L
+	return L - L0
 end
 
 return F
