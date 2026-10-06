@@ -23,6 +23,7 @@ local Kit = require(script.Parent.UI.Kit)
 local SkillText = require(script.Parent.UI.SkillText)
 local MegaBoardClient = require(script.Parent.World.MegaBoardClient)
 local Stands = require(script.Parent.World.Stands)
+local RuneAltarUI = require(script.Parent.World.RuneAltarUI)
 local Unlocks = require(Shared.Unlocks)
 local Runes = require(Shared.Runes)
 
@@ -1095,6 +1096,9 @@ Stands.init(workspace:WaitForChild("OrbWorld"), {
 	end,
 })
 
+RuneAltarUI.init(workspace:WaitForChild("OrbWorld"))
+onState(RuneAltarUI.refresh)
+
 -- HUD buttons follow the same reveal as the stands: the game starts as just the board
 local standsSeen = false
 onState(function(d)
@@ -1261,6 +1265,8 @@ R.Notify.OnClientEvent:Connect(function(kind, payload)
 		if r then
 			toast(string.upper(tostring(payload.name)) .. " ROLLED", string.upper((payload.variant and payload.variant .. " " or "") .. r.name), "1/" .. fmtLog(r.oneInLog, 0), rarityColor(payload.rarity))
 		end
+	elseif kind == "runeOpen" then
+		RuneAltarUI.opened(payload)
 	elseif kind == "rune" and type(payload) == "table" then
 		local r = Runes.LIST[payload.id]
 		if r then

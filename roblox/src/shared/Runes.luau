@@ -69,6 +69,12 @@ Runes.PLAYTIME = {
 	{ minutes = 1440, bulk = 2 },
 }
 
+-- the altar's title evolves with opening milestones (one step per 2 milestones)
+Runes.EVOLUTIONS = { "Dormant", "Stirring", "Awakened", "Blossoming", "Radiant", "Ascendant", "Mythic", "Celestial", "Eternal", "Infinite" }
+function Runes.evolution(openMilestones: number): string
+	return Runes.EVOLUTIONS[math.min(#Runes.EVOLUTIONS, math.floor(openMilestones / 2) + 1)]
+end
+
 ---------------------------------------------------------------- state
 
 function Runes.newState()

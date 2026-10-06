@@ -165,6 +165,14 @@ end
 
 -- tell the player about rare runes; server-wide shout for Halo and rarer
 local function announceRunes(player, gained)
+	-- every opening drives the altar effect (best rune of the batch)
+	local best = 0
+	for i in gained do
+		best = math.max(best, i)
+	end
+	if best > 0 then
+		notify(player, "runeOpen", best)
+	end
 	for i, c in gained do
 		if i >= 6 then
 			notify(player, "rune", { id = i, count = c })

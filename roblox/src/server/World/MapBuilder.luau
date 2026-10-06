@@ -230,18 +230,24 @@ local function buildStands()
 			part({ Name = "Pad", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.4, 28, 28), CFrame = CFrame.new(pos + Vector3.new(0, 0.2, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color = col, Material = Enum.Material.Neon, Transparency = 0.45, CanCollide = false, Parent = m })
 		end
 		part({ Name = "Pedestal", Size = Vector3.new(10, 5, 10), CFrame = facing * CFrame.new(0, 4, 0), Color = Color3.fromRGB(60, 50, 90), Parent = m })
-		local display = part({ Name = "Display", Shape = Enum.PartType.Ball, Size = Vector3.new(6, 6, 6), CFrame = facing * CFrame.new(0, 10, 0), Color = col, Material = Enum.Material.Neon, CanCollide = false, Parent = m })
+		-- the altar keeps only base + pedestal + pad: its crystal and floating panels are client-side
+		local display = part({ Name = "Display", Shape = Enum.PartType.Ball, Size = Vector3.new(6, 6, 6), CFrame = facing * CFrame.new(0, 10, 0), Color = col, Material = Enum.Material.Neon, CanCollide = false, Transparency = s.pad and 1 or 0, Parent = m })
 		display:SetAttribute("Spin", true)
-		for _, sx in { -7, 7 } do
-			part({ Name = "Post", Size = Vector3.new(1.2, 14, 1.2), CFrame = facing * CFrame.new(sx, 7, 7), Color = col, Parent = m })
+		local roof
+		if s.pad then
+			roof = part({ Name = "Roof", Size = Vector3.new(1, 1, 1), CFrame = facing * CFrame.new(0, 14.5, 0), Transparency = 1, CanCollide = false, Parent = m })
+		else
+			for _, sx in { -7, 7 } do
+				part({ Name = "Post", Size = Vector3.new(1.2, 14, 1.2), CFrame = facing * CFrame.new(sx, 7, 7), Color = col, Parent = m })
+			end
+			roof = part({ Name = "Roof", Size = Vector3.new(17, 1.5, 6), CFrame = facing * CFrame.new(0, 14.5, 6), Color = col, Parent = m })
 		end
-		local roof = part({ Name = "Roof", Size = Vector3.new(17, 1.5, 6), CFrame = facing * CFrame.new(0, 14.5, 6), Color = col, Parent = m })
 		-- name sign (client swaps text for "???" while it's a silhouette)
 		local bb = Instance.new("BillboardGui")
 		bb.Name = "Sign"
 		bb.Size = UDim2.fromOffset(220, 60)
 		bb.StudsOffset = Vector3.new(0, 4, 0)
-		bb.MaxDistance = 160
+		bb.MaxDistance = if s.pad then 70 else 160
 		bb.AlwaysOnTop = false
 		bb.Parent = roof
 		local t = Instance.new("TextLabel")
