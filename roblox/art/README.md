@@ -14,3 +14,5 @@ blender -b -P art/make_icons.py -- art/icons [name ...]
 **In Roblox:** upload the PNGs as Decals and put their asset ids in `client/UI/Assets.luau`.
 
 **Rune stones** (`rune0`–`rune9`): a deep-toned tablet with a raised glyph that glows in the rune's own colour.
+
+**Outline step:** after rendering, run `python3 art/outline.py <render dir> art/icons` to add the black sticker outline.

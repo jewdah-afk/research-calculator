@@ -30,18 +30,31 @@ def reset():
     sc.render.image_settings.file_format = "PNG"
     sc.render.image_settings.color_mode = "RGBA"
     sc.view_settings.view_transform = "Standard"
-    sc.view_settings.look = "Medium High Contrast"
+    sc.view_settings.look = "High Contrast"
+    sc.render.use_freestyle = False
+    sc.render.line_thickness_mode = "ABSOLUTE"
+    sc.render.line_thickness = 5.5
+    ls = sc.view_layers[0].freestyle_settings.linesets[0] if sc.view_layers[0].freestyle_settings.linesets else sc.view_layers[0].freestyle_settings.linesets.new("ls")
+    ls.select_by_visibility = True
+    ls.select_silhouette = True
+    ls.select_border = True
+    ls.select_crease = False
+    if not ls.linestyle:
+        ls.linestyle = bpy.data.linestyles.new("ink")
+    ls.linestyle.color = (0.02, 0.02, 0.03)
+    ls.linestyle.thickness = 5.5
+    ls.linestyle.caps = "ROUND"
     w = bpy.data.worlds.new("w")
     w.use_nodes = True
     w.node_tree.nodes["Background"].inputs[0].default_value = (0.82, 0.86, 0.95, 1)
-    w.node_tree.nodes["Background"].inputs[1].default_value = 0.55
+    w.node_tree.nodes["Background"].inputs[1].default_value = 0.6
     sc.world = w
     # camera: slight 3/4 view from above, like the reference icons
     cam = bpy.data.cameras.new("cam")
     cam.type = "ORTHO"
-    cam.ortho_scale = 2.6
+    cam.ortho_scale = 2.75
     co = bpy.data.objects.new("cam", cam)
-    co.location = (2.2, -6.5, 3.0)
+    co.location = (0, -8, 0)
     sc.collection.objects.link(co)
     look_at(co, Vector((0, 0, 0)))
     sc.camera = co
@@ -52,8 +65,8 @@ def reset():
         o.location = loc
         sc.collection.objects.link(o)
         look_at(o, Vector((0, 0, 0)))
-    area("key", (-3, -4, 5), 900, 4)
-    area("fill", (5, -3, 1), 300, 5, (0.9, 0.95, 1))
+    area("key", (-3, -6, 4), 650, 6)
+    area("fill", (4, -6, -1), 300, 6, (0.95, 0.97, 1))
     area("rim", (1, 5, 4), 700, 3)
     area("top", (0, 0, 7), 250, 6)
 
@@ -67,7 +80,7 @@ def link(o):
 
 # ---------------------------------------------------------------- materials
 
-def toy(color, rough=0.28, coat=0.7, metal=0.0, emit=0.0, sss=0.0, transmission=0.0):
+def toy(color, rough=0.45, coat=0.9, metal=0.0, emit=0.0, sss=0.0, transmission=0.0):
     m = bpy.data.materials.new("m")
     m.use_nodes = True
     b = m.node_tree.nodes["Principled BSDF"]
@@ -230,11 +243,11 @@ def darken(h, f):
 def rune(i):
     col = RUNE_COLORS[i]
     # rounded stone tablet, slightly tilted back
-    rbox((1.75, 0.5, 1.9), bevel=0.32, m=toy(darken(col, 0.45), rough=0.35, coat=0.3))
-    rbox((1.45, 0.1, 1.6), bevel=0.12, loc=(0, -0.22, 0), m=toy(darken(col, 0.66), rough=0.5, coat=0.15))
+    rbox((1.85, 0.5, 2.0), bevel=0.3, m=toy(col))
+    rbox((1.4, 0.1, 1.55), bevel=0.1, loc=(0, -0.22, 0), m=toy(darken(col, 0.35), coat=0.5))
     # raised glowing glyph on the front face
     lines = [[((x - 12) / 12 * 0.62, (12 - y) / 12 * 0.62) for x, y in ln] for ln in RUNE_GLYPHS[i]]
-    tube(lines, 0.115, toy(col, rough=0.18, emit=1.6, coat=0.9), loc=(0, -0.3, 0))
+    tube(lines, 0.12, toy(lighten(col, 0.75), emit=0.6), loc=(0, -0.32, 0))
     sparkle((0.85, -0.3, 0.95), 0.2)
     sparkle((-0.95, -0.3, -0.75), 0.12)
 
