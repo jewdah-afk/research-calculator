@@ -1,0 +1,67 @@
+# UI style guide (from the "SHOP / Starter Pack" reference)
+
+Every window, card, button and in-world panel follows these rules, in both the browser preview and Roblox.
+
+## 1. What the reference is made of
+
+| Element | Observed detail |
+|---|---|
+| **Window frame** | Thick black outline (~4px at 1x) with rounded corners (~12px). Charcoal body (#2e3036 → #26282d top to bottom). A faint giant swoosh/emblem watermark in the body (white at ~5%). |
+| **Header bar** | Full-width, ~56px tall. Sky-blue vertical gradient (#63ccff → #2b8de6). A fine embossed grid of small rounded squares (studs) in a lighter blue (~12% white). Two soft diagonal gloss streaks. A 3px black rule on the bottom edge. |
+| **Title** | "SHOP": heavy rounded display face, white, thick dark navy/black outline (~3–4px), hard 2–3px drop shadow straight down. Left-aligned with ~24px inset. |
+| **Close button** | Square, flush in the header's top-right, same height as the header. Red gradient (#ff4b4b → #d31b1b), same stud texture. A 3px black divider on its left. White chunky "X" with a black outline. |
+| **Item card** | Inset panel inside the body. Darker charcoal (#3a3c43) with a diamond-lattice pattern (thin lines, ~6% white). 3px black border, 6px radius. A 1px light bevel on the top inner edge and a darker inner bottom edge. |
+| **Card title** | "Starter Pack": same display face, white, outlined, top-left. |
+| **Left art area** | A halftone dot field that fades out to the right, with a grey sunburst (radiating rays) behind it. |
+| **Item tiles** | Squares in rarity colours: grey, green, blue, purple. A sunburst of lighter rays from the centre. A darker 3px bottom lip that makes a 3D block. Black outline. "???" sits over the top edge in white with a black outline. |
+| **Small icon tile** | Pink/purple square holding the gift icon. Same black outline. |
+| **Price button** | Bright green (#46ef55 → #1db52c), black outline, white "199" with a currency glyph, both outlined. A light bevel along the top edge. Wide and short, aligned to the right of the card. |
+| **Overall** | Toy-like and chunky. Every shape has a black outline, a bevel or lip, and saturated primaries over neutral charcoal. Texture (studs, lattice, halftone, sunburst) is subtle and never fights the text. |
+
+## 2. Tokens
+
+```
+Frame      #0b0c10 outline, 4px; radius 12px
+Body       #2e3036 → #25272c, watermark swoosh 5% white
+Card       #3a3c43 → #33353b, lattice 6% white, border 3px #0b0c10, radius 7px,
+           bevel: inset 0 2px 0 rgba(255,255,255,.12), inset 0 -3px 0 rgba(0,0,0,.35)
+Header     blue   #63ccff → #2b8de6   (default windows)
+           purple #c47dff → #7a3fe0   (prestige / runes rare)
+           gold   #ffd84a → #f0a412   (rewards)
+Close      #ff4b4b → #d31b1b
+Buy        #46ef55 → #1db52c   (all purchases)
+Secondary  #5aa9ff → #2f6fe0   (neutral actions)
+Rarity     grey #9aa0ab · green #3fdc5a · blue #3a9bff · purple #b45cff · gold #ffc63a · red #ff4f6a · cyan #5cf2ff
+Text       white display face; outline #0b0c10 at 0.12em; drop shadow 0 0.08em 0 #0b0c10
+Sub-text   #b9bdc8 body face, no outline
+```
+
+## 3. Type
+- **Display** (titles, numbers, buttons): Lilita One. Fallback: Fredoka 700.
+- **Body** (descriptions, small stats): Fredoka 600.
+- **Hierarchy:**
+  - Window title 30px
+  - Card title 20px
+  - Big number 22–28px
+  - Button 16px
+  - Sub-text 12–13px
+
+## 4. Components
+1. **Window** = frame + header (title, close) + body (padding 12px, gap 10px).
+2. **Card** = inset lattice panel. The title sits top-left; content sits on the right.
+3. **Tile** = rarity square with sunburst and bottom lip, and an optional ??? / count badge.
+4. **Buttons:**
+   - Buy (green): price plus a currency icon.
+   - Secondary (blue).
+   - Danger (red).
+   - Toggle on (gold).
+   - All buttons share the outline, a 4px bottom lip and pressed-down movement.
+5. **Toast** = mini window: a tile on the left, the title strip on top, outlined headline.
+6. **Tabs** = secondary buttons. The active tab uses the header colour and sits 2px lower (pressed).
+7. **In-world panels** use exactly the same window/card/tile drawing, rendered to a texture (preview) or a SurfaceGui (Roblox).
+
+## 5. Visual hierarchy rules
+- **Window level:** one header colour per window. The colour says what the window is: blue = info, purple = runes and prestige, gold = rewards.
+- **Primary action colour:** green means "spend", only ever. Only one green button per card.
+- **Locked and undiscovered:** dark tile with "???". Found items get their rarity colour and a sunburst.
+- **Biggest text:** big numbers (counts, multipliers) are the largest text inside a card. Labels sit above them, smaller and muted.
