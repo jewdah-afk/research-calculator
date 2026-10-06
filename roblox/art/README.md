@@ -2,9 +2,10 @@
 
 The icons are PNGs drawn in a flat vector style in the chunky mobile-game style: a thick black outline with a hard drop, a flat base tone, a darker rim along the bottom-right, a lighter band along the top, and one white highlight.
 
-- **Source:** `art/vector/icons.mjs`. Each icon is built from a few shapes on a 128px grid.
-- **Build:** run `NODE_PATH=<dir with playwright> node art/vector/build.mjs`. It writes 256px PNGs to `art/icons/` (for Roblox Decals) and `art/icons_sheet.png`.
-- **Preview:** run `node art/vector/embed.mjs docs/preview.html` to embed the PNGs into the preview page.
+- **Source:** `art/vector/icons.mjs`. Each icon is a few shapes on a 128 grid; facets are placed by hand and every part draws its own outline over the parts behind it.
+- **Build:** `NODE_PATH=<dir with playwright> node art/vector/build.mjs` writes `art/icons/*.png` (512px, for Roblox), `art/icons/ui/*.png` (128px, for the preview) and `art/icons_sheet.png` (review sheet, also at UI sizes on tiles). The build fails if any icon reaches the edge of its canvas.
+- **Preview:** `node art/vector/embed.mjs docs/preview.html` embeds the 128px PNGs.
+- **Stat icons:** Rune Bulk = `rune_bulk`, Rune Speed = `bolt_blue`, Rune Luck = `clover`, Clone Chance = `dice`, Clone Amount = `clone`, Tickrate = `stopwatch`.
 
 **In Roblox:** upload the PNGs as Decals and put their asset ids in `client/UI/Assets.luau`.
 
