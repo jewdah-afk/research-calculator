@@ -11,6 +11,8 @@ local F = require(Shared.OrbFormulas)
 local Balance = require(Shared.Balance)
 local Events = require(Shared.Events)
 local Tutorial = require(Shared.Tutorial)
+local Unlocks = require(Shared.Unlocks)
+local Progression = require(Shared.Progression)
 
 local GameService = {}
 
@@ -19,6 +21,10 @@ local MAX_PENDING = 600 -- hard cap on tracked orbs per player (duplicates can e
 local ACTIONS_PER_SECOND = 40
 local STATE_PUSH_HZ = 5
 local ORB_TIMEOUT = 120 -- forget orbs that never came back (lag / tab-out)
+local GHOST_FLUSH = 0.25 -- how often other players' orbs are relayed to spectators
+local GHOST_PER_FLUSH = 6 -- per player per flush (rares always go through)
+local RARE_MIN_ONE_IN_LOG = 4 -- announce + effects only for 1/10,000 and rarer...
+local RARE_TOP = 2 -- ...that are within 2 of the player's best rarity ever
 
 local R -- remotes
 local DataService, LeaderboardService
@@ -59,6 +65,51 @@ local function clearBoard(player)
 	end
 end
 
+-- rare = worth a server-wide moment: hard odds AND near the top of what this player has found
+local function isRare(data, orb)
+	if orb.kind ~= "orb" then
+		return false
+	end
+	local r = Progression.Rarities[orb.rarity]
+	return r.oneInLog >= RARE_MIN_ONE_IN_LOG and orb.rarity >= data.highestRarity - RARE_TOP
+end
+
+local function queueGhosts(s, out)
+	local q = s.ghostQueue
+	for _, o in out do
+		if o.rare then
+			table.insert(q.rare, o)
+		elseif #q.common < GHOST_PER_FLUSH * 4 then
+			table.insert(q.common, o)
+		end
+	end
+end
+
+-- relay a sample of this player's orbs to everyone else (visual only, pegs-only physics there)
+local function flushGhosts(player, s)
+	local q = s.ghostQueue
+	if #q.rare == 0 and #q.common == 0 then
+		return
+	end
+	table.sort(q.common, function(a, b)
+		return (a.rarity or 0) > (b.rarity or 0)
+	end)
+	local list = {}
+	for _, o in q.rare do
+		table.insert(list, { kind = o.kind, rarity = o.rarity, variant = o.variant, rare = true })
+	end
+	for i = 1, math.min(#q.common, GHOST_PER_FLUSH) do
+		local o = q.common[i]
+		table.insert(list, { kind = o.kind, rarity = o.rarity, variant = o.variant })
+	end
+	q.rare, q.common = {}, {}
+	for other in sessions do
+		if other ~= player then
+			R.Ghost:FireClient(other, player.UserId, player.DisplayName, list)
+		end
+	end
+end
+
 local function spawnFor(player, s, spawner)
 	local before = s.data.highestRarity
 	local orbs = Economy.rollSpawn(s.data, spawner, s.pendingCount, s.rng)
@@ -69,11 +120,17 @@ local function spawnFor(player, s, spawner)
 	for _, orb in orbs do
 		local id = track(s, orb)
 		if id then
-			table.insert(out, { id = id, kind = orb.kind, rarity = orb.rarity, variant = orb.variant, spawner = spawner })
+			local rare = isRare(s.data, orb)
+			table.insert(out, { id = id, kind = orb.kind, rarity = orb.rarity, variant = orb.variant, spawner = spawner, rare = rare or nil })
+			if rare and os.clock() - (s.lastAnnounce or 0) > 15 then
+				s.lastAnnounce = os.clock()
+				GameService.broadcast("rareDrop", { name = player.DisplayName, rarity = orb.rarity, variant = orb.variant })
+			end
 		end
 	end
 	if #out > 0 then
 		R.Spawn:FireClient(player, out)
+		queueGhosts(s, out)
 	end
 	if s.data.highestRarity > before then
 		notify(player, "newRarity", s.data.highestRarity)
@@ -249,6 +306,8 @@ local function onJoin(player)
 		dirty = true,
 		actionBudget = ACTIONS_PER_SECOND,
 		rng = Random.new(),
+		ghostQueue = { rare = {}, common = {} },
+		ghostAcc = 0,
 	}
 	sessions[player] = s
 	LeaderboardService.attach(player)
@@ -259,6 +318,7 @@ local function onJoin(player)
 	end
 	s.data, s.canSave = data, canSave
 	Economy.refresh(data)
+	Unlocks.update(data)
 	pushState(player)
 	R.Board:FireClient(player, "rebuild")
 	R.Events:FireClient(player, Balance.ctx.events)
@@ -334,6 +394,9 @@ function GameService.init(remotes, services)
 		if result then
 			Economy.refresh(s.data)
 			Tutorial.advance(s.data)
+			for _, id in Unlocks.update(s.data) do
+				notify(player, "unlock", id)
+			end
 			pushState(player)
 		end
 		return result == true
@@ -387,6 +450,9 @@ function GameService.init(remotes, services)
 					end,
 				})
 				Tutorial.advance(d)
+				for _, id in Unlocks.update(d) do
+					notify(player, "unlock", id)
+				end
 				local now = os.clock()
 				for id, p in s.pending do
 					if now - p.t > ORB_TIMEOUT then
@@ -403,6 +469,11 @@ function GameService.init(remotes, services)
 					LeaderboardService.submit(player, d)
 				end
 				s.dirty = true
+			end
+			s.ghostAcc += dt
+			if s.ghostAcc >= GHOST_FLUSH then
+				s.ghostAcc = 0
+				flushGhosts(player, s)
 			end
 			s.stateAcc += dt
 			if s.dirty and s.stateAcc >= 1 / STATE_PUSH_HZ then

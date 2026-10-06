@@ -96,6 +96,7 @@ function Economy.newData(difficulty: string?, rng: Random?)
 		tierReqOdds = 0, -- relative tiers: odds target (log10) for the next tier
 		tierProgress = 0, -- relative tiers: qualifying orbs collected since the last tier
 		tierStartTime = 0, -- timePlayed when the current tier began (pacing floor)
+		unlocked = {}, -- world stands that have been revealed (see Unlocks.luau)
 		prestige = Prestige.newState(), -- ascension / transcension / ... (see Prestige.luau)
 		totalLuckLog = 0, -- cached for UI
 	}

@@ -277,7 +277,7 @@ return function(Shared)
 	end)
 
 	-- prestige layers --------------------------------------------------------------------
-	test("ascension is tier-like: 1 AP each, requirement climbs x1.6", function()
+	test("ascension is tier-like: 1 AP each, requirement climbs x1.1", function()
 		local Pr = Shared.Prestige
 		local d = E.newData()
 		d.rebirths = 249
@@ -286,7 +286,7 @@ return function(Shared)
 		eq(Pr.pending(d, "ascension"), 1, "always exactly 1, however far past")
 		eq(Pr.requirement(d, "ascension"), 250)
 		d.prestige.ascension.count = 2
-		eq(Pr.requirement(d, "ascension"), 640)
+		eq(Pr.requirement(d, "ascension"), 303)
 	end)
 	test("ascending banks 1 AP, resets the run, keeps tiers", function()
 		local d = E.newData()
@@ -349,7 +349,9 @@ return function(Shared)
 	test("transcension: 1 TrP, magnifies AP gain, resets ascension + tiers", function()
 		local Pr = Shared.Prestige
 		local d = E.newData()
-		d.prestige.ascension.lifetime = 10
+		d.prestige.ascension.lifetime = 44
+		eq(Pr.pending(d, "transcension"), 0, "needs 45 lifetime AP")
+		d.prestige.ascension.lifetime = 45
 		d.tiers = 5
 		d.skills.main[1] = 3
 		eq(Pr.pending(d, "transcension"), 1)
@@ -360,6 +362,42 @@ return function(Shared)
 		d.prestige.transcension.lifetime = 4 -- 1 + 0.25*4 = 2
 		d.rebirths = 250
 		eq(Pr.pending(d, "ascension"), 2)
+	end)
+	-- progressive reveal ------------------------------------------------------------------
+	test("new player sees only the board: every stand hidden", function()
+		local U = Shared.Unlocks
+		local d = E.newData()
+		for _, st in U.STANDS do
+			eq(U.state(d, st.id), "hidden", st.id)
+		end
+	end)
+	test("cash stand: ??? after first cash, open once you can buy", function()
+		local U = Shared.Unlocks
+		local d = E.newData()
+		d.totalMoney = Big.new(5)
+		eq(U.state(d, "cash"), "teaser")
+		d.totalMoney = Big.new(50)
+		eq(U.state(d, "cash"), "open")
+	end)
+	test("ascension pops up 10 rebirths before it's ready", function()
+		local U = Shared.Unlocks
+		local d = E.newData()
+		d.rebirths = 239
+		eq(U.state(d, "ascension"), "hidden")
+		d.rebirths = 240
+		eq(U.state(d, "ascension"), "teaser")
+		d.rebirths = 250
+		eq(U.state(d, "ascension"), "open")
+	end)
+	test("opened stands stay open after resets", function()
+		local U = Shared.Unlocks
+		local d = E.newData()
+		d.totalMoney = Big.new(100)
+		local opened = U.update(d)
+		eq(opened[1], "cash")
+		d.totalMoney = Big.new(0)
+		eq(U.state(d, "cash"), "open")
+		eq(#U.update(d), 0, "no repeat unlock")
 	end)
 	test("old saves get prestige state", function()
 		local d = E.newData()

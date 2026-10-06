@@ -13,6 +13,8 @@ local GameService = require(Services.GameService)
 
 local R = Remotes.server()
 
+require(script.Parent:WaitForChild("World"):WaitForChild("MapBuilder")).build()
+
 EventService.init()
 LeaderboardService.init()
 GameService.init(R, { DataService = DataService, LeaderboardService = LeaderboardService })

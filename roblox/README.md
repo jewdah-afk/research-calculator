@@ -120,8 +120,8 @@ Each layer works like a tier: one prestige gives exactly **1 point** (times magn
 
 | Layer | Requirement for the next one | Passive (lifetime points) | Resets |
 |---|---|---|---|
-| Ascension | 250 × 1.6^ascensions rebirths (250, 400, 640, …) | +0.1× rebirths per click per AP (stacks with bulk rebirth) | cash, upgrades, spawners, gems, rebirths (keeps tiers) |
-| Transcension | 10 × 1.8^transcensions lifetime AP | +0.25× AP per ascension per TrP | everything above, plus tiers and Ascension (TP trees refunded) |
+| Ascension | 250 × 1.1^ascensions rebirths (250, 275, 303, 333, …) | +0.1× rebirths per click per AP (stacks with bulk rebirth) | cash, upgrades, spawners, gems, rebirths (keeps tiers) |
+| Transcension | 45 × 1.25^transcensions lifetime AP (~same rebirth effort as the old curve) | +0.25× AP per ascension per TrP | everything above, plus tiers and Ascension (TP trees refunded) |
 
 - **Shops:** the first level of the opening upgrades costs 1 point. After that, each line scales differently: `exp` (cost·g^lv), `lin` (cost + step·lv) or `soft` (cost·(1+lv)^g).
   - **Ascension:**
@@ -136,6 +136,31 @@ Each layer works like a tier: one prestige gives exactly **1 point** (times magn
 - **Performance:** shop effects are summed once and cached per player, using a fingerprint of their levels. The economy reads them every frame at no cost, so adding more upgrades doesn't add lag.
 - **Passives use lifetime points,** so spending in a shop never weakens them.
 - **Prestige effects count as core progression,** not capped bonuses.
+
+## The world (Mega Board plaza)
+
+`server/World/MapBuilder.luau` builds the plaza once at server start:
+
+- A 512×512 grid baseplate, fenced with stone walls and pillars. Trees, rocks and hills sit outside the fence.
+- **The Mega Board** at the north end: 440 × 286 studs, leaning back 12°. It has pegs, gold bumpers and slot dividers. Geometry lives in `shared/MegaBoard.luau`.
+- **Upgrade stands** down the path, in unlock order:
+  - Cash → Gems → Spawners → Rebirth → Skills & Tier → Storm → Ascension → Transcension
+  - Each stand has a proximity prompt that opens its panel. Walking away closes it.
+
+**Progressive reveal** (`shared/Unlocks.luau`, `client/World/Stands.luau`):
+
+- A new player sees only the board.
+- Each stand goes from **hidden** to a **black "???" silhouette** when you're close, then **pops in** when unlocked. Ascension appears 10 rebirths early; Transcension appears 5 AP early.
+- Once open, a stand stays open: this is saved in `data.unlocked`.
+- HUD buttons (dock, gems chip, prestige) follow the same states.
+
+**Shared board without collisions or lag** (`client/World/MegaBoardClient.luau`):
+
+- **Your orbs:** full physics against the pegs and your own orbs. They still decide your payout, and the server validates them as before.
+- **Other players' orbs ("ghosts"):** every 0.25s the server relays a sample: up to 6 per player, plus every rare. Each client simulates them against pegs only, so they never touch your orbs. They're capped at 120 on screen.
+- **Rendering:** orbs are pooled anchored parts with collision, query, touch and shadows off. All of them move with a single `BulkMoveTo` per frame. Peg checks use grid buckets, so each orb tests only the 2–4 pegs near it.
+- **Rare drops:** at least 1/10,000, and within 2 of the player's best rarity. They get a server-wide toast (at most one per player per 15s), a name tag above the orb, a neon glow, and a particle burst where they land.
+- **Slot multipliers:** each player sees their own multipliers (from their tier) on the slot panels.
 
 ## Systems
 

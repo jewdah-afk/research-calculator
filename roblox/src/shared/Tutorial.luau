@@ -9,19 +9,19 @@ local Big = require(script.Parent.Big)
 local Tutorial = {}
 
 Tutorial.STEPS = {
-	{ text = "Orbs drop from the top. Wherever they land pays CASH — edge slots pay double!", target = "Board",
+	{ text = "Your orbs drop on the MEGA BOARD with everyone else's. Where yours land pays CASH: check the slot multipliers!", target = "Board",
 		done = function(d) return Big.gt(d.totalMoney, 40) end },
-	{ text = "Buy your first CASH BOOST to earn more from every orb.", target = "UpgradesPanel",
+	{ text = "A stand just popped up! Walk to the CASH stand and buy your first CASH BOOST.", target = "UpgradesPanel",
 		done = function(d) return d.mainLevels[1] >= 1 end },
 	{ text = "LUCKY ORB makes rarer, more valuable orbs drop. Grab a level.", target = "UpgradesPanel",
 		done = function(d) return d.mainLevels[2] >= 1 end },
-	{ text = "Open SPAWN and unlock a second spawner for more orbs.", target = "Dock",
+	{ text = "Walk to the SPAWNERS stand and unlock a second spawner for more orbs.", target = "UpgradesPanel",
 		done = function(d) return d.spawnersUnlocked >= 2 end },
-	{ text = "Blue gems drop sometimes. Collect 50 GEMS, then unlock REBIRTH in the GEMS tab.", target = "UpgradesPanel",
+	{ text = "Blue gems drop sometimes. Collect 50 GEMS, then unlock REBIRTH at the GEMS stand.", target = "UpgradesPanel",
 		done = function(d) return d.mechanics >= 1 end },
-	{ text = "REBIRTH resets your cash for a permanent x2 luck. Rebirth once!", target = "Dock",
+	{ text = "REBIRTH resets your cash for a permanent x2 luck. Use the REBIRTH stand or button once!", target = "Dock",
 		done = function(d) return d.rebirths >= 1 end },
-	{ text = "You're set! Rarities, tiers and weather keep going forever. Have fun!", target = nil,
+	{ text = "You're set! More stands appear as you get close to them. Rarities, tiers and weather keep going forever!", target = nil,
 		done = function(d) return d.timePlayed - (d.tutorialDoneAt or d.timePlayed) >= 0 end, final = true },
 }
 

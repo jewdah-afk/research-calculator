@@ -4,7 +4,7 @@
 -- Each layer works like a TIER:
 --   * one prestige = +1 point (times magnifiers from the layer above)
 --   * the requirement climbs with every prestige:  need * growth ^ count
---       Ascension #1 at 250 rebirths, #2 at 400, #3 at 640, ...
+--       Ascension: 250 x 1.1^n rebirths   Transcension: 45 x 1.25^n lifetime AP
 --   * PASSIVE per lifetime point magnifies the layer below:
 --       Ascension:     rebirths per rebirth click = 1 + 0.1 * lifetimeAP (+ echo)
 --       Transcension:  AP per ascension           = 1 + 0.25 * lifetimeTrP
@@ -29,7 +29,7 @@ Prestige.LAYERS = {
 		point = "AP",
 		source = "rebirths",
 		need = 250,
-		growth = 1.6, -- requirement x1.6 per ascension, like a tier
+		growth = 1.1, -- requirement x1.1 per ascension, like a tier (250, 275, 303, 333, ...)
 		perPoint = 0.1, -- +0.1x rebirths per click, per lifetime AP
 		passiveTarget = "rebirthGain",
 		resets = { run = true, rebirths = true, gems = true, tiers = false },
@@ -50,8 +50,9 @@ Prestige.LAYERS = {
 		name = "Transcension",
 		point = "TrP",
 		source = "ascensionLifetime", -- lifetime AP earned
-		need = 10,
-		growth = 1.8,
+		-- ~45 AP at x1.1 costs about as many rebirths as the old 10 AP at x1.6 did
+		need = 45,
+		growth = 1.25, -- requirement x1.25 lifetime AP per transcension
 		perPoint = 0.25, -- +0.25x AP per ascension, per lifetime TrP
 		passiveTarget = "ascensionGain",
 		resets = { run = true, rebirths = true, gems = true, tiers = true, ascension = true },

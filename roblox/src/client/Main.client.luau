@@ -21,7 +21,9 @@ local Prestige = require(Shared.Prestige)
 
 local Kit = require(script.Parent.UI.Kit)
 local SkillText = require(script.Parent.UI.SkillText)
-local Board = require(script.Parent.Board)
+local MegaBoardClient = require(script.Parent.World.MegaBoardClient)
+local Stands = require(script.Parent.World.Stands)
+local Unlocks = require(Shared.Unlocks)
 
 local C, Fonts = Kit.Colors, Kit.Fonts
 local new, text = Kit.new, Kit.text
@@ -412,18 +414,17 @@ local boardFrame = new("Frame", { Name = "Board", BackgroundColor3 = C.Panel, Ba
 local playArea = new("Frame", { Name = "PlayAreaHolder", BackgroundColor3 = C.White, Position = UDim2.fromOffset(8, 8), Size = UDim2.new(1, -16, 1, -16), ClipsDescendants = true, Parent = boardFrame }, {
 	Kit.corner(4), Kit.gradient(Color3.fromRGB(34, 18, 74), Color3.fromRGB(18, 11, 36)),
 })
-local board = Board.new(playArea)
+-- the board now lives in the world (shared Mega Board); this GUI frame only holds the orb counter
+boardFrame.BackgroundTransparency = 1
+playArea.Visible = false
+boardFrame.Size = UDim2.fromOffset(BOARD_W, 40)
+local board = MegaBoardClient.new(workspace:WaitForChild("OrbWorld"))
 local capLabel = text({ text = "", rich = true, size = 12, font = Fonts.HeavyItalic, outline = 1.5, alignX = Enum.TextXAlignment.Right, anchor = Vector2.new(1, 0), pos = UDim2.new(1, -14, 0, 12), dim = UDim2.fromOffset(160, 16), parent = boardFrame })
 capLabel.ZIndex = 10
 
--- floating "+$" popups
+-- floating "+$" popups over the slot your orb landed in
 local function popup(x, msg, color)
-	local p = text({ text = msg, size = 14, font = Fonts.HeavyItalic, outline = 2, color = color, alignX = Enum.TextXAlignment.Center, anchor = Vector2.new(0.5, 1), pos = UDim2.new(x / Config.Board.Width, 0, 1, -44), dim = UDim2.fromOffset(120, 16), parent = playArea })
-	p.ZIndex = 20
-	TweenService:Create(p, TweenInfo.new(0.9), { Position = p.Position - UDim2.fromOffset(0, 40), TextTransparency = 1 }):Play()
-	task.delay(0.9, function()
-		p:Destroy()
-	end)
+	board:popup(x, msg, color)
 end
 
 local collectQueue = {}
@@ -453,9 +454,16 @@ end)
 
 local function rebuildBoard()
 	if data then
-		board:setLayout(data.tiers, Economy.obstaclesRemoved(data), F.skill(data, "BST-3") > 1 and Economy.obstaclesRemoved(data))
+		board:setLayout(data.tiers)
 	end
 end
+
+-- other players' orbs (visual only, never collide with yours)
+R.Ghost.OnClientEvent:Connect(function(userId, name, list)
+	if userId ~= player.UserId and type(list) == "table" then
+		board:ghosts(tostring(name), list)
+	end
+end)
 
 R.Spawn.OnClientEvent:Connect(function(list)
 	if data then
@@ -760,7 +768,8 @@ local function dockTab(i, icon, label, onClick)
 	slot.Activated:Connect(onClick)
 	return badge, bt
 end
-dockTab(1, "spawn", "SPAWN", function()
+local spawnBadge = dockTab(1, "spawn", "SPAWN", function()
+	upgradesPanel.Visible = not upgradesPanel.Visible
 	showTab("SPAWNERS")
 end)
 local stormBadge = dockTab(2, "storm", "STORM", function()
@@ -948,6 +957,61 @@ end })
 Kit.icon("star", 40, { parent = lbBtn, anchor = Vector2.new(0.5, 0.5), pos = UDim2.fromScale(0.5, 0.5), z = 4 })
 toastHost.Position -= UDim2.fromOffset(56, 0)
 
+---------------------------------------------------------------- world: stands + progressive HUD
+
+-- side panels float over the world only when you're using them
+upgradesPanel.Visible = false
+rarityPanel.Visible = false
+local idxBtn = Kit.button({ text = "", color1 = Color3.fromRGB(43, 47, 85), color2 = Color3.fromRGB(27, 30, 58), dim = UDim2.fromOffset(48, 48), pos = UDim2.fromOffset(1280 - M - 48 - 168, M), parent = canvas, onClick = function()
+	rarityPanel.Visible = not rarityPanel.Visible
+end })
+Kit.icon("star", 40, { parent = idxBtn, anchor = Vector2.new(0.5, 0.5), pos = UDim2.fromScale(0.5, 0.5), z = 4 })
+toastHost.Position -= UDim2.fromOffset(56, 0)
+
+local STAND_TAB = { cash = "MAIN", gems = "GEMS", spawners = "SPAWNERS" }
+Stands.init(workspace:WaitForChild("OrbWorld"), {
+	onOpen = function(id)
+		if STAND_TAB[id] then
+			openModal(nil)
+			upgradesPanel.Visible = true
+			showTab(STAND_TAB[id])
+		elseif id == "rebirth" then
+			act("rebirth")
+		elseif id == "skills" then
+			openModal(data and data.mechanics >= 4 and "Tier" or "Skills")
+		elseif id == "weather" then
+			openModal("Storm")
+		else
+			openModal("Prestige")
+		end
+	end,
+	onLeave = function()
+		upgradesPanel.Visible = false
+		openModal(nil)
+	end,
+})
+
+-- HUD buttons follow the same reveal as the stands: the game starts as just the board
+local standsSeen = false
+onState(function(d)
+	Stands.refresh(d, standsSeen)
+	standsSeen = true
+	local function open(id)
+		return Unlocks.state(d, id) == "open"
+	end
+	tabButtons.MAIN.Visible = open("cash")
+	tabButtons.GEMS.Visible = open("gems")
+	tabButtons.SPAWNERS.Visible = open("spawners")
+	gemValue.Parent.Parent.Visible = open("gems")
+	spawnBadge.Parent.Visible = open("spawners")
+	stormBadge.Parent.Visible = open("weather")
+	skillBadge.Parent.Visible = open("skills")
+	tierBadge.Parent.Visible = open("skills")
+	rebirthBtn.Visible = open("rebirth")
+	dock.Visible = open("spawners") or open("rebirth") or open("skills")
+	prBtn.Visible = Unlocks.state(d, "ascension") ~= "hidden"
+end)
+
 ---------------------------------------------------------------- admin panel (only shown to admins; server re-checks every call)
 
 task.spawn(function()
@@ -1082,6 +1146,16 @@ R.Notify.OnClientEvent:Connect(function(kind, payload)
 	elseif kind == "prestige" then
 		local L = Prestige.byId[payload]
 		toast(string.upper(L.name) .. "!", "+" .. L.point .. " BANKED", "magnified", C.Storm)
+	elseif kind == "unlock" then
+		local s = Unlocks.byId[payload]
+		if s then
+			toast("NEW STAND UNLOCKED", s.name, "go check it out!", Color3.fromRGB(s.color[1], s.color[2], s.color[3]))
+		end
+	elseif kind == "rareDrop" and type(payload) == "table" then
+		local r = Progression.Rarities[payload.rarity]
+		if r then
+			toast(string.upper(tostring(payload.name)) .. " ROLLED", string.upper((payload.variant and payload.variant .. " " or "") .. r.name), "1/" .. fmtLog(r.oneInLog, 0), rarityColor(payload.rarity))
+		end
 	elseif kind == "announce" then
 		toast("ANNOUNCEMENT", tostring(payload), nil, C.Cyan)
 	end

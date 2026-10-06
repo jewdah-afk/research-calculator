@@ -18,6 +18,7 @@ local SPEC = {
 	Collect = "RemoteEvent",
 	Board = "RemoteEvent",
 	Notify = "RemoteEvent",
+	Ghost = "RemoteEvent", -- server -> all clients : (ownerUserId, ownerName, { {kind, rarity, variant, rare} }) Mega Board spectators
 	Events = "RemoteEvent", -- server -> client : active global events list
 	Leaderboards = "RemoteEvent", -- server -> client : { board = { {name, value, display}, ... } }
 	Admin = "RemoteFunction", -- client -> server : (command, ...) admin-only, verified server-side
