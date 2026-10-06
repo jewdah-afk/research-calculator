@@ -1,5 +1,17 @@
 # Icons
 
+The icons are hand-drawn SVG vectors in the chunky mobile-game style: a thick black outline with a hard drop, a flat base tone, a darker rim along the bottom-right, a lighter band along the top, and one white highlight.
+
+- **Source:** `art/vector/icons.mjs`. Each icon is built from a few shapes on a 128px grid.
+- **Build:** run `NODE_PATH=<dir with playwright> node art/vector/build.mjs`. It writes `art/vector/svg/*.svg`, 256px PNGs to `art/icons/` (for Roblox Decals) and `art/icons_sheet.png`.
+- **Preview:** run `node art/vector/embed.mjs docs/preview.html` to swap the set into the preview page.
+
+**In Roblox:** upload the PNGs as Decals and put their asset ids in `client/UI/Assets.luau`.
+
+---
+
+Older pipeline (Blender renders, now superseded):
+
 The icons are 3D renders made in Blender (Cycles), in the same toy-plastic style as the original icon set.
 
 **To regenerate them:**
