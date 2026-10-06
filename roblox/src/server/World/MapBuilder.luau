@@ -21,9 +21,10 @@ local root
 local function part(props)
 	local p = Instance.new("Part")
 	p.Anchored = true
-	p.TopSurface = Enum.SurfaceType.Smooth
-	p.BottomSurface = Enum.SurfaceType.Smooth
-	p.Material = Enum.Material.SmoothPlastic
+	-- classic studded bricks everywhere (balls/cylinders ignore surfaces)
+	p.TopSurface = Enum.SurfaceType.Studs
+	p.BottomSurface = Enum.SurfaceType.Inlet
+	p.Material = Enum.Material.Plastic
 	for k, v in props do
 		if k ~= "Parent" then
 			p[k] = v
@@ -47,23 +48,39 @@ end
 ---------------------------------------------------------------- ground + fence + landscape
 
 local function buildGround()
-	local base = part({ Name = "Baseplate", Size = Vector3.new(HALF * 2, 4, HALF * 2), Position = Vector3.new(0, -2, 0), Color = Color3.fromRGB(70, 74, 92), Material = Enum.Material.SmoothPlastic })
+	local base = part({ Name = "Baseplate", Size = Vector3.new(HALF * 2, 4, HALF * 2), Position = Vector3.new(0, -2, 0), Color = Color3.fromRGB(99, 196, 92), Material = Enum.Material.Plastic })
 	local tex = Instance.new("Texture")
 	tex.Texture = GRID_TEXTURE
 	tex.Face = Enum.NormalId.Top
 	tex.StudsPerTileU, tex.StudsPerTileV = 8, 8
-	tex.Transparency = 0.6
+	tex.Transparency = 0.82
 	tex.Parent = base
 	-- grass outside the fence
-	part({ Name = "Grass", Size = Vector3.new(1100, 4, 1100), Position = Vector3.new(0, -2.2, 0), Color = Color3.fromRGB(78, 140, 70), Material = Enum.Material.Grass })
+	part({ Name = "Grass", Size = Vector3.new(1100, 4, 1100), Position = Vector3.new(0, -2.2, 0), Color = Color3.fromRGB(86, 186, 74), Material = Enum.Material.Plastic })
 	-- central path from spawn to the board
-	part({ Name = "Path", Size = Vector3.new(26, 0.2, 380), Position = Vector3.new(0, 0.1, 0), Color = Color3.fromRGB(50, 44, 70) })
+	part({ Name = "Path", Size = Vector3.new(26, 0.4, 380), Position = Vector3.new(0, 0.2, 0), Color = Color3.fromRGB(255, 214, 120) })
+	for i = -9, 9 do -- rainbow tiles along the path edges
+		local c = Color3.fromHSV(((i + 9) / 19) % 1, 0.65, 1)
+		for _, sx in { -15, 15 } do
+			part({ Name = "Tile", Size = Vector3.new(4, 0.6, 16), Position = Vector3.new(sx, 0.3, i * 20), Color = c })
+		end
+	end
+	-- flower beds dotted around the plaza
+	local rng = Random.new(3)
+	for _ = 1, 40 do
+		local x, z = rng:NextNumber(-230, 230), rng:NextNumber(-130, 230)
+		if math.abs(x) > 60 then
+			local c = Color3.fromHSV(rng:NextNumber(), 0.6, 1)
+			part({ Name = "Flower", Size = Vector3.new(2, 2, 2), Position = Vector3.new(x, 1, z), Color = c })
+			part({ Name = "Bush", Size = Vector3.new(6, 2, 6), Position = Vector3.new(x, 1, z + 3), Color = Color3.fromRGB(60, 160, 70) })
+		end
+	end
 end
 
 local function buildFence()
 	local f = folder("Fence")
 	local H, T = 14, 3
-	local stone, cap = Color3.fromRGB(96, 92, 110), Color3.fromRGB(150, 140, 170)
+	local stone, cap = Color3.fromRGB(236, 226, 255), Color3.fromRGB(255, 196, 60)
 	local sides = {
 		{ Vector3.new(0, 0, -HALF), Vector3.new(HALF * 2, 0, 0) },
 		{ Vector3.new(0, 0, HALF), Vector3.new(HALF * 2, 0, 0) },
@@ -74,14 +91,14 @@ local function buildFence()
 		local c, len = s[1], s[2]
 		local along = len.X > 0
 		local size = if along then Vector3.new(len.X, H, T) else Vector3.new(T, H, len.Z)
-		part({ Name = "Wall", Size = size, Position = c + Vector3.new(0, H / 2, 0), Color = stone, Material = Enum.Material.Cobblestone, Parent = f })
+		part({ Name = "Wall", Size = size, Position = c + Vector3.new(0, H / 2, 0), Color = stone, Parent = f })
 		part({ Name = "Cap", Size = size + Vector3.new(along and 0 or 1.5, -H + 1.5, along and 1.5 or 0), Position = c + Vector3.new(0, H + 0.75, 0), Color = cap, Parent = f })
 		-- pillars every 32 studs
 		local n = math.floor((along and len.X or len.Z) / 32)
 		for i = 0, n do
 			local t = -HALF + i * 32
 			local pos = if along then Vector3.new(t, 0, c.Z) else Vector3.new(c.X, 0, t)
-			part({ Name = "Pillar", Size = Vector3.new(5, H + 4, 5), Position = pos + Vector3.new(0, (H + 4) / 2, 0), Color = cap, Material = Enum.Material.Slate, Parent = f })
+			part({ Name = "Pillar", Size = Vector3.new(5, H + 4, 5), Position = pos + Vector3.new(0, (H + 4) / 2, 0), Color = Color3.fromRGB(120, 92, 230), Parent = f })
 		end
 	end
 end
@@ -89,7 +106,7 @@ end
 local function buildLandscape()
 	local f = folder("Landscape")
 	local rng = Random.new(7)
-	local leafColors = { Color3.fromRGB(56, 128, 64), Color3.fromRGB(80, 150, 70), Color3.fromRGB(44, 110, 80) }
+	local leafColors = { Color3.fromRGB(70, 200, 90), Color3.fromRGB(255, 150, 200), Color3.fromRGB(120, 220, 80), Color3.fromRGB(255, 200, 80) }
 	-- ring of trees + rocks just outside the fence
 	for i = 1, 90 do
 		local a = rng:NextNumber(0, math.pi * 2)
@@ -102,7 +119,7 @@ local function buildLandscape()
 			local h = rng:NextNumber(14, 30)
 			part({ Name = "Trunk", Shape = Enum.PartType.Cylinder, Size = Vector3.new(h, 3, 3), CFrame = CFrame.new(x, h / 2, z) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(105, 72, 48), Material = Enum.Material.Wood, CanCollide = false, Parent = f })
 			local s = rng:NextNumber(14, 24)
-			part({ Name = "Leaves", Shape = Enum.PartType.Ball, Size = Vector3.new(s, s, s), Position = Vector3.new(x, h + s * 0.3, z), Color = leafColors[rng:NextInteger(1, 3)], Material = Enum.Material.Grass, CanCollide = false, Parent = f })
+			part({ Name = "Leaves", Shape = Enum.PartType.Ball, Size = Vector3.new(s, s, s), Position = Vector3.new(x, h + s * 0.3, z), Color = leafColors[rng:NextInteger(1, 4)], CanCollide = false, Parent = f })
 		else
 			local s = rng:NextNumber(6, 16)
 			part({ Name = "Rock", Size = Vector3.new(s, s * 0.7, s * 1.2), CFrame = CFrame.new(x, s * 0.25, z) * CFrame.Angles(0, rng:NextNumber(0, 6), rng:NextNumber(-0.3, 0.3)), Color = Color3.fromRGB(120, 118, 128), Material = Enum.Material.Rock, Parent = f })
@@ -113,7 +130,7 @@ local function buildLandscape()
 		local a = (i / 14) * math.pi * 2
 		local r = 520
 		local s = rng:NextNumber(120, 200)
-		part({ Name = "Hill", Shape = Enum.PartType.Ball, Size = Vector3.new(s * 1.6, s, s * 1.6), Position = Vector3.new(math.cos(a) * r, -s * 0.25, math.sin(a) * r), Color = Color3.fromRGB(70, 128, 66), Material = Enum.Material.Grass, CanCollide = false, Parent = f })
+		part({ Name = "Hill", Shape = Enum.PartType.Ball, Size = Vector3.new(s * 1.6, s, s * 1.6), Position = Vector3.new(math.cos(a) * r, -s * 0.25, math.sin(a) * r), Color = Color3.fromRGB(96, 200, 96), CanCollide = false, Parent = f })
 	end
 end
 
@@ -245,6 +262,78 @@ local function buildSpawn()
 	sp.Parent = root
 end
 
+---------------------------------------------------------------- sky (multilayered)
+
+local function fx(class, props)
+	local old = Lighting:FindFirstChildOfClass(class)
+	if old then
+		old:Destroy()
+	end
+	local i = Instance.new(class)
+	for k, v in props do
+		i[k] = v
+	end
+	i.Parent = Lighting
+	return i
+end
+
+local function cloudPuff(f, pos, size, rng)
+	-- a stack of soft white balls = one cartoon cloud
+	for _ = 1, rng:NextInteger(4, 7) do
+		local s = size * rng:NextNumber(0.5, 1)
+		part({ Name = "Puff", Shape = Enum.PartType.Ball, Size = Vector3.new(s * 1.4, s, s * 1.2), Position = pos + Vector3.new(rng:NextNumber(-size, size), rng:NextNumber(-size * 0.2, size * 0.3), rng:NextNumber(-size * 0.4, size * 0.4)), Color = Color3.new(1, 1, 1), Material = Enum.Material.SmoothPlastic, Transparency = 0.08, CanCollide = false, CanQuery = false, CanTouch = false, CastShadow = false, Parent = f })
+	end
+end
+
+local function buildSky()
+	-- golden-afternoon sun, bright sky
+	Lighting.ClockTime = 14.2
+	Lighting.GeographicLatitude = 35
+	Lighting.Brightness = 3
+	Lighting.Ambient = Color3.fromRGB(120, 110, 150)
+	Lighting.OutdoorAmbient = Color3.fromRGB(170, 160, 200)
+	Lighting.EnvironmentDiffuseScale = 0.6
+	Lighting.EnvironmentSpecularScale = 0.6
+	Lighting.GlobalShadows = true
+	pcall(function()
+		Lighting.Technology = Enum.Technology.Future
+	end)
+	-- layer 1: atmosphere haze (blue sky, warm glow towards the sun)
+	fx("Atmosphere", { Density = 0.28, Offset = 0.15, Color = Color3.fromRGB(190, 225, 255), Decay = Color3.fromRGB(255, 190, 150), Glare = 0.35, Haze = 1.4 })
+	-- layer 2: dynamic volumetric clouds
+	local clouds = workspace.Terrain:FindFirstChildOfClass("Clouds") or Instance.new("Clouds")
+	clouds.Cover = 0.55
+	clouds.Density = 0.6
+	clouds.Color = Color3.fromRGB(255, 250, 245)
+	clouds.Parent = workspace.Terrain
+	-- layer 3: sun + rays + glow
+	fx("Sky", { SunAngularSize = 14, MoonAngularSize = 8, CelestialBodiesShown = true, StarCount = 0 })
+	fx("SunRaysEffect", { Intensity = 0.12, Spread = 0.8 })
+	fx("BloomEffect", { Intensity = 0.6, Size = 28, Threshold = 1.6 })
+	fx("ColorCorrectionEffect", { Saturation = 0.22, Contrast = 0.08, Brightness = 0.03, TintColor = Color3.fromRGB(255, 248, 238) })
+	fx("DepthOfFieldEffect", { FarIntensity = 0.12, FocusDistance = 260, InFocusRadius = 260, NearIntensity = 0 })
+	-- layer 4: chunky cartoon clouds drifting at three heights
+	local f = folder("Clouds")
+	local rng = Random.new(11)
+	for layer, h in { 160, 260, 380 } do
+		for _ = 1, 10 - layer * 2 + 6 do
+			local a = rng:NextNumber(0, math.pi * 2)
+			local r = rng:NextNumber(150, 650)
+			cloudPuff(f, Vector3.new(math.cos(a) * r, h + rng:NextNumber(-20, 20), math.sin(a) * r), 18 + layer * 8, rng)
+		end
+	end
+	-- layer 5: distant mountain ranges (two depths, cooler colour further away)
+	local m = folder("Mountains")
+	for ring, info in { { 720, Color3.fromRGB(110, 170, 230), 260 }, { 900, Color3.fromRGB(160, 195, 240), 380 } } do
+		local n = 18
+		for i = 1, n do
+			local a = (i + ring * 0.5) / n * math.pi * 2
+			local hgt = info[3] * rng:NextNumber(0.6, 1.1)
+			part({ Name = "Peak", Size = Vector3.new(hgt * 1.3, hgt, hgt * 1.3), CFrame = CFrame.new(math.cos(a) * info[1], hgt * 0.3, math.sin(a) * info[1]) * CFrame.Angles(0, a, math.rad(45)), Color = info[2], CanCollide = false, CastShadow = false, Parent = m })
+		end
+	end
+end
+
 function MapBuilder.build()
 	if workspace:FindFirstChild("OrbWorld") then
 		return workspace.OrbWorld
@@ -262,9 +351,7 @@ function MapBuilder.build()
 	buildStands()
 	buildSpawn()
 	root.Parent = workspace
-	Lighting.ClockTime = 15
-	Lighting.Brightness = 2.2
-	Lighting.OutdoorAmbient = Color3.fromRGB(130, 120, 160)
+	buildSky()
 	return root
 end
 
