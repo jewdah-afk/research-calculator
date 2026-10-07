@@ -1,0 +1,636 @@
+[
+ {
+  "id": "bait_coastal_chum",
+  "type": "consumable",
+  "effect": {
+   "type": "type_boost",
+   "value": 1,
+   "targetType": "coastal"
+  },
+  "cost": [
+   {
+    "type": "currency",
+    "id": "monetariaMoneta",
+    "count": 1
+   }
+  ],
+  "evolutionRequired": 1
+ },
+ {
+  "id": "bait_freshwater_pellet",
+  "type": "consumable",
+  "effect": {
+   "type": "type_boost",
+   "value": 1,
+   "targetType": "freshwater"
+  },
+  "cost": [
+   {
+    "type": "currency",
+    "id": "monetariaMoneta",
+    "count": 5
+   }
+  ],
+  "evolutionRequired": 1
+ },
+ {
+  "id": "bait_river_grub",
+  "type": "consumable",
+  "effect": {
+   "type": "type_boost",
+   "value": 1,
+   "targetType": "river"
+  },
+  "cost": [
+   {
+    "type": "currency",
+    "id": "monetariaMoneta",
+    "count": 10
+   }
+  ],
+  "evolutionRequired": 2
+ },
+ {
+  "id": "bait_reef_coral",
+  "type": "consumable",
+  "effect": {
+   "type": "type_boost",
+   "value": 1,
+   "targetType": "reef"
+  },
+  "cost": [
+   {
+    "type": "currency",
+    "id": "monetariaMoneta",
+    "count": 15
+   }
+  ],
+  "evolutionRequired": 2
+ },
+ {
+  "id": "bait_crab",
+  "type": "consumable",
+  "effect": {
+   "type": "type_boost",
+   "value": 1,
+   "targetType": "crab"
+  },
+  "cost": [
+   {
+    "type": "currency",
+    "id": "monetariaMoneta",
+    "count": 30
+   }
+  ],
+  "evolutionRequired": 3
+ },
+ {
+  "id": "bait_exotic_reef_prism",
+  "type": "consumable",
+  "effect": {
+   "type": "type_boost",
+   "value": 1,
+   "targetType": "exotic_reef"
+  },
+  "cost": [
+   {
+    "type": "currency",
+    "id": "monetariaMoneta",
+    "count": 45
+   }
+  ],
+  "evolutionRequired": 3
+ },
+ {
+  "id": "bait_spirit",
+  "type": "consumable",
+  "effect": {
+   "type": "type_boost",
+   "value": 1,
+   "targetType": "spirit"
+  },
+  "cost": [
+   {
+    "type": "currency",
+    "id": "monetariaMoneta",
+    "count": 60
+   }
+  ],
+  "evolutionRequired": 3
+ },
+ {
+  "id": "bait_mech",
+  "type": "consumable",
+  "effect": {
+   "type": "type_boost",
+   "value": 1,
+   "targetType": "mechanical"
+  },
+  "cost": [
+   {
+    "type": "currency",
+    "id": "monetariaMoneta",
+    "count": 60
+   }
+  ],
+  "evolutionRequired": 3
+ },
+ {
+  "id": "bait_ocean_minnow",
+  "type": "consumable",
+  "effect": {
+   "type": "type_boost",
+   "value": 1,
+   "targetType": "ocean"
+  },
+  "cost": [
+   {
+    "type": "currency",
+    "id": "monetariaMoneta",
+    "count": 75
+   }
+  ],
+  "evolutionRequired": 3
+ },
+ {
+  "id": "bait_creature_morsel",
+  "type": "consumable",
+  "effect": {
+   "type": "type_boost",
+   "value": 1,
+   "targetType": "creature"
+  },
+  "cost": [
+   {
+    "type": "currency",
+    "id": "monetariaMoneta",
+    "count": 90
+   }
+  ],
+  "evolutionRequired": 3
+ },
+ {
+  "id": "bait_cosmic",
+  "type": "consumable",
+  "effect": {
+   "type": "type_boost",
+   "value": 1,
+   "targetType": "cosmic"
+  },
+  "cost": [
+   {
+    "type": "currency",
+    "id": "monetariaMoneta",
+    "count": 150
+   }
+  ],
+  "evolutionRequired": 3
+ },
+ {
+  "id": "bait_abyssal",
+  "type": "consumable",
+  "effect": {
+   "type": "type_boost",
+   "value": 1,
+   "targetType": "abyssal"
+  },
+  "cost": [
+   {
+    "type": "currency",
+    "id": "monetariaMoneta",
+    "count": 220
+   }
+  ],
+  "evolutionRequired": 3
+ },
+ {
+  "id": "shiny_bait_coastal",
+  "type": "consumable",
+  "effect": {
+   "type": "shiny_type_boost",
+   "value": 2.2,
+   "targetType": "coastal"
+  },
+  "cost": [
+   {
+    "type": "currency",
+    "id": "monetariaMoneta",
+    "count": 180
+   }
+  ],
+  "evolutionRequired": 3,
+  "shiny": true
+ },
+ {
+  "id": "shiny_bait_freshwater",
+  "type": "consumable",
+  "effect": {
+   "type": "shiny_type_boost",
+   "value": 2.2,
+   "targetType": "freshwater"
+  },
+  "cost": [
+   {
+    "type": "currency",
+    "id": "monetariaMoneta",
+    "count": 180
+   }
+  ],
+  "evolutionRequired": 3,
+  "shiny": true
+ },
+ {
+  "id": "shiny_bait_river",
+  "type": "consumable",
+  "effect": {
+   "type": "shiny_type_boost",
+   "value": 2.25,
+   "targetType": "river"
+  },
+  "cost": [
+   {
+    "type": "currency",
+    "id": "monetariaMoneta",
+    "count": 200
+   }
+  ],
+  "evolutionRequired": 3,
+  "shiny": true
+ },
+ {
+  "id": "shiny_bait_reef",
+  "type": "consumable",
+  "effect": {
+   "type": "shiny_type_boost",
+   "value": 2.2,
+   "targetType": "reef"
+  },
+  "cost": [
+   {
+    "type": "currency",
+    "id": "monetariaMoneta",
+    "count": 200
+   }
+  ],
+  "evolutionRequired": 3,
+  "shiny": true
+ },
+ {
+  "id": "shiny_bait_crab",
+  "type": "consumable",
+  "effect": {
+   "type": "shiny_type_boost",
+   "value": 2.45,
+   "targetType": "crab"
+  },
+  "cost": [
+   {
+    "type": "currency",
+    "id": "monetariaMoneta",
+    "count": 250
+   }
+  ],
+  "evolutionRequired": 4,
+  "shiny": true
+ },
+ {
+  "id": "shiny_bait_exotic_reef",
+  "type": "consumable",
+  "effect": {
+   "type": "shiny_type_boost",
+   "value": 2.45,
+   "targetType": "exotic_reef"
+  },
+  "cost": [
+   {
+    "type": "currency",
+    "id": "monetariaMoneta",
+    "count": 260
+   }
+  ],
+  "evolutionRequired": 4,
+  "shiny": true
+ },
+ {
+  "id": "shiny_bait_ocean",
+  "type": "consumable",
+  "effect": {
+   "type": "shiny_type_boost",
+   "value": 2.4,
+   "targetType": "ocean"
+  },
+  "cost": [
+   {
+    "type": "currency",
+    "id": "monetariaMoneta",
+    "count": 290
+   }
+  ],
+  "evolutionRequired": 4,
+  "shiny": true
+ },
+ {
+  "id": "shiny_bait_creature",
+  "type": "consumable",
+  "effect": {
+   "type": "shiny_type_boost",
+   "value": 2.4,
+   "targetType": "creature"
+  },
+  "cost": [
+   {
+    "type": "currency",
+    "id": "monetariaMoneta",
+    "count": 300
+   }
+  ],
+  "evolutionRequired": 4,
+  "shiny": true
+ },
+ {
+  "id": "shiny_bait_expedition",
+  "type": "consumable",
+  "effect": {
+   "type": "shiny_type_boost",
+   "value": 3,
+   "targetType": "expedition"
+  },
+  "cost": [
+   {
+    "type": "currency",
+    "id": "monetariaMoneta",
+    "count": 650
+   }
+  ],
+  "evolutionRequired": 4,
+  "shiny": true
+ },
+ {
+  "id": "shiny_bait_spirit",
+  "type": "consumable",
+  "effect": {
+   "type": "shiny_type_boost",
+   "value": 2.65,
+   "targetType": "spirit"
+  },
+  "cost": [
+   {
+    "type": "currency",
+    "id": "monetariaMoneta",
+    "count": 310
+   }
+  ],
+  "evolutionRequired": 5,
+  "shiny": true
+ },
+ {
+  "id": "shiny_bait_mechanical",
+  "type": "consumable",
+  "effect": {
+   "type": "shiny_type_boost",
+   "value": 2.65,
+   "targetType": "mechanical"
+  },
+  "cost": [
+   {
+    "type": "currency",
+    "id": "monetariaMoneta",
+    "count": 310
+   }
+  ],
+  "evolutionRequired": 5,
+  "shiny": true
+ },
+ {
+  "id": "shiny_bait_cosmic",
+  "type": "consumable",
+  "effect": {
+   "type": "shiny_type_boost",
+   "value": 2.85,
+   "targetType": "cosmic"
+  },
+  "cost": [
+   {
+    "type": "currency",
+    "id": "monetariaMoneta",
+    "count": 430
+   }
+  ],
+  "evolutionRequired": 5,
+  "shiny": true
+ },
+ {
+  "id": "shiny_bait_abyssal",
+  "type": "consumable",
+  "effect": {
+   "type": "shiny_type_boost",
+   "value": 3,
+   "targetType": "abyssal"
+  },
+  "cost": [
+   {
+    "type": "currency",
+    "id": "monetariaMoneta",
+    "count": 520
+   }
+  ],
+  "evolutionRequired": 5,
+  "shiny": true
+ },
+ {
+  "id": "hook_wood",
+  "type": "hook",
+  "effect": {
+   "type": "rarity_profile",
+   "value": 1
+  },
+  "cost": [
+   {
+    "type": "currency",
+    "id": "popcorn",
+    "count": 200
+   }
+  ]
+ },
+ {
+  "id": "hook_bronze",
+  "type": "hook",
+  "effect": {
+   "type": "rarity_profile",
+   "value": 2
+  },
+  "cost": [
+   {
+    "type": "fish",
+    "id": "catfish_albino",
+    "count": 5
+   }
+  ],
+  "evolutionRequired": 2,
+  "rodTierRequired": 3,
+  "requiredHookId": "hook_wood"
+ },
+ {
+  "id": "hook_iron",
+  "type": "hook",
+  "effect": {
+   "type": "rarity_profile",
+   "value": 2.5
+  },
+  "cost": [
+   {
+    "type": "fish",
+    "id": "bobbit_worm",
+    "count": 1
+   }
+  ],
+  "evolutionRequired": 3,
+  "rodTierRequired": 4,
+  "requiredHookId": "hook_bronze"
+ },
+ {
+  "id": "hook_gold",
+  "type": "hook",
+  "effect": {
+   "type": "rarity_profile",
+   "value": 3
+  },
+  "cost": [
+   {
+    "type": "fish",
+    "id": "ghost_angel_white",
+    "count": 1
+   }
+  ],
+  "evolutionRequired": 3,
+  "rodTierRequired": 5,
+  "requiredHookId": "hook_iron"
+ },
+ {
+  "id": "hook_diamond",
+  "type": "hook",
+  "effect": {
+   "type": "rarity_profile",
+   "value": 4
+  },
+  "cost": [
+   {
+    "type": "fish",
+    "id": "whale_magenta_ocean",
+    "count": 1
+   }
+  ],
+  "evolutionRequired": 3,
+  "rodTierRequired": 7,
+  "requiredHookId": "hook_gold"
+ },
+ {
+  "id": "hook_ancient",
+  "type": "hook",
+  "effect": {
+   "type": "rarity_profile",
+   "value": 4
+  },
+  "cost": [
+   {
+    "type": "fish",
+    "id": "huchen",
+    "count": 1
+   }
+  ],
+  "evolutionRequired": 4,
+  "rodTierRequired": 8,
+  "requiredHookId": "hook_diamond"
+ },
+ {
+  "id": "hook_cursed",
+  "type": "hook",
+  "effect": {
+   "type": "rarity_profile",
+   "value": 3
+  },
+  "cost": [
+   {
+    "type": "fish",
+    "id": "dead_fish",
+    "count": 1
+   }
+  ],
+  "evolutionRequired": 3,
+  "fishingLevelRequired": 25
+ },
+ {
+  "id": "lure_basic",
+  "type": "lure",
+  "effect": {
+   "type": "progression_objective",
+   "value": 3
+  },
+  "cost": []
+ },
+ {
+  "id": "lure_advanced",
+  "type": "lure",
+  "effect": {
+   "type": "collection_objective",
+   "value": 3
+  },
+  "cost": [
+   {
+    "type": "fish",
+    "id": "cosmic_shard_blue",
+    "count": 5
+   }
+  ],
+  "evolutionRequired": 2
+ },
+ {
+  "id": "lure_pro",
+  "type": "lure",
+  "effect": {
+   "type": "aquarium_objective",
+   "value": 3
+  },
+  "cost": [
+   {
+    "type": "fish",
+    "id": "ghost_axolotl_pink",
+    "count": 5
+   }
+  ],
+  "evolutionRequired": 3,
+  "aquariumRequired": true
+ },
+ {
+  "id": "lure_master",
+  "type": "lure",
+  "effect": {
+   "type": "trophy_weight_mult",
+   "value": 1.25
+  },
+  "cost": [
+   {
+    "type": "fish",
+    "id": "bobbit_worm",
+    "count": 3
+   }
+  ],
+  "evolutionRequired": 4
+ },
+ {
+  "id": "lure_legend",
+  "type": "lure",
+  "effect": {
+   "type": "shiny_chance_mult",
+   "value": 1.5
+  },
+  "cost": [
+   {
+    "type": "fish",
+    "id": "dragonfish_black",
+    "count": 2
+   }
+  ],
+  "evolutionRequired": 4
+ }
+]

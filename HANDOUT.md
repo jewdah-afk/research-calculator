@@ -2,36 +2,49 @@
 
 This file is the handoff for the next session or teammate. It covers what exists, where it lives, what is verified, and what comes next.
 
-Last updated: 2026-10-07
+Last updated: 2026-10-07 (Roblox build)
 
 ---
 
-## 0. Start here (next session: Roblox Studio build)
+## 0. Start here (Roblox build status, 2026-10-07)
 
-The user is opening a new session that can drive **Roblox Studio** (they run the place `birb(test)` locally; the current in-game build already has the HUD, the docked Popcorn shop and the grass map). Do these in order:
+The Roblox game now lives in **`roblox/`** (Rojo). The owner has synced it into the place **`birb(test)`** (placeId 104948155633094) and published it. `rojo build -o roblox/Peckwood.rbxl` makes a fresh place file.
 
-1. **Import every Figma window 1:1 into Studio.** Source of truth is Figma file `SQOJ2gzGt12vFMGGlNRWBE`, page **UI v2** (`7:7`), board `8:7`. Match sizes, gradients (multi-colour icon gradients + shade layer), strokes, corner radii, fonts (Fredoka One / Fredoka), drop shadows, rim glow, centring, and the motion specs on the cards under each window. Icons are the PNGs in `birb-icons/final/` (UI and gear) and `birb-icons/final/fish/` (all 426 fish, named by fish id); upload them as image assets and keep a name to asset-id map in one ModuleScript.
-2. **Two test saves + a progression toggle (user requirement, must ship with the import):**
-   - **Regular save:** the user's normal progress.
-   - **Maxed save:** everything unlocked and maxed (every layer, companion, rod tier 23, tank 5, sacrifice XVIII, all 426 fish discovered, all quests done), so every window can be seen in its final state.
-   - **"Next island" toggle:** a dev-only button that steps the save forward one unlock at a time (next buy island / next layer / next tier) so the user can watch the progression unfold in order. It must be **non-destructive**: work on a copy of the save, never write to the real DataStore, and be able to jump back to Regular or Maxed at any time without breaking state.
-3. **Wire the math:** `birb-data/EternityNum.luau`, `BirbFormulas.luau`, `BirbSystems.luau` into ReplicatedStorage; load `birb-data/upgrades.json` and `birb-data/data/*.json` as data modules. Numbers on every row come from these (all verified 1:1 against the original game, see section 3).
-4. **Polish in Studio until it "looks amazing"** (user's words): compare each in-game window side by side with its Figma frame.
-5. **Then the map:** give it more visual hierarchy. It already looks good; the user wants it clearly better (paths, landmarks, focal points, lighting, depth).
+### What is built
+| Part | Where | State |
+|---|---|---|
+| Map, bird controller, kernels, camera (from the old place) | `src/server/Island.luau`, `src/client/{Main.client,Controller,Birds}.luau`, `src/shared/{MapData,Models}.luau` | Working. The old `UI.luau` is deleted. |
+| Verified math + data | `src/shared/{EternityNum,BirbFormulas,BirbSystems}.luau`, `src/shared/Data/*.json` | Copied from `birb-data/`. A junk row was removed from `quests.json`. |
+| Every shop row (cost, effect, max level) | `src/shared/Defs.luau` | All 160 upgrades resolve through `Defs.UP`. The islands progression order (`Defs.ISLANDS`) is here too. |
+| Server: state, every system, actions, saves | `src/server/Game.luau` (pure logic), `src/server/Main.server.luau` (players, field, remotes) | Popcorn field, Molt, seeds, sparrow, evolve, fishing (426 fish rolls, rods, baits, aquarium), seagull, Dave, red panda, nest, crow mining, echo, expedition, quests, sacrifice, profile. |
+| Dev saves | `Main.server.luau` `A.dev` | **REGULAR** (your real save), **MAXED** (everything unlocked and maxed), **NEXT ISLAND** (works on a copy and steps forward one unlock). The sandbox states never save. Only Studio, the owner, or `Config.DEV_USER_IDS` can use them. |
+| AUTO = group perk | `Config.GROUP_ID` (**still 0, set it**), `A.auto` | Membership is checked on the server with `IsInGroup`. Locked players get `GroupService:PromptJoinAsync` and then a re-check. AUTO collects a kernel every 0.35s and buys the cheapest affordable upgrade every 1s. While `GROUP_ID` is 0, it only works in Studio. |
+| UI | `src/client/UI/{Kit,Window,Windows,Spec,Hud}.luau` | Details below. |
 
-### Where everything is
+### How the UI matches Figma
+- **Window art is the Figma frame itself.** The temporary atlas `83:7` holds a copy of each UI v2 window with its live layers hidden (text, `ico/*`, `btn/*`, sparkles, progress fills, chevrons). Each copy was rendered at 2x (including the rim glow, with a 150px margin at 1x), uploaded, and listed in `src/shared/FigmaArt.luau`. Button faces (`btn/<window>_buy|tab|hero`, `grey_buy`, `grey_all`, `blue_all`, `gold_maxed`) were cut from `roblox/assets/figma/buttons_sheet.png`.
+- **Live layers are drawn on top at the Figma coordinates** (`Window.luau`): title, tab contents, hero icon/title/subtitle/button, section label, row icon/title/growth/description/progress fill/buttons, footer, sparkles.
+- **Texts and colours per window** are in `Spec.luau`, extracted from the Figma layers. Icons are the PNGs actually placed in each Figma slot, matched by image bytes rather than by the stale layer names.
+- **Motion** follows the spec cards: open (0.86 to 1.04 to 1), close, rows cascading in, icons bobbing ±3px, hero icon tilting ±4°, sparkles twinkling, buy-button glow pulsing, shine sweep when something becomes affordable, can't-afford shake with red flash, wallet capsule wiggle, currency particles flying to the HUD, violet flash on Molt.
+- **HUD** (`Hud.luau`): Figma `8:271` (map banner, toast, wallet capsules, objective bar, shop docked on the right). Additions: the window menu (3 columns, only unlocked windows show), the dev panel, the AUTO button, the UNLOCK button for paid island gates, and the full Fish Index overlay.
+- **Gotchas found:**
+  - A UIGradient on a CanvasGroup tints everything inside it. Put gradients on a child frame instead.
+  - Only one UIScale applies per object. The fit-to-height scale sits on a wrapper.
+  - Images taller than about 2048px did not render, so window renders are resized to fit (`assets/figma/fit/`).
+  - The Roblox top-left menu covers HUD y<60.
 
-| What | Where |
-|---|---|
-| Every UI window (20) + motion spec cards | Figma `SQOJ2gzGt12vFMGGlNRWBE`, board `8:7` on page UI v2. Node ids in section 4 |
-| UI + gear icons (130) | `birb-icons/final/*.png`, list in `birb-icons/final/manifest.json` |
-| Fish icons (426) | `birb-icons/final/fish/<fish id>.png` |
-| Icon source sheets + how to make more | `birb-icons/sheets/`, `cut_grid.py`, `qa.py`, `fish_prompts.py`, `fish_cut.py`, section 7 |
-| Game math (Luau) | `birb-data/*.luau` |
-| Game data (upgrades, fish, rods, baits, quests, sacrifice, enemies, artifacts) | `birb-data/upgrades.json`, `birb-data/data/*.json` |
-| Formulas explained | `birb-data/CORE_FORMULAS.md`, `birb-data/SYSTEMS.md` |
+### Open issues (do these next)
+1. **Most new image uploads report not loaded yet.** On 2026-10-07 only `popcorn` and `grey_buy` loaded. This is probably Roblox image moderation. Re-check with `ContentProvider:PreloadAsync` on the ImageLabels. If they are rejected, re-upload them with `upload_image` (batches of 20 or fewer, served from `python -m http.server 8778` in `roblox/`) and regenerate `FigmaArt.luau` from `tools/figma_ids.json`.
+2. Delete the Figma temp atlas `83:7` once the art loads (`use_figma`: `(await figma.getNodeByIdAsync('83:7')).remove()`).
+3. Upload the 426 fish icons (`birb-icons/final/fish/`, batches of 25, serve on :8799) and add them to `Icons.luau` using `tools/rec.py` and the generator snippet. Until then, fish rows show no icon.
+4. Islands other than the Park reuse the Park map. The Desert is a field toggle (golden drops). Each island still needs its own 3D area: garden, bridge/fishing spot, forest, mine, castle.
+5. Visual polish pass: compare each window side by side with Figma, then work on map hierarchy (section 5).
+6. Unverified numbers: seeds base 3/s (from the Figma copy), fishing cast 4s × rod speed, expedition kill rate and floor progression (simplified), Dave XP from golden pickups.
 
----
+### Tools
+- `roblox/tools/gen_manifest.py` writes the list of scripts to sync.
+- With `python -m http.server 8778 --bind 127.0.0.1` running in `roblox/`, run the sync snippet `tools/sync.luau` through `execute_luau` in Edit mode. It pushes every `.luau` into the open place. JSON data needs `rojo build`.
+- `tools/rec.py` / `tools/rec2.py` record uploaded asset IDs into `asset_ids.json` / `figma_ids.json`.
 
 ## 1. What the project is
 

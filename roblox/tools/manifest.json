@@ -1,0 +1,195 @@
+[
+{
+"path": [
+"ReplicatedStorage",
+"Peckwood",
+"BirbFormulas"
+],
+"class": "ModuleScript",
+"url": "src/shared/BirbFormulas.luau"
+},
+{
+"path": [
+"ReplicatedStorage",
+"Peckwood",
+"BirbSystems"
+],
+"class": "ModuleScript",
+"url": "src/shared/BirbSystems.luau"
+},
+{
+"path": [
+"ReplicatedStorage",
+"Peckwood",
+"Config"
+],
+"class": "ModuleScript",
+"url": "src/shared/Config.luau"
+},
+{
+"path": [
+"ReplicatedStorage",
+"Peckwood",
+"Defs"
+],
+"class": "ModuleScript",
+"url": "src/shared/Defs.luau"
+},
+{
+"path": [
+"ReplicatedStorage",
+"Peckwood",
+"EternityNum"
+],
+"class": "ModuleScript",
+"url": "src/shared/EternityNum.luau"
+},
+{
+"path": [
+"ReplicatedStorage",
+"Peckwood",
+"FigmaArt"
+],
+"class": "ModuleScript",
+"url": "src/shared/FigmaArt.luau"
+},
+{
+"path": [
+"ReplicatedStorage",
+"Peckwood",
+"Icons"
+],
+"class": "ModuleScript",
+"url": "src/shared/Icons.luau"
+},
+{
+"path": [
+"ReplicatedStorage",
+"Peckwood",
+"MapData"
+],
+"class": "ModuleScript",
+"url": "src/shared/MapData.luau"
+},
+{
+"path": [
+"ReplicatedStorage",
+"Peckwood",
+"Models"
+],
+"class": "ModuleScript",
+"url": "src/shared/Models.luau"
+},
+{
+"path": [
+"ServerScriptService",
+"Peckwood",
+"Game"
+],
+"class": "ModuleScript",
+"url": "src/server/Game.luau"
+},
+{
+"path": [
+"ServerScriptService",
+"Peckwood",
+"Island"
+],
+"class": "ModuleScript",
+"url": "src/server/Island.luau"
+},
+{
+"path": [
+"ServerScriptService",
+"Peckwood",
+"Main"
+],
+"class": "Script",
+"url": "src/server/Main.server.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"Birds"
+],
+"class": "ModuleScript",
+"url": "src/client/Birds.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"Controller"
+],
+"class": "ModuleScript",
+"url": "src/client/Controller.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"Main"
+],
+"class": "LocalScript",
+"url": "src/client/Main.client.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Hud"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Hud.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Kit"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Kit.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Spec"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Spec.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Window"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Window.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Windows"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Windows.luau"
+}
+]

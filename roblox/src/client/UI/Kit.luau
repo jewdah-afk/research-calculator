@@ -1,0 +1,265 @@
+--!nonstrict
+-- Kit: Roblox GUI rebuild of the Figma "Peckwood UI v2" window template (board 8:7, Golden tab 49:10 as the source).
+-- Every number here is the Figma layer's own geometry at 1080p (window 500 wide). Do not redraw; change specs instead.
+local RS = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+local Icons = require(RS:WaitForChild("Peckwood"):WaitForChild("Icons"))
+
+local Kit = {}
+
+local INK = Color3.fromHex("0b0c10")
+Kit.INK = INK
+local TITLE = Font.fromEnum(Enum.Font.FredokaOne)
+local BODY = Font.new("rbxasset://fonts/families/FredokaOne.json", Enum.FontWeight.Regular)
+Kit.TITLE, Kit.BODY = TITLE, BODY
+
+local function hex(h) return Color3.fromHex(h) end
+Kit.hex = hex
+
+function Kit.new(class, props, parent)
+	local o = Instance.new(class)
+	for k, v in props do o[k] = v end
+	if parent then o.Parent = parent end
+	return o
+end
+local new = Kit.new
+
+function Kit.frame(parent, x, y, w, h, color, props)
+	local f = new("Frame", { Position = UDim2.fromOffset(x, y), Size = UDim2.fromOffset(w, h), BorderSizePixel = 0,
+		BackgroundColor3 = color or Color3.new(1, 1, 1), BackgroundTransparency = if color then 0 else 1 }, parent)
+	if props then for k, v in props do f[k] = v end end
+	return f
+end
+function Kit.corner(p, r) new("UICorner", { CornerRadius = UDim.new(0, r) }, p) end
+-- Figma INSIDE stroke: Roblox strokes sit on the border, so inset by half and use the Inner position when available
+function Kit.stroke(p, w, color, transp)
+	local s = new("UIStroke", { Thickness = w, Color = color or INK, Transparency = transp or 0, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, p)
+	pcall(function() s.BorderStrokePosition = Enum.BorderStrokePosition.Inner end)
+	return s
+end
+function Kit.textStroke(p, w, color)
+	return new("UIStroke", { Thickness = w, Color = color or INK, ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual, LineJoinMode = Enum.LineJoinMode.Round }, p)
+end
+
+-- "c1:0 c2:30 ..." or { {hex, pos, alpha?}, ... } -> UIGradient (vertical by default: Figma [[0,1,0],[-1,0,1]])
+function Kit.grad(p, stops, rotation)
+	local cs, ts = {}, {}
+	for _, st in stops do
+		table.insert(cs, ColorSequenceKeypoint.new(st[2], hex(st[1])))
+		table.insert(ts, NumberSequenceKeypoint.new(st[2], 1 - (st[3] or 1)))
+	end
+	if cs[1].Time > 0 then table.insert(cs, 1, ColorSequenceKeypoint.new(0, cs[1].Value)); table.insert(ts, 1, NumberSequenceKeypoint.new(0, ts[1].Value)) end
+	if cs[#cs].Time < 1 then table.insert(cs, ColorSequenceKeypoint.new(1, cs[#cs].Value)); table.insert(ts, NumberSequenceKeypoint.new(1, ts[#ts].Value)) end
+	return new("UIGradient", { Color = ColorSequence.new(cs), Transparency = NumberSequence.new(ts), Rotation = rotation or 90 }, p)
+end
+-- parse the compact export format "ffd27a:0 f7a634:30 e07a1c:72 9e4a0c:100" (alpha as "rrggbb@95")
+function Kit.stops(str)
+	local out = {}
+	for tok in string.gmatch(str, "%S+") do
+		local c, a, pos = string.match(tok, "^(%x+)@?(%d*):(%d+)$")
+		table.insert(out, { c, tonumber(pos) / 100, if a ~= "" then tonumber(a) / 100 else 1 })
+	end
+	return out
+end
+
+function Kit.image(parent, x, y, w, h, id, props)
+	local i = new("ImageLabel", { Position = UDim2.fromOffset(x, y), Size = UDim2.fromOffset(w, h), BackgroundTransparency = 1,
+		Image = id or "", ScaleType = Enum.ScaleType.Fit, BorderSizePixel = 0 }, parent)
+	if props then for k, v in props do i[k] = v end end
+	return i
+end
+function Kit.iconId(name) return Icons[name] or "" end
+function Kit.icon(parent, x, y, s, name, props)
+	return Kit.image(parent, x, y, s, s, Icons[name] or "", props)
+end
+-- 9-slice soft image (glow / shadow) spilling `m` px around a box
+function Kit.soft(parent, x, y, w, h, m, which, color, transp, z)
+	return Kit.image(parent, x - m, y - m, w + 2 * m, h + 2 * m, Icons["ui/" .. which], {
+		ScaleType = Enum.ScaleType.Slice, SliceCenter = Rect.new(128, 128, 128, 128), SliceScale = math.max(0.05, m / 64),
+		ImageColor3 = color or Color3.new(1, 1, 1), ImageTransparency = transp or 0, ZIndex = z or 0 })
+end
+-- texture overlay (halftone / glitter) tiled across a frame
+function Kit.texture(parent, which, transp, tile, z)
+	return new("ImageLabel", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Image = Icons["ui/" .. which],
+		ScaleType = Enum.ScaleType.Tile, TileSize = UDim2.fromOffset(tile or 32, tile or 32), ImageTransparency = transp, ZIndex = z or 1 }, parent)
+end
+
+-- Figma text. size = Figma font size; Fredoka One renders a hair larger in Roblox, so 0.96.
+function Kit.text(parent, str, size, color, props)
+	local t = new("TextLabel", { BackgroundTransparency = 1, Text = str, TextSize = math.floor(size * 0.96 + 0.5), FontFace = TITLE,
+		TextColor3 = color or Color3.new(1, 1, 1), AutomaticSize = Enum.AutomaticSize.XY, Size = UDim2.fromOffset(0, 0),
+		TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Center }, parent)
+	if props then for k, v in props do t[k] = v end end
+	return t
+end
+-- display text: white fill, ink outline, hard ink drop shadow (Figma DS y=dy, r=0)
+function Kit.title(parent, str, size, color, strokeW, dy, props)
+	local holder = new("Frame", { BackgroundTransparency = 1, AutomaticSize = Enum.AutomaticSize.XY, Size = UDim2.fromOffset(0, 0) }, parent)
+	if props then for k, v in props do holder[k] = v end end
+	local sh
+	if dy and dy > 0 then
+		sh = Kit.text(holder, str, size, INK, { Position = UDim2.fromOffset(0, dy), ZIndex = (props and props.ZIndex or 1) })
+		Kit.textStroke(sh, strokeW or 2, INK)
+	end
+	local t = Kit.text(holder, str, size, color or Color3.new(1, 1, 1), { ZIndex = (props and props.ZIndex or 1) + 1 })
+	Kit.textStroke(t, strokeW or 2, INK)
+	holder:SetAttribute("isTitle", true)
+	local api = { holder = holder, label = t, shadow = sh }
+	function api.set(s) t.Text = s; if sh then sh.Text = s end end
+	function api.color(c) t.TextColor3 = c end
+	return api
+end
+
+function Kit.ellipse(parent, x, y, w, h, color, transp)
+	local e = Kit.frame(parent, x, y, w, h, color, { BackgroundTransparency = transp or 0 })
+	new("UICorner", { CornerRadius = UDim.new(1, 0) }, e)
+	return e
+end
+
+local sparkleList = {}
+function Kit.sparkle(parent, x, y, s, color)
+	local i = Kit.image(parent, x - s * 0.5, y - s * 0.5, s * 2, s * 2, Icons["ui/sparkle"], { ImageColor3 = hex(color or "fff5d8"), ZIndex = 8 })
+	table.insert(sparkleList, { i = i, base = s * 2, x = x, y = y, ph = math.random() * 2.4, per = 1.2 + math.random() * 1.2 })
+	return i
+end
+Kit.sparkles = sparkleList
+
+-- glass streak pair (fx/glass streak): wide + thin bands at -35 deg, screen-ish white
+function Kit.streaks(parent, x1, w1, x2, w2, y, h)
+	for _, b in { { x1, w1 }, { x2, w2 } } do
+		local f = Kit.frame(parent, b[1], y, b[2], h, Color3.new(1, 1, 1), { Rotation = -35, ZIndex = 2 })
+		Kit.grad(f, { { "ffffff", 0, 0 }, { "fff7d9", 0.5, 0.16 }, { "ffffff", 1, 0 } }, 0)
+	end
+end
+
+-- ---------------------------------------------------------------- buttons (btn/*)
+-- Figma: ink base offset 3 below, face (stroke 3 inside, inner top white), depth band, gloss, bevel, centred content.
+local GREY = Kit.stops("5c6676:0 444c59:42 323844:86 323844:100")
+local BLUE = Kit.stops("7fd2ff:0 3a9cf0:42 1f6bc4:86 1f6bc4:100")
+local GOLD = Kit.stops("ffe07a:0 f2b331:42 c27a10:86 c27a10:100")
+Kit.GREY, Kit.BLUE, Kit.GOLD = GREY, BLUE, GOLD
+
+local function darken(c, f) return Color3.new(c.R * f, c.G * f, c.B * f) end
+
+function Kit.button(parent, x, y, w, h, opts)
+	-- h = total height incl. the 3 px ink base
+	local fh = h - 3
+	local cr = opts.cr or (if fh >= 50 then 14 elseif fh >= 39 then 12 else 10)
+	local root = new("TextButton", { Position = UDim2.fromOffset(x, y), Size = UDim2.fromOffset(w, h), BackgroundTransparency = 1, Text = "", AutoButtonColor = false, ZIndex = 3 }, parent)
+	local glow = Kit.soft(root, 0, 0, w, fh, 18, "glow", Color3.new(1, 1, 1), 1, 2)
+	local base = Kit.frame(root, 0, 3, w, fh, INK, { ZIndex = 3 }); Kit.corner(base, cr)
+	local face = Kit.frame(root, 0, 0, w, fh, Color3.new(1, 1, 1), { ZIndex = 4, ClipsDescendants = true }); Kit.corner(face, cr)
+	local g = Kit.grad(face, opts.stops or GREY)
+	local tex = Kit.texture(face, "halftone", 0.78, 24, 4)
+	local dH = if fh >= 50 then 5 elseif fh >= 39 then 4 else 3
+	local depth = Kit.frame(face, 0, fh - dH, w, dH, Color3.new(0, 0, 0), { BackgroundTransparency = 0.49, ZIndex = 5 })
+	local gx, gh = (if fh >= 50 then 10 elseif fh >= 39 then 8 else 7), (if fh >= 50 then math.floor(fh * 0.28) elseif fh >= 39 then 11 else 8)
+	local gloss = Kit.frame(face, gx, 4, w - 2 * gx, gh, Color3.new(1, 1, 1), { ZIndex = 6 }); Kit.corner(gloss, gh / 2)
+	Kit.grad(gloss, { { "ffffff", 0, 0.42 }, { "ffffff", 1, 0.04 } })
+	local topHl = Kit.frame(face, 2, 1, w - 4, 3, Color3.new(1, 1, 1), { BackgroundTransparency = 0.5, ZIndex = 5 }); Kit.corner(topHl, 2)
+	Kit.frame(face, 8, fh - dH - 1.5, w - 16, 1.5, Color3.new(1, 1, 1), { BackgroundTransparency = 0.65, ZIndex = 6 })
+	Kit.stroke(face, 3, INK)
+	-- centred content row: icon + label
+	local content = new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0, (fh - dH) / 2 + 0.5),
+		AutomaticSize = Enum.AutomaticSize.XY, Size = UDim2.fromOffset(0, 0), ZIndex = 7 }, face)
+	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, opts.gap or 8), SortOrder = Enum.SortOrder.LayoutOrder }, content)
+	local ico
+	if opts.icon then ico = Kit.icon(content, 0, 0, opts.iconSize or math.floor(fh * 0.74), opts.icon, { ZIndex = 8, LayoutOrder = 1 }) end
+	local label = Kit.title(content, opts.text or "", opts.size or 20, opts.textColor, opts.strokeW or (if (opts.size or 20) >= 24 then 2.5 else if (opts.size or 20) >= 16 then 2.4 else 1.6), 2, { ZIndex = 8, LayoutOrder = 2 })
+	label.holder.Visible = (opts.text or "") ~= ""   -- icon-only buttons stay centred
+	local api = { root = root, face = face, grad = g, glowImg = glow, label = label, iconImg = ico, depth = depth, h = h, w = w, state = "" }
+	-- art mode: the face is the Figma-rendered button (opts.art = { lit, grey, blue, gold } image ids), content drawn on top
+	local art
+	if opts.art then
+		base.Visible = false
+		for _, c in face:GetChildren() do if c ~= content then c:Destroy() end end
+		face.BackgroundTransparency = 1; face.ClipsDescendants = false
+		art = Kit.image(face, 0, 0, w, h, opts.art.lit or opts.art.grey, { ZIndex = 4, ScaleType = Enum.ScaleType.Stretch })
+		g = nil
+	end
+	function api.setStops(st)
+		if art then return end
+		local ng = Kit.grad(face, st); g:Destroy(); g = ng; api.grad = ng
+	end
+	local function artLook(kind)
+		if not art then return end
+		local id = opts.art[kind]
+		if id then art.Image = id; art.ImageColor3 = Color3.new(1, 1, 1)
+		else art.Image = opts.art.lit; art.ImageColor3 = if kind == "grey" then Color3.fromRGB(120, 124, 134) else Color3.new(1, 1, 1) end
+	end
+	function api.setIcon(name) if ico then ico.Image = Icons[name] or "" end end
+	function api.setText(s) label.set(s); label.holder.Visible = s ~= "" end
+	-- look: "lit" (theme stops + glow), "grey" (can't afford), "blue" (BUY ALL), "gold" (MAXED)
+	function api.look(kind, stops, glowColor)
+		if api.state == kind .. tostring(stops) then return end
+		api.state = kind .. tostring(stops)
+		artLook(kind)
+		if kind == "grey" then api.setStops(GREY); label.color(hex("cdd3dd")); glow.ImageTransparency = 1
+		elseif kind == "blue" then api.setStops(BLUE); label.color(Color3.new(1, 1, 1)); glow.ImageTransparency = 1
+		elseif kind == "gold" then api.setStops(GOLD); label.color(Color3.new(1, 1, 1)); glow.ImageTransparency = 1
+		else
+			api.setStops(stops); label.color(Color3.new(1, 1, 1))
+			if glowColor then glow.ImageColor3 = hex(glowColor); glow.ImageTransparency = 0.45 else glow.ImageTransparency = 1 end
+		end
+		api.lit = kind == "lit" and glowColor ~= nil
+	end
+	-- motion (spec cards): hover lift 2px + brighten, press squash .94, release 1.06 overshoot
+	local scale = new("UIScale", { Scale = 1 }, root)
+	root.MouseEnter:Connect(function() TweenService:Create(face, TweenInfo.new(0.12), { Position = UDim2.fromOffset(0, -2) }):Play() end)
+	root.MouseLeave:Connect(function() TweenService:Create(face, TweenInfo.new(0.12), { Position = UDim2.fromOffset(0, 0) }):Play(); TweenService:Create(scale, TweenInfo.new(0.1), { Scale = 1 }):Play() end)
+	root.MouseButton1Down:Connect(function()
+		TweenService:Create(scale, TweenInfo.new(0.07), { Scale = 0.94 }):Play()
+		TweenService:Create(face, TweenInfo.new(0.07), { Position = UDim2.fromOffset(0, 3) }):Play()
+	end)
+	root.MouseButton1Up:Connect(function()
+		TweenService:Create(face, TweenInfo.new(0.07), { Position = UDim2.fromOffset(0, 0) }):Play()
+		local t = TweenService:Create(scale, TweenInfo.new(0.09, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Scale = 1.06 })
+		t:Play(); t.Completed:Once(function() TweenService:Create(scale, TweenInfo.new(0.12, Enum.EasingStyle.Back), { Scale = 1 }):Play() end)
+	end)
+	api.scale = scale
+	return api
+end
+
+-- can't afford: shake +-6 px x3 (180 ms) and flash the label red once
+function Kit.nope(api)
+	local r = api.root
+	local x0 = r.Position.X.Offset
+	task.spawn(function()
+		for _, dx in { 6, -6, 6, -6, 6, 0 } do r.Position = UDim2.fromOffset(x0 + dx, r.Position.Y.Offset); task.wait(0.03) end
+	end)
+	local l = api.label.label
+	local c = l.TextColor3
+	l.TextColor3 = hex("ff4d4d")
+	task.delay(0.25, function() l.TextColor3 = c end)
+end
+
+function Kit.pop(gui, from)
+	local s = gui:FindFirstChildOfClass("UIScale") or new("UIScale", {}, gui)
+	s.Scale = from or 1.25
+	TweenService:Create(s, TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+end
+
+-- ---------------------------------------------------------------- progress bar (progress)
+function Kit.progress(parent, x, y, w, h, fillStops)
+	local bg = Kit.frame(parent, x, y, w, h, hex("0f1115"), { ZIndex = 3, ClipsDescendants = true }); Kit.corner(bg, h / 2)
+	local inner = Kit.frame(bg, 0, 0, w, 2, Color3.new(0, 0, 0), { BackgroundTransparency = 0.4, ZIndex = 4 })
+	local fill = Kit.frame(bg, 0, 0, 0, h, Color3.new(1, 1, 1), { ZIndex = 4 }); Kit.corner(fill, h / 2)
+	local fg = Kit.grad(fill, fillStops or Kit.stops("fffbd0:0 f5d06b:50 b28d34:100"))
+	local hl = Kit.frame(fill, 2, 1, 0, 2, Color3.new(1, 1, 1), { BackgroundTransparency = 0.55, ZIndex = 5, Size = UDim2.new(1, -4, 0, 2) })
+	local lbl = Kit.text(bg, "", 13, Color3.new(1, 1, 1), { AutomaticSize = Enum.AutomaticSize.None, Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 6 })
+	Kit.textStroke(lbl, 1.6)
+	Kit.stroke(bg, 2, INK)
+	local api = { bg = bg, fill = fill, label = lbl, frac = -1 }
+	function api.set(frac, text)
+		frac = math.clamp(frac, 0, 1)
+		lbl.Text = text
+		if math.abs(frac - api.frac) > 1e-4 then
+			api.frac = frac
+			TweenService:Create(fill, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = UDim2.fromOffset(math.max(if frac > 0 then h else 0, w * frac), h) }):Play()
+		end
+	end
+	function api.setStops(st) fg:Destroy(); fg = Kit.grad(fill, st) end
+	return api
+end
+
+return Kit

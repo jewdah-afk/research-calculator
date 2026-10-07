@@ -1,0 +1,561 @@
+[
+ {
+  "id": "mythic_spirit_trash",
+  "rarity": "mythic",
+  "type": "utility",
+  "inventoryCategory": "material",
+  "icon": "spirit_trash",
+  "stackable": true,
+  "stats": {},
+  "dropSource": "mythic-sacrifice"
+ },
+ {
+  "id": "veil_heart",
+  "name": "Heart of the Veil",
+  "description": "Every 6th hit: 90% chain damage to 2 enemies. Scales with Infusion.",
+  "rarity": "mythic",
+  "type": "damage",
+  "icon": "spirit_feather",
+  "effectId": "storm_chain",
+  "stats": {
+   "damage": 0.75,
+   "attackSpeed": 0.15
+  },
+  "dropSource": "mythic-sacrifice"
+ },
+ {
+  "id": "watcher_oath",
+  "name": "Watcher's Oath",
+  "description": "Below 60% HP: up to +50% Health Regen at 20% HP. Scales with Infusion.",
+  "rarity": "mythic",
+  "type": "survivability",
+  "icon": "shadow_shield",
+  "effectId": "resonant_recovery",
+  "stats": {
+   "maxHealth": 1,
+   "lifeRegenMult": 1
+  },
+  "dropSource": "mythic-sacrifice"
+ },
+ {
+  "id": "archivist_book",
+  "rarity": "mythic",
+  "type": "utility",
+  "inventoryCategory": "material",
+  "icon": "mythic_book",
+  "stackable": true,
+  "stats": {}
+ },
+ {
+  "id": "spirit_trash",
+  "rarity": "common",
+  "type": "utility",
+  "inventoryCategory": "material",
+  "icon": "spirit_trash",
+  "stackable": true,
+  "stats": {},
+  "name": "Spirit Aura",
+  "description": "A faint spiritual aura."
+ },
+ {
+  "id": "uncommon_spirit_trash",
+  "rarity": "uncommon",
+  "type": "utility",
+  "inventoryCategory": "material",
+  "icon": "spirit_trash",
+  "stackable": true,
+  "stats": {},
+  "name": "Uncommon Spirit Aura",
+  "description": "A steadier spiritual aura drawn from expedition."
+ },
+ {
+  "id": "rare_spirit_trash",
+  "rarity": "rare",
+  "type": "utility",
+  "inventoryCategory": "material",
+  "icon": "spirit_trash",
+  "stackable": true,
+  "stats": {},
+  "name": "Rare Spirit Aura",
+  "description": "Dense spiritual aura from expedition."
+ },
+ {
+  "id": "epic_spirit_trash",
+  "rarity": "epic",
+  "type": "utility",
+  "inventoryCategory": "material",
+  "icon": "spirit_trash",
+  "stackable": true,
+  "stats": {},
+  "name": "Epic Spirit Aura",
+  "description": "Refined spiritual aura compressed from expedition."
+ },
+ {
+  "id": "legendary_spirit_trash",
+  "rarity": "legendary",
+  "type": "utility",
+  "inventoryCategory": "material",
+  "icon": "spirit_trash",
+  "stackable": true,
+  "stats": {},
+  "name": "Legendary Spirit Aura",
+  "description": "An ancient spiritual aura condensed to its limit."
+ },
+ {
+  "id": "gold_ore",
+  "rarity": "legendary",
+  "type": "utility",
+  "inventoryCategory": "material",
+  "icon": "gold_ore",
+  "stackable": true,
+  "stats": {},
+  "name": "Gold Ore",
+  "description": "A dense legendary ore used by the forge."
+ },
+ {
+  "id": "crow_feather",
+  "rarity": "common",
+  "type": "damage",
+  "icon": "crow_feather",
+  "stats": {
+   "damage": 0.1
+  },
+  "name": "Crow Feather",
+  "description": "+10% Damage."
+ },
+ {
+  "id": "egg",
+  "rarity": "common",
+  "type": "survivability",
+  "icon": "egg",
+  "stats": {
+   "maxHealth": 0.1
+  },
+  "name": "Forest Egg",
+  "description": "+10% Max HP."
+ },
+ {
+  "id": "simple_book",
+  "rarity": "uncommon",
+  "type": "utility",
+  "icon": "simple_book",
+  "effectId": "sp_gain_10",
+  "stats": {
+   "attackSpeed": 0.04
+  },
+  "name": "Simple Book",
+  "description": "+10% Points gained and +4% Attack Speed."
+ },
+ {
+  "id": "small_shield",
+  "rarity": "uncommon",
+  "type": "survivability",
+  "icon": "small_shield",
+  "stats": {
+   "lifeRegenMult": 0.12
+  },
+  "name": "Small Shield",
+  "description": "+12% Health Regen."
+ },
+ {
+  "id": "pair_of_boots",
+  "rarity": "common",
+  "type": "utility",
+  "icon": "pair_of_boots",
+  "stats": {
+   "moveSpeed": 0.05
+  },
+  "name": "Pair of Boots",
+  "description": "+5% Move Speed."
+ },
+ {
+  "id": "flute",
+  "rarity": "rare",
+  "type": "damage",
+  "icon": "flute",
+  "stats": {
+   "attackSpeed": 0.14
+  },
+  "name": "Wooden Flute",
+  "description": "+14% Attack Speed."
+ },
+ {
+  "id": "spirit_vests",
+  "rarity": "rare",
+  "type": "survivability",
+  "icon": "spirit_vests",
+  "stats": {
+   "maxHealth": 0.18,
+   "lifeRegenMult": 0.1
+  },
+  "name": "Spirit Vest",
+  "description": "+18% Max HP and +10% Life Regen."
+ },
+ {
+  "id": "spirit_feather",
+  "rarity": "rare",
+  "type": "damage",
+  "icon": "spirit_feather",
+  "stats": {
+   "damage": 0.18,
+   "attackSpeed": 0.04
+  },
+  "name": "Spirit Feather",
+  "description": "+18% Damage and +4% Attack Speed."
+ },
+ {
+  "id": "holy_symbol",
+  "rarity": "epic",
+  "type": "survivability",
+  "icon": "holy_symbol",
+  "stats": {
+   "lifeRegenMult": 0.5
+  },
+  "name": "Holy Symbol",
+  "description": "+50% Health Regen."
+ },
+ {
+  "id": "divine_symbol",
+  "rarity": "legendary",
+  "type": "survivability",
+  "icon": "holy_symbol",
+  "effectId": "combat_regen_relief_10",
+  "stats": {
+   "lifeRegenMult": 1
+  },
+  "name": "Divine Symbol",
+  "description": "+100% Health Regen and -20% combat regen penalty."
+ },
+ {
+  "id": "spirit_amulete",
+  "rarity": "epic",
+  "type": "scaling",
+  "icon": "spirit_amulete",
+  "stats": {
+   "damage": 0.28,
+   "maxHealth": 0.28
+  },
+  "name": "Spirit Amulet",
+  "description": "+28% Damage and +28% Max HP."
+ },
+ {
+  "id": "strange_key",
+  "rarity": "legendary",
+  "type": "utility",
+  "inventoryCategory": "material",
+  "icon": "strange_key",
+  "stackable": true,
+  "stats": {},
+  "name": "Strange Key",
+  "description": "A legendary key with no known origin. Its teeth fit a lock that does not exist in this world."
+ },
+ {
+  "id": "empty_potion",
+  "rarity": "uncommon",
+  "type": "utility",
+  "icon": "empty_potion",
+  "effectId": "sp_gain_10",
+  "stats": {
+   "moveSpeed": 0.03
+  },
+  "name": "Cracked Vial",
+  "description": "+10% Points gained and +3% Move Speed."
+ },
+ {
+  "id": "garden_cheese",
+  "rarity": "rare",
+  "type": "survivability",
+  "icon": "garden_cheese",
+  "stats": {
+   "maxHealth": 0.16,
+   "lifeRegenMult": 0.08
+  },
+  "name": "Aged Garden Cheese",
+  "description": "+16% Max HP and +8% Health Regen."
+ },
+ {
+  "id": "single_boot",
+  "rarity": "epic",
+  "type": "utility",
+  "icon": "single_boot",
+  "effectId": "hunter_momentum_3s",
+  "stats": {
+   "moveSpeed": 0.04
+  },
+  "name": "Lone Strider Boot",
+  "description": "On kill: +20% Attack Speed and Move Speed for 3s."
+ },
+ {
+  "id": "spirit_soup",
+  "rarity": "epic",
+  "type": "damage",
+  "icon": "spirit_soup",
+  "stats": {
+   "damage": 0.24,
+   "attackSpeed": 0.06
+  },
+  "name": "Spirit Broth",
+  "description": "+24% Damage and +6% Attack Speed."
+ },
+ {
+  "id": "bone",
+  "rarity": "common",
+  "type": "damage",
+  "icon": "bone",
+  "stats": {
+   "damage": 0.08,
+   "attackSpeed": 0.02
+  },
+  "name": "Marrow Charm",
+  "description": "+8% Damage and +2% Attack Speed."
+ },
+ {
+  "id": "famous_book",
+  "rarity": "uncommon",
+  "type": "utility",
+  "icon": "famous_book",
+  "effectId": "sp_gain_10",
+  "stats": {
+   "moveSpeed": 0.04
+  },
+  "name": "Public Codex",
+  "description": "+10% Points gained and +4% Move Speed."
+ },
+ {
+  "id": "golden_amulet",
+  "rarity": "epic",
+  "type": "scaling",
+  "icon": "golden_amulet",
+  "stats": {
+   "damage": 0.24,
+   "maxHealth": 0.24
+  },
+  "name": "Auric Oath",
+  "description": "+24% Damage and +24% Max HP."
+ },
+ {
+  "id": "harp",
+  "rarity": "rare",
+  "type": "utility",
+  "icon": "harp",
+  "effectId": "sp_gain_15",
+  "stats": {
+   "attackSpeed": 0.1
+  },
+  "name": "Tempest Harp",
+  "description": "+15% Points gained and +10% Attack Speed."
+ },
+ {
+  "id": "lava_bucket",
+  "rarity": "rare",
+  "type": "damage",
+  "icon": "lava_bucket",
+  "stats": {
+   "damage": 0.22,
+   "attackSpeed": 0.04
+  },
+  "name": "Magma Vessel",
+  "description": "+22% Damage and +4% Attack Speed."
+ },
+ {
+  "id": "legendary_book",
+  "rarity": "epic",
+  "type": "scaling",
+  "icon": "legendary_book",
+  "effectId": "scale_per_floor",
+  "stats": {
+   "attackSpeed": 0.05
+  },
+  "name": "Depth Chronicle",
+  "description": "Each cleared floor: +8% Damage and Max HP. Second copy: +4% per floor."
+ },
+ {
+  "id": "magic_mushroom",
+  "rarity": "uncommon",
+  "type": "survivability",
+  "icon": "magic_mushroom",
+  "stats": {
+   "maxHealth": 0.1,
+   "lifeRegenMult": 0.1
+  },
+  "name": "Witchcap",
+  "description": "+10% Max HP and +10% Health Regen."
+ },
+ {
+  "id": "money_bag",
+  "rarity": "uncommon",
+  "type": "utility",
+  "icon": "money_bag",
+  "effectId": "loot_aura_chance_5",
+  "stats": {
+   "moveSpeed": 0.05
+  },
+  "name": "Bandit Purse",
+  "description": "+5% Spirit Aura chance and +5% Move Speed."
+ },
+ {
+  "id": "mythic_book",
+  "rarity": "legendary",
+  "type": "scaling",
+  "icon": "mythic_book",
+  "effectId": "scale_per_artifact",
+  "stats": {
+   "damage": 0.12,
+   "maxHealth": 0.12
+  },
+  "name": "Mythic Ledger",
+  "description": "Other artifacts grant +8% Damage each. 2 copies: +12% each."
+ },
+ {
+  "id": "pile_of_points",
+  "rarity": "legendary",
+  "type": "utility",
+  "icon": "pile_of_points",
+  "effectId": "sp_triple_jackpot",
+  "stats": {
+   "moveSpeed": 0.08
+  },
+  "name": "Point Hoard",
+  "description": "10% chance: triple Points (15% with 2 copies). Jackpot: +10% Attack Speed and +5% Range for 3s (doubled for 5s with 2 copies)."
+ },
+ {
+  "id": "poison_pie",
+  "rarity": "rare",
+  "type": "damage",
+  "icon": "poison_pie",
+  "effectId": "splitter_haste_5th_3s",
+  "stats": {
+   "damage": 0.08
+  },
+  "name": "Venom Tart",
+  "description": "Every 5th hit: +30% Attack Speed for 3s."
+ },
+ {
+  "id": "shadow_shield",
+  "rarity": "epic",
+  "type": "survivability",
+  "icon": "shadow_shield",
+  "stats": {
+   "maxHealth": 0.22,
+   "lifeRegenMult": 0.24
+  },
+  "name": "Umbra Bastion",
+  "description": "+22% Max HP and +24% Health Regen."
+ },
+ {
+  "id": "predator_instinct",
+  "rarity": "rare",
+  "type": "damage",
+  "icon": "predator_instinct",
+  "effectId": "opening_strike",
+  "stats": {
+   "damage": 0.06,
+   "moveSpeed": 0.04
+  },
+  "balanceTier": "mid",
+  "powerBudget": 18,
+  "name": "Predator Instinct",
+  "description": "First hit above 85% HP: +45% Damage. 2 copies: +67.5%. Scales with Infusion."
+ },
+ {
+  "id": "echo_shell",
+  "rarity": "rare",
+  "type": "survivability",
+  "icon": "echo_shell",
+  "effectId": "resonant_recovery",
+  "stats": {
+   "maxHealth": 0.12
+  },
+  "balanceTier": "mid",
+  "powerBudget": 18,
+  "name": "Echo Shell",
+  "description": "Below 60% HP: up to +50% Health Regen at 20% HP. 2 copies: +75%. Scales with Infusion."
+ },
+ {
+  "id": "blood_beak",
+  "rarity": "epic",
+  "type": "damage",
+  "icon": "blood_beak",
+  "effectId": "redline_fury",
+  "stats": {
+   "damage": 0.08,
+   "maxHealth": 0.08
+  },
+  "balanceTier": "end",
+  "powerBudget": 27,
+  "name": "Blood Beak",
+  "description": "Below 70% HP: up to +24% Damage at 20% HP. 2 copies: +36%. Scales with Infusion."
+ },
+ {
+  "id": "relentless_hunter",
+  "rarity": "epic",
+  "type": "damage",
+  "icon": "relentless_hunter",
+  "effectId": "focused_assault",
+  "stats": {
+   "damage": 0.06,
+   "attackSpeed": 0.08
+  },
+  "balanceTier": "end",
+  "powerBudget": 28,
+  "name": "Relentless Hunter",
+  "description": "Same-target hits within 2.5s: +4% Damage/hit (max 7). 2 copies: +6%/hit. Scales with Infusion."
+ },
+ {
+  "id": "storm_locket",
+  "rarity": "legendary",
+  "type": "damage",
+  "icon": "storm_locket",
+  "effectId": "storm_chain",
+  "stats": {
+   "damage": 0.1,
+   "attackSpeed": 0.1
+  },
+  "balanceTier": "end",
+  "powerBudget": 40,
+  "name": "Storm Locket",
+  "description": "Every 6th hit: 90% chain damage to 2 enemies. 2 copies: 100% to 3. Scales with Infusion."
+ },
+ {
+  "id": "skull",
+  "rarity": "legendary",
+  "type": "damage",
+  "icon": "skull",
+  "stats": {
+   "damage": 0.32,
+   "attackSpeed": 0.1
+  },
+  "name": "Skull of Reckoning",
+  "description": "+32% Damage and +10% Attack Speed."
+ },
+ {
+  "id": "minor_heal_pot",
+  "rarity": "common",
+  "type": "consumable",
+  "icon": "full_potion",
+  "effectId": "heal_20_pct",
+  "stackable": true,
+  "name": "Minor Healing Potion",
+  "description": "Heals 20% HP. Press G to quick use."
+ },
+ {
+  "id": "full_potion",
+  "rarity": "rare",
+  "type": "consumable",
+  "icon": "full_potion",
+  "effectId": "heal_35_pct",
+  "stackable": true,
+  "name": "Healing Potion",
+  "description": "Heals 35% HP. Press G to quick use."
+ },
+ {
+  "id": "full_recovery_pot",
+  "rarity": "epic",
+  "type": "consumable",
+  "icon": "full_potion",
+  "effectId": "heal_60_pct",
+  "stackable": true,
+  "name": "Greater Recovery Potion",
+  "description": "Heals 50% HP. Press G to quick use."
+ }
+]
