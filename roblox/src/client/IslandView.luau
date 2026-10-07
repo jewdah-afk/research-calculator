@@ -14,6 +14,7 @@ local Lighting = game:GetService("Lighting")
 local Shared = RS:WaitForChild("Peckwood")
 local Map = require(Shared:WaitForChild("MapData"))
 local Models = require(Shared:WaitForChild("Models"))
+local Ocean = require(script.Parent:WaitForChild("Ocean"))
 local World = require(Shared:WaitForChild("World"))
 
 local S = Models.S              -- 4 world studs per tile
@@ -421,17 +422,19 @@ function IslandView.build()
 		fm.WorldPivot = CFrame.new(); fm.Parent = scenery
 		table.insert(props, { model = fm, home = fm:GetPivot(), kind = "flowers", base = 0, x = 0, z = 0 })
 	end
-	-- clouds orbiting around and below the island
+	-- the sea around the growing landmass (reef shelf + life follow the open coast: Ocean.rebuild on every sync)
+	Ocean.build(root)
+	-- clouds drift on the horizon, far outside the landmass, so they never cover the play area
 	local cf = Instance.new("Folder"); cf.Name = "Clouds"; cf.Parent = root
 	for k = 1, 12 do
 		local m = buildCloud(cf, k)
-		table.insert(clouds, { model = m, r = (34 + hash(k, 4) * 26) * S / 2, a = hash(k, 5) * math.pi * 2, y = -10 - hash(k, 6) * 22, sp = 0.006 + hash(k, 7) * 0.006 })   -- clouds stay below the island tops (never across a bridge)
+		table.insert(clouds, { model = m, r = (190 + hash(k, 4) * 120) * S / 2, a = hash(k, 5) * math.pi * 2, y = 18 + hash(k, 6) * 22, sp = 0.004 + hash(k, 7) * 0.004 })
 	end
-	-- far islands: small brick islands in the haze
+	-- far islets: small brick islands standing in the sea on the horizon
 	local farF = Instance.new("Folder"); farF.Name = "Far"; farF.Parent = root
-	for k, f in { { -150, -70, -160, 1.0 }, { 170, -95, -120, 0.8 }, { -210, -120, 60, 0.7 }, { 230, -60, 90, 0.9 }, { 40, -140, -260, 0.6 }, { -60, -110, 230, 0.65 } } do
-		local o = Vector3.new(f[1], f[2], f[3])
-		local w = math.floor((10 + k % 3 * 4) * f[4]) * L
+	for k, f in { { -560, -620, 1.0 }, { 640, -480, 0.8 }, { -760, 240, 0.7 }, { 820, 360, 0.9 }, { 160, -900, 0.6 }, { -240, 860, 0.65 } } do
+		local o = Vector3.new(f[1], Ocean.SEA_Y + PLATE, f[2])
+		local w = math.floor((10 + k % 3 * 4) * f[3]) * L
 		brickPart(farF, o + Vector3.new(-w / 2, 0, -w * 0.35), Vector3.new(w, PLATE * 2, w * 0.7), hx("86b268")).CastShadow = false
 		for q = 1, 3 do
 			local kw = w * (1 - q * 0.22)
@@ -502,7 +505,8 @@ function IslandView.play(onDone)
 			if k > 0 then
 				if not x.shown then x.shown = true; setVisible(x.inst, 0) end
 				x.set((1 - easeBack(k)) * x.drop)
-				if x.dust and not x.puffed and k > 0.55 then
+				if x.splash and not x.splashed and k > 0.35 then x.splashed = true; Ocean.splash(x.at, x.splash) end
+			if x.dust and not x.puffed and k > 0.55 then
 					x.puffed = true
 					dustPart.CFrame = CFrame.new(x.at)
 					dustPart.Puff:Emit(10)
@@ -526,7 +530,6 @@ end
 -- grass), hill courses, and only the underside courses the camera can actually see (rim + stepped taper).
 -- Props are the concept's exact brick parts (shared/IslandData, tile units -> studs).
 local built = {}         -- island id -> record
-local builtBridges = {}  -- bridge -> record
 local bobs, islandLamps, islandGlows = {}, {}, {}
 local islandsF
 local function islandsFolder()
@@ -548,7 +551,9 @@ end
 
 local function buildIslandGround(isl, rec)
 	local d = isl.data
-	local function land(i, j) local c, o = World.rawTile(i, j); return c ~= 0 and o == isl end
+	-- a land join treats all land as its own (no cliff walls at the seams with its islands)
+	local function land(i, j) local c, o = World.rawTile(i, j); return c ~= 0 and (o == isl or (isl.join and o ~= nil)) end
+	local function mine(i, j) local c, o = World.rawTile(i, j); return c ~= 0 and o == isl end
 	local eCache = {}
 	local function edge(i, j)
 		local k = i * 1000 + j
@@ -579,7 +584,7 @@ local function buildIslandGround(isl, rec)
 	for j = isl.oj, isl.oj + isl.N - 1 do
 		for i = isl.oi, isl.oi + isl.W - 1 do
 			local c = World.rawTile(i, j)
-			if not land(i, j) then continue end
+			if not mine(i, j) then continue end
 			local m = Instance.new("Model"); m.Name = i .. "," .. j
 			local x0, z0 = sx(i), sz(j)
 			local n = hash(i, j)
@@ -589,6 +594,7 @@ local function buildIslandGround(isl, rec)
 			elseif c == 4 then col = altCol[(i + j) % 2 + 1]
 			elseif c == 2 then col = pathCol[if n > 0.5 then 1 else 2]
 			else col = hx(C.sand) end
+			if isl.blend and c ~= 3 then col = isl.blend(i, j, c) end
 			col = vary(col, (n - 0.5) * 0.03)
 			brickPart(m, Vector3.new(x0, ty - PLATE, z0), Vector3.new(S, PLATE, S), col)
 			if c == 1 then
@@ -608,6 +614,7 @@ local function buildIslandGround(isl, rec)
 				local y0 = if k == 1 then -PLATE else (k - 1) * BRICK
 				local y1 = if k == lv then ty - PLATE else k * BRICK
 				local cc = if c == 4 and isl.id ~= "garden" then altCol[(k + 1) % 2 + 1] else hx(if k % 2 == 1 then C.soil else C.soilD)
+				if isl.join and c == 4 then cc = vary(isl.blend(i, j, 4, k < lv - 1), if k % 2 == 1 then -0.04 else -0.09) end   -- mountain faces in the peak's own rock / snow
 				brickPart(m, Vector3.new(x0, y0, z0), Vector3.new(S, y1 - y0, S), vary(cc, (hash(i + k, j) - 0.5) * 0.05))
 			end
 			-- underside: only courses with an exposed side
@@ -706,116 +713,6 @@ local function buildIslandProp(isl, p, parent)
 	return info
 end
 
--- rope bridge: wooden planks hung between stone landing posts, rope rails, posts every fourth plank.
--- Each plank row is its own model so the deck can sway in the wind and dip under the bird (see bridgeStep).
-local function buildBridgeModel(br, parent)
-	local m = Instance.new("Model"); m.Name = "Bridge_" .. br.a.id .. "_" .. br.b.id
-	local rows = {}   -- u -> {tiles}
-	for _, t in br.tiles do rows[t.u] = rows[t.u] or {}; table.insert(rows[t.u], t) end
-	local planks = {}
-	local n = 0
-	for _ in rows do n += 1 end
-	for u, ts in rows do
-		local mn, mx = Vector2.new(math.huge, math.huge), Vector2.new(-math.huge, -math.huge)
-		for _, t in ts do mn = mn:Min(Vector2.new(t.i, t.j)); mx = mx:Max(Vector2.new(t.i + 1, t.j + 1)) end
-		local pm = Instance.new("Model"); pm.Name = "Plank" .. u
-		local x0, z0, x1, z1 = sx(mn.X), sz(mn.Y), sx(mx.X), sz(mx.Y)
-		local cx, cz = (x0 + x1) / 2, (z0 + z1) / 2
-		-- local frame: a = along the bridge, c = across
-		local along = if br.alongX then Vector3.xAxis else Vector3.zAxis
-		local across = if br.alongX then Vector3.zAxis else Vector3.xAxis
-		local lenA = if br.alongX then x1 - x0 else z1 - z0
-		local width = (if br.alongX then z1 - z0 else x1 - x0) + 1.2
-		local function box(oa, oy, oc, sa, sy, sc, col)
-			local size = along * sa + across * sc + Vector3.new(0, sy, 0)
-			local centre = Vector3.new(cx, 0, cz) + along * oa + across * oc + Vector3.new(0, oy, 0)
-			return brickPart(pm, centre - size / 2, size, col)
-		end
-		-- two boards per tile with a hairline gap, a darker crossbeam under them
-		for h = 0, 1 do
-			local oa = (h - 0.5) * lenA / 2
-			local wood = vary(hx(if (u * 2 + h) % 3 == 0 then "b27f50" elseif (u * 2 + h) % 3 == 1 then C.wood else "a8774a"), (hash(u, h) - 0.5) * 0.05)
-			box(oa, -PLATE * 1.1, (hash(u + h, 7) - 0.5) * 0.3, lenA / 2 - 0.18, PLATE * 1.2, width - 0.4 - hash(h, u) * 0.4, wood)   -- deck top flush with the paths (-0.5 plate)
-		end
-		box(0, -PLATE * 2.1, 0, 0.5, PLATE * 0.8, width + 0.4, hx(C.woodD))
-		-- rope rails (thin, dark) on both sides, a wooden post every 4th plank
-		for _, side in { -1, 1 } do
-			-- ropes are continuous segments added after all planks hang (see below); posts every 4th plank
-			if u % 4 == 1 and u > 2 and u < n - 1 then   -- none next to the end anchor posts (no doubled posts)
-				box(0, 1.1, side * (width / 2 + 0.15), 0.6, 2.9, 0.6, hx(C.woodD))
-			end
-		end
-		pm.WorldPivot = CFrame.new(cx, 0, cz)
-		local sag = ts[1].sag or 0
-		pm:PivotTo(CFrame.new(cx, -sag, cz))   -- hangs in a gentle rope curve
-		pm.Parent = m
-		table.insert(planks, { model = pm, u = u, home = pm:GetPivot(), at = Vector3.new(cx, -sag, cz), half = width / 2 + 0.15, across = across })
-	end
-	table.sort(planks, function(a, b) return a.u < b.u end)
-	-- ropes: one straight segment between consecutive planks per side and height, so the rail follows the sag
-	-- as one unbroken line (each segment rides with its plank during the build-in)
-	local function rope(parent, a: Vector3, b: Vector3, th, col)
-		local len = (b - a).Magnitude
-		if len < 0.01 then return end
-		local r = Instance.new("Part")
-		r.Anchored = true; r.CanCollide = false; r.CanQuery = false; r.CanTouch = false; r.CastShadow = false
-		r.Material = Enum.Material.SmoothPlastic; r.Color = col
-		r.Size = Vector3.new(th, th, len + th); r.CFrame = CFrame.lookAt((a + b) / 2, b)
-		r.Parent = parent
-	end
-	for k = 2, #planks do
-		local pa, pb = planks[k - 1], planks[k]
-		for _, side in { -1, 1 } do
-			for _, h in { { 2.3, 0.22, "6e5238" }, { 1.0, 0.16, "7a5c40" } } do
-				local a = pa.at + pa.across * side * pa.half + Vector3.new(0, h[1], 0)
-				local b = pb.at + pb.across * side * pb.half + Vector3.new(0, h[1], 0)
-				rope(pb.model, a, b, h[2], hx(h[3]))
-			end
-		end
-	end
-	for k, pl in planks do pl.f = (k - 0.5) / #planks end
-	-- stone landing posts at both ends (static)
-	local ends = Instance.new("Model"); ends.Name = "Posts"
-	for _, e in { planks[1], planks[#planks] } do
-		if not e then continue end
-		local back = if e == planks[1] then -1 else 1
-		local along = if br.alongX then Vector3.xAxis else Vector3.zAxis
-		local across = if br.alongX then Vector3.zAxis else Vector3.xAxis
-		-- landing pier: a stacked timber crib under the end plank, sunk into the cliff face, so the bridge end
-		-- visibly rests on something instead of hanging off the grass lip
-		do
-			local w = e.half * 2 - 0.6
-			for k = 0, 3 do
-				local h = BRICK * 0.6
-				local inset = k * 0.25
-				local sz = along * (S * 0.9 - inset) + across * (w - inset * 2) + Vector3.new(0, h, 0)
-				local c0 = Vector3.new(e.at.X, e.at.Y - PLATE * 1.7 - h * (k + 0.5), e.at.Z) + along * back * 0.4
-				local logCol = vary(hx(if k % 2 == 0 then C.woodD else "6e4f33"), (hash(k, e.u) - 0.5) * 0.05)
-				local pp = brickPart(e.model, c0 - sz / 2, sz, logCol)
-				pp.CastShadow = true
-			end
-		end
-		for _, side in { -1, 1 } do
-			local c = Vector3.new(e.at.X, 0, e.at.Z) + along * back * (S * 0.5 + 0.4) + across * side * (S + 0.75)
-			-- wooden anchor post the ropes tie to, with a darker cap
-			brickPart(ends, c - Vector3.new(0.6, 0, 0.6) - Vector3.new(0, PLATE + BRICK, 0), Vector3.new(1.2, 2 * BRICK + PLATE, 1.2), hx(C.woodD))
-			brickPart(ends, c - Vector3.new(0.75, 0, 0.75) + Vector3.new(0, BRICK, 0), Vector3.new(1.5, PLATE * 0.6, 1.5), hx("6e4f33"))
-			-- tie both ropes from this anchor post to the end plank (they ride with that plank in the build-in)
-			for _, h in { { 2.3, 0.22, "6e5238" }, { 1.0, 0.16, "7a5c40" } } do
-				rope(e.model, c + Vector3.new(0, h[1], 0), e.at + e.across * side * e.half + Vector3.new(0, h[1], 0), h[2], hx(h[3]))
-			end
-		end
-	end
-	ends.Parent = m
-	m.Parent = parent
-	return { model = m, planks = planks, br = br, centre = if #planks > 0 then (planks[1].at + planks[#planks].at) / 2 else Vector3.zero }
-end
-
--- leaves: a slow emitter in each tree's canopy; leaves tumble down and drift with the wind (Ambience sets the push)
-IslandView.leafEmitters = {}
-local LEAF_TEX = "rbxasset://textures/whiteCircle.png"
-local LEAF_KINDS = { oak = { "7fb35e", "c8b040" }, bigoak = { "7fb35e", "d88a3a" }, tree = { "7fb35e", "c8b040" }, pine = { "5d9a4c" },
-	nesttree = { "569a4e", "d88a3a" }, palm = { "5aa04c" } }
 local function addLeaves(model: Instance, kind: string)
 	local cols = LEAF_KINDS[kind]; if not cols then return end
 	local cf, size = model:GetBoundingBox()
@@ -895,6 +792,7 @@ local function animate(items, camPath, onDone)
 			if not x.shown then x.shown = true; setVis(x.inst, 0) end
 			local e = easeBack(k)
 			x.inst:PivotTo(x.home + Vector3.new(0, (1 - e) * x.drop, 0))
+			if x.splash and not x.splashed and k > 0.35 then x.splashed = true; Ocean.splash(x.at, x.splash) end
 			if x.dust and not x.puffed and k > 0.55 then
 				x.puffed = true; dustPart.CFrame = CFrame.new(x.at); dustPart.Puff:Emit(x.dust)
 			end
@@ -913,32 +811,49 @@ local CAM_PITCH, CAM_DIST = math.rad(52), 15 * S / math.tan(math.rad(5.5))
 local function camAt(focus: Vector3)
 	return CFrame.lookAt(focus + Vector3.new(0, math.sin(CAM_PITCH), math.cos(CAM_PITCH)) * CAM_DIST, focus)
 end
-local function bridgeItems(brec, startT, fromEnd)
+-- terraform items for a land join: tiles rise out of the sea from the `fromA` side to the other, with spray where
+-- they break the surface; trees drop in once the ground under them is up. Returns items + when the wave ends.
+local function joinItems(jrec, j, startT, fromA)
 	local items = {}
-	local n = #brec.planks
-	for k, pl in brec.planks do
-		local order = if fromEnd then n - k else k - 1
-		table.insert(items, { inst = pl.model, home = pl.home, drop = 10, dur = 0.38, delay = startT + order * 0.055, dust = if order % 2 == 0 then 4 else nil, at = pl.at })
+	local function f(c) return if fromA then c.f else 1 - c.f end
+	local span = 1.5
+	for _, t in jrec.tiles do
+		local c = j.cells[(t.j + 500) * 2000 + t.i + 500]
+		local d = startT + (if c then f(c) else 0.5) * span + hash(t.i, t.j) * 0.12
+		table.insert(items, { inst = t.model, home = t.model.WorldPivot, drop = -(9 + hash(t.i, t.j) * 5), dur = 0.5, delay = d,
+			splash = if (t.i + t.j) % 3 == 0 then 5 else nil, at = Vector3.new(sx(t.i + 0.5), Ocean.SEA_Y, sz(t.j + 0.5)) })
 	end
-	return items, startT + n * 0.055 + 0.3
+	for _, p in jrec.props do
+		local c = j.cells[(p.j + 500) * 2000 + p.i + 500]
+		table.insert(items, { inst = p.model, home = p.home, drop = 14, dur = 0.45, delay = startT + (if c then f(c) else 0.5) * span + 0.35, dust = 6, at = Vector3.new(p.x, p.base, p.z) })
+	end
+	return items, startT + span + 0.6
 end
 
 function IslandView.unlockIsland(isl, animated, onDone)
 	local rec = built[isl.id] or buildIsland(isl)
-	-- bridges to every open neighbour; the source bridge (the one it unlocks from) goes first
+	-- land joins to every open neighbour; the source join (the one it unlocks from) terraforms first, from the old
+	-- coast towards the new island, then the island itself rises, then the other joins fill in
 	local src = World.sourceBridge(isl)
 	local items, after = {}, 0
 	local startI, startJ = math.floor(isl.cx), math.floor(isl.cz)
 	local landing = Vector3.new(sx(isl.cx), 0, sz(isl.cz))
-	local brs = {}
+	local fresh = {}
 	for _, br in World.bridges do
-		if (br.a == isl or br.b == isl) and World.bridgeOpen(br) and not builtBridges[br] then
-			builtBridges[br] = buildBridgeModel(br, islandsFolder())
-			table.insert(brs, br)
+		local j = br.join
+		if j and (br.a == isl or br.b == isl) and World.bridgeOpen(br) and not built[j.id] then
+			buildIsland(j)
+			table.insert(fresh, br)
 		end
 	end
-	if src and builtBridges[src] then
-		local its; its, after = bridgeItems(builtBridges[src], 0, false)
+	-- highlands whose four islands are now all open rise last, from their shores up to the peaks
+	local highs = {}
+	for _, h in World.joins do
+		if h.highland and World.isOpen(h) and not built[h.id] then buildIsland(h); table.insert(highs, h) end
+	end
+	Ocean.rebuild()
+	if src and src.join and built[src.join.id] then
+		local its; its, after = joinItems(built[src.join.id], src.join, 0, src.a ~= isl)
 		for _, x in its do table.insert(items, x) end
 		startI, startJ = src.landB[1], src.landB[2]
 		landing = Vector3.new(sx(startI + 0.5), 0, sz(startJ + 0.5))
@@ -954,7 +869,7 @@ function IslandView.unlockIsland(isl, animated, onDone)
 		for _, o in { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } } do
 			local ni, nj = cur[1] + o[1], cur[2] + o[2]
 			local c, own = World.rawTile(ni, nj)
-			if c ~= 0 and own == isl and not dist[ni * 1000 + nj] then dist[ni * 1000 + nj] = d0 + 1; table.insert(q, { ni, nj }) end
+			if c ~= 0 and (own == isl or (src and own == src.join)) and not dist[ni * 1000 + nj] then dist[ni * 1000 + nj] = d0 + 1; table.insert(q, { ni, nj }) end
 		end
 	end
 	local maxD = 0
@@ -962,17 +877,22 @@ function IslandView.unlockIsland(isl, animated, onDone)
 	local STEP = math.clamp(1.6 / math.max(1, maxD), 0.035, 0.06)
 	local function delayAt(i, j) return after + (dist[i * 1000 + j] or maxD) * STEP end
 	for _, t in rec.tiles do
-		table.insert(items, { inst = t.model, home = t.model.WorldPivot, drop = -(14 + hash(t.i, t.j) * 6), dur = 0.42, delay = delayAt(t.i, t.j) })
+		table.insert(items, { inst = t.model, home = t.model.WorldPivot, drop = -(14 + hash(t.i, t.j) * 6), dur = 0.42, delay = delayAt(t.i, t.j),
+			splash = if (t.i * 7 + t.j) % 5 == 0 then 4 else nil, at = Vector3.new(sx(t.i + 0.5), Ocean.SEA_Y, sz(t.j + 0.5)) })
 	end
 	for _, p in rec.props do
 		table.insert(items, { inst = p.model, home = p.home, drop = 18, dur = 0.5, delay = delayAt(p.i, p.j) + 0.28, dust = 10, at = Vector3.new(p.x, p.base, p.z) })
 	end
 	local waveEnd = after + maxD * STEP + 0.8
-	for _, br in brs do
+	for _, br in fresh do
 		if br ~= src then
-			local its = bridgeItems(builtBridges[br], waveEnd, br.b ~= isl)
+			local its = joinItems(built[br.join.id], br.join, waveEnd, br.a == isl)   -- outward from the new island
 			for _, x in its do table.insert(items, x) end
 		end
+	end
+	for _, h in highs do
+		local its = joinItems(built[h.id], h, waveEnd + 1.2, false)
+		for _, x in its do table.insert(items, x) end
 	end
 	if not animated then
 		for _, x in items do x.inst:PivotTo(x.home); setVis(x.inst, 0) end
@@ -983,7 +903,7 @@ function IslandView.unlockIsland(isl, animated, onDone)
 	local from = workspace.CurrentCamera.CFrame
 	local srcFocus = if src then Vector3.new(sx(src.landA[1] + 0.5), 0, sz(src.landA[2] + 0.5)) else landing
 	animate(items, function(k)
-		-- glide to the source shore, ride along the bridge and the wave, settle framing the new island
+		-- glide to the old coast, ride the terraform wave across the sea, settle framing the new island
 		if k < 0.15 then return from:Lerp(camAt(srcFocus), 1 - (1 - k / 0.15) ^ 3) end
 		local u = (k - 0.15) / 0.85
 		local e = u * u * (3 - 2 * u)
@@ -1003,24 +923,25 @@ function IslandView.sync(open, animated)
 		if World.isOpen(isl) and not built[isl.id] then table.insert(fresh, isl)
 		elseif not World.isOpen(isl) and built[isl.id] then destroyIsland(isl.id) end
 	end
-	for br, brec in builtBridges do
-		if not World.bridgeOpen(br) then brec.model:Destroy(); builtBridges[br] = nil end
+	for _, j in World.joins do
+		if not World.isOpen(j) and built[j.id] then destroyIsland(j.id) end
 	end
 	for _, isl in fresh do IslandView.unlockIsland(isl, animated and #fresh == 1) end
-	-- bridges whose islands were both already up
+	-- joins whose islands were both already up (first load)
 	for _, br in World.bridges do
-		if World.bridgeOpen(br) and not builtBridges[br] and (br.a.park or built[br.a.id]) and (br.b.park or built[br.b.id]) then
-			builtBridges[br] = buildBridgeModel(br, islandsFolder())
-		end
+		local j = br.join
+		if j and World.bridgeOpen(br) and not built[j.id] then buildIsland(j) end
 	end
+	for _, h in World.joins do if h.highland and World.isOpen(h) and not built[h.id] then buildIsland(h) end end
+	Ocean.rebuild()
 	syncing = false
 end
 -- QA: replay the build-in of an open island
 function IslandView.replay(id)
 	local isl = World.byId[id]
-	if not isl or isl.park or not World.isOpen(isl) then return end
+	if not isl or isl.park or isl.join or not World.isOpen(isl) then return end
 	destroyIsland(id)
-	for br, brec in builtBridges do if br.a == isl or br.b == isl then brec.model:Destroy(); builtBridges[br] = nil end end
+	for _, br in World.bridges do if br.join and (br.a == isl or br.b == isl) then destroyIsland(br.join.id) end end
 	IslandView.unlockIsland(isl, true)
 end
 function IslandView.busy() return building > 0 or playing end
@@ -1052,47 +973,9 @@ function IslandView.ambientStep(dt, t)
 				rec.scenery.Parent = if show then IslandView.scenery else nil
 			end
 		end
-		for br, brec in builtBridges do
-			local c = brec.centre
-			local show = math.abs(c.X - focus.X) < halfX + 30 and math.abs(c.Z - focus.Z) < 40 * S + 30
-			brec.shown = show
-			brec.model.Parent = if show then islandsFolder() else nil
-		end
 	end
 	local w = IslandView.wind(t)
-	-- bridges: wind sway + a dip that follows the bird, deepest mid-span
-	local bird = IslandView.birdPos
-	local dipHere = 0
-	for br, brec in builtBridges do
-		if not brec.shown then continue end
-		local n = #brec.planks
-		if n == 0 then continue end
-		local along = if br.alongX then Vector3.xAxis else Vector3.zAxis
-		local birdF, onIt = nil, false
-		if bird then
-			local a0, a1 = brec.planks[1].at, brec.planks[n].at
-			local rel = bird - a0
-			local len = (a1 - a0):Dot(along)
-			local fa = rel:Dot(along) / (if len ~= 0 then len else 1)
-			local off = (rel - along * rel:Dot(along)) * Vector3.new(1, 0, 1)
-			if fa > -0.05 and fa < 1.05 and off.Magnitude < S * 1.4 and math.abs(bird.Y) < 6 then birdF = math.clamp(fa, 0, 1); onIt = true end
-		end
-		brec.dip = (brec.dip or 0) + ((if onIt then 1 else 0) - (brec.dip or 0)) * math.min(1, dt * 4)
-		for k, pl in brec.planks do
-			local sag = math.sin(pl.f * math.pi)
-			local y = math.sin(t * 1.4 + k * 0.45) * 0.1 * sag * w
-			local roll = math.sin(t * 0.9 + k * 0.25) * 0.02 * sag * w
-			if birdF then
-				local d = (pl.f - birdF) * n
-				local bump = brec.dip * 0.9 * math.sin(birdF * math.pi) * math.exp(-(d * d) / 8)
-				y -= bump
-				if math.abs(d) < 0.6 then dipHere = math.max(dipHere, bump) end
-			end
-			local rot = if br.alongX then CFrame.Angles(roll, 0, 0) else CFrame.Angles(0, 0, roll)
-			pl.model:PivotTo(pl.home * CFrame.new(0, y, 0) * rot)
-		end
-	end
-	IslandView.bridgeDip = dipHere
+	IslandView.bridgeDip = 0   -- no rope bridges any more (land joins)
 	-- trees lean with the gusts (20 Hz, tiny angles, pivot at the base)
 	swayT += dt
 	if swayT < 0.05 then return end
@@ -1150,6 +1033,7 @@ RunService.RenderStepped:Connect(function(dt)
 		for _, b in bobs do if b.model.Parent and b.model:IsDescendantOf(workspace) then b.model:PivotTo(b.home + Vector3.new(0, math.sin(clock * b.sp + b.ph) * b.amp, 0)) end end
 		IslandView.ambientStep(dt, clock)
 	end
+	Ocean.step(dt)
 	for _, c in clouds do
 		c.a += c.sp * dt
 		c.model:PivotTo(CFrame.new(math.cos(c.a) * c.r, c.y + math.sin(clock * 0.3 + c.a * 5) * 0.6, math.sin(c.a) * c.r * 0.85))
@@ -1180,6 +1064,7 @@ RunService.RenderStepped:Connect(function(dt)
 		end
 	end
 	if fireflies then fireflies.FF.Rate = 14 * n end
+	Ocean.setNight(n)
 	local neon = n > 0.4
 	for _, g in islandGlows do g.Material = if neon then Enum.Material.Neon else Enum.Material.SmoothPlastic end
 end)
