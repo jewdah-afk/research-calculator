@@ -105,7 +105,8 @@ Watch the file key: the letter after `GG` is a lowercase **l**. A key with a cap
 | `8:122` | Popcorn shop (amber), layer 0 |
 | `8:250` | Molt shop (violet), layer 1, with hero |
 | `43:7` | Seeds shop (green), layer 2, with sunflower hero |
-| `45:7`, `45:19`, `45:33` | Motion spec cards under each window |
+| `49:10` | **Golden shop** (gold, desert), with the desert hero and new textures |
+| `45:7`, `45:19`, `45:33`, `49:161` | Motion spec cards under each window |
 | `8:271` | HUD 1920×1080: money capsules, map banner, objective, toast, docked shop |
 
 Page 1 of the same file holds an older version with studded buttons. Don't use it as a reference.
@@ -133,6 +134,18 @@ Page 1 of the same file holds an older version with studded buttons. Don't use i
 | Popcorn | `ffd27a → f7a634 → e07a1c → 9e4a0c` | `ffb45a` |
 | Molt | `e9c4ff → b06cff → 8a3fe6 → 4f1d9c` | `b06cff` |
 | Seeds | `e6ffc4 → 8fe04a → 4fb52a → 256a12` | `8fe04a` |
+| Golden | the Seeds gradient hue-shifted to gold (hue 44°, darks 34°) | `ffd259` |
+
+### Textures (in `7:8`)
+
+These are new 2026-10-07, inspired by glossy tile references: a fine dot grid, twin diagonal glass streaks, a bright inner rim and a dark bottom lip.
+
+- `tex/halftone` (`49:7`): white dot grid, used as an OVERLAY tile. Header 35%, button faces 22%, row cards 10%.
+- `tex/dunes` (`49:8`): wavy sand ripples, used as an OVERLAY on the desert hero art.
+- `tex/glitter` (`49:9`): sparse 4-point glints, used as SCREEN on the hero.
+- `fx/glass streak`: a wide band plus a thin band at -35°, using a SCREEN gradient. It sits on row cards and the hero art.
+
+Use these on the remaining windows too.
 
 ### Shared motion language
 
@@ -158,7 +171,6 @@ The full text is on the spec cards. In short:
 ## 5. Next steps (in order)
 
 1. **Remaining shop windows**, each a reset layer with its own color, hero, FX and motion spec:
-   - Golden popcorn (desert)
    - Mine / ore (crow)
    - Nest / twigs
    - Echo field
@@ -172,6 +184,8 @@ The full text is on the spec cards. In short:
 7. **Roblox wiring:** drop the three ModuleScripts (`EternityNum`, `BirbFormulas`, `BirbSystems`) into ReplicatedStorage. Load `upgrades.json` and `data/*.json` as data modules.
 
 ---
+
+**Golden shop data:** Golden Value (`p_golden_popcorn_value`, base cost 10, ×1.55, max 999), Auric Silo (`p_auric_silo`, base cost 1000, ×1.8, max 50) and Gilded Margins (`d_desert_field_notes_plus`, base cost 5000, ×10, max 3). Molt resets the two `p_` rows. The golden popcorn balance and the desert unlocks are kept. The other one-off desert unlocks still need a tree screen.
 
 ## 6. Gotchas
 
