@@ -631,15 +631,55 @@ function Hud.openShop()
 	Kit.image(bodyG, PW / 2 - 420, 30, 840, 840, Kit.iconId("ui/sunburst"), { ImageColor3 = hex("8f7cff"), ImageTransparency = 0.86, ZIndex = 81 })
 	local trim = Kit.frame(panel, 10, 10, PW - 20, PH - 20, nil, { ZIndex = 82 }); Kit.corner(trim, 22); Kit.stroke(trim, 2, hex("f5c451"), 0.35)
 	local ol = Kit.frame(panel, 0, 0, PW, PH, nil, { ZIndex = 82 }); Kit.corner(ol, 30); Kit.stroke(ol, 6, Kit.INK)
-	-- header: gold plaque ribbon with the title, close key on the right
-	local plW = 440
-	local tails = Kit.frame(panel, PW / 2 - plW / 2 - 50, -6, plW + 100, 58, hex("b5730f"), { ZIndex = 83 }); Kit.corner(tails, 14); Kit.stroke(tails, 4, Kit.INK)
-	local plate = Kit.frame(panel, PW / 2 - plW / 2, -30, plW, 96, Color3.new(1, 1, 1), { ZIndex = 84 }); Kit.corner(plate, 26); Kit.stroke(plate, 5, Kit.INK)
-	Kit.grad(plate, Kit.stops("fff0a8:0 ffc93c:45 e08a14:100"))
-	local plateTx = Kit.texture(plate, "halftone", 0.8, 20, 84); Kit.corner(plateTx, 26)
-	Kit.frame(plate, 18, 6, plW - 36, 6, Color3.new(1, 1, 1), { BackgroundTransparency = 0.4, ZIndex = 85 })
-	Kit.title(plate, "SHOP", 62, Color3.new(1, 1, 1), 4.5, 4, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, -2), ZIndex = 86 })
-	Kit.sparkle(panel, PW / 2 - plW / 2 + 26, -18, 12); Kit.sparkle(panel, PW / 2 + plW / 2 - 20, 54, 10)
+	-- header (Figma "header/SHOP (blocky)"): a crimson banner with gold trim runs behind a gold brick plaque. The band
+	-- folds back at each end into lower tails with a stepped swallowtail (two prongs), all square-cornered like the
+	-- rest of the HUD. The plaque has a 3D lip, LEGO studs on top, halftone, an edge light and the title in ink.
+	local CXH, BW, BY, BH, TY, TH, TW = PW / 2, 320, -16, 60, 20, 58, 104
+	local RED, TAIL = Kit.stops("ff7486:0 ec3a54:45 b01b33:100"), Kit.stops("d42a45:0 a8182f:55 7a0f22:100")
+	local function block(x, y, w, h, stops, z, sw)
+		local f = Kit.frame(panel, x, y, w, h, Color3.new(1, 1, 1), { ZIndex = z }); Kit.corner(f, 4)
+		Kit.grad(f, stops)
+		if sw then Kit.stroke(f, sw, Kit.INK) end
+		return f
+	end
+	for _, sgn in { -1, 1 } do
+		local bandEnd = CXH + sgn * BW
+		local tx = if sgn < 0 then bandEnd - TW + 26 else bandEnd - 26
+		local px = if sgn < 0 then tx - 24 else tx + TW - 4
+		block(px, TY, 28, 24, Kit.stops("d42a45:0 a8182f:100"), 82, 3)               -- swallowtail prongs
+		block(px, TY + TH - 24, 28, 24, Kit.stops("a8182f:0 7a0f22:100"), 82, 3)
+		block(tx, TY, TW, TH, TAIL, 83, 4)                                            -- tail
+		local tx0 = tx + (if sgn < 0 then 8 else 30)
+		Kit.frame(panel, tx0, TY + 8, TW - 40, 3, hex("ffd54a"), { BackgroundTransparency = 0.1, ZIndex = 83 })
+		Kit.frame(panel, tx0, TY + TH - 11, TW - 40, 3, hex("ffd54a"), { BackgroundTransparency = 0.1, ZIndex = 83 })
+		block(if sgn < 0 then bandEnd else bandEnd - 34, BY + BH - 8, 34, TY + TH - (BY + BH) - 6, Kit.stops("4a0814:0 2a040b:100"), 84, 2)   -- fold
+	end
+	local band = block(CXH - BW, BY, BW * 2, BH, RED, 85, 4)
+	Kit.corner(Kit.texture(band, "halftone", 0.8, 20, 85), 4)
+	Kit.frame(band, 8, 5, BW * 2 - 16, 4, Color3.new(1, 1, 1), { BackgroundTransparency = 0.5, ZIndex = 86 })
+	Kit.frame(band, 12, 13, BW * 2 - 24, 3, hex("ffd54a"), { ZIndex = 86 })
+	Kit.frame(band, 12, BH - 16, BW * 2 - 24, 3, hex("ffd54a"), { ZIndex = 86 })
+	for _, rx in { 18, BW * 2 - 32 } do
+		local rv = block(CXH - BW + rx, BY + BH / 2 - 7, 14, 14, Kit.stops("fff3b0:0 e0a020:60 8a5a0a:100"), 86, 2.5)
+		_ = rv
+	end
+	-- plaque: lip 8 px lower, studs on top, face, title
+	local plW, plH, plY = 400, 104, -36
+	block(CXH - plW / 2, plY + 8, plW, plH, Kit.stops("d08414:0 8a4a06:100"), 86, 5)
+	for k = 0, 3 do
+		local sx = CXH - plW / 2 + 44 + k * (plW - 128) / 3
+		local stud = block(sx, plY - 12, 40, 16, Kit.stops("fff3b0:0 ffc93c:55 c0700c:100"), 86, 4)
+		Kit.frame(stud, 6, 3, 28, 3, Color3.new(1, 1, 1), { BackgroundTransparency = 0.3, ZIndex = 87 })
+	end
+	local plate = block(CXH - plW / 2, plY, plW, plH, Kit.stops("fff6c4:0 ffd54a:38 f0a020:78 c0700c:100"), 87, 5)
+	plate.ClipsDescendants = true
+	Kit.corner(Kit.texture(plate, "halftone", 0.78, 18, 87), 4)
+	Kit.frame(plate, 10, 6, plW - 20, 8, Color3.new(1, 1, 1), { BackgroundTransparency = 0.3, ZIndex = 88 })      -- edge light
+	Kit.frame(plate, 0, plH - 18, plW, 18, hex("a85a08"), { BackgroundTransparency = 0.55, ZIndex = 88 })          -- bottom shade
+	local bev = Kit.frame(plate, 8, 8, plW - 16, plH - 16, nil, { ZIndex = 88 }); Kit.corner(bev, 4); Kit.stroke(bev, 2, hex("fff3c0"), 0.45)
+	local title = Kit.title(panel, "SHOP", 74, Color3.new(1, 1, 1), 5.5, 6, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(CXH, plY + plH / 2 - 4), ZIndex = 89 })
+	Kit.grad(title.label, Kit.stops("ffffff:0 ffffff:45 ffe9a0:100"))
+	Kit.sparkle(panel, CXH - plW / 2 + 22, plY - 26, 14); Kit.sparkle(panel, CXH + plW / 2 - 18, plY + 78, 10); Kit.sparkle(panel, CXH + plW / 2 + 30, plY - 10, 8)
 	local close = Kit.button(panel, PW - 84, 22, 62, 60, { text = "X", size = 30, stops = Kit.stops("ff8a7a:0 d0443a:100"), sound = "close" })
 	close.root.ZIndex = 86
 	close.root.Activated:Connect(function() shopOverlay.Visible = false end)
@@ -651,7 +691,7 @@ function Hud.openShop()
 		for i, t in tabs do t.look(if i == k then "lit" else "grey", Kit.stops("ffe08a:0 f5b93c:45 c97a14:100")) end
 	end
 	for i, t in TABS do
-		local b = Kit.button(panel, PW / 2 - 330 + (i - 1) * 226, 88, 210, 58, { icon = t[2], iconSize = 46, text = t[1], size = 22, stops = Kit.stops("ffe08a:0 f5b93c:45 c97a14:100") })
+		local b = Kit.button(panel, PW / 2 - 330 + (i - 1) * 226, 102, 210, 58, { icon = t[2], iconSize = 46, text = t[1], size = 22, stops = Kit.stops("ffe08a:0 f5b93c:45 c97a14:100") })
 		b.root.ZIndex = 86
 		b.root.Activated:Connect(function() show(i) end)
 		tabs[i] = b
