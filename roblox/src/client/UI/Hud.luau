@@ -127,8 +127,7 @@ end
 local lastVals = {}
 local function wiggle(cur)
 	local c = capsules[cur]; if not c then return end
-	local x0 = c.frame.Position
-	task.spawn(function() for _, dx in { 5, -5, 4, -4, 0 } do c.cap.Position = UDim2.fromOffset(30 + dx, 8); task.wait(0.035) end end)
+	Kit.shake(c.cap, 5, 0.22)
 end
 Hud.wiggle = wiggle
 

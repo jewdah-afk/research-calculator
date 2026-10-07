@@ -120,7 +120,7 @@ function Kit.title(parent, str, size, color, strokeW, dy, props)
 	holder:SetAttribute("isTitle", true)
 	local api = { holder = holder, label = t, shadow = sh }
 	function api.set(s) t.Text = s; if sh then sh.Text = s end end
-	function api.color(c) t.TextColor3 = c end
+	function api.color(c) t.TextColor3 = c; if t:GetAttribute("NopeBase") then t:SetAttribute("NopeBase", c) end end
 	return api
 end
 
@@ -271,17 +271,36 @@ function Kit.button(parent, x, y, w, h, opts)
 	return api
 end
 
--- can't afford: shake +-6 px x3 (180 ms) and flash the label red once
-function Kit.nope(api)
-	local r = api.root
-	local x0 = r.Position.X.Offset
-	task.spawn(function()
-		for _, dx in { 6, -6, 6, -6, 6, 0 } do r.Position = UDim2.fromOffset(x0 + dx, r.Position.Y.Offset); task.wait(0.03) end
+-- can't afford: a smooth decaying shake (~0.28 s, RenderStepped) around the button's HOME position, which is captured
+-- once, so spamming restarts the shake instead of stacking offsets and walking the button out of place
+local RunServiceKit = game:GetService("RunService")
+local shaking = {}
+function Kit.shake(gui, amp, dur)
+	local home = gui:GetAttribute("ShakeHome")
+	if not home then home = gui.Position; gui:SetAttribute("ShakeHome", home) end
+	if Kit.reduced() then gui.Position = home; return end
+	local st = shaking[gui]
+	if st then st.t = 0; return end
+	st = { t = 0 }; shaking[gui] = st
+	st.conn = RunServiceKit.RenderStepped:Connect(function(dt)
+		st.t += dt
+		local k = st.t / (dur or 0.28)
+		if k >= 1 or not gui.Parent then
+			gui.Position = home; st.conn:Disconnect(); shaking[gui] = nil; return
+		end
+		local dx = math.sin(k * math.pi * 6) * (amp or 6) * (1 - k) ^ 1.5
+		gui.Position = home + UDim2.fromOffset(dx, 0)
 	end)
+end
+function Kit.nope(api)
+	Kit.shake(api.root, 6, 0.28)
 	local l = api.label.label
-	local c = l.TextColor3
+	local c = l:GetAttribute("NopeBase") or l.TextColor3
+	l:SetAttribute("NopeBase", c)
 	l.TextColor3 = hex("ff4d4d")
-	task.delay(0.25, function() l.TextColor3 = c end)
+	local tw = TweenService:Create(l, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, 0.12), { TextColor3 = c })
+	tw:Play()
+	tw.Completed:Once(function(state) if state == Enum.PlaybackState.Completed then l:SetAttribute("NopeBase", nil) end end)
 end
 
 function Kit.pop(gui, from)
