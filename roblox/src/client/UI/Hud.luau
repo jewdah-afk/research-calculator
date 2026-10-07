@@ -687,16 +687,16 @@ function Hud.openShop()
 			Kit.icon(chip, 4, 4, 50, ShopData.BY_ID[g].icon, { ZIndex = 89 })
 		end
 		-- old price: cream on a dark pill so it reads against the gold, red strike through the middle
-		local wasPill = Kit.frame(hero, CW - 150, 44, 0, 40, hex("5a2a06"), { AnchorPoint = Vector2.new(0.5, 0.5), AutomaticSize = Enum.AutomaticSize.X, BackgroundTransparency = 0.25, ZIndex = 88 })
+		local wasPill = Kit.frame(hero, CW - 150, 52, 0, 40, hex("5a2a06"), { AnchorPoint = Vector2.new(0.5, 0.5), AutomaticSize = Enum.AutomaticSize.X, BackgroundTransparency = 0.25, ZIndex = 88 })
 		Kit.corner(wasPill, 20)
 		Kit.new("UIPadding", { PaddingLeft = UDim.new(0, 18), PaddingRight = UDim.new(0, 18) }, wasPill)
 		local was = Kit.title(wasPill, "R$ " .. B.was, 26, hex("fff1d6"), 0, 0, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.fromScale(0, 0.5), ZIndex = 89 })
 		local strike = Kit.frame(was.holder, 0, 0, 0, 0, hex("ff4a4a"), { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.52), Size = UDim2.new(1, 12, 0, 4), ZIndex = 91 })
 		Kit.corner(strike, 2)
 		local bw, bh = 272, 104
-		local btn = Kit.button(hero, CW - 28 - bw, 72, bw, bh, { text = "R$ " .. B.robux, size = 48, stops = Kit.stops(GREEN) })
+		local btn = Kit.button(hero, CW - 28 - bw, 80, bw, bh, { text = "R$ " .. B.robux, size = 48, stops = Kit.stops(GREEN) })
 		-- the bundle key is the only green glow on the page: it breathes so the main buy reads first
-		local bglow = Kit.soft(hero, CW - 28 - bw, 72, bw, bh, 24, "glow", hex("5dff6e"), 0.5, 89)
+		local bglow = Kit.soft(hero, CW - 28 - bw, 80, bw, bh, 24, "glow", hex("5dff6e"), 0.5, 89)
 		TweenService:Create(bglow, TweenInfo.new(1.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { ImageTransparency = 0.8 }):Play()
 		btn.root.ZIndex = 90
 		local kc = Kit.new("Frame", { ClipsDescendants = true, Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ZIndex = 9 }, btn.face); Kit.corner(kc, 16)
