@@ -106,43 +106,68 @@ local CAP_FACE = { popcorn = "9fe36a:0 3fae3a:100", goldenFeathers = "c9a2ff:0 7
 -- the number sits in a recessed well, Figma style: a deep shade of the capsule's own colour (not black), an inner
 -- shadow along the top, halftone texture and a lit bottom edge, so it reads as pressed INTO the key
 local function well(parent, x, w, h, faceStops)
-	local deep = Kit.shadeStops(Kit.stops(faceStops), 0.34)
-	local wl = Kit.frame(parent, x, 0, w, h, Color3.new(1, 1, 1), { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, x, 0.5, 1), ZIndex = 10 })
+	local deep = Kit.shadeStops(Kit.stops(faceStops), 0.3)
+	local rim = Kit.shadeStops(Kit.stops(faceStops), 0.16)
+	local wl = Kit.frame(parent, x, 0, w, h, Color3.new(1, 1, 1), { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, x, 0.5, 0), ZIndex = 10 })
 	Kit.corner(wl, h / 2)
 	local d1, d2 = deep[1][1], (deep[2] or deep[1])[1]
-	Kit.grad(wl, { { d2, 0, 1 }, { d1, 1, 1 } }, 90)   -- darker at the top (recessed), lifting toward the bottom
-	local tx = Kit.texture(wl, "halftone", 0.86, 18, 10); Kit.corner(tx, h / 2)
-	local sh = Kit.frame(wl, 0, 0, w, h * 0.55, Color3.new(0, 0, 0), { ZIndex = 11 }); Kit.corner(sh, h / 2)
-	Kit.grad(sh, { { "000000", 0, 0.42 }, { "000000", 1, 0 } }, 90)
-	local lit = Kit.frame(wl, h * 0.45, h - 3, w - h * 0.9, 2, Color3.new(1, 1, 1), { BackgroundTransparency = 0.7, ZIndex = 11 }); Kit.corner(lit, 1)
-	Kit.stroke(wl, 1.5, Color3.fromHex(Kit.shadeStops(Kit.stops(faceStops), 0.2)[2][1]), 0.15)
+	Kit.grad(wl, { { d2, 0, 1 }, { d1, 1, 1 } }, 90)
+	local tx = Kit.texture(wl, "halftone", 0.84, 16, 10); Kit.corner(tx, h / 2)
+	-- inner shadow: strong at the top lip of the recess, fading by mid-height
+	local sh = Kit.frame(wl, 0, 0, w, h * 0.62, Color3.new(0, 0, 0), { ZIndex = 11 }); Kit.corner(sh, h / 2)
+	Kit.grad(sh, { { "000000", 0, 0.62 }, { "000000", 0.55, 0.18 }, { "000000", 1, 0 } }, 90)
+	-- lit bottom edge where the recess meets the face again
+	local lit = Kit.frame(wl, h * 0.5, h - 3, w - h, 2, Color3.new(1, 1, 1), { BackgroundTransparency = 0.62, ZIndex = 11 }); Kit.corner(lit, 1)
+	Kit.stroke(wl, 2, Color3.fromHex((rim[2] or rim[1])[1]), 0)
 	return wl
 end
+-- fit a title inside a box (scale down only)
+local function fitInto(title, box, pad)
+	local sc = Kit.new("UIScale", {}, title.holder)
+	local function fit()
+		local bw, tw = box.AbsoluteSize.X, title.holder.AbsoluteSize.X / math.max(0.01, sc.Scale)
+		if bw <= 0 or tw <= 0 then return end
+		local want = math.min(1, (bw - pad) / tw)
+		if math.abs(want - sc.Scale) > 0.01 then sc.Scale = want end
+	end
+	title.holder:GetPropertyChangedSignal("AbsoluteSize"):Connect(fit)
+	box:GetPropertyChangedSignal("AbsoluteSize"):Connect(fit)
+end
 local function capsule(cur, big)
-	local w, h = if big then 330 else 156, if big then 72 else 52
-	local ic = if big then 92 else 60
-	local f = Kit.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(w + 30, h + 12), ZIndex = 10, LayoutOrder = CAP_UNLOCK[cur] or 0 }, if big then capBig else capGrid)
+	local w, h = if big then 336 else 160, if big then 80 else 58
+	local ic = if big then 90 else 58
+	local depth = if big then 9 else 7
+	local KX = 30
+	local f = Kit.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(w + KX, h + 12), ZIndex = 10, LayoutOrder = CAP_UNLOCK[cur] or 0 }, if big then capBig else capGrid)
 	local stops = CAP_FACE[cur] or CAP_FACE.popcorn
-	local key = Kit.button(f, 30, 6, w, h, { text = "", stops = Kit.stops(stops), silent = true, depth = if big then 7 else 5 })
+	-- soft drop shadow under the key
+	Kit.soft(f, KX + 4, 10, w - 8, h - 2, 10, "shadow", Color3.new(0, 0, 0), 0.4, 1)   -- below the key (root ZIndex 3)
+	local key = Kit.button(f, KX, 4, w, h, { text = "", stops = Kit.stops(stops), silent = true, depth = depth })
 	key.root.Active = false; pcall(function() key.root.Interactable = false end)
-	local fh = h - 6 - (if big then 7 else 5)
-	local wellX = if big then 50 else 30
-	local wl = well(key.face, wellX, w - 6 - wellX - 7, fh - 12, stops)
-	local icon = Kit.icon(f, 0, if big then -4 else -1, ic, Defs.CUR[cur].icon, { ZIndex = 12 })
-	local val = Kit.title(wl, "0", if big then 38 else 22, Color3.new(1, 1, 1), if big then 3.2 else 2.6, if big then 3 else 2,
-		{ AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, if big then 40 else 24, 0.5, -1), ZIndex = 12 })
+	local fw, fh = w - 6, h - 6 - depth
+	-- the well starts where the icon ends (icon spans 0..ic in the capsule; the face starts at KX + 3)
+	local wellX = ic - KX - 3 + 4
+	local wh = fh - 14
+	local wl = well(key.face, wellX, fw - wellX - 8, wh, stops)
+	Kit.soft(f, 6, ic * 0.62, ic - 12, ic * 0.32, 8, "shadow", Color3.new(0, 0, 0), 0.5, 4)   -- icon contact shadow: over the key, under the icon
+	local icon = Kit.icon(f, 0, (h + 4 - depth) / 2 - ic / 2 - 1, ic, Defs.CUR[cur].icon, { ZIndex = 12 })
+	local val = Kit.title(wl, "0", if big then 36 else 22, Color3.new(1, 1, 1), if big then 3.2 else 2.6, if big then 3 else 2,
+		{ AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, if big then 16 else 12, 0.5, -1), ZIndex = 12 })
 	Kit.grad(val.label, Kit.stops(CAP_GRAD[cur]))
 	local rate
 	if big then
-		rate = Kit.title(wl, "", 17, hex("9dffae"), 2.2, 0, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -14, 0.5, 0), ZIndex = 12 })
+		rate = Kit.title(wl, "", 16, hex("9dffae"), 2.2, 0, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -16, 0.5, 0), ZIndex = 12 })
+		fitInto(val, wl, 130)
+	else
+		fitInto(val, wl, 22)
 	end
 	capsules[cur] = { frame = f, cap = key.root, value = val, rate = rate, icon = icon, big = big }
 	return capsules[cur]
 end
 local function buildWallet()
-	capBig = Kit.new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 26, 1, -20), Size = UDim2.fromOffset(360, 86), ZIndex = 10 }, canvas)
-	capGrid = Kit.new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 26, 1, -110), Size = UDim2.fromOffset(384, 264), ZIndex = 10 }, canvas)
-	Kit.new("UIGridLayout", { CellSize = UDim2.fromOffset(186, 64), CellPadding = UDim2.fromOffset(8, 2), SortOrder = Enum.SortOrder.LayoutOrder,
+	capBig = Kit.new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 26, 1, -16), Size = UDim2.fromOffset(366, 92), ZIndex = 10 }, canvas)
+	capGrid = Kit.new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 26, 1, -112), Size = UDim2.fromOffset(392, 284), ZIndex = 10 }, canvas)
+	Kit.new("UIGridLayout", { CellSize = UDim2.fromOffset(190, 70), CellPadding = UDim2.fromOffset(6, 0), SortOrder = Enum.SortOrder.LayoutOrder,
 		StartCorner = Enum.StartCorner.BottomLeft, FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Bottom }, capGrid)
 	for _, cur in Defs.CUR_ORDER do capsule(cur, cur == "popcorn").frame.Visible = cur == "popcorn" end
 end
@@ -183,10 +208,10 @@ local objective, autoBtn, unlockBtn
 local function buildObjective()
 	-- the goal plate: a slate 3D key (same build as the wallet keys) with the text in a recessed well
 	local SLATE = "5a6478:0 343b4a:100"
-	local key = Kit.button(canvas, 0, 0, 640, 60, { text = "", stops = Kit.stops(SLATE), silent = true, depth = 6 })
+	local key = Kit.button(canvas, 0, 0, 640, 64, { text = "", stops = Kit.stops(SLATE), silent = true, depth = 8 })
 	key.root.Active = false; pcall(function() key.root.Interactable = false end)
 	key.root.AnchorPoint = Vector2.new(0.5, 1); key.root.Position = UDim2.new(0.5, -244, 1, -22)
-	local wl = well(key.face, 48, 640 - 6 - 48 - 8, 60 - 12 - 6 - 10, SLATE)
+	local wl = well(key.face, 50, 640 - 6 - 50 - 9, 64 - 6 - 8 - 14, SLATE)
 	local bang = Kit.frame(key.face, 10, 0, 32, 32, Color3.new(1, 1, 1), { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 0), ZIndex = 13 })
 	Kit.corner(bang, 16); Kit.grad(bang, Kit.stops("ffe07a:0 c27a10:100")); Kit.stroke(bang, 2.5)
 	Kit.title(bang, "!", 21, Color3.new(1, 1, 1), 2, 0, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), ZIndex = 14 })
