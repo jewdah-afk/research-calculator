@@ -194,3 +194,11 @@ The full text is on the spec cards. In short:
 - **Figma connection drops:** it can disconnect mid-session. Re-load the tools with ToolSearch and keep going. The node IDs above stay stable.
 - **Costs:** in the original, costs are plain numbers capped at 1.8e308. Only currency balances and Molt payouts are big numbers. The Luau port does the same.
 - **Display:** show HUD numbers with `EN.short(x)` (K, M, B, T, Qa, Qi, ... then scientific notation, then layer notation).
+
+---
+
+## 7. Icons (2026-10-07)
+
+The final UI icons are in `birb-icons/final/*.png`: 25 icons at 256px, transparent, with a uniform ink outline. They come from the user-approved sheet (`birb-icons/approved_sheet.png`) and were QA'd one by one on both dark and light backgrounds. Use these for every new window instead of the older Figma `icon/*` set. **They haven't been placed in Figma yet.**
+
+The Blender source scene (`birb-icons/*.py` and `peckwood_icons.blend`) is set up for later 3D icon ports, but nothing is exported yet. See `birb-icons/README.md` for the style rules and the export plan.
