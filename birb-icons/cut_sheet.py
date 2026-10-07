@@ -29,6 +29,42 @@ BOXES = {
     'twig': (1200, 612, 1500, 853), 'wing': (1510, 612, 1844, 853), 'wood': (0, 763, 300, 853),
 }
 
+def hull_fill(m):
+    from scipy.spatial import ConvexHull
+    from PIL import ImageDraw
+    pts = np.argwhere(m)[:, ::-1]; h = pts[ConvexHull(pts).vertices]
+    im = Image.new('1', (m.shape[1], m.shape[0])); ImageDraw.Draw(im).polygon([tuple(p) for p in h], fill=1)
+    return np.asarray(im).astype(bool)
+
+def book_shape(m):
+    """Straighten the book's wobbly cover: hull of the body (rows wider than half the max), ribbon kept as drawn."""
+    w = m.sum(1); rows = np.nonzero(w > 0.5 * w.max())[0]
+    body = m.copy(); body[:rows.min()] = False; body[rows.max() + 1:] = False
+    return hull_fill(body) | m
+
+def mushroom_shape(m):
+    """Clip the cap to a smooth dome so the top spot doesn't bulge out of the silhouette."""
+    w = m.sum(1); cy = int(np.argmax(w)); xs = np.nonzero(m[cy])[0]; cx = (xs.min() + xs.max()) / 2; rx = (xs.max() - xs.min()) / 2
+    ys, xs_all = np.nonzero(m); top = {}
+    for x, y in zip(xs_all, ys):
+        if y < cy and (x not in top or y < top[x]): top[x] = y
+    r = []
+    for x, y in top.items():
+        u = (x - cx) / rx
+        if 0.45 < abs(u) < 0.9: r.append((cy - y) / np.sqrt(1 - u * u))
+    ry = np.median(r)
+    Y, X = np.mgrid[0:m.shape[0], 0:m.shape[1]]
+    dome = ((X - cx) / rx) ** 2 + ((Y - cy) / ry) ** 2 <= 1.0
+    return m & ((Y >= cy) | dome)
+
+SHAPE = {'index': book_shape, 'mushroom': mushroom_shape}
+BAND = {}
+ERASE = {}
+ERASE_SRC = {}
+# twig: the crossing branch pokes out left of the main branch; cut it along the main branch's edge (x = 1293 + (y - 712))
+DIAG_CUT = {'twig': (1280, 720, 750, lambda y: 1293 + (y - 712))}
+CLOSE = {'crown': 1, 'nest': 1, 'twig': 1}
+OPEN = {'parrot': 4}
 CAP = {'seed': 0.75}
 STRETCH = {'wood': (1.0, 1.32), 'seed': (0.9, 1.0)}   # (x, y) un-squash for icons squeezed on the sheet   # icon -> cap depth as a fraction of the cut width
 
@@ -64,13 +100,34 @@ os.makedirs(OUT, exist_ok=True)
 for name, (x0, y0, x1, y1) in BOXES.items():
     keep = [i + 1 for i, ((cy, cx), s) in enumerate(zip(cents, sizes)) if s > 12 and x0 <= cx < x1 and y0 <= cy < y1]
     m = np.isin(lab, keep)
-    m = nd.binary_closing(m, iterations=3)
-    # fill holes = interior details (pupils, dark stripes) that are enclosed
-    m = nd.binary_fill_holes(m)
-    if name in CAP:                                   # this icon was cut flat where it overlapped another on the sheet
-        m, src_fill = cap_bottom(m, src, CAP[name])
+    for x0_, y0_, x1_, y1_ in ERASE_SRC.get(name, []): m[y0_:y1_, x0_:x1_] = False
+    if name in DIAG_CUT:
+        xa, ya, yb_, edge = DIAG_CUT[name]
+        for yy in range(ya, yb_): m[yy, xa:int(edge(yy))] = False
+    m = nd.binary_closing(m, iterations=CLOSE.get(name, 2))
+    # fill holes = enclosed interior details (pupils, dark stripes) -- but never background showing through a gap
+    filled = nd.binary_fill_holes(m)
+    hole = filled & ~m
+    hl, hn = nd.label(hole)
+    for i in range(1, hn + 1):
+        h = hl == i
+        if (bgd[h] < 8).mean() > 0.35:      # mostly sheet background -> keep it transparent
+            filled &= ~h
+    m = filled
+    if name in OPEN:                        # shave thin stray bits (stray strokes on the sheet)
+        m = nd.binary_opening(m, iterations=OPEN[name])
+    if name in SHAPE:
+        m0 = m; m = SHAPE[name](m)
+        core = nd.binary_erosion(m0, iterations=4)
+        idx = nd.distance_transform_edt(~core, return_distances=False, return_indices=True)
+        src_shape = src.copy(); add = m & ~core
+        src_shape[add] = src[idx[0][add], idx[1][add]]
     else:
-        src_fill = src
+        src_shape = src
+    if name in CAP:                                   # this icon was cut flat where it overlapped another on the sheet
+        m, src_fill = cap_bottom(m, src_shape, CAP[name])
+    else:
+        src_fill = src_shape
     ys, xs = np.nonzero(m)
     by0, by1 = ys.min() - int(RING) - PAD, ys.max() + int(RING) + PAD + 1
     bx0, bx1 = xs.min() - int(RING) - PAD, xs.max() + int(RING) + PAD + 1
@@ -82,7 +139,10 @@ for name, (x0, y0, x1, y1) in BOXES.items():
     canvas_m[sy0 - Y0:sy1 - Y0, sx0 - X0:sx1 - X0] = m[sy0:sy1, sx0:sx1]
     canvas_c[sy0 - Y0:sy1 - Y0, sx0 - X0:sx1 - X0] = src_fill[sy0:sy1, sx0:sx1]
     if name in STRETCH:                                    # resample interior, then the ring is rebuilt at full width
-        kx, ky = STRETCH[name]; H, W = canvas_m.shape
+        kx, ky = STRETCH[name]
+        yy, xx = np.nonzero(canvas_m)                      # crop to the icon first so padding isn't stretched/doubled
+        canvas_m = canvas_m[yy.min():yy.max() + 1, xx.min():xx.max() + 1]; canvas_c = canvas_c[yy.min():yy.max() + 1, xx.min():xx.max() + 1]
+        H, W = canvas_m.shape
         nh, nw = int(H * ky), int(W * kx)
         cm = np.asarray(Image.fromarray(canvas_m.astype(np.uint8) * 255).resize((nw, nh), Image.BILINEAR)) > 127
         cc = np.asarray(Image.fromarray(canvas_c.astype(np.uint8)).resize((nw, nh), Image.LANCZOS)).astype(float)
@@ -90,6 +150,23 @@ for name, (x0, y0, x1, y1) in BOXES.items():
         canvas_m = np.zeros((side, side), bool); canvas_c = np.zeros((side, side, 3))
         oy, ox = (side - nh) // 2, (side - nw) // 2
         canvas_m[oy:oy + nh, ox:ox + nw] = cm; canvas_c[oy:oy + nh, ox:ox + nw] = cc
+    for fx0, fy0, fx1, fy1 in ERASE.get(name, []):       # remove stray bits, boxes in canvas fractions
+        H, W = canvas_m.shape
+        canvas_m[int(fy0 * H):int(fy1 * H), int(fx0 * W):int(fx1 * W)] = False
+    for (ax, ay, bx, by, hw, t0, t1) in BAND.get(name, []):  # straight band along a limb, recoloured from nearest pixels
+        H, W = canvas_m.shape; Y, X = np.mgrid[0:H, 0:W] / np.array([H, W])[:, None, None]
+        dx, dy = bx - ax, by - ay; L = np.hypot(dx, dy)
+        t = ((X - ax) * dx + (Y - ay) * dy) / L ** 2
+        d = np.abs((X - ax) * dy - (Y - ay) * dx) / L
+        side = (X - ax) * dy - (Y - ay) * dx                   # >0 = left of the axis
+        band = (t > t0) & (t < t1) & (d < hw)
+        nub = (t > t0) & (t < t1) & (d >= hw) & (d < hw + 0.07) & (side > 0)
+        canvas_m &= ~nub
+        sh = -0.22                                              # copy a clean stretch from further up the limb
+        yy, xx = np.nonzero(band)
+        sy = np.clip(((yy / H) + sh * dy) * H, 0, H - 1).astype(int); sx = np.clip(((xx / W) + sh * dx) * W, 0, W - 1).astype(int)
+        canvas_c[yy, xx] = canvas_c[sy, sx]
+        canvas_m |= band
     dist = nd.distance_transform_edt(~canvas_m)               # px distance outside the interior
     alpha = np.clip(RING + 0.5 - dist, 0, 1)
     ring = (dist > 0.0)
