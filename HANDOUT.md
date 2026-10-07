@@ -121,7 +121,8 @@ Page 1 of the same file holds an older version with studded buttons. Don't use i
    - 4-point sparkles in the header and hero.
    - Glow on affordable buy buttons.
 4. **Motion is documented in two places:** a Motion spec card under the window, and Figma annotations on the layers themselves (window, header, every `btn/buy`, every `progress`, the hero).
-5. **Fonts:**
+5. **Header:** the icon and title are centered as a group. The lip under the header is a 12px band in the theme's own dark tone, not black, with a 2px tinted ink line. A soft tinted drop shadow (y 6, blur 14, 38%) falls on the body, plus a tight 2px contact shadow. Keep the header clipped.
+6. **Fonts:**
    - Fredoka One for titles and buttons.
    - Fredoka for body text.
    - Ink color `#0B0C10` for strokes.
