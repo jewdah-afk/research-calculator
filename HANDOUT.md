@@ -6,6 +6,9 @@ Last updated: 2026-10-07 (Roblox build)
 
 ---
 
+## New chat? Paste this first
+> Read `HANDOUT.md` section 0 in `~/Downloads/rc-main` (repo jewdah-afk/research-calculator, branch main). The Roblox game is in `rc-main/roblox` (Rojo), and it is synced into Studio place **birb(test)**; `~/OneDrive/Desktop/Peckwood.rbxl` is the latest build. Start `python -m http.server 8778 --bind 127.0.0.1` in `rc-main/roblox`, then push edits into Studio with the `tools/sync.luau` snippet. The owner is reviewing the build in Studio and will list fixes; do them, sync, check with the debug hook (section 0), then rebuild and copy the `.rbxl` to the Desktop.
+
 ## 0. Start here (Roblox build status, 2026-10-07)
 
 The Roblox game now lives in **`roblox/`** (Rojo). The owner has synced it into the place **`birb(test)`** (placeId 104948155633094) and published it. `rojo build -o roblox/Peckwood.rbxl` makes a fresh place file.
