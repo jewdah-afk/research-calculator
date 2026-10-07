@@ -210,6 +210,9 @@ function Window.build(parent, spec)
 	-- collapse control (drawer tucks into a right-edge tab)
 	local col = Kit.button(body, 438, 12, 46, 40, { text = "›", size = 30, stops = Kit.stops("5c6676:0 323844:100"), sound = "close" })
 	api.collapse = col
+	-- the Fredoka "›" glyph sits low-left in its box: nudge the content onto the face's optical centre
+	local cc = col.label.holder.Parent
+	cc.Position = UDim2.new(0.5, 1, 0.5, -1)
 
 	-- tabs (16,90,468,54): one tab per member of the window's feature group (Spec.GROUPS), equal widths.
 	-- Active = Figma pill face; inactive = icon + grey label (icon only when the group has 4+ members).
