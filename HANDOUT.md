@@ -34,7 +34,11 @@ The Roblox game now lives in **`roblox/`** (Rojo). The owner has synced it into 
   - The Roblox top-left menu covers HUD y<60.
 
 ### Open issues (do these next)
-1. **Most new image uploads report not loaded yet.** On 2026-10-07 only `popcorn` and `grey_buy` loaded. This is probably Roblox image moderation. Re-check with `ContentProvider:PreloadAsync` on the ImageLabels. If they are rejected, re-upload them with `upload_image` (batches of 20 or fewer, served from `python -m http.server 8778` in `roblox/`) and regenerate `FigmaArt.luau` from `tools/figma_ids.json`.
+1. **Done:** all 83 Figma images load. They took about 1 hour in Roblox moderation after upload, so new uploads look blank until they clear.
+   **Also fixed:**
+   - MAXED froze the server: the level-up loops ran without end. They are now capped (crow 500, parrot, sparrow and Dave 1000).
+   - The buy particle effect is removed (owner's call).
+   **Debug hook:** `PlayerGui:SetAttribute("PeckwoodOpen", "<window id>")` opens a window, and `Remotes.Action:FireServer("dev", "maxed")` from Client `execute_luau` switches the save. Use these for screenshots without clicking.
 2. Delete the Figma temp atlas `83:7` once the art loads (`use_figma`: `(await figma.getNodeByIdAsync('83:7')).remove()`).
 3. Upload the 426 fish icons (`birb-icons/final/fish/`, batches of 25, serve on :8799) and add them to `Icons.luau` using `tools/rec.py` and the generator snippet. Until then, fish rows show no icon.
 4. Islands other than the Park reuse the Park map. The Desert is a field toggle (golden drops). Each island still needs its own 3D area: garden, bridge/fishing spot, forest, mine, castle.

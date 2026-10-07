@@ -342,7 +342,6 @@ for id, d in Defs.UP do NAMES[id] = d end
 function Hud.onToast(kind, a, b, c)
 	if kind == "bought" then
 		local d = Defs.UP[a]
-		if d and Hud.lastBtn then flyTo(d.cur, Hud.lastBtn.root, math.clamp(5 + (b or 1), 6, 10)) end
 	elseif kind == "poor" then
 		if Hud.lastBtn then Kit.nope(Hud.lastBtn) end
 		local d = Defs.UP[a]

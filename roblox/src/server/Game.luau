@@ -276,7 +276,7 @@ function G.sparrowStep(s, dt, seedIncome)
 	pay(s, "sunflowerSeeds", seedsUsed)
 	local gain = seedsUsed * xpPerSeed
 	sp.xp += gain; sp.mitosisXp += gain
-	while sp.xp >= S.sparrowXpNeeded(sp.level) do sp.xp -= S.sparrowXpNeeded(sp.level); sp.level += 1 end
+	while sp.level < 1000 and sp.xp >= S.sparrowXpNeeded(sp.level) do sp.xp -= S.sparrowXpNeeded(sp.level); sp.level += 1 end
 	if (sp.autoMitosis or sp.rebirbs >= 1) and sp.count < 16 and sp.mitosisXp >= S.mitosisRequirement(sp.count) then G.mitosis(s) end
 end
 function G.sparrowFeedNow(s)
@@ -287,7 +287,7 @@ function G.sparrowFeedNow(s)
 	if seeds <= 0 then return false end
 	pay(s, "sunflowerSeeds", seeds)
 	sp.xp += seeds * xpPerSeed; sp.mitosisXp += seeds * xpPerSeed
-	while sp.xp >= S.sparrowXpNeeded(sp.level) - 1e-9 do sp.xp = math.max(0, sp.xp - S.sparrowXpNeeded(sp.level)); sp.level += 1 end
+	while sp.level < 1000 and sp.xp >= S.sparrowXpNeeded(sp.level) - 1e-9 do sp.xp = math.max(0, sp.xp - S.sparrowXpNeeded(sp.level)); sp.level += 1 end
 	return true
 end
 function G.mitosis(s)
@@ -467,7 +467,7 @@ function G.step(s, dt, rng)
 		local dmg, interval = G.crowDamage(s)
 		local breaks = dmg / interval / S.oreHp(s.crow.area) * dt
 		s.crow.xp += breaks * ({ 1, 3, 8, 20, 48, 110, 260 })[math.min(s.crow.area, 6) + 1]
-		while s.crow.xp >= S.crowXpNeeded(s.crow.level) do s.crow.xp -= S.crowXpNeeded(s.crow.level); s.crow.level += 1 end
+		while s.crow.level < 500 and s.crow.xp >= S.crowXpNeeded(s.crow.level) do s.crow.xp -= S.crowXpNeeded(s.crow.level); s.crow.level += 1 end
 	end
 	-- fishing (player rod while "Go Fishing" is on) + the seagull
 	if s.island >= 5 then
@@ -511,7 +511,7 @@ function G.step(s, dt, rng)
 		local sp = (3 + math.floor((p.floor - 1) / 2)) * spMult * kills
 		give(s, "skillPoints", sp)
 		p.xp += kills * 10 * 2.05 ^ (p.floor - 1)
-		while p.xp >= S.parrotXpNeeded(p.level) do p.xp -= S.parrotXpNeeded(p.level); p.level += 1 end
+		while p.level < 1000 and p.xp >= S.parrotXpNeeded(p.level) do p.xp -= S.parrotXpNeeded(p.level); p.level += 1 end
 		for _, id in s.quests.daily do
 			local q = QUEST_BY_ID[id]
 			if q and (q.family ~= "floor_kill" or (q.floor or 1) <= p.floor) then

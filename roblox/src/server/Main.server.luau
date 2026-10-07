@@ -185,7 +185,7 @@ local function collect(plr, ss, id, k)
 		s.dave.golden += value
 		if s.island >= 8 then   -- Dave levels from golden pickups (same curve as the Sparrow)
 			s.dave.xp += value * (1 + 0.08 * Defs.level(s, "dave_training"))
-			while s.dave.xp >= Defs.S.sparrowXpNeeded(s.dave.level) do s.dave.xp -= Defs.S.sparrowXpNeeded(s.dave.level); s.dave.level += 1 end
+			while s.dave.level < 1000 and s.dave.xp >= Defs.S.sparrowXpNeeded(s.dave.level) do s.dave.xp -= Defs.S.sparrowXpNeeded(s.dave.level); s.dave.level += 1 end
 		end
 	else
 		local base = 1
