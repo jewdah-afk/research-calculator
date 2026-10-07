@@ -99,29 +99,42 @@ local CAP_UNLOCK = { popcorn = 1, goldenFeathers = 2, sunflowerSeeds = 3, moneta
 local capBig, capGrid
 -- popcorn = the big Figma capsule (money/popcorn 360x86); every other currency = a money/plume-style capsule,
 -- in a 2-column grid that fills upward from just above it, so it never runs into the menu.
--- face colour per currency (the key itself); the value sits in a dark inset well so it always reads
+-- face colour per currency (the 3D key itself)
 local CAP_FACE = { popcorn = "9fe36a:0 3fae3a:100", goldenFeathers = "c9a2ff:0 7f4fd8:100", sunflowerSeeds = "b8e86a:0 5fa83a:100",
 	goldenPopcorn = "ffe07a:0 d89a1a:100", bruteOre = "8fe4ff:0 2f8fd8:100", twigs = "e0b07a:0 9a6232:100", echoPopcorn = "ffa8ec:0 d04fb8:100",
 	moneta = "ffe88a:0 d8a020:100", skillPoints = "ff9a8a:0 d04a4a:100" }
+-- the number sits in a recessed well, Figma style: a deep shade of the capsule's own colour (not black), an inner
+-- shadow along the top, halftone texture and a lit bottom edge, so it reads as pressed INTO the key
+local function well(parent, x, w, h, faceStops)
+	local deep = Kit.shadeStops(Kit.stops(faceStops), 0.34)
+	local wl = Kit.frame(parent, x, 0, w, h, Color3.new(1, 1, 1), { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, x, 0.5, 1), ZIndex = 10 })
+	Kit.corner(wl, h / 2)
+	local d1, d2 = deep[1][1], (deep[2] or deep[1])[1]
+	Kit.grad(wl, { { d2, 0, 1 }, { d1, 1, 1 } }, 90)   -- darker at the top (recessed), lifting toward the bottom
+	local tx = Kit.texture(wl, "halftone", 0.86, 18, 10); Kit.corner(tx, h / 2)
+	local sh = Kit.frame(wl, 0, 0, w, h * 0.55, Color3.new(0, 0, 0), { ZIndex = 11 }); Kit.corner(sh, h / 2)
+	Kit.grad(sh, { { "000000", 0, 0.42 }, { "000000", 1, 0 } }, 90)
+	local lit = Kit.frame(wl, h * 0.45, h - 3, w - h * 0.9, 2, Color3.new(1, 1, 1), { BackgroundTransparency = 0.7, ZIndex = 11 }); Kit.corner(lit, 1)
+	Kit.stroke(wl, 1.5, Color3.fromHex(Kit.shadeStops(Kit.stops(faceStops), 0.2)[2][1]), 0.15)
+	return wl
+end
 local function capsule(cur, big)
 	local w, h = if big then 330 else 156, if big then 72 else 52
 	local ic = if big then 92 else 60
 	local f = Kit.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(w + 30, h + 12), ZIndex = 10, LayoutOrder = CAP_UNLOCK[cur] or 0 }, if big then capBig else capGrid)
-	-- the 3D key (ink outline, themed face, darker lip, stripes, gloss), not clickable
-	local key = Kit.button(f, 30, 6, w, h, { text = "", stops = Kit.stops(CAP_FACE[cur] or CAP_FACE.popcorn), silent = true, depth = if big then 7 else 5 })
+	local stops = CAP_FACE[cur] or CAP_FACE.popcorn
+	local key = Kit.button(f, 30, 6, w, h, { text = "", stops = Kit.stops(stops), silent = true, depth = if big then 7 else 5 })
 	key.root.Active = false; pcall(function() key.root.Interactable = false end)
 	local fh = h - 6 - (if big then 7 else 5)
-	-- inset well for the number: starts under the icon, rounded, translucent ink
 	local wellX = if big then 50 else 30
-	local well = Kit.frame(key.face, wellX, 0, w - 6 - wellX - 7, fh - 12, Kit.INK, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, wellX, 0.5, 0), BackgroundTransparency = 0.35, ZIndex = 10 })
-	Kit.corner(well, (fh - 12) / 2)
+	local wl = well(key.face, wellX, w - 6 - wellX - 7, fh - 12, stops)
 	local icon = Kit.icon(f, 0, if big then -4 else -1, ic, Defs.CUR[cur].icon, { ZIndex = 12 })
-	local val = Kit.title(well, "0", if big then 38 else 22, Color3.new(1, 1, 1), if big then 3.2 else 2.6, if big then 3 else 2,
-		{ AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, if big then 40 else 24, 0.5, 0), ZIndex = 12 })
+	local val = Kit.title(wl, "0", if big then 38 else 22, Color3.new(1, 1, 1), if big then 3.2 else 2.6, if big then 3 else 2,
+		{ AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, if big then 40 else 24, 0.5, -1), ZIndex = 12 })
 	Kit.grad(val.label, Kit.stops(CAP_GRAD[cur]))
 	local rate
 	if big then
-		rate = Kit.title(well, "", 17, hex("9dffae"), 2.2, 0, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -14, 0.5, 1), ZIndex = 12 })
+		rate = Kit.title(wl, "", 17, hex("9dffae"), 2.2, 0, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -14, 0.5, 0), ZIndex = 12 })
 	end
 	capsules[cur] = { frame = f, cap = key.root, value = val, rate = rate, icon = icon, big = big }
 	return capsules[cur]
@@ -168,15 +181,16 @@ Hud.flyTo = flyTo
 -- ---------------------------------------------------------------- objective (399,1000,634,56) + AUTO
 local objective, autoBtn, unlockBtn
 local function buildObjective()
-	-- the goal plate: a slate 3D key like AUTO, gold "!" coin, text sized to fit
-	local key = Kit.button(canvas, 0, 0, 640, 60, { text = "", stops = Kit.stops("4a5468:0 2c323f:100"), silent = true, depth = 6 })
+	-- the goal plate: a slate 3D key (same build as the wallet keys) with the text in a recessed well
+	local SLATE = "5a6478:0 343b4a:100"
+	local key = Kit.button(canvas, 0, 0, 640, 60, { text = "", stops = Kit.stops(SLATE), silent = true, depth = 6 })
 	key.root.Active = false; pcall(function() key.root.Interactable = false end)
 	key.root.AnchorPoint = Vector2.new(0.5, 1); key.root.Position = UDim2.new(0.5, -244, 1, -22)
-	local o = key.face
-	local bang = Kit.frame(o, 12, 0, 34, 34, Color3.new(1, 1, 1), { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 12, 0.5, 0), ZIndex = 11 })
-	Kit.corner(bang, 17); Kit.grad(bang, Kit.stops("ffe07a:0 c27a10:100")); Kit.stroke(bang, 2.5)
-	Kit.title(bang, "!", 22, Color3.new(1, 1, 1), 2, 0, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), ZIndex = 12 })
-	local t = Kit.title(o, "", 20, hex("ffe8a8"), 2.4, 2, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 58, 0.5, 0), ZIndex = 12 })
+	local wl = well(key.face, 48, 640 - 6 - 48 - 8, 60 - 12 - 6 - 10, SLATE)
+	local bang = Kit.frame(key.face, 10, 0, 32, 32, Color3.new(1, 1, 1), { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 0), ZIndex = 13 })
+	Kit.corner(bang, 16); Kit.grad(bang, Kit.stops("ffe07a:0 c27a10:100")); Kit.stroke(bang, 2.5)
+	Kit.title(bang, "!", 21, Color3.new(1, 1, 1), 2, 0, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), ZIndex = 14 })
+	local t = Kit.title(wl, "", 20, hex("ffe8a8"), 2.4, 2, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 16, 0.5, -1), ZIndex = 13 })
 	objective = { frame = key.root, text = t }
 	unlockBtn = Kit.button(canvas, 0, 0, 220, 56, { text = "UNLOCK", size = 20, stops = Kit.GOLD, icon = "popcorn", iconSize = 34 })
 	unlockBtn.root.AnchorPoint = Vector2.new(0.5, 1); unlockBtn.root.Position = UDim2.new(0.5, 230, 1, -24)
