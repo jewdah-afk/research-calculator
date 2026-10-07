@@ -106,7 +106,8 @@ Watch the file key: the letter after `GG` is a lowercase **l**. A key with a cap
 | `8:250` | Molt shop (violet), layer 1, with hero |
 | `43:7` | Seeds shop (green), layer 2, with sunflower hero |
 | `49:10` | **Golden shop** (gold, desert), with the desert hero and new textures |
-| `45:7`, `45:19`, `45:33`, `49:161` | Motion spec cards under each window |
+| `57:7` | **Mine shop** (steel cyan, crow hero), 4 rows: Mining Power, Ore Value, Charged Strike, Rupture. Uses the final icons |
+| `45:7`, `45:19`, `45:33`, `49:161`, `57:166` | Motion spec cards under each window |
 | `8:271` | HUD 1920×1080: money capsules, map banner, objective, toast, docked shop |
 
 Page 1 of the same file holds an older version with studded buttons. Don't use it as a reference.
@@ -136,6 +137,7 @@ Page 1 of the same file holds an older version with studded buttons. Don't use i
 | Molt | `e9c4ff → b06cff → 8a3fe6 → 4f1d9c` | `b06cff` |
 | Seeds | `e6ffc4 → 8fe04a → 4fb52a → 256a12` | `8fe04a` |
 | Golden | the Seeds gradient hue-shifted to gold (hue 44°, darks 34°) | `ffd259` |
+| Mine | the Golden window hue-shifted +156° (gold to steel cyan; blue BUY ALL and grey states untouched) | about `59c8ff` |
 
 ### Textures (in `7:8`)
 
@@ -172,7 +174,6 @@ The full text is on the spec cards. In short:
 ## 5. Next steps (in order)
 
 1. **Remaining shop windows**, each a reset layer with its own color, hero, FX and motion spec:
-   - Mine / ore (crow)
    - Nest / twigs
    - Echo field
    - Parrot / expedition
@@ -180,11 +181,13 @@ The full text is on the spec cards. In short:
 2. **Companion panels:** Sparrow (mitosis and resonance), Seagull (doctrines, routes, migrations), Dave, Red Panda.
 3. **Fishing:** fish index, rods, baits, aquarium.
 4. **Quests, sacrifice milestones and the profile screen.**
-5. **Missing icons** in the icon-set style: ore, twig, echo, fish, crow, gold ore, spirit and others.
+5. **Missing icons** in the icon-set style: spirit, and any new currencies the remaining windows need.
 6. **Blender models for all item drops**, matching the icon set. Not started.
 7. **Roblox wiring:** drop the three ModuleScripts (`EternityNum`, `BirbFormulas`, `BirbSystems`) into ReplicatedStorage. Load `upgrades.json` and `data/*.json` as data modules.
 
 ---
+
+**Mine shop data:** costs at level 0 are 240, 180, 4,800 and 2e6 Brute Ore. All four are non-permanent, so Evolve resets them.
 
 **Golden shop data:** Golden Value (`p_golden_popcorn_value`, base cost 10, ×1.55, max 999), Auric Silo (`p_auric_silo`, base cost 1000, ×1.8, max 50) and Gilded Margins (`d_desert_field_notes_plus`, base cost 5000, ×10, max 3). Molt resets the two `p_` rows. The golden popcorn balance and the desert unlocks are kept. The other one-off desert unlocks still need a tree screen.
 
@@ -199,6 +202,6 @@ The full text is on the spec cards. In short:
 
 ## 7. Icons (2026-10-07)
 
-The final UI icons are in `birb-icons/final/*.png`: 25 icons at 256px, transparent, with a uniform ink outline. They come from the user-approved sheet (`birb-icons/approved_sheet.png`) and were QA'd one by one on both dark and light backgrounds. Use these for every new window instead of the older Figma `icon/*` set. **They haven't been placed in Figma yet.**
+The final UI icons are in `birb-icons/final/*.png`: 25 icons at 256px, transparent, with a uniform ink outline. They come from the user-approved sheet (`birb-icons/approved_sheet.png`) and were QA'd one by one on both dark and light backgrounds. Use these for every new window instead of the older Figma `icon/*` set. They are placed in the Mine shop (`57:7`) by uploading the PNG as an image fill on the cloned `ico/*` rectangles (FIT). The older windows still use the old Figma `icon/*` set.
 
 The Blender source scene (`birb-icons/*.py` and `peckwood_icons.blend`) is set up for later 3D icon ports, but nothing is exported yet. See `birb-icons/README.md` for the style rules and the export plan.
