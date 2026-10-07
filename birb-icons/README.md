@@ -18,6 +18,8 @@ The cutter works in four steps:
 
 Names: popcorn, golden, plume, wing, magnet, clock, seed, index, crown, ore, goldore, crow, pickaxe, twig, nest, wood, echo, mushroom, parrot, sword, heart, shield, skill, monster, fish.
 
+Companions (sparrow, seagull, dove, redpanda) come from `companions_sheet.png` (2x2, generated with Figma AI) via `python3 birb-icons/cut_companions.py`, which uses the same ring method with a 10px ring for the larger source art.
+
 **Style rules for new icons:**
 - Chunky, front facing, with a soft top-left key light.
 - Three cel bands: a cool shadow, the base, and a highlight.

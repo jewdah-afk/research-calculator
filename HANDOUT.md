@@ -112,7 +112,7 @@ Watch the file key: the letter after `GG` is a lowercase **l**. A key with a cap
 | `61:7` | **Parrot / expedition** (emerald, parrot hero), 3 skill-point rows: Health, Damage, Regen. Buttons read SPEND ALL |
 | `62:7` | **Evolve** (crimson, castle monster hero), 3 feed rows for evolution 3 to 4: popcorn 1Qa, twigs 100K, moneta 10K. Buttons read FEED / FEED ALL |
 | `45:7`, `45:19`, `45:33`, `49:161`, `57:166`, `59:166`, `60:166`, `61:166`, `62:166` | Motion spec cards under each window |
-| `65:8`, `65:181`, `65:354`, `65:527` | **Companion panels** (row under the shops, label COMPANIONS): Sparrow (Feed, Resonance, Mitosis), Seagull (Route, Doctrine, Migration), Dave (Seed Training, Rebirb), Red Panda (Assist Mode). Spec cards `65:167`, `65:340`, `65:513`, `65:686`. **Their hero/header icons are placeholders** (wing, fish, golden, twig) until sparrow, seagull, dove and red panda icons exist |
+| `65:8`, `65:181`, `65:354`, `65:527` | **Companion panels** (row under the shops, label COMPANIONS): Sparrow (Feed, Resonance, Mitosis), Seagull (Route, Doctrine, Migration), Dave (Seed Training, Rebirb), Red Panda (Assist Mode). Spec cards `65:167`, `65:340`, `65:513`, `65:686`. Header, tab and hero use the new `sparrow`, `seagull`, `dove` and `redpanda` icons |
 | `8:271` | HUD 1920×1080: money capsules, map banner, objective, toast, docked shop |
 
 Page 1 of the same file holds an older version with studded buttons. Don't use it as a reference.
@@ -153,9 +153,9 @@ Page 1 of the same file holds an older version with studded buttons. Don't use i
 | Parrot | red 356° (l×0.88) | wing blue 212° | yellow 50° |
 | Evolve (monster) | deep teal 192° (l×0.82) | mouth purple 284° | mint 160° |
 | Sparrow | chestnut 22° (l×0.85) | seed yellow 48° | cream 40° |
-| Seagull | sea blue 212° (l×0.85) | beak orange 34° | white 50° (s×0.25) |
-| Dave | dove lilac-grey 262° (s×0.4) | gold 46° | rose 345° |
-| Red Panda | rust 12° (l×0.85) | bamboo green 118° | cream 40° |
+| Seagull | wing blue-grey 212° (s×0.7, l×0.85) | beak yellow 48° | white 50° (s×0.2) |
+| Dave | dove lilac 278° (s×0.42) | leg pink 335° | pale lilac 290° |
+| Red Panda | dark maroon fur 356° (l×0.78) | rust orange 20° | cream 40° |
 
 **Rule (user's call, Mine is the reference):** a deep, darkened base hue, buttons in a bright hue far from the base, and stat text in a third contrasting hue. Never three shades of one hue.
 
@@ -198,7 +198,6 @@ The full text is on the spec cards. In short:
 ## 5. Next steps (in order)
 
 1. **Review the five new windows** with the user (Mine, Nest, Echo, Parrot, Evolve). Open questions: the Nest footer says Molt and Evolve keep twigs and the twig shop, which is not verified in the data; Moneta uses the fish icon; Rupture uses the sword.
-2. **Companion icons:** sparrow, seagull, collared dove and red panda in the icon-set style, then swap them into the companion panels.
 3. **Fishing:** fish index, rods, baits, aquarium.
 4. **Quests, sacrifice milestones and the profile screen.**
 5. **Missing icons** in the icon-set style: spirit, and any new currencies the remaining windows need.
@@ -222,6 +221,6 @@ The full text is on the spec cards. In short:
 
 ## 7. Icons (2026-10-07)
 
-The final UI icons are in `birb-icons/final/*.png`: 25 icons at 256px, transparent, with a uniform ink outline. They come from the user-approved sheet (`birb-icons/approved_sheet.png`) and were QA'd one by one on both dark and light backgrounds. Use these for every new window instead of the older Figma `icon/*` set. They are placed in the Mine shop (`57:7`) by uploading the PNG as an image fill on the cloned `ico/*` rectangles (FIT). The older windows still use the old Figma `icon/*` set.
+The final UI icons are in `birb-icons/final/*.png`: 29 icons at 256px, transparent, with a uniform ink outline. The 4 companion icons (sparrow, seagull, dove, redpanda) come from `birb-icons/companions_sheet.png` (Figma AI, gpt-image model) cut by `cut_companions.py`. The rest come from the user-approved sheet (`birb-icons/approved_sheet.png`) and were QA'd one by one on both dark and light backgrounds. Use these for every new window instead of the older Figma `icon/*` set. They are placed in the Mine shop (`57:7`) by uploading the PNG as an image fill on the cloned `ico/*` rectangles (FIT). The older windows still use the old Figma `icon/*` set.
 
 The Blender source scene (`birb-icons/*.py` and `peckwood_icons.blend`) is set up for later 3D icon ports, but nothing is exported yet. See `birb-icons/README.md` for the style rules and the export plan.
