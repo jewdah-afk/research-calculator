@@ -148,7 +148,8 @@ local function capsule(cur, big)
 	local wellX = ic - KX - 3 + 4
 	local wh = fh - 14
 	local wl = well(key.face, wellX, fw - wellX - 8, wh, stops)
-	local icon = Kit.icon(f, 0, (h + 4 - depth) / 2 - ic / 2 - 1, ic, Defs.CUR[cur].icon, { ZIndex = 12 })
+	-- centred on the key face (key at y 4, face 3 px in, fh tall), a touch low so it sits on the well's centre line
+	local icon = Kit.icon(f, KX - ic / 2 + 2, 4 + 3 + fh / 2 - ic / 2 + 1, ic, Defs.CUR[cur].icon, { ZIndex = 12 })
 	local val = Kit.title(wl, "0", if big then 36 else 22, Color3.new(1, 1, 1), if big then 3.2 else 2.6, if big then 3 else 2,
 		{ AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, if big then 16 else 12, 0.5, -1), ZIndex = 12 })
 	Kit.grad(val.label, Kit.stops(CAP_GRAD[cur]))
