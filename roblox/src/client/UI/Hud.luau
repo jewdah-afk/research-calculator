@@ -148,7 +148,6 @@ local function capsule(cur, big)
 	local wellX = ic - KX - 3 + 4
 	local wh = fh - 14
 	local wl = well(key.face, wellX, fw - wellX - 8, wh, stops)
-	Kit.soft(f, 6, ic * 0.62, ic - 12, ic * 0.32, 8, "shadow", Color3.new(0, 0, 0), 0.5, 4)   -- icon contact shadow: over the key, under the icon
 	local icon = Kit.icon(f, 0, (h + 4 - depth) / 2 - ic / 2 - 1, ic, Defs.CUR[cur].icon, { ZIndex = 12 })
 	local val = Kit.title(wl, "0", if big then 36 else 22, Color3.new(1, 1, 1), if big then 3.2 else 2.6, if big then 3 else 2,
 		{ AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, if big then 16 else 12, 0.5, -1), ZIndex = 12 })
