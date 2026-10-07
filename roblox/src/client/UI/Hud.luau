@@ -328,7 +328,7 @@ local function heroTile(parent, g, order)
 	Kit.frame(strip, 0, 0, W, 2, Kit.INK, { ZIndex = 14 })
 	Kit.frame(strip, 6, 3, W - 12, 4, Color3.new(1, 1, 1), { BackgroundTransparency = 0.6, ZIndex = 14 })
 	local lbl = Kit.title(strip, g.name, if #g.name > 7 then 12 else 14, Color3.new(1, 1, 1), 2, 1.5,
-		{ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 1), ZIndex = 15 })
+		{ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, -0.5), ZIndex = 15 })   -- optically centred in the strip
 	-- top gloss
 	local gl = Kit.frame(card, 6, 4, W - 12, 18, Color3.new(1, 1, 1), { ZIndex = 16 }); Kit.corner(gl, 9)
 	Kit.grad(gl, { { "ffffff", 0, 0.16 }, { "ffffff", 1, 0 } })

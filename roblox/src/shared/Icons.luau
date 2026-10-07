@@ -134,7 +134,7 @@ return {
 	["ui/glitter"] = "rbxassetid://125312063276165",
 	["ui/glow"] = "rbxassetid://116355676345477",
 	["ui/halftone"] = "rbxassetid://113708246576458",
-	["ui/lattice"] = "rbxassetid://122612937976687",
+	["ui/lattice"] = "rbxassetid://104329918992090",   -- exported 1:1 from the Figma HUD capsule (30 px tile)
 	["ui/halo"] = "rbxassetid://73180918810930",
 	["ui/shadow"] = "rbxassetid://79595371390287",
 	["ui/stripes"] = "rbxassetid://101175973864393",
