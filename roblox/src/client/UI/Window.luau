@@ -162,7 +162,7 @@ function Window.build(parent, spec)
 	Kit.corner(clip, 24)   -- Figma window radius (measured on the render)
 	-- one clean ink outline drawn from 1 px OUTSIDE the art inward, so no anti-aliased sliver of art shows at the edge
 	local edge = Kit.frame(root, -1, -1, W + 2, H + 2, nil, { ZIndex = 2 }); Kit.corner(edge, 25)
-	Kit.stroke(edge, 9, Kit.INK)   -- covers the baked 2 px coloured rim (x 4-5) and its light bevel (x 6-7) too
+	Kit.stroke(edge, 6, Kit.INK)
 	local bg = Kit.image(clip, 0, 0, W, H, Art[spec.artId or spec.id], { ScaleType = Enum.ScaleType.Stretch, ZIndex = 0 })
 	local px = ArtSize[spec.artId or spec.id]
 	if px then
@@ -190,6 +190,15 @@ function Window.build(parent, spec)
 		local strip = Kit.image(clip, 4, 144, W - 8, 2, bg.Image, { ScaleType = Enum.ScaleType.Stretch, ZIndex = 0,
 			ImageRectOffset = Vector2.new((MARGIN + 4) * k, (MARGIN + 148) * k), ImageRectSize = Vector2.new((W - 8) * k, 2 * k) })
 		bg:GetPropertyChangedSignal("ImageTransparency"):Connect(function() strip.ImageTransparency = bg.ImageTransparency end)
+		-- the render also bakes a 2 px coloured rim + light bevel down both sides (x 4-9): replace it with the body
+		-- surface just inside it, same rows, so header/tabs/body colours carry on to the ink outline
+		if cut == 0 then
+			for _, side in { { 4, 10 }, { W - 10, W - 16 } } do
+				local sideImg = Kit.image(clip, side[1], 0, 6, H, bg.Image, { ScaleType = Enum.ScaleType.Stretch, ZIndex = 0,
+					ImageRectOffset = Vector2.new((MARGIN + side[2]) * k, MARGIN * k), ImageRectSize = Vector2.new(6 * k, H * k) })
+				bg:GetPropertyChangedSignal("ImageTransparency"):Connect(function() sideImg.ImageTransparency = bg.ImageTransparency end)
+			end
+		end
 	end
 	local body = Kit.new("CanvasGroup", { Size = UDim2.fromOffset(W, H), BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 1 }, root)
 	Kit.corner(body, 22)
