@@ -57,7 +57,7 @@ def mushroom_shape(m):
     dome = ((X - cx) / rx) ** 2 + ((Y - cy) / ry) ** 2 <= 1.0
     return m & ((Y >= cy) | dome)
 
-SHAPE = {'index': book_shape, 'mushroom': mushroom_shape}
+SHAPE = {'index': book_shape, 'mushroom': mushroom_shape, 'seed': hull_fill}   # seed: just fill the notch the log cut
 BAND = {}
 ERASE = {}
 ERASE_SRC = {}
@@ -65,8 +65,8 @@ ERASE_SRC = {}
 DIAG_CUT = {'twig': (1280, 720, 750, lambda y: 1293 + (y - 712))}
 CLOSE = {'crown': 1, 'nest': 1, 'twig': 1}
 OPEN = {'parrot': 4}
-CAP = {'seed': 0.75}
-STRETCH = {'wood': (1.0, 1.32), 'seed': (0.9, 1.0)}   # (x, y) un-squash for icons squeezed on the sheet   # icon -> cap depth as a fraction of the cut width
+CAP = {}
+STRETCH = {'wood': (1.0, 1.32)}   # (x, y) un-squash for icons squeezed on the sheet   # icon -> cap depth as a fraction of the cut width
 
 def cap_bottom(m, src, depth):
     """Close a flat-cut bottom with a half-ellipse and fill it with the nearest interior colours."""
