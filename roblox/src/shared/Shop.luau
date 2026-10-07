@@ -8,20 +8,22 @@ export type Item = { id: string, kind: "pass" | "product", name: string, desc: s
 	assetId: number, tag: string?, section: string, theme: string }
 
 Shop.ITEMS = {
+	-- hero: every pass in one purchase (sum 1,394 R$ -> 899 R$, ~35% off)
+	{ id = "bundle", kind = "pass", section = "BUNDLE", name = "Ultimate Bundle", desc = "All 6 passes, forever", icon = "shop_bundle", robux = 899, was = 1394, assetId = 0, theme = "golden", tag = "SAVE 35%", grants = { "x2popcorn", "vip", "swift", "beak", "goldtouch", "angler" } },
 	-- game passes
-	{ id = "x2popcorn", kind = "pass", section = "GAME PASSES", name = "2x Popcorn", desc = "Double popcorn from every kernel, forever", icon = "popcorn", robux = 249, assetId = 0, theme = "popcorn", tag = "POPULAR" },
-	{ id = "vip", kind = "pass", section = "GAME PASSES", name = "Royal Birb", desc = "x1.5 every currency + crown tag", icon = "crown", robux = 499, assetId = 0, theme = "golden", tag = "BEST" },
-	{ id = "swift", kind = "pass", section = "GAME PASSES", name = "Swift Wings", desc = "+50% walk speed", icon = "wing", robux = 99, assetId = 0, theme = "seagull" },
-	{ id = "beak", kind = "pass", section = "GAME PASSES", name = "Big Beak", desc = "+50% pickup reach", icon = "magnet", robux = 149, assetId = 0, theme = "molt" },
-	{ id = "goldtouch", kind = "pass", section = "GAME PASSES", name = "Golden Touch", desc = "x2 golden popcorn", icon = "golden", robux = 199, assetId = 0, theme = "golden" },
-	{ id = "angler", kind = "pass", section = "GAME PASSES", name = "Lucky Angler", desc = "x2 moneta from fishing", icon = "rod", robux = 199, assetId = 0, theme = "rods" },
+	{ id = "x2popcorn", kind = "pass", section = "GAME PASSES", name = "2x Popcorn", desc = "Double popcorn from every kernel, forever", icon = "shop_x2popcorn", robux = 249, assetId = 0, theme = "popcorn", tag = "POPULAR" },
+	{ id = "vip", kind = "pass", section = "GAME PASSES", name = "Royal Birb", desc = "x1.5 every currency + crown tag", icon = "shop_vip", robux = 499, assetId = 0, theme = "golden", tag = "BEST" },
+	{ id = "swift", kind = "pass", section = "GAME PASSES", name = "Swift Wings", desc = "+50% walk speed", icon = "shop_swift", robux = 99, assetId = 0, theme = "seagull" },
+	{ id = "beak", kind = "pass", section = "GAME PASSES", name = "Big Beak", desc = "+50% pickup reach", icon = "shop_beak", robux = 149, assetId = 0, theme = "molt" },
+	{ id = "goldtouch", kind = "pass", section = "GAME PASSES", name = "Golden Touch", desc = "x2 golden popcorn", icon = "shop_goldtouch", robux = 199, assetId = 0, theme = "golden" },
+	{ id = "angler", kind = "pass", section = "GAME PASSES", name = "Lucky Angler", desc = "x2 moneta from fishing", icon = "shop_angler", robux = 199, assetId = 0, theme = "rods" },
 	-- boosts (stack time)
-	{ id = "boost15", kind = "product", section = "BOOSTS", name = "2x Boost · 15 min", desc = "x2 every currency, stacks", icon = "clock", robux = 39, assetId = 0, theme = "echo", minutes = 15 },
-	{ id = "boost60", kind = "product", section = "BOOSTS", name = "2x Boost · 1 hour", desc = "x2 every currency, stacks", icon = "clock", robux = 99, assetId = 0, theme = "echo", minutes = 60, tag = "BEST VALUE" },
+	{ id = "boost15", kind = "product", section = "BOOSTS", name = "2x Boost · 15 min", desc = "x2 every currency, stacks", icon = "shop_boost15", robux = 39, assetId = 0, theme = "echo", minutes = 15 },
+	{ id = "boost60", kind = "product", section = "BOOSTS", name = "2x Boost · 1 hour", desc = "x2 every currency, stacks", icon = "shop_boost60", robux = 99, assetId = 0, theme = "echo", minutes = 60, tag = "BEST VALUE" },
 	-- crates (scale with your production)
-	{ id = "crateS", kind = "product", section = "CRATES", name = "Popcorn Crate", desc = "10 min of your popcorn", icon = "popcorn", robux = 25, assetId = 0, theme = "popcorn", seconds = 600 },
-	{ id = "crateM", kind = "product", section = "CRATES", name = "Big Crate", desc = "1 hour of your popcorn", icon = "golden", robux = 79, assetId = 0, theme = "popcorn", seconds = 3600 },
-	{ id = "crateL", kind = "product", section = "CRATES", name = "Mega Crate", desc = "8 hours of your popcorn", icon = "chest", robux = 299, assetId = 0, theme = "golden", seconds = 28800, tag = "POPULAR" },
+	{ id = "crateS", kind = "product", section = "CRATES", name = "Popcorn Crate", desc = "10 min of your popcorn", icon = "shop_crateS", robux = 25, assetId = 0, theme = "popcorn", seconds = 600 },
+	{ id = "crateM", kind = "product", section = "CRATES", name = "Big Crate", desc = "1 hour of your popcorn", icon = "shop_crateM", robux = 79, assetId = 0, theme = "popcorn", seconds = 3600 },
+	{ id = "crateL", kind = "product", section = "CRATES", name = "Mega Crate", desc = "8 hours of your popcorn", icon = "shop_crateL", robux = 299, assetId = 0, theme = "golden", seconds = 28800, tag = "POPULAR" },
 } :: { any }
 
 Shop.BY_ID = {}

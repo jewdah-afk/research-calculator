@@ -485,7 +485,8 @@ local function grant(plr, item)
 	local ss = sessions[plr]; if not ss then return false end
 	for _, s in { ss.real, ss.view } do
 		local sh = shopOf(s)
-		if item.kind == "pass" then sh.passes[item.id] = true
+		if item.grants then for _, g in item.grants do sh.passes[g] = true end; sh.passes[item.id] = true
+		elseif item.kind == "pass" then sh.passes[item.id] = true
 		elseif item.minutes then sh.boostUntil = math.max(sh.boostUntil or 0, os.time()) + item.minutes * 60
 		elseif item.seconds then
 			G.syncFactors(s)

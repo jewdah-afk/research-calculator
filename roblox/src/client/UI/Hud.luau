@@ -331,9 +331,15 @@ local function heroTile(parent, g, order)
 	Kit.corner(card, 18)
 	local bodyF = Kit.frame(card, 0, 0, W, H, Color3.new(1, 1, 1), { ZIndex = 11 })
 	Kit.grad(bodyF, Kit.stops(lead.card or lead.body))
-	Kit.texture(card, "halftone", 0.9, 20, 12)
-	local burst = Kit.image(card, W / 2 - 60, 40 - 60, 120, 120, Kit.iconId("ui/sunburst"), { ImageColor3 = hex(lead.glow or "ffffff"), ImageTransparency = 0.8, ZIndex = 12 })
-	Kit.image(card, W / 2 - 30, 62, 60, 14, Kit.iconId("ui/softellipse"), { ImageColor3 = Color3.new(0, 0, 0), ImageTransparency = 0.45, ZIndex = 12 })
+	-- bright themed face above the name strip (like the shop cards): header gradient, halftone, sunburst, bevel
+	local face = Kit.frame(card, 0, 0, W, H - 26, Color3.new(1, 1, 1), { ZIndex = 11 })
+	Kit.grad(face, Kit.stops(lead.hdr))
+	Kit.texture(card, "halftone", 0.82, 18, 12)
+	local burst = Kit.image(card, W / 2 - (H - 26), (H - 26) / 2 - (H - 26), (H - 26) * 2, (H - 26) * 2, Kit.iconId("ui/sunburst"), { ImageColor3 = Color3.new(1, 1, 1), ImageTransparency = 0.7, ZIndex = 12 })
+	local inner = Kit.frame(card, 0, 0, W, H - 26, Color3.new(0, 0, 0), { ZIndex = 12 })
+	Kit.grad(inner, { { "000000", 0, 1 }, { "000000", 0.55, 1 }, { "000000", 1, 0.55 } }, 90)   -- soft inner shadow toward the strip
+	Kit.frame(card, 4, 2, W - 8, 2, Color3.new(1, 1, 1), { BackgroundTransparency = 0.45, ZIndex = 12 })   -- lit top edge
+	Kit.image(card, W / 2 - (g.iconSize or 64) * 0.42, H - 26 - 16, (g.iconSize or 64) * 0.84, 14, Kit.iconId("ui/softellipse"), { ImageColor3 = Color3.new(0, 0, 0), ImageTransparency = 0.4, ZIndex = 12 })
 	-- header strip (name)
 	local strip = Kit.frame(card, 0, H - 26, W, 26, Color3.new(1, 1, 1), { ZIndex = 13 })
 	Kit.grad(strip, Kit.stops(lead.hdr))
@@ -347,7 +353,7 @@ local function heroTile(parent, g, order)
 	local rim = Kit.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(W, H), ZIndex = 17 }, lift)
 	Kit.corner(rim, 18)
 	local rs = Kit.stroke(rim, 3, Kit.INK)
-	local icon = Kit.icon(lift, W / 2, 40, g.iconSize or 64, g.icon, { AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = 18 })
+	local icon = Kit.icon(lift, W / 2, 40, (g.iconSize or 64) + 8, g.icon, { AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = 18 })
 	local isc = Kit.new("UIScale", {}, icon)
 	local lsc = Kit.new("UIScale", {}, lift)
 	local hit = Kit.new("TextButton", { Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromOffset(W, H), ZIndex = 20 }, holder)
@@ -360,7 +366,7 @@ local function heroTile(parent, g, order)
 		TweenService:Create(lsc, q, { Scale = if pressed then 0.94 elseif selected then 1.04 else 1 }):Play()
 		TweenService:Create(isc, q, { Scale = if hovered then 1.14 elseif selected then 1.06 else 1 }):Play()
 		TweenService:Create(icon, q, { Rotation = if hovered then -6 else 0 }):Play()
-		TweenService:Create(burst, TweenInfo.new(0.2), { ImageTransparency = if selected then 0.35 elseif hovered then 0.55 else 0.8 }):Play()
+		TweenService:Create(burst, TweenInfo.new(0.2), { ImageTransparency = if selected then 0.4 elseif hovered then 0.55 else 0.7 }):Play()
 		TweenService:Create(glow, TweenInfo.new(0.2), { ImageTransparency = if selected then 0.45 elseif hovered then 0.7 else 1 }):Play()
 		if not selected then icon.Position = UDim2.fromOffset(W / 2, 40) end
 		rs.Color = if selected then Color3.new(1, 1, 1) else Kit.INK
@@ -522,66 +528,129 @@ function Hud.refreshShop()
 		end
 	end
 end
+local GREEN = "7dff86:0 2bd04a:42 15962f:86 15962f:100"
+local function buyItem(it)
+	local c = shopCards[it.id]
+	if c and c.owned then return end
+	local MPS = game:GetService("MarketplaceService")
+	if it.assetId > 0 then
+		pcall(function()
+			if it.kind == "pass" then MPS:PromptGamePassPurchase(plr, it.assetId) else MPS:PromptProductPurchase(plr, it.assetId) end
+		end)
+	elseif derived and derived.shop and derived.shop.testGrants then
+		act("shoptest", it.id); showToast(it.name .. " granted (Studio test)", "golden", it.icon)
+	else
+		showToast(it.name .. " is coming soon", "golden", it.icon)
+	end
+end
+-- one shop card: themed band with a sunburst + big 3D icon, name, effect line, price key, optional ribbon
+local function shopCard(parent, it, w, h, iconSz, nameSz, keyH, order)
+	local th = Spec[it.theme] or Spec.golden
+	local holder = Kit.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(w, h), LayoutOrder = order, ZIndex = 83 }, parent)
+	Kit.soft(holder, 6, 10, w - 12, h - 4, 12, "shadow", Color3.new(0, 0, 0), 0.5, 83)
+	local base = Kit.frame(holder, 0, 6, w, h - 6, hex(th.glow or "ffd27a"):Lerp(Kit.INK, 0.6), { ZIndex = 83 }); Kit.corner(base, 20); Kit.stroke(base, 3, Kit.INK)
+	local card = Kit.frame(holder, 0, 0, w, h - 6, Color3.new(1, 1, 1), { ZIndex = 84 }); Kit.corner(card, 20)
+	Kit.grad(card, Kit.stops(th.card or th.body)); Kit.stroke(card, 3, Kit.INK)
+	local bandH = math.floor(h * 0.5)
+	local band = Kit.new("CanvasGroup", { Size = UDim2.fromOffset(w, bandH), BackgroundTransparency = 1, ZIndex = 85 }, card); Kit.corner(band, 20)
+	local bf = Kit.frame(band, 0, 0, w, bandH, Color3.new(1, 1, 1), { ZIndex = 85 }); Kit.grad(bf, Kit.stops(th.hdr))
+	Kit.texture(band, "halftone", 0.8, 20, 86)
+	Kit.image(band, w / 2 - bandH, bandH / 2 - bandH, bandH * 2, bandH * 2, Kit.iconId("ui/sunburst"), { ImageColor3 = Color3.new(1, 1, 1), ImageTransparency = 0.72, ZIndex = 86 })
+	Kit.image(card, w / 2 - iconSz * 0.42, bandH - 8, iconSz * 0.84, 16, Kit.iconId("ui/softellipse"), { ImageColor3 = Color3.new(0, 0, 0), ImageTransparency = 0.45, ZIndex = 87 })
+	Kit.icon(card, w / 2 - iconSz / 2, bandH - iconSz + 4, iconSz, it.icon, { ZIndex = 88 })
+	Kit.title(card, it.name, nameSz, Color3.new(1, 1, 1), 2.8, 2, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(w / 2, bandH + 8), ZIndex = 88 })
+	local sub = Kit.text(card, it.desc, 14, hex("d8dde6"), { AutomaticSize = Enum.AutomaticSize.None, Size = UDim2.fromOffset(w - 20, 18),
+		Position = UDim2.fromOffset(10, bandH + 10 + nameSz), TextXAlignment = Enum.TextXAlignment.Center, TextScaled = true, ZIndex = 88 })
+	Kit.new("UITextSizeConstraint", { MaxTextSize = 15 }, sub)
+	local btn = Kit.button(card, 14, h - 6 - keyH - 12, w - 28, keyH, { text = "R$ " .. it.robux, size = math.floor(keyH * 0.45), stops = Kit.stops(GREEN) })
+	btn.root.ZIndex = 89
+	if it.tag then
+		local rib = Kit.frame(holder, w - 108, -10, 116, 28, hex("ff4d6a"), { ZIndex = 90 }); Kit.corner(rib, 14); Kit.stroke(rib, 2.5, Kit.INK)
+		Kit.title(rib, it.tag, 13, Color3.new(1, 1, 1), 2, 1, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, -1), ZIndex = 91 })
+	end
+	shopCards[it.id] = { btn = btn, sub = sub, owned = nil }
+	btn.root.Activated:Connect(function() buyItem(it) end)
+	return holder
+end
 function Hud.openShop()
 	if shopOverlay then shopOverlay.Visible = not shopOverlay.Visible; Hud.refreshShop(); return end
-	shopOverlay = Kit.new("TextButton", { Text = "", AutoButtonColor = false, BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.45, Size = UDim2.fromScale(1, 1), ZIndex = 80 }, canvas)
-	local spec = table.clone(Spec.golden); spec.rows = {}; spec.hero = nil; spec.section = nil; spec.h = 905
-	spec.title = "SHOP"; spec.footer = "Passes are forever and stack with each other. Boost time stacks."
-	spec.tabs = { { id = "shop", icon = "shop", label = "Shop", active = true } }
-	local api = Window.build(shopOverlay, spec)
-	api.root.Position = UDim2.fromScale(0.5, 0.5); api.root.ZIndex = 81
-	if api.collapse then api.collapse.root.Activated:Connect(function() shopOverlay.Visible = false end) end
-	local sf = Kit.new("ScrollingFrame", { Position = UDim2.fromOffset(16, 158), Size = UDim2.fromOffset(468, 712), BackgroundTransparency = 1, BorderSizePixel = 0,
-		ScrollBarThickness = 6, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, ZIndex = 5 }, api.body)
-	Kit.new("UIListLayout", { Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder }, sf)
-	local order, curSec, grid = 0, nil, nil
+	shopOverlay = Kit.new("TextButton", { Text = "", AutoButtonColor = false, BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.4, Size = UDim2.fromScale(1, 1), ZIndex = 80 }, canvas)
+	local PW, PH = 1040, 940
+	local panel = Kit.new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(PW, PH), ZIndex = 81 }, shopOverlay)
+	Kit.new("TextButton", { Text = "", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 81 }, panel)   -- clicks on the board itself never close it
+	Kit.soft(panel, 10, 16, PW - 20, PH - 10, 24, "shadow", Color3.new(0, 0, 0), 0.35, 81)
+	local body = Kit.frame(panel, 0, 0, PW, PH, Color3.new(1, 1, 1), { ZIndex = 81 }); Kit.corner(body, 28)
+	Kit.grad(body, Kit.stops("2b2118:0 15100b:100")); Kit.stroke(body, 6, Kit.INK)
+	local tx = Kit.texture(body, "halftone", 0.9, 26, 81); Kit.corner(tx, 28)
+	-- header
+	local hdr = Kit.new("CanvasGroup", { Size = UDim2.fromOffset(PW, 96), BackgroundTransparency = 1, ZIndex = 82 }, body); Kit.corner(hdr, 28)
+	local hf = Kit.frame(hdr, 0, 0, PW, 96, Color3.new(1, 1, 1), { ZIndex = 82 }); Kit.grad(hf, Kit.stops(Spec.golden.hdr))
+	Kit.texture(hdr, "halftone", 0.82, 24, 82)
+	Kit.frame(body, 0, 92, PW, 4, Kit.INK, { ZIndex = 83 })
+	Kit.title(body, "SHOP", 52, Color3.new(1, 1, 1), 4, 4, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(PW / 2, 46), ZIndex = 84 })
+	local close = Kit.button(body, PW - 76, 18, 56, 54, { text = "X", size = 28, stops = Kit.stops("5c6676:0 323844:100"), sound = "close" })
+	close.root.ZIndex = 85
+	close.root.Activated:Connect(function() shopOverlay.Visible = false end)
+	local sf = Kit.new("ScrollingFrame", { Position = UDim2.fromOffset(20, 108), Size = UDim2.fromOffset(PW - 28, PH - 120), BackgroundTransparency = 1, BorderSizePixel = 0,
+		ScrollBarThickness = 8, ScrollBarImageColor3 = hex("ffd27a"), CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, ZIndex = 83 }, body)
+	Kit.new("UIListLayout", { Padding = UDim.new(0, 18), SortOrder = Enum.SortOrder.LayoutOrder }, sf)
+	Kit.new("UIPadding", { PaddingTop = UDim.new(0, 14), PaddingBottom = UDim.new(0, 16) }, sf)
+	local CW = PW - 56
+	-- hero: Ultimate Bundle
+	local B = ShopData.BY_ID.bundle
+	do
+		local hero = Kit.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(CW, 236), LayoutOrder = 1, ZIndex = 83 }, sf)
+		Kit.soft(hero, 8, 12, CW - 16, 228, 14, "shadow", Color3.new(0, 0, 0), 0.45, 83)
+		local hb = Kit.frame(hero, 0, 8, CW, 228, hex("7a4a10"), { ZIndex = 83 }); Kit.corner(hb, 24); Kit.stroke(hb, 3, Kit.INK)
+		local hc = Kit.new("CanvasGroup", { Size = UDim2.fromOffset(CW, 228), BackgroundTransparency = 1, ZIndex = 84 }, hero); Kit.corner(hc, 24)
+		local hf2 = Kit.frame(hc, 0, 0, CW, 228, Color3.new(1, 1, 1), { ZIndex = 84 }); Kit.grad(hf2, Kit.stops("ffe9a6:0 f5b93c:45 c97a14:100"))
+		Kit.texture(hc, "halftone", 0.8, 26, 85)
+		Kit.image(hc, 140 - 220, 114 - 220, 440, 440, Kit.iconId("ui/sunburst"), { ImageColor3 = Color3.new(1, 1, 1), ImageTransparency = 0.55, ZIndex = 85 })
+		local ol = Kit.frame(hero, 0, 0, CW, 228, nil, { ZIndex = 86 }); Kit.corner(ol, 24); Kit.stroke(ol, 3, Kit.INK)
+		Kit.icon(hero, 30, 6, 216, B.icon, { ZIndex = 88 })
+		Kit.title(hero, "ULTIMATE BUNDLE", 40, Color3.new(1, 1, 1), 3.6, 3, { Position = UDim2.fromOffset(270, 28), ZIndex = 88 })
+		Kit.title(hero, "Every game pass, forever", 20, hex("4a2a06"), 0, 0, { Position = UDim2.fromOffset(272, 80), ZIndex = 88 })
+		local row = Kit.new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(268, 116), Size = UDim2.fromOffset(420, 70), ZIndex = 88 }, hero)
+		Kit.new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, row)
+		for k, g in B.grants do
+			local chip = Kit.frame(row, 0, 0, 64, 64, Kit.INK, { BackgroundTransparency = 0.6, LayoutOrder = k, ZIndex = 88 }); Kit.corner(chip, 16)
+			Kit.icon(chip, 4, 4, 56, ShopData.BY_ID[g].icon, { ZIndex = 89 })
+		end
+		-- price block: old price struck through, the deal on the key
+		local was = Kit.title(hero, "R$ " .. B.was, 26, hex("8a5a2a"), 0, 0, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(CW - 150, 34), ZIndex = 88 })
+		local strike = Kit.frame(was.holder, 0, 0, 0, 0, hex("e0403c"), { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(1, 8, 0, 4), Rotation = -8, ZIndex = 90 })
+		Kit.corner(strike, 2)
+		local btn = Kit.button(hero, CW - 270, 80, 240, 84, { text = "R$ " .. B.robux, size = 38, stops = Kit.stops(GREEN) })
+		btn.root.ZIndex = 89
+		local rib = Kit.frame(hero, CW - 150, -12, 160, 38, hex("ff4d6a"), { ZIndex = 90 }); Kit.corner(rib, 19); Kit.stroke(rib, 3, Kit.INK)
+		Kit.title(rib, B.tag, 20, Color3.new(1, 1, 1), 2.4, 1.5, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, -1), ZIndex = 91 })
+		shopCards.bundle = { btn = btn, sub = Instance.new("TextLabel"), owned = nil }
+		btn.root.Activated:Connect(function() buyItem(B) end)
+	end
+	local function section(name, order)
+		return Kit.title(sf, name, 26, hex("fff2d0"), 3, 2, { LayoutOrder = order, ZIndex = 84 })
+	end
+	local function grid(cols, cw, ch, order)
+		local g = Kit.new("Frame", { BackgroundTransparency = 1, AutomaticSize = Enum.AutomaticSize.Y, Size = UDim2.fromOffset(CW, 0), LayoutOrder = order, ZIndex = 83 }, sf)
+		Kit.new("UIGridLayout", { CellSize = UDim2.fromOffset(cw, ch), CellPadding = UDim2.fromOffset(math.floor((CW - cols * cw) / math.max(1, cols - 1)), 24), SortOrder = Enum.SortOrder.LayoutOrder }, g)
+		Kit.new("UIPadding", { PaddingTop = UDim.new(0, 12) }, g)
+		return g
+	end
+	section("GAME PASSES", 2)
+	local gp = grid(3, 318, 268, 3)
+	local k = 0
 	for _, it in ShopData.ITEMS do
-		if it.section ~= curSec then
-			curSec = it.section; order += 1
-			local hdrL = Kit.title(sf, curSec, 18, hex("fff2d0"), 2.4, 2, { LayoutOrder = order, ZIndex = 6 })
-			order += 1
-			grid = Kit.new("Frame", { BackgroundTransparency = 1, AutomaticSize = Enum.AutomaticSize.Y, Size = UDim2.fromOffset(460, 0), LayoutOrder = order, ZIndex = 5 }, sf)
-			Kit.new("UIGridLayout", { CellSize = UDim2.fromOffset(222, 196), CellPadding = UDim2.fromOffset(12, 12), SortOrder = Enum.SortOrder.LayoutOrder }, grid)
-			local _ = hdrL
-		end
-		local th = Spec[it.theme] or Spec.golden
-		local card = Kit.frame(grid, 0, 0, 222, 196, Color3.new(1, 1, 1), { ZIndex = 6 }); Kit.corner(card, 18)
-		Kit.grad(card, Kit.stops(th.card or th.body))
-		Kit.stroke(card, 3, Kit.INK)
-		local band = Kit.frame(card, 0, 0, 222, 96, Color3.new(1, 1, 1), { ZIndex = 6 }); Kit.corner(band, 18)
-		Kit.grad(band, Kit.stops(th.hdr))
-		Kit.texture(band, "halftone", 0.82, 18, 6)
-		Kit.image(band, 111 - 70, 48 - 70, 140, 140, Kit.iconId("ui/sunburst"), { ImageColor3 = Color3.new(1, 1, 1), ImageTransparency = 0.7, ZIndex = 7 })
-		Kit.icon(card, 111 - 40, 8, 80, it.icon, { ZIndex = 9 })
-		Kit.title(card, it.name, 19, Color3.new(1, 1, 1), 2.6, 2, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(111, 98), ZIndex = 9 })
-		local sub = Kit.text(card, it.desc, 13, hex("d8dde6"), { AutomaticSize = Enum.AutomaticSize.None, Size = UDim2.fromOffset(206, 18), Position = UDim2.fromOffset(8, 124),
-			TextXAlignment = Enum.TextXAlignment.Center, TextScaled = true, ZIndex = 9 })
-		Kit.new("UITextSizeConstraint", { MaxTextSize = 13 }, sub)
-		local btn = Kit.button(card, 16, 146, 190, 42, { text = "R$ " .. it.robux, size = 20, stops = Kit.stops("7dff86:0 2bd04a:42 15962f:86 15962f:100") })
-		if it.tag then
-			local rib = Kit.frame(card, 222 - 96, -8, 104, 24, hex("ff4d6a"), { ZIndex = 10 }); Kit.corner(rib, 12); Kit.stroke(rib, 2.5, Kit.INK)
-			local rl = Kit.title(rib, it.tag, 12, Color3.new(1, 1, 1), 2, 1, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, -1), ZIndex = 11 })
-			local _ = rl
-		end
-		shopCards[it.id] = { btn = btn, sub = sub, owned = nil }
-		btn.root.Activated:Connect(function()
-			local c = shopCards[it.id]
-			if c.owned then return end
-			local MPS = game:GetService("MarketplaceService")
-			if it.assetId > 0 then
-				pcall(function()
-					if it.kind == "pass" then MPS:PromptGamePassPurchase(plr, it.assetId) else MPS:PromptProductPurchase(plr, it.assetId) end
-				end)
-			elseif derived and derived.shop and derived.shop.testGrants then
-				act("shoptest", it.id)
-				showToast(it.name .. " granted (Studio test)", "golden", it.icon)
-			else
-				showToast(it.name .. " is coming soon", "golden", it.icon)
-			end
-		end)
+		if it.section == "GAME PASSES" then k += 1; shopCard(gp, it, 318, 268, 132, 26, 54, k) end
+	end
+	section("BOOSTS & CRATES", 4)
+	local more = grid(5, 186, 250, 5)
+	k = 0
+	for _, it in ShopData.ITEMS do
+		if it.section == "BOOSTS" or it.section == "CRATES" then k += 1; shopCard(more, it, 186, 250, 104, 18, 44, k) end
 	end
 	shopOverlay.Activated:Connect(function() shopOverlay.Visible = false end)
-	Window.open(api)
+	local sc = Kit.new("UIScale", { Scale = 0.88 }, panel)
+	TweenService:Create(sc, TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
 	Hud.refreshShop()
 end
 function Hud.onMap()
@@ -669,8 +738,9 @@ layoutBookmarks = function()
 	local list = {}
 	for _, id in bmOrder do
 		local t = groupTiles[id]
-		if t and t.unlocked ~= false then
-			local show = not t.isSelected()
+		if t then
+			-- locked groups and the open group are hidden (a locked bar left visible would stack at the top)
+			local show = t.unlocked == true and not t.isSelected() and docked ~= "profile"
 			t.holder.Visible = show
 			if show then table.insert(list, t) end
 		end
@@ -908,7 +978,8 @@ function Hud.start(remotes)
 		local api = Windows.build(holder, id, act)
 		holder.Size = UDim2.fromOffset(500, api.H)
 		api.root.Position = UDim2.fromScale(0.5, 0.5)
-		Kit.new("UIScale", { Scale = math.min(1, WIN_MAX_H / api.H), Name = "Fit" }, holder)
+		-- Profile is a full-height board: it fills the right side to the screen bottom (the group bars step aside)
+		Kit.new("UIScale", { Scale = if id == "profile" then math.min(1, (1080 - DOCK_Y - 12) / api.H) else math.min(1, WIN_MAX_H / api.H), Name = "Fit" }, holder)
 		api.root.Visible = false
 		api.collapse.root.Activated:Connect(function() Hud.setCollapsed(true) end)
 	end
