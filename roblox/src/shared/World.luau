@@ -73,6 +73,12 @@ for _, isl in World.list do
 	end
 end
 function World.islandOfTile(i, j) return owner[key(i, j)] end
+-- islands + land joins (joins are filled in further down)
+function World.all()
+	local out = table.clone(World.list)
+	for _, j in World.joins or {} do table.insert(out, j) end
+	return out
+end
 
 -- ---------------------------------------------------------------- props that block (footprint radius in tiles)
 local WALK_PROPS = { rails = true, tilledrow = true, flowers = true, bones = true, twigs = true, pier = true, footbridge = true, log = true, vine = true }
@@ -110,7 +116,7 @@ for _, isl in World.list do
 end
 -- inside a prop's ground footprint (+ margin, tiles)
 function World.inProp(x, z, margin)
-	for _, isl in World.list do
+	for _, isl in World.all() do
 		for _, p in isl.props do
 			local b = p.box
 			if b and not p.dropped and x > b[1] - margin and x < b[2] + margin and z > b[3] - margin and z < b[4] + margin then return p end
@@ -119,7 +125,7 @@ function World.inProp(x, z, margin)
 	return nil
 end
 local function propNear(x, z, rad)
-	for _, isl in World.list do
+	for _, isl in World.all() do
 		for _, p in isl.props do
 			if not p.dropped and (p.x - x) ^ 2 + (p.z - z) ^ 2 < (rad + (p.r or 0.8)) ^ 2 and (p.r or 0) > 0 then return true end
 		end
@@ -128,7 +134,6 @@ local function propNear(x, z, rad)
 end
 
 -- ---------------------------------------------------------------- bridges between grid neighbours
-local bridgeTiles = {}   -- "i,j" -> bridge
 World.bridges = {}
 local function walk(isl, i, j)
 	local c = rawIsland(isl, i, j)
@@ -182,14 +187,13 @@ local function makeBridge(a, b)
 		for v = best.v0, best.v0 + 1 do
 			local i, j = T(u, v)
 			if not World.islandOfTile(i, j) then
-				local t = { i = i, j = j, u = math.abs(u - best.ea), br = nil }
-				table.insert(br.tiles, t); bridgeTiles[key(i, j)] = br
+				table.insert(br.tiles, { i = i, j = j, u = math.abs(u - best.ea) })
 			end
 		end
 		u += dir
 	end
 	br.len = math.abs(best.sb - best.ea) - 1
-	for _, t in br.tiles do t.sag = 0.9 * math.sin(math.pi * (t.u - 0.5) / br.len) end   -- rope sag, studs
+	br.lo, br.hi = lo, hi
 	br.landA = { T(best.ea, best.v0) }; br.landB = { T(best.sb, best.v0) }
 	-- walk targets (game px) on the lane centre, one tile inland on each side
 	do
@@ -232,6 +236,264 @@ for _, br in World.bridges do
 	end
 end
 
+-- ---------------------------------------------------------------- land joins (owner 2026-10-07: no bridges)
+-- Every pair of neighbouring islands is joined by generated land instead of a rope bridge, so the open islands
+-- read as ONE growing landmass rising out of the sea. A join fills the sea between the two facing coasts across
+-- most of their shared width (ragged coastline), keeps the old bridge lane as a 2-wide path, and builds hierarchy
+-- away from the path: grass flats -> hills -> rock mountains with snow caps, plus a few ponds and trees.
+-- Colours blend from island a's palette to island b's along the join. A join opens when both islands are open.
+World.joins = {}
+local function noise(x, z)   -- smooth value noise, 0..1
+	local xi, zi = math.floor(x), math.floor(z)
+	local xf, zf = x - xi, z - zi
+	local function h(a, b) local n = math.sin(a * 127.1 + b * 311.7) * 43758.5453; return n - math.floor(n) end
+	local u, v = xf * xf * (3 - 2 * xf), zf * zf * (3 - 2 * zf)
+	local a0 = h(xi, zi) + (h(xi + 1, zi) - h(xi, zi)) * u
+	local a1 = h(xi, zi + 1) + (h(xi + 1, zi + 1) - h(xi, zi + 1)) * u
+	return a0 + (a1 - a0) * v
+end
+local function fbm(x, z) return noise(x / 7, z / 7) * 0.6 + noise(x / 3.2 + 9, z / 3.2 + 4) * 0.3 + noise(x / 1.6 + 2, z / 1.6 + 7) * 0.1 end
+-- prop templates borrowed from the islands' own concept props (same brick parts), by kind
+local TEMPLATE_KINDS = { tree = true, pine = true, bush = true, rock = true, flowers = true, palm = true, cactus = true, mushroom = true, crystal = true }
+local function templatesOf(isl)
+	local out = {}
+	for _, p in isl.props do if TEMPLATE_KINDS[p.kind] and p.parts and not out[p.kind] then out[p.kind] = p end end
+	return out
+end
+local anyTemplates = {}
+for _, isl in World.list do for k, p in templatesOf(isl) do anyTemplates[k] = anyTemplates[k] or p end end
+local function makeJoin(br)
+	local a, b, alongX, dir = br.a, br.b, br.alongX, br.dir
+	local function T(u, v) if alongX then return u, v else return v, u end end
+	local function U(isl) if alongX then return isl.oi, isl.oi + isl.W - 1 else return isl.oj, isl.oj + isl.N - 1 end end
+	local function V(isl) if alongX then return isl.oj, isl.oj + isl.N - 1 else return isl.oi, isl.oi + isl.W - 1 end end
+	local au0, au1 = U(a); local bu0, bu1 = U(b)
+	local aEdge, bEdge = if dir > 0 then au1 else au0, if dir > 0 then bu0 else bu1
+	local av0, av1 = V(a); local bv0, bv1 = V(b)
+	local vlo, vhi = math.max(av0, bv0), math.min(av1, bv1)
+	local laneMid = br.v0 + 0.5
+	local uFrom, uTo = aEdge - 7 * dir, bEdge + 7 * dir
+	local span = math.abs(uTo - uFrom)
+	local j = { id = "join:" .. a.id .. ":" .. b.id, join = true, a = a, b = b, br = br, need = math.max(a.need, b.need),
+		name = a.name, props = {}, cells = {} }
+	local cells = {}   -- key -> cell
+	local u = uFrom
+	while true do
+		local f = math.abs(u - uFrom) / span                        -- 0 at a, 1 at b
+		local pinch = math.sin(f * math.pi) * (1.5 + noise(u * 0.35, 3) * 3)   -- waist in the middle (still wide)
+		for v = vlo, vhi do
+			local i, jj = T(u, v)
+			if World.islandOfTile(i, jj) then continue end
+			local m = 1.5 + pinch + noise(u * 0.45, v * 0.2) * 2.5    -- ragged coast
+			local inLane = math.abs(v + 0.5 - laneMid) <= 3
+			if inLane or (v >= vlo + m and v <= vhi - m) then
+				cells[key(i, jj)] = { i = i, j = jj, u = u, v = v, f = f, code = 1, h = 0 }
+			end
+		end
+		if u == uTo then break end
+		u += dir
+	end
+	-- coast distance (land = join cells + island land), up to 6
+	local function isLand(i, jj) return cells[key(i, jj)] ~= nil or World.islandOfTile(i, jj) ~= nil end
+	for _, c in cells do
+		local d = 6
+		for r = 1, 5 do
+			local hit = false
+			for x = -r, r do
+				for z = -r, r do
+					if (math.abs(x) == r or math.abs(z) == r) and not isLand(c.i + x, c.j + z) then hit = true; break end
+				end
+				if hit then break end
+			end
+			if hit then d = r - 1; break end
+		end
+		c.cd = d
+	end
+	-- terrain hierarchy
+	for _, c in cells do
+		local dv = math.abs(c.v + 0.5 - laneMid)
+		if dv <= 1 then c.code = 2
+		elseif dv > 2.5 then
+			local n = fbm(c.i, c.j)
+			local ridge = math.clamp((dv - 2.5) / 4, 0, 1) * math.clamp((c.cd - 1) / 3, 0, 1)
+			c.h = math.clamp(math.floor((n - 0.18) * ridge * 11), 0, 5)
+			if c.h >= 2 then c.code = 4 end
+			if c.h == 0 and dv >= 4 and c.cd >= 2 and noise(c.i * 0.5 + 40, c.j * 0.5) < 0.16 then c.code = 3 end
+		end
+	end
+	-- the lane joins the island landing stripes: the first / last lane cells are path too (already 2)
+	local mn, mx = Vector2.new(math.huge, math.huge), Vector2.new(-math.huge, -math.huge)
+	for _, c in cells do mn = mn:Min(Vector2.new(c.i, c.j)); mx = mx:Max(Vector2.new(c.i, c.j)) end
+	j.oi, j.oj, j.W, j.N = mn.X, mn.Y, mx.X - mn.X + 1, mx.Y - mn.Y + 1
+	j.cx, j.cz = j.oi + j.W / 2, j.oj + j.N / 2
+	j.cells = cells
+	j.codes = setmetatable({}, { __index = function(t, row)   -- codes[j - oj][i - oi], like an island
+		local r = setmetatable({}, { __index = function(_, col) local c = cells[key(col + j.oi, row + j.oj)]; return c and c.code or 0 end })
+		t[row] = r
+		return r
+	end })
+	j.H = function(i, jj) local c = cells[key(i, jj)]; return if c and (c.code == 1 or c.code == 4) then c.h else 0 end
+	-- palette: lerp a -> b along the join; mountains go rock grey, high peaks snow
+	local da, db = a.data or { grass = { "8cc06a", "84b863" }, path = { "d9bf91", "cfb487" }, alt = { "8d8478", "7f776c" } }, b.data
+	j.data = { grass = da.grass, path = da.path, alt = da.alt, spills = {} }
+	function j.blend(i, jj, code, alt2)
+		local c = cells[key(i, jj)]
+		local f = if c then math.clamp((c.f - 0.15) / 0.7, 0, 1) else 0
+		f = f * f * (3 - 2 * f)
+		local idx = (i + jj) % 2 + 1
+		local function mixHex(x, y) return Color3.fromHex(x):Lerp(Color3.fromHex(y), f) end
+		if code == 2 then return mixHex(da.path[idx], db.path[idx]) end
+		if code == 4 then
+			if c and c.h >= 4 and not alt2 then return Color3.fromHex(if idx == 1 then "f4f7fb" else "e6ecf4") end   -- snow cap (top plate only; alt2 = cliff side)
+			local rock = mixHex(da.alt[idx], db.alt[idx]):Lerp(Color3.fromHex(if idx == 1 then "8d8478" else "7f776c"), 0.55)
+			return rock
+		end
+		return mixHex(da.grass[idx], db.grass[idx])
+	end
+	-- trees / bushes / rocks on the flats, never on the lane, thicker near the mountains
+	local ta, tb = templatesOf(a), templatesOf(b)
+	local function pick(f, n)
+		local t = if f < 0.5 then ta else tb
+		local order = if n < 0.45 then { "pine", "tree", "palm", "cactus" } elseif n < 0.7 then { "tree", "pine", "bush" } elseif n < 0.85 then { "bush", "flowers" } else { "rock", "mushroom", "crystal" }
+		for _, k in order do if t[k] then return t[k] end end
+		for _, k in order do if anyTemplates[k] then return anyTemplates[k] end end
+		return nil
+	end
+	for _, c in cells do
+		if c.code ~= 1 or c.h ~= 0 or c.cd < 1 then continue end
+		local dv = math.abs(c.v + 0.5 - laneMid)
+		if dv < 3 then continue end
+		local hsh = noise(c.i * 3.1 + 0.5, c.j * 2.7 + 0.5)
+		if hsh > 0.27 then continue end
+		local tpl = pick(c.f, noise(c.i * 0.8, c.j * 0.8 + 20))
+		if not tpl then continue end
+		local p = { kind = tpl.kind, x = c.i + 0.5, z = c.j + 0.5, rot = hsh * 40, bob = tpl.bob, parts = tpl.parts, r = 0.6, join = true }
+		if tpl.kind ~= "flowers" then p.box = { c.i + 0.1, c.i + 0.9, c.j + 0.1, c.j + 0.9 } else p.r = 0 end
+		table.insert(j.props, p)
+	end
+	for k in cells do owner[k] = j end
+	br.join = j
+	World.byId[j.id] = j
+	table.insert(World.joins, j)
+end
+for _, br in World.bridges do makeJoin(br) end
+
+-- ---------------------------------------------------------------- highlands: the gap inside every 2x2 block of islands
+-- Once all four islands around a gap are open (and so their four joins), the inland sea between them fills in as a
+-- mountain range: grass foothills where it meets the existing land, rock slopes, snow-capped peaks in the middle.
+-- This is what turns the ring of joins into one solid landmass with a real height hierarchy.
+local function makeHighland(q)
+	local cells = {}
+	local mnI, mxI = math.huge, -math.huge
+	local mnJ, mxJ = math.huge, -math.huge
+	for _, isl in q do
+		mnI = math.min(mnI, isl.cx); mxI = math.max(mxI, isl.cx)
+		mnJ = math.min(mnJ, isl.cz); mxJ = math.max(mxJ, isl.cz)
+	end
+	-- flood the void reachable from the block centre without leaving the box spanned by the four centres
+	local ci, cj = math.floor((mnI + mxI) / 2), math.floor((mnJ + mxJ) / 2)
+	if owner[key(ci, cj)] then return end
+	local list, seen = {}, { [key(ci, cj)] = true }
+	local fq, head = { { ci, cj } }, 1
+	while head <= #fq do
+		local c = fq[head]; head += 1
+		table.insert(list, c)
+		for _, o in { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } } do
+			local ni, nj = c[1] + o[1], c[2] + o[2]
+			local kk = key(ni, nj)
+			if not seen[kk] and ni > mnI and ni < mxI and nj > mnJ and nj < mxJ and not owner[kk] then seen[kk] = true; table.insert(fq, { ni, nj }) end
+		end
+	end
+	if #list == 0 then return end
+	-- distance from the existing land (BFS inwards from the cells that touch it)
+	local dist = {}
+	local bq, bh = {}, 1
+	for _, c in list do
+		for _, o in { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } } do
+			if owner[key(c[1] + o[1], c[2] + o[2])] then dist[key(c[1], c[2])] = 1; table.insert(bq, c); break end
+		end
+	end
+	while bh <= #bq do
+		local c = bq[bh]; bh += 1
+		local d0 = dist[key(c[1], c[2])]
+		for _, o in { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } } do
+			local kk = key(c[1] + o[1], c[2] + o[2])
+			if seen[kk] and not dist[kk] then dist[kk] = d0 + 1; table.insert(bq, { c[1] + o[1], c[2] + o[2] }) end
+		end
+	end
+	local maxD = 1
+	for _, d in dist do maxD = math.max(maxD, d) end
+	local need = 0
+	for _, isl in q do need = math.max(need, isl.need) end
+	local h = { id = "highland:" .. q[1].id, join = true, highland = true, quad = q, need = need, name = q[1].name, props = {} }
+	for _, c in list do
+		local d = dist[key(c[1], c[2])] or maxD
+		local r = d / maxD                                    -- 0 at the shore, 1 at the heart
+		local n = fbm(c[1] * 1.3, c[2] * 1.3)
+		local lift = math.clamp((d - 3) / math.max(1, maxD - 3), 0, 1)
+		local ridge = 1 - math.abs(noise(c[1] * 0.28 + 11, c[2] * 0.28 + 5) * 2 - 1)   -- ridge lines -> separate summits
+		local ht = math.clamp(math.floor(lift ^ 1.1 * 7.5 * (0.3 + 0.45 * n + 0.45 * ridge)), 0, 6)
+		local code = if ht >= 2 then 4 else 1
+		-- a few tarns in the foothills
+		if ht == 0 and d >= 2 and noise(c[1] * 0.45 + 70, c[2] * 0.45) < 0.13 then code = 3 end
+		cells[key(c[1], c[2])] = { i = c[1], j = c[2], f = 1 - r, code = code, h = ht, cd = d }
+	end
+	local mn, mx = Vector2.new(math.huge, math.huge), Vector2.new(-math.huge, -math.huge)
+	for _, c in cells do mn = mn:Min(Vector2.new(c.i, c.j)); mx = mx:Max(Vector2.new(c.i, c.j)) end
+	h.oi, h.oj, h.W, h.N = mn.X, mn.Y, mx.X - mn.X + 1, mx.Y - mn.Y + 1
+	h.cx, h.cz = h.oi + h.W / 2, h.oj + h.N / 2
+	h.cells = cells
+	h.codes = setmetatable({}, { __index = function(t, row)
+		local r = setmetatable({}, { __index = function(_, col) local c = cells[key(col + h.oi, row + h.oj)]; return c and c.code or 0 end })
+		t[row] = r
+		return r
+	end })
+	h.H = function(i, jj) local c = cells[key(i, jj)]; return if c and (c.code == 1 or c.code == 4) then c.h else 0 end
+	-- colours: each quarter takes the palette of the island in that corner; rock + snow above
+	local function nearestIsl(i, jj)
+		local best, bd = q[1], math.huge
+		for _, isl in q do local d = (isl.cx - i) ^ 2 + (isl.cz - jj) ^ 2; if d < bd then best, bd = isl, d end end
+		return best.data or { grass = { "8cc06a", "84b863" }, path = { "d9bf91", "cfb487" }, alt = { "8d8478", "7f776c" } }
+	end
+	h.data = { grass = q[1].data and q[1].data.grass or { "8cc06a", "84b863" }, path = { "d9bf91", "cfb487" }, alt = { "8d8478", "7f776c" }, spills = {} }
+	function h.blend(i, jj, code, side)
+		local c = cells[key(i, jj)]
+		local d = nearestIsl(i, jj)
+		local idx = (i + jj) % 2 + 1
+		if code == 4 then
+			if c and c.h >= 5 and not side then return Color3.fromHex(if idx == 1 then "f4f7fb" else "e6ecf4") end
+			return Color3.fromHex(d.alt[idx]):Lerp(Color3.fromHex(if idx == 1 then "8d8478" else "7f776c"), 0.6)
+		end
+		if code == 2 then return Color3.fromHex(d.path[idx]) end
+		return Color3.fromHex(d.grass[idx])
+	end
+	-- pines on the slopes' feet, bushes and rocks on the foothills
+	local tpl = {}
+	for _, isl in q do for k, p in templatesOf(isl) do tpl[k] = tpl[k] or p end end
+	for k, p in anyTemplates do tpl[k] = tpl[k] or p end
+	for _, c in cells do
+		if c.code ~= 1 or c.h ~= 0 then continue end
+		local hsh = noise(c.i * 3.3 + 0.5, c.j * 2.9 + 0.5)
+		if hsh > 0.3 then continue end
+		local kind = if c.cd >= 3 then "pine" elseif hsh < 0.12 then "rock" else "bush"
+		local t = tpl[kind] or tpl.tree
+		if not t then continue end
+		table.insert(h.props, { kind = t.kind, x = c.i + 0.5, z = c.j + 0.5, rot = hsh * 40, bob = t.bob, parts = t.parts, r = 0.6, join = true,
+			box = { c.i + 0.1, c.i + 0.9, c.j + 0.1, c.j + 0.9 } })
+	end
+	for kk in cells do owner[kk] = h end
+	World.byId[h.id] = h
+	table.insert(World.joins, h)
+end
+do
+	local at = {}
+	for _, isl in World.list do at[isl.gx .. "," .. isl.gz] = isl end
+	for _, isl in World.list do
+		local q = { isl, at[(isl.gx + 1) .. "," .. isl.gz], at[isl.gx .. "," .. (isl.gz + 1)], at[(isl.gx + 1) .. "," .. (isl.gz + 1)] }
+		if q[2] and q[3] and q[4] then makeHighland(q) end
+	end
+end
+
 -- walkable decks on props (the Bridge island's footbridge over the river, the pier): every tile under a flat plank
 -- becomes walkable at the plank's height (studs), so the bird climbs the hump instead of hitting the water
 local decks = {}   -- key -> { isl, h }
@@ -264,8 +526,6 @@ end
 function World.deckH(i, j)
 	local d = decks[key(i, j)]
 	if d then return d.h end
-	local br = bridgeTiles[key(i, j)]
-	if br then for _, t in br.tiles do if t.i == i and t.j == j then return -t.sag end end end
 	return nil
 end
 
@@ -279,8 +539,6 @@ function World.bridgeOpen(br) return World.isOpen(br.a) and World.isOpen(br.b) e
 function World.rawTile(i, j)
 	local isl = World.islandOfTile(i, j)
 	if isl then return rawIsland(isl, i, j), isl end
-	local br = bridgeTiles[key(i, j)]
-	if br then return 5, nil, br end
 	return 0
 end
 function World.tile(i, j)
@@ -288,8 +546,6 @@ function World.tile(i, j)
 	if dk and World.isOpen(dk.isl) then return 5 end
 	local isl = World.islandOfTile(i, j)
 	if isl then return if World.isOpen(isl) then rawIsland(isl, i, j) else 0 end
-	local br = bridgeTiles[key(i, j)]
-	if br and World.bridgeOpen(br) then return 5 end
 	return 0
 end
 function World.height(i, j)

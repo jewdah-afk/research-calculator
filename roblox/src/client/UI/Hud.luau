@@ -598,7 +598,8 @@ local function shopCard(parent, it, w, h, iconSz, nameSz, keyH, order)
 	addShine(keyClip, w - 32, keyH, 9)
 	if it.tag then
 		local rw = math.max(100, #it.tag * 10 + 26)
-		local rib = Kit.frame(lift, w - rw - 8, top - 14, rw, 32,   -- right of the icon, inside the card edge hex("ff4d6a"), { ZIndex = 91 }); Kit.corner(rib, 16); Kit.stroke(rib, 3, Kit.INK)
+		-- right of the icon, inside the card edge
+		local rib = Kit.frame(lift, w - rw - 8, top - 14, rw, 32, hex("ff4d6a"), { ZIndex = 91 }); Kit.corner(rib, 16); Kit.stroke(rib, 3, Kit.INK)
 		Kit.grad(rib, Kit.stops("ff8095:0 e8344f:100"))
 		Kit.title(rib, it.tag, 15, Color3.new(1, 1, 1), 2.2, 1.5, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, -1), ZIndex = 92 })
 	end
