@@ -68,7 +68,7 @@ return {
 	["rod_blue"] = "rbxassetid://123741116945920",
 	["rod_carbon"] = "rbxassetid://138030588520219",
 	["rod_coco"] = "rbxassetid://102123349495145",
-	["rod_divine"] = "rbxassetid://79881487514507",
+	["rod_divine"] = "rbxassetid://83748116650692",
 	["rod_fiberglass"] = "rbxassetid://133076439046135",
 	["rod_green"] = "rbxassetid://127414792267168",
 	["rod_infernal"] = "rbxassetid://130525913951919",
