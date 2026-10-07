@@ -29,8 +29,9 @@ local RAW = {}
 for _, d in require(JSON.Upgrades) do RAW[d.id] = d end
 Defs.RAW = RAW
 
-local function x2(n: number) return string.format("x%.2f", n) end
-local function x1(n: number) return string.format("x%.1f", n) end
+-- big-safe multipliers: plain decimals below 1e6, EternityNum short form above (never a 300-digit string)
+local function x2(n: any) if type(n) ~= "number" or n >= 1e6 then return "x" .. EN.short(n) end return string.format("x%.2f", n) end
+local function x1(n: any) if type(n) ~= "number" or n >= 1e6 then return "x" .. EN.short(n) end return string.format("x%.1f", n) end
 local function short(n: any) return EN.short(n) end
 
 -- Shop rows. cost(L) is charged at the CURRENT internal level L (F.level semantics).
@@ -69,8 +70,8 @@ up("p_auric_silo", { name = "Auric Silo", desc = "Raises the popcorn cap.", icon
 up("d_desert_field_notes_plus", { name = "Gilded Margins", desc = "+33% golden per level.", icon = "golden", fx = function(L) return x2(1 + L / 3) end })
 -- Mine (Evolve resets); verified stepped-anchor costs from BirbSystems
 local function mineCost(id) return function(L) return S.mineCost(id, L) end end
-up("m_mining_power", { name = "Mining Power", desc = "Birb and Crow hit ore harder.", icon = "pickaxe", cost = mineCost("m_mining_power"), fx = function(L) return string.format("%.2f", S.miningPowerEffect(L)) end, layer = "mine" })
-up("m_ore_value", { name = "Ore Value", desc = "More ore per HP removed.", icon = "ore", cost = mineCost("m_ore_value"), fx = function(L) return x2(S.oreValueEffect(L)) end, layer = "mine" })
+up("m_mining_power", { name = "Mining Power", desc = "Birb and Crow hit ore harder.", icon = "pickaxe", cost = mineCost("m_mining_power"), fx = function(L) return x2(EN.pow(1.1, math.max(0, L - 1))):sub(2) end, layer = "mine" })
+up("m_ore_value", { name = "Ore Value", desc = "More ore per HP removed.", icon = "ore", cost = mineCost("m_ore_value"), fx = function(L) return x2(EN.pow(1.1, math.max(0, L - 1))) end, layer = "mine" })
 up("m_charged_strike", { name = "Charged Strike", desc = "+1x to Crow's charged peck.", icon = "crow", cost = mineCost("m_charged_strike"), fx = function(L) return "x" .. S.chargedStrikeEffect(L) end, layer = "mine" })
 up("m_rupture", { name = "Rupture", desc = "+5% break bonus per level.", icon = "sword", cost = mineCost("m_rupture"), fx = function(L) return "+" .. math.round(100 * S.ruptureEffect(L)) .. "%" end, layer = "mine" })
 -- Nest twig shop (kept through Molt and Evolve). Internal level starts at 0.

@@ -205,9 +205,10 @@ function Kit.button(parent, x, y, w, h, opts)
 	end
 	-- motion (spec cards): hover lift 2px + brighten, press squash .94, release 1.06 overshoot
 	local scale = new("UIScale", { Scale = 1 }, root)
-	root.MouseEnter:Connect(function() TweenService:Create(face, TweenInfo.new(0.12), { Position = UDim2.fromOffset(0, -2) }):Play() end)
+	root.MouseEnter:Connect(function() if not opts.silent then Kit.sfx("hover") end; TweenService:Create(face, TweenInfo.new(0.12), { Position = UDim2.fromOffset(0, -2) }):Play() end)
 	root.MouseLeave:Connect(function() TweenService:Create(face, TweenInfo.new(0.12), { Position = UDim2.fromOffset(0, 0) }):Play(); TweenService:Create(scale, TweenInfo.new(0.1), { Scale = 1 }):Play() end)
 	root.MouseButton1Down:Connect(function()
+		if not opts.silent then Kit.sfx(opts.sound or "click") end
 		TweenService:Create(scale, TweenInfo.new(0.07), { Scale = 0.94 }):Play()
 		TweenService:Create(face, TweenInfo.new(0.07), { Position = UDim2.fromOffset(0, 3) }):Play()
 	end)
@@ -260,6 +261,42 @@ function Kit.progress(parent, x, y, w, h, fillStops)
 	end
 	function api.setStops(st) fg:Destroy(); fg = Kit.grad(fill, st) end
 	return api
+end
+
+-- ---------------------------------------------------------------- sound (keycap: crisp plastic attack, cushioned thock)
+-- One short dry slice of a real keyboard take, re-pitched per action. Played once per action, never per frame.
+local SoundService = game:GetService("SoundService")
+local KEY = "rbxassetid://9113869921"   -- Pro Sound Effects "Computer Keyboard 8": first keystroke only
+local SFX = {
+	click = { speed = 1.0, vol = 0.55, len = 0.1 },
+	thock = { speed = 0.78, vol = 0.5, len = 0.12 },    -- buy / confirm: lower, softer
+	open = { speed = 0.92, vol = 0.45, len = 0.11 },
+	close = { speed = 0.84, vol = 0.4, len = 0.11 },
+	hover = { speed = 1.35, vol = 0.07, len = 0.05 },   -- desktop only
+	nope = { speed = 0.62, vol = 0.45, len = 0.09 },
+}
+Kit.muted = false
+Kit.uiVolume = 1
+local UIS = game:GetService("UserInputService")
+local lastPlay = {}
+function Kit.sfx(kind)
+	local d = SFX[kind]; if not d or Kit.muted then return end
+	if kind == "hover" and not UIS.MouseEnabled then return end
+	local now = os.clock()
+	if lastPlay[kind] and now - lastPlay[kind] < 0.04 then return end
+	lastPlay[kind] = now
+	local snd = new("Sound", { SoundId = KEY, Volume = d.vol * Kit.uiVolume, PlaybackSpeed = d.speed * (0.97 + math.random() * 0.06) }, SoundService)
+	snd:Play()
+	task.delay(d.len / d.speed, function() snd:Stop(); snd:Destroy() end)
+end
+task.spawn(function() pcall(function() game:GetService("ContentProvider"):PreloadAsync({ KEY }) end) end)
+
+-- reduced motion: Roblox setting when available
+function Kit.reduced()
+	local ok, v = pcall(function() return game:GetService("UserGameSettings").ReducedMotion end)
+	if ok and v ~= nil then return v end
+	ok, v = pcall(function() return game:GetService("GuiService").ReducedMotionEnabled end)
+	return ok and v == true
 end
 
 return Kit

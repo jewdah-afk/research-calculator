@@ -151,10 +151,16 @@ function G.crowDamage(s)
 	return dmg, interval
 end
 function G.orePerSec(s)
-	if s.island < 7 then return 0 end
-	local dmg, interval = G.crowDamage(s)
-	local oreValue = S.oreValueEffect(F.level(s, "m_ore_value")) * (if s.evolutionCount >= 6 then 2 else 1)
-	return dmg / interval * oreValue * S.oreAreaReward(s.crow.area)
+	if s.island < 7 then return EN.ZERO end
+	-- EN all the way: power, rebirb damage and ore value are each exponential, so their product overflows a double at max
+	local _, interval = G.crowDamage(s)
+	local _, over = S.crowHitInterval(s.crow.level, s.crow.rebirbs, 1)
+	local R = s.crow.rebirbs
+	local reb = EN.mul(EN.pow(1.25, math.min(8, R)), EN.pow(2, math.max(0, R - 8)))
+	local pow = EN.pow(1.1, math.max(0, F.level(s, "m_mining_power") - 1))
+	local val = EN.pow(1.1, math.max(0, F.level(s, "m_ore_value") - 1))
+	local r = EN.mul(EN.mul(pow, reb), val)
+	return EN.mul(r, over / interval * (if s.evolutionCount >= 6 then 2 else 1) * S.oreAreaReward(s.crow.area))
 end
 
 function G.parrotStats(s)
@@ -462,8 +468,8 @@ function G.step(s, dt, rng)
 	if tw > 0 then give(s, "twigs", tw * dt) end
 	-- ore (crow)
 	local ore = G.orePerSec(s)
-	if ore > 0 then
-		give(s, "bruteOre", ore * dt)
+	if not EN.isZero(ore) then
+		give(s, "bruteOre", EN.mul(ore, dt))
 		local dmg, interval = G.crowDamage(s)
 		local breaks = dmg / interval / S.oreHp(s.crow.area) * dt
 		s.crow.xp += breaks * ({ 1, 3, 8, 20, 48, 110, 260 })[math.min(s.crow.area, 6) + 1]

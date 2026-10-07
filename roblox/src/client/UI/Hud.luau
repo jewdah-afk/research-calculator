@@ -194,36 +194,147 @@ local function buildObjective()
 	end)
 end
 
--- ---------------------------------------------------------------- window menu (left column) + docking
+-- ---------------------------------------------------------------- window menu (left column) + docking drawer
+-- The drawer (dock) slides in from the right edge when the feature group changes; tabs inside a group just swap.
+-- Collapsing tucks it into a narrow right-edge tab that keeps the feature icon and a reopen chevron.
+local groupTiles = {}
+local collapsed = false
+local edgeTab
+local DOCK_IN, DOCK_OUT = -22, 560
+local function groupOf(id) return Spec.GROUP_OF[id] end
+local function slideDock(x, t, style)
+	if Kit.reduced() then Hud.dock.Position = UDim2.new(1, x, 0, 26); return nil end
+	local tw = TweenService:Create(Hud.dock, TweenInfo.new(t, style or Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Position = UDim2.new(1, x, 0, 26) })
+	tw:Play()
+	return tw
+end
+local function refreshTiles()
+	local g = docked and groupOf(docked)
+	for gid, t in groupTiles do t.select(g ~= nil and g.id == gid and not collapsed) end
+end
+local function setCollapsed(c)
+	if collapsed == c then return end
+	collapsed = c
+	Kit.sfx(if c then "close" else "open")
+	slideDock(if c then DOCK_OUT else DOCK_IN, if c then 0.22 else 0.3, if c then Enum.EasingStyle.Quad else nil)
+	edgeTab.icon.Image = Kit.iconId(Spec.MENU_ICON[docked or "popcorn"])
+	edgeTab.grad:Destroy()
+	edgeTab.grad = Kit.grad(edgeTab.face, Kit.stops(Spec[docked or "popcorn"].tab))
+	TweenService:Create(edgeTab.root, TweenInfo.new(if c then 0.25 else 0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+		{ Position = UDim2.new(1, if c then 0 else 100, 0.5, 0) }):Play()
+	refreshTiles()
+end
+Hud.setCollapsed = setCollapsed
+
 local function dockWindow(id)
-	if docked == id then return end
+	if docked == id then if collapsed then setCollapsed(false) end; return end
 	local old = docked and Windows.built[docked]
+	local sameGroup = docked ~= nil and groupOf(docked) == groupOf(id)
 	docked = id
 	local api = Windows.built[id]
 	if not api then return end
-	if old then Window.close(old) end
-	Window.open(api)
 	if state and derived then Windows.binders[id].update(api, state, derived) end
-	for wid, mb in menuButtons do mb.sel.Visible = wid == id end
+	if collapsed then
+		if old then old.root.Visible = false end
+		Window.open(api)
+		setCollapsed(false)
+	elseif not old then
+		Window.open(api)
+		Hud.dock.Position = UDim2.new(1, DOCK_OUT, 0, 26)
+		slideDock(DOCK_IN, 0.34)
+	elseif sameGroup then
+		Window.close(old)
+		Window.open(api)
+	else
+		-- new feature group: drawer slides out, swaps, slides back in with a soft glow reveal
+		Kit.sfx("open")
+		local tw = slideDock(DOCK_OUT, 0.14, Enum.EasingStyle.Quad)
+		local function swap()
+			old.root.Visible = false
+			Window.open(api)
+			slideDock(DOCK_IN, 0.3)
+		end
+		if tw then tw.Completed:Once(swap) else swap() end
+	end
+	refreshTiles()
 end
 Windows.open = function(id)
 	if not Windows.built[id] then return end
-	if state and (Defs.WINDOW_ISLAND[id] or 1) > state.island then showToast("Locked: " .. (Defs.ISLANDS[Defs.WINDOW_ISLAND[id]].goal), docked, "crown"); return end
+	if state and (Defs.WINDOW_ISLAND[id] or 1) > state.island then
+		Kit.sfx("nope")
+		showToast("Locked: " .. (Defs.ISLANDS[Defs.WINDOW_ISLAND[id]].goal), docked, "crown")
+		return
+	end
 	dockWindow(id)
 end
 
-local function buildMenu()
-	-- 3 columns of 64 px tiles under the banner; label sits under its tile inside the cell
-	local col = Kit.new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(28, 150), Size = UDim2.fromOffset(240, 560), ZIndex = 10 }, canvas)
-	Kit.new("UIGridLayout", { CellSize = UDim2.fromOffset(76, 88), CellPadding = UDim2.fromOffset(6, 2), SortOrder = Enum.SortOrder.LayoutOrder }, col)
-	for i, id in Spec.MENU do
-		local holder = Kit.new("Frame", { BackgroundTransparency = 1, LayoutOrder = i, ZIndex = 10 }, col)
-		local sel = Kit.frame(holder, 3, -3, 70, 70, nil, { ZIndex = 9, Visible = false }); Kit.corner(sel, 20); Kit.stroke(sel, 3, Color3.new(1, 1, 1), 0)
-		local b = Kit.button(holder, 6, 0, 64, 64, { stops = Kit.stops(Spec[id].tab), icon = Spec.MENU_ICON[id], iconSize = 48, text = "", cr = 16 })
-		Kit.title(holder, Spec[id].title, 12, Color3.new(1, 1, 1), 1.6, 0, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(38, 68), ZIndex = 9 })
-		b.root.Activated:Connect(function() Windows.open(id) end)
-		menuButtons[id] = { holder = holder, btn = b, sel = sel }
+-- feature tile: glossy 3D tile in the group colour (same build as the panel buttons), the hero icon pops out of it,
+-- name plate below. Hover: lift + icon grows and tilts + glow. Press: squash. Selected: bright ring + glow.
+local function heroTile(parent, g, order)
+	local lead = Spec[g.members[1]]
+	local holder = Kit.new("Frame", { BackgroundTransparency = 1, LayoutOrder = order, ZIndex = 10 }, parent)
+	local glow = Kit.soft(holder, 10, 6, 84, 84, 20, "glow", hex(lead.buyGlow or lead.glow or "ffffff"), 1, 9)
+	local ring = Kit.frame(holder, 5, 1, 94, 94, nil, { ZIndex = 9 }); Kit.corner(ring, 26)
+	local rs = Kit.stroke(ring, 4, Color3.new(1, 1, 1), 1)
+	local b = Kit.button(holder, 10, 6, 84, 84, { stops = Kit.stops(lead.tab), text = "", cr = 22 })
+	local shadow = Kit.icon(holder, 55, 52, 70, g.icon, { AnchorPoint = Vector2.new(0.5, 0.5), ImageColor3 = Color3.new(0, 0, 0), ImageTransparency = 0.6, ZIndex = 11 })
+	local icon = Kit.icon(holder, 52, 45, 70, g.icon, { AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = 12 })
+	local isc = Kit.new("UIScale", {}, icon)
+	local plate = Kit.frame(holder, 10, 94, 84, 22, hex("12141a"), { BackgroundTransparency = 0.15, ZIndex = 10 }); Kit.corner(plate, 11); Kit.stroke(plate, 2)
+	local lbl = Kit.title(plate, g.name, if #g.name > 7 then 11 else 13, Color3.new(1, 1, 1), 1.8, 0,
+		{ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), ZIndex = 11 })
+	local hovered, selected = false, false
+	local function pose()
+		local up = hovered or selected
+		local back = TweenInfo.new(0.16, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+		TweenService:Create(isc, back, { Scale = if hovered then 1.16 elseif selected then 1.08 else 1 }):Play()
+		TweenService:Create(icon, back, { Rotation = if hovered then -7 else 0, Position = UDim2.fromOffset(52, if up then 40 else 45) }):Play()
+		TweenService:Create(shadow, TweenInfo.new(0.16), { ImageTransparency = if up then 0.72 else 0.6, Position = UDim2.fromOffset(55, if up then 55 else 52) }):Play()
+		TweenService:Create(glow, TweenInfo.new(0.18), { ImageTransparency = if selected then 0.25 elseif hovered then 0.55 else 1 }):Play()
+		TweenService:Create(rs, TweenInfo.new(0.15), { Transparency = if selected then 0 else 1 }):Play()
+		lbl.color(if selected then hex(lead.tcol or "ffffff") else Color3.new(1, 1, 1))
 	end
+	b.root.MouseEnter:Connect(function() hovered = true; pose() end)
+	b.root.MouseLeave:Connect(function() hovered = false; pose() end)
+	b.root.MouseButton1Down:Connect(function() TweenService:Create(isc, TweenInfo.new(0.07), { Scale = 0.94 }):Play() end)
+	b.root.MouseButton1Up:Connect(function() pose() end)
+	b.root.Activated:Connect(function()
+		-- clicking the open feature tucks the drawer away; otherwise open the group's first unlocked window
+		local cur = docked and groupOf(docked)
+		if cur == g then setCollapsed(not collapsed); return end
+		for _, m in g.members do
+			if not state or (Defs.WINDOW_ISLAND[m] or 1) <= state.island then Windows.open(m); return end
+		end
+	end)
+	local t = { holder = holder, btn = b, icon = icon }
+	function t.select(on)
+		if on == selected then return end
+		selected = on
+		pose()
+		if on then Kit.pop(icon, 1.3) end
+	end
+	return t
+end
+
+local function buildMenu()
+	local col = Kit.new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(24, 150), Size = UDim2.fromOffset(330, 380), ZIndex = 10 }, canvas)
+	Kit.new("UIGridLayout", { CellSize = UDim2.fromOffset(104, 120), CellPadding = UDim2.fromOffset(4, 4), SortOrder = Enum.SortOrder.LayoutOrder }, col)
+	for i, g in Spec.GROUPS do
+		groupTiles[g.id] = heroTile(col, g, i)
+		for _, m in g.members do menuButtons[m] = { holder = groupTiles[g.id].holder, btn = groupTiles[g.id].btn, group = g } end
+	end
+	-- right-edge tab shown while the drawer is collapsed
+	local root = Kit.new("TextButton", { Text = "", AutoButtonColor = false, BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, 100, 0.5, 0), Size = UDim2.fromOffset(74, 132), ZIndex = 40 }, canvas)
+	local face = Kit.frame(root, 0, 0, 96, 132, Color3.new(1, 1, 1), { ZIndex = 40 }); Kit.corner(face, 22)
+	local gr = Kit.grad(face, Kit.stops(Spec.popcorn.tab))
+	Kit.texture(face, "halftone", 0.78, 24, 40); Kit.stroke(face, 3.5)
+	local ic = Kit.icon(root, 9, 12, 56, "popcorn", { ZIndex = 42 })
+	Kit.title(root, "‹", 40, Color3.new(1, 1, 1), 3, 2, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(37, 68), ZIndex = 42 })
+	edgeTab = { root = root, face = face, grad = gr, icon = ic }
+	root.MouseEnter:Connect(function() Kit.sfx("hover"); TweenService:Create(root, TweenInfo.new(0.12), { Position = UDim2.new(1, -8, 0.5, 0) }):Play() end)
+	root.MouseLeave:Connect(function() if collapsed then TweenService:Create(root, TweenInfo.new(0.12), { Position = UDim2.new(1, 0, 0.5, 0) }):Play() end end)
+	root.Activated:Connect(function() setCollapsed(false) end)
 end
 
 -- ---------------------------------------------------------------- dev panel (Studio / owner only)
@@ -321,7 +432,20 @@ function Hud.setState(s, d)
 	devPanel.Visible = d.devAllowed == true
 	if d.devAllowed then devLabel.set(string.upper(d.mode) .. "  ·  " .. Defs.ISLANDS[s.island].id) end
 	-- menu: unlocked windows only
-	for id, mb in menuButtons do mb.holder.Visible = (Defs.WINDOW_ISLAND[id] or 1) <= s.island end
+	for _, g in Spec.GROUPS do
+		local open = false
+		for _, m in g.members do if (Defs.WINDOW_ISLAND[m] or 1) <= s.island then open = true end end
+		groupTiles[g.id].holder.Visible = open
+	end
+	for _, api in Windows.built do
+		for _, t in api.tabs do
+			if t.icon and t.id then
+				local locked = (Defs.WINDOW_ISLAND[t.id] or 1) > s.island
+				t.icon.ImageColor3 = if locked then Color3.fromRGB(70, 74, 84) else Color3.new(1, 1, 1)
+				if t.label then t.label.TextTransparency = if locked then 0.5 else 0 end
+			end
+		end
+	end
 	if not docked then dockWindow("popcorn") end
 	if docked and (Defs.WINDOW_ISLAND[docked] or 1) > s.island then dockWindow("popcorn") end
 	if docked then Windows.update(docked, s, d) end
@@ -342,7 +466,12 @@ for id, d in Defs.UP do NAMES[id] = d end
 function Hud.onToast(kind, a, b, c)
 	if kind == "bought" then
 		local d = Defs.UP[a]
+		Kit.sfx("thock")
+		local api = docked and Windows.built[docked]
+		if api then Window.celebrate(api, a) end
+		if d then local c = capsules[d.cur]; if c then Kit.pop(c.value.holder, 1.06) end end
 	elseif kind == "poor" then
+		Kit.sfx("nope")
 		if Hud.lastBtn then Kit.nope(Hud.lastBtn) end
 		local d = Defs.UP[a]
 		if d then wiggle(d.cur) end
@@ -398,6 +527,7 @@ function Hud.start(remotes)
 		api.root.Position = UDim2.fromScale(0.5, 0.5)
 		Kit.new("UIScale", { Scale = math.min(1, 1028 / api.H), Name = "Fit" }, holder)
 		api.root.Visible = false
+		api.collapse.root.Activated:Connect(function() Hud.setCollapsed(true) end)
 	end
 	layout()
 	workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(layout)

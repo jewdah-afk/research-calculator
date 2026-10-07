@@ -316,10 +316,22 @@ B.rods = {
 	end,
 	update = function(api, s, d)
 		local cur = Defs.ROD_BY_ID[s.fish.rod]
+		-- nothing left to craft: show the best crafted rods as owned (MAXED) instead of empty cards
+		local list = d.rodRows
+		if #list == 0 then
+			list = {}
+			for i = #Defs.RODS, 1, -1 do
+				if s.fish.crafted[Defs.RODS[i].id] and #list < #api.rows then table.insert(list, 1, Defs.RODS[i].id) end
+			end
+		end
 		for i, r in api.rows do
-			local id = d.rodRows[i]
+			local id = list[i]
 			r.row.Visible = id ~= nil
-			if id then
+			if id and s.fish.crafted[id] then
+				local rod = Defs.ROD_BY_ID[id]
+				r.set({ title = fishName(id:gsub("^rod_", "")) .. " Rod", icon = id, desc = rod.monetaPerCatch .. " moneta per catch.",
+					from = string.format("x%.2f", rod.speedBonus), to = "OWNED", prog = { 1, "CRAFTED" }, maxed = true })
+			elseif id then
 				local rod = Defs.ROD_BY_ID[id]
 				r.rod = id
 				local parts, ok, frac = {}, true, 0
@@ -552,7 +564,6 @@ B.profile = {
 }
 
 -- fishing tab cycles through the four fishing windows
-local FISH_NEXT = { rods = "baits", baits = "index", index = "aquarium", aquarium = "rods" }
 
 -- ---------------------------------------------------------------- registry
 Windows.binders = B
@@ -561,7 +572,11 @@ function Windows.build(parent, id, act)
 	local spec = table.clone(Spec[id])
 	local b = B[id]
 	spec.rows = b.rows
-	if FISH_NEXT[id] then spec.tabs = table.clone(spec.tabs); spec.tabs[1] = table.clone(spec.tabs[1]); spec.tabs[1].target = FISH_NEXT[id]; spec.tabs[1].label = "Fishing" end
+	-- tabs = the window's feature group (a lone window keeps one full-width tab naming itself)
+	spec.tabs = {}
+	for _, m in Spec.GROUP_OF[id].members do
+		table.insert(spec.tabs, { id = m, icon = Spec.MENU_ICON[m], label = Spec.TAB_LABEL[m], active = m == id, target = if m ~= id then m else nil })
+	end
 	local api = Window.build(parent, spec)
 	b.bind(api, act)
 	for _, t in api.tabs do

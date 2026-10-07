@@ -153,6 +153,24 @@ L("profile", { title = "PROFILE", figma = "75:354", body = "172925:0 0c1412:100"
 	section = "RECORDS", sectionColor = "5cf2e8", footer = "Your records show on the leaderboards.", extraH = 471 })
 
 Spec.GOLDEN_PROG = GOLDEN_PROG
+-- Feature groups: windows that belong together share one menu tile and show each other as tabs
+-- (Popcorn and its Molt reset, the Garden's seeds/sparrow/evolve, every fishing window, ...). Order = unlock order.
+Spec.GROUPS = {
+	{ id = "park", name = "PARK", icon = "popcorn", members = { "popcorn", "molt" } },
+	{ id = "garden", name = "GARDEN", icon = "seed", members = { "seeds", "sparrow", "evolve" } },
+	{ id = "bridge", name = "FISHING", icon = "rod", members = { "rods", "baits", "index", "aquarium", "seagull" } },
+	{ id = "forest", name = "FOREST", icon = "nest", members = { "nest", "redpanda" } },
+	{ id = "mine", name = "MINE", icon = "crow", members = { "mine" } },
+	{ id = "desert", name = "DESERT", icon = "golden", members = { "golden", "dave" } },
+	{ id = "expedition", name = "EXPEDITION", icon = "parrot", members = { "parrot", "quests", "sacrifice" } },
+	{ id = "echo", name = "ECHO", icon = "echo", members = { "echo" } },
+	{ id = "profile", name = "PROFILE", icon = "birb", members = { "profile" } },
+}
+Spec.GROUP_OF = {}
+for _, g in Spec.GROUPS do for _, m in g.members do Spec.GROUP_OF[m] = g end end
+Spec.TAB_LABEL = { popcorn = "Popcorn", molt = "Molt", seeds = "Seeds", sparrow = "Sparrow", evolve = "Evolve", rods = "Rods", baits = "Bait",
+	index = "Index", aquarium = "Aquarium", seagull = "Seagull", nest = "Nest", redpanda = "Panda", mine = "Mine", golden = "Golden", dave = "Dave",
+	parrot = "Parrot", quests = "Quests", sacrifice = "Altar", echo = "Echo", profile = "Profile" }
 -- HUD menu order (only unlocked windows show)
 Spec.MENU = { "popcorn", "molt", "seeds", "sparrow", "evolve", "rods", "seagull", "nest", "redpanda", "mine", "golden", "dave", "parrot", "quests", "sacrifice", "echo", "profile" }
 Spec.MENU_ICON = { popcorn = "popcorn", molt = "plume", seeds = "seed", sparrow = "sparrow", evolve = "monster", rods = "rod", seagull = "seagull",

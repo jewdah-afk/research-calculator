@@ -12,6 +12,8 @@ local hex, frame, text = Kit.hex, Kit.frame, Kit.text
 
 local Window = {}
 local live = {}
+local reduced = false   -- reduced-motion setting, polled
+task.spawn(function() while true do reduced = Kit.reduced(); task.wait(2) end end)
 
 local W = 500
 local ROW_H, ROW_PITCH = 116, 126
@@ -59,7 +61,7 @@ local function buildRow(api, body, spec, y, r)
 	local maxed = Kit.button(row, 304, 30, 150, 57, { text = "MAXED", size = 26, art = btnArt(spec.id, "maxed") })
 	maxed.root.Visible = false
 	buy.look("grey"); all.look("grey")
-	local rapi = { row = row, title = title, from = from, to = to, desc = desc, prog = prog, buy = buy, all = all, maxed = maxed, icon = ico, y = y }
+	local rapi = { row = row, title = title, from = from, to = to, desc = desc, prog = prog, buy = buy, all = all, maxed = maxed, icon = ico, y = y, upgrade = r.upgrade, growth = growth }
 	table.insert(api.bobbers, { ico, 16, math.random() * 6 })
 	function rapi.set(t)
 		if t.title then title.set(t.title) end
@@ -113,7 +115,7 @@ function Window.build(parent, spec)
 	local root = Kit.new("Frame", { Name = spec.id, Size = UDim2.fromOffset(W, H), BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5) }, parent)
 	api.root = root
 	-- the Figma frame render (incl. rim glow), 2x texture drawn at 1x
-	local bg = Kit.image(root, -MARGIN, -MARGIN, W + 2 * MARGIN, H + 2 * MARGIN, Art[spec.art or spec.id], { ScaleType = Enum.ScaleType.Stretch, ZIndex = 0 })
+	local bg = Kit.image(root, -MARGIN, -MARGIN, W + 2 * MARGIN, H + 2 * MARGIN, Art[spec.artId or spec.id], { ScaleType = Enum.ScaleType.Stretch, ZIndex = 0 })
 	api.bg = bg
 	local body = Kit.new("CanvasGroup", { Size = UDim2.fromOffset(W, H), BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 1 }, root)
 	Kit.corner(body, 22)
@@ -121,32 +123,50 @@ function Window.build(parent, spec)
 
 	-- header: centred title (no icon, user rule) + sparkles
 	api.title = Kit.title(body, spec.title, 34, Color3.new(1, 1, 1), 3, 3, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(250, 29.5), ZIndex = 6 })
-	Kit.sparkle(body, 437, 21, 14); Kit.sparkle(body, 384.5, 44.5, 9); Kit.sparkle(body, 465.5, 49.5, 7)
+	Kit.sparkle(body, 384.5, 44.5, 9)
+	-- collapse control (drawer tucks into a right-edge tab)
+	local col = Kit.button(body, 438, 12, 46, 40, { text = "", stops = Kit.stops("ffffff@30:0 ffffff@10:100"), cr = 12, sound = "close" })
+	Kit.title(col.face, "›", 34, Color3.new(1, 1, 1), 3, 2, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(23, 15), ZIndex = 9 })
+	api.collapse = col
 
-	-- tabs (16,90,468,54): active pill = Figma face, inactive = icon + grey label centred in its half
+	-- tabs (16,90,468,54): one tab per member of the window's feature group (Spec.GROUPS), equal widths.
+	-- Active = Figma pill face; inactive = icon + grey label (icon only when the group has 4+ members).
 	api.tabs = {}
 	local tabs = frame(body, 16, 90, 468, 54, nil, { ZIndex = 2 })
+	local n = #spec.tabs
+	local tw = 468 / n
 	for i, t in spec.tabs do
-		local left = i == 1
+		local x = (i - 1) * tw
 		if t.active then
-			local pill = Kit.button(tabs, if left then 7.5 else 236.5, 7, 224, 42, { icon = t.icon, text = t.label, size = 20, iconSize = 29, art = btnArt(spec.id, "tab") })
+			local pill = Kit.button(tabs, x + 6, 7, tw - 12, 42, { icon = t.icon, text = if n >= 4 then "" else t.label, size = if n >= 3 then 17 else 20, iconSize = 29, art = btnArt(spec.id, "tab") })
 			api.tabs[i] = pill
 		else
-			local hit = Kit.new("TextButton", { BackgroundTransparency = 1, Text = "", Position = UDim2.fromOffset(if left then 0 else 234, 0), Size = UDim2.fromOffset(234, 54), ZIndex = 4 }, tabs)
+			local hit = Kit.new("TextButton", { BackgroundTransparency = 1, Text = "", AutoButtonColor = false, Position = UDim2.fromOffset(x, 0), Size = UDim2.fromOffset(tw, 54), ZIndex = 4 }, tabs)
 			local c = Kit.new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), AutomaticSize = Enum.AutomaticSize.XY, Size = UDim2.fromOffset(0, 0), ZIndex = 4 }, hit)
-			Kit.new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 8) }, c)
-			Kit.icon(c, 0, 0, 28, t.icon, { ZIndex = 5 })
-			text(c, t.label, 19, hex("8d94a3"), { ZIndex = 5 })
-			api.tabs[i] = { root = hit }
+			Kit.new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 6) }, c)
+			local ic = Kit.icon(c, 0, 0, if n >= 4 then 34 else 28, t.icon, { ZIndex = 5 })
+			local lb = if n < 4 then text(c, t.label, if n >= 3 then 16 else 19, hex("8d94a3"), { ZIndex = 5 }) else nil
+			local sc = Kit.new("UIScale", {}, c)
+			hit.MouseEnter:Connect(function()
+				Kit.sfx("hover")
+				TweenService:Create(sc, TweenInfo.new(0.12, Enum.EasingStyle.Back), { Scale = 1.1 }):Play()
+				if lb then lb.TextColor3 = hex("e4e8f0") end
+			end)
+			hit.MouseLeave:Connect(function()
+				TweenService:Create(sc, TweenInfo.new(0.12), { Scale = 1 }):Play()
+				if lb then lb.TextColor3 = hex("8d94a3") end
+			end)
+			api.tabs[i] = { root = hit, icon = ic, label = lb, id = t.id }
 		end
 		api.tabs[i].target = t.target
+		api.tabs[i].id = t.id
 	end
 
 	-- hero (16,158,468,300): art is baked; hero icon, title, subtitle and button are live
 	if hasHero then
 		local h = spec.hero
 		local hero = frame(body, 16, 158, 468, 300, nil, { ZIndex = 2 })
-		local hi = Kit.icon(hero, 14 + 153, 14, 134, h.icon, { ZIndex = 4 })
+		local hi = Kit.icon(hero, 234, 152, 134, h.icon, { ZIndex = 4, AnchorPoint = Vector2.new(0.5, 1) })
 		local ht = Kit.title(hero, h.title, 32, Color3.new(1, 1, 1), 3, 3, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(234, 171), ZIndex = 6 })
 		local sub = text(hero, h.sub or "", 14, hex("a9afbc"), { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(234, 210), ZIndex = 6 })
 		local hb = Kit.button(hero, 14, 236, 440, 53, { icon = h.btnIcon, text = h.btn, size = 22, iconSize = 37, art = btnArt(spec.id, "hero") })
@@ -164,6 +184,28 @@ function Window.build(parent, spec)
 
 	live[api] = true
 	return api
+end
+
+-- successful upgrade: card brightens, icon pulses, value pops, a few theme-colour sparkles
+function Window.celebrate(api, upgradeId)
+	for _, r in api.rows do
+		if r.upgrade == upgradeId then
+			local flash = frame(r.row, -2, -2, 472, ROW_H + 4, Color3.new(1, 1, 1), { BackgroundTransparency = 0.55, ZIndex = 3 }); Kit.corner(flash, 16)
+			TweenService:Create(flash, TweenInfo.new(0.35, Enum.EasingStyle.Quad), { BackgroundTransparency = 1 }):Play()
+			task.delay(0.36, function() flash:Destroy() end)
+			Kit.pop(r.icon, 1.25); Kit.pop(r.growth, 1.15)
+			if reduced then return end
+			local c = hex(api.spec.buyGlow or "ffffff")
+			for _ = 1, 5 do
+				local sx, sy = 50 + math.random(-30, 30), 58 + math.random(-30, 30)
+				local sp = Kit.image(r.row, sx, sy, 14, 14, Kit.iconId("ui/sparkle"), { ImageColor3 = c, ZIndex = 9 })
+				local a = math.random() * math.pi * 2
+				TweenService:Create(sp, TweenInfo.new(0.45, Enum.EasingStyle.Quad), { Position = UDim2.fromOffset(sx + math.cos(a) * 46, sy + math.sin(a) * 34), ImageTransparency = 1, Rotation = 90, Size = UDim2.fromOffset(6, 6) }):Play()
+				task.delay(0.46, function() sp:Destroy() end)
+			end
+			return
+		end
+	end
 end
 
 function Window.destroy(api) live[api] = nil; api.root:Destroy() end
@@ -205,16 +247,19 @@ RunService.RenderStepped:Connect(function(dt)
 	clock += dt
 	for api in live do
 		if not api.root.Visible then continue end
-		for _, bob in api.bobbers do bob[1].Position = UDim2.fromOffset(12, bob[2] + math.sin(clock * math.pi * 2 / 2.2 + bob[3]) * 3) end
-		if api.hero then
-			api.hero.icon.Rotation = math.sin(clock * math.pi * 2 / 3) * 4
-			api.hero.icon.Position = UDim2.fromOffset(167, 14 + math.sin(clock * math.pi * 2 / 3 + 1) * 3)
+		if not reduced then for _, bob in api.bobbers do bob[1].Position = UDim2.fromOffset(12, bob[2] + math.sin(clock * math.pi * 2 / 2.2 + bob[3]) * 3) end end
+		if api.hero and not reduced then
+			-- breathing squash with the feet planted on the shadow, plus a slight sway
+			local b = math.sin(clock * math.pi * 2 / 2.6)
+			api.hero.icon.Size = UDim2.fromOffset(134 * (1 - 0.025 * b), 134 * (1 + 0.035 * b))
+			api.hero.icon.Rotation = math.sin(clock * math.pi * 2 / 5.2) * 2
 		end
 		local pulse = (math.sin(clock * math.pi * 2 / 1.6) + 1) / 2
 		for _, r in api.rows do
 			if r.buy.lit then r.buy.glowImg.ImageTransparency = 0.3 + 0.45 * (1 - pulse) end
 		end
 	end
+	if reduced then return end
 	for _, sp in Kit.sparkles do
 		if sp.i.Parent then
 			local t = ((clock + sp.ph) % sp.per) / sp.per
