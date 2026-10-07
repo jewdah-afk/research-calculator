@@ -428,7 +428,7 @@ local function buildMenu()
 		{ id = "map", name = "MAP", icon = "map", members = {}, theme = LEFT_THEMES.map, onClick = function() Hud.onMap() end },
 		{ id = "teleport", name = "TELEPORT", icon = "teleport", members = {}, theme = LEFT_THEMES.teleport, onClick = function() Hud.onTeleport() end },
 		profileG,
-		{ id = "shop", name = "SHOP", icon = "shop", w = 196, iconSize = 84, members = {}, theme = LEFT_THEMES.shop, onClick = function() showToast("The shop opens with the live servers", "golden", "shop") end },
+		{ id = "shop", name = "SHOP", icon = "shop", w = 196, iconSize = 84, members = {}, theme = LEFT_THEMES.shop, onClick = function() Hud.openShop() end },
 		{ id = "settings", name = "SETTINGS", icon = "settings", members = {}, theme = LEFT_THEMES.settings, onClick = function() Hud.onSettings() end },
 		{ id = "auto", name = "AUTO", icon = "auto", members = {}, theme = LEFT_THEMES.auto, onClick = function()
 			if not derived then return end
@@ -497,6 +497,92 @@ function Hud.onSettings()
 		end },
 	}
 	openPopup("SETTINGS", rows).Name = "Settings"
+end
+-- ---------------------------------------------------------------- shop board (passes, boosts, crates)
+-- Same window system as every board (cloned golden art), cards in two columns per section. Buying: a real
+-- PromptGamePass/ProductPurchase when the item has a Creator Hub id; in Studio / for devs it grants through the
+-- server test path so everything can be checked before the ids exist. The server applies every effect.
+local ShopData = require(game:GetService("ReplicatedStorage"):WaitForChild("Peckwood"):WaitForChild("Shop"))
+local shopOverlay, shopCards = nil, {}
+local function fmtTime(sec) sec = math.floor(sec); return string.format("%d:%02d", sec // 60, sec % 60) end
+function Hud.refreshShop()
+	if not shopOverlay then return end
+	local sh = derived and derived.shop or { passes = {}, boostLeft = 0 }
+	for id, c in shopCards do
+		local it = ShopData.BY_ID[id]
+		if it.kind == "pass" then
+			local own = sh.passes[id] == true
+			if own ~= c.owned then
+				c.owned = own
+				c.btn.setText(if own then "OWNED" else "R$ " .. it.robux)
+				c.btn.look(if own then "gold" else "lit", Kit.stops("7dff86:0 2bd04a:42 15962f:86 15962f:100"))
+			end
+		elseif it.minutes then
+			c.sub.Text = if sh.boostLeft > 0 then "Active · " .. fmtTime(sh.boostLeft) .. " left" else it.desc
+		end
+	end
+end
+function Hud.openShop()
+	if shopOverlay then shopOverlay.Visible = not shopOverlay.Visible; Hud.refreshShop(); return end
+	shopOverlay = Kit.new("TextButton", { Text = "", AutoButtonColor = false, BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.45, Size = UDim2.fromScale(1, 1), ZIndex = 80 }, canvas)
+	local spec = table.clone(Spec.golden); spec.rows = {}; spec.hero = nil; spec.section = nil; spec.h = 905
+	spec.title = "SHOP"; spec.footer = "Passes are forever and stack with each other. Boost time stacks."
+	spec.tabs = { { id = "shop", icon = "shop", label = "Shop", active = true } }
+	local api = Window.build(shopOverlay, spec)
+	api.root.Position = UDim2.fromScale(0.5, 0.5); api.root.ZIndex = 81
+	if api.collapse then api.collapse.root.Activated:Connect(function() shopOverlay.Visible = false end) end
+	local sf = Kit.new("ScrollingFrame", { Position = UDim2.fromOffset(16, 158), Size = UDim2.fromOffset(468, 712), BackgroundTransparency = 1, BorderSizePixel = 0,
+		ScrollBarThickness = 6, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, ZIndex = 5 }, api.body)
+	Kit.new("UIListLayout", { Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder }, sf)
+	local order, curSec, grid = 0, nil, nil
+	for _, it in ShopData.ITEMS do
+		if it.section ~= curSec then
+			curSec = it.section; order += 1
+			local hdrL = Kit.title(sf, curSec, 18, hex("fff2d0"), 2.4, 2, { LayoutOrder = order, ZIndex = 6 })
+			order += 1
+			grid = Kit.new("Frame", { BackgroundTransparency = 1, AutomaticSize = Enum.AutomaticSize.Y, Size = UDim2.fromOffset(460, 0), LayoutOrder = order, ZIndex = 5 }, sf)
+			Kit.new("UIGridLayout", { CellSize = UDim2.fromOffset(222, 196), CellPadding = UDim2.fromOffset(12, 12), SortOrder = Enum.SortOrder.LayoutOrder }, grid)
+			local _ = hdrL
+		end
+		local th = Spec[it.theme] or Spec.golden
+		local card = Kit.frame(grid, 0, 0, 222, 196, Color3.new(1, 1, 1), { ZIndex = 6 }); Kit.corner(card, 18)
+		Kit.grad(card, Kit.stops(th.card or th.body))
+		Kit.stroke(card, 3, Kit.INK)
+		local band = Kit.frame(card, 0, 0, 222, 96, Color3.new(1, 1, 1), { ZIndex = 6 }); Kit.corner(band, 18)
+		Kit.grad(band, Kit.stops(th.hdr))
+		Kit.texture(band, "halftone", 0.82, 18, 6)
+		Kit.image(band, 111 - 70, 48 - 70, 140, 140, Kit.iconId("ui/sunburst"), { ImageColor3 = Color3.new(1, 1, 1), ImageTransparency = 0.7, ZIndex = 7 })
+		Kit.icon(card, 111 - 40, 8, 80, it.icon, { ZIndex = 9 })
+		Kit.title(card, it.name, 19, Color3.new(1, 1, 1), 2.6, 2, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(111, 98), ZIndex = 9 })
+		local sub = Kit.text(card, it.desc, 13, hex("d8dde6"), { AutomaticSize = Enum.AutomaticSize.None, Size = UDim2.fromOffset(206, 18), Position = UDim2.fromOffset(8, 124),
+			TextXAlignment = Enum.TextXAlignment.Center, TextScaled = true, ZIndex = 9 })
+		Kit.new("UITextSizeConstraint", { MaxTextSize = 13 }, sub)
+		local btn = Kit.button(card, 16, 146, 190, 42, { text = "R$ " .. it.robux, size = 20, stops = Kit.stops("7dff86:0 2bd04a:42 15962f:86 15962f:100") })
+		if it.tag then
+			local rib = Kit.frame(card, 222 - 96, -8, 104, 24, hex("ff4d6a"), { ZIndex = 10 }); Kit.corner(rib, 12); Kit.stroke(rib, 2.5, Kit.INK)
+			local rl = Kit.title(rib, it.tag, 12, Color3.new(1, 1, 1), 2, 1, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, -1), ZIndex = 11 })
+			local _ = rl
+		end
+		shopCards[it.id] = { btn = btn, sub = sub, owned = nil }
+		btn.root.Activated:Connect(function()
+			local c = shopCards[it.id]
+			if c.owned then return end
+			local MPS = game:GetService("MarketplaceService")
+			if it.assetId > 0 then
+				pcall(function()
+					if it.kind == "pass" then MPS:PromptGamePassPurchase(plr, it.assetId) else MPS:PromptProductPurchase(plr, it.assetId) end
+				end)
+			elseif derived and derived.shop and derived.shop.testGrants then
+				act("shoptest", it.id)
+				showToast(it.name .. " granted (Studio test)", "golden", it.icon)
+			else
+				showToast(it.name .. " is coming soon", "golden", it.icon)
+			end
+		end)
+	end
+	shopOverlay.Activated:Connect(function() shopOverlay.Visible = false end)
+	Window.open(api)
+	Hud.refreshShop()
 end
 function Hud.onMap()
 	closePopup()
@@ -683,6 +769,7 @@ local lastIsland = 0
 function Hud.setState(s, d)
 	state, derived = s, d
 	Windows.state = s
+	Hud.refreshShop()
 	-- banner: island name + live kernels
 	-- banner names (and themes) the island the bird is standing on
 	local isl = Defs.ISLANDS[s.island]
@@ -834,6 +921,7 @@ function Hud.start(remotes)
 	end)
 	remotes.Toast.OnClientEvent:Connect(Hud.onToast)
 	-- debug hook (Studio tooling / screenshots): PlayerGui:SetAttribute("PeckwoodOpen", "<window id>")
+	gui.Parent:GetAttributeChangedSignal("PeckwoodShop"):Connect(function() Hud.openShop() end)   -- QA: toggle the shop
 	gui.Parent:GetAttributeChangedSignal("PeckwoodOpen"):Connect(function() Windows.open(gui.Parent:GetAttribute("PeckwoodOpen")) end)
 	-- QA rig (Studio screenshots): PeckwoodQA = zoom (0 = off), PeckwoodQAY = scroll in design px.
 	-- Hides the rest of the HUD and pins the docked window top-left so every window is checked the same way.

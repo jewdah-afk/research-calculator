@@ -126,6 +126,8 @@ local function derived(ss)
 		nextGoal = nxt and nxt.goal or "Every island is open", nextCost = nxt and nxt.cost,
 		autoAllowed = ss.autoAllowed, devAllowed = ss.devAllowed, mode = ss.mode, groupId = Config.GROUP_ID,
 		discovered = (function() local n = 0; for _ in fs.disc do n += 1 end; return n end)(),
+		shop = { passes = (ss.real.shop or {}).passes or {}, boostLeft = math.max(0, ((ss.real.shop or {}).boostUntil or 0) - os.time()),
+			testGrants = game:GetService("RunService"):IsStudio() or ss.devAllowed },
 	}
 end
 
@@ -208,7 +210,7 @@ local function collect(plr, ss, id, k)
 	local value
 	if k.golden then
 		value = G.goldenValue(s)
-		G.give(s, "goldenPopcorn", value)
+		value = G.give(s, "goldenPopcorn", value)
 		s.stats.goldenCollected += value
 		s.dave.golden += value
 		if s.island >= 8 then   -- Dave levels from golden pickups (same curve as the Sparrow)
@@ -219,7 +221,7 @@ local function collect(plr, ss, id, k)
 		local base = 1
 		for _, t in F.PopcornTypes do if t.id == k.kind then base = t.value end end
 		value = F.popcornGain(s, base, G.inDesert(s))
-		G.give(s, "popcorn", value)
+		value = G.give(s, "popcorn", value)
 		if s.island >= 10 and ss.rng:NextNumber() < Defs.S.echoChance(false, false) then
 			G.give(s, "echoPopcorn", Defs.level(s, "p_echo_value"))
 		end
@@ -473,6 +475,53 @@ function A.dev(plr, ss, op)
 	clearField(plr, ss)
 	ss.fishDirty = true
 	toast(plr, "dev", ss.mode, ss.view.island)
+end
+
+-- ---------------------------------------------------------------- shop (passes + products), server-verified
+local MarketplaceService = game:GetService("MarketplaceService")
+local Shop = require(RS:WaitForChild("Peckwood"):WaitForChild("Shop"))
+local function shopOf(s) s.shop = s.shop or { passes = {}, boostUntil = 0 }; s.shop.passes = s.shop.passes or {}; return s.shop end
+local function grant(plr, item)
+	local ss = sessions[plr]; if not ss then return false end
+	for _, s in { ss.real, ss.view } do
+		local sh = shopOf(s)
+		if item.kind == "pass" then sh.passes[item.id] = true
+		elseif item.minutes then sh.boostUntil = math.max(sh.boostUntil or 0, os.time()) + item.minutes * 60
+		elseif item.seconds then
+			G.syncFactors(s)
+			local pps = F.popcornGain(s, 1, false) / F.spawnInterval(s, false)
+			G.give(s, "popcorn", math.max(1000, pps * item.seconds * Shop.mult(s, "popcorn", os.time())), true)
+		end
+		if ss.real == ss.view then break end
+	end
+	ss.dirty = true
+	push(plr)
+	return true
+end
+-- passes owned on Roblox are re-checked every join (never trust saved flags alone for live passes)
+Players.PlayerAdded:Connect(function(plr)
+	for _, it in Shop.ITEMS do
+		if it.kind == "pass" and it.assetId > 0 then
+			local ok, owns = pcall(MarketplaceService.UserOwnsGamePassAsync, MarketplaceService, plr.UserId, it.assetId)
+			if ok and owns then task.defer(grant, plr, it) end
+		end
+	end
+end)
+MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(plr, passId, bought)
+	local it = Shop.BY_ASSET[passId]
+	if bought and it then grant(plr, it) end
+end)
+MarketplaceService.ProcessReceipt = function(info)
+	local plr = Players:GetPlayerByUserId(info.PlayerId)
+	local it = Shop.BY_ASSET[info.ProductId]
+	if not plr or not it then return Enum.ProductPurchaseDecision.NotProcessedYet end
+	if grant(plr, it) then save(plr); return Enum.ProductPurchaseDecision.PurchaseGranted end
+	return Enum.ProductPurchaseDecision.NotProcessedYet
+end
+-- Studio / dev test path: grants without Robux (never available to normal players in live servers)
+A.shoptest = function(plr, ss, id)
+	if not (game:GetService("RunService"):IsStudio() or ss.devAllowed) then return end
+	local it = Shop.BY_ID[id]; if it then grant(plr, it) end
 end
 
 ActionEv.OnServerEvent:Connect(function(plr, kind, a, b)

@@ -5,6 +5,7 @@
 -- (popcorn, goldenFeathers, sunflowerSeeds, ...) because BirbFormulas reads them there.
 local RS = game:GetService("ReplicatedStorage")
 local Defs = require(RS:WaitForChild("Peckwood"):WaitForChild("Defs"))
+local Shop = require(RS:WaitForChild("Peckwood"):WaitForChild("Shop"))
 local F, S, EN = Defs.F, Defs.S, Defs.EN
 local UP = Defs.UP
 
@@ -34,6 +35,7 @@ function G.fresh()
 		quests = { day = 0, daily = {}, prog = {}, claimed = {}, done = 0, bonus = {} },
 		sacrifice = { total = 0, tier = 0 },
 		auto = false,
+		shop = { passes = {}, boostUntil = 0 },
 	}
 	for _, k in WALLET do s[k] = EN.ZERO end
 	return s
@@ -107,8 +109,8 @@ end
 function G.evoMult(s) return if s.evolutionCount >= 2 then s.evolutionCount else 1 end
 
 -- ---------------------------------------------------------------- derived (also sent to the client)
-function G.reachPx(s) return 14 * (1 + 0.2 * math.max(0, F.level(s, "pr_radius_mult") - 1)) * (1 + questBonus(s, "pickup_radius_mult")) end
-function G.speed(s) return F.wingSpeed(F.level(s, "p_move_speed")) end
+function G.reachPx(s) return (if s.shop and s.shop.passes.beak then 1.5 else 1) * 14 * (1 + 0.2 * math.max(0, F.level(s, "pr_radius_mult") - 1)) * (1 + questBonus(s, "pickup_radius_mult")) end
+function G.speed(s) return F.wingSpeed(F.level(s, "p_move_speed")) * (if s.shop and s.shop.passes.swift then 1.5 else 1) end
 function G.inDesert(s) return s.zone == "desert" end
 
 function G.goldenValue(s)
@@ -194,12 +196,20 @@ end
 function G.plumeGain(s) G.syncFactors(s); return F.rebirbFeathers(s) end
 
 -- ---------------------------------------------------------------- wallet helpers
-local function give(s, cur, n)
+-- every earned currency passes here: shop passes + an active 2x boost multiply it (raw = crates / refunds, unboosted).
+-- Returns the amount actually credited (number pops show the boosted value).
+local function give(s, cur, n, raw)
+	s.shop = s.shop or { passes = {}, boostUntil = 0 }
+	if not raw then
+		local m = Shop.mult(s, cur, os.time())
+		if m ~= 1 then n = if type(n) == "number" then n * m else EN.mul(n, m) end
+	end
 	s[cur] = EN.add(s[cur], n)
 	if cur == "popcorn" then
 		s.stats.totalPopcorn += num(n)
 		local p = num(s.popcorn); if p > (s.stats.bestPopcorn or 0) then s.stats.bestPopcorn = p end
 	end
+	return n
 end
 G.give = give
 local function canPay(s, cur, n) return EN.meeq(s[cur], n) end
