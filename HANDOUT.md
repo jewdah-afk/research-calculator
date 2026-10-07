@@ -112,6 +112,7 @@ Watch the file key: the letter after `GG` is a lowercase **l**. A key with a cap
 | `61:7` | **Parrot / expedition** (emerald, parrot hero), 3 skill-point rows: Health, Damage, Regen. Buttons read SPEND ALL |
 | `62:7` | **Evolve** (crimson, castle monster hero), 3 feed rows for evolution 3 to 4: popcorn 1Qa, twigs 100K, moneta 10K. Buttons read FEED / FEED ALL |
 | `45:7`, `45:19`, `45:33`, `49:161`, `57:166`, `59:166`, `60:166`, `61:166`, `62:166` | Motion spec cards under each window |
+| `65:8`, `65:181`, `65:354`, `65:527` | **Companion panels** (row under the shops, label COMPANIONS): Sparrow (Feed, Resonance, Mitosis), Seagull (Route, Doctrine, Migration), Dave (Seed Training, Rebirb), Red Panda (Assist Mode). Spec cards `65:167`, `65:340`, `65:513`, `65:686`. **Their hero/header icons are placeholders** (wing, fish, golden, twig) until sparrow, seagull, dove and red panda icons exist |
 | `8:271` | HUD 1920×1080: money capsules, map banner, objective, toast, docked shop |
 
 Page 1 of the same file holds an older version with studded buttons. Don't use it as a reference.
@@ -141,13 +142,24 @@ Page 1 of the same file holds an older version with studded buttons. Don't use i
 | Molt | `e9c4ff → b06cff → 8a3fe6 → 4f1d9c` | `b06cff` |
 | Seeds | `e6ffc4 → 8fe04a → 4fb52a → 256a12` | `8fe04a` |
 | Golden | the Seeds gradient hue-shifted to gold (hue 44°, darks 34°) | `ffd259` |
-| Mine | the Golden window hue-shifted +156° (gold to steel cyan; blue BUY ALL and grey states untouched) | about `59c8ff` |
-| Nest | Golden hue-shifted −36°, saturation ×0.85 (cedar) | cedar red |
-| Echo | Golden hue-shifted +276° (magenta) | magenta |
-| Parrot | Golden hue-shifted +116°, saturation ×0.9 (emerald) | emerald |
-| Evolve | Golden hue-shifted +302°, lightness ×0.95 (crimson) | crimson |
 
-**How the new windows were made:** clone `49:10` and `49:161`, add or remove `row/*` (126px pitch, window height follows), hue-shift every SOLID/gradient/effect colour whose hue is 10–70° (leaves the blue BUY ALL, greys and inks alone), rewrite text, then upload PNGs from `birb-icons/final/` as FIT image fills on the cloned `ico/*` rectangles. The board `8:7` was widened for each.
+**Icon-matched palettes (2026-10-07).** The user wants every window coloured from its hero icon's own colours, using several of them. Each window has three roles: **p** (header, hero, body), **b** (main buttons and active tab) and **a** (row titles and stat text). Each is a target hue plus saturation and lightness factors applied to the Golden source colours:
+
+| Window | p | b | a |
+|---|---|---|---|
+| Mine (crow + ore) | navy 226° | ore cyan 194° | beak yellow 46° |
+| Nest | wood brown 24° (s×0.75) | leaf green 108° | egg cream 42° (s×0.45, l×1.12) |
+| Echo | pink 318° | violet 290° | light pink 332° |
+| Parrot | red 356° | wing blue 214° | yellow 50° |
+| Evolve (monster) | cyan 188° | mouth purple 284° | mint 168° |
+| Sparrow | brown 28° | seed yellow 48° | cream 38° |
+| Seagull | sky 204° (s×0.6) | beak orange 38° | white 50° (s×0.3) |
+| Dave | dusty rose 18° (s×0.45) | gold 46° | lilac 290° |
+| Red Panda | rust 14° | bamboo green 120° | cream 36° |
+
+The BUY ALL buttons and progress bars keep the Golden source colours.
+
+**How the new windows were made:** clone `49:10` and `49:161`, add or remove `row/*` (126px pitch, window height follows), recolour by walking the clone alongside `49:10` and mapping each warm colour (hue 10–70°) to the window's p/b/a role (greys, inks, the blue BUY ALL and progress bars stay as they are), rewrite text, then upload PNGs from `birb-icons/final/` as FIT image fills on the cloned `ico/*` rectangles. The board `8:7` was widened for each.
 
 ### Textures (in `7:8`)
 
@@ -184,7 +196,7 @@ The full text is on the spec cards. In short:
 ## 5. Next steps (in order)
 
 1. **Review the five new windows** with the user (Mine, Nest, Echo, Parrot, Evolve). Open questions: the Nest footer says Molt and Evolve keep twigs and the twig shop, which is not verified in the data; Moneta uses the fish icon; Rupture uses the sword.
-2. **Companion panels:** Sparrow (mitosis and resonance), Seagull (doctrines, routes, migrations), Dave, Red Panda.
+2. **Companion icons:** sparrow, seagull, collared dove and red panda in the icon-set style, then swap them into the companion panels.
 3. **Fishing:** fish index, rods, baits, aquarium.
 4. **Quests, sacrifice milestones and the profile screen.**
 5. **Missing icons** in the icon-set style: spirit, and any new currencies the remaining windows need.
