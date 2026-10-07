@@ -691,7 +691,7 @@ function Hud.openShop()
 		for i, t in tabs do t.look(if i == k then "lit" else "grey", Kit.stops("ffe08a:0 f5b93c:45 c97a14:100")) end
 	end
 	for i, t in TABS do
-		local b = Kit.button(panel, PW / 2 - 330 + (i - 1) * 226, 102, 210, 58, { icon = t[2], iconSize = 46, text = t[1], size = 22, stops = Kit.stops("ffe08a:0 f5b93c:45 c97a14:100") })
+		local b = Kit.button(panel, PW / 2 - 330 + (i - 1) * 226, 96, 210, 58, { icon = t[2], iconSize = 46, text = t[1], size = 22, stops = Kit.stops("ffe08a:0 f5b93c:45 c97a14:100") })
 		b.root.ZIndex = 86
 		b.root.Activated:Connect(function() show(i) end)
 		tabs[i] = b
@@ -743,7 +743,7 @@ function Hud.openShop()
 		btn.root.ZIndex = 90
 		local kc = Kit.new("Frame", { ClipsDescendants = true, Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ZIndex = 9 }, btn.face); Kit.corner(kc, 16)
 		addShine(kc, bw, bh, 9)
-		local rib = Kit.frame(hero, CW - 28 - 136 - 90, -18, 180, 44, Color3.new(1, 1, 1), { ZIndex = 91 }); Kit.corner(rib, 22); Kit.stroke(rib, 4, Kit.INK)
+		local rib = Kit.frame(hero, CW - 28 - 136 - 90, -10, 180, 44, Color3.new(1, 1, 1), { ZIndex = 91 }); Kit.corner(rib, 22); Kit.stroke(rib, 4, Kit.INK)
 		Kit.grad(rib, Kit.stops("ff8095:0 e8344f:100"))
 		Kit.title(rib, B.tag, 24, Color3.new(1, 1, 1), 3, 2, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, -1), ZIndex = 92 })
 		shopCards.bundle = { btn = btn, sub = Instance.new("TextLabel"), owned = nil }
