@@ -23,7 +23,12 @@ local cam = workspace.CurrentCamera
 -- yaw 0 (looking down -Z) so the 40-tile axis of the island runs left-right across the screen.
 local PITCH = math.rad(52)
 local FOV = 11
-local zoom = 9               -- half the visible height, in tiles (View3D 10.5 ortho; a touch closer reads better in perspective)
+-- zoom = half the visible height in tiles. Default frames the WHOLE island, level and square-on; zooming in slides
+-- the focus from the island centre onto the bird (ZOOM_FOLLOW and closer = full follow)
+local ZOOM_MIN, ZOOM_MAX, ZOOM_ALL, ZOOM_FOLLOW = 4, 20, 16, 8
+local zoom = ZOOM_ALL
+local zoomTarget = ZOOM_ALL
+local ISLAND_CENTRE = Vector3.new(0, 0, 2)
 local camFocus: Vector3? = nil
 local shake = 0
 cam.CameraType = Enum.CameraType.Scriptable
@@ -35,7 +40,7 @@ end
 UIS.InputChanged:Connect(function(io, gp)
 	if gp then return end
 	if io.UserInputType == Enum.UserInputType.MouseWheel then
-		zoom = math.clamp(zoom * (if io.Position.Z < 0 then 1.1 else 1 / 1.1), 4, 16)
+		zoomTarget = math.clamp(zoomTarget * (if io.Position.Z < 0 then 1.12 else 1 / 1.12), ZOOM_MIN, ZOOM_MAX)
 	end
 end)
 
@@ -220,7 +225,13 @@ RunService:BindToRenderStep("Peckwood", Enum.RenderPriority.Camera.Value + 1, fu
 	bodyStep(dt); Birds.step(clock, dt, plr.Character, body); kernelsStep(dt)
 	local ch = plr.Character
 	local hrp = ch and ch:FindFirstChild("HumanoidRootPart") :: BasePart?
-	local want = if hrp then Vector3.new(hrp.Position.X, 0, hrp.Position.Z) else Vector3.zero
+	zoom += (zoomTarget - zoom) * (1 - math.exp(-dt * 10))   -- smooth wheel zoom
+	local follow = 1 - math.clamp((zoom - ZOOM_FOLLOW) / (ZOOM_ALL - ZOOM_FOLLOW), 0, 1)
+	local bird = if hrp then Vector3.new(hrp.Position.X, 0, hrp.Position.Z) else ISLAND_CENTRE
+	-- keep the island centred in the free space left of the shop drawer when it is open
+	local vp = cam.ViewportSize
+	local drawerShift = if Hud.dock and Hud.dock.Visible and not Hud.collapsed then 0.3 * zoom * S * vp.X / math.max(1, vp.Y) else 0
+	local want = ISLAND_CENTRE:Lerp(bird, follow) + Vector3.new(drawerShift * (1 - follow), 0, 0)
 	camFocus = if camFocus then camFocus:Lerp(want, 1 - math.exp(-dt * 8)) else want
 	shake = math.max(0, shake - dt)
 	local jitter = if shake > 0 then Vector3.new(math.random() - 0.5, math.random() - 0.5, 0) * shake * S * 0.6 else Vector3.zero

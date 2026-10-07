@@ -203,7 +203,7 @@ local function refreshTiles()
 end
 local function setCollapsed(c)
 	if collapsed == c then return end
-	collapsed = c
+	collapsed = c; Hud.collapsed = c
 	Kit.sfx(if c then "close" else "open")
 	slideDock(if c then DOCK_OUT else DOCK_IN, if c then 0.22 else 0.3, if c then Enum.EasingStyle.Quad else nil)
 	edgeTab.icon.Image = Kit.iconId(Spec.MENU_ICON[docked or "popcorn"])
