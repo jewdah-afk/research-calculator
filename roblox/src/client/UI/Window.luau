@@ -160,7 +160,9 @@ function Window.build(parent, spec)
 	-- art is clipped to the window's rounded shape so nothing from the old glow margin shows at the corners
 	local clip = Kit.new("CanvasGroup", { Size = UDim2.fromOffset(W, H), BackgroundTransparency = 1, ZIndex = 0 }, root)
 	Kit.corner(clip, 24)   -- Figma window radius (measured on the render)
-	Kit.stroke(clip, 5, Kit.INK)   -- one clean ink outline, thick enough to cover the render's coloured hairline
+	-- one clean ink outline drawn from 1 px OUTSIDE the art inward, so no anti-aliased sliver of art shows at the edge
+	local edge = Kit.frame(root, -1, -1, W + 2, H + 2, nil, { ZIndex = 2 }); Kit.corner(edge, 25)
+	Kit.stroke(edge, 6, Kit.INK)
 	local bg = Kit.image(clip, 0, 0, W, H, Art[spec.artId or spec.id], { ScaleType = Enum.ScaleType.Stretch, ZIndex = 0 })
 	local px = ArtSize[spec.artId or spec.id]
 	if px then
