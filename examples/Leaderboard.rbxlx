@@ -1,0 +1,192 @@
+<roblox version="4">
+<Item class="Workspace" referent="RBX1"><Properties><string name="Name">Workspace</string></Properties>
+<Item class="Part" referent="RBX2"><Properties><string name="Name">Baseplate</string><bool name="Anchored">true</bool><Vector3 name="size"><X>512</X><Y>4</Y><Z>512</Z></Vector3><CoordinateFrame name="CFrame"><X>0</X><Y>-2</Y><Z>0</Z><R00>1</R00><R01>0</R01><R02>0</R02><R10>0</R10><R11>1</R11><R12>0</R12><R20>0</R20><R21>0</R21><R22>1</R22></CoordinateFrame><Color3uint8 name="Color3uint8">4284193356</Color3uint8><token name="TopSurface">0</token><token name="BottomSurface">0</token></Properties></Item>
+<Item class="SpawnLocation" referent="RBX3"><Properties><string name="Name">SpawnLocation</string><bool name="Anchored">true</bool><Vector3 name="size"><X>12</X><Y>1</Y><Z>12</Z></Vector3><CoordinateFrame name="CFrame"><X>0</X><Y>0.5</Y><Z>0</Z><R00>1</R00><R01>0</R01><R02>0</R02><R10>0</R10><R11>1</R11><R12>0</R12><R20>0</R20><R21>0</R21><R22>1</R22></CoordinateFrame><Color3uint8 name="Color3uint8">4291348680</Color3uint8><token name="TopSurface">0</token><token name="BottomSurface">0</token></Properties></Item>
+<Item class="Part" referent="RBX5"><Properties><string name="Name">KillsBoard</string><bool name="Anchored">true</bool><Vector3 name="size"><X>16</X><Y>10</Y><Z>1</Z></Vector3><CoordinateFrame name="CFrame"><X>0</X><Y>6</Y><Z>-25</Z><R00>-1</R00><R01>0</R01><R02>0</R02><R10>0</R10><R11>1</R11><R12>0</R12><R20>0</R20><R21>0</R21><R22>-1</R22></CoordinateFrame><Color3uint8 name="Color3uint8">4280163880</Color3uint8><token name="TopSurface">0</token><token name="BottomSurface">0</token></Properties><Item class="Script" referent="RBX4"><Properties><string name="Name">LeaderboardDisplay</string><ProtectedString name="Source"><![CDATA[-- SCRIPT 2: put inside the board Part
+local STAT = "Kills" -- must match Script 1
+local TOP = 10
+
+local Players = game:GetService("Players")
+local DSS = game:GetService("DataStoreService")
+local Store = DSS:GetOrderedDataStore("LB_" .. STAT .. "_v1")
+
+local gui = Instance.new("SurfaceGui")
+gui.Parent = script.Parent
+
+local list = Instance.new("Frame")
+list.Size = UDim2.fromScale(1, 1)
+list.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+list.Parent = gui
+
+local layout = Instance.new("UIListLayout")
+layout.SortOrder = Enum.SortOrder.LayoutOrder
+layout.Parent = list
+
+local function addRow(text, order)
+	local l = Instance.new("TextLabel")
+	l.Size = UDim2.fromScale(1, 1 / (TOP + 1))
+	l.BackgroundTransparency = 1
+	l.TextScaled = true
+	l.Font = Enum.Font.GothamBold
+	l.TextColor3 = Color3.new(1, 1, 1)
+	l.Text = text
+	l.LayoutOrder = order
+	l.Parent = list
+end
+local names = {}
+local function getName(id)
+	if not names[id] then
+		local ok, n = pcall(function()
+			return Players:GetNameFromUserIdAsync(id)
+		end)
+		names[id] = ok and n or "Unknown"
+	end
+	return names[id]
+end
+
+-- 1500 -> 1.50K
+local function short(n)
+	local s = {"", "K", "M", "B", "T", "Qd", "Qn"}
+	local i = 1
+	while n >= 1000 and i < #s do
+		n /= 1000
+		i += 1
+	end
+	if i == 1 then return tostring(n) end
+	return string.format("%.2f", n) .. s[i]
+end
+
+-- refresh every 60 sec
+while true do
+	local ok, page = pcall(function()
+		return Store:GetSortedAsync(false, TOP):GetCurrentPage()
+	end)
+
+	if ok then
+		for _, c in list:GetChildren() do
+			if c:IsA("TextLabel") then c:Destroy() end
+		end
+		addRow("TOP " .. STAT:upper(), 0)
+		for i, e in page do
+			local who = getName(tonumber(e.key))
+			addRow("#" .. i .. "  " .. who .. "  " .. short(e.value), i)
+		end
+	end
+
+	task.wait(60)
+end]]></ProtectedString></Properties></Item></Item>
+<Item class="Part" referent="RBX7"><Properties><string name="Name">TestPad_GetKill</string><bool name="Anchored">true</bool><Vector3 name="size"><X>6</X><Y>1</Y><Z>6</Z></Vector3><CoordinateFrame name="CFrame"><X>15</X><Y>0.5</Y><Z>0</Z><R00>1</R00><R01>0</R01><R02>0</R02><R10>0</R10><R11>1</R11><R12>0</R12><R20>0</R20><R21>0</R21><R22>1</R22></CoordinateFrame><Color3uint8 name="Color3uint8">4278241360</Color3uint8><token name="TopSurface">0</token><token name="BottomSurface">0</token></Properties><Item class="Script" referent="RBX6"><Properties><string name="Name">GiveKill</string><ProtectedString name="Source"><![CDATA[-- Demo: touch the green pad to get +1 Kill (delete this when you add real kills)
+local Players = game:GetService("Players")
+local cooldown = {}
+
+script.Parent.Touched:Connect(function(hit)
+	local plr = Players:GetPlayerFromCharacter(hit.Parent)
+	if not plr or cooldown[plr] then return end
+	local ls = plr:FindFirstChild("leaderstats")
+	if not ls then return end
+	cooldown[plr] = true
+	ls.Kills.Value += 1
+	task.wait(1)
+	cooldown[plr] = nil
+end)]]></ProtectedString></Properties></Item></Item>
+</Item>
+<Item class="ServerScriptService" referent="RBX8"><Properties><string name="Name">ServerScriptService</string></Properties>
+<Item class="Script" referent="RBX9"><Properties><string name="Name">Stats</string><ProtectedString name="Source"><![CDATA[-- SCRIPT 1: put in ServerScriptService
+local Players = game:GetService("Players")
+local DSS = game:GetService("DataStoreService")
+
+local STATS = {"Kills", "Wins"} -- your stat names
+local Store = DSS:GetDataStore("Stats_v1")
+local Ordered = {}
+for _, s in STATS do
+	Ordered[s] = DSS:GetOrderedDataStore("LB_" .. s .. "_v1")
+end
+
+local loaded = {}
+
+-- try up to 5 times
+local function retry(f)
+	for i = 1, 5 do
+		local ok, r = pcall(f)
+		if ok then return true, r end
+		warn("DataStore error: " .. tostring(r))
+		task.wait(i * 2)
+	end
+	return false
+end
+
+local function save(plr)
+	-- never save if load failed (stops data wipes)
+	if not loaded[plr] then return end
+	local ls = plr:FindFirstChild("leaderstats")
+	if not ls then return end
+
+	local data = {}
+	for _, s in STATS do
+		data[s] = ls[s].Value
+	end
+
+	retry(function()
+		Store:SetAsync(plr.UserId, data)
+	end)
+	for _, s in STATS do
+		retry(function()
+			Ordered[s]:SetAsync(plr.UserId, data[s])
+		end)
+	end
+end
+Players.PlayerAdded:Connect(function(plr)
+	local ls = Instance.new("Folder")
+	ls.Name = "leaderstats"
+	for _, s in STATS do
+		local v = Instance.new("IntValue")
+		v.Name = s
+		v.Parent = ls
+	end
+
+	local ok, data = retry(function()
+		return Store:GetAsync(plr.UserId)
+	end)
+	if not ok then
+		plr:Kick("Data failed to load, rejoin!")
+		return
+	end
+
+	data = data or {}
+	for _, s in STATS do
+		ls[s].Value = data[s] or 0
+	end
+	ls.Parent = plr
+	loaded[plr] = true
+end)
+
+Players.PlayerRemoving:Connect(function(plr)
+	save(plr)
+	loaded[plr] = nil
+end)
+
+-- autosave every 2 min
+task.spawn(function()
+	while task.wait(120) do
+		for _, plr in Players:GetPlayers() do
+			task.spawn(save, plr)
+		end
+	end
+end)
+
+-- save everyone when server shuts down
+game:BindToClose(function()
+	local left = 0
+	for _, plr in Players:GetPlayers() do
+		left += 1
+		task.spawn(function()
+			save(plr)
+			left -= 1
+		end)
+	end
+	while left > 0 do
+		task.wait()
+	end
+end)]]></ProtectedString></Properties></Item>
+</Item>
+</roblox>
