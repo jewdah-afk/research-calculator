@@ -106,8 +106,17 @@ local function outline(target: Instance, color: string, outlineT: number, fill: 
 	return h
 end
 outline(field, "#6b4512", 0.12, "#fff6d6", 0.78)                                   -- popcorn: warm rim + soft inner lift
-local island = workspace:WaitForChild("Island")
-outline(island:WaitForChild("Scenery"), "#24331f", 0.5)                            -- scenery: quiet tinted outline
+local IslandView = require(script.Parent:WaitForChild("IslandView"))
+IslandView.build()
+outline(IslandView.scenery, "#24331f", 0.5)                                         -- scenery: quiet tinted outline
+-- dev/QA hook: PlayerGui:SetAttribute("PeckwoodBuild", tick()) replays the unlock build-in; PeckwoodHour freezes the sky
+plr:WaitForChild("PlayerGui"):GetAttributeChangedSignal("PeckwoodBuild"):Connect(function() IslandView.play() end)
+-- QA camera: PlayerGui:SetAttribute("PeckwoodCam", Vector3) frames the island from there (nil = normal camera)
+plr.PlayerGui:GetAttributeChangedSignal("PeckwoodCam"):Connect(function()
+	local p = plr.PlayerGui:GetAttribute("PeckwoodCam")
+	IslandView.camCF = if typeof(p) == "Vector3" then CFrame.lookAt(p, Vector3.new(0, -8, 2)) else nil
+end)
+plr.PlayerGui:GetAttributeChangedSignal("PeckwoodHour"):Connect(function() IslandView.timeOverride = plr.PlayerGui:GetAttribute("PeckwoodHour") end)
 type K = { model: Model, halo: Part, pos: Vector3, born: number, golden: boolean, homing: number? }
 local kernels: { [number]: K } = {}
 local clock = 0
@@ -205,21 +214,10 @@ local function kernelsStep(dt: number)
 	end
 end
 
--- ---------------------------------------------------------------- clouds drift
-local clouds = workspace:WaitForChild("Island"):WaitForChild("Clouds")
-local cloudBase: { [Model]: CFrame } = {}
-for _, c in clouds:GetChildren() do cloudBase[c :: Model] = (c :: Model):GetPivot() end
-local function cloudsStep()
-	for m, base in cloudBase do
-		local h = base.Position.X * 0.13
-		m:PivotTo(base + Vector3.new(math.sin(clock * 0.05 + h) * 6 * S, math.sin(clock * 0.4 + h) * 0.3 * S, 0))
-	end
-end
-
 -- ---------------------------------------------------------------- frame
 RunService:BindToRenderStep("Peckwood", Enum.RenderPriority.Camera.Value + 1, function(dt)
 	clock += dt
-	bodyStep(dt); Birds.step(clock, dt, plr.Character, body); kernelsStep(dt); cloudsStep()
+	bodyStep(dt); Birds.step(clock, dt, plr.Character, body); kernelsStep(dt)
 	local ch = plr.Character
 	local hrp = ch and ch:FindFirstChild("HumanoidRootPart") :: BasePart?
 	local want = if hrp then Vector3.new(hrp.Position.X, 0, hrp.Position.Z) else Vector3.zero
@@ -229,7 +227,7 @@ RunService:BindToRenderStep("Peckwood", Enum.RenderPriority.Camera.Value + 1, fu
 	local back = Vector3.new(0, math.sin(PITCH), math.cos(PITCH)) * distFor(zoom)
 	cam.CameraType = Enum.CameraType.Scriptable
 	cam.FieldOfView = FOV
-	cam.CFrame = CFrame.lookAt((camFocus :: Vector3) + back + jitter, (camFocus :: Vector3) + jitter)
+	cam.CFrame = IslandView.camCF or CFrame.lookAt((camFocus :: Vector3) + back + jitter, (camFocus :: Vector3) + jitter)
 	cam.Focus = CFrame.new(camFocus :: Vector3)
 end)
 

@@ -17,13 +17,17 @@ local Controller = {}
 local VOID, WATER = 0, 3
 local STEP_UP = 5
 local colliders: { { x: number, y: number, r: number, base: number, top: number } } = {}
+-- footprint radius (px) and height (px) per prop kind (Park overhaul props; see client/IslandView)
+local PROP_COLL = { lantern = { 3, 40 }, oak = { 6, 60 }, bigoak = { 7, 70 }, pine = { 6, 60 }, bush = { 9, 12 }, rock = { 9, 10 },
+	cart = { 16, 40 }, bench = { 9, 10 }, fence = { 6, 12 } }
 for _, o in Map.objects do
 	local kind, x, y, z = o[1], o[2], o[3], o[4]
-	if kind == "pillar" then table.insert(colliders, { x = x, y = y, r = 6, base = z, top = z + 60 })
-	elseif kind == "bush" then table.insert(colliders, { x = x, y = y, r = 5, base = z, top = z + 11 })
-	elseif kind == "rock" then table.insert(colliders, { x = x, y = y, r = 5, base = z, top = z + 9 })
-	elseif kind == "tree" then table.insert(colliders, { x = x, y = y, r = 5, base = z, top = z + 50 })   -- World addTree collider
-	elseif kind == "lantern" then table.insert(colliders, { x = x, y = y, r = 3, base = z, top = z + 30 }) end
+	if kind == "arch" then   -- two pillars, walk-through gap between them
+		table.insert(colliders, { x = x - 20, y = y, r = 8, base = z, top = z + 80 })
+		table.insert(colliders, { x = x + 20, y = y, r = 8, base = z, top = z + 80 })
+	elseif PROP_COLL[kind] then
+		table.insert(colliders, { x = x, y = y, r = PROP_COLL[kind][1], base = z, top = z + PROP_COLL[kind][2] })
+	end
 end
 
 local function tileAt(x: number, y: number): number
@@ -31,6 +35,7 @@ local function tileAt(x: number, y: number): number
 end
 local function heightAt(x: number, y: number): number
 	local t = tileAt(x, y)
+	if t == 1 and Map.height(math.floor(x / Map.PX), math.floor(y / Map.PX)) > 0 then return 99 end   -- lookout hill: scenery wall
 	return if t == WATER then -3 elseif t == VOID then -36 else 0
 end
 Controller.heightAt = heightAt
