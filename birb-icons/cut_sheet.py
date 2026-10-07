@@ -29,7 +29,8 @@ BOXES = {
     'twig': (1200, 612, 1500, 853), 'wing': (1510, 612, 1844, 853), 'wood': (0, 763, 300, 853),
 }
 
-CAP = {'seed': 0.6}   # icon -> cap depth as a fraction of the cut width
+CAP = {'seed': 0.75}
+STRETCH = {'wood': (1.0, 1.32), 'seed': (0.9, 1.0)}   # (x, y) un-squash for icons squeezed on the sheet   # icon -> cap depth as a fraction of the cut width
 
 def cap_bottom(m, src, depth):
     """Close a flat-cut bottom with a half-ellipse and fill it with the nearest interior colours."""
@@ -37,7 +38,8 @@ def cap_bottom(m, src, depth):
     row = np.nonzero(m[yb - 2])[0]; xl, xr = row.min(), row.max()
     cx, rx = (xl + xr) / 2, (xr - xl) / 2 + 1; ry = rx * depth
     Y, X = np.mgrid[0:m.shape[0], 0:m.shape[1]]
-    cap = (Y >= yb - 3) & (((X - cx) / rx) ** 2 + ((Y - (yb - 3)) / ry) ** 2 <= 1)
+    t = (Y - (yb - 3)) / ry                                  # rounded-point tip: width shrinks with sqrt-ish falloff
+    cap = (Y >= yb - 3) & (t <= 1) & (np.abs(X - cx) / rx <= (1 - np.clip(t, 0, 1)) ** 0.7)
     m2 = m | cap
     from scipy.spatial import ConvexHull                  # seed is convex: fill its hull to remove notches
     from PIL import ImageDraw
@@ -79,6 +81,15 @@ for name, (x0, y0, x1, y1) in BOXES.items():
     sy0, sx0 = max(0, Y0), max(0, X0); sy1, sx1 = min(src.shape[0], Y0 + side), min(src.shape[1], X0 + side)
     canvas_m[sy0 - Y0:sy1 - Y0, sx0 - X0:sx1 - X0] = m[sy0:sy1, sx0:sx1]
     canvas_c[sy0 - Y0:sy1 - Y0, sx0 - X0:sx1 - X0] = src_fill[sy0:sy1, sx0:sx1]
+    if name in STRETCH:                                    # resample interior, then the ring is rebuilt at full width
+        kx, ky = STRETCH[name]; H, W = canvas_m.shape
+        nh, nw = int(H * ky), int(W * kx)
+        cm = np.asarray(Image.fromarray(canvas_m.astype(np.uint8) * 255).resize((nw, nh), Image.BILINEAR)) > 127
+        cc = np.asarray(Image.fromarray(canvas_c.astype(np.uint8)).resize((nw, nh), Image.LANCZOS)).astype(float)
+        side = max(nh, nw) + 2 * (int(RING) + PAD)
+        canvas_m = np.zeros((side, side), bool); canvas_c = np.zeros((side, side, 3))
+        oy, ox = (side - nh) // 2, (side - nw) // 2
+        canvas_m[oy:oy + nh, ox:ox + nw] = cm; canvas_c[oy:oy + nh, ox:ox + nw] = cc
     dist = nd.distance_transform_edt(~canvas_m)               # px distance outside the interior
     alpha = np.clip(RING + 0.5 - dist, 0, 1)
     ring = (dist > 0.0)
