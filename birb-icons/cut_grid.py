@@ -10,6 +10,9 @@ from scipy import ndimage as nd
 HERE = os.path.dirname(os.path.abspath(__file__))
 INK = np.array([11, 12, 16])
 SIZE = 256
+# only these keep see-through holes (frame centre, hook eyes, gaps between rod and line); everything else is a
+# solid sticker, so dark mouths and bodies on fish are never punched out
+OPEN_HOLES = ('avatar_frame', 'hook_', 'lure_', 'rod_')
 
 def cut(sheet, cols, rows, names, out=os.path.join(HERE, 'final')):
     src = np.asarray(Image.open(sheet).convert('RGB')).astype(float)
@@ -73,9 +76,9 @@ def cut(sheet, cols, rows, names, out=os.path.join(HERE, 'final')):
                                by.start - my <= c2[k][0] <= by.stop + my and bx.start - mx <= c2[k][1] <= bx.stop + mx])
         m = nd.binary_closing(m, iterations=2)
         filled = nd.binary_fill_holes(m); hl, hn = nd.label(filled & ~m)
-        for h in range(1, hn + 1):          # enclosed dark details stay, but real see-through holes (frames, rings) stay open
+        for h in range(1, hn + 1):          # enclosed dark details stay filled; listed items keep real see-through holes
             hole = hl == h
-            if hole.sum() > 400 and (src.max(2)[hole] < 14).mean() > 0.6: filled &= ~hole
+            if name.startswith(OPEN_HOLES) and hole.sum() > 400 and (src.max(2)[hole] < 14).mean() > 0.6: filled &= ~hole
         m = filled
         q = src
         ys, xs = np.nonzero(m)
@@ -92,6 +95,9 @@ def cut(sheet, cols, rows, names, out=os.path.join(HERE, 'final')):
         alpha = np.clip(ring + 0.5 - dist, 0, 1)
         rgb = np.where((dist > 0)[..., None], INK, cc)
         edge = (dist > 0) & (dist < 1.5); rgb[edge] = cc[edge] * 0.35 + INK * 0.65
+        if not name.startswith(OPEN_HOLES):   # pockets the outline closes over (between claws, fins) are sealed in ink
+            pocket = nd.binary_fill_holes(alpha > 0.5) & (alpha <= 0.5)
+            alpha[pocket] = 1; rgb[pocket] = INK
         img = np.dstack([rgb, alpha * 255]).astype(np.uint8)
         os.makedirs(out, exist_ok=True)
         Image.fromarray(img, 'RGBA').resize((SIZE, SIZE), Image.LANCZOS).save(os.path.join(out, name + '.png'))
