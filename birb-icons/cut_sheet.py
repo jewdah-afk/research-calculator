@@ -57,12 +57,13 @@ def mushroom_shape(m):
     dome = ((X - cx) / rx) ** 2 + ((Y - cy) / ry) ** 2 <= 1.0
     return m & ((Y >= cy) | dome)
 
-SHAPE = {'index': book_shape, 'mushroom': mushroom_shape, 'seed': hull_fill}   # seed: just fill the notch the log cut
+SHAPE = {'index': book_shape, 'mushroom': mushroom_shape}
 BAND = {}
 ERASE = {}
 ERASE_SRC = {}
 # twig: the crossing branch pokes out left of the main branch; cut it along the main branch's edge (x = 1293 + (y - 712))
 DIAG_CUT = {'twig': (1280, 720, 750, lambda y: 1293 + (y - 712))}
+HANDMADE = {'seed'}   # drawn by seed.py instead (hidden behind the log on the sheet)
 CLOSE = {'crown': 1, 'nest': 1, 'twig': 1}
 OPEN = {'parrot': 4}
 CAP = {}
@@ -98,6 +99,7 @@ sizes = nd.sum(inside, lab, range(1, n + 1))
 
 os.makedirs(OUT, exist_ok=True)
 for name, (x0, y0, x1, y1) in BOXES.items():
+    if name in HANDMADE: continue
     keep = [i + 1 for i, ((cy, cx), s) in enumerate(zip(cents, sizes)) if s > 12 and x0 <= cx < x1 and y0 <= cy < y1]
     m = np.isin(lab, keep)
     for x0_, y0_, x1_, y1_ in ERASE_SRC.get(name, []): m[y0_:y1_, x0_:x1_] = False

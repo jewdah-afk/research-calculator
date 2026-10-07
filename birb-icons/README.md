@@ -6,6 +6,8 @@ They are cut from `approved_sheet.png`, the user-approved art, by `cut_sheet.py`
 
 ```
 python3 birb-icons/cut_sheet.py birb-icons/approved_sheet.png
+python3 birb-icons/seed.py        # the seed is drawn by hand (it was hidden behind the log on the sheet)
+python3 birb-icons/touchups.py    # small additions, such as the goldfish mouth
 ```
 
 The cutter works in four steps:
