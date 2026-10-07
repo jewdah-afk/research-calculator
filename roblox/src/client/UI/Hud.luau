@@ -224,7 +224,7 @@ local function dockWindow(id)
 	local api = Windows.built[id]
 	if not api then return end
 	if state and derived then Windows.binders[id].update(api, state, derived) end
-	if old and old ~= api then old.root.Visible = false end
+	if old and old ~= api and not (sameGroup and not collapsed) then old.root.Visible = false end
 	if collapsed then
 		Window.open(api, "slide")
 		setCollapsed(false)
@@ -233,7 +233,7 @@ local function dockWindow(id)
 		Hud.dock.Position = UDim2.new(1, DOCK_OUT, 0, 26)
 		slideDock(DOCK_IN, 0.34)
 	elseif sameGroup then
-		Window.open(api, "tab")
+		Window.morph(old, api)
 	else
 		-- new feature group: drawer slides in fresh from the right edge with the new window (one motion)
 		Kit.sfx("open")

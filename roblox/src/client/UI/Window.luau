@@ -162,7 +162,7 @@ function Window.build(parent, spec)
 	Kit.corner(clip, 24)   -- Figma window radius (measured on the render)
 	-- one clean ink outline drawn from 1 px OUTSIDE the art inward, so no anti-aliased sliver of art shows at the edge
 	local edge = Kit.frame(root, -1, -1, W + 2, H + 2, nil, { ZIndex = 2 }); Kit.corner(edge, 25)
-	Kit.stroke(edge, 6, Kit.INK)
+	Kit.stroke(edge, 9, Kit.INK)   -- covers the baked 2 px coloured rim (x 4-5) and its light bevel (x 6-7) too
 	local bg = Kit.image(clip, 0, 0, W, H, Art[spec.artId or spec.id], { ScaleType = Enum.ScaleType.Stretch, ZIndex = 0 })
 	local px = ArtSize[spec.artId or spec.id]
 	if px then
@@ -183,12 +183,20 @@ function Window.build(parent, spec)
 	end
 	api.bg = bg; api.shadow = shadow
 	if px then api.art = { image = bg.Image, k = px.X / (W + 2 * MARGIN) } end
+	-- the baked tabs bar ends in a 2 px light highlight (y 144-145) the owner reads as a stray line: cover it with the clean
+	-- body surface just below it (same columns, so the side shading lines up)
+	if px then
+		local k = px.X / (W + 2 * MARGIN)
+		local strip = Kit.image(clip, 4, 144, W - 8, 2, bg.Image, { ScaleType = Enum.ScaleType.Stretch, ZIndex = 0,
+			ImageRectOffset = Vector2.new((MARGIN + 4) * k, (MARGIN + 148) * k), ImageRectSize = Vector2.new((W - 8) * k, 2 * k) })
+		bg:GetPropertyChangedSignal("ImageTransparency"):Connect(function() strip.ImageTransparency = bg.ImageTransparency end)
+	end
 	local body = Kit.new("CanvasGroup", { Size = UDim2.fromOffset(W, H), BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 1 }, root)
 	Kit.corner(body, 22)
 	api.body = body
 
 	-- header: centred title (no icon, user rule) + sparkles
-	api.title = Kit.title(body, spec.title, 34, Color3.new(1, 1, 1), 3, 3, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(250, 29.5), ZIndex = 6 })
+	api.title = Kit.title(body, spec.title, 34, Color3.new(1, 1, 1), 3, 3, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(250, 33), ZIndex = 6 })   -- glyphs centred on the bright band (y 5-58); holder includes the 3 px drop
 	Kit.sparkle(body, 384.5, 44.5, 9)
 	-- collapse control (drawer tucks into a right-edge tab)
 	local col = Kit.button(body, 438, 12, 46, 40, { text = "›", size = 30, stops = Kit.stops("5c6676:0 323844:100"), sound = "close" })
@@ -235,7 +243,41 @@ function Window.build(parent, spec)
 		local hero = frame(body, 16, 158, 468, 300, nil, { ZIndex = 2 })
 		local hi = Kit.icon(hero, 234, 150, 120, h.icon, { ZIndex = 4, AnchorPoint = Vector2.new(0.5, 1) })
 		local ht = Kit.title(hero, h.title, 32, Color3.new(1, 1, 1), 3, 3, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(234, 171), ZIndex = 6 })
-		local sub = text(hero, h.sub or "", 14, hex("a9afbc"), { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(234, 210), ZIndex = 6 })
+		-- subtitle: binders write sub.Text (plain "a  ·  b"); it renders as one outlined line, values in the theme colour,
+		-- grey dot separators, shrunk to fit the card
+		local subL = text(hero, "", 17, hex("e8ebf2"), { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(234, 219), ZIndex = 6, RichText = true })
+		Kit.textStroke(subL, 2.2)
+		local subS = Kit.new("UIScale", {}, subL)
+		local accent; for c in (spec.buy or ""):gmatch("%x%x%x%x%x%x") do accent = c end   -- strongest theme stop
+		local vcol = hex(accent or spec.tcol or "ffe18d"):Lerp(Color3.new(1, 1, 1), 0.2):ToHex()
+		local raw = ""
+		local function fitSub()
+			local hw = hero.AbsoluteSize.X / 468
+			local wNat = subL.AbsoluteSize.X / math.max(0.01, subS.Scale)
+			if wNat > 0 and hw > 0 then
+				local want = math.min(1, 432 * hw / wNat)
+				if math.abs(want - subS.Scale) > 0.01 then subS.Scale = want end
+			end
+		end
+		subL:GetPropertyChangedSignal("AbsoluteSize"):Connect(fitSub)
+		hero:GetPropertyChangedSignal("AbsoluteSize"):Connect(fitSub)
+		local function render(str)
+			if str == raw then return end
+			raw = str
+			local parts = {}
+			for part in (str .. "  ·  "):gmatch("(.-)%s*·%s*") do
+				if part ~= "" then
+					part = part:gsub("&", "&amp;"):gsub("<", "&lt;"):gsub(">", "&gt;")
+					part = part:gsub("([%+%-]?%d[%d%.,]*%a*%%?)", '<font color="#' .. vcol .. '">%1</font>')
+					table.insert(parts, part)
+				end
+			end
+			subL.Text = table.concat(parts, '   <font color="#8d94a3">\u{2022}</font>   ')
+		end
+		local sub = setmetatable({}, {
+			__newindex = function(_, k, v) if k == "Text" then render(v) else subL[k] = v end end,
+			__index = function(_, k) if k == "Text" then return raw end return subL[k] end })
+		render(h.sub or "")
 		local hb = Kit.button(hero, 14, 236, 440, 53, { icon = h.btnIcon, text = h.btn, size = 22, iconSize = 37, stops = Kit.stops(spec.tab) })
 		for _, sp in { { 48, 38, 16 }, { 414, 46, 12 }, { 362, 114, 8 }, { 74.5, 124.5, 9 } } do Kit.sparkle(hero, sp[1], sp[2], sp[3]) end
 		api.hero = { frame = hero, icon = hi, title = ht, sub = sub, btn = hb }
@@ -317,6 +359,63 @@ function Window.open(api, mode)
 			TweenService:Create(r.row, TweenInfo.new(0.24, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Position = UDim2.fromOffset(16, y) }):Play()
 		end)
 	end
+end
+-- tab switch inside a group: the new window's colours wash in over the old one (art crossfade, no dip to dark),
+-- the active pill glides from the old tab to the new one, the hero icon swaps with a springy pop
+local morphing = {}
+function Window.morph(old, api)
+	local slow = if reduced then 0.12 else 0.34
+	local ease = TweenInfo.new(slow, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+	-- windows sit in their own holders: raise the holder that is a sibling of the old window's holder
+	local function layer(a, b)
+		local ga = a.root
+		while ga.Parent and not b.root:IsDescendantOf(ga.Parent) do ga = ga.Parent end
+		return ga
+	end
+	local newL, oldL = layer(api, old), layer(old, api)
+	for a in morphing do layer(a, api).ZIndex = 1 end
+	old.root.Visible = true; oldL.ZIndex = 1
+	api.root.Visible = true; newL.ZIndex = 2
+	morphing[api] = true
+	scaleOf(api).Scale = 1; scaleOf(old).Scale = 1
+	api.shadow.Value = 0.5
+	-- colours: the new art washes in on top of the old
+	api.bg.ImageTransparency = 1
+	TweenService:Create(api.bg, ease, { ImageTransparency = 0 }):Play()
+	-- live layers: old text fades out fast, new fades in behind the wash so nothing reads doubled
+	TweenService:Create(old.body, TweenInfo.new(slow * 0.45, Enum.EasingStyle.Quad), { GroupTransparency = 1 }):Play()
+	api.body.GroupTransparency = 1
+	TweenService:Create(api.body, TweenInfo.new(slow * 0.8, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, false, slow * 0.25), { GroupTransparency = 0 }):Play()
+	-- active pill glides from the tab we came from
+	local fromI, toI
+	for i, t in api.tabs do
+		if t.target == nil and t.face then toI = i end
+		if t.id == old.spec.id or t.target == old.spec.id then fromI = i end
+	end
+	local pill = toI and api.tabs[toI]
+	if pill and fromI and fromI ~= toI and not reduced then
+		local p = pill.root.Position
+		local dx = (fromI - toI) * (468 / #api.tabs)
+		pill.root.Position = p + UDim2.fromOffset(dx, 0)
+		TweenService:Create(pill.root, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), { Position = p }):Play()
+	end
+	-- hero icon pop
+	if api.hero and not reduced then
+		local hs = api.hero.icon:FindFirstChild("MorphScale") or Kit.new("UIScale", { Name = "MorphScale" }, api.hero.icon)
+		hs.Scale = 0.6
+		TweenService:Create(hs, TweenInfo.new(0.42, Enum.EasingStyle.Back, Enum.EasingDirection.Out, 0, false, slow * 0.2), { Scale = 1 }):Play()
+	end
+	for i, r in api.rows do
+		local y = r.y
+		r.row.Position = UDim2.fromOffset(16, y + 8)
+		task.delay(slow * 0.3 + (i - 1) * 0.03, function()
+			TweenService:Create(r.row, TweenInfo.new(0.24, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Position = UDim2.fromOffset(16, y) }):Play()
+		end)
+	end
+	task.delay(slow + 0.02, function()
+		morphing[api] = nil
+		if oldL.ZIndex == 1 and not morphing[old] then old.root.Visible = false; old.body.GroupTransparency = 0 end
+	end)
 end
 function Window.close(api, done)
 	local sc = scaleOf(api)
