@@ -136,6 +136,7 @@ return {
 	["ui/halftone"] = "rbxassetid://113708246576458",
 	["ui/halo"] = "rbxassetid://73180918810930",
 	["ui/shadow"] = "rbxassetid://79595371390287",
+	["ui/stripes"] = "rbxassetid://101175973864393",
 	["ui/softellipse"] = "rbxassetid://125732999677704",
 	["ui/sparkle"] = "rbxassetid://80416105674934",
 	["ui/sunburst"] = "rbxassetid://115548657934228",

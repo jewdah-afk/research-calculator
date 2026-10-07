@@ -57,6 +57,15 @@
 "path": [
 "ReplicatedStorage",
 "Peckwood",
+"FigmaArtSize"
+],
+"class": "ModuleScript",
+"url": "src/shared/FigmaArtSize.luau"
+},
+{
+"path": [
+"ReplicatedStorage",
+"Peckwood",
 "Icons"
 ],
 "class": "ModuleScript",

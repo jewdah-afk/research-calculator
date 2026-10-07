@@ -141,83 +141,103 @@ Kit.GREY, Kit.BLUE, Kit.GOLD = GREY, BLUE, GOLD
 
 local function darken(c, f) return Color3.new(c.R * f, c.G * f, c.B * f) end
 
+-- Peckwood 3D key button. h = total height. Layers (back to front):
+--   glow (lit only) -> ink body (the one outline + the drop under the key) -> lip (darker shade of the face gradient,
+--   rounded, shows under and around the bottom corners) -> face (gradient, diagonal stripes, gloss cap) -> content.
+-- Press sinks the face into the lip; hover brightens and lifts 1 px. No hairlines anywhere.
+local function shadeStops(st, f)
+	local out = {}
+	for i, s in st do
+		local c = hex(s[1])
+		out[i] = { string.format("%02x%02x%02x", math.floor(c.R * 255 * f), math.floor(c.G * 255 * f), math.floor(c.B * 255 * f)), s[2], s[3] }
+	end
+	return out
+end
+Kit.shadeStops = shadeStops
+
 function Kit.button(parent, x, y, w, h, opts)
-	-- h = total height incl. the 3 px ink base
-	local fh = h - 3
-	local cr = opts.cr or (if fh >= 50 then 14 elseif fh >= 39 then 12 else 10)
+	local o = 3                                               -- ink outline
+	local d = opts.depth or math.clamp(math.floor(h * 0.13 + 0.5), 4, 8)   -- lip depth
+	local cr = opts.cr or math.clamp(math.floor(h * 0.3), 9, 18)
+	local fw, fh = w - 2 * o, h - 2 * o - d
 	local root = new("TextButton", { Position = UDim2.fromOffset(x, y), Size = UDim2.fromOffset(w, h), BackgroundTransparency = 1, Text = "", AutoButtonColor = false, ZIndex = 3 }, parent)
-	local glow = Kit.soft(root, 0, 0, w, fh, 18, "glow", Color3.new(1, 1, 1), 1, 2)
-	local base = Kit.frame(root, 0, 3, w, fh, INK, { ZIndex = 3 }); Kit.corner(base, cr)
-	local face = Kit.frame(root, 0, 0, w, fh, Color3.new(1, 1, 1), { ZIndex = 4, ClipsDescendants = true }); Kit.corner(face, cr)
-	local g = Kit.grad(face, opts.stops or GREY)
-	local tex = Kit.texture(face, "halftone", 0.78, 24, 4)
-	local dH = if fh >= 50 then 5 elseif fh >= 39 then 4 else 3
-	local depth = Kit.frame(face, 0, fh - dH, w, dH, Color3.new(0, 0, 0), { BackgroundTransparency = 0.49, ZIndex = 5 })
-	local gx, gh = (if fh >= 50 then 10 elseif fh >= 39 then 8 else 7), (if fh >= 50 then math.floor(fh * 0.28) elseif fh >= 39 then 11 else 8)
-	local gloss = Kit.frame(face, gx, 4, w - 2 * gx, gh, Color3.new(1, 1, 1), { ZIndex = 6 }); Kit.corner(gloss, gh / 2)
-	Kit.grad(gloss, { { "ffffff", 0, 0.42 }, { "ffffff", 1, 0.04 } })
-	local topHl = Kit.frame(face, 2, 1, w - 4, 3, Color3.new(1, 1, 1), { BackgroundTransparency = 0.5, ZIndex = 5 }); Kit.corner(topHl, 2)
-	Kit.frame(face, 8, fh - dH - 1.5, w - 16, 1.5, Color3.new(1, 1, 1), { BackgroundTransparency = 0.65, ZIndex = 6 })
-	Kit.stroke(face, 3, INK)
-	-- centred content row: icon + label
-	local content = new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0, (fh - dH) / 2 + 0.5),
-		AutomaticSize = Enum.AutomaticSize.XY, Size = UDim2.fromOffset(0, 0), ZIndex = 7 }, face)
-	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, opts.gap or 8), SortOrder = Enum.SortOrder.LayoutOrder }, content)
+	local glow = Kit.soft(root, 0, 0, w, h, 18, "glow", Color3.new(1, 1, 1), 1, 2)
+	local body = Kit.frame(root, 0, 0, w, h, INK, { ZIndex = 3 }); Kit.corner(body, cr)
+	local lip = Kit.frame(root, o, o, fw, h - 2 * o, Color3.new(1, 1, 1), { ZIndex = 4 }); Kit.corner(lip, cr - o)
+	local face = Kit.frame(root, o, o, fw, fh, Color3.new(1, 1, 1), { ZIndex = 5 })
+	Kit.corner(face, cr - o)
+	local stops = opts.stops or GREY
+	local g = Kit.grad(face, stops)
+	local lg = Kit.grad(lip, shadeStops(stops, 0.58))
+	-- stripes (clipped to the face by a CanvasGroup so the rounded corners stay clean)
+	local tex = new("CanvasGroup", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, GroupTransparency = 0, ZIndex = 6 }, face)
+	Kit.corner(tex, cr - o)
+	new("ImageLabel", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Image = Icons["ui/stripes"] or "", ScaleType = Enum.ScaleType.Tile,
+		TileSize = UDim2.fromOffset(32, 32), ImageTransparency = 0.88, ZIndex = 6 }, tex)
+	-- gloss cap: soft white pill on the upper half
+	local gh = math.max(6, math.floor(fh * 0.42))
+	local gloss = Kit.frame(face, math.max(4, cr * 0.45), 3, fw - 2 * math.max(4, cr * 0.45), gh, Color3.new(1, 1, 1), { ZIndex = 7 })
+	Kit.corner(gloss, gh / 2)
+	Kit.grad(gloss, { { "ffffff", 0, 0.5 }, { "ffffff", 1, 0.06 } })
+	local hl = Kit.frame(face, 0, 0, fw, fh, Color3.new(1, 1, 1), { BackgroundTransparency = 1, ZIndex = 7 }); Kit.corner(hl, cr - o)
+	-- content row: icon + label, centred on the face
+	local content = new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0),
+		AutomaticSize = Enum.AutomaticSize.XY, Size = UDim2.fromOffset(0, 0), ZIndex = 8 }, face)
+	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		Padding = UDim.new(0, opts.gap or 8), SortOrder = Enum.SortOrder.LayoutOrder }, content)
 	local ico
-	if opts.icon then ico = Kit.icon(content, 0, 0, opts.iconSize or math.floor(fh * 0.74), opts.icon, { ZIndex = 8, LayoutOrder = 1 }) end
-	local label = Kit.title(content, opts.text or "", opts.size or 20, opts.textColor, opts.strokeW or (if (opts.size or 20) >= 24 then 2.5 else if (opts.size or 20) >= 16 then 2.4 else 1.6), 2, { ZIndex = 8, LayoutOrder = 2 })
-	label.holder.Visible = (opts.text or "") ~= ""   -- icon-only buttons stay centred
-	local api = { root = root, face = face, grad = g, glowImg = glow, label = label, iconImg = ico, depth = depth, h = h, w = w, state = "" }
-	-- art mode: the face is the Figma-rendered button (opts.art = { lit, grey, blue, gold } image ids), content drawn on top
-	local art
-	if opts.art then
-		base.Visible = false
-		for _, c in face:GetChildren() do if c ~= content then c:Destroy() end end
-		face.BackgroundTransparency = 1; face.ClipsDescendants = false
-		art = Kit.image(face, 0, 0, w, h, opts.art.lit or opts.art.grey, { ZIndex = 4, ScaleType = Enum.ScaleType.Stretch })
-		g = nil
-	end
+	if opts.icon then ico = Kit.icon(content, 0, 0, opts.iconSize or math.floor(fh * 0.8), opts.icon, { ZIndex = 9, LayoutOrder = 1 }) end
+	local size = opts.size or 20
+	local label = Kit.title(content, opts.text or "", size, opts.textColor, opts.strokeW or (if size >= 24 then 2.6 elseif size >= 16 then 2.4 else 1.8), if size >= 16 then 2 else 1.5, { ZIndex = 9, LayoutOrder = 2 })
+	label.holder.Visible = (opts.text or "") ~= ""
+	local api = { root = root, face = face, grad = g, glowImg = glow, label = label, iconImg = ico, h = h, w = w, state = "", lit = false }
 	function api.setStops(st)
-		if art then return end
-		local ng = Kit.grad(face, st); g:Destroy(); g = ng; api.grad = ng
-	end
-	local function artLook(kind)
-		if not art then return end
-		local id = opts.art[kind]
-		if id then art.Image = id; art.ImageColor3 = Color3.new(1, 1, 1)
-		else art.Image = opts.art.lit; art.ImageColor3 = if kind == "grey" then Color3.fromRGB(120, 124, 134) else Color3.new(1, 1, 1) end
+		g:Destroy(); g = Kit.grad(face, st); api.grad = g
+		lg:Destroy(); lg = Kit.grad(lip, shadeStops(st, 0.58))
 	end
 	function api.setIcon(name) if ico then ico.Image = Icons[name] or "" end end
 	function api.setText(s) label.set(s); label.holder.Visible = s ~= "" end
-	-- look: "lit" (theme stops + glow), "grey" (can't afford), "blue" (BUY ALL), "gold" (MAXED)
-	function api.look(kind, stops, glowColor)
-		if api.state == kind .. tostring(stops) then return end
-		api.state = kind .. tostring(stops)
-		artLook(kind)
+	-- look: "lit" (theme stops + optional glow), "grey" (can't afford), "blue" (BUY ALL), "gold" (MAXED)
+	function api.look(kind, st, glowColor)
+		st = st or opts.litStops or opts.stops
+		local key = kind .. tostring(st) .. tostring(glowColor)
+		if api.state == key then return end
+		api.state = key
 		if kind == "grey" then api.setStops(GREY); label.color(hex("cdd3dd")); glow.ImageTransparency = 1
 		elseif kind == "blue" then api.setStops(BLUE); label.color(Color3.new(1, 1, 1)); glow.ImageTransparency = 1
 		elseif kind == "gold" then api.setStops(GOLD); label.color(Color3.new(1, 1, 1)); glow.ImageTransparency = 1
 		else
-			api.setStops(stops); label.color(Color3.new(1, 1, 1))
+			if st then api.setStops(st) end
+			label.color(Color3.new(1, 1, 1))
 			if glowColor then glow.ImageColor3 = hex(glowColor); glow.ImageTransparency = 0.45 else glow.ImageTransparency = 1 end
 		end
+		if ico then ico.ImageTransparency = if kind == "grey" then 0.25 else 0 end
 		api.lit = kind == "lit" and glowColor ~= nil
 	end
-	-- motion (spec cards): hover lift 2px + brighten, press squash .94, release 1.06 overshoot
+	-- motion: hover brighten + lift 1, press sinks into the lip, release springs back
 	local scale = new("UIScale", { Scale = 1 }, root)
-	root.MouseEnter:Connect(function() if not opts.silent then Kit.sfx("hover") end; TweenService:Create(face, TweenInfo.new(0.12), { Position = UDim2.fromOffset(0, -2) }):Play() end)
-	root.MouseLeave:Connect(function() TweenService:Create(face, TweenInfo.new(0.12), { Position = UDim2.fromOffset(0, 0) }):Play(); TweenService:Create(scale, TweenInfo.new(0.1), { Scale = 1 }):Play() end)
+	local q = TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	root.MouseEnter:Connect(function()
+		if not opts.silent then Kit.sfx("hover") end
+		TweenService:Create(face, q, { Position = UDim2.fromOffset(o, o - 1) }):Play()
+		TweenService:Create(hl, q, { BackgroundTransparency = 0.88 }):Play()
+	end)
+	root.MouseLeave:Connect(function()
+		TweenService:Create(face, q, { Position = UDim2.fromOffset(o, o) }):Play()
+		TweenService:Create(hl, q, { BackgroundTransparency = 1 }):Play()
+		TweenService:Create(scale, q, { Scale = 1 }):Play()
+	end)
 	root.MouseButton1Down:Connect(function()
 		if not opts.silent then Kit.sfx(opts.sound or "click") end
-		TweenService:Create(scale, TweenInfo.new(0.07), { Scale = 0.94 }):Play()
-		TweenService:Create(face, TweenInfo.new(0.07), { Position = UDim2.fromOffset(0, 3) }):Play()
+		TweenService:Create(face, TweenInfo.new(0.06), { Position = UDim2.fromOffset(o, o + d - 1) }):Play()
+		TweenService:Create(scale, TweenInfo.new(0.06), { Scale = 0.97 }):Play()
 	end)
 	root.MouseButton1Up:Connect(function()
-		TweenService:Create(face, TweenInfo.new(0.07), { Position = UDim2.fromOffset(0, 0) }):Play()
-		local t = TweenService:Create(scale, TweenInfo.new(0.09, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Scale = 1.06 })
-		t:Play(); t.Completed:Once(function() TweenService:Create(scale, TweenInfo.new(0.12, Enum.EasingStyle.Back), { Scale = 1 }):Play() end)
+		TweenService:Create(face, TweenInfo.new(0.16, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Position = UDim2.fromOffset(o, o) }):Play()
+		TweenService:Create(scale, TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
 	end)
 	api.scale = scale
+	if opts.stops then api.look("lit", opts.stops) end
 	return api
 end
 

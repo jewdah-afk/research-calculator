@@ -40,25 +40,14 @@ end
 -- ---------------------------------------------------------------- banner (map banner 28,26,330,66)
 local banner
 local function buildBanner()
-	local b = Kit.frame(canvas, 28, 64, 330, 66, Color3.new(1, 1, 1), { ZIndex = 10, ClipsDescendants = true })
-	Kit.corner(b, 18)
-	b:SetAttribute("grad", true)
-	local g = Kit.grad(b, Kit.stops("ffd27a:0 f7a634:30 e07a1c:72 9e4a0c:100"))
-	Kit.texture(b, "halftone", 0.7, 32, 10)
-	local glow = Kit.frame(b, 0, 30, 330, 36, hex("ffb85c"), { ZIndex = 10 }); Kit.grad(glow, { { "ffb85c", 0, 0 }, { "ffb85c", 1, 0.55 } })
-	local dome = Kit.ellipse(b, -25, -28, 380, 73, Color3.new(1, 1, 1)); dome.ZIndex = 11
-	Kit.grad(dome, { { "ffffff", 0, 0.75 }, { "ffffff", 0.62, 0.22 }, { "ffffff", 1, 0 } })
-	local band = Kit.frame(b, 0, 50, 330, 12, Color3.new(1, 1, 1), { ZIndex = 11 }); local bg = Kit.grad(band, Kit.stops("6e2f07:0 2a1203:100"))
-	Kit.frame(b, 0, 48, 330, 2, hex("ffe2b0"), { BackgroundTransparency = 0.3, ZIndex = 11 })
-	Kit.image(b, 10, 4, 46, 13, Kit.iconId("ui/softellipse"), { ImageTransparency = 0.15, ZIndex = 11 })
-	local name = Kit.title(b, "THE PARK", 30, Color3.new(1, 1, 1), 3, 3, { Position = UDim2.fromOffset(20, 6), ZIndex = 12 })
-	local k = Kit.frame(b, 200, 10, 110, 30, hex("1a0c03"), { BackgroundTransparency = 0.45, ZIndex = 12 }); Kit.corner(k, 12)
-	Kit.icon(k, 8, 3, 24, "popcorn", { ZIndex = 13 })
-	local kt = Kit.title(k, "0 / 0", 17, Color3.new(1, 1, 1), 2, 0, { Position = UDim2.fromOffset(38, 4), ZIndex = 13 })
-	Kit.stroke(b, 4)
-	-- outer drop shadow
-	local sh = Kit.frame(canvas, 28, 70, 330, 66, Color3.new(0, 0, 0), { BackgroundTransparency = 0.45, ZIndex = 9 }); Kit.corner(sh, 18)
-	banner = { frame = b, name = name, kernels = kt, grad = g, band = bg, kbox = k }
+	-- island plate: the same 3D key as every button (ink outline, themed face, darker lip, gloss, stripes), not clickable
+	local key = Kit.button(canvas, 30, 60, 304, 70, { text = "", stops = Kit.stops(Spec.popcorn.hdr), silent = true, depth = 7 })
+	key.root.Active = false; pcall(function() key.root.Interactable = false end)
+	local name = Kit.title(key.face, "THE PARK", 27, Color3.new(1, 1, 1), 3, 3, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 16, 0.5, 0), ZIndex = 10 })
+	local k = Kit.frame(key.face, 298 - 116, 0, 106, 32, Kit.INK, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(1, -116, 0.5, 0), BackgroundTransparency = 0.4, ZIndex = 10 }); Kit.corner(k, 16)
+	Kit.icon(k, 3, 1, 30, "popcorn", { ZIndex = 11 })
+	local kt = Kit.title(k, "0 / 0", 16, Color3.new(1, 1, 1), 2, 0, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(67, 16), ZIndex = 11 })
+	banner = { key = key, name = name, kernels = kt, kbox = k }
 end
 
 -- ---------------------------------------------------------------- toast (397,96,644,69)
@@ -234,27 +223,22 @@ local function dockWindow(id)
 	local api = Windows.built[id]
 	if not api then return end
 	if state and derived then Windows.binders[id].update(api, state, derived) end
+	if old and old ~= api then old.root.Visible = false end
 	if collapsed then
-		if old then old.root.Visible = false end
-		Window.open(api)
+		Window.open(api, "slide")
 		setCollapsed(false)
 	elseif not old then
-		Window.open(api)
+		Window.open(api, "slide")
 		Hud.dock.Position = UDim2.new(1, DOCK_OUT, 0, 26)
 		slideDock(DOCK_IN, 0.34)
 	elseif sameGroup then
-		Window.close(old)
-		Window.open(api)
+		Window.open(api, "tab")
 	else
-		-- new feature group: drawer slides out, swaps, slides back in with a soft glow reveal
+		-- new feature group: drawer slides in fresh from the right edge with the new window (one motion)
 		Kit.sfx("open")
-		local tw = slideDock(DOCK_OUT, 0.14, Enum.EasingStyle.Quad)
-		local function swap()
-			old.root.Visible = false
-			Window.open(api)
-			slideDock(DOCK_IN, 0.3)
-		end
-		if tw then tw.Completed:Once(swap) else swap() end
+		Hud.dock.Position = UDim2.new(1, DOCK_IN + 140, 0, 26)
+		Window.open(api, "slide")
+		slideDock(DOCK_IN, 0.26)
 	end
 	refreshTiles()
 end
@@ -322,7 +306,7 @@ local function heroTile(parent, g, order)
 	hit.Activated:Connect(function()
 		-- clicking the open feature tucks the drawer away; otherwise open the group's first unlocked window
 		local cur = docked and groupOf(docked)
-		if cur == g then setCollapsed(not collapsed); return end
+		if cur == g then if collapsed then setCollapsed(false) end; return end
 		for _, m in g.members do
 			if not state or (Defs.WINDOW_ISLAND[m] or 1) <= state.island then Windows.open(m); return end
 		end
@@ -483,8 +467,8 @@ function Hud.setState(s, d)
 		end
 	end
 	lastIsland = s.island
-	banner.grad:Destroy()
-	banner.grad = Kit.grad(banner.frame, Kit.stops(Spec[ISLAND_THEME[isl.id]] and Spec[ISLAND_THEME[isl.id]].hdr or Spec.popcorn.hdr))
+	local th = Spec[ISLAND_THEME[isl.id]] or Spec.popcorn
+	if banner.theme ~= th then banner.theme = th; banner.key.setStops(Kit.stops(th.hdr)) end
 end
 
 -- ---------------------------------------------------------------- toasts from the server
