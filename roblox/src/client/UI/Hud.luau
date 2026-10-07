@@ -240,7 +240,7 @@ end
 -- Collapsing tucks it into a narrow right-edge tab that keeps the feature icon and a reopen chevron.
 local groupTiles = {}
 local collapsed = false
-local DOCK_IN, DOCK_OUT = 0, 500   -- flush to the screen edge; tucked = fully out, the bookmarks stay
+local DOCK_IN, DOCK_OUT = 30, 530   -- flush to the screen edge; tucked = fully out, the bookmarks stay
 local function groupOf(id) return Spec.GROUP_OF[id] end
 local function slideDock(x, t, style)
 	if Hud.qa then return nil end
@@ -483,6 +483,9 @@ end
 -- one per unlocked feature group, stacked down the drawer's left edge and tucked under the window. They ride with the
 -- drawer, so when it is tucked away they wait at the screen edge. The open one sticks out further; hover nudges out.
 local TAB_W, TAB_H, TAB_SHOW, TAB_OPEN = 128, 112, 84, 104
+local TAB_STEP = 54        -- stacked tabs below the active one show their top 54 px (icon)
+local bmOrder, bmHover = {}, nil
+local layoutBookmarks
 local function bookmarkTab(parent, g, order)
 	local lead = Spec[g.members[1]]
 	local holder = Kit.new("Frame", { BackgroundTransparency = 1, LayoutOrder = order, Size = UDim2.fromOffset(TAB_OPEN, TAB_H + 4), ZIndex = 4 }, parent)
@@ -492,7 +495,7 @@ local function bookmarkTab(parent, g, order)
 	local gr = Kit.grad(face, Kit.stops(lead.tab or lead.hdr))
 	local tx = Kit.texture(face, "halftone", 0.78, 24, 4); Kit.corner(tx, 22)
 	local st = Kit.stroke(face, 3.5)
-	local icon = Kit.icon(slide, TAB_SHOW / 2 - 34, 10, 68, g.icon, { ZIndex = 6 })
+	local icon = Kit.icon(slide, TAB_SHOW / 2 - 30, 4, 60, g.icon, { ZIndex = 6 })
 	local chev = Kit.title(slide, "‹", 36, Color3.new(1, 1, 1), 3, 2, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(TAB_SHOW / 2, 70), ZIndex = 6 })
 	local hit = Kit.new("TextButton", { Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromOffset(TAB_OPEN, TAB_H), ZIndex = 7 }, holder)
 	local hovered, selected = false, false
@@ -504,8 +507,8 @@ local function bookmarkTab(parent, g, order)
 		chev.holder.Visible = not selected
 		st.Color = if selected then Color3.new(1, 1, 1) else Kit.INK
 	end
-	hit.MouseEnter:Connect(function() hovered = true; Kit.sfx("hover"); pose() end)
-	hit.MouseLeave:Connect(function() hovered = false; pose() end)
+	hit.MouseEnter:Connect(function() hovered = true; bmHover = g.id; Kit.sfx("hover"); pose(); layoutBookmarks() end)
+	hit.MouseLeave:Connect(function() hovered = false; if bmHover == g.id then bmHover = nil end; pose(); layoutBookmarks() end)
 	hit.MouseButton1Down:Connect(function() Kit.sfx("click") end)
 	hit.Activated:Connect(function()
 		local cur = docked and groupOf(docked)
@@ -514,22 +517,41 @@ local function bookmarkTab(parent, g, order)
 			if not state or (Defs.WINDOW_ISLAND[m] or 1) <= state.island then Windows.open(m); return end
 		end
 	end)
-	local t = { holder = holder, btn = { root = hit }, icon = icon, burst = Instance.new("Frame"), glow = glow, iconY = 10 }
+	local t = { holder = holder, btn = { root = hit }, icon = icon, burst = Instance.new("Frame"), glow = glow, iconY = 4, gid = g.id }
 	function t.select(on)
 		if on == selected then return end
 		selected = on
 		pose()
 		if on then Kit.pop(icon, 1.2) end
+		layoutBookmarks()
 	end
 	function t.isSelected() return selected end
 	return t
 end
+-- stacked layout: the active tab on top (next to the header), the rest layered under it like a deck, each later tab
+-- drawn over the one above so only its top strip + icon peeks; hovering one pushes the tabs below it down to reveal it
+layoutBookmarks = function()
+	local list = {}
+	for _, id in bmOrder do
+		local t = groupTiles[id]
+		if t and t.holder.Visible and t.isSelected() then table.insert(list, 1, t) elseif t and t.holder.Visible then table.insert(list, t) end
+	end
+	local y = 0
+	local q = TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+	for k, t in list do
+		t.holder.ZIndex = 4 + k
+		TweenService:Create(t.holder, q, { Position = UDim2.fromOffset(0, y) }):Play()
+		local full = k == 1 or t.gid == bmHover
+		y += if full then TAB_H + 8 else TAB_STEP
+	end
+end
 local function buildBookmarks(dock)
-	bookmarkCol = Kit.new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(0, 4, 0, 8), Size = UDim2.fromOffset(TAB_OPEN, 1000), ZIndex = 4 }, dock)
-	Kit.new("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder, HorizontalAlignment = Enum.HorizontalAlignment.Right }, bookmarkCol)
+	bookmarkCol = Kit.new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(0, 4, 0, 4), Size = UDim2.fromOffset(TAB_OPEN, 1000), ZIndex = 4 }, dock)
 	for i, g in Spec.GROUPS do
 		if g.id == "profile" then continue end
 		local t = bookmarkTab(bookmarkCol, g, i)
+		table.insert(bmOrder, g.id)
+		t.holder:GetPropertyChangedSignal("Visible"):Connect(function() layoutBookmarks() end)
 		groupTiles[g.id] = t
 		for _, m in g.members do menuButtons[m] = { holder = t.holder, btn = t.btn, group = g } end
 	end

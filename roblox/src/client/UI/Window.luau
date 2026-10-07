@@ -206,10 +206,10 @@ function Window.build(parent, spec)
 	api.body = body
 
 	-- header: centred title (no icon, user rule) + sparkles
-	api.title = Kit.title(body, spec.title, 34, Color3.new(1, 1, 1), 3, 3, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(250, 33), ZIndex = 6 })   -- glyphs centred on the bright band (y 5-58); holder includes the 3 px drop
+	api.title = Kit.title(body, spec.title, 34, Color3.new(1, 1, 1), 3, 3, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(235, 33), ZIndex = 6 })   -- centred on the visible header (the right 30 px run past the screen edge); glyphs centred on the bright band (y 5-58); holder includes the 3 px drop
 	Kit.sparkle(body, 384.5, 44.5, 9)
 	-- collapse control (drawer tucks into a right-edge tab)
-	local col = Kit.button(body, 438, 12, 46, 40, { text = "›", size = 30, stops = Kit.stops("5c6676:0 323844:100"), sound = "close" })
+	local col = Kit.button(body, 438 - 30, 12, 46, 40, { text = "›", size = 30, stops = Kit.stops("5c6676:0 323844:100"), sound = "close" })
 	api.collapse = col
 	-- the Fredoka "›" glyph sits low-left in its box: nudge the content onto the face's optical centre
 	local cc = col.label.holder.Parent
