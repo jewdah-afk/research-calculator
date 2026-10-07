@@ -416,8 +416,13 @@ function EN.short(x: any, digits: number?): string
 	end
 	if x[2] <= 1 then
 		local e = if x[2] == 0 then log10(x[3]) else x[3]
+		if e ~= e then return neg .. "0" end                 -- NaN guard
+		if e < 3 then                                         -- un-normalised small value: plain number, never a nil suffix
+			local v = 10 ^ e
+			return neg .. (if v == floor(v) then tostring(v) else trimNum(v, d))
+		end
 		local tier = floor(e / 3)
-		if tier < #SUFFIXES then
+		if tier >= 0 and tier < #SUFFIXES then
 			local m = 10 ^ (e - tier * 3)
 			if tonumber(trimNum(m, d)) >= 1000 and tier + 1 < #SUFFIXES then
 				return neg .. trimNum(m / 1000, d) .. SUFFIXES[tier + 2]

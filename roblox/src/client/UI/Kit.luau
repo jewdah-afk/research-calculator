@@ -30,7 +30,10 @@ function Kit.frame(parent, x, y, w, h, color, props)
 	if props then for k, v in props do f[k] = v end end
 	return f
 end
-function Kit.corner(p, r) new("UICorner", { CornerRadius = UDim.new(0, r) }, p) end
+-- Peckwood style is SQUARE (owner 2026-10-07: "the square corners look sweet, we are not using the bubbly style"):
+-- every corner in the HUD goes through here and is capped to a crisp 4 px
+Kit.CORNER = 4
+function Kit.corner(p, r) new("UICorner", { CornerRadius = UDim.new(0, math.min(r, Kit.CORNER)) }, p) end
 -- Figma INSIDE stroke: Roblox strokes sit on the border, so inset by half and use the Inner position when available
 function Kit.stroke(p, w, color, transp)
 	local s = new("UIStroke", { Thickness = w, Color = color or INK, Transparency = transp or 0, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, p)

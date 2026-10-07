@@ -425,7 +425,7 @@ function IslandView.build()
 	local cf = Instance.new("Folder"); cf.Name = "Clouds"; cf.Parent = root
 	for k = 1, 12 do
 		local m = buildCloud(cf, k)
-		table.insert(clouds, { model = m, r = (34 + hash(k, 4) * 26) * S / 2, a = hash(k, 5) * math.pi * 2, y = (hash(k, 6) - 0.7) * 26, sp = 0.006 + hash(k, 7) * 0.006 })
+		table.insert(clouds, { model = m, r = (34 + hash(k, 4) * 26) * S / 2, a = hash(k, 5) * math.pi * 2, y = -10 - hash(k, 6) * 22, sp = 0.006 + hash(k, 7) * 0.006 })   -- clouds stay below the island tops (never across a bridge)
 	end
 	-- far islands: small brick islands in the haze
 	local farF = Instance.new("Folder"); farF.Name = "Far"; farF.Parent = root
@@ -737,8 +737,7 @@ local function buildBridgeModel(br, parent)
 		box(0, -PLATE * 1.6, 0, 0.5, PLATE * 0.8, width + 0.4, hx(C.woodD))
 		-- rope rails (thin, dark) on both sides, a wooden post every 4th plank
 		for _, side in { -1, 1 } do
-			box(0, 2.3, side * (width / 2 + 0.15), lenA + 0.02, 0.22, 0.22, hx("6e5238"))
-			box(0, 1.0, side * (width / 2 + 0.15), lenA + 0.02, 0.16, 0.16, hx("7a5c40"))
+			-- ropes are continuous segments added after all planks hang (see below); posts every 4th plank
 			if u % 4 == 1 then
 				box(0, 1.1, side * (width / 2 + 0.15), 0.6, 2.9, 0.6, hx(C.woodD))
 			end
@@ -747,9 +746,30 @@ local function buildBridgeModel(br, parent)
 		local sag = ts[1].sag or 0
 		pm:PivotTo(CFrame.new(cx, -sag, cz))   -- hangs in a gentle rope curve
 		pm.Parent = m
-		table.insert(planks, { model = pm, u = u, home = pm:GetPivot(), at = Vector3.new(cx, -sag, cz) })
+		table.insert(planks, { model = pm, u = u, home = pm:GetPivot(), at = Vector3.new(cx, -sag, cz), half = width / 2 + 0.15, across = across })
 	end
 	table.sort(planks, function(a, b) return a.u < b.u end)
+	-- ropes: one straight segment between consecutive planks per side and height, so the rail follows the sag
+	-- as one unbroken line (each segment rides with its plank during the build-in)
+	local function rope(parent, a: Vector3, b: Vector3, th, col)
+		local len = (b - a).Magnitude
+		if len < 0.01 then return end
+		local r = Instance.new("Part")
+		r.Anchored = true; r.CanCollide = false; r.CanQuery = false; r.CanTouch = false; r.CastShadow = false
+		r.Material = Enum.Material.SmoothPlastic; r.Color = col
+		r.Size = Vector3.new(th, th, len + th); r.CFrame = CFrame.lookAt((a + b) / 2, b)
+		r.Parent = parent
+	end
+	for k = 2, #planks do
+		local pa, pb = planks[k - 1], planks[k]
+		for _, side in { -1, 1 } do
+			for _, h in { { 2.3, 0.22, "6e5238" }, { 1.0, 0.16, "7a5c40" } } do
+				local a = pa.at + pa.across * side * pa.half + Vector3.new(0, h[1], 0)
+				local b = pb.at + pb.across * side * pb.half + Vector3.new(0, h[1], 0)
+				rope(pb.model, a, b, h[2], hx(h[3]))
+			end
+		end
+	end
 	for k, pl in planks do pl.f = (k - 0.5) / #planks end
 	-- stone landing posts at both ends (static)
 	local ends = Instance.new("Model"); ends.Name = "Posts"
@@ -763,6 +783,10 @@ local function buildBridgeModel(br, parent)
 			-- wooden anchor post the ropes tie to, with a darker cap
 			brickPart(ends, c - Vector3.new(0.6, 0, 0.6) - Vector3.new(0, PLATE, 0), Vector3.new(1.2, BRICK + PLATE, 1.2), hx(C.woodD))
 			brickPart(ends, c - Vector3.new(0.75, 0, 0.75) + Vector3.new(0, BRICK, 0), Vector3.new(1.5, PLATE * 0.6, 1.5), hx("6e4f33"))
+			-- tie both ropes from this anchor post to the end plank (they ride with that plank in the build-in)
+			for _, h in { { 2.3, 0.22, "6e5238" }, { 1.0, 0.16, "7a5c40" } } do
+				rope(e.model, c + Vector3.new(0, h[1], 0), e.at + e.across * side * e.half + Vector3.new(0, h[1], 0), h[2], hx(h[3]))
+			end
 		end
 	end
 	ends.Parent = m

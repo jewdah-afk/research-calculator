@@ -245,10 +245,13 @@ Remotes:WaitForChild("Spawn").OnClientEvent:Connect(function(id: number, pos: Ve
 	local pv = m:GetPivot()
 	local parts, offs = {}, {}
 	for _, d in m:GetDescendants() do
-		if d:IsA("BasePart") and d ~= halo then table.insert(parts, d); table.insert(offs, pv:ToObjectSpace(d.CFrame)) end
+		if d:IsA("BasePart") and d ~= halo then
+			d.CastShadow = false   -- 180 moving shadow casters re-render the shadow map every frame; the halo grounds them
+			table.insert(parts, d); table.insert(offs, pv:ToObjectSpace(d.CFrame))
+		end
 	end
 	kernels[id] = { model = m, halo = halo, pos = pos, born = clock, golden = golden, parts = parts, offs = offs }
-	local n = 0; for _ in kernels do n += 1 end; Hud.kernelCount = n
+	local n = 0; for _, kk in kernels do if not kk.homing then n += 1 end end; Hud.kernelCount = n   -- flying-in kernels no longer count
 end)
 
 -- collect: number pop + bird punch + burst of little cubes (View3D collect burst)
