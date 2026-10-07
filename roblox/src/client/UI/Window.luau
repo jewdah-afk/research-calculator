@@ -54,7 +54,8 @@ local function buildRow(api, body, spec, y, r)
 	end
 	fitTo(growth, 196)
 	fitTo(title.holder, 196)
-	local desc = text(row, r.desc or "", 15, hex("bcc3cf"), { Position = UDim2.fromOffset(104, 61), ZIndex = 5, AutomaticSize = Enum.AutomaticSize.None, Size = UDim2.fromOffset(196, 18), TextTruncate = Enum.TextTruncate.AtEnd })
+	local desc = text(row, (string.gsub(r.desc or "", "%.%s*$", "")), 15, hex("e6eaf0"), { Position = UDim2.fromOffset(104, 61), ZIndex = 5, AutomaticSize = Enum.AutomaticSize.None, Size = UDim2.fromOffset(196, 18), TextTruncate = Enum.TextTruncate.AtEnd })
+	Kit.textStroke(desc, 1.4)   -- small text reads bold: brighter fill + ink stroke
 	-- progress: the baked track (104,88,186,22) sits too close to the card bottom. Erase it with a copy of the clean card
 	-- surface beside it (same rows, under the buttons: nothing baked there) and draw a live track 6 px higher.
 	if api.art then
@@ -98,7 +99,7 @@ local function buildRow(api, body, spec, y, r)
 		if t.title then title.set(t.title) end
 		if t.from then from.set(t.from) end
 		if t.to then to.set(t.to) end
-		if t.desc then desc.Text = t.desc end
+		if t.desc then desc.Text = (string.gsub(t.desc, "%.%s*$", "")) end
 		if t.icon then ico.Image = Kit.iconId(t.icon) end
 		if t.prog then prog.set(t.prog[1], t.prog[2]) end
 		local isMax = t.maxed == true
@@ -459,7 +460,7 @@ RunService.RenderStepped:Connect(function(dt)
 		end
 		local pulse = (math.sin(clock * math.pi * 2 / 1.6) + 1) / 2
 		for _, r in api.rows do
-			if r.buy.lit then r.buy.glowImg.ImageTransparency = 0.3 + 0.45 * (1 - pulse) end
+			if r.buy.lit then r.buy.glowImg.ImageTransparency = 0.66 + 0.2 * (1 - pulse) end
 		end
 	end
 	if reduced then return end

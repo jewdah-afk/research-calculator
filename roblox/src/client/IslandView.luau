@@ -238,10 +238,10 @@ DEFS.rock = { w = 3, d = 2, parts = { P(0, 0, 0, 3, 2, 2, "rock"), P(1, 0, 2, 2,
 DEFS.lantern = { w = 1, d = 1, parts = {
 	P(0, 0, 0, 1, 1, 1, "metal"), P(0.35, 0.35, 1, 0.3, 0.3, 7, "metal"), P(0, 0, 8, 1, 1, 0.5, "metal"),
 	P(0, 0, 10.6, 1, 1, 0.5, "metal"), P(0.25, 0.25, 11.1, 0.5, 0.5, 0.6, "metal") }, glow = { 0.15, 0.15, 8.5, 0.7, 0.7, 2.1 } }
-DEFS.arch = { w = 7, d = 2, parts = {
+DEFS.arch = { w = 8, d = 2, parts = {   -- 8 studs: the 4-stud opening spans the 2-tile road exactly
 	P(0, 0, 0, 2, 2, 3, "stone"), P(0, 0, 3, 2, 2, 3, "stoneB"), P(0, 0, 6, 2, 2, 3, "stone"), P(0, 0, 9, 2, 2, 3, "stoneB"),
-	P(5, 0, 0, 2, 2, 3, "stoneB"), P(5, 0, 3, 2, 2, 3, "stone"), P(5, 0, 6, 2, 2, 3, "stoneB"), P(5, 0, 9, 2, 2, 3, "stone"),
-	P(0, 0, 12, 7, 2, 3, "stoneL"), P(1, 0, 15, 5, 2, 2, "stone"), P(2.5, 1.95, 12.6, 2, 0.1, 1.8, "gold") } }
+	P(6, 0, 0, 2, 2, 3, "stoneB"), P(6, 0, 3, 2, 2, 3, "stone"), P(6, 0, 6, 2, 2, 3, "stoneB"), P(6, 0, 9, 2, 2, 3, "stone"),
+	P(0, 0, 12, 8, 2, 3, "stoneL"), P(1, 0, 15, 6, 2, 2, "stone"), P(3, 1.95, 12.6, 2, 0.1, 1.8, "gold") } }
 DEFS.cart = { w = 5, d = 3, parts = {
 	P(0.5, 0.2, 0, 1.2, 0.2, 3, "metal"), P(3.3, 0.2, 0, 1.2, 0.2, 3, "metal"), P(0.5, 2.6, 0, 1.2, 0.2, 3, "metal"), P(3.3, 2.6, 0, 1.2, 0.2, 3, "metal"),
 	P(0, 0.4, 2, 5, 2.2, 3, "cart"), P(0, 0.3, 5, 5, 2.4, 0.5, "woodD"), P(0.5, 0.8, 5.5, 4, 1.4, 2, "cream"), P(1.5, 1, 7.5, 2, 1, 1, "cream"),
@@ -395,6 +395,7 @@ function IslandView.build()
 		local x, z = pxToWorld(o[2], o[3])
 		local info = buildProp(def, o[1], x, z, scenery, seed)
 		table.insert(props, info)
+		task.defer(function() IslandView.addLeaves(info.model, o[1]) end)
 		if info.light then table.insert(lamps, info) end
 		if o[1] == "windmill" then
 			local hub = Vector3.new(info.ox + 2.5 * L, info.base + 14 * PLATE, info.oz + 5 * L + 0.6)
@@ -769,6 +770,31 @@ local function buildBridgeModel(br, parent)
 	return { model = m, planks = planks, br = br, centre = if #planks > 0 then (planks[1].at + planks[#planks].at) / 2 else Vector3.zero }
 end
 
+-- leaves: a slow emitter in each tree's canopy; leaves tumble down and drift with the wind (Ambience sets the push)
+IslandView.leafEmitters = {}
+local LEAF_TEX = "rbxasset://textures/whiteCircle.png"
+local LEAF_KINDS = { oak = { "7fb35e", "c8b040" }, bigoak = { "7fb35e", "d88a3a" }, tree = { "7fb35e", "c8b040" }, pine = { "5d9a4c" },
+	nesttree = { "569a4e", "d88a3a" }, palm = { "5aa04c" } }
+local function addLeaves(model: Instance, kind: string)
+	local cols = LEAF_KINDS[kind]; if not cols then return end
+	local cf, size = model:GetBoundingBox()
+	local p = Instance.new("Part")
+	p.Name = "Leaves"; p.Anchored = true; p.CanCollide = false; p.CanQuery = false; p.CanTouch = false; p.Transparency = 1
+	p.Size = Vector3.new(size.X * 0.7, 1, size.Z * 0.7); p.CFrame = CFrame.new(cf.Position + Vector3.new(0, size.Y * 0.25, 0))
+	local pe = Instance.new("ParticleEmitter")
+	pe.Texture = LEAF_TEX; pe.Shape = Enum.ParticleEmitterShape.Box; pe.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
+	pe.Color = if #cols == 1 then ColorSequence.new(hx(cols[1])) else ColorSequence.new({ ColorSequenceKeypoint.new(0, hx(cols[1])), ColorSequenceKeypoint.new(0.6, hx(cols[1])), ColorSequenceKeypoint.new(0.61, hx(cols[2])), ColorSequenceKeypoint.new(1, hx(cols[2])) })
+	pe.Size = NumberSequence.new(0.32); pe.Squash = NumberSequence.new(0.55)
+	pe.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.1, 0), NumberSequenceKeypoint.new(0.8, 0), NumberSequenceKeypoint.new(1, 1) })
+	pe.Lifetime = NumberRange.new(3, 4.5); pe.Rate = 0.25; pe.Speed = NumberRange.new(0.5, 1.5); pe.SpreadAngle = Vector2.new(60, 60)
+	pe.Rotation = NumberRange.new(0, 360); pe.RotSpeed = NumberRange.new(-140, 140)
+	pe.Acceleration = Vector3.new(2, -3, 0.5); pe.Drag = 0.8; pe.LightInfluence = 1
+	pe.Parent = p
+	p.Parent = model
+	table.insert(IslandView.leafEmitters, pe)
+end
+IslandView.addLeaves = addLeaves
+
 local function setVis(inst: Instance, v: number)
 	if inst:IsA("BasePart") then inst.LocalTransparencyModifier = v end
 	for _, d in inst:GetDescendants() do if d:IsA("BasePart") then d.LocalTransparencyModifier = v end end
@@ -781,7 +807,11 @@ local function buildIsland(isl)
 	rec.scenery = Instance.new("Model"); rec.scenery.Name = isl.id
 	buildIslandGround(isl, rec)
 	for k, p in isl.props do
-		if not p.dropped then table.insert(rec.props, buildIslandProp(isl, p, rec.scenery)) end
+		if not p.dropped then
+			local info = buildIslandProp(isl, p, rec.scenery)
+			table.insert(rec.props, info)
+			addLeaves(info.model, p.kind)
+		end
 		if k % 40 == 0 then task.wait() end
 	end
 	rec.folder.Parent = islandsFolder(); rec.scenery.Parent = IslandView.scenery   -- appear in one frame

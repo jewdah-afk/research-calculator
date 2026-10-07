@@ -105,17 +105,18 @@ local CAP_FACE = { popcorn = "9fe36a:0 3fae3a:100", goldenFeathers = "c9a2ff:0 7
 	moneta = "ffe88a:0 d8a020:100", skillPoints = "ff9a8a:0 d04a4a:100" }
 -- the number sits in a recessed well, Figma style: a deep shade of the capsule's own colour (not black), an inner
 -- shadow along the top, halftone texture and a lit bottom edge, so it reads as pressed INTO the key
-local function well(parent, x, w, h, faceStops)
+local function well(parent, x, w, h, faceStops, rad)
+	rad = rad or h / 2
 	local deep = Kit.shadeStops(Kit.stops(faceStops), 0.3)
 	local rim = Kit.shadeStops(Kit.stops(faceStops), 0.16)
 	local wl = Kit.frame(parent, x, 0, w, h, Color3.new(1, 1, 1), { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, x, 0.5, 0), ZIndex = 10 })
-	Kit.corner(wl, h / 2)
+	Kit.corner(wl, rad)
 	local d1, d2 = deep[1][1], (deep[2] or deep[1])[1]
 	Kit.grad(wl, { { d2, 0, 1 }, { d1, 1, 1 } }, 90)
-	local tx = Kit.texture(wl, "halftone", 0.84, 16, 10); Kit.corner(tx, h / 2)
+	local tx = Kit.texture(wl, "halftone", 0.84, 16, 10); Kit.corner(tx, rad)
 	-- inner shadow: the same pill as the well (so its edges always follow the shape), dark at the top lip of the
 	-- recess and fully clear from just past the middle
-	local sh = Kit.frame(wl, 0, 0, w, h, Color3.new(0, 0, 0), { ZIndex = 11 }); Kit.corner(sh, h / 2)
+	local sh = Kit.frame(wl, 0, 0, w, h, Color3.new(0, 0, 0), { ZIndex = 11 }); Kit.corner(sh, rad)
 	Kit.grad(sh, { { "000000", 0, 0.6 }, { "000000", 0.3, 0.22 }, { "000000", 0.6, 0 }, { "000000", 1, 0 } }, 90)
 	Kit.stroke(wl, 2, Color3.fromHex((rim[2] or rim[1])[1]), 0)
 	return wl
@@ -147,7 +148,9 @@ local function capsule(cur, big)
 	-- the well starts where the icon ends (icon spans 0..ic in the capsule; the face starts at KX + 3)
 	local wellX = ic - KX - 3 + 4
 	local wh = fh - 14
-	local wl = well(key.face, wellX, fw - wellX - 8, wh, stops)
+	-- concentric corners: the well's radius is the face radius minus its inset, so both curves run parallel
+	local faceR = math.clamp(math.floor(h * 0.3), 9, 18) - 3
+	local wl = well(key.face, wellX, fw - wellX - 8, wh, stops, math.max(3, faceR - 7))
 	-- centred on the key face (key at y 4, face 3 px in, fh tall), a touch low so it sits on the well's centre line
 	local icon = Kit.icon(f, KX - ic / 2 + 2, 4 + 3 + fh / 2 - ic / 2 + 1, ic, Defs.CUR[cur].icon, { ZIndex = 12 })
 	local val = Kit.title(wl, "0", if big then 36 else 22, Color3.new(1, 1, 1), if big then 3.2 else 2.6, if big then 3 else 2,
@@ -209,20 +212,20 @@ local function buildObjective()
 	local SLATE = "5a6478:0 343b4a:100"
 	local key = Kit.button(canvas, 0, 0, 640, 64, { text = "", stops = Kit.stops(SLATE), silent = true, depth = 8 })
 	key.root.Active = false; pcall(function() key.root.Interactable = false end)
-	key.root.AnchorPoint = Vector2.new(0.5, 1); key.root.Position = UDim2.new(0.5, -244, 1, -22)
-	local wl = well(key.face, 50, 640 - 6 - 50 - 9, 64 - 6 - 8 - 14, SLATE)
+	key.root.AnchorPoint = Vector2.new(0.5, 1); key.root.Position = UDim2.new(0.5, 0, 1, -22)   -- centred: progression reads at a glance
+	local wl = well(key.face, 50, 640 - 6 - 50 - 9, 64 - 6 - 8 - 14, SLATE, math.max(3, math.clamp(math.floor(64 * 0.3), 9, 18) - 3 - 7))
 	local bang = Kit.frame(key.face, 10, 0, 32, 32, Color3.new(1, 1, 1), { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 0), ZIndex = 13 })
 	Kit.corner(bang, 16); Kit.grad(bang, Kit.stops("ffe07a:0 c27a10:100")); Kit.stroke(bang, 2.5)
 	Kit.title(bang, "!", 21, Color3.new(1, 1, 1), 2, 0, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), ZIndex = 14 })
 	local t = Kit.title(wl, "", 20, hex("ffe8a8"), 2.4, 2, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 16, 0.5, -1), ZIndex = 13 })
 	objective = { frame = key.root, text = t }
 	unlockBtn = Kit.button(canvas, 0, 0, 220, 56, { text = "UNLOCK", size = 20, stops = Kit.GOLD, icon = "popcorn", iconSize = 34 })
-	unlockBtn.root.AnchorPoint = Vector2.new(0.5, 1); unlockBtn.root.Position = UDim2.new(0.5, 230, 1, -24)
+	unlockBtn.root.AnchorPoint = Vector2.new(0, 1); unlockBtn.root.Position = UDim2.new(0.5, 332, 1, -24)
 	unlockBtn.root.Visible = false
 	unlockBtn.root.Activated:Connect(function() act("unlock", nil, nil, unlockBtn) end)
 	-- AUTO: group perk. Locked players get the in-game join prompt, then the server re-checks.
 	autoBtn = Kit.button(canvas, 0, 0, 190, 56, { text = "AUTO", size = 22, stops = Kit.GREY, icon = "clock", iconSize = 34 })
-	autoBtn.root.AnchorPoint = Vector2.new(1, 1); autoBtn.root.Position = UDim2.new(1, -540, 1, -24)
+	autoBtn.root.AnchorPoint = Vector2.new(0, 0); autoBtn.root.Position = UDim2.fromOffset(30, 528)   -- left column, under the menu
 	autoBtn.root.Activated:Connect(function()
 		if not derived then return end
 		if not derived.autoAllowed and derived.groupId and derived.groupId > 0 then

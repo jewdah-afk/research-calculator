@@ -235,7 +235,7 @@ function Kit.button(parent, x, y, w, h, opts)
 		else
 			if st then api.setStops(st) end
 			label.color(Color3.new(1, 1, 1))
-			if glowColor then glow.ImageColor3 = hex(glowColor); glow.ImageTransparency = 0.45 else glow.ImageTransparency = 1 end
+			if glowColor then glow.ImageColor3 = hex(glowColor); glow.ImageTransparency = 0.72 else glow.ImageTransparency = 1 end   -- soft halo, not a bloom
 		end
 		if ico then ico.ImageTransparency = if kind == "grey" then 0.25 else 0 end
 		api.lit = kind == "lit" and glowColor ~= nil
@@ -325,7 +325,7 @@ function Kit.progress(parent, x, y, w, h, fillStops)
 		lbl.Text = text
 		if math.abs(frac - api.frac) > 1e-4 then
 			api.frac = frac
-			TweenService:Create(fill, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = UDim2.fromOffset(math.max(if frac > 0 then h else 0, w * frac), h) }):Play()
+			TweenService:Create(fill, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = UDim2.fromOffset(if w * frac >= h then w * frac else 0, h) }):Play()   -- no stub knob below one pill width
 		end
 	end
 	function api.setStops(st) fg:Destroy(); fg = Kit.grad(fill, st) end

@@ -24,8 +24,8 @@ local PROP_COLL = { lantern = { 3, 40 }, oak = { 6, 60 }, bigoak = { 7, 70 }, pi
 for _, o in Map.objects do
 	local kind, x, y, z = o[1], o[2], o[3], o[4]
 	if kind == "arch" then   -- two pillars, walk-through gap between them
-		table.insert(colliders, { x = x - 20, y = y, r = 8, base = z, top = z + 80 })
-		table.insert(colliders, { x = x + 20, y = y, r = 8, base = z, top = z + 80 })
+		table.insert(colliders, { x = x - 24, y = y, r = 8, base = z, top = z + 80 })
+		table.insert(colliders, { x = x + 24, y = y, r = 8, base = z, top = z + 80 })
 	elseif PROP_COLL[kind] then
 		table.insert(colliders, { x = x, y = y, r = PROP_COLL[kind][1], base = z, top = z + PROP_COLL[kind][2] })
 	end
