@@ -9,9 +9,9 @@ export type Item = { id: string, kind: "pass" | "product", name: string, desc: s
 
 Shop.ITEMS = {
 	-- hero: every pass in one purchase (sum 1,394 R$ -> 899 R$, ~35% off)
-	{ id = "bundle", kind = "pass", section = "BUNDLE", name = "Ultimate Bundle", desc = "All 6 passes, forever", icon = "shop_bundle", robux = 899, was = 1394, assetId = 0, theme = "golden", tag = "SAVE 35%", grants = { "x2popcorn", "vip", "swift", "beak", "goldtouch", "angler" } },
+	{ id = "bundle", kind = "pass", section = "BUNDLE", name = "Ultimate Bundle", desc = "All 6 passes, forever", icon = "shop_bundle", robux = 899, assetId = 0, theme = "golden", grants = { "x2popcorn", "vip", "swift", "beak", "goldtouch", "angler" } },
 	-- game passes
-	{ id = "x2popcorn", kind = "pass", section = "GAME PASSES", name = "2x Popcorn", desc = "Double popcorn from every kernel, forever", icon = "shop_x2popcorn", robux = 249, assetId = 0, theme = "popcorn", tag = "POPULAR" },
+	{ id = "x2popcorn", kind = "pass", section = "GAME PASSES", name = "2x Popcorn", desc = "Double popcorn from every kernel", icon = "shop_x2popcorn", robux = 249, assetId = 0, theme = "popcorn", tag = "POPULAR" },
 	{ id = "vip", kind = "pass", section = "GAME PASSES", name = "Royal Birb", desc = "x1.5 every currency + crown tag", icon = "shop_vip", robux = 499, assetId = 0, theme = "golden", tag = "BEST" },
 	{ id = "swift", kind = "pass", section = "GAME PASSES", name = "Swift Wings", desc = "+50% walk speed", icon = "shop_swift", robux = 99, assetId = 0, theme = "seagull" },
 	{ id = "beak", kind = "pass", section = "GAME PASSES", name = "Big Beak", desc = "+50% pickup reach", icon = "shop_beak", robux = 149, assetId = 0, theme = "molt" },
@@ -31,6 +31,16 @@ Shop.BY_ASSET = {}
 for _, it in Shop.ITEMS do
 	Shop.BY_ID[it.id] = it
 	if it.assetId > 0 then Shop.BY_ASSET[it.assetId] = it end
+end
+
+-- bundle "was" price and SAVE tag come from the real pass prices, so they can never drift out of date
+for _, it in Shop.ITEMS do
+	if it.grants then
+		local sum = 0
+		for _, g in it.grants do sum += Shop.BY_ID[g].robux end
+		it.was = sum
+		it.tag = "SAVE " .. math.floor((sum - it.robux) / sum * 100 + 0.5) .. "%"
+	end
 end
 
 -- multiplier for one currency from passes + an active boost (server state `s.shop`)
