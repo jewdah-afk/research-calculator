@@ -240,18 +240,22 @@ end
 -- Collapsing tucks it into a narrow right-edge tab that keeps the feature icon and a reopen chevron.
 local groupTiles = {}
 local collapsed = false
-local DOCK_IN, DOCK_OUT = 30, 530   -- flush to the screen edge; tucked = fully out, the bookmarks stay
+local DOCK_IN, DOCK_OUT = 0, 500
+local DOCK_Y = -5
+local WIN_MAX_H = 730   -- tall windows scale down a touch so the bookmark deck fits under them   -- top outline just past the screen top: the header runs into the corner   -- flush to the screen edge; tucked = fully out, the bookmarks stay
 local function groupOf(id) return Spec.GROUP_OF[id] end
 local function slideDock(x, t, style)
 	if Hud.qa then return nil end
-	if Kit.reduced() then Hud.dock.Position = UDim2.new(1, x, 0, 26); return nil end
-	local tw = TweenService:Create(Hud.dock, TweenInfo.new(t, style or Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Position = UDim2.new(1, x, 0, 26) })
+	if Kit.reduced() then Hud.dock.Position = UDim2.new(1, x, 0, DOCK_Y); return nil end
+	local tw = TweenService:Create(Hud.dock, TweenInfo.new(t, style or Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Position = UDim2.new(1, x, 0, DOCK_Y) })
 	tw:Play()
 	return tw
 end
+local layoutBookmarks   -- defined with the bookmarks below
 local function refreshTiles()
 	local g = docked and groupOf(docked)
 	for gid, t in groupTiles do t.select(g ~= nil and g.id == gid and not collapsed) end
+	if layoutBookmarks then layoutBookmarks(); task.delay(0.4, layoutBookmarks) end   -- again once the window has settled
 end
 local function setCollapsed(c)
 	if collapsed == c then return end
@@ -276,14 +280,14 @@ local function dockWindow(id)
 		setCollapsed(false)
 	elseif not old then
 		Window.open(api, "slide")
-		Hud.dock.Position = UDim2.new(1, DOCK_OUT, 0, 26)
+		Hud.dock.Position = UDim2.new(1, DOCK_OUT, 0, DOCK_Y)
 		slideDock(DOCK_IN, 0.34)
 	elseif sameGroup then
 		Window.morph(old, api)
 	else
 		-- new feature group: drawer slides in fresh from the right edge with the new window (one motion)
 		Kit.sfx("open")
-		Hud.dock.Position = UDim2.new(1, DOCK_IN + 140, 0, 26)
+		Hud.dock.Position = UDim2.new(1, DOCK_IN + 140, 0, DOCK_Y)
 		Window.open(api, "slide")
 		slideDock(DOCK_IN, 0.26)
 	end
@@ -482,26 +486,25 @@ end
 -- bookmarks: the edge-tab style (solid themed face, halftone, thick ink outline, rounded left corners, icon on top),
 -- one per unlocked feature group, stacked down the drawer's left edge and tucked under the window. They ride with the
 -- drawer, so when it is tucked away they wait at the screen edge. The open one sticks out further; hover nudges out.
-local TAB_W, TAB_H, TAB_SHOW, TAB_OPEN = 128, 112, 84, 104
+local TAB_W, TAB_H, TAB_SHOW, TAB_OPEN = 116, 92, 76, 94
 local TAB_STEP = 54        -- stacked tabs below the active one show their top 54 px (icon)
 local bmOrder, bmHover = {}, nil
-local layoutBookmarks
 local function bookmarkTab(parent, g, order)
 	local lead = Spec[g.members[1]]
 	local holder = Kit.new("Frame", { BackgroundTransparency = 1, LayoutOrder = order, Size = UDim2.fromOffset(TAB_OPEN, TAB_H + 4), ZIndex = 4 }, parent)
-	local slide = Kit.new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(TAB_OPEN - TAB_SHOW, 0), Size = UDim2.fromOffset(TAB_W, TAB_H + 4), ZIndex = 4 }, holder)
+	local slide = Kit.new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(TAB_OPEN - TAB_SHOW, 0), Size = UDim2.fromOffset(TAB_W, TAB_H + 4), ZIndex = 4 }, holder)   -- the face's right part runs past the wall
 	local glow = Kit.soft(slide, 0, 0, TAB_W, TAB_H, 16, "glow", hex(lead.glow or "ffffff"), 1, 3)
 	local face = Kit.frame(slide, 0, 0, TAB_W, TAB_H, Color3.new(1, 1, 1), { ZIndex = 4 }); Kit.corner(face, 22)
 	local gr = Kit.grad(face, Kit.stops(lead.tab or lead.hdr))
 	local tx = Kit.texture(face, "halftone", 0.78, 24, 4); Kit.corner(tx, 22)
 	local st = Kit.stroke(face, 3.5)
-	local icon = Kit.icon(slide, TAB_SHOW / 2 - 30, 4, 60, g.icon, { ZIndex = 6 })
-	local chev = Kit.title(slide, "‹", 36, Color3.new(1, 1, 1), 3, 2, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(TAB_SHOW / 2, 70), ZIndex = 6 })
+	local icon = Kit.icon(slide, TAB_SHOW / 2 - 25, 3, 50, g.icon, { ZIndex = 6 })
+	local chev = Kit.title(slide, "‹", 36, Color3.new(1, 1, 1), 3, 2, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(TAB_SHOW / 2, 54), ZIndex = 6 })
 	local hit = Kit.new("TextButton", { Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromOffset(TAB_OPEN, TAB_H), ZIndex = 7 }, holder)
 	local hovered, selected = false, false
 	local function pose()
 		local q = TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-		local x = TAB_OPEN - (if selected then TAB_OPEN elseif hovered then TAB_SHOW + 8 else TAB_SHOW)
+		local x = if selected then TAB_OPEN + 4 else TAB_OPEN - (if hovered then TAB_SHOW + 8 else TAB_SHOW)   -- open = tucked into the wall
 		TweenService:Create(slide, q, { Position = UDim2.fromOffset(x, 0) }):Play()
 		TweenService:Create(glow, TweenInfo.new(0.2), { ImageTransparency = if selected then 0.55 else 1 }):Play()
 		chev.holder.Visible = not selected
@@ -526,6 +529,11 @@ local function bookmarkTab(parent, g, order)
 		layoutBookmarks()
 	end
 	function t.isSelected() return selected end
+	function t.slideOut(hide)
+		local x = if hide then TAB_OPEN + 4 else TAB_OPEN - (if hovered then TAB_SHOW + 8 else TAB_SHOW)
+		TweenService:Create(slide, TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Position = UDim2.fromOffset(x, 0) }):Play()
+		hit.Visible = not hide
+	end
 	return t
 end
 -- stacked layout: the active tab on top (next to the header), the rest layered under it like a deck, each later tab
@@ -534,19 +542,40 @@ layoutBookmarks = function()
 	local list = {}
 	for _, id in bmOrder do
 		local t = groupTiles[id]
-		if t and t.holder.Visible and t.isSelected() then table.insert(list, 1, t) elseif t and t.holder.Visible then table.insert(list, t) end
+		if t and t.holder.Visible then
+			-- the open window's tab leaves the deck (it IS the window now) and comes back when another replaces it
+			local hide = t.isSelected()
+			if not hide then table.insert(list, t) end
+			t.slideOut(hide)
+		end
 	end
+	if not bookmarkCol then return end
+	-- top of the stack: just under the open window (canvas units), or near the top while the drawer is tucked
+	local top = 26
+	local api = docked and Windows.built[docked]
+	if api and not collapsed and api.root.Visible and scale then
+		local r = api.root
+		top = (r.AbsolutePosition.Y + r.AbsoluteSize.Y - canvas.AbsolutePosition.Y) / scale.Scale - 2   -- flush under the window
+	end
+	local n = #list
+	local room = 1080 - 16 - top
+	-- active tab full, the middle ones show a strip each, the last one shows in full
+	local step = TAB_STEP
+	if n > 1 then step = math.clamp((room - TAB_H) / (n - 1), 26, TAB_STEP) end
+	local need = math.max(0, n - 1) * step + (if n > 0 then TAB_H else 0)
+	if top + need > 1064 then top = math.max(26, 1064 - need) end
+	local q = TweenInfo.new(0.22, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+	TweenService:Create(bookmarkCol, q, { Position = UDim2.new(1, 0, 0, top) }):Play()
 	local y = 0
-	local q = TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
 	for k, t in list do
 		t.holder.ZIndex = 4 + k
 		TweenService:Create(t.holder, q, { Position = UDim2.fromOffset(0, y) }):Play()
-		local full = k == 1 or t.gid == bmHover
-		y += if full then TAB_H + 8 else TAB_STEP
+		local full = t.gid == bmHover
+		y += if full then TAB_H + 8 else step
 	end
 end
 local function buildBookmarks(dock)
-	bookmarkCol = Kit.new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(0, 4, 0, 4), Size = UDim2.fromOffset(TAB_OPEN, 1000), ZIndex = 4 }, dock)
+	bookmarkCol = Kit.new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 26), Size = UDim2.fromOffset(TAB_OPEN, 1000), ZIndex = 4 }, canvas)
 	for i, g in Spec.GROUPS do
 		if g.id == "profile" then continue end
 		local t = bookmarkTab(bookmarkCol, g, i)
@@ -742,18 +771,19 @@ function Hud.start(remotes)
 	Kit.grad(vig, { { "121729", 0, 0 }, { "121729", 0.75, 0 }, { "121729", 1, 0.45 } })
 	buildBanner(); buildWallet(); buildObjective(); buildMenu(); buildDev()
 	-- docked shop column: right edge, 22 px margin, fit to height
-	local dock = Kit.new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, DOCK_IN, 0, 26), Size = UDim2.fromOffset(500, 1028), ZIndex = 5 }, canvas)
+	local dock = Kit.new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, DOCK_IN, 0, DOCK_Y), Size = UDim2.fromOffset(500, 1028), ZIndex = 5 }, canvas)
 	Hud.dock = dock
 	buildBookmarks(dock)
 	local ids = table.clone(Spec.MENU)
 	for _, id in { "baits", "index", "aquarium" } do table.insert(ids, id) end
 	for _, id in ids do
 		-- wrapper carries the fit-to-height scale; the window root keeps its own open/close scale
-		local holder = Kit.new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0), Size = UDim2.fromOffset(500, 100), ZIndex = 5 }, dock)
+		-- anchored top-right so a scaled-down window stays in the corner against the wall
+		local holder = Kit.new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0), Position = UDim2.fromScale(1, 0), Size = UDim2.fromOffset(500, 100), ZIndex = 5 }, dock)
 		local api = Windows.build(holder, id, act)
 		holder.Size = UDim2.fromOffset(500, api.H)
 		api.root.Position = UDim2.fromScale(0.5, 0.5)
-		Kit.new("UIScale", { Scale = math.min(1, 1028 / api.H), Name = "Fit" }, holder)
+		Kit.new("UIScale", { Scale = math.min(1, WIN_MAX_H / api.H), Name = "Fit" }, holder)
 		api.root.Visible = false
 		api.collapse.root.Activated:Connect(function() Hud.setCollapsed(true) end)
 	end
@@ -779,7 +809,7 @@ function Hud.start(remotes)
 			dock.AnchorPoint = Vector2.new(0, 0)
 			dock.Position = UDim2.new(0, 20, 0, 10 - (gui.Parent:GetAttribute("PeckwoodQAY") or 0))
 		else
-			dock.AnchorPoint = Vector2.new(1, 0); dock.Position = UDim2.new(1, DOCK_IN, 0, 26); layout()
+			dock.AnchorPoint = Vector2.new(1, 0); dock.Position = UDim2.new(1, DOCK_IN, 0, DOCK_Y); layout()
 		end
 	end
 	gui.Parent:GetAttributeChangedSignal("PeckwoodQA"):Connect(qa)

@@ -13,7 +13,7 @@ return {
 	["nest"] = Vector2.new(1360, 2048),
 	["parrot"] = Vector2.new(1360, 2048),
 	["popcorn"] = Vector2.new(1600, 1984),
-	["profile"] = Vector2.new(969, 2048),
+	["profile"] = Vector2.new(970, 2048),
 	["quests"] = Vector2.new(1360, 2048),
 	["redpanda"] = Vector2.new(1600, 1906),
 	["rods"] = Vector2.new(1360, 2048),
