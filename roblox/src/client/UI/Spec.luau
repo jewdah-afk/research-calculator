@@ -70,7 +70,7 @@ L("evolve", { title = "EVOLVE", figma = "62:7", body = "192f30:0 0d1818:100", gl
 	card = "263c3d:0 172526:100", art = "39c8f0@95:0 8a3fd6@95:50 ff5a8a@95:100", tcol = "b8eedc", gcol = "f2fdf9:0 70d1b1:100", chev = "70d1b1@35:0 f2fdf9:100",
 	buy = "39c8f0:0 8a3fd6:100", buyGlow = "d153ff",
 	tabs = { { icon = "popcorn", label = "Popcorn", target = "popcorn" }, { icon = "monster", label = "Evolve", active = true } },
-	hero = { icon = "monster", title = "CASTLE MONSTER", sub = "Evolution 3 to 4  ·  0% fed", btn = "Evolve", btnIcon = "crown" },
+	hero = { icon = "monster", title = "CASTLE MONSTER", sub = "Evolution 3 to 4  ·  0% fed", btn = "Evolve" },
 	section = "FEED THE MONSTER", sectionColor = "80e3fc", footer = "Evolving resets non-permanent upgrades, sparrows and feeding progress." })
 -- ======================================================== companions
 L("sparrow", { title = "SPARROW", figma = "65:8", body = "30201b:0 18100e:100", glow = "8b4a24",
@@ -78,7 +78,7 @@ L("sparrow", { title = "SPARROW", figma = "65:8", body = "30201b:0 18100e:100", 
 	card = "3e2d29:0 261b18:100", art = "8b4a24@95:0 ffa62e@95:50 f2d9b0@95:100", tcol = "e4d9c2", gcol = "fbf8f4:0 c0ab81:100", chev = "c0ab81@35:0 fbf8f4:100",
 	buy = "8b4a24:0 ffa62e:100", buyGlow = "ffdd53",
 	tabs = { { icon = "popcorn", label = "Popcorn", target = "popcorn" }, { icon = "sparrow", label = "Sparrow", active = true } },
-	hero = { icon = "sparrow", title = "THE SPARROW", sub = "LV 1  ·  1 sparrow  ·  0 / 40 XP", btn = "Rebirb (needs 16 sparrows)", btnIcon = "crown" },
+	hero = { icon = "sparrow", title = "THE SPARROW", sub = "LV 1  ·  1 sparrow  ·  0 / 40 XP", btn = "Rebirb (needs 16 sparrows)" },
 	section = "SPARROW", sectionColor = "f6b893", footer = "Rebirb at 16 sparrows resets to 1. Boosts popcorn spawns." })
 L("seagull", { title = "SEAGULL", figma = "65:181", body = "1d282f:0 0f1417:100", glow = "8aa4c4",
 	hdr = "8aa4c4:0 f4f7fb:33 ffcf2e:67 ff8a2e:100", band = "14384c:0 0b1e29:100", tab = "8aa4c4:0 f4f7fb:33 ffcf2e:67 ff8a2e:100",
@@ -150,7 +150,7 @@ L("profile", { title = "PROFILE", figma = "75:354", body = "172925:0 0c1412:100"
 	buy = "ffc23a:0 e0333a:100", buyGlow = "ffce5d",
 	tabs = { { icon = "popcorn", label = "Popcorn", target = "popcorn" }, { icon = "birb", label = "Profile", active = true } },
 	hero = { icon = "birb", title = "BIRB", sub = "0 Molts  ·  0 Evolutions  ·  floor 1", btn = "Leaderboards", btnIcon = "leaderboard" },
-	section = "RECORDS", sectionColor = "5cf2e8", footer = "Your records show on the leaderboards.", extraH = 471 })
+	section = "RECORDS", sectionColor = "5cf2e8", footer = "Your records show on the leaderboards.", extraH = 471, trim = { 1262, 1338 } })
 
 Spec.GOLDEN_PROG = GOLDEN_PROG
 -- Feature groups: windows that belong together share one menu tile and show each other as tabs

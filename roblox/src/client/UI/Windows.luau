@@ -22,6 +22,9 @@ local function commas(n)
 	return short(n)
 end
 Windows.commas = commas
+-- wallet values: commas below 1M, EternityNum short form above (never inf)
+local function amount(v) local n = EN.toNumber(v); if n == n and n < 1e6 then return commas(n) end return short(v) end
+Windows.amount = amount
 local function fishName(id)
 	local n = id:gsub("^fish_", ""):gsub("_", " ")
 	return (n:gsub("(%a)([%w]*)", function(a, b) return a:upper() .. b end))
@@ -75,7 +78,7 @@ do
 	end, update = function(api, s, d)
 		base.update(api, s, d)
 		local g = d.plumeGain
-		api.hero.sub.Text = commas(EN.toNumber(s.goldenFeathers)) .. " plumes  ·  molted " .. s.rebirbCount .. " times"
+		api.hero.sub.Text = amount(s.goldenFeathers) .. " plumes  ·  molted " .. s.rebirbCount .. " times"
 		api.hero.btn.setText("Molt for +" .. fmt(g) .. " Plumes")
 		api.hero.btn.look(if EN.meeq(g, 1) then "lit" else "grey", Kit.stops(Spec.molt.tab))
 	end }
@@ -88,7 +91,7 @@ do
 		api.hero.btn.root.Activated:Connect(function() act("travel", "park") end)
 	end, update = function(api, s, d)
 		base.update(api, s, d)
-		api.hero.sub.Text = commas(EN.toNumber(s.sunflowerSeeds)) .. " seeds  ·  +" .. fmt(d.seedsPerSec) .. " / s on the platform"
+		api.hero.sub.Text = amount(s.sunflowerSeeds) .. " seeds  ·  +" .. fmt(d.seedsPerSec) .. " / s on the platform"
 	end }
 end
 B.golden = shop({ "p_golden_popcorn_value", "p_auric_silo", "d_desert_field_notes_plus" }, { "golden", "popcorn", "golden" })
@@ -99,7 +102,7 @@ do
 		api.hero.btn.root.Activated:Connect(function() act("travel", if Windows.state and Windows.state.zone == "desert" then "park" else "desert") end)
 	end, update = function(api, s, d)
 		base.update(api, s, d)
-		api.hero.sub.Text = commas(EN.toNumber(s.goldenPopcorn)) .. " golden  ·  " .. math.round(d.goldenChance * 100) .. "% of desert drops are golden"
+		api.hero.sub.Text = amount(s.goldenPopcorn) .. " golden  ·  " .. math.round(d.goldenChance * 100) .. "% of desert drops are golden"
 		api.hero.btn.setText(if s.zone == "desert" then "Back to the Park" else "Go to the Desert")
 	end }
 end
@@ -108,7 +111,7 @@ do
 	local base = B.mine
 	B.mine = { rows = base.rows, bind = base.bind, update = function(api, s, d)
 		base.update(api, s, d)
-		api.hero.sub.Text = commas(EN.toNumber(s.bruteOre)) .. " brute ore  ·  Area " .. (s.crow.area + 1) .. "  ·  Crow LV " .. s.crow.level
+		api.hero.sub.Text = amount(s.bruteOre) .. " brute ore  ·  Area " .. (s.crow.area + 1) .. "  ·  Crow LV " .. s.crow.level
 		api.hero.btn.setText("+" .. fmt(d.orePerSec) .. " ore / s")
 	end }
 end
@@ -137,7 +140,7 @@ do
 	local base = B.echo
 	B.echo = { rows = base.rows, bind = base.bind, update = function(api, s, d)
 		base.update(api, s, d)
-		api.hero.sub.Text = commas(EN.toNumber(s.echoPopcorn)) .. " echo popcorn  ·  25% of pickups echo"
+		api.hero.sub.Text = amount(s.echoPopcorn) .. " echo popcorn  ·  25% of pickups echo"
 	end }
 end
 
@@ -182,7 +185,9 @@ B.evolve = {
 		end
 	end,
 	update = function(api, s, d)
-		local need = Defs.EVO[s.evolutionCount + 1] or {}
+		local need = Defs.EVO[s.evolutionCount + 1]
+		local done = need == nil
+		need = need or Defs.EVO[#Defs.EVO] or {}   -- fully evolved: show the last feeding, completed
 		local list = {}
 		for _, k in { "popcorn", "sunflowerSeeds", "twigs", "moneta" } do if need[k] then table.insert(list, k) end end
 		for i, r in api.rows do
@@ -190,16 +195,17 @@ B.evolve = {
 			r.row.Visible = k ~= nil
 			if k then
 				r.res = k
-				local fed = s.evo.fed[k] or 0
+				local fed = if done then need[k] else (s.evo.fed[k] or 0)
 				local cur = Defs.CUR[k]
 				r.set({ title = cur.name, icon = cur.icon, buyIcon = cur.icon, desc = "Feed " .. cur.name:lower() .. " to the monster.",
 					from = fmt(fed), to = fmt(need[k]), prog = { fed / need[k], math.floor(fed / need[k] * 100) .. "%" },
-					cost = "FEED", can = fed < need[k] and EN.me(s[k], 0) })
+					cost = "FEED", can = fed < need[k] and EN.me(s[k], 0), maxed = done })
 			end
 		end
 		local nextEvo = s.evolutionCount + 1
 		api.hero.sub.Text = if Defs.EVO[nextEvo] then "Evolution " .. s.evolutionCount .. " to " .. nextEvo .. "  ·  " .. math.floor(d.evoProgress * 100) .. "% fed" else "Fully evolved"
-		api.hero.btn.look(if d.evoProgress >= 1 then "lit" else "grey", Kit.stops(Spec.evolve.tab))
+		if done then api.hero.btn.setText("Fully Evolved"); api.hero.btn.look("gold")
+		else api.hero.btn.setText("Evolve"); api.hero.btn.look(if d.evoProgress >= 1 then "lit" else "grey", Kit.stops(Spec.evolve.tab)) end
 	end,
 }
 
@@ -267,7 +273,7 @@ B.seagull = {
 B.dave = {
 	rows = {
 		upgradeRow("dave_training", "seed"),
-		{ title = "Rebirb", desc = "Needs LV 100 and 250 golden.", icon = "golden", buyIcon = "crown", allText = "BRANCH" },
+		{ title = "Rebirb", desc = "Needs LV 100 and 250 golden.", icon = "golden", allText = "BRANCH" },
 	},
 	bind = function(api, act)
 		api.rows[1].buy.root.Activated:Connect(function() act("buy", "dave_training", false, api.rows[1].buy) end)
@@ -379,7 +385,7 @@ B.baits = {
 			r.set({ from = "All", to = t:gsub("^%l", string.upper), desc = if need > s.evolutionCount + 1 then "Needs " .. need .. " evolutions." else "Only " .. t .. " fish bite.",
 				prog = { math.min(1, owned / 10), "Owned " .. owned .. (if s.fish.bait == id then "  ·  equipped" else "") }, cost = tostring(c), can = EN.meeq(s.moneta, c), canAll = EN.meeq(s.moneta, c * 10) })
 		end
-		api.hero.sub.Text = commas(EN.toNumber(s.moneta)) .. " moneta  ·  bait picks the fish type"
+		api.hero.sub.Text = amount(s.moneta) .. " moneta  ·  bait picks the fish type"
 	end,
 }
 B.index = {
@@ -541,13 +547,16 @@ B.profile = {
 		Kit.textStroke(hide, 2)
 		api.statVals = {}
 		local grid = Kit.frame(dd, 17, 47, 435, 408, nil, { ZIndex = 3 })
+		-- chips measured on the Figma render: 212 x 29, columns at x 0 / 221, rows every 35 px
 		for i, st in STATS do
 			local col, rw = (i - 1) % 2, math.floor((i - 1) / 2)
-			local chip = Kit.frame(grid, col * 222, rw * 46, 214, 40, nil, { ZIndex = 3 })
-			Kit.icon(chip, 8, 5, 30, st[2], { ZIndex = 4 })
-			Kit.text(chip, st[1], 14, Kit.hex("bcc3cf"), { Position = UDim2.fromOffset(46, 11), ZIndex = 4 })
-			local v = Kit.title(chip, "0", 16, Kit.hex("c2ecde"), 1.6, 0, { AnchorPoint = Vector2.new(1, 0), Position = UDim2.fromOffset(204, 10), ZIndex = 4 })
-			api.statVals[i] = v
+			local chip = Kit.frame(grid, col * 221, rw * 35, 212, 29, nil, { ZIndex = 3 })
+			Kit.icon(chip, 6, 3, 23, st[2], { ZIndex = 4 })
+			Kit.text(chip, st[1], 13, Kit.hex("bcc3cf"), { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.fromOffset(35, 15), ZIndex = 4 })
+			local v = Kit.text(chip, "0", 14, Kit.hex("c2ecde"), { AutomaticSize = Enum.AutomaticSize.None, AnchorPoint = Vector2.new(1, 0.5),
+				Position = UDim2.fromOffset(204, 15), Size = UDim2.fromOffset(100, 20), TextXAlignment = Enum.TextXAlignment.Right, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 4 })
+			Kit.textStroke(v, 1.6)
+			api.statVals[i] = { set = function(t) v.Text = t end }
 		end
 		hide.Activated:Connect(function()
 			grid.Visible = not grid.Visible

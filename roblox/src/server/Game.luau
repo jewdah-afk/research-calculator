@@ -411,11 +411,11 @@ function G.tankCount(s) return math.min(5, 2 + math.floor(s.evolutionCount / 2))
 
 -- ---------------------------------------------------------------- quests
 local function seededDailies(day)
-	local fam = { floor_kill = {}, hunt = {}, boss = {} }
+	local fam = { floor_kill = {}, enemy_hunt = {}, boss_clear = {} }
 	for _, q in Defs.QUESTS do if q.questType == "daily" and fam[q.family] then table.insert(fam[q.family], q) end end
 	local rng = Random.new(day)
 	local out = {}
-	for _, k in { "floor_kill", "hunt", "boss" } do
+	for _, k in { "floor_kill", "enemy_hunt", "boss_clear" } do
 		local list = fam[k]
 		if #list > 0 then table.insert(out, list[rng:NextInteger(1, #list)].id) end
 	end
@@ -426,7 +426,7 @@ for _, q in Defs.QUESTS do if q.id then QUEST_BY_ID[q.id] = q end end
 G.QUEST_BY_ID = QUEST_BY_ID
 function G.refreshDailies(s, now)
 	local day = math.floor(now / 86400)
-	if s.quests.day ~= day then
+	if s.quests.day ~= day or #s.quests.daily < 3 then   -- < 3: saves rolled before the family-name fix
 		s.quests.day = day
 		s.quests.daily = seededDailies(day)
 		s.quests.prog = {}; s.quests.claimed = {}
@@ -521,7 +521,7 @@ function G.step(s, dt, rng)
 		for _, id in s.quests.daily do
 			local q = QUEST_BY_ID[id]
 			if q and (q.family ~= "floor_kill" or (q.floor or 1) <= p.floor) then
-				s.quests.prog[id] = math.min(q.target, (s.quests.prog[id] or 0) + kills * (if q.family == "boss" then 1 / 35 else 1))
+				s.quests.prog[id] = math.min(q.target, (s.quests.prog[id] or 0) + kills * (if q.family == "boss_clear" then 1 / 35 else 1))
 			end
 		end
 		if p.kills >= 35 * p.floor and p.floor < 12 and dmg >= hp * 0.25 then

@@ -192,6 +192,7 @@ local edgeTab
 local DOCK_IN, DOCK_OUT = -22, 560
 local function groupOf(id) return Spec.GROUP_OF[id] end
 local function slideDock(x, t, style)
+	if Hud.qa then return nil end
 	if Kit.reduced() then Hud.dock.Position = UDim2.new(1, x, 0, 26); return nil end
 	local tw = TweenService:Create(Hud.dock, TweenInfo.new(t, style or Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Position = UDim2.new(1, x, 0, 26) })
 	tw:Play()
@@ -440,7 +441,7 @@ function Hud.setState(s, d)
 	autoBtn.setText(if not d.autoAllowed then "AUTO  🔒" elseif s.auto then "AUTO ON" else "AUTO")
 	autoBtn.look(if s.auto then "lit" else "grey", Kit.stops("7dff86:0 2bd04a:42 15962f:86 15962f:100"), if s.auto then "4dff66" else nil)
 	-- dev
-	devPanel.Visible = d.devAllowed == true
+	devPanel.Visible = d.devAllowed == true and not Hud.qa
 	if d.devAllowed then devLabel.set(string.upper(d.mode) .. "  ·  " .. Defs.ISLANDS[s.island].id) end
 	-- menu: unlocked windows only
 	for _, g in Spec.GROUPS do
@@ -550,6 +551,23 @@ function Hud.start(remotes)
 	remotes.Toast.OnClientEvent:Connect(Hud.onToast)
 	-- debug hook (Studio tooling / screenshots): PlayerGui:SetAttribute("PeckwoodOpen", "<window id>")
 	gui.Parent:GetAttributeChangedSignal("PeckwoodOpen"):Connect(function() Windows.open(gui.Parent:GetAttribute("PeckwoodOpen")) end)
+	-- QA rig (Studio screenshots): PeckwoodQA = zoom (0 = off), PeckwoodQAY = scroll in design px.
+	-- Hides the rest of the HUD and pins the docked window top-left so every window is checked the same way.
+	local function qa()
+		local z = gui.Parent:GetAttribute("PeckwoodQA") or 0
+		Hud.qa = z > 0
+		for _, c in canvas:GetChildren() do if c:IsA("GuiObject") and c ~= dock then c.Visible = not Hud.qa end end
+		if Hud.qa then
+			scale.Scale = z
+			canvas.Size = UDim2.fromOffset(workspace.CurrentCamera.ViewportSize.X / z, workspace.CurrentCamera.ViewportSize.Y / z)
+			dock.AnchorPoint = Vector2.new(0, 0)
+			dock.Position = UDim2.new(0, 20, 0, 10 - (gui.Parent:GetAttribute("PeckwoodQAY") or 0))
+		else
+			dock.AnchorPoint = Vector2.new(1, 0); dock.Position = UDim2.new(1, DOCK_IN, 0, 26); layout()
+		end
+	end
+	gui.Parent:GetAttributeChangedSignal("PeckwoodQA"):Connect(qa)
+	gui.Parent:GetAttributeChangedSignal("PeckwoodQAY"):Connect(qa)
 end
 
 return Hud

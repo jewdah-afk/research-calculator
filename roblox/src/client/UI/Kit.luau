@@ -68,9 +68,23 @@ function Kit.image(parent, x, y, w, h, id, props)
 	if props then for k, v in props do i[k] = v end end
 	return i
 end
-function Kit.iconId(name) return Icons[name] or "" end
+-- missing art never leaves an empty slot: fish/rod/bait ids fall back to their family icon
+local FISH_IDS
+local FAMILY = { { "^fish_", "fish" }, { "^rod_", "rod" }, { "^shiny_bait_", "bait" }, { "^bait_", "bait" }, { "^hook_", "rod" }, { "^lure_", "bait" }, { "^tank_", "aquarium" } }
+function Kit.iconId(name)
+	if not name then return "" end
+	if Icons[name] then return Icons[name] end
+	for _, f in FAMILY do if string.find(name, f[1]) then return Icons[f[2]] or "" end end
+	if not FISH_IDS then
+		FISH_IDS = {}
+		local ok, Defs = pcall(require, RS:WaitForChild("Peckwood"):WaitForChild("Defs"))
+		if ok then for _, f in Defs.FISH do FISH_IDS[f.id] = true end end
+	end
+	if FISH_IDS[name] then return Icons.fish or "" end   -- species art not uploaded yet
+	return ""
+end
 function Kit.icon(parent, x, y, s, name, props)
-	return Kit.image(parent, x, y, s, s, Icons[name] or "", props)
+	return Kit.image(parent, x, y, s, s, Kit.iconId(name), props)
 end
 -- 9-slice soft image (glow / shadow) spilling `m` px around a box
 function Kit.soft(parent, x, y, w, h, m, which, color, transp, z)
@@ -190,12 +204,23 @@ function Kit.button(parent, x, y, w, h, opts)
 	local size = opts.size or 20
 	local label = Kit.title(content, opts.text or "", size, opts.textColor, opts.strokeW or (if size >= 24 then 2.6 elseif size >= 16 then 2.4 else 1.8), if size >= 16 then 2 else 1.5, { ZIndex = 9, LayoutOrder = 2 })
 	label.holder.Visible = (opts.text or "") ~= ""
+	-- content always keeps 8 px padding inside the face: shrink to fit when icon + label are too wide
+	local csc = new("UIScale", {}, content)
+	local function fitContent()
+		local fwAbs = face.AbsoluteSize.X
+		if fwAbs <= 0 then return end
+		local natural = content.AbsoluteSize.X / csc.Scale
+		local want = math.min(1, (fwAbs - 16 * fwAbs / fw) / math.max(1, natural))
+		if math.abs(want - csc.Scale) > 0.01 then csc.Scale = want end
+	end
+	content:GetPropertyChangedSignal("AbsoluteSize"):Connect(fitContent)
+	face:GetPropertyChangedSignal("AbsoluteSize"):Connect(fitContent)
 	local api = { root = root, face = face, grad = g, glowImg = glow, label = label, iconImg = ico, h = h, w = w, state = "", lit = false }
 	function api.setStops(st)
 		g:Destroy(); g = Kit.grad(face, st); api.grad = g
 		lg:Destroy(); lg = Kit.grad(lip, shadeStops(st, 0.58))
 	end
-	function api.setIcon(name) if ico then ico.Image = Icons[name] or "" end end
+	function api.setIcon(name) if ico then ico.Image = Kit.iconId(name) end end
 	function api.setText(s) label.set(s); label.holder.Visible = s ~= "" end
 	-- look: "lit" (theme stops + optional glow), "grey" (can't afford), "blue" (BUY ALL), "gold" (MAXED)
 	function api.look(kind, st, glowColor)

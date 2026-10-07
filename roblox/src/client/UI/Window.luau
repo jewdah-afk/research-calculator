@@ -39,17 +39,47 @@ local function buildRow(api, body, spec, y, r)
 	Kit.grad(chev, Kit.stops(spec.chev or "daaa28@35:0 ffe18d:100"), 0)
 	local to = Kit.title(growth, "", 22, Color3.new(1, 1, 1), 2, 0, { ZIndex = 5, LayoutOrder = 3 })
 	Kit.grad(to.label, Kit.stops(spec.gcol))
-	local desc = text(row, r.desc or "", 15, hex("bcc3cf"), { Position = UDim2.fromOffset(104, 63), ZIndex = 5, AutomaticSize = Enum.AutomaticSize.None, Size = UDim2.fromOffset(196, 18), TextTruncate = Enum.TextTruncate.AtEnd })
-	-- progress (104,88,186,22): track is baked, draw the fill + label
-	local track = frame(row, 104, 88, 186, 22, nil, { ZIndex = 4, ClipsDescendants = true }); Kit.corner(track, 11)
+	-- title and growth never run under the buttons: each shrinks to its 196 px column
+	local function fitTo(gui, maxDesign)
+		local sc = Kit.new("UIScale", {}, gui)
+		local function fit()
+			local rowW = row.AbsoluteSize.X
+			if rowW <= 0 then return end
+			local natural = gui.AbsoluteSize.X / sc.Scale
+			local want = math.min(1, rowW * maxDesign / 468 / math.max(1, natural))
+			if math.abs(want - sc.Scale) > 0.01 then sc.Scale = want end
+		end
+		gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(fit)
+		row:GetPropertyChangedSignal("AbsoluteSize"):Connect(fit)
+	end
+	fitTo(growth, 196)
+	fitTo(title.holder, 196)
+	local desc = text(row, r.desc or "", 15, hex("bcc3cf"), { Position = UDim2.fromOffset(104, 61), ZIndex = 5, AutomaticSize = Enum.AutomaticSize.None, Size = UDim2.fromOffset(196, 18), TextTruncate = Enum.TextTruncate.AtEnd })
+	-- progress: the baked track (104,88,186,22) sits too close to the card bottom. Erase it with a copy of the clean card
+	-- surface beside it (same rows, under the buttons: nothing baked there) and draw a live track 6 px higher.
+	if api.art then
+		local A = api.art
+		local function patch(dx, sx, w)
+			Kit.image(body, 16 + dx, y + 86, w, 26, A.image, { ScaleType = Enum.ScaleType.Stretch, ZIndex = 1,
+				ImageRectOffset = Vector2.new((MARGIN + 16 + sx) * A.k, (MARGIN + y + 86) * A.k), ImageRectSize = Vector2.new(w * A.k, 26 * A.k) })
+		end
+		patch(102, 300, 150); patch(252, 300, 40)
+	end
+	local TY = 82
+	local tbg = frame(row, 104, TY, 186, 22, hex("0d0f14"), { ZIndex = 3, BackgroundTransparency = 0.05 }); Kit.corner(tbg, 11)
+	Kit.stroke(tbg, 2, Kit.INK)
+	frame(tbg, 6, 2, 174, 2, Color3.new(0, 0, 0), { BackgroundTransparency = 0.5, ZIndex = 3 })
+	local track = frame(row, 104, TY, 186, 22, nil, { ZIndex = 4, ClipsDescendants = true }); Kit.corner(track, 11)
 	local fill = frame(track, 0, 0, 0, 22, Color3.new(1, 1, 1), { ZIndex = 4 }); Kit.corner(fill, 11)
 	local fg = Kit.grad(fill, Kit.stops("fffbd0:0 f5d06b:50 b28d34:100"))
 	frame(fill, 3, 1, 0, 2, Color3.new(1, 1, 1), { BackgroundTransparency = 0.55, ZIndex = 5, Size = UDim2.new(1, -6, 0, 2) })
-	local lbl = text(track, "", 13, Color3.new(1, 1, 1), { AutomaticSize = Enum.AutomaticSize.None, Size = UDim2.fromScale(1, 1), TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 6 })
+	local lbl = text(track, "", 13, Color3.new(1, 1, 1), { AutomaticSize = Enum.AutomaticSize.None, Size = UDim2.new(1, -12, 1, -4), Position = UDim2.fromOffset(6, 2), TextScaled = true, TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 6 })
+	Kit.new("UITextSizeConstraint", { MaxTextSize = 13 }, lbl)
 	Kit.textStroke(lbl, 1.6)
 	local prog = { frac = -1 }
 	function prog.set(f, t)
 		f = math.clamp(f, 0, 1); lbl.Text = t
+		fill.Visible = f > 0
 		if math.abs(f - prog.frac) > 1e-4 then
 			prog.frac = f
 			TweenService:Create(fill, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = UDim2.fromOffset(if f > 0 then math.max(22, 186 * f) else 0, 22) }):Play()
@@ -111,14 +141,27 @@ function Window.build(parent, spec)
 	local footerY = afterRows + 12 + (if extraH > 0 then extraH + 14 else 0)
 	local H = spec.h or (footerY + 28)
 	if not hasHero then footerY = H - 28 end
+	-- spec.trim = { from, to }: drop an empty band baked into the render (art drawn as two slices, window shortened)
+	local ART_H = H
+	local cut = if spec.trim then spec.trim[2] - spec.trim[1] else 0
+	H -= cut; footerY -= cut
 
 	local api = { spec = spec, rows = {}, bobbers = {}, H = H }
 	local root = Kit.new("Frame", { Name = spec.id, Size = UDim2.fromOffset(W, H), BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5) }, parent)
 	api.root = root
 	-- the Figma frame render (incl. rim glow), 2x texture drawn at 1x
 	-- the render carries a baked colour rim-glow in its 150 px margin; crop it off and sit the window on a neutral shadow
-	local shadow = Kit.soft(root, 0, 10, W, H, 34, "shadow", Color3.new(0, 0, 0), 0.35, 0)
-	local bg = Kit.image(root, 0, 0, W, H, Art[spec.artId or spec.id], { ScaleType = Enum.ScaleType.Stretch, ZIndex = 0 })
+	-- rounded ink drop (same 24 px corner as the window, like the HUD plates); ImageTransparency proxy keeps the tweens simple
+	local shadowF = Kit.frame(root, 0, 6, W, H, Kit.INK, { BackgroundTransparency = 0.5, ZIndex = 0 }); Kit.corner(shadowF, 24)
+	local shadow = Kit.new("NumberValue", { Value = 0.5 }, shadowF)
+	shadow.Changed:Connect(function(v) shadowF.BackgroundTransparency = v end)
+	-- animated rim glow in the window's colour: two rounded strokes hugging the window outline
+
+	-- art is clipped to the window's rounded shape so nothing from the old glow margin shows at the corners
+	local clip = Kit.new("CanvasGroup", { Size = UDim2.fromOffset(W, H), BackgroundTransparency = 1, ZIndex = 0 }, root)
+	Kit.corner(clip, 24)   -- Figma window radius (measured on the render)
+	Kit.stroke(clip, 5, Kit.INK)   -- one clean ink outline, thick enough to cover the render's coloured hairline
+	local bg = Kit.image(clip, 0, 0, W, H, Art[spec.artId or spec.id], { ScaleType = Enum.ScaleType.Stretch, ZIndex = 0 })
 	local px = ArtSize[spec.artId or spec.id]
 	if px then
 		px = px * math.min(1, 1024 / math.max(px.X, px.Y))   -- Roblox stores uploads at most 1024 px on the long side
@@ -126,10 +169,18 @@ function Window.build(parent, spec)
 		local k = px.X / (W + 2 * MARGIN)
 		bg.ImageRectOffset = Vector2.new(MARGIN * k, MARGIN * k)
 		bg.ImageRectSize = Vector2.new(W * k, px.Y - 2 * MARGIN * k)
+		if cut > 0 then
+			local a, b = spec.trim[1], spec.trim[2]
+			bg.Size = UDim2.fromOffset(W, a); bg.ImageRectSize = Vector2.new(W * k, a * k)
+			local bg2 = Kit.image(clip, 0, a, W, ART_H - b, bg.Image, { ScaleType = Enum.ScaleType.Stretch, ZIndex = 0,
+				ImageRectOffset = Vector2.new(MARGIN * k, (MARGIN + b) * k), ImageRectSize = Vector2.new(W * k, (ART_H - b) * k) })
+			bg:GetPropertyChangedSignal("ImageTransparency"):Connect(function() bg2.ImageTransparency = bg.ImageTransparency end)
+		end
 	else
 		bg.Position = UDim2.fromOffset(-MARGIN, -MARGIN); bg.Size = UDim2.fromOffset(W + 2 * MARGIN, H + 2 * MARGIN)
 	end
 	api.bg = bg; api.shadow = shadow
+	if px then api.art = { image = bg.Image, k = px.X / (W + 2 * MARGIN) } end
 	local body = Kit.new("CanvasGroup", { Size = UDim2.fromOffset(W, H), BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 1 }, root)
 	Kit.corner(body, 22)
 	api.body = body
@@ -180,7 +231,7 @@ function Window.build(parent, spec)
 	if hasHero then
 		local h = spec.hero
 		local hero = frame(body, 16, 158, 468, 300, nil, { ZIndex = 2 })
-		local hi = Kit.icon(hero, 234, 152, 134, h.icon, { ZIndex = 4, AnchorPoint = Vector2.new(0.5, 1) })
+		local hi = Kit.icon(hero, 234, 150, 120, h.icon, { ZIndex = 4, AnchorPoint = Vector2.new(0.5, 1) })
 		local ht = Kit.title(hero, h.title, 32, Color3.new(1, 1, 1), 3, 3, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(234, 171), ZIndex = 6 })
 		local sub = text(hero, h.sub or "", 14, hex("a9afbc"), { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(234, 210), ZIndex = 6 })
 		local hb = Kit.button(hero, 14, 236, 440, 53, { icon = h.btnIcon, text = h.btn, size = 22, iconSize = 37, stops = Kit.stops(spec.tab) })
@@ -207,7 +258,7 @@ function Window.celebrate(api, upgradeId)
 			local flash = frame(r.row, -2, -2, 472, ROW_H + 4, Color3.new(1, 1, 1), { BackgroundTransparency = 0.55, ZIndex = 3 }); Kit.corner(flash, 16)
 			TweenService:Create(flash, TweenInfo.new(0.35, Enum.EasingStyle.Quad), { BackgroundTransparency = 1 }):Play()
 			task.delay(0.36, function() flash:Destroy() end)
-			Kit.pop(r.icon, 1.25); Kit.pop(r.growth, 1.15)
+			Kit.pop(r.icon, 1.25); Kit.pop(r.to.holder, 1.2)
 			if reduced then return end
 			local c = hex(api.spec.buyGlow or "ffffff")
 			for _ = 1, 5 do
@@ -236,10 +287,10 @@ function Window.open(api, mode)
 	if mode then
 		sc.Scale = 1
 		local t0, dur = if mode == "tab" then 0.6 else 1, if mode == "tab" then 0.1 else 0.18
-		api.body.GroupTransparency = t0; api.bg.ImageTransparency = t0; api.shadow.ImageTransparency = 1
+		api.body.GroupTransparency = t0; api.bg.ImageTransparency = t0; api.shadow.Value = 1
 		TweenService:Create(api.body, TweenInfo.new(dur), { GroupTransparency = 0 }):Play()
 		TweenService:Create(api.bg, TweenInfo.new(dur), { ImageTransparency = 0 }):Play()
-		TweenService:Create(api.shadow, TweenInfo.new(dur + 0.1), { ImageTransparency = 0.35 }):Play()
+		TweenService:Create(api.shadow, TweenInfo.new(dur + 0.1), { Value = 0.5 }):Play()
 		for i, r in api.rows do
 			local y = r.y
 			r.row.Position = UDim2.fromOffset(16, y + 10)
@@ -253,7 +304,7 @@ function Window.open(api, mode)
 	api.body.GroupTransparency = 1; api.bg.ImageTransparency = 1
 	TweenService:Create(api.body, TweenInfo.new(0.12), { GroupTransparency = 0 }):Play()
 	TweenService:Create(api.bg, TweenInfo.new(0.12), { ImageTransparency = 0 }):Play()
-	api.shadow.ImageTransparency = 1; TweenService:Create(api.shadow, TweenInfo.new(0.2), { ImageTransparency = 0.35 }):Play()
+	api.shadow.Value = 1; TweenService:Create(api.shadow, TweenInfo.new(0.2), { Value = 0.5 }):Play()
 	local t1 = TweenService:Create(sc, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Scale = 1.04 })
 	t1:Play(); t1.Completed:Once(function() TweenService:Create(sc, TweenInfo.new(0.12, Enum.EasingStyle.Quad), { Scale = 1 }):Play() end)
 	-- rows: live layers cascade in (40 ms stagger, small overshoot)
@@ -269,7 +320,7 @@ function Window.close(api, done)
 	local sc = scaleOf(api)
 	TweenService:Create(sc, TweenInfo.new(0.16), { Scale = 0.9 }):Play()
 	TweenService:Create(api.bg, TweenInfo.new(0.16), { ImageTransparency = 1 }):Play()
-	TweenService:Create(api.shadow, TweenInfo.new(0.16), { ImageTransparency = 1 }):Play()
+	TweenService:Create(api.shadow, TweenInfo.new(0.16), { Value = 1 }):Play()
 	local t = TweenService:Create(api.body, TweenInfo.new(0.16), { GroupTransparency = 1 })
 	t:Play(); t.Completed:Once(function() api.root.Visible = false; if done then done() end end)
 end
@@ -284,7 +335,7 @@ RunService.RenderStepped:Connect(function(dt)
 		if api.hero and not reduced then
 			-- breathing squash with the feet planted on the shadow, plus a slight sway
 			local b = math.sin(clock * math.pi * 2 / 2.6)
-			api.hero.icon.Size = UDim2.fromOffset(134 * (1 - 0.025 * b), 134 * (1 + 0.035 * b))
+			api.hero.icon.Size = UDim2.fromOffset(120 * (1 - 0.025 * b), 120 * (1 + 0.035 * b))
 			api.hero.icon.Rotation = math.sin(clock * math.pi * 2 / 5.2) * 2
 		end
 		local pulse = (math.sin(clock * math.pi * 2 / 1.6) + 1) / 2
