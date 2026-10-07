@@ -317,12 +317,15 @@ local function heroTile(parent, g, order)
 	local lead = g.theme or Spec[g.members[1]]
 	local W, H = 92, 104
 	local holder = Kit.new("Frame", { BackgroundTransparency = 1, LayoutOrder = order, ZIndex = 10 }, parent)
-	local lift = Kit.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(W, H + 4), ZIndex = 10 }, holder)
+	local lift = Kit.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(W, H + 8), ZIndex = 10 }, holder)
 	local glow = Kit.soft(lift, 0, 0, W, H, 22, "glow", hex(lead.buyGlow or lead.glow or "ffffff"), 1, 9)
 	-- drop: a small, dark undertone of the tile's own strip colour (not a black slab)
 	local hs = Kit.stops(lead.hdr)
 	local under = Color3.fromHex(hs[#hs][1]):Lerp(Kit.INK, 0.55)
-	local drop = Kit.frame(lift, 0, 2, W, H, under, { ZIndex = 10 }); Kit.corner(drop, 18)
+	-- 3D base like the keys: soft contact shadow, then a 6 px lip in the strip's own deep tone with an ink edge
+	Kit.soft(lift, 6, 10, W - 12, H - 2, 10, "shadow", Color3.new(0, 0, 0), 0.55, 9)
+	local drop = Kit.frame(lift, 0, 6, W, H, under, { ZIndex = 10 }); Kit.corner(drop, 18)
+	Kit.stroke(drop, 3, Kit.INK)
 	local card = Kit.new("CanvasGroup", { Size = UDim2.fromOffset(W, H), BackgroundTransparency = 1, ZIndex = 11 }, lift)
 	Kit.corner(card, 18)
 	local bodyF = Kit.frame(card, 0, 0, W, H, Color3.new(1, 1, 1), { ZIndex = 11 })
@@ -415,7 +418,7 @@ local leftTiles = {}
 local bookmarkCol
 local function buildMenu()
 	local col = Kit.new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(30, 152), Size = UDim2.fromOffset(330, 240), ZIndex = 10 }, canvas)
-	Kit.new("UIGridLayout", { CellSize = UDim2.fromOffset(92, 112), CellPadding = UDim2.fromOffset(12, 8), SortOrder = Enum.SortOrder.LayoutOrder }, col)
+	Kit.new("UIGridLayout", { CellSize = UDim2.fromOffset(92, 116), CellPadding = UDim2.fromOffset(12, 10), SortOrder = Enum.SortOrder.LayoutOrder }, col)
 	local profileG
 	for _, g in Spec.GROUPS do if g.id == "profile" then profileG = g end end
 	local LEFT = {
