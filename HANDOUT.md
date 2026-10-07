@@ -148,14 +148,16 @@ Page 1 of the same file holds an older version with studded buttons. Don't use i
 | Window | p | b | a |
 |---|---|---|---|
 | Mine (crow + ore) | navy 226° | ore cyan 194° | beak yellow 46° |
-| Nest | wood brown 24° (s×0.75) | leaf green 108° | egg cream 42° (s×0.45, l×1.12) |
-| Echo | pink 318° | violet 290° | light pink 332° |
-| Parrot | red 356° | wing blue 214° | yellow 50° |
-| Evolve (monster) | cyan 188° | mouth purple 284° | mint 168° |
-| Sparrow | brown 28° | seed yellow 48° | cream 38° |
-| Seagull | sky 204° (s×0.6) | beak orange 38° | white 50° (s×0.3) |
-| Dave | dusty rose 18° (s×0.45) | gold 46° | lilac 290° |
-| Red Panda | rust 14° | bamboo green 120° | cream 36° |
+| Nest | wood brown 22° (l×0.88) | leaf green 105° | egg yellow-cream 46° |
+| Echo | deep violet 282° (l×0.88) | hot pink 322° | bright pink 328° |
+| Parrot | red 356° (l×0.88) | wing blue 212° | yellow 50° |
+| Evolve (monster) | deep teal 192° (l×0.82) | mouth purple 284° | mint 160° |
+| Sparrow | chestnut 22° (l×0.85) | seed yellow 48° | cream 40° |
+| Seagull | sea blue 212° (l×0.85) | beak orange 34° | white 50° (s×0.25) |
+| Dave | dove lilac-grey 262° (s×0.4) | gold 46° | rose 345° |
+| Red Panda | rust 12° (l×0.85) | bamboo green 118° | cream 40° |
+
+**Rule (user's call, Mine is the reference):** a deep, darkened base hue, buttons in a bright hue far from the base, and stat text in a third contrasting hue. Never three shades of one hue.
 
 The BUY ALL buttons and progress bars keep the Golden source colours.
 
