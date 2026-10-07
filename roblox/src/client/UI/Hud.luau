@@ -225,7 +225,7 @@ local function buildObjective()
 	unlockBtn.root.Activated:Connect(function() act("unlock", nil, nil, unlockBtn) end)
 	-- AUTO: group perk. Locked players get the in-game join prompt, then the server re-checks.
 	autoBtn = Kit.button(canvas, 0, 0, 190, 56, { text = "AUTO", size = 22, stops = Kit.GREY, icon = "clock", iconSize = 34 })
-	autoBtn.root.AnchorPoint = Vector2.new(0, 0); autoBtn.root.Position = UDim2.fromOffset(30, 528)   -- left column, under the menu
+	autoBtn.root.Visible = false   -- AUTO lives in the left bar now (tile); kept for the state code
 	autoBtn.root.Activated:Connect(function()
 		if not derived then return end
 		if not derived.autoAllowed and derived.groupId and derived.groupId > 0 then
@@ -240,8 +240,7 @@ end
 -- Collapsing tucks it into a narrow right-edge tab that keeps the feature icon and a reopen chevron.
 local groupTiles = {}
 local collapsed = false
-local edgeTab
-local DOCK_IN, DOCK_OUT = -22, 560
+local DOCK_IN, DOCK_OUT = 0, 500   -- flush to the screen edge; tucked = fully out, the bookmarks stay
 local function groupOf(id) return Spec.GROUP_OF[id] end
 local function slideDock(x, t, style)
 	if Hud.qa then return nil end
@@ -259,11 +258,6 @@ local function setCollapsed(c)
 	collapsed = c; Hud.collapsed = c
 	Kit.sfx(if c then "close" else "open")
 	slideDock(if c then DOCK_OUT else DOCK_IN, if c then 0.22 else 0.3, if c then Enum.EasingStyle.Quad else nil)
-	edgeTab.icon.Image = Kit.iconId(Spec.MENU_ICON[docked or "popcorn"])
-	edgeTab.grad:Destroy()
-	edgeTab.grad = Kit.grad(edgeTab.face, Kit.stops(Spec[docked or "popcorn"].tab))
-	TweenService:Create(edgeTab.root, TweenInfo.new(if c then 0.25 else 0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-		{ Position = UDim2.new(1, if c then 0 else 100, 0.5, 0) }):Play()
 	refreshTiles()
 end
 Hud.setCollapsed = setCollapsed
@@ -309,12 +303,15 @@ local function heroTile(parent, g, order)
 	-- Built like the panels' hero card: dark themed card, sunburst + ground shadow behind the icon (icon stays inside),
 	-- coloured header strip along the bottom carrying the name. Hover: lift, icon grows, burst fades in.
 	-- Press: squash. Selected: white rim, outer glow, burst spins.
-	local lead = Spec[g.members[1]]
+	local lead = g.theme or Spec[g.members[1]]
 	local W, H = 92, 104
 	local holder = Kit.new("Frame", { BackgroundTransparency = 1, LayoutOrder = order, ZIndex = 10 }, parent)
 	local lift = Kit.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(W, H + 4), ZIndex = 10 }, holder)
 	local glow = Kit.soft(lift, 0, 0, W, H, 22, "glow", hex(lead.buyGlow or lead.glow or "ffffff"), 1, 9)
-	local drop = Kit.frame(lift, 0, 4, W, H, Kit.INK, { ZIndex = 10 }); Kit.corner(drop, 18)
+	-- drop: a small, dark undertone of the tile's own strip colour (not a black slab)
+	local hs = Kit.stops(lead.hdr)
+	local under = Color3.fromHex(hs[#hs][1]):Lerp(Kit.INK, 0.55)
+	local drop = Kit.frame(lift, 0, 2, W, H, under, { ZIndex = 10 }); Kit.corner(drop, 18)
 	local card = Kit.new("CanvasGroup", { Size = UDim2.fromOffset(W, H), BackgroundTransparency = 1, ZIndex = 11 }, lift)
 	Kit.corner(card, 18)
 	local bodyF = Kit.frame(card, 0, 0, W, H, Color3.new(1, 1, 1), { ZIndex = 11 })
@@ -343,12 +340,14 @@ local function heroTile(parent, g, order)
 	local hovered, selected, pressed = false, false, false
 	local function pose()
 		local q = TweenInfo.new(0.16, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-		TweenService:Create(lift, q, { Position = UDim2.fromOffset(0, if pressed then 2 elseif hovered then -4 else 0) }):Play()
+		local out = if g.bookmark then (if selected then -16 elseif hovered then -8 else 0) else 0
+		TweenService:Create(lift, q, { Position = UDim2.fromOffset(out, if g.bookmark then 0 elseif pressed then 2 elseif hovered then -4 else 0) }):Play()
 		TweenService:Create(lsc, q, { Scale = if pressed then 0.94 elseif selected then 1.04 else 1 }):Play()
 		TweenService:Create(isc, q, { Scale = if hovered then 1.14 elseif selected then 1.06 else 1 }):Play()
 		TweenService:Create(icon, q, { Rotation = if hovered then -6 else 0 }):Play()
 		TweenService:Create(burst, TweenInfo.new(0.2), { ImageTransparency = if selected then 0.35 elseif hovered then 0.55 else 0.8 }):Play()
-		TweenService:Create(glow, TweenInfo.new(0.2), { ImageTransparency = if selected then 0.2 elseif hovered then 0.6 else 1 }):Play()
+		TweenService:Create(glow, TweenInfo.new(0.2), { ImageTransparency = if selected then 0.45 elseif hovered then 0.7 else 1 }):Play()
+		if not selected then icon.Position = UDim2.fromOffset(W / 2, 40) end
 		rs.Color = if selected then Color3.new(1, 1, 1) else Kit.INK
 		rs.Thickness = if selected then 3.5 else 3
 	end
@@ -357,14 +356,15 @@ local function heroTile(parent, g, order)
 	hit.MouseButton1Down:Connect(function() pressed = true; Kit.sfx("click"); pose() end)
 	hit.MouseButton1Up:Connect(function() pressed = false; pose() end)
 	hit.Activated:Connect(function()
+		if g.onClick then g.onClick(); return end
 		-- clicking the open feature tucks the drawer away; otherwise open the group's first unlocked window
 		local cur = docked and groupOf(docked)
-		if cur == g then if collapsed then setCollapsed(false) end; return end
+		if cur == g then setCollapsed(not collapsed); return end
 		for _, m in g.members do
 			if not state or (Defs.WINDOW_ISLAND[m] or 1) <= state.island then Windows.open(m); return end
 		end
 	end)
-	local t = { holder = holder, btn = { root = hit }, icon = icon, burst = burst }
+	local t = { holder = holder, btn = { root = hit }, icon = icon, burst = burst, glow = glow, iconY = 40, W = W }
 	function t.select(on)
 		if on == selected then return end
 		selected = on
@@ -375,34 +375,123 @@ local function heroTile(parent, g, order)
 	return t
 end
 
--- selected tile's sunburst turns slowly
-local burstAcc = 0
-game:GetService("RunService").RenderStepped:Connect(function(dt)   -- 30 Hz: the tile card is a CanvasGroup
+-- selected tile: the sunburst turns slowly (30 Hz, it sits in the CanvasGroup), the halo breathes and the icon floats
+-- a couple of pixels (60 Hz, both outside the CanvasGroup, so they cost nothing to redraw)
+local burstAcc, tclock = 0, 0
+game:GetService("RunService").RenderStepped:Connect(function(dt)
+	tclock += dt
 	burstAcc += dt
-	if burstAcc < 1 / 30 then return end
-	for _, t in groupTiles do if t.isSelected() and t.holder.Visible then t.burst.Rotation += burstAcc * 20 end end
-	burstAcc = 0
+	local slow = burstAcc >= 1 / 30
+	for _, t in groupTiles do
+		if not (t.isSelected() and t.holder.Visible) then continue end
+		if slow and not Kit.reduced() then t.burst.Rotation += burstAcc * 9 end
+		local b = (math.sin(tclock * math.pi * 2 / 2.8) + 1) / 2
+		t.glow.ImageTransparency = 0.42 + 0.18 * b
+		if not Kit.reduced() then t.icon.Position = UDim2.fromOffset(t.W / 2, t.iconY - 1.5 + 3 * b) end
+	end
+	if slow then burstAcc = 0 end
 end)
 
+-- left bar: the game's tools in the same tile style. Bookmarks (the feature groups) live on the drawer (see start).
+local LEFT_THEMES = {
+	map = { card = "2c3f3a:0 1b2622:100", hdr = "7fd8c8:0 2f9a8a:100", glow = "7fd8c8" },
+	teleport = { card = "332d48:0 1f1b2e:100", hdr = "b89cff:0 6a4fd0:100", glow = "b89cff" },
+	shop = { card = "45282a:0 2a1719:100", hdr = "ff8a7a:0 d0443a:100", glow = "ff8a7a" },
+	settings = { card = "2e333f:0 1b1f27:100", hdr = "b8c4d8:0 5f6f8c:100", glow = "b8c4d8" },
+	auto = { card = "2c3b28:0 1a2417:100", hdr = "9fe36a:0 3fae3a:100", glow = "9fe36a" },
+}
+local leftTiles = {}
+local bookmarkCol
 local function buildMenu()
-	local col = Kit.new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(30, 152), Size = UDim2.fromOffset(330, 380), ZIndex = 10 }, canvas)
+	local col = Kit.new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(30, 152), Size = UDim2.fromOffset(330, 240), ZIndex = 10 }, canvas)
 	Kit.new("UIGridLayout", { CellSize = UDim2.fromOffset(92, 112), CellPadding = UDim2.fromOffset(12, 8), SortOrder = Enum.SortOrder.LayoutOrder }, col)
-	for i, g in Spec.GROUPS do
-		groupTiles[g.id] = heroTile(col, g, i)
-		for _, m in g.members do menuButtons[m] = { holder = groupTiles[g.id].holder, btn = groupTiles[g.id].btn, group = g } end
+	local profileG
+	for _, g in Spec.GROUPS do if g.id == "profile" then profileG = g end end
+	local LEFT = {
+		{ id = "map", name = "MAP", icon = "map", members = {}, theme = LEFT_THEMES.map, onClick = function() Hud.onMap() end },
+		{ id = "teleport", name = "TELEPORT", icon = "teleport", members = {}, theme = LEFT_THEMES.teleport, onClick = function() Hud.onTeleport() end },
+		profileG,
+		{ id = "shop", name = "SHOP", icon = "shop", members = {}, theme = LEFT_THEMES.shop, onClick = function() showToast("The shop opens with the live servers", "golden", "shop") end },
+		{ id = "settings", name = "SETTINGS", icon = "settings", members = {}, theme = LEFT_THEMES.settings, onClick = function() Hud.onSettings() end },
+		{ id = "auto", name = "AUTO", icon = "auto", members = {}, theme = LEFT_THEMES.auto, onClick = function()
+			if not derived then return end
+			if not derived.autoAllowed and derived.groupId and derived.groupId > 0 then pcall(function() GroupService:PromptJoinAsync(derived.groupId) end) end
+			act("auto", not (state and state.auto))
+		end },
+	}
+	for i, g in LEFT do
+		local t = heroTile(col, g, i)
+		leftTiles[g.id] = t
+		if g == profileG then
+			groupTiles[g.id] = t
+			for _, m in g.members do menuButtons[m] = { holder = t.holder, btn = t.btn, group = g } end
+		end
 	end
-	-- right-edge tab shown while the drawer is collapsed
-	local root = Kit.new("TextButton", { Text = "", AutoButtonColor = false, BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, 100, 0.5, 0), Size = UDim2.fromOffset(74, 132), ZIndex = 40 }, canvas)
-	local face = Kit.frame(root, 0, 0, 96, 132, Color3.new(1, 1, 1), { ZIndex = 40 }); Kit.corner(face, 22)
-	local gr = Kit.grad(face, Kit.stops(Spec.popcorn.tab))
-	Kit.texture(face, "halftone", 0.78, 24, 40); Kit.stroke(face, 3.5)
-	local ic = Kit.icon(root, 9, 12, 56, "popcorn", { ZIndex = 42 })
-	Kit.title(root, "‹", 40, Color3.new(1, 1, 1), 3, 2, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(37, 68), ZIndex = 42 })
-	edgeTab = { root = root, face = face, grad = gr, icon = ic }
-	root.MouseEnter:Connect(function() Kit.sfx("hover"); TweenService:Create(root, TweenInfo.new(0.12), { Position = UDim2.new(1, -8, 0.5, 0) }):Play() end)
-	root.MouseLeave:Connect(function() if collapsed then TweenService:Create(root, TweenInfo.new(0.12), { Position = UDim2.new(1, 0, 0.5, 0) }):Play() end end)
-	root.Activated:Connect(function() setCollapsed(false) end)
+end
+-- small popup card beside the left bar (teleport list / settings); one open at a time, click the tile again to close
+local popup
+local function closePopup() if popup then popup:Destroy(); popup = nil end end
+local function openPopup(title, rows)
+	closePopup()
+	local h = 70 + #rows * 58
+	local root = Kit.new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(372, 152), Size = UDim2.fromOffset(260, h), ZIndex = 30 }, canvas)
+	local drop = Kit.frame(root, 0, 3, 260, h, Kit.INK, { ZIndex = 30 }); Kit.corner(drop, 18)
+	local card = Kit.frame(root, 0, 0, 260, h, Color3.new(1, 1, 1), { ZIndex = 31 }); Kit.corner(card, 18)
+	Kit.grad(card, Kit.stops("2a2f3a:0 15181f:100")); Kit.stroke(card, 3.5)
+	local tx = Kit.texture(card, "halftone", 0.9, 20, 31); Kit.corner(tx, 18)
+	Kit.title(card, title, 22, Color3.new(1, 1, 1), 2.6, 2, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 14), ZIndex = 33 })
+	for k, r in rows do
+		local b = Kit.button(card, 16, 56 + (k - 1) * 58, 228, 50, { text = r.text, size = 18, stops = r.stops or Kit.stops(Spec.popcorn.tab), icon = r.icon, iconSize = 34 })
+		b.root.ZIndex = 34
+		b.root.Activated:Connect(function() r.click(b) end)
+	end
+	local sc = Kit.new("UIScale", { Scale = 0.85 }, root)
+	TweenService:Create(sc, TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+	popup = root
+	return root
+end
+local ISLAND_ICON = { park = "popcorn", garden = "seed", castle = "monster", bridge = "rod", forest = "nest", mine = "crow", desert = "golden", expedition = "parrot", echo = "echo" }
+function Hud.onTeleport()
+	if popup and popup.Name == "Teleport" then closePopup(); return end
+	local rows = {}
+	for _, isl in World.list do
+		if World.isOpen(isl) then
+			table.insert(rows, { text = string.gsub(isl.name, "^THE ", ""), icon = ISLAND_ICON[isl.id], click = function()
+				closePopup(); plr.PlayerGui:SetAttribute("PeckwoodTP", isl.id .. "#" .. os.clock())
+			end })
+		end
+	end
+	openPopup("TELEPORT", rows).Name = "Teleport"
+end
+function Hud.onSettings()
+	if popup and popup.Name == "Settings" then closePopup(); return end
+	local rows = {
+		{ text = if Kit.muted then "Sound: OFF" else "Sound: ON", icon = "settings", stops = Kit.stops(LEFT_THEMES.settings.hdr), click = function(b)
+			Kit.muted = not Kit.muted; b.setText(if Kit.muted then "Sound: OFF" else "Sound: ON")
+		end },
+	}
+	openPopup("SETTINGS", rows).Name = "Settings"
+end
+function Hud.onMap()
+	closePopup()
+	local on = not plr.PlayerGui:GetAttribute("PeckwoodMap")
+	plr.PlayerGui:SetAttribute("PeckwoodMap", on)
+	if on then showToast("Map: every open island. Tap MAP again to return", "seeds", "map") end
+end
+
+-- bookmarks: one tab per unlocked feature group, stacked down the drawer's left edge (tucked 14 px under the window).
+-- They ride with the drawer, so when it is tucked away they wait at the screen edge.
+local function buildBookmarks(dock)
+	bookmarkCol = Kit.new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(0, 14, 0, 6), Size = UDim2.fromOffset(92, 1000), ZIndex = 4 }, dock)
+	Kit.new("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, bookmarkCol)
+	for i, g in Spec.GROUPS do
+		if g.id == "profile" then continue end
+		g.bookmark = true
+		local t = heroTile(bookmarkCol, g, i)
+		t.holder.Size = UDim2.fromOffset(92, 108)
+		groupTiles[g.id] = t
+		for _, m in g.members do menuButtons[m] = { holder = t.holder, btn = t.btn, group = g } end
+	end
 end
 
 -- ---------------------------------------------------------------- dev panel (Studio / owner only)
@@ -590,8 +679,9 @@ function Hud.start(remotes)
 	Kit.grad(vig, { { "121729", 0, 0 }, { "121729", 0.75, 0 }, { "121729", 1, 0.45 } })
 	buildBanner(); buildWallet(); buildObjective(); buildMenu(); buildDev()
 	-- docked shop column: right edge, 22 px margin, fit to height
-	local dock = Kit.new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -22, 0, 26), Size = UDim2.fromOffset(500, 1028), ZIndex = 5 }, canvas)
+	local dock = Kit.new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, DOCK_IN, 0, 26), Size = UDim2.fromOffset(500, 1028), ZIndex = 5 }, canvas)
 	Hud.dock = dock
+	buildBookmarks(dock)
 	local ids = table.clone(Spec.MENU)
 	for _, id in { "baits", "index", "aquarium" } do table.insert(ids, id) end
 	for _, id in ids do

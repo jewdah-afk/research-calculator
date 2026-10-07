@@ -29,6 +29,9 @@ local ZOOM_MIN, ZOOM_MAX, ZOOM_ALL, ZOOM_FOLLOW = 4, 20, 16, 8
 local zoom = ZOOM_ALL
 local zoomTarget = ZOOM_ALL
 local PARK_CENTRE = Vector3.new(0, 0, 2)
+local mapFocus: Vector3? = nil
+local mapZoom: number? = nil
+local function vpAspect(): number local v = workspace.CurrentCamera.ViewportSize; return v.Y / math.max(1, v.X) end
 local ISLAND_CENTRE = PARK_CENTRE
 local camFocus: Vector3? = nil
 local shake = 0
@@ -184,6 +187,21 @@ plr:WaitForChild("PlayerGui"):GetAttributeChangedSignal("PeckwoodBuild"):Connect
 	if typeof(v) == "string" and v ~= "park" then IslandView.replay(v) else IslandView.play() end
 end)
 plr.PlayerGui:GetAttributeChangedSignal("PeckwoodGo"):Connect(function() Nav.go(plr.PlayerGui:GetAttribute("PeckwoodGo")) end)
+-- Teleport (left bar): instant hop to an open island; value is "<id>#<nonce>" so the same island can be picked twice
+plr.PlayerGui:GetAttributeChangedSignal("PeckwoodTP"):Connect(function()
+	local v = plr.PlayerGui:GetAttribute("PeckwoodTP")
+	if typeof(v) ~= "string" or not body then return end
+	local id = string.match(v, "^([^#]+)")
+	local isl = World.byId[id or ""]
+	if not (isl and World.isOpen(isl)) then return end
+	local i, j = World.arrival(isl)
+	local b = body :: Controller.Body
+	dust(b.x, b.y, b.z, 0, 0, 8)
+	b.x, b.y, b.z, b.vx, b.vy, b.vz = i * 16, j * 16, 0, 0, 0, 0
+	b.target = nil
+	dust(b.x, b.y, 0, 0, 0, 10)
+	plr.PlayerGui:SetAttribute("PeckwoodMap", false)
+end)
 -- QA camera: PlayerGui:SetAttribute("PeckwoodCam", Vector3) frames the island from there (nil = normal camera)
 plr.PlayerGui:GetAttributeChangedSignal("PeckwoodCam"):Connect(function()
 	local p = plr.PlayerGui:GetAttribute("PeckwoodCam")
@@ -309,8 +327,21 @@ RunService:BindToRenderStep("Peckwood", Enum.RenderPriority.Camera.Value + 1, fu
 	holdStep(dt); bodyStep(dt); Birds.step(clock, dt, plr.Character, body); kernelsStep(dt)
 	local ch = plr.Character
 	local hrp = ch and ch:FindFirstChild("HumanoidRootPart") :: BasePart?
-	zoom += (zoomTarget - zoom) * (1 - math.exp(-dt * 10))   -- smooth wheel zoom
+	local mapOn0 = plr.PlayerGui:GetAttribute("PeckwoodMap") == true
+	zoom += ((if mapOn0 and mapZoom then mapZoom else zoomTarget) - zoom) * (1 - math.exp(-dt * (if mapOn0 then 4 else 10)))   -- smooth wheel zoom
 	local follow = 1   -- zooming in or out always stays on the bird (owner)
+	local mapOn = plr.PlayerGui:GetAttribute("PeckwoodMap") == true
+	if mapOn then
+		local mn, mx = Vector2.new(math.huge, math.huge), Vector2.new(-math.huge, -math.huge)
+		for _, isl in World.list do
+			if World.isOpen(isl) then
+				mn = mn:Min(Vector2.new(isl.oi, isl.oj)); mx = mx:Max(Vector2.new(isl.oi + isl.W, isl.oj + isl.N))
+			end
+		end
+		local c = (mn + mx) / 2
+		mapFocus = Vector3.new((c.X - 20) * S, 0, (c.Y - 15) * S)
+		mapZoom = math.max((mx.Y - mn.Y) * 0.62, (mx.X - mn.X) * 0.62 * vpAspect() / 0.7, 14)   -- /0.7: the drawer covers ~30 % on the right
+	end
 	local bird = if hrp then Vector3.new(hrp.Position.X, 0, hrp.Position.Z) else ISLAND_CENTRE
 	if hrp then
 		local isl = World.nearest(hrp.Position.X / S + 20, hrp.Position.Z / S + 15)
@@ -319,7 +350,8 @@ RunService:BindToRenderStep("Peckwood", Enum.RenderPriority.Camera.Value + 1, fu
 	-- keep the island centred in the free space left of the shop drawer when it is open
 	local vp = cam.ViewportSize
 	local drawerShift = if Hud.dock and Hud.dock.Visible and not Hud.collapsed then 0.3 * zoom * S * vp.X / math.max(1, vp.Y) else 0
-	local want = ISLAND_CENTRE:Lerp(bird, follow) + Vector3.new(drawerShift * (1 - follow), 0, 0)
+	local mapShift = if Hud.dock and Hud.dock.Visible and not Hud.collapsed then 0.3 * zoom * S * vp.X / math.max(1, vp.Y) else 0
+	local want = if mapOn and mapFocus then mapFocus + Vector3.new(mapShift, 0, 0) else ISLAND_CENTRE:Lerp(bird, follow) + Vector3.new(drawerShift * (1 - follow), 0, 0)
 	camFocus = if camFocus then camFocus:Lerp(want, 1 - math.exp(-dt * 8)) else want
 	shake = math.max(0, shake - dt)
 	local jitter = if shake > 0 then Vector3.new(math.random() - 0.5, math.random() - 0.5, 0) * shake * S * 0.6 else Vector3.zero
