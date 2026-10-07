@@ -315,9 +315,10 @@ local function heroTile(parent, g, order)
 	-- coloured header strip along the bottom carrying the name. Hover: lift, icon grows, burst fades in.
 	-- Press: squash. Selected: white rim, outer glow, burst spins.
 	local lead = g.theme or Spec[g.members[1]]
-	local W, H = 92, 104
-	local holder = Kit.new("Frame", { BackgroundTransparency = 1, LayoutOrder = order, ZIndex = 10 }, parent)
-	local lift = Kit.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(W, H + 8), ZIndex = 10 }, holder)
+	local W, H = g.w or 92, g.h or 104
+	local holder = Kit.new("Frame", { BackgroundTransparency = 1, LayoutOrder = order, ZIndex = 10, Size = UDim2.fromOffset(W, H + 12) }, parent)
+	-- centre-pivoted so press / select scaling stays even on every side (a top-left pivot pulls the right side in)
+	local lift = Kit.new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(W / 2, (H + 8) / 2), Size = UDim2.fromOffset(W, H + 8), ZIndex = 10 }, holder)
 	local glow = Kit.soft(lift, 0, 0, W, H, 22, "glow", hex(lead.buyGlow or lead.glow or "ffffff"), 1, 9)
 	-- drop: a small, dark undertone of the tile's own strip colour (not a black slab)
 	local hs = Kit.stops(lead.hdr)
@@ -346,7 +347,7 @@ local function heroTile(parent, g, order)
 	local rim = Kit.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(W, H), ZIndex = 17 }, lift)
 	Kit.corner(rim, 18)
 	local rs = Kit.stroke(rim, 3, Kit.INK)
-	local icon = Kit.icon(lift, W / 2, 40, 64, g.icon, { AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = 18 })
+	local icon = Kit.icon(lift, W / 2, 40, g.iconSize or 64, g.icon, { AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = 18 })
 	local isc = Kit.new("UIScale", {}, icon)
 	local lsc = Kit.new("UIScale", {}, lift)
 	local hit = Kit.new("TextButton", { Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromOffset(W, H), ZIndex = 20 }, holder)
@@ -355,7 +356,7 @@ local function heroTile(parent, g, order)
 	local function pose()
 		local q = TweenInfo.new(0.16, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 		local out = if g.bookmark then (if selected then -16 elseif hovered then -8 else 0) else 0
-		TweenService:Create(lift, q, { Position = UDim2.fromOffset(out, if g.bookmark then 0 elseif pressed then 2 elseif hovered then -4 else 0) }):Play()
+		TweenService:Create(lift, q, { Position = UDim2.fromOffset(W / 2 + out, (H + 8) / 2 + (if g.bookmark then 0 elseif pressed then 2 elseif hovered then -4 else 0)) }):Play()
 		TweenService:Create(lsc, q, { Scale = if pressed then 0.94 elseif selected then 1.04 else 1 }):Play()
 		TweenService:Create(isc, q, { Scale = if hovered then 1.14 elseif selected then 1.06 else 1 }):Play()
 		TweenService:Create(icon, q, { Rotation = if hovered then -6 else 0 }):Play()
@@ -417,15 +418,17 @@ local LEFT_THEMES = {
 local leftTiles = {}
 local bookmarkCol
 local function buildMenu()
-	local col = Kit.new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(30, 152), Size = UDim2.fromOffset(330, 240), ZIndex = 10 }, canvas)
-	Kit.new("UIGridLayout", { CellSize = UDim2.fromOffset(92, 116), CellPadding = UDim2.fromOffset(12, 10), SortOrder = Enum.SortOrder.LayoutOrder }, col)
+	-- visual hierarchy: SHOP is the hero (double-wide, gold), AUTO beside it; the navigation row (MAP / TELEPORT /
+	-- PROFILE) under them; SETTINGS is a small gear key by the island banner
+	local col = Kit.new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(30, 152), Size = UDim2.fromOffset(330, 260), ZIndex = 10 }, canvas)
+	local SLOT = { shop = { 0, 0 }, auto = { 208, 0 }, map = { 0, 128 }, teleport = { 104, 128 }, profile = { 208, 128 } }
 	local profileG
 	for _, g in Spec.GROUPS do if g.id == "profile" then profileG = g end end
 	local LEFT = {
 		{ id = "map", name = "MAP", icon = "map", members = {}, theme = LEFT_THEMES.map, onClick = function() Hud.onMap() end },
 		{ id = "teleport", name = "TELEPORT", icon = "teleport", members = {}, theme = LEFT_THEMES.teleport, onClick = function() Hud.onTeleport() end },
 		profileG,
-		{ id = "shop", name = "SHOP", icon = "shop", members = {}, theme = LEFT_THEMES.shop, onClick = function() showToast("The shop opens with the live servers", "golden", "shop") end },
+		{ id = "shop", name = "SHOP", icon = "shop", w = 196, iconSize = 84, members = {}, theme = LEFT_THEMES.shop, onClick = function() showToast("The shop opens with the live servers", "golden", "shop") end },
 		{ id = "settings", name = "SETTINGS", icon = "settings", members = {}, theme = LEFT_THEMES.settings, onClick = function() Hud.onSettings() end },
 		{ id = "auto", name = "AUTO", icon = "auto", members = {}, theme = LEFT_THEMES.auto, onClick = function()
 			if not derived then return end
@@ -434,7 +437,16 @@ local function buildMenu()
 		end },
 	}
 	for i, g in LEFT do
+		if g.id == "settings" then
+			-- small gear key beside the banner (low priority, still one tap away)
+			local k = Kit.button(canvas, 344, 30, 56, 56, { icon = "settings", iconSize = 34, stops = Kit.stops(LEFT_THEMES.settings.hdr) })
+			k.root.Activated:Connect(g.onClick)
+			leftTiles.settings = { holder = k.root, btn = k, icon = k.iconImg }
+			continue
+		end
 		local t = heroTile(col, g, i)
+		local sl = SLOT[g.id]
+		if sl then t.holder.Position = UDim2.fromOffset(sl[1], sl[2]) end
 		leftTiles[g.id] = t
 		if g == profileG then
 			groupTiles[g.id] = t
@@ -493,36 +505,61 @@ function Hud.onMap()
 	if on then showToast("Map: every open island. Tap MAP again to return", "seeds", "map") end
 end
 
--- bookmarks: the edge-tab style (solid themed face, halftone, thick ink outline, rounded left corners, icon on top),
--- one per unlocked feature group, stacked down the drawer's left edge and tucked under the window. They ride with the
--- drawer, so when it is tucked away they wait at the screen edge. The open one sticks out further; hover nudges out.
-local TAB_W, TAB_H, TAB_SHOW, TAB_OPEN = 116, 92, 76, 94
-local TAB_STEP = 54        -- stacked tabs below the active one show their top 54 px (icon)
-local bmOrder, bmHover = {}, nil
+-- group bars: under the open window, every other feature group is a full-width bar styled like a window header
+-- (themed header gradient, halftone, gloss, ink outline, icon + name). They share the space down to the screen bottom
+-- evenly, so the right side is always filled top to bottom; click one to swap the drawer to that group.
+local BAR_GAP, BAR_MIN, BAR_MAX = 5, 34, 64
+local bmOrder = {}
 local function bookmarkTab(parent, g, order)
 	local lead = Spec[g.members[1]]
-	local holder = Kit.new("Frame", { BackgroundTransparency = 1, LayoutOrder = order, Size = UDim2.fromOffset(TAB_OPEN, TAB_H + 4), ZIndex = 4 }, parent)
-	local slide = Kit.new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(TAB_OPEN - TAB_SHOW, 0), Size = UDim2.fromOffset(TAB_W, TAB_H + 4), ZIndex = 4 }, holder)   -- the face's right part runs past the wall
-	local glow = Kit.soft(slide, 0, 0, TAB_W, TAB_H, 16, "glow", hex(lead.glow or "ffffff"), 1, 3)
-	local face = Kit.frame(slide, 0, 0, TAB_W, TAB_H, Color3.new(1, 1, 1), { ZIndex = 4 }); Kit.corner(face, 22)
-	local gr = Kit.grad(face, Kit.stops(lead.tab or lead.hdr))
-	local tx = Kit.texture(face, "halftone", 0.78, 24, 4); Kit.corner(tx, 22)
-	local st = Kit.stroke(face, 3.5)
-	local icon = Kit.icon(slide, TAB_SHOW / 2 - 25, 3, 50, g.icon, { ZIndex = 6 })
-	local chev = Kit.title(slide, "‹", 36, Color3.new(1, 1, 1), 3, 2, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(TAB_SHOW / 2, 54), ZIndex = 6 })
-	local hit = Kit.new("TextButton", { Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromOffset(TAB_OPEN, TAB_H), ZIndex = 7 }, holder)
-	local hovered, selected = false, false
-	local function pose()
-		local q = TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-		local x = if selected then TAB_OPEN + 4 else TAB_OPEN - (if hovered then TAB_SHOW + 8 else TAB_SHOW)   -- open = tucked into the wall
-		TweenService:Create(slide, q, { Position = UDim2.fromOffset(x, 0) }):Play()
-		TweenService:Create(glow, TweenInfo.new(0.2), { ImageTransparency = if selected then 0.55 else 1 }):Play()
-		chev.holder.Visible = not selected
-		st.Color = if selected then Color3.new(1, 1, 1) else Kit.INK
+	local holder = Kit.new("Frame", { BackgroundTransparency = 1, LayoutOrder = order, Size = UDim2.fromOffset(500, 64), ZIndex = 4 }, parent)
+	local lift = Kit.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 4 }, holder)
+	local glow = Kit.soft(lift, 0, 0, 500, 64, 16, "glow", hex(lead.glow or "ffffff"), 1, 3)
+	glow.Size = UDim2.new(1, 32, 1, 32); glow.Position = UDim2.fromOffset(-16, -16)
+	local base = Kit.frame(lift, 0, 5, 0, 0, Color3.fromHex(Kit.stops(lead.hdr)[#Kit.stops(lead.hdr)][1]):Lerp(Kit.INK, 0.5), { Size = UDim2.new(1, 0, 1, -5), ZIndex = 4 })
+	Kit.corner(base, 16); Kit.stroke(base, 3, Kit.INK)
+	local face = Kit.frame(lift, 0, 0, 0, 0, Color3.new(1, 1, 1), { Size = UDim2.new(1, 0, 1, -5), ZIndex = 5 }); Kit.corner(face, 16)
+	Kit.grad(face, Kit.stops(lead.hdr))
+	local tx = Kit.texture(face, "halftone", 0.82, 22, 5); Kit.corner(tx, 16)
+	local gl = Kit.frame(face, 10, 4, 0, 0, Color3.new(1, 1, 1), { Size = UDim2.new(1, -20, 0.38, 0), ZIndex = 6 }); Kit.corner(gl, 10)
+	Kit.grad(gl, { { "ffffff", 0, 0.22 }, { "ffffff", 1, 0 } })
+	local st = Kit.stroke(face, 3, Kit.INK)
+	local row = Kit.new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 16, 0.5, -2), AutomaticSize = Enum.AutomaticSize.XY, Size = UDim2.fromOffset(0, 0), ZIndex = 7 }, face)
+	Kit.new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder }, row)
+	local wellF = Kit.new("Frame", { BackgroundColor3 = Kit.INK, BackgroundTransparency = 0.55, Size = UDim2.fromOffset(46, 46), ZIndex = 7, LayoutOrder = 1 }, row)
+	Kit.corner(wellF, 23)
+	local icon = Kit.icon(wellF, 23, 23, 40, g.icon, { AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = 8 })
+	local name = Kit.title(row, g.name, 24, Color3.new(1, 1, 1), 3, 2, { ZIndex = 8, LayoutOrder = 2 })
+	-- secondary: the group's tabs as small icons (what's inside), right-aligned before the chevron
+	local mem = Kit.new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -46, 0.5, -2), AutomaticSize = Enum.AutomaticSize.XY, Size = UDim2.fromOffset(0, 0), ZIndex = 7 }, face)
+	Kit.new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder }, mem)
+	local memIcons = {}
+	if #g.members > 1 then
+		for k, m in g.members do table.insert(memIcons, Kit.icon(mem, 0, 0, 28, Spec.MENU_ICON[m] or m, { ZIndex = 8, LayoutOrder = k, ImageTransparency = 0.15 })) end
 	end
-	hit.MouseEnter:Connect(function() hovered = true; bmHover = g.id; Kit.sfx("hover"); pose(); layoutBookmarks() end)
-	hit.MouseLeave:Connect(function() hovered = false; if bmHover == g.id then bmHover = nil end; pose(); layoutBookmarks() end)
-	hit.MouseButton1Down:Connect(function() Kit.sfx("click") end)
+	local chev = Kit.title(face, "‹", 30, Color3.new(1, 1, 1), 3, 2, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -18, 0.5, -3), ZIndex = 8 })
+	local sc = Kit.new("UIScale", {}, row)
+	local hit = Kit.new("TextButton", { Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 9 }, holder)
+	local hovered, selected, pressed = false, false, false
+	local function pose()
+		local q = TweenInfo.new(0.16, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+		TweenService:Create(lift, q, { Position = UDim2.fromOffset(if hovered then -10 else 0, if pressed then 3 else 0) }):Play()
+		TweenService:Create(glow, TweenInfo.new(0.2), { ImageTransparency = if hovered then 0.6 else 1 }):Play()
+		TweenService:Create(sc, q, { Scale = if hovered then 1.05 else 1 }):Play()
+	end
+	-- icon + name shrink to fit short bars (the bar height follows the room left under the window)
+	holder:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+		local h = holder.Size.Y.Offset
+		local d = math.clamp(h - 14, 26, 50)
+		wellF.Size = UDim2.fromOffset(d, d); wellF.UICorner.CornerRadius = UDim.new(0.5, 0)
+		icon.Position = UDim2.fromOffset(d / 2, d / 2); icon.Size = UDim2.fromOffset(d - 6, d - 6)
+		name.holder:FindFirstChildOfClass("UIScale")
+		for _, mi in memIcons do mi.Size = UDim2.fromOffset(math.clamp(h - 26, 18, 30), math.clamp(h - 26, 18, 30)) end
+	end)
+	hit.MouseEnter:Connect(function() hovered = true; Kit.sfx("hover"); pose() end)
+	hit.MouseLeave:Connect(function() hovered = false; pressed = false; pose() end)
+	hit.MouseButton1Down:Connect(function() pressed = true; Kit.sfx("click"); pose() end)
+	hit.MouseButton1Up:Connect(function() pressed = false; pose() end)
 	hit.Activated:Connect(function()
 		local cur = docked and groupOf(docked)
 		if cur == g then setCollapsed(not collapsed); return end
@@ -530,67 +567,57 @@ local function bookmarkTab(parent, g, order)
 			if not state or (Defs.WINDOW_ISLAND[m] or 1) <= state.island then Windows.open(m); return end
 		end
 	end)
-	local t = { holder = holder, btn = { root = hit }, icon = icon, burst = Instance.new("Frame"), glow = glow, iconY = 4, gid = g.id }
+	local t = { holder = holder, btn = { root = hit }, icon = icon, burst = Instance.new("Frame"), glow = glow, iconY = 4, gid = g.id, name = name }
 	function t.select(on)
 		if on == selected then return end
 		selected = on
-		pose()
-		if on then Kit.pop(icon, 1.2) end
-		layoutBookmarks()
+		if layoutBookmarks then layoutBookmarks() end
 	end
 	function t.isSelected() return selected end
-	function t.slideOut(hide)
-		local x = if hide then TAB_OPEN + 4 else TAB_OPEN - (if hovered then TAB_SHOW + 8 else TAB_SHOW)
-		TweenService:Create(slide, TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Position = UDim2.fromOffset(x, 0) }):Play()
-		hit.Visible = not hide
-	end
+	function t.slideOut(hide) holder.Visible = holder.Visible end
 	return t
 end
--- stacked layout: the active tab on top (next to the header), the rest layered under it like a deck, each later tab
--- drawn over the one above so only its top strip + icon peeks; hovering one pushes the tabs below it down to reveal it
+-- even stack: from under the open window (or the top while the drawer is tucked) down to the screen bottom
 layoutBookmarks = function()
+	if not bookmarkCol then return end
 	local list = {}
 	for _, id in bmOrder do
 		local t = groupTiles[id]
-		if t and t.holder.Visible then
-			-- the open window's tab leaves the deck (it IS the window now) and comes back when another replaces it
-			local hide = t.isSelected()
-			if not hide then table.insert(list, t) end
-			t.slideOut(hide)
+		if t and t.unlocked ~= false then
+			local show = not t.isSelected()
+			t.holder.Visible = show
+			if show then table.insert(list, t) end
 		end
 	end
-	if not bookmarkCol then return end
-	-- top of the stack: just under the open window (canvas units), or near the top while the drawer is tucked
-	local top = 26
+	local top, width, left = 26, 470, nil
 	local api = docked and Windows.built[docked]
-	if api and not collapsed and api.root.Visible and scale then
+	if api and api.root.Visible and scale then
 		local r = api.root
-		top = (r.AbsolutePosition.Y + r.AbsoluteSize.Y - canvas.AbsolutePosition.Y) / scale.Scale - 2   -- flush under the window
+		local cs = scale.Scale
+		-- the window's outline sits 1 px outside its root: match it so bar edges line up with the board exactly
+		width = r.AbsoluteSize.X / cs + 2
+		left = (r.AbsolutePosition.X - canvas.AbsolutePosition.X) / cs - 1
+		if not collapsed then top = (r.AbsolutePosition.Y + r.AbsoluteSize.Y - canvas.AbsolutePosition.Y) / cs + 8 end
 	end
+	local bottom = 1080 - 10
 	local n = #list
-	local room = 1080 - 16 - top
-	-- active tab full, the middle ones show a strip each, the last one shows in full
-	local step = TAB_STEP
-	if n > 1 then step = math.clamp((room - TAB_H) / (n - 1), 26, TAB_STEP) end
-	local need = math.max(0, n - 1) * step + (if n > 0 then TAB_H else 0)
-	if top + need > 1064 then top = math.max(26, 1064 - need) end
-	local q = TweenInfo.new(0.22, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
-	TweenService:Create(bookmarkCol, q, { Position = UDim2.new(1, 0, 0, top) }):Play()
-	local y = 0
+	local h = if n > 0 then math.clamp((bottom - top - BAR_GAP * (n - 1)) / n, BAR_MIN, BAR_MAX) else 0
+	local q = TweenInfo.new(0.24, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+	bookmarkCol.AnchorPoint = Vector2.new(0, 0)
+	bookmarkCol.Size = UDim2.fromOffset(width, bottom - top)
+	local vw = canvas.AbsoluteSize.X / (if scale then scale.Scale else 1)
+	TweenService:Create(bookmarkCol, q, { Position = UDim2.fromOffset(left or (vw - width), top) }):Play()   -- same left/right edges as the open board
 	for k, t in list do
-		t.holder.ZIndex = 4 + k
-		TweenService:Create(t.holder, q, { Position = UDim2.fromOffset(0, y) }):Play()
-		local full = t.gid == bmHover
-		y += if full then TAB_H + 8 else step
+		t.holder.Size = UDim2.fromOffset(width, h)
+		TweenService:Create(t.holder, q, { Position = UDim2.fromOffset(0, (k - 1) * (h + BAR_GAP)) }):Play()
 	end
 end
 local function buildBookmarks(dock)
-	bookmarkCol = Kit.new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 26), Size = UDim2.fromOffset(TAB_OPEN, 1000), ZIndex = 4 }, canvas)
+	bookmarkCol = Kit.new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 26), Size = UDim2.fromOffset(470, 1000), ZIndex = 4 }, canvas)
 	for i, g in Spec.GROUPS do
 		if g.id == "profile" then continue end
 		local t = bookmarkTab(bookmarkCol, g, i)
 		table.insert(bmOrder, g.id)
-		t.holder:GetPropertyChangedSignal("Visible"):Connect(function() layoutBookmarks() end)
 		groupTiles[g.id] = t
 		for _, m in g.members do menuButtons[m] = { holder = t.holder, btn = t.btn, group = g } end
 	end
@@ -701,7 +728,8 @@ function Hud.setState(s, d)
 	for _, g in Spec.GROUPS do
 		local open = false
 		for _, m in g.members do if (Defs.WINDOW_ISLAND[m] or 1) <= s.island then open = true end end
-		groupTiles[g.id].holder.Visible = open
+		local t = groupTiles[g.id]
+		if t and t.unlocked ~= open then t.unlocked = open; if layoutBookmarks then task.defer(layoutBookmarks) end end
 	end
 	for _, api in Windows.built do
 		for _, t in api.tabs do

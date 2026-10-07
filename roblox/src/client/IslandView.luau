@@ -669,7 +669,7 @@ local function buildIslandProp(isl, p, parent)
 	local m = Instance.new("Model"); m.Name = p.kind
 	local bobM
 	local info = { model = m, kind = p.kind, base = base, x = sx(p.x), z = sz(p.z), i = i, j = j }
-	for _, q in p.parts do
+	for k, q in p.parts do
 		local b = Instance.new("Part")
 		b.Anchored = true; b.CanCollide = false; b.CanQuery = false; b.CanTouch = false
 		b.TopSurface = Enum.SurfaceType.Smooth; b.BottomSurface = Enum.SurfaceType.Smooth
@@ -677,6 +677,9 @@ local function buildIslandProp(isl, p, parent)
 		if q[1] == 1 then
 			b.Shape = Enum.PartType.Cylinder; b.Size = Vector3.new(q[3] * S, q[2] * S, q[4] * S); cf *= CFrame.Angles(0, 0, math.pi / 2)
 		else b.Size = Vector3.new(q[2] * S, q[3] * S, q[4] * S) end
+		-- anti z-fighting: later (detail) parts grow by a hair so a face that is coplanar with an earlier part
+		-- (moss strips on temple tiers, trims, doors) always sits just proud of it instead of flickering
+		b.Size += Vector3.one * (0.012 * k)
 		b.CFrame = cf
 		b.Color = hx(q[11]); b.Material = MAT[q[12]]
 		if q[12] == 1 then b.Transparency = 0.5 elseif q[12] == 4 then b.Transparency = 0.4; b.Color = hx("4fa8d8") end

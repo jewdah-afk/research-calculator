@@ -262,7 +262,7 @@ function Kit.button(parent, x, y, w, h, opts)
 		-- the whole cap sinks: face and the top of the ink outline go down together, the lip stays put
 		TweenService:Create(face, TweenInfo.new(0.06), { Position = UDim2.fromOffset(o, o + d - 1) }):Play()
 		TweenService:Create(body, TweenInfo.new(0.06), { Position = UDim2.fromOffset(0, d - 1), Size = UDim2.fromOffset(w, h - d + 1) }):Play()
-		TweenService:Create(scale, TweenInfo.new(0.06), { Scale = 0.97 }):Play()
+		-- no squash: a UIScale shrinks toward the top-left anchor (right side pulled in); the cap sinking IS the press
 	end)
 	root.MouseButton1Up:Connect(function()
 		TweenService:Create(face, TweenInfo.new(0.16, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Position = UDim2.fromOffset(o, o) }):Play()
