@@ -113,11 +113,10 @@ local function well(parent, x, w, h, faceStops)
 	local d1, d2 = deep[1][1], (deep[2] or deep[1])[1]
 	Kit.grad(wl, { { d2, 0, 1 }, { d1, 1, 1 } }, 90)
 	local tx = Kit.texture(wl, "halftone", 0.84, 16, 10); Kit.corner(tx, h / 2)
-	-- inner shadow: strong at the top lip of the recess, fading by mid-height
-	local sh = Kit.frame(wl, 0, 0, w, h * 0.62, Color3.new(0, 0, 0), { ZIndex = 11 }); Kit.corner(sh, h / 2)
-	Kit.grad(sh, { { "000000", 0, 0.62 }, { "000000", 0.55, 0.18 }, { "000000", 1, 0 } }, 90)
-	-- lit bottom edge where the recess meets the face again
-	local lit = Kit.frame(wl, h * 0.5, h - 3, w - h, 2, Color3.new(1, 1, 1), { BackgroundTransparency = 0.62, ZIndex = 11 }); Kit.corner(lit, 1)
+	-- inner shadow: the same pill as the well (so its edges always follow the shape), dark at the top lip of the
+	-- recess and fully clear from just past the middle
+	local sh = Kit.frame(wl, 0, 0, w, h, Color3.new(0, 0, 0), { ZIndex = 11 }); Kit.corner(sh, h / 2)
+	Kit.grad(sh, { { "000000", 0, 0.6 }, { "000000", 0.3, 0.22 }, { "000000", 0.6, 0 }, { "000000", 1, 0 } }, 90)
 	Kit.stroke(wl, 2, Color3.fromHex((rim[2] or rim[1])[1]), 0)
 	return wl
 end
