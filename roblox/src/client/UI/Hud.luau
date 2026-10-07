@@ -387,7 +387,7 @@ game:GetService("RunService").RenderStepped:Connect(function(dt)
 		if slow and not Kit.reduced() then t.burst.Rotation += burstAcc * 9 end
 		local b = (math.sin(tclock * math.pi * 2 / 2.8) + 1) / 2
 		t.glow.ImageTransparency = 0.42 + 0.18 * b
-		if not Kit.reduced() then t.icon.Position = UDim2.fromOffset(t.W / 2, t.iconY - 1.5 + 3 * b) end
+		if not Kit.reduced() then t.icon.Position = UDim2.new(t.icon.Position.X, UDim.new(0, t.iconY - 1.5 + 3 * b)) end
 	end
 	if slow then burstAcc = 0 end
 end)
@@ -479,16 +479,57 @@ function Hud.onMap()
 	if on then showToast("Map: every open island. Tap MAP again to return", "seeds", "map") end
 end
 
--- bookmarks: one tab per unlocked feature group, stacked down the drawer's left edge (tucked 14 px under the window).
--- They ride with the drawer, so when it is tucked away they wait at the screen edge.
+-- bookmarks: the edge-tab style (solid themed face, halftone, thick ink outline, rounded left corners, icon on top),
+-- one per unlocked feature group, stacked down the drawer's left edge and tucked under the window. They ride with the
+-- drawer, so when it is tucked away they wait at the screen edge. The open one sticks out further; hover nudges out.
+local TAB_W, TAB_H, TAB_SHOW, TAB_OPEN = 128, 112, 84, 104
+local function bookmarkTab(parent, g, order)
+	local lead = Spec[g.members[1]]
+	local holder = Kit.new("Frame", { BackgroundTransparency = 1, LayoutOrder = order, Size = UDim2.fromOffset(TAB_OPEN, TAB_H + 4), ZIndex = 4 }, parent)
+	local slide = Kit.new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(TAB_OPEN - TAB_SHOW, 0), Size = UDim2.fromOffset(TAB_W, TAB_H + 4), ZIndex = 4 }, holder)
+	local glow = Kit.soft(slide, 0, 0, TAB_W, TAB_H, 16, "glow", hex(lead.glow or "ffffff"), 1, 3)
+	local face = Kit.frame(slide, 0, 0, TAB_W, TAB_H, Color3.new(1, 1, 1), { ZIndex = 4 }); Kit.corner(face, 22)
+	local gr = Kit.grad(face, Kit.stops(lead.tab or lead.hdr))
+	local tx = Kit.texture(face, "halftone", 0.78, 24, 4); Kit.corner(tx, 22)
+	local st = Kit.stroke(face, 3.5)
+	local icon = Kit.icon(slide, TAB_SHOW / 2 - 34, 10, 68, g.icon, { ZIndex = 6 })
+	local chev = Kit.title(slide, "‹", 36, Color3.new(1, 1, 1), 3, 2, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(TAB_SHOW / 2, 70), ZIndex = 6 })
+	local hit = Kit.new("TextButton", { Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromOffset(TAB_OPEN, TAB_H), ZIndex = 7 }, holder)
+	local hovered, selected = false, false
+	local function pose()
+		local q = TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+		local x = TAB_OPEN - (if selected then TAB_OPEN elseif hovered then TAB_SHOW + 8 else TAB_SHOW)
+		TweenService:Create(slide, q, { Position = UDim2.fromOffset(x, 0) }):Play()
+		TweenService:Create(glow, TweenInfo.new(0.2), { ImageTransparency = if selected then 0.55 else 1 }):Play()
+		chev.holder.Visible = not selected
+		st.Color = if selected then Color3.new(1, 1, 1) else Kit.INK
+	end
+	hit.MouseEnter:Connect(function() hovered = true; Kit.sfx("hover"); pose() end)
+	hit.MouseLeave:Connect(function() hovered = false; pose() end)
+	hit.MouseButton1Down:Connect(function() Kit.sfx("click") end)
+	hit.Activated:Connect(function()
+		local cur = docked and groupOf(docked)
+		if cur == g then setCollapsed(not collapsed); return end
+		for _, m in g.members do
+			if not state or (Defs.WINDOW_ISLAND[m] or 1) <= state.island then Windows.open(m); return end
+		end
+	end)
+	local t = { holder = holder, btn = { root = hit }, icon = icon, burst = Instance.new("Frame"), glow = glow, iconY = 10 }
+	function t.select(on)
+		if on == selected then return end
+		selected = on
+		pose()
+		if on then Kit.pop(icon, 1.2) end
+	end
+	function t.isSelected() return selected end
+	return t
+end
 local function buildBookmarks(dock)
-	bookmarkCol = Kit.new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(0, 14, 0, 6), Size = UDim2.fromOffset(92, 1000), ZIndex = 4 }, dock)
-	Kit.new("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, bookmarkCol)
+	bookmarkCol = Kit.new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(0, 4, 0, 8), Size = UDim2.fromOffset(TAB_OPEN, 1000), ZIndex = 4 }, dock)
+	Kit.new("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder, HorizontalAlignment = Enum.HorizontalAlignment.Right }, bookmarkCol)
 	for i, g in Spec.GROUPS do
 		if g.id == "profile" then continue end
-		g.bookmark = true
-		local t = heroTile(bookmarkCol, g, i)
-		t.holder.Size = UDim2.fromOffset(92, 108)
+		local t = bookmarkTab(bookmarkCol, g, i)
 		groupTiles[g.id] = t
 		for _, m in g.members do menuButtons[m] = { holder = t.holder, btn = t.btn, group = g } end
 	end
