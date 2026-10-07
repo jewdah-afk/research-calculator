@@ -24,11 +24,31 @@ def cut(sheet, cols, rows, names, out=os.path.join(HERE, 'final')):
     owner = {}
     objs = nd.find_objects(lab)
     split = set()          # pieces wider/taller than a cell are two icons glued by a glow: split those at the cell lines
+    cell_of = lambda cy_, cx_: min(rows - 1, int(cy_ // ch)) * cols + min(cols - 1, int(cx_ // cw))
+    main = {}              # biggest piece per cell = the icon body
     for k, ((cy_, cx_), sz) in enumerate(zip(cents, sizes)):
         ys_, xs_ = objs[k]
         if (ys_.stop - ys_.start) > 1.15 * ch or (xs_.stop - xs_.start) > 1.15 * cw:
             split.add(k + 1); continue
-        owner.setdefault(min(rows - 1, int(cy_ // ch)) * cols + min(cols - 1, int(cx_ // cw)), []).append((k + 1, sz))
+        c_ = cell_of(cy_, cx_)
+        if sz > main.get(c_, (0, 0))[1]: main[c_] = (k + 1, sz)
+    # every other piece (flame tips, sparkles, bobbers) joins the NEAREST icon body, not whichever cell its centre is in
+    body = np.zeros(full.shape, np.int32)
+    for c_, (k, _) in main.items(): body[lab == k] = c_ + 1
+    if split:                  # a cell whose icon is glued to a neighbour: seed its body from the glued piece's core inside that cell
+        glued = nd.binary_erosion(np.isin(lab, list(split)), iterations=6)
+        for c_ in range(rows * cols):
+            if c_ in main: continue
+            r0, c0 = (c_ // cols) * ch, (c_ % cols) * cw
+            seed = np.zeros(full.shape, bool); seed[r0 + ch // 6:r0 + ch * 5 // 6, c0 + cw // 6:c0 + cw * 5 // 6] = True
+            body[glued & seed & (body == 0)] = c_ + 1
+    _, (iy, ix) = nd.distance_transform_edt(body == 0, return_indices=True)
+    nearest = body[iy, ix]
+    for k, sz in enumerate(sizes):
+        if k + 1 in split: continue
+        ys_, xs_ = np.nonzero(lab[objs[k]] == k + 1)
+        c_ = int(np.bincount(nearest[objs[k]][ys_, xs_]).argmax()) - 1
+        owner.setdefault(c_, []).append((k + 1, sz))
     for i, name in enumerate(names):
         if name == '-': continue
         keep = name.endswith('!'); name = name.rstrip('!')
@@ -39,13 +59,24 @@ def cut(sheet, cols, rows, names, out=os.path.join(HERE, 'final')):
         if parts:
             big = max(s for _, s in parts)
             m = np.isin(lab, [k for k, s in parts if s > 0.01 * big])
-        if split:
-            m |= np.isin(lab, list(split)) & cellmask
+        if split:                            # glued pieces: each pixel goes to the icon body nearest to it
+            m |= np.isin(lab, list(split)) & (nearest == i + 1)
         lab2, n2 = nd.label(m)               # keep the main body plus any real detail pieces
         if n2 > 1:
             sz2 = nd.sum(m, lab2, range(1, n2 + 1))
-            m = np.isin(lab2, [k + 1 for k, v in enumerate(sz2) if v > 0.01 * sz2.max()])
-        m = nd.binary_fill_holes(nd.binary_closing(m, iterations=2))
+            bk = int(np.argmax(sz2)); by, bx = nd.find_objects(lab2)[bk]
+            my, mx = 0.1 * (by.stop - by.start), 0.1 * (bx.stop - bx.start)
+            c2 = nd.center_of_mass(m, lab2, range(1, n2 + 1))
+            # keep detail pieces (sparkles, bobbers) only if they sit within the body's own area, so stray flame
+            # tips or glow from a neighbouring icon are dropped
+            m = np.isin(lab2, [k + 1 for k, v in enumerate(sz2) if v > 0.01 * sz2.max() and
+                               by.start - my <= c2[k][0] <= by.stop + my and bx.start - mx <= c2[k][1] <= bx.stop + mx])
+        m = nd.binary_closing(m, iterations=2)
+        filled = nd.binary_fill_holes(m); hl, hn = nd.label(filled & ~m)
+        for h in range(1, hn + 1):          # enclosed dark details stay, but real see-through holes (frames, rings) stay open
+            hole = hl == h
+            if hole.sum() > 400 and (src.max(2)[hole] < 14).mean() > 0.6: filled &= ~hole
+        m = filled
         q = src
         ys, xs = np.nonzero(m)
         ext = max(np.ptp(ys), np.ptp(xs))
