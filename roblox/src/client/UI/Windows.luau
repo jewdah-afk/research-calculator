@@ -4,6 +4,7 @@
 local RS = game:GetService("ReplicatedStorage")
 local Shared = RS:WaitForChild("Peckwood")
 local Defs = require(Shared:WaitForChild("Defs"))
+local Nav = require(script.Parent.Parent:WaitForChild("Nav"))
 local Spec = require(script.Parent.Spec)
 local Window = require(script.Parent.Window)
 local Kit = require(script.Parent.Kit)
@@ -88,7 +89,7 @@ do
 	local base = B.seeds
 	B.seeds = { rows = base.rows, bind = function(api, act)
 		base.bind(api, act)
-		api.hero.btn.root.Activated:Connect(function() act("travel", "park") end)
+		api.hero.btn.root.Activated:Connect(function() Nav.go("garden") end)
 	end, update = function(api, s, d)
 		base.update(api, s, d)
 		api.hero.sub.Text = amount(s.sunflowerSeeds) .. " seeds  ·  +" .. fmt(d.seedsPerSec) .. " / s on the platform"
@@ -99,7 +100,7 @@ do
 	local base = B.golden
 	B.golden = { rows = base.rows, bind = function(api, act)
 		base.bind(api, act)
-		api.hero.btn.root.Activated:Connect(function() act("travel", if Windows.state and Windows.state.zone == "desert" then "park" else "desert") end)
+		api.hero.btn.root.Activated:Connect(function() Nav.go(if Windows.state and Windows.state.zone == "desert" then "park" else "desert") end)
 	end, update = function(api, s, d)
 		base.update(api, s, d)
 		api.hero.sub.Text = amount(s.goldenPopcorn) .. " golden  ·  " .. math.round(d.goldenChance * 100) .. "% of desert drops are golden"
@@ -120,7 +121,9 @@ do
 	local base = B.nest
 	B.nest = { rows = base.rows, bind = function(api, act)
 		base.bind(api, act)
-		api.hero.btn.root.Activated:Connect(function() act("nest", nil, nil, api.hero.btn) end)
+		api.hero.btn.root.Activated:Connect(function()
+			if api.goForest then Nav.go("forest") else act("nest", nil, nil, api.hero.btn) end
+		end)
 	end, update = function(api, s, d)
 		base.update(api, s, d)
 		local T = Defs.NEST_TIERS
@@ -129,6 +132,7 @@ do
 			api.hero.sub.Text = cur.name .. " nest  ·  " .. fmt(s.twigs) .. " / " .. fmt(cur.next) .. " twigs to " .. nxt.name
 			local can = EN.meeq(s.twigs, cur.next) and s.nest.tier + 1 <= Defs.S.nestMaxTier(s.evolutionCount)
 			api.hero.btn.setText(if can then "Build the " .. nxt.name .. " Nest" else "Go to the Forest")
+			api.goForest = not can
 			api.hero.btn.look(if can then "lit" else "grey", Kit.stops(Spec.nest.tab))
 		else
 			api.hero.sub.Text = cur.name .. " nest  ·  max tier"
@@ -280,7 +284,7 @@ B.dave = {
 		api.rows[1].all.root.Activated:Connect(function() act("buy", "dave_training", true, api.rows[1].all) end)
 		api.rows[2].buy.root.Activated:Connect(function() act("dave", "rebirb", nil, api.rows[2].buy) end)
 		api.rows[2].all.root.Activated:Connect(function() act("dave", "branch") end)
-		api.hero.btn.root.Activated:Connect(function() act("travel", "desert") end)
+		api.hero.btn.root.Activated:Connect(function() Nav.go("desert") end)
 	end,
 	update = function(api, s)
 		fillUpgrade(api.rows[1], s, "dave_training")

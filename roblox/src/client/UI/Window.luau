@@ -440,8 +440,14 @@ end
 
 -- ---------------------------------------------------------------- idle life
 local clock = 0
+-- idle motion runs at 30 Hz: the window body is a CanvasGroup, which re-renders its whole texture whenever a child
+-- moves, so halving the updates halves that cost (the motion is slow enough to stay smooth)
+local idleAcc = 0
 RunService.RenderStepped:Connect(function(dt)
 	clock += dt
+	idleAcc += dt
+	if idleAcc < 1 / 30 then return end
+	idleAcc = 0
 	for api in live do
 		if not api.root.Visible then continue end
 		if not reduced then for _, bob in api.bobbers do bob[1].Position = UDim2.fromOffset(12, bob[2] + math.sin(clock * math.pi * 2 / 2.2 + bob[3]) * 3) end end

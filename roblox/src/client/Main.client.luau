@@ -28,7 +28,8 @@ local FOV = 11
 local ZOOM_MIN, ZOOM_MAX, ZOOM_ALL, ZOOM_FOLLOW = 4, 20, 16, 8
 local zoom = ZOOM_ALL
 local zoomTarget = ZOOM_ALL
-local ISLAND_CENTRE = Vector3.new(0, 0, 2)
+local PARK_CENTRE = Vector3.new(0, 0, 2)
+local ISLAND_CENTRE = PARK_CENTRE
 local camFocus: Vector3? = nil
 local shake = 0
 cam.CameraType = Enum.CameraType.Scriptable
@@ -65,20 +66,80 @@ local function dust(x: number, y: number, z: number, vx: number, vy: number, n: 
 	end
 end
 
-Remotes:WaitForChild("State").OnClientEvent:Connect(function(_, d) if d and d.speed then speedMul = d.speed end end)
+local World = require(Shared:WaitForChild("World"))
+local IslandView = require(script.Parent:WaitForChild("IslandView"))
+local Nav = require(script.Parent:WaitForChild("Nav"))
+local lastOpen = 0
+Remotes:WaitForChild("State").OnClientEvent:Connect(function(s, d)
+	if d and d.speed then speedMul = d.speed end
+	if s and s.island and s.island ~= lastOpen then
+		-- animate only a real step forward (one unlock); dev save switches rebuild instantly
+		local animate = lastOpen > 0 and s.island == lastOpen + 1
+		lastOpen = s.island
+		task.spawn(IslandView.sync, s.island, animate)
+	end
+end)
+-- "Go to ..." buttons: drop the bird on that island (the client owns the body; the server reads the position)
+Nav.handler = function(id: string)
+	local isl = World.byId[id]
+	if not (isl and World.isOpen(isl) and body) then return false end
+	local i, j = World.arrival(isl)
+	-- walk there hands-free (bridges included); falls back to a hop if no route exists
+	if Controller.travel(body :: Controller.Body, i * 16, j * 16) then return true end
+	local b = body :: Controller.Body
+	b.x, b.y, b.z, b.vx, b.vy, b.vz = i * 16, j * 16, 0, 0, 0, 0
+	b.target = nil
+	dust(b.x, b.y, 0, 0, 0, 8)
+	return true
+end
 
--- click the ground to walk there (View3D.click -> Game.click): ray onto the y = 0 ground plane
+-- click the ground to walk there (View3D.click -> Game.click); HOLD to keep following the pointer (mouse, finger,
+-- or gamepad R2 with the virtual cursor). Ray onto the ground plane at the bird's height.
+local holding: InputObject? = nil
+local holdT = 0
+local function pointerGround(pos: Vector2): (number?, number?)
+	local ray = cam:ScreenPointToRay(pos.X, pos.Y)   -- input coords exclude the topbar inset
+	if math.abs(ray.Direction.Y) < 1e-4 then return nil, nil end
+	local t = -ray.Origin.Y / ray.Direction.Y
+	if t <= 0 then return nil, nil end
+	local x, y = Controller.fromWorld(ray.Origin + ray.Direction * t)
+	return x, y
+end
+local function pointerPos(): Vector2
+	if holding and holding.UserInputType == Enum.UserInputType.Touch then return Vector2.new(holding.Position.X, holding.Position.Y) end
+	return UIS:GetMouseLocation() - Vector2.new(0, game:GetService("GuiService"):GetGuiInset().Y)
+end
 UIS.InputBegan:Connect(function(io, gp)
 	if gp or not body then return end
-	if io.UserInputType ~= Enum.UserInputType.MouseButton1 and io.UserInputType ~= Enum.UserInputType.Touch then return end
-	local ray = cam:ScreenPointToRay(io.Position.X, io.Position.Y)   -- input coords exclude the topbar inset
-	if math.abs(ray.Direction.Y) < 1e-4 then return end
-	local t = -ray.Origin.Y / ray.Direction.Y
-	if t <= 0 then return end
-	local hit = ray.Origin + ray.Direction * t
-	local x, y = Controller.fromWorld(hit)
-	Controller.click(body :: Controller.Body, x, y)
+	local t = io.UserInputType
+	if t ~= Enum.UserInputType.MouseButton1 and t ~= Enum.UserInputType.Touch and io.KeyCode ~= Enum.KeyCode.ButtonR2 then return end
+	holding = io; holdT = 0
+	local x, y = pointerGround(pointerPos())
+	if x then Controller.click(body :: Controller.Body, x, y :: number) end
 end)
+UIS.InputEnded:Connect(function(io)
+	if holding and (io == holding or io.UserInputType == holding.UserInputType and io.KeyCode == holding.KeyCode) then holding = nil end
+end)
+local function holdStep(dt: number)
+	if not (holding and body) then return end
+	holdT += dt
+	if holdT < 0.18 then return end   -- a quick click stays a click; holding re-aims 6x a second
+	holdT = 0.06
+	local x, y = pointerGround(pointerPos())
+	if not x then return end
+	local b = body :: Controller.Body
+	-- short hops: steer straight at the pointer (slides along walls); A* only when the straight line is blocked
+	b.target = { x = x, y = y :: number, path = { { x = x, y = y :: number } }, st = 0 }
+	local dx, dy = x - b.x, (y :: number) - b.y
+	local d = math.sqrt(dx * dx + dy * dy)
+	local n = math.max(1, math.floor(d / 6))
+	for k = 1, n do
+		local px, py = b.x + dx * k / n, b.y + dy * k / n
+		if not Controller.canStand(px, py, Controller.heightAt(px, py), 4) and Controller.heightAt(px, py) < 15 then
+			Controller.click(b, x, y :: number); break
+		end
+	end
+end
 
 local function bodyStep(dt: number)
 	local ch = plr.Character
@@ -92,6 +153,8 @@ local function bodyStep(dt: number)
 	simAcc = math.min(simAcc + dt, 0.25)
 	while simAcc >= STEP do Controller.step(b, STEP, speedMul, dust); simAcc -= STEP end
 	local feet = Controller.toWorld(b.x, b.y, b.z)
+	IslandView.birdPos = feet
+	feet -= Vector3.new(0, IslandView.bridgeDip, 0)   -- rope bridges sink under the bird
 	hrp.CFrame = CFrame.new(feet + Vector3.new(0, hrp.Size.Y / 2, 0))
 	hrp.AssemblyLinearVelocity = Vector3.new(b.vx / 16 * S, b.vz / 16 * S, b.vy / 16 * S)
 end
@@ -111,19 +174,25 @@ local function outline(target: Instance, color: string, outlineT: number, fill: 
 	return h
 end
 outline(field, "#6b4512", 0.12, "#fff6d6", 0.78)                                   -- popcorn: warm rim + soft inner lift
-local IslandView = require(script.Parent:WaitForChild("IslandView"))
 IslandView.build()
+require(script.Parent:WaitForChild("Ambience")).start()
 outline(IslandView.scenery, "#24331f", 0.5)                                         -- scenery: quiet tinted outline
 -- dev/QA hook: PlayerGui:SetAttribute("PeckwoodBuild", tick()) replays the unlock build-in; PeckwoodHour freezes the sky
-plr:WaitForChild("PlayerGui"):GetAttributeChangedSignal("PeckwoodBuild"):Connect(function() IslandView.play() end)
+-- (a string island id replays that island's build-in from its bridge, e.g. "garden")
+plr:WaitForChild("PlayerGui"):GetAttributeChangedSignal("PeckwoodBuild"):Connect(function()
+	local v = plr.PlayerGui:GetAttribute("PeckwoodBuild")
+	if typeof(v) == "string" and v ~= "park" then IslandView.replay(v) else IslandView.play() end
+end)
+plr.PlayerGui:GetAttributeChangedSignal("PeckwoodGo"):Connect(function() Nav.go(plr.PlayerGui:GetAttribute("PeckwoodGo")) end)
 -- QA camera: PlayerGui:SetAttribute("PeckwoodCam", Vector3) frames the island from there (nil = normal camera)
 plr.PlayerGui:GetAttributeChangedSignal("PeckwoodCam"):Connect(function()
 	local p = plr.PlayerGui:GetAttribute("PeckwoodCam")
 	IslandView.camCF = if typeof(p) == "Vector3" then CFrame.lookAt(p, Vector3.new(0, -8, 2)) else nil
 end)
 plr.PlayerGui:GetAttributeChangedSignal("PeckwoodHour"):Connect(function() IslandView.timeOverride = plr.PlayerGui:GetAttribute("PeckwoodHour") end)
-type K = { model: Model, halo: Part, pos: Vector3, born: number, golden: boolean, homing: number? }
+type K = { model: Model, halo: Part, pos: Vector3, born: number, golden: boolean, homing: number?, parts: { BasePart }, offs: { CFrame } }
 local kernels: { [number]: K } = {}
+local frameN = 0
 local clock = 0
 
 local function easeOutBack(t: number): number
@@ -154,7 +223,13 @@ Remotes:WaitForChild("Spawn").OnClientEvent:Connect(function(id: number, pos: Ve
 	halo.CFrame = CFrame.new(pos + Vector3.new(0, 0.04 * S, 0)) * CFrame.Angles(0, 0, math.rad(90))
 	halo.Parent = m
 	m.Parent = field
-	kernels[id] = { model = m, halo = halo, pos = pos, born = clock, golden = golden }
+	-- cache the puff parts relative to the pivot so every kernel moves in one BulkMoveTo per frame
+	local pv = m:GetPivot()
+	local parts, offs = {}, {}
+	for _, d in m:GetDescendants() do
+		if d:IsA("BasePart") and d ~= halo then table.insert(parts, d); table.insert(offs, pv:ToObjectSpace(d.CFrame)) end
+	end
+	kernels[id] = { model = m, halo = halo, pos = pos, born = clock, golden = golden, parts = parts, offs = offs }
 	local n = 0; for _ in kernels do n += 1 end; Hud.kernelCount = n
 end)
 
@@ -197,37 +272,50 @@ Remotes:WaitForChild("Collect").OnClientEvent:Connect(function(id: number, value
 	end)
 end)
 
+local bulkParts: { BasePart } = {}
+local bulkCFs: { CFrame } = {}
 local function kernelsStep(dt: number)
 	local ch = plr.Character
 	local hrp = ch and ch:FindFirstChild("HumanoidRootPart") :: BasePart?
+	table.clear(bulkParts); table.clear(bulkCFs)
+	local function place(k: K, cf: CFrame)
+		for n, p in k.parts do table.insert(bulkParts, p); table.insert(bulkCFs, cf * k.offs[n]) end
+	end
 	for id, k in kernels do
+		if not k.model.Parent then continue end
 		local age = clock - k.born
 		if k.homing and hrp then
 			k.homing += dt
 			local t = math.min(1, k.homing / 0.18)
 			local target = hrp.Position + Vector3.new(0, 0.2 * S, 0)
 			local p = k.pos:Lerp(target, t * t) + Vector3.new(0, math.sin(t * math.pi) * 0.8 * S, 0)
-			k.model:PivotTo(CFrame.new(p) * CFrame.Angles(0, clock * 12, 0))
+			place(k, CFrame.new(p) * CFrame.Angles(0, clock * 12, 0))
 		else
-			-- pop-in (rise out of the ground with easeOutBack), then spin + bob like View3D
+			-- pop-in (rise out of the ground with easeOutBack), then spin + bob like View3D; settled kernels
+			-- only update every other frame (half the work, invisible at this bob speed)
+			if age > 0.4 and (id + frameN) % 2 == 0 then continue end
 			local e = easeOutBack(math.min(1, age / 0.35))
 			local y = (e - 1) * 0.6 * S + math.sin(clock * 3 + id) * 0.06 * S + 0.08 * S
-			k.model:PivotTo(CFrame.new(k.pos + Vector3.new(0, y, 0)) * CFrame.Angles(0, clock * 1.6 + id, 0))
-			k.halo.CFrame = CFrame.new(k.pos + Vector3.new(0, 0.04 * S, 0)) * CFrame.Angles(0, 0, math.rad(90))
-			k.halo.Transparency = 0.5 + math.sin(clock * 4 + id) * 0.12
+			place(k, CFrame.new(k.pos + Vector3.new(0, y, 0)) * CFrame.Angles(0, clock * 1.6 + id, 0))
+			if k.halo.Parent then k.halo.Transparency = 0.5 + math.sin(clock * 4 + id) * 0.12 end
 		end
 	end
+	if #bulkParts > 0 then workspace:BulkMoveTo(bulkParts, bulkCFs, Enum.BulkMoveMode.FireCFrameChanged) end
 end
 
 -- ---------------------------------------------------------------- frame
 RunService:BindToRenderStep("Peckwood", Enum.RenderPriority.Camera.Value + 1, function(dt)
-	clock += dt
-	bodyStep(dt); Birds.step(clock, dt, plr.Character, body); kernelsStep(dt)
+	clock += dt; frameN += 1
+	holdStep(dt); bodyStep(dt); Birds.step(clock, dt, plr.Character, body); kernelsStep(dt)
 	local ch = plr.Character
 	local hrp = ch and ch:FindFirstChild("HumanoidRootPart") :: BasePart?
 	zoom += (zoomTarget - zoom) * (1 - math.exp(-dt * 10))   -- smooth wheel zoom
-	local follow = 1 - math.clamp((zoom - ZOOM_FOLLOW) / (ZOOM_ALL - ZOOM_FOLLOW), 0, 1)
+	local follow = 1   -- zooming in or out always stays on the bird (owner)
 	local bird = if hrp then Vector3.new(hrp.Position.X, 0, hrp.Position.Z) else ISLAND_CENTRE
+	if hrp then
+		local isl = World.nearest(hrp.Position.X / S + 20, hrp.Position.Z / S + 15)
+		ISLAND_CENTRE = if isl.park then PARK_CENTRE else Vector3.new((isl.cx - 20) * S, 0, (isl.cz - 15) * S)
+	end
 	-- keep the island centred in the free space left of the shop drawer when it is open
 	local vp = cam.ViewportSize
 	local drawerShift = if Hud.dock and Hud.dock.Visible and not Hud.collapsed then 0.3 * zoom * S * vp.X / math.max(1, vp.Y) else 0

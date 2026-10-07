@@ -185,10 +185,10 @@ function Kit.button(parent, x, y, w, h, opts)
 	local g = Kit.grad(face, stops)
 	local lg = Kit.grad(lip, shadeStops(stops, 0.58))
 	-- stripes (clipped to the face by a CanvasGroup so the rounded corners stay clean)
-	local tex = new("CanvasGroup", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, GroupTransparency = 0, ZIndex = 6 }, face)
+	-- (a rounded ImageLabel clips its own tiled image: no CanvasGroup, which live clients downsample once too many exist)
+	local tex = new("ImageLabel", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Image = Icons["ui/stripes"] or "", ScaleType = Enum.ScaleType.Tile,
+		TileSize = UDim2.fromOffset(32, 32), ImageTransparency = 0.88, ZIndex = 6 }, face)
 	Kit.corner(tex, cr - o)
-	new("ImageLabel", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Image = Icons["ui/stripes"] or "", ScaleType = Enum.ScaleType.Tile,
-		TileSize = UDim2.fromOffset(32, 32), ImageTransparency = 0.88, ZIndex = 6 }, tex)
 	-- gloss cap: soft white pill on the upper half
 	local gh = math.max(6, math.floor(fh * 0.42))
 	local gloss = Kit.frame(face, math.max(4, cr * 0.45), 3, fw - 2 * math.max(4, cr * 0.45), gh, Color3.new(1, 1, 1), { ZIndex = 7 })

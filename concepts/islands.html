@@ -278,9 +278,9 @@ D.forEach((d,isl)=>{
     lineZ(i,j0,j1,v){for(let j=j0;j<=j1;j++)for(const ii of[i-1,i])if(t(ii,j))T[j][ii]=v},
     hill(ci,cj,rx,ry,lv=2){for(let j=0;j<N;j++)for(let i=0;i<W;i++){const e=Math.hypot((i+.5-ci)/rx,(j+.5-cj)/ry);if((T[j][i]===1||T[j][i]===4)&&e<1)H[j][i]=Math.max(1,Math.round((1-e)*lv*1.4))}},
     dune(ci,cj,r){for(let j=0;j<N;j++)for(let i=0;i<W;i++){const e=Math.hypot(i+.5-ci,j+.5-cj)/r;if(T[j][i]===4&&e<1)H[j][i]=e<.5?2:1}},
-    spill(i,side){let j=side==='n'?0:N-1;const dir=side==='n'?1:-1;while(j>=0&&j<N&&!t(Math.floor(i),j))j+=dir;spills.push({x:ox+i-cx,z:oz+j+(side==='n'?0:1)-cy,dz:side==='n'?-1:1})},
+    spill(i,side){let j=side==='n'?0:N-1;const dir=side==='n'?1:-1;while(j>=0&&j<N&&!t(Math.floor(i),j))j+=dir;spills.push({isl,li:i,side,x:ox+i-cx,z:oz+j+(side==='n'?0:1)-cy,dz:side==='n'?-1:1})},
     put(kind,i,j,rot=0,...a){const g=new THREE.Group();P[kind](g,...a);const [x,z]=C(i-.5,j-.5);const fi=Math.floor(i),fj=Math.floor(j);
-      const y=t(fi,fj)===3?-.05:groundAt(fi,fj);g.rotation.y=rot;g.position.set(x,y,z);g.userData={isl,ty:y,delay:1.7+(pdelay+=.035)};scene.add(g);props.push(g);
+      const y=t(fi,fj)===3?-.05:groundAt(fi,fj);g.rotation.y=rot;g.position.set(x,y,z);g.userData={isl,kind,ti:i,tj:j,rot,ty:y,delay:1.7+(pdelay+=.035)};scene.add(g);props.push(g);
       for(let a2=-1;a2<=1;a2++)for(let b=-1;b<=1;b++)occ.add((fi+a2)+','+(fj+b));return g},
     free(i,j){return T[j]&&(T[j][i]===1||T[j][i]===4)&&!occ.has(i+','+j)},
     rim(kind,n,...a){let placed=0;for(let k=0;k<400&&placed<n;k++){const i=Math.floor(hash(k+d.seed*31,7)*W),j=Math.floor(hash(k+d.seed*31,9)*N);const e=edge(i,j);if(e>=1&&e<=2&&ctx.free(i,j)){ctx.put(kind,i+.5,j+.5,0,...(kind==='flowers'?[i,j,...a]:a.length?a:(kind==='tree'||kind==='pine'?[.85+hash(i,j)*.3]:[])));placed++}}},
@@ -305,7 +305,7 @@ D.forEach((d,isl)=>{
     else {bricks.push({isl,x,y:-.25,z,sx:1,sy:.2,sz:1,color:0xe8d9ad,delay:base+.3});waterTiles.push({isl,x,z})}
   }
   d.props(ctx);
-  d.T=T;d.cx=cx;d.cy=cy;d.ox=ox;d.oz=oz;d.center=new THREE.Vector3(ox,0,oz);
+  d.T=T;d.H=H;d.cx=cx;d.cy=cy;d.ox=ox;d.oz=oz;d.center=new THREE.Vector3(ox,0,oz);
 });
 // brick bridges between consecutive islands (unlock order)
 const bridgeParts=[];
@@ -406,7 +406,7 @@ function frame(){const dt=Math.min(clock.getDelta(),.05);el+=dt;
   // name tags
   const w=innerWidth,h=innerHeight;D.forEach((d,k)=>{v3.copy(d.center);v3.y=9;v3.project(camera);const on=v3.z<1&&(sel<0||sel===k);d.tag.style.display=on?'block':'none';d.tag.style.left=((v3.x+1)/2*w)+'px';d.tag.style.top=((1-v3.y)/2*h)+'px'});
   renderer.render(scene,camera);requestAnimationFrame(frame)}
-window.__s={scene,camera,D,bricks,props};
+window.__s={scene,camera,D,bricks,props,spills,bobs,glowMats,lampMats,glass};
 requestAnimationFrame(frame);
 })();
 </script>

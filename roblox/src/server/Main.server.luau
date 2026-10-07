@@ -58,6 +58,34 @@ for j = 0, Map.ROWS - 1 do
 	end
 end
 
+-- desert spawn tiles: walkable desert-island tiles clear of props (golden drops while you stand on the Desert)
+local World = require(Shared:WaitForChild("World"))
+local desertTiles = {}
+do
+	local d = World.byId.desert
+	for j = d.oj + 1, d.oj + d.N - 2 do
+		for i = d.oi + 1, d.oi + d.W - 2 do
+			local c, own = World.rawTile(i, j)
+			if own == d and (c == 1 or c == 2 or c == 4) and World.height(i, j) == 0 then
+				local ok = true
+				for _, o in { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } } do local c2 = World.rawTile(i + o[1], j + o[2]); if c2 == 0 or c2 == 3 then ok = false end end
+				if World.inProp(i + 0.5, j + 0.5, 0.6) then ok = false end
+				if ok then table.insert(desertTiles, Vector3.new((i + 0.5 - Map.COLS / 2) * S, 0, (j + 0.5 - Map.ROWS / 2) * S)) end
+			end
+		end
+	end
+end
+-- the zone follows where the bird stands: on the Desert island = desert, on the Park = park (bridges keep the last)
+local function zoneAt(plr): string?
+	local ch = plr.Character
+	local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
+	if not hrp then return nil end
+	local i, j = math.floor(hrp.Position.X / S + Map.COLS / 2), math.floor(hrp.Position.Z / S + Map.ROWS / 2)
+	local _, isl = World.rawTile(i, j)
+	if not isl then return nil end
+	return if isl.id == "desert" then "desert" elseif isl.id == "park" then "park" else nil
+end
+
 -- ---------------------------------------------------------------- sessions
 local store = (function()
 	local ok, ds = pcall(function() return DataStoreService:GetDataStore(Config.DATASTORE) end)
@@ -217,6 +245,13 @@ RunService.Heartbeat:Connect(function(dt)
 		end
 		if s.fish.active or s.seagull.out then ss.fishDirty = true end
 		ss.dirty = true
+		-- zone from position
+		local z = zoneAt(plr)
+		if z and z ~= s.zone and (z == "park" or G.windowUnlocked(s, "golden")) then
+			s.zone = z
+			clearField(plr, ss)
+			toast(plr, "travel", z)
+		end
 		-- popcorn spawns
 		ss.popT += dt
 		local interval = F.spawnInterval(s, G.inDesert(s))
@@ -224,7 +259,8 @@ RunService.Heartbeat:Connect(function(dt)
 			ss.popT -= interval
 			local live = 0; for _ in ss.kernels do live += 1 end
 			if live < F.maxCapacity(s) and #spawnTiles > 0 then
-				local c = spawnTiles[ss.rng:NextInteger(1, #spawnTiles)]
+				local pool = if G.inDesert(s) and #desertTiles > 0 then desertTiles else spawnTiles
+				local c = pool[ss.rng:NextInteger(1, #pool)]
 				local pos = c + Vector3.new(ss.rng:NextNumber(-0.35, 0.35) * S, 0, ss.rng:NextNumber(-0.35, 0.35) * S)
 				local kind = F.rollType(s, G.inDesert(s), ss.rng)
 				if G.inDesert(s) and kind ~= "golden" and ss.rng:NextNumber() < G.desertGoldenChance(s) then kind = "golden" end

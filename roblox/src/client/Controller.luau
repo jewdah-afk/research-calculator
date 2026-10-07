@@ -9,6 +9,7 @@ local RS = game:GetService("ReplicatedStorage")
 local Shared = RS:WaitForChild("Peckwood")
 local Map = require(Shared:WaitForChild("MapData"))
 local Models = require(Shared:WaitForChild("Models"))
+local World = require(Shared:WaitForChild("World"))
 local S = Models.S
 
 local Controller = {}
@@ -16,8 +17,8 @@ local Controller = {}
 -- ---------------------------------------------------------------- world queries (World.canStand)
 local VOID, WATER = 0, 3
 local STEP_UP = 5
-local colliders: { { x: number, y: number, r: number, base: number, top: number } } = {}
--- footprint radius (px) and height (px) per prop kind (Park overhaul props; see client/IslandView)
+local colliders: { { x: number, y: number, r: number, base: number, top: number, hw: number?, hh: number? } } = {}
+-- footprint radius (px) and height (px) per Park prop kind (Park overhaul props; see client/IslandView)
 local PROP_COLL = { lantern = { 3, 40 }, oak = { 6, 60 }, bigoak = { 7, 70 }, pine = { 6, 60 }, bush = { 9, 12 }, rock = { 9, 10 },
 	cart = { 16, 40 }, bench = { 9, 10 }, fence = { 6, 12 } }
 for _, o in Map.objects do
@@ -29,13 +30,41 @@ for _, o in Map.objects do
 		table.insert(colliders, { x = x, y = y, r = PROP_COLL[kind][1], base = z, top = z + PROP_COLL[kind][2] })
 	end
 end
+-- other islands: one circle per prop from its ground footprint (World computes r in tiles)
+for _, isl in World.list do
+	if isl.park then continue end
+	for _, p in isl.props do
+		if p.dropped or (p.r or 0) <= 0 then continue end
+		if p.box then   -- the prop's real ground footprint, as a box (px)
+			local b = p.box
+			table.insert(colliders, { x = (b[1] + b[2]) / 2 * Map.PX, y = (b[3] + b[4]) / 2 * Map.PX, r = 0, base = 0, top = 80,
+				hw = (b[2] - b[1]) / 2 * Map.PX, hh = (b[4] - b[3]) / 2 * Map.PX })
+		end
+	end
+end
+-- coarse buckets so canStand only checks nearby colliders
+local BUCKET = 64
+local buckets: { [number]: { any } } = {}
+local function bkey(bx: number, by: number): number return (by + 500) * 2000 + bx + 500 end
+for _, c in colliders do
+	local rx, ry = (c.hw or c.r) + 8, (c.hh or c.r) + 8
+	for bx = math.floor((c.x - rx) / BUCKET), math.floor((c.x + rx) / BUCKET) do
+		for by = math.floor((c.y - ry) / BUCKET), math.floor((c.y + ry) / BUCKET) do
+			local k = bkey(bx, by); buckets[k] = buckets[k] or {}; table.insert(buckets[k], c)
+		end
+	end
+end
 
 local function tileAt(x: number, y: number): number
-	return Map.tile(math.floor(x / Map.PX), math.floor(y / Map.PX))
+	return World.tile(math.floor(x / Map.PX), math.floor(y / Map.PX))
 end
 local function heightAt(x: number, y: number): number
 	local t = tileAt(x, y)
-	if t == 1 and Map.height(math.floor(x / Map.PX), math.floor(y / Map.PX)) > 0 then return 99 end   -- lookout hill: scenery wall
+	if (t == 1 or t == 4) and World.height(math.floor(x / Map.PX), math.floor(y / Map.PX)) > 0 then return 99 end   -- hills / dunes: scenery wall
+	if t == 5 then   -- bridge / dock deck: walk on the planks
+		local h = World.deckH(math.floor(x / Map.PX), math.floor(y / Map.PX))
+		return if h then h / S * Map.PX else 0   -- planks (+) or a sagging rope bridge (-)
+	end
 	return if t == WATER then -3 elseif t == VOID then -36 else 0
 end
 Controller.heightAt = heightAt
@@ -46,12 +75,14 @@ function Controller.canStand(x: number, y: number, z: number, r: number): boolea
 		local px, py = x + PTS[k] * r, y + PTS[k + 1] * r
 		local t = tileAt(px, py)
 		if t == VOID or t == WATER then return false end
-		if heightAt(px, py) - z > STEP_UP then return false end
+		if heightAt(px, py) - z > (if t == 5 then 15 else STEP_UP) then return false end   -- hop up onto plank decks
 	end
-	for _, c in colliders do
+	for _, c in buckets[bkey(math.floor(x / BUCKET), math.floor(y / BUCKET))] or {} do
 		if z >= c.top or z + 14 < c.base then continue end
 		local dx, dy = x - c.x, y - c.y
-		if dx * dx + dy * dy < (r + c.r) * (r + c.r) then return false end
+		if c.hw then
+			if math.abs(dx) < c.hw + r and math.abs(dy) < (c.hh :: number) + r then return false end
+		elseif dx * dx + dy * dy < (r + c.r) * (r + c.r) then return false end
 	end
 	return true
 end
@@ -70,8 +101,8 @@ end
 -- ---------------------------------------------------------------- click-to-move (Game.click / findPath / playerInput)
 -- A* on an 8-unit grid over canStand (r 6), 8-neighbour, no corner cutting, best-effort when the goal is unreachable.
 function Controller.findPath(sx: number, sy: number, gx: number, gy: number, reach: number): { { x: number, y: number } }
-	local G, cols = 8, 80
-	local function key(i: number, j: number): number return j * cols + i end
+	local G, cols = 8, 4000
+	local function key(i: number, j: number): number return (j + 2000) * cols + i + 2000 end
 	local function cx(i: number): number return i * G + G / 2 end
 	local memo: { [number]: number | boolean } = {}
 	local function pass(i: number, j: number): number?
@@ -90,7 +121,7 @@ function Controller.findPath(sx: number, sy: number, gx: number, gy: number, rea
 	local came: { [number]: number } = {}
 	local cost: { [number]: number } = { [key(si, sj)] = 0 }
 	local best, bestH, it = { si, sj }, H(si, sj), 0
-	while #open > 0 and it < 6000 do
+	while #open > 0 and it < 9000 do
 		it += 1
 		local bi = 1
 		for k = 2, #open do if open[k][1] < open[bi][1] then bi = k end end
@@ -105,7 +136,7 @@ function Controller.findPath(sx: number, sy: number, gx: number, gy: number, rea
 				if di == 0 and dj == 0 then continue end
 				local ni, nj = i + di, j + dj
 				local z1 = pass(ni, nj)
-				if z1 == nil or z1 - z0 > 5 then continue end
+				if z1 == nil or z1 - z0 > 15 then continue end   -- 15: hop onto plank decks
 				if di ~= 0 and dj ~= 0 and (pass(i + di, j) == nil or pass(i, j + dj) == nil) then continue end
 				local nc = c + (if di ~= 0 and dj ~= 0 then 1.414 else 1) + (if z0 - z1 > 5 then 3 else 0)
 				local k = key(ni, nj)
@@ -116,10 +147,50 @@ function Controller.findPath(sx: number, sy: number, gx: number, gy: number, rea
 	local path = {}
 	local k = key(best[1], best[2])
 	while k ~= key(si, sj) and came[k] do
-		table.insert(path, 1, { x = cx(k % cols), y = cx(k // cols) })
+		table.insert(path, 1, { x = cx(k % cols - 2000), y = cx(k // cols - 2000) })
 		k = came[k]
 	end
 	return path
+end
+
+-- hands-free travel ("Go to ..."): route island -> island over open bridges (BFS on the island graph), then stitch
+-- short A* legs between the bridge landings so the bird walks the best path on its own
+function Controller.travel(p: Body, gx: number, gy: number): boolean
+	local from = World.nearest(p.x / Map.PX, p.y / Map.PX)
+	local to = World.nearest(gx / Map.PX, gy / Map.PX)
+	local prev: { [any]: any } = { [from] = false }
+	local q = { from }
+	local head = 1
+	while head <= #q do
+		local cur = q[head]; head += 1
+		if cur == to then break end
+		for _, br in World.bridges do
+			if not World.bridgeOpen(br) then continue end
+			local nxt = if br.a == cur then br.b elseif br.b == cur then br.a else nil
+			if nxt and prev[nxt] == nil then prev[nxt] = { cur, br }; table.insert(q, nxt) end
+		end
+	end
+	if prev[to] == nil then return false end
+	local hops = {}
+	local n = to
+	while prev[n] do table.insert(hops, 1, prev[n]); n = prev[n][1] end
+	local pts = {}
+	for _, h in hops do
+		local cur, br = h[1], h[2]
+		local a, b = if br.a == cur then br.pa else br.pb, if br.a == cur then br.pb else br.pa
+		table.insert(pts, a); table.insert(pts, b)
+	end
+	table.insert(pts, { gx, gy })
+	local path = {}
+	local sx, sy = p.x, p.y
+	for _, pt in pts do
+		local leg = Controller.findPath(sx, sy, pt[1], pt[2], 3)
+		for _, w in leg do table.insert(path, w) end
+		table.insert(path, { x = pt[1], y = pt[2] })
+		sx, sy = pt[1], pt[2]
+	end
+	p.target = { x = gx, y = gy, path = path, st = 0, travel = true }
+	return true
 end
 
 function Controller.click(p: Body, wx: number, wy: number)
@@ -131,7 +202,7 @@ local function followTarget(p: Body, dt: number): (number?, number?)
 	local m = p.target; if not m then return nil, nil end
 	m.st += dt
 	if m.st > 0.5 then
-		if m.lx ~= nil and math.sqrt((p.x - m.lx) ^ 2 + (p.y - m.ly) ^ 2) < 1.5 then p.target = nil; return nil, nil end   -- stuck
+		if m.lx ~= nil and math.sqrt((p.x - m.lx) ^ 2 + (p.y - m.ly) ^ 2) < (if m.travel then 0.5 else 1.5) then p.target = nil; return nil, nil end   -- stuck
 		m.st = 0; m.lx = p.x; m.ly = p.y
 	end
 	local path = m.path

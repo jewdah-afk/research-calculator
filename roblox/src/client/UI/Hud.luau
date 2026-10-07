@@ -7,6 +7,7 @@ local TweenService = game:GetService("TweenService")
 local GroupService = game:GetService("GroupService")
 local Shared = RS:WaitForChild("Peckwood")
 local Defs = require(Shared:WaitForChild("Defs"))
+local World = require(game:GetService("ReplicatedStorage"):WaitForChild("Peckwood"):WaitForChild("World"))
 local Kit = require(script.Parent.Kit)
 local Spec = require(script.Parent.Spec)
 local Window = require(script.Parent.Window)
@@ -98,29 +99,37 @@ local CAP_UNLOCK = { popcorn = 1, goldenFeathers = 2, sunflowerSeeds = 3, moneta
 local capBig, capGrid
 -- popcorn = the big Figma capsule (money/popcorn 360x86); every other currency = a money/plume-style capsule,
 -- in a 2-column grid that fills upward from just above it, so it never runs into the menu.
+-- face colour per currency (the key itself); the value sits in a dark inset well so it always reads
+local CAP_FACE = { popcorn = "9fe36a:0 3fae3a:100", goldenFeathers = "c9a2ff:0 7f4fd8:100", sunflowerSeeds = "b8e86a:0 5fa83a:100",
+	goldenPopcorn = "ffe07a:0 d89a1a:100", bruteOre = "8fe4ff:0 2f8fd8:100", twigs = "e0b07a:0 9a6232:100", echoPopcorn = "ffa8ec:0 d04fb8:100",
+	moneta = "ffe88a:0 d8a020:100", skillPoints = "ff9a8a:0 d04a4a:100" }
 local function capsule(cur, big)
-	local w, h = if big then 330 else 150, if big then 70 else 48
-	local ic = if big then 92 else 64
-	local f = Kit.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(w + 30, h + 16), ZIndex = 10, LayoutOrder = CAP_UNLOCK[cur] or 0 }, if big then capBig else capGrid)
-	local c = Kit.frame(f, 30, 8, w, h, Color3.new(1, 1, 1), { ZIndex = 10 })
-	Kit.corner(c, h / 2); Kit.grad(c, { { "20242c", 0, 0.92 }, { "12141a", 1, 0.92 } }); Kit.stroke(c, 3.5)
-	Kit.frame(c, h / 2, 2, w - h, 2, Color3.new(1, 1, 1), { BackgroundTransparency = 0.9, ZIndex = 11 })
-	local icon = Kit.icon(f, 0, if big then -3 else 0, ic, Defs.CUR[cur].icon, { ZIndex = 12 })
-	-- value is vertically centred on the capsule
-	local val = Kit.title(f, "0", if big then 43.4 else 26, Color3.new(1, 1, 1), if big then 3.5 else 3, if big then 3 else 2,
-		{ AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.fromOffset(if big then 94 else 68, 8 + h / 2 - 1), ZIndex = 12 })
+	local w, h = if big then 330 else 156, if big then 72 else 52
+	local ic = if big then 92 else 60
+	local f = Kit.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(w + 30, h + 12), ZIndex = 10, LayoutOrder = CAP_UNLOCK[cur] or 0 }, if big then capBig else capGrid)
+	-- the 3D key (ink outline, themed face, darker lip, stripes, gloss), not clickable
+	local key = Kit.button(f, 30, 6, w, h, { text = "", stops = Kit.stops(CAP_FACE[cur] or CAP_FACE.popcorn), silent = true, depth = if big then 7 else 5 })
+	key.root.Active = false; pcall(function() key.root.Interactable = false end)
+	local fh = h - 6 - (if big then 7 else 5)
+	-- inset well for the number: starts under the icon, rounded, translucent ink
+	local wellX = if big then 50 else 30
+	local well = Kit.frame(key.face, wellX, 0, w - 6 - wellX - 7, fh - 12, Kit.INK, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, wellX, 0.5, 0), BackgroundTransparency = 0.35, ZIndex = 10 })
+	Kit.corner(well, (fh - 12) / 2)
+	local icon = Kit.icon(f, 0, if big then -4 else -1, ic, Defs.CUR[cur].icon, { ZIndex = 12 })
+	local val = Kit.title(well, "0", if big then 38 else 22, Color3.new(1, 1, 1), if big then 3.2 else 2.6, if big then 3 else 2,
+		{ AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, if big then 40 else 24, 0.5, 0), ZIndex = 12 })
 	Kit.grad(val.label, Kit.stops(CAP_GRAD[cur]))
 	local rate
 	if big then
-		rate = Kit.title(f, "", 17, hex("7dff96"), 2, 0, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.fromOffset(30 + w - 22, 8 + h / 2 + 2), ZIndex = 12 })
+		rate = Kit.title(well, "", 17, hex("9dffae"), 2.2, 0, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -14, 0.5, 1), ZIndex = 12 })
 	end
-	capsules[cur] = { frame = f, cap = c, value = val, rate = rate, icon = icon, big = big }
+	capsules[cur] = { frame = f, cap = key.root, value = val, rate = rate, icon = icon, big = big }
 	return capsules[cur]
 end
 local function buildWallet()
 	capBig = Kit.new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 26, 1, -20), Size = UDim2.fromOffset(360, 86), ZIndex = 10 }, canvas)
-	capGrid = Kit.new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 26, 1, -110), Size = UDim2.fromOffset(372, 256), ZIndex = 10 }, canvas)
-	Kit.new("UIGridLayout", { CellSize = UDim2.fromOffset(180, 64), CellPadding = UDim2.fromOffset(12, 0), SortOrder = Enum.SortOrder.LayoutOrder,
+	capGrid = Kit.new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 26, 1, -110), Size = UDim2.fromOffset(384, 264), ZIndex = 10 }, canvas)
+	Kit.new("UIGridLayout", { CellSize = UDim2.fromOffset(186, 64), CellPadding = UDim2.fromOffset(8, 2), SortOrder = Enum.SortOrder.LayoutOrder,
 		StartCorner = Enum.StartCorner.BottomLeft, FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Bottom }, capGrid)
 	for _, cur in Defs.CUR_ORDER do capsule(cur, cur == "popcorn").frame.Visible = cur == "popcorn" end
 end
@@ -159,13 +168,16 @@ Hud.flyTo = flyTo
 -- ---------------------------------------------------------------- objective (399,1000,634,56) + AUTO
 local objective, autoBtn, unlockBtn
 local function buildObjective()
-	local o = Kit.frame(canvas, 0, 0, 634, 56, Color3.new(1, 1, 1), { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, -244, 1, -24), ZIndex = 10, AutomaticSize = Enum.AutomaticSize.X })
-	Kit.corner(o, 26); Kit.grad(o, { { "20242c", 0, 0.88 }, { "12141a", 1, 0.88 } }); Kit.stroke(o, 3)
-	local bang = Kit.frame(o, 15, 11, 34, 34, Color3.new(1, 1, 1), { ZIndex = 11 }); Kit.corner(bang, 17); Kit.grad(bang, Kit.stops("ffe07a:0 c27a10:100")); Kit.stroke(bang, 2.5)
+	-- the goal plate: a slate 3D key like AUTO, gold "!" coin, text sized to fit
+	local key = Kit.button(canvas, 0, 0, 640, 60, { text = "", stops = Kit.stops("4a5468:0 2c323f:100"), silent = true, depth = 6 })
+	key.root.Active = false; pcall(function() key.root.Interactable = false end)
+	key.root.AnchorPoint = Vector2.new(0.5, 1); key.root.Position = UDim2.new(0.5, -244, 1, -22)
+	local o = key.face
+	local bang = Kit.frame(o, 12, 0, 34, 34, Color3.new(1, 1, 1), { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 12, 0.5, 0), ZIndex = 11 })
+	Kit.corner(bang, 17); Kit.grad(bang, Kit.stops("ffe07a:0 c27a10:100")); Kit.stroke(bang, 2.5)
 	Kit.title(bang, "!", 22, Color3.new(1, 1, 1), 2, 0, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), ZIndex = 12 })
-	local t = Kit.title(o, "", 20, hex("ffe8a8"), 2.4, 2, { Position = UDim2.fromOffset(61, 13), ZIndex = 12 })
-	Kit.new("UIPadding", { PaddingRight = UDim.new(0, 24) }, o)
-	objective = { frame = o, text = t }
+	local t = Kit.title(o, "", 20, hex("ffe8a8"), 2.4, 2, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 58, 0.5, 0), ZIndex = 12 })
+	objective = { frame = key.root, text = t }
 	unlockBtn = Kit.button(canvas, 0, 0, 220, 56, { text = "UNLOCK", size = 20, stops = Kit.GOLD, icon = "popcorn", iconSize = 34 })
 	unlockBtn.root.AnchorPoint = Vector2.new(0.5, 1); unlockBtn.root.Position = UDim2.new(0.5, 230, 1, -24)
 	unlockBtn.root.Visible = false
@@ -323,8 +335,12 @@ local function heroTile(parent, g, order)
 end
 
 -- selected tile's sunburst turns slowly
-game:GetService("RunService").RenderStepped:Connect(function(dt)
-	for _, t in groupTiles do if t.isSelected() and t.holder.Visible then t.burst.Rotation += dt * 20 end end
+local burstAcc = 0
+game:GetService("RunService").RenderStepped:Connect(function(dt)   -- 30 Hz: the tile card is a CanvasGroup
+	burstAcc += dt
+	if burstAcc < 1 / 30 then return end
+	for _, t in groupTiles do if t.isSelected() and t.holder.Visible then t.burst.Rotation += burstAcc * 20 end end
+	burstAcc = 0
 end)
 
 local function buildMenu()
@@ -409,9 +425,16 @@ function Hud.setState(s, d)
 	state, derived = s, d
 	Windows.state = s
 	-- banner: island name + live kernels
+	-- banner names (and themes) the island the bird is standing on
 	local isl = Defs.ISLANDS[s.island]
-	local zoneName = if s.zone == "desert" then "THE DESERT" else (if s.island >= 3 then "THE GARDEN" else "THE PARK")
-	banner.name.set(zoneName)
+	local ch = game:GetService("Players").LocalPlayer.Character
+	local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
+	local here = if hrp then World.nearest(hrp.Position.X / 4 + 20, hrp.Position.Z / 4 + 15) else World.byId.park
+	isl = { id = here.id }
+	banner.name.set(here.name)
+	-- long names shrink to stay clear of the kernel counter (plate face 298 wide, counter starts at 182)
+	local nsc = banner.name.holder:FindFirstChildOfClass("UIScale") or Kit.new("UIScale", {}, banner.name.holder)
+	nsc.Scale = if #here.name > 12 then 0.8 elseif #here.name > 9 then 0.92 else 1
 	banner.kernels.set((Hud.kernelCount or 0) .. " / " .. d.cap)
 	-- wallet
 	for _, cur in Defs.CUR_ORDER do
