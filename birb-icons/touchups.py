@@ -7,6 +7,16 @@ def fish_mouth():
     """Goldfish smile: a curved ink line that starts IN the head outline at the nose and curves back into the face."""
     p = os.path.join(D, 'fish.png'); im = Image.open(p).convert('RGBA')
     import numpy as np
+    # clean the nose: the sheet had a pale white/blue streak at the front -- repaint it with the nearby orange
+    from scipy import ndimage as nd
+    arr = np.asarray(im).copy(); rgb = arr[..., :3].astype(int)
+    X = np.arange(arr.shape[1])[None, :].repeat(arr.shape[0], 0)
+    pale = (arr[..., 3] > 200) & (rgb.min(2) > 140) & (X > 213)
+    pale = nd.binary_dilation(pale, iterations=2) & (arr[..., 3] > 200) & (rgb.max(2) > 60)
+    orange = (arr[..., 3] > 250) & (rgb[..., 0] > 200) & (rgb[..., 2] < 120) & ~pale
+    idx = nd.distance_transform_edt(~orange, return_distances=False, return_indices=True)
+    arr[pale, :3] = arr[idx[0][pale], idx[1][pale], :3]
+    im = Image.fromarray(arr, 'RGBA')
     a = np.asarray(im)[..., 3]
     y0 = 140                                                   # row just below the eye
     ex = int(np.nonzero(a[y0] > 200)[0].max())                 # outer edge of the outline at that row
