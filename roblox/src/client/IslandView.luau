@@ -732,13 +732,13 @@ local function buildBridgeModel(br, parent)
 		for h = 0, 1 do
 			local oa = (h - 0.5) * lenA / 2
 			local wood = vary(hx(if (u * 2 + h) % 3 == 0 then "b27f50" elseif (u * 2 + h) % 3 == 1 then C.wood else "a8774a"), (hash(u, h) - 0.5) * 0.05)
-			box(oa, -PLATE * 0.6, (hash(u + h, 7) - 0.5) * 0.3, lenA / 2 - 0.18, PLATE * 1.2, width - 0.4 - hash(h, u) * 0.4, wood)
+			box(oa, -PLATE * 1.1, (hash(u + h, 7) - 0.5) * 0.3, lenA / 2 - 0.18, PLATE * 1.2, width - 0.4 - hash(h, u) * 0.4, wood)   -- deck top flush with the paths (-0.5 plate)
 		end
-		box(0, -PLATE * 1.6, 0, 0.5, PLATE * 0.8, width + 0.4, hx(C.woodD))
+		box(0, -PLATE * 2.1, 0, 0.5, PLATE * 0.8, width + 0.4, hx(C.woodD))
 		-- rope rails (thin, dark) on both sides, a wooden post every 4th plank
 		for _, side in { -1, 1 } do
 			-- ropes are continuous segments added after all planks hang (see below); posts every 4th plank
-			if u % 4 == 1 then
+			if u % 4 == 1 and u > 2 and u < n - 1 then   -- none next to the end anchor posts (no doubled posts)
 				box(0, 1.1, side * (width / 2 + 0.15), 0.6, 2.9, 0.6, hx(C.woodD))
 			end
 		end
@@ -778,10 +778,24 @@ local function buildBridgeModel(br, parent)
 		local back = if e == planks[1] then -1 else 1
 		local along = if br.alongX then Vector3.xAxis else Vector3.zAxis
 		local across = if br.alongX then Vector3.zAxis else Vector3.xAxis
+		-- landing pier: a stacked timber crib under the end plank, sunk into the cliff face, so the bridge end
+		-- visibly rests on something instead of hanging off the grass lip
+		do
+			local w = e.half * 2 - 0.6
+			for k = 0, 3 do
+				local h = BRICK * 0.6
+				local inset = k * 0.25
+				local sz = along * (S * 0.9 - inset) + across * (w - inset * 2) + Vector3.new(0, h, 0)
+				local c0 = Vector3.new(e.at.X, e.at.Y - PLATE * 1.7 - h * (k + 0.5), e.at.Z) + along * back * 0.4
+				local logCol = vary(hx(if k % 2 == 0 then C.woodD else "6e4f33"), (hash(k, e.u) - 0.5) * 0.05)
+				local pp = brickPart(e.model, c0 - sz / 2, sz, logCol)
+				pp.CastShadow = true
+			end
+		end
 		for _, side in { -1, 1 } do
 			local c = Vector3.new(e.at.X, 0, e.at.Z) + along * back * (S * 0.5 + 0.4) + across * side * (S + 0.75)
 			-- wooden anchor post the ropes tie to, with a darker cap
-			brickPart(ends, c - Vector3.new(0.6, 0, 0.6) - Vector3.new(0, PLATE, 0), Vector3.new(1.2, BRICK + PLATE, 1.2), hx(C.woodD))
+			brickPart(ends, c - Vector3.new(0.6, 0, 0.6) - Vector3.new(0, PLATE + BRICK, 0), Vector3.new(1.2, 2 * BRICK + PLATE, 1.2), hx(C.woodD))
 			brickPart(ends, c - Vector3.new(0.75, 0, 0.75) + Vector3.new(0, BRICK, 0), Vector3.new(1.5, PLATE * 0.6, 1.5), hx("6e4f33"))
 			-- tie both ropes from this anchor post to the end plank (they ride with that plank in the build-in)
 			for _, h in { { 2.3, 0.22, "6e5238" }, { 1.0, 0.16, "7a5c40" } } do

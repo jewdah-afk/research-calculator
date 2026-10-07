@@ -383,6 +383,14 @@ end
 local SUFFIXES = { "", "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc",
 	"UDc", "DDc", "TDc", "QaDc", "QiDc", "SxDc", "SpDc", "OcDc", "NoDc", "Vg" }
 
+local U_ = { "", "U", "D", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No" }
+local T_ = { "", "Dc", "Vg", "Tg", "Qag", "Qig", "Sxg", "Spg", "Ocg", "Nog" }
+local H_ = { "", "Ce", "DCe", "TCe", "QaCe", "QiCe", "SxCe", "SpCe", "OcCe", "NoCe" }
+local function bigSuffix(tier: number): string   -- tier = floor(exponent / 3); tier 11 = Dc (1e33)
+	local i = tier - 1   -- -illion index (Dc = 10)
+	return U_[i % 10 + 1] .. T_[(i // 10) % 10 + 1] .. H_[(i // 100) % 10 + 1]
+end
+
 local function trimNum(v: number, digits: number): string
 	local s = string.format("%." .. digits .. "f", v)
 	if s:find("%.") then s = s:gsub("0+$", ""):gsub("%.$", "") end
@@ -428,6 +436,12 @@ function EN.short(x: any, digits: number?): string
 				return neg .. trimNum(m / 1000, d) .. SUFFIXES[tier + 2]
 			end
 			return neg .. trimNum(m, d) .. SUFFIXES[tier + 1]
+		end
+		-- past the listed suffixes: compose the standard -illion suffix (units + tens + hundreds, e.g. UVg, QaTg, DCe)
+		-- so every value up to ~e3000 keeps a proper suffix; only beyond that does it fall back to scientific
+		if tier >= 0 and tier < 1000 then
+			local m = 10 ^ (e - tier * 3)
+			return neg .. trimNum(m, d) .. bigSuffix(tier)
 		end
 		local ie, m = splitExp(e, d)
 		return neg .. m .. "e" .. tostring(ie)

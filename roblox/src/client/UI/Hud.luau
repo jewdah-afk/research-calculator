@@ -135,13 +135,14 @@ local function fitInto(title, box, pad)
 end
 local function capsule(cur, big)
 	local w, h = if big then 336 else 160, if big then 80 else 58
-	local ic = if big then 90 else 58
+	local ic = if big then 98 else 66   -- icons a touch bigger (owner); centring below keeps them on the key face
 	local depth = if big then 9 else 7
 	local KX = 30
 	local f = Kit.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(w + KX, h + 12), ZIndex = 10, LayoutOrder = CAP_UNLOCK[cur] or 0 }, if big then capBig else capGrid)
 	local stops = CAP_FACE[cur] or CAP_FACE.popcorn
 	-- soft drop shadow under the key
-	Kit.soft(f, KX + 4, 10, w - 8, h - 2, 10, "shadow", Color3.new(0, 0, 0), 0.4, 1)   -- below the key (root ZIndex 3)
+	-- soft drop shadow: tucked under the key's footprint (no smear past the left cap / icon), short and light
+	Kit.soft(f, KX + 10, 12, w - 20, h - 8, 8, "shadow", Color3.new(0, 0, 0), 0.62, 1)   -- below the key (root ZIndex 3)
 	local key = Kit.button(f, KX, 4, w, h, { text = "", stops = Kit.stops(stops), silent = true, depth = depth })
 	key.root.Active = false; pcall(function() key.root.Interactable = false end)
 	local fw, fh = w - 6, h - 6 - depth
@@ -153,15 +154,21 @@ local function capsule(cur, big)
 	local wl = well(key.face, wellX, fw - wellX - 8, wh, stops, math.max(3, faceR - 7))
 	-- centred on the key face (key at y 4, face 3 px in, fh tall), a touch low so it sits on the well's centre line
 	local icon = Kit.icon(f, KX - ic / 2 + 2, 4 + 3 + fh / 2 - ic / 2 + 1, ic, Defs.CUR[cur].icon, { ZIndex = 12 })
+	-- the stat's name, engraved into the right end of the well (soft caps in clear space after the value, never under it)
+	local tag = Kit.text(wl, string.upper(Defs.CUR[cur].name), 12, Color3.new(1, 1, 1), { AutomaticSize = Enum.AutomaticSize.None,
+		AnchorPoint = Vector2.new(1, 0.5), Position = if big then UDim2.new(1, -16, 0.3, 0) else UDim2.new(1, -8, 0.5, 1),
+		Size = if big then UDim2.new(0.34, 0, 0.32, 0) else UDim2.new(0.44, 0, 0.62, 0),
+		TextScaled = true, TextXAlignment = Enum.TextXAlignment.Right, TextTransparency = 0.5, ZIndex = 12 })
+	Kit.new("UITextSizeConstraint", { MaxTextSize = if big then 15 else 12, MinTextSize = 6 }, tag)
 	local val = Kit.title(wl, "0", if big then 36 else 22, Color3.new(1, 1, 1), if big then 3.2 else 2.6, if big then 3 else 2,
 		{ AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, if big then 16 else 12, 0.5, -1), ZIndex = 12 })
 	Kit.grad(val.label, Kit.stops(CAP_GRAD[cur]))
 	local rate
 	if big then
-		rate = Kit.title(wl, "", 16, hex("9dffae"), 2.2, 0, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -16, 0.5, 0), ZIndex = 12 })
+		rate = Kit.title(wl, "", 15, hex("9dffae"), 2.2, 0, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -16, 0.68, 0), ZIndex = 12 })   -- under the engraved name
 		fitInto(val, wl, 130)
 	else
-		fitInto(val, wl, 22)
+		fitInto(val, wl, 74)   -- leave the right end clear for the engraved stat name
 	end
 	capsules[cur] = { frame = f, cap = key.root, value = val, rate = rate, icon = icon, big = big }
 	return capsules[cur]
