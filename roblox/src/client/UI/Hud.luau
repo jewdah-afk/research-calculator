@@ -268,37 +268,58 @@ Windows.open = function(id)
 	dockWindow(id)
 end
 
--- feature tile: glossy 3D tile in the group colour (same build as the panel buttons), the hero icon pops out of it,
--- name plate below. Hover: lift + icon grows and tilts + glow. Press: squash. Selected: bright ring + glow.
 local function heroTile(parent, g, order)
+	-- Built like the panels' hero card: dark themed card, sunburst + ground shadow behind the icon (icon stays inside),
+	-- coloured header strip along the bottom carrying the name. Hover: lift, icon grows, burst fades in.
+	-- Press: squash. Selected: white rim, outer glow, burst spins.
 	local lead = Spec[g.members[1]]
+	local W, H = 92, 104
 	local holder = Kit.new("Frame", { BackgroundTransparency = 1, LayoutOrder = order, ZIndex = 10 }, parent)
-	local glow = Kit.soft(holder, 10, 6, 84, 84, 20, "glow", hex(lead.buyGlow or lead.glow or "ffffff"), 1, 9)
-	local ring = Kit.frame(holder, 5, 1, 94, 94, nil, { ZIndex = 9 }); Kit.corner(ring, 26)
-	local rs = Kit.stroke(ring, 4, Color3.new(1, 1, 1), 1)
-	local b = Kit.button(holder, 10, 6, 84, 84, { stops = Kit.stops(lead.tab), text = "", cr = 22 })
-	local shadow = Kit.icon(holder, 55, 52, 70, g.icon, { AnchorPoint = Vector2.new(0.5, 0.5), ImageColor3 = Color3.new(0, 0, 0), ImageTransparency = 0.6, ZIndex = 11 })
-	local icon = Kit.icon(holder, 52, 45, 70, g.icon, { AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = 12 })
+	local lift = Kit.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(W, H + 4), ZIndex = 10 }, holder)
+	local glow = Kit.soft(lift, 0, 0, W, H, 22, "glow", hex(lead.buyGlow or lead.glow or "ffffff"), 1, 9)
+	local drop = Kit.frame(lift, 0, 4, W, H, Kit.INK, { ZIndex = 10 }); Kit.corner(drop, 18)
+	local card = Kit.new("CanvasGroup", { Size = UDim2.fromOffset(W, H), BackgroundTransparency = 1, ZIndex = 11 }, lift)
+	Kit.corner(card, 18)
+	local bodyF = Kit.frame(card, 0, 0, W, H, Color3.new(1, 1, 1), { ZIndex = 11 })
+	Kit.grad(bodyF, Kit.stops(lead.card or lead.body))
+	Kit.texture(card, "halftone", 0.9, 20, 12)
+	local burst = Kit.image(card, W / 2 - 60, 40 - 60, 120, 120, Kit.iconId("ui/sunburst"), { ImageColor3 = hex(lead.glow or "ffffff"), ImageTransparency = 0.8, ZIndex = 12 })
+	Kit.image(card, W / 2 - 30, 62, 60, 14, Kit.iconId("ui/softellipse"), { ImageColor3 = Color3.new(0, 0, 0), ImageTransparency = 0.45, ZIndex = 12 })
+	-- header strip (name)
+	local strip = Kit.frame(card, 0, H - 26, W, 26, Color3.new(1, 1, 1), { ZIndex = 13 })
+	Kit.grad(strip, Kit.stops(lead.hdr))
+	Kit.frame(strip, 0, 0, W, 2, Kit.INK, { ZIndex = 14 })
+	Kit.frame(strip, 6, 3, W - 12, 4, Color3.new(1, 1, 1), { BackgroundTransparency = 0.6, ZIndex = 14 })
+	local lbl = Kit.title(strip, g.name, if #g.name > 7 then 12 else 14, Color3.new(1, 1, 1), 2, 1.5,
+		{ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 1), ZIndex = 15 })
+	-- top gloss
+	local gl = Kit.frame(card, 6, 4, W - 12, 18, Color3.new(1, 1, 1), { ZIndex = 16 }); Kit.corner(gl, 9)
+	Kit.grad(gl, { { "ffffff", 0, 0.16 }, { "ffffff", 1, 0 } })
+	local rim = Kit.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(W, H), ZIndex = 17 }, lift)
+	Kit.corner(rim, 18)
+	local rs = Kit.stroke(rim, 3, Kit.INK)
+	local icon = Kit.icon(lift, W / 2, 40, 64, g.icon, { AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = 18 })
 	local isc = Kit.new("UIScale", {}, icon)
-	local plate = Kit.frame(holder, 10, 94, 84, 22, hex("12141a"), { BackgroundTransparency = 0.15, ZIndex = 10 }); Kit.corner(plate, 11); Kit.stroke(plate, 2)
-	local lbl = Kit.title(plate, g.name, if #g.name > 7 then 11 else 13, Color3.new(1, 1, 1), 1.8, 0,
-		{ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), ZIndex = 11 })
-	local hovered, selected = false, false
+	local lsc = Kit.new("UIScale", {}, lift)
+	local hit = Kit.new("TextButton", { Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromOffset(W, H), ZIndex = 20 }, holder)
+
+	local hovered, selected, pressed = false, false, false
 	local function pose()
-		local up = hovered or selected
-		local back = TweenInfo.new(0.16, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-		TweenService:Create(isc, back, { Scale = if hovered then 1.16 elseif selected then 1.08 else 1 }):Play()
-		TweenService:Create(icon, back, { Rotation = if hovered then -7 else 0, Position = UDim2.fromOffset(52, if up then 40 else 45) }):Play()
-		TweenService:Create(shadow, TweenInfo.new(0.16), { ImageTransparency = if up then 0.72 else 0.6, Position = UDim2.fromOffset(55, if up then 55 else 52) }):Play()
-		TweenService:Create(glow, TweenInfo.new(0.18), { ImageTransparency = if selected then 0.25 elseif hovered then 0.55 else 1 }):Play()
-		TweenService:Create(rs, TweenInfo.new(0.15), { Transparency = if selected then 0 else 1 }):Play()
-		lbl.color(if selected then hex(lead.tcol or "ffffff") else Color3.new(1, 1, 1))
+		local q = TweenInfo.new(0.16, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+		TweenService:Create(lift, q, { Position = UDim2.fromOffset(0, if pressed then 2 elseif hovered then -4 else 0) }):Play()
+		TweenService:Create(lsc, q, { Scale = if pressed then 0.94 elseif selected then 1.04 else 1 }):Play()
+		TweenService:Create(isc, q, { Scale = if hovered then 1.14 elseif selected then 1.06 else 1 }):Play()
+		TweenService:Create(icon, q, { Rotation = if hovered then -6 else 0 }):Play()
+		TweenService:Create(burst, TweenInfo.new(0.2), { ImageTransparency = if selected then 0.35 elseif hovered then 0.55 else 0.8 }):Play()
+		TweenService:Create(glow, TweenInfo.new(0.2), { ImageTransparency = if selected then 0.2 elseif hovered then 0.6 else 1 }):Play()
+		rs.Color = if selected then Color3.new(1, 1, 1) else Kit.INK
+		rs.Thickness = if selected then 3.5 else 3
 	end
-	b.root.MouseEnter:Connect(function() hovered = true; pose() end)
-	b.root.MouseLeave:Connect(function() hovered = false; pose() end)
-	b.root.MouseButton1Down:Connect(function() TweenService:Create(isc, TweenInfo.new(0.07), { Scale = 0.94 }):Play() end)
-	b.root.MouseButton1Up:Connect(function() pose() end)
-	b.root.Activated:Connect(function()
+	hit.MouseEnter:Connect(function() hovered = true; Kit.sfx("hover"); pose() end)
+	hit.MouseLeave:Connect(function() hovered = false; pressed = false; pose() end)
+	hit.MouseButton1Down:Connect(function() pressed = true; Kit.sfx("click"); pose() end)
+	hit.MouseButton1Up:Connect(function() pressed = false; pose() end)
+	hit.Activated:Connect(function()
 		-- clicking the open feature tucks the drawer away; otherwise open the group's first unlocked window
 		local cur = docked and groupOf(docked)
 		if cur == g then setCollapsed(not collapsed); return end
@@ -306,19 +327,25 @@ local function heroTile(parent, g, order)
 			if not state or (Defs.WINDOW_ISLAND[m] or 1) <= state.island then Windows.open(m); return end
 		end
 	end)
-	local t = { holder = holder, btn = b, icon = icon }
+	local t = { holder = holder, btn = { root = hit }, icon = icon, burst = burst }
 	function t.select(on)
 		if on == selected then return end
 		selected = on
 		pose()
-		if on then Kit.pop(icon, 1.3) end
+		if on then Kit.pop(icon, 1.25) end
 	end
+	function t.isSelected() return selected end
 	return t
 end
 
+-- selected tile's sunburst turns slowly
+game:GetService("RunService").RenderStepped:Connect(function(dt)
+	for _, t in groupTiles do if t.isSelected() and t.holder.Visible then t.burst.Rotation += dt * 20 end end
+end)
+
 local function buildMenu()
-	local col = Kit.new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(24, 150), Size = UDim2.fromOffset(330, 380), ZIndex = 10 }, canvas)
-	Kit.new("UIGridLayout", { CellSize = UDim2.fromOffset(104, 120), CellPadding = UDim2.fromOffset(4, 4), SortOrder = Enum.SortOrder.LayoutOrder }, col)
+	local col = Kit.new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(30, 152), Size = UDim2.fromOffset(330, 380), ZIndex = 10 }, canvas)
+	Kit.new("UIGridLayout", { CellSize = UDim2.fromOffset(92, 112), CellPadding = UDim2.fromOffset(12, 8), SortOrder = Enum.SortOrder.LayoutOrder }, col)
 	for i, g in Spec.GROUPS do
 		groupTiles[g.id] = heroTile(col, g, i)
 		for _, m in g.members do menuButtons[m] = { holder = groupTiles[g.id].holder, btn = groupTiles[g.id].btn, group = g } end

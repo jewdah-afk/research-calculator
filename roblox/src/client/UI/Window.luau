@@ -138,7 +138,9 @@ function Window.build(parent, spec)
 	for i, t in spec.tabs do
 		local x = (i - 1) * tw
 		if t.active then
-			local pill = Kit.button(tabs, x + 6, 7, tw - 12, 42, { icon = t.icon, text = if n >= 4 then "" else t.label, size = if n >= 3 then 17 else 20, iconSize = 29, art = btnArt(spec.id, "tab") })
+			-- the Figma pill face is drawn for the 2-tab width; narrower pills are built live so corners and icon never squash or clip
+			local pill = Kit.button(tabs, x + 6, 7, tw - 12, 42, { icon = t.icon, text = if n >= 4 then "" else t.label, size = if n >= 3 then 17 else 20,
+				iconSize = if n >= 4 then 32 else 29, art = if n == 2 then btnArt(spec.id, "tab") else nil, stops = Kit.stops(spec.tab), cr = 12 })
 			api.tabs[i] = pill
 		else
 			local hit = Kit.new("TextButton", { BackgroundTransparency = 1, Text = "", AutoButtonColor = false, Position = UDim2.fromOffset(x, 0), Size = UDim2.fromOffset(tw, 54), ZIndex = 4 }, tabs)
