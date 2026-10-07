@@ -107,7 +107,11 @@ Watch the file key: the letter after `GG` is a lowercase **l**. A key with a cap
 | `43:7` | Seeds shop (green), layer 2, with sunflower hero |
 | `49:10` | **Golden shop** (gold, desert), with the desert hero and new textures |
 | `57:7` | **Mine shop** (steel cyan, crow hero), 4 rows: Mining Power, Ore Value, Charged Strike, Rupture. Uses the final icons |
-| `45:7`, `45:19`, `45:33`, `49:161`, `57:166` | Motion spec cards under each window |
+| `59:7` | **Nest shop** (cedar red-brown, nest hero), 3 rows: Twig Value, Peck Rate, Peck Power |
+| `60:7` | **Echo shop** (magenta, echo spirit hero), 2 rows: Echo Value, Echo Capacity |
+| `61:7` | **Parrot / expedition** (emerald, parrot hero), 3 skill-point rows: Health, Damage, Regen. Buttons read SPEND ALL |
+| `62:7` | **Evolve** (crimson, castle monster hero), 3 feed rows for evolution 3 to 4: popcorn 1Qa, twigs 100K, moneta 10K. Buttons read FEED / FEED ALL |
+| `45:7`, `45:19`, `45:33`, `49:161`, `57:166`, `59:166`, `60:166`, `61:166`, `62:166` | Motion spec cards under each window |
 | `8:271` | HUD 1920×1080: money capsules, map banner, objective, toast, docked shop |
 
 Page 1 of the same file holds an older version with studded buttons. Don't use it as a reference.
@@ -138,6 +142,12 @@ Page 1 of the same file holds an older version with studded buttons. Don't use i
 | Seeds | `e6ffc4 → 8fe04a → 4fb52a → 256a12` | `8fe04a` |
 | Golden | the Seeds gradient hue-shifted to gold (hue 44°, darks 34°) | `ffd259` |
 | Mine | the Golden window hue-shifted +156° (gold to steel cyan; blue BUY ALL and grey states untouched) | about `59c8ff` |
+| Nest | Golden hue-shifted −36°, saturation ×0.85 (cedar) | cedar red |
+| Echo | Golden hue-shifted +276° (magenta) | magenta |
+| Parrot | Golden hue-shifted +116°, saturation ×0.9 (emerald) | emerald |
+| Evolve | Golden hue-shifted +302°, lightness ×0.95 (crimson) | crimson |
+
+**How the new windows were made:** clone `49:10` and `49:161`, add or remove `row/*` (126px pitch, window height follows), hue-shift every SOLID/gradient/effect colour whose hue is 10–70° (leaves the blue BUY ALL, greys and inks alone), rewrite text, then upload PNGs from `birb-icons/final/` as FIT image fills on the cloned `ico/*` rectangles. The board `8:7` was widened for each.
 
 ### Textures (in `7:8`)
 
@@ -173,11 +183,7 @@ The full text is on the spec cards. In short:
 
 ## 5. Next steps (in order)
 
-1. **Remaining shop windows**, each a reset layer with its own color, hero, FX and motion spec:
-   - Nest / twigs
-   - Echo field
-   - Parrot / expedition
-   - Evolution feeding
+1. **Review the five new windows** with the user (Mine, Nest, Echo, Parrot, Evolve). Open questions: the Nest footer says Molt and Evolve keep twigs and the twig shop, which is not verified in the data; Moneta uses the fish icon; Rupture uses the sword.
 2. **Companion panels:** Sparrow (mitosis and resonance), Seagull (doctrines, routes, migrations), Dave, Red Panda.
 3. **Fishing:** fish index, rods, baits, aquarium.
 4. **Quests, sacrifice milestones and the profile screen.**
