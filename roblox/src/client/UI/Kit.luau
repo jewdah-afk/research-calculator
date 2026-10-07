@@ -347,12 +347,33 @@ local SFX = {
 	hover = { speed = 1.35, vol = 0.07, len = 0.05 },   -- desktop only
 	nope = { speed = 0.62, vol = 0.45, len = 0.09 },
 }
+-- the synthesized "buttery keycap" kit (roblox/assets/sfx/*.ogg, made by concepts/reference sfx.js). Upload each file and
+-- put its id here; anything still 0 falls back to the keyboard slice above. Old names map onto the new kit.
+local KIT_IDS = {
+	hover = 0, press = 0, release = 0, tab = 0, open = 0, close = 0, buy = 0, deny = 0, pickup = 0, golden = 0, peck = 0,
+	mine = 0, hit = 0, splash = 0, pillar = 0, molt = 0, evolve = 0, upgrade = 0, unlock = 0, pop = 0,
+}
+local KIT_ALIAS = { click = "press", thock = "buy", nope = "deny" }
+local KIT_VOL = { hover = 0.25, press = 0.6, release = 0.45, tab = 0.55, pop = 0.35, unlock = 0.8, molt = 0.8, evolve = 0.8 }
 Kit.muted = false
 Kit.uiVolume = 1
 local UIS = game:GetService("UserInputService")
 local lastPlay = {}
 function Kit.sfx(kind)
-	local d = SFX[kind]; if not d or Kit.muted then return end
+	if Kit.muted then return end
+	local kitName = KIT_ALIAS[kind] or kind
+	local id = KIT_IDS[kitName]
+	if id and id > 0 then
+		if kitName == "hover" and not UIS.MouseEnabled then return end
+		local now = os.clock()
+		if lastPlay[kitName] and now - lastPlay[kitName] < 0.04 then return end
+		lastPlay[kitName] = now
+		local snd = new("Sound", { SoundId = "rbxassetid://" .. id, Volume = (KIT_VOL[kitName] or 0.6) * Kit.uiVolume, PlaybackSpeed = 0.98 + math.random() * 0.04 }, SoundService)
+		snd.Ended:Once(function() snd:Destroy() end)
+		snd:Play()
+		return
+	end
+	local d = SFX[kind]; if not d then return end
 	if kind == "hover" and not UIS.MouseEnabled then return end
 	local now = os.clock()
 	if lastPlay[kind] and now - lastPlay[kind] < 0.04 then return end
