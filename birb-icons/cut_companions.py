@@ -1,5 +1,7 @@
-"""Cut companions_sheet.png (2x2: sparrow, seagull / dove, redpanda) into final/*.png with the same ink ring as cut_sheet.py.
-Run: python3 birb-icons/cut_companions.py"""
+"""Cut a 2x2 generated sheet into final/*.png with the same ink ring as cut_sheet.py.
+Run: python3 birb-icons/cut_companions.py            (companions_sheet.png: sparrow, seagull / dove, redpanda)
+     python3 birb-icons/cut_companions.py fishing    (fishing_sheet.png: moneta, rod / bait, aquarium)"""
+import sys
 import os
 import numpy as np
 from PIL import Image
@@ -8,9 +10,11 @@ from scipy import ndimage as nd
 HERE = os.path.dirname(os.path.abspath(__file__))
 INK = np.array([11, 12, 16])
 RING, PAD, SIZE = 10.0, 24, 256          # ring scaled for this sheet's larger icons (~450px vs ~260px)
-NAMES = {'sparrow': (0, 0), 'seagull': (1, 0), 'dove': (0, 1), 'redpanda': (1, 1)}
+SHEETS = {'companions': ['sparrow', 'seagull', 'dove', 'redpanda'], 'fishing': ['moneta', 'rod', 'bait', 'aquarium']}
+which = sys.argv[1] if len(sys.argv) > 1 else 'companions'
+NAMES = {n: (i % 2, i // 2) for i, n in enumerate(SHEETS[which])}
 
-src = np.asarray(Image.open(os.path.join(HERE, 'companions_sheet.png')).convert('RGB')).astype(float)
+src = np.asarray(Image.open(os.path.join(HERE, which + '_sheet.png')).convert('RGB')).astype(float)
 H, W = src.shape[:2]
 for name, (qx, qy) in NAMES.items():
     q = src[qy * H // 2:(qy + 1) * H // 2, qx * W // 2:(qx + 1) * W // 2]
