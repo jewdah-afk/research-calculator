@@ -114,6 +114,7 @@ Watch the file key: the letter after `GG` is a lowercase **l**. A key with a cap
 | `45:7`, `45:19`, `45:33`, `49:161`, `57:166`, `59:166`, `60:166`, `61:166`, `62:166` | Motion spec cards under each window |
 | `65:8`, `65:181`, `65:354`, `65:527` | **Companion panels** (row under the shops, label COMPANIONS): Sparrow (Feed, Resonance, Mitosis), Seagull (Route, Doctrine, Migration), Dave (Seed Training, Rebirb), Red Panda (Assist Mode). Spec cards `65:167`, `65:340`, `65:513`, `65:686`. Header, tab and hero use the new `sparrow`, `seagull`, `dove` and `redpanda` icons |
 | `70:8`, `70:181`, `70:354`, `70:527` | **Fishing** (row under companions, label FISHING): Rods (craft Normal/Reinforced/Pro from fish), Bait (Coastal Chum 1, Fresh Pellet 5, River Grub 10 moneta), Fish Index (sample catches Silver Fish, Swallowtail, Huchen with EQUIP/SELL), Aquarium (2 tanks, PLACE). Shared deep-ocean base 216°; buttons per icon: rod red, worm pink, clownfish orange, seaweed green. Tabs read "Fishing / <tab>". Rows use the real tiered icons (rods by tier, baits, fish, tanks by size) |
+| `75:8`, `75:181`, `75:354` | **Quests, Sacrifice, Profile** (row under Fishing). Quests: merchant hero, 3 dailies (floor kill, hunt, boss) with CLAIM/TRACK. Sacrifice: altar hero, milestone rows Tier I-III (450, 10K, 100K) using `sacrifice_I`..`XVIII` crests that grow more ornate per tier. Profile: `birb` hero in `avatar_frame`, records rows (fish index, highest floor, sacrifice tier) |
 | `8:271` | HUD 1920×1080: money capsules, map banner, objective, toast, docked shop |
 
 Page 1 of the same file holds an older version with studded buttons. Don't use it as a reference.
@@ -200,7 +201,7 @@ The full text is on the spec cards. In short:
 
 1. **Review the five new windows** with the user (Mine, Nest, Echo, Parrot, Evolve). Open questions: the Nest footer says Molt and Evolve keep twigs and the twig shop, which is not verified in the data; Moneta uses the fish icon; Rupture uses the sword.
 3. **Fishing follow-ups:** the aquarium modifier table once it is pulled from the bundle.
-4. **Quests, sacrifice milestones and the profile screen.**
+4. **Quests, sacrifice and profile follow-ups:** a scrolling main-quest list (19 quests) and a full 18-tier sacrifice list.
 5. **Missing icons** in the icon-set style: spirit, and any new currencies the remaining windows need.
 6. **Blender models for all item drops**, matching the icon set. Not started.
 7. **Roblox wiring:** drop the three ModuleScripts (`EternityNum`, `BirbFormulas`, `BirbSystems`) into ReplicatedStorage. Load `upgrades.json` and `data/*.json` as data modules.
