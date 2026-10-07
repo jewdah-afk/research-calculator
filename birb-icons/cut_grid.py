@@ -14,17 +14,22 @@ SIZE = 256
 def cut(sheet, cols, rows, names, out=os.path.join(HERE, 'final')):
     src = np.asarray(Image.open(sheet).convert('RGB')).astype(float)
     H, W = src.shape[:2]; ch, cw = H // rows, W // cols
+    # label the WHOLE sheet, then give each piece to the cell holding its centre: icons that poke past
+    # their cell (hook eyes, rod tips) stay whole instead of being sliced at the cell line
+    full = nd.binary_opening(src.max(2) > 40, iterations=1)
+    lab, n = nd.label(full)
+    sizes = nd.sum(full, lab, range(1, n + 1)); cents = nd.center_of_mass(full, lab, range(1, n + 1))
+    owner = {}
+    for k, ((cy_, cx_), sz) in enumerate(zip(cents, sizes)):
+        owner.setdefault(min(rows - 1, int(cy_ // ch)) * cols + min(cols - 1, int(cx_ // cw)), []).append((k + 1, sz))
     for i, name in enumerate(names):
         if name == '-': continue
         keep = name.endswith('!'); name = name.rstrip('!')
-        q = src[(i // cols) * ch:(i // cols + 1) * ch, (i % cols) * cw:(i % cols + 1) * cw]
-        m = nd.binary_opening(q.max(2) > 40, iterations=1)
-        lab, n = nd.label(m); sizes = nd.sum(m, lab, range(1, n + 1))
-        big = int(np.argmax(sizes)) + 1
-        edge_ids = set(np.unique(np.concatenate([lab[0], lab[-1], lab[:, 0], lab[:, -1]]))) - {0}
-        # drop specks and bits of neighbouring icons that cross into this cell (they touch the cell edge)
-        m = np.isin(lab, [k + 1 for k, s in enumerate(sizes) if s > 0.01 * sizes.max() and (k + 1 == big or k + 1 not in edge_ids)])
+        parts = owner.get(i, [])
+        big = max(s for _, s in parts)
+        m = np.isin(lab, [k for k, s in parts if s > 0.01 * big])
         m = nd.binary_fill_holes(nd.binary_closing(m, iterations=2))
+        q = src
         ys, xs = np.nonzero(m)
         ext = max(np.ptp(ys), np.ptp(xs))
         ring = max(3.0, ext * 0.022)                  # ~6px at 256 after scaling
