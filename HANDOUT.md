@@ -6,6 +6,33 @@ Last updated: 2026-10-07
 
 ---
 
+## 0. Start here (next session: Roblox Studio build)
+
+The user is opening a new session that can drive **Roblox Studio** (they run the place `birb(test)` locally; the current in-game build already has the HUD, the docked Popcorn shop and the grass map). Do these in order:
+
+1. **Import every Figma window 1:1 into Studio.** Source of truth is Figma file `SQOJ2gzGt12vFMGGlNRWBE`, page **UI v2** (`7:7`), board `8:7`. Match sizes, gradients (multi-colour icon gradients + shade layer), strokes, corner radii, fonts (Fredoka One / Fredoka), drop shadows, rim glow, centring, and the motion specs on the cards under each window. Icons are the PNGs in `birb-icons/final/` (UI and gear) and `birb-icons/final/fish/` (all 426 fish, named by fish id); upload them as image assets and keep a name to asset-id map in one ModuleScript.
+2. **Two test saves + a progression toggle (user requirement, must ship with the import):**
+   - **Regular save:** the user's normal progress.
+   - **Maxed save:** everything unlocked and maxed (every layer, companion, rod tier 23, tank 5, sacrifice XVIII, all 426 fish discovered, all quests done), so every window can be seen in its final state.
+   - **"Next island" toggle:** a dev-only button that steps the save forward one unlock at a time (next buy island / next layer / next tier) so the user can watch the progression unfold in order. It must be **non-destructive**: work on a copy of the save, never write to the real DataStore, and be able to jump back to Regular or Maxed at any time without breaking state.
+3. **Wire the math:** `birb-data/EternityNum.luau`, `BirbFormulas.luau`, `BirbSystems.luau` into ReplicatedStorage; load `birb-data/upgrades.json` and `birb-data/data/*.json` as data modules. Numbers on every row come from these (all verified 1:1 against the original game, see section 3).
+4. **Polish in Studio until it "looks amazing"** (user's words): compare each in-game window side by side with its Figma frame.
+5. **Then the map:** give it more visual hierarchy. It already looks good; the user wants it clearly better (paths, landmarks, focal points, lighting, depth).
+
+### Where everything is
+
+| What | Where |
+|---|---|
+| Every UI window (20) + motion spec cards | Figma `SQOJ2gzGt12vFMGGlNRWBE`, board `8:7` on page UI v2. Node ids in section 4 |
+| UI + gear icons (130) | `birb-icons/final/*.png`, list in `birb-icons/final/manifest.json` |
+| Fish icons (426) | `birb-icons/final/fish/<fish id>.png` |
+| Icon source sheets + how to make more | `birb-icons/sheets/`, `cut_grid.py`, `qa.py`, `fish_prompts.py`, `fish_cut.py`, section 7 |
+| Game math (Luau) | `birb-data/*.luau` |
+| Game data (upgrades, fish, rods, baits, quests, sacrifice, enemies, artifacts) | `birb-data/upgrades.json`, `birb-data/data/*.json` |
+| Formulas explained | `birb-data/CORE_FORMULAS.md`, `birb-data/SYSTEMS.md` |
+
+---
+
 ## 1. What the project is
 
 Peckwood is a Roblox remake of **Birb** (hwonze; web build at birbplay.com). The goals:
@@ -129,7 +156,7 @@ Page 1 of the same file holds an older version with studded buttons. Don't use i
    - 4-point sparkles in the header and hero.
    - Glow on affordable buy buttons.
 4. **Motion is documented in two places:** a Motion spec card under the window, and Figma annotations on the layers themselves (window, header, every `btn/buy`, every `progress`, the hero).
-5. **Header:** the icon and title are centered as a group. The lip under the header is a 12px band in the theme's own dark tone, not black, with a 2px tinted ink line. A soft tinted drop shadow (y 6, blur 14, 38%) falls on the body, plus a tight 2px contact shadow. Keep the header clipped.
+5. **Header:** title only, centred (no icon, user's call). The lip under the header is a 12px band in the theme's own dark tone, not black, with a 2px tinted ink line. A soft tinted drop shadow (y 6, blur 14, 38%) falls on the body, plus a tight 2px contact shadow. Keep the header clipped.
 6. **Fonts:**
    - Fredoka One for titles and buttons.
    - Fredoka for body text.
@@ -199,7 +226,7 @@ The full text is on the spec cards. In short:
 
 ## 5. Next steps (in order)
 
-0. **Roblox 1:1 import (user's next priority):** rebuild every Figma window in Roblox exactly, using the `birb-icons/final` PNGs as image assets, then polish in Studio. After that, **the map needs more visual hierarchy** (it already looks good; the user wants it clearly better).
+0. **Roblox Studio build: see section 0** (1:1 import, Regular + Maxed saves with a non-destructive next-island toggle, wiring, polish, then map hierarchy).
 1. **Review the five new windows** with the user (Mine, Nest, Echo, Parrot, Evolve). Open questions: the Nest footer says Molt and Evolve keep twigs and the twig shop, which is not verified in the data; Moneta uses the fish icon; Rupture uses the sword.
 3. **Fishing follow-ups:** the aquarium modifier table once it is pulled from the bundle.
 4. **Quests, sacrifice and profile follow-ups:** a scrolling main-quest list (19 quests) and a full 18-tier sacrifice list.
