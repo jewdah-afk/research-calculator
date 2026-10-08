@@ -211,9 +211,54 @@
   X.tickLoot = function (s, run, dt) {
     const par = run.parrot; if (par && par.potionCooldown > 0) par.potionCooldown = Math.max(0, par.potionCooldown - dt);
     if (run.pointHoardBuff && (run.pointHoardBuff.timer -= dt) <= 0) run.pointHoardBuff = null;
+    tickFx(run, dt);
     X.autoPotion(s);
   };
-  X.tempAttackSpeed = (run) => (run?.pointHoardBuff ? run.pointHoardBuff.atk : 0);
+  // ------------------------------------------------------------------ combat procs (Birb mn constants, kn / xn / Cn, the parrot hit in updateParrot)
+  const F = { REDLINE_START: 0.7, REDLINE_FULL: 0.2, REDLINE_P: 0.24, REDLINE_S: 0.12, OPEN_RATIO: 0.85, OPEN_P: 0.45, OPEN_S: 0.225, FOCUS_HIT: 0.04, FOCUS_MAX: 7, FOCUS_WINDOW: 2.5,
+    REC_START: 0.6, REC_FULL: 0.2, REC_P: 0.5, REC_S: 0.25, STORM_EVERY: 6, STORM_P: 0.9, STORM_S: 0.1, STORM_TARGETS: 2, STORM_R: 110, SPLIT_T: 3, SPLIT_ATK: 0.3, HUNT_T: 3, HUNT_ATK: 0.2, HUNT_MOVE: 0.2 };
+  X.PROC_K = F;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v)), ratio = (h, m, fb) => (m <= 0 ? fb : clamp((Number.isFinite(h) ? h : m * fb) / m, 0, 1));
+  const fx = (run) => (run.fx ||= { hits: 0, splitter: 0, hunter: 0, focusId: null, focusHits: 0, focusT: 0, opened: {} });
+  X.procMult = function (o) {
+    const rl = o.redline, os = o.opening, fc = o.focus;
+    const r1 = rl.copies <= 0 ? 1 : 1 + (F.REDLINE_P * rl.primaryPower + F.REDLINE_S * rl.secondaryPower) * clamp((F.REDLINE_START - ratio(o.health, o.maxHealth, 1)) / (F.REDLINE_START - F.REDLINE_FULL), 0, 1);
+    const r2 = !o.isOpening || os.copies <= 0 || ratio(o.targetHealth, o.targetMaxHealth, 0) < F.OPEN_RATIO ? 1 : F.OPEN_P * os.primaryPower + F.OPEN_S * os.secondaryPower + 1;
+    const r3 = fc.copies <= 0 ? 1 : 1 + clamp(Math.floor(o.focusHits || 0), 0, F.FOCUS_MAX) * F.FOCUS_HIT * (fc.primaryPower + 0.5 * fc.secondaryPower);
+    return Math.max(1, r1 * r2 * r3);
+  };
+  X.storm = function (hits, pw) {
+    if (!(pw.copies > 0 && hits > 0 && hits % F.STORM_EVERY === 0)) return { active: false, damageRatio: 0, maxTargets: 0, radius: F.STORM_R };
+    return { active: true, damageRatio: Math.round(1e6 * (F.STORM_P * pw.primaryPower + F.STORM_S * pw.secondaryPower)) / 1e6, maxTargets: F.STORM_TARGETS + (pw.copies - 1), radius: F.STORM_R };
+  };
+  X.recoveryMult = (pw, h, m) => (pw.copies <= 0 ? 1 : 1 + (F.REC_P * pw.primaryPower + F.REC_S * pw.secondaryPower) * clamp((F.REC_START - ratio(h, m, 1)) / (F.REC_START - F.REC_FULL), 0, 1));
+  X.regenMult = (s, p) => X.recoveryMult(X.effectPower(s, "resonant_recovery"), p.health, p.maxHealth);
+  X.parrotHit = function (s, run, p, e) {
+    const f = fx(run), split = X.countEffect(s, "splitter_haste_5th_3s"), hunt = X.countEffect(s, "hunter_momentum_3s");
+    const P = { redline: X.effectPower(s, "redline_fury"), opening: X.effectPower(s, "opening_strike"), focus: X.effectPower(s, "focused_assault"), storm: X.effectPower(s, "storm_chain") };
+    f.hits++; const crit = split > 0 && f.hits % 5 === 0; if (crit) f.splitter = F.SPLIT_T;
+    const th = Math.max(0, e.health), tm = Math.max(1, +e.maxHealth || th || 1), open = P.opening.copies > 0 && !f.opened[e.id], fh = f.focusT > 0 && f.focusId === e.id ? f.focusHits : 0;
+    const dmg = Math.max(0, p.damage * X.procMult({ health: p.health, maxHealth: p.maxHealth, targetHealth: th, targetMaxHealth: tm, isOpening: open, focusHits: fh, redline: P.redline, opening: P.opening, focus: P.focus }));
+    const st = X.storm(f.hits, P.storm);
+    e.stunTimer = X.hitStun(e); e.health = Math.max(0, e.health - dmg);
+    if (P.opening.copies > 0) f.opened[e.id] = true;
+    if (P.focus.copies > 0) { f.focusId = e.id; f.focusHits = Math.min(F.FOCUS_MAX, fh + 1); f.focusT = F.FOCUS_WINDOW; }
+    e.hitFlash = 0.06; if (e.health <= 0) X.primeOnKill(s, e);
+    let kills = 0;
+    if (st.active && st.maxTargets > 0 && st.damageRatio > 0) {
+      const r = dmg * st.damageRatio, R = st.radius * st.radius;
+      const near = run.enemies.filter((m) => m.id !== e.id && X.validTarget(m) && (m.x - e.x) ** 2 + (m.y - e.y) ** 2 <= R).sort((a, b) => (a.x - e.x) ** 2 + (a.y - e.y) ** 2 - ((b.x - e.x) ** 2 + (b.y - e.y) ** 2));
+      for (const m of r > 0 ? near.slice(0, st.maxTargets) : []) { m.hitFlash = Math.max(m.hitFlash || 0, 0.65); m.health = Math.max(0, m.health - r); if (m.health <= 0) { kills++; X.primeOnKill(s, m); } X.dmgNumber(run, m, PT.fmt(r), "#67e8f9"); }
+    }
+    if ((e.health <= 0 || kills > 0) && hunt > 0) f.hunter = F.HUNT_T;
+    X.dmgNumber(run, e, PT.fmt(dmg), crit ? "#22d3ee" : open ? "#facc15" : "#ff4444");
+  };
+  // the opening strike target list and focus clear when an enemy respawns (Birb respawn branch)
+  X.onEnemyRespawn = (run, e) => { const f = fx(run); delete f.opened[e.id]; if (f.focusId === e.id) { f.focusId = null; f.focusHits = 0; f.focusT = 0; } };
+  const tickFx = (run, dt) => { const f = fx(run); f.splitter = Math.max(0, f.splitter - dt); f.hunter = Math.max(0, f.hunter - dt); f.focusT = Math.max(0, f.focusT - dt); if (f.focusT <= 0) { f.focusId = null; f.focusHits = 0; } };
+  X.tempAttackSpeed = (run) => { if (!run) return 0; const s = X.curState, f = fx(run); return (run.pointHoardBuff ? run.pointHoardBuff.atk : 0) + (s && f.splitter > 0 ? X.countEffect(s, "splitter_haste_5th_3s") * F.SPLIT_ATK : 0) + (s && f.hunter > 0 ? X.countEffect(s, "hunter_momentum_3s") * F.HUNT_ATK : 0); };
+  X.tempMoveSpeed = (run) => { if (!run) return 0; const s = X.curState, f = fx(run); return s && f.hunter > 0 ? X.countEffect(s, "hunter_momentum_3s") * F.HUNT_MOVE : 0; };
+  X._tempAtkPointHoard = (run) => (run?.pointHoardBuff ? run.pointHoardBuff.atk : 0);
   X.tempRange = (run) => (run?.pointHoardBuff ? run.pointHoardBuff.range : 0);
 
   // ------------------------------------------------------------------ equipment chests (Birb chest manager equipment_* tables)

@@ -253,7 +253,7 @@
       const n = X.respawnPos(e), r = X.triggerRange(e), lim = Math.max(420, 2.25 * r); let start = (e.x - n.x) ** 2 + (e.y - n.y) ** 2 > lim * lim;
       if (!start && e.health < e.maxHealth) { if (!p || p.health <= 0) start = true; else if (!(p.targetEnemyId === e.id && /^attack/.test(p.state))) { const a = X.anchor(e), d = Math.max(180, 1.75 * r); start = (p.x - a.x) ** 2 + (p.y - a.y) ** 2 > d * d; } }
       if (!start) return false;
-      e.isLeashing = true; e.archivistSpells = undefined; e.health = e.maxHealth; e.hitFlash = 0; e.stunTimer = 0; e.attackCooldown = 0; e.attackDamageApplied = false;
+      e.isLeashing = true; if (X.onEnemyRespawn && X.curState) X.onEnemyRespawn(PT.expState(X.curState).activeRun, e); e.archivistSpells = undefined; e.health = e.maxHealth; e.hitFlash = 0; e.stunTimer = 0; e.attackCooldown = 0; e.attackDamageApplied = false;
     }
     if (!moveHome(e, dt, b, 62)) X.applyRespawnedState(e);
     return true;
@@ -320,6 +320,7 @@
         if (cnt > 0) { const t = 175 * dt; r.x += (ox / cnt) * t; r.y += (oy / cnt) * t; }
       }
       if (r.health <= 0) {
+        if (X.onEnemyRespawn) X.onEnemyRespawn(run, r); // Birb: drop the opening strike mark and focus on a dead enemy
         if (r.isBoss) {
           bossKill(s, run, r, mapId);
           if (r.type === "the-archivist") { r.respawnTimer = undefined; X.clearCooldown(s, r); PT.expState(s).archivistDefeated = true; continue; }
@@ -745,7 +746,7 @@
     if (p.state === "death") { for (p.animTimer += a; p.animTimer > 0.1;) { p.animTimer -= 0.1; p.animFrame++; if (p.animFrame >= 5) { if (!p.deathHandled) { p.deathHandled = true; X.onParrotDeath && X.onParrotDeath(s); } break; } } return; }
     const ts = tState(p); ts.commit = Math.max(0, ts.commit - a); for (const [k, v] of ts.blocked) v <= a ? ts.blocked.delete(k) : ts.blocked.set(k, v - a); if (ts.target !== p.targetEnemyId) { ts.target = p.targetEnemyId; ts.commit = 0.55; ts.stuck = 0; }
     // regen: x0.25 for 3 s after taking damage (artifact / desert reductions shrink the penalty)
-    if (p.health < p.maxHealth && B.lifeRegen > 0) { const red = Math.max(0, Math.min(1, (X.externalBonuses(s).combatRegenPenaltyReduction || 0) + (B.combatRegenPenaltyReduction || 0))), m = fighting ? 1 - 0.75 * (1 - red) : 1; p.health = Math.min(p.maxHealth, p.health + B.lifeRegen * m * dt); }
+    if (p.health < p.maxHealth && B.lifeRegen > 0) { const red = Math.max(0, Math.min(1, (X.externalBonuses(s).combatRegenPenaltyReduction || 0) + (B.combatRegenPenaltyReduction || 0))), m = fighting ? 1 - 0.75 * (1 - red) : 1; p.health = Math.min(p.maxHealth, p.health + B.lifeRegen * m * (X.regenMult ? X.regenMult(s, p) : 1) * dt); }
     if (p.state === "take_damage") {
       p.stunTimer = Math.max(0, (p.stunTimer ?? 0) - a);
       if (p.stunTimer <= 0) { const e = X.byId(run, p.targetEnemyId); if (X.validTarget(e)) p.state = "attack"; else { p.state = "return"; p.targetEnemyId = null; p.manualTargetEnemyId = null; } }
@@ -755,7 +756,7 @@
     if ((p.x === 0 && p.y === 0) || (p.x - px) ** 2 + (p.y - py) ** 2 > snap * snap) { p.x = px - 40; p.y = py - 40; }
     if (!inLeash(p.x, p.y, px, py) && /^attack/.test(p.state)) Object.assign(p, { state: "return", targetEnemyId: null, manualTargetEnemyId: null, animFrame: 0, animTimer: 0 });
     p.hitCooldown = Math.max(0, (p.hitCooldown ?? 0) - a);
-    const M = Math.max(0.2, 1 + (B.attackSpeedMult || 0) + (X.tempAttackSpeed ? X.tempAttackSpeed(run) : 0)), S = Math.max(0.25, 1 + (B.moveSpeedMult || 0)), ok = (pt) => inLeash(pt.x, pt.y, px, py);
+    const M = Math.max(0.2, 1 + (B.attackSpeedMult || 0) + (X.tempAttackSpeed ? X.tempAttackSpeed(run) : 0)), S = Math.max(0.25, 1 + (B.moveSpeedMult || 0) + (X.tempMoveSpeed ? X.tempMoveSpeed(run) : 0)), ok = (pt) => inLeash(pt.x, pt.y, px, py);
     if (PT.expState(s).isAutoAttack && !p.targetEnemyId && /^(idle|follow|return)$/.test(p.state)) { const e = scan(s, run, p.x, p.y, px, py, b); if (e) { p.targetEnemyId = e; p.manualTargetEnemyId = null; p.state = "attack"; } }
     if (p.state === "idle") { const e = followTarget(p, px, py, b); if ((e.x - p.x) ** 2 + (e.y - p.y) ** 2 > 4900) p.state = "follow"; else p.facingRight = followSide(p, px) < 0; }
     else if (p.state === "follow") { const e = followTarget(p, px, py, b); if ((e.x - p.x) ** 2 + (e.y - p.y) ** 2 < 100) p.state = "idle"; else { fly(p, e, 0, p.speed * S, a, b); p.facingRight = followSide(p, px) < 0; } }
@@ -773,11 +774,7 @@
           p.animTimer -= step; p.animFrame++;
           if (p.animFrame === 2) {
             if (hyp(sa.x - p.x, sa.y - p.y) > 18) { p.state = "attack"; p.animFrame = 0; p.animTimer = 0; break; }
-            if (X.validTarget(e)) { // Birb: the hit (artifact damage procs come with 6b)
-              const dmg = Math.max(0, p.damage * X.hitDamageMult(s, run, p, e)); e.stunTimer = 0; e.health = Math.max(0, e.health - dmg); e.hitFlash = 0.06;
-              if (e.health <= 0) X.primeOnKill(s, e);
-              X.dmgNumber(run, e, PT.fmt(dmg), "#ff4444");
-            }
+            if (X.validTarget(e)) X.parrotHit(s, run, p, e); // Birb: the hit, with artifact procs (expedition_loot.js)
           }
           if (p.animFrame >= 4) { if (X.validTarget(e) && canMaintain(p, e, px, py, b)) { p.state = "attack_wait"; p.animTimer = 0.6 / M; } else retarget(s, run, p, px, py, b); break; }
         }
@@ -795,7 +792,15 @@
       if ((k.x - p.x) ** 2 + (k.y - p.y) ** 2 < 625 && p.state !== "take_damage" && (p.hitCooldown ?? 0) <= 0) { const t = 0.5 * k.attack * dtm(run), f = /^attack/.test(p.state); p.health = Math.max(0, p.health - t); if (p.health > 0 && !f) Object.assign(p, { state: "take_damage", animFrame: 0, animTimer: 0, stunTimer: 0.3 }); p.hitCooldown = 2; }
     }
   };
-  X.hitDamageMult = () => 1; // redline / opening strike / focused assault artifacts (6b)
+  // Birb: enemies on this list are never stunned by parrot hits; the rest (and not bosses) get 0.3 s
+  const NO_STUN = new Set(["harpy", "ice-harpy", "witch", "anubis", "anubis-warrior", "fishfolk-archpriest", "twig-blight", "cobra", "ghoul", "skeleton-warrior", "elven-assassin", "zombie-cultist", "shardsoul-slayer",
+    "fishfolk-whipe", "fishfolk-brute", "fishfolk-horror", "fishfolk-pugilist", "sea-horror", "sea-gramlin", "elemental", "frost-wisp", "ghost", "doppelganger", "black-pudding", "giant-black-pudding", "hell-critter", "imp",
+    "cacodaemon", "arctic-whisper", "frozy-cube", "frosty-slime", "ice-fire-guardian", "frogfolk-wizard", "frogfolk-brute", "frogfolk-chieftain", "fishfolk-inkbender", "mummy", "giant-fly"]);
+  X.hitStun = (e) => (e.isBoss || NO_STUN.has(e.type) || String(e.type).includes("masked-forest-spirit") ? 0 : 0.3);
+  X.parrotHit = function (s, run, p, e) { // replaced by the artifact version in expedition_loot.js
+    const dmg = Math.max(0, p.damage); e.stunTimer = X.hitStun(e); e.health = Math.max(0, e.health - dmg); e.hitFlash = 0.06;
+    if (e.health <= 0) X.primeOnKill(s, e); X.dmgNumber(run, e, PT.fmt(dmg), "#ff4444");
+  };
 
   // ------------------------------------------------------------------ per-frame driver (Birb updateCurrentMap)
   X.update = function (G, dt) {

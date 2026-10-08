@@ -1,8 +1,8 @@
 # Parity report
 
-Birb's live engine (birbplay.com `window.game`) vs the playtest, same save state per scenario. Generated 2026-10-08T20:50Z by `playtest/parity/parity.js`.
+Birb's live engine (birbplay.com `window.game`) vs the playtest, same save state per scenario. Generated 2026-10-08T20:55Z by `playtest/parity/parity.js`.
 
-**31786 / 31786 values match.** Birb's live community-goal twig reward today: x1.5 (copied into the playtest for the run).
+**32281 / 32281 values match.** Birb's live community-goal twig reward today: x1.5 (copied into the playtest for the run).
 
 | Scenario | Values | Mismatches |
 |---|---|---|
@@ -32,7 +32,7 @@ Birb's live engine (birbplay.com `window.game`) vs the playtest, same save state
 | sacrifice capped III | 1865 | 0 |
 | sacrifice expansion V | 1865 | 0 |
 | sacrifice rebirb XIV | 1865 | 0 |
-| loot basic kit | 1865 | 0 |
+| loot basic kit | 2360 | 0 |
 | loot effect copies | 1865 | 0 |
 | loot full bag | 1865 | 0 |
 

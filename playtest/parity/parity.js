@@ -74,6 +74,7 @@ function probe({ side, scenario }) {
           spMult: () => em.artifactManager.getSkillPointMultiplier([], g.getEquippedArtifactNames()), hoard: () => em.artifactManager.getPointHoardJackpotChance([], g.getEquippedArtifactNames()),
           auraBonus: () => em.artifactManager.getLootAuraChanceBonus([], g.getEquippedArtifactNames(), g.getEquippedArtifactInfusionLevels()), passive: () => { em.refreshParrotBonuses(g.getEquippedArtifactNames(), g.getEquipmentMultipliers(), g.getEquippedArtifactInfusionLevels()); return em.getPassiveSkillPointMultiplier(g.getEquippedArtifactNames()); },
           names: () => g.getEquippedArtifactNames().filter(Boolean).length },
+        procs: window.__BIRB_PROCS ? { kn: (o) => window.__BIRB_PROCS.kn(o), xn: (h, m, p) => window.__BIRB_PROCS.xn(h, m, p), cn: (n, p) => window.__BIRB_PROCS.Cn(n, p).damageRatio * 100 + window.__BIRB_PROCS.Cn(n, p).maxTargets } : null,
         resetCost: () => { const sk = s.parrot.skills, t = sk.hp + sk.lifeRegen + sk.damage; return t <= 0 ? 0 : Math.max(1, Math.ceil(Math.sqrt(0.01 * t))); },
       }; })(),
       desert: {
@@ -123,13 +124,15 @@ function probe({ side, scenario }) {
       maxBuffs: () => PT.maxFishBuffs(s), aqUnlocked: () => PT.aquariumUnlocked(s),
       contracts: (c, r) => { PT.market(s); return JSON.stringify(PT.generateContracts(s, c, r)); },
       repLevel: (x) => PT.repLevel(x),
-      exp: (() => { const X = PT.EXP; PT.parrotState(s); PT.expState(s); return {
+      exp: (() => { const X = PT.EXP; PT.parrotState(s); PT.expState(s); const pw = (p) => (typeof p === "number" ? { copies: Math.min(2, p), primaryPower: p >= 1 ? 1 : 0, secondaryPower: p >= 2 ? 1 : 0 } : { copies: Math.min(2, p.copies), primaryPower: p.copies >= 1 ? p.primaryPower : 0, secondaryPower: p.copies >= 2 ? p.secondaryPower : 0 }); return {
         xpReq: (L) => X.xpReq(L), stats: (t, f, b, k) => X.enemyStats(t, f, b)?.[k], depthHp: (t, h, r, f, q) => X.depthHealthAt(t, h, r, f, q), atk: (a, h, l, b) => X.attackFromLife(a, h, l, b),
         sp: (t, l, h, m, b, f, r) => X.spReward(t, l, h, m, b, f, r), spScale: (sp, f, r) => X.floorSpScale(sp, f, r), total: (k) => PT.parrotTotalStats(s)[k], gear: (k) => X.gearMults(s)[k],
         spMult: () => X.rebirbSpMult(s), rebirb: () => PT.parrotRebirbReady(s), ext: (k) => X.externalBonuses(s)[k], muad: () => X.muadBirb(s), add: (k) => X.skillAdditions(s)[k],
         range: (t, b) => X.triggerRange({ type: t, isBoss: b }), strike: (t, b) => X.strikeDist({ type: t, isBoss: b }), respawn: (x) => X.effectiveRespawn(s, x), shiny: () => X.shinyChance(s), resetCost: () => PT.parrotResetCost(s),
         loot: { ab: (k) => X.artifactBonuses(s)[k], slots: () => X.slotCount(s), cap: (c) => X.invCapacity(s, c).max, used: (c) => X.invCapacity(s, c).used, rolls: () => X.lootAuraExpectedRolls(s),
           spMult: () => X.artifactSpMult(s), hoard: () => X.pointHoardChance(s), auraBonus: () => X.lootAuraChanceBonus(s), passive: () => X.passiveSpMult(s) / X.rebirbSpMult(s), names: () => X.equippedNames(s).filter(Boolean).length },
+        procs: { kn: (o) => X.procMult({ ...o, isOpening: o.isOpeningStrike, redline: pw(o.redlinePower), opening: pw(o.openingStrikePower), focus: pw(o.focusPower) }), xn: (h, m, p) => X.recoveryMult(pw(p), h, m),
+          cn: (n, p) => { const r = X.storm(n, pw(p)); return r.damageRatio * 100 + r.maxTargets; } },
         sac: { level: () => X.sacLevel(s), target: () => X.sacTarget(s), popcorn: () => PT.sacrificePopcornMult(s), sp: () => X.sacSpMult(s), radius: () => X.sacRadiusMult(s), seed: () => X.sacSeedMult(s),
           qty: () => X.sacProfile(s).auraQuantityMultiplier, chance: () => X.sacProfile(s).auraChanceMultiplier, promo: () => X.sacProfile(s).auraRarityPromotionChance, canExpand: () => X.canUnlockSacExpansion(s),
           maxLv: () => X.sacMaxUnlocked(s), progress: () => X.sacProgress(s).progress, atk: () => { const b = X.parrotBonuses(s); return b.attackSpeedMult; }, move: () => X.parrotBonuses(s).moveSpeedMult, range: () => { X.bonuses = X.parrotBonuses(s); return X.rangeMult(); } },
@@ -210,6 +213,10 @@ function probe({ side, scenario }) {
   for (const k of ["damageMult", "hpMult", "skillPointMult", "chestRewardMult", "combatRegenPenaltyReduction", "lootAuraChanceFlat"]) put(`parrot external ${k}`, () => Ex.ext(k));
   put("parrot rebirb sp mult", Ex.spMult); put("parrot can rebirb", Ex.rebirb); put("parrot muad birb", Ex.muad); put("parrot boss respawn s", () => Ex.respawn(480)); put("exp shiny chance", Ex.shiny); put("parrot reset cost", Ex.resetCost);
   for (const k of ["damageMult", "hpMult", "hpAdd", "lifeRegenAdd", "lifeRegenMult", "combatRegenPenaltyReduction", "attackSpeedMult", "moveSpeedMult", "inventorySpace"]) put(`artifact bonus ${k}`, () => Ex.loot.ab(k));
+  { const P = [0, 1, 2, { copies: 2, primaryPower: 1.2, secondaryPower: 1.04 }, { copies: 1, primaryPower: 1.4, secondaryPower: 0 }];
+    for (const [i, pp] of P.entries()) for (const hr of [1, 0.69, 0.45, 0.2, 0.05]) for (const tr of [1, 0.9, 0.5]) for (const op of [true, false]) for (const fh of [0, 3, 9])
+      if (scenario.name === "loot basic kit") put(`proc mult p${i} hp${hr} t${tr} o${op} f${fh}`, () => Ex.procs && Ex.procs.kn({ health: hr * 1000, maxHealth: 1000, targetHealth: tr * 500, targetMaxHealth: 500, isOpeningStrike: op, focusHits: fh, redlinePower: pp, openingStrikePower: pp, focusPower: pp }));
+    if (scenario.name === "loot basic kit") for (const [i, pp] of P.entries()) { for (const hr of [1, 0.6, 0.4, 0.2, 0]) put(`proc recovery p${i} hp${hr}`, () => Ex.procs && Ex.procs.xn(hr * 800, 800, pp)); for (const n of [5, 6, 12, 13]) put(`proc storm p${i} hit${n}`, () => Ex.procs && Ex.procs.cn(n, pp)); } }
   for (const k of ["slots", "rolls", "spMult", "hoard", "auraBonus", "passive", "names"]) put(`loot ${k}`, Ex.loot[k]);
   for (const c of ["artifact", "material"]) { put(`inventory cap ${c}`, () => Ex.loot.cap(c)); put(`inventory used ${c}`, () => Ex.loot.used(c)); }
   for (const k of ["level", "target", "popcorn", "sp", "radius", "seed", "qty", "chance", "promo", "canExpand", "maxLv", "progress", "atk", "move", "range"]) put(`sacrifice ${k}`, Ex.sac[k]);
@@ -248,6 +255,10 @@ function probe({ side, scenario }) {
   await birb.waitForFunction(() => window.game && window.game.state && window.game.upgradeManager, null, { timeout: 60000 });
   await birb.waitForTimeout(3000);
   await birb.evaluate((d) => { window.BIRB_DATA = d; }, DATA); // CSP blocks script tags; evaluate goes through devtools
+  await birb.evaluate(async () => { // Birb's artifact proc helpers live in the main chunk (kn / xn / Cn, exported as a0 / $ / a1)
+    const src = [...document.querySelectorAll("script[src],link[href]")].map((e) => e.src || e.href).find((u) => /\/assets\/main-[^/]+\.js$/.test(u)) || "/assets/main-CPPXRpzm.js";
+    const m = await import(src); window.__BIRB_PROCS = { kn: m.a0, xn: m.$, Cn: m.a1 };
+  });
   const ours = await (await browser.newContext()).newPage();
   const errs = [];
   ours.on("pageerror", (e) => errs.push(e.message));
