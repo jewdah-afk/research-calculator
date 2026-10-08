@@ -115,3 +115,15 @@ module.exports = [
       sunflowerUpgrades: { d_desert_expedition_points: 1, d_desert_muad_birb: 1, d_desert_shiny_enemies: 1, d_desert_dune_scouts: 1, d_desert_warpath: 5 } } },
   );
 }
+
+// Sacrifice Room scenarios (Phase 6b): milestone tiers, expansion, parrot rebirb unlock
+{
+  const sac = (n, x, rb, sp) => ({ evolutionCount: 5, rebirthCount: 40, expedition: { unlocked: true, highestFloorReached: 5, progress: { level: 30 }, sacrifice: { skillPointsSacrificed: n, commonMilestoneExpansionUnlocked: x } },
+    parrot: { unlocked: true, level: 30, skillPoints: sp, rebirbCount: rb, skills: { hp: 500, lifeRegen: 50, damage: 400 }, artifactInventory: [{ name: "Spirit Aura", count: 80, rarity: "common", stackable: true }] } });
+  module.exports.push(
+    { name: "sacrifice tier I", expedition: true, state: sac(5000, false, 0, 300) },
+    { name: "sacrifice capped III", expedition: true, state: sac(4e5, false, 0, 1e4) },
+    { name: "sacrifice expansion V", expedition: true, state: sac(9e5, true, 0, 1e5) },
+    { name: "sacrifice rebirb XIV", expedition: true, state: sac(3e12, false, 2, 1e9) },
+  );
+}

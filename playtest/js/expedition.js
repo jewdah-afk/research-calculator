@@ -137,7 +137,7 @@
       fin: { maxHealth: (1 + (p.finalHpMult || 0)) * mf, damage: (1 + (p.finalDamageMult || 0)) * mf, lifeRegen: 1 + (p.finalLifeRegenMult || 0) },
     });
     return { hp: m.maxHealth - K.BASE_HP, lifeRegen: m.lifeRegen, damage: m.damage - K.BASE_DAMAGE, inventorySpace: c.inventorySpace, skillPointMult: o.skillPointMult || 0,
-      attackSpeedMult: m.attackSpeed - 1, moveSpeedMult: m.moveSpeed - 1, rangeMult: o.rangeMult || 0, combatRegenPenaltyReduction: c.combatRegenPenaltyReduction || 0 };
+      attackSpeedMult: m.attackSpeed - 1, moveSpeedMult: m.moveSpeed - 1, rangeMult: o.rangeMult || 0, sacRadiusMult: X.sacRadiusMult ? X.sacRadiusMult(s) : 1, combatRegenPenaltyReduction: c.combatRegenPenaltyReduction || 0 };
   };
   // Birb getParrotTotalStats (lb): what the parrot window shows
   PT.parrotTotalStats = function (s) {
@@ -766,5 +766,7 @@
     return true;
   };
   // Birb getFieldNotesSkillPointsPerSecond: Field Notes gives 1 SP/s (x rebirb multiplier) during a run
-  X.fieldNotesRate = (s) => (PT.hasSun(s, "d_desert_field_notes") && PT.expState(s).activeRun ? X.rebirbSpMult(s) : 0);
+  X.fieldNotesRate = (s) => (PT.hasSun(s, "d_desert_field_notes") && PT.expState(s).activeRun ? X.passiveSpMult(s) : 0);
+  // Birb getPassiveSkillPointMultiplier x gC (artifact SP roll is 1 for passive gains)
+  X.passiveSpMult = (s) => (X.sacSpMult ? X.sacSpMult(s) : 1) * (1 + (X.parrotBonuses(s).skillPointMult || 0)) * (1 + (X.externalBonuses(s).skillPointMult || 0)) * X.rebirbSpMult(s);
 })();

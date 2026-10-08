@@ -23,7 +23,8 @@
     if (m === 0 && dir < 0) return 4;
     if (m === 9) return dir > 0 ? 1 : 4; // Birb: the Desert sits above the Park with the same side arrows
     if (m === 4) return dir > 0 ? (s.nestReturnMap === 9 && PT.desertUnlocked(s) ? 9 : 0) : PT.EXP_HUB_MAP; // Birb: the Expedition hub is left of the Nest
-    if (m === PT.EXP_HUB_MAP) return dir > 0 ? 4 : -99;
+    if (m === PT.EXP_HUB_MAP) return dir > 0 ? 4 : PT.SACRIFICE_MAP; // Birb: the Sacrifice Room is left of the hub
+    if (m === PT.SACRIFICE_MAP) return dir > 0 ? PT.EXP_HUB_MAP : -99;
     if (m === 1 && dir < 0) return s.sunflowerFieldReturnMap === 9 && PT.desertUnlocked(s) ? 9 : 0;
     return m + dir;
   };
@@ -51,7 +52,7 @@
     } else {
       if (m === 0 || m === 9) return (s.evolutionCount || 0) < 3 ? "EVOLUTION 3" : "";
       if (m === 4) return PT.expState(s).unlocked ? "" : "COMPLETE NEST LEVEL 2";
-      if (m === PT.EXP_HUB_MAP) return "end";
+      if (m === PT.SACRIFICE_MAP) return "end";
     }
     return "";
   };
@@ -72,7 +73,7 @@
   PT.fishMult = () => 1;
   const nestPopcornRespawnMult = (s) => (PT.nestRespawnMult ? PT.nestRespawnMult(s) : 1), nestSeedProductionMult = (s) => (PT.nestSeedProdMult ? PT.nestSeedProdMult(s) : 1);
   const grainSilo = (s) => (PT.nestGrainSilo ? PT.nestGrainSilo(s) : 1), wateringWell = (s) => (PT.nestWellMult ? PT.nestWellMult(s) : 1);
-  const questBonus = () => 0, sacrificeMult = () => 1, redPandaNap = (s) => (PT.redPandaNapMult ? PT.redPandaNapMult(s) : 1), flockCommunity = () => 1;
+  const questBonus = () => 0, sacrificeMult = (s) => (PT.sacrificePopcornMult ? PT.sacrificePopcornMult(s) : 1), redPandaNap = (s) => (PT.redPandaNapMult ? PT.redPandaNapMult(s) : 1), flockCommunity = () => 1;
 
   // Birb: fo/$r  a + i * log10(x / t + 1)
   const logCurve = (x, t, i, a) => a + i * D(x).div(t).add(1).log10().toNumber();

@@ -78,7 +78,7 @@
   X.strikeDist = (e) => { let t = STRIKE[e.type] ?? 40; if (e.type === "ice-fire-guardian") t = e.isBoss ? 72 : 36; if (e.isElite) t += 4; if (e.isBoss) t += 16; return Math.max(18, Math.min(t, Math.max(18, X.triggerRange(e) - 2))); };
 
   // ------------------------------------------------------------------ leash / targeting (Birb isPointInsideParrotLeash, scanForTarget, ET.choose)
-  X.rangeMult = () => Math.max(1, 1 + (X.bonuses?.rangeMult || 0));
+  X.rangeMult = () => Math.max(1, (1 + (X.bonuses?.rangeMult || 0)) * (X.bonuses?.sacRadiusMult || 1)); // Birb getEffectiveParrotRangeMultiplier
   const inLeash = (x, y, px, py, pad = 0) => { const l = Math.max(0, K.LEASH * X.rangeMult() + pad); return (x - px) ** 2 + (y - py) ** 2 <= l * l; };
   const DIRS = [{ x: -1, y: 0 }, { x: 1, y: 0 }, { x: -Math.SQRT1_2, y: -Math.SQRT1_2 }, { x: Math.SQRT1_2, y: -Math.SQRT1_2 }, { x: -Math.SQRT1_2, y: Math.SQRT1_2 }, { x: Math.SQRT1_2, y: Math.SQRT1_2 }, { x: 0, y: -1 }, { x: 0, y: 1 }];
   const firstOk = (c, d, ok, pref = DIRS[0]) => { const a = { x: c.x + pref.x * d, y: c.y + pref.y * d }; if (ok(a)) return a; for (const r of DIRS) { const i = { x: c.x + r.x * d, y: c.y + r.y * d }; if (ok(i)) return i; } return null; };
@@ -268,7 +268,7 @@
     run.skillPointFractionCarry = Math.max(0, h - p); if (p <= 0) return;
     X.grantSkillPoints(s, p); run.spGained = (run.spGained || 0) + p; X.dmgNumber(run, e, "+" + PT.fmt(p) + " SP", "#f1c40f");
   };
-  X.spKillMult = () => 1; // artifact roll + common sacrifice multiplier (6b / 6c)
+  X.spKillMult = (s) => (X.sacSpMult ? X.sacSpMult(s) : 1); // artifact roll (6b) x common sacrifice multiplier
   const bossKill = (s, run, e, mapId) => {
     if (e.xpGranted) return;
     X.onKill(s, run, e, true); X.tryLegendaryKey(s, run, e); grantSp(s, run, e); run.enemiesDefeated++; e.xpGranted = true;

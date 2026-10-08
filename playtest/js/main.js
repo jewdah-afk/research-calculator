@@ -98,7 +98,7 @@
     const k = e.key.toLowerCase();
     if (k === "5" && PT.mineOpen(G.s)) openWin("crow");
     if (k === "e" && expPortalAction()) return;
-    if (k === "e") { if (G.s.currentMap === PT.MINE_TREE_MAP) openWin("minetree"); else if (G.s.currentMap === PT.MINE_MAP) PT.minePlayerHit(G); else if (G.s.currentMap === PT.NEST_ROOM_MAP) openWin("redpanda"); else if (G.s.currentMap === PT.FISH_MARKET_MAP) openWin("market", "market"); else if (G.s.currentMap !== 1 && PT.aquariumUnlocked(G.s)) openWin("aquarium"); else tryStation(); }
+    if (k === "e") { if (G.s.currentMap === PT.SACRIFICE_MAP) openWin("sacrifice"); else if (G.s.currentMap === PT.MINE_TREE_MAP) openWin("minetree"); else if (G.s.currentMap === PT.MINE_MAP) PT.minePlayerHit(G); else if (G.s.currentMap === PT.NEST_ROOM_MAP) openWin("redpanda"); else if (G.s.currentMap === PT.FISH_MARKET_MAP) openWin("market", "market"); else if (G.s.currentMap !== 1 && PT.aquariumUnlocked(G.s)) openWin("aquarium"); else tryStation(); }
     if (k === " ") { e.preventDefault(); cast(); }
     if (k === "tab") { e.preventDefault(); G.companionsOpen = !G.companionsOpen; drawHud(); }
     if (k === "p") openWin("profile");
@@ -115,6 +115,7 @@
     if (G.s.currentMap === PT.NEST_ROOM_MAP && Math.hypot(w.x - 528, w.y - 380) < 70) openWin("redpanda");
     if (G.s.currentMap === PT.MINE_MAP && Math.hypot(w.x - 528, w.y - 520) < 110) { PT.minePlayerHit(G); G.target = null; }
     if (G.s.currentMap === PT.MINE_TREE_MAP) openWin("minetree");
+    if (G.s.currentMap === PT.SACRIFICE_MAP && Math.hypot(w.x - 528, w.y - 396) < 90) openWin("sacrifice");
     if (G.s.currentMap === 3 && !G.s.hasTalkedToMonster && Math.hypot(w.x - 800, w.y - 500) < 140) { G.s.hasTalkedToMonster = true; toast("The monster is hungry. Hold to feed it!"); }
   });
 
@@ -594,6 +595,19 @@
   // Birb collared-dove menu: LV + XP bar, stats row (XP/min, forage size, golden bonus, travel speed, rebirbs),
   // SEED SNACKS, REBIRB (Travel / Forage / Gilded with +, RESET, x1 / x10 / MAX), MILESTONES n / 8 (folds open)
   G.daveAmt = 1; G.daveMilestones = false;
+  // Birb Sacrifice Room (map 8): sacrifice skill points toward milestone tiers I-XVIII
+  function sacrificePanel() {
+    const s = G.s, X = PT.EXP, lv = X.sacLevel(s), pr = X.sacProgress(s), p = PT.parrotState(s), max = X.sacMaxUnlocked(s), T = X.SACRIFICE_TIERS;
+    const eff = (t) => [`aura qty x${t.auraQuantityMultiplier}`, `aura chance x${t.auraChanceMultiplier}`, `SP x${t.skillPointMultiplier}`, `popcorn x${t.popcornMultiplier}`, `seeds x${t.seedMultiplier}`,
+      t.parrotRadiusMultiplier > 1 ? `radius x${t.parrotRadiusMultiplier}` : "", t.parrotAttackSpeedMultiplier > 1 ? `speed x${t.parrotAttackSpeedMultiplier}` : "", t.auraRarityPromotionChance ? `promote ${t.auraRarityPromotionChance * 100}%` : ""].filter(Boolean).join(" · ");
+    const rows = T.map((t, i) => `<div class="note" style="opacity:${i < max ? 1 : 0.45}">${i < lv ? "✔" : i < max ? "○" : "🔒"} <b>${t.label}</b> (${fmt(t.cost)} SP): ${eff(t)}</div>`).join("");
+    const can = pr.target > 0 && p.skillPoints >= 1;
+    return `<div class="hero"><div class="big">${lv ? T[lv - 1].label : "-"}</div><div class="bar"><i style="width:${pr.cost ? Math.min(100, (pr.progress / pr.cost) * 100) : 100}%"></i></div>
+      <div class="sub">${pr.target ? `${fmt(pr.progress)} / ${fmt(pr.cost)} SP to ${T[pr.level - 1].label}` : lv >= 18 ? "ALL MILESTONES" : max === 3 ? "Unlock the expansion for IV-VI" : "Parrot rebirb I opens VII-XVIII"} · you have ${fmt(Math.floor(p.skillPoints))} SP</div></div>
+      <div class="devrow">${["all", "half", "quarter"].map((m) => `<button class="key ${can ? "" : "grey"}" data-act="sac_${m}" style="flex:1">${m.toUpperCase()}</button>`).join("")}</div>
+      ${X.canUnlockSacExpansion(s) ? `<div class="devrow"><button class="key" data-act="sac_expand" style="flex:1">EXPANSION · 50 Spirit Aura (have ${X.itemCount(s, "Spirit Aura")})</button></div>` : ""}
+      <div class="section">MILESTONES</div>${rows}`;
+  }
   function davePanel() {
     const s = G.s, d = PT.dave(s), need = PT.daveXpNeeded(d.level), I = d.instincts, c = PT.daveSeedCost(d.seedTrainingLevel), pts = d.unspentRebirbPoints || 0;
     const got = PT.DAVE_MILESTONES.filter(([, r]) => PT.daveRebirbs(s) >= r).length, xpm = (G.rates.daveXp || 0) * 60;
@@ -793,6 +807,7 @@
     parrot: { title: "PARROT", tabs: [["stats", "STATS"], ["skills", "SKILLS"], ["rebirb", "REBIRB"]], body: (t) => parrotPanel(t) },
     expfloors: { title: "EXPEDITION", body: () => expFloorsPanel() },
     minetree: { title: "TREASURE ROOM", body: () => mineTreePanel() },
+    sacrifice: { title: "SACRIFICE", body: () => sacrificePanel() },
   };
   // Birb aquarium window: BIOMES (donate per biome), RESONANCE (milestones), TOTAL (all bonuses)
   function aqBiomes() {
@@ -973,6 +988,7 @@
     else if (a === "parrotrebirb") toast(PT.parrotRebirb(G) ? "Parrot rebirb " + PT.parrotState(s).rebirbCount : "Not ready: " + PT.parrotRebirbNeed(s));
     else if (a === "expauto") { const e = PT.expState(s); e.isAutoAttack = !e.isAutoAttack; const r = e.activeRun; if (r) r.combatArmed = true; }
     else if (a === "expreset") toast(PT.EXP.resetFloor(G) ? "Floor reset" : "Not in a run");
+    else if (a.startsWith("sac_")) { if (a === "sac_expand") { if (!PT.EXP.unlockSacExpansion(s)) toast("Not enough Spirit Aura"); } else { const n = PT.EXP.sacrifice(s, a.slice(4)); toast(n ? `Sacrificed ${fmt(n)} SP` : "No skill points to sacrifice"); } }
     else if (a === "davetrain") { if (!PT.daveTrain(s)) toast("Not enough seeds"); }
     else if (a === "daverefund") PT.daveRefund(s);
     else if (a === "davems") G.daveMilestones = !G.daveMilestones;

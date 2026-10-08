@@ -1,33 +1,37 @@
 # Parity report
 
-Birb's live engine (birbplay.com `window.game`) vs the playtest, same save state per scenario. Generated 2026-10-08T20:27Z by `playtest/parity/parity.js`.
+Birb's live engine (birbplay.com `window.game`) vs the playtest, same save state per scenario. Generated 2026-10-08T20:38Z by `playtest/parity/parity.js`.
 
-**17961 / 17961 values match.** Birb's live community-goal twig reward today: x1.5 (copied into the playtest for the run).
+**25671 / 25671 values match.** Birb's live community-goal twig reward today: x1.5 (copied into the playtest for the run).
 
 | Scenario | Values | Mismatches |
 |---|---|---|
-| fresh start | 714 | 0 |
-| early eggs | 714 | 0 |
-| first molt done | 714 | 0 |
-| seeds online | 714 | 0 |
-| evolve unlocked | 714 | 0 |
-| evolution 1 | 714 | 0 |
-| evolution 3 | 714 | 0 |
-| aquarium early | 717 | 0 |
-| aquarium mid | 717 | 0 |
-| aquarium full + market | 717 | 0 |
-| nest start | 714 | 0 |
-| nest boxes | 714 | 0 |
-| nest tier 2 | 726 | 0 |
-| mine start | 714 | 0 |
-| mine mid | 714 | 0 |
-| mine deep | 714 | 0 |
-| desert start | 714 | 0 |
-| desert dave | 714 | 0 |
-| desert sandstorm late | 714 | 0 |
-| expedition start | 1830 | 0 |
-| expedition rebirb 1 | 714 | 0 |
-| expedition late | 1830 | 0 |
+| fresh start | 729 | 0 |
+| early eggs | 729 | 0 |
+| first molt done | 729 | 0 |
+| seeds online | 729 | 0 |
+| evolve unlocked | 729 | 0 |
+| evolution 1 | 729 | 0 |
+| evolution 3 | 729 | 0 |
+| aquarium early | 732 | 0 |
+| aquarium mid | 732 | 0 |
+| aquarium full + market | 732 | 0 |
+| nest start | 729 | 0 |
+| nest boxes | 729 | 0 |
+| nest tier 2 | 741 | 0 |
+| mine start | 729 | 0 |
+| mine mid | 729 | 0 |
+| mine deep | 729 | 0 |
+| desert start | 729 | 0 |
+| desert dave | 729 | 0 |
+| desert sandstorm late | 729 | 0 |
+| expedition start | 1845 | 0 |
+| expedition rebirb 1 | 729 | 0 |
+| expedition late | 1845 | 0 |
+| sacrifice tier I | 1845 | 0 |
+| sacrifice capped III | 1845 | 0 |
+| sacrifice expansion V | 1845 | 0 |
+| sacrifice rebirb XIV | 1845 | 0 |
 
 ### fresh start
 
@@ -114,5 +118,21 @@ All match.
 All match.
 
 ### expedition late
+
+All match.
+
+### sacrifice tier I
+
+All match.
+
+### sacrifice capped III
+
+All match.
+
+### sacrifice expansion V
+
+All match.
+
+### sacrifice rebirb XIV
 
 All match.

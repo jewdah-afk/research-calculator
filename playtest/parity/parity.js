@@ -65,7 +65,11 @@ function probe({ side, scenario }) {
         total: (k) => g.getParrotTotalStats()[k], gear: (k) => g.getEquipmentMultipliers()[k], spMult: () => g.getParrotRebirbSkillPointMultiplier(), rebirb: () => g.canPerformParrotRebirb(),
         ext: (k) => g.getQuestMerchantExpeditionBonuses()[k], muad: () => g.getMuadBirbSkillPointMultiplier(), add: (k) => g.getParrotSkillAdditions()[k],
         range: (t, b) => em.getEnemyRetaliationTriggerRange({ type: t, isBoss: b, attackRange: em.constructor && undefined }), strike: (t, b) => em.getParrotStrikeDistance({ type: t, isBoss: b }),
-        respawn: (x) => em.getEffectiveEnemyRespawnDelaySeconds(x), shiny: () => g.getExpeditionShinyEnemyChance(), resetCost: () => { const sk = s.parrot.skills, t = sk.hp + sk.lifeRegen + sk.damage; return t <= 0 ? 0 : Math.max(1, Math.ceil(Math.sqrt(0.01 * t))); },
+        respawn: (x) => em.getEffectiveEnemyRespawnDelaySeconds(x), shiny: () => g.getExpeditionShinyEnemyChance(), sac: { level: () => em.getCommonSacrificeMilestoneLevel(), target: () => em.getCommonSacrificeMilestoneTarget(), popcorn: () => em.getSacrificePopcornMultiplier(), sp: () => em.getCommonSacrificeSkillPointMultiplier(),
+          radius: () => em.getSacrificeParrotRadiusMultiplier(), seed: () => em.getSacrificeSeedMultiplier(), qty: () => em.getSacrificeAuraQuantityMultiplier(), chance: () => em.getCommonSacrificeChestChanceMultiplier(),
+          promo: () => em.getSacrificeAuraRarityPromotionChance(), canExpand: () => em.canUnlockCommonMilestoneExpansion(), maxLv: () => em.getCommonSacrificeMilestoneMaxUnlockedLevel(),
+          progress: () => em.getCommonSacrificeMilestoneProgressByTarget(em.getCommonSacrificeMilestoneTarget()), atk: () => { em.refreshParrotBonuses(g.getEquippedArtifactNames(), g.getEquipmentMultipliers(), g.getEquippedArtifactInfusionLevels()); return em.parrotBonuses.attackSpeedMult; }, move: () => em.parrotBonuses.moveSpeedMult, range: () => em.getEffectiveParrotRangeMultiplier() },
+        resetCost: () => { const sk = s.parrot.skills, t = sk.hp + sk.lifeRegen + sk.damage; return t <= 0 ? 0 : Math.max(1, Math.ceil(Math.sqrt(0.01 * t))); },
       }; })(),
       desert: {
         chance: () => g.getDesertGoldenPopcornChance(), interval: () => g.getSpawnInterval(9) / g.getDesertPopcornSpawnRateMultiplier(), perDrop: () => g.calculateGoldenPopcornGainPerDrop(),
@@ -119,6 +123,9 @@ function probe({ side, scenario }) {
         sp: (t, l, h, m, b, f, r) => X.spReward(t, l, h, m, b, f, r), spScale: (sp, f, r) => X.floorSpScale(sp, f, r), total: (k) => PT.parrotTotalStats(s)[k], gear: (k) => X.gearMults(s)[k],
         spMult: () => X.rebirbSpMult(s), rebirb: () => PT.parrotRebirbReady(s), ext: (k) => X.externalBonuses(s)[k], muad: () => X.muadBirb(s), add: (k) => X.skillAdditions(s)[k],
         range: (t, b) => X.triggerRange({ type: t, isBoss: b }), strike: (t, b) => X.strikeDist({ type: t, isBoss: b }), respawn: (x) => X.effectiveRespawn(s, x), shiny: () => X.shinyChance(s), resetCost: () => PT.parrotResetCost(s),
+        sac: { level: () => X.sacLevel(s), target: () => X.sacTarget(s), popcorn: () => PT.sacrificePopcornMult(s), sp: () => X.sacSpMult(s), radius: () => X.sacRadiusMult(s), seed: () => X.sacSeedMult(s),
+          qty: () => X.sacProfile(s).auraQuantityMultiplier, chance: () => X.sacProfile(s).auraChanceMultiplier, promo: () => X.sacProfile(s).auraRarityPromotionChance, canExpand: () => X.canUnlockSacExpansion(s),
+          maxLv: () => X.sacMaxUnlocked(s), progress: () => X.sacProgress(s).progress, atk: () => { const b = X.parrotBonuses(s); return b.attackSpeedMult; }, move: () => X.parrotBonuses(s).moveSpeedMult, range: () => { X.bonuses = X.parrotBonuses(s); return X.rangeMult(); } },
       }; })(),
       desert: {
         chance: () => PT.desertGoldenChance(s), interval: () => PT.desertSpawnInterval(s), perDrop: () => PT.goldenPerDrop(s),
@@ -195,6 +202,7 @@ function probe({ side, scenario }) {
   for (const k of ["hpMult", "damageMult", "lifeRegenMult", "skillPointMult", "attackSpeedMult"]) put(`parrot additions ${k}`, () => Ex.add(k));
   for (const k of ["damageMult", "hpMult", "skillPointMult", "chestRewardMult", "combatRegenPenaltyReduction", "lootAuraChanceFlat"]) put(`parrot external ${k}`, () => Ex.ext(k));
   put("parrot rebirb sp mult", Ex.spMult); put("parrot can rebirb", Ex.rebirb); put("parrot muad birb", Ex.muad); put("parrot boss respawn s", () => Ex.respawn(480)); put("exp shiny chance", Ex.shiny); put("parrot reset cost", Ex.resetCost);
+  for (const k of ["level", "target", "popcorn", "sp", "radius", "seed", "qty", "chance", "promo", "canExpand", "maxLv", "progress", "atk", "move", "range"]) put(`sacrifice ${k}`, Ex.sac[k]);
   const Dz = A.desert;
   for (const k of ["chance", "interval", "perDrop", "eggMult", "bloom", "storm", "speed", "delay", "sweep", "burst", "golden", "canRebirb", "xpGain", "rebirbs", "unspent", "goldenAuto"]) put(`desert ${k}`, Dz[k]);
   for (const c of [false, true]) put(`desert golden collect caramel=${c}`, () => Dz.collect(c));
