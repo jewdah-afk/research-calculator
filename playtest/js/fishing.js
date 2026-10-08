@@ -437,7 +437,7 @@
     if (PT.hasSun(s, "d_seagull_xp")) a = Math.floor(1.5 * a);
     if (PT.hasSun(s, "d_seagull_synergy")) a = Math.floor(a * Math.max(0, PT.activeFishMult(s, "xp_mult") || 1));
     const ft = PT.sunLevel(s, "d_fleet_training"); if (ft > 0) a = Math.floor(a * (1 + 0.06 * ft));
-    a = Math.max(1, Math.floor(a * xpMult));
+    a = Math.max(1, Math.floor(a * xpMult * (PT.flockMemoryMult ? PT.flockMemoryMult(s, "seagull") : 1))); // Birb: x n x $l(state, "seagull")
     if (sg.migrationCount >= 5) { const t = Math.floor(a * (PT.hasSun(s, "d_ancestral_radio") ? 0.1 : 0.05) * shareMult); if (t > 0 && s.sparrow.unlocked) s.sparrow.xp += t; }
     const cap = PT.gullCap(s); if (sg.level >= cap) return a;
     sg.xp += a;

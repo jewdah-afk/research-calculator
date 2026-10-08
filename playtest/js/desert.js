@@ -154,9 +154,9 @@
     const d = PT.dave(s), t = inst(s, "scavenger") + inst(s, "sweep") + inst(s, "gilded"); if (t <= 0) return false;
     d.instincts = { scavenger: 0, sweep: 0, gilded: 0 }; d.unspentRebirbPoints = ky(ky(d.unspentRebirbPoints) + t); d.autoRebirbEnabled = false; return true;
   };
-  // Birb awardDaveXp (echo grove "dave" bonus is Phase 7)
+  // Birb awardDaveXp (x Flock Memory)
   function daveXp(G, base) {
-    const s = G.s, a = Math.max(0, base) * PT.daveXpGainMult(s);
+    const s = G.s, a = Math.max(0, base) * PT.daveXpGainMult(s) * (PT.flockMemoryMult ? PT.flockMemoryMult(s, "dave") : 1);
     if (a <= 0 || !PT.hasSun(s, "d_desert_collared_dove")) return;
     const d = PT.dave(s); d.xp += a; d.lifetimePopcornCollected++; G.gain("daveXp", a);
     let ups = 0, need = PT.daveXpNeeded(d.level);

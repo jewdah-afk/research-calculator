@@ -301,6 +301,7 @@
     if (PT.hasSun(s, "d_sparrow_wisdom")) t *= 1.5;
     t *= sqrtBoost(s.sparrowPrestigeCount || 0, 2);
     if (feed) t *= milestoneMult(s, "seed_feed_xp_mult");
+    if (PT.flockMemoryMult) t *= PT.flockMemoryMult(s, "sparrow"); // Birb $l(state, "sparrow"): Flock Memory
     return t; // hat bonus: none in the playtest
   }
   PT.seedFeedXp = (s) => sparrowXpMult(s, true);

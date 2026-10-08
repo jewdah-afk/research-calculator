@@ -131,6 +131,7 @@
       attackSpeedMult: f(s, "expedition_attack_speed_mult"), moveSpeedMult: f(s, "expedition_move_speed_mult"), chestChanceFlat: q(s, "expedition_chest_chance_flat"),
       chestRewardMult: q(s, "expedition_chest_reward_mult") + f(s, "expedition_chest_reward_mult") + (PT.hasSun(s, "d_desert_salvage_rights") ? 0.25 : 0) + (PT.hasSun(s, "d_desert_dune_scouts") ? 0.5 : 0) + (X.community("chestRewards") - 1),
       contractChestRewardBonus: f(s, "expedition_chest_reward_mult"), lootAuraChanceFlat: PT.hasSun(s, "d_desert_blossom_route") ? 0.05 : 0,
+      parrotXpMultiplier: PT.flockMemoryMult ? PT.flockMemoryMult(s, "parrot") : 1, mythicAuraCopyChance: PT.mythicCopyChance ? PT.mythicCopyChance(s) : 0,
     };
   };
   X.mythicFinal = (s) => ((s.expedition?.mythicSacrifice?.level ?? 0) >= 1 ? 1.2 : 1);
@@ -164,6 +165,7 @@
 
   // ------------------------------------------------------------------ progress: XP from skill points (Birb addXp / awardProgressFromSkillPoints / uU)
   X.addXp = function (s, n) {
+    n *= Math.max(1, X.externalBonuses(s).parrotXpMultiplier || 1); // Birb addXp x Flock Memory (Shared Knowledge)
     const pr = PT.expState(s).progress; pr.xp += n; pr.totalXpEarned += n; let up = false;
     while (pr.xp >= pr.xpToNextLevel) { pr.xp -= pr.xpToNextLevel; pr.level++; pr.xpToNextLevel = X.xpReq(pr.level); up = true; }
     PT.parrotState(s).level = pr.level;

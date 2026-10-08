@@ -266,7 +266,7 @@
     cx.setTransform(1, 0, 0, 1, 0, 0);
     cx.fillStyle = "#1a2a1c"; cx.fillRect(0, 0, cv.width, cv.height);
     cx.setTransform(cam.k, 0, 0, cam.k, cam.x * cam.k, cam.y * cam.k);
-    const bg = { 0: "#5f9a45", 1: archivistView() ? "#3b2f55" : desertView() ? "#c8a46a" : "#6fa553", 2: "#6fa553", 3: "#5c5f66", 30: "#2c2547" }[s.currentMap];
+    const bg = { 0: "#5f9a45", 1: archivistView() ? "#7b3fae" : desertView() ? "#c8a46a" : "#6fa553", 2: "#6fa553", 3: "#5c5f66", 30: "#7b3fae" }[s.currentMap];
     cx.fillStyle = bg; roundRect(0, 0, m.w, m.h, 24); cx.fill();
     cx.lineWidth = 6; cx.strokeStyle = "#0b0c10"; cx.stroke();
     if (s.currentMap === 0) {

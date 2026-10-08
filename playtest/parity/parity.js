@@ -250,7 +250,7 @@ function probe({ side, scenario }) {
   for (const k of ["hp", "damage", "lifeRegen"]) put(`parrot total ${k}`, () => Ex.total(k));
   for (const k of ["beakMult", "armorMult", "auraMult"]) put(`parrot gear ${k}`, () => Ex.gear(k));
   for (const k of ["hpMult", "damageMult", "lifeRegenMult", "skillPointMult", "attackSpeedMult"]) put(`parrot additions ${k}`, () => Ex.add(k));
-  for (const k of ["damageMult", "hpMult", "skillPointMult", "chestRewardMult", "combatRegenPenaltyReduction", "lootAuraChanceFlat", "lifeRegenMult", "attackSpeedMult", "moveSpeedMult", "contractChestRewardBonus"]) put(`parrot external ${k}`, () => Ex.ext(k));
+  for (const k of ["damageMult", "hpMult", "skillPointMult", "chestRewardMult", "combatRegenPenaltyReduction", "lootAuraChanceFlat", "lifeRegenMult", "attackSpeedMult", "moveSpeedMult", "contractChestRewardBonus", "parrotXpMultiplier", "mythicAuraCopyChance"]) put(`parrot external ${k}`, () => Ex.ext(k));
   put("parrot rebirb sp mult", Ex.spMult); put("parrot can rebirb", Ex.rebirb); put("parrot muad birb", Ex.muad); put("parrot boss respawn s", () => Ex.respawn(480)); put("exp shiny chance", Ex.shiny); put("parrot reset cost", Ex.resetCost);
   for (const k of ["damageMult", "hpMult", "hpAdd", "lifeRegenAdd", "lifeRegenMult", "combatRegenPenaltyReduction", "attackSpeedMult", "moveSpeedMult", "inventorySpace"]) put(`artifact bonus ${k}`, () => Ex.loot.ab(k));
   { const P = [0, 1, 2, { copies: 2, primaryPower: 1.2, secondaryPower: 1.04 }, { copies: 1, primaryPower: 1.4, secondaryPower: 0 }];

@@ -144,7 +144,7 @@
   PT.crowRebirb = function (s) { if (!PT.crowCanRebirb(s)) return false; const m = PT.mineState(s); m.crowRebirbLegacyCount = Math.min(m.crowRebirbCount, legacy(m)); m.crowTrainingLevel = Math.max(1, m.crowLevel, m.crowTrainingLevel); m.crowRebirbCount++; m.crowLevel = 1; m.crowXp = 0; return true; };
   function crowXp(G, ore) { // Birb addMineCrowXp (every non-giant break)
     const s = G.s, m = PT.mineState(s);
-    const gain = Math.max(1, Math.ceil(Math.max(1, Math.floor(ore.xpBase || 1)) * (ore.golden ? 2 : 1) * (1 + 0.15 * PT.mineArea(s)) * Math.pow(1.25, m.crowRebirbCount)));
+    const gain = Math.max(1, Math.ceil(Math.max(1, Math.floor(ore.xpBase || 1)) * (ore.golden ? 2 : 1) * (1 + 0.15 * PT.mineArea(s)) * Math.pow(1.25, m.crowRebirbCount) * (PT.flockMemoryMult ? PT.flockMemoryMult(s, "crow") : 1)));
     m.crowXp += gain; while (m.crowXp >= PT.crowXpNeeded(m.crowLevel)) { m.crowXp -= PT.crowXpNeeded(m.crowLevel); m.crowLevel++; }
     m.crowTrainingLevel = Math.max(m.crowTrainingLevel, m.crowLevel);
   }
