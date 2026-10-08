@@ -12,7 +12,7 @@ INK = np.array([11, 12, 16])
 SIZE = 256
 # only these keep see-through holes (frame centre, hook eyes, gaps between rod and line); everything else is a
 # solid sticker, so dark mouths and bodies on fish are never punched out
-OPEN_HOLES = ('avatar_frame', 'hook_', 'lure_', 'rod_')
+OPEN_HOLES = ('avatar_frame', 'hook_', 'lure_', 'rod_', 'badge_regen', 'up_heart_regen')
 
 def cut(sheet, cols, rows, names, out=os.path.join(HERE, 'final')):
     src = np.asarray(Image.open(sheet).convert('RGB')).astype(float)

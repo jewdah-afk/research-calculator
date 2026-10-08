@@ -13,7 +13,7 @@ FINAL = os.path.join(HERE, 'final')
 BACKUP = os.path.join(HERE, 'final_pre_ring')
 INK = np.array([11, 12, 16], float)
 R = 6.0          # ring width in px at 256
-OPEN_HOLES = ('avatar_frame', 'hook_', 'lure_', 'rod_')
+OPEN_HOLES = ('avatar_frame', 'hook_', 'lure_', 'rod_', 'badge_regen', 'up_heart_regen')
 
 def clean(path, name):
     src = os.path.join(BACKUP, os.path.relpath(path, FINAL))

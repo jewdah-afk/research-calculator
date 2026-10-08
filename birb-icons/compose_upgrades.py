@@ -8,7 +8,7 @@ import clean_ring
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FINAL = os.path.join(HERE, 'final')
-SIZE, BADGE, INSET = 256, 118, 4   # badge box (px at 256) and its offset from the bottom-right corner
+SIZE, BADGE, INSET = 256, 112, 10  # badge box (px at 256) and its offset from the bottom-right corner
 BASE_SCALE = 0.9                   # shrink the base a little toward the top-left so the badge has room
 
 UPGRADES = {
@@ -19,6 +19,7 @@ UPGRADES = {
     'mining_power': ('crow_miner', 'power'), 'ore_value': ('ore', 'up'),
     'twig_value': ('twig', 'up'), 'twig_speed': ('twig', 'speed'), 'twig_power': ('twig', 'power'),
     'echo_value': ('echo', 'up'), 'echo_cap': ('echo', 'cap'),
+    'heart_value': ('stat_heart', 'up'), 'heart_regen': ('stat_heart', 'regen'), 'sword_power': ('stat_sword', 'power'),
 }
 
 def compose(name, base, badge):
