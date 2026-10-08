@@ -86,7 +86,7 @@
     if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
     G.keys.add(e.key.toLowerCase());
     const k = e.key.toLowerCase();
-    if (k === "e") tryStation();
+    if (k === "e") { if (G.s.currentMap === PT.FISH_MARKET_MAP) openWin("market", "market"); else if (G.s.currentMap !== 1 && PT.aquariumUnlocked(G.s)) openWin("aquarium"); else tryStation(); }
     if (k === " ") { e.preventDefault(); cast(); }
     if (k === "tab") { e.preventDefault(); G.companionsOpen = !G.companionsOpen; drawHud(); }
     if (k === "p") openWin("profile");
@@ -135,6 +135,17 @@
     G.s.player.x = dir > 0 ? 80 : m.w - 80; G.s.player.y = m.id === 1 ? 640 : m.h / 2; G.target = null; G.vx = G.vy = 0;
     save();
   }
+  function travelVert(dir) {
+    const why = PT.vertBlock(G.s, dir);
+    if (why) { if (why !== "end") toast(why); return; }
+    G.s.currentMap = PT.vertLinks[G.s.currentMap][dir];
+    const m = PT.MAPS[G.s.currentMap]; G.s.player.x = m.w / 2; G.s.player.y = dir === "down" ? 140 : m.h - 140; G.target = null; G.vx = G.vy = 0;
+    if (G.s.currentMap === PT.FISH_MARKET_MAP) PT.marketSync(G.s);
+    save();
+  }
+  document.getElementById("go-up").onclick = () => travelVert("up");
+  document.getElementById("go-down").onclick = () => travelVert("down");
+  document.getElementById("btn-aquarium").onclick = () => openWin(G.s.currentMap === PT.FISH_MARKET_MAP ? "market" : "aquarium");
   document.getElementById("go-left").onclick = () => travel(-1);
   document.getElementById("go-right").onclick = () => travel(1);
 
@@ -207,11 +218,34 @@
     }
     if (s.currentMap === 1) drawSunflowerField();
     if (s.currentMap === 2) drawBridge();
+    if (s.currentMap === PT.AQUARIUM_MAP) drawAquarium();
+    if (s.currentMap === PT.FISH_MARKET_MAP) drawMarket();
     if (s.currentMap === 3) { drawIcon("monster", 800, 500, 200); if (!s.hasTalkedToMonster) label("Click the monster", 800, 640, 22); }
     // pickup radius ring + bird
     if (s.currentMap === 0) { cx.beginPath(); cx.arc(s.player.x, s.player.y, PT.pickupProfile(s).collectRadius, 0, 7); cx.strokeStyle = "rgba(255,255,255,.25)"; cx.lineWidth = 2; cx.stroke(); }
     drawIcon("birb", s.player.x, s.player.y, 48, G.vx < -5);
     for (const f of G.floats) if (f.map === s.currentMap) { cx.globalAlpha = Math.min(1, f.life / 0.4); label(f.text, f.x, f.y, 16, f.color); cx.globalAlpha = 1; }
+  }
+  function drawAquarium() {
+    const a = PT.aq(G.s);
+    cx.fillStyle = "#1d3b5a"; roundRect(0, 0, 1600, 1100, 24); cx.fill();
+    PT.AQ_BIOMES.forEach((b, i) => {
+      const x = 120 + (i % 3) * 460, y = 200 + Math.floor(i / 3) * 260, pr = PT.aqBiome(a, b.id);
+      cx.fillStyle = "#0e2236"; roundRect(x, y, 400, 220, 18); cx.fill(); cx.lineWidth = 4; cx.strokeStyle = b.color; cx.stroke();
+      cx.fillStyle = b.color; cx.globalAlpha = 0.35; roundRect(x + 6, y + 220 - 6 - 208 * pr.completionRatio, 388, 208 * pr.completionRatio, 14); cx.fill(); cx.globalAlpha = 1;
+      label(b.id.toUpperCase(), x + 200, y + 40, 22, b.color);
+      label(`${pr.housedSpecies} / ${pr.totalSpecies} species · tier ${pr.tierCount}`, x + 200, y + 120, 16);
+      label(`+${(PT.aqBiomeBuff(a, b.id) * 100).toFixed(0)}% ${b.modifierType.replace(/_mult$/, "").replace(/_/g, " ")}`, x + 200, y + 160, 15, "#c8ffb0");
+    });
+    label(`RESONANCE ${PT.aqPoints(a)}`, 270, 150, 24, "#ffd27a"); label("press E to donate", 1330, 150, 20, "#ffd27a");
+  }
+  function drawMarket() {
+    cx.fillStyle = "#dfeefa"; roundRect(0, 0, 1056, 792, 24); cx.fill();
+    const stall = (x, y, ic, name) => { cx.fillStyle = "#c0392b"; roundRect(x - 140, y - 90, 280, 70, 12); cx.fill(); cx.lineWidth = 4; cx.strokeStyle = "#0b0c10"; cx.stroke();
+      for (let i = x - 140; i < x + 140; i += 40) { cx.fillStyle = "#f4f1ea"; cx.fillRect(i, y - 90, 20, 30); }
+      cx.fillStyle = "#8a5a32"; roundRect(x - 120, y - 20, 240, 90, 10); cx.fill(); cx.stroke(); drawIcon(ic, x, y + 25, 70); label(name, x, y + 110, 18, "#0b0c10"); };
+    stall(260, 420, "bait", "BAIT MERCHANT"); stall(796, 420, "quest_scroll", "FISH CONTRACTS");
+    label("Press E for contracts", 528, 680, 20, "#2563eb");
   }
   function drawBridge() {
     const s = G.s, F = G.fish || {};
@@ -458,7 +492,7 @@
     return `<div class="dev">
       <div class="devrow">Speed ${[1, 10, 100, 1000].map((x) => `<button class="key small ${G.timeScale === x ? "violet" : ""}" data-speed="${x}">x${x}</button>`).join("")}</div>
       <div class="devrow"><select data-in="givecur">${curs}</select><input data-in="giveamt" value="1e6" style="width:90px"><button class="key small" data-act="give">Give</button></div>
-      <div class="devrow"><button class="key small" data-act="evo+">Evolution +1 (no reset)</button><button class="key small" data-act="allsun">Own all visible unlocks</button></div>
+      <div class="devrow"><button class="key small" data-act="evo+">Evolution +1 (no reset)</button><button class="key small" data-act="allsun">Own all visible unlocks</button><button class="key small" data-act="fish50">+50 random fish</button></div>
       <div class="devrow"><button class="key small" data-act="export">Export save</button><button class="key small" data-act="import">Import save</button><button class="key small grey" data-act="wipe">Wipe save</button></div>
       <textarea data-in="savebox" placeholder="Export puts the save here. Paste a save and press Import.">${saveBox}</textarea>
       ${s_hasDesert() ? `<div class="devrow"><button class="key small" data-act="treeview">Show the ${desertView() ? "sunflower" : "desert"} tree</button></div>` : ""}
@@ -474,11 +508,62 @@
     profile: { title: "PROFILE", body: () => statsPanel() },
     settings: { title: "SETTINGS", body: () => devPanel() },
     travel: { title: "FAST TRAVEL", body: () => travelPanel() },
+    aquarium: { title: "AQUARIUM", tabs: [["biomes", "BIOMES"], ["resonance", "RESONANCE"], ["total", "TOTAL"], ["market", "FISH MARKET"]], body: (t) => (t === "resonance" ? aqResonance() : t === "total" ? aqTotal() : t === "market" ? marketPanel() : aqBiomes()) },
+    market: { title: "FISH MARKET", body: () => marketPanel() },
   };
-  function openWin(id) {
+  // Birb aquarium window: BIOMES (donate per biome), RESONANCE (milestones), TOTAL (all bonuses)
+  function aqBiomes() {
+    const s = G.s, a = PT.aq(s), here = s.currentMap === PT.AQUARIUM_MAP;
+    const bs = PT.AQ_BIOMES.map((b) => { const pr = PT.aqBiome(a, b.id); return `<button class="biome ${a.activeBiomeId === b.id ? "on" : ""}" data-biome="${b.id}"><b style="color:${b.color}">${b.id.toUpperCase()}</b>${pr.housedSpecies}/${pr.totalSpecies} · tier ${pr.tierCount}/${pr.maxTierCount}<br>+${(PT.aqBiomeBuff(a, b.id) * 100).toFixed(0)}% ${b.modifierType.replace(/_mult$/, "").replace(/_/g, " ")}</button>`; }).join("");
+    const b = PT.AQ_BIOMES.find((x) => x.id === a.activeBiomeId);
+    const rows = PT.FISH.filter((f) => f.type && b.fishTypes.includes(f.type)).sort((x, y) => RANK[x.rarity] - RANK[y.rarity]).map((f) => {
+      const h = PT.aqHoused(a, f.id), sh = PT.aqShinyStored(a, f.id), pn = PT.aqDonatePreview(s, f.id, false), ps = PT.aqDonatePreview(s, f.id, true);
+      return `<div class="row"><img class="ico" src="${FISHICON(f.id)}" style="${h ? "" : "filter:brightness(0) opacity(.5)"}" alt=""><div><div class="t" style="color:${PT.RARITY_COLOR[f.rarity]}">${(s.discoveredFish || []).includes(f.id) ? PT.fishName(f.id) : "???"}${sh ? " ★" : ""}</div>
+        <div class="d">${f.rarity} · ${h ? (sh ? "shiny donated" : "donated") : "not donated"} · ${pn.availableCount} owned (${pn.usableCount} safe)${ps.availableCount ? " · " + ps.availableCount + " shiny" : ""}</div>
+        <div class="lv">ref. weight ${PT.aqRefWeight(s, f.id).toFixed(2)} kg${sh ? ` · +${(PT.aqWeightBonus(PT.aqRefWeight(s, f.id)) * 100).toFixed(3)}% shiny` : ""}</div></div>
+        <div class="btns">${h ? "" : `<button class="key small ${pn.canDonate ? "" : "grey"}" data-donate="${f.id}" title="${pn.reason || ""}">DONATE +${pn.pointsGain}</button>`}
+        ${sh ? "" : `<button class="key small ${ps.canDonate ? "gold" : "grey"}" data-donates="${f.id}" title="${ps.reason || ""}">SHINY +${ps.pointsGain}</button>`}</div></div>`;
+    }).join("");
+    const all = PT.aqDonateAllPreview(s);
+    return `<div class="note">${here ? "Donate one of each fish to house it. Shiny donations count double." : "Travel to the Aquarium (down from the Bridge) to donate."} Resonance <b>${PT.aqPoints(a)}</b>.</div>
+      <div class="biomes">${bs}</div><div class="devrow"><button class="key small ${all.length ? "" : "grey"}" data-act="donateall">DONATE ALL (${all.length})</button></div>${rows}`;
+  }
+  function aqResonance() {
+    const a = PT.aq(G.s), pts = PT.aqPoints(a), got = new Set(PT.aqMilestones(a).map((m) => m.id));
+    return `<div class="note">Resonance ${pts}: each housed species gives 1 (common) to 6 (mythic) points, x2 if its shiny is donated. ${PT.aqHousedCount(a)} species housed, ${PT.aqShinyCount(a)} shiny.</div>
+      ${[...PT.AQ_MILESTONES].sort((x, y) => x.points - y.points).map((m) => `<div class="row"><img class="ico" src="${ICON("aquarium")}" alt=""><div><div class="t">${m.title}</div><div class="d">${m.text}</div><div class="bar"><i style="width:${Math.min(100, (pts / m.points) * 100)}%"></i></div></div>
+        <div class="btns"><button class="key small ${got.has(m.id) ? "gold" : "grey"}">${got.has(m.id) ? "REACHED" : pts + " / " + m.points}</button></div></div>`).join("")}`;
+  }
+  function aqTotal() {
+    const s = G.s, kv = (a, b) => `<span>${a}</span><span>${b}</span>`;
+    const types = ["popcorn_mult", "feather_mult", "seed_mult", "golden_popcorn_mult", "speed_mult", "pickup_mult", "reel_speed_mult", "xp_mult", "parrot_damage_mult"];
+    const a = PT.aq(s), tiers = PT.AQ_BIOMES.reduce((n, b) => n + PT.aqBiome(a, b.id).tierCount, 0);
+    const card = (k, v) => `<div class="biome"><b>${v}</b>${k}</div>`;
+    return `<div class="biomes">${card("housed species", PT.aqHousedCount(a))}${card("shiny species", PT.aqShinyCount(a))}${card("resonance points", PT.aqPoints(a))}${card("biome tiers", tiers)}</div>
+      <div class="section">AQUARIUM TOTAL</div><div class="kv">${types.map((t) => kv(t.replace(/_mult$/, "").replace(/_/g, " "), "x" + PT.aqModifier(s, t).toFixed(3))).join("")}
+      ${kv("shiny chance", "x" + PT.aqShinyChanceMult(s).toFixed(4))}${kv("normal fish buffs", "x" + PT.aqNormalBuffMult(s).toFixed(2))}
+      ${kv("shiny buff duration", PT.aqShinyBuffMs(s) / 3600e3 + " h")}${kv("extra fish buff slots", PT.aqBuffSlots(s))}${kv("fish market", PT.fishMarketUnlocked(s) ? "open" : "locked")}</div>`;
+  }
+  // Birb fish market: daily contracts (3 offers), reputation levels, accepted slots, rerolls, timed buffs
+  function marketPanel() {
+    const s = G.s; if (!PT.fishMarketUnlocked(s)) return `<div class="note">The Fish Market opens at 700 aquarium resonance.</div>`;
+    PT.marketSync(s); const m = PT.market(s), rp = PT.repProgress(s), now = Date.now();
+    const req = (q) => { const o = PT.contractOwned(s, q); return `<div class="req ${o >= q.count ? "ok" : ""}"><img src="${FISHICON(q.fishId)}" alt="">${q.shiny ? "★ " : ""}${PT.fishName(q.fishId)} ${Math.min(o, q.count)}/${q.count}</div>`; };
+    const rew = (r) => `<b style="color:${PT.RARITY_COLOR[r.rarity]}">${r.rarity}</b> · ${r.buffType.replace(/_mult$/, "").replace(/_/g, " ").toUpperCase()} x${(1 + r.value).toFixed(2)} for ${PT.fmtTime(r.durationMs / 1000)} · +${r.reputation} rep`;
+    const offers = m.contractOffers.map((c) => `<div class="contract"><div class="note">${rew(c.reward)}</div><div class="reqs">${c.requirements.map(req).join("")}</div><button class="key small" data-accept="${c.id}">ACCEPT</button></div>`).join("") || '<div class="note">No offers left today.</div>';
+    const acc = m.acceptedContracts.map((c) => { const ok = c.requirements.every((q) => PT.contractOwned(s, q) >= q.count);
+      return `<div class="contract"><div class="note">${rew(c.reward)}</div><div class="reqs">${c.requirements.map(req).join("")}</div><div class="devrow"><button class="key small ${ok ? "gold" : "grey"}" data-claim="${c.id}">CLAIM</button><button class="key small grey" data-abandon="${c.id}">ABANDON</button></div></div>`; }).join("") || '<div class="note">No accepted contracts.</div>';
+    const buffs = Object.entries(m.activeContractBuffs).flatMap(([k, l]) => l.filter((b) => b.expiresAt > now).map((b) => `<div class="note">● ${k.replace(/_mult$/, "").replace(/_/g, " ").toUpperCase()} x${(1 + b.value).toFixed(2)} · ${PT.fmtTime((b.expiresAt - now) / 1000)} left</div>`)).join("") || '<div class="note">No active buffs.</div>';
+    return `<div class="hero"><div class="big">REPUTATION RANK ${rp.level}</div><div class="bar"><i style="width:${rp.progress * 100}%"></i></div>
+      <div class="sub">${rp.xp} rep${rp.next !== null ? " / " + rp.next : " (max)"} · ${m.acceptedContracts.length}/${PT.contractSlots(s)} accepted · new offers in ${PT.fmtTime((m.nextRefreshAt - now) / 1000)}${m.contractAcceptCooldownUntil > now ? " · accept cooldown " + PT.fmtTime((m.contractAcceptCooldownUntil - now) / 1000) : ""}</div>
+      <button class="key small ${m.rerollsRemaining > 0 ? "blue" : "grey"}" data-act="reroll">REROLL (${m.rerollsRemaining})</button></div>
+      <div class="section">OFFERS</div>${offers}<div class="section">ACCEPTED (${m.acceptedContracts.length}/${PT.contractSlots(s)})</div>${acc}
+      <div class="section">ACTIVE BUFFS (${PT.contractBuffCount(s)}/${PT.contractSlots(s)})</div>${buffs}`;
+  }
+  function openWin(id, tab) {
     if (id === "fishing" && G.s.evolutionCount < 1) return toast("Fish Inventory opens at Evolution 1");
     if (G.win && G.win.id === id) return closeWin();
-    G.win = { id, tab: WINS[id].tabs ? WINS[id].tabs[0][0] : "" }; G.companionsOpen = false; winBody.dataset.last = ""; drawWin();
+    G.win = { id, tab: tab || (WINS[id].tabs ? WINS[id].tabs[0][0] : "") }; G.companionsOpen = false; winBody.dataset.last = ""; drawWin();
   }
   function closeWin() { G.win = null; winEl.hidden = true; }
   document.getElementById("win-close").onclick = closeWin;
@@ -486,7 +571,7 @@
     if (!G.win) { winEl.hidden = true; return; }
     const w = WINS[G.win.id]; winEl.hidden = false;
     document.getElementById("win-title").textContent = w.title;
-    const tabsH = (w.tabs || []).map(([k, n]) => `<button class="tab ${G.win.tab === k ? "on" : ""}" data-wtab="${k}">${n}</button>`).join("");
+    const tabsH = (w.tabs || []).filter(([k]) => k !== "market" || PT.fishMarketUnlocked(G.s)).map(([k, n]) => `<button class="tab ${G.win.tab === k ? "on" : ""}" data-wtab="${k}">${n}</button>`).join("");
     if (winTabs.dataset.last !== tabsH) { winTabs.innerHTML = tabsH; winTabs.dataset.last = tabsH; }
     const h = w.body(G.win.tab);
     if (winBody.dataset.last !== h) { const y = winBody.scrollTop; winBody.innerHTML = h; winBody.scrollTop = y; winBody.dataset.last = h; }
@@ -494,6 +579,8 @@
   winTabs.addEventListener("click", (e) => { const b = e.target.closest("[data-wtab]"); if (b) { G.win.tab = b.dataset.wtab; winBody.dataset.last = ""; winBody.scrollTop = 0; drawWin(); } });
   function reachable(m) { // maps you can walk to from the Park with the current gates
     const s = G.s; if (m === 0) return true;
+    if (m === PT.AQUARIUM_MAP) return reachable(2) && PT.aquariumUnlocked(s);
+    if (m === PT.FISH_MARKET_MAP) return reachable(PT.AQUARIUM_MAP) && PT.fishMarketUnlocked(s);
     const dir = m > 0 ? 1 : -1; let cur = 0;
     while (cur !== m) { const save = s.currentMap; s.currentMap = cur; const why = PT.travelBlock(s, dir); s.currentMap = save; if (why) return false; cur += dir; }
     return true;
@@ -521,6 +608,12 @@
     else if (b.dataset.teq) PT.equipTackle(s, b.dataset.teq);
     else if (b.dataset.eat) { const r = PT.eatFish(s, b.dataset.eat); toast(r || "Buff active"); }
     else if (b.dataset.lock) { const i = s.lockedFish.indexOf(b.dataset.lock); if (i < 0) s.lockedFish.push(b.dataset.lock); else s.lockedFish.splice(i, 1); }
+    else if (b.dataset.biome) PT.aq(s).activeBiomeId = b.dataset.biome;
+    else if (b.dataset.donate) { const r = PT.aqDonate(s, b.dataset.donate, false); toast(r || "Donated!"); }
+    else if (b.dataset.donates) { const r = PT.aqDonate(s, b.dataset.donates, true); toast(r || "Shiny donated!"); }
+    else if (b.dataset.accept) { const r = PT.acceptContract(s, b.dataset.accept); toast(r || "Contract accepted"); }
+    else if (b.dataset.claim) { const r = PT.claimContract(s, b.dataset.claim); toast(r || "Contract claimed!"); }
+    else if (b.dataset.abandon) { const r = PT.abandonContract(s, b.dataset.abandon); toast(r || "Contract abandoned (3h cooldown)"); }
     else if (b.dataset.go !== undefined) { const m = +b.dataset.go; if (reachable(m) && m !== s.currentMap) { s.currentMap = m; const mm = PT.MAPS[m]; s.player.x = mm.w / 2; s.player.y = m === 1 ? 640 : mm.h / 2; G.target = null; closeWin(); } }
     else if (b.dataset.act) act(b.dataset.act);
     panel.dataset.last = ""; winBody.dataset.last = ""; drawPanel(); drawWin(); drawHud(); save();
@@ -553,11 +646,14 @@
     else if (a === "cast") cast();
     else if (a === "autofish") { if (PT.autoFishUnlocked(s)) G.autoFish = !G.autoFish; else toast("Catch 10 fish by hand first"); }
     else if (a === "sellsafe") toast(PT.sellSafe(G));
+    else if (a === "donateall") toast(PT.aqDonateAll(s));
+    else if (a === "reroll") toast(PT.marketReroll(s) || "New offers");
     else if (a === "migrate") { const r = PT.migrate(s); toast(r || "Migrated!"); }
     else if (a === "frenzy") { const r = PT.frenzy(s); toast(r || "Frenzy!"); }
     else if (a === "evolve") { if (PT.evolve(G)) toast("Evolution " + s.evolutionCount + "!"); else toast("Feed it to 100% first"); }
     else if (a === "give") { PT.add(s, q("givecur").value, D(q("giveamt").value)); }
     else if (a === "evo+") s.evolutionCount = Math.min(6, s.evolutionCount + 1);
+    else if (a === "fish50") { PT.ensureFishing(s); for (let i = 0; i < 50; i++) PT.catchFish(G, false); }
     else if (a === "allsun") { for (const st of visibleStations()) if (!PT.hasSun(s, st[0])) s.sunflowerUpgrades[st[0]] = 1; if (s.sunflowerUpgrades.d_unlock_evolve) s.hasUnlockedEvolve = true; }
     else if (a === "export") { saveBox = btoa(serialize(s)); }
     else if (a === "import") { try { G.s = deserialize(atob(q("savebox").value.trim())); G.field.clear(); toast("Loaded"); } catch (e) { toast("Bad save"); } }
@@ -579,6 +675,14 @@
     document.getElementById("go-right").style.display = R === "end" ? "none" : "";
     document.getElementById("label-left").textContent = L === "end" ? "" : PT.MAPS[s.currentMap - 1]?.name || "";
     document.getElementById("label-right").textContent = R === "end" ? "" : PT.MAPS[s.currentMap + 1]?.name || "";
+    for (const d of ["up", "down"]) {
+      const why = PT.vertBlock(s, d), to = PT.vertLinks[s.currentMap]?.[d], el = document.getElementById("go-" + d);
+      el.style.display = why === "end" ? "none" : ""; el.classList.toggle("locked", !!why);
+      document.getElementById("label-" + d).textContent = why === "end" ? "" : s.currentMap === PT.FISH_MARKET_MAP ? "LEAVE MARKET" : PT.MAPS[to].name;
+    }
+    const aqb = document.getElementById("btn-aquarium");
+    aqb.style.display = PT.aquariumUnlocked(s) || s.currentMap === PT.FISH_MARKET_MAP ? "" : "none";
+    aqb.textContent = s.currentMap === PT.FISH_MARKET_MAP ? "[E] FISH MARKET" : "[E] AQUARIUM";
     // companions (Birb: COMPANIONS [TAB] dropdown)
     const comps = [];
     if (s.sparrow.unlocked) comps.push(["sparrow", `${s.sparrow.level} SPARROW`]);

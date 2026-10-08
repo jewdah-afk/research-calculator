@@ -85,14 +85,14 @@
   const usableLure = (s, id) => { const t = id && TACKLE_BY.get(id); return t && t.type === "lure" && !PT.tackleReq(s, t) ? id : undefined; };
 
   // ------------------------------------------------------------------ fish buffs (Birb getActiveFishEffectSnapshot)
-  const SHINY_BUFF_MS = 864e5; // 24h base; aquarium rewards add hours later
+  const SHINY_BUFF_MS = (s) => (PT.aqShinyBuffMs ? PT.aqShinyBuffMs(s) : 864e5); // 24h, +12h from the Glass Tide aquarium milestone
   PT.normalizeFishBuffs = function (s, now = Date.now()) {
     const out = [];
     for (const id of s.activeFishIds || []) {
       let n = id;
       if (isShiny(id)) {
         const at = Number(s.activeFishBuffs[id]?.activatedAt || 0);
-        if (at > 0 && now >= at + SHINY_BUFF_MS) { n = baseId(id); delete s.activeFishBuffs[id]; }
+        if (at > 0 && now >= at + SHINY_BUFF_MS(s)) { n = baseId(id); delete s.activeFishBuffs[id]; }
         else if (!(at > 0)) s.activeFishBuffs[id] = { activatedAt: now };
       }
       if (!out.includes(n)) out.push(n);
@@ -100,18 +100,20 @@
     s.activeFishIds = out;
   };
   PT.activeFishMult = function (s, type, now = Date.now()) {
-    let sum = 0, any = false;
+    let sum = 0, any = false; const dur = SHINY_BUFF_MS(s), nb = PT.aqNormalBuffMult ? PT.aqNormalBuffMult(s) : 1;
     for (const id of s.activeFishIds || []) {
       const f = FISH_BY.get(baseId(id)); if (!f?.effect || f.effect.type !== type) continue;
       const v = Number(f.effect.value) - 1;
       const at = Number(s.activeFishBuffs?.[id]?.activatedAt || 0);
-      sum += isShiny(id) && at > 0 && at + SHINY_BUFF_MS > now ? 3 * v : v; any = true;
+      sum += isShiny(id) && at > 0 && at + dur > now ? 3 * v : v * nb; any = true; // Birb getScaledActiveFishBuffValue
     }
     return any ? Math.max(0, 1 + sum) : 1;
   };
   // Birb getFishMultiplier (replaces the Phase 1 stub)
   PT.fishMult = function (s, e) {
     let t = PT.activeFishMult(s, e);
+    if (PT.aqModifier && e !== "expedition_mult") t *= PT.aqModifier(s, e); // aquarium biomes + milestones
+    if ((e === "reel_speed_mult" || e === "xp_mult") && PT.contractBonus) t *= 1 + PT.contractBonus(s, e); // fish market contracts
     const n = e === "xp_mult" && (s.evolutionCount || 0) >= 6 ? 2 : 1;
     const f = s.fishing; if (!f) return t * n;
     for (const id of [f.equippedBaitId, f.equippedLureId, f.equippedHookId]) {
@@ -121,7 +123,11 @@
     }
     return (t + (e === "xp_mult" ? 0.05 * (Math.max(1, Math.floor(f.level || 1)) - 1) : 0)) * n;
   };
-  PT.maxFishBuffs = (s) => { const e = PT.hasSun(s, "d_double_fish_buff") ? 1 : 0; return Math.max(1, Math.min(3, 1 + e)); };
+  PT.maxFishBuffs = (s) => { // Birb getMaxActiveFishBuffs
+    const e = PT.hasSun(s, "d_double_fish_buff") ? 1 : 0, t = PT.aqBuffSlots ? PT.aqBuffSlots(s) : 0;
+    if (e > 0 && (s.fishBuffThirdSlotUnlocked === true || (s.activeFishIds || []).length >= 3)) { s.fishBuffThirdSlotUnlocked = true; return 3; }
+    return Math.max(1, Math.min(3, 1 + e + t));
+  };
   PT.eatFish = function (s, key) {
     PT.normalizeFishBuffs(s);
     const f = FISH_BY.get(baseId(key)); if (!f?.effect) return "no effect";
@@ -162,7 +168,8 @@
     const baitApplied = !tf || typed.length > 0;
     if (baitApplied) pool = typed;
     const prog = nextRodState(s).need; for (const x of neededUpgradeFish(s)) prog.add(x);
-    const disc = new Set(s.discoveredFish), housed = new Set();
+    const disc = new Set(s.discoveredFish), housed = new Set(Object.entries(s.aquarium?.housedFish || {}).filter(([, v]) => v === true).map(([k]) => k));
+    const luck = Math.max(1, 1 + (PT.contractBonus ? PT.contractBonus(s, "fishing_luck_mult") : 0)); // Birb getUncommonPlusWeightMultiplier
     const progMult = PT.hasSun(s, "d_rod_chance") ? 1.15 : 1;
     const entries = pool.map((t) => {
       let w = Math.max(1e-12, Number(t.weight) || 0);
@@ -170,6 +177,7 @@
       w *= hookMult(hookId, t.rarity);
       if ((lureId === "lure_basic" && prog.has(t.id)) || (lureId === "lure_advanced" && !disc.has(t.id)) || (lureId === "lure_pro" && !housed.has(t.id))) w *= 3;
       if (lureId === "lure_basic" && prog.has(t.id)) w *= progMult;
+      if (t.rarity !== "common") w *= luck;
       for (const id of [baitId, hookId, lureId]) { const e = id && TACKLE_BY.get(id); if (e?.effect.type === "specific_fish" && e.effect.targetFish?.includes(t.id)) w *= Math.max(1e-12, Number(e.effect.value) || 1); }
       return { fish: t, weight: Math.max(1e-12, w) };
     });
@@ -270,7 +278,7 @@
     const tf = typeFilterOf(bait);
     if (bait && tf && a.type !== tf) { if (f.equippedBaitId === bait) f.equippedBaitId = undefined; bait = undefined; }
     const now = Date.now();
-    const shinyRoll = (fish) => { const m = shinySoftcap(fish.rarity === "legendary" || fish.rarity === "mythic" ? 1e-5 : 2e-5, shinyBait(bait, fish) * pity(s.shinyPityCatches) * fleetShiny(s), moonlit(s.seagull.migrationCount, s.lastPlayerShinyFishCaughtAt, now)); const g = Math.random() < m; s.shinyPityCatches = g ? 0 : (s.shinyPityCatches || 0) + 1; return g; };
+    const shinyRoll = (fish) => { const m = shinySoftcap(fish.rarity === "legendary" || fish.rarity === "mythic" ? 1e-5 : 2e-5, shinyBait(bait, fish) * pity(s.shinyPityCatches) * fleetShiny(s) * (PT.aqShinyChanceMult ? PT.aqShinyChanceMult(s) : 1), moonlit(s.seagull.migrationCount, s.lastPlayerShinyFishCaughtAt, now), 1 + (PT.contractBonus ? PT.contractBonus(s, "shiny_chance_mult") : 0)); const g = Math.random() < m; s.shinyPityCatches = g ? 0 : (s.shinyPityCatches || 0) + 1; return g; };
     const g = shinyRoll(a);
     addFish(s, a.id, g, "player");
     const w = PT.fishWeight(s, a, g, rod.tier); const rec = recordWeight(s, a.id, w);

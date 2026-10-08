@@ -10,10 +10,22 @@
     1: { id: 1, key: "sunflower-field", name: "SUNFLOWER FIELD", w: 4000, h: 2000 },
     2: { id: 2, key: "bridge", name: "THE BRIDGE", w: 3000, h: 1400 },
     3: { id: 3, key: "castle", name: "THE CASTLE", w: 1600, h: 1152 },
+    22: { id: 22, key: "aquarium", name: "THE AQUARIUM", w: 1600, h: 1100, side: true },
+    24: { id: 24, key: "fish-market", name: "FISH MARKET", w: 1056, h: 792, side: true },
+  };
+  // Birb sA(): the Aquarium is "down" from the Bridge (Evolution 5), the Fish Market is a room off the Aquarium.
+  PT.vertLinks = { 2: { down: 22 }, 22: { up: 2, down: 24 }, 24: { up: 22 } };
+  PT.vertBlock = function (s, dir) {
+    const to = PT.vertLinks[s.currentMap]?.[dir];
+    if (to === undefined) return "end";
+    if (to === 22 && !PT.aquariumUnlocked(s)) return "The Aquarium opens at Evolution 5";
+    if (to === 24 && !PT.fishMarketUnlocked(s)) return "The Fish Market opens at 700 resonance";
+    return "";
   };
   // Birb uA(): +1 = right arrow, -1 = left. Returns "" or the reason travel is blocked.
   PT.travelBlock = function (s, dir) {
     const m = s.currentMap;
+    if (PT.MAPS[m]?.side) return "end";
     if (dir > 0) {
       if (m === 0 && (s.rebirthCount || 0) < 1) return "Molt once to travel";
       if (m === 1 && !s.hasUnlockedEvolve) return "Needs Unlock Evolve";

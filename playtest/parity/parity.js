@@ -26,14 +26,18 @@ function probe({ side, scenario }) {
   const D = window.BIRB_DATA;
   const num = (x) => (x == null ? null : typeof x === "boolean" ? x : typeof x === "object" && x.toNumber ? x.toNumber() : typeof x === "object" && "mantissa" in x ? x.mantissa * Math.pow(10, x.exponent) : Number(x));
   const deep = (dst, src) => { for (const [k, v] of Object.entries(src)) { if (v && typeof v === "object" && !Array.isArray(v)) { dst[k] = dst[k] && typeof dst[k] === "object" ? dst[k] : {}; deep(dst[k], v); } else dst[k] = v; } };
+  const fresh = () => ({ aquarium: { activeBiomeId: "coast", housedFish: {}, researchedFishCounts: {}, releasedShinyFishes: {}, releasedShinyWeightsKg: {} }, fishInventory: [], discoveredFish: [], discoveredShinyFish: [], fishWeightRecords: [], activeFishIds: [], activeFishBuffs: {}, lockedFish: [], fishBuffThirdSlotUnlocked: false });
   let A;
   if (side === "birb") {
     const g = window.game, s = g.state;
     s.upgrades = {}; s.sunflowerUpgrades = {};
     for (const k of Object.keys(s.resources)) s.resources[k] = 0;
+    Object.assign(s, fresh());
     const st = JSON.parse(JSON.stringify(scenario.state));
     deep(s, st);
     if (g.invalidateUpgradeTreeCache) g.invalidateUpgradeTreeCache();
+    g.aquariumManager.invalidateModifierCache(); g.activeFishEffectSnapshot = null; g.fishMarketManager.normalizedMarketState = null;
+    const mm = g.fishMarketManager, am = g.aquariumManager;
     A = {
       level: (id) => g.getUpgradeLevel(id), max: (id) => g.getUpgradeMaxLevel(id), eff: (id) => g.getUpgradeEffect(id),
       cost: (d) => g.getDiscountedUpgradeCost(d, g.getUpgradeLevel(d.id)),
@@ -42,9 +46,15 @@ function probe({ side, scenario }) {
       radius: () => g.getPickupRadius(), sunUnlocked: (id) => g.isSunflowerUpgradeUnlocked(id), sunVisible: (id) => g.isSunflowerUpgradeVisible(id),
       sunCost: (d) => g.getDiscountedUpgradeCost(d, g.getSunflowerUpgradeLevel(d.id)),
       fish: (t) => g.getFishMultiplier(t), canEvolve: () => g.canEvolveCurrentStage(), sparrowXp: (L) => g.getSparrowXpNeeded(L),
+      aqMod: (t) => am.getModifierMultiplier(t), aqShiny: () => am.getShinyChanceMultiplier(), aqNormal: () => am.getNormalFishBuffMultiplier(),
+      aqShinyMs: () => am.getShinyBuffDurationMs(), aqSlots: () => am.getFishBuffSlotBonus(), aqPoints: () => am.getResonancePoints(),
+      aqTier: (b) => am.getBiomeProgress(b).tierCount, aqHoused: () => am.getHousedSpeciesCount(), marketOpen: () => g.isFishMarketUnlocked(),
+      maxBuffs: () => g.fishingManager.getMaxActiveFishBuffs(), aqUnlocked: () => g.isAquariumUnlocked(),
+      contracts: (c, r) => { mm.ensureState(); mm.generateContractOffers(c, r); return JSON.stringify(s.aquarium.market.contractOffers); },
+      repLevel: (x) => mm.getContractReputationLevel(x),
     };
   } else {
-    const G = window.PT.G, PT = window.PT, s = PT.newState();
+    const G = window.PT.G, PT = window.PT, s = Object.assign(PT.newState(), fresh());
     const st = JSON.parse(JSON.stringify(scenario.state));
     const res = st.resources || {}; delete st.resources;
     deep(s, st);
@@ -58,6 +68,12 @@ function probe({ side, scenario }) {
       radius: () => PT.pickupProfile(s).collectRadius, sunUnlocked: (id) => PT.sunUnlocked(s, id), sunVisible: (id) => PT.sunVisible(s, id),
       sunCost: (d) => PT.sunCost(s, d.id),
       fish: (t) => PT.fishMult(s, t), canEvolve: () => PT.canEvolveStage(s), sparrowXp: (L) => PT.sparrowXpNeeded(L),
+      aqMod: (t) => PT.aqModifier(s, t), aqShiny: () => PT.aqShinyChanceMult(s), aqNormal: () => PT.aqNormalBuffMult(s),
+      aqShinyMs: () => PT.aqShinyBuffMs(s), aqSlots: () => PT.aqBuffSlots(s), aqPoints: () => PT.aqPoints(PT.aq(s)),
+      aqTier: (b) => PT.aqBiome(PT.aq(s), b).tierCount, aqHoused: () => PT.aqHousedCount(PT.aq(s)), marketOpen: () => PT.fishMarketUnlocked(s),
+      maxBuffs: () => PT.maxFishBuffs(s), aqUnlocked: () => PT.aquariumUnlocked(s),
+      contracts: (c, r) => { PT.market(s); return JSON.stringify(PT.generateContracts(s, c, r)); },
+      repLevel: (x) => PT.repLevel(x),
     };
   }
   const out = {}, put = (k, f) => { try { out[k] = num(f()); } catch (e) { out[k] = "ERR " + e.message.slice(0, 60); } };
@@ -70,6 +86,13 @@ function probe({ side, scenario }) {
   put("can evolve", A.canEvolve);
   for (const t of ["popcorn_mult", "seed_mult", "feather_mult", "speed_mult", "pickup_mult", "spawn_mult", "reel_speed_mult", "xp_mult"]) put(`fish mult ${t}`, () => A.fish(t));
   for (const L of [1, 2, 10, 50]) put(`sparrow xp needed L${L}`, () => A.sparrowXp(L));
+  for (const t of ["popcorn_mult", "seed_mult", "feather_mult", "golden_popcorn_mult", "speed_mult", "pickup_mult", "reel_speed_mult", "xp_mult", "shiny_chance_mult", "parrot_damage_mult", "sell_mult"]) put(`aquarium modifier ${t}`, () => A.aqMod(t));
+  put("aquarium shiny chance mult", A.aqShiny); put("aquarium normal buff mult", A.aqNormal); put("aquarium shiny buff ms", A.aqShinyMs);
+  put("aquarium buff slots", A.aqSlots); put("aquarium resonance", A.aqPoints); put("aquarium housed species", A.aqHoused); put("aquarium unlocked", A.aqUnlocked);
+  put("fish market unlocked", A.marketOpen); put("max fish buffs", A.maxBuffs);
+  for (const b of ["coast", "reef", "freshwater", "ocean", "abyssal", "creatures", "mystic", "mechanical", "expedition"]) put(`aquarium tier ${b}`, () => A.aqTier(b));
+  for (const x of [0, 99, 100, 650, 6200, 9999]) put(`market rep level at ${x}`, () => A.repLevel(x));
+  if (scenario.state.aquarium) for (const [c, r] of [[20000, 0], [20001, 0], [20001, 2]]) out[`contract offers cycle ${c} reroll ${r}`] = A.contracts(c, r);
   for (const [id] of D.stations) { if (id.startsWith("__")) continue; put(`tree ${id} unlocked`, () => A.sunUnlocked(id)); put(`tree ${id} visible`, () => A.sunVisible(id)); put(`tree ${id} cost`, () => A.sunCost(D.upgrades.find((u) => u.id === id))); }
   return out;
 }

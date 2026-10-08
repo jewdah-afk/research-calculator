@@ -1,18 +1,21 @@
 # Parity report
 
-Birb's live engine (birbplay.com `window.game`) vs the playtest, same save state per scenario. Generated 2026-10-08T04:17Z by `playtest/parity/parity.js`.
+Birb's live engine (birbplay.com `window.game`) vs the playtest, same save state per scenario. Generated 2026-10-08T05:52Z by `playtest/parity/parity.js`.
 
-**3395 / 3409 values match.**
+**5209 / 5229 values match.**
 
 | Scenario | Values | Mismatches |
 |---|---|---|
-| fresh start | 487 | 2 |
-| early eggs | 487 | 2 |
-| first molt done | 487 | 2 |
-| seeds online | 487 | 2 |
-| evolve unlocked | 487 | 2 |
-| evolution 1 | 487 | 2 |
-| evolution 3 | 487 | 2 |
+| fresh start | 522 | 2 |
+| early eggs | 522 | 2 |
+| first molt done | 522 | 2 |
+| seeds online | 522 | 2 |
+| evolve unlocked | 522 | 2 |
+| evolution 1 | 522 | 2 |
+| evolution 3 | 522 | 2 |
+| aquarium early | 525 | 2 |
+| aquarium mid | 525 | 2 |
+| aquarium full + market | 525 | 2 |
 
 ### fresh start
 
@@ -57,6 +60,27 @@ Birb's live engine (birbplay.com `window.game`) vs the playtest, same save state
 | upgrade m_charged_strike effect | 3 | 1 |
 
 ### evolution 3
+
+| Value | Birb | Playtest |
+|---|---|---|
+| upgrade m_rupture effect | 0.25 | 1 |
+| upgrade m_charged_strike effect | 3 | 1 |
+
+### aquarium early
+
+| Value | Birb | Playtest |
+|---|---|---|
+| upgrade m_rupture effect | 0.25 | 1 |
+| upgrade m_charged_strike effect | 3 | 1 |
+
+### aquarium mid
+
+| Value | Birb | Playtest |
+|---|---|---|
+| upgrade m_rupture effect | 0.25 | 1 |
+| upgrade m_charged_strike effect | 3 | 1 |
+
+### aquarium full + market
 
 | Value | Birb | Playtest |
 |---|---|---|
