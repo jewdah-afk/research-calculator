@@ -106,7 +106,9 @@
   X.artifactBonuses = () => ({ hpAdd: 0, lifeRegenAdd: 0, hpMult: 0, damageMult: 0, lifeRegenMult: 0, attackSpeedMult: 0, moveSpeedMult: 0, inventorySpace: 0, combatRegenPenaltyReduction: 0 });
   // Birb getQuestMerchantExpeditionBonuses: desert nodes, Muad'Birb, community goals; quest merchant, fish market parrot buffs and
   // the crow's expedition tracks join in 6c (they read 0 until then)
-  X.questBonus = () => 0; X.marketParrotBuff = () => 0; X.crowBonus = () => 0;
+  X.questBonus = () => 0; X.crowBonus = () => 0;
+  // Birb getActiveParrotBuffBonus: the larger of a legacy bought parrot buff and the sum of live contract buffs of that type
+  X.marketParrotBuff = (s, k, now = Date.now()) => { const b = s.aquarium?.market?.activeParrotBuffs?.[k], r = b && b.expiresAt > now ? Math.max(0, Number(b.value) || 0) : 0; return Math.max(0, Math.max(r, PT.contractBonus ? PT.contractBonus(s, k, now) : 0)); };
   X.muadBirb = (s) => { if (!PT.hasSun(s, "d_desert_muad_birb")) return 1; const t = PT.res(s, "goldenPopcorn"), n = t.lte(0) ? D(1) : t.div(15e7).sqrt().add(1); return n.lte(20) ? Math.max(1, n.toNumber()) : 20 + 4.4 * n.div(20).ln(); };
   X.community = (k) => (PT.COMMUNITY && PT.COMMUNITY[k]) || 1;
   X.externalBonuses = (s) => {

@@ -1,47 +1,48 @@
 # Parity report
 
-Birb's live engine (birbplay.com `window.game`) vs the playtest, same save state per scenario. Generated 2026-10-08T22:09Z by `playtest/parity/parity.js`.
+Birb's live engine (birbplay.com `window.game`) vs the playtest, same save state per scenario. Generated 2026-10-08T22:10Z by `playtest/parity/parity.js`.
 
-**45744 / 45744 values match.** Birb's live community-goal twig reward today: x1.5 (copied into the playtest for the run).
+**46720 / 46720 values match.** Birb's live community-goal twig reward today: x1.5 (copied into the playtest for the run).
 
 | Scenario | Values | Mismatches |
 |---|---|---|
-| fresh start | 825 | 0 |
-| early eggs | 825 | 0 |
-| first molt done | 825 | 0 |
-| seeds online | 825 | 0 |
-| evolve unlocked | 825 | 0 |
-| evolution 1 | 825 | 0 |
-| evolution 3 | 825 | 0 |
-| aquarium early | 828 | 0 |
-| aquarium mid | 828 | 0 |
-| aquarium full + market | 828 | 0 |
-| nest start | 825 | 0 |
-| nest boxes | 825 | 0 |
-| nest tier 2 | 837 | 0 |
-| mine start | 825 | 0 |
-| mine mid | 825 | 0 |
-| mine deep | 825 | 0 |
-| desert start | 825 | 0 |
-| desert dave | 825 | 0 |
-| desert sandstorm late | 825 | 0 |
-| expedition start | 1941 | 0 |
-| expedition rebirb 1 | 825 | 0 |
-| expedition late | 1941 | 0 |
-| sacrifice tier I | 1941 | 0 |
-| sacrifice capped III | 1941 | 0 |
-| sacrifice expansion V | 1941 | 0 |
-| sacrifice rebirb XIV | 1941 | 0 |
-| loot basic kit | 2436 | 0 |
-| loot effect copies | 1941 | 0 |
-| loot full bag | 1941 | 0 |
-| forge no milestone | 1941 | 0 |
-| forge early | 1941 | 0 |
-| forge legendary | 1941 | 0 |
-| forge refined deep | 1941 | 0 |
-| quest unlock | 1157 | 0 |
-| quest progress | 1171 | 0 |
-| quest legacy migration | 1167 | 0 |
+| fresh start | 829 | 0 |
+| early eggs | 829 | 0 |
+| first molt done | 829 | 0 |
+| seeds online | 829 | 0 |
+| evolve unlocked | 829 | 0 |
+| evolution 1 | 829 | 0 |
+| evolution 3 | 829 | 0 |
+| aquarium early | 832 | 0 |
+| aquarium mid | 832 | 0 |
+| aquarium full + market | 832 | 0 |
+| nest start | 829 | 0 |
+| nest boxes | 829 | 0 |
+| nest tier 2 | 841 | 0 |
+| mine start | 829 | 0 |
+| mine mid | 829 | 0 |
+| mine deep | 829 | 0 |
+| desert start | 829 | 0 |
+| desert dave | 829 | 0 |
+| desert sandstorm late | 829 | 0 |
+| expedition start | 1945 | 0 |
+| expedition rebirb 1 | 829 | 0 |
+| expedition late | 1945 | 0 |
+| sacrifice tier I | 1945 | 0 |
+| sacrifice capped III | 1945 | 0 |
+| sacrifice expansion V | 1945 | 0 |
+| sacrifice rebirb XIV | 1945 | 0 |
+| loot basic kit | 2440 | 0 |
+| loot effect copies | 1945 | 0 |
+| loot full bag | 1945 | 0 |
+| forge no milestone | 1945 | 0 |
+| forge early | 1945 | 0 |
+| forge legendary | 1945 | 0 |
+| forge refined deep | 1945 | 0 |
+| quest unlock | 1161 | 0 |
+| quest progress | 1175 | 0 |
+| quest legacy migration | 1171 | 0 |
+| market parrot buffs | 832 | 0 |
 
 ### fresh start
 
@@ -184,5 +185,9 @@ All match.
 All match.
 
 ### quest legacy migration
+
+All match.
+
+### market parrot buffs
 
 All match.

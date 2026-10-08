@@ -180,3 +180,15 @@ module.exports = [
       qs({ 1: 5000, 6: 2500, 7: 10 }, { 6: 5, 9: 1 }, { anubis: 3, "fishfolk-inkbender": 90 })) },
   );
 }
+
+// Fish market parrot buffs (Phase 6c): contract buffs of the expedition types stack; a legacy bought parrot buff counts if larger
+{
+  const far = 9e15, buff = (value, i) => ({ value, expiresAt: far, sourceContractId: `c_test_${i}`, rarity: "rare" });
+  module.exports.push(
+    { name: "market parrot buffs", expedition: false, state: { evolutionCount: 6, rebirthCount: 60, expedition: { unlocked: true, highestFloorReached: 5, progress: { level: 40 } },
+      parrot: { unlocked: true, level: 40, skillPoints: 0, skills: { hp: 500, lifeRegen: 50, damage: 300 } },
+      aquarium: { market: { unlockedAt: 1, contractReputationXp: 500, activeParrotBuffs: { expedition_damage_mult: { value: 0.9, expiresAt: far, sourceOfferId: "o1", rarity: "epic" }, expedition_hp_mult: { value: 0.2, expiresAt: far, sourceOfferId: "o2", rarity: "common" } },
+        activeContractBuffs: { expedition_damage_mult: [buff(0.35, 1), buff(0.5, 2)], expedition_hp_mult: [buff(0.75, 3)], expedition_life_regen_mult: [buff(0.5, 4)], expedition_move_speed_mult: [buff(0.35, 5)],
+          expedition_attack_speed_mult: [buff(1.1, 6)], expedition_skill_point_mult: [buff(1.65, 7)], expedition_chest_reward_mult: [buff(0.75, 8), { value: 9, expiresAt: 1000, sourceContractId: "old", rarity: "epic" }] } } } } },
+  );
+}

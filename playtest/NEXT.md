@@ -13,7 +13,7 @@ Build a 1:1 HTML copy of Birb (birbplay.com) as Peckwood, so any progression can
 - **Branch:** `claude/egg-mining-icons` (not merged into `main`).
 - **Parity:** `NODE_PATH=<node_modules with playwright> node playtest/parity/parity.js`
   - It loads every save in `parity/scenarios.js` into Birb's live engine and into the playtest, compares every shared value, and writes `parity/REPORT.md`.
-  - Last run: **45744 / 45744 match**. Keep it at 100% after every change.
+  - Last run: **46720 / 46720 match**. Keep it at 100% after every change.
   - `ONLY=quest` (any name substring) runs a subset of scenarios while you iterate; run the full set before committing.
 - **Script load order:** `index.html` loads `... mine, desert, expedition_data, expedition, expedition_ai, expedition_sacrifice, expedition_loot, expedition_forge, quests, main`.
 
@@ -63,7 +63,7 @@ Gotchas we hit:
 1. **DONE: Quest merchant** (`js/quests.js`, Q opens OBJECTIVES; potion key moved to H). Flock orders (daily rules v2/v3) are server-issued and off in Birb today (`flockCommunity.generationEnabled` false), so only v1 dailies are ported. Notes from the original plan:
    - Birb `questMerchant` state, `getQuestMerchantExpeditionBonuses`, `getQuestMerchantBonus(...)`, `flockProgress` (tracked in `trackQuestKill`, `game-*.js` around line 37870), `flockCommunity` (`tI(...)`) and `createFlockOrderReward`.
    - Fill the quest parts of `X.externalBonuses` and the `questBonus` stub in `js/systems.js`, which feeds popcorn.
-2. **Fish market parrot buffs:**
+2. **DONE: Fish market parrot buffs** (`X.marketParrotBuff` in `expedition.js`: max(legacy bought parrot buff, sum of live contract buffs) per expedition stat; fish / aquarium `parrot_*_mult` were already in `X.skillAdditions`). Original notes:
    - The `parrot_*_mult` fish effects and aquarium modifiers are already read in Birb's skill-addition code (`game-*.js` around line 77360). Check that the playtest's `X.skillAdditions` gets them.
 3. **Floor 1 secret room to the Mine:**
    - `canBreakFloorOneMineEntrance` needs parrot rebirb ≥2 and all starter gear maxed. It also uses `updateFloorOneMineEntranceBreak` and `floorOneMineEntranceOpened`.
