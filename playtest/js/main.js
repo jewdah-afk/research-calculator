@@ -97,6 +97,7 @@
     G.keys.add(e.key.toLowerCase());
     const k = e.key.toLowerCase();
     if (k === "5" && PT.mineOpen(G.s)) openWin("crow");
+    if (k === "e" && expPortalAction()) return;
     if (k === "e") { if (G.s.currentMap === PT.MINE_TREE_MAP) openWin("minetree"); else if (G.s.currentMap === PT.MINE_MAP) PT.minePlayerHit(G); else if (G.s.currentMap === PT.NEST_ROOM_MAP) openWin("redpanda"); else if (G.s.currentMap === PT.FISH_MARKET_MAP) openWin("market", "market"); else if (G.s.currentMap !== 1 && PT.aquariumUnlocked(G.s)) openWin("aquarium"); else tryStation(); }
     if (k === " ") { e.preventDefault(); cast(); }
     if (k === "tab") { e.preventDefault(); G.companionsOpen = !G.companionsOpen; drawHud(); }
@@ -108,6 +109,8 @@
   cv.addEventListener("mousedown", (e) => {
     const r = cv.getBoundingClientRect(), dpr = cv.width / r.width;
     const w = toWorld((e.clientX - r.left) * dpr, (e.clientY - r.top) * dpr);
+    if (PT.EXP.isRunMap(G.s.currentMap) && PT.EXP.command(G.s, w.x, w.y, G.s.player.x, G.s.player.y)) return;
+    if (expPortalAt(w.x, w.y)) { expPortalAction(); return; }
     G.target = w;
     if (G.s.currentMap === PT.NEST_ROOM_MAP && Math.hypot(w.x - 528, w.y - 380) < 70) openWin("redpanda");
     if (G.s.currentMap === PT.MINE_MAP && Math.hypot(w.x - 528, w.y - 520) < 110) { PT.minePlayerHit(G); G.target = null; }
@@ -182,8 +185,15 @@
     if (ix || iy) { G.vx += (ix / il) * acc * dt; G.vy += (iy / il) * acc * dt; }
     else { const f = Math.max(0, 1 - 8 * dt); G.vx *= f; G.vy *= f; }
     const sp = Math.hypot(G.vx, G.vy); if (sp > vmax) { G.vx *= vmax / sp; G.vy *= vmax / sp; }
+    if (PT.EXP.isRunMap(s.currentMap) || s.currentMap === PT.EXP_HUB_MAP) { // collision boxes (Birb: same boxes the enemies use)
+      const rects = PT.EXP.collisions(s.currentMap), hit = (x, y) => rects.some((r) => x + 10 > r.left && x - 10 < r.right && y > r.top && y - 10 < r.bottom);
+      const nx = Math.max(20, Math.min(m.w - 20, s.player.x + G.vx * dt)); if (!hit(nx, s.player.y)) s.player.x = nx; else G.vx = 0;
+      const ny = Math.max(20, Math.min(m.h - 20, s.player.y + G.vy * dt)); if (!hit(s.player.x, ny)) s.player.y = ny; else G.vy = 0;
+      const run = PT.expState(s).activeRun; if (run && (ix || iy)) run.combatArmed = true; // Birb registerPlayerCombatAction on movement
+    } else {
     s.player.x = Math.max(20, Math.min(m.w - 20, s.player.x + G.vx * dt));
     s.player.y = Math.max(20, Math.min(m.h - 20, s.player.y + G.vy * dt));
+    }
 
     // Park field: spawns while you're there, and while away once the Sparrow is unlocked (Birb update())
     const prof = PT.pickupProfile(s);
@@ -206,6 +216,7 @@
     PT.updateDesert(G, dt, prof);
     PT.updateNest(G, dt);
     PT.updateMine(G, dt);
+    PT.EXP.update(G, dt);
     PT.ensureFishing(s);
     PT.updateFishing(G, dt, Math.abs(G.vx) > 5 || Math.abs(G.vy) > 5);
     PT.updateSeagull(G, dt);
@@ -246,6 +257,7 @@
     if (s.currentMap === PT.NEST_MAP) drawNest();
     if (s.currentMap === PT.NEST_ROOM_MAP) drawNestRoom();
     if (s.currentMap === PT.MINE_MAP) drawMine();
+    if (s.currentMap === PT.EXP_HUB_MAP || PT.EXP.isRunMap(s.currentMap)) drawExpedition();
     if (s.currentMap === PT.MINE_TREE_MAP) drawMineTree();
     if (s.currentMap === 3) { drawIcon("monster", 800, 500, 200); if (!s.hasTalkedToMonster) label("Click the monster", 800, 640, 22); }
     // pickup radius ring + bird
@@ -256,6 +268,31 @@
       const t = Math.max(0, s.desertSandstormTimeRemaining), al = Math.max(0, Math.min(1, (30 - t) / 1.2, t / 1.2));
       cx.fillStyle = `rgba(214,170,92,${0.35 * al})`; cx.fillRect(0, 0, m.w, m.h);
     }
+  }
+  // Birb expedition hub and floors: collision boxes, portals, enemies with HP bars, the parrot
+  const ENEMY_COLOR = { boss: "#f97316", elite: "#c084fc", shiny: "#facc15" };
+  function drawExpedition() {
+    const s = G.s, X = PT.EXP, m = PT.MAPS[s.currentMap], run = PT.expState(s).activeRun, floor = X.MAP_FLOOR[s.currentMap];
+    cx.fillStyle = floor ? ["#3f6b3a", "#5d3f74", "#a08a5a", "#2e5a6b", "#2b4a66", "#9fc4d8", "#3d5a2e", "#2b2b38", "#4a1f1f"][floor - 1] : "#1b1d24"; roundRect(0, 0, m.w, m.h, 24); cx.fill();
+    if (floor) { const b = X.bounds(s.currentMap); for (let i = 0; i < 5; i++) { cx.fillStyle = `rgba(0,0,0,${0.06 * i})`; cx.fillRect(b.minX, b.minY + ((b.maxY - b.minY) * i) / 5, b.maxX - b.minX, (b.maxY - b.minY) / 5); } }
+    cx.fillStyle = "rgba(10,12,16,.55)"; for (const r of X.collisions(s.currentMap)) cx.fillRect(r.left, r.top, r.right - r.left, r.bottom - r.top);
+    for (const p of X.portals(s.currentMap)) {
+      const on = p.type !== "next_floor" || !!run?.exitPortal?.active; if (p.type === "secret_room_enter") continue;
+      cx.beginPath(); cx.arc(p.x, p.y, p.r, 0, 7); cx.fillStyle = on ? (p.type === "next_floor" ? "rgba(250,204,21,.45)" : "rgba(124,58,237,.45)") : "rgba(80,80,90,.25)"; cx.fill();
+      label(p.type === "enter_expedition" ? "EXPEDITION" : p.type === "return_hub" ? "RETURN" : on ? "NEXT FLOOR" : "BOSS FIRST", p.x, p.y - p.r - 10, 16, "#fff");
+    }
+    if (!run || !floor) { if (s.currentMap === PT.EXP_HUB_MAP) drawIcon("parrot", s.player.x - 40, s.player.y - 30, 34); return; }
+    for (const e of run.enemies) {
+      if (e.health <= 0) continue;
+      const r = e.type === "mini-fly" ? 5 : e.isBoss ? 30 : e.isElite ? 20 : 14;
+      cx.beginPath(); cx.arc(e.x, e.y, r, 0, 7); cx.fillStyle = e.hitFlash > 0 ? "#fff" : e.projectileKind ? "#fb923c" : e.isShiny ? ENEMY_COLOR.shiny : e.isBoss ? ENEMY_COLOR.boss : e.isElite ? ENEMY_COLOR.elite : "#d1d5db"; cx.fill();
+      cx.lineWidth = 2; cx.strokeStyle = /attack|hitting/.test(e.state) ? "#ef4444" : "#0b0c10"; cx.stroke();
+      if (e.type !== "mini-fly" && !e.projectileKind) { bar(e.x - 20, e.y - r - 14, 40, e.health / e.maxHealth, "#ef4444"); if (e.isBoss || e.isElite) label(e.type.replace(/-/g, " ").toUpperCase(), e.x, e.y - r - 22, 13, e.isBoss ? "#fdba74" : "#e9d5ff"); }
+    }
+    const p = run.parrot;
+    if (p) { drawIcon("parrot", p.x, p.y - 14, 36, !p.facingRight); bar(p.x - 22, p.y - 40, 44, p.health / p.maxHealth, "#4ade80"); }
+    cx.beginPath(); cx.arc(s.player.x, s.player.y, PT.EXP.K.LEASH * PT.EXP.rangeMult(), 0, 7); cx.strokeStyle = "rgba(255,255,255,.12)"; cx.lineWidth = 2; cx.stroke();
+    for (const d of run.damageNumbers) { cx.globalAlpha = Math.min(1, d.life / 0.4); label(d.text, d.x, d.y, 15, d.color); cx.globalAlpha = 1; }
   }
   // Birb desert-meadow: sand field, plain and golden eggs, Dave and his sons
   function drawDesert() {
@@ -383,7 +420,26 @@
       if (!own && def.evolutionRequired > (s.evolutionCount || 0)) label("EVO " + def.evolutionRequired, st[1] + st[3] / 2, st[2] + 78, 11, "#ff9a9a");
     }
   }
-  function canAffordSun(id) { const def = PT.SUN.get(id); const c = def.costCurrency; return c in G.s.resources && PT.has(G.s, c, PT.sunCost(G.s, id)); }
+  function canAffordSun(id) { const def = PT.SUN.get(id); const c = def.costCurrency; return PT.altCurrency[c] ? PT.altCurrency[c].has(G.s, PT.sunCost(G.s, id)) : c in G.s.resources && PT.has(G.s, c, PT.sunCost(G.s, id)); }
+  // ------------------------------------------------------------------ Expedition portals (Birb: hub portal opens the floor wheel; floor portals return / advance)
+  function expPortalNear() {
+    const s = G.s, X = PT.EXP; if (s.currentMap !== PT.EXP_HUB_MAP && !X.isRunMap(s.currentMap)) return null;
+    for (const p of X.portals(s.currentMap)) {
+      if (p.type === "next_floor" && !PT.expState(s).activeRun?.exitPortal?.active) continue;
+      if (p.type === "secret_room_enter") continue; // secret rooms: Phase 6c
+      if ((s.player.x - p.x) ** 2 + (s.player.y - p.y) ** 2 <= (p.r + 40) ** 2) return p;
+    }
+    return null;
+  }
+  function expPortalAt(x, y) { const p = expPortalNear(); return p && (x - p.x) ** 2 + (y - p.y) ** 2 <= p.r * p.r; }
+  function expPortalAction() {
+    const p = expPortalNear(); if (!p) return false;
+    if (p.type === "enter_expedition") openWin("expfloors");
+    else if (p.type === "return_hub") { const r = PT.EXP.endRun(G, false); if (r) toast(`Back at the hub: floor ${r.floor}, ${r.kills} kills`); }
+    else if (p.type === "next_floor") { if (!PT.EXP.advanceFloor(G)) toast("The next floor needs Evolution 5"); }
+    save(); return true;
+  }
+  PT.EXP.onParrotDeath = () => { const r = PT.EXP.endRun(G, false); toast(`The parrot fell on floor ${r ? r.floor : "?"}. Back to the hub.`); save(); };
 
   // ------------------------------------------------------------------ panels
   const panel = document.getElementById("panel"), tabsEl = document.getElementById("tabs");
@@ -505,6 +561,35 @@
       return `<div class="row"><img class="ico" src="${ICON(n.cur === "goldOre" ? "goldore" : "ore")}" alt=""><div><div class="t">${n.name}${n.growth ? " LV " + L : ""}</div><div class="d">${n.text}</div><div class="lv">AREA ${n.area}${n.evo ? " · EVOLUTION " + n.evo : ""}</div></div>
         <div class="btns">${own ? `<button class="key small gold">OWNED</button>` : `<button class="key small ${unl ? "" : "grey"}" data-mnode="${n.id}">${c === 0 ? "FREE" : fmt(c) + (n.cur === "goldOre" ? " gold" : "")}</button>`}</div></div>`;
     }).join("");
+  }
+  // Birb parrot menu: STATS (level, HP, damage, regen, skill points), SKILLS (spend points: Vitality / Recovery / Strength), and the rebirb table
+  G.spAmt = 1;
+  function parrotPanel(tab) {
+    const s = G.s, p = PT.parrotState(s), e = PT.expState(s), pr = e.progress, st = PT.parrotTotalStats(s), kv = (a, b) => `<span>${a}</span><span>${b}</span>`;
+    const head = `<div class="hero"><img src="${ICON("parrot")}" alt=""><div class="big">LV ${pr.level}</div><div class="bar"><i style="width:${Math.min(100, (pr.xp / pr.xpToNextLevel) * 100)}%"></i></div><div class="sub">XP ${fmt(Math.floor(pr.xp))} / ${fmt(pr.xpToNextLevel)} · ${fmt(p.skillPoints)} skill points to spend · rebirb ${p.rebirbCount}</div></div>`;
+    if (tab === "skills") {
+      const row = (k, n, d) => `<div class="row"><img class="ico" src="${ICON(k === "hp" ? "stat_heart" : k === "damage" ? "stat_sword" : "heart")}" alt=""><div><div class="t">${n}</div><div class="d">${d}</div></div><div class="btns"><b style="color:#f1c40f;font-size:18px">${fmt(p.skills[k])}</b><button class="key small ${p.skillPoints >= 1 ? "" : "grey"}" data-pspend="${k}">+</button></div></div>`;
+      return head + `<div class="devrow">${[1, 10, 100, "25%", "50%", "max"].map((a) => `<button class="key small ${G.spAmt === a ? "" : "grey"}" data-spamt="${a}">${String(a).toUpperCase()}</button>`).join("")}</div>
+        ${row("hp", "VITALITY", "+1 max HP per point")}${row("lifeRegen", "RECOVERY", "+1 HP regen / s per point")}${row("damage", "STRENGTH", "+1 damage per point")}
+        <div class="note">Skill points come from kills (and Field Notes). Each point spent also counts as parrot XP when earned. Resetting skills costs ${PT.parrotResetCost(s)} chests (Phase 6b).</div>`;
+    }
+    if (tab === "rebirb") {
+      const rows = [["I", "Evolution 4 and floor 3", "skill points x2"], ["II", "floor 7", "skill points x4, +0.1% per parrot level, enemy respawns x0.5"], ["III", "defeat the Archivist", "skill points x8"]];
+      return head + rows.map(([n, need, gain], i) => `<div class="row"><img class="ico" src="${ICON("parrot")}" alt=""><div><div class="t">REBIRB ${n}</div><div class="d">Needs ${need} · best floor ${e.highestFloorReached}</div><div class="lv">${gain}</div></div><div class="btns">${p.rebirbCount > i ? `<button class="key small gold">DONE</button>` : p.rebirbCount === i ? `<button class="key small ${PT.parrotRebirbReady(s) ? "violet" : "grey"}" data-act="parrotrebirb">REBIRB</button>` : ""}</div></div>`).join("")
+        + `<div class="note">A rebirb resets the parrot's level, skill points, skills and gear upgrades. The Legendary Key is kept.</div>`;
+    }
+    const B = PT.EXP.parrotBonuses(s);
+    return head + `<div class="kv">${kv("Max HP", fmt(st.hp))}${kv("Damage", fmt(st.damage))}${kv("HP regen", fmt(st.lifeRegen) + "/s")}${kv("Attack speed", "x" + st.attackSpeed.toFixed(2))}${kv("Move speed", "x" + st.moveSpeed.toFixed(2))}
+      ${kv("Skill point gain", "x" + (1 + B.skillPointMult).toFixed(2))}${kv("Gear", ["beak", "armor", "aura"].map((k) => k + " " + p.equipmentUpgrades[k].rarity + " " + p.equipmentUpgrades[k].level).join(" · "))}
+      ${kv("Best floor", e.highestFloorReached)}${kv("Runs", e.totalRuns)}${kv("Kills", e.totalEnemiesDefeated)}${kv("Legendary Keys", p.strangeKeys)}</div>
+      <div class="note">HP regen drops to 25% for 3 s after taking damage. Base 100 HP and 100 damage, times beak (damage), armor (HP) and aura (regen).</div>`;
+  }
+  // Birb floor wheel: pick a start floor up to your best floor (9 floors from Evolution 5, else 3)
+  function expFloorsPanel() {
+    const s = G.s, e = PT.expState(s), max = Math.min(e.highestFloorReached || 1, PT.EXP.maxFloorForEvo(s)), cd = e.enemyRespawnCooldowns;
+    const rows = []; for (let f = 1; f <= PT.EXP.maxFloorForEvo(s); f++) { const key = PT.EXP.bossKey(PT.EXP.FLOOR_MAP[f], f), left = Math.max(0, ((cd[key] || 0) - Date.now()) / 1000), boss = PT.EXP.PLAN[f - 1].boss;
+      rows.push(`<div class="row"><img class="ico" src="${ICON("map")}" alt=""><div><div class="t">FLOOR ${f}</div><div class="d">Boss: ${boss.replace(/-/g, " ")}${left > 0 ? " · respawns in " + PT.fmtTime(left) : ""}</div></div><div class="btns"><button class="key ${f <= max ? "" : "grey"}" data-expfloor="${f}">${f <= max ? "START" : "LOCKED"}</button></div></div>`); }
+    return `<div class="note">The parrot fights near you (450 px leash). Move or click an enemy to start combat; AUTO lets it pick targets. Defeat the floor boss to open the next floor.</div>${rows.join("")}`;
   }
   // Birb collared-dove menu: LV + XP bar, stats row (XP/min, forage size, golden bonus, travel speed, rebirbs),
   // SEED SNACKS, REBIRB (Travel / Forage / Gilded with +, RESET, x1 / x10 / MAX), MILESTONES n / 8 (folds open)
@@ -705,6 +790,8 @@
     redpanda: { title: "RED PANDA", body: () => pandaPanel() },
     crow: { title: "CROW", body: () => crowPanel() },
     dove: { title: "DAVE", body: () => davePanel() },
+    parrot: { title: "PARROT", tabs: [["stats", "STATS"], ["skills", "SKILLS"], ["rebirb", "REBIRB"]], body: (t) => parrotPanel(t) },
+    expfloors: { title: "EXPEDITION", body: () => expFloorsPanel() },
     minetree: { title: "TREASURE ROOM", body: () => mineTreePanel() },
   };
   // Birb aquarium window: BIOMES (donate per biome), RESONANCE (milestones), TOTAL (all bonuses)
@@ -778,6 +865,8 @@
     if (m === PT.AQUARIUM_MAP) return reachable(2) && PT.aquariumUnlocked(s);
     if (m === PT.NEST_MAP) return (s.evolutionCount || 0) >= 3;
     if (m === PT.DESERT_MAP) return PT.desertUnlocked(s);
+    if (m === PT.EXP_HUB_MAP) return PT.expState(s).unlocked;
+    if (PT.EXP.isRunMap(m)) return false; // floors are entered through the hub portal
     if (m === PT.MINE_MAP) return PT.mineOpen(s);
     if (m === PT.MINE_TREE_MAP) return PT.mineOpen(s) && PT.mineArea(s) >= 1;
     if (m === PT.NEST_ROOM_MAP) return (s.evolutionCount || 0) >= 3 && PT.nestState(s).tier >= 1;
@@ -802,6 +891,9 @@
     const s = G.s;
     if (b.dataset.buy) PT.buy(s, b.dataset.buy);
     else if (b.dataset.max) PT.buyMax(s, b.dataset.max);
+    else if (b.dataset.pspend) { const p = PT.parrotState(s), a = G.spAmt; PT.parrotSpend(s, b.dataset.pspend, a === "max" ? p.skillPoints : String(a).endsWith("%") ? Math.max(1, Math.floor((p.skillPoints * parseInt(a)) / 100)) : a); }
+    else if (b.dataset.spamt) G.spAmt = /^\d+$/.test(b.dataset.spamt) ? +b.dataset.spamt : b.dataset.spamt;
+    else if (b.dataset.expfloor) { if (PT.EXP.startRun(G, +b.dataset.expfloor)) closeWin(); else toast("Floor locked"); }
     else if (b.dataset.dspend) PT.daveSpendPoint(s, b.dataset.dspend, G.daveAmt === "max" ? 100 : G.daveAmt);
     else if (b.dataset.damt) G.daveAmt = b.dataset.damt === "max" ? "max" : +b.dataset.damt;
     else if (b.dataset.drebirb) { if (!PT.daveRebirb(G, b.dataset.drebirb)) toast("Dave needs level 100"); }
@@ -878,6 +970,9 @@
     else if (a === "give") { PT.add(s, q("givecur").value, D(q("giveamt").value)); }
     else if (a === "evo+") s.evolutionCount = Math.min(6, s.evolutionCount + 1);
     else if (a === "openmine") { s.floorOneMineEntranceOpened = true; s.hasSeenMineTab = true; toast("Mine entrance opened (Birb: Parrot Rebirb II + maxed gear on Expedition floor 1)"); }
+    else if (a === "parrotrebirb") toast(PT.parrotRebirb(G) ? "Parrot rebirb " + PT.parrotState(s).rebirbCount : "Not ready: " + PT.parrotRebirbNeed(s));
+    else if (a === "expauto") { const e = PT.expState(s); e.isAutoAttack = !e.isAutoAttack; const r = e.activeRun; if (r) r.combatArmed = true; }
+    else if (a === "expreset") toast(PT.EXP.resetFloor(G) ? "Floor reset" : "Not in a run");
     else if (a === "davetrain") { if (!PT.daveTrain(s)) toast("Not enough seeds"); }
     else if (a === "daverefund") PT.daveRefund(s);
     else if (a === "davems") G.daveMilestones = !G.daveMilestones;
@@ -912,7 +1007,7 @@
       document.getElementById("label-" + d).textContent = why === "end" ? "" : s.currentMap === PT.FISH_MARKET_MAP ? "LEAVE MARKET" : PT.MAPS[to].name;
     }
     const aqb = document.getElementById("btn-aquarium");
-    aqb.style.display = PT.aquariumUnlocked(s) || s.currentMap === PT.FISH_MARKET_MAP ? "" : "none";
+    aqb.style.display = (PT.aquariumUnlocked(s) && s.currentMap !== PT.EXP_HUB_MAP && !PT.EXP.isRunMap(s.currentMap)) || s.currentMap === PT.FISH_MARKET_MAP ? "" : "none";
     aqb.textContent = s.currentMap === PT.FISH_MARKET_MAP ? "[E] FISH MARKET" : "[E] AQUARIUM";
     // companions (Birb: COMPANIONS [TAB] dropdown)
     const comps = [];
@@ -921,6 +1016,7 @@
     if (s.redPanda?.introSeen) comps.push(["redpanda", `${PT.redPandaTier(s)} ${s.redPanda.name.toUpperCase()}`]);
     if (PT.mineOpen(s)) comps.push(["crow", `${PT.mineState(s).crowLevel} CROW`]);
     if (PT.hasSun(s, "d_desert_collared_dove")) comps.push(["dove", `${PT.dave(s).level} DAVE`]);
+    if (PT.expState(s).unlocked) comps.push(["parrot", `${PT.expState(s).progress.level} PARROT`]);
     document.getElementById("btn-companions").style.display = comps.length ? "" : "none";
     setHtml("companion-list", G.companionsOpen ? comps.map(([k, n]) => `<button class="key small" data-win="${k}"><img src="${ICON(k)}" alt="">${n}</button>`).join("") : "");
     const af = document.getElementById("btn-autofish");
@@ -946,6 +1042,11 @@
       setHtml("fishbar", `<div class="lvl"><b>${a + 1}</b><div class="bar"><i style="width:${k >= 4 ? 100 : Math.min(100, (cur / th[k]) * 100)}%"></i></div><span class="note">+${4 * k}%</span></div><div class="sub">AREA ${a + 1} · +${4 * k}% damage in this area${k < 4 ? " · next at " + fmt(th[k]) + " HP mined" : ""}</div>`);
       const wait = Math.max(0, Math.ceil((PT.mineState(s).bossRespawnAt - Date.now()) / 1000));
       setHtml("hotbar", `<button class="key cast ${M.boss ? "gold" : wait ? "grey" : "violet"}" data-act="minechallenge">${M.boss ? "GIANT ORE · " + Math.max(0, Math.ceil((M.bossUntil - Date.now()) / 1000)) + "s" : wait ? "GIANT RESTS " + wait + "s" : "CHALLENGE"}</button>`);
+    } else if (PT.EXP.isRunMap(s.currentMap) && PT.expState(s).activeRun) {
+      const run = PT.expState(s).activeRun, p = run.parrot || { health: 0, maxHealth: 1 }, pr = PT.expState(s).progress, alive = run.enemies.filter((e) => e.health > 0 && e.type !== "mini-fly" && e.type !== "cultist").length, boss = run.enemies.find((e) => e.isBoss);
+      setHtml("fishbar", `<div class="lvl"><b>${pr.level}</b><div class="bar"><i style="width:${Math.min(100, (pr.xp / pr.xpToNextLevel) * 100)}%"></i></div><span class="note">${fmt(Math.floor(pr.xp))}/${fmt(pr.xpToNextLevel)}</span></div>
+        <div class="sub">FLOOR ${run.currentFloor} · HP ${fmt(Math.ceil(p.health))}/${fmt(p.maxHealth)} · ${alive} enemies · ${fmt(PT.parrotState(s).skillPoints)} SP${boss ? boss.health > 0 ? " · boss alive" : " · boss respawns in " + PT.fmtTime(boss.respawnTimer || 0) : ""}${run.combatArmed ? "" : " · move to start"}</div>`);
+      setHtml("hotbar", `<button class="key cast ${PT.expState(s).isAutoAttack ? "violet" : ""}" data-act="expauto">AUTO: ${PT.expState(s).isAutoAttack ? "ON" : "OFF"}</button><button class="key small grey" data-act="expreset">RESET FLOOR</button>`);
     } else if (s.currentMap === PT.DESERT_MAP) {
       const storm = PT.sandstormOn(s), cd = s.desertSandstormCooldownRemaining || 0, hasStorm = PT.hasSun(s, "d_desert_sandstorm") || PT.hasSun(s, "d_desert_dune_conductors");
       setHtml("fishbar", `<div class="lvl"><b>${G.field.list(PT.DESERT_MAP).length}/${PT.maxPopcorn(s)}</b></div><div class="sub">GOLDEN CHANCE ${(PT.desertGoldenChance(s) * 100).toFixed(1)}% · ${fmt(PT.goldenPerDrop(s))} per golden egg${hasStorm ? ` · ${storm ? "SANDSTORM " + Math.ceil(s.desertSandstormTimeRemaining) + "s" : cd > 0 ? "next storm possible in " + PT.fmtTime(cd) : "a sandstorm can start any moment"}` : ""}</div>`);
@@ -962,6 +1063,7 @@
     let msg = "";
     if (st) { const d = PT.SUN.get(st[0]); msg = `${title(d.name || st[0])}: ${words(d.description || "")} · press E to buy`; }
     else if (onPlatform()) msg = "On the seed platform: making seeds";
+    else { const ep = expPortalNear(); if (ep) msg = ep.type === "enter_expedition" ? "[E] Enter the Expedition" : ep.type === "return_hub" ? "[E] Return to the hub (ends the run)" : "[E] Go to the next floor"; }
     pr.style.display = msg ? "block" : "none"; pr.textContent = msg;
   }
   function setHtml(id, h) { const el = document.getElementById(id); if (el.dataset.last !== h) { el.innerHTML = h; el.dataset.last = h; } }

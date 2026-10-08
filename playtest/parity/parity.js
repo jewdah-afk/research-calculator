@@ -26,7 +26,7 @@ function probe({ side, scenario }) {
   const D = window.BIRB_DATA;
   const num = (x) => (x == null ? null : typeof x === "boolean" ? x : typeof x === "object" && x.toNumber ? x.toNumber() : typeof x === "object" && "mantissa" in x ? x.mantissa * Math.pow(10, x.exponent) : Number(x));
   const deep = (dst, src) => { for (const [k, v] of Object.entries(src)) { if (v && typeof v === "object" && !Array.isArray(v)) { dst[k] = dst[k] && typeof dst[k] === "object" ? dst[k] : {}; deep(dst[k], v); } else dst[k] = v; } };
-  const fresh = () => ({ collaredDove: null, sparrowPrestigeCount: 0, desertSandstormTimeRemaining: 0, desertSandstormCooldownRemaining: 0, hasUnlockedDesertMap: false, mine: {}, floorOneMineEntranceOpened: false, aquarium: { activeBiomeId: "coast", housedFish: {}, researchedFishCounts: {}, releasedShinyFishes: {}, releasedShinyWeightsKg: {} }, fishInventory: [], discoveredFish: [], discoveredShinyFish: [], fishWeightRecords: [], activeFishIds: [], activeFishBuffs: {}, lockedFish: [], fishBuffThirdSlotUnlocked: false });
+  const fresh = () => ({ parrot: null, collaredDove: null, sparrowPrestigeCount: 0, desertSandstormTimeRemaining: 0, desertSandstormCooldownRemaining: 0, hasUnlockedDesertMap: false, mine: {}, floorOneMineEntranceOpened: false, aquarium: { activeBiomeId: "coast", housedFish: {}, researchedFishCounts: {}, releasedShinyFishes: {}, releasedShinyWeightsKg: {} }, fishInventory: [], discoveredFish: [], discoveredShinyFish: [], fishWeightRecords: [], activeFishIds: [], activeFishBuffs: {}, lockedFish: [], fishBuffThirdSlotUnlocked: false });
   let A;
   if (side === "birb") {
     const g = window.game, s = g.state;
@@ -40,7 +40,8 @@ function probe({ side, scenario }) {
     s.redPanda = Object.assign({ name: "Red Panda", named: false, introSeen: false, tier: 1, mode: "chill", x: 528, y: 300 }, st.redPanda || {}); g.ensureRedPandaState();
     g.aquariumManager.invalidateModifierCache(); g.activeFishEffectSnapshot = null; g.fishMarketManager.normalizedMarketState = null;
     const nm = g.nestManager, snap = () => nm.getCultivationShopSnapshot();
-    g.ensureMineState(); g.ensureCollaredDoveState(); g.goldenPopcornRewardSnapshotTime = -1;
+    g.ensureMineState(); g.ensureCollaredDoveState(); g.ensureParrotState();
+    { const em0 = g.expeditionManager, pr = (st.expedition && st.expedition.progress) || {}; em0.state.progress.level = pr.level || 1; em0.state.highestFloorReached = (st.expedition && st.expedition.highestFloorReached) || 1; em0.state.archivistEncounterVersion = 1; em0.state.archivistDefeated = !!(st.expedition && st.expedition.archivistDefeated); em0.state.activeRun = null; } g.goldenPopcornRewardSnapshotTime = -1;
     const mm = g.fishMarketManager, am = g.aquariumManager;
     A = {
       level: (id) => g.getUpgradeLevel(id), max: (id) => g.getUpgradeMaxLevel(id), eff: (id) => g.getUpgradeEffect(id),
@@ -57,6 +58,15 @@ function probe({ side, scenario }) {
       contracts: (c, r) => { mm.ensureState(); mm.generateContractOffers(c, r); return JSON.stringify(s.aquarium.market.contractOffers); },
       repLevel: (x) => mm.getContractReputationLevel(x),
       community: () => g.getCommunityGoalRewardValue("twigGain"),
+      exp: (() => { const em = g.expeditionManager, FI = em.constructor; return {
+        xpReq: (L) => FI.getXpRequirementForLevel(L), stats: (t, f, b, k) => em.resolveEnemyStatsForMapSpawn(t, f, b)?.[k],
+        depthHp: (t, h, r, f, q) => em.enemyDepthBalance.resolveDepthScaledHealthAtQuantile(t, h, r, f, q), atk: (a, h, l, b) => em.resolveAttackFromLife(a, h, l, b),
+        sp: (t, l, h, m, b, f, r) => em.resolveSkillPointReward(t, l, h, m, b, f, r), spScale: (sp, f, r) => em.applyFloorSkillPointRewardScaling(sp, f, r),
+        total: (k) => g.getParrotTotalStats()[k], gear: (k) => g.getEquipmentMultipliers()[k], spMult: () => g.getParrotRebirbSkillPointMultiplier(), rebirb: () => g.canPerformParrotRebirb(),
+        ext: (k) => g.getQuestMerchantExpeditionBonuses()[k], muad: () => g.getMuadBirbSkillPointMultiplier(), add: (k) => g.getParrotSkillAdditions()[k],
+        range: (t, b) => em.getEnemyRetaliationTriggerRange({ type: t, isBoss: b, attackRange: em.constructor && undefined }), strike: (t, b) => em.getParrotStrikeDistance({ type: t, isBoss: b }),
+        respawn: (x) => em.getEffectiveEnemyRespawnDelaySeconds(x), shiny: () => g.getExpeditionShinyEnemyChance(), resetCost: () => { const sk = s.parrot.skills, t = sk.hp + sk.lifeRegen + sk.damage; return t <= 0 ? 0 : Math.max(1, Math.ceil(Math.sqrt(0.01 * t))); },
+      }; })(),
       desert: {
         chance: () => g.getDesertGoldenPopcornChance(), interval: () => g.getSpawnInterval(9) / g.getDesertPopcornSpawnRateMultiplier(), perDrop: () => g.calculateGoldenPopcornGainPerDrop(),
         collect: (c) => g.getGoldenPopcornCollectionMultiplier(c), eggMult: () => g.getPopcornCollectionMultiplier(9, g.getTotalMultiplier()), bloom: () => g.getDuneBloomGoldenPopcornMultiplier(),
@@ -104,6 +114,12 @@ function probe({ side, scenario }) {
       maxBuffs: () => PT.maxFishBuffs(s), aqUnlocked: () => PT.aquariumUnlocked(s),
       contracts: (c, r) => { PT.market(s); return JSON.stringify(PT.generateContracts(s, c, r)); },
       repLevel: (x) => PT.repLevel(x),
+      exp: (() => { const X = PT.EXP; PT.parrotState(s); PT.expState(s); return {
+        xpReq: (L) => X.xpReq(L), stats: (t, f, b, k) => X.enemyStats(t, f, b)?.[k], depthHp: (t, h, r, f, q) => X.depthHealthAt(t, h, r, f, q), atk: (a, h, l, b) => X.attackFromLife(a, h, l, b),
+        sp: (t, l, h, m, b, f, r) => X.spReward(t, l, h, m, b, f, r), spScale: (sp, f, r) => X.floorSpScale(sp, f, r), total: (k) => PT.parrotTotalStats(s)[k], gear: (k) => X.gearMults(s)[k],
+        spMult: () => X.rebirbSpMult(s), rebirb: () => PT.parrotRebirbReady(s), ext: (k) => X.externalBonuses(s)[k], muad: () => X.muadBirb(s), add: (k) => X.skillAdditions(s)[k],
+        range: (t, b) => X.triggerRange({ type: t, isBoss: b }), strike: (t, b) => X.strikeDist({ type: t, isBoss: b }), respawn: (x) => X.effectiveRespawn(s, x), shiny: () => X.shinyChance(s), resetCost: () => PT.parrotResetCost(s),
+      }; })(),
       desert: {
         chance: () => PT.desertGoldenChance(s), interval: () => PT.desertSpawnInterval(s), perDrop: () => PT.goldenPerDrop(s),
         collect: (c) => PT.goldenCollectMult(s, c), eggMult: () => PT.desertEggMult(s), bloom: () => PT.duneBloomMult(s),
@@ -161,6 +177,24 @@ function probe({ side, scenario }) {
   for (const b of ["coast", "reef", "freshwater", "ocean", "abyssal", "creatures", "mystic", "mechanical", "expedition"]) put(`aquarium tier ${b}`, () => A.aqTier(b));
   for (const x of [0, 99, 100, 650, 6200, 9999]) put(`market rep level at ${x}`, () => A.repLevel(x));
   if (scenario.state.aquarium) for (const [c, r] of [[20000, 0], [20001, 0], [20001, 2]]) out[`contract offers cycle ${c} reroll ${r}`] = A.contracts(c, r);
+  const Ex = A.exp, PLAN = { 1: ["cobra", "masked-forest-spirit", "twig-blight", "flower-monster"], 2: ["witch", "harpy", "cobra", "skeleton-warrior", "ghoul"], 3: ["anubis", "mummy", "anubis-warrior"],
+    4: ["fishfolk-brute", "fishfolk-whipe", "fishfolk-inkbender", "fishfolk-archpriest"], 5: ["fishfolk-horror", "fishfolk-pugilist", "sea-horror", "sea-gramlin", "elemental"], 6: ["frosty-slime", "frost-wisp", "arctic-whisper", "ice-harpy", "frozy-cube"],
+    7: ["frogfolk-chieftain", "frogfolk-wizard", "frogfolk-brute", "giant-fly"], 8: ["giant-black-pudding", "black-pudding", "ghost", "doppelganger"], 9: ["the-archivist", "hell-critter", "imp", "cacodaemon", "cultist-brute", "cultist"] };
+  for (const L of [1, 2, 7, 30, 150, 1000]) put(`parrot xp needed L${L}`, () => Ex.xpReq(L));
+  if (scenario.expedition) {
+    for (const [f, types] of Object.entries(PLAN)) for (const t of types) for (const b of [false, true]) {
+      for (const k of ["health", "attack", "xpBase", "skillPointReward", "speed"]) put(`exp stats F${f} ${t}${b ? " boss" : ""} ${k}`, () => Ex.stats(t, +f, b, k));
+      if (!b) for (const r of [0.1, 0.5, 0.95]) for (const q of [0, 1]) put(`exp depth hp F${f} ${t} r${r} q${q}`, () => Ex.depthHp(t, Ex.stats(t, +f, false, "health"), r, +f, q));
+      for (const r of [0.1, 0.5, 0.95]) put(`exp sp F${f} ${t}${b ? " boss" : ""} r${r}`, () => { const h = Ex.stats(t, +f, b, "health"), life = Ex.depthHp(t, h, r, +f, 0.5); return Ex.spScale(Ex.sp(t, life, h, Ex.stats(t, +f, b, "skillPointReward"), b, +f, r), +f, r); });
+      put(`exp atk F${f} ${t}${b ? " boss" : ""}`, () => { const h = Ex.stats(t, +f, b, "health"); return Ex.atk(Ex.stats(t, +f, b, "attack"), h, Ex.depthHp(t, h, 0.5, +f, 0.5), b); });
+      put(`exp range ${t}${b ? " boss" : ""}`, () => Ex.range(t, b)); put(`exp strike ${t}${b ? " boss" : ""}`, () => Ex.strike(t, b));
+    }
+  }
+  for (const k of ["hp", "damage", "lifeRegen"]) put(`parrot total ${k}`, () => Ex.total(k));
+  for (const k of ["beakMult", "armorMult", "auraMult"]) put(`parrot gear ${k}`, () => Ex.gear(k));
+  for (const k of ["hpMult", "damageMult", "lifeRegenMult", "skillPointMult", "attackSpeedMult"]) put(`parrot additions ${k}`, () => Ex.add(k));
+  for (const k of ["damageMult", "hpMult", "skillPointMult", "chestRewardMult", "combatRegenPenaltyReduction", "lootAuraChanceFlat"]) put(`parrot external ${k}`, () => Ex.ext(k));
+  put("parrot rebirb sp mult", Ex.spMult); put("parrot can rebirb", Ex.rebirb); put("parrot muad birb", Ex.muad); put("parrot boss respawn s", () => Ex.respawn(480)); put("exp shiny chance", Ex.shiny); put("parrot reset cost", Ex.resetCost);
   const Dz = A.desert;
   for (const k of ["chance", "interval", "perDrop", "eggMult", "bloom", "storm", "speed", "delay", "sweep", "burst", "golden", "canRebirb", "xpGain", "rebirbs", "unspent", "goldenAuto"]) put(`desert ${k}`, Dz[k]);
   for (const c of [false, true]) put(`desert golden collect caramel=${c}`, () => Dz.collect(c));
@@ -210,7 +244,8 @@ function probe({ side, scenario }) {
   for (const sc of SCENARIOS) {
     const b = await birb.evaluate(probe, { side: "birb", scenario: sc });
     const tg = await birb.evaluate(() => window.game.getCommunityGoalRewardValue("twigGain"));
-    await ours.evaluate((v) => { window.PT.COMMUNITY.twigGain = v; }, tg); // live server-wide event value
+    const cg = await birb.evaluate(() => ({ skillPointGain: window.game.getCommunityGoalRewardValue("skillPointGain"), chestRewards: window.game.getCommunityGoalRewardValue("chestRewards") }));
+    await ours.evaluate(([v, c]) => { window.PT.COMMUNITY.twigGain = v; Object.assign(window.PT.COMMUNITY, c); }, [tg, cg]); // live server-wide event values
     if (!communityNote) communityNote = tg;
     const o = await ours.evaluate(probe, { side: "ours", scenario: sc });
     const rows = [];

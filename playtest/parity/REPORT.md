@@ -1,30 +1,33 @@
 # Parity report
 
-Birb's live engine (birbplay.com `window.game`) vs the playtest, same save state per scenario. Generated 2026-10-08T19:51Z by `playtest/parity/parity.js`.
+Birb's live engine (birbplay.com `window.game`) vs the playtest, same save state per scenario. Generated 2026-10-08T20:27Z by `playtest/parity/parity.js`.
 
-**13036 / 13036 values match.** Birb's live community-goal twig reward today: x1.5 (copied into the playtest for the run).
+**17961 / 17961 values match.** Birb's live community-goal twig reward today: x1.5 (copied into the playtest for the run).
 
 | Scenario | Values | Mismatches |
 |---|---|---|
-| fresh start | 685 | 0 |
-| early eggs | 685 | 0 |
-| first molt done | 685 | 0 |
-| seeds online | 685 | 0 |
-| evolve unlocked | 685 | 0 |
-| evolution 1 | 685 | 0 |
-| evolution 3 | 685 | 0 |
-| aquarium early | 688 | 0 |
-| aquarium mid | 688 | 0 |
-| aquarium full + market | 688 | 0 |
-| nest start | 685 | 0 |
-| nest boxes | 685 | 0 |
-| nest tier 2 | 697 | 0 |
-| mine start | 685 | 0 |
-| mine mid | 685 | 0 |
-| mine deep | 685 | 0 |
-| desert start | 685 | 0 |
-| desert dave | 685 | 0 |
-| desert sandstorm late | 685 | 0 |
+| fresh start | 714 | 0 |
+| early eggs | 714 | 0 |
+| first molt done | 714 | 0 |
+| seeds online | 714 | 0 |
+| evolve unlocked | 714 | 0 |
+| evolution 1 | 714 | 0 |
+| evolution 3 | 714 | 0 |
+| aquarium early | 717 | 0 |
+| aquarium mid | 717 | 0 |
+| aquarium full + market | 717 | 0 |
+| nest start | 714 | 0 |
+| nest boxes | 714 | 0 |
+| nest tier 2 | 726 | 0 |
+| mine start | 714 | 0 |
+| mine mid | 714 | 0 |
+| mine deep | 714 | 0 |
+| desert start | 714 | 0 |
+| desert dave | 714 | 0 |
+| desert sandstorm late | 714 | 0 |
+| expedition start | 1830 | 0 |
+| expedition rebirb 1 | 714 | 0 |
+| expedition late | 1830 | 0 |
 
 ### fresh start
 
@@ -99,5 +102,17 @@ All match.
 All match.
 
 ### desert sandstorm late
+
+All match.
+
+### expedition start
+
+All match.
+
+### expedition rebirb 1
+
+All match.
+
+### expedition late
 
 All match.

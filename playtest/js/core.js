@@ -90,6 +90,8 @@
   PT.add = (s, k, v) => { s.resources[k] = D(s.resources[k]).add(v); };
   PT.sub = (s, k, v) => { s.resources[k] = Decimal.max(0, D(s.resources[k]).sub(v)); };
   PT.has = (s, k, v) => D(s.resources[k]).gte(v);
+  // Currencies kept outside s.resources (Birb: the Legendary Key is an item in the parrot inventory)
+  PT.altCurrency = { strange_key: { has: (s, c) => (s.parrot?.strangeKeys || 0) >= c, sub: (s, c) => { s.parrot.strangeKeys -= c; } } };
 
   // ------------------------------------------------------------------ sunflower nodes (Birb: getSunflowerLevel / hasSunflowerUpgrade)
   PT.sunLevel = (s, id) => (SUN.has(id) && s.sunflowerUpgrades[id]) || 0;
@@ -131,7 +133,7 @@
     }
     if (id === "m_rupture") return Math.ceil(2e6 * 2.7 ** (L - 1));
     if (id === "m_charged_strike") return 4800 * 24 ** (L - 1);
-    if (id.startsWith("d_") && def.costMultiplier !== undefined) {
+    if (id.startsWith("d_mine_") && def.costMultiplier !== undefined) { // Birb Jc: only mine-tree nodes (growth) round up
       const a = Math.max(0, Math.floor(L));
       const r = id === "d_mine_abyssal_forge" ? 3 ** Math.min(200, a) * 2.85 ** Math.max(0, a - 200) : def.costMultiplier ** a;
       return Math.ceil((def.cost ?? def.baseCost) * r);
@@ -238,7 +240,8 @@
     if (!PT.sunUnlocked(s, id)) return "locked";
     const cur = n.costCurrency, c = PT.sunCost(s, id);
     if (cur === "totalFishCaught") { if ((s.totalFishCaught || 0) < c) return "not enough"; }
-    else if (!(cur in s.resources)) return "needs " + cur; // fish, gold ore, keys, books: later phases
+    else if (PT.altCurrency[cur]) { if (!PT.altCurrency[cur].has(s, c)) return "not enough"; PT.altCurrency[cur].sub(s, c); }
+    else if (!(cur in s.resources)) return "needs " + cur; // fish, gold ore, books: later phases
     else { if (!PT.has(s, cur, c)) return "not enough"; if (!freeSeeds(s, cur)) PT.sub(s, cur, c); }
     s.sunflowerUpgrades[id] = L + 1;
     if (id === "d_unlock_evolve") s.hasUnlockedEvolve = true;

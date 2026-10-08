@@ -63,7 +63,7 @@
     return fl(t * PT.harvestMult(s)) * ((s.evolutionCount || 0) >= 6 ? 2 : 1);
   };
   // Birb getGoldenPopcornCollectionMultiplier: caramelized x2, archivist V2 x1.15 (comes with Phase 7), Golden Sand x3 in a storm
-  PT.goldenCollectMult = (s, caramel) => (caramel ? 2 : 1) * (PT.sandstormOn(s) && PT.hasSun(s, "d_desert_golden_sand") ? 3 : 1);
+  PT.goldenCollectMult = (s, caramel) => (caramel ? 2 : 1) * (PT.hasSun(s, "d_archivist_echo_golden_memory") ? 1.15 : 1) * (PT.sandstormOn(s) && PT.hasSun(s, "d_desert_golden_sand") ? 3 : 1);
   PT.desertEggMult = (s) => PT.collectionMultiplier(s) * (PT.hasSun(s, "d_desert_fever") ? 5 : 1);
 
   // Birb awardCollectedPopcorn, desert branch (who: player / collared_dove)
