@@ -5,7 +5,7 @@
 const fs = require("fs"), path = require("path"), http = require("http");
 const { chromium } = require("playwright");
 const ROOT = path.resolve(__dirname, "../..");
-const SCENARIOS = require("./scenarios.js");
+const SCENARIOS = require("./scenarios.js").filter((sc) => !process.env.ONLY || sc.name.includes(process.env.ONLY)); // ONLY=quest runs a subset (REPORT.md then covers only that subset)
 const DATA = (() => { const window = {}; eval(fs.readFileSync(path.join(ROOT, "playtest/js/data.js"), "utf8")); return window.BIRB_DATA; })();
 
 const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".png": "image/png", ".json": "application/json" };
@@ -32,11 +32,11 @@ function probe({ side, scenario }) {
     const g = window.game, s = g.state;
     s.upgrades = {}; s.sunflowerUpgrades = {};
     for (const k of Object.keys(s.resources)) s.resources[k] = 0;
-    Object.assign(s, fresh());
+    Object.assign(s, fresh()); if (s.expedition) { delete s.expedition.questMerchant; delete s.expedition.questStats; }
     const st = JSON.parse(JSON.stringify(scenario.state));
     deep(s, st);
     if (g.invalidateUpgradeTreeCache) g.invalidateUpgradeTreeCache();
-    g.nestManager.setState(JSON.parse(JSON.stringify(st.nest || {})), false); s.nest = g.nestManager.getState();
+    g.questMerchantManager.normalizedStateRef = null; g.nestManager.setState(JSON.parse(JSON.stringify(st.nest || {})), false); s.nest = g.nestManager.getState();
     s.redPanda = Object.assign({ name: "Red Panda", named: false, introSeen: false, tier: 1, mode: "chill", x: 528, y: 300 }, st.redPanda || {}); g.ensureRedPandaState();
     g.aquariumManager.invalidateModifierCache(); g.activeFishEffectSnapshot = null; g.fishMarketManager.normalizedMarketState = null;
     const nm = g.nestManager, snap = () => nm.getCultivationShopSnapshot();
@@ -81,6 +81,10 @@ function probe({ side, scenario }) {
         procs: window.__BIRB_PROCS ? { kn: (o) => window.__BIRB_PROCS.kn(o), xn: (h, m, p) => window.__BIRB_PROCS.xn(h, m, p), cn: (n, p) => window.__BIRB_PROCS.Cn(n, p).damageRatio * 100 + window.__BIRB_PROCS.Cn(n, p).maxTargets } : null,
         resetCost: () => { const sk = s.parrot.skills, t = sk.hp + sk.lifeRegen + sk.damage; return t <= 0 ? 0 : Math.max(1, Math.ceil(Math.sqrt(0.01 * t))); },
       }; })(),
+      quest: (() => { const qm = g.questMerchantManager, fix = () => { qm.normalizedStateRef = null; qm.setState(g.state.expedition); }; return {
+        sync: (now) => { fix(); let r = false; if (g.hasSunflowerUpgrade("d_desert_quest_merchant")) r = qm.unlock(now) || r; r = qm.sync(now) || r; g.state.expedition = qm.getState(); return r; }, bonus: (k) => { fix(); return qm.getBonus(k); }, m: () => g.state.expedition.questMerchant,
+        progress: () => { fix(); return [...qm.getQuestProgressValues()].map(([id, v]) => [id, v.current, v.target]); }, done: () => qm.getCompletedQuestCount(), total: () => qm.getTotalQuestCount(),
+        left: (now) => qm.getTimeUntilRefresh(now), kill: (f, e) => { fix(); g.expeditionManager.trackQuestKill(f, e); }, stats: () => g.state.expedition.questStats, ext: (k) => g.getQuestMerchantExpeditionBonuses()[k] } })(),
       desert: {
         chance: () => g.getDesertGoldenPopcornChance(), interval: () => g.getSpawnInterval(9) / g.getDesertPopcornSpawnRateMultiplier(), perDrop: () => g.calculateGoldenPopcornGainPerDrop(),
         collect: (c) => g.getGoldenPopcornCollectionMultiplier(c), eggMult: () => g.getPopcornCollectionMultiplier(9, g.getTotalMultiplier()), bloom: () => g.getDuneBloomGoldenPopcornMultiplier(),
@@ -145,6 +149,10 @@ function probe({ side, scenario }) {
           qty: () => X.sacProfile(s).auraQuantityMultiplier, chance: () => X.sacProfile(s).auraChanceMultiplier, promo: () => X.sacProfile(s).auraRarityPromotionChance, canExpand: () => X.canUnlockSacExpansion(s),
           maxLv: () => X.sacMaxUnlocked(s), progress: () => X.sacProgress(s).progress, atk: () => { const b = X.parrotBonuses(s); return b.attackSpeedMult; }, move: () => X.parrotBonuses(s).moveSpeedMult, range: () => { X.bonuses = X.parrotBonuses(s); return X.rangeMult(); } },
       }; })(),
+      quest: (() => { const X = PT.EXP; return {
+        sync: (now) => X.questSync(s, now), bonus: (k) => X.questMerchantBonus(s, k), m: () => X.questState(s),
+        progress: () => X.QUESTS.ALL.map((d) => [d.id, X.questProgress(s, d), X.questTarget(s, d)]), done: () => X.questCompletedCount(s), total: () => X.questTotalCount(s),
+        left: (now) => X.questTimeUntilRefresh(s, now), kill: (f, e) => X.trackQuestKill(s, null, f, e, X.FLOOR_MAP[f]), stats: () => PT.expState(s).questStats, ext: (k) => X.externalBonuses(s)[k] } })(),
       desert: {
         chance: () => PT.desertGoldenChance(s), interval: () => PT.desertSpawnInterval(s), perDrop: () => PT.goldenPerDrop(s),
         collect: (c) => PT.goldenCollectMult(s, c), eggMult: () => PT.desertEggMult(s), bloom: () => PT.duneBloomMult(s),
@@ -232,6 +240,20 @@ function probe({ side, scenario }) {
   for (const k of ["slots", "rolls", "spMult", "hoard", "auraBonus", "passive", "names"]) put(`loot ${k}`, Ex.loot[k]);
   for (const c of ["artifact", "material"]) { put(`inventory cap ${c}`, () => Ex.loot.cap(c)); put(`inventory used ${c}`, () => Ex.loot.used(c)); }
   for (const k of ["level", "target", "popcorn", "sp", "radius", "seed", "qty", "chance", "promo", "canExpand", "maxLv", "progress", "atk", "move", "range"]) put(`sacrifice ${k}`, Ex.sac[k]);
+  if (scenario.quest) { const Q = A.quest, T0 = scenario.quest.now, enc = (ids) => ids.join(",").split("").reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
+    const snap = (tag) => { const m = Q.m(); put(`quest ${tag} daily ids`, () => enc(m.dailyQuestIds)); put(`quest ${tag} main done`, () => enc(m.mainCompletedQuestIds)); put(`quest ${tag} daily done`, () => enc(m.dailyCompletedQuestIds));
+      put(`quest ${tag} cycle`, () => m.dailyCycle); put(`quest ${tag} next refresh`, () => m.nextRefreshAt); put(`quest ${tag} unlocked`, () => m.unlockedAt); put(`quest ${tag} done count`, Q.done); put(`quest ${tag} total count`, Q.total);
+      for (const [id, n] of Object.entries(m.dailyCompletionCounts || {})) put(`quest ${tag} count ${id}`, () => n);
+      for (const k of ["seed_gain_mult", "popcorn_gain_mult", "twig_gain_mult", "feather_gain_mult", "expedition_damage_mult", "expedition_hp_mult", "expedition_skill_point_mult", "expedition_chest_chance_flat", "expedition_chest_reward_mult", "pickup_radius_mult"]) put(`quest ${tag} bonus ${k}`, () => Q.bonus(k));
+      for (const [id, c, t] of Q.progress()) { put(`quest ${tag} progress ${id}`, () => c); put(`quest ${tag} target ${id}`, () => t); } };
+    put("quest sync 1", () => Q.sync(T0)); snap("t0"); put("quest left t0", () => Q.left(T0 + 1234));
+    for (const [f, e] of scenario.quest.kills || []) Q.kill(f, { ...e });
+    const st = Q.stats(); for (const g of ["killsByFloor", "bossClearsByFloor", "killsByEnemyType"]) for (const [k, v] of Object.entries(st[g])) put(`quest stats ${g} ${k}`, () => v);
+    for (const [f, v] of Object.entries(Q.m().flockProgress || {})) for (const k of ["normal", "elite", "deep"]) put(`quest flock F${f} ${k}`, () => v[k]);
+    put("quest sync 2", () => Q.sync(T0 + 5000)); snap("t1");
+    put("quest sync 3", () => Q.sync(T0 + 3 * 864e5)); snap("t3");
+    for (const k of ["damageMult", "hpMult", "skillPointMult", "chestChanceFlat", "chestRewardMult"]) put(`quest external ${k}`, () => Q.ext(k));
+  }
   const Dz = A.desert;
   for (const k of ["chance", "interval", "perDrop", "eggMult", "bloom", "storm", "speed", "delay", "sweep", "burst", "golden", "canRebirb", "xpGain", "rebirbs", "unspent", "goldenAuto"]) put(`desert ${k}`, Dz[k]);
   for (const c of [false, true]) put(`desert golden collect caramel=${c}`, () => Dz.collect(c));

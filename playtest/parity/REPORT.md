@@ -1,8 +1,8 @@
 # Parity report
 
-Birb's live engine (birbplay.com `window.game`) vs the playtest, same save state per scenario. Generated 2026-10-08T20:59Z by `playtest/parity/parity.js`.
+Birb's live engine (birbplay.com `window.game`) vs the playtest, same save state per scenario. Generated 2026-10-08T22:09Z by `playtest/parity/parity.js`.
 
-**42249 / 42249 values match.** Birb's live community-goal twig reward today: x1.5 (copied into the playtest for the run).
+**45744 / 45744 values match.** Birb's live community-goal twig reward today: x1.5 (copied into the playtest for the run).
 
 | Scenario | Values | Mismatches |
 |---|---|---|
@@ -39,6 +39,9 @@ Birb's live engine (birbplay.com `window.game`) vs the playtest, same save state
 | forge early | 1941 | 0 |
 | forge legendary | 1941 | 0 |
 | forge refined deep | 1941 | 0 |
+| quest unlock | 1157 | 0 |
+| quest progress | 1171 | 0 |
+| quest legacy migration | 1167 | 0 |
 
 ### fresh start
 
@@ -169,5 +172,17 @@ All match.
 All match.
 
 ### forge refined deep
+
+All match.
+
+### quest unlock
+
+All match.
+
+### quest progress
+
+All match.
+
+### quest legacy migration
 
 All match.

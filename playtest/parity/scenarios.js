@@ -158,3 +158,25 @@ module.exports = [
     { name: "forge refined deep", expedition: true, state: forge(eq({ rarity: "legendary", level: 5 }, { rarity: "legendary", level: 5 }, { rarity: "legendary", level: 5 }), items2, 3e10, 3, { journeyVersion: 1, goldOre: 9e4, highestArea: 9, expeditionCycle: { version: 1, rewardedGiants: 9, refinements: { beak: 3, armor: 35, aura: 0 } } }) },
   );
 }
+
+// Quest merchant scenarios (Phase 6c): unlock, daily picks (rules v1), progress, completions, the v2 reward migration, kill tracking
+{
+  const T0 = 1.8e12, DAY = 864e5, cyc = Math.floor(T0 / DAY);
+  const qs = (kf, bc, kt) => ({ killsByFloor: kf, bossClearsByFloor: bc, killsByEnemyType: kt });
+  const base = (hf, qm, stats, extra = {}) => ({ evolutionCount: 6, rebirthCount: 60, sunflowerUpgrades: { d_desert_quest_merchant: 1, ...(extra.sun || {}) },
+    expedition: { unlocked: true, highestFloorReached: hf, progress: { level: 80 }, sacrifice: { skillPointsSacrificed: 0, commonMilestoneExpansionUnlocked: false }, questMerchant: qm, questStats: stats } });
+  const kills = [[1, { type: "cobra", x: 600, y: 400 }], [1, { type: "masked-forest-spirit-blue", x: 600, y: 3500 }], [1, { type: "twig-blight", isElite: true, x: 600, y: 900 }],
+    [2, { type: "witch", isBoss: true, x: 700, y: 3000 }], [4, { type: "fishfolk-whipe", x: 700, y: 3400 }], [6, { type: "ice-harpy", x: 600, y: 1200 }], [3, { type: "mini-fly", x: 600, y: 500 }],
+    [3, { type: "anubis", isBoss: true, x: 900, y: 2000 }], [3, { type: "mummy", anubisSummon: true, x: 900, y: 2000 }]];
+  module.exports.push(
+    { name: "quest unlock", quest: { now: T0, kills }, state: base(4, { dailySeed: 424242 }, qs({ 1: 40 }, { 1: 1 }, { cobra: 5 })) },
+    { name: "quest progress", quest: { now: T0, kills }, state: base(6, { unlockedAt: T0 - 9 * DAY, dailySeed: 99173, dailyCycle: cyc, rewardRulesVersion: 2, dailyRulesVersion: 1, nextRefreshAt: (cyc + 1) * DAY,
+      lastRefreshAt: cyc * DAY, dailyQuestIds: ["daily_floor3_recon", "daily_hunt_witch", "daily_floor4_boss"], dailyCompletedQuestIds: [], dailyCompletionCounts: { daily_floor4_boss: 9, daily_hunt_cobra: 3, daily_floor1_clearance: 12 },
+      mainCompletedQuestIds: ["main_floor1_first_incursion", "main_floor1_break_the_fangs"], dailyBaselineStats: qs({ 3: 100 }, { 4: 2 }, { witch: 4 }) },
+      qs({ 1: 900, 2: 400, 3: 125, 4: 50 }, { 1: 6, 2: 1, 3: 2, 4: 3 }, { witch: 6, anubis: 1, "fishfolk-whipe": 99 })) },
+    { name: "quest legacy migration", quest: { now: T0, kills }, state: base(9, { unlockedAt: T0 - 40 * DAY, dailySeed: 7, dailyCycle: cyc - 1, nextRefreshAt: cyc * DAY,
+      dailyQuestIds: ["daily_floor1_boss", "daily_hunt_inkbender", "daily_floor2_predator_control"], dailyCompletedQuestIds: ["daily_floor1_boss"], completedQuestIds: ["main_defeat_anubis", "main_floor4_boss_gauntlet"],
+      dailyCompletionCounts: { daily_floor4_boss: 30, daily_hunt_inkbender: 4, daily_floor1_boss: 2 }, mainCompletedQuestIds: ["main_floor6_frozen_apex"] },
+      qs({ 1: 5000, 6: 2500, 7: 10 }, { 6: 5, 9: 1 }, { anubis: 3, "fishfolk-inkbender": 90 })) },
+  );
+}

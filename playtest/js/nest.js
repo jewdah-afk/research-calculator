@@ -44,7 +44,7 @@
   PT.nestWellMult = (s) => (special(s, "wateringWell") ? 2 : 1);
   // Birb x community goal "twigGain": a live, server-wide event reward (x1.5 while the goal is met). Set it in Settings to match Birb today.
   PT.COMMUNITY = { twigGain: 1 };
-  PT.nestResourceMult = (s) => PT.NEST_TIERS[PT.nestState(s).tier].mult * PT.COMMUNITY.twigGain * PT.nestWellMult(s); // x quest x carpentry forestry (later phases)
+  PT.nestResourceMult = (s) => PT.NEST_TIERS[PT.nestState(s).tier].mult * (1 + (PT.questBonus ? PT.questBonus(s, "twig_gain_mult") : 0)) * PT.COMMUNITY.twigGain * PT.nestWellMult(s); // x quest x carpentry forestry (later phases)
   PT.nestTwigMult = (s) => PT.nestResourceMult(s) * (PT.hasSun(s, "d_archivist_echo_ancient_roots") ? 1.15 : 1);
   const twigK = (tv, pp, mult) => { const base = Number((1 + 0.2 * tv).toFixed(1)); const v = Math.max(0.1, r12(base * mult)) * (1 + pp); return Math.max(0.1, r12(v)); }; // Birb _k
   PT.nestRewardPerHit = (s) => twigK(lvl(s, "n_twig_value"), 0, PT.nestTwigMult(s));

@@ -272,7 +272,7 @@
   const bossKill = (s, run, e, mapId) => {
     if (e.xpGranted) return;
     X.onKill(s, run, e, true); X.tryLegendaryKey(s, run, e); grantSp(s, run, e); run.enemiesDefeated++; e.xpGranted = true;
-    const qs = PT.expState(s).questStats; qs.bossClearsByFloor[run.currentFloor] = (qs.bossClearsByFloor[run.currentFloor] || 0) + 1;
+    X.trackQuestKill(s, run, run.currentFloor, e, mapId || s.currentMap);
     if (e.type !== "the-archivist") { e.respawnTimer = X.effectiveRespawn(s, K.BOSS_RESPAWN); X.setCooldown(s, e, e.respawnTimer); }
     if (e.type === "anubis") { run.enemies = run.enemies.filter((m) => !(m.anubisSummon && String(m.anubisLeaderId || "") === String(e.id))); Object.assign(e, { anubisAction: "", anubisActionApplied: false, anubisCoffinPhase: "", anubisCoffinFrame: 0, anubisCoffinSpawned: false }); }
     X.dmgNumber(run, e, "BOSS DOWN", "#f59e0b");
@@ -284,7 +284,8 @@
     if (PT.parrotState(s).strangeKeys > 0 || s.hasUnlockedDesertMap || PT.hasSun(s, "d_unlock_desert_tree")) return;
     PT.parrotState(s).strangeKeys = 1; X.dmgNumber(run, e, "LEGENDARY KEY ACQUIRED!", "#facc15");
   };
-  const trackKill = (s, run, e) => { const q = PT.expState(s).questStats; q.killsByFloor[run.currentFloor] = (q.killsByFloor[run.currentFloor] || 0) + 1; q.killsByEnemyType[e.type] = (q.killsByEnemyType[e.type] || 0) + 1; };
+  const trackKill = (s, run, e) => X.trackQuestKill(s, run, run.currentFloor, e, s.currentMap); // quests.js
+  X.trackQuestKill = () => {};
 
   // ------------------------------------------------------------------ enemy runtime (Birb WT.update)
   const GENERIC = new Set(["cobra", "ghoul", "skeleton-warrior", "mummy", "fishfolk-whipe", "fishfolk-inkbender", "fishfolk-brute", "fishfolk-horror", "fishfolk-pugilist", "sea-horror", "sea-gramlin", "elemental", "frost-wisp", "ghost",

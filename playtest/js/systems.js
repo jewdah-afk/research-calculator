@@ -73,7 +73,7 @@
   PT.fishMult = () => 1;
   const nestPopcornRespawnMult = (s) => (PT.nestRespawnMult ? PT.nestRespawnMult(s) : 1), nestSeedProductionMult = (s) => (PT.nestSeedProdMult ? PT.nestSeedProdMult(s) : 1);
   const grainSilo = (s) => (PT.nestGrainSilo ? PT.nestGrainSilo(s) : 1), wateringWell = (s) => (PT.nestWellMult ? PT.nestWellMult(s) : 1);
-  const questBonus = () => 0, sacrificeMult = (s) => (PT.sacrificePopcornMult ? PT.sacrificePopcornMult(s) : 1), redPandaNap = (s) => (PT.redPandaNapMult ? PT.redPandaNapMult(s) : 1), flockCommunity = () => 1;
+  const questBonus = (s, k) => (PT.questBonus ? PT.questBonus(s, k) : 0), sacrificeMult = (s) => (PT.sacrificePopcornMult ? PT.sacrificePopcornMult(s) : 1), redPandaNap = (s) => (PT.redPandaNapMult ? PT.redPandaNapMult(s) : 1), flockCommunity = (s) => (PT.flockCommunityMult ? PT.flockCommunityMult(s) : 1);
 
   // Birb: fo/$r  a + i * log10(x / t + 1)
   const logCurve = (x, t, i, a) => a + i * D(x).div(t).add(1).log10().toNumber();

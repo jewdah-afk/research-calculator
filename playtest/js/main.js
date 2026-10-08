@@ -102,7 +102,8 @@
     if (k === " ") { e.preventDefault(); cast(); }
     if (k === "tab") { e.preventDefault(); G.companionsOpen = !G.companionsOpen; drawHud(); }
     if (k === "p") openWin("profile");
-    if (k === "q" && PT.expState(G.s).activeRun) { if (PT.EXP.usePotion(G.s)) save(); }
+    if (k === "q") openWin("quests"); // Birb KeyQ opens the objectives window
+    if (k === "h" && PT.expState(G.s).activeRun) { if (PT.EXP.usePotion(G.s)) save(); } // Birb uses the potion button only (no key)
     if (k === "escape") { if (G.win) closeWin(); else openWin("settings"); }
   });
   function cast() { if (!PT.startCast(G)) toast(G.s.currentMap !== 2 ? "Fish on the Bridge" : G.s.evolutionCount < 1 ? "Fishing needs Evolution 1" : "Not ready"); }
@@ -582,7 +583,7 @@
     return `<div class="section">EQUIPPED ${eq.size} / ${X.slotCount(s)} · ARTIFACTS ${ca.used} / ${ca.max} · MATERIALS ${cm.used} / ${cm.max}</div>
       ${chests ? `<div class="devrow" style="flex-wrap:wrap">${chests}</div>` : `<div class="note">Bosses and elites drop equipment chests.</div>`}
       <div class="section">ARTIFACTS</div>${arts.map(row).join("") || `<div class="note">None yet.</div>`}
-      <div class="section">POTIONS ${par ? `· <button class="key small ${(par.potionCooldown || 0) > 0 ? "grey" : ""}" data-act="inv_use">USE (Q)</button>` : ""}</div>${pots.map(row).join("") || `<div class="note">2% of kills drop a potion.</div>`}
+      <div class="section">POTIONS ${par ? `· <button class="key small ${(par.potionCooldown || 0) > 0 ? "grey" : ""}" data-act="inv_use">USE (H)</button>` : ""}</div>${pots.map(row).join("") || `<div class="note">2% of kills drop a potion.</div>`}
       ${PT.hasSun(s, "d_desert_auto_potion") ? `<div class="devrow"><label><input type="checkbox" data-in="autopot" ${p.autoPotionEnabled ? "checked" : ""}> auto potion below ${PT.EXP.autoPotionThreshold(s)}% HP</label></div>` : ""}
       <div class="section">MATERIALS</div>${mats.map(row).join("") || `<div class="note">Kills drop Spirit Aura.</div>`}
       ${forgePanel(arts)}`;
@@ -849,7 +850,24 @@
     expfloors: { title: "EXPEDITION", body: () => expFloorsPanel() },
     minetree: { title: "TREASURE ROOM", body: () => mineTreePanel() },
     sacrifice: { title: "SACRIFICE", body: () => sacrificePanel() },
+    quests: { title: "OBJECTIVES", tabs: [["active", "QUESTS"], ["index", "QUEST INDEX"], ["bonus", "BONUSES"]], body: (t) => questPanel(t) },
   };
+  // Birb objectives window, quests part (the quest merchant opens with the desert node d_desert_quest_merchant)
+  const QSTAT = { seed_gain_mult: "seed gain", popcorn_gain_mult: "popcorn gain", twig_gain_mult: "twig gain", feather_gain_mult: "feather gain", expedition_damage_mult: "parrot damage", expedition_hp_mult: "parrot HP",
+    expedition_skill_point_mult: "skill points", expedition_chest_chance_flat: "chest chance", expedition_chest_reward_mult: "chest rewards", pickup_radius_mult: "pickup radius" };
+  function questPanel(t) {
+    const s = G.s, X = PT.EXP; if (!PT.hasSun(s, "d_desert_quest_merchant")) return `<div class="note">The quest merchant opens with the desert node "Quest Merchant".</div>`;
+    X.questSync(s); const m = X.questState(s), Q = X.QUESTS;
+    const goal = (d) => d.metric === "kills_by_floor" ? `Defeat enemies on floor ${d.floor}` : d.metric === "boss_clears_by_floor" ? `Defeat the floor ${d.floor} boss` : `Defeat ${d.enemyType.replace(/-/g, " ")}s`;
+    const row = (d) => { const c = X.questProgress(s, d), tg = X.questTarget(s, d), done = X.questCompleted(s, d), pin = (m.pinnedQuestIds || []).includes(d.id);
+      return `<div class="row"><img class="ico" src="${ICON("quest_scroll")}" alt=""><div><div class="t">${d.id.replace(/^(daily|main)_/, "").replace(/_/g, " ").toUpperCase()} <span class="d">${d.questType}</span></div>
+        <div class="d">${goal(d)}: ${PT.fmt(Math.min(c, tg))} / ${PT.fmt(tg)} · +${+(d.rewardValue * 100).toFixed(2)}% ${QSTAT[d.rewardStat]}</div><div class="bar"><i style="width:${Math.min(100, (c / tg) * 100)}%"></i></div></div>
+        <div class="btns">${done ? `<button class="key small gold">DONE</button>` : `<button class="key small ${pin ? "blue" : "grey"}" data-qpin="${d.id}">${pin ? "PINNED" : "PIN"}</button>`}</div></div>`; };
+    if (t === "bonus") return `<div class="kv">${Q.BONUS_STATS.map((k) => `<span>${QSTAT[k]}</span><span>+${+(X.questMerchantBonus(s, k) * 100).toFixed(2)}%</span>`).join("")}</div>`;
+    if (t === "index") return ["floor_kill", "enemy_hunt", "boss_clear"].map((f) => `<div class="section">${f.replace("_", " ").toUpperCase()}</div>` + [...Q.DAILY, ...Q.MAIN].filter((d) => d.family === f && X.questVisible(s, d)).map(row).join("")).join("");
+    const act = m.activeQuestIds.map((id) => Q.BY_ID[id]).filter((d) => d && !X.questCompleted(s, d));
+    return `<div class="hero"><div class="big">${X.questCompletedCount(s)} / ${X.questTotalCount(s)} COMPLETE</div><div class="sub">New daily quests in ${PT.fmtTime(X.questTimeUntilRefresh(s) / 1000)}</div></div>${act.map(row).join("") || '<div class="note">All quests done.</div>'}`;
+  }
   // Birb aquarium window: BIOMES (donate per biome), RESONANCE (milestones), TOTAL (all bonuses)
   function aqBiomes() {
     const s = G.s, a = PT.aq(s), here = s.currentMap === PT.AQUARIUM_MAP;
@@ -973,6 +991,7 @@
     else if (b.dataset.bfuse) { const r = PT.breedFuse(s, b.dataset.bfuse); toast(r || "Fused!"); }
     else if (b.dataset.donate) { const r = PT.aqDonate(s, b.dataset.donate, false); toast(r || "Donated!"); }
     else if (b.dataset.donates) { const r = PT.aqDonate(s, b.dataset.donates, true); toast(r || "Shiny donated!"); }
+    else if (b.dataset.qpin) PT.EXP.togglePinnedQuest(s, b.dataset.qpin);
     else if (b.dataset.accept) { const r = PT.acceptContract(s, b.dataset.accept); toast(r || "Contract accepted"); }
     else if (b.dataset.claim) { const r = PT.claimContract(s, b.dataset.claim); toast(r || "Contract claimed!"); }
     else if (b.dataset.abandon) { const r = PT.abandonContract(s, b.dataset.abandon); toast(r || "Contract abandoned (3h cooldown)"); }
