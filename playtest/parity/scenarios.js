@@ -99,6 +99,10 @@ module.exports = [
     { name: "mine deep", state: { ...base, evolutionCount: 6, resources: { bruteOre: 1e30 }, upgrades: { m_ore_value: 300, m_mining_power: 280, m_charged_strike: 4 },
       sunflowerUpgrades: dm(["work_perch", "precise_peck", "rich_vein", "impact_transfer", "peck_rhythm", "deep_survey", "seismic_strike", "mineral_temper", "clean_extraction", "unbroken_rhythm", "work_pulse", "gold_beacon", "crown_survey", "fine_cut", "royal_mastery", "deep_mine", "royal_impact", "mineral_coffers", "seismic_echo", "royal_cut", ["abyssal_forge", 12], ["abyssal_treasure", 7]]),
       mine: { ...MV, highestArea: 10, crowLevel: 140, crowXp: 0, crowRebirbCount: 9, crowTrainingLevel: 160, goldOre: 50000, campaign: { version: 2, areaDamage: {}, areaMilestones: { 10: 4 }, normalBreaks: 9000, chargeHits: 0, oreDiscoveries: {} } } } },
+    { name: "mine crow tracks", state: { ...base, evolutionCount: 6, mine: { ...MV, highestArea: 3, crowLevel: 20, crowArmorLevel: 12, crowDamageLevel: 30, crowRegenLevel: 7, crowDrainTarget: "damage" },
+      parrot: { equipmentUpgrades: { beak: { rarity: "legendary", level: 5 }, armor: { rarity: "legendary", level: 5 }, aura: { rarity: "epic", level: 5 } } } } },
+    { name: "mine crow tracks low gear", state: { ...base, evolutionCount: 6, mine: { ...MV, highestArea: 3, crowLevel: 20, crowArmorLevel: 12, crowDamageLevel: 30, crowRegenLevel: 7 },
+      parrot: { equipmentUpgrades: { beak: { rarity: "legendary", level: 4 }, armor: { rarity: "legendary", level: 5 }, aura: { rarity: "legendary", level: 5 } } } } },
   );
 }
 

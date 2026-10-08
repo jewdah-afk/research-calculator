@@ -106,6 +106,7 @@ function probe({ side, scenario }) {
         value: () => g.getMineOreValue(), bonus: () => g.getMineOreDamageBonus(), interval: () => g.getMineCrowHitInterval(), golden: () => g.getMineGoldenOreChance(),
         area: () => g.getMineMilestoneLevel(), stat: (k) => g.getMineShopStats()[k], xpNeed: (L) => g.getMineCrowXpNeeded(L), rebirbLevel: () => g.getMineCrowRebirbRequiredLevelForNext(),
         rebirbUnlocked: () => g.isMineCrowRebirbUnlocked(), canRebirb: () => g.canRebirbMineCrow(),
+        track: (k) => (k === "armor" ? g.getCrowArmorHpBonus() : k === "damage" ? g.getCrowDamageBonus() : g.getCrowRegenBonus()),
         nodeVisible: (id) => g.isMineTreasureUpgradeVisible("d_mine_" + id), nodeUnlocked: (id) => g.upgradeManager.isSunflowerUpgradeUnlocked("d_mine_" + id),
         cost: (d, L) => g.getDiscountedUpgradeCost(d, L),
       },
@@ -187,6 +188,7 @@ function probe({ side, scenario }) {
         area: () => PT.mineArea(s), stat: (k) => (k === "chargeInterval" ? PT.mineProfile(s).chargeInterval : k === "chargeBonus" ? (PT.mineHas(s, "seismic_strike") ? 3 : 0) : k === "crowDamage" ? PT.crowDamage(s) : NaN),
         xpNeed: (L) => PT.crowXpNeeded(L), rebirbLevel: () => { const n = PT.mineState(s).crowRebirbCount; return n < 8 ? [3, 5, 7, 7, 10, 12, 16, 20][n] : 20 + 5 * (n - 8); },
         rebirbUnlocked: () => PT.crowRebirbUnlocked(s), canRebirb: () => PT.crowCanRebirb(s),
+        track: (k) => PT.EXP.crowBonus(s, k),
         nodeVisible: (id) => PT.mineNodeVisible(s, id), nodeUnlocked: (id) => PT.mineNodeUnlocked(s, id),
         cost: (d, L) => PT.cost(PT.UP.get(d.id), L),
       },
@@ -314,6 +316,7 @@ function probe({ side, scenario }) {
   for (const k of ["value", "bonus", "interval", "golden", "area", "rebirbLevel", "rebirbUnlocked", "canRebirb"]) put(`mine ${k}`, Mn[k]);
   for (const k of ["chargeInterval", "chargeBonus", "crowDamage"]) put(`mine stat ${k}`, () => Mn.stat(k));
   for (const L of [1, 5, 26, 100]) put(`crow xp needed L${L}`, () => Mn.xpNeed(L));
+  for (const k of ["armor", "damage", "regen"]) put(`crow track ${k} bonus`, () => Mn.track(k));
   for (const [id, Ls] of [["m_ore_value", [1, 8, 11, 30, 100]], ["m_mining_power", [1, 8, 13, 25, 100]], ["m_charged_strike", [1, 2, 3, 4]]]) for (const L of Ls) put(`mine cost ${id} L${L}`, () => Mn.cost(D.upgrades.find((u) => u.id === id), L));
   for (const id of ["work_perch", "precise_peck", "rich_vein", "impact_transfer", "peck_rhythm", "deep_survey", "seismic_strike", "mineral_temper", "clean_extraction", "unbroken_rhythm", "work_pulse", "gold_beacon", "crown_survey", "fine_cut", "royal_mastery", "deep_mine", "royal_impact", "mineral_coffers", "seismic_echo", "royal_cut", "abyssal_forge", "abyssal_treasure", "deep_rebirb"]) {
     put(`mine tree ${id} visible`, () => Mn.nodeVisible(id)); put(`mine tree ${id} unlocked`, () => Mn.nodeUnlocked(id));

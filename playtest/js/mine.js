@@ -125,9 +125,18 @@
   const crowJu = (s) => { const m = PT.mineState(s); return Ju(ME(Math.max(1, m.crowLevel, m.crowTrainingLevel), legacy(m)), speed(s)); };
   PT.crowInterval = (s) => crowJu(s).interval;
   PT.crowRebirbDamage = (n) => Math.pow(1.25, Math.min(8, n)) * Math.pow(2, Math.max(0, n - 8));
+  // the crow's metal-drain tracks (Birb getCrowTrackLevel / isCrowDrainTargetUnlocked): Mine open and the matching parrot gear legendary level 5.
+  // Birb switched the drain and track level-ups off, so only levels already in a save count.
+  const CROW_TRACK = { armor: ["armor", "crowArmorLevel"], damage: ["beak", "crowDamageLevel"], regen: ["aura", "crowRegenLevel"] };
+  PT.crowTrackLevel = function (s, k) {
+    const t = CROW_TRACK[k]; if (!t || !PT.mineOpen(s)) return 0;
+    const g = (s.parrot?.equipmentUpgrades || {})[t[0]] || {};
+    if (g.rarity !== "legendary" || Math.max(1, Math.floor(Number(g.level || 1))) < 5) return 0;
+    return Math.max(0, Math.floor(Number((s.mine || {})[t[1]] || 0)));
+  };
   PT.mineDamageBonus = function (s) { // getMineOreDamageBonus
     const m = PT.mineState(s), c = PT.mineCampaign(s), area = PT.mineArea(s);
-    const ha = 1 * Math.pow(1.1, Math.floor(s.upgrades.m_mining_power || 1) - 1); // x (1 + core edge): Metal Drain is switched off in Birb
+    const ha = (1 + Math.min(8, Math.floor(PT.crowTrackLevel(s, "damage") / 10))) * Math.pow(1.1, Math.floor(s.upgrades.m_mining_power || 1) - 1); // x (1 + core edge from the damage track)
     const areaMult = 1 + 0.04 * Math.min(4, Math.max(0, c.areaMilestones[area] || 0));
     const Fi = (has(s, "impact_transfer") ? 1.25 : 1) * (has(s, "mineral_temper") ? 1.08 : 1) * (has(s, "royal_impact") ? 2 : 1) * Bi(lvlOf(s, "abyssal_forge") * (has(s, "abyssal_forge") ? 1 : 0), 1.2);
     return Math.min(Number.MAX_VALUE, ha * areaMult * Fi * PT.crowRebirbDamage(m.crowRebirbCount) * crowJu(s).damage) - 1;
