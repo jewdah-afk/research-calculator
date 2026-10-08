@@ -4,6 +4,7 @@
   const PT = window.PT;
   const { D, fmt } = PT;
   const ICON = (n) => `../birb-icons/final/${n}.png`;
+  const FISHICON = (id) => `../birb-icons/final/fish/${PT.baseFishId ? PT.baseFishId(id) : id}.png`;
   const CUR = {
     popcorn: { name: "Eggs", icon: "egg" },
     goldenFeathers: { name: "Plumes", icon: "plume" },
@@ -84,15 +85,20 @@
   addEventListener("keydown", (e) => {
     if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
     G.keys.add(e.key.toLowerCase());
-    if (e.key.toLowerCase() === "e") tryStation();
-    if (e.key.toLowerCase() === "f" && !PT.startCast(G)) toast(G.s.currentMap !== 2 ? "Fish on the Bridge" : G.s.evolutionCount < 1 ? "Fishing needs Evolution 1" : "Wait for the cooldown");
+    const k = e.key.toLowerCase();
+    if (k === "e") tryStation();
+    if (k === " ") { e.preventDefault(); cast(); }
+    if (k === "tab") { e.preventDefault(); G.companionsOpen = !G.companionsOpen; drawHud(); }
+    if (k === "p") openWin("profile");
+    if (k === "escape") { if (G.win) closeWin(); else openWin("settings"); }
   });
+  function cast() { if (!PT.startCast(G)) toast(G.s.currentMap !== 2 ? "Fish on the Bridge" : G.s.evolutionCount < 1 ? "Fishing needs Evolution 1" : "Not ready"); }
   addEventListener("keyup", (e) => G.keys.delete(e.key.toLowerCase()));
   cv.addEventListener("mousedown", (e) => {
     const r = cv.getBoundingClientRect(), dpr = cv.width / r.width;
     const w = toWorld((e.clientX - r.left) * dpr, (e.clientY - r.top) * dpr);
     G.target = w;
-    if (G.s.currentMap === 3 && !G.s.hasTalkedToMonster && Math.hypot(w.x - 800, w.y - 500) < 140) { G.s.hasTalkedToMonster = true; toast("The monster is hungry. Feed it!"); }
+    if (G.s.currentMap === 3 && !G.s.hasTalkedToMonster && Math.hypot(w.x - 800, w.y - 500) < 140) { G.s.hasTalkedToMonster = true; toast("The monster is hungry. Hold to feed it!"); }
   });
 
   // ------------------------------------------------------------------ helpers
@@ -131,7 +137,6 @@
   }
   document.getElementById("go-left").onclick = () => travel(-1);
   document.getElementById("go-right").onclick = () => travel(1);
-  document.getElementById("btn-save").onclick = () => { save(); toast("Saved"); };
 
   // ------------------------------------------------------------------ update
   function step(dt) {
@@ -202,7 +207,7 @@
     }
     if (s.currentMap === 1) drawSunflowerField();
     if (s.currentMap === 2) drawBridge();
-    if (s.currentMap === 3) { drawIcon("monster", 800, 500, 200); label(s.hasTalkedToMonster ? `FED ${PT.feedProgress(s).toFixed(1)}%` : "Click the monster", 800, 640, 22); }
+    if (s.currentMap === 3) { drawIcon("monster", 800, 500, 200); if (!s.hasTalkedToMonster) label("Click the monster", 800, 640, 22); }
     // pickup radius ring + bird
     if (s.currentMap === 0) { cx.beginPath(); cx.arc(s.player.x, s.player.y, PT.pickupProfile(s).collectRadius, 0, 7); cx.strokeStyle = "rgba(255,255,255,.25)"; cx.lineWidth = 2; cx.stroke(); }
     drawIcon("birb", s.player.x, s.player.y, 48, G.vx < -5);
@@ -214,7 +219,7 @@
     cx.fillStyle = "#8a5a32"; cx.fillRect(0, 640, 3000, 120); cx.strokeStyle = "#0b0c10"; cx.lineWidth = 4; cx.strokeRect(0, 640, 3000, 120);
     for (let x = 0; x < 3000; x += 40) { cx.fillStyle = x % 80 ? "#9a6a3e" : "#7a4e2a"; cx.fillRect(x, 642, 38, 116); }
     cx.fillStyle = "#6b6f78"; roundRect(2260, 360, 260, 300, 16); cx.fill(); cx.stroke(); label(s.hasEnteredDungeon ? "CASTLE GATE (open)" : "CASTLE GATE", 2390, 350, 18);
-    if (s.evolutionCount >= 1) label("Stand still and press F to fish", 700, 610, 16);
+    if (s.evolutionCount >= 1) label("Stand still and press SPACE to cast", 700, 610, 16);
     else label("Fishing opens at Evolution 1", 700, 610, 16);
     if (s.hasMetSeagull) s.seagull.gulls.forEach((g, i) => drawIcon("seagull", 800 + 96 * i, 560 + 10 * Math.sin(2 * G.t + i), 46));
     const p = s.player;
@@ -261,15 +266,9 @@
   // ------------------------------------------------------------------ panels
   const panel = document.getElementById("panel"), tabsEl = document.getElementById("tabs");
   function tabs() {
-    const s = G.s, t = [["eggs", "EGGS", "egg"]];
-    if (s.rebirthCount > 0 || PT.res(s, "popcorn").gte(1000) || PT.res(s, "goldenFeathers").gt(0)) t.push(["molt", "MOLT", "plume"]);
+    // Birb's drawer: POPCORN and REBIRB from the start, SEEDS once the Sunflower Machine is owned (updateSeedShopTabVisibility).
+    const s = G.s, t = [["eggs", "EGGS", "egg"], ["molt", "MOLT", "plume"]];
     if (PT.hasSun(s, "d_sunflower_machine")) t.push(["seeds", "SEEDS", "seed"]);
-    if (s.rebirthCount > 0) t.push(["tree", "TREE", "up_seed_value"]);
-    if (s.sparrow.unlocked) t.push(["sparrow", "SPARROW", "sparrow"]);
-    if (s.hasUnlockedEvolve || s.evolutionCount > 0) t.push(["castle", "EVOLVE", "monster"]);
-    if (s.evolutionCount >= 1) t.push(["fishing", "FISHING", "rod"]);
-    if (s.hasMetSeagull) t.push(["seagull", "SEAGULL", "seagull"]);
-    t.push(["stats", "STATS", "index"], ["dev", "DEV", "settings"]);
     if (!t.some((x) => x[0] === G.tab)) G.tab = "eggs";
     return t;
   }
@@ -280,9 +279,9 @@
     const cur = CUR[def.costCurrency];
     return `<div class="row"><img class="ico" src="${ICON(UP_ICON[id] || "egg")}" alt="">
       <div><div class="t">${title(def.name)}</div><div class="g">${words(show(L))}${maxed ? "" : ` <b>›››</b> ${words(show(L + 1))}`}</div>
-      <div class="d">${words(def.description)}</div><div class="lv">LV ${L - (id.startsWith("p_") || id.startsWith("pr_") || id.startsWith("s_") ? 1 : 0)} / ${M - 1}</div></div>
+      <div class="d">${words(def.description)}</div><div class="lv">LV ${L} / ${M}</div></div>
       <div class="btns">${maxed ? `<button class="key gold">MAXED</button>` : `<button class="key ${ok ? "" : "grey"}" data-buy="${id}"><img src="${ICON(cur.icon)}" alt="">${fmt(cost)}</button>
-      <button class="key small ${ok ? "blue" : "grey"}" data-max="${id}">BUY MAX</button>`}</div></div>`;
+      <button class="key small ${ok ? "violet" : "grey"}" data-max="${id}">MAX</button>`}</div></div>`;
   }
   const treeRows = (tree) => [...PT.UP.values()].filter((d) => d.tree === tree && rowVisible(d.id)).map((d) => upRow(d.id)).join("");
   function rowVisible(id) {
@@ -294,34 +293,23 @@
   }
   function drawPanel() {
     const s = G.s, list = tabs();
-    tabsEl.innerHTML = list.map(([k, n, ic]) => `<button class="tab ${G.tab === k ? "on" : ""}" data-tab="${k}"><img src="${ICON(ic)}" alt="">${n}</button>`).join("");
+    const pend = PT.prestige(s).final;
+    tabsEl.innerHTML = list.map(([k, n, ic]) => `<button class="tab ${G.tab === k ? "on" : ""}" data-tab="${k}"><img src="${ICON(ic)}" alt="">${n}${k === "molt" && pend.gte(1) ? `<span class="badge">+${fmt(pend)}</span>` : ""}</button>`).join("");
     let h = "";
     if (G.tab === "eggs") {
-      h = `<div class="hdr">EGGS</div><div class="section">EGG UPGRADES</div>${treeRows("P")}
+      h = `${treeRows("P")}
       <div class="note">Molting resets eggs and these upgrades. Plumes are forever.</div>`;
     } else if (G.tab === "molt") {
       const p = PT.prestige(s), ok = p.final.gte(1);
-      h = `<div class="hdr">MOLT</div><div class="hero"><img src="${ICON("plume")}" alt=""><div class="big">MOLT</div>
-      <div class="sub">${fmt(s.resources.goldenFeathers)} plumes · molted ${s.rebirthCount} times · 1 plume per 1,000 eggs</div>
-      <button class="key wide ${ok ? "violet" : "grey"}" data-act="molt">${ok ? `Molt for +${fmt(p.final)} Plumes` : "Needs 1,000 eggs"}</button></div>
+      h = `<div class="reset"><div class="big">RESET YOUR EGGS</div>
+      <div class="gain">+${fmt(p.final)}<img src="${ICON("plume")}" alt=""></div>
+      <button class="key wide ${ok ? "gold" : "grey"}" data-act="molt">MOLT</button>
+      <div class="note">${fmt(s.resources.goldenFeathers)} plumes · molted ${s.rebirthCount} times · 1 plume per 1,000 eggs</div></div>
       <div class="section">PLUME KEEPSAKES</div>${treeRows("PR")}<div class="note">Molting resets eggs and egg upgrades. Plumes and keepsakes are kept until you Evolve.</div>`;
     } else if (G.tab === "seeds") {
       const sr = PT.seedRate(s, true);
-      h = `<div class="hdr">SEEDS</div><div class="hero"><img src="${ICON("seed")}" alt=""><div class="big">SUNFLOWERS</div>
-      <div class="sub">${fmt(s.resources.sunflowerSeeds)} seeds · ${fmt(sr.ticksPerSec * sr.perTick)} / s on the platform${PT.hasSun(s, "d_auto_gen") ? " (auto)" : ""}</div></div>
-      <div class="section">SEED UPGRADES</div>${treeRows("S")}<div class="note">Evolving resets seeds and these upgrades.</div>`;
-    } else if (G.tab === "tree") {
-      const vis = visibleStations(), owned = vis.filter((st) => PT.hasSun(s, st[0])).length;
-      h = `<div class="hdr">${desertView() ? "DESERT TREE" : "SUNFLOWER TREE"}</div>
-      <div class="hero"><div class="sub">${owned} / ${vis.length} visible unlocks owned. Walk onto a station in the Sunflower Field and press E (or click Buy here).</div>
-      ${s.hasUnlockedDesertMap ? `<button class="key small" data-act="treeview">Switch to ${desertView() ? "sunflower" : "desert"} tree</button>` : ""}</div>
-      ${vis.map((st) => sunRow(st[0])).join("")}`;
-    } else if (G.tab === "sparrow") h = sparrowPanel();
-    else if (G.tab === "castle") h = castlePanel();
-    else if (G.tab === "fishing") h = fishingPanel();
-    else if (G.tab === "seagull") h = seagullPanel();
-    else if (G.tab === "stats") h = statsPanel();
-    else if (G.tab === "dev") h = devPanel();
+      h = `${treeRows("S")}<div class="note">${fmt(sr.ticksPerSec * sr.perTick)} seeds / s on the platform${PT.hasSun(s, "d_auto_gen") ? " (auto generator: always on)" : ""}</div><div class="note">Evolving resets seeds and these upgrades.</div>`;
+    }
     if (panel.dataset.last !== h) { const y = panel.scrollTop; panel.innerHTML = h; panel.scrollTop = y; panel.dataset.last = h; }
   }
   function sunRow(id) {
@@ -335,7 +323,7 @@
   function sparrowPanel() {
     const s = G.s, sp = s.sparrow, need = PT.sparrowXpNeeded(sp.level), feat = s.evolutionCount >= 2;
     const total = PT.sparrowTotalXp(sp.level, sp.xp), mneed = PT.mitosisNeed(s, s.sparrowCount);
-    return `<div class="hdr">SPARROW</div><div class="hero"><img src="${ICON("sparrow")}" alt=""><div class="big">THE SPARROW</div>
+    return `<div class="hero"><img src="${ICON("sparrow")}" alt=""><div class="big">THE SPARROW</div>
       <div class="sub">LV ${sp.level} · ${s.sparrowCount} sparrow${s.sparrowCount > 1 ? "s" : ""} · ${fmt(sp.xp)} / ${fmt(need)} XP · speed ${Math.round(PT.sparrowSpeed(s))} px/s</div>
       <div class="bar"><i style="width:${Math.min(100, (sp.xp / need) * 100)}%"></i></div></div>
       <div class="note">Sparrows collect eggs on the Park field (also while you are away). Each egg gives XP by type: plain 1, butter 2, caramel 3, cheese 5, rainbow 10.</div>
@@ -356,22 +344,32 @@
       <div class="section">MILESTONES (Evolution 2+)</div>
       ${PT.SPARROW_MILESTONES.map((m) => `<div class="note">${PT.milestoneMet(s, m) ? "✔" : "○"} <b>${m.name}</b>: ${m.text}</div>`).join("")}`;
   }
-  function castlePanel() {
-    const s = G.s, n = PT.evoReq(s.evolutionCount), pr = PT.feedProgress(s), can = PT.canEvolveStage(s);
-    const line = (name, fed, need, cur) => need > 0 ? `<div class="note"><b>${name}</b> ${fmt(fed)} / ${fmt(need)}<div class="bar"><i style="width:${Math.min(100, (fed / need) * 100)}%"></i></div></div>` : "";
-    return `<div class="hdr">EVOLVE</div><div class="hero"><img src="${ICON("monster")}" alt=""><div class="big">CASTLE MONSTER</div>
-      <div class="sub">Evolution ${s.evolutionCount} → ${s.evolutionCount + 1} · ${pr.toFixed(1)}% fed${s.currentMap === 3 ? "" : " · go to the Castle to feed"}</div>
-      <button class="key wide ${s.currentMap === 3 && s.hasTalkedToMonster ? "" : "grey"}" data-hold="feed">Hold to feed (10% of each need / s)</button>
-      <div style="height:6px"></div><button class="key wide ${pr >= 100 && can ? "violet" : "grey"}" data-act="evolve">Evolve</button></div>
-      <div class="section">FEED THE MONSTER</div>
+  // Birb castle: satisfaction bar and HOLD TO FEED over the map, plus the five evolution stages.
+  const EVO_STAGES = [
+    ["Stage 1: Genesis", "Unlocks fishing, more tree upgrades and egg automation"],
+    ["Stage 2: Exodus", "More upgrades, resources x Evolution"],
+    ["Stage 3: Leviticus", "Unlocks fishing automation, more tree upgrades, the Nest"],
+    ["Stage 4: Numbers", "Unlocks nest upgrades, the Expedition, the Desert map, new upgrade trees"],
+    ["Stage 5: Deuteronomy", "The hell opens, unlocks the Aquarium"],
+  ];
+  function castleHtml() {
+    const s = G.s;
+    if (s.currentMap !== 3) return "";
+    const stages = EVO_STAGES.map(([n, d], i) => `<div class="stage ${s.evolutionCount > i ? "done" : ""}"><b>[${s.evolutionCount > i ? "x" : " "}] ${n}</b><br>${d}</div>`).join("");
+    if (!s.hasTalkedToMonster) return `<div class="section">THE MONSTER</div><div class="note">Click the monster to talk to it.</div>${stages}`;
+    if (s.evolutionCount >= 5) return `<div class="section">FULLY EVOLVED</div>${stages}`;
+    const n = PT.evoReq(s.evolutionCount), pr = PT.feedProgress(s), can = PT.canEvolveStage(s);
+    const line = (name, fed, need) => need > 0 ? `<div class="note"><b>${name}</b> ${fmt(fed)} / ${fmt(need)}<div class="bar"><i style="width:${Math.min(100, (fed / need) * 100)}%"></i></div></div>` : "";
+    return `<div class="section">SATISFACTION ${pr.toFixed(1)}%</div><div class="bar"><i style="width:${Math.min(100, pr)}%"></i></div>
       ${line("Eggs", s.monsterPopcornFed, n.popcorn)}${line("Plumes", s.monsterFeathersFed, n.feathers)}${line("Seeds", s.monsterSeedsFed, n.seeds)}
       ${line("Fish", s.monsterFishFed, n.fish)}${line("Twigs", s.monsterTwigsFed, n.twigs)}${line("Moneta", s.monsterMonetaFed, n.moneta)}
-      <div class="note">Evolving resets eggs, plumes, seeds, golden and echo eggs, moneta, twigs, every non-permanent upgrade and sunflower unlock, and the sparrow. Evolution 1 unlocks the Sparrow. From Evolution 2, eggs, seeds and plumes are multiplied by your evolution count.</div>`;
+      ${pr >= 100 && can ? `<button class="key wide violet" data-act="evolve">EVOLVE</button>` : `<button class="key wide ${can ? "" : "grey"}" data-hold="feed">${can ? "HOLD TO FEED" : "Unlock Evolve in the sunflower tree"}</button>`}
+      <div style="height:6px"></div>${stages}`;
   }
   function statsPanel() {
     const s = G.s, p = PT.prestige(s), prof = PT.pickupProfile(s), sr = PT.seedRate(s, true);
     const kv = (a, b) => `<span>${a}</span><span>${b}</span>`;
-    return `<div class="hdr">STATS</div><div class="kv">
+    return `<div class="kv">
       ${kv("Egg multiplier", "x" + fmt(PT.totalMultiplier(s)))}${kv("Spawn interval", PT.spawnInterval(s).toFixed(3) + " s")}
       ${kv("Field cap", PT.maxPopcorn(s))}${kv("On field", G.field.list(0).length)}${kv("Pickup radius", prof.collectRadius.toFixed(1) + " px")}
       ${kv("Max speed", PT.maxSpeed(s).toFixed(1) + " px/s")}${kv("Eggs / s", fmt(G.rates.popcorn || 0))}${kv("Seeds / s (platform)", fmt(sr.ticksPerSec * sr.perTick))}
@@ -380,20 +378,28 @@
       ${kv("Total eggs collected", fmt(s.totalPopcornCollected))}${kv("Play time", PT.fmtTime(s.playTime))}</div>
       <div class="note">Every number here comes from the same formulas as Birb. Compare with the Roblox build to spot differences.</div>`;
   }
-  function fishingPanel() {
-    const s = G.s, f = PT.ensureFishing(s), F = G.fish || {};
-    const rodIcon = (id) => "rod_" + id.replace(/^rod_/, "");
-    const curRod = PT.RODS.find((r) => r.id === f.equippedRodId);
-    const state = F.casting > 0 ? "Casting..." : F.reeling > 0 ? `Reeling ${F.reeling.toFixed(1)}s` : F.cooldown > 0 ? `Cooldown ${F.cooldown.toFixed(1)}s` : "Ready";
-    const last = F.last ? `Last: <b style="color:${PT.RARITY_COLOR[F.last.fish.rarity]}">${PT.fishName(F.last.fish.id)}</b>${F.last.shiny ? " (shiny)" : ""} · ${F.last.weight} kg${F.last.record ? " · new best!" : ""}` : "";
+  const RANK = { common: 0, uncommon: 1, rare: 2, epic: 3, legendary: 4, mythic: 5 };
+  const fishFilter = { rarity: "", type: "" };
+  function fishCollection() {
+    const s = G.s;
     PT.normalizeFishBuffs(s);
     const buffs = s.activeFishIds.map((id) => { const fi = PT.FISH_BY.get(PT.baseFishId(id)); return `<div class="note">● ${PT.fishName(id)}: ${fi.effect.type} x${fi.effect.value}${PT.isShiny(id) ? " (x" + (1 + 3 * (fi.effect.value - 1)).toFixed(2) + " for 24h)" : ""}</div>`; }).join("");
-    const inv = [...s.fishInventory].sort((a, b) => ({ common: 0, uncommon: 1, rare: 2, epic: 3, legendary: 4, mythic: 5 }[PT.FISH_BY.get(PT.baseFishId(b.fishId)).rarity] - { common: 0, uncommon: 1, rare: 2, epic: 3, legendary: 4, mythic: 5 }[PT.FISH_BY.get(PT.baseFishId(a.fishId)).rarity])).slice(0, 40).map((row) => {
-      const fi = PT.FISH_BY.get(PT.baseFishId(row.fishId));
-      return `<div class="row"><img class="ico" src="${ICON("fish")}" alt=""><div><div class="t" style="color:${PT.RARITY_COLOR[fi.rarity]}">${PT.fishName(row.fishId)} x${row.count}</div>
+    const rows = s.fishInventory.filter((r) => r.count > 0).map((r) => ({ r, fi: PT.FISH_BY.get(PT.baseFishId(r.fishId)) }))
+      .filter(({ fi }) => (!fishFilter.rarity || fi.rarity === fishFilter.rarity) && (!fishFilter.type || (fi.type || "expedition") === fishFilter.type))
+      .sort((a, b) => RANK[b.fi.rarity] - RANK[a.fi.rarity]).slice(0, 80).map(({ r: row, fi }) =>
+        `<div class="row"><img class="ico" src="${FISHICON(row.fishId)}" onerror="this.src='${ICON("fish")}'" alt=""><div><div class="t" style="color:${PT.RARITY_COLOR[fi.rarity]}">${PT.fishName(row.fishId)} x${row.count}</div>
         <div class="d">${fi.rarity} · ${fi.type || "expedition"} · eat: ${fi.effect.type} x${fi.effect.value} · sells ${fmt(PT.sellValue(s, row.fishId))} seeds</div></div>
-        <div class="btns"><button class="key small" data-eat="${row.fishId}">EAT</button><button class="key small ${s.lockedFish.includes(fi.id) ? "violet" : "grey"}" data-lock="${fi.id}">${s.lockedFish.includes(fi.id) ? "LOCKED" : "LOCK"}</button></div></div>`;
-    }).join("");
+        <div class="btns"><button class="key small" data-eat="${row.fishId}">EAT</button><button class="key small ${s.lockedFish.includes(fi.id) ? "violet" : "grey"}" data-lock="${fi.id}">${s.lockedFish.includes(fi.id) ? "LOCKED" : "LOCK"}</button></div></div>`).join("");
+    const opt = (k, list) => `<select data-ff="${k}"><option value="">${k === "rarity" ? "RARITIES" : "TYPES"}</option>${list.map((x) => `<option ${fishFilter[k] === x ? "selected" : ""}>${x}</option>`).join("")}</select>`;
+    return `<div class="filters">${opt("rarity", Object.keys(RANK))}${opt("type", [...new Set(PT.FISH.map((f) => f.type || "expedition"))])}
+      <button class="key small ${PT.hasSun(s, "d_fish_seeds") ? "gold" : "grey"}" data-act="sellsafe">SAFE SELL</button></div>
+      <div class="section">ACTIVE FISH BUFFS (${s.activeFishIds.length} / ${PT.maxFishBuffs(s)})</div>${buffs || '<div class="note">Eat a fish to get its effect. Shiny fish give 4x the bonus for 24h.</div>'}
+      <div class="section">FISH (${s.fishInventory.reduce((a, r) => a + r.count, 0)})</div>${rows || '<div class="note">No fish caught!</div>'}
+      <div class="note">Selling pays seeds and needs the Fish Seeds unlock. Safe sell keeps fish needed for rods, tackle and fish-priced sunflower nodes, plus locked and shiny fish.</div>`;
+  }
+  const rodIcon = (id) => "rod_" + id.replace(/^rod_/, "");
+  function fishEquipment() {
+    const s = G.s, f = PT.ensureFishing(s);
     const nextRod = PT.RODS.find((r) => !f.ownedRods.includes(r.id));
     const rods = PT.RODS.filter((r) => f.ownedRods.includes(r.id) || r === nextRod).map((r) => {
       const own = f.ownedRods.includes(r.id), eq = f.equippedRodId === r.id;
@@ -407,22 +413,21 @@
       const eq = [f.equippedBaitId, f.equippedHookId, f.equippedLureId].includes(t.id);
       const cost = t.cost.map((c) => `${c.count} ${c.type === "currency" ? (CUR[c.id]?.name || c.id) : PT.fishName(c.id)}`).join(", ");
       const eff = t.effect.type === "type_boost" ? `only ${t.effect.targetType} fish` : t.effect.type === "specific_fish" ? `x${t.effect.value} for ${t.effect.targetFish.map(PT.fishName).join(", ")}` : `${t.effect.type} ${t.effect.value ?? ""}${t.effect.targetType ? " (" + t.effect.targetType + ")" : ""}`;
-      return `<div class="row"><img class="ico" src="${ICON(t.type === "consumable" ? "bait" : t.id)}" onerror="this.src='${ICON("bait")}'" alt=""><div><div class="t">${PT.itemName(t.id)} <span class="lv">${t.type}</span></div>
+      return `<div class="row"><img class="ico" src="${ICON(t.id)}" alt=""><div><div class="t">${PT.itemName(t.id)} <span class="lv">${t.type}</span></div>
         <div class="d">${eff}</div><div class="lv">${req ? req.toUpperCase() : t.type === "consumable" ? "owned " + owned + " · cost " + cost : owned ? "OWNED" : "cost " + cost}</div></div>
         <div class="btns">${t.type === "consumable" || !owned ? `<button class="key small ${req ? "grey" : ""}" data-tbuy="${t.id}">${t.type === "consumable" ? "BUY 10" : "UNLOCK"}</button>` : ""}
         ${owned ? `<button class="key small ${eq ? "gold" : "blue"}" data-teq="${t.id}">${eq ? "ON" : "EQUIP"}</button>` : ""}</div></div>`;
     }).join("");
-    return `<div class="hdr">FISHING</div><div class="hero"><img src="${ICON(rodIcon(f.equippedRodId))}" alt=""><div class="big">THE BRIDGE</div>
-      <div class="sub">Fishing LV ${f.level} · ${fmt(f.xp)} / ${fmt(PT.fishingXpNeeded(f.level))} XP · ${s.totalFishCaught || 0} caught · ${state}</div>
-      <div class="sub">reel ${PT.reelDuration(s).toFixed(2)}s (fastest rod) · cooldown ${PT.fishCooldown(s).toFixed(2)}s · moneta from your best rod</div>
-      <div class="devrow" style="justify-content:center"><button class="key" data-act="cast">Cast (F)</button>
-      <button class="key ${G.autoFish ? "violet" : PT.autoFishUnlocked(s) ? "" : "grey"}" data-act="autofish">${PT.autoFishUnlocked(s) ? "Auto: " + (G.autoFish ? "ON" : "OFF") : "Auto " + (s.manualFishingCatches || 0) + "/10"}</button>
-      <button class="key ${PT.hasSun(s, "d_fish_seeds") ? "gold" : "grey"}" data-act="sellsafe">Sell safe fish</button></div><div class="note">${last}</div></div>
-      <div class="section">ACTIVE FISH BUFFS (${s.activeFishIds.length} / ${PT.maxFishBuffs(s)})</div>${buffs || '<div class="note">Eat a fish to get its effect. Shiny fish give 4x the bonus for 24h.</div>'}
-      <div class="section">RODS</div>${rods}
-      <div class="section">FISH (${s.fishInventory.reduce((a, r) => a + r.count, 0)})</div>${inv || '<div class="note">No fish yet.</div>'}
-      <div class="note">Selling pays seeds and needs the Fish Seeds unlock. "Safe" keeps fish needed for rods, tackle and fish-priced sunflower nodes, plus locked and shiny fish.</div>
-      <div class="section">TACKLE (bait, hooks, lures)</div>${tackle}`;
+    return `<div class="note">Reel time comes from your fastest owned rod (${PT.reelDuration(s).toFixed(2)}s), Moneta from your richest. Cooldown ${PT.fishCooldown(s).toFixed(2)}s.</div>
+      <div class="section">RODS</div>${rods}<div class="section">BAIT, HOOKS AND LURES</div>${tackle}`;
+  }
+  function fishDex() {
+    const s = G.s, disc = new Set(s.discoveredFish || []), sh = new Set(s.discoveredShinyFish || []);
+    const cells = [...PT.FISH].sort((a, b) => (a.minTier || 0) - (b.minTier || 0) || RANK[a.rarity] - RANK[b.rarity]).map((fi) => {
+      const got = disc.has(fi.id), rec = (s.fishWeightRecords || []).find((r) => r.fishId === fi.id);
+      return `<div class="${got ? "" : "no"}" title="${fi.rarity} · ${fi.type || "expedition"}"><img src="${FISHICON(fi.id)}" alt=""><br><span style="color:${PT.RARITY_COLOR[fi.rarity]}">${got ? PT.fishName(fi.id) : "???"}</span>${sh.has(fi.id) ? " ★" : ""}${rec ? `<br>${rec.weightKg} kg` : ""}</div>`;
+    }).join("");
+    return `<div class="note">${disc.size} / ${PT.FISH.length} species · trophy bonus from your heaviest fish (${PT.highestFishWeight(s)} kg)</div><div class="dex">${cells}</div>`;
   }
   function seagullPanel() {
     const s = G.s, sg = s.seagull, now = Date.now();
@@ -435,7 +440,7 @@
         <div class="btns">${spec ? `<button class="key small gold">BALANCED</button>` : `<select data-doc="${i}">${["balanced", "hunter", "training"].map((d) => `<option ${g.doctrine === d ? "selected" : ""}>${d}</option>`).join("")}</select>`}</div></div>`;
     }).join("");
     const frenzy = PT.frenzyOn(s, now) ? `Frenzy ${Math.ceil((sg.frenzyActiveUntil - now) / 1000)}s` : (sg.frenzyCooldownUntil || 0) > now ? `Frenzy ready in ${PT.fmtTime((sg.frenzyCooldownUntil - now) / 1000)}` : "Frenzy (x2 speed)";
-    return `<div class="hdr">SEAGULL</div><div class="hero"><img src="${ICON("seagull")}" alt=""><div class="big">THE SEAGULL</div>
+    return `<div class="hero"><img src="${ICON("seagull")}" alt=""><div class="big">THE SEAGULL</div>
       <div class="sub">LV ${sg.level} / ${PT.gullCap(s)} · ${fmt(sg.xp)} / ${fmt(PT.gullXpNeeded(sg.level))} XP · ${sg.migrationCount} migrations</div>
       <div class="sub">Forecast this hour: <b>${fid.replace(/_/g, " ")}</b> (favours ${fc.fav === "*" ? "a rotating doctrine" : fc.fav})</div>
       <div class="devrow" style="justify-content:center"><button class="key ${sg.level >= PT.migrateLevel(s) ? "violet" : "grey"}" data-act="migrate">Migrate (needs LV ${PT.migrateLevel(s)})</button>
@@ -447,21 +452,65 @@
         .map(([n, t]) => `<div class="note">${sg.migrationCount >= n ? "✔" : "○"} ${n}: ${t}</div>`).join("")}
       <div class="note">Gulls fish on their own every interval: 10 × 0.99^LV / (1 + 0.02 × migrations), times doctrine and forecast. They use your bait-free roll with your lure and hook, and pay 25% Moneta.</div>`;
   }
+  const s_hasDesert = () => !!G.s.hasUnlockedDesertMap;
   function devPanel() {
     const curs = Object.keys(G.s.resources).map((k) => `<option value="${k}">${CUR[k]?.name || k}</option>`).join("");
-    return `<div class="hdr">DEV</div><div class="dev">
+    return `<div class="dev">
       <div class="devrow">Speed ${[1, 10, 100, 1000].map((x) => `<button class="key small ${G.timeScale === x ? "violet" : ""}" data-speed="${x}">x${x}</button>`).join("")}</div>
       <div class="devrow"><select data-in="givecur">${curs}</select><input data-in="giveamt" value="1e6" style="width:90px"><button class="key small" data-act="give">Give</button></div>
       <div class="devrow"><button class="key small" data-act="evo+">Evolution +1 (no reset)</button><button class="key small" data-act="allsun">Own all visible unlocks</button></div>
       <div class="devrow"><button class="key small" data-act="export">Export save</button><button class="key small" data-act="import">Import save</button><button class="key small grey" data-act="wipe">Wipe save</button></div>
       <textarea data-in="savebox" placeholder="Export puts the save here. Paste a save and press Import.">${saveBox}</textarea>
-      <div class="note">Phase 1 covers the Park, Molt, seeds and the sunflower tree, the Sparrow and Castle evolutions. Fishing, the nest, the mine, the desert, the expedition and the echo field come in later phases; their nodes show "needs ..." until then.</div></div>`;
+      ${s_hasDesert() ? `<div class="devrow"><button class="key small" data-act="treeview">Show the ${desertView() ? "sunflower" : "desert"} tree</button></div>` : ""}
+      <div class="note">Done: the Park, Molt, seeds and the sunflower tree, the Sparrow, Castle evolutions, Bridge fishing and the Seagull. The nest, the mine, the desert, the expedition and the echo field come in later phases; their nodes show "needs ..." until then.</div></div>`;
   }
+
+  // ------------------------------------------------------------------ windows (Birb: managed windows over the map)
+  const winEl = document.getElementById("win"), winBody = document.getElementById("win-body"), winTabs = document.getElementById("win-tabs");
+  const WINS = {
+    fishing: { title: "FISHING", tabs: [["collection", "COLLECTION"], ["equipment", "EQUIPMENT"], ["fishdex", "FISHDEX"]], body: (t) => (t === "equipment" ? fishEquipment() : t === "fishdex" ? fishDex() : fishCollection()) },
+    sparrow: { title: "SPARROW", body: () => sparrowPanel() },
+    seagull: { title: "SEAGULL", body: () => seagullPanel() },
+    profile: { title: "PROFILE", body: () => statsPanel() },
+    settings: { title: "SETTINGS", body: () => devPanel() },
+    travel: { title: "FAST TRAVEL", body: () => travelPanel() },
+  };
+  function openWin(id) {
+    if (id === "fishing" && G.s.evolutionCount < 1) return toast("Fish Inventory opens at Evolution 1");
+    if (G.win && G.win.id === id) return closeWin();
+    G.win = { id, tab: WINS[id].tabs ? WINS[id].tabs[0][0] : "" }; G.companionsOpen = false; winBody.dataset.last = ""; drawWin();
+  }
+  function closeWin() { G.win = null; winEl.hidden = true; }
+  document.getElementById("win-close").onclick = closeWin;
+  function drawWin() {
+    if (!G.win) { winEl.hidden = true; return; }
+    const w = WINS[G.win.id]; winEl.hidden = false;
+    document.getElementById("win-title").textContent = w.title;
+    const tabsH = (w.tabs || []).map(([k, n]) => `<button class="tab ${G.win.tab === k ? "on" : ""}" data-wtab="${k}">${n}</button>`).join("");
+    if (winTabs.dataset.last !== tabsH) { winTabs.innerHTML = tabsH; winTabs.dataset.last = tabsH; }
+    const h = w.body(G.win.tab);
+    if (winBody.dataset.last !== h) { const y = winBody.scrollTop; winBody.innerHTML = h; winBody.scrollTop = y; winBody.dataset.last = h; }
+  }
+  winTabs.addEventListener("click", (e) => { const b = e.target.closest("[data-wtab]"); if (b) { G.win.tab = b.dataset.wtab; winBody.dataset.last = ""; winBody.scrollTop = 0; drawWin(); } });
+  function reachable(m) { // maps you can walk to from the Park with the current gates
+    const s = G.s; if (m === 0) return true;
+    const dir = m > 0 ? 1 : -1; let cur = 0;
+    while (cur !== m) { const save = s.currentMap; s.currentMap = cur; const why = PT.travelBlock(s, dir); s.currentMap = save; if (why) return false; cur += dir; }
+    return true;
+  }
+  function travelPanel() {
+    return Object.values(PT.MAPS).map((m) => `<div class="row"><img class="ico" src="${ICON("map")}" alt=""><div><div class="t">${m.name}</div><div class="d">${reachable(m.id) ? (G.s.currentMap === m.id ? "You are here" : "Unlocked") : "Locked"}</div></div>
+      <div class="btns"><button class="key ${reachable(m.id) && G.s.currentMap !== m.id ? "" : "grey"}" data-go="${m.id}">GO</button></div></div>`).join("");
+  }
+  document.getElementById("utility").addEventListener("click", (e) => { const b = e.target.closest("[data-win]"); if (b) openWin(b.dataset.win); });
+  document.getElementById("btn-companions").onclick = () => { G.companionsOpen = !G.companionsOpen; drawHud(); };
+  document.getElementById("companion-list").addEventListener("click", (e) => { const b = e.target.closest("[data-win]"); if (b) openWin(b.dataset.win); });
+  document.getElementById("btn-autofish").onclick = () => act("autofish");
 
   // panel events
   let saveBox = "";
-  panel.addEventListener("click", (e) => {
-    const b = e.target.closest("button"); if (!b) return;
+  function onUiClick(e) {
+    const b = e.target.closest("button"); if (!b || b.dataset.wtab || b.dataset.win || b.dataset.tab) return;
     const s = G.s;
     if (b.dataset.buy) PT.buy(s, b.dataset.buy);
     else if (b.dataset.max) PT.buyMax(s, b.dataset.max);
@@ -472,29 +521,36 @@
     else if (b.dataset.teq) PT.equipTackle(s, b.dataset.teq);
     else if (b.dataset.eat) { const r = PT.eatFish(s, b.dataset.eat); toast(r || "Buff active"); }
     else if (b.dataset.lock) { const i = s.lockedFish.indexOf(b.dataset.lock); if (i < 0) s.lockedFish.push(b.dataset.lock); else s.lockedFish.splice(i, 1); }
+    else if (b.dataset.go !== undefined) { const m = +b.dataset.go; if (reachable(m) && m !== s.currentMap) { s.currentMap = m; const mm = PT.MAPS[m]; s.player.x = mm.w / 2; s.player.y = m === 1 ? 640 : mm.h / 2; G.target = null; closeWin(); } }
     else if (b.dataset.act) act(b.dataset.act);
-    panel.dataset.last = ""; drawPanel(); save();
-  });
-  panel.addEventListener("pointerdown", (e) => { const b = e.target.closest("[data-hold]"); if (b) G.holdFeed = true; });
+    panel.dataset.last = ""; winBody.dataset.last = ""; drawPanel(); drawWin(); drawHud(); save();
+  }
+  const castleEl = document.getElementById("castle"), hotbarEl = document.getElementById("hotbar");
+  for (const el of [panel, winBody, castleEl, hotbarEl]) {
+    el.addEventListener("click", onUiClick);
+    el.addEventListener("change", onUiChange);
+    el.addEventListener("pointerdown", (e) => { const b = e.target.closest("[data-hold]"); if (b) G.holdFeed = true; });
+  }
   addEventListener("pointerup", () => (G.holdFeed = false));
-  panel.addEventListener("change", (e) => {
+  function onUiChange(e) {
     const k = e.target.dataset.in, s = G.s;
+    if (e.target.dataset.ff) { fishFilter[e.target.dataset.ff] = e.target.value; winBody.dataset.last = ""; drawWin(); return; }
     if (k === "feedpct") s.sparrowSeedFeedRatePercent = Math.max(1, Math.min(100, Math.floor(+e.target.value || 25)));
     if (k === "automitosis") s.sparrowAutoMitosisEnabled = e.target.checked;
     if (k === "autorebirb") s.sparrowAutoRebirbEnabled = e.target.checked;
     if (k === "gullauto") s.seagull.autoRebirbEnabled = e.target.checked;
     if (e.target.dataset.doc !== undefined) { const g = s.seagull.gulls[+e.target.dataset.doc]; g.pendingDoctrine = e.target.value; if (!g.lastCatchSummary) g.doctrine = e.target.value; }
-  });
+  }
   tabsEl.addEventListener("click", (e) => { const b = e.target.closest("[data-tab]"); if (b) { G.tab = b.dataset.tab; panel.dataset.last = ""; drawPanel(); } });
   function act(a) {
-    const s = G.s, q = (k) => panel.querySelector(`[data-in="${k}"]`);
+    const s = G.s, q = (k) => winBody.querySelector(`[data-in="${k}"]`) || panel.querySelector(`[data-in="${k}"]`);
     if (a === "molt") { if (PT.molt(G)) toast("Molted!"); }
     else if (a === "treeview") s.sunflowerTreeView = desertView() ? "base" : "desert";
     else if (a === "feed") { s.isFeedingSparrow = !s.isFeedingSparrow; if (s.isFeedingSparrow) s.isDrainingSparrow = false; }
     else if (a === "drain") { s.isDrainingSparrow = !s.isDrainingSparrow; if (s.isDrainingSparrow) s.isFeedingSparrow = false; }
     else if (a === "mitosis") { if (!PT.mitosis(s)) toast("Not enough XP"); }
     else if (a === "srebirb") { if (!PT.sparrowRebirb(s)) toast("Not ready"); }
-    else if (a === "cast") { if (!PT.startCast(G)) toast(s.currentMap !== 2 ? "Go to the Bridge" : "Not ready"); }
+    else if (a === "cast") cast();
     else if (a === "autofish") { if (PT.autoFishUnlocked(s)) G.autoFish = !G.autoFish; else toast("Catch 10 fish by hand first"); }
     else if (a === "sellsafe") toast(PT.sellSafe(G));
     else if (a === "migrate") { const r = PT.migrate(s); toast(r || "Migrated!"); }
@@ -510,21 +566,50 @@
 
   // ------------------------------------------------------------------ HUD + prompt
   function drawHud() {
-    const s = G.s, keys = ["popcorn", "goldenFeathers", "sunflowerSeeds"];
-    for (const k of ["goldenPopcorn", "monetariaMoneta", "twigs", "echoPopcorn", "bruteOre"]) if (PT.res(s, k).gt(0)) keys.push(k);
-    document.getElementById("wallet").innerHTML = keys.map((k) => `<div class="chip"><img src="${ICON(CUR[k].icon)}" alt="">${fmt(s.resources[k])}${G.rates[k] ? `<span class="rate">+${fmt(G.rates[k])}/s</span>` : ""}</div>`).join("");
+    const s = G.s, keys = ["popcorn", "goldenFeathers"];
+    if (PT.hasSun(s, "d_sunflower_machine") || PT.res(s, "sunflowerSeeds").gt(0)) keys.push("sunflowerSeeds");
+    for (const k of ["goldenPopcorn", "monetariaMoneta", "twigs", "echoPopcorn", "bruteOre"]) if (PT.res(s, k).gt(0) || (k === "monetariaMoneta" && s.evolutionCount >= 1)) keys.push(k);
+    setHtml("wallet", keys.map((k) => `<div class="chip"><img src="${ICON(CUR[k].icon)}" alt=""><span class="v">${fmt(s.resources[k])}</span><span class="rate">+${fmt(G.rates[k] || 0)}/s</span></div>`).join(""));
     document.getElementById("mapname").textContent = PT.MAPS[s.currentMap].name + (s.currentMap === 1 && desertView() ? " (DESERT TREE)" : "");
     document.getElementById("speedtag").textContent = G.timeScale > 1 ? `x${G.timeScale} speed` : "";
-    document.getElementById("go-left").classList.toggle("locked", !!PT.travelBlock(s, -1));
-    document.getElementById("go-right").classList.toggle("locked", !!PT.travelBlock(s, 1));
+    const L = PT.travelBlock(s, -1), R = PT.travelBlock(s, 1);
+    document.getElementById("go-left").classList.toggle("locked", !!L);
+    document.getElementById("go-right").classList.toggle("locked", !!R);
+    document.getElementById("go-left").style.display = L === "end" ? "none" : "";
+    document.getElementById("go-right").style.display = R === "end" ? "none" : "";
+    document.getElementById("label-left").textContent = L === "end" ? "" : PT.MAPS[s.currentMap - 1]?.name || "";
+    document.getElementById("label-right").textContent = R === "end" ? "" : PT.MAPS[s.currentMap + 1]?.name || "";
+    // companions (Birb: COMPANIONS [TAB] dropdown)
+    const comps = [];
+    if (s.sparrow.unlocked) comps.push(["sparrow", `${s.sparrow.level} SPARROW`]);
+    if (s.hasMetSeagull) comps.push(["seagull", `${s.seagull.level} SEAGULL`]);
+    document.getElementById("btn-companions").style.display = comps.length ? "" : "none";
+    setHtml("companion-list", G.companionsOpen ? comps.map(([k, n]) => `<button class="key small" data-win="${k}"><img src="${ICON(k)}" alt="">${n}</button>`).join("") : "");
+    const af = document.getElementById("btn-autofish");
+    af.style.display = s.currentMap === 2 && s.evolutionCount >= 1 ? "" : "none";
+    af.className = "key small " + (G.autoFish ? "violet" : PT.autoFishUnlocked(s) ? "" : "grey");
+    af.textContent = PT.autoFishUnlocked(s) ? `AUTO: ${G.autoFish ? "ON" : "OFF"}` : `AUTO ${s.manualFishingCatches || 0}/10`;
+    document.querySelector('[data-win="fishing"]').classList.toggle("off", s.evolutionCount < 1);
+    // Bridge: fishing level top-centre, cast hotbar bottom-centre
+    if (s.currentMap === 2 && s.evolutionCount >= 1) {
+      const f = PT.ensureFishing(s), F = G.fish || {}, need = PT.fishingXpNeeded(f.level);
+      setHtml("fishbar", `<div class="lvl"><b>${f.level}</b><div class="bar"><i style="width:${Math.min(100, (f.xp / need) * 100)}%"></i></div><span class="note">${fmt(f.xp)}/${fmt(need)}</span></div>
+        <div class="sub">${s.totalFishCaught || 0} caught · ${PT.RODS.reduce((m, r) => (f.ownedRods.includes(r.id) ? Math.max(m, r.monetaPerCatch) : m), 1)} moneta / catch</div>`);
+      const state = F.casting > 0 ? "CASTING..." : F.reeling > 0 ? "REELING..." : F.cooldown > 0 ? `COOLDOWN ${F.cooldown.toFixed(1)}s` : "[SPACE] CAST";
+      const slot = (id, n) => id ? `<div class="slot" title="${PT.itemName(id)}"><img src="${ICON(id.startsWith("rod_") ? rodIcon(id) : id)}" alt="">${n != null ? `<span>${n}</span>` : ""}</div>` : `<div class="slot empty"></div>`;
+      const bait = f.equippedBaitId ? (f.baitInventory.find((b) => b.baitId === f.equippedBaitId)?.count || 0) : null;
+      setHtml("hotbar", `<button class="key cast ${F.reeling > 0 || F.casting > 0 ? "gold" : F.cooldown > 0 ? "grey" : ""}" data-act="cast">${state}</button>
+        <div class="slots">${slot(f.equippedRodId)}${slot(f.equippedBaitId, bait)}${slot(f.equippedHookId)}${slot(f.equippedLureId)}</div>`);
+    } else { setHtml("fishbar", ""); setHtml("hotbar", ""); }
+    setHtml("castle", castleHtml());
     const pr = document.getElementById("prompt");
     const st = stationAt(s.player.x, s.player.y + 15);
     let msg = "";
     if (st) { const d = PT.SUN.get(st[0]); msg = `${title(d.name || st[0])}: ${words(d.description || "")} · press E to buy`; }
     else if (onPlatform()) msg = "On the seed platform: making seeds";
-    else if (s.currentMap === 2 && G.fish && G.fish.reeling > 0) msg = "Reeling... stand still";
     pr.style.display = msg ? "block" : "none"; pr.textContent = msg;
   }
+  function setHtml(id, h) { const el = document.getElementById(id); if (el.dataset.last !== h) { el.innerHTML = h; el.dataset.last = h; } }
 
   // ------------------------------------------------------------------ main loop
   let last = performance.now(), uiT = 0, saveT = 0;
@@ -535,7 +620,7 @@
     render();
     uiT += dt; saveT += dt; toastT -= dt;
     if (toastT <= 0) document.getElementById("toast").style.opacity = 0;
-    if (uiT > 0.25) { uiT = 0; drawPanel(); drawHud(); }
+    if (uiT > 0.25) { uiT = 0; drawPanel(); drawHud(); drawWin(); }
     if (saveT > 10) { saveT = 0; save(); }
     requestAnimationFrame(frame);
   }

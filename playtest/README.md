@@ -11,6 +11,18 @@ Open `playtest/index.html` in a browser from the repo, so the icons at `../birb-
 
 Controls: WASD or arrow keys, or click to move. E buys the sunflower station you are standing on. The side arrows travel between maps. The **DEV** tab has x10/x100/x1000 speed, give currency, export/import save and wipe. The **STATS** tab shows every live multiplier.
 
+## Parity test against the real Birb
+
+`parity/parity.js` opens Birb's live game (birbplay.com exposes its engine as `window.game`) and the playtest side by side, loads the same save state into both (`parity/scenarios.js`), and compares every formula both expose: each upgrade's level, max, effect and cost, egg cap, spawn interval, egg multiplier, Molt plumes, playtime and payout multipliers, pickup radius, fish multipliers, sparrow XP, and every sunflower node's unlocked/visible/cost. Results go to `parity/REPORT.md`.
+
+```
+NODE_PATH=/opt/node-tools/node_modules node playtest/parity/parity.js
+```
+
+Add a scenario to `scenarios.js` for any point in progression you want to check. The same states can be loaded into the Roblox build to compare it with both.
+
+`parity/birb_ui.js` and `parity/birb_windows.js` screenshot Birb's real screens (every map and drawer tab, the companion, fishing, aquarium and fast travel windows, the castle) for a scenario into `parity/birb_ui/`. The playtest layout copies them: wallet stack top-left, map arrows with the next map's name, COMPANIONS [TAB] and AUTO top-right, fishing level bar and the [SPACE] CAST hotbar on the Bridge, utility buttons bottom-right, satisfaction + HOLD TO FEED over the castle map, and the shop drawer with EGGS / MOLT / SEEDS tabs (Birb: POPCORN / REBIRB / SEEDS / MINE).
+
 ## Phase status
 | Phase | Systems | State |
 |---|---|---|

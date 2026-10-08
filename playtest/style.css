@@ -17,15 +17,17 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: "Fredoka", system-ui, sans-serif; }
 button { font-family: inherit; }
-#hud { height: 56px; display: flex; align-items: center; gap: 12px; padding: 0 12px; background: #0e1217; border-bottom: 3px solid var(--ink); }
-#wallet { display: flex; gap: 8px; flex-wrap: wrap; flex: 1; }
-.chip { display: flex; align-items: center; gap: 6px; background: var(--panel2); border: 2px solid var(--ink); border-radius: 999px; padding: 3px 12px 3px 4px; font-family: "Fredoka One"; font-size: 15px; }
-.chip img { width: 26px; height: 26px; }
-.chip .rate { font-family: "Fredoka"; font-size: 11px; color: var(--muted); }
-#mapname { font-family: "Fredoka One"; font-size: 20px; letter-spacing: .5px; background: linear-gradient(#ffd27a, #e07a1c); color: var(--ink); padding: 4px 16px; border: 2px solid var(--ink); border-radius: 10px; }
-#hud-right { display: flex; align-items: center; gap: 8px; }
+#wallet { position: absolute; left: 10px; top: 10px; display: flex; flex-direction: column; gap: 6px; z-index: 3; }
+.chip { display: grid; grid-template-columns: 30px auto; grid-template-rows: auto auto; column-gap: 6px; align-items: center; min-width: 150px; background: var(--panel2); border: 2px solid var(--ink); border-radius: 999px; padding: 3px 12px 3px 4px; font-family: "Fredoka One"; font-size: 15px; }
+.chip img { width: 30px; height: 30px; grid-row: span 2; }
+.chip .rate { font-family: "Fredoka"; font-size: 11px; color: var(--green); }
+.chip .v { line-height: 1; }
+#mapname { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); z-index: 3; font-family: "Fredoka One"; font-size: 20px; letter-spacing: .5px; background: linear-gradient(#ffd27a, #e07a1c); color: var(--ink); padding: 4px 16px; border: 2px solid var(--ink); border-radius: 10px; }
+#topright { position: absolute; right: 10px; top: 10px; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; z-index: 4; }
+#companion-list { display: flex; flex-direction: column; gap: 4px; }
+#companion-list:empty { display: none; }
 #speedtag { font-size: 12px; color: var(--muted); }
-#layout { display: flex; height: calc(100% - 56px); }
+#layout { display: flex; height: 100%; }
 #stage { position: relative; flex: 1; min-width: 0; background: #2d4a2a; overflow: hidden; }
 #view { display: block; width: 100%; height: 100%; cursor: crosshair; }
 .arrow { position: absolute; top: 50%; transform: translateY(-50%); width: 44px; height: 88px; font-size: 22px; background: rgba(14, 18, 23, .75); color: var(--text); border: 2px solid var(--ink); border-radius: 10px; cursor: pointer; }
@@ -33,7 +35,52 @@ button { font-family: inherit; }
 .arrow.locked { opacity: .45; }
 #prompt { position: absolute; left: 50%; bottom: 46px; transform: translateX(-50%); background: rgba(14,18,23,.9); border: 2px solid var(--ink); border-radius: 10px; padding: 6px 14px; display: none; font-size: 14px; }
 #toast { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); background: #ffd27a; color: var(--ink); font-family: "Fredoka One"; padding: 6px 16px; border: 2px solid var(--ink); border-radius: 10px; opacity: 0; transition: opacity .25s; pointer-events: none; }
-#help { position: absolute; left: 8px; bottom: 8px; font-size: 11px; color: rgba(255,255,255,.7); }
+#arrowlabels span { position: absolute; top: calc(50% - 14px); font-family: "Fredoka One"; font-size: 13px; background: rgba(14,18,23,.85); border: 2px solid var(--ink); border-radius: 8px; padding: 4px 10px; pointer-events: none; }
+#arrowlabels span:empty { display: none; }
+#label-left { left: 60px; } #label-right { right: 60px; }
+#utility { position: absolute; right: 10px; bottom: 10px; display: flex; gap: 6px; z-index: 3; }
+.util { display: flex; flex-direction: column; align-items: center; gap: 1px; width: 64px; padding: 4px 2px; background: rgba(29,35,45,.92); color: var(--text); border: 2px solid var(--ink); border-radius: 10px; font-family: "Fredoka One"; font-size: 10px; cursor: pointer; box-shadow: 0 3px 0 var(--ink); }
+.util img { width: 30px; height: 30px; }
+.util.off { opacity: .35; pointer-events: none; }
+#fishbar { position: absolute; left: 50%; top: 52px; transform: translateX(-50%); z-index: 3; width: 300px; text-align: center; }
+#fishbar:empty, #hotbar:empty, #castle:empty { display: none; }
+#fishbar .lvl { display: flex; align-items: center; gap: 6px; }
+#fishbar .lvl b { font-family: "Fredoka One"; background: var(--blue); border: 2px solid var(--ink); border-radius: 6px; padding: 0 8px; }
+#fishbar .bar { flex: 1; margin: 0; }
+#fishbar .bar > i { background: linear-gradient(#8cc4ff, #3a8bff); }
+#fishbar .sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+#hotbar { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 3; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+#hotbar .slots { display: flex; gap: 6px; }
+#hotbar .slot { width: 56px; height: 56px; background: rgba(29,35,45,.92); border: 2px solid var(--ink); border-radius: 10px; display: grid; place-items: center; position: relative; }
+#hotbar .slot img { width: 44px; height: 44px; }
+#hotbar .slot.empty { opacity: .45; }
+#hotbar .slot span { position: absolute; right: 3px; bottom: 1px; font-size: 10px; font-family: "Fredoka One"; }
+#hotbar .cast { min-width: 200px; }
+#castle { position: absolute; right: 18px; top: 50%; transform: translateY(-50%); z-index: 3; width: 300px; background: rgba(29,35,45,.94); border: 2px solid var(--ink); border-radius: 12px; padding: 10px; }
+#castle .stage { font-size: 11px; color: var(--muted); margin: 3px 0; }
+#castle .stage b { color: var(--text); }
+#castle .stage.done b { color: var(--green); }
+#controls { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 10px; padding: 8px; border-top: 3px solid var(--ink); font-size: 11px; color: var(--muted); }
+#controls b { color: var(--text); background: var(--panel2); border: 1px solid var(--ink); border-radius: 4px; padding: 0 4px; }
+.window { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 10; width: min(680px, 92%); max-height: 84%; display: flex; flex-direction: column; background: var(--panel); border: 3px solid var(--ink); border-radius: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.5); }
+.window[hidden] { display: none; }
+.win-hdr { display: flex; align-items: center; justify-content: center; position: relative; padding: 8px; background: linear-gradient(#ffd27a, #e07a1c); border-bottom: 3px solid var(--ink); border-radius: 11px 11px 0 0; font-family: "Fredoka One"; font-size: 20px; color: var(--ink); }
+.win-hdr .key { position: absolute; right: 8px; }
+#win-tabs { display: flex; gap: 4px; padding: 8px 8px 0; }
+#win-tabs:empty { display: none; }
+#win-tabs .tab { flex: 1; justify-content: center; }
+#win-body { overflow: auto; padding: 10px; }
+.filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.filters select, .filters input { font-family: inherit; background: #10141a; color: var(--text); border: 2px solid var(--ink); border-radius: 8px; padding: 3px 6px; font-size: 12px; }
+.dex { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 6px; }
+.dex div { background: var(--card); border: 2px solid var(--ink); border-radius: 10px; padding: 4px; text-align: center; font-size: 10px; }
+.dex img { width: 56px; height: 56px; }
+.dex .no img { filter: brightness(0) opacity(.5); }
+.reset { background: var(--panel2); border: 2px solid var(--amber); border-radius: 12px; padding: 10px; text-align: center; margin-bottom: 10px; }
+.reset .big { font-family: "Fredoka One"; font-size: 16px; }
+.reset .gain { display: inline-flex; align-items: center; gap: 6px; margin: 8px 0; font-family: "Fredoka One"; font-size: 20px; color: #ffd27a; background: #10141a; border: 2px solid var(--ink); border-radius: 8px; padding: 2px 14px; }
+.reset .gain img { width: 26px; height: 26px; }
+.tab .badge { font-size: 10px; background: #e0413a; color: #fff; border-radius: 4px; padding: 0 4px; margin-left: 2px; }
 #drawer { width: 420px; display: flex; flex-direction: column; background: var(--panel); border-left: 3px solid var(--ink); }
 #tabs { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px; background: #161b22; border-bottom: 3px solid var(--ink); }
 .tab { display: flex; align-items: center; gap: 4px; padding: 4px 10px 4px 4px; border: 2px solid var(--ink); border-radius: 8px; background: var(--panel2); color: var(--muted); font-family: "Fredoka One"; font-size: 13px; cursor: pointer; }
