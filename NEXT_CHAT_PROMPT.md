@@ -5,7 +5,7 @@
 You're continuing **Peckwood**, a Roblox remake of the incremental game Birb. Read this whole prompt first, then `~/Downloads/rc-main/HANDOUT.md` section 0. The owner is very picky about visual quality: they catch every hairline, clipped edge, off-centre glyph and drifting button. **Check everything zoomed in and show a screenshot with every visual change.** Keep replies short and plain.
 
 ## Where everything is
-- **Repo:** `~/Downloads/rc-main` (git, branch `main`, GitHub `jewdah-afk/research-calculator`). Last commit `bb19ded`. Commit messages end with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
+- **Repo:** `~/Downloads/rc-main` (git, GitHub `jewdah-afk/research-calculator`). The newest work (eggs replace popcorn + upgrade icons) is on branch **`claude/egg-mining-icons`**, not merged into `main` yet: `git fetch origin claude/egg-mining-icons && git checkout claude/egg-mining-icons` (or merge it into `main` first if the owner says so). Commit messages end with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
 - **Roblox game (Rojo):** `rc-main/roblox`.
   - `src/client/IslandView.luau` **(new)**: the whole island is drawn on the client.
     - **Ground:** EditableMesh "bands" with real 10-sided studs on every grass tile, built centre-out.
@@ -62,14 +62,21 @@ You're continuing **Peckwood**, a Roblox remake of the incremental game Birb. Re
 - Map: LEGO studded look, "top of the line". Every prop lines up with the studs. Toned natural palette. Studs only on grass tops.
 - Camera: 2.5D iso, level and square-on to the island. The whole island is visible by default; zoom in and out is allowed.
 - Always show screenshots. Say when it's a good time to `/compact`.
+- **Eggs replace popcorn** (2026-10-08): only player-facing text and art changed; internal ids, save keys and math stay `popcorn`/`goldenPopcorn`. Golden popcorn = golden eggs.
+- **Upgrade-row icons** are the CURRENT in-game icon + a painted badge in the lower-right, merged into one silhouette with one shared ink ring (`birb-icons/compose_upgrades.py` → `final/up_*.png`). Badges: green arrow = value, blue plus = cap, yellow bolt = speed, orange × = multiplier, red/yellow burst = power, teal loop = regen (`final/badge_*.png`). The owner REJECTED: hand-drawn Figma vector badges, pixel/blocky badges, tiles/circles behind badges, repainted subjects (AI look), old approved-sheet bases, the magnet-with-eggs, a bolt drawn on the wing, stacked crates. Change only what is asked; when the owner says "it was perfect before", go back to that exact version.
 
 ## Next tasks (in order)
-1. **Other islands.** Unlock order (`Defs.ISLANDS`): Park → Garden (sunflowers) → Castle (Evolve monster) → Bridge (fishing) → Forest (nest/twigs, red panda) → Mine (crow, ore) → Desert (golden, Dave) → Expedition (parrot floors) → Echo Field.
-   - **Step A:** one cheap HTML concept board (Three.js r128 from cdnjs, like `concepts/park.html`) showing all 8 islands in the Park's LEGO style, for the owner's pick or edits.
-   - **Step B:** build each island in Roblox by generalising IslandView. Give each island its own tile map and props (`MapData` per island), placed beside the Park and linked by brick bridges.
-     - When an island unlocks (watch `state.island` increase in Hud/Main), call the build-in for THAT island: bands rise, props drop with dust, camera swoop, then a toast via `Hud.toast`.
-     - Hook the build-in to the real unlock (it currently runs only from the `PeckwoodBuild` QA hook).
-     - Each window's "Go to …" hero button should move the bird there.
-   - Mind the EditableMesh budget: share or merge ground meshes across islands, or build far islands' ground from Parts or larger tiles.
-2. Park polish the owner may raise: the golden-hour background below the island goes beige (tune `KF` fog and atmosphere colours), and the underside reads dark from the play angle.
-3. HANDOUT open items: the window check at 1.6–2.6x zoom on MAXED and REGULAR for all 20 windows; Task 3 smooth-60fps pass (tiles, drawer, buy celebrations, Molt/Evolve reset moments); `Config.GROUP_ID` (AUTO needs the owner's group id); the 426 fish icons to upload; delete the temporary Figma atlas `83:7`.
+1. **Ship eggs + the upgrade icons in game** (they exist only in Figma and `birb-icons/final/` right now; the live build still shows popcorn).
+   - Upload with Studio MCP `upload_image` (serve `birb-icons/final` on :8799): `egg`, `egg_golden`, the `shop_*` egg set, and every `up_*.png` (24 files).
+   - `Icons.luau`: replace the `popcorn`, `golden` and `shop_*` ids; add `up_*` ids. `Spec.luau`: point each upgrade row at its `up_*` icon (row → icon map is in HANDOUT §0 "Upgrade icons" and in `compose_upgrades.py` comments; Figma slots are named `ico/<name>`).
+   - Re-export the window art from the square-top atlas `117:7` into `FigmaArt.luau` (the baked renders still say POPCORN), wait for moderation, then QA every window at 1.6–2.6x on MAXED and REGULAR.
+2. **Visual hierarchy QA pass** (the owner wants this next; screenshot everything, zoomed). Work window by window and on the HUD, fix as you go:
+   - **HUD reading order:** island banner → main currency (big egg counter) → window drawer → wallet chips → nav tiles. Check the eye lands in that order; the wallet chips must not out-shout the main counter (size, saturation, glow). Main counter bottom-left must stay the biggest number on screen.
+   - **Window reading order:** title → hero (icon, title, subtitle, button) → tab bar → row title → growth line (`a >>> b`) → description → level bar → buy button. Check font sizes/weights step down consistently across all 20 windows; descriptions must be clearly secondary; numbers in growth lines use the theme accent.
+   - **Icons:** every row icon the same optical size and centred in its slot (badged icons read slightly smaller: compare against plain ones), nothing clipped by the slot, badges visible at 1x.
+   - **Buttons:** BUY (lit theme colour) > BUY ALL (blue) > MAXED (gold) > can't-afford (grey) must be distinguishable at a glance; pressed state sinks, never drifts.
+   - **Colour/contrast:** text on every theme passes a quick contrast check; no two adjacent wallet chips or drawer bookmarks share a colour.
+   - **Map:** the bird, eggs on the field and interactive props must read above the decor (HANDOUT §5 "map hierarchy"); check day and night.
+   - Deliver a short before/after board (artifact or screenshots) per area, then implement the owner's picks.
+3. **Other islands** (unchanged plan): concept board for all 8 islands in the Park LEGO style, then build each via IslandView with its own MapData, unlock build-in and "Go to …" travel.
+4. **Leftovers:** Rebirb (Dave) still shows golden popcorn and Resonance (Sparrow) shows popcorn in Figma; `Config.GROUP_ID`; 426 fish icons; delete Figma temp atlases `83:7` and `117:7` only after art is re-exported; smooth-60fps pass.

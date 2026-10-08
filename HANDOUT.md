@@ -2,12 +2,12 @@
 
 This file is the handoff for the next session or teammate. It covers what exists, where it lives, what is verified, and what comes next.
 
-Last updated: 2026-10-07 (Roblox build)
+Last updated: 2026-10-08 (eggs + upgrade icons, branch `claude/egg-mining-icons`)
 
 ---
 
 ## New chat? Paste this first
-> Read `HANDOUT.md` section 0 in `~/Downloads/rc-main` (repo jewdah-afk/research-calculator, branch main). The Roblox game is in `rc-main/roblox` (Rojo), and it is synced into Studio place **birb(test)**; `~/OneDrive/Desktop/Peckwood.rbxl` is the latest build. Start `python -m http.server 8778 --bind 127.0.0.1` in `rc-main/roblox`, then push edits into Studio with the `tools/sync.luau` snippet. The owner is reviewing the build in Studio and will list fixes; do them, sync, check with the debug hook (section 0), then rebuild and copy the `.rbxl` to the Desktop.
+> Paste `NEXT_CHAT_PROMPT.md` (everything below its line). It is the up-to-date starter; the short version: Read `HANDOUT.md` section 0 in `~/Downloads/rc-main` (repo jewdah-afk/research-calculator, branch main). The Roblox game is in `rc-main/roblox` (Rojo), and it is synced into Studio place **birb(test)**; `~/OneDrive/Desktop/Peckwood.rbxl` is the latest build. Start `python -m http.server 8778 --bind 127.0.0.1` in `rc-main/roblox`, then push edits into Studio with the `tools/sync.luau` snippet. The owner is reviewing the build in Studio and will list fixes; do them, sync, check with the debug hook (section 0), then rebuild and copy the `.rbxl` to the Desktop.
 
 ## 0. Start here (Roblox build status, 2026-10-07)
 
@@ -53,7 +53,7 @@ Eggs are now the main currency. **Only what players see changed; internal ids st
 2. Delete the Figma temp atlas `83:7` once the art loads (`use_figma`: `(await figma.getNodeByIdAsync('83:7')).remove()`).
 3. Upload the 426 fish icons (`birb-icons/final/fish/`, batches of 25, serve on :8799) and add them to `Icons.luau` using `tools/rec.py` and the generator snippet. Until then, fish rows show no icon.
 4. Islands other than the Park reuse the Park map. The Desert is a field toggle (golden drops). Each island still needs its own 3D area: garden, bridge/fishing spot, forest, mine, castle.
-5. Visual polish pass: compare each window side by side with Figma, then work on map hierarchy (section 5).
+5. **Next up:** ship eggs + upgrade icons in game, then the visual hierarchy QA pass (checklist in `NEXT_CHAT_PROMPT.md`, task 2).
 6. Unverified numbers: seeds base 3/s (from the Figma copy), fishing cast 4s × rod speed, expedition kill rate and floor progression (simplified), Dave XP from golden pickups.
 
 ### Tools
