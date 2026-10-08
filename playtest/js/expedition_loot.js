@@ -104,7 +104,7 @@
     return { copies: c, primaryPower: c >= 1 ? r[0] : 0, secondaryPower: c >= 2 ? r[1] : 0 };
   };
   const relicStats = (name, lvl, boost) => { const a = statInfuse(lvl) * (boost ? 2 : 1); return { damage: name === RELICS[0] ? 0.75 * a : 0, attackSpeed: name === RELICS[0] ? 0.15 * a : 0, maxHealth: name === RELICS[1] ? a : 0, lifeRegen: name === RELICS[1] ? a : 0 }; };
-  X.relicBoost = () => false; // mythic sacrifice III doubles the relic (6c)
+  X.relicBoost = () => false; // mythic sacrifice III doubles the relic (expedition_mythic.js)
   X.artifactBonuses = function (s) {
     const a = { damageMult: 0, hpMult: 0, hpAdd: 0, lifeRegenAdd: 0, lifeRegenMult: 0, combatRegenPenaltyReduction: 0, attackSpeedMult: 0, moveSpeedMult: 0, inventorySpace: 0 };
     if (!s.parrot) return a;

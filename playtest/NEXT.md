@@ -13,9 +13,9 @@ Build a 1:1 HTML copy of Birb (birbplay.com) as Peckwood, so any progression can
 - **Branch:** `claude/egg-mining-icons` (not merged into `main`).
 - **Parity:** `NODE_PATH=<node_modules with playwright> node playtest/parity/parity.js`
   - It loads every save in `parity/scenarios.js` into Birb's live engine and into the playtest, compares every shared value, and writes `parity/REPORT.md`.
-  - Last run: **52979 / 52979 match**. Keep it at 100% after every change.
+  - Last run: **56403 / 56403 match**. Keep it at 100% after every change.
   - `ONLY=quest` (any name substring) runs a subset of scenarios while you iterate; run the full set before committing.
-- **Script load order:** `index.html` loads `... mine, desert, expedition_data, expedition, expedition_ai, expedition_sacrifice, expedition_loot, expedition_forge, quests, expedition_secret, expedition_night, main`.
+- **Script load order:** `index.html` loads `... mine, desert, expedition_data, expedition, expedition_ai, expedition_sacrifice, expedition_loot, expedition_forge, quests, expedition_secret, expedition_night, expedition_mythic, main`.
 
 ## Expedition files (Phase 6)
 | File | What it holds |
@@ -29,12 +29,11 @@ Build a 1:1 HTML copy of Birb (birbplay.com) as Peckwood, so any progression can
 | `js/quests.js` | Quest merchant (6c): main + daily quests (rules v1), quest stats, `X.trackQuestKill`, bonuses (`PT.questBonus`), sync |
 | `js/expedition_secret.js` | Secret rooms (6c): floor 1 → map 17 (cracked wall → Mine map 25), floor 3 → map 19 (empty in Birb), the 3-hit wall break, entrance repair for old saves |
 | `js/expedition_night.js` | Night mode (6c): night map walkability, wall-impact test, the elven assassin / zombie cultist / ice-fire guardian AIs. `X.qt`, `X.runMap`, `X.NIGHT_PLAN` live in `expedition.js` |
+| `js/expedition_mythic.js` | Mythic sacrifice (6c): 3 levels (SP + Mythic Spirit Aura), pour loop, relic drops from night elites, `X.relicBoost`, `X.mythicFinal` |
 | `js/main.js` | UI: the Parrot window (STATS / SKILLS / INVENTORY+forge / REBIRB), the Sacrifice and floor windows, the floor HUD |
 
-Hooks stubbed for 6c (each returns 0, 1 or false; search for these names):
-- `X.externalBonuses`: its quest, market and crow parts.
-- `X.relicBoost`: mythic sacrifice III doubles the relics.
-- `X.mythicFinal`: mythic sacrifice I gives ×1.2.
+Hooks still stubbed (search for these names):
+- `X.crowBonus` in `X.externalBonuses`: the crow's expedition tracks (crow drain targets).
 
 ## How to research Birb (the tools are in `tools/`)
 1. Download Birb's bundles **outside the repo**: `playtest/tools/fetch_birb.sh /tmp/birb`. This creates the `*.pretty.js` files.
@@ -72,7 +71,7 @@ Gotchas we hit:
 4. **DONE: Night mode** (rebirb III, floor 1 on map 32, stats / loot at floor 10+, mythic auras at 5 weight, boss portal ends the run as a success; `tools/build_expedition_data.js` now also exports the night map). Original notes:
    - `activeRun.nightMode`; loot floor = 10 + floor − 1 (`maps` `N()`).
    - Mythic aura appears on floor 10 at rebirb III (`rM`).
-5. **Mythic sacrifice:**
+5. **DONE: Mythic sacrifice** (Sacrifice window, below the milestones; Birb's hold-to-pour is a SACRIFICE / STOP toggle). Parity found that Birb grants the Archivist's Book on load when `archivistDefeated` is set (Phase 7). Original notes:
    - `wa` tiers, `Oy` normalize, `Qh` relics (Heart of the Veil / Watcher's Oath), night elite kills (12 per relic, bosses count 4), `Ia` = ×1.2 final at I, the relic slot at II, double relics at III.
 6. **Totem** (`parrotTotem`), field drops of legacy artifacts (`checkArtifactDrop`, chance `kp`), and material chests (`US` tables) if reachable in current Birb.
 7. **Screenshots:**

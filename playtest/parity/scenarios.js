@@ -206,3 +206,23 @@ module.exports = [
     { name: "mine entrance repair tree", state: st(0, gear(E4, E4, E4), { sunflowerUpgrades: { d_mine_work_perch: 1 } }) },
   );
 }
+
+// Mythic sacrifice (Phase 6c): levels from contributions, x1.2 final at I, night elite kills drop relics at II, doubled relic at III
+{
+  let n = 0; const art = (name, count = 1, infusionLevel = 0) => ({ instanceId: `art_m_${++n}`, name, count, ...(infusionLevel ? { infusionLevel } : {}) });
+  const W = [{ skillPoints: 2e15, aura: 1200 }, { skillPoints: 4e15, aura: 3600 }, { skillPoints: 8e15, aura: 9000 }];
+  const st = (contrib, extra, items, relic) => ({ evolutionCount: 6, rebirthCount: 60, expedition: { unlocked: true, highestFloorReached: 9, progress: { level: 300 },
+      sacrifice: { skillPointsSacrificed: 2e16, commonMilestoneExpansionUnlocked: true }, mythicSacrifice: { contributions: contrib, ...extra } },
+    parrot: { unlocked: true, level: 300, skillPoints: 5e15, rebirbCount: 3, skills: { hp: 1e6, lifeRegen: 1e4, damage: 5e5 }, artifactInventory: items,
+      equippedArtifacts: [items[0].instanceId], ...(relic ? { relicSlot: relic } : {}),
+      equipmentUpgrades: { beak: { rarity: "legendary", level: 5 }, armor: { rarity: "legendary", level: 5 }, aura: { rarity: "legendary", level: 5 } } } });
+  const kills = [[1, { type: "elven-assassin", isElite: true, x: 1400, y: 4000 }], [1, { type: "zombie-cultist", isElite: true, x: 1400, y: 4000 }], [1, { type: "ice-fire-guardian", isBoss: true, x: 1400, y: 900 }],
+    [1, { type: "shardsoul-slayer", x: 1400, y: 3000 }], [1, { type: "elven-assassin", isElite: true, x: 1400, y: 4000 }]];
+  const i1 = [art("Spirit Vest", 1, 3), art("Mythic Spirit Aura", 400)], i2 = [art("Spirit Vest", 1, 3), art("Heart of the Veil", 1, 4), art("Mythic Spirit Aura", 50)];
+  module.exports.push(
+    { name: "mythic none", mythic: { kills }, state: st([{ skillPoints: 1e15, aura: 1200 }], {}, i1) },
+    { name: "mythic I", mythic: { kills }, state: st([W[0], { skillPoints: 3e15, aura: 10 }], { eliteKills: 5 }, i1) },
+    { name: "mythic II relic bar", mythic: { kills }, state: st([W[0], W[1], { skillPoints: 0, aura: 900 }], { eliteKills: 9, relicDrops: 1, pendingAura: 7 }, i2, "art_m_4") },
+    { name: "mythic III doubled relic", mythic: { kills }, state: st([W[0], W[1], W[2]], { eliteKills: 11, relicDrops: 2, claimedRelicId: "veil_heart" }, i2, "art_m_7") },
+  );
+}

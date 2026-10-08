@@ -674,7 +674,17 @@
       <div class="sub">${pr.target ? `${fmt(pr.progress)} / ${fmt(pr.cost)} SP to ${T[pr.level - 1].label}` : lv >= 18 ? "ALL MILESTONES" : max === 3 ? "Unlock the expansion for IV-VI" : "Parrot rebirb I opens VII-XVIII"} · you have ${fmt(Math.floor(p.skillPoints))} SP</div></div>
       <div class="devrow">${["all", "half", "quarter"].map((m) => `<button class="key ${can ? "" : "grey"}" data-act="sac_${m}" style="flex:1">${m.toUpperCase()}</button>`).join("")}</div>
       ${X.canUnlockSacExpansion(s) ? `<div class="devrow"><button class="key" data-act="sac_expand" style="flex:1">EXPANSION · 50 Spirit Aura (have ${X.itemCount(s, "Spirit Aura")})</button></div>` : ""}
-      <div class="section">MILESTONES</div>${rows}`;
+      <div class="section">MILESTONES</div>${rows}${mythicSection()}`;
+  }
+  // Birb mythic sacrifice page (after tier XVIII, parrot rebirb III): pour SP and Mythic Spirit Aura into three levels
+  function mythicSection() {
+    const s = G.s, X = PT.EXP; if (X.rebirbs(s) < 3) return "";
+    const m = X.mythicState(s), open = X.mythicOpen(s), names = ["I · x1.2 final parrot stats", "II · night elite kills drop relics (12 kills, bosses count 4)", "III · the equipped relic's stats are doubled"];
+    const rows = X.MYTHIC_TIERS.map((w, i) => { const c = m.contributions[i]; return `<div class="note" style="opacity:${i <= m.level ? 1 : 0.45}">${i < m.level ? "✔" : "○"} <b>${names[i]}</b><br>${fmt(c.skillPoints)} / ${fmt(w.skillPoints)} SP · ${fmt(c.aura)} / ${fmt(w.aura)} Mythic Spirit Aura</div>`; }).join("");
+    const pouring = X.mythicPouring(), can = open && m.level < 3 && X.mythicCanPour(s);
+    return `<div class="section">MYTHIC SACRIFICE · ${["-", "I", "II", "III"][m.level]}</div>${open ? "" : `<div class="note">Opens with all 18 milestones.</div>`}${rows}
+      ${m.level >= 2 ? `<div class="note">Relic bar: ${m.eliteKills} / ${X.RELIC_KILLS} · relics dropped: ${m.relicDrops}</div>` : ""}
+      ${m.level < 3 ? `<div class="devrow"><button class="key ${pouring ? "red" : can ? "" : "grey"}" data-act="mythic_pour" style="flex:1">${pouring ? "STOP" : "SACRIFICE"}</button></div>` : ""}`;
   }
   function davePanel() {
     const s = G.s, d = PT.dave(s), need = PT.daveXpNeeded(d.level), I = d.instincts, c = PT.daveSeedCost(d.seedTrainingLevel), pts = d.unspentRebirbPoints || 0;
@@ -1087,6 +1097,7 @@
       else if (c === "inv_pot") PT.parrotState(s).potionSlot = id; else if (c === "inv_use") { if (!X.usePotion(s)) toast("No potion ready"); }
       else if (c === "inv_chest") { const r = X.openChest(s, id); toast(!r ? "No chest" : r.full ? "Artifact bag is full" : `Got ${r.name} (${r.rarity})`); }
       X.bonuses = X.parrotBonuses(s); X.refreshRunParrot(s); }
+    else if (a === "mythic_pour") { if (PT.EXP.mythicPouring()) PT.EXP.mythicPourStop(); else if (!PT.EXP.mythicPourStart(s)) toast("Nothing to sacrifice"); }
     else if (a.startsWith("sac_")) { if (a === "sac_expand") { if (!PT.EXP.unlockSacExpansion(s)) toast("Not enough Spirit Aura"); } else { const n = PT.EXP.sacrifice(s, a.slice(4)); toast(n ? `Sacrificed ${fmt(n)} SP` : "No skill points to sacrifice"); } }
     else if (a === "davetrain") { if (!PT.daveTrain(s)) toast("Not enough seeds"); }
     else if (a === "daverefund") PT.daveRefund(s);

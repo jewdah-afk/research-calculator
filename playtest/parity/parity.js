@@ -32,11 +32,11 @@ function probe({ side, scenario }) {
     const g = window.game, s = g.state;
     s.upgrades = {}; s.sunflowerUpgrades = {};
     for (const k of Object.keys(s.resources)) s.resources[k] = 0;
-    Object.assign(s, fresh()); if (s.expedition) { delete s.expedition.questMerchant; delete s.expedition.questStats; }
+    Object.assign(s, fresh()); if (s.expedition) { delete s.expedition.questMerchant; delete s.expedition.questStats; delete s.expedition.mythicSacrifice; }
     const st = JSON.parse(JSON.stringify(scenario.state));
     deep(s, st);
     if (g.invalidateUpgradeTreeCache) g.invalidateUpgradeTreeCache();
-    g.questMerchantManager.normalizedStateRef = null; g.nestManager.setState(JSON.parse(JSON.stringify(st.nest || {})), false); s.nest = g.nestManager.getState();
+    g.questMerchantManager.normalizedStateRef = null; if (st.expedition && st.expedition.mythicSacrifice) g.expeditionManager.normalizeSacrificeState(); /* Birb normalizes the mythic state on load */ g.nestManager.setState(JSON.parse(JSON.stringify(st.nest || {})), false); s.nest = g.nestManager.getState();
     s.redPanda = Object.assign({ name: "Red Panda", named: false, introSeen: false, tier: 1, mode: "chill", x: 528, y: 300 }, st.redPanda || {}); g.ensureRedPandaState();
     g.aquariumManager.invalidateModifierCache(); g.activeFishEffectSnapshot = null; g.fishMarketManager.normalizedMarketState = null;
     const nm = g.nestManager, snap = () => nm.getCultivationShopSnapshot();
@@ -59,7 +59,7 @@ function probe({ side, scenario }) {
       repLevel: (x) => mm.getContractReputationLevel(x),
       community: () => g.getCommunityGoalRewardValue("twigGain"),
       exp: (() => { const em = g.expeditionManager, FI = em.constructor; return {
-        walk: (x, y) => window.__BIRB_NIGHT_WALK(x, y), night: (fn) => { const r0 = em.state.activeRun; em.state.activeRun = { nightMode: true, currentFloor: 1, enemies: [], startTime: Date.now() }; try { return fn(); } finally { em.state.activeRun = r0; } }, nightMap: () => em.getRunMapForFloor(1),
+        walk: (x, y) => window.__BIRB_NIGHT_WALK(x, y), night: (fn) => { const r0 = em.state.activeRun; em.state.activeRun = { nightMode: true, currentFloor: 1, enemies: [], damageNumbers: [], startTime: Date.now() }; try { return fn(); } finally { em.state.activeRun = r0; } }, nightMap: () => em.getRunMapForFloor(1),
         xpReq: (L) => FI.getXpRequirementForLevel(L), stats: (t, f, b, k) => em.resolveEnemyStatsForMapSpawn(t, f, b)?.[k],
         depthHp: (t, h, r, f, q) => em.enemyDepthBalance.resolveDepthScaledHealthAtQuantile(t, h, r, f, q), atk: (a, h, l, b) => em.resolveAttackFromLife(a, h, l, b),
         sp: (t, l, h, m, b, f, r) => em.resolveSkillPointReward(t, l, h, m, b, f, r), spScale: (sp, f, r) => em.applyFloorSkillPointRewardScaling(sp, f, r),
@@ -83,6 +83,8 @@ function probe({ side, scenario }) {
         resetCost: () => { const sk = s.parrot.skills, t = sk.hp + sk.lifeRegen + sk.damage; return t <= 0 ? 0 : Math.max(1, Math.ceil(Math.sqrt(0.01 * t))); },
       }; })(),
       secret: { maxed: () => g.areStarterEquipmentUpgradesMaxed(), repair: () => g.hasMineProgressForEntranceRepair(), canBreak: () => { const c = g.currentMap; g.currentMap = 17; try { return g.canBreakFloorOneMineEntrance(); } finally { g.currentMap = c; } } },
+      mythic: { norm: () => { g.expeditionManager.normalizeSacrificeState(); return g.state.expedition.mythicSacrifice; }, can: () => window.__BIRB_MYTHIC_CAN(g.state.expedition.mythicSacrifice, Math.floor(s.parrot.skillPoints), g.getAuraCount("mythic_spirit_trash")),
+        count: (n) => (s.parrot.artifactInventory || []).filter((a) => a.name === n).reduce((k, a) => k + (a.count || 1), 0) },
       quest: (() => { const qm = g.questMerchantManager, fix = () => { qm.normalizedStateRef = null; qm.setState(g.state.expedition); }; return {
         sync: (now) => { fix(); let r = false; if (g.hasSunflowerUpgrade("d_desert_quest_merchant")) r = qm.unlock(now) || r; r = qm.sync(now) || r; g.state.expedition = qm.getState(); return r; }, bonus: (k) => { fix(); return qm.getBonus(k); }, m: () => g.state.expedition.questMerchant,
         progress: () => { fix(); return [...qm.getQuestProgressValues()].map(([id, v]) => [id, v.current, v.target]); }, done: () => qm.getCompletedQuestCount(), total: () => qm.getTotalQuestCount(),
@@ -135,7 +137,7 @@ function probe({ side, scenario }) {
       contracts: (c, r) => { PT.market(s); return JSON.stringify(PT.generateContracts(s, c, r)); },
       repLevel: (x) => PT.repLevel(x),
       exp: (() => { const X = PT.EXP; PT.parrotState(s); PT.expState(s); const pw = (p) => (typeof p === "number" ? { copies: Math.min(2, p), primaryPower: p >= 1 ? 1 : 0, secondaryPower: p >= 2 ? 1 : 0 } : { copies: Math.min(2, p.copies), primaryPower: p.copies >= 1 ? p.primaryPower : 0, secondaryPower: p.copies >= 2 ? p.secondaryPower : 0 }); return {
-        walk: (x, y) => X.nightWalkable(x, y), night: (fn) => { const e = PT.expState(s), r0 = e.activeRun; e.activeRun = { nightMode: true, currentFloor: 1, enemies: [], startTime: Date.now() }; try { return fn(); } finally { e.activeRun = r0; } }, nightMap: () => X.runMap(1),
+        walk: (x, y) => X.nightWalkable(x, y), night: (fn) => { const e = PT.expState(s), r0 = e.activeRun; e.activeRun = { nightMode: true, currentFloor: 1, enemies: [], damageNumbers: [], startTime: Date.now() }; try { return fn(); } finally { e.activeRun = r0; } }, nightMap: () => X.runMap(1),
         xpReq: (L) => X.xpReq(L), stats: (t, f, b, k) => X.enemyStats(t, f, b)?.[k], depthHp: (t, h, r, f, q) => X.depthHealthAt(t, h, r, f, q), atk: (a, h, l, b) => X.attackFromLife(a, h, l, b),
         sp: (t, l, h, m, b, f, r) => X.spReward(t, l, h, m, b, f, r), spScale: (sp, f, r) => X.floorSpScale(sp, f, r), total: (k) => PT.parrotTotalStats(s)[k], gear: (k) => X.gearMults(s)[k],
         spMult: () => X.rebirbSpMult(s), rebirb: () => PT.parrotRebirbReady(s), ext: (k) => X.externalBonuses(s)[k], muad: () => X.muadBirb(s), add: (k) => X.skillAdditions(s)[k],
@@ -153,10 +155,11 @@ function probe({ side, scenario }) {
           maxLv: () => X.sacMaxUnlocked(s), progress: () => X.sacProgress(s).progress, atk: () => { const b = X.parrotBonuses(s); return b.attackSpeedMult; }, move: () => X.parrotBonuses(s).moveSpeedMult, range: () => { X.bonuses = X.parrotBonuses(s); return X.rangeMult(); } },
       }; })(),
       secret: { maxed: () => PT.EXP.starterGearMaxed(s), repair: () => PT.EXP.hasMineProgress(s), canBreak: () => { const c = s.currentMap; s.currentMap = 17; try { return PT.EXP.canBreakMineEntrance(s); } finally { s.currentMap = c; } } },
+      mythic: { norm: () => PT.EXP.mythicState(s), can: () => PT.EXP.mythicCanPour(s), count: (n) => PT.EXP.itemCount(s, n) },
       quest: (() => { const X = PT.EXP; return {
         sync: (now) => X.questSync(s, now), bonus: (k) => X.questMerchantBonus(s, k), m: () => X.questState(s),
         progress: () => X.QUESTS.ALL.map((d) => [d.id, X.questProgress(s, d), X.questTarget(s, d)]), done: () => X.questCompletedCount(s), total: () => X.questTotalCount(s),
-        left: (now) => X.questTimeUntilRefresh(s, now), kill: (f, e) => X.trackQuestKill(s, null, f, e, X.FLOOR_MAP[f]), stats: () => PT.expState(s).questStats, ext: (k) => X.externalBonuses(s)[k] } })(),
+        left: (now) => X.questTimeUntilRefresh(s, now), kill: (f, e) => X.trackQuestKill(s, PT.expState(s).activeRun, f, e, X.FLOOR_MAP[f]), stats: () => PT.expState(s).questStats, ext: (k) => X.externalBonuses(s)[k] } })(),
       desert: {
         chance: () => PT.desertGoldenChance(s), interval: () => PT.desertSpawnInterval(s), perDrop: () => PT.goldenPerDrop(s),
         collect: (c) => PT.goldenCollectMult(s, c), eggMult: () => PT.desertEggMult(s), bloom: () => PT.duneBloomMult(s),
@@ -253,6 +256,12 @@ function probe({ side, scenario }) {
   for (const c of ["artifact", "material"]) { put(`inventory cap ${c}`, () => Ex.loot.cap(c)); put(`inventory used ${c}`, () => Ex.loot.used(c)); }
   for (const k of ["level", "target", "popcorn", "sp", "radius", "seed", "qty", "chance", "promo", "canExpand", "maxLv", "progress", "atk", "move", "range"]) put(`sacrifice ${k}`, Ex.sac[k]);
   for (const k of ["maxed", "repair", "canBreak"]) put(`mine entrance ${k}`, A.secret[k]);
+  if (scenario.mythic) { const My = A.mythic;
+    const snap = (tag) => { const m = My.norm(); for (const k of ["level", "eliteKills", "relicDrops", "pendingAura"]) put(`mythic ${tag} ${k}`, () => m[k]); m.contributions.forEach((c, i) => { put(`mythic ${tag} c${i} sp`, () => c.skillPoints); put(`mythic ${tag} c${i} aura`, () => c.aura); }); };
+    snap("t0"); put("mythic can pour", My.can);
+    for (const [f, e] of scenario.mythic.kills || []) Ex.night(() => A.quest.kill(f, { ...e }));
+    snap("t1"); for (const n of ["Heart of the Veil", "Watcher's Oath", "Mythic Spirit Aura"]) put(`mythic item ${n}`, () => My.count(n));
+  }
   if (scenario.quest) { const Q = A.quest, T0 = scenario.quest.now, enc = (ids) => ids.join(",").split("").reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
     const snap = (tag) => { const m = Q.m(); put(`quest ${tag} daily ids`, () => enc(m.dailyQuestIds)); put(`quest ${tag} main done`, () => enc(m.mainCompletedQuestIds)); put(`quest ${tag} daily done`, () => enc(m.dailyCompletedQuestIds));
       put(`quest ${tag} cycle`, () => m.dailyCycle); put(`quest ${tag} next refresh`, () => m.nextRefreshAt); put(`quest ${tag} unlocked`, () => m.unlockedAt); put(`quest ${tag} done count`, Q.done); put(`quest ${tag} total count`, Q.total);
@@ -307,6 +316,8 @@ function probe({ side, scenario }) {
     const m = await import(src); window.__BIRB_PROCS = { kn: m.a0, xn: m.$, Cn: m.a1 };
     const ms = [...document.querySelectorAll("script[src],link[href]")].map((e) => e.src || e.href).find((u) => /\/assets\/maps-[^/]+\.js$/.test(u)) || "/assets/maps-CcKoUYtq.js";
     window.__BIRB_NIGHT_WALK = (await import(ms)).d0; // Birb Re: night map walkable test
+    const es = [...document.querySelectorAll("script[src],link[href]")].map((e) => e.src || e.href).find((u) => /\/assets\/editors-[^/]+\.js$/.test(u)) || "/assets/editors-BtUaWY01.js";
+    window.__BIRB_MYTHIC_CAN = (await import(es)).aI; // Birb Ba
   });
   const ours = await (await browser.newContext()).newPage();
   const errs = [];

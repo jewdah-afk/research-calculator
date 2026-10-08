@@ -1,8 +1,8 @@
 # Parity report
 
-Birb's live engine (birbplay.com `window.game`) vs the playtest, same save state per scenario. Generated 2026-10-08T22:24Z by `playtest/parity/parity.js`.
+Birb's live engine (birbplay.com `window.game`) vs the playtest, same save state per scenario. Generated 2026-10-08T22:29Z by `playtest/parity/parity.js`.
 
-**52979 / 52979 values match.** Birb's live community-goal twig reward today: x1.5 (copied into the playtest for the run).
+**56403 / 56403 values match.** Birb's live community-goal twig reward today: x1.5 (copied into the playtest for the run).
 
 | Scenario | Values | Mismatches |
 |---|---|---|
@@ -48,6 +48,10 @@ Birb's live engine (birbplay.com `window.game`) vs the playtest, same save state
 | mine entrance rebirb 1 | 832 | 0 |
 | mine entrance repair crow | 832 | 0 |
 | mine entrance repair tree | 832 | 0 |
+| mythic none | 856 | 0 |
+| mythic I | 856 | 0 |
+| mythic II relic bar | 856 | 0 |
+| mythic III doubled relic | 856 | 0 |
 
 ### fresh start
 
@@ -214,5 +218,21 @@ All match.
 All match.
 
 ### mine entrance repair tree
+
+All match.
+
+### mythic none
+
+All match.
+
+### mythic I
+
+All match.
+
+### mythic II relic bar
+
+All match.
+
+### mythic III doubled relic
 
 All match.
