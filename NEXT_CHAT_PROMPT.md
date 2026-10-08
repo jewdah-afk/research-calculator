@@ -2,6 +2,8 @@
 
 ---
 
+> **Current focus (2026-10-08): the HTML playtest port of Birb.** Read `playtest/NEXT.md` first; it says exactly what to do next (Phase 6c) and how. Roblox/Figma work below is paused until the owner says otherwise.
+
 You're continuing **Peckwood**, a Roblox remake of the incremental game Birb. Read this whole prompt first, then `~/Downloads/rc-main/HANDOUT.md` section 0. The owner is very picky about visual quality: they catch every hairline, clipped edge, off-centre glyph and drifting button. **Check everything zoomed in and show a screenshot with every visual change.** Keep replies short and plain.
 
 ## Where everything is
