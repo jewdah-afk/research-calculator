@@ -163,7 +163,7 @@ local function bodyStep(dt: number)
 end
 
 -- ---------------------------------------------------------------- kernels
-local field = Instance.new("Model"); field.Name = "Kernels"; field.Parent = workspace
+local field = Instance.new("Model"); field.Name = "Eggs"; field.Parent = workspace
 
 -- ---------------------------------------------------------------- outline tiers (visual hierarchy)
 -- One Highlight per GROUP (Roblox renders at most 31 at once). Strongest on what you control / collect,

@@ -79,15 +79,16 @@ function Models.bird(): Model
 	return m
 end
 
--- ---------------------------------------------------------------- popcorn kernel (a_kernel)
-local LOBES = { { 0, 0, 0.17, 0.15 }, { 0.1, 0.03, 0.2, 0.11 }, { -0.09, 0.05, 0.21, 0.11 }, { 0.02, -0.1, 0.22, 0.11 }, { 0, 0.08, 0.28, 0.1 }, { -0.05, -0.04, 0.3, 0.09 }, { 0.08, -0.06, 0.12, 0.09 } }
+-- ---------------------------------------------------------------- egg (the main currency pickup; was the popcorn kernel)
+local SPECKS = { { 0.11, 0.11, 0.17 }, { -0.15, 0.03, 0.2 }, { 0.03, -0.155, 0.15 }, { -0.085, -0.09, 0.29 }, { 0.15, -0.045, 0.12 }, { -0.03, 0.125, 0.3 } }   -- sit on the shell surface
 function Models.kernel(golden: boolean?): Model
-	local m = newModel("Kernel")
-	local lobe = if golden then "#ffc93a" else P.cream
-	for i, l in LOBES do Models.ball(m, "lobe" .. i, l[4], { l[1], l[2], l[3] }, lobe) end
-	Models.ball(m, "hull", 0.075, { 0, 0.02, 0.07 }, if golden then "#e0a010" else P.hull, { 1, 1, 0.75 })
+	local m = newModel("Egg")
+	local shell = if golden then "#ffc93a" else "#f4ead8"
+	Models.ball(m, "shell", 0.15, { 0, 0, 0.17 }, shell, { 1, 1, 1.15 })      -- wide bottom
+	Models.ball(m, "top", 0.12, { 0, 0, 0.27 }, shell, { 1, 1, 1.25 })        -- narrower top gives the egg shape
+	for i, p in SPECKS do Models.ball(m, "speck" .. i, 0.022, p, if golden then "#e0a010" else "#c9a888") end
 	if golden then for _, p in m:GetChildren() do (p :: BasePart).Reflectance = 0.08 end end   -- gold reads by colour + outline, not Neon (bloom blob)
-	m.WorldPivot = CFrame.new(); m:ScaleTo(2.3)   -- scale about the base point; View3D draws popcorn at 2.3x
+	m.WorldPivot = CFrame.new(); m:ScaleTo(2.3)   -- scale about the base point, same size as the old kernel
 	return m
 end
 

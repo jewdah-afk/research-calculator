@@ -36,6 +36,13 @@ The Roblox game now lives in **`roblox/`** (Rojo). The owner has synced it into 
   - Images taller than about 2048px did not render, so window renders are resized to fit (`assets/figma/fit/`).
   - The Roblox top-left menu covers HUD y<60.
 
+### Eggs replace popcorn (2026-10-08, owner's call)
+Eggs are now the main currency. **Only what players see changed; internal ids stay** (`popcorn`, `goldenPopcorn`, `echoPopcorn`, `p_*`/`pr_popcorn_mult` upgrade ids, save keys, `BirbFormulas`), so saves and the verified Birb math are untouched. Golden popcorn is now golden eggs, and echo popcorn is now echo eggs.
+- Code: display text in `Defs`, `Shop`, `Spec`, `Windows`, `Hud`; the field pickup `Models.kernel` is now a speckled egg (gold version for golden). The field model is named `Eggs`.
+- Figma UI v2: 82 text layers renamed; the popcorn and golden icon fills in all windows, the HUD icon `108:7` and `icon/popcorn`/`icon/golden` swapped to `egg`/`egg_golden`. Egg Robux shop icons are in `145:7` (the popcorn strip `128:7` is kept for reference).
+- **To do:** upload `birb-icons/final/egg.png`, `egg_golden.png` and the new `shop_*.png` to Roblox and replace the `popcorn`, `golden` and `shop_*` ids in `Icons.luau`; re-export the Figma window art (`FigmaArt.luau`), since the baked window renders still say POPCORN. The `birb-data/*.json` descriptions still say popcorn (Birb source data, not shown in game).
+- New icons from the egg/mining sheet (cut from a low-res preview, recut from the original when available): `egg`, `egg_golden`, `egg_shiny`, `shop_*` (eggs), `ore_*` tiers, `golem`, `pickaxe_charged`, `rupture`, `mine_chest`, `crow_miner`, `anvil`, `minecart`, `tombstone`.
+
 ### Open issues (do these next)
 1. **Done:** all 83 Figma images load. They took about 1 hour in Roblox moderation after upload, so new uploads look blank until they clear.
    **Also fixed:**

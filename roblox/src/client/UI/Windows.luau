@@ -144,7 +144,7 @@ do
 	local base = B.echo
 	B.echo = { rows = base.rows, bind = base.bind, update = function(api, s, d)
 		base.update(api, s, d)
-		api.hero.sub.Text = amount(s.echoPopcorn) .. " echo popcorn  ·  25% of pickups echo"
+		api.hero.sub.Text = amount(s.echoPopcorn) .. " echo eggs  ·  25% of pickups echo"
 	end }
 end
 
@@ -177,7 +177,7 @@ B.parrot = {
 
 B.evolve = {
 	rows = {
-		{ title = "Popcorn", desc = "Feed popcorn to the monster.", icon = "popcorn", buyIcon = "popcorn", allText = "FEED ALL" },
+		{ title = "Eggs", desc = "Feed eggs to the monster.", icon = "popcorn", buyIcon = "popcorn", allText = "FEED ALL" },
 		{ title = "Twigs", desc = "Feed twigs from the nest.", icon = "twig", buyIcon = "twig", allText = "FEED ALL" },
 		{ title = "Moneta", desc = "Feed moneta from fish sales.", icon = "moneta", buyIcon = "moneta", allText = "FEED ALL" },
 	},
@@ -216,7 +216,7 @@ B.evolve = {
 B.sparrow = {
 	rows = {
 		{ title = "Feed", desc = "Feeds 25% of seed income.", icon = "seed", buyIcon = "seed", allText = "FEED ALL" },
-		{ title = "Resonance", desc = "Drains XP into popcorn mult.", icon = "popcorn", buyIcon = "clock", allText = "STOP" },
+		{ title = "Resonance", desc = "Drains XP into egg mult.", icon = "popcorn", buyIcon = "clock", allText = "STOP" },
 		{ title = "Mitosis", desc = "Needs 10K XP. Resets level.", icon = "heart", buyIcon = "wing", allText = "AUTO" },
 	},
 	bind = function(api, act)
@@ -505,10 +505,10 @@ B.sacrifice = {
 			local m = Defs.SACRIFICE[t]
 			local prev = Defs.SACRIFICE[t - 1]
 			local got = tot >= m.cost
-			local what = if m.popcornMultiplier > (prev and prev.popcornMultiplier or 1) then "Popcorn and seeds."
+			local what = if m.popcornMultiplier > (prev and prev.popcornMultiplier or 1) then "Eggs and seeds."
 				elseif m.skillPointMultiplier > (prev and prev.skillPointMultiplier or 1) then "Skill points from expeditions."
 				else "Aura amount and chance."
-			r.info = "Tier " .. ROMAN[t] .. ": popcorn x" .. m.popcornMultiplier .. ", seeds x" .. m.seedMultiplier .. ", skill points x" .. m.skillPointMultiplier
+			r.info = "Tier " .. ROMAN[t] .. ": eggs x" .. m.popcornMultiplier .. ", seeds x" .. m.seedMultiplier .. ", skill points x" .. m.skillPointMultiplier
 			r.set({ title = "Tier " .. ROMAN[t], icon = "sacrifice_" .. ROMAN[t], desc = what,
 				from = "x" .. (prev and prev.popcornMultiplier or 1), to = "x" .. m.popcornMultiplier,
 				prog = { math.min(1, tot / m.cost), commas(math.min(tot, m.cost)) .. " / " .. fmt(m.cost) }, maxed = got,
@@ -521,7 +521,7 @@ B.sacrifice = {
 }
 
 local STATS = {
-	{ "Popcorn", "popcorn", function(s) return fmt(s.popcorn) end }, { "Plumes", "plume", function(s) return fmt(s.goldenFeathers) end },
+	{ "Eggs", "popcorn", function(s) return fmt(s.popcorn) end }, { "Plumes", "plume", function(s) return fmt(s.goldenFeathers) end },
 	{ "Seeds", "seed", function(s) return fmt(s.sunflowerSeeds) end }, { "Golden", "golden", function(s) return fmt(s.goldenPopcorn) end },
 	{ "Brute Ore", "ore", function(s) return fmt(s.bruteOre) end }, { "Twigs", "twig", function(s) return fmt(s.twigs) end },
 	{ "Echo", "echo", function(s) return fmt(s.echoPopcorn) end }, { "Moneta", "moneta", function(s) return fmt(s.moneta) end },

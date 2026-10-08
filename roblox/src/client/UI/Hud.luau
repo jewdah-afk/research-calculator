@@ -714,7 +714,7 @@ function Hud.openShop()
 	Kit.new("UIGridLayout", { CellSize = UDim2.fromOffset(310, 520), CellPadding = UDim2.fromOffset(math.floor((CW - 3 * 310) / 2), 0), SortOrder = Enum.SortOrder.LayoutOrder }, g3)
 	k = 0
 	for _, it in ShopData.ITEMS do if it.section == "CRATES" then k += 1; shopCard(g3, it, 310, 440, 160 + k * 24, 30, 66, k) end end
-	Kit.title(p3, "Crates pay out from YOUR current popcorn per second, so they stay worth it as you grow.", 20, hex("d8d2ff"), 2, 0,
+	Kit.title(p3, "Crates pay out from YOUR current eggs per second, so they stay worth it as you grow.", 20, hex("d8d2ff"), 2, 0,
 		{ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(CW / 2, 640), ZIndex = 84 })
 	show(1)
 	shopOverlay.Activated:Connect(function() shopOverlay.Visible = false end)

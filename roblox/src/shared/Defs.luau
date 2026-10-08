@@ -12,7 +12,7 @@ Defs.F, Defs.S, Defs.EN = F, S, EN
 
 -- currency key -> HUD name + icon
 Defs.CUR = {
-	popcorn = { name = "Popcorn", icon = "popcorn" },
+	popcorn = { name = "Eggs", icon = "popcorn" },
 	goldenFeathers = { name = "Plumes", icon = "plume" },
 	sunflowerSeeds = { name = "Seeds", icon = "seed" },
 	goldenPopcorn = { name = "Golden", icon = "golden" },
@@ -52,21 +52,21 @@ local function up(id: string, t)
 end
 
 -- Popcorn (layer 0, Molt resets)
-up("p_value", { name = "Popcorn Value", desc = "Each kernel is worth more.", icon = "popcorn", fx = function(L) return tostring(L) end, layer = "popcorn" })
-up("p_speed", { name = "Faster Popcorn", desc = "Kernels pop up more often.", icon = "clock", fx = function(L) return string.format("%.1fs", F.spawnTime(L)) end, layer = "popcorn" })
-up("p_capacity", { name = "Popcorn Cap", desc = "More kernels on the field.", icon = "popcorn", fx = function(L) return "+" .. F.capacity(L) end, layer = "popcorn" })
+up("p_value", { name = "Egg Value", desc = "Each egg is worth more.", icon = "popcorn", fx = function(L) return tostring(L) end, layer = "popcorn" })
+up("p_speed", { name = "Faster Eggs", desc = "Eggs pop up more often.", icon = "clock", fx = function(L) return string.format("%.1fs", F.spawnTime(L)) end, layer = "popcorn" })
+up("p_capacity", { name = "Egg Cap", desc = "More eggs on the field.", icon = "popcorn", fx = function(L) return "+" .. F.capacity(L) end, layer = "popcorn" })
 up("p_move_speed", { name = "Wing Training", desc = "Hop around quicker.", icon = "wing", fx = function(L) return math.floor(100 * F.wingSpeed(L)) .. "%" end, layer = "popcorn" })
 -- Molt keepsakes (permanent)
-up("pr_popcorn_mult", { name = "Golden Down", desc = "Popcorn gain, forever.", icon = "plume", fx = function(L) return "x" .. short(F.popcornMult(L)) end })
+up("pr_popcorn_mult", { name = "Golden Down", desc = "Egg gain, forever.", icon = "plume", fx = function(L) return "x" .. short(F.popcornMult(L)) end })
 up("pr_radius_mult", { name = "Long Neck", desc = "Pickup radius, forever.", icon = "magnet", fx = function(L) return x2(1 + 0.2 * math.max(0, L - 1)) end })
-up("pr_respawn_mult", { name = "Quick Pop", desc = "Kernels respawn faster.", icon = "clock", fx = function(L) return x2(F.respawnMult(L)) end })
+up("pr_respawn_mult", { name = "Quick Pop", desc = "Eggs respawn faster.", icon = "clock", fx = function(L) return x2(F.respawnMult(L)) end })
 -- Seeds (Evolve resets)
-up("s_more_popcorn", { name = "More Popcorn", desc = "Popcorn gain per kernel.", icon = "popcorn", fx = function(L) return x1(F.morePopcorn(L)) end, layer = "seeds" })
+up("s_more_popcorn", { name = "More Eggs", desc = "Egg gain per pickup.", icon = "popcorn", fx = function(L) return x1(F.morePopcorn(L)) end, layer = "seeds" })
 up("s_more_feathers", { name = "More Plumes", desc = "Plumes from every Molt.", icon = "plume", fx = function(L) return x1(F.moreFeathers(L)) end, layer = "seeds" })
 up("s_more_seeds", { name = "More Seeds", desc = "Sunflowers grow more seeds.", icon = "seed", fx = function(L) return "x" .. F.moreSeeds(L) end, layer = "seeds" })
 -- Golden (desert)
 up("p_golden_popcorn_value", { name = "Golden Value", desc = "More golden per drop.", icon = "golden", fx = function(L) return tostring(L) end, layer = "popcorn" })
-up("p_auric_silo", { name = "Auric Silo", desc = "Raises the popcorn cap.", icon = "popcorn", fx = function(L) return "+" .. 2 * L end, layer = "popcorn" })
+up("p_auric_silo", { name = "Auric Silo", desc = "Raises the egg cap.", icon = "popcorn", fx = function(L) return "+" .. 2 * L end, layer = "popcorn" })
 up("d_desert_field_notes_plus", { name = "Gilded Margins", desc = "+33% golden per level.", icon = "golden", fx = function(L) return x2(1 + L / 3) end })
 -- Mine (Evolve resets); verified stepped-anchor costs from BirbSystems
 local function mineCost(id) return function(L) return S.mineCost(id, L) end end
@@ -79,8 +79,8 @@ up("n_twig_value", { name = "Twig Value", desc = "More twigs per hit.", icon = "
 up("n_peck_rate", { name = "Peck Rate", desc = "Birb pecks trees faster.", icon = "clock", cur = "twigs", max = 20, start = 0, cost = function(L) return S.peckRateCost(L) end, fx = function(L) return "+" .. string.format("%g", 0.2 * L) .. "/s" end })
 up("n_peck_power", { name = "Peck Power", desc = "+1 damage per peck.", icon = "wood", cur = "twigs", max = 15, start = 0, cost = function(L) return S.peckPowerCost(L) end, fx = function(L) return tostring(1 + L) end })
 -- Echo field (Molt resets)
-up("p_echo_value", { name = "Echo Value", desc = "More echo popcorn per echo.", icon = "echo", cur = "echoPopcorn", max = 999, cost = function(L) return F.cost({ id = "p_echo_value" }, L) end, fx = function(L) return tostring(L) end, layer = "popcorn" })
-up("e_echo_capacity", { name = "Echo Capacity", desc = "Raises the echo popcorn cap.", icon = "mushroom", cur = "echoPopcorn", max = 10, start = 1, cost = function(L) return math.floor(20 * 1.65 ^ (L - 1)) end, fx = function(L) return "+" .. (2 + 2 * (L - 1)) end, layer = "popcorn" })
+up("p_echo_value", { name = "Echo Value", desc = "More echo eggs per echo.", icon = "echo", cur = "echoPopcorn", max = 999, cost = function(L) return F.cost({ id = "p_echo_value" }, L) end, fx = function(L) return tostring(L) end, layer = "popcorn" })
+up("e_echo_capacity", { name = "Echo Capacity", desc = "Raises the echo egg cap.", icon = "mushroom", cur = "echoPopcorn", max = 10, start = 1, cost = function(L) return math.floor(20 * 1.65 ^ (L - 1)) end, fx = function(L) return "+" .. (2 + 2 * (L - 1)) end, layer = "popcorn" })
 -- Dave seed training (seeds)
 up("dave_training", { name = "Seed Training", desc = "Dave forages faster.", icon = "seed", cur = "sunflowerSeeds", max = 50, start = 0, cost = function(L) return S.daveSeedTrainingCost(L) end, fx = function(L) return x2(1 + 0.02 * math.min(50, L)) end })
 
@@ -140,10 +140,10 @@ Defs.NEST_TIERS = {
 -- goal = the objective line shown while this island is the next one; gate(s) = unlocked?
 local function evo(s) return s.evolutionCount or 0 end
 Defs.ISLANDS = {
-	{ id = "park", name = "THE PARK", windows = { "popcorn", "profile" }, goal = "Collect popcorn", gate = function() return true end },
-	{ id = "molt", name = "THE PARK", windows = { "molt" }, goal = "Hold 1,000 popcorn to unlock Molt", gate = function(s) return (s.stats.bestPopcorn or 0) >= 1000 or (s.rebirbCount or 0) > 0 end },
-	{ id = "garden", name = "THE GARDEN", windows = { "seeds", "sparrow" }, goal = "Molt for Plumes: 1 Plume per 1,000 popcorn you hold", gate = function(s) return (s.rebirbCount or 0) > 0 end },
-	{ id = "castle", name = "THE CASTLE", windows = { "evolve" }, goal = "Unlock Evolve: 100M popcorn", cost = { popcorn = 1e8 }, gate = function(s) return s.owned.d_unlock_evolve == true end },
+	{ id = "park", name = "THE PARK", windows = { "popcorn", "profile" }, goal = "Collect eggs", gate = function() return true end },
+	{ id = "molt", name = "THE PARK", windows = { "molt" }, goal = "Hold 1,000 eggs to unlock Molt", gate = function(s) return (s.stats.bestPopcorn or 0) >= 1000 or (s.rebirbCount or 0) > 0 end },
+	{ id = "garden", name = "THE GARDEN", windows = { "seeds", "sparrow" }, goal = "Molt for Plumes: 1 Plume per 1,000 eggs you hold", gate = function(s) return (s.rebirbCount or 0) > 0 end },
+	{ id = "castle", name = "THE CASTLE", windows = { "evolve" }, goal = "Unlock Evolve: 100M eggs", cost = { popcorn = 1e8 }, gate = function(s) return s.owned.d_unlock_evolve == true end },
 	{ id = "bridge", name = "THE BRIDGE", windows = { "rods", "baits", "index", "aquarium", "seagull" }, goal = "Evolve once to open the Bridge", gate = function(s) return evo(s) >= 1 end },
 	{ id = "forest", name = "THE FOREST", windows = { "nest", "redpanda" }, goal = "Reach Evolution 2 to open the Forest", gate = function(s) return evo(s) >= 2 end },
 	{ id = "mine", name = "THE MINE", windows = { "mine" }, goal = "Reach Evolution 3 to open the Mine", gate = function(s) return evo(s) >= 3 end },
