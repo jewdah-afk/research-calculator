@@ -1,6 +1,6 @@
 // Peckwood playtest, Phase 4: the Mine and the Crow, copied from Birb (editors LE ore system + area formulas,
 // game WE mine profile, mine journey _E, crow ME/gE/lE). In Birb the mine opens from the Expedition floor-1
-// secret room (Parrot Rebirb II + maxed starter gear); until the Expedition phase lands, Settings can open it.
+// secret room (Parrot Rebirb II + maxed starter gear); see expedition_secret.js.
 // The mine room is map 25, the Treasure Room (mine tree) is map 26.
 "use strict";
 (function () {

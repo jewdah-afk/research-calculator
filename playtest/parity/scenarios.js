@@ -192,3 +192,17 @@ module.exports = [
           expedition_attack_speed_mult: [buff(1.1, 6)], expedition_skill_point_mult: [buff(1.65, 7)], expedition_chest_reward_mult: [buff(0.75, 8), { value: 9, expiresAt: 1000, sourceContractId: "old", rarity: "epic" }] } } } } },
   );
 }
+
+// Floor 1 mine entrance (Phase 6c): rebirb II + maxed starter gear (legendary, or epic 5); old saves with mine progress reopen it
+{
+  const gear = (b, a, u) => ({ beak: b, armor: a, aura: u }), L = { rarity: "legendary", level: 1 }, E5 = { rarity: "epic", level: 5 }, E4 = { rarity: "epic", level: 4 };
+  const st = (rb, eq, extra = {}) => ({ evolutionCount: 6, rebirthCount: 60, expedition: { unlocked: true, highestFloorReached: 9, progress: { level: 50 } }, ...extra,
+    parrot: { unlocked: true, level: 50, skillPoints: 0, rebirbCount: rb, skills: { hp: 10, lifeRegen: 0, damage: 10 }, equipmentUpgrades: eq } });
+  module.exports.push(
+    { name: "mine entrance ready", state: st(2, gear(L, E5, L)) },
+    { name: "mine entrance epic 4", state: st(2, gear(L, E4, L)) },
+    { name: "mine entrance rebirb 1", state: st(1, gear(L, L, L)) },
+    { name: "mine entrance repair crow", state: st(0, gear(E4, E4, E4), { mine: { crowLevel: 3 } }) },
+    { name: "mine entrance repair tree", state: st(0, gear(E4, E4, E4), { sunflowerUpgrades: { d_mine_work_perch: 1 } }) },
+  );
+}

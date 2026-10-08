@@ -81,6 +81,7 @@ function probe({ side, scenario }) {
         procs: window.__BIRB_PROCS ? { kn: (o) => window.__BIRB_PROCS.kn(o), xn: (h, m, p) => window.__BIRB_PROCS.xn(h, m, p), cn: (n, p) => window.__BIRB_PROCS.Cn(n, p).damageRatio * 100 + window.__BIRB_PROCS.Cn(n, p).maxTargets } : null,
         resetCost: () => { const sk = s.parrot.skills, t = sk.hp + sk.lifeRegen + sk.damage; return t <= 0 ? 0 : Math.max(1, Math.ceil(Math.sqrt(0.01 * t))); },
       }; })(),
+      secret: { maxed: () => g.areStarterEquipmentUpgradesMaxed(), repair: () => g.hasMineProgressForEntranceRepair(), canBreak: () => { const c = g.currentMap; g.currentMap = 17; try { return g.canBreakFloorOneMineEntrance(); } finally { g.currentMap = c; } } },
       quest: (() => { const qm = g.questMerchantManager, fix = () => { qm.normalizedStateRef = null; qm.setState(g.state.expedition); }; return {
         sync: (now) => { fix(); let r = false; if (g.hasSunflowerUpgrade("d_desert_quest_merchant")) r = qm.unlock(now) || r; r = qm.sync(now) || r; g.state.expedition = qm.getState(); return r; }, bonus: (k) => { fix(); return qm.getBonus(k); }, m: () => g.state.expedition.questMerchant,
         progress: () => { fix(); return [...qm.getQuestProgressValues()].map(([id, v]) => [id, v.current, v.target]); }, done: () => qm.getCompletedQuestCount(), total: () => qm.getTotalQuestCount(),
@@ -149,6 +150,7 @@ function probe({ side, scenario }) {
           qty: () => X.sacProfile(s).auraQuantityMultiplier, chance: () => X.sacProfile(s).auraChanceMultiplier, promo: () => X.sacProfile(s).auraRarityPromotionChance, canExpand: () => X.canUnlockSacExpansion(s),
           maxLv: () => X.sacMaxUnlocked(s), progress: () => X.sacProgress(s).progress, atk: () => { const b = X.parrotBonuses(s); return b.attackSpeedMult; }, move: () => X.parrotBonuses(s).moveSpeedMult, range: () => { X.bonuses = X.parrotBonuses(s); return X.rangeMult(); } },
       }; })(),
+      secret: { maxed: () => PT.EXP.starterGearMaxed(s), repair: () => PT.EXP.hasMineProgress(s), canBreak: () => { const c = s.currentMap; s.currentMap = 17; try { return PT.EXP.canBreakMineEntrance(s); } finally { s.currentMap = c; } } },
       quest: (() => { const X = PT.EXP; return {
         sync: (now) => X.questSync(s, now), bonus: (k) => X.questMerchantBonus(s, k), m: () => X.questState(s),
         progress: () => X.QUESTS.ALL.map((d) => [d.id, X.questProgress(s, d), X.questTarget(s, d)]), done: () => X.questCompletedCount(s), total: () => X.questTotalCount(s),
@@ -240,6 +242,7 @@ function probe({ side, scenario }) {
   for (const k of ["slots", "rolls", "spMult", "hoard", "auraBonus", "passive", "names"]) put(`loot ${k}`, Ex.loot[k]);
   for (const c of ["artifact", "material"]) { put(`inventory cap ${c}`, () => Ex.loot.cap(c)); put(`inventory used ${c}`, () => Ex.loot.used(c)); }
   for (const k of ["level", "target", "popcorn", "sp", "radius", "seed", "qty", "chance", "promo", "canExpand", "maxLv", "progress", "atk", "move", "range"]) put(`sacrifice ${k}`, Ex.sac[k]);
+  for (const k of ["maxed", "repair", "canBreak"]) put(`mine entrance ${k}`, A.secret[k]);
   if (scenario.quest) { const Q = A.quest, T0 = scenario.quest.now, enc = (ids) => ids.join(",").split("").reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
     const snap = (tag) => { const m = Q.m(); put(`quest ${tag} daily ids`, () => enc(m.dailyQuestIds)); put(`quest ${tag} main done`, () => enc(m.mainCompletedQuestIds)); put(`quest ${tag} daily done`, () => enc(m.dailyCompletedQuestIds));
       put(`quest ${tag} cycle`, () => m.dailyCycle); put(`quest ${tag} next refresh`, () => m.nextRefreshAt); put(`quest ${tag} unlocked`, () => m.unlockedAt); put(`quest ${tag} done count`, Q.done); put(`quest ${tag} total count`, Q.total);

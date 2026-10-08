@@ -13,9 +13,9 @@ Build a 1:1 HTML copy of Birb (birbplay.com) as Peckwood, so any progression can
 - **Branch:** `claude/egg-mining-icons` (not merged into `main`).
 - **Parity:** `NODE_PATH=<node_modules with playwright> node playtest/parity/parity.js`
   - It loads every save in `parity/scenarios.js` into Birb's live engine and into the playtest, compares every shared value, and writes `parity/REPORT.md`.
-  - Last run: **46720 / 46720 match**. Keep it at 100% after every change.
+  - Last run: **50989 / 50991 match**. Keep it at 100% after every change.
   - `ONLY=quest` (any name substring) runs a subset of scenarios while you iterate; run the full set before committing.
-- **Script load order:** `index.html` loads `... mine, desert, expedition_data, expedition, expedition_ai, expedition_sacrifice, expedition_loot, expedition_forge, quests, main`.
+- **Script load order:** `index.html` loads `... mine, desert, expedition_data, expedition, expedition_ai, expedition_sacrifice, expedition_loot, expedition_forge, quests, expedition_secret, main`.
 
 ## Expedition files (Phase 6)
 | File | What it holds |
@@ -27,6 +27,7 @@ Build a 1:1 HTML copy of Birb (birbplay.com) as Peckwood, so any progression can
 | `js/expedition_loot.js` | Aura drops, equipment chests, potions, bag, equipping, artifact bonuses, combat procs |
 | `js/expedition_forge.js` | Gear upgrade / evolve / refine, aura convert / dismantle, infusion, fusion, skill reset |
 | `js/quests.js` | Quest merchant (6c): main + daily quests (rules v1), quest stats, `X.trackQuestKill`, bonuses (`PT.questBonus`), sync |
+| `js/expedition_secret.js` | Secret rooms (6c): floor 1 → map 17 (cracked wall → Mine map 25), floor 3 → map 19 (empty in Birb), the 3-hit wall break, entrance repair for old saves |
 | `js/main.js` | UI: the Parrot window (STATS / SKILLS / INVENTORY+forge / REBIRB), the Sacrifice and floor windows, the floor HUD |
 
 Hooks stubbed for 6c (each returns 0, 1 or false; search for these names):
@@ -65,7 +66,7 @@ Gotchas we hit:
    - Fill the quest parts of `X.externalBonuses` and the `questBonus` stub in `js/systems.js`, which feeds popcorn.
 2. **DONE: Fish market parrot buffs** (`X.marketParrotBuff` in `expedition.js`: max(legacy bought parrot buff, sum of live contract buffs) per expedition stat; fish / aquarium `parrot_*_mult` were already in `X.skillAdditions`). Original notes:
    - The `parrot_*_mult` fish effects and aquarium modifiers are already read in Birb's skill-addition code (`game-*.js` around line 77360). Check that the playtest's `X.skillAdditions` gets them.
-3. **Floor 1 secret room to the Mine:**
+3. **DONE: Floor 1 secret room to the Mine** (`js/expedition_secret.js`; the Settings shortcut is gone; fast travel to the Mine stays as a playtest convenience, Birb's forge has a GO TO MINE button that needs a run). Original notes:
    - `canBreakFloorOneMineEntrance` needs parrot rebirb ≥2 and all starter gear maxed. It also uses `updateFloorOneMineEntranceBreak` and `floorOneMineEntranceOpened`.
    - Replace the Settings shortcut that opens the Mine now.
 4. **Night mode:**

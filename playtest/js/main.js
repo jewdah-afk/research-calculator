@@ -98,6 +98,7 @@
     const k = e.key.toLowerCase();
     if (k === "5" && PT.mineOpen(G.s)) openWin("crow");
     if (k === "e" && expPortalAction()) return;
+    if (k === "e" && G.s.currentMap === 17 && Math.hypot(G.s.player.x - 511, G.s.player.y - 640) < 140) { mineEntrance(); return; }
     if (k === "e") { if (G.s.currentMap === PT.SACRIFICE_MAP) openWin("sacrifice"); else if (G.s.currentMap === PT.MINE_TREE_MAP) openWin("minetree"); else if (G.s.currentMap === PT.MINE_MAP) PT.minePlayerHit(G); else if (G.s.currentMap === PT.NEST_ROOM_MAP) openWin("redpanda"); else if (G.s.currentMap === PT.FISH_MARKET_MAP) openWin("market", "market"); else if (G.s.currentMap !== 1 && PT.aquariumUnlocked(G.s)) openWin("aquarium"); else tryStation(); }
     if (k === " ") { e.preventDefault(); cast(); }
     if (k === "tab") { e.preventDefault(); G.companionsOpen = !G.companionsOpen; drawHud(); }
@@ -106,6 +107,14 @@
     if (k === "h" && PT.expState(G.s).activeRun) { if (PT.EXP.usePotion(G.s)) save(); } // Birb uses the potion button only (no key)
     if (k === "escape") { if (G.win) closeWin(); else openWin("settings"); }
   });
+  // Birb tryHandleFloorOneMineEntranceInteraction
+  function mineEntrance() {
+    const s = G.s, X = PT.EXP; X.repairMineEntrance(s);
+    if (s.floorOneMineEntranceOpened === true) { if (X.enterMineRoom(G)) save(); return; }
+    if (X.breakActive()) return;
+    if (!X.canBreakMineEntrance(s)) return toast(`The wall is cracked. The parrot can break it at Parrot Rebirb II (${X.rebirbs(s)}/2) with maxed beak, armor and aura (legendary, or epic 5): ${["beak", "armor", "aura"].filter((k) => X.gearMaxed(PT.parrotState(s).equipmentUpgrades[k])).length}/3.`);
+    X.startBreak(s, (n) => { const run = PT.expState(s).activeRun; if (run) X.dmgNumber(run, { x: 511, y: 600 }, n >= 3 ? "THE WALL BREAKS!" : "CRACK", "#fde68a"); if (n >= 3) { s.hasSeenMineTab = true; toast("The Mine is open"); save(); } });
+  }
   function cast() { if (!PT.startCast(G)) toast(G.s.currentMap !== 2 ? "Fish on the Bridge" : G.s.evolutionCount < 1 ? "Fishing needs Evolution 1" : "Not ready"); }
   addEventListener("keyup", (e) => G.keys.delete(e.key.toLowerCase()));
   cv.addEventListener("mousedown", (e) => {
@@ -113,6 +122,7 @@
     const w = toWorld((e.clientX - r.left) * dpr, (e.clientY - r.top) * dpr);
     if (PT.EXP.isRunMap(G.s.currentMap) && PT.EXP.command(G.s, w.x, w.y, G.s.player.x, G.s.player.y)) return;
     if (expPortalAt(w.x, w.y)) { expPortalAction(); return; }
+    if (G.s.currentMap === 17 && PT.EXP.inMineEntrance(w.x, w.y)) { mineEntrance(); return; }
     G.target = w;
     if (G.s.currentMap === PT.NEST_ROOM_MAP && Math.hypot(w.x - 528, w.y - 380) < 70) openWin("redpanda");
     if (G.s.currentMap === PT.MINE_MAP && Math.hypot(w.x - 528, w.y - 520) < 110) { PT.minePlayerHit(G); G.target = null; }
@@ -260,7 +270,8 @@
     if (s.currentMap === PT.NEST_MAP) drawNest();
     if (s.currentMap === PT.NEST_ROOM_MAP) drawNestRoom();
     if (s.currentMap === PT.MINE_MAP) drawMine();
-    if (s.currentMap === PT.EXP_HUB_MAP || PT.EXP.isRunMap(s.currentMap)) drawExpedition();
+    if (s.currentMap === PT.EXP_HUB_MAP || PT.EXP.isRunMap(s.currentMap) || PT.EXP.isSecretRoom(s.currentMap)) drawExpedition();
+    if (s.currentMap === PT.MINE_MAP && PT.expState(s).activeRun) { const q = PT.EXP.portals(s.currentMap)[0]; cx.beginPath(); cx.arc(q.x, q.y, q.r, 0, 7); cx.fillStyle = "rgba(124,58,237,.45)"; cx.fill(); label("SECRET ROOM", q.x, q.y + q.r + 18, 16, "#fff"); }
     if (s.currentMap === PT.MINE_TREE_MAP) drawMineTree();
     if (s.currentMap === 3) { drawIcon("monster", 800, 500, 200); if (!s.hasTalkedToMonster) label("Click the monster", 800, 640, 22); }
     // pickup radius ring + bird
@@ -280,9 +291,16 @@
     if (floor) { const b = X.bounds(s.currentMap); for (let i = 0; i < 5; i++) { cx.fillStyle = `rgba(0,0,0,${0.06 * i})`; cx.fillRect(b.minX, b.minY + ((b.maxY - b.minY) * i) / 5, b.maxX - b.minX, (b.maxY - b.minY) / 5); } }
     cx.fillStyle = "rgba(10,12,16,.55)"; for (const r of X.collisions(s.currentMap)) cx.fillRect(r.left, r.top, r.right - r.left, r.bottom - r.top);
     for (const p of X.portals(s.currentMap)) {
-      const on = p.type !== "next_floor" || !!run?.exitPortal?.active; if (p.type === "secret_room_enter") continue;
+      const on = p.type !== "next_floor" || !!run?.exitPortal?.active; if (p.type === "secret_room_enter" && !secretOpen(p)) continue;
       cx.beginPath(); cx.arc(p.x, p.y, p.r, 0, 7); cx.fillStyle = on ? (p.type === "next_floor" ? "rgba(250,204,21,.45)" : "rgba(124,58,237,.45)") : "rgba(80,80,90,.25)"; cx.fill();
-      label(p.type === "enter_expedition" ? "EXPEDITION" : p.type === "return_hub" ? "RETURN" : on ? "NEXT FLOOR" : "BOSS FIRST", p.x, p.y - p.r - 10, 16, "#fff");
+      label(p.type === "enter_expedition" ? "EXPEDITION" : p.type === "return_hub" ? "RETURN" : p.type === "secret_room_enter" ? "SECRET ROOM" : p.type === "secret_room_return" ? "BACK" : on ? "NEXT FLOOR" : "BOSS FIRST", p.x, Math.max(18, p.y - p.r - 10), 16, "#fff");
+    }
+    if (X.isSecretRoom(s.currentMap)) { // Birb map 17: the cracked wall that leads to the Mine
+      if (s.currentMap === 17) { const r = X.MINE_ENTRANCE, op = s.floorOneMineEntranceOpened === true; cx.fillStyle = op ? "#0b0c10" : X.breakActive() ? "#8a6d4a" : "#6b5a44"; cx.fillRect(r.x, r.y, r.width, r.height);
+        cx.strokeStyle = op ? "#f59e0b" : "#3a2f22"; cx.lineWidth = 3; cx.strokeRect(r.x, r.y, r.width, r.height); label(op ? "MINE" : "CRACKED WALL", r.x + r.width / 2, r.y - 12, 15, op ? "#fde68a" : "#e5e7eb"); }
+      const p = run?.parrot; if (p) drawIcon("parrot", p.x, p.y - 14, 36, !p.facingRight);
+      if (run) for (const d of run.damageNumbers) { cx.globalAlpha = Math.min(1, d.life / 0.4); label(d.text, d.x, d.y, 15, d.color); cx.globalAlpha = 1; }
+      return;
     }
     if (!run || !floor) { if (s.currentMap === PT.EXP_HUB_MAP) drawIcon("parrot", s.player.x - 40, s.player.y - 30, 34); return; }
     for (const e of run.enemies) {
@@ -425,11 +443,13 @@
   }
   function canAffordSun(id) { const def = PT.SUN.get(id); const c = def.costCurrency; return PT.altCurrency[c] ? PT.altCurrency[c].has(G.s, PT.sunCost(G.s, id)) : c in G.s.resources && PT.has(G.s, c, PT.sunCost(G.s, id)); }
   // ------------------------------------------------------------------ Expedition portals (Birb: hub portal opens the floor wheel; floor portals return / advance)
+  // Birb tryEnterSecretRoom: floors with a secret room, not in night mode
+  function secretOpen(p) { const run = PT.expState(G.s).activeRun; return !!run && !run.nightMode && !!PT.EXP.SECRET_ROOMS[run.currentFloor]; }
   function expPortalNear() {
-    const s = G.s, X = PT.EXP; if (s.currentMap !== PT.EXP_HUB_MAP && !X.isRunMap(s.currentMap)) return null;
+    const s = G.s, X = PT.EXP; if (s.currentMap !== PT.EXP_HUB_MAP && !X.isRunMap(s.currentMap) && !X.isSecretRoom(s.currentMap) && s.currentMap !== PT.MINE_MAP) return null;
     for (const p of X.portals(s.currentMap)) {
       if (p.type === "next_floor" && !PT.expState(s).activeRun?.exitPortal?.active) continue;
-      if (p.type === "secret_room_enter") continue; // secret rooms: Phase 6c
+      if (p.type === "secret_room_enter" && !secretOpen(p)) continue;
       if ((s.player.x - p.x) ** 2 + (s.player.y - p.y) ** 2 <= (p.r + 40) ** 2) return p;
     }
     return null;
@@ -440,6 +460,9 @@
     if (p.type === "enter_expedition") openWin("expfloors");
     else if (p.type === "return_hub") { const r = PT.EXP.endRun(G, false); if (r) toast(`Back at the hub: floor ${r.floor}, ${r.kills} kills`); }
     else if (p.type === "next_floor") { if (!PT.EXP.advanceFloor(G)) toast("The next floor needs Evolution 5"); }
+    else if (p.type === "secret_room_enter") PT.EXP.enterSecretRoom(G);
+    else if (p.type === "secret_room_return") PT.EXP.exitSecretRoom(G);
+    else if (p.type === "mine_exit") PT.EXP.exitMineRoom(G);
     save(); return true;
   }
   PT.EXP.onParrotDeath = () => { const r = PT.EXP.endRun(G, false); toast(`The parrot fell on floor ${r ? r.floor : "?"}. Back to the hub.`); save(); };
@@ -824,7 +847,7 @@
     return `<div class="dev">
       <div class="devrow">Speed ${[1, 10, 100, 1000].map((x) => `<button class="key small ${G.timeScale === x ? "violet" : ""}" data-speed="${x}">x${x}</button>`).join("")}</div>
       <div class="devrow"><select data-in="givecur">${curs}</select><input data-in="giveamt" value="1e6" style="width:90px"><button class="key small" data-act="give">Give</button></div>
-      <div class="devrow"><button class="key small" data-act="evo+">Evolution +1 (no reset)</button><button class="key small" data-act="allsun">Own all visible unlocks</button><button class="key small" data-act="fish50">+50 random fish</button><button class="key small" data-act="openmine">Open the mine entrance</button></div>
+      <div class="devrow"><button class="key small" data-act="evo+">Evolution +1 (no reset)</button><button class="key small" data-act="allsun">Own all visible unlocks</button><button class="key small" data-act="fish50">+50 random fish</button></div>
       <div class="devrow"><label><input type="checkbox" data-in="community" ${PT.COMMUNITY.twigGain > 1 ? "checked" : ""}> Birb community goal active (twigs x1.5, a live server event)</label></div>
       <div class="devrow"><button class="key small" data-act="export">Export save</button><button class="key small" data-act="import">Import save</button><button class="key small grey" data-act="wipe">Wipe save</button></div>
       <textarea data-in="savebox" placeholder="Export puts the save here. Paste a save and press Import.">${saveBox}</textarea>
@@ -1046,7 +1069,6 @@
     else if (a === "evolve") { if (PT.evolve(G)) toast("Evolution " + s.evolutionCount + "!"); else toast("Feed it to 100% first"); }
     else if (a === "give") { PT.add(s, q("givecur").value, D(q("giveamt").value)); }
     else if (a === "evo+") s.evolutionCount = Math.min(6, s.evolutionCount + 1);
-    else if (a === "openmine") { s.floorOneMineEntranceOpened = true; s.hasSeenMineTab = true; toast("Mine entrance opened (Birb: Parrot Rebirb II + maxed gear on Expedition floor 1)"); }
     else if (a === "parrotrebirb") toast(PT.parrotRebirb(G) ? "Parrot rebirb " + PT.parrotState(s).rebirbCount : "Not ready: " + PT.parrotRebirbNeed(s));
     else if (a === "expauto") { const e = PT.expState(s); e.isAutoAttack = !e.isAutoAttack; const r = e.activeRun; if (r) r.combatArmed = true; }
     else if (a === "expreset") toast(PT.EXP.resetFloor(G) ? "Floor reset" : "Not in a run");
@@ -1096,7 +1118,7 @@
       document.getElementById("label-" + d).textContent = why === "end" ? "" : s.currentMap === PT.FISH_MARKET_MAP ? "LEAVE MARKET" : PT.MAPS[to].name;
     }
     const aqb = document.getElementById("btn-aquarium");
-    aqb.style.display = (PT.aquariumUnlocked(s) && s.currentMap !== PT.EXP_HUB_MAP && !PT.EXP.isRunMap(s.currentMap)) || s.currentMap === PT.FISH_MARKET_MAP ? "" : "none";
+    aqb.style.display = (PT.aquariumUnlocked(s) && s.currentMap !== PT.EXP_HUB_MAP && !PT.EXP.isRunMap(s.currentMap) && !PT.EXP.isSecretRoom(s.currentMap)) || s.currentMap === PT.FISH_MARKET_MAP ? "" : "none";
     aqb.textContent = s.currentMap === PT.FISH_MARKET_MAP ? "[E] FISH MARKET" : "[E] AQUARIUM";
     // companions (Birb: COMPANIONS [TAB] dropdown)
     const comps = [];
@@ -1152,7 +1174,7 @@
     let msg = "";
     if (st) { const d = PT.SUN.get(st[0]); msg = `${title(d.name || st[0])}: ${words(d.description || "")} · press E to buy`; }
     else if (onPlatform()) msg = "On the seed platform: making seeds";
-    else { const ep = expPortalNear(); if (ep) msg = ep.type === "enter_expedition" ? "[E] Enter the Expedition" : ep.type === "return_hub" ? "[E] Return to the hub (ends the run)" : "[E] Go to the next floor"; }
+    else { const ep = expPortalNear(); if (ep) msg = ep.type === "enter_expedition" ? "[E] Enter the Expedition" : ep.type === "return_hub" ? "[E] Return to the hub (ends the run)" : ep.type === "secret_room_enter" ? "[E] Enter the secret room" : ep.type === "secret_room_return" || ep.type === "mine_exit" ? "[E] Leave" : "[E] Go to the next floor"; else if (s.currentMap === 17 && Math.hypot(s.player.x - 511, s.player.y - 640) < 140) msg = s.floorOneMineEntranceOpened ? "[E] Enter the Mine" : "[E] Break the wall"; }
     pr.style.display = msg ? "block" : "none"; pr.textContent = msg;
   }
   function setHtml(id, h) { const el = document.getElementById(id); if (el.dataset.last !== h) { el.innerHTML = h; el.dataset.last = h; } }
