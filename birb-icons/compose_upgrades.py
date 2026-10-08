@@ -22,7 +22,7 @@ UPGRADES = {
     'mining_power': ('crow_miner', 'power'), 'ore_value': ('ore', 'up'),
     'twig_value': ('twig', 'up'), 'twig_speed': ('twig', 'speed'), 'twig_power': ('twig', 'power'),
     'echo_value': ('echo', 'up'), 'echo_cap': ('echo', 'cap'),
-    'magnet_value': ('magnet', 'up'), 'wing_speed': ('wing', 'speed@center'),
+    'magnet_value': ('magnet', 'up'), 'wing_speed': ('wing', 'speed'),
     'heart_value': ('stat_heart', 'up'), 'heart_regen': ('stat_heart', 'regen'), 'sword_power': ('stat_sword', 'power'),
 }
 
