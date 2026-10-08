@@ -14,6 +14,8 @@
     24: { id: 24, key: "fish-market", name: "FISH MARKET", w: 1056, h: 792, side: true },
     4: { id: 4, key: "nest", name: "BIRB NEST", w: 1600, h: 2112 },
     14: { id: 14, key: "twig-nest-room", name: "NEST INTERIOR", w: 1056, h: 792, side: true },
+    25: { id: 25, key: "expedition-mine-room", name: "THE MINE", w: 1056, h: 792, side: true },
+    26: { id: 26, key: "expedition-mine-treasure-room", name: "TREASURE ROOM", w: 1056, h: 792, side: true },
   };
   // Birb map arrows: the Nest (4) is left of the Park (0); its left arrow leads to the Expedition hub (later phase).
   PT.travelTarget = function (s, dir) {
@@ -23,13 +25,14 @@
     return m + dir;
   };
   // Birb sA(): the Aquarium is "down" from the Bridge (Evolution 5), the Fish Market is a room off the Aquarium.
-  PT.vertLinks = { 2: { down: 22 }, 22: { up: 2, down: 24 }, 24: { up: 22 }, 4: { up: 14 }, 14: { down: 4 } };
+  PT.vertLinks = { 2: { down: 22 }, 22: { up: 2, down: 24 }, 24: { up: 22 }, 4: { up: 14 }, 14: { down: 4 }, 25: { down: 26 }, 26: { up: 25 } };
   PT.vertBlock = function (s, dir) {
     const to = PT.vertLinks[s.currentMap]?.[dir];
     if (to === undefined) return "end";
     if (to === 22 && !PT.aquariumUnlocked(s)) return "The Aquarium opens at Evolution 5";
     if (to === 24 && !PT.fishMarketUnlocked(s)) return "The Fish Market opens at 700 resonance";
     if (to === 14 && PT.nestState(s).tier < 1) return "The nest interior opens at Nest level 2";
+    if (to === 26 && PT.mineArea(s) < 1) return "Defeat the first giant ore";
     return "";
   };
   // Birb uA(): +1 = right arrow, -1 = left. Returns "" or the reason travel is blocked.
@@ -464,6 +467,7 @@
     }
     if (s.evolutionCount >= 1) s.sparrow.unlocked = true;
     if (PT.nestOnEvolve) PT.nestOnEvolve(G);
+    if (PT.mineOnEvolve) PT.mineOnEvolve(G);
     s.currentMap = 0; s.player.x = 528; s.player.y = 396;
     return true;
   };

@@ -59,3 +59,19 @@ module.exports = [
       breed: [[fa, fb], [fa, fc + "__shiny"], [fb, fb]] },
   );
 }
+
+// Mine scenarios (Birb state.mine shape; d_mine_* nodes live in sunflowerUpgrades)
+{
+  const dm = (ids) => Object.fromEntries(ids.map((x) => ["d_mine_" + (Array.isArray(x) ? x[0] : x), Array.isArray(x) ? x[1] : 1]));
+  const base = { evolutionCount: 5, rebirthCount: 30, playTime: 3e5, floorOneMineEntranceOpened: true };
+  const MV = { journeyVersion: 1, currencyVersion: 1, deepCoreMigrationVersion: 3, crowRebirbLegacyCount: 0 }; // a current-format save
+  module.exports.push(
+    { name: "mine start", state: { ...base, resources: { bruteOre: 500 }, mine: { ...MV, highestArea: 0, crowLevel: 2, crowXp: 30 } } },
+    { name: "mine mid", state: { ...base, resources: { bruteOre: 5e9 }, upgrades: { m_ore_value: 40, m_mining_power: 35, m_charged_strike: 3 },
+      sunflowerUpgrades: dm(["work_perch", "precise_peck", "rich_vein", "impact_transfer", "peck_rhythm", "deep_survey", "seismic_strike"]),
+      mine: { ...MV, highestArea: 4, crowLevel: 12, crowXp: 500, crowRebirbCount: 3, crowTrainingLevel: 30, goldOre: 900, campaign: { version: 2, areaDamage: { 4: 9e6 }, areaMilestones: { 4: 2 }, normalBreaks: 400, chargeHits: 1, oreDiscoveries: {} } } } },
+    { name: "mine deep", state: { ...base, evolutionCount: 6, resources: { bruteOre: 1e30 }, upgrades: { m_ore_value: 300, m_mining_power: 280, m_charged_strike: 4 },
+      sunflowerUpgrades: dm(["work_perch", "precise_peck", "rich_vein", "impact_transfer", "peck_rhythm", "deep_survey", "seismic_strike", "mineral_temper", "clean_extraction", "unbroken_rhythm", "work_pulse", "gold_beacon", "crown_survey", "fine_cut", "royal_mastery", "deep_mine", "royal_impact", "mineral_coffers", "seismic_echo", "royal_cut", ["abyssal_forge", 12], ["abyssal_treasure", 7]]),
+      mine: { ...MV, highestArea: 10, crowLevel: 140, crowXp: 0, crowRebirbCount: 9, crowTrainingLevel: 160, goldOre: 50000, campaign: { version: 2, areaDamage: {}, areaMilestones: { 10: 4 }, normalBreaks: 9000, chargeHits: 0, oreDiscoveries: {} } } } },
+  );
+}

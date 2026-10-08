@@ -21,6 +21,7 @@
     p_golden_popcorn_value: "up_golden_value", p_auric_silo: "up_silo_cap",
     pr_popcorn_mult: "up_egg_mult", pr_radius_mult: "up_magnet_value", pr_respawn_mult: "up_hatch_speed", pr_golden_popcorn_mult: "up_golden_mult",
     s_more_popcorn: "up_basket_value", s_more_feathers: "up_plume_value", s_more_seeds: "up_seed_value",
+    m_ore_value: "up_ore_value", m_mining_power: "up_mining_power", m_charged_strike: "pickaxe_charged", m_rupture: "rupture",
   };
   // Player-facing text: Birb's words with eggs for popcorn (owner's call), Plumes for golden feathers, Molt for rebirb.
   const words = (t) => String(t || "")
@@ -95,7 +96,8 @@
     if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
     G.keys.add(e.key.toLowerCase());
     const k = e.key.toLowerCase();
-    if (k === "e") { if (G.s.currentMap === PT.NEST_ROOM_MAP) openWin("redpanda"); else if (G.s.currentMap === PT.FISH_MARKET_MAP) openWin("market", "market"); else if (G.s.currentMap !== 1 && PT.aquariumUnlocked(G.s)) openWin("aquarium"); else tryStation(); }
+    if (k === "5" && PT.mineOpen(G.s)) openWin("crow");
+    if (k === "e") { if (G.s.currentMap === PT.MINE_TREE_MAP) openWin("minetree"); else if (G.s.currentMap === PT.MINE_MAP) PT.minePlayerHit(G); else if (G.s.currentMap === PT.NEST_ROOM_MAP) openWin("redpanda"); else if (G.s.currentMap === PT.FISH_MARKET_MAP) openWin("market", "market"); else if (G.s.currentMap !== 1 && PT.aquariumUnlocked(G.s)) openWin("aquarium"); else tryStation(); }
     if (k === " ") { e.preventDefault(); cast(); }
     if (k === "tab") { e.preventDefault(); G.companionsOpen = !G.companionsOpen; drawHud(); }
     if (k === "p") openWin("profile");
@@ -108,6 +110,8 @@
     const w = toWorld((e.clientX - r.left) * dpr, (e.clientY - r.top) * dpr);
     G.target = w;
     if (G.s.currentMap === PT.NEST_ROOM_MAP && Math.hypot(w.x - 528, w.y - 380) < 70) openWin("redpanda");
+    if (G.s.currentMap === PT.MINE_MAP && Math.hypot(w.x - 528, w.y - 520) < 110) { PT.minePlayerHit(G); G.target = null; }
+    if (G.s.currentMap === PT.MINE_TREE_MAP) openWin("minetree");
     if (G.s.currentMap === 3 && !G.s.hasTalkedToMonster && Math.hypot(w.x - 800, w.y - 500) < 140) { G.s.hasTalkedToMonster = true; toast("The monster is hungry. Hold to feed it!"); }
   });
 
@@ -198,6 +202,7 @@
     }
     PT.updateSparrows(G, dt);
     PT.updateNest(G, dt);
+    PT.updateMine(G, dt);
     PT.ensureFishing(s);
     PT.updateFishing(G, dt, Math.abs(G.vx) > 5 || Math.abs(G.vy) > 5);
     PT.updateSeagull(G, dt);
@@ -236,6 +241,8 @@
     if (s.currentMap === PT.FISH_MARKET_MAP) drawMarket();
     if (s.currentMap === PT.NEST_MAP) drawNest();
     if (s.currentMap === PT.NEST_ROOM_MAP) drawNestRoom();
+    if (s.currentMap === PT.MINE_MAP) drawMine();
+    if (s.currentMap === PT.MINE_TREE_MAP) drawMineTree();
     if (s.currentMap === 3) { drawIcon("monster", 800, 500, 200); if (!s.hasTalkedToMonster) label("Click the monster", 800, 640, 22); }
     // pickup radius ring + bird
     if (s.currentMap === 0) { cx.beginPath(); cx.arc(s.player.x, s.player.y, PT.pickupProfile(s).collectRadius, 0, 7); cx.strokeStyle = "rgba(255,255,255,.25)"; cx.lineWidth = 2; cx.stroke(); }
@@ -271,6 +278,25 @@
     if (!r.introSeen || r.mode === "chill") { drawIcon("redpanda", 528, 380, 110); label(r.introSeen ? r.name + " · napping (eggs and seeds x1.25)" : "zzz...", 528, 470, 18); }
     else label(r.name + " is helping outside", 528, 400, 20, "#a2d149");
     label("Click the panda or press E", 528, 560, 16, "#ffd27a");
+  }
+  function drawMine() {
+    const s = G.s, M = G.mine || {}, ore = M.boss || M.ore, now = Date.now();
+    cx.fillStyle = "#2a2733"; roundRect(0, 0, 1056, 792, 24); cx.fill(); cx.fillStyle = "#3b3646"; roundRect(60, 600, 936, 150, 20); cx.fill();
+    if (ore) {
+      const R = PT.MINE_RARITY[ore.rank], sc = ore.boss ? 2.2 : 1;
+      if (ore.golden) { cx.beginPath(); cx.arc(528, 520, 90 * sc, 0, 7); cx.fillStyle = "rgba(250,204,21,.25)"; cx.fill(); }
+      drawIcon(ore.golden ? "ore_gold" : "ore_" + ["dirt", "iron", "stone", "crystal", "obsidian", "emerald", "ruby"][ore.tier], 528, 520, 130 * sc);
+      bar(448, 520 - 90 * sc, 160, ore.hits / ore.maxHits, ore.boss ? "#ef4444" : R.color);
+      label(ore.boss ? `GIANT ORE · ${Math.max(0, Math.ceil((M.bossUntil - now) / 1000))}s` : `${R.id.toUpperCase()} ${ore.tierId.toUpperCase()}${ore.golden ? " · GOLDEN" : ""}`, 528, 520 - 100 * sc, 16, ore.boss ? "#fca5a5" : R.color);
+    }
+    drawIcon("crow_miner", 610, 560, 70, true);
+    label("Click the ore or press E to peck", 528, 720, 16, "#ffd27a");
+  }
+  function drawMineTree() {
+    const s = G.s; cx.fillStyle = "#1f2a24"; roundRect(0, 0, 1056, 792, 24); cx.fill();
+    PT.MINE_TREE.forEach((n, i) => { if (!PT.mineNodeVisible(s, n.id)) return; const x = 200 + (i % 5) * 165, y = 240 + Math.floor(i / 5) * 110, own = (s.sunflowerUpgrades["d_mine_" + n.id] || 0) > 0;
+      cx.fillStyle = own ? "#3d8a3a" : PT.mineNodeUnlocked(s, n.id) ? "#c99a2e" : "#4a4f58"; roundRect(x - 70, y - 40, 140, 80, 12); cx.fill(); cx.lineWidth = 3; cx.strokeStyle = "#0b0c10"; cx.stroke(); label(n.name, x, y - 6, 14); label(own && !n.growth ? "OWNED" : "AREA " + n.area, x, y + 18, 12, "#ffe7a0"); });
+    label("Click anywhere or press E for the mine tree", 528, 760, 16, "#ffd27a");
   }
   function drawAquarium() {
     const a = PT.aq(G.s);
@@ -350,6 +376,7 @@
     const s = G.s, t = [["eggs", "EGGS", "egg"], ["molt", "MOLT", "plume"]];
     if (PT.hasSun(s, "d_sunflower_machine")) t.push(["seeds", "SEEDS", "seed"]);
     if (s.clickedMapArrows?.visited_map4) t.push(["nest", "NEST", "twig"]); // Birb updateNestShopTabVisibility
+    if (PT.mineOpen(s) || PT.res(s, "bruteOre").gt(0) || s.hasSeenMineTab) t.push(["mine", "MINE", "pickaxe"]); // Birb #tab-btn-m
     if (!t.some((x) => x[0] === G.tab)) G.tab = "eggs";
     return t;
   }
@@ -360,7 +387,7 @@
     const cur = CUR[def.costCurrency];
     return `<div class="row"><img class="ico" src="${ICON(UP_ICON[id] || "egg")}" alt="">
       <div><div class="t">${title(def.name)}</div><div class="g">${words(show(L))}${maxed ? "" : ` <b>›››</b> ${words(show(L + 1))}`}</div>
-      <div class="d">${words(def.description)}</div><div class="lv">LV ${L} / ${M}</div></div>
+      <div class="d">${def.tree === "M" ? { m_ore_value: "+10% Brute Ore per HP extracted.", m_mining_power: "+10% mining damage per level.", m_charged_strike: "+1x damage to the Crow's charged peck per level." }[id] || words(def.description) : words(def.description)}</div><div class="lv">LV ${L} / ${M}</div></div>
       <div class="btns">${maxed ? `<button class="key gold">MAXED</button>` : `<button class="key ${ok ? "" : "grey"}" data-buy="${id}"><img src="${ICON(cur.icon)}" alt="">${fmt(cost)}</button>
       <button class="key small ${ok ? "violet" : "grey"}" data-max="${id}">MAX</button>`}</div></div>`;
   }
@@ -370,6 +397,7 @@
     if (id === "p_golden_popcorn_value") return !!s.hasUnlockedDesertMap;
     if (id === "p_auric_silo") return PT.hasSun(s, "d_desert_auric_blueprints");
     if (id === "pr_golden_popcorn_mult") return PT.hasSun(s, "d_desert_golden_popcorn_mult_unlock");
+    if (id.startsWith("m_")) return PT.mineUpShown(s, id);
     return true;
   }
   function drawPanel() {
@@ -388,6 +416,11 @@
       <div class="note">${fmt(s.resources.goldenFeathers)} plumes · molted ${s.rebirthCount} times · 1 plume per 1,000 eggs</div></div>
       <div class="section">PLUME KEEPSAKES</div>${treeRows("PR")}<div class="note">Molting resets eggs and egg upgrades. Plumes and keepsakes are kept until you Evolve.</div>`;
     } else if (G.tab === "nest") h = nestPanel();
+    else if (G.tab === "mine") {
+      const st = { area: PT.mineArea(s), dmg: PT.crowDamage(s), value: PT.mineOreValue(s), iv: PT.crowInterval(s) };
+      h = `<div class="note">Area ${st.area} · ${fmt(st.value * PT.mineUa(st.area) * st.dmg)} Brute Ore base per peck · Crow damage ${fmt(st.dmg)} every ${st.iv.toFixed(2)}s · ${PT.mineState(s).goldOre} Gold Ore</div>${treeRows("M")}
+        <div class="note">Mine upgrades, the mine tree and the Crow's level reset on Evolve. Crow rebirbs stay.</div>`;
+    }
     else if (G.tab === "seeds") {
       const sr = PT.seedRate(s, true);
       h = `${treeRows("S")}<div class="note">${fmt(sr.ticksPerSec * sr.perTick)} seeds / s on the platform${PT.hasSun(s, "d_auto_gen") ? " (auto generator: always on)" : ""}</div><div class="note">Evolving resets seeds and these upgrades.</div>`;
@@ -432,6 +465,26 @@
     return `${incH}${inc ? "" : `<div class="devrow">${opt(0)}${opt(1)}</div>${pv.monetaCost ? `<div class="note">Cost ${fmt(pv.monetaCost)} moneta · odds ${pv.odds.map((o, i) => rar[i] + " " + o + "%").join(", ")} · shiny ${pv.shinyChance}%${pv.shinyProgress ? " · lineage shiny " + pv.shinyProgress + "/100" : ""}</div>` : ""}
       <button class="key ${pv.valid ? "" : "grey"}" data-act="breedstart">BREED (both parents are consumed)${pv.reason && pv.monetaCost ? " · " + pv.reason : ""}</button>`}
       <div class="section">HYBRIDS (${bs.hybrids.length}/${bs.reserveSlotUnlocked ? 2 : 1})</div>${hy || '<div class="note">No hybrids yet. The active hybrid gives its parents\' fish bonuses.</div>'}`;
+  }
+  function crowPanel() {
+    const s = G.s, m = PT.mineState(s), need = PT.crowXpNeeded(m.crowLevel), n = m.crowRebirbCount, req = PT.crowRebirbReq(s);
+    const gold = (() => { const d = PT.mineCampaign(s).oreDiscoveries[PT.mineArea(s)] || {}; return d.pendingGolden ? 30 : Math.min(30, d.goldWork || 0); })();
+    const dps = PT.crowDamage(s) / PT.crowInterval(s), r = n >= 8 ? 2 : 1.25;
+    const rb = PT.crowRebirbUnlocked(s) ? `<div class="section">REBIRB (${n}/${PT.mineHas(s, "deep_rebirb") ? "∞" : 8})</div>
+      <div class="kv"><span>DPS</span><span>${fmt(dps)} → ${fmt(req ? dps * r : dps)}</span><span>Rare ores</span><span>x${(1 + 0.1 * n).toFixed(2)} → x${(1 + 0.1 * (n + 1)).toFixed(2)}</span><span>Gold</span><span>x${(1 + 0.15 * n).toFixed(2)} → x${(1 + 0.15 * (n + 1)).toFixed(2)}</span><span>XP</span><span>x${Math.pow(1.25, n).toFixed(2)} → x${Math.pow(1.25, n + 1).toFixed(2)}</span></div>
+      ${req ? `<div class="note">${m.crowLevel >= req.level ? "✔" : "✗"} LV ${req.level} · ${PT.mineArea(s) >= req.giants ? "✔" : "✗"} Giant ${req.giants} · LV → 1 · XP → 0 (keeps learned speed)</div>
+      <button class="key ${PT.crowCanRebirb(s) ? "violet" : "grey"}" data-act="crowrebirb">REBIRB</button>` : `<div class="note">MAXED</div>`}` : `<div class="note">Buy Crow Rebirb (free) in the Treasure Room to unlock rebirbs.</div>`;
+    return `<div class="hero"><img src="${ICON("crow_miner")}" alt=""><div class="big">LV ${m.crowLevel}</div><div class="bar"><i style="width:${Math.min(100, (m.crowXp / need) * 100)}%"></i></div>
+      <div class="sub">XP ${fmt(m.crowXp)} / ${fmt(need)} · Peck ${PT.crowInterval(s).toFixed(2)}s · TRAINING LV ${m.crowTrainingLevel}${PT.crowRebirbUnlocked(s) ? ` · Next gold ${Math.round(gold * 10) / 10} / 30` : ""}</div></div>${rb}
+      <div class="note">The Crow mines automatically, also while you are elsewhere. Rebirb needs Crow levels and Mine giants.</div>`;
+  }
+  function mineTreePanel() {
+    const s = G.s;
+    return `<div class="note">${fmt(PT.res(s, "bruteOre"))} Brute Ore · ${PT.mineState(s).goldOre} Gold Ore · area ${PT.mineArea(s)}</div>` + PT.MINE_TREE.filter((n) => PT.mineNodeVisible(s, n.id)).map((n) => {
+      const L = s.sunflowerUpgrades["d_mine_" + n.id] || 0, own = L > 0 && !n.growth, c = PT.mineNodeCost(s, n.id), unl = PT.mineNodeUnlocked(s, n.id);
+      return `<div class="row"><img class="ico" src="${ICON(n.cur === "goldOre" ? "goldore" : "ore")}" alt=""><div><div class="t">${n.name}${n.growth ? " LV " + L : ""}</div><div class="d">${n.text}</div><div class="lv">AREA ${n.area}${n.evo ? " · EVOLUTION " + n.evo : ""}</div></div>
+        <div class="btns">${own ? `<button class="key small gold">OWNED</button>` : `<button class="key small ${unl ? "" : "grey"}" data-mnode="${n.id}">${c === 0 ? "FREE" : fmt(c) + (n.cur === "goldOre" ? " gold" : "")}</button>`}</div></div>`;
+    }).join("");
   }
   function pandaPanel() {
     const s = G.s, r = PT.redPandaState(s);
@@ -588,7 +641,7 @@
     return `<div class="dev">
       <div class="devrow">Speed ${[1, 10, 100, 1000].map((x) => `<button class="key small ${G.timeScale === x ? "violet" : ""}" data-speed="${x}">x${x}</button>`).join("")}</div>
       <div class="devrow"><select data-in="givecur">${curs}</select><input data-in="giveamt" value="1e6" style="width:90px"><button class="key small" data-act="give">Give</button></div>
-      <div class="devrow"><button class="key small" data-act="evo+">Evolution +1 (no reset)</button><button class="key small" data-act="allsun">Own all visible unlocks</button><button class="key small" data-act="fish50">+50 random fish</button></div>
+      <div class="devrow"><button class="key small" data-act="evo+">Evolution +1 (no reset)</button><button class="key small" data-act="allsun">Own all visible unlocks</button><button class="key small" data-act="fish50">+50 random fish</button><button class="key small" data-act="openmine">Open the mine entrance</button></div>
       <div class="devrow"><label><input type="checkbox" data-in="community" ${PT.COMMUNITY.twigGain > 1 ? "checked" : ""}> Birb community goal active (twigs x1.5, a live server event)</label></div>
       <div class="devrow"><button class="key small" data-act="export">Export save</button><button class="key small" data-act="import">Import save</button><button class="key small grey" data-act="wipe">Wipe save</button></div>
       <textarea data-in="savebox" placeholder="Export puts the save here. Paste a save and press Import.">${saveBox}</textarea>
@@ -608,6 +661,8 @@
     aquarium: { title: "AQUARIUM", tabs: [["biomes", "BIOMES"], ["resonance", "RESONANCE"], ["total", "TOTAL"], ["market", "FISH MARKET"]], body: (t) => (t === "resonance" ? aqResonance() : t === "total" ? aqTotal() : t === "market" ? marketPanel() : aqBiomes()) },
     market: { title: "FISH MARKET", body: () => marketPanel() },
     redpanda: { title: "RED PANDA", body: () => pandaPanel() },
+    crow: { title: "CROW", body: () => crowPanel() },
+    minetree: { title: "TREASURE ROOM", body: () => mineTreePanel() },
   };
   // Birb aquarium window: BIOMES (donate per biome), RESONANCE (milestones), TOTAL (all bonuses)
   function aqBiomes() {
@@ -679,6 +734,8 @@
     const s = G.s; if (m === 0) return true;
     if (m === PT.AQUARIUM_MAP) return reachable(2) && PT.aquariumUnlocked(s);
     if (m === PT.NEST_MAP) return (s.evolutionCount || 0) >= 3;
+    if (m === PT.MINE_MAP) return PT.mineOpen(s);
+    if (m === PT.MINE_TREE_MAP) return PT.mineOpen(s) && PT.mineArea(s) >= 1;
     if (m === PT.NEST_ROOM_MAP) return (s.evolutionCount || 0) >= 3 && PT.nestState(s).tier >= 1;
     if (m === PT.FISH_MARKET_MAP) return reachable(PT.AQUARIUM_MAP) && PT.fishMarketUnlocked(s);
     const dir = m > 0 ? 1 : -1; let cur = 0;
@@ -692,7 +749,7 @@
   document.getElementById("utility").addEventListener("click", (e) => { const b = e.target.closest("[data-win]"); if (b) openWin(b.dataset.win); });
   document.getElementById("btn-companions").onclick = () => { G.companionsOpen = !G.companionsOpen; drawHud(); };
   document.getElementById("companion-list").addEventListener("click", (e) => { const b = e.target.closest("[data-win]"); if (b) openWin(b.dataset.win); });
-  document.getElementById("btn-autofish").onclick = () => { if (G.s.currentMap === PT.NEST_MAP) { const f = PT.nestState(G.s).forest; f.autoCollectEnabled = !f.autoCollectEnabled; if (!f.autoCollectEnabled) G.target = null; } else act("autofish"); };
+  document.getElementById("btn-autofish").onclick = () => { if (G.s.currentMap === PT.MINE_MAP) { const m = PT.mineState(G.s); if (PT.mineArea(G.s) >= 1) m.playerAutoEnabled = !m.playerAutoEnabled; else toast("Player auto opens at area 1"); } else if (G.s.currentMap === PT.NEST_MAP) { const f = PT.nestState(G.s).forest; f.autoCollectEnabled = !f.autoCollectEnabled; if (!f.autoCollectEnabled) G.target = null; } else act("autofish"); };
 
   // panel events
   let saveBox = "";
@@ -710,6 +767,7 @@
     else if (b.dataset.lock) { const i = s.lockedFish.indexOf(b.dataset.lock); if (i < 0) s.lockedFish.push(b.dataset.lock); else s.lockedFish.splice(i, 1); }
     else if (b.dataset.biome) PT.aq(s).activeBiomeId = b.dataset.biome;
     else if (b.dataset.nview) G.nestView = b.dataset.nview;
+    else if (b.dataset.mnode) { const r = PT.mineBuyNode(s, b.dataset.mnode); if (r) toast(r); }
     else if (b.dataset.nest) { const r = b.dataset.nest === "box" ? PT.nestBuyTreeBox(s) : PT.nestBuyExpansion(s); if (r) toast(r); }
     else if (b.dataset.nspec) { const r = PT.nestBuySpecial(s, b.dataset.nspec); if (r) toast(r); }
     else if (b.dataset.nup) { const r = PT.nestBuyUp(s, b.dataset.nup, false); if (r) toast(r); }
@@ -769,6 +827,9 @@
     else if (a === "evolve") { if (PT.evolve(G)) toast("Evolution " + s.evolutionCount + "!"); else toast("Feed it to 100% first"); }
     else if (a === "give") { PT.add(s, q("givecur").value, D(q("giveamt").value)); }
     else if (a === "evo+") s.evolutionCount = Math.min(6, s.evolutionCount + 1);
+    else if (a === "openmine") { s.floorOneMineEntranceOpened = true; s.hasSeenMineTab = true; toast("Mine entrance opened (Birb: Parrot Rebirb II + maxed gear on Expedition floor 1)"); }
+    else if (a === "crowrebirb") toast(PT.crowRebirb(s) ? "Crow rebirb " + PT.mineState(s).crowRebirbCount : "Not ready");
+    else if (a === "minechallenge") { const r = PT.mineChallenge(G); if (r) toast(r); }
     else if (a === "fish50") { PT.ensureFishing(s); for (let i = 0; i < 50; i++) PT.catchFish(G, false); }
     else if (a === "allsun") { for (const st of visibleStations()) if (!PT.hasSun(s, st[0])) s.sunflowerUpgrades[st[0]] = 1; if (s.sunflowerUpgrades.d_unlock_evolve) s.hasUnlockedEvolve = true; }
     else if (a === "export") { saveBox = btoa(serialize(s)); }
@@ -781,7 +842,8 @@
     const s = G.s, keys = ["popcorn", "goldenFeathers"];
     if (PT.hasSun(s, "d_sunflower_machine") || PT.res(s, "sunflowerSeeds").gt(0)) keys.push("sunflowerSeeds");
     for (const k of ["goldenPopcorn", "monetariaMoneta", "twigs", "echoPopcorn", "bruteOre"]) if (PT.res(s, k).gt(0) || (k === "monetariaMoneta" && s.evolutionCount >= 1)) keys.push(k);
-    setHtml("wallet", keys.map((k) => `<div class="chip"><img src="${ICON(CUR[k].icon)}" alt=""><span class="v">${fmt(s.resources[k])}</span><span class="rate">+${fmt(G.rates[k] || 0)}/s</span></div>`).join(""));
+    const goldChip = PT.mineOpen(s) ? `<div class="chip"><img src="${ICON("goldore")}" alt=""><span class="v">${fmt(PT.mineState(s).goldOre)}</span><span class="rate">gold ore</span></div>` : "";
+    setHtml("wallet", goldChip + keys.map((k) => `<div class="chip"><img src="${ICON(CUR[k].icon)}" alt=""><span class="v">${fmt(s.resources[k])}</span><span class="rate">+${fmt(G.rates[k] || 0)}/s</span></div>`).join(""));
     document.getElementById("mapname").textContent = PT.MAPS[s.currentMap].name + (s.currentMap === 1 && desertView() ? " (DESERT TREE)" : "");
     document.getElementById("speedtag").textContent = G.timeScale > 1 ? `x${G.timeScale} speed` : "";
     const L = PT.travelBlock(s, -1), R = PT.travelBlock(s, 1);
@@ -804,10 +866,12 @@
     if (s.sparrow.unlocked) comps.push(["sparrow", `${s.sparrow.level} SPARROW`]);
     if (s.hasMetSeagull) comps.push(["seagull", `${s.seagull.level} SEAGULL`]);
     if (s.redPanda?.introSeen) comps.push(["redpanda", `${PT.redPandaTier(s)} ${s.redPanda.name.toUpperCase()}`]);
+    if (PT.mineOpen(s)) comps.push(["crow", `${PT.mineState(s).crowLevel} CROW`]);
     document.getElementById("btn-companions").style.display = comps.length ? "" : "none";
     setHtml("companion-list", G.companionsOpen ? comps.map(([k, n]) => `<button class="key small" data-win="${k}"><img src="${ICON(k)}" alt="">${n}</button>`).join("") : "");
     const af = document.getElementById("btn-autofish");
-    if (s.currentMap === PT.NEST_MAP) { const f = PT.nestState(s).forest; af.style.display = f.autoCollectUnlocked ? "" : "none"; af.className = "key small " + (f.autoCollectEnabled ? "violet" : ""); af.textContent = `AUTO: ${f.autoCollectEnabled ? "ON" : "OFF"}`; }
+    if (s.currentMap === PT.MINE_MAP) { const m = PT.mineState(s); af.style.display = ""; af.className = "key small " + (m.playerAutoEnabled ? "violet" : PT.mineArea(s) >= 1 ? "" : "grey"); af.textContent = PT.mineArea(s) >= 1 ? `AUTO: ${m.playerAutoEnabled ? "ON" : "OFF"}` : "AUTO (area 1)"; }
+    else if (s.currentMap === PT.NEST_MAP) { const f = PT.nestState(s).forest; af.style.display = f.autoCollectUnlocked ? "" : "none"; af.className = "key small " + (f.autoCollectEnabled ? "violet" : ""); af.textContent = `AUTO: ${f.autoCollectEnabled ? "ON" : "OFF"}`; }
     else {
     af.style.display = s.currentMap === 2 && s.evolutionCount >= 1 ? "" : "none";
     af.className = "key small " + (G.autoFish ? "violet" : PT.autoFishUnlocked(s) ? "" : "grey");
@@ -823,6 +887,11 @@
       const bait = f.equippedBaitId ? (f.baitInventory.find((b) => b.baitId === f.equippedBaitId)?.count || 0) : null;
       setHtml("hotbar", `<button class="key cast ${F.reeling > 0 || F.casting > 0 ? "gold" : F.cooldown > 0 ? "grey" : ""}" data-act="cast">${state}</button>
         <div class="slots">${slot(f.equippedRodId)}${slot(f.equippedBaitId, bait)}${slot(f.equippedHookId)}${slot(f.equippedLureId)}</div>`);
+    } else if (s.currentMap === PT.MINE_MAP) {
+      const c = PT.mineCampaign(s), a = PT.mineArea(s), k = c.areaMilestones[a] || 0, th = PT.mineAaMilestones(a), cur = c.areaDamage[a] || 0, M = G.mine || {};
+      setHtml("fishbar", `<div class="lvl"><b>${a + 1}</b><div class="bar"><i style="width:${k >= 4 ? 100 : Math.min(100, (cur / th[k]) * 100)}%"></i></div><span class="note">+${4 * k}%</span></div><div class="sub">AREA ${a + 1} · +${4 * k}% damage in this area${k < 4 ? " · next at " + fmt(th[k]) + " HP mined" : ""}</div>`);
+      const wait = Math.max(0, Math.ceil((PT.mineState(s).bossRespawnAt - Date.now()) / 1000));
+      setHtml("hotbar", `<button class="key cast ${M.boss ? "gold" : wait ? "grey" : "violet"}" data-act="minechallenge">${M.boss ? "GIANT ORE · " + Math.max(0, Math.ceil((M.bossUntil - Date.now()) / 1000)) + "s" : wait ? "GIANT RESTS " + wait + "s" : "CHALLENGE"}</button>`);
     } else if (s.currentMap === PT.NEST_MAP) {
       const b = PT.nestBuild(s);
       setHtml("fishbar", `<div class="lvl"><b>${b.tier + 1}</b><div class="bar"><i style="width:${b.progress * 100}%"></i></div><span class="note">${fmt(b.current)}/${fmt(b.required)}</span></div>

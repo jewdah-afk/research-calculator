@@ -1,112 +1,88 @@
 # Parity report
 
-Birb's live engine (birbplay.com `window.game`) vs the playtest, same save state per scenario. Generated 2026-10-08T17:24Z by `playtest/parity/parity.js`.
+Birb's live engine (birbplay.com `window.game`) vs the playtest, same save state per scenario. Generated 2026-10-08T18:07Z by `playtest/parity/parity.js`.
 
-**7483 / 7509 values match.** Birb's live community-goal twig reward today: x1.5 (copied into the playtest for the run).
+**10437 / 10437 values match.** Birb's live community-goal twig reward today: x1.5 (copied into the playtest for the run).
 
 | Scenario | Values | Mismatches |
 |---|---|---|
-| fresh start | 576 | 2 |
-| early eggs | 576 | 2 |
-| first molt done | 576 | 2 |
-| seeds online | 576 | 2 |
-| evolve unlocked | 576 | 2 |
-| evolution 1 | 576 | 2 |
-| evolution 3 | 576 | 2 |
-| aquarium early | 579 | 2 |
-| aquarium mid | 579 | 2 |
-| aquarium full + market | 579 | 2 |
-| nest start | 576 | 2 |
-| nest boxes | 576 | 2 |
-| nest tier 2 | 588 | 2 |
+| fresh start | 651 | 0 |
+| early eggs | 651 | 0 |
+| first molt done | 651 | 0 |
+| seeds online | 651 | 0 |
+| evolve unlocked | 651 | 0 |
+| evolution 1 | 651 | 0 |
+| evolution 3 | 651 | 0 |
+| aquarium early | 654 | 0 |
+| aquarium mid | 654 | 0 |
+| aquarium full + market | 654 | 0 |
+| nest start | 651 | 0 |
+| nest boxes | 651 | 0 |
+| nest tier 2 | 663 | 0 |
+| mine start | 651 | 0 |
+| mine mid | 651 | 0 |
+| mine deep | 651 | 0 |
 
 ### fresh start
 
-| Value | Birb | Playtest |
-|---|---|---|
-| upgrade m_rupture effect | 0.25 | 1 |
-| upgrade m_charged_strike effect | 3 | 1 |
+All match.
 
 ### early eggs
 
-| Value | Birb | Playtest |
-|---|---|---|
-| upgrade m_rupture effect | 0.25 | 1 |
-| upgrade m_charged_strike effect | 3 | 1 |
+All match.
 
 ### first molt done
 
-| Value | Birb | Playtest |
-|---|---|---|
-| upgrade m_rupture effect | 0.25 | 1 |
-| upgrade m_charged_strike effect | 3 | 1 |
+All match.
 
 ### seeds online
 
-| Value | Birb | Playtest |
-|---|---|---|
-| upgrade m_rupture effect | 0.25 | 1 |
-| upgrade m_charged_strike effect | 3 | 1 |
+All match.
 
 ### evolve unlocked
 
-| Value | Birb | Playtest |
-|---|---|---|
-| upgrade m_rupture effect | 0.25 | 1 |
-| upgrade m_charged_strike effect | 3 | 1 |
+All match.
 
 ### evolution 1
 
-| Value | Birb | Playtest |
-|---|---|---|
-| upgrade m_rupture effect | 0.25 | 1 |
-| upgrade m_charged_strike effect | 3 | 1 |
+All match.
 
 ### evolution 3
 
-| Value | Birb | Playtest |
-|---|---|---|
-| upgrade m_rupture effect | 0.25 | 1 |
-| upgrade m_charged_strike effect | 3 | 1 |
+All match.
 
 ### aquarium early
 
-| Value | Birb | Playtest |
-|---|---|---|
-| upgrade m_rupture effect | 0.25 | 1 |
-| upgrade m_charged_strike effect | 3 | 1 |
+All match.
 
 ### aquarium mid
 
-| Value | Birb | Playtest |
-|---|---|---|
-| upgrade m_rupture effect | 0.25 | 1 |
-| upgrade m_charged_strike effect | 3 | 1 |
+All match.
 
 ### aquarium full + market
 
-| Value | Birb | Playtest |
-|---|---|---|
-| upgrade m_rupture effect | 0.25 | 1 |
-| upgrade m_charged_strike effect | 3 | 1 |
+All match.
 
 ### nest start
 
-| Value | Birb | Playtest |
-|---|---|---|
-| upgrade m_rupture effect | 0.25 | 1 |
-| upgrade m_charged_strike effect | 3 | 1 |
+All match.
 
 ### nest boxes
 
-| Value | Birb | Playtest |
-|---|---|---|
-| upgrade m_rupture effect | 0.25 | 1 |
-| upgrade m_charged_strike effect | 3 | 1 |
+All match.
 
 ### nest tier 2
 
-| Value | Birb | Playtest |
-|---|---|---|
-| upgrade m_rupture effect | 0.25 | 1 |
-| upgrade m_charged_strike effect | 3 | 1 |
+All match.
+
+### mine start
+
+All match.
+
+### mine mid
+
+All match.
+
+### mine deep
+
+All match.

@@ -26,7 +26,7 @@ function probe({ side, scenario }) {
   const D = window.BIRB_DATA;
   const num = (x) => (x == null ? null : typeof x === "boolean" ? x : typeof x === "object" && x.toNumber ? x.toNumber() : typeof x === "object" && "mantissa" in x ? x.mantissa * Math.pow(10, x.exponent) : Number(x));
   const deep = (dst, src) => { for (const [k, v] of Object.entries(src)) { if (v && typeof v === "object" && !Array.isArray(v)) { dst[k] = dst[k] && typeof dst[k] === "object" ? dst[k] : {}; deep(dst[k], v); } else dst[k] = v; } };
-  const fresh = () => ({ aquarium: { activeBiomeId: "coast", housedFish: {}, researchedFishCounts: {}, releasedShinyFishes: {}, releasedShinyWeightsKg: {} }, fishInventory: [], discoveredFish: [], discoveredShinyFish: [], fishWeightRecords: [], activeFishIds: [], activeFishBuffs: {}, lockedFish: [], fishBuffThirdSlotUnlocked: false });
+  const fresh = () => ({ mine: {}, floorOneMineEntranceOpened: false, aquarium: { activeBiomeId: "coast", housedFish: {}, researchedFishCounts: {}, releasedShinyFishes: {}, releasedShinyWeightsKg: {} }, fishInventory: [], discoveredFish: [], discoveredShinyFish: [], fishWeightRecords: [], activeFishIds: [], activeFishBuffs: {}, lockedFish: [], fishBuffThirdSlotUnlocked: false });
   let A;
   if (side === "birb") {
     const g = window.game, s = g.state;
@@ -40,6 +40,7 @@ function probe({ side, scenario }) {
     s.redPanda = Object.assign({ name: "Red Panda", named: false, introSeen: false, tier: 1, mode: "chill", x: 528, y: 300 }, st.redPanda || {}); g.ensureRedPandaState();
     g.aquariumManager.invalidateModifierCache(); g.activeFishEffectSnapshot = null; g.fishMarketManager.normalizedMarketState = null;
     const nm = g.nestManager, snap = () => nm.getCultivationShopSnapshot();
+    g.ensureMineState();
     const mm = g.fishMarketManager, am = g.aquariumManager;
     A = {
       level: (id) => g.getUpgradeLevel(id), max: (id) => g.getUpgradeMaxLevel(id), eff: (id) => g.getUpgradeEffect(id),
@@ -56,6 +57,13 @@ function probe({ side, scenario }) {
       contracts: (c, r) => { mm.ensureState(); mm.generateContractOffers(c, r); return JSON.stringify(s.aquarium.market.contractOffers); },
       repLevel: (x) => mm.getContractReputationLevel(x),
       community: () => g.getCommunityGoalRewardValue("twigGain"),
+      mine: {
+        value: () => g.getMineOreValue(), bonus: () => g.getMineOreDamageBonus(), interval: () => g.getMineCrowHitInterval(), golden: () => g.getMineGoldenOreChance(),
+        area: () => g.getMineMilestoneLevel(), stat: (k) => g.getMineShopStats()[k], xpNeed: (L) => g.getMineCrowXpNeeded(L), rebirbLevel: () => g.getMineCrowRebirbRequiredLevelForNext(),
+        rebirbUnlocked: () => g.isMineCrowRebirbUnlocked(), canRebirb: () => g.canRebirbMineCrow(),
+        nodeVisible: (id) => g.isMineTreasureUpgradeVisible("d_mine_" + id), nodeUnlocked: (id) => g.upgradeManager.isSunflowerUpgradeUnlocked("d_mine_" + id),
+        cost: (d, L) => g.getDiscountedUpgradeCost(d, L),
+      },
       nest: {
         resMult: () => nm.getResourceMultiplier(), twigMult: () => nm.getForestTwigMultiplier(), perHit: () => nm.getTwigRewardPerHit(),
         compDps: () => nm.getForestChopDamagePerSecond(), hitRate: () => nm.getBirbForestChopHitRatePerSecond(), peckDmg: () => nm.getBirbForestPeckDamage(),
@@ -88,6 +96,14 @@ function probe({ side, scenario }) {
       maxBuffs: () => PT.maxFishBuffs(s), aqUnlocked: () => PT.aquariumUnlocked(s),
       contracts: (c, r) => { PT.market(s); return JSON.stringify(PT.generateContracts(s, c, r)); },
       repLevel: (x) => PT.repLevel(x),
+      mine: {
+        value: () => PT.mineOreValue(s), bonus: () => PT.mineDamageBonus(s), interval: () => PT.crowInterval(s), golden: () => PT.mineGoldenChance(s),
+        area: () => PT.mineArea(s), stat: (k) => (k === "chargeInterval" ? PT.mineProfile(s).chargeInterval : k === "chargeBonus" ? (PT.mineHas(s, "seismic_strike") ? 3 : 0) : k === "crowDamage" ? PT.crowDamage(s) : NaN),
+        xpNeed: (L) => PT.crowXpNeeded(L), rebirbLevel: () => { const n = PT.mineState(s).crowRebirbCount; return n < 8 ? [3, 5, 7, 7, 10, 12, 16, 20][n] : 20 + 5 * (n - 8); },
+        rebirbUnlocked: () => PT.crowRebirbUnlocked(s), canRebirb: () => PT.crowCanRebirb(s),
+        nodeVisible: (id) => PT.mineNodeVisible(s, id), nodeUnlocked: (id) => PT.mineNodeUnlocked(s, id),
+        cost: (d, L) => PT.cost(PT.UP.get(d.id), L),
+      },
       nest: (() => {
         const sn = () => PT.nestCultSnapshot(s), up = (id) => PT.NEST_UPS[id].cost(PT.nestUpLevel(s, id));
         const SNAP = { twigValueCost: () => up("n_twig_value"), peckRateCost: () => up("n_peck_rate"), peckPowerCost: () => up("n_peck_power"),
@@ -129,6 +145,14 @@ function probe({ side, scenario }) {
   for (const b of ["coast", "reef", "freshwater", "ocean", "abyssal", "creatures", "mystic", "mechanical", "expedition"]) put(`aquarium tier ${b}`, () => A.aqTier(b));
   for (const x of [0, 99, 100, 650, 6200, 9999]) put(`market rep level at ${x}`, () => A.repLevel(x));
   if (scenario.state.aquarium) for (const [c, r] of [[20000, 0], [20001, 0], [20001, 2]]) out[`contract offers cycle ${c} reroll ${r}`] = A.contracts(c, r);
+  const Mn = A.mine;
+  for (const k of ["value", "bonus", "interval", "golden", "area", "rebirbLevel", "rebirbUnlocked", "canRebirb"]) put(`mine ${k}`, Mn[k]);
+  for (const k of ["chargeInterval", "chargeBonus", "crowDamage"]) put(`mine stat ${k}`, () => Mn.stat(k));
+  for (const L of [1, 5, 26, 100]) put(`crow xp needed L${L}`, () => Mn.xpNeed(L));
+  for (const [id, Ls] of [["m_ore_value", [1, 8, 11, 30, 100]], ["m_mining_power", [1, 8, 13, 25, 100]], ["m_charged_strike", [1, 2, 3, 4]]]) for (const L of Ls) put(`mine cost ${id} L${L}`, () => Mn.cost(D.upgrades.find((u) => u.id === id), L));
+  for (const id of ["work_perch", "precise_peck", "rich_vein", "impact_transfer", "peck_rhythm", "deep_survey", "seismic_strike", "mineral_temper", "clean_extraction", "unbroken_rhythm", "work_pulse", "gold_beacon", "crown_survey", "fine_cut", "royal_mastery", "deep_mine", "royal_impact", "mineral_coffers", "seismic_echo", "royal_cut", "abyssal_forge", "abyssal_treasure", "deep_rebirb"]) {
+    put(`mine tree ${id} visible`, () => Mn.nodeVisible(id)); put(`mine tree ${id} unlocked`, () => Mn.nodeUnlocked(id));
+  }
   const N = A.nest;
   for (const k of ["resMult", "twigMult", "perHit", "compDps", "hitRate", "peckDmg", "estBirb", "estComp", "maxTier", "migrate", "silo", "respawn", "seedProd", "well", "nap", "pandaTier"]) put(`nest ${k}`, N[k]);
   for (const k of ["tier", "current", "required", "progress", "isComplete", "isMaxed"]) put(`nest build ${k}`, () => N.build(k));
