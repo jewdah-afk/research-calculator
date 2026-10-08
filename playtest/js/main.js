@@ -104,9 +104,17 @@
     if (k === "tab") { e.preventDefault(); G.companionsOpen = !G.companionsOpen; drawHud(); }
     if (k === "p") openWin("profile");
     if (k === "q") openWin("quests"); // Birb KeyQ opens the objectives window
+    if (k === "t" && PT.EXP.isRunMap(G.s.currentMap)) totemKey();
     if (k === "h" && PT.expState(G.s).activeRun) { if (PT.EXP.usePotion(G.s)) save(); } // Birb uses the potion button only (no key)
     if (k === "escape") { if (G.win) closeWin(); else openWin("settings"); }
   });
+  // Birb parrot totem (rebirb III): T places it where you stand on a run map, T again picks it up
+  function totemKey() {
+    const s = G.s, X = PT.EXP; if (!X.totemUnlocked(s)) return toast("The totem opens at Parrot Rebirb III");
+    if (X.totem.position) { X.totemCollect(G); toast("Totem picked up"); return; }
+    if (X.totemRemaining(s) > 0) return toast(`The totem is broken for ${PT.fmtTime(X.totemRemaining(s) / 1000)}`);
+    toast(X.totemPlace(s, s.currentMap, s.player.x, s.player.y) ? "Totem placed: the parrot fights here even when you leave" : "Can't place the totem here");
+  }
   // Birb tryHandleFloorOneMineEntranceInteraction
   function mineEntrance() {
     const s = G.s, X = PT.EXP; X.repairMineEntrance(s);
@@ -310,6 +318,7 @@
       cx.lineWidth = 2; cx.strokeStyle = /attack|hitting/.test(e.state) ? "#ef4444" : "#0b0c10"; cx.stroke();
       if (e.type !== "mini-fly" && !e.projectileKind) { bar(e.x - 20, e.y - r - 14, 40, e.health / e.maxHealth, "#ef4444"); if (e.isBoss || e.isElite) label(e.type.replace(/-/g, " ").toUpperCase(), e.x, e.y - r - 22, 13, e.isBoss ? "#fdba74" : "#e9d5ff"); }
     }
+    const T = X.totem.position; if (T && T.mapId === s.currentMap) { cx.fillStyle = X.totemActive(s) ? "#a78bfa" : "#555"; cx.fillRect(T.x - 10, T.y - 36, 20, 36); label("TOTEM", T.x, T.y - 44, 13, "#ddd6fe"); }
     const p = run.parrot;
     if (p) { drawIcon("parrot", p.x, p.y - 14, 36, !p.facingRight); bar(p.x - 22, p.y - 40, 44, p.health / p.maxHealth, "#4ade80"); }
     cx.beginPath(); cx.arc(s.player.x, s.player.y, PT.EXP.K.LEASH * PT.EXP.rangeMult(), 0, 7); cx.strokeStyle = "rgba(255,255,255,.12)"; cx.lineWidth = 2; cx.stroke();
@@ -458,6 +467,7 @@
   function expPortalAction() {
     const p = expPortalNear(); if (!p) return false;
     if (p.type === "enter_expedition") openWin("expfloors");
+    else if (p.type === "return_hub" && PT.EXP.totemRunMap(G.s) !== null && (PT.expState(G.s).activeRun?.parrot?.health ?? 0) > 0) { const m = PT.EXP_HUB_MAP, q = PT.EXP.portal(m, "enter_expedition"); G.s.currentMap = m; G.s.player.x = q.x; G.s.player.y = q.y + 90; G.target = null; toast("The run goes on at the totem"); } // Birb returnToHub with an active totem
     else if (p.type === "return_hub") { const r = PT.EXP.endRun(G, false); if (r) toast(`Back at the hub: floor ${r.floor}, ${r.kills} kills`); }
     else if (p.type === "next_floor") { if (!PT.EXP.advanceFloor(G)) toast("The next floor needs Evolution 5"); }
     else if (p.type === "secret_room_enter") PT.EXP.enterSecretRoom(G);
@@ -465,7 +475,7 @@
     else if (p.type === "mine_exit") PT.EXP.exitMineRoom(G);
     save(); return true;
   }
-  PT.EXP.onParrotDeath = () => { const r = PT.EXP.endRun(G, false); toast(`The parrot fell on floor ${r ? r.floor : "?"}. Back to the hub.`); save(); };
+  PT.EXP.onParrotDeath = () => { if (PT.EXP.totemDeath(G)) { toast("The parrot fell at the totem. The totem breaks for 1 hour, then the run restarts there."); save(); return; } const r = PT.EXP.endRun(G, false); toast(`The parrot fell on floor ${r ? r.floor : "?"}. Back to the hub.`); save(); };
 
   // ------------------------------------------------------------------ panels
   const panel = document.getElementById("panel"), tabsEl = document.getElementById("tabs");
@@ -655,6 +665,7 @@
     const s = G.s, e = PT.expState(s), max = Math.min(e.highestFloorReached || 1, PT.EXP.maxFloorForEvo(s)), cd = e.enemyRespawnCooldowns;
     const rows = []; for (let f = 1; f <= PT.EXP.maxFloorForEvo(s); f++) { const key = PT.EXP.bossKey(PT.EXP.FLOOR_MAP[f], f), left = Math.max(0, ((cd[key] || 0) - Date.now()) / 1000), boss = PT.EXP.PLAN[f - 1].boss;
       rows.push(`<div class="row"><img class="ico" src="${ICON("map")}" alt=""><div><div class="t">FLOOR ${f}</div><div class="d">Boss: ${boss.replace(/-/g, " ")}${left > 0 ? " · respawns in " + PT.fmtTime(left) : ""}</div></div><div class="btns"><button class="key ${f <= max ? "" : "grey"}" data-expfloor="${f}">${f <= max ? "START" : "LOCKED"}</button></div></div>`); }
+    if (PT.EXP.totemRunMap(s) !== null) { const st = PT.EXP.totem.stats; rows.unshift(`<div class="row"><img class="ico" src="${ICON("map")}" alt=""><div><div class="t" style="color:#c4b5fd">TOTEM RUN · FLOOR ${e.activeRun.currentFloor}${e.activeRun.nightMode ? " (NIGHT)" : ""}</div><div class="d">${PT.fmtTime(st.seconds)} · ${st.kills} kills${PT.EXP.totemActive(s) ? "" : " · broken, back in " + PT.fmtTime(PT.EXP.totemRemaining(s) / 1000)}</div></div><div class="btns"><button class="key blue" data-act="totem_return">RETURN</button><button class="key small grey" data-act="totem_collect">COLLECT</button></div></div>`); }
     // Birb night mode: parrot rebirb III, floor 1 only (stats and loot as floor 10, mythic auras, an ice-fire guardian boss)
     const nk = PT.EXP.bossKey(PT.EXP.NIGHT_MAP, 1), nl = Math.max(0, ((cd[nk] || 0) - Date.now()) / 1000), can = PT.EXP.canNight(s);
     rows.push(`<div class="row"><img class="ico" src="${ICON("map")}" alt=""><div><div class="t" style="color:#b8cbff">NIGHT FLOOR 1</div><div class="d">${can ? "Boss: ice fire guardian" + (nl > 0 ? " · respawns in " + PT.fmtTime(nl) : "") + " · loot as floor 10, mythic auras" : "Needs Parrot Rebirb III"}</div></div><div class="btns"><button class="key ${can ? "blue" : "grey"}" data-expnight="1">${can ? "START" : "LOCKED"}</button></div></div>`);
@@ -1097,6 +1108,8 @@
       else if (c === "inv_pot") PT.parrotState(s).potionSlot = id; else if (c === "inv_use") { if (!X.usePotion(s)) toast("No potion ready"); }
       else if (c === "inv_chest") { const r = X.openChest(s, id); toast(!r ? "No chest" : r.full ? "Artifact bag is full" : `Got ${r.name} (${r.rarity})`); }
       X.bonuses = X.parrotBonuses(s); X.refreshRunParrot(s); }
+    else if (a === "totem_return") { if (PT.EXP.returnToTotem(G)) closeWin(); }
+    else if (a === "totem_collect") { PT.EXP.totemCollect(G); toast("Totem picked up, the run ended"); }
     else if (a === "mythic_pour") { if (PT.EXP.mythicPouring()) PT.EXP.mythicPourStop(); else if (!PT.EXP.mythicPourStart(s)) toast("Nothing to sacrifice"); }
     else if (a.startsWith("sac_")) { if (a === "sac_expand") { if (!PT.EXP.unlockSacExpansion(s)) toast("Not enough Spirit Aura"); } else { const n = PT.EXP.sacrifice(s, a.slice(4)); toast(n ? `Sacrificed ${fmt(n)} SP` : "No skill points to sacrifice"); } }
     else if (a === "davetrain") { if (!PT.daveTrain(s)) toast("Not enough seeds"); }

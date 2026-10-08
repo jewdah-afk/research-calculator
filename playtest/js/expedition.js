@@ -755,13 +755,14 @@
     X.goToFloorMap(G, run.currentFloor); X.initFloor(s, run, run.currentFloor); X.placeAtPortal(G, "return_hub");
     return true;
   };
-  X.endRun = function (G, success) {
+  X.endRun = function (G, success, inPlace = false) { // inPlace: Birb endRun(.., mapId, false) keeps the player where they are (a totem run ending in the background)
     const s = G.s, e = PT.expState(s), run = e.activeRun; if (!run) return null;
     if (success) e.successfulRuns++;
     e.totalEnemiesDefeated += run.enemiesDefeated;
     if (X.onEndRun) X.onEndRun(s, run);
     const res = { floor: run.currentFloor, kills: run.enemiesDefeated, time: (Date.now() - run.startTime) / 1e3 };
-    e.activeRun = null; s.currentMap = PT.EXP_HUB_MAP; const p = X.portal(PT.EXP_HUB_MAP, "enter_expedition"); s.player.x = p.x; s.player.y = p.y + 90; G.target = null;
+    e.activeRun = null; if (X.totemRemaining && X.totemRemaining(s) === 0) X.totemResetPlacement(); // Birb: an unbroken totem is picked up when the run ends
+    if (!inPlace) { s.currentMap = PT.EXP_HUB_MAP; const p = X.portal(PT.EXP_HUB_MAP, "enter_expedition"); s.player.x = p.x; s.player.y = p.y + 90; G.target = null; }
     return res;
   };
   // Birb: hold to reset the floor seed (rerolls this floor's enemies)
@@ -781,6 +782,7 @@
     const p = PT.parrotState(s), e = PT.expState(s);
     p.rebirbCount = X.rebirbs(s) + 1; p.level = 1; p.xp = 0; p.skillPoints = 0; p.skills = { hp: 0, lifeRegen: 0, damage: 0 };
     p.equipmentUpgrades = { beak: { rarity: "common", level: 1 }, armor: { rarity: "common", level: 1 }, aura: { rarity: "common", level: 1 } };
+    if (X.totemResetPlacement) X.totemResetPlacement();
     if (X.onParrotRebirb) X.onParrotRebirb(s); // inventory / chests / sacrifice (6b, 6c)
     e.progress = { level: 1, xp: 0, xpToNextLevel: X.xpReq(1), totalXpEarned: 0 };
     return true;

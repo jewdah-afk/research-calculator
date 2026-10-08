@@ -83,6 +83,7 @@ function probe({ side, scenario }) {
         resetCost: () => { const sk = s.parrot.skills, t = sk.hp + sk.lifeRegen + sk.damage; return t <= 0 ? 0 : Math.max(1, Math.ceil(Math.sqrt(0.01 * t))); },
       }; })(),
       secret: { maxed: () => g.areStarterEquipmentUpgradesMaxed(), repair: () => g.hasMineProgressForEntranceRepair(), canBreak: () => { const c = g.currentMap; g.currentMap = 17; try { return g.canBreakFloorOneMineEntrance(); } finally { g.currentMap = c; } } },
+      totem: () => g.expeditionManager.parrotTotem.isUnlocked(),
       mythic: { norm: () => { g.expeditionManager.normalizeSacrificeState(); return g.state.expedition.mythicSacrifice; }, can: () => window.__BIRB_MYTHIC_CAN(g.state.expedition.mythicSacrifice, Math.floor(s.parrot.skillPoints), g.getAuraCount("mythic_spirit_trash")),
         count: (n) => (s.parrot.artifactInventory || []).filter((a) => a.name === n).reduce((k, a) => k + (a.count || 1), 0) },
       quest: (() => { const qm = g.questMerchantManager, fix = () => { qm.normalizedStateRef = null; qm.setState(g.state.expedition); }; return {
@@ -155,6 +156,7 @@ function probe({ side, scenario }) {
           maxLv: () => X.sacMaxUnlocked(s), progress: () => X.sacProgress(s).progress, atk: () => { const b = X.parrotBonuses(s); return b.attackSpeedMult; }, move: () => X.parrotBonuses(s).moveSpeedMult, range: () => { X.bonuses = X.parrotBonuses(s); return X.rangeMult(); } },
       }; })(),
       secret: { maxed: () => PT.EXP.starterGearMaxed(s), repair: () => PT.EXP.hasMineProgress(s), canBreak: () => { const c = s.currentMap; s.currentMap = 17; try { return PT.EXP.canBreakMineEntrance(s); } finally { s.currentMap = c; } } },
+      totem: () => PT.EXP.totemUnlocked(s),
       mythic: { norm: () => PT.EXP.mythicState(s), can: () => PT.EXP.mythicCanPour(s), count: (n) => PT.EXP.itemCount(s, n) },
       quest: (() => { const X = PT.EXP; return {
         sync: (now) => X.questSync(s, now), bonus: (k) => X.questMerchantBonus(s, k), m: () => X.questState(s),
@@ -256,6 +258,7 @@ function probe({ side, scenario }) {
   for (const c of ["artifact", "material"]) { put(`inventory cap ${c}`, () => Ex.loot.cap(c)); put(`inventory used ${c}`, () => Ex.loot.used(c)); }
   for (const k of ["level", "target", "popcorn", "sp", "radius", "seed", "qty", "chance", "promo", "canExpand", "maxLv", "progress", "atk", "move", "range"]) put(`sacrifice ${k}`, Ex.sac[k]);
   for (const k of ["maxed", "repair", "canBreak"]) put(`mine entrance ${k}`, A.secret[k]);
+  put("totem unlocked", A.totem);
   if (scenario.mythic) { const My = A.mythic;
     const snap = (tag) => { const m = My.norm(); for (const k of ["level", "eliteKills", "relicDrops", "pendingAura"]) put(`mythic ${tag} ${k}`, () => m[k]); m.contributions.forEach((c, i) => { put(`mythic ${tag} c${i} sp`, () => c.skillPoints); put(`mythic ${tag} c${i} aura`, () => c.aura); }); };
     snap("t0"); put("mythic can pour", My.can);

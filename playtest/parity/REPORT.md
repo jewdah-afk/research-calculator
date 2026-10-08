@@ -1,57 +1,57 @@
 # Parity report
 
-Birb's live engine (birbplay.com `window.game`) vs the playtest, same save state per scenario. Generated 2026-10-08T22:29Z by `playtest/parity/parity.js`.
+Birb's live engine (birbplay.com `window.game`) vs the playtest, same save state per scenario. Generated 2026-10-08T22:32Z by `playtest/parity/parity.js`.
 
-**56403 / 56403 values match.** Birb's live community-goal twig reward today: x1.5 (copied into the playtest for the run).
+**56449 / 56449 values match.** Birb's live community-goal twig reward today: x1.5 (copied into the playtest for the run).
 
 | Scenario | Values | Mismatches |
 |---|---|---|
-| fresh start | 832 | 0 |
-| early eggs | 832 | 0 |
-| first molt done | 832 | 0 |
-| seeds online | 832 | 0 |
-| evolve unlocked | 832 | 0 |
-| evolution 1 | 832 | 0 |
-| evolution 3 | 832 | 0 |
-| aquarium early | 835 | 0 |
-| aquarium mid | 835 | 0 |
-| aquarium full + market | 835 | 0 |
-| nest start | 832 | 0 |
-| nest boxes | 832 | 0 |
-| nest tier 2 | 844 | 0 |
-| mine start | 832 | 0 |
-| mine mid | 832 | 0 |
-| mine deep | 832 | 0 |
-| desert start | 832 | 0 |
-| desert dave | 832 | 0 |
-| desert sandstorm late | 832 | 0 |
-| expedition start | 2060 | 0 |
-| expedition rebirb 1 | 832 | 0 |
-| expedition late | 2592 | 0 |
-| sacrifice tier I | 2060 | 0 |
-| sacrifice capped III | 2060 | 0 |
-| sacrifice expansion V | 2060 | 0 |
-| sacrifice rebirb XIV | 2060 | 0 |
-| loot basic kit | 2555 | 0 |
-| loot effect copies | 2060 | 0 |
-| loot full bag | 2060 | 0 |
-| forge no milestone | 2060 | 0 |
-| forge early | 2060 | 0 |
-| forge legendary | 2060 | 0 |
-| forge refined deep | 2060 | 0 |
-| quest unlock | 1164 | 0 |
-| quest progress | 1178 | 0 |
-| quest legacy migration | 1174 | 0 |
-| market parrot buffs | 835 | 0 |
-| mine entrance ready | 832 | 0 |
-| mine entrance epic 4 | 832 | 0 |
-| mine entrance rebirb 1 | 832 | 0 |
-| mine entrance repair crow | 832 | 0 |
-| mine entrance repair tree | 832 | 0 |
-| mythic none | 856 | 0 |
-| mythic I | 856 | 0 |
-| mythic II relic bar | 856 | 0 |
-| mythic III doubled relic | 856 | 0 |
+| fresh start | 833 | 0 |
+| early eggs | 833 | 0 |
+| first molt done | 833 | 0 |
+| seeds online | 833 | 0 |
+| evolve unlocked | 833 | 0 |
+| evolution 1 | 833 | 0 |
+| evolution 3 | 833 | 0 |
+| aquarium early | 836 | 0 |
+| aquarium mid | 836 | 0 |
+| aquarium full + market | 836 | 0 |
+| nest start | 833 | 0 |
+| nest boxes | 833 | 0 |
+| nest tier 2 | 845 | 0 |
+| mine start | 833 | 0 |
+| mine mid | 833 | 0 |
+| mine deep | 833 | 0 |
+| desert start | 833 | 0 |
+| desert dave | 833 | 0 |
+| desert sandstorm late | 833 | 0 |
+| expedition start | 2061 | 0 |
+| expedition rebirb 1 | 833 | 0 |
+| expedition late | 2593 | 0 |
+| sacrifice tier I | 2061 | 0 |
+| sacrifice capped III | 2061 | 0 |
+| sacrifice expansion V | 2061 | 0 |
+| sacrifice rebirb XIV | 2061 | 0 |
+| loot basic kit | 2556 | 0 |
+| loot effect copies | 2061 | 0 |
+| loot full bag | 2061 | 0 |
+| forge no milestone | 2061 | 0 |
+| forge early | 2061 | 0 |
+| forge legendary | 2061 | 0 |
+| forge refined deep | 2061 | 0 |
+| quest unlock | 1165 | 0 |
+| quest progress | 1179 | 0 |
+| quest legacy migration | 1175 | 0 |
+| market parrot buffs | 836 | 0 |
+| mine entrance ready | 833 | 0 |
+| mine entrance epic 4 | 833 | 0 |
+| mine entrance rebirb 1 | 833 | 0 |
+| mine entrance repair crow | 833 | 0 |
+| mine entrance repair tree | 833 | 0 |
+| mythic none | 857 | 0 |
+| mythic I | 857 | 0 |
+| mythic II relic bar | 857 | 0 |
+| mythic III doubled relic | 857 | 0 |
 
 ### fresh start
 
