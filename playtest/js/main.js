@@ -52,12 +52,21 @@
     s.sparrow = Object.assign(PT.newState().sparrow, o.sparrow || {});
     return s;
   }
-  function save() { try { localStorage.setItem(SAVE_KEY, serialize(G.s)); } catch (e) {} }
+  function save() { try { G.s.lastActiveAt = Date.now(); localStorage.setItem(SAVE_KEY, serialize(G.s)); } catch (e) {} }
   function load() {
     try { const t = localStorage.getItem(SAVE_KEY); if (t) return deserialize(t); } catch (e) {}
     return PT.newState();
   }
   G.s = load();
+  PT.nestState(G.s);
+  G.offline = PT.applyOffline(G.s); // Birb applyOfflineEarnings on load
+  // Birb applyHiddenTabEarnings: when the tab comes back, pay twigs for the time the loop did not run
+  let hiddenAt = 0;
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) { hiddenAt = performance.now(); return; }
+    const sec = (performance.now() - hiddenAt) / 1000; if (!hiddenAt || sec < 0.25) return;
+    PT.nestAdvanceBeds(G.s, sec); const tw = Math.floor(PT.hiddenTabTwigRate(G.s) * sec); if (tw > 0) { PT.nestAddTwigs(G.s, tw); toast(`+${fmt(tw)} twigs while hidden`); }
+  });
 
   // ------------------------------------------------------------------ canvas + camera
   const cv = document.getElementById("view"), cx = cv.getContext("2d");
@@ -86,7 +95,7 @@
     if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
     G.keys.add(e.key.toLowerCase());
     const k = e.key.toLowerCase();
-    if (k === "e") { if (G.s.currentMap === PT.FISH_MARKET_MAP) openWin("market", "market"); else if (G.s.currentMap !== 1 && PT.aquariumUnlocked(G.s)) openWin("aquarium"); else tryStation(); }
+    if (k === "e") { if (G.s.currentMap === PT.NEST_ROOM_MAP) openWin("redpanda"); else if (G.s.currentMap === PT.FISH_MARKET_MAP) openWin("market", "market"); else if (G.s.currentMap !== 1 && PT.aquariumUnlocked(G.s)) openWin("aquarium"); else tryStation(); }
     if (k === " ") { e.preventDefault(); cast(); }
     if (k === "tab") { e.preventDefault(); G.companionsOpen = !G.companionsOpen; drawHud(); }
     if (k === "p") openWin("profile");
@@ -98,6 +107,7 @@
     const r = cv.getBoundingClientRect(), dpr = cv.width / r.width;
     const w = toWorld((e.clientX - r.left) * dpr, (e.clientY - r.top) * dpr);
     G.target = w;
+    if (G.s.currentMap === PT.NEST_ROOM_MAP && Math.hypot(w.x - 528, w.y - 380) < 70) openWin("redpanda");
     if (G.s.currentMap === 3 && !G.s.hasTalkedToMonster && Math.hypot(w.x - 800, w.y - 500) < 140) { G.s.hasTalkedToMonster = true; toast("The monster is hungry. Hold to feed it!"); }
   });
 
@@ -130,8 +140,10 @@
   function travel(dir) {
     const why = PT.travelBlock(G.s, dir);
     if (why) { if (why !== "end") toast(why); return; }
-    G.s.currentMap += dir;
+    const from = G.s.currentMap; G.s.currentMap = PT.travelTarget(G.s, dir);
     const m = PT.MAPS[G.s.currentMap];
+    if (G.s.currentMap === PT.NEST_MAP) { (G.s.clickedMapArrows ||= {}).visited_map4 = true; G.s.nestReturnMap = from;
+      const f = PT.nestState(G.s).forest; if (!f.hasSeenIntro) { f.hasSeenIntro = true; toast("This ancient tree has been abandoned... collect twigs to fix it"); } }
     G.s.player.x = dir > 0 ? 80 : m.w - 80; G.s.player.y = m.id === 1 ? 640 : m.h / 2; G.target = null; G.vx = G.vy = 0;
     save();
   }
@@ -139,6 +151,7 @@
     const why = PT.vertBlock(G.s, dir);
     if (why) { if (why !== "end") toast(why); return; }
     G.s.currentMap = PT.vertLinks[G.s.currentMap][dir];
+    if (G.s.currentMap === PT.NEST_ROOM_MAP && !PT.redPandaState(G.s).introSeen) { toast("Something is already sleeping inside the nest..."); setTimeout(() => openWin("redpanda"), 600); }
     const m = PT.MAPS[G.s.currentMap]; G.s.player.x = m.w / 2; G.s.player.y = dir === "down" ? 140 : m.h - 140; G.target = null; G.vx = G.vy = 0;
     if (G.s.currentMap === PT.FISH_MARKET_MAP) PT.marketSync(G.s);
     save();
@@ -184,6 +197,7 @@
         if (onPlatform()) G.onFloat(s.player.x, s.player.y - 30, "+" + fmt(v), "#22c55e"); }
     }
     PT.updateSparrows(G, dt);
+    PT.updateNest(G, dt);
     PT.ensureFishing(s);
     PT.updateFishing(G, dt, Math.abs(G.vx) > 5 || Math.abs(G.vy) > 5);
     PT.updateSeagull(G, dt);
@@ -220,11 +234,43 @@
     if (s.currentMap === 2) drawBridge();
     if (s.currentMap === PT.AQUARIUM_MAP) drawAquarium();
     if (s.currentMap === PT.FISH_MARKET_MAP) drawMarket();
+    if (s.currentMap === PT.NEST_MAP) drawNest();
+    if (s.currentMap === PT.NEST_ROOM_MAP) drawNestRoom();
     if (s.currentMap === 3) { drawIcon("monster", 800, 500, 200); if (!s.hasTalkedToMonster) label("Click the monster", 800, 640, 22); }
     // pickup radius ring + bird
     if (s.currentMap === 0) { cx.beginPath(); cx.arc(s.player.x, s.player.y, PT.pickupProfile(s).collectRadius, 0, 7); cx.strokeStyle = "rgba(255,255,255,.25)"; cx.lineWidth = 2; cx.stroke(); }
     drawIcon("birb", s.player.x, s.player.y, 48, G.vx < -5);
     for (const f of G.floats) if (f.map === s.currentMap) { cx.globalAlpha = Math.min(1, f.life / 0.4); label(f.text, f.x, f.y, 16, f.color); cx.globalAlpha = 1; }
+  }
+  function drawPine(x, y, k, hp, maxHp, active) {
+    cx.fillStyle = "#6b4a2a"; cx.fillRect(x - 4 * k, y + 6 * k, 8 * k, 14 * k);
+    for (let i = 0; i < 3; i++) { cx.beginPath(); cx.moveTo(x, y - 34 * k + i * 12 * k); cx.lineTo(x - (16 + 5 * i) * k, y + (i * 12 - 6) * k); cx.lineTo(x + (16 + 5 * i) * k, y + (i * 12 - 6) * k); cx.closePath(); cx.fillStyle = i % 2 ? "#2f7d3a" : "#3a9447"; cx.fill(); cx.lineWidth = 2; cx.strokeStyle = "#0b0c10"; cx.stroke(); }
+    if (active) { cx.beginPath(); cx.arc(x, y, 30 * k, 0, 7); cx.strokeStyle = "#ffd27a"; cx.lineWidth = 3; cx.stroke(); }
+    if (hp < maxHp) bar(x - 18, y - 46 * k, 36, hp / maxHp, "#d8a24a");
+  }
+  function drawNest() {
+    const s = G.s, n = PT.nestState(s), f = n.forest;
+    cx.fillStyle = "#6fa553"; roundRect(0, 0, 1600, 2112, 24); cx.fill();
+    cx.fillStyle = "#4a8bd6"; cx.fillRect(0, 2000, 1600, 112);
+    drawIcon("nest", 800, 170, 300);
+    for (const t of f.trees) { const k = t.age >= 180 ? 1 : 0.35 + 0.65 * (t.age / 180); if (t.hp <= 0) cx.globalAlpha = Math.max(0, t.collapse / 0.8); drawPine(t.x, t.y, k, Math.max(0, t.hp), t.maxHp, f.activeTreeId === t.id); cx.globalAlpha = 1; }
+    for (const b of n.cultivation.treeBoxes) {
+      const p = PT.boxSlotPos(b.slotIndex); cx.fillStyle = "#7a4e2a"; roundRect(p.x - 50, p.y - 44, 100, 92, 10); cx.fill(); cx.lineWidth = 3; cx.strokeStyle = "#0b0c10"; cx.stroke();
+    }
+    const gs = PT.nestCultSnapshot(s).growthSeconds;
+    for (const b of n.cultivation.treeBoxes) { const p = PT.boxSlotPos(b.slotIndex), k = (b.trees || []).length;
+      (b.trees || []).forEach((t, i) => { if (t.hp <= 0) return; const x = p.x + (i % 2) * 40 - (k > 1 ? 20 : 0), y = p.y + Math.floor(i / 2) * 36 - (k > 2 ? 18 : 0);
+        drawPine(x, y, 0.7 * (t.age >= gs ? 1 : 0.35 + 0.65 * (t.age / gs)), t.hp, t.maxHp, f.activeTreeId === "box" + b.slotIndex + "_" + i); });
+      const g = (b.trees || []).find((t) => t.hp > 0 && t.age < gs); if (g) label(Math.ceil(gs - g.age) + "s", p.x, p.y + 40, 12); }
+    if (PT.pandaAssisting(s) && G.pandaPos) drawIcon("redpanda", G.pandaPos.x, G.pandaPos.y, 40);
+  }
+  function drawNestRoom() {
+    const s = G.s, r = PT.redPandaState(s);
+    cx.fillStyle = "#5a3d24"; roundRect(0, 0, 1056, 792, 24); cx.fill();
+    cx.fillStyle = "#7a5634"; roundRect(328, 300, 400, 200, 40); cx.fill();
+    if (!r.introSeen || r.mode === "chill") { drawIcon("redpanda", 528, 380, 110); label(r.introSeen ? r.name + " · napping (eggs and seeds x1.25)" : "zzz...", 528, 470, 18); }
+    else label(r.name + " is helping outside", 528, 400, 20, "#a2d149");
+    label("Click the panda or press E", 528, 560, 16, "#ffd27a");
   }
   function drawAquarium() {
     const a = PT.aq(G.s);
@@ -303,6 +349,7 @@
     // Birb's drawer: POPCORN and REBIRB from the start, SEEDS once the Sunflower Machine is owned (updateSeedShopTabVisibility).
     const s = G.s, t = [["eggs", "EGGS", "egg"], ["molt", "MOLT", "plume"]];
     if (PT.hasSun(s, "d_sunflower_machine")) t.push(["seeds", "SEEDS", "seed"]);
+    if (s.clickedMapArrows?.visited_map4) t.push(["nest", "NEST", "twig"]); // Birb updateNestShopTabVisibility
     if (!t.some((x) => x[0] === G.tab)) G.tab = "eggs";
     return t;
   }
@@ -340,11 +387,60 @@
       <button class="key wide ${ok ? "gold" : "grey"}" data-act="molt">MOLT</button>
       <div class="note">${fmt(s.resources.goldenFeathers)} plumes · molted ${s.rebirthCount} times · 1 plume per 1,000 eggs</div></div>
       <div class="section">PLUME KEEPSAKES</div>${treeRows("PR")}<div class="note">Molting resets eggs and egg upgrades. Plumes and keepsakes are kept until you Evolve.</div>`;
-    } else if (G.tab === "seeds") {
+    } else if (G.tab === "nest") h = nestPanel();
+    else if (G.tab === "seeds") {
       const sr = PT.seedRate(s, true);
       h = `${treeRows("S")}<div class="note">${fmt(sr.ticksPerSec * sr.perTick)} seeds / s on the platform${PT.hasSun(s, "d_auto_gen") ? " (auto generator: always on)" : ""}</div><div class="note">Evolving resets seeds and these upgrades.</div>`;
     }
     if (panel.dataset.last !== h) { const y = panel.scrollTop; panel.innerHTML = h; panel.scrollTop = y; panel.dataset.last = h; }
+  }
+  // Birb nest shop: SHOP (planting beds, buildings, twig upgrades) / LAKE (fish breeding) / OWNED
+  G.nestView = "shop";
+  function nestPanel() {
+    const s = G.s, n = PT.nestState(s), sn = PT.nestCultSnapshot(s), tw = PT.res(s, "twigs");
+    const views = [["shop", "SHOP"], ...(PT.breedVisible(s) ? [["lake", "LAKE"]] : []), ["owned", "OWNED " + PT.NEST_SPECIALS.filter((x) => n.cultivation.specialUpgrades[x.id]).length]];
+    const sw = `<div class="devrow">${views.map(([k, l]) => `<button class="tab ${G.nestView === k ? "on" : ""}" data-nview="${k}">${l}</button>`).join("")}</div>`;
+    if (G.nestView === "lake") return sw + lakePanel();
+    if (G.nestView === "owned") return sw + (PT.NEST_SPECIALS.filter((x) => n.cultivation.specialUpgrades[x.id]).map((x) => `<div class="row"><img class="ico" src="${ICON("nest")}" alt=""><div><div class="t">${x.name}</div><div class="d">${x.text}</div></div><div class="btns"><button class="key small gold">OWNED</button></div></div>`).join("") || '<div class="note">Nothing owned yet.</div>');
+    const specials = PT.NEST_SPECIALS.filter((x) => !n.cultivation.specialUpgrades[x.id] && x.visible(s, n.cultivation)).map((x) =>
+      `<div class="row"><img class="ico" src="${ICON("nest")}" alt=""><div><div class="t">${x.name}</div><div class="d">${x.text}</div></div><div class="btns"><button class="key ${tw.gte(x.cost) ? "" : "grey"}" data-nspec="${x.id}"><img src="${ICON("twig")}" alt="">${fmt(x.cost)}</button></div></div>`).join("");
+    const boxCur = sn.treeBoxCostCurrency === "twigs" ? "twig" : "plume";
+    const box = sn.treeBoxMaxed ? "" : `<div class="row"><img class="ico" src="${ICON("nest")}" alt=""><div><div class="t">${title(sn.phase)}</div><div class="d">${sn.phase === "TREE BOX" ? "Grows a tree outside the Nest." : sn.phase.startsWith("EVOLVE") ? (sn.phase.includes("QUAD") ? "Unlocks transforming double beds into quad beds." + (sn.quadRequirementMet ? "" : " REQUIRES NEST TIER 2") : "Unlocks transforming tree boxes into double boxes.") : sn.phase === "SPECIALIZED TREE BOX" ? "Adds +1 tree to each box." : "Adds +2 trees to each planting bed."}</div>
+      <div class="lv">${sn.phaseLevel !== null ? sn.phaseLevel + " / 16 · " : ""}${sn.growthSeconds}s to grow · ${sn.treeHp} hits</div></div>
+      <div class="btns"><button class="key ${PT.has(s, sn.treeBoxCostCurrency, sn.treeBoxCost) ? "" : "grey"}" data-nest="box"><img src="${ICON(boxCur)}" alt="">${fmt(sn.treeBoxCost)}</button></div></div>`;
+    const exp = sn.expansionVisible && !sn.expansionMaxed ? `<div class="row"><img class="ico" src="${ICON("nest")}" alt=""><div><div class="t">Planting Bed Expansion</div><div class="d">Adds a planting bed prepared for 4 trees.</div><div class="lv">${sn.expansionCount} / 8</div></div><div class="btns"><button class="key ${tw.gte(sn.expansionCost) ? "" : "grey"}" data-nest="exp"><img src="${ICON("twig")}" alt="">${fmt(sn.expansionCost)}</button></div></div>` : "";
+    const ups = Object.entries(PT.NEST_UPS).filter(([id]) => PT.nestUpVisible(s, id)).map(([id, u]) => {
+      const L = PT.nestUpLevel(s, id), maxed = L >= u.max, c = maxed ? 0 : u.cost(L), ok = !maxed && tw.gte(c);
+      const show = (lv) => (id === "n_twig_value" ? fmt(PT.nestTwigPerPeck(s, lv)) + " per hit" : id === "n_peck_rate" ? PT.nestHitRate(s, lv).toFixed(2) + " hits/s" : PT.nestPeckDamage(s, lv) + " damage");
+      return `<div class="row"><img class="ico" src="${ICON("twig")}" alt=""><div><div class="t">${u.name}</div><div class="g">${show(L)}${maxed ? "" : ` <b>›››</b> ${show(L + 1)}`}</div><div class="d">${u.text}</div><div class="lv">LV ${L} / ${u.max}</div></div>
+        <div class="btns">${maxed ? `<button class="key gold">MAXED</button>` : `<button class="key ${ok ? "" : "grey"}" data-nup="${id}"><img src="${ICON("twig")}" alt="">${fmt(c)}</button><button class="key small ${ok ? "violet" : "grey"}" data-nupmax="${id}">MAX</button>`}</div></div>`;
+    }).join("");
+    const auto = PT.nestAutomationUnlocked(s) ? `<div class="section">AUTOMATION (Nest level 3)</div><div class="devrow"><label><input type="checkbox" data-in="nautop" ${n.autoPopcornEnabled ? "checked" : ""}> auto egg upgrades</label><label><input type="checkbox" data-in="nautos" ${n.autoSeedsEnabled ? "checked" : ""}> auto seed upgrades</label></div>` : "";
+    return sw + `<div class="note">${fmt(tw)} twigs · ${fmt(PT.nestTwigsPerSec(s))} twigs/s possible · ${PT.NEST_TIERS[n.tier].name} (x${PT.nestResourceMult(s)})</div>${box}${exp}${specials}${ups}${auto}`;
+  }
+  G.breedPick = ["", ""];
+  function lakePanel() {
+    const s = G.s, bs = PT.nestState(s).fishBreeding;
+    if (!bs.unlocked) return `<div class="row"><img class="ico" src="${ICON("aquarium")}" alt=""><div><div class="t">Fish Breeding</div><div class="d">Breed fish and speed up hatching by fishing. Needs Evolution 5 and 600 aquarium resonance.</div></div><div class="btns"><button class="key ${PT.res(s, "twigs").gte(1e6) ? "" : "grey"}" data-act="breedunlock"><img src="${ICON("twig")}" alt="">1M</button></div></div>`;
+    PT.breedSyncReserve(s);
+    const cands = PT.breedCandidates(s), opt = (i) => `<select data-breed="${i}"><option value="">parent ${i ? "B" : "A"}</option>${cands.map((r) => `<option value="${r.fishId}" ${G.breedPick[i] === r.fishId ? "selected" : ""}>${PT.fishName(r.fishId)} x${r.count}</option>`).join("")}</select>`;
+    const pv = PT.breedPreview(s, G.breedPick[0], G.breedPick[1]), now = Date.now(), inc = bs.incubation;
+    const rar = ["common", "uncommon", "rare", "epic", "legendary"];
+    const incH = inc ? `<div class="hero"><div class="big">${inc.hatchAt > now ? "HYBRID FORMING" : "HYBRID READY TO HATCH"}</div><div class="sub">${PT.fishName(inc.parentAId)} × ${PT.fishName(inc.parentBId)} · ${inc.hatchAt > now ? PT.fmtTime((inc.hatchAt - now) / 1000) + " left · fishing speeds it up (same species 5s, same biome 2s, any 1s, shiny -40%)" : `<b style="color:${PT.RARITY_COLOR[inc.resultRarity]}">${inc.resultRarity}</b>${inc.resultShiny ? " SHINY" : ""}`}</div>
+      ${inc.hatchAt <= now ? `<div class="devrow" style="justify-content:center"><button class="key small gold" data-act="breedclaim">HATCH</button>${bs.hybrids.map((h) => `<button class="key small blue" data-bfuse="${h.id}">FUSE into ${h.rarity}</button>`).join("")}<button class="key small grey" data-act="breeddiscard">DISCARD</button></div>` : ""}</div>` : "";
+    const hy = bs.hybrids.map((h) => `<div class="row"><img class="ico" src="${FISHICON(h.dominantParentId)}" alt=""><div><div class="t" style="color:${PT.RARITY_COLOR[h.rarity]}">${h.shiny ? "★ " : ""}${PT.fishName(h.parentAId)} × ${PT.fishName(h.parentBId)}</div><div class="d">${h.rarity} · lineage ${h.lineagePoints}/100 · ${h.id === bs.activeHybridId ? "ACTIVE" : "reserve"}</div></div><div class="btns"></div></div>`).join("");
+    return `${incH}${inc ? "" : `<div class="devrow">${opt(0)}${opt(1)}</div>${pv.monetaCost ? `<div class="note">Cost ${fmt(pv.monetaCost)} moneta · odds ${pv.odds.map((o, i) => rar[i] + " " + o + "%").join(", ")} · shiny ${pv.shinyChance}%${pv.shinyProgress ? " · lineage shiny " + pv.shinyProgress + "/100" : ""}</div>` : ""}
+      <button class="key ${pv.valid ? "" : "grey"}" data-act="breedstart">BREED (both parents are consumed)${pv.reason && pv.monetaCost ? " · " + pv.reason : ""}</button>`}
+      <div class="section">HYBRIDS (${bs.hybrids.length}/${bs.reserveSlotUnlocked ? 2 : 1})</div>${hy || '<div class="note">No hybrids yet. The active hybrid gives its parents\' fish bonuses.</div>'}`;
+  }
+  function pandaPanel() {
+    const s = G.s, r = PT.redPandaState(s);
+    if (!r.introSeen) return `<div class="hero"><img src="${ICON("redpanda")}" alt=""><div class="big">NAME THE RED PANDA</div><div class="sub">It looks like it has been guarding the grain stores.</div>
+      <div class="devrow" style="justify-content:center"><input data-in="pandaname" maxlength="12" placeholder="Red Panda"><button class="key" data-act="pandaname">OK</button></div></div>`;
+    return `<div class="hero"><img src="${ICON("redpanda")}" alt=""><div class="big">${r.name.toUpperCase()}</div><div class="sub">Tier ${r.tier} · ${r.mode === "assist" ? "helping outside" : "napping in the nest"}</div>
+      <div class="devrow" style="justify-content:center"><button class="key ${r.mode === "assist" ? "gold" : ""}" data-panda="assist">HELP</button><button class="key ${r.mode === "chill" ? "gold" : ""}" data-panda="chill">NAP</button></div></div>
+      <div class="note"><b>HELP</b>: chops trees in the Nest at ${PT.nestCompanionDps(s).toFixed(2)} hits/s; anywhere else it gathers 55% of that, ${fmt(0.55 * PT.nestTwigsPerSec(s, "companion"))} twigs/s, also while the game is closed (up to 8 h).</div>
+      <div class="note"><b>NAP</b>: eggs and seeds x1.25.</div>`;
   }
   function sunRow(id) {
     const s = G.s, def = PT.SUN.get(id), own = PT.hasSun(s, id), unl = PT.sunUnlocked(s, id), c = PT.sunCost(s, id);
@@ -493,10 +589,11 @@
       <div class="devrow">Speed ${[1, 10, 100, 1000].map((x) => `<button class="key small ${G.timeScale === x ? "violet" : ""}" data-speed="${x}">x${x}</button>`).join("")}</div>
       <div class="devrow"><select data-in="givecur">${curs}</select><input data-in="giveamt" value="1e6" style="width:90px"><button class="key small" data-act="give">Give</button></div>
       <div class="devrow"><button class="key small" data-act="evo+">Evolution +1 (no reset)</button><button class="key small" data-act="allsun">Own all visible unlocks</button><button class="key small" data-act="fish50">+50 random fish</button></div>
+      <div class="devrow"><label><input type="checkbox" data-in="community" ${PT.COMMUNITY.twigGain > 1 ? "checked" : ""}> Birb community goal active (twigs x1.5, a live server event)</label></div>
       <div class="devrow"><button class="key small" data-act="export">Export save</button><button class="key small" data-act="import">Import save</button><button class="key small grey" data-act="wipe">Wipe save</button></div>
       <textarea data-in="savebox" placeholder="Export puts the save here. Paste a save and press Import.">${saveBox}</textarea>
       ${s_hasDesert() ? `<div class="devrow"><button class="key small" data-act="treeview">Show the ${desertView() ? "sunflower" : "desert"} tree</button></div>` : ""}
-      <div class="note">Done: the Park, Molt, seeds and the sunflower tree, the Sparrow, Castle evolutions, Bridge fishing and the Seagull. The nest, the mine, the desert, the expedition and the echo field come in later phases; their nodes show "needs ..." until then.</div></div>`;
+      <div class="note">Done: the Park, Molt, seeds and the sunflower tree, the Sparrow, Castle evolutions, Bridge fishing and the Seagull. Also done: the Aquarium, Fish Market and the Nest (forest, planting beds, buildings, Red Panda, offline twigs, fish breeding). Riverside and the sawmill (Evolution 6), the mine, the desert, the expedition and the echo field come in later phases; their nodes show "needs ..." until then.</div></div>`;
   }
 
   // ------------------------------------------------------------------ windows (Birb: managed windows over the map)
@@ -510,6 +607,7 @@
     travel: { title: "FAST TRAVEL", body: () => travelPanel() },
     aquarium: { title: "AQUARIUM", tabs: [["biomes", "BIOMES"], ["resonance", "RESONANCE"], ["total", "TOTAL"], ["market", "FISH MARKET"]], body: (t) => (t === "resonance" ? aqResonance() : t === "total" ? aqTotal() : t === "market" ? marketPanel() : aqBiomes()) },
     market: { title: "FISH MARKET", body: () => marketPanel() },
+    redpanda: { title: "RED PANDA", body: () => pandaPanel() },
   };
   // Birb aquarium window: BIOMES (donate per biome), RESONANCE (milestones), TOTAL (all bonuses)
   function aqBiomes() {
@@ -580,6 +678,8 @@
   function reachable(m) { // maps you can walk to from the Park with the current gates
     const s = G.s; if (m === 0) return true;
     if (m === PT.AQUARIUM_MAP) return reachable(2) && PT.aquariumUnlocked(s);
+    if (m === PT.NEST_MAP) return (s.evolutionCount || 0) >= 3;
+    if (m === PT.NEST_ROOM_MAP) return (s.evolutionCount || 0) >= 3 && PT.nestState(s).tier >= 1;
     if (m === PT.FISH_MARKET_MAP) return reachable(PT.AQUARIUM_MAP) && PT.fishMarketUnlocked(s);
     const dir = m > 0 ? 1 : -1; let cur = 0;
     while (cur !== m) { const save = s.currentMap; s.currentMap = cur; const why = PT.travelBlock(s, dir); s.currentMap = save; if (why) return false; cur += dir; }
@@ -592,7 +692,7 @@
   document.getElementById("utility").addEventListener("click", (e) => { const b = e.target.closest("[data-win]"); if (b) openWin(b.dataset.win); });
   document.getElementById("btn-companions").onclick = () => { G.companionsOpen = !G.companionsOpen; drawHud(); };
   document.getElementById("companion-list").addEventListener("click", (e) => { const b = e.target.closest("[data-win]"); if (b) openWin(b.dataset.win); });
-  document.getElementById("btn-autofish").onclick = () => act("autofish");
+  document.getElementById("btn-autofish").onclick = () => { if (G.s.currentMap === PT.NEST_MAP) { const f = PT.nestState(G.s).forest; f.autoCollectEnabled = !f.autoCollectEnabled; if (!f.autoCollectEnabled) G.target = null; } else act("autofish"); };
 
   // panel events
   let saveBox = "";
@@ -609,6 +709,13 @@
     else if (b.dataset.eat) { const r = PT.eatFish(s, b.dataset.eat); toast(r || "Buff active"); }
     else if (b.dataset.lock) { const i = s.lockedFish.indexOf(b.dataset.lock); if (i < 0) s.lockedFish.push(b.dataset.lock); else s.lockedFish.splice(i, 1); }
     else if (b.dataset.biome) PT.aq(s).activeBiomeId = b.dataset.biome;
+    else if (b.dataset.nview) G.nestView = b.dataset.nview;
+    else if (b.dataset.nest) { const r = b.dataset.nest === "box" ? PT.nestBuyTreeBox(s) : PT.nestBuyExpansion(s); if (r) toast(r); }
+    else if (b.dataset.nspec) { const r = PT.nestBuySpecial(s, b.dataset.nspec); if (r) toast(r); }
+    else if (b.dataset.nup) { const r = PT.nestBuyUp(s, b.dataset.nup, false); if (r) toast(r); }
+    else if (b.dataset.nupmax) { const r = PT.nestBuyUp(s, b.dataset.nupmax, true); if (r) toast(r); }
+    else if (b.dataset.panda) PT.redPandaState(s).mode = b.dataset.panda;
+    else if (b.dataset.bfuse) { const r = PT.breedFuse(s, b.dataset.bfuse); toast(r || "Fused!"); }
     else if (b.dataset.donate) { const r = PT.aqDonate(s, b.dataset.donate, false); toast(r || "Donated!"); }
     else if (b.dataset.donates) { const r = PT.aqDonate(s, b.dataset.donates, true); toast(r || "Shiny donated!"); }
     else if (b.dataset.accept) { const r = PT.acceptContract(s, b.dataset.accept); toast(r || "Contract accepted"); }
@@ -627,6 +734,10 @@
   addEventListener("pointerup", () => (G.holdFeed = false));
   function onUiChange(e) {
     const k = e.target.dataset.in, s = G.s;
+    if (e.target.dataset.breed !== undefined) { G.breedPick[+e.target.dataset.breed] = e.target.value; panel.dataset.last = ""; drawPanel(); return; }
+    if (k === "community") PT.COMMUNITY.twigGain = e.target.checked ? 1.5 : 1;
+    if (k === "nautop") PT.nestState(s).autoPopcornEnabled = e.target.checked;
+    if (k === "nautos") PT.nestState(s).autoSeedsEnabled = e.target.checked;
     if (e.target.dataset.ff) { fishFilter[e.target.dataset.ff] = e.target.value; winBody.dataset.last = ""; drawWin(); return; }
     if (k === "feedpct") s.sparrowSeedFeedRatePercent = Math.max(1, Math.min(100, Math.floor(+e.target.value || 25)));
     if (k === "automitosis") s.sparrowAutoMitosisEnabled = e.target.checked;
@@ -647,6 +758,11 @@
     else if (a === "autofish") { if (PT.autoFishUnlocked(s)) G.autoFish = !G.autoFish; else toast("Catch 10 fish by hand first"); }
     else if (a === "sellsafe") toast(PT.sellSafe(G));
     else if (a === "donateall") toast(PT.aqDonateAll(s));
+    else if (a === "pandaname") { PT.nameRedPanda(s, q("pandaname")?.value); toast(s.redPanda.name + " joined you!"); }
+    else if (a === "breedunlock") toast(PT.breedUnlock(s) || "Breeding Lake unlocked");
+    else if (a === "breedstart") toast(PT.breedStart(s, G.breedPick[0], G.breedPick[1]) || "Breeding started");
+    else if (a === "breedclaim") toast(PT.breedClaim(s) || "Hybrid hatched!");
+    else if (a === "breeddiscard") toast(PT.breedDiscard(s) || "Discarded");
     else if (a === "reroll") toast(PT.marketReroll(s) || "New offers");
     else if (a === "migrate") { const r = PT.migrate(s); toast(r || "Migrated!"); }
     else if (a === "frenzy") { const r = PT.frenzy(s); toast(r || "Frenzy!"); }
@@ -673,8 +789,8 @@
     document.getElementById("go-right").classList.toggle("locked", !!R);
     document.getElementById("go-left").style.display = L === "end" ? "none" : "";
     document.getElementById("go-right").style.display = R === "end" ? "none" : "";
-    document.getElementById("label-left").textContent = L === "end" ? "" : PT.MAPS[s.currentMap - 1]?.name || "";
-    document.getElementById("label-right").textContent = R === "end" ? "" : PT.MAPS[s.currentMap + 1]?.name || "";
+    document.getElementById("label-left").textContent = L === "end" ? "" : L && s.currentMap === 0 ? "EVOLUTION 3" : PT.MAPS[PT.travelTarget(s, -1)]?.name || (L ? L.replace(/ \(.*\)$/, "") : "");
+    document.getElementById("label-right").textContent = R === "end" ? "" : PT.MAPS[PT.travelTarget(s, 1)]?.name || "";
     for (const d of ["up", "down"]) {
       const why = PT.vertBlock(s, d), to = PT.vertLinks[s.currentMap]?.[d], el = document.getElementById("go-" + d);
       el.style.display = why === "end" ? "none" : ""; el.classList.toggle("locked", !!why);
@@ -687,12 +803,15 @@
     const comps = [];
     if (s.sparrow.unlocked) comps.push(["sparrow", `${s.sparrow.level} SPARROW`]);
     if (s.hasMetSeagull) comps.push(["seagull", `${s.seagull.level} SEAGULL`]);
+    if (s.redPanda?.introSeen) comps.push(["redpanda", `${PT.redPandaTier(s)} ${s.redPanda.name.toUpperCase()}`]);
     document.getElementById("btn-companions").style.display = comps.length ? "" : "none";
     setHtml("companion-list", G.companionsOpen ? comps.map(([k, n]) => `<button class="key small" data-win="${k}"><img src="${ICON(k)}" alt="">${n}</button>`).join("") : "");
     const af = document.getElementById("btn-autofish");
+    if (s.currentMap === PT.NEST_MAP) { const f = PT.nestState(s).forest; af.style.display = f.autoCollectUnlocked ? "" : "none"; af.className = "key small " + (f.autoCollectEnabled ? "violet" : ""); af.textContent = `AUTO: ${f.autoCollectEnabled ? "ON" : "OFF"}`; }
+    else {
     af.style.display = s.currentMap === 2 && s.evolutionCount >= 1 ? "" : "none";
     af.className = "key small " + (G.autoFish ? "violet" : PT.autoFishUnlocked(s) ? "" : "grey");
-    af.textContent = PT.autoFishUnlocked(s) ? `AUTO: ${G.autoFish ? "ON" : "OFF"}` : `AUTO ${s.manualFishingCatches || 0}/10`;
+    af.textContent = PT.autoFishUnlocked(s) ? `AUTO: ${G.autoFish ? "ON" : "OFF"}` : `AUTO ${s.manualFishingCatches || 0}/10`; }
     document.querySelector('[data-win="fishing"]').classList.toggle("off", s.evolutionCount < 1);
     // Bridge: fishing level top-centre, cast hotbar bottom-centre
     if (s.currentMap === 2 && s.evolutionCount >= 1) {
@@ -704,6 +823,11 @@
       const bait = f.equippedBaitId ? (f.baitInventory.find((b) => b.baitId === f.equippedBaitId)?.count || 0) : null;
       setHtml("hotbar", `<button class="key cast ${F.reeling > 0 || F.casting > 0 ? "gold" : F.cooldown > 0 ? "grey" : ""}" data-act="cast">${state}</button>
         <div class="slots">${slot(f.equippedRodId)}${slot(f.equippedBaitId, bait)}${slot(f.equippedHookId)}${slot(f.equippedLureId)}</div>`);
+    } else if (s.currentMap === PT.NEST_MAP) {
+      const b = PT.nestBuild(s);
+      setHtml("fishbar", `<div class="lvl"><b>${b.tier + 1}</b><div class="bar"><i style="width:${b.progress * 100}%"></i></div><span class="note">${fmt(b.current)}/${fmt(b.required)}</span></div>
+        <div class="sub">TWIGS x${PT.nestTwigMult(s).toFixed(2)} · ${b.isMaxed ? "COMPLETE" : b.isComplete ? "EVOLVE TO LEVEL UP" : "Move close to a tree to start collecting."}</div>`);
+      setHtml("hotbar", "");
     } else { setHtml("fishbar", ""); setHtml("hotbar", ""); }
     setHtml("castle", castleHtml());
     const pr = document.getElementById("prompt");
@@ -730,5 +854,6 @@
   }
   addEventListener("beforeunload", save);
   drawPanel(); drawHud();
+  if (G.offline && G.offline.twigs > 0) toast(`WELCOME BACK! You were away ${PT.fmtTime(G.offline.awaySeconds)}: +${fmt(G.offline.twigs)} twigs`);
   requestAnimationFrame(frame);
 })();

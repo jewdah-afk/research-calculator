@@ -36,7 +36,10 @@ function probe({ side, scenario }) {
     const st = JSON.parse(JSON.stringify(scenario.state));
     deep(s, st);
     if (g.invalidateUpgradeTreeCache) g.invalidateUpgradeTreeCache();
+    g.nestManager.setState(JSON.parse(JSON.stringify(st.nest || {})), false); s.nest = g.nestManager.getState();
+    s.redPanda = Object.assign({ name: "Red Panda", named: false, introSeen: false, tier: 1, mode: "chill", x: 528, y: 300 }, st.redPanda || {}); g.ensureRedPandaState();
     g.aquariumManager.invalidateModifierCache(); g.activeFishEffectSnapshot = null; g.fishMarketManager.normalizedMarketState = null;
+    const nm = g.nestManager, snap = () => nm.getCultivationShopSnapshot();
     const mm = g.fishMarketManager, am = g.aquariumManager;
     A = {
       level: (id) => g.getUpgradeLevel(id), max: (id) => g.getUpgradeMaxLevel(id), eff: (id) => g.getUpgradeEffect(id),
@@ -52,6 +55,17 @@ function probe({ side, scenario }) {
       maxBuffs: () => g.fishingManager.getMaxActiveFishBuffs(), aqUnlocked: () => g.isAquariumUnlocked(),
       contracts: (c, r) => { mm.ensureState(); mm.generateContractOffers(c, r); return JSON.stringify(s.aquarium.market.contractOffers); },
       repLevel: (x) => mm.getContractReputationLevel(x),
+      community: () => g.getCommunityGoalRewardValue("twigGain"),
+      nest: {
+        resMult: () => nm.getResourceMultiplier(), twigMult: () => nm.getForestTwigMultiplier(), perHit: () => nm.getTwigRewardPerHit(),
+        compDps: () => nm.getForestChopDamagePerSecond(), hitRate: () => nm.getBirbForestChopHitRatePerSecond(), peckDmg: () => nm.getBirbForestPeckDamage(),
+        estBirb: () => nm.getEstimatedTwigGenPerSecond("birb"), estComp: () => nm.getEstimatedTwigGenPerSecond("companion"),
+        build: (k) => nm.getNestBuildProgress()[k], maxTier: () => nm.getMaxNestTierForCurrentEvolution(), migrate: () => nm.canMigrate(),
+        silo: () => nm.getGrainSiloMultiplier(), respawn: () => nm.getPopcornRespawnMultiplier(), seedProd: () => nm.getSeedProductionMultiplier(), well: () => nm.getWateringWellResourceMultiplier(),
+        snap: (k) => snap()[k], maxPrev: (kind, k) => nm.getCultivationUpgradeMaxPreview(kind)[k],
+        nap: () => g.getRedPandaNapResourceMultiplier(), pandaTier: () => g.getRedPandaTier(), hybrid: (t) => nm.getActiveHybridMultiplier(t),
+        breed: (a, b, k) => { const v = nm.getFishBreedingPreview(a, b)[k]; return v && typeof v === "object" ? ["common", "uncommon", "rare", "epic", "legendary"].map((r) => v[r]).join(",") : v; },
+      },
     };
   } else {
     const G = window.PT.G, PT = window.PT, s = Object.assign(PT.newState(), fresh());
@@ -74,7 +88,29 @@ function probe({ side, scenario }) {
       maxBuffs: () => PT.maxFishBuffs(s), aqUnlocked: () => PT.aquariumUnlocked(s),
       contracts: (c, r) => { PT.market(s); return JSON.stringify(PT.generateContracts(s, c, r)); },
       repLevel: (x) => PT.repLevel(x),
+      nest: (() => {
+        const sn = () => PT.nestCultSnapshot(s), up = (id) => PT.NEST_UPS[id].cost(PT.nestUpLevel(s, id));
+        const SNAP = { twigValueCost: () => up("n_twig_value"), peckRateCost: () => up("n_peck_rate"), peckPowerCost: () => up("n_peck_power"),
+          peckRateVisible: () => PT.nestUpVisible(s, "n_peck_rate"), peckPowerVisible: () => PT.nestUpVisible(s, "n_peck_power"),
+          treeBoxCost: () => sn().treeBoxCost, treeBoxCostCurrency: () => sn().treeBoxCostCurrency, treeBoxMaxed: () => sn().treeBoxMaxed,
+          treeBoxExpansionVisible: () => sn().expansionVisible, treeBoxExpansionCost: () => sn().expansionCost, growthSeconds: () => sn().growthSeconds,
+          fertilizerVisible: () => PT.NEST_SPECIALS[0].visible(s, s.nest.cultivation), specializedFertilizerVisible: () => PT.NEST_SPECIALS[1].visible(s, s.nest.cultivation),
+          sunflowerFieldVisible: () => PT.NEST_SPECIALS[4].visible(s, s.nest.cultivation), wateringWellVisible: () => PT.NEST_SPECIALS[5].visible(s, s.nest.cultivation),
+          twigValuePerPeck: () => PT.nestTwigPerPeck(s), peckRate: () => PT.nestHitRate(s), peckDamage: () => PT.nestPeckDamage(s) };
+        const KIND = { "twig-value": "n_twig_value", "peck-rate": "n_peck_rate", "peck-power": "n_peck_power" };
+        return {
+          resMult: () => PT.nestResourceMult(s), twigMult: () => PT.nestTwigMult(s), perHit: () => PT.nestRewardPerHit(s),
+          compDps: () => PT.nestCompanionDps(s), hitRate: () => PT.nestHitRate(s), peckDmg: () => PT.nestPeckDamage(s),
+          estBirb: () => PT.nestTwigsPerSec(s, "birb"), estComp: () => PT.nestTwigsPerSec(s, "companion"),
+          build: (k) => PT.nestBuild(s)[k], maxTier: () => PT.nestMaxTier(s), migrate: () => PT.nestCanMigrate(s),
+          silo: () => PT.nestGrainSilo(s), respawn: () => PT.nestRespawnMult(s), seedProd: () => PT.nestSeedProdMult(s), well: () => PT.nestWellMult(s),
+          snap: (k) => SNAP[k](), maxPrev: (kind, k) => { const p = PT.nestMaxPreview(s, KIND[kind]); return k === "totalCost" ? PT.num(p.totalCost) : p[k]; },
+          nap: () => PT.redPandaNapMult(s), pandaTier: () => PT.redPandaTier(s), hybrid: (t) => PT.hybridMult(s, t),
+          breed: (a, b, k) => { const v = PT.breedPreview(s, a, b)[k]; return Array.isArray(v) ? v.join(",") : v; },
+        };
+      })(),
     };
+    PT.nestState(s);
   }
   const out = {}, put = (k, f) => { try { out[k] = num(f()); } catch (e) { out[k] = "ERR " + e.message.slice(0, 60); } };
   for (const d of D.upgrades.filter((u) => !u.id.startsWith("d_"))) {
@@ -93,6 +129,14 @@ function probe({ side, scenario }) {
   for (const b of ["coast", "reef", "freshwater", "ocean", "abyssal", "creatures", "mystic", "mechanical", "expedition"]) put(`aquarium tier ${b}`, () => A.aqTier(b));
   for (const x of [0, 99, 100, 650, 6200, 9999]) put(`market rep level at ${x}`, () => A.repLevel(x));
   if (scenario.state.aquarium) for (const [c, r] of [[20000, 0], [20001, 0], [20001, 2]]) out[`contract offers cycle ${c} reroll ${r}`] = A.contracts(c, r);
+  const N = A.nest;
+  for (const k of ["resMult", "twigMult", "perHit", "compDps", "hitRate", "peckDmg", "estBirb", "estComp", "maxTier", "migrate", "silo", "respawn", "seedProd", "well", "nap", "pandaTier"]) put(`nest ${k}`, N[k]);
+  for (const k of ["tier", "current", "required", "progress", "isComplete", "isMaxed"]) put(`nest build ${k}`, () => N.build(k));
+  for (const k of ["twigValueCost", "peckRateCost", "peckPowerCost", "peckRateVisible", "peckPowerVisible", "treeBoxCost", "treeBoxCostCurrency", "treeBoxMaxed", "treeBoxExpansionVisible", "treeBoxExpansionCost", "growthSeconds", "fertilizerVisible", "specializedFertilizerVisible", "sunflowerFieldVisible", "wateringWellVisible", "twigValuePerPeck", "peckRate", "peckDamage"])
+    out[`nest shop ${k}`] = (() => { try { const v = N.snap(k); return typeof v === "string" ? v : num(v); } catch (e) { return "ERR " + e.message.slice(0, 50); } })();
+  for (const kind of ["twig-value", "peck-rate", "peck-power"]) for (const k of ["targetLevel", "levelsGained", "totalCost"]) put(`nest max preview ${kind} ${k}`, () => N.maxPrev(kind, k));
+  for (const t of ["popcorn_mult", "seed_mult", "xp_mult", "reel_speed_mult", "pickup_mult"]) put(`nest hybrid ${t}`, () => N.hybrid(t));
+  if (scenario.breed) for (const [a, b] of scenario.breed) for (const k of ["monetaCost", "odds", "shinyChance", "shinyParentCount"]) out[`breed ${a} x ${b} ${k}`] = (() => { const v = N.breed(a, b, k); return typeof v === "string" ? v : num(v); })();
   for (const [id] of D.stations) { if (id.startsWith("__")) continue; put(`tree ${id} unlocked`, () => A.sunUnlocked(id)); put(`tree ${id} visible`, () => A.sunVisible(id)); put(`tree ${id} cost`, () => A.sunCost(D.upgrades.find((u) => u.id === id))); }
   return out;
 }
@@ -116,17 +160,20 @@ function probe({ side, scenario }) {
   await ours.evaluate(() => { window.PT.G.paused = true; });
 
   const lines = [], close = (a, b) => (typeof a === "number" && typeof b === "number" ? Math.abs(a - b) <= 1e-6 * Math.max(1, Math.abs(a), Math.abs(b)) : a === b);
-  let total = 0, bad = 0;
+  let total = 0, bad = 0, communityNote = 0;
   const summary = [];
   for (const sc of SCENARIOS) {
     const b = await birb.evaluate(probe, { side: "birb", scenario: sc });
+    const tg = await birb.evaluate(() => window.game.getCommunityGoalRewardValue("twigGain"));
+    await ours.evaluate((v) => { window.PT.COMMUNITY.twigGain = v; }, tg); // live server-wide event value
+    if (!communityNote) communityNote = tg;
     const o = await ours.evaluate(probe, { side: "ours", scenario: sc });
     const rows = [];
     for (const k of Object.keys(b)) { total++; if (!close(b[k], o[k])) { bad++; rows.push(`| ${k} | ${b[k]} | ${o[k]} |`); } }
     summary.push(`| ${sc.name} | ${Object.keys(b).length} | ${rows.length} |`);
     lines.push(`\n### ${sc.name}\n`, rows.length ? "| Value | Birb | Playtest |\n|---|---|---|\n" + rows.join("\n") : "All match.");
   }
-  const report = `# Parity report\n\nBirb's live engine (birbplay.com \`window.game\`) vs the playtest, same save state per scenario. Generated ${new Date().toISOString().slice(0, 16)}Z by \`playtest/parity/parity.js\`.\n\n**${total - bad} / ${total} values match.**\n\n| Scenario | Values | Mismatches |\n|---|---|---|\n${summary.join("\n")}\n${errs.length ? "\nPlaytest page errors:\n" + errs.map((e) => "- " + e).join("\n") + "\n" : ""}${lines.join("\n")}\n`;
+  const report = `# Parity report\n\nBirb's live engine (birbplay.com \`window.game\`) vs the playtest, same save state per scenario. Generated ${new Date().toISOString().slice(0, 16)}Z by \`playtest/parity/parity.js\`.\n\n**${total - bad} / ${total} values match.** Birb's live community-goal twig reward today: x${communityNote} (copied into the playtest for the run).\n\n| Scenario | Values | Mismatches |\n|---|---|---|\n${summary.join("\n")}\n${errs.length ? "\nPlaytest page errors:\n" + errs.map((e) => "- " + e).join("\n") + "\n" : ""}${lines.join("\n")}\n`;
   fs.writeFileSync(path.join(__dirname, "REPORT.md"), report);
   console.log(`${total - bad}/${total} match`);
   console.log(summary.join("\n"));

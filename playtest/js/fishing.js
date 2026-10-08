@@ -99,7 +99,8 @@
     }
     s.activeFishIds = out;
   };
-  PT.activeFishMult = function (s, type, now = Date.now()) {
+  PT.activeFishMult = function (s, type, now = Date.now()) { return activeFishMult0(s, type, now) * (PT.hybridMult ? PT.hybridMult(s, type) : 1); }; // Birb x nest hybrid
+  const activeFishMult0 = function (s, type, now) {
     let sum = 0, any = false; const dur = SHINY_BUFF_MS(s), nb = PT.aqNormalBuffMult ? PT.aqNormalBuffMult(s) : 1;
     for (const id of s.activeFishIds || []) {
       const f = FISH_BY.get(baseId(id)); if (!f?.effect || f.effect.type !== type) continue;
@@ -294,6 +295,7 @@
     if (manual) s.manualFishingCatches = Math.min(10, (s.manualFishingCatches || 0) + 1);
     const xpOf = (x) => Math.floor((TUNE.xpPerFish[x.rarity] || 5) * (PT.hasSun(s, "d_xp_tome") ? 1.5 : 1));
     addFishingXp(s, xpOf(a) + (second ? xpOf(second) : 0));
+    if (PT.breedOnCatch) { PT.breedOnCatch(s, a.id, g); if (second) PT.breedOnCatch(s, second.id, g2); }
     return { fish: a, shiny: g, weight: w, record: rec, second, shiny2: g2, weight2: w2 };
   };
 

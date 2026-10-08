@@ -12,14 +12,24 @@
     3: { id: 3, key: "castle", name: "THE CASTLE", w: 1600, h: 1152 },
     22: { id: 22, key: "aquarium", name: "THE AQUARIUM", w: 1600, h: 1100, side: true },
     24: { id: 24, key: "fish-market", name: "FISH MARKET", w: 1056, h: 792, side: true },
+    4: { id: 4, key: "nest", name: "BIRB NEST", w: 1600, h: 2112 },
+    14: { id: 14, key: "twig-nest-room", name: "NEST INTERIOR", w: 1056, h: 792, side: true },
+  };
+  // Birb map arrows: the Nest (4) is left of the Park (0); its left arrow leads to the Expedition hub (later phase).
+  PT.travelTarget = function (s, dir) {
+    const m = s.currentMap;
+    if (m === 0 && dir < 0) return 4;
+    if (m === 4) return dir > 0 ? 0 : -99;
+    return m + dir;
   };
   // Birb sA(): the Aquarium is "down" from the Bridge (Evolution 5), the Fish Market is a room off the Aquarium.
-  PT.vertLinks = { 2: { down: 22 }, 22: { up: 2, down: 24 }, 24: { up: 22 } };
+  PT.vertLinks = { 2: { down: 22 }, 22: { up: 2, down: 24 }, 24: { up: 22 }, 4: { up: 14 }, 14: { down: 4 } };
   PT.vertBlock = function (s, dir) {
     const to = PT.vertLinks[s.currentMap]?.[dir];
     if (to === undefined) return "end";
     if (to === 22 && !PT.aquariumUnlocked(s)) return "The Aquarium opens at Evolution 5";
     if (to === 24 && !PT.fishMarketUnlocked(s)) return "The Fish Market opens at 700 resonance";
+    if (to === 14 && PT.nestState(s).tier < 1) return "The nest interior opens at Nest level 2";
     return "";
   };
   // Birb uA(): +1 = right arrow, -1 = left. Returns "" or the reason travel is blocked.
@@ -30,9 +40,10 @@
       if (m === 0 && (s.rebirthCount || 0) < 1) return "Molt once to travel";
       if (m === 1 && !s.hasUnlockedEvolve) return "Needs Unlock Evolve";
       if (m === 2 && !s.hasEnteredDungeon) return "Walk to the castle gate at the end of the bridge";
-      if (m >= 3) return "end";
+      if (m === 3) return "end";
     } else {
-      if (m === 0) return (s.evolutionCount || 0) < 3 ? "Needs Evolution 3 (Nest)" : "Nest: later phase";
+      if (m === 0) return (s.evolutionCount || 0) < 3 ? "EVOLUTION 3" : "";
+      if (m === 4) return "COMPLETE NEST LEVEL 2 (Expedition: later phase)";
     }
     return "";
   };
@@ -51,8 +62,9 @@
 
   // Later-phase multipliers are 1 until those systems exist (fish, nest, quests, sacrifice, red panda).
   PT.fishMult = () => 1;
-  const nestPopcornRespawnMult = () => 1, nestSeedProductionMult = () => 1, grainSilo = () => 1, wateringWell = () => 1;
-  const questBonus = () => 0, sacrificeMult = () => 1, redPandaNap = () => 1, flockCommunity = () => 1;
+  const nestPopcornRespawnMult = (s) => (PT.nestRespawnMult ? PT.nestRespawnMult(s) : 1), nestSeedProductionMult = (s) => (PT.nestSeedProdMult ? PT.nestSeedProdMult(s) : 1);
+  const grainSilo = (s) => (PT.nestGrainSilo ? PT.nestGrainSilo(s) : 1), wateringWell = (s) => (PT.nestWellMult ? PT.nestWellMult(s) : 1);
+  const questBonus = () => 0, sacrificeMult = () => 1, redPandaNap = (s) => (PT.redPandaNapMult ? PT.redPandaNapMult(s) : 1), flockCommunity = () => 1;
 
   // Birb: fo/$r  a + i * log10(x / t + 1)
   const logCurve = (x, t, i, a) => a + i * D(x).div(t).add(1).log10().toNumber();
@@ -324,7 +336,7 @@
     return true;
   };
   // Birb oz: rebirb at 16 sparrows; also needs the nest's first tier (rz -> nestManager.canMigrate)
-  PT.sparrowRebirbReady = (s) => ((s.nest?.tier || 0) >= 1);
+  PT.sparrowRebirbReady = (s) => (PT.nestCanMigrate ? PT.nestCanMigrate(s) : (s.nest?.tier || 0) >= 1);
   PT.sparrowRebirb = function (s) {
     const n = Math.max(1, Math.floor(s.sparrowCount || 1));
     if (!PT.sparrowRebirbReady(s) || n < SP.full) return false;
@@ -451,6 +463,7 @@
       s.activeFishIds = []; s.activeFishBuffs = {};
     }
     if (s.evolutionCount >= 1) s.sparrow.unlocked = true;
+    if (PT.nestOnEvolve) PT.nestOnEvolve(G);
     s.currentMap = 0; s.player.x = 528; s.player.y = 396;
     return true;
   };

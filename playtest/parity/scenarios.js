@@ -34,3 +34,28 @@ module.exports = [
     { name: "aquarium full + market", state: { ...base, fishInventory: [...inv, { fishId: disc[0] + "__shiny", count: 3 }], aquarium: { ...aquarium(1, 4), market: { contractReputationXp: 1200 } } } },
   );
 }
+
+// Nest scenarios (Birb's state.nest shape: twigs live in nest.resources)
+{
+  const fs = require("fs"), path = require("path");
+  const window = {}; eval(fs.readFileSync(path.join(__dirname, "../js/data.js"), "utf8"));
+  const FISH = window.BIRB_DATA.tables.fish;
+  const box = (i, kind) => ({ slotIndex: i, specialized: kind !== "plain", ...(kind === "quad" ? { extraTrees: [{ age: 0, hp: 12 }, { age: 0, hp: 12 }] } : {}) });
+  const boxes = (n, kind, from = 0) => Array.from({ length: n }, (_, i) => box(from + i, kind));
+  const pick = (type) => FISH.find((f) => f.effect && f.effect.type === type && f.rarity === "rare") || FISH.find((f) => f.effect && f.effect.type === type);
+  const fa = pick("popcorn_mult").id, fb = pick("seed_mult").id, fc = pick("xp_mult").id;
+  const ev3 = { evolutionCount: 3, rebirthCount: 20, playTime: 90000, upgrades: { p_value: 300, p_speed: 12, p_capacity: 40, pr_respawn_mult: 6 }, sunflowerUpgrades: { d_unlock_evolve: 1, d_sunflower_machine: 1 } };
+  module.exports.push(
+    { name: "nest start", state: { ...ev3, nest: { unlocked: true, tier: 0, resources: { twigs: 40 }, forest: { tierTwigsProgress: 40, totalTwigsFromTrees: 40 } } } },
+    { name: "nest boxes", state: { ...ev3, nest: { unlocked: true, tier: 0, resources: { twigs: 52000 }, upgrades: { n_twig_value: 60, n_peck_rate: 12, n_peck_power: 2 },
+      forest: { tierTwigsProgress: 1e5, totalTwigsFromTrees: 1.2e5 }, cultivation: { schemaVersion: 8, treeBoxCount: 16, treeBoxes: boxes(16, "plain"), specialUpgrades: { fertilizer: true, grainSilo: true, cornfield: true } } } } },
+    { name: "nest tier 2", redPanda: true, state: { ...ev3, evolutionCount: 5, resources: { monetariaMoneta: 5e5 },
+      nest: { unlocked: true, tier: 2, resources: { twigs: 3e7 }, upgrades: { n_twig_value: 400, n_peck_rate: 20, n_peck_power: 9 }, forest: { tierTwigsProgress: 4e7, totalTwigsFromTrees: 6e7 },
+        cultivation: { schemaVersion: 8, treeBoxCount: 16, treeBoxes: [...boxes(10, "quad"), ...boxes(6, "double", 10)], treeBoxEvolution: true, treeBoxQuadEvolution: true,
+          specialUpgrades: { fertilizer: true, specializedFertilizer: true, grainSilo: true, cornfield: true, sunflowerField: true, wateringWell: true } },
+        fishBreeding: { unlocked: true, hybrids: [{ id: "nest_hybrid_1", parentAId: fa, parentBId: fb, dominantParentId: fb, rarity: "epic", shiny: true, lineagePoints: 30, hatchedAt: 1 }], activeHybridId: "nest_hybrid_1", nextHybridId: 2 } },
+      redPanda: { name: "Mochi", named: true, introSeen: true, mode: "chill" },
+      fishInventory: [{ fishId: fa, count: 3 }, { fishId: fb, count: 2 }, { fishId: fc + "__shiny", count: 1 }] },
+      breed: [[fa, fb], [fa, fc + "__shiny"], [fb, fb]] },
+  );
+}

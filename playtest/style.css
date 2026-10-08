@@ -121,8 +121,8 @@ textarea { width: 100%; height: 90px; background: #10141a; color: var(--text); b
 @media (max-width: 900px) { #layout { flex-direction: column; } #drawer { width: 100%; height: 50%; } }
 
 .arrow.up, .arrow.down { left: 50%; top: auto; transform: translateX(-50%); width: 88px; height: 40px; }
-.arrow.up { top: 92px; } .arrow.down { bottom: 92px; }
-#label-up { left: 50%; top: 138px !important; transform: translateX(-50%); }
+.arrow.up { top: 122px; } .arrow.down { bottom: 92px; }
+#label-up { left: 50%; top: 168px !important; transform: translateX(-50%); }
 #label-down { left: 50%; top: auto !important; bottom: 138px; transform: translateX(-50%); }
 #btn-aquarium { position: absolute; right: 10px; bottom: 76px; z-index: 3; }
 .biomes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 8px; }

@@ -1,21 +1,24 @@
 # Parity report
 
-Birb's live engine (birbplay.com `window.game`) vs the playtest, same save state per scenario. Generated 2026-10-08T05:52Z by `playtest/parity/parity.js`.
+Birb's live engine (birbplay.com `window.game`) vs the playtest, same save state per scenario. Generated 2026-10-08T17:24Z by `playtest/parity/parity.js`.
 
-**5209 / 5229 values match.**
+**7483 / 7509 values match.** Birb's live community-goal twig reward today: x1.5 (copied into the playtest for the run).
 
 | Scenario | Values | Mismatches |
 |---|---|---|
-| fresh start | 522 | 2 |
-| early eggs | 522 | 2 |
-| first molt done | 522 | 2 |
-| seeds online | 522 | 2 |
-| evolve unlocked | 522 | 2 |
-| evolution 1 | 522 | 2 |
-| evolution 3 | 522 | 2 |
-| aquarium early | 525 | 2 |
-| aquarium mid | 525 | 2 |
-| aquarium full + market | 525 | 2 |
+| fresh start | 576 | 2 |
+| early eggs | 576 | 2 |
+| first molt done | 576 | 2 |
+| seeds online | 576 | 2 |
+| evolve unlocked | 576 | 2 |
+| evolution 1 | 576 | 2 |
+| evolution 3 | 576 | 2 |
+| aquarium early | 579 | 2 |
+| aquarium mid | 579 | 2 |
+| aquarium full + market | 579 | 2 |
+| nest start | 576 | 2 |
+| nest boxes | 576 | 2 |
+| nest tier 2 | 588 | 2 |
 
 ### fresh start
 
@@ -81,6 +84,27 @@ Birb's live engine (birbplay.com `window.game`) vs the playtest, same save state
 | upgrade m_charged_strike effect | 3 | 1 |
 
 ### aquarium full + market
+
+| Value | Birb | Playtest |
+|---|---|---|
+| upgrade m_rupture effect | 0.25 | 1 |
+| upgrade m_charged_strike effect | 3 | 1 |
+
+### nest start
+
+| Value | Birb | Playtest |
+|---|---|---|
+| upgrade m_rupture effect | 0.25 | 1 |
+| upgrade m_charged_strike effect | 3 | 1 |
+
+### nest boxes
+
+| Value | Birb | Playtest |
+|---|---|---|
+| upgrade m_rupture effect | 0.25 | 1 |
+| upgrade m_charged_strike effect | 3 | 1 |
+
+### nest tier 2
 
 | Value | Birb | Playtest |
 |---|---|---|
