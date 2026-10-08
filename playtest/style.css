@@ -1,0 +1,74 @@
+/* Peckwood playtest: UI v2 look (dark themed windows, thin ink outline, 3D keys, Fredoka). */
+:root {
+  --ink: #0b0c10;
+  --bg: #12161c;
+  --panel: #1d232d;
+  --panel2: #252c38;
+  --card: #2b3340;
+  --text: #f4f1ea;
+  --muted: #a9b3c2;
+  --amber: #f7a634;
+  --amber2: #e07a1c;
+  --violet: #b06cff;
+  --green: #4fd85a;
+  --grey: #5b6472;
+  --blue: #3a8bff;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: "Fredoka", system-ui, sans-serif; }
+button { font-family: inherit; }
+#hud { height: 56px; display: flex; align-items: center; gap: 12px; padding: 0 12px; background: #0e1217; border-bottom: 3px solid var(--ink); }
+#wallet { display: flex; gap: 8px; flex-wrap: wrap; flex: 1; }
+.chip { display: flex; align-items: center; gap: 6px; background: var(--panel2); border: 2px solid var(--ink); border-radius: 999px; padding: 3px 12px 3px 4px; font-family: "Fredoka One"; font-size: 15px; }
+.chip img { width: 26px; height: 26px; }
+.chip .rate { font-family: "Fredoka"; font-size: 11px; color: var(--muted); }
+#mapname { font-family: "Fredoka One"; font-size: 20px; letter-spacing: .5px; background: linear-gradient(#ffd27a, #e07a1c); color: var(--ink); padding: 4px 16px; border: 2px solid var(--ink); border-radius: 10px; }
+#hud-right { display: flex; align-items: center; gap: 8px; }
+#speedtag { font-size: 12px; color: var(--muted); }
+#layout { display: flex; height: calc(100% - 56px); }
+#stage { position: relative; flex: 1; min-width: 0; background: #2d4a2a; overflow: hidden; }
+#view { display: block; width: 100%; height: 100%; cursor: crosshair; }
+.arrow { position: absolute; top: 50%; transform: translateY(-50%); width: 44px; height: 88px; font-size: 22px; background: rgba(14, 18, 23, .75); color: var(--text); border: 2px solid var(--ink); border-radius: 10px; cursor: pointer; }
+.arrow.left { left: 8px; } .arrow.right { right: 8px; }
+.arrow.locked { opacity: .45; }
+#prompt { position: absolute; left: 50%; bottom: 46px; transform: translateX(-50%); background: rgba(14,18,23,.9); border: 2px solid var(--ink); border-radius: 10px; padding: 6px 14px; display: none; font-size: 14px; }
+#toast { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); background: #ffd27a; color: var(--ink); font-family: "Fredoka One"; padding: 6px 16px; border: 2px solid var(--ink); border-radius: 10px; opacity: 0; transition: opacity .25s; pointer-events: none; }
+#help { position: absolute; left: 8px; bottom: 8px; font-size: 11px; color: rgba(255,255,255,.7); }
+#drawer { width: 420px; display: flex; flex-direction: column; background: var(--panel); border-left: 3px solid var(--ink); }
+#tabs { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px; background: #161b22; border-bottom: 3px solid var(--ink); }
+.tab { display: flex; align-items: center; gap: 4px; padding: 4px 10px 4px 4px; border: 2px solid var(--ink); border-radius: 8px; background: var(--panel2); color: var(--muted); font-family: "Fredoka One"; font-size: 13px; cursor: pointer; }
+.tab img { width: 22px; height: 22px; }
+.tab.on { background: linear-gradient(#ffd27a, #e07a1c); color: var(--ink); }
+#panel { flex: 1; overflow: auto; padding: 10px; }
+.hdr { font-family: "Fredoka One"; font-size: 22px; text-align: center; margin: 2px 0 8px; }
+.hero { background: var(--panel2); border: 2px solid var(--ink); border-radius: 12px; padding: 10px; margin-bottom: 10px; text-align: center; }
+.hero img { width: 72px; height: 72px; }
+.hero .big { font-family: "Fredoka One"; font-size: 20px; }
+.hero .sub { font-size: 13px; color: var(--muted); margin: 4px 0 8px; }
+.section { font-family: "Fredoka One"; font-size: 13px; color: var(--muted); margin: 10px 2px 6px; letter-spacing: .4px; }
+.row { display: grid; grid-template-columns: 52px 1fr 112px; gap: 8px; align-items: center; background: var(--card); border: 2px solid var(--ink); border-radius: 12px; padding: 8px; margin-bottom: 8px; }
+.row img.ico { width: 48px; height: 48px; }
+.row .t { font-family: "Fredoka One"; font-size: 15px; color: #ffd27a; }
+.row .g { font-family: "Fredoka One"; font-size: 13px; }
+.row .g b { color: var(--green); }
+.row .d { font-size: 12px; color: var(--muted); }
+.row .lv { font-size: 11px; color: var(--muted); }
+.btns { display: flex; flex-direction: column; gap: 4px; }
+.key { position: relative; border: 2px solid var(--ink); border-radius: 10px; padding: 6px 8px; font-family: "Fredoka One"; font-size: 14px; color: var(--ink); background: linear-gradient(#7dff86, #2bd04a 60%, #15962f); box-shadow: 0 3px 0 var(--ink); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px; }
+.key img { width: 18px; height: 18px; }
+.key:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--ink); }
+.key.grey { background: linear-gradient(#8a93a1, #5b6472); color: #1a1f27; }
+.key.blue { background: linear-gradient(#8cc4ff, #3a8bff); }
+.key.gold { background: linear-gradient(#ffe08a, #d7a724); }
+.key.violet { background: linear-gradient(#e9c4ff, #8a3fe6); }
+.key.small { font-size: 12px; padding: 3px 8px; box-shadow: 0 2px 0 var(--ink); }
+.key.wide { width: 100%; padding: 9px; font-size: 16px; }
+.bar { height: 14px; background: #10141a; border: 2px solid var(--ink); border-radius: 8px; overflow: hidden; margin-top: 4px; }
+.bar > i { display: block; height: 100%; background: linear-gradient(#fffbd0, #f5d06b, #b28d34); }
+.note { font-size: 12px; color: var(--muted); margin: 6px 2px; line-height: 1.4; }
+.kv { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; font-size: 13px; }
+.kv span:nth-child(odd) { color: var(--muted); }
+.dev input, .dev select { font-family: inherit; background: #10141a; color: var(--text); border: 2px solid var(--ink); border-radius: 8px; padding: 4px 6px; }
+.devrow { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
+textarea { width: 100%; height: 90px; background: #10141a; color: var(--text); border: 2px solid var(--ink); border-radius: 8px; font-size: 11px; }
+@media (max-width: 900px) { #layout { flex-direction: column; } #drawer { width: 100%; height: 50%; } }

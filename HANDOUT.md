@@ -103,6 +103,12 @@ Notes for the owner's review:
 - New screens show two tabs (parent window + the new one), like the existing frames; in game the tab bar comes from `Spec.GROUPS`.
 - Long Birb names were shortened so every row keeps the same type size: Near Response (Nearby Response), Desert Harvest (Treasured Harvest), Irrigation (Sunsprout Irrigation), Sand Harvest (Sandstorm Harvest), Fast Farming (Efficient Farming), Wisdom (Ancestral Wisdom), Double Catch (Echo Double Catch).
 - Not in `birb-data` yet, so shown as a guess or "—": the mine tree node order per area, Lumberyard and Compost effects, the Tree Spawns cost, artifact infusion caps (wiki values).
+### Hero icon outlines (2026-10-08, owner's call)
+The 41 big hero icons on UI v2 had 8 stacked 2 px ink drop shadows (offsets ±2 and ±1.4 diagonal, radius 0, #0B0C10) drawing a second outline on top of the PNG's own ink ring. Removed, so only the PNG ring shows. Key and tab icons still have their thinner extra outline (1–2.4 px), untouched. The Roblox UI draws the PNG directly, so it already matches.
+
+### Playtest: HTML copy of Birb (2026-10-08)
+`playtest/` is a plain HTML/CSS/JS copy of Birb's gameplay with our names and icons, built phase by phase from the live birbplay.com code, to compare with Figma and Roblox. Phase 1 (Park, Molt, seeds, sunflower tree, Sparrow, Castle evolutions) is done. See `playtest/README.md`, and `playtest/DIFFERENCES.md` for where our game differs from Birb.
+
 ### Map boards (Figma, 2026-10-08)
 Frame **`178:7`** "Peckwood / Map boards" on page UI v2 (x 4200, y 9000), built from the owner's World Guide artifact (layout #1 "Peckwood Isle").
 - **World / unlock order** `178:10`: the 9 unlock steps in `Defs.ISLANDS` order (map view), plus the whole world at night 01:00 and golden hour 18:30.
