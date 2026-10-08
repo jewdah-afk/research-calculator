@@ -53,7 +53,7 @@ Eggs are now the main currency. **Only what players see changed; internal ids st
 2. Delete the Figma temp atlas `83:7` once the art loads (`use_figma`: `(await figma.getNodeByIdAsync('83:7')).remove()`).
 3. Upload the 426 fish icons (`birb-icons/final/fish/`, batches of 25, serve on :8799) and add them to `Icons.luau` using `tools/rec.py` and the generator snippet. Until then, fish rows show no icon.
 4. Islands other than the Park reuse the Park map. The Desert is a field toggle (golden drops). Each island still needs its own 3D area: garden, bridge/fishing spot, forest, mine, castle.
-5. **Next up:** finish the rest of Birb's gameplay 1:1 (gap audit first), then ship eggs + upgrade icons in game, then the visual hierarchy QA pass (all in `NEXT_CHAT_PROMPT.md`, tasks 1–3).
+5. **Next up (no Studio access for now, Figma only):** gap audit of the remaining Birb gameplay, design every missing screen in Figma, map boards per area from the owner's World Guide artifact (https://claude.ai/artifact/Ux19BGfq7Jq4De8RCBYiwL), then the visual hierarchy QA in Figma. Details in `NEXT_CHAT_PROMPT.md`.
 6. Unverified numbers: seeds base 3/s (from the Figma copy), fishing cast 4s × rod speed, expedition kill rate and floor progression (simplified), Dave XP from golden pickups.
 
 ### Tools

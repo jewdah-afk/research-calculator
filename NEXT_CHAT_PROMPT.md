@@ -65,29 +65,29 @@ You're continuing **Peckwood**, a Roblox remake of the incremental game Birb. Re
 - **Eggs replace popcorn** (2026-10-08): only player-facing text and art changed; internal ids, save keys and math stay `popcorn`/`goldenPopcorn`. Golden popcorn = golden eggs.
 - **Upgrade-row icons** are the CURRENT in-game icon + a painted badge in the lower-right, merged into one silhouette with one shared ink ring (`birb-icons/compose_upgrades.py` → `final/up_*.png`). Badges: green arrow = value, blue plus = cap, yellow bolt = speed, orange × = multiplier, red/yellow burst = power, teal loop = regen (`final/badge_*.png`). The owner REJECTED: hand-drawn Figma vector badges, pixel/blocky badges, tiles/circles behind badges, repainted subjects (AI look), old approved-sheet bases, the magnet-with-eggs, a bolt drawn on the wing, stacked crates. Change only what is asked; when the owner says "it was perfect before", go back to that exact version.
 
+## Right now: no Studio access, Figma only
+The owner can't open Roblox Studio for now. **Do everything visually in Figma** (file `SQOJ2gzGt12vFMGGlNRWBE`, page "UI v2" `7:7`; load the figma-use skill first). Don't touch the Roblox code until Studio is back, except to read it for data. The Studio workflow above is for later.
+
+**World reference:** the owner's live 3D "Peckwood World Guide" artifact: https://claude.ai/artifact/Ux19BGfq7Jq4De8RCBYiwL (read it with the Artifact tool, `action: read`). It is built from `World.luau` / `IslandData` and shows the custom builds: the Park with waterfalls, Forest (falling leaves), Desert (drifting sand), Echo Field (rising sparkles), Mine (sparks), the old Bridge lane, the coast with seagulls, the windmill, LEGO brick terrain (studded grass plates, earth/rock cliff courses, paths one plate lower, sand-bed ponds), highlands with snow on top, a living sea (reef depths, foam, fish, sharks, whale, night jellyfish), the 24-min day cycle, and the sea terraforming into one landmass as areas unlock. Treat it as the source of truth for how the map looks. To get it into Figma, screenshot its views (Map view, each area, day/night, unlock steps) with the pre-installed Playwright/Chromium and upload them with `upload_assets`.
+
 ## Next tasks (in order)
-1. **Add the rest of Birb's gameplay, 1:1.** The math library is verified (`birb-data/`), but the Roblox server (`roblox/src/server/Game.luau`) only runs part of it. Start with a gap audit: walk `birb-data/SYSTEMS.md`, `CORE_FORMULAS.md` and `upgrades.json` section by section, grep `Game.luau`/`Defs.luau`, and write a checklist (built / simplified / missing) into HANDOUT §0. Gaps already spotted:
-   - **Desert research tree (`d_*`):** 143 one-off unlocks in `upgrades.json`; only ~10 are referenced in the game. Needs the effects wired and a tree screen.
-   - **Echo field archivist tree** (R/E/A/V/F nodes: Nearby Response, Duet, Tuning, mushroom collectors, Flock Memory, Golden Ascension…), SYSTEMS.md "Echo field".
-   - **Nest:** cultivation (tree boxes), riverside, carpentry (soft-cap), forest tree tiers.
-   - **Mine:** giants (HP and rewards), crow damage/speed curve check.
-   - **Expedition:** equipment (beak/armor/aura) and the 47 artifacts with infusion; real floor progression and kill rate (now simplified); per-enemy behaviour.
-   - **Companions:** Seagull Frenzy (Migration unlock), Sparrow Resonance/Mitosis and Dave XP from golden pickups need checking against the data.
-   - **Quests/Sacrifice:** the 19-quest main list and all 18 sacrifice tiers (only 3 shown).
-   - **Persistence:** confirm DataStore saves, offline progress (if Birb has it) and leaderboards (`EN.lbencode`).
-   - Unverified numbers already listed in HANDOUT §0 open issue 6 (seeds 3/s, fishing cast 4s × rod speed, expedition rates).
-   Build each system server-side from the ported formulas, add its UI by duplicating the real Figma frames (never redraw), test with the dev saves (REGULAR / MAXED / NEXT ISLAND), and check numbers against the original functions like §3 of the handout did.
-2. **Ship eggs + the upgrade icons in game** (they exist only in Figma and `birb-icons/final/` right now; the live build still shows popcorn).
-   - Upload with Studio MCP `upload_image` (serve `birb-icons/final` on :8799): `egg`, `egg_golden`, the `shop_*` egg set, and every `up_*.png` (24 files).
-   - `Icons.luau`: replace the `popcorn`, `golden` and `shop_*` ids; add `up_*` ids. `Spec.luau`: point each upgrade row at its `up_*` icon (row → icon map is in HANDOUT §0 "Upgrade icons" and in `compose_upgrades.py` comments; Figma slots are named `ico/<name>`).
-   - Re-export the window art from the square-top atlas `117:7` into `FigmaArt.luau` (the baked renders still say POPCORN), wait for moderation, then QA every window at 1.6–2.6x on MAXED and REGULAR.
-3. **Visual hierarchy QA pass** (screenshot everything, zoomed). Work window by window and on the HUD, fix as you go:
-   - **HUD reading order:** island banner → main currency (big egg counter) → window drawer → wallet chips → nav tiles. Check the eye lands in that order; the wallet chips must not out-shout the main counter (size, saturation, glow). Main counter bottom-left must stay the biggest number on screen.
-   - **Window reading order:** title → hero (icon, title, subtitle, button) → tab bar → row title → growth line (`a >>> b`) → description → level bar → buy button. Check font sizes/weights step down consistently across all 20 windows; descriptions must be clearly secondary; numbers in growth lines use the theme accent.
-   - **Icons:** every row icon the same optical size and centred in its slot (badged icons read slightly smaller: compare against plain ones), nothing clipped by the slot, badges visible at 1x.
-   - **Buttons:** BUY (lit theme colour) > BUY ALL (blue) > MAXED (gold) > can't-afford (grey) must be distinguishable at a glance; pressed state sinks, never drifts.
-   - **Colour/contrast:** text on every theme passes a quick contrast check; no two adjacent wallet chips or drawer bookmarks share a colour.
-   - **Map:** the bird, eggs on the field and interactive props must read above the decor (HANDOUT §5 "map hierarchy"); check day and night.
-   - Deliver a short before/after board (artifact or screenshots) per area, then implement the owner's picks.
-4. **Other islands** (unchanged plan): concept board for all 8 islands in the Park LEGO style, then build each via IslandView with its own MapData, unlock build-in and "Go to …" travel.
-5. **Leftovers:** Rebirb (Dave) still shows golden popcorn and Resonance (Sparrow) shows popcorn in Figma; `Config.GROUP_ID`; 426 fish icons; delete Figma temp atlases `83:7` and `117:7` only after art is re-exported; smooth-60fps pass.
+1. **Gap audit (read-only).** Walk `birb-data/SYSTEMS.md`, `CORE_FORMULAS.md` and `upgrades.json` against what already has a screen in Figma (UI v2 board `8:7`, square-top atlas `117:7`) and what `roblox/src/server/Game.luau` runs. Write a built / simplified / missing checklist into HANDOUT §0. Gaps already spotted:
+   - **Desert research tree (`d_*`):** 143 one-off unlocks; only ~10 used. Needs a tree screen.
+   - **Echo field archivist tree** (R/E/A/V/F nodes: Nearby Response, Duet, Tuning, mushroom collectors, Flock Memory, Golden Ascension…).
+   - **Nest:** cultivation (tree boxes), riverside, carpentry, forest tree tiers.
+   - **Mine:** giants.
+   - **Expedition:** equipment (beak/armor/aura), the 47 artifacts with infusion, floor progression/boss screens.
+   - **Companions:** Seagull Frenzy, Sparrow Resonance/Mitosis states, Dave XP.
+   - **Quests/Sacrifice:** the 19-quest main list and all 18 sacrifice tiers.
+   - **Meta:** leaderboards, settings, offline-earnings popup (if Birb has one), unlock/new-island toasts.
+2. **Design every missing screen in Figma.** Duplicate the real square-top window frames (`117:*`) and UI v2 parts (header, tabs, hero, rows, buttons, progress bars); never redraw. Use the real numbers from `birb-data` in the copy. Use existing icons from `birb-icons/final/` (and the `up_*` upgrade icons); new icons only via the icon pipeline and only when nothing fits. Add a spec card per screen like the existing ones (states, motion). Show each screen zoomed.
+3. **Map board in Figma.** One board per area (Park, Garden, Castle, Bridge, Forest, Mine, Desert, Expedition, Echo Field) from the World Guide: hero shot, day and night, how it joins its neighbours, the unlock moment (sea terraforming), and where the HUD/drawer sit over it. Plus a whole-world map view in unlock order (`Defs.ISLANDS`). Annotate props and effects so it can be rebuilt in Studio later.
+4. **Visual hierarchy QA (in Figma).** On full HUD + window mockups over the map:
+   - **HUD reading order:** island banner → big egg counter → drawer → wallet chips → nav tiles; wallet chips must not out-shout the main counter.
+   - **Window reading order:** title → hero → tabs → row title → growth line → description → level bar → buy button, stepping down the same way in all windows.
+   - **Icons:** same optical size and centred in every slot; badges readable at 1x.
+   - **Buttons:** BUY > BUY ALL > MAXED > can't-afford distinguishable at a glance.
+   - **Contrast and colour:** readable text on every theme; no neighbouring chips or bookmarks the same colour.
+   - **Map:** the bird, eggs and interactive props read above the decor, day and night.
+   Deliver before/after boards per area and let the owner pick.
+5. **Leftovers in Figma:** Rebirb (Dave) still shows golden popcorn and Resonance (Sparrow) shows popcorn. When Studio is back: upload eggs + `up_*` icons, map them in `Icons.luau`/`Spec.luau`, re-export `FigmaArt.luau`, and build the gameplay from task 1 server-side 1:1.
