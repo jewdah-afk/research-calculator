@@ -1,3 +1,5 @@
 roblox/assets/figma/*.png
 roblox/assets/figma/fit/
 roblox/*.rbxl
+__pycache__/
+birb-icons/final_pre_ring/
