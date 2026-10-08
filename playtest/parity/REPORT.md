@@ -1,8 +1,8 @@
 # Parity report
 
-Birb's live engine (birbplay.com `window.game`) vs the playtest, same save state per scenario. Generated 2026-10-08T22:14Z by `playtest/parity/parity.js`.
+Birb's live engine (birbplay.com `window.game`) vs the playtest, same save state per scenario. Generated 2026-10-08T22:15Z by `playtest/parity/parity.js`.
 
-**50989 / 50991 values match.** Birb's live community-goal twig reward today: x1.5 (copied into the playtest for the run).
+**50991 / 50991 values match.** Birb's live community-goal twig reward today: x1.5 (copied into the playtest for the run).
 
 | Scenario | Values | Mismatches |
 |---|---|---|
@@ -37,8 +37,8 @@ Birb's live engine (birbplay.com `window.game`) vs the playtest, same save state
 | loot full bag | 1948 | 0 |
 | forge no milestone | 1948 | 0 |
 | forge early | 1948 | 0 |
-| forge legendary | 1948 | 1 |
-| forge refined deep | 1948 | 1 |
+| forge legendary | 1948 | 0 |
+| forge refined deep | 1948 | 0 |
 | quest unlock | 1164 | 0 |
 | quest progress | 1178 | 0 |
 | quest legacy migration | 1174 | 0 |
@@ -175,15 +175,11 @@ All match.
 
 ### forge legendary
 
-| Value | Birb | Playtest |
-|---|---|---|
-| mine entrance repair | true | false |
+All match.
 
 ### forge refined deep
 
-| Value | Birb | Playtest |
-|---|---|---|
-| mine entrance repair | true | false |
+All match.
 
 ### quest unlock
 

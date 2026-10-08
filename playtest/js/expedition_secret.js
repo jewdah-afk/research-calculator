@@ -20,7 +20,7 @@
   // Birb hasMineProgressForEntranceRepair: any mine progress on an old save reopens the entrance
   X.hasMineProgress = function (s) {
     const m = s.mine || {}, r = (v) => Math.max(0, Math.floor(Number(v ?? 0) || 0)), res = (k) => (s.resources[k] ? Number(s.resources[k].toString()) : 0);
-    const area = Math.max(0, Math.floor(Number(m.collapseLevel ?? m.milestoneLevel ?? 0)));
+    const area = Math.max(0, Math.floor(Number(m.collapseLevel ?? m.milestoneLevel ?? (s.mine && PT.mineArea ? PT.mineArea(s) : 0)))); // Birb's normalized mine has collapseLevel = the mine area
     const track = Math.max(r(m.crowArmorLevel ?? m.armorPlatingLevel), r(m.crowArmorXp ?? m.armorPlatingXp), r(m.crowDamageLevel), r(m.crowDamageXp), r(m.crowRegenLevel), r(m.crowRegenXp), 0);
     const tree = window.BIRB_DATA.upgrades.some((u) => u.tree === "M" && (s.upgrades?.[u.id] || 0) > 1);
     const crow = Number(m.crowLevel || 1) > 1 || Number(m.crowXp || 0) > 0 || Number(m.crowRebirbCount || 0) > 0;

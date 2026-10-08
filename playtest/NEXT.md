@@ -13,7 +13,7 @@ Build a 1:1 HTML copy of Birb (birbplay.com) as Peckwood, so any progression can
 - **Branch:** `claude/egg-mining-icons` (not merged into `main`).
 - **Parity:** `NODE_PATH=<node_modules with playwright> node playtest/parity/parity.js`
   - It loads every save in `parity/scenarios.js` into Birb's live engine and into the playtest, compares every shared value, and writes `parity/REPORT.md`.
-  - Last run: **50989 / 50991 match**. Keep it at 100% after every change.
+  - Last run: **50991 / 50991 match**. Keep it at 100% after every change.
   - `ONLY=quest` (any name substring) runs a subset of scenarios while you iterate; run the full set before committing.
 - **Script load order:** `index.html` loads `... mine, desert, expedition_data, expedition, expedition_ai, expedition_sacrifice, expedition_loot, expedition_forge, quests, expedition_secret, main`.
 
