@@ -89,6 +89,22 @@ Checked against `birb-data/SYSTEMS.md`, `CORE_FORMULAS.md`, `Game.luau`, `Spec.l
 
 Figma progress for the missing screens and map boards is logged under "Missing screens board" below.
 
+### Missing screens board (Figma, 2026-10-08)
+Board **`168:7`** "Peckwood UI v2 / Missing screens" on page UI v2 (below the shop board, y 9000). Every window is a clone of a square-top frame from `117:7` with its live layers turned back on, scaled to 1x, with text, rows and icons replaced. Icons are the PNGs from `birb-icons/final/` (image fills, FIT). Each window has a motion spec card under it (cloned from `49:161`).
+
+| Band | Windows (node) |
+|---|---|
+| Mine and Nest | Mine / Areas `171:7`, Mine / Tree + crow rebirb `171:383`, Nest / Cultivation `173:7`, Nest / Riverside `173:465`, Nest / Carpentry `173:873`, Nest / Forest `173:1214` |
+| Expedition | Gear `174:7`, Artifacts `174:299`, Parrot Rebirb `174:623`, Floors + boss `174:948`, Quests / Main `174:1289`, Sacrifice / All tiers `174:1697` |
+| Trees and companions | Echo / Archivist tree `176:7`, Desert / Research tree `176:432`, Seeds / Sunflower tree `176:873`, Fishing / Tackle `176:1294`, Seagull / Migrations + Frenzy `176:1735`, Sparrow / Mitosis + Resonance `176:2160`, Dave / Branches `176:2501` |
+| Meta | Profile / Leaderboards `177:7`, Profile / Settings `177:434`, Offline / Welcome back `177:877` |
+
+Notes for the owner's review:
+- New screens show two tabs (parent window + the new one), like the existing frames; in game the tab bar comes from `Spec.GROUPS`.
+- Long Birb names were shortened so every row keeps the same type size: Near Response (Nearby Response), Desert Harvest (Treasured Harvest), Irrigation (Sunsprout Irrigation), Sand Harvest (Sandstorm Harvest), Fast Farming (Efficient Farming), Wisdom (Ancestral Wisdom), Double Catch (Echo Double Catch).
+- Not in `birb-data` yet, so shown as a guess or "—": the mine tree node order per area, Lumberyard and Compost effects, the Tree Spawns cost, artifact infusion caps (wiki values).
+- Temporary icon cache frame `172:7` (used to reuse image hashes). Delete it once the map boards are done.
+
 ### Open issues (do these next)
 1. **Done:** all 83 Figma images load. They took about 1 hour in Roblox moderation after upload, so new uploads look blank until they clear.
    **Also fixed:**
