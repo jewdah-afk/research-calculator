@@ -66,11 +66,22 @@ You're continuing **Peckwood**, a Roblox remake of the incremental game Birb. Re
 - **Upgrade-row icons** are the CURRENT in-game icon + a painted badge in the lower-right, merged into one silhouette with one shared ink ring (`birb-icons/compose_upgrades.py` → `final/up_*.png`). Badges: green arrow = value, blue plus = cap, yellow bolt = speed, orange × = multiplier, red/yellow burst = power, teal loop = regen (`final/badge_*.png`). The owner REJECTED: hand-drawn Figma vector badges, pixel/blocky badges, tiles/circles behind badges, repainted subjects (AI look), old approved-sheet bases, the magnet-with-eggs, a bolt drawn on the wing, stacked crates. Change only what is asked; when the owner says "it was perfect before", go back to that exact version.
 
 ## Next tasks (in order)
-1. **Ship eggs + the upgrade icons in game** (they exist only in Figma and `birb-icons/final/` right now; the live build still shows popcorn).
+1. **Add the rest of Birb's gameplay, 1:1.** The math library is verified (`birb-data/`), but the Roblox server (`roblox/src/server/Game.luau`) only runs part of it. Start with a gap audit: walk `birb-data/SYSTEMS.md`, `CORE_FORMULAS.md` and `upgrades.json` section by section, grep `Game.luau`/`Defs.luau`, and write a checklist (built / simplified / missing) into HANDOUT §0. Gaps already spotted:
+   - **Desert research tree (`d_*`):** 143 one-off unlocks in `upgrades.json`; only ~10 are referenced in the game. Needs the effects wired and a tree screen.
+   - **Echo field archivist tree** (R/E/A/V/F nodes: Nearby Response, Duet, Tuning, mushroom collectors, Flock Memory, Golden Ascension…), SYSTEMS.md "Echo field".
+   - **Nest:** cultivation (tree boxes), riverside, carpentry (soft-cap), forest tree tiers.
+   - **Mine:** giants (HP and rewards), crow damage/speed curve check.
+   - **Expedition:** equipment (beak/armor/aura) and the 47 artifacts with infusion; real floor progression and kill rate (now simplified); per-enemy behaviour.
+   - **Companions:** Seagull Frenzy (Migration unlock), Sparrow Resonance/Mitosis and Dave XP from golden pickups need checking against the data.
+   - **Quests/Sacrifice:** the 19-quest main list and all 18 sacrifice tiers (only 3 shown).
+   - **Persistence:** confirm DataStore saves, offline progress (if Birb has it) and leaderboards (`EN.lbencode`).
+   - Unverified numbers already listed in HANDOUT §0 open issue 6 (seeds 3/s, fishing cast 4s × rod speed, expedition rates).
+   Build each system server-side from the ported formulas, add its UI by duplicating the real Figma frames (never redraw), test with the dev saves (REGULAR / MAXED / NEXT ISLAND), and check numbers against the original functions like §3 of the handout did.
+2. **Ship eggs + the upgrade icons in game** (they exist only in Figma and `birb-icons/final/` right now; the live build still shows popcorn).
    - Upload with Studio MCP `upload_image` (serve `birb-icons/final` on :8799): `egg`, `egg_golden`, the `shop_*` egg set, and every `up_*.png` (24 files).
    - `Icons.luau`: replace the `popcorn`, `golden` and `shop_*` ids; add `up_*` ids. `Spec.luau`: point each upgrade row at its `up_*` icon (row → icon map is in HANDOUT §0 "Upgrade icons" and in `compose_upgrades.py` comments; Figma slots are named `ico/<name>`).
    - Re-export the window art from the square-top atlas `117:7` into `FigmaArt.luau` (the baked renders still say POPCORN), wait for moderation, then QA every window at 1.6–2.6x on MAXED and REGULAR.
-2. **Visual hierarchy QA pass** (the owner wants this next; screenshot everything, zoomed). Work window by window and on the HUD, fix as you go:
+3. **Visual hierarchy QA pass** (screenshot everything, zoomed). Work window by window and on the HUD, fix as you go:
    - **HUD reading order:** island banner → main currency (big egg counter) → window drawer → wallet chips → nav tiles. Check the eye lands in that order; the wallet chips must not out-shout the main counter (size, saturation, glow). Main counter bottom-left must stay the biggest number on screen.
    - **Window reading order:** title → hero (icon, title, subtitle, button) → tab bar → row title → growth line (`a >>> b`) → description → level bar → buy button. Check font sizes/weights step down consistently across all 20 windows; descriptions must be clearly secondary; numbers in growth lines use the theme accent.
    - **Icons:** every row icon the same optical size and centred in its slot (badged icons read slightly smaller: compare against plain ones), nothing clipped by the slot, badges visible at 1x.
@@ -78,5 +89,5 @@ You're continuing **Peckwood**, a Roblox remake of the incremental game Birb. Re
    - **Colour/contrast:** text on every theme passes a quick contrast check; no two adjacent wallet chips or drawer bookmarks share a colour.
    - **Map:** the bird, eggs on the field and interactive props must read above the decor (HANDOUT §5 "map hierarchy"); check day and night.
    - Deliver a short before/after board (artifact or screenshots) per area, then implement the owner's picks.
-3. **Other islands** (unchanged plan): concept board for all 8 islands in the Park LEGO style, then build each via IslandView with its own MapData, unlock build-in and "Go to …" travel.
-4. **Leftovers:** Rebirb (Dave) still shows golden popcorn and Resonance (Sparrow) shows popcorn in Figma; `Config.GROUP_ID`; 426 fish icons; delete Figma temp atlases `83:7` and `117:7` only after art is re-exported; smooth-60fps pass.
+4. **Other islands** (unchanged plan): concept board for all 8 islands in the Park LEGO style, then build each via IslandView with its own MapData, unlock build-in and "Go to …" travel.
+5. **Leftovers:** Rebirb (Dave) still shows golden popcorn and Resonance (Sparrow) shows popcorn in Figma; `Config.GROUP_ID`; 426 fish icons; delete Figma temp atlases `83:7` and `117:7` only after art is re-exported; smooth-60fps pass.
