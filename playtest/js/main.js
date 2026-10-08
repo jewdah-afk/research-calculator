@@ -146,6 +146,7 @@
     if (why) { if (why !== "end") toast(why); return; }
     const from = G.s.currentMap; G.s.currentMap = PT.travelTarget(G.s, dir);
     const m = PT.MAPS[G.s.currentMap];
+    if (G.s.currentMap === 1) G.s.sunflowerFieldReturnMap = from === 9 ? 9 : 0;
     if (G.s.currentMap === PT.NEST_MAP) { (G.s.clickedMapArrows ||= {}).visited_map4 = true; G.s.nestReturnMap = from;
       const f = PT.nestState(G.s).forest; if (!f.hasSeenIntro) { f.hasSeenIntro = true; toast("This ancient tree has been abandoned... collect twigs to fix it"); } }
     G.s.player.x = dir > 0 ? 80 : m.w - 80; G.s.player.y = m.id === 1 ? 640 : m.h / 2; G.target = null; G.vx = G.vy = 0;
@@ -158,6 +159,7 @@
     if (G.s.currentMap === PT.NEST_ROOM_MAP && !PT.redPandaState(G.s).introSeen) { toast("Something is already sleeping inside the nest..."); setTimeout(() => openWin("redpanda"), 600); }
     const m = PT.MAPS[G.s.currentMap]; G.s.player.x = m.w / 2; G.s.player.y = dir === "down" ? 140 : m.h - 140; G.target = null; G.vx = G.vy = 0;
     if (G.s.currentMap === PT.FISH_MARKET_MAP) PT.marketSync(G.s);
+    if (G.s.currentMap === PT.DESERT_MAP && !G.s.hasSeenDesertMapIntro) { G.s.hasSeenDesertMapIntro = true; toast("THE DESERT: some eggs here are golden"); }
     save();
   }
   document.getElementById("go-up").onclick = () => travelVert("up");
@@ -201,6 +203,7 @@
         if (onPlatform()) G.onFloat(s.player.x, s.player.y - 30, "+" + fmt(v), "#22c55e"); }
     }
     PT.updateSparrows(G, dt);
+    PT.updateDesert(G, dt, prof);
     PT.updateNest(G, dt);
     PT.updateMine(G, dt);
     PT.ensureFishing(s);
@@ -212,7 +215,7 @@
 
     // per-second income rates (used by the seed feeder, Birb currencyRates)
     G.rateT += dt;
-    if (G.rateT >= 1) { for (const k of ["popcorn", "sunflowerSeeds", "goldenFeathers", "monetariaMoneta"]) { const r = (G.gainAcc[k] || 0) / G.rateT; G.rates[k] = G.rates[k] === undefined ? r : G.rates[k] * 0.6 + r * 0.4; G.gainAcc[k] = 0; } G.rateT = 0; }
+    if (G.rateT >= 1) { for (const k of ["popcorn", "sunflowerSeeds", "goldenFeathers", "monetariaMoneta", "goldenPopcorn", "daveXp"]) { const r = (G.gainAcc[k] || 0) / G.rateT; G.rates[k] = G.rates[k] === undefined ? r : G.rates[k] * 0.6 + r * 0.4; G.gainAcc[k] = 0; } G.rateT = 0; }
     for (const f of G.floats) { f.life -= dt; f.y -= 30 * dt; }
     G.floats = G.floats.filter((f) => f.life > 0);
   }
@@ -235,6 +238,7 @@
       for (const p of G.field.list(0)) drawEgg(p.x, p.y, PT.TYPES[p.type].color, p.type);
       for (const b of G.sparrows) drawIcon("sparrow", b.x, b.y - (b.state === "fly" ? 14 : 0), 34, b.face < 0);
     }
+    if (s.currentMap === PT.DESERT_MAP) drawDesert();
     if (s.currentMap === 1) drawSunflowerField();
     if (s.currentMap === 2) drawBridge();
     if (s.currentMap === PT.AQUARIUM_MAP) drawAquarium();
@@ -245,9 +249,21 @@
     if (s.currentMap === PT.MINE_TREE_MAP) drawMineTree();
     if (s.currentMap === 3) { drawIcon("monster", 800, 500, 200); if (!s.hasTalkedToMonster) label("Click the monster", 800, 640, 22); }
     // pickup radius ring + bird
-    if (s.currentMap === 0) { cx.beginPath(); cx.arc(s.player.x, s.player.y, PT.pickupProfile(s).collectRadius, 0, 7); cx.strokeStyle = "rgba(255,255,255,.25)"; cx.lineWidth = 2; cx.stroke(); }
+    if (s.currentMap === 0 || s.currentMap === PT.DESERT_MAP) { cx.beginPath(); cx.arc(s.player.x, s.player.y, PT.pickupProfile(s).collectRadius, 0, 7); cx.strokeStyle = "rgba(255,255,255,.25)"; cx.lineWidth = 2; cx.stroke(); }
     drawIcon("birb", s.player.x, s.player.y, 48, G.vx < -5);
     for (const f of G.floats) if (f.map === s.currentMap) { cx.globalAlpha = Math.min(1, f.life / 0.4); label(f.text, f.x, f.y, 16, f.color); cx.globalAlpha = 1; }
+    if (s.currentMap === PT.DESERT_MAP && PT.sandstormOn(s)) { // Birb getDesertSandstormVisualAlpha: 1.2 s fade in and out
+      const t = Math.max(0, s.desertSandstormTimeRemaining), al = Math.max(0, Math.min(1, (30 - t) / 1.2, t / 1.2));
+      cx.fillStyle = `rgba(214,170,92,${0.35 * al})`; cx.fillRect(0, 0, m.w, m.h);
+    }
+  }
+  // Birb desert-meadow: sand field, plain and golden eggs, Dave and his sons
+  function drawDesert() {
+    const s = G.s, M = PT.DESERT_MAP;
+    cx.fillStyle = "#e3c27a"; roundRect(0, 0, PT.DESERT_W, PT.DESERT_H, 24); cx.fill();
+    cx.fillStyle = "rgba(190,140,70,.35)"; for (const [x, y, r] of [[220, 180, 90], [980, 260, 120], [420, 640, 140], [1100, 700, 80]]) { cx.beginPath(); cx.ellipse(x, y, r, r * 0.35, 0, 0, 7); cx.fill(); }
+    for (const p of G.field.list(M)) { if (p.type === "golden" && p.caramel) { cx.beginPath(); cx.arc(p.x, p.y, 17, 0, 7); cx.fillStyle = "rgba(255,213,74,.35)"; cx.fill(); } drawEgg(p.x, p.y, PT.TYPES[p.type].color, p.type); }
+    if (G.daves && G.daves[0]) { const a = G.daves[0]; for (const e of a.sons) drawIcon("dove", e.x, e.y - (e.state === "fly" ? 14 : 0), 24, e.face < 0); drawIcon("dove", a.x, a.y - (a.state === "fly" ? 20 : 0), 38, a.face < 0); }
   }
   function drawPine(x, y, k, hp, maxHp, active) {
     cx.fillStyle = "#6b4a2a"; cx.fillRect(x - 4 * k, y + 6 * k, 8 * k, 14 * k);
@@ -406,7 +422,11 @@
     tabsEl.innerHTML = list.map(([k, n, ic]) => `<button class="tab ${G.tab === k ? "on" : ""}" data-tab="${k}"><img src="${ICON(ic)}" alt="">${n}${k === "molt" && pend.gte(1) ? `<span class="badge">+${fmt(pend)}</span>` : ""}</button>`).join("");
     let h = "";
     if (G.tab === "eggs") {
-      h = `${treeRows("P")}
+      // Birb POPCORN tab: a popcorn / golden popcorn switch once golden-priced upgrades exist
+      const gold = [...PT.UP.values()].some((d) => d.tree === "P" && d.costCurrency === "goldenPopcorn" && rowVisible(d.id));
+      if (!gold) G.eggView = "popcorn";
+      const sw = gold ? `<div class="devrow">${[["popcorn", "egg", "EGGS"], ["goldenPopcorn", "egg_golden", "GOLDEN"]].map(([k, ic, l]) => `<button class="tab ${G.eggView === k ? "on" : ""}" data-eview="${k}"><img src="${ICON(ic)}" alt="">${l}</button>`).join("")}</div>` : "";
+      h = `${sw}${[...PT.UP.values()].filter((d) => d.tree === "P" && d.costCurrency === G.eggView && rowVisible(d.id)).map((d) => upRow(d.id)).join("")}
       <div class="note">Molting resets eggs and these upgrades. Plumes are forever.</div>`;
     } else if (G.tab === "molt") {
       const p = PT.prestige(s), ok = p.final.gte(1);
@@ -428,7 +448,7 @@
     if (panel.dataset.last !== h) { const y = panel.scrollTop; panel.innerHTML = h; panel.scrollTop = y; panel.dataset.last = h; }
   }
   // Birb nest shop: SHOP (planting beds, buildings, twig upgrades) / LAKE (fish breeding) / OWNED
-  G.nestView = "shop";
+  G.nestView = "shop"; G.eggView = "popcorn";
   function nestPanel() {
     const s = G.s, n = PT.nestState(s), sn = PT.nestCultSnapshot(s), tw = PT.res(s, "twigs");
     const views = [["shop", "SHOP"], ...(PT.breedVisible(s) ? [["lake", "LAKE"]] : []), ["owned", "OWNED " + PT.NEST_SPECIALS.filter((x) => n.cultivation.specialUpgrades[x.id]).length]];
@@ -448,7 +468,7 @@
       return `<div class="row"><img class="ico" src="${ICON("twig")}" alt=""><div><div class="t">${u.name}</div><div class="g">${show(L)}${maxed ? "" : ` <b>›››</b> ${show(L + 1)}`}</div><div class="d">${u.text}</div><div class="lv">LV ${L} / ${u.max}</div></div>
         <div class="btns">${maxed ? `<button class="key gold">MAXED</button>` : `<button class="key ${ok ? "" : "grey"}" data-nup="${id}"><img src="${ICON("twig")}" alt="">${fmt(c)}</button><button class="key small ${ok ? "violet" : "grey"}" data-nupmax="${id}">MAX</button>`}</div></div>`;
     }).join("");
-    const auto = PT.nestAutomationUnlocked(s) ? `<div class="section">AUTOMATION (Nest level 3)</div><div class="devrow"><label><input type="checkbox" data-in="nautop" ${n.autoPopcornEnabled ? "checked" : ""}> auto egg upgrades</label><label><input type="checkbox" data-in="nautos" ${n.autoSeedsEnabled ? "checked" : ""}> auto seed upgrades</label></div>` : "";
+    const auto = PT.nestAutomationUnlocked(s) ? `<div class="section">AUTOMATION (Nest level 3)</div><div class="devrow"><label><input type="checkbox" data-in="nautop" ${n.autoPopcornEnabled ? "checked" : ""}> auto egg upgrades</label><label><input type="checkbox" data-in="nautos" ${n.autoSeedsEnabled ? "checked" : ""}> auto seed upgrades</label>${PT.goldenAutomationUnlocked(s) ? `<label><input type="checkbox" data-in="nautog" ${n.autoGoldenPopcornEnabled ? "checked" : ""}> auto golden egg upgrades</label>` : ""}</div>` : "";
     return sw + `<div class="note">${fmt(tw)} twigs · ${fmt(PT.nestTwigsPerSec(s))} twigs/s possible · ${PT.NEST_TIERS[n.tier].name} (x${PT.nestResourceMult(s)})</div>${box}${exp}${specials}${ups}${auto}`;
   }
   G.breedPick = ["", ""];
@@ -485,6 +505,27 @@
       return `<div class="row"><img class="ico" src="${ICON(n.cur === "goldOre" ? "goldore" : "ore")}" alt=""><div><div class="t">${n.name}${n.growth ? " LV " + L : ""}</div><div class="d">${n.text}</div><div class="lv">AREA ${n.area}${n.evo ? " · EVOLUTION " + n.evo : ""}</div></div>
         <div class="btns">${own ? `<button class="key small gold">OWNED</button>` : `<button class="key small ${unl ? "" : "grey"}" data-mnode="${n.id}">${c === 0 ? "FREE" : fmt(c) + (n.cur === "goldOre" ? " gold" : "")}</button>`}</div></div>`;
     }).join("");
+  }
+  // Birb collared-dove menu: LV + XP bar, stats row (XP/min, forage size, golden bonus, travel speed, rebirbs),
+  // SEED SNACKS, REBIRB (Travel / Forage / Gilded with +, RESET, x1 / x10 / MAX), MILESTONES n / 8 (folds open)
+  G.daveAmt = 1; G.daveMilestones = false;
+  function davePanel() {
+    const s = G.s, d = PT.dave(s), need = PT.daveXpNeeded(d.level), I = d.instincts, c = PT.daveSeedCost(d.seedTrainingLevel), pts = d.unspentRebirbPoints || 0;
+    const got = PT.DAVE_MILESTONES.filter(([, r]) => PT.daveRebirbs(s) >= r).length, xpm = (G.rates.daveXp || 0) * 60;
+    const stat = (k, v) => `<div class="biome"><b>${v}</b>${k}</div>`;
+    const inst = (k, n, eff) => `<div class="row"><img class="ico" src="${ICON("dove")}" alt=""><div><div class="t">${n}</div><div class="d">${eff}</div></div><div class="btns"><b style="color:#f4d03f;font-size:20px">${I[k] || 0}</b>
+      <button class="key small ${pts > 0 || PT.daveCanRebirb(s) ? "" : "grey"}" ${pts > 0 ? `data-dspend="${k}"` : `data-drebirb="${k}"`} title="${pts > 0 ? "Spend points" : "Rebirb into " + n}">+</button></div></div>`;
+    return `<div class="hero"><div class="big">LV ${d.level}</div><div class="bar"><i style="width:${Math.min(100, (d.xp / need) * 100)}%"></i></div><div class="sub">XP: ${fmt(Math.floor(d.xp))} / ${fmt(need)}</div></div>
+      <div class="biomes">${stat("XP / min", fmt(xpm))}${stat("forage size", PT.daveSweepSize(s))}${stat("golden bonus", "x" + PT.daveGoldenMult(s).toFixed(2))}${stat("travel speed", "+" + Math.round((PT.daveSpeedMult(s) - 1) * 100) + "%")}${stat("rebirbs", d.rebirbCount)}</div>
+      <div class="section">SEED SNACKS · LEVEL ${d.seedTrainingLevel}</div>
+      <div class="devrow"><span class="note">+${Math.round((PT.daveXpGainMult(s) - 1) * 100)}% XP gain › +${Math.round((PT.daveXpGainMult(s) - 0.92) * 100)}% XP gain</span><button class="key ${PT.res(s, "sunflowerSeeds").gte(c) ? "" : "grey"}" data-act="davetrain">${fmt(c)}<img src="${ICON("seed")}" alt=""></button></div>
+      <div class="section">REBIRB · needs LV 100 (level -100, XP kept as a fraction)${PT.daveRebirbs(s) >= 100 ? " · MAXED" : ""}</div>
+      ${inst("scavenger", "TRAVEL", `Travel +${Math.round(30 * (I.scavenger || 0))}% speed`)}${inst("sweep", "FORAGE", `Forage size +${20 * (I.sweep || 0)}`)}${inst("gilded", "GILDED", `Gold x${(1 + (I.gilded || 0)).toFixed(2)}`)}
+      <div class="devrow"><button class="key small ${pts > 0 ? "grey" : "red"}" data-act="daverefund" style="flex:1">RESET${pts > 0 ? ` (${pts} UNSPENT)` : ""}</button>${[1, 10, "max"].map((a) => `<button class="key small ${G.daveAmt === a ? "" : "grey"}" data-damt="${a}">${a === "max" ? "MAX" : "X" + a}</button>`).join("")}</div>
+      ${PT.daveMilestone(s, "workRhythm") ? `<div class="devrow"><label><input type="checkbox" data-in="daveauto" ${d.autoRebirbEnabled ? "checked" : ""} ${pts > 0 ? "disabled" : ""}> auto rebirb (${(d.autoRebirbInstinct || "pick one").toUpperCase()})</label></div>` : ""}
+      <button class="section" data-act="davems" style="width:100%;text-align:left;background:none;border:0;color:inherit;cursor:pointer">MILESTONES ${got} / 8 ${G.daveMilestones ? "▴" : "▾"}</button>
+      ${G.daveMilestones ? PT.DAVE_MILESTONES.map(([id, r, t]) => `<div class="note">${PT.daveRebirbs(s) >= r ? "✔" : "○"} <b>${r}</b>: ${t}</div>`).join("") : ""}
+      <div class="note">Dave scavenges the Desert in clustered swoops, also while you are away. Golden eggs give 5 XP (x2 with Gilded Lessons), plain eggs 1 XP (x2 with Steady Pecking).</div>`;
   }
   function pandaPanel() {
     const s = G.s, r = PT.redPandaState(s);
@@ -558,7 +599,8 @@
       ${kv("Max speed", PT.maxSpeed(s).toFixed(1) + " px/s")}${kv("Eggs / s", fmt(G.rates.popcorn || 0))}${kv("Seeds / s (platform)", fmt(sr.ticksPerSec * sr.perTick))}
       ${kv("Molt base (eggs/1000)", fmt(p.base))}${kv("Molt multiplier", (p.a * p.pay).toFixed(3))}${kv("Playtime x", p.play.toFixed(2))}
       ${kv("Sparrow drain x", PT.sparrowDrainMult(s).toFixed(3))}${kv("Evolutions", s.evolutionCount)}${kv("Molts", s.rebirthCount)}
-      ${kv("Total eggs collected", fmt(s.totalPopcornCollected))}${kv("Play time", PT.fmtTime(s.playTime))}</div>
+      ${kv("Total eggs collected", fmt(s.totalPopcornCollected))}${kv("Play time", PT.fmtTime(s.playTime))}
+      ${PT.desertUnlocked(s) ? kv("Desert golden chance", (PT.desertGoldenChance(s) * 100).toFixed(1) + "%") + kv("Desert spawn interval", PT.desertSpawnInterval(s).toFixed(3) + " s") + kv("Golden eggs / drop", fmt(PT.goldenPerDrop(s))) + kv("Desert egg multiplier", "x" + fmt(PT.desertEggMult(s))) + kv("Total golden eggs", fmt(s.totalGoldenPopcornCollected || 0)) : ""}</div>
       <div class="note">Every number here comes from the same formulas as Birb. Compare with the Roblox build to spot differences.</div>`;
   }
   const RANK = { common: 0, uncommon: 1, rare: 2, epic: 3, legendary: 4, mythic: 5 };
@@ -662,6 +704,7 @@
     market: { title: "FISH MARKET", body: () => marketPanel() },
     redpanda: { title: "RED PANDA", body: () => pandaPanel() },
     crow: { title: "CROW", body: () => crowPanel() },
+    dove: { title: "DAVE", body: () => davePanel() },
     minetree: { title: "TREASURE ROOM", body: () => mineTreePanel() },
   };
   // Birb aquarium window: BIOMES (donate per biome), RESONANCE (milestones), TOTAL (all bonuses)
@@ -734,6 +777,7 @@
     const s = G.s; if (m === 0) return true;
     if (m === PT.AQUARIUM_MAP) return reachable(2) && PT.aquariumUnlocked(s);
     if (m === PT.NEST_MAP) return (s.evolutionCount || 0) >= 3;
+    if (m === PT.DESERT_MAP) return PT.desertUnlocked(s);
     if (m === PT.MINE_MAP) return PT.mineOpen(s);
     if (m === PT.MINE_TREE_MAP) return PT.mineOpen(s) && PT.mineArea(s) >= 1;
     if (m === PT.NEST_ROOM_MAP) return (s.evolutionCount || 0) >= 3 && PT.nestState(s).tier >= 1;
@@ -758,6 +802,9 @@
     const s = G.s;
     if (b.dataset.buy) PT.buy(s, b.dataset.buy);
     else if (b.dataset.max) PT.buyMax(s, b.dataset.max);
+    else if (b.dataset.dspend) PT.daveSpendPoint(s, b.dataset.dspend, G.daveAmt === "max" ? 100 : G.daveAmt);
+    else if (b.dataset.damt) G.daveAmt = b.dataset.damt === "max" ? "max" : +b.dataset.damt;
+    else if (b.dataset.drebirb) { if (!PT.daveRebirb(G, b.dataset.drebirb)) toast("Dave needs level 100"); }
     else if (b.dataset.sun) { const r = PT.buySun(s, b.dataset.sun); if (r) toast(r); }
     else if (b.dataset.speed) G.timeScale = +b.dataset.speed;
     else if (b.dataset.rod) { const r = PT.rodClick(s, b.dataset.rod); if (r) toast(r); }
@@ -767,6 +814,7 @@
     else if (b.dataset.lock) { const i = s.lockedFish.indexOf(b.dataset.lock); if (i < 0) s.lockedFish.push(b.dataset.lock); else s.lockedFish.splice(i, 1); }
     else if (b.dataset.biome) PT.aq(s).activeBiomeId = b.dataset.biome;
     else if (b.dataset.nview) G.nestView = b.dataset.nview;
+    else if (b.dataset.eview) G.eggView = b.dataset.eview;
     else if (b.dataset.mnode) { const r = PT.mineBuyNode(s, b.dataset.mnode); if (r) toast(r); }
     else if (b.dataset.nest) { const r = b.dataset.nest === "box" ? PT.nestBuyTreeBox(s) : PT.nestBuyExpansion(s); if (r) toast(r); }
     else if (b.dataset.nspec) { const r = PT.nestBuySpecial(s, b.dataset.nspec); if (r) toast(r); }
@@ -795,6 +843,8 @@
     if (e.target.dataset.breed !== undefined) { G.breedPick[+e.target.dataset.breed] = e.target.value; panel.dataset.last = ""; drawPanel(); return; }
     if (k === "community") PT.COMMUNITY.twigGain = e.target.checked ? 1.5 : 1;
     if (k === "nautop") PT.nestState(s).autoPopcornEnabled = e.target.checked;
+    if (k === "nautog") PT.nestState(s).autoGoldenPopcornEnabled = e.target.checked;
+    if (k === "daveauto") { const d = PT.dave(s); d.autoRebirbEnabled = (d.unspentRebirbPoints || 0) <= 0 && e.target.checked; }
     if (k === "nautos") PT.nestState(s).autoSeedsEnabled = e.target.checked;
     if (e.target.dataset.ff) { fishFilter[e.target.dataset.ff] = e.target.value; winBody.dataset.last = ""; drawWin(); return; }
     if (k === "feedpct") s.sparrowSeedFeedRatePercent = Math.max(1, Math.min(100, Math.floor(+e.target.value || 25)));
@@ -828,6 +878,9 @@
     else if (a === "give") { PT.add(s, q("givecur").value, D(q("giveamt").value)); }
     else if (a === "evo+") s.evolutionCount = Math.min(6, s.evolutionCount + 1);
     else if (a === "openmine") { s.floorOneMineEntranceOpened = true; s.hasSeenMineTab = true; toast("Mine entrance opened (Birb: Parrot Rebirb II + maxed gear on Expedition floor 1)"); }
+    else if (a === "davetrain") { if (!PT.daveTrain(s)) toast("Not enough seeds"); }
+    else if (a === "daverefund") PT.daveRefund(s);
+    else if (a === "davems") G.daveMilestones = !G.daveMilestones;
     else if (a === "crowrebirb") toast(PT.crowRebirb(s) ? "Crow rebirb " + PT.mineState(s).crowRebirbCount : "Not ready");
     else if (a === "minechallenge") { const r = PT.mineChallenge(G); if (r) toast(r); }
     else if (a === "fish50") { PT.ensureFishing(s); for (let i = 0; i < 50; i++) PT.catchFish(G, false); }
@@ -867,6 +920,7 @@
     if (s.hasMetSeagull) comps.push(["seagull", `${s.seagull.level} SEAGULL`]);
     if (s.redPanda?.introSeen) comps.push(["redpanda", `${PT.redPandaTier(s)} ${s.redPanda.name.toUpperCase()}`]);
     if (PT.mineOpen(s)) comps.push(["crow", `${PT.mineState(s).crowLevel} CROW`]);
+    if (PT.hasSun(s, "d_desert_collared_dove")) comps.push(["dove", `${PT.dave(s).level} DAVE`]);
     document.getElementById("btn-companions").style.display = comps.length ? "" : "none";
     setHtml("companion-list", G.companionsOpen ? comps.map(([k, n]) => `<button class="key small" data-win="${k}"><img src="${ICON(k)}" alt="">${n}</button>`).join("") : "");
     const af = document.getElementById("btn-autofish");
@@ -892,6 +946,10 @@
       setHtml("fishbar", `<div class="lvl"><b>${a + 1}</b><div class="bar"><i style="width:${k >= 4 ? 100 : Math.min(100, (cur / th[k]) * 100)}%"></i></div><span class="note">+${4 * k}%</span></div><div class="sub">AREA ${a + 1} · +${4 * k}% damage in this area${k < 4 ? " · next at " + fmt(th[k]) + " HP mined" : ""}</div>`);
       const wait = Math.max(0, Math.ceil((PT.mineState(s).bossRespawnAt - Date.now()) / 1000));
       setHtml("hotbar", `<button class="key cast ${M.boss ? "gold" : wait ? "grey" : "violet"}" data-act="minechallenge">${M.boss ? "GIANT ORE · " + Math.max(0, Math.ceil((M.bossUntil - Date.now()) / 1000)) + "s" : wait ? "GIANT RESTS " + wait + "s" : "CHALLENGE"}</button>`);
+    } else if (s.currentMap === PT.DESERT_MAP) {
+      const storm = PT.sandstormOn(s), cd = s.desertSandstormCooldownRemaining || 0, hasStorm = PT.hasSun(s, "d_desert_sandstorm") || PT.hasSun(s, "d_desert_dune_conductors");
+      setHtml("fishbar", `<div class="lvl"><b>${G.field.list(PT.DESERT_MAP).length}/${PT.maxPopcorn(s)}</b></div><div class="sub">GOLDEN CHANCE ${(PT.desertGoldenChance(s) * 100).toFixed(1)}% · ${fmt(PT.goldenPerDrop(s))} per golden egg${hasStorm ? ` · ${storm ? "SANDSTORM " + Math.ceil(s.desertSandstormTimeRemaining) + "s" : cd > 0 ? "next storm possible in " + PT.fmtTime(cd) : "a sandstorm can start any moment"}` : ""}</div>`);
+      setHtml("hotbar", "");
     } else if (s.currentMap === PT.NEST_MAP) {
       const b = PT.nestBuild(s);
       setHtml("fishbar", `<div class="lvl"><b>${b.tier + 1}</b><div class="bar"><i style="width:${b.progress * 100}%"></i></div><span class="note">${fmt(b.current)}/${fmt(b.required)}</span></div>

@@ -18,7 +18,7 @@
   PT.nestState = function (s) {
     const n = s.nest || (s.nest = {});
     n.unlocked ??= false; n.tier = Math.max(0, Math.min(PT.nestMaxTier(s), Math.floor(n.tier || 0)));
-    n.upgrades ||= {}; n.autoPopcornEnabled ??= false; n.autoSeedsEnabled ??= false;
+    n.upgrades ||= {}; n.autoPopcornEnabled ??= false; n.autoGoldenPopcornEnabled ??= false; n.autoSeedsEnabled ??= false;
     const f = n.forest || (n.forest = {});
     f.trees ||= []; f.populationSeedVersion ??= 0; f.spawnAccumulator ??= 0; f.totalTwigsFromTrees ??= 0; f.tierTwigsProgress ??= 0;
     f.nextTreeId ??= 1; f.activeTreeId ??= null; f.hasSeenIntro ??= false; f.firstTreeChopped ??= false; f.autoCollectUnlocked ??= false; f.autoCollectEnabled ??= false;
@@ -84,7 +84,7 @@
     const s = G.s, n = PT.nestState(s), e = Math.floor(s.evolutionCount || 0);
     if (e >= 3) { if (!n.unlocked) n.unlocked = true; else if (e > 3 && n.tier < PT.nestMaxTier(s)) n.tier++; }
     const keepF = n.forest;
-    n.upgrades = {}; n.autoPopcornEnabled = false; n.autoSeedsEnabled = false;
+    n.upgrades = {}; n.autoPopcornEnabled = false; n.autoGoldenPopcornEnabled = false; n.autoSeedsEnabled = false;
     n.forest = { trees: [], populationSeedVersion: 0, spawnAccumulator: 0, totalTwigsFromTrees: 0, tierTwigsProgress: 0, nextTreeId: 1, activeTreeId: null,
       hasSeenIntro: keepF.hasSeenIntro, firstTreeChopped: keepF.firstTreeChopped || n.tier > 0, autoCollectUnlocked: keepF.autoCollectUnlocked || n.tier > 0, autoCollectEnabled: keepF.autoCollectEnabled };
     n.cultivation = { treeBoxCount: 0, treeBoxes: [], treeBoxEvolution: false, treeBoxQuadEvolution: false, specialUpgrades: {} };
@@ -279,16 +279,19 @@
 
   // ------------------------------------------------------------------ automation from nest tier 2 (Birb updateUpgradeAutomation: 1 buy per second per channel)
   PT.nestAutomationUnlocked = (s) => PT.nestState(s).tier >= 2;
+  PT.goldenAutomationUnlocked = (s) => PT.nestState(s).tier >= 3 && PT.nestMaxTier(s) >= 3;
   PT.nestAutomation = function (G, dt) {
     const s = G.s, n = PT.nestState(s);
     if (!PT.nestAutomationUnlocked(s)) return;
-    for (const [flag, tree] of [["autoPopcornEnabled", "P"], ["autoSeedsEnabled", "S"]]) {
-      if (!n[flag]) continue;
-      G["auto" + tree] = (G["auto" + tree] || 0) + dt; if (G["auto" + tree] < 1) continue; G["auto" + tree] = Math.min(1, G["auto" + tree] - 1);
+    // Birb isGoldenPopcornAutomationUnlocked: nest tier 3 and Evolution 6 (max nest tier 3)
+    for (const [flag, tree, cur] of [["autoPopcornEnabled", "P", "popcorn"], ["autoGoldenPopcornEnabled", "P", "goldenPopcorn"], ["autoSeedsEnabled", "S", ""]]) {
+      if (!n[flag] || (cur === "goldenPopcorn" && !PT.goldenAutomationUnlocked(s))) continue;
+      const tk = "auto" + flag; G[tk] = (G[tk] || 0) + dt; if (G[tk] < 1) continue; G[tk] = Math.min(1, G[tk] - 1);
       for (const d of PT.UP.values()) {
-        if (d.tree !== tree || (tree === "P" && d.costCurrency !== "popcorn")) continue;
+        if (d.tree !== tree || (tree === "P" && d.costCurrency !== cur)) continue;
         if (d.id === "s_more_seeds" && !PT.hasSun(s, "d_seed_multiplier_unlocker")) continue;
-        if (d.id === "p_golden_popcorn_value" || d.id === "p_auric_silo") continue;
+        if (d.id === "p_golden_popcorn_value" && !PT.hasSun(s, "d_desert_core_mockup")) continue;
+        if (d.id === "p_auric_silo" && !PT.hasSun(s, "d_desert_auric_blueprints")) continue;
         const before = PT.level(s, d.id); PT.buy(s, d.id); if (PT.level(s, d.id) > before) break;
       }
     }

@@ -75,3 +75,28 @@ module.exports = [
       mine: { ...MV, highestArea: 10, crowLevel: 140, crowXp: 0, crowRebirbCount: 9, crowTrainingLevel: 160, goldOre: 50000, campaign: { version: 2, areaDamage: {}, areaMilestones: { 10: 4 }, normalBreaks: 9000, chargeHits: 0, oreDiscoveries: {} } } } },
   );
 }
+
+// Desert scenarios (Phase 5): golden eggs, sandstorm, Dave (state.collaredDove)
+{
+  const sun = (ids) => Object.fromEntries(ids.map((x) => (Array.isArray(x) ? x : [x, 1])));
+  const base = { evolutionCount: 5, rebirthCount: 40, playTime: 4e5, hasUnlockedDesertMap: true };
+  const early = ["d_unlock_desert_tree", "d_desert_core_mockup", "d_desert_quest_merchant", "d_desert_golden_popcorn_chance", "d_desert_golden_popcorn_x2"];
+  const mid = [...early, "d_desert_seed_generation_x2", "d_desert_fever", "d_desert_expedition_points", "d_desert_rebirb_golden_feathers", "d_desert_rebirb_parrot_vitality", "d_desert_field_notes",
+    "d_desert_scout_gull", "d_desert_tackle_crate", "d_desert_guarded_plumage", "d_desert_salvage_rights", "d_desert_signal_smoke", "d_desert_auric_bargain", "d_desert_golden_popcorn_chance_3",
+    "d_desert_golden_popcorn_gain_2", "d_desert_popcorn_spawn_rate", "d_desert_golden_popcorn_chance_4", "d_desert_collared_dove", "d_desert_dave_golden_xp", "d_desert_bloom_netting", "d_desert_bloom_reservoir",
+    "d_desert_golden_popcorn_mult_unlock", "d_desert_seed_generation_x5", "d_desert_golden_popcorn_chance_2", "d_desert_popcorn_gain_x2", "d_desert_warpath", ["d_desert_field_notes_plus", 2]];
+  const late = [...mid, "d_desert_seed_generation_x2_plus", "d_desert_auric_blueprints", ["d_desert_oasis_recovery", 5], "d_desert_muad_birb", "d_desert_sandstorm", "d_desert_gourmet_golden_popcorn",
+    "d_desert_bountiful_harvest", "d_desert_feathered_harvest", "d_desert_golden_popcorn_chance_5", "d_desert_dune_conductors", "d_desert_golden_sand", "d_desert_dave_popcorn_xp"];
+  const dove = (o) => ({ rebirbProgressionVersion: 3, unspentRebirbPoints: 0, level: 1, xp: 0, seedTrainingLevel: 0, rebirbCount: 1, cycleGoldenCollected: 0, instincts: { scavenger: 0, sweep: 0, gilded: 0 },
+    upgrades: { scan: 0, sweep: 0, instinct: 0, storm: 0 }, lifetimeSweeps: 0, lifetimePopcornCollected: 0, lifetimeGoldenCollected: 0, ...o });
+  module.exports.push(
+    { name: "desert start", state: { ...base, resources: { goldenPopcorn: 40, sunflowerSeeds: 6e11 }, upgrades: { p_golden_popcorn_value: 3 }, sunflowerUpgrades: sun(early) } },
+    { name: "desert dave", state: { ...base, sparrowPrestigeCount: 2, resources: { goldenPopcorn: 3e7, sunflowerSeeds: 4e13, goldenFeathers: 2e18 },
+      upgrades: { p_golden_popcorn_value: 40, p_auric_silo: 5, pr_golden_popcorn_mult: 3 }, sunflowerUpgrades: sun(mid),
+      collaredDove: dove({ level: 104, xp: 900, seedTrainingLevel: 12, rebirbCount: 14, unspentRebirbPoints: 1, instincts: { scavenger: 6, sweep: 4, gilded: 3 } }) } },
+    { name: "desert sandstorm late", state: { ...base, evolutionCount: 6, desertSandstormTimeRemaining: 12, resources: { goldenPopcorn: 5e12, sunflowerSeeds: 1e22, goldenFeathers: 3e24 },
+      upgrades: { p_golden_popcorn_value: 300, p_auric_silo: 30, pr_golden_popcorn_mult: 7 }, sunflowerUpgrades: sun(late),
+      nest: { unlocked: true, tier: 3 },
+      collaredDove: dove({ level: 260, xp: 5e4, seedTrainingLevel: 70, rebirbCount: 100, instincts: { scavenger: 40, sweep: 35, gilded: 25 } }) } },
+  );
+}

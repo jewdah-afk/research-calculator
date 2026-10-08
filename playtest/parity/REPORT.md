@@ -1,27 +1,30 @@
 # Parity report
 
-Birb's live engine (birbplay.com `window.game`) vs the playtest, same save state per scenario. Generated 2026-10-08T18:07Z by `playtest/parity/parity.js`.
+Birb's live engine (birbplay.com `window.game`) vs the playtest, same save state per scenario. Generated 2026-10-08T19:51Z by `playtest/parity/parity.js`.
 
-**10437 / 10437 values match.** Birb's live community-goal twig reward today: x1.5 (copied into the playtest for the run).
+**13036 / 13036 values match.** Birb's live community-goal twig reward today: x1.5 (copied into the playtest for the run).
 
 | Scenario | Values | Mismatches |
 |---|---|---|
-| fresh start | 651 | 0 |
-| early eggs | 651 | 0 |
-| first molt done | 651 | 0 |
-| seeds online | 651 | 0 |
-| evolve unlocked | 651 | 0 |
-| evolution 1 | 651 | 0 |
-| evolution 3 | 651 | 0 |
-| aquarium early | 654 | 0 |
-| aquarium mid | 654 | 0 |
-| aquarium full + market | 654 | 0 |
-| nest start | 651 | 0 |
-| nest boxes | 651 | 0 |
-| nest tier 2 | 663 | 0 |
-| mine start | 651 | 0 |
-| mine mid | 651 | 0 |
-| mine deep | 651 | 0 |
+| fresh start | 685 | 0 |
+| early eggs | 685 | 0 |
+| first molt done | 685 | 0 |
+| seeds online | 685 | 0 |
+| evolve unlocked | 685 | 0 |
+| evolution 1 | 685 | 0 |
+| evolution 3 | 685 | 0 |
+| aquarium early | 688 | 0 |
+| aquarium mid | 688 | 0 |
+| aquarium full + market | 688 | 0 |
+| nest start | 685 | 0 |
+| nest boxes | 685 | 0 |
+| nest tier 2 | 697 | 0 |
+| mine start | 685 | 0 |
+| mine mid | 685 | 0 |
+| mine deep | 685 | 0 |
+| desert start | 685 | 0 |
+| desert dave | 685 | 0 |
+| desert sandstorm late | 685 | 0 |
 
 ### fresh start
 
@@ -84,5 +87,17 @@ All match.
 All match.
 
 ### mine deep
+
+All match.
+
+### desert start
+
+All match.
+
+### desert dave
+
+All match.
+
+### desert sandstorm late
 
 All match.

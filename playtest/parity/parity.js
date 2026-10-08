@@ -26,7 +26,7 @@ function probe({ side, scenario }) {
   const D = window.BIRB_DATA;
   const num = (x) => (x == null ? null : typeof x === "boolean" ? x : typeof x === "object" && x.toNumber ? x.toNumber() : typeof x === "object" && "mantissa" in x ? x.mantissa * Math.pow(10, x.exponent) : Number(x));
   const deep = (dst, src) => { for (const [k, v] of Object.entries(src)) { if (v && typeof v === "object" && !Array.isArray(v)) { dst[k] = dst[k] && typeof dst[k] === "object" ? dst[k] : {}; deep(dst[k], v); } else dst[k] = v; } };
-  const fresh = () => ({ mine: {}, floorOneMineEntranceOpened: false, aquarium: { activeBiomeId: "coast", housedFish: {}, researchedFishCounts: {}, releasedShinyFishes: {}, releasedShinyWeightsKg: {} }, fishInventory: [], discoveredFish: [], discoveredShinyFish: [], fishWeightRecords: [], activeFishIds: [], activeFishBuffs: {}, lockedFish: [], fishBuffThirdSlotUnlocked: false });
+  const fresh = () => ({ collaredDove: null, sparrowPrestigeCount: 0, desertSandstormTimeRemaining: 0, desertSandstormCooldownRemaining: 0, hasUnlockedDesertMap: false, mine: {}, floorOneMineEntranceOpened: false, aquarium: { activeBiomeId: "coast", housedFish: {}, researchedFishCounts: {}, releasedShinyFishes: {}, releasedShinyWeightsKg: {} }, fishInventory: [], discoveredFish: [], discoveredShinyFish: [], fishWeightRecords: [], activeFishIds: [], activeFishBuffs: {}, lockedFish: [], fishBuffThirdSlotUnlocked: false });
   let A;
   if (side === "birb") {
     const g = window.game, s = g.state;
@@ -40,7 +40,7 @@ function probe({ side, scenario }) {
     s.redPanda = Object.assign({ name: "Red Panda", named: false, introSeen: false, tier: 1, mode: "chill", x: 528, y: 300 }, st.redPanda || {}); g.ensureRedPandaState();
     g.aquariumManager.invalidateModifierCache(); g.activeFishEffectSnapshot = null; g.fishMarketManager.normalizedMarketState = null;
     const nm = g.nestManager, snap = () => nm.getCultivationShopSnapshot();
-    g.ensureMineState();
+    g.ensureMineState(); g.ensureCollaredDoveState(); g.goldenPopcornRewardSnapshotTime = -1;
     const mm = g.fishMarketManager, am = g.aquariumManager;
     A = {
       level: (id) => g.getUpgradeLevel(id), max: (id) => g.getUpgradeMaxLevel(id), eff: (id) => g.getUpgradeEffect(id),
@@ -57,6 +57,14 @@ function probe({ side, scenario }) {
       contracts: (c, r) => { mm.ensureState(); mm.generateContractOffers(c, r); return JSON.stringify(s.aquarium.market.contractOffers); },
       repLevel: (x) => mm.getContractReputationLevel(x),
       community: () => g.getCommunityGoalRewardValue("twigGain"),
+      desert: {
+        chance: () => g.getDesertGoldenPopcornChance(), interval: () => g.getSpawnInterval(9) / g.getDesertPopcornSpawnRateMultiplier(), perDrop: () => g.calculateGoldenPopcornGainPerDrop(),
+        collect: (c) => g.getGoldenPopcornCollectionMultiplier(c), eggMult: () => g.getPopcornCollectionMultiplier(9, g.getTotalMultiplier()), bloom: () => g.getDuneBloomGoldenPopcornMultiplier(),
+        storm: () => g.isDesertSandstormActive(), xpNeed: (L) => g.getDaveXpNeeded(L), seedCost: (L) => g.getDaveSeedTrainingCost(L), speed: () => g.getDaveSpeedMultiplier(),
+        delay: () => g.getDaveForagePickDelay(), sweep: () => g.getDaveSweepSize(), burst: () => g.getDaveBurstPickCount(), golden: () => g.getDaveGoldenPopcornMultiplier(),
+        canRebirb: () => g.canDaveRebirb(), xpGain: () => g.getDaveXpGainMultiplier(), rebirbs: () => g.getDaveRebirbCount(), unspent: () => g.getDaveUnspentRebirbPoints(),
+        milestone: (id) => g.isDaveMilestoneUnlocked(id), goldenAuto: () => nm.isGoldenPopcornAutomationUnlocked(),
+      },
       mine: {
         value: () => g.getMineOreValue(), bonus: () => g.getMineOreDamageBonus(), interval: () => g.getMineCrowHitInterval(), golden: () => g.getMineGoldenOreChance(),
         area: () => g.getMineMilestoneLevel(), stat: (k) => g.getMineShopStats()[k], xpNeed: (L) => g.getMineCrowXpNeeded(L), rebirbLevel: () => g.getMineCrowRebirbRequiredLevelForNext(),
@@ -96,6 +104,14 @@ function probe({ side, scenario }) {
       maxBuffs: () => PT.maxFishBuffs(s), aqUnlocked: () => PT.aquariumUnlocked(s),
       contracts: (c, r) => { PT.market(s); return JSON.stringify(PT.generateContracts(s, c, r)); },
       repLevel: (x) => PT.repLevel(x),
+      desert: {
+        chance: () => PT.desertGoldenChance(s), interval: () => PT.desertSpawnInterval(s), perDrop: () => PT.goldenPerDrop(s),
+        collect: (c) => PT.goldenCollectMult(s, c), eggMult: () => PT.desertEggMult(s), bloom: () => PT.duneBloomMult(s),
+        storm: () => PT.sandstormOn(s), xpNeed: (L) => PT.daveXpNeeded(L), seedCost: (L) => PT.daveSeedCost(L), speed: () => PT.daveSpeedMult(s),
+        delay: () => PT.davePickDelay(s), sweep: () => PT.daveSweepSize(s), burst: () => PT.daveBurst(s), golden: () => PT.daveGoldenMult(s),
+        canRebirb: () => PT.daveCanRebirb(s), xpGain: () => PT.daveXpGainMult(s), rebirbs: () => PT.daveRebirbs(s), unspent: () => PT.dave(s).unspentRebirbPoints,
+        milestone: (id) => PT.daveMilestone(s, id), goldenAuto: () => PT.goldenAutomationUnlocked(s),
+      },
       mine: {
         value: () => PT.mineOreValue(s), bonus: () => PT.mineDamageBonus(s), interval: () => PT.crowInterval(s), golden: () => PT.mineGoldenChance(s),
         area: () => PT.mineArea(s), stat: (k) => (k === "chargeInterval" ? PT.mineProfile(s).chargeInterval : k === "chargeBonus" ? (PT.mineHas(s, "seismic_strike") ? 3 : 0) : k === "crowDamage" ? PT.crowDamage(s) : NaN),
@@ -145,6 +161,11 @@ function probe({ side, scenario }) {
   for (const b of ["coast", "reef", "freshwater", "ocean", "abyssal", "creatures", "mystic", "mechanical", "expedition"]) put(`aquarium tier ${b}`, () => A.aqTier(b));
   for (const x of [0, 99, 100, 650, 6200, 9999]) put(`market rep level at ${x}`, () => A.repLevel(x));
   if (scenario.state.aquarium) for (const [c, r] of [[20000, 0], [20001, 0], [20001, 2]]) out[`contract offers cycle ${c} reroll ${r}`] = A.contracts(c, r);
+  const Dz = A.desert;
+  for (const k of ["chance", "interval", "perDrop", "eggMult", "bloom", "storm", "speed", "delay", "sweep", "burst", "golden", "canRebirb", "xpGain", "rebirbs", "unspent", "goldenAuto"]) put(`desert ${k}`, Dz[k]);
+  for (const c of [false, true]) put(`desert golden collect caramel=${c}`, () => Dz.collect(c));
+  for (const L of [1, 50, 100, 250]) { put(`dave xp needed L${L}`, () => Dz.xpNeed(L)); put(`dave seed cost L${L - 1}`, () => Dz.seedCost(L - 1)); }
+  for (const id of ["firstHop", "quickFeet", "sharpEyes", "davesSons", "workRhythm", "fieldSense", "davesFamily", "masterForager"]) put(`dave milestone ${id}`, () => Dz.milestone(id));
   const Mn = A.mine;
   for (const k of ["value", "bonus", "interval", "golden", "area", "rebirbLevel", "rebirbUnlocked", "canRebirb"]) put(`mine ${k}`, Mn[k]);
   for (const k of ["chargeInterval", "chargeBonus", "crowDamage"]) put(`mine stat ${k}`, () => Mn.stat(k));

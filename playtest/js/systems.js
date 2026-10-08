@@ -21,7 +21,9 @@
   PT.travelTarget = function (s, dir) {
     const m = s.currentMap;
     if (m === 0 && dir < 0) return 4;
-    if (m === 4) return dir > 0 ? 0 : -99;
+    if (m === 9) return dir > 0 ? 1 : 4; // Birb: the Desert sits above the Park with the same side arrows
+    if (m === 4) return dir > 0 ? (s.nestReturnMap === 9 && PT.desertUnlocked(s) ? 9 : 0) : -99;
+    if (m === 1 && dir < 0) return s.sunflowerFieldReturnMap === 9 && PT.desertUnlocked(s) ? 9 : 0;
     return m + dir;
   };
   // Birb sA(): the Aquarium is "down" from the Bridge (Evolution 5), the Fish Market is a room off the Aquarium.
@@ -31,6 +33,7 @@
     if (to === undefined) return "end";
     if (to === 22 && !PT.aquariumUnlocked(s)) return "The Aquarium opens at Evolution 5";
     if (to === 24 && !PT.fishMarketUnlocked(s)) return "The Fish Market opens at 700 resonance";
+    if (to === 9 && !PT.desertUnlocked(s)) return "end"; // Birb shows the up arrow once the desert tree is unlocked
     if (to === 14 && PT.nestState(s).tier < 1) return "The nest interior opens at Nest level 2";
     if (to === 26 && PT.mineArea(s) < 1) return "Defeat the first giant ore";
     return "";
@@ -40,12 +43,12 @@
     const m = s.currentMap;
     if (PT.MAPS[m]?.side) return "end";
     if (dir > 0) {
-      if (m === 0 && (s.rebirthCount || 0) < 1) return "Molt once to travel";
+      if ((m === 0 || m === 9) && (s.rebirthCount || 0) < 1) return "Molt once to travel";
       if (m === 1 && !s.hasUnlockedEvolve) return "Needs Unlock Evolve";
       if (m === 2 && !s.hasEnteredDungeon) return "Walk to the castle gate at the end of the bridge";
       if (m === 3) return "end";
     } else {
-      if (m === 0) return (s.evolutionCount || 0) < 3 ? "EVOLUTION 3" : "";
+      if (m === 0 || m === 9) return (s.evolutionCount || 0) < 3 ? "EVOLUTION 3" : "";
       if (m === 4) return "COMPLETE NEST LEVEL 2 (Expedition: later phase)";
     }
     return "";
@@ -147,7 +150,8 @@
     // Birb: wI.spawnPopcorn (40 px margin; spawns that land inside the bird's reach are collected at once)
     spawn(s, m, W, H, ctx) {
       const pad = 40;
-      const p = { id: this.nextId++, type: this.rollType(s), x: pad + Math.random() * (W - 2 * pad), y: pad + Math.random() * (H - 2 * pad) };
+      const type = ctx && ctx.rollType ? ctx.rollType() : this.rollType(s); // Birb rollPopcornType: the desert rolls only plain / golden
+      const p = { id: this.nextId++, type, caramel: type === "golden" && !!(ctx && ctx.caramel) && Math.random() < 0.25, x: pad + Math.random() * (W - 2 * pad), y: pad + Math.random() * (H - 2 * pad) };
       if (ctx && ctx.player) {
         const dx = p.x - ctx.player.x, dy = p.y - ctx.player.y, r = ctx.immediateRadius;
         if (dx * dx + dy * dy <= r * r) { ctx.onImmediate(p); return; }
