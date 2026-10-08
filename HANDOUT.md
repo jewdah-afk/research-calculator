@@ -103,7 +103,12 @@ Notes for the owner's review:
 - New screens show two tabs (parent window + the new one), like the existing frames; in game the tab bar comes from `Spec.GROUPS`.
 - Long Birb names were shortened so every row keeps the same type size: Near Response (Nearby Response), Desert Harvest (Treasured Harvest), Irrigation (Sunsprout Irrigation), Sand Harvest (Sandstorm Harvest), Fast Farming (Efficient Farming), Wisdom (Ancestral Wisdom), Double Catch (Echo Double Catch).
 - Not in `birb-data` yet, so shown as a guess or "—": the mine tree node order per area, Lumberyard and Compost effects, the Tree Spawns cost, artifact infusion caps (wiki values).
-- Temporary icon cache frame `172:7` (used to reuse image hashes). Delete it once the map boards are done.
+### Map boards (Figma, 2026-10-08)
+Frame **`178:7`** "Peckwood / Map boards" on page UI v2 (x 4200, y 9000), built from the owner's World Guide artifact (layout #1 "Peckwood Isle").
+- **World / unlock order** `178:10`: the 9 unlock steps in `Defs.ISLANDS` order (map view), plus the whole world at night 01:00 and golden hour 18:30.
+- **One board per area** (Park `178:34`, Garden `178:66`, Castle `178:102`, Bridge `178:138`, Forest `178:174`, Mine `178:210`, Desert `178:246`, Expedition `178:282`, Echo Field `178:318`): hero shot at 11:00, night 01:00, a wide shot of how it joins its neighbours, the unlock moment in four frames (before, rising, settling, after), the HUD v3 zones over the map, and a notes card (props from `IslandData.luau`, effects, joins, terrain colour, how to rebuild in Studio).
+- Captured headless with `concepts/capture/world_guide_areas.js` and `world_guide_overview.js` (Playwright + SwiftShader; save the artifact HTML locally, serve it, run `node <script> <outDir> <url>`). The unlock frames freeze `performance.now` and step it 0.5s / 1.2s / 7.2s after `unlock(n)`.
+- The cyan strips between areas in the world shots are the guide's shallow-water seams, not fog.
 
 ### Open issues (do these next)
 1. **Done:** all 83 Figma images load. They took about 1 hour in Roblox moderation after upload, so new uploads look blank until they clear.
