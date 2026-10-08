@@ -1,8 +1,8 @@
 # Parity report
 
-Birb's live engine (birbplay.com `window.game`) vs the playtest, same save state per scenario. Generated 2026-10-08T22:15Z by `playtest/parity/parity.js`.
+Birb's live engine (birbplay.com `window.game`) vs the playtest, same save state per scenario. Generated 2026-10-08T22:24Z by `playtest/parity/parity.js`.
 
-**50991 / 50991 values match.** Birb's live community-goal twig reward today: x1.5 (copied into the playtest for the run).
+**52979 / 52979 values match.** Birb's live community-goal twig reward today: x1.5 (copied into the playtest for the run).
 
 | Scenario | Values | Mismatches |
 |---|---|---|
@@ -25,20 +25,20 @@ Birb's live engine (birbplay.com `window.game`) vs the playtest, same save state
 | desert start | 832 | 0 |
 | desert dave | 832 | 0 |
 | desert sandstorm late | 832 | 0 |
-| expedition start | 1948 | 0 |
+| expedition start | 2060 | 0 |
 | expedition rebirb 1 | 832 | 0 |
-| expedition late | 1948 | 0 |
-| sacrifice tier I | 1948 | 0 |
-| sacrifice capped III | 1948 | 0 |
-| sacrifice expansion V | 1948 | 0 |
-| sacrifice rebirb XIV | 1948 | 0 |
-| loot basic kit | 2443 | 0 |
-| loot effect copies | 1948 | 0 |
-| loot full bag | 1948 | 0 |
-| forge no milestone | 1948 | 0 |
-| forge early | 1948 | 0 |
-| forge legendary | 1948 | 0 |
-| forge refined deep | 1948 | 0 |
+| expedition late | 2592 | 0 |
+| sacrifice tier I | 2060 | 0 |
+| sacrifice capped III | 2060 | 0 |
+| sacrifice expansion V | 2060 | 0 |
+| sacrifice rebirb XIV | 2060 | 0 |
+| loot basic kit | 2555 | 0 |
+| loot effect copies | 2060 | 0 |
+| loot full bag | 2060 | 0 |
+| forge no milestone | 2060 | 0 |
+| forge early | 2060 | 0 |
+| forge legendary | 2060 | 0 |
+| forge refined deep | 2060 | 0 |
 | quest unlock | 1164 | 0 |
 | quest progress | 1178 | 0 |
 | quest legacy migration | 1174 | 0 |

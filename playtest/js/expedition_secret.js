@@ -42,7 +42,7 @@
     const s = G.s, run = PT.expState(s).activeRun; if (!X.isSecretRoom(s.currentMap)) return false;
     X.breakReset(s);
     if (!run) { s.currentMap = PT.EXP_HUB_MAP; const p = X.portal(PT.EXP_HUB_MAP, "enter_expedition"); s.player.x = p.x; s.player.y = p.y + 90; G.target = null; return true; }
-    const back = run.secretRoomOriginMapId || X.FLOOR_MAP[run.currentFloor]; run.secretRoomOriginMapId = null;
+    const back = run.secretRoomOriginMapId || X.runMap(run.currentFloor); run.secretRoomOriginMapId = null;
     s.currentMap = back; X.placeAtPortal(G, "secret_room_enter"); return true;
   };
   // Birb enterFloorOneSecretMineRoom / exitFloorOneSecretMineRoom

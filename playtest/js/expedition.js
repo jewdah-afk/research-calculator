@@ -14,7 +14,15 @@
   for (const [f, v] of Object.entries(DATA.floors)) { X.FLOOR_MAP[f] = v.mapId; X.MAP_FLOOR[v.mapId] = +f; }
   PT.MAPS[PT.EXP_HUB_MAP] = { id: PT.EXP_HUB_MAP, key: "expedition-hub", name: "EXPEDITION", w: 1056, h: 792 };
   for (const [f, v] of Object.entries(DATA.floors)) PT.MAPS[v.mapId] = { id: v.mapId, key: "expedition-floor-" + f, name: "FLOOR " + f, w: 2000, h: 4000, side: true, floor: +f };
+  // night mode (Birb activeRun.nightMode): parrot rebirb III, floor 1 only, on its own map; stats and loot use floor 10 + floor - 1 (Birb Qt)
+  X.NIGHT_MAP = DATA.night[1].mapId; X.MAP_FLOOR[X.NIGHT_MAP] = 1; X.NIGHT_MAX_FLOOR = 1;
+  { const b = DATA.night[1].bounds; PT.MAPS[X.NIGHT_MAP] = { id: X.NIGHT_MAP, key: "expedition-night-floor-1", name: "NIGHT FLOOR 1", w: Math.ceil(b.maxX + 160), h: Math.ceil(b.maxY + 160), side: true, floor: 1, night: true }; }
   X.isRunMap = (m) => m in X.MAP_FLOOR;
+  X.nightRun = () => !!PT.G?.s?.expedition?.activeRun?.nightMode; // Birb reads this.state.activeRun?.nightMode inside the stat wrappers
+  X.canNight = (s) => X.rebirbs(s) >= 3; // Birb $ / Ma
+  X.qt = (f, night = X.nightRun()) => (night ? 10 + f - 1 : f); // Birb Qt
+  X.runMap = (floor, night = X.nightRun()) => (night && floor === 1 ? X.NIGHT_MAP : X.FLOOR_MAP[floor]); // Birb getRunMapForFloor
+  const FD = (m) => (m === X.NIGHT_MAP ? DATA.night[1] : DATA.floors[X.MAP_FLOOR[m]]);
 
   // ------------------------------------------------------------------ constants (Birb fI statics, editors / maps consts)
   const K = X.K = {
@@ -176,18 +184,20 @@
     { boss: "giant-black-pudding", packs: [["black-pudding", 22], ["ghost", 10], ["doppelganger", 5]], group: [3, 5] },
     { boss: "the-archivist", packs: [["hell-critter", 8], ["imp", 5], ["cacodaemon", 5], ["cultist-brute", 6]], group: [3, 5], diversity: { minDistinctTypes: 2, maxSameType: 2 } },
   ];
-  const plan = (f) => X.PLAN[Math.max(1, Math.min(9, Math.floor(f) || 1)) - 1];
+  X.NIGHT_PLAN = { ...X.PLAN[0], boss: "ice-fire-guardian", packs: [["elven-assassin", 11], ["zombie-cultist", 11], ["shardsoul-slayer", 10]] }; // Birb vl(1, true)
+  X.NIGHT_POOL = ["elven-assassin", "zombie-cultist", "shardsoul-slayer"]; // Birb mn
+  const plan = (f) => (X.nightRun() && f === 1 ? X.NIGHT_PLAN : X.PLAN[Math.max(1, Math.min(9, Math.floor(f) || 1)) - 1]);
   X.floorConfig = function (f) { // Birb tS
     const t = Math.max(1, Math.min(9, Math.floor(Number(f) || 1)));
     const i = t <= 1 ? 8 : t === 2 ? 10 : t <= 4 ? 6 : 13, a = t <= 1 ? 6 : t === 2 ? 8 : t === 3 ? 9 : t === 4 ? 7 : 11;
     return { coverageTargetPerBand: i, maximumRegularsPerBand: a, minimumGroupsPerBand: t <= 1 ? 3 : t === 2 ? 4 : t <= 4 ? 2 : 5, eliteLeaderGroups: t <= 1 ? 1 : t === 2 ? 2 : t === 4 ? 1 : 3 };
   };
-  X.bounds = (mapId) => DATA.floors[X.MAP_FLOOR[mapId]]?.bounds || { minX: 160, maxX: 1840, minY: 160, maxY: 3680 };
+  X.bounds = (mapId) => FD(mapId)?.bounds || { minX: 160, maxX: 1840, minY: 160, maxY: 3680 };
   X.collisions = (mapId) => {
-    const f = X.MAP_FLOOR[mapId]; const raw = f ? DATA.floors[f].collisions : mapId === PT.EXP_HUB_MAP ? DATA.hub.collisions : [];
+    const f = X.MAP_FLOOR[mapId]; const raw = f ? FD(mapId).collisions : mapId === PT.EXP_HUB_MAP ? DATA.hub.collisions : [];
     return raw.map ? (raw._rects ||= raw.map(([l, t, r, b]) => ({ left: l, top: t, right: r, bottom: b }))) : [];
   };
-  X.portals = (mapId) => (X.MAP_FLOOR[mapId] ? DATA.floors[X.MAP_FLOOR[mapId]].portals : mapId === PT.EXP_HUB_MAP ? DATA.hub.portals : []);
+  X.portals = (mapId) => (X.MAP_FLOOR[mapId] ? FD(mapId).portals : mapId === PT.EXP_HUB_MAP ? DATA.hub.portals : []);
   X.portal = (mapId, type) => { const p = X.portals(mapId).find((q) => q.type === type); return p ? { x: p.x, y: p.y, radius: p.r } : null; };
   X.portalZones = (mapId, pad = K.PORTAL_PAD) => X.portals(mapId).map((p) => ({ x: p.x, y: p.y, radius: p.r + pad }));
   const inZones = (x, y, zs) => zs.some((z) => (x - z.x) ** 2 + (y - z.y) ** 2 <= z.radius * z.radius);
@@ -222,6 +232,7 @@
     return { health: py(g.health * Math.pow(1.1483, k) * (isBoss ? 1.1 : 1), 1), attack: py(g.attack * Math.pow(1.1112, k) * (isBoss ? 1.08 : 1), 1), defense: py(g.defense, 0),
       speed: py(g.speed, 1), xpBase: py(g.xpBase * Math.pow(1.1236, k), 0), skillPointReward: py(g.skillPointReward, 0), isBoss: !!isBoss };
   };
+  { const es = X.enemyStats; X.enemyStats = (type, floor, isBoss) => es(type, X.qt(floor), isBoss); }
   const BANDS = {
     2: [[18, 36], [100, 160], [430, 560], [1200, 1800], [4500, 6e3]], 3: [[13, 17], [140, 220], [900, 1300], [4500, 7e3], [22e3, 3e4]],
     4: [[6, 12], [48, 84], [360, 600], [1800, 2800], [4600, 6200]], 5: [[18, 36], [80, 120], [280, 420], [1e3, 1500], [3500, 5200]],
@@ -236,6 +247,7 @@
     const c = Math.max(1, X.baseStats(type)?.health || h || 1), d = Math.max(0.2, (h || c) / c);
     return X.roundHealth(l * d);
   };
+  { const dh = X.depthHealthAt; X.depthHealthAt = (type, h, ratio, floor, q) => dh(type, h, ratio, X.qt(floor), q); }
   X.attackFromLife = (atk, hp, life, boss) => { const a = Math.max(1, +atk || 1), r = Math.max(1, +hp || 1), s = Math.max(1, +life || 1) / 25, o = Math.max(1, r / 5); let l = s * Math.max(0.95, Math.min(1.05, a / o)); if (boss) l *= 1.12; return Math.max(1, Math.round(l)); };
   X.spFromHealth = function (hp, minSp, boss) {
     const i = Math.max(1, +hp || 1); let a = i <= 60 ? 3 : Math.max(3, Math.round(16.61 * Math.log10(i) - 23.23));
@@ -254,7 +266,9 @@
     return 0;
   };
   X.spReward = (type, life, h, minSp, boss, floor, ratio) => (type === "mini-fly" ? 0 : Math.max(X.spFromHealth(life, minSp, boss), X.minSpForBand(type, h, minSp, boss, floor, X.band(ratio))));
-  X.floorSpScale = function (e, f, ratio = 0) {
+  { const sr = X.spReward; X.spReward = (type, life, h, minSp, boss, floor, ratio) => sr(type, life, h, minSp, boss, X.qt(floor), ratio); }
+  X.floorSpScale = (e, f, ratio = 0) => floorSpScaleRaw(e, X.qt(f), ratio);
+  const floorSpScaleRaw = function (e, f, ratio = 0) {
     const i = Math.max(0, Math.floor(+e || 0)); if (i <= 0) return 0; const n = 1 - Math.max(0, Math.min(1, +ratio || 0));
     if (f >= 9) return Math.round(2.4 * i); if (f >= 7) return Math.round(2 * i);
     if (f === 6) return Math.round(i * (2 + 0.8 * n)); if (f === 5) return Math.round(i * (2.8 + 1.6 * n)); if (f === 4) return Math.round(i * (2.4 + 3.8 * n)); if (f === 3) return Math.round(i * (2.2 + 10.7 * n));
@@ -282,6 +296,7 @@
       attackRange: RANGE[type] ?? 40, hitFlash: 0, animFrame: 0, animTimer: 0, facingRight: Math.random() > 0.5, state: type === "flower-monster" ? "hide" : "idle", roamTimer: 0,
       isBoss: !!st.isBoss, respawnKey, originalX: x, originalY: y, groupCenterX: x, groupCenterY: y };
     if (type === "flower-monster") e.flowerEmerged = false;
+    if (type === "zombie-cultist") { e.state = "respawn"; e.attackCooldown = 1.1; } // Birb: night cultists rise first
     if (type === "anubis") Object.assign(e, { anubisAction: "", anubisAttackSide: "right", anubisAnkhCooldown: 1.6, anubisCoffinCooldown: 6.8, anubisActionApplied: false, anubisCoffinPhase: "", anubisCoffinFrame: 0, anubisCoffinSpawned: false });
     if (type === "anubis-warrior") e.anubisWarriorAttackMode = "range";
     if (type === "doppelganger") e.doppelgangerForm = "human";
@@ -346,7 +361,9 @@
   };
   X.clearBossCooldowns = (s, mapId, floor) => { const pre = X.respawnKey("boss", mapId, floor, ""); for (const k of Object.keys(cds(s))) if (k.startsWith(pre)) delete cds(s)[k]; };
   X.applyRespawnedState = function (e) { // Birb applyRespawnedEnemyState
+    e.elvenAssassin = undefined; e.zombieCultist = undefined; e.guardianBoss = undefined;
     e.animFrame = 0; e.animTimer = 0; e.attackCooldown = 0; e.isLeashing = false; e.archivistSpells = undefined;
+    if (e.type === "zombie-cultist") { e.state = "respawn"; e.attackCooldown = 1.1; return; }
     if (e.type === "flower-monster") { e.flowerEmerged = false; e.state = "hide"; }
     else if (e.type === "frost-wisp" || e.type === "ghost") { e.state = "respawn"; e.attackCooldown = 0.55; }
     else if (e.type === "giant-black-pudding") { e.state = "respawn"; e.attackCooldown = 1.35; }
@@ -373,7 +390,7 @@
   X.bossOnCooldown = (run) => run.enemies.some((e) => e.isBoss && e.health <= 0 && (e.respawnTimer ?? 0) > 0);
   // Birb syncNextFloorPortalWithBossCooldown: the next-floor portal opens while the boss is down
   X.syncExitPortal = function (run, mapId) {
-    if (!X.isRunMap(mapId) || run.currentFloor >= K.MAX_FLOOR || !X.bossOnCooldown(run)) { run.exitPortal = null; return; }
+    if (!X.isRunMap(mapId) || (!run.nightMode && run.currentFloor >= K.MAX_FLOOR) || !X.bossOnCooldown(run)) { run.exitPortal = null; return; }
     const n = X.portal(mapId, "next_floor"), b = run.enemies.find((e) => e.isBoss);
     run.exitPortal = { x: n?.x ?? b?.x ?? 0, y: n?.y ?? b?.y ?? 0, active: true };
   };
@@ -471,8 +488,8 @@
   const procGroupMin = (f) => K.PROC_GROUP_MIN + (f <= 1 ? 0 : f === 2 ? 20 : f === 3 ? 30 : 40);
   const guardMin = (f) => K.DEPTH_GUARD_MIN + (f <= 1 ? 0 : f === 2 ? 20 : f === 3 ? 30 : 40);
   const coverageSize = (f) => (f <= 1 ? [2, 3] : f === 2 ? [2, 4] : f === 3 || f === 4 ? [2, 3] : [3, 5]);
-  const POOL = (f) => (f <= 1 ? ["masked-forest-spirit", "twig-blight", "flower-monster"] : f === 2 ? ["harpy", "cobra", "skeleton-warrior"] : f === 3 ? ["mummy", "anubis-warrior"] : f >= 9 ? ["hell-critter", "imp", "cacodaemon", "cultist-brute"] : f >= 8 ? ["black-pudding", "ghost"] : f >= 7 ? ["frogfolk-wizard", "frogfolk-brute", "giant-fly"] : f >= 6 ? ["frost-wisp", "arctic-whisper", "ice-harpy", "frozy-cube"] : f >= 5 ? ["fishfolk-pugilist", "sea-horror", "sea-gramlin", "elemental"] : ["fishfolk-whipe", "fishfolk-inkbender"]);
-  const COVERAGE_POOL = (f) => (f <= 1 ? ["twig-blight", "masked-forest-spirit", "flower-monster"] : POOL(f));
+  const POOL = (f) => (X.nightRun() && f === 1 ? [...X.NIGHT_POOL] : f <= 1 ? ["masked-forest-spirit", "twig-blight", "flower-monster"] : f === 2 ? ["harpy", "cobra", "skeleton-warrior"] : f === 3 ? ["mummy", "anubis-warrior"] : f >= 9 ? ["hell-critter", "imp", "cacodaemon", "cultist-brute"] : f >= 8 ? ["black-pudding", "ghost"] : f >= 7 ? ["frogfolk-wizard", "frogfolk-brute", "giant-fly"] : f >= 6 ? ["frost-wisp", "arctic-whisper", "ice-harpy", "frozy-cube"] : f >= 5 ? ["fishfolk-pugilist", "sea-horror", "sea-gramlin", "elemental"] : ["fishfolk-whipe", "fishfolk-inkbender"]);
+  const COVERAGE_POOL = (f) => (X.nightRun() && f === 1 ? [...X.NIGHT_POOL] : f <= 1 ? ["twig-blight", "masked-forest-spirit", "flower-monster"] : POOL(f));
   X.spawnProcedural = function (s, run, mapId, floor) {
     const P = plan(floor), b = X.bounds(mapId), zones = X.portalZones(mapId), avoid = procAvoid(floor), gmin = procGroupMin(floor);
     const nonce = run.floorResetNonce || 0;
@@ -684,7 +701,7 @@
   };
   // Birb initializeFloor + spawnEnemiesFromMapData (no floor has hand-placed spawns, so everything is procedural)
   X.populateFloor = function (s, run, floor) {
-    const mapId = X.FLOOR_MAP[floor];
+    const mapId = X.runMap(floor);
     X.collapseBossCooldowns(s, mapId, floor);
     X.spawnProcedural(s, run, mapId, floor);
     X.reconcileBoss(s, run, mapId, floor); X.ensureBoss(s, run, mapId, floor); X.reconcileBoss(s, run, mapId, floor);
@@ -706,22 +723,23 @@
         speed: 90, health: hp, maxHealth: hp, damage: K.BASE_DAMAGE + b.damage, state: "idle", hitCooldown: 0, poisonTicksRemaining: 0, poisonTickTimer: 0, poisonDamagePerTick: 0 };
     } else if (run.parrot.state !== "death") Object.assign(run.parrot, { targetEnemyId: null, manualTargetEnemyId: null, state: "idle" });
     X.populateFloor(s, run, floor);
-    X.syncExitPortal(run, X.FLOOR_MAP[floor]);
+    X.syncExitPortal(run, X.runMap(floor));
   };
 
   // ------------------------------------------------------------------ run flow (Birb startRun / advanceToNextFloor / endRun)
-  X.startRun = function (G, floor) {
+  X.startRun = function (G, floor, night = false) {
     const s = G.s, e = PT.expState(s); if (e.activeRun) return false;
-    const want = Math.max(1, Math.floor(floor || 1)); if (want > X.maxFloorForEvo(s)) return false;
+    const want = Math.max(1, Math.floor(floor || 1)); if (night && (!X.canNight(s) || want > X.NIGHT_MAX_FLOOR)) return false; if (want > X.maxFloorForEvo(s)) return false;
     X.normalizeCooldowns(s);
     const l = Math.min(e.highestFloorReached || 1, K.MAX_FLOOR, want);
-    e.activeRun = { startTime: Date.now(), elapsedTime: 0, currentFloor: l, floorResetNonce: 0, exitPortal: null, phase: "active", enemies: [], parrot: null,
+    e.activeRun = { startTime: Date.now(), elapsedTime: 0, currentFloor: l, nightMode: !!night, secretRoomOriginMapId: null, floorResetNonce: 0, exitPortal: null, phase: "active", enemies: [], parrot: null,
       lootDrops: [], damageNumbers: [], collectedResources: {}, equipmentChestsCollected: {}, enemiesDefeated: 0, artifacts: [], skillPointFractionCarry: 0 };
     e.highestFloorReached = Math.max(e.highestFloorReached || 1, l); e.totalRuns++;
     X.goToFloorMap(G, l); X.initFloor(s, e.activeRun, l); X.placeAtPortal(G, "return_hub");
+    if (night && e.activeRun.parrot) { const q = X.portal(G.s.currentMap, "return_hub"); if (q) { e.activeRun.parrot.x = q.x - 36; e.activeRun.parrot.y = q.y + 50; } } // Birb: the night parrot starts by the portal
     return true;
   };
-  X.goToFloorMap = (G, floor) => { G.s.currentMap = X.FLOOR_MAP[floor]; G.target = null; G.vx = G.vy = 0; };
+  X.goToFloorMap = (G, floor) => { G.s.currentMap = X.runMap(floor); G.target = null; G.vx = G.vy = 0; };
   X.placeAtPortal = function (G, type) { // Birb placePlayerAtExpeditionSpawn: 50 px below the portal
     const m = G.s.currentMap, p = X.portal(m, type) || { x: 528, y: 130 }, run = PT.expState(G.s).activeRun;
     G.s.player.x = p.x; G.s.player.y = p.y + 50;
@@ -729,7 +747,7 @@
   };
   X.advanceFloor = function (G) {
     const s = G.s, e = PT.expState(s), run = e.activeRun; if (!run || !run.exitPortal?.active) return false;
-    if (run.currentFloor >= K.MAX_FLOOR) { X.endRun(G, false); return true; }
+    if (run.currentFloor >= (run.nightMode ? X.NIGHT_MAX_FLOOR : K.MAX_FLOOR)) { run.exitPortal = null; X.endRun(G, run.nightMode === true); return true; }
     if (run.currentFloor + 1 > X.maxFloorForEvo(s)) return false;
     run.currentFloor++; run.floorResetNonce = 0; run.exitPortal = null; run.enemies = []; run.lootDrops = []; run.damageNumbers = [];
     if (run.parrot && run.parrot.state !== "death") Object.assign(run.parrot, { targetEnemyId: null, manualTargetEnemyId: null, state: "idle" });
@@ -749,7 +767,7 @@
   // Birb: hold to reset the floor seed (rerolls this floor's enemies)
   X.resetFloor = function (G) {
     const s = G.s, run = PT.expState(s).activeRun; if (!run || run.phase !== "active") return false;
-    run.floorResetNonce = (run.floorResetNonce || 0) + 1; run.enemies = []; X.populateFloor(s, run, run.currentFloor); X.syncExitPortal(run, X.FLOOR_MAP[run.currentFloor]); run.combatArmed = false; return true;
+    run.floorResetNonce = (run.floorResetNonce || 0) + 1; run.enemies = []; X.populateFloor(s, run, run.currentFloor); X.syncExitPortal(run, X.runMap(run.currentFloor)); run.combatArmed = false; return true;
   };
 
   // ------------------------------------------------------------------ parrot rebirb (Birb m_ / g_ / f_ and the rebirb table)

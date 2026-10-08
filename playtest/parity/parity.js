@@ -59,6 +59,7 @@ function probe({ side, scenario }) {
       repLevel: (x) => mm.getContractReputationLevel(x),
       community: () => g.getCommunityGoalRewardValue("twigGain"),
       exp: (() => { const em = g.expeditionManager, FI = em.constructor; return {
+        walk: (x, y) => window.__BIRB_NIGHT_WALK(x, y), night: (fn) => { const r0 = em.state.activeRun; em.state.activeRun = { nightMode: true, currentFloor: 1, enemies: [], startTime: Date.now() }; try { return fn(); } finally { em.state.activeRun = r0; } }, nightMap: () => em.getRunMapForFloor(1),
         xpReq: (L) => FI.getXpRequirementForLevel(L), stats: (t, f, b, k) => em.resolveEnemyStatsForMapSpawn(t, f, b)?.[k],
         depthHp: (t, h, r, f, q) => em.enemyDepthBalance.resolveDepthScaledHealthAtQuantile(t, h, r, f, q), atk: (a, h, l, b) => em.resolveAttackFromLife(a, h, l, b),
         sp: (t, l, h, m, b, f, r) => em.resolveSkillPointReward(t, l, h, m, b, f, r), spScale: (sp, f, r) => em.applyFloorSkillPointRewardScaling(sp, f, r),
@@ -134,6 +135,7 @@ function probe({ side, scenario }) {
       contracts: (c, r) => { PT.market(s); return JSON.stringify(PT.generateContracts(s, c, r)); },
       repLevel: (x) => PT.repLevel(x),
       exp: (() => { const X = PT.EXP; PT.parrotState(s); PT.expState(s); const pw = (p) => (typeof p === "number" ? { copies: Math.min(2, p), primaryPower: p >= 1 ? 1 : 0, secondaryPower: p >= 2 ? 1 : 0 } : { copies: Math.min(2, p.copies), primaryPower: p.copies >= 1 ? p.primaryPower : 0, secondaryPower: p.copies >= 2 ? p.secondaryPower : 0 }); return {
+        walk: (x, y) => X.nightWalkable(x, y), night: (fn) => { const e = PT.expState(s), r0 = e.activeRun; e.activeRun = { nightMode: true, currentFloor: 1, enemies: [], startTime: Date.now() }; try { return fn(); } finally { e.activeRun = r0; } }, nightMap: () => X.runMap(1),
         xpReq: (L) => X.xpReq(L), stats: (t, f, b, k) => X.enemyStats(t, f, b)?.[k], depthHp: (t, h, r, f, q) => X.depthHealthAt(t, h, r, f, q), atk: (a, h, l, b) => X.attackFromLife(a, h, l, b),
         sp: (t, l, h, m, b, f, r) => X.spReward(t, l, h, m, b, f, r), spScale: (sp, f, r) => X.floorSpScale(sp, f, r), total: (k) => PT.parrotTotalStats(s)[k], gear: (k) => X.gearMults(s)[k],
         spMult: () => X.rebirbSpMult(s), rebirb: () => PT.parrotRebirbReady(s), ext: (k) => X.externalBonuses(s)[k], muad: () => X.muadBirb(s), add: (k) => X.skillAdditions(s)[k],
@@ -214,7 +216,7 @@ function probe({ side, scenario }) {
   if (scenario.state.aquarium) for (const [c, r] of [[20000, 0], [20001, 0], [20001, 2]]) out[`contract offers cycle ${c} reroll ${r}`] = A.contracts(c, r);
   const Ex = A.exp, PLAN = { 1: ["cobra", "masked-forest-spirit", "twig-blight", "flower-monster"], 2: ["witch", "harpy", "cobra", "skeleton-warrior", "ghoul"], 3: ["anubis", "mummy", "anubis-warrior"],
     4: ["fishfolk-brute", "fishfolk-whipe", "fishfolk-inkbender", "fishfolk-archpriest"], 5: ["fishfolk-horror", "fishfolk-pugilist", "sea-horror", "sea-gramlin", "elemental"], 6: ["frosty-slime", "frost-wisp", "arctic-whisper", "ice-harpy", "frozy-cube"],
-    7: ["frogfolk-chieftain", "frogfolk-wizard", "frogfolk-brute", "giant-fly"], 8: ["giant-black-pudding", "black-pudding", "ghost", "doppelganger"], 9: ["the-archivist", "hell-critter", "imp", "cacodaemon", "cultist-brute", "cultist"] };
+    7: ["frogfolk-chieftain", "frogfolk-wizard", "frogfolk-brute", "giant-fly"], 8: ["giant-black-pudding", "black-pudding", "ghost", "doppelganger"], 9: ["the-archivist", "hell-critter", "imp", "cacodaemon", "cultist-brute", "cultist"], 10: ["ice-fire-guardian", "elven-assassin", "zombie-cultist", "shardsoul-slayer"] };
   for (const L of [1, 2, 7, 30, 150, 1000]) put(`parrot xp needed L${L}`, () => Ex.xpReq(L));
   if (scenario.expedition) {
     for (const [f, types] of Object.entries(PLAN)) for (const t of types) for (const b of [false, true]) {
@@ -223,6 +225,14 @@ function probe({ side, scenario }) {
       for (const r of [0.1, 0.5, 0.95]) put(`exp sp F${f} ${t}${b ? " boss" : ""} r${r}`, () => { const h = Ex.stats(t, +f, b, "health"), life = Ex.depthHp(t, h, r, +f, 0.5); return Ex.spScale(Ex.sp(t, life, h, Ex.stats(t, +f, b, "skillPointReward"), b, +f, r), +f, r); });
       put(`exp atk F${f} ${t}${b ? " boss" : ""}`, () => { const h = Ex.stats(t, +f, b, "health"); return Ex.atk(Ex.stats(t, +f, b, "attack"), h, Ex.depthHp(t, h, 0.5, +f, 0.5), b); });
       put(`exp range ${t}${b ? " boss" : ""}`, () => Ex.range(t, b)); put(`exp strike ${t}${b ? " boss" : ""}`, () => Ex.strike(t, b));
+    }
+  }
+  if (scenario.night) { // night mode: the same wrappers read floor 10 + floor - 1 (Birb Qt) and floor 1 runs on its own map
+    put("night run map F1", () => Ex.night(() => Ex.nightMap()));
+    for (let x = 160; x <= 2660; x += 125) for (let y = 160; y <= 5330; y += 235) put(`night walkable ${x},${y}`, () => Ex.walk(x, y));
+    for (const t of PLAN[10]) for (const b of [false, true]) {
+      for (const k of ["health", "attack", "skillPointReward"]) put(`night stats F1 ${t}${b ? " boss" : ""} ${k}`, () => Ex.night(() => Ex.stats(t, 1, b, k)));
+      for (const r of [0.1, 0.5, 0.95]) put(`night sp F1 ${t}${b ? " boss" : ""} r${r}`, () => Ex.night(() => { const h = Ex.stats(t, 1, b, "health"), life = Ex.depthHp(t, h, r, 1, 0.5); return Ex.spScale(Ex.sp(t, life, h, Ex.stats(t, 1, b, "skillPointReward"), b, 1, r), 1, r); }));
     }
   }
   for (const k of ["hp", "damage", "lifeRegen"]) put(`parrot total ${k}`, () => Ex.total(k));
@@ -295,6 +305,8 @@ function probe({ side, scenario }) {
   await birb.evaluate(async () => { // Birb's artifact proc helpers live in the main chunk (kn / xn / Cn, exported as a0 / $ / a1)
     const src = [...document.querySelectorAll("script[src],link[href]")].map((e) => e.src || e.href).find((u) => /\/assets\/main-[^/]+\.js$/.test(u)) || "/assets/main-CPPXRpzm.js";
     const m = await import(src); window.__BIRB_PROCS = { kn: m.a0, xn: m.$, Cn: m.a1 };
+    const ms = [...document.querySelectorAll("script[src],link[href]")].map((e) => e.src || e.href).find((u) => /\/assets\/maps-[^/]+\.js$/.test(u)) || "/assets/maps-CcKoUYtq.js";
+    window.__BIRB_NIGHT_WALK = (await import(ms)).d0; // Birb Re: night map walkable test
   });
   const ours = await (await browser.newContext()).newPage();
   const errs = [];

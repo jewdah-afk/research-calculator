@@ -24,15 +24,17 @@
     if (p.health > 0) { p.hitCooldown = Math.max(p.hitCooldown ?? 0, n.hitCooldown); if (!fighting) { p.state = "take_damage"; if (!was) { p.animFrame = 0; p.animTimer = 0; p.stunTimer = Math.max(p.stunTimer ?? 0, n.stunTimer); } } }
     RT.regenPenalty = 3; for (const f of n.onApply) f();
   };
+  X.queueParrotHit = queue;
   X.dmgNumber = (run, at, text, color) => { if (run.damageNumbers.length < 60) run.damageNumbers.push({ x: at.x, y: at.y - 24, text, color, life: 0.9 }); };
   const ROLE = X.role;
-  const anchorY = (e) => { const t = e.type === "harpy" || e.type === "ice-harpy" ? K.HARPY_Y : e.type === "frogfolk-wizard" ? K.WIZARD_Y : e.type === "frogfolk-brute" ? K.BRUTE_Y : e.type === "frogfolk-chieftain" ? K.CHIEFTAIN_Y : 0; return t <= 0 ? 0 : e.isBoss ? Math.round(1.8 * t) : e.isElite ? Math.round(1.4 * t) : t; };
+  const anchorY = (e) => { if (e.type === "ice-fire-guardian" && e.isBoss) return 90; /* Birb Go -> Ho.combatAnchorY */ const t = e.type === "harpy" || e.type === "ice-harpy" ? K.HARPY_Y : e.type === "frogfolk-wizard" ? K.WIZARD_Y : e.type === "frogfolk-brute" ? K.BRUTE_Y : e.type === "frogfolk-chieftain" ? K.CHIEFTAIN_Y : 0; return t <= 0 ? 0 : e.isBoss ? Math.round(1.8 * t) : e.isElite ? Math.round(1.4 * t) : t; };
   X.anchor = (e) => ({ x: e.x, y: e.y + anchorY(e) });
   const r2 = (base, min, boss, bossAdd, bossMin) => { const t = Math.max(min, base); return boss ? Math.max(t + bossAdd, bossMin) : t; };
   // Birb getEnemyRetaliationTriggerRange
   X.triggerRange = function (e) {
     const a = e.attackRange, B = e.isBoss;
     switch (e.type) {
+      case "elven-assassin": case "zombie-cultist": case "shardsoul-slayer": return B ? 48 : 34;
       case "masked-forest-spirit": return B ? 78 : 45;
       case "flower-monster": return r2(a || 22, 12, B, 6, 28);
       case "harpy": case "ice-harpy": return r2(a || 28, 16, B, 8, 36);
@@ -70,7 +72,7 @@
       default: return Math.max(20, a || 40);
     }
   };
-  const STRIKE = { "flower-monster": 21, harpy: 22, "ice-harpy": 22, witch: 58, anubis: 66, "anubis-warrior": 52, "fishfolk-archpriest": 56, cobra: 28, ghoul: 28, "skeleton-warrior": 28,
+  const STRIKE = { "elven-assassin": 28, "zombie-cultist": 28, "shardsoul-slayer": 28, "flower-monster": 21, harpy: 22, "ice-harpy": 22, witch: 58, anubis: 66, "anubis-warrior": 52, "fishfolk-archpriest": 56, cobra: 28, ghoul: 28, "skeleton-warrior": 28,
     "fishfolk-whipe": 30, "fishfolk-brute": 32, "fishfolk-horror": 34, "fishfolk-pugilist": 30, "sea-horror": 30, "sea-gramlin": 28, elemental: 32, "frost-wisp": 30, ghost: 30, doppelganger: 32,
     "black-pudding": 32, "giant-black-pudding": 58, "hell-critter": 28, cultist: 26, "cultist-brute": 30, "the-archivist": 54, imp: 30, cacodaemon: 38, "arctic-whisper": 34, "frozy-cube": 32,
     "frosty-slime": 44, "frogfolk-wizard": 38, "frogfolk-brute": 44, "frogfolk-chieftain": 50, "fishfolk-inkbender": 30, mummy: 28, "masked-forest-spirit": 40, "giant-fly": 44, "twig-blight": 44 };
@@ -288,11 +290,11 @@
   X.trackQuestKill = () => {};
 
   // ------------------------------------------------------------------ enemy runtime (Birb WT.update)
-  const GENERIC = new Set(["cobra", "ghoul", "skeleton-warrior", "mummy", "fishfolk-whipe", "fishfolk-inkbender", "fishfolk-brute", "fishfolk-horror", "fishfolk-pugilist", "sea-horror", "sea-gramlin", "elemental", "frost-wisp", "ghost",
+  const GENERIC = new Set(["elven-assassin", "zombie-cultist", "shardsoul-slayer", "cobra", "ghoul", "skeleton-warrior", "mummy", "fishfolk-whipe", "fishfolk-inkbender", "fishfolk-brute", "fishfolk-horror", "fishfolk-pugilist", "sea-horror", "sea-gramlin", "elemental", "frost-wisp", "ghost",
     "doppelganger", "black-pudding", "giant-black-pudding", "hell-critter", "cultist-brute", "the-archivist", "arctic-whisper", "frozy-cube", "frosty-slime", "ice-fire-guardian", "frogfolk-wizard", "frogfolk-brute", "frogfolk-chieftain"]);
-  const HIT_FRAME = { "skeleton-warrior": 4, mummy: 3, "fishfolk-whipe": 4, "fishfolk-inkbender": 8, "sea-horror": 4, "sea-gramlin": 4, "frost-wisp": 4, ghost: 4, doppelganger: 4, "black-pudding": 4, "giant-black-pudding": 8,
+  const HIT_FRAME = { "elven-assassin": 1, "zombie-cultist": 4, "shardsoul-slayer": 3, "skeleton-warrior": 4, mummy: 3, "fishfolk-whipe": 4, "fishfolk-inkbender": 8, "sea-horror": 4, "sea-gramlin": 4, "frost-wisp": 4, ghost: 4, doppelganger: 4, "black-pudding": 4, "giant-black-pudding": 8,
     "hell-critter": 3, "cultist-brute": 3, "arctic-whisper": 5, "frozy-cube": 4, "frosty-slime": 10, "ice-fire-guardian": 4, "frogfolk-wizard": 4, "frogfolk-brute": 4, "frogfolk-chieftain": 4, "fishfolk-brute": 4, "fishfolk-horror": 4 };
-  const END_FRAME = { "skeleton-warrior": 10, mummy: 6, "fishfolk-whipe": 7, "fishfolk-inkbender": 16, "sea-horror": 8, "sea-gramlin": 8, elemental: 8, "frost-wisp": 8, ghost: 8, doppelganger: 8, "black-pudding": 8,
+  const END_FRAME = { "elven-assassin": 6, "zombie-cultist": 8, "shardsoul-slayer": 5, "skeleton-warrior": 10, mummy: 6, "fishfolk-whipe": 7, "fishfolk-inkbender": 16, "sea-horror": 8, "sea-gramlin": 8, elemental: 8, "frost-wisp": 8, ghost: 8, doppelganger: 8, "black-pudding": 8,
     "giant-black-pudding": 16, "hell-critter": 5, "cultist-brute": 6, "the-archivist": 12, "arctic-whisper": 8, "frozy-cube": 8, "frosty-slime": 16, "ice-fire-guardian": 6, "frogfolk-wizard": 8, "frogfolk-brute": 8, "frogfolk-chieftain": 8, "fishfolk-brute": 8, "fishfolk-horror": 8 };
   const COOLDOWN = { "fishfolk-inkbender": 1.6, "sea-horror": 1.3, "sea-gramlin": 1.15, "frost-wisp": 1, ghost: 1.15, doppelganger: 1.2, "black-pudding": 1.25, "giant-black-pudding": 2.2, "hell-critter": 1.05, "cultist-brute": 1.25,
     "arctic-whisper": 1.35, "frozy-cube": 1.2, "frosty-slime": 2.6, "ice-fire-guardian": 1.55, "frogfolk-wizard": 1.45, "frogfolk-brute": 1.8, "frogfolk-chieftain": 2, "fishfolk-brute": 1.8, "fishfolk-horror": 1.8 };
@@ -350,6 +352,7 @@
         continue;
       }
       if (bossLeash(s, r, h, dt, b)) continue;
+      if (X.nightPreAI && X.nightPreAI(s, run, r, dt)) continue; // expedition_night.js (Birb LT / qT)
       if (r.type === "the-archivist" && archivistSpells(s, run, r, dt)) continue;
       if (!C) { r.attackCooldown = Math.max(0, (r.attackCooldown || 0) - a); if ((v + RT.sepPhase) % g !== 0) continue; }
       enemyAI(s, run, r, dt, a, px, py, h, b, rects, mapId, u, () => (prune = true));
@@ -610,7 +613,7 @@
     const f = hyp(r.x - hx, r.y - hy), y = X.triggerRange(r), bb = r.isBoss ? 0.75 * y : 0.65 * y, A = r.isBoss ? 340 : 260, v = r.isBoss ? 420 : 280, an = X.anchor(r), w = alive ? hyp(t.x - an.x, t.y - an.y) : Infinity, M = alive && (w < y || (t.targetEnemyId === r.id && w < A));
     r.attackCooldown = Math.max(0, (r.attackCooldown || 0) - a);
     if (r.type === "elemental") r.elementalSpecialCooldown = Math.max(0, (+r.elementalSpecialCooldown || 0) - a);
-    if ((r.type === "frost-wisp" || r.type === "ghost" || r.type === "giant-black-pudding") && r.state === "respawn") { if (r.attackCooldown <= 0) { r.state = "idle"; r.animFrame = 0; r.animTimer = 0; } return; }
+    if ((r.type === "frost-wisp" || r.type === "ghost" || r.type === "giant-black-pudding" || r.type === "zombie-cultist") && r.state === "respawn") { if (r.attackCooldown <= 0) { r.state = "idle"; r.animFrame = 0; r.animTimer = 0; } return; }
     if (r.type === "doppelganger") {
       const sx = alive ? t.x - r.x : 0, sy = alive ? t.y - r.y : 0;
       if (r.doppelgangerForm === "human" && ((alive && sx * sx + sy * sy <= 104 * 104) || r.health < r.maxHealth)) Object.assign(r, { doppelgangerForm: "transforming", state: "transform", animFrame: 0, animTimer: 0, attackCooldown: 0, facingRight: sx > 0 });
@@ -618,6 +621,7 @@
       if (r.doppelgangerForm === "transforming") { r.state = "transform"; for (r.animTimer = (r.animTimer || 0) + a; r.animTimer >= 0.085;) { r.animTimer -= 0.085; r.animFrame = (r.animFrame || 0) + 1; if (r.animFrame >= 8) { Object.assign(r, { doppelgangerForm: "monster", state: "idle", animFrame: 0, animTimer: 0, attackCooldown: 0.35 }); break; } } return; }
     }
     if (f > 1.08 * v && !M) return goHome(r, hx, hy, f, e, 1.1, 62, () => { if (r.type === "fishfolk-brute") r.fishfolkBruteAttackStage = "windup"; if (r.type === "elemental") { r.elementalAttackMode = "normal"; r.elementalSpecialLastHitFrame = -1; } });
+    if (r.type === "ice-fire-guardian" && r.isBoss && X.guardianAI && X.guardianAI(s, run, r, a)) return; // expedition_night.js (Birb $T)
     if (r.state === "attack") {
       const mode = r.type === "elemental" ? String(r.elementalAttackMode || "normal") : "normal";
       if (r.type === "elemental" && mode === "special" && alive) { const rad = Math.max(18, y - 6), ang = (+r.elementalOrbitAngle || 0) + a * 4.8; r.elementalOrbitAngle = ang; const ox = t.x + Math.cos(ang) * rad - r.x, oy = t.y + Math.sin(ang) * rad - r.y, q = hyp(ox, oy) || 1, sp = 2.2 * (r.speed || 60); r.x += (ox / q) * sp * e; r.y += (oy / q) * sp * e; r.facingRight = ox > 0; }

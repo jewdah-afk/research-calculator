@@ -110,7 +110,7 @@ module.exports = [
     { name: "expedition rebirb 1", state: { evolutionCount: 5, rebirthCount: 40, expedition: { unlocked: true, highestFloorReached: 7, progress: { level: 45 } },
       parrot: { unlocked: true, level: 45, skillPoints: 9000, rebirbCount: 1, skills: { hp: 4000, lifeRegen: 300, damage: 2500 }, equipmentUpgrades: eq({ rarity: "rare", level: 3 }, { rarity: "uncommon", level: 5 }, { rarity: "epic", level: 1 }) },
       sunflowerUpgrades: { d_desert_expedition_points: 1, d_desert_guarded_plumage: 1, d_desert_rebirb_parrot_vitality: 1, d_desert_warpath: 3, d_desert_combat_regen_penalty: 1, d_desert_salvage_rights: 1, d_desert_blossom_route: 1 } } },
-    { name: "expedition late", expedition: true, state: { evolutionCount: 6, rebirthCount: 60, resources: { goldenPopcorn: 8e12 }, expedition: { unlocked: true, highestFloorReached: 9, progress: { level: 220 } },
+    { name: "expedition late", expedition: true, night: true, state: { evolutionCount: 6, rebirthCount: 60, resources: { goldenPopcorn: 8e12 }, expedition: { unlocked: true, highestFloorReached: 9, progress: { level: 220 } },
       parrot: { unlocked: true, level: 220, skillPoints: 1e9, rebirbCount: 2, skills: { hp: 3e8, lifeRegen: 2e6, damage: 9e7 }, equipmentUpgrades: eq({ rarity: "legendary", level: 2 }, { rarity: "legendary", level: 4 }, { rarity: "epic", level: 5 }) },
       sunflowerUpgrades: { d_desert_expedition_points: 1, d_desert_muad_birb: 1, d_desert_shiny_enemies: 1, d_desert_dune_scouts: 1, d_desert_warpath: 5 } } },
   );

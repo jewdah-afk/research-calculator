@@ -24,8 +24,9 @@
   X.auraWeights = (f) => { const a = AURA_W[Math.max(1, Math.floor(f || 1))] || [0, 0, 0, 85, 15]; return Object.fromEntries(RAR.map((r, i) => [r, a[i]])); };
   X.auraCap = (f) => { const t = Math.max(1, Math.floor(f || 1)); return t === 1 ? "common" : t <= 3 ? "uncommon" : t <= 5 ? "rare" : t <= 7 ? "epic" : "legendary"; };
   // Birb rM: roll a rarity from the floor weights, cap it at the floor's top rarity, maybe promote one step (night mode mythic in 6c)
-  X.rollAuraRarity = function (floor, promo) {
-    const w = { ...X.auraWeights(floor), mythic: 0 }, i = pickWeighted(RAR6, w, "common"), r = RAR6.indexOf(X.auraCap(floor)), s = Math.min(r, RAR6.indexOf(i));
+  X.rollAuraRarity = function (floor, promo, night = false, rebirbs = 0) { // Birb rM: night floor 10+ at parrot rebirb III swaps 5 epic weight for mythic
+    const t = night === true && floor >= 10 && rebirbs >= 3, w = { ...X.auraWeights(floor), mythic: 0 }; if (t) { w.epic -= 5; w.mythic = 5; }
+    const i = pickWeighted(RAR6, w, "common"), r = RAR6.indexOf(t ? "mythic" : X.auraCap(floor)), s = Math.min(r, RAR6.indexOf(i));
     return RAR6[Math.min(r, s + (Math.random() < Math.max(0, Math.min(1, promo)) ? 1 : 0))];
   };
   const CHEST_W = { 1: [100, 0, 0, 0, 0], 2: [43.75, 56.25, 0, 0, 0], 3: [16, 46, 32, 6, 0], 4: [6, 30, 52, 10, 2], 5: [4, 26, 59.8, 10, 0.2] };
@@ -174,7 +175,7 @@
     if (e.isBoss || e.isElite) { X.grantEquipmentChest(run, pickWeighted(RAR, X.chestWeights(f), "common"), e); return; }
     const x = Math.max(0, X.lootAuraExpectedRolls(s)), k = Math.floor(x), rolls = k + (Math.random() < x - k ? 1 : 0);
     const promo = X.sacProfile ? X.sacProfile(s).auraRarityPromotionChance : 0;
-    for (let i = 0; i < rolls; i++) X.grantLootAura(s, run, X.rollAuraRarity(f, promo), e);
+    for (let i = 0; i < rolls; i++) X.grantLootAura(s, run, X.rollAuraRarity(f, promo, run.nightMode, X.rebirbs(s)), e);
   };
   X.rollPotion = function (f) {
     const w = X.potionWeights(f), a = [["minor_heal_pot", w.minor], ["full_potion", w.medium], ["full_recovery_pot", w.major]], t = a.reduce((x, [, v]) => x + v, 0);

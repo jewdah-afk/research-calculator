@@ -287,7 +287,7 @@
   const ENEMY_COLOR = { boss: "#f97316", elite: "#c084fc", shiny: "#facc15" };
   function drawExpedition() {
     const s = G.s, X = PT.EXP, m = PT.MAPS[s.currentMap], run = PT.expState(s).activeRun, floor = X.MAP_FLOOR[s.currentMap];
-    cx.fillStyle = floor ? ["#3f6b3a", "#5d3f74", "#a08a5a", "#2e5a6b", "#2b4a66", "#9fc4d8", "#3d5a2e", "#2b2b38", "#4a1f1f"][floor - 1] : "#1b1d24"; roundRect(0, 0, m.w, m.h, 24); cx.fill();
+    cx.fillStyle = m.night ? "#141a2e" : floor ? ["#3f6b3a", "#5d3f74", "#a08a5a", "#2e5a6b", "#2b4a66", "#9fc4d8", "#3d5a2e", "#2b2b38", "#4a1f1f"][floor - 1] : "#1b1d24"; roundRect(0, 0, m.w, m.h, 24); cx.fill();
     if (floor) { const b = X.bounds(s.currentMap); for (let i = 0; i < 5; i++) { cx.fillStyle = `rgba(0,0,0,${0.06 * i})`; cx.fillRect(b.minX, b.minY + ((b.maxY - b.minY) * i) / 5, b.maxX - b.minX, (b.maxY - b.minY) / 5); } }
     cx.fillStyle = "rgba(10,12,16,.55)"; for (const r of X.collisions(s.currentMap)) cx.fillRect(r.left, r.top, r.right - r.left, r.bottom - r.top);
     for (const p of X.portals(s.currentMap)) {
@@ -655,6 +655,9 @@
     const s = G.s, e = PT.expState(s), max = Math.min(e.highestFloorReached || 1, PT.EXP.maxFloorForEvo(s)), cd = e.enemyRespawnCooldowns;
     const rows = []; for (let f = 1; f <= PT.EXP.maxFloorForEvo(s); f++) { const key = PT.EXP.bossKey(PT.EXP.FLOOR_MAP[f], f), left = Math.max(0, ((cd[key] || 0) - Date.now()) / 1000), boss = PT.EXP.PLAN[f - 1].boss;
       rows.push(`<div class="row"><img class="ico" src="${ICON("map")}" alt=""><div><div class="t">FLOOR ${f}</div><div class="d">Boss: ${boss.replace(/-/g, " ")}${left > 0 ? " · respawns in " + PT.fmtTime(left) : ""}</div></div><div class="btns"><button class="key ${f <= max ? "" : "grey"}" data-expfloor="${f}">${f <= max ? "START" : "LOCKED"}</button></div></div>`); }
+    // Birb night mode: parrot rebirb III, floor 1 only (stats and loot as floor 10, mythic auras, an ice-fire guardian boss)
+    const nk = PT.EXP.bossKey(PT.EXP.NIGHT_MAP, 1), nl = Math.max(0, ((cd[nk] || 0) - Date.now()) / 1000), can = PT.EXP.canNight(s);
+    rows.push(`<div class="row"><img class="ico" src="${ICON("map")}" alt=""><div><div class="t" style="color:#b8cbff">NIGHT FLOOR 1</div><div class="d">${can ? "Boss: ice fire guardian" + (nl > 0 ? " · respawns in " + PT.fmtTime(nl) : "") + " · loot as floor 10, mythic auras" : "Needs Parrot Rebirb III"}</div></div><div class="btns"><button class="key ${can ? "blue" : "grey"}" data-expnight="1">${can ? "START" : "LOCKED"}</button></div></div>`);
     return `<div class="note">The parrot fights near you (450 px leash). Move or click an enemy to start combat; AUTO lets it pick targets. Defeat the floor boss to open the next floor.</div>${rows.join("")}`;
   }
   // Birb collared-dove menu: LV + XP bar, stats row (XP/min, forage size, golden bonus, travel speed, rebirbs),
@@ -991,6 +994,7 @@
     else if (b.dataset.max) PT.buyMax(s, b.dataset.max);
     else if (b.dataset.pspend) { const p = PT.parrotState(s), a = G.spAmt; PT.parrotSpend(s, b.dataset.pspend, a === "max" ? p.skillPoints : String(a).endsWith("%") ? Math.max(1, Math.floor((p.skillPoints * parseInt(a)) / 100)) : a); }
     else if (b.dataset.spamt) G.spAmt = /^\d+$/.test(b.dataset.spamt) ? +b.dataset.spamt : b.dataset.spamt;
+    else if (b.dataset.expnight) { if (PT.EXP.startRun(G, 1, true)) closeWin(); else toast("Night mode needs Parrot Rebirb III"); }
     else if (b.dataset.expfloor) { if (PT.EXP.startRun(G, +b.dataset.expfloor)) closeWin(); else toast("Floor locked"); }
     else if (b.dataset.dspend) PT.daveSpendPoint(s, b.dataset.dspend, G.daveAmt === "max" ? 100 : G.daveAmt);
     else if (b.dataset.damt) G.daveAmt = b.dataset.damt === "max" ? "max" : +b.dataset.damt;

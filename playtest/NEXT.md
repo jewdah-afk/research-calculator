@@ -13,9 +13,9 @@ Build a 1:1 HTML copy of Birb (birbplay.com) as Peckwood, so any progression can
 - **Branch:** `claude/egg-mining-icons` (not merged into `main`).
 - **Parity:** `NODE_PATH=<node_modules with playwright> node playtest/parity/parity.js`
   - It loads every save in `parity/scenarios.js` into Birb's live engine and into the playtest, compares every shared value, and writes `parity/REPORT.md`.
-  - Last run: **50991 / 50991 match**. Keep it at 100% after every change.
+  - Last run: **52979 / 52979 match**. Keep it at 100% after every change.
   - `ONLY=quest` (any name substring) runs a subset of scenarios while you iterate; run the full set before committing.
-- **Script load order:** `index.html` loads `... mine, desert, expedition_data, expedition, expedition_ai, expedition_sacrifice, expedition_loot, expedition_forge, quests, expedition_secret, main`.
+- **Script load order:** `index.html` loads `... mine, desert, expedition_data, expedition, expedition_ai, expedition_sacrifice, expedition_loot, expedition_forge, quests, expedition_secret, expedition_night, main`.
 
 ## Expedition files (Phase 6)
 | File | What it holds |
@@ -28,13 +28,13 @@ Build a 1:1 HTML copy of Birb (birbplay.com) as Peckwood, so any progression can
 | `js/expedition_forge.js` | Gear upgrade / evolve / refine, aura convert / dismantle, infusion, fusion, skill reset |
 | `js/quests.js` | Quest merchant (6c): main + daily quests (rules v1), quest stats, `X.trackQuestKill`, bonuses (`PT.questBonus`), sync |
 | `js/expedition_secret.js` | Secret rooms (6c): floor 1 → map 17 (cracked wall → Mine map 25), floor 3 → map 19 (empty in Birb), the 3-hit wall break, entrance repair for old saves |
+| `js/expedition_night.js` | Night mode (6c): night map walkability, wall-impact test, the elven assassin / zombie cultist / ice-fire guardian AIs. `X.qt`, `X.runMap`, `X.NIGHT_PLAN` live in `expedition.js` |
 | `js/main.js` | UI: the Parrot window (STATS / SKILLS / INVENTORY+forge / REBIRB), the Sacrifice and floor windows, the floor HUD |
 
 Hooks stubbed for 6c (each returns 0, 1 or false; search for these names):
 - `X.externalBonuses`: its quest, market and crow parts.
 - `X.relicBoost`: mythic sacrifice III doubles the relics.
 - `X.mythicFinal`: mythic sacrifice I gives ×1.2.
-- `run.nightMode`: loot uses floor 10+ when it is on.
 
 ## How to research Birb (the tools are in `tools/`)
 1. Download Birb's bundles **outside the repo**: `playtest/tools/fetch_birb.sh /tmp/birb`. This creates the `*.pretty.js` files.
@@ -69,7 +69,7 @@ Gotchas we hit:
 3. **DONE: Floor 1 secret room to the Mine** (`js/expedition_secret.js`; the Settings shortcut is gone; fast travel to the Mine stays as a playtest convenience, Birb's forge has a GO TO MINE button that needs a run). Original notes:
    - `canBreakFloorOneMineEntrance` needs parrot rebirb ≥2 and all starter gear maxed. It also uses `updateFloorOneMineEntranceBreak` and `floorOneMineEntranceOpened`.
    - Replace the Settings shortcut that opens the Mine now.
-4. **Night mode:**
+4. **DONE: Night mode** (rebirb III, floor 1 on map 32, stats / loot at floor 10+, mythic auras at 5 weight, boss portal ends the run as a success; `tools/build_expedition_data.js` now also exports the night map). Original notes:
    - `activeRun.nightMode`; loot floor = 10 + floor − 1 (`maps` `N()`).
    - Mythic aura appears on floor 10 at rebirb III (`rM`).
 5. **Mythic sacrifice:**
