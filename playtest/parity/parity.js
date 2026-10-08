@@ -74,6 +74,10 @@ function probe({ side, scenario }) {
           spMult: () => em.artifactManager.getSkillPointMultiplier([], g.getEquippedArtifactNames()), hoard: () => em.artifactManager.getPointHoardJackpotChance([], g.getEquippedArtifactNames()),
           auraBonus: () => em.artifactManager.getLootAuraChanceBonus([], g.getEquippedArtifactNames(), g.getEquippedArtifactInfusionLevels()), passive: () => { em.refreshParrotBonuses(g.getEquippedArtifactNames(), g.getEquipmentMultipliers(), g.getEquippedArtifactInfusionLevels()); return em.getPassiveSkillPointMultiplier(g.getEquippedArtifactNames()); },
           names: () => g.getEquippedArtifactNames().filter(Boolean).length },
+        forge: { plan: (slot, k) => { const r = g.getEquipmentUpgradeNextAction(slot); return k === "gold" ? (r.extraCosts || []).reduce((a, c) => a + c.cost, 0) : k === "area" ? r.requiredMineArea || 0 : k === "action" ? ["upgrade", "evolve", "refine", "max"].indexOf(r.action) : r.cost; },
+          inf: (i, k) => { const id = s.parrot.artifactInventory[i]?.instanceId, r = g.getInfusionInfo(id); return r ? +r[k] : -1; },
+          fuse: (ids, k) => { const r = g.canFuseArtifacts(ids.map((i) => s.parrot.artifactInventory[i]?.instanceId)); return k === "valid" ? r.valid : r.auraCost; },
+          conv: (id, k) => g.getAuraConversionBatchBounds(id)[k], dis: (id, k) => g.getAuraDismantleBatchBounds(id)[k] },
         procs: window.__BIRB_PROCS ? { kn: (o) => window.__BIRB_PROCS.kn(o), xn: (h, m, p) => window.__BIRB_PROCS.xn(h, m, p), cn: (n, p) => window.__BIRB_PROCS.Cn(n, p).damageRatio * 100 + window.__BIRB_PROCS.Cn(n, p).maxTargets } : null,
         resetCost: () => { const sk = s.parrot.skills, t = sk.hp + sk.lifeRegen + sk.damage; return t <= 0 ? 0 : Math.max(1, Math.ceil(Math.sqrt(0.01 * t))); },
       }; })(),
@@ -131,6 +135,10 @@ function probe({ side, scenario }) {
         range: (t, b) => X.triggerRange({ type: t, isBoss: b }), strike: (t, b) => X.strikeDist({ type: t, isBoss: b }), respawn: (x) => X.effectiveRespawn(s, x), shiny: () => X.shinyChance(s), resetCost: () => PT.parrotResetCost(s),
         loot: { ab: (k) => X.artifactBonuses(s)[k], slots: () => X.slotCount(s), cap: (c) => X.invCapacity(s, c).max, used: (c) => X.invCapacity(s, c).used, rolls: () => X.lootAuraExpectedRolls(s),
           spMult: () => X.artifactSpMult(s), hoard: () => X.pointHoardChance(s), auraBonus: () => X.lootAuraChanceBonus(s), passive: () => X.passiveSpMult(s) / X.rebirbSpMult(s), names: () => X.equippedNames(s).filter(Boolean).length },
+        forge: { plan: (slot, k) => { const r = X.gearPlan(s, slot); return k === "gold" ? r.gold : k === "area" ? r.area : k === "action" ? ["upgrade", "evolve", "refine", "max"].indexOf(r.action) : r.cost; },
+          inf: (i, k) => { const r = X.infusionInfo(s, PT.parrotState(s).artifactInventory[i]?.instanceId); return r ? +r[k] : -1; },
+          fuse: (ids, k) => { const r = X.fusionCheck(s, ids.map((i) => PT.parrotState(s).artifactInventory[i]?.instanceId)); return k === "valid" ? r.valid : r.auraCost; },
+          conv: (id, k) => X.convertBounds(s, id)[k], dis: (id, k) => X.dismantleBounds(s, id)[k] },
         procs: { kn: (o) => X.procMult({ ...o, isOpening: o.isOpeningStrike, redline: pw(o.redlinePower), opening: pw(o.openingStrikePower), focus: pw(o.focusPower) }), xn: (h, m, p) => X.recoveryMult(pw(p), h, m),
           cn: (n, p) => { const r = X.storm(n, pw(p)); return r.damageRatio * 100 + r.maxTargets; } },
         sac: { level: () => X.sacLevel(s), target: () => X.sacTarget(s), popcorn: () => PT.sacrificePopcornMult(s), sp: () => X.sacSpMult(s), radius: () => X.sacRadiusMult(s), seed: () => X.sacSeedMult(s),
@@ -217,6 +225,10 @@ function probe({ side, scenario }) {
     for (const [i, pp] of P.entries()) for (const hr of [1, 0.69, 0.45, 0.2, 0.05]) for (const tr of [1, 0.9, 0.5]) for (const op of [true, false]) for (const fh of [0, 3, 9])
       if (scenario.name === "loot basic kit") put(`proc mult p${i} hp${hr} t${tr} o${op} f${fh}`, () => Ex.procs && Ex.procs.kn({ health: hr * 1000, maxHealth: 1000, targetHealth: tr * 500, targetMaxHealth: 500, isOpeningStrike: op, focusHits: fh, redlinePower: pp, openingStrikePower: pp, focusPower: pp }));
     if (scenario.name === "loot basic kit") for (const [i, pp] of P.entries()) { for (const hr of [1, 0.6, 0.4, 0.2, 0]) put(`proc recovery p${i} hp${hr}`, () => Ex.procs && Ex.procs.xn(hr * 800, 800, pp)); for (const n of [5, 6, 12, 13]) put(`proc storm p${i} hit${n}`, () => Ex.procs && Ex.procs.cn(n, pp)); } }
+  for (const slot of ["beak", "armor", "aura"]) for (const k of ["action", "cost", "gold", "area"]) put(`forge ${slot} ${k}`, () => Ex.forge.plan(slot, k));
+  for (let i = 0; i < 8; i++) for (const k of ["currentLevel", "maxLevel", "cost", "canInfuse"]) put(`infuse item${i} ${k}`, () => Ex.forge.inf(i, k));
+  for (const ids of [[0, 1, 2], [1, 2, 5], [5, 6, 7], [0, 0, 1]]) for (const k of ["valid", "cost"]) put(`fuse ${ids} ${k}`, () => Ex.forge.fuse(ids, k));
+  for (const id of ["spirit_trash", "uncommon_spirit_trash", "rare_spirit_trash", "epic_spirit_trash", "legendary_spirit_trash", "mythic_spirit_trash"]) for (const k of ["min", "max"]) { put(`aura convert ${id} ${k}`, () => Ex.forge.conv(id, k)); put(`aura dismantle ${id} ${k}`, () => Ex.forge.dis(id, k)); }
   for (const k of ["slots", "rolls", "spMult", "hoard", "auraBonus", "passive", "names"]) put(`loot ${k}`, Ex.loot[k]);
   for (const c of ["artifact", "material"]) { put(`inventory cap ${c}`, () => Ex.loot.cap(c)); put(`inventory used ${c}`, () => Ex.loot.used(c)); }
   for (const k of ["level", "target", "popcorn", "sp", "radius", "seed", "qty", "chance", "promo", "canExpand", "maxLv", "progress", "atk", "move", "range"]) put(`sacrifice ${k}`, Ex.sac[k]);

@@ -1,40 +1,44 @@
 # Parity report
 
-Birb's live engine (birbplay.com `window.game`) vs the playtest, same save state per scenario. Generated 2026-10-08T20:55Z by `playtest/parity/parity.js`.
+Birb's live engine (birbplay.com `window.game`) vs the playtest, same save state per scenario. Generated 2026-10-08T20:59Z by `playtest/parity/parity.js`.
 
-**32281 / 32281 values match.** Birb's live community-goal twig reward today: x1.5 (copied into the playtest for the run).
+**42249 / 42249 values match.** Birb's live community-goal twig reward today: x1.5 (copied into the playtest for the run).
 
 | Scenario | Values | Mismatches |
 |---|---|---|
-| fresh start | 749 | 0 |
-| early eggs | 749 | 0 |
-| first molt done | 749 | 0 |
-| seeds online | 749 | 0 |
-| evolve unlocked | 749 | 0 |
-| evolution 1 | 749 | 0 |
-| evolution 3 | 749 | 0 |
-| aquarium early | 752 | 0 |
-| aquarium mid | 752 | 0 |
-| aquarium full + market | 752 | 0 |
-| nest start | 749 | 0 |
-| nest boxes | 749 | 0 |
-| nest tier 2 | 761 | 0 |
-| mine start | 749 | 0 |
-| mine mid | 749 | 0 |
-| mine deep | 749 | 0 |
-| desert start | 749 | 0 |
-| desert dave | 749 | 0 |
-| desert sandstorm late | 749 | 0 |
-| expedition start | 1865 | 0 |
-| expedition rebirb 1 | 749 | 0 |
-| expedition late | 1865 | 0 |
-| sacrifice tier I | 1865 | 0 |
-| sacrifice capped III | 1865 | 0 |
-| sacrifice expansion V | 1865 | 0 |
-| sacrifice rebirb XIV | 1865 | 0 |
-| loot basic kit | 2360 | 0 |
-| loot effect copies | 1865 | 0 |
-| loot full bag | 1865 | 0 |
+| fresh start | 825 | 0 |
+| early eggs | 825 | 0 |
+| first molt done | 825 | 0 |
+| seeds online | 825 | 0 |
+| evolve unlocked | 825 | 0 |
+| evolution 1 | 825 | 0 |
+| evolution 3 | 825 | 0 |
+| aquarium early | 828 | 0 |
+| aquarium mid | 828 | 0 |
+| aquarium full + market | 828 | 0 |
+| nest start | 825 | 0 |
+| nest boxes | 825 | 0 |
+| nest tier 2 | 837 | 0 |
+| mine start | 825 | 0 |
+| mine mid | 825 | 0 |
+| mine deep | 825 | 0 |
+| desert start | 825 | 0 |
+| desert dave | 825 | 0 |
+| desert sandstorm late | 825 | 0 |
+| expedition start | 1941 | 0 |
+| expedition rebirb 1 | 825 | 0 |
+| expedition late | 1941 | 0 |
+| sacrifice tier I | 1941 | 0 |
+| sacrifice capped III | 1941 | 0 |
+| sacrifice expansion V | 1941 | 0 |
+| sacrifice rebirb XIV | 1941 | 0 |
+| loot basic kit | 2436 | 0 |
+| loot effect copies | 1941 | 0 |
+| loot full bag | 1941 | 0 |
+| forge no milestone | 1941 | 0 |
+| forge early | 1941 | 0 |
+| forge legendary | 1941 | 0 |
+| forge refined deep | 1941 | 0 |
 
 ### fresh start
 
@@ -149,5 +153,21 @@ All match.
 All match.
 
 ### loot full bag
+
+All match.
+
+### forge no milestone
+
+All match.
+
+### forge early
+
+All match.
+
+### forge legendary
+
+All match.
+
+### forge refined deep
 
 All match.

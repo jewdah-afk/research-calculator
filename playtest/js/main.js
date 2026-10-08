@@ -584,7 +584,26 @@
       <div class="section">ARTIFACTS</div>${arts.map(row).join("") || `<div class="note">None yet.</div>`}
       <div class="section">POTIONS ${par ? `· <button class="key small ${(par.potionCooldown || 0) > 0 ? "grey" : ""}" data-act="inv_use">USE (Q)</button>` : ""}</div>${pots.map(row).join("") || `<div class="note">2% of kills drop a potion.</div>`}
       ${PT.hasSun(s, "d_desert_auto_potion") ? `<div class="devrow"><label><input type="checkbox" data-in="autopot" ${p.autoPotionEnabled ? "checked" : ""}> auto potion below ${PT.EXP.autoPotionThreshold(s)}% HP</label></div>` : ""}
-      <div class="section">MATERIALS</div>${mats.map(row).join("") || `<div class="note">Kills drop Spirit Aura.</div>`}`;
+      <div class="section">MATERIALS</div>${mats.map(row).join("") || `<div class="note">Kills drop Spirit Aura.</div>`}
+      ${forgePanel(arts)}`;
+  }
+  // Birb forge: gear (upgrade / evolve / refine), aura convert 50 -> 1 and dismantle 1 -> 25, infuse, fuse three of one rarity
+  function forgePanel(arts) {
+    const s = G.s, X = PT.EXP, p = PT.parrotState(s); if (!X.forgeUnlocked(s)) return `<div class="section">FORGE</div><div class="note">Reach sacrifice milestone I to open the forge.</div>`;
+    const auraLbl = (id) => (id ? X.itemById(id).name.replace(" Spirit Aura", "").replace("Spirit Aura", "Common") : "");
+    const gear = ["beak", "armor", "aura"].map((k) => { const g = p.equipmentUpgrades[k], pl = X.gearPlan(s, k), m = X.gearMult(s, k);
+      const cost = [pl.cost ? `${fmt(pl.cost)} ${auraLbl(pl.currency)} aura` : "", pl.gold ? `${fmt(pl.gold)} Gold Ore` : "", pl.area ? `mine area ${pl.area}` : ""].filter(Boolean).join(" + ");
+      return `<div class="row"><div><div class="t">${k.toUpperCase()} · ${g.rarity.toUpperCase()} ${g.level}${pl.action === "refine" ? ` · REFINED ${X.refineLevel(s, k)}` : ""} · x${m.toFixed(2)}</div><div class="d">${pl.action.toUpperCase()}: ${cost || "free"}</div></div>
+        <div class="btns"><button class="key small" data-act="frg_gear:${k}">${pl.action === "evolve" ? "EVOLVE" : pl.action === "refine" ? "REFINE" : "UP"}</button></div></div>`; }).join("");
+    const auras = Object.values(X.AURA_ID).map((id) => { const n = X.itemCount(s, X.itemById(id).name), c = X.convertBounds(s, id), d = X.dismantleBounds(s, id); if (!n) return "";
+      return `<div class="row"><div><div class="t">${X.itemById(id).name} ×${fmt(n)}</div></div><div class="btns">${c.max ? `<button class="key small" data-act="frg_conv:${id}:${c.max}">CONVERT ×${fmt(c.max)}</button>` : ""}${d.max ? `<button class="key small grey" data-act="frg_dis:${id}:1">DISMANTLE 1</button>` : ""}</div></div>`; }).join("");
+    G.fuseSel = (G.fuseSel || []).filter((id) => arts.some((a) => a.instanceId === id));
+    const inf = arts.map((it) => { const f = X.infusionInfo(s, it.instanceId); if (!f) return ""; const on = G.fuseSel.includes(it.instanceId);
+      return `<div class="row"><div><div class="t">${it.name} +${f.currentLevel}/${f.maxLevel}</div><div class="d">${f.currentLevel < f.maxLevel ? `next: ${fmt(f.cost)} ${auraLbl(f.auraId)} aura` : "maxed"}</div></div><div class="btns">
+        <button class="key small ${f.canInfuse ? "" : "grey"}" data-act="frg_inf:${it.instanceId}">INFUSE</button><button class="key small ${on ? "gold" : "grey"}" data-act="frg_sel:${it.instanceId}">${on ? "✔" : "FUSE?"}</button></div></div>`; }).join("");
+    const fc = X.fusionCheck(s, G.fuseSel);
+    return `<div class="section">FORGE · GEAR</div>${gear}<div class="section">AURA</div>${auras || `<div class="note">No aura yet.</div>`}
+      <div class="section">INFUSE / FUSE (${G.fuseSel.length}/3)</div>${inf}<div class="devrow"><button class="key ${fc.valid ? "" : "grey"}" data-act="frg_fuse" style="flex:1">FUSE ${fc.valid ? `→ ${fc.targetRarity.toUpperCase()} (${fmt(fc.auraCost)} aura)` : `· ${fc.reason}`}</button></div>`;
   }
   function parrotPanel(tab) {
     const s = G.s, p = PT.parrotState(s), e = PT.expState(s), pr = e.progress, st = PT.parrotTotalStats(s), kv = (a, b) => `<span>${a}</span><span>${b}</span>`;
@@ -593,7 +612,8 @@
       const row = (k, n, d) => `<div class="row"><img class="ico" src="${ICON(k === "hp" ? "stat_heart" : k === "damage" ? "stat_sword" : "heart")}" alt=""><div><div class="t">${n}</div><div class="d">${d}</div></div><div class="btns"><b style="color:#f1c40f;font-size:18px">${fmt(p.skills[k])}</b><button class="key small ${p.skillPoints >= 1 ? "" : "grey"}" data-pspend="${k}">+</button></div></div>`;
       return head + `<div class="devrow">${[1, 10, 100, "25%", "50%", "max"].map((a) => `<button class="key small ${G.spAmt === a ? "" : "grey"}" data-spamt="${a}">${String(a).toUpperCase()}</button>`).join("")}</div>
         ${row("hp", "VITALITY", "+1 max HP per point")}${row("lifeRegen", "RECOVERY", "+1 HP regen / s per point")}${row("damage", "STRENGTH", "+1 damage per point")}
-        <div class="note">Skill points come from kills (and Field Notes). Each point spent also counts as parrot XP when earned. Resetting skills costs ${PT.parrotResetCost(s)} chests (Phase 6b).</div>`;
+        <div class="note">Skill points come from kills (and Field Notes). Each point spent also counts as parrot XP when earned. Birb labels the reset in chests but it keeps ${PT.parrotResetCost(s)} of the invested points.</div>
+        <div class="devrow"><button class="key small red" data-act="inv_reset" style="flex:1">RESET SKILLS (REFUND ALL BUT ${fmt(PT.parrotResetCost(s))})</button></div>`;
     }
     if (tab === "rebirb") {
       const rows = [["I", "Evolution 4 and floor 3", "skill points x2"], ["II", "floor 7", "skill points x4, +0.1% per parrot level, enemy respawns x0.5"], ["III", "defeat the Archivist", "skill points x8"]];
@@ -1011,6 +1031,12 @@
     else if (a === "parrotrebirb") toast(PT.parrotRebirb(G) ? "Parrot rebirb " + PT.parrotState(s).rebirbCount : "Not ready: " + PT.parrotRebirbNeed(s));
     else if (a === "expauto") { const e = PT.expState(s); e.isAutoAttack = !e.isAutoAttack; const r = e.activeRun; if (r) r.combatArmed = true; }
     else if (a === "expreset") toast(PT.EXP.resetFloor(G) ? "Floor reset" : "Not in a run");
+    else if (a.startsWith("frg_")) { const X = PT.EXP, [c, id, n] = a.split(":"); let m = "";
+      if (c === "frg_gear") m = X.gearUpgrade(s, id); else if (c === "frg_conv") m = X.convertAura(s, id, +n); else if (c === "frg_dis") m = X.dismantleAura(s, id, +n); else if (c === "frg_inf") m = X.infuse(s, id);
+      else if (c === "frg_sel") { G.fuseSel ||= []; G.fuseSel = G.fuseSel.includes(id) ? G.fuseSel.filter((x) => x !== id) : [...G.fuseSel, id].slice(-3); }
+      else if (c === "frg_fuse") { const r = X.fuse(s, G.fuseSel || []); m = r.error || ""; if (r.item) { toast(`Fused into ${r.item.name} (${r.item.rarity})`); G.fuseSel = []; } }
+      if (m) toast(m); X.bonuses = X.parrotBonuses(s); }
+    else if (a === "inv_reset") { const n = PT.EXP.resetSkills(s); toast(n ? `Refunded ${fmt(n)} SP` : "Nothing to reset"); }
     else if (a.startsWith("inv_")) { const X = PT.EXP, [c, id] = a.split(":");
       if (c === "inv_on") { if (!X.equip(s, id)) toast("No free slot or already 2 copies"); } else if (c === "inv_off") X.unequip(s, id); else if (c === "inv_drop") X.discard(s, id);
       else if (c === "inv_pot") PT.parrotState(s).potionSlot = id; else if (c === "inv_use") { if (!X.usePotion(s)) toast("No potion ready"); }

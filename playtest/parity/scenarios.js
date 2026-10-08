@@ -142,3 +142,19 @@ module.exports = [
     { name: "loot full bag", expedition: true, state: kit(a3, [0, 1, 2, 3], 1) },
   );
 }
+
+// Forge scenarios (Phase 6b): gear upgrade / evolve / refine plans, infusion, fusion, aura batches
+{
+  let n = 0; const art = (name, infusionLevel = 0, count = 1) => ({ instanceId: `art_f_${++n}`, name, count, ...(infusionLevel ? { infusionLevel } : {}) });
+  const eq = (b, a, u) => ({ beak: b, armor: a, aura: u });
+  const forge = (gear, items, sac, rb, mine) => ({ evolutionCount: 6, rebirthCount: 60, mine: mine || {}, expedition: { unlocked: true, highestFloorReached: 8, progress: { level: 120 }, sacrifice: { skillPointsSacrificed: sac, commonMilestoneExpansionUnlocked: true } },
+    parrot: { unlocked: true, level: 120, skillPoints: 1e5, rebirbCount: rb, skills: { hp: 4e4, lifeRegen: 3e3, damage: 2e4 }, equipmentUpgrades: gear, artifactInventory: items, equippedArtifacts: [items[3].instanceId] } });
+  const items1 = [art("Crow Feather", 1), art("Forest Egg"), art("Pair of Boots", 3), art("Spirit Vest", 2), art("Spirit Aura", 0, 640), art("Simple Book"), art("Witchcap", 5), art("Uncommon Spirit Aura", 0, 120), art("Rare Spirit Aura", 0, 30)];
+  const items2 = [art("Holy Symbol", 4), art("Spirit Broth"), art("Umbra Bastion", 9), art("Skull of Reckoning", 14), art("Epic Spirit Aura", 0, 900), art("Legendary Spirit Aura", 0, 260), art("Spirit Amulet"), art("Auric Oath"), art("Mythic Spirit Aura", 0, 40)];
+  module.exports.push(
+    { name: "forge no milestone", expedition: true, state: forge(eq({ rarity: "common", level: 2 }, { rarity: "common", level: 5 }, { rarity: "uncommon", level: 1 }), items1, 100, 0) },
+    { name: "forge early", expedition: true, state: forge(eq({ rarity: "common", level: 4 }, { rarity: "uncommon", level: 5 }, { rarity: "rare", level: 5 }), items1, 2e4, 0) },
+    { name: "forge legendary", expedition: true, state: forge(eq({ rarity: "epic", level: 5 }, { rarity: "legendary", level: 3 }, { rarity: "legendary", level: 5 }), items2, 3e8, 3, { journeyVersion: 1, goldOre: 500, highestArea: 4, expeditionCycle: { version: 1, rewardedGiants: 4, refinements: { aura: 2 } } }) },
+    { name: "forge refined deep", expedition: true, state: forge(eq({ rarity: "legendary", level: 5 }, { rarity: "legendary", level: 5 }, { rarity: "legendary", level: 5 }), items2, 3e10, 3, { journeyVersion: 1, goldOre: 9e4, highestArea: 9, expeditionCycle: { version: 1, rewardedGiants: 9, refinements: { beak: 3, armor: 35, aura: 0 } } }) },
+  );
+}
