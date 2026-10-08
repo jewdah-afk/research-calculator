@@ -58,6 +58,32 @@ module.exports = [
       fishInventory: [{ fishId: fa, count: 3 }, { fishId: fb, count: 2 }, { fishId: fc + "__shiny", count: 1 }] },
       breed: [[fa, fb], [fa, fc + "__shiny"], [fb, fb]] },
   );
+  // Phase 3b: riverside and the sawmill (Nest IV + Evolution 6)
+  const XPT = [0]; for (let L = 1; L < 99; L++) { const a = L - 1; XPT.push(XPT[L - 1] + 10 * Math.round((150 + 12 * a + 6 * a ** 2.2) / 10)); }
+  const allSpecial = { fertilizer: true, specializedFertilizer: true, grainSilo: true, cornfield: true, sunflowerField: true, wateringWell: true };
+  const ev6 = { ...ev3, evolutionCount: 6 };
+  const nest6 = (extra, cult) => ({ unlocked: true, tier: 3, upgrades: { n_twig_value: 500, n_peck_rate: 20, n_peck_power: 12 }, forest: { tierTwigsProgress: 5e9, totalTwigsFromTrees: 9e9 },
+    cultivation: { schemaVersion: 8, treeBoxCount: 16, treeBoxes: boxes(16, "quad"), treeBoxEvolution: true, treeBoxQuadEvolution: true, specialUpgrades: allSpecial, ...cult }, ...extra });
+  const carp = (bench, prod) => ({ version: 4, workbenchLevel: bench, woodRemainderHp: 7, production: { balanceVersion: 6, workshopUnlocked: false, toolLevel: 0, expansionLevel: 0, upgrades: { forestry: 0, timber: 0, saw: 0 }, yieldRemainder: 0.3, autoEnabled: true, xp: 0, selected: "plank", stock: { plank: 0 }, progress: { plank: 0 }, ...prod } });
+  const full = [...boxes(16, "quad"), ...boxes(8, "quad", 16)];
+  module.exports.push(
+    { name: "riverside locked", state: { ...ev3, evolutionCount: 5, nest: nest6({ tier: 2, resources: { twigs: 1e9 } }) } },
+    { name: "riverside open", state: { ...ev6, nest: nest6({ resources: { twigs: 7e7 } }, { specialUpgrades: { ...allSpecial, sunflowerField: false } }) } },
+    { name: "riverside open fields", state: { ...ev6, nest: nest6({ resources: { twigs: 3e8 }, riverside: { upgrades: { lumberyard: 1 } } }) } },
+    { name: "riverside grove", state: { ...ev6, nest: nest6({ resources: { twigs: 5e8, wood: 40 }, fishBreeding: { unlocked: true },
+      riverside: { upgrades: { pollinator: 1, lumberyard: 1, compost: 1, grove: 2, nursery: 0 }, compostProgress: 12, compostSlot: null, compostMask: 0, nextCompostSlot: 3 } },
+      { treeBoxCount: 24, treeBoxes: full }) } },
+    { name: "riverside grove waiting", state: { ...ev6, nest: nest6({ resources: { twigs: 5e8 }, riverside: { upgrades: { pollinator: 1, lumberyard: 1, grove: 3 } } }, { treeBoxCount: 20, treeBoxes: [...boxes(16, "quad"), ...boxes(4, "quad", 16)] }) } },
+    { name: "sawmill wood", state: { ...ev6, nest: nest6({ resources: { twigs: 2e6, wood: 900 }, riverside: { upgrades: { lumberyard: 1 } }, carpentry: carp(1, { upgrades: { forestry: 5, timber: 3, saw: 0 } }) }) } },
+    { name: "sawmill early", state: { ...ev6, nest: nest6({ resources: { twigs: 4e6, wood: 2500 }, riverside: { upgrades: { lumberyard: 1 } },
+      carpentry: carp(1, { workshopUnlocked: true, xp: XPT[11] + 40, toolLevel: 1, upgrades: { forestry: 12, timber: 9, saw: 0 }, stock: { plank: 650 } }) }) } },
+    { name: "sawmill mid", state: { ...ev6, nest: nest6({ resources: { twigs: 6e7, wood: 6000 }, riverside: { upgrades: { lumberyard: 1, pollinator: 1 } },
+      carpentry: carp(2, { workshopUnlocked: true, xp: XPT[27] + 900, toolLevel: 4, upgrades: { forestry: 33, timber: 22, saw: 14 }, stock: { plank: 9000 } }) }) } },
+    { name: "sawmill late", state: { ...ev6, nest: nest6({ resources: { twigs: 9e10, wood: 2e5 }, forest: { tierTwigsProgress: 2e10, totalTwigsFromTrees: 5e10 }, riverside: { upgrades: { lumberyard: 1 } },
+      carpentry: carp(3, { workshopUnlocked: true, xp: XPT[72] + 5, toolLevel: 15, expansionLevel: 2, upgrades: { forestry: 61, timber: 41, saw: 52 }, stock: { plank: 4e5 } }) }) } },
+    { name: "sawmill mastery", state: { ...ev6, nest: nest6({ resources: { twigs: 2e9, wood: 9000 }, forest: { tierTwigsProgress: 2e10, totalTwigsFromTrees: 5e10 }, riverside: { upgrades: { lumberyard: 1 } },
+      carpentry: carp(3, { workshopUnlocked: true, xp: XPT[55], toolLevel: 15, upgrades: { forestry: 45, timber: 30, saw: 35 }, stock: { plank: 30000 } }) }) } },
+  );
 }
 
 // Mine scenarios (Birb state.mine shape; d_mine_* nodes live in sunflowerUpgrades)

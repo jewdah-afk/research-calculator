@@ -56,7 +56,7 @@
   PT.newState = function () {
     return {
       saveVersion: 1,
-      resources: { popcorn: D(0), goldenPopcorn: D(0), echoPopcorn: D(0), goldenFeathers: D(0), sunflowerSeeds: D(0), monetariaMoneta: D(0), twigs: D(0), bruteOre: D(0) },
+      resources: { popcorn: D(0), goldenPopcorn: D(0), echoPopcorn: D(0), goldenFeathers: D(0), sunflowerSeeds: D(0), monetariaMoneta: D(0), twigs: D(0), wood: D(0), bruteOre: D(0) },
       player: { x: 528, y: 396 },
       upgrades: {},
       sunflowerUpgrades: {},

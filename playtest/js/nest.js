@@ -1,6 +1,6 @@
 // Peckwood playtest, Phase 3: the Nest (map 4, left of the Park, Evolution 3), copied from Birb's nestManager (bT),
 // the cultivation shop, fish breeding ("Lineage Lake"), the Red Panda and offline twigs.
-// Riverside and the sawmill (carpentry) need Nest IV + Evolution 6, which comes with the Expedition phase.
+// Riverside and the sawmill (carpentry, Nest IV + Evolution 6) live in riverside.js and hook in through PT.riv*.
 "use strict";
 (function () {
   const PT = window.PT;
@@ -28,7 +28,7 @@
     if (c.treeBoxQuadEvolution) c.treeBoxEvolution = true; // Birb zk: quad evolution implies double boxes; boxes from slot 16 are quad
     for (const b of c.treeBoxes) { if (c.treeBoxQuadEvolution || b.slotIndex >= 16) b.specialized = true; if (b.slotIndex >= 16 && !(b.extraTrees?.length >= 2)) b.extraTrees = [{}, {}]; }
     c.specialUpgrades = Object.assign({ fertilizer: false, specializedFertilizer: false, grainSilo: false, cornfield: false, sunflowerField: false, wateringWell: false }, c.specialUpgrades || {});
-    if (n.resources && n.resources.twigs !== undefined) { s.resources.twigs = D(n.resources.twigs); delete n.resources.twigs; } // Birb keeps twigs in nest.resources
+    for (const k of ["twigs", "wood"]) if (n.resources && n.resources[k] !== undefined) { s.resources[k] = D(n.resources[k]); delete n.resources[k]; } // Birb keeps twigs and wood in nest.resources
     const b = n.fishBreeding || (n.fishBreeding = {});
     b.unlocked ??= false; b.reserveSlotUnlocked ??= false; b.incubation ??= null; b.hybrids ||= []; b.activeHybridId ??= null; b.nextHybridId ??= 1; b.shinyProgressByLineage ||= {};
     n.unlocked = true; // Birb quirk: normalizeState infers 'unlocked' even on a fresh save (the map arrow still waits for Evolution 3)
@@ -94,7 +94,7 @@
 
   // ------------------------------------------------------------------ multipliers for other systems (Birb §6)
   PT.nestGrainSilo = (s) => (special(s, "grainSilo") ? 1 + 3.7 * Math.log10(Math.max(0, PT.num(twigs(s))) / 5e4 + 1) : 1);
-  PT.nestRespawnMult = (s) => (special(s, "cornfield") ? 2 : 1); // x1.25 pollinator (riverside, later)
+  PT.nestRespawnMult = (s) => (special(s, "cornfield") ? 2 : 1); // riverside.js adds the Pollinator Garden x1.25
   PT.nestSeedProdMult = (s) => (special(s, "sunflowerField") ? 2 : 1) * PT.nestWellMult(s);
   PT.redPandaNapMult = (s) => (s.redPanda?.introSeen && s.redPanda.mode === "chill" ? 1.25 : 1);
   PT.redPandaTier = (s) => Math.max(1, Math.min(4, PT.nestState(s).tier + 1));
@@ -123,8 +123,8 @@
   // ------------------------------------------------------------------ cultivation shop (Birb Yk snapshot, purchaseTreeBox phases, specials)
   const pow12 = (n) => Math.pow(1.2, n);
   const costBase = (n) => Math.ceil(100 * pow12(Math.min(15, n)));
-  const costDouble = (n) => Math.ceil(2 * costBase(15) * pow12(n));
-  const costQuad = (n) => Math.ceil(2 * costDouble(15) * pow12(n));
+  const costDouble = (n) => Math.ceil(2 * costBase(15) * pow12(Math.min(15, n)));
+  const costQuad = (n) => Math.ceil(2 * costDouble(15) * pow12(Math.min(15, n)));
   const costExp = (n) => Math.ceil(Math.ceil(costQuad(15) * 1.2) * pow12(Math.min(7, n)));
   PT.NEST_SPECIALS = [
     { id: "fertilizer", name: "Fertilizer", text: "Trees in planting beds grow 50% faster (60s → 40s). Unlocks Pecking Rhythm.", cost: 500, visible: (s, c) => c.treeBoxCount >= 5 },
@@ -205,17 +205,21 @@
   function allTargets(s) { // mature, alive trees: wild + planting beds
     const out = [], f = PT.nestState(s).forest;
     for (const t of f.trees) if (t.hp > 0 && t.age >= F.growSec) out.push({ t, x: t.x, y: t.y, key: t.id });
-    for (const b of cult(s).treeBoxes) { const p = PT.boxSlotPos(b.slotIndex); boxTrees(s, b).forEach((t, i) => { if (t.hp > 0 && t.age >= growSec(s)) out.push({ t, x: p.x + (i % 2) * 40 - (treesIn(b) > 1 ? 20 : 0), y: p.y + Math.floor(i / 2) * 36 - (treesIn(b) > 2 ? 18 : 0), key: "box" + b.slotIndex + "_" + i, box: true }); }); }
+    for (const b of cult(s).treeBoxes) { const p = PT.boxSlotPos(b.slotIndex); boxTrees(s, b).forEach((t, i) => { if (t.hp > 0 && t.age >= growSec(s)) out.push({ t, x: p.x + (i % 2) * 40 - (treesIn(b) > 1 ? 20 : 0), y: p.y + Math.floor(i / 2) * 36 - (treesIn(b) > 2 ? 18 : 0), key: "box" + b.slotIndex + "_" + i, box: true, slot: b.slotIndex, idx: i }); }); }
     return out;
   }
   PT.nestTargets = allTargets;
-  function hitTree(G, tgt, dmgUnits, who) {
-    const s = G.s, t = tgt.t, rem = Math.min(Math.floor(t.hp), Math.max(1, Math.floor(dmgUnits)));
+  function hitTree(G, tgt, dmgUnits, who, hits = 1) {
+    const s = G.s, t = tgt.t, hp0 = Math.floor(t.hp), rem = Math.min(hp0, Math.max(1, Math.floor(dmgUnits)));
+    t.harvestBaseHp ??= t.maxHp;
+    const refund = who === "player" && PT.rivLumberRefund ? PT.rivLumberRefund(s, hp0, t.maxHp, dmgUnits, hits) : 0; // Lumberyard
     t.hp -= rem;
     const tw = r12(PT.nestRewardPerHit(s) * rem);
     PT.nestAddTwigs(s, tw); G.gain("twigs", tw);
     if (who === "player") G.onFloat(tgt.x, tgt.y - 30, "+" + PT.fmt(tw), "#d8a24a");
+    if (refund > 0) { const rt = r12(PT.nestRewardPerHit(s) * refund); PT.nestAddTwigs(s, rt); G.gain("twigs", rt); }
     if (t.hp <= 0) {
+      if (PT.rivOnTreeFelled) PT.rivOnTreeFelled(G, tgt);
       t.collapse = 0.8; if (tgt.box) t.respawn = 3;
       const f = PT.nestState(s).forest;
       if (!f.firstTreeChopped) { f.firstTreeChopped = f.autoCollectUnlocked = true; G.toast && G.toast("Auto collect unlocked"); }
@@ -256,7 +260,7 @@
       f.activeTreeId = tgt ? tgt.key : f.autoCollectEnabled ? f.activeTreeId : null;
       if (tgt && Math.hypot(tgt.x - p.x, tgt.y - p.y) <= R + 30) {
         G.nestAcc = (G.nestAcc || 0) + PT.nestHitRate(s) * dt;
-        const h = Math.floor(G.nestAcc); if (h > 0) { G.nestAcc -= h; hitTree(G, tgt, PT.nestPeckDamage(s) * h, "player"); }
+        const h = Math.floor(G.nestAcc); if (h > 0) { G.nestAcc -= h; hitTree(G, tgt, PT.nestPeckDamage(s) * h, "player", h); }
       } else G.nestAcc = 0;
       if (panda) { // the Red Panda chops another tree at the companion rate, 1 damage per hit
         const pt = targets.filter((x) => x.t.hp > 0 && x.key !== (tgt && tgt.key))[0];
@@ -272,7 +276,7 @@
   PT.nestAdvanceBeds = function (s, dt) {
     for (const b of cult(s).treeBoxes) for (const t of boxTrees(s, b)) {
       let r = Math.min(dt, F.maxOffline);
-      if (t.hp <= 0) { t.collapse -= r; if (r < t.respawn) { t.respawn -= r; continue; } r -= t.respawn; t.respawn = 0; t.hp = t.maxHp = boxTreeHp(s); t.age = 0; }
+      if (t.hp <= 0) { t.collapse -= r; if (r < t.respawn) { t.respawn -= r; continue; } r -= t.respawn; t.respawn = 0; t.hp = t.maxHp = boxTreeHp(s); t.age = 0; t.carpentryHarvested = false; delete t.harvestBaseHp; }
       t.age += r;
     }
   };

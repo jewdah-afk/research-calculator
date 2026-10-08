@@ -118,6 +118,11 @@ function probe({ side, scenario }) {
         snap: (k) => snap()[k], maxPrev: (kind, k) => nm.getCultivationUpgradeMaxPreview(kind)[k],
         nap: () => g.getRedPandaNapResourceMultiplier(), pandaTier: () => g.getRedPandaTier(), hybrid: (t) => nm.getActiveHybridMultiplier(t),
         breed: (a, b, k) => { const v = nm.getFishBreedingPreview(a, b)[k]; return v && typeof v === "object" ? ["common", "uncommon", "rare", "epic", "legendary"].map((r) => v[r]).join(",") : v; },
+        rivVisible: () => nm.getRiversideShopSnapshot().visible,
+        riv: (id, k) => { const v = nm.getRiversideShopSnapshot().items.find((i) => i.id === id)[k]; return k === "requirement" ? ["tier", "fields", "boxes", "breeding"].indexOf(v) : v; },
+        boxCount: () => nm.getState().cultivation.treeBoxes.length,
+        carpTop: (k) => { const v = nm.getCarpentryShopSnapshot(); return k.startsWith("stock.") ? v.stock[k.slice(6)] : v[k]; },
+        carp: (id, k) => { const v = nm.getCarpentryShopSnapshot().items.find((i) => i.id === id); const [a, b] = k.split("."); return b ? v[a][b] : v[a]; },
       },
     };
   } else {
@@ -204,6 +209,11 @@ function probe({ side, scenario }) {
           snap: (k) => SNAP[k](), maxPrev: (kind, k) => { const p = PT.nestMaxPreview(s, KIND[kind]); return k === "totalCost" ? PT.num(p.totalCost) : p[k]; },
           nap: () => PT.redPandaNapMult(s), pandaTier: () => PT.redPandaTier(s), hybrid: (t) => PT.hybridMult(s, t),
           breed: (a, b, k) => { const v = PT.breedPreview(s, a, b)[k]; return Array.isArray(v) ? v.join(",") : v; },
+          rivVisible: () => PT.rivSnapshot(s).visible,
+          riv: (id, k) => { const v = PT.rivSnapshot(s).items.find((i) => i.id === id)[k]; return k === "requirement" ? ["tier", "fields", "boxes", "breeding"].indexOf(v) : v; },
+          boxCount: () => s.nest.cultivation.treeBoxes.length,
+          carpTop: (k) => { const v = PT.carpSnapshot(s); return k.startsWith("stock.") ? v.stock[k.slice(6)] : v[k]; },
+          carp: (id, k) => { const v = PT.carpSnapshot(s).items.find((i) => i.id === id); const [a, b] = k.split("."); return b ? v[a][b] : v[a]; },
         };
       })(),
     };
@@ -315,6 +325,11 @@ function probe({ side, scenario }) {
     out[`nest shop ${k}`] = (() => { try { const v = N.snap(k); return typeof v === "string" ? v : num(v); } catch (e) { return "ERR " + e.message.slice(0, 50); } })();
   for (const kind of ["twig-value", "peck-rate", "peck-power"]) for (const k of ["targetLevel", "levelsGained", "totalCost"]) put(`nest max preview ${kind} ${k}`, () => N.maxPrev(kind, k));
   for (const t of ["popcorn_mult", "seed_mult", "xp_mult", "reel_speed_mult", "pickup_mult"]) put(`nest hybrid ${t}`, () => N.hybrid(t));
+  put("riverside visible", N.rivVisible); put("nest tree boxes", N.boxCount);
+  for (const id of ["pollinator", "lumberyard", "compost", "grove", "nursery"]) for (const k of ["level", "max", "cost", "requirement", "canBuy"]) put(`riverside ${id} ${k}`, () => N.riv(id, k));
+  for (const k of ["visible", "workshopUnlocked", "workbenchLevel", "skillLevel", "stock.twigs", "stock.wood", "stock.plank"]) put(`sawmill ${k}`, () => N.carpTop(k));
+  for (const id of ["timber", "forestry", "workshop", "saw", "bench", "tools", "mastery", "expansion"])
+    for (const k of ["visible", "level", "max", "requiredLevel", "requiredWorkbench", "requirementsMet", "nestComplete", "currentBonus", "nextBonus", "maxBonus", "canBuy", "maxBuyCount", "costs.twigs", "costs.wood", "costs.plank", "maxCosts.twigs", "maxCosts.wood", "maxCosts.plank"]) put(`sawmill ${id} ${k}`, () => N.carp(id, k));
   if (scenario.breed) for (const [a, b] of scenario.breed) for (const k of ["monetaCost", "odds", "shinyChance", "shinyParentCount"]) out[`breed ${a} x ${b} ${k}`] = (() => { const v = N.breed(a, b, k); return typeof v === "string" ? v : num(v); })();
   for (const [id] of D.stations) { if (id.startsWith("__")) continue; put(`tree ${id} unlocked`, () => A.sunUnlocked(id)); put(`tree ${id} visible`, () => A.sunVisible(id)); put(`tree ${id} cost`, () => A.sunCost(D.upgrades.find((u) => u.id === id))); }
   return out;

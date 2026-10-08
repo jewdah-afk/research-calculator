@@ -12,6 +12,7 @@
     goldenPopcorn: { name: "Golden Eggs", icon: "egg_golden" },
     monetariaMoneta: { name: "Moneta", icon: "moneta" },
     twigs: { name: "Twigs", icon: "twig" },
+    wood: { name: "Wood", icon: "wood" },
     echoPopcorn: { name: "Echo Eggs", icon: "echo" },
     bruteOre: { name: "Brute Ore", icon: "ore" },
     totalFishCaught: { name: "Fish caught", icon: "fish" },
@@ -239,6 +240,7 @@
     PT.updateEchoField(G, dt, prof);
     if ((G.bookT = (G.bookT ?? 1) - dt) <= 0) { G.bookT = 1; if (PT.grantArchivistBook(s)) toast("The Archivist dropped a book: it opens the Archivist's Branch (sunflower field, desert tree)"); }
     PT.updateNest(G, dt);
+    PT.carpUpdate(G, dt, G.tab === "nest" && G.nestView === "saw" && G.sawView === "mill");
     PT.updateMine(G, dt);
     PT.EXP.update(G, dt);
     PT.ensureFishing(s);
@@ -554,9 +556,11 @@
   G.nestView = "shop"; G.eggView = "popcorn";
   function nestPanel() {
     const s = G.s, n = PT.nestState(s), sn = PT.nestCultSnapshot(s), tw = PT.res(s, "twigs");
-    const views = [["shop", "SHOP"], ...(PT.breedVisible(s) ? [["lake", "LAKE"]] : []), ["owned", "OWNED " + PT.NEST_SPECIALS.filter((x) => n.cultivation.specialUpgrades[x.id]).length]];
+    const views = [["shop", "SHOP"], ...(PT.breedVisible(s) ? [["lake", "LAKE"]] : []), ...(PT.rivSnapshot(s).visible ? [["river", "RIVERSIDE"]] : []), ...(PT.carpSnapshot(s).visible ? [["saw", "SAWMILL"]] : []), ["owned", "OWNED " + PT.NEST_SPECIALS.filter((x) => n.cultivation.specialUpgrades[x.id]).length]];
     const sw = `<div class="devrow">${views.map(([k, l]) => `<button class="tab ${G.nestView === k ? "on" : ""}" data-nview="${k}">${l}</button>`).join("")}</div>`;
     if (G.nestView === "lake") return sw + lakePanel();
+    if (G.nestView === "river") return sw + riverPanel();
+    if (G.nestView === "saw") return sw + sawPanel();
     if (G.nestView === "owned") return sw + (PT.NEST_SPECIALS.filter((x) => n.cultivation.specialUpgrades[x.id]).map((x) => `<div class="row"><img class="ico" src="${ICON("nest")}" alt=""><div><div class="t">${x.name}</div><div class="d">${x.text}</div></div><div class="btns"><button class="key small gold">OWNED</button></div></div>`).join("") || '<div class="note">Nothing owned yet.</div>');
     const specials = PT.NEST_SPECIALS.filter((x) => !n.cultivation.specialUpgrades[x.id] && x.visible(s, n.cultivation)).map((x) =>
       `<div class="row"><img class="ico" src="${ICON("nest")}" alt=""><div><div class="t">${x.name}</div><div class="d">${x.text}</div></div><div class="btns"><button class="key ${tw.gte(x.cost) ? "" : "grey"}" data-nspec="${x.id}"><img src="${ICON("twig")}" alt="">${fmt(x.cost)}</button></div></div>`).join("");
@@ -573,6 +577,44 @@
     }).join("");
     const auto = PT.nestAutomationUnlocked(s) ? `<div class="section">AUTOMATION (Nest level 3)</div><div class="devrow"><label><input type="checkbox" data-in="nautop" ${n.autoPopcornEnabled ? "checked" : ""}> auto egg upgrades</label><label><input type="checkbox" data-in="nautos" ${n.autoSeedsEnabled ? "checked" : ""}> auto seed upgrades</label>${PT.goldenAutomationUnlocked(s) ? `<label><input type="checkbox" data-in="nautog" ${n.autoGoldenPopcornEnabled ? "checked" : ""}> auto golden egg upgrades</label>` : ""}</div>` : "";
     return sw + `<div class="note">${fmt(tw)} twigs · ${fmt(PT.nestTwigsPerSec(s))} twigs/s possible · ${PT.NEST_TIERS[n.tier].name} (x${PT.nestResourceMult(s)})</div>${box}${exp}${specials}${ups}${auto}`;
+  }
+  // Birb riverside buildings (Nest IV + Evolution 6)
+  function riverPanel() {
+    const s = G.s, sn = PT.rivSnapshot(s), r = PT.rivState(s);
+    const rows = sn.items.map((it) => {
+      const inf = PT.RIV_INFO[it.id], maxed = it.level >= it.max, req = PT.rivReqText(it);
+      const lv = it.max > 1 ? `<div class="lv">LV ${it.level} / ${it.max}</div>` : "";
+      const extra = it.id === "compost" && it.level ? `<div class="g">${r.compostSlot === null ? `${r.compostProgress} / 20 trees felled` : `bed ${r.compostSlot + 1}: ${[0, 1, 2, 3].filter((i) => r.compostMask & (1 << i)).length} marked trees left`}</div>` : "";
+      return `<div class="row"><img class="ico" src="${ICON(it.id === "lumberyard" ? "wood" : "nest")}" alt=""><div><div class="t">${inf.name}</div><div class="d">${inf.text}</div>${extra}${lv}${req && !maxed ? `<div class="d" style="color:#e07a5f">${req}</div>` : ""}</div>
+        <div class="btns">${maxed ? `<button class="key small gold">${it.max > 1 ? "MAXED" : "OWNED"}</button>` : `<button class="key ${it.canBuy ? "" : "grey"}" data-riv="${it.id}"><img src="${ICON("twig")}" alt="">${fmt(it.cost)}</button>`}</div></div>`;
+    }).join("");
+    return `<div class="note">${fmt(PT.res(s, "twigs"))} twigs · riverside buildings stay through Evolution</div>${rows}`;
+  }
+  // Birb sawmill (carpentry): WOOD tab (timber, forestry, sawmill unlock) and SAWMILL tab (cutting + upgrades)
+  G.sawView = "wood";
+  function sawPanel() {
+    const s = G.s, sn = PT.carpSnapshot(s), p = PT.carpState(s).production, lv = PT.carpLevel(p.xp);
+    const views = [["wood", "WOOD"], ...(sn.workshopUnlocked ? [["mill", "SAWMILL"]] : [])];
+    if (!views.some(([k]) => k === G.sawView)) G.sawView = "wood";
+    const sw = `<div class="devrow">${views.map(([k, l]) => `<button class="tab ${G.sawView === k ? "on" : ""}" data-sview="${k}">${l}</button>`).join("")}</div>`;
+    const ids = G.sawView === "wood" ? ["timber", "forestry", "workshop"] : ["saw", "bench", "tools", "mastery", "expansion"];
+    const showB = (id, v) => (id === "workshop" ? "" : "x" + (v >= 100 ? fmt(v) : Number(v.toPrecision(4))));
+    const cost = (k) => ["twigs", "wood", "plank"].filter((c) => k[c] > 0).map((c) => `${fmt(k[c])} ${c === "plank" ? "planks" : c}`).join(" + ") || "free";
+    const rows = sn.items.filter((it) => ids.includes(it.id) && it.visible).map((it) => {
+      const inf = PT.CARP_INFO[it.id], maxed = it.level >= it.max, many = ["timber", "forestry", "saw", "tools", "expansion"].includes(it.id);
+      const req = !it.requirementsMet && !maxed ? (it.id === "mastery" || it.id === "expansion" ? (it.nestComplete ? `Requires Sawmill Lv. 50, Workbench 3, Forest carpentry maxed` : "Complete Nest IV") : `Requires Sawmill Lv. ${it.requiredLevel}${it.requiredWorkbench > 1 ? " · Workbench " + it.requiredWorkbench : ""}`) : "";
+      return `<div class="row"><img class="ico" src="${ICON(it.id === "forestry" || it.id === "tools" ? "twig" : "wood")}" alt=""><div><div class="t">${inf.name}</div>${inf.unit ? `<div class="g">${inf.unit} ${showB(it.id, it.currentBonus)}${maxed ? "" : ` <b>›››</b> ${showB(it.id, it.nextBonus)}`}</div>` : ""}<div class="d">${inf.text}</div>
+        <div class="lv">${it.max > 1 ? `LV ${it.level} / ${it.max}` : ""}${req ? ` <span style="color:#e07a5f">${req}</span>` : ""}</div></div>
+        <div class="btns">${maxed ? `<button class="key small gold">${it.max > 1 ? "MAXED" : "OWNED"}</button>` : `<button class="key small ${it.canBuy ? "" : "grey"}" data-carp="${it.id}">${cost(it.costs)}</button>${many ? `<button class="key small ${it.canBuy ? "violet" : "grey"}" data-carpmax="${it.id}">MAX${it.maxBuyCount > 1 ? " x" + it.maxBuyCount : ""}</button>` : ""}`}</div></div>`;
+    }).join("");
+    const stock = `<div class="note">${fmt(sn.stock.twigs)} twigs · ${fmt(sn.stock.wood)} wood · ${fmt(sn.stock.plank)} planks · twig gains x${Number(PT.carpTwigMult(s).toPrecision(4))}</div>`;
+    const yieldNow = PT.carpFns.plankYield(sn.workbenchLevel, p.upgrades.saw, p.expansionLevel);
+    const mill = G.sawView === "mill" ? `<div class="hero"><div class="big">SAWMILL LV ${lv.level}</div><div class="bar"><i style="width:${(lv.fraction * 100).toFixed(1)}%"></i></div>
+      <div class="sub">${fmt(lv.current)} / ${fmt(lv.next)} XP · 1 wood → ${Number(yieldNow.toPrecision(4))} planks · ${PT.carpFns.xpPerPlank(sn.workbenchLevel, p.toolLevel)} XP per plank · Workbench ${sn.workbenchLevel}</div>
+      <div class="devrow" style="justify-content:center"><button class="key ${PT.carpCanCut(s) ? "" : "grey"}" data-act="sawstroke">SAW (2 strokes = 1 wood)</button><button class="key small ${lv.level >= 5 ? (PT.carpAutoOn(s) ? "gold" : "violet") : "grey"}" data-act="sawauto">AUTO ${lv.level >= 5 ? (PT.carpAutoOn(s) ? "ON" : "OFF") : "at Lv. 5"}</button></div>
+      <div class="note">AUTO cuts 1 wood per second while this tab is open (Birb: while the birb works the bench).</div></div>` : "";
+    const locked = G.sawView === "wood" && !sn.workshopUnlocked ? `<div class="note">In the Wood tab, raise both upgrades to level 5. Then purchase the Sawmill unlock.</div>` : "";
+    return sw + stock + mill + rows + locked;
   }
   G.breedPick = ["", ""];
   function lakePanel() {
@@ -897,7 +939,7 @@
       <div class="devrow"><button class="key small" data-act="export">Export save</button><button class="key small" data-act="import">Import save</button><button class="key small grey" data-act="wipe">Wipe save</button></div>
       <textarea data-in="savebox" placeholder="Export puts the save here. Paste a save and press Import.">${saveBox}</textarea>
       ${s_hasDesert() ? `<div class="devrow"><button class="key small" data-act="treeview">Show the ${archivistView() ? "sunflower" : desertView() ? (PT.archivistTreeOpen(G.s) ? "archivist" : "sunflower") : "desert"} tree</button></div>` : ""}
-      <div class="note">Done: the Park, Molt, seeds and the sunflower tree, the Sparrow, Castle evolutions, Bridge fishing and the Seagull. Also done: the Aquarium, Fish Market and the Nest (forest, planting beds, buildings, Red Panda, offline twigs, fish breeding). Riverside and the sawmill (Evolution 6), the mine, the desert, the expedition and the echo field come in later phases; their nodes show "needs ..." until then.</div></div>`;
+      <div class="note">Done: the Park, Molt, seeds and the sunflower tree, the Sparrow, Castle evolutions, Bridge fishing and the Seagull. Also done: the Aquarium, Fish Market, the Nest (forest, planting beds, buildings, Red Panda, offline twigs, fish breeding), Riverside and the sawmill (Nest IV + Evolution 6), the mine, the desert, the expedition and the echo field.</div></div>`;
   }
 
   // ------------------------------------------------------------------ windows (Birb: managed windows over the map)
@@ -1050,6 +1092,10 @@
     else if (b.dataset.lock) { const i = s.lockedFish.indexOf(b.dataset.lock); if (i < 0) s.lockedFish.push(b.dataset.lock); else s.lockedFish.splice(i, 1); }
     else if (b.dataset.biome) PT.aq(s).activeBiomeId = b.dataset.biome;
     else if (b.dataset.nview) G.nestView = b.dataset.nview;
+    else if (b.dataset.sview) G.sawView = b.dataset.sview;
+    else if (b.dataset.riv) { const r = PT.rivBuy(s, b.dataset.riv); if (r) toast(r); }
+    else if (b.dataset.carp) { const r = PT.carpBuy(s, b.dataset.carp, false); if (r) toast(r); }
+    else if (b.dataset.carpmax) { const r = PT.carpBuy(s, b.dataset.carpmax, true); if (r) toast(r); }
     else if (b.dataset.eview) G.eggView = b.dataset.eview;
     else if (b.dataset.mnode) { const r = PT.mineBuyNode(s, b.dataset.mnode); if (r) toast(r); }
     else if (b.dataset.nest) { const r = b.dataset.nest === "box" ? PT.nestBuyTreeBox(s) : PT.nestBuyExpansion(s); if (r) toast(r); }
@@ -1106,6 +1152,8 @@
     else if (a === "donateall") toast(PT.aqDonateAll(s));
     else if (a === "pandaname") { PT.nameRedPanda(s, q("pandaname")?.value); toast(s.redPanda.name + " joined you!"); }
     else if (a === "breedunlock") toast(PT.breedUnlock(s) || "Breeding Lake unlocked");
+    else if (a === "sawstroke") { if (!PT.carpCanCut(s)) toast("Needs wood"); else PT.carpStroke(G); }
+    else if (a === "sawauto") { const r = PT.carpToggleAuto(s); if (r) toast(r); }
     else if (a === "breedstart") toast(PT.breedStart(s, G.breedPick[0], G.breedPick[1]) || "Breeding started");
     else if (a === "breedclaim") toast(PT.breedClaim(s) || "Hybrid hatched!");
     else if (a === "breeddiscard") toast(PT.breedDiscard(s) || "Discarded");
@@ -1149,7 +1197,7 @@
   function drawHud() {
     const s = G.s, keys = ["popcorn", "goldenFeathers"];
     if (PT.hasSun(s, "d_sunflower_machine") || PT.res(s, "sunflowerSeeds").gt(0)) keys.push("sunflowerSeeds");
-    for (const k of ["goldenPopcorn", "monetariaMoneta", "twigs", "echoPopcorn", "bruteOre"]) if (PT.res(s, k).gt(0) || (k === "monetariaMoneta" && s.evolutionCount >= 1)) keys.push(k);
+    for (const k of ["goldenPopcorn", "monetariaMoneta", "twigs", "wood", "echoPopcorn", "bruteOre"]) if (PT.res(s, k).gt(0) || (k === "monetariaMoneta" && s.evolutionCount >= 1)) keys.push(k);
     const goldChip = PT.mineOpen(s) ? `<div class="chip"><img src="${ICON("goldore")}" alt=""><span class="v">${fmt(PT.mineState(s).goldOre)}</span><span class="rate">gold ore</span></div>` : "";
     const xr = PT.expState(s).activeRun, spChip = xr ? `<div class="chip"><img src="${ICON("skill_point")}" alt=""><span class="v">SP ${fmt(Math.floor(PT.parrotState(s).skillPoints))}</span><span class="rate">+${fmt(Math.floor((xr.spGained || 0) / Math.max(1 / 60, (Date.now() - xr.startTime) / 6e4)))}/m</span></div>` : "";
     setHtml("wallet", spChip + goldChip + keys.map((k) => `<div class="chip"><img src="${ICON(CUR[k].icon)}" alt=""><span class="v">${fmt(s.resources[k])}</span><span class="rate">+${fmt(G.rates[k] || 0)}/s</span></div>`).join(""));
