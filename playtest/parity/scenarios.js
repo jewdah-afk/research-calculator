@@ -119,11 +119,26 @@ module.exports = [
 // Sacrifice Room scenarios (Phase 6b): milestone tiers, expansion, parrot rebirb unlock
 {
   const sac = (n, x, rb, sp) => ({ evolutionCount: 5, rebirthCount: 40, expedition: { unlocked: true, highestFloorReached: 5, progress: { level: 30 }, sacrifice: { skillPointsSacrificed: n, commonMilestoneExpansionUnlocked: x } },
-    parrot: { unlocked: true, level: 30, skillPoints: sp, rebirbCount: rb, skills: { hp: 500, lifeRegen: 50, damage: 400 }, artifactInventory: [{ name: "Spirit Aura", count: 80, rarity: "common", stackable: true }] } });
+    parrot: { unlocked: true, level: 30, skillPoints: sp, rebirbCount: rb, skills: { hp: 500, lifeRegen: 50, damage: 400 }, artifactInventory: [{ instanceId: "art_sac_aura", name: "Spirit Aura", count: 80 }] } });
   module.exports.push(
     { name: "sacrifice tier I", expedition: true, state: sac(5000, false, 0, 300) },
     { name: "sacrifice capped III", expedition: true, state: sac(4e5, false, 0, 1e4) },
     { name: "sacrifice expansion V", expedition: true, state: sac(9e5, true, 0, 1e5) },
     { name: "sacrifice rebirb XIV", expedition: true, state: sac(3e12, false, 2, 1e9) },
+  );
+}
+
+// Loot scenarios (Phase 6b): equipped artifacts with infusion, effect copies, inventory capacity
+{
+  let n = 0; const art = (name, infusionLevel = 0, count = 1) => ({ instanceId: `art_p_${++n}`, name, count, ...(infusionLevel ? { infusionLevel } : {}) });
+  const kit = (items, eq, rb, extra = {}) => ({ evolutionCount: 5, rebirthCount: 40, expedition: { unlocked: true, highestFloorReached: 6, progress: { level: 60 }, sacrifice: { skillPointsSacrificed: 6e5, commonMilestoneExpansionUnlocked: true } },
+    parrot: { unlocked: true, level: 60, skillPoints: 500, rebirbCount: rb, skills: { hp: 2000, lifeRegen: 200, damage: 1500 }, artifactInventory: items, equippedArtifacts: eq.map((i) => items[i].instanceId) }, ...extra });
+  const a1 = [art("Crow Feather", 2), art("Spirit Vest"), art("Simple Book", 1), art("Spirit Aura", 0, 120), art("Minor Healing Potion", 0, 3)];
+  const a2 = [art("Bandit Purse", 4), art("Bandit Purse", 1), art("Bandit Purse"), art("Point Hoard"), art("Divine Symbol", 3), art("Mythic Ledger", 2), art("Tempest Harp")];
+  const a3 = [art("Skull of Reckoning", 10), art("Skull of Reckoning", 5), art("Storm Locket"), art("Depth Chronicle", 6), art("Mythic Ledger"), ...Array.from({ length: 30 }, () => art("Marrow Charm"))];
+  module.exports.push(
+    { name: "loot basic kit", expedition: true, state: kit(a1, [0, 1, 2], 0) },
+    { name: "loot effect copies", expedition: true, state: kit(a2, [0, 1, 2, 3, 4], 2, { sunflowerUpgrades: { d_desert_blossom_route: 1 } }) },
+    { name: "loot full bag", expedition: true, state: kit(a3, [0, 1, 2, 3], 1) },
   );
 }

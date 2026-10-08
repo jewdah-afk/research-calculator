@@ -82,6 +82,11 @@
   X.sacSeedMult = (s) => (1 + softCap(X.sacState(s).seedMultiplierBonus || 0, 14)) * X.sacProfile(s).seedMultiplier; // Birb getSacrificeSeedMultiplier (chest seed rewards)
   X.sacSpMult = (s) => X.sacProfile(s).skillPointMultiplier; // Birb getCommonSacrificeSkillPointMultiplier
   X.sacRadiusMult = (s) => X.sacProfile(s).parrotRadiusMultiplier;
+  // Birb getSacrificeChestChanceBonus: legacy rare sacrifice bonus with an asymptotic cap (0.12 soft, 0.2 hard)
+  X.sacChestChanceBonus = function (s) {
+    const i = Math.max(0, X.sacState(s).chestChanceBonus || 0), t = 0.12, n = 0.2;
+    return i <= t ? i : t + (n - t) * (1 - Math.exp(-(i - t) / Math.max(1e-4, t)));
+  };
   const prevRebirb = X.onParrotRebirb;
   X.onParrotRebirb = function (s) { if (prevRebirb) prevRebirb(s); const q = X.sacState(s); q.skillPointsSacrificed = 0; q.commonMilestoneExpansionUnlocked = false; };
 })();

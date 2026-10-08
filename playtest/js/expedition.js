@@ -768,5 +768,5 @@
   // Birb getFieldNotesSkillPointsPerSecond: Field Notes gives 1 SP/s (x rebirb multiplier) during a run
   X.fieldNotesRate = (s) => (PT.hasSun(s, "d_desert_field_notes") && PT.expState(s).activeRun ? X.passiveSpMult(s) : 0);
   // Birb getPassiveSkillPointMultiplier x gC (artifact SP roll is 1 for passive gains)
-  X.passiveSpMult = (s) => (X.sacSpMult ? X.sacSpMult(s) : 1) * (1 + (X.parrotBonuses(s).skillPointMult || 0)) * (1 + (X.externalBonuses(s).skillPointMult || 0)) * X.rebirbSpMult(s);
+  X.passiveSpMult = (s) => (X.passiveArtifactSpMult ? X.passiveArtifactSpMult(s) : 1) * (X.sacSpMult ? X.sacSpMult(s) : 1) * (1 + (X.parrotBonuses(s).skillPointMult || 0)) * (1 + (X.externalBonuses(s).skillPointMult || 0)) * X.rebirbSpMult(s);
 })();

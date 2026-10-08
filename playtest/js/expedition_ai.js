@@ -78,7 +78,7 @@
   X.strikeDist = (e) => { let t = STRIKE[e.type] ?? 40; if (e.type === "ice-fire-guardian") t = e.isBoss ? 72 : 36; if (e.isElite) t += 4; if (e.isBoss) t += 16; return Math.max(18, Math.min(t, Math.max(18, X.triggerRange(e) - 2))); };
 
   // ------------------------------------------------------------------ leash / targeting (Birb isPointInsideParrotLeash, scanForTarget, ET.choose)
-  X.rangeMult = () => Math.max(1, (1 + (X.bonuses?.rangeMult || 0)) * (X.bonuses?.sacRadiusMult || 1)); // Birb getEffectiveParrotRangeMultiplier
+  X.rangeMult = () => Math.max(1, (1 + (X.bonuses?.rangeMult || 0) + (X.tempRange ? X.tempRange(X.curState && PT.expState(X.curState).activeRun) : 0)) * (X.bonuses?.sacRadiusMult || 1)); // Birb getEffectiveParrotRangeMultiplier
   const inLeash = (x, y, px, py, pad = 0) => { const l = Math.max(0, K.LEASH * X.rangeMult() + pad); return (x - px) ** 2 + (y - py) ** 2 <= l * l; };
   const DIRS = [{ x: -1, y: 0 }, { x: 1, y: 0 }, { x: -Math.SQRT1_2, y: -Math.SQRT1_2 }, { x: Math.SQRT1_2, y: -Math.SQRT1_2 }, { x: -Math.SQRT1_2, y: Math.SQRT1_2 }, { x: Math.SQRT1_2, y: Math.SQRT1_2 }, { x: 0, y: -1 }, { x: 0, y: 1 }];
   const firstOk = (c, d, ok, pref = DIRS[0]) => { const a = { x: c.x + pref.x * d, y: c.y + pref.y * d }; if (ok(a)) return a; for (const r of DIRS) { const i = { x: c.x + r.x * d, y: c.y + r.y * d }; if (ok(i)) return i; } return null; };
@@ -755,7 +755,7 @@
     if ((p.x === 0 && p.y === 0) || (p.x - px) ** 2 + (p.y - py) ** 2 > snap * snap) { p.x = px - 40; p.y = py - 40; }
     if (!inLeash(p.x, p.y, px, py) && /^attack/.test(p.state)) Object.assign(p, { state: "return", targetEnemyId: null, manualTargetEnemyId: null, animFrame: 0, animTimer: 0 });
     p.hitCooldown = Math.max(0, (p.hitCooldown ?? 0) - a);
-    const M = Math.max(0.2, 1 + (B.attackSpeedMult || 0)), S = Math.max(0.25, 1 + (B.moveSpeedMult || 0)), ok = (pt) => inLeash(pt.x, pt.y, px, py);
+    const M = Math.max(0.2, 1 + (B.attackSpeedMult || 0) + (X.tempAttackSpeed ? X.tempAttackSpeed(run) : 0)), S = Math.max(0.25, 1 + (B.moveSpeedMult || 0)), ok = (pt) => inLeash(pt.x, pt.y, px, py);
     if (PT.expState(s).isAutoAttack && !p.targetEnemyId && /^(idle|follow|return)$/.test(p.state)) { const e = scan(s, run, p.x, p.y, px, py, b); if (e) { p.targetEnemyId = e; p.manualTargetEnemyId = null; p.state = "attack"; } }
     if (p.state === "idle") { const e = followTarget(p, px, py, b); if ((e.x - p.x) ** 2 + (e.y - p.y) ** 2 > 4900) p.state = "follow"; else p.facingRight = followSide(p, px) < 0; }
     else if (p.state === "follow") { const e = followTarget(p, px, py, b); if ((e.x - p.x) ** 2 + (e.y - p.y) ** 2 < 100) p.state = "idle"; else { fly(p, e, 0, p.speed * S, a, b); p.facingRight = followSide(p, px) < 0; } }

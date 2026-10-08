@@ -102,6 +102,7 @@
     if (k === " ") { e.preventDefault(); cast(); }
     if (k === "tab") { e.preventDefault(); G.companionsOpen = !G.companionsOpen; drawHud(); }
     if (k === "p") openWin("profile");
+    if (k === "q" && PT.expState(G.s).activeRun) { if (PT.EXP.usePotion(G.s)) save(); }
     if (k === "escape") { if (G.win) closeWin(); else openWin("settings"); }
   });
   function cast() { if (!PT.startCast(G)) toast(G.s.currentMap !== 2 ? "Fish on the Bridge" : G.s.evolutionCount < 1 ? "Fishing needs Evolution 1" : "Not ready"); }
@@ -565,6 +566,26 @@
   }
   // Birb parrot menu: STATS (level, HP, damage, regen, skill points), SKILLS (spend points: Vitality / Recovery / Strength), and the rebirb table
   G.spAmt = 1;
+  // Birb parrot INVENTORY: artifacts (equip into 3-5 slots, 2 copies max), materials (aura), potions, equipment chests
+  function parrotInventory() {
+    const s = G.s, X = PT.EXP, p = PT.parrotState(s), eq = new Set(p.equippedArtifacts.filter(Boolean)), ch = X.chestCounts(s), ca = X.invCapacity(s, "artifact"), cm = X.invCapacity(s, "material");
+    const RC = { common: "#cbd5e1", uncommon: "#4ade80", rare: "#60a5fa", epic: "#c084fc", legendary: "#facc15", mythic: "#f472b6" };
+    const stat = (d) => Object.entries(d.stats || {}).map(([k, v]) => `+${Math.round(v * 100)}% ${k.replace("Mult", "").replace("maxHealth", "HP").replace("lifeRegen", "regen")}`).join(" · ") + (d.effectId ? ` · ${d.effectId.replace(/_/g, " ")}` : "");
+    const row = (it) => { const d = X.itemByName(it.name) || {}, on = eq.has(it.instanceId) || p.relicSlot === it.instanceId, mat = d.inventoryCategory === "material", pot = d.type === "consumable";
+      const btn = mat ? "" : pot ? `<button class="key small ${p.potionSlot === it.instanceId ? "gold" : "grey"}" data-act="inv_pot:${it.instanceId}">${p.potionSlot === it.instanceId ? "SLOTTED" : "SLOT"}</button>`
+        : `<button class="key small ${on ? "gold" : ""}" data-act="inv_${on ? "off" : "on"}:${it.instanceId}">${on ? "EQUIPPED" : "EQUIP"}</button><button class="key small red" data-act="inv_drop:${it.instanceId}">✕</button>`;
+      return `<div class="row"><div><div class="t" style="color:${RC[d.rarity] || "#fff"}">${it.name}${(it.count || 1) > 1 ? " ×" + fmt(it.count) : ""}${it.infusionLevel ? " +" + it.infusionLevel : ""}</div><div class="d">${d.rarity || ""} ${stat(d)}</div></div><div class="btns">${btn}</div></div>`; };
+    const chests = Object.entries(ch).filter(([, n]) => n > 0).map(([r, n]) => `<button class="key small" data-act="inv_chest:${r}" style="color:${RC[r]}">OPEN ${r.toUpperCase()} ×${n}</button>`).join("");
+    const arts = p.artifactInventory.filter((it) => { const d = X.itemByName(it.name); return d && d.inventoryCategory !== "material" && d.type !== "consumable"; });
+    const pots = p.artifactInventory.filter((it) => X.itemByName(it.name)?.type === "consumable"), mats = p.artifactInventory.filter((it) => X.itemByName(it.name)?.inventoryCategory === "material");
+    const run = PT.expState(s).activeRun, par = run?.parrot;
+    return `<div class="section">EQUIPPED ${eq.size} / ${X.slotCount(s)} · ARTIFACTS ${ca.used} / ${ca.max} · MATERIALS ${cm.used} / ${cm.max}</div>
+      ${chests ? `<div class="devrow" style="flex-wrap:wrap">${chests}</div>` : `<div class="note">Bosses and elites drop equipment chests.</div>`}
+      <div class="section">ARTIFACTS</div>${arts.map(row).join("") || `<div class="note">None yet.</div>`}
+      <div class="section">POTIONS ${par ? `· <button class="key small ${(par.potionCooldown || 0) > 0 ? "grey" : ""}" data-act="inv_use">USE (Q)</button>` : ""}</div>${pots.map(row).join("") || `<div class="note">2% of kills drop a potion.</div>`}
+      ${PT.hasSun(s, "d_desert_auto_potion") ? `<div class="devrow"><label><input type="checkbox" data-in="autopot" ${p.autoPotionEnabled ? "checked" : ""}> auto potion below ${PT.EXP.autoPotionThreshold(s)}% HP</label></div>` : ""}
+      <div class="section">MATERIALS</div>${mats.map(row).join("") || `<div class="note">Kills drop Spirit Aura.</div>`}`;
+  }
   function parrotPanel(tab) {
     const s = G.s, p = PT.parrotState(s), e = PT.expState(s), pr = e.progress, st = PT.parrotTotalStats(s), kv = (a, b) => `<span>${a}</span><span>${b}</span>`;
     const head = `<div class="hero"><img src="${ICON("parrot")}" alt=""><div class="big">LV ${pr.level}</div><div class="bar"><i style="width:${Math.min(100, (pr.xp / pr.xpToNextLevel) * 100)}%"></i></div><div class="sub">XP ${fmt(Math.floor(pr.xp))} / ${fmt(pr.xpToNextLevel)} · ${fmt(p.skillPoints)} skill points to spend · rebirb ${p.rebirbCount}</div></div>`;
@@ -804,7 +825,7 @@
     redpanda: { title: "RED PANDA", body: () => pandaPanel() },
     crow: { title: "CROW", body: () => crowPanel() },
     dove: { title: "DAVE", body: () => davePanel() },
-    parrot: { title: "PARROT", tabs: [["stats", "STATS"], ["skills", "SKILLS"], ["rebirb", "REBIRB"]], body: (t) => parrotPanel(t) },
+    parrot: { title: "PARROT", tabs: [["stats", "STATS"], ["skills", "SKILLS"], ["gear", "INVENTORY"], ["rebirb", "REBIRB"]], body: (t) => (t === "gear" ? parrotInventory() : parrotPanel(t)) },
     expfloors: { title: "EXPEDITION", body: () => expFloorsPanel() },
     minetree: { title: "TREASURE ROOM", body: () => mineTreePanel() },
     sacrifice: { title: "SACRIFICE", body: () => sacrificePanel() },
@@ -858,6 +879,7 @@
       <div class="section">OFFERS</div>${offers}<div class="section">ACCEPTED (${m.acceptedContracts.length}/${PT.contractSlots(s)})</div>${acc}
       <div class="section">ACTIVE BUFFS (${PT.contractBuffCount(s)}/${PT.contractSlots(s)})</div>${buffs}`;
   }
+  PT.openWin = (id, tab) => openWin(id, tab);
   function openWin(id, tab) {
     if (id === "fishing" && G.s.evolutionCount < 1) return toast("Fish Inventory opens at Evolution 1");
     if (G.win && G.win.id === id) return closeWin();
@@ -951,6 +973,7 @@
     if (k === "community") PT.COMMUNITY.twigGain = e.target.checked ? 1.5 : 1;
     if (k === "nautop") PT.nestState(s).autoPopcornEnabled = e.target.checked;
     if (k === "nautog") PT.nestState(s).autoGoldenPopcornEnabled = e.target.checked;
+    if (k === "autopot") PT.parrotState(s).autoPotionEnabled = e.target.checked;
     if (k === "daveauto") { const d = PT.dave(s); d.autoRebirbEnabled = (d.unspentRebirbPoints || 0) <= 0 && e.target.checked; }
     if (k === "nautos") PT.nestState(s).autoSeedsEnabled = e.target.checked;
     if (e.target.dataset.ff) { fishFilter[e.target.dataset.ff] = e.target.value; winBody.dataset.last = ""; drawWin(); return; }
@@ -988,6 +1011,11 @@
     else if (a === "parrotrebirb") toast(PT.parrotRebirb(G) ? "Parrot rebirb " + PT.parrotState(s).rebirbCount : "Not ready: " + PT.parrotRebirbNeed(s));
     else if (a === "expauto") { const e = PT.expState(s); e.isAutoAttack = !e.isAutoAttack; const r = e.activeRun; if (r) r.combatArmed = true; }
     else if (a === "expreset") toast(PT.EXP.resetFloor(G) ? "Floor reset" : "Not in a run");
+    else if (a.startsWith("inv_")) { const X = PT.EXP, [c, id] = a.split(":");
+      if (c === "inv_on") { if (!X.equip(s, id)) toast("No free slot or already 2 copies"); } else if (c === "inv_off") X.unequip(s, id); else if (c === "inv_drop") X.discard(s, id);
+      else if (c === "inv_pot") PT.parrotState(s).potionSlot = id; else if (c === "inv_use") { if (!X.usePotion(s)) toast("No potion ready"); }
+      else if (c === "inv_chest") { const r = X.openChest(s, id); toast(!r ? "No chest" : r.full ? "Artifact bag is full" : `Got ${r.name} (${r.rarity})`); }
+      X.bonuses = X.parrotBonuses(s); X.refreshRunParrot(s); }
     else if (a.startsWith("sac_")) { if (a === "sac_expand") { if (!PT.EXP.unlockSacExpansion(s)) toast("Not enough Spirit Aura"); } else { const n = PT.EXP.sacrifice(s, a.slice(4)); toast(n ? `Sacrificed ${fmt(n)} SP` : "No skill points to sacrifice"); } }
     else if (a === "davetrain") { if (!PT.daveTrain(s)) toast("Not enough seeds"); }
     else if (a === "daverefund") PT.daveRefund(s);
