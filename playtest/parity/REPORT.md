@@ -1,8 +1,8 @@
 # Parity report
 
-Birb's live engine (birbplay.com `window.game`) vs the playtest, same save state per scenario. Generated 2026-10-08T22:38Z by `playtest/parity/parity.js`.
+Birb's live engine (birbplay.com `window.game`) vs the playtest, same save state per scenario. Generated 2026-10-08T22:50Z by `playtest/parity/parity.js`.
 
-**56449 / 56449 values match.** Birb's live community-goal twig reward today: x1.5 (copied into the playtest for the run).
+**59302 / 59302 values match.** Birb's live community-goal twig reward today: x1.5 (copied into the playtest for the run).
 
 | Scenario | Values | Mismatches |
 |---|---|---|
@@ -52,6 +52,9 @@ Birb's live engine (birbplay.com `window.game`) vs the playtest, same save state
 | mythic I | 857 | 0 |
 | mythic II relic bar | 857 | 0 |
 | mythic III doubled relic | 857 | 0 |
+| archivist book | 951 | 0 |
+| archivist tree early | 951 | 0 |
+| archivist tree full | 951 | 0 |
 
 ### fresh start
 
@@ -234,5 +237,17 @@ All match.
 All match.
 
 ### mythic III doubled relic
+
+All match.
+
+### archivist book
+
+All match.
+
+### archivist tree early
+
+All match.
+
+### archivist tree full
 
 All match.

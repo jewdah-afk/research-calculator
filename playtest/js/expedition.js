@@ -46,7 +46,7 @@
     e.saveVersion ??= 3; e.enemyRespawnCooldowns ||= {}; e.unlocked ??= false;
     e.progress ||= { level: 1, xp: 0, xpToNextLevel: X.xpReq(1), totalXpEarned: 0 };
     e.totalRuns ??= 0; e.successfulRuns ??= 0; e.totalEnemiesDefeated ??= 0; e.highestFloorReached ??= 1; e.activeRun ??= null;
-    e.isAutoAttack ??= false; e.archivistDefeated ??= false;
+    e.isAutoAttack ??= false; e.archivistDefeated ??= false; e.archivistEncounterVersion ??= 1; // Birb qo
     e.questStats ||= { killsByFloor: {}, bossClearsByFloor: {}, killsByEnemyType: {} };
     return e;
   };

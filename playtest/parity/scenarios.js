@@ -226,3 +226,20 @@ module.exports = [
     { name: "mythic III doubled relic", mythic: { kills }, state: st([W[0], W[1], W[2]], { eliteKills: 11, relicDrops: 2, claimedRelicId: "veil_heart" }, i2, "art_m_7") },
   );
 }
+
+// Phase 7: the Archivist's Book, the archivist tree and the Echo Field
+{
+  const desert = ["d_desert_core_mockup", "d_desert_golden_popcorn_chance", "d_desert_golden_reserve", "d_desert_golden_sand", "d_desert_golden_emblem", "d_desert_tempered_glass", "d_desert_mineral_tracker", "d_desert_dune_conductors"];
+  const base = (sun, extra = {}) => ({ evolutionCount: 6, rebirthCount: 80, hasUnlockedDesertMap: true, resources: { goldenPopcorn: 3e22, goldenFeathers: 4e31, echoPopcorn: 2.5e6 },
+    sunflowerUpgrades: Object.fromEntries(["d_sunflower_machine", "d_unlock_desert_tree", ...desert, ...sun].map((k) => [k, 1])), mine: { journeyVersion: 1, highestArea: 9 },
+    expedition: { unlocked: true, highestFloorReached: 9, archivistDefeated: true, progress: { level: 200 }, sacrifice: { skillPointsSacrificed: 0, commonMilestoneExpansionUnlocked: false } }, parrot: { unlocked: true, level: 200, rebirbCount: 3, skills: { hp: 10, lifeRegen: 0, damage: 10 } }, ...extra });
+  const R = ["near_response", "duet", "tuning", "trail", "chord", "harvest"], A = ["mycelium", "meeting", "network", "roots", "coordination", "route"], V = ["flock_memory", "golden_memory", "veil", "knowledge", "ancient_roots", "deep_memory"];
+  const nodes = (list) => list.map((k) => "d_archivist_echo_" + k);
+  module.exports.push(
+    { name: "archivist book", echo: true, state: base([]) },
+    { name: "archivist tree early", echo: true, state: base(["d_unlock_archivist_tree", "d_archivist_popcorn_echo", "d_archivist_auric_rebirb", ...nodes(R.slice(0, 2)), ...nodes(A.slice(0, 1))],
+      { upgrades: { p_echo_value: 24, p_echo_capacity: 6 }, echoGrove: { version: 2, lifetimeEarned: 8e4 } }) },
+    { name: "archivist tree full", echo: true, state: base(["d_unlock_archivist_tree", "d_archivist_popcorn_echo", "d_archivist_auric_rebirb", "d_archivist_golden_ascension", "d_archivist_echo_chance", "d_archivist_echo_value_milestones",
+      "d_archivist_echo_capacity_expansion", ...nodes(R), ...nodes(A), ...nodes(V), "d_archivist_echo_resonant_grove", "d_archivist_echo_forever"], { upgrades: { p_echo_value: 260, p_echo_capacity: 17 }, echoGrove: { version: 2, lifetimeEarned: 9e9 } }) },
+  );
+}

@@ -148,10 +148,11 @@
     for (const st of visibleStations()) if (x >= st[1] && x <= st[1] + st[3] && y >= st[2] && y <= st[2] + st[4]) return st;
     return null;
   }
-  const desertView = () => G.s.sunflowerTreeView === "desert";
+  const desertView = () => G.s.sunflowerTreeView === "desert", archivistView = () => G.s.sunflowerTreeView === "archivist" && PT.archivistTreeOpen(G.s);
   const isDesertNode = (id) => id.startsWith("d_desert_") || id === "d_unlock_archivist_tree";
-  function visibleStations() {
-    return PT.STATIONS.filter((st) => st[0] !== "__platform" && isDesertNode(st[0]) === desertView() && PT.sunVisible(G.s, st[0]));
+  function visibleStations() { // Birb: three views of the tree; the archivist view (above the desert one) needs the Archivist's Book
+    if (archivistView()) return PT.ARCHIVIST_STATIONS.filter((st) => PT.sunVisible(G.s, st[0]));
+    return PT.STATIONS.filter((st) => st[0] !== "__platform" && !PT.isArchivistNode(st[0]) && isDesertNode(st[0]) === desertView() && PT.sunVisible(G.s, st[0]));
   }
   function tryStation() {
     const st = stationAt(G.s.player.x, G.s.player.y + 15);
@@ -161,7 +162,7 @@
     if (r === "") save();
   }
   function onPlatform() {
-    if (G.s.currentMap !== 1 || desertView() || !PT.hasSun(G.s, "d_sunflower_machine")) return false;
+    if (G.s.currentMap !== 1 || desertView() || archivistView() || !PT.hasSun(G.s, "d_sunflower_machine")) return false;
     const p = PT.STATIONS.find((s) => s[0] === "__platform"), x = G.s.player.x, y = G.s.player.y + 15;
     return x >= p[1] && x <= p[1] + p[3] && y >= p[2] && y <= p[2] + p[4];
   }
@@ -235,6 +236,8 @@
     }
     PT.updateSparrows(G, dt);
     PT.updateDesert(G, dt, prof);
+    PT.updateEchoField(G, dt, prof);
+    if ((G.bookT = (G.bookT ?? 1) - dt) <= 0) { G.bookT = 1; if (PT.grantArchivistBook(s)) toast("The Archivist dropped a book: it opens the Archivist's Branch (sunflower field, desert tree)"); }
     PT.updateNest(G, dt);
     PT.updateMine(G, dt);
     PT.EXP.update(G, dt);
@@ -263,7 +266,7 @@
     cx.setTransform(1, 0, 0, 1, 0, 0);
     cx.fillStyle = "#1a2a1c"; cx.fillRect(0, 0, cv.width, cv.height);
     cx.setTransform(cam.k, 0, 0, cam.k, cam.x * cam.k, cam.y * cam.k);
-    const bg = { 0: "#5f9a45", 1: desertView() ? "#c8a46a" : "#6fa553", 2: "#6fa553", 3: "#5c5f66" }[s.currentMap];
+    const bg = { 0: "#5f9a45", 1: archivistView() ? "#3b2f55" : desertView() ? "#c8a46a" : "#6fa553", 2: "#6fa553", 3: "#5c5f66", 30: "#2c2547" }[s.currentMap];
     cx.fillStyle = bg; roundRect(0, 0, m.w, m.h, 24); cx.fill();
     cx.lineWidth = 6; cx.strokeStyle = "#0b0c10"; cx.stroke();
     if (s.currentMap === 0) {
@@ -271,6 +274,7 @@
       for (const b of G.sparrows) drawIcon("sparrow", b.x, b.y - (b.state === "fly" ? 14 : 0), 34, b.face < 0);
     }
     if (s.currentMap === PT.DESERT_MAP) drawDesert();
+    if (s.currentMap === PT.ECHO_FIELD_MAP) drawEchoField();
     if (s.currentMap === 1) drawSunflowerField();
     if (s.currentMap === 2) drawBridge();
     if (s.currentMap === PT.AQUARIUM_MAP) drawAquarium();
@@ -331,6 +335,12 @@
     cx.fillStyle = "rgba(190,140,70,.35)"; for (const [x, y, r] of [[220, 180, 90], [980, 260, 120], [420, 640, 140], [1100, 700, 80]]) { cx.beginPath(); cx.ellipse(x, y, r, r * 0.35, 0, 0, 7); cx.fill(); }
     for (const p of G.field.list(M)) { if (p.type === "golden" && p.caramel) { cx.beginPath(); cx.arc(p.x, p.y, 17, 0, 7); cx.fillStyle = "rgba(255,213,74,.35)"; cx.fill(); } drawEgg(p.x, p.y, PT.TYPES[p.type].color, p.type); }
     if (G.daves && G.daves[0]) { const a = G.daves[0]; for (const e of a.sons) drawIcon("dove", e.x, e.y - (e.state === "fly" ? 14 : 0), 24, e.face < 0); drawIcon("dove", a.x, a.y - (a.state === "fly" ? 20 : 0), 38, a.face < 0); }
+  }
+  // Birb echo field (map 30): a grove; plain popcorn, purple Echo popcorn, mushrooms with their reach
+  function drawEchoField() {
+    const s = G.s, b = PT.echoBounds(); cx.strokeStyle = "rgba(223,173,240,.25)"; cx.lineWidth = 3; cx.strokeRect(b.left, b.top, b.right - b.left, b.bottom - b.top);
+    const reach = PT.echoMushroomReach(s); for (const m of PT.echoMushrooms(s)) { cx.beginPath(); cx.arc(m.x, m.y, reach, 0, 7); cx.fillStyle = "rgba(167,139,250,.08)"; cx.fill(); drawIcon("mushroom", m.x, m.y - 10, 44); }
+    for (const p of G.field.list(PT.ECHO_FIELD_MAP)) drawEgg(p.x, p.y, p.type === "echo" ? "#853cbd" : PT.TYPES.plain.color, "plain");
   }
   function drawPine(x, y, k, hp, maxHp, active) {
     cx.fillStyle = "#6b4a2a"; cx.fillRect(x - 4 * k, y + 6 * k, 8 * k, 14 * k);
@@ -436,7 +446,7 @@
   function drawSunflowerField() {
     const s = G.s;
     const plat = PT.STATIONS.find((st) => st[0] === "__platform");
-    if (!desertView()) {
+    if (!desertView() && !archivistView()) {
       cx.fillStyle = PT.hasSun(s, "d_sunflower_machine") ? "#e9c84a" : "#8a7a4a"; roundRect(plat[1], plat[2], plat[3], plat[4], 12); cx.fill(); cx.lineWidth = 3; cx.strokeStyle = "#0b0c10"; cx.stroke();
       drawIcon("seed", plat[1] + plat[3] / 2, plat[2] + 34, 44); label(PT.hasSun(s, "d_sunflower_machine") ? "SEED PLATFORM" : "LOCKED", plat[1] + plat[3] / 2, plat[2] + 74, 13);
     }
@@ -504,6 +514,7 @@
     const s = G.s;
     if (id === "p_golden_popcorn_value") return !!s.hasUnlockedDesertMap;
     if (id === "p_auric_silo") return PT.hasSun(s, "d_desert_auric_blueprints");
+    if (id === "p_echo_value" || id === "p_echo_capacity") return PT.echoFieldOpen(s);
     if (id === "pr_golden_popcorn_mult") return PT.hasSun(s, "d_desert_golden_popcorn_mult_unlock");
     if (id.startsWith("m_")) return PT.mineUpShown(s, id);
     return true;
@@ -515,9 +526,9 @@
     let h = "";
     if (G.tab === "eggs") {
       // Birb POPCORN tab: a popcorn / golden popcorn switch once golden-priced upgrades exist
-      const gold = [...PT.UP.values()].some((d) => d.tree === "P" && d.costCurrency === "goldenPopcorn" && rowVisible(d.id));
-      if (!gold) G.eggView = "popcorn";
-      const sw = gold ? `<div class="devrow">${[["popcorn", "egg", "EGGS"], ["goldenPopcorn", "egg_golden", "GOLDEN"]].map(([k, ic, l]) => `<button class="tab ${G.eggView === k ? "on" : ""}" data-eview="${k}"><img src="${ICON(ic)}" alt="">${l}</button>`).join("")}</div>` : "";
+      const has = (c) => [...PT.UP.values()].some((d) => d.tree === "P" && d.costCurrency === c && rowVisible(d.id)), views = [["popcorn", "egg", "EGGS"], ["goldenPopcorn", "egg_golden", "GOLDEN"], ["echoPopcorn", "echo", "ECHO"]].filter(([k], i) => i === 0 || has(k));
+      const gold = views.length > 1; if (!views.some(([k]) => k === G.eggView)) G.eggView = "popcorn";
+      const sw = gold ? `<div class="devrow">${views.map(([k, ic, l]) => `<button class="tab ${G.eggView === k ? "on" : ""}" data-eview="${k}"><img src="${ICON(ic)}" alt="">${l}</button>`).join("")}</div>` : "";
       h = `${sw}${[...PT.UP.values()].filter((d) => d.tree === "P" && d.costCurrency === G.eggView && rowVisible(d.id)).map((d) => upRow(d.id)).join("")}
       <div class="note">Molting resets eggs and these upgrades. Plumes are forever.</div>`;
     } else if (G.tab === "molt") {
@@ -885,7 +896,7 @@
       <div class="devrow"><label><input type="checkbox" data-in="community" ${PT.COMMUNITY.twigGain > 1 ? "checked" : ""}> Birb community goal active (twigs x1.5, a live server event)</label></div>
       <div class="devrow"><button class="key small" data-act="export">Export save</button><button class="key small" data-act="import">Import save</button><button class="key small grey" data-act="wipe">Wipe save</button></div>
       <textarea data-in="savebox" placeholder="Export puts the save here. Paste a save and press Import.">${saveBox}</textarea>
-      ${s_hasDesert() ? `<div class="devrow"><button class="key small" data-act="treeview">Show the ${desertView() ? "sunflower" : "desert"} tree</button></div>` : ""}
+      ${s_hasDesert() ? `<div class="devrow"><button class="key small" data-act="treeview">Show the ${archivistView() ? "sunflower" : desertView() ? (PT.archivistTreeOpen(G.s) ? "archivist" : "sunflower") : "desert"} tree</button></div>` : ""}
       <div class="note">Done: the Park, Molt, seeds and the sunflower tree, the Sparrow, Castle evolutions, Bridge fishing and the Seagull. Also done: the Aquarium, Fish Market and the Nest (forest, planting beds, buildings, Red Panda, offline twigs, fish breeding). Riverside and the sawmill (Evolution 6), the mine, the desert, the expedition and the echo field come in later phases; their nodes show "needs ..." until then.</div></div>`;
   }
 
@@ -1084,7 +1095,7 @@
   function act(a) {
     const s = G.s, q = (k) => winBody.querySelector(`[data-in="${k}"]`) || panel.querySelector(`[data-in="${k}"]`);
     if (a === "molt") { if (PT.molt(G)) toast("Molted!"); }
-    else if (a === "treeview") s.sunflowerTreeView = desertView() ? "base" : "desert";
+    else if (a === "treeview") s.sunflowerTreeView = archivistView() ? "base" : desertView() ? (PT.archivistTreeOpen(s) ? "archivist" : "base") : "desert";
     else if (a === "feed") { s.isFeedingSparrow = !s.isFeedingSparrow; if (s.isFeedingSparrow) s.isDrainingSparrow = false; }
     else if (a === "drain") { s.isDrainingSparrow = !s.isDrainingSparrow; if (s.isDrainingSparrow) s.isFeedingSparrow = false; }
     else if (a === "mitosis") { if (!PT.mitosis(s)) toast("Not enough XP"); }
@@ -1142,7 +1153,7 @@
     const goldChip = PT.mineOpen(s) ? `<div class="chip"><img src="${ICON("goldore")}" alt=""><span class="v">${fmt(PT.mineState(s).goldOre)}</span><span class="rate">gold ore</span></div>` : "";
     const xr = PT.expState(s).activeRun, spChip = xr ? `<div class="chip"><img src="${ICON("skill_point")}" alt=""><span class="v">SP ${fmt(Math.floor(PT.parrotState(s).skillPoints))}</span><span class="rate">+${fmt(Math.floor((xr.spGained || 0) / Math.max(1 / 60, (Date.now() - xr.startTime) / 6e4)))}/m</span></div>` : "";
     setHtml("wallet", spChip + goldChip + keys.map((k) => `<div class="chip"><img src="${ICON(CUR[k].icon)}" alt=""><span class="v">${fmt(s.resources[k])}</span><span class="rate">+${fmt(G.rates[k] || 0)}/s</span></div>`).join(""));
-    document.getElementById("mapname").textContent = PT.MAPS[s.currentMap].name + (s.currentMap === 1 && desertView() ? " (DESERT TREE)" : "");
+    document.getElementById("mapname").textContent = PT.MAPS[s.currentMap].name + (s.currentMap === 1 && desertView() ? " (DESERT TREE)" : s.currentMap === 1 && archivistView() ? " (ARCHIVIST'S BRANCH)" : "");
     document.getElementById("speedtag").textContent = G.timeScale > 1 ? `x${G.timeScale} speed` : "";
     const L = PT.travelBlock(s, -1), R = PT.travelBlock(s, 1);
     document.getElementById("go-left").classList.toggle("locked", !!L);
@@ -1201,6 +1212,10 @@
       const item = (id) => { const a = par.artifactInventory.find((x) => x.instanceId === id); return a ? `<div class="slot" title="${a.name}"><img src="${ICON("aura")}" alt=""><span class="n">${a.name.split(" ").map((w) => w[0]).join("").slice(0, 3)}</span></div>` : `<div class="slot empty"></div>`; };
       setHtml("hotbar", `<div class="hpbar">${item(par.potionSlot)}<div class="bar hp"><i style="width:${Math.max(0, Math.min(100, (p.health / p.maxHealth) * 100))}%"></i><span class="in">${fmt(Math.ceil(Math.max(0, p.health)))} / ${fmt(p.maxHealth)}</span></div>${item(par.relicSlot)}</div>
         <div class="slots">${(par.equippedArtifacts || []).map(item).join("")}<button class="key small grey" data-act="expreset">RESET FLOOR</button></div>`);
+    } else if (s.currentMap === PT.ECHO_FIELD_MAP) { // Birb echo grove HUD: field count, echo per purple popcorn, lifetime echo
+      const n = G.field.list(PT.ECHO_FIELD_MAP).length, cap = Math.max(2, Math.min(40, PT.echoCapacity(s)));
+      setHtml("fishbar", `<div class="lvl"><b>${n}/${cap}</b></div><div class="sub">ECHO CHANCE ${Math.round(PT.echoChance(s) * 100)}% · +${fmt(PT.effect(s, "p_echo_value"))} per purple · lifetime ${fmt(PT.echoGrove(s).lifetimeEarned)}${PT.echoMushroomRate(s) ? " · mushrooms " + PT.echoMushroomRate(s) + "/s" : ""}</div>`);
+      setHtml("hotbar", "");
     } else if (s.currentMap === PT.DESERT_MAP) {
       const storm = PT.sandstormOn(s), cd = s.desertSandstormCooldownRemaining || 0, hasStorm = PT.hasSun(s, "d_desert_sandstorm") || PT.hasSun(s, "d_desert_dune_conductors");
       setHtml("fishbar", `<div class="lvl"><b>${G.field.list(PT.DESERT_MAP).length}/${PT.maxPopcorn(s)}</b></div><div class="sub">GOLDEN CHANCE ${(PT.desertGoldenChance(s) * 100).toFixed(1)}% · ${fmt(PT.goldenPerDrop(s))} per golden egg${hasStorm ? ` · ${storm ? "SANDSTORM " + Math.ceil(s.desertSandstormTimeRemaining) + "s" : cd > 0 ? "next storm possible in " + PT.fmtTime(cd) : "a sandstorm can start any moment"}` : ""}</div>`);

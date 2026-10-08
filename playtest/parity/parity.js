@@ -7,6 +7,7 @@ const { chromium } = require("playwright");
 const ROOT = path.resolve(__dirname, "../..");
 const SCENARIOS = require("./scenarios.js").filter((sc) => !process.env.ONLY || sc.name.includes(process.env.ONLY)); // ONLY=quest runs a subset (REPORT.md then covers only that subset)
 const DATA = (() => { const window = {}; eval(fs.readFileSync(path.join(ROOT, "playtest/js/data.js"), "utf8")); return window.BIRB_DATA; })();
+DATA.arch = (() => { const window = {}; eval(fs.readFileSync(path.join(ROOT, "playtest/js/archivist_data.js"), "utf8")); return window.ARCHIVIST_DATA; })(); // Phase 7 nodes and stations
 
 const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".png": "image/png", ".json": "application/json" };
 function serve() {
@@ -26,7 +27,7 @@ function probe({ side, scenario }) {
   const D = window.BIRB_DATA;
   const num = (x) => (x == null ? null : typeof x === "boolean" ? x : typeof x === "object" && x.toNumber ? x.toNumber() : typeof x === "object" && "mantissa" in x ? x.mantissa * Math.pow(10, x.exponent) : Number(x));
   const deep = (dst, src) => { for (const [k, v] of Object.entries(src)) { if (v && typeof v === "object" && !Array.isArray(v)) { dst[k] = dst[k] && typeof dst[k] === "object" ? dst[k] : {}; deep(dst[k], v); } else dst[k] = v; } };
-  const fresh = () => ({ parrot: null, collaredDove: null, sparrowPrestigeCount: 0, desertSandstormTimeRemaining: 0, desertSandstormCooldownRemaining: 0, hasUnlockedDesertMap: false, mine: {}, floorOneMineEntranceOpened: false, aquarium: { activeBiomeId: "coast", housedFish: {}, researchedFishCounts: {}, releasedShinyFishes: {}, releasedShinyWeightsKg: {} }, fishInventory: [], discoveredFish: [], discoveredShinyFish: [], fishWeightRecords: [], activeFishIds: [], activeFishBuffs: {}, lockedFish: [], fishBuffThirdSlotUnlocked: false });
+  const fresh = () => ({ parrot: null, collaredDove: null, sparrowPrestigeCount: 0, desertSandstormTimeRemaining: 0, desertSandstormCooldownRemaining: 0, hasUnlockedDesertMap: false, mine: {}, floorOneMineEntranceOpened: false, aquarium: { activeBiomeId: "coast", housedFish: {}, researchedFishCounts: {}, releasedShinyFishes: {}, releasedShinyWeightsKg: {} }, fishInventory: [], discoveredFish: [], discoveredShinyFish: [], fishWeightRecords: [], activeFishIds: [], activeFishBuffs: {}, lockedFish: [], fishBuffThirdSlotUnlocked: false, echoGrove: null });
   let A;
   if (side === "birb") {
     const g = window.game, s = g.state;
@@ -84,6 +85,9 @@ function probe({ side, scenario }) {
       }; })(),
       secret: { maxed: () => g.areStarterEquipmentUpgradesMaxed(), repair: () => g.hasMineProgressForEntranceRepair(), canBreak: () => { const c = g.currentMap; g.currentMap = 17; try { return g.canBreakFloorOneMineEntrance(); } finally { g.currentMap = c; } } },
       totem: () => g.expeditionManager.parrotTotem.isUnlocked(),
+      echo: { chance: () => window.__BIRB_ECHO.chance(s), rate: () => window.__BIRB_ECHO.rate(s), mush: () => window.__BIRB_ECHO.mush(s).length, reach: () => window.__BIRB_ECHO.reach(s), flock: (w) => window.__BIRB_ECHO.flock(s, w),
+        copy: () => window.__BIRB_ECHO.copy(s), mult: (L) => window.__BIRB_ECHO.value(s, L), value: () => g.getUpgradeEffect("p_echo_value"), cap: () => g.getMaxPopcorn(30), max: (id) => g.getUpgradeMaxLevel(id), level: (id) => g.getUpgradeLevel(id),
+        cost: (id, L) => g.getDiscountedUpgradeCost((D.arch || window.ARCHIVIST_DATA).shop.find((u) => u.id === id), L), books: () => (s.parrot?.artifactInventory || []).filter((a) => a.name === "Archivist's Book").length, sunCost: (id) => g.getDiscountedUpgradeCost((D.arch || window.ARCHIVIST_DATA).upgrades.find((u) => u.id === id), g.getSunflowerUpgradeLevel(id)) },
       mythic: { norm: () => { g.expeditionManager.normalizeSacrificeState(); return g.state.expedition.mythicSacrifice; }, can: () => window.__BIRB_MYTHIC_CAN(g.state.expedition.mythicSacrifice, Math.floor(s.parrot.skillPoints), g.getAuraCount("mythic_spirit_trash")),
         count: (n) => (s.parrot.artifactInventory || []).filter((a) => a.name === n).reduce((k, a) => k + (a.count || 1), 0) },
       quest: (() => { const qm = g.questMerchantManager, fix = () => { qm.normalizedStateRef = null; qm.setState(g.state.expedition); }; return {
@@ -122,7 +126,7 @@ function probe({ side, scenario }) {
     const res = st.resources || {}; delete st.resources;
     deep(s, st);
     for (const [k, v] of Object.entries(res)) s.resources[k] = new Decimal(v);
-    G.s = s; PT.ensureFishing && PT.ensureFishing(s);
+    G.s = s; PT.ensureFishing && PT.ensureFishing(s); PT.grantArchivistBook && PT.grantArchivistBook(s); // Birb grants the Archivist's Book on load (sC)
     A = {
       level: (id) => PT.level(s, id), max: (id) => PT.maxLevel(s, id), eff: (id) => PT.effect(s, id),
       cost: (d) => PT.discounted(s, PT.UP.get(d.id), PT.level(s, d.id)),
@@ -157,6 +161,9 @@ function probe({ side, scenario }) {
       }; })(),
       secret: { maxed: () => PT.EXP.starterGearMaxed(s), repair: () => PT.EXP.hasMineProgress(s), canBreak: () => { const c = s.currentMap; s.currentMap = 17; try { return PT.EXP.canBreakMineEntrance(s); } finally { s.currentMap = c; } } },
       totem: () => PT.EXP.totemUnlocked(s),
+      echo: { chance: () => PT.echoChance(s), rate: () => PT.echoMushroomRate(s), mush: () => PT.echoMushrooms(s).length, reach: () => PT.echoMushroomReach(s), flock: (w) => PT.flockMemoryMult(s, w),
+        copy: () => PT.mythicCopyChance(s), mult: (L) => PT.echoValueMult(s, L), value: () => PT.effect(s, "p_echo_value"), cap: () => PT.echoCapacity(s), max: (id) => PT.maxLevel(s, id), level: (id) => PT.level(s, id),
+        cost: (id, L) => PT.discounted(s, PT.UP.get(id), L), books: () => (s.parrot?.artifactInventory || []).filter((a) => a.name === "Archivist's Book").length, sunCost: (id) => PT.sunCost(s, id) },
       mythic: { norm: () => PT.EXP.mythicState(s), can: () => PT.EXP.mythicCanPour(s), count: (n) => PT.EXP.itemCount(s, n) },
       quest: (() => { const X = PT.EXP; return {
         sync: (now) => X.questSync(s, now), bonus: (k) => X.questMerchantBonus(s, k), m: () => X.questState(s),
@@ -259,6 +266,15 @@ function probe({ side, scenario }) {
   for (const k of ["level", "target", "popcorn", "sp", "radius", "seed", "qty", "chance", "promo", "canExpand", "maxLv", "progress", "atk", "move", "range"]) put(`sacrifice ${k}`, Ex.sac[k]);
   for (const k of ["maxed", "repair", "canBreak"]) put(`mine entrance ${k}`, A.secret[k]);
   put("totem unlocked", A.totem);
+  if (scenario.echo) { const E = A.echo; // Phase 7: the Archivist's Book, the archivist tree, the Echo Field's numbers
+    put("archivist books", E.books);
+    for (const k of ["chance", "rate", "mush", "reach", "copy", "value", "cap"]) put(`echo ${k}`, E[k]);
+    for (const w of ["sparrow", "parrot"]) put(`echo flock memory ${w}`, () => E.flock(w));
+    for (const L of [0, 1, 24, 25, 50, 99]) put(`echo value mult L${L}`, () => E.mult(L));
+    for (const id of ["p_echo_value", "p_echo_capacity"]) { put(`echo ${id} level`, () => E.level(id)); put(`echo ${id} max`, () => E.max(id)); for (const L of [1, 2, 10, 24, 25, 26, 99, 100, 101, 400]) put(`echo ${id} cost L${L}`, () => E.cost(id, L)); }
+    for (const [id] of (D.arch || window.ARCHIVIST_DATA).stations) { put(`tree ${id} unlocked`, () => A.sunUnlocked(id)); put(`tree ${id} visible`, () => A.sunVisible(id)); put(`tree ${id} cost`, () => E.sunCost(id)); }
+    put("tree d_unlock_archivist_tree unlocked", () => A.sunUnlocked("d_unlock_archivist_tree")); put("tree d_unlock_archivist_tree visible", () => A.sunVisible("d_unlock_archivist_tree"));
+  }
   if (scenario.mythic) { const My = A.mythic;
     const snap = (tag) => { const m = My.norm(); for (const k of ["level", "eliteKills", "relicDrops", "pendingAura"]) put(`mythic ${tag} ${k}`, () => m[k]); m.contributions.forEach((c, i) => { put(`mythic ${tag} c${i} sp`, () => c.skillPoints); put(`mythic ${tag} c${i} aura`, () => c.aura); }); };
     snap("t0"); put("mythic can pour", My.can);
@@ -320,7 +336,7 @@ function probe({ side, scenario }) {
     const ms = [...document.querySelectorAll("script[src],link[href]")].map((e) => e.src || e.href).find((u) => /\/assets\/maps-[^/]+\.js$/.test(u)) || "/assets/maps-CcKoUYtq.js";
     window.__BIRB_NIGHT_WALK = (await import(ms)).d0; // Birb Re: night map walkable test
     const es = [...document.querySelectorAll("script[src],link[href]")].map((e) => e.src || e.href).find((u) => /\/assets\/editors-[^/]+\.js$/.test(u)) || "/assets/editors-BtUaWY01.js";
-    window.__BIRB_MYTHIC_CAN = (await import(es)).aI; // Birb Ba
+    { const ed = await import(es); window.__BIRB_MYTHIC_CAN = ed.aI; window.__BIRB_ECHO = { chance: ed.gr, rate: ed.bX, mush: ed.bY, reach: ed.bZ, flock: ed.d$, copy: ed.g_, value: ed.cE }; } // Birb Ba, In, Sn, Rn, vn, En, Cn, Tn
   });
   const ours = await (await browser.newContext()).newPage();
   const errs = [];

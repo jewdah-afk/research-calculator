@@ -183,9 +183,13 @@
     if (id === "d_desert_collared_dove") return ["d_desert_tackle_crate", "d_desert_signal_smoke"];
     if (id === "d_desert_golden_popcorn_chance_4") return ["d_desert_golden_popcorn_gain_2", "d_desert_popcorn_spawn_rate"];
     if (id === "d_desert_auto_potion" || id === "d_desert_shiny_enemies") return ["d_desert_sandstorm"];
+    const multi = { d_archivist_echo_deep_memory: ["d_archivist_echo_ancient_roots", "d_archivist_echo_veil"], d_archivist_echo_tuning: ["d_archivist_echo_duet", "d_archivist_echo_chance"],
+      d_archivist_echo_harvest: ["d_archivist_echo_chord", "d_archivist_echo_value_milestones"], d_archivist_echo_resonant_grove: ["d_archivist_echo_harvest", "d_archivist_echo_route"],
+      d_archivist_echo_forever: ["d_archivist_echo_resonant_grove", "d_archivist_echo_flock_memory"] }; // Birb oo: the echo branch's joins
+    if (multi[id]) return multi[id];
     return n.requires ? [n.requires] : [];
   };
-  const needsAllParents = (id) => id === "d_unlock_archivist_tree" || id === "d_desert_auto_potion";
+  const needsAllParents = (id) => id === "d_unlock_archivist_tree" || id === "d_desert_auto_potion" || id.startsWith("d_archivist_echo_"); // Birb requiresAllSunflowerParents
   PT.chainConnected = function (s, id, memo = new Map()) {
     if (memo.has(id)) return memo.get(id);
     const n = SUN.get(id);
