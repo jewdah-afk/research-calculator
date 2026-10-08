@@ -1,6 +1,6 @@
 # Parity report
 
-Birb's live engine (birbplay.com `window.game`) vs the playtest, same save state per scenario. Generated 2026-10-08T22:36Z by `playtest/parity/parity.js`.
+Birb's live engine (birbplay.com `window.game`) vs the playtest, same save state per scenario. Generated 2026-10-08T22:38Z by `playtest/parity/parity.js`.
 
 **56449 / 56449 values match.** Birb's live community-goal twig reward today: x1.5 (copied into the playtest for the run).
 

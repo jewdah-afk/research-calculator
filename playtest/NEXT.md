@@ -1,4 +1,4 @@
-# Playtest handoff: what to do next (updated 2026-10-08)
+# Playtest handoff: what to do next (updated 2026-10-08, after Phase 6c)
 
 This is the starting point for the next session on the HTML port. Read it first, then `README.md` (phase table) and `DIFFERENCES.md` (Birb vs our Roblox/Figma build).
 
@@ -9,7 +9,7 @@ Build a 1:1 HTML copy of Birb (birbplay.com) as Peckwood, so any progression can
 - Icons are not a priority. The owner will make them later in Figma on PC. The `plume.png` question is parked.
 
 ## Where things stand
-- **Done:** phases 1, 2, 2b, 3, 4, 5, 6a and 6b (see `README.md`).
+- **Done:** phases 1, 2, 2b, 3, 4, 5, 6a, 6b and 6c (see `README.md`). **Next:** Phase 7.
 - **Branch:** `claude/egg-mining-icons` (not merged into `main`).
 - **Parity:** `NODE_PATH=<node_modules with playwright> node playtest/parity/parity.js`
   - It loads every save in `parity/scenarios.js` into Birb's live engine and into the playtest, compares every shared value, and writes `parity/REPORT.md`.
@@ -31,10 +31,10 @@ Build a 1:1 HTML copy of Birb (birbplay.com) as Peckwood, so any progression can
 | `js/expedition_night.js` | Night mode (6c): night map walkability, wall-impact test, the elven assassin / zombie cultist / ice-fire guardian AIs. `X.qt`, `X.runMap`, `X.NIGHT_PLAN` live in `expedition.js` |
 | `js/expedition_mythic.js` | Mythic sacrifice (6c): 3 levels (SP + Mythic Spirit Aura), pour loop, relic drops from night elites, `X.relicBoost`, `X.mythicFinal` |
 | `js/expedition_totem.js` | Parrot totem (6c, rebirb III): T places / collects it; the run keeps fighting at the totem while you are away; death breaks it for 1 h, then the run restarts there |
-| `js/main.js` | UI: the Parrot window (STATS / SKILLS / INVENTORY+forge / REBIRB), the Sacrifice and floor windows, the floor HUD |
+| `js/main.js` | UI: the Parrot window (OVERVIEW / UPGRADE / EQUIPMENT+forge / INDEX / REBIRB), the Sacrifice, floor and OBJECTIVES windows, the floor HUD |
 
 Hooks still stubbed (search for these names):
-- `X.crowBonus` in `X.externalBonuses`: the crow's expedition tracks (crow drain targets).
+- `X.crowBonus` in `X.externalBonuses`: the crow's expedition tracks (crow drain targets, a mine sub-system not ported yet).
 
 ## How to research Birb (the tools are in `tools/`)
 1. Download Birb's bundles **outside the repo**: `playtest/tools/fetch_birb.sh /tmp/birb`. This creates the `*.pretty.js` files.
@@ -60,27 +60,19 @@ Gotchas we hit:
 - **`em.parrotBonuses` goes stale in probes.** Call `em.refreshParrotBonuses(g.getEquippedArtifactNames(), g.getEquipmentMultipliers(), g.getEquippedArtifactInfusionLevels())` first.
 - **Escape `$` in shell arguments.**
 
-## Next: Phase 6c (in this order)
-1. **DONE: Quest merchant** (`js/quests.js`, Q opens OBJECTIVES; potion key moved to H). Flock orders (daily rules v2/v3) are server-issued and off in Birb today (`flockCommunity.generationEnabled` false), so only v1 dailies are ported. Notes from the original plan:
-   - Birb `questMerchant` state, `getQuestMerchantExpeditionBonuses`, `getQuestMerchantBonus(...)`, `flockProgress` (tracked in `trackQuestKill`, `game-*.js` around line 37870), `flockCommunity` (`tI(...)`) and `createFlockOrderReward`.
-   - Fill the quest parts of `X.externalBonuses` and the `questBonus` stub in `js/systems.js`, which feeds popcorn.
-2. **DONE: Fish market parrot buffs** (`X.marketParrotBuff` in `expedition.js`: max(legacy bought parrot buff, sum of live contract buffs) per expedition stat; fish / aquarium `parrot_*_mult` were already in `X.skillAdditions`). Original notes:
-   - The `parrot_*_mult` fish effects and aquarium modifiers are already read in Birb's skill-addition code (`game-*.js` around line 77360). Check that the playtest's `X.skillAdditions` gets them.
-3. **DONE: Floor 1 secret room to the Mine** (`js/expedition_secret.js`; the Settings shortcut is gone; fast travel to the Mine stays as a playtest convenience, Birb's forge has a GO TO MINE button that needs a run). Original notes:
-   - `canBreakFloorOneMineEntrance` needs parrot rebirb ≥2 and all starter gear maxed. It also uses `updateFloorOneMineEntranceBreak` and `floorOneMineEntranceOpened`.
-   - Replace the Settings shortcut that opens the Mine now.
-4. **DONE: Night mode** (rebirb III, floor 1 on map 32, stats / loot at floor 10+, mythic auras at 5 weight, boss portal ends the run as a success; `tools/build_expedition_data.js` now also exports the night map). Original notes:
-   - `activeRun.nightMode`; loot floor = 10 + floor − 1 (`maps` `N()`).
-   - Mythic aura appears on floor 10 at rebirb III (`rM`).
-5. **DONE: Mythic sacrifice** (Sacrifice window, below the milestones; Birb's hold-to-pour is a SACRIFICE / STOP toggle). Parity found that Birb grants the Archivist's Book on load when `archivistDefeated` is set (Phase 7). Original notes:
-   - `wa` tiers, `Oy` normalize, `Qh` relics (Heart of the Veil / Watcher's Oath), night elite kills (12 per relic, bosses count 4), `Ia` = ×1.2 final at I, the relic slot at II, double relics at III.
-6. **DONE: Totem** (`js/expedition_totem.js`). **Not reachable in Birb today, so not ported:** field drops of legacy artifacts (`checkArtifactDrop` is never called) and material chests (the chest window only fills the equipment counts).
-7. **DONE: Screenshots** (`parity/birb_expedition.js` → `parity/birb_ui/expedition/`; the floor wheel did not open headless). Copied: parrot window tabs OVERVIEW / UPGRADE / EQUIPMENT / INDEX (+ REBIRB, which Birb opens from its own window), the four overview cards, the UPGRADE amount buttons, the floor HUD (level / XP / rebirb row, POINTS x and run time, HP bar between the potion and relic slots, equipped artifacts below, SP counter with a per-minute rate top-left, AUTO top-right). Original notes:
-   - Capture Birb's Expedition screens (hub, floor HUD, parrot window tabs, forge, sacrifice room) with a script like `parity/birb_desert.js` into `parity/birb_ui/expedition/`.
-   - Copy their layout into `main.js`.
-8. **Docs:** add DIFFERENCES rows, update the README phase table and HANDOUT, then commit and push.
+## Phase 6c: done
+Quest merchant (`quests.js`), fish market parrot buffs (`X.marketParrotBuff`), secret rooms and the floor 1 mine entrance (`expedition_secret.js`), night mode (`expedition_night.js` + `X.qt` / `X.runMap`), mythic sacrifice (`expedition_mythic.js`), parrot totem (`expedition_totem.js`), Birb's Expedition HUD and parrot window layout (screens in `parity/birb_ui/expedition/`). DIFFERENCES rows 44-50.
+- Not ported because Birb cannot reach them today: field drops of legacy artifacts (`checkArtifactDrop` is never called), material chests (the chest window only fills equipment counts), server flock orders (daily rules v2/v3; `flockCommunity.generationEnabled` is false).
+- Playtest-only conveniences: fast travel to the Mine once it is open; the mythic sacrifice is a SACRIFICE / STOP toggle (Birb: hold); the totem is placed with T where you stand (Birb: click a spot).
 
-**After 6c:** Phase 7 (Echo field and the archivist tree). Later, riverside and the sawmill (3b). Possible extra: a script that plays both games side by side and logs pacing.
+## Next: Phase 7 (Echo field and the archivist tree)
+Start here (research first, then port in this order, with parity probes for each part):
+1. **The Archivist's Book.** Birb `sC(state)` (game-*.js, near `quest_archivist_book`) puts a locked Archivist's Book in the parrot bag once the Archivist is defeated (`qr(expedition)`), unless the book was already used (`Pa`) or is owned (`$r`). Parity scenarios must keep `archivistDefeated` unset unless they expect the book.
+2. **The archivist tree** (`d_archivist_*` sunflower nodes; Birb has about 33, the playtest data has 6). Find how the book unlocks it and where the tree lives (a map like the mine Treasure Room?), the costs (currency `echoPopcorn`?) and every effect.
+3. **The Echo field** (`maps.echoField`, map id `X` in game-*.js; currency `echoPopcorn`, unlocked by sunflower node `Oa` = maps export `aS`). Port its spawns, values and how echo popcorn is earned (`resources.echoPopcorn`, `lifetimeEarned`).
+4. Screenshots of both with a capture script like `parity/birb_expedition.js`, then DIFFERENCES / README / HANDOUT.
+
+Later: riverside and the sawmill (3b); the crow's expedition tracks (metal drain into armor / damage / regen, `getCrowTrackBonus`; feeds `X.crowBonus`, still a stub). Possible extra: a script that plays both games side by side and logs pacing.
 
 ## Known open items
 - A 3,000 HP parrot dies within about 0.4 s on floor 3 in a simulated run (enemy stats match Birb, so this may be correct; check pacing against Birb live).
