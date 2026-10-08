@@ -75,7 +75,7 @@ Gotchas we hit:
 5. **DONE: Mythic sacrifice** (Sacrifice window, below the milestones; Birb's hold-to-pour is a SACRIFICE / STOP toggle). Parity found that Birb grants the Archivist's Book on load when `archivistDefeated` is set (Phase 7). Original notes:
    - `wa` tiers, `Oy` normalize, `Qh` relics (Heart of the Veil / Watcher's Oath), night elite kills (12 per relic, bosses count 4), `Ia` = ×1.2 final at I, the relic slot at II, double relics at III.
 6. **DONE: Totem** (`js/expedition_totem.js`). **Not reachable in Birb today, so not ported:** field drops of legacy artifacts (`checkArtifactDrop` is never called) and material chests (the chest window only fills the equipment counts).
-7. **Screenshots:**
+7. **DONE: Screenshots** (`parity/birb_expedition.js` → `parity/birb_ui/expedition/`; the floor wheel did not open headless). Copied: parrot window tabs OVERVIEW / UPGRADE / EQUIPMENT / INDEX (+ REBIRB, which Birb opens from its own window), the four overview cards, the UPGRADE amount buttons, the floor HUD (level / XP / rebirb row, POINTS x and run time, HP bar between the potion and relic slots, equipped artifacts below, SP counter with a per-minute rate top-left, AUTO top-right). Original notes:
    - Capture Birb's Expedition screens (hub, floor HUD, parrot window tabs, forge, sacrifice room) with a script like `parity/birb_desert.js` into `parity/birb_ui/expedition/`.
    - Copy their layout into `main.js`.
 8. **Docs:** add DIFFERENCES rows, update the README phase table and HANDOUT, then commit and push.

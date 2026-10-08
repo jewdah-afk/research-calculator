@@ -644,7 +644,7 @@
     const head = `<div class="hero"><img src="${ICON("parrot")}" alt=""><div class="big">LV ${pr.level}</div><div class="bar"><i style="width:${Math.min(100, (pr.xp / pr.xpToNextLevel) * 100)}%"></i></div><div class="sub">XP ${fmt(Math.floor(pr.xp))} / ${fmt(pr.xpToNextLevel)} · ${fmt(p.skillPoints)} skill points to spend · rebirb ${p.rebirbCount}</div></div>`;
     if (tab === "skills") {
       const row = (k, n, d) => `<div class="row"><img class="ico" src="${ICON(k === "hp" ? "stat_heart" : k === "damage" ? "stat_sword" : "heart")}" alt=""><div><div class="t">${n}</div><div class="d">${d}</div></div><div class="btns"><b style="color:#f1c40f;font-size:18px">${fmt(p.skills[k])}</b><button class="key small ${p.skillPoints >= 1 ? "" : "grey"}" data-pspend="${k}">+</button></div></div>`;
-      return head + `<div class="devrow">${[1, 10, 100, "25%", "50%", "max"].map((a) => `<button class="key small ${G.spAmt === a ? "" : "grey"}" data-spamt="${a}">${String(a).toUpperCase()}</button>`).join("")}</div>
+      return `<div class="note" style="text-align:center">POINTS AVAILABLE: <b style="color:#f1c40f">${fmt(Math.floor(p.skillPoints))}</b></div><div class="devrow">${[1, 10, 100, "10%", "25%", "33%", "50%", "75%", "max"].map((a) => `<button class="key small ${G.spAmt === a ? "" : "grey"}" data-spamt="${a}">${String(a).toUpperCase()}</button>`).join("")}</div>
         ${row("hp", "VITALITY", "+1 max HP per point")}${row("lifeRegen", "RECOVERY", "+1 HP regen / s per point")}${row("damage", "STRENGTH", "+1 damage per point")}
         <div class="note">Skill points come from kills (and Field Notes). Each point spent also counts as parrot XP when earned. Birb labels the reset in chests but it keeps ${PT.parrotResetCost(s)} of the invested points.</div>
         <div class="devrow"><button class="key small red" data-act="inv_reset" style="flex:1">RESET SKILLS (REFUND ALL BUT ${fmt(PT.parrotResetCost(s))})</button></div>`;
@@ -654,11 +654,21 @@
       return head + rows.map(([n, need, gain], i) => `<div class="row"><img class="ico" src="${ICON("parrot")}" alt=""><div><div class="t">REBIRB ${n}</div><div class="d">Needs ${need} · best floor ${e.highestFloorReached}</div><div class="lv">${gain}</div></div><div class="btns">${p.rebirbCount > i ? `<button class="key small gold">DONE</button>` : p.rebirbCount === i ? `<button class="key small ${PT.parrotRebirbReady(s) ? "violet" : "grey"}" data-act="parrotrebirb">REBIRB</button>` : ""}</div></div>`).join("")
         + `<div class="note">A rebirb resets the parrot's level, skill points, skills and gear upgrades. The Legendary Key is kept.</div>`;
     }
-    const B = PT.EXP.parrotBonuses(s);
-    return head + `<div class="kv">${kv("Max HP", fmt(st.hp))}${kv("Damage", fmt(st.damage))}${kv("HP regen", fmt(st.lifeRegen) + "/s")}${kv("Attack speed", "x" + st.attackSpeed.toFixed(2))}${kv("Move speed", "x" + st.moveSpeed.toFixed(2))}
+    const B = PT.EXP.parrotBonuses(s), K = PT.EXP.K, sk = p.skills, inv = sk.hp + sk.lifeRegen + sk.damage;
+    const cards = [["MAX HEALTH", "#4ade80", st.hp, K.BASE_HP + sk.hp], ["DAMAGE", "#fb7185", st.damage, K.BASE_DAMAGE + sk.damage], ["HP REGEN", "#93c5fd", st.lifeRegen, sk.lifeRegen]]
+      .map(([t, c, v, b]) => `<div class="biome"><b style="color:${c}">${t}</b><div class="big" style="font-size:22px">${fmt(v)}${t === "HP REGEN" ? "/s" : ""}</div><div class="d">BASE: ${fmt(b)}<br>BONUS: +${fmt(Math.max(0, v - b))}</div></div>`).join("")
+      + `<div class="biome"><b style="color:#f1c40f">BUILD POINTS</b><div class="big" style="font-size:22px">${fmt(Math.floor(p.skillPoints))}</div><div class="d">AVAILABLE: ${fmt(Math.floor(p.skillPoints))}<br>INVESTED: ${fmt(inv)}</div></div>`;
+    return head + `<div class="biomes" style="grid-template-columns:1fr 1fr">${cards}</div><div class="kv">${kv("Attack speed", "x" + st.attackSpeed.toFixed(2))}${kv("Move speed", "x" + st.moveSpeed.toFixed(2))}
       ${kv("Skill point gain", "x" + (1 + B.skillPointMult).toFixed(2))}${kv("Gear", ["beak", "armor", "aura"].map((k) => k + " " + p.equipmentUpgrades[k].rarity + " " + p.equipmentUpgrades[k].level).join(" · "))}
       ${kv("Best floor", e.highestFloorReached)}${kv("Runs", e.totalRuns)}${kv("Kills", e.totalEnemiesDefeated)}${kv("Legendary Keys", p.strangeKeys)}</div>
       <div class="note">HP regen drops to 25% for 3 s after taking damage. Base 100 HP and 100 damage, times beak (damage), armor (HP) and aura (regen).</div>`;
+  }
+  // Birb parrot INDEX tab: every expedition item, found or not
+  function parrotIndex() {
+    const s = G.s, X = PT.EXP, p = PT.parrotState(s), seen = new Set(p.discoveredArtifacts || []), RC = { common: "#cbd5e1", uncommon: "#4ade80", rare: "#60a5fa", epic: "#c084fc", legendary: "#facc15", mythic: "#f472b6" };
+    const list = X.ITEMS.filter((d) => d.type !== "consumable" && d.inventoryCategory !== "material" && !/key/i.test(d.id));
+    const rows = list.map((d) => `<div class="note" style="opacity:${seen.has(d.name) ? 1 : 0.4}"><b style="color:${RC[d.rarity] || "#fff"}">${seen.has(d.name) ? d.name : "???"}</b> · ${d.rarity}${seen.has(d.name) && d.description ? " · " + d.description : ""}</div>`).join("");
+    return `<div class="section">INDEX ${list.filter((d) => seen.has(d.name)).length} / ${list.length}</div>${rows}`;
   }
   // Birb floor wheel: pick a start floor up to your best floor (9 floors from Evolution 5, else 3)
   function expFloorsPanel() {
@@ -893,7 +903,7 @@
     redpanda: { title: "RED PANDA", body: () => pandaPanel() },
     crow: { title: "CROW", body: () => crowPanel() },
     dove: { title: "DAVE", body: () => davePanel() },
-    parrot: { title: "PARROT", tabs: [["stats", "STATS"], ["skills", "SKILLS"], ["gear", "INVENTORY"], ["rebirb", "REBIRB"]], body: (t) => (t === "gear" ? parrotInventory() : parrotPanel(t)) },
+    parrot: { title: "PARROT", tabs: [["stats", "OVERVIEW"], ["skills", "UPGRADE"], ["gear", "EQUIPMENT"], ["index", "INDEX"], ["rebirb", "REBIRB"]], body: (t) => (t === "gear" ? parrotInventory() : t === "index" ? parrotIndex() : parrotPanel(t)) },
     expfloors: { title: "EXPEDITION", body: () => expFloorsPanel() },
     minetree: { title: "TREASURE ROOM", body: () => mineTreePanel() },
     sacrifice: { title: "SACRIFICE", body: () => sacrificePanel() },
@@ -1004,7 +1014,7 @@
   document.getElementById("utility").addEventListener("click", (e) => { const b = e.target.closest("[data-win]"); if (b) openWin(b.dataset.win); });
   document.getElementById("btn-companions").onclick = () => { G.companionsOpen = !G.companionsOpen; drawHud(); };
   document.getElementById("companion-list").addEventListener("click", (e) => { const b = e.target.closest("[data-win]"); if (b) openWin(b.dataset.win); });
-  document.getElementById("btn-autofish").onclick = () => { if (G.s.currentMap === PT.MINE_MAP) { const m = PT.mineState(G.s); if (PT.mineArea(G.s) >= 1) m.playerAutoEnabled = !m.playerAutoEnabled; else toast("Player auto opens at area 1"); } else if (G.s.currentMap === PT.NEST_MAP) { const f = PT.nestState(G.s).forest; f.autoCollectEnabled = !f.autoCollectEnabled; if (!f.autoCollectEnabled) G.target = null; } else act("autofish"); };
+  document.getElementById("btn-autofish").onclick = () => { if (PT.EXP.isRunMap(G.s.currentMap) && PT.expState(G.s).activeRun) act("expauto"); else if (G.s.currentMap === PT.MINE_MAP) { const m = PT.mineState(G.s); if (PT.mineArea(G.s) >= 1) m.playerAutoEnabled = !m.playerAutoEnabled; else toast("Player auto opens at area 1"); } else if (G.s.currentMap === PT.NEST_MAP) { const f = PT.nestState(G.s).forest; f.autoCollectEnabled = !f.autoCollectEnabled; if (!f.autoCollectEnabled) G.target = null; } else act("autofish"); };
 
   // panel events
   let saveBox = "";
@@ -1130,7 +1140,8 @@
     if (PT.hasSun(s, "d_sunflower_machine") || PT.res(s, "sunflowerSeeds").gt(0)) keys.push("sunflowerSeeds");
     for (const k of ["goldenPopcorn", "monetariaMoneta", "twigs", "echoPopcorn", "bruteOre"]) if (PT.res(s, k).gt(0) || (k === "monetariaMoneta" && s.evolutionCount >= 1)) keys.push(k);
     const goldChip = PT.mineOpen(s) ? `<div class="chip"><img src="${ICON("goldore")}" alt=""><span class="v">${fmt(PT.mineState(s).goldOre)}</span><span class="rate">gold ore</span></div>` : "";
-    setHtml("wallet", goldChip + keys.map((k) => `<div class="chip"><img src="${ICON(CUR[k].icon)}" alt=""><span class="v">${fmt(s.resources[k])}</span><span class="rate">+${fmt(G.rates[k] || 0)}/s</span></div>`).join(""));
+    const xr = PT.expState(s).activeRun, spChip = xr ? `<div class="chip"><img src="${ICON("skill_point")}" alt=""><span class="v">SP ${fmt(Math.floor(PT.parrotState(s).skillPoints))}</span><span class="rate">+${fmt(Math.floor((xr.spGained || 0) / Math.max(1 / 60, (Date.now() - xr.startTime) / 6e4)))}/m</span></div>` : "";
+    setHtml("wallet", spChip + goldChip + keys.map((k) => `<div class="chip"><img src="${ICON(CUR[k].icon)}" alt=""><span class="v">${fmt(s.resources[k])}</span><span class="rate">+${fmt(G.rates[k] || 0)}/s</span></div>`).join(""));
     document.getElementById("mapname").textContent = PT.MAPS[s.currentMap].name + (s.currentMap === 1 && desertView() ? " (DESERT TREE)" : "");
     document.getElementById("speedtag").textContent = G.timeScale > 1 ? `x${G.timeScale} speed` : "";
     const L = PT.travelBlock(s, -1), R = PT.travelBlock(s, 1);
@@ -1159,7 +1170,8 @@
     document.getElementById("btn-companions").style.display = comps.length ? "" : "none";
     setHtml("companion-list", G.companionsOpen ? comps.map(([k, n]) => `<button class="key small" data-win="${k}"><img src="${ICON(k)}" alt="">${n}</button>`).join("") : "");
     const af = document.getElementById("btn-autofish");
-    if (s.currentMap === PT.MINE_MAP) { const m = PT.mineState(s); af.style.display = ""; af.className = "key small " + (m.playerAutoEnabled ? "violet" : PT.mineArea(s) >= 1 ? "" : "grey"); af.textContent = PT.mineArea(s) >= 1 ? `AUTO: ${m.playerAutoEnabled ? "ON" : "OFF"}` : "AUTO (area 1)"; }
+    if (PT.EXP.isRunMap(s.currentMap) && PT.expState(s).activeRun) { const on = PT.expState(s).isAutoAttack; af.style.display = ""; af.className = "key small " + (on ? "violet" : "red"); af.textContent = `AUTO: ${on ? "ON" : "OFF"}`; }
+    else if (s.currentMap === PT.MINE_MAP) { const m = PT.mineState(s); af.style.display = ""; af.className = "key small " + (m.playerAutoEnabled ? "violet" : PT.mineArea(s) >= 1 ? "" : "grey"); af.textContent = PT.mineArea(s) >= 1 ? `AUTO: ${m.playerAutoEnabled ? "ON" : "OFF"}` : "AUTO (area 1)"; }
     else if (s.currentMap === PT.NEST_MAP) { const f = PT.nestState(s).forest; af.style.display = f.autoCollectUnlocked ? "" : "none"; af.className = "key small " + (f.autoCollectEnabled ? "violet" : ""); af.textContent = `AUTO: ${f.autoCollectEnabled ? "ON" : "OFF"}`; }
     else {
     af.style.display = s.currentMap === 2 && s.evolutionCount >= 1 ? "" : "none";
@@ -1181,11 +1193,14 @@
       setHtml("fishbar", `<div class="lvl"><b>${a + 1}</b><div class="bar"><i style="width:${k >= 4 ? 100 : Math.min(100, (cur / th[k]) * 100)}%"></i></div><span class="note">+${4 * k}%</span></div><div class="sub">AREA ${a + 1} · +${4 * k}% damage in this area${k < 4 ? " · next at " + fmt(th[k]) + " HP mined" : ""}</div>`);
       const wait = Math.max(0, Math.ceil((PT.mineState(s).bossRespawnAt - Date.now()) / 1000));
       setHtml("hotbar", `<button class="key cast ${M.boss ? "gold" : wait ? "grey" : "violet"}" data-act="minechallenge">${M.boss ? "GIANT ORE · " + Math.max(0, Math.ceil((M.bossUntil - Date.now()) / 1000)) + "s" : wait ? "GIANT RESTS " + wait + "s" : "CHALLENGE"}</button>`);
-    } else if (PT.EXP.isRunMap(s.currentMap) && PT.expState(s).activeRun) {
-      const run = PT.expState(s).activeRun, p = run.parrot || { health: 0, maxHealth: 1 }, pr = PT.expState(s).progress, alive = run.enemies.filter((e) => e.health > 0 && e.type !== "mini-fly" && e.type !== "cultist").length, boss = run.enemies.find((e) => e.isBoss);
-      setHtml("fishbar", `<div class="lvl"><b>${pr.level}</b><div class="bar"><i style="width:${Math.min(100, (pr.xp / pr.xpToNextLevel) * 100)}%"></i></div><span class="note">${fmt(Math.floor(pr.xp))}/${fmt(pr.xpToNextLevel)}</span></div>
-        <div class="sub">FLOOR ${run.currentFloor} · HP ${fmt(Math.ceil(p.health))}/${fmt(p.maxHealth)} · ${alive} enemies · ${fmt(PT.parrotState(s).skillPoints)} SP${boss ? boss.health > 0 ? " · boss alive" : " · boss respawns in " + PT.fmtTime(boss.respawnTimer || 0) : ""}${run.combatArmed ? "" : " · move to start"}</div>`);
-      setHtml("hotbar", `<button class="key cast ${PT.expState(s).isAutoAttack ? "violet" : ""}" data-act="expauto">AUTO: ${PT.expState(s).isAutoAttack ? "ON" : "OFF"}</button><button class="key small grey" data-act="expreset">RESET FLOOR</button>`);
+    } else if (PT.EXP.isRunMap(s.currentMap) && PT.expState(s).activeRun) { // Birb floor HUD: level / XP / rebirb on top, points multiplier and run time below; HP bar between the potion and relic slots
+      const X = PT.EXP, run = PT.expState(s).activeRun, p = run.parrot || { health: 0, maxHealth: 1 }, pr = PT.expState(s).progress, par = PT.parrotState(s), boss = run.enemies.find((e) => e.isBoss);
+      const rb = ["", "I", "II", "III"][Math.min(3, X.rebirbs(s))], t = Math.floor((Date.now() - run.startTime) / 1e3), B = X.bonuses || X.parrotBonuses(s);
+      setHtml("fishbar", `<div class="lvl"><b>${pr.level}</b><div class="bar"><i style="width:${Math.min(100, (pr.xp / pr.xpToNextLevel) * 100)}%"></i><span class="in">${fmt(Math.floor(pr.xp))}/${fmt(pr.xpToNextLevel)}</span></div>${rb ? `<b class="rb">${rb}</b>` : ""}</div>
+        <div class="sub">POINTS: x${(1 + (B.skillPointMult || 0)).toFixed(2)} · ${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")} · ${run.nightMode ? "NIGHT " : ""}FLOOR ${run.currentFloor}${boss ? boss.health > 0 ? "" : " · boss back in " + PT.fmtTime(boss.respawnTimer || 0) : ""}${run.combatArmed ? "" : " · move to start"}</div>`);
+      const item = (id) => { const a = par.artifactInventory.find((x) => x.instanceId === id); return a ? `<div class="slot" title="${a.name}"><img src="${ICON("aura")}" alt=""><span class="n">${a.name.split(" ").map((w) => w[0]).join("").slice(0, 3)}</span></div>` : `<div class="slot empty"></div>`; };
+      setHtml("hotbar", `<div class="hpbar">${item(par.potionSlot)}<div class="bar hp"><i style="width:${Math.max(0, Math.min(100, (p.health / p.maxHealth) * 100))}%"></i><span class="in">${fmt(Math.ceil(Math.max(0, p.health)))} / ${fmt(p.maxHealth)}</span></div>${item(par.relicSlot)}</div>
+        <div class="slots">${(par.equippedArtifacts || []).map(item).join("")}<button class="key small grey" data-act="expreset">RESET FLOOR</button></div>`);
     } else if (s.currentMap === PT.DESERT_MAP) {
       const storm = PT.sandstormOn(s), cd = s.desertSandstormCooldownRemaining || 0, hasStorm = PT.hasSun(s, "d_desert_sandstorm") || PT.hasSun(s, "d_desert_dune_conductors");
       setHtml("fishbar", `<div class="lvl"><b>${G.field.list(PT.DESERT_MAP).length}/${PT.maxPopcorn(s)}</b></div><div class="sub">GOLDEN CHANCE ${(PT.desertGoldenChance(s) * 100).toFixed(1)}% · ${fmt(PT.goldenPerDrop(s))} per golden egg${hasStorm ? ` · ${storm ? "SANDSTORM " + Math.ceil(s.desertSandstormTimeRemaining) + "s" : cd > 0 ? "next storm possible in " + PT.fmtTime(cd) : "a sandstorm can start any moment"}` : ""}</div>`);
