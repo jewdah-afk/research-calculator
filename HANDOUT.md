@@ -44,6 +44,51 @@ Eggs are now the main currency. **Only what players see changed; internal ids st
 - **Upgrade icons (2026-10-08):** stat-upgrade rows = the current icon + a painted 3D badge on the lower right (green up arrow = value, blue plus = cap, yellow bolt = speed, orange × = multiplier, red burst = power, teal circular arrow = regen). Badges are `birb-icons/final/badge_*.png` (Figma AI sheet `sheets/badges_sheet.png`); in Figma each `icon/<name>` frame next to the Icon assets strip is a `base` image + a `badge/<type>` image (62px at 68,66), merged by `birb-icons/compose_upgrades.py` (base scaled 0.9 to the top-left, badge 118px bottom-right, then `clean_ring` so icon and badge share one crisp ink outline like the wallet icons) into `final/up_<name>.png`, placed on every matching `ico/<name>` slot (square-top atlas `117:7` and UI v2). Bases come from the up-to-date set (egg/mining sheet + shop icons: carton for Egg Cap, single 3-egg crate (`shop_crateS`) for Auric Silo, basket for More Eggs, hatch for Quick Pop, gold touch for Gilded Margins, plain `magnet` + up arrow for Long Neck (owner: the magnet with eggs reads badly), miner crow for Mining Power, charged pickaxe for Charged Strike, `wing` + bolt badge in the corner for Wing Training (owner: a bolt on the wing itself looks bad)). Parrot Health/Damage/Regen are composed the same way on `stat_heart`/`stat_sword` (painted in `sheets/badges_sheet_2.png`, which also replaced the bolt and loop badges; the burst stays the first painted one, owner's pick). `badge_regen` keeps its centre hole open (OPEN_HOLES in cut_grid/clean_ring). Owner rejected hand-drawn vector badges and old approved-sheet icons. Still to upload to Roblox and map in `Icons.luau`/`Spec.luau`.
 - New icons from the egg/mining sheet (cut from a low-res preview, recut from the original when available): `egg`, `egg_golden`, `egg_shiny`, `shop_*` (eggs), `ore_*` tiers, `golem`, `pickaxe_charged`, `rupture`, `mine_chest`, `crow_miner`, `anvil`, `minecart`, `tombstone`.
 
+### Gap audit (2026-10-08): built / simplified / missing
+Checked against `birb-data/SYSTEMS.md`, `CORE_FORMULAS.md`, `Game.luau`, `Spec.luau` and the Figma UI v2 page. Figma = a frame exists on UI v2; Game = playable in `roblox/`.
+
+**Built (Figma + Game)**
+- [x] Eggs shop, Molt (Plumes), Seeds, Golden, Echo shop, Mine shop (4 rows), Nest shop (3 rows), Evolve (feed + evolve)
+- [x] Companions: Sparrow, Seagull, Dave, Red Panda
+- [x] Fishing: Rods (craft), Baits, Fish Index (tab + full overlay), Aquarium
+- [x] Expedition: Parrot skill points, Quests (3 dailies), Sacrifice (first 3 tiers), Profile + ALL STATS
+- [x] HUD: wallet, left tiles, group bars, map banner, goal bar, toast, Robux shop v3 (`130:7`, `132:7`)
+- [x] Game only (no Figma frame yet): Map overview, Teleport popup, Settings popup (sound toggle only), dev panel
+
+**Simplified (works, but not 1:1 with Birb yet)**
+- [ ] Twigs: a flat 1 peck/s + Peck Rate. No trees, tree HP, spawns, axe or offline efficiency.
+- [ ] Mine: ore comes in as a rate. No ore HP bar, areas to pick, giants, Mineral Coffers or idle claim. Crow XP is estimated from breaks.
+- [ ] Expedition: auto-fight against floor band-0 HP, 35 kills per floor. No enemy types, elites, bosses, depth bands or potions.
+- [ ] Parrot stats: only skill points and quest bonuses. No equipment, artifact or progression multipliers.
+- [ ] Quests: dailies only, the 19 main quests are not listed.
+- [ ] Sacrifice: 3 of 18 tiers shown.
+- [ ] Seagull level cap is fixed at 50.
+- [ ] Desert: the golden toggle and Golden shop only. Auric Silo opens on arrival.
+- [ ] Fishing: hooks and lures have icons but can't be equipped. The aquarium modifier table isn't pulled.
+
+**Missing screens (no Figma frame, no Game UI)**
+- [ ] Mine / Areas: area picker, ore HP, giant with respawn timer, coffer meter, idle claim
+- [ ] Mine / Tree: mine tree nodes (cost `anchor(POWER_ANCHORS, area−1, 36)·(6+branch)`)
+- [ ] Nest / Cultivation: 16 tree boxes plus the 6 buildings (Fertilizer … Watering Well)
+- [ ] Nest / Riverside: Lumberyard, Pollinator, Compost, Grove ×4, Nursery
+- [ ] Nest / Carpentry: Forestry, Timber, Saw, Tools tiers, Bench, Workshop, Mastery/Expansion
+- [ ] Expedition / Gear: beak, armor, aura with rarity and level 1–5, spirit costs
+- [ ] Expedition / Artifacts: slots (3 + rebirbs), owned list, infusion
+- [ ] Expedition / Parrot Rebirb: 3 rebirbs and their requirements
+- [ ] Quests / Main: the scrolling 19-quest list
+- [ ] Sacrifice / all 18 tiers list
+- [ ] Echo / Archivist tree: Echo Chance, Value Milestones, R/F/A nodes, mushroom collectors
+- [ ] Research trees (`d_*`, 143 one-off unlocks, only 11 used in Game): **Seed tree** (~86 nodes: seeds, sparrow, fishing, seagull, spirit), **Desert tree** (51 `d_desert_*`, paid in golden eggs or Brute Ore, some gated by mine area) and **Archivist tree** (6 `d_archivist_*` + echo field nodes)
+- [ ] Companions: Seagull Frenzy and route/forecast, Sparrow Resonance and Mitosis states, Dave XP bar
+- [ ] Forest: tree tiers (Normal / Birch / Autumn, fresh/growing/mature HP)
+- [ ] Expedition: floor select, boss / elite screens
+- [ ] Meta: leaderboards, offline earnings popup (8h cap, Red Panda 55%), new-island unlock toast
+- [ ] Fishing / Tackle: equip hook, lure and fish
+- [ ] Settings panel (full), Map and Teleport in Figma
+- [ ] Map boards per area (from the World Guide artifact): Park, Garden, Castle, Bridge, Forest, Mine, Desert, Expedition, Echo Field
+
+Figma progress for the missing screens and map boards is logged under "Missing screens board" below.
+
 ### Open issues (do these next)
 1. **Done:** all 83 Figma images load. They took about 1 hour in Roblox moderation after upload, so new uploads look blank until they clear.
    **Also fixed:**
