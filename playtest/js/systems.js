@@ -7,9 +7,9 @@
   // ------------------------------------------------------------------ maps (Birb map ids; park field 1056x792)
   PT.MAPS = {
     0: { id: 0, key: "meadow", name: "THE PARK", w: 1056, h: 792, popcorn: true },
-    1: { id: 1, key: "sunflower-field", name: "SUNFLOWER FIELD", w: 3400, h: 1900 },
-    2: { id: 2, key: "dungeon", name: "THE DUNGEON", w: 1056, h: 792 },
-    3: { id: 3, key: "castle", name: "THE CASTLE", w: 1056, h: 792 },
+    1: { id: 1, key: "sunflower-field", name: "SUNFLOWER FIELD", w: 4000, h: 2000 },
+    2: { id: 2, key: "bridge", name: "THE BRIDGE", w: 3000, h: 1400 },
+    3: { id: 3, key: "castle", name: "THE CASTLE", w: 1600, h: 1152 },
   };
   // Birb uA(): +1 = right arrow, -1 = left. Returns "" or the reason travel is blocked.
   PT.travelBlock = function (s, dir) {
@@ -17,7 +17,7 @@
     if (dir > 0) {
       if (m === 0 && (s.rebirthCount || 0) < 1) return "Molt once to travel";
       if (m === 1 && !s.hasUnlockedEvolve) return "Needs Unlock Evolve";
-      if (m === 2 && !s.hasEnteredDungeon) return "Enter the dungeon first";
+      if (m === 2 && !s.hasEnteredDungeon) return "Walk to the castle gate at the end of the bridge";
       if (m >= 3) return "end";
     } else {
       if (m === 0) return (s.evolutionCount || 0) < 3 ? "Needs Evolution 3 (Nest)" : "Nest: later phase";
@@ -59,7 +59,7 @@
     if (s.evolutionCount >= 2) t *= s.evolutionCount;
     if (PT.hasSun(s, "d_seed_synergy")) t *= 1 + 1.3 * Math.log10(1 + PT.num(s.resources.sunflowerSeeds) / 5e4);
     t *= Math.max(1, grainSilo(s));
-    // d_trophy_bonus: highest fish weight (fishing phase)
+    if (PT.hasSun(s, "d_trophy_bonus")) t *= 1 + 3 * Math.log10(1 + (PT.highestFishWeight ? PT.highestFishWeight(s) : 0));
     t *= PT.sparrowDrainMult(s);
     if (PT.hasSun(s, "d_golden_butter")) t *= 1 + 0.5 * Math.log10(PT.num(s.resources.goldenFeathers) + 1);
     t *= sacrificeMult(s);
@@ -434,6 +434,10 @@
     s.upgrades = ups; s.sunflowerUpgrades = sun;
     for (const k of ["popcorn", "goldenPopcorn", "echoPopcorn", "goldenFeathers", "sunflowerSeeds", "monetariaMoneta", "twigs"]) s.resources[k] = D(0);
     G.field.clear();
+    if (s.fishing) { // Birb onEvolutionReset: fish, bait and buffs go; rods, total catches and fishing level stay
+      s.fishInventory = []; s.fishing.xp = 0; s.fishing.baitInventory = []; s.fishing.equippedBaitId = undefined;
+      s.activeFishIds = []; s.activeFishBuffs = {};
+    }
     if (s.evolutionCount >= 1) s.sparrow.unlocked = true;
     s.currentMap = 0; s.player.x = 528; s.player.y = 396;
     return true;

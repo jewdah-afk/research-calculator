@@ -15,7 +15,8 @@ Controls: WASD or arrow keys, or click to move. E buys the sunflower station you
 | Phase | Systems | State |
 |---|---|---|
 | 1 | Park field (spawn timer, cap, 6 egg types and their weights, pickup radius, magnet, Gravity Field), egg shop, Molt (Plume formula and reset), Plume keepsakes, seed shop, sunflower platform and seed ticks, the walkable sunflower tree (134 stations, parent/chain/visibility rules), Sparrow (egg collecting on the Park while you're away, XP by egg type, seed feeder, resonance drain, mitosis, rebirb, milestones, autos), Castle (feeding 10%/s, requirements per evolution, evolution reset and what it keeps) | **Done** |
-| 2 | Bridge and fishing: casting, 426 fish rolls, rods, bait, hooks, lures, Moneta, fish buffs, aquarium, fish market, Seagull | Next. Evolution 2 needs 1,000 Moneta, so this is the blocker |
+| 2 | Bridge and fishing: casting and reeling, fish rolls (tier, bait type, hooks, lures, shiny chance and pity), fish weights and records, rods crafted with fish, bait/hooks/lures, Moneta, fish buffs (eat), fishing XP and levels, auto fishing, sell safe for seeds, castle gate, Seagull (gulls, doctrines, hourly forecast, migrations, frenzy) | **Done** (aquarium and fish market move to Phase 2b) |
+| 2b | Aquarium and fish market | Next |
 | 3 | Nest and forest: twigs, trees, nest tiers, cultivation, riverside, carpentry, Red Panda | Later |
 | 4 | Mine and crow: ores, areas, giants, coffers, mine tree, crow rebirbs, forge | Later |
 | 5 | Desert: golden eggs, sandstorm, desert tree, Dave | Later |

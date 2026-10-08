@@ -14,3 +14,8 @@ Found while copying Birb into the playtest. Each row names what Birb does, what 
 | 8 | Sparrow features | Drain, resonance and milestones only work from **Evolution 2** | Not gated | Gate on Evolution 2 |
 | 9 | Egg pickup | Collect radius 40 × Magnetic Field × Vacuum × Focus × quests; the magnet only pulls when a fish buff raises `pickup_mult` | `G.reachPx` = 14 × ... (a different base) | Use 40 px world units (scale to studs) |
 | 10 | Field while away | The Park keeps spawning while you're elsewhere once the Sparrow is unlocked, and sparrows keep collecting | The field only runs on the Park | Keep the Park field ticking |
+| 11 | Map 2 | Map 2 is **the Bridge** (fishing). The castle gate at its right end sets `hasEnteredDungeon`, which opens the Castle | No bridge map; fishing has no place | Add a Bridge island between the Field and the Castle |
+| 12 | Fish selling | Selling fish pays **seeds**, and only after the `d_fish_seeds` tree node. "Sell safe" keeps fish reserved for rods, tackle and tree costs | Not built | Sell for seeds behind the node, keep the reserve rule |
+| 13 | Rods | Rods are crafted in order and cost **fish**. Reel time comes from your **fastest owned** rod, Moneta per catch from your **richest owned** rod (not the equipped one) | Not built | Copy the owned-rod rules |
+| 14 | Auto fishing | Unlocks after 10 manual catches | Not built | Same gate |
+| 15 | Seagull | Met on the Bridge from **Evolution 3**. Gulls fish on their own (10 × 0.99^LV s), pay 25% Moneta, migrate at LV 25 (50 after 10 migrations, 100 after 50), second gull at 3 migrations, third at 30. The 10th migration needs Evolution 4 | Not built | Copy the gull loop and gates |
