@@ -270,18 +270,6 @@ local function burst(at: Vector3, color: Color3, n: number)
 		tw:Play(); tw.Completed:Once(function() p:Destroy() end)
 	end
 end
-local function numberPop(at: Vector3, text: string, golden: boolean)
-	local a = Instance.new("Part"); a.Anchored = true; a.CanCollide = false; a.CanQuery = false; a.Transparency = 1; a.Size = Vector3.one * 0.1
-	a.Position = at; a.Parent = workspace
-	local bb = Instance.new("BillboardGui"); bb.Size = UDim2.fromOffset(160, 50); bb.AlwaysOnTop = true; bb.LightInfluence = 0; bb.Parent = a
-	local t = Instance.new("TextLabel"); t.Size = UDim2.fromScale(1, 1); t.BackgroundTransparency = 1; t.Font = Enum.Font.FredokaOne
-	t.TextSize = 30; t.Text = text; t.TextColor3 = if golden then Color3.fromHex("#ffd84a") else Color3.fromHex("#fff1a8"); t.Parent = bb
-	local st = Instance.new("UIStroke"); st.Thickness = 3; st.Color = Color3.fromHex("#0b0c10"); st.Parent = t
-	local tw = TweenService:Create(a, TweenInfo.new(0.9, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), { Position = at + Vector3.new(0, 1.4 * S, 0) })
-	TweenService:Create(t, TweenInfo.new(0.9, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { TextTransparency = 1 }):Play()
-	TweenService:Create(st, TweenInfo.new(0.9, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { Transparency = 1 }):Play()
-	tw:Play(); tw.Completed:Once(function() a:Destroy() end)
-end
 
 Remotes:WaitForChild("Collect").OnClientEvent:Connect(function(id: number, value: any, golden: boolean)
 	local k = kernels[id]; if not k then return end
@@ -291,13 +279,9 @@ Remotes:WaitForChild("Collect").OnClientEvent:Connect(function(id: number, value
 	local at = k.pos + Vector3.new(0, 0.5 * S, 0)
 	k.model:Destroy(); kernels[id] = nil
 	burst(at, if golden then Color3.fromHex("#ffc93a") else Color3.fromHex("#fff1c9"), if golden then 14 else 8)
-	numberPop(at + Vector3.new(0, 0.9 * S, 0), "+" .. Defs.EN.short(value), golden)
-	local cam = workspace.CurrentCamera
-	local sp, onScreen = cam:WorldToViewportPoint(at)
-	if onScreen then
-		local inset = game:GetService("GuiService"):GetGuiInset()
-		Hud.flyFromScreen(if golden and Defs.CUR.goldenPopcorn then "goldenPopcorn" else "popcorn", Vector2.new(sp.X, sp.Y) - inset, 1)
-	end
+	-- UI floater: "+N" rises from the egg, then a few icons curve into the wallet chip (Hud.onLabel; a Vfx module can
+	-- call the same hook with its own label position)
+	Hud.onLabel(at + Vector3.new(0, 0.9 * S, 0), value, if golden and Defs.CUR.goldenPopcorn then "goldenPopcorn" else "popcorn")
 	Birds.punch()
 	if golden then shake = 0.35 end
 end)

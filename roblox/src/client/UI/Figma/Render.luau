@@ -12,6 +12,7 @@ local TweenService = game:GetService("TweenService")
 local Icons = require(RS:WaitForChild("Peckwood"):WaitForChild("Icons"))
 local IconAlias = require(script.Parent.IconAlias)
 local Sfx = require(script.Parent.Parent.Sfx)
+local Motion = require(script.Parent.Parent.Motion)
 
 local Render = {}
 
@@ -242,6 +243,44 @@ local function inner(n, P, inst, alpha)
 	end
 end
 
+-- a rotated gradient strip inside a clipping frame (the Figma header sweeps) becomes an axis-aligned frame the size
+-- of its parent with a rotated UIGradient band: clipped for free, no CanvasGroup. Roblox rotates gradients in the
+-- frame's UV space, so the pixel angle and the band edges are converted.
+local function band(n, P, parent, alpha, z, pw, ph)
+	local layers = n.f and P[n.f]
+	local L = layers and layers[1]
+	if not (L and L[1] == "g") then return nil end
+	local th = math.rad(-(n.rot or 0) + (L[2] or 0))
+	local ex, ey = math.cos(th), math.sin(th)
+	local rho = math.atan2(ph * ey, pw * ex)
+	local cr, sr = math.cos(rho), math.sin(rho)
+	local K = math.abs(cr) + math.abs(sr)
+	local function tuv(x, y) return 0.5 + ((x / pw - 0.5) * cr + (y / ph - 0.5) * sr) / K end
+	local cx, cy = n.x + n.w / 2, n.y + n.h / 2
+	local tA, tB = tuv(cx - ex * n.w / 2, cy - ey * n.w / 2), tuv(cx + ex * n.w / 2, cy + ey * n.w / 2)
+	local pts = {}
+	for _, st in L[3] do
+		local t = tA + st[1] * (tB - tA)
+		table.insert(pts, { t, st[2], st[3] * alpha })
+	end
+	table.sort(pts, function(a, b) return a[1] < b[1] end)
+	local cs, ts = {}, {}
+	local function push(t, hex, a)
+		t = math.clamp(t, 0, 1)
+		if #cs > 0 and t <= cs[#cs].Time + 1e-4 then t = cs[#cs].Time + 1e-4 end
+		if t > 1 then return end
+		table.insert(cs, ColorSequenceKeypoint.new(t, C(hex)))
+		table.insert(ts, NumberSequenceKeypoint.new(t, math.clamp(1 - a, 0, 1)))
+	end
+	push(0, pts[1][2], 0)
+	for _, q in pts do if q[1] > 0 and q[1] < 1 then push(q[1], q[2], q[3]) end end
+	if cs[#cs].Time < 1 then push(1, pts[#pts][2], 0) end
+	if #cs < 2 then return nil end
+	local f = new("Frame", { Name = n.n, BorderSizePixel = 0, BackgroundColor3 = WHITE, Size = UDim2.fromOffset(pw, ph), ZIndex = z }, parent)
+	new("UIGradient", { Color = ColorSequence.new(cs), Transparency = NumberSequence.new(ts), Rotation = math.deg(rho) }, f)
+	return f
+end
+
 local function hasRotated(n)
 	if not n.k then return false end
 	for _, c in n.k do
@@ -252,7 +291,7 @@ end
 
 -- ---------------------------------------------------------------- nodes
 local build
-function build(n, P, parent, alpha, z, ui)
+function build(n, P, parent, alpha, z, ui, parentClip)
 	alpha = alpha * (n.o or 1)
 	local t = n.t
 	if t == "T" then
@@ -303,8 +342,12 @@ function build(n, P, parent, alpha, z, ui)
 		end
 		return im
 	end
-	-- frames / rects / ellipses
-	local canvas = n.c and hasRotated(n)
+	-- frames / rects / ellipses (a rotated strip under a clipping parent becomes a gradient band)
+	if n.rot and parentClip and t ~= "E" and not n.k then
+		local b = band(n, P, parent, alpha, z, parentClip.X, parentClip.Y)
+		if b then return b end
+	end
+	local canvas = false
 	local inst
 	if canvas then
 		inst = new("CanvasGroup", { Name = n.n, BackgroundTransparency = 1, BorderSizePixel = 0, Position = UDim2.fromOffset(n.x, n.y), Size = UDim2.fromOffset(n.w, n.h), ZIndex = z }, parent)
@@ -332,9 +375,13 @@ function build(n, P, parent, alpha, z, ui)
 	end
 	behind(n, P, parent, alpha, z, layers ~= nil and #layers > 0)
 	if n.k then
-		for i, c in n.k do build(c, P, inst, alpha, 2 + 2 * i, ui) end
+		local clip = if n.c then Vector2.new(n.w, n.h) else nil
+		for i, c in n.k do build(c, P, inst, alpha, 2 + 2 * i, ui, clip) end
 	end
 	if n.key then
+		-- keys are centre-anchored so a press squash / release overshoot scales around the middle
+		inst.AnchorPoint = Vector2.new(0.5, 0.5)
+		inst.Position = UDim2.fromOffset(n.x + n.w / 2, n.y + n.h / 2)
 		inst:SetAttribute("keyDepth", n.key)
 		table.insert(ui.keys, { inst = inst, node = n, depth = n.key })
 	elseif string.sub(n.n, 1, 4) == "tab/" or string.sub(n.n, 1, 4) == "btn/" then
@@ -346,45 +393,94 @@ end
 -- ---------------------------------------------------------------- interaction
 local Q = TweenInfo.new(0.07, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local BACK = TweenInfo.new(0.16, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+-- keys whose press squashes 0.94 and whose confirmed action releases with a 1.06 overshoot (the money keys)
+local SQUASH = { "btn/buy", "btn/max", "btn/molt", "btn/spend", "btn/craft", "btn/donate", "btn/sacrifice", "btn/hold", "btn/evolve",
+	"btn/claim", "btn/accept", "btn/saw", "btn/breed", "btn/hatch", "btn/fuse", "btn/refine", "btn/rebirb", "btn/mitosis", "btn/feed", "btn/unlock",
+	"btn/collect", "btn/start", "cast key", "btn/eat" }
+local function squashes(name)
+	for _, p in SQUASH do if string.sub(name, 1, #p) == p then return true end end
+	return false
+end
+Render.squashes = squashes
+-- gamepad / keyboard selection: our ink outline instead of Roblox's default highlight
+local selection
+function Render.selectionImage()
+	if not selection then
+		selection = new("Frame", { Name = "ink selection", BackgroundTransparency = 1, Size = UDim2.new(1, 8, 1, 8), Position = UDim2.fromOffset(-4, -4) })
+		new("UICorner", { CornerRadius = UDim.new(0, 6) }, selection)
+		new("UIStroke", { Thickness = 3, Color = WHITE, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, selection)
+		local ink = new("Frame", { Name = "ink", BackgroundTransparency = 1, Size = UDim2.new(1, 6, 1, 6), Position = UDim2.fromOffset(-3, -3) }, selection)
+		new("UICorner", { CornerRadius = UDim.new(0, 8) }, ink)
+		new("UIStroke", { Thickness = 2, Color = INK, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, ink)
+	end
+	return selection
+end
 -- the owner-approved key press: ink body and face drop together by the lip depth D, the body loses D of height and
--- the lip hides (no black band above the face, no lip below while held)
+-- the lip hides (no black band above the face, no lip below while held). Hover: +6 % brightness and the key rises
+-- 2 px. Money keys also squash 0.94 while held.
 function Render.wireKey(ui, k)
 	local inst, D = k.inst, k.depth
 	local body, lip, face = inst:FindFirstChild("ink body"), inst:FindFirstChild("lip"), inst:FindFirstChild("face") or inst:FindFirstChild("body")
 	if not (body and face) then return end
 	local bp, bs, fp = body.Position, body.Size, face.Position
+	local lp = lip and lip.Position
 	local hl = new("Frame", { Name = "hover", BorderSizePixel = 0, BackgroundColor3 = WHITE, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 50 }, face)
 	corner(hl, 2.5)
-	local hit = new("TextButton", { Name = "hit", Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 999 }, inst)
+	local hit = new("TextButton", { Name = "hit", Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 999,
+		SelectionImageObject = Render.selectionImage() }, inst)
 	k.hit = hit
-	local down = false
+	local squash = squashes(k.node.n)
+	local down, over = false, false
+	local RISE = UDim2.fromOffset(0, -2)
+	local function rest(animate)
+		local lift = if over then RISE else UDim2.new()
+		local info = if animate then BACK else Q
+		TweenService:Create(body, info, { Position = bp + lift, Size = bs }):Play()
+		TweenService:Create(face, info, { Position = fp + lift }):Play()
+		if lip then TweenService:Create(lip, info, { Position = lp + lift }):Play() end
+	end
 	local function release()
 		if not down then return end
 		down = false
 		if lip then lip.Visible = true end
-		TweenService:Create(body, BACK, { Position = bp, Size = bs }):Play()
-		TweenService:Create(face, BACK, { Position = fp }):Play()
+		if squash then Motion.unsquash(inst) end
+		rest(true)
 	end
 	hit.MouseEnter:Connect(function()
 		if k.disabled then return end
+		over = true
+		Sfx.hover()
 		TweenService:Create(hl, Q, { BackgroundTransparency = 0.94 }):Play()
+		if not down then rest(false) end
 	end)
 	hit.MouseLeave:Connect(function()
+		over = false
 		TweenService:Create(hl, Q, { BackgroundTransparency = 1 }):Play()
-		release()
+		if down then
+			release()
+			if ui.onUp then ui.onUp(k.node.n, inst, k) end
+		else
+			rest(false)
+		end
 	end)
 	hit.MouseButton1Down:Connect(function()
 		down = true
 		Sfx.press()
 		if lip then lip.Visible = false end
+		if squash then Motion.squash(inst) end
 		TweenService:Create(body, Q, { Position = bp + UDim2.fromOffset(0, D), Size = bs - UDim2.fromOffset(0, D) }):Play()
 		TweenService:Create(face, Q, { Position = fp + UDim2.fromOffset(0, D) }):Play()
+		if ui.onDown then ui.onDown(k.node.n, inst, k) end
 	end)
-	hit.MouseButton1Up:Connect(function() Sfx.release(); release() end)
-	hit.Activated:Connect(function()
+	hit.MouseButton1Up:Connect(function()
+		Sfx.release(); release()
+		if ui.onUp then ui.onUp(k.node.n, inst, k) end
+	end)
+	hit.Activated:Connect(function(io)
+		if k.suppress then k.suppress = false; return end   -- a hold-to-repeat already acted
 		local fns = ui.handlers[k.node.n]
-		if fns then for _, fn in fns do task.spawn(fn, inst, k) end end
-		for _, fn in ui.anyHandlers do task.spawn(fn, k.node.n, inst, k) end
+		if fns then for _, fn in fns do task.spawn(fn, inst, k, io) end end
+		for _, fn in ui.anyHandlers do task.spawn(fn, k.node.n, inst, k, io) end
 	end)
 end
 -- tabs / plain buttons that are not keys: hover brightens, press = keycap sound
@@ -392,11 +488,13 @@ function Render.wireClick(ui, c)
 	local inst = c.inst
 	local hl = new("Frame", { Name = "hover", BorderSizePixel = 0, BackgroundColor3 = WHITE, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 50 }, inst)
 	corner(hl, c.node.r)
-	local hit = new("TextButton", { Name = "hit", Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 999 }, inst)
+	local hit = new("TextButton", { Name = "hit", Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 999,
+		SelectionImageObject = Render.selectionImage() }, inst)
 	c.hit = hit
-	hit.MouseEnter:Connect(function() TweenService:Create(hl, Q, { BackgroundTransparency = 0.95 }):Play() end)
+	hit.MouseEnter:Connect(function() Sfx.hover(); TweenService:Create(hl, Q, { BackgroundTransparency = 0.95 }):Play() end)
 	hit.MouseLeave:Connect(function() TweenService:Create(hl, Q, { BackgroundTransparency = 1 }):Play() end)
 	hit.MouseButton1Down:Connect(function() Sfx.press() end)
+	hit.MouseButton1Up:Connect(function() Sfx.release() end)
 	hit.Activated:Connect(function()
 		local fns = ui.handlers[c.node.n]
 		if fns then for _, fn in fns do task.spawn(fn, inst, c) end end
@@ -439,7 +537,34 @@ end
 function Render.component(section, name, parent)
 	local node = section.C[name]
 	assert(node, "no Figma component " .. tostring(name))
-	return Render.build({ P = section.P, root = node }, parent, node)
+	-- lists: thin styled scrollbar + soft fades at the scroll edges (shown only when there is more to scroll)
+function Render.styleScroll(sf, bgHex)
+	sf.ScrollBarThickness = 4
+	sf.ScrollBarImageColor3 = C("aab2c0")
+	sf.ScrollBarImageTransparency = 0.25
+	sf.VerticalScrollBarInset = Enum.ScrollBarInset.ScrollBar
+	local parent = sf.Parent
+	local col = C(bgHex or "0e131b")
+	local function fade(name, top)
+		local f = new("Frame", { Name = name, BorderSizePixel = 0, BackgroundColor3 = col, ZIndex = sf.ZIndex + 1, Visible = false,
+			Position = if top then sf.Position else sf.Position + UDim2.fromOffset(0, sf.Size.Y.Offset - 28), Size = UDim2.fromOffset(sf.Size.X.Offset - 8, 28) }, parent)
+		new("UIGradient", { Rotation = if top then 90 else 270, Transparency = NumberSequence.new(0, 1) }, f)
+		return f
+	end
+	local topF, botF = fade("scroll fade top", true), fade("scroll fade bottom", false)
+	local function update()
+		local maxY = sf.AbsoluteCanvasSize.Y - sf.AbsoluteWindowSize.Y
+		topF.Visible = sf.CanvasPosition.Y > 2
+		botF.Visible = maxY > 2 and sf.CanvasPosition.Y < maxY - 2
+		botF.Position = sf.Position + UDim2.fromOffset(0, sf.Size.Y.Offset - 28)
+	end
+	sf:GetPropertyChangedSignal("CanvasPosition"):Connect(update)
+	sf:GetPropertyChangedSignal("CanvasSize"):Connect(update)
+	sf:GetPropertyChangedSignal("Size"):Connect(update)
+	task.defer(update)
+end
+
+return Render.build({ P = section.P, root = node }, parent, node)
 end
 
 -- all text labels under an instance (drop shadows excluded), top-to-bottom then left-to-right

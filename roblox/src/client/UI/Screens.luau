@@ -193,46 +193,58 @@ end
 -- ---------------------------------------------------------------- FAST TRAVEL
 local AREA_ICON = { park = "egg", garden = "seed", castle = "monster", bridge = "rod_simple", forest = "nest", mine = "crow", desert = "egg_golden", expedition = "parrot", echo = "echo" }
 local function buildTeleport(parent)
+	-- Birb Fast Travel: a small list that pops up above its button (bottom-right tiles), one row per area.
+	-- Open areas travel on click; locked ones are muted with what opens them; the area you stand on says HERE.
 	local areas = {}
 	for _, isl in World.list do if AREA_ICON[isl.id] then table.insert(areas, isl) end end
-	local W = 1000
-	local H = 156 + #areas * 76 + 64
+	local W, ROW, PAD = 360, 48, 8
+	local H = 48 + #areas * (ROW + PAD) + PAD
 	local L = FKit.layout()
-	local win = FKit.WINDOWn(L, "Window / Fast Travel", W, H, "fishing", "FAST TRAVEL")
-	add(win, FKit.BODYn(L, "Hop to any open area. Locked areas show what opens them.", 16, { x = 0, y = 96, w = W, ax = "C" }))
+	local panel = FKit.STEELn(L, "Window / Fast Travel", 0, 0, W, H, { cols = { "29313e", "171c24" } })
+	add(panel, FKit.Tn(L, "FAST TRAVEL", 18, { x = 16, y = 12, w = 200 }))
+	local close = FKit.KEYn(L, "btn/close", W - 40, 8, 32, 32, PAL.red, { d = 4 })
+	table.insert(close.k[3].k, FKit.node("G", "glyph/x", 7, 4, 15, 15, { kind = "x", col = "ffffff", ink = 5.5, lw = 2.6 }))
+	add(panel, close)
 	for i, isl in areas do
-		local row = add(win, FKit.STEELn(L, "area/" .. isl.id, 16, 136 + (i - 1) * 76, W - 32, 68))
-		local w = add(row, FKit.WELLn(L, "icon well", 10, 8, 52, 52))
-		add(w, FKit.ICOn(AREA_ICON[isl.id], 44, 4, 4, L))
-		add(row, FKit.Tn(L, string.upper(isl.name), 22, { name = "name", x = 78, y = 8, w = 500 }))
-		add(row, FKit.BODYn(L, "Open", 14, { name = "status", x = 78, y = 40, w = 600 }))
-		add(row, FKit.BTNn(L, "btn/go " .. isl.id, W - 32 - 12 - 170, 8, 170, 54, PAL.green, "GO", { size = 22, glyph = nil }))
+		local row = add(panel, FKit.WELLn(L, "area/" .. isl.id, PAD, 48 + (i - 1) * (ROW + PAD), W - 2 * PAD, ROW, { op = 0.7 }))
+		add(row, FKit.ICOn(AREA_ICON[isl.id], 36, 8, 6, L))
+		add(row, FKit.Tn(L, string.upper(isl.name), 17, { name = "name", x = 54, y = 6, w = 230 }))
+		add(row, FKit.BODYn(L, "Open", 12, { name = "status", x = 54, y = 28, w = 280 }))
 	end
-	FKit.OUTLINEn(L, win)
-	local ui = FKit.build(L, win, parent)
+	local ui = FKit.build(L, panel, parent)
+	local stateNow
 	for _, isl in areas do
-		ui.on("btn/go " .. isl.id, function()
+		local row = ui.find("area/" .. isl.id)
+		local hit = Render.new("TextButton", { Name = "hit", Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 999,
+			SelectionImageObject = Render.selectionImage() }, row)
+		local hl = Render.new("Frame", { Name = "row hover", BorderSizePixel = 0, BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 998 }, row)
+		hit.MouseEnter:Connect(function() if World.isOpen(isl) then hl.BackgroundTransparency = 0.94 end end)
+		hit.MouseLeave:Connect(function() hl.BackgroundTransparency = 1 end)
+		hit.MouseButton1Down:Connect(function() Kit.sfx("click") end)
+		hit.Activated:Connect(function()
 			if World.isOpen(isl) then WM.close() end
 			Hud.travelTo(isl.id)
 		end)
 	end
 	ui.update = function(s)
+		stateNow = s
+		local here = Hud.currentAreaId and Hud.currentAreaId()
 		for _, isl in areas do
 			local row = ui.find("area/" .. isl.id)
 			if row then
 				local open = World.isOpen(isl)
 				local st = row:FindFirstChild("status", true)
-				local goal = "Open"
-				if not open then for _, x in Defs.ISLANDS do if x.id == isl.id then goal = "Locked  ·  " .. x.goal end end end
-				if st then Render.setText(st, goal); st.TextColor3 = if open then Color3.fromHex("9dffae") else Color3.fromHex("ff9a8a") end
-				local key = row:FindFirstChild("btn/go " .. isl.id, true)
-				if key then
-					local cols = if open then PAL.green else PAL.steel
-					for _, part in { { key:FindFirstChild("face"), nil }, { key:FindFirstChild("lip"), 0.58 } } do
-						for _, g in part[1]:GetChildren() do if g:IsA("UIGradient") then g:Destroy() end end
-						Render.gradient(part[1], FKit.vgrad(cols, part[2]), 1)
-					end
+				local goal = if isl.id == here then "HERE" else "Open"
+				if not open then for _, x in Defs.ISLANDS do if x.id == isl.id then goal = x.goal end end end
+				if st then
+					Render.setText(st, goal)
+					Render.setTextColor(st, Color3.fromHex(if not open then "ff9a8a" elseif isl.id == here then "ffd36b" else "9dffae"))
 				end
+				-- locked rows are muted: icon dimmed, name grey
+				local ico = row:FindFirstChild("ico/" .. AREA_ICON[isl.id])
+				if ico then ico.ImageTransparency = if open then 0 else 0.55 end
+				local nm = row:FindFirstChild("name")
+				if nm then Render.setTextColor(nm, Color3.fromHex(if open then "ffffff" else "8d94a3")) end
 			end
 		end
 	end

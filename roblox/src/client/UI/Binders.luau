@@ -6,12 +6,20 @@
 -- Upgrade lists (shop drawer EGGS / MOLT / SEEDS / golden, Mine SHOP) are rebuilt from the Figma row templates
 -- (row/<id> (buy) / (need) / (max)) inside a ScrollingFrame, one row per Defs.UP id, so they scroll and grow with
 -- the game. Row state changes swap the template; values update in place.
+-- Hierarchy: ONE primary per list (the cheapest affordable row gets the green BUY, a small "recommended" sparkle and,
+-- in the sidebar, the single breathing attention glow); other affordable rows are steel keys with a white price and
+-- "Can buy"; unaffordable rows are steel with the cost in red. Feel: hold BUY to repeat (accelerating), Shift-click
+-- = MAX, LV bar eases, "+1 LV" pops off the icon, a row reaching MAX pops gold with sparkles and shimmers.
 local RS = game:GetService("ReplicatedStorage")
 local TextService = game:GetService("TextService")
+local TweenService = game:GetService("TweenService")
+local UIS = game:GetService("UserInputService")
 local Defs = require(RS:WaitForChild("Peckwood"):WaitForChild("Defs"))
 local Render = require(script.Parent.Figma.Render)
 local FKit = require(script.Parent.Figma.FKit)
 local Kit = require(script.Parent.Kit)
+local Motion = require(script.Parent.Motion)
+local Sfx = require(script.Parent.Sfx)
 local Layouts = script.Parent.Figma.Layouts
 local EN = Defs.EN
 
@@ -36,10 +44,34 @@ end
 local function centreRow(frame: Frame, items, gap)
 	gap = gap or 6
 	local widths, total = {}, 0
-	for i, it in items do
-		local w = if it:IsA("TextLabel") then textW(it, (string.gsub(it.Text, "<[^>]+>", ""))) else it.Size.X.Offset
-		widths[i] = w
-		total += w + (if i > 1 then gap else 0)
+	local function measure()
+		total = 0
+		for i, it in items do
+			local w = if it:IsA("TextLabel") then textW(it, (string.gsub(it.Text, "<[^>]+>", ""))) else it.Size.X.Offset
+			widths[i] = w
+			total += w + (if i > 1 then gap else 0)
+		end
+	end
+	for _, it in items do
+		if it:IsA("TextLabel") then
+			local b = it:GetAttribute("baseSize") or it.TextSize
+			it:SetAttribute("baseSize", b)
+			it.TextSize = b
+		end
+	end
+	measure()
+	-- zero clipping: long live values shrink the row's text until it fits (min 10)
+	local avail = frame.Size.X.Offset - 12
+	if total > avail and avail > 0 then
+		local f = avail / total
+		for _, it in items do
+			if it:IsA("TextLabel") then
+				it.TextSize = math.max(10, math.floor(it.TextSize * f))
+				local sh = Render.SHADOW[it]
+				if sh then sh.TextSize = it.TextSize end
+			end
+		end
+		measure()
 	end
 	local x = (frame.Size.X.Offset - total) / 2
 	for i, it in items do
@@ -105,8 +137,20 @@ local function rowState(s, id)
 	local d = Defs.UP[id]
 	return if EN.meeq(s[d.cur], Defs.cost(s, id, L)) then "buy" else "need"
 end
+-- the list's one primary: the cheapest affordable row
+local function primaryOf(s, ids)
+	local best, bestCost
+	for _, id in ids do
+		if Defs.UP[id] and rowState(s, id) == "buy" then
+			local c = Defs.cost(s, id, Defs.level(s, id))
+			local n = if type(c) == "number" then c else EN.toNumber(c)
+			if not bestCost or n < bestCost then best, bestCost = id, n end
+		end
+	end
+	return best
+end
 
-local function fillRow(row, s, id)
+local function fillRow(row, s, id, st, r)
 	local d = Defs.UP[id]
 	local L = Defs.level(s, id)
 	local maxL = Defs.maxLevel(s, id)
@@ -131,9 +175,19 @@ local function fillRow(row, s, id)
 	-- level
 	local lvl = row:FindFirstChild("level bar") or row:FindFirstChild("level")
 	if lvl then
-		for _, t in Render.childTexts(lvl) do Render.setText(t, "LV " .. shown .. " / " .. shownMax) end
+		for _, t in Render.childTexts(lvl) do
+			Render.setText(t, "LV " .. shown .. " / " .. shownMax)
+			if r and r.level and shown > r.level then Kit.pop(t, 1.25) end
+		end
 		local fill = lvl:FindFirstChild("fill")
-		if fill then fill.Size = UDim2.fromOffset(math.floor(lvl.Size.X.Offset * (if shownMax > 0 then math.clamp(shown / shownMax, 0, 1) else 1) + 0.5), fill.Size.Y.Offset) end
+		if fill then
+			local w = math.floor(lvl.Size.X.Offset * (if shownMax > 0 then math.clamp(shown / shownMax, 0, 1) else 1) + 0.5)
+			if r and r.level and w ~= fill.Size.X.Offset then
+				TweenService:Create(fill, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = UDim2.fromOffset(w, fill.Size.Y.Offset) }):Play()
+			else
+				fill.Size = UDim2.fromOffset(w, fill.Size.Y.Offset)
+			end
+		end
 	end
 	-- effect: now >>> next (+ unit), or the maxed value
 	local eff = row:FindFirstChild("effect")
@@ -154,16 +208,20 @@ local function fillRow(row, s, id)
 		for _, it in items do if not (it:IsA("TextLabel") and it.Text == "") then table.insert(vis, it) end end
 		centreRow(eff, vis)
 	end
-	-- price: BUY key face or the Mine price tag
+	-- price: BUY key face or the Mine price tag. Colour = state: white on the primary / affordable, red when short
 	local priceText = fmt(cost)
+	local priceCol = if st == "need" then Color3.fromHex("ff9a8a") else Color3.new(1, 1, 1)
 	for _, c in row:GetChildren() do
 		if string.sub(c.Name, 1, 7) == "btn/buy" then
 			local face = c:FindFirstChild("face")
 			if face then
 				local its = kids(face)
 				for _, it in its do
-					if it:IsA("TextLabel") then Render.setText(it, priceText) end
-					if it:IsA("ImageLabel") then it.Image = FKit.icon(Defs.CUR[d.cur].icon) end
+					if it:IsA("TextLabel") then Render.setText(it, priceText); Render.setTextColor(it, priceCol) end
+					if it:IsA("ImageLabel") then
+						it.Image = FKit.icon(Defs.CUR[d.cur].icon)
+						it.ImageTransparency = if st == "need" then 0.45 else 0
+					end
 				end
 				centreRow(face, its, 8)
 			end
@@ -179,11 +237,16 @@ local function fillRow(row, s, id)
 	-- the hint under the key: "Need X more" / "CAN BUY" / "Fully upgraded"
 	for _, t in texts do
 		local x, y = t.Position.X.Offset, t.Position.Y.Offset
-		if y > 90 and x >= rowW * 0.6 and string.find(t.Text, "^Need") and not isMax then
-			local have = EN.toNumber(s[d.cur])
-			Render.setText(t, "Need " .. fmt(math.max(0, cost - have)) .. " more")
+		if y > 90 and x >= rowW * 0.6 and not isMax and (string.find(t.Text, "^Need") or string.find(t.Text, "^Can buy") or string.find(t.Text, "^CAN BUY")) then
+			if st == "can" then
+				Render.setText(t, "Can buy"); Render.setTextColor(t, Color3.fromHex("9dffae"))
+			elseif st == "need" then
+				local have = EN.toNumber(s[d.cur])
+				Render.setText(t, "Need " .. fmt(math.max(0, cost - have)) .. " more"); Render.setTextColor(t, Color3.fromHex("ff9a8a"))
+			end
 		end
 	end
+	if r then r.level = shown end
 end
 
 -- turn a Figma "upgrade list" panel into a scrolling list of live rows
@@ -209,36 +272,98 @@ local function liveList(ui, family, ids, layoutName)
 	local sf = Render.new("ScrollingFrame", { Name = "rows", BackgroundTransparency = 1, BorderSizePixel = 0, Position = UDim2.fromOffset(0, first.y - 8),
 		Size = UDim2.fromOffset(list.Size.X.Offset, list.Size.Y.Offset - first.y + 8), CanvasSize = UDim2.new(), ScrollBarThickness = 6,
 		ScrollBarImageColor3 = Color3.fromHex("8d94a3"), ScrollingDirection = Enum.ScrollingDirection.Y, ZIndex = 50 }, list)
+	Render.styleScroll(sf, "0e131b")
 	local api = { sf = sf, rows = {}, ids = ids, family = family, x = first.x, h = first.h, gap = gap }
 	return api
 end
-local function refreshList(api, s, onBuy)
+
+-- hold BUY: first buy on release as usual; held past 0.35 s it repeats, faster and faster (server validates each)
+local holdToken = nil
+local function holdRepeat(fn, k)
+	local token = {}
+	holdToken = token
+	task.delay(0.35, function()
+		local iv = 0.22
+		while holdToken == token do
+			k.suppress = true
+			fn()
+			task.wait(iv)
+			iv = math.max(0.06, iv * 0.8)
+		end
+	end)
+end
+local function holdStop() holdToken = nil end
+-- the ONE attention target on screen (the sidebar's primary BUY breathes); everything else stays still
+local attention = { key = nil, stop = nil }
+local function setAttention(keyInst)
+	if attention.key == keyInst then return end
+	if attention.stop then attention.stop() end
+	attention.key, attention.stop = keyInst, nil
+	if keyInst then attention.stop = Motion.breathe(keyInst, "7dff86") end
+end
+Binders.setAttention = setAttention
+local function refreshList(api, s, onBuy, attentionOn)
 	if not api then return end
+	local primary = primaryOf(s, api.ids)
 	local y = 8
+	local primaryKey
 	for _, id in api.ids do
 		if Defs.UP[id] then
 			local st = rowState(s, id)
+			if st == "buy" and id ~= primary then st = "can" end
 			local r = api.rows[id]
 			if not r or r.state ~= st then
+				local was = r and r.state
+				local level = r and r.level
 				if r then r.ui.root:Destroy() end
-				local tp = templates[api.family][st] or templates[api.family].buy or templates[api.family].need
+				local tp = templates[api.family][if st == "can" then "need" else st] or templates[api.family].buy or templates[api.family].need
 				local ui = Render.buildNode(tp.layout, tp.node, api.sf, 2)
 				ui.root.Name = "row/" .. id
-				-- icon slot shows this upgrade's icon (Figma names it ico/up_<thing>; keep the template art otherwise)
-				r = { ui = ui, state = st }
+				r = { ui = ui, state = st, level = level }
 				api.rows[id] = r
 				ui.onAny(function(name, inst)
-					if string.sub(name, 1, 7) == "btn/buy" then onBuy(id, false, inst)
+					local shift = UIS:IsKeyDown(Enum.KeyCode.LeftShift) or UIS:IsKeyDown(Enum.KeyCode.RightShift)
+					if string.sub(name, 1, 7) == "btn/buy" then onBuy(id, shift, inst)
 					elseif name == "btn/max" then onBuy(id, true, inst) end
 				end)
-				if st == "buy" and r.wasState and r.wasState ~= "buy" then Kit.pop(ui.root, 1.04) end
+				ui.onDown = function(name, inst, k)
+					if string.sub(name, 1, 7) == "btn/buy" then holdRepeat(function() onBuy(id, false, inst) end, k) end
+				end
+				ui.onUp = holdStop
+				-- the primary row: a small static "recommended" sparkle on its BUY key
+				if st == "buy" then
+					local key = ui.node:FindFirstChild("btn/buy")
+					if key then
+						Render.new("ImageLabel", { Name = "recommended", BackgroundTransparency = 1, Image = FKit.Icons["ui/sparkle"], ImageColor3 = Color3.fromHex("fff3b0"),
+							AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(1, -6, 0, 6), Size = UDim2.fromOffset(26, 26), ZIndex = 1000 }, key)
+					end
+					if was and was ~= "buy" then Kit.pop(ui.root, 1.06) end   -- turned affordable: one pop, no loop
+				end
+				if st == "max" and was and was ~= "max" then
+					Sfx.maxed()
+					task.defer(function()
+						local plate
+						for _, d in ui.node:GetDescendants() do
+							if d:IsA("TextLabel") and d.Text == "MAXED" then plate = d.Parent end
+						end
+						Motion.maxed(plate, ui.node:FindFirstChild("level bar") or ui.node:FindFirstChild("level"), WM.canvas, plate and Hud.centreOf(plate))
+					end)
+				end
 			end
 			r.ui.root.Position = UDim2.fromOffset(api.x, y)
-			fillRow(r.ui.node, s, id)
+			local before = r.level
+			fillRow(r.ui.node, s, id, st, r)
+			if before and r.level and r.level > before then
+				local well = r.ui.node:FindFirstChild("icon well")
+				local p = well and Hud.centreOf(well)
+				if p then Motion.floater(WM.canvas, p, "+" .. (r.level - before) .. " LV", "9dffae", 20) end
+			end
+			if st == "buy" then primaryKey = r.ui.node:FindFirstChild("btn/buy") end
 			y += api.h + api.gap
 		end
 	end
 	api.sf.CanvasSize = UDim2.fromOffset(0, y)
+	if attentionOn then setAttention(primaryKey) end
 end
 
 -- upgrade ids per drawer view (Birb rowVisible: golden rows after the Desert, echo after the Echo Field)
@@ -257,13 +382,35 @@ B.shop = {
 	bind = function(rec, ui, variant)
 		rec.lists = rec.lists or {}
 		rec.lists[variant] = liveList(ui, "drawer", DRAWER_IDS[variant] or {}, variant)
-		ui.on("btn/molt", function(inst) act("molt", nil, nil, inst) end)
+		-- MOLT is hold-to-confirm: a violet fill runs across the key; let go early and nothing happens
+		local fillTween, fillFrame
+		ui.onDown = function(name, inst, k)
+			if name ~= "btn/molt" then return end
+			local face = inst:FindFirstChild("face")
+			if not face then return end
+			fillFrame = Render.new("Frame", { Name = "hold fill", BorderSizePixel = 0, BackgroundColor3 = Color3.fromHex("e3c2ff"), BackgroundTransparency = 0.35,
+				Size = UDim2.new(0, 0, 1, 0), ZIndex = 60 }, face)
+			fillTween = TweenService:Create(fillFrame, TweenInfo.new(0.9, Enum.EasingStyle.Linear), { Size = UDim2.fromScale(1, 1) })
+			fillTween.Completed:Once(function(st)
+				if st ~= Enum.PlaybackState.Completed then return end
+				k.suppress = true
+				act("molt", nil, nil, inst)
+				local gw = ui.find("gain well")
+				if gw then Hud.flyTo("goldenFeathers", gw, 8) end
+			end)
+			fillTween:Play()
+		end
+		ui.onUp = function()
+			if fillTween then fillTween:Cancel(); fillTween = nil end
+			if fillFrame then fillFrame:Destroy(); fillFrame = nil end
+		end
+		ui.on("btn/molt", function() Hud.toast("Hold MOLT to confirm", "info", "plume") end)
 		ui.onAny(function(name)
 			if string.sub(name, 1, 13) == "btn/auto-buy " then act("auto", not (WM.state and WM.state.auto)) end
 		end)
 	end,
 	update = function(rec, ui, variant, s, d)
-		refreshList(rec.lists and rec.lists[variant], s, buy)
+		refreshList(rec.lists and rec.lists[variant], s, buy, true)
 		if variant == "Shop_Molt" then
 			local hero = ui.find("molt hero")
 			if hero then
@@ -569,6 +716,27 @@ B.fishing = {
 
 -- a purchase went through: the bought row's level bar / values are refreshed by the next state push; give the
 -- buttery thock + a small pop on the open drawer row
+-- Molt: the sidebar's rows dissolve and come back
+function Binders.molted()
+	local rec = WM.built.shop
+	local v = rec and rec.current and rec.variants[rec.current]
+	if v then
+		Motion.collapse(v.ui.root)
+		task.delay(0.45, function() Motion.restoreRows(v.ui.root); Motion.cascade(v.ui.root) end)
+	end
+end
+-- Evolve: the feed rows wilt brown and fall away
+function Binders.evolved()
+	local rec = WM.built.evolve
+	local v = rec and rec.holder.Visible and rec.current and rec.variants[rec.current]
+	local panel = v and v.ui.root:FindFirstChild("feed panel", true)
+	if panel then
+		local rows = {}
+		for _, c in panel:GetChildren() do if c:IsA("Frame") and c.Size.Y.Offset >= 40 then table.insert(rows, c) end end
+		Motion.wilt(rows)
+	end
+end
+
 function Binders.bought(id)
 	for _, wid in { "shop", "mine" } do
 		local rec = WM.built[wid]

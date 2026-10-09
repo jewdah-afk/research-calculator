@@ -1,16 +1,23 @@
 --!nonstrict
--- WindowManager: opens / closes every window (WindowDefs), builds each Figma variant lazily on first view, switches
--- tabs and in-window views, runs the shared motion (pop-in 0.86 -> 1.04 -> 1, close = quick shrink, drawer slides
--- from the right) and calls the live-data binders (UI/Binders.luau) for the visible variant only.
+-- WindowManager: opens / closes every window (WindowDefs), builds each Figma variant lazily (or pre-builds it in
+-- spare frames after load), switches tabs and in-window views, and calls the live-data binders (UI/Binders) for the
+-- visible variant only.
+-- Placement follows Birb (UI/Layout): the upgrades drawer is a permanent full-height RIGHT SIDEBAR (open by default,
+-- collapse tab on its left edge); every other window opens inside the GAME AREA left of it, never over it, docked
+-- where Birb puts it (WindowDefs `dock`: "center" default, "bl" bottom-left, "popup" above the button that opened
+-- it), scaled down when it does not fit. One window at a time; opening / closing windows and Esc never touch the
+-- sidebar. Motion (UI/Motion): pop out of the HUD button, rows cascade, close shrinks back into the button, tabs
+-- crossfade without re-popping, idle loops only on the open window.
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
-local RunService = game:GetService("RunService")
 local UIS = game:GetService("UserInputService")
 local Render = require(script.Parent.Figma.Render)
 local Layouts = script.Parent.Figma.Layouts
 local Defs = require(script.Parent.WindowDefs)
 local Sfx = require(script.Parent.Sfx)
 local Kit = require(script.Parent.Kit)
+local Layout = require(script.Parent.Layout)
+local Motion = require(script.Parent.Motion)
 
 local WM = {}
 WM.defs = Defs
@@ -18,12 +25,18 @@ WM.built = {}           -- id -> window record
 WM.binders = {}         -- id -> { bind(rec, ui, variant), update(rec, ui, variant, s, d) }
 WM.screens = nil        -- hand-built screens module (set by Hud)
 WM.state, WM.derived = nil, nil
-WM.modal = nil          -- id of the open centred window
-WM.drawerOpen = false
-WM.onChanged = nil      -- fn() when a window opens/closes (HUD dims / camera)
+WM.modal = nil          -- id of the open window (game area)
+WM.drawerOpen = true    -- the sidebar (mirrors Layout.sidebarOpen)
+WM.onChanged = nil      -- fn() when a window opens / closes or the sidebar moves (HUD / camera)
+WM.anchors = {}         -- id -> fn() -> design-px point a "popup" window opens above (set by Hud)
+WM.sources = {}         -- id -> fn() -> design-px point of the HUD button a window pops out of / shrinks into
+WM.beforeOpen = nil     -- fn(id) before a window opens (Hud closes the Robux shop: one window at a time)
+WM.onEscape = nil       -- fn() -> true when Esc was used by something else (Robux shop)
+WM.onSidebarView = nil  -- fn(variant) when the sidebar shows another view (Hud badges)
 
-local gui, canvas, scale, backdrop, modalLayer, drawerLayer
-local RAIL_W = 116      -- the area rail + its margin on the right edge stay clear of the drawer
+local gui, canvas, scale, modalLayer, drawerLayer
+local sidebarTab        -- collapse tab ui on the sidebar's left edge
+local S = Layout.S
 
 local function label(name)
 	local s = string.gsub(name, "^tab/", "")
@@ -39,73 +52,147 @@ local function layoutOf(variant)
 	return require(m)
 end
 
--- ---------------------------------------------------------------- canvas (1920x1080 design space, fit to height)
+-- ---------------------------------------------------------------- placement (design px, see UI/Layout)
+local SLIDE = TweenInfo.new(0.22, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+local function move(inst, props, animate)
+	if animate and not Kit.reduced() then TweenService:Create(inst, SLIDE, props):Play()
+	else for k, v in props do inst[k] = v end end
+end
+
+-- the sidebar view stretches to the full screen height: the window body, its outline and the upgrade list grow,
+-- whatever sits below the list (footer note) moves down. Base sizes live in attributes so this is repeatable.
+local function stretch(v, baseH, targetH)
+	local node = v.ui.node
+	local extra = math.max(0, targetH - baseH)
+	local function grow(inst)
+		if not inst then return end
+		local b = inst:GetAttribute("baseH") or inst.Size.Y.Offset
+		inst:SetAttribute("baseH", b)
+		inst.Size = UDim2.fromOffset(inst.Size.X.Offset, b + extra)
+	end
+	local function shift(inst)
+		local b = inst:GetAttribute("baseY") or inst.Position.Y.Offset
+		inst:SetAttribute("baseY", b)
+		inst.Position = UDim2.fromOffset(inst.Position.X.Offset, b + extra)
+	end
+	grow(v.ui.root); grow(node)
+	grow(node:FindFirstChild("window outline"))
+	for _, c in v.ui.root:GetChildren() do if c.Name == "shadow" or c.Name == "drop" then grow(c) end end
+	local list = node:FindFirstChild("upgrade list")
+	if list then
+		local listBottom = (list:GetAttribute("baseY") or list.Position.Y.Offset) + (list:GetAttribute("baseH") or list.Size.Y.Offset)
+		grow(list)
+		local rows = list:FindFirstChild("rows")
+		if rows then grow(rows) end
+		for _, c in node:GetChildren() do
+			if c:IsA("GuiObject") and c ~= list and (c:GetAttribute("baseY") or c.Position.Y.Offset) >= listBottom - 1 then shift(c) end
+		end
+	end
+end
+
+local function placeSidebar(animate)
+	local rec = WM.built.shop
+	local s = Layout.sidebarScale()
+	local fullH = Layout.H / s
+	if rec then
+		rec.fit.Scale = s
+		rec.H = fullH
+		rec.holder.AnchorPoint = Vector2.new(0, 0)
+		rec.holder.Size = UDim2.fromOffset(rec.W, fullH)
+		rec.inner.Size = UDim2.fromOffset(rec.W, fullH)
+		local v = rec.current and rec.variants[rec.current]
+		if v then stretch(v, rec.baseH, fullH); v.ui.root.Position = UDim2.fromOffset(0, 0) end
+		if Layout.sidebarOpen then rec.holder.Visible = true end
+		move(rec.holder, { Position = UDim2.fromOffset(if Layout.sidebarOpen then Layout.gameRight() else Layout.W + 8, 0) }, animate)
+		if not Layout.sidebarOpen then
+			task.delay(if animate then 0.24 else 0, function() if not Layout.sidebarOpen then rec.holder.Visible = false end end)
+		end
+	end
+	if sidebarTab then
+		move(sidebarTab.root, { Position = UDim2.new(0, Layout.gameRight(), 0.5, 0) }, animate)
+		for _, g in sidebarTab.root:GetDescendants() do
+			if g.Name == "glyph/right" then g.Visible = Layout.sidebarOpen elseif g.Name == "glyph/left" then g.Visible = not Layout.sidebarOpen end
+		end
+	end
+end
+
 local function fitWindow(rec)
-	if not rec or not rec.holder then return end
-	local vp = canvas.AbsoluteSize / math.max(0.01, scale.Scale)
-	local W, H = rec.W, rec.H
-	local availW = if rec.def.drawer then vp.X - RAIL_W - 24 else vp.X - 48
-	local s = math.min(1, (vp.Y - 32) / H, availW / W)
+	if not rec or not rec.holder or rec.def.drawer then return end
+	local s = math.min(1, (Layout.H - 2 * S.WIN) / rec.H, (Layout.windowRight() - 2 * S.WIN) / rec.W)
 	rec.fit.Scale = math.max(0.3, s)
 end
+-- where a window sits in the game area (Birb anchors)
+local function placeWindow(rec, animate)
+	if not rec or rec.def.drawer then return end
+	fitWindow(rec)
+	local s = rec.fit.Scale
+	local dock = rec.def.dock or "center"
+	local right = Layout.windowRight()
+	if dock == "bl" then
+		rec.holder.AnchorPoint = Vector2.new(0, 1)
+		move(rec.holder, { Position = UDim2.new(0, S.WIN, 1, -S.WIN) }, animate)
+	elseif dock == "popup" and WM.anchors[rec.id] then
+		local p = WM.anchors[rec.id]()
+		local w, h = rec.W * s, rec.H * s
+		local x = math.clamp(p.X, S.WIN + w / 2, right - S.WIN - w / 2)
+		local y = math.max(p.Y - S.GAP, S.WIN + h)
+		rec.holder.AnchorPoint = Vector2.new(0.5, 1)
+		move(rec.holder, { Position = UDim2.fromOffset(x, y) }, animate)
+	else
+		rec.holder.AnchorPoint = Vector2.new(0.5, 0.5)
+		move(rec.holder, { Position = UDim2.new(0, right / 2, 0.5, 0) }, animate)
+	end
+end
+WM.placeWindow = placeWindow
+
 local function layout()
 	local vp = workspace.CurrentCamera.ViewportSize
 	local s = math.max(0.35, vp.Y / 1080)
 	scale.Scale = s
 	canvas.Size = UDim2.fromOffset(vp.X / s, vp.Y / s)
-	for _, rec in WM.built do fitWindow(rec) end
+	Layout.setCanvas(vp.X / s, vp.Y / s)
+end
+local function reflow(animate)
+	placeSidebar(animate)
+	for _, rec in WM.built do
+		if rec.holder.Visible then placeWindow(rec, animate) else fitWindow(rec) end
+	end
+	if WM.onChanged then WM.onChanged() end
 end
 
-function WM.init(parentGui)
-	gui = Instance.new("ScreenGui")
-	gui.Name = "PeckwoodWindows"; gui.ResetOnSpawn = false; gui.IgnoreGuiInset = true
-	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling; gui.DisplayOrder = 20
-	gui.Parent = parentGui
-	canvas = Render.new("Frame", { Name = "canvas", BackgroundTransparency = 1, Size = UDim2.fromOffset(1920, 1080) }, gui)
-	scale = Render.new("UIScale", {}, canvas)
-	backdrop = Render.new("TextButton", { Name = "backdrop", Text = "", AutoButtonColor = false, BackgroundColor3 = Color3.fromHex("06070c"),
-		BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Visible = false, ZIndex = 1 }, canvas)
-	backdrop.Activated:Connect(function() WM.close() end)
-	modalLayer = Render.new("Frame", { Name = "modal", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 2 }, canvas)
-	-- the docked drawer sits under the backdrop: a centred window opened over it dims it instead of overlapping
-	drawerLayer = Render.new("Frame", { Name = "drawer", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 0 }, canvas)
-	layout()
-	workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(layout)
-	UIS.InputBegan:Connect(function(io, gp)
-		if gp then return end
-		if io.KeyCode == Enum.KeyCode.Escape or io.KeyCode == Enum.KeyCode.ButtonB then
-			if WM.modal then WM.close() elseif WM.drawerOpen then WM.setDrawer(false) end
-		end
-	end)
-	-- idle twinkle for sparkles outside CanvasGroups (a handful per open window; skipped with reduced motion)
-	local t = 0
-	RunService.RenderStepped:Connect(function(dt)
-		t += dt
-		if Kit.reduced() then return end
-		for _, rec in WM.built do
-			local v = rec.holder and rec.holder.Visible and rec.variants[rec.current]
-			if v then
-				for i, sp in v.twinkle do
-					local k = 0.75 + 0.25 * math.sin(t * 2.6 + i * 1.7)
-					sp.Size = UDim2.fromOffset(v.twinkleBase[i] * k, v.twinkleBase[i] * k)
-					sp.Rotation = math.sin(t * 0.8 + i) * 12
-				end
-			end
-		end
-	end)
-	return canvas
+-- ---------------------------------------------------------------- idle motion: only on the open window
+local function idleStart(rec)
+	local v = rec.current and rec.variants[rec.current]
+	if not v or rec.def.drawer then return end
+	if v.idleStop then return end
+	v.idleStop = Motion.idle(v.ui.root, v.ui.root:FindFirstChild("header", true))
 end
-WM.layout = layout
+local function idleStop(rec)
+	for _, v in rec.variants do
+		if v.idleStop then v.idleStop(); v.idleStop = nil end
+	end
+end
 
 -- ---------------------------------------------------------------- building
+local function topLeftOf(inst) return Motion.topLeft(inst) end
+local function activeTab(root)
+	for _, d in root:GetDescendants() do
+		if d:IsA("GuiObject") and string.match(d.Name, "^tab/.*%(active%)$") then return d end
+	end
+	return nil
+end
+local function tabIndex(def, variant)
+	for i, tb in def.tabs or {} do if tb[2] == variant then return i end end
+	return 0
+end
+
 local function wireVariant(rec, name, ui)
 	local def = rec.def
-	-- close key
 	ui.on("btn/close", function()
 		if def.drawer then WM.setDrawer(false) else WM.close() end
 	end)
 	-- tabs: every tab/* layer (key or plain) switches to its variant / window
-	ui.onAny(function(nodeName, inst)
+	ui.onAny(function(nodeName)
 		if string.sub(nodeName, 1, 4) == "tab/" then
 			local lab = label(nodeName)
 			for _, tb in def.tabs or {} do
@@ -113,23 +200,26 @@ local function wireVariant(rec, name, ui)
 					if tb.go then
 						if tb.go ~= rec.id then Sfx.tab(); WM.open(tb.go) end
 					elseif tb[2] and tb[2] ~= rec.current then
-						Sfx.tab(); WM.show(rec, tb[2])
+						Sfx.tab(); WM.show(rec, tb[2], true)
 					end
 					return
 				end
 			end
 		elseif def.views and def.views[nodeName] then
 			local target = def.views[nodeName]
-			if target ~= rec.current then Sfx.tab(); WM.show(rec, target) end
+			if target ~= rec.current then Sfx.tab(); WM.show(rec, target, true) end
 		end
 	end)
 	-- selection: clicking a row / card / node moves the white selected ring onto it (when the panel has one)
-	ui.onAny(function(nodeName, inst)
+	ui.onAny(function(_, inst)
 		local ring = inst.Parent and inst.Parent:FindFirstChild("selected ring")
 		if ring and ring ~= inst then
 			local d = ring:GetAttribute("inset") or 4
-			ring.Position = inst.Position - UDim2.fromOffset(d, d)
-			ring.Size = inst.Size + UDim2.fromOffset(2 * d, 2 * d)
+			local tl = topLeftOf(inst)
+			TweenService:Create(ring, TweenInfo.new(0.12, Enum.EasingStyle.Quad), {
+				Position = UDim2.fromOffset(tl.X - d + ring.AnchorPoint.X * (inst.Size.X.Offset + 2 * d), tl.Y - d + ring.AnchorPoint.Y * (inst.Size.Y.Offset + 2 * d)),
+				Size = inst.Size + UDim2.fromOffset(2 * d, 2 * d) }):Play()
+			Kit.pop(ring, 1.06)
 		end
 	end)
 end
@@ -138,36 +228,40 @@ local function buildVariant(rec, name)
 	local v = rec.variants[name]
 	if v then return v end
 	local L = layoutOf(name)
+	if rec.variants[name] then return rec.variants[name] end   -- built meanwhile (a require can yield)
 	local ui = Render.build(L, rec.inner)
 	ui.root.Visible = false
-	-- rows / cards / plain list entries become clickable (selection) without changing their look
+	rec.builds = (rec.builds or 0) + 1
+	-- rows / cards / plain list entries become clickable (selection) and answer hover without changing their look
 	for _, d in ui.root:GetDescendants() do
-		if d:IsA("Frame") and (string.sub(d.Name, 1, 4) == "row/" or string.sub(d.Name, 1, 5) == "card/" or string.sub(d.Name, 1, 5) == "cell/") and not d:FindFirstChild("hit") then
+		local nm = d.Name
+		if d:IsA("Frame") and (string.sub(nm, 1, 4) == "row/" or string.sub(nm, 1, 5) == "card/" or string.sub(nm, 1, 5) == "cell/") and not d:FindFirstChild("hit") then
 			-- under the row's own content (z 1): keys inside the row keep their clicks
-			local hit = Render.new("TextButton", { Name = "hit", Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 1 }, d)
+			local hit = Render.new("TextButton", { Name = "hit", Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 1,
+				SelectionImageObject = Render.selectionImage() }, d)
+			local hl = Render.new("Frame", { Name = "row hover", BorderSizePixel = 0, BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 1 }, d)
+			Render.new("UICorner", { CornerRadius = UDim.new(0, 4) }, hl)
+			hit.MouseEnter:Connect(function() Sfx.hover(); TweenService:Create(hl, TweenInfo.new(0.08), { BackgroundTransparency = 0.96 }):Play() end)
+			hit.MouseLeave:Connect(function() TweenService:Create(hl, TweenInfo.new(0.12), { BackgroundTransparency = 1 }):Play() end)
 			hit.MouseButton1Down:Connect(function() Sfx.press() end)
 			hit.Activated:Connect(function()
-				for _, fn in ui.anyHandlers do task.spawn(fn, d.Name, d) end
+				for _, fn in ui.anyHandlers do task.spawn(fn, nm, d) end
 			end)
 		end
-		if d.Name == "selected ring" and d:IsA("GuiObject") then
+		if nm == "selected ring" and d:IsA("GuiObject") then
 			-- measure the ring's inset around the element it wraps in Figma, so moving it keeps the same gap
 			for _, sib in d.Parent:GetChildren() do
 				if sib ~= d and sib:IsA("GuiObject") then
-					local dp = sib.Position.X.Offset - d.Position.X.Offset
-					if dp >= 2 and dp <= 8 and math.abs(sib.Position.Y.Offset - d.Position.Y.Offset - dp) < 0.6 and math.abs(sib.Size.X.Offset + 2 * dp - d.Size.X.Offset) < 0.6 then
+					local a, b = topLeftOf(sib), topLeftOf(d)
+					local dp = a.X - b.X
+					if dp >= 2 and dp <= 8 and math.abs(a.Y - b.Y - dp) < 0.6 and math.abs(sib.Size.X.Offset + 2 * dp - d.Size.X.Offset) < 0.6 then
 						d:SetAttribute("inset", dp)
 					end
 				end
 			end
 		end
 	end
-	v = { ui = ui, name = name, twinkle = {}, twinkleBase = {} }
-	for _, sp in ui.sparkles do
-		if not sp:FindFirstAncestorOfClass("CanvasGroup") then
-			table.insert(v.twinkle, sp); table.insert(v.twinkleBase, sp.Size.X.Offset)
-		end
-	end
+	v = { ui = ui, name = name }
 	rec.variants[name] = v
 	wireVariant(rec, name, ui)
 	local b = WM.binders[rec.id]
@@ -178,7 +272,7 @@ end
 local function buildWindow(id)
 	local def = Defs[id]
 	assert(def, "unknown window " .. tostring(id))
-	local rec = { id = id, def = def, variants = {}, current = nil }
+	local rec = { id = id, def = def, variants = {}, current = nil, builds = 0, popCount = 0 }
 	local W, H
 	if def.build then
 		W, H = 1000, 860
@@ -189,50 +283,76 @@ local function buildWindow(id)
 			if tb[2] then local l2 = layoutOf(tb[2]); W = math.max(W, l2.root.w); H = math.max(H, l2.root.h) end
 		end
 	end
-	rec.W, rec.H = W, H
+	rec.W, rec.H, rec.baseH = W, H, H
 	local parent = if def.drawer then drawerLayer else modalLayer
 	rec.holder = Render.new("Frame", { Name = id, BackgroundTransparency = 1, Size = UDim2.fromOffset(W, H), Visible = false, ZIndex = 2,
-		AnchorPoint = if def.drawer then Vector2.new(1, 0.5) else Vector2.new(0.5, 0.5),
-		Position = if def.drawer then UDim2.new(1, -RAIL_W, 0.5, 0) else UDim2.fromScale(0.5, 0.5) }, parent)
+		AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5) }, parent)
 	rec.fit = Render.new("UIScale", { Name = "Fit" }, rec.holder)
-	-- clicks on the window's empty areas stop here (never reach the backdrop or the world behind)
+	-- clicks on the window's empty areas stop here (never reach the world behind)
 	Render.new("TextButton", { Name = "blocker", Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 1 }, rec.holder)
 	rec.inner = Render.new("Frame", { Name = "inner", BackgroundTransparency = 1, Size = UDim2.fromOffset(W, H), AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5), ZIndex = 2 }, rec.holder)
 	rec.pop = Render.new("UIScale", { Name = "Pop" }, rec.inner)
+	rec.canvasScale = function() return scale.Scale end
 	if def.build then
 		local ui, w, h = WM.screens.build(id, rec.inner, rec)
-		rec.W, rec.H = w, h
+		rec.W, rec.H, rec.baseH = w, h, h
 		rec.holder.Size = UDim2.fromOffset(w, h); rec.inner.Size = UDim2.fromOffset(w, h)
-		rec.variants.main = { ui = ui, name = "main", twinkle = {}, twinkleBase = {} }
+		rec.variants.main = { ui = ui, name = "main" }
+		rec.builds = 1
 		wireVariant(rec, "main", ui)
 		ui.root.Visible = false
 	end
 	WM.built[id] = rec
+	if def.drawer then
+		rec.inner.AnchorPoint = Vector2.new(0, 0); rec.inner.Position = UDim2.fromOffset(0, 0)
+	end
 	fitWindow(rec)
 	return rec
 end
 
--- show one variant of a window (tab switch / view switch)
-function WM.show(rec, name)
+-- show one variant of a window. `switch` = a tab / view change inside an open window: no re-pop, the old content
+-- fades out while the new fades in with an 8 px slide toward the tab, the active tab pill springs, rows cascade.
+function WM.show(rec, name, switch)
 	local v = if rec.def.build then rec.variants.main else buildVariant(rec, name)
-	for vn, vv in rec.variants do vv.ui.root.Visible = vv == v end
-	-- variants of one window can differ in size (Fish Market locked is short): centre the smaller one
-	local r = v.ui.root
-	r.Position = UDim2.fromOffset((rec.W - r.Size.X.Offset) / 2, (rec.H - r.Size.Y.Offset) / 2)
+	local old = rec.current and rec.variants[rec.current]
+	if rec.transition then rec.transition(); rec.transition = nil end
+	local animate = switch and old and old ~= v and old.ui.root.Visible and rec.holder.Visible
+	local oldTab = animate and activeTab(old.ui.root)
+	local oldTabPos = oldTab and oldTab.Position
+	local dir = if animate and tabIndex(rec.def, v.name) < tabIndex(rec.def, old.name) then -1 else 1
+	if old and old ~= v then
+		if old.idleStop then old.idleStop(); old.idleStop = nil end
+	end
 	rec.current = v.name
+	local r = v.ui.root
+	if rec.def.drawer then
+		placeSidebar(false)
+	else
+		r.Position = UDim2.fromOffset((rec.W - r.Size.X.Offset) / 2, (rec.H - r.Size.Y.Offset) / 2)
+	end
+	if animate then
+		r.Visible = true
+		rec.transition = Motion.crossfade(old.ui.root, r, dir, function() rec.transition = nil end)
+		Motion.springTab(activeTab(r), oldTabPos)
+		Motion.cascade(r, dir)
+	else
+		for _, vv in rec.variants do vv.ui.root.Visible = vv == v end
+	end
+	if rec.holder.Visible and WM.modal == rec.id then idleStart(rec) end
 	local b = WM.binders[rec.id]
 	if b and b.update and WM.state then b.update(rec, v.ui, v.name, WM.state, WM.derived) end
+	if rec.def.drawer and WM.onSidebarView then WM.onSidebarView(v) end
 end
-
-local POP = TweenInfo.new(0.32, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-local SHRINK = TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-local SLIDE_IN = TweenInfo.new(0.22, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
-local SLIDE_OUT = TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
 
 function WM.isOpen(id)
 	local rec = WM.built[id]
 	return rec ~= nil and rec.holder.Visible
+end
+
+local function sourcePoint(id)
+	local f = WM.sources[id]
+	return if f then f() else nil
 end
 
 -- open a window (optionally on a given tab label or variant name)
@@ -250,52 +370,33 @@ function WM.open(id, tab)
 	target = target or (def.tabs and def.tabs[1][2]) or "main"
 	if def.build then target = "main" end
 	if def.drawer then
-		WM.show(rec, target)
-		if not WM.drawerOpen then WM.setDrawer(true) end
+		WM.show(rec, target, rec.current ~= nil and target ~= rec.current)
+		if not Layout.sidebarOpen then WM.setDrawer(true) end
 		return rec
 	end
+	if WM.beforeOpen then WM.beforeOpen(id) end
+	-- one window at a time (never the sidebar)
 	if WM.modal and WM.modal ~= id then
 		local old = WM.built[WM.modal]
-		if old then old.holder.Visible = false end
+		if old then
+			idleStop(old)
+			if old.closing then old.closing() end
+			old.holder.Visible = false
+		end
 	end
 	local wasOpen = WM.modal == id and rec.holder.Visible
 	WM.modal = id
-	WM.show(rec, target)
+	WM.show(rec, target, wasOpen)
+	placeWindow(rec, false)
 	rec.holder.Visible = true
-	backdrop.Visible = true
-	TweenService:Create(backdrop, TweenInfo.new(0.2), { BackgroundTransparency = 0.55 }):Play()
 	if not wasOpen then
 		Sfx.open()
-		if Kit.reduced() then rec.pop.Scale = 1 else
-			rec.pop.Scale = 0.86; TweenService:Create(rec.pop, POP, { Scale = 1 }):Play()
-			WM.cascade(rec)
-		end
+		local v = rec.variants[rec.current]
+		Motion.open(rec, sourcePoint(id), v and v.ui.root)
 	end
+	idleStart(rec)
 	if WM.onChanged then WM.onChanged() end
 	return rec
-end
-
--- rows / cards slide in with a 40 ms stagger after the pop (spec card: "rows cascade in")
-local CASCADE = TweenInfo.new(0.22, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
-function WM.cascade(rec)
-	local v = rec.current and rec.variants[rec.current]
-	if not v then return end
-	local list, n = {}, 0
-	for _, d in v.ui.root:GetDescendants() do
-		local nm = d.Name
-		if d:IsA("Frame") and (string.sub(nm, 1, 4) == "row/" or string.sub(nm, 1, 5) == "card/" or string.sub(nm, 1, 10) == "stat card/") then
-			n += 1
-			if n > 14 then break end
-			table.insert(list, d)
-		end
-	end
-	for i, d in list do
-		local home = d.Position
-		d.Position = home + UDim2.fromOffset(18, 0)
-		task.delay(0.04 * i, function()
-			if d.Parent then TweenService:Create(d, CASCADE, { Position = home }):Play() end
-		end)
-	end
 end
 
 function WM.close()
@@ -304,15 +405,13 @@ function WM.close()
 	local rec = WM.built[id]
 	WM.modal = nil
 	Sfx.close()
-	TweenService:Create(backdrop, TweenInfo.new(0.15), { BackgroundTransparency = 1 }):Play()
-	task.delay(0.15, function() if not WM.modal then backdrop.Visible = false end end)
 	if rec then
-		if Kit.reduced() then rec.holder.Visible = false
-		else
-			local tw = TweenService:Create(rec.pop, SHRINK, { Scale = 0.9 })
-			tw:Play()
-			tw.Completed:Once(function() if WM.modal ~= id then rec.holder.Visible = false end end)
-		end
+		idleStop(rec)
+		local v = rec.current and rec.variants[rec.current]
+		local pt = sourcePoint(id)
+		Motion.close(rec, pt, v and v.ui.root, function()
+			if WM.modal ~= id then rec.holder.Visible = false end
+		end, canvas, pt)
 	end
 	if WM.onChanged then WM.onChanged() end
 end
@@ -321,25 +420,15 @@ function WM.toggle(id, tab)
 	if WM.modal == id then WM.close() else WM.open(id, tab) end
 end
 
--- shop drawer: docked on the right edge (left of the area rail); closing tucks it into the pull tab
+-- the upgrades sidebar: slides away to the right edge (collapse tab stays) and back; never closed by windows / Esc
 function WM.setDrawer(on)
-	local rec = WM.built.shop or buildWindow("shop")
+	if not WM.built.shop then buildWindow("shop") end
+	local rec = WM.built.shop
 	if not rec.current then WM.show(rec, rec.def.tabs[1][2]) end
+	if on == Layout.sidebarOpen then placeSidebar(false); return end
 	WM.drawerOpen = on
-	local home = UDim2.new(1, -RAIL_W, 0.5, 0)
-	local away = UDim2.new(1, rec.W + 40, 0.5, 0)
-	if on then
-		Sfx.open()
-		rec.holder.Visible = true
-		rec.holder.Position = away
-		TweenService:Create(rec.holder, SLIDE_IN, { Position = home }):Play()
-	else
-		Sfx.close()
-		local tw = TweenService:Create(rec.holder, SLIDE_OUT, { Position = away })
-		tw:Play()
-		tw.Completed:Once(function() if not WM.drawerOpen then rec.holder.Visible = false end end)
-	end
-	if WM.onChanged then WM.onChanged() end
+	if on then Sfx.open() else Sfx.close() end
+	Layout.setSidebar(on)   -- fires reflow: sidebar slide, windows + HUD re-anchor
 end
 
 -- live data: called on every server state push; only the visible variant of an open window is refreshed
@@ -354,6 +443,66 @@ function WM.update(s, d)
 	end
 end
 
+-- first open never hitches: after load, build the first view of each unlocked window, one per few frames
+function WM.prebuild(ids)
+	task.spawn(function()
+		task.wait(3)
+		for _, id in ids do
+			if not WM.built[id] then
+				local ok = pcall(function()
+					local rec = buildWindow(id)
+					if not rec.def.build then buildVariant(rec, rec.def.tabs[1][2]) end
+				end)
+				if not ok then warn("[UI] prebuild failed", id) end
+				for _ = 1, 3 do task.wait() end
+			end
+		end
+	end)
+end
+
+function WM.init(parentGui)
+	gui = Instance.new("ScreenGui")
+	gui.Name = "PeckwoodWindows"; gui.ResetOnSpawn = false; gui.IgnoreGuiInset = true
+	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling; gui.DisplayOrder = 20
+	gui.Parent = parentGui
+	canvas = Render.new("Frame", { Name = "canvas", BackgroundTransparency = 1, Size = UDim2.fromOffset(1920, 1080) }, gui)
+	scale = Render.new("UIScale", {}, canvas)
+	WM.canvas = canvas
+	-- no dimming backdrop (Birb): the game keeps running and the sidebar stays usable while a window is open
+	modalLayer = Render.new("Frame", { Name = "windows", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 2 }, canvas)
+	drawerLayer = Render.new("Frame", { Name = "sidebar", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 3 }, canvas)
+	-- collapse tab (Birb: a small tab on the sidebar's left edge at mid-height): steel kit key, right / left glyph
+	do
+		local FKit = require(script.Parent.Figma.FKit)
+		local L = FKit.layout()
+		local k = FKit.KEYn(L, "btn/sidebar", 0, 0, S.TAB_W, S.TAB_H, FKit.PAL.steel, { d = 4, gloss = 0.2 })
+		local face = k.k[3]
+		local g = 14
+		table.insert(face.k, FKit.node("G", "glyph/right", (face.w - g) / 2, (face.h - g) / 2, g, g, { kind = "right", col = "ffffff", ink = 5.5, lw = 2.6 }))
+		table.insert(face.k, FKit.node("G", "glyph/left", (face.w - g) / 2, (face.h - g) / 2, g, g, { kind = "left", col = "ffffff", ink = 5.5, lw = 2.6 }))
+		sidebarTab = FKit.build(L, k, drawerLayer)
+		sidebarTab.root.AnchorPoint = Vector2.new(1, 0.5)
+		sidebarTab.root.ZIndex = 4
+		sidebarTab.on("btn/sidebar", function() WM.setDrawer(not Layout.sidebarOpen) end)
+	end
+	Layout.onChanged(reflow)
+	layout()
+	workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(layout)
+	UIS.InputBegan:Connect(function(io, gp)
+		if gp then return end
+		if io.KeyCode == Enum.KeyCode.Escape or io.KeyCode == Enum.KeyCode.ButtonB then
+			-- Esc / gamepad B closes the open window; the sidebar is never closed by it
+			if WM.onEscape and WM.onEscape() then return end
+			if WM.modal then WM.close() end
+		end
+	end)
+	-- the sidebar is open from the start on the EGGS view
+	WM.open("shop")
+	reflow(false)
+	return canvas
+end
+WM.layout = layout
+
 -- debug / QA: PlayerGui:SetAttribute("PeckwoodOpen", "<window id>[:<tab>]") opens a window without clicking
 function WM.debugHook()
 	local pg = Players.LocalPlayer:WaitForChild("PlayerGui")
@@ -362,6 +511,9 @@ function WM.debugHook()
 		if typeof(v) ~= "string" or v == "" then WM.close(); return end
 		local id, tab = string.match(v, "^([^:]+):?(.*)$")
 		WM.open(id, if tab ~= "" then tab else nil)
+	end)
+	pg:GetAttributeChangedSignal("PeckwoodSidebar"):Connect(function()
+		WM.setDrawer(pg:GetAttribute("PeckwoodSidebar") ~= false)
 	end)
 end
 

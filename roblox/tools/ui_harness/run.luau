@@ -42,6 +42,7 @@ end
 for _, cls in { "TextButton", "ImageButton" } do
 	for _, ev in { "Activated", "MouseButton1Down", "MouseButton1Up", "MouseButton1Click" } do roblox.implementProperty(cls, ev, function(i) return sig(i, ev) end) end
 end
+roblox.implementProperty("NumberValue", "Changed", function(i) return sig(i, "Changed") end)
 roblox.implementMethod("Sound", "Play", function() end)
 roblox.implementMethod("Sound", "Stop", function() end)
 roblox.implementProperty("Sound", "Ended", function(i) return sig(i, "Ended") end)
@@ -62,6 +63,7 @@ local HarnessInstance = { new = function(cls, parent)
 	if GUISET[cls] then
 		i.AbsoluteSize = V2.new(0, 0); i.AbsolutePosition = V2.new(0, 0)
 		if cls == "TextLabel" or cls == "TextButton" or cls == "TextBox" then i.TextBounds = V2.new(0, 0) end
+		if cls == "ScrollingFrame" then i.AbsoluteCanvasSize = V2.new(0, 0); i.AbsoluteWindowSize = V2.new(0, 0) end
 	end
 	if parent then i.Parent = parent end
 	return i
@@ -74,6 +76,7 @@ local function tween(inst, _, props)
 	return { Play = function() for k, v in props do inst[k] = v end end, Cancel = function() end, Completed = Signal.new() }
 end
 local camera = { ViewportSize = V2.new(1920, 1080) }
+function camera:WorldToViewportPoint(p) return roblox.Vector3.new(960, 540, 10), true end
 function camera:GetPropertyChangedSignal() return Signal.new() end
 local workspace = { CurrentCamera = camera }
 local playerGui = Instance.new("Folder"); playerGui.Name = "PlayerGui"
@@ -85,7 +88,8 @@ local services = {
 	ReplicatedStorage = RS, ServerScriptService = SSS,
 	TweenService = { Create = function(_, i, ti, p) return tween(i, ti, p) end },
 	RunService = { RenderStepped = Signal.new(), Heartbeat = Signal.new(), Stepped = Signal.new(), IsStudio = function() return true end, IsClient = function() return true end, IsServer = function() return false end, BindToRenderStep = function() end },
-	UserInputService = { InputBegan = Signal.new(), InputEnded = Signal.new(), InputChanged = Signal.new(), MouseEnabled = true, TouchEnabled = false, GetMouseLocation = function() return V2.new(0, 0) end },
+	UserInputService = { InputBegan = Signal.new(), InputEnded = Signal.new(), InputChanged = Signal.new(), MouseEnabled = true, TouchEnabled = false,
+		GetMouseLocation = function() return V2.new(0, 0) end, IsKeyDown = function() return false end },
 	TextService = { GetTextSize = function(_, s, size) return V2.new(#s * size * 0.55, size) end },
 	GuiService = { GetGuiInset = function() return V2.new(0, 58), V2.new(0, 0) end },
 	Players = { LocalPlayer = player },
@@ -241,6 +245,64 @@ for _, id in ids do
 		print(("%-13s variants built %d"):format(id, nv))
 	end
 end
+-- ---------------------------------------------------------------- layout + motion checks (Birb placement pass)
+local Layout = req(UI:FindFirstChild("Layout"))
+local function check(label, ok, msg) if not ok then table.insert(errors, label .. ": " .. (msg or "")); print("FAIL " .. label .. " " .. (msg or "")) end end
+local sidebar = WM.built.shop
+WM.setDrawer(true)   -- the press-everything pass above also pressed the collapse tab
+task.wait(0.3)
+check("sidebar open", sidebar and sidebar.holder.Visible and Layout.sidebarOpen)
+local function rect(holder, fit)
+	local s = fit.Scale
+	local w, h = holder.Size.X.Offset * s, holder.Size.Y.Offset * s
+	local x = holder.Position.X.Offset + holder.Position.X.Scale * Layout.W - holder.AnchorPoint.X * w
+	local y = holder.Position.Y.Offset + holder.Position.Y.Scale * Layout.H - holder.AnchorPoint.Y * h
+	return x, y, w, h
+end
+for _, id in ids do
+	local def = Defs2[id]
+	if not def.drawer then
+		WM.open(id)
+		local rec = WM.built[id]
+		check("sidebar stays open with " .. id, sidebar.holder.Visible and Layout.sidebarOpen)
+		local x, y, w, h = rect(rec.holder, rec.fit)
+		check("window in game area " .. id, x >= -0.5 and x + w <= Layout.windowRight() + 0.5 and y >= -0.5 and y + h <= Layout.H + 0.5,
+			("x %.0f..%.0f (window right %.0f) y %.0f..%.0f"):format(x, x + w, Layout.windowRight(), y, y + h))
+		-- tab switches: no rebuild of a seen variant, no re-pop
+		local pops, tabs = rec.popCount, 0
+		for _, tb in def.tabs or {} do
+			if tb[2] then tabs += 1; WM.show(rec, tb[2], true) end
+		end
+		for _, tb in def.tabs or {} do if tb[2] then WM.show(rec, tb[2], true) end end
+		local nv = 0; for _ in rec.variants do nv += 1 end
+		check("tab switch does not re-pop " .. id, rec.popCount == pops, ("pops %d -> %d"):format(pops, rec.popCount))
+		check("tab switch builds each view once " .. id, rec.builds == nv, ("builds %d views %d"):format(rec.builds, nv))
+		WM.close()
+	end
+end
+-- collapse the sidebar: HUD re-flows to the screen edge, windows widen; open it again
+WM.setDrawer(false)
+task.wait(0.3)
+check("sidebar collapses", not Layout.sidebarOpen and Layout.gameRight() == Layout.W)
+local comp = hudGui:FindFirstChild("companions", true)
+WM.setDrawer(true)
+task.wait(0.3)
+check("sidebar reopens", Layout.sidebarOpen and sidebar.holder.Visible)
+-- no HUD group crosses into the sidebar
+for _, g in hudGui.canvas:GetChildren() do
+	if g:IsA("Frame") and g.Visible and g:FindFirstChildOfClass("UIScale") then
+		local sc = g:FindFirstChildOfClass("UIScale").Scale
+		local w = g.Size.X.Offset * sc
+		local x = g.Position.X.Offset - g.AnchorPoint.X * w
+		if g.Name ~= "moment" and g.Name ~= "toast" and g.Name ~= "dev" then
+			check("HUD clear of the sidebar " .. g.Name, x + w <= Layout.gameRight() + 0.5, ("right edge %.0f > %.0f"):format(x + w, Layout.gameRight()))
+		end
+	end
+end
+-- feel hooks run
+try("onLabel", function() local Hud2 = req(UI:FindFirstChild("Hud")); Hud2.onLabel(roblox.Vector2.new(400, 300), 12345, "popcorn"); Hud2.bigMoment("THE MINE opens!", "unlock", "map") end)
+local _ = comp
+
 -- HUD keys
 local hudHits = {}
 for _, h in hudGui:GetDescendants() do if h.Name == "hit" and h:IsA("TextButton") then table.insert(hudHits, { h, h.Parent.Name }) end end

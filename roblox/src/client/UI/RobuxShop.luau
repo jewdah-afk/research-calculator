@@ -11,6 +11,9 @@ local hex = Kit.hex
 local plr = Players.LocalPlayer
 
 local Hud = {}          -- (kept the old name inside so the moved code reads the same)
+local gameRight = 1440  -- right edge of the game area (design px), set by RobuxShop.reflow
+local panelScale
+local function fitScale() return math.min(1, (gameRight - 48) / 1080, (1080 - 48) / 980) end
 local canvas, showToast, act
 local derived = nil
 local Spec = {
@@ -134,7 +137,9 @@ local function shopCard(parent, it, w, h, iconSz, nameSz, keyH, order)
 end
 function Hud.openShop()
 	if shopOverlay then shopOverlay.Visible = not shopOverlay.Visible; Hud.refreshShop(); return end
-	shopOverlay = Kit.new("TextButton", { Text = "", AutoButtonColor = false, BackgroundColor3 = hex("06070c"), BackgroundTransparency = 0.35, Size = UDim2.fromScale(1, 1), ZIndex = 80 }, canvas)
+	-- the board opens inside the game area (left of the upgrades sidebar), dimming only that area
+	shopOverlay = Kit.new("TextButton", { Text = "", AutoButtonColor = false, BackgroundColor3 = hex("06070c"), BackgroundTransparency = 0.35,
+		Size = UDim2.new(0, gameRight, 1, 0), ZIndex = 80 }, canvas)
 	local PW, PH = 1080, 980
 	local panel = Kit.new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 16), Size = UDim2.fromOffset(PW, PH), ZIndex = 81 }, shopOverlay)
 	Kit.new("TextButton", { Text = "", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 81 }, panel)   -- clicks on the board never close it
@@ -289,8 +294,8 @@ function Hud.openShop()
 		{ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(PW / 2, PH - 34), ZIndex = 84 })
 	show(1)
 	shopOverlay.Activated:Connect(function() shopOverlay.Visible = false end)
-	local sc = Kit.new("UIScale", { Scale = 0.9 }, panel)
-	TweenService:Create(sc, TweenInfo.new(0.24, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+	panelScale = Kit.new("UIScale", { Scale = 0.9 * fitScale() }, panel)
+	TweenService:Create(panelScale, TweenInfo.new(0.24, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = fitScale() }):Play()
 	Hud.refreshShop()
 end
 
@@ -299,4 +304,9 @@ function RobuxShop.init(c, toastFn, actFn) canvas, showToast, act = c, toastFn, 
 function RobuxShop.setDerived(d) derived = d; Hud.refreshShop() end
 function RobuxShop.toggle() Hud.openShop() end
 function RobuxShop.isOpen() return shopOverlay ~= nil and shopOverlay.Visible end
+function RobuxShop.reflow(right)
+	gameRight = right
+	if shopOverlay then shopOverlay.Size = UDim2.new(0, gameRight, 1, 0) end
+	if panelScale then panelScale.Scale = fitScale() end
+end
 return RobuxShop
