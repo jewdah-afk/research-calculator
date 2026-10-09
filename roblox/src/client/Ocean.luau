@@ -18,7 +18,10 @@ local S = Models.S
 local L = S / 2
 local PLATE = 0.4 * L
 local BRICK = 3 * PLATE
-Ocean.SEA_Y = -PLATE - BRICK * 1.25   -- a bit more than one brick of cliff shows above the water
+-- AAA plan (target B, 2026-10-09): each island is a raised diorama plate: the sea sits CLIFF studs below the grass, so
+-- a rock cliff skirt shows between the grass lip and a rounded sand beach at the waterline
+Ocean.CLIFF = 16
+Ocean.SEA_Y = -PLATE - BRICK * 1.25 - Ocean.CLIFF
 local SEA_Y = Ocean.SEA_Y
 local COLS, ROWS = Map.COLS, Map.ROWS
 
@@ -292,6 +295,8 @@ local function openLand(i, j)
 	return c ~= 0   -- inland ponds belong to the land (painting them as sea put a white foam square on them)
 end
 local CORAL = { "ff7a8a", "ffb14a", "b98cff", "ff5fb0", "5fe0c8", "ffe066" }
+local BED = -40              -- matches LandTerrain's sea bed
+local ringTiles, ringSig = {}, nil   -- beach / shelf tiles last written into Terrain
 function Ocean.rebuild()
 	if not shelfF then return end
 	shelfF:ClearAllChildren()
@@ -329,24 +334,44 @@ function Ocean.rebuild()
 		end
 	end
 	task.spawn(paint, function(i, j) return dist[k(i, j)] end)
-	-- shelf plates: depth steps down with distance (d 1..3 shallow sand, 4..5 reef edge); runs merged per row
-	local function level(d) return if d <= 1 then 1 elseif d <= 3 then 2 elseif d <= 5 then 3 else 0 end
-	local LEVEL_Y = { SEA_Y - 1.2, SEA_Y - 2.6, SEA_Y - 4.6 }
-	local LEVEL_C = { "f1e2b4", "e2d29e", "6fb3a8" }
+	-- beach + shelf as smooth Terrain sand (target B): a rounded beach crest just above the water on the first ring,
+	-- shallow sand just under it on the second, a shelf sloping down to the reef edge; nothing past 5 tiles
+	local function shelfTop(d) return if d <= 1 then SEA_Y + 1.6 elseif d == 2 then SEA_Y - 0.4 else SEA_Y - 3.5 - (d - 3) * 1.4 end
+	local ring, sig = {}, {}
 	for j = mnJ, mxJ do
-		local runStart, runLv = nil, 0
-		for i = mnI, mxI + 1 do
+		for i = mnI, mxI do
 			local d = dist[k(i, j)]
-			local lv = if d and d > 0 and i <= mxI then level(d) else 0
-			if lv ~= runLv then
-				if runStart and runLv > 0 then
-					local w = (i - runStart) * S
-					local x0 = sx(runStart)
-					part(shelfF, Vector3.new(w, BRICK, S), CFrame.new(x0 + w / 2, LEVEL_Y[runLv] - BRICK / 2, sz(j) + S / 2), hx(LEVEL_C[runLv]))
-				end
-				runStart, runLv = i, lv
-			end
+			if d and d > 0 and d <= 5 then ring[k(i, j)] = { i, j, d }; table.insert(sig, k(i, j) * 8 + d) end
 		end
+	end
+	table.sort(sig)
+	local sigS = table.concat(sig, ",")
+	if sigS ~= ringSig then
+		local T = workspace.Terrain
+		local TOP = math.floor(SEA_Y / 4 + 0.5) * 4
+		local old = ringTiles
+		ringTiles, ringSig = ring, sigS
+		task.spawn(function()
+			local n = 0
+			for key, t in old do   -- tiles that left the ring (and did not become land) go back to open sea
+				if not ring[key] and not openLand(t[1], t[2]) then
+					local x, z = sx(t[1]) + S / 2, sz(t[2]) + S / 2
+					T:FillBlock(CFrame.new(x, (BED + TOP + 8) / 2, z), Vector3.new(S, TOP + 8 - BED, S), Enum.Material.Air)
+					T:FillBlock(CFrame.new(x, TOP - 2, z), Vector3.new(S, 4, S), Enum.Material.Water)
+				end
+				n += 1; if n % 200 == 0 then task.wait() end
+			end
+			for d = 5, 1, -1 do   -- far rings first so the nearer, higher sand rounds over them
+				for _, t in ring do
+					if t[3] ~= d then continue end
+					local x, z = sx(t[1]) + S / 2, sz(t[2]) + S / 2
+					local top = shelfTop(d) + (hash(t[1], t[2] + 7) - 0.5) * 0.8
+					T:FillBlock(CFrame.new(x, (BED + top - 2) / 2, z), Vector3.new(S, top - 2 - BED, S), Enum.Material.Sand)
+					T:FillBall(Vector3.new(x, top - 3.2, z), 3.2, Enum.Material.Sand)   -- neighbouring balls merge into a rounded shore
+					n += 1; if n % 120 == 0 then task.wait() end
+				end
+			end
+		end)
 	end
 	-- coral on the reef edge + lists for life
 	for j = mnJ, mxJ do
@@ -356,9 +381,8 @@ function Ocean.rebuild()
 			local x, z = sx(i) + S / 2, sz(j) + S / 2
 			if d >= 2 and d <= 5 then table.insert(coastList, Vector3.new(x, 0, z)) end
 			if d >= 8 then table.insert(deepList, Vector3.new(x, 0, z)) end
-			if d >= 2 and d <= 4 and hash(i, j) < 0.1 then
-				local lv = level(d)
-				local base = LEVEL_Y[lv]
+			if d >= 3 and d <= 5 and hash(i, j) < 0.1 then
+				local base = shelfTop(d)
 				local m = Instance.new("Model"); m.Name = "Coral"
 				local col = hx(CORAL[math.floor(hash(i + 3, j) * #CORAL) + 1])
 				local col2 = hx(CORAL[math.floor(hash(i, j + 5) * #CORAL) + 1])

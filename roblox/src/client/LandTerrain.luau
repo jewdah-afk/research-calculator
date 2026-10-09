@@ -8,8 +8,8 @@ local Terrain = workspace.Terrain
 local LandTerrain = {}
 
 local M = Enum.Material
-local BED = -24          -- sea bed: columns reach down to it so cliffs continue under the clear water
-local WATER_TOP = -4     -- Ocean's terrain sea level (one voxel under the grass)
+local BED = -40          -- sea bed: columns reach down to it so cliffs continue under the clear water
+local WATER_TOP = -20    -- Ocean's terrain sea level (Ocean.CLIFF studs under the grass: islands are raised plates)
 
 -- cel look: every terrain material is overridden by a flat MaterialVariant (a plain white map, so the colour is
 -- exactly SetMaterialColor), hard shadows come from Lighting. No grass blades (Workspace.Terrain.Decoration off).
@@ -147,8 +147,7 @@ function LandTerrain.column(x0, z0, top, mat, code, shore)
 	if mat == M.Grass or mat == M.LeafyGrass then
 		local n1 = math.noise(i * 0.07, j * 0.07, 3.1)
 		local n2 = math.noise(i * 0.19 + 40, j * 0.19, 7.7)
-		if shore and World.base(i, j) == 0 then mat = M.Sand
-		elseif n2 > 0.42 and World.base(i, j) > 0 then mat = M.Ground   -- no random dirt stains in the Park valley
+		if n2 > 0.42 and World.base(i, j) > 0 then mat = M.Ground   -- no random dirt stains in the Park valley
 		elseif n1 > 0.45 then mat = M.LeafyGrass   -- deep moss is dark: only small patches
 		elseif n1 < -0.05 then mat = M.Pavement   -- drier meadow tone (painted grass, warmer tint)
 		end
@@ -156,12 +155,13 @@ function LandTerrain.column(x0, z0, top, mat, code, shore)
 	-- cliff slopes show rock (snow way up high); hills stay grassy mounds, capped with snow on the summit
 	if cliff and y - World.base(i, j) > 2 then mat = if y > 76 then M.Snow else M.Rock
 	elseif hill and y > 86 then mat = M.Snow end
-	local under = if mat == M.Snow or mat == M.Rock or mat == M.Slate then M.Slate elseif shore or mat == M.Sand then M.Sand else M.Mud
+	local under = if mat == M.Snow or mat == M.Rock or mat == M.Slate then M.Slate elseif mat == M.Sand then M.Sand else M.Mud
 	-- the top two voxels carry the surface material: with a fractional top voxel the one below is what you see
 	-- WriteVoxels: a full voxel's rendered surface sits ~2 studs above its top (measured in Play: logic ground 0,
 	-- terrain surface 2.0), so write 2 studs lower to put the visible ground exactly where the bird / eggs / props stand
 	local yv = y - 2.5   -- measured: -2 -> surface +1.0, -3 -> -1.0
-	column(x0, z0, yv, { { yv - 7, mat }, { yv - 14, under }, { -math.huge, M.Rock } })
+	-- island edge (target B): a grass lip, a thin soil band, then the rock cliff face down to the sea bed
+	column(x0, z0, yv, { { yv - 5, mat }, { yv - 9, under }, { -math.huge, M.Rock } })
 end
 
 -- remove a column (area locked again): back to sea water up to sea level
