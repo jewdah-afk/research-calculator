@@ -56,7 +56,10 @@ Branch **`claude/peckwood-isle`** (pushed). Build: `cd roblox && rojo build defa
   hen feet / most props now within 0.5 stud of the visible ground.
 - QA script (paste in Studio, Client, after MAXED): raycast Terrain per open tile for Water on non-water tiles; every
   `Smooth` prop: bounding-box bottom vs terrain raycast; every egg vs ground; LogService warnings/errors.
-- Open from QA: pond reads as a pale sunken square (water / bed colour, square shape); 3 props 3-5 studs off the
+- Fixed after QA: pond foam square (Ocean `openLand` now counts inland ponds as land); rounded lakes (per-tile water
+  FillBall + banks within ~3 tiles dip below the waterline with noise in `LandTerrain.visualTop` + bank flooding);
+  smooth props stand on the rendered ground (swapProp raycasts Terrain; QA: all 14 Park props 0 offset).
+- (old) Open from QA: pond reads as a pale sunken square (water / bed colour, square shape); 3 props 3-5 studs off the
   ground; trees "sink" only by their root meshes (expected); paths read as dirt stains in places.
 
 ### Eggs + portals (2026-10-09, latest)

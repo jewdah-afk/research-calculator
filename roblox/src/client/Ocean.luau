@@ -289,7 +289,7 @@ end
 -- ---------------------------------------------------------------- coast shelf (follows the open coastline)
 local function openLand(i, j)
 	local c = World.tile(i, j)
-	return c ~= 0 and c ~= 3   -- water tiles (ponds, coves) are painted as shallow sea
+	return c ~= 0   -- inland ponds belong to the land (painting them as sea put a white foam square on them)
 end
 local CORAL = { "ff7a8a", "ffb14a", "b98cff", "ff5fb0", "5fe0c8", "ffe066" }
 function Ocean.rebuild()

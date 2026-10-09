@@ -94,6 +94,15 @@ function LandTerrain.visualTop(i, j, top, code)
 	end
 	local h = World.height(i, j)
 	if h > 0 then y = base + hillAvg(i, j) * 3.2 + math.noise(i * 0.2, j * 0.2, 9) * 1.5 end
+	-- pond banks: land within ~2 tiles of a pond slopes gently down to the water (rounded natural edge, not a pit)
+	if code ~= 3 then
+		local best = math.huge
+		for dj = -3, 3 do for di = -3, 3 do
+			if World.rawTile(i + di, j + dj) == 3 then best = math.min(best, math.sqrt(di * di + dj * dj) + math.noise(i * 0.4, j * 0.4, 2) * 0.8) end
+		end end
+		-- the first ring dips below the waterline, so the shore follows this rounded slope instead of the square tiles
+		if best < 3.2 then y = math.min(y, top - (1 - math.clamp((best - 0.8) / 2.4, 0, 1)) ^ 1.3 * 5) end
+	end
 	-- shores dip toward the water
 	local sea = 0
 	for _, o in { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } } do if not landAt(i + o[1], j + o[2]) then sea += 1 end end
@@ -126,7 +135,11 @@ function LandTerrain.column(x0, z0, top, mat, code, shore)
 	if code == 3 then   -- pond / river: sand bed, water on top (at its terrace height)
 		local wt = math.max(0, snap(top)) - 4   -- one voxel below the land, so the water can't spill over the banks
 		block(x0, z0, BED, wt - 4, M.Mud)   -- dark bed so ponds read blue, not pale
-		block(x0, z0, wt - 4, wt, M.Water)
+		-- a ball of water per tile: neighbouring balls merge into a rounded natural shoreline instead of a square
+		Terrain:FillBall(Vector3.new(x0 + 2, wt - 1.5, z0 + 2), 3.1, M.Water)
+		-- flood the dipped bank too: water up to the pond level wherever the bank is lower (air only)
+		local r = Region3.new(Vector3.new(x0 - 6, wt - 4, z0 - 6), Vector3.new(x0 + 10, wt, z0 + 10)):ExpandToGrid(4)
+		Terrain:ReplaceMaterial(r, 4, M.Air, M.Water)
 		return
 	end
 	local y, cliff, hill = LandTerrain.visualTop(i, j, math.max(0, top), code)

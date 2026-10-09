@@ -336,7 +336,12 @@ local function swapProp(info)
 	end
 	local acf, asz2 = a:GetBoundingBox()
 	a.WorldPivot = CFrame.new(acf.Position - Vector3.new(0, asz2.Y / 2, 0))
-	a:PivotTo(CFrame.new(cf.Position.X, info.base, cf.Position.Z) * CFrame.Angles(0, yaw, 0))
+	-- stand on the ground the terrain actually rendered (raycast), falling back to the computed base
+	local gy = info.base
+	local rp = RaycastParams.new(); rp.FilterType = Enum.RaycastFilterType.Include; rp.FilterDescendantsInstances = { workspace.Terrain }
+	local hit = workspace:Raycast(Vector3.new(cf.Position.X, info.base + 40, cf.Position.Z), Vector3.new(0, -80, 0), rp)
+	if hit and hit.Material ~= Enum.Material.Water then gy = hit.Position.Y end
+	a:PivotTo(CFrame.new(cf.Position.X, gy, cf.Position.Z) * CFrame.Angles(0, yaw, 0))
 	for _, d in m:GetDescendants() do
 		if d:IsA("BasePart") and not d:FindFirstChildWhichIsA("Light") then d:Destroy()
 		elseif d:IsA("BasePart") then d.Transparency = 1 end
