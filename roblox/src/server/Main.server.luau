@@ -96,6 +96,7 @@ end)()
 
 type Kernel = { pos: Vector3, kind: string, golden: boolean }
 local sessions = {}
+local sendSfxPicks: (Player) -> ()   -- dev Sound Board picks (defined with the actions below; used on join)
 -- session = { real = state (saved), view = state (what the game runs on), mode = "regular"|"maxed"|"step",
 --             kernels, nextId, popT, lastAct, rng, dirty, fishDirty, autoAllowed, devAllowed, autoT, buyT }
 
@@ -184,7 +185,7 @@ Players.PlayerAdded:Connect(function(plr)
 		dirty = true, fishDirty = true, autoAllowed = checkGroup(plr), devAllowed = isDev(plr), autoT = 0, buyT = 0 }
 	if not ss.autoAllowed then real.auto = false end
 	sessions[plr] = ss
-	if ss.devAllowed then task.spawn(sendSfxPicks, plr) end
+	if ss.devAllowed then task.defer(function() if sendSfxPicks then sendSfxPicks(plr) end end) end
 	plr.CharacterAdded:Connect(function(ch)
 		task.defer(function()
 			local hrp = ch:WaitForChild("HumanoidRootPart") :: BasePart
@@ -512,7 +513,7 @@ local function loadSfxPicks()
 	end
 	return sfxPicks
 end
-local function sendSfxPicks(plr)
+function sendSfxPicks(plr)
 	local ok, json = pcall(function() return HttpService:JSONEncode(loadSfxPicks()) end)
 	if ok then plr:SetAttribute("PeckwoodSfxPicks", json) end
 end
