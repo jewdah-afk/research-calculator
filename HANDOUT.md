@@ -17,16 +17,15 @@ merged with peckwood-isle 6788d54 for ZOOM_PLAY 9). Static checks + a Lune smoke
 
 **v3 (QA round 2, 2026-10-09): what changed after the v2 Studio pass** (kept as hero quality: the Rare crack frame,
 the toon burst cloud with the swirl dome, the Mythic rune circle drawing in):
-- **EditableMesh budget = 0.** Roblox caps live EditableMeshes at ~7 per client (fewer on phones); the map uses 2.
-  `Vfx/MeshFx` now loads Creator Store MESH assets (mesh-only, no scripts) with `AssetService:CreateMeshPartAsync`
-  and pools clones; no EditableMesh is ever created (the smoke test asserts it). Ids + alternates in `MeshFx.ASSETS`:
-  crescent `92572984944785` (alt 129794830935741, "wide / long crescent vfx"), swirl `10895746627` (alt 2671071349),
-  shock wall `131187152008585` (alt 2788580299, "Tall Shockwave"), broken ring `7741808274` (alt 7753130413, Akron
-  Circle4Gaps / 8Gaps), thin ring `7263678713` (alt 12640000893, Akron Pipe_Circle_Thin), dome `7349045196` (alt
-  7349045384, Akron Sphere_Half), tornado `7029892192` (alt 7028996145, "Tornado VFX"), star `15591537807` (alt
-  2620058380, "4Star"). Picked by name/creator (thumbnails not viewed): `_G.__vfx("meshes")` prints what loaded, each
-  bounding-box size and the detected axis; swap an id (or set `flip = true` / `axis = n`) if a shape looks wrong.
-  Orientation is auto-detected (thinnest axis = normal for plane shapes, odd-one-out axis for up shapes).
+- **EditableMesh budget = 0; meshes come from the place.** Roblox caps live EditableMeshes at ~7 per client (the map
+  uses 2), and store meshes the place does not own cannot be fetched by id at runtime (QA r3: "MeshContentProvider
+  failed"). So `Vfx/MeshFx` clones the 8 template MeshParts saved in `ReplicatedStorage.PeckwoodVfxMeshes`
+  (`assets/VfxMeshes.rbxm`, scanned, no scripts, untextured): dome 2x1x2, crescent 7.2x1.14x12.1, swirl 2.48x0.5x2.49,
+  wall 10x14.9x10, ringgap 1.96x0.1x1.96, ring 2x2x2, tornado 50x48.9x33.2, star4 4x1x4 (from store meshes
+  7349045196, 92572984944785, 10895746627, 131187152008585, 7741808274, 7263678713, 7029892192, 15591537807).
+  Coloured by Color + Neon (glow) or SmoothPlastic (ink) + Transparency. Orientation is detected from the box (all
+  normals / axes are Y except the tornado, round in X/Y so its axis reads as Z: check it stands upright; `axis = 2`
+  in `MeshFx.ASSETS` pins it). The ring's 2x2x2 box is pinned to Y. `_G.__vfx("meshes")` prints size + axis.
 - **Camera feel no longer needs Main**: CamFx binds its own RenderStep at Camera+2 while a shake / push / flash runs
   (reads what Main wrote, adds the feel, unbinds when idle). Main's camera lines are the originals again. Reduced
   Motion turns shake / push off and logs it once; `_G.__vfx("motion", true)` forces it on for QA.

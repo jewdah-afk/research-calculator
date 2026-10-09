@@ -1,30 +1,32 @@
 --!nonstrict
--- Vfx/MeshFx: VFX mesh shapes from Creator Store MESH assets (no scripts inside a mesh asset), loaded at runtime with
--- AssetService:CreateMeshPartAsync and handed out as pooled MeshPart clones. They cost NO EditableMesh slots: Roblox
--- caps live EditableMeshes at ~7 per client (fewer on phones) and the map uses 2, so the VFX uses 0 (QA round 2).
--- Everything is optional: a shape that fails to load, or is not loaded yet, returns nil and the effect plays its
--- particle layer instead.
+-- Vfx/MeshFx: VFX mesh shapes, handed out as pooled MeshPart clones of the templates saved in the place at
+-- ReplicatedStorage.PeckwoodVfxMeshes (assets/VfxMeshes.rbxm: one untextured MeshPart per shape, scanned, no scripts).
+-- QA round 3: store meshes the place does not own cannot be fetched by id at runtime ("MeshContentProvider failed"),
+-- so nothing is loaded by id any more. They cost NO EditableMesh slots (Roblox caps live EditableMeshes at ~7 per
+-- client and the map uses 2): the VFX uses 0. Everything is optional: a missing template returns nil and the effect
+-- plays its particle layer instead.
 --
--- Each asset's orientation is detected from its bounding box (template Size), so an export with Y-up or Z-up both
--- work: "plane" shapes (crescent, swirl, star, flat rings) use the THINNEST axis as their normal; "up" shapes (dome,
--- tornado, shock wall) use the odd-one-out axis (the one unlike the two equal diameters) as their axis. Per asset
--- `flip` turns it over, `alt` is a second id tried if the first fails. Swap ids here if a shape looks wrong in Studio.
-local AssetService = game:GetService("AssetService")
+-- Each shape's orientation is detected from its bounding box (template Size): "plane" shapes (crescent, swirl, star,
+-- flat rings) use the THINNEST axis as their normal; "up" shapes (dome, tornado, shock wall) use the odd-one-out axis
+-- (the one unlike the two equal diameters). Per shape `axis` (1 X, 2 Y, 3 Z) pins it, `flip` turns it over.
+local RS = game:GetService("ReplicatedStorage")
 
 local MeshFx = {}
 MeshFx.enabled = true
 MeshFx.MAX_PER_KIND = 16
 
--- Creator Store mesh assets (free, mesh-only). frame: "plane" (normal -> local Z) | "up" (axis -> local Y)
+MeshFx.FOLDER = "PeckwoodVfxMeshes" -- ReplicatedStorage folder of template MeshParts, one per shape (named = kind)
+-- shape -> how to read it. frame: "plane" (normal -> local Z) | "up" (axis -> local Y). id = the Creator Store mesh it
+-- was saved from (documentation only). Native template sizes (studs, X x Y x Z) noted from the rbxm.
 MeshFx.ASSETS = {
-	crescent = { id = "92572984944785", alt = "129794830935741", frame = "plane" }, -- "Meshes/wide crescent vfx" (alt "long crescent")
-	swirl = { id = "10895746627", alt = "2671071349", frame = "plane" }, -- "wind" swirl (alt "Swirl" spiral)
-	wall = { id = "131187152008585", alt = "2788580299", frame = "up" }, -- "Meshes/Tall Shockwave" ring wall (alt "Meshes/shockwave")
-	ringgap = { id = "7741808274", alt = "7753130413", frame = "plane" }, -- Akron "Circle4Gaps_Smooth" broken ring (alt 8 gaps)
-	ring = { id = "7263678713", alt = "12640000893", frame = "plane" }, -- Akron "Pipe_Circle_Thin_Smooth" thin ring (alt "Smooth Torus 1")
-	dome = { id = "7349045196", alt = "7349045384", frame = "up" }, -- Akron "Spheres_Sphere_Half" (alt 1-sided)
-	tornado = { id = "7029892192", alt = "7028996145", frame = "up" }, -- "Tornado VFX" (alt "Cyliner Tornado VFX")
-	star4 = { id = "15591537807", alt = "2620058380", frame = "plane" }, -- "4Star" (alt "Meshes/Flash")
+	crescent = { id = "92572984944785", frame = "plane" }, -- "wide crescent vfx", 7.2 x 1.14 x 12.1 (normal Y)
+	swirl = { id = "10895746627", frame = "plane" }, -- "wind", 2.48 x 0.50 x 2.49 (normal Y)
+	wall = { id = "131187152008585", frame = "up" }, -- "Tall Shockwave", 10 x 14.9 x 10 (axis Y)
+	ringgap = { id = "7741808274", frame = "plane" }, -- Akron Circle4Gaps_Smooth, 1.96 x 0.1 x 1.96 (normal Y)
+	ring = { id = "7263678713", frame = "plane", axis = 2 }, -- Akron Pipe_Circle_Thin, 2 x 2 x 2 (box says nothing: pinned Y)
+	dome = { id = "7349045196", frame = "up" }, -- Akron Sphere_Half, 2 x 1 x 2 (axis Y)
+	tornado = { id = "7029892192", frame = "up" }, -- "Tornado VFX", 50 x 48.9 x 33.2 (round in X/Y -> axis Z: CHECK in Studio)
+	star4 = { id = "15591537807", frame = "plane" }, -- "4Star", 4 x 1 x 4 (normal Y)
 }
 MeshFx.KINDS = { "crescent", "swirl", "wall", "ringgap", "ring", "dome", "tornado", "star4" }
 
@@ -80,47 +82,38 @@ local function correction(ax: number, t: number): CFrame
 	return if ax == 3 then CFrame.Angles(-math.pi / 2, 0, 0) else CFrame.Angles(0, 0, math.pi / 2)
 end
 
-local function createFrom(id: string): MeshPart?
-	local uri = "rbxassetid://" .. id
-	local ok, mp = pcall(function()
-		return AssetService:CreateMeshPartAsync(Content.fromUri(uri), { CollisionFidelity = Enum.CollisionFidelity.Box })
-	end)
-	if ok and mp then return mp end
-	ok, mp = pcall(function() return AssetService:CreateMeshPartAsync(uri) end) -- older signature
-	if ok and mp then return mp end
-	return nil
-end
-
 local function load(kind: string)
 	if templates[kind] ~= nil or loading[kind] then return end
 	local spec = MeshFx.ASSETS[kind]
 	if not spec then templates[kind] = false; return end
 	loading[kind] = true
-	local mp = createFrom(spec.id) or (spec.alt and createFrom(spec.alt))
+	local f = RS:FindFirstChild(MeshFx.FOLDER) or RS:WaitForChild(MeshFx.FOLDER, 10)
+	local src = f and f:FindFirstChild(kind)
 	loading[kind] = nil
-	if not mp then
+	if not (src and src:IsA("MeshPart")) then
 		templates[kind] = false
-		warn("[Vfx] mesh asset '" .. kind .. "' did not load, using particles")
+		warn("[Vfx] mesh template '" .. kind .. "' missing in ReplicatedStorage." .. MeshFx.FOLDER .. ", using particles")
 		return
 	end
-	mp.Name = "VfxMesh_" .. kind
-	mp.Anchored = true
-	mp.CanCollide = false
-	mp.CanQuery = false
-	mp.CanTouch = false
-	mp.CastShadow = false
-	mp.Material = Enum.Material.Neon
-	mp.Color = Color3.new(1, 1, 1)
-	mp.Transparency = 1
-	mp.CFrame = FAR
-	pcall(function() mp.DoubleSided = true end) -- plugin-only on some versions; the meshes read from one side anyway
-	mp.Parent = parentFolder()
-	local size0 = mp.Size
+	-- the template itself stays untouched in ReplicatedStorage; clones get the VFX settings
+	local size0 = src.Size
 	local t = if spec.frame == "up" then 2 else 3
 	local ax = spec.axis or detectAxis(size0, spec.frame)
 	local corr = correction(ax, t)
 	if spec.flip then corr = corr * CFrame.Angles(math.pi, 0, 0) end
-	templates[kind] = { part = mp, size0 = size0, ax = ax, t = t, corr = corr, frame = spec.frame }
+	templates[kind] = { part = src, size0 = size0, ax = ax, t = t, corr = corr, frame = spec.frame }
+end
+
+local function setup(p: MeshPart)
+	p.Name = "VfxMesh"
+	p.Anchored = true
+	p.CanCollide = false
+	p.CanQuery = false
+	p.CanTouch = false
+	p.CastShadow = false
+	p.Material = Enum.Material.Neon
+	p.Transparency = 1
+	p.CFrame = FAR
 end
 
 -- load every shape in the background (call once at start; get() also triggers a load)
@@ -158,6 +151,7 @@ function MeshFx.get(kind: string): MeshPart?
 	if not (p and p.Parent) then
 		if (live[kind] or 0) >= MeshFx.MAX_PER_KIND then return nil end
 		p = t.part:Clone()
+		setup(p)
 		p.Parent = parentFolder()
 	end
 	live[kind] = (live[kind] or 0) + 1
