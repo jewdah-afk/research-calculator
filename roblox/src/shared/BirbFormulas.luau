@@ -12,7 +12,10 @@ local EN = require((if script then script.Parent.EternityNum else "./EternityNum
 local F = {}
 F.EN = EN
 
+-- one-off tree nodes: s.sunflowerUpgrades[id] = level (Birb's save); v2 saves used s.owned[id] = true
 local function has(s, id: string): boolean
+	local su = s.sunflowerUpgrades
+	if su ~= nil and (su[id] or 0) >= 1 then return true end
 	return s.owned ~= nil and s.owned[id] == true
 end
 

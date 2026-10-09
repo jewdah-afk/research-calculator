@@ -10,6 +10,44 @@ Last updated: 2026-10-09 (Peckwood Ascent world rebuild, branch `claude/peckwood
 
 Branch **`claude/peckwood-isle`** (pushed). Build: `cd roblox && rojo build default.project.json -o Peckwood.rbxl`, open it in Studio (one Studio window only). The owner says it is OK to stop Play / reload the test place at any time.
 
+### MECHANICS: Phase 1 on Birb's real rules (claude/peckwood-mech, 2026-10-09, latest)
+Owner: "start coding in the real lua mechanics but with our 2.5d engine, same way". Branch **`claude/peckwood-mech`**
+(worktree `~/Downloads/rc-main-mech`, not pushed, not merged; Studio QA first). The playtest (`playtest/js`, which matches
+Birb's live engine value for value) is the source of truth; the Luau is written fresh from it.
+- **Parity harness (Phase 0):** `node roblox/tools/parity/run.js` (one command, ~1.5 min) loads the playtest headless,
+  dumps every value `playtest/parity/parity.js` compares + Phase 1 extras + simulated runs through the playtest's own
+  step (seeded random streams), replays the same saves / actions through `Game.stepPhase1` in lune, checks the v2 -> v3
+  save migration and smoke-steps every dev save, and writes `roblox/tools/parity/REPORT.md`. **Phase 1 gate: 100%**
+  (see the report for the count). Details, the Birb-save mapping and how to add Phase 2: `roblox/tools/parity/README.md`.
+- **Code:** `shared/Birb/Rules.luau` (every Phase 1 formula: shop rows, multipliers, egg cap, spawn interval, pickup /
+  magnet / Gravity Field radii, Molt plumes, seed ticks, the sunflower tree's parent / chain / visibility / cost rules,
+  Sparrow formulas + milestones, castle requirements; client and server share it), `shared/Birb/Data.luau` (generated
+  from the playtest: 19 rows, 163 tree nodes with effective gates, 134 stations), `server/Systems/{Park,Sparrow,Castle,Shops}`
+  (egg field + pickups + awards + seed ticks + income rates, the flock that collects on the Park while you are away,
+  feeding 10% / s + the evolution reset, buy / MAX / Molt / tree purchases). Later systems plug their multipliers into
+  `Rules.hooks` (today: the old simplified fish / quest / sacrifice / Big Beak pass).
+- **Server:** the Phase 1 step runs at a fixed 20 Hz per player (`G.stepPhase1`), on Birb's rules in Birb px. The Park
+  field box is the fenced egg yard's bounding box (MapData px), spots re-roll onto yard tiles (fallback = a random yard
+  tile); radii stay Birb px (studs = px / 16 * 4). Pickups are server-side from the character position (a jump faster than
+  the bird can move gives no pickups that tick). New actions: `tree <id>`, `feed hold|release|click` (only at the Castle),
+  `sparrow feed|drain|stop|mitosis|rebirb|automitosis|autorebirb|rate <pct>`; `buy` checks Birb's drawer visibility.
+  New remote `Move` (Gravity Field drift batches, 10 Hz). Desert golden drops keep the old code until the Desert phase.
+- **Save v3** (`Game.migrate`): `owned[id] = true` -> `sunflowerUpgrades[id] = 1`, Gilded Margins moves to the tree,
+  `sparrow` gets Birb's fields (`count`, `prestigeCount`, `resonanceXP`, `feeding`, `draining`, autos, `feedRatePercent`;
+  unlocked at Evolution 1 like Birb), `evo = { fed = { popcorn, feathers, seeds, fish, twigs, moneta }, progress, talked }`.
+- **Progression changes (Birb):** the castle opens with the Unlock Evolve tree node (no 100M-egg button), the Sparrow
+  window moves to Evolution 1 (bridge row), the Trees window opens with the Garden; Molt resets the P tree incl. golden
+  rows; Evolution keeps only permanent rows / nodes + Unlock Evolve, Desert key, Double Catch, Seagull Synergy.
+- **Live UI:** shop drawer EGGS / MOLT (plume gain, keepsakes) / SEEDS rows price and level from Rules; wallet rates are
+  Birb's smoothed income; **Trees** window = Birb's 82 sunflower stations (and 51 on the DESERT tab) built from the Figma
+  node templates (owned / buy / need / locked / "?"), edges, drag + wheel + key zoom, live detail panel, BUY; **Evolve**
+  window = live stage, satisfaction, the stage's foods (fed / need / have), stage cards, HOLD TO FEED / EVOLVE.
+- **Studio QA to do:** eggs stay inside the yard; pickups feel right at radius 40 px (10 studs); Gravity Field drift on
+  the client (`Move`); Trees pan / zoom / buy; Evolve hold at the Castle; a v2 save loads (sparrow, tree, castle fed).
+- **Not matched / open:** sparrow birds are simulated on the server but not drawn yet; Birb's evolve sends the bird to the
+  Park (ours leaves it at the Castle); the seed platform is a 10-stud pad at the Garden centre (no prop yet); the
+  ARCHIVIST tab stays Figma's sample (Phase 7).
+
 ### VFX (claude/peckwood-vfx): v3, after Studio QA rounds 1 + 2 and the four craft levers (2026-10-09)
 Owner: "super AAA quality and fit our style" (cel toy diorama: flat pastel blocks, hard 2-3 tone steps, white-hot
 cores, ink #16181e only on normal-blend pieces). Branch `claude/peckwood-vfx` (worktree `~/Downloads/rc-main-vfx`,

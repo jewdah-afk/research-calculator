@@ -2,10 +2,21 @@
 -- Defs: every buyable row in the Peckwood windows, bound to the verified Birb math
 -- (BirbFormulas / BirbSystems / Data/Upgrades.json). Server and client both read this,
 -- so the price the client shows is the price the server charges.
-local F = require(script.Parent.BirbFormulas)
-local S = require(script.Parent.BirbSystems)
+-- loads in Roblox (ModuleScripts) and in lune (roblox/tools/parity): sibling modules by name, Data/*.json via @lune/fs
+local function sib(name: string)
+	if script then return require(script.Parent:WaitForChild(name)) end
+	return require("./" .. name)
+end
+local F = sib("BirbFormulas")
+local S = sib("BirbSystems")
+local R = (if script then require(script.Parent:WaitForChild("Birb"):WaitForChild("Rules")) else require("./Birb/Rules")) :: any
 local EN = F.EN
-local JSON = script.Parent.Data
+local function json(name: string)
+	if script then return require(script.Parent.Data[name]) end
+	local fs, serde = require("@lune/fs") :: any, require("@lune/serde") :: any
+	local dir = string.match(debug.info(1, "s"), "^(.*)[\\/]")
+	return serde.decode("json", fs.readFile(dir .. "/Data/" .. name .. ".json"))
+end
 
 local Defs = {}
 Defs.F, Defs.S, Defs.EN = F, S, EN
@@ -26,7 +37,7 @@ Defs.CUR_ORDER = { "popcorn", "goldenFeathers", "sunflowerSeeds", "goldenPopcorn
 
 -- raw upgrades.json rows by id
 local RAW = {}
-for _, d in require(JSON.Upgrades) do RAW[d.id] = d end
+for _, d in json("Upgrades") do RAW[d.id] = d end
 Defs.RAW = RAW
 
 -- big-safe multipliers: plain decimals below 1e6, EternityNum short form above (never a 300-digit string)
@@ -38,10 +49,20 @@ local function short(n: any) return EN.short(n) end
 -- fx(L) returns the display string of the effect AT level L.
 local UP = {}
 Defs.UP = UP
+Defs.R = R
+local NO_STATE = { upgrades = {}, sunflowerUpgrades = {} }
 local function up(id: string, t)
 	t.id = id
 	local raw = RAW[id]
-	if raw then
+	local birb = R.Data.UP_BY_ID[id]
+	if birb and birb.tree ~= "M" and id:sub(1, 7) ~= "p_echo_" then
+		-- Birb Phase 1 rows: price, level and max come from shared/Birb/Rules (the parity-checked port)
+		t.cur = t.cur or R.wkey(birb.costCurrency)
+		t.max = t.max or birb.maxLevel or 1
+		t.raw = raw or birb
+		t.birb = birb
+		t.cost = t.cost or function(L, s) return R.discounted(s or NO_STATE, birb, L) end
+	elseif raw then
 		t.cur = t.cur or raw.costCurrency
 		t.max = t.max or raw.maxLevel or 1
 		t.raw = raw
@@ -87,6 +108,8 @@ up("dave_training", { name = "Seed Training", desc = "Dave forages faster.", ico
 -- internal level for any row (F.level handles the p_/pr_/s_/m_ start-at-1 rule)
 function Defs.level(s, id: string): number
 	local d = UP[id]
+	if d and d.birb then return R.level(s, id) end
+	if id:sub(1, 2) == "d_" then return R.sunLevel(s, id) end   -- leveled tree nodes (Gilded Margins)
 	if d and d.start ~= nil then
 		local v = s.upgrades and s.upgrades[id]
 		return if v ~= nil then v else d.start
@@ -95,6 +118,7 @@ function Defs.level(s, id: string): number
 end
 function Defs.maxLevel(s, id: string): number
 	local d = UP[id]
+	if d.birb then return R.maxLevel(s, id) end
 	if d.raw then return F.maxLevel(s, d.raw) end
 	return d.max
 end
@@ -111,17 +135,18 @@ function Defs.shownLevel(s, id: string): (number, number)
 end
 
 -- ---------------------------------------------------------------- data tables
-Defs.FISH = require(JSON.fish)
-Defs.RODS = require(JSON.rods)
-Defs.BAITS = require(JSON.baits)
-Defs.QUESTS = require(JSON.quests)
-Defs.SACRIFICE = require(JSON.sacrifice_milestones)
+Defs.FISH = json("fish")
+Defs.RODS = json("rods")
+Defs.BAITS = json("baits")
+Defs.QUESTS = json("quests")
+Defs.SACRIFICE = json("sacrifice_milestones")
 Defs.FISH_BY_ID = {}
 for i, f in Defs.FISH do Defs.FISH_BY_ID[f.id] = f; f.index = i end
 Defs.ROD_BY_ID = {}
 for i, r in Defs.RODS do Defs.ROD_BY_ID[r.id] = r; r.index = i end
 
--- Evolution feed table (SYSTEMS.md "Evolution")
+-- Evolution feed table (SYSTEMS.md "Evolution"; the live one is Rules.EVO_REQ, keyed popcorn / feathers / seeds /
+-- fish / twigs / moneta). Kept in the wallet-key shape for older readers.
 Defs.EVO = {
 	{ popcorn = 1e7 },
 	{ popcorn = 1e10, moneta = 1000 },
@@ -142,9 +167,11 @@ local function evo(s) return s.evolutionCount or 0 end
 Defs.ISLANDS = {
 	{ id = "park", name = "THE PARK", windows = { "popcorn", "profile" }, goal = "Collect eggs", gate = function() return true end },
 	{ id = "molt", name = "THE PARK", windows = { "molt" }, goal = "Hold 1,000 eggs to unlock Molt", gate = function(s) return (s.stats.bestPopcorn or 0) >= 1000 or (s.rebirbCount or 0) > 0 end },
-	{ id = "garden", name = "THE GARDEN", windows = { "seeds", "sparrow" }, goal = "Molt for Plumes: 1 Plume per 1,000 eggs you hold", gate = function(s) return (s.rebirbCount or 0) > 0 end },
-	{ id = "castle", name = "THE CASTLE", windows = { "evolve" }, goal = "Unlock Evolve: 100M eggs", cost = { popcorn = 1e8 }, gate = function(s) return s.owned.d_unlock_evolve == true end },
-	{ id = "bridge", name = "THE BRIDGE", windows = { "rods", "baits", "index", "aquarium", "seagull" }, goal = "Evolve once to open the Bridge", gate = function(s) return evo(s) >= 1 end },
+	{ id = "garden", name = "THE GARDEN", windows = { "seeds", "trees" }, goal = "Molt for Plumes: 1 Plume per 1,000 eggs you hold", gate = function(s) return (s.rebirbCount or 0) > 0 end },
+	-- Birb: the way to the castle opens with Unlock Evolve, a sunflower-tree node (100M eggs, after Golden Harvest)
+	{ id = "castle", name = "THE CASTLE", windows = { "evolve" }, goal = "Buy Unlock Evolve in the sunflower tree", gate = function(s) return R.hasSun(s, "d_unlock_evolve") end },
+	-- Birb unlocks the Sparrow at Evolution 1
+	{ id = "bridge", name = "THE BRIDGE", windows = { "rods", "baits", "index", "aquarium", "seagull", "sparrow" }, goal = "Evolve once to open the Bridge", gate = function(s) return evo(s) >= 1 end },
 	{ id = "forest", name = "THE FOREST", windows = { "nest", "redpanda" }, goal = "Reach Evolution 2 to open the Forest", gate = function(s) return evo(s) >= 2 end },
 	{ id = "mine", name = "THE MINE", windows = { "mine" }, goal = "Reach Evolution 3 to open the Mine", gate = function(s) return evo(s) >= 3 end },
 	{ id = "desert", name = "THE DESERT", windows = { "golden", "dave" }, goal = "Reach Evolution 4 to open the Desert", gate = function(s) return evo(s) >= 4 end },
