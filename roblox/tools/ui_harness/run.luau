@@ -187,6 +187,16 @@ end
 local remotes = { State = remote("State"), Fish = remote("Fish"), Toast = remote("Toast"), Action = remote("Action"), Spawn = remote("Spawn"), Collect = remote("Collect") }
 
 local UI = client:FindFirstChild("UI")
+-- stand the bird on an area (default the Bridge, like the Figma HUD mock 229:7) so context bar / hotbar show
+do
+	local World = req(shared:FindFirstChild("World"))
+	World.open = 99   -- IslandView.sync sets this in game (every area unlocked on the MAXED-like save)
+	local isl = World.byId[process.env.PECK_AREA or "bridge"]
+	if isl then
+		local hrp = { Position = roblox.Vector3.new((isl.cx - 20) * 4, 0, (isl.cz - 15) * 4) }
+		player.Character = { FindFirstChild = function(_, n) if n == "HumanoidRootPart" then return hrp end end }
+	end
+end
 local Hud
 try("require Hud", function() Hud = req(UI:FindFirstChild("Hud")) end)
 if not Hud then for _, e in errors do print(e) end; process.exit(1) end
@@ -325,5 +335,50 @@ for i = 1, math.min(10, #warnings) do print("  " .. warnings[i]) end
 local IconAlias = req(UI:FindFirstChild("Figma"):FindFirstChild("IconAlias"))
 local miss = 0; for _ in IconAlias.missing do miss += 1 end
 print("icons drawn with a family fallback (not uploaded yet): " .. miss)
+-- layout dump for the composite QA mock (tools/ui_harness/mock.py): design-px rects of every HUD piece + windows
+do
+	local Hud2 = req(UI:FindFirstChild("Hud"))
+	remotes.State.OnClientEvent:Fire(s, d)
+	local out = { W = Layout.W, H = Layout.H, gameRight = Layout.gameRight(), sidebarW = Layout.sidebarW(), top = Layout.TOP, items = {} }
+	local function own(c)
+		local u = c:FindFirstChildOfClass("UIScale")
+		return if u and u.Name ~= "Pop" and u.Name ~= "Squash" then u.Scale else 1
+	end
+	-- absolute design-px rect: each GuiObject's size is scaled by its own UIScale and every UIScale above it;
+	-- anchor points apply to that scaled size (Roblox rules); scale-sized layers (canvas, layers) fill the canvas
+	local function abs(c)
+		if c.Name == "canvas" or not c:IsA("GuiObject") then return 0, 0, Layout.W, Layout.H, 1 end
+		local px, py, pw, ph, psc = abs(c.Parent)
+		local sc = psc * own(c)
+		local w = (c.Size.X.Offset + c.Size.X.Scale * pw / psc) * sc
+		local h = (c.Size.Y.Offset + c.Size.Y.Scale * ph / psc) * sc
+		local x = px + c.Position.X.Offset * psc + c.Position.X.Scale * pw - c.AnchorPoint.X * w
+		local y = py + c.Position.Y.Offset * psc + c.Position.Y.Scale * ph - c.AnchorPoint.Y * h
+		return x, y, w, h, sc
+	end
+	local function rectOf(inst)
+		local x, y, w, h = abs(inst)
+		return { x, y, w, h }
+	end
+	local function add(name, inst) if inst and inst.Visible then out.items[name] = rectOf(inst) end end
+	local hc = hudGui.canvas
+	for _, g in hc:GetChildren() do
+		if g:IsA("Frame") and g:FindFirstChildOfClass("UIScale") then
+			for _, c in g:GetChildren() do
+				if c:IsA("Frame") and c.Visible and (string.sub(c.Name, 1, 4) == "hud/" or c.Name:find("btn/")) then add(g.Name .. "|" .. c.Name, c) end
+			end
+		end
+	end
+	local sb = WM.built.shop
+	add("sidebar|" .. (sb.current or "?"), sb.holder)
+	WM.open("fishing")
+	add("window|fishing", WM.built.fishing.holder)
+	WM.close()
+	WM.open("teleport")
+	add("window|teleport", WM.built.teleport.holder)
+	local f = io and io.open
+	require("@lune/fs").writeFile("tools/ui_harness/layout_dump.json", serde.encode("json", out, true))
+	local _ = Hud2
+end
 print(("ERRORS: %d"):format(#errors))
 process.exit(if #errors > 0 then 1 else 0)

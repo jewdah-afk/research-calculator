@@ -296,7 +296,10 @@ local function layoutCompanions()
 			if show then row.Position = UDim2.fromOffset(0, y); y += 52 + SP.GAP / SP.HUD end
 		end
 	end
-	companions.root.Visible = state == nil or unlockedWindow("sparrow")
+	-- always shown like Birb; dimmed (locked) until the first companion joins
+	local locked = state ~= nil and not unlockedWindow("sparrow")
+	local shade = companions.node:FindFirstChild("locked shade", true)
+	if shade then shade.Visible = locked end
 	-- the dropdown covers the AUTO slot (Birb): AUTO hides while the list is open
 	if autoKey then autoKey.root.Visible = not companionsOpen end
 end
@@ -319,7 +322,21 @@ Hud.onAuto = onAuto
 local function buildCompanions()
 	local g = group("companions", Vector2.new(300, 420), SP.HUD)
 	companions = Render.component(S.companions, "hud/companions (open)", g)
-	companions.on("header key", toggleCompanions)
+	companions.on("header key", function()
+		if state and not unlockedWindow("sparrow") then
+			Sfx.deny(); Hud.toast("Companions join as you progress (Sparrow at the Garden)", "info", "sparrow")
+			return
+		end
+		toggleCompanions()
+	end)
+	do
+		local face = companions.node:FindFirstChild("header key") and companions.node:FindFirstChild("header key"):FindFirstChild("face")
+		if face then
+			local sh = Render.new("Frame", { Name = "locked shade", BorderSizePixel = 0, BackgroundColor3 = Color3.fromHex("0b0c10"), BackgroundTransparency = 0.45,
+				Size = UDim2.fromScale(1, 1), ZIndex = 900, Visible = false }, face)
+			Render.new("UICorner", { CornerRadius = UDim.new(0, 2.5) }, sh)
+		end
+	end
 	for _, r in COMPANION_ROWS do
 		local row = companions.node:FindFirstChild(r[1])
 		if row then
@@ -724,9 +741,12 @@ local TILE_ACTION = {
 	auto = onAuto,
 	pets = function() toggleCompanions() end,
 }
-local TILE_PITCH_X, TILE_PITCH_Y = 111, 125   -- Figma tile block pitch (unscaled)
+-- the 4x2 tile block at 75 % of the HUD scale (compact, not in your face); 8 px between keys on screen
+local TILE_S = 0.6
+local TILE_PITCH_X = 104 + Layout.S.GAP / TILE_S
+local TILE_PITCH_Y = 111 + Layout.S.GAP / TILE_S
 local function buildTiles()
-	local g = group("tiles", Vector2.new(TILE_PITCH_X * 3 + 104, TILE_PITCH_Y + 119), SP.HUD)
+	local g = group("tiles", Vector2.new(TILE_PITCH_X * 3 + 104, TILE_PITCH_Y + 119), TILE_S)
 	for i, id in TILE_ORDER do
 		local ui = Render.component(S.tiles, "hud/tile/" .. id, g)
 		ui.root.Position = UDim2.fromOffset(((i - 1) % 4) * TILE_PITCH_X, math.floor((i - 1) / 4) * TILE_PITCH_Y)
@@ -764,7 +784,7 @@ local function buildArrows()
 			if ui then
 				ui.root.Visible = false
 				-- right / up / down arrows hug their group's anchor edge
-				if dir == "right" then ui.root.AnchorPoint = Vector2.new(1, 0); ui.root.Position = UDim2.new(1, 0, 0, 0)
+				if dir == "right" or dir == "down" then ui.root.AnchorPoint = Vector2.new(1, 0); ui.root.Position = UDim2.new(1, 0, 0, 0)
 				elseif dir ~= "left" then ui.root.AnchorPoint = Vector2.new(0.5, 0); ui.root.Position = UDim2.new(0.5, 0, 0, 0) end
 				ui.onAny(function(_, inst) if arrows[dir].target then travelTo(arrows[dir].target, inst) end end)
 			end
@@ -776,8 +796,25 @@ local function setArrowLabel(ui, text)
 	if not ui then return end
 	local face = ui.node:FindFirstChild("face")
 	if not face then return end
-	for _, l in Render.childTexts(face) do Render.setText(l, text) end
+	local glyph
+	for _, c in face:GetChildren() do if string.sub(c.Name, 1, 6) == "glyph/" then glyph = c end end
+	for _, l in Render.childTexts(face) do
+		if not l:GetAttribute("fitted") then
+			-- the label owns the face between its start and the chevron (or the face edge): never past it
+			l:SetAttribute("fitted", true)
+			local x = l.Position.X.Offset
+			local right = if glyph and glyph.Position.X.Offset > x then glyph.Position.X.Offset - 6 else face.Size.X.Offset - 8
+			l.Size = UDim2.fromOffset(math.max(20, right - x), l.Size.Y.Offset)
+			local sh = Render.SHADOW[l]
+			if sh then sh.Size = l.Size end
+			Render.fit(l, 10)
+		end
+		Render.setText(l, text)
+	end
 end
+-- short requirement copy for a locked destination (the chip has room for ~12 characters)
+local SHORT_REQ = { garden = "MOLT ONCE", castle = "100M EGGS", bridge = "EVOLVE ONCE", forest = "EVOLUTION 2", mine = "EVOLUTION 3",
+	desert = "EVOLUTION 4", expedition = "STURDY NEST", echo = "EVOLUTION 5" }
 local function updateArrows(area)
 	local t = TRAVEL[area] or {}
 	for dir, a in arrows do
@@ -790,11 +827,7 @@ local function updateArrows(area)
 		if id then
 			setArrowLabel(a.open, destName(id))
 			if a.locked and not open then
-				local req = "LOCKED"
-				for _, x in Defs.ISLANDS do
-					if x.id == id then req = string.upper((string.gsub(string.gsub(x.goal, "^Reach ", ""), " to open.*$", ""))) end
-				end
-				setArrowLabel(a.locked, req)
+				setArrowLabel(a.locked, SHORT_REQ[id] or "LOCKED")
 			end
 			-- an arrow whose destination just unlocked pulses once
 			if open and a.wasLocked and wasTarget == id then Kit.pop(a.open.root, 1.12) end
@@ -829,8 +862,9 @@ local function badgeOn(key, host, text)
 	local b = badges[key]
 	if b and b.host ~= host then if b.frame then b.frame:Destroy() end; b = nil; badges[key] = nil end
 	if not b then
+		-- inside the host's top-right corner (tab bars clip: zero clipping)
 		local f = Render.new("Frame", { Name = "badge", BackgroundColor3 = Color3.fromHex("e8344f"), BorderSizePixel = 0, AnchorPoint = Vector2.new(1, 0),
-			Position = UDim2.new(1, 6, 0, -8), Size = UDim2.fromOffset(28, 22), ZIndex = 1000, AutomaticSize = Enum.AutomaticSize.X }, host)
+			Position = UDim2.new(1, -3, 0, 3), Size = UDim2.fromOffset(28, 22), ZIndex = 1000, AutomaticSize = Enum.AutomaticSize.X }, host)
 		Render.new("UICorner", { CornerRadius = UDim.new(0, 4) }, f)
 		Render.new("UIStroke", { Thickness = 2, Color = Render.INK, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, f)
 		Render.new("UIPadding", { PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6) }, f)
@@ -909,15 +943,16 @@ function reflow(animate)
 	place("banner", Vector2.new(0, 0), edge - bx0, top - by0, false)
 	place("wallet", Vector2.new(0, 0), edge, top + (by1 - by0) + SP.GAP, false)
 	-- top-right column (right edge = the rail's): COMPANIONS, AUTO, rail
+	local railL = colR - 100 * SP.RAIL
+	place("rail", Vector2.new(0, 0), railL, top, animate)
+	local colR2 = railL - SP.GAP2   -- COMPANIONS / AUTO column, left of the rail
 	local _, _, cx1c = vb(S.companions, "hud/companions (open)", SP.HUD)
-	place("companions", Vector2.new(0, 0), colR - cx1c, top, animate)
+	place("companions", Vector2.new(0, 0), colR2 - cx1c, top, animate)
 	local compH = 58 * SP.HUD
 	local _, _, ax1 = vb(S.auto, "hud/auto/fish on", SP.HUD)
-	place("auto", Vector2.new(0, 0), colR - ax1, top + compH + SP.GAP, animate)
-	local autoH = 64 * SP.HUD
-	place("rail", Vector2.new(0, 0), colR - 100 * SP.RAIL, top + compH + SP.GAP + autoH + SP.GAP2, animate)
+	place("auto", Vector2.new(0, 0), colR2 - ax1, top + compH + SP.GAP, animate)
 	-- bottom-right tile block (Birb's icon row)
-	local tilesW, tilesH = (TILE_PITCH_X * 3 + 104) * SP.HUD, (TILE_PITCH_Y + 111) * SP.HUD
+	local tilesW, tilesH = (TILE_PITCH_X * 3 + 104) * TILE_S, (TILE_PITCH_Y + 111) * TILE_S
 	place("tiles", Vector2.new(0, 0), colR - tilesW, H - edge - tilesH, animate)
 	local tilesLeft = colR - tilesW
 	-- bottom-centre: objective at the bottom, hotbar (or UNLOCK) above it; centred in the game area, nudged left
@@ -932,7 +967,7 @@ function reflow(animate)
 	if hotbar then hotbar.root.AnchorPoint = Vector2.new(0.5, 0); hotbar.root.Position = UDim2.new(0.5, 0, 0, 0) end
 	if unlockKey then unlockKey.root.AnchorPoint = Vector2.new(0.5, 0); unlockKey.root.Position = UDim2.new(0.5, 0, 0, 0) end
 	-- down arrow: left of the hotbar, bottoms aligned
-	place("travel down", Vector2.new(1, 0), bcx - math.max(hbW, 280 * SP.HUD) / 2 - SP.GAP2 + 120 * SP.HUD, hbY + hbH - 62 * SP.HUD, animate)
+	place("travel down", Vector2.new(1, 0), bcx - hbW / 2 - SP.GAP2, hbY + hbH - 62 * SP.HUD, animate)
 	-- top-centre: context bar, up arrow under it, toasts under that
 	local ctxH = (if context then 98 else 0) * SP.CONTEXT
 	place("context", Vector2.new(0.5, 0), cx, top, animate)
@@ -942,13 +977,13 @@ function reflow(animate)
 	place("toast", Vector2.new(0.5, 0), cx, upY + upH, animate)
 	-- mid-left / mid-right travel arrows (the right one stays left of the rail)
 	place("travel left", Vector2.new(0, 0.5), edge, H / 2, animate)
-	place("travel right", Vector2.new(1, 0.5), colR - 100 * SP.RAIL - SP.GAP2, H / 2, animate)
+	place("travel right", Vector2.new(1, 0.5), railL - SP.GAP2, H / 2, animate)
 	-- [E] prompt and big moments: centre of the game area
 	place("prompt", Vector2.new(0.5, 0), cx, Layout.snap(H * 0.6), animate)
 	place("moment", Vector2.new(0.5, 0.5), cx, H * 0.4, animate)
 	if devPanel then
-		devPanel.AnchorPoint = Vector2.new(0, 0)
-		devPanel.Position = UDim2.fromOffset(edge, H / 2 + 70 * SP.HUD / 2 + SP.GAP2)
+		devPanel.AnchorPoint = Vector2.new(0.5, 0)
+		devPanel.Position = UDim2.fromOffset(cx, SP.GAP)
 	end
 	Hud.collapsed = not Layout.sidebarOpen
 	Hud.dock.Visible = Layout.sidebarOpen
@@ -1117,7 +1152,7 @@ end
 local function buildDev()
 	local L = FKit.layout()
 	devPanel = Render.new("Frame", { Name = "dev", BackgroundTransparency = 1, Size = UDim2.fromOffset(3 * 160 + 2 * SP.GAP, 52), Visible = false, ZIndex = 20 }, canvas)
-	Render.new("UIScale", { Scale = SP.HUD }, devPanel)
+	Render.new("UIScale", { Scale = 0.55 }, devPanel)
 	local x = 0
 	for _, b in { { "REGULAR", "regular", FKit.PAL.green }, { "MAXED", "maxed", FKit.PAL.gold }, { "NEXT AREA", "next", FKit.PAL.violet } } do
 		local k = FKit.BTNn(L, "btn/dev " .. b[2], 0, 0, 160, 52, b[3], b[1], { size = 17 })
@@ -1158,7 +1193,10 @@ function Hud.start(remotes)
 	WM.onSidebarView = function(v) sidebarView = v.name; task.defer(updateBadges) end
 	WM.init(pg)
 	WM.debugHook()
-	WM.onChanged = function() reflow(true) end
+	WM.onChanged = function()
+		Hud.collapsed = not Layout.sidebarOpen
+		Hud.dock.Visible = Layout.sidebarOpen
+	end
 	Layout.onChanged(function(animate) reflow(animate) end)
 	layoutCanvas()
 	workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(layoutCanvas)

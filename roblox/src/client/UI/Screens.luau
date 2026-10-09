@@ -106,7 +106,9 @@ end
 -- ---------------------------------------------------------------- SETTINGS
 local SETTINGS = {
 	{ id = "sound", title = "SOUND", desc = "Buttery keycap clicks and effect cues", icon = "settings", get = function() return not Kit.muted end, set = function(v) Kit.muted = not v end },
-	{ id = "music", title = "MUSIC", desc = "Area theme per island (coming with the music set)", icon = "sparrow", local_ = true },
+	{ id = "music", title = "MUSIC", desc = "Area theme per island (music volume group)", icon = "sparrow",
+		get = function() return (require(script.Parent.Sfx).CATEGORY.music or 0) > 0 end,
+		set = function(v) require(script.Parent.Sfx).setVolume("music", if v then 0.6 else 0) end },
 	{ id = "motion", title = "REDUCED MOTION", desc = "Fades instead of bounces", icon = "clock", local_ = true, off = true },
 	{ id = "numbers", title = "NUMBERS", desc = "1.2Qa letters or 1.2e15", icon = "index", choice = { "SHORT", "SCIENTIFIC" } },
 	{ id = "graphics", title = "GRAPHICS", desc = "Props, fog and fireflies", icon = "map", choice = { "HIGH", "LOW" } },
@@ -212,7 +214,6 @@ local function buildTeleport(parent)
 		add(row, FKit.BODYn(L, "Open", 12, { name = "status", x = 54, y = 28, w = 280 }))
 	end
 	local ui = FKit.build(L, panel, parent)
-	local stateNow
 	for _, isl in areas do
 		local row = ui.find("area/" .. isl.id)
 		local hit = Render.new("TextButton", { Name = "hit", Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 999,
@@ -227,7 +228,6 @@ local function buildTeleport(parent)
 		end)
 	end
 	ui.update = function(s)
-		stateNow = s
 		local here = Hud.currentAreaId and Hud.currentAreaId()
 		for _, isl in areas do
 			local row = ui.find("area/" .. isl.id)

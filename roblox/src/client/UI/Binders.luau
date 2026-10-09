@@ -162,8 +162,18 @@ local function fillRow(row, s, id, st, r)
 	-- title (top-left text) and description (lower-left text)
 	for _, t in texts do
 		local x, y = t.Position.X.Offset, t.Position.Y.Offset
-		if y < 40 and x < rowW * 0.6 then Render.setText(t, string.upper(d.name))
-		elseif y > 90 and x < rowW * 0.6 then Render.setText(t, d.desc) end
+		if x < rowW * 0.6 and (y < 40 or y > 90) then
+			-- zero clipping: title / description get the room up to the key column and shrink to fit it
+			if not t:GetAttribute("fitted") then
+				t:SetAttribute("fitted", true)
+				t.TextWrapped = false
+				t.Size = UDim2.fromOffset(math.floor(rowW * 0.66) - x, t.Size.Y.Offset)
+				local sh = Render.SHADOW[t]
+				if sh then sh.Size = t.Size; sh.TextWrapped = false end
+				Render.fit(t, 10)
+			end
+			Render.setText(t, if y < 40 then string.upper(d.name) else d.desc)
+		end
 	end
 	-- icon: the upgrade's own painted icon (up_* art falls back to its family icon until uploaded)
 	local well = row:FindFirstChild("icon well")
@@ -330,6 +340,24 @@ local function refreshList(api, s, onBuy, attentionOn)
 					if string.sub(name, 1, 7) == "btn/buy" then holdRepeat(function() onBuy(id, false, inst) end, k) end
 				end
 				ui.onUp = holdStop
+				-- MAX stays a quiet steel key under BUY (the green BUY is the row's only strong element)
+				local mx = ui.node:FindFirstChild("btn/max")
+				if mx then
+					local steel = FKit.PAL.steel
+					for _, part in { { mx:FindFirstChild("face"), nil }, { mx:FindFirstChild("lip"), 0.58 } } do
+						local f = part[1]
+						if f then
+							for _, gg in f:GetChildren() do if gg:IsA("UIGradient") then gg:Destroy() end end
+							f.BackgroundColor3 = Color3.new(1, 1, 1); f.BackgroundTransparency = 0
+							Render.gradient(f, FKit.vgrad(steel, part[2]), 1)
+						end
+					end
+					local cap = mx:FindFirstChild("face") and mx.face:FindFirstChild("gloss cap")
+					if cap then cap.BackgroundTransparency = 0.6 end
+					for _, l in mx:GetDescendants() do
+						if l:IsA("TextLabel") and not string.find(l.Name, "drop") then Render.setTextColor(l, Color3.fromHex("c9d2e3")) end
+					end
+				end
 				-- the primary row: a small static "recommended" sparkle on its BUY key
 				if st == "buy" then
 					local key = ui.node:FindFirstChild("btn/buy")

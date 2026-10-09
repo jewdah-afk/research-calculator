@@ -153,7 +153,8 @@ function Motion.close(rec, toPt, root, done, burstParent, burstPt)
 	rec.closing = finish
 	task.delay(wait, function()
 		if finished then return end
-		cg, unwrap = Motion.wrap(rec.inner, 48)
+		-- a big transient canvas so the window can travel to its button without being cut off
+		cg, unwrap = Motion.wrap(rec.inner, 900)
 		tw(cg, 0.18, { GroupTransparency = 1 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
 		tw(rec.pop, 0.18, { Scale = 0.45 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
 		if toPt then tw(rec.inner, 0.18, { Position = offsetTo(rec, toPt) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In) end
