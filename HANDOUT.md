@@ -291,7 +291,9 @@ where a system exists and Figma's own sample save everywhere else.
 - **Live vs placeholder:** live = wallet + egg rate, banner, objective + UNLOCK, companions levels, AUTO state, fishing
   catches / rod per catch, mine area, parrot level, desert chance + field count, nest tier + twigs, shop drawer rows
   (EGGS / golden / MOLT / SEEDS: name, LV bar, now >>> next, price, buy / need / maxed state swap, BUY + MAX send
-  `buy`), MOLT gain + MOLT key, Mine SHOP rows, Profile stats, Fast Travel locks, Settings sound. Actions wired to the
+  `buy`), MOLT gain + MOLT key, Mine SHOP rows, FISHDEX (all 426 species from `Defs.FISH` + the Fish remote, rod-tier
+  sections built as they scroll into view, rarity plates, silhouettes, detail panel follows the clicked fish), Profile
+  stats, Fast Travel locks, Settings sound. Actions wired to the
   existing intents: molt, buy, feed / evolve, sparrow, seagull migrate, dave, panda, parrot spend, expedition, sacrifice,
   fish go, unlock, auto, dev. Everything else shows the Figma sample (SampleData for HUD values).
 - **Not reproduced / caveats:** header "swoosh" vector shapes (dropped); radial gradients = soft-ellipse approximation
@@ -300,7 +302,7 @@ where a system exists and Figma's own sample save everywhere else.
   non-seamless `ui/stripes` id (upload `roblox/assets/ui/stripes_seamless.png`); **328 icons not uploaded** (list with
   source PNGs: `roblox/tools/figma_export/icons_to_upload.txt`; they show a family fallback until their ids are in
   `shared/Icons.luau`, the `lock` badge stays blank until uploaded); tab locks are not enforced (placeholder build: every
-  tab opens); fish / enemy / quest grids show the Figma sample, not the live 426 fish yet.
+  tab opens); Collection / enemy / quest grids still show the Figma sample (Fishdex is live).
 - **Checks (no Studio used):** `rojo build` OK; `luau-lsp analyze` clean on the new UI; `lune run
   tools/ui_harness/run.luau` loads the real UI modules on lune's instance model with service mocks, starts the HUD, pushes
   a state, opens every window / tab / view and presses every key: 0 errors (per-window instance counts printed).

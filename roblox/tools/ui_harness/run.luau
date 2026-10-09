@@ -188,6 +188,11 @@ try("require Hud", function() Hud = req(UI:FindFirstChild("Hud")) end)
 if not Hud then for _, e in errors do print(e) end; process.exit(1) end
 try("Hud.start", Hud.start, remotes)
 try("State push", function() remotes.State.OnClientEvent:Fire(s, d) end)
+try("Fish push", function()
+	local disc, best, have = {}, {}, {}
+	for i, f in Defs.FISH do if i % 3 == 0 then disc[f.id] = true; best[f.id] = i * 0.37; have[f.id] = i % 7 end end
+	remotes.Fish.OnClientEvent:Fire(disc, best, have)
+end)
 local hudGui = playerGui:FindFirstChild("PeckwoodHUD")
 print(("HUD built: %d instances"):format(hudGui and count(hudGui) or -1))
 

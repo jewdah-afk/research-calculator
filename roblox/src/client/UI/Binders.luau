@@ -367,9 +367,203 @@ B.sacrifice = {
 		ui.on("btn/sacrifice all", function(inst) act("sacrifice", nil, nil, inst) end)
 	end,
 }
+-- ---------------------------------------------------------------- FISHDEX: every species, live (426 fish)
+-- The Figma grid (cells 97x130 at a 105 / 138 pitch, rod-tier section headers, "not found" silhouettes, rarity
+-- plates) is rebuilt from its own templates inside a ScrollingFrame. Cells are built per tier section as they
+-- scroll into view (never all 426 at once); the detail panel follows the clicked cell.
+local RARITY = {   -- plate gradient + name colour per rarity (rare / epic / legendary / mythic are the Figma swatches)
+	common = { { "4a5262", "262c37" }, "c9d2e3" }, uncommon = { { "2f7a35", "143d18" }, "9dffae" },
+	rare = { { "255199", "112452" }, "6cb2ff" }, epic = { { "683599", "2e1259" }, "c893ff" },
+	legendary = { { "986207", "4c2407" }, "ffc94a" }, mythic = { { "99254f", "4c0f26" }, "ff7a96" },
+}
+local function fishName(id)
+	local n = string.gsub(string.gsub(id, "^fish_", ""), "_", " ")
+	return (string.gsub(n, "(%a)([%w]*)", function(a, b) return string.upper(a) .. b end))
+end
+Binders.fishName = fishName
+local function effectText(f)
+	if not (f.effect and f.effect.type) then return "-" end
+	local t = string.gsub(string.gsub(f.effect.type, "_mult$", ""), "_", " ")
+	t = string.upper(string.sub(t, 1, 1)) .. string.sub(t, 2)
+	return string.format("%s x%.2f", t, f.effect.value or 1)
+end
+local function rightAlign(label, right)
+	local w = textW(label, (string.gsub(label.Text, "<[^>]+>", ""))) + 4
+	label.TextXAlignment = Enum.TextXAlignment.Right
+	label.Size = UDim2.fromOffset(w, label.Size.Y.Offset)
+	local sh = Render.SHADOW[label]
+	moveLabel(label, right - w)
+	if sh then sh.Size = label.Size; sh.TextXAlignment = Enum.TextXAlignment.Right end
+end
+local function retintPlate(plate, cols)
+	for _, g in plate:GetChildren() do if g:IsA("UIGradient") then g:Destroy() end end
+	plate.BackgroundColor3 = Color3.new(1, 1, 1); plate.BackgroundTransparency = 0
+	Render.gradient(plate, { "g", 90, { { 0, cols[1], 1 }, { 1, cols[2], 1 } } }, 1)
+end
+
+local function fishdex(rec, ui)
+	local L = require(Layouts.Fishing_Fishdex)
+	local gridNode = Render.findNode(L.root, "dex grid")
+	local tFound, tMiss, tHead
+	for _, c in gridNode.k do
+		if string.sub(c.n, 1, 5) == "cell/" then
+			if string.find(c.n, "not found") then tMiss = tMiss or c
+			elseif not string.find(c.n, "%(") then tFound = tFound or c end
+		elseif string.sub(c.n, 1, 12) == "tier header/" and not string.find(c.n, "sticky") then tHead = tHead or c end
+	end
+	local grid = ui.find("dex grid")
+	if not (grid and tFound and tMiss and tHead) then return end
+	for _, c in grid:GetChildren() do
+		local nm = c.Name
+		if string.sub(nm, 1, 5) == "cell/" or string.sub(nm, 1, 12) == "tier header/" or nm == "selected ring" or nm == "scroll track" or nm == "scroll thumb" then
+			c:Destroy()
+		elseif (nm == "drop" or nm == "shadow") and c:IsA("GuiObject") then
+			c:Destroy()
+		end
+	end
+	local sf = Render.new("ScrollingFrame", { Name = "fish", BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1),
+		CanvasSize = UDim2.new(), ScrollBarThickness = 6, ScrollBarImageColor3 = Color3.fromHex("8d94a3"), ScrollingDirection = Enum.ScrollingDirection.Y, ZIndex = 50 }, grid)
+	-- sections by rod tier (fish.minTier), Defs order inside a section
+	local tiers, order = {}, {}
+	for _, f in Defs.FISH do
+		local t = f.minTier or 0
+		if not tiers[t] then tiers[t] = {}; table.insert(order, t) end
+		table.insert(tiers[t], f)
+	end
+	table.sort(order)
+	local PITCH_X, PITCH_Y, COLS, X0 = 105, 138, 7, tFound.x   -- Figma cell pitch
+	local sections, y = {}, 8
+	for _, t in order do
+		local rows = math.ceil(#tiers[t] / COLS)
+		table.insert(sections, { tier = t, fish = tiers[t], y = y, built = false })
+		y += tHead.h + 4 + rows * PITCH_Y
+	end
+	sf.CanvasSize = UDim2.fromOffset(0, y + 8)
+	local ring
+	local function select(f, cell)
+		local disc = Binders.fish and Binders.fish.disc or {}
+		local best = Binders.fish and Binders.fish.best or {}
+		local found = disc[f.id] ~= nil
+		local panel = ui.find("detail panel")
+		if not panel then return end
+		local hero = panel:FindFirstChild("hero")
+		if hero then
+			for _, d in hero:GetChildren() do
+				if d:IsA("ImageLabel") and (d.Name:sub(1, 4) == "ico/" or d.Name == "drop") then
+					d.Image = FKit.icon(f.id)
+					if d.Name ~= "drop" then d.ImageColor3 = if found then Color3.new(1, 1, 1) else Color3.new(0, 0, 0) end
+				end
+			end
+			local tag = hero:FindFirstChild("rarity tag")
+			if tag then for _, t in Render.childTexts(tag) do Render.setText(t, string.upper(f.rarity)) end end
+		end
+		local rc = RARITY[f.rarity] or RARITY.common
+		for _, t in Render.childTexts(panel) do
+			if t.Name == "name" then Render.setText(t, if found then string.upper(fishName(f.id)) else "???") end
+			if t.Name == "rarity + type" then
+				Render.setText(t, string.upper(string.sub(f.rarity, 1, 1)) .. string.sub(f.rarity, 2) .. "  ·  " .. string.upper(string.sub(f.type or "", 1, 1)) .. string.sub(f.type or "", 2) .. " fish")
+				Render.setTextColor(t, Color3.fromHex(rc[2]))
+			end
+		end
+		local heavy = panel:FindFirstChild("heaviest catch")
+		if heavy then
+			for _, t in Render.childTexts(heavy) do
+				if string.find(t.Text, "kg$") then Render.setText(t, if best[f.id] then string.format("%.2f kg", best[f.id]) else "-") end
+			end
+		end
+		local facts = panel:FindFirstChild("facts")
+		if facts then
+			local labels = Render.childTexts(facts)
+			for i, t in labels do
+				if t.Position.X.Offset > 120 then
+					local prev = labels[i - 1]
+					local key = prev and prev.Text or ""
+					if key == "Bites from" then Render.setText(t, "rod tier " .. (f.minTier or 0))
+					elseif key == "When eaten" then Render.setText(t, effectText(f))
+					elseif key == "Sells for" then Render.setText(t, fmt(f.sellValue or 0) .. " each")
+					elseif key == "Shiny" then Render.setText(t, if found then "not found yet" else "-") end
+					rightAlign(t, 292)
+				end
+			end
+		end
+		if cell then
+			if not ring then
+				local rn = Render.findNode(gridNode, "selected ring")
+				if rn then ring = Render.buildNode(L, rn, sf, 60).root end
+			end
+			if ring then ring.Position = cell.Position - UDim2.fromOffset(5, 5) end
+		end
+	end
+	local function buildSection(sec)
+		if sec.built then return end
+		sec.built = true
+		local disc = Binders.fish and Binders.fish.disc or {}
+		local best = Binders.fish and Binders.fish.best or {}
+		local head = Render.buildNode(L, tHead, sf, 2)
+		head.root.Position = UDim2.fromOffset(0, sec.y)
+		local n = 0
+		for _, f in sec.fish do if disc[f.id] then n += 1 end end
+		local hl = Render.childTexts(head.node)
+		if hl[1] then Render.setText(hl[1], "ROD TIER " .. sec.tier) end
+		if hl[2] then Render.setText(hl[2], n .. " / " .. #sec.fish) end
+		if hl[4] then Render.setText(hl[4], "bites from rod tier " .. sec.tier); rightAlign(hl[4], tHead.w - 4) end
+		sec.cells = {}
+		for i, f in sec.fish do
+			local found = disc[f.id] ~= nil
+			local cui = Render.buildNode(L, if found then tFound else tMiss, sf, 4)
+			local cell = cui.root
+			cell.Name = "cell/" .. f.id
+			cell.Position = UDim2.fromOffset(X0 + ((i - 1) % COLS) * PITCH_X, sec.y + tHead.h + 4 + math.floor((i - 1) / COLS) * PITCH_Y)
+			local rc = RARITY[f.rarity] or RARITY.common
+			local plate = cui.node:FindFirstChild("plate")
+			if plate and found then retintPlate(plate, rc[1]) end
+			for _, d in (plate or cui.node):GetDescendants() do
+				if d:IsA("ImageLabel") and (d.Name:sub(1, 4) == "ico/" or d.Name:sub(1, 11) == "silhouette/" or d.Name == "drop") then
+					d.Image = FKit.icon(f.id)
+					if not found and d.Name ~= "drop" then d.ImageColor3 = Color3.new(0, 0, 0) end
+				end
+			end
+			local tl = Render.childTexts(cui.node)
+			if tl[1] then
+				Render.setText(tl[1], if found then fishName(f.id) else "???")
+				Render.setTextColor(tl[1], Color3.fromHex(rc[2]))
+			end
+			if tl[2] then Render.setText(tl[2], if found and best[f.id] then string.format("%.2f kg", best[f.id]) else "not found") end
+			local hit = Render.new("TextButton", { Name = "hit", Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 999 }, cell)
+			hit.MouseButton1Down:Connect(function() Kit.sfx("click") end)
+			hit.Activated:Connect(function() select(f, cell) end)
+			sec.cells[f.id] = cui
+		end
+	end
+	local function ensure()
+		local top = sf.CanvasPosition.Y
+		local bottom = top + math.max(grid.Size.Y.Offset, 400) + 300
+		for _, sec in sections do
+			if sec.y < bottom and sec.y + 2000 > top - 200 then buildSection(sec) end
+		end
+	end
+	sf:GetPropertyChangedSignal("CanvasPosition"):Connect(ensure)
+	ensure()
+	rec.dex = { rebuild = function()
+		for _, sec in sections do sec.built = false end
+		for _, c in sf:GetChildren() do if c:IsA("GuiObject") then c:Destroy() end end
+		ring = nil
+		ensure()
+	end, seen = Binders.fish }
+	if sections[1] and sections[1].fish[1] then select(sections[1].fish[1], nil) end
+end
+
 B.fishing = {
 	bind = function(rec, ui, variant)
 		ui.on("btn/view in collection", function() WM.show(rec, "Fishing_Collection") end)
+		if variant == "Fishing_Fishdex" then fishdex(rec, ui) end
+	end,
+	update = function(rec, ui, variant)
+		-- discoveries changed (Fish remote): rebuild the visible sections once
+		if variant == "Fishing_Fishdex" and rec.dex and rec.dex.seen ~= Binders.fish then
+			rec.dex.seen = Binders.fish
+			rec.dex.rebuild()
+		end
 	end,
 }
 
