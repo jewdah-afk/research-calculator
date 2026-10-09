@@ -29,7 +29,8 @@
     if (id === PT.MINE_MAP || id === PT.MINE_TREE_MAP) return "mine"; if (id === PT.ECHO_FIELD_MAP) return "echo";
     return "expedition";
   };
-  const SCENE3D = { 0: true, 4: true }; // maps with their own 3D game objects so far
+  const SCENE3D = { 0: true, 1: true, 4: true }; // maps with their own 3D game objects so far
+  const WALK = { 0: true, 4: true }; // maps where eggs / trees and the birb keep to open ground
   const isl = (id) => W.ISL.find((x) => x.id === ISLAND_OF(id));
   // map pixel -> world position on that map's island (the island's tile rectangle stands for the whole map)
   function toWorld(id, x, y) {
@@ -133,7 +134,7 @@
     const p = toWorld(id, x, y), i = Math.floor(p.x / W.S + W.COLS / 2), j = Math.floor(p.z / W.S + W.ROWS / 2), t = W.byKey.get(W.key(i, j));
     return !!t && t.need <= Math.max(W.level, isl(id).n) && t.c !== 3 && !blocked.has(W.key(i, j));
   }
-  const usesIsland = (id) => !!SCENE3D[id];
+  const usesIsland = (id) => !!WALK[id];
   PT.spawnOk = (id, x, y) => !A || !usesIsland(id) || cellOk(id, x, y);
   PT.walkOk = (id, x, y) => !A || !usesIsland(id) || cellOk(id, x, y) || !cellOk(id, G.s.player.x, G.s.player.y); // never trap the birb
   const usableStart = (id) => { // drop the birb on open ground near where it stands
@@ -216,6 +217,42 @@
     A.panda.visible = on && PT.pandaAssisting(s) && !!G.pandaPos;
     if (A.panda.visible) { const w = toWorld(4, G.pandaPos.x, G.pandaPos.y); A.panda.position.lerp(w, Math.min(1, dt * 6)); A.panda.rotation.y = Math.sin(G.t * 8) * 0.15; }
   }
+  // ------------------------------------------------------------------ sunflower field stations: stone pedestals with a coloured top, an icon and a floating name / cost card
+  const STATE_COL = { owned: "#4caf50", afford: "#f0b429", poor: "#9a7b45", locked: "#5b6170", platform: "#f2c94c" };
+  const stations = new Map();
+  function labelTex(name, cost, evo, state) {
+    const cv = document.createElement("canvas"); cv.width = 512; cv.height = 168; const c = cv.getContext("2d");
+    c.fillStyle = "rgba(11,12,16,.78)"; const r = 22; c.beginPath(); c.moveTo(r, 4); c.arcTo(508, 4, 508, 164, r); c.arcTo(508, 164, 4, 164, r); c.arcTo(4, 164, 4, 4, r); c.arcTo(4, 4, 508, 4, r); c.fill();
+    c.textAlign = "center"; c.textBaseline = "middle"; c.lineJoin = "round";
+    const line = (txt, y, size, col) => { c.font = `${size}px 'Fredoka One', sans-serif`; c.lineWidth = 8; c.strokeStyle = "#0b0c10"; c.strokeText(txt, 256, y); c.fillStyle = col; c.fillText(txt, 256, y); };
+    line(name, cost ? 52 : 84, 46, "#ffffff"); if (cost) line(cost, 112, 38, state === "owned" ? "#b9f5a4" : state === "afford" ? "#ffe08a" : "#d9c7a4");
+    if (evo) line("EVOLUTION " + evo, 150, 24, "#ff9a9a");
+    const tex = new T.CanvasTexture(cv); tex.encoding = T.sRGBEncoding; return tex;
+  }
+  function syncStations(on) {
+    const list = on ? G.fieldStations() : [], seen = new Set(), kx = pxScale(1), I = on ? isl(1) : null;
+    for (const st of list) {
+      seen.add(st.id); let o = stations.get(st.id);
+      if (!o) {
+        o = { g: new T.Group(), sig: "" };
+        const base = new T.Mesh(new T.BoxGeometry(1, 1, 1), new T.MeshStandardMaterial({ color: new T.Color("#8d8a82").convertSRGBToLinear(), roughness: 0.85 })); base.castShadow = base.receiveShadow = true;
+        const top = new T.Mesh(new T.BoxGeometry(1, 1, 1), new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 })); top.castShadow = true;
+        const card = new T.Sprite(new T.SpriteMaterial({ transparent: true, depthWrite: false })); card.renderOrder = 9;
+        o.g.add(base, top, card); Object.assign(o, { base, top, card }); A.root.add(o.g); stations.set(st.id, o);
+      }
+      const c = toWorld(1, st.x + st.w / 2, st.y + st.h / 2), wW = Math.max(7, st.w * kx), wD = Math.max(7, st.h * ((I.N * W.S) / PT.MAPS[1].h));
+      o.g.position.copy(c);
+      o.base.scale.set(wW * 0.9, 1.6, wD * 0.9); o.base.position.y = 0.8;
+      o.top.scale.set(wW * 0.8, 0.5, wD * 0.8); o.top.position.y = 1.85;
+      o.top.material.color.set(STATE_COL[st.state] || "#888").convertSRGBToLinear();
+      if (st.state === "afford") o.top.position.y = 1.85 + Math.abs(Math.sin(G.t * 3)) * 0.4;
+      const sig = st.name + "|" + st.cost + "|" + st.evo + "|" + st.state;
+      if (sig !== o.sig) { o.sig = sig; if (o.card.material.map) o.card.material.map.dispose(); o.card.material.map = labelTex(st.name, st.cost, st.evo, st.state); o.card.material.needsUpdate = true; }
+      o.card.scale.set(27, 8.9, 1); o.card.position.y = 10;
+    }
+    for (const [id, o] of stations) if (!seen.has(id)) { A.root.remove(o.g); stations.delete(id); }
+  }
+
   // floating numbers: a light DOM layer projected from the world camera
   const floatLayer = document.createElement("div"); Object.assign(floatLayer.style, { position: "absolute", inset: "0", pointerEvents: "none", overflow: "hidden" }); stage.insertBefore(floatLayer, frame.nextSibling);
   const floatEls = new Map();
@@ -251,6 +288,10 @@
     syncEggs(0, G.field.list(0), cur === 0);
     syncSparrows(cur === 0);
     syncNest(cur === PT.NEST_MAP, dt);
+    if (!A.gardenClear) { A.gardenClear = true; const I1 = isl(1), m1 = PT.MAPS[1]; // garden decor steps aside for the stations
+      const rects = PT.STATIONS.map((st) => [I1.oi + (st[1] / m1.w) * I1.W - 1, I1.oj + (st[2] / m1.h) * I1.N - 1, I1.oi + ((st[1] + st[3]) / m1.w) * I1.W + 1, I1.oj + ((st[2] + st[4]) / m1.h) * I1.N + 1]);
+      W.hideProps((p) => p.need === I1.n && rects.some(([a, b, c, d]) => p.i >= a && p.i <= c && p.j >= b && p.j <= d)); }
+    syncStations(cur === 1);
     syncDying(dt);
     placeCamera(false);
     syncFloats();

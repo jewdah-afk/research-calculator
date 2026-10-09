@@ -476,6 +476,17 @@
       if (!own && def.evolutionRequired > (s.evolutionCount || 0)) label("EVO " + def.evolutionRequired, st[1] + st[3] / 2, st[2] + 78, 11, "#ff9a9a");
     }
   }
+  // game3d: what each sunflower-field station shows (same rules as the 2D drawing above)
+  G.fieldStations = function () {
+    const s = G.s, out = [], plat = PT.STATIONS.find((st) => st[0] === "__platform");
+    if (!desertView() && !archivistView()) out.push({ id: "__platform", x: plat[1], y: plat[2], w: plat[3], h: plat[4], name: PT.hasSun(s, "d_sunflower_machine") ? "SEED PLATFORM" : "LOCKED", cost: "", state: PT.hasSun(s, "d_sunflower_machine") ? "platform" : "locked" });
+    for (const st of visibleStations()) {
+      const id = st[0], def = PT.SUN.get(id), own = PT.hasSun(s, id), unl = PT.sunUnlocked(s, id);
+      out.push({ id, x: st[1], y: st[2], w: st[3], h: st[4], name: title(def?.name || id).slice(0, 22), cost: own ? "OWNED" : `${fmt(PT.sunCost(s, id))} ${CUR[def.costCurrency]?.name || def.costCurrency}`,
+        evo: !own && def.evolutionRequired > (s.evolutionCount || 0) ? def.evolutionRequired : 0, state: own ? "owned" : !unl ? "locked" : canAffordSun(id) ? "afford" : "poor" });
+    }
+    return out;
+  };
   function canAffordSun(id) { const def = PT.SUN.get(id); const c = def.costCurrency; return PT.altCurrency[c] ? PT.altCurrency[c].has(G.s, PT.sunCost(G.s, id)) : c in G.s.resources && PT.has(G.s, c, PT.sunCost(G.s, id)); }
   // ------------------------------------------------------------------ Expedition portals (Birb: hub portal opens the floor wheel; floor portals return / advance)
   // Birb tryEnterSecretRoom: floors with a secret room, not in night mode
