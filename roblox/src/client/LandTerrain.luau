@@ -53,34 +53,100 @@ local function block(x0, z0, y0, y1, mat)
 	Terrain:FillBlock(CFrame.new(x0 + 2, (y0 + y1) / 2, z0 + 2), Vector3.new(4, y1 - y0, 4), mat)
 end
 
+-- ---------------------------------------------------------------- smooth landforms (art pass, 2026-10-09)
+-- Visual height of a tile (studs). Walkable tiles sit exactly on World.base; the 3 tiles at the foot of a higher
+-- terrace become a rocky slope up to it (Controller treats that band as a wall), hills become rolling mounds, and
+-- shore tiles dip into the sea. Columns are written with WriteVoxels and fractional top occupancy, so the surface
+-- is smooth instead of 4-stud steps.
+local World = require(game:GetService("ReplicatedStorage"):WaitForChild("Peckwood"):WaitForChild("World"))
+local COLS, ROWS = 40, 30
+local function tileOf(x0, z0) return math.floor(x0 / 4 + 0.5) + COLS / 2, math.floor(z0 / 4 + 0.5) + ROWS / 2 end
+local function landAt(i, j) return World.rawTile(i, j) ~= 0 end
+local function smoothstep(t) t = math.clamp(t, 0, 1); return t * t * (3 - 2 * t) end
+-- distance (tiles, <= 3) to the nearest tile whose terrace is clearly higher, and that terrace's base
+local function cliffAbove(i, j, base)
+	local best, bb
+	for dj = -3, 3 do
+		for di = -3, 3 do
+			local d = math.sqrt(di * di + dj * dj)
+			if d > 0 and d <= 3.2 and landAt(i + di, j + dj) then
+				local b = World.base(i + di, j + dj)
+				if b > base + 3 and (not best or d < best) then best, bb = d, b end
+			end
+		end
+	end
+	return best, bb
+end
+LandTerrain.cliffAbove = cliffAbove
+local function hillAvg(i, j)
+	local s, n = 0, 0
+	for dj = -1, 1 do for di = -1, 1 do s += World.height(i + di, j + dj); n += 1 end end
+	return s / n
+end
+function LandTerrain.visualTop(i, j, top, code)
+	local base = World.base(i, j)
+	local y = top
+	local d, ub = nil, nil
+	if code ~= 2 then d, ub = cliffAbove(i, j, base) end   -- trail ramps stay on their own height
+	if d then
+		-- rocky slope rising to the upper terrace's edge (bumpy so it reads as natural rock)
+		local k = smoothstep(1 - (d - 1) / 2.4)
+		y = math.max(y, base + (ub - base) * k * (0.92 + math.noise(i * 0.31, j * 0.31, 4.2) * 0.12))
+	end
+	local h = World.height(i, j)
+	if h > 0 then y = base + hillAvg(i, j) * 3.2 + math.noise(i * 0.2, j * 0.2, 9) * 1.5 end
+	-- shores dip toward the water
+	local sea = 0
+	for _, o in { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } } do if not landAt(i + o[1], j + o[2]) then sea += 1 end end
+	if sea > 0 and base == 0 and code ~= 3 then y = math.min(y, top - 0.6 * sea) end
+	return y, d ~= nil, h > 0
+end
+
+local function column(x0, z0, yTop, layers)
+	-- layers: { {fromY, mat}, ... } top-down; everything from BED to yTop
+	local top = math.max(BED + 1, yTop)
+	local y0 = BED
+	local n = math.ceil((top - y0) / 4)
+	local mats, occ = table.create(1), table.create(1)
+	mats[1], occ[1] = { }, { }
+	for k = 1, n do
+		local vy0 = y0 + (k - 1) * 4
+		local fill = math.clamp((top - vy0) / 4, 0, 1)
+		local m = layers[#layers][2]
+		for _, L in layers do if vy0 + 2 >= L[1] then m = L[2]; break end end
+		mats[1][k] = { m }; occ[1][k] = { fill }
+	end
+	local region = Region3.new(Vector3.new(x0, y0, z0), Vector3.new(x0 + 4, y0 + n * 4, z0 + 4))
+	Terrain:WriteVoxels(region, 4, mats, occ)
+end
+
 -- fill one tile column: x0/z0 = tile corner (studs), top = surface y, mat = surface material, shore = touches sea.
--- Everything snaps to whole voxels (4 studs): flat ground stays flat, hills step in clean voxel terraces, and no
--- layer boundary sits mid-voxel (partial occupancy is what made the surface lumpy).
 local function snap(y) return math.floor(y / 4 + 0.5) * 4 end
 function LandTerrain.column(x0, z0, top, mat, code, shore)
-	if code == 3 then   -- pond / river: sand bed one voxel down, water on top (at its terrace height)
+	local i, j = tileOf(x0, z0)
+	if code == 3 then   -- pond / river: sand bed, water on top (at its terrace height)
 		local wt = math.max(0, snap(top))
 		block(x0, z0, BED, wt - 4, M.Sand)
 		block(x0, z0, wt - 4, wt, M.Water)
 		return
 	end
-	local t = math.max(0, snap(top))
-	-- natural variation on grass: sandy beaches on the coast, then smooth noise patches of lush grass, dry meadow
-	-- and bare dirt (each a flat cel colour), so the land reads like generated terrain, not one green sheet
+	local y, cliff, hill = LandTerrain.visualTop(i, j, math.max(0, top), code)
+	-- natural variation on grass: beaches, lush / dry patches, bare dirt (flat cel colours)
 	if mat == M.Grass or mat == M.LeafyGrass then
-		local i, j = x0 / 4, z0 / 4
 		local n1 = math.noise(i * 0.07, j * 0.07, 3.1)
 		local n2 = math.noise(i * 0.19 + 40, j * 0.19, 7.7)
-		if shore and t == 0 then mat = M.Sand
+		if shore and World.base(i, j) == 0 then mat = M.Sand
 		elseif n2 > 0.42 then mat = M.Ground
 		elseif n1 > 0.22 then mat = M.LeafyGrass
-		elseif n1 < -0.28 then mat = M.Pavement   -- dry meadow tone (flat override, coloured olive)
+		elseif n1 < -0.28 then mat = M.Pavement
 		end
 	end
-	local under = if mat == M.Snow or mat == M.Rock or mat == M.Slate then M.Slate elseif t > 0 then M.Rock elseif shore then M.Sand else M.Basalt
-	block(x0, z0, BED, WATER_TOP - 4, M.Rock)
-	block(x0, z0, WATER_TOP - 4, t - 4, under)
-	block(x0, z0, t - 4, t, mat)
+	-- cliff slopes show rock (snow way up high); hills stay grassy mounds, capped with snow on the summit
+	if cliff and y - World.base(i, j) > 2 then mat = if y > 76 then M.Snow else M.Rock
+	elseif hill and y > 86 then mat = M.Snow end
+	local under = if mat == M.Snow or mat == M.Rock or mat == M.Slate then M.Slate elseif shore or mat == M.Sand then M.Sand else M.Mud
+	-- the top two voxels carry the surface material: with a fractional top voxel the one below is what you see
+	column(x0, z0, y, { { y - 7, mat }, { y - 14, under }, { -math.huge, M.Rock } })
 end
 
 -- remove a column (area locked again): back to sea water up to sea level

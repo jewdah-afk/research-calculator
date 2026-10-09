@@ -71,8 +71,28 @@ local function heightAt(x: number, y: number): number
 	local base = World.base(math.floor(x / Map.PX), math.floor(y / Map.PX)) * Map.PX / S
 	return base + heightAtLocal(x, y)
 end
+-- the rocky slope at the foot of a higher terrace (LandTerrain.visualTop) is scenery: a wall, cached per tile
+local slopeCache: { [number]: boolean } = {}
+local function onSlope(i: number, j: number): boolean
+	local k = (j + 1000) * 4000 + i + 1000
+	local v = slopeCache[k]
+	if v == nil then
+		local base = World.base(i, j)
+		v = false
+		if World.rawTile(i, j) == 2 then slopeCache[k] = false; return false end   -- trail ramps stay walkable
+		for dj = -3, 3 do
+			for di = -3, 3 do
+				local d = math.sqrt(di * di + dj * dj)
+				if d > 0 and d <= 3.2 and World.rawTile(i + di, j + dj) ~= 0 and World.base(i + di, j + dj) > base + 3 then v = true end
+			end
+		end
+		slopeCache[k] = v
+	end
+	return v
+end
 heightAtLocalImpl = function(x: number, y: number): number
 	local t = tileAt(x, y)
+	if t ~= VOID and t ~= 5 and onSlope(math.floor(x / Map.PX), math.floor(y / Map.PX)) then return 99 end
 	if (t == 1 or t == 4) and World.height(math.floor(x / Map.PX), math.floor(y / Map.PX)) > 0 then return 99 end   -- hills / dunes: scenery wall
 	if t == 5 then   -- bridge / dock deck: walk on the planks
 		local h = World.deckH(math.floor(x / Map.PX), math.floor(y / Map.PX))

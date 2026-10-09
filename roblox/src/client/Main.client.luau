@@ -341,10 +341,10 @@ RunService:BindToRenderStep("Peckwood", Enum.RenderPriority.Camera.Value + 1, fu
 		mapFocus = Vector3.new((c.X - 20) * S, 0, (c.Y - 15) * S)
 		mapZoom = math.max((mx.Y - mn.Y) * 0.62, (mx.X - mn.X) * 0.62 * vpAspect() / 0.7, 14)   -- /0.7: the drawer covers ~30 % on the right
 	end
-	local bird = if hrp then Vector3.new(hrp.Position.X, 0, hrp.Position.Z) else ISLAND_CENTRE
+	local bird = if hrp then Vector3.new(hrp.Position.X, hrp.Position.Y - hrp.Size.Y / 2, hrp.Position.Z) else ISLAND_CENTRE   -- follows the terrace height (Peckwood Ascent)
 	if hrp then
 		local isl = World.nearest(hrp.Position.X / S + 20, hrp.Position.Z / S + 15)
-		ISLAND_CENTRE = if isl.park then PARK_CENTRE else Vector3.new((isl.cx - 20) * S, 0, (isl.cz - 15) * S)
+		ISLAND_CENTRE = if isl.park then PARK_CENTRE else Vector3.new((isl.cx - 20) * S, isl.base or 0, (isl.cz - 15) * S)
 	end
 	-- keep the island centred in the free space left of the shop drawer when it is open
 	local vp = cam.ViewportSize

@@ -48,6 +48,19 @@ Branch **`claude/peckwood-isle`** (pushed). Build: `cd roblox && rojo build defa
 - Asset export pipeline: SerializationService in Studio -> local POST receiver -> `lune` re-serialize (fixes the Tags
   property Rojo 7.5 can't read) -> rojo `$path`.
 
+### Art pass progress (2026-10-09, same chat)
+- Owner LOVES the generate_mesh props ("exactly what we want for our assets everywhere"): use Studio generate_mesh
+  for every asset (no brand names in prompts; ~3 jobs at a time or it rate-limits; check each upright in a lineup).
+- Terrain now uses `Terrain:WriteVoxels` with fractional top occupancy (`LandTerrain.column`): smooth surfaces.
+  `LandTerrain.visualTop`: the 3 tiles at the foot of a higher terrace slope up to it as rock (Controller
+  `onSlope` makes that band a wall, path/ramp tiles exempt); hills = rolling grassy mounds; shores dip. The top two
+  voxels carry the surface material (a fractional top voxel shows the one below), soil (Mud) under grass.
+- Camera now follows the ground height (`Main.client.luau` bird / ISLAND_CENTRE Y = terrace base); before, it aimed
+  at y=0 and ended up inside the terrain after teleporting to high areas (Echo).
+- Owner still unhappy with the map look overall ("might need to do something else"): next idea = faceted low-poly
+  terrain MESHES in the same style as the generate_mesh props (Blender from the AscentData heightfield, or
+  generate_mesh landmark pieces such as cliffs/rock formations placed along terrace edges).
+
 ### TOP PRIORITY (owner, end of 2026-10-09): full map art pass
 Owner: "the map design is amazing, but the terrain isn't smooth and it still lacks the cel-shaded look. Focus on the
 full map design and go all out to match our aesthetic: a real-life map, but nicely cel-shaded." The layout
