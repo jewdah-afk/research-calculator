@@ -12,6 +12,9 @@ for rel, base in MAP.items():
             b, cls = f[:-5], 'ModuleScript'
             if b.endswith('.server'): b, cls = b[:-7], 'Script'
             elif b.endswith('.client'): b, cls = b[:-7], 'LocalScript'
-            out.append({'path': base + parts + [b], 'class': cls, 'url': (rel + '/' + '/'.join(parts + [f])).replace('//', '/')})
+            # init.luau / init.server.luau / init.client.luau: the folder itself is the script (Rojo semantics)
+            path = base + parts if b == 'init' else base + parts + [b]
+            out.append({'path': path, 'class': cls, 'url': (rel + '/' + '/'.join(parts + [f])).replace('//', '/')})
+out.sort(key=lambda x: len(x['path']))   # parents (init scripts) before their children
 json.dump(out, open(os.path.join(ROOT, 'tools', 'manifest.json'), 'w'), indent=0)
 print(len(out))
