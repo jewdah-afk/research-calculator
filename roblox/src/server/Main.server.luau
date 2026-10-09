@@ -67,8 +67,23 @@ for j = 0, Map.ROWS - 1 do
 	end
 end
 
-local PARK_GEOM = { W = Map.COLS * Map.PX, H = Map.ROWS * Map.PX, pad = 40, cx = 320, cy = 250,
-	spawnOk = function(px: number, py: number) return yardOk[math.floor(px / Map.PX) * 100 + math.floor(py / Map.PX)] == true end }
+-- the spawn box = the yard's bounding box; spawnOk = a yard tile; fallback = a random yard tile (never the void)
+local yardList = {}
+local yi0, yi1, yj0, yj1 = math.huge, -math.huge, math.huge, -math.huge
+for key in yardOk do
+	local i, j = key // 100, key % 100
+	table.insert(yardList, { i, j })
+	yi0, yi1, yj0, yj1 = math.min(yi0, i), math.max(yi1, i), math.min(yj0, j), math.max(yj1, j)
+end
+table.sort(yardList, function(a, b) return a[1] * 100 + a[2] < b[1] * 100 + b[2] end)
+local PARK_GEOM = {
+	x0 = yi0 * Map.PX, sx = (yi1 - yi0 + 1) * Map.PX, y0 = yj0 * Map.PX, sy = (yj1 - yj0 + 1) * Map.PX, cx = 320, cy = 250,
+	spawnOk = function(px: number, py: number) return yardOk[math.floor(px / Map.PX) * 100 + math.floor(py / Map.PX)] == true end,
+	fallback = function(u: () -> number)
+		local t = yardList[math.clamp(math.floor(u() * #yardList) + 1, 1, #yardList)]
+		return (t[1] + 0.15 + 0.7 * u()) * Map.PX, (t[2] + 0.15 + 0.7 * u()) * Map.PX
+	end,
+}
 -- field px -> world position on the rolling ground (the same shape the client terrain and the bird use)
 local function fieldToWorld(px: number, py: number): Vector3
 	local pos = Island.toWorld(px, py)

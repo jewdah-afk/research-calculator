@@ -3,8 +3,9 @@
 -- the playtest (playtest/js/systems.js PT.Field / PT.award, main.js step). Server only; pure Luau (no Instances), so
 -- the lune parity harness (roblox/tools/parity) runs it unchanged.
 --
--- Coordinates are Birb field px. Birb's Park field is 1056 x 792 with a 40 px margin; Peckwood's Park is MapData px
--- (40 x 30 tiles of 16 px), so Main passes its own field box and a spawnOk test (the fenced egg yard) in rt.geom.
+-- Coordinates are Birb field px. Birb's Park field is 1056 x 792 with a 40 px margin (eggs spawn in x 40 + u * 976,
+-- y 40 + u * 712); Peckwood's Park is MapData px (40 x 30 tiles of 16 px), so Main passes its own spawn box (x0, sx,
+-- y0, sy = origin and span), a spawnOk test (the fenced egg yard) and a fallback spot in rt.geom.
 -- Radii stay Birb px; studs = px / Map.PX * S.
 --
 -- rt = the per-player runtime (never saved): see Park.newRuntime. rt.rng.type / pos / sparrow are uniform [0, 1)
@@ -41,7 +42,7 @@ end
 Park.hypot = hypot
 
 -- ---------------------------------------------------------------- runtime
-Park.BIRB_GEOM = { W = 1056, H = 792, pad = 40, cx = 528, cy = 396 }
+Park.BIRB_GEOM = { x0 = 40, sx = 1056 - 2 * 40, y0 = 40, sy = 792 - 2 * 40, cx = 528, cy = 396 }
 function Park.newRuntime(geom, rng)
 	return {
 		geom = geom or Park.BIRB_GEOM,
@@ -97,19 +98,19 @@ end
 -- Birb wI.spawnPopcorn: 40 px margin; a spawn inside the bird's reach is collected at once (its id is still used)
 local function spawn(s, rt, m, ctx)
 	local g, f = rt.geom, rt.field
-	local pad = g.pad
 	local ty = R.rollType(s, rt.rng.type())
 	local p = { id = f.nextId, type = ty, x = 0, y = 0 }
 	f.nextId += 1
-	p.x = pad + rt.rng.pos() * (g.W - 2 * pad)
-	p.y = pad + rt.rng.pos() * (g.H - 2 * pad)
-	if g.spawnOk then
+	p.x = g.x0 + rt.rng.pos() * g.sx
+	p.y = g.y0 + rt.rng.pos() * g.sy
+	if g.spawnOk then   -- keep eggs on open ground (Peckwood's egg yard), as the playtest's game3d does
 		local k = 0
 		while k < 24 and not g.spawnOk(p.x, p.y) do
-			p.x = pad + rt.rng.pos() * (g.W - 2 * pad)
-			p.y = pad + rt.rng.pos() * (g.H - 2 * pad)
+			p.x = g.x0 + rt.rng.pos() * g.sx
+			p.y = g.y0 + rt.rng.pos() * g.sy
 			k += 1
 		end
+		if not g.spawnOk(p.x, p.y) and g.fallback then p.x, p.y = g.fallback(rt.rng.pos) end
 	end
 	if ctx then
 		local dx, dy, r = p.x - ctx.px, p.y - ctx.py, ctx.immediateRadius

@@ -25,6 +25,7 @@ local EN = Defs.EN
 
 local Binders = {}
 local WM, act, Hud
+local TreeBinder = require(script.Parent.TreeBinder)
 Binders.fish = nil
 
 local function fmt(v) return EN.short(v) end
@@ -689,15 +690,217 @@ B.mine = {
 	end,
 }
 
+-- ---------------------------------------------------------------- EVOLVE (Birb's castle): live from Rules (Phase 1)
+-- HOLD TO FEED holds (the server feeds 10% of each need per second while the bird is at the Castle); at 100% the same
+-- key reads EVOLVE. Feed rows = the current stage's foods, the strip = foods this stage does not need, the five stage
+-- cards switch between their done / feeding / locked Figma templates.
+local R = Defs.R
+local STAGE_NAMES = { "GENESIS", "EXODUS", "LEVITICUS", "NUMBERS", "DEUTERONOMY" }
+local ROMAN = { "I", "II", "III", "IV", "V" }
+local FOOD = { popcorn = { "Eggs", "egg", "eggs" }, feathers = { "Plumes", "plume", "plumes" }, seeds = { "Seeds", "seed", "seeds" },
+	fish = { "Fish", "fish", "fish caught" }, twigs = { "Twigs", "twig", "twigs" }, moneta = { "Moneta", "moneta", "moneta" } }
+local function foodHave(s, k)
+	if k == "fish" then return s.stats.fishCaught or 0 end
+	return s[R.wkey(R.EVO_CUR[k])] or 0
+end
+local function setIcon(frame, name)
+	for _, c in frame:GetDescendants() do
+		if c:IsA("ImageLabel") and string.sub(c.Name, 1, 4) == "ico/" then c.Image = FKit.icon(name) end
+	end
+end
+local function textOf(frame, name)
+	local t = frame:FindFirstChild(name)
+	return if t and t:IsA("TextLabel") then t else nil
+end
+local function canEvolveNow(s) return R.canEvolveStage(s) and R.feedProgress(s) >= 100 end
+
 B.evolve = {
-	bind = function(rec, ui)
+	bind = function(rec, ui, variant)
+		local L = WM.layoutOf(variant)
+		local feedPanel = ui.find("feed panel")
+		local stages = ui.find("stages panel")
+		local ev = { rows = {}, chips = {}, cards = {}, cardNodes = {}, tpl = {} }
+		rec.ev = ev
+		if feedPanel then
+			for _, c in feedPanel:GetChildren() do
+				if c:IsA("Frame") and string.sub(c.Name, 1, 5) == "feed/" then table.insert(ev.rows, c) end
+			end
+			table.sort(ev.rows, function(a, b) return a.Position.Y.Offset < b.Position.Y.Offset end)
+			-- every row gets the FULL check (only the Figma "full" row has one)
+			local check
+			for _, r in ev.rows do check = check or r:FindFirstChild("glyph/check") end
+			for _, r in ev.rows do
+				if check and not r:FindFirstChild("glyph/check") then check:Clone().Parent = r end
+			end
+			local strip = feedPanel:FindFirstChild("not needed (stage 4)") or feedPanel:FindFirstChild("not needed", true)
+			ev.strip = strip
+			if strip then
+				for _, c in strip:GetChildren() do if c:IsA("Frame") and string.sub(c.Name, 1, 5) == "food/" then table.insert(ev.chips, c) end end
+				table.sort(ev.chips, function(a, b) return a.Position.X.Offset < b.Position.X.Offset end)
+			end
+		end
+		-- stage cards: remember each card's own name / text / icon, and the three state templates
+		if stages then
+			local sn = Render.findNode(L.root, "stages panel")
+			for _, n in Render.findNodes(sn, function(x) return string.sub(x.n, 1, 6) == "stage/" end) do
+				local st = string.match(n.n, "%((%w+)%)$")
+				ev.tpl[st] = ev.tpl[st] or n
+				local i = table.find(ROMAN, string.match(n.n, "^stage/(%u+) ")) or (#ev.cardNodes + 1)
+				local nameN, unl, ico = Render.findNode(n, "stage name"), Render.findNode(n, "unlocks"), Render.findNode(n, "ico/", true)
+				ev.cardNodes[i] = { node = n, name = nameN and nameN.tx, unlocks = unl and unl.tx, icon = ico and ico.icon, state = st }
+			end
+			for _, c in stages:GetChildren() do
+				local i = table.find(ROMAN, string.match(c.Name, "^stage/(%u+) ") or "")
+				if i then ev.cards[i] = { inst = c, state = ev.cardNodes[i] and ev.cardNodes[i].state } end
+			end
+			ev.ring = stages:FindFirstChild("selected ring")
+		end
+		-- HOLD TO FEED: press = hold (10% / s at the Castle), let go = release; at 100% the key evolves
+		local holding = false
+		ui.onDown = function(name, inst)
+			if name ~= "btn/hold to feed" then return end
+			local s = WM.state
+			if not s or canEvolveNow(s) then return end
+			holding = true
+			act("feed", "hold", nil, inst)
+		end
+		ui.onUp = function(name)
+			if holding then holding = false; act("feed", "release") end
+		end
 		ui.on("btn/hold to feed", function(inst)
-			local s, d = WM.state, WM.derived
-			if not s then return end
-			if d and d.evoProgress >= 1 then act("evolve", nil, nil, inst); return end
-			local need = Defs.EVO[s.evolutionCount + 1] or {}
-			for k in need do act("feed", k, true, inst) end
+			local s = WM.state
+			if s and canEvolveNow(s) then act("evolve", nil, nil, inst) end
 		end)
+	end,
+	update = function(rec, ui, variant, s, d)
+		local ev = rec.ev
+		if not ev then return end
+		local e = s.evolutionCount or 0
+		local maxed = e >= math.min(5, R.evoCap(s))
+		local prog = R.feedProgress(s)
+		local ready = canEvolveNow(s)
+		local stageNo = math.min(5, e + 1)
+		-- monster panel
+		local chip = ui.find("chip/stage")
+		if chip then local t = Render.childTexts(chip)[1]; if t then Render.setText(t, if maxed then "ALL STAGES DONE" else "STAGE " .. stageNo .. " · " .. STAGE_NAMES[stageNo]) end end
+		local mood = ui.find("chip/mood")
+		if mood then local t = Render.childTexts(mood)[1]; if t then Render.setText(t, if maxed then "CONTENT" elseif ready then "FULL" else "HUNGRY") end end
+		local line = ui.find("monster line")
+		if line then
+			Render.setText(line, if maxed then "Thank you... I have all I need." elseif ready then "I'm full! Evolve me!"
+				elseif not s.evo.talked then "Psst... come closer. I'm so hungry..." else "More... feed me more...")
+		end
+		local val = ui.find("satisfaction value")
+		if val then Render.setText(val, string.format("%.1f%%", prog)) end
+		local bar = ui.find("satisfaction bar")
+		local fill = bar and bar:FindFirstChild("fill")
+		if fill then fill.Size = UDim2.fromOffset(math.floor(bar.Size.X.Offset * math.clamp(prog / 100, 0, 1) + 0.5), fill.Size.Y.Offset) end
+		local key = ui.find("btn/hold to feed")
+		if key then
+			for _, t in Render.texts(key) do
+				Render.setText(t, if maxed then "MAX EVOLUTION" elseif ready then "EVOLVE" else "HOLD TO FEED")
+			end
+		end
+		local hint = ui.find("feed hint")
+		if hint then
+			Render.setText(hint, if d and d.map ~= 3 and not maxed then "Go to the Castle to feed · hold: 10% of each need per second"
+				else "Hold: 10% of each need per second · let go to stop")
+		end
+		-- feed rows (the stage's foods, Birb order)
+		local req = R.evoReq(e)
+		local needed, spare = {}, {}
+		for _, k in R.EVO_KEYS do
+			if req[k] > 0 then table.insert(needed, k) elseif k ~= "popcorn" then table.insert(spare, k) end
+		end
+		for i, row in ev.rows do
+			local k = needed[i]
+			row.Visible = k ~= nil and not maxed
+			if k and not maxed then
+				local f = FOOD[k]
+				local need, fed = req[k], math.min(req[k], s.evo.fed[k] or 0)
+				local full = fed >= need
+				setIcon(row:FindFirstChild("icon tile") or row, f[2])
+				local nm, pct = textOf(row, "name"), textOf(row, "pct")
+				if nm then Render.setText(nm, f[1]) end
+				if pct then Render.setText(pct, if full then "FULL" else string.format("%d%%", math.floor(100 * fed / need))) end
+				local chk = row:FindFirstChild("glyph/check")
+				if chk then chk.Visible = full end
+				local b = row:FindFirstChild("bar")
+				if b then
+					local bf = b:FindFirstChild("fill")
+					if bf then bf.Size = UDim2.fromOffset(math.floor(b.Size.X.Offset * math.clamp(fed / need, 0, 1) + 0.5), bf.Size.Y.Offset) end
+					local bt = Render.childTexts(b)[1]
+					if bt then Render.setText(bt, fmt(fed) .. " / " .. fmt(need)) end
+				end
+				local have = textOf(row, "have")
+				if have then
+					local h = foodHave(s, k)
+					local short = need - fed
+					Render.setText(have, if full then "Fed in full · the rest stays yours"
+						elseif EN.meeq(h, short) then "You have " .. fmt(h) .. " " .. f[3]
+						else "You have " .. fmt(h) .. " " .. f[3] .. " · " .. fmt(EN.sub(short, h)) .. " short")
+				end
+			end
+		end
+		local foods = ui.find("chip/foods")
+		if foods then local t = Render.childTexts(foods)[1]; if t then Render.setText(t, #needed .. (if #needed == 1 then " FOOD" else " FOODS")) end end
+		if ev.strip then
+			ev.strip.Visible = not maxed
+			local lab = textOf(ev.strip, "label")
+			if lab then Render.setText(lab, "NOT NEEDED FOR STAGE " .. stageNo) end
+			for i, c in ev.chips do
+				local k = spare[i]
+				c.Visible = k ~= nil
+				if k then
+					setIcon(c, FOOD[k][2])
+					local nm, nd = textOf(c, "name"), textOf(c, "need")
+					if nm then Render.setText(nm, FOOD[k][1]) end
+					if nd then Render.setText(nd, "0 / 0") end
+				end
+			end
+		end
+		-- stage cards
+		local stages = ui.find("stages panel")
+		local doneChip = ui.find("chip/stages")
+		if doneChip then local t = Render.childTexts(doneChip)[1]; if t then Render.setText(t, math.min(e, 5) .. " / 5") end end
+		if stages then
+			local L = WM.layoutOf(variant)
+			for i = 1, 5 do
+				local want = if i <= e then "done" elseif i == e + 1 and not maxed then "feeding" else "locked"
+				local c, cn = ev.cards[i], ev.cardNodes[i]
+				if c and cn and c.state ~= want and ev.tpl[want] then
+					local tn = table.clone(ev.tpl[want])
+					tn.x, tn.y = cn.node.x, cn.node.y
+					local built = Render.buildNode(L, tn, stages, 2)
+					built.root.Name = "stage/" .. ROMAN[i] .. " " .. STAGE_NAMES[i] .. " (" .. want .. ")"
+					for _, t in built.root:GetDescendants() do
+						if t:IsA("TextLabel") and not string.find(t.Name, "  %(drop%)$") then
+							if t.Name == "stage name" and cn.name then Render.setText(t, cn.name) end
+							if t.Name == "unlocks" and cn.unlocks then Render.setText(t, cn.unlocks) end
+						end
+					end
+					if cn.icon then setIcon(built.root, cn.icon) end
+					c.inst:Destroy()
+					c.inst, c.state = built.root, want
+				end
+				if c and c.inst then
+					for _, t in c.inst:GetDescendants() do
+						if t:IsA("TextLabel") and not string.find(t.Name, "  %(drop%)$") then
+							if want == "feeding" and string.find(t.Text, "^FEEDING") then Render.setText(t, string.format("FEEDING %.1f%%", prog)) end
+							if want == "locked" and t.Name == "status" then Render.setText(t, "AFTER STAGE " .. (i - 1)) end
+						end
+					end
+				end
+			end
+			if ev.ring then
+				local c = ev.cards[math.min(5, e + 1)]
+				ev.ring.Visible = c ~= nil and not maxed
+				if c and c.inst then
+					local inset = ev.ring:GetAttribute("inset") or 6
+					ev.ring.Position = UDim2.fromOffset(c.inst.Position.X.Offset - inset, c.inst.Position.Y.Offset - inset)
+				end
+			end
+		end
 	end,
 }
 
@@ -1173,6 +1376,8 @@ function Binders.install(wm, actFn, hud)
 		if Hud.hideTip then Hud.hideTip() end
 	end
 	for id, b in B do WM.binders[id] = b end
+	TreeBinder.install(WM, actFn)
+	WM.binders.trees = TreeBinder.binder
 end
 
 return Binders
