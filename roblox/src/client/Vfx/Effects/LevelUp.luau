@@ -9,7 +9,8 @@
 --   0.85      DING at head height: crisp 4-point flash (tinted rim + white-hot core, squash gleam) + star4 mesh gleam +
 --             3 star bits (no feathers: an edge-on feather read as a stray dark stick in QA)
 --   1.15-1.6  the column and the cone thin away
--- opts: color / rarity / palette (default gold), scale, follow (Instance or () -> Vector3), punch()
+-- opts: color / rarity / palette (default gold), scale, follow (Instance or () -> Vector3), punch(), push (false = no
+--       camera push: the background companion level-ups)
 local Vfx = script.Parent.Parent
 local Layers = require(Vfx:WaitForChild("Layers"))
 local Palette = require(Vfx:WaitForChild("Palette"))
@@ -52,7 +53,7 @@ return {
 	needs = { "sparkle", "glow_step", "flash_star" },
 	run = function(fx, _cf, opts)
 		if not (opts.palette or opts.rarity or opts.color) then fx.pal = Palette.get("Legendary") end
-		local amount = fx:frame(fx:pos() + Vector3.new(0, 6, 0), 28, 0.08, 0.32, 0.35, 1.0, 0.8, 0.5)
+		local amount = fx:frame(fx:pos() + Vector3.new(0, 6, 0), 28, 0.08, 0.32, 0.35, 1.0, 0.8, 0.5, 1) -- lowest priority
 		fx.view = fx:viewFor(fx.camDist * (1 - amount))
 		fx.scale *= fx.view
 		local sc = fx.scale

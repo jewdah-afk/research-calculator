@@ -31,7 +31,9 @@ local function reducedMotion(): boolean
 end
 
 -- ---------------------------------------------------------------- post-process binding (only while busy)
-local BIND = "PeckwoodVfxCamera"
+-- unique per module instance: a second copy of this module (a second Main, a command-bar require) must never bind
+-- over / unbind this one (QA r3: "removed different functions with same reference name PeckwoodVfxCamera")
+local BIND = "PeckwoodVfxCamera_" .. tostring(math.random(1, 2 ^ 30))
 local bound = false
 local lastOutCF, lastOutFov, lastBaseCF, lastBaseFov = nil, nil, nil, nil
 local function post(dt: number)
@@ -68,11 +70,17 @@ function CamFx.shake(amp: number, dur: number?)
 end
 
 -- slow push-in on a world point: FOV narrows by `amount` (0.15 = 15 %) and the point slides `pull` of the way to the
--- screen centre; eases in over inT, holds, eases out over outT. A new push replaces the old one.
-function CamFx.push(target: Vector3, amount: number, inT: number, hold: number, outT: number, pull: number?)
-	if reducedMotion() then return end
-	push = { target = target, amount = amount, pull = pull or 0.55, inT = math.max(0.05, inT), hold = hold, outT = math.max(0.05, outT), t = 0 }
+-- screen centre (1 = dead centre); eases in over inT, holds, eases out over outT. Priority: a push only replaces the
+-- running one if its priority is >= (or the running one is already easing out): island unlock 5 > hatch 3 >
+-- level-up 1, so a level-up never steals a hatch's framing (QA r3). Returns true when it took the camera.
+function CamFx.push(target: Vector3, amount: number, inT: number, hold: number, outT: number, pull: number?, prio: number?): boolean
+	if reducedMotion() then return false end
+	local pr = prio or 1
+	if push and push.prio > pr and push.t < push.inT + push.hold then return false end
+	push = { target = target, amount = amount, pull = pull or 0.55, inT = math.max(0.05, inT), hold = hold,
+		outT = math.max(0.05, outT), t = 0, prio = pr }
 	ensureBound()
+	return true
 end
 
 function CamFx.release(outT: number?)

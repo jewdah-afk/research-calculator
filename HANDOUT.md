@@ -26,6 +26,10 @@ the toon burst cloud with the swirl dome, the Mythic rune circle drawing in):
   Coloured by Color + Neon (glow) or SmoothPlastic (ink) + Transparency. Orientation is detected from the box (all
   normals / axes are Y except the tornado, round in X/Y so its axis reads as Z: check it stands upright; `axis = 2`
   in `MeshFx.ASSETS` pins it). The ring's 2x2x2 box is pinned to Y. `_G.__vfx("meshes")` prints size + axis.
+- **Camera (QA r3)**: push priorities (island unlock 5 > hatch 3 > level-up 1; a lower one never replaces a running
+  higher one); background companion level-ups never push (`opts.push = false`); the hatch pull is 1 (egg at the screen
+  centre; smoke test: 0.12 deg off during the hold) and holds until 0.3 s after the reveal; the camera step name is
+  unique per module instance and `Vfx.start` runs once per client (a second call warns), so it can't be bound twice.
 - **Camera feel no longer needs Main**: CamFx binds its own RenderStep at Camera+2 while a shake / push / flash runs
   (reads what Main wrote, adds the feel, unbinds when idle). Main's camera lines are the originals again. Reduced
   Motion turns shake / push off and logs it once; `_G.__vfx("motion", true)` forces it on for QA.

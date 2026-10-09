@@ -29,7 +29,7 @@ local EASE = Layers.EASE
 local T_ANT = { 0.65, 0.8, 1.0, 1.25, 1.7, 2.1 }
 local T_HIT = { 0.05, 0.05, 0.06, 0.07, 0.08, 0.1 }
 local SHAKE = { 0.3, 0.38, 0.5, 0.62, 0.85, 1.05 }
-local RAYS = { 0, 1.0, 1.3, 1.7, 2.2, 2.6 }
+local RAYS = { 0, 1.3, 1.5, 1.8, 2.2, 2.6 } -- rays stay readable >= 0.6 s (they thin over the 2nd half)
 local WAVE_D = { 10, 11, 12, 14, 16, 18 }
 -- reveal mix, ~30 % leaner than v2 (QA round 2: equal-weight clutter): stars (the hero accent), feathers, confetti
 local CELEB = { { 2, 0, 0 }, { 3, 1, 0 }, { 3, 2, 3 }, { 4, 2, 4 }, { 5, 3, 6 }, { 6, 4, 8 } }
@@ -159,8 +159,11 @@ return {
 		end
 		local centre = ground + Vector3.new(0, eggH * 0.5, 0)
 		-- ---------------------------------------------------------------- camera: push in to frame the egg
-		local amount = fx:frame(centre, FRAME_H[T], PUSH_MIN[T], PUSH_MAX[T], math.max(0.3, A * 0.85),
-			0.6 + 0.15 * T, 0.9 + 0.1 * T, 0.85)
+		-- in over 0.85 A, hold through the crack and the reveal, ease out from 0.3 s after the reveal; pull = 1 puts the
+		-- egg at the screen centre (QA r3); priority 3 (a level-up cannot steal it, an island unlock can)
+		local inT = math.max(0.3, A * 0.85)
+		local amount = fx:frame(centre, FRAME_H[T], PUSH_MIN[T], PUSH_MAX[T], inT,
+			math.max(0.2, A + 0.34 - inT), 1.0 + 0.12 * T, 1, 3)
 		fx.view = fx:viewFor(fx.camDist * (1 - amount)) -- size for the framing we push to
 		fx.scale *= fx.view * (1 + (T - 1) * 0.06)
 		local sc = fx.scale
@@ -399,9 +402,9 @@ return {
 			local rl = RAYS[T]
 			if rl > 0 then
 				fx:emit(RAYS_L, petC, 1, { life = rl, tag = "rays" })
-				fx:emit(HALO, petC, 1, { life = rl, tag = "halo" })
 				if T >= 6 then fx:emit(RAYS_L2, petC, 1, { life = rl, tag = "rays2" }) end
 			end
+			fx:emit(HALO, petC, 1, { life = math.max(0.9, rl), tag = "halo" }) -- every tier: >= 0.6 s of readable glow
 			if T >= 3 then
 				fx:mesh("star4", { at = petC + Vector3.new(0.9 * sc, 1.6 * sc, 0), face = "camera", roll = 0, spin = 0,
 					r = { 0, 2.4 * sc }, rInT = 0.3, rEase = "back", life = 0.45, color = "white",

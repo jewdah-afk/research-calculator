@@ -190,7 +190,7 @@ return {
 			end
 			fx:shake(0.6, 0.45)
 			fx:flash("hi", 0.18, 0.55)
-			fx:push(cc, 0.14, 0.5, 0.8, 1.0, 0.4)
+			fx:push(cc, 0.14, 0.5, 0.8, 1.0, 0.4, 5)
 		end)
 		fx:extend(finale + 3.2)
 	end,

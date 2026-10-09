@@ -145,7 +145,20 @@ end)
 local renderStepped = signal()
 local RunService = { RenderStepped = renderStepped, Heartbeat = signal(), IsStudio = function() return true end }
 local boundSteps = {}
-function RunService:BindToRenderStep(name, _, fn) boundSteps[name] = fn end
+local maxCamSteps = 0
+local function camStep()
+	local n, fn = 0, nil
+	for name, f in boundSteps do
+		if string.sub(name, 1, 17) == "PeckwoodVfxCamera" then n += 1; fn = f end
+	end
+	return fn, n
+end
+function RunService:BindToRenderStep(name, _, fn)
+	if boundSteps[name] then problem("render step '" .. name .. "' bound twice") end
+	boundSteps[name] = fn
+	local _, n = camStep()
+	maxCamSteps = math.max(maxCamSteps, n)
+end
 function RunService:UnbindFromRenderStep(name) boundSteps[name] = nil end
 local settingsSvc = {
 	ReducedMotion = false,
@@ -312,6 +325,7 @@ do
 end
 
 minFov = 11
+aimAt, aimFrom, aimTo, maxOff, minOff, midway, startOff = nil, 0, 0, 0, 180, nil, 0
 local function run(label, fn)
 	local before = #problems
 	emits.total = 0
@@ -324,14 +338,23 @@ local function run(label, fn)
 		-- Main writes the camera every frame (Camera + 1), then the Vfx post-step runs (Camera + 2) while bound
 		cam.CFrame = base
 		cam.FieldOfView = 11
-		local post = boundSteps.PeckwoodVfxCamera
+		local post = camStep()
 		if post then post(1 / 60) end
+		if aimAt then -- how far off the view axis the subject sits (0 = dead centre of the screen)
+			local v = (aimAt - cam.CFrame.Position).Unit
+			-- against the view AXIS (abs): Lune's CFrame.lookAt LookVector points away from the target, Roblox's at it
+			local off = math.deg(math.acos(math.clamp(math.abs(v:Dot(cam.CFrame.LookVector)), -1, 1)))
+			if frames >= aimFrom and frames <= aimTo then maxOff = math.max(maxOff, off) end
+			minOff = math.min(minOff, off)
+			if frames == 0 then startOff = off end
+		end
+		if midway and frames == midway.frame then midway.fn() end
 		if cam.FieldOfView <= 0 or cam.FieldOfView > 11.0001 then problem("camera FOV out of range: " .. cam.FieldOfView) end
 		minFov = math.min(minFov, cam.FieldOfView)
 		frames += 1
 		task.wait() -- let task.spawn / task.delay callbacks run
 	end
-	if boundSteps.PeckwoodVfxCamera then problem(label .. ": camera step still bound when idle") end
+	if camStep() then problem(label .. ": camera step still bound when idle") end
 	if Vfx.activeCount() > 0 then problem(label .. ": still active after 30 s") end
 	local live = Vfx.Layers.stats()
 	for k, v in live do
@@ -389,10 +412,21 @@ run("egg_hatch x8 overlapping (cap 8)", function()
 	return n > 0
 end)
 run("egg_hatch Mythic, no egg/pet", function() return Vfx.play("egg_hatch", at, { rarity = "Mythic", noEgg = true, noPet = true }) end)
-run("egg_hatch Legendary: camera push", function() return Vfx.play("egg_hatch", at, { rarity = "Legendary" }) end)
-print(string.format("  push: FOV went down to %.2f (from 11) and eased back", minFov))
-if minFov > 11 * (1 - 0.15) then problem("Legendary hatch push-in too weak / missing: min FOV " .. minFov) end
-if math.abs(cam.FieldOfView - 11) > 1e-3 then problem("camera FOV not restored after the push") end
+-- framing: the egg (off to the side of the camera's base aim) must end at the screen centre during the hold, and a
+-- level-up started half way (lower push priority) must not steal it (QA r3)
+do
+	local spot = roblox.Vector3.new(30, 0, 18)
+	local eggCentre = spot + roblox.Vector3.new(0, 0.62 * 4 * 1.6 * 1.16 / 2, 0)
+	aimAt, aimFrom, aimTo, maxOff, minOff = eggCentre, 92, 118, 0, 180 -- Legendary: in to 1.45 s, held to 2.04 s
+	midway = { frame = 80, fn = function() Vfx.play("level_up", roblox.Vector3.new(-10, 0, 0), {}) end }
+	run("egg_hatch Legendary: push framing + priority", function() return Vfx.play("egg_hatch", spot, { rarity = "Legendary" }) end)
+	print(string.format("  push: FOV down to %.2f; egg %.2f deg off the screen centre during the hold (%.1f deg before the push)", minFov, maxOff, startOff))
+	if minFov > 11 * (1 - 0.15) then problem("Legendary hatch push-in too weak / missing: min FOV " .. minFov) end
+	if maxOff > 0.6 then problem(string.format("hatch not framed at the centre during the hold: %.2f deg off", maxOff)) end
+	if math.abs(cam.FieldOfView - 11) > 1e-3 then problem("camera FOV not restored after the push") end
+	aimAt, midway = nil, nil
+end
+if maxCamSteps > 1 then problem("camera render step bound " .. maxCamSteps .. " times at once") end
 run("level_up (follow)", function() return Vfx.play("level_up", at, { follow = function() return birdPos end }) end)
 run("level_up companion colour", function() return Vfx.play("level_up", at, { color = "6fe0ff", scale = 1.3 }) end)
 run("island_unlock (synthetic)", function() return Vfx.play("island_unlock", at, {}) end)
