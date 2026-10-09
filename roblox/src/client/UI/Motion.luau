@@ -3,7 +3,7 @@
 -- TweenService and event driven. Nothing here runs per frame while the UI is idle: ambient loops are engine tweens
 -- that start when a window becomes visible and are cancelled when it hides.
 --   open      scale 0.86 -> 1.04 -> 1 (320 ms) flying out of the HUD button that opened it; rows cascade 40 ms
---   close     rows collapse in reverse, then the window fades + shrinks into its button; small sparkle burst
+--   close     rows collapse in reverse, then the window shrinks into its button (no fade); small sparkle burst
 --   tabs      no re-pop: old content fades out / new fades in (120 ms, 8 px slide toward the tab), the active tab
 --             pill springs to its new slot, rows cascade (the window frame never moves)
 --   idle      header gloss sweep every 4.5 s (one tweened gradient offset), sparkles twinkle, header glow breathes
@@ -102,9 +102,9 @@ function Motion.collapse(root)
 		local d = rows[i]
 		local home = d:GetAttribute("homePos") or d.Position
 		d:SetAttribute("homePos", home)
-		tw(d, 0.1, { Position = home + UDim2.fromOffset(22, 0) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, 0.02 * (n - i))
+		tw(d, 0.12, { Position = home + UDim2.fromOffset(26, 0) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, 0.025 * (n - i))
 	end
-	return math.min(0.18, 0.02 * n + 0.1)
+	return math.min(0.22, 0.025 * n + 0.12)
 end
 function Motion.restoreRows(root)
 	for _, d in root:GetDescendants() do
@@ -139,13 +139,13 @@ function Motion.open(rec, fromPt, root)
 end
 function Motion.close(rec, toPt, root, done, burstParent, burstPt)
 	if reduced() then done(); return end
+	-- the rows collapse in reverse first, then the whole window shrinks into the HUD button that opened it (a real
+	-- shrink, no fade and no CanvasGroup: the window stays where it is in the tree, it just gets small and goes)
 	local wait = if root then Motion.collapse(root) else 0
 	local finished = false
-	local cg, unwrap
 	local function finish()
 		if finished then return end
 		finished = true
-		if unwrap then unwrap() end
 		rec.pop.Scale = 1
 		rec.inner.Position = UDim2.new(0.5, 0, 0.5, 0)
 		if root then Motion.restoreRows(root) end
@@ -154,12 +154,9 @@ function Motion.close(rec, toPt, root, done, burstParent, burstPt)
 	rec.closing = finish
 	task.delay(wait, function()
 		if finished then return end
-		-- a big transient canvas so the window can travel to its button without being cut off
-		cg, unwrap = Motion.wrap(rec.inner, 900)
-		tw(cg, 0.18, { GroupTransparency = 1 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-		tw(rec.pop, 0.18, { Scale = 0.45 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
-		if toPt then tw(rec.inner, 0.18, { Position = offsetTo(rec, toPt) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In) end
-		task.delay(0.19, function()
+		tw(rec.pop, 0.22, { Scale = 0.08 }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+		if toPt then tw(rec.inner, 0.22, { Position = offsetTo(rec, toPt) }, Enum.EasingStyle.Quad, Enum.EasingDirection.In) end
+		task.delay(0.23, function()
 			if burstParent and burstPt then Motion.burst(burstParent, burstPt, 5, 26) end
 			finish()
 		end)

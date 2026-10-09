@@ -446,6 +446,10 @@ local function refreshList(api, s, onBuy, attentionOn)
 				local ui = Render.buildNode(tp.layout, tp.node, if api.accordion then entryOf(api, id).holder else api.sf, 2)
 				ui.root.Name = "row/" .. id
 				ui.node.Name = "row/" .. id .. " (" .. st .. ")"
+				for _, kk in ui.keys do
+					local base = string.match(kk.node.n, "^(btn/[%w%-]+)")
+					if base then kk.inst.Name = base; kk.inst:SetAttribute("state", st) end
+				end
 				if api.accordion then
 					ui.root.Position = UDim2.fromOffset(0, 0)
 					local e0 = api.entries[id]
@@ -529,9 +533,15 @@ local function refreshList(api, s, onBuy, attentionOn)
 			local before = r.level
 			fillRow(r.ui.node, s, id, st, r)
 			if before and r.level and r.level > before then
+				-- "+N LV" rises from the row's icon; measured a frame later (a row rebuilt this push has no layout yet),
+				-- once per level step, and only while the row is on screen
 				local well = r.ui.node:FindFirstChild("icon well")
-				local p = well and Hud.centreOf(well)
-				if p then Motion.floater(WM.canvas, p, "+" .. (r.level - before) .. " LV", "9dffae", 20) end
+				local gain = r.level - before
+				task.defer(function()
+					if not (well and well.Parent and well.AbsoluteSize.X > 0 and r.ui.root.Visible) then return end
+					local p = Hud.centreOf(well)
+					if p then Motion.floater(WM.canvas, p, "+" .. gain .. " LV", "9dffae", 20) end
+				end)
 			end
 			if st == "buy" and (not api.accordion or (api.entries[id] and api.entries[id].expanded)) then primaryKey = r.ui.node:FindFirstChild("btn/buy") end
 			y += api.h + api.gap

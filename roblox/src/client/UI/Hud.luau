@@ -1129,15 +1129,16 @@ local function badgeOn(key, host, text)
 		return
 	end
 	if not b then
-		-- inside the host's top-right corner (tab bars clip: zero clipping); the same on-screen size in any group
+		-- centred on the host's top-right corner (half over its border), never over the label; the same on-screen size
+		-- in any group
 		local k = 1 / math.max(0.3, scaleUnder(host))
-		local f = Render.new("Frame", { Name = "badge", BackgroundColor3 = Color3.fromHex("e8344f"), BorderSizePixel = 0, AnchorPoint = Vector2.new(1, 0),
-			Position = UDim2.new(1, -3 * k, 0, 3 * k), Size = UDim2.fromOffset(28 * k, 22 * k), ZIndex = 1000, AutomaticSize = Enum.AutomaticSize.X }, host)
+		local f = Render.new("Frame", { Name = "badge", BackgroundColor3 = Color3.fromHex("e8344f"), BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(1, -4 * k, 0, 2 * k), Size = UDim2.fromOffset(22 * k, 18 * k), ZIndex = 1000, AutomaticSize = Enum.AutomaticSize.X }, host)
 		Render.new("UICorner", { CornerRadius = UDim.new(0, 4 * k) }, f)
 		Render.new("UIStroke", { Thickness = 2 * k, Color = Render.INK, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, f)
-		Render.new("UIPadding", { PaddingLeft = UDim.new(0, 6 * k), PaddingRight = UDim.new(0, 6 * k) }, f)
-		local l = Render.new("TextLabel", { Name = "count", BackgroundTransparency = 1, FontFace = Render.FONT, TextSize = 15 * k, TextColor3 = Color3.new(1, 1, 1),
-			AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.fromOffset(0, 22 * k), Text = text, ZIndex = 1001 }, f)
+		Render.new("UIPadding", { PaddingLeft = UDim.new(0, 5 * k), PaddingRight = UDim.new(0, 5 * k) }, f)
+		local l = Render.new("TextLabel", { Name = "count", BackgroundTransparency = 1, FontFace = Render.FONT, TextSize = 13 * k, TextColor3 = Color3.new(1, 1, 1),
+			AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.fromOffset(0, 18 * k), Text = text, ZIndex = 1001 }, f)
 		Render.new("UIStroke", { Thickness = 1.4 * k, Color = Render.INK, LineJoinMode = Enum.LineJoinMode.Round }, l)
 		b = { frame = f, label = l, host = host, text = text }
 		badges[key] = b

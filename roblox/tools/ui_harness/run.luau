@@ -524,6 +524,15 @@ do
 	check("aquarium has TYPES + STATUS", aroot:FindFirstChild("dropdown/types", true) ~= nil and aroot:FindFirstChild("dropdown/status", true) ~= nil)
 	WM.close()
 end
+-- close: rows collapse, then the window SHRINKS into its button in place (no CanvasGroup re-parenting, no fade)
+do
+	WM.open("fishing")
+	local rec = WM.built.fishing
+	WM.close()
+	check("closing window stays in its holder", rec.inner.Parent == rec.holder and rec.inner:FindFirstChild("Pop") ~= nil)
+	task.wait(0.6)
+	check("closed window hidden, pop restored", not rec.holder.Visible and rec.pop.Scale == 1)
+end
 -- tooltips: show on hover, hide on press, never stay over (or appear over) an open window
 do
 	WM.close()

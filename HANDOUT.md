@@ -449,7 +449,7 @@ everywhere else. QA rounds: UI_BIRB_QA_1 (tab-by-tab Studio QA against real Birb
   chip in gold when maxed, green dot when affordable) after its gold pop; any row folds / unfolds on click (0.18 s
   height ease, rows below slide). Keybind hint panel pinned at the bottom ([WASD] MOVE, [SPACE] HOP, [TAB] COMPANIONS,
   [Q] OBJECTIVES, [P] PROFILE). The MOLT tab's pending plume gain is a violet chip inside the tab under its label; count
-  badges sit inside the tab's top-right. Cards show live values (seeds / twigs / ore, per second, tier / area / crow).
+  badges sit on the tab's top-right corner (half over the border, never on the label). Cards show live values (seeds / twigs / ore, per second, tier / area / crow).
 - **Figma frame -> window (open from):** sidebar `260:3088` EGGS / `260:3277` golden view (currency switch) /
   `260:4397` MOLT / `260:4544` SEEDS (+ generated NEST / MINE views) · mine `246:4443` SHOP / `248:1739` AREAS (+ CROW
   tab -> crow `246:1276`) (mine meter, hotbar, sidebar MINE card) · treasure `246:1525` (mine down arrow) · trees
@@ -483,8 +483,8 @@ everywhere else. QA rounds: UI_BIRB_QA_1 (tab-by-tab Studio QA against real Birb
   Render keys, tab / btn / seg layers, rows, cells, HUD buttons, rail, arrows, icon keys, the pull ring, dropdowns and
   Kit.button (Robux shop) all go through it. `_G.__uiKeys()` returns { path, kind, pressIn, sfx, keycap, visible }.
 - **Motion (all TweenService, event driven; CanvasGroup only during a transition):** open 0.86 -> 1.04 (0.2 s) -> 1
-  (0.12 s) out of the button, rows cascade 40 ms; close: rows collapse in reverse, fade + shrink into the button with a
-  sparkle burst. Tab switch: no re-pop, no rebuild, the pill glides (0.2 s Quint), content crossfades 0.12 s with an 8 px
+  (0.12 s) out of the button, rows cascade 40 ms; close: rows collapse in reverse, then the window shrinks (0.22 s, no fade, no CanvasGroup) into the
+  button with a sparkle burst. Tab switch: no re-pop, no rebuild, the pill glides (0.2 s Quint), content crossfades 0.12 s with an 8 px
   slide. Idle (open window only): header gloss sweep every 4.5 s, glow breathe 2.8 s, sparkle twinkle, up to 2 big icons
   bob, and the window's ONE primary key (its biggest hero key) catches a light sweep every ~3.5 s. Can't afford: shake
   +-6 x3, red flash, wallet wiggle. Maxed: gold pop + sparkles + shimmer, then the sidebar row folds. MOLT:
