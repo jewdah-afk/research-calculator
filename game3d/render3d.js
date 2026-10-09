@@ -110,6 +110,8 @@
     // the Nest's forest is the game's own trees (Birb: 30 wild trees + planting beds), so the forest island's decorative trees step aside
     W.hideProps((p) => p.need === isl(PT.NEST_MAP).n && ["pine", "tree", "bush", "rock", "log", "deadtree"].includes(p.kind));
     for (const id of [PT.DESERT_MAP, PT.ECHO_FIELD_MAP, PT.MINE_MAP]) SCENE3D[id] = true;
+    for (const id of Object.keys(PT.MAPS).map(Number)) if (isExp(id)) SCENE3D[id] = true;
+    W.hideProps((p) => p.need === W.ISL.find((x) => x.id === "expedition").n); // the floors bring their own walls
     WALK[PT.DESERT_MAP] = WALK[PT.ECHO_FIELD_MAP] = true;
     buildBlocked();
     const n = reachedLevel(); W.resetTo(n); A.level = n;
@@ -339,6 +341,91 @@
     const b = oreBar.querySelector("[data-b]"); b.style.width = Math.max(0, Math.min(1, o.hits / o.maxHits)) * 100 + "%"; b.style.background = o.boss ? "#ef4444" : R.color;
   }
 
+  // ------------------------------------------------------------------ Expedition: each floor is an arena on the expedition island (walls from Birb's collision boxes)
+  const isExp = (id) => id === PT.EXP_HUB_MAP || id === PT.SACRIFICE_MAP || PT.EXP.isRunMap(id) || PT.EXP.isSecretRoom(id);
+  const ENEMY_COL = { boss: "#f97316", elite: "#c084fc", shiny: "#facc15", normal: "#9aa3ad" };
+  const exp = { map: null, walls: null, portals: [], foes: new Map(), parrot: null, totem: null, bars: new Map(), nums: new Map() };
+  const expLayer = document.createElement("div"); Object.assign(expLayer.style, { position: "absolute", inset: "0", pointerEvents: "none", overflow: "hidden" }); stage.appendChild(expLayer);
+  const stoneM = () => new T.MeshStandardMaterial({ color: new T.Color("#6f6a78").convertSRGBToLinear(), roughness: 0.9 });
+  function buildArena(id) {
+    if (exp.walls) A.root.remove(exp.walls); for (const q of exp.portals) A.root.remove(q.g); exp.portals = [];
+    exp.walls = new T.Group(); const m = stoneM(), capM = new T.MeshStandardMaterial({ color: new T.Color("#8d879a").convertSRGBToLinear(), roughness: 0.8 });
+    const k = pxScale(id), kz = (isl(id).N * W.S) / PT.MAPS[id].h;
+    for (const r of PT.EXP.collisions(id)) {
+      const w = (r.right - r.left) * k, d = (r.bottom - r.top) * kz; if (w < 0.5 || d < 0.5) continue;
+      const c = toWorld(id, (r.left + r.right) / 2, (r.top + r.bottom) / 2), h = 5;
+      const b = new T.Mesh(new T.BoxGeometry(w, h, d), m); b.position.set(c.x, c.y + h / 2, c.z); b.castShadow = b.receiveShadow = true;
+      const cap = new T.Mesh(new T.BoxGeometry(w + 0.4, 0.6, d + 0.4), capM); cap.position.set(c.x, c.y + h + 0.3, c.z); exp.walls.add(b, cap);
+    }
+    A.root.add(exp.walls);
+    for (const p of PT.EXP.portals(id)) {
+      const g = new T.Group(), r = Math.max(3, p.r * k), ringM = new T.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8, side: T.DoubleSide, depthWrite: false });
+      const ringMesh = new T.Mesh(new T.RingGeometry(r * 0.75, r, 40), ringM); ringMesh.rotation.x = -Math.PI / 2; ringMesh.position.y = 0.4;
+      const beam = new T.Mesh(new T.CylinderGeometry(r * 0.7, r * 0.7, 10, 24, 1, true), new T.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.18, side: T.DoubleSide, depthWrite: false })); beam.position.y = 5;
+      g.add(ringMesh, beam); g.position.copy(toWorld(id, p.x, p.y)); A.root.add(g); exp.portals.push({ g, p, ringM, beam });
+    }
+    exp.map = id;
+  }
+  function foeModel(e) {
+    const g = new T.Group(), col = e.isShiny ? ENEMY_COL.shiny : e.isBoss ? ENEMY_COL.boss : e.isElite ? ENEMY_COL.elite : ENEMY_COL.normal;
+    const bodyM = new T.MeshStandardMaterial({ color: new T.Color(col).convertSRGBToLinear(), roughness: 0.5, emissive: new T.Color(0) });
+    if (e.projectileKind) { const b = new T.Mesh(new T.SphereGeometry(0.6, 10, 8), new T.MeshBasicMaterial({ color: new T.Color("#fb923c") })); b.position.y = 1.5; g.add(b); g.userData = { bodyM }; return g; }
+    const body = new T.Mesh(new T.SphereGeometry(1, 18, 14), bodyM); body.scale.set(1, 0.85, 1); body.position.y = 1; body.castShadow = true;
+    const eyeW = new T.MeshStandardMaterial({ color: 0xffffff }), eyeB = new T.MeshStandardMaterial({ color: 0x111111 });
+    for (const sx of [1, -1]) { const w = new T.Mesh(new T.SphereGeometry(0.2, 8, 6), eyeW); w.position.set(0.35 * sx, 1.3, 0.8); const b = new T.Mesh(new T.SphereGeometry(0.11, 6, 5), eyeB); b.position.set(0.35 * sx, 1.3, 0.97); g.add(w, b); }
+    if (e.isBoss || e.isElite) for (const sx of [1, -1]) { const h = new T.Mesh(new T.ConeGeometry(0.22, 0.8, 6), new T.MeshStandardMaterial({ color: 0x2a2a2a })); h.position.set(0.5 * sx, 1.9, 0); h.rotation.z = -0.4 * sx; g.add(h); }
+    g.add(body); g.userData = { bodyM, body };
+    return g;
+  }
+  function domBar(key, x, y, frac, color, label) {
+    let el = exp.bars.get(key);
+    if (!el) { el = document.createElement("div"); Object.assign(el.style, { position: "absolute", transform: "translate(-50%,-100%)", textAlign: "center", font: "12px 'Fredoka One', sans-serif", color: "#fff", textShadow: "0 0 3px #000" });
+      el.innerHTML = '<div data-l></div><div style="width:46px;height:7px;margin:0 auto;background:#10141a;border:2px solid #0b0c10;border-radius:4px;overflow:hidden"><i style="display:block;height:100%"></i></div>'; expLayer.appendChild(el); exp.bars.set(key, el); }
+    el.dataset.live = "1"; el.style.left = x + "px"; el.style.top = y + "px"; el.firstChild.textContent = label || "";
+    const i = el.querySelector("i"); i.style.width = Math.max(0, Math.min(1, frac)) * 100 + "%"; i.style.background = color;
+  }
+  function syncExp(on, dt) {
+    const s = G.s, id = s.currentMap, run = on ? PT.expState(s).activeRun : null, r = frame.getBoundingClientRect();
+    const scr = (v) => { const p = v.clone().project(W.camera); return [((p.x + 1) / 2) * r.width, ((1 - p.y) / 2) * r.height]; };
+    for (const el of exp.bars.values()) el.dataset.live = "";
+    if (!on) { if (exp.walls) { A.root.remove(exp.walls); exp.walls = null; for (const q of exp.portals) A.root.remove(q.g); exp.portals = []; exp.map = null; } }
+    else {
+      if (exp.map !== id) buildArena(id);
+      for (const q of exp.portals) { const live = q.p.type !== "next_floor" || !!run?.exitPortal?.active, show = q.p.type !== "secret_room_enter" || (!!run && !run.nightMode && !!PT.EXP.SECRET_ROOMS[run.currentFloor]);
+        q.g.visible = show; const col = !live ? "#55555f" : q.p.type === "next_floor" ? "#facc15" : "#a78bfa"; q.ringM.color.set(col); q.beam.material.color.set(col); q.g.rotation.y += dt * 0.8; }
+    }
+    // enemies
+    const seen = new Set();
+    if (run && PT.EXP.MAP_FLOOR[id]) for (const e of run.enemies) {
+      if (e.health <= 0) continue; seen.add(e);
+      let g = exp.foes.get(e); if (!g) { g = foeModel(e); A.root.add(g); exp.foes.set(e, g); }
+      const w = toWorld(id, e.x, e.y), sc = e.type === "mini-fly" ? 0.7 : e.isBoss ? 4.2 : e.isElite ? 3 : e.projectileKind ? 1 : 2.1;
+      g.position.set(w.x, w.y + (e.type === "mini-fly" ? 2.5 : 0), w.z); g.scale.setScalar(sc);
+      const p = run.parrot; if (p) g.rotation.y = Math.atan2(p.x - e.x, p.y - e.y);
+      if (g.userData.body) g.userData.body.position.y = 1 + Math.abs(Math.sin(G.t * 6 + e.x)) * 0.15;
+      g.userData.bodyM.emissive.set(e.hitFlash > 0 ? "#ffffff" : /attack|hitting/.test(e.state) ? "#5a0a0a" : "#000000");
+      if (e.type !== "mini-fly" && !e.projectileKind) { const [x, y] = scr(w.clone().add(new T.Vector3(0, 2.6 * sc, 0))); domBar(e, x, y, e.health / e.maxHealth, "#ef4444", e.isBoss || e.isElite ? e.type.replace(/-/g, " ").toUpperCase() : ""); }
+    }
+    for (const [e, g] of exp.foes) if (!seen.has(e)) { A.root.remove(g); exp.foes.delete(e); }
+    // the parrot
+    const p = run && run.parrot;
+    if (!exp.parrot) { exp.parrot = A.M.bird({ body: "#2ecc71", belly: "#f1c40f", wing: "#e74c3c" }); exp.parrot.scale.setScalar(A.BIRD * 0.8); A.root.add(exp.parrot); }
+    exp.parrot.visible = !!p && on;
+    if (p && on) { const w = toWorld(id, p.x, p.y), last = exp.parrot.userData.last || w; exp.parrot.position.copy(w); animBird(exp.parrot, (w.x - last.x) * 20, (w.z - last.z) * 20, dt); exp.parrot.userData.last = w;
+      const [x, y] = scr(w.clone().add(new T.Vector3(0, 7, 0))); domBar("parrot", x, y, p.health / p.maxHealth, "#4ade80"); }
+    // totem
+    const Tp = on ? PT.EXP.totem.position : null;
+    if (!exp.totem) { exp.totem = new T.Mesh(new T.CylinderGeometry(0.9, 1.2, 7, 8), new T.MeshStandardMaterial({ color: new T.Color("#a78bfa").convertSRGBToLinear(), emissive: new T.Color("#3b1d7a") })); exp.totem.castShadow = true; A.root.add(exp.totem); }
+    exp.totem.visible = !!Tp && Tp.mapId === id; if (exp.totem.visible) { exp.totem.position.copy(toWorld(id, Tp.x, Tp.y)).add(new T.Vector3(0, 3.5, 0)); exp.totem.material.color.set(PT.EXP.totemActive(s) ? "#a78bfa" : "#555555"); }
+    // damage numbers
+    const live = new Set();
+    if (run && on) for (const d of run.damageNumbers) { live.add(d); let el = exp.nums.get(d);
+      if (!el) { el = document.createElement("div"); el.textContent = d.text; Object.assign(el.style, { position: "absolute", transform: "translate(-50%,-50%)", font: "17px 'Fredoka One', sans-serif", color: d.color || "#fff", textShadow: "0 0 3px #000, 0 2px 0 #000", whiteSpace: "nowrap" }); expLayer.appendChild(el); exp.nums.set(d, el); }
+      const [x, y] = scr(toWorld(id, d.x, d.y).add(new T.Vector3(0, 6, 0))); el.style.left = x + "px"; el.style.top = y + "px"; el.style.opacity = Math.min(1, d.life / 0.4); }
+    for (const [d, el] of exp.nums) if (!live.has(d)) { el.remove(); exp.nums.delete(d); }
+    for (const [k, el] of exp.bars) if (!el.dataset.live) { el.remove(); exp.bars.delete(k); }
+  }
+
   // floating numbers: a light DOM layer projected from the world camera
   const floatLayer = document.createElement("div"); Object.assign(floatLayer.style, { position: "absolute", inset: "0", pointerEvents: "none", overflow: "hidden" }); stage.insertBefore(floatLayer, frame.nextSibling);
   const floatEls = new Map();
@@ -383,6 +470,7 @@
     syncBridge(cur === 2, dt);
     syncEggs(PT.DESERT_MAP, G.field.list(PT.DESERT_MAP), cur === PT.DESERT_MAP);
     syncEggs(PT.ECHO_FIELD_MAP, G.field.list(PT.ECHO_FIELD_MAP), cur === PT.ECHO_FIELD_MAP);
+    syncExp(isExp(cur), dt);
     syncDesert(cur === PT.DESERT_MAP, dt); syncEcho(cur === PT.ECHO_FIELD_MAP); syncMine(cur === PT.MINE_MAP, dt);
     syncDying(dt);
     placeCamera(false);
