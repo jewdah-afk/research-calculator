@@ -9,9 +9,13 @@ Design only: no Roblox code, no git commits.
   Before your first `use_figma` call read `skill://figma/figma-use/SKILL.md` with `get_figma_skill` and pass
   `skillNames: "resource:figma-use,resource:figma-generate-design"` on every call.
 - **Windows board** `239:307` (page coords x 5400, y 17600). Work ONLY inside your column:
-  board-local `x0 = 40 + col*1400`, `y0 = 110`, width 1360, height up to 4300. Never create, move or delete anything
+  board-local `x0 = 40 + col*1400`, `y0` as given in your task (batch 1: 110, batch 2: 4800), width 1360, height
+  up to 4300 below y0 (your icons frame goes at y0+4000). Never create, move or delete anything
   outside your column, never edit components, the HUD board `213:7`, the icon strip `213:10`, or other windows.
-- **Reference window** (copy its look exactly): `Window / Sunflower Tree` `239:309` (column 0). Screenshot it first.
+- **Reference windows** (copy their look exactly; screenshot two of them first): `Window / Sunflower Tree` `239:309`
+  (node map + detail panel), `Window / Mine · SHOP` `246:4443` (upgrade rows + detail panel), `Window / Crow`
+  `246:1276` (companion hero + stats), `Window / Fish Market` `246:2574` (cards + slots), `Window / Fishing · COLLECTION`
+  `246:3448` (grid + detail).
 - **Kit**: `C:\Users\jacob\Downloads\rc-main\docs\figma\kit.js`. Paste the WHOLE file at the top of every
   `use_figma` script (each call is a fresh context), then write your code below it. It gives you:
   `WINDOW, TABS, STEEL, WELL, KEY, BTN, CHIP, BAR, T, BODY, ICO, GLYPH, CHEVRONS, SPEC, PAL, THEME, ICON, textW, grad, hgrad, R, F, STROKE, LATT, HALFTONE, STRIPES, SHADOW, INNER, INKDS`.

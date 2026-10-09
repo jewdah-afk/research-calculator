@@ -79,7 +79,7 @@ local function buildSurface(parent)
 		i1 = math.max(i1, isl.oi + isl.W); j1 = math.max(j1, isl.oj + isl.N)
 	end
 	i0 -= 24; j0 -= 24; i1 += 24; j1 += 24
-	PX = math.clamp(math.floor(1024 / math.max(i1 - i0, j1 - j0)), 1, 4)
+	PX = math.clamp(math.floor(1024 / math.max(i1 - i0, j1 - j0)), 1, 6)
 	B = { i0 = i0, j0 = j0, w = i1 - i0, h = j1 - j0 }
 	local W, H = B.w * S, B.h * S
 	local cx, cz = sx(i0) + W / 2, sz(j0) + H / 2
@@ -142,14 +142,6 @@ local function buildSurface(parent)
 				table.insert(ripples, t)
 			end
 		end
-		for k = 1, 3 do
-			local img = newImage(B.w * PX, B.h * PX)
-			if img then
-				local dcl = Instance.new("Decal"); dcl.Face = Enum.NormalId.Top; dcl.ZIndex = 4; dcl.Transparency = 1
-				dcl.ColorMapContent = Content.fromObject(img); dcl.Parent = sheet
-				waveImgs[k], waveDecals[k] = img, dcl
-			end
-		end
 	end
 	-- sparkle: a tiling 64px image of white flecks, two layers at different scales drifting apart
 	local gl = newImage(64, 64)
@@ -158,7 +150,7 @@ local function buildSurface(parent)
 		for y = 0, 63 do
 			for x = 0, 63 do
 				local v = hash(x * 1.7 + 3, y * 2.3 + 1)
-				local a = if v > 0.994 then 170 elseif v > 0.985 then 70 else 0
+				local a = if v > 0.997 then 190 elseif v > 0.993 then 60 else 0
 				local o = (y * 64 + x) * 4
 				buffer.writeu8(buf, o, 255); buffer.writeu8(buf, o + 1, 255); buffer.writeu8(buf, o + 2, 255); buffer.writeu8(buf, o + 3, a)
 			end
@@ -201,59 +193,173 @@ end
 -- repaint tint + foam from the tile distance to open land (bilinear between tile centres, so contours are smooth)
 local function lerp1(a, b, t) return a + (b - a) * t end
 local function smooth(e0, e1, x) local t = math.clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t) end
-local DEEP, MID, SHAL = Vector3.new(0.10, 0.42, 0.68), Vector3.new(0.16, 0.60, 0.80), Vector3.new(0.36, 0.86, 0.86)
+local function C3(h) local c = hx(h); return Vector3.new(c.R, c.G, c.B) end
+-- water hierarchy (owner 2026-10-09: "water also has to get a hierarchy look ... the water is now slacking"): clear toon
+-- depth TIERS instead of one soft gradient, like a handheld-RPG sea: crisp white foam at the beach, bright aqua lagoon,
+-- cyan reef shelf, mid blue, deep blue (= the far sea). Each step has a wobbly organic edge and a thin light rim on
+-- its shallow side (the drop-off line), and each tier shades a little towards the next so it is not flat.
+local DMAX = 12                                   -- distances are capped here (tiles); beyond the last step = deep
+local TIERS = {                                   -- { outer edge (tiles from the coast), colour, alpha }
+	{ 4.2, C3("8af2e2"), 0.66 },                  -- lagoon (the beach sand shows through a little)
+	{ 6.4, C3("3fd4e8"), 0.76 },                  -- reef shelf
+	{ 9.2, C3("2a9fe0"), 0.80 },                  -- mid
+}
+local RIM = C3("c8fff6")
 local paintGen = 0
+-- rolling waves (owner 2026-10-09: "water needs to animate"): white crest lines that roll in to the beach and fade
+-- into the foam, like a handheld-RPG shore. Two crest FRONTS, each ONE ribbon mesh along every coast loop (offset
+-- along a heavily smoothed outward normal so bays don't fold), dashed by low-frequency noise so each crest keeps its
+-- gaps as it travels. Every frame the visible fronts slide their vertices inward (EditableMesh budget: 2 meshes,
+-- ~700 vertex moves per frame) and fade; the painted foam surges as a crest lands.
+local function skirtLand(i, j) local c = World.tile(i, j); return c ~= 0 and c ~= 5 end
+local WAVE_FROM, WAVE_TO = 7.4, 2.5   -- tiles from the coast contour
+local waveF, fronts = nil, {}
+local AssetServiceW = game:GetService("AssetService")
+local function buildWaveFronts(loops)
+	if waveF then waveF:Destroy(); waveF = nil end
+	fronts = {}
+	local TOPW = math.floor(SEA_Y / 4 + 0.5) * 4 + 0.14
+	local function landAtW(p: Vector2) return skirtLand(math.floor((p.X - sx(0)) / S), math.floor((p.Y - sz(0)) / S)) end
+	local rails = {}
+	for _, loop in loops do
+		local m0 = #loop
+		if m0 < 12 then continue end
+		local pts = {}
+		for q = 1, m0, 2 do table.insert(pts, loop[q]) end
+		local m = #pts
+		local raw = table.create(m)
+		local landSide = 0
+		for q = 1, m do
+			local tg = pts[q % m + 1] - pts[(q - 2) % m + 1]
+			tg = if tg.Magnitude > 0 then tg.Unit else Vector2.new(1, 0)
+			raw[q] = Vector2.new(tg.Y, -tg.X)
+			if landAtW(pts[q] + raw[q] * 2.5) then landSide += 1 end
+		end
+		local sgn = if landSide > m / 2 then -1 else 1
+		-- the crest path is the coast with its corners ironed out (two passes of a wide moving average), so the
+		-- offset lines are round swells, not copies of the cliff's facets
+		local base = pts
+		for _ = 1, 2 do
+			local sm = table.create(m)
+			for q = 1, m do
+				local sum = Vector2.zero
+				for k = -6, 6 do sum += base[(q - 1 + k) % m + 1] end
+				sm[q] = sum / 13
+			end
+			base = sm
+		end
+		local rail = table.create(m)
+		for q = 1, m do
+			local sum = Vector2.zero
+			for k = -7, 7 do sum += raw[(q - 1 + k) % m + 1] end
+			local nv = (if sum.Magnitude > 0 then sum.Unit else raw[q]) * sgn
+			local p = base[q]
+			local on = math.clamp((math.noise(p.X * 0.045, p.Y * 0.045, 11.3) + 0.02) / 0.16, 0, 1)
+			rail[q] = { base = p, n = nv, hw = 0.4 * on * (0.8 + 0.4 * hash(q, 2.7)) }
+		end
+		table.insert(rails, rail)
+	end
+	if #rails == 0 then return end
+	waveF = Instance.new("Folder"); waveF.Name = "Waves"; waveF.Parent = root
+	for f = 1, 2 do
+		local ok, em = pcall(function() return AssetServiceW:CreateEditableMesh({}) end)
+		if not ok or not em then warn("[Ocean] wave mesh: " .. tostring(em)); break end
+		local up = em:AddNormal(Vector3.yAxis)
+		local verts = {}
+		for _, rail in rails do
+			local m = #rail
+			local ids = table.create(m)
+			for q = 1, m do
+				local r = rail[q]
+				local p = r.base + r.n * (WAVE_FROM * S)
+				local a = em:AddVertex(Vector3.new(p.X - r.n.X * r.hw, 0, p.Y - r.n.Y * r.hw))
+				local b = em:AddVertex(Vector3.new(p.X + r.n.X * r.hw, 0, p.Y + r.n.Y * r.hw))
+				ids[q] = { a, b }
+				table.insert(verts, { a = a, b = b, r = r })
+			end
+			for q = 1, m do
+				local q2 = q % m + 1
+				if rail[q].hw <= 0 and rail[q2].hw <= 0 then continue end
+				local A, B, C, D = ids[q][1], ids[q][2], ids[q2][2], ids[q2][1]
+				local pa, pb, pc = em:GetPosition(A), em:GetPosition(B), em:GetPosition(C)
+				local faceUp = (pb - pa):Cross(pc - pa).Y >= 0
+				local f1 = if faceUp then em:AddTriangle(A, B, C) else em:AddTriangle(A, C, B)
+				local f2 = if faceUp then em:AddTriangle(A, C, D) else em:AddTriangle(A, D, C)
+				em:SetFaceNormals(f1, { up, up, up }); em:SetFaceNormals(f2, { up, up, up })
+			end
+		end
+		local okP, mp = pcall(function() return AssetServiceW:CreateMeshPartAsync(Content.fromObject(em)) end)
+		if okP and mp then
+			mp.Name = "WaveFront"
+			mp.Anchored = true; mp.CanCollide = false; mp.CanQuery = false; mp.CanTouch = false; mp.CastShadow = false
+			mp.Material = Enum.Material.SmoothPlastic; mp.Color = hx("f2fdff"); mp.Transparency = 1
+			mp.CFrame = CFrame.new(0, TOPW, 0)   -- EditableMesh vertices keep their own origin
+			mp.Parent = waveF
+			table.insert(fronts, { em = em, part = mp, verts = verts, phase = (f - 1) * 0.5 })
+		end
+	end
+end
 local function paint(distOf)
 	if not tintImg or not B then return end
 	paintGen += 1
 	local gen = paintGen
 	local w, h = B.w, B.h
-	local g = table.create((w + 1) * (h + 1), 8)
+	local g = table.create((w + 1) * (h + 1), DMAX)
 	for j = 0, h do
 		for i = 0, w do
 			local d = distOf(B.i0 + i, B.j0 + j)
-			g[j * (w + 1) + i + 1] = if d then math.min(8, d) else 8
+			g[j * (w + 1) + i + 1] = if d then math.min(DMAX, d) else DMAX
 		end
 	end
 	local PW, PH = w * PX, h * PX
 	local tb, fb = buffer.create(PW * PH * 4), buffer.create(PW * PH * 4)
-	local wb = { buffer.create(PW * PH * 4), buffer.create(PW * PH * 4), buffer.create(PW * PH * 4) }
 	-- d = distance (tiles) to the smooth coast contour; the cliff mesh's beach meets the water at ~2.2 tiles
-	local WAVE_D = { 4.9, 3.9, 3.0 }   -- wave line distance from the coast (tiles), outermost first
 	for py = 0, PH - 1 do
 		local fy = (py + 0.5) / PX - 0.5
 		local j = math.clamp(math.floor(fy), 0, h - 1); local ty = math.clamp(fy - j, 0, 1)
+		local tj = B.j0 + fy
 		for px = 0, PW - 1 do
 			local fx = (px + 0.5) / PX - 0.5
 			local i = math.clamp(math.floor(fx), 0, w - 1); local tx = math.clamp(fx - i, 0, 1)
 			local r0 = j * (w + 1) + i + 1
 			local d = lerp1(lerp1(g[r0], g[r0 + 1], tx), lerp1(g[r0 + w + 1], g[r0 + w + 2], tx), ty)
-			local shallow = 1 - smooth(2.0, 7.5, d)
-			local c = DEEP:Lerp(MID, smooth(9, 4, d)):Lerp(SHAL, shallow * shallow)
-			local n = hash(px * 0.37, py * 0.53)
-			c += Vector3.one * ((n - 0.5) * 0.025 * (1 - smooth(6, 7.5, d)))
-			if d >= 7.5 then c = FARV end   -- open water: exactly the far-sea colour, so the painted edge never shows
-			local a = if d < 2.0 then 0 elseif d > 7.5 then 0.8 else lerp1(0.8, 0.42, shallow)
-			local o = (py * PW + (PW - 1 - px)) * 4   -- Top-face decals run U along -X
+			local o = ((PH - 1 - py) * PW + (PW - 1 - px)) * 4   -- Top-face decal: image row 0 at +Z, column 0 at +X (tested)
+			if d >= DMAX - 0.01 then   -- open water: exactly the far-sea colour, so the painted edge never shows
+				buffer.writeu8(tb, o, FAR[1]); buffer.writeu8(tb, o + 1, FAR[2]); buffer.writeu8(tb, o + 2, FAR[3]); buffer.writeu8(tb, o + 3, 204)
+				continue
+			end
+			local ti = B.i0 + fx
+			-- organic step edges: low-frequency wobble + a little finer detail
+			local dw = d + math.noise(ti * 0.3, tj * 0.3, 3.1) * 0.55 + math.noise(ti * 1.05, tj * 1.05, 7.7) * 0.14
+			local c, a = FARV, 0.8
+			local inner = 2.2
+			for t = 1, #TIERS do
+				local T = TIERS[t]
+				if dw < T[1] + 0.1 then
+					local nextC = if t < #TIERS then TIERS[t + 1][2] else FARV
+					local nextA = if t < #TIERS then TIERS[t + 1][3] else 0.8
+					local cc = T[2]:Lerp(nextC, smooth(inner, T[1], dw) * 0.28)
+					cc = cc:Lerp(RIM, smooth(T[1] - 0.5, T[1] - 0.03, dw) * 0.22)   -- soft drop-off glow before the step
+					local k = smooth(T[1] - 0.1, T[1] + 0.1, dw)                     -- anti-aliased step (~1 px)
+					c = cc:Lerp(nextC, k); a = lerp1(T[3], nextA, k)
+					break
+				end
+				inner = T[1]
+			end
+			if d < 2.0 then a = 0 end
 			buffer.writeu8(tb, o, math.clamp(c.X * 255, 0, 255)); buffer.writeu8(tb, o + 1, math.clamp(c.Y * 255, 0, 255))
 			buffer.writeu8(tb, o + 2, math.clamp(c.Z * 255, 0, 255)); buffer.writeu8(tb, o + 3, a * 255)
-			-- foam: soft band hugging the coast with ripples running in, plus rare flecks further out
-			local band = smooth(3.0, 2.2, d) * smooth(1.95, 2.25, d)
-			local f = band * (0.6 + 0.4 * math.sin(d * 7 + n * 1.5))
-			if d > 3.0 and d < 5.5 and n > 0.985 then f = math.max(f, 0.5) end
-			buffer.writeu8(fb, o, 255); buffer.writeu8(fb, o + 1, 255); buffer.writeu8(fb, o + 2, 255); buffer.writeu8(fb, o + 3, math.clamp(f, 0, 1) * 235)
-			for k = 1, 3 do   -- thin wavy wave crest following the coast at WAVE_D[k], broken where noise is low
-				local wd = WAVE_D[k] + math.sin(px * 0.05 + py * 0.035 + k) * 0.18
-				local wa = math.max(0, 1 - math.abs(d - wd) / 0.22) * (if n > 0.18 then 1 else 0.3)
-				local ow = o
-				buffer.writeu8(wb[k], ow, 255); buffer.writeu8(wb[k], ow + 1, 255); buffer.writeu8(wb[k], ow + 2, 255); buffer.writeu8(wb[k], ow + 3, wa * 220)
-			end
+			-- foam: a crisp white line on the beach waterline + a broken wash line just outside it
+			local fw = d + math.noise(ti * 0.6, tj * 0.6, 5.3) * 0.18
+			local f = smooth(1.94, 2.12, fw) * (1 - smooth(2.46, 2.66, fw))
+			local wash = math.max(0, 1 - math.abs(fw - 2.95) / 0.17) * smooth(-0.2, 0.05, math.noise(ti * 0.9, tj * 0.9, 2.2))
+			f = math.max(f, wash * 0.75)
+			buffer.writeu8(fb, o, 255); buffer.writeu8(fb, o + 1, 255); buffer.writeu8(fb, o + 2, 255); buffer.writeu8(fb, o + 3, math.clamp(f, 0, 1) * 245)
 		end
-		if py % 64 == 63 then task.wait(); if gen ~= paintGen then return end end   -- a newer coastline superseded this one
+		if py % 48 == 47 then task.wait(); if gen ~= paintGen then return end end   -- a newer coastline superseded this one
 	end
 	tintImg:WritePixelsBuffer(Vector2.zero, Vector2.new(PW, PH), tb)
 	if foamImg then foamImg:WritePixelsBuffer(Vector2.zero, Vector2.new(PW, PH), fb) end
-	for k = 1, 3 do if waveImgs[k] then waveImgs[k]:WritePixelsBuffer(Vector2.zero, Vector2.new(PW, PH), wb[k]) end end
 end
 
 -- ---------------------------------------------------------------- static sea
@@ -309,7 +415,6 @@ local SKIRT_IN = 3.2         -- how far the lip reaches back over the land (cove
 local SKIRT_OUT = 1.6        -- contour offset out to sea, so the smoothed curve never cuts a land tile corner
 local STEP = 1.6             -- studs between resampled contour points (mesh resolution along the coast)
 local skirtF, skirtSig = nil, nil
-local function skirtLand(i, j) local c = World.tile(i, j); return c ~= 0 and c ~= 5 end
 -- closed coast loops in world studs (x, z as Vector2), smoothed
 local function coastLoops(mnI, mnJ, mxI, mxJ)
 	local function v(i, j) return if skirtLand(i, j) then 1 else 0 end
@@ -397,7 +502,7 @@ end
 local PROFILE = {
 	-- { out (studs past the contour), y, colour band, bulge, abs?, v (texture row 0..1) }
 	-- rock part: y in "rock units" 0..-9.6 (scaled to fit between the lip top and the beach)
-	{ -4.6, 0.00, "grass", 0, false, 0.00 }, { 0.2, 0.05, "grass", 0, false, 0.07 }, { 1.05, -0.25, "grass", 0, false, 0.11 },
+	{ -4.6, -0.30, "grass", 0, false, 0.00 }, { 0.2, 0.05, "grass", 0, false, 0.07 }, { 1.05, -0.25, "grass", 0, false, 0.11 },
 	{ 1.45, -0.80, "grass", 0, false, 0.15 }, { 1.20, -1.30, "grassD", 0, false, 0.195 }, { 0.55, -1.55, "rockT", 0.2, false, 0.225 },
 	{ 0.95, -2.6, "rockA", 0.9, false, 0.32 }, { 1.25, -4.1, "rockA", 1.0, false, 0.45 }, { 1.05, -4.8, "ledge", 0.6, false, 0.50 },
 	{ 1.65, -5.25, "ledge", 0.6, false, 0.545 }, { 1.30, -5.9, "rockB", 0.9, false, 0.59 }, { 1.55, -7.6, "rockB", 1.0, false, 0.71 },
@@ -417,7 +522,7 @@ local function cliffTexture()
 	if not img then return nil end
 	local buf = buffer.create(TW * TH * 4)
 	local function C(h) local c = hx(h); return Vector3.new(c.R, c.G, c.B) end
-	local GRASS, GRASS_L, GRASS_D, GRASS_DD = C("7cc24a"), C("93d35c"), C("4f9a34"), C("3a7a28")
+	local GRASS, GRASS_L, GRASS_D, GRASS_DD = C("6fb43f"), C("86c64f"), C("4f9a34"), C("3a7a28")   -- lip top matched to the rendered turf
 	local ROCKS = { C("c98d4d"), C("b47a42"), C("a46c3a"), C("bb8247"), C("9a6234"), C("b07743") }
 	local INKR, LIGHT = C("5c391d"), C("e2ae6c")
 	local FOOTC, SAND, SAND_D, WET = C("5a3b22"), C("f2dea4"), C("e2c98a"), C("cdb37a")
@@ -437,7 +542,7 @@ local function cliffTexture()
 				-- underside of the lip with hanging blade tips
 				local tip = (u * 30) % 1
 				local h = 0.17 + 0.045 * (1 - math.abs(tip - 0.5) * 2) * (0.6 + hash(math.floor(u * 30), 2) * 0.4)
-				col = if v < h then GRASS_DD else ROCKS[1]:Lerp(INKR, 0.55)
+				col = if v < h then GRASS_DD:Lerp(Vector3.new(0.12, 0.3, 0.08), 0.35) else ROCKS[1]:Lerp(INKR, 0.55)
 			elseif v < 0.80 then
 				local band = 1
 				for k = 1, #EDGES - 1 do if v >= EDGES[k] then band = k end end
@@ -480,13 +585,19 @@ local function cliffTexture()
 	return img
 end
 local BEACH_OUT = 9.6 + 1.6   -- studs from the coast contour to the beach's underwater edge (SKIRT_OUT + last point)
-local BAND = { grass = hx("6fb843"), grassD = hx("3f8a2c"), rockT = hx("6e4526"), rockA = hx("b97b40"), ledge = hx("7a4c2a"),
+local BAND = { grass = hx("6fb843"), grassD = hx("2f6f22"), rockT = hx("6e4526"), rockA = hx("b97b40"), ledge = hx("7a4c2a"),
 	rockB = hx("a26a37"), foot = hx("5a3b22"), sand = hx("f0dca0"), sandW = hx("dcc58c"), shelf = hx("8fd8c8") }
 local lastLoops = {}
 local AssetService2 = game:GetService("AssetService")
-local function buildSkirt(mnI, mnJ, mxI, mxJ)
+local skirtAnim: RBXScriptConnection? = nil
+local function buildSkirt(mnI, mnJ, mxI, mxJ, riseAt)
 	if skirtF then skirtF:Destroy() end
+	if skirtAnim then skirtAnim:Disconnect(); skirtAnim = nil end
 	skirtF = Instance.new("Folder"); skirtF.Name = "Skirt"
+	-- unlock animation: columns whose land tile is part of the fresh island start DROP studs under the sea and rise
+	-- with the tile wave (riseAt(i, j) = seconds after the unlock starts, nil = already open land)
+	local rising = {}   -- { em, delay, verts = { {vid, pos} } }
+	local DROP, DUR = 14, 0.45
 	local function landAtWorld(p: Vector2) return skirtLand(math.floor((p.X - sx(0)) / S), math.floor((p.Y - sz(0)) / S)) end
 	local WSURF = math.floor(SEA_Y / 4 + 0.5) * 4   -- the visible water surface (Terrain water top / painted sheet)
 	local scaleY = (SKIRT_TOP - (WSURF + 1.05)) / 9.6   -- rock profile authored 9.6 tall, ends where the beach starts
@@ -516,18 +627,39 @@ local function buildSkirt(mnI, mnJ, mxI, mxJ)
 		for q = 1, nP do c += loop[q] end
 		c /= nP
 		local origin = Vector3.new(c.X, SKIRT_TOP, c.Y)
+		-- grass drips (owner 2026-10-09: the grass line was "too flat"): the lip's underside hangs down in scallops of
+		-- uneven depth, so the grass / rock border is a wavy hand-drawn line instead of a straight edge
+		local drip = table.create(nP)
+		do
+			local a = 0
+			for q = 1, nP do
+				if q > 1 then a += (loop[q] - loop[q - 1]).Magnitude end
+				local sc = 0.5 + 0.5 * math.sin(a / 2.8 * math.pi * 2 + hash(math.floor(a / 5.6), 3.3) * 2.4)
+				drip[q] = 0.25 + 2.3 * sc ^ 2.2 * (0.55 + hash(math.floor(a / 2.8), 7.7) * 0.9) + hash(q, 8.8) * 0.2
+			end
+		end
+		local DRIP_ROW = { [4] = 0.55, [5] = 1.0, [6] = 1.0 }
 		local mn, mx = Vector3.one * math.huge, -Vector3.one * math.huge
 		local function P(q, r)
 			local pr = PROFILE[r]
-			local out = SKIRT_OUT + pr[1] + bulge[q] * pr[4]
+			local dr = (DRIP_ROW[r] or 0) * drip[q]
+			local out = SKIRT_OUT + pr[1] + bulge[q] * pr[4] + dr * 0.18
 			local p2 = loop[q] + nrm[q] * out
-			local v = Vector3.new(p2.X, if pr[5] then WSURF + pr[2] else SKIRT_TOP + pr[2] * scaleY, p2.Y) - origin
+			local v = Vector3.new(p2.X, if pr[5] then WSURF + pr[2] else SKIRT_TOP + pr[2] * scaleY - dr, p2.Y) - origin
 			mn = mn:Min(v); mx = mx:Max(v)
 			return v
 		end
 		local tex = cliffTexture()
 		local colIds = {}
 		for name, col in BAND do colIds[name] = em:AddColor(if tex then Color3.new(1, 1, 1) else col, 1) end
+		local colDelay, colVerts = {}, {}
+		if riseAt then
+			for q = 1, nP do
+				local inner = loop[q] - nrm[q] * 2
+				colDelay[q] = riseAt(math.floor((inner.X - sx(0)) / S), math.floor((inner.Y - sz(0)) / S))
+				if colDelay[q] then colVerts[q] = {} end
+			end
+		end
 		-- arc length per point (texture u)
 		local arc = table.create(nP + 1)
 		arc[1] = 0
@@ -545,6 +677,8 @@ local function buildSkirt(mnI, mnJ, mxI, mxJ)
 				local outward = Vector3.new(nrm[q].X, 0, nrm[q].Y) + Vector3.new(0, 0.3, 0)
 				local flip = n1:Dot(outward) < 0
 				local va, vb, vc, vd = em:AddVertex(a), em:AddVertex(b), em:AddVertex(cc), em:AddVertex(d)
+				if colVerts[q] then table.insert(colVerts[q], { va, a }); table.insert(colVerts[q], { vd, d }) end
+				if colVerts[q2] then table.insert(colVerts[q2], { vb, b }); table.insert(colVerts[q2], { vc, cc }) end
 				local ni = em:AddNormal(if flip then -n1 else n1)
 				local u0, u1 = arc[q] / U_PERIOD, arc[q + 1] / U_PERIOD
 				local tv0, tv1 = PROFILE[r][6], PROFILE[r + 1][6]
@@ -564,18 +698,40 @@ local function buildSkirt(mnI, mnJ, mxI, mxJ)
 			mp.Anchored = true; mp.CanCollide = false; mp.CanQuery = false; mp.CanTouch = false
 			mp.Material = Enum.Material.SmoothPlastic; mp.Color = Color3.new(1, 1, 1)
 			mp.CFrame = CFrame.new(origin)   -- EditableMesh vertices keep their own origin (measured: no recentring)
+			for q, list in colVerts do
+				for _, v in list do em:SetPosition(v[1], v[2] - Vector3.new(0, DROP, 0)) end
+				table.insert(rising, { em = em, delay = colDelay[q], verts = list })
+			end
 			if tex then pcall(function() mp.TextureContent = Content.fromObject(tex) end) end
 			mp.Parent = skirtF
 		else
 			warn("[Ocean] cliff mesh failed: " .. tostring(mp))
 		end
 	end
+	if #rising > 0 then
+		local t = 0
+		skirtAnim = RunService.RenderStepped:Connect(function(dt)
+			t += dt
+			local left = 0
+			for _, r in rising do
+				if r.done then continue end
+				left += 1
+				local k = math.clamp((t - r.delay) / DUR, 0, 1)
+				if k <= 0 then continue end
+				local e = 1 + 2.2 * (k - 1) ^ 3 + 1.2 * (k - 1) ^ 2   -- ease-out with a small overshoot (easeBack)
+				local off = (1 - e) * DROP
+				for _, v in r.verts do r.em:SetPosition(v[1], v[2] - Vector3.new(0, off, 0)) end
+				if k >= 1 then r.done = true end
+			end
+			if left == 0 and skirtAnim then skirtAnim:Disconnect(); skirtAnim = nil end
+		end)
+	end
 	local hl = Instance.new("Highlight")
 	hl.OutlineColor = Color3.fromHex("16181e"); hl.OutlineTransparency = 0; hl.FillTransparency = 1
 	hl.DepthMode = Enum.HighlightDepthMode.Occluded; hl.Adornee = skirtF; hl.Parent = skirtF
 	skirtF.Parent = root
 end
-function Ocean.rebuild()
+function Ocean.rebuild(riseAt: ((number, number) -> number?)?)
 	if not shelfF then return end
 	shelfF:ClearAllChildren()
 	for _, f in lifeF:GetChildren() do f:Destroy() end
@@ -592,7 +748,7 @@ function Ocean.rebuild()
 	if mnI == math.huge then return end
 	local M = 12
 	mnI -= M; mnJ -= M; mxI += M; mxJ += M
-	-- BFS distance from open land over the sea, up to 10 tiles
+	-- BFS distance from open land over the sea, up to 14 tiles
 	local dist = {}
 	local q, head = {}, 1
 	local function k(i, j) return (j + 500) * 2000 + i + 500 end
@@ -604,7 +760,7 @@ function Ocean.rebuild()
 	while head <= #q do
 		local c = q[head]; head += 1
 		local d0 = dist[k(c[1], c[2])]
-		if d0 >= 10 then continue end
+		if d0 >= 14 then continue end
 		for _, o in { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } } do
 			local ni, nj = c[1] + o[1], c[2] + o[2]
 			if ni < mnI or ni > mxI or nj < mnJ or nj > mxJ then continue end
@@ -624,7 +780,8 @@ function Ocean.rebuild()
 	if sigS ~= skirtSig then
 		skirtSig = sigS
 		lastLoops = coastLoops(mnI, mnJ, mxI, mxJ)
-		buildSkirt(mnI, mnJ, mxI, mxJ)
+		buildSkirt(mnI, mnJ, mxI, mxJ, riseAt)
+		buildWaveFronts(lastLoops)
 		-- exact distance (tiles) from each tile centre to the smooth coast, bucketed so it stays cheap; the painted
 		-- shallows / foam / wave lines then follow the real curved coast instead of tile-step diamonds
 		local BK = 4
@@ -640,7 +797,7 @@ function Ocean.rebuild()
 		local function exact(i, j)
 			if openLand(i, j) then return 0 end
 			local d0 = dist[k(i, j)]
-			if not d0 or d0 >= 10 then return 8 end
+			if not d0 or d0 >= 14 then return 12 end
 			local c = Vector2.new(sx(i) + S / 2, sz(j) + S / 2)
 			local bi, bj = math.floor(i / BK), math.floor(j / BK)
 			local best = math.huge
@@ -650,7 +807,7 @@ function Ocean.rebuild()
 					if list then for _, p in list do local m = (p - c).Magnitude; if m < best then best = m end end end
 				end
 			end
-			return math.min(8, best / S)
+			return math.min(12, best / S)
 		end
 		local cache = {}
 		task.spawn(paint, function(i, j)
@@ -770,7 +927,8 @@ function Ocean.setNight(n: number)
 	night = n
 	if tintDecal then tintDecal.Color3 = Color3.new(1, 1, 1):Lerp(hx("3a5d8a"), n) end
 	if foamDecal then foamDecal.Color3 = Color3.new(1, 1, 1):Lerp(hx("7f93b0"), n) end
-	for _, g in glints do g.Transparency = 0.55 + 0.42 * n end
+	for _, g in glints do g.Transparency = 0.68 + 0.3 * n end
+	for _, fr in fronts do fr.part.Color = hx("f2fdff"):Lerp(hx("8fa6c4"), n) end
 	workspace.Terrain.WaterColor = hx("1b70b1"):Lerp(hx("12305a"), n)
 	workspace.Terrain.WaterReflectance = 0.28 * (1 - n) + 0.04 * n   -- no grey sky blotches at night
 	for _, f in frame do f.Color3 = Color3.new(1, 1, 1):Lerp(hx("3a5d8a"), n) end
@@ -823,22 +981,40 @@ function Ocean.step(dt: number)
 	for kk, r in ripples do
 		r.OffsetStudsU = clock * (if kk == 1 then 1.3 else -0.9)
 		r.OffsetStudsV = clock * (if kk == 1 then 0.6 else 1.1)
-		r.Transparency = 0.35 + 0.65 * ripFade
+		r.Transparency = 0.55 + 0.45 * ripFade
 	end
-	-- shore waves: a set every 4.5 s, outermost line first, each brightening then fading as the next takes over
-	local cyc = (clock / 4.5) % 1
-	for k, dcl in waveDecals do
-		local ph = (cyc - (k - 1) * 0.22) % 1
-		local a = if ph < 0.35 then math.sin(ph / 0.35 * math.pi) else 0
-		dcl.Transparency = 1 - a * 0.85 * (1 - night * 0.6)
+	-- rolling waves: two crest fronts half a cycle apart travel from WAVE_FROM to WAVE_TO, building up far out and
+	-- fading into the foam; only a visible front moves its vertices
+	local surge = 0
+	local dim = 1 - night * 0.55
+	for _, fr in fronts do
+		local ph = ((clock / 6.5) + fr.phase) % 1
+		local pos = WAVE_FROM - ph * (WAVE_FROM - WAVE_TO)
+		local amp = smooth(WAVE_FROM, WAVE_FROM - 1.1, pos) * (1 - smooth(3.3, WAVE_TO, pos))
+		if pos < 3.3 then surge = math.max(surge, smooth(3.3, 2.7, pos)) end
+		local tr = 1 - amp * 0.9 * dim
+		if math.abs(fr.part.Transparency - tr) > 0.005 then fr.part.Transparency = tr end
+		if amp > 0.01 then
+			local off = pos * S
+			local wsc = 0.7 + 0.6 * amp   -- the crest thickens as it builds
+			local em = fr.em
+			for _, v in fr.verts do
+				local r = v.r
+				local hw = r.hw * wsc
+				local cx, cz = r.base.X + r.n.X * off, r.base.Y + r.n.Y * off
+				em:SetPosition(v.a, Vector3.new(cx - r.n.X * hw, 0, cz - r.n.Y * hw))
+				em:SetPosition(v.b, Vector3.new(cx + r.n.X * hw, 0, cz + r.n.Y * hw))
+			end
+		end
 	end
 	for kk, g in glints do
 		g.OffsetStudsU = clock * (if kk == 1 then 1.6 else -1.1)
 		g.OffsetStudsV = clock * (if kk == 1 then 1.1 else 1.4)
 	end
-	-- foam breathes
-	if shelfF and math.floor(clock * 4) ~= math.floor((clock - dt) * 4) then
-		if foamDecal then foamDecal.Transparency = 0.12 + (0.5 + 0.5 * math.sin(clock * 1.6)) * 0.45 end
+	-- foam surges as each crest lands
+	if foamDecal then
+		local ft = 0.04 + (1 - surge) * 0.28
+		if math.abs(foamDecal.Transparency - ft) > 0.01 then foamDecal.Transparency = ft end
 	end
 end
 

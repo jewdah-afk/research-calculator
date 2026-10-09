@@ -48,7 +48,8 @@ for j = 0, Map.ROWS - 1 do
 	for i = 0, Map.COLS - 1 do
 		local t = Map.tile(i, j)
 		local px, py = (i + 0.5) * Map.PX, (j + 0.5) * Map.PX
-		if (t == 1 or t == 2) and Map.height(i, j) == 0 and px >= 40 and px <= 600 and py >= 40 and py <= 440 then
+		-- eggs spawn only inside the fenced egg yard (owner 2026-10-09: "a fenced in area where your eggs spawn")
+		if t == 1 and Map.inYard(i, j) and Map.inYard(i + 1, j) and Map.inYard(i - 1, j) and Map.inYard(i, j + 1) and Map.inYard(i, j - 1) and Map.height(i, j) == 0 and px >= 40 and px <= 600 and py >= 40 and py <= 440 then
 			if Map.tile(i + 1, j) ~= 0 and Map.tile(i - 1, j) ~= 0 and Map.tile(i, j + 1) ~= 0 and Map.tile(i, j - 1) ~= 0 then
 				local c = Island.tileCenter(i, j); local ok = true
 				for _, b in blocked do if (b - c).Magnitude < 1.2 * S then ok = false; break end end

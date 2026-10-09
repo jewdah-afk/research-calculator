@@ -47,20 +47,27 @@ local AIR = {   -- colours, size, rate per wind, rise (+up) or fall, spin, textu
 local anchor, wind, air, rain, cc
 local cur, state, blend = nil, "clear", { breezy = 0, rain = 0 }
 
+-- Each effect emits from ONE attachment that jumps to a random point of the 150 x 26 x 120 volume every frame
+-- (same spread as a Box volume). A big invisible box part over the island blocked every Occluded Highlight outline
+-- behind it (hen, eggs, fence lost their ink lines, 2026-10-09), so the anchor is a tiny part now.
+local VOL = Vector3.new(150, 26, 120)
+local rng = Random.new()
+local atts = {}
 local function emitter(name, props)
+	local att = Instance.new("Attachment"); att.Name = name; att.Parent = anchor
+	table.insert(atts, att)
 	local pe = Instance.new("ParticleEmitter")
 	pe.Name = name
-	pe.Shape = Enum.ParticleEmitterShape.Box; pe.ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume
 	pe.LockedToPart = false; pe.Rate = 0
 	for k, v in props do pe[k] = v end
-	pe.Parent = anchor
+	pe.Parent = att
 	return pe
 end
 
 function Ambience.start()
 	anchor = Instance.new("Part")
 	anchor.Name = "Ambience"; anchor.Anchored = true; anchor.CanCollide = false; anchor.CanQuery = false; anchor.CanTouch = false
-	anchor.Transparency = 1; anchor.Size = Vector3.new(150, 26, 120); anchor.Parent = workspace
+	anchor.Transparency = 1; anchor.Size = Vector3.new(0.2, 0.2, 0.2); anchor.Parent = workspace
 	wind = emitter("Wind", {
 		Texture = DOT, Color = ColorSequence.new(Color3.new(1, 1, 1)), LightEmission = 0.2,
 		Size = seq(0, 0, 0.2, 0.22, 0.8, 0.22, 1, 0), Squash = seq(0, 4, 1, 4),
@@ -97,6 +104,9 @@ function Ambience.step(dt)
 	local cam = workspace.CurrentCamera
 	local focus = cam.Focus.Position
 	anchor.CFrame = CFrame.new(focus + Vector3.new(-40, 10, 0))
+	for _, att in atts do
+		att.Position = Vector3.new((rng:NextNumber() - 0.5) * VOL.X, (rng:NextNumber() - 0.5) * VOL.Y, (rng:NextNumber() - 0.5) * VOL.Z)
+	end
 	local t = workspace:GetServerTimeNow()
 	local w = IslandView.wind(t)
 	acc += dt

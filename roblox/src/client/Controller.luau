@@ -22,7 +22,7 @@ local colliders: { { x: number, y: number, r: number, base: number, top: number,
 -- tight hitboxes (owner 2026-10-09: "right around them"): footprint radius in studs per kind, sized to the
 -- generated models; kinds not listed are walk-through decor
 local FOOT = { lantern = 0.5, oak = 0.7, bigoak = 0.9, pine = 0.6, tree = 0.7, palm = 0.5, deadtree = 0.6, rock = 1.0,
-	cart = 2.0, bench = 1.1, windmill = 3.4, arch = 0.9, barrel = 0.9, birdhouse = 0.4, scarecrow = 0.4, post = 0.3,
+	cart = 2.0, bench = 1.1, windmill = 3.4, lighthouse = 3.4, arch = 0.9, barrel = 0.9, birdhouse = 0.4, scarecrow = 0.4, post = 0.3,
 	keep = 9, tower = 2.6, temple = 6, pyramid = 6, greenhouse = 3.6, hut = 3.2, mineentrance = 4, minecart = 1.2,
 	crystal = 1.0, ore = 1.0, cactus = 0.6, altar = 1.6, pillar = 0.9, bell = 1.2, banner = 0.3, rod = 0.4, tent = 2.2 }
 local PX_PER_STUD = Map.PX / S

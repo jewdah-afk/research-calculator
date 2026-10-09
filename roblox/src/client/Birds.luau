@@ -19,16 +19,16 @@ type Bird = { model: Model, parts: { PartRest }, heading: number, phase: number,
 	punch: number, eyes: { BasePart }, eyeSize: Vector3, blinking: boolean, shadow: BasePart }
 local birds: { [Model]: Bird } = {}
 local folder = Instance.new("Model"); folder.Name = "Birds"; folder.Parent = workspace
-if false then   -- cartoon ink outline removed for the realistic look (owner 2026-10-09)
+do   -- cel look (owner 2026-10-09): the hen gets the same solid ink outline as the rest of the world
 	local h = Instance.new("Highlight")
-	h.OutlineColor = Color3.fromHex("#1b1720"); h.OutlineTransparency = 0.08; h.FillTransparency = 1
+	h.OutlineColor = Color3.fromHex("#16181e"); h.OutlineTransparency = 0; h.FillTransparency = 1
 	h.DepthMode = Enum.HighlightDepthMode.Occluded; h.Adornee = folder; h.Parent = folder
 end
 local shadows = Instance.new("Folder"); shadows.Name = "BirdShadows"; shadows.Parent = workspace
 
 local function build(): Bird
 	local m = Models.bird()
-	m.WorldPivot = CFrame.new(); m:ScaleTo(1.25)   -- View3D bird scale
+	m.WorldPivot = CFrame.new(); m:ScaleTo(m:GetScale() * 1.25)   -- View3D bird scale (multiply: Models.bird already sized the asset)
 	local parts: { PartRest } = {}
 	local eyes = {}
 	for _, p in m:GetChildren() do

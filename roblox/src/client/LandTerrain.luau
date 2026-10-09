@@ -108,7 +108,10 @@ function LandTerrain.visualTop(i, j, top, code)
 			if World.rawTile(i + di, j + dj) == 3 then best = math.min(best, math.sqrt(di * di + dj * dj) + math.noise(i * 0.4, j * 0.4, 2) * 0.8) end
 		end end
 		-- the first ring dips below the waterline, so the shore follows this rounded slope instead of the square tiles
-		if best < 3.2 then y = math.min(y, top - (1 - math.clamp((best - 0.8) / 2.4, 0, 1)) ^ 1.3 * 5) end
+		-- (not next to the sea: there the cliff lip sits flush with the turf, so a dipped bank would show a gap under it)
+		local nearSea = false
+		for dj = -2, 2 do for di = -2, 2 do if not landAt(i + di, j + dj) then nearSea = true end end end
+		if false and best < 3.2 and not nearSea then y = math.min(y, top - (1 - math.clamp((best - 0.8) / 2.4, 0, 1)) ^ 1.3 * 5) end
 	end
 	-- (no shore dip any more: the coast is a cliff skirt with a grass lip flush with the turf, Ocean.buildSkirt)
 	return y, d ~= nil, h > 0
@@ -147,15 +150,8 @@ function LandTerrain.column(x0, z0, top, mat, code, shore)
 		return
 	end
 	local y, cliff, hill = LandTerrain.visualTop(i, j, math.max(0, top), code)
-	-- natural variation on grass: beaches, lush / dry patches, bare dirt (flat cel colours)
-	if mat == M.Grass or mat == M.LeafyGrass then
-		local n1 = math.noise(i * 0.07, j * 0.07, 3.1)
-		local n2 = math.noise(i * 0.19 + 40, j * 0.19, 7.7)
-		if n2 > 0.42 and World.base(i, j) > 0 then mat = M.Ground   -- no random dirt stains in the Park valley
-		elseif n1 > 0.45 then mat = M.LeafyGrass   -- deep moss is dark: only small patches
-		elseif n1 < -0.05 then mat = M.Pavement   -- drier meadow tone (painted grass, warmer tint)
-		end
-	end
+	-- toon colour blocking (owner 2026-10-09: the random lighter "yellow" patches looked messy): grass is ONE clean
+	-- colour; variety comes from placed props (tall grass, flowers, paths), not from noise patches
 	-- cliff slopes show rock (snow way up high); hills stay grassy mounds, capped with snow on the summit
 	if cliff and y - World.base(i, j) > 2 then mat = if y > 76 then M.Snow else M.Rock
 	elseif hill and y > 86 then mat = M.Snow end
