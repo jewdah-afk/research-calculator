@@ -1,17 +1,19 @@
 --!nonstrict
 -- egg_hatch: the reveal, scaled by rarity (Common 1 .. Mythic 6). A = wind-up length (0.65 .. 2.1 s).
--- Hierarchy: HERO = the crack flash (white-hot core + rarity rim + inked needles), SUPPORT = shell shards + toon smoke
--- (then rays + halo at the reveal), AMBIENT = sparkle trickle. Everything else is a small accent.
---   0 .. A   WIND-UP: an egg (opts.egg, else the game's egg mesh) rocks on its base, faster and wider; crack decals
---            appear in 3 stages (glowing the rarity colour) with a jolt + shell specks each; a 3-band glow charges
---            behind it in steps; ember streaks are sucked in. Rare+: a swirl spirals inward before the burst.
---            Legendary+: rune circle drawn in under the egg + light pillar. Every tier: camera push-in that frames
---            the egg (stronger and longer for higher rarity).
---   A        CRACK (hit-stop 0.05-0.1 s on everything but the flash): hero flash (0.09 s), inked needles (Uncommon+),
---            swirl crescents + ink swirl (Uncommon+ / Rare+), speed lines (Rare+), embers, shell shards, smoke ring,
---            ONE uneven ground wave (two on Epic+), sheen dome + colour flash (Epic+), pillar flare (Legendary+), shake.
---   A+0.04   REVEAL: the pet pops in (back overshoot + hop), ray fan + halo behind it (Uncommon+), a mixed handful of
---            stars / feathers / confetti, sparkle trickle round the pet, sparkle shower (Legendary+).
+-- Hierarchy: HERO = the crack flash (white-hot core + rarity rim + inked needles) then the toon burst cloud + stars,
+-- SUPPORT = crescent slashes, shards, smoke, ground wave, then rays + halo behind the pet, AMBIENT = sparkle trickle.
+--   0 .. A   WIND-UP: an egg 1.6x the field egg (opts.egg, else the game's EggAsset) rocks on its base, faster and
+--            wider (hops on Rare+); crack decals appear in 3 stages glowing the rarity colour, each with a jolt, a
+--            small flash, shell specks; a 3-band stepped glow charges behind it in steps; sparks + streaks are sucked
+--            in. Rare+: a swirl spirals inward. Legendary+: rune circle drawn in under the egg + a tapered light pillar.
+--            Every tier: camera push-in framing the egg (stronger and longer for higher rarity).
+--   A        CRACK (hit-stop 0.05-0.1 s on everything but the flash): hero flash (0.09 s), inked needles
+--            (Uncommon+), crescent slash meshes spinning out and thinning (Uncommon+; swirl flipbooks without
+--            meshes), ink swirl (Rare+), speed lines (Rare+), embers (Uncommon+), ground mark (Rare+), toon burst
+--            cloud, shell shards, smoke ring, one ground wave (two on Epic+), dome + colour flash (Epic+), pillar
+--            flare (Legendary+), shake.
+--   A+0.04   REVEAL: the pet pops in (back overshoot + hop), a warm ray fan + halo BEHIND it (Uncommon+), a star gleam
+--            (Rare+), stars + a few feathers + a little confetti, sparkle trickle, sparkle shower (Legendary+).
 -- opts: rarity, egg (Model: cracked + hidden at the crack, the caller owns it), pet (Model to pop; caller owns it),
 --       noEgg / noPet (skip the stand-ins), eggColor (shard tint), onCrack(), onReveal()
 -- `where` = the ground point the egg stands on (ignored when opts.egg is given).
@@ -29,20 +31,26 @@ local T_HIT = { 0.05, 0.05, 0.06, 0.07, 0.08, 0.1 }
 local SHAKE = { 0.3, 0.38, 0.5, 0.62, 0.85, 1.05 }
 local RAYS = { 0, 1.0, 1.3, 1.7, 2.2, 2.6 }
 local WAVE_D = { 10, 11, 12, 14, 16, 18 }
-local CELEB = { { 2, 0, 0 }, { 3, 2, 0 }, { 3, 3, 4 }, { 4, 4, 6 }, { 5, 5, 8 }, { 6, 6, 12 } } -- stars, feathers, confetti
+-- reveal mix, ~30 % leaner than v2 (QA round 2: equal-weight clutter): stars (the hero accent), feathers, confetti
+local CELEB = { { 2, 0, 0 }, { 3, 1, 0 }, { 3, 2, 3 }, { 4, 2, 4 }, { 5, 3, 6 }, { 6, 4, 8 } }
+local SHARDS_N = { 4, 5, 5, 6, 7, 8 }
 -- push-in framing: half the view height (studs) to aim for, and the FOV fraction clamp
-local FRAME_H = { 26, 25, 24, 22, 18, 16 }
-local PUSH_MIN = { 0.06, 0.07, 0.08, 0.1, 0.16, 0.2 }
+local FRAME_H = { 24, 23, 22, 20, 17, 15 }
+local PUSH_MIN = { 0.08, 0.09, 0.1, 0.12, 0.18, 0.22 }
 local PUSH_MAX = { 0.45, 0.48, 0.5, 0.55, 0.62, 0.66 }
 local CRACK_AT = { 0.3, 0.58, 0.84 } -- fractions of A
+local EGG_SCALE = 1.6 -- x the field egg (0.62 S tall)
 
 local SUCK = {
-	tex = "speed_line", orient = "vel", life = 0.32, speed = 13, size = pop(0.9, 0.2, 0.75, 0.2, 0.3),
-	squash = seq(0, 2.2, 0.7, 1.6, 1, 0.8), color = "hi", light = 1, bright = 2, z = 1,
+	tex = "speed_line", orient = "vel", life = 0.34, speed = 16, size = pop(1.5, 0.2, 0.75, 0.4, 0.5),
+	squash = seq(0, 2.2, 0.7, 1.6, 1, 0.8), color = "hi", light = 0.8, bright = 1.8, z = 1,
+}
+local SUCK_TW = { -- a twinkle riding in with each streak
+	tex = "sparkle", orient = "face", life = 0.34, speed = 16, size = pop(1.6, 0.15, 0.75, 0.5), color = "hi", z = 1.1,
 }
 local SPECK = {
 	tex = "shell_shards", orient = "face", life = { 0.35, 0.45 }, speed = { 6, 9 }, spread = 40,
-	accel = Vector3.new(0, -40, 0), size = vary(pop(0.55, 0.1, 0.7, 0), 0.3), rotSpeed = { -300, 300 },
+	accel = Vector3.new(0, -40, 0), size = vary(pop(0.7, 0.1, 0.7, 0), 0.3), rotSpeed = { -300, 300 },
 	fps = { 12, 16 }, startRandom = true, color = "fff4dc", z = 1.2,
 }
 local SHARDS = {
@@ -54,17 +62,17 @@ local GATHER = {
 	tex = "swirl_arc", orient = "face", life = 0.4, size = seq(0, 11, 0.6, 8, 1, 6), color = "mid",
 	light = 1, bright = 1.6, z = 1.5, rotSpeed = { -300, -260 },
 }
-local RAYS_L = {
-	tex = "rays_fan", orient = "face", life = 2, size = seq(0, 5, 0.12, 10, 0.3, 11.2, 1, 12),
-	rotSpeed = { 10, 14 }, color = "warm", light = 1, bright = 1.4, z = -2,
+local RAYS_L = { -- thin warm rays BEHIND the pet (negative ZOffset), dying by thinning (the flipbook)
+	tex = "rays_fan", orient = "face", life = 2, size = seq(0, 3.5, 0.12, 8, 0.3, 9, 1, 9.5),
+	rotSpeed = { 10, 14 }, color = "warm", light = 1, bright = 1.7, z = -3,
 }
 local RAYS_L2 = {
-	tex = "rays_fan", orient = "face", life = 2, size = seq(0, 4, 0.12, 8, 0.3, 9, 1, 9.5),
-	rotSpeed = { -16, -12 }, color = "accent", light = 1, bright = 1.3, z = -1.9,
+	tex = "rays_fan", orient = "face", life = 2, size = seq(0, 3, 0.12, 6.5, 0.3, 7.2, 1, 7.6),
+	rotSpeed = { -16, -12 }, color = "accent", light = 1, bright = 1.5, z = -2.9,
 }
 local HALO = {
-	tex = "glow_step", orient = "face", life = 2, size = seq(0, 3, 0.12, 6.5, 1, 6),
-	trans = steps({ 0.7, 0.35 }, { 0.86, 1 }), color = "base", light = 0.8, bright = 1.2, z = -2.2,
+	tex = "glow_step", orient = "face", life = 2, size = seq(0, 2.5, 0.12, 5, 1, 4.6),
+	trans = steps({ 0.7, 0.4 }, { 0.86, 1 }), color = "mid", light = 0.4, bright = 1.1, z = -3.2,
 }
 local SHOWER = {
 	tex = "sparkle", orient = "face", life = { 1.3, 1.9 }, speed = { 0.5, 2 }, dir = Enum.NormalId.Bottom, spread = 25,
@@ -78,14 +86,9 @@ local TRACE = { -- the swirl flipbook lying flat traces round the rune circle on
 	tex = "swirl_arc", orient = "flat", life = 0.6, size = 1, color = "hi", light = 1, bright = 1.8, z = 0.4,
 }
 local POOF = {
-	tex = { "toon_smoke", "smoke_puff" }, orient = "face", life = { 0.45, 0.6 }, speed = { 3, 6 }, spread = 180, drag = 3,
-	size = seq(0, 1.6, 1, 2.8), color = "white", z = 2,
+	tex = { "toon_smoke", "smoke_puff" }, orient = "face", life = { 0.45, 0.6 }, speed = { 3, 6 }, spread = 180,
+	drag = 3, size = seq(0, 1.6, 1, 2.8), color = "white", z = 2,
 }
-local PILLAR = {
-	tex = "beam_core", texMode = Enum.TextureMode.Wrap, texLen = 7, texSpeed = 1.6, color = "base",
-	light = 1, bright = 1.6, trans = seq(0, 0.05, 0.65, 0.4, 1, 1), z = -0.5,
-}
-local PILLAR_CORE = { color = "white", light = 1, bright = 2.2, trans = seq(0, 0, 0.6, 0.3, 1, 1), z = -0.4 }
 
 local function hideModel(m: Instance)
 	for _, d in m:GetDescendants() do
@@ -104,7 +107,7 @@ local function biggestPart(m: Instance): BasePart?
 	return best
 end
 
--- the two faces of `part` that look most at the camera (Decals project per bounding-box face)
+-- the faces of `part` that look most at the camera (Decals project per bounding-box face)
 local FACES = {
 	{ Enum.NormalId.Right, Vector3.xAxis }, { Enum.NormalId.Left, -Vector3.xAxis },
 	{ Enum.NormalId.Top, Vector3.yAxis }, { Enum.NormalId.Bottom, -Vector3.yAxis },
@@ -118,7 +121,8 @@ local function camFaces(part: BasePart)
 	for _, f in FACES do table.insert(list, { f[1], l:Dot(f[2]) }) end
 	table.sort(list, function(a, b) return a[2] > b[2] end)
 	local out = { list[1][1] }
-	if list[2][2] > 0.25 then table.insert(out, list[2][1]) end
+	if list[2][2] > 0.2 then table.insert(out, list[2][1]) end
+	if list[3][2] > 0.2 then table.insert(out, list[3][1]) end
 	return out
 end
 
@@ -133,10 +137,10 @@ return {
 	run = function(fx, cf, opts)
 		local T = math.clamp(fx.tier, 1, 6)
 		local A = T_ANT[T]
-		-- ---------------------------------------------------------------- the egg
+		-- ---------------------------------------------------------------- the egg (1.6x the field egg)
 		local egg, ownEgg = opts.egg, false
 		local ground = cf.Position
-		local eggH = 3.4 * (1 + 0.04 * (T - 1))
+		local eggH = 0.62 * Models.S * EGG_SCALE * (1 + 0.04 * (T - 1))
 		if egg then
 			local bcf, size = egg:GetBoundingBox()
 			ground = bcf.Position - Vector3.new(0, size.Y / 2, 0)
@@ -160,7 +164,7 @@ return {
 		fx.view = fx:viewFor(fx.camDist * (1 - amount)) -- size for the framing we push to
 		fx.scale *= fx.view * (1 + (T - 1) * 0.06)
 		local sc = fx.scale
-		-- ---------------------------------------------------------------- wobble + cracks
+		-- ---------------------------------------------------------------- wobble (bigger) + cracks
 		local eggPart = egg and biggestPart(egg)
 		local decals = {}
 		local jolt = 0
@@ -172,19 +176,19 @@ return {
 				if t >= A or not egg then return true end
 				local u = t / A
 				jolt = math.max(0, jolt - dt * 6)
-				phase += (9 + 24 * u * u + 18 * jolt) * dt
-				local amp = math.rad(3 + 11 * u ^ 1.4) * (1 + 0.1 * (T - 1)) * (1 + 0.9 * jolt)
+				phase += (8 + 26 * u * u + 18 * jolt) * dt
+				local amp = math.rad(5 + 15 * u ^ 1.3) * (1 + 0.08 * (T - 1)) * (1 + 0.9 * jolt)
 				local hop = 0
 				if T >= 3 then
 					for _, h0 in { 0.55, 0.8 } do
 						local w = (u - h0) / 0.07
-						if w > 0 and w < 1 then hop = math.max(hop, math.sin(w * math.pi) * 0.35 * sc) end
+						if w > 0 and w < 1 then hop = math.max(hop, math.sin(w * math.pi) * 0.5 * sc) end
 					end
 				end
 				egg:PivotTo(base * CFrame.new(0, hop, 0) * CFrame.Angles(0, 0, math.sin(phase) * amp))
 				return nil
 			end)
-			fx:at(A - 0.1, function() if egg then egg:ScaleTo(s0 * 1.08) end end) -- swell before it bursts
+			fx:at(A - 0.1, function() if egg then egg:ScaleTo(s0 * 1.1) end end) -- swell before it bursts
 			if eggPart then
 				fx:cleanup(function() for _, d in decals do d:Destroy() end end)
 			end
@@ -199,23 +203,28 @@ return {
 							local d = Instance.new("Decal")
 							d.Face = face
 							d.Color3 = fx:col("base")
+							d.ZIndex = 2
 							d.Parent = eggPart
 							table.insert(decals, d)
 						end
 					end
 					for _, d in decals do d.Texture = id end
 				end
-				fx:emit(SPECK, CFrame.new(centre + Vector3.new(0, eggH * 0.25, 0)), stage)
-				fx:emit(R.SPARKLE, centre + Vector3.new((math.random() - 0.5) * eggH * 0.6, eggH * 0.2, 0.5), 1, { tag = "crackTw" })
-				fx:shake(0.06 + 0.03 * stage, 0.12)
+				-- a small flash where it cracks, specks, a twinkle, a tiny shake: every stage is a beat you can see
+				local spot = centre + Vector3.new((math.random() - 0.5) * eggH * 0.5, eggH * (0.05 + 0.08 * stage), 0)
+				R.flash(fx, spot, 0.22 + 0.06 * stage, 0.08)
+				fx:emit(SPECK, CFrame.new(spot), 1 + stage)
+				fx:emit(R.SPARKLE, spot, 1, { tag = "crackTw" })
+				fx:shake(0.06 + 0.04 * stage, 0.12)
 			end)
 		end
 		-- ---------------------------------------------------------------- charge: stepped glow, light, sparks in
 		local c1, c2, c3 = CRACK_AT[1], CRACK_AT[2], CRACK_AT[3]
+		local g = eggH / 3.4 -- glow sizes are authored for a 3.4-stud egg
 		fx:emit(R.GLOW, centre, 1, {
 			life = A, tag = "charge",
-			size = seq(0, 2.2, c1, 2.2, c1 + 0.004, 3, c2, 3, c2 + 0.004, 3.9, c3, 3.9, c3 + 0.004, 5, 1, 5.4),
-			trans = seq(0, 0.5, c1, 0.5, c1 + 0.004, 0.4, c2, 0.4, c2 + 0.004, 0.28, c3, 0.28, c3 + 0.004, 0.12, 1, 0.08),
+			size = seq(0, 4 * g, c1, 4 * g, c1 + 0.004, 5.2 * g, c2, 5.2 * g, c2 + 0.004, 6.6 * g, c3, 6.6 * g, c3 + 0.004, 8 * g, 1, 8.6 * g),
+			trans = seq(0, 0.3, c1, 0.3, c1 + 0.004, 0.22, c2, 0.22, c2 + 0.004, 0.14, c3, 0.14, c3 + 0.004, 0.06, 1, 0.04),
 		})
 		local light = fx:light(centre, "base", 8, 0)
 		if light then
@@ -227,20 +236,21 @@ return {
 				return nil
 			end)
 		end
-		local nSuck = fx:n(3 + 2 * T, true)
+		local nSuck = fx:n(4 + 2 * T, true)
 		for k = 1, nSuck do
-			fx:at(A * (0.12 + 0.8 * ((k - 1) / math.max(1, nSuck - 1)) ^ 0.65), function()
+			fx:at(A * (0.1 + 0.82 * ((k - 1) / math.max(1, nSuck - 1)) ^ 0.65), function()
 				local d = Vector3.new(math.random() - 0.5, math.random() * 0.8 - 0.1, math.random() - 0.5)
 				if d.Magnitude < 1e-3 then d = Vector3.xAxis end
 				d = d.Unit
-				fx:emit(SUCK, Layers.upTo(centre + d * 4.2 * sc, -d), 1)
+				local from = Layers.upTo(centre + d * 5.4 * sc, -d) -- SUCK travels 16 x 0.34 = 5.4 studs x scale
+				fx:emit(SUCK, from, 1)
+				if k % 2 == 1 then fx:emit(SUCK_TW, from, 1) end
 			end)
 		end
 		if T >= 3 then
 			fx:at(A * 0.62, function() fx:emit(GATHER, centre, 1) end)
 		end
 		-- ---------------------------------------------------------------- Legendary / Mythic build-up
-		local pillar, pillarCore
 		if T >= 5 then
 			local D = 14 + (T - 5) * 4
 			local L = A - 0.2 + 1.6
@@ -255,31 +265,15 @@ return {
 				})
 				fx:emit(TRACE, ground + Vector3.new(0, 0.2, 0), 1, { size = D * 1.04, tag = "trace" })
 			end)
+			-- tapered pillar: grows over the wind-up, flares at the crack, then thins away (QA round 2: no slab)
 			fx:at(A * 0.3, function()
-				pillar = fx:beam(PILLAR, ground, ground + Vector3.new(0, 56 * sc, 0))
-				pillarCore = fx:beam(PILLAR_CORE, ground, ground + Vector3.new(0, 56 * sc, 0))
 				local t0 = A * 0.3
-				fx:tick(function(t)
-					local w, wc
-					if t < A then
-						local u = EASE.out2((t - t0) / (A - t0))
-						w, wc = 2.6 * u * sc, 0.9 * u * sc
-					elseif t < A + 0.08 then
-						local u = (t - A) / 0.08
-						w, wc = (2.6 + 5.4 * u) * sc, (0.9 + 2.1 * u) * sc
-					else
-						local u = math.clamp((t - A - 0.08) / 0.62, 0, 1)
-						local k = 1 - EASE["in"](u)
-						w, wc = 8 * k * sc, 3 * k * sc
-						if u >= 1 then
-							if pillar then pillar.beam.Enabled = false end
-							if pillarCore then pillarCore.beam.Enabled = false end
-							return true
-						end
-					end
-					if pillar then pillar.set(nil, nil, w) end
-					if pillarCore then pillarCore.set(nil, nil, wc) end
-					return nil
+				R.pillar(fx, ground, 30 * sc, 3.2 * sc, function(t)
+					if t < A then return 0.25 + 0.6 * EASE.out2((t - t0) / (A - t0)) end
+					if t < A + 0.08 then return 0.85 + 0.75 * (t - A) / 0.08 end
+					local u = (t - A - 0.08) / 0.7
+					if u >= 1 then return nil end
+					return 1.6 * (1 - EASE["in"](u))
 				end)
 			end)
 		end
@@ -293,50 +287,45 @@ return {
 			for _, d in decals do d:Destroy() end
 			table.clear(decals)
 			if opts.onCrack then task.spawn(opts.onCrack) end
-			-- HERO
+			-- HERO (QA: keep this frame)
 			R.flash(fx, centre, 0.85 + 0.07 * T)
 			if T >= 2 then fx:emit(R.NEEDLES, centre, 1) end
-			-- swirls (clip2 shape language): mesh crescent slashes spinning out, thinning as they go, + one dark ink
-			-- spiral turning the other way (particle flipbooks when the meshes are not available)
+			-- crescent slash meshes spinning out, thinning as they go (swirl flipbooks when no mesh)
 			local Rs = 4.2 * sc
 			if T >= 2 then
-				if not fx:mesh("arc", { at = centre, face = "camera", tilt = 1.05, yaw = 0.35, spin = 12, spinEnd = 2.5,
-					r = { 0.35 * Rs, Rs }, rInT = 0.55, z = { 1.6 * sc, 0.05 }, life = 0.42, color = "base",
-					alpha = { { 0, 0 }, { 0.62, 0.4 }, { 0.85, 1 } } }) then
+				if not fx:mesh("crescent", { at = centre, face = "camera", tilt = 0.3, spin = 12, spinEnd = 2.5,
+					r = { 0.4 * Rs, Rs }, rInT = 0.55, xy = function(u) return 1, 1 - 0.8 * u ^ 1.4 end, life = 0.42,
+					color = "base", alpha = { { 0, 0 }, { 0.62, 0.4 }, { 0.85, 1 } } }) then
 					fx:emit(R.SWIRL, centre, 1, { rotSpeed = { 380, 440 }, tag = "sw1" })
 				end
 			end
 			if T >= 3 then
 				local col2 = if T >= 6 then "accent" else "mid"
-				if not fx:mesh("arc", { at = centre, face = "camera", tilt = 1.3, yaw = -0.5, spin = -10, spinEnd = -2,
-					r = { 0.45 * Rs, 1.3 * Rs }, rInT = 0.6, z = { 1.3 * sc, 0.05 }, life = 0.48, color = col2,
-					alpha = { { 0, 0 }, { 0.6, 0.4 }, { 0.85, 1 } } }) then
+				if not fx:mesh("crescent", { at = centre, face = "camera", tilt = -0.35, roll = math.pi, spin = -10,
+					spinEnd = -2, r = { 0.5 * Rs, 1.3 * Rs }, rInT = 0.6, xy = function(u) return 1, 1 - 0.8 * u ^ 1.4 end,
+					life = 0.48, color = col2, alpha = { { 0, 0 }, { 0.6, 0.4 }, { 0.85, 1 } } }) then
 					fx:emit(R.SWIRL, centre, 1, { rotSpeed = { -380, -320 }, color = col2, scale = 1.25, tag = "sw2" })
 				end
-				if not fx:mesh("spiral", { at = centre, face = "camera", tilt = 1.15, spin = -7, spinEnd = -1.5,
-					r = { 0.5 * Rs, 1.2 * Rs }, z = { 0.9 * sc, 0.05 }, life = 0.5, color = "ink",
-					material = Enum.Material.SmoothPlastic, alpha = { { 0, 0 }, { 0.75, 1 } } }) then
-					fx:emit(R.INK_SWIRL, centre, 1, { rotSpeed = { 280, 320 } })
-				end
-				fx:emitSphere(R.SPEED, centre, fx:n(5 + T), 0.3)
+				fx:emit(R.INK_SWIRL, centre, 1, { rotSpeed = { 280, 320 } }) -- ink stays a camera-facing sprite
+				fx:emitSphere(R.SPEED, centre, fx:n(4 + T), 0.3)
+				fx:emit(R.MARK, ground + Vector3.new(0, 0.12, 0), 1, { scale = 0.8 + 0.08 * T })
 			end
-			if T >= 2 then fx:emitSphere(R.EMBER, centre, fx:n(3 + 2 * T), 0.7, { color = if T >= 6 then "accent" else "base" }) end
-			if T >= 3 then fx:emit(R.MARK, ground + Vector3.new(0, 0.12, 0), 1, { scale = 0.8 + 0.08 * T }) end
-			-- SUPPORT: the rendered toon burst cloud, shell shards, toon smoke ring
+			if T >= 2 then fx:emitSphere(R.EMBER, centre, fx:n(2 + 2 * T), 0.7, { color = if T >= 6 then "accent" else "base" }) end
+			-- the toon burst cloud (hero accent) + shell shards + smoke ring
 			fx:emit(R.BURST, centre, 1, { scale = 0.85 + 0.06 * T })
-			fx:emit(SHARDS, centre, fx:n(5 + T, true), { color = opts.eggColor or "fff4dc" })
-			fx:emitRadial(R.SMOKE, ground + Vector3.new(0, 0.7, 0), fx:n(4 + T // 2, true), 0.25)
-			-- ONE ground wave (two on Epic+), alpha <= 0.6: a tapered mesh wall ring expanding with an ease-out while it
+			fx:emit(SHARDS, centre, fx:n(SHARDS_N[T], true), { color = opts.eggColor or "fff4dc" })
+			fx:emitRadial(R.SMOKE, ground + Vector3.new(0, 0.7, 0), fx:n(3 + T // 2, true), 0.25)
+			-- ONE ground wave (two on Epic+), alpha <= 0.6: a shockwave wall mesh expanding with an ease-out while it
 			-- collapses (thins); the flat particle wave when the mesh is not there
 			local wr = WAVE_D[T] * 0.5 * sc
-			if not fx:mesh("wallring", { at = foot, face = "flat", lift = true, spin = 0.6, r = { 0.18 * wr, wr }, rInT = 1,
-				z = { 1.5 * sc, 0.05 }, life = 0.32, color = "hi", alpha = { { 0, 0.4 }, { 0.5, 0.6 }, { 0.8, 1 } } }) then
+			if not fx:mesh("wall", { at = foot, face = "up", lift = true, spin = 0.6, r = { 0.18 * wr, wr }, rInT = 1,
+				z = { 1.6 * sc, 0.05 }, life = 0.32, color = "hi", alpha = { { 0, 0.4 }, { 0.5, 0.6 }, { 0.8, 1 } } }) then
 				fx:emit(R.WAVE, foot, 1, { size = R.waveSize(WAVE_D[T]), trans = R.waveTrans(0.6), tag = "wave1" })
 			end
 			if T >= 4 then
 				fx:at(A + 0.07, function()
-					if not fx:mesh("wallring", { at = foot, face = "flat", lift = true, spin = -0.5, r = { 0.25 * wr, 1.3 * wr },
-						rInT = 1, z = { 0.9 * sc, 0.05 }, life = 0.38, color = "mid", alpha = { { 0, 0.6 }, { 0.5, 0.75 }, { 0.8, 1 } } }) then
+					if not fx:mesh("wall", { at = foot, face = "up", lift = true, spin = -0.5, r = { 0.25 * wr, 1.3 * wr },
+						rInT = 1, z = { 1 * sc, 0.05 }, life = 0.38, color = "mid", alpha = { { 0, 0.6 }, { 0.5, 0.75 }, { 0.8, 1 } } }) then
 						fx:emit(R.WAVE, foot + Vector3.new(0, 0.05, 0), 1, { size = R.waveSize(WAVE_D[T] * 1.3), trans = R.waveTrans(0.4), color = "mid", tag = "wave2" })
 					end
 				end)
@@ -378,7 +367,7 @@ return {
 				if ok and m then
 					pet = m
 					pet.Name = "VfxHatchChick"
-					pet:ScaleTo(pet:GetScale() * 0.55 * (1 + 0.04 * (T - 1)))
+					pet:ScaleTo(pet:GetScale() * 0.55 * EGG_SCALE * 0.8 * (1 + 0.04 * (T - 1)))
 					pet.Parent = standInParent()
 					ownPet = true
 					fx:cleanup(function() if pet and ownPet then pet:Destroy() end end)
@@ -413,21 +402,14 @@ return {
 				fx:emit(HALO, petC, 1, { life = rl, tag = "halo" })
 				if T >= 6 then fx:emit(RAYS_L2, petC, 1, { life = rl, tag = "rays2" }) end
 			end
-			-- a thin 4-point gleam over the pet (Rare+): pops in, then sweeps from tall to wide
 			if T >= 3 then
 				fx:mesh("star4", { at = petC + Vector3.new(0.9 * sc, 1.6 * sc, 0), face = "camera", roll = 0, spin = 0,
-					r = { 0, 2.4 * sc }, rInT = 0.3, rEase = "back", z = { 1, 1 }, life = 0.45, color = "white",
+					r = { 0, 2.4 * sc }, rInT = 0.3, rEase = "back", life = 0.45, color = "white",
 					xy = function(u) return 1 - 0.55 * u, 1 + 0.25 * u end, alpha = { { 0, 0 }, { 0.8, 0.5 }, { 0.92, 1 } } })
-			end
-			-- Legendary+: a spiral cone winds up round the pet
-			if T >= 5 then
-				fx:mesh("tornado", { at = ground, face = "up", lift = true, spin = 7, spinEnd = 3, r = { 1.6 * sc, 3 * sc },
-					zFn = function(u) return 9 * sc * (if u < 0.3 then Layers.EASE.out(u / 0.3) else 1 - 0.85 * Layers.EASE["in"]((u - 0.3) / 0.7)) end,
-					life = 1.1, color = "base", alpha = { { 0, 0.15 }, { 0.7, 0.5 }, { 0.88, 1 } } })
 			end
 			local cb = CELEB[T]
 			R.celebrate(fx, centre, cb[1], cb[2], cb[3], if T >= 6 then fx.pal.rainbow else nil)
-			local nTw = 2 + math.ceil(T / 2)
+			local nTw = 1 + math.ceil(T / 2)
 			for k = 1, nTw do
 				fx:at(fx.t + 0.1 + (k - 1) * (1.1 / nTw), function()
 					local a = math.random() * math.pi * 2
@@ -437,7 +419,7 @@ return {
 			end
 			if T >= 5 then
 				fx:at(fx.t + 0.2, function()
-					for _ = 1, fx:n(8 + (T - 5) * 6) do
+					for _ = 1, fx:n(6 + (T - 5) * 4) do
 						local a, r = math.random() * math.pi * 2, math.sqrt(math.random()) * 7 * sc
 						fx:emit(SHOWER, ground + Vector3.new(math.cos(a) * r, 14 * sc + math.random() * 4, math.sin(a) * r), 1)
 					end

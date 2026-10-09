@@ -343,7 +343,7 @@ def tex_confetti():
     for k in range(16):
         sx, rot = tumble(k)
         c = Canvas(128)
-        w = max(abs(sx), 0.1)
+        w = max(abs(sx), 0.34)  # never fully edge-on: a bare ink line read as a stray stick (QA r2)
         lx, ly = local(c, 0, 0, rot)
         m = (np.abs(lx) <= 0.25 * w) & (np.abs(ly) <= 0.56)
         m = c.round(m, 0.035) if w > 0.25 else m
@@ -363,7 +363,7 @@ def tex_leaf():
     for k in range(16):
         sx, rot = tumble(k)
         c = Canvas(128)
-        w = max(abs(sx), 0.1)
+        w = max(abs(sx), 0.34)  # never fully edge-on: a bare ink line read as a stray stick (QA r2)
         lx, ly = local(c, 0, 0, rot + 0.4, w, 1)
         ly = ly + 0.06
         lens = ((lx - 0.33) ** 2 + ly ** 2 <= 0.6 ** 2) & ((lx + 0.33) ** 2 + ly ** 2 <= 0.6 ** 2)
@@ -570,7 +570,7 @@ def tex_feather():
     for k in range(16):
         sx, rot = tumble(k)
         c = Canvas(128)
-        w = max(abs(sx), 0.1)
+        w = max(abs(sx), 0.34)  # never fully edge-on: a bare ink line read as a stray stick (QA r2)
         lx, ly = local(c, 0, 0, rot + 0.3, w, 1)
         ly = ly + 0.05
         t = np.clip((ly + 0.62) / 1.04, 0, 1)
@@ -720,8 +720,8 @@ def tex_crack(stage):
             ex, ey = bx - ax, by - ay
             t = np.clip(((c.X - ax) * ex + (c.Y - ay) * ey) / (ex * ex + ey * ey), 0, 1)
             d = np.hypot(c.X - (ax + t * ex), c.Y - (ay + t * ey))
-            ink |= d <= 0.03
-            core |= d <= 0.011
+            ink |= d <= 0.05  # bold: the decal is read from a far camera (QA r2)
+            core |= d <= 0.022
     c.paint(ink, INK)
     c.paint(core, g(255))
     return c.image()

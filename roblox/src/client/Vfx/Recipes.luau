@@ -107,10 +107,48 @@ R.MARK = {
 	tex = "glow_step", orient = "flat", life = 0.9, size = pop(7, 0.12, 0.7, 7.6), trans = steps({ 0.55, 0.55 }, { 0.8, 0.8 }, { 0.9, 1 }),
 	color = "deep", light = 0, z = 0.1,
 }
-R.GLOW = { -- 3-band cel glow (billboard)
-	tex = "glow_step", orient = "face", life = 1, size = 4, color = "base", light = 0.75, bright = 1.2, z = -0.6,
+-- 3-band cel glows: mostly normal blend (LightEmission 0.3) so the hard bands read as flat colour steps instead of an
+-- airbrushed bloom on the bright grass (QA round 2)
+R.GLOW = { -- billboard, behind the subject
+	tex = "glow_step", orient = "face", life = 1, size = 4, color = "mid", light = 0.3, bright = 1.15, z = -0.6,
 }
-R.GLOW_FLAT = { tex = "glow_step", orient = "flat", life = 0.7, size = 6, color = "base", light = 0.8, bright = 1.2, z = 0.15 }
+R.GLOW_FLAT = {
+	tex = "glow_step", orient = "flat", life = 0.7, size = 6, color = "mid", light = 0.15, bright = 1.1, z = 0.15,
+	trans = steps({ 0.55, 0.45 }, { 0.8, 1 }),
+}
+
+-- ---------------------------------------------------------------- tapered light pillar (QA round 2: it was a flat
+-- pure-white slab running off-screen). Two FaceCamera beams: a rarity-tinted body (streak texture, low emission) and a
+-- thin white core; soft bottom end, fading out toward the top, wider at the base than the top, a slight width pulse.
+R.PILLAR_BODY = {
+	tex = "beam_core", texMode = Enum.TextureMode.Wrap, texLen = 8, texSpeed = 1.2, color = "base", light = 0.45,
+	bright = 1.25, trans = seq(0, 1, 0.06, 0.25, 0.45, 0.35, 0.8, 0.72, 1, 1), z = -0.5, segments = 12,
+}
+R.PILLAR_CORE = {
+	color = "white", light = 0.55, bright = 1.35, trans = seq(0, 1, 0.05, 0.12, 0.5, 0.38, 0.85, 0.88, 1, 1),
+	z = -0.4, segments = 12,
+}
+-- base: Vector3 or () -> Vector3; envelope(t) -> 0..1 width factor, or nil when finished (beams switch off)
+function R.pillar(fx, base: any, height: number, width: number, envelope: (number) -> number?)
+	local function at() return if type(base) == "function" then base() else base end
+	local p0 = at()
+	local body = fx:beam(R.PILLAR_BODY, p0, p0 + Vector3.new(0, height, 0))
+	local core = fx:beam(R.PILLAR_CORE, p0, p0 + Vector3.new(0, height, 0))
+	fx:tick(function(t)
+		local k = envelope(t)
+		if not k then
+			if body then body.beam.Enabled = false end
+			if core then core.beam.Enabled = false end
+			return true
+		end
+		local b = at()
+		local w = width * k * (1 + 0.08 * math.sin(t * 8.5))
+		local top = b + Vector3.new(0, height * (0.35 + 0.65 * math.min(1, k * 1.6)), 0)
+		if body then body.set(b, top, w, w * 0.35) end
+		if core then core.set(b, top, w * 0.3, w * 0.1) end
+		return nil
+	end)
+end
 
 -- rendered toon flipbooks (lever B) with the PIL puff as the fallback until they are uploaded
 R.SMOKE = {

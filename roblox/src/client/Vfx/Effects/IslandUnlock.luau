@@ -46,11 +46,6 @@ local DROP = { -- feathers / confetti falling from above for the finale
 	accel = Vector3.new(1, -6, 0), drag = 1.2, size = vary(seq(0, 1.6, 1, 1.6), 0.35), rotSpeed = { -60, 60 },
 	fps = { 8, 12 }, startRandom = true, color = "hi", z = 2.1,
 }
-local PILLAR = {
-	tex = "beam_core", texMode = Enum.TextureMode.Wrap, texLen = 10, texSpeed = 1.4, color = "base",
-	light = 1, bright = 1.6, trans = seq(0, 0.1, 0.6, 0.45, 1, 1), z = -0.5,
-}
-local PILLAR_CORE = { color = "white", light = 1, bright = 2.2, trans = seq(0, 0.05, 0.55, 0.35, 1, 1), z = -0.4 }
 
 local function flat(v: Vector3): Vector3
 	local f = Vector3.new(v.X, 0, v.Z)
@@ -107,8 +102,9 @@ return {
 					hold, 0, hold + 0.004, 0.45, hold + 0.5 * (1 - hold), 0.45, hold + 0.5 * (1 - hold) + 0.004, 1, 1, 1),
 			})
 			-- a glowing arc wall lying on the circle sweeps once round it as it appears (the flat swirl flipbook if no mesh)
-			if not fx:mesh("arc", { at = cc, face = "flat", lift = true, roll = 0, spin = 10, spinEnd = 6, r = { D * 0.52, D * 0.52 },
-				z = { 3, 0.2 }, life = 0.75, color = "hi", alpha = { { 0, 0 }, { 0.7, 0.45 }, { 0.88, 1 } } }) then
+			if not fx:mesh("crescent", { at = cc + Vector3.new(0, 0.3, 0), face = "flat", roll = 0, spin = 10, spinEnd = 6,
+				r = { D * 0.52, D * 0.52 }, xy = function(u) return 1, 1 - 0.6 * u end, life = 0.75, color = "hi",
+				alpha = { { 0, 0 }, { 0.7, 0.45 }, { 0.88, 1 } } }) then
 				fx:emit(TRACE, cc + Vector3.new(0, 0.05, 0), 1, { size = D * 1.04 })
 			end
 		end)
@@ -120,21 +116,12 @@ return {
 				zFn = function(u) return 46 * (if u < 0.25 then EASE.out(u / 0.25) elseif u < 0.75 then 1 else 1 - EASE["in"]((u - 0.75) / 0.25)) end,
 				life = pillarEnd - start - 0.1, color = "base", alpha = { { 0, 0.25 }, { 0.8, 0.55 }, { 0.92, 1 } } })
 			fx:emit(SUMMON_RAYS, cc + Vector3.new(0, 18, 0), 1, { life = math.max(1.2, pillarEnd - start - 0.1) })
-			local top = cc + Vector3.new(0, 80, 0)
-			local outerB = fx:beam(PILLAR, cc, top)
-			local coreB = fx:beam(PILLAR_CORE, cc, top)
+			-- the tapered summon pillar (white core, tinted body, soft ends, fades to the top; QA round 2: no slab)
 			local t0 = fx.t
-			fx:tick(function(t)
-				local u = math.clamp((t - t0) / (pillarEnd - t0), 0, 1)
-				local k = if u < 0.2 then EASE.out(u / 0.2) elseif u < 0.75 then 1 else 1 - EASE["in"]((u - 0.75) / 0.25)
-				if outerB then outerB.set(nil, nil, 7 * k, 9 * k) end
-				if coreB then coreB.set(nil, nil, 2.4 * k, 3 * k) end
-				if u >= 1 then
-					if outerB then outerB.beam.Enabled = false end
-					if coreB then coreB.beam.Enabled = false end
-					return true
-				end
-				return nil
+			R.pillar(fx, cc, 42, 7, function(t)
+				local u = (t - t0) / (pillarEnd - t0)
+				if u >= 1 then return nil end
+				return if u < 0.2 then EASE.out(u / 0.2) elseif u < 0.75 then 1 else 1 - EASE["in"]((u - 0.75) / 0.25)
 			end)
 		end)
 		-- ---------------------------------------------------------------- SUPPORT: light wave + glints from the landing
@@ -142,7 +129,7 @@ return {
 		fx:at(info.waveStart, function()
 			local Dmax = 2 * info.maxD * S
 			local lp = Vector3.new(info.landing.X, y + 0.1, info.landing.Z)
-			if fx:mesh("wallring", { at = lp, face = "flat", lift = true, spin = 0.3, r = { 1, Dmax / 2 }, rEase = "lin", rInT = 1,
+			if fx:mesh("wall", { at = lp, face = "up", lift = true, spin = 0.3, r = { 1, Dmax / 2 }, rEase = "lin", rInT = 1,
 				z = { 3.2, 1 }, zEase = "lin", life = waveDur, color = "hi", alpha = { { 0, 0.35 }, { 0.85, 0.6 }, { 0.95, 1 } } }) then
 				return
 			end
@@ -174,7 +161,7 @@ return {
 		end
 		-- ---------------------------------------------------------------- finale
 		fx:at(finale, function()
-			if not fx:mesh("wallring", { at = cc, face = "flat", lift = true, spin = -0.4, r = { 2, Rad * 1.05 }, rInT = 1,
+			if not fx:mesh("wall", { at = cc, face = "up", lift = true, spin = -0.4, r = { 2, Rad * 1.05 }, rInT = 1,
 				z = { 4, 0.2 }, life = 0.55, color = "hi", alpha = { { 0, 0.35 }, { 0.6, 0.6 }, { 0.85, 1 } } }) then
 				fx:emit(WAVE, cc + Vector3.new(0, 0.1, 0), 1, {
 					life = 0.55, size = Layers.curve(4, Rad * 2.1, "out", 10), trans = R.waveTrans(0.6), tag = "sweep",
