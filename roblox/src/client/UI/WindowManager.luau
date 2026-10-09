@@ -45,6 +45,21 @@ local function label(name)
 	return string.upper(s)
 end
 WM.tabLabel = label
+-- the def tab a tab layer / tab name means: "tab/OWNED 6 (active)", "OWNED 6", "OWNED" and "NIGHT  ·  FLOOR 1" all match
+local function tabOf(def, name)
+	if not (def.tabs and name) then return nil end
+	local full = string.upper((string.gsub(string.gsub(name, "^tab/", ""), "%s*%b()$", "")))
+	local short = string.gsub(full, "%s+%d+$", "")
+	for _, tb in def.tabs do
+		local u = string.upper(tb[1])
+		if u == full or tb[2] == name then return tb end
+	end
+	for _, tb in def.tabs do
+		if string.upper(tb[1]) == short then return tb end
+	end
+	return nil
+end
+WM.tabOf = tabOf
 
 local function layoutOf(variant)
 	local m = Layouts:FindFirstChild(variant)
@@ -194,16 +209,12 @@ local function wireVariant(rec, name, ui)
 	-- tabs: every tab/* layer (key or plain) switches to its variant / window
 	ui.onAny(function(nodeName)
 		if string.sub(nodeName, 1, 4) == "tab/" then
-			local lab = label(nodeName)
-			for _, tb in def.tabs or {} do
-				if string.upper(tb[1]) == lab then
-					if tb.go then
-						if tb.go ~= rec.id then Sfx.tab(); WM.open(tb.go) end
-					elseif tb[2] and tb[2] ~= rec.current then
-						Sfx.tab(); WM.show(rec, tb[2], true)
-					end
-					return
-				end
+			local tb = tabOf(def, nodeName)
+			if not tb then warn("[UI] tab layer with no tab def:", rec.id, nodeName); return end
+			if tb.go then
+				if tb.go ~= rec.id then Sfx.tab(); WM.open(tb.go) end
+			elseif tb[2] and tb[2] ~= rec.current then
+				Sfx.tab(); WM.show(rec, tb[2], true)
 			end
 		elseif def.views and def.views[nodeName] then
 			local target = def.views[nodeName]
@@ -216,12 +227,45 @@ local function wireVariant(rec, name, ui)
 		if ring and ring ~= inst then
 			local d = ring:GetAttribute("inset") or 4
 			local tl = topLeftOf(inst)
-			TweenService:Create(ring, TweenInfo.new(0.12, Enum.EasingStyle.Quad), {
+			local home = inst:GetAttribute("homePos")
+			if home then tl = Vector2.new(home.X.Offset - inst.AnchorPoint.X * inst.Size.X.Offset, home.Y.Offset - inst.AnchorPoint.Y * inst.Size.Y.Offset) end
+			TweenService:Create(ring, TweenInfo.new(0.14, Enum.EasingStyle.Quad), {
 				Position = UDim2.fromOffset(tl.X - d + ring.AnchorPoint.X * (inst.Size.X.Offset + 2 * d), tl.Y - d + ring.AnchorPoint.Y * (inst.Size.Y.Offset + 2 * d)),
 				Size = inst.Size + UDim2.fromOffset(2 * d, 2 * d) }):Play()
-			Kit.pop(ring, 1.06)
 		end
 	end)
+end
+
+-- a variant whose tab carries its own title / header theme (one Figma frame reused for several tabs)
+function WM.retitle(ui, title, theme)
+	local header = ui.node:FindFirstChild("header")
+	if not header then return end
+	if title then
+		for _, l in header:GetChildren() do
+			if l:IsA("TextLabel") and not string.find(l.Name, "  %(drop%)$") then
+				local sh = Render.SHADOW[l]
+				for _, t in { l, sh } do
+					if t then
+						t.Position = UDim2.fromOffset(0, t.Position.Y.Offset); t.Size = UDim2.fromOffset(header.Size.X.Offset, t.Size.Y.Offset)
+						t.TextXAlignment = Enum.TextXAlignment.Center
+					end
+				end
+				Render.setText(l, title)
+			end
+		end
+	end
+	local FKit = require(script.Parent.Figma.FKit)
+	local th = theme and FKit.THEME[theme]
+	if th then
+		local function regrad(f, layer)
+			if not f then return end
+			for _, g in f:GetChildren() do if g:IsA("UIGradient") then g:Destroy() end end
+			f.BackgroundColor3 = Color3.new(1, 1, 1); f.BackgroundTransparency = 0
+			Render.gradient(f, layer, 1)
+		end
+		regrad(header, { "g", 20, { { 0, th[1], 1 }, { 0.11, th[1], 1 }, { 0.5, th[2], 1 }, { 0.89, th[3], 1 }, { 1, th[3], 1 } } })
+		regrad(header:FindFirstChild("glow"), { "g", 90, { { 0, th[2], 0 }, { 1, th[2], 0.55 } } })
+	end
 end
 
 local function buildVariant(rec, name)
@@ -237,16 +281,11 @@ local function buildVariant(rec, name)
 		local nm = d.Name
 		if d:IsA("Frame") and (string.sub(nm, 1, 4) == "row/" or string.sub(nm, 1, 5) == "card/" or string.sub(nm, 1, 5) == "cell/") and not d:FindFirstChild("hit") then
 			-- under the row's own content (z 1): keys inside the row keep their clicks
-			local hit = Render.new("TextButton", { Name = "hit", Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 1,
-				SelectionImageObject = Render.selectionImage() }, d)
-			local hl = Render.new("Frame", { Name = "row hover", BorderSizePixel = 0, BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 1 }, d)
-			Render.new("UICorner", { CornerRadius = UDim.new(0, 4) }, hl)
-			hit.MouseEnter:Connect(function() Sfx.hover(); TweenService:Create(hl, TweenInfo.new(0.08), { BackgroundTransparency = 0.96 }):Play() end)
-			hit.MouseLeave:Connect(function() TweenService:Create(hl, TweenInfo.new(0.12), { BackgroundTransparency = 1 }):Play() end)
-			hit.MouseButton1Down:Connect(function() Sfx.press() end)
-			hit.Activated:Connect(function()
-				for _, fn in ui.anyHandlers do task.spawn(fn, nm, d) end
-			end)
+			Motion.key(d, if string.sub(nm, 1, 5) == "cell/" then "cell" else "row", { z = 1,
+				onActivate = function()
+					Sfx.rowSelect()
+					for _, fn in ui.anyHandlers do task.spawn(fn, nm, d) end
+				end })
 		end
 		if nm == "selected ring" and d:IsA("GuiObject") then
 			-- measure the ring's inset around the element it wraps in Figma, so moving it keeps the same gap
@@ -263,6 +302,9 @@ local function buildVariant(rec, name)
 	end
 	v = { ui = ui, name = name }
 	rec.variants[name] = v
+	for _, tb in rec.def.tabs or {} do
+		if tb[2] == name and (tb.title or tb.theme) then WM.retitle(ui, tb.title, tb.theme) end
+	end
 	wireVariant(rec, name, ui)
 	local b = WM.binders[rec.id]
 	if b and b.bind then b.bind(rec, ui, name) end
@@ -362,9 +404,8 @@ function WM.open(id, tab)
 	local def = rec.def
 	local target = rec.current
 	if tab then
-		for _, tb in def.tabs or {} do
-			if string.upper(tb[1]) == string.upper(tab) or tb[2] == tab then target = tb[2] end
-		end
+		local tb = tabOf(def, tab)
+		if tb and tb[2] then target = tb[2] end
 		if def.views and def.views[tab] then target = def.views[tab] end
 	end
 	target = target or (def.tabs and def.tabs[1][2]) or "main"

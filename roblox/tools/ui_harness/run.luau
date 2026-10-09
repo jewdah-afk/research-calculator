@@ -290,6 +290,43 @@ for _, id in ids do
 		WM.close()
 	end
 end
+-- tab routing: opening a tab lands on its variant, and clicking every tab layer of every tab variant lands on the
+-- variant whose active tab carries that label (QA round 1: Nest OWNED showed RIVERSIDE)
+for _, id in ids do
+	local def = Defs2[id]
+	if not def.build and not def.drawer and def.tabs then
+		for _, tb in def.tabs do
+			if tb[2] then
+				WM.open(id, tb[1])
+				local rec = WM.built[id]
+				check("open tab " .. id .. "/" .. tb[1], rec.current == tb[2], "current " .. tostring(rec.current))
+				local v = rec.variants[rec.current]
+				local at = v and (function()
+					for _, d in v.ui.root:GetDescendants() do if string.match(d.Name, "^tab/.*%(active%)$") then return d end end
+				end)()
+				-- the active tab of the shown variant is this tab (Expedition shows one frame for both of its tabs)
+				if at and def.tabs[1][2] ~= def.tabs[#def.tabs][2] then
+					check("active tab label " .. id .. "/" .. tb[1], WM.tabOf(def, at.Name) == tb, "active " .. at.Name)
+				end
+				local tabsHit = {}
+				for _, d in v.ui.root:GetDescendants() do
+					if d.Name == "hit" and d.Parent and string.sub(d.Parent.Name, 1, 4) == "tab/" then table.insert(tabsHit, d) end
+				end
+				for _, h in tabsHit do
+					local lab = WM.tabLabel(h.Parent.Name)
+					local target = WM.tabOf(def, h.Parent.Name)
+					check("tab layer has a def " .. id .. " " .. h.Parent.Name, target ~= nil)
+					if target and target[2] then
+						WM.open(id, tb[1])
+						sig(h, "Activated"):Fire()
+						check("tab click " .. id .. " " .. tb[1] .. " -> " .. lab, rec.current == target[2], "current " .. tostring(rec.current))
+					end
+				end
+			end
+		end
+		WM.close()
+	end
+end
 -- collapse the sidebar: HUD re-flows to the screen edge, windows widen; open it again
 WM.setDrawer(false)
 task.wait(0.3)
@@ -308,6 +345,64 @@ for _, g in hudGui.canvas:GetChildren() do
 			check("HUD clear of the sidebar " .. g.Name, x + w <= Layout.gameRight() + 0.5, ("right edge %.0f > %.0f"):format(x + w, Layout.gameRight()))
 		end
 	end
+end
+-- key audit (owner: every button presses in): build every variant of every window, then every node that looks like
+-- a button (Kit keys, btn/ tab/ seg/ layers, close keys, rows, cards, cells) must be registered in Motion.key with
+-- press-in and sound wired; no Squash UIScale (the old bubbly press) may exist anywhere
+do
+	local Motion = req(UI:FindFirstChild("Motion"))
+	for _, id in ids do
+		local def = Defs2[id]
+		if not def.build then
+			local rec = WM.built[id] or (function() WM.open(id); return WM.built[id] end)()
+			for _, tb in def.tabs or {} do if tb[2] then WM.show(rec, tb[2]) end end
+			for _, target in def.views or {} do WM.show(rec, target) end
+		end
+	end
+	WM.close()
+	local function buttonLike(d)
+		if not d:IsA("GuiObject") then return false end
+		local n = d.Name
+		if d:GetAttribute("keyDepth") then return true end
+		for _, p in { "btn/", "tab/", "seg/", "row/", "card/", "cell/" } do if string.sub(n, 1, #p) == p then return true end end
+		return false
+	end
+	local total, bad, kinds = 0, 0, {}
+	local roots = { playerGui:FindFirstChild("PeckwoodWindows"), playerGui:FindFirstChild("PeckwoodHUD") }
+	for _, root in roots do
+		for _, d in root:GetDescendants() do
+			if d.Name == "Squash" and d:IsA("UIScale") then check("no squash UIScale " .. d.Parent:GetFullName(), false) end
+			if buttonLike(d) and not d:FindFirstAncestor("info strip") then
+				-- display-only components (wallet chips, banner, context bar) had their wiring removed on purpose
+				local inertOk = d:FindFirstAncestor("wallet") or d:FindFirstAncestor("banner") or d:FindFirstAncestor("context") or d:FindFirstAncestor("moment")
+				local info = Motion.registry[d]
+				-- Render.build holders carry their node's name: the node inside is the key
+				local inner = d:FindFirstChild(d.Name)
+				if inner and Motion.registry[inner] then inertOk = true end
+				if string.sub(d.Name, 1, 4) == "row/" and inner == nil then
+					for _, c in d:GetChildren() do if string.sub(c.Name, 1, #d.Name) == d.Name then inner = c end end
+					if inner and Motion.registry[inner] then inertOk = true end
+				end
+				-- a template node inside a wired holder (live list rows, Fishdex cells)
+				if d.Parent and Motion.registry[d.Parent] and string.sub(d.Parent.Name, 1, 4) == string.sub(d.Name, 1, 4) then inertOk = true end
+				if not inertOk then
+					total += 1
+					if info then kinds[info.kind] = (kinds[info.kind] or 0) + 1 end
+					if not (info and info.pressIn and info.sfx) then
+						bad += 1
+						if bad <= 12 then check("key wired " .. d:GetFullName(), false, "no Motion.key press-in / sound") end
+						if process.env.PECK_AUDIT then print("UNWIRED " .. d:GetFullName()) end
+					end
+				end
+			end
+		end
+	end
+	local kl = {}
+	for k, v in kinds do table.insert(kl, k .. " " .. v) end
+	table.sort(kl)
+	print(("key audit: %d button-like nodes, %d wired, %d unwired  (%s)"):format(total, total - bad, bad, table.concat(kl, ", ")))
+	local live = _G.__uiKeys and _G.__uiKeys() or {}
+	print(("_G.__uiKeys(): %d live keys"):format(#live))
 end
 -- feel hooks run
 try("onLabel", function() local Hud2 = req(UI:FindFirstChild("Hud")); Hud2.onLabel(roblox.Vector2.new(400, 300), 12345, "popcorn"); Hud2.bigMoment("THE MINE opens!", "unlock", "map") end)
@@ -334,7 +429,8 @@ print("warnings: " .. #warnings)
 for i = 1, math.min(10, #warnings) do print("  " .. warnings[i]) end
 local IconAlias = req(UI:FindFirstChild("Figma"):FindFirstChild("IconAlias"))
 local miss = 0; for _ in IconAlias.missing do miss += 1 end
-print("icons drawn with a family fallback (not uploaded yet): " .. miss)
+local missList = {}; for k in IconAlias.missing do table.insert(missList, k) end; table.sort(missList)
+print("icons with no uploaded id: " .. miss .. (if miss > 0 then " (" .. table.concat(missList, ", ") .. ")" else ""))
 -- layout dump for the composite QA mock (tools/ui_harness/mock.py): design-px rects of every HUD piece + windows
 do
 	local Hud2 = req(UI:FindFirstChild("Hud"))

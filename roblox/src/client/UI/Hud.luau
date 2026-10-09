@@ -76,6 +76,9 @@ Hud.amount, Hud.commas = amount, commas
 -- strip the press wiring from a component that is display-only (wallet chips, banner, bars)
 local function inert(ui)
 	for _, d in ui.root:GetDescendants() do
+		if Motion.isKey(d) then Motion.unkey(d) end
+	end
+	for _, d in ui.root:GetDescendants() do
 		if d.Name == "hit" and d:IsA("TextButton") then d:Destroy() end
 	end
 end
@@ -96,13 +99,8 @@ local function centreOf(inst)   -- design-px centre of any on-screen GuiObject
 	return (inst.AbsolutePosition + inst.AbsoluteSize / 2) / s
 end
 Hud.centreOf = centreOf
-local function button(parent, onClick)   -- an invisible hit area with the keycap press + ink selection
-	local hit = Render.new("TextButton", { Name = "hit", Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 999,
-		SelectionImageObject = Render.selectionImage() }, parent)
-	hit.MouseButton1Down:Connect(function() Sfx.press() end)
-	hit.MouseButton1Up:Connect(function() Sfx.release() end)
-	hit.Activated:Connect(onClick)
-	return hit
+local function button(parent, onClick, kind)   -- the one press (Motion.key): flat press-in, hover veil, keycap sounds
+	return Motion.key(parent, kind or "plain", { onActivate = onClick }).hit
 end
 
 -- open a window out of the HUD element that asked for it (the window pops from / shrinks back into it)
@@ -340,10 +338,7 @@ local function buildCompanions()
 	for _, r in COMPANION_ROWS do
 		local row = companions.node:FindFirstChild(r[1])
 		if row then
-			local hl = Render.new("Frame", { Name = "hover", BorderSizePixel = 0, BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 998 }, row)
-			local hit = button(row, function() openFrom(r[2], row) end)
-			hit.MouseEnter:Connect(function() Sfx.hover(); hl.BackgroundTransparency = 0.94 end)
-			hit.MouseLeave:Connect(function() hl.BackgroundTransparency = 1 end)
+			button(row, function() Sfx.rowSelect(); openFrom(r[2], row) end, "row")
 		end
 	end
 	g.ZIndex = 8   -- the dropdown overlays the AUTO slot and the rail
@@ -873,13 +868,13 @@ local function badgeOn(key, host, text)
 		Render.new("UIStroke", { Thickness = 1.4, Color = Render.INK, LineJoinMode = Enum.LineJoinMode.Round }, l)
 		b = { frame = f, label = l, host = host, text = text }
 		badges[key] = b
-		Kit.pop(f, 1.4)
+		Kit.pop(f, 1.15)
 		return
 	end
 	if b.text ~= text then
 		b.text = text
 		b.label.Text = text
-		Kit.pop(b.frame, 1.2)
+		Kit.pop(b.frame, 1.1)
 	end
 end
 local function badgeOff(key)
@@ -1095,14 +1090,12 @@ end
 -- ---------------------------------------------------------------- toasts from the server
 function Hud.onToast(kind, a, b)
 	if kind == "bought" then
-		Sfx.buy()
 		local dd = Defs.UP[a]
-		if dd then local ch = chips[dd.cur]; if ch and ch.value then Kit.pop(ch.value, 1.06) end end
+		if dd then local ch = chips[dd.cur]; if ch and ch.value then Kit.pop(ch.value, 1.05) end end
 		local lb = Hud.lastBtn
-		if typeof(lb) == "Instance" then
-			Motion.release(lb)
-			if dd then Hud.flyTo(dd.cur, lb, 5) end
-		end
+		local hero = typeof(lb) == "Instance" and Motion.registry[lb] and Motion.registry[lb].kind == "hero"
+		if hero then Sfx.purchaseBig(); Motion.settle(lb) else Sfx.buy() end
+		if typeof(lb) == "Instance" and dd then Hud.flyTo(dd.cur, lb, 5) end
 		Binders.bought(a)
 	elseif kind == "poor" then
 		Sfx.deny()

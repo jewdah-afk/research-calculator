@@ -3,12 +3,13 @@
 -- tools/figma_export/build_layouts.py) into Roblox GUI, node for node, at the Figma coordinates. So the in-game UI
 -- matches Figma by construction: change Figma, re-export, rebuild.
 --   * every instance is named after its Figma layer, so binders find things with FindFirstChild(name, true)
---   * Kit keys (ink body / lip / face) get the owner-approved press: the WHOLE key drops by the lip depth, lip
---     hidden, hover = face +6 % brighter; every press plays Sfx.press()
---   * nodes named tab/* and btn/* are clickable too (ui.on(name, fn))
+--   * every key (ink body / lip / face) and every tab/*, btn/*, seg/* layer is wired through Motion.key: the owner
+--     press-in (the whole key drops by the lip depth, lip hidden), hover +6 % and a small lift, keycap sounds;
+--     no squash or bounce on keys (outcomes carry the juice). ui.on(name, fn) handles clicks.
+--   * window headers end in one clean edge: a uniform 1.5 px highlight over a full-width 4 px ink line
 -- Perf: build once per window (lazily, on first open), no per-frame work here.
 local RS = game:GetService("ReplicatedStorage")
-local TweenService = game:GetService("TweenService")
+
 local Icons = require(RS:WaitForChild("Peckwood"):WaitForChild("Icons"))
 local IconAlias = require(script.Parent.IconAlias)
 local Sfx = require(script.Parent.Parent.Sfx)
@@ -384,122 +385,82 @@ function build(n, P, parent, alpha, z, ui, parentClip)
 		inst.Position = UDim2.fromOffset(n.x + n.w / 2, n.y + n.h / 2)
 		inst:SetAttribute("keyDepth", n.key)
 		table.insert(ui.keys, { inst = inst, node = n, depth = n.key })
-	elseif string.sub(n.n, 1, 4) == "tab/" or string.sub(n.n, 1, 4) == "btn/" then
+	elseif string.sub(n.n, 1, 4) == "tab/" or string.sub(n.n, 1, 4) == "btn/" or string.sub(n.n, 1, 4) == "seg/" then
 		table.insert(ui.clicks, { inst = inst, node = n })
 	end
 	return inst
 end
 
 -- ---------------------------------------------------------------- interaction
-local Q = TweenInfo.new(0.07, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-local BACK = TweenInfo.new(0.16, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
--- keys whose press squashes 0.94 and whose confirmed action releases with a 1.06 overshoot (the money keys)
-local SQUASH = { "btn/buy", "btn/max", "btn/molt", "btn/spend", "btn/craft", "btn/donate", "btn/sacrifice", "btn/hold", "btn/evolve",
-	"btn/claim", "btn/accept", "btn/saw", "btn/breed", "btn/hatch", "btn/fuse", "btn/refine", "btn/rebirb", "btn/mitosis", "btn/feed", "btn/unlock",
-	"btn/collect", "btn/start", "cast key", "btn/eat" }
-local function squashes(name)
-	for _, p in SQUASH do if string.sub(name, 1, #p) == p then return true end end
+-- the hero keys of a window (its main action): they settle 3 % when the action succeeds, never squash on press
+local HERO = { "btn/buy", "btn/molt", "btn/craft", "btn/donate", "btn/sacrifice", "btn/hold", "btn/evolve", "btn/claim", "btn/accept",
+	"btn/saw", "btn/breed", "btn/hatch", "btn/fuse", "btn/refine", "btn/rebirb", "btn/mitosis", "btn/feed", "btn/unlock", "btn/collect",
+	"btn/start", "cast key", "btn/eat", "btn/spend", "btn/migrate", "btn/hold to feed" }
+local function isHero(name)
+	for _, p in HERO do if string.sub(name, 1, #p) == p then return true end end
 	return false
 end
-Render.squashes = squashes
--- gamepad / keyboard selection: our ink outline instead of Roblox's default highlight
-local selection
-function Render.selectionImage()
-	if not selection then
-		selection = new("Frame", { Name = "ink selection", BackgroundTransparency = 1, Size = UDim2.new(1, 8, 1, 8), Position = UDim2.fromOffset(-4, -4) })
-		new("UICorner", { CornerRadius = UDim.new(0, 6) }, selection)
-		new("UIStroke", { Thickness = 3, Color = WHITE, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, selection)
-		local ink = new("Frame", { Name = "ink", BackgroundTransparency = 1, Size = UDim2.new(1, 6, 1, 6), Position = UDim2.fromOffset(-3, -3) }, selection)
-		new("UICorner", { CornerRadius = UDim.new(0, 8) }, ink)
-		new("UIStroke", { Thickness = 2, Color = INK, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, ink)
-	end
-	return selection
+Render.isHero = isHero
+Render.squashes = isHero   -- old name kept for callers
+Render.selectionImage = Motion.selectionImage
+local function kindOf(name)
+	if isHero(name) then return "hero" end
+	if name == "btn/close" then return "close" end
+	if string.sub(name, 1, 4) == "tab/" then return "tab" end
+	if string.sub(name, 1, 4) == "seg/" then return "toggle" end
+	if string.find(name, "toggle") or string.find(name, "auto%-buy") or string.find(name, "%(on%)") or string.find(name, "%(off%)") then return "toggle" end
+	return "key"
 end
--- the owner-approved key press: ink body and face drop together by the lip depth D, the body loses D of height and
--- the lip hides (no black band above the face, no lip below while held). Hover: +6 % brightness and the key rises
--- 2 px. Money keys also squash 0.94 while held.
+Render.kindOf = kindOf
+local function fire(ui, name, inst, k, io)
+	local fns = ui.handlers[name]
+	if fns then for _, fn in fns do task.spawn(fn, inst, k, io) end end
+	for _, fn in ui.anyHandlers do task.spawn(fn, name, inst, k, io) end
+end
+-- every Kit key: Motion.key (press-in, hover, sounds, audit registry)
 function Render.wireKey(ui, k)
-	local inst, D = k.inst, k.depth
-	local body, lip, face = inst:FindFirstChild("ink body"), inst:FindFirstChild("lip"), inst:FindFirstChild("face") or inst:FindFirstChild("body")
-	if not (body and face) then return end
-	local bp, bs, fp = body.Position, body.Size, face.Position
-	local lp = lip and lip.Position
-	local hl = new("Frame", { Name = "hover", BorderSizePixel = 0, BackgroundColor3 = WHITE, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 50 }, face)
-	corner(hl, 2.5)
-	local hit = new("TextButton", { Name = "hit", Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 999,
-		SelectionImageObject = Render.selectionImage() }, inst)
-	k.hit = hit
-	local squash = squashes(k.node.n)
-	local down, over = false, false
-	local RISE = UDim2.fromOffset(0, -2)
-	local function rest(animate)
-		local lift = if over then RISE else UDim2.new()
-		local info = if animate then BACK else Q
-		TweenService:Create(body, info, { Position = bp + lift, Size = bs }):Play()
-		TweenService:Create(face, info, { Position = fp + lift }):Play()
-		if lip then TweenService:Create(lip, info, { Position = lp + lift }):Play() end
-	end
-	local function release()
-		if not down then return end
-		down = false
-		if lip then lip.Visible = true end
-		if squash then Motion.unsquash(inst) end
-		rest(true)
-	end
-	hit.MouseEnter:Connect(function()
-		if k.disabled then return end
-		over = true
-		Sfx.hover()
-		TweenService:Create(hl, Q, { BackgroundTransparency = 0.94 }):Play()
-		if not down then rest(false) end
-	end)
-	hit.MouseLeave:Connect(function()
-		over = false
-		TweenService:Create(hl, Q, { BackgroundTransparency = 1 }):Play()
-		if down then
-			release()
-			if ui.onUp then ui.onUp(k.node.n, inst, k) end
-		else
-			rest(false)
-		end
-	end)
-	hit.MouseButton1Down:Connect(function()
-		down = true
-		Sfx.press()
-		if lip then lip.Visible = false end
-		if squash then Motion.squash(inst) end
-		TweenService:Create(body, Q, { Position = bp + UDim2.fromOffset(0, D), Size = bs - UDim2.fromOffset(0, D) }):Play()
-		TweenService:Create(face, Q, { Position = fp + UDim2.fromOffset(0, D) }):Play()
-		if ui.onDown then ui.onDown(k.node.n, inst, k) end
-	end)
-	hit.MouseButton1Up:Connect(function()
-		Sfx.release(); release()
-		if ui.onUp then ui.onUp(k.node.n, inst, k) end
-	end)
-	hit.Activated:Connect(function(io)
-		if k.suppress then k.suppress = false; return end   -- a hold-to-repeat already acted
-		local fns = ui.handlers[k.node.n]
-		if fns then for _, fn in fns do task.spawn(fn, inst, k, io) end end
-		for _, fn in ui.anyHandlers do task.spawn(fn, k.node.n, inst, k, io) end
-	end)
+	local inst = k.inst
+	if not (inst:FindFirstChild("ink body") and (inst:FindFirstChild("face") or inst:FindFirstChild("body"))) then return end
+	local api
+	api = Motion.key(inst, kindOf(k.node.n), {
+		depth = k.depth,
+		isDisabled = function() return k.disabled == true end,
+		onDown = function() if ui.onDown then ui.onDown(k.node.n, inst, k) end end,
+		onUp = function() if ui.onUp then ui.onUp(k.node.n, inst, k) end end,
+		onActivate = function(io)
+			if k.suppress then k.suppress = false; return end   -- a hold-to-repeat already acted
+			fire(ui, k.node.n, inst, k, io)
+		end,
+	})
+	k.api, k.hit = api, api.hit
 end
--- tabs / plain buttons that are not keys: hover brightens, press = keycap sound
+-- tabs / segments / plain buttons that are not keys: the flat press-in (2 px), hover veil, keycap sounds
 function Render.wireClick(ui, c)
 	local inst = c.inst
-	local hl = new("Frame", { Name = "hover", BorderSizePixel = 0, BackgroundColor3 = WHITE, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 50 }, inst)
-	corner(hl, c.node.r)
-	local hit = new("TextButton", { Name = "hit", Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 999,
-		SelectionImageObject = Render.selectionImage() }, inst)
-	c.hit = hit
-	hit.MouseEnter:Connect(function() Sfx.hover(); TweenService:Create(hl, Q, { BackgroundTransparency = 0.95 }):Play() end)
-	hit.MouseLeave:Connect(function() TweenService:Create(hl, Q, { BackgroundTransparency = 1 }):Play() end)
-	hit.MouseButton1Down:Connect(function() Sfx.press() end)
-	hit.MouseButton1Up:Connect(function() Sfx.release() end)
-	hit.Activated:Connect(function()
-		local fns = ui.handlers[c.node.n]
-		if fns then for _, fn in fns do task.spawn(fn, inst, c) end end
-		for _, fn in ui.anyHandlers do task.spawn(fn, c.node.n, inst, c) end
-	end)
+	local api = Motion.key(inst, kindOf(c.node.n), {
+		onActivate = function(io) fire(ui, c.node.n, inst, c, io) end,
+	})
+	c.api, c.hit = api, api.hit
+end
+
+-- window headers end in ONE clean edge on every theme: the Figma bevel (a horizontal gradient strip that fades out)
+-- and the 12 px depth band read as a broken streak, so the header gets a uniform 1.5 px highlight over a full-width
+-- 4 px ink line that meets the window outline
+function Render.cleanHeaderEdge(header)
+	local h = header.Size.Y.Offset
+	local depth, bevel, ink = header:FindFirstChild("depth band"), header:FindFirstChild("bevel"), header:FindFirstChild("ink")
+	if depth then depth.Visible = false end
+	if ink then
+		for _, g in ink:GetChildren() do if g:IsA("UIGradient") then g:Destroy() end end
+		ink.BackgroundColor3 = INK; ink.BackgroundTransparency = 0
+		ink.Position = UDim2.fromOffset(0, h - 4); ink.Size = UDim2.new(1, 0, 0, 4)
+	end
+	if bevel then
+		for _, g in bevel:GetChildren() do if g:IsA("UIGradient") then g:Destroy() end end
+		for _, f in bevel:GetChildren() do if f:IsA("GuiObject") then f:Destroy() end end
+		bevel.BackgroundColor3 = WHITE; bevel.BackgroundTransparency = 0.72
+		bevel.Position = UDim2.fromOffset(0, h - 5.5); bevel.Size = UDim2.new(1, 0, 0, 1.5)
+	end
 end
 
 -- ---------------------------------------------------------------- public
@@ -519,6 +480,8 @@ function Render.build(layout, parent, node, opts)
 	ui.node = build(rn, layout.P, ui.root, 1, 2, ui)
 	for _, k in ui.keys do Render.wireKey(ui, k) end
 	for _, c in ui.clicks do Render.wireClick(ui, c) end
+	local hd = ui.node:FindFirstChild("header")
+	if hd and hd:FindFirstChild("ink") then Render.cleanHeaderEdge(hd) end
 	function ui.on(name, fn)
 		ui.handlers[name] = ui.handlers[name] or {}
 		table.insert(ui.handlers[name], fn)
@@ -537,7 +500,10 @@ end
 function Render.component(section, name, parent)
 	local node = section.C[name]
 	assert(node, "no Figma component " .. tostring(name))
-	-- lists: thin styled scrollbar + soft fades at the scroll edges (shown only when there is more to scroll)
+	return Render.build({ P = section.P, root = node }, parent, node)
+end
+
+-- lists: thin styled scrollbar + soft fades at the scroll edges (shown only when there is more to scroll)
 function Render.styleScroll(sf, bgHex)
 	sf.ScrollBarThickness = 4
 	sf.ScrollBarImageColor3 = C("aab2c0")
@@ -558,14 +524,18 @@ function Render.styleScroll(sf, bgHex)
 		botF.Visible = maxY > 2 and sf.CanvasPosition.Y < maxY - 2
 		botF.Position = sf.Position + UDim2.fromOffset(0, sf.Size.Y.Offset - 28)
 	end
-	sf:GetPropertyChangedSignal("CanvasPosition"):Connect(update)
+	-- a very quiet tick every ~60 px scrolled (mouse only, throttled in Sfx)
+	local lastY = sf.CanvasPosition.Y
+	sf:GetPropertyChangedSignal("CanvasPosition"):Connect(function()
+		update()
+		local y = sf.CanvasPosition.Y
+		if math.abs(y - lastY) >= 60 then lastY = y; Sfx.scrollTick() end
+	end)
 	sf:GetPropertyChangedSignal("CanvasSize"):Connect(update)
 	sf:GetPropertyChangedSignal("Size"):Connect(update)
 	task.defer(update)
 end
 
-return Render.build({ P = section.P, root = node }, parent, node)
-end
 
 -- all text labels under an instance (drop shadows excluded), top-to-bottom then left-to-right
 function Render.texts(under)

@@ -13,6 +13,8 @@ local Render = require(script.Parent.Figma.Render)
 local FKit = require(script.Parent.Figma.FKit)
 local Kit = require(script.Parent.Kit)
 local SampleData = require(script.Parent.SampleData)
+local Motion = require(script.Parent.Motion)
+local Sfx = require(script.Parent.Sfx)
 local EN = Defs.EN
 
 local Screens = {}
@@ -216,16 +218,10 @@ local function buildTeleport(parent)
 	local ui = FKit.build(L, panel, parent)
 	for _, isl in areas do
 		local row = ui.find("area/" .. isl.id)
-		local hit = Render.new("TextButton", { Name = "hit", Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 999,
-			SelectionImageObject = Render.selectionImage() }, row)
-		local hl = Render.new("Frame", { Name = "row hover", BorderSizePixel = 0, BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 998 }, row)
-		hit.MouseEnter:Connect(function() if World.isOpen(isl) then hl.BackgroundTransparency = 0.94 end end)
-		hit.MouseLeave:Connect(function() hl.BackgroundTransparency = 1 end)
-		hit.MouseButton1Down:Connect(function() Kit.sfx("click") end)
-		hit.Activated:Connect(function()
-			if World.isOpen(isl) then WM.close() end
+		Motion.key(row, "row", { onActivate = function()
+			if World.isOpen(isl) then Sfx.rowSelect(); WM.close() end
 			Hud.travelTo(isl.id)
-		end)
+		end })
 	end
 	ui.update = function(s)
 		local here = Hud.currentAreaId and Hud.currentAreaId()

@@ -7,6 +7,7 @@
 --   dock   = where the window sits in the game area, from the Birb captures (playtest/parity/birb_ui):
 --            "bl" = bottom-left (Birb companion panels: Fishing, Parrot, Dave ...), "popup" = above the HUD button that
 --            opened it (Fast Travel), default = centred in the game area (Aquarium, Objectives, Fish Market ...)
+--   title / theme on a tab = that tab's header title and colour (a Figma frame reused for several tabs)
 --   build  = hand-built window (no squared Figma frame yet), see UI/Screens.luau
 -- Variant names are module names in UI/Figma/Layouts (generated from Figma; node ids in the module headers).
 return {
@@ -16,7 +17,9 @@ return {
 	mine = { title = "MINE", tabs = { { "SHOP", "Mine_Shop" }, { "AREAS", "Mine_Areas" }, { "CROW", go = "crow" } } },
 	crow = { dock = "bl", title = "CROW", tabs = { { "CROW", "Crow" } } },
 	treasure = { title = "TREASURE ROOM", tabs = { { "TREASURE ROOM", "Mine_TreasureRoom" } } },
-	trees = { title = "SUNFLOWER TREE", tabs = { { "SUNFLOWER", "Tree_Sunflower" }, { "DESERT", "Tree_Desert" }, { "ARCHIVIST", "Tree_Archivist" } } },
+	-- one Figma header for all three tabs: the title and header theme follow the tab (parity build names)
+	trees = { title = "SUNFLOWER TREE", tabs = { { "SUNFLOWER", "Tree_Sunflower", title = "SUNFLOWER TREE" }, { "DESERT", "Tree_Desert", title = "DESERT TREE", theme = "desert" },
+		{ "ARCHIVIST", "Tree_Archivist", title = "ARCHIVIST'S BRANCH", theme = "archivist" } } },
 	fishing = { dock = "bl", title = "FISHING", tabs = { { "COLLECTION", "Fishing_Collection" }, { "EQUIPMENT", "Fishing_Equipment" }, { "FISHDEX", "Fishing_Fishdex" } } },
 	aquarium = { title = "AQUARIUM", tabs = { { "BIOMES", "Aquarium_Biomes" }, { "RESONANCE", "Aquarium_Resonance" }, { "TOTAL", "Aquarium_Total" }, { "FISH MARKET", go = "market" } } },
 	market = { title = "FISH MARKET", tabs = { { "FISH MARKET", "FishMarket" } }, views = { locked = "FishMarket_Locked" } },

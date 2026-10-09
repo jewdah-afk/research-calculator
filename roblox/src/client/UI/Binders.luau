@@ -102,6 +102,10 @@ end
 -- ---------------------------------------------------------------- upgrade rows from Figma templates
 local templates = {}       -- state -> { layout, node } (collected from every shop-type layout)
 local units = {}           -- upgrade id -> unit text shown after the next value (from the Figma rows)
+-- upgrade id -> its painted icon (from its own Figma row; rows without a Figma row use these)
+local upIcon = { m_rupture = "up_sword_power", d_desert_field_notes_plus = "up_golden_value", n_twig_value = "up_twig_value",
+	n_peck_rate = "up_twig_speed", n_peck_power = "up_twig_power", p_echo_value = "echo", e_echo_capacity = "mushroom" }
+Binders.upIcon = upIcon
 local function stateOf(name)
 	local st = string.match(name, "%(([^)]+)%)$") or ""
 	if string.find(st, "max") then return "max" elseif string.find(st, "buy") and not string.find(st, "cannot") then return "buy" end
@@ -114,6 +118,10 @@ local function collect(modName, family)
 		templates[family] = templates[family] or {}
 		templates[family][st] = templates[family][st] or { layout = L, node = n }
 		local id = string.match(n.n, "^row/([%w_]+)")
+		local well = Render.findNode(n, "icon well")
+		if id and well and well.k then
+			for _, c in well.k do if c.t == "I" and c.icon then upIcon[id] = c.icon end end
+		end
 		local eff = Render.findNode(n, "effect")
 		if id and eff and eff.k then
 			local big = 0
@@ -160,9 +168,28 @@ local function fillRow(row, s, id, st, r)
 	local texts = Render.childTexts(row)
 	local rowW = row.Size.X.Offset
 	-- title (top-left text) and description (lower-left text)
+	local chip = row:FindFirstChild("level")
+	if chip and chip:FindFirstChild("level bar") then chip = nil end
 	for _, t in texts do
 		local x, y = t.Position.X.Offset, t.Position.Y.Offset
-		if x < rowW * 0.6 and (y < 40 or y > 90) then
+		if chip and y < 40 and x < rowW * 0.6 then
+			-- title then its LV chip, 12 px apart, both inside the text column (title shrinks before it ever clips)
+			local maxRight = math.floor(rowW * 0.72)
+			local title = string.upper(d.name)
+			local base = t:GetAttribute("baseSize") or t.TextSize
+			t:SetAttribute("baseSize", base)
+			local room = maxRight - x - 12 - chip.Size.X.Offset
+			local tw0 = Render.textWidth(t, title, base)
+			local size = if tw0 > room then math.max(12, math.floor(base * room / tw0)) else base
+			t.TextSize = size
+			t.TextWrapped = false
+			local tw = math.min(room, Render.textWidth(t, title, size))
+			t.Size = UDim2.fromOffset(math.ceil(tw) + 4, t.Size.Y.Offset)
+			local sh = Render.SHADOW[t]
+			if sh then sh.Size = t.Size; sh.TextSize = size; sh.TextWrapped = false end
+			Render.setText(t, title)
+			chip.Position = UDim2.fromOffset(x + math.ceil(tw) + 12, chip.Position.Y.Offset)
+		elseif x < rowW * 0.6 and (y < 40 or y > 90) then
 			-- zero clipping: title / description get the room up to the key column and shrink to fit it
 			if not t:GetAttribute("fitted") then
 				t:SetAttribute("fitted", true)
@@ -175,12 +202,13 @@ local function fillRow(row, s, id, st, r)
 			Render.setText(t, if y < 40 then string.upper(d.name) else d.desc)
 		end
 	end
-	-- icon: the upgrade's own painted icon (up_* art falls back to its family icon until uploaded)
+	-- icon: the upgrade's own painted icon (never the template row's)
 	local well = row:FindFirstChild("icon well")
-	local ico = well and well:FindFirstChildWhichIsA("ImageLabel")
-	if ico then
-		local name = ico:GetAttribute("icon")
-		if name then ico.Image = FKit.icon(name) end
+	if well then
+		local name = upIcon[id] or d.icon
+		for _, ico in well:GetChildren() do
+			if ico:IsA("ImageLabel") and (ico.Name:sub(1, 4) == "ico/" or ico.Name == "drop") then ico.Image = FKit.icon(name) end
+		end
 	end
 	-- level
 	local lvl = row:FindFirstChild("level bar") or row:FindFirstChild("level")
@@ -329,6 +357,10 @@ local function refreshList(api, s, onBuy, attentionOn)
 				local tp = templates[api.family][if st == "can" then "need" else st] or templates[api.family].buy or templates[api.family].need
 				local ui = Render.buildNode(tp.layout, tp.node, api.sf, 2)
 				ui.root.Name = "row/" .. id
+				ui.node.Name = "row/" .. id .. " (" .. st .. ")"
+				Motion.key(ui.node, "row", { z = 1 })
+				-- a BUY key in a list is an ordinary key: the list's hero is the primary row, not every row
+				for _, kk in ui.keys do if string.sub(kk.node.n, 1, 7) == "btn/buy" then Motion.setKind(kk.inst, "key") end end
 				r = { ui = ui, state = st, level = level }
 				api.rows[id] = r
 				ui.onAny(function(name, inst)
@@ -365,7 +397,7 @@ local function refreshList(api, s, onBuy, attentionOn)
 						Render.new("ImageLabel", { Name = "recommended", BackgroundTransparency = 1, Image = FKit.Icons["ui/sparkle"], ImageColor3 = Color3.fromHex("fff3b0"),
 							AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(1, -6, 0, 6), Size = UDim2.fromOffset(26, 26), ZIndex = 1000 }, key)
 					end
-					if was and was ~= "buy" then Kit.pop(ui.root, 1.06) end   -- turned affordable: one pop, no loop
+					if was and was ~= "buy" then Kit.pop(ui.root, 1.04) end   -- turned affordable: one pop, no loop
 				end
 				if st == "max" and was and was ~= "max" then
 					Sfx.maxed()
@@ -704,9 +736,7 @@ local function fishdex(rec, ui)
 				Render.setTextColor(tl[1], Color3.fromHex(rc[2]))
 			end
 			if tl[2] then Render.setText(tl[2], if found and best[f.id] then string.format("%.2f kg", best[f.id]) else "not found") end
-			local hit = Render.new("TextButton", { Name = "hit", Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 999 }, cell)
-			hit.MouseButton1Down:Connect(function() Kit.sfx("click") end)
-			hit.Activated:Connect(function() select(f, cell) end)
+			Motion.key(cell, "cell", { onActivate = function() Sfx.rowSelect(); select(f, cell) end })
 			sec.cells[f.id] = cui
 		end
 	end

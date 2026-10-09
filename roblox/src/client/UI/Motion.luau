@@ -8,8 +8,9 @@
 --             pill springs to its new slot, rows cascade (the window frame never moves)
 --   idle      header gloss sweep every 4.5 s (one tweened gradient offset), sparkles twinkle, header glow breathes
 --             over 2.8 s, hero icons bob +-3 px. Only on the open window.
---   feedback  buy squash 0.94 -> release 1.06, value pop, bar tween, currency fly-in; can't afford shake + red
---             flash; maxed gold pop + sparkle burst + shimmer; molt / evolve reset moments
+--   keys      Motion.key: every button presses in (no squash / bounce on keys), hover +6 % and a small lift
+--   feedback  on OUTCOMES only: value pop, bar tween, currency fly-in, the hero key settles 3 %; can't afford shake +
+--             red flash; maxed gold pop + sparkle burst + shimmer; molt / evolve reset moments
 -- Fades use a CanvasGroup only for the length of the transition (wrap -> tween -> unwrap), never at rest.
 local TweenService = game:GetService("TweenService")
 local RS = game:GetService("ReplicatedStorage")
@@ -261,22 +262,175 @@ function Motion.idle(root, header)
 	end
 end
 
--- ---------------------------------------------------------------- feedback
-local function scaleOf(inst)
-	local s = inst:FindFirstChild("Squash")
-	if not s then
-		s = Instance.new("UIScale"); s.Name = "Squash"; s.Parent = inst
+-- ---------------------------------------------------------------- keys: the ONE way any button gets feedback
+-- Motion.key(target, kind, opts) wires hover, press-in, sounds and gamepad selection on a button and registers it
+-- (_G.__uiKeys() lists every live key for the Studio audit). Owner rules:
+--   * EVERY key presses in: a keycap (ink body / lip / face) drops its body + face by the lip depth with the lip
+--     hidden in 40 ms and rises back in 90 ms; a flat button (tab, row, cell, plate) drops 2 px the same way
+--   * hover = +6 % brightness and a 2 px (keycap) / 1 px (flat) lift, nothing more
+--   * NO scale squash / overshoot / bounce on any key. Juice belongs to OUTCOMES (value pops, bars, fly-ins); the
+--     big hero key of a window (BUY / EVOLVE / MOLT ...) may settle 3 % when its action succeeds (Motion.settle)
+--   * sounds: press_down on press, press_up on release, hover_tick on enter; outcome sounds come from the caller
+-- kinds: "key" (keycap), "hero" (keycap, settles on success), "close", "tab", "toggle", "tile", "rail", "arrow",
+--        "row", "cell", "plain" (flat). Anything with ink body + face presses as a keycap whatever its kind.
+local Sfx = require(script.Parent.Sfx)
+local registry = setmetatable({}, { __mode = "k" })   -- target -> info
+Motion.registry = registry
+local KDOWN = TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local KUP = TweenInfo.new(0.09, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local KHOVER = TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local selection
+-- gamepad / keyboard selection: our ink outline instead of the default highlight
+function Motion.selectionImage()
+	if not selection then
+		selection = Instance.new("Frame")
+		selection.Name = "ink selection"
+		selection.BackgroundTransparency = 1
+		selection.Size = UDim2.new(1, 8, 1, 8)
+		selection.Position = UDim2.fromOffset(-4, -4)
+		local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 6); c.Parent = selection
+		local st = Instance.new("UIStroke"); st.Thickness = 3; st.Color = Color3.new(1, 1, 1); st.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; st.Parent = selection
+		local ink = Instance.new("Frame"); ink.Name = "ink"; ink.BackgroundTransparency = 1; ink.Size = UDim2.new(1, 6, 1, 6); ink.Position = UDim2.fromOffset(-3, -3); ink.Parent = selection
+		local c2 = Instance.new("UICorner"); c2.CornerRadius = UDim.new(0, 8); c2.Parent = ink
+		local st2 = Instance.new("UIStroke"); st2.Thickness = 2; st2.Color = Color3.fromHex("0b0c10"); st2.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; st2.Parent = ink
 	end
-	return s
+	return selection
 end
-function Motion.squash(inst) if not reduced() then tw(scaleOf(inst), 0.06, { Scale = 0.94 }) end end
-function Motion.unsquash(inst) if not reduced() then tw(scaleOf(inst), 0.14, { Scale = 1 }, Enum.EasingStyle.Back) end end
--- confirmed purchase: the key releases with a 1.06 overshoot
-function Motion.release(inst)
-	if reduced() or not inst then return end
-	local s = scaleOf(inst)
-	s.Scale = 1.06
-	tw(s, 0.25, { Scale = 1 }, Enum.EasingStyle.Back)
+
+function Motion.key(target, kind, opts)
+	opts = opts or {}
+	kind = kind or "key"
+	local had = registry[target]
+	if had then return had.api end
+	local body = opts.body or target:FindFirstChild("ink body")
+	local face = opts.face or target:FindFirstChild("face") or (body and target:FindFirstChild("body"))
+	local lip = opts.lip or target:FindFirstChild("lip")
+	local cap = body ~= nil and face ~= nil
+	local D = opts.depth or target:GetAttribute("keyDepth")
+	if cap and not D then D = if lip then math.max(2, lip.Position.Y.Offset - face.Position.Y.Offset) else 3 end
+	-- the hit: the whole key (labels and icons inside never take the input)
+	local hit = opts.hit
+	if not hit then
+		hit = Instance.new("TextButton")
+		hit.Name = "hit"
+		hit.Text = ""
+		hit.AutoButtonColor = false
+		hit.BackgroundTransparency = 1
+		hit.Size = UDim2.fromScale(1, 1)
+		hit.ZIndex = opts.z or 999
+		hit.Parent = target
+	end
+	hit.SelectionImageObject = Motion.selectionImage()
+	-- hover: +6 % brightness (a white veil on the face / the flat button)
+	local veilParent = if cap then face else target
+	local veil = Instance.new("Frame")
+	veil.Name = "hover"
+	veil.BorderSizePixel = 0
+	veil.BackgroundColor3 = Color3.new(1, 1, 1)
+	veil.BackgroundTransparency = 1
+	veil.Size = UDim2.fromScale(1, 1)
+	veil.ZIndex = if opts.z and opts.z < 50 then opts.z else 50
+	local vc = veilParent:FindFirstChildOfClass("UICorner")
+	if vc then local c = Instance.new("UICorner"); c.CornerRadius = vc.CornerRadius; c.Parent = veil end
+	veil.Parent = veilParent
+	local bp, bs, fp = body and body.Position, body and body.Size, face and face.Position
+	local lp = lip and lip.Position
+	local down, over = false, false
+	local flatRest, flatMoved = nil, false
+	local api = { hit = hit, target = target, kind = kind, cap = cap, disabled = false, suppress = false }
+	local function moveTo(state, info)
+		if cap then
+			local lift = if state == "hover" then -2 else 0
+			local drop = if state == "down" then D else 0
+			TweenService:Create(body, info, { Position = bp + UDim2.fromOffset(0, lift + drop), Size = bs - UDim2.fromOffset(0, drop) }):Play()
+			TweenService:Create(face, info, { Position = fp + UDim2.fromOffset(0, lift + drop) }):Play()
+			if lip then
+				lip.Visible = state ~= "down"
+				TweenService:Create(lip, info, { Position = lp + UDim2.fromOffset(0, lift) }):Play()
+			end
+		elseif not opts.noMove then
+			if not flatMoved then flatRest = target:GetAttribute("homePos") or target.Position end
+			local dy = if state == "hover" then -1 elseif state == "down" then 2 else 0
+			flatMoved = dy ~= 0
+			TweenService:Create(target, info, { Position = flatRest + UDim2.fromOffset(0, dy) }):Play()
+		end
+	end
+	local function blocked() return api.disabled or (opts.isDisabled ~= nil and opts.isDisabled()) end
+	hit.MouseEnter:Connect(function()
+		over = true
+		if blocked() then return end
+		if not opts.silent then Sfx.hover() end
+		TweenService:Create(veil, KHOVER, { BackgroundTransparency = 0.94 }):Play()
+		if not down and not reduced() then moveTo("hover", KHOVER) end
+	end)
+	hit.MouseLeave:Connect(function()
+		over = false
+		TweenService:Create(veil, KHOVER, { BackgroundTransparency = 1 }):Play()
+		if down then
+			down = false
+			moveTo("rest", KUP)
+			if opts.onUp then opts.onUp() end
+		elseif not reduced() then
+			moveTo("rest", KHOVER)
+		end
+	end)
+	hit.MouseButton1Down:Connect(function()
+		if blocked() then return end
+		down = true
+		if not opts.silent then Sfx.press() end
+		moveTo("down", KDOWN)
+		if opts.onDown then opts.onDown() end
+	end)
+	hit.MouseButton1Up:Connect(function()
+		if not down then return end
+		down = false
+		if not opts.silent then Sfx.release() end
+		moveTo(if over then "hover" else "rest", KUP)
+		if opts.onUp then opts.onUp() end
+	end)
+	hit.Activated:Connect(function(io)
+		if api.suppress then api.suppress = false; return end   -- a hold-to-repeat already acted
+		if opts.onActivate then opts.onActivate(io) end
+	end)
+	function api.settle() Motion.settle(target) end
+	registry[target] = { api = api, kind = kind, pressIn = true, sfx = not opts.silent, cap = cap }
+	return api
+end
+-- remove a key's wiring (display-only components built from key layouts: wallet chips, banner)
+function Motion.unkey(target)
+	local info = registry[target]
+	if not info then return end
+	registry[target] = nil
+	if info.api.hit and info.api.hit.Name == "hit" then info.api.hit:Destroy() end
+	local vp = if info.cap then (target:FindFirstChild("face") or target:FindFirstChild("body")) else target
+	local veil = vp and vp:FindFirstChild("hover")
+	if veil then veil:Destroy() end
+end
+function Motion.isKey(target) return registry[target] ~= nil end
+function Motion.setKind(target, kind) local i = registry[target]; if i then i.kind = kind; i.api.kind = kind end end
+Kit.keyHook = Motion.key
+function Motion.keyOf(target) local i = registry[target]; return i and i.api end
+-- the debug registry for the Studio key audit: every live key, its path, kind, press-in and sound wiring
+_G.__uiKeys = function()
+	local out = {}
+	for target, info in registry do
+		if target.Parent then
+			table.insert(out, { path = target:GetFullName(), kind = info.kind, pressIn = info.pressIn, sfx = info.sfx, keycap = info.cap,
+				visible = target.Visible })
+		end
+	end
+	table.sort(out, function(x, y) return x.path < y.path end)
+	return out
+end
+
+-- ---------------------------------------------------------------- feedback (outcomes only)
+-- the hero key of a window settles 3 % when its action succeeded (the only scale reaction a key ever gets)
+function Motion.settle(inst)
+	if reduced() or not inst or not inst.Parent then return end
+	local sc = inst:FindFirstChild("Settle")
+	if not sc then sc = Instance.new("UIScale"); sc.Name = "Settle"; sc.Parent = inst end
+	sc.Scale = 1.03
+	tw(sc, 0.18, { Scale = 1 }, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 end
 function Motion.pop(inst, from) Kit.pop(inst, from or 1.15) end
 -- red flash on a cost label (can't afford)
@@ -397,7 +551,7 @@ function Motion.shimmer(frame)
 end
 -- maxed: gold plate pops in with sparkles, the bar shimmers
 function Motion.maxed(plate, bar, burstParent, burstPt)
-	if plate then Kit.pop(plate, 1.2) end
+	if plate then Kit.pop(plate, 1.1) end
 	Motion.shimmer(bar)
 	if burstParent and burstPt then Motion.burst(burstParent, burstPt, 6, 24) end
 end

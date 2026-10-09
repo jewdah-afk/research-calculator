@@ -6,6 +6,7 @@ local TweenService = game:GetService("TweenService")
 local Icons = require(RS:WaitForChild("Peckwood"):WaitForChild("Icons"))
 
 local Kit = {}
+Kit.keyHook = nil :: any   -- set by Motion: Kit.button presses through Motion.key
 
 local INK = Color3.fromHex("0b0c10")
 Kit.INK = INK
@@ -243,33 +244,9 @@ function Kit.button(parent, x, y, w, h, opts)
 		if ico then ico.ImageTransparency = if kind == "grey" then 0.25 else 0 end
 		api.lit = kind == "lit" and glowColor ~= nil
 	end
-	-- motion: hover brighten + lift 1, press sinks into the lip, release springs back
-	local scale = new("UIScale", { Scale = 1 }, root)
-	local q = TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-	root.MouseEnter:Connect(function()
-		if not opts.silent then Kit.sfx("hover") end
-		TweenService:Create(face, q, { Position = UDim2.fromOffset(o, o - 1) }):Play()
-		TweenService:Create(hl, q, { BackgroundTransparency = 0.88 }):Play()
-	end)
-	root.MouseLeave:Connect(function()
-		TweenService:Create(face, q, { Position = UDim2.fromOffset(o, o) }):Play()
-		TweenService:Create(body, q, { Position = UDim2.fromOffset(0, 0), Size = UDim2.fromOffset(w, h) }):Play()
-		TweenService:Create(hl, q, { BackgroundTransparency = 1 }):Play()
-		TweenService:Create(scale, q, { Scale = 1 }):Play()
-	end)
-	root.MouseButton1Down:Connect(function()
-		if not opts.silent then Kit.sfx(opts.sound or "click") end
-		-- the whole cap sinks: face and the top of the ink outline go down together, the lip stays put
-		TweenService:Create(face, TweenInfo.new(0.06), { Position = UDim2.fromOffset(o, o + d - 1) }):Play()
-		TweenService:Create(body, TweenInfo.new(0.06), { Position = UDim2.fromOffset(0, d - 1), Size = UDim2.fromOffset(w, h - d + 1) }):Play()
-		-- no squash: a UIScale shrinks toward the top-left anchor (right side pulled in); the cap sinking IS the press
-	end)
-	root.MouseButton1Up:Connect(function()
-		TweenService:Create(face, TweenInfo.new(0.16, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Position = UDim2.fromOffset(o, o) }):Play()
-		TweenService:Create(body, TweenInfo.new(0.16, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Position = UDim2.fromOffset(0, 0), Size = UDim2.fromOffset(w, h) }):Play()
-		TweenService:Create(scale, TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
-	end)
-	api.scale = scale
+	-- motion: the one press for every key (Motion.key: press-in by the lip depth, hover +6 % and a lift, sounds)
+	local _ = hl
+	if Kit.keyHook then Kit.keyHook(root, opts.kind or "key", { hit = root, body = body, face = face, lip = lip, depth = d, silent = opts.silent }) end
 	if opts.stops then api.look("lit", opts.stops) end
 	return api
 end
