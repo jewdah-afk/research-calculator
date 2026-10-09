@@ -1,0 +1,25 @@
+Continue Peckwood (my Roblox remake of Birb, 2.5D cel-shaded islands). This chat is the Figma UI cleanup.
+
+Repo: ~/Downloads/rc-main, branch claude/peckwood-isle. Run: git fetch && git checkout claude/peckwood-isle && git pull
+
+Read first, in this order:
+1. FIGMA_UI_NEXT.md in the repo root (this job's handout: fix list, layer-name rules, re-export pipeline, Studio QA loop)
+2. HANDOUT.md section A, the "INTEGRATED" entry and "In-game UI from Figma"
+3. docs/figma/WINDOW_BRIEF.md and docs/figma/kit.js (my locked style rules and the Figma build recipes)
+
+Figma: file SQOJ2gzGt12vFMGGlNRWBE, page UI v2 = node 7:7, HUD board 213:7, screen mock 229:7, Windows board 239:307. Use the Figma MCP (use_figma, get_screenshot, get_metadata).
+
+The job, in order:
+A. Fix the light streak line under every window header IN FIGMA (one clean full-width 4 px ink line continuous with the 4 px window outline, at most one uniform 1-2 px highlight above it, no fading bevel strip or short depth band), on every theme and in the kit.js WINDOW recipe and the header FKit clones. Then re-export every window into the game and delete the runtime workaround Render.cleanHeaderEdge.
+B. Move the other runtime patches (UI/LayoutPatches.luau, state words in key names) into the Figma frames so imports need no code patches.
+C. Design real square-top Figma frames for Profile / Settings / Leaderboards (one window, 3 tabs), Fast Travel (compact popup) and Welcome Back, then swap out the code-built versions.
+D. Add the missing Birb bits to the frames: Parrot UPGRADE spend slider + typed amount, PARROT CAM toggle, Objectives GOALS tab, "?" help key + settings gear in headers, locked-tab states.
+E. Small polish from FIGMA_UI_NEXT.md section 4E.
+
+Rules:
+- Don't break my locked style rules (squared UI, Kit.button keys with the COMPANIONS header shading, press-in keys, 4 px continuous outline, 44 px close key at W-54,10, Fredoka One everywhere, steel cost chips, 3D icons only, zero clipping, one primary key per window).
+- Keep the layer-name contract in FIGMA_UI_NEXT.md section 3, or the importer breaks.
+- After each fixed frame: re-export with roblox/tools/figma_export (exporter.js, collect.py, build_layouts.py, roots.json), sync to Studio, QA it there, and send me a screenshot of every window as it lands.
+- Only ONE Roblox Studio window (place birb(test)). Don't touch the mechanics branch claude/peckwood-mech (paused mid Phase 2).
+- Commit and push to claude/peckwood-isle as each part lands, and keep HANDOUT.md section A + FIGMA_UI_NEXT.md updated.
+- Make it AAA quality and QA everything zoomed in before showing me.

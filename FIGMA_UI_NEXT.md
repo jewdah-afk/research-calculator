@@ -8,6 +8,8 @@ works. This is about fixing the *source* in Figma so later imports come out righ
 
 ## Paste this into a new chat
 
+The full copy-paste prompt is in **`FIGMA_UI_NEXT_PROMPT.txt`** (plain text, no markdown symbols, safe to copy on a phone). Short version:
+
 > Continue Peckwood (Roblox, Birb remake). Repo `~/Downloads/rc-main`, branch `claude/peckwood-isle`
 > (`git fetch && git checkout claude/peckwood-isle && git pull`). Read `FIGMA_UI_NEXT.md` (this file) first, then
 > `HANDOUT.md` section A ("INTEGRATED" + "In-game UI from Figma"). Figma file `SQOJ2gzGt12vFMGGlNRWBE`, page
