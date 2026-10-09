@@ -25,8 +25,8 @@ local tex: { [string]: Tex } = {
 	smoke_puff = { id = "92268408409601", size = Vector2.new(1024, 1024), layout = L.Grid4x4, mode = M.OneShot, frames = 16, tint = "baked" },
 	sparkle = { id = "109306538694217", size = Vector2.new(512, 512), layout = L.Grid4x4, mode = M.OneShot, frames = 16, tint = "tint" },
 	shell_shards = { id = "140039753673574", size = Vector2.new(512, 512), layout = L.Grid2x2, mode = M.Loop, frames = 4, tint = "tint" },
-	confetti = { id = "139503594314619", size = Vector2.new(512, 512), layout = L.Grid4x4, mode = M.Loop, frames = 16, tint = "tint" },
-	leaf = { id = "108661409279858", size = Vector2.new(512, 512), layout = L.Grid4x4, mode = M.Loop, frames = 16, tint = "baked" },
+	confetti = { id = "133443963956711", size = Vector2.new(512, 512), layout = L.Grid4x4, mode = M.Loop, frames = 16, tint = "tint" },
+	leaf = { id = "106031175500215", size = Vector2.new(512, 512), layout = L.Grid4x4, mode = M.Loop, frames = 16, tint = "baked" },
 	star = { id = "127499349991305", size = Vector2.new(256, 256), tint = "tint" },
 	burst_lines = { id = "89698007141854", size = Vector2.new(512, 512), tint = "tint" },
 	rune_circle = { id = "127457007197351", size = Vector2.new(1024, 1024), tint = "tint" },
@@ -34,7 +34,7 @@ local tex: { [string]: Tex } = {
 	flash_star = { id = "122557944181179", size = Vector2.new(512, 512), tint = "tint" },
 	swirl_arc = { id = "105953018314375", size = Vector2.new(1024, 1024), layout = L.Grid4x4, mode = M.OneShot, frames = 16, tint = "tint" },
 	ink_swirl = { id = "136639846082350", size = Vector2.new(1024, 1024), layout = L.Grid4x4, mode = M.OneShot, frames = 16, tint = "baked" },
-	feather = { id = "82735282077755", size = Vector2.new(512, 512), layout = L.Grid4x4, mode = M.Loop, frames = 16, tint = "tint" },
+	feather = { id = "129204348369168", size = Vector2.new(512, 512), layout = L.Grid4x4, mode = M.Loop, frames = 16, tint = "tint" },
 	speed_line = { id = "120270699957251", size = Vector2.new(256, 256), tint = "tint" },
 	ring_wave = { id = "96259929424912", size = Vector2.new(512, 512), tint = "tint" },
 	ring_snap = { id = "114978616114659", size = Vector2.new(256, 256), tint = "tint" },
@@ -46,9 +46,9 @@ local tex: { [string]: Tex } = {
 	toon_burst = { id = "102280174245408", size = Vector2.new(1024, 1024), layout = L.Grid4x4, mode = M.OneShot, frames = 16, tint = "tint" },
 	dust_puff = { id = "78339786731843", size = Vector2.new(1024, 1024), layout = L.Grid4x4, mode = M.OneShot, frames = 16, tint = "baked" },
 	-- egg crack decals (Decal.Texture, cumulative stages)
-	crack_1 = { id = "92626626543938", size = Vector2.new(512, 512), tint = "tint" },
-	crack_2 = { id = "75272112769368", size = Vector2.new(512, 512), tint = "tint" },
-	crack_3 = { id = "131762392183567", size = Vector2.new(512, 512), tint = "tint" },
+	crack_1 = { id = "118053811439079", size = Vector2.new(512, 512), tint = "tint" },
+	crack_2 = { id = "129007410357048", size = Vector2.new(512, 512), tint = "tint" },
+	crack_3 = { id = "86638557157174", size = Vector2.new(512, 512), tint = "tint" },
 }
 
 local VfxAssets = { tex = tex }
