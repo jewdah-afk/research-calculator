@@ -426,6 +426,42 @@ do
 	print("unlockInfo: radius", math.floor(info.radius), "edge tiles", #info.edge, "maxD", math.floor(info.maxD))
 	run("island_unlock (IslandView data)", function() return Vfx.play("island_unlock", info.centre, { info = info }) end)
 end
+-- the REAL unlock data path: every tile of a real (non-park) island from World, shaped like IslandView's items
+do
+	local World = load(rsI:FindFirstChild("Peckwood"):FindFirstChild("World"))
+	local Map = load(rsI:FindFirstChild("Peckwood"):FindFirstChild("MapData"))
+	local S = 4
+	for _, isl in World.list do
+		if isl.park or isl.join then continue end
+		local items = {}
+		local cx, cz = isl.cx or (isl.oi + isl.W / 2), isl.cz or (isl.oj + isl.N / 2)
+		local land = { i = math.floor(isl.oi), j = math.floor(isl.oj + isl.N / 2) }
+		for j = isl.oj, isl.oj + isl.N - 1 do
+			for i = isl.oi, isl.oi + isl.W - 1 do
+				local c, own = World.rawTile(i, j)
+				if c ~= 0 and own == isl then
+					local d = math.abs(i - land.i) + math.abs(j - land.j)
+					table.insert(items, { fill = function() end, delay = 0.6 + d * 0.045,
+						at = roblox.Vector3.new((i + 0.5 - Map.COLS / 2) * S, -14, (j + 0.5 - Map.ROWS / 2) * S) })
+				end
+			end
+		end
+		if #items == 0 then continue end
+		local maxDelay = 0
+		for _, x in items do maxDelay = math.max(maxDelay, x.delay) end
+		local raw = { isl = isl, items = items, top = World.base(math.floor(cx), math.floor(cz)),
+			landing = roblox.Vector3.new((land.i + 0.5 - Map.COLS / 2) * S, 0, (land.j + 0.5 - Map.ROWS / 2) * S),
+			centre = roblox.Vector3.new((cx - Map.COLS / 2) * S, 0, (cz - Map.ROWS / 2) * S),
+			waveStart = 0.6, waveEnd = maxDelay + 0.8, step = 0.045 }
+		local info = Hooks.unlockInfo(raw)
+		print(string.format("real island '%s': %d tiles, %d coast tiles, radius %.0f studs, maxD %.0f, wave %.1f-%.1f s",
+			tostring(isl.id), #info.tiles, #info.edge, info.radius, info.maxD, info.waveStart, info.waveEnd))
+		if #info.edge == 0 then problem("real island has no coast tiles") end
+		if #info.edge >= #info.tiles then problem("every tile counted as coast") end
+		run("island_unlock (real island " .. tostring(isl.id) .. ")", function() return Vfx.play("island_unlock", info.centre, { info = info }) end)
+		break
+	end
+end
 run("dev preview _G.__vfx egg_hatch Rare", function() return G.__vfx("egg_hatch", "Rare") end)
 run("dev preview _G.__vfx collect_pop", function() return G.__vfx("collect_pop") end)
 run("dev preview _G.__vfx level_up", function() return G.__vfx("level_up") end)

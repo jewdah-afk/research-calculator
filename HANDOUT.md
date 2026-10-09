@@ -10,10 +10,37 @@ Last updated: 2026-10-09 (Peckwood Ascent world rebuild, branch `claude/peckwood
 
 Branch **`claude/peckwood-isle`** (pushed). Build: `cd roblox && rojo build default.project.json -o Peckwood.rbxl`, open it in Studio (one Studio window only). The owner says it is OK to stop Play / reload the test place at any time.
 
-### VFX (claude/peckwood-vfx): v2, after Studio QA round 1 + the four craft levers (2026-10-09)
+### VFX (claude/peckwood-vfx): v3, after Studio QA rounds 1 + 2 and the four craft levers (2026-10-09)
 Owner: "super AAA quality and fit our style" (cel toy diorama: flat pastel blocks, hard 2-3 tone steps, white-hot
 cores, ink #16181e only on normal-blend pieces). Branch `claude/peckwood-vfx` (worktree `~/Downloads/rc-main-vfx`,
 merged with peckwood-isle 6788d54 for ZOOM_PLAY 9). Static checks + a Lune smoke test pass; v2 is NOT yet seen in Studio.
+
+**v3 (QA round 2, 2026-10-09): what changed after the v2 Studio pass** (kept as hero quality: the Rare crack frame,
+the toon burst cloud with the swirl dome, the Mythic rune circle drawing in):
+- **EditableMesh budget = 0.** Roblox caps live EditableMeshes at ~7 per client (fewer on phones); the map uses 2.
+  `Vfx/MeshFx` now loads Creator Store MESH assets (mesh-only, no scripts) with `AssetService:CreateMeshPartAsync`
+  and pools clones; no EditableMesh is ever created (the smoke test asserts it). Ids + alternates in `MeshFx.ASSETS`:
+  crescent `92572984944785` (alt 129794830935741, "wide / long crescent vfx"), swirl `10895746627` (alt 2671071349),
+  shock wall `131187152008585` (alt 2788580299, "Tall Shockwave"), broken ring `7741808274` (alt 7753130413, Akron
+  Circle4Gaps / 8Gaps), thin ring `7263678713` (alt 12640000893, Akron Pipe_Circle_Thin), dome `7349045196` (alt
+  7349045384, Akron Sphere_Half), tornado `7029892192` (alt 7028996145, "Tornado VFX"), star `15591537807` (alt
+  2620058380, "4Star"). Picked by name/creator (thumbnails not viewed): `_G.__vfx("meshes")` prints what loaded, each
+  bounding-box size and the detected axis; swap an id (or set `flip = true` / `axis = n`) if a shape looks wrong.
+  Orientation is auto-detected (thinnest axis = normal for plane shapes, odd-one-out axis for up shapes).
+- **Camera feel no longer needs Main**: CamFx binds its own RenderStep at Camera+2 while a shake / push / flash runs
+  (reads what Main wrote, adds the feel, unbinds when idle). Main's camera lines are the originals again. Reduced
+  Motion turns shake / push off and logs it once; `_G.__vfx("motion", true)` forces it on for QA.
+- **Wind-up reads**: hatch egg 1.6x the field egg, bigger wobble, a big normal-blend 3-band glow, sparks + streaks
+  sucked in from 5.4 studs, a small flash + specks on every crack stage, crack decals on up to 3 camera faces with
+  bolder crack art.
+- **Light pillar** (hatch Legendary+ 30 studs, level-up 22, unlock 42): `R.pillar` = tapered body (rarity tint,
+  low emission, streak texture) + thin white core, soft bottom, fades to the top, wider base, slight width pulse.
+- **Level-up**: stepped ground glow (no airbrushed bloom), column to 1.6 s, ding at 0.85 s, no feathers.
+- **Reveal**: shards / sparkles about -30 %, no reveal tornado, thin warm ray fans behind the pet.
+- **Re-upload these 6** (same keys, art redrawn): `feather`, `confetti`, `leaf` (tumble frames never edge-on: an edge-on
+  frame was a bare ink line = the stray "stick") and `crack_1`, `crack_2`, `crack_3` (bolder lines).
+- Real unlock data path checked headless with the real Garden tiles from World (343 tiles, 16 coast tiles, 46-stud
+  radius, wave 0.6-2.8 s): plays clean. In Studio: `PlayerGui:SetAttribute("PeckwoodBuild", "garden")`.
 
 **Upload these 16 PNGs** (`roblox/assets/vfx/`, paste ids into `src/shared/VfxAssets.luau`; until then each layer falls
 back or is skipped, and `collect_pop` keeps the old cube burst):
@@ -34,10 +61,8 @@ MeshFx (six EditableMesh shapes), CamFx (shake / push / flash), Palette, Hooks, 
 - Readable at any zoom: size multiplier `clamp(camDist / 290, 1, 2.4)`; hatch frames the egg with a push-in (stronger
   and longer for higher rarity, then sizes follow the pushed framing); level_up gentle push; unlock pushes at the finale.
 - No flat beams any more (QA: they stood up as triangles / ovals). Ground pieces = flat particles or mesh wall rings.
-- Lever A meshes (`MeshFx`): arc, spiral, wallring, dome, tornado, star4; 103-225 verts each, built once lazily in a
-  background thread (pcall; failure = particle fallback), EditableMeshes kept alive, pooled clones with Size set from
-  the template; bounding boxes forced symmetric (no skew). Bands run along one axis so "fade by thinning" = scaling
-  that axis; cel bands = vertex colours (white leading strip / 0.72 body) x clone Color (Neon). `fx:mesh(kind, spec)`.
+- Lever A meshes (`MeshFx`): v3 = Creator Store mesh assets (see above), 0 EditableMeshes; `fx:mesh(kind, spec)`
+  animates a pooled clone (billboard / flat / up, tilt, eased spin, ease-out growth, thinning, squash, hard-stepped fade).
 - Lever C: streaks are VelocityParallel + Squash + Drag + gravity; sizes use multi-key pops; ZOffset layering (flash
   core 5.2 > rim 5 > needles 4.6 > speed 4.4 > embers 4.3 > swirls 4.2 > ink 4 > shards 3.5 > cloud 3 > smoke 2 > glow
   -0.6 > rays -2); hot cores Brightness 2-3; radial bursts use `emitSphere` / `emitRadial` (the Sphere/Disc-outward

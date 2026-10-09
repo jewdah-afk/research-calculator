@@ -124,7 +124,7 @@ function Hooks.start(Vfx, remotes: Instance?)
 	-- ---------------------------------------------------------------- dev preview
 	local function preview(name: string?, pos: any, options: { [string]: any }?)
 		if name == nil or name == "list" or name == "help" then
-			print("[Vfx] effects: " .. table.concat(Vfx.names(), ", ") .. "  |  hatch_all, shake, flash, stop, stats")
+			print("[Vfx] effects: " .. table.concat(Vfx.names(), ", ") .. "  |  hatch_all, shake, flash, stop, stats, meshes, motion")
 			print('[Vfx] _G.__vfx("egg_hatch", "Mythic")  _G.__vfx("collect_pop", nil, {golden = true})  _G.__vfx("island_unlock")')
 			return nil
 		end
@@ -144,6 +144,14 @@ function Hooks.start(Vfx, remotes: Instance?)
 			return nil
 		elseif name == "stop" then
 			Vfx.stopAll()
+			return nil
+		elseif name == "meshes" then -- QA: which mesh assets loaded, their size and detected axis
+			for _, k in Vfx.MeshFx.KINDS do
+				local t = Vfx.MeshFx.template(k)
+				local spec = Vfx.MeshFx.ASSETS[k]
+				print(string.format("[Vfx] mesh %-8s id %s  %s", k, spec.id,
+					if t then string.format("size %s  axis %s  frame %s", tostring(t.size0), ({ "X", "Y", "Z" })[t.ax], t.frame) else "NOT LOADED"))
+			end
 			return nil
 		elseif name == "motion" then -- QA: camera feel even with Reduced Motion on
 			Vfx.CamFx.forceMotion = pos ~= false
