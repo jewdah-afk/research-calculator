@@ -10,6 +10,115 @@ Last updated: 2026-10-09 (Peckwood Ascent world rebuild, branch `claude/peckwood
 
 Branch **`claude/peckwood-isle`** (pushed). Build: `cd roblox && rojo build default.project.json -o Peckwood.rbxl`, open it in Studio (one Studio window only). The owner says it is OK to stop Play / reload the test place at any time.
 
+### VFX (claude/peckwood-vfx, 2026-10-09): first effect set, waiting for texture upload + Studio QA
+Owner brief: top-tier Roblox VFX quality in OUR style (cel toy diorama, flat pastel blocks, hard 2-3 tone steps, white
+hot cores, ink #16181e outlines where they read, bright accents, clean like the lighthouse beam). Approved first set:
+egg hatch (scaled by rarity), collect pops, level-up, island-unlock reveal. Branch `claude/peckwood-vfx` (worktree
+`~/Downloads/rc-main-vfx`, not merged). Built statically only (rojo build, luau-lsp, selene, a Lune smoke test): nothing
+here has been seen in Studio yet.
+
+**Files**
+- `roblox/assets/vfx/*.png` (15 textures) + `manifest.json`; generator `roblox/tools/vfx/gen_vfx.py` (PIL/numpy/scipy,
+  re-run to regenerate; `--preview` writes QA contact sheets to `roblox/tools/vfx/preview/`).
+- `roblox/src/shared/VfxAssets.luau`: texture key -> asset id (all `""` now) + flipbook layout/mode.
+- `roblox/src/client/Vfx/`: `init.luau` (engine + API), `Layers.luau` (pools, recipes, curves), `Palette.luau` (rarity
+  ladders), `CamFx.luau` (shake / push / flash), `Hooks.luau` (hook-ups + dev preview), `Effects/{CollectPop,EggHatch,
+  LevelUp,IslandUnlock}.luau`.
+- `roblox/tools/vfx/smoke.luau`: headless Lune test (see below).
+
+**Textures** (all transparent, power of two; "tint" = greyscale + ink, coloured per rarity by `Color`; "baked" = own colours)
+
+| file (`roblox/assets/vfx/`) | VfxAssets key | size | FlipbookLayout / Mode | type | used for |
+|---|---|---|---|---|---|
+| smoke_puff.png | `smoke_puff` | 1024 | Grid4x4 / OneShot | baked cool white | toon puff that blooms then melts lobe by lobe: hatch smoke ring, unlock coast dust, chick poof |
+| impact_star.png | `impact_star` | 1024 | Grid4x4 / OneShot | tint | flash disc -> 8-spike star -> hollow centre -> spikes recede: hatch crack, level-up "ding" |
+| sparkle.png | `sparkle` | 512 | Grid4x4 / OneShot | tint | 4-point twinkle (pops in, turns, breathes, shrinks): every effect |
+| shell_shards.png | `shell_shards` | 512 | Grid2x2 / Loop | tint | eggshell piece tumbling (outer speckled face / inner face): hatch |
+| confetti.png | `confetti` | 512 | Grid4x4 / Loop | tint | paper strip spinning + flipping (front / darker back): hatch, unlock shower |
+| leaf.png | `leaf` | 512 | Grid4x4 / Loop | baked green | tumbling leaf: unlock coast bursts |
+| ring_shock.png | `ring_shock` | 512 | None | tint | flat shockwave ring (ink / white rim / body / ink + 2-step inner glow) |
+| ring_thin.png | `ring_thin` | 256 | None | tint | thin pop ring (collect, echo rings) |
+| glow_disc.png | `glow_disc` | 256 | None | tint | 4-step glow disc (additive cores, charge glow, flashes) |
+| light_rays.png | `light_rays` | 512 | None | tint | 14-ray fan, 3 alpha steps (spins behind the reveal) |
+| star.png | `star` | 256 | None | tint | faceted puffy 5-point star with ink (star bits) |
+| burst_lines.png | `burst_lines` | 512 | None | tint | 30 inward impact needles (hatch crack frame, Rare+) |
+| rune_circle.png | `rune_circle` | 1024 | None | tint | Peckwood magic circle (egg/feather/leaf/star glyph band, hexagram, egg emblem): Legendary+ hatch |
+| beam_streak.png | `beam_streak` | 256x64 | Beam strip | tint | light pillars / level-up column (U along the beam, seamless, scroll with TextureSpeed) |
+| beam_runes.png | `beam_runes` | 512x64 | Beam strip | tint | glyph band for the unlock rune ring (TextureMode Stretch, whole repeats per half ring) |
+
+**Upload:** upload each PNG as an Image (Asset Manager or Creator Hub), paste the number into the matching `id` in
+`src/shared/VfxAssets.luau` (`"123"` or `"rbxassetid://123"` both work). Until then every layer that needs a missing
+texture is skipped: `collect_pop` stays on the old cube burst (Main checks `Vfx.can`), `island_unlock` and the beam
+parts (rune rings, pillars, columns, light wave) already draw because they are textureless beams.
+
+**API** (client): `local Vfx = require(StarterPlayerScripts.Peckwood.Vfx)`
+- `Vfx.play(name, where, opts?) -> handle?`: where = Vector3 / CFrame / BasePart / Model; opts: `rarity` ("Common".."Mythic"
+  or 1-6), `color` (Color3 / hex / palette name), `scale`, `follow` (Instance or `() -> Vector3`), `force`, `onDone`.
+  Per effect: collect_pop `golden, groundY, onLabel(pos)`; egg_hatch `egg` (Model, hidden at the crack), `pet` (Model,
+  popped in), `eggColor`, `onCrack`, `onReveal`, `preview`; level_up `punch`; island_unlock `info` (from Hooks).
+- `Vfx.can(name)`, `Vfx.stop(handle)`, `Vfx.stopAll()`, `Vfx.shake(studs, dur)`, `Vfx.push(pos, amount, in, hold, out)`,
+  `Vfx.flash(Color3, strength, dur)`, `Vfx.register(name, { run, cap, needs })`.
+- Engine rules: one RenderStepped connection only while an effect lives; every piece (emitters, beams, attachments,
+  lights, trails, ForceField domes) is pooled on ONE 0.05-stud anchor part (`workspace.PeckwoodVfx`) and returned when
+  the effect ends; caps per effect + 24 total; burst counts scale with the saved graphics quality (x1 / 0.7 / 0.4,
+  Automatic 0.8); hit-stop freezes the effect's timeline + its emitters (`TimeScale 0`); Reduced Motion turns off shake
+  and push. No EditableMesh, no Studio-authored models, no Creator Store assets, no big invisible parts (flat rings are
+  `VelocityPerpendicular` particles or flat 2-beam circles instead of decal planes, so Occluded Highlights stay intact).
+
+**Effects (timelines)**
+- `collect_pop` (~0.5 s, cap 10): t0 cream glow pop + white core + thin pop ring + 6 sparkles flung out (drag stop);
+  0.02 two star bits hop; 0.04 `onLabel` (UI "+N" spot); golden = gold, x1.25, 10 sparkles + ground shockwave.
+- `egg_hatch` (Common 2.0 s .. Mythic 5.5 s): 0..A anticipation (A = 0.6/0.8/1.0/1.25/1.75/2.15 s): egg rocks on its
+  base with rising frequency + amplitude (hops Rare+), stepped glow charges, sparks sucked in, light ramps; Legendary+
+  also rune ring traced + spinning rune circle, light pillar grows, slow camera push. A: CRACK = hit-stop
+  (0.04..0.14 s) on the impact frame: star-burst, white flash, impact lines (Rare+), shell shards, smoke ring,
+  ground shockwave (+ echo Rare+, third ring Mythic), shake, colour flash + ForceField dome (Epic+), pillar flare.
+  A+0.03: REVEAL = pet pops in (back overshoot + hop), light rays + halo (Uncommon+, 1.2..3.1 s, 2 layers Mythic),
+  confetti (12..60, rainbow on Mythic), star bits, twinkles round the pet, sparkle shower (Legendary+).
+- `level_up` (~1.6 s, follows the hen): t0 flat stepped glow + shockwave, light column (streak beam + white core)
+  snaps up in 0.18 s, holds, thins by 1.15 s, light swell, small shake, hen punch; 0-0.9 rising sparkles + 3 ribbon
+  trails spiralling up; 0.08 echo ring; 0.8 "ding" star-burst at head height + star bits.
+- `island_unlock` (rides IslandView's rise; S = waveStart - 0.45): S..S+0.95 rune circle draws in over the new island
+  (outer ring traced with a spark on its leading edge, inner ring, hexagram line by line, then the rune band fades in
+  and circulates) + summon pillar; waveStart.. a flat light ring sweeps out from the landing in step with the tile wave
+  (radius = (t - waveStart) / step tiles) and each coast tile bursts dust + leaves as it breaks the surface (<= 56);
+  waveEnd: the rune flashes out, a shock ring sweeps the island, sparkle + confetti shower, star burst, shake + soft
+  flash.
+
+**Hook-ups (existing files touched)**
+- `src/client/Main.client.luau`: `local Vfx = require(...Vfx)`; Collect handler plays `collect_pop` when `Vfx.can`,
+  else the old cube `burst`; camera: `cam.CFrame, cam.FieldOfView = Vfx.camera(<same CFrame as before>, FOV, dt)`;
+  `Vfx.start(Remotes)` before `Hud.start`.
+- `src/client/IslandView.luau`: `IslandView.onUnlock = nil` declaration + one line in `unlockIsland` (animated path,
+  just before `animate(...)`) that passes `{ isl, items, landing, centre, waveStart, waveEnd, step, top }`.
+- In `Vfx/Hooks.luau` (no other file edits): island_unlock from `IslandView.onUnlock`; level_up on a companion level
+  going up (sparrow / seagull / dave / crow / parrot from State, same save mode, max one per 6 s: `LEVEL_GAP`) and on the
+  Evolve (pink, x1.25) and Molt (violet, x1.3) toasts. egg_hatch has no game event yet: call
+  `Vfx.play("egg_hatch", groundPos, { rarity = r, egg = eggModel, pet = petModel })` from the future hatch flow. It is a
+  WORLD effect: particles do not render inside ViewportFrames, so stage the hatch in the world (in front of the hen).
+
+**Preview in Play** (client command bar, or anything client-side):
+`_G.__vfx()` lists effects; `_G.__vfx("egg_hatch", "Mythic")`; `_G.__vfx("hatch_all")` (all six rarities, 4.6 s apart,
+in front of the hen); `_G.__vfx("collect_pop", nil, { golden = true })`; `_G.__vfx("level_up")`;
+`_G.__vfx("island_unlock")` (synthetic round island at the hen); `_G.__vfx("shake")`, `"flash"`, `"stop"`, `"stats"`.
+Previews pass `force = true`, so they show every layer whose texture exists. From the SERVER command bar:
+`game.Players:GetPlayers()[1].PlayerGui:SetAttribute("PeckwoodVfx", "egg_hatch:Mythic#1")` (change the `#n` to re-fire;
+`collect_pop:golden#2`). Real unlock path: `PlayerGui:SetAttribute("PeckwoodBuild", "garden")` replays an island rise.
+
+**Smoke test (no Studio):** `cd roblox && rojo build default.project.json -o <tmp>/vfx.rbxl && lune run
+tools/vfx/smoke.luau <tmp>/vfx.rbxl` runs every effect at every rarity with fake ids and with none: 0 problems,
+no pool leaks (particles per play: collect 10-15, hatch 35 (Common) .. 157 (Mythic), level-up 30, unlock 60-175).
+
+**Studio QA still to do (could not be verified headless)**
+- Flat 2-beam circles + hexagram lines (FaceCamera off) must lie FLAT (they take the attachments' up axis = world up);
+  if they stand up, the ring frame in `Layers.ringFrame` needs another axis.
+- Particle Size is treated as the full width in studs; the island flash glow reaches ~R studs (60-100): check nothing
+  clamps. Ground rings sit 0.15-0.4 studs above the ground (ZOffset small): check no terrain clipping.
+- Beam `TextureSpeed` sign (streaks should flow UP the pillars) and the rune band's circulation direction.
+- Brightness / LightEmission against Bloom 0.3 / threshold 1.6 and the toon ColorCorrection, day and night.
+- Sizes/timing feel at the default zoom (1 stud ~ 8 px) and zoomed in; hit-stop length; camera push amount.
+- Egg/chick stand-ins: `Model:ScaleTo` per frame only during the 0.4 s pet pop (one model).
+
 ### Park slice v2: toon walkway, lighthouse, pond, tiered rolling sea (2026-10-09, latest, commit 2dbcdd4)
 Owner verdict on the island: "looking fucking crazy"; the lighthouse beam is "super clean, keep that up".
 - **Walkway** (`IslandView`, "toon walkway" block): drawn as STROKES, not from the tile mask. Ring = the egg-yard outline (`tileLoop(Map.inYard)`) pushed 2 studs outward, half width 2.3; every path branch that leaves the ring (path tiles not next to the yard) becomes one straight capsule; ring + spurs blend with a smooth-min fillet, noise wobble, painted as sand fill / toon band / brown outline into one 960x720 EditableImage decal at y -0.44. 1-tile diagonal stair steps can no longer break it into patches. New east spur (MapData rows 13-14, cols 29-31) leads to the market stall.

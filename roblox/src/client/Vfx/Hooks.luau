@@ -2,7 +2,7 @@
 -- Vfx/Hooks: wires the effects into the game, and the dev preview. Started once by Main (Vfx.start(Remotes)).
 --   island_unlock  IslandView.onUnlock (called by IslandView.unlockIsland's animated path with its wave timing)
 --   level_up       a companion's level going up (State: sparrow / seagull / dave / crow / parrot .level, same save
---                  mode, throttled to one per 2.5 s), Evolve and Molt toasts (bigger)
+--                  mode, throttled to one per LEVEL_GAP = 6 s), Evolve and Molt toasts (bigger)
 --   collect_pop    in Main's Collect handler (it knows the egg position); egg_hatch has no game event yet (no hatch
 --                  screen): call Vfx.play("egg_hatch", groundPos, { rarity = ..., egg = model, pet = model }).
 -- Dev preview (client): _G.__vfx(name, position?, opts?)  |  _G.__vfx("egg_hatch", "Mythic")  |  _G.__vfx("hatch_all")
@@ -53,13 +53,13 @@ function Hooks.unlockInfo(raw)
 	table.sort(edge, function(a, b) return a.at < b.at end)
 	local step = raw.step or 0.045
 	local d = raw.isl and raw.isl.data
-	local dust, leaf
+	local dust = nil -- puffs take a lightened tint of the island's path colour; leaves keep their baked green
 	if d and d.path and d.path[1] then dust = Color3.new(1, 1, 1):Lerp(Color3.fromHex(d.path[1]), 0.5) end
 	return {
 		centre = centre, radius = radius, landing = raw.landing or centre,
 		waveStart = raw.waveStart or 0, waveEnd = raw.waveEnd or 2, step = step,
 		maxD = math.max(1, ((raw.waveEnd or 2) - 0.8 - (raw.waveStart or 0)) / step),
-		edge = edge, dust = dust, leaf = leaf,
+		edge = edge, dust = dust,
 	}
 end
 
@@ -69,8 +69,10 @@ local function levelUp(Vfx, color: any, scale: number?)
 	Vfx.play("level_up", p, { color = color, scale = scale or 1, follow = hen, punch = Birds.punch })
 end
 
--- companion -> colour of its level-up column
+-- companion -> colour of its level-up column. Sparrow and Crow level passively in the background, so level-ups are
+-- throttled to one column per LEVEL_GAP seconds (tuning knob; set COMPANIONS = {} to keep only Evolve / Molt)
 local COMPANIONS = { sparrow = "ffc94a", seagull = "8fd0ff", dave = "e7b6ff", crow = "6fe0ff", parrot = "ff7a7a" }
+local LEVEL_GAP = 6
 
 function Hooks.start(Vfx, remotes: Instance?)
 	-- island unlock
@@ -102,7 +104,7 @@ function Hooks.start(Vfx, remotes: Instance?)
 					local c = s[k]
 					cur[k] = type(c) == "table" and c.level or nil
 				end
-				if last and mode == lastMode and os.clock() - lastFx > 2.5 then
+				if last and mode == lastMode and os.clock() - lastFx > LEVEL_GAP then
 					for k, col in COMPANIONS do
 						local a, b = last[k], cur[k]
 						if a and b and b > a and b - a <= 25 then
