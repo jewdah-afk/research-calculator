@@ -48,6 +48,30 @@ Branch **`claude/peckwood-isle`** (pushed). Build: `cd roblox && rojo build defa
 - Asset export pipeline: SerializationService in Studio -> local POST receiver -> `lune` re-serialize (fixes the Tags
   property Rojo 7.5 can't read) -> rojo `$path`.
 
+### ART DIRECTION LOCKED (owner, 2026-10-09 night): "Painted storybook"
+- Breath of the Wild / A Short Hike / Ghibli: realistic terrain shapes and light, HAND-PAINTED textures, cute readable
+  hero objects (hen, eggs, portals pop with rim light + outline). Replaces the Valheim experiment below.
+- Look board (approve before building): `roblox/docs/lookboard/` park_overview.png, hen_meadow.png,
+  terrain_swatches.png (Figma generate_image, team::1657975936717760073).
+- Build plan: painted terrain MaterialVariants (upload painted grass / dry grass / dirt / mossy rock / sand / snow
+  tiles, author in project MaterialService, SetBaseMaterialOverride), warm low key light + blue-violet shadows +
+  gentle bloom + haze + painted sky, ONE generate_mesh style prompt for every asset, Park as a finished vertical
+  slice first. Unique hooks: island grows with unlocks, visible flock of hens with upgrades, eggs as the star.
+  Perf budget: 60 fps mid phone, mesh instancing, LOD, streaming, particle caps.
+
+### DIRECTION CHANGE (owner, late 2026-10-09): Valheim / The Forest, Park first
+- Owner rejected both the flat cel colours and the sculpted faceted-mesh land ("this map is bad, coloring is off").
+  New target: **Valheim / The Forest**: really good natural terrain generation (rolling ground, dense forests,
+  rocks, atmospheric light), still leaving room for every mechanic. **Design and finish the Park first**, with the
+  mechanics working, then build the other areas one by one.
+- Also asked: the in-game UI laid out like theirs (the original Birb game's UI) but in OUR Figma style with the
+  squared HUD / UI. Separate track after the Park.
+- Done so far: realistic Roblox materials (no Flat overrides applied; the Flat* variants still sit in
+  MaterialService), natural earthy palette (`LandTerrain.setup`), grass blades on, Atmosphere + softer shadows +
+  lower saturation (project Lighting). `World.relief(x, z)` = gentle rolling ground in studs (Park 0.7, regions 2.6),
+  shared by the terrain (`LandTerrain.visualTop`), the bird (`Controller.heightAt`) and egg spawns (server), so
+  nothing floats or sinks. The faceted-mesh attempt is parked at scratchpad (not in the repo).
+
 ### Art pass progress (2026-10-09, same chat)
 - Owner LOVES the generate_mesh props ("exactly what we want for our assets everywhere"): use Studio generate_mesh
   for every asset (no brand names in prompts; ~3 jobs at a time or it rate-limits; check each upright in a lineup).
