@@ -111,6 +111,15 @@
 "path": [
 "ReplicatedStorage",
 "Peckwood",
+"VfxAssets"
+],
+"class": "ModuleScript",
+"url": "src/shared/VfxAssets.luau"
+},
+{
+"path": [
+"ReplicatedStorage",
+"Peckwood",
 "World"
 ],
 "class": "ModuleScript",
@@ -238,11 +247,32 @@
 "StarterPlayer",
 "StarterPlayerScripts",
 "Peckwood",
+"Vfx"
+],
+"class": "ModuleScript",
+"url": "src/client/Vfx/init.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
 "UI",
 "Binders"
 ],
 "class": "ModuleScript",
 "url": "src/client/UI/Binders.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"CompanionsBoard"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/CompanionsBoard.luau"
 },
 {
 "path": [
@@ -265,6 +295,39 @@
 ],
 "class": "ModuleScript",
 "url": "src/client/UI/Kit.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Layout"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Layout.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"LayoutPatches"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/LayoutPatches.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Motion"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Motion.luau"
 },
 {
 "path": [
@@ -316,6 +379,39 @@
 "StarterPlayerScripts",
 "Peckwood",
 "UI",
+"SfxCandidates"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/SfxCandidates.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"SidebarViews"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/SidebarViews.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"SoundBoard"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/SoundBoard.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
 "WindowDefs"
 ],
 "class": "ModuleScript",
@@ -331,6 +427,72 @@
 ],
 "class": "ModuleScript",
 "url": "src/client/UI/WindowManager.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"Vfx",
+"CamFx"
+],
+"class": "ModuleScript",
+"url": "src/client/Vfx/CamFx.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"Vfx",
+"Hooks"
+],
+"class": "ModuleScript",
+"url": "src/client/Vfx/Hooks.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"Vfx",
+"Layers"
+],
+"class": "ModuleScript",
+"url": "src/client/Vfx/Layers.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"Vfx",
+"MeshFx"
+],
+"class": "ModuleScript",
+"url": "src/client/Vfx/MeshFx.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"Vfx",
+"Palette"
+],
+"class": "ModuleScript",
+"url": "src/client/Vfx/Palette.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"Vfx",
+"Recipes"
+],
+"class": "ModuleScript",
+"url": "src/client/Vfx/Recipes.luau"
 },
 {
 "path": [
@@ -367,6 +529,54 @@
 ],
 "class": "ModuleScript",
 "url": "src/client/UI/Figma/Render.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"Vfx",
+"Effects",
+"CollectPop"
+],
+"class": "ModuleScript",
+"url": "src/client/Vfx/Effects/CollectPop.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"Vfx",
+"Effects",
+"EggHatch"
+],
+"class": "ModuleScript",
+"url": "src/client/Vfx/Effects/EggHatch.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"Vfx",
+"Effects",
+"IslandUnlock"
+],
+"class": "ModuleScript",
+"url": "src/client/Vfx/Effects/IslandUnlock.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"Vfx",
+"Effects",
+"LevelUp"
+],
+"class": "ModuleScript",
+"url": "src/client/Vfx/Effects/LevelUp.luau"
 },
 {
 "path": [
