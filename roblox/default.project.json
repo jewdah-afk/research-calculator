@@ -3,7 +3,8 @@
   "tree": {
     "$className": "DataModel",
     "ReplicatedStorage": {
-      "Peckwood": { "$path": "src/shared" }
+      "Peckwood": { "$path": "src/shared" },
+      "TreeAssets": { "$path": "assets/TreeAssets.rbxm" }
     },
     "ServerScriptService": {
       "Peckwood": { "$path": "src/server" }
@@ -18,7 +19,8 @@
       }
     },
     "Workspace": {
-      "$properties": { "FilteringEnabled": true, "StreamingEnabled": false, "Gravity": 196.2 }
+      "$properties": { "FilteringEnabled": true, "StreamingEnabled": false, "Gravity": 196.2 },
+      "Terrain": { "$properties": { "Decoration": true } }
     },
     "Lighting": {
       "$properties": {

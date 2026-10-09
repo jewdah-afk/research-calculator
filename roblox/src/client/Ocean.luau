@@ -79,7 +79,23 @@ local function buildSurface(parent)
 	B = { i0 = i0, j0 = j0, w = i1 - i0, h = j1 - j0 }
 	local W, H = B.w * S, B.h * S
 	local cx, cz = sx(i0) + W / 2, sz(j0) + H / 2
-	sheet = part(parent, Vector3.new(W, 0.2, H), CFrame.new(cx, SEA_Y - 0.1, cz), Color3.new(1, 1, 1), nil, 1)
+	-- the surface itself is Terrain water: real waves, sun glints and a waterline where it meets the cliffs. It is
+	-- kept nearly clear, so the painted colour layer just under it (the guide's gradient + foam) gives the colour.
+	local T = workspace.Terrain
+	local TOP = math.floor(SEA_Y / 4 + 0.5) * 4
+	T.WaterColor = hx("1b70b1"); T.WaterTransparency = 0.75; T.WaterReflectance = 0.28
+	T.WaterWaveSize = 0.04; T.WaterWaveSpeed = 6
+	task.spawn(function()
+		local TILE = 512
+		for x = -2048, 2048 - TILE, TILE do
+			for z = -2048, 2048 - TILE, TILE do
+				local r = Region3.new(Vector3.new(x, TOP - 4, z), Vector3.new(x + TILE, TOP, z + TILE)):ExpandToGrid(4)
+				T:ReplaceMaterial(r, 4, Enum.Material.Air, Enum.Material.Water)   -- only empty voxels: land columns stay
+				task.wait()
+			end
+		end
+	end)
+	sheet = part(parent, Vector3.new(W, 0.2, H), CFrame.new(cx, TOP + 0.02, cz), Color3.new(1, 1, 1), nil, 1)
 	sheet.Name = "Sea"
 	tintImg = newImage(B.w * PX, B.h * PX)
 	foamImg = newImage(B.w * PX, B.h * PX)
@@ -106,7 +122,7 @@ local function buildSurface(parent)
 		gl:WritePixelsBuffer(Vector2.zero, Vector2.new(64, 64), buf)
 		for _, st in { 22, 37 } do
 			local t = Instance.new("Texture"); t.Face = Enum.NormalId.Top; t.ZIndex = 2; t.StudsPerTileU = st; t.StudsPerTileV = st
-			t.ColorMapContent = Content.fromObject(gl); t.Transparency = 0.25; t.Parent = sheet
+			t.ColorMapContent = Content.fromObject(gl); t.Transparency = 0.55; t.Parent = sheet
 			table.insert(glints, t)
 		end
 	end
@@ -170,7 +186,7 @@ local function paint(distOf)
 			local n = hash(px * 0.37, py * 0.53)
 			c += Vector3.one * ((n - 0.5) * 0.025 * (1 - smooth(6, 7.5, d)))
 			if d >= 7.5 then c = FARV end   -- open water: exactly the far-sea colour, so the painted edge never shows
-			local a = if d < 0.5 then 0 elseif d > 7.5 then 1 else lerp1(0.97, 0.58, shallow)
+			local a = if d < 0.5 then 0 elseif d > 7.5 then 0.8 else lerp1(0.8, 0.42, shallow)
 			local o = (py * PW + (PW - 1 - px)) * 4   -- Top-face decals run U along -X
 			buffer.writeu8(tb, o, math.clamp(c.X * 255, 0, 255)); buffer.writeu8(tb, o + 1, math.clamp(c.Y * 255, 0, 255))
 			buffer.writeu8(tb, o + 2, math.clamp(c.Z * 255, 0, 255)); buffer.writeu8(tb, o + 3, a * 255)
@@ -376,7 +392,9 @@ function Ocean.setNight(n: number)
 	night = n
 	if tintDecal then tintDecal.Color3 = Color3.new(1, 1, 1):Lerp(hx("3a5d8a"), n) end
 	if foamDecal then foamDecal.Color3 = Color3.new(1, 1, 1):Lerp(hx("7f93b0"), n) end
-	for _, g in glints do g.Transparency = 0.25 + 0.7 * n end
+	for _, g in glints do g.Transparency = 0.55 + 0.42 * n end
+	workspace.Terrain.WaterColor = hx("1b70b1"):Lerp(hx("12305a"), n)
+	workspace.Terrain.WaterReflectance = 0.28 * (1 - n) + 0.04 * n   -- no grey sky blotches at night
 	for _, f in frame do f.Color3 = Color3.new(1, 1, 1):Lerp(hx("3a5d8a"), n) end
 	for _, j in jellies do j.p.Material = if n > 0.4 then Enum.Material.Neon else Enum.Material.SmoothPlastic; j.p.Transparency = 0.35 - 0.15 * n end
 end

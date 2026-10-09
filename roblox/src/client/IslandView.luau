@@ -16,6 +16,7 @@ local Map = require(Shared:WaitForChild("MapData"))
 local Models = require(Shared:WaitForChild("Models"))
 local Ocean = require(script.Parent:WaitForChild("Ocean"))
 local World = require(Shared:WaitForChild("World"))
+local LandTerrain = require(script.Parent:WaitForChild("LandTerrain"))
 
 local S = Models.S              -- 4 world studs per tile
 local L = S / 2                 -- LEGO stud pitch (2 per tile)
@@ -137,7 +138,7 @@ local function topY(i, j)
 	if t == 0 then return -math.huge end
 	if t == 2 then return -0.5 * PLATE end
 	if t == 3 then return -2 * PLATE end
-	return Map.height(i, j) * BRICK
+	return math.floor(Map.height(i, j) * BRICK / 4 + 0.5) * 4   -- terrain voxel steps
 end
 local edgeCache = {}
 local function edgeDist(i, j)
@@ -270,6 +271,43 @@ local function groundAtWorld(x, z)
 	return math.max(0, topY(i, j))
 end
 
+
+-- ---------------------------------------------------------------- stylized trees (Yasu's Stylized Tree Pack, free)
+-- tree / oak / bigoak / pine / bush props use the pack's meshes, scaled to our world, random yaw, leaf colour per area
+local TreeAssets = RS:WaitForChild("TreeAssets", 10)
+local TREE_SETS = {
+	tree = { set = { "Tree_01", "Tree_02", "Tree_03", "Tree_05", "Tree_09", "Tree_13", "Tree_18" }, h = { 11, 14 } },
+	oak = { set = { "Tree_01", "Tree_03", "Tree_05", "Tree_13", "Tree_18" }, h = { 13, 16 } },
+	bigoak = { set = { "Tree_06", "Tree_15", "Tree_19" }, h = { 18, 22 } },
+	pine = { set = { "Tree_08", "Tree_12", "Tree_14", "Tree_16" }, h = { 13, 17 } },
+	bush = { set = { "Bush_01", "Bush_02", "Bush_03" }, h = { 2.6, 3.6 }, bush = true },
+}
+local LEAF_TINT = { forest = "4f8f3c", echo = "9a8fe0", desert = "9fb45a", expedition = "5f9f45", mine = "6f9f4f" }
+local function treeModel(kind, x, base, z, seed, areaId)
+	local spec = TREE_SETS[kind]
+	if not spec or not TreeAssets then return nil end
+	local folder = if spec.bush then TreeAssets:FindFirstChild("Bushes") else TreeAssets:FindFirstChild("Trees")
+	local src = folder and folder:FindFirstChild(spec.set[math.floor(hash(seed, 3.7) * #spec.set) + 1])
+	if not src then return nil end
+	local m = src:Clone()
+	m.Name = kind
+	local _, size = m:GetBoundingBox()
+	local h = spec.h[1] + hash(seed, 9.1) * (spec.h[2] - spec.h[1])
+	m:ScaleTo(m:GetScale() * h / size.Y)
+	local tint = Color3.fromHex(LEAF_TINT[areaId] or "6fb04a")
+	for _, d in m:GetDescendants() do
+		if d:IsA("BasePart") then
+			d.Anchored = true; d.CanCollide = false; d.CanQuery = false; d.CanTouch = false
+			d.CastShadow = not spec.bush
+			if d.Name:find("Canopy") or d.Name:find("Leaf") or d.Name:find("Bush") then d.Color = vary(tint, (hash(seed, 2.2) - 0.5) * 0.08) end
+		end
+	end
+	-- stand the trunk on the ground: pivot at the bottom-centre of the bounding box
+	local cf, sz = m:GetBoundingBox()
+	m.WorldPivot = CFrame.new(cf.Position - Vector3.new(0, sz.Y / 2, 0))
+	m:PivotTo(CFrame.new(x, base - 0.3, z) * CFrame.Angles(0, hash(seed, 5.3) * math.pi * 2, 0))
+	return m
+end
 local function buildProp(def, kind, cx, cz, parent, seed)
 	local ox, oz = snapCorner(cx, cz, def.w, def.d)
 	-- sit on the highest top under the footprint
@@ -282,6 +320,8 @@ local function buildProp(def, kind, cx, cz, parent, seed)
 		b.CastShadow = p[4] >= 0.5 or p[5] >= 0.5
 	end
 	local info = { model = m, kind = kind, base = base, ox = ox, oz = oz, x = ox + def.w * L / 2, z = oz + def.d * L / 2 }
+	local tm = treeModel(kind, info.x, base, info.z, seed + 0.5, "park")
+	if tm then m:Destroy(); m = tm; info.model = tm; tm.Parent = parent; info.home = tm:GetPivot(); return info end
 	if def.glow then
 		local g = def.glow
 		local lamp = brickPart(m, Vector3.new(ox + g[1] * L, base + g[3] * PLATE, oz + g[2] * L), Vector3.new(g[4] * L, g[6] * PLATE, g[5] * L), hx("5a5048"), Enum.Material.Neon)
@@ -348,25 +388,22 @@ function IslandView.build()
 		end
 	end
 	table.sort(order, function(a, b) return a[3] < b[3] end)
-	local b = Builder.new()
+	-- ground = Roblox Terrain columns (LandTerrain), centre-out
+	LandTerrain.setup()
 	local n = 0
-	local function flush()
-		local mp = b:emit(groundF, "Band" .. (#meshes + 1))
-		if mp then mp.CastShadow = true; table.insert(meshes, { part = mp, home = mp.CFrame }) end
-		b = Builder.new()
-		task.wait()
-	end
 	for _, t in order do
-		buildColumn(b, t[1], t[2])
+		local i, j = t[1], t[2]
+		local c = tile(i, j)
+		local shore = not land(i + 1, j) or not land(i - 1, j) or not land(i, j + 1) or not land(i, j - 1)
+		LandTerrain.column(x0Of(i), z0Of(j), topY(i, j), LandTerrain.surface(nil, c, Map.height(i, j)), c, shore)
 		n += 1
-		if b:full() then flush() end
+		if n % 120 == 0 then task.wait() end
 	end
-	flush()
-	IslandView.stats = { bands = #meshes, tiles = n }
+	IslandView.stats = { bands = 0, tiles = n }
 	-- water (pond + stream): translucent plate over the sand bed
 	for j = 0, ROWS - 1 do
 		for i = 0, COLS - 1 do
-			if tile(i, j) == 3 then
+			if false and tile(i, j) == 3 then
 				local w = brickPart(groundF, Vector3.new(x0Of(i), -2 * PLATE, z0Of(j)), Vector3.new(S, PLATE, S), hx("6fb7d8"), Enum.Material.Glass)
 				w.Name = "Water"; w.Transparency = 0.28; w.Reflectance = 0.05; w.CastShadow = false
 				table.insert(waterParts, { part = w, home = w.CFrame })
@@ -546,7 +583,7 @@ local function islandTopY(isl, i, j)
 	local c = World.rawTile(i, j)
 	if c == 2 then return -0.5 * PLATE end
 	if c == 3 then return -2 * PLATE end
-	return isl.H(i, j) * BRICK
+	return math.floor(isl.H(i, j) * BRICK / 4 + 0.5) * 4   -- terrain voxel steps
 end
 
 local function buildIslandGround(isl, rec)
@@ -580,70 +617,19 @@ local function buildIslandGround(isl, rec)
 	local grassCol = { hx(d.grass[1]), hx(d.grass[2]) }
 	local altCol = { hx(d.alt[1]), hx(d.alt[2]) }
 	local pathCol = { hx(d.path[1]), hx(d.path[2]) }
-	local count = 0
+	-- ground = Roblox Terrain columns; each tile is a record the unlock wave fills in order (fill / clear)
 	for j = isl.oj, isl.oj + isl.N - 1 do
 		for i = isl.oi, isl.oi + isl.W - 1 do
 			local c = World.rawTile(i, j)
 			if not mine(i, j) then continue end
-			local m = Instance.new("Model"); m.Name = i .. "," .. j
 			local x0, z0 = sx(i), sz(j)
-			local n = hash(i, j)
 			local ty = islandTopY(isl, i, j)
-			local col
-			if c == 1 then col = grassCol[(i + j) % 2 + 1]
-			elseif c == 4 then col = altCol[(i + j) % 2 + 1]
-			elseif c == 2 then col = pathCol[if n > 0.5 then 1 else 2]
-			else col = hx(C.sand) end
-			if isl.blend and c ~= 3 then col = isl.blend(i, j, c) end
-			col = vary(col, (n - 0.5) * 0.03)
-			brickPart(m, Vector3.new(x0, ty - PLATE, z0), Vector3.new(S, PLATE, S), col)
-			if c == 1 then
-				local sc = vary(col, 0.035)
-				for _, o in { { 0.25, 0.25 }, { 0.75, 0.25 }, { 0.25, 0.75 }, { 0.75, 0.75 } } do
-					local st = Instance.new("Part")
-					st.Shape = Enum.PartType.Cylinder; st.Size = Vector3.new(STUD_H, 2 * STUD_R, 2 * STUD_R)
-					st.Anchored = true; st.CanCollide = false; st.CanQuery = false; st.CanTouch = false; st.CastShadow = false
-					st.Material = Enum.Material.SmoothPlastic; st.Color = sc
-					st.CFrame = CFrame.new(x0 + o[1] * S, ty + STUD_H / 2, z0 + o[2] * S) * CFrame.Angles(0, 0, math.pi / 2)
-					st.Parent = m
-				end
-			end
-			-- hill courses under a raised top
-			local lv = if c == 1 or c == 4 then isl.H(i, j) else 0
-			for k = 1, lv do
-				local y0 = if k == 1 then -PLATE else (k - 1) * BRICK
-				local y1 = if k == lv then ty - PLATE else k * BRICK
-				local cc = if c == 4 and isl.id ~= "garden" then altCol[(k + 1) % 2 + 1] else hx(if k % 2 == 1 then C.soil else C.soilD)
-				if isl.join and c == 4 then cc = vary(isl.blend(i, j, 4, k < lv - 1), if k % 2 == 1 then -0.04 else -0.09) end   -- mountain faces in the peak's own rock / snow
-				brickPart(m, Vector3.new(x0, y0, z0), Vector3.new(S, y1 - y0, S), vary(cc, (hash(i + k, j) - 0.5) * 0.05))
-			end
-			-- underside: only courses with an exposed side
-			local dp = depth(i, j)
-			local yy = if c == 2 or c == 3 then ty - PLATE else math.min(ty - PLATE, -PLATE)
-			for k = 1, dp do
-				local inset = if k > dp - 2 and dp > 2 then (k - (dp - 2)) * 0.25 * L else 0
-				local exposed = inset > 0
-				for _, o in { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } } do
-					if not land(i + o[1], j + o[2]) or depth(i + o[1], j + o[2]) < k or World.rawTile(i + o[1], j + o[2]) == 3 then exposed = true end
-				end
-				if exposed then
-					local cc
-					if k == 1 then cc = hx(C.topsoil)
-					elseif n > 0.82 and k > 2 then cc = hx(if k % 2 == 1 then C.rock else C.rockD)
-					else cc = hx(if k % 2 == 1 then C.soil else C.soilD) end
-					brickPart(m, Vector3.new(x0 + inset, yy - BRICK, z0 + inset), Vector3.new(S - 2 * inset, BRICK, S - 2 * inset), vary(cc, (hash(i * 3 + k, j) - 0.5) * 0.05))
-				end
-				yy -= BRICK
-			end
-			if c == 3 then
-				local w = brickPart(m, Vector3.new(x0, -2 * PLATE, z0), Vector3.new(S, PLATE, S), hx("6fb7d8"), Enum.Material.Glass)
-				w.Name = "Water"; w.Transparency = 0.28; w.Reflectance = 0.05; w.CastShadow = false
-			end
-			m.WorldPivot = CFrame.new(x0 + S / 2, 0, z0 + S / 2)
-			m.Parent = rec.ground
-			table.insert(rec.tiles, { model = m, i = i, j = j })
-			count += 1
-			if count % 60 == 0 then task.wait() end
+			local h = if c == 1 or c == 4 then isl.H(i, j) else 0
+			local shore = not land(i + 1, j) or not land(i - 1, j) or not land(i, j + 1) or not land(i, j - 1)
+			local mat = LandTerrain.surface(isl, c, h)
+			table.insert(rec.tiles, { i = i, j = j,
+				fill = function() LandTerrain.column(x0, z0, ty, mat, c, shore) end,
+				clear = function() LandTerrain.clear(x0, z0) end })
 		end
 	end
 	-- waterfalls at the river mouths
@@ -676,6 +662,8 @@ local function buildIslandProp(isl, p, parent)
 	local m = Instance.new("Model"); m.Name = p.kind
 	local bobM
 	local info = { model = m, kind = p.kind, base = base, x = sx(p.x), z = sz(p.z), i = i, j = j }
+	local tm = treeModel(p.kind, info.x, base, info.z, p.x * 13.1 + p.z * 7.7, (isl.area or isl.id):gsub("^region:", ""))
+	if tm then tm.Parent = parent; info.model = tm; info.home = tm:GetPivot(); return info end
 	for k, q in p.parts do
 		local b = Instance.new("Part")
 		b.Anchored = true; b.CanCollide = false; b.CanQuery = false; b.CanTouch = false
@@ -743,6 +731,7 @@ local function setVis(inst: Instance, v: number)
 	for _, d in inst:GetDescendants() do if d:IsA("BasePart") then d.LocalTransparencyModifier = v end end
 end
 
+local deferFill = false   -- unlockIsland: the wave fills the terrain, not buildIsland
 local function buildIsland(isl)
 	local rec = { tiles = {}, props = {}, extras = {} }
 	rec.folder = Instance.new("Folder"); rec.folder.Name = isl.id
@@ -758,6 +747,9 @@ local function buildIsland(isl)
 		if k % 40 == 0 then task.wait() end
 	end
 	rec.folder.Parent = islandsFolder(); rec.scenery.Parent = IslandView.scenery   -- appear in one frame
+	if not deferFill then
+		for k, t in rec.tiles do t.fill(); if k % 150 == 0 then task.wait() end end
+	end
 	built[isl.id] = rec
 	return rec
 end
@@ -766,6 +758,7 @@ local function destroyIsland(id)
 	for k = #bobs, 1, -1 do if bobs[k].model:IsDescendantOf(rec.scenery) then table.remove(bobs, k) end end
 	for k = #islandLamps, 1, -1 do if islandLamps[k].glow:IsDescendantOf(rec.scenery) then table.remove(islandLamps, k) end end
 	for k = #islandGlows, 1, -1 do if islandGlows[k]:IsDescendantOf(rec.scenery) then table.remove(islandGlows, k) end end
+	for k, t in rec.tiles do if t.clear then t.clear() end; if k % 150 == 0 then task.wait() end end
 	rec.folder:Destroy(); rec.scenery:Destroy()
 	built[id] = nil
 end
@@ -779,9 +772,9 @@ local function animate(items, camPath, onDone)
 	local reduced = false
 	pcall(function() reduced = UserSettings():GetService("UserGameSettings").ReducedMotion end)
 	local total = 0
-	for _, x in items do total = math.max(total, x.delay + x.dur); setVis(x.inst, 1); x.inst:PivotTo(x.home + Vector3.new(0, x.drop, 0)) end
+	for _, x in items do total = math.max(total, x.delay + x.dur); if x.inst then setVis(x.inst, 1); x.inst:PivotTo(x.home + Vector3.new(0, x.drop, 0)) end end
 	if reduced then
-		for _, x in items do x.inst:PivotTo(x.home); setVis(x.inst, 0) end
+		for _, x in items do if x.fill then x.fill() else x.inst:PivotTo(x.home); setVis(x.inst, 0) end end
 		if onDone then onDone() end
 		return
 	end
@@ -794,6 +787,11 @@ local function animate(items, camPath, onDone)
 			if x.done then continue end
 			local k = math.clamp((t - x.delay) / x.dur, 0, 1)
 			if k <= 0 then continue end
+			if x.fill then   -- terrain column: appears as the wave passes, with spray where it breaks the sea
+				x.fill(); x.done = true
+				if x.splash then Ocean.splash(x.at, x.splash) end
+				continue
+			end
 			if not x.shown then x.shown = true; setVis(x.inst, 0) end
 			local e = easeBack(k)
 			x.inst:PivotTo(x.home + Vector3.new(0, (1 - e) * x.drop, 0))
@@ -825,7 +823,7 @@ local function joinItems(jrec, j, startT, fromA)
 	for _, t in jrec.tiles do
 		local c = j.cells[(t.j + 500) * 2000 + t.i + 500]
 		local d = startT + (if c then f(c) else 0.5) * span + hash(t.i, t.j) * 0.12
-		table.insert(items, { inst = t.model, home = t.model.WorldPivot, drop = -(9 + hash(t.i, t.j) * 5), dur = 0.5, delay = d,
+		table.insert(items, { inst = t.model, home = t.model and t.model.WorldPivot, fill = t.fill, drop = -(9 + hash(t.i, t.j) * 5), dur = 0.5, delay = d,
 			splash = if (t.i + t.j) % 3 == 0 then 5 else nil, at = Vector3.new(sx(t.i + 0.5), Ocean.SEA_Y, sz(t.j + 0.5)) })
 	end
 	for _, p in jrec.props do
@@ -836,6 +834,7 @@ local function joinItems(jrec, j, startT, fromA)
 end
 
 function IslandView.unlockIsland(isl, animated, onDone)
+	deferFill = true
 	local rec = built[isl.id] or buildIsland(isl)
 	-- land joins to every open neighbour; the source join (the one it unlocks from) terraforms first, from the old
 	-- coast towards the new island, then the island itself rises, then the other joins fill in
@@ -856,6 +855,7 @@ function IslandView.unlockIsland(isl, animated, onDone)
 	for _, h in World.joins do
 		if h.highland and World.isOpen(h) and not built[h.id] then buildIsland(h); table.insert(highs, h) end
 	end
+	deferFill = false
 	Ocean.rebuild()
 	if src and src.join and built[src.join.id] then
 		local its; its, after = joinItems(built[src.join.id], src.join, 0, src.a ~= isl)
@@ -901,7 +901,7 @@ function IslandView.unlockIsland(isl, animated, onDone)
 	end
 	for _, fr in freshRecs do
 		for _, t in fr.rec.tiles do
-			table.insert(items, { inst = t.model, home = t.model.WorldPivot, drop = -16, dur = 0.5, delay = delayAt(t.i, t.j),
+			table.insert(items, { inst = t.model, home = t.model and t.model.WorldPivot, fill = t.fill, drop = -16, dur = 0.5, delay = delayAt(t.i, t.j),
 				splash = if (t.i + t.j) % 3 == 0 then 4 else nil, at = Vector3.new(sx(t.i + 0.5), Ocean.SEA_Y, sz(t.j + 0.5)) })
 		end
 		for _, p in fr.rec.props do
@@ -921,7 +921,7 @@ function IslandView.unlockIsland(isl, animated, onDone)
 		for _, x in its do table.insert(items, x) end
 	end
 	if not animated then
-		for _, x in items do x.inst:PivotTo(x.home); setVis(x.inst, 0) end
+		for _, x in items do if x.fill then x.fill() else x.inst:PivotTo(x.home); setVis(x.inst, 0) end end
 		if onDone then onDone() end
 		return
 	end
@@ -1038,6 +1038,7 @@ if sky then sky.CelestialBodiesShown = true; sky.StarCount = 3000 end
 IslandView.timeOverride = nil   -- dev/QA: set a game hour to freeze the sky
 function IslandView.hour()
 	if IslandView.timeOverride then return IslandView.timeOverride end
+	if RunService:IsStudio() and workspace:GetAttribute("QAHour") then return workspace:GetAttribute("QAHour") end   -- Studio QA: pin the hour
 	return (workspace:GetServerTimeNow() / 60 + 8) % 24   -- +8: the server epoch starts at 08:00
 end
 local function nightOf(h)
