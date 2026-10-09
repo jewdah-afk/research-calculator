@@ -9,6 +9,9 @@
       "TreeAssets": {
         "$path": "assets/TreeAssets.rbxm"
       },
+      "PeckwoodVfxMeshes": {
+        "$path": "assets/VfxMeshes.rbxm"
+      },
       "PropAssets": {
         "$path": "assets/PropAssets.rbxm"
       },
