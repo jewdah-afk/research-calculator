@@ -109,6 +109,15 @@ arcs reads as crescents, wall rings sit on the ground; crack decals land on the 
 flash ZOffset keeps it out of the ground; VelocityParallel streak orientation (texture head at row 0 should lead);
 particle sizes past ~100 studs (unlock wave / circle fallbacks); Brightness / bloom by day and night; push amounts at
 zoom 4 / 9 / 16.
+### INTEGRATED: Figma UI + VFX merged into claude/peckwood-isle (2026-10-09, latest, cbb19b8)
+- `claude/peckwood-ui` (in-game Figma UI, owner placement, COMPANIONS pull-down board, Motion.key press-in on every key, layered Sfx + dev Sound Board) and `claude/peckwood-vfx` (egg_hatch / collect_pop / level_up / island_unlock, 0 EditableMeshes) are merged here. Details: sections "In-game UI from Figma" and "VFX (claude/peckwood-vfx)" below. Side branches keep going and merge isle first.
+- Studio QA at merge: 0 script errors; MAXED layout = owner sketch; 643 wired keys visible at peak; only unwired GuiButtons are Roblox chat, window click-blockers and the board's pull ring (fix sent).
+- Icons: all 992 icons uploaded (426 fish + every tree node / gear / item); `shared/Icons.luau`.
+- VFX meshes: store meshes can't be fetched by id at runtime ("could not fetch"), so the 8 shapes are saved in the place as `ReplicatedStorage.PeckwoodVfxMeshes` (`assets/VfxMeshes.rbxm`, scanned: no scripts).
+- EditableMesh budget (measured): ~7 live meshes per client, 20,000 triangles / 60,000 vertices each. Cliff = shared-vertex grid split into 19.5k-tri chunks (every island open = 3 meshes), waves = 1 mesh, VFX = 0.
+- Sounds: 31 events with 3 licensed candidates each (Pro Sound Effects / Roblox UI pack / APM); first candidate is the default; owner picks by ear on the dev Sound Board (SOUNDS on the dev bar). Egg pickup = eggshell tap + buttery pop layers with warm EQ.
+- Open fixes in flight: board pull-ring press, board covers AUTO + rail top, sticky hover tooltip, VFX push framing / duplicate camera bind / reveal hold, island_unlock check.
+
 ### Park life pass + camera (2026-10-09, latest)
 - **Camera** starts close on the bird: `ZOOM_PLAY = 9` in Main.client (wheel still goes out to the whole island, 16). Owner: "I can't even see the vfx"; Birb's view is close too.
 - **Toon flowers** replace the generated wildflower tufts (owner: they "look ass"). Each `Map.flowers` spot = a rounded leaf clump + 2-3 five-petal flowers of one pastel (white / pink / yellow / coral / lilac), scale `F = 3`. Skipped on paths, water, hills, the egg yard, prop footprints and the screen strip just north of tall props (they hid behind lamps).
