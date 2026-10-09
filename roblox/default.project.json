@@ -309,6 +309,162 @@
           },
           "StudsPerTile": 24
         }
+      },
+      "FlatGrass": {
+        "$className": "MaterialVariant",
+        "$properties": {
+          "BaseMaterial": "Grass",
+          "ColorMapContent": {
+            "Content": {
+              "Uri": "rbxassetid://83334179566218"
+            }
+          },
+          "StudsPerTile": 32
+        }
+      },
+      "FlatLeafyGrass": {
+        "$className": "MaterialVariant",
+        "$properties": {
+          "BaseMaterial": "LeafyGrass",
+          "ColorMapContent": {
+            "Content": {
+              "Uri": "rbxassetid://83334179566218"
+            }
+          },
+          "StudsPerTile": 32
+        }
+      },
+      "FlatPavement": {
+        "$className": "MaterialVariant",
+        "$properties": {
+          "BaseMaterial": "Pavement",
+          "ColorMapContent": {
+            "Content": {
+              "Uri": "rbxassetid://83334179566218"
+            }
+          },
+          "StudsPerTile": 32
+        }
+      },
+      "FlatSalt": {
+        "$className": "MaterialVariant",
+        "$properties": {
+          "BaseMaterial": "Salt",
+          "ColorMapContent": {
+            "Content": {
+              "Uri": "rbxassetid://83334179566218"
+            }
+          },
+          "StudsPerTile": 32
+        }
+      },
+      "FlatGround": {
+        "$className": "MaterialVariant",
+        "$properties": {
+          "BaseMaterial": "Ground",
+          "ColorMapContent": {
+            "Content": {
+              "Uri": "rbxassetid://83334179566218"
+            }
+          },
+          "StudsPerTile": 32
+        }
+      },
+      "FlatMud": {
+        "$className": "MaterialVariant",
+        "$properties": {
+          "BaseMaterial": "Mud",
+          "ColorMapContent": {
+            "Content": {
+              "Uri": "rbxassetid://83334179566218"
+            }
+          },
+          "StudsPerTile": 32
+        }
+      },
+      "FlatRock": {
+        "$className": "MaterialVariant",
+        "$properties": {
+          "BaseMaterial": "Rock",
+          "ColorMapContent": {
+            "Content": {
+              "Uri": "rbxassetid://83334179566218"
+            }
+          },
+          "StudsPerTile": 32
+        }
+      },
+      "FlatSlate": {
+        "$className": "MaterialVariant",
+        "$properties": {
+          "BaseMaterial": "Slate",
+          "ColorMapContent": {
+            "Content": {
+              "Uri": "rbxassetid://83334179566218"
+            }
+          },
+          "StudsPerTile": 32
+        }
+      },
+      "FlatBasalt": {
+        "$className": "MaterialVariant",
+        "$properties": {
+          "BaseMaterial": "Basalt",
+          "ColorMapContent": {
+            "Content": {
+              "Uri": "rbxassetid://83334179566218"
+            }
+          },
+          "StudsPerTile": 32
+        }
+      },
+      "FlatCobblestone": {
+        "$className": "MaterialVariant",
+        "$properties": {
+          "BaseMaterial": "Cobblestone",
+          "ColorMapContent": {
+            "Content": {
+              "Uri": "rbxassetid://83334179566218"
+            }
+          },
+          "StudsPerTile": 32
+        }
+      },
+      "FlatSand": {
+        "$className": "MaterialVariant",
+        "$properties": {
+          "BaseMaterial": "Sand",
+          "ColorMapContent": {
+            "Content": {
+              "Uri": "rbxassetid://83334179566218"
+            }
+          },
+          "StudsPerTile": 32
+        }
+      },
+      "FlatSandstone": {
+        "$className": "MaterialVariant",
+        "$properties": {
+          "BaseMaterial": "Sandstone",
+          "ColorMapContent": {
+            "Content": {
+              "Uri": "rbxassetid://83334179566218"
+            }
+          },
+          "StudsPerTile": 32
+        }
+      },
+      "FlatSnow": {
+        "$className": "MaterialVariant",
+        "$properties": {
+          "BaseMaterial": "Snow",
+          "ColorMapContent": {
+            "Content": {
+              "Uri": "rbxassetid://83334179566218"
+            }
+          },
+          "StudsPerTile": 32
+        }
       }
     }
   }

@@ -9,7 +9,7 @@ local LandTerrain = {}
 
 local M = Enum.Material
 local BED = -40          -- sea bed: columns reach down to it so cliffs continue under the clear water
-local WATER_TOP = -20    -- Ocean's terrain sea level (Ocean.CLIFF studs under the grass: islands are raised plates)
+local WATER_TOP = -12    -- Ocean's terrain sea level (Ocean.CLIFF studs under the grass: islands are raised plates)
 
 -- cel look: every terrain material is overridden by a flat MaterialVariant (a plain white map, so the colour is
 -- exactly SetMaterialColor), hard shadows come from Lighting. No grass blades (Workspace.Terrain.Decoration off).
@@ -19,11 +19,18 @@ local WATER_TOP = -20    -- Ocean's terrain sea level (Ocean.CLIFF studs under t
 -- Painted storybook look (owner 2026-10-09, art direction locked): every terrain material uses a hand-painted
 -- MaterialVariant authored in default.project.json MaterialService (Painted<Material>, tiles in assets/terrain/).
 -- Material colours stay near white so the painted texture shows its own colours.
+-- Toon flat colour blocking (owner 2026-10-09, 2.5D handheld-RPG / Wind Waker / Tokyo 42 look): every terrain
+-- material uses Flat<Material> (plain white map, project MaterialService) so the colour is exactly this palette;
+-- light / dark grass patches, dry meadow, path, sand and cliff rock read as clean colour blocks.
+local FLAT = { [M.Grass] = "7cc24a", [M.LeafyGrass] = "5aa83c", [M.Pavement] = "9ccf55", [M.Ground] = "e2b878",
+	[M.Sand] = "f0dca0", [M.Rock] = "a8743f", [M.Mud] = "8a5a32", [M.Slate] = "7a4f2c", [M.Salt] = "c9c6f0",
+	[M.Basalt] = "5a5560", [M.Cobblestone] = "b9b2a6", [M.Sandstone] = "e6c27a", [M.Snow] = "f4f8ff" }
 function LandTerrain.setup()
 	local MS = game:GetService("MaterialService")
-	for _, mat in { M.Grass, M.LeafyGrass, M.Pavement, M.Salt, M.Ground, M.Mud, M.Rock, M.Slate, M.Basalt, M.Cobblestone, M.Sand, M.Sandstone, M.Snow } do
-		Terrain:SetMaterialColor(mat, Color3.fromHex(if mat == M.LeafyGrass then "ffffff" elseif mat == M.Mud then "c8b8a4" elseif mat == M.Pavement then "e6e8c8" elseif mat == M.Salt then "d2d2ee" else "f2f2f2"))
-		if MS:FindFirstChild("Painted" .. mat.Name) then pcall(function() MS:SetBaseMaterialOverride(mat, "Painted" .. mat.Name) end) end
+	for mat, col in FLAT do
+		Terrain:SetMaterialColor(mat, Color3.fromHex(col))
+		local v = if MS:FindFirstChild("Flat" .. mat.Name) then "Flat" .. mat.Name elseif MS:FindFirstChild("Painted" .. mat.Name) then "Painted" .. mat.Name else nil
+		if v then pcall(function() MS:SetBaseMaterialOverride(mat, v) end) end
 	end
 end
 
@@ -103,10 +110,7 @@ function LandTerrain.visualTop(i, j, top, code)
 		-- the first ring dips below the waterline, so the shore follows this rounded slope instead of the square tiles
 		if best < 3.2 then y = math.min(y, top - (1 - math.clamp((best - 0.8) / 2.4, 0, 1)) ^ 1.3 * 5) end
 	end
-	-- shores dip toward the water
-	local sea = 0
-	for _, o in { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } } do if not landAt(i + o[1], j + o[2]) then sea += 1 end end
-	if sea > 0 and base == 0 and code ~= 3 then y = math.min(y, top - 0.6 * sea) end
+	-- (no shore dip any more: the coast is a cliff skirt with a grass lip flush with the turf, Ocean.buildSkirt)
 	return y, d ~= nil, h > 0
 end
 

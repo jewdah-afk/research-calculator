@@ -20,7 +20,7 @@ local PLATE = 0.4 * L
 local BRICK = 3 * PLATE
 -- AAA plan (target B, 2026-10-09): each island is a raised diorama plate: the sea sits CLIFF studs below the grass, so
 -- a rock cliff skirt shows between the grass lip and a rounded sand beach at the waterline
-Ocean.CLIFF = 16
+Ocean.CLIFF = 9   -- owner 2026-10-09: 16 was too high
 Ocean.SEA_Y = -PLATE - BRICK * 1.25 - Ocean.CLIFF
 local SEA_Y = Ocean.SEA_Y
 local COLS, ROWS = Map.COLS, Map.ROWS
@@ -218,7 +218,8 @@ local function paint(distOf)
 	local PW, PH = w * PX, h * PX
 	local tb, fb = buffer.create(PW * PH * 4), buffer.create(PW * PH * 4)
 	local wb = { buffer.create(PW * PH * 4), buffer.create(PW * PH * 4), buffer.create(PW * PH * 4) }
-	local WAVE_D = { 3.6, 2.6, 1.7 }   -- wave line distance from shore (tiles), outermost first
+	-- d = distance (tiles) to the smooth coast contour; the cliff mesh's beach meets the water at ~2.2 tiles
+	local WAVE_D = { 4.9, 3.9, 3.0 }   -- wave line distance from the coast (tiles), outermost first
 	for py = 0, PH - 1 do
 		local fy = (py + 0.5) / PX - 0.5
 		local j = math.clamp(math.floor(fy), 0, h - 1); local ty = math.clamp(fy - j, 0, 1)
@@ -227,19 +228,19 @@ local function paint(distOf)
 			local i = math.clamp(math.floor(fx), 0, w - 1); local tx = math.clamp(fx - i, 0, 1)
 			local r0 = j * (w + 1) + i + 1
 			local d = lerp1(lerp1(g[r0], g[r0 + 1], tx), lerp1(g[r0 + w + 1], g[r0 + w + 2], tx), ty)
-			local shallow = 1 - smooth(0.6, 6.5, d)
+			local shallow = 1 - smooth(2.0, 7.5, d)
 			local c = DEEP:Lerp(MID, smooth(9, 4, d)):Lerp(SHAL, shallow * shallow)
 			local n = hash(px * 0.37, py * 0.53)
 			c += Vector3.one * ((n - 0.5) * 0.025 * (1 - smooth(6, 7.5, d)))
 			if d >= 7.5 then c = FARV end   -- open water: exactly the far-sea colour, so the painted edge never shows
-			local a = if d < 0.5 then 0 elseif d > 7.5 then 0.8 else lerp1(0.8, 0.42, shallow)
+			local a = if d < 2.0 then 0 elseif d > 7.5 then 0.8 else lerp1(0.8, 0.42, shallow)
 			local o = (py * PW + (PW - 1 - px)) * 4   -- Top-face decals run U along -X
 			buffer.writeu8(tb, o, math.clamp(c.X * 255, 0, 255)); buffer.writeu8(tb, o + 1, math.clamp(c.Y * 255, 0, 255))
 			buffer.writeu8(tb, o + 2, math.clamp(c.Z * 255, 0, 255)); buffer.writeu8(tb, o + 3, a * 255)
 			-- foam: soft band hugging the coast with ripples running in, plus rare flecks further out
-			local band = smooth(1.8, 0.9, d) * smooth(0.35, 0.75, d)
+			local band = smooth(3.0, 2.2, d) * smooth(1.95, 2.25, d)
 			local f = band * (0.6 + 0.4 * math.sin(d * 7 + n * 1.5))
-			if d > 1.2 and d < 4 and n > 0.985 then f = math.max(f, 0.5) end
+			if d > 3.0 and d < 5.5 and n > 0.985 then f = math.max(f, 0.5) end
 			buffer.writeu8(fb, o, 255); buffer.writeu8(fb, o + 1, 255); buffer.writeu8(fb, o + 2, 255); buffer.writeu8(fb, o + 3, math.clamp(f, 0, 1) * 235)
 			for k = 1, 3 do   -- thin wavy wave crest following the coast at WAVE_D[k], broken where noise is low
 				local wd = WAVE_D[k] + math.sin(px * 0.05 + py * 0.035 + k) * 0.18
@@ -297,6 +298,283 @@ end
 local CORAL = { "ff7a8a", "ffb14a", "b98cff", "ff5fb0", "5fe0c8", "ffe066" }
 local BED = -40              -- matches LandTerrain's sea bed
 local ringTiles, ringSig = {}, nil   -- beach / shelf tiles last written into Terrain
+
+-- ---------------------------------------------------------------- cliff skirt (target B / handheld-RPG cliffs)
+-- Terrain walls read as jagged voxel rock (owner: "disgusting"), so the coast gets a crisp handheld-RPG cliff built
+-- from parts along a SMOOTH contour: marching squares over the land tiles -> closed loops -> Chaikin rounding, pushed
+-- out a little so it always encloses the tile corners. Along the curve: chunky vertical rock slabs (varied width /
+-- depth / height / shade), a darker wet-rock foot at the waterline and a thick grass lip on top; one ink outline.
+local SKIRT_TOP = -0.3       -- grass lip top, flush with the visible turf (logic ground 0 renders at -0.5)
+local SKIRT_IN = 3.2         -- how far the lip reaches back over the land (covers the stepped terrain edge)
+local SKIRT_OUT = 1.6        -- contour offset out to sea, so the smoothed curve never cuts a land tile corner
+local STEP = 1.6             -- studs between resampled contour points (mesh resolution along the coast)
+local skirtF, skirtSig = nil, nil
+local function skirtLand(i, j) local c = World.tile(i, j); return c ~= 0 and c ~= 5 end
+-- closed coast loops in world studs (x, z as Vector2), smoothed
+local function coastLoops(mnI, mnJ, mxI, mxJ)
+	local function v(i, j) return if skirtLand(i, j) then 1 else 0 end
+	-- tile-centre index space: point (ci, cj) -> world (sx(0) + (ci + 0.5) * S, sz(0) + (cj + 0.5) * S)
+	local function W(p: Vector2) return Vector2.new(sx(0) + (p.X + 0.5) * S, sz(0) + (p.Y + 0.5) * S) end
+	local segs = {}
+	for j = mnJ - 1, mxJ do
+		for i = mnI - 1, mxI do
+			local a, b, c, d = v(i, j), v(i + 1, j), v(i + 1, j + 1), v(i, j + 1)
+			local idx = a * 8 + b * 4 + c * 2 + d
+			if idx == 0 or idx == 15 then continue end
+			local T, R, B, Lf = Vector2.new(i + 0.5, j), Vector2.new(i + 1, j + 0.5), Vector2.new(i + 0.5, j + 1), Vector2.new(i, j + 0.5)
+			local cross = {}
+			if a ~= b then table.insert(cross, T) end
+			if b ~= c then table.insert(cross, R) end
+			if c ~= d then table.insert(cross, B) end
+			if d ~= a then table.insert(cross, Lf) end
+			if #cross == 2 then table.insert(segs, { W(cross[1]), W(cross[2]) })
+			elseif #cross == 4 then   -- saddle: keep the land diagonal connected
+				if a == 1 then table.insert(segs, { W(T), W(R) }); table.insert(segs, { W(B), W(Lf) })
+				else table.insert(segs, { W(T), W(Lf) }); table.insert(segs, { W(R), W(B) }) end
+			end
+		end
+	end
+	-- chain segments into loops
+	local function key(p: Vector2) return math.floor(p.X * 10 + 0.5) .. "," .. math.floor(p.Y * 10 + 0.5) end
+	local at = {}
+	for n, sgm in segs do
+		for e = 1, 2 do local k = key(sgm[e]); at[k] = at[k] or {}; table.insert(at[k], n) end
+	end
+	local used, loops = {}, {}
+	for n0 in segs do
+		if used[n0] then continue end
+		used[n0] = true
+		local loop = { segs[n0][1], segs[n0][2] }
+		local cur = segs[n0][2]
+		while true do
+			local nxt = nil
+			for _, m in at[key(cur)] or {} do if not used[m] then nxt = m; break end end
+			if not nxt then break end
+			used[nxt] = true
+			local sg = segs[nxt]
+			cur = if key(sg[1]) == key(cur) then sg[2] else sg[1]
+			if key(cur) == key(loop[1]) then break end
+			table.insert(loop, cur)
+		end
+		if #loop >= 4 then table.insert(loops, loop) end
+	end
+	-- Chaikin rounding (closed loops), 3 passes
+	for li, loop in loops do
+		for _ = 1, 3 do
+			local out = table.create(#loop * 2)
+			for q = 1, #loop do
+				local p0, p1 = loop[q], loop[q % #loop + 1]
+				table.insert(out, p0:Lerp(p1, 0.25)); table.insert(out, p0:Lerp(p1, 0.75))
+			end
+			loop = out
+		end
+		-- resample at an even STEP so part count follows the coast length, not the rounding detail
+		local per = 0
+		for q = 1, #loop do per += (loop[q % #loop + 1] - loop[q]).Magnitude end
+		local nOut = math.max(6, math.floor(per / STEP + 0.5))
+		local stepLen = per / nOut
+		local res, q, acc, want = {}, 1, 0, 0
+		local cur = loop[1]
+		while #res < nOut do
+			local nxt = loop[q % #loop + 1]
+			local segL = (nxt - loop[q]).Magnitude
+			if acc + segL >= want then
+				res[#res + 1] = loop[q]:Lerp(nxt, if segL > 0 then (want - acc) / segL else 0)
+				want += stepLen
+			else
+				acc += segL; q += 1
+				if q > #loop then break end
+			end
+		end
+		loops[li] = res
+		_ = cur
+	end
+	return loops
+end
+-- cross-section of the cliff, swept along each smooth coast loop: { out (studs past the contour), y (studs below the
+-- lip top), colour band, smooth? }. Lip: rounded grass overhang; then a tuck, a bulging rock face with a ledge, a
+-- wet foot under the beach. "j" = how much the per-point noise pushes that vertex out (chunky rock masses).
+local PROFILE = {
+	-- { out (studs past the contour), y, colour band, bulge, abs?, v (texture row 0..1) }
+	-- rock part: y in "rock units" 0..-9.6 (scaled to fit between the lip top and the beach)
+	{ -4.6, 0.00, "grass", 0, false, 0.00 }, { 0.2, 0.05, "grass", 0, false, 0.07 }, { 1.05, -0.25, "grass", 0, false, 0.11 },
+	{ 1.45, -0.80, "grass", 0, false, 0.15 }, { 1.20, -1.30, "grassD", 0, false, 0.195 }, { 0.55, -1.55, "rockT", 0.2, false, 0.225 },
+	{ 0.95, -2.6, "rockA", 0.9, false, 0.32 }, { 1.25, -4.1, "rockA", 1.0, false, 0.45 }, { 1.05, -4.8, "ledge", 0.6, false, 0.50 },
+	{ 1.65, -5.25, "ledge", 0.6, false, 0.545 }, { 1.30, -5.9, "rockB", 0.9, false, 0.59 }, { 1.55, -7.6, "rockB", 1.0, false, 0.71 },
+	{ 1.95, -9.6, "foot", 0.6, false, 0.82 },
+	-- beach: y relative to the water surface: an even sand apron sloping into the water
+	{ 2.4, 1.05, "sand", 0.25, true, 0.86 }, { 4.6, 0.75, "sand", 0.3, true, 0.90 }, { 6.6, 0.2, "sandW", 0.3, true, 0.94 },
+	{ 8.0, -0.55, "sandW", 0.3, true, 0.97 }, { 9.6, -2.2, "shelf", 0.3, true, 1.00 },
+}
+local U_PERIOD = 24          -- studs of coast per texture repeat
+-- the cliff texture: painted procedurally (toon look, no upload): grass lip with hanging blade tips, layered rock
+-- strata with cracks, bright top edges and dark bottom edges, a wet foot, speckled sand -> wet sand
+local cliffTex = nil
+local function cliffTexture()
+	if cliffTex then return cliffTex end
+	local TW, TH = 256, 512
+	local img = newImage(TW, TH)
+	if not img then return nil end
+	local buf = buffer.create(TW * TH * 4)
+	local function C(h) local c = hx(h); return Vector3.new(c.R, c.G, c.B) end
+	local GRASS, GRASS_L, GRASS_D, GRASS_DD = C("7cc24a"), C("93d35c"), C("4f9a34"), C("3a7a28")
+	local ROCKS = { C("c98d4d"), C("b47a42"), C("a46c3a"), C("bb8247"), C("9a6234"), C("b07743") }
+	local INKR, LIGHT = C("5c391d"), C("e2ae6c")
+	local FOOTC, SAND, SAND_D, WET = C("5a3b22"), C("f2dea4"), C("e2c98a"), C("cdb37a")
+	-- strata band edges (v) inside the rock zone
+	local EDGES = { 0.225, 0.30, 0.40, 0.495, 0.55, 0.63, 0.72, 0.80 }
+	for y = 0, TH - 1 do
+		local v = (y + 0.5) / TH
+		for x = 0, TW - 1 do
+			local u = (x + 0.5) / TW
+			local col
+			if v < 0.17 then
+				-- the lip top matches the flat turf exactly (no stripes), only the rolled front edge darkens
+				col = GRASS
+				if v > 0.115 then col = col:Lerp(GRASS_D, math.clamp((v - 0.115) / 0.05, 0, 1) * 0.55) end
+				if v > 0.06 and v < 0.11 and hash(x * 0.9, math.floor(y / 3)) > 0.985 then col = GRASS_L end
+			elseif v < 0.215 then
+				-- underside of the lip with hanging blade tips
+				local tip = (u * 30) % 1
+				local h = 0.17 + 0.045 * (1 - math.abs(tip - 0.5) * 2) * (0.6 + hash(math.floor(u * 30), 2) * 0.4)
+				col = if v < h then GRASS_DD else ROCKS[1]:Lerp(INKR, 0.55)
+			elseif v < 0.80 then
+				local band = 1
+				for k = 1, #EDGES - 1 do if v >= EDGES[k] then band = k end end
+				local v0, v1 = EDGES[band], EDGES[band + 1]
+				local wob = math.sin(u * 37 + band * 1.7) * 0.004 + math.sin(u * 91 + band) * 0.002
+				col = ROCKS[(band - 1) % #ROCKS + 1]
+				if band == 4 then col = col:Lerp(INKR, 0.35) end   -- the ledge band
+				local t = (v - v0) / (v1 - v0)
+				if v - v0 < 0.006 + wob then col = LIGHT                         -- lit top edge of the layer
+				elseif v1 - v < 0.008 - wob then col = INKR                       -- dark seam under the layer
+				elseif t > 0.62 then col = col:Lerp(INKR, 0.18) end               -- 2-band toon shade on the lower part
+				-- vertical cracks: a few per band, jittered, with a light rim on one side
+				local nC = 2 + (band % 3)
+				for c = 1, nC do
+					local cx = (hash(band, c * 3.1) * 0.8 + c + hash(c, band * 1.3) * 0.6) / nC % 1
+					local dx = math.abs(((u - cx + 0.5) % 1) - 0.5) * TW
+					local jag = math.sin(v * 220 + c) * 0.8
+					if dx < 1.1 + jag * 0.3 and t > 0.08 and t < 0.92 then col = INKR
+					elseif dx < 2.3 and dx >= 1.1 and ((u - cx) % 1) < 0.5 and t > 0.08 and t < 0.92 then col = col:Lerp(LIGHT, 0.35) end
+				end
+				-- pebbles / pits
+				if hash(x * 0.71, y * 1.33) > 0.996 then col = col:Lerp(INKR, 0.5) end
+			elseif v < 0.84 then
+				col = FOOTC
+				if v < 0.805 then col = INKR end
+				if math.sin(u * 60) > 0.97 then col = FOOTC:Lerp(LIGHT, 0.25) end
+			else
+				local t = (v - 0.84) / 0.16
+				col = SAND:Lerp(SAND_D, math.clamp((t - 0.45) / 0.3, 0, 1)):Lerp(WET, math.clamp((t - 0.72) / 0.28, 0, 1))
+				if hash(x * 1.9, y * 0.77) > 0.985 then col = col:Lerp(Vector3.new(1, 1, 1), 0.35) end
+				if hash(x * 0.37, y * 2.1) > 0.992 then col = col:Lerp(C("a88a5a"), 0.5) end
+			end
+			local o = (y * TW + x) * 4
+			buffer.writeu8(buf, o, math.clamp(col.X * 255, 0, 255)); buffer.writeu8(buf, o + 1, math.clamp(col.Y * 255, 0, 255))
+			buffer.writeu8(buf, o + 2, math.clamp(col.Z * 255, 0, 255)); buffer.writeu8(buf, o + 3, 255)
+		end
+	end
+	img:WritePixelsBuffer(Vector2.zero, Vector2.new(TW, TH), buf)
+	cliffTex = img
+	return img
+end
+local BEACH_OUT = 9.6 + 1.6   -- studs from the coast contour to the beach's underwater edge (SKIRT_OUT + last point)
+local BAND = { grass = hx("6fb843"), grassD = hx("3f8a2c"), rockT = hx("6e4526"), rockA = hx("b97b40"), ledge = hx("7a4c2a"),
+	rockB = hx("a26a37"), foot = hx("5a3b22"), sand = hx("f0dca0"), sandW = hx("dcc58c"), shelf = hx("8fd8c8") }
+local lastLoops = {}
+local AssetService2 = game:GetService("AssetService")
+local function buildSkirt(mnI, mnJ, mxI, mxJ)
+	if skirtF then skirtF:Destroy() end
+	skirtF = Instance.new("Folder"); skirtF.Name = "Skirt"
+	local function landAtWorld(p: Vector2) return skirtLand(math.floor((p.X - sx(0)) / S), math.floor((p.Y - sz(0)) / S)) end
+	local WSURF = math.floor(SEA_Y / 4 + 0.5) * 4   -- the visible water surface (Terrain water top / painted sheet)
+	local scaleY = (SKIRT_TOP - (WSURF + 1.05)) / 9.6   -- rock profile authored 9.6 tall, ends where the beach starts
+	for _, loop in lastLoops do
+		local nP = #loop
+		if nP < 6 then continue end
+		-- outward normal per point (average of the two neighbouring segments, flipped toward the sea)
+		local nrm = table.create(nP)
+		for q = 1, nP do
+			local a0, a1 = loop[(q - 2) % nP + 1], loop[q % nP + 1]
+			local t = (a1 - a0).Unit
+			local nv = Vector2.new(t.Y, -t.X)
+			if landAtWorld(loop[q] + nv * 2.5) and not landAtWorld(loop[q] - nv * 2.5) then nv = -nv end
+			nrm[q] = nv
+		end
+		-- smooth per-point bulge noise (rock masses ~3 points wide)
+		local bulge = table.create(nP)
+		for q = 1, nP do
+			local raw = 0
+			for k = -1, 1 do raw += hash((q + k) % nP + 1, 4.4) * (if k == 0 then 0.5 else 0.25) end
+			bulge[q] = (raw - 0.5) * 1.4
+		end
+		local ok, em = pcall(function() return AssetService2:CreateEditableMesh({}) end)
+		if not ok or not em then continue end
+		-- centre of this loop (vertices are written relative to it)
+		local c = Vector2.zero
+		for q = 1, nP do c += loop[q] end
+		c /= nP
+		local origin = Vector3.new(c.X, SKIRT_TOP, c.Y)
+		local mn, mx = Vector3.one * math.huge, -Vector3.one * math.huge
+		local function P(q, r)
+			local pr = PROFILE[r]
+			local out = SKIRT_OUT + pr[1] + bulge[q] * pr[4]
+			local p2 = loop[q] + nrm[q] * out
+			local v = Vector3.new(p2.X, if pr[5] then WSURF + pr[2] else SKIRT_TOP + pr[2] * scaleY, p2.Y) - origin
+			mn = mn:Min(v); mx = mx:Max(v)
+			return v
+		end
+		local tex = cliffTexture()
+		local colIds = {}
+		for name, col in BAND do colIds[name] = em:AddColor(if tex then Color3.new(1, 1, 1) else col, 1) end
+		-- arc length per point (texture u)
+		local arc = table.create(nP + 1)
+		arc[1] = 0
+		for q = 2, nP + 1 do arc[q] = arc[q - 1] + (loop[(q - 1) % nP + 1] - loop[q - 1]).Magnitude end
+		-- flat-shaded quads (own vertices per face): crisp toon facets
+		for q = 1, nP do
+			local q2 = q % nP + 1
+			for r = 1, #PROFILE - 1 do
+				local a, b, cc, d = P(q, r), P(q2, r), P(q2, r + 1), P(q, r + 1)
+				local band = PROFILE[r][3]
+				local n1 = (b - a):Cross(d - a)
+				if n1.Magnitude < 1e-6 then continue end
+				n1 = n1.Unit
+				-- winding: the face must point away from the land (outward / up)
+				local outward = Vector3.new(nrm[q].X, 0, nrm[q].Y) + Vector3.new(0, 0.3, 0)
+				local flip = n1:Dot(outward) < 0
+				local va, vb, vc, vd = em:AddVertex(a), em:AddVertex(b), em:AddVertex(cc), em:AddVertex(d)
+				local ni = em:AddNormal(if flip then -n1 else n1)
+				local u0, u1 = arc[q] / U_PERIOD, arc[q + 1] / U_PERIOD
+				local tv0, tv1 = PROFILE[r][6], PROFILE[r + 1][6]
+				local ua, ub, uc, ud = em:AddUV(Vector2.new(u0, tv0)), em:AddUV(Vector2.new(u1, tv0)), em:AddUV(Vector2.new(u1, tv1)), em:AddUV(Vector2.new(u0, tv1))
+				local f1 = if flip then em:AddTriangle(va, vc, vb) else em:AddTriangle(va, vb, vc)
+				local f2 = if flip then em:AddTriangle(va, vd, vc) else em:AddTriangle(va, vc, vd)
+				local cid = colIds[band]
+				em:SetFaceNormals(f1, { ni, ni, ni }); em:SetFaceNormals(f2, { ni, ni, ni })
+				em:SetFaceColors(f1, { cid, cid, cid }); em:SetFaceColors(f2, { cid, cid, cid })
+				if flip then em:SetFaceUVs(f1, { ua, uc, ub }); em:SetFaceUVs(f2, { ua, ud, uc })
+				else em:SetFaceUVs(f1, { ua, ub, uc }); em:SetFaceUVs(f2, { ua, uc, ud }) end
+			end
+		end
+		local okP, mp = pcall(function() return AssetService2:CreateMeshPartAsync(Content.fromObject(em)) end)
+		if okP and mp then
+			mp.Name = "Cliff"
+			mp.Anchored = true; mp.CanCollide = false; mp.CanQuery = false; mp.CanTouch = false
+			mp.Material = Enum.Material.SmoothPlastic; mp.Color = Color3.new(1, 1, 1)
+			mp.CFrame = CFrame.new(origin)   -- EditableMesh vertices keep their own origin (measured: no recentring)
+			if tex then pcall(function() mp.TextureContent = Content.fromObject(tex) end) end
+			mp.Parent = skirtF
+		else
+			warn("[Ocean] cliff mesh failed: " .. tostring(mp))
+		end
+	end
+	local hl = Instance.new("Highlight")
+	hl.OutlineColor = Color3.fromHex("16181e"); hl.OutlineTransparency = 0; hl.FillTransparency = 1
+	hl.DepthMode = Enum.HighlightDepthMode.Occluded; hl.Adornee = skirtF; hl.Parent = skirtF
+	skirtF.Parent = root
+end
 function Ocean.rebuild()
 	if not shelfF then return end
 	shelfF:ClearAllChildren()
@@ -333,46 +611,72 @@ function Ocean.rebuild()
 			if dist[k(ni, nj)] == nil then dist[k(ni, nj)] = d0 + 1; table.insert(q, { ni, nj }) end
 		end
 	end
-	task.spawn(paint, function(i, j) return dist[k(i, j)] end)
-	-- beach + shelf as smooth Terrain sand (target B): a rounded beach crest just above the water on the first ring,
-	-- shallow sand just under it on the second, a shelf sloping down to the reef edge; nothing past 5 tiles
-	local function shelfTop(d) return if d <= 1 then SEA_Y + 1.6 elseif d == 2 then SEA_Y - 0.4 else SEA_Y - 3.5 - (d - 3) * 1.4 end
-	local ring, sig = {}, {}
+	-- coast signature (BFS ring) -> rebuild the smooth coast loops, the cliff+beach mesh and the painted sea
+	local sig = {}
 	for j = mnJ, mxJ do
 		for i = mnI, mxI do
 			local d = dist[k(i, j)]
-			if d and d > 0 and d <= 5 then ring[k(i, j)] = { i, j, d }; table.insert(sig, k(i, j) * 8 + d) end
+			if d and d > 0 and d <= 2 then table.insert(sig, k(i, j) * 8 + d) end
 		end
 	end
 	table.sort(sig)
 	local sigS = table.concat(sig, ",")
-	if sigS ~= ringSig then
+	if sigS ~= skirtSig then
+		skirtSig = sigS
+		lastLoops = coastLoops(mnI, mnJ, mxI, mxJ)
+		buildSkirt(mnI, mnJ, mxI, mxJ)
+		-- exact distance (tiles) from each tile centre to the smooth coast, bucketed so it stays cheap; the painted
+		-- shallows / foam / wave lines then follow the real curved coast instead of tile-step diamonds
+		local BK = 4
+		local buckets = {}
+		for _, loop in lastLoops do
+			for _, p in loop do
+				local bi, bj = math.floor((p.X - sx(0)) / S / BK), math.floor((p.Y - sz(0)) / S / BK)
+				local kk = bi .. "," .. bj
+				buckets[kk] = buckets[kk] or {}
+				table.insert(buckets[kk], p)
+			end
+		end
+		local function exact(i, j)
+			if openLand(i, j) then return 0 end
+			local d0 = dist[k(i, j)]
+			if not d0 or d0 >= 10 then return 8 end
+			local c = Vector2.new(sx(i) + S / 2, sz(j) + S / 2)
+			local bi, bj = math.floor(i / BK), math.floor(j / BK)
+			local best = math.huge
+			for dj = -3, 3 do
+				for di = -3, 3 do
+					local list = buckets[(bi + di) .. "," .. (bj + dj)]
+					if list then for _, p in list do local m = (p - c).Magnitude; if m < best then best = m end end end
+				end
+			end
+			return math.min(8, best / S)
+		end
+		local cache = {}
+		task.spawn(paint, function(i, j)
+			local kk = k(i, j)
+			local v = cache[kk]
+			if v == nil then v = exact(i, j); cache[kk] = v end
+			return v
+		end)
+		-- the old Terrain beach / shelf columns go back to open sea (the beach is part of the cliff mesh now)
 		local T = workspace.Terrain
 		local TOP = math.floor(SEA_Y / 4 + 0.5) * 4
 		local old = ringTiles
-		ringTiles, ringSig = ring, sigS
+		ringTiles, ringSig = {}, sigS
 		task.spawn(function()
 			local n = 0
-			for key, t in old do   -- tiles that left the ring (and did not become land) go back to open sea
-				if not ring[key] and not openLand(t[1], t[2]) then
+			for _, t in old do
+				if not openLand(t[1], t[2]) then
 					local x, z = sx(t[1]) + S / 2, sz(t[2]) + S / 2
 					T:FillBlock(CFrame.new(x, (BED + TOP + 8) / 2, z), Vector3.new(S, TOP + 8 - BED, S), Enum.Material.Air)
 					T:FillBlock(CFrame.new(x, TOP - 2, z), Vector3.new(S, 4, S), Enum.Material.Water)
 				end
 				n += 1; if n % 200 == 0 then task.wait() end
 			end
-			for d = 5, 1, -1 do   -- far rings first so the nearer, higher sand rounds over them
-				for _, t in ring do
-					if t[3] ~= d then continue end
-					local x, z = sx(t[1]) + S / 2, sz(t[2]) + S / 2
-					local top = shelfTop(d) + (hash(t[1], t[2] + 7) - 0.5) * 0.8
-					T:FillBlock(CFrame.new(x, (BED + top - 2) / 2, z), Vector3.new(S, top - 2 - BED, S), Enum.Material.Sand)
-					T:FillBall(Vector3.new(x, top - 3.2, z), 3.2, Enum.Material.Sand)   -- neighbouring balls merge into a rounded shore
-					n += 1; if n % 120 == 0 then task.wait() end
-				end
-			end
 		end)
 	end
+	local function shelfTop(d) return SEA_Y - 2.5 - math.max(0, d - 3) * 1.4 end
 	-- coral on the reef edge + lists for life
 	for j = mnJ, mxJ do
 		for i = mnI, mxI do
