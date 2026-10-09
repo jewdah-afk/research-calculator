@@ -524,12 +524,21 @@ local PROFILE = {
 local U_PERIOD = 24          -- studs of coast per texture repeat
 -- the cliff texture: painted procedurally (toon look, no upload): grass lip with hanging blade tips, layered rock
 -- strata with cracks, bright top edges and dark bottom edges, a wet foot, speckled sand -> wet sand
-local cliffTex = nil
+-- The pixels are painted once and kept in a buffer; every coast rebuild gets a FRESH EditableImage from it.
+-- (Measured 2026-10-09: after the old cliff MeshParts are destroyed, a reused EditableImage renders BLACK on new
+-- MeshParts even though ReadPixels still returns the right colours, so the cliff went black after every unlock.)
+local cliffBuf, cliffTex = nil, nil
+local CLIFF_TW, CLIFF_TH = 256, 512
 local function cliffTexture()
-	if cliffTex then return cliffTex end
-	local TW, TH = 256, 512
+	local TW, TH = CLIFF_TW, CLIFF_TH
+	if cliffTex then pcall(function() cliffTex:Destroy() end); cliffTex = nil end
 	local img = newImage(TW, TH)
 	if not img then return nil end
+	if cliffBuf then
+		img:WritePixelsBuffer(Vector2.zero, Vector2.new(TW, TH), cliffBuf)
+		cliffTex = img
+		return img
+	end
 	local buf = buffer.create(TW * TH * 4)
 	local function C(h) local c = hx(h); return Vector3.new(c.R, c.G, c.B) end
 	local GRASS, GRASS_L, GRASS_D, GRASS_DD = C("6fb43f"), C("86c64f"), C("4f9a34"), C("3a7a28")   -- lip top matched to the rendered turf
@@ -591,7 +600,7 @@ local function cliffTexture()
 		end
 	end
 	img:WritePixelsBuffer(Vector2.zero, Vector2.new(TW, TH), buf)
-	cliffTex = img
+	cliffBuf, cliffTex = buf, img
 	return img
 end
 local BEACH_OUT = 9.6 + 1.6   -- studs from the coast contour to the beach's underwater edge (SKIRT_OUT + last point)
