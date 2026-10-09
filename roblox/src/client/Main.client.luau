@@ -273,7 +273,7 @@ local function burst(at: Vector3, color: Color3, n: number)
 	end
 end
 
-Remotes:WaitForChild("Collect").OnClientEvent:Connect(function(id: number, value: any, golden: boolean)
+Remotes:WaitForChild("Collect").OnClientEvent:Connect(function(id: number, value: any, golden: boolean, _kind: string?, who: string?)
 	local k = kernels[id]; if not k then return end
 	if value == nil then k.model:Destroy(); kernels[id] = nil; return end   -- cleared by Molt / travel / dev save
 	local n = 0; for _, kk in kernels do if not kk.homing then n += 1 end end; Hud.kernelCount = n - 1
@@ -284,8 +284,10 @@ Remotes:WaitForChild("Collect").OnClientEvent:Connect(function(id: number, value
 	else burst(at, if golden then Color3.fromHex("#ffc93a") else Color3.fromHex("#fff1c9"), if golden then 14 else 8) end
 	-- UI floater: "+N" rises from the egg, then a few icons curve into the wallet chip (Hud.onLabel)
 	Hud.onLabel(at + Vector3.new(0, 0.9 * S, 0), value, if golden and Defs.CUR.goldenPopcorn then "goldenPopcorn" else "popcorn")
-	Birds.punch()
-	if golden then shake = 0.35 end
+	if who ~= "sparrow" then   -- the Sparrow's pickups pop without the bird's peck or a camera shake
+		Birds.punch()
+		if golden then shake = 0.35 end
+	end
 end)
 
 -- Gravity Field / magnet: the server drifts eggs toward the bird; it sends their new spots in batches (10 Hz)

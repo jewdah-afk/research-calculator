@@ -62,9 +62,9 @@ local function bindCallbacks(rt)
 	if rt.onPlayer then return end
 	rt.onPlayer = function(p) Park.award(rt.s, rt, p, "player") end
 end
-local function emit(rt, a, b, c, d, e)
+local function emit(rt, a, b, c, d, e, f, g)
 	local ev = rt.events
-	if ev then table.insert(ev, { a, b, c, d, e }) end
+	if ev then table.insert(ev, { a, b, c, d, e, f, g }) end
 end
 function Park.gain(rt, k: string, v)
 	rt.gainAcc[k] = (rt.gainAcc[k] or 0) + (if type(v) == "number" then v else EN.toNumber(v))
@@ -183,7 +183,7 @@ function Park.award(s, rt, p, who: string)
 	local credited = Park.give(s, "popcorn", v)
 	s.stats.totalPopcorn = (s.stats.totalPopcorn or 0) + EN.toNumber(credited)   -- Birb totalPopcornCollected
 	Park.gain(rt, "popcorn", credited)
-	emit(rt, "collect", p.id, credited, who, p.type)
+	emit(rt, "collect", p.id, credited, who, p.type, p.x, p.y)
 	return credited
 end
 

@@ -300,11 +300,10 @@ local function flushEvents(plr, ss)
 		elseif kind == "collect" then
 			local id = e[2]
 			if not ss.shown[id] then   -- collected the moment it spawned (inside the reach): show it, then pop it
-				local p = ss.rt.player
-				SpawnEv:FireClient(plr, id, fieldToWorld(p.x, p.y), e[5])
+				SpawnEv:FireClient(plr, id, fieldToWorld(e[6] or ss.rt.player.x, e[7] or ss.rt.player.y), e[5])
 			end
 			ss.shown[id] = nil
-			CollectEv:FireClient(plr, id, e[3], false, e[5])
+			CollectEv:FireClient(plr, id, e[3], false, e[5], e[4])   -- e[4] = "player" | "sparrow"
 		elseif kind == "clear" then
 			clearShown(plr, ss)
 		end
