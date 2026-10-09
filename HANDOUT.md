@@ -55,6 +55,37 @@ Branch **`claude/peckwood-isle`** (pushed). Build: `cd roblox && rojo build defa
 - Prop variety: `VARY` table in IslandView.swapProp = per-position random yaw + size range + tilt for rock, ore,
   crystal, lantern, barrel, log, mushroom, cactus, sunflower, bones, twigs, deadtree (Park objects carry no rotation).
 
+### Figma windows at Birb parity: batch 1 (2026-10-09, Figma chat)
+- **Windows board `239:307`** "Peckwood UI v2 / Windows at Birb parity" (page UI v2, x 5400, y 17600), one column per
+  window. Built by a 9-agent workflow from one shared kit, then reviewed and fixed by hand:
+  - Trees: Sunflower Tree `239:309` (SUNFLOWER tab, the reference), DESERT tab `246:3851` (+ gates board `248:2673`),
+    ARCHIVIST tab `246:1796`. Real Birb grid + prerequisite links, node states (owned / can buy / need more / locked /
+    unexplored), minimap, detail panel with one BUY key. Spec card for all three tabs `248:3276`.
+  - Mining: Mine SHOP `246:4443`, Mine AREAS `248:1739` (+ states `248:2831`), Treasure Room `246:1525`, Crow
+    `246:1276` (+ rebirb states `246:4118`).
+  - Fishing: Fishing COLLECTION `246:3448` / EQUIPMENT `248:2079` / FISHDEX `248:2952` (Birb's 3 tabs; Rods, Baits and
+    Tackle fold into EQUIPMENT), Aquarium BIOMES `246:2134` / RESONANCE `246:4667` / TOTAL `248:1351`, Fish Market
+    `246:2574` (+ locked `248:1566`, states `248:1615`), Nest LAKE breeding `246:1462` (+ incubating `248:546`, ready
+    `248:948`). Each has a spec card in its column.
+- **Shared kit for any new window:** `docs/figma/kit.js` (paste at the top of every use_figma script) +
+  `docs/figma/WINDOW_BRIEF.md` (rules, QA, parity sources). Helpers: WINDOW, TABS, STEEL, WELL, KEY, BTN, PRESS, CHIP,
+  BAR, T, BODY, ICO, GLYPH, SPEC, OUTLINE.
+- **Owner rules from this round (all in the kit):** all UI text is Fredoka One (normal text = 1.2 px outline + 1 px
+  drop); close key 44 px at (W-54, 10), don't move it; continuous 4 px window outline over the header (`OUTLINE` last);
+  pressed key = the WHOLE key drops by the lip depth (no black band above the face); tree connector lines = all ink
+  under all colour; cost chips = steel mini plates; +/- and x are centred glyphs, never typed characters.
+- **Game bug found:** `roblox/assets/ui/stripes.png` does not tile (12 px stripe period on a 64 px image), so every
+  stripes texture in game shows seams. Fixed file: `roblox/assets/ui/stripes_seamless.png` (period 12.8, wrap diff 0):
+  upload it and point `Icons["ui/stripes"]` at it. Figma already uses the seamless one.
+- **Decisions taken (owner: "do what is best"):** EGGS = one window with an Eggs / Golden / Echo switch; Fishing = Birb's
+  3 tabs; each tree tab tints its map (desert sand, archivist violet); unnamed desert nodes named from their effects;
+  Treasure Room shows Deep Mine as an unexplored teaser; Crow REBIRB key stays violet (rebirb colour); spec cards keep
+  their documentation font.
+- **Still open:** fish display names are id-derived (Birb's translation strings are not in the parity data); no painted
+  "shiny" or "hybrid egg" icon yet (star / pink egg stand in); next batch = Expedition (Parrot 5 tabs, forge, floors +
+  night + totem, sacrifice + mythic, objectives), Nest SHOP / RIVERSIDE / SAWMILL / OWNED, companions + Evolve, the
+  EGGS window with the currency switch, popups.
+
 ### Figma HUD at Birb parity (2026-10-09, Figma chat, group 1 of 5 done)
 - **Inventory first:** `FIGMA_INVENTORY.md` (repo root) lists every Birb window / panel / popup / HUD element from the
   parity build and marks it exists / differs / missing in Figma, with node ids.
