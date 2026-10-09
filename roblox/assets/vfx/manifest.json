@@ -1,0 +1,257 @@
+{
+ "smoke_puff": {
+  "layout": "Grid4x4",
+  "mode": "OneShot",
+  "tint": "baked-neutral",
+  "use": "PIL toon puff (fallback; the Blender flipbooks replace it)",
+  "file": "roblox/assets/vfx/smoke_puff.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "sparkle": {
+  "layout": "Grid4x4",
+  "mode": "OneShot",
+  "tint": "tint",
+  "use": "inked 4-point twinkle: ambient trickle in every effect",
+  "file": "roblox/assets/vfx/sparkle.png",
+  "size": [
+   512,
+   512
+  ]
+ },
+ "shell_shards": {
+  "layout": "Grid2x2",
+  "mode": "Loop",
+  "tint": "tint",
+  "use": "eggshell pieces tumbling out of the hatch",
+  "file": "roblox/assets/vfx/shell_shards.png",
+  "size": [
+   512,
+   512
+  ]
+ },
+ "confetti": {
+  "layout": "Grid4x4",
+  "mode": "Loop",
+  "tint": "tint",
+  "use": "paper confetti (reveal, unlock shower)",
+  "file": "roblox/assets/vfx/confetti.png",
+  "size": [
+   512,
+   512
+  ]
+ },
+ "leaf": {
+  "layout": "Grid4x4",
+  "mode": "Loop",
+  "tint": "baked",
+  "use": "tumbling leaf: unlock coast bursts",
+  "file": "roblox/assets/vfx/leaf.png",
+  "size": [
+   512,
+   512
+  ]
+ },
+ "star": {
+  "layout": "None",
+  "tint": "tint",
+  "use": "inked star bits",
+  "file": "roblox/assets/vfx/star.png",
+  "size": [
+   256,
+   256
+  ]
+ },
+ "burst_lines": {
+  "layout": "None",
+  "tint": "tint",
+  "use": "inked impact needles on the crack frame (QA: keep this look)",
+  "file": "roblox/assets/vfx/burst_lines.png",
+  "size": [
+   512,
+   512
+  ]
+ },
+ "rune_circle": {
+  "layout": "None",
+  "tint": "tint",
+  "use": "magic circle (hatch Legendary+, island unlock)",
+  "file": "roblox/assets/vfx/rune_circle.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "flash_star": {
+  "layout": "None",
+  "tint": "tint",
+  "use": "HERO flash: white core + tinted rim, billboard, additive",
+  "file": "roblox/assets/vfx/flash_star.png",
+  "size": [
+   512,
+   512
+  ]
+ },
+ "swirl_arc": {
+  "layout": "Grid4x4",
+  "mode": "OneShot",
+  "tint": "tint",
+  "use": "crescent swirl sweep (particle fallback of the mesh slash)",
+  "file": "roblox/assets/vfx/swirl_arc.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "ink_swirl": {
+  "layout": "Grid4x4",
+  "mode": "OneShot",
+  "tint": "baked-ink",
+  "use": "dark ink accent strokes behind the bright swirls",
+  "file": "roblox/assets/vfx/ink_swirl.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "feather": {
+  "layout": "Grid4x4",
+  "mode": "Loop",
+  "tint": "tint",
+  "use": "tumbling feather: reveal, level-up, unlock",
+  "file": "roblox/assets/vfx/feather.png",
+  "size": [
+   512,
+   512
+  ]
+ },
+ "speed_line": {
+  "layout": "None",
+  "tint": "tint",
+  "use": "speed lines + ember streaks (VelocityParallel + Squash)",
+  "file": "roblox/assets/vfx/speed_line.png",
+  "size": [
+   256,
+   256
+  ]
+ },
+ "ring_wave": {
+  "layout": "None",
+  "tint": "tint",
+  "use": "flat ground wave: uneven crescent band, white leading edge",
+  "file": "roblox/assets/vfx/ring_wave.png",
+  "size": [
+   512,
+   512
+  ]
+ },
+ "ring_snap": {
+  "layout": "None",
+  "tint": "tint",
+  "use": "collect pop ring snap (billboard)",
+  "file": "roblox/assets/vfx/ring_snap.png",
+  "size": [
+   256,
+   256
+  ]
+ },
+ "glow_step": {
+  "layout": "None",
+  "tint": "tint",
+  "use": "3-band cel glow (wind-up, halo, under the feet)",
+  "file": "roblox/assets/vfx/glow_step.png",
+  "size": [
+   256,
+   256
+  ]
+ },
+ "rays_fan": {
+  "layout": "Grid4x4",
+  "mode": "OneShot",
+  "tint": "tint",
+  "use": "light-ray fan behind the reveal, dies by thinning",
+  "file": "roblox/assets/vfx/rays_fan.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "beam_core": {
+  "layout": "Beam",
+  "tint": "tint",
+  "use": "Beam strip for pillars / the level-up column",
+  "file": "roblox/assets/vfx/beam_core.png",
+  "size": [
+   256,
+   64
+  ]
+ },
+ "crack_1": {
+  "layout": "Decal",
+  "tint": "tint",
+  "use": "egg crack decal, stage 1",
+  "file": "roblox/assets/vfx/crack_1.png",
+  "size": [
+   512,
+   512
+  ]
+ },
+ "crack_2": {
+  "layout": "Decal",
+  "tint": "tint",
+  "use": "egg crack decal, stage 2",
+  "file": "roblox/assets/vfx/crack_2.png",
+  "size": [
+   512,
+   512
+  ]
+ },
+ "crack_3": {
+  "layout": "Decal",
+  "tint": "tint",
+  "use": "egg crack decal, stage 3",
+  "file": "roblox/assets/vfx/crack_3.png",
+  "size": [
+   512,
+   512
+  ]
+ },
+ "toon_smoke": {
+  "layout": "Grid4x4",
+  "mode": "OneShot",
+  "tint": "baked-neutral",
+  "use": "toon smoke puff (Blender): hatch smoke ring, poofs",
+  "file": "roblox/assets/vfx/toon_smoke.png",
+  "size": [
+   1024,
+   1024
+  ],
+  "blender": true
+ },
+ "toon_burst": {
+  "layout": "Grid4x4",
+  "mode": "OneShot",
+  "tint": "tint",
+  "use": "toon impact burst (Blender, greyscale: tint pastel per rarity): hatch crack cloud",
+  "file": "roblox/assets/vfx/toon_burst.png",
+  "size": [
+   1024,
+   1024
+  ],
+  "blender": true
+ },
+ "dust_puff": {
+  "layout": "Grid4x4",
+  "mode": "OneShot",
+  "tint": "baked-neutral",
+  "use": "soft toon dust puff (Blender, warm grey: tint per island): ground bursts, coast dust",
+  "file": "roblox/assets/vfx/dust_puff.png",
+  "size": [
+   1024,
+   1024
+  ],
+  "blender": true
+ }
+}

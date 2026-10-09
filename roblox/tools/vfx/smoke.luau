@@ -1,0 +1,502 @@
+--!nonstrict
+-- Headless smoke test for the client VFX engine (no Studio). Loads the BUILT place, runs every effect at every
+-- rarity on a fake 60 Hz RenderStepped, with every texture "uploaded" (fake ids) and again with none, and checks:
+--   * no Lua errors / [Vfx] warnings, real property names (Lune's reflection rejects unknown members)
+--   * NumberSequence / ColorSequence rules (start at 0, end at 1, ascending, <= 20 keys, transparency in 0..1)
+--   * every effect finishes and every pooled piece goes back (no leaks), camera hook returns sane values
+-- What it can NOT check: anything visual (sizes, colours, timing feel), Beam/particle rendering, real Instance
+-- methods beyond the stubs below. That is Studio QA.
+--
+--   cd roblox && rojo build default.project.json -o <tmp>/vfx.rbxl && lune run tools/vfx/smoke.luau <tmp>/vfx.rbxl
+local roblox = require("@lune/roblox")
+local fs = require("@lune/fs")
+local luau = require("@lune/luau")
+local task = require("@lune/task")
+local process = require("@lune/process")
+
+local placePath = process.args[1] or error("usage: lune run tools/vfx/smoke.luau <built.rbxl>")
+local place = roblox.deserializePlace(fs.readFile(placePath))
+local Instance, Enum = roblox.Instance, roblox.Enum
+
+local problems = {}
+local function problem(msg)
+	table.insert(problems, msg)
+	print("  !! " .. msg)
+end
+
+-- ---------------------------------------------------------------- validated sequences
+local function checkKeys(kind, keys, isTrans)
+	if #keys < 2 then return end
+	if #keys > 20 then problem(kind .. ": " .. #keys .. " keypoints (max 20)") end
+	if math.abs(keys[1].Time) > 1e-6 then problem(kind .. ": first keypoint at " .. keys[1].Time) end
+	if math.abs(keys[#keys].Time - 1) > 1e-6 then problem(kind .. ": last keypoint at " .. keys[#keys].Time) end
+	for i = 2, #keys do
+		if keys[i].Time < keys[i - 1].Time then problem(kind .. ": keypoints not ascending") end
+	end
+end
+local NumberSequence = setmetatable({
+	new = function(a, b)
+		if type(a) == "table" then checkKeys("NumberSequence", a) end
+		if type(a) == "table" then
+			for _, k in a do
+				if k.Value ~= k.Value then problem("NumberSequence: NaN value") end
+			end
+		end
+		return roblox.NumberSequence.new(a, b)
+	end,
+}, { __index = roblox.NumberSequence })
+local ColorSequence = setmetatable({
+	new = function(a, b)
+		if type(a) == "table" then checkKeys("ColorSequence", a) end
+		return roblox.ColorSequence.new(a, b)
+	end,
+}, { __index = roblox.ColorSequence })
+
+-- ---------------------------------------------------------------- signals + stub methods
+local function signal()
+	local s = { fns = {} }
+	function s:Connect(fn)
+		table.insert(self.fns, fn)
+		local c = { Connected = true }
+		function c.Disconnect()
+			c.Connected = false
+			for i, f in s.fns do if f == fn then table.remove(s.fns, i); break end end
+		end
+		return c
+	end
+	function s:Fire(...) for _, f in table.clone(self.fns) do f(...) end end
+	return s
+end
+
+roblox.implementMethod("Instance", "WaitForChild", function(self, name)
+	local c = self:FindFirstChild(name)
+	if not c then error("WaitForChild would hang: " .. self:GetFullName() .. "." .. name) end
+	return c
+end)
+roblox.implementMethod("Instance", "GetPropertyChangedSignal", function() return signal() end)
+local attrSignals = {}
+roblox.implementMethod("Instance", "GetAttributeChangedSignal", function(self, name)
+	local key = tostring(self) .. "|" .. name
+	attrSignals[key] = attrSignals[key] or signal()
+	return attrSignals[key]
+end)
+local function fireAttr(inst, name, value)
+	inst:SetAttribute(name, value)
+	local sg = attrSignals[tostring(inst) .. "|" .. name]
+	if sg then sg:Fire() end
+end
+
+local emits = { total = 0 }
+roblox.implementMethod("ParticleEmitter", "Emit", function(self, n)
+	if n == nil or n < 1 or n ~= math.floor(n) then problem("Emit(" .. tostring(n) .. ")") end
+	if self.Texture == "" then problem("Emit on an emitter with no texture") end
+	emits.total += n or 0
+end)
+roblox.implementMethod("ParticleEmitter", "Clear", function() end)
+roblox.implementMethod("Trail", "Clear", function() end)
+
+-- Model pivot / scale (enough for PivotTo / GetPivot / ScaleTo / GetScale / GetBoundingBox / WorldPivot)
+local pivots, scales = setmetatable({}, { __mode = "k" }), setmetatable({}, { __mode = "k" })
+local function parts(m)
+	local out = {}
+	for _, d in m:GetDescendants() do if d:IsA("BasePart") then table.insert(out, d) end end
+	return out
+end
+local function pos(p) return p.CFrame.Position end -- Lune has no computed Position on parts
+local function bbox(m)
+	local mn, mx = nil, nil
+	for _, p in parts(m) do
+		local h = p.Size / 2
+		mn = if mn then mn:Min(pos(p) - h) else pos(p) - h
+		mx = if mx then mx:Max(pos(p) + h) else pos(p) + h
+	end
+	if not mn then return roblox.CFrame.new(), roblox.Vector3.zero end
+	return roblox.CFrame.new((mn + mx) / 2), mx - mn
+end
+local function getPivot(m) return pivots[m] or bbox(m) end
+roblox.implementProperty("Model", "WorldPivot", function(m) return getPivot(m) end, function(m, v) pivots[m] = v end)
+roblox.implementMethod("Model", "GetPivot", function(m) return getPivot(m) end)
+roblox.implementMethod("Model", "PivotTo", function(m, cf)
+	local old = getPivot(m)
+	local delta = cf * old:Inverse()
+	for _, p in parts(m) do p.CFrame = delta * p.CFrame end
+	pivots[m] = cf
+end)
+roblox.implementMethod("Model", "GetScale", function(m) return scales[m] or 1 end)
+roblox.implementMethod("Model", "ScaleTo", function(m, s)
+	if not (s > 0) then error("ScaleTo(" .. tostring(s) .. ")") end
+	local k = s / (scales[m] or 1)
+	local pv = getPivot(m)
+	for _, p in parts(m) do
+		local off = pos(p) - pv.Position
+		p.Size = p.Size * k
+		p.CFrame = roblox.CFrame.new(pv.Position + off * k) * p.CFrame.Rotation
+	end
+	scales[m] = s
+end)
+roblox.implementMethod("Model", "GetBoundingBox", function(m) return bbox(m) end)
+roblox.implementMethod("Instance", "GetFullName", function(self)
+	local n, p = self.Name, self.Parent
+	while p do n = p.Name .. "." .. n; p = p.Parent end
+	return n
+end)
+
+-- ---------------------------------------------------------------- fake services
+local renderStepped = signal()
+local RunService = { RenderStepped = renderStepped, Heartbeat = signal(), IsStudio = function() return true end }
+local boundSteps = {}
+function RunService:BindToRenderStep(name, _, fn) boundSteps[name] = fn end
+function RunService:UnbindFromRenderStep(name) boundSteps[name] = nil end
+local settingsSvc = {
+	ReducedMotion = false,
+	SavedQualityLevel = Enum.SavedQualitySetting.Automatic,
+	GetPropertyChangedSignal = function() return signal() end,
+}
+local ContentProvider = { PreloadAsync = function() end }
+-- EditableMesh / AssetService mocks: validate ids + counts, report vertex budgets and bounding-box symmetry
+local meshStats = {}
+local function mockEM()
+	local em = { verts = {}, nTri = 0, nUV = 0, nN = 0, nC = 0, uvs = {} }
+	function em.AddVertex(self, p)
+		if typeof(p) ~= "Vector3" then error("AddVertex: not a Vector3") end
+		table.insert(self.verts, p)
+		return #self.verts
+	end
+	function em.AddTriangle(self, a, b, c)
+		if not (self.verts[a] and self.verts[b] and self.verts[c]) then error("AddTriangle: bad vertex id") end
+		if a == b or b == c or a == c then error("AddTriangle: repeated vertex") end
+		self.nTri += 1
+		return self.nTri
+	end
+	function em.AddNormal(self, n)
+		if typeof(n) ~= "Vector3" then error("AddNormal") end
+		self.nN += 1
+		return self.nN
+	end
+	function em.AddColor(self, c, a)
+		if typeof(c) ~= "Color3" or type(a) ~= "number" then error("AddColor") end
+		self.nC += 1
+		return self.nC
+	end
+	function em.AddUV(self, uv)
+		if typeof(uv) ~= "Vector2" then error("AddUV") end
+		self.nUV += 1
+		self.uvs[self.nUV] = uv
+		return self.nUV
+	end
+	local function face3(self, f, ids, max, what)
+		if f > self.nTri or #ids ~= 3 then error(what .. ": bad face / count") end
+		for _, i in ids do if i > max then error(what .. ": bad id") end end
+	end
+	function em.SetFaceNormals(self, f, ids) face3(self, f, ids, self.nN, "SetFaceNormals") end
+	function em.SetFaceColors(self, f, ids) face3(self, f, ids, self.nC, "SetFaceColors") end
+	function em.SetFaceUVs(self, f, ids) face3(self, f, ids, self.nUV, "SetFaceUVs") end
+	function em.GetUVs(self) local t = {}; for i = 1, self.nUV do t[i] = i end; return t end
+	function em.GetUV(self, i) return self.uvs[i] end
+	function em.SetUV(self, i, v) self.uvs[i] = v end
+	return em
+end
+-- mesh ASSETS (QA round 2: the VFX may hold 0 EditableMeshes): fake bounding boxes in mixed orientations so the
+-- axis detection is exercised (a Y-normal ring, Z-normal crescent / star, X-axis tornado, ...)
+local editableCreated = 0
+local MESH_BOXES = {
+	["92572984944785"] = roblox.Vector3.new(6, 4, 0.4), -- crescent, flat in XY (normal Z)
+	["10895746627"] = roblox.Vector3.new(5, 0.6, 4), -- swirl, flat in XZ (normal Y)
+	["131187152008585"] = roblox.Vector3.new(5, 3, 5), -- wall, Y axis
+	["7741808274"] = roblox.Vector3.new(4, 0.3, 4), -- broken ring, normal Y
+	["7263678713"] = roblox.Vector3.new(4, 4, 0.3), -- thin ring, normal Z
+	["7349045196"] = roblox.Vector3.new(4, 2, 4), -- half sphere, Y up
+	["7029892192"] = roblox.Vector3.new(7, 3, 3), -- tornado lying along X
+	["15591537807"] = roblox.Vector3.new(0.2, 4, 4), -- star, normal X
+}
+local meshLoads = 0
+local AssetService = {
+	CreateEditableMesh = function()
+		editableCreated += 1
+		return mockEM()
+	end,
+	CreateMeshPartAsync = function(_, content)
+		local uri = if type(content) == "table" then content.uri else content
+		local id = string.match(tostring(uri), "(%d+)$")
+		local box = MESH_BOXES[id or ""]
+		if not box then error("unknown mesh asset " .. tostring(uri)) end
+		meshLoads += 1
+		local mp = Instance.new("MeshPart")
+		mp.Size = box
+		return mp
+	end,
+}
+local Content = { fromObject = function(o) return o end, fromUri = function(u) return { uri = u } end }
+local workspaceI = place:GetService("Workspace")
+local cam = Instance.new("Camera")
+cam.Parent = workspaceI
+-- the game camera at ZOOM_PLAY (distance ~374 studs, pitch 52) so the distance scaling + framing push-in run
+cam.CFrame = roblox.CFrame.lookAt(roblox.Vector3.new(0, 374 * math.sin(math.rad(52)), 374 * math.cos(math.rad(52))), roblox.Vector3.zero)
+pcall(function() workspaceI.CurrentCamera = cam end)
+local lighting = place:GetService("Lighting")
+local rsI = place:GetService("ReplicatedStorage")
+local playerGui = Instance.new("Folder")
+playerGui.Name = "PlayerGui"
+local localPlayer = { PlayerGui = playerGui, Character = nil, Name = "Smoke" }
+function localPlayer:WaitForChild(n) return self[n] end
+local Players = { LocalPlayer = localPlayer }
+local fakeGame = {}
+function fakeGame:GetService(name)
+	if name == "RunService" then return RunService end
+	if name == "ContentProvider" then return ContentProvider end
+	if name == "Players" then return Players end
+	if name == "UserGameSettings" then return settingsSvc end
+	if name == "GuiService" then return { ReducedMotionEnabled = false } end
+	if name == "Workspace" then return workspaceI end
+	if name == "Lighting" then return lighting end
+	if name == "AssetService" then return AssetService end
+	if name == "ReplicatedStorage" then return rsI end
+	return place:GetService(name)
+end
+local function UserSettings() return { GetService = function(_, n) return fakeGame:GetService(n) end } end
+
+-- ---------------------------------------------------------------- module loader
+local client = place:GetService("StarterPlayer"):FindFirstChild("StarterPlayerScripts"):FindFirstChild("Peckwood")
+local STUB = {} -- ModuleScript -> table (modules too heavy to boot headless)
+local birdPos = roblox.Vector3.new(0, 0, 0)
+STUB[client:FindFirstChild("IslandView")] = { birdPos = birdPos }
+STUB[client:FindFirstChild("Birds")] = { punch = function() end }
+local cache = {}
+local G = {}
+local warnings = 0
+local function load(ms)
+	if STUB[ms] then return STUB[ms] end
+	if cache[ms] ~= nil then return cache[ms] end
+	local env = {
+		game = fakeGame, workspace = workspaceI, script = ms, Enum = Enum, Instance = Instance,
+		Vector3 = roblox.Vector3, Vector2 = roblox.Vector2, CFrame = roblox.CFrame, Color3 = roblox.Color3,
+		ColorSequence = ColorSequence, ColorSequenceKeypoint = roblox.ColorSequenceKeypoint,
+		NumberSequence = NumberSequence, NumberSequenceKeypoint = roblox.NumberSequenceKeypoint,
+		NumberRange = roblox.NumberRange, UDim2 = roblox.UDim2, UDim = roblox.UDim, BrickColor = roblox.BrickColor,
+		Random = roblox.Random, Rect = roblox.Rect, Region3 = roblox.Region3, Font = roblox.Font,
+		UserSettings = UserSettings, task = task, _G = G, typeof = typeof, type = type, Content = Content,
+		print = print, warn = function(...) warnings += 1; problem("warn: " .. table.concat({ ... }, " ")) end,
+		pairs = pairs, ipairs = ipairs, next = next, select = select, tostring = tostring, tonumber = tonumber,
+		error = error, assert = assert, pcall = pcall, xpcall = xpcall, setmetatable = setmetatable,
+		getmetatable = getmetatable, rawget = rawget, rawset = rawset, rawequal = rawequal, rawlen = rawlen,
+		unpack = table.unpack, table = table, string = string, math = math, os = os, bit32 = bit32, utf8 = utf8,
+		coroutine = coroutine, buffer = buffer, tick = os.clock, time = os.clock,
+	}
+	env.require = function(m)
+		if typeof(m) ~= "Instance" then error("require of non-instance") end
+		return load(m)
+	end
+	local fn = luau.load(luau.compile(ms.Source), { debugName = ms:GetFullName(), environment = env })
+	local result = fn()
+	cache[ms] = result
+	return result
+end
+
+-- ---------------------------------------------------------------- run
+local VfxAssets = load(rsI:FindFirstChild("Peckwood"):FindFirstChild("VfxAssets"))
+local Vfx = load(client:FindFirstChild("Vfx"))
+local Hooks = load(client:FindFirstChild("Vfx"):FindFirstChild("Hooks"))
+Vfx.start(nil)
+for _ = 1, 40 do task.wait(0.02) end -- let MeshFx.warm load the mesh assets in the background
+local ready = {}
+for k, st in Vfx.MeshFx.stats() do if st.ready then table.insert(ready, k) end end
+table.sort(ready)
+print("mesh assets ready: " .. table.concat(ready, ", ") .. "  (EditableMeshes created: " .. editableCreated .. ")")
+if editableCreated > 2 then problem("VFX created " .. editableCreated .. " EditableMeshes (budget 2)") end
+if #ready ~= #Vfx.MeshFx.KINDS then problem("expected " .. #Vfx.MeshFx.KINDS .. " mesh shapes, got " .. #ready) end
+-- axis detection + size mapping: our requested in-plane span / axis length must land on the right part axes
+do
+	local function check(kind, want)
+		local t = Vfx.MeshFx.template(kind)
+		if not t then return end
+		if t.ax ~= want then problem(kind .. ": detected axis " .. t.ax .. ", expected " .. want) end
+		local sz = Vfx.MeshFx.sizeFor(kind, 10, 2)
+		local axisLen = if t.ax == 1 then sz.X elseif t.ax == 2 then sz.Y else sz.Z
+		if math.abs(axisLen - 2) > 1e-4 then problem(kind .. ": axis length not mapped") end
+		local maxIn = math.max(if t.ax ~= 1 then sz.X else 0, if t.ax ~= 2 then sz.Y else 0, if t.ax ~= 3 then sz.Z else 0)
+		if math.abs(maxIn - 10) > 1e-4 then problem(kind .. ": in-plane span not mapped") end
+		-- the correction must take the mesh axis onto our axis (Z for plane, Y for up)
+		local axVec = if t.ax == 1 then roblox.Vector3.xAxis elseif t.ax == 2 then roblox.Vector3.yAxis else roblox.Vector3.zAxis
+		local our = t.corr:VectorToWorldSpace(axVec)
+		local target = if t.t == 2 then roblox.Vector3.yAxis else roblox.Vector3.zAxis
+		if (our - target).Magnitude > 1e-4 and (our + target).Magnitude > 1e-4 then problem(kind .. ": correction rotation wrong") end
+	end
+	check("crescent", 3); check("swirl", 2); check("wall", 2); check("ringgap", 2); check("ring", 3)
+	check("dome", 2); check("tornado", 1); check("star4", 1)
+end
+
+minFov = 11
+local function run(label, fn)
+	local before = #problems
+	emits.total = 0
+	local handle = fn()
+	local frames = 0
+	minFov = 11
+	local base = cam.CFrame
+	while (Vfx.activeCount() > 0 or Vfx.CamFx.busy()) and frames < 60 * 30 do
+		renderStepped:Fire(1 / 60)
+		-- Main writes the camera every frame (Camera + 1), then the Vfx post-step runs (Camera + 2) while bound
+		cam.CFrame = base
+		cam.FieldOfView = 11
+		local post = boundSteps.PeckwoodVfxCamera
+		if post then post(1 / 60) end
+		if cam.FieldOfView <= 0 or cam.FieldOfView > 11.0001 then problem("camera FOV out of range: " .. cam.FieldOfView) end
+		minFov = math.min(minFov, cam.FieldOfView)
+		frames += 1
+		task.wait() -- let task.spawn / task.delay callbacks run
+	end
+	if boundSteps.PeckwoodVfxCamera then problem(label .. ": camera step still bound when idle") end
+	if Vfx.activeCount() > 0 then problem(label .. ": still active after 30 s") end
+	local live = Vfx.Layers.stats()
+	for k, v in live do
+		if v ~= 0 then problem(label .. ": pool leak " .. k .. "=" .. v) end
+	end
+	for k, st in Vfx.MeshFx.stats() do
+		if st.live ~= 0 then problem(label .. ": mesh leak " .. k .. "=" .. st.live) end
+	end
+	print(string.format("%-34s %s  %5.2f s  %4d particles%s", label, if handle then "ok " else "nil", frames / 60, emits.total,
+		if #problems > before then "  <-- " .. (#problems - before) .. " problem(s)" else ""))
+end
+
+local function setIds(id)
+	for _, t in VfxAssets.tex do t.id = id end
+end
+
+print("== all textures uploaded (fake ids) ==")
+setIds("123")
+print("can collect_pop:", Vfx.can("collect_pop"), " can egg_hatch:", Vfx.can("egg_hatch"))
+local at = roblox.Vector3.new(4, 0, 6)
+run("collect_pop", function() return Vfx.play("collect_pop", at + roblox.Vector3.new(0, 2, 0), { groundY = 0 }) end)
+run("collect_pop golden", function() return Vfx.play("collect_pop", at, { golden = true, groundY = 0 }) end)
+run("collect_pop x14 burst (cap 10)", function()
+	local h
+	for _ = 1, 14 do h = Vfx.play("collect_pop", at, {}) end
+	return h
+end)
+for _, r in Vfx.Palette.ORDER do
+	run("egg_hatch " .. r .. " (stand-ins)", function() return Vfx.play("egg_hatch", at, { rarity = r }) end)
+end
+do
+	local Models = load(rsI:FindFirstChild("Peckwood"):FindFirstChild("Models"))
+	local egg = Models.kernel(false)
+	egg.Parent = workspaceI
+	local pet = Models.bird()
+	pet.Parent = workspaceI
+	local cracked, revealed = false, false
+	run("egg_hatch Epic, caller egg + pet", function()
+		return Vfx.play("egg_hatch", at, { rarity = "Epic", egg = egg, pet = pet,
+			onCrack = function() cracked = true end, onReveal = function() revealed = true end })
+	end)
+	if not (cracked and revealed) then problem("caller egg: onCrack/onReveal not called") end
+	local leftover = 0
+	for _, d in egg:GetDescendants() do if d:IsA("Decal") then leftover += 1 end end
+	if leftover > 0 then problem("crack decals left on the caller egg: " .. leftover) end
+	egg:Destroy()
+	pet:Destroy()
+end
+run("egg_hatch x8 overlapping (cap 8)", function()
+	local n = 0
+	for i = 1, 8 do
+		if Vfx.play("egg_hatch", at + roblox.Vector3.new(i * 6, 0, 0), { rarity = Vfx.Palette.ORDER[(i - 1) % 6 + 1] }) then n += 1 end
+	end
+	if n < 8 then problem("only " .. n .. " of 8 hatches started") end
+	return n > 0
+end)
+run("egg_hatch Mythic, no egg/pet", function() return Vfx.play("egg_hatch", at, { rarity = "Mythic", noEgg = true, noPet = true }) end)
+run("egg_hatch Legendary: camera push", function() return Vfx.play("egg_hatch", at, { rarity = "Legendary" }) end)
+print(string.format("  push: FOV went down to %.2f (from 11) and eased back", minFov))
+if minFov > 11 * (1 - 0.15) then problem("Legendary hatch push-in too weak / missing: min FOV " .. minFov) end
+if math.abs(cam.FieldOfView - 11) > 1e-3 then problem("camera FOV not restored after the push") end
+run("level_up (follow)", function() return Vfx.play("level_up", at, { follow = function() return birdPos end }) end)
+run("level_up companion colour", function() return Vfx.play("level_up", at, { color = "6fe0ff", scale = 1.3 }) end)
+run("island_unlock (synthetic)", function() return Vfx.play("island_unlock", at, {}) end)
+-- the real hook path: IslandView-shaped raw data through Hooks.unlockInfo
+do
+	local items = {}
+	for i = -6, 6 do
+		for j = -5, 5 do
+			if i * i + j * j <= 30 then
+				table.insert(items, { fill = function() end, at = roblox.Vector3.new((i + 0.5) * 4, -14, (j + 0.5) * 4), delay = 0.5 + (i + 6) * 0.045 })
+			end
+		end
+	end
+	table.insert(items, { inst = true, at = roblox.Vector3.new(0, 0, 0), delay = 1 }) -- a prop item (ignored)
+	local raw = { items = items, landing = roblox.Vector3.new(-24, 0, 0), centre = roblox.Vector3.new(0, 0, 0), waveStart = 0.5, waveEnd = 1.9, step = 0.045, top = 0 }
+	local info = Hooks.unlockInfo(raw)
+	print("unlockInfo: radius", math.floor(info.radius), "edge tiles", #info.edge, "maxD", math.floor(info.maxD))
+	run("island_unlock (IslandView data)", function() return Vfx.play("island_unlock", info.centre, { info = info }) end)
+end
+-- the REAL unlock data path: every tile of a real (non-park) island from World, shaped like IslandView's items
+do
+	local World = load(rsI:FindFirstChild("Peckwood"):FindFirstChild("World"))
+	local Map = load(rsI:FindFirstChild("Peckwood"):FindFirstChild("MapData"))
+	local S = 4
+	for _, isl in World.list do
+		if isl.park or isl.join then continue end
+		local items = {}
+		local cx, cz = isl.cx or (isl.oi + isl.W / 2), isl.cz or (isl.oj + isl.N / 2)
+		local land = { i = math.floor(isl.oi), j = math.floor(isl.oj + isl.N / 2) }
+		for j = isl.oj, isl.oj + isl.N - 1 do
+			for i = isl.oi, isl.oi + isl.W - 1 do
+				local c, own = World.rawTile(i, j)
+				if c ~= 0 and own == isl then
+					local d = math.abs(i - land.i) + math.abs(j - land.j)
+					table.insert(items, { fill = function() end, delay = 0.6 + d * 0.045,
+						at = roblox.Vector3.new((i + 0.5 - Map.COLS / 2) * S, -14, (j + 0.5 - Map.ROWS / 2) * S) })
+				end
+			end
+		end
+		if #items == 0 then continue end
+		local maxDelay = 0
+		for _, x in items do maxDelay = math.max(maxDelay, x.delay) end
+		local raw = { isl = isl, items = items, top = World.base(math.floor(cx), math.floor(cz)),
+			landing = roblox.Vector3.new((land.i + 0.5 - Map.COLS / 2) * S, 0, (land.j + 0.5 - Map.ROWS / 2) * S),
+			centre = roblox.Vector3.new((cx - Map.COLS / 2) * S, 0, (cz - Map.ROWS / 2) * S),
+			waveStart = 0.6, waveEnd = maxDelay + 0.8, step = 0.045 }
+		local info = Hooks.unlockInfo(raw)
+		print(string.format("real island '%s': %d tiles, %d coast tiles, radius %.0f studs, maxD %.0f, wave %.1f-%.1f s",
+			tostring(isl.id), #info.tiles, #info.edge, info.radius, info.maxD, info.waveStart, info.waveEnd))
+		if #info.edge == 0 then problem("real island has no coast tiles") end
+		if #info.edge >= #info.tiles then problem("every tile counted as coast") end
+		run("island_unlock (real island " .. tostring(isl.id) .. ")", function() return Vfx.play("island_unlock", info.centre, { info = info }) end)
+		break
+	end
+end
+run("dev preview _G.__vfx egg_hatch Rare", function() return G.__vfx("egg_hatch", "Rare") end)
+run("dev preview _G.__vfx collect_pop", function() return G.__vfx("collect_pop") end)
+run("dev preview _G.__vfx level_up", function() return G.__vfx("level_up") end)
+run("dev preview _G.__vfx island_unlock", function() return G.__vfx("island_unlock") end)
+run("QA attribute PeckwoodVfxAt egg_hatch:Rare:12,-4", function()
+	fireAttr(playerGui, "PeckwoodVfxAt", "egg_hatch:Rare:12,-4#1")
+	return Vfx.activeCount() > 0
+end)
+run("QA attribute PeckwoodVfxAt collect_pop:golden:3,0,5", function()
+	fireAttr(playerGui, "PeckwoodVfxAt", "collect_pop:golden:3,0,5#2")
+	return Vfx.activeCount() > 0
+end)
+run("QA attribute PeckwoodVfxAt level_up:-6,2", function()
+	fireAttr(playerGui, "PeckwoodVfxAt", "level_up:-6,2#3")
+	return Vfx.activeCount() > 0
+end)
+run("camera shake + flash + push", function()
+	Vfx.shake(1, 0.4); Vfx.flash(roblox.Color3.new(1, 0.9, 0.5), 0.3, 0.5); Vfx.push(roblox.Vector3.zero, 0.15, 0.3, 0.2, 0.4)
+	return true
+end)
+
+print("== meshes off (particle fallbacks) ==")
+Vfx.MeshFx.enabled = false
+run("egg_hatch Mythic, particle fallbacks", function() return Vfx.play("egg_hatch", at, { rarity = "Mythic" }) end)
+run("level_up, particle fallbacks", function() return Vfx.play("level_up", at, {}) end)
+run("island_unlock, particle fallbacks", function() return Vfx.play("island_unlock", at, {}) end)
+Vfx.MeshFx.enabled = true
+
+print("== no textures uploaded (graceful degrade) ==")
+setIds("")
+print("can collect_pop:", Vfx.can("collect_pop"), "(Main falls back to the cube burst)")
+run("collect_pop (not forced -> nil)", function() return Vfx.play("collect_pop", at, {}) end)
+run("egg_hatch Mythic forced, no textures", function() return Vfx.play("egg_hatch", at, { rarity = "Mythic", force = true }) end)
+run("level_up forced, no textures", function() return Vfx.play("level_up", at, { force = true }) end)
+run("island_unlock, no textures", function() return Vfx.play("island_unlock", at, {}) end)
+
+print(string.format("\n%d problem(s), %d warning(s)", #problems, warnings))
+process.exit(if #problems == 0 then 0 else 1)

@@ -13,6 +13,7 @@ local Models = require(Shared:WaitForChild("Models"))
 local Defs = require(Shared:WaitForChild("Defs"))
 local Remotes = Shared:WaitForChild("Remotes")
 local Hud = require(script.Parent:WaitForChild("UI"):WaitForChild("Hud"))
+local Vfx = require(script.Parent:WaitForChild("Vfx"))   -- VFX engine (effects + camera feel on its own render step), see Vfx/init.luau
 local S = Models.S
 
 local plr = Players.LocalPlayer
@@ -279,9 +280,9 @@ Remotes:WaitForChild("Collect").OnClientEvent:Connect(function(id: number, value
 	-- owner 2026-10-09: the +value pops right above the egg, and the egg itself flies into the wallet on the HUD
 	local at = k.pos + Vector3.new(0, 0.5 * S, 0)
 	k.model:Destroy(); kernels[id] = nil
-	burst(at, if golden then Color3.fromHex("#ffc93a") else Color3.fromHex("#fff1c9"), if golden then 14 else 8)
-	-- UI floater: "+N" rises from the egg, then a few icons curve into the wallet chip (Hud.onLabel; a Vfx module can
-	-- call the same hook with its own label position)
+	if Vfx.can("collect_pop") then Vfx.play("collect_pop", at, { golden = golden, groundY = k.pos.Y })
+	else burst(at, if golden then Color3.fromHex("#ffc93a") else Color3.fromHex("#fff1c9"), if golden then 14 else 8) end
+	-- UI floater: "+N" rises from the egg, then a few icons curve into the wallet chip (Hud.onLabel)
 	Hud.onLabel(at + Vector3.new(0, 0.9 * S, 0), value, if golden and Defs.CUR.goldenPopcorn then "goldenPopcorn" else "popcorn")
 	Birds.punch()
 	if golden then shake = 0.35 end
@@ -377,4 +378,5 @@ RunService:BindToRenderStep("Peckwood", Enum.RenderPriority.Camera.Value + 1, fu
 	cam.Focus = CFrame.new(camFocus :: Vector3)
 end)
 
+Vfx.start(Remotes)   -- effect hook-ups (island unlock, level-ups) + dev preview _G.__vfx
 Hud.start(Remotes)

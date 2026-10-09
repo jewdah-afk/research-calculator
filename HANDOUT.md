@@ -10,6 +10,105 @@ Last updated: 2026-10-09 (Peckwood Ascent world rebuild, branch `claude/peckwood
 
 Branch **`claude/peckwood-isle`** (pushed). Build: `cd roblox && rojo build default.project.json -o Peckwood.rbxl`, open it in Studio (one Studio window only). The owner says it is OK to stop Play / reload the test place at any time.
 
+### VFX (claude/peckwood-vfx): v3, after Studio QA rounds 1 + 2 and the four craft levers (2026-10-09)
+Owner: "super AAA quality and fit our style" (cel toy diorama: flat pastel blocks, hard 2-3 tone steps, white-hot
+cores, ink #16181e only on normal-blend pieces). Branch `claude/peckwood-vfx` (worktree `~/Downloads/rc-main-vfx`,
+merged with peckwood-isle 6788d54 for ZOOM_PLAY 9). Static checks + a Lune smoke test pass; v2 is NOT yet seen in Studio.
+
+**v3 (QA round 2, 2026-10-09): what changed after the v2 Studio pass** (kept as hero quality: the Rare crack frame,
+the toon burst cloud with the swirl dome, the Mythic rune circle drawing in):
+- **EditableMesh budget = 0.** Roblox caps live EditableMeshes at ~7 per client (fewer on phones); the map uses 2.
+  `Vfx/MeshFx` now loads Creator Store MESH assets (mesh-only, no scripts) with `AssetService:CreateMeshPartAsync`
+  and pools clones; no EditableMesh is ever created (the smoke test asserts it). Ids + alternates in `MeshFx.ASSETS`:
+  crescent `92572984944785` (alt 129794830935741, "wide / long crescent vfx"), swirl `10895746627` (alt 2671071349),
+  shock wall `131187152008585` (alt 2788580299, "Tall Shockwave"), broken ring `7741808274` (alt 7753130413, Akron
+  Circle4Gaps / 8Gaps), thin ring `7263678713` (alt 12640000893, Akron Pipe_Circle_Thin), dome `7349045196` (alt
+  7349045384, Akron Sphere_Half), tornado `7029892192` (alt 7028996145, "Tornado VFX"), star `15591537807` (alt
+  2620058380, "4Star"). Picked by name/creator (thumbnails not viewed): `_G.__vfx("meshes")` prints what loaded, each
+  bounding-box size and the detected axis; swap an id (or set `flip = true` / `axis = n`) if a shape looks wrong.
+  Orientation is auto-detected (thinnest axis = normal for plane shapes, odd-one-out axis for up shapes).
+- **Camera feel no longer needs Main**: CamFx binds its own RenderStep at Camera+2 while a shake / push / flash runs
+  (reads what Main wrote, adds the feel, unbinds when idle). Main's camera lines are the originals again. Reduced
+  Motion turns shake / push off and logs it once; `_G.__vfx("motion", true)` forces it on for QA.
+- **Wind-up reads**: hatch egg 1.6x the field egg, bigger wobble, a big normal-blend 3-band glow, sparks + streaks
+  sucked in from 5.4 studs, a small flash + specks on every crack stage, crack decals on up to 3 camera faces with
+  bolder crack art.
+- **Light pillar** (hatch Legendary+ 30 studs, level-up 22, unlock 42): `R.pillar` = tapered body (rarity tint,
+  low emission, streak texture) + thin white core, soft bottom, fades to the top, wider base, slight width pulse.
+- **Level-up**: stepped ground glow (no airbrushed bloom), column to 1.6 s, ding at 0.85 s, no feathers.
+- **Reveal**: shards / sparkles about -30 %, no reveal tornado, thin warm ray fans behind the pet.
+- **Re-upload these 6** (same keys, art redrawn): `feather`, `confetti`, `leaf` (tumble frames never edge-on: an edge-on
+  frame was a bare ink line = the stray "stick") and `crack_1`, `crack_2`, `crack_3` (bolder lines).
+- Real unlock data path checked headless with the real Garden tiles from World (343 tiles, 16 coast tiles, 46-stud
+  radius, wave 0.6-2.8 s): plays clean. In Studio: `PlayerGui:SetAttribute("PeckwoodBuild", "garden")`.
+
+**v2 textures (16 PNGs, uploaded in 026abc1)** (`roblox/assets/vfx/`, ids in `src/shared/VfxAssets.luau`; a missing id makes a layer fall
+back or is skipped, and `collect_pop` keeps the old cube burst):
+`flash_star` 512, `swirl_arc` 1024 4x4 OneShot, `ink_swirl` 1024 4x4 OneShot, `feather` 512 4x4 Loop, `speed_line` 256,
+`ring_wave` 512, `ring_snap` 256, `glow_step` 256, `rays_fan` 1024 4x4 OneShot, `beam_core` 256x64 (Beam strip),
+`crack_1/2/3` 512 (egg Decals), `toon_smoke` / `toon_burst` / `dust_puff` 1024 4x4 OneShot (Blender renders).
+Kept from round 1 (ids already in): smoke_puff (fallback), sparkle, shell_shards, confetti, leaf, star, burst_lines,
+rune_circle. Dropped: impact_star, ring_shock, ring_thin, glow_disc, light_rays, beam_streak, beam_runes.
+Generators: `tools/vfx/gen_vfx.py` (PIL shapes, `--preview` contact sheets, `--only=a,b`) and
+`tools/vfx/gen_toon_flipbooks.py` (Blender: `blender.exe -b --factory-startup --python ... -- [keys]`, then
+`python ... --post`): noise-displaced sphere lobes, 3-step toon ramp from N.L (constant ColorRamp -> Emission),
+inverted-hull ink at constant world width, PIL dissolve that re-inks every hole rim.
+
+**Engine (`src/client/Vfx/`)**: init (API + scheduler), Layers (pools, curves: `pop` multi-key, `vary` envelopes,
+`steps`), Recipes (shared hero flash / swirls / streaks / celebration / ground wave / glow / smoke / dust / mark),
+MeshFx (six EditableMesh shapes), CamFx (shake / push / flash), Palette, Hooks, Effects/*.
+- Hierarchy rule: ONE hero (flash or column), two support layers, an ambient trickle. Ink only on normal-blend pieces.
+- Readable at any zoom: size multiplier `clamp(camDist / 290, 1, 2.4)`; hatch frames the egg with a push-in (stronger
+  and longer for higher rarity, then sizes follow the pushed framing); level_up gentle push; unlock pushes at the finale.
+- No flat beams any more (QA: they stood up as triangles / ovals). Ground pieces = flat particles or mesh wall rings.
+- Lever A meshes (`MeshFx`): v3 = Creator Store mesh assets (see above), 0 EditableMeshes; `fx:mesh(kind, spec)`
+  animates a pooled clone (billboard / flat / up, tilt, eased spin, ease-out growth, thinning, squash, hard-stepped fade).
+- Lever C: streaks are VelocityParallel + Squash + Drag + gravity; sizes use multi-key pops; ZOffset layering (flash
+  core 5.2 > rim 5 > needles 4.6 > speed 4.4 > embers 4.3 > swirls 4.2 > ink 4 > shards 3.5 > cloud 3 > smoke 2 > glow
+  -0.6 > rays -2); hot cores Brightness 2-3; radial bursts use `emitSphere` / `emitRadial` (the Sphere/Disc-outward
+  shape without a shape Part, because an invisible Part hides the Occluded ink Highlights); rate curves (accelerating
+  suck-in, tapering sparkle trickles).
+- Caps: egg_hatch 8, collect_pop 16, level_up 4, unlock 2, 48 total. Hit-stop freezes everything but the hero flash.
+
+**Effects: layers in order (times in s)**
+- `collect_pop` (0.35): t0 ring snap (white, broken, 0.24, ease-out, stepped out) + colour flash star (0.13) + white
+  core (0.09) + 3-4 inked sparkles (drag stop); golden x1.25 + 2 star bits; 0.04 `onLabel`.
+- `level_up` (1.6): t0 mesh wall-ring ground wave (0.34) + flat 3-band glow (0.7) + 4 dust puffs; light column shoots
+  up (0.14), holds, thins 0.95-1.45; mesh spiral cone winds up (0-0.32), spins, collapses 1.05-1.45; light swell;
+  hen punch; push-in. 0-1.1 rising sparkles (3/step -> 1) + speed-line streaks up the column (to 0.8). 0-1.25 three
+  ribbon trails. 0.9 ding: 4-point flash (rim + core, squash gleam) + star4 mesh gleam + 3 star bits + 2 feathers.
+- `egg_hatch` (A = 0.65 / 0.8 / 1.0 / 1.25 / 1.7 / 2.1 by rarity): 0 push-in (in 0.85A), egg (EggAsset stand-in
+  unless `opts.egg`) rocks with ramping speed + amplitude (hops Rare+), 3-band glow charges in steps, light ramps,
+  ember streaks sucked in (accelerating). 0.3A / 0.58A / 0.84A crack decal stages glowing the rarity colour + jolt +
+  shell specks + twinkle + micro shake. 0.62A swirl gather (Rare+). Legendary+: 0.2 rune circle drops in + flat swirl
+  trace; 0.3A..A light pillar. A-0.1 egg swells. A CRACK: hero flash (0.09, plays through the hit-stop) + inked
+  needles (Uncommon+); mesh crescent slashes spin out and thin (1 Uncommon, 2 Rare+, 0.42-0.48) + ink spiral (Rare+);
+  speed lines (Rare+) + embers (Uncommon+); ground mark (Rare+); toon burst cloud (0.72, white-hot 2 frames); shell
+  shards; toon smoke ring; mesh wall-ring wave (0.32; a 2nd at A+0.07 on Epic+); mesh dome (Epic+, 0.42) + colour
+  flash; pillar flare; shake; hit-stop 0.05-0.1. A+0.04 REVEAL: pet pops (0.4, back overshoot + hop); ray fan + halo
+  (Uncommon+, 1.0-2.6, rays die by thinning; Mythic counter-rays); star4 gleam (Rare+); spiral cone round the pet
+  (Legendary+, 1.1); stars + feathers + a little confetti (varied sizes; rainbow on Mythic); twinkle trickle (1.1);
+  sparkle shower (Legendary+). The stand-in chick poofs at the end (`opts.pet` / `noPet` / `noEgg` to control).
+- `island_unlock` (S = waveStart - 0.45): S rune circle drops in (118% -> 100%, alpha in 3 steps) + a mesh arc wall
+  sweeps once round it; S+0.1 summon pillar + big mesh spiral cone + warm ray fan. waveStart: mesh wall-ring light wave
+  grows from the landing with the tile wave; glints flash on sampled tiles; coast tiles burst toon dust + leaves.
+  waveEnd: rune flashes out, wall-ring sweep from the centre, translucent dome blooms and flattens, star burst,
+  sparkle + feather + confetti shower, shake, flash, push-in.
+
+**QA helpers**: `_G.__vfx("egg_hatch", "Mythic")`, `_G.__vfx("hatch_all")`, `_G.__vfx("collect_pop", nil, {golden=true})`,
+`_G.__vfx("level_up")`, `_G.__vfx("island_unlock")`, `"stats"`, `"stop"`; server command bar:
+`PlayerGui:SetAttribute("PeckwoodVfx", "egg_hatch:Mythic#1")`, and at a world spot for frame strips:
+`PlayerGui:SetAttribute("PeckwoodVfxAt", "egg_hatch:Rare:12,-4#1")` (x,z or x,y,z; y = ground there; collect_pop is
+lifted 2 studs). Real unlock: `PlayerGui:SetAttribute("PeckwoodBuild", "garden")`.
+**Smoke test**: `rojo build default.project.json -o <tmp>.rbxl && lune run tools/vfx/smoke.luau <tmp>.rbxl` (every
+effect x rarity, caller egg + pet, 8 overlapping hatches, the QA attribute, mesh + particle-fallback paths, no-texture
+degrade; mocks EditableMesh and checks budgets, bbox symmetry, sequence rules, pool / mesh leaks).
+
+**Studio QA still open**: mesh clones render + scale right (Neon + vertex colours, both faces), billboard tilt of the
+arcs reads as crescents, wall rings sit on the ground; crack decals land on the camera-facing faces of the egg mesh;
+flash ZOffset keeps it out of the ground; VelocityParallel streak orientation (texture head at row 0 should lead);
+particle sizes past ~100 studs (unlock wave / circle fallbacks); Brightness / bloom by day and night; push amounts at
+zoom 4 / 9 / 16.
 ### Park life pass + camera (2026-10-09, latest)
 - **Camera** starts close on the bird: `ZOOM_PLAY = 9` in Main.client (wheel still goes out to the whole island, 16). Owner: "I can't even see the vfx"; Birb's view is close too.
 - **Toon flowers** replace the generated wildflower tufts (owner: they "look ass"). Each `Map.flowers` spot = a rounded leaf clump + 2-3 five-petal flowers of one pastel (white / pink / yellow / coral / lilac), scale `F = 3`. Skipped on paths, water, hills, the egg yard, prop footprints and the screen strip just north of tall props (they hid behind lamps).
