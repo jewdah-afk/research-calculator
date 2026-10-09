@@ -185,6 +185,19 @@ outline(field, "#16181e", 0, "#fff6d6", 0.78)                                   
 IslandView.build()
 -- portals removed (owner 2026-10-09): the HUD Teleport button covers travel. Portals.luau stays in the repo, unused.
 require(script.Parent:WaitForChild("Ambience")).start()
+-- world sound: beds, 3D spots, one-shots and hen footsteps (Soundscape; ids in AmbienceIds)
+do
+	local Soundscape = require(script.Parent:WaitForChild("Soundscape"))
+	Soundscape.start()
+	Birds.onStep = Soundscape.footstep
+end
+-- the look: lighting preset (stylized realism "golden" by default), tilt-shift focus on the hen, GlobalWind gusts
+do
+	local LightingPresets = require(script.Parent:WaitForChild("LightingPresets"))
+	local function apply() LightingPresets.apply(function() return IslandView.birdPos end, IslandView.wind); IslandView.setLook() end
+	apply()
+	LightingPresets.watch(apply)
+end
 -- scenery has no ink outline any more (look B, owner 2026-10-09: painted, realistic cartoony). Outlines are the
 -- focus tier only: the hen (Birds) and the eggs above. See MAP_HIERARCHY.md section 2.
 -- dev/QA hook: PlayerGui:SetAttribute("PeckwoodBuild", tick()) replays the unlock build-in; PeckwoodHour freezes the sky

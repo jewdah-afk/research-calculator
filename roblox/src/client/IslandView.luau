@@ -1680,20 +1680,13 @@ function IslandView.ambientStep(dt, t)
 end
 
 -- ---------------------------------------------------------------- day cycle: 24 real min per day (1 min = 1 game hour)
-local KF = {   -- hour, brightness, outdoorAmbient, ambient, colorShiftTop, fog, tint, exposure, atmosphere colour, atmosphere decay
-	{ 0, 2.3, "9aa8d8", "6a76a8", "8a98c8", "3a4a86", "e2e8ff", 0.55, "3a4a80", "22305a" },
-	{ 4.5, 2.3, "9aa8d8", "6a76a8", "8a98c8", "3a4a86", "e2e8ff", 0.55, "3a4a80", "22305a" },
-	{ 5.6, 1.6, "8a7aa0", "3d3a55", "ffb38a", "e0a080", "ffe0d0", 0, "ffc8a8", "c890a8" },
-	{ 7, 2.1, "8494b4", "485068", "ffe2bf", "d8e2ee", "fff1e0", -0.12, "d2e6fa", "a8cbef" },
-	{ 11, 2.4, "8a9cba", "4c546c", "fff8ec", "c8dcf0", "fffaf2", -0.18, "cfe4fa", "9cc4ee" },
-	{ 15, 2.35, "8898b6", "4c546c", "fff0d8", "cfe2f2", "fff6ea", -0.16, "d2e6fa", "a8cbef" },
-	{ 17.5, 2.6, "8a86aa", "35324c", "ffb46b", "f0c49a", "ffe0c0", -0.06, "ffd6b8", "f0a89a" },
-	{ 18.7, 2.2, "9a8ab0", "4a4466", "ff9a6c", "d89088", "ffe0d0", 0.08, "f0a898", "9a6a98" },
-	{ 20, 2.3, "9aa8d8", "6a76a8", "8a98c8", "3c4c88", "e2e8ff", 0.55, "3c4c82", "24325c" },
-	{ 24, 2.3, "9aa8d8", "6a76a8", "8a98c8", "3a4a86", "e2e8ff", 0.55, "3a4a80", "22305a" },
-}
+-- day-cycle keyframes come from the active look (LightingPresets: "golden" stylized realism, "toy" the old cel look)
+-- rows: hour, brightness, outdoorAmbient, ambient, colorShiftTop, fog, tint, exposure, atmosphere colour, decay
+local LightingPresets = require(script.Parent:WaitForChild("LightingPresets"))
+local KF = LightingPresets.get().KF
+function IslandView.setLook() KF = LightingPresets.get().KF end
 local atmo = Lighting:FindFirstChildOfClass("Atmosphere") or Instance.new("Atmosphere")
-atmo.Density = 0.2; atmo.Offset = 0.08; atmo.Glare = 0.2; atmo.Haze = 0.35; atmo.Parent = Lighting
+atmo.Parent = Lighting   -- density / haze / glare come from LightingPresets.apply
 local function lerpHex(a, b, t) return hx(a):Lerp(hx(b), t) end
 local cc = Lighting:FindFirstChildOfClass("ColorCorrectionEffect")
 local sky = Lighting:FindFirstChildOfClass("Sky")

@@ -47,6 +47,7 @@ local AIR = {   -- colours, size, rate per wind, rise (+up) or fall, spin, textu
 
 local anchor, wind, air, rain, cc
 local cur, state, blend = nil, "clear", { breezy = 0, rain = 0 }
+Ambience.blend = blend   -- read by Soundscape so rain / breeze sound and particles always agree
 
 -- Each effect emits from ONE attachment that jumps to a random point of the 150 x 26 x 120 volume every frame
 -- (same spread as a Box volume). A big invisible box part over the island blocked every Occluded Highlight outline

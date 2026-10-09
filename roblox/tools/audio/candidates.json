@@ -1,0 +1,622 @@
+{
+ "wind_soft": {
+  "kind": "bed",
+  "picks": [
+   {
+    "id": 9114057128,
+    "name": "Desert Wind Whistley Light Gusts 2 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 92.0,
+    "q": "wind ambience"
+   },
+   {
+    "id": 9114057104,
+    "name": "Desert Wind Whistley Light Gusts 1 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 37.4,
+    "q": "wind ambience"
+   }
+  ]
+ },
+ "wind_gust": {
+  "kind": "shot",
+  "picks": [
+   {
+    "id": 9113286782,
+    "name": "Barstow Wind Light Blustery Low Howl 1 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 11.9,
+    "q": "wind gusts"
+   }
+  ]
+ },
+ "leaves": {
+  "kind": "bed",
+  "picks": [
+   {
+    "id": 9116258282,
+    "name": "Leaves Rustle Wind Blowing Through Trees 2 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 87.4,
+    "q": "leaves rustle wind"
+   },
+   {
+    "id": 9116258071,
+    "name": "Leaves Rustle Wind Blowing Through Trees 1 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 75.8,
+    "q": "leaves rustle wind"
+   },
+   {
+    "id": 9116248055,
+    "name": "Leaf Movement 2 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 24.5,
+    "q": "foliage rustle"
+   },
+   {
+    "id": 9116248034,
+    "name": "Leaf Movement 3 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 21.6,
+    "q": "foliage rustle"
+   }
+  ]
+ },
+ "sea_shore": {
+  "kind": "bed",
+  "picks": [
+   {
+    "id": 9116203162,
+    "name": "Lake Lap Water Movement 2 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 45.7,
+    "q": "waves lapping beach"
+   },
+   {
+    "id": 9120570701,
+    "name": "Water Lap Active 1 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 31.5,
+    "q": "gentle waves shore"
+   },
+   {
+    "id": 9120611182,
+    "name": "Wave Crash 2 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 21.3,
+    "q": "waves beach"
+   }
+  ]
+ },
+ "sea_far": {
+  "kind": "bed",
+  "picks": [
+   {
+    "id": 9125394114,
+    "name": "Big Surf Ocean Wave Impact Some Foam Sizzle  (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 41.5,
+    "q": "ocean surf"
+   },
+   {
+    "id": 9119677305,
+    "name": "Surf Ocean Wave Impact On Zuma Beach 4 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 40.2,
+    "q": "ocean surf"
+   },
+   {
+    "id": 9125394480,
+    "name": "Big Surf Ocean Wave Impact Some Foam Sizzle  (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 39.9,
+    "q": "ocean surf"
+   },
+   {
+    "id": 9117143228,
+    "name": "Ocean Surf 2 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 34.9,
+    "q": "ocean surf"
+   }
+  ]
+ },
+ "birds_day": {
+  "kind": "bed",
+  "picks": [
+   {
+    "id": 9119383684,
+    "name": "Sonoma Morning Birds California Chirping 2 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 127.6,
+    "q": "birds chirping"
+   },
+   {
+    "id": 9118752742,
+    "name": "Rural Daytime Ext Birds Tweeting Chirping 1 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 99.8,
+    "q": "birds chirping"
+   },
+   {
+    "id": 9118752861,
+    "name": "Rural Daytime Ext Birds Tweeting Chirping 2 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 95.9,
+    "q": "birds chirping"
+   },
+   {
+    "id": 9119383777,
+    "name": "Sonoma Morning Birds California Chirping 3 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 79.4,
+    "q": "birds chirping"
+   }
+  ]
+ },
+ "seagull": {
+  "kind": "shot",
+  "picks": [
+   {
+    "id": 9118858259,
+    "name": "Seagull Squawks 3 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 3.5,
+    "q": "seagull"
+   },
+   {
+    "id": 9118858265,
+    "name": "Seagull Squawks 2 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 5.2,
+    "q": "seagull"
+   },
+   {
+    "id": 9118858279,
+    "name": "Seagull Squawks 1 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 6.0,
+    "q": "seagull"
+   }
+  ]
+ },
+ "bird_chirp": {
+  "kind": "shot",
+  "picks": [
+   {
+    "id": 9113844830,
+    "name": "Cockatiel Bird Interior Chirping 1 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 3.3,
+    "q": "bird chirp"
+   },
+   {
+    "id": 9113844972,
+    "name": "Cockatiel Bird Interior Whistling Chirps 1 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 3.4,
+    "q": "bird chirp"
+   },
+   {
+    "id": 9113845102,
+    "name": "Cockatiel Bird Interior Whistling Chirps 3 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 4.9,
+    "q": "bird chirp"
+   }
+  ]
+ },
+ "night_crickets": {
+  "kind": "bed",
+  "picks": [
+   {
+    "id": 9112764573,
+    "name": "Crickets Night 3 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 64.0,
+    "q": "crickets"
+   },
+   {
+    "id": 9112764891,
+    "name": "Crickets Night 3 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 63.5,
+    "q": "crickets"
+   },
+   {
+    "id": 9112765178,
+    "name": "Crickets Night 3 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 57.7,
+    "q": "crickets"
+   },
+   {
+    "id": 9112765304,
+    "name": "Crickets Night 1 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 56.0,
+    "q": "crickets"
+   }
+  ]
+ },
+ "night_owl": {
+  "kind": "shot",
+  "picks": [
+   {
+    "id": 9117181875,
+    "name": "Owl Hooting Reverberant Several 3 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 5.4,
+    "q": "owl hoot"
+   },
+   {
+    "id": 9117181540,
+    "name": "Owl Hooting Reverberant Several 1 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 5.5,
+    "q": "owl hoot"
+   },
+   {
+    "id": 9117181886,
+    "name": "Owl Hooting Reverberant Several 2 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 5.8,
+    "q": "owl hoot"
+   },
+   {
+    "id": 9117181539,
+    "name": "Owl Hooting Reverberant Dry Several 6 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 7.4,
+    "q": "owl hoot"
+   }
+  ]
+ },
+ "pond": {
+  "kind": "bed",
+  "picks": [
+   {
+    "id": 9119646672,
+    "name": "Stream Flow 2 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 86.3,
+    "q": "babbling brook"
+   },
+   {
+    "id": 9119646667,
+    "name": "Stream Flow 1 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 46.0,
+    "q": "babbling brook"
+   },
+   {
+    "id": 9119646356,
+    "name": "Stream Bed 2 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 41.7,
+    "q": "babbling brook"
+   },
+   {
+    "id": 9119647238,
+    "name": "Stream Small River 2 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 36.1,
+    "q": "babbling brook"
+   }
+  ]
+ },
+ "rain_light": {
+  "kind": "bed",
+  "picks": [
+   {
+    "id": 9112854440,
+    "name": "Rain On Leaves 2 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 55.9,
+    "q": "rain on leaves"
+   },
+   {
+    "id": 9112854438,
+    "name": "Rain On Leaves 1 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 46.0,
+    "q": "rain on leaves"
+   }
+  ]
+ },
+ "thunder_far": {
+  "kind": "shot",
+  "picks": [
+   {
+    "id": 9120017068,
+    "name": "Thunder Distant Boom Thud Rapid Hits 4 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 3.6,
+    "q": "distant thunder"
+   },
+   {
+    "id": 9120016738,
+    "name": "Thunder Distant Boom Thud Rapid Hits 2 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 4.0,
+    "q": "distant thunder"
+   },
+   {
+    "id": 9120017302,
+    "name": "Thunder Distant Boom Thud Rapid Hits 8 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 4.1,
+    "q": "distant thunder"
+   },
+   {
+    "id": 9120018088,
+    "name": "Thunder Distant Boom Thud Rapid Hits 18 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 4.1,
+    "q": "distant thunder"
+   }
+  ]
+ },
+ "cave_tone": {
+  "kind": "bed",
+  "picks": [
+   {
+    "id": 9113731969,
+    "name": "Cave Presence Constant Eerie Musical Hum 4 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 57.4,
+    "q": "cave"
+   },
+   {
+    "id": 9113732233,
+    "name": "Cavernous Winds Empty Eerie Gusts Tonal 3 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 43.0,
+    "q": "cavern"
+   },
+   {
+    "id": 9113732197,
+    "name": "Cavernous Winds Empty Eerie Gusts Tonal 2 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 36.0,
+    "q": "cavern"
+   },
+   {
+    "id": 9113732046,
+    "name": "Cavernous Winds Empty Eerie Gusts Tonal 1 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 36.0,
+    "q": "cavern"
+   }
+  ]
+ },
+ "cave_drip": {
+  "kind": "shot",
+  "picks": [
+   {
+    "id": 9126181740,
+    "name": "Water Drip Distant Single Splattering Drops  (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 0.3,
+    "q": "water drip"
+   },
+   {
+    "id": 9126183559,
+    "name": "Water Drip Distant Single Splattering Drops  (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 0.6,
+    "q": "water drip"
+   },
+   {
+    "id": 9126182905,
+    "name": "Water Drip Distant Single Splattering Drops  (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 0.6,
+    "q": "water drip"
+   },
+   {
+    "id": 9126176458,
+    "name": "Water Drip Distant Single Splattering Drops  (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 0.6,
+    "q": "water drip"
+   }
+  ]
+ },
+ "crystal_hum": {
+  "kind": "bed",
+  "picks": [
+   {
+    "id": 9125602386,
+    "name": "Heavenly Harmonic Presence Glowing Crystal R (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 36.0,
+    "q": "magic sparkle loop"
+   },
+   {
+    "id": 9125986239,
+    "name": "Sparkle Tone Constant High End Shimmer Spark (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 36.0,
+    "q": "magic sparkle loop"
+   },
+   {
+    "id": 9125602255,
+    "name": "Heavenly Harmonic Presence Glowing Crystal R (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 36.0,
+    "q": "magic sparkle loop"
+   },
+   {
+    "id": 9125602647,
+    "name": "Heavenly Harmonic Presence Glowing Crystal R (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 36.0,
+    "q": "shimmer pad"
+   }
+  ]
+ },
+ "lamp_crackle": {
+  "kind": "bed",
+  "picks": [
+   {
+    "id": 9112780462,
+    "name": "Fireplace Constant Burning Flame 4 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 42.8,
+    "q": "fire crackle small"
+   },
+   {
+    "id": 9120193895,
+    "name": "Torch O Fire 1 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 10.9,
+    "q": "torch fire"
+   },
+   {
+    "id": 9120193891,
+    "name": "Torch O Fire 2 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 7.2,
+    "q": "torch fire"
+   }
+  ]
+ },
+ "step_grass": {
+  "kind": "shot",
+  "picks": [
+   {
+    "id": 9120062559,
+    "name": "Tip Toe Of Object Onto Grass 1 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 1.0,
+    "q": "tip toe onto grass"
+   },
+   {
+    "id": 9120062960,
+    "name": "Tip Toe Of Object Onto Grass 8 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 1.1,
+    "q": "tip toe onto grass"
+   },
+   {
+    "id": 9120064187,
+    "name": "Tip Toe Of Object Onto Grass 27 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 1.1,
+    "q": "tip toe onto grass"
+   },
+   {
+    "id": 9120063866,
+    "name": "Tip Toe Of Object Onto Grass 24 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 1.5,
+    "q": "tip toe onto grass"
+   }
+  ]
+ },
+ "step_dirt": {
+  "kind": "shot",
+  "picks": [
+   {
+    "id": 9118598720,
+    "name": "Rock Hit Dirt Impact 19 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 0.3,
+    "q": "rock hits dirt"
+   },
+   {
+    "id": 9118598279,
+    "name": "Rock Hit Dirt Impact 14 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 0.4,
+    "q": "rock hits dirt"
+   },
+   {
+    "id": 9118598729,
+    "name": "Rock Hit Dirt Impact 20 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 0.4,
+    "q": "rock hits dirt"
+   },
+   {
+    "id": 9118598470,
+    "name": "Rock Hit Dirt Impact 16 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 0.4,
+    "q": "rock hits dirt"
+   }
+  ]
+ },
+ "step_wood": {
+  "kind": "shot",
+  "picks": [
+   {
+    "id": 9120880314,
+    "name": "Wood Grab Muted Thuds 17 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 0.9,
+    "q": "wood muted thud"
+   },
+   {
+    "id": 9120880564,
+    "name": "Wood Grab Muted Thuds 19 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 1.0,
+    "q": "wood muted thud"
+   },
+   {
+    "id": 9120880755,
+    "name": "Wood Grab Muted Thuds 23 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 1.3,
+    "q": "wood muted thud"
+   },
+   {
+    "id": 9120880067,
+    "name": "Wood Grab Muted Thuds 15 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 1.4,
+    "q": "wood muted thud"
+   }
+  ]
+ },
+ "step_stone": {
+  "kind": "shot",
+  "picks": [
+   {
+    "id": 9118682212,
+    "name": "Rocks Dirt Impacts In Ground 25 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 0.2,
+    "q": "pebble tap"
+   },
+   {
+    "id": 9118682636,
+    "name": "Rocks Dirt Impacts In Ground 29 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 0.2,
+    "q": "pebble tap"
+   },
+   {
+    "id": 9118681251,
+    "name": "Rocks Dirt Impacts In Ground 16 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 0.2,
+    "q": "pebble tap"
+   },
+   {
+    "id": 9118681596,
+    "name": "Rocks Dirt Impacts In Ground 19 (SFX)",
+    "by": "ProSoundEffects",
+    "dur": 0.2,
+    "q": "pebble tap"
+   }
+  ]
+ },
+ "hen_cluck": {
+  "kind": "shot",
+  "picks": []
+ }
+}

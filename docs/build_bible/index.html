@@ -1,0 +1,258 @@
+<title>Peckwood Build Bible</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column (~72ch) with wide figures and tables that break out to the page width; sticky chapter
+   chips at the top. Palette from the target frames: golden-hour amber accent, moss green, dusk-blue neutrals. */
+:root {
+  --bg: #f7f4ee; --surface: #fffdf8; --fg: #1d2330; --muted: #5d6474; --rule: #e3ddd0;
+  --accent: #c8711a; --accent-soft: #fbe9d2; --moss: #3f7a3a; --warn: #b3261e; --code-bg: #f0ebe1;
+  --font-display: "Fredoka One", "Fredoka", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12151d; --surface: #191d28; --fg: #e9e6df; --muted: #a2a8b6; --rule: #2a3040;
+  --accent: #f0a04b; --accent-soft: #3a2a17; --moss: #8cc77f; --warn: #ff8a80; --code-bg: #222838; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #12151d; --surface: #191d28; --fg: #e9e6df; --muted: #a2a8b6; --rule: #2a3040;
+  --accent: #f0a04b; --accent-soft: #3a2a17; --moss: #8cc77f; --warn: #ff8a80; --code-bg: #222838; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font: 16px/1.6 var(--font-body); padding-inline: 16px; padding-block: 0 64px; }
+.wrap { max-width: 1080px; margin: 0 auto; }
+.col { max-width: 72ch; }
+header.hero { padding-block: 40px 20px; display: grid; gap: 10px; }
+.eyebrow { font: 500 12px/1 var(--font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+h1 { font: 44px/1.05 var(--font-display); margin: 0; text-wrap: balance; letter-spacing: .01em; }
+h2 { font: 28px/1.15 var(--font-display); margin: 56px 0 10px; text-wrap: balance; scroll-margin-top: 70px; }
+h3 { font: 600 17px/1.3 var(--font-body); margin: 26px 0 6px; }
+p, li { max-width: 72ch; }
+.lede { font-size: 18px; color: var(--muted); max-width: 64ch; margin: 0; }
+nav.chips { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-block: 10px; border-bottom: 1px solid var(--rule);
+  display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+nav.chips a { flex: none; font: 500 13px/1 var(--font-body); color: var(--fg); text-decoration: none; padding: 7px 11px; border: 1px solid var(--rule); border-radius: 999px; background: var(--surface); }
+nav.chips a:hover, nav.chips a:focus-visible { border-color: var(--accent); color: var(--accent); outline: none; }
+.shots { display: grid; grid-template-columns: 2fr 1fr; gap: 10px; margin-top: 18px; }
+.shots figure { margin: 0; display: grid; gap: 6px; min-width: 0; }
+.shots figure:first-child { grid-row: span 2; }
+.shots img, figure img { width: 100%; height: auto; border-radius: 6px; display: block; }
+figcaption { font-size: 13px; color: var(--muted); }
+@media (max-width: 720px) { .shots { grid-template-columns: 1fr; } .shots figure:first-child { grid-row: auto; } h1 { font-size: 34px; } }
+.rules { counter-reset: r; list-style: none; padding: 0; display: grid; gap: 12px; }
+.rules li { counter-increment: r; display: grid; grid-template-columns: 34px 1fr; gap: 12px; }
+.rules li::before { content: counter(r); font: 20px/1.2 var(--font-display); color: var(--accent); }
+.rules b { display: block; }
+.note { border-left: 3px solid var(--accent); background: var(--accent-soft); padding: 10px 14px; border-radius: 0 6px 6px 0; max-width: 72ch; margin: 14px 0; }
+.tbl { overflow-x: auto; margin: 12px 0; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font: 600 12px/1.2 var(--font-body); letter-spacing: .04em; text-transform: uppercase; color: var(--muted); background: var(--surface); position: sticky; top: 0; }
+tr:last-child td { border-bottom: 0; }
+td.num { font-variant-numeric: tabular-nums; font-family: var(--font-mono); white-space: nowrap; }
+code { overflow-wrap: anywhere; font: 13px/1.4 var(--font-mono); background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+pre { font: 13px/1.5 var(--font-mono); background: var(--code-bg); padding: 14px 16px; border-radius: 8px; overflow-x: auto; margin: 12px 0; }
+.dim { color: var(--muted); }
+.warn { color: var(--warn); font-weight: 600; }
+.sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 6px; border: 1px solid rgba(0,0,0,.2); }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+@media (max-width: 720px) { .two { grid-template-columns: 1fr; } }
+.card { border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); padding: 14px 16px; min-width: 0; }
+.card h3 { margin-top: 0; }
+.checks { list-style: none; padding: 0; display: grid; gap: 8px; }
+.checks li { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 8px; }
+.checks li::before { content: ""; width: 14px; height: 14px; border: 2px solid var(--moss); border-radius: 3px; margin-top: 4px; }
+footer { margin-top: 56px; color: var(--muted); font-size: 13px; }
+a { color: var(--accent); }
+</style>
+
+<div class="wrap">
+<header class="hero">
+  <span class="eyebrow">Peckwood · build bible · look: stylized realism</span>
+  <h1>Make people say “wait, this is Roblox?”</h1>
+  <p class="lede">The rules for the world, light, ground, wind, sound and performance, with the exact Roblox setting for each. Every Studio step ends with a side-by-side against these target frames.</p>
+</header>
+<nav class="chips" aria-label="Chapters">
+  <a href="#look">Look</a><a href="#hierarchy">Hierarchy</a><a href="#light">Light</a><a href="#ground">Ground</a><a href="#wind">Wind</a><a href="#sound">Sound</a><a href="#perf">Performance</a><a href="#qa">Studio QA</a>
+</nav>
+
+<h2 id="look">1. The look</h2>
+<p class="col">Sea of Thieves meets Fortnite meets Kena: real materials and real light, chunky readable shapes, something moving in every frame. The hen and her eggs are always the brightest thing on screen.</p>
+<div class="shots">
+  <figure><img src="park_play.jpg" alt="Hen in a fenced egg yard at golden hour, dense grass, dirt path, oak roots, lamp post and bench"><figcaption>Park, play camera at golden hour. Target for the ground, grass density and light.</figcaption></figure>
+  <figure><img src="park_dusk.jpg" alt="The Park at blue hour with lanterns, fireflies and the lighthouse beam over the sea"><figcaption>Park at dusk: lantern pools, fireflies, the lighthouse beam.</figcaption></figure>
+  <figure><img src="cave.jpg" alt="Hen in a wet violet cave with glowing pink seed pods and amethyst crystals"><figcaption>Cave expedition: wet stone, crystals, pink seed glow.</figcaption></figure>
+</div>
+<p class="dim" style="font-size:13px">Target frames are AI concept art, not in-game captures. The camera in the dusk frame sits lower than the game camera (pitch 52°).</p>
+<h3>What makes it read as real (in priority order)</h3>
+<ol class="rules">
+  <li><div><b>Light does the work.</b>Warm sun, cool shadows, real sky light on materials (PBR back on). Contrast comes from light, not from saturated paint.</div></li>
+  <li><div><b>Materials, not colours.</b>Bark has grooves, stone has cracks, paths have pebbles and ruts. A flat colour anywhere big reads as cheap.</div></li>
+  <li><div><b>Density at the edges, calm in the middle.</b>Grass, flowers, rocks and roots crowd the borders and props. The play area stays open so the hen and eggs pop.</div></li>
+  <li><div><b>Something moves everywhere.</b>Grass blades, leaves, pollen, water, clouds, lantern flicker. Still frames look like a screenshot of a demo.</div></li>
+  <li><div><b>Sound sells the space.</b>Wind that rises with the gusts, the shore getting louder at the coast, footsteps that change with the ground. Section 6.</div></li>
+</ol>
+<div class="note"><b>Not possible in Roblox here:</b> the soft background blur (depth of field) in the play frame. Roblox caps focus distance at 200 studs and our near-orthographic camera sits about 620 studs away, so it would blur the whole screen. Depth comes from Atmosphere haze, and foreground framing comes from real props near the screen edge.</div>
+
+<h2 id="hierarchy">2. Hierarchy</h2>
+<p class="col">Code: <code>src/shared/WorldTree.luau</code>, spec: <code>MAP_HIERARCHY.md</code>. Every object lives in exactly one layer, and the layer decides its rules.</p>
+<figure><img src="hierarchy.jpg" alt="Park mockup with numbered hierarchy tiers and the Explorer tree"><figcaption>Read order from 1 (hen and eggs) to 7 (sea and sky).</figcaption></figure>
+<div class="tbl"><table>
+  <thead><tr><th>Layer</th><th>Tier</th><th>Shadows</th><th>Sways</th><th>Material rule</th></tr></thead>
+  <tbody>
+    <tr><td>Actors</td><td class="num">1</td><td>yes</td><td>no</td><td>Brightest values in the frame, ink outline Highlight (the only one left)</td></tr>
+    <tr><td>Interactables</td><td class="num">2</td><td>yes</td><td>no</td><td>Own light or glow, a cleared ring of ground around it</td></tr>
+    <tr><td>Landmarks</td><td class="num">3</td><td>yes</td><td>no</td><td>Hero SurfaceAppearance (1024 px), slow motion only (beam, sails)</td></tr>
+    <tr><td>Props</td><td class="num">4</td><td>yes</td><td>no</td><td>512 px SurfaceAppearance, subtle studs allowed (man-made only)</td></tr>
+    <tr><td>Foliage</td><td class="num">5</td><td>yes</td><td>yes</td><td>Instanced meshes (same MeshId), darkest and most varied greens</td></tr>
+    <tr><td>Rocks</td><td class="num">5</td><td>yes</td><td>no</td><td>Moss on top faces, sunk 0.3 studs into the ground</td></tr>
+    <tr><td>Ground</td><td class="num">6</td><td>no</td><td>grass blades</td><td>Terrain with the Painted* MaterialVariants, Decoration on</td></tr>
+    <tr><td>Sea / Sky</td><td class="num">7</td><td>no</td><td>waves, clouds</td><td>Hazy and cooler, never brighter than the island</td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="light">3. Light</h2>
+<p class="col">Code: <code>src/client/LightingPresets.luau</code>. The active preset is <b>golden</b>, and the old cel look is kept as <b>toy</b>. Switch live in Studio with <code>PlayerGui:SetAttribute("PeckwoodLook", "toy")</code>.</p>
+<div class="two">
+  <div class="card"><h3>Golden: static settings</h3>
+    <div class="tbl"><table><tbody>
+      <tr><td>Technology</td><td><code>Future</code></td></tr>
+      <tr><td>EnvironmentDiffuseScale</td><td class="num">1 <span class="dim">(toy 0)</span></td></tr>
+      <tr><td>EnvironmentSpecularScale</td><td class="num">0.65 <span class="dim">(toy 0)</span></td></tr>
+      <tr><td>ShadowSoftness</td><td class="num">0.22 <span class="dim">(toy 0.12)</span></td></tr>
+      <tr><td>ColorCorrection</td><td class="num">Sat 0.14 · Con 0.10 · Bri 0.015</td></tr>
+      <tr><td>Bloom</td><td class="num">Int 0.55 · Size 30 · Thr 1.2</td></tr>
+      <tr><td>SunRays</td><td class="num">Int 0.07 · Spread 0.55</td></tr>
+      <tr><td>Atmosphere</td><td class="num">Density 0.30 · Offset 0.14 · Glare 0.4 · Haze 1.4</td></tr>
+    </tbody></table></div>
+  </div>
+  <div class="card"><h3>Why these numbers</h3>
+    <p>With sky light on, the sky lights every surface, so the flat ambient lift drops and shadows get real depth. Specular at 0.65 gives wet stone and glossy eggs a sheen without plastic shine. Saturation comes down from 0.36 to 0.14 because real materials already carry colour. Haze 1.4 gives distance depth now that depth of field is out.</p>
+  </div>
+</div>
+<h3>Day cycle (24 real minutes per day, interpolated at 4 Hz)</h3>
+<div class="tbl"><table>
+  <thead><tr><th>Hour</th><th>Brightness</th><th>OutdoorAmbient</th><th>Ambient</th><th>ColorShift_Top</th><th>Fog</th></tr></thead>
+  <tbody>
+<tr><td class="num">00:00</td><td class="num">1.2</td><td><span class="sw" style="background:#3c4a78"></span><code>#3c4a78</code></td><td><span class="sw" style="background:#1e2440"></span><code>#1e2440</code></td><td><span class="sw" style="background:#7c8cc8"></span><code>#7c8cc8</code></td><td><span class="sw" style="background:#1c2850"></span><code>#1c2850</code></td></tr>
+<tr><td class="num">05:36</td><td class="num">1.6</td><td><span class="sw" style="background:#7a6a8c"></span><code>#7a6a8c</code></td><td><span class="sw" style="background:#2e2a40"></span><code>#2e2a40</code></td><td><span class="sw" style="background:#ffb07a"></span><code>#ffb07a</code></td><td><span class="sw" style="background:#e8a684"></span><code>#e8a684</code></td></tr>
+<tr><td class="num">07:00</td><td class="num">2.6</td><td><span class="sw" style="background:#8c96b0"></span><code>#8c96b0</code></td><td><span class="sw" style="background:#36384a"></span><code>#36384a</code></td><td><span class="sw" style="background:#ffd9a8"></span><code>#ffd9a8</code></td><td><span class="sw" style="background:#d6e0ec"></span><code>#d6e0ec</code></td></tr>
+<tr><td class="num">11:00</td><td class="num">3.0</td><td><span class="sw" style="background:#96a6c2"></span><code>#96a6c2</code></td><td><span class="sw" style="background:#3a3e52"></span><code>#3a3e52</code></td><td><span class="sw" style="background:#fff4e2"></span><code>#fff4e2</code></td><td><span class="sw" style="background:#c4daf2"></span><code>#c4daf2</code></td></tr>
+<tr><td class="num">15:00</td><td class="num">3.0</td><td><span class="sw" style="background:#94a2be"></span><code>#94a2be</code></td><td><span class="sw" style="background:#3a3e52"></span><code>#3a3e52</code></td><td><span class="sw" style="background:#ffead0"></span><code>#ffead0</code></td><td><span class="sw" style="background:#cadff2"></span><code>#cadff2</code></td></tr>
+<tr><td class="num">17:30</td><td class="num">3.2</td><td><span class="sw" style="background:#8e86a6"></span><code>#8e86a6</code></td><td><span class="sw" style="background:#33304a"></span><code>#33304a</code></td><td><span class="sw" style="background:#ffa860"></span><code>#ffa860</code></td><td><span class="sw" style="background:#f2c49a"></span><code>#f2c49a</code></td></tr>
+<tr><td class="num">18:42</td><td class="num">2.4</td><td><span class="sw" style="background:#8a7ca4"></span><code>#8a7ca4</code></td><td><span class="sw" style="background:#3a3456"></span><code>#3a3456</code></td><td><span class="sw" style="background:#ff8a5c"></span><code>#ff8a5c</code></td><td><span class="sw" style="background:#d08a86"></span><code>#d08a86</code></td></tr>
+<tr><td class="num">20:00</td><td class="num">1.3</td><td><span class="sw" style="background:#3c4a78"></span><code>#3c4a78</code></td><td><span class="sw" style="background:#1e2440"></span><code>#1e2440</code></td><td><span class="sw" style="background:#7c8cc8"></span><code>#7c8cc8</code></td><td><span class="sw" style="background:#1c2850"></span><code>#1c2850</code></td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="ground">4. Ground and materials</h2>
+<div class="two">
+  <div class="card"><h3>Terrain (walkable tops)</h3>
+    <ul>
+      <li>Override terrain materials with the project's <b>Painted*</b> variants (PaintedGrass, PaintedGround, PaintedRock, PaintedSand…), not the Flat* ones.</li>
+      <li><code>Terrain.Decoration = true</code> and <code>GrassLength = 0.75</code>. This is Roblox's own swaying grass, cheap on the GPU, set by the preset.</li>
+      <li>Two grass tones per biome: a lit tone and a cooler shade tone in noise patches. Never one flat green field.</li>
+      <li>Paths: Ground or Mud material with pebble decals, and ruts painted into the variant's ColorMap.</li>
+    </ul>
+  </div>
+  <div class="card"><h3>Meshes</h3>
+    <ul>
+      <li>SurfaceAppearance on every hero and prop: ColorMap + NormalMap + RoughnessMap. Metalness 0 except iron lamps.</li>
+      <li>Texture budget: 1024 px landmarks, 512 px props, 256 px small dressing. Trim sheets shared across props.</li>
+      <li>Rocks get a moss top (vertex colour or a second material) and sit 0.3 studs into the ground. Nothing floats.</li>
+      <li>Subtle studs only on man-made props (owner decision C).</li>
+    </ul>
+  </div>
+</div>
+
+<h2 id="wind">5. Wind and foliage</h2>
+<p class="col">One gust signal (<code>IslandView.wind(t)</code>, from server time so every player shares it) drives everything, so grass, trees, particles and sound always move together.</p>
+<div class="tbl"><table>
+  <thead><tr><th>What</th><th>Driven by</th><th>Setting</th></tr></thead>
+  <tbody>
+    <tr><td>Terrain grass blades</td><td><code>workspace.GlobalWind</code></td><td class="num">direction (0.8, 0, 0.35), 5 + 12 × gust studs/s, updated at 10 Hz</td></tr>
+    <tr><td>Trees, bushes, flowers</td><td>IslandView sway (pivot at the base)</td><td class="num">0.018 rad × gust, two sines, 20 Hz, visible islands only</td></tr>
+    <tr><td>Leaves, pollen, petals</td><td>Ambience air emitter</td><td class="num">rate and speed × gust, per-island palette</td></tr>
+    <tr><td>Wind sound</td><td>Soundscape</td><td class="num">wind bed 0.45 + 0.55 × gust, a gust whoosh on each peak</td></tr>
+    <tr><td>Weather</td><td>Ambience (8-minute shared slots)</td><td class="num">clear 62 % · breezy 24 % · rain 14 %, 20 s blends</td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="sound">6. Sound</h2>
+<p class="col">Code: <code>src/client/Soundscape.luau</code>, ids in <code>src/client/AmbienceIds.luau</code> (picked by <code>roblox/tools/audio/find_sounds.py</code> from free, licensed Creator Store libraries only). The mix follows the hen, the hour and the weather, so it is right everywhere without per-place scripting.</p>
+<div class="two">
+  <div class="card"><h3>How it works</h3>
+    <ul>
+      <li><b>Listener on the hen.</b> The camera is about 620 studs away, so 3D sounds are heard from the hen's position, oriented to the camera.</li>
+      <li><b>Beds:</b> looping layers crossfaded with a 1.2 s ease by zone × context (coast distance, trees nearby, gusts, rain, night).</li>
+      <li><b>Spots:</b> 3D loops on real things: the nearest pond, and the two nearest lanterns at night.</li>
+      <li><b>One-shots:</b> random, in 3D around the hen, never the same take twice in a row, ±8 % pitch.</li>
+      <li><b>Footsteps:</b> every hop landing of the local hen; the surface comes from the tile under her.</li>
+    </ul>
+  </div>
+  <div class="card"><h3>Mix rules</h3>
+    <ul>
+      <li>Volume tiers: UI 0.8 · rewards 1.0 · <b>ambience 0.8</b> · music 0.6 (Sfx categories; the Settings slider uses <code>Sfx.setVolume("ambience", v)</code>).</li>
+      <li>Behind any open window: <code>Soundscape.setMuffled(true)</code> low-passes the world (high −22 dB, mid −6 dB).</li>
+      <li>Big moments (hatch, island unlock): <code>Soundscape.duck(0.4, 2)</code>.</li>
+      <li>Reverb per zone: none in the open, Forest, Quarry (Mine), Mountains (Expedition), Auditorium (Echo), Cave.</li>
+      <li>At most about 12 sounds playing at once. Beds stop when silent.</li>
+    </ul>
+  </div>
+</div>
+<h3>Every sound slot</h3>
+<div class="tbl"><table>
+  <thead><tr><th>Slot</th><th>Kind</th><th>In use</th><th>Alternates</th><th>When it plays</th></tr></thead>
+  <tbody>
+<tr><td><code>wind_soft</code></td><td>bed</td><td><code>9114057128</code> Desert Wind Whistley Light Gusts 2 (SFX) <span class="dim">92.0 s · ProSoundEffects</span></td><td class="dim">1 alternate</td><td>Bed. Always on outdoors, rises with gusts and breeze.</td></tr>
+<tr><td><code>wind_gust</code></td><td>shot</td><td><code>9113286782</code> Barstow Wind Light Blustery Low Howl 1 (SFX) <span class="dim">11.9 s · ProSoundEffects</span></td><td class="dim">none</td><td>Shot. On each gust peak, max one per 8 s.</td></tr>
+<tr><td><code>leaves</code></td><td>bed</td><td><code>9116258282</code> Leaves Rustle Wind Blowing Through Trees 2 (SFX) <span class="dim">87.4 s · ProSoundEffects</span></td><td class="dim">3 alternates</td><td>Bed. Scales with trees within 40 studs x wind.</td></tr>
+<tr><td><code>sea_shore</code></td><td>bed</td><td><code>9116203162</code> Lake Lap Water Movement 2 (SFX) <span class="dim">45.7 s · ProSoundEffects</span></td><td class="dim">2 alternates</td><td>Bed. Fades in within 8 tiles of the coast.</td></tr>
+<tr><td><code>sea_far</code></td><td>bed</td><td><code>9125394114</code> Big Surf Ocean Wave Impact Some Foam Sizzle  (SFX) <span class="dim">41.5 s · ProSoundEffects</span></td><td class="dim">3 alternates</td><td>Bed. Low wash everywhere, quieter on the shore.</td></tr>
+<tr><td><code>birds_day</code></td><td>bed</td><td><code>9119383684</code> Sonoma Morning Birds California Chirping 2 (SFX) <span class="dim">127.6 s · ProSoundEffects</span></td><td class="dim">3 alternates</td><td>Bed. Day only, dawn chorus 5:00-8:30, ducks in rain.</td></tr>
+<tr><td><code>seagull</code></td><td>shot</td><td><code>9118858259</code> Seagull Squawks 3 (SFX) <span class="dim">3.5 s · ProSoundEffects</span></td><td class="dim">2 alternates</td><td>Shot. Near the coast by day, 3D.</td></tr>
+<tr><td><code>bird_chirp</code></td><td>shot</td><td><code>9113844830</code> Cockatiel Bird Interior Chirping 1 (SFX) <span class="dim">3.3 s · ProSoundEffects</span></td><td class="dim">2 alternates</td><td>Shot. From the nearest tree, 3D.</td></tr>
+<tr><td><code>night_crickets</code></td><td>bed</td><td><code>9112764573</code> Crickets Night 3 (SFX) <span class="dim">64.0 s · ProSoundEffects</span></td><td class="dim">3 alternates</td><td>Bed. Night only.</td></tr>
+<tr><td><code>night_owl</code></td><td>shot</td><td><code>9117181875</code> Owl Hooting Reverberant Several 3 (SFX) <span class="dim">5.4 s · ProSoundEffects</span></td><td class="dim">3 alternates</td><td>Shot. Night, far, 3D.</td></tr>
+<tr><td><code>pond</code></td><td>bed</td><td><code>9119646672</code> Stream Flow 2 (SFX) <span class="dim">86.3 s · ProSoundEffects</span></td><td class="dim">3 alternates</td><td>3D spot on the nearest inland water.</td></tr>
+<tr><td><code>rain_light</code></td><td>bed</td><td><code>9112854440</code> Rain On Leaves 2 (SFX) <span class="dim">55.9 s · ProSoundEffects</span></td><td class="dim">1 alternate</td><td>Bed. Follows the shared weather blend.</td></tr>
+<tr><td><code>thunder_far</code></td><td>shot</td><td><code>9120017068</code> Thunder Distant Boom Thud Rapid Hits 4 (SFX) <span class="dim">3.6 s · ProSoundEffects</span></td><td class="dim">3 alternates</td><td>Shot. Only in heavy rain.</td></tr>
+<tr><td><code>cave_tone</code></td><td>bed</td><td><code>9113731969</code> Cave Presence Constant Eerie Musical Hum 4 (SFX) <span class="dim">57.4 s · ProSoundEffects</span></td><td class="dim">3 alternates</td><td>Bed. Caves (full) and the Mine (low).</td></tr>
+<tr><td><code>cave_drip</code></td><td>shot</td><td><code>9126181740</code> Water Drip Distant Single Splattering Drops  (SFX) <span class="dim">0.3 s · ProSoundEffects</span></td><td class="dim">3 alternates</td><td>Shot. Caves and Mine, 3D around the hen.</td></tr>
+<tr><td><code>crystal_hum</code></td><td>bed</td><td><code>9125602386</code> Heavenly Harmonic Presence Glowing Crystal R (SFX) <span class="dim">36.0 s · ProSoundEffects</span></td><td class="dim">3 alternates</td><td>Bed. Echo Field and crystal caves.</td></tr>
+<tr><td><code>lamp_crackle</code></td><td>bed</td><td><code>9112780462</code> Fireplace Constant Burning Flame 4 (SFX) <span class="dim">42.8 s · ProSoundEffects</span></td><td class="dim">2 alternates</td><td>3D spot on the 2 nearest lanterns, night only.</td></tr>
+<tr><td><code>step_grass</code></td><td>shot</td><td><code>9120062559</code> Tip Toe Of Object Onto Grass 1 (SFX) <span class="dim">1.0 s · ProSoundEffects</span></td><td class="dim">3 alternates</td><td>Hen footstep on grass (first 0.18 s of the take).</td></tr>
+<tr><td><code>step_dirt</code></td><td>shot</td><td><code>9118598720</code> Rock Hit Dirt Impact 19 (SFX) <span class="dim">0.3 s · ProSoundEffects</span></td><td class="dim">3 alternates</td><td>Footstep on paths and sand.</td></tr>
+<tr><td><code>step_wood</code></td><td>shot</td><td><code>9120880314</code> Wood Grab Muted Thuds 17 (SFX) <span class="dim">0.9 s · ProSoundEffects</span></td><td class="dim">3 alternates</td><td>Footstep on decks, piers, bridges.</td></tr>
+<tr><td><code>step_stone</code></td><td>shot</td><td><code>9118682212</code> Rocks Dirt Impacts In Ground 25 (SFX) <span class="dim">0.2 s · ProSoundEffects</span></td><td class="dim">3 alternates</td><td>Footstep in the Mine and caves.</td></tr>
+<tr><td><code>hen_cluck</code></td><td>shot</td><td><span class="warn">empty</span></td><td class="dim"></td><td>No licensed chicken in the library. Slot stays silent until we pick or upload one.</td></tr>
+  </tbody>
+</table></div>
+<p class="dim" style="font-size:13px">Pick by ear in Studio: swap the first id in <code>AmbienceIds.luau</code> with an alternate, or re-run the picker. All picks are free licensed library sounds (Pro Sound Effects via Roblox), so there is no upload or moderation wait.</p>
+
+<h2 id="perf">7. Performance budget (mid phone, 60 fps)</h2>
+<div class="tbl"><table>
+  <thead><tr><th>Budget</th><th>Limit</th><th>How</th></tr></thead>
+  <tbody>
+    <tr><td>Triangles on screen</td><td class="num">≤ 60k per island</td><td>LOD on foliage, RenderFidelity Automatic, culling (IslandView already unparents islands off screen)</td></tr>
+    <tr><td>Draw calls</td><td class="num">≤ 300</td><td>Instancing: same MeshId + same SurfaceAppearance for every copy of a tree, rock or bush</td></tr>
+    <tr><td>Shadow casters</td><td class="num">big shapes only</td><td>CastShadow off below 0.6 studs (WorldTree.audit checks this), lamp PointLights Shadows = false</td></tr>
+    <tr><td>Particles</td><td class="num">≤ 200 live</td><td>Emitters follow the camera focus, not one per island</td></tr>
+    <tr><td>Sounds</td><td class="num">≤ 12 playing</td><td>Beds stop when silent, shots auto-destroy</td></tr>
+    <tr><td>Textures</td><td class="num">1024 / 512 / 256</td><td>Hero / prop / dressing, shared trim sheets</td></tr>
+    <tr><td>EditableMesh</td><td class="num">nearly full today</td><td>The cliff skirt uses most of it; new meshes come from Blender as MeshParts, not EditableMesh</td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="qa">8. First Studio session (owner home)</h2>
+<ol class="checks">
+  <li>Sync (tools/manifest.json includes WorldTree, Soundscape, LightingPresets, AmbienceIds), press Play and check Output is clean.</li>
+  <li><div>Run the hierarchy audit in the command bar and fix what it lists:<pre>print(table.concat(require(game.ReplicatedStorage.Peckwood.WorldTree).audit(), "\n"))</pre></div></li>
+  <li>Look: compare golden and toy (<code>PeckwoodLook</code>) at 07:00, 12:00, 17:30 and 21:00 (<code>PeckwoodHour</code>), with screenshots next to the targets.</li>
+  <li>Grass: blades visible and swaying with the gusts. If too tall or dense for the near-ortho camera, lower GrassLength to 0.5.</li>
+  <li>Listen pass (headphones): Park middle, Park coast, under a tree, by the pond, at night by a lantern, in the rain (<code>PeckwoodWeather</code>), on a deck and in the Mine. Note each slot to swap.</li>
+  <li>Footsteps: one soft tap per hop, never a double hit. If a take double-hits, trim with the 0.18 s cap or pick an alternate.</li>
+  <li>Performance: MicroProfiler on the phone emulator with every island open, within the budget table.</li>
+</ol>
+
+<footer>Source: <code>docs/build_bible/</code> on branch <code>claude/peckwood-isle</code>. Rebuild with <code>python3 docs/build_bible/build.py</code>.</footer>
+</div>

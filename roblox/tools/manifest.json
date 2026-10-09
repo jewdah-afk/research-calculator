@@ -246,6 +246,16 @@
 "StarterPlayer",
 "StarterPlayerScripts",
 "Peckwood",
+"LightingPresets"
+],
+"class": "ModuleScript",
+"url": "src/client/LightingPresets.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
 "Ambience"
 ],
 "class": "ModuleScript",
@@ -296,10 +306,30 @@
 "StarterPlayer",
 "StarterPlayerScripts",
 "Peckwood",
+"AmbienceIds"
+],
+"class": "ModuleScript",
+"url": "src/client/AmbienceIds.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
 "IslandView"
 ],
 "class": "ModuleScript",
 "url": "src/client/IslandView.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"Soundscape"
+],
+"class": "ModuleScript",
+"url": "src/client/Soundscape.luau"
 },
 {
 "path": [

@@ -51,6 +51,7 @@ end
 -- the local player's punch (kernel collected)
 local localBird: Bird? = nil
 function Birds.punch() if localBird then localBird.punch = 1 end end
+Birds.onStep = nil :: ((feet: Vector3, heavy: boolean) -> ())?   -- set by Main: Soundscape footsteps for the local hen
 
 -- one bird, given its feet position (world), velocity in game px/s, height above ground (px)
 local function animate(b: Bird, feet: Vector3, vx: number, vy: number, airZ: number, t: number, dt: number)
@@ -66,12 +67,18 @@ local function animate(b: Bird, feet: Vector3, vx: number, vy: number, airZ: num
 		b.phase += sp * PX * dt * 2.4
 		local s = math.abs(math.sin(b.phase * math.pi))
 		hop = s * 0.22; sy = 0.86 + s * 0.24
-		if b.lastS ~= nil and (b.lastS :: number) > 0.15 and s < 0.15 then b.squash = 1 end
+		if b.lastS ~= nil and (b.lastS :: number) > 0.15 and s < 0.15 then
+			b.squash = 1
+			if b == localBird and Birds.onStep then Birds.onStep(feet, false) end
+		end
 		b.lastS = s
 	else
 		b.phase = 0; sy = 1 + math.sin(t * 3) * 0.025
 	end
-	if b.prevAir and grounded then b.squash = 1.4 end
+	if b.prevAir and grounded then
+		b.squash = 1.4
+		if b == localBird and Birds.onStep then Birds.onStep(feet, true) end
+	end
 	b.prevAir = not grounded
 	b.squash = math.max(0, b.squash - dt * 6)
 	sy -= b.squash * 0.18
