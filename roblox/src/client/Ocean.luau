@@ -634,7 +634,7 @@ local function buildSkirt(mnI, mnJ, mxI, mxJ, riseAt)
 			warn("[Ocean] cliff mesh failed: " .. tostring(mp))
 		end
 	end
-	local TRI_CAP = 9500   -- per mesh (well under Roblox's per-EditableMesh triangle limit)
+	local TRI_CAP = 19500   -- per mesh (measured limits: 20,000 triangles and 60,000 vertices per EditableMesh)
 	local function meshFor(tris: number)
 		if cur and cur.tris + tris > TRI_CAP then finish() end
 		if not cur then
