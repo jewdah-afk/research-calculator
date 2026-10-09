@@ -62,7 +62,7 @@
       "$properties": {
         "Technology": "Future",
         "GlobalShadows": true,
-        "ShadowSoftness": 0.22,
+        "ShadowSoftness": 0.12,
         "ClockTime": 17.1,
         "GeographicLatitude": 38,
         "Brightness": 3.4,
@@ -76,7 +76,7 @@
           0.5,
           0.72
         ],
-        "EnvironmentDiffuseScale": 0.15,
+        "EnvironmentDiffuseScale": 0,
         "EnvironmentSpecularScale": 0,
         "Ambient": [
           0.34,
@@ -107,9 +107,9 @@
       "ColorCorrection": {
         "$className": "ColorCorrectionEffect",
         "$properties": {
-          "Saturation": 0.04,
-          "Contrast": 0.08,
-          "Brightness": 0,
+          "Saturation": 0.36,
+          "Contrast": 0.2,
+          "Brightness": 0.03,
           "TintColor": [
             1,
             0.96,

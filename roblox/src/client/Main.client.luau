@@ -177,11 +177,12 @@ local function outline(target: Instance, color: string, outlineT: number, fill: 
 	h.Adornee = target; h.Parent = target
 	return h
 end
-outline(field, "#6b4512", 0.12, "#fff6d6", 0.78)                                   -- popcorn: warm rim + soft inner lift
+-- owner 2026-10-09 ("that outline and pastel look is incredible"): solid dark ink outlines, 2.5D handheld-RPG look
+outline(field, "#16181e", 0, "#fff6d6", 0.78)                                      -- eggs: solid ink rim + soft inner lift
 IslandView.build()
 -- portals removed (owner 2026-10-09): the HUD Teleport button covers travel. Portals.luau stays in the repo, unused.
 require(script.Parent:WaitForChild("Ambience")).start()
-outline(IslandView.scenery, "#24331f", 0.5)                                         -- scenery: quiet tinted outline
+outline(IslandView.scenery, "#16181e", 0)                                          -- scenery: solid ink outline
 -- dev/QA hook: PlayerGui:SetAttribute("PeckwoodBuild", tick()) replays the unlock build-in; PeckwoodHour freezes the sky
 -- (a string island id replays that island's build-in from its bridge, e.g. "garden")
 plr:WaitForChild("PlayerGui"):GetAttributeChangedSignal("PeckwoodBuild"):Connect(function()

@@ -283,9 +283,33 @@ local TREE_SETS = {
 	bush = { set = { "Bush_01", "Bush_02", "Bush_03" }, h = { 2.6, 3.6 }, bush = true },
 }
 local LEAF_TINT = { forest = "5d7f3a", echo = "8f8fc4", desert = "9aa262", expedition = "5f8a40", mine = "6a8048" }
+-- 2.5D handheld-RPG look (owner 2026-10-09, target roblox/docs/targets/park_target_v3_poke.png): round puffy trees
+-- with flat crown colours per area (the ink outline + toon grade do the shading); PropAssets.pokeTree / pokeBush
+local POKE = { tree = "pokeTree", oak = "pokeTree", bigoak = "pokeTree", bush = "pokeBush" }
+local POKE_LEAF = { forest = "2f7d3a", echo = "8f7fd0", desert = "8fae4a", expedition = "3f8a40", mine = "5f8a48" }
+local PropAssetsT = RS:WaitForChild("PropAssets", 10)
 local function treeModel(kind, x, base, z, seed, areaId)
 	local spec = TREE_SETS[kind]
-	if not spec or not TreeAssets then return nil end
+	if not spec then return nil end
+	local pk = POKE[kind] and PropAssetsT and PropAssetsT:FindFirstChild(POKE[kind])
+	if pk then
+		local m = pk:Clone()
+		m.Name = kind
+		local h = spec.h[1] + hash(seed, 9.1) * (spec.h[2] - spec.h[1])
+		if not spec.bush then h *= 0.95 end
+		m:ScaleTo(m:GetScale() * h / m:GetExtentsSize().Y)
+		local leaf = vary(Color3.fromHex(POKE_LEAF[areaId] or "3f9b3c"), (hash(seed, 2.2) - 0.5) * 0.1)
+		for _, d in m:GetDescendants() do
+			if d:IsA("BasePart") then
+				d.Anchored = true; d.CanCollide = false; d.CanQuery = false; d.CanTouch = false
+				d.CastShadow = not spec.bush
+				if d.Name:find("crown") then d.Color = leaf end
+			end
+		end
+		m:PivotTo(CFrame.new(x, base - 0.2, z) * CFrame.Angles(0, hash(seed, 5.3) * math.pi * 2, 0))
+		return m
+	end
+	if not TreeAssets then return nil end
 	local folder = if spec.bush then TreeAssets:FindFirstChild("Bushes") else TreeAssets:FindFirstChild("Trees")
 	local src = folder and folder:FindFirstChild(spec.set[math.floor(hash(seed, 3.7) * #spec.set) + 1])
 	if not src then return nil end
