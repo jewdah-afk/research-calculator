@@ -154,6 +154,66 @@
 },
 {
 "path": [
+"ReplicatedStorage",
+"Peckwood",
+"Birb",
+"Data"
+],
+"class": "ModuleScript",
+"url": "src/shared/Birb/Data.luau"
+},
+{
+"path": [
+"ReplicatedStorage",
+"Peckwood",
+"Birb",
+"Rules"
+],
+"class": "ModuleScript",
+"url": "src/shared/Birb/Rules.luau"
+},
+{
+"path": [
+"ServerScriptService",
+"Peckwood",
+"Systems",
+"Castle"
+],
+"class": "ModuleScript",
+"url": "src/server/Systems/Castle.luau"
+},
+{
+"path": [
+"ServerScriptService",
+"Peckwood",
+"Systems",
+"Park"
+],
+"class": "ModuleScript",
+"url": "src/server/Systems/Park.luau"
+},
+{
+"path": [
+"ServerScriptService",
+"Peckwood",
+"Systems",
+"Shops"
+],
+"class": "ModuleScript",
+"url": "src/server/Systems/Shops.luau"
+},
+{
+"path": [
+"ServerScriptService",
+"Peckwood",
+"Systems",
+"Sparrow"
+],
+"class": "ModuleScript",
+"url": "src/server/Systems/Sparrow.luau"
+},
+{
+"path": [
 "StarterPlayer",
 "StarterPlayerScripts",
 "Peckwood",
@@ -405,6 +465,17 @@
 ],
 "class": "ModuleScript",
 "url": "src/client/UI/SoundBoard.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"TreeBinder"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/TreeBinder.luau"
 },
 {
 "path": [
