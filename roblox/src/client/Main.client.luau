@@ -13,6 +13,7 @@ local Models = require(Shared:WaitForChild("Models"))
 local Defs = require(Shared:WaitForChild("Defs"))
 local Remotes = Shared:WaitForChild("Remotes")
 local Hud = require(script.Parent:WaitForChild("UI"):WaitForChild("Hud"))
+local Vfx = require(script.Parent:WaitForChild("Vfx"))   -- VFX engine (camera feel hook + effects), see Vfx/init.luau
 local S = Models.S
 
 local plr = Players.LocalPlayer
@@ -290,7 +291,8 @@ Remotes:WaitForChild("Collect").OnClientEvent:Connect(function(id: number, value
 	-- owner 2026-10-09: the +value pops right above the egg, and the egg itself flies into the wallet on the HUD
 	local at = k.pos + Vector3.new(0, 0.5 * S, 0)
 	k.model:Destroy(); kernels[id] = nil
-	burst(at, if golden then Color3.fromHex("#ffc93a") else Color3.fromHex("#fff1c9"), if golden then 14 else 8)
+	if Vfx.can("collect_pop") then Vfx.play("collect_pop", at, { golden = golden, groundY = k.pos.Y })   -- cube burst until the VFX textures are uploaded
+	else burst(at, if golden then Color3.fromHex("#ffc93a") else Color3.fromHex("#fff1c9"), if golden then 14 else 8) end
 	numberPop(at + Vector3.new(0, 0.9 * S, 0), "+" .. Defs.EN.short(value), golden)
 	local cam = workspace.CurrentCamera
 	local sp, onScreen = cam:WorldToViewportPoint(at)
@@ -387,9 +389,10 @@ RunService:BindToRenderStep("Peckwood", Enum.RenderPriority.Camera.Value + 1, fu
 	local jitter = if shake > 0 then Vector3.new(math.random() - 0.5, math.random() - 0.5, 0) * shake * S * 0.6 else Vector3.zero
 	local back = Vector3.new(0, math.sin(PITCH), math.cos(PITCH)) * distFor(zoom)
 	cam.CameraType = Enum.CameraType.Scriptable
-	cam.FieldOfView = FOV
-	cam.CFrame = IslandView.camCF or CFrame.lookAt((camFocus :: Vector3) + back + jitter, (camFocus :: Vector3) + jitter)
+	-- Vfx.camera layers shake / push-in / flash on top of whichever camera is driving (no-op while idle)
+	cam.CFrame, cam.FieldOfView = Vfx.camera(IslandView.camCF or CFrame.lookAt((camFocus :: Vector3) + back + jitter, (camFocus :: Vector3) + jitter), FOV, dt)
 	cam.Focus = CFrame.new(camFocus :: Vector3)
 end)
 
+Vfx.start(Remotes)   -- effect hook-ups (island unlock, level-ups) + dev preview _G.__vfx
 Hud.start(Remotes)
