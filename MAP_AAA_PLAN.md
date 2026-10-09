@@ -79,3 +79,51 @@ C = subtle studs on man-made props only.
 2. Make the 9 target frames + a biome palette sheet in Figma (board next to the map boards `178:7`).
 3. Park slice in Studio (one Studio window only): Lighting preset + DepthOfField tilt-shift first (instant win),
    then the hen remake, outline hulls, skirt + landmarks, foliage, motion, perf, QA.
+
+## 9. Build recipe for target B (owner picked B, 2026-10-09)
+Target: `roblox/docs/targets/park_target_v2_cel.png` (Figma board `256:413`).
+
+### What the live test showed (Studio, whole-island camera, everything reverted after)
+- Before: one big flat green field, tiny scattered props, no island edge, no landmark. White ripple strokes from the sea
+  texture are drawn over the grass (bug).
+- Toon lighting + saturation + one group Highlight outline on IslandView: outlines and colour work, but it is still a
+  flat field. **Rendering tricks are ~30 % of the look; composition, scale and density are ~70 %.** Fix those first.
+
+### Layer 1: composition (do first)
+1. **Island plate:** each area reads as its own island with sea around it: flat walkable top (Birb's map), a chunky rock
+   cliff skirt that drops into the water, a sand beach rim, a white toon foam ring. Neighbouring areas sit across water
+   and connect by bridges / docks (target: the wooden pier).
+2. **Toy scale:** props 1.5-2x their "real" size against the hen; trees are big round chunky crowns; benches, lamps and
+   fences big enough to read at the default whole-island zoom.
+3. **Density:** about 3x today. Fences along paths, flower clusters at every path edge, bushes hugging the cliff tops,
+   lamps at path corners. Clustered, never evenly sprinkled.
+4. **Landmark:** one hero building per island (Park: windmill + market stall + stone arch at the pier).
+5. **Paths:** clean sandy loop with soft edges (decal / mesh strip), not blobs. Pond with a stone rim and lily pads.
+6. **Bug:** keep the sea ripple Textures off land.
+
+### Layer 2: rendering (Roblox has no custom shaders: fake the cel look)
+- **Lighting "Toy" preset** (tested values): ShadowSoftness 0.04, Brightness 3.2, EnvironmentDiffuseScale 0,
+  Ambient (96,104,150), OutdoorAmbient (150,160,200), ColorCorrection contrast 0.18 / saturation 0.28 / warm tint.
+- **Ink outlines:** one Highlight per GROUP (trees, props, buildings, hero) = outline on every silhouette, 31-group cap
+  is plenty. Hero assets (hen, eggs, windmill) also get inverted-hull outline meshes from Blender for inner lines.
+- **Flat colour fills:** generate_mesh prompts end with the shared style line "cel-shaded, flat colour fills, two-tone
+  shading, chunky rounded toy shapes"; hero meshes are made in Blender with a baked 2-tone ramp.
+- **Terrain:** two-tone flat MaterialVariants per biome (grass light/dark bands), Terrain.Decoration off.
+- **Tilt-shift:** DepthOfField with a small InFocusRadius (FOV 11 camera has little depth range): tune on the slice.
+- **Water:** flat turquoise + white foam ring, gentle shimmer; ripple strokes only on water.
+
+### Layer 3: life
+Tree / grass sway (batched client wobble), drifting cloud shadows, birds, butterflies, windmill sails turning, water
+shimmer, eggs bobbing. Budget: <= 200 live particles, animate only what is on screen.
+
+### Tools
+generate_mesh in Studio (props, ~3 jobs at a time), Blender headless (cliff skirts from a heightfield, hero meshes, toon
+bakes, outline hulls), Figma AI (targets, texture sheets). One Studio window at a time.
+
+### Park slice, in order (screenshot vs target after each)
+1. Fix the ripple-on-land bug; set the default zoom so the whole island fills ~75 % of the screen.
+2. Island plate: cliff skirt + beach + foam ring (test terrain-top vs mesh-top on one corner, decision A).
+3. Toy-scale + density pass with the existing props; add windmill, stall, arch, pier (generate_mesh).
+4. Toon Lighting preset + group Highlights + tilt-shift.
+5. Hen remake (Blender, toon bake + outline hull) and eggs.
+6. Motion pass. 7. Perf on phone budget. 8. QA script. 9. Owner sign-off -> next island.
