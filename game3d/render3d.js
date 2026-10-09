@@ -29,8 +29,8 @@
     if (id === PT.MINE_MAP || id === PT.MINE_TREE_MAP) return "mine"; if (id === PT.ECHO_FIELD_MAP) return "echo";
     return "expedition";
   };
-  const SCENE3D = { 0: true, 1: true, 2: true, 4: true }; // maps with their own 3D game objects so far
-  const WALK = { 0: true, 4: true }; // maps where eggs / trees and the birb keep to open ground
+  const SCENE3D = { 0: true, 1: true, 2: true, 4: true }; // + desert, echo field and mine, set at boot // maps with their own 3D game objects so far
+  const WALK = { 0: true, 4: true }; // + desert and echo field, set at boot // maps where eggs / trees and the birb keep to open ground
   const isl = (id) => W.ISL.find((x) => x.id === ISLAND_OF(id));
   // map pixel -> world position on that map's island (the island's tile rectangle stands for the whole map)
   function toWorld(id, x, y) {
@@ -109,6 +109,8 @@
     // islands: everything you have reached so far stands; a new island rises when you first get there
     // the Nest's forest is the game's own trees (Birb: 30 wild trees + planting beds), so the forest island's decorative trees step aside
     W.hideProps((p) => p.need === isl(PT.NEST_MAP).n && ["pine", "tree", "bush", "rock", "log", "deadtree"].includes(p.kind));
+    for (const id of [PT.DESERT_MAP, PT.ECHO_FIELD_MAP, PT.MINE_MAP]) SCENE3D[id] = true;
+    WALK[PT.DESERT_MAP] = WALK[PT.ECHO_FIELD_MAP] = true;
     buildBlocked();
     const n = reachedLevel(); W.resetTo(n); A.level = n;
     placeCamera(true);
@@ -160,11 +162,12 @@
     const half = (I.W * W.S) / 2, halfD = (I.N * W.S) / 2, cx = W.wx(I.oi + I.W / 2), cz = W.wz(I.oj + I.N / 2);
     const tx = Math.max(cx - half, Math.min(cx + half, p.x)), tz = Math.max(cz - halfD, Math.min(cz + halfD, p.z));
     const want = new T.Vector3(tx, 0, tz);
-    if (snap) { const d = Math.min(c.maxDistance, 260); W.flyTo(want, d, POLAR, 0); if (W.camera.fov !== 22) { W.camera.fov = 22; W.camera.updateProjectionMatrix(); } return; }
-    if (W.flying) return;
-    const off = cam.position.clone().sub(c.target), dist = Math.min(c.maxDistance, Math.max(c.minDistance, off.length()));
+    if (W.camera.fov !== 22) { W.camera.fov = 22; W.camera.updateProjectionMatrix(); }
+    if (W.flying) W.stopFlight(); // the game camera always follows the birb (no long fly-overs)
+    const off = cam.position.clone().sub(c.target), dist = snap ? Math.min(c.maxDistance, 260) : Math.min(c.maxDistance, Math.max(c.minDistance, off.length()));
     off.setFromSpherical(new T.Spherical(dist, POLAR, 0)); // keep the fixed angle whatever the controls did
-    c.target.lerp(want, 0.12); cam.position.copy(c.target).add(off);
+    if (snap) c.target.copy(want); else c.target.lerp(want, 0.15);
+    cam.position.copy(c.target).add(off);
   }
 
   // ------------------------------------------------------------------ per-frame sync
@@ -294,6 +297,48 @@
       const x = c.x + Math.cos(a) * 14, z = c.z + Math.sin(a) * 9, last = b.position.clone(); b.position.set(x, c.y + 10 + Math.sin(G.t * 2 + i) * 1.2, z); animBird(b, (x - last.x) * 30, (z - last.z) * 30, dt, 0.9); });
   }
 
+  // ------------------------------------------------------------------ Desert doves, Echo mushrooms, the Mine ore
+  const doves = [], shrooms = [];
+  function syncDesert(on, dt) {
+    const a = on && G.daves && G.daves[0], list = a ? [a, ...a.sons] : [];
+    while (doves.length < list.length) { const b = A.M.bird({ body: "#e9e4dc", belly: "#ffffff", wing: "#b9b0a3" }); A.root.add(b); doves.push(b); }
+    doves.forEach((o, i) => { const b = list[i]; o.visible = !!b; if (!b) return; o.scale.setScalar(A.BIRD * (i ? 0.45 : 0.75)); const w = toWorld(PT.DESERT_MAP, b.x, b.y), last = o.userData.last || w;
+      o.position.set(w.x, w.y + (b.state === "fly" ? 6 : 0), w.z); animBird(o, (w.x - last.x) * 10, (w.z - last.z) * 10, dt, b.state === "fly" ? 0.8 : 0); o.userData.last = w; });
+  }
+  function syncEcho(on) {
+    const list = on ? PT.echoMushrooms(G.s) : [];
+    while (shrooms.length < list.length) { const g = new T.Group(), st = new T.Mesh(new T.CylinderGeometry(0.5, 0.65, 1.6, 10), new T.MeshStandardMaterial({ color: new T.Color("#efe3d0").convertSRGBToLinear() }));
+      const cap = new T.Mesh(new T.SphereGeometry(1.6, 16, 10, 0, 6.29, 0, 1.6), new T.MeshStandardMaterial({ color: new T.Color("#a77bff").convertSRGBToLinear(), emissive: new T.Color("#4b1d99").convertSRGBToLinear(), emissiveIntensity: 0.6 }));
+      st.position.y = 0.8; cap.position.y = 1.5; st.castShadow = cap.castShadow = true; g.add(st, cap); A.root.add(g); shrooms.push(g); }
+    shrooms.forEach((g, i) => { const m = list[i]; g.visible = !!m; if (m) { g.position.copy(toWorld(PT.ECHO_FIELD_MAP, m.x, m.y)); g.scale.setScalar(1.6 + Math.sin(G.t * 2 + i) * 0.05); } });
+  }
+  const ORE_COL = ["#8a6a4a", "#a7a9ad", "#7d7f86", "#7fd6ff", "#3a2b52", "#3fbf6f", "#e0284a"];
+  let ore = null, crow = null;
+  const oreBar = document.createElement("div"); Object.assign(oreBar.style, { position: "absolute", pointerEvents: "none", transform: "translate(-50%,-100%)", textAlign: "center", font: "16px 'Fredoka One', sans-serif", color: "#fff", textShadow: "0 0 3px #000, 0 2px 0 #000", display: "none" });
+  oreBar.innerHTML = '<div data-t style="white-space:nowrap;margin-bottom:4px"></div><div style="width:150px;height:14px;margin:0 auto;background:#10141a;border:2px solid #0b0c10;border-radius:7px;overflow:hidden"><i data-b style="display:block;height:100%"></i></div>';
+  stage.appendChild(oreBar);
+  function syncMine(on, dt) {
+    const Mn = G.mine || {}, o = on ? Mn.boss || Mn.ore : null;
+    if (!ore) { // a chunky rock (the island's own props around it step aside)
+      const I = isl(PT.MINE_MAP), ci = I.oi + (528 / PT.MAPS[PT.MINE_MAP].w) * I.W, cj = I.oj + (520 / PT.MAPS[PT.MINE_MAP].h) * I.N;
+      W.hideProps((p) => p.need === I.n && Math.hypot(p.i - ci, p.j - cj) < 5); // a cluster of boxes, recoloured per ore
+      ore = new T.Group(); const m = new T.MeshStandardMaterial({ roughness: 0.55, metalness: 0.15 });
+      [[0, 1.6, 0, 4.4, 3.2, 4], [1.8, 0.9, 1, 2.4, 1.8, 2.4], [-1.9, 1, -0.6, 2.2, 2, 2.6], [0.4, 3.4, -0.3, 2.6, 1.6, 2.4]].forEach(([x, y, z, a, b, c]) => { const k = new T.Mesh(new T.BoxGeometry(a, b, c), m); k.position.set(x, y, z); k.rotation.y = x * 0.4; k.castShadow = true; ore.add(k); });
+      ore.userData.m = m; A.root.add(ore); crow = A.M.bird({ body: "#2b2d33", belly: "#4a4d57", wing: "#1b1c21" }); crow.scale.setScalar(A.BIRD * 0.8); A.root.add(crow);
+    }
+    ore.visible = crow.visible = !!o; oreBar.style.display = o ? "block" : "none";
+    if (!o) return;
+    const c = toWorld(PT.MINE_MAP, 528, 520), sc = (o.boss ? 2.2 : 1) * 2.6;
+    ore.position.copy(c); ore.scale.setScalar(sc * (1 + (Mn.hitPulse > 0 ? 0.04 : 0))); ore.rotation.y += dt * 0.15;
+    ore.userData.m.color.set(o.golden ? "#ffc93c" : ORE_COL[o.tier] || "#888").convertSRGBToLinear(); ore.userData.m.metalness = o.golden ? 0.8 : 0.15;
+    ore.userData.m.emissive.set(o.golden ? "#6a4400" : "#000000");
+    const cw = toWorld(PT.MINE_MAP, 610, 560); crow.position.copy(cw); animBird(crow, -1, 0, dt, Math.sin(G.t * 12) * 0.15);
+    const R = PT.MINE_RARITY[o.rank], p = c.clone().add(new T.Vector3(0, 9 * sc, 0)).project(W.camera), r = frame.getBoundingClientRect();
+    oreBar.style.left = ((p.x + 1) / 2) * r.width + "px"; oreBar.style.top = ((1 - p.y) / 2) * r.height + "px";
+    oreBar.querySelector("[data-t]").textContent = o.boss ? `GIANT ORE · ${Math.max(0, Math.ceil((Mn.bossUntil - Date.now()) / 1000))}s` : `${R.id.toUpperCase()} ${o.tierId.toUpperCase()}${o.golden ? " · GOLDEN" : ""}`;
+    const b = oreBar.querySelector("[data-b]"); b.style.width = Math.max(0, Math.min(1, o.hits / o.maxHits)) * 100 + "%"; b.style.background = o.boss ? "#ef4444" : R.color;
+  }
+
   // floating numbers: a light DOM layer projected from the world camera
   const floatLayer = document.createElement("div"); Object.assign(floatLayer.style, { position: "absolute", inset: "0", pointerEvents: "none", overflow: "hidden" }); stage.insertBefore(floatLayer, frame.nextSibling);
   const floatEls = new Map();
@@ -334,6 +379,9 @@
       W.hideProps((p) => p.need === I1.n && rects.some(([a, b, c, d]) => p.i >= a && p.i <= c && p.j >= b && p.j <= d)); }
     syncStations(cur === 1);
     syncBridge(cur === 2, dt);
+    syncEggs(PT.DESERT_MAP, G.field.list(PT.DESERT_MAP), cur === PT.DESERT_MAP);
+    syncEggs(PT.ECHO_FIELD_MAP, G.field.list(PT.ECHO_FIELD_MAP), cur === PT.ECHO_FIELD_MAP);
+    syncDesert(cur === PT.DESERT_MAP, dt); syncEcho(cur === PT.ECHO_FIELD_MAP); syncMine(cur === PT.MINE_MAP, dt);
     syncDying(dt);
     placeCamera(false);
     syncFloats();
