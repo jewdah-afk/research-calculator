@@ -194,12 +194,12 @@ function Motion.crossfade(oldRoot, newRoot, dir, done)
 	task.delay(0.17, finish)
 	return finish
 end
--- the selected tab pill springs from where the old one was
+-- the selected tab pill glides from where the old one was
 function Motion.springTab(newActive, oldPos)
 	if reduced() or not (newActive and oldPos) then return end
 	local home = newActive.Position
 	newActive.Position = oldPos
-	tw(newActive, 0.22, { Position = home }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+	tw(newActive, 0.2, { Position = home }, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)   -- glides, no overshoot
 end
 
 -- ---------------------------------------------------------------- idle (open window only)
