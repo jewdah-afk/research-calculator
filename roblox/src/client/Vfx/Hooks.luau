@@ -66,10 +66,10 @@ function Hooks.unlockInfo(raw)
 	}
 end
 
-local function levelUp(Vfx, color: any, scale: number?)
+local function levelUp(Vfx, color: any, scale: number?, push: boolean?)
 	local p = hen()
 	if not p then return end
-	Vfx.play("level_up", p, { color = color, scale = scale or 1, follow = hen, punch = Birds.punch })
+	Vfx.play("level_up", p, { color = color, scale = scale or 1, follow = hen, punch = Birds.punch, push = push })
 end
 
 -- companion -> colour of its level-up column. Sparrow and Crow level passively in the background, so level-ups are
@@ -112,7 +112,7 @@ function Hooks.start(Vfx, remotes: Instance?)
 						local a, b = last[k], cur[k]
 						if a and b and b > a and b - a <= 25 then
 							lastFx = os.clock()
-							levelUp(Vfx, col, 1)
+							levelUp(Vfx, col, 1, false) -- background event: no camera push (QA r3)
 							break
 						end
 					end

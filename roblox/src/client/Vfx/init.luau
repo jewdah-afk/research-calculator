@@ -306,18 +306,20 @@ end
 
 function Fx:shake(amp: number, dur: number?) CamFx.shake(amp, dur) end
 function Fx:flash(color: any, strength: number, dur: number?) CamFx.flash(self:col(color), strength, dur) end
-function Fx:push(target: Vector3, amount: number, inT: number, hold: number, outT: number, pull: number?)
-	CamFx.push(target, amount, inT, hold, outT, pull)
+function Fx:push(target: Vector3, amount: number, inT: number, hold: number, outT: number, pull: number?, prio: number?): boolean
+	if self.opts.push == false then return false end
+	return CamFx.push(target, amount, inT, hold, outT, pull, prio)
 end
 
 -- push-in that frames `target` with about `halfH` studs above and below it at the current zoom; returns the FOV
 -- fraction used (clamped to minA..maxA). Effects call it before sizing so fx.view can follow the pushed framing.
-function Fx:frame(target: Vector3, halfH: number, minA: number, maxA: number, inT: number, hold: number, outT: number, pull: number?): number
+function Fx:frame(target: Vector3, halfH: number, minA: number, maxA: number, inT: number, hold: number, outT: number, pull: number?, prio: number?): number
+	if self.opts.push == false then return 0 end -- background effects (companion level-ups) never move the camera
 	local fov = CamFx.baseFov or 11
 	local d = math.max(1, self.camDist)
 	local need = 2 * math.deg(math.atan(halfH / d))
 	local amount = math.clamp(1 - need / fov, minA, maxA)
-	CamFx.push(target, amount, inT, hold, outT, pull or 0.8)
+	if not CamFx.push(target, amount, inT, hold, outT, pull or 0.8, prio) then return 0 end -- a bigger moment owns it
 	return amount
 end
 
@@ -519,6 +521,12 @@ end
 
 -- Main.client.luau calls this once: preload + hook-ups + the dev preview (_G.__vfx)
 function Vfx.start(remotes: Instance?)
+	-- once per client VM (QA r3: a double start bound the camera step twice and would double every hook)
+	if _G.__PeckwoodVfxStarted then
+		warn("[Vfx] Vfx.start called twice; ignoring the second call")
+		return
+	end
+	_G.__PeckwoodVfxStarted = true
 	Vfx.preload()
 	MeshFx.warm() -- Creator Store mesh shapes, loaded in the background (particles cover until they exist)
 	local ok, err = pcall(function() require(script:WaitForChild("Hooks")).start(Vfx, remotes) end)
