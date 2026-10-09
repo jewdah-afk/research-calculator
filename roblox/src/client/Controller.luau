@@ -101,7 +101,7 @@ heightAtLocalImpl = function(x: number, y: number): number
 		local h = World.deckH(math.floor(x / Map.PX), math.floor(y / Map.PX))
 		return if h then h / S * Map.PX else 0   -- planks (+) or a sagging rope bridge (-)
 	end
-	return if t == WATER then -3 elseif t == VOID then -36 else 0
+	return if t == WATER then -6 elseif t == VOID then -36 else 0   -- wading: the hen sinks to its belly
 end
 Controller.heightAt = heightAt
 
@@ -110,7 +110,7 @@ function Controller.canStand(x: number, y: number, z: number, r: number): boolea
 	for k = 1, #PTS, 2 do
 		local px, py = x + PTS[k] * r, y + PTS[k + 1] * r
 		local t = tileAt(px, py)
-		if t == VOID or t == WATER then return false end
+		if t == VOID then return false end   -- lakes / ponds are wadeable (owner 2026-10-09)
 		if heightAt(px, py) - z > (if t == 5 then 15 else STEP_UP) then return false end   -- hop up onto plank decks
 	end
 	for _, c in buckets[bkey(math.floor(x / BUCKET), math.floor(y / BUCKET))] or {} do
@@ -290,6 +290,7 @@ function Controller.step(p: Body, dt: number, speedMul: number, dustCb: ((x: num
 	end
 	local run = down(K.LeftShift, K.RightShift)
 	local speed = (if run then 100 else 60) * speedMul
+	if tileAt(p.x, p.y) == WATER then speed *= 0.5 end   -- slow while wading
 	local moving = wx ~= 0 or wy ~= 0
 	p.vx = approach(p.vx, wx * speed, (if moving then 600 else 800) * dt)
 	p.vy = approach(p.vy, wy * speed, (if moving then 600 else 800) * dt)

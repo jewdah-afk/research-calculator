@@ -124,7 +124,7 @@ local function snap(y) return math.floor(y / 4 + 0.5) * 4 end
 function LandTerrain.column(x0, z0, top, mat, code, shore)
 	local i, j = tileOf(x0, z0)
 	if code == 3 then   -- pond / river: sand bed, water on top (at its terrace height)
-		local wt = math.max(0, snap(top))
+		local wt = math.max(0, snap(top)) - 4   -- one voxel below the land, so the water can't spill over the banks
 		block(x0, z0, BED, wt - 4, M.Mud)   -- dark bed so ponds read blue, not pale
 		block(x0, z0, wt - 4, wt, M.Water)
 		return
@@ -147,7 +147,7 @@ function LandTerrain.column(x0, z0, top, mat, code, shore)
 	-- the top two voxels carry the surface material: with a fractional top voxel the one below is what you see
 	-- WriteVoxels: a full voxel's rendered surface sits ~2 studs above its top (measured in Play: logic ground 0,
 	-- terrain surface 2.0), so write 2 studs lower to put the visible ground exactly where the bird / eggs / props stand
-	local yv = y - 3   -- measured: -2 left the surface at +1.0
+	local yv = y - 2.5   -- measured: -2 -> surface +1.0, -3 -> -1.0
 	column(x0, z0, yv, { { yv - 7, mat }, { yv - 14, under }, { -math.huge, M.Rock } })
 end
 

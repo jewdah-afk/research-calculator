@@ -48,6 +48,17 @@ Branch **`claude/peckwood-isle`** (pushed). Build: `cd roblox && rojo build defa
 - Asset export pipeline: SerializationService in Studio -> local POST receiver -> `lune` re-serialize (fixes the Tags
   property Rojo 7.5 can't read) -> rojo `$path`.
 
+### World QA pass (2026-10-09, latest)
+- "Eggs in the water" was false water: pond columns wrote water at land height, so it spilled over 48 dry tiles. Ponds
+  now sit one voxel below the land (`LandTerrain.column` code 3: `wt = snap(top) - 4`). QA scan: 0 water-on-land tiles.
+- Water is wadeable: Controller `canStand` only blocks VOID; water height -6 px (hen sinks to its belly), speed x0.5.
+- Terrain surface offset tuned to `y - 2.5` (measured: -2 -> +1.0, -3 -> -1.0, -2.5 -> -0.5 below logic ground);
+  hen feet / most props now within 0.5 stud of the visible ground.
+- QA script (paste in Studio, Client, after MAXED): raycast Terrain per open tile for Water on non-water tiles; every
+  `Smooth` prop: bounding-box bottom vs terrain raycast; every egg vs ground; LogService warnings/errors.
+- Open from QA: pond reads as a pale sunken square (water / bed colour, square shape); 3 props 3-5 studs off the
+  ground; trees "sink" only by their root meshes (expected); paths read as dirt stains in places.
+
 ### Eggs + portals (2026-10-09, latest)
 - Egg = generated mesh `assets/EggAsset.rbxm` (Models.kernel; golden = same mesh, solid gold). Collect: +value pops above
   the egg, the egg flies (2D icon arc) into the wallet capsule (`Hud.flyFromScreen`), no more homing into the hen.
