@@ -48,6 +48,23 @@ Branch **`claude/peckwood-isle`** (pushed). Build: `cd roblox && rojo build defa
 - Asset export pipeline: SerializationService in Studio -> local POST receiver -> `lune` re-serialize (fixes the Tags
   property Rojo 7.5 can't read) -> rojo `$path`.
 
+### TOP PRIORITY (owner, end of 2026-10-09): full map art pass
+Owner: "the map design is amazing, but the terrain isn't smooth and it still lacks the cel-shaded look. Focus on the
+full map design and go all out to match our aesthetic: a real-life map, but nicely cel-shaded." The layout
+(Peckwood Ascent) is approved; the LOOK is not. Current terrain = 4-stud voxel columns, so terraces read as blocky
+steps and slopes are stairs. Suggested approach (pick after a quick prototype on one area, show screenshots):
+1. Smooth landforms: build a smoothed heightfield from AscentData (blur terrace edges into sloped cliffs with
+   rocky faces, rolling hills from noise, river banks and beaches that slope into the water) and write it with
+   `Terrain:WriteVoxels` using fractional occupancy (true smooth Roblox terrain) instead of FillBlock columns.
+   Keep walkable fields flat (World.base) so the controller still works; only the scenery between them slopes.
+2. Cel look on top: flat MaterialVariants (already in place), a tighter, more saturated palette per biome, crisp
+   shadows, warm key light + cool ambient, Atmosphere haze for depth, sky gradient; ink outlines only where cheap
+   (Highlight max ~31: bird, eggs, portals).
+3. If Roblox Terrain still can't look cel-shaded enough: generate faceted low-poly terrain MESHES per area in
+   Blender headless from the same heightfield (flat-shaded, vertex colours by height/slope/biome), import as
+   MeshParts. Most control over the look; needs the owner's OK and a mesh upload path.
+Do this before the steps below.
+
 ### Next steps (in order)
 1. Playtest the Ascent in Studio: walk every ramp (Park -> Garden -> ... -> Echo), check cliffs/no snags, portals both
    ways, eggs + desert eggs on terraces, camera framing on high terraces, frame rate on MAXED (last: CPU 8.7 ms, GPU 1.2 ms).
