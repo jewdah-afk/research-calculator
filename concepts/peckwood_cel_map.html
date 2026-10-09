@@ -15,6 +15,12 @@
   --ink-outline: #0c0817;
   --neon-glow: #ff007f;
   /* derived 2-step pairs (same hues, one hard shadow step each) */
+  --grass-mid: #0fbf62;      /* hard-edged dark (cool) patches */
+  --grass-sun: #74ff5e;      /* hard-edged sunlit (warm) patches */
+  --grass-light: #8affc0;    /* sunlit patches + lit lip */
+  --grass-rim: #0a9a50;      /* inner rim on shadow-side edges */
+  --tuft: #08934b;
+  --tuft-shade: #045a2d;
   --path-shadow: #d99a22;
   --water-base: #29d8ff;
   --water-shadow: #0b86c9;
@@ -72,6 +78,11 @@ button { font: inherit; color: inherit; }
   filter: drop-shadow(2px 0 0 var(--ink-outline)) drop-shadow(-2px 0 0 var(--ink-outline)) drop-shadow(0 2px 0 var(--ink-outline)) drop-shadow(0 -2px 0 var(--ink-outline)) drop-shadow(0 0 10px var(--neon-glow)) drop-shadow(0 0 22px var(--neon-glow)); }
 .card.seed.got > .art { animation: pop .36s ease-out forwards; }
 @keyframes bob { 50% { transform: translateY(-9px); } }
+/* wind: tufts and foliage lean from the base (skew keeps the ink edge crisp; no blur) */
+.card.tuft > .art { filter: none; animation: sway 2.8s ease-in-out infinite; }
+.card.sway > .art { animation: swaysoft 4.2s ease-in-out infinite; }
+@keyframes sway { 0%, 100% { transform: skewX(-7deg); } 50% { transform: skewX(6deg); } }
+@keyframes swaysoft { 0%, 100% { transform: skewX(-2deg); } 50% { transform: skewX(2.2deg); } }
 @keyframes pop { to { transform: translateY(-30px) scale(1.8); opacity: 0; } }
 
 /* emissive interactive tiles: flat neon square on the floor + high-intensity bloom shadow */
@@ -137,7 +148,7 @@ button { font: inherit; color: inherit; }
 }
 @media (prefers-reduced-motion: reduce) {
   .world, .card { transition: none; }
-  .neon, .card.seed > .art { animation: none; }
+  .neon, .card.seed > .art, .card.tuft > .art, .card.sway > .art { animation: none; }
   .card.hop > .art { animation: none; }
 }
 </style>
@@ -194,6 +205,7 @@ button { font: inherit; color: inherit; }
   <ul>
     <li><b>Ink outlines:</b> Highlight per WorldTree group (OutlineColor <code>#0c0817</code>, OutlineTransparency 0, FillTransparency 1, DepthMode Occluded; ≤ 31 live). Hero cards (hen, eggs, landmarks) also get an inverted-hull outline mesh for inner lines.</li>
     <li><b>2-step cel, no gloss:</b> SmoothPlastic only, two colours per part (base + hard shadow face). Lighting: EnvironmentDiffuseScale 0, EnvironmentSpecularScale 0, Ambient + OutdoorAmbient high so faces stay flat, Brightness 2.</li>
+    <li><b>Ground detail:</b> the grass top is one painted texture per island (EditableImage or an uploaded decal on the ground mesh): grass-base field, hard-edged grass-mid / grass-light patches from noise, a grass-rim band on the north and east edges, a lit line on the south and west edges, painted tufts. Standing tufts are small camera-facing cards that sway (CFrame skew in one batched loop).</li>
     <li><b>Hard shadows:</b> GlobalShadows <code>false</code>, CastShadow off everywhere. Each prop gets a flat ellipse (cylinder Part 0.05 thick, colour ink, Transparency 0.66) offset north-east; hill drops paint a grass-shadow band on the lower tile.</li>
     <li><b>Post:</b> ColorCorrection Contrast <code>0.4</code>, Saturation <code>0.45</code> (= CSS 140 % / 145 %).</li>
     <li><b>Neon nodes:</b> Material Neon <code>#ff007f</code> tile + PointLight (Range 10, Brightness 3) + Lighting BloomEffect (Intensity 1, Size 24, Threshold 0.95). Pulse = TweenService on the light Brightness.</li>
@@ -224,13 +236,19 @@ button { font: inherit; color: inherit; }
 'use strict';
 const css = getComputedStyle(document.documentElement);
 const tok = n => css.getPropertyValue('--' + n).trim();
-const T = 40, LEVEL = 24, CLIFF = 60, RES = 1.5;   // px per tile, px per hill level, cliff depth, canvas px per CSS px
+const T = 40, LEVEL = 24, CLIFF = 60;   // px per tile, px per hill level, cliff depth
+const RES = Math.min(2, Math.max(1.25, devicePixelRatio || 1)) * (innerWidth < 600 ? .7 : 1);   // canvas px per CSS px
 const INK = tok('ink-outline');
 const C = {};
-['bg-flat','grass-base','grass-shadow','path-base','ink-outline','neon-glow','path-shadow','water-base','water-shadow','cliff-lit','cliff-shadow',
+['bg-flat','grass-base','grass-shadow','grass-mid','grass-sun','grass-light','grass-rim','tuft','tuft-shade','path-base','ink-outline','neon-glow','path-shadow','water-base','water-shadow','cliff-lit','cliff-shadow',
  'cave-floor','cave-grout','wall-top','wall-lit','wall-shadow'].forEach(k => C[k] = tok(k));
 const hash = (i, j) => { const n = Math.sin(i * 127.1 + j * 311.7) * 43758.5453; return n - Math.floor(n); };
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+// smooth value noise (for hard-edged patch shapes: thresholded, never shaded)
+const vnoise = (x, y) => { const xi = Math.floor(x), yi = Math.floor(y), u = x - xi, v = y - yi, sm = t => t * t * (3 - 2 * t);
+  const a = hash(xi, yi), b = hash(xi + 1, yi), c = hash(xi, yi + 1), d = hash(xi + 1, yi + 1), su = sm(u), sv = sm(v);
+  return a + (b - a) * su + (c - a) * sv + (a - b - c + d) * su * sv; };
+const fbm = (x, y) => .62 * vnoise(x, y) + .38 * vnoise(x * 2.3 + 11.7, y * 2.3 + 4.1);
 
 // ---------------------------------------------------------------- map data
 // Map 1 = the real Park (roblox/src/shared/MapData.luau): 0 void, 1 grass, 2 path, 3 water. Objects in game px (16 px per tile).
@@ -292,6 +310,7 @@ const ART = {
     cel(poly('40,16 47,19 40,22'), '#ffb627', '#d97a00', 0, -1, 4) +
     `<circle cx="34" cy="15" r="2.2" fill="${INK}"/>`) },
   egg: { w: 18, h: 22, s: () => svg(18, 22, cel('<ellipse cx="9" cy="12" rx="7.5" ry="9.5"/>', '#fffbea', '#e2d4a6', -3, -3, 4)) },
+  tuft: { w: 30, h: 26, s: () => svg(30, 26, cel(poly('4,25 7,9 11,25') + poly('10,25 15,1 20,25') + poly('19,25 24,8 27,25'), '#22d977', '#078a46', -3, -3, 4)) },
   seed: { w: 26, h: 34, s: () => svg(26, 34, cel(poly('13,2 24,17 13,32 2,17'), '#ff5aa8', '#c20062', -4, -4, 5) + `<polygon points="10,9 13,5 15,9 12,14" fill="#ffe3f1"/>`) },
 };
 const artCache = {};
@@ -398,22 +417,61 @@ function buildBase() {
     g.fillStyle = C['grass-base'];
     for (const [i, j] of at) g.fillRect(i * T - .5, j * T - .5, T + 1, T + 1);
     // shadow shapes on this level: props standing here (ellipse thrown north-east) + bands under taller neighbours
-    const shadowShapes = (ctx) => {
-      ctx.beginPath();
-      for (const p of props) if (p.h === L && SH[p.k]) {
-        const [rx, ry] = SH[p.k];
-        ctx.moveTo(p.ti * T + rx * T * .55 + .25 * T, p.tj * T - .12 * T);
-        ctx.ellipse(p.ti * T + .25 * T, p.tj * T - .12 * T, rx * T * .55, ry * T * .55, 0, 0, Math.PI * 2);
-      }
-      for (const [i, j] of at) {
-        const up = (a, b) => cells[b] && cells[b][a] && cells[b][a].h > L ? cells[b][a].h - L : 0;
-        const w = up(i - 1, j), s = up(i, j + 1);   // taller tile to the west / south throws its shadow onto this one
-        if (w) ctx.rect(i * T, j * T, T * .3 * w, T);
-        if (s) ctx.rect(i * T, j * T + T - T * .3 * s, T, T * .3 * s);
-      }
-    };
+    const shadowList = [];
+    for (const p of props) if (p.h === L && SH[p.k]) { const [rx, ry] = SH[p.k]; shadowList.push({ e: 1, x: p.ti * T + .25 * T, y: p.tj * T - .12 * T, rx: rx * T * .55, ry: ry * T * .55 }); }
+    for (const [i, j] of at) {
+      const up = (a, b) => cells[b] && cells[b][a] && cells[b][a].h > L ? cells[b][a].h - L : 0;
+      const w = up(i - 1, j), s = up(i, j + 1);   // taller tile to the west / south throws its shadow onto this one
+      if (w) shadowList.push({ x: i * T, y: j * T, w: T * .3 * w, h: T });
+      if (s) shadowList.push({ x: i * T, y: j * T + T - T * .3 * s, w: T, h: T * .3 * s });
+    }
+    const shadowShapes = ctx => { ctx.beginPath(); for (const q of shadowList) { if (q.e) { ctx.moveTo(q.x + q.rx, q.y); ctx.ellipse(q.x, q.y, q.rx, q.ry, 0, 0, Math.PI * 2); } else ctx.rect(q.x, q.y, q.w, q.h); } };
+    const inShadow = (x, y) => shadowList.some(q => q.e ? ((x - q.x) / q.rx) ** 2 + ((y - q.y) / q.ry) ** 2 < 1 : x >= q.x && x < q.x + q.w && y >= q.y && y < q.y + q.h);
+    const codeAt = (x, y) => { const r = PARK.rows[Math.floor(y / T)]; return r ? r[Math.floor(x / T)] : '0'; };
+    const onTurf = (x, y, m) => codeAt(x - m, y - m) === '1' && codeAt(x + m, y - m) === '1' && codeAt(x - m, y + m) === '1' && codeAt(x + m, y + m) === '1';
+
     g.save(); g.beginPath(); for (const [i, j] of at) g.rect(i * T, j * T, T, T); g.clip();
+    // 1. two-tone patches: thresholded noise, drawn as overlapping discs = organic shapes with hard edges (no shading)
+    const dark = new Path2D(), light = new Path2D(), STEP = 6;
+    for (const [i, j] of at) for (let y = j * T + STEP / 2; y < j * T + T; y += STEP) for (let x = i * T + STEP / 2; x < i * T + T; x += STEP) {
+      const n = fbm(x / (T * 2.4), y / (T * 2.4));
+      if (n < .37) { dark.moveTo(x + 4.6, y); dark.arc(x, y, 4.6, 0, 7); }
+      else if (n > .73) { light.moveTo(x + 4, y); light.arc(x, y, 4, 0, 7); }
+    }
+    g.fillStyle = C['grass-mid']; g.fill(dark);
+    g.fillStyle = C['grass-sun']; g.fill(light);
+    // 2. island lip: dark inner rim on the shadow-side edges (N, E), a lit line on the sun side (S, W)
+    const same = (a, b) => cells[b] && cells[b][a] && cells[b][a].h === L;
+    for (const [i, j] of at) {
+      const x = i * T, y = j * T;
+      g.fillStyle = C['grass-rim'];
+      if (!same(i, j - 1)) g.fillRect(x, y, T, 11);
+      if (!same(i + 1, j)) g.fillRect(x + T - 11, y, 11, T);
+      g.fillStyle = C['grass-light'];
+      if (!same(i, j + 1)) g.fillRect(x, y + T - 8, T, 3);
+      if (!same(i - 1, j)) g.fillRect(x + 5, y, 3, T);
+    }
+    // 3. hard cast shadows + a fine halftone inside them (comic shading, never a gradient)
     g.fillStyle = C['grass-shadow']; shadowShapes(g); g.fill();
+    const dot = document.createElement('canvas'); dot.width = dot.height = 6;
+    const dg = dot.getContext('2d'); dg.fillStyle = 'rgba(12,8,23,.5)'; dg.beginPath(); dg.arc(3, 3, 1.1, 0, 7); dg.fill();
+    g.fillStyle = g.createPattern(dot, 'repeat'); shadowShapes(g); g.fill();
+    // 4. painted grass tufts: three blades each, darker in shadow, a few lit tips; denser in dark patches and near edges
+    for (const [i, j] of at) {
+      if (PARK.rows[j][i] !== '1') continue;
+      const edge = !same(i, j - 1) || !same(i + 1, j) || !same(i, j + 1) || !same(i - 1, j);
+      const nT = 2 + (edge ? 2 : 0) + (fbm(i / 2.4, j / 2.4) < .4 ? 2 : 0);
+      for (let k = 0; k < nT; k++) {
+        const x = i * T + 4 + hash(i * 3 + k, j * 1.7) * (T - 8), y = j * T + 8 + hash(i * 1.3, j * 3 + k) * (T - 10);
+        if (!onTurf(x, y, 9)) continue;
+        const sh = inShadow(x, y), sc = .8 + hash(k, i + j) * .5;
+        g.fillStyle = sh ? C['tuft-shade'] : C['tuft'];
+        for (const [dx, h, lean] of [[-3.5, 8, -3], [0, 11, 0], [3.5, 7.5, 3]]) {
+          g.beginPath(); g.moveTo(x + dx * sc - 1.8, y); g.lineTo(x + (dx + lean) * sc, y - h * sc); g.lineTo(x + dx * sc + 1.8, y); g.fill();
+        }
+        if (!sh && hash(i + k, j * 2) > .55) { g.fillStyle = C['grass-light']; g.beginPath(); g.moveTo(x - .9, y - 6 * sc); g.lineTo(x, y - 11 * sc); g.lineTo(x + .9, y - 6 * sc); g.fill(); }
+      }
+    }
     g.restore();
 
     // path + water as smooth strokes through tile centres (winding, not blocky): ink pass, base pass, shadow on top (clipped)
@@ -440,7 +498,16 @@ function buildBase() {
       const f = fillLayer.getContext('2d'); f.setTransform(g.getTransform()); f.lineCap = 'round'; f.lineJoin = 'round';
       // 2-step: whole ribbon in the shadow tone, then the lit tone shifted south-west, clipped to the ribbon = a hard
       // shadow lip along the north-east bank (water) / cast shadows only (path)
-      f.strokeStyle = want === '3' ? shade : base; f.lineWidth = width; f.stroke(p);
+      f.strokeStyle = shade; f.lineWidth = width; f.stroke(p);
+      if (want === '2') {   // lit walkway inside a hard darker border band, then pebbles + ruts
+        f.globalCompositeOperation = 'source-atop'; f.strokeStyle = base; f.lineWidth = width - 11; f.stroke(p);
+        for (const [i, j] of at) if (PARK.rows[j][i] === '2') for (let k = 0; k < 3; k++) {
+          const px = i * T + 6 + hash(i * 5 + k, j) * (T - 12), py = j * T + 6 + hash(i, j * 5 + k) * (T - 12), r = 1.8 + hash(k, i * j) * 1.8;
+          f.fillStyle = INK; f.beginPath(); f.ellipse(px, py, r + 1.3, r * .75 + 1.3, 0, 0, 7); f.fill();
+          f.fillStyle = hash(i + k, j) > .5 ? '#fff0c4' : C['path-shadow']; f.beginPath(); f.ellipse(px, py, r, r * .75, 0, 0, 7); f.fill();
+        }
+      }
+      if (want === '3') f.stroke(p);
       if (want === '3') { f.globalCompositeOperation = 'source-atop'; f.save(); f.translate(-.12 * T, .2 * T); f.strokeStyle = base; f.stroke(p); f.restore(); }
       f.globalCompositeOperation = 'source-atop'; f.fillStyle = shade; shadowShapes(f); f.fill();
       // keep ribbons inside the island (the pond touches the west coast)
@@ -456,10 +523,14 @@ function buildBase() {
       if (!mine(i, j) || PARK.rows[j][i] !== '1') return;
       const cx = x / 16 * T, cy = y / 16 * T, col = PET[Math.floor(hash(k, 3.7) * PET.length)];
       for (let q = 0; q < 3; q++) {
-        const a = hash(k, q) * 6.28, r = 5 + hash(q, k) * 5, fx = cx + Math.cos(a) * r, fy = cy + Math.sin(a) * r;
-        g.fillStyle = INK; g.beginPath(); g.arc(fx, fy, 4.6, 0, 7); g.fill();
-        g.fillStyle = col; g.beginPath(); g.arc(fx, fy, 3, 0, 7); g.fill();
-        g.fillStyle = '#ffb627'; g.beginPath(); g.arc(fx, fy, 1.2, 0, 7); g.fill();
+        const a = hash(k, q) * 6.28, r = 6 + hash(q, k) * 6, fx = cx + Math.cos(a) * r, fy = cy + Math.sin(a) * r, rot = hash(q, k * 3) * 6.28;
+        for (const [rad, fill] of [[3.9, INK], [2.5, col]]) {   // ink silhouette first, then the petals
+          g.fillStyle = fill; g.beginPath();
+          for (let pIdx = 0; pIdx < 5; pIdx++) { const pa = rot + pIdx * 1.2566, px = fx + Math.cos(pa) * 3.1, py = fy + Math.sin(pa) * 3.1; g.moveTo(px + rad, py); g.arc(px, py, rad, 0, 7); }
+          g.fill();
+        }
+        g.fillStyle = INK; g.beginPath(); g.arc(fx, fy, 2.3, 0, 7); g.fill();
+        g.fillStyle = '#ffb627'; g.beginPath(); g.arc(fx, fy, 1.5, 0, 7); g.fill();
       }
     });
   });
@@ -468,11 +539,23 @@ function buildBase() {
     const lip = lit ? C['grass-base'] : C['grass-shadow'];
     const body = lit ? C['cliff-lit'] : C['cliff-shadow'];
     const lipH = Math.min(10, drop);
-    return `linear-gradient(to bottom, ${lip} 0 ${lipH}px, ${INK} ${lipH}px ${lipH + 3}px, ${body} ${lipH + 3}px)`;
+    // hard-stop layers only: grass lip, ink line, then rock strata lines over the cliff body
+    return `linear-gradient(to bottom, ${lip} 0 ${lipH}px, ${INK} ${lipH}px ${lipH + 3}px, transparent ${lipH + 3}px), ` +
+      `repeating-linear-gradient(to bottom, transparent 0 13px, rgba(12,8,23,.4) 13px 16px), ${body}`;
   });
 
   // cards (depth sorted by the 3D buffer)
-  for (const p of props) card(p.k, p.k === 'arch' ? p.ti + .5 : p.ti, p.tj, zOf(p.h));   // the arch stands centred on its gate tile
+  const FOLIAGE = new Set(['oak', 'bigoak', 'pine', 'bush']);
+  for (const p of props) card(p.k, p.k === 'arch' ? p.ti + .5 : p.ti, p.tj, zOf(p.h), FOLIAGE.has(p.k) ? 'sway' : '');   // the arch stands centred on its gate tile
+  // standing tuft cards that sway (sparse; edges and patch borders), clear of paths, props and the yard
+  const taken = new Set(props.map(p => p.i + ',' + p.j));
+  let nTuft = 0;
+  for (let j = 0; j < rows && nTuft < 90; j++) for (let i = 0; i < cols && nTuft < 90; i++) {
+    const c = cells[j][i]; if (!c || PARK.rows[j][i] !== '1' || taken.has(i + ',' + j) || (i >= 17 && i <= 23 && j >= 12 && j <= 18)) continue;
+    const nearPath = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, b]) => PARK.rows[j + b] && PARK.rows[j + b][i + a] !== '1');
+    if (hash(i * 7.1, j * 5.3) < (nearPath ? .34 : .1)) { card('tuft', i + .2 + hash(i, j) * .6, j + .3 + hash(j, i) * .5, zOf(c.h), 'tuft'); nTuft++; }
+  }
+  document.querySelectorAll('.card.tuft > .art, .card.sway > .art').forEach((a, k) => a.style.animationDelay = (-hash(k, 9) * 3) + 's');
   // eggs in the yard (focus tier)
   [[18.6, 14.4], [21.9, 14.9], [19.2, 16.6], [21.4, 16.9]].forEach(([x, y]) => card('egg', x, y, 0));
 
@@ -516,6 +599,12 @@ function buildCave() {
       if (L === 0) {
         g.fillStyle = C['cave-grout']; g.fillRect(x, y, T, T);
         g.fillStyle = C['cave-floor']; g.fillRect(x + 3, y + 3, T - 6, T - 6);
+        if (hash(i * 2.3, j * 1.7) > .55) {   // a crack across the slab
+          g.strokeStyle = '#2a145e'; g.lineWidth = 2; g.beginPath(); let cx = x + 6 + hash(i, j) * 10, cy = y + 6 + hash(j, i) * 10; g.moveTo(cx, cy);
+          for (let q = 0; q < 3; q++) { cx += 5 + hash(q, i + j) * 7; cy += 4 + hash(i - q, j) * 7; g.lineTo(Math.min(cx, x + T - 5), Math.min(cy, y + T - 5)); }
+          g.stroke();
+        }
+        if (hash(i * 4.1, j * 3.3) > .6) { g.fillStyle = '#3a1d7a'; g.beginPath(); g.arc(x + 8 + hash(i + 1, j) * 24, y + 8 + hash(i, j + 1) * 24, 2.4, 0, 7); g.fill(); }
         // hard wall shadows on the floor: thrown north-east, flat
         const hw = cells[j][i - 1] && cells[j][i - 1].h, hs = cells[j + 1] && cells[j + 1][i] && cells[j + 1][i].h;
         g.fillStyle = 'rgba(12,8,23,.72)';
@@ -642,7 +731,7 @@ const openSpec = on => { spec.hidden = !on; specBtn.setAttribute('aria-expanded'
 specBtn.onclick = () => openSpec(spec.hidden);
 document.getElementById('specClose').onclick = () => openSpec(false);
 const tokTable = document.getElementById('tokTable');
-const TOKS = [['bg-flat', 'canvas / sea'], ['grass-base', 'grass top'], ['grass-shadow', 'grass hard shadow'], ['path-base', 'walkway'], ['path-shadow', 'walkway shadow'],
+const TOKS = [['bg-flat', 'canvas / sea'], ['grass-base', 'grass top'], ['grass-mid', 'grass dark patch'], ['grass-sun', 'grass sunlit patch'], ['grass-light', 'grass lit patch / lip'], ['grass-rim', 'grass edge rim'], ['tuft', 'tufts'], ['grass-shadow', 'grass hard shadow'], ['path-base', 'walkway'], ['path-shadow', 'walkway shadow'],
   ['ink-outline', 'outlines'], ['neon-glow', 'interactive nodes'], ['water-base', 'pond'], ['cliff-lit', 'cliff lit (S/W)'], ['cliff-shadow', 'cliff shadow (N/E)'],
   ['cave-floor', 'cave floor'], ['wall-top', 'cave column top'], ['wall-lit', 'column lit'], ['wall-shadow', 'column shadow']];
 tokTable.innerHTML = TOKS.map(([k, use]) => `<tr><td><span class="sw" style="background:${C[k]}"></span>${use}</td><td><code>Color3.fromHex("${C[k]}")</code></td></tr>`).join('');
