@@ -3,15 +3,6 @@
 "path": [
 "ReplicatedStorage",
 "Peckwood",
-"BirbFormulas"
-],
-"class": "ModuleScript",
-"url": "src/shared/BirbFormulas.luau"
-},
-{
-"path": [
-"ReplicatedStorage",
-"Peckwood",
 "BirbSystems"
 ],
 "class": "ModuleScript",
@@ -21,10 +12,10 @@
 "path": [
 "ReplicatedStorage",
 "Peckwood",
-"Config"
+"IslandData"
 ],
 "class": "ModuleScript",
-"url": "src/shared/Config.luau"
+"url": "src/shared/IslandData.luau"
 },
 {
 "path": [
@@ -39,15 +30,6 @@
 "path": [
 "ReplicatedStorage",
 "Peckwood",
-"EternityNum"
-],
-"class": "ModuleScript",
-"url": "src/shared/EternityNum.luau"
-},
-{
-"path": [
-"ReplicatedStorage",
-"Peckwood",
 "FigmaArt"
 ],
 "class": "ModuleScript",
@@ -57,19 +39,19 @@
 "path": [
 "ReplicatedStorage",
 "Peckwood",
-"FigmaArtSize"
+"World"
 ],
 "class": "ModuleScript",
-"url": "src/shared/FigmaArtSize.luau"
+"url": "src/shared/World.luau"
 },
 {
 "path": [
 "ReplicatedStorage",
 "Peckwood",
-"Icons"
+"IsleData"
 ],
 "class": "ModuleScript",
-"url": "src/shared/Icons.luau"
+"url": "src/shared/IsleData.luau"
 },
 {
 "path": [
@@ -84,6 +66,42 @@
 "path": [
 "ReplicatedStorage",
 "Peckwood",
+"Shop"
+],
+"class": "ModuleScript",
+"url": "src/shared/Shop.luau"
+},
+{
+"path": [
+"ReplicatedStorage",
+"Peckwood",
+"Icons"
+],
+"class": "ModuleScript",
+"url": "src/shared/Icons.luau"
+},
+{
+"path": [
+"ReplicatedStorage",
+"Peckwood",
+"BirbFormulas"
+],
+"class": "ModuleScript",
+"url": "src/shared/BirbFormulas.luau"
+},
+{
+"path": [
+"ReplicatedStorage",
+"Peckwood",
+"Config"
+],
+"class": "ModuleScript",
+"url": "src/shared/Config.luau"
+},
+{
+"path": [
+"ReplicatedStorage",
+"Peckwood",
 "Models"
 ],
 "class": "ModuleScript",
@@ -91,12 +109,30 @@
 },
 {
 "path": [
-"ServerScriptService",
+"ReplicatedStorage",
 "Peckwood",
-"Game"
+"EternityNum"
 ],
 "class": "ModuleScript",
-"url": "src/server/Game.luau"
+"url": "src/shared/EternityNum.luau"
+},
+{
+"path": [
+"ReplicatedStorage",
+"Peckwood",
+"FigmaArtSize"
+],
+"class": "ModuleScript",
+"url": "src/shared/FigmaArtSize.luau"
+},
+{
+"path": [
+"ServerScriptService",
+"Peckwood",
+"Main"
+],
+"class": "Script",
+"url": "src/server/Main.server.luau"
 },
 {
 "path": [
@@ -111,20 +147,10 @@
 "path": [
 "ServerScriptService",
 "Peckwood",
-"Main"
-],
-"class": "Script",
-"url": "src/server/Main.server.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"Birds"
+"Game"
 ],
 "class": "ModuleScript",
-"url": "src/client/Birds.luau"
+"url": "src/server/Game.luau"
 },
 {
 "path": [
@@ -141,6 +167,36 @@
 "StarterPlayer",
 "StarterPlayerScripts",
 "Peckwood",
+"Ambience"
+],
+"class": "ModuleScript",
+"url": "src/client/Ambience.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"Nav"
+],
+"class": "ModuleScript",
+"url": "src/client/Nav.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"Ocean"
+],
+"class": "ModuleScript",
+"url": "src/client/Ocean.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
 "Main"
 ],
 "class": "LocalScript",
@@ -151,22 +207,20 @@
 "StarterPlayer",
 "StarterPlayerScripts",
 "Peckwood",
-"UI",
-"Hud"
+"IslandView"
 ],
 "class": "ModuleScript",
-"url": "src/client/UI/Hud.luau"
+"url": "src/client/IslandView.luau"
 },
 {
 "path": [
 "StarterPlayer",
 "StarterPlayerScripts",
 "Peckwood",
-"UI",
-"Kit"
+"Birds"
 ],
 "class": "ModuleScript",
-"url": "src/client/UI/Kit.luau"
+"url": "src/client/Birds.luau"
 },
 {
 "path": [
@@ -185,6 +239,28 @@
 "StarterPlayerScripts",
 "Peckwood",
 "UI",
+"Windows"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Windows.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Hud"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Hud.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
 "Window"
 ],
 "class": "ModuleScript",
@@ -196,9 +272,9 @@
 "StarterPlayerScripts",
 "Peckwood",
 "UI",
-"Windows"
+"Kit"
 ],
 "class": "ModuleScript",
-"url": "src/client/UI/Windows.luau"
+"url": "src/client/UI/Kit.luau"
 }
 ]

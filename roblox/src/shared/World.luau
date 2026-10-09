@@ -10,8 +10,13 @@ local Shared = RS:WaitForChild("Peckwood")
 local Map = require(Shared:WaitForChild("MapData"))
 local Defs = require(Shared:WaitForChild("Defs"))
 local Data = require(Shared:WaitForChild("IslandData"))
+local Isle = require(Shared:WaitForChild("IsleData"))
 
 local World = {}
+-- "isle" = the World Guide's Peckwood Isle (one big generated island, areas placed on it, owner 2026-10-09);
+-- "grid" = the older 3x3 grid of islands joined by generated land
+World.LAYOUT = "isle"
+local ISLE = World.LAYOUT == "isle"
 local DX, DZ = 44, 34
 local PCX, PCY = Map.COLS / 2, Map.ROWS / 2
 World.DX, World.DZ = DX, DZ
@@ -38,6 +43,7 @@ for _, id in ORDER do
 		isl = { id = id, name = d.name, gx = d.gx, gz = d.gz, W = d.W, N = d.N, need = needOf(id), data = d, props = {} }
 		isl.oi = PCX + d.gx * DX - math.floor(d.W / 2)
 		isl.oj = PCY + d.gz * DZ - math.floor(d.N / 2)
+		if ISLE and Isle.off[id] then isl.oi += Isle.off[id][1]; isl.oj += Isle.off[id][2] end
 		local codes, hs = {}, {}
 		for j = 0, d.N - 1 do
 			codes[j], hs[j] = {}, {}
@@ -215,7 +221,7 @@ local function makeBridge(a, b)
 	table.insert(World.bridges, br)
 	return br
 end
-for _, a in World.list do
+for _, a in (if ISLE then {} else World.list) do
 	for _, b in World.list do
 		if (b.gx == a.gx + 1 and b.gz == a.gz) or (b.gz == a.gz + 1 and b.gx == a.gx) then
 			-- build from the earlier-unlocked island towards the later one
@@ -485,12 +491,68 @@ local function makeHighland(q)
 	World.byId[h.id] = h
 	table.insert(World.joins, h)
 end
-do
+if not ISLE then
 	local at = {}
 	for _, isl in World.list do at[isl.gx .. "," .. isl.gz] = isl end
 	for _, isl in World.list do
 		local q = { isl, at[(isl.gx + 1) .. "," .. isl.gz], at[isl.gx .. "," .. (isl.gz + 1)], at[(isl.gx + 1) .. "," .. (isl.gz + 1)] }
 		if q[2] and q[3] and q[4] then makeHighland(q) end
+	end
+end
+
+-- ---------------------------------------------------------------- Peckwood Isle regions
+-- The generated land between the areas (grass, beaches, hills, rock and snow ranges, ponds, roads, trees) belongs
+-- to the nearest area and rises out of the sea when that area unlocks, so the open areas grow into one island.
+-- Tiles, heights and colours come straight from the World Guide generator (IsleData).
+if ISLE then
+	for _, isl in World.list do
+		local src = Isle.regions[isl.id]
+		if not src then continue end
+		local cells = {}
+		local mnI, mnJ, mxI, mxJ = math.huge, math.huge, -math.huge, -math.huge
+		for rec in string.gmatch(src, "[^;]+") do
+			local i, jj, code, h, top, side = string.match(rec, "^(-?%d+),(-?%d+),(%d+),(%d+),(%x+),([%x%-]+)$")
+			i, jj = tonumber(i), tonumber(jj)
+			if owner[key(i, jj)] then continue end   -- handmade land always wins
+			local c = { i = i, j = jj, code = tonumber(code), h = tonumber(h), top = Color3.fromHex(top),
+				side = if side ~= "-" then Color3.fromHex(side) else nil }
+			c.f = math.clamp(math.sqrt((i - isl.cx) ^ 2 + (jj - isl.cz) ^ 2) / 40, 0, 1)   -- rises outward from the area
+			cells[key(i, jj)] = c
+			mnI = math.min(mnI, i); mnJ = math.min(mnJ, jj); mxI = math.max(mxI, i); mxJ = math.max(mxJ, jj)
+		end
+		if mnI == math.huge then continue end
+		local r = { id = "region:" .. isl.id, join = true, highland = true, area = isl.id, need = isl.need, name = isl.name,
+			props = {}, cells = cells, oi = mnI, oj = mnJ, W = mxI - mnI + 1, N = mxJ - mnJ + 1 }
+		r.cx, r.cz = r.oi + r.W / 2, r.oj + r.N / 2
+		r.codes = setmetatable({}, { __index = function(t, row)
+			local rr = setmetatable({}, { __index = function(_, col) local c = cells[key(col + r.oi, row + r.oj)]; return c and c.code or 0 end })
+			t[row] = rr
+			return rr
+		end })
+		r.H = function(i, jj) local c = cells[key(i, jj)]; return if c and (c.code == 1 or c.code == 4) then c.h else 0 end
+		r.data = { grass = isl.data and isl.data.grass or { "8cc06a", "84b863" }, path = isl.data and isl.data.path or { "d9bf91", "cfb487" },
+			alt = isl.data and isl.data.alt or { "8d8478", "7f776c" }, spills = {} }
+		function r.blend(i, jj, code, side)
+			local c = cells[key(i, jj)]
+			if not c then return Color3.fromHex(r.data.grass[(i + jj) % 2 + 1]) end
+			if side and c.side then return c.side end
+			return c.top
+		end
+		for kk in cells do owner[kk] = r end
+		World.byId[r.id] = r
+		table.insert(World.joins, r)
+	end
+	-- trees, bushes, rocks: the guide's picks, built from each area's own prop bricks
+	for rec in string.gmatch(Isle.props, "[^;]+") do
+		local area, kind, x, z, rot = string.match(rec, "^(%w+),(%w+),([%d%.%-]+),([%d%.%-]+),([%d%.%-]+)$")
+		local r, isl = World.byId["region:" .. area], World.byId[area]
+		if not r or not isl then continue end
+		local tpl = templatesOf(isl)[kind] or anyTemplates[kind]
+		x, z = tonumber(x), tonumber(z)
+		if not tpl or owner[key(math.floor(x), math.floor(z))] ~= r then continue end
+		local p = { kind = tpl.kind, x = x, z = z, rot = tonumber(rot), bob = tpl.bob, parts = tpl.parts, r = 0.6, join = true }
+		if tpl.kind ~= "flowers" then p.box = { x - 0.4, x + 0.4, z - 0.4, z + 0.4 } else p.r = 0 end
+		table.insert(r.props, p)
 	end
 end
 

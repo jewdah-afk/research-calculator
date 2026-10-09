@@ -891,7 +891,7 @@ function IslandView.unlockIsland(isl, animated, onDone)
 		end
 	end
 	for _, h in highs do
-		local its = joinItems(built[h.id], h, waveEnd + 1.2, false)
+		local its = joinItems(built[h.id], h, if h.area then waveEnd else waveEnd + 1.2, h.area ~= nil)   -- Isle regions grow outward from their area
 		for _, x in its do table.insert(items, x) end
 	end
 	if not animated then

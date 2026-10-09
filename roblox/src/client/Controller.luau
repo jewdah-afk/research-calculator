@@ -156,6 +156,12 @@ end
 -- hands-free travel ("Go to ..."): route island -> island over open bridges (BFS on the island graph), then stitch
 -- short A* legs between the bridge landings so the bird walks the best path on its own
 function Controller.travel(p: Body, gx: number, gy: number): boolean
+	if #World.bridges == 0 then   -- Peckwood Isle: one landmass, walk the whole way with A*
+		local path = Controller.findPath(p.x, p.y, gx, gy, 3)
+		if #path == 0 then return false end
+		p.target = { x = gx, y = gy, path = path, st = 0, travel = true }
+		return true
+	end
 	local from = World.nearest(p.x / Map.PX, p.y / Map.PX)
 	local to = World.nearest(gx / Map.PX, gy / Map.PX)
 	local prev: { [any]: any } = { [from] = false }

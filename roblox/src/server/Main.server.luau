@@ -83,7 +83,8 @@ local function zoneAt(plr): string?
 	local i, j = math.floor(hrp.Position.X / S + Map.COLS / 2), math.floor(hrp.Position.Z / S + Map.ROWS / 2)
 	local _, isl = World.rawTile(i, j)
 	if not isl then return nil end
-	return if isl.id == "desert" then "desert" elseif isl.id == "park" then "park" else nil
+	local id = isl.area or isl.id   -- Isle regions count as their area
+	return if id == "desert" then "desert" elseif id == "park" then "park" else nil
 end
 
 -- ---------------------------------------------------------------- sessions
