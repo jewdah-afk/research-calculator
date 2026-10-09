@@ -414,7 +414,7 @@ everywhere else. QA rounds: UI_BIRB_QA_1 (tab-by-tab Studio QA against real Birb
   key and asserts, 0 errors: sidebar open at start and with every window; every window inside the window region (the
   popup inside the game area); tab routing (open by name and click every tab layer of every tab variant); tab switches
   neither re-pop nor rebuild; sidebar collapse / reopen; no HUD group in the sidebar; **key audit** (every button-like
-  node registered with press-in + sound, no Squash UIScale anywhere: 1036 / 1036 wired at the last run, 998 live keys
+  node registered with press-in + sound, no Squash UIScale anywhere: 1036 / 1036 wired at the last run, 1078 live keys
   in `_G.__uiKeys()`); every icon name resolves (0 missing); the accordion (defaults, heights, fold / unfold); NEST /
   MINE views have live rows; filter bars filter and RESET restores; the COMPANIONS board drops, rolls up, holds all six
   rows with correct locked looks and hides / restores AUTO. `python tools/ui_harness/mock.py <refs> <out.png>` turns
