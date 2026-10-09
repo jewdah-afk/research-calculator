@@ -30,8 +30,8 @@ for _, o in Map.objects do
 		table.insert(colliders, { x = x, y = y, r = PROP_COLL[kind][1], base = z, top = z + PROP_COLL[kind][2] })
 	end
 end
--- other islands: one circle per prop from its ground footprint (World computes r in tiles)
-for _, isl in World.list do
+-- other islands + land joins: one box per prop from its ground footprint (World computes r in tiles)
+for _, isl in World.all() do
 	if isl.park then continue end
 	for _, p in isl.props do
 		if p.dropped or (p.r or 0) <= 0 then continue end
