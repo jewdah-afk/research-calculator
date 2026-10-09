@@ -35,7 +35,11 @@ local LEAF = {
 }
 local SHOWER = {
 	tex = "sparkle", orient = "face", life = { 1.6, 2.4 }, speed = { 0.5, 2 }, dir = Enum.NormalId.Bottom, spread = 30,
-	accel = Vector3.new(0, -7, 0), drag = 0.3, size = vary(seq(0, 2.2, 1, 2.2), 0.3), color = "hi", z = 2,
+	accel = Vector3.new(0, -7, 0), drag = 0.3, size = vary(Layers.pop(2.3, 0.06, 0.8, 0.4), 0.3), color = "hi", z = 2,
+}
+local SUMMON_RAYS = { -- (clip3) a light-ray fan behind the summon pillar while the circle is drawn
+	tex = "rays_fan", orient = "face", life = 1.6, size = seq(0, 10, 0.15, 30, 1, 34), rotSpeed = { 6, 8 },
+	color = "warm", light = 1, bright = 1.3, z = -4, noScale = true,
 }
 local DROP = { -- feathers / confetti falling from above for the finale
 	tex = "feather", orient = "face", life = { 2.2, 3 }, speed = { 1, 3 }, dir = Enum.NormalId.Bottom, spread = 60,
@@ -115,6 +119,7 @@ return {
 			fx:mesh("tornado", { at = cc, face = "up", lift = true, spin = 3.5, spinEnd = 2, r = { D * 0.18, D * 0.26 }, rInT = 1,
 				zFn = function(u) return 46 * (if u < 0.25 then EASE.out(u / 0.25) elseif u < 0.75 then 1 else 1 - EASE["in"]((u - 0.75) / 0.25)) end,
 				life = pillarEnd - start - 0.1, color = "base", alpha = { { 0, 0.25 }, { 0.8, 0.55 }, { 0.92, 1 } } })
+			fx:emit(SUMMON_RAYS, cc + Vector3.new(0, 18, 0), 1, { life = math.max(1.2, pillarEnd - start - 0.1) })
 			local top = cc + Vector3.new(0, 80, 0)
 			local outerB = fx:beam(PILLAR, cc, top)
 			local coreB = fx:beam(PILLAR_CORE, cc, top)

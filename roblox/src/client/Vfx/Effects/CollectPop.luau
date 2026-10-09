@@ -26,7 +26,7 @@ local CORE = {
 }
 local SPARK = {
 	tex = "sparkle", orient = "face", life = { 0.26, 0.34 }, speed = { 9, 13 }, drag = 9, spread = 180,
-	accel = Vector3.new(0, 6, 0), size = vary(seq(0, 1.15, 1, 1.15), 0.2), color = "hi", z = 2.6,
+	accel = Vector3.new(0, 6, 0), size = vary(pop(1.2, 0.12, 0.65, 0.5), 0.2), color = "hi", z = 2.6,
 }
 local BIT = {
 	tex = "star", orient = "face", life = { 0.32, 0.38 }, speed = { 10, 14 }, spread = 30, accel = Vector3.new(0, -40, 0),

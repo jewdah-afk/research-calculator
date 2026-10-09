@@ -13,16 +13,17 @@ local Vfx = script.Parent.Parent
 local Layers = require(Vfx:WaitForChild("Layers"))
 local Palette = require(Vfx:WaitForChild("Palette"))
 local R = require(Vfx:WaitForChild("Recipes"))
-local seq, steps, vary = Layers.seq, Layers.steps, Layers.vary
+local seq, steps, vary, pop = Layers.seq, Layers.steps, Layers.vary, Layers.pop
 local EASE = Layers.EASE
 
 local RISE = {
 	tex = "sparkle", orient = "face", life = { 0.7, 1.0 }, speed = { 7, 12 }, spread = 8, drag = 1,
-	size = vary(seq(0, 1.3, 1, 1.3), 0.25), color = "hi", z = 2,
+	size = vary(pop(1.4, 0.12, 0.7, 0.5), 0.25), color = "hi", z = 2,
 }
 local STREAK = {
 	tex = "speed_line", orient = "vel", life = { 0.26, 0.34 }, speed = { 28, 40 }, spread = 4, drag = 2,
-	size = seq(0, 1.6, 0.6, 1.4, 1, 0.4), squash = seq(0, 2.2, 1, 1.4), color = "hi", light = 1, bright = 1.8, z = 2.2,
+	size = pop(1.7, 0.12, 0.6, 0.4), squash = seq(0, 2.6, 0.6, 1.8, 1, 1.2), trans = steps({ 0.7, 0.4 }),
+	color = "hi", light = 1, bright = 1.8, z = 2.2,
 }
 local DING_RIM = {
 	tex = "flash_star", orient = "face", life = 0.32, size = Layers.pop(6.5, 0.18, 0.45, 0), color = "mid",
@@ -100,7 +101,7 @@ return {
 		-- AMBIENT: rising sparkles + SUPPORT speed lines up the column
 		for k = 0, 11 do
 			fx:at(k * 0.1, function()
-				for _ = 1, fx:n(2, true) do
+				for _ = 1, fx:n(if k < 3 then 3 elseif k < 7 then 2 else 1, true) do
 					local a = math.random() * math.pi * 2
 					local r = 2.2 * sc
 					fx:emit(RISE, feet() + Vector3.new(math.cos(a) * r, 0.3, math.sin(a) * r), 1)

@@ -37,12 +37,12 @@ local PUSH_MAX = { 0.45, 0.48, 0.5, 0.55, 0.62, 0.66 }
 local CRACK_AT = { 0.3, 0.58, 0.84 } -- fractions of A
 
 local SUCK = {
-	tex = "speed_line", orient = "vel", life = 0.32, speed = 13, size = seq(0, 0.5, 0.3, 0.9, 1, 0.3),
-	squash = seq(0, 1.8, 1, 1.2), color = "hi", light = 1, bright = 2, z = 1,
+	tex = "speed_line", orient = "vel", life = 0.32, speed = 13, size = pop(0.9, 0.2, 0.75, 0.2, 0.3),
+	squash = seq(0, 2.2, 0.7, 1.6, 1, 0.8), color = "hi", light = 1, bright = 2, z = 1,
 }
 local SPECK = {
 	tex = "shell_shards", orient = "face", life = { 0.35, 0.45 }, speed = { 6, 9 }, spread = 40,
-	accel = Vector3.new(0, -40, 0), size = vary(seq(0, 0.55, 1, 0.45), 0.3), rotSpeed = { -300, 300 },
+	accel = Vector3.new(0, -40, 0), size = vary(pop(0.55, 0.1, 0.7, 0), 0.3), rotSpeed = { -300, 300 },
 	fps = { 12, 16 }, startRandom = true, color = "fff4dc", z = 1.2,
 }
 local SHARDS = {
@@ -68,7 +68,7 @@ local HALO = {
 }
 local SHOWER = {
 	tex = "sparkle", orient = "face", life = { 1.3, 1.9 }, speed = { 0.5, 2 }, dir = Enum.NormalId.Bottom, spread = 25,
-	accel = Vector3.new(0, -9, 0), drag = 0.4, size = vary(seq(0, 1.5, 1, 1.5), 0.3), color = "hi", z = 2,
+	accel = Vector3.new(0, -9, 0), drag = 0.4, size = vary(pop(1.6, 0.08, 0.75, 0.3), 0.3), color = "hi", z = 2,
 }
 local RUNE = {
 	tex = "rune_circle", orient = "flat", life = 3, size = 1, rotSpeed = { 24, 24 }, rot = { 0, 360 },
@@ -229,7 +229,7 @@ return {
 		end
 		local nSuck = fx:n(3 + 2 * T, true)
 		for k = 1, nSuck do
-			fx:at(A * (0.12 + 0.8 * (k - 1) / math.max(1, nSuck - 1)), function()
+			fx:at(A * (0.12 + 0.8 * ((k - 1) / math.max(1, nSuck - 1)) ^ 0.65), function()
 				local d = Vector3.new(math.random() - 0.5, math.random() * 0.8 - 0.1, math.random() - 0.5)
 				if d.Magnitude < 1e-3 then d = Vector3.xAxis end
 				d = d.Unit
@@ -307,11 +307,11 @@ return {
 				end
 			end
 			if T >= 3 then
-				local c2 = if T >= 6 then "accent" else "mid"
+				local col2 = if T >= 6 then "accent" else "mid"
 				if not fx:mesh("arc", { at = centre, face = "camera", tilt = 1.3, yaw = -0.5, spin = -10, spinEnd = -2,
-					r = { 0.45 * Rs, 1.3 * Rs }, rInT = 0.6, z = { 1.3 * sc, 0.05 }, life = 0.48, color = c2,
+					r = { 0.45 * Rs, 1.3 * Rs }, rInT = 0.6, z = { 1.3 * sc, 0.05 }, life = 0.48, color = col2,
 					alpha = { { 0, 0 }, { 0.6, 0.4 }, { 0.85, 1 } } }) then
-					fx:emit(R.SWIRL, centre, 1, { rotSpeed = { -380, -320 }, color = c2, scale = 1.25, tag = "sw2" })
+					fx:emit(R.SWIRL, centre, 1, { rotSpeed = { -380, -320 }, color = col2, scale = 1.25, tag = "sw2" })
 				end
 				if not fx:mesh("spiral", { at = centre, face = "camera", tilt = 1.15, spin = -7, spinEnd = -1.5,
 					r = { 0.5 * Rs, 1.2 * Rs }, z = { 0.9 * sc, 0.05 }, life = 0.5, color = "ink",
@@ -321,6 +321,7 @@ return {
 				fx:emitSphere(R.SPEED, centre, fx:n(5 + T), 0.3)
 			end
 			if T >= 2 then fx:emitSphere(R.EMBER, centre, fx:n(3 + 2 * T), 0.7, { color = if T >= 6 then "accent" else "base" }) end
+			if T >= 3 then fx:emit(R.MARK, ground + Vector3.new(0, 0.12, 0), 1, { scale = 0.8 + 0.08 * T }) end
 			-- SUPPORT: the rendered toon burst cloud, shell shards, toon smoke ring
 			fx:emit(R.BURST, centre, 1, { scale = 0.85 + 0.06 * T })
 			fx:emit(SHARDS, centre, fx:n(5 + T, true), { color = opts.eggColor or "fff4dc" })

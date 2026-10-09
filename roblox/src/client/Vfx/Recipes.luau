@@ -43,19 +43,22 @@ R.INK_SWIRL = {
 }
 
 -- ---------------------------------------------------------------- streaks: speed lines + embers (VelocityParallel)
+-- (clip4) speed lines: shoot out, stretch (Squash) along the motion, stop dead (Drag), step out
 R.SPEED = {
-	tex = "speed_line", orient = "vel", life = { 0.18, 0.26 }, speed = { 45, 70 }, drag = 7, size = seq(0, 2.2, 0.5, 2, 1, 0.6),
-	squash = seq(0, 2.4, 1, 1.2), color = "white", light = 1, bright = 2, z = 4.4,
+	tex = "speed_line", orient = "vel", life = { 0.18, 0.26 }, speed = { 45, 70 }, drag = 7,
+	size = pop(2.2, 0.12, 0.55, 0.5), squash = seq(0, 2.6, 0.5, 2, 1, 1.1), trans = steps({ 0.6, 0.35 }, { 0.85, 1 }),
+	color = "white", light = 1, bright = 2, z = 4.4,
 }
+-- (clip2) embers: small hot streaks flung out, decelerating, falling a little, tumbling as they slow
 R.EMBER = {
 	tex = "speed_line", orient = "vel", life = { 0.5, 0.8 }, speed = { 18, 30 }, drag = 2.2,
-	accel = Vector3.new(0, -14, 0), size = vary(seq(0, 0.7, 0.2, 0.6, 1, 0), 0.3), squash = seq(0, 1.6, 1, 0.8),
-	color = "base", light = 1, bright = 2.2, z = 4.3,
+	accel = Vector3.new(0, -14, 0), size = vary(pop(0.75, 0.1, 0.5, 0), 0.3), squash = seq(0, 1.8, 0.6, 1.2, 1, 0.5),
+	trans = steps({ 0.75, 0.3 }), color = "base", light = 1, bright = 2.2, z = 4.3,
 }
 
 -- ---------------------------------------------------------------- ambient + celebration (inked, normal blend)
 R.SPARKLE = {
-	tex = "sparkle", orient = "face", life = { 0.45, 0.6 }, speed = 0, size = vary(seq(0, 1.5, 1, 1.5), 0.25),
+	tex = "sparkle", orient = "face", life = { 0.45, 0.6 }, speed = 0, size = vary(pop(1.6, 0.15, 0.7, 0.6), 0.25),
 	color = "hi", z = 3,
 }
 R.STAR = {
@@ -99,6 +102,11 @@ function R.waveTrans(alpha: number?): NumberSequence
 	return seq(0, a, 0.5, a, 0.504, math.min(1, a + 0.22), 0.78, math.min(1, a + 0.22), 0.784, 1, 1, 1)
 end
 
+-- (clip3) ground mark: a flat stepped shadow / glow left on the ground under a big burst, lingers then steps out
+R.MARK = {
+	tex = "glow_step", orient = "flat", life = 0.9, size = pop(7, 0.12, 0.7, 7.6), trans = steps({ 0.55, 0.55 }, { 0.8, 0.8 }, { 0.9, 1 }),
+	color = "deep", light = 0, z = 0.1,
+}
 R.GLOW = { -- 3-band cel glow (billboard)
 	tex = "glow_step", orient = "face", life = 1, size = 4, color = "base", light = 0.75, bright = 1.2, z = -0.6,
 }
