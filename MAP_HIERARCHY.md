@@ -3,7 +3,8 @@
 Owner: "B is what we're trying, but we want absolute hierarchy built." The look is **B, realistic cartoony**
 (`roblox/docs/targets/look_B_realistic_cartoony.png`: Sea of Thieves / Fortnite / Kena, golden hour, painted
 materials, dense wind-blown grass, swaying ambience). It replaces the cel / Pokemon X/Y look: **no ink outlines on
-scenery** any more. This file is the single rule for where everything in the world lives and how much it is
+scenery** any more. Picture: `roblox/docs/targets/park_hierarchy_B_annotated.png` (look-B Park mockup from the game camera, every tier
+labelled; concept art, not in-game). This file is the single rule for where everything in the world lives and how much it is
 allowed to shout. Code: `roblox/src/shared/WorldTree.luau`.
 
 ---
@@ -16,7 +17,7 @@ Every frame from the game camera must read in this order. Each tier is a bit qui
 | Tier | What | How it wins attention | How it stays quiet |
 |---|---|---|---|
 | 1 Focus | hen, eggs, companions (`Actors`) | the only ink outlines left, brightest whites, warm rim light, always moving (hop, bob) | — |
-| 2 Interactables | gold bird, monster, nest tree, tank, portals, shop stall | a light of its own or a glint, clear silhouette, a cleared ring of ground around it | no outline; at most 1 per screen region |
+| 2 Interactables | gold bird, monster, nest tree, tank, portals | a light of its own or a glint, clear silhouette, a cleared ring of ground around it | no outline; at most 1 per screen region |
 | 3 Landmark | ONE hero per island (Park: lighthouse) | tallest silhouette, sits on the island's far edge or a corner so it frames the play area, never in the middle | darker values than tier 1-2, slow motion only (beam, sails) |
 | 4 Structure | paths, fences, lamps, benches, bridges, piers (`Props`) | leads the eye: paths point at the egg yard and the landmark | mid values, low saturation browns / greys |
 | 5 Dressing | trees, bushes, grass, flowers, rocks (`Foliage`, `Rocks`) | texture and life: sways, drifts | darkest + most varied greens, denser at the island edge than in the middle (natural vignette), never on the play path |
