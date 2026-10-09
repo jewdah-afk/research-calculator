@@ -713,6 +713,11 @@ local function buildIslandProp(isl, p, parent)
 	return info
 end
 
+-- leaves: a slow emitter in each tree's canopy; leaves tumble down and drift with the wind (Ambience sets the push)
+IslandView.leafEmitters = {}
+local LEAF_TEX = "rbxasset://textures/whiteCircle.png"
+local LEAF_KINDS = { oak = { "7fb35e", "c8b040" }, bigoak = { "7fb35e", "d88a3a" }, tree = { "7fb35e", "c8b040" }, pine = { "5d9a4c" },
+	nesttree = { "569a4e", "d88a3a" }, palm = { "5aa04c" } }
 local function addLeaves(model: Instance, kind: string)
 	local cols = LEAF_KINDS[kind]; if not cols then return end
 	local cf, size = model:GetBoundingBox()

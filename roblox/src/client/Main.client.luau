@@ -1,6 +1,6 @@
 --!strict
 -- Peckwood client — presentation only (port of src/three/View3D.js): near-orthographic iso camera looking straight
--- across the island (yaw 0 so the island lies horizontal), bird hop/tilt, kernel pop-in / spin / bob / halo,
+-- across the island (yaw 0 so the island lies horizontal), bird hop/tilt, kernel pop-in / spin / bob,
 -- collect homing + burst + number pop, drifting clouds, screen shake. The server owns every number.
 local Players = game:GetService("Players")
 local RS = game:GetService("ReplicatedStorage")
@@ -208,7 +208,7 @@ plr.PlayerGui:GetAttributeChangedSignal("PeckwoodCam"):Connect(function()
 	IslandView.camCF = if typeof(p) == "Vector3" then CFrame.lookAt(p, Vector3.new(0, -8, 2)) else nil
 end)
 plr.PlayerGui:GetAttributeChangedSignal("PeckwoodHour"):Connect(function() IslandView.timeOverride = plr.PlayerGui:GetAttribute("PeckwoodHour") end)
-type K = { model: Model, halo: Part, pos: Vector3, born: number, golden: boolean, homing: number?, parts: { BasePart }, offs: { CFrame } }
+type K = { model: Model, pos: Vector3, born: number, golden: boolean, homing: number?, parts: { BasePart }, offs: { CFrame } }
 local kernels: { [number]: K } = {}
 local frameN = 0
 local clock = 0
@@ -234,23 +234,17 @@ Remotes:WaitForChild("Spawn").OnClientEvent:Connect(function(id: number, pos: Ve
 			end
 		end
 	end
-	local halo = Instance.new("Part")
-	halo.Name = "Halo"; halo.Shape = Enum.PartType.Cylinder; halo.Size = Vector3.new(0.04, 0.68 * S, 0.68 * S)
-	halo.Color = if golden then Color3.fromHex("#ffd54a") else Color3.new(1, 1, 1); halo.Material = Enum.Material.Neon
-	halo.Transparency = 0.55; halo.Anchored = true; halo.CanCollide = false; halo.CanQuery = false; halo.CastShadow = false
-	halo.CFrame = CFrame.new(pos + Vector3.new(0, 0.04 * S, 0)) * CFrame.Angles(0, 0, math.rad(90))
-	halo.Parent = m
 	m.Parent = field
 	-- cache the puff parts relative to the pivot so every kernel moves in one BulkMoveTo per frame
 	local pv = m:GetPivot()
 	local parts, offs = {}, {}
 	for _, d in m:GetDescendants() do
-		if d:IsA("BasePart") and d ~= halo then
-			d.CastShadow = false   -- 180 moving shadow casters re-render the shadow map every frame; the halo grounds them
+		if d:IsA("BasePart") then
+			d.CastShadow = false   -- 180 moving shadow casters re-render the shadow map every frame
 			table.insert(parts, d); table.insert(offs, pv:ToObjectSpace(d.CFrame))
 		end
 	end
-	kernels[id] = { model = m, halo = halo, pos = pos, born = clock, golden = golden, parts = parts, offs = offs }
+	kernels[id] = { model = m, pos = pos, born = clock, golden = golden, parts = parts, offs = offs }
 	local n = 0; for _, kk in kernels do if not kk.homing then n += 1 end end; Hud.kernelCount = n   -- flying-in kernels no longer count
 end)
 
@@ -282,7 +276,7 @@ Remotes:WaitForChild("Collect").OnClientEvent:Connect(function(id: number, value
 	local k = kernels[id]; if not k then return end
 	if value == nil then k.model:Destroy(); kernels[id] = nil; return end   -- cleared by Molt / travel / dev save
 	local n = 0; for _, kk in kernels do if not kk.homing then n += 1 end end; Hud.kernelCount = n - 1
-	k.homing = 0; k.halo:Destroy()
+	k.homing = 0
 	task.delay(0.18, function()
 		local at = k.model:GetPivot().Position
 		k.model:Destroy(); kernels[id] = nil
@@ -318,7 +312,6 @@ local function kernelsStep(dt: number)
 			local e = easeOutBack(math.min(1, age / 0.35))
 			local y = (e - 1) * 0.6 * S + math.sin(clock * 3 + id) * 0.06 * S + 0.08 * S
 			place(k, CFrame.new(k.pos + Vector3.new(0, y, 0)) * CFrame.Angles(0, clock * 1.6 + id, 0))
-			if k.halo.Parent then k.halo.Transparency = 0.5 + math.sin(clock * 4 + id) * 0.12 end
 		end
 	end
 	if #bulkParts > 0 then workspace:BulkMoveTo(bulkParts, bulkCFs, Enum.BulkMoveMode.FireCFrameChanged) end

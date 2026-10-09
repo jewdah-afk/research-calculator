@@ -80,13 +80,10 @@ function Models.bird(): Model
 end
 
 -- ---------------------------------------------------------------- egg (the main currency pickup; was the popcorn kernel)
-local SPECKS = { { 0.11, 0.11, 0.17 }, { -0.15, 0.03, 0.2 }, { 0.03, -0.155, 0.15 }, { -0.085, -0.09, 0.29 }, { 0.15, -0.045, 0.12 }, { -0.03, 0.125, 0.3 } }   -- sit on the shell surface
 function Models.kernel(golden: boolean?): Model
 	local m = newModel("Egg")
 	local shell = if golden then "#ffc93a" else "#f4ead8"
-	Models.ball(m, "shell", 0.15, { 0, 0, 0.17 }, shell, { 1, 1, 1.15 })      -- wide bottom
-	Models.ball(m, "top", 0.12, { 0, 0, 0.27 }, shell, { 1, 1, 1.25 })        -- narrower top gives the egg shape
-	for i, p in SPECKS do Models.ball(m, "speck" .. i, 0.022, p, if golden then "#e0a010" else "#c9a888") end
+	Models.ball(m, "shell", 0.15, { 0, 0, 0.2 }, shell, { 1, 1, 1.32 })       -- one smooth shell, no seam or bulge
 	if golden then for _, p in m:GetChildren() do (p :: BasePart).Reflectance = 0.08 end end   -- gold reads by colour + outline, not Neon (bloom blob)
 	m.WorldPivot = CFrame.new(); m:ScaleTo(2.3)   -- scale about the base point, same size as the old kernel
 	return m
