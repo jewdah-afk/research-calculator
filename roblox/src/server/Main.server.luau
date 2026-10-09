@@ -96,6 +96,7 @@ end)()
 
 type Kernel = { pos: Vector3, kind: string, golden: boolean }
 local sessions = {}
+local sendSfxPicks: (Player) -> ()   -- dev Sound Board picks (defined with the actions below; used on join)
 -- session = { real = state (saved), view = state (what the game runs on), mode = "regular"|"maxed"|"step",
 --             kernels, nextId, popT, lastAct, rng, dirty, fishDirty, autoAllowed, devAllowed, autoT, buyT }
 
@@ -184,6 +185,7 @@ Players.PlayerAdded:Connect(function(plr)
 		dirty = true, fishDirty = true, autoAllowed = checkGroup(plr), devAllowed = isDev(plr), autoT = 0, buyT = 0 }
 	if not ss.autoAllowed then real.auto = false end
 	sessions[plr] = ss
+	if ss.devAllowed then task.defer(function() if sendSfxPicks then sendSfxPicks(plr) end end) end
 	plr.CharacterAdded:Connect(function(ch)
 		task.defer(function()
 			local hrp = ch:WaitForChild("HumanoidRootPart") :: BasePart
@@ -485,6 +487,45 @@ function A.dev(plr, ss, op)
 	clearField(plr, ss)
 	ss.fishDirty = true
 	toast(plr, "dev", ss.mode, ss.view.island)
+end
+
+-- UI preferences the client remembers across sessions (whitelisted keys, plain booleans only)
+local PREF_KEYS = { companions = true }
+function A.pref(plr, ss, key, value)
+	if not PREF_KEYS[key] or type(value) ~= "boolean" then return end
+	for _, st in { ss.real, ss.view } do
+		st.prefs = st.prefs or {}
+		st.prefs[key] = value
+	end
+	ss.dirty = true
+end
+
+-- dev Sound Board picks (dev only): one shared dev DataStore key, applied for every dev through a player attribute
+local HttpService = game:GetService("HttpService")
+local SFX_KEY = "dev_sfx_picks_v1"
+local sfxPicks = nil
+local function loadSfxPicks()
+	if sfxPicks then return sfxPicks end
+	sfxPicks = {}
+	if store then
+		local ok, data = pcall(function() return store:GetAsync(SFX_KEY) end)
+		if ok and type(data) == "table" then sfxPicks = data end
+	end
+	return sfxPicks
+end
+function sendSfxPicks(plr)
+	local ok, json = pcall(function() return HttpService:JSONEncode(loadSfxPicks()) end)
+	if ok then plr:SetAttribute("PeckwoodSfxPicks", json) end
+end
+function A.sfxpick(plr, ss, event, id)
+	if not ss.devAllowed or type(event) ~= "string" or #event > 40 or type(id) ~= "number" or id < 0 or id ~= math.floor(id) then return end
+	local picks = loadSfxPicks()
+	picks[event] = id
+	if store then pcall(function() store:SetAsync(SFX_KEY, picks) end) end
+	for _, p2 in Players:GetPlayers() do
+		local s2 = sessions[p2]
+		if s2 and s2.devAllowed then sendSfxPicks(p2) end
+	end
 end
 
 -- ---------------------------------------------------------------- shop (passes + products), server-verified

@@ -1480,6 +1480,7 @@ local function joinItems(jrec, j, startT, fromA)
 	return items, startT + span + 0.6
 end
 
+IslandView.onUnlock = nil   -- set by Vfx/Hooks: called with the wave timing so the island_unlock effect rides the rise
 function IslandView.unlockIsland(isl, animated, onDone)
 	deferFill = true
 	local rec = built[isl.id] or buildIsland(isl)
@@ -1592,6 +1593,7 @@ function IslandView.unlockIsland(isl, animated, onDone)
 	local centre = Vector3.new(sx(isl.cx), 0, sz(isl.cz))
 	local from = workspace.CurrentCamera.CFrame
 	local srcFocus = if src then Vector3.new(sx(src.landA[1] + 0.5), 0, sz(src.landA[2] + 0.5)) else landing
+	if IslandView.onUnlock then task.spawn(IslandView.onUnlock, { isl = isl, items = items, landing = landing, centre = centre, waveStart = after, waveEnd = waveEnd, step = STEP, top = islandTopY(isl, math.floor(isl.cx), math.floor(isl.cz)) }) end
 	animate(items, function(k)
 		-- glide to the old coast, ride the terraform wave across the sea, settle framing the new island
 		if k < 0.15 then return from:Lerp(camAt(srcFocus), 1 - (1 - k / 0.15) ^ 3) end
