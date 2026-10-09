@@ -3,24 +3,6 @@
 "path": [
 "ReplicatedStorage",
 "Peckwood",
-"AscentData"
-],
-"class": "ModuleScript",
-"url": "src/shared/AscentData.luau"
-},
-{
-"path": [
-"ReplicatedStorage",
-"Peckwood",
-"BirbFormulas"
-],
-"class": "ModuleScript",
-"url": "src/shared/BirbFormulas.luau"
-},
-{
-"path": [
-"ReplicatedStorage",
-"Peckwood",
 "BirbSystems"
 ],
 "class": "ModuleScript",
@@ -30,10 +12,10 @@
 "path": [
 "ReplicatedStorage",
 "Peckwood",
-"Config"
+"IslandData"
 ],
 "class": "ModuleScript",
-"url": "src/shared/Config.luau"
+"url": "src/shared/IslandData.luau"
 },
 {
 "path": [
@@ -48,28 +30,19 @@
 "path": [
 "ReplicatedStorage",
 "Peckwood",
-"EternityNum"
+"World"
 ],
 "class": "ModuleScript",
-"url": "src/shared/EternityNum.luau"
+"url": "src/shared/World.luau"
 },
 {
 "path": [
 "ReplicatedStorage",
 "Peckwood",
-"Icons"
+"WorldTree"
 ],
 "class": "ModuleScript",
-"url": "src/shared/Icons.luau"
-},
-{
-"path": [
-"ReplicatedStorage",
-"Peckwood",
-"IslandData"
-],
-"class": "ModuleScript",
-"url": "src/shared/IslandData.luau"
+"url": "src/shared/WorldTree.luau"
 },
 {
 "path": [
@@ -93,19 +66,46 @@
 "path": [
 "ReplicatedStorage",
 "Peckwood",
-"Models"
+"Shop"
 ],
 "class": "ModuleScript",
-"url": "src/shared/Models.luau"
+"url": "src/shared/Shop.luau"
 },
 {
 "path": [
 "ReplicatedStorage",
 "Peckwood",
-"Shop"
+"AscentData"
 ],
 "class": "ModuleScript",
-"url": "src/shared/Shop.luau"
+"url": "src/shared/AscentData.luau"
+},
+{
+"path": [
+"ReplicatedStorage",
+"Peckwood",
+"Icons"
+],
+"class": "ModuleScript",
+"url": "src/shared/Icons.luau"
+},
+{
+"path": [
+"ReplicatedStorage",
+"Peckwood",
+"BirbFormulas"
+],
+"class": "ModuleScript",
+"url": "src/shared/BirbFormulas.luau"
+},
+{
+"path": [
+"ReplicatedStorage",
+"Peckwood",
+"Config"
+],
+"class": "ModuleScript",
+"url": "src/shared/Config.luau"
 },
 {
 "path": [
@@ -120,19 +120,28 @@
 "path": [
 "ReplicatedStorage",
 "Peckwood",
-"World"
+"Models"
 ],
 "class": "ModuleScript",
-"url": "src/shared/World.luau"
+"url": "src/shared/Models.luau"
+},
+{
+"path": [
+"ReplicatedStorage",
+"Peckwood",
+"EternityNum"
+],
+"class": "ModuleScript",
+"url": "src/shared/EternityNum.luau"
 },
 {
 "path": [
 "ServerScriptService",
 "Peckwood",
-"Game"
+"Main"
 ],
-"class": "ModuleScript",
-"url": "src/server/Game.luau"
+"class": "Script",
+"url": "src/server/Main.server.luau"
 },
 {
 "path": [
@@ -147,10 +156,10 @@
 "path": [
 "ServerScriptService",
 "Peckwood",
-"Main"
+"Game"
 ],
-"class": "Script",
-"url": "src/server/Main.server.luau"
+"class": "ModuleScript",
+"url": "src/server/Game.luau"
 },
 {
 "path": [
@@ -171,16 +180,6 @@
 ],
 "class": "ModuleScript",
 "url": "src/shared/Birb/Rules.luau"
-},
-{
-"path": [
-"ServerScriptService",
-"Peckwood",
-"Systems",
-"Castle"
-],
-"class": "ModuleScript",
-"url": "src/server/Systems/Castle.luau"
 },
 {
 "path": [
@@ -214,23 +213,23 @@
 },
 {
 "path": [
-"StarterPlayer",
-"StarterPlayerScripts",
+"ServerScriptService",
 "Peckwood",
-"Ambience"
+"Systems",
+"Castle"
 ],
 "class": "ModuleScript",
-"url": "src/client/Ambience.luau"
+"url": "src/server/Systems/Castle.luau"
 },
 {
 "path": [
 "StarterPlayer",
 "StarterPlayerScripts",
 "Peckwood",
-"Birds"
+"Portals"
 ],
 "class": "ModuleScript",
-"url": "src/client/Birds.luau"
+"url": "src/client/Portals.luau"
 },
 {
 "path": [
@@ -247,30 +246,10 @@
 "StarterPlayer",
 "StarterPlayerScripts",
 "Peckwood",
-"IslandView"
+"Ambience"
 ],
 "class": "ModuleScript",
-"url": "src/client/IslandView.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"LandTerrain"
-],
-"class": "ModuleScript",
-"url": "src/client/LandTerrain.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"Main"
-],
-"class": "LocalScript",
-"url": "src/client/Main.client.luau"
+"url": "src/client/Ambience.luau"
 },
 {
 "path": [
@@ -297,10 +276,40 @@
 "StarterPlayer",
 "StarterPlayerScripts",
 "Peckwood",
-"Portals"
+"Main"
+],
+"class": "LocalScript",
+"url": "src/client/Main.client.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"LandTerrain"
 ],
 "class": "ModuleScript",
-"url": "src/client/Portals.luau"
+"url": "src/client/LandTerrain.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"IslandView"
+],
+"class": "ModuleScript",
+"url": "src/client/IslandView.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"Birds"
+],
+"class": "ModuleScript",
+"url": "src/client/Birds.luau"
 },
 {
 "path": [
@@ -317,231 +326,11 @@
 "StarterPlayer",
 "StarterPlayerScripts",
 "Peckwood",
-"UI",
-"Binders"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/Binders.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"CompanionsBoard"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/CompanionsBoard.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"Hud"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/Hud.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"Kit"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/Kit.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"Layout"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/Layout.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"LayoutPatches"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/LayoutPatches.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"Motion"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/Motion.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"RobuxShop"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/RobuxShop.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"SampleData"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/SampleData.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"Screens"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/Screens.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"Sfx"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/Sfx.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"SfxCandidates"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/SfxCandidates.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"SidebarViews"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/SidebarViews.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"SoundBoard"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/SoundBoard.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"TreeBinder"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/TreeBinder.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"WindowDefs"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/WindowDefs.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"WindowManager"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/WindowManager.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
 "Vfx",
 "CamFx"
 ],
 "class": "ModuleScript",
 "url": "src/client/Vfx/CamFx.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"Vfx",
-"Hooks"
-],
-"class": "ModuleScript",
-"url": "src/client/Vfx/Hooks.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"Vfx",
-"Layers"
-],
-"class": "ModuleScript",
-"url": "src/client/Vfx/Layers.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"Vfx",
-"MeshFx"
-],
-"class": "ModuleScript",
-"url": "src/client/Vfx/MeshFx.luau"
 },
 {
 "path": [
@@ -564,6 +353,274 @@
 ],
 "class": "ModuleScript",
 "url": "src/client/Vfx/Recipes.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"Vfx",
+"Layers"
+],
+"class": "ModuleScript",
+"url": "src/client/Vfx/Layers.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"Vfx",
+"Hooks"
+],
+"class": "ModuleScript",
+"url": "src/client/Vfx/Hooks.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"Vfx",
+"MeshFx"
+],
+"class": "ModuleScript",
+"url": "src/client/Vfx/MeshFx.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"SidebarViews"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/SidebarViews.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Layout"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Layout.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Sfx"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Sfx.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"SampleData"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/SampleData.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"WindowManager"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/WindowManager.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"SfxCandidates"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/SfxCandidates.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"SoundBoard"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/SoundBoard.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"WindowDefs"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/WindowDefs.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"LayoutPatches"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/LayoutPatches.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"CompanionsBoard"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/CompanionsBoard.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Screens"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Screens.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Binders"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Binders.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"RobuxShop"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/RobuxShop.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Hud"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Hud.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Motion"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Motion.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Kit"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Kit.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"TreeBinder"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/TreeBinder.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"Vfx",
+"Effects",
+"IslandUnlock"
+],
+"class": "ModuleScript",
+"url": "src/client/Vfx/Effects/IslandUnlock.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"Vfx",
+"Effects",
+"EggHatch"
+],
+"class": "ModuleScript",
+"url": "src/client/Vfx/Effects/EggHatch.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"Vfx",
+"Effects",
+"CollectPop"
+],
+"class": "ModuleScript",
+"url": "src/client/Vfx/Effects/CollectPop.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"Vfx",
+"Effects",
+"LevelUp"
+],
+"class": "ModuleScript",
+"url": "src/client/Vfx/Effects/LevelUp.luau"
 },
 {
 "path": [
@@ -606,347 +663,13 @@
 "StarterPlayer",
 "StarterPlayerScripts",
 "Peckwood",
-"Vfx",
-"Effects",
-"CollectPop"
-],
-"class": "ModuleScript",
-"url": "src/client/Vfx/Effects/CollectPop.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"Vfx",
-"Effects",
-"EggHatch"
-],
-"class": "ModuleScript",
-"url": "src/client/Vfx/Effects/EggHatch.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"Vfx",
-"Effects",
-"IslandUnlock"
-],
-"class": "ModuleScript",
-"url": "src/client/Vfx/Effects/IslandUnlock.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"Vfx",
-"Effects",
-"LevelUp"
-],
-"class": "ModuleScript",
-"url": "src/client/Vfx/Effects/LevelUp.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
 "UI",
 "Figma",
 "Layouts",
-"Aquarium_Biomes"
+"Objectives_QuestIndex"
 ],
 "class": "ModuleScript",
-"url": "src/client/UI/Figma/Layouts/Aquarium_Biomes.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"Figma",
-"Layouts",
-"Aquarium_Resonance"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/Figma/Layouts/Aquarium_Resonance.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"Figma",
-"Layouts",
-"Aquarium_Total"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/Figma/Layouts/Aquarium_Total.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"Figma",
-"Layouts",
-"Crow"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/Figma/Layouts/Crow.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"Figma",
-"Layouts",
-"Dave"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/Figma/Layouts/Dave.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"Figma",
-"Layouts",
-"Evolve"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/Figma/Layouts/Evolve.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"Figma",
-"Layouts",
-"Expedition"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/Figma/Layouts/Expedition.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"Figma",
-"Layouts",
-"Fishing_Collection"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/Figma/Layouts/Fishing_Collection.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"Figma",
-"Layouts",
-"Fishing_Equipment"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/Figma/Layouts/Fishing_Equipment.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"Figma",
-"Layouts",
-"Fishing_Fishdex"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/Figma/Layouts/Fishing_Fishdex.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"Figma",
-"Layouts",
-"FishMarket"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/Figma/Layouts/FishMarket.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"Figma",
-"Layouts",
-"FishMarket_Locked"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/Figma/Layouts/FishMarket_Locked.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"Figma",
-"Layouts",
-"Hud_Auto"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/Figma/Layouts/Hud_Auto.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"Figma",
-"Layouts",
-"Hud_Chips"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/Figma/Layouts/Hud_Chips.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"Figma",
-"Layouts",
-"Hud_Companions"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/Figma/Layouts/Hud_Companions.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"Figma",
-"Layouts",
-"Hud_Context"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/Figma/Layouts/Hud_Context.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"Figma",
-"Layouts",
-"Hud_Hotbar"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/Figma/Layouts/Hud_Hotbar.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"Figma",
-"Layouts",
-"Hud_Prompts"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/Figma/Layouts/Hud_Prompts.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"Figma",
-"Layouts",
-"Hud_Tiles"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/Figma/Layouts/Hud_Tiles.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"Figma",
-"Layouts",
-"Hud_Travel"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/Figma/Layouts/Hud_Travel.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"Figma",
-"Layouts",
-"Mine_Areas"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/Figma/Layouts/Mine_Areas.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"Figma",
-"Layouts",
-"Mine_Shop"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/Figma/Layouts/Mine_Shop.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"Figma",
-"Layouts",
-"Mine_TreasureRoom"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/Figma/Layouts/Mine_TreasureRoom.luau"
+"url": "src/client/UI/Figma/Layouts/Objectives_QuestIndex.luau"
 },
 {
 "path": [
@@ -969,36 +692,10 @@
 "UI",
 "Figma",
 "Layouts",
-"Nest_Lake_Incubating"
+"Hud_Chips"
 ],
 "class": "ModuleScript",
-"url": "src/client/UI/Figma/Layouts/Nest_Lake_Incubating.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"Figma",
-"Layouts",
-"Nest_Lake_Ready"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/Figma/Layouts/Nest_Lake_Ready.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"Figma",
-"Layouts",
-"Nest_Owned"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/Figma/Layouts/Nest_Owned.luau"
+"url": "src/client/UI/Figma/Layouts/Hud_Chips.luau"
 },
 {
 "path": [
@@ -1021,140 +718,10 @@
 "UI",
 "Figma",
 "Layouts",
-"Nest_Sawmill"
+"Mine_TreasureRoom"
 ],
 "class": "ModuleScript",
-"url": "src/client/UI/Figma/Layouts/Nest_Sawmill.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"Figma",
-"Layouts",
-"Nest_Shop"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/Figma/Layouts/Nest_Shop.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"Figma",
-"Layouts",
-"Objectives_Bonuses"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/Figma/Layouts/Objectives_Bonuses.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"Figma",
-"Layouts",
-"Objectives_QuestIndex"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/Figma/Layouts/Objectives_QuestIndex.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"Figma",
-"Layouts",
-"Objectives_Quests"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/Figma/Layouts/Objectives_Quests.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"Figma",
-"Layouts",
-"Parrot_Equipment"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/Figma/Layouts/Parrot_Equipment.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"Figma",
-"Layouts",
-"Parrot_Forge"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/Figma/Layouts/Parrot_Forge.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"Figma",
-"Layouts",
-"Parrot_Index"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/Figma/Layouts/Parrot_Index.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"Figma",
-"Layouts",
-"Parrot_Overview"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/Figma/Layouts/Parrot_Overview.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"Figma",
-"Layouts",
-"Parrot_Rebirb"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/Figma/Layouts/Parrot_Rebirb.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"Figma",
-"Layouts",
-"Parrot_Upgrade"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/Figma/Layouts/Parrot_Upgrade.luau"
+"url": "src/client/UI/Figma/Layouts/Mine_TreasureRoom.luau"
 },
 {
 "path": [
@@ -1177,49 +744,10 @@
 "UI",
 "Figma",
 "Layouts",
-"RedPanda_Naming"
+"Tree_Desert"
 ],
 "class": "ModuleScript",
-"url": "src/client/UI/Figma/Layouts/RedPanda_Naming.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"Figma",
-"Layouts",
-"Sacrifice"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/Figma/Layouts/Sacrifice.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"Figma",
-"Layouts",
-"Sacrifice_Mythic"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/Figma/Layouts/Sacrifice_Mythic.luau"
-},
-{
-"path": [
-"StarterPlayer",
-"StarterPlayerScripts",
-"Peckwood",
-"UI",
-"Figma",
-"Layouts",
-"Seagull"
-],
-"class": "ModuleScript",
-"url": "src/client/UI/Figma/Layouts/Seagull.luau"
+"url": "src/client/UI/Figma/Layouts/Tree_Desert.luau"
 },
 {
 "path": [
@@ -1242,6 +770,136 @@
 "UI",
 "Figma",
 "Layouts",
+"Dave"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Figma/Layouts/Dave.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Figma",
+"Layouts",
+"Parrot_Forge"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Figma/Layouts/Parrot_Forge.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Figma",
+"Layouts",
+"Objectives_Quests"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Figma/Layouts/Objectives_Quests.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Figma",
+"Layouts",
+"Nest_Lake_Ready"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Figma/Layouts/Nest_Lake_Ready.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Figma",
+"Layouts",
+"Sacrifice_Mythic"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Figma/Layouts/Sacrifice_Mythic.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Figma",
+"Layouts",
+"FishMarket_Locked"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Figma/Layouts/FishMarket_Locked.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Figma",
+"Layouts",
+"Nest_Owned"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Figma/Layouts/Nest_Owned.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Figma",
+"Layouts",
+"Hud_Prompts"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Figma/Layouts/Hud_Prompts.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Figma",
+"Layouts",
+"Expedition"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Figma/Layouts/Expedition.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Figma",
+"Layouts",
+"Parrot_Upgrade"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Figma/Layouts/Parrot_Upgrade.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Figma",
+"Layouts",
 "Shop_Eggs_Golden"
 ],
 "class": "ModuleScript",
@@ -1255,10 +913,10 @@
 "UI",
 "Figma",
 "Layouts",
-"Shop_Molt"
+"Hud_Tiles"
 ],
 "class": "ModuleScript",
-"url": "src/client/UI/Figma/Layouts/Shop_Molt.luau"
+"url": "src/client/UI/Figma/Layouts/Hud_Tiles.luau"
 },
 {
 "path": [
@@ -1268,10 +926,140 @@
 "UI",
 "Figma",
 "Layouts",
-"Shop_Seeds"
+"FishMarket"
 ],
 "class": "ModuleScript",
-"url": "src/client/UI/Figma/Layouts/Shop_Seeds.luau"
+"url": "src/client/UI/Figma/Layouts/FishMarket.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Figma",
+"Layouts",
+"Aquarium_Biomes"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Figma/Layouts/Aquarium_Biomes.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Figma",
+"Layouts",
+"Nest_Lake_Incubating"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Figma/Layouts/Nest_Lake_Incubating.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Figma",
+"Layouts",
+"Nest_Shop"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Figma/Layouts/Nest_Shop.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Figma",
+"Layouts",
+"Parrot_Index"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Figma/Layouts/Parrot_Index.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Figma",
+"Layouts",
+"Sacrifice"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Figma/Layouts/Sacrifice.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Figma",
+"Layouts",
+"Parrot_Overview"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Figma/Layouts/Parrot_Overview.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Figma",
+"Layouts",
+"Objectives_Bonuses"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Figma/Layouts/Objectives_Bonuses.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Figma",
+"Layouts",
+"Crow"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Figma/Layouts/Crow.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Figma",
+"Layouts",
+"RedPanda_Naming"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Figma/Layouts/RedPanda_Naming.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Figma",
+"Layouts",
+"Hud_Context"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Figma/Layouts/Hud_Context.luau"
 },
 {
 "path": [
@@ -1294,10 +1082,10 @@
 "UI",
 "Figma",
 "Layouts",
-"Tree_Archivist"
+"Fishing_Equipment"
 ],
 "class": "ModuleScript",
-"url": "src/client/UI/Figma/Layouts/Tree_Archivist.luau"
+"url": "src/client/UI/Figma/Layouts/Fishing_Equipment.luau"
 },
 {
 "path": [
@@ -1307,10 +1095,166 @@
 "UI",
 "Figma",
 "Layouts",
-"Tree_Desert"
+"Mine_Shop"
 ],
 "class": "ModuleScript",
-"url": "src/client/UI/Figma/Layouts/Tree_Desert.luau"
+"url": "src/client/UI/Figma/Layouts/Mine_Shop.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Figma",
+"Layouts",
+"Nest_Sawmill"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Figma/Layouts/Nest_Sawmill.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Figma",
+"Layouts",
+"Fishing_Fishdex"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Figma/Layouts/Fishing_Fishdex.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Figma",
+"Layouts",
+"Hud_Auto"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Figma/Layouts/Hud_Auto.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Figma",
+"Layouts",
+"Hud_Travel"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Figma/Layouts/Hud_Travel.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Figma",
+"Layouts",
+"Parrot_Equipment"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Figma/Layouts/Parrot_Equipment.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Figma",
+"Layouts",
+"Fishing_Collection"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Figma/Layouts/Fishing_Collection.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Figma",
+"Layouts",
+"Seagull"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Figma/Layouts/Seagull.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Figma",
+"Layouts",
+"Hud_Hotbar"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Figma/Layouts/Hud_Hotbar.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Figma",
+"Layouts",
+"Aquarium_Total"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Figma/Layouts/Aquarium_Total.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Figma",
+"Layouts",
+"Shop_Seeds"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Figma/Layouts/Shop_Seeds.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Figma",
+"Layouts",
+"Evolve"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Figma/Layouts/Evolve.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Figma",
+"Layouts",
+"Shop_Molt"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Figma/Layouts/Shop_Molt.luau"
 },
 {
 "path": [
@@ -1324,5 +1268,70 @@
 ],
 "class": "ModuleScript",
 "url": "src/client/UI/Figma/Layouts/Tree_Sunflower.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Figma",
+"Layouts",
+"Hud_Companions"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Figma/Layouts/Hud_Companions.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Figma",
+"Layouts",
+"Parrot_Rebirb"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Figma/Layouts/Parrot_Rebirb.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Figma",
+"Layouts",
+"Mine_Areas"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Figma/Layouts/Mine_Areas.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Figma",
+"Layouts",
+"Tree_Archivist"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Figma/Layouts/Tree_Archivist.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Figma",
+"Layouts",
+"Aquarium_Resonance"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Figma/Layouts/Aquarium_Resonance.luau"
 }
 ]

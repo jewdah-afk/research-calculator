@@ -373,9 +373,10 @@ local function paint(distOf)
 end
 
 -- ---------------------------------------------------------------- static sea
-function Ocean.build(parent)
-	if root then root:Destroy() end
-	root = Instance.new("Folder"); root.Name = "Ocean"; root.Parent = parent or workspace
+function Ocean.build(parent: Folder)
+	-- root = World.Sea (WorldTree, MAP_HIERARCHY.md): rebuilt in place, never re-parented
+	root = parent
+	root:ClearAllChildren()
 	-- the sea (World Guide look): one surface over the whole map with three painted layers
 	--   tint  = colour + alpha from the distance to open land (turquoise and clear over the reef -> deep blue), smooth
 	--   foam  = the soft band along the coast, its transparency breathes

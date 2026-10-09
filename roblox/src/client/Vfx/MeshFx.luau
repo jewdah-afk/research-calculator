@@ -10,6 +10,7 @@
 -- flat rings) use the THINNEST axis as their normal; "up" shapes (dome, tornado, shock wall) use the odd-one-out axis
 -- (the one unlike the two equal diameters). Per shape `axis` (1 X, 2 Y, 3 Z) pins it, `flip` turns it over.
 local RS = game:GetService("ReplicatedStorage")
+local WorldTree = require(RS:WaitForChild("Peckwood"):WaitForChild("WorldTree"))
 
 local MeshFx = {}
 MeshFx.enabled = true
@@ -39,11 +40,12 @@ local folder: Folder? = nil
 
 local function parentFolder(): Folder
 	if folder and folder.Parent then return folder end
-	local f = workspace:FindFirstChild("PeckwoodVfxParts")
+	local vfx = WorldTree.get("Vfx")   -- shared with Layers (same folder name)
+	local f = vfx:FindFirstChild("PeckwoodVfxParts")
 	if not f then
 		f = Instance.new("Folder")
 		f.Name = "PeckwoodVfxParts"
-		f.Parent = workspace
+		f.Parent = vfx
 	end
 	folder = f :: Folder
 	return f :: Folder

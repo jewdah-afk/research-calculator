@@ -17,6 +17,7 @@ local Models = require(Shared:WaitForChild("Models"))
 local Ocean = require(script.Parent:WaitForChild("Ocean"))
 local World = require(Shared:WaitForChild("World"))
 local LandTerrain = require(script.Parent:WaitForChild("LandTerrain"))
+local WorldTree = require(Shared:WaitForChild("WorldTree"))   -- the one map hierarchy (MAP_HIERARCHY.md)
 
 local S = Models.S              -- 4 world studs per tile
 local L = S / 2                 -- LEGO stud pitch (2 per tile)
@@ -528,7 +529,8 @@ local function buildCloud(parent, seed)
 end
 
 -- ---------------------------------------------------------------- build
-local root, meshes, props, clouds, waterParts = nil, {}, {}, {}, {}
+local root, meshes, props, clouds, waterParts = nil, {}, {}, {}, {}   -- root = the Park's island Model (World.Islands.park)
+local owned = {}   -- pieces this module puts outside the Park model (Sky, Atmosphere): destroyed on a rebuild
 local lamps = {}
 local fireflies, dustPart
 local ffAtt: Attachment? = nil
@@ -539,12 +541,15 @@ local beaconN = -1
 
 function IslandView.build()
 	if root then root:Destroy() end
+	for _, o in owned do o:Destroy() end
+	owned = {}
 	for _, em in IslandView.meshes or {} do em:Destroy() end
 	IslandView.meshes = {}
-	root = Instance.new("Folder"); root.Name = "IslandView"; root.Parent = workspace
-	local groundF = Instance.new("Folder"); groundF.Name = "Ground"; groundF.Parent = root
-	local scenery = Instance.new("Model"); scenery.Name = "Scenery"; scenery.Parent = root
-	IslandView.scenery = scenery
+	-- the Park is an island like any other: World.Islands.park with the WorldTree layer folders
+	root = WorldTree.newIsland("park"); WorldTree.mount(root)
+	IslandView.park = root
+	local groundF = WorldTree.layer(root, "Ground")
+	local function layerFor(kind) return WorldTree.layerFor(root, kind) end
 	meshes, props, clouds, waterParts, lamps = {}, {}, {}, {}, {}
 	butterflies, flowerSpots = {}, {}
 	-- ground: tiles ordered centre-out, packed into as few EditableMeshes as the tri limit allows (client budget is
@@ -601,13 +606,13 @@ function IslandView.build()
 		if not def then continue end
 		seed += 1
 		local x, z = pxToWorld(o[2], o[3])
-		local info = buildProp(def, o[1], x, z, scenery, seed)
+		local info = buildProp(def, o[1], x, z, layerFor(o[1]), seed)
 		swapProp(info)
 		table.insert(props, info)
 		task.defer(function() IslandView.addLeaves(info.model, o[1]) end)
 		if info.light then table.insert(lamps, info) end
 		if o[1] == "lighthouse" then
-			local _, bc = buildLighthouse(info.model, info.x, info.base, info.z, root)
+			local _, bc = buildLighthouse(info.model, info.x, info.base, info.z, WorldTree.layer(root, "FX"))
 			beacon = bc
 			info.model.WorldPivot = CFrame.new(info.x, info.base, info.z)
 			info.home = info.model:GetPivot()
@@ -692,13 +697,13 @@ function IslandView.build()
 				part(Enum.PartType.Ball, Vector3.new(0.27 * F, 0.2 * F, 0.27 * F), head * CFrame.new(0, 0.05 * F, 0), cc)
 			end
 		end
-		fm.WorldPivot = CFrame.new(); fm.Parent = root   -- not under the scenery outline: tiny clusters read as black specks
+		fm.WorldPivot = CFrame.new(); fm.Parent = layerFor("flowers")
 		table.insert(props, { model = fm, home = fm:GetPivot(), kind = "flowers", base = 0, x = 0, z = 0 })
 	end
 	-- butterflies (AAA life pass, 2026-10-09): a few toon butterflies drift between the flower patches by day (the
 	-- fireflies take over at night). Five smooth parts each (body + 4 wing lobes), moved with one BulkMoveTo per frame.
 	if #flowerSpots > 0 then
-		local bf = Instance.new("Folder"); bf.Name = "Butterflies"; bf.Parent = root
+		local bf = Instance.new("Folder"); bf.Name = "Butterflies"; bf.Parent = WorldTree.layer(root, "Life")
 		local COLS_B = { "ffe066", "fbfaf4", "ffa8cf", "8fd3ff", "ffb14a", "c9b6ff", "ffe066" }
 		local function bpart(size, col)
 			local b = Instance.new("Part")   -- ellipsoid (SpecialMesh sphere): Ball parts can't be squashed
@@ -963,7 +968,7 @@ function IslandView.build()
 			local plane = Instance.new("Part")
 			plane.Name = "ToonPath"; plane.Anchored = true; plane.CanCollide = false; plane.CanQuery = false; plane.CanTouch = false
 			plane.CastShadow = false; plane.Transparency = 1; plane.Size = Vector3.new(WS, 0.05, HS)
-			plane.CFrame = CFrame.new(0, -0.44, 0); plane.Parent = root
+			plane.CFrame = CFrame.new(0, -0.44, 0); plane.Parent = groundF
 			local dcl = Instance.new("Decal"); dcl.Face = Enum.NormalId.Top; dcl.ColorMapContent = Content.fromObject(img); dcl.Parent = plane
 		end
 	end
@@ -1020,7 +1025,7 @@ function IslandView.build()
 		local hl = Instance.new("Highlight")
 		hl.FillTransparency = 1; hl.OutlineColor = hx("1d3f6a"); hl.OutlineTransparency = 0
 		hl.DepthMode = Enum.HighlightDepthMode.Occluded; hl.Adornee = pondF; hl.Parent = pondF
-		pondF.Parent = root
+		pondF.Parent = groundF
 	end
 	-- the egg yard fence (owner 2026-10-09: "a fenced in area where your eggs spawn ... like a little home"): white
 	-- paddock fence along the inside of the path ring (Map.inYard), traced as a smooth loop (marching squares +
@@ -1097,19 +1102,19 @@ function IslandView.build()
 				end
 			end
 		end
-		fenceM.Parent = scenery
+		fenceM.Parent = layerFor("yardfence")
 		table.insert(props, { model = fenceM, home = fenceM:GetPivot(), kind = "yardfence", base = 0, x = 0, z = 0 })
 	end
 	-- the sea around the growing landmass (reef shelf + life follow the open coast: Ocean.rebuild on every sync)
-	Ocean.build(root)
+	Ocean.build(WorldTree.get("Sea"))
 	-- clouds drift on the horizon, far outside the landmass, so they never cover the play area
-	local cf = Instance.new("Folder"); cf.Name = "Clouds"; cf.Parent = root
+	local cf = Instance.new("Folder"); cf.Name = "Clouds"; cf.Parent = WorldTree.get("Sky"); table.insert(owned, cf)
 	for k = 1, 12 do
 		local m = buildCloud(cf, k)
 		table.insert(clouds, { model = m, r = (190 + hash(k, 4) * 120) * S / 2, a = hash(k, 5) * math.pi * 2, y = 18 + hash(k, 6) * 22, sp = 0.004 + hash(k, 7) * 0.004 })
 	end
 	-- far islets: small brick islands standing in the sea on the horizon
-	local farF = Instance.new("Folder"); farF.Name = "Far"; farF.Parent = root
+	local farF = Instance.new("Folder"); farF.Name = "Far"; farF.Parent = WorldTree.get("Sky"); table.insert(owned, farF)
 	for k, f in { { -560, -620, 1.0 }, { 640, -480, 0.8 }, { -760, 240, 0.7 }, { 820, 360, 0.9 }, { 160, -900, 0.6 }, { -240, 860, 0.65 } } do
 		local o = Vector3.new(f[1], Ocean.SEA_Y + PLATE, f[2])
 		local w = math.floor((10 + k % 3 * 4) * f[3]) * L
@@ -1126,7 +1131,7 @@ function IslandView.build()
 	-- fireflies (night only): one emitter over the grass
 	fireflies = Instance.new("Part")
 	fireflies.Name = "Fireflies"; fireflies.Anchored = true; fireflies.CanCollide = false; fireflies.CanQuery = false; fireflies.CanTouch = false
-	fireflies.Transparency = 1; fireflies.Size = Vector3.new(0.2, 0.2, 0.2); fireflies.CFrame = CFrame.new(0, 4, 0); fireflies.Parent = root
+	fireflies.Transparency = 1; fireflies.Size = Vector3.new(0.2, 0.2, 0.2); fireflies.CFrame = CFrame.new(0, 4, 0); fireflies.Parent = WorldTree.get("Atmosphere"); table.insert(owned, fireflies)
 	ffAtt = Instance.new("Attachment"); ffAtt.Name = "FFPoint"; ffAtt.Parent = fireflies   -- jumps around the field every frame (no big occluding box)
 	local ff = Instance.new("ParticleEmitter")
 	ff.Name = "FF"; ff.Texture = "rbxasset://textures/particles/sparkles_main.dds"; ff.Color = ColorSequence.new(hx("fff4a0"))
@@ -1136,7 +1141,7 @@ function IslandView.build()
 	-- dust puffs for the build-in
 	dustPart = Instance.new("Part")
 	dustPart.Name = "Dust"; dustPart.Anchored = true; dustPart.CanCollide = false; dustPart.CanQuery = false; dustPart.CanTouch = false; dustPart.Transparency = 1
-	dustPart.Size = Vector3.new(4, 0.2, 4); dustPart.Parent = root
+	dustPart.Size = Vector3.new(4, 0.2, 4); dustPart.Parent = WorldTree.get("Atmosphere"); table.insert(owned, dustPart)
 	local dpe = Instance.new("ParticleEmitter")
 	dpe.Name = "Puff"; dpe.Texture = "rbxasset://textures/particles/smoke_main.dds"; dpe.Color = ColorSequence.new(hx("f3ead6"))
 	dpe.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(1, 3) })
@@ -1210,13 +1215,7 @@ end
 -- Props are the concept's exact brick parts (shared/IslandData, tile units -> studs).
 local built = {}         -- island id -> record
 local bobs, islandLamps, islandGlows = {}, {}, {}
-local islandsF
-local function islandsFolder()
-	if not islandsF or not islandsF.Parent then
-		islandsF = Instance.new("Folder"); islandsF.Name = "Islands"; islandsF.Parent = root or workspace
-	end
-	return islandsF
-end
+local function islandsFolder() return WorldTree.get("Islands") end
 local function sx(i) return (i - COLS / 2) * S end   -- world tile coord -> studs (continuous)
 local function sz(j) return (j - ROWS / 2) * S end
 local MAT = { [0] = Enum.Material.SmoothPlastic, [1] = Enum.Material.Glass, [2] = Enum.Material.Neon, [3] = Enum.Material.Neon, [4] = Enum.Material.Glass }
@@ -1380,20 +1379,19 @@ end
 local deferFill = false   -- unlockIsland: the wave fills the terrain, not buildIsland
 local function buildIsland(isl)
 	local rec = { tiles = {}, props = {}, extras = {} }
-	rec.folder = Instance.new("Folder"); rec.folder.Name = isl.id
-	rec.ground = Instance.new("Folder"); rec.ground.Name = "Ground"; rec.ground.Parent = rec.folder
-	rec.scenery = Instance.new("Model"); rec.scenery.Name = isl.id
+	rec.folder = WorldTree.newIsland(isl.id)   -- World.Islands.<id>: Ground + every prop in its layer
+	rec.ground = WorldTree.layer(rec.folder, "Ground")
 	buildIslandGround(isl, rec)
 	for k, p in isl.props do
 		if not p.dropped then
-			local info = buildIslandProp(isl, p, rec.scenery)
+			local info = buildIslandProp(isl, p, WorldTree.layerFor(rec.folder, p.kind))
 			swapProp(info)
 			table.insert(rec.props, info)
 			addLeaves(info.model, p.kind)
 		end
 		if k % 40 == 0 then task.wait() end
 	end
-	rec.folder.Parent = islandsFolder(); rec.scenery.Parent = IslandView.scenery   -- appear in one frame
+	rec.folder.Parent = islandsFolder()   -- appear in one frame
 	if not deferFill then
 		for k, t in rec.tiles do t.fill(); if k % 150 == 0 then task.wait() end end
 	end
@@ -1402,11 +1400,11 @@ local function buildIsland(isl)
 end
 local function destroyIsland(id)
 	local rec = built[id]; if not rec then return end
-	for k = #bobs, 1, -1 do if bobs[k].model:IsDescendantOf(rec.scenery) then table.remove(bobs, k) end end
-	for k = #islandLamps, 1, -1 do if islandLamps[k].glow:IsDescendantOf(rec.scenery) then table.remove(islandLamps, k) end end
-	for k = #islandGlows, 1, -1 do if islandGlows[k]:IsDescendantOf(rec.scenery) then table.remove(islandGlows, k) end end
+	for k = #bobs, 1, -1 do if bobs[k].model:IsDescendantOf(rec.folder) then table.remove(bobs, k) end end
+	for k = #islandLamps, 1, -1 do if islandLamps[k].glow:IsDescendantOf(rec.folder) then table.remove(islandLamps, k) end end
+	for k = #islandGlows, 1, -1 do if islandGlows[k]:IsDescendantOf(rec.folder) then table.remove(islandGlows, k) end end
 	for k, t in rec.tiles do if t.clear then t.clear() end; if k % 150 == 0 then task.wait() end end
-	rec.folder:Destroy(); rec.scenery:Destroy()
+	rec.folder:Destroy()
 	built[id] = nil
 end
 
@@ -1662,7 +1660,6 @@ function IslandView.ambientStep(dt, t)
 			if visible[id] ~= show then
 				visible[id] = show
 				rec.folder.Parent = if show then islandsFolder() else nil
-				rec.scenery.Parent = if show then IslandView.scenery else nil
 			end
 		end
 	end

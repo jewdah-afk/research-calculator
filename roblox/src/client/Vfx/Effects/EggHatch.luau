@@ -20,6 +20,7 @@
 local RS = game:GetService("ReplicatedStorage")
 local Models = require(RS:WaitForChild("Peckwood"):WaitForChild("Models"))
 local VfxAssets = require(RS:WaitForChild("Peckwood"):WaitForChild("VfxAssets"))
+local WorldTree = require(RS:WaitForChild("Peckwood"):WaitForChild("WorldTree"))
 local Vfx = script.Parent.Parent
 local Layers = require(Vfx:WaitForChild("Layers"))
 local R = require(Vfx:WaitForChild("Recipes"))
@@ -127,7 +128,8 @@ local function camFaces(part: BasePart)
 end
 
 local function standInParent(): Instance
-	return workspace:FindFirstChild("Eggs") or workspace -- the egg field carries the ink outline Highlight
+	local actors = WorldTree.get("Actors")
+	return actors:FindFirstChild("Eggs") or actors -- the egg field carries the ink outline Highlight
 end
 
 return {

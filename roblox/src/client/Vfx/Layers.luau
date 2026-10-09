@@ -10,6 +10,7 @@
 -- reconfiguring a pooled emitter never restyles live particles.
 local RS = game:GetService("ReplicatedStorage")
 local VfxAssets = require(RS:WaitForChild("Peckwood"):WaitForChild("VfxAssets"))
+local WorldTree = require(RS:WaitForChild("Peckwood"):WaitForChild("WorldTree"))
 
 local Layers = {}
 
@@ -43,7 +44,7 @@ function Layers.root(): BasePart
 	p.CastShadow = false
 	p.Locked = true
 	p.CFrame = CFrame.new()
-	p.Parent = workspace
+	p.Parent = WorldTree.get("Vfx")
 	rootPart = p
 	-- a pool whose root vanished is stale
 	for k in free do free[k] = {} end
@@ -54,7 +55,7 @@ local function folder(): Folder
 	if partsFolder and partsFolder.Parent then return partsFolder end
 	local f = Instance.new("Folder")
 	f.Name = "PeckwoodVfxParts"
-	f.Parent = workspace
+	f.Parent = WorldTree.get("Vfx")
 	partsFolder = f
 	return f
 end

@@ -10,6 +10,19 @@ Last updated: 2026-10-09 (Peckwood Ascent world rebuild, branch `claude/peckwood
 
 Branch **`claude/peckwood-isle`** (pushed). Build: `cd roblox && rojo build default.project.json -o Peckwood.rbxl`, open it in Studio (one Studio window only). The owner says it is OK to stop Play / reload the test place at any time.
 
+### MAP LOOK B + MAP HIERARCHY (2026-10-09, latest, no Studio: owner away)
+- **Look changed to B, realistic cartoony** (owner picked from 3 tests in `roblox/docs/targets/look_A_dark_fantasy.png`,
+  `look_B_realistic_cartoony.png`, `look_C_dark_storybook.png`): Sea of Thieves / Fortnite / Kena, golden hour, painted
+  materials, dense swaying grass. Cel / X/Y look and scenery ink outlines are retired; outlines stay on the hen + eggs only.
+- **Read `MAP_HIERARCHY.md`** before any world work: the visual hierarchy (7 tiers, fore/mid/background rules) and the
+  one Explorer tree `workspace.World/{Sky, Sea, Islands/<id>/{Ground, Landmarks, Interactables, Props, Foliage, Rocks,
+  Life, FX}, Actors, Atmosphere, Vfx}`. Code: `src/shared/WorldTree.luau` (kind -> layer map, layer rules, `audit()`).
+  IslandView, Ocean, Birds, Main, Ambience and the Vfx roots now build into it; the `Scenery` model and the
+  `IslandView` / `Ocean` / `Birds` / `Eggs` roots in workspace are gone.
+- Verified outside Studio only (compile, rojo build, VFX smoke 0 problems, WorldTree Lune test). First Studio step: run
+  the audit (MAP_HIERARCHY.md section 5).
+- Figma UI job (FIGMA_UI_NEXT.md) is parked by the owner for now.
+
 ### MECHANICS: Phase 1 on Birb's real rules (claude/peckwood-mech, 2026-10-09, latest)
 Owner: "start coding in the real lua mechanics but with our 2.5d engine, same way". Branch **`claude/peckwood-mech`**
 (worktree `~/Downloads/rc-main-mech`, not pushed, not merged; Studio QA first). The playtest (`playtest/js`, which matches

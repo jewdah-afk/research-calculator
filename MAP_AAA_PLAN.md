@@ -1,5 +1,9 @@
 # Peckwood map: the AAA plan (2026-10-09)
 
+> **Update (2026-10-09, later): the look is now B, realistic cartoony, not cel-shaded.** See `MAP_HIERARCHY.md` for the
+> look, the visual hierarchy and the Explorer tree. The pipeline, budgets and "target frame first" rule below still apply;
+> the cel-specific parts (ink outline hulls on scenery, 2-3 tone toon ramps) do not.
+
 Owner target: "make our game look like this but way better, super AAA quality" -> **premium toy diorama, cel-shaded**
 (owner: "i fucking love celshading"). Live state today: `World.LAYOUT = "grid"` (Birb's flat islands + bridges),
 painted terrain MaterialVariants, Future lighting, generate_mesh props, painted EditableImage sea.

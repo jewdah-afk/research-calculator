@@ -9,6 +9,7 @@ local Players = game:GetService("Players")
 local RS = game:GetService("ReplicatedStorage")
 local Shared = RS:WaitForChild("Peckwood")
 local Models = require(Shared:WaitForChild("Models"))
+local WorldTree = require(Shared:WaitForChild("WorldTree"))
 local S = Models.S
 local PX = 1 / 16   -- game px -> tiles
 
@@ -18,13 +19,13 @@ type PartRest = { part: BasePart, rest: CFrame, kind: string }
 type Bird = { model: Model, parts: { PartRest }, heading: number, phase: number, lastS: number?, squash: number, prevAir: boolean,
 	punch: number, eyes: { BasePart }, eyeSize: Vector3, blinking: boolean, shadow: BasePart }
 local birds: { [Model]: Bird } = {}
-local folder = Instance.new("Model"); folder.Name = "Birds"; folder.Parent = workspace
+local folder = Instance.new("Model"); folder.Name = "Birds"; folder.Parent = WorldTree.get("Actors")
 do   -- cel look (owner 2026-10-09): the hen gets the same solid ink outline as the rest of the world
 	local h = Instance.new("Highlight")
 	h.OutlineColor = Color3.fromHex("#16181e"); h.OutlineTransparency = 0; h.FillTransparency = 1
 	h.DepthMode = Enum.HighlightDepthMode.Occluded; h.Adornee = folder; h.Parent = folder
 end
-local shadows = Instance.new("Folder"); shadows.Name = "BirdShadows"; shadows.Parent = workspace
+local shadows = Instance.new("Folder"); shadows.Name = "BirdShadows"; shadows.Parent = WorldTree.get("Actors")
 
 local function build(): Bird
 	local m = Models.bird()

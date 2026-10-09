@@ -11,6 +11,7 @@ local TweenService = game:GetService("TweenService")
 local Shared = RS:WaitForChild("Peckwood")
 local Models = require(Shared:WaitForChild("Models"))
 local Defs = require(Shared:WaitForChild("Defs"))
+local WorldTree = require(Shared:WaitForChild("WorldTree"))   -- the one map hierarchy (MAP_HIERARCHY.md)
 local Remotes = Shared:WaitForChild("Remotes")
 local Hud = require(script.Parent:WaitForChild("UI"):WaitForChild("Hud"))
 local Vfx = require(script.Parent:WaitForChild("Vfx"))   -- VFX engine (effects + camera feel on its own render step), see Vfx/init.luau
@@ -64,7 +65,7 @@ local function dust(x: number, y: number, z: number, vx: number, vy: number, n: 
 	for _ = 1, n do
 		local at = Controller.toWorld(x + (math.random() - 0.5) * 4, y + (math.random() - 0.5) * 2, z + 1)
 		local p = Instance.new("Part"); p.Size = Vector3.one * 0.13 * S; p.Color = Color3.fromHex("#f4ead8"); p.Material = Enum.Material.SmoothPlastic
-		p.Anchored = true; p.CanCollide = false; p.CanQuery = false; p.CanTouch = false; p.CastShadow = false; p.CFrame = CFrame.new(at); p.Parent = workspace
+		p.Anchored = true; p.CanCollide = false; p.CanQuery = false; p.CanTouch = false; p.CastShadow = false; p.CFrame = CFrame.new(at); p.Parent = WorldTree.get("Vfx")
 		local drift = Vector3.new((vx + (math.random() - 0.5) * 16) / 16 * S * 0.45, (if n > 1 then 10 else 12) / 16 * S * 0.45, (vy + (math.random() - 0.5) * 10) / 16 * S * 0.45)
 		local tw = TweenService:Create(p, TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { CFrame = CFrame.new(at + drift), Transparency = 1 })
 		tw:Play(); tw.Completed:Once(function() p:Destroy() end)
@@ -166,7 +167,7 @@ local function bodyStep(dt: number)
 end
 
 -- ---------------------------------------------------------------- kernels
-local field = Instance.new("Model"); field.Name = "Eggs"; field.Parent = workspace
+local field = Instance.new("Model"); field.Name = "Eggs"; field.Parent = WorldTree.get("Actors")
 
 -- ---------------------------------------------------------------- outline tiers (visual hierarchy)
 -- One Highlight per GROUP (Roblox renders at most 31 at once). Strongest on what you control / collect,
@@ -184,7 +185,8 @@ outline(field, "#16181e", 0, "#fff6d6", 0.78)                                   
 IslandView.build()
 -- portals removed (owner 2026-10-09): the HUD Teleport button covers travel. Portals.luau stays in the repo, unused.
 require(script.Parent:WaitForChild("Ambience")).start()
-outline(IslandView.scenery, "#16181e", 0)                                          -- scenery: solid ink outline
+-- scenery has no ink outline any more (look B, owner 2026-10-09: painted, realistic cartoony). Outlines are the
+-- focus tier only: the hen (Birds) and the eggs above. See MAP_HIERARCHY.md section 2.
 -- dev/QA hook: PlayerGui:SetAttribute("PeckwoodBuild", tick()) replays the unlock build-in; PeckwoodHour freezes the sky
 -- (a string island id replays that island's build-in from its bridge, e.g. "garden")
 plr:WaitForChild("PlayerGui"):GetAttributeChangedSignal("PeckwoodBuild"):Connect(function()
@@ -265,7 +267,7 @@ end)
 local function burst(at: Vector3, color: Color3, n: number)
 	for _ = 1, n do
 		local p = Instance.new("Part"); p.Size = Vector3.one * 0.12 * S; p.Color = color; p.Material = Enum.Material.SmoothPlastic
-		p.Anchored = true; p.CanCollide = false; p.CanQuery = false; p.CastShadow = false; p.CFrame = CFrame.new(at); p.Parent = workspace
+		p.Anchored = true; p.CanCollide = false; p.CanQuery = false; p.CastShadow = false; p.CFrame = CFrame.new(at); p.Parent = WorldTree.get("Vfx")
 		local dir = Vector3.new(math.random() - 0.5, math.random() * 0.8 + 0.4, math.random() - 0.5).Unit * (0.8 + math.random()) * S
 		local tw = TweenService:Create(p, TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
 			{ CFrame = CFrame.new(at + dir) * CFrame.Angles(math.random() * 6, math.random() * 6, 0), Transparency = 1 })

@@ -11,6 +11,7 @@ local RunService = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
 local RS = game:GetService("ReplicatedStorage")
 local World = require(RS:WaitForChild("Peckwood"):WaitForChild("World"))
+local WorldTree = require(RS:WaitForChild("Peckwood"):WaitForChild("WorldTree"))
 local IslandView = require(script.Parent:WaitForChild("IslandView"))
 
 local Ambience = {}
@@ -67,7 +68,7 @@ end
 function Ambience.start()
 	anchor = Instance.new("Part")
 	anchor.Name = "Ambience"; anchor.Anchored = true; anchor.CanCollide = false; anchor.CanQuery = false; anchor.CanTouch = false
-	anchor.Transparency = 1; anchor.Size = Vector3.new(0.2, 0.2, 0.2); anchor.Parent = workspace
+	anchor.Transparency = 1; anchor.Size = Vector3.new(0.2, 0.2, 0.2); anchor.Parent = WorldTree.get("Atmosphere")
 	wind = emitter("Wind", {
 		Texture = DOT, Color = ColorSequence.new(Color3.new(1, 1, 1)), LightEmission = 0.2,
 		Size = seq(0, 0, 0.2, 0.22, 0.8, 0.22, 1, 0), Squash = seq(0, 4, 1, 4),
