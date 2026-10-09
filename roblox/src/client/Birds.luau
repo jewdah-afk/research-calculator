@@ -19,7 +19,7 @@ type Bird = { model: Model, parts: { PartRest }, heading: number, phase: number,
 	punch: number, eyes: { BasePart }, eyeSize: Vector3, blinking: boolean, shadow: BasePart }
 local birds: { [Model]: Bird } = {}
 local folder = Instance.new("Model"); folder.Name = "Birds"; folder.Parent = workspace
-do   -- strongest outline tier: the birds (one Highlight for every bird)
+if false then   -- cartoon ink outline removed for the realistic look (owner 2026-10-09)
 	local h = Instance.new("Highlight")
 	h.OutlineColor = Color3.fromHex("#1b1720"); h.OutlineTransparency = 0.08; h.FillTransparency = 1
 	h.DepthMode = Enum.HighlightDepthMode.Occluded; h.Adornee = folder; h.Parent = folder

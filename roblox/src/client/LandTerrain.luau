@@ -13,18 +13,17 @@ local WATER_TOP = -4     -- Ocean's terrain sea level (one voxel under the grass
 
 -- cel look: every terrain material is overridden by a flat MaterialVariant (a plain white map, so the colour is
 -- exactly SetMaterialColor), hard shadows come from Lighting. No grass blades (Workspace.Terrain.Decoration off).
+-- Valheim / The Forest look (owner 2026-10-09): Roblox's realistic materials (no flat overrides), natural earthy
+-- tones, grass blades on (Terrain.Decoration in the project). The Flat* MaterialVariants stay in the place but are
+-- not applied.
+-- Painted storybook look (owner 2026-10-09, art direction locked): every terrain material uses a hand-painted
+-- MaterialVariant authored in default.project.json MaterialService (Painted<Material>, tiles in assets/terrain/).
+-- Material colours stay near white so the painted texture shows its own colours.
 function LandTerrain.setup()
 	local MS = game:GetService("MaterialService")
-	for mat, hex in {
-		-- 3DS-Pokemon (X/Y) palette: lively, clean, warm; one flat colour per material
-		[M.Grass] = "7cc35a", [M.LeafyGrass] = "58a548", [M.Ground] = "d8bf8a", [M.Mud] = "9a7454", [M.Pavement] = "a9c86a",
-		[M.Sand] = "f0e1a9", [M.Sandstone] = "e6cf92", [M.Rock] = "a39d90", [M.Slate] = "8a8478",
-		[M.Cobblestone] = "c4bdb0", [M.Snow] = "f6f8fc", [M.Salt] = "8c96dc", [M.Basalt] = "9a7454",
-	} do
-		Terrain:SetMaterialColor(mat, Color3.fromHex(hex))
-		-- the Flat* MaterialVariants are authored in the place (default.project.json, MaterialService): game scripts
-		-- may not create them; here we only point each base material at its flat variant
-		if MS:FindFirstChild("Flat" .. mat.Name) then pcall(function() MS:SetBaseMaterialOverride(mat, "Flat" .. mat.Name) end) end
+	for _, mat in { M.Grass, M.LeafyGrass, M.Pavement, M.Salt, M.Ground, M.Mud, M.Rock, M.Slate, M.Basalt, M.Cobblestone, M.Sand, M.Sandstone, M.Snow } do
+		Terrain:SetMaterialColor(mat, Color3.fromHex(if mat == M.LeafyGrass then "ffffff" elseif mat == M.Mud then "c8b8a4" elseif mat == M.Pavement then "e6e8c8" elseif mat == M.Salt then "d2d2ee" else "f2f2f2"))
+		if MS:FindFirstChild("Painted" .. mat.Name) then pcall(function() MS:SetBaseMaterialOverride(mat, "Painted" .. mat.Name) end) end
 	end
 end
 
@@ -85,7 +84,7 @@ local function hillAvg(i, j)
 end
 function LandTerrain.visualTop(i, j, top, code)
 	local base = World.base(i, j)
-	local y = top
+	local y = top + World.relief(i + 0.5, j + 0.5)
 	local d, ub = nil, nil
 	if code ~= 2 then d, ub = cliffAbove(i, j, base) end   -- trail ramps stay on their own height
 	if d then
@@ -126,7 +125,7 @@ function LandTerrain.column(x0, z0, top, mat, code, shore)
 	local i, j = tileOf(x0, z0)
 	if code == 3 then   -- pond / river: sand bed, water on top (at its terrace height)
 		local wt = math.max(0, snap(top))
-		block(x0, z0, BED, wt - 4, M.Sand)
+		block(x0, z0, BED, wt - 4, M.Mud)   -- dark bed so ponds read blue, not pale
 		block(x0, z0, wt - 4, wt, M.Water)
 		return
 	end
@@ -136,9 +135,9 @@ function LandTerrain.column(x0, z0, top, mat, code, shore)
 		local n1 = math.noise(i * 0.07, j * 0.07, 3.1)
 		local n2 = math.noise(i * 0.19 + 40, j * 0.19, 7.7)
 		if shore and World.base(i, j) == 0 then mat = M.Sand
-		elseif n2 > 0.42 then mat = M.Ground
-		elseif n1 > 0.22 then mat = M.LeafyGrass
-		elseif n1 < -0.28 then mat = M.Pavement
+		elseif n2 > 0.42 and World.base(i, j) > 0 then mat = M.Ground   -- no random dirt stains in the Park valley
+		elseif n1 > 0.45 then mat = M.LeafyGrass   -- deep moss is dark: only small patches
+		elseif n1 < -0.28 then mat = M.Pavement   -- drier meadow tone (painted grass, warmer tint)
 		end
 	end
 	-- cliff slopes show rock (snow way up high); hills stay grassy mounds, capped with snow on the summit

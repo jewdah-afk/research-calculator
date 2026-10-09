@@ -58,7 +58,20 @@ local function newModel(name: string): Model
 end
 
 -- ---------------------------------------------------------------- bird (a_bird)
+-- realistic hen (owner 2026-10-09: the bird should fit the Valheim-style world): generated mesh in
+-- ReplicatedStorage.BirdAsset with parts body / wingL / wingR (Birds.luau flaps the wings), pivot at the feet.
+-- BIRD_YAW turns it so its beak looks down -Z (the Roblox model front Birds.luau expects).
+Models.BIRD_YAW = 0   -- owner 2026-10-09: pi ran backwards
 function Models.bird(): Model
+	local asset = game:GetService("ReplicatedStorage"):FindFirstChild("BirdAsset")
+	if asset then
+		local m = asset:Clone()
+		m.Name = "Bird"
+		local _, sz = m:GetBoundingBox()
+		m:ScaleTo(m:GetScale() * (1.5 * S) / sz.Y)   -- big enough to read above the grass blades
+		m:PivotTo(CFrame.new(0, 0.45, 0) * CFrame.Angles(0, Models.BIRD_YAW, 0))   -- feet a hair above the stepped terrain surface
+		return m
+	end
 	local m, box = newModel("Bird"), Models.box
 	box(m, "body", { 0.56, 0.62, 0.5 }, { 0, 0, 0.42 }, P.white)
 	box(m, "belly", { 0.4, 0.06, 0.32 }, { 0, -0.31, 0.36 }, "#ffffff")

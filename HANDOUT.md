@@ -48,6 +48,17 @@ Branch **`claude/peckwood-isle`** (pushed). Build: `cd roblox && rojo build defa
 - Asset export pipeline: SerializationService in Studio -> local POST receiver -> `lune` re-serialize (fixes the Tags
   property Rojo 7.5 can't read) -> rojo `$path`.
 
+### LAYOUT SWITCH (owner, 2026-10-09 late night): back to Birb's setup
+- The Ascent terraces made the bird snag everywhere (cliff-foot no-walk strips, narrow ramps, hills, relief), so
+  `World.LAYOUT = "grid"`: Birb's flat islands per area + bridges, Park portal hub inside the Park
+  (`Portals.luau` HUB 20,23). `World.relief` returns 0 outside "ascent" (flat walkable ground). Ascent code, data and
+  concept stay in the repo for later.
+- Keep on top: painted terrain MaterialVariants (`Painted<Material>` in project MaterialService, tiles in
+  `assets/terrain/`, uploaded ids in default.project.json), storybook lighting, generated props / trees, water,
+  portals. Height only as scenery around island edges.
+- Owner: "make sure it looks SOOOO GOOD FOR ROBLOX, and the chicken needs some real work": next = hen pass
+  (regenerate in the look board style, size / facing / grounding, motion check), then the Park prop pass.
+
 ### ART DIRECTION LOCKED (owner, 2026-10-09 night): "Painted storybook"
 - Breath of the Wild / A Short Hike / Ghibli: realistic terrain shapes and light, HAND-PAINTED textures, cute readable
   hero objects (hen, eggs, portals pop with rim light + outline). Replaces the Valheim experiment below.

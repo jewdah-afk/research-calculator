@@ -11,6 +11,9 @@
       },
       "PropAssets": {
         "$path": "assets/PropAssets.rbxm"
+      },
+      "BirdAsset": {
+        "$path": "assets/BirdAsset.rbxm"
       }
     },
     "ServerScriptService": {
@@ -53,7 +56,7 @@
       "$properties": {
         "Technology": "Future",
         "GlobalShadows": true,
-        "ShadowSoftness": 0.08,
+        "ShadowSoftness": 0.22,
         "ClockTime": 17.1,
         "GeographicLatitude": 38,
         "Brightness": 3.4,
@@ -98,13 +101,13 @@
       "ColorCorrection": {
         "$className": "ColorCorrectionEffect",
         "$properties": {
-          "Saturation": 0.08,
-          "Contrast": 0.2,
-          "Brightness": -0.02,
+          "Saturation": 0.04,
+          "Contrast": 0.08,
+          "Brightness": 0,
           "TintColor": [
             1,
-            0.92,
-            0.8
+            0.96,
+            0.88
           ]
         }
       },
@@ -122,164 +125,183 @@
           "Intensity": 0.05,
           "Spread": 0.6
         }
+      },
+      "Atmosphere": {
+        "$className": "Atmosphere",
+        "$properties": {
+          "Density": 0.26,
+          "Offset": 0.15,
+          "Haze": 1.2,
+          "Glare": 0.4,
+          "Color": [
+            0.85,
+            0.86,
+            0.9
+          ],
+          "Decay": [
+            0.62,
+            0.7,
+            0.82
+          ]
+        }
       }
     },
     "MaterialService": {
       "$className": "MaterialService",
-      "FlatGrass": {
+      "PaintedGrass": {
         "$className": "MaterialVariant",
         "$properties": {
           "BaseMaterial": "Grass",
-          "StudsPerTile": 64,
           "ColorMapContent": {
             "Content": {
-              "Uri": "rbxassetid://83334179566218"
+              "Uri": "rbxassetid://116717537894157"
             }
-          }
+          },
+          "StudsPerTile": 28
         }
       },
-      "FlatLeafyGrass": {
+      "PaintedLeafyGrass": {
         "$className": "MaterialVariant",
         "$properties": {
           "BaseMaterial": "LeafyGrass",
-          "StudsPerTile": 64,
           "ColorMapContent": {
             "Content": {
-              "Uri": "rbxassetid://83334179566218"
+              "Uri": "rbxassetid://110200714563611"
             }
-          }
+          },
+          "StudsPerTile": 24
         }
       },
-      "FlatGround": {
-        "$className": "MaterialVariant",
-        "$properties": {
-          "BaseMaterial": "Ground",
-          "StudsPerTile": 64,
-          "ColorMapContent": {
-            "Content": {
-              "Uri": "rbxassetid://83334179566218"
-            }
-          }
-        }
-      },
-      "FlatMud": {
-        "$className": "MaterialVariant",
-        "$properties": {
-          "BaseMaterial": "Mud",
-          "StudsPerTile": 64,
-          "ColorMapContent": {
-            "Content": {
-              "Uri": "rbxassetid://83334179566218"
-            }
-          }
-        }
-      },
-      "FlatPavement": {
+      "PaintedPavement": {
         "$className": "MaterialVariant",
         "$properties": {
           "BaseMaterial": "Pavement",
-          "StudsPerTile": 64,
           "ColorMapContent": {
             "Content": {
-              "Uri": "rbxassetid://83334179566218"
+              "Uri": "rbxassetid://116717537894157"
             }
-          }
+          },
+          "StudsPerTile": 28
         }
       },
-      "FlatSand": {
-        "$className": "MaterialVariant",
-        "$properties": {
-          "BaseMaterial": "Sand",
-          "StudsPerTile": 64,
-          "ColorMapContent": {
-            "Content": {
-              "Uri": "rbxassetid://83334179566218"
-            }
-          }
-        }
-      },
-      "FlatSandstone": {
-        "$className": "MaterialVariant",
-        "$properties": {
-          "BaseMaterial": "Sandstone",
-          "StudsPerTile": 64,
-          "ColorMapContent": {
-            "Content": {
-              "Uri": "rbxassetid://83334179566218"
-            }
-          }
-        }
-      },
-      "FlatRock": {
-        "$className": "MaterialVariant",
-        "$properties": {
-          "BaseMaterial": "Rock",
-          "StudsPerTile": 64,
-          "ColorMapContent": {
-            "Content": {
-              "Uri": "rbxassetid://83334179566218"
-            }
-          }
-        }
-      },
-      "FlatSlate": {
-        "$className": "MaterialVariant",
-        "$properties": {
-          "BaseMaterial": "Slate",
-          "StudsPerTile": 64,
-          "ColorMapContent": {
-            "Content": {
-              "Uri": "rbxassetid://83334179566218"
-            }
-          }
-        }
-      },
-      "FlatCobblestone": {
-        "$className": "MaterialVariant",
-        "$properties": {
-          "BaseMaterial": "Cobblestone",
-          "StudsPerTile": 64,
-          "ColorMapContent": {
-            "Content": {
-              "Uri": "rbxassetid://83334179566218"
-            }
-          }
-        }
-      },
-      "FlatSnow": {
-        "$className": "MaterialVariant",
-        "$properties": {
-          "BaseMaterial": "Snow",
-          "StudsPerTile": 64,
-          "ColorMapContent": {
-            "Content": {
-              "Uri": "rbxassetid://83334179566218"
-            }
-          }
-        }
-      },
-      "FlatSalt": {
+      "PaintedSalt": {
         "$className": "MaterialVariant",
         "$properties": {
           "BaseMaterial": "Salt",
-          "StudsPerTile": 64,
           "ColorMapContent": {
             "Content": {
-              "Uri": "rbxassetid://83334179566218"
+              "Uri": "rbxassetid://116717537894157"
             }
-          }
+          },
+          "StudsPerTile": 28
         }
       },
-      "FlatBasalt": {
+      "PaintedGround": {
+        "$className": "MaterialVariant",
+        "$properties": {
+          "BaseMaterial": "Ground",
+          "ColorMapContent": {
+            "Content": {
+              "Uri": "rbxassetid://90458112744365"
+            }
+          },
+          "StudsPerTile": 20
+        }
+      },
+      "PaintedMud": {
+        "$className": "MaterialVariant",
+        "$properties": {
+          "BaseMaterial": "Mud",
+          "ColorMapContent": {
+            "Content": {
+              "Uri": "rbxassetid://90458112744365"
+            }
+          },
+          "StudsPerTile": 20
+        }
+      },
+      "PaintedRock": {
+        "$className": "MaterialVariant",
+        "$properties": {
+          "BaseMaterial": "Rock",
+          "ColorMapContent": {
+            "Content": {
+              "Uri": "rbxassetid://74421027321536"
+            }
+          },
+          "StudsPerTile": 16
+        }
+      },
+      "PaintedSlate": {
+        "$className": "MaterialVariant",
+        "$properties": {
+          "BaseMaterial": "Slate",
+          "ColorMapContent": {
+            "Content": {
+              "Uri": "rbxassetid://74421027321536"
+            }
+          },
+          "StudsPerTile": 16
+        }
+      },
+      "PaintedBasalt": {
         "$className": "MaterialVariant",
         "$properties": {
           "BaseMaterial": "Basalt",
-          "StudsPerTile": 64,
           "ColorMapContent": {
             "Content": {
-              "Uri": "rbxassetid://83334179566218"
+              "Uri": "rbxassetid://74421027321536"
             }
-          }
+          },
+          "StudsPerTile": 16
+        }
+      },
+      "PaintedCobblestone": {
+        "$className": "MaterialVariant",
+        "$properties": {
+          "BaseMaterial": "Cobblestone",
+          "ColorMapContent": {
+            "Content": {
+              "Uri": "rbxassetid://74421027321536"
+            }
+          },
+          "StudsPerTile": 14
+        }
+      },
+      "PaintedSand": {
+        "$className": "MaterialVariant",
+        "$properties": {
+          "BaseMaterial": "Sand",
+          "ColorMapContent": {
+            "Content": {
+              "Uri": "rbxassetid://89238626696008"
+            }
+          },
+          "StudsPerTile": 24
+        }
+      },
+      "PaintedSandstone": {
+        "$className": "MaterialVariant",
+        "$properties": {
+          "BaseMaterial": "Sandstone",
+          "ColorMapContent": {
+            "Content": {
+              "Uri": "rbxassetid://89238626696008"
+            }
+          },
+          "StudsPerTile": 24
+        }
+      },
+      "PaintedSnow": {
+        "$className": "MaterialVariant",
+        "$properties": {
+          "BaseMaterial": "Snow",
+          "ColorMapContent": {
+            "Content": {
+              "Uri": "rbxassetid://92686357977026"
+            }
+          },
+          "StudsPerTile": 24
         }
       }
     }

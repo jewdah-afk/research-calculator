@@ -268,7 +268,7 @@ end
 local function groundAtWorld(x, z)
 	local i, j = math.floor(x / S + COLS / 2), math.floor(z / S + ROWS / 2)
 	if not land(i, j) then return 0 end
-	return math.max(0, topY(i, j))
+	return math.max(0, topY(i, j)) + World.relief(x / S + COLS / 2, z / S + ROWS / 2)   -- on the rolling ground
 end
 
 
@@ -282,7 +282,7 @@ local TREE_SETS = {
 	pine = { set = { "Tree_08", "Tree_12", "Tree_14", "Tree_16" }, h = { 13, 17 } },
 	bush = { set = { "Bush_01", "Bush_02", "Bush_03" }, h = { 2.6, 3.6 }, bush = true },
 }
-local LEAF_TINT = { forest = "4f8f3c", echo = "9a8fe0", desert = "9fb45a", expedition = "5f9f45", mine = "6f9f4f" }
+local LEAF_TINT = { forest = "5d7f3a", echo = "8f8fc4", desert = "9aa262", expedition = "5f8a40", mine = "6a8048" }
 local function treeModel(kind, x, base, z, seed, areaId)
 	local spec = TREE_SETS[kind]
 	if not spec or not TreeAssets then return nil end
@@ -294,16 +294,13 @@ local function treeModel(kind, x, base, z, seed, areaId)
 	local _, size = m:GetBoundingBox()
 	local h = spec.h[1] + hash(seed, 9.1) * (spec.h[2] - spec.h[1])
 	m:ScaleTo(m:GetScale() * h / size.Y)
-	local tint = Color3.fromHex(LEAF_TINT[areaId] or "6fb04a")
+	local tint = Color3.fromHex(LEAF_TINT[areaId] or "7a9a4a")
 	for _, d in m:GetDescendants() do
 		if d:IsA("BasePart") then
 			d.Anchored = true; d.CanCollide = false; d.CanQuery = false; d.CanTouch = false
 			d.CastShadow = not spec.bush
-			-- cel look: no photo textures, flat colour (canopy facets read as toon shading)
-			local sa = d:FindFirstChildOfClass("SurfaceAppearance"); if sa then sa:Destroy() end
-			d.Material = Enum.Material.SmoothPlastic
-			if d.Name:find("Canopy") or d.Name:find("Leaf") or d.Name:find("Bush") then d.Color = vary(tint, (hash(seed, 2.2) - 0.5) * 0.08)
-			else d.Color = hx("7a5638") end
+			-- realistic look (owner 2026-10-09, Valheim / The Forest): keep the pack's leaf + bark textures, tint gently
+			if d.Name:find("Canopy") or d.Name:find("Leaf") or d.Name:find("Bush") then d.Color = vary(tint, (hash(seed, 2.2) - 0.5) * 0.08) end
 		end
 	end
 	-- stand the trunk on the ground: pivot at the bottom-centre of the bounding box
@@ -696,7 +693,7 @@ end
 local function buildIslandProp(isl, p, parent)
 	local i, j = math.floor(p.x), math.floor(p.z)
 	local c = World.rawTile(i, j)
-	local base = if c == 3 then -0.2 else islandTopY(isl, i, j)
+	local base = if c == 3 then -0.2 else islandTopY(isl, i, j) + World.relief(p.x, p.z)   -- on the rolling ground
 	local origin = CFrame.new(sx(p.x), base, sz(p.z)) * CFrame.Angles(0, p.rot or 0, 0)
 	local m = Instance.new("Model"); m.Name = p.kind
 	local bobM
@@ -1058,16 +1055,16 @@ end
 
 -- ---------------------------------------------------------------- day cycle: 24 real min per day (1 min = 1 game hour)
 local KF = {   -- hour, brightness, outdoorAmbient, ambient, colorShiftTop, fog, tint, exposure, atmosphere colour, atmosphere decay
-	{ 0, 1.9, "8a98c8", "5a6690", "8a98c8", "33427a", "dfe6ff", 0.25, "3a4a80", "22305a" },
-	{ 4.5, 1.9, "8a98c8", "5a6690", "8a98c8", "33427a", "dfe6ff", 0.25, "3a4a80", "22305a" },
+	{ 0, 2.3, "9aa8d8", "6a76a8", "8a98c8", "3a4a86", "e2e8ff", 0.55, "3a4a80", "22305a" },
+	{ 4.5, 2.3, "9aa8d8", "6a76a8", "8a98c8", "3a4a86", "e2e8ff", 0.55, "3a4a80", "22305a" },
 	{ 5.6, 1.6, "8a7aa0", "3d3a55", "ffb38a", "e0a080", "ffe0d0", 0, "ffc8a8", "c890a8" },
 	{ 7, 2.1, "8494b4", "485068", "ffe2bf", "d8e2ee", "fff1e0", -0.12, "d2e6fa", "a8cbef" },
 	{ 11, 2.4, "8a9cba", "4c546c", "fff8ec", "c8dcf0", "fffaf2", -0.18, "cfe4fa", "9cc4ee" },
 	{ 15, 2.35, "8898b6", "4c546c", "fff0d8", "cfe2f2", "fff6ea", -0.16, "d2e6fa", "a8cbef" },
 	{ 17.5, 2.6, "8a86aa", "35324c", "ffb46b", "f0c49a", "ffe0c0", -0.06, "ffd6b8", "f0a89a" },
 	{ 18.7, 2.2, "9a8ab0", "4a4466", "ff9a6c", "d89088", "ffe0d0", 0.08, "f0a898", "9a6a98" },
-	{ 20, 1.9, "8a98c8", "5a6690", "8a98c8", "35447c", "dfe6ff", 0.25, "3c4c82", "24325c" },
-	{ 24, 1.9, "8a98c8", "5a6690", "8a98c8", "33427a", "dfe6ff", 0.25, "3a4a80", "22305a" },
+	{ 20, 2.3, "9aa8d8", "6a76a8", "8a98c8", "3c4c88", "e2e8ff", 0.55, "3c4c82", "24325c" },
+	{ 24, 2.3, "9aa8d8", "6a76a8", "8a98c8", "3a4a86", "e2e8ff", 0.55, "3a4a80", "22305a" },
 }
 local atmo = Lighting:FindFirstChildOfClass("Atmosphere") or Instance.new("Atmosphere")
 atmo.Density = 0.2; atmo.Offset = 0.08; atmo.Glare = 0.2; atmo.Haze = 0.35; atmo.Parent = Lighting

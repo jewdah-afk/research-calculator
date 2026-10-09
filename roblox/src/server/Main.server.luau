@@ -265,6 +265,10 @@ RunService.Heartbeat:Connect(function(dt)
 				local pool = if G.inDesert(s) and #desertTiles > 0 then desertTiles else spawnTiles
 				local c = pool[ss.rng:NextInteger(1, #pool)]
 				local pos = c + Vector3.new(ss.rng:NextNumber(-0.35, 0.35) * S, 0, ss.rng:NextNumber(-0.35, 0.35) * S)
+				do   -- sit on the rolling ground (World.relief, same shape the client terrain and the bird use)
+					local ti, tj = pos.X / S + Map.COLS / 2, pos.Z / S + Map.ROWS / 2
+					pos = Vector3.new(pos.X, World.base(math.floor(ti), math.floor(tj)) + World.relief(ti, tj), pos.Z)
+				end
 				local kind = F.rollType(s, G.inDesert(s), ss.rng)
 				if G.inDesert(s) and kind ~= "golden" and ss.rng:NextNumber() < G.desertGoldenChance(s) then kind = "golden" end
 				local id = ss.nextId; ss.nextId += 1

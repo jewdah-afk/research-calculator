@@ -68,7 +68,7 @@ local heightAtLocalImpl
 local function heightAtLocal(x: number, y: number): number return heightAtLocalImpl(x, y) end
 local function heightAt(x: number, y: number): number
 	-- terrace height (Peckwood Ascent) under everything else, in game px (Map.PX px per tile = S studs)
-	local base = World.base(math.floor(x / Map.PX), math.floor(y / Map.PX)) * Map.PX / S
+	local base = (World.base(math.floor(x / Map.PX), math.floor(y / Map.PX)) + World.relief(x / Map.PX, y / Map.PX)) * Map.PX / S
 	return base + heightAtLocal(x, y)
 end
 -- the rocky slope at the foot of a higher terrace (LandTerrain.visualTop) is scenery: a wall, cached per tile

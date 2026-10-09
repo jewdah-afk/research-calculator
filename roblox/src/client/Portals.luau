@@ -18,7 +18,7 @@ local root
 local list = {}   -- { id, dest, pos, model, ring, swirl, built }
 local COL = { park = "7cc35a", garden = "ff8fc0", castle = "6aa8ff", bridge = "4fd2ff", forest = "4fd06a",
 	mine = "ffb14a", desert = "ffd84a", expedition = "7dff86", echo = "b06cff" }
-local HUB = Vector2.new(8, 38)   -- plaza centre (world tile), see tools/ascent_gen.py
+local HUB = if World.LAYOUT == "ascent" then Vector2.new(8, 38) else Vector2.new(20, 23)   -- plaza centre (world tile): Ascent plaza / inside the Park
 local function hx(h) return Color3.fromHex(h) end
 local function tileToWorld(i, j) return Vector3.new((i - Map.COLS / 2) * S, World.base(math.floor(i), math.floor(j)), (j - Map.ROWS / 2) * S) end
 
@@ -81,7 +81,8 @@ local function placements()
 	for _, isl in World.list do if not isl.park then table.insert(areas, isl) end end
 	for k, isl in areas do
 		local a = math.rad(-150 + (k - 1) * (300 / math.max(1, #areas - 1)))
-		local i, j = HUB.X + math.sin(a) * 7.5, HUB.Y - math.cos(a) * 7.5
+		local R = if World.LAYOUT == "ascent" then 7.5 else 5.5
+		local i, j = HUB.X + math.sin(a) * R, HUB.Y - math.cos(a) * R
 		local p = tileToWorld(i, j)
 		local c = tileToWorld(HUB.X, HUB.Y)
 		table.insert(out, { key = "hub:" .. isl.id, id = isl.id, dest = isl.id, need = isl, name = string.gsub(isl.name, "^THE ", ""), pos = p,
