@@ -63,9 +63,11 @@ Branch **`claude/peckwood-isle`** (pushed). Build: `cd roblox && rojo build defa
   - Wallet chips `215:7` section: `hud/chip/<cur>` x10 + `hud/chip-main/popcorn`, **1:1 with `Hud.luau capsule()`**
     (owner-approved in game), squared (ink 6 / face 4 / well 3). Long value hides the engraved name, never overlaps.
   - Menu tiles `hud/tile/*` (MAP TELEPORT FISH PROFILE / SHOP SETTINGS AUTO PETS, + pressed), solid keys, no label band.
-  - Area rail `hud/area rail` (right edge; open area lit + popped out, locked dimmed with lock). Old bookmark tiles
-    `hud/bookmark/*` are kept in the section but no longer used.
-  - Travel arrows `hud/arrow/*` (open / locked + requirement), context AUTO `hud/auto/*` (exact parity labels + pressed).
+  - Area rail `hud/area rail` (right edge): open areas = coloured Kit keys, current area pops out 16 px and is
+    biggest, locked = grey key + greyed icon + padlock (no colour bars). Old bookmark tiles `hud/bookmark/*` kept
+    in the section, unused.
+  - Travel keys v2 `hud/travel/<left|right|up|down>` (+ locked): one solid key, chunky outlined chevron + destination
+    on the face (old square `hud/arrow/*` kept, unused). Context AUTO `hud/auto/*` (exact parity labels + pressed).
   - Context bars `hud/context/<fishing|mine|expedition|echo|desert|nest>`: level badge + bar + info strip in one outline,
     title tab flush on the bar.
   - Hotbars `hud/hotbar/*` (fishing ready/cooldown/reeling, mine challenge/giant/resting, expedition HP+potion+relic+
