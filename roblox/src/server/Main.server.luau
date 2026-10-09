@@ -1,7 +1,8 @@
 --!nonstrict
--- Peckwood server. Owns every number: wallets, upgrades, the popcorn field (per player), pickups (server-side
--- distance check), purchases, resets, companions, fishing, expedition, saves, AUTO (group perk) and the dev saves.
--- Clients only render and ask through the single Action remote.
+-- Peckwood server. Owns every number: wallets, upgrades, the egg field (per player, Birb's Park rules in
+-- Systems/Park), pickups (server-side distance check from the character's position), purchases, resets, companions,
+-- fishing, expedition, saves, AUTO (group perk) and the dev saves. Clients only render and ask through the single
+-- Action remote (rate-limited, every argument validated here).
 local Players = game:GetService("Players")
 local RS = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -13,10 +14,13 @@ local Map = require(Shared:WaitForChild("MapData"))
 local Models = require(Shared:WaitForChild("Models"))
 local Config = require(Shared:WaitForChild("Config"))
 local Island = require(script.Parent:WaitForChild("Island"))
+local World = require(Shared:WaitForChild("World"))
 local G = require(script.Parent:WaitForChild("Game"))
 local Defs = G.Defs
 local F, EN = Defs.F, Defs.EN
+local R, Park = G.R, G.Park
 local S = Models.S
+local STEP = 0.05   -- the Phase 1 step runs at a fixed 20 Hz, like the playtest's 0.05 s sub-steps
 
 Island.build()
 
@@ -26,6 +30,7 @@ local function remote(name: string): RemoteEvent
 	local r = Instance.new("RemoteEvent"); r.Name = name; r.Parent = Remotes; return r
 end
 local StateEv, FishEv, SpawnEv, CollectEv, ActionEv, ToastEv = remote("State"), remote("Fish"), remote("Spawn"), remote("Collect"), remote("Action"), remote("Toast")
+local MoveEv = remote("Move")   -- Gravity Field / magnet drift: ({ id }, { Vector3 }) batches
 
 -- ---------------------------------------------------------------- character: a bare root the client drives (unchanged from birb(test))
 do
@@ -40,8 +45,11 @@ do
 	char.Parent = StarterPlayer
 end
 
--- ---------------------------------------------------------------- spawn tiles: grass / dirt clear of scenery
-local spawnTiles = {}
+-- ---------------------------------------------------------------- the Park egg field: Birb's field box on our map
+-- Birb's Park is a 1056 x 792 px field with a 40 px margin; ours is MapData's 640 x 480 px Park with the eggs kept in
+-- the fenced egg yard: Park.spawnEgg draws a spot in the box and re-rolls it (up to 24 times, as the playtest's
+-- game3d does) until spawnOk says it is on a yard tile clear of scenery. Radii stay Birb px (studs = px / Map.PX * S).
+local yardOk = {}   -- i * 100 + j -> true
 local blocked = {}
 for _, o in Map.objects do table.insert(blocked, Island.toWorld(o[2], o[3])) end
 for j = 0, Map.ROWS - 1 do
@@ -53,14 +61,22 @@ for j = 0, Map.ROWS - 1 do
 			if Map.tile(i + 1, j) ~= 0 and Map.tile(i - 1, j) ~= 0 and Map.tile(i, j + 1) ~= 0 and Map.tile(i, j - 1) ~= 0 then
 				local c = Island.tileCenter(i, j); local ok = true
 				for _, b in blocked do if (b - c).Magnitude < 1.2 * S then ok = false; break end end
-				if ok then table.insert(spawnTiles, c) end
+				if ok then yardOk[i * 100 + j] = true end
 			end
 		end
 	end
 end
 
+local PARK_GEOM = { W = Map.COLS * Map.PX, H = Map.ROWS * Map.PX, pad = 40, cx = 320, cy = 250,
+	spawnOk = function(px: number, py: number) return yardOk[math.floor(px / Map.PX) * 100 + math.floor(py / Map.PX)] == true end }
+-- field px -> world position on the rolling ground (the same shape the client terrain and the bird use)
+local function fieldToWorld(px: number, py: number): Vector3
+	local pos = Island.toWorld(px, py)
+	local ti, tj = pos.X / S + Map.COLS / 2, pos.Z / S + Map.ROWS / 2
+	return Vector3.new(pos.X, World.base(math.floor(ti), math.floor(tj)) + World.relief(ti, tj), pos.Z)
+end
+
 -- desert spawn tiles: walkable desert-island tiles clear of props (golden drops while you stand on the Desert)
-local World = require(Shared:WaitForChild("World"))
 local desertTiles = {}
 do
 	local d = World.byId.desert
@@ -76,15 +92,29 @@ do
 		end
 	end
 end
--- the zone follows where the bird stands: on the Desert island = desert, on the Park = park (bridges keep the last)
+-- the area under a world position (Isle regions count as their area; bridges / joins give nil)
+local function areaAt(pos: Vector3): string?
+	local i, j = math.floor(pos.X / S + Map.COLS / 2), math.floor(pos.Z / S + Map.ROWS / 2)
+	local _, isl = World.rawTile(i, j)
+	if not isl then return nil end
+	local id = isl.area or isl.id
+	return if type(id) == "string" and not string.find(id, ":") then id else nil
+end
+-- our areas -> Birb map ids (the Phase 1 step needs 0 Park, 1 Sunflower Field, 3 Castle; the rest are "elsewhere")
+local AREA_MAP = { park = 0, garden = 1, bridge = 2, castle = 3, forest = 4, desert = 9, mine = 25, expedition = 18, echo = 30 }
+-- the seed platform (Birb's 180 x 80 px pad on the Sunflower Field): a pad at the Garden's centre
+local PLATFORM_R = 2.5 * S
+local platformAt = (function()
+	local g = World.byId.garden
+	if not g then return nil end
+	return Vector3.new((g.oi + g.W / 2 - Map.COLS / 2) * S, 0, (g.oj + g.N / 2 - Map.ROWS / 2) * S)
+end)()
+-- the zone for the old golden-drop toggle: desert / park (bridges keep the last)
 local function zoneAt(plr): string?
 	local ch = plr.Character
 	local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
 	if not hrp then return nil end
-	local i, j = math.floor(hrp.Position.X / S + Map.COLS / 2), math.floor(hrp.Position.Z / S + Map.ROWS / 2)
-	local _, isl = World.rawTile(i, j)
-	if not isl then return nil end
-	local id = isl.area or isl.id   -- Isle regions count as their area
+	local id = areaAt(hrp.Position)
 	return if id == "desert" then "desert" elseif id == "park" then "park" else nil
 end
 
@@ -95,6 +125,7 @@ local store = (function()
 end)()
 
 type Kernel = { pos: Vector3, kind: string, golden: boolean }
+local DESERT_ID0 = 1000000   -- desert drops use their own id range (the Park field counts from 1)
 local sessions = {}
 local sendSfxPicks: (Player) -> ()   -- dev Sound Board picks (defined with the actions below; used on join)
 -- session = { real = state (saved), view = state (what the game runs on), mode = "regular"|"maxed"|"step",
@@ -120,9 +151,13 @@ local function derived(ss)
 	local hp, dmg, regen = G.parrotStats(s)
 	local nxt = Defs.ISLANDS[s.island + 1]
 	return {
-		kernelValue = F.popcornGain(s, 1, G.inDesert(s)), interval = F.spawnInterval(s, G.inDesert(s)), cap = F.maxCapacity(s),
-		reach = G.reachPx(s), speed = G.speed(s), plumeGain = G.plumeGain(s), popPerSec = F.popcornGain(s, 1, false) / F.spawnInterval(s, false),
-		seedsPerSec = G.seedsPerSec(s), twigsPerSec = G.twigsPerSec(s), orePerSec = G.orePerSec(s),
+		kernelValue = if G.inDesert(s) then F.popcornGain(s, 1, true) else math.floor(R.collectionMultiplier(s)),
+		interval = if G.inDesert(s) then F.spawnInterval(s, true) else R.spawnInterval(s), cap = R.maxPopcorn(s),
+		reach = G.reachPx(s), speed = G.speed(s), plumeGain = G.plumeGain(s),
+		-- live income (Birb currencyRates) + what the seed platform makes
+		popPerSec = ss.rt.rates.popcorn or 0, seedsPerSec = ss.rt.rates.sunflowerSeeds or 0, seedsPlatform = G.seedsPerSec(s, true),
+		map = ss.rt.map, onPlatform = ss.rt.onPlatform, holdFeed = ss.rt.holdFeed, fieldCount = #Park.list(ss.rt, 0),
+		twigsPerSec = G.twigsPerSec(s), orePerSec = G.orePerSec(s),
 		goldenValue = G.goldenValue(s), goldenChance = G.desertGoldenChance(s), evoProgress = G.evoProgress(s),
 		seagullInterval = G.seagullInterval(s), fishInterval = G.fishInterval(s), tankCount = G.tankCount(s),
 		parrot = { hp = hp, dmg = dmg, regen = regen }, rodRows = rods, recentSell = recentSell,
@@ -155,9 +190,13 @@ local function push(plr: Player)
 end
 local function toast(plr, ...) ToastEv:FireClient(plr, ...) end
 
-local function clearField(plr, ss)
+local function clearDesert(plr, ss)
 	for id in ss.kernels do CollectEv:FireClient(plr, id, nil, false) end
 	ss.kernels = {}
+end
+local function clearShown(plr, ss)
+	for id in ss.shown do CollectEv:FireClient(plr, id, nil, false) end
+	table.clear(ss.shown)
 end
 
 local function load(plr: Player)
@@ -181,8 +220,12 @@ Players.PlayerAdded:Connect(function(plr)
 		local away = math.min(8 * 3600, os.time() - real.panda.leftAt)
 		real.panda.waiting += G.twigsPerSec(real) * 0.55 * away
 	end
-	local ss = { real = real, view = real, mode = "regular", kernels = {}, nextId = 1, popT = 0, lastAct = 0, rng = Random.new(),
-		dirty = true, fishDirty = true, autoAllowed = checkGroup(plr), devAllowed = isDev(plr), autoT = 0, buyT = 0 }
+	local rng = Random.new()
+	local function u() return rng:NextNumber() end
+	local rt = G.newRuntime(PARK_GEOM, { type = u, pos = u, sparrow = u })
+	rt.events = {}
+	local ss = { real = real, view = real, mode = "regular", kernels = {}, nextId = DESERT_ID0, popT = 0, lastAct = 0, rng = rng, rt = rt, acc = 0,
+		shown = {}, moveT = 0, dirty = true, fishDirty = true, autoAllowed = checkGroup(plr), devAllowed = isDev(plr), autoT = 0, buyT = 0 }
 	if not ss.autoAllowed then real.auto = false end
 	sessions[plr] = ss
 	if ss.devAllowed then task.defer(function() if sendSfxPicks then sendSfxPicks(plr) end end) end
@@ -193,6 +236,7 @@ Players.PlayerAdded:Connect(function(plr)
 			hrp.CFrame = CFrame.new(Island.toWorld(320, 250) + Vector3.new(0, hrp.Size.Y / 2, 0))
 			local s2 = sessions[plr]; if not s2 then return end
 			for id, k in s2.kernels do SpawnEv:FireClient(plr, id, k.pos, k.kind) end
+			for _, p in Park.list(s2.rt, 0) do s2.shown[p.id] = true; SpawnEv:FireClient(plr, p.id, fieldToWorld(p.x, p.y), p.type) end
 			s2.fishDirty = true
 			push(plr)
 		end)
@@ -208,7 +252,8 @@ game:BindToClose(function() for plr in sessions do save(plr) end end)
 task.spawn(function() while true do task.wait(60); for plr in sessions do save(plr) end end end)
 
 -- ---------------------------------------------------------------- the field
-local function collect(plr, ss, id, k)
+-- desert drops (pre-port golden toggle, kept until the Desert phase): collected by the old distance check
+local function collectDesert(plr, ss, id, k)
 	local s = ss.view
 	ss.kernels[id] = nil
 	local value
@@ -222,16 +267,71 @@ local function collect(plr, ss, id, k)
 			while s.dave.level < 1000 and s.dave.xp >= Defs.S.sparrowXpNeeded(s.dave.level) do s.dave.xp -= Defs.S.sparrowXpNeeded(s.dave.level); s.dave.level += 1 end
 		end
 	else
-		local base = 1
-		for _, t in F.PopcornTypes do if t.id == k.kind then base = t.value end end
-		value = F.popcornGain(s, base, G.inDesert(s))
-		value = G.give(s, "popcorn", value)
-		if s.island >= 10 and ss.rng:NextNumber() < Defs.S.echoChance(false, false) then
-			G.give(s, "echoPopcorn", Defs.level(s, "p_echo_value"))
-		end
+		value = G.give(s, "popcorn", F.popcornGain(s, 1, true))
 	end
 	CollectEv:FireClient(plr, id, value, k.golden, k.kind)
 	ss.dirty = true
+end
+
+-- replicate what the Park step did: spawns, collections (player and sparrows), clears
+local function flushEvents(plr, ss)
+	local ev = ss.rt.events
+	if #ev == 0 then return end
+	for _, e in ev do
+		local kind = e[1]
+		if kind == "spawn" then
+			ss.shown[e[2]] = true
+			SpawnEv:FireClient(plr, e[2], fieldToWorld(e[3], e[4]), e[5])
+		elseif kind == "collect" then
+			local id = e[2]
+			if not ss.shown[id] then   -- collected the moment it spawned (inside the reach): show it, then pop it
+				local p = ss.rt.player
+				SpawnEv:FireClient(plr, id, fieldToWorld(p.x, p.y), e[5])
+			end
+			ss.shown[id] = nil
+			CollectEv:FireClient(plr, id, e[3], false, e[5])
+		elseif kind == "clear" then
+			clearShown(plr, ss)
+		end
+	end
+	table.clear(ev)
+	ss.dirty = true
+end
+-- Gravity Field / magnet moved eggs: send the new spots (10 Hz, only while something moved)
+local moveIds, movePos = {}, {}
+local function flushMoves(plr, ss)
+	local rt = ss.rt
+	if not rt.moved then return end
+	rt.moved = false
+	table.clear(moveIds); table.clear(movePos)
+	local reach = 1.2 * math.max(R.legacyRadius(ss.view), G.pickupProfile(ss.view).magnetRadius) + 60
+	local px, py = rt.player.x, rt.player.y
+	for _, p in Park.list(rt, 0) do
+		local dx, dy = p.x - px, p.y - py
+		if dx * dx + dy * dy <= reach * reach then table.insert(moveIds, p.id); table.insert(movePos, fieldToWorld(p.x, p.y)) end
+	end
+	if #moveIds > 0 then MoveEv:FireClient(plr, moveIds, movePos) end
+end
+
+-- where the bird is: Birb map id, Park px, seed platform. A jump faster than the bird can move (teleport) gives no
+-- pickups that tick (map -1 = nowhere).
+local function locate(plr, ss, dt)
+	local rt = ss.rt
+	local ch = plr.Character
+	local hrp = ch and ch:FindFirstChild("HumanoidRootPart") :: BasePart?
+	if not hrp then rt.map = -1; return end
+	local p = hrp.Position
+	local last = ss.lastPos; ss.lastPos = p
+	local maxStep = 100 * G.speed(ss.view) * 1.3 / Map.PX * S * math.max(dt, 1 / 60) * 1.6 + 2
+	local jumped = last ~= nil and Vector3.new(p.X - last.X, 0, p.Z - last.Z).Magnitude > maxStep
+	local area = areaAt(p)
+	local map = if area then AREA_MAP[area] else nil
+	if map == nil then map = if ss.lastMap ~= nil then ss.lastMap else -1 end   -- bridges keep the last area
+	ss.lastMap = map
+	rt.player.x = (p.X / S + Map.COLS / 2) * Map.PX
+	rt.player.y = (p.Z / S + Map.ROWS / 2) * Map.PX
+	rt.map = if jumped then -1 else map
+	rt.onPlatform = map == 1 and platformAt ~= nil and Vector3.new(p.X - platformAt.X, 0, p.Z - platformAt.Z).Magnitude <= PLATFORM_R
 end
 
 local acc, pushAcc = 0, 0
@@ -239,59 +339,73 @@ RunService.Heartbeat:Connect(function(dt)
 	acc += dt; pushAcc += dt
 	for plr, ss in sessions do
 		local s = ss.view
-		-- systems
-		for _, t in G.step(s, dt, ss.rng) do
-			if t[1] == "island" then
-				local isl = Defs.ISLANDS[t[2]]
-				toast(plr, "island", isl.id, isl.name)
-			else
-				toast(plr, t[1], t[2], t[3])
+		locate(plr, ss, dt)
+		-- systems at a fixed 20 Hz (Phase 1 + the later simplified systems), at most 8 steps per frame
+		ss.acc += dt
+		local n = 0
+		while ss.acc >= STEP and n < 8 do
+			ss.acc -= STEP; n += 1
+			for _, t in G.step(s, STEP, ss.rng, ss.rt) do
+				if t[1] == "island" then
+					local isl = Defs.ISLANDS[t[2]]
+					toast(plr, "island", isl.id, isl.name)
+				else
+					toast(plr, t[1], t[2], t[3])
+				end
+				ss.fishDirty = ss.fishDirty or t[1] == "fish"
 			end
-			ss.fishDirty = ss.fishDirty or t[1] == "fish"
 		end
+		if ss.acc > STEP then ss.acc = 0 end   -- a long hitch drops the backlog instead of spiralling
+		flushEvents(plr, ss)
 		if s.fish.active or s.seagull.out then ss.fishDirty = true end
 		ss.dirty = true
-		-- zone from position
+		-- desert drops (pre-port golden toggle) while the bird stands on the Desert
 		local z = zoneAt(plr)
 		if z and z ~= s.zone and (z == "park" or G.windowUnlocked(s, "golden")) then
 			s.zone = z
-			clearField(plr, ss)
+			clearDesert(plr, ss)
 			toast(plr, "travel", z)
 		end
-		-- popcorn spawns
-		ss.popT += dt
-		local interval = F.spawnInterval(s, G.inDesert(s))
-		if ss.popT >= interval then
-			ss.popT -= interval
-			local live = 0; for _ in ss.kernels do live += 1 end
-			if live < F.maxCapacity(s) and #spawnTiles > 0 then
-				local pool = if G.inDesert(s) and #desertTiles > 0 then desertTiles else spawnTiles
-				local c = pool[ss.rng:NextInteger(1, #pool)]
-				local pos = c + Vector3.new(ss.rng:NextNumber(-0.35, 0.35) * S, 0, ss.rng:NextNumber(-0.35, 0.35) * S)
-				do   -- sit on the rolling ground (World.relief, same shape the client terrain and the bird use)
-					local ti, tj = pos.X / S + Map.COLS / 2, pos.Z / S + Map.ROWS / 2
-					pos = Vector3.new(pos.X, World.base(math.floor(ti), math.floor(tj)) + World.relief(ti, tj), pos.Z)
+		if G.inDesert(s) and #desertTiles > 0 then
+			ss.popT += dt
+			local interval = F.spawnInterval(s, true)
+			if ss.popT >= interval then
+				ss.popT -= interval
+				local live = 0; for _ in ss.kernels do live += 1 end
+				if live < F.maxCapacity(s) then
+					local c = desertTiles[ss.rng:NextInteger(1, #desertTiles)]
+					local pos = c + Vector3.new(ss.rng:NextNumber(-0.35, 0.35) * S, 0, ss.rng:NextNumber(-0.35, 0.35) * S)
+					local kind = if ss.rng:NextNumber() < G.desertGoldenChance(s) then "golden" else "plain"
+					local id = ss.nextId; ss.nextId += 1
+					ss.kernels[id] = { pos = pos, kind = kind, golden = kind == "golden" }
+					SpawnEv:FireClient(plr, id, pos, kind)
 				end
-				local kind = F.rollType(s, G.inDesert(s), ss.rng)
-				if G.inDesert(s) and kind ~= "golden" and ss.rng:NextNumber() < G.desertGoldenChance(s) then kind = "golden" end
-				local drop = nil   -- plain float (owner 2026-10-09: the drop / roll looked broken)
-				local id = ss.nextId; ss.nextId += 1
-				ss.kernels[id] = { pos = pos, kind = kind, golden = kind == "golden" }
-				SpawnEv:FireClient(plr, id, pos, kind, drop)
 			end
 		end
-		-- AUTO (group perk): collect a kernel every 0.35 s and buy the cheapest affordable upgrade every second
+		-- AUTO (group perk): collect the nearest egg every 0.35 s and buy the cheapest affordable upgrade every second
 		if s.auto and ss.autoAllowed then
 			ss.autoT += dt
 			if ss.autoT >= 0.35 then
 				ss.autoT = 0
-				local hrp = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+				local rt = ss.rt
 				local best, bestD
-				for id, k in ss.kernels do
-					local d = if hrp then (hrp.Position - k.pos).Magnitude else 0
-					if not bestD or d < bestD then best, bestD = id, d end
+				for _, p in Park.list(rt, 0) do
+					local dx, dy = p.x - rt.player.x, p.y - rt.player.y
+					local d = dx * dx + dy * dy
+					if not bestD or d < bestD then best, bestD = p.id, d end
 				end
-				if best then collect(plr, ss, best, ss.kernels[best]) end
+				if best then
+					local p = Park.take(rt, 0, best)
+					if p then Park.award(s, rt, p, "player"); flushEvents(plr, ss) end
+				elseif G.inDesert(s) then
+					local hrp = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+					local bid, bd
+					for id, k in ss.kernels do
+						local d = if hrp then (hrp.Position - k.pos).Magnitude else 0
+						if not bd or d < bd then bid, bd = id, d end
+					end
+					if bid then collectDesert(plr, ss, bid, ss.kernels[bid]) end
+				end
 			end
 			ss.buyT += dt
 			if ss.buyT >= 1 then
@@ -299,7 +413,8 @@ RunService.Heartbeat:Connect(function(dt)
 				local pick, pickCost
 				for id, d in Defs.UP do
 					local w = G.windowRowOf[id]
-					if w and G.windowUnlocked(s, w) and Defs.level(s, id) < Defs.maxLevel(s, id) then
+					local visible = if d.birb then R.rowVisible(s, id) else (w ~= nil and G.windowUnlocked(s, w))
+					if w and visible and Defs.level(s, id) < Defs.maxLevel(s, id) then
 						local c = Defs.cost(s, id)
 						if c and EN.meeq(s[d.cur], c) and (not pickCost or c < pickCost) and d.cur ~= "goldenFeathers" then pick, pickCost = id, c end
 					end
@@ -311,19 +426,17 @@ RunService.Heartbeat:Connect(function(dt)
 	if acc >= 0.1 then
 		acc = 0
 		for plr, ss in sessions do
+			flushMoves(plr, ss)
+			-- desert drops: the old server distance check
+			if not G.inDesert(ss.view) then continue end
 			local ch = plr.Character
 			local hrp = ch and ch:FindFirstChild("HumanoidRootPart") :: BasePart?
 			if not hrp then continue end
 			local reach = G.reachPx(ss.view) / Map.PX * S + 1.2
 			local p = hrp.Position
-			local last = ss.lastPos; ss.lastPos = p
-			local maxStep = 100 * G.speed(ss.view) * 1.3 / Map.PX * S * 0.1 * 1.6 + 2
-			if last and Vector3.new(p.X - last.X, 0, p.Z - last.Z).Magnitude > maxStep then continue end   -- teleport: no pickups this tick
-			local now = os.clock()
 			for id, k in ss.kernels do
-				if k.readyAt and now < k.readyAt then continue end   -- still bouncing / rolling in
 				local dx, dz = p.X - k.pos.X, p.Z - k.pos.Z
-				if dx * dx + dz * dz < reach * reach then collect(plr, ss, id, k) end
+				if dx * dx + dz * dz < reach * reach then collectDesert(plr, ss, id, k) end
 			end
 		end
 	end
@@ -338,17 +451,32 @@ local A = {}
 
 function A.buy(plr, ss, id, all)
 	if type(id) ~= "string" or not Defs.UP[id] then return end
-	local w = G.windowRowOf[id]
-	if w and not G.windowUnlocked(ss.view, w) then return end
+	local d = Defs.UP[id]
+	if d.birb then
+		if not R.rowVisible(ss.view, id) then return end   -- Birb's drawer: SEEDS rows need the Sunflower Machine, ...
+	else
+		local w = G.windowRowOf[id]
+		if w and not G.windowUnlocked(ss.view, w) then return end
+	end
 	local n = G.buy(ss.view, id, all == true)
 	if n > 0 then toast(plr, "bought", id, n) else toast(plr, "poor", id) end
 end
 function A.molt(plr, ss)
 	if not G.windowUnlocked(ss.view, "molt") then return end
-	local g = G.molt(ss.view)
+	local g = G.molt(ss.view, ss.rt)
 	if not g then toast(plr, "poor", "molt"); return end
-	clearField(plr, ss)
+	flushEvents(plr, ss)
 	toast(plr, "molt", EN.short(g), ss.view.rebirbCount == 1)
+end
+-- a sunflower / desert tree node (Birb purchaseSunflowerUpgrade): only nodes the tree shows, in a view the player has
+function A.tree(plr, ss, id)
+	local s = ss.view
+	if type(id) ~= "string" or not R.Data.SUN_BY_ID[id] or not G.windowUnlocked(s, "trees") then return end
+	if string.sub(id, 1, 12) == "d_archivist_" or id == "d_unlock_archivist_tree" then toast(plr, "poor", "tree"); return end   -- Phase 7
+	if string.sub(id, 1, 9) == "d_desert_" and not R.hasSun(s, "d_unlock_desert_tree") then return end
+	if not R.sunVisible(s, id) then return end
+	local why = G.buySun(s, id)
+	if why == "" then toast(plr, "tree", id) else toast(plr, "poor", "tree", why) end
 end
 function A.unlock(plr, ss)
 	if G.unlockIsland(ss.view) then toast(plr, "unlocked") else toast(plr, "poor", "unlock") end
@@ -357,16 +485,30 @@ function A.travel(plr, ss, zone)
 	if zone ~= "park" and zone ~= "desert" then return end
 	if zone == "desert" and not G.windowUnlocked(ss.view, "golden") then return end
 	ss.view.zone = zone
-	clearField(plr, ss)
+	clearDesert(plr, ss)
 	toast(plr, "travel", zone)
 end
-function A.feed(plr, ss, res, all)
-	if not G.windowUnlocked(ss.view, "evolve") then return end
-	if not G.feed(ss.view, res, all == true) then toast(plr, "poor", "feed_" .. tostring(res)) end
+-- castle feeding (Birb): talk to the monster, then HOLD feeds 10% of each requirement per second (the step does it,
+-- only while the bird is at the Castle); a click feeds 1%. op = "hold" | "release" | "click"
+function A.feed(plr, ss, op)
+	local s = ss.view
+	if not G.windowUnlocked(s, "evolve") then return end
+	if op == "release" then ss.rt.holdFeed = false; return end
+	if ss.rt.map ~= 3 then toast(plr, "poor", "feed_castle"); ss.rt.holdFeed = false; return end
+	s.evo.talked = true
+	if op == "hold" then ss.rt.holdFeed = true
+	elseif op == "click" then
+		if (s.evolutionCount or 0) >= 5 or (s.evo.progress or 0) >= 100 then return end
+		G.feedClick(s)
+	end
 end
 function A.evolve(plr, ss)
 	if not G.windowUnlocked(ss.view, "evolve") then return end
-	if G.evolve(ss.view) then clearField(plr, ss); toast(plr, "evolve", ss.view.evolutionCount) else toast(plr, "poor", "evolve") end
+	if G.evolve(ss.view, ss.rt) then
+		ss.rt.holdFeed = false
+		flushEvents(plr, ss)
+		toast(plr, "evolve", ss.view.evolutionCount)
+	else toast(plr, "poor", "evolve") end
 end
 function A.spend(plr, ss, stat, all)
 	if not G.windowUnlocked(ss.view, "parrot") or (stat ~= "hp" and stat ~= "dmg" and stat ~= "regen") then return end
@@ -381,17 +523,29 @@ function A.expedition(plr, ss)
 	if not G.windowUnlocked(ss.view, "parrot") then return end
 	ss.view.parrot.active = not ss.view.parrot.active
 end
-function A.sparrow(plr, ss, op)
-	if not G.windowUnlocked(ss.view, "sparrow") then return end
-	local s, ok = ss.view, true
-	if op == "feed" then ok = G.sparrowFeedNow(s)
-	elseif op == "feedall" then ok = G.sparrowFeedNow(s); while ok and G.sparrowFeedNow(s) do end; ok = true
-	elseif op == "drain" then s.sparrow.draining = true
-	elseif op == "stop" then s.sparrow.draining = false
-	elseif op == "split" then ok = G.mitosis(s)
-	elseif op == "auto" then s.sparrow.autoMitosis = not s.sparrow.autoMitosis
-	elseif op == "rebirb" then ok = G.sparrowRebirb(s) end
-	if not ok then toast(plr, "poor", "sparrow_" .. tostring(op)) end
+-- Birb's Sparrow panel: FEED (seed feeder, a % of seed income) / DRAIN (resonance) toggles, MITOSIS, REBIRB, autos
+function A.sparrow(plr, ss, op, arg)
+	local s = ss.view
+	local sp = s.sparrow
+	if not sp.unlocked or type(op) ~= "string" then return end
+	local ok = true
+	if op == "feed" or op == "feedall" then
+		if not R.hasSun(s, "d_seed_feeder") then ok = false else sp.feeding = not sp.feeding; if sp.feeding then sp.draining = false end end
+	elseif op == "drain" then
+		if not (R.sparrowFeaturesOn(s) and R.hasSun(s, "d_sparrow_drain_power")) then ok = false else sp.draining = not sp.draining; if sp.draining then sp.feeding = false end end
+	elseif op == "stop" then sp.draining = false; sp.feeding = false
+	elseif op == "split" or op == "mitosis" then ok = G.mitosis(s)
+	elseif op == "rebirb" then ok = G.sparrowRebirb(s)
+	elseif op == "auto" or op == "automitosis" then
+		if R.sparrowAutoUnlocked(s, "mitosis") then sp.autoMitosis = not sp.autoMitosis else ok = false end
+	elseif op == "autorebirb" then
+		if R.sparrowAutoUnlocked(s, "rebirb") then sp.autoRebirb = not sp.autoRebirb else ok = false end
+	elseif op == "rate" then
+		local n = tonumber(arg)
+		if not n or n ~= n then return end
+		sp.feedRatePercent = math.clamp(math.floor(n), 1, 100)
+	else return end
+	if not ok then toast(plr, "poor", "sparrow_" .. op) end
 end
 function A.seagull(plr, ss, op)
 	if not G.windowUnlocked(ss.view, "seagull") then return end
@@ -484,7 +638,9 @@ function A.dev(plr, ss, op)
 	else return end
 	ss.view.auto = ss.view.auto and ss.autoAllowed
 	G.refreshDailies(ss.view, os.time())
-	clearField(plr, ss)
+	clearDesert(plr, ss)
+	Park.clearField(ss.rt); table.clear(ss.rt.sparrows); ss.rt.holdFeed = false
+	flushEvents(plr, ss)
 	ss.fishDirty = true
 	toast(plr, "dev", ss.mode, ss.view.island)
 end
@@ -579,7 +735,12 @@ end
 ActionEv.OnServerEvent:Connect(function(plr, kind, a, b)
 	local ss = sessions[plr]; if not ss or type(kind) ~= "string" then return end
 	local fn = A[kind]; if not fn then return end
-	local now = os.clock(); if now - ss.lastAct < 0.05 then return end; ss.lastAct = now
+	-- rate limit: one action per 50 ms (letting go of a held FEED always goes through, so it can never stick)
+	local now = os.clock()
+	if not (kind == "feed" and a == "release") then
+		if now - ss.lastAct < 0.05 then return end
+		ss.lastAct = now
+	end
 	fn(plr, ss, a, b)
 	push(plr)
 end)

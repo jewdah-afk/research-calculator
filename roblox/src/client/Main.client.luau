@@ -288,6 +288,20 @@ Remotes:WaitForChild("Collect").OnClientEvent:Connect(function(id: number, value
 	if golden then shake = 0.35 end
 end)
 
+-- Gravity Field / magnet: the server drifts eggs toward the bird; it sends their new spots in batches (10 Hz)
+Remotes:WaitForChild("Move").OnClientEvent:Connect(function(ids: { number }, positions: { Vector3 })
+	if type(ids) ~= "table" or type(positions) ~= "table" then return end
+	for i, id in ids do
+		local k = kernels[id]
+		local pos = positions[i]
+		if k and typeof(pos) == "Vector3" then
+			k.pos = pos
+			k.drop = nil
+			if k.shadow then k.shadow.CFrame = CFrame.new(pos + Vector3.new(0, 0.06, 0)) * CFrame.Angles(0, 0, math.pi / 2) end
+		end
+	end
+end)
+
 local bulkParts: { BasePart } = {}
 local bulkCFs: { CFrame } = {}
 local function kernelsStep(dt: number)

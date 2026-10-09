@@ -1,30 +1,55 @@
 --!nonstrict
--- Game: Peckwood state + every system's math, on the verified Birb formulas (shared/Defs).
--- Pure logic, no Instances: Main.server owns players, remotes, the popcorn field and saving.
--- Wallet keys live at the top of the state table with the original game's names
--- (popcorn, goldenFeathers, sunflowerSeeds, ...) because BirbFormulas reads them there.
-local RS = game:GetService("ReplicatedStorage")
-local Defs = require(RS:WaitForChild("Peckwood"):WaitForChild("Defs"))
-local Shop = require(RS:WaitForChild("Peckwood"):WaitForChild("Shop"))
+-- Game: Peckwood state + every system's math. Pure logic, no Instances: Main.server owns players, remotes, the egg
+-- field replication and saving. Phase 1 (Park, egg shop, Molt, keepsakes, seeds, sunflower tree, Sparrow, Castle) runs
+-- on Birb's rules, ported 1:1 from the playtest into shared/Birb/Rules + server/Systems/* and held to 100% parity by
+-- roblox/tools/parity. Later systems (fishing, nest, mine, desert, expedition, ...) are still the simplified versions
+-- (HANDOUT section 0 "Gap audit") and plug their multipliers into Rules.hooks.
+-- Wallet keys live at the top of the state table with the original game's names (popcorn, goldenFeathers, ...).
+-- Loads in Roblox and in lune (roblox/tools/parity/lua_dump.luau): requires go through sh() / sys().
+local function sh(name: string)
+	if script then return require(game:GetService("ReplicatedStorage"):WaitForChild("Peckwood"):WaitForChild(name)) end
+	return require("../shared/" .. name)
+end
+local function sys(name: string)
+	if script then return require(script.Parent:WaitForChild("Systems"):WaitForChild(name)) end
+	return require("./Systems/" .. name)
+end
+local Defs = sh("Defs")
+local Shop = sh("Shop")
+local Park, Sparrow, Castle, Shops = sys("Park"), sys("Sparrow"), sys("Castle"), sys("Shops")
+local R = Park.R
 local F, S, EN = Defs.F, Defs.S, Defs.EN
 local UP = Defs.UP
 
 local G = {}
 G.Defs = Defs
+G.R, G.Park, G.Sparrow, G.Castle, G.Shops = R, Park, Sparrow, Castle, Shops
 
 local WALLET = Defs.CUR_ORDER
 local function num(x) return EN.toNumber(x) end
 
 -- ---------------------------------------------------------------- state
+G.VERSION = 3
+local function freshSparrow()
+	-- Birb's sparrow* fields: sparrow.{unlocked, level, xp, maxLevelReached}, sparrowCount, sparrowPrestigeCount,
+	-- sparrowResonanceXP, sparrowTotalEnergyDrained, sparrowSeedFeedRatePercent, is{Feeding,Draining}Sparrow, auto*
+	return { unlocked = false, level = 1, xp = 0, maxLevelReached = 1, count = 1, prestigeCount = 0, resonanceXP = 0, totalEnergyDrained = 0,
+		feedRatePercent = 25, feeding = false, draining = false, autoMitosis = false, autoRebirb = false }
+end
+local function freshEvo()
+	-- Birb monster{Popcorn,Feathers,Seeds,Fish,Twigs,Moneta}Fed / monsterFeedProgress / hasTalkedToMonster
+	return { fed = { popcorn = 0, feathers = 0, seeds = 0, fish = 0, twigs = 0, moneta = 0 }, progress = 0, talked = false }
+end
 function G.fresh()
 	local s = {
-		v = 2,
-		upgrades = {}, owned = {},
+		v = G.VERSION,
+		upgrades = {}, sunflowerUpgrades = {},
 		rebirbCount = 0, evolutionCount = 0, island = 1,
+		hasUnlockedEvolve = false, hasEnteredDungeon = false, hasUnlockedDesertMap = false,
 		stats = { totalPopcorn = 0, bestPopcorn = 0, fishCaught = 0, kills = 0, questsDone = 0, playTime = 0, goldenCollected = 0 },
 		zone = "park",
-		evo = { fed = {} },
-		sparrow = { level = 1, xp = 0, count = 1, rebirbs = 0, resonance = 0, draining = false, mitosisXp = 0, autoMitosis = false },
+		evo = freshEvo(),
+		sparrow = freshSparrow(),
 		seagull = { level = 1, xp = 0, migrations = 0, route = 1, doctrine = 1, out = true, t = 0, autoMigrate = false },
 		dave = { level = 1, xp = 0, rebirbs = 0, branch = 0, golden = 0 },
 		panda = { assist = false, waiting = 0, leftAt = 0 },
@@ -50,6 +75,34 @@ local function deep(t)
 end
 G.clone = deep
 
+-- Save migration v2 -> v3 (Phase 1 port). v2: owned[id] = true, sparrow = { level, xp, count, rebirbs, resonance,
+-- draining, mitosisXp, autoMitosis }, evo.fed keyed by wallet keys, Gilded Margins in upgrades. v3: Birb's shapes.
+function G.migrate(d)
+	if type(d) ~= "table" then return d end
+	if (d.v or 0) == 2 then
+		d.sunflowerUpgrades = d.sunflowerUpgrades or {}
+		for id, on in d.owned or {} do if on == true then d.sunflowerUpgrades[id] = math.max(1, d.sunflowerUpgrades[id] or 0) end end
+		d.owned = nil
+		local up = d.upgrades or {}
+		if up.d_desert_field_notes_plus then d.sunflowerUpgrades.d_desert_field_notes_plus = up.d_desert_field_notes_plus; up.d_desert_field_notes_plus = nil end
+		local o = d.sparrow or {}
+		local sp = freshSparrow()
+		sp.unlocked = (d.evolutionCount or 0) >= 1           -- Birb unlocks the Sparrow at Evolution 1
+		sp.level = math.max(1, o.level or 1); sp.xp = o.xp or 0; sp.maxLevelReached = sp.level
+		sp.count = o.count or 1; sp.prestigeCount = o.rebirbs or 0; sp.resonanceXP = o.resonance or 0
+		sp.draining = o.draining == true; sp.autoMitosis = o.autoMitosis == true
+		d.sparrow = sp
+		local fed = (d.evo and d.evo.fed) or {}
+		local e = freshEvo()
+		e.fed.popcorn, e.fed.seeds, e.fed.twigs, e.fed.moneta = fed.popcorn or 0, fed.sunflowerSeeds or 0, fed.twigs or 0, fed.moneta or 0
+		e.talked = true
+		d.evo = e
+		d.hasUnlockedEvolve = d.sunflowerUpgrades.d_unlock_evolve ~= nil
+		d.v = 3
+	end
+	return d
+end
+
 -- DataStore: EN -> strings, everything else plain
 function G.serialize(s)
 	local o = deep(s)
@@ -58,7 +111,10 @@ function G.serialize(s)
 end
 function G.deserialize(d)
 	local s = G.fresh()
-	if type(d) ~= "table" or d.v ~= 2 then return s end
+	if type(d) ~= "table" or (d.v ~= 2 and d.v ~= 3) then return s end
+	local wallet = {}
+	for _, k in WALLET do wallet[k] = d[k] end
+	d = G.migrate(d)
 	for k, v in d do
 		if type(s[k]) == "table" and type(v) == "table" and not table.find(WALLET, k) then
 			for kk, vv in v do s[k][kk] = vv end
@@ -66,7 +122,8 @@ function G.deserialize(d)
 			s[k] = v
 		end
 	end
-	for _, k in WALLET do s[k] = if type(d[k]) == "string" then EN.fromSave(d[k]) else EN.ZERO end
+	for _, k in WALLET do s[k] = if type(wallet[k]) == "string" then EN.fromSave(wallet[k]) else EN.ZERO end
+	s.evo.progress = R.feedProgress(s)
 	return s
 end
 
@@ -94,12 +151,12 @@ function G.syncFactors(s)
 	s.seeds = s.sunflowerSeeds
 	s.fishPopcornMult = fishMult(s, "popcorn_mult")
 	s.fishFeatherMult = fishMult(s, "feather_mult")
-	s.sparrowDrainMultiplier = S.sparrowDrainMultiplier(s.sparrow.resonance)
+	s.sparrowDrainMultiplier = R.sparrowDrainMult(s)
 	local sr = sacrificeRow(s)
 	s.sacrificeMultiplier = if sr then sr.popcornMultiplier else 1
 	s.questPopcornMultiplier = 1 + questBonus(s, "popcorn_gain_mult")
 	s.questFeatherBonus = questBonus(s, "feather_gain_mult")
-	s.sparrowRebirbs = s.sparrow.rebirbs
+	s.sparrowRebirbs = s.sparrow.prestigeCount
 	s.daveRebirbs = s.dave.rebirbs
 	s.playTimeSeconds = s.stats.playTime
 	s.highestFishWeight = 0
@@ -108,9 +165,28 @@ end
 
 function G.evoMult(s) return if s.evolutionCount >= 2 then s.evolutionCount else 1 end
 
+-- the systems that exist today feed Birb's later-phase multipliers (Rules.hooks); each phase replaces its hook
+R.hooks.fishMult = function(s, kind) return fishMult(s, kind) end
+R.hooks.questBonus = function(s, k) return questBonus(s, k) end
+R.hooks.sacrificePopcorn = function(s) local r = sacrificeRow(s); return if r then r.popcornMultiplier else 1 end
+R.hooks.pickupBonus = function(s) return if s.shop and s.shop.passes and s.shop.passes.beak then 1.5 else 1 end
+R.hooks.highestFishWeight = function(s)
+	local m = 0
+	for _, kg in s.fish.best do if kg > m then m = kg end end
+	return m
+end
+
 -- ---------------------------------------------------------------- derived (also sent to the client)
-function G.reachPx(s) return (if s.shop and s.shop.passes.beak then 1.5 else 1) * 14 * (1 + 0.2 * math.max(0, F.level(s, "pr_radius_mult") - 1)) * (1 + questBonus(s, "pickup_radius_mult")) end
-function G.speed(s) return F.wingSpeed(F.level(s, "p_move_speed")) * (if s.shop and s.shop.passes.swift then 1.5 else 1) end
+-- Birb pickup profile (px) with the Big Beak pass on top; studs = px / Map.PX * S
+function G.pickupProfile(s)
+	local p = R.pickupProfile(s)
+	local b = R.hooks.pickupBonus(s)
+	p.collectRadius *= b; p.magnetRadius *= b
+	return p
+end
+function G.reachPx(s) return G.pickupProfile(s).collectRadius end
+-- Birb speed multiplier (x 168 px/s) with the Swift Wings pass on top
+function G.speed(s) return R.speedMult(s) * (if s.shop and s.shop.passes.swift then 1.5 else 1) end
 function G.inDesert(s) return s.zone == "desert" end
 
 function G.goldenValue(s)
@@ -127,13 +203,10 @@ function G.desertGoldenChance(s)
 	return if c > 0 then c else 0.05   -- Figma hero: "5% of desert drops are golden" (Desert Core is implied by reaching the desert)
 end
 
-function G.seedsPerSec(s)
-	if s.island < 3 then return 0 end
-	local r = 3 * F.moreSeeds(F.level(s, "s_more_seeds")) * G.evoMult(s)   -- base 3/s: Figma Seeds hero ("+3 / s on the platform")
-	local sr = sacrificeRow(s)
-	if sr then r *= sr.seedMultiplier end
-	r *= 1 + questBonus(s, "seed_gain_mult")
-	return r
+-- Birb seed production: whole ticks per second x seeds per tick, on the platform (or anywhere with Auto Generator)
+function G.seedsPerSec(s, onPlatform: boolean?)
+	local tps, perTick = R.seedRate(s, onPlatform == true)
+	return tps * perTick
 end
 
 function G.twigMult(s)
@@ -185,20 +258,15 @@ function G.fishInterval(s)
 	return 4 * (rod and rod.speedBonus or 1) / fishMult(s, "reel_speed_mult")
 end
 
-function G.evoProgress(s)
-	local need = Defs.EVO[s.evolutionCount + 1]
-	if not need then return 0 end
-	local sum, n = 0, 0
-	for k, req in need do sum += math.min(1, (s.evo.fed[k] or 0) / req); n += 1 end
-	return sum / n
-end
+function G.evoProgress(s) return R.feedProgress(s) / 100 end   -- 0..1
 
-function G.plumeGain(s) G.syncFactors(s); return F.rebirbFeathers(s) end
+function G.plumeGain(s) return (R.prestige(s)) end
 
 -- ---------------------------------------------------------------- wallet helpers
 -- every earned currency passes here: shop passes + an active 2x boost multiply it (raw = crates / refunds, unboosted).
 -- Returns the amount actually credited (number pops show the boosted value).
 local function give(s, cur, n, raw)
+	cur = R.wkey(cur)
 	s.shop = s.shop or { passes = {}, boostUntil = 0 }
 	if not raw then
 		local m = Shop.mult(s, cur, os.time())
@@ -206,19 +274,34 @@ local function give(s, cur, n, raw)
 	end
 	s[cur] = EN.add(s[cur], n)
 	if cur == "popcorn" then
-		s.stats.totalPopcorn += num(n)
 		local p = num(s.popcorn); if p > (s.stats.bestPopcorn or 0) then s.stats.bestPopcorn = p end
 	end
 	return n
 end
 G.give = give
+Park.give = give   -- every Phase 1 income (awards, seeds, plumes) gets the shop passes / 2x boost
 local function canPay(s, cur, n) return EN.meeq(s[cur], n) end
 local function pay(s, cur, n) s[cur] = EN.sub(s[cur], n) end
 
 -- ---------------------------------------------------------------- shop
 function G.windowUnlocked(s, w) return (Defs.WINDOW_ISLAND[w] or 99) <= s.island end
 
+-- Birb rows (P / PR / S trees) buy through Shops (purchaseUpgrade / purchaseUpgradeMax), tree nodes priced in levels
+-- (Gilded Margins) through the tree; the rest (mine, nest, echo, Dave) keep their pre-port rows until their phase.
 function G.buy(s, id, all)
+	local bd = R.Data.UP_BY_ID[id]
+	if bd and bd.tree ~= "M" and id:sub(1, 7) ~= "p_echo_" then
+		if all then return Shops.buyMax(s, id) end
+		return if Shops.buy(s, id) then 1 else 0
+	end
+	if id:sub(1, 2) == "d_" then
+		local n = 0
+		repeat
+			if Shops.buySun(s, id) ~= "" then break end
+			n += 1
+		until not all or n >= 1000
+		return n
+	end
 	local d = UP[id]; if not d then return 0 end
 	local n = 0
 	repeat
@@ -233,92 +316,15 @@ function G.buy(s, id, all)
 	return n
 end
 
--- ---------------------------------------------------------------- resets
-local function resetTree(s, pred)
-	for id in s.upgrades do if pred(id) then s.upgrades[id] = nil end end
-end
-function G.molt(s)
-	local g = G.plumeGain(s)
-	if EN.le(g, 1) and not EN.eq(g, 1) then return nil end
-	give(s, "goldenFeathers", g)
-	s.rebirbCount += 1
-	s.popcorn = EN.ZERO
-	-- Molt resets popcorn and the non-permanent P tree (Popcorn, Golden Value, Auric Silo, Echo rows)
-	resetTree(s, function(id) return id:sub(1, 2) == "p_" or id == "e_echo_capacity" end)
-	return g
-end
-
-function G.evolve(s)
-	if s.evolutionCount >= 5 or G.evoProgress(s) < 1 then return false end
-	s.evolutionCount += 1
-	s.evo.fed = {}
-	s.popcorn = EN.ZERO; s.sunflowerSeeds = EN.ZERO
-	resetTree(s, function(id) return id:sub(1, 2) == "p_" or id:sub(1, 2) == "s_" or id:sub(1, 2) == "m_" or id == "e_echo_capacity" end)
-	s.sparrow.level, s.sparrow.xp, s.sparrow.count, s.sparrow.mitosisXp = 1, 0, 1, 0
-	return true
-end
-
-function G.feed(s, res, all)
-	local need = Defs.EVO[s.evolutionCount + 1]; if not need or not need[res] then return false end
-	local want = need[res] - (s.evo.fed[res] or 0)
-	if want <= 0 then return false end
-	local have = num(s[res])
-	local amt = math.min(want, if all then have else math.max(1, math.min(have, want / 10)))
-	if amt <= 0 then return false end
-	pay(s, res, amt)
-	s.evo.fed[res] = (s.evo.fed[res] or 0) + amt
-	return true
-end
-
--- ---------------------------------------------------------------- companions
-function G.sparrowStep(s, dt, seedIncome)
-	local sp = s.sparrow
-	if s.island < 3 then return end
-	local xpPerSeed = 0.01 * (1 + 2 * math.sqrt(sp.rebirbs)) * (if sp.level >= 50 then 1.5 else 1)
-	local need = S.sparrowXpNeeded(sp.level)
-	if sp.draining then
-		local loss = need * math.max(2, 0.1 * sp.level) * dt
-		local taken = math.min(loss, sp.xp + (sp.level > 1 and need or 0))
-		sp.xp -= loss
-		while sp.xp < 0 and sp.level > 1 do sp.level -= 1; sp.xp += S.sparrowXpNeeded(sp.level) end
-		if sp.xp < 0 then sp.xp = 0; sp.draining = false end
-		sp.resonance += taken * (if sp.rebirbs >= 1 then 1.25 else 1)
-		return
-	end
-	local share = seedIncome * 0.25
-	local cap = 0.25 * need / xpPerSeed
-	local seedsUsed = math.min(share, cap) * dt
-	if seedsUsed <= 0 or not canPay(s, "sunflowerSeeds", seedsUsed) then return end
-	pay(s, "sunflowerSeeds", seedsUsed)
-	local gain = seedsUsed * xpPerSeed
-	sp.xp += gain; sp.mitosisXp += gain
-	while sp.level < 1000 and sp.xp >= S.sparrowXpNeeded(sp.level) do sp.xp -= S.sparrowXpNeeded(sp.level); sp.level += 1 end
-	if (sp.autoMitosis or sp.rebirbs >= 1) and sp.count < 16 and sp.mitosisXp >= S.mitosisRequirement(sp.count) then G.mitosis(s) end
-end
-function G.sparrowFeedNow(s)
-	local sp = s.sparrow
-	local need = S.sparrowXpNeeded(sp.level)
-	local xpPerSeed = 0.01 * (1 + 2 * math.sqrt(sp.rebirbs))
-	local seeds = math.min(num(s.sunflowerSeeds), (need - sp.xp) / xpPerSeed)
-	if seeds <= 0 then return false end
-	pay(s, "sunflowerSeeds", seeds)
-	sp.xp += seeds * xpPerSeed; sp.mitosisXp += seeds * xpPerSeed
-	while sp.level < 1000 and sp.xp >= S.sparrowXpNeeded(sp.level) - 1e-9 do sp.xp = math.max(0, sp.xp - S.sparrowXpNeeded(sp.level)); sp.level += 1 end
-	return true
-end
-function G.mitosis(s)
-	local sp = s.sparrow
-	if sp.count >= 16 or sp.mitosisXp < S.mitosisRequirement(sp.count) then return false end
-	sp.count *= 2; sp.level = 1; sp.xp = 0; sp.mitosisXp = 0
-	return true
-end
-function G.sparrowRebirb(s)
-	local sp = s.sparrow
-	if sp.count < 16 then return false end
-	sp.count, sp.level, sp.xp, sp.mitosisXp = 1, 1, 0, 0
-	sp.rebirbs += 1
-	return true
-end
+-- ---------------------------------------------------------------- Phase 1 resets and companions (Birb systems)
+G.newRuntime = Park.newRuntime
+function G.molt(s, rt) return Shops.molt(s, rt) end
+function G.evolve(s, rt) return Castle.evolve(s, rt) end
+function G.buySun(s, id) return Shops.buySun(s, id) end
+-- one FEED click = 1% of each requirement (holding feeds 10% / s through the step)
+function G.feedClick(s) Castle.feed(s, 1) end
+G.mitosis = Sparrow.mitosis
+G.sparrowRebirb = Sparrow.rebirb
 
 G.ROUTES = { { "Bridge", 1 }, { "Floor 1", 1.18 }, { "Floor 2", 1.22 }, { "Floor 4", 1.28 }, { "Floor 6", 1.34 } }
 G.DOCTRINES = { { "Balanced", 1, 1, 1 }, { "Hunter", 1.3, 0.94, 1.18 }, { "Training", 1.02, 1.45, 0.92 } }
@@ -465,14 +471,17 @@ end
 
 -- ---------------------------------------------------------------- per-second systems
 -- Called on the server Heartbeat with real dt. Returns a list of toasts.
-function G.step(s, dt, rng)
+-- The Phase 1 step (Birb rules): egg field, pickups, seeds, Sparrow, castle feeding, income rates. rt = the player's
+-- Park runtime (Park.newRuntime). The parity harness runs exactly this.
+function G.stepPhase1(s, dt, rt)
+	Park.step(s, rt, dt, Sparrow, Castle)
+end
+
+-- Called on the server Heartbeat with real dt: Phase 1, then the later (still simplified) systems. Returns toasts.
+function G.step(s, dt, rng, rt)
 	local toasts = {}
-	s.stats.playTime += dt
+	if rt then G.stepPhase1(s, dt, rt) else s.stats.playTime += dt end
 	G.syncFactors(s)
-	-- seeds + sparrow feeding share
-	local seeds = G.seedsPerSec(s)
-	if seeds > 0 then give(s, "sunflowerSeeds", seeds * dt) end
-	G.sparrowStep(s, dt, seeds)
 	-- twigs (nest)
 	local tw = G.twigsPerSec(s)
 	if tw > 0 then give(s, "twigs", tw * dt) end
@@ -544,7 +553,8 @@ function G.step(s, dt, rng)
 		s.island += 1
 		table.insert(toasts, { "island", s.island })
 	end
-	if s.island >= 8 then s.owned.d_desert_auric_blueprints = true end   -- desert opens Auric Silo in the Golden shop
+	-- pre-port shortcut kept until the Desert phase: reaching the desert opens Auric Silo in the Golden shop
+	if s.island >= 8 and R.sunLevel(s, "d_desert_auric_blueprints") < 1 then s.sunflowerUpgrades.d_desert_auric_blueprints = 1 end
 	return toasts
 end
 
@@ -554,7 +564,6 @@ function G.unlockIsland(s)
 	if not nxt or not nxt.cost then return false end
 	for cur, n in nxt.cost do if not canPay(s, cur, n) then return false end end
 	for cur, n in nxt.cost do pay(s, cur, n) end
-	if nxt.id == "castle" then s.owned.d_unlock_evolve = true end
 	return true
 end
 
@@ -565,10 +574,14 @@ function G.maxed()
 	for _, k in WALLET do s[k] = EN.fromNumber(1e30) end
 	s.island = #Defs.ISLANDS
 	s.rebirbCount, s.evolutionCount = 250, 5
-	s.owned.d_unlock_evolve = true
+	-- the whole base sunflower tree (desert / archivist / mine branches stay with their phases)
+	for _, n in R.Data.SUN do
+		if n.id:sub(1, 9) ~= "d_desert_" and n.id:sub(1, 12) ~= "d_archivist_" and n.id ~= "d_unlock_archivist_tree" then s.sunflowerUpgrades[n.id] = n.maxLevel or 1 end
+	end
+	s.hasUnlockedEvolve = true
 	s.nest.tier = 3
 	s.crow.level, s.crow.rebirbs, s.crow.area = 120, 8, 6
-	s.sparrow.level, s.sparrow.count, s.sparrow.rebirbs, s.sparrow.resonance = 100, 16, 5, 1e6
+	s.sparrow.unlocked, s.sparrow.level, s.sparrow.maxLevelReached, s.sparrow.count, s.sparrow.prestigeCount, s.sparrow.resonanceXP = true, 100, 100, 16, 5, 1e6
 	s.seagull.level, s.seagull.migrations = 50, 100
 	s.dave.level, s.dave.rebirbs = 100, 100
 	s.parrot.level, s.parrot.floor, s.parrot.best, s.parrot.hp, s.parrot.dmg, s.parrot.regen = 200, 12, 12, 500, 500, 100
@@ -592,8 +605,16 @@ function G.stepIsland(src)
 	local nxt = Defs.ISLANDS[s.island + 1]
 	if nxt.id == "molt" then s.stats.bestPopcorn = math.max(s.stats.bestPopcorn, 1000); give(s, "popcorn", 2000)
 	elseif nxt.id == "garden" then s.rebirbCount = math.max(1, s.rebirbCount); give(s, "goldenFeathers", 25)
-	elseif nxt.id == "castle" then s.owned.d_unlock_evolve = true; give(s, "popcorn", 1e8)
-	elseif nxt.id == "bridge" then s.evolutionCount = math.max(1, s.evolutionCount)
+	elseif nxt.id == "castle" then   -- Unlock Evolve and its parent chain in the sunflower tree
+		local id = "d_unlock_evolve"
+		while id do
+			s.sunflowerUpgrades[id] = math.max(1, s.sunflowerUpgrades[id] or 0)
+			local ps = R.sunParents(id)
+			id = ps[1]
+		end
+		s.hasUnlockedEvolve = true
+		give(s, "popcorn", 1e8)
+	elseif nxt.id == "bridge" then s.evolutionCount = math.max(1, s.evolutionCount); s.sparrow.unlocked = true
 	elseif nxt.id == "forest" then s.evolutionCount = math.max(2, s.evolutionCount)
 	elseif nxt.id == "mine" then s.evolutionCount = math.max(3, s.evolutionCount)
 	elseif nxt.id == "desert" then s.evolutionCount = math.max(4, s.evolutionCount)
