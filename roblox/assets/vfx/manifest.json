@@ -1,0 +1,158 @@
+{
+ "smoke_puff": {
+  "layout": "Grid4x4",
+  "mode": "OneShot",
+  "tint": "baked-neutral",
+  "use": "toon smoke puff: hatch crack ring, island-unlock dust, pet reveal poof",
+  "file": "roblox/assets/vfx/smoke_puff.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "impact_star": {
+  "layout": "Grid4x4",
+  "mode": "OneShot",
+  "tint": "tint",
+  "use": "star-burst / impact spike: hatch crack, level-up ding, collect (golden)",
+  "file": "roblox/assets/vfx/impact_star.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "sparkle": {
+  "layout": "Grid4x4",
+  "mode": "OneShot",
+  "tint": "tint",
+  "use": "sparkle twinkle: every effect",
+  "file": "roblox/assets/vfx/sparkle.png",
+  "size": [
+   512,
+   512
+  ]
+ },
+ "shell_shards": {
+  "layout": "Grid2x2",
+  "mode": "Loop",
+  "tint": "tint",
+  "use": "eggshell shards tumbling out of the hatch (tint = egg colour)",
+  "file": "roblox/assets/vfx/shell_shards.png",
+  "size": [
+   512,
+   512
+  ]
+ },
+ "confetti": {
+  "layout": "Grid4x4",
+  "mode": "Loop",
+  "tint": "tint",
+  "use": "paper confetti tumbling: hatch (Uncommon+), island unlock shower",
+  "file": "roblox/assets/vfx/confetti.png",
+  "size": [
+   512,
+   512
+  ]
+ },
+ "leaf": {
+  "layout": "Grid4x4",
+  "mode": "Loop",
+  "tint": "baked",
+  "use": "tumbling leaf: island-unlock edge burst",
+  "file": "roblox/assets/vfx/leaf.png",
+  "size": [
+   512,
+   512
+  ]
+ },
+ "ring_shock": {
+  "layout": "None",
+  "tint": "tint",
+  "use": "flat ground shockwave: hatch crack, level-up, golden collect",
+  "file": "roblox/assets/vfx/ring_shock.png",
+  "size": [
+   512,
+   512
+  ]
+ },
+ "ring_thin": {
+  "layout": "None",
+  "tint": "tint",
+  "use": "thin pop ring: collect pop, level-up echo ring, hatch secondary ring",
+  "file": "roblox/assets/vfx/ring_thin.png",
+  "size": [
+   256,
+   256
+  ]
+ },
+ "glow_disc": {
+  "layout": "None",
+  "tint": "tint",
+  "use": "stepped glow: egg glow build, flashes, pop cores (additive)",
+  "file": "roblox/assets/vfx/glow_disc.png",
+  "size": [
+   256,
+   256
+  ]
+ },
+ "light_rays": {
+  "layout": "None",
+  "tint": "tint",
+  "use": "light-ray fan behind the hatch reveal (additive, slow spin)",
+  "file": "roblox/assets/vfx/light_rays.png",
+  "size": [
+   512,
+   512
+  ]
+ },
+ "star": {
+  "layout": "None",
+  "tint": "tint",
+  "use": "little star bits: collect, hatch, level-up",
+  "file": "roblox/assets/vfx/star.png",
+  "size": [
+   256,
+   256
+  ]
+ },
+ "burst_lines": {
+  "layout": "None",
+  "tint": "tint",
+  "use": "impact lines on the hatch crack frame (Rare+)",
+  "file": "roblox/assets/vfx/burst_lines.png",
+  "size": [
+   512,
+   512
+  ]
+ },
+ "rune_circle": {
+  "layout": "None",
+  "tint": "tint",
+  "use": "magic circle under a Legendary/Mythic hatch (flat, spinning)",
+  "file": "roblox/assets/vfx/rune_circle.png",
+  "size": [
+   1024,
+   1024
+  ]
+ },
+ "beam_streak": {
+  "layout": "Beam",
+  "tint": "tint",
+  "use": "Beam texture: light pillars / level-up column (U along the beam, scroll with TextureSpeed)",
+  "file": "roblox/assets/vfx/beam_streak.png",
+  "size": [
+   256,
+   64
+  ]
+ },
+ "beam_runes": {
+  "layout": "Beam",
+  "tint": "tint",
+  "use": "Beam texture: rune band on the island-unlock magic circle rings (TextureMode Stretch)",
+  "file": "roblox/assets/vfx/beam_runes.png",
+  "size": [
+   512,
+   64
+  ]
+ }
+}
