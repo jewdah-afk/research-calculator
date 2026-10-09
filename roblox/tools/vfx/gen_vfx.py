@@ -234,37 +234,6 @@ def tex_sparkle():
     return sheet(frames, 4)
 
 
-def tex_impact():
-    """4x4 impact star: flash disc -> 8-spike star bursts out -> centre punches hollow -> spikes recede to nothing"""
-    frames = []
-    for k in range(16):
-        c = Canvas(256)
-        if k == 0:
-            d = c.circle(0, 0, 0.24)
-            c.inked(d, g(255), 0.045)
-            frames.append(c.image())
-            continue
-        R = 0.86 * (0.5 + 0.5 * ease_out(min(1, k / 3.0), 2))
-        hollow = 0.0 if k < 4 else 0.46 * ease_out((k - 4) / 5.0, 2)
-        valley0 = 0.32 * R if k < 4 else (0.32 - 0.1 * min(1, (k - 4) / 5)) * R
-        L = 1.0 if k < 9 else 1 - (k - 8) / 7.0
-        tip = hollow + (R - hollow) * L
-        valley = max(hollow + 0.02, valley0 * L + hollow * (1 - L) * 0.98)
-        rot = -math.pi / 2 + 0.05 * k
-        if tip > hollow + 0.03:
-            outer = c.poly(star_pts(8, tip, valley, rot, long_short=0.62))
-            inner_tip = hollow + (tip - hollow) * 0.62
-            inner = c.poly(star_pts(8, inner_tip, max(hollow + 0.01, valley * 0.7), rot, long_short=0.62))
-            hole = c.circle(0, 0, hollow) if hollow > 0 else np.zeros_like(outer)
-            outer &= ~hole
-            inner &= ~hole
-            c.paint(c.grow(outer, 0.04), INK)  # also inks the inner edge of the punch-out
-            c.paint(outer, g(206))
-            c.paint(inner, g(255))
-        frames.append(c.image())
-    return sheet(frames, 4)
-
-
 PUFF = [(0.0, 0.06, 0.40), (-0.36, 0.15, 0.28), (0.36, 0.13, 0.30), (-0.16, -0.22, 0.30), (0.19, -0.21, 0.27),
         (0.02, -0.40, 0.20), (-0.02, 0.30, 0.26)]
 PUFF_HOLES = [(-0.12, 0.02, 0.0), (0.20, 0.12, 0.0), (0.02, -0.26, 0.0)]
@@ -414,58 +383,6 @@ def tex_leaf():
     return sheet(frames, 4)
 
 
-def tex_ring_shock():
-    """flat shockwave ring: ink | white rim | body tone | ink, then a two-step translucent inner glow"""
-    c = Canvas(512, ss=3)
-    R = c.R
-    c.paint((R >= 0.50) & (R < 0.62), g(240), 0.22)
-    c.paint((R >= 0.62) & (R < 0.665), g(240), 0.45)
-    c.paint((R >= 0.665) & (R < 0.95), INK)
-    c.paint((R >= 0.70) & (R < 0.915), g(206))
-    c.paint((R >= 0.83) & (R < 0.915), g(255))
-    return c.image()
-
-
-def tex_ring_thin():
-    """thin crisp pop ring: white band with ink both sides"""
-    c = Canvas(256)
-    R = c.R
-    c.paint((R >= 0.74) & (R < 0.96), INK)
-    c.paint((R >= 0.79) & (R < 0.91), g(255))
-    return c.image()
-
-
-def tex_glow():
-    """stepped glow disc: four hard alpha steps (no smooth falloff), white"""
-    c = Canvas(256)
-    R = c.R
-    for r, a in ((0.94, 0.14), (0.74, 0.34), (0.52, 0.62), (0.30, 1.0)):
-        c.paint(R < r, g(255), a)
-    return c.image()
-
-
-def tex_rays():
-    """light-ray fan: 14 wedges (long/short alternating) with three hard alpha steps along their length"""
-    c = Canvas(512, ss=3)
-    rng = np.random.default_rng(7)
-    a_all = np.zeros(c.X.shape, np.float32)
-    n = 14
-    for i in range(n):
-        a0 = i * 2 * math.pi / n + rng.uniform(-0.06, 0.06)
-        long = i % 2 == 0
-        hw = (0.17 if long else 0.1) + rng.uniform(-0.015, 0.015)
-        reach = (0.95 if long else 0.66) + rng.uniform(-0.04, 0.0)
-        d = np.abs((c.T - a0 + math.pi) % (2 * math.pi) - math.pi)
-        taper = np.clip(1 - (c.R / reach) ** 6, 0, 1)
-        m = (d < hw * (0.55 + 0.45 * c.R) * (0.35 + 0.65 * taper)) & (c.R > 0.08) & (c.R < reach)
-        step = np.where(c.R < 0.4, 1.0, np.where(c.R < 0.64, 0.6, 0.3))
-        a_all = np.maximum(a_all, m * step)
-    c.paint(a_all > 0, g(255))
-    c.a = c.a * a_all
-    c.rgb = c.rgb * a_all[..., None]
-    return c.image()
-
-
 def tex_burst_lines():
     """anime impact lines, our way: 30 white needles pointing at the centre, thick outer end, ink outline"""
     c = Canvas(512, ss=3)
@@ -562,84 +479,302 @@ def tex_rune_circle():
     return c.image()
 
 
-def tex_beam_streak():
-    """beam strip, U (x, 256 px) along the beam, V (y, 64 px) across it: stepped core / mid / edge bands plus
-    bright dashes that read as rising energy when TextureSpeed scrolls it. Seamless in U, empty top/bottom rows."""
+# ------------------------------------------------------------------------------------------------ v2 shapes
+# Round-1 QA rules: additive / glow pieces carry NO ink (flash_star, swirl_arc, ring_wave, ring_snap, glow_step,
+# rays_fan, speed_line, beam_core); ink only on normal-blend pieces (feather, ink_swirl, shards, stars, confetti, ...).
+
+def tex_flash_star():
+    """hero impact flash (billboard, additive): 4 long needle spikes + 4 short diagonals + core disc, two hard alpha
+    bands. Drawn twice in game: tinted + bigger behind (rarity rim), white + Brightness > 1 in front (hot core)."""
+    c = Canvas(512, ss=3)
+
+    def shape(k):
+        lx, ly = local(c, 0, 0, 0)
+        long = astroid(lx, ly, 0.95 * k, 0.4)
+        dlx, dly = local(c, 0, 0, math.pi / 4)
+        short = astroid(dlx, dly, 0.56 * k, 0.48)
+        return long | short | c.circle(0, 0, 0.2 * k)
+
+    c.paint(shape(1.0), g(255), 0.62)
+    c.paint(shape(0.66), g(255), 1.0)
+    return c.image()
+
+
+def arc_band(c, R, a_tail, a_head, w_max, cx=0.0, cy=0.0, lead=0.33):
+    """crescent band along a circle: zero width at the tail, w_max at the rounded head; the outer side leads.
+    Returns (band, edge) masks (edge = the outer leading strip)."""
+    span = a_head - a_tail
+    if span <= 1e-3 or w_max <= 1e-3:
+        z = np.zeros(c.X.shape, bool)
+        return z, z
+    x, y = c.X - cx, c.Y - cy
+    r = np.hypot(x, y)
+    th = np.arctan2(y, x)
+    d = (th - a_tail) % (2 * math.pi)
+    inside = d <= span
+    sp = np.clip(d / span, 0, 1)
+    w = w_max * np.sin(sp * math.pi / 2) ** 0.85
+    lo, hi = R - w * 0.72, R + w * 0.28
+    band = inside & (r >= lo) & (r <= hi)
+    hx, hy = math.cos(a_head) * (R - w_max * 0.22), math.sin(a_head) * (R - w_max * 0.22)
+    band = band | c.circle(cx + hx, cy + hy, w_max * 0.5)
+    edge = band & (r >= hi - np.maximum(w * lead, 0.012)) & inside
+    return band, edge
+
+
+def tex_swirl_arc():
+    """4x4 crescent swirl (clip2 shape language): a tapered arc sweeps ~300 deg round the centre, grows, then the tail
+    catches the head while it thins. Outer leading strip 255, body 120: with LightEmission 1 and Brightness > 1 the
+    strip blows out white-hot while the body keeps the rarity colour. No ink (additive)."""
+    frames = []
+    for k in range(16):
+        f = k / 15
+        c = Canvas(256)
+        head = -math.pi / 2 + 2 * math.pi * 0.84 * ease_out(f, 2)
+        span = 2 * math.pi * 0.6 * math.sin(min(1.0, f / 0.94) * math.pi) ** 0.75
+        w = 0.27 * (1 - 0.6 * f)
+        R = 0.58 + 0.2 * ease_out(f, 2)
+        band, edge = arc_band(c, R, head - span, head, w)
+        if band.any():
+            c.paint(band, g(120))
+            c.paint(edge, g(255))
+        frames.append(c.image())
+    return sheet(frames, 4)
+
+
+def tex_ink_swirl():
+    """4x4 dark ink accent strokes (clip2's black swirls, our ink #16181e, normal blend): two thin brush crescents at
+    two radii sweep round, offset in time, then thin away."""
+    frames = []
+    for k in range(16):
+        f = k / 15
+        c = Canvas(256)
+        m = np.zeros(c.X.shape, bool)
+        for R, ph, w0, delay in ((0.8, 0.0, 0.12, 0.0), (0.55, 2.4, 0.085, 0.12)):
+            ff = min(1.0, max(0.0, (f - delay) / (1 - delay)))
+            if ff <= 0:
+                continue
+            head = math.pi / 2 + ph + 2 * math.pi * 0.7 * ease_out(ff, 2)
+            span = 2 * math.pi * 0.45 * math.sin(min(1.0, ff / 0.92) * math.pi) ** 0.8
+            band, _ = arc_band(c, R * (0.9 + 0.1 * ff), head - span, head, w0 * (1 - 0.5 * ff))
+            m |= band
+        if m.any():
+            c.paint(m, INK)
+        frames.append(c.image())
+    return sheet(frames, 4)
+
+
+def tex_feather():
+    """4x4 feather tumbling (Loop): asymmetric vane split lit / shade, quill, two notches, thin ink; tint per palette"""
+    frames = []
+    for k in range(16):
+        sx, rot = tumble(k)
+        c = Canvas(128)
+        w = max(abs(sx), 0.1)
+        lx, ly = local(c, 0, 0, rot + 0.3, w, 1)
+        ly = ly + 0.05
+        t = np.clip((ly + 0.62) / 1.04, 0, 1)
+        prof = np.clip(np.sin(t * math.pi), 0, 1) ** 0.7
+        x = lx + 0.07 * (t - 0.5) ** 2
+        wl, wr = 0.27 * prof * (1 - 0.2 * t), 0.18 * prof
+        vane = (ly >= -0.62) & (ly <= 0.42) & (x >= -wl) & (x <= wr)
+        notch1 = (x < -0.05) & (np.abs(ly - (-0.04 + 0.28 * (x + 0.05))) < 0.022)
+        notch2 = (x > 0.05) & (np.abs(ly - (0.16 - 0.28 * (x - 0.05))) < 0.02)
+        vane &= ~(notch1 | notch2)
+        quill = (np.abs(x) <= 0.028) & (ly >= -0.5) & (ly <= 0.74)
+        m = vane | quill
+        c.paint(c.grow(m, 0.06), INK)
+        front = sx >= 0
+        c.paint(vane & (x < 0), g(255 if front else 226))
+        c.paint(vane & (x >= 0), g(212 if front else 190))
+        c.paint(quill, g(168))
+        frames.append(c.image())
+    return sheet(frames, 4)
+
+
+def tex_speed_line():
+    """speed line / ember streak: a needle with a round head at the TOP (row 0) and a long tail, white core band +
+    a translucent outer band, no ink. Use with Orientation VelocityParallel + Squash."""
+    c = Canvas(256, ss=4)
+    t = np.clip((c.Y + 0.94) / 1.88, 0, 1)
+    hw = 0.085 * (1 - t) ** 0.85
+    body = ((np.abs(c.X) <= hw) & (c.Y >= -0.86) & (c.Y <= 0.94)) | c.circle(0, -0.86, 0.085)
+    core = ((np.abs(c.X) <= hw * 0.42) & (c.Y >= -0.86) & (c.Y <= 0.7)) | c.circle(0, -0.86, 0.04)
+    c.paint(body, g(255), 0.55)
+    c.paint(core, g(255), 1.0)
+    return c.image()
+
+
+def tex_ring_wave():
+    """ground wave (flat particle): an UNEVEN crescent band (thick on one side, thin / broken on others) with a white
+    leading (outer) edge, a translucent body and one faint inner step. No ink. Random Rotation per play."""
+    c = Canvas(512, ss=3)
+    th = c.T
+    gth = 0.5 + 0.36 * np.cos(th - 0.5) + 0.2 * np.cos(2 * th + 1.3) + 0.1 * np.cos(3 * th - 0.4)
+    gth = np.clip((gth - 0.12) / 0.95, 0, 1)
+    t = 0.02 + 0.15 * gth
+    R0 = 0.94
+    live = gth > 0.02
+    body = live & (c.R <= R0) & (c.R >= R0 - t)
+    edge = live & (c.R <= R0) & (c.R >= R0 - np.minimum(0.03, t))
+    inner = live & (c.R < R0 - t) & (c.R >= R0 - t - 0.06 * gth)
+    c.paint(inner, g(255), 0.22)
+    c.paint(body, g(255), 0.55)
+    c.paint(edge, g(255), 1.0)
+    return c.image()
+
+
+def tex_ring_snap():
+    """collect-pop ring snap: three tapered white arcs (a broken ring), no ink"""
+    c = Canvas(256)
+    m = np.zeros(c.X.shape, bool)
+    for a0, a1 in ((0, 108), (124, 232), (248, 350)):
+        A0, A1 = math.radians(a0), math.radians(a1)
+        d = (c.T - A0) % (2 * math.pi)
+        sp = np.clip(d / (A1 - A0), 0, 1)
+        w = 0.085 * np.clip(np.sin(sp * math.pi), 0, 1) ** 0.6
+        m |= (d <= A1 - A0) & (np.abs(c.R - 0.84) <= w / 2)
+    c.paint(m, g(255))
+    return c.image()
+
+
+def tex_glow_step():
+    """cel glow: THREE hard bands (1 / 0.5 / 0.2 alpha), crisp edges, white"""
+    c = Canvas(256)
+    for r, a in ((0.9, 0.2), (0.62, 0.5), (0.36, 1.0)):
+        c.paint(c.R < r, g(255), a)
+    return c.image()
+
+
+def tex_rays_fan():
+    """4x4 light-ray fan (OneShot): 18 thin rays shoot out (0-0.22), hold while the fan turns a little, then die by
+    THINNING to hairlines. Three hard alpha steps along each ray. White, no ink (additive, tint warm)."""
+    rng = np.random.default_rng(17)
+    n = 18
+    base = [(i * 2 * math.pi / n + rng.uniform(-0.05, 0.05), i % 2 == 0, rng.uniform(-0.05, 0.02)) for i in range(n)]
+    frames = []
+    for k in range(16):
+        f = k / 15
+        c = Canvas(256)
+        L = ease_out(min(1.0, f / 0.22), 2)
+        W = 1.0 if f < 0.5 else max(0.0, 1 - (f - 0.5) / 0.5) ** 1.3
+        turn = 0.18 * f
+        a_all = np.zeros(c.X.shape, np.float32)
+        if W > 0.02:
+            for a0, long, jit in base:
+                reach = ((0.96 if long else 0.64) + jit) * L
+                hw = (0.1 if long else 0.066) * W
+                d = np.abs((c.T - a0 - turn + math.pi) % (2 * math.pi) - math.pi)
+                taper = np.clip(1 - (c.R / max(reach, 1e-3)) ** 5, 0, 1)
+                m = (d < hw * (0.45 + 0.55 * c.R) * (0.3 + 0.7 * taper)) & (c.R > 0.08) & (c.R < reach)
+                step = np.where(c.R < 0.4, 1.0, np.where(c.R < 0.68, 0.6, 0.32))
+                a_all = np.maximum(a_all, m * step)
+        c.paint(a_all > 0, g(255))
+        c.a = c.a * a_all
+        c.rgb = c.rgb * a_all[..., None]
+        frames.append(c.image())
+    return sheet(frames, 4)
+
+
+def tex_beam_core():
+    """beam strip (U = 256 px along the beam, V = 64 across): clean stepped bands (core / mid / edge) + three long
+    tapered streaks that read as energy flowing when TextureSpeed scrolls it. Seamless in U, empty top/bottom rows."""
     c = Canvas(256, 64, ss=4)
-    ay = np.abs(c.Y)
-    alpha = np.where(ay < 0.16, 1.0, np.where(ay < 0.42, 0.62, np.where(ay < 0.74, 0.3, 0.0)))
-    rng = np.random.default_rng(5)
-    for _ in range(9):
-        y0 = rng.uniform(-0.6, 0.6)
-        x0 = rng.uniform(-1, 1)
-        ln = rng.uniform(0.18, 0.42)
-        for off in (-2, 0, 2):  # wrap so the strip tiles in U
-            dash = (np.abs(c.Y - y0) < 0.07) & (c.X >= x0 + off) & (c.X <= x0 + off + ln)
-            alpha = np.where(dash & (ay < 0.74), np.maximum(alpha, 0.92), alpha)
-    band = ((c.X + 1) * 4) % 2 < 1.0  # gentle stepped pulse bands along U (8 per tile)
-    alpha = np.where(band & (alpha < 0.99), alpha * 0.82, alpha)
+    av = np.abs(c.Y)
+    alpha = np.where(av < 0.12, 1.0, np.where(av < 0.36, 0.62, np.where(av < 0.6, 0.26, 0.0)))
+    for v0, u0, ln in ((-0.24, -0.8, 0.95), (0.2, 0.1, 0.8), (-0.05, 0.55, 0.6)):
+        for off in (-2, 0, 2):
+            u = (c.X - (u0 + off)) / ln
+            lens = (u >= 0) & (u <= 1) & (np.abs(c.Y - v0) < 0.08 * np.sin(np.clip(u, 0, 1) * math.pi))
+            alpha = np.where(lens, 1.0, alpha)
     c.paint(alpha > 0, g(255))
     c.a = c.a * alpha
     c.rgb = c.rgb * alpha[..., None]
     return c.image()
 
 
-def tex_beam_runes():
-    """rune band for beam rings: two border lines + Peckwood glyphs, white with ink, seamless in U (512 px = 8 slots).
-    U runs along the ring, V across it (glyph 'up' = -V)."""
-    c = Canvas(512, 64, ss=4)
-    # work in output pixels for this strip (anisotropic normalized units)
-    PX = (c.X + 1) / 2 * 512
-    PY = (c.Y + 1) / 2 * 64
-    lines = ((PY >= 8.5) & (PY <= 12.5)) | ((PY >= 51.5) & (PY <= 55.5))
-    kinds = ["egg", "dot", "feather", "dot", "star", "dot", "leaf", "dot"]
-    for i, kind in enumerate(kinds):
-        cx = 32 + 64 * i
-        lines |= glyph(PX - cx, PY - 32, kind, 30 if kind != "dot" else 22)
-    # ink outline in pixel units: grow() measures in normalized x units -> 2 px = 2 / 256
-    ink = ndimage.distance_transform_edt(~lines) <= 2.0 * c.ss
+CRACKS = [
+    # stage 1: one short zigzag across the upper shell
+    [[(-0.3, -0.18), (-0.18, -0.26), (-0.06, -0.14), (0.06, -0.24), (0.2, -0.15)]],
+    # stage 2: longer + a branch running up
+    [[(-0.58, -0.08), (-0.42, -0.2), (-0.3, -0.18), (-0.18, -0.26), (-0.06, -0.14), (0.06, -0.24), (0.2, -0.15),
+      (0.34, -0.26), (0.5, -0.12)],
+     [(0.06, -0.24), (0.1, -0.38), (0.02, -0.5)]],
+    # stage 3: right round the shell + three branches
+    [[(-0.86, 0.0), (-0.72, -0.12), (-0.58, -0.08), (-0.42, -0.2), (-0.3, -0.18), (-0.18, -0.26), (-0.06, -0.14),
+      (0.06, -0.24), (0.2, -0.15), (0.34, -0.26), (0.5, -0.12), (0.64, -0.2), (0.86, -0.04)],
+     [(0.06, -0.24), (0.1, -0.38), (0.02, -0.5), (0.08, -0.62)],
+     [(-0.42, -0.2), (-0.46, -0.02), (-0.36, 0.1)],
+     [(0.5, -0.12), (0.46, 0.04), (0.56, 0.16)]],
+]
+
+
+def tex_crack(stage):
+    """egg crack decal (stage 1-3, cumulative): ink zigzags with a white core line that glows the rarity colour
+    (Decal.Color3 multiplies: ink stays ink, the core takes the tint)"""
+    c = Canvas(512, ss=2)
+    ink = np.zeros(c.X.shape, bool)
+    core = np.zeros(c.X.shape, bool)
+    for line in CRACKS[stage - 1]:
+        for (ax, ay), (bx, by) in zip(line, line[1:]):
+            ex, ey = bx - ax, by - ay
+            t = np.clip(((c.X - ax) * ex + (c.Y - ay) * ey) / (ex * ex + ey * ey), 0, 1)
+            d = np.hypot(c.X - (ax + t * ex), c.Y - (ay + t * ey))
+            ink |= d <= 0.03
+            core |= d <= 0.011
     c.paint(ink, INK)
-    c.paint(lines, g(255))
+    c.paint(core, g(255))
     return c.image()
 
 
 # ------------------------------------------------------------------------------------------------ main
+TEXTURES = [
+    ("smoke_puff", tex_smoke, dict(layout="Grid4x4", mode="OneShot", tint="baked-neutral", use="PIL toon puff (fallback; the Blender flipbooks replace it)")),
+    ("sparkle", tex_sparkle, dict(layout="Grid4x4", mode="OneShot", tint="tint", use="inked 4-point twinkle: ambient trickle in every effect")),
+    ("shell_shards", tex_shards, dict(layout="Grid2x2", mode="Loop", tint="tint", use="eggshell pieces tumbling out of the hatch")),
+    ("confetti", tex_confetti, dict(layout="Grid4x4", mode="Loop", tint="tint", use="paper confetti (reveal, unlock shower)")),
+    ("leaf", tex_leaf, dict(layout="Grid4x4", mode="Loop", tint="baked", use="tumbling leaf: unlock coast bursts")),
+    ("star", tex_star, dict(layout="None", tint="tint", use="inked star bits")),
+    ("burst_lines", tex_burst_lines, dict(layout="None", tint="tint", use="inked impact needles on the crack frame (QA: keep this look)")),
+    ("rune_circle", tex_rune_circle, dict(layout="None", tint="tint", use="magic circle (hatch Legendary+, island unlock)")),
+    ("flash_star", tex_flash_star, dict(layout="None", tint="tint", use="HERO flash: white core + tinted rim, billboard, additive")),
+    ("swirl_arc", tex_swirl_arc, dict(layout="Grid4x4", mode="OneShot", tint="tint", use="crescent swirl sweep (particle fallback of the mesh slash)")),
+    ("ink_swirl", tex_ink_swirl, dict(layout="Grid4x4", mode="OneShot", tint="baked-ink", use="dark ink accent strokes behind the bright swirls")),
+    ("feather", tex_feather, dict(layout="Grid4x4", mode="Loop", tint="tint", use="tumbling feather: reveal, level-up, unlock")),
+    ("speed_line", tex_speed_line, dict(layout="None", tint="tint", use="speed lines + ember streaks (VelocityParallel + Squash)")),
+    ("ring_wave", tex_ring_wave, dict(layout="None", tint="tint", use="flat ground wave: uneven crescent band, white leading edge")),
+    ("ring_snap", tex_ring_snap, dict(layout="None", tint="tint", use="collect pop ring snap (billboard)")),
+    ("glow_step", tex_glow_step, dict(layout="None", tint="tint", use="3-band cel glow (wind-up, halo, under the feet)")),
+    ("rays_fan", tex_rays_fan, dict(layout="Grid4x4", mode="OneShot", tint="tint", use="light-ray fan behind the reveal, dies by thinning")),
+    ("beam_core", tex_beam_core, dict(layout="Beam", tint="tint", use="Beam strip for pillars / the level-up column")),
+    ("crack_1", lambda: tex_crack(1), dict(layout="Decal", tint="tint", use="egg crack decal, stage 1")),
+    ("crack_2", lambda: tex_crack(2), dict(layout="Decal", tint="tint", use="egg crack decal, stage 2")),
+    ("crack_3", lambda: tex_crack(3), dict(layout="Decal", tint="tint", use="egg crack decal, stage 3")),
+]
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
+    only = None
+    for a in sys.argv[1:]:
+        if a.startswith("--only="):
+            only = set(a[7:].split(","))
     print("writing", OUT)
-    reg("smoke_puff", tex_smoke(), layout="Grid4x4", mode="OneShot", tint="baked-neutral",
-        use="toon smoke puff: hatch crack ring, island-unlock dust, pet reveal poof")
-    reg("impact_star", tex_impact(), layout="Grid4x4", mode="OneShot", tint="tint",
-        use="star-burst / impact spike: hatch crack, level-up ding, collect (golden)")
-    reg("sparkle", tex_sparkle(), layout="Grid4x4", mode="OneShot", tint="tint",
-        use="sparkle twinkle: every effect")
-    reg("shell_shards", tex_shards(), layout="Grid2x2", mode="Loop", tint="tint",
-        use="eggshell shards tumbling out of the hatch (tint = egg colour)")
-    reg("confetti", tex_confetti(), layout="Grid4x4", mode="Loop", tint="tint",
-        use="paper confetti tumbling: hatch (Uncommon+), island unlock shower")
-    reg("leaf", tex_leaf(), layout="Grid4x4", mode="Loop", tint="baked",
-        use="tumbling leaf: island-unlock edge burst")
-    reg("ring_shock", tex_ring_shock(), layout="None", tint="tint",
-        use="flat ground shockwave: hatch crack, level-up, golden collect")
-    reg("ring_thin", tex_ring_thin(), layout="None", tint="tint",
-        use="thin pop ring: collect pop, level-up echo ring, hatch secondary ring")
-    reg("glow_disc", tex_glow(), layout="None", tint="tint",
-        use="stepped glow: egg glow build, flashes, pop cores (additive)")
-    reg("light_rays", tex_rays(), layout="None", tint="tint",
-        use="light-ray fan behind the hatch reveal (additive, slow spin)")
-    reg("star", tex_star(), layout="None", tint="tint",
-        use="little star bits: collect, hatch, level-up")
-    reg("burst_lines", tex_burst_lines(), layout="None", tint="tint",
-        use="impact lines on the hatch crack frame (Rare+)")
-    reg("rune_circle", tex_rune_circle(), layout="None", tint="tint",
-        use="magic circle under a Legendary/Mythic hatch (flat, spinning)")
-    reg("beam_streak", tex_beam_streak(), layout="Beam", tint="tint",
-        use="Beam texture: light pillars / level-up column (U along the beam, scroll with TextureSpeed)")
-    reg("beam_runes", tex_beam_runes(), layout="Beam", tint="tint",
-        use="Beam texture: rune band on the island-unlock magic circle rings (TextureMode Stretch)")
-    man = {k: m for k, m in TEX}
-    with open(os.path.join(OUT, "manifest.json"), "w") as fh:
-        json.dump(man, fh, indent=1)
+    mp = os.path.join(OUT, "manifest.json")
+    old = json.load(open(mp)) if os.path.exists(mp) else {}
+    for key, fn, meta in TEXTURES:
+        if only and key not in only:
+            if key in old:
+                TEX.append((key, old[key]))
+            continue
+        reg(key, fn(), **meta)
+    # Blender flipbooks (tools/vfx/gen_toon_flipbooks.py) register themselves in the manifest too: keep them
+    have = {k for k, _ in TEX}
+    for key, meta in old.items():
+        if meta.get("blender") and key not in have:
+            TEX.append((key, meta))
+    with open(mp, "w") as fh:
+        json.dump({k: m for k, m in TEX}, fh, indent=1)
     if "--preview" in sys.argv:
         preview()
 
@@ -660,6 +795,8 @@ def preview():
         im = img.resize((max(1, int(w * sc)), max(1, int(h * sc))), Image.LANCZOS)
         arr = np.asarray(im).astype(np.float32) / 255
         tints = TINTS.get(meta["tint"], [(255, 255, 255)] * 4)
+        if not os.path.exists(os.path.join(OUT, key + ".png")):
+            continue
         row = Image.new("RGB", (tile * 4, tile), (0, 0, 0))
         for i, bg in enumerate(BGS):
             t = np.asarray(tints[i], np.float32) / 255

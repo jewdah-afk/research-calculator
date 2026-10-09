@@ -25,7 +25,9 @@ local Vfx = {}
 Vfx.Layers = Layers
 Vfx.Palette = Palette
 Vfx.CamFx = CamFx
-Vfx.MAX_ACTIVE = 24
+Vfx.MAX_ACTIVE = 48
+-- size multiplier = clamp(camera distance / 290, 1, 2.4) (QA 2026-10-09: an Epic hatch reads right at zoom 7)
+Vfx.VIEW_REF, Vfx.VIEW_MAX = 290, 2.4
 
 local defs = {}
 local active = {}
@@ -108,6 +110,7 @@ function Fx:emitter(spec, ov)
 	if e then return e end
 	e = Layers.getEmitter()
 	if not e then return nil end
+	e.noHold = spec.noHold == true -- hero flashes keep playing through the hit-stop
 	if not Layers.applyEmitter(e, spec, self.colorOf, (ov and ov.scale or 1) * (spec.noScale and 1 or self.scale), ov) then
 		Layers.putEmitter(e)
 		self.emitters[key] = false
@@ -126,6 +129,16 @@ function Fx:emit(spec, where: any, n: number, ov)
 	pe:Emit(n)
 	self:extend(self.t + (ov and ov.life and (type(ov.life) == "table" and ov.life[2] or ov.life) or Layers.maxLife(spec)) + 0.05)
 	return e
+end
+
+-- emit 1 particle along each of n random directions on a sphere (biased up by `lift`): a radial burst. This is the
+-- Sphere-surface-outward shape without a shape Part (an invisible Part would hide the Occluded ink Highlights).
+function Fx:emitSphere(spec, centre: Vector3, n: number, lift: number?, ov)
+	for _ = 1, n do
+		local d = Vector3.new(math.random() * 2 - 1, math.random() * 2 - 1 + (lift or 0), math.random() * 2 - 1)
+		if d.Magnitude < 1e-3 then d = Vector3.yAxis end
+		self:emit(spec, Layers.upTo(centre, d), 1, ov)
+	end
 end
 
 -- emit 1 particle along each of n directions spread round a horizontal circle (tilted up by `up`): a radial ring
@@ -162,93 +175,6 @@ function Fx:beam(spec, p0: Vector3, p1: Vector3)
 		if q1 then a1.WorldCFrame = CFrame.new(q1) end
 		if w0 then b.Width0 = w0; b.Width1 = w1 or w0 end
 	end
-	return h
-end
-
--- a flat circle drawn by two curved beams (cubic Bezier halves, handles 4/3 r: < 2 % radius error).
--- `layers` = list of beam specs drawn on the same circle (e.g. an ink twin under a bright line); each spec may give
--- width (studs). Returns a handle: set(centre, radius, widthScale?), trace(p 0..1), alpha(t 0..1), or nil.
-function Fx:ring(layers, centre: Vector3, radius: number)
-	local A, B = Layers.getAtt(), Layers.getAtt()
-	if not (A and B) then
-		if A then Layers.putAtt(A) end
-		if B then Layers.putAtt(B) end
-		return nil
-	end
-	table.insert(self.atts, A)
-	table.insert(self.atts, B)
-	local h = { layers = {}, A = A, B = B, centre = centre, radius = radius, ws = 1, p = 1, a = 0 }
-	for _, spec in layers do
-		local b1, b2 = Layers.getBeam(), Layers.getBeam()
-		if not (b1 and b2) then
-			if b1 then Layers.putBeam(b1) end
-			if b2 then Layers.putBeam(b2) end
-			continue
-		end
-		local ok1 = Layers.applyBeam(b1, spec, self.colorOf)
-		local ok2 = ok1 and Layers.applyBeam(b2, spec, self.colorOf)
-		table.insert(self.beams, b1)
-		table.insert(self.beams, b2)
-		if not (ok1 and ok2) then
-			b1.Enabled = false
-			b2.Enabled = false
-			continue
-		end
-		b1.FaceCamera = false
-		b2.FaceCamera = false
-		b1.Segments = spec.segments or 48
-		b2.Segments = spec.segments or 48
-		b1.Attachment0, b1.Attachment1 = A, B
-		b2.Attachment0, b2.Attachment1 = B, A
-		table.insert(h.layers, { b1 = b1, b2 = b2, spec = spec, base = spec.alpha or 0 })
-	end
-	local function widths()
-		for _, L in h.layers do
-			local w = (L.spec.width or 1) * h.ws
-			L.b1.Width0, L.b1.Width1, L.b2.Width0, L.b2.Width1 = w, w, w, w
-			if L.spec.texRepeat then -- Stretch: whole repeats per half ring keep the strip seamless and unstretched
-				local n = math.max(1, math.floor(math.pi * h.radius / (w * L.spec.texRepeat) + 0.5))
-				L.b1.TextureLength, L.b2.TextureLength = n, n
-			end
-		end
-	end
-	local function trans()
-		for _, L in h.layers do
-			local base = L.base + (1 - L.base) * h.a
-			L.b1.Transparency = Layers.trace(math.clamp(h.p * 2, 0, 1), base)
-			L.b2.Transparency = Layers.trace(math.clamp(h.p * 2 - 1, 0, 1), base)
-		end
-	end
-	function h.set(c: Vector3?, r: number?, ws: number?)
-		h.centre = c or h.centre
-		h.radius = math.max(0.05, r or h.radius)
-		h.ws = ws or h.ws
-		local k = h.radius * 4 / 3
-		A.WorldCFrame = Layers.ringFrame(h.centre - Vector3.new(h.radius, 0, 0))
-		B.WorldCFrame = Layers.ringFrame(h.centre + Vector3.new(h.radius, 0, 0))
-		for _, L in h.layers do
-			L.b1.CurveSize0, L.b1.CurveSize1 = k, -k
-			L.b2.CurveSize0, L.b2.CurveSize1 = -k, k
-		end
-		widths()
-	end
-	-- draw-in progress (0 = nothing, 1 = full circle), starting at -X, round through +Z (towards the camera)
-	function h.trace(p: number)
-		h.p = p
-		trans()
-	end
-	-- extra fade over the layers' own alpha (0 = as authored, 1 = gone)
-	function h.alpha(a: number)
-		h.a = math.clamp(a, 0, 1)
-		trans()
-	end
-	-- point on the circle at draw progress u (0..1), for a spark riding the leading edge
-	function h.point(u: number): Vector3
-		local th = math.pi - u * 2 * math.pi
-		return h.centre + Vector3.new(math.cos(th) * h.radius, 0, math.sin(th) * h.radius)
-	end
-	h.set(centre, radius, 1)
-	h.trace(1)
 	return h
 end
 
@@ -300,7 +226,7 @@ function Fx:hitstop(d: number)
 	if d <= 0 then return end
 	self.hold = math.max(self.hold, d)
 	for _, e in self.emitters do
-		if e then e.pe.TimeScale = 0 end
+		if e and not e.noHold then e.pe.TimeScale = 0 end
 	end
 end
 
@@ -308,6 +234,22 @@ function Fx:shake(amp: number, dur: number?) CamFx.shake(amp, dur) end
 function Fx:flash(color: any, strength: number, dur: number?) CamFx.flash(self:col(color), strength, dur) end
 function Fx:push(target: Vector3, amount: number, inT: number, hold: number, outT: number, pull: number?)
 	CamFx.push(target, amount, inT, hold, outT, pull)
+end
+
+-- push-in that frames `target` with about `halfH` studs above and below it at the current zoom; returns the FOV
+-- fraction used (clamped to minA..maxA). Effects call it before sizing so fx.view can follow the pushed framing.
+function Fx:frame(target: Vector3, halfH: number, minA: number, maxA: number, inT: number, hold: number, outT: number, pull: number?): number
+	local fov = CamFx.baseFov or 11
+	local d = math.max(1, self.camDist)
+	local need = 2 * math.deg(math.atan(halfH / d))
+	local amount = math.clamp(1 - need / fov, minA, maxA)
+	CamFx.push(target, amount, inT, hold, outT, pull or 0.8)
+	return amount
+end
+
+-- the camera-distance size multiplier for a given distance (Vfx.VIEW_REF / VIEW_MAX)
+function Fx:viewFor(dist: number): number
+	return math.clamp(dist / Vfx.VIEW_REF, 1, Vfx.VIEW_MAX)
 end
 
 -- ---------------------------------------------------------------- scheduler
@@ -434,6 +376,10 @@ function Vfx.play(name: string, where: any, options: { [string]: any }?)
 		cf = toCFrame(where),
 	}, Fx)
 	if opts.rarity then fx.tier = Palette.tier(opts.rarity) end
+	-- readable at any zoom: hero sizes follow the camera distance (effects may re-derive it after a push-in)
+	local cam = workspace.CurrentCamera
+	fx.camDist = if cam then (cam.CFrame.Position - fx.cf.Position).Magnitude else Vfx.VIEW_REF
+	fx.view = opts.view or fx:viewFor(fx.camDist)
 	fx.colorOf = function(role) return Palette.color(fx.pal, role) end -- effects may swap fx.pal at the start of run
 	local f = opts.follow
 	if typeof(f) == "Instance" then

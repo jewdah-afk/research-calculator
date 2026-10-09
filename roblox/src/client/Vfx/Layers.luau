@@ -23,7 +23,7 @@ local ORIENT = {
 }
 
 -- caps (live, across all effects); a layer that cannot get a piece is skipped, never errors
-Layers.MAX = { emit = 160, att = 96, beam = 96, light = 10, ball = 10, trail = 12 }
+Layers.MAX = { emit = 320, att = 128, beam = 64, light = 16, ball = 12, trail = 24 }
 local live = { emit = 0, att = 0, beam = 0, light = 0, ball = 0, trail = 0 }
 local free = { emit = {}, att = {}, beam = {}, light = {}, ball = {}, trail = {} }
 
@@ -89,6 +89,35 @@ function Layers.curve(v0: number, v1: number, style: string?, n: number?): Numbe
 		table.insert(k, NumberSequenceKeypoint.new(t, math.max(0, v0 + (v1 - v0) * f(t))))
 	end
 	return NumberSequence.new(k)
+end
+
+-- multi-key pop: 0 -> overshoot -> peak by inT, hold to holdT, then shrink (accelerating) to endV at 1.
+-- Never linear: the in-phase is a back ease, the out-phase an ease-in, baked into <= 11 keys.
+function Layers.pop(peak: number, inT: number?, holdT: number?, endV: number?, start: number?): NumberSequence
+	local i = math.clamp(inT or 0.2, 0.02, 0.9)
+	local h = math.clamp(holdT or 0.6, i + 0.01, 0.98)
+	local e = endV or 0
+	local s0 = start or 0
+	local k = {}
+	for n = 0, 4 do
+		local t = n / 4
+		table.insert(k, NumberSequenceKeypoint.new(t * i, math.max(0, s0 + (peak - s0) * EASE.back(t))))
+	end
+	table.insert(k, NumberSequenceKeypoint.new(h, peak))
+	for n = 1, 5 do
+		local t = n / 5
+		table.insert(k, NumberSequenceKeypoint.new(h + (1 - h) * t, math.max(0, peak + (e - peak) * EASE["in"](t))))
+	end
+	return NumberSequence.new(k)
+end
+
+-- give every keypoint a random +- envelope (a fraction of its value): per-particle size variety
+function Layers.vary(s: NumberSequence, frac: number): NumberSequence
+	local out = table.create(#s.Keypoints)
+	for _, kp in s.Keypoints do
+		table.insert(out, NumberSequenceKeypoint.new(kp.Time, kp.Value, math.abs(kp.Value) * frac))
+	end
+	return NumberSequence.new(out)
 end
 
 -- cel "stepped fade": fully visible, then hard steps (no smooth ramp) e.g. steps({0.6, 0.45}, {0.8, 1})
@@ -232,10 +261,12 @@ function Layers.applyEmitter(e, spec, colorOf, sc: number?, ov): boolean
 	pe.Transparency = asSeq(ov.trans or spec.trans or 0)
 	pe.Lifetime = asRange(ov.life or spec.life or 1)
 	pe.Squash = asSeq(spec.squash or 0)
-	pe.Rotation = asRange(spec.rot or { 0, 360 })
-	pe.RotSpeed = asRange(spec.rotSpeed or 0)
+	pe.Rotation = asRange(ov.rot or spec.rot or { 0, 360 })
+	pe.RotSpeed = asRange(ov.rotSpeed or spec.rotSpeed or 0)
 	pe.Drag = spec.drag or 0
-	pe.Acceleration = ov.accel or spec.accel or Vector3.zero
+	-- motion scales with size (a 2x burst flies 2x as far) unless the spec pins it
+	local ms = if spec.fixedSpeed then 1 else sc
+	pe.Acceleration = (ov.accel or spec.accel or Vector3.zero) * ms
 	pe.EmissionDirection = spec.dir or Enum.NormalId.Top
 	if orient == "flat" then
 		pe.Speed = NumberRange.new(0.0003)
@@ -244,7 +275,7 @@ function Layers.applyEmitter(e, spec, colorOf, sc: number?, ov): boolean
 		pe.Acceleration = Vector3.zero
 		pe.Drag = 0
 	else
-		pe.Speed = asRange(ov.speed or spec.speed or 0, if spec.speedScales then sc else 1)
+		pe.Speed = asRange(ov.speed or spec.speed or 0, ms)
 		local sp = ov.spread or spec.spread or 0
 		pe.SpreadAngle = if type(sp) == "table" then Vector2.new(sp[1], sp[2]) else Vector2.new(sp, sp)
 	end
@@ -403,24 +434,6 @@ function Layers.upTo(pos: Vector3, dir: Vector3): CFrame
 	local ref = if math.abs(dir.Y) < 0.95 then Vector3.yAxis else Vector3.xAxis
 	local right = ref:Cross(dir).Unit
 	return CFrame.fromMatrix(pos, right, dir)
-end
-
--- a flat attachment frame for beam rings: Axis (X) = +Z (tangent at the ring's -X / +X points), up = world up
-function Layers.ringFrame(pos: Vector3): CFrame
-	return CFrame.fromMatrix(pos, Vector3.zAxis, Vector3.yAxis)
-end
-
--- NumberSequence that shows a beam from its start to progress p (0..1), hidden after: draws a line "in"
-function Layers.trace(p: number, base: number?): NumberSequence
-	local b: number = base or 0
-	if p <= 0.002 then return NumberSequence.new(1) end
-	if p >= 0.996 then return NumberSequence.new(b) end
-	return NumberSequence.new({
-		NumberSequenceKeypoint.new(0, b),
-		NumberSequenceKeypoint.new(p, b),
-		NumberSequenceKeypoint.new(p + 0.003, 1),
-		NumberSequenceKeypoint.new(1, 1),
-	})
 end
 
 function Layers.stats()

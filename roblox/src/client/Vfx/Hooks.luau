@@ -6,7 +6,9 @@
 --   collect_pop    in Main's Collect handler (it knows the egg position); egg_hatch has no game event yet (no hatch
 --                  screen): call Vfx.play("egg_hatch", groundPos, { rarity = ..., egg = model, pet = model }).
 -- Dev preview (client): _G.__vfx(name, position?, opts?)  |  _G.__vfx("egg_hatch", "Mythic")  |  _G.__vfx("hatch_all")
---   or from the server command bar: PlayerGui:SetAttribute("PeckwoodVfx", "egg_hatch:Mythic#1") (nonce re-fires).
+--   or from the server command bar: PlayerGui:SetAttribute("PeckwoodVfx", "egg_hatch:Mythic#1") (nonce re-fires),
+--   at a world spot (frame strips): PlayerGui:SetAttribute("PeckwoodVfxAt", "egg_hatch:Rare:12,-4#1") (x,z or x,y,z;
+--   y defaults to the ground there).
 local Players = game:GetService("Players")
 local RS = game:GetService("ReplicatedStorage")
 local Shared = RS:WaitForChild("Peckwood")
@@ -34,13 +36,14 @@ Hooks.hen = hen
 function Hooks.unlockInfo(raw)
 	local top = raw.top or 0
 	local centre = Vector3.new(raw.centre.X, top, raw.centre.Z)
-	local edge, radius = {}, 8
+	local edge, tiles, radius = {}, {}, 8
 	for _, x in raw.items do
 		if not (x.fill and x.at) then continue end
 		local i = math.floor(x.at.X / S + Map.COLS / 2)
 		local j = math.floor(x.at.Z / S + Map.ROWS / 2)
 		local pos = Vector3.new(x.at.X, top, x.at.Z)
 		radius = math.max(radius, (Vector3.new(pos.X - centre.X, 0, pos.Z - centre.Z)).Magnitude)
+		table.insert(tiles, { pos = pos, at = x.delay })
 		local coast = false
 		for _, o in { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } } do
 			if World.rawTile(i + o[1], j + o[2]) == 0 then coast = true; break end
@@ -59,7 +62,7 @@ function Hooks.unlockInfo(raw)
 		centre = centre, radius = radius, landing = raw.landing or centre,
 		waveStart = raw.waveStart or 0, waveEnd = raw.waveEnd or 2, step = step,
 		maxD = math.max(1, ((raw.waveEnd or 2) - 0.8 - (raw.waveStart or 0)) / step),
-		edge = edge, dust = dust,
+		edge = edge, tiles = tiles, dust = dust,
 	}
 end
 
@@ -150,7 +153,6 @@ function Hooks.start(Vfx, remotes: Instance?)
 		local base = if typeof(pos) == "Vector3" then pos elseif typeof(pos) == "CFrame" then pos.Position else hen()
 		base = base or Vector3.zero
 		if name == "egg_hatch" then
-			if opts.preview == nil then opts.preview = true end
 			opts.rarity = opts.rarity or "Legendary"
 			if pos == nil then base += Vector3.new(0, 0, 6) end -- just in front of the hen (towards the camera)
 		elseif name == "collect_pop" then
@@ -163,7 +165,37 @@ function Hooks.start(Vfx, remotes: Instance?)
 		return Vfx.play(name, base, opts)
 	end
 	_G.__vfx = preview
+	-- ground height at a world x/z (same terrace + relief the server and the hen use)
+	local function groundAt(x: number, z: number): number
+		local ti, tj = x / S + Map.COLS / 2, z / S + Map.ROWS / 2
+		local ok, y = pcall(function() return World.base(math.floor(ti), math.floor(tj)) + World.relief(ti, tj) end)
+		return if ok and type(y) == "number" then y else 0
+	end
+	Hooks.groundAt = groundAt
 	local gui = plr:WaitForChild("PlayerGui")
+	-- "name[:arg]:x,z[#n]" or "name[:arg]:x,y,z[#n]": play at that world spot (QA frame strips)
+	gui:GetAttributeChangedSignal("PeckwoodVfxAt"):Connect(function()
+		local v = gui:GetAttribute("PeckwoodVfxAt")
+		if typeof(v) ~= "string" then return end
+		local body = string.match(v, "^([^#]+)") or v
+		local parts = string.split(body, ":")
+		local name = parts[1]
+		local arg, xyz = nil, nil
+		if #parts >= 3 then arg, xyz = parts[2], parts[3] elseif #parts == 2 then xyz = parts[2] end
+		if not (name and xyz) then return end
+		local nums = {}
+		for n in string.gmatch(xyz, "[-%d%.]+") do table.insert(nums, tonumber(n)) end
+		if #nums < 2 then return end
+		local x, z = nums[1], nums[#nums]
+		local y = if #nums >= 3 then nums[2] else groundAt(x, z)
+		local pos = Vector3.new(x, y, z)
+		local opts = {}
+		if arg and arg ~= "" then
+			if arg == "golden" then opts.golden = true else opts.rarity = arg end
+		end
+		if name == "collect_pop" then pos += Vector3.new(0, 2, 0); opts.groundY = y end
+		preview(name, pos, opts)
+	end)
 	gui:GetAttributeChangedSignal("PeckwoodVfx"):Connect(function()
 		local v = gui:GetAttribute("PeckwoodVfx")
 		if typeof(v) ~= "string" then return end

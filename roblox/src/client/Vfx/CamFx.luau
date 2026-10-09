@@ -75,7 +75,9 @@ local function ensureCC(): ColorCorrectionEffect
 end
 
 -- Main.client.luau: cam.CFrame, cam.FieldOfView = Vfx.camera(cf, FOV, dt)
+CamFx.baseFov = 11 -- the game's FOV before any push (written by apply every frame)
 function CamFx.apply(cf: CFrame, fov: number, dt: number): (CFrame, number)
+	CamFx.baseFov = fov
 	if #shakes == 0 and not push and not flash then return cf, fov end
 	-- flash (ColorCorrection pulse: tint + brightness, stepped decay so it reads as a cel "flash frame")
 	if flash then

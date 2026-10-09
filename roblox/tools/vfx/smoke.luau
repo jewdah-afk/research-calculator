@@ -74,7 +74,17 @@ roblox.implementMethod("Instance", "WaitForChild", function(self, name)
 	return c
 end)
 roblox.implementMethod("Instance", "GetPropertyChangedSignal", function() return signal() end)
-roblox.implementMethod("Instance", "GetAttributeChangedSignal", function() return signal() end)
+local attrSignals = {}
+roblox.implementMethod("Instance", "GetAttributeChangedSignal", function(self, name)
+	local key = tostring(self) .. "|" .. name
+	attrSignals[key] = attrSignals[key] or signal()
+	return attrSignals[key]
+end)
+local function fireAttr(inst, name, value)
+	inst:SetAttribute(name, value)
+	local sg = attrSignals[tostring(inst) .. "|" .. name]
+	if sg then sg:Fire() end
+end
 
 local emits = { total = 0 }
 roblox.implementMethod("ParticleEmitter", "Emit", function(self, n)
@@ -144,6 +154,9 @@ local ContentProvider = { PreloadAsync = function() end }
 local workspaceI = place:GetService("Workspace")
 local cam = Instance.new("Camera")
 cam.Parent = workspaceI
+-- the game camera at ZOOM_PLAY (distance ~374 studs, pitch 52) so the distance scaling + framing push-in run
+cam.CFrame = roblox.CFrame.lookAt(roblox.Vector3.new(0, 374 * math.sin(math.rad(52)), 374 * math.cos(math.rad(52))), roblox.Vector3.zero)
+pcall(function() workspaceI.CurrentCamera = cam end)
 local lighting = place:GetService("Lighting")
 local rsI = place:GetService("ReplicatedStorage")
 local playerGui = Instance.new("Folder")
@@ -246,8 +259,34 @@ run("collect_pop x14 burst (cap 10)", function()
 	return h
 end)
 for _, r in Vfx.Palette.ORDER do
-	run("egg_hatch " .. r .. " (preview)", function() return Vfx.play("egg_hatch", at, { rarity = r, preview = true }) end)
+	run("egg_hatch " .. r .. " (stand-ins)", function() return Vfx.play("egg_hatch", at, { rarity = r }) end)
 end
+do
+	local Models = load(rsI:FindFirstChild("Peckwood"):FindFirstChild("Models"))
+	local egg = Models.kernel(false)
+	egg.Parent = workspaceI
+	local pet = Models.bird()
+	pet.Parent = workspaceI
+	local cracked, revealed = false, false
+	run("egg_hatch Epic, caller egg + pet", function()
+		return Vfx.play("egg_hatch", at, { rarity = "Epic", egg = egg, pet = pet,
+			onCrack = function() cracked = true end, onReveal = function() revealed = true end })
+	end)
+	if not (cracked and revealed) then problem("caller egg: onCrack/onReveal not called") end
+	local leftover = 0
+	for _, d in egg:GetDescendants() do if d:IsA("Decal") then leftover += 1 end end
+	if leftover > 0 then problem("crack decals left on the caller egg: " .. leftover) end
+	egg:Destroy()
+	pet:Destroy()
+end
+run("egg_hatch x8 overlapping (cap 8)", function()
+	local n = 0
+	for i = 1, 8 do
+		if Vfx.play("egg_hatch", at + roblox.Vector3.new(i * 6, 0, 0), { rarity = Vfx.Palette.ORDER[(i - 1) % 6 + 1] }) then n += 1 end
+	end
+	if n < 8 then problem("only " .. n .. " of 8 hatches started") end
+	return n > 0
+end)
 run("egg_hatch Mythic, no egg/pet", function() return Vfx.play("egg_hatch", at, { rarity = "Mythic" }) end)
 run("level_up (follow)", function() return Vfx.play("level_up", at, { follow = function() return birdPos end }) end)
 run("level_up companion colour", function() return Vfx.play("level_up", at, { color = "6fe0ff", scale = 1.3 }) end)
@@ -272,6 +311,18 @@ run("dev preview _G.__vfx egg_hatch Rare", function() return G.__vfx("egg_hatch"
 run("dev preview _G.__vfx collect_pop", function() return G.__vfx("collect_pop") end)
 run("dev preview _G.__vfx level_up", function() return G.__vfx("level_up") end)
 run("dev preview _G.__vfx island_unlock", function() return G.__vfx("island_unlock") end)
+run("QA attribute PeckwoodVfxAt egg_hatch:Rare:12,-4", function()
+	fireAttr(playerGui, "PeckwoodVfxAt", "egg_hatch:Rare:12,-4#1")
+	return Vfx.activeCount() > 0
+end)
+run("QA attribute PeckwoodVfxAt collect_pop:golden:3,0,5", function()
+	fireAttr(playerGui, "PeckwoodVfxAt", "collect_pop:golden:3,0,5#2")
+	return Vfx.activeCount() > 0
+end)
+run("QA attribute PeckwoodVfxAt level_up:-6,2", function()
+	fireAttr(playerGui, "PeckwoodVfxAt", "level_up:-6,2#3")
+	return Vfx.activeCount() > 0
+end)
 run("camera shake + flash + push", function()
 	Vfx.shake(1, 0.4); Vfx.flash(roblox.Color3.new(1, 0.9, 0.5), 0.3, 0.5); Vfx.push(roblox.Vector3.zero, 0.15, 0.3, 0.2, 0.4)
 	return true
@@ -281,7 +332,7 @@ print("== no textures uploaded (graceful degrade) ==")
 setIds("")
 print("can collect_pop:", Vfx.can("collect_pop"), "(Main falls back to the cube burst)")
 run("collect_pop (not forced -> nil)", function() return Vfx.play("collect_pop", at, {}) end)
-run("egg_hatch Mythic forced, no textures", function() return Vfx.play("egg_hatch", at, { rarity = "Mythic", preview = true, force = true }) end)
+run("egg_hatch Mythic forced, no textures", function() return Vfx.play("egg_hatch", at, { rarity = "Mythic", force = true }) end)
 run("level_up forced, no textures", function() return Vfx.play("level_up", at, { force = true }) end)
 run("island_unlock, no textures", function() return Vfx.play("island_unlock", at, {}) end)
 

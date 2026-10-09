@@ -9,6 +9,7 @@ local Palette = {}
 
 local INK = Color3.fromHex("16181e")
 local WHITE = Color3.new(1, 1, 1)
+local WARM = Color3.fromHex("ffe7a8")
 
 Palette.ORDER = { "Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythic" }
 
@@ -32,6 +33,7 @@ local cache = {}
 local function build(raw)
 	local p = { tier = raw.tier, white = WHITE, ink = INK }
 	for _, role in { "hi", "mid", "base", "deep", "accent" } do p[role] = Color3.fromHex(raw[role]) end
+	p.warm = p.hi:Lerp(WARM, 0.55) -- light rays are always a little warm
 	if raw.rainbow then
 		p.rainbow = {}
 		for i, h in raw.rainbow do p.rainbow[i] = Color3.fromHex(h) end
@@ -50,6 +52,7 @@ local function fromColor(c: Color3)
 		base = c,
 		deep = Color3.fromHSV(h, math.min(1, s * 1.1), v * 0.62),
 		accent = WHITE,
+		warm = WHITE:Lerp(c, 0.22):Lerp(WARM, 0.55),
 	}
 end
 
