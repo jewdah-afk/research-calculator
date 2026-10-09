@@ -286,7 +286,7 @@ local function buildProp(def, kind, cx, cz, parent, seed)
 		local g = def.glow
 		local lamp = brickPart(m, Vector3.new(ox + g[1] * L, base + g[3] * PLATE, oz + g[2] * L), Vector3.new(g[4] * L, g[6] * PLATE, g[5] * L), hx("5a5048"), Enum.Material.Neon)
 		lamp.Name = "Glow"; lamp.CastShadow = false
-		local pl = Instance.new("PointLight"); pl.Color = hx("ffc56b"); pl.Range = 16; pl.Brightness = 0; pl.Shadows = false; pl.Parent = lamp
+		local pl = Instance.new("PointLight"); pl.Color = hx("ffc56b"); pl.Range = 9; pl.Brightness = 0; pl.Shadows = false; pl.Parent = lamp
 		info.glow = lamp; info.light = pl
 	end
 	m.WorldPivot = CFrame.new(info.x, base, info.z)
@@ -694,7 +694,7 @@ local function buildIslandProp(isl, p, parent)
 		if q[12] == 2 then b.Material = Enum.Material.SmoothPlastic; table.insert(islandGlows, b) end   -- Neon only at night
 		if q[12] == 3 then
 			b.Color = hx("5a5048")
-			local pl = Instance.new("PointLight"); pl.Color = hx("ffc56b"); pl.Range = 16; pl.Brightness = 0; pl.Shadows = false; pl.Parent = b
+			local pl = Instance.new("PointLight"); pl.Color = hx("ffc56b"); pl.Range = 9; pl.Brightness = 0; pl.Shadows = false; pl.Parent = b
 			table.insert(islandLamps, { glow = b, light = pl })
 		end
 		if q[13] == 1 then
@@ -863,30 +863,50 @@ function IslandView.unlockIsland(isl, animated, onDone)
 		startI, startJ = src.landB[1], src.landB[2]
 		landing = Vector3.new(sx(startI + 0.5), 0, sz(startJ + 0.5))
 	end
-	-- BFS distance over this island's land from the landing tile
+	-- one wave like the World Guide: every fresh tile (the area + the Isle regions opening with it) rises out of the
+	-- sea by BFS distance from the land that was already open; hills come up later, higher levels last
+	local freshRecs = { { rec = rec, isl = isl } }
+	for _, h in highs do if h.area then table.insert(freshRecs, { rec = built[h.id], isl = h }) end end
+	local freshKey = {}
+	for _, fr in freshRecs do for _, t in fr.rec.tiles do freshKey[t.i * 1000 + t.j] = fr.isl end end
 	local dist = {}
-	local q = { { startI, startJ } }
-	dist[startI * 1000 + startJ] = 0
+	local q = {}
+	for k in freshKey do
+		local i, j = k // 1000, k % 1000
+		for _, o in { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } } do
+			local c, own = World.rawTile(i + o[1], j + o[2])
+			local nk = (i + o[1]) * 1000 + j + o[2]
+			if c ~= 0 and own and not freshKey[nk] and World.isOpen(own) and not dist[k] then dist[k] = 0; table.insert(q, { i, j }) end
+		end
+	end
+	if #q == 0 then dist[startI * 1000 + startJ] = 0; table.insert(q, { startI, startJ }) end
 	local head = 1
 	while head <= #q do
 		local cur = q[head]; head += 1
 		local d0 = dist[cur[1] * 1000 + cur[2]]
 		for _, o in { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } } do
-			local ni, nj = cur[1] + o[1], cur[2] + o[2]
-			local c, own = World.rawTile(ni, nj)
-			if c ~= 0 and (own == isl or (src and own == src.join)) and not dist[ni * 1000 + nj] then dist[ni * 1000 + nj] = d0 + 1; table.insert(q, { ni, nj }) end
+			local nk = (cur[1] + o[1]) * 1000 + cur[2] + o[2]
+			if freshKey[nk] and not dist[nk] then dist[nk] = d0 + 1; table.insert(q, { cur[1] + o[1], cur[2] + o[2] }) end
 		end
 	end
-	local maxD = 0
+	local maxD = 1
 	for _, d in dist do maxD = math.max(maxD, d) end
-	local STEP = math.clamp(1.6 / math.max(1, maxD), 0.035, 0.06)
-	local function delayAt(i, j) return after + (dist[i * 1000 + j] or maxD) * STEP end
-	for _, t in rec.tiles do
-		table.insert(items, { inst = t.model, home = t.model.WorldPivot, drop = -(14 + hash(t.i, t.j) * 6), dur = 0.42, delay = delayAt(t.i, t.j),
-			splash = if (t.i * 7 + t.j) % 5 == 0 then 4 else nil, at = Vector3.new(sx(t.i + 0.5), Ocean.SEA_Y, sz(t.j + 0.5)) })
+	local STEP = math.min(0.045, 2.4 / maxD)
+	local function delayAt(i, j)
+		local d = dist[i * 1000 + j] or maxD
+		local own = freshKey[i * 1000 + j]
+		local h = if own then own.H(i, j) else 0
+		if h > 0 then d += maxD * 0.25 + h * 3 end
+		return after + d * STEP
 	end
-	for _, p in rec.props do
-		table.insert(items, { inst = p.model, home = p.home, drop = 18, dur = 0.5, delay = delayAt(p.i, p.j) + 0.28, dust = 10, at = Vector3.new(p.x, p.base, p.z) })
+	for _, fr in freshRecs do
+		for _, t in fr.rec.tiles do
+			table.insert(items, { inst = t.model, home = t.model.WorldPivot, drop = -16, dur = 0.5, delay = delayAt(t.i, t.j),
+				splash = if (t.i + t.j) % 3 == 0 then 4 else nil, at = Vector3.new(sx(t.i + 0.5), Ocean.SEA_Y, sz(t.j + 0.5)) })
+		end
+		for _, p in fr.rec.props do
+			table.insert(items, { inst = p.model, home = p.home, drop = 18, dur = 0.5, delay = delayAt(p.i, p.j) + 0.4, dust = 8, at = Vector3.new(p.x, p.base, p.z) })
+		end
 	end
 	local waveEnd = after + maxD * STEP + 0.8
 	for _, br in fresh do
@@ -896,7 +916,8 @@ function IslandView.unlockIsland(isl, animated, onDone)
 		end
 	end
 	for _, h in highs do
-		local its = joinItems(built[h.id], h, if h.area then waveEnd else waveEnd + 1.2, h.area ~= nil)   -- Isle regions grow outward from their area
+		if h.area then continue end   -- Isle regions already rose in the main wave
+		local its = joinItems(built[h.id], h, waveEnd + 1.2, false)
 		for _, x in its do table.insert(items, x) end
 	end
 	if not animated then
@@ -1065,7 +1086,7 @@ RunService.RenderStepped:Connect(function(dt)
 	for _, list in { lamps, islandLamps } do
 		for _, info in list do
 			info.glow.Color = hx("5a5048"):Lerp(hx("ffd890"), n)
-			info.light.Brightness = 2.2 * n
+			info.light.Brightness = 1.1 * n
 		end
 	end
 	if fireflies then fireflies.FF.Rate = 14 * n end

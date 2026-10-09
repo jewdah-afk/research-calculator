@@ -468,6 +468,7 @@ function A.dev(plr, ss, op)
 	if not ss.devAllowed then return end
 	if op == "regular" then ss.view = ss.real; ss.mode = "regular"
 	elseif op == "maxed" then ss.view = G.maxed(); ss.mode = "maxed"
+	elseif op == "fresh" then ss.view = G.fresh(); ss.mode = "step"   -- QA: Park only, then NEXT ISLAND plays each unlock
 	elseif op == "next" then ss.view = G.stepIsland(if ss.mode == "regular" then ss.real else ss.view); ss.mode = "step"
 	elseif op == "grant" then for _, k in Defs.CUR_ORDER do G.give(ss.view, k, EN.mul(EN.add(ss.view[k], 100), 10)) end
 	else return end

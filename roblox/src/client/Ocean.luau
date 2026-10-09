@@ -53,16 +53,156 @@ local coastList = {}   -- { x, z } world studs of shallow-water tiles (for placi
 local deepList = {}    -- open-water tiles 6+ tiles from land (sharks / whale)
 local night = 0
 
+-- ---------------------------------------------------------------- painted sea surface
+local AssetService = game:GetService("AssetService")
+local tintImg, foamImg, tintDecal, foamDecal, sheet
+local glints, frame = {}, {}
+local B = nil   -- painted rectangle in tiles
+local PX = 2    -- pixels per tile
+local FAR = { 27, 112, 177 }   -- deep-sea colour (the gradient at distance 8), shared by the painted and far sea
+local FARV = Vector3.new(FAR[1] / 255, FAR[2] / 255, FAR[3] / 255)
+local function newImage(w, h)
+	local ok, img = pcall(function() return AssetService:CreateEditableImage({ Size = Vector2.new(w, h) }) end)
+	if ok and img then return img end
+	warn("[Ocean] EditableImage: " .. tostring(img))
+	return nil
+end
+local function buildSurface(parent)
+	glints, frame = {}, {}
+	local i0, j0, i1, j1 = math.huge, math.huge, -math.huge, -math.huge
+	for _, isl in World.all() do
+		i0 = math.min(i0, isl.oi); j0 = math.min(j0, isl.oj)
+		i1 = math.max(i1, isl.oi + isl.W); j1 = math.max(j1, isl.oj + isl.N)
+	end
+	i0 -= 24; j0 -= 24; i1 += 24; j1 += 24
+	PX = math.clamp(math.floor(1024 / math.max(i1 - i0, j1 - j0)), 1, 4)
+	B = { i0 = i0, j0 = j0, w = i1 - i0, h = j1 - j0 }
+	local W, H = B.w * S, B.h * S
+	local cx, cz = sx(i0) + W / 2, sz(j0) + H / 2
+	sheet = part(parent, Vector3.new(W, 0.2, H), CFrame.new(cx, SEA_Y - 0.1, cz), Color3.new(1, 1, 1), nil, 1)
+	sheet.Name = "Sea"
+	tintImg = newImage(B.w * PX, B.h * PX)
+	foamImg = newImage(B.w * PX, B.h * PX)
+	if tintImg then
+		tintDecal = Instance.new("Decal"); tintDecal.Face = Enum.NormalId.Top; tintDecal.ZIndex = 1
+		tintDecal.ColorMapContent = Content.fromObject(tintImg); tintDecal.Parent = sheet
+	end
+	if foamImg then
+		foamDecal = Instance.new("Decal"); foamDecal.Face = Enum.NormalId.Top; foamDecal.ZIndex = 3
+		foamDecal.ColorMapContent = Content.fromObject(foamImg); foamDecal.Parent = sheet
+	end
+	-- sparkle: a tiling 64px image of white flecks, two layers at different scales drifting apart
+	local gl = newImage(64, 64)
+	if gl then
+		local buf = buffer.create(64 * 64 * 4)
+		for y = 0, 63 do
+			for x = 0, 63 do
+				local v = hash(x * 1.7 + 3, y * 2.3 + 1)
+				local a = if v > 0.994 then 170 elseif v > 0.985 then 70 else 0
+				local o = (y * 64 + x) * 4
+				buffer.writeu8(buf, o, 255); buffer.writeu8(buf, o + 1, 255); buffer.writeu8(buf, o + 2, 255); buffer.writeu8(buf, o + 3, a)
+			end
+		end
+		gl:WritePixelsBuffer(Vector2.zero, Vector2.new(64, 64), buf)
+		for _, st in { 22, 37 } do
+			local t = Instance.new("Texture"); t.Face = Enum.NormalId.Top; t.ZIndex = 2; t.StudsPerTileU = st; t.StudsPerTileV = st
+			t.ColorMapContent = Content.fromObject(gl); t.Transparency = 0.25; t.Parent = sheet
+			table.insert(glints, t)
+		end
+	end
+	-- deep-blue frame to the horizon around the painted rectangle
+	local R = 3000
+	-- the far sea is painted the same way (a flat deep-colour image on invisible parts) so it matches the
+	-- painted rectangle exactly and never catches a specular sun glare
+	local farImg = newImage(4, 4)
+	if farImg then
+		local fbuf = buffer.create(64)
+		for q = 0, 15 do buffer.writeu8(fbuf, q * 4, FAR[1]); buffer.writeu8(fbuf, q * 4 + 1, FAR[2]); buffer.writeu8(fbuf, q * 4 + 2, FAR[3]); buffer.writeu8(fbuf, q * 4 + 3, 255) end
+		farImg:WritePixelsBuffer(Vector2.zero, Vector2.new(4, 4), fbuf)
+	end
+	-- one floor under the whole sea, painted the deep colour: outside the rectangle you see it at full colour,
+	-- inside, the painted deep water (same colour, opaque) covers it, so there is no seam to catch the light
+	local fp = part(parent, Vector3.new(2 * R, 0.2, 2 * R), CFrame.new(cx, SEA_Y - 7.6, cz), hx("1b70b1"))   -- under the deepest reef step
+	fp.Name = "SeaFar"
+	if farImg then
+		fp.Transparency = 1
+		local fd = Instance.new("Decal"); fd.Face = Enum.NormalId.Top; fd.ZIndex = 1; fd.ColorMapContent = Content.fromObject(farImg); fd.Parent = fp
+		table.insert(frame, fd)
+	end
+	if gl then
+		for _, st in { 22, 37 } do
+			local t = Instance.new("Texture"); t.Face = Enum.NormalId.Top; t.StudsPerTileU = st; t.StudsPerTileV = st
+			t.ColorMapContent = Content.fromObject(gl); t.Transparency = 0.25; t.Parent = fp
+			table.insert(glints, t)
+		end
+	end
+end
+
+-- repaint tint + foam from the tile distance to open land (bilinear between tile centres, so contours are smooth)
+local function lerp1(a, b, t) return a + (b - a) * t end
+local function smooth(e0, e1, x) local t = math.clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t) end
+local DEEP, MID, SHAL = Vector3.new(0.10, 0.42, 0.68), Vector3.new(0.16, 0.60, 0.80), Vector3.new(0.36, 0.86, 0.86)
+local paintGen = 0
+local function paint(distOf)
+	if not tintImg or not B then return end
+	paintGen += 1
+	local gen = paintGen
+	local w, h = B.w, B.h
+	local g = table.create((w + 1) * (h + 1), 8)
+	for j = 0, h do
+		for i = 0, w do
+			local d = distOf(B.i0 + i, B.j0 + j)
+			g[j * (w + 1) + i + 1] = if d then math.min(8, d) else 8
+		end
+	end
+	local PW, PH = w * PX, h * PX
+	local tb, fb = buffer.create(PW * PH * 4), buffer.create(PW * PH * 4)
+	for py = 0, PH - 1 do
+		local fy = (py + 0.5) / PX - 0.5
+		local j = math.clamp(math.floor(fy), 0, h - 1); local ty = math.clamp(fy - j, 0, 1)
+		for px = 0, PW - 1 do
+			local fx = (px + 0.5) / PX - 0.5
+			local i = math.clamp(math.floor(fx), 0, w - 1); local tx = math.clamp(fx - i, 0, 1)
+			local r0 = j * (w + 1) + i + 1
+			local d = lerp1(lerp1(g[r0], g[r0 + 1], tx), lerp1(g[r0 + w + 1], g[r0 + w + 2], tx), ty)
+			local shallow = 1 - smooth(0.6, 6.5, d)
+			local c = DEEP:Lerp(MID, smooth(9, 4, d)):Lerp(SHAL, shallow * shallow)
+			local n = hash(px * 0.37, py * 0.53)
+			c += Vector3.one * ((n - 0.5) * 0.025 * (1 - smooth(6, 7.5, d)))
+			if d >= 7.5 then c = FARV end   -- open water: exactly the far-sea colour, so the painted edge never shows
+			local a = if d < 0.5 then 0 elseif d > 7.5 then 1 else lerp1(0.97, 0.58, shallow)
+			local o = (py * PW + (PW - 1 - px)) * 4   -- Top-face decals run U along -X
+			buffer.writeu8(tb, o, math.clamp(c.X * 255, 0, 255)); buffer.writeu8(tb, o + 1, math.clamp(c.Y * 255, 0, 255))
+			buffer.writeu8(tb, o + 2, math.clamp(c.Z * 255, 0, 255)); buffer.writeu8(tb, o + 3, a * 255)
+			-- foam: soft band hugging the coast with ripples running in, plus rare flecks further out
+			local band = smooth(1.8, 0.9, d) * smooth(0.35, 0.75, d)
+			local f = band * (0.6 + 0.4 * math.sin(d * 7 + n * 1.5))
+			if d > 1.2 and d < 4 and n > 0.985 then f = math.max(f, 0.5) end
+			buffer.writeu8(fb, o, 255); buffer.writeu8(fb, o + 1, 255); buffer.writeu8(fb, o + 2, 255); buffer.writeu8(fb, o + 3, math.clamp(f, 0, 1) * 235)
+		end
+		if py % 64 == 63 then task.wait(); if gen ~= paintGen then return end end   -- a newer coastline superseded this one
+	end
+	tintImg:WritePixelsBuffer(Vector2.zero, Vector2.new(PW, PH), tb)
+	if foamImg then foamImg:WritePixelsBuffer(Vector2.zero, Vector2.new(PW, PH), fb) end
+end
+
 -- ---------------------------------------------------------------- static sea
 function Ocean.build(parent)
 	if root then root:Destroy() end
 	root = Instance.new("Folder"); root.Name = "Ocean"; root.Parent = parent or workspace
-	surface = part(root, Vector3.new(4000, 1, 4000), CFrame.new(0, SEA_Y - 0.5, 0), hx("2f93c8"), Enum.Material.SmoothPlastic, 0.18)
-	surface.Name = "Sea"; surface.Reflectance = 0.06
-	deep = part(root, Vector3.new(4000, 1, 4000), CFrame.new(0, SEA_Y - 26, 0), hx("0e3d66"))
-	deep.Name = "SeaFloor"
+	-- the sea (World Guide look): one surface over the whole map with three painted layers
+	--   tint  = colour + alpha from the distance to open land (turquoise and clear over the reef -> deep blue), smooth
+	--   foam  = the soft band along the coast, its transparency breathes
+	--   glint = small tiling sparkle textures drifting two ways (only two offsets change per frame)
+	-- outside the painted rectangle four deep-blue frame parts carry the sea to the horizon
+	buildSurface(root)
+	deep = part(root, Vector3.new(6000, 1, 6000), CFrame.new(0, SEA_Y - 14.5, 0), hx("0f3c66"))
 	shelfF = Instance.new("Folder"); shelfF.Name = "Shelf"; shelfF.Parent = root
 	lifeF = Instance.new("Folder"); lifeF.Name = "Life"; lifeF.Parent = root
+	local Lighting = game:GetService("Lighting")
+	if not Lighting:FindFirstChild("SeaRays") then
+		local sr = Instance.new("SunRaysEffect"); sr.Name = "SeaRays"; sr.Intensity = 0.03; sr.Spread = 0.4; sr.Parent = Lighting
+	end
 	-- splash emitter (terraform + whale)
 	splashPart = part(root, Vector3.new(4, 0.2, 4), CFrame.new(0, SEA_Y, 0), Color3.new(1, 1, 1), nil, 1)
 	splashPart.Name = "Splash"
@@ -83,7 +223,7 @@ end
 -- ---------------------------------------------------------------- coast shelf (follows the open coastline)
 local function openLand(i, j)
 	local c = World.tile(i, j)
-	return c ~= 0
+	return c ~= 0 and c ~= 3   -- water tiles (ponds, coves) are painted as shallow sea
 end
 local CORAL = { "ff7a8a", "ffb14a", "b98cff", "ff5fb0", "5fe0c8", "ffe066" }
 function Ocean.rebuild()
@@ -122,10 +262,11 @@ function Ocean.rebuild()
 			if dist[k(ni, nj)] == nil then dist[k(ni, nj)] = d0 + 1; table.insert(q, { ni, nj }) end
 		end
 	end
+	task.spawn(paint, function(i, j) return dist[k(i, j)] end)
 	-- shelf plates: depth steps down with distance (d 1..3 shallow sand, 4..5 reef edge); runs merged per row
 	local function level(d) return if d <= 1 then 1 elseif d <= 3 then 2 elseif d <= 5 then 3 else 0 end
 	local LEVEL_Y = { SEA_Y - 1.2, SEA_Y - 2.6, SEA_Y - 4.6 }
-	local LEVEL_C = { "f1e2b4", "e2d29e", "5aa7a4" }
+	local LEVEL_C = { "f1e2b4", "e2d29e", "6fb3a8" }
 	for j = mnJ, mxJ do
 		local runStart, runLv = nil, 0
 		for i = mnI, mxI + 1 do
@@ -138,20 +279,6 @@ function Ocean.rebuild()
 					part(shelfF, Vector3.new(w, BRICK, S), CFrame.new(x0 + w / 2, LEVEL_Y[runLv] - BRICK / 2, sz(j) + S / 2), hx(LEVEL_C[runLv]))
 				end
 				runStart, runLv = i, lv
-			end
-		end
-	end
-	-- foam: thin white plates on the surface along the waterline (d == 1), merged per row
-	for j = mnJ, mxJ do
-		local runStart = nil
-		for i = mnI, mxI + 1 do
-			local on = i <= mxI and dist[k(i, j)] == 1
-			if on and not runStart then runStart = i
-			elseif not on and runStart then
-				local w = (i - runStart) * S
-				local f = part(shelfF, Vector3.new(w - 0.4, 0.15, S * 0.55), CFrame.new(sx(runStart) + w / 2, SEA_Y + 0.05, sz(j) + S / 2), hx("ffffff"), nil, 0.55)
-				f.Name = "Foam"
-				runStart = nil
 			end
 		end
 	end
@@ -247,7 +374,10 @@ end
 local function near(p: Vector3, focus: Vector3, r: number) return math.abs(p.X - focus.X) < r and math.abs(p.Z - focus.Z) < r end
 function Ocean.setNight(n: number)
 	night = n
-	if surface then surface.Color = hx("2f93c8"):Lerp(hx("173a66"), n) end
+	if tintDecal then tintDecal.Color3 = Color3.new(1, 1, 1):Lerp(hx("3a5d8a"), n) end
+	if foamDecal then foamDecal.Color3 = Color3.new(1, 1, 1):Lerp(hx("7f93b0"), n) end
+	for _, g in glints do g.Transparency = 0.25 + 0.7 * n end
+	for _, f in frame do f.Color3 = Color3.new(1, 1, 1):Lerp(hx("3a5d8a"), n) end
 	for _, j in jellies do j.p.Material = if n > 0.4 then Enum.Material.Neon else Enum.Material.SmoothPlastic; j.p.Transparency = 0.35 - 0.15 * n end
 end
 local clock = 0
@@ -290,10 +420,13 @@ function Ocean.step(dt: number)
 		if not near(j.c, focus, R) then continue end
 		j.p.CFrame = CFrame.new(j.c.X + math.sin(clock * 0.3 + j.ph) * 2, SEA_Y - 0.7 + math.sin(clock * 1.2 + j.ph) * 0.25, j.c.Z + math.cos(clock * 0.25 + j.ph) * 2)
 	end
+	for kk, g in glints do
+		g.OffsetStudsU = clock * (if kk == 1 then 1.6 else -1.1)
+		g.OffsetStudsV = clock * (if kk == 1 then 1.1 else 1.4)
+	end
 	-- foam breathes
 	if shelfF and math.floor(clock * 4) ~= math.floor((clock - dt) * 4) then
-		local tr = 0.5 + math.sin(clock * 1.3) * 0.12
-		for _, f in shelfF:GetChildren() do if f.Name == "Foam" then f.Transparency = tr end end
+		if foamDecal then foamDecal.Transparency = 0.12 + (0.5 + 0.5 * math.sin(clock * 1.6)) * 0.45 end
 	end
 end
 
