@@ -42,7 +42,7 @@ the toon burst cloud with the swirl dome, the Mythic rune circle drawing in):
 - Real unlock data path checked headless with the real Garden tiles from World (343 tiles, 16 coast tiles, 46-stud
   radius, wave 0.6-2.8 s): plays clean. In Studio: `PlayerGui:SetAttribute("PeckwoodBuild", "garden")`.
 
-**Upload these 16 PNGs** (`roblox/assets/vfx/`, paste ids into `src/shared/VfxAssets.luau`; until then each layer falls
+**v2 textures (16 PNGs, uploaded in 026abc1)** (`roblox/assets/vfx/`, ids in `src/shared/VfxAssets.luau`; a missing id makes a layer fall
 back or is skipped, and `collect_pop` keeps the old cube burst):
 `flash_star` 512, `swirl_arc` 1024 4x4 OneShot, `ink_swirl` 1024 4x4 OneShot, `feather` 512 4x4 Loop, `speed_line` 256,
 `ring_wave` 512, `ring_snap` 256, `glow_step` 256, `rays_fan` 1024 4x4 OneShot, `beam_core` 256x64 (Beam strip),
