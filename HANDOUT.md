@@ -48,6 +48,16 @@ Branch **`claude/peckwood-isle`** (pushed). Build: `cd roblox && rojo build defa
 - Asset export pipeline: SerializationService in Studio -> local POST receiver -> `lune` re-serialize (fixes the Tags
   property Rojo 7.5 can't read) -> rojo `$path`.
 
+### Eggs + portals (2026-10-09, latest)
+- Egg = generated mesh `assets/EggAsset.rbxm` (Models.kernel; golden = same mesh, solid gold). Collect: +value pops above
+  the egg, the egg flies (2D icon arc) into the wallet capsule (`Hud.flyFromScreen`), no more homing into the hen.
+- Egg icons uploaded (egg rbxassetid://122713849392935, golden egg 74456595363673) and mapped onto the `popcorn` /
+  `golden` keys in `shared/Icons.luau` (ids kept so saves stay 1:1).
+- Portals: doorway-size (R 2.4), one row on the Park's north edge facing the camera, name plate on the static pad
+  (it orbited when attached to the spinning swirl). Plate still renders at the pad base: raise it next.
+- NEXT (owner): Figma UI at Birb parity in our high-quality style (needs the Birb UI reference + the Figma page),
+  then build the game up.
+
 ### Park polish (2026-10-09, latest)
 - Hen: new storybook hen (generate_mesh, parts body/wingL/wingR) in `assets/BirdAsset.rbxm`; `Models.bird` rebuilds
   its WorldPivot at the feet (the exported pivot is lost in the asset round-trip), 1.1 * S tall, no cartoon outline.

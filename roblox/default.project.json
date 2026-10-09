@@ -14,6 +14,9 @@
       },
       "BirdAsset": {
         "$path": "assets/BirdAsset.rbxm"
+      },
+      "EggAsset": {
+        "$path": "assets/EggAsset.rbxm"
       }
     },
     "ServerScriptService": {

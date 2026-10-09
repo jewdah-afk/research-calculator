@@ -27,7 +27,7 @@ return {
 	["dove"] = "rbxassetid://99768037469282",
 	["echo"] = "rbxassetid://103405854802057",
 	["fish"] = "rbxassetid://127355926965229",
-	["golden"] = "rbxassetid://84832516597883",
+	["golden"] = "rbxassetid://74456595363673",   -- golden egg (was golden popcorn)
 	["goldore"] = "rbxassetid://140016842522607",
 	["heart"] = "rbxassetid://129903281922088",
 	["hook_ancient"] = "rbxassetid://71577459046383",
@@ -53,7 +53,9 @@ return {
 	["parrot"] = "rbxassetid://76837104327169",
 	["pickaxe"] = "rbxassetid://138125644362770",
 	["plume"] = "rbxassetid://111806153073599",
-	["popcorn"] = "rbxassetid://113756529774262",
+	["popcorn"] = "rbxassetid://122713849392935",   -- egg (was popcorn); id name kept so saves / defs stay 1:1
+	["egg"] = "rbxassetid://122713849392935",
+	["egg_golden"] = "rbxassetid://74456595363673",
 	["map"] = "rbxassetid://77709245164795",
 	["teleport"] = "rbxassetid://88614883427482",
 	["settings"] = "rbxassetid://136833567323138",

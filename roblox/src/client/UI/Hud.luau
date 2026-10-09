@@ -212,6 +212,29 @@ local function flyTo(cur, fromGui, n)
 	end
 end
 Hud.flyTo = flyTo
+-- same arc, but from a point on screen (a collected egg in the world -> its wallet capsule)
+function Hud.flyFromScreen(cur, screenPt: Vector2, n)
+	local c = capsules[cur]; if not (c and c.frame.Visible) then return end
+	local s = scale.Scale
+	local a = screenPt / s
+	local b = (c.icon.AbsolutePosition + c.icon.AbsoluteSize / 2) / s
+	for i = 1, n or 1 do
+		local img = Kit.icon(canvas, a.X - 18, a.Y - 18, 36, Defs.CUR[cur].icon, { ZIndex = 60 })
+		local mid = Vector2.new((a.X + b.X) / 2 + math.random(-60, 60), math.min(a.Y, b.Y) - 90 - math.random(0, 60))
+		task.delay((i - 1) * 0.04, function()
+			local t0 = os.clock()
+			local conn
+			conn = game:GetService("RunService").RenderStepped:Connect(function()
+				local t = math.min(1, (os.clock() - t0) / 0.6)
+				local e = t * t * (3 - 2 * t)
+				local p = a:Lerp(mid, e):Lerp(mid:Lerp(b, e), e)
+				local sz = 36 - 12 * e
+				img.Size = UDim2.fromOffset(sz, sz); img.Position = UDim2.fromOffset(p.X - sz / 2, p.Y - sz / 2)
+				if t >= 1 then conn:Disconnect(); img:Destroy(); Kit.pop(c.icon, 1.18); wiggle(cur) end
+			end)
+		end)
+	end
+end
 
 -- ---------------------------------------------------------------- objective (399,1000,634,56) + AUTO
 local objective, autoBtn, unlockBtn

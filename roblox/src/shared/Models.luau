@@ -96,6 +96,19 @@ end
 
 -- ---------------------------------------------------------------- egg (the main currency pickup; was the popcorn kernel)
 function Models.kernel(golden: boolean?): Model
+	-- painted egg model (generated mesh, ReplicatedStorage.EggAsset); golden = same shape in solid gold
+	local asset = game:GetService("ReplicatedStorage"):FindFirstChild("EggAsset")
+	if asset then
+		local m = asset:Clone(); m.Name = "Egg"
+		local cf, sz = m:GetBoundingBox()
+		m.WorldPivot = CFrame.new(cf.Position - Vector3.new(0, sz.Y / 2, 0))
+		m:ScaleTo(m:GetScale() * (0.62 * S) / sz.Y)
+		m:PivotTo(CFrame.new())
+		for _, p in m:GetDescendants() do
+			if p:IsA("MeshPart") and golden then p.TextureID = ""; p.Color = Color3.fromHex("#ffc93a"); p.Reflectance = 0.12 end
+		end
+		return m
+	end
 	local m = newModel("Egg")
 	local shell = if golden then "#ffc93a" else "#f4ead8"
 	Models.ball(m, "shell", 0.15, { 0, 0, 0.2 }, shell, { 1, 1, 1.32 })       -- one smooth shell, no seam or bulge

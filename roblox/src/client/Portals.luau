@@ -36,8 +36,8 @@ local function build(id, name, pos, facing)
 	local col = hx(COL[id] or "ffffff")
 	local m = Instance.new("Model"); m.Name = "Portal_" .. id
 	local cf = CFrame.lookAt(pos, pos + facing)
-	local R = 2.6 * S / 4 * 2   -- ring radius (studs)
-	part(m, { Name = "Pad", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.6, R * 2.6, R * 2.6), Color = hx("c4bdb0"),
+	local R = 2.4   -- ring radius (studs): a doorway, not a pad (owner: portals were huge and in the egg field)
+	local pad = part(m, { Name = "Pad", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.6, R * 2.6, R * 2.6), Color = hx("c4bdb0"),
 		Material = Enum.Material.SmoothPlastic, CFrame = cf * CFrame.new(0, 0.3, 0) * CFrame.Angles(0, 0, math.pi / 2) })
 	part(m, { Name = "Trim", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.64, R * 2.2, R * 2.2), Color = col,
 		Material = Enum.Material.Neon, Transparency = 0.2, CFrame = cf * CFrame.new(0, 0.32, 0) * CFrame.Angles(0, 0, math.pi / 2) })
@@ -61,8 +61,8 @@ local function build(id, name, pos, facing)
 	local light = Instance.new("PointLight"); light.Color = col; light.Range = 14; light.Brightness = 1.6; light.Shadows = false; light.Parent = swirl
 	-- name sign: a rounded plaque above the ring in the area colour
 	local bb = Instance.new("BillboardGui")
-	bb.Size = UDim2.fromOffset(190, 46); bb.StudsOffsetWorldSpace = Vector3.new(0, R * 2 + 2.6, 0); bb.LightInfluence = 0
-	bb.MaxDistance = 260; bb.Adornee = swirl; bb.Parent = m
+	bb.Size = UDim2.fromScale(7, 1.6); bb.StudsOffsetWorldSpace = Vector3.new(0, 2 * R + 3.2, 0); bb.LightInfluence = 0   -- world-sized sign, stays on its portal
+	bb.MaxDistance = 160; bb.Adornee = pad; bb.Parent = m   -- the pad never moves (the swirl spins, which made signs orbit)
 	local f = Instance.new("Frame"); f.Size = UDim2.fromScale(1, 1); f.BackgroundColor3 = hx("1c2233"); f.BackgroundTransparency = 0.1; f.Parent = bb
 	Instance.new("UICorner", f).CornerRadius = UDim.new(0, 14)
 	local st = Instance.new("UIStroke"); st.Color = col; st.Thickness = 3; st.Parent = f
@@ -79,14 +79,12 @@ local function placements()
 	-- hub arc on the plaza: areas in unlock order, facing the plaza centre
 	local areas = {}
 	for _, isl in World.list do if not isl.park then table.insert(areas, isl) end end
+	-- portal gate: one tidy row along the back (north) edge of the Park, facing the camera, out of the egg field
 	for k, isl in areas do
-		local a = math.rad(-150 + (k - 1) * (300 / math.max(1, #areas - 1)))
-		local R = if World.LAYOUT == "ascent" then 7.5 else 5.5
-		local i, j = HUB.X + math.sin(a) * R, HUB.Y - math.cos(a) * R
+		local i, j = 20 + (k - (#areas + 1) / 2) * 3.4, 3
 		local p = tileToWorld(i, j)
-		local c = tileToWorld(HUB.X, HUB.Y)
 		table.insert(out, { key = "hub:" .. isl.id, id = isl.id, dest = isl.id, need = isl, name = string.gsub(isl.name, "^THE ", ""), pos = p,
-			facing = (Vector3.new(c.X, p.Y, c.Z) - p).Unit })
+			facing = Vector3.new(0, 0, 1) })
 	end
 	-- a way home from every area: beside its arrival spot
 	for _, isl in areas do
@@ -128,7 +126,7 @@ function Portals.init()
 			b.swirl.Transparency = 0.42 + math.sin(t * 3 + p.pos.X) * 0.1
 			if hrp and cool <= 0 then
 				local d = Vector3.new(hrp.Position.X - p.pos.X, 0, hrp.Position.Z - p.pos.Z).Magnitude
-				if d < 2.2 and math.abs(hrp.Position.Y - p.pos.Y) < 8 then
+				if d < 1.8 and math.abs(hrp.Position.Y - p.pos.Y) < 8 then
 					cool = 2.5
 					plr.PlayerGui:SetAttribute("PeckwoodTP", p.dest .. "#" .. os.clock())
 				end

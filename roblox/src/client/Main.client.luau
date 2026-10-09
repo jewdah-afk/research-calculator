@@ -286,16 +286,19 @@ Remotes:WaitForChild("Collect").OnClientEvent:Connect(function(id: number, value
 	local k = kernels[id]; if not k then return end
 	if value == nil then k.model:Destroy(); kernels[id] = nil; return end   -- cleared by Molt / travel / dev save
 	local n = 0; for _, kk in kernels do if not kk.homing then n += 1 end end; Hud.kernelCount = n - 1
-	k.homing = 0
-	if k.shadow then k.shadow.Transparency = 1 end
-	task.delay(0.18, function()
-		local at = k.model:GetPivot().Position
-		k.model:Destroy(); kernels[id] = nil
-		burst(at + Vector3.new(0, 0.3 * S, 0), if golden then Color3.fromHex("#ffc93a") else Color3.fromHex("#fff1c9"), if golden then 14 else 8)
-		numberPop(at + Vector3.new(0, 1.1 * S, 0), "+" .. Defs.EN.short(value), golden)
-		Birds.punch()
-		if golden then shake = 0.35 end
-	end)
+	-- owner 2026-10-09: the +value pops right above the egg, and the egg itself flies into the wallet on the HUD
+	local at = k.pos + Vector3.new(0, 0.5 * S, 0)
+	k.model:Destroy(); kernels[id] = nil
+	burst(at, if golden then Color3.fromHex("#ffc93a") else Color3.fromHex("#fff1c9"), if golden then 14 else 8)
+	numberPop(at + Vector3.new(0, 0.9 * S, 0), "+" .. Defs.EN.short(value), golden)
+	local cam = workspace.CurrentCamera
+	local sp, onScreen = cam:WorldToViewportPoint(at)
+	if onScreen then
+		local inset = game:GetService("GuiService"):GetGuiInset()
+		Hud.flyFromScreen(if golden and Defs.CUR.goldenPopcorn then "goldenPopcorn" else "popcorn", Vector2.new(sp.X, sp.Y) - inset, 1)
+	end
+	Birds.punch()
+	if golden then shake = 0.35 end
 end)
 
 local bulkParts: { BasePart } = {}
