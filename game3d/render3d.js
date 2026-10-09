@@ -365,6 +365,8 @@
       A.player.position.copy(toWorld(cur, s.player.x, s.player.y));
       if (!first) placeCamera(true);
     }
+    // pale sand catches the glow pass, so the Desert gets a softer bloom
+    const soft = island === "desert"; W.bloom.strength += ((soft ? 0.14 : 0.5) - W.bloom.strength) * 0.1; W.bloom.threshold = soft ? 0.93 : 0.78;
     const pw = toWorld(cur, s.player.x, s.player.y);
     A.player.position.lerp(pw, 0.6);
     const k = pxScale(cur);

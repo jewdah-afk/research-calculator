@@ -1081,7 +1081,7 @@ html,body{height:100%;margin:0;padding:0!important;overflow:hidden;background:#0
 <script>
 // Peckwood game hooks: the world's renderer is the source of truth for the look; the game layer (game3d/render3d.js) drives it through WG.
 function hideProps(pred) { const lv = new Set(); for (const p of propsAll) if (pred(p)) { p.hidden = true; lv.add(p.need); } for (const n of lv) animLevels.add(n); }
-window.WG = { stopFlight() { flight = null; }, hideProps, THREE, scene, tiles, byKey, key, topY, propsAll, DEFS, L, camera, controls, renderer, groundY, wx, wz, S, SEA, COLS, ROWS, WORLD, ISL, unlock, resetTo, flyTo, floatText, ring, FX, SFX,
+window.WG = { bloom, stopFlight() { flight = null; }, hideProps, THREE, scene, tiles, byKey, key, topY, propsAll, DEFS, L, camera, controls, renderer, groundY, wx, wz, S, SEA, COLS, ROWS, WORLD, ISL, unlock, resetTo, flyTo, floatText, ring, FX, SFX,
   get level() { return level; }, get flying() { return !!flight; } };
 controls.enableRotate = false; controls.enablePan = false; controls.minDistance = 90; controls.maxDistance = 900;
 window.parent && window.parent !== window && window.parent.postMessage("wg-ready", "*");
