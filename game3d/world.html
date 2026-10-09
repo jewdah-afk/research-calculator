@@ -802,7 +802,7 @@ function resetTo(n) {
   for (const t of tiles) { t.born = -1; t.k = 1; } for (const p of propsAll) { p.born = -1; p.k = 1; }
   level = n; animLevels = new Set(LEVELS); setVisibleLevels(); rebuildSea(n); renderSteps(); if (typeof refreshHierarchy === "function") refreshHierarchy();
 }
-function tileOffset(a) {
+function tileOffset(a) { if (a && a.hidden) return { dy: -999, vis: false };
   if (!a) return { dy: 0, vis: true };
   if (a.born < 0 || a.k >= 1) { const bob = a.bob ? Math.sin(clock * a.bob.sp + a.bob.ph) * a.bob.amp : 0; return { dy: bob, vis: true }; }
   if (a.k <= 0) return { dy: 0, vis: false };
@@ -1080,7 +1080,8 @@ html,body{height:100%;margin:0;padding:0!important;overflow:hidden;background:#0
 </style>
 <script>
 // Peckwood game hooks: the world's renderer is the source of truth for the look; the game layer (game3d/render3d.js) drives it through WG.
-window.WG = { THREE, scene, camera, controls, renderer, groundY, wx, wz, S, SEA, COLS, ROWS, WORLD, ISL, unlock, resetTo, flyTo, floatText, ring, FX, SFX,
+function hideProps(pred) { const lv = new Set(); for (const p of propsAll) if (pred(p)) { p.hidden = true; lv.add(p.need); } for (const n of lv) animLevels.add(n); }
+window.WG = { hideProps, THREE, scene, tiles, byKey, key, topY, propsAll, DEFS, L, camera, controls, renderer, groundY, wx, wz, S, SEA, COLS, ROWS, WORLD, ISL, unlock, resetTo, flyTo, floatText, ring, FX, SFX,
   get level() { return level; }, get flying() { return !!flight; } };
 controls.enableRotate = false; controls.enablePan = false; controls.minDistance = 90; controls.maxDistance = 900;
 window.parent && window.parent !== window && window.parent.postMessage("wg-ready", "*");

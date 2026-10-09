@@ -196,6 +196,7 @@
     for (let a = 0; a < (mature ? 180 : 80); a++) {
       const x = minX + Math.random() * (maxX - minX), y = minY + Math.random() * (maxY - minY), sp = mature ? 42 + 24 * Math.random() : 42 + 44 * Math.random();
       if (Math.abs(x - 800) < 170 && y < 330) continue; // the ancient tree
+      if (PT.spawnOk && !PT.spawnOk(PT.NEST_MAP, x, y)) continue; // game3d: only on open ground
       if (f.trees.some((t) => Math.hypot(t.x - x, t.y - y) < sp)) continue;
       f.trees.push({ id: "nest_tree_" + f.nextTreeId++, x, y, age: mature ? F.growSec : 0, hp: F.treeHp, maxHp: F.treeHp, collapse: 0 });
       return true;

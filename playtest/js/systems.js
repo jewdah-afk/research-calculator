@@ -155,6 +155,8 @@
       const pad = 40;
       const type = ctx && ctx.rollType ? ctx.rollType() : this.rollType(s); // Birb rollPopcornType: the desert rolls only plain / golden
       const p = { id: this.nextId++, type, caramel: type === "golden" && !!(ctx && ctx.caramel) && Math.random() < 0.25, x: pad + Math.random() * (W - 2 * pad), y: pad + Math.random() * (H - 2 * pad) };
+      // game3d: keep eggs on open ground of the island (re-roll the spot only; count, timing and type are unchanged)
+      for (let k = 0; PT.spawnOk && k < 24 && !PT.spawnOk(m, p.x, p.y); k++) { p.x = pad + Math.random() * (W - 2 * pad); p.y = pad + Math.random() * (H - 2 * pad); }
       if (ctx && ctx.player) {
         const dx = p.x - ctx.player.x, dy = p.y - ctx.player.y, r = ctx.immediateRadius;
         if (dx * dx + dy * dy <= r * r) { ctx.onImmediate(p); return; }

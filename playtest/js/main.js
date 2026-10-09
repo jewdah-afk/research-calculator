@@ -217,8 +217,12 @@
       const ny = Math.max(20, Math.min(m.h - 20, s.player.y + G.vy * dt)); if (!hit(s.player.x, ny)) s.player.y = ny; else G.vy = 0;
       const run = PT.expState(s).activeRun; if (run && (ix || iy)) run.combatArmed = true; // Birb registerPlayerCombatAction on movement
     } else {
-    s.player.x = Math.max(20, Math.min(m.w - 20, s.player.x + G.vx * dt));
-    s.player.y = Math.max(20, Math.min(m.h - 20, s.player.y + G.vy * dt));
+    const nx = Math.max(20, Math.min(m.w - 20, s.player.x + G.vx * dt)), ny = Math.max(20, Math.min(m.h - 20, s.player.y + G.vy * dt));
+    if (!PT.walkOk) { s.player.x = nx; s.player.y = ny; }
+    else { // game3d: slide along trees, ponds and the coast
+      if (PT.walkOk(s.currentMap, nx, s.player.y)) s.player.x = nx; else G.vx = 0;
+      if (PT.walkOk(s.currentMap, s.player.x, ny)) s.player.y = ny; else G.vy = 0;
+    }
     if (window.R3D) window.R3D.edge(G, ix, iy, dt); // game3d: walk off a map edge into the connected neighbour
     }
 

@@ -106,10 +106,42 @@
     // clicks on the ground move / interact on the current map
     frame.contentWindow.WG_CLICK = (hit) => { G.clickWorld(toMap(G.s.currentMap, hit)); };
     // islands: everything you have reached so far stands; a new island rises when you first get there
+    // the Nest's forest is the game's own trees (Birb: 30 wild trees + planting beds), so the forest island's decorative trees step aside
+    W.hideProps((p) => p.need === isl(PT.NEST_MAP).n && ["pine", "tree", "bush", "rock", "log", "deadtree"].includes(p.kind));
+    buildBlocked();
     const n = reachedLevel(); W.resetTo(n); A.level = n;
     placeCamera(true);
   }
   frame.addEventListener("load", () => { const t0 = Date.now(), wait = () => { if (frame.contentWindow.WG) boot(); else if (Date.now() - t0 < 15000) setTimeout(wait, 100); }; wait(); });
+
+  // ------------------------------------------------------------------ walkable ground: land tiles of a raised island, minus ponds and prop footprints
+  const SOFT = new Set(["flowers", "sunflower", "lantern", "twigs", "mushroom", "flower", "post", "vine", "bones", "rails"]);
+  const BIG = new Set(["tree", "pine", "palm", "tower", "keep", "temple", "pyramid", "greenhouse", "hut", "windmill", "monolith", "nesttree", "tent", "balloon", "mineentrance", "wall", "boat", "pier", "tank", "monster", "altar"]);
+  let blocked = null;
+  function buildBlocked() {
+    blocked = new Set();
+    for (const p of W.propsAll) {
+      if (p.hidden || SOFT.has(p.kind)) continue;
+      const d = W.DEFS[p.kind];
+      if (p.need === 1 && d && d.w) { // park props: real footprints
+        const x0 = p.x - (d.w * W.L) / 2, z0 = p.z - (d.d * W.L) / 2;
+        for (let x = x0 + 0.5; x < x0 + d.w * W.L; x += 1) for (let z = z0 + 0.5; z < z0 + d.d * W.L; z += 1) blocked.add(W.key(Math.floor(x / W.S + W.COLS / 2), Math.floor(z / W.S + W.ROWS / 2)));
+      } else { const r = BIG.has(p.kind) ? 1 : 0; for (let a = -r; a <= r; a++) for (let b = -r; b <= r; b++) blocked.add(W.key(p.i + a, p.j + b)); }
+    }
+  }
+  function cellOk(id, x, y) {
+    const p = toWorld(id, x, y), i = Math.floor(p.x / W.S + W.COLS / 2), j = Math.floor(p.z / W.S + W.ROWS / 2), t = W.byKey.get(W.key(i, j));
+    return !!t && t.need <= Math.max(W.level, isl(id).n) && t.c !== 3 && !blocked.has(W.key(i, j));
+  }
+  const usesIsland = (id) => !!SCENE3D[id];
+  PT.spawnOk = (id, x, y) => !A || !usesIsland(id) || cellOk(id, x, y);
+  PT.walkOk = (id, x, y) => !A || !usesIsland(id) || cellOk(id, x, y) || !cellOk(id, G.s.player.x, G.s.player.y); // never trap the birb
+  const usableStart = (id) => { // drop the birb on open ground near where it stands
+    if (!usesIsland(id) || cellOk(id, G.s.player.x, G.s.player.y)) return;
+    const m = PT.MAPS[id];
+    for (let r = 20; r < Math.max(m.w, m.h); r += 20) for (let a = 0; a < 16; a++) { const x = G.s.player.x + Math.cos(a / 16 * 6.28) * r, y = G.s.player.y + Math.sin(a / 16 * 6.28) * r;
+      if (x > 20 && y > 20 && x < m.w - 20 && y < m.h - 20 && cellOk(id, x, y)) { G.s.player.x = x; G.s.player.y = y; return; } }
+  };
 
   function reachedLevel() {
     const s = G.s, seen = (s.visitedIslands ||= ["park"]), cur = ISLAND_OF(s.currentMap);
@@ -206,7 +238,7 @@
       const n = reachedLevel();
       const first = A.lastIsland === null;
       if (n > A.level) { W.unlock(n, true); A.level = n; }
-      A.lastIsland = island;
+      A.lastIsland = island; usableStart(cur);
       A.player.position.copy(toWorld(cur, s.player.x, s.player.y));
       if (!first) placeCamera(true);
     }
@@ -229,7 +261,8 @@
   // walking off a map edge takes the arrow in that direction (the camera flies to the next island)
   R3D.edge = function (G, ix, iy, dt) {
     edgeT -= dt; const s = G.s, m = PT.MAPS[s.currentMap];
-    const dir = s.player.x <= 21 && ix < 0 ? -1 : s.player.x >= m.w - 21 && ix > 0 ? 1 : 0;
+    const coast = (d) => usesIsland(s.currentMap) && !cellOk(s.currentMap, s.player.x + d * 40, s.player.y); // the shore counts as the edge
+    const dir = ix < 0 && (s.player.x <= 21 || (s.player.x < m.w * 0.25 && coast(-1))) ? -1 : ix > 0 && (s.player.x >= m.w - 21 || (s.player.x > m.w * 0.75 && coast(1))) ? 1 : 0;
     if (!dir || edgeT > 0) return;
     edgeT = 0.8; G.travel(dir);
   };
