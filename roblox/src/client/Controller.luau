@@ -16,7 +16,7 @@ local Controller = {}
 
 -- ---------------------------------------------------------------- world queries (World.canStand)
 local VOID, WATER = 0, 3
-local STEP_UP = 5
+local STEP_UP = 13   -- hills are walkable now (owner: "explore every part"); a hill step is up to ~3 studs
 local colliders: { { x: number, y: number, r: number, base: number, top: number, hw: number?, hh: number? } } = {}
 -- footprint radius (px) and height (px) per Park prop kind (Park overhaul props; see client/IslandView)
 -- trees are the stylized pack meshes now: only the trunk blocks (r 3 px); bushes are walk-through
@@ -93,7 +93,13 @@ end
 heightAtLocalImpl = function(x: number, y: number): number
 	local t = tileAt(x, y)
 	if t ~= VOID and t ~= 5 and onSlope(math.floor(x / Map.PX), math.floor(y / Map.PX)) then return 99 end
-	if (t == 1 or t == 4) and World.height(math.floor(x / Map.PX), math.floor(y / Map.PX)) > 0 then return 99 end   -- hills / dunes: scenery wall
+	if (t == 1 or t == 4) and World.height(math.floor(x / Map.PX), math.floor(y / Map.PX)) > 0 then
+		-- hills / dunes: walk up and over at the height the terrain shows (LandTerrain.visualTop)
+		local i, j = math.floor(x / Map.PX), math.floor(y / Map.PX)
+		local LT = require(script.Parent:WaitForChild("LandTerrain"))
+		local base = World.base(i, j)
+		return ((LT.visualTop(i, j, base, t)) - base) * Map.PX / S
+	end
 	if t == 5 then   -- bridge / dock deck: walk on the planks
 		local h = World.deckH(math.floor(x / Map.PX), math.floor(y / Map.PX))
 		return if h then h / S * Map.PX else 0   -- planks (+) or a sagging rope bridge (-)

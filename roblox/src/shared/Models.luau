@@ -67,9 +67,11 @@ function Models.bird(): Model
 	if asset then
 		local m = asset:Clone()
 		m.Name = "Bird"
-		local _, sz = m:GetBoundingBox()
-		m:ScaleTo(m:GetScale() * (1.5 * S) / sz.Y)   -- big enough to read above the grass blades
-		m:PivotTo(CFrame.new(0, 0.45, 0) * CFrame.Angles(0, Models.BIRD_YAW, 0))   -- feet a hair above the stepped terrain surface
+		-- the exported WorldPivot does not survive the asset round-trip: rebuild it at the feet (bottom centre)
+		local bcf, bsz = m:GetBoundingBox()
+		m.WorldPivot = CFrame.new(bcf.Position - Vector3.new(0, bsz.Y / 2, 0))
+		m:ScaleTo(m:GetScale() * (1.1 * S) / bsz.Y)   -- big enough to read above the grass blades
+		m:PivotTo(CFrame.new(0, 0.1, 0) * CFrame.Angles(0, Models.BIRD_YAW, 0))   -- feet on the ground   -- feet a hair above the stepped terrain surface
 		return m
 	end
 	local m, box = newModel("Bird"), Models.box

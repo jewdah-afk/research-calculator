@@ -271,9 +271,22 @@ RunService.Heartbeat:Connect(function(dt)
 				end
 				local kind = F.rollType(s, G.inDesert(s), ss.rng)
 				if G.inDesert(s) and kind ~= "golden" and ss.rng:NextNumber() < G.desertGoldenChance(s) then kind = "golden" end
+				-- the egg drops at `pos`, bounces and rolls a short way to where it rests (owner 2026-10-09: physical
+				-- eggs). The server decides the resting spot (kept on walkable land) and only allows pickup once landed.
+				local drop = pos
+				do
+					local a = ss.rng:NextNumber(0, math.pi * 2)
+					local dist = ss.rng:NextNumber(0.4, 1.4) * S
+					local land = pos + Vector3.new(math.cos(a) * dist, 0, math.sin(a) * dist)
+					local ti, tj = land.X / S + Map.COLS / 2, land.Z / S + Map.ROWS / 2
+					local c = World.tile(math.floor(ti), math.floor(tj))
+					if c ~= 0 and c ~= 3 and World.height(math.floor(ti), math.floor(tj)) == 0 then
+						pos = Vector3.new(land.X, World.base(math.floor(ti), math.floor(tj)) + World.relief(ti, tj), land.Z)
+					end
+				end
 				local id = ss.nextId; ss.nextId += 1
-				ss.kernels[id] = { pos = pos, kind = kind, golden = kind == "golden" }
-				SpawnEv:FireClient(plr, id, pos, kind)
+				ss.kernels[id] = { pos = pos, kind = kind, golden = kind == "golden", readyAt = os.clock() + 1.0 }
+				SpawnEv:FireClient(plr, id, pos, kind, drop)
 			end
 		end
 		-- AUTO (group perk): collect a kernel every 0.35 s and buy the cheapest affordable upgrade every second
@@ -315,7 +328,9 @@ RunService.Heartbeat:Connect(function(dt)
 			local last = ss.lastPos; ss.lastPos = p
 			local maxStep = 100 * G.speed(ss.view) * 1.3 / Map.PX * S * 0.1 * 1.6 + 2
 			if last and Vector3.new(p.X - last.X, 0, p.Z - last.Z).Magnitude > maxStep then continue end   -- teleport: no pickups this tick
+			local now = os.clock()
 			for id, k in ss.kernels do
+				if k.readyAt and now < k.readyAt then continue end   -- still bouncing / rolling in
 				local dx, dz = p.X - k.pos.X, p.Z - k.pos.Z
 				if dx * dx + dz * dz < reach * reach then collect(plr, ss, id, k) end
 			end

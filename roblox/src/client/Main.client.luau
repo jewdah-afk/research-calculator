@@ -211,7 +211,7 @@ plr.PlayerGui:GetAttributeChangedSignal("PeckwoodCam"):Connect(function()
 	IslandView.camCF = if typeof(p) == "Vector3" then CFrame.lookAt(p, Vector3.new(0, -8, 2)) else nil
 end)
 plr.PlayerGui:GetAttributeChangedSignal("PeckwoodHour"):Connect(function() IslandView.timeOverride = plr.PlayerGui:GetAttribute("PeckwoodHour") end)
-type K = { model: Model, pos: Vector3, born: number, golden: boolean, homing: number?, parts: { BasePart }, offs: { CFrame } }
+type K = { model: Model, shadow: Part?, drop: Vector3?, pos: Vector3, born: number, golden: boolean, homing: number?, parts: { BasePart }, offs: { CFrame } }
 local kernels: { [number]: K } = {}
 local frameN = 0
 local clock = 0
@@ -224,7 +224,7 @@ end
 -- popcorn types (BirbFormulas.PopcornTypes) tint the kernel puffs
 local KIND_COLOR = { butter = "#ffe27a", caramel = "#e0913a", cheese = "#ffc93a", rainbow = nil, red = "#ff4a4a" }
 local RAINBOW = { "#ff5a5a", "#ffb43a", "#ffe94a", "#5ae86a", "#4ab4ff", "#b06cff" }
-Remotes:WaitForChild("Spawn").OnClientEvent:Connect(function(id: number, pos: Vector3, kind: string)
+Remotes:WaitForChild("Spawn").OnClientEvent:Connect(function(id: number, pos: Vector3, kind: string, drop: Vector3?)
 	if kernels[id] then return end
 	local golden = kind == "golden"
 	local m = Models.kernel(golden)
@@ -247,7 +247,14 @@ Remotes:WaitForChild("Spawn").OnClientEvent:Connect(function(id: number, pos: Ve
 			table.insert(parts, d); table.insert(offs, pv:ToObjectSpace(d.CFrame))
 		end
 	end
-	kernels[id] = { model = m, pos = pos, born = clock, golden = golden, parts = parts, offs = offs }
+	-- soft black drop shadow on the ground under the hovering egg (owner 2026-10-09); not in `parts`, so it stays put
+	local shadow = Instance.new("Part")
+	shadow.Name = "Shadow"; shadow.Shape = Enum.PartType.Cylinder; shadow.Size = Vector3.new(0.04, 0.5 * S, 0.5 * S)
+	shadow.Color = Color3.new(0, 0, 0); shadow.Material = Enum.Material.SmoothPlastic; shadow.Transparency = 0.5
+	shadow.Anchored = true; shadow.CanCollide = false; shadow.CanQuery = false; shadow.CanTouch = false; shadow.CastShadow = false
+	shadow.CFrame = CFrame.new(pos + Vector3.new(0, 0.06, 0)) * CFrame.Angles(0, 0, math.pi / 2)
+	shadow.Parent = m
+	kernels[id] = { model = m, pos = pos, born = clock, golden = golden, parts = parts, offs = offs, shadow = shadow, drop = drop }
 	local n = 0; for _, kk in kernels do if not kk.homing then n += 1 end end; Hud.kernelCount = n   -- flying-in kernels no longer count
 end)
 
@@ -280,6 +287,7 @@ Remotes:WaitForChild("Collect").OnClientEvent:Connect(function(id: number, value
 	if value == nil then k.model:Destroy(); kernels[id] = nil; return end   -- cleared by Molt / travel / dev save
 	local n = 0; for _, kk in kernels do if not kk.homing then n += 1 end end; Hud.kernelCount = n - 1
 	k.homing = 0
+	if k.shadow then k.shadow.Transparency = 1 end
 	task.delay(0.18, function()
 		local at = k.model:GetPivot().Position
 		k.model:Destroy(); kernels[id] = nil
@@ -311,9 +319,28 @@ local function kernelsStep(dt: number)
 		else
 			-- pop-in (rise out of the ground with easeOutBack), then spin + bob like View3D; settled kernels
 			-- only update every other frame (half the work, invisible at this bob speed)
-			if age > 0.4 and (id + frameN) % 2 == 0 then continue end
-			local e = easeOutBack(math.min(1, age / 0.35))
-			local y = (e - 1) * 0.6 * S + math.sin(clock * 3 + id) * 0.06 * S + 0.08 * S
+			if k.drop and age < 1.0 then
+				-- fall (0-0.42 s), two bounces (to 0.7 s) while rolling from the drop point to the rest spot (to 1.0 s)
+				local d = k.drop :: Vector3
+				local roll = math.clamp((age - 0.3) / 0.7, 0, 1)
+				roll = 1 - (1 - roll) * (1 - roll)
+				local at = d:Lerp(k.pos, roll)
+				local hover = 0.5 * S
+				local h
+				if age < 0.42 then local u = age / 0.42; h = (1 - u * u) * 9 * S
+				elseif age < 0.62 then local u = (age - 0.42) / 0.2; h = math.sin(u * math.pi) * 1.1 * S
+				elseif age < 0.76 then local u = (age - 0.62) / 0.14; h = math.sin(u * math.pi) * 0.35 * S
+				else h = 0 end
+				local dir = k.pos - d
+				local axis = if dir.Magnitude > 0.01 then Vector3.new(dir.Z, 0, -dir.X).Unit else Vector3.xAxis
+				local spin = CFrame.fromAxisAngle(axis, roll * dir.Magnitude / (0.3 * S))
+				place(k, CFrame.new(at + Vector3.new(0, hover + h, 0)) * spin)
+				if k.shadow then k.shadow.CFrame = CFrame.new(Vector3.new(at.X, k.pos.Y + 0.06, at.Z)) * CFrame.Angles(0, 0, math.pi / 2) end
+				continue
+			end
+			if age > 1.4 and (id + frameN) % 2 == 0 then continue end
+			local e = if k.drop then 1 else easeOutBack(math.min(1, age / 0.35))
+			local y = (e - 1) * 0.6 * S + math.sin(clock * 3 + id) * 0.1 * S + 0.5 * S   -- hovers above its shadow
 			place(k, CFrame.new(k.pos + Vector3.new(0, y, 0)) * CFrame.Angles(0, clock * 1.6 + id, 0))
 		end
 	end

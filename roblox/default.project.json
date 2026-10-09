@@ -157,7 +157,7 @@
               "Uri": "rbxassetid://116717537894157"
             }
           },
-          "StudsPerTile": 28
+          "StudsPerTile": 56
         }
       },
       "PaintedLeafyGrass": {
@@ -169,7 +169,7 @@
               "Uri": "rbxassetid://110200714563611"
             }
           },
-          "StudsPerTile": 24
+          "StudsPerTile": 44
         }
       },
       "PaintedPavement": {
@@ -181,7 +181,7 @@
               "Uri": "rbxassetid://116717537894157"
             }
           },
-          "StudsPerTile": 28
+          "StudsPerTile": 37
         }
       },
       "PaintedSalt": {

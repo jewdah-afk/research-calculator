@@ -268,7 +268,7 @@ end
 local function groundAtWorld(x, z)
 	local i, j = math.floor(x / S + COLS / 2), math.floor(z / S + ROWS / 2)
 	if not land(i, j) then return 0 end
-	return math.max(0, topY(i, j)) + World.relief(x / S + COLS / 2, z / S + ROWS / 2)   -- on the rolling ground
+	return (LandTerrain.visualTop(i, j, math.max(0, topY(i, j)), tile(i, j)))   -- first value only (height)   -- the ground the terrain actually shows
 end
 
 
@@ -315,6 +315,12 @@ end
 -- rotation, lamp lights), its bricks are removed except the ones carrying a light, and the smooth model is placed
 -- on the same footprint, scaled to the brick height and turned like it.
 local PropAssets = RS:WaitForChild("PropAssets", 10)
+-- real-world heights (studs) per prop kind, so props read at a proper size next to the hen (owner 2026-10-09)
+local PROP_H = { lantern = 9, bench = 2.6, fence = 2.6, cart = 8, windmill = 19, rock = 2.4, arch = 10, barrel = 2.4,
+	birdhouse = 6.5, scarecrow = 5.5, sunflower = 4.2, mushroom = 1.8, post = 4.2, keep = 28, tower = 17, temple = 15,
+	pyramid = 15, greenhouse = 8.5, hut = 8, mineentrance = 11, minecart = 3.2, boat = 2.6, balloon = 13, crystal = 3.2,
+	ore = 2.4, cactus = 4.8, palm = 13, deadtree = 8.5, log = 1.6, bones = 1.1, twigs = 0.9, altar = 4.2, pillar = 6.5,
+	bell = 6.5, banner = 7.5, rod = 5, tent = 5.5, flowers = 1.4 }
 local function swapProp(info)
 	local m = info.model
 	local src = PropAssets and PropAssets:FindFirstChild(info.kind)
@@ -323,9 +329,7 @@ local function swapProp(info)
 	local yaw = select(2, m.WorldPivot:ToOrientation())
 	local a = src:Clone()
 	local _, asz = a:GetBoundingBox()
-	local k = size.Y / math.max(asz.Y, 0.01)
-	local foot = math.max(size.X, size.Z) * 1.15
-	if math.max(asz.X, asz.Z) * k > foot then k = foot / math.max(asz.X, asz.Z) end
+	local k = (PROP_H[info.kind] or size.Y * 1.4) / math.max(asz.Y, 0.01)
 	a:ScaleTo(a:GetScale() * k)
 	for _, d in a:GetDescendants() do
 		if d:IsA("BasePart") then d.Anchored = true; d.CanCollide = false; d.CanQuery = false; d.CanTouch = false end
@@ -478,7 +482,20 @@ function IslandView.build()
 	-- flowers: 1x1-stud clusters on stud centres, grass only, never in the field / on the hill
 	do
 		local fm = Instance.new("Model"); fm.Name = "Flowers"
+		local fl = PropAssets and PropAssets:FindFirstChild("flowers")
 		for k, f in Map.flowers do
+			if fl then   -- painted wildflower clusters (generated mesh) instead of brick flowers
+				local x, z = pxToWorld(f[1], f[2])
+				local c = fl:Clone()
+				local _, fsz = c:GetBoundingBox()
+				c:ScaleTo(c:GetScale() * (1.2 + hash(k, 2) * 0.5) / fsz.Y)
+				local fcf, fsz2 = c:GetBoundingBox()
+				c.WorldPivot = CFrame.new(fcf.Position - Vector3.new(0, fsz2.Y / 2, 0))
+				c:PivotTo(CFrame.new(x, groundAtWorld(x, z), z) * CFrame.Angles(0, hash(k, 7) * 6.28, 0))
+				for _, d in c:GetDescendants() do if d:IsA("BasePart") then d.Anchored = true; d.CanCollide = false; d.CanQuery = false; d.CanTouch = false; d.CastShadow = false end end
+				c.Parent = fm
+				continue
+			end
 			local x, z = pxToWorld(f[1], f[2])
 			local i, j = math.floor(x / S + COLS / 2), math.floor(z / S + ROWS / 2)
 			if tile(i, j) ~= 1 or Map.height(i, j) > 0 or inField(i, j) then continue end
@@ -693,7 +710,7 @@ end
 local function buildIslandProp(isl, p, parent)
 	local i, j = math.floor(p.x), math.floor(p.z)
 	local c = World.rawTile(i, j)
-	local base = if c == 3 then -0.2 else islandTopY(isl, i, j) + World.relief(p.x, p.z)   -- on the rolling ground
+	local base = if c == 3 then -0.2 else (LandTerrain.visualTop(i, j, islandTopY(isl, i, j), c))   -- the ground the terrain shows
 	local origin = CFrame.new(sx(p.x), base, sz(p.z)) * CFrame.Angles(0, p.rot or 0, 0)
 	local m = Instance.new("Model"); m.Name = p.kind
 	local bobM

@@ -48,6 +48,22 @@ Branch **`claude/peckwood-isle`** (pushed). Build: `cd roblox && rojo build defa
 - Asset export pipeline: SerializationService in Studio -> local POST receiver -> `lune` re-serialize (fixes the Tags
   property Rojo 7.5 can't read) -> rojo `$path`.
 
+### Park polish (2026-10-09, latest)
+- Hen: new storybook hen (generate_mesh, parts body/wingL/wingR) in `assets/BirdAsset.rbxm`; `Models.bird` rebuilds
+  its WorldPivot at the feet (the exported pivot is lost in the asset round-trip), 1.1 * S tall, no cartoon outline.
+- Terrain surface offset: WriteVoxels renders a full voxel's surface ~2 studs high, so `LandTerrain.column` writes
+  3 studs lower (measured in Play with a raycast; ground now matches the bird/eggs/props).
+- Hills are walkable (Controller: hill height = `LandTerrain.visualTop`, STEP_UP 13 px); props sit on the visible
+  ground (`groundAtWorld` / island props use visualTop). Only call visualTop in parentheses: it returns 3 values.
+- Props: `PROP_H` table in IslandView = real-world heights per kind (lamp 9, windmill 19, ...); new generated bench +
+  wildflower tuft (Park flowers use it); PropAssets now 37 kinds.
+- Eggs: hover 0.5 * S over a black shadow disc; physical-feeling spawn: server picks a rest spot a short roll from the
+  drop point (walkable only) + `readyAt` (no pickup until landed); client animates fall, 2 bounces, rolling spin.
+- Water: ripple sheet (procedural wavy strokes, two drifting Textures over the whole sea) + 3 shore-wave bands that
+  light up outermost first every 4.5 s. Grass repeat broken up (tile scales 56 / 44 / 37).
+- Open: pond reads as a blocky square; sand rim too white at dusk; regenerate the bad props (wall, tank, tent,
+  monolith, vine); paths in the Park still show dirt patches; then the other islands; then the UI track.
+
 ### LAYOUT SWITCH (owner, 2026-10-09 late night): back to Birb's setup
 - The Ascent terraces made the bird snag everywhere (cliff-foot no-walk strips, narrow ramps, hills, relief), so
   `World.LAYOUT = "grid"`: Birb's flat islands per area + bridges, Park portal hub inside the Park

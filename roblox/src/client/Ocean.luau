@@ -57,6 +57,7 @@ local night = 0
 local AssetService = game:GetService("AssetService")
 local tintImg, foamImg, tintDecal, foamDecal, sheet
 local glints, frame = {}, {}
+local ripples, waveDecals, waveImgs = {}, {}, {}
 local B = nil   -- painted rectangle in tiles
 local PX = 2    -- pixels per tile
 local FAR = { 27, 112, 177 }   -- deep-sea colour (the gradient at distance 8), shared by the painted and far sea
@@ -106,6 +107,46 @@ local function buildSurface(parent)
 	if foamImg then
 		foamDecal = Instance.new("Decal"); foamDecal.Face = Enum.NormalId.Top; foamDecal.ZIndex = 3
 		foamDecal.ColorMapContent = Content.fromObject(foamImg); foamDecal.Parent = sheet
+	end
+	-- Pokemon-style water: (1) a ripple sheet over the whole sea with painted wavy strokes drifting two ways, visible
+	-- at any zoom (far Terrain water renders flat); (2) three shore-wave bands that light up outermost first, so waves
+	-- read as rolling in to the beach (painted in paint())
+	do
+		local RW = 128
+		local rip = newImage(RW, RW)
+		if rip then
+			local rb = buffer.create(RW * RW * 4)
+			for y = 0, RW - 1 do
+				for x = 0, RW - 1 do
+					-- three wavy stroke rows per tile, broken into dashes so it reads as ripples, not stripes
+					local a = 0
+					for k = 0, 2 do
+						local cy = (k + 0.5) * RW / 3 + math.sin(x / RW * math.pi * 2 * 2 + k * 2.1) * 5
+						local d = math.abs(y - cy)
+						local dash = math.sin(x / RW * math.pi * 2 * (3 + k) + k) > -0.2
+						if d < 1.6 and dash then a = math.max(a, 1 - d / 1.6) end
+					end
+					local o = (y * RW + x) * 4
+					buffer.writeu8(rb, o, 255); buffer.writeu8(rb, o + 1, 255); buffer.writeu8(rb, o + 2, 255); buffer.writeu8(rb, o + 3, a * 150)
+				end
+			end
+			rip:WritePixelsBuffer(Vector2.zero, Vector2.new(RW, RW), rb)
+			local rs = part(parent, Vector3.new(6000, 0.2, 6000), CFrame.new(cx, TOP + 0.06, cz), Color3.new(1, 1, 1), nil, 1)
+			rs.Name = "Ripples"
+			for _, st in { 46, 71 } do
+				local t = Instance.new("Texture"); t.Face = Enum.NormalId.Top; t.StudsPerTileU = st; t.StudsPerTileV = st * 0.8
+				t.ColorMapContent = Content.fromObject(rip); t.Transparency = 0.35; t.Parent = rs
+				table.insert(ripples, t)
+			end
+		end
+		for k = 1, 3 do
+			local img = newImage(B.w * PX, B.h * PX)
+			if img then
+				local dcl = Instance.new("Decal"); dcl.Face = Enum.NormalId.Top; dcl.ZIndex = 4; dcl.Transparency = 1
+				dcl.ColorMapContent = Content.fromObject(img); dcl.Parent = sheet
+				waveImgs[k], waveDecals[k] = img, dcl
+			end
+		end
 	end
 	-- sparkle: a tiling 64px image of white flecks, two layers at different scales drifting apart
 	local gl = newImage(64, 64)
@@ -173,6 +214,8 @@ local function paint(distOf)
 	end
 	local PW, PH = w * PX, h * PX
 	local tb, fb = buffer.create(PW * PH * 4), buffer.create(PW * PH * 4)
+	local wb = { buffer.create(PW * PH * 4), buffer.create(PW * PH * 4), buffer.create(PW * PH * 4) }
+	local WAVE_D = { 3.6, 2.6, 1.7 }   -- wave line distance from shore (tiles), outermost first
 	for py = 0, PH - 1 do
 		local fy = (py + 0.5) / PX - 0.5
 		local j = math.clamp(math.floor(fy), 0, h - 1); local ty = math.clamp(fy - j, 0, 1)
@@ -195,11 +238,18 @@ local function paint(distOf)
 			local f = band * (0.6 + 0.4 * math.sin(d * 7 + n * 1.5))
 			if d > 1.2 and d < 4 and n > 0.985 then f = math.max(f, 0.5) end
 			buffer.writeu8(fb, o, 255); buffer.writeu8(fb, o + 1, 255); buffer.writeu8(fb, o + 2, 255); buffer.writeu8(fb, o + 3, math.clamp(f, 0, 1) * 235)
+			for k = 1, 3 do   -- thin wavy wave crest following the coast at WAVE_D[k], broken where noise is low
+				local wd = WAVE_D[k] + math.sin(px * 0.05 + py * 0.035 + k) * 0.18
+				local wa = math.max(0, 1 - math.abs(d - wd) / 0.22) * (if n > 0.18 then 1 else 0.3)
+				local ow = o
+				buffer.writeu8(wb[k], ow, 255); buffer.writeu8(wb[k], ow + 1, 255); buffer.writeu8(wb[k], ow + 2, 255); buffer.writeu8(wb[k], ow + 3, wa * 220)
+			end
 		end
 		if py % 64 == 63 then task.wait(); if gen ~= paintGen then return end end   -- a newer coastline superseded this one
 	end
 	tintImg:WritePixelsBuffer(Vector2.zero, Vector2.new(PW, PH), tb)
 	if foamImg then foamImg:WritePixelsBuffer(Vector2.zero, Vector2.new(PW, PH), fb) end
+	for k = 1, 3 do if waveImgs[k] then waveImgs[k]:WritePixelsBuffer(Vector2.zero, Vector2.new(PW, PH), wb[k]) end end
 end
 
 -- ---------------------------------------------------------------- static sea
@@ -437,6 +487,17 @@ function Ocean.step(dt: number)
 	for _, j in jellies do
 		if not near(j.c, focus, R) then continue end
 		j.p.CFrame = CFrame.new(j.c.X + math.sin(clock * 0.3 + j.ph) * 2, SEA_Y - 0.7 + math.sin(clock * 1.2 + j.ph) * 0.25, j.c.Z + math.cos(clock * 0.25 + j.ph) * 2)
+	end
+	for kk, r in ripples do
+		r.OffsetStudsU = clock * (if kk == 1 then 1.3 else -0.9)
+		r.OffsetStudsV = clock * (if kk == 1 then 0.6 else 1.1)
+	end
+	-- shore waves: a set every 4.5 s, outermost line first, each brightening then fading as the next takes over
+	local cyc = (clock / 4.5) % 1
+	for k, dcl in waveDecals do
+		local ph = (cyc - (k - 1) * 0.22) % 1
+		local a = if ph < 0.35 then math.sin(ph / 0.35 * math.pi) else 0
+		dcl.Transparency = 1 - a * 0.85 * (1 - night * 0.6)
 	end
 	for kk, g in glints do
 		g.OffsetStudsU = clock * (if kk == 1 then 1.6 else -1.1)

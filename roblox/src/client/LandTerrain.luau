@@ -137,7 +137,7 @@ function LandTerrain.column(x0, z0, top, mat, code, shore)
 		if shore and World.base(i, j) == 0 then mat = M.Sand
 		elseif n2 > 0.42 and World.base(i, j) > 0 then mat = M.Ground   -- no random dirt stains in the Park valley
 		elseif n1 > 0.45 then mat = M.LeafyGrass   -- deep moss is dark: only small patches
-		elseif n1 < -0.28 then mat = M.Pavement   -- drier meadow tone (painted grass, warmer tint)
+		elseif n1 < -0.05 then mat = M.Pavement   -- drier meadow tone (painted grass, warmer tint)
 		end
 	end
 	-- cliff slopes show rock (snow way up high); hills stay grassy mounds, capped with snow on the summit
@@ -145,7 +145,10 @@ function LandTerrain.column(x0, z0, top, mat, code, shore)
 	elseif hill and y > 86 then mat = M.Snow end
 	local under = if mat == M.Snow or mat == M.Rock or mat == M.Slate then M.Slate elseif shore or mat == M.Sand then M.Sand else M.Mud
 	-- the top two voxels carry the surface material: with a fractional top voxel the one below is what you see
-	column(x0, z0, y, { { y - 7, mat }, { y - 14, under }, { -math.huge, M.Rock } })
+	-- WriteVoxels: a full voxel's rendered surface sits ~2 studs above its top (measured in Play: logic ground 0,
+	-- terrain surface 2.0), so write 2 studs lower to put the visible ground exactly where the bird / eggs / props stand
+	local yv = y - 3   -- measured: -2 left the surface at +1.0
+	column(x0, z0, yv, { { yv - 7, mat }, { yv - 14, under }, { -math.huge, M.Rock } })
 end
 
 -- remove a column (area locked again): back to sea water up to sea level
