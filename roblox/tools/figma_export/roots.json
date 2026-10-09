@@ -1,0 +1,210 @@
+{
+ "239:309": {
+  "mod": "Tree_Sunflower",
+  "kind": "window"
+ },
+ "246:3851": {
+  "mod": "Tree_Desert",
+  "kind": "window"
+ },
+ "246:1796": {
+  "mod": "Tree_Archivist",
+  "kind": "window"
+ },
+ "246:4443": {
+  "mod": "Mine_Shop",
+  "kind": "window"
+ },
+ "248:1739": {
+  "mod": "Mine_Areas",
+  "kind": "window"
+ },
+ "246:1525": {
+  "mod": "Mine_TreasureRoom",
+  "kind": "window"
+ },
+ "246:1276": {
+  "mod": "Crow",
+  "kind": "window"
+ },
+ "246:3448": {
+  "mod": "Fishing_Collection",
+  "kind": "window"
+ },
+ "248:2079": {
+  "mod": "Fishing_Equipment",
+  "kind": "window"
+ },
+ "248:2952": {
+  "mod": "Fishing_Fishdex",
+  "kind": "window"
+ },
+ "246:2134": {
+  "mod": "Aquarium_Biomes",
+  "kind": "window"
+ },
+ "246:4667": {
+  "mod": "Aquarium_Resonance",
+  "kind": "window"
+ },
+ "248:1351": {
+  "mod": "Aquarium_Total",
+  "kind": "window"
+ },
+ "246:2574": {
+  "mod": "FishMarket",
+  "kind": "window"
+ },
+ "248:1566": {
+  "mod": "FishMarket_Locked",
+  "kind": "window"
+ },
+ "246:1462": {
+  "mod": "Nest_Lake",
+  "kind": "window"
+ },
+ "248:546": {
+  "mod": "Nest_Lake_Incubating",
+  "kind": "window"
+ },
+ "248:948": {
+  "mod": "Nest_Lake_Ready",
+  "kind": "window"
+ },
+ "256:483": {
+  "mod": "Parrot_Overview",
+  "kind": "window"
+ },
+ "260:753": {
+  "mod": "Parrot_Upgrade",
+  "kind": "window"
+ },
+ "259:613": {
+  "mod": "Parrot_Equipment",
+  "kind": "window"
+ },
+ "260:3850": {
+  "mod": "Parrot_Forge",
+  "kind": "window"
+ },
+ "260:1011": {
+  "mod": "Parrot_Index",
+  "kind": "window"
+ },
+ "260:3443": {
+  "mod": "Parrot_Rebirb",
+  "kind": "window"
+ },
+ "260:5073": {
+  "mod": "Expedition",
+  "kind": "window"
+ },
+ "256:924": {
+  "mod": "Sacrifice",
+  "kind": "window"
+ },
+ "256:995": {
+  "mod": "Sacrifice_Mythic",
+  "kind": "window"
+ },
+ "256:1284": {
+  "mod": "Objectives_Quests",
+  "kind": "window"
+ },
+ "260:1565": {
+  "mod": "Objectives_QuestIndex",
+  "kind": "window"
+ },
+ "260:2885": {
+  "mod": "Objectives_Bonuses",
+  "kind": "window"
+ },
+ "260:2137": {
+  "mod": "Nest_Shop",
+  "kind": "window"
+ },
+ "260:4842": {
+  "mod": "Nest_Riverside",
+  "kind": "window"
+ },
+ "260:5761": {
+  "mod": "Nest_Sawmill",
+  "kind": "window"
+ },
+ "261:600": {
+  "mod": "Nest_Owned",
+  "kind": "window"
+ },
+ "259:788": {
+  "mod": "Sparrow",
+  "kind": "window"
+ },
+ "260:5560": {
+  "mod": "Seagull",
+  "kind": "window"
+ },
+ "256:589": {
+  "mod": "RedPanda",
+  "kind": "window"
+ },
+ "256:806": {
+  "mod": "RedPanda_Naming",
+  "kind": "window"
+ },
+ "259:871": {
+  "mod": "Dave",
+  "kind": "window"
+ },
+ "260:2568": {
+  "mod": "Evolve",
+  "kind": "window"
+ },
+ "260:3088": {
+  "mod": "Shop_Eggs",
+  "kind": "window"
+ },
+ "260:3277": {
+  "mod": "Shop_Eggs_Golden",
+  "kind": "window"
+ },
+ "260:4397": {
+  "mod": "Shop_Molt",
+  "kind": "window"
+ },
+ "260:4544": {
+  "mod": "Shop_Seeds",
+  "kind": "window"
+ },
+ "215:7": {
+  "mod": "Hud_Chips",
+  "kind": "hud"
+ },
+ "215:75": {
+  "mod": "Hud_Tiles",
+  "kind": "hud"
+ },
+ "215:181": {
+  "mod": "Hud_Travel",
+  "kind": "hud"
+ },
+ "215:245": {
+  "mod": "Hud_Auto",
+  "kind": "hud"
+ },
+ "218:7": {
+  "mod": "Hud_Context",
+  "kind": "hud"
+ },
+ "218:75": {
+  "mod": "Hud_Hotbar",
+  "kind": "hud"
+ },
+ "218:162": {
+  "mod": "Hud_Prompts",
+  "kind": "hud"
+ },
+ "218:254": {
+  "mod": "Hud_Companions",
+  "kind": "hud"
+ }
+}

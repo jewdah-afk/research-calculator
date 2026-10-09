@@ -1,1165 +1,890 @@
 --!nonstrict
--- Hud: Figma HUD frame 8:271 (1920x1080) - map banner, toast, wallet capsules, objective bar, docked shop window -
--- plus the window menu, the AUTO button (group perk) and the dev save panel (Regular / Maxed / Next island).
+-- Hud: the in-game HUD, built 1:1 from the Figma HUD board "HUD at Birb parity (squared)" 213:7 and placed like the
+-- screen mock 229:7 (1920x1080, HUD scale 0.82, wallet 0.85, area rail 1.0, 16 px margins). Every piece is the
+-- Figma component rendered by UI/Figma/Render (layouts Hud_*.luau). Live data comes from the server State push;
+-- anything without a game system yet reads UI/SampleData.
+--   top left      area banner, 4x2 menu tiles (MAP TELEPORT FISH PROFILE / SHOP SETTINGS AUTO PETS), COMPANIONS list
+--   bottom left   wallet: EGGS main chip + 2-column chips that fill upward (only currencies the player has)
+--   top centre    context bar for the current area + toasts under it
+--   bottom centre objective (+ UNLOCK for paid gates), area hotbar, context AUTO, down arrow
+--   right         area rail (open = coloured key, current = popped out, locked = grey + lock), travel arrows
+--   top right     SHOP drawer pull tab (the Eggs / Molt / Seeds upgrade drawer docks on the right)
+-- Windows are opened through UI/WindowManager (WindowDefs lists every one and the Figma frames behind it).
 local Players = game:GetService("Players")
 local RS = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local GroupService = game:GetService("GroupService")
+local GuiService = game:GetService("GuiService")
+local UIS = game:GetService("UserInputService")
 local Shared = RS:WaitForChild("Peckwood")
 local Defs = require(Shared:WaitForChild("Defs"))
-local World = require(game:GetService("ReplicatedStorage"):WaitForChild("Peckwood"):WaitForChild("World"))
+local World = require(Shared:WaitForChild("World"))
 local Kit = require(script.Parent.Kit)
-local Spec = require(script.Parent.Spec)
-local Window = require(script.Parent.Window)
-local Windows = require(script.Parent.Windows)
+local Sfx = require(script.Parent.Sfx)
+local Render = require(script.Parent.Figma.Render)
+local FKit = require(script.Parent.Figma.FKit)
+local WM = require(script.Parent.WindowManager)
+local Binders = require(script.Parent.Binders)
+local Screens = require(script.Parent.Screens)
+local SampleData = require(script.Parent.SampleData)
+local RobuxShop = require(script.Parent.RobuxShop)
+local Layouts = script.Parent.Figma.Layouts
 local EN = Defs.EN
-local hex = Kit.hex
 
 local Hud = {}
+Hud.toast = function(_msg: string, _tone: string?, _icon: string?) end   -- set below (showToast)
 local plr = Players.LocalPlayer
+local S = {
+	chips = require(Layouts.Hud_Chips), tiles = require(Layouts.Hud_Tiles), travel = require(Layouts.Hud_Travel),
+	auto = require(Layouts.Hud_Auto), context = require(Layouts.Hud_Context), hotbar = require(Layouts.Hud_Hotbar),
+	prompts = require(Layouts.Hud_Prompts), companions = require(Layouts.Hud_Companions),
+}
 
 local gui, canvas, scale
-local state, derived
 local Remotes
-local docked = nil          -- id of the window docked on the right
-local capsules = {}         -- currency -> { frame, value, rate, icon }
-local menuButtons = {}
+local state, derived
+Hud.kernelCount = 0
+Hud.collapsed = true
+Hud.dock = { Visible = false }   -- Main.client reads dock.Visible / collapsed to keep the island clear of the drawer
 
 local function act(kind, a, b, btn)
 	Remotes.Action:FireServer(kind, a, b)
 	Hud.lastBtn = btn
 end
+Hud.act = act
 
--- ---------------------------------------------------------------- canvas: 1920x1080 design space, scaled to the screen height
+local function fmt(v) return EN.short(v) end
+local function commas(n)
+	n = math.floor(n)
+	if n >= 1e6 then return EN.short(n) end
+	local s = tostring(n):reverse():gsub("(%d%d%d)", "%1,"):reverse()
+	return (s:gsub("^,", ""))
+end
+local function amount(v)
+	local n = EN.toNumber(v)
+	if n == n and n < 1e6 then return commas(n) end
+	return EN.short(v)
+end
+Hud.amount, Hud.commas = amount, commas
+
+-- strip the press wiring from a component that is display-only (wallet chips, banner, bars)
+local function inert(ui)
+	for _, d in ui.root:GetDescendants() do
+		if d.Name == "hit" and d:IsA("TextButton") then d:Destroy() end
+	end
+end
+local function setT(under, name, text)
+	local l = under:FindFirstChild(name, true)
+	if l and l:IsA("TextLabel") then Render.setText(l, text) end
+	return l
+end
+-- recolour a key face / lip from a gradient layer
+local function retint(frame, layer)
+	if not (frame and layer) then return end
+	for _, g in frame:GetChildren() do if g:IsA("UIGradient") then g:Destroy() end end
+	frame.BackgroundColor3 = Color3.new(1, 1, 1); frame.BackgroundTransparency = 0
+	Render.gradient(frame, layer, 1)
+end
+
+-- ---------------------------------------------------------------- groups (design space 1920x1080, scaled to height)
+local groups = {}
+local function group(name, anchor, pos, size, sc)
+	local g = Render.new("Frame", { Name = name, BackgroundTransparency = 1, AnchorPoint = anchor, Position = pos, Size = UDim2.fromOffset(size.X, size.Y), ZIndex = 5 }, canvas)
+	Render.new("UIScale", { Scale = sc }, g)
+	groups[name] = g
+	return g
+end
+local topInset = 0
 local function layout()
 	local vp = workspace.CurrentCamera.ViewportSize
-	local s = math.max(0.4, vp.Y / 1080)
+	local s = math.max(0.35, vp.Y / 1080)
 	scale.Scale = s
 	canvas.Size = UDim2.fromOffset(vp.X / s, vp.Y / s)
+	-- the Roblox top bar covers the top-left corner: the top-left block starts under it
+	local inset = GuiService:GetGuiInset()
+	topInset = inset.Y / s
+	if groups.tl then groups.tl.Position = UDim2.fromOffset(16, 14 + topInset) end
+	if groups.pull then groups.pull.Position = UDim2.new(1, -16, 0, 14 + topInset) end
+	-- narrow (portrait) screens: shrink the HUD a little so the corners never meet
+	local w = vp.X / s
+	local k = math.clamp(w / 1700, 0.62, 1)
+	for name, g in groups do
+		local base = g:GetAttribute("baseScale") or g:FindFirstChildOfClass("UIScale").Scale
+		g:SetAttribute("baseScale", base)
+		g:FindFirstChildOfClass("UIScale").Scale = base * k
+	end
 end
 
--- ---------------------------------------------------------------- banner (map banner 28,26,330,66)
-local banner
-local function buildBanner()
-	-- island plate: the same 3D key as every button (ink outline, themed face, darker lip, gloss, stripes), not clickable
-	local key = Kit.button(canvas, 30, 60, 304, 70, { text = "", stops = Kit.stops(Spec.popcorn.hdr), silent = true, depth = 7 })
-	key.root.Active = false; pcall(function() key.root.Interactable = false end)
-	local name = Kit.title(key.face, "THE PARK", 27, Color3.new(1, 1, 1), 3, 3, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 16, 0.5, 0), ZIndex = 10 })
-	local k = Kit.frame(key.face, 298 - 116, 0, 106, 32, Kit.INK, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(1, -116, 0.5, 0), BackgroundTransparency = 0.4, ZIndex = 10 }); Kit.corner(k, 16)
-	Kit.icon(k, 3, 1, 30, "popcorn", { ZIndex = 11 })
-	local kt = Kit.title(k, "0 / 0", 16, Color3.new(1, 1, 1), 2, 0, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(67, 16), ZIndex = 11 })
-	banner = { key = key, name = name, kernels = kt, kbox = k }
+-- ---------------------------------------------------------------- top left: banner, tiles, companions
+local banner, tiles, companions = nil, {}, nil
+local TILE_ORDER = { "map", "teleport", "fish", "profile", "shop", "settings", "auto", "pets" }
+local TILE_X, TILE_Y = { 0, 111, 223, 334 }, { 91, 216 }
+local companionsOpen = true
+local COMPANION_ROWS = {   -- Figma row name -> window id, unlock window (WINDOW_ISLAND gate)
+	{ "row/SPARROW", "sparrow", "sparrow" }, { "row/SEAGULL", "seagull", "seagull" }, { "row/BAMBOO", "redpanda", "redpanda" },
+	{ "row/CROW", "crow", "mine" }, { "row/DAVE", "dave", "dave" }, { "row/PARROT", "parrot", "parrot" },
+}
+local function unlockedWindow(w)
+	return state ~= nil and (Defs.WINDOW_ISLAND[w] or 1) <= state.island
+end
+local function layoutCompanions()
+	if not companions then return end
+	local y = 70
+	for _, r in COMPANION_ROWS do
+		local row = companions.node:FindFirstChild(r[1])
+		if row then
+			local show = companionsOpen and unlockedWindow(r[3])
+			row.Visible = show
+			if show then row.Position = UDim2.fromOffset(0, y); y += 58 end
+		end
+	end
+	-- no companion yet: the header stays (Birb shows COMPANIONS once the Sparrow is unlocked)
+	companions.root.Visible = state == nil or unlockedWindow("sparrow")
+end
+local function toggleCompanions()
+	companionsOpen = not companionsOpen
+	layoutCompanions()
+end
+Hud.toggleCompanions = toggleCompanions
+
+local function onAuto()
+	if not derived then return end
+	if not derived.autoAllowed and derived.groupId and derived.groupId > 0 then
+		pcall(function() GroupService:PromptJoinAsync(derived.groupId) end)
+	end
+	act("auto", not (state and state.auto))
+end
+Hud.onAuto = onAuto
+
+local TILE_ACTION = {
+	map = function()
+		local on = not plr.PlayerGui:GetAttribute("PeckwoodMap")
+		plr.PlayerGui:SetAttribute("PeckwoodMap", on)
+		if on then Hud.toast("Map: every open area. Tap MAP again to return", "info", "map") end
+	end,
+	teleport = function() WM.toggle("teleport") end,
+	fish = function() WM.toggle("fishing") end,
+	profile = function() WM.toggle("profile") end,
+	shop = function() RobuxShop.toggle() end,
+	settings = function() WM.toggle("settings") end,
+	auto = onAuto,
+	pets = function() toggleCompanions() end,
+}
+
+local function buildTopLeft()
+	local tl = group("tl", Vector2.new(0, 0), UDim2.fromOffset(16, 14), Vector2.new(440, 780), 0.82)
+	banner = Render.component(S.prompts, "hud/banner/the bridge", tl)
+	inert(banner)
+	local areaL = banner.root:FindFirstChild("area", true)
+	if areaL then Render.fit(areaL, 16) end
+	for i, id in TILE_ORDER do
+		local ui = Render.component(S.tiles, "hud/tile/" .. id, tl)
+		ui.root.Position = UDim2.fromOffset(TILE_X[(i - 1) % 4 + 1], TILE_Y[math.floor((i - 1) / 4) + 1])
+		ui.on("hud/tile/" .. id, function() TILE_ACTION[id]() end)
+		tiles[id] = ui
+	end
+	companions = Render.component(S.companions, "hud/companions (open)", tl)
+	companions.root.Position = UDim2.fromOffset(0, 346)
+	companions.on("header key", toggleCompanions)
+	-- rows open their companion window (rows are plain plates: make each one a button)
+	for _, r in COMPANION_ROWS do
+		local row = companions.node:FindFirstChild(r[1])
+		if row then
+			local hit = Render.new("TextButton", { Name = "hit", Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 999 }, row)
+			local hl = Render.new("Frame", { Name = "hover", BorderSizePixel = 0, BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 998 }, row)
+			hit.MouseEnter:Connect(function() hl.BackgroundTransparency = 0.94 end)
+			hit.MouseLeave:Connect(function() hl.BackgroundTransparency = 1 end)
+			hit.MouseButton1Down:Connect(function() Sfx.press() end)
+			hit.Activated:Connect(function() WM.toggle(r[2]) end)
+		end
+	end
+	UIS.InputBegan:Connect(function(io, gp)
+		if gp then return end
+		if io.KeyCode == Enum.KeyCode.Tab then toggleCompanions() end
+	end)
 end
 
--- ---------------------------------------------------------------- toast (397,96,644,69)
+-- ---------------------------------------------------------------- wallet (bottom left)
+-- currency -> Figma chip; popcorn is the EGGS main chip. Chips show only for currencies the player has.
+local CHIP = { goldenFeathers = "plume", sunflowerSeeds = "seed", moneta = "moneta", twigs = "twig", goldenPopcorn = "egg_golden",
+	bruteOre = "ore", echoPopcorn = "echo", skillPoints = "skill_point" }
+local CHIP_ORDER = { "goldenFeathers", "sunflowerSeeds", "moneta", "twigs", "goldenPopcorn", "bruteOre", "echoPopcorn", "skillPoints" }
+local CHIP_UNLOCK = { goldenFeathers = 2, sunflowerSeeds = 3, moneta = 5, twigs = 6, bruteOre = 7, goldenPopcorn = 8, skillPoints = 9, echoPopcorn = 10 }
+local chips = {}
+local WALLET_H = 520
+local function chipApi(ui, main)
+	local wellF = ui.root:FindFirstChild("well", true)
+	local value, name, rate = setT(ui.root, "value", "0"), wellF and wellF:FindFirstChild("name tag"), wellF and wellF:FindFirstChild("rate")
+	local c = { ui = ui, value = value, name = name, rate = rate, icon = ui.root:FindFirstChildWhichIsA("ImageLabel"), main = main }
+	-- value fits by shrinking; when it needs the room the engraved name hides (never overlaps)
+	if value then
+		Render.fit(value, 14)
+		local function hideName()
+			if not (name and wellF) then return end
+			local room = (name.Position.X.Offset - value.Position.X.Offset)
+			name.Visible = value.TextBounds.X < room - 6
+			if rate then rate.Visible = name.Visible or main end
+		end
+		value:GetPropertyChangedSignal("TextBounds"):Connect(hideName)
+	end
+	for _, d in ui.root:GetDescendants() do
+		if d:IsA("ImageLabel") and d.Name:sub(1, 4) == "ico/" then c.icon = d end
+	end
+	return c
+end
+local function buildWallet()
+	local g = group("wallet", Vector2.new(0, 1), UDim2.new(0, 10, 1, -10), Vector2.new(520, WALLET_H), 0.852)
+	local main = Render.component(S.chips, "hud/chip-main/popcorn", g)
+	main.root.Position = UDim2.fromOffset(0, WALLET_H - 92)
+	inert(main)
+	chips.popcorn = chipApi(main, true)
+	for cur, chipName in CHIP do
+		local ui = Render.component(S.chips, "hud/chip/" .. chipName, g)
+		inert(ui)
+		ui.root.Visible = false
+		chips[cur] = chipApi(ui, false)
+	end
+end
+local function layoutWallet()
+	local i = 0
+	for _, cur in CHIP_ORDER do
+		local c = chips[cur]
+		local show = state ~= nil and (CHIP_UNLOCK[cur] or 99) <= state.island and EN.me(state[cur], 0)
+		if cur == "goldenFeathers" and state and state.island >= 2 then show = true end
+		c.ui.root.Visible = show
+		if show then
+			c.ui.root.Position = UDim2.fromOffset(2 + 253 * (i % 2), WALLET_H - 155 - 67 * math.floor(i / 2))
+			i += 1
+		end
+	end
+end
+
+-- currency icons arc from a point to their wallet chip (collected eggs, buys)
+local function flyFrom(cur, a: Vector2, n, size)
+	local c = chips[cur]; if not (c and c.icon and c.ui.root.Visible) then return end
+	local s = scale.Scale
+	local b = (c.icon.AbsolutePosition + c.icon.AbsoluteSize / 2) / s
+	local id = c.icon.Image
+	for i = 1, n or 1 do
+		local img = Render.new("ImageLabel", { BackgroundTransparency = 1, Image = id, Size = UDim2.fromOffset(size, size), ZIndex = 60 }, canvas)
+		local mid = Vector2.new((a.X + b.X) / 2 + math.random(-60, 60), math.min(a.Y, b.Y) - 90 - math.random(0, 60))
+		task.delay((i - 1) * 0.04, function()
+			local t0 = os.clock()
+			local conn
+			conn = RunService.RenderStepped:Connect(function()
+				local t = math.min(1, (os.clock() - t0) / 0.6)
+				local e = t * t * (3 - 2 * t)
+				local p = a:Lerp(mid, e):Lerp(mid:Lerp(b, e), e)
+				local sz = size - size / 3 * e
+				img.Size = UDim2.fromOffset(sz, sz); img.Position = UDim2.fromOffset(p.X - sz / 2, p.Y - sz / 2)
+				if t >= 1 then conn:Disconnect(); img:Destroy(); Kit.pop(c.icon, 1.18); Kit.shake(c.ui.root, 5, 0.22) end
+			end)
+		end)
+	end
+end
+function Hud.flyFromScreen(cur, screenPt: Vector2, n)
+	flyFrom(cur, screenPt / scale.Scale, n, 36)
+end
+function Hud.flyTo(cur, fromGui, n)
+	if not fromGui then return end
+	flyFrom(cur, (fromGui.AbsolutePosition + fromGui.AbsoluteSize / 2) / scale.Scale, n or 8, 28)
+end
+function Hud.wiggle(cur) local c = chips[cur]; if c then Kit.shake(c.ui.root, 5, 0.22) end end
+
+-- ---------------------------------------------------------------- top centre: context bar + toasts
+local context, contextKind = nil, nil
+local AREA_CONTEXT = { bridge = "fishing", mine = "mine", expedition = "expedition", echo = "echo", desert = "desert", forest = "nest" }
+local CONTEXT_WINDOW = { fishing = "fishing", mine = "mine", expedition = "expedition", echo = "trees", desert = "trees", nest = "nest" }
+local CONTEXT_TAB = { echo = "ARCHIVIST", desert = "DESERT" }
+local function buildContext(kind)
+	if context then context.root:Destroy(); context = nil end
+	contextKind = kind
+	if not kind then return end
+	context = Render.component(S.context, "hud/context/" .. kind, groups.tc)
+	context.root.Position = UDim2.fromOffset(0, 0)
+	inert(context)
+	-- the whole bar opens the area's window
+	local hit = Render.new("TextButton", { Name = "hit", Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 999 }, context.root)
+	hit.MouseButton1Down:Connect(function() Sfx.press() end)
+	hit.Activated:Connect(function() WM.toggle(CONTEXT_WINDOW[kind], CONTEXT_TAB[kind]) end)
+	context.fill = context.root:FindFirstChild("fill", true)
+	context.fillW = context.fill and context.fill.Parent.Size.X.Offset
+	for _, d in context.root:GetDescendants() do
+		if d:IsA("TextLabel") and d.RichText and d.Parent.Name == "info strip" then
+			context.info = context.info or {}
+			table.insert(context.info, d)
+		end
+	end
+	if context.info then table.sort(context.info, function(a, b) return a.Position.X.Offset < b.Position.X.Offset end) end
+end
+local function setContextBar(frac, label)
+	if not context then return end
+	setT(context.root, "bar label", label)
+	if context.fill then
+		local w = math.max(0, math.floor(context.fillW * math.clamp(frac, 0, 1) + 0.5))
+		TweenService:Create(context.fill, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = UDim2.fromOffset(w, context.fill.Size.Y.Offset) }):Play()
+		local edge = context.fill:FindFirstChild("fx/leading edge")
+		if edge then edge.Visible = w > 6 end
+	end
+end
+local function setInfo(i, num, rest)
+	local l = context and context.info and context.info[i]
+	if not l then return end
+	local hi, lo = string.match(l.Text, '^<font color="#(%x+)">.-</font><font color="#(%x+)">')
+	if hi then
+		Render.setText(l, string.format('<font color="#%s">%s</font><font color="#%s">%s</font>', hi, num, lo, rest))
+	else
+		Render.setText(l, num .. rest)
+	end
+end
+local function updateContext(area)
+	local kind = AREA_CONTEXT[area]
+	if kind ~= contextKind then buildContext(kind) end
+	if not (context and state) then return end
+	local SD = SampleData.context[kind]
+	if kind == "fishing" then
+		setContextBar(SD.xp / SD.need, fmt(SD.xp) .. " / " .. fmt(SD.need) .. " XP")
+		setT(context.root, "level", tostring(SD.level))
+		local rod = Defs.ROD_BY_ID[state.fish.rod]
+		setInfo(1, commas(state.stats.fishCaught), " caught")
+		setInfo(2, tostring(rod and rod.monetaPerCatch or 1), " per catch")
+	elseif kind == "mine" then
+		local area1 = (state.crow.area or 0) + 1
+		setT(context.root, "title", "AREA " .. area1)
+		setT(context.root, "level", tostring(area1))
+		setContextBar(SD.xp / SD.need, fmt(SD.xp) .. " / " .. fmt(SD.need) .. " " .. SD.unit)
+	elseif kind == "expedition" then
+		local p = state.parrot
+		setT(context.root, "level", tostring(p.level))
+		setContextBar(SD.xp / SD.need, fmt(SD.xp) .. " / " .. fmt(SD.need) .. " XP")
+	elseif kind == "echo" then
+		setContextBar(SD.count / SD.cap, SD.count .. " / " .. SD.cap .. " on the field")
+	elseif kind == "desert" then
+		setContextBar(Hud.kernelCount / math.max(1, derived.cap), Hud.kernelCount .. " / " .. derived.cap .. " on the field")
+		setInfo(1, string.format("%.1f%%", (derived.goldenChance or 0) * 100), " chance")
+	elseif kind == "nest" then
+		local tier = (state.nest.tier or 0) + 1
+		local T = Defs.NEST_TIERS[tier]
+		local roman = ({ "I", "II", "III", "IV", "V" })[tier] or tostring(tier)
+		setT(context.root, "title", "NEST " .. roman)
+		setT(context.root, "level", tostring(tier))
+		if T and T.next then
+			local tw = EN.toNumber(state.twigs)
+			setContextBar(tw / T.next, fmt(tw) .. " / " .. fmt(T.next) .. " twigs")
+		end
+	end
+end
+
+-- toasts: Figma hud/toast/<reward|unlock|error|info>, slide down 0.25 s, hold 2.5 s, fade 0.3 s
 local toastQ, toastBusy = {}, false
-local function showToast(msg, theme, icon)
-	table.insert(toastQ, { msg, theme or "molt", icon or "plume" })
+local function showToast(msg, tone, icon)
+	table.insert(toastQ, { msg, tone or "info", icon })
 	if toastBusy then return end
 	toastBusy = true
 	task.spawn(function()
 		while #toastQ > 0 do
 			local t = table.remove(toastQ, 1)
-			local sp = Spec[t[2]] or Spec.molt
-			local holder = Kit.new("Frame", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, -241, 0, 96), Size = UDim2.fromOffset(644, 69), BackgroundTransparency = 1, ZIndex = 30 }, canvas)
-			local sh = Kit.frame(holder, 0, 5, 644, 69, Color3.new(0, 0, 0), { BackgroundTransparency = 0.45, ZIndex = 30 }); Kit.corner(sh, 20)
-			local f = Kit.frame(holder, 0, 0, 644, 69, Color3.new(1, 1, 1), { ZIndex = 31, ClipsDescendants = true }); Kit.corner(f, 20)
-			Kit.grad(f, Kit.stops(sp.hdr)); Kit.texture(f, "halftone", 0.75, 32, 31)
-			local dome = Kit.ellipse(f, 18, 12 - 40, 741, 76, Color3.new(1, 1, 1)); dome.ZIndex = 32
-			Kit.grad(dome, { { "ffffff", 0, 0.4 }, { "ffffff", 1, 0 } })
-			local row = Kit.new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), AutomaticSize = Enum.AutomaticSize.XY, ZIndex = 33 }, f)
-			Kit.new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 10) }, row)
-			Kit.icon(row, 0, 0, 44, t[3], { ZIndex = 34 })
-			Kit.title(row, t[1], 24, Color3.new(1, 1, 1), 3, 3, { ZIndex = 34 })
-			Kit.stroke(f, 3.5)
-			local sc = Kit.new("UIScale", { Scale = 0.6 }, holder)
-			TweenService:Create(sc, TweenInfo.new(0.32, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
-			task.wait(2.4)
-			TweenService:Create(sc, TweenInfo.new(0.18), { Scale = 0.85 }):Play()
-			for _, d in holder:GetDescendants() do
-				if d:IsA("GuiObject") then TweenService:Create(d, TweenInfo.new(0.18), { BackgroundTransparency = 1 }):Play() end
-				if d:IsA("TextLabel") then TweenService:Create(d, TweenInfo.new(0.18), { TextTransparency = 1 }):Play() end
-				if d:IsA("ImageLabel") then TweenService:Create(d, TweenInfo.new(0.18), { ImageTransparency = 1 }):Play() end
-				if d:IsA("UIStroke") then TweenService:Create(d, TweenInfo.new(0.18), { Transparency = 1 }):Play() end
+			local name = "hud/toast/" .. (if S.prompts.C["hud/toast/" .. t[2]] then t[2] else "info")
+			local ui = Render.component(S.prompts, name, groups.toast)
+			inert(ui)
+			local root = ui.root
+			local lbl = root:FindFirstChild("label", true)
+			if lbl then
+				Render.setText(lbl, t[1])
+				-- the plate grows to fit the message (Figma widths are per sample text)
+				local need = lbl.Position.X.Offset + lbl.TextBounds.X + 24
+				local body = ui.node:FindFirstChild("body")
+				if body and need > body.Size.X.Offset then
+					local dw = need - body.Size.X.Offset
+					root.Size += UDim2.fromOffset(dw, 0); ui.node.Size += UDim2.fromOffset(dw, 0); body.Size += UDim2.fromOffset(dw, 0)
+					lbl.Size += UDim2.fromOffset(dw, 0)
+					for _, d in body:GetChildren() do
+						if d:IsA("GuiObject") and (d.Name == "top highlight" or d.Name == "gloss cap" or d.Name == "fx/edge light") then d.Size += UDim2.fromOffset(dw, 0) end
+					end
+				end
 			end
-			task.wait(0.2)
-			holder:Destroy()
+			if t[3] then
+				for _, d in root:GetDescendants() do
+					if d:IsA("ImageLabel") and d.Name:sub(1, 4) == "ico/" then d.Image = FKit.icon(t[3]) end
+					if d:IsA("ImageLabel") and d.Name == "drop" then d.Image = FKit.icon(t[3]) end
+				end
+			end
+			root.AnchorPoint = Vector2.new(0.5, 0)
+			root.Position = UDim2.new(0.5, 0, 0, -30)
+			TweenService:Create(root, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Position = UDim2.new(0.5, 0, 0, 0) }):Play()
+			task.wait(2.5)
+			local tw = TweenService:Create(root, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { Position = UDim2.new(0.5, 0, 0, -20) })
+			for _, d in root:GetDescendants() do
+				local ti = TweenInfo.new(0.3)
+				if d:IsA("TextLabel") then TweenService:Create(d, ti, { TextTransparency = 1 }):Play()
+				elseif d:IsA("ImageLabel") then TweenService:Create(d, ti, { ImageTransparency = 1 }):Play()
+				elseif d:IsA("Frame") then TweenService:Create(d, ti, { BackgroundTransparency = 1 }):Play()
+				elseif d:IsA("UIStroke") then TweenService:Create(d, ti, { Transparency = 1 }):Play() end
+			end
+			tw:Play()
+			task.wait(0.3)
+			root:Destroy()
 		end
 		toastBusy = false
 	end)
 end
 Hud.toast = showToast
-Windows.toast = function(msg) showToast(msg, docked or "popcorn", Spec.MENU_ICON[docked or "popcorn"]) end
 
--- ---------------------------------------------------------------- wallet capsules (money/popcorn 360x86, money/plume 180x64)
-local CAP_GRAD = { popcorn = "eaff9a:0 62e83c:55 2bb52a:100", goldenFeathers = "f3e6ff:0 c79bff:100", sunflowerSeeds = "e8ffd0:0 8fe04a:100",
-	goldenPopcorn = "fff3c4:0 f5c84a:100", bruteOre = "e0f6ff:0 4fd2ff:100", twigs = "fdf2dc:0 d2a062:100", echoPopcorn = "ffe0f6:0 ff8ff0:100",
-	moneta = "fff7d0:0 f2c033:100", skillPoints = "ffe0e0:0 ff6a6a:100" }
-local CAP_UNLOCK = { popcorn = 1, goldenFeathers = 2, sunflowerSeeds = 3, moneta = 5, twigs = 6, bruteOre = 7, goldenPopcorn = 8, skillPoints = 9, echoPopcorn = 10 }
-local capBig, capGrid
--- popcorn = the big Figma capsule (money/popcorn 360x86); every other currency = a money/plume-style capsule,
--- in a 2-column grid that fills upward from just above it, so it never runs into the menu.
--- face colour per currency (the 3D key itself)
-local CAP_FACE = { popcorn = "9fe36a:0 3fae3a:100", goldenFeathers = "c9a2ff:0 7f4fd8:100", sunflowerSeeds = "b8e86a:0 5fa83a:100",
-	goldenPopcorn = "ffe07a:0 d89a1a:100", bruteOre = "8fe4ff:0 2f8fd8:100", twigs = "e0b07a:0 9a6232:100", echoPopcorn = "ffa8ec:0 d04fb8:100",
-	moneta = "ffe88a:0 d8a020:100", skillPoints = "ff9a8a:0 d04a4a:100" }
--- the number sits in a recessed well, Figma style: a deep shade of the capsule's own colour (not black), an inner
--- shadow along the top, halftone texture and a lit bottom edge, so it reads as pressed INTO the key
-local function well(parent, x, w, h, faceStops, rad)
-	rad = rad or h / 2
-	local deep = Kit.shadeStops(Kit.stops(faceStops), 0.3)
-	local rim = Kit.shadeStops(Kit.stops(faceStops), 0.16)
-	local wl = Kit.frame(parent, x, 0, w, h, Color3.new(1, 1, 1), { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, x, 0.5, 0), ZIndex = 10 })
-	Kit.corner(wl, rad)
-	local d1, d2 = deep[1][1], (deep[2] or deep[1])[1]
-	Kit.grad(wl, { { d2, 0, 1 }, { d1, 1, 1 } }, 90)
-	local tx = Kit.texture(wl, "halftone", 0.84, 16, 10); Kit.corner(tx, rad)
-	-- inner shadow: the same pill as the well (so its edges always follow the shape), dark at the top lip of the
-	-- recess and fully clear from just past the middle
-	local sh = Kit.frame(wl, 0, 0, w, h, Color3.new(0, 0, 0), { ZIndex = 11 }); Kit.corner(sh, rad)
-	Kit.grad(sh, { { "000000", 0, 0.6 }, { "000000", 0.3, 0.22 }, { "000000", 0.6, 0 }, { "000000", 1, 0 } }, 90)
-	Kit.stroke(wl, 2, Color3.fromHex((rim[2] or rim[1])[1]), 0)
-	return wl
-end
--- fit a title inside a box (scale down only)
-local function fitInto(title, box, pad)
-	local sc = Kit.new("UIScale", {}, title.holder)
-	local function fit()
-		local bw, tw = box.AbsoluteSize.X, title.holder.AbsoluteSize.X / math.max(0.01, sc.Scale)
-		if bw <= 0 or tw <= 0 then return end
-		local want = math.min(1, (bw - pad) / tw)
-		if math.abs(want - sc.Scale) > 0.01 then sc.Scale = want end
-	end
-	title.holder:GetPropertyChangedSignal("AbsoluteSize"):Connect(fit)
-	box:GetPropertyChangedSignal("AbsoluteSize"):Connect(fit)
-end
-local function capsule(cur, big)
-	local w, h = if big then 336 else 160, if big then 80 else 58
-	local ic = if big then 98 else 66   -- icons a touch bigger (owner); centring below keeps them on the key face
-	local depth = if big then 9 else 7
-	local KX = 30
-	local f = Kit.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(w + KX, h + 12), ZIndex = 10, LayoutOrder = CAP_UNLOCK[cur] or 0 }, if big then capBig else capGrid)
-	local stops = CAP_FACE[cur] or CAP_FACE.popcorn
-	-- soft drop shadow under the key
-	-- soft drop shadow: tucked under the key's footprint (no smear past the left cap / icon), short and light
-	Kit.soft(f, KX + 10, 12, w - 20, h - 8, 8, "shadow", Color3.new(0, 0, 0), 0.62, 1)   -- below the key (root ZIndex 3)
-	local key = Kit.button(f, KX, 4, w, h, { text = "", stops = Kit.stops(stops), silent = true, depth = depth })
-	key.root.Active = false; pcall(function() key.root.Interactable = false end)
-	local fw, fh = w - 6, h - 6 - depth
-	-- the well starts where the icon ends (icon spans 0..ic in the capsule; the face starts at KX + 3)
-	local wellX = ic - KX - 3 + 4
-	local wh = fh - 14
-	-- concentric corners: the well's radius is the face radius minus its inset, so both curves run parallel
-	local faceR = math.clamp(math.floor(h * 0.3), 9, 18) - 3
-	local wl = well(key.face, wellX, fw - wellX - 8, wh, stops, math.max(3, faceR - 7))
-	-- centred on the key face (key at y 4, face 3 px in, fh tall), a touch low so it sits on the well's centre line
-	local icon = Kit.icon(f, KX - ic / 2 + 2, 4 + 3 + fh / 2 - ic / 2 + 1, ic, Defs.CUR[cur].icon, { ZIndex = 12 })
-	-- the stat's name, engraved into the right end of the well (soft caps in clear space after the value, never under it)
-	local tag = Kit.text(wl, string.upper(Defs.CUR[cur].name), 12, Color3.new(1, 1, 1), { AutomaticSize = Enum.AutomaticSize.None,
-		AnchorPoint = Vector2.new(1, 0.5), Position = if big then UDim2.new(1, -16, 0.3, 0) else UDim2.new(1, -8, 0.5, 1),
-		Size = if big then UDim2.new(0.34, 0, 0.32, 0) else UDim2.new(0.44, 0, 0.62, 0),
-		TextScaled = true, TextXAlignment = Enum.TextXAlignment.Right, TextTransparency = 0.5, ZIndex = 12 })
-	Kit.new("UITextSizeConstraint", { MaxTextSize = if big then 15 else 12, MinTextSize = 6 }, tag)
-	local val = Kit.title(wl, "0", if big then 36 else 22, Color3.new(1, 1, 1), if big then 3.2 else 2.6, if big then 3 else 2,
-		{ AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, if big then 16 else 12, 0.5, -1), ZIndex = 12 })
-	Kit.grad(val.label, Kit.stops(CAP_GRAD[cur]))
-	local rate
-	if big then
-		rate = Kit.title(wl, "", 15, hex("9dffae"), 2.2, 0, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -16, 0.68, 0), ZIndex = 12 })   -- under the engraved name
-		fitInto(val, wl, 130)
-	else
-		fitInto(val, wl, 74)   -- leave the right end clear for the engraved stat name
-	end
-	capsules[cur] = { frame = f, cap = key.root, value = val, rate = rate, icon = icon, big = big }
-	return capsules[cur]
-end
-local function buildWallet()
-	capBig = Kit.new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 26, 1, -16), Size = UDim2.fromOffset(366, 92), ZIndex = 10 }, canvas)
-	capGrid = Kit.new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 26, 1, -112), Size = UDim2.fromOffset(392, 284), ZIndex = 10 }, canvas)
-	Kit.new("UIGridLayout", { CellSize = UDim2.fromOffset(190, 70), CellPadding = UDim2.fromOffset(6, 0), SortOrder = Enum.SortOrder.LayoutOrder,
-		StartCorner = Enum.StartCorner.BottomLeft, FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Bottom }, capGrid)
-	for _, cur in Defs.CUR_ORDER do capsule(cur, cur == "popcorn").frame.Visible = cur == "popcorn" end
-end
-local lastVals = {}
-local function wiggle(cur)
-	local c = capsules[cur]; if not c then return end
-	Kit.shake(c.cap, 5, 0.22)
-end
-Hud.wiggle = wiggle
-
--- currency particles arc from a button to its wallet capsule (6-10 icons)
-local function flyTo(cur, fromGui, n)
-	local c = capsules[cur]; if not (c and fromGui and c.frame.Visible) then return end
-	local s = scale.Scale
-	local a = (fromGui.AbsolutePosition + fromGui.AbsoluteSize / 2) / s
-	local b = (c.icon.AbsolutePosition + c.icon.AbsoluteSize / 2) / s
-	for i = 1, n or 8 do
-		local img = Kit.icon(canvas, a.X - 14, a.Y - 14, 28, Defs.CUR[cur].icon, { ZIndex = 60 })
-		local mid = Vector2.new((a.X + b.X) / 2 + math.random(-80, 80), math.min(a.Y, b.Y) - 120 - math.random(0, 80))
-		task.delay(i * 0.03, function()
-			local t0 = os.clock()
-			local conn
-			conn = game:GetService("RunService").RenderStepped:Connect(function()
-				local t = math.min(1, (os.clock() - t0) / 0.55)
-				local e = t * t * (3 - 2 * t)
-				local p = a:Lerp(mid, e):Lerp(mid:Lerp(b, e), e)
-				img.Position = UDim2.fromOffset(p.X - 14, p.Y - 14)
-				img.Rotation = t * 180
-				if t >= 1 then conn:Disconnect(); img:Destroy(); Kit.pop(c.icon, 1.18) end
-			end)
-		end)
-	end
-end
-Hud.flyTo = flyTo
--- same arc, but from a point on screen (a collected egg in the world -> its wallet capsule)
-function Hud.flyFromScreen(cur, screenPt: Vector2, n)
-	local c = capsules[cur]; if not (c and c.frame.Visible) then return end
-	local s = scale.Scale
-	local a = screenPt / s
-	local b = (c.icon.AbsolutePosition + c.icon.AbsoluteSize / 2) / s
-	for i = 1, n or 1 do
-		local img = Kit.icon(canvas, a.X - 18, a.Y - 18, 36, Defs.CUR[cur].icon, { ZIndex = 60 })
-		local mid = Vector2.new((a.X + b.X) / 2 + math.random(-60, 60), math.min(a.Y, b.Y) - 90 - math.random(0, 60))
-		task.delay((i - 1) * 0.04, function()
-			local t0 = os.clock()
-			local conn
-			conn = game:GetService("RunService").RenderStepped:Connect(function()
-				local t = math.min(1, (os.clock() - t0) / 0.6)
-				local e = t * t * (3 - 2 * t)
-				local p = a:Lerp(mid, e):Lerp(mid:Lerp(b, e), e)
-				local sz = 36 - 12 * e
-				img.Size = UDim2.fromOffset(sz, sz); img.Position = UDim2.fromOffset(p.X - sz / 2, p.Y - sz / 2)
-				if t >= 1 then conn:Disconnect(); img:Destroy(); Kit.pop(c.icon, 1.18); wiggle(cur) end
-			end)
-		end)
-	end
-end
-
--- ---------------------------------------------------------------- objective (399,1000,634,56) + AUTO
-local objective, autoBtn, unlockBtn
+-- ---------------------------------------------------------------- bottom centre: objective, hotbar, AUTO, down arrow
+local objective, unlockKey, hotbar, autoKey
 local function buildObjective()
-	-- the goal plate: a slate 3D key (same build as the wallet keys) with the text in a recessed well
-	local SLATE = "5a6478:0 343b4a:100"
-	local key = Kit.button(canvas, 0, 0, 640, 64, { text = "", stops = Kit.stops(SLATE), silent = true, depth = 8 })
-	key.root.Active = false; pcall(function() key.root.Interactable = false end)
-	key.root.AnchorPoint = Vector2.new(0.5, 1); key.root.Position = UDim2.new(0.5, 0, 1, -22)   -- centred: progression reads at a glance
-	local wl = well(key.face, 50, 640 - 6 - 50 - 9, 64 - 6 - 8 - 14, SLATE, math.max(3, math.clamp(math.floor(64 * 0.3), 9, 18) - 3 - 7))
-	local bang = Kit.frame(key.face, 10, 0, 32, 32, Color3.new(1, 1, 1), { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 0), ZIndex = 13 })
-	Kit.corner(bang, 16); Kit.grad(bang, Kit.stops("ffe07a:0 c27a10:100")); Kit.stroke(bang, 2.5)
-	Kit.title(bang, "!", 21, Color3.new(1, 1, 1), 2, 0, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), ZIndex = 14 })
-	local t = Kit.title(wl, "", 20, hex("ffe8a8"), 2.4, 2, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 16, 0.5, -1), ZIndex = 13 })
-	objective = { frame = key.root, text = t }
-	unlockBtn = Kit.button(canvas, 0, 0, 220, 56, { text = "UNLOCK", size = 20, stops = Kit.GOLD, icon = "popcorn", iconSize = 34 })
-	unlockBtn.root.AnchorPoint = Vector2.new(0, 1); unlockBtn.root.Position = UDim2.new(0.5, 332, 1, -24)
-	unlockBtn.root.Visible = false
-	unlockBtn.root.Activated:Connect(function() act("unlock", nil, nil, unlockBtn) end)
-	-- AUTO: group perk. Locked players get the in-game join prompt, then the server re-checks.
-	autoBtn = Kit.button(canvas, 0, 0, 190, 56, { text = "AUTO", size = 22, stops = Kit.GREY, icon = "clock", iconSize = 34 })
-	autoBtn.root.Visible = false   -- AUTO lives in the left bar now (tile); kept for the state code
-	autoBtn.root.Activated:Connect(function()
-		if not derived then return end
-		if not derived.autoAllowed and derived.groupId and derived.groupId > 0 then
-			pcall(function() GroupService:PromptJoinAsync(derived.groupId) end)
+	objective = Render.component(S.prompts, "hud/objective", groups.bc)
+	objective.root.AnchorPoint = Vector2.new(0.5, 1)
+	objective.root.Position = UDim2.new(0.5, 0, 1, 0)
+	inert(objective)
+	local goalL = objective.root:FindFirstChild("goal", true)
+	if goalL then Render.fit(goalL, 12) end
+	-- UNLOCK key for paid gates (Evolve's 100M eggs): kit gold key right of the objective
+	local L = FKit.layout()
+	local k = FKit.BTNn(L, "btn/unlock", 0, 0, 230, 64, FKit.PAL.gold, "UNLOCK", { icon = "popcorn", size = 22 })
+	unlockKey = FKit.build(L, k, groups.bc)
+	unlockKey.root.AnchorPoint = Vector2.new(0, 1)
+	unlockKey.root.Position = UDim2.new(0.5, 356, 1, 0)
+	unlockKey.root.Visible = false
+	unlockKey.on("btn/unlock", function() act("unlock", nil, nil, unlockKey) end)
+end
+local HOTBAR = { bridge = "fishing", mine = "mine", expedition = "expedition" }
+local function buildHotbar(kind, variant)
+	if hotbar and hotbar.kind == kind and hotbar.variant == variant then return end
+	if hotbar then hotbar.root:Destroy(); hotbar = nil end
+	if not kind then return end
+	local ui = Render.component(S.hotbar, "hud/hotbar/" .. variant, groups.bc)
+	ui.kind, ui.variant = kind, variant
+	ui.root.AnchorPoint = Vector2.new(0.5, 1)
+	ui.root.Position = UDim2.new(0.5, 0, 1, -76)
+	if kind == "fishing" then
+		ui.on("cast key", function() act("fish", "go") end)
+		for _, d in ui.node:GetChildren() do
+			if d.Name:sub(1, 5) == "slot/" then
+				local hit = Render.new("TextButton", { Name = "hit", Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 999 }, d)
+				hit.MouseButton1Down:Connect(function() Sfx.press() end)
+				hit.Activated:Connect(function() WM.open("fishing", "EQUIPMENT") end)
+			end
 		end
-		act("auto", not (state and state.auto))
-	end)
-end
-
--- ---------------------------------------------------------------- window menu (left column) + docking drawer
--- The drawer (dock) slides in from the right edge when the feature group changes; tabs inside a group just swap.
--- Collapsing tucks it into a narrow right-edge tab that keeps the feature icon and a reopen chevron.
-local groupTiles = {}
-local collapsed = false
-local DOCK_IN, DOCK_OUT = 0, 500
-local DOCK_Y = -5
-local WIN_MAX_H = 730   -- tall windows scale down a touch so the bookmark deck fits under them   -- top outline just past the screen top: the header runs into the corner   -- flush to the screen edge; tucked = fully out, the bookmarks stay
-local function groupOf(id) return Spec.GROUP_OF[id] end
-local function slideDock(x, t, style)
-	if Hud.qa then return nil end
-	if Kit.reduced() then Hud.dock.Position = UDim2.new(1, x, 0, DOCK_Y); return nil end
-	local tw = TweenService:Create(Hud.dock, TweenInfo.new(t, style or Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Position = UDim2.new(1, x, 0, DOCK_Y) })
-	tw:Play()
-	return tw
-end
-local layoutBookmarks   -- defined with the bookmarks below
-local function refreshTiles()
-	local g = docked and groupOf(docked)
-	for gid, t in groupTiles do t.select(g ~= nil and g.id == gid and not collapsed) end
-	if layoutBookmarks then layoutBookmarks(); task.delay(0.4, layoutBookmarks) end   -- again once the window has settled
-end
-local function setCollapsed(c)
-	if collapsed == c then return end
-	collapsed = c; Hud.collapsed = c
-	Kit.sfx(if c then "close" else "open")
-	slideDock(if c then DOCK_OUT else DOCK_IN, if c then 0.22 else 0.3, if c then Enum.EasingStyle.Quad else nil)
-	refreshTiles()
-end
-Hud.setCollapsed = setCollapsed
-
-local function dockWindow(id)
-	if docked == id then if collapsed then setCollapsed(false) end; return end
-	local old = docked and Windows.built[docked]
-	local sameGroup = docked ~= nil and groupOf(docked) == groupOf(id)
-	docked = id
-	local api = Windows.built[id]
-	if not api then return end
-	if state and derived then Windows.binders[id].update(api, state, derived) end
-	if old and old ~= api and not (sameGroup and not collapsed) then old.root.Visible = false end
-	if collapsed then
-		Window.open(api, "slide")
-		setCollapsed(false)
-	elseif not old then
-		Window.open(api, "slide")
-		Hud.dock.Position = UDim2.new(1, DOCK_OUT, 0, DOCK_Y)
-		slideDock(DOCK_IN, 0.34)
-	elseif sameGroup then
-		Window.morph(old, api)
-	else
-		-- new feature group: drawer slides in fresh from the right edge with the new window (one motion)
-		Kit.sfx("open")
-		Hud.dock.Position = UDim2.new(1, DOCK_IN + 140, 0, DOCK_Y)
-		Window.open(api, "slide")
-		slideDock(DOCK_IN, 0.26)
+	elseif kind == "mine" then
+		ui.on("challenge key", function() WM.open("mine", "AREAS") end)
+	elseif kind == "expedition" then
+		ui.on("reset floor key", function() act("expedition") end)
+		for _, d in ui.node:GetChildren() do
+			if d.Name:sub(1, 5) == "slot/" then
+				local hit = Render.new("TextButton", { Name = "hit", Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 999 }, d)
+				hit.MouseButton1Down:Connect(function() Sfx.press() end)
+				hit.Activated:Connect(function() WM.open("parrot", "EQUIPMENT") end)
+			end
+		end
 	end
-	refreshTiles()
+	hotbar = ui
 end
-Windows.open = function(id)
-	if not Windows.built[id] then return end
-	if state and (Defs.WINDOW_ISLAND[id] or 1) > state.island then
-		Kit.sfx("nope")
-		showToast("Locked: " .. (Defs.ISLANDS[Defs.WINDOW_ISLAND[id]].goal), docked, "crown")
+local function buildAuto(kind, st)
+	local name = if kind then "hud/auto/" .. kind .. " " .. st else nil
+	if name and not S.auto.C[name] then name = "hud/auto/" .. kind .. (if st == "locked" then " locked" else " on") end
+	if autoKey and autoKey.name == name then return end
+	if autoKey then autoKey.root:Destroy(); autoKey = nil end
+	if not (name and S.auto.C[name]) then return end
+	local ui = Render.component(S.auto, name, groups.bc)
+	ui.name = name
+	ui.root.AnchorPoint = Vector2.new(0, 1)
+	ui.on("key", onAuto)
+	autoKey = ui
+end
+
+-- ---------------------------------------------------------------- right: area rail + travel arrows
+local RAIL = { { "PARK", "park" }, { "GARDEN", "garden" }, { "FISHING", "bridge" }, { "FOREST", "forest" }, { "MINE", "mine" },
+	{ "DESERT", "desert" }, { "EXPEDITION", "expedition" }, { "ECHO", "echo" } }
+local RAIL_BOOK = { park = "park (active)", garden = "garden", bridge = "fishing", forest = "forest", mine = "mine", desert = "desert", expedition = "expedition", echo = "echo" }
+local RAIL_ICON = { park = "egg", garden = "seed", bridge = "rod_simple", forest = "nest", mine = "crow", desert = "egg_golden", expedition = "parrot", echo = "echo" }
+local rail, railSlots, railActive, railArea = nil, {}, nil, nil
+local lockedLook, openLook = nil, nil
+local function areaColours(area)
+	local bm = S.tiles.C["hud/bookmark/" .. RAIL_BOOK[area]]
+	if not bm then return nil end
+	local face = Render.findNode(bm, "body")
+	local lip = Render.findNode(bm, "lip")
+	return { face = face and face.f and S.tiles.P[face.f][1], lip = lip and lip.f and S.tiles.P[lip.f][1] }
+end
+local function slotLook(slot, look, area)
+	local face, lip = slot:FindFirstChild("face"), slot:FindFirstChild("lip")
+	local ico = face and face:FindFirstChildWhichIsA("ImageLabel")
+	local lock = slot:FindFirstChild("ico/lock")
+	if look == "locked" then
+		retint(face, lockedLook.face); retint(lip, lockedLook.lip)
+		if ico then ico.ImageTransparency = 0.3 end
+		if lock then lock.Visible = true end
+	else
+		local cols = areaColours(area) or openLook
+		retint(face, cols.face); retint(lip, cols.lip)
+		if ico then ico.ImageTransparency = 0 end
+		if lock then lock.Visible = false end
+	end
+	slot:SetAttribute("look", look)
+end
+local function travelTo(id)
+	if id == "aquarium" or id == "market" then WM.open(id); return end
+	local isl = World.byId[id]
+	if not isl then return end
+	if not World.isOpen(isl) then
+		Sfx.deny()
+		local idx
+		for i, x in Defs.ISLANDS do if x.id == id then idx = i end end
+		Hud.toast("Locked: " .. (if idx then Defs.ISLANDS[idx].goal else "keep going"), "error", "map")
 		return
 	end
-	dockWindow(id)
+	plr.PlayerGui:SetAttribute("PeckwoodTP", id .. "#" .. os.clock())
 end
-
-local function heroTile(parent, g, order)
-	-- Built like the panels' hero card: dark themed card, sunburst + ground shadow behind the icon (icon stays inside),
-	-- coloured header strip along the bottom carrying the name. Hover: lift, icon grows, burst fades in.
-	-- Press: squash. Selected: white rim, outer glow, burst spins.
-	local lead = g.theme or Spec[g.members[1]]
-	local W, H = g.w or 92, g.h or 104
-	local holder = Kit.new("Frame", { BackgroundTransparency = 1, LayoutOrder = order, ZIndex = 10, Size = UDim2.fromOffset(W, H + 12) }, parent)
-	-- centre-pivoted so press / select scaling stays even on every side (a top-left pivot pulls the right side in)
-	local lift = Kit.new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(W / 2, (H + 8) / 2), Size = UDim2.fromOffset(W, H + 8), ZIndex = 10 }, holder)
-	local glow = Kit.soft(lift, 0, 0, W, H, 22, "glow", hex(lead.buyGlow or lead.glow or "ffffff"), 1, 9)
-	-- drop: a small, dark undertone of the tile's own strip colour (not a black slab)
-	local hs = Kit.stops(lead.hdr)
-	local under = Color3.fromHex(hs[#hs][1]):Lerp(Kit.INK, 0.55)
-	-- 3D base like the keys: soft contact shadow, then a 6 px lip in the strip's own deep tone with an ink edge
-	Kit.soft(lift, 6, 10, W - 12, H - 2, 10, "shadow", Color3.new(0, 0, 0), 0.55, 9)
-	local drop = Kit.frame(lift, 0, 6, W, H, under, { ZIndex = 10 }); Kit.corner(drop, 18)
-	Kit.stroke(drop, 3, Kit.INK)
-	local card = Kit.new("CanvasGroup", { Size = UDim2.fromOffset(W, H), BackgroundTransparency = 1, ZIndex = 11 }, lift)
-	Kit.corner(card, 18)
-	local bodyF = Kit.frame(card, 0, 0, W, H, Color3.new(1, 1, 1), { ZIndex = 11 })
-	Kit.grad(bodyF, Kit.stops(lead.card or lead.body))
-	-- bright themed face above the name strip (like the shop cards): header gradient, halftone, sunburst, bevel
-	local face = Kit.frame(card, 0, 0, W, H - 26, Color3.new(1, 1, 1), { ZIndex = 11 })
-	Kit.grad(face, Kit.stops(lead.hdr))
-	Kit.texture(card, "halftone", 0.82, 18, 12)
-	local burst = Kit.image(card, W / 2 - (H - 26), (H - 26) / 2 - (H - 26), (H - 26) * 2, (H - 26) * 2, Kit.iconId("ui/sunburst"), { ImageColor3 = Color3.new(1, 1, 1), ImageTransparency = 0.7, ZIndex = 12 })
-	local inner = Kit.frame(card, 0, 0, W, H - 26, Color3.new(0, 0, 0), { ZIndex = 12 })
-	Kit.grad(inner, { { "000000", 0, 0 }, { "000000", 0.55, 0 }, { "000000", 1, 0.45 } }, 90)   -- soft inner shadow toward the strip
-	Kit.frame(card, 4, 2, W - 8, 2, Color3.new(1, 1, 1), { BackgroundTransparency = 0.45, ZIndex = 12 })   -- lit top edge
-	Kit.image(card, W / 2 - (g.iconSize or 64) * 0.42, H - 26 - 16, (g.iconSize or 64) * 0.84, 14, Kit.iconId("ui/softellipse"), { ImageColor3 = Color3.new(0, 0, 0), ImageTransparency = 0.4, ZIndex = 12 })
-	-- header strip (name)
-	local strip = Kit.frame(card, 0, H - 26, W, 26, Color3.new(1, 1, 1), { ZIndex = 13 })
-	Kit.grad(strip, Kit.stops(lead.hdr))
-	Kit.frame(strip, 0, 0, W, 2, Kit.INK, { ZIndex = 14 })
-	Kit.frame(strip, 6, 3, W - 12, 4, Color3.new(1, 1, 1), { BackgroundTransparency = 0.6, ZIndex = 14 })
-	local lbl = Kit.title(strip, g.name, if #g.name > 7 then 12 else 14, Color3.new(1, 1, 1), 2, 1.5,
-		{ AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, -0.5), ZIndex = 15 })   -- optically centred in the strip
-	-- top gloss
-	local gl = Kit.frame(card, 6, 4, W - 12, 18, Color3.new(1, 1, 1), { ZIndex = 16 }); Kit.corner(gl, 9)
-	Kit.grad(gl, { { "ffffff", 0, 0.16 }, { "ffffff", 1, 0 } })
-	local rim = Kit.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(W, H), ZIndex = 17 }, lift)
-	Kit.corner(rim, 18)
-	local rs = Kit.stroke(rim, 3, Kit.INK)
-	local icon = Kit.icon(lift, W / 2, 40, (g.iconSize or 64) + 8, g.icon, { AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = 18 })
-	local isc = Kit.new("UIScale", {}, icon)
-	local lsc = Kit.new("UIScale", {}, lift)
-	local hit = Kit.new("TextButton", { Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromOffset(W, H), ZIndex = 20 }, holder)
-
-	local hovered, selected, pressed = false, false, false
-	local function pose()
-		local q = TweenInfo.new(0.16, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-		local out = if g.bookmark then (if selected then -16 elseif hovered then -8 else 0) else 0
-		TweenService:Create(lift, q, { Position = UDim2.fromOffset(W / 2 + out, (H + 8) / 2 + (if g.bookmark then 0 elseif pressed then 2 elseif hovered then -4 else 0)) }):Play()
-		TweenService:Create(lsc, q, { Scale = if pressed then 0.94 elseif selected then 1.04 else 1 }):Play()
-		TweenService:Create(isc, q, { Scale = if hovered then 1.14 elseif selected then 1.06 else 1 }):Play()
-		TweenService:Create(icon, q, { Rotation = if hovered then -6 else 0 }):Play()
-		TweenService:Create(burst, TweenInfo.new(0.2), { ImageTransparency = if selected then 0.4 elseif hovered then 0.55 else 0.7 }):Play()
-		TweenService:Create(glow, TweenInfo.new(0.2), { ImageTransparency = if selected then 0.45 elseif hovered then 0.7 else 1 }):Play()
-		if not selected then icon.Position = UDim2.fromOffset(W / 2, 40) end
-		rs.Color = if selected then Color3.new(1, 1, 1) else Kit.INK
-		rs.Thickness = if selected then 3.5 else 3
+Hud.travelTo = travelTo
+local function buildRail()
+	local g = group("rail", Vector2.new(1, 0.5), UDim2.new(1, 0, 0.5, 0), Vector2.new(100, 616), 1)
+	rail = Render.component(S.tiles, "hud/area rail", g)
+	local face = rail.root:FindFirstChild("rail face", true)
+	-- reference looks (open = the Park slot, locked = the Forest slot) taken from the Figma layout itself
+	local railNode = S.tiles.C["hud/area rail"]
+	local function looksOf(name)
+		local n = Render.findNode(railNode, name)
+		local fN, lN = Render.findNode(n, "face"), Render.findNode(n, "lip")
+		return { face = S.tiles.P[fN.f][1], lip = S.tiles.P[lN.f][1] }
 	end
-	hit.MouseEnter:Connect(function() hovered = true; Kit.sfx("hover"); pose() end)
-	hit.MouseLeave:Connect(function() hovered = false; pressed = false; pose() end)
-	hit.MouseButton1Down:Connect(function() pressed = true; Kit.sfx("click"); pose() end)
-	hit.MouseButton1Up:Connect(function() pressed = false; pose() end)
-	hit.Activated:Connect(function()
-		if g.onClick then g.onClick(); return end
-		-- clicking the open feature tucks the drawer away; otherwise open the group's first unlocked window
-		local cur = docked and groupOf(docked)
-		if cur == g then setCollapsed(not collapsed); return end
-		for _, m in g.members do
-			if not state or (Defs.WINDOW_ISLAND[m] or 1) <= state.island then Windows.open(m); return end
-		end
-	end)
-	local t = { holder = holder, btn = { root = hit }, icon = icon, burst = burst, glow = glow, iconY = 40, W = W }
-	function t.select(on)
-		if on == selected then return end
-		selected = on
-		pose()
-		if on then Kit.pop(icon, 1.25) end
-	end
-	function t.isSelected() return selected end
-	return t
-end
-
--- selected tile: the sunburst turns slowly (30 Hz, it sits in the CanvasGroup), the halo breathes and the icon floats
--- a couple of pixels (60 Hz, both outside the CanvasGroup, so they cost nothing to redraw)
-local burstAcc, tclock = 0, 0
-game:GetService("RunService").RenderStepped:Connect(function(dt)
-	tclock += dt
-	burstAcc += dt
-	local slow = burstAcc >= 1 / 30
-	for _, t in groupTiles do
-		if not (t.isSelected() and t.holder.Visible) then continue end
-		if slow and not Kit.reduced() then t.burst.Rotation += burstAcc * 9 end
-		local b = (math.sin(tclock * math.pi * 2 / 2.8) + 1) / 2
-		t.glow.ImageTransparency = 0.42 + 0.18 * b
-		if not Kit.reduced() then t.icon.Position = UDim2.new(t.icon.Position.X, UDim.new(0, t.iconY - 1.5 + 3 * b)) end
-	end
-	if slow then burstAcc = 0 end
-end)
-
--- left bar: the game's tools in the same tile style. Bookmarks (the feature groups) live on the drawer (see start).
-local LEFT_THEMES = {
-	map = { card = "2c3f3a:0 1b2622:100", hdr = "7fd8c8:0 2f9a8a:100", glow = "7fd8c8" },
-	teleport = { card = "332d48:0 1f1b2e:100", hdr = "b89cff:0 6a4fd0:100", glow = "b89cff" },
-	shop = { card = "45282a:0 2a1719:100", hdr = "ff8a7a:0 d0443a:100", glow = "ff8a7a" },
-	settings = { card = "2e333f:0 1b1f27:100", hdr = "b8c4d8:0 5f6f8c:100", glow = "b8c4d8" },
-	auto = { card = "2c3b28:0 1a2417:100", hdr = "9fe36a:0 3fae3a:100", glow = "9fe36a" },
-}
-local leftTiles = {}
-local bookmarkCol
-local function buildMenu()
-	-- visual hierarchy: SHOP is the hero (double-wide, gold), AUTO beside it; the navigation row (MAP / TELEPORT /
-	-- PROFILE) under them; SETTINGS is a small gear key by the island banner
-	local col = Kit.new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(30, 152), Size = UDim2.fromOffset(330, 260), ZIndex = 10 }, canvas)
-	local SLOT = { shop = { 0, 0 }, auto = { 208, 0 }, map = { 0, 128 }, teleport = { 104, 128 }, profile = { 208, 128 } }
-	local profileG
-	for _, g in Spec.GROUPS do if g.id == "profile" then profileG = g end end
-	local LEFT = {
-		{ id = "map", name = "MAP", icon = "map", members = {}, theme = LEFT_THEMES.map, onClick = function() Hud.onMap() end },
-		{ id = "teleport", name = "TELEPORT", icon = "teleport", members = {}, theme = LEFT_THEMES.teleport, onClick = function() Hud.onTeleport() end },
-		profileG,
-		{ id = "shop", name = "SHOP", icon = "shop", w = 196, iconSize = 84, members = {}, theme = LEFT_THEMES.shop, onClick = function() Hud.openShop() end },
-		{ id = "settings", name = "SETTINGS", icon = "settings", members = {}, theme = LEFT_THEMES.settings, onClick = function() Hud.onSettings() end },
-		{ id = "auto", name = "AUTO", icon = "auto", members = {}, theme = LEFT_THEMES.auto, onClick = function()
-			if not derived then return end
-			if not derived.autoAllowed and derived.groupId and derived.groupId > 0 then pcall(function() GroupService:PromptJoinAsync(derived.groupId) end) end
-			act("auto", not (state and state.auto))
-		end },
-	}
-	for i, g in LEFT do
-		if g.id == "settings" then
-			-- small gear key beside the banner (low priority, still one tap away)
-			local k = Kit.button(canvas, 344, 30, 56, 56, { icon = "settings", iconSize = 34, stops = Kit.stops(LEFT_THEMES.settings.hdr) })
-			k.root.Activated:Connect(g.onClick)
-			leftTiles.settings = { holder = k.root, btn = k, icon = k.iconImg }
-			continue
-		end
-		local t = heroTile(col, g, i)
-		local sl = SLOT[g.id]
-		if sl then t.holder.Position = UDim2.fromOffset(sl[1], sl[2]) end
-		leftTiles[g.id] = t
-		if g == profileG then
-			groupTiles[g.id] = t
-			for _, m in g.members do menuButtons[m] = { holder = t.holder, btn = t.btn, group = g } end
-		end
-	end
-end
--- small popup card beside the left bar (teleport list / settings); one open at a time, click the tile again to close
-local popup
-local function closePopup() if popup then popup:Destroy(); popup = nil end end
-local function openPopup(title, rows)
-	closePopup()
-	local h = 70 + #rows * 58
-	local root = Kit.new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(372, 152), Size = UDim2.fromOffset(260, h), ZIndex = 30 }, canvas)
-	local drop = Kit.frame(root, 0, 3, 260, h, Kit.INK, { ZIndex = 30 }); Kit.corner(drop, 18)
-	local card = Kit.frame(root, 0, 0, 260, h, Color3.new(1, 1, 1), { ZIndex = 31 }); Kit.corner(card, 18)
-	Kit.grad(card, Kit.stops("2a2f3a:0 15181f:100")); Kit.stroke(card, 3.5)
-	local tx = Kit.texture(card, "halftone", 0.9, 20, 31); Kit.corner(tx, 18)
-	Kit.title(card, title, 22, Color3.new(1, 1, 1), 2.6, 2, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 14), ZIndex = 33 })
-	for k, r in rows do
-		local b = Kit.button(card, 16, 56 + (k - 1) * 58, 228, 50, { text = r.text, size = 18, stops = r.stops or Kit.stops(Spec.popcorn.tab), icon = r.icon, iconSize = 34 })
-		b.root.ZIndex = 34
-		b.root.Activated:Connect(function() r.click(b) end)
-	end
-	local sc = Kit.new("UIScale", { Scale = 0.85 }, root)
-	TweenService:Create(sc, TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
-	popup = root
-	return root
-end
-local ISLAND_ICON = { park = "popcorn", garden = "seed", castle = "monster", bridge = "rod", forest = "nest", mine = "crow", desert = "golden", expedition = "parrot", echo = "echo" }
-function Hud.onTeleport()
-	if popup and popup.Name == "Teleport" then closePopup(); return end
-	local rows = {}
-	for _, isl in World.list do
-		if World.isOpen(isl) then
-			table.insert(rows, { text = string.gsub(isl.name, "^THE ", ""), icon = ISLAND_ICON[isl.id], click = function()
-				closePopup(); plr.PlayerGui:SetAttribute("PeckwoodTP", isl.id .. "#" .. os.clock())
-			end })
-		end
-	end
-	openPopup("TELEPORT", rows).Name = "Teleport"
-end
-function Hud.onSettings()
-	if popup and popup.Name == "Settings" then closePopup(); return end
-	local rows = {
-		{ text = if Kit.muted then "Sound: OFF" else "Sound: ON", icon = "settings", stops = Kit.stops(LEFT_THEMES.settings.hdr), click = function(b)
-			Kit.muted = not Kit.muted; b.setText(if Kit.muted then "Sound: OFF" else "Sound: ON")
-		end },
-	}
-	openPopup("SETTINGS", rows).Name = "Settings"
-end
--- ---------------------------------------------------------------- shop board (passes, boosts, crates)
--- Same window system as every board (cloned golden art), cards in two columns per section. Buying: a real
--- PromptGamePass/ProductPurchase when the item has a Creator Hub id; in Studio / for devs it grants through the
--- server test path so everything can be checked before the ids exist. The server applies every effect.
-local ShopData = require(game:GetService("ReplicatedStorage"):WaitForChild("Peckwood"):WaitForChild("Shop"))
-local shopOverlay, shopCards = nil, {}
-local function fmtTime(sec) sec = math.floor(sec); return string.format("%d:%02d", sec // 60, sec % 60) end
-function Hud.refreshShop()
-	if not shopOverlay then return end
-	local sh = derived and derived.shop or { passes = {}, boostLeft = 0 }
-	for id, c in shopCards do
-		local it = ShopData.BY_ID[id]
-		if it.kind == "pass" then
-			local own = sh.passes[id] == true
-			if own ~= c.owned then
-				c.owned = own
-				c.btn.setText(if own then "OWNED" else "R$ " .. it.robux)
-				c.btn.look(if own then "gold" else "lit", Kit.stops("7dff86:0 2bd04a:42 15962f:86 15962f:100"))
+	openLook, lockedLook = looksOf("slot/PARK"), looksOf("slot/FOREST (locked)")
+	-- the Figma rail has FISHING popped out; the plain FISHING slot is a copy of the GARDEN slot in its place
+	local garden = face:FindFirstChild("slot/GARDEN")
+	local fishing = Render.buildNode(S.tiles, Render.findNode(railNode, "slot/GARDEN"), face, garden.ZIndex)
+	fishing.root.Name = "slot/FISHING (holder)"; fishing.node.Name = "slot/FISHING"
+	fishing.root.Position = UDim2.fromOffset(4, 156)
+	setT(fishing.root, "label", "FISHING")
+	local fi = fishing.node:FindFirstChild("face"):FindFirstChildWhichIsA("ImageLabel")
+	if fi then fi.Image = FKit.icon("rod_simple") end
+	-- the lock badge every slot can show
+	railActive = rail.node:FindFirstChild("slot/FISHING (active)")
+	for i, r in RAIL do
+		local slot = face:FindFirstChild("slot/" .. r[1]) or face:FindFirstChild("slot/" .. r[1] .. " (locked)") or (r[1] == "FISHING" and fishing.node)
+		if slot then
+			if not slot:FindFirstChild("ico/lock") then
+				local L = FKit.layout()
+				local lk = FKit.build(L, FKit.ICOn("lock", 22, 50, -5, L), slot)
+				lk.root.Name = "ico/lock"; lk.root.Position = UDim2.fromOffset(50, -5); lk.root.Visible = false
 			end
-		elseif it.minutes then
-			c.sub.Text = if sh.boostLeft > 0 then "Active · " .. fmtTime(sh.boostLeft) .. " left" else it.desc
+			railSlots[r[2]] = slot
+			-- every slot travels (keys are wired by Render; plain copies get a hit here)
+			local hit = slot:FindFirstChild("hit") or Render.new("TextButton", { Name = "hit", Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 999 }, slot)
+			hit.Activated:Connect(function() travelTo(r[2]) end)
 		end
 	end
+	local ah = railActive and railActive:FindFirstChild("hit")
+	if ah then ah.Activated:Connect(function() if railArea then WM.toggle(CONTEXT_WINDOW[AREA_CONTEXT[railArea] or ""] or "profile") end end) end
 end
-local GREEN = "7dff86:0 2bd04a:42 15962f:86 15962f:100"
-local function buyItem(it)
-	local c = shopCards[it.id]
-	if c and c.owned then return end
-	local MPS = game:GetService("MarketplaceService")
-	if it.assetId > 0 then
-		pcall(function()
-			if it.kind == "pass" then MPS:PromptGamePassPurchase(plr, it.assetId) else MPS:PromptProductPurchase(plr, it.assetId) end
-		end)
-	elseif derived and derived.shop and derived.shop.testGrants then
-		act("shoptest", it.id); showToast(it.name .. " granted (Studio test)", "golden", it.icon)
-	else
-		showToast(it.name .. " is coming soon", "golden", it.icon)
-	end
-end
--- a diagonal white shine that sweeps across a frame every few seconds (CanvasGroup-clipped by the caller)
-local shineList = {}
-local function addShine(clipParent, w, h, z)
-	local s = Kit.frame(clipParent, -80, -10, 46, h + 20, Color3.new(1, 1, 1), { Rotation = 18, ZIndex = z })
-	Kit.grad(s, { { "ffffff", 0, 0 }, { "ffffff", 0.5, 0.55 }, { "ffffff", 1, 0 } }, 0)
-	table.insert(shineList, { f = s, w = w, t = math.random() * 3 })
-	return s
-end
-RunService.RenderStepped:Connect(function(dt)
-	if not (shopOverlay and shopOverlay.Visible) or Kit.reduced() then return end
-	for _, sh in shineList do
-		sh.t = (sh.t + dt) % 3.6
-		local k = math.clamp(sh.t / 0.7, 0, 1)
-		sh.f.Position = UDim2.fromOffset(-80 + (sh.w + 160) * k, -10)
-	end
-end)
--- a pass / product card, coloured top to bottom in its theme, icon popping over the top edge
-local function shopCard(parent, it, w, h, iconSz, nameSz, keyH, order)
-	local th = Spec[it.theme] or Spec.golden
-	local holder = Kit.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(w, h + iconSz * 0.35), LayoutOrder = order, ZIndex = 83 }, parent)
-	local lift = Kit.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 83 }, holder)
-	local top = iconSz * 0.35
-	Kit.soft(lift, 8, top + 12, w - 16, h - 6, 14, "shadow", Color3.new(0, 0, 0), 0.45, 83)
-	local base = Kit.frame(lift, 0, top + 7, w, h - 7, Color3.fromHex(Kit.stops(th.hdr)[#Kit.stops(th.hdr)][1]):Lerp(Kit.INK, 0.45), { ZIndex = 83 })
-	Kit.corner(base, 22); Kit.stroke(base, 3, Kit.INK)
-	local card = Kit.new("Frame", { ClipsDescendants = true, Position = UDim2.fromOffset(0, top), Size = UDim2.fromOffset(w, h - 7), BackgroundTransparency = 1, ZIndex = 84 }, lift)
-	Kit.corner(card, 22)
-	local f = Kit.frame(card, 0, 0, w, h - 7, Color3.new(1, 1, 1), { ZIndex = 84 }); Kit.corner(f, 22); Kit.grad(f, Kit.stops(th.hdr))
-	Kit.corner(Kit.texture(card, "halftone", 0.78, 22, 85), 22)
-	Kit.image(card, 12, 6, w - 24, w - 24, Kit.iconId("ui/sunburst"), { ImageColor3 = Color3.new(1, 1, 1), ImageTransparency = 0.62, ZIndex = 85 })
-	local shade = Kit.frame(card, 0, 0, w, h - 7, Color3.new(0, 0, 0), { ZIndex = 85 }); Kit.corner(shade, 22)
-	Kit.grad(shade, { { "000000", 0, 0 }, { "000000", 0.45, 0 }, { "000000", 1, 0.45 } }, 90)
-	Kit.frame(card, 8, 3, w - 16, 3, Color3.new(1, 1, 1), { BackgroundTransparency = 0.4, ZIndex = 86 })
-	local ol = Kit.frame(lift, 0, top, w, h - 7, nil, { ZIndex = 87 }); Kit.corner(ol, 22); Kit.stroke(ol, 3, Kit.INK)
-	if it.id == "vip" then   -- featured pass: gold rim + breathing gold glow (the only glow among the cards)
-		local rim = Kit.frame(lift, 3, top + 3, w - 6, h - 13, nil, { ZIndex = 87 }); Kit.corner(rim, 19); Kit.stroke(rim, 4, hex("ffd54a"))
-		local fg = Kit.soft(lift, 0, top, w, h - 7, 22, "glow", hex("ffc93c"), 0.45, 82)
-		TweenService:Create(fg, TweenInfo.new(1.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { ImageTransparency = 0.8 }):Play()
-	end
-	-- icon pops over the top edge, grounded by a soft shadow
-	Kit.image(lift, w / 2 - iconSz * 0.3, top + iconSz * 0.58, iconSz * 0.6, math.max(10, iconSz * 0.12), Kit.iconId("ui/softellipse"), { ImageColor3 = Color3.new(0, 0, 0), ImageTransparency = 0.35, ZIndex = 88 })   -- contact shadow under the icon base
-	local icon = Kit.icon(lift, w / 2 - iconSz / 2, 0, iconSz, it.icon, { ZIndex = 89 })
-	local ny = top + iconSz * 0.68
-	Kit.title(lift, it.name, nameSz, Color3.new(1, 1, 1), 3, 2.5, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(w / 2, ny), ZIndex = 89 })
-	local pill = Kit.frame(lift, 14, ny + nameSz + 10, w - 28, 28, Kit.INK, { BackgroundTransparency = 0.45, ZIndex = 88 }); Kit.corner(pill, 14)
-	local sub = Kit.text(pill, it.desc, 15, hex("f1f3f7"), { AutomaticSize = Enum.AutomaticSize.None, Size = UDim2.new(1, -16, 1, -6), Position = UDim2.fromOffset(8, 3),
-		TextXAlignment = Enum.TextXAlignment.Center, TextScaled = true, ZIndex = 89 })
-	Kit.new("UITextSizeConstraint", { MaxTextSize = 16 }, sub)
-	local btn = Kit.button(lift, 16, top + h - 7 - keyH - 14, w - 32, keyH, { text = "R$ " .. it.robux, size = math.floor(keyH * 0.48), stops = Kit.stops(GREEN) })
-	btn.root.ZIndex = 90
-	local keyClip = Kit.new("Frame", { ClipsDescendants = true, Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ZIndex = 9 }, btn.face); Kit.corner(keyClip, 14)
-	addShine(keyClip, w - 32, keyH, 9)
-	if it.tag then
-		local rw = math.max(100, #it.tag * 10 + 26)
-		-- right of the icon, inside the card edge
-		local rib = Kit.frame(lift, w - rw - 8, top - 14, rw, 32, hex("ff4d6a"), { ZIndex = 91 }); Kit.corner(rib, 16); Kit.stroke(rib, 3, Kit.INK)
-		Kit.grad(rib, Kit.stops("ff8095:0 e8344f:100"))
-		Kit.title(rib, it.tag, 15, Color3.new(1, 1, 1), 2.2, 1.5, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, -1), ZIndex = 92 })
-	end
-	-- hover lift + icon pop
-	local hit = Kit.new("TextButton", { Text = "", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 83 }, holder)
-	local isc = Kit.new("UIScale", {}, icon)
-	hit.MouseEnter:Connect(function()
-		TweenService:Create(lift, TweenInfo.new(0.16, Enum.EasingStyle.Back), { Position = UDim2.fromOffset(0, -6) }):Play()
-		TweenService:Create(isc, TweenInfo.new(0.16, Enum.EasingStyle.Back), { Scale = 1.08 }):Play()
-	end)
-	hit.MouseLeave:Connect(function()
-		TweenService:Create(lift, TweenInfo.new(0.16), { Position = UDim2.fromOffset(0, 0) }):Play()
-		TweenService:Create(isc, TweenInfo.new(0.16), { Scale = 1 }):Play()
-	end)
-	shopCards[it.id] = { btn = btn, sub = sub, owned = nil }
-	btn.root.Activated:Connect(function() buyItem(it) end)
-	return holder
-end
-function Hud.openShop()
-	if shopOverlay then shopOverlay.Visible = not shopOverlay.Visible; Hud.refreshShop(); return end
-	shopOverlay = Kit.new("TextButton", { Text = "", AutoButtonColor = false, BackgroundColor3 = hex("06070c"), BackgroundTransparency = 0.35, Size = UDim2.fromScale(1, 1), ZIndex = 80 }, canvas)
-	local PW, PH = 1080, 980
-	local panel = Kit.new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 16), Size = UDim2.fromOffset(PW, PH), ZIndex = 81 }, shopOverlay)
-	Kit.new("TextButton", { Text = "", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 81 }, panel)   -- clicks on the board never close it
-	Kit.soft(panel, 12, 20, PW - 24, PH - 12, 28, "shadow", Color3.new(0, 0, 0), 0.3, 81)
-	local bodyG = Kit.new("Frame", { ClipsDescendants = true, Size = UDim2.fromOffset(PW, PH), BackgroundTransparency = 1, ZIndex = 81 }, panel); Kit.corner(bodyG, 30)
-	local bf = Kit.frame(bodyG, 0, 0, PW, PH, Color3.new(1, 1, 1), { ZIndex = 81 }); Kit.corner(bf, 30); Kit.grad(bf, Kit.stops("3a2a74:0 241b52:45 141233:100"))
-	Kit.corner(Kit.texture(bodyG, "halftone", 0.88, 30, 81), 30)
-	Kit.image(bodyG, PW / 2 - 420, 30, 840, 840, Kit.iconId("ui/sunburst"), { ImageColor3 = hex("8f7cff"), ImageTransparency = 0.86, ZIndex = 81 })
-	local trim = Kit.frame(panel, 10, 10, PW - 20, PH - 20, nil, { ZIndex = 82 }); Kit.corner(trim, 22); Kit.stroke(trim, 2, hex("f5c451"), 0.35)
-	local ol = Kit.frame(panel, 0, 0, PW, PH, nil, { ZIndex = 82 }); Kit.corner(ol, 30); Kit.stroke(ol, 6, Kit.INK)
-	-- header (Figma "header/SHOP (blocky)"): a crimson banner with gold trim runs behind a gold brick plaque. The band
-	-- folds back at each end into lower tails with a stepped swallowtail (two prongs), all square-cornered like the
-	-- rest of the HUD. The plaque has a 3D lip, LEGO studs on top, halftone, an edge light and the title in ink.
-	local CXH, BW, BY, BH, TY, TH, TW = PW / 2, 320, -16, 60, 20, 58, 104
-	local RED, TAIL = Kit.stops("ff7486:0 ec3a54:45 b01b33:100"), Kit.stops("d42a45:0 a8182f:55 7a0f22:100")
-	local function block(x, y, w, h, stops, z, sw)
-		local f = Kit.frame(panel, x, y, w, h, Color3.new(1, 1, 1), { ZIndex = z }); Kit.corner(f, 4)
-		Kit.grad(f, stops)
-		if sw then Kit.stroke(f, sw, Kit.INK) end
-		return f
-	end
-	for _, sgn in { -1, 1 } do
-		local bandEnd = CXH + sgn * BW
-		local tx = if sgn < 0 then bandEnd - TW + 26 else bandEnd - 26
-		local px = if sgn < 0 then tx - 24 else tx + TW - 4
-		block(px, TY, 28, 24, Kit.stops("d42a45:0 a8182f:100"), 82, 3)               -- swallowtail prongs
-		block(px, TY + TH - 24, 28, 24, Kit.stops("a8182f:0 7a0f22:100"), 82, 3)
-		block(tx, TY, TW, TH, TAIL, 83, 4)                                            -- tail
-		local tx0 = tx + (if sgn < 0 then 8 else 30)
-		Kit.frame(panel, tx0, TY + 8, TW - 40, 3, hex("ffd54a"), { BackgroundTransparency = 0.1, ZIndex = 83 })
-		Kit.frame(panel, tx0, TY + TH - 11, TW - 40, 3, hex("ffd54a"), { BackgroundTransparency = 0.1, ZIndex = 83 })
-		block(if sgn < 0 then bandEnd else bandEnd - 34, BY + BH - 8, 34, TY + TH - (BY + BH) - 6, Kit.stops("4a0814:0 2a040b:100"), 84, 2)   -- fold
-	end
-	local band = block(CXH - BW, BY, BW * 2, BH, RED, 85, 4)
-	Kit.corner(Kit.texture(band, "halftone", 0.8, 20, 85), 4)
-	Kit.frame(band, 8, 5, BW * 2 - 16, 4, Color3.new(1, 1, 1), { BackgroundTransparency = 0.5, ZIndex = 86 })
-	Kit.frame(band, 12, 13, BW * 2 - 24, 3, hex("ffd54a"), { ZIndex = 86 })
-	Kit.frame(band, 12, BH - 16, BW * 2 - 24, 3, hex("ffd54a"), { ZIndex = 86 })
-	for _, rx in { 18, BW * 2 - 32 } do
-		local rv = block(CXH - BW + rx, BY + BH / 2 - 7, 14, 14, Kit.stops("fff3b0:0 e0a020:60 8a5a0a:100"), 86, 2.5)
-		_ = rv
-	end
-	-- plaque: lip 8 px lower, studs on top, face, title
-	local plW, plH, plY = 400, 104, -36
-	block(CXH - plW / 2, plY + 8, plW, plH, Kit.stops("d08414:0 8a4a06:100"), 86, 5)
-	for k = 0, 3 do
-		local sx = CXH - plW / 2 + 44 + k * (plW - 128) / 3
-		local stud = block(sx, plY - 12, 40, 16, Kit.stops("fff3b0:0 ffc93c:55 c0700c:100"), 86, 4)
-		Kit.frame(stud, 6, 3, 28, 3, Color3.new(1, 1, 1), { BackgroundTransparency = 0.3, ZIndex = 87 })
-	end
-	local plate = block(CXH - plW / 2, plY, plW, plH, Kit.stops("fff6c4:0 ffd54a:38 f0a020:78 c0700c:100"), 87, 5)
-	plate.ClipsDescendants = true
-	Kit.corner(Kit.texture(plate, "halftone", 0.78, 18, 87), 4)
-	Kit.frame(plate, 10, 6, plW - 20, 8, Color3.new(1, 1, 1), { BackgroundTransparency = 0.3, ZIndex = 88 })      -- edge light
-	Kit.frame(plate, 0, plH - 18, plW, 18, hex("a85a08"), { BackgroundTransparency = 0.55, ZIndex = 88 })          -- bottom shade
-	local bev = Kit.frame(plate, 8, 8, plW - 16, plH - 16, nil, { ZIndex = 88 }); Kit.corner(bev, 4); Kit.stroke(bev, 2, hex("fff3c0"), 0.45)
-	local title = Kit.title(panel, "SHOP", 74, Color3.new(1, 1, 1), 5.5, 6, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(CXH, plY + plH / 2 - 4), ZIndex = 89 })
-	Kit.grad(title.label, Kit.stops("ffffff:0 ffffff:45 ffe9a0:100"))
-	Kit.sparkle(panel, CXH - plW / 2 + 22, plY - 26, 14); Kit.sparkle(panel, CXH + plW / 2 - 18, plY + 78, 10); Kit.sparkle(panel, CXH + plW / 2 + 30, plY - 10, 8)
-	local close = Kit.button(panel, PW - 84, 22, 62, 60, { text = "X", size = 30, stops = Kit.stops("ff8a7a:0 d0443a:100"), sound = "close" })
-	close.root.ZIndex = 86
-	close.root.Activated:Connect(function() shopOverlay.Visible = false end)
-	-- category tabs
-	local pages, tabs = {}, {}
-	local TABS = { { "PASSES", "shop_vip" }, { "BOOSTS", "shop_boost60" }, { "CRATES", "shop_crateL" } }
-	local function show(k)
-		for i, pg in pages do pg.Visible = i == k end
-		for i, t in tabs do t.look(if i == k then "lit" else "grey", Kit.stops("ffe08a:0 f5b93c:45 c97a14:100")) end
-	end
-	for i, t in TABS do
-		local b = Kit.button(panel, PW / 2 - 330 + (i - 1) * 226, 96, 210, 58, { icon = t[2], iconSize = 46, text = t[1], size = 22, stops = Kit.stops("ffe08a:0 f5b93c:45 c97a14:100") })
-		b.root.ZIndex = 86
-		b.root.Activated:Connect(function() show(i) end)
-		tabs[i] = b
-	end
-	local CW, CY = PW - 72, 172
-	local function page()
-		local p = Kit.new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(36, CY), Size = UDim2.fromOffset(CW, PH - CY - 30), ZIndex = 83, Visible = false }, panel)
-		table.insert(pages, p)
-		return p
-	end
-	-- PASSES page: hero bundle + 6 pass cards
-	local p1 = page()
-	local B = ShopData.BY_ID.bundle
-	do
-		local HH = 236
-		local hero = Kit.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(CW, HH + 8), ZIndex = 83 }, p1)
-		Kit.soft(hero, 8, 14, CW - 16, HH, 16, "shadow", Color3.new(0, 0, 0), 0.4, 83)
-		local hb = Kit.frame(hero, 0, 8, CW, HH, hex("8a4c0c"), { ZIndex = 83 }); Kit.corner(hb, 26); Kit.stroke(hb, 3, Kit.INK)
-		local hc = Kit.new("Frame", { ClipsDescendants = true, Size = UDim2.fromOffset(CW, HH), BackgroundTransparency = 1, ZIndex = 84 }, hero); Kit.corner(hc, 26)
-		local hf = Kit.frame(hc, 0, 0, CW, HH, Color3.new(1, 1, 1), { ZIndex = 84 }); Kit.corner(hf, 26); Kit.grad(hf, Kit.stops("fff2b8:0 ffc94a:40 f08a1c:100"))
-		Kit.corner(Kit.texture(hc, "halftone", 0.76, 26, 85), 26)
-		Kit.image(hc, 30, 8, HH - 16, HH - 16, Kit.iconId("ui/sunburst"), { ImageColor3 = Color3.new(1, 1, 1), ImageTransparency = 0.45, ZIndex = 85 })
-		local hs = Kit.frame(hc, 0, 0, CW, HH, Color3.new(0, 0, 0), { ZIndex = 85 }); Kit.corner(hs, 26); Kit.grad(hs, { { "000000", 0, 0 }, { "000000", 0.5, 0 }, { "000000", 1, 0.4 } }, 90)
-		addShine(hc, CW, HH, 86)
-		local hol = Kit.frame(hero, 0, 0, CW, HH, nil, { ZIndex = 87 }); Kit.corner(hol, 26); Kit.stroke(hol, 3, Kit.INK)
-		Kit.image(hero, 65, 178, 180, 24, Kit.iconId("ui/softellipse"), { ImageColor3 = Color3.new(0, 0, 0), ImageTransparency = 0.3, ZIndex = 88 })   -- contact shadow under the chest
-		Kit.icon(hero, 30, -34, 250, B.icon, { ZIndex = 89 })   -- pops out over the top edge
-		Kit.title(hero, "ULTIMATE BUNDLE", 46, Color3.new(1, 1, 1), 4, 3.5, { Position = UDim2.fromOffset(300, 34), ZIndex = 89 })
-		Kit.title(hero, "Every game pass, forever", 22, hex("5a3006"), 0, 0, { Position = UDim2.fromOffset(300, 94), ZIndex = 89 })
-		local row = Kit.new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(300, 136), Size = UDim2.fromOffset(460, 60), ZIndex = 88 }, hero)
-		Kit.new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, row)
-		for k, g in B.grants do
-			local chip = Kit.frame(row, 0, 0, 58, 58, Color3.new(1, 1, 1), { LayoutOrder = k, ZIndex = 88 }); Kit.corner(chip, 16)
-			Kit.grad(chip, Kit.stops("ffffff@70:0 ffe7a0@85:100")); Kit.stroke(chip, 3, Kit.INK)
-			Kit.icon(chip, 4, 4, 50, ShopData.BY_ID[g].icon, { ZIndex = 89 })
-		end
-		-- old price: cream on a dark pill so it reads against the gold, red strike through the middle
-		local wasPill = Kit.frame(hero, CW - 28 - 136, 62, 0, 40, hex("5a2a06"), { AnchorPoint = Vector2.new(0.5, 0.5), AutomaticSize = Enum.AutomaticSize.X, BackgroundTransparency = 0.25, ZIndex = 88 })
-		Kit.corner(wasPill, 20)
-		Kit.new("UIPadding", { PaddingLeft = UDim.new(0, 18), PaddingRight = UDim.new(0, 18) }, wasPill)
-		local was = Kit.title(wasPill, "R$ " .. B.was, 26, hex("fff1d6"), 0, 0, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.fromScale(0, 0.5), ZIndex = 89 })
-		local strike = Kit.frame(was.holder, 0, 0, 0, 0, hex("ff4a4a"), { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.52), Size = UDim2.new(1, 12, 0, 4), ZIndex = 91 })
-		Kit.corner(strike, 2)
-		local bw, bh = 272, 104
-		local btn = Kit.button(hero, CW - 28 - bw, 90, bw, bh, { text = "R$ " .. B.robux, size = 48, stops = Kit.stops(GREEN) })
-		-- the bundle key is the only green glow on the page: it breathes so the main buy reads first
-		local bglow = Kit.soft(hero, CW - 28 - bw, 90, bw, bh, 24, "glow", hex("5dff6e"), 0.5, 89)
-		TweenService:Create(bglow, TweenInfo.new(1.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { ImageTransparency = 0.8 }):Play()
-		btn.root.ZIndex = 90
-		local kc = Kit.new("Frame", { ClipsDescendants = true, Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ZIndex = 9 }, btn.face); Kit.corner(kc, 16)
-		addShine(kc, bw, bh, 9)
-		local rib = Kit.frame(hero, CW - 28 - 136 - 90, -10, 180, 44, Color3.new(1, 1, 1), { ZIndex = 91 }); Kit.corner(rib, 22); Kit.stroke(rib, 4, Kit.INK)
-		Kit.grad(rib, Kit.stops("ff8095:0 e8344f:100"))
-		Kit.title(rib, B.tag, 24, Color3.new(1, 1, 1), 3, 2, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, -1), ZIndex = 92 })
-		shopCards.bundle = { btn = btn, sub = Instance.new("TextLabel"), owned = nil }
-		btn.root.Activated:Connect(function() buyItem(B) end)
-	end
-	local g1 = Kit.new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 262), Size = UDim2.fromOffset(CW, 500), ZIndex = 83 }, p1)
-	Kit.new("UIGridLayout", { CellSize = UDim2.fromOffset(318, 248), CellPadding = UDim2.fromOffset(math.floor((CW - 3 * 318) / 2), 4), SortOrder = Enum.SortOrder.LayoutOrder }, g1)
-	local k = 0
-	for _, it in ShopData.ITEMS do
-		if it.section == "GAME PASSES" then k += 1; shopCard(g1, it, 318, 212, 100, 26, 48, k) end
-	end
-	-- BOOSTS page: two big cards + a note on stacking
-	local p2 = page()
-	local g2 = Kit.new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(CW / 2 - 360, 40), Size = UDim2.fromOffset(720, 560), ZIndex = 83 }, p2)
-	Kit.new("UIGridLayout", { CellSize = UDim2.fromOffset(340, 520), CellPadding = UDim2.fromOffset(40, 0), SortOrder = Enum.SortOrder.LayoutOrder }, g2)
-	k = 0
-	for _, it in ShopData.ITEMS do if it.section == "BOOSTS" then k += 1; shopCard(g2, it, 340, 440, 220, 32, 70, k) end end
-	Kit.title(p2, "Boosts double EVERY currency and stack with your passes. Buy more to add time.", 20, hex("d8d2ff"), 2, 0,
-		{ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(CW / 2, 640), ZIndex = 84 })
-	-- CRATES page: three cards that grow with size
-	local p3 = page()
-	local g3 = Kit.new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 40), Size = UDim2.fromOffset(CW, 560), ZIndex = 83 }, p3)
-	Kit.new("UIGridLayout", { CellSize = UDim2.fromOffset(310, 520), CellPadding = UDim2.fromOffset(math.floor((CW - 3 * 310) / 2), 0), SortOrder = Enum.SortOrder.LayoutOrder }, g3)
-	k = 0
-	for _, it in ShopData.ITEMS do if it.section == "CRATES" then k += 1; shopCard(g3, it, 310, 440, 160 + k * 24, 30, 66, k) end end
-	Kit.title(p3, "Crates pay out from YOUR current eggs per second, so they stay worth it as you grow.", 20, hex("d8d2ff"), 2, 0,
-		{ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(CW / 2, 640), ZIndex = 84 })
-	Kit.title(panel, "Passes are forever  ·  Boosts stack with passes  ·  Every purchase is checked on the server", 15, hex("a99ce0"), 0, 0,
-		{ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromOffset(PW / 2, PH - 34), ZIndex = 84 })
-	show(1)
-	shopOverlay.Activated:Connect(function() shopOverlay.Visible = false end)
-	local sc = Kit.new("UIScale", { Scale = 0.9 }, panel)
-	TweenService:Create(sc, TweenInfo.new(0.24, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
-	Hud.refreshShop()
-end
-function Hud.onMap()
-	closePopup()
-	local on = not plr.PlayerGui:GetAttribute("PeckwoodMap")
-	plr.PlayerGui:SetAttribute("PeckwoodMap", on)
-	if on then showToast("Map: every open island. Tap MAP again to return", "seeds", "map") end
-end
-
--- group bars: under the open window, every other feature group is a full-width bar styled like a window header
--- (themed header gradient, halftone, gloss, ink outline, icon + name). They share the space down to the screen bottom
--- evenly, so the right side is always filled top to bottom; click one to swap the drawer to that group.
-local BAR_GAP, BAR_MIN, BAR_MAX = 5, 34, 64
-local bmOrder = {}
-local function bookmarkTab(parent, g, order)
-	local lead = Spec[g.members[1]]
-	local holder = Kit.new("Frame", { BackgroundTransparency = 1, LayoutOrder = order, Size = UDim2.fromOffset(500, 64), ZIndex = 4 }, parent)
-	local lift = Kit.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 4 }, holder)
-	local glow = Kit.soft(lift, 0, 0, 500, 64, 16, "glow", hex(lead.glow or "ffffff"), 1, 3)
-	glow.Size = UDim2.new(1, 32, 1, 32); glow.Position = UDim2.fromOffset(-16, -16)
-	local base = Kit.frame(lift, 0, 5, 0, 0, Color3.fromHex(Kit.stops(lead.hdr)[#Kit.stops(lead.hdr)][1]):Lerp(Kit.INK, 0.5), { Size = UDim2.new(1, 0, 1, -5), ZIndex = 4 })
-	Kit.corner(base, 16); Kit.stroke(base, 3, Kit.INK)
-	local face = Kit.frame(lift, 0, 0, 0, 0, Color3.new(1, 1, 1), { Size = UDim2.new(1, 0, 1, -5), ZIndex = 5 }); Kit.corner(face, 16)
-	Kit.grad(face, Kit.stops(lead.hdr))
-	local tx = Kit.texture(face, "halftone", 0.82, 22, 5); Kit.corner(tx, 16)
-	local gl = Kit.frame(face, 10, 4, 0, 0, Color3.new(1, 1, 1), { Size = UDim2.new(1, -20, 0.38, 0), ZIndex = 6 }); Kit.corner(gl, 10)
-	Kit.grad(gl, { { "ffffff", 0, 0.22 }, { "ffffff", 1, 0 } })
-	local st = Kit.stroke(face, 3, Kit.INK)
-	local row = Kit.new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 16, 0.5, -2), AutomaticSize = Enum.AutomaticSize.XY, Size = UDim2.fromOffset(0, 0), ZIndex = 7 }, face)
-	Kit.new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder }, row)
-	local wellF = Kit.new("Frame", { BackgroundColor3 = Kit.INK, BackgroundTransparency = 0.55, Size = UDim2.fromOffset(46, 46), ZIndex = 7, LayoutOrder = 1 }, row)
-	Kit.corner(wellF, 23)
-	local icon = Kit.icon(wellF, 23, 23, 40, g.icon, { AnchorPoint = Vector2.new(0.5, 0.5), ZIndex = 8 })
-	local name = Kit.title(row, g.name, 24, Color3.new(1, 1, 1), 3, 2, { ZIndex = 8, LayoutOrder = 2 })
-	-- secondary: the group's tabs as small icons (what's inside), right-aligned before the chevron
-	local mem = Kit.new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -46, 0.5, -2), AutomaticSize = Enum.AutomaticSize.XY, Size = UDim2.fromOffset(0, 0), ZIndex = 7 }, face)
-	Kit.new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder }, mem)
-	local memIcons = {}
-	if #g.members > 1 then
-		for k, m in g.members do table.insert(memIcons, Kit.icon(mem, 0, 0, 28, Spec.MENU_ICON[m] or m, { ZIndex = 8, LayoutOrder = k, ImageTransparency = 0.15 })) end
-	end
-	local chev = Kit.title(face, "‹", 30, Color3.new(1, 1, 1), 3, 2, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -18, 0.5, -3), ZIndex = 8 })
-	local sc = Kit.new("UIScale", {}, row)
-	local hit = Kit.new("TextButton", { Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 9 }, holder)
-	local hovered, selected, pressed = false, false, false
-	local function pose()
-		local q = TweenInfo.new(0.16, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-		TweenService:Create(lift, q, { Position = UDim2.fromOffset(if hovered then -10 else 0, if pressed then 3 else 0) }):Play()
-		TweenService:Create(glow, TweenInfo.new(0.2), { ImageTransparency = if hovered then 0.6 else 1 }):Play()
-		TweenService:Create(sc, q, { Scale = if hovered then 1.05 else 1 }):Play()
-	end
-	-- icon + name shrink to fit short bars (the bar height follows the room left under the window)
-	holder:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
-		local h = holder.Size.Y.Offset
-		local d = math.clamp(h - 14, 26, 50)
-		wellF.Size = UDim2.fromOffset(d, d); wellF.UICorner.CornerRadius = UDim.new(0.5, 0)
-		icon.Position = UDim2.fromOffset(d / 2, d / 2); icon.Size = UDim2.fromOffset(d - 6, d - 6)
-		name.holder:FindFirstChildOfClass("UIScale")
-		for _, mi in memIcons do mi.Size = UDim2.fromOffset(math.clamp(h - 26, 18, 30), math.clamp(h - 26, 18, 30)) end
-	end)
-	hit.MouseEnter:Connect(function() hovered = true; Kit.sfx("hover"); pose() end)
-	hit.MouseLeave:Connect(function() hovered = false; pressed = false; pose() end)
-	hit.MouseButton1Down:Connect(function() pressed = true; Kit.sfx("click"); pose() end)
-	hit.MouseButton1Up:Connect(function() pressed = false; pose() end)
-	hit.Activated:Connect(function()
-		local cur = docked and groupOf(docked)
-		if cur == g then setCollapsed(not collapsed); return end
-		for _, m in g.members do
-			if not state or (Defs.WINDOW_ISLAND[m] or 1) <= state.island then Windows.open(m); return end
-		end
-	end)
-	local t = { holder = holder, btn = { root = hit }, icon = icon, burst = Instance.new("Frame"), glow = glow, iconY = 4, gid = g.id, name = name }
-	function t.select(on)
-		if on == selected then return end
-		selected = on
-		if layoutBookmarks then layoutBookmarks() end
-	end
-	function t.isSelected() return selected end
-	function t.slideOut(hide) holder.Visible = holder.Visible end
-	return t
-end
--- even stack: from under the open window (or the top while the drawer is tucked) down to the screen bottom
-layoutBookmarks = function()
-	if not bookmarkCol then return end
-	local list = {}
-	for _, id in bmOrder do
-		local t = groupTiles[id]
-		if t then
-			-- locked groups and the open group are hidden (a locked bar left visible would stack at the top)
-			local show = t.unlocked == true and not t.isSelected() and docked ~= "profile"
-			t.holder.Visible = show
-			if show then table.insert(list, t) end
+local function updateRail(area)
+	if not rail then return end
+	for i, r in RAIL do
+		local slot = railSlots[r[2]]
+		if slot then
+			local isl = World.byId[r[2]]
+			local open = isl ~= nil and World.isOpen(isl)
+			local look = if open then "open" else "locked"
+			if slot:GetAttribute("look") ~= look then slotLook(slot, look, r[2]) end
+			slot.Visible = r[2] ~= area
 		end
 	end
-	local top, width, left = 26, 470, nil
-	local api = docked and Windows.built[docked]
-	if api and api.root.Visible and scale then
-		local r = api.root
-		local cs = scale.Scale
-		-- the window's outline sits 1 px outside its root: match it so bar edges line up with the board exactly
-		width = r.AbsoluteSize.X / cs + 2
-		left = (r.AbsolutePosition.X - canvas.AbsolutePosition.X) / cs - 1
-		if not collapsed then top = (r.AbsolutePosition.Y + r.AbsoluteSize.Y - canvas.AbsolutePosition.Y) / cs + 8 end
-	end
-	local bottom = 1080 - 10
-	local n = #list
-	local h = if n > 0 then math.clamp((bottom - top - BAR_GAP * (n - 1)) / n, BAR_MIN, BAR_MAX) else 0
-	local q = TweenInfo.new(0.24, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
-	bookmarkCol.AnchorPoint = Vector2.new(0, 0)
-	bookmarkCol.Size = UDim2.fromOffset(width, bottom - top)
-	local vw = canvas.AbsoluteSize.X / (if scale then scale.Scale else 1)
-	TweenService:Create(bookmarkCol, q, { Position = UDim2.fromOffset(left or (vw - width), top) }):Play()   -- same left/right edges as the open board
-	for k, t in list do
-		t.holder.Size = UDim2.fromOffset(width, h)
-		TweenService:Create(t.holder, q, { Position = UDim2.fromOffset(0, (k - 1) * (h + BAR_GAP)) }):Play()
-	end
-end
-local function buildBookmarks(dock)
-	bookmarkCol = Kit.new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 26), Size = UDim2.fromOffset(470, 1000), ZIndex = 4 }, canvas)
-	for i, g in Spec.GROUPS do
-		if g.id == "profile" then continue end
-		local t = bookmarkTab(bookmarkCol, g, i)
-		table.insert(bmOrder, g.id)
-		groupTiles[g.id] = t
-		for _, m in g.members do menuButtons[m] = { holder = t.holder, btn = t.btn, group = g } end
+	-- the current area pops out of the rail (Figma "slot/FISHING (active)"), retinted and relabelled
+	if railActive then
+		local idx
+		for i, r in RAIL do if r[2] == area then idx = i end end
+		railActive.Visible = idx ~= nil
+		if idx and railArea ~= area then
+			railArea = area
+			local cols = areaColours(area) or openLook
+			retint(railActive:FindFirstChild("face"), cols.face); retint(railActive:FindFirstChild("lip"), cols.lip)
+			for _, d in railActive:GetDescendants() do
+				if d:IsA("TextLabel") and not d.Name:find("drop") then Render.setText(d, RAIL[idx][1]) end
+				if d:IsA("ImageLabel") and (d.Name:sub(1, 4) == "ico/" or d.Name == "drop") then d.Image = FKit.icon(RAIL_ICON[area]) end
+			end
+			local y = 4 + 76 * (idx - 1) + 3 - 4
+			TweenService:Create(railActive, TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Position = UDim2.fromOffset(0, y) }):Play()
+		end
 	end
 end
 
--- ---------------------------------------------------------------- dev panel (Studio / owner only)
-local devPanel, devLabel
-local function buildDev()
-	devPanel = Kit.new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, -241, 0, 26), Size = UDim2.fromOffset(644, 60), ZIndex = 20, Visible = false }, canvas)
-	Kit.new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 10) }, devPanel)
-	local function db(label, op, stops)
-		local h = Kit.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(150, 46), ZIndex = 20 }, devPanel)
-		local b = Kit.button(h, 0, 0, 150, 46, { text = label, size = 17, stops = stops })
-		b.root.Activated:Connect(function() act("dev", op) end)
-		return b
+-- travel arrows (Birb map arrows): left / right along the chain, up / down to rooms
+local TRAVEL = {
+	park = { left = "forest", right = "garden", up = "desert" }, garden = { left = "park", right = "bridge" },
+	bridge = { left = "garden", right = "castle", down = "aquarium" }, castle = { left = "bridge" },
+	forest = { left = "expedition", right = "park" }, expedition = { right = "forest", down = "mine" }, mine = { up = "expedition" },
+	desert = { left = "forest", right = "garden", down = "park" }, echo = { right = "garden" },
+}
+local arrows = {}
+local function destName(id)
+	if id == "aquarium" then return "AQUARIUM" elseif id == "market" then return "FISH MARKET" end
+	local isl = World.byId[id]
+	return if isl then string.upper(isl.name) else string.upper(id)
+end
+local function buildArrows()
+	group("travelL", Vector2.new(0, 0), UDim2.new(0, 16, 0.5, 116), Vector2.new(260, 70), 0.82)
+	group("travelR", Vector2.new(1, 0), UDim2.new(1, -110, 0.5, -29), Vector2.new(260, 70), 0.82)
+	group("travelU", Vector2.new(0.5, 0), UDim2.new(0.5, 400, 0, 14), Vector2.new(260, 70), 0.82)
+	for _, dir in { "left", "right", "up", "down" } do
+		local parent = if dir == "down" then groups.bc else groups["travel" .. string.upper(dir:sub(1, 1))]
+		local open = Render.component(S.travel, "hud/travel/" .. dir, parent)
+		local lockedName = "hud/travel/" .. dir .. " (locked)"
+		local locked = if S.travel.C[lockedName] then Render.component(S.travel, lockedName, parent) else nil
+		for _, ui in { open, locked } do
+			if ui then
+				ui.root.Visible = false
+				if dir == "right" then ui.root.AnchorPoint = Vector2.new(1, 0); ui.root.Position = UDim2.new(1, 0, 0, 0) end
+				if dir == "down" then ui.root.AnchorPoint = Vector2.new(0, 1); ui.root.Position = UDim2.new(0.5, 435, 1, -6) end
+				ui.onAny(function() if arrows[dir].target then travelTo(arrows[dir].target) end end)
+			end
+		end
+		arrows[dir] = { open = open, locked = locked }
 	end
-	db("REGULAR", "regular", Kit.stops("7dff86:0 2bd04a:42 15962f:86 15962f:100"))
-	db("MAXED", "maxed", Kit.GOLD)
-	db("NEXT ISLAND", "next", Kit.stops(Spec.molt.tab))
-	local lh = Kit.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(150, 46), ZIndex = 20 }, devPanel)
-	devLabel = Kit.title(lh, "", 15, hex("ffe8a8"), 2, 0, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.fromOffset(0, 23), ZIndex = 21 })
+end
+local function setArrowLabel(ui, text)
+	if not ui then return end
+	local face = ui.node:FindFirstChild("face")
+	if not face then return end
+	for _, l in Render.childTexts(face) do Render.setText(l, text) end
+end
+local function updateArrows(area)
+	local t = TRAVEL[area] or {}
+	for dir, a in arrows do
+		local id = t[dir]
+		a.target = id
+		local open = id ~= nil and (id == "aquarium" or id == "market" or (World.byId[id] and World.isOpen(World.byId[id])))
+		a.open.root.Visible = id ~= nil and open
+		if a.locked then a.locked.root.Visible = id ~= nil and not open end
+		if id then
+			setArrowLabel(a.open, destName(id))
+			if a.locked and not open then
+				local req = "LOCKED"
+				for i, x in Defs.ISLANDS do
+					if x.id == id then req = string.upper((string.gsub(string.gsub(x.goal, "^Reach ", ""), " to open.*$", ""))) end
+				end
+				setArrowLabel(a.locked, req)
+			end
+		end
+	end
 end
 
--- ---------------------------------------------------------------- full fish index overlay (Open Full Index)
-local indexOverlay
-function Windows.openIndex()
-	if indexOverlay then indexOverlay.Visible = not indexOverlay.Visible; return end
-	indexOverlay = Kit.new("TextButton", { Text = "", AutoButtonColor = false, BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.45, Size = UDim2.fromScale(1, 1), ZIndex = 80 }, canvas)
-	local spec = table.clone(Spec.index); spec.rows = {}; spec.hero = nil; spec.section = nil; spec.h = 905
-	spec.title = "FISH INDEX"; spec.footer = "Tap anywhere outside to close."
-	local api = Window.build(indexOverlay, spec)
-	api.root.Position = UDim2.fromScale(0.5, 0.5); api.root.ZIndex = 81
-	local sf = Kit.new("ScrollingFrame", { Position = UDim2.fromOffset(16, 158), Size = UDim2.fromOffset(468, 700), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 6, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, ZIndex = 5 }, api.body)
-	Kit.new("UIGridLayout", { CellSize = UDim2.fromOffset(84, 96), CellPadding = UDim2.fromOffset(12, 10) }, sf)
-	api.cells = {}
-	for i, f in Defs.FISH do
-		local c = Kit.frame(sf, 0, 0, 84, 96, Color3.new(0, 0, 0), { BackgroundTransparency = 0.6, ZIndex = 5, LayoutOrder = i }); Kit.corner(c, 12)
-		local im = Kit.icon(c, 10, 4, 64, f.id, { ZIndex = 6 })
-		local q = Kit.title(c, "?", 30, hex("8d94a3"), 2, 0, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromOffset(42, 36), ZIndex = 7 })
-		local n = Kit.text(c, Windows.fishName(f.id), 11, hex("bcc3cf"), { AutomaticSize = Enum.AutomaticSize.None, Size = UDim2.fromOffset(80, 14), Position = UDim2.fromOffset(2, 76), TextXAlignment = Enum.TextXAlignment.Center, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 6 })
-		api.cells[f.id] = { im = im, q = q, n = n }
-	end
-	Hud.indexApi = api
-	Hud.refreshIndex()
-	Window.open(api)
-	indexOverlay.Activated:Connect(function() indexOverlay.Visible = false end)
+-- [E] prompt above the player (no proximity system yet): Hud.prompt("aquarium") shows one, Hud.prompt() hides
+local promptUi
+function Hud.prompt(kind, onUse)
+	if promptUi then promptUi.root:Destroy(); promptUi = nil end
+	if not kind then return end
+	promptUi = Render.component(S.prompts, "hud/prompt/" .. kind, groups.prompt)
+	promptUi.root.AnchorPoint = Vector2.new(0.5, 0); promptUi.root.Position = UDim2.new(0.5, 0, 0, 0)
+	promptUi.on("E key", function() if onUse then onUse() end end)
 end
-function Hud.refreshIndex()
-	local api = Hud.indexApi; if not api then return end
-	local disc = Windows.fishDisc or {}
-	for id, c in api.cells do
-		local d = disc[id]
-		c.im.ImageColor3 = if d then Color3.new(1, 1, 1) else Color3.new(0, 0, 0)
-		c.im.ImageTransparency = if d then 0 else 0.35
-		c.q.holder.Visible = not d
-		c.n.Text = if d then Windows.fishName(id) else "???"
-	end
+
+-- shop drawer pull tab (top right): opens the Eggs / Molt / Seeds drawer; hides while the drawer is out
+local pull
+local function buildPull()
+	local g = group("pull", Vector2.new(1, 0), UDim2.new(1, -16, 0, 14), Vector2.new(230, 72), 0.82)
+	local L = FKit.layout()
+	local k = FKit.BTNn(L, "btn/shop drawer", 0, 0, 230, 72, FKit.PAL.gold, "UPGRADES", { icon = "shop", size = 21 })
+	pull = FKit.build(L, k, g)
+	pull.root.AnchorPoint = Vector2.new(1, 0); pull.root.Position = UDim2.new(1, 0, 0, 0)
+	pull.on("btn/shop drawer", function() WM.setDrawer(not WM.drawerOpen) end)
 end
 
 -- ---------------------------------------------------------------- state
-local ISLAND_THEME = { park = "popcorn", molt = "molt", garden = "seeds", castle = "evolve", bridge = "rods", forest = "nest", mine = "mine", desert = "golden", expedition = "parrot", echo = "echo" }
-local lastIsland = 0
-function Hud.setState(s, d)
-	state, derived = s, d
-	Windows.state = s
-	Hud.refreshShop()
-	-- banner: island name + live kernels
-	-- banner names (and themes) the island the bird is standing on
-	local isl = Defs.ISLANDS[s.island]
-	local ch = game:GetService("Players").LocalPlayer.Character
+local lastIsland, lastArea = 0, nil
+local lastVals = {}
+local function currentArea()
+	local ch = plr.Character
 	local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
 	local here = if hrp then World.nearest(hrp.Position.X / 4 + 20, hrp.Position.Z / 4 + 15) else World.byId.park
-	isl = { id = here.id }
-	banner.name.set(here.name)
-	-- long names shrink to stay clear of the kernel counter (plate face 298 wide, counter starts at 182)
-	local nsc = banner.name.holder:FindFirstChildOfClass("UIScale") or Kit.new("UIScale", {}, banner.name.holder)
-	nsc.Scale = if #here.name > 12 then 0.8 elseif #here.name > 9 then 0.92 else 1
-	banner.kernels.set((Hud.kernelCount or 0) .. " / " .. d.cap)
+	return here
+end
+function Hud.setState(s, d)
+	state, derived = s, d
+	WM.update(s, d)
+	RobuxShop.setDerived(d)
+	-- banner: the area the bird stands on + eggs on the field
+	local here = currentArea()
+	local area = here and (here.area or here.id) or "park"
+	if banner then
+		setT(banner.root, "area", here and here.name or "THE PARK")
+		setT(banner.root, "count", Hud.kernelCount .. " / " .. d.cap)
+		if area ~= lastArea then
+			local cols = areaColours(area)
+			if cols then retint(banner.node:FindFirstChild("body"), cols.face) end
+		end
+	end
 	-- wallet
-	for _, cur in Defs.CUR_ORDER do
-		local c = capsules[cur]
-		local show = cur == "popcorn" or (CAP_UNLOCK[cur] or 99) <= s.island
-		c.frame.Visible = show
-		if show then
-			local v = s[cur]
-			local txt = if cur == "popcorn" and EN.toNumber(v) < 1e6 then Windows.commas(EN.toNumber(v)) else EN.short(v)
-			c.value.set(txt)
+	for cur, c in chips do
+		local v = s[cur]
+		if v and c.value then
+			Render.setText(c.value, amount(v))
 			local prev = lastVals[cur]
-			if prev and EN.me(v, prev) and cur ~= "popcorn" then Kit.pop(c.value.holder, 1.08) end
+			if prev and EN.me(v, prev) and cur ~= "popcorn" and c.ui.root.Visible then Kit.pop(c.value, 1.06) end
 			lastVals[cur] = v
 		end
 	end
-	if capsules.popcorn.rate then capsules.popcorn.rate.set("+" .. EN.short(d.popPerSec) .. "/s") end
+	if chips.popcorn.rate then Render.setText(chips.popcorn.rate, "+" .. fmt(d.popPerSec) .. "/s") end
+	layoutWallet()
 	-- objective + unlock
-	objective.text.set(d.nextGoal)
-	unlockBtn.root.Visible = d.nextCost ~= nil
-	if d.nextCost then
-		local can = true
-		for cur, n in d.nextCost do if not EN.meeq(s[cur], n) then can = false end; unlockBtn.setText(EN.short(n)) end
-		unlockBtn.look(if can then "gold" else "grey")
-	end
-	-- auto
-	autoBtn.setText(if not d.autoAllowed then "AUTO  🔒" elseif s.auto then "AUTO ON" else "AUTO")
-	autoBtn.look(if s.auto then "lit" else "grey", Kit.stops("7dff86:0 2bd04a:42 15962f:86 15962f:100"), if s.auto then "4dff66" else nil)
-	-- dev
-	devPanel.Visible = d.devAllowed == true and not Hud.qa
-	if d.devAllowed then devLabel.set(string.upper(d.mode) .. "  ·  " .. Defs.ISLANDS[s.island].id) end
-	-- menu: unlocked windows only
-	for _, g in Spec.GROUPS do
-		local open = false
-		for _, m in g.members do if (Defs.WINDOW_ISLAND[m] or 1) <= s.island then open = true end end
-		local t = groupTiles[g.id]
-		if t and t.unlocked ~= open then t.unlocked = open; if layoutBookmarks then task.defer(layoutBookmarks) end end
-	end
-	for _, api in Windows.built do
-		for _, t in api.tabs do
-			if t.icon and t.id then
-				local locked = (Defs.WINDOW_ISLAND[t.id] or 1) > s.island
-				t.icon.ImageColor3 = if locked then Color3.fromRGB(70, 74, 84) else Color3.new(1, 1, 1)
-				if t.label then t.label.TextTransparency = if locked then 0.5 else 0 end
+	if objective then
+		setT(objective.root, "goal", d.nextGoal)
+		local frac = 0
+		if d.nextCost then
+			for cur, n in d.nextCost do frac = math.min(1, EN.toNumber(s[cur]) / n) end
+		end
+		local fill = objective.root:FindFirstChild("fill", true)
+		if fill then fill.Size = UDim2.fromOffset(math.floor(600 * frac + 0.5), fill.Size.Y.Offset) end
+		unlockKey.root.Visible = d.nextCost ~= nil
+		if d.nextCost then
+			local can = true
+			for cur, n in d.nextCost do
+				if not EN.meeq(s[cur], n) then can = false end
+				local face = unlockKey.node:FindFirstChild("face")
+				for _, l in Render.childTexts(face) do Render.setText(l, "UNLOCK " .. fmt(n)) end
 			end
+			retint(unlockKey.node:FindFirstChild("face"), FKit.vgrad(if can then FKit.PAL.gold else FKit.PAL.steel))
+			retint(unlockKey.node:FindFirstChild("lip"), FKit.vgrad(if can then FKit.PAL.gold else FKit.PAL.steel, 0.58))
 		end
 	end
-	if not docked then dockWindow("popcorn") end
-	if docked and (Defs.WINDOW_ISLAND[docked] or 1) > s.island then dockWindow("popcorn") end
-	if docked then Windows.update(docked, s, d) end
-	if s.island > lastIsland and lastIsland > 0 then
-		for i = lastIsland + 1, s.island do
-			local w = Defs.ISLANDS[i].windows[1]
-			local mb = menuButtons[w]; if mb then Kit.pop(mb.holder, 1.4) end
+	-- tiles: AUTO tile shows on / off by tint, locked tiles do not exist (all 8 are always available)
+	-- area pieces
+	updateContext(area)
+	local hk = HOTBAR[area]
+	if hk == "fishing" then buildHotbar("fishing", if s.fish.active then "fishing (reeling)" else "fishing (ready)")
+	elseif hk == "mine" then buildHotbar("mine", "mine (challenge)")
+	elseif hk == "expedition" then buildHotbar("expedition", "expedition")
+	else buildHotbar(nil) end
+	if hotbar and hk == "fishing" then
+		local bait = s.fish.bait and s.fish.baits[s.fish.bait] or SampleData.hotbar.fishing.baitCount
+		setT(hotbar.root, "24", tostring(bait))
+	end
+	local akind = ({ bridge = "fish", mine = "mine", expedition = "expedition", forest = "forest" })[area]
+	buildAuto(akind, if not d.autoAllowed then "locked" elseif s.auto then "on" else "off")
+	if autoKey then
+		local hw = if hotbar then hotbar.root.Size.X.Offset / 2 else 0
+		autoKey.root.Position = UDim2.new(0.5, hw + 14, 1, -82)
+		if not d.autoAllowed then
+			local lbl = autoKey.root:FindFirstChild("label", true)
+			if lbl then Render.setText(lbl, if akind == "fish" then "AUTO " .. SampleData.autoFish.have .. "/" .. SampleData.autoFish.need else "AUTO") end
 		end
+	end
+	updateRail(area)
+	updateArrows(area)
+	layoutCompanions()
+	-- companion levels
+	if companions then
+		local L = { ["row/SPARROW"] = s.sparrow.level, ["row/SEAGULL"] = s.seagull.level, ["row/BAMBOO"] = SampleData.companions.redpanda,
+			["row/CROW"] = s.crow.level, ["row/DAVE"] = s.dave.level, ["row/PARROT"] = s.parrot.level }
+		for row, lv in L do
+			local r = companions.node:FindFirstChild(row)
+			local lvl = r and r:FindFirstChild("level")
+			if lvl then for _, l in Render.childTexts(lvl) do Render.setText(l, tostring(lv)) end end
+		end
+	end
+	-- new area unlocked: rail slot pops
+	if s.island > lastIsland and lastIsland > 0 then
+		for _, r in RAIL do local slot = railSlots[r[2]]; if slot then Kit.pop(slot, 1.2) end end
 	end
 	lastIsland = s.island
-	local th = Spec[ISLAND_THEME[isl.id]] or Spec.popcorn
-	if banner.theme ~= th then banner.theme = th; banner.key.setStops(Kit.stops(th.hdr)) end
+	lastArea = area
 end
 
 -- ---------------------------------------------------------------- toasts from the server
-local NAMES = {}
-for id, d in Defs.UP do NAMES[id] = d end
 function Hud.onToast(kind, a, b, c)
 	if kind == "bought" then
-		local d = Defs.UP[a]
-		Kit.sfx("thock")
-		local api = docked and Windows.built[docked]
-		if api then Window.celebrate(api, a) end
-		if d then local c = capsules[d.cur]; if c then Kit.pop(c.value.holder, 1.06) end end
+		Sfx.buy()
+		local dd = Defs.UP[a]
+		if dd then local ch = chips[dd.cur]; if ch and ch.value then Kit.pop(ch.value, 1.06) end end
+		Binders.bought(a)
 	elseif kind == "poor" then
-		Kit.sfx("nope")
-		if Hud.lastBtn then Kit.nope(Hud.lastBtn) end
-		local d = Defs.UP[a]
-		if d then wiggle(d.cur) end
+		Sfx.deny()
+		local lb = Hud.lastBtn
+		local inst = if typeof(lb) == "Instance" then lb elseif type(lb) == "table" then lb.root else nil
+		if inst then Kit.shake(inst, 6, 0.28) end
+		local dd = Defs.UP[a]
+		if dd then Hud.wiggle(dd.cur) end
 	elseif kind == "molt" then
-		showToast("You molted!  +" .. a .. " Plumes" .. (if b then "  ·  The Garden opens" else ""), "molt", "plume")
-		-- violet flash
-		local fl = Kit.frame(canvas, 0, 0, 0, 0, hex("b06cff"), { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 0.35, ZIndex = 90 })
+		showToast("You molted!  +" .. a .. " Plumes" .. (if b then "  ·  The Garden opens" else ""), "reward", "plume")
+		local fl = Render.new("Frame", { BorderSizePixel = 0, BackgroundColor3 = Color3.fromHex("b06cff"), BackgroundTransparency = 0.35, Size = UDim2.fromScale(1, 1), ZIndex = 90 }, canvas)
 		TweenService:Create(fl, TweenInfo.new(0.6), { BackgroundTransparency = 1 }):Play()
 		task.delay(0.6, function() fl:Destroy() end)
-	elseif kind == "island" then
-		local theme = ISLAND_THEME[a] or "popcorn"
-		showToast(b .. " opens!", theme, Spec.MENU_ICON[Spec.MENU[1]] and Spec[theme] and (Spec.MENU_ICON[theme] or "crown") or "crown")
+	elseif kind == "island" then showToast(b .. " opens!", "unlock", "map")
 	elseif kind == "evolve" then
-		showToast("Evolution " .. a .. "!  The monster grows.", "evolve", "monster")
-		local fl = Kit.frame(canvas, 0, 0, 0, 0, hex("ff5a8a"), { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 0.3, ZIndex = 90 })
+		showToast("Evolution " .. a .. "!  The monster grows.", "reward", "monster")
+		local fl = Render.new("Frame", { BorderSizePixel = 0, BackgroundColor3 = Color3.fromHex("ff5a8a"), BackgroundTransparency = 0.3, Size = UDim2.fromScale(1, 1), ZIndex = 90 }, canvas)
 		TweenService:Create(fl, TweenInfo.new(0.7), { BackgroundTransparency = 1 }):Play()
 		task.delay(0.7, function() fl:Destroy() end)
 	elseif kind == "fish" then
-		showToast("New fish!  " .. Windows.fishName(a) .. "  ·  " .. string.format("%.2f kg", b), "index", a)
-	elseif kind == "floor" then showToast("Floor " .. a .. " reached!", "parrot", "parrot")
-	elseif kind == "nest" then showToast("The " .. a .. " nest is built!", "nest", "nest")
-	elseif kind == "craft" then showToast("Crafted the " .. Windows.fishName(a:gsub("^rod_", "")) .. " Rod!", "rods", a)
-	elseif kind == "sacrifice" then showToast("Sacrificed!  Tier " .. a, "sacrifice", "altar")
-	elseif kind == "claim" then showToast("Quest claimed!", "quests", "chest")
-	elseif kind == "travel" then showToast(if a == "desert" then "Welcome to the Desert" else "Back to the Park", if a == "desert" then "golden" else "popcorn", if a == "desert" then "golden" else "popcorn")
-	elseif kind == "auto" then showToast(if a then "AUTO is on" else "AUTO is off", "seeds", "clock")
-	elseif kind == "autolocked" then showToast("Join the group to unlock AUTO", "golden", "crown")
-	elseif kind == "dev" then showToast("Dev save: " .. string.upper(a) .. "  ·  island " .. b, "molt", "crown")
-	elseif kind == "unlocked" then showToast("Unlocked!", "evolve", "crown")
+		local n = string.gsub(string.gsub(a, "^fish_", ""), "_", " ")
+		showToast("New fish!  " .. n .. "  ·  " .. string.format("%.2f kg", b), "info", "fish")
+	elseif kind == "floor" then showToast("Floor " .. a .. " reached!", "info", "parrot")
+	elseif kind == "nest" then showToast("The " .. a .. " nest is built!", "unlock", "nest")
+	elseif kind == "craft" then showToast("Crafted a new rod!", "reward", a)
+	elseif kind == "sacrifice" then showToast("Sacrificed!  Tier " .. a, "reward", "altar")
+	elseif kind == "claim" then showToast("Quest claimed!", "reward", "chest")
+	elseif kind == "travel" then showToast(if a == "desert" then "Welcome to the Desert" else "Back to the Park", "info", if a == "desert" then "golden" else "popcorn")
+	elseif kind == "auto" then showToast(if a then "AUTO is on" else "AUTO is off", "info", "auto")
+	elseif kind == "autolocked" then showToast("Join the group to unlock AUTO", "error", "auto")
+	elseif kind == "dev" then showToast("Dev save: " .. string.upper(a) .. "  ·  island " .. b, "info", "crown")
+	elseif kind == "unlocked" then showToast("Unlocked!", "unlock", "crown")
+	end
+end
+
+-- ---------------------------------------------------------------- dev save panel (Studio / owner only)
+local devPanel
+local function buildDev()
+	local L = FKit.layout()
+	devPanel = Render.new("Frame", { Name = "dev", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 120), Size = UDim2.fromOffset(520, 60), Visible = false, ZIndex = 20 }, canvas)
+	local x = 0
+	for _, b in { { "REGULAR", "regular", FKit.PAL.green }, { "MAXED", "maxed", FKit.PAL.gold }, { "NEXT AREA", "next", FKit.PAL.violet } } do
+		local k = FKit.BTNn(L, "btn/dev " .. b[2], x, 0, 160, 52, b[3], b[1], { size = 17 })
+		local ui = FKit.build(L, k, devPanel)
+		ui.root.Position = UDim2.fromOffset(x, 0)
+		ui.on("btn/dev " .. b[2], function() act("dev", b[2]) end)
+		x += 172
 	end
 end
 
 -- ---------------------------------------------------------------- start
 function Hud.start(remotes)
 	Remotes = remotes
-	gui = Kit.new("ScreenGui", { Name = "PeckwoodHUD", ResetOnSpawn = false, IgnoreGuiInset = true, ZIndexBehavior = Enum.ZIndexBehavior.Sibling, DisplayOrder = 5 }, plr:WaitForChild("PlayerGui"))
-	canvas = Kit.new("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(1920, 1080) }, gui)
-	scale = Kit.new("UIScale", {}, canvas)
-	-- vignette (121729 0 -> 55%)
-	local vig = Kit.frame(canvas, 0, 0, 0, 0, hex("121729"), { Size = UDim2.fromScale(1, 1), ZIndex = 0 })
-	Kit.grad(vig, { { "121729", 0, 0 }, { "121729", 0.75, 0 }, { "121729", 1, 0.45 } })
-	buildBanner(); buildWallet(); buildObjective(); buildMenu(); buildDev()
-	-- docked shop column: right edge, 22 px margin, fit to height
-	local dock = Kit.new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, DOCK_IN, 0, DOCK_Y), Size = UDim2.fromOffset(500, 1028), ZIndex = 5 }, canvas)
-	Hud.dock = dock
-	buildBookmarks(dock)
-	local ids = table.clone(Spec.MENU)
-	for _, id in { "baits", "index", "aquarium" } do table.insert(ids, id) end
-	for _, id in ids do
-		-- wrapper carries the fit-to-height scale; the window root keeps its own open/close scale
-		-- anchored top-right so a scaled-down window stays in the corner against the wall
-		local holder = Kit.new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(1, 0), Position = UDim2.fromScale(1, 0), Size = UDim2.fromOffset(500, 100), ZIndex = 5 }, dock)
-		local api = Windows.build(holder, id, act)
-		holder.Size = UDim2.fromOffset(500, api.H)
-		api.root.Position = UDim2.fromScale(0.5, 0.5)
-		-- Profile is a full-height board: it fills the right side to the screen bottom (the group bars step aside)
-		Kit.new("UIScale", { Scale = if id == "profile" then math.min(1, (1080 - DOCK_Y - 12) / api.H) else math.min(1, WIN_MAX_H / api.H), Name = "Fit" }, holder)
-		api.root.Visible = false
-		api.collapse.root.Activated:Connect(function() Hud.setCollapsed(true) end)
+	local pg = plr:WaitForChild("PlayerGui")
+	gui = Render.new("ScreenGui", { Name = "PeckwoodHUD", ResetOnSpawn = false, IgnoreGuiInset = true, ZIndexBehavior = Enum.ZIndexBehavior.Sibling, DisplayOrder = 5 }, pg)
+	canvas = Render.new("Frame", { Name = "canvas", BackgroundTransparency = 1, Size = UDim2.fromOffset(1920, 1080) }, gui)
+	scale = Render.new("UIScale", {}, canvas)
+	Hud.canvas = canvas
+	-- the windows layer and its binders / hand-built screens
+	WM.screens = Screens
+	Screens.init(Hud, WM)
+	Binders.install(WM, act, Hud)
+	WM.init(pg)
+	WM.debugHook()
+	WM.onChanged = function()
+		Hud.dock.Visible = WM.drawerOpen
+		Hud.collapsed = not WM.drawerOpen
+		if pull then pull.root.Visible = not WM.drawerOpen end
 	end
+	group("tc", Vector2.new(0.5, 0), UDim2.new(0.5, 0, 0, 10), Vector2.new(560, 106), 0.85)
+	group("toast", Vector2.new(0.5, 0), UDim2.new(0.5, 0, 0, 112), Vector2.new(1000, 80), 0.78)
+	group("bc", Vector2.new(0.5, 1), UDim2.new(0.5, 0, 1, -12), Vector2.new(680, 260), 0.82)
+	group("prompt", Vector2.new(0.5, 0), UDim2.new(0.5, 0, 0, 640), Vector2.new(600, 62), 0.85)
+	buildTopLeft(); buildWallet(); buildObjective(); buildRail(); buildArrows(); buildPull(); buildDev()
+	RobuxShop.init(canvas, function(msg, tone, icon) showToast(msg, if tone == "golden" then "reward" else "info", icon) end, act)
 	layout()
 	workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(layout)
-	remotes.State.OnClientEvent:Connect(function(s, d) Hud.setState(s, d) end)
+	remotes.State.OnClientEvent:Connect(function(s, d)
+		Hud.setState(s, d)
+		if devPanel then devPanel.Visible = d.devAllowed == true end
+	end)
 	remotes.Fish.OnClientEvent:Connect(function(disc, best, have)
-		Windows.fishDisc, Windows.fishBest, Windows.fishHave = disc, best, have
-		Hud.refreshIndex()
+		Binders.fish = { disc = disc, best = best, have = have }
 	end)
 	remotes.Toast.OnClientEvent:Connect(Hud.onToast)
-	-- debug hook (Studio tooling / screenshots): PlayerGui:SetAttribute("PeckwoodOpen", "<window id>")
-	gui.Parent:GetAttributeChangedSignal("PeckwoodShop"):Connect(function() Hud.openShop() end)   -- QA: toggle the shop
-	gui.Parent:GetAttributeChangedSignal("PeckwoodOpen"):Connect(function() Windows.open(gui.Parent:GetAttribute("PeckwoodOpen")) end)
-	-- QA rig (Studio screenshots): PeckwoodQA = zoom (0 = off), PeckwoodQAY = scroll in design px.
-	-- Hides the rest of the HUD and pins the docked window top-left so every window is checked the same way.
-	local function qa()
-		local z = gui.Parent:GetAttribute("PeckwoodQA") or 0
-		Hud.qa = z > 0
-		for _, c in canvas:GetChildren() do if c:IsA("GuiObject") and c ~= dock then c.Visible = not Hud.qa end end
-		if Hud.qa then
-			scale.Scale = z
-			canvas.Size = UDim2.fromOffset(workspace.CurrentCamera.ViewportSize.X / z, workspace.CurrentCamera.ViewportSize.Y / z)
-			dock.AnchorPoint = Vector2.new(0, 0)
-			dock.Position = UDim2.new(0, 20, 0, 10 - (gui.Parent:GetAttribute("PeckwoodQAY") or 0))
-		else
-			dock.AnchorPoint = Vector2.new(1, 0); dock.Position = UDim2.new(1, DOCK_IN, 0, DOCK_Y); layout()
-		end
-	end
-	gui.Parent:GetAttributeChangedSignal("PeckwoodQA"):Connect(qa)
-	gui.Parent:GetAttributeChangedSignal("PeckwoodQAY"):Connect(qa)
+	pg:GetAttributeChangedSignal("PeckwoodShop"):Connect(function() RobuxShop.toggle() end)
+	pg:GetAttributeChangedSignal("PeckwoodPrompt"):Connect(function()
+		local v = pg:GetAttribute("PeckwoodPrompt")
+		Hud.prompt(if typeof(v) == "string" and v ~= "" then v else nil)
+	end)
 end
 
 return Hud
