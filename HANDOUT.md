@@ -245,6 +245,67 @@ Do this before the steps below.
 4. Ocean: verify painted shallows/foam fit the new coastline; remove the faint diagonal lines seen on the water.
 5. Then the owner's bigger ask: every Birb mechanic + all windows in the Figma UI style (see section 0 gap audit).
 
+### In-game UI from Figma (claude/peckwood-ui)
+Branch **`claude/peckwood-ui`** (worktree `~/Downloads/rc-main-ui`, not merged, not pushed). Owner ask: "get our UI in
+... everything rendered in till we get the rest of the game in". Every HUD element and every window on the Figma HUD
+board `213:7` and Windows board `239:307` is in game, placed like the screen mock `229:7`, openable, with live data
+where a system exists and Figma's own sample save everywhere else.
+- **How it matches Figma (by construction, no hand redraw):** `roblox/tools/figma_export/exporter.js` (read-only
+  `use_figma` script) dumps a frame's node tree in 19 KB slices; `collect.py` reassembles the slices from the Claude
+  session transcripts (`python collect.py <session dir>`); `build_layouts.py` writes one Luau layout per frame to
+  `src/client/UI/Figma/Layouts/` (node id in each header). `UI/Figma/Render.luau` builds those tables node for node at
+  the Figma coordinates: fills, linear gradients, radial (soft-ellipse fallback, no beta needed), tiled stripes /
+  lattice / halftone, strokes (inner), ink drops, soft shadows, inner shadows, layer-blur ellipses, sparkles; glyphs
+  and growth chevrons are drawn as rounded bars (all ink first, then colour); every Kit key gets the owner press (whole
+  key drops by the lip depth, lip hidden, hover +6 %) and `Sfx.press()`. Re-export a changed frame: run the exporter
+  with its node id (parts 0..n), `collect.py`, `build_layouts.py` (roots in `roots.json`).
+- **Modules:** `UI/Hud.luau` (new HUD), `UI/WindowManager.luau` + `UI/WindowDefs.luau` (every window, its Figma frames,
+  tabs, views; lazy build on first open; pop 0.86 -> 1 back-out, rows cascade 40 ms, close key / Esc / backdrop),
+  `UI/Binders.luau` (live data + actions), `UI/Screens.luau` (windows with no squared frame, built with
+  `UI/Figma/FKit.luau` = Luau port of `docs/figma/kit.js`), `UI/SampleData.luau` (EVERY placeholder value in one
+  place), `UI/Sfx.luau` (one hook per sound; `press()` = keycap), `UI/RobuxShop.luau` (the approved Robux shop, moved
+  out of the old Hud), `UI/Figma/IconAlias.luau`. Removed: old baked-art `Window`, `Windows`, `Spec`, shared `FigmaArt*`.
+- **HUD (mock 229:7):** top left banner (live area name + eggs on field / cap, tinted per area) + 4x2 tiles
+  (MAP = map view, TELEPORT = Fast Travel, FISH = Fishing, PROFILE, SHOP = Robux shop, SETTINGS, AUTO = group perk,
+  PETS = companions list) + COMPANIONS [TAB] (live levels, only unlocked rows, opens each companion window);
+  bottom left wallet (EGGS main chip + chips for owned currencies, value fits, name hides when long); top centre
+  context bar per area (bridge fishing / mine / expedition / echo / desert / nest, opens that window) + toasts (reward /
+  unlock / error / info from the server Toast remote); bottom centre objective (live goal, opens Objectives) + UNLOCK
+  key for paid gates, hotbar (fishing CAST + slots, mine CHALLENGE, expedition HP / RESET FLOOR), context AUTO; right
+  area rail (open / locked / current pops out, click = travel) and travel arrows (Birb chain park-garden-bridge-castle,
+  forest-expedition, desert up, rooms down/up open their window); top right UPGRADES pull tab for the shop drawer.
+- **Figma frame -> window (open from):** shop drawer `260:3088` EGGS / `260:3277` golden view (currency switch) /
+  `260:4397` MOLT / `260:4544` SEEDS, tabs NEST / MINE open those windows (UPGRADES pull tab) · mine `246:4443` SHOP /
+  `248:1739` AREAS (+ CROW tab -> crow `246:1276`) (mine context bar, hotbar, drawer MINE) · treasure `246:1525`
+  (mine down arrow) · trees `239:309` / `246:3851` / `246:1796` (garden up arrow, echo / desert context bar) · fishing
+  `246:3448` / `248:2079` / `248:2952` (FISH tile, bridge context bar, hotbar slots) · aquarium `246:2134` / `246:4667` /
+  `248:1351` (bridge down arrow) + FISH MARKET tab -> market `246:2574` (locked variant `248:1566`) · nest `260:2137` SHOP
+  / `246:1462` LAKE (BREED -> `248:546` incubating -> HATCH -> `248:948` ready) / `260:4842` / `260:5761` / `261:600`
+  (forest context bar, drawer NEST) · parrot `256:483` / `260:753` / `259:613` (+ FORGE view `260:3850`) / `260:1011` /
+  `260:3443` (companions PARROT) · expedition `260:5073` (expedition context bar) · sacrifice `256:924` / `256:995`
+  (expedition left arrow) · objectives `256:1284` / `260:1565` / `260:2885` (objective bar) · sparrow `259:788`,
+  seagull `260:5560`, red panda `256:589` (+ naming `256:806` on first open), dave `259:871` (companions rows) · evolve
+  `260:2568` (castle up arrow). Code-built (FKit, no squared frame yet): profile / settings / leaderboards (one tab
+  bar), Fast Travel, Welcome back (Settings > Offline earnings). Debug: `PlayerGui:SetAttribute("PeckwoodOpen",
+  "mine:AREAS")`, `PeckwoodPrompt` = "aquarium" shows an [E] prompt, `PeckwoodShop` toggles the Robux shop.
+- **Live vs placeholder:** live = wallet + egg rate, banner, objective + UNLOCK, companions levels, AUTO state, fishing
+  catches / rod per catch, mine area, parrot level, desert chance + field count, nest tier + twigs, shop drawer rows
+  (EGGS / golden / MOLT / SEEDS: name, LV bar, now >>> next, price, buy / need / maxed state swap, BUY + MAX send
+  `buy`), MOLT gain + MOLT key, Mine SHOP rows, Profile stats, Fast Travel locks, Settings sound. Actions wired to the
+  existing intents: molt, buy, feed / evolve, sparrow, seagull migrate, dave, panda, parrot spend, expedition, sacrifice,
+  fish go, unlock, auto, dev. Everything else shows the Figma sample (SampleData for HUD values).
+- **Not reproduced / caveats:** header "swoosh" vector shapes (dropped); radial gradients = soft-ellipse approximation
+  (Upgraded UIGradients beta not used); letter spacing (Roblox has none); header sweep / rim breathing idle loops
+  skipped (the header is a CanvasGroup because of its rotated sweeps; no per-frame churn); stripes still use the old
+  non-seamless `ui/stripes` id (upload `roblox/assets/ui/stripes_seamless.png`); **328 icons not uploaded** (list with
+  source PNGs: `roblox/tools/figma_export/icons_to_upload.txt`; they show a family fallback until their ids are in
+  `shared/Icons.luau`, the `lock` badge stays blank until uploaded); tab locks are not enforced (placeholder build: every
+  tab opens); fish / enemy / quest grids show the Figma sample, not the live 426 fish yet.
+- **Checks (no Studio used):** `rojo build` OK; `luau-lsp analyze` clean on the new UI; `lune run
+  tools/ui_harness/run.luau` loads the real UI modules on lune's instance model with service mocks, starts the HUD, pushes
+  a state, opens every window / tab / view and presses every key: 0 errors (per-window instance counts printed).
+  Not yet seen on screen: needs one Studio pass (PeckwoodOpen hook + screenshots) for pixel QA.
+
 ---
 
 ## New chat? Paste this first
@@ -266,6 +327,8 @@ The Roblox game now lives in **`roblox/`** (Rojo). The owner has synced it into 
 | UI | `src/client/UI/{Kit,Window,Windows,Spec,Hud}.luau` | Details below. |
 
 ### How the UI matches Figma
+- **Superseded on branch `claude/peckwood-ui`:** the baked-art windows below were replaced by generated Figma layouts
+  rendered live (section A, "In-game UI from Figma"). The notes below describe the old build on `claude/peckwood-isle`.
 - **Window art is the Figma frame itself.** The temporary atlas `83:7` holds a copy of each UI v2 window with its live layers hidden (text, `ico/*`, `btn/*`, sparkles, progress fills, chevrons). Each copy was rendered at 2x (including the rim glow, with a 150px margin at 1x), uploaded, and listed in `src/shared/FigmaArt.luau`. Button faces (`btn/<window>_buy|tab|hero`, `grey_buy`, `grey_all`, `blue_all`, `gold_maxed`) were cut from `roblox/assets/figma/buttons_sheet.png`.
 - **Live layers are drawn on top at the Figma coordinates** (`Window.luau`): title, tab contents, hero icon/title/subtitle/button, section label, row icon/title/growth/description/progress fill/buttons, footer, sparkles.
 - **Texts and colours per window** are in `Spec.luau`, extracted from the Figma layers. Icons are the PNGs actually placed in each Figma slot, matched by image bytes rather than by the stale layer names.

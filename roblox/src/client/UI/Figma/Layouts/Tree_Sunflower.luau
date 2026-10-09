@@ -103,7 +103,7 @@ return {
       {t="F",n="gloss cap",x=3,y=2,w=46,h=21,r=2,f=20},
       {t="I",n="ico/node_sunflower_machine",x=5,y=5,w=42,h=42,icon="node_sunflower_machine",e=26}}},
      {t="F",n="owned check",x=42,y=-8,w=24,h=24,r=3,f=40,s=30,k={
-      {t="F",n="Frame",x=4,y=4,w=16,h=16,c=true}}}}},
+      {t="G",n="Frame",x=4,y=4,w=16,h=16,c=true,kind="check",col="ffffff",ink=5,lw=2.6}}}}},
     {t="F",n="node/unlock_desert_tree (locked)",x=36,y=182,w=58,h=64,e=16,key=6,k={
      {t="F",n="ink body",x=0,y=0,w=58,h=64,r=4,f=17},
      {t="F",n="lip",x=3,y=9,w=52,h=52,r=2.5,f=41},
@@ -122,7 +122,7 @@ return {
       {t="F",n="gloss cap",x=3,y=2,w=46,h=21,r=2,f=20},
       {t="I",n="ico/node_seed_multiplier",x=5,y=5,w=42,h=42,icon="node_seed_multiplier",e=26}}},
      {t="F",n="owned check",x=42,y=-8,w=24,h=24,r=3,f=40,s=30,k={
-      {t="F",n="Frame",x=4,y=4,w=16,h=16,c=true}}}}},
+      {t="G",n="Frame",x=4,y=4,w=16,h=16,c=true,kind="check",col="ffffff",ink=5,lw=2.6}}}}},
     {t="F",n="node/popcorn_cap (owned)",x=144,y=262,w=58,h=64,e=16,key=6,k={
      {t="F",n="ink body",x=0,y=0,w=58,h=64,r=4,f=17},
      {t="F",n="lip",x=3,y=9,w=52,h=52,r=2.5,f=38},
@@ -130,7 +130,7 @@ return {
       {t="F",n="gloss cap",x=3,y=2,w=46,h=21,r=2,f=20},
       {t="I",n="ico/node_popcorn_cap",x=5,y=5,w=42,h=42,icon="node_popcorn_cap",e=26}}},
      {t="F",n="owned check",x=42,y=-8,w=24,h=24,r=3,f=40,s=30,k={
-      {t="F",n="Frame",x=4,y=4,w=16,h=16,c=true}}}}},
+      {t="G",n="Frame",x=4,y=4,w=16,h=16,c=true,kind="check",col="ffffff",ink=5,lw=2.6}}}}},
     {t="F",n="node/swift_wings (owned)",x=144,y=342,w=58,h=64,e=16,key=6,k={
      {t="F",n="ink body",x=0,y=0,w=58,h=64,r=4,f=17},
      {t="F",n="lip",x=3,y=9,w=52,h=52,r=2.5,f=38},
@@ -138,7 +138,7 @@ return {
       {t="F",n="gloss cap",x=3,y=2,w=46,h=21,r=2,f=20},
       {t="I",n="ico/node_swift_wings",x=5,y=5,w=42,h=42,icon="node_swift_wings",e=26}}},
      {t="F",n="owned check",x=42,y=-8,w=24,h=24,r=3,f=40,s=30,k={
-      {t="F",n="Frame",x=4,y=4,w=16,h=16,c=true}}}}},
+      {t="G",n="Frame",x=4,y=4,w=16,h=16,c=true,kind="check",col="ffffff",ink=5,lw=2.6}}}}},
     {t="F",n="node/fish_frenzy (owned)",x=144,y=502,w=58,h=64,e=16,key=6,k={
      {t="F",n="ink body",x=0,y=0,w=58,h=64,r=4,f=17},
      {t="F",n="lip",x=3,y=9,w=52,h=52,r=2.5,f=38},
@@ -146,7 +146,7 @@ return {
       {t="F",n="gloss cap",x=3,y=2,w=46,h=21,r=2,f=20},
       {t="I",n="ico/node_fish_frenzy",x=5,y=5,w=42,h=42,icon="node_fish_frenzy",e=26}}},
      {t="F",n="owned check",x=42,y=-8,w=24,h=24,r=3,f=40,s=30,k={
-      {t="F",n="Frame",x=4,y=4,w=16,h=16,c=true}}}}},
+      {t="G",n="Frame",x=4,y=4,w=16,h=16,c=true,kind="check",col="ffffff",ink=5,lw=2.6}}}}},
     {t="F",n="node/critical_reel (need)",x=144,y=582,w=58,h=64,e=16,key=6,k={
      {t="F",n="ink body",x=0,y=0,w=58,h=64,r=4,f=17},
      {t="F",n="lip",x=3,y=9,w=52,h=52,r=2.5,f=46},
@@ -164,7 +164,7 @@ return {
       {t="F",n="gloss cap",x=3,y=2,w=46,h=21,r=2,f=20},
       {t="I",n="ico/node_rebirth_playtime",x=5,y=5,w=42,h=42,icon="node_rebirth_playtime",e=26}}},
      {t="F",n="owned check",x=42,y=-8,w=24,h=24,r=3,f=40,s=30,k={
-      {t="F",n="Frame",x=4,y=4,w=16,h=16,c=true}}}}},
+      {t="G",n="Frame",x=4,y=4,w=16,h=16,c=true,kind="check",col="ffffff",ink=5,lw=2.6}}}}},
     {t="F",n="node/auto_gen (owned)",x=252,y=262,w=58,h=64,e=16,key=6,k={
      {t="F",n="ink body",x=0,y=0,w=58,h=64,r=4,f=17},
      {t="F",n="lip",x=3,y=9,w=52,h=52,r=2.5,f=38},
@@ -172,7 +172,7 @@ return {
       {t="F",n="gloss cap",x=3,y=2,w=46,h=21,r=2,f=20},
       {t="I",n="ico/node_auto_gen",x=5,y=5,w=42,h=42,icon="node_auto_gen",e=26}}},
      {t="F",n="owned check",x=42,y=-8,w=24,h=24,r=3,f=40,s=30,k={
-      {t="F",n="Frame",x=4,y=4,w=16,h=16,c=true}}}}},
+      {t="G",n="Frame",x=4,y=4,w=16,h=16,c=true,kind="check",col="ffffff",ink=5,lw=2.6}}}}},
     {t="F",n="node/seed_multiplier_unlocker (need)",x=252,y=342,w=58,h=64,e=16,key=6,k={
      {t="F",n="ink body",x=0,y=0,w=58,h=64,r=4,f=17},
      {t="F",n="lip",x=3,y=9,w=52,h=52,r=2.5,f=46},
@@ -200,7 +200,7 @@ return {
       {t="F",n="gloss cap",x=3,y=2,w=46,h=21,r=2,f=20},
       {t="I",n="ico/node_golden_harvest",x=5,y=5,w=42,h=42,icon="node_golden_harvest",e=26}}},
      {t="F",n="owned check",x=42,y=-8,w=24,h=24,r=3,f=40,s=30,k={
-      {t="F",n="Frame",x=4,y=4,w=16,h=16,c=true}}}}},
+      {t="G",n="Frame",x=4,y=4,w=16,h=16,c=true,kind="check",col="ffffff",ink=5,lw=2.6}}}}},
     {t="F",n="node/unlock_evolve (need)",x=360,y=102,w=58,h=64,e=16,key=6,k={
      {t="F",n="ink body",x=0,y=0,w=58,h=64,r=4,f=17},
      {t="F",n="lip",x=3,y=9,w=52,h=52,r=2.5,f=46},
@@ -218,7 +218,7 @@ return {
       {t="F",n="gloss cap",x=3,y=2,w=46,h=21,r=2,f=20},
       {t="I",n="ico/node_faster_seeds",x=5,y=5,w=42,h=42,icon="node_faster_seeds",e=26}}},
      {t="F",n="owned check",x=42,y=-8,w=24,h=24,r=3,f=40,s=30,k={
-      {t="F",n="Frame",x=4,y=4,w=16,h=16,c=true}}}}},
+      {t="G",n="Frame",x=4,y=4,w=16,h=16,c=true,kind="check",col="ffffff",ink=5,lw=2.6}}}}},
     {t="F",n="node/seed_synergy (buy)",x=468,y=182,w=58,h=64,e=16,key=6,k={
      {t="F",n="ink body",x=0,y=0,w=58,h=64,r=4,f=17},
      {t="F",n="lip",x=3,y=9,w=52,h=52,r=2.5,f=24},
@@ -361,7 +361,7 @@ return {
     {t="C",n="growth chevrons",x=136,y=12,w=34,h=16,c=true,col="5fe06a"},
     {t="T",n="on",x=182,y=6,w=27,h=27,tx="on",fs=22,ax="L",ay="T",tf=50,sw=2.2,sh={0,2}}}},
    {t="F",n="requirement",x=14,y=322,w=304,h=30,k={
-    {t="F",n="Frame",x=0,y=5,w=18,h=18,c=true},
+    {t="G",n="Frame",x=0,y=5,w=18,h=18,c=true,kind="check",col="5fe06a",ink=5.63,lw=2.92},
     {t="T",n="Needs Golden Harvest",x=26,y=5,w=161,h=18,tx="Needs Golden Harvest",fs=15,ax="L",ay="T",tf=50,sw=1.2,sh={0,1}}}},
    {t="F",n="btn/buy",x=14,y=516,w=304,h=76,e=16,key=8,k={
     {t="F",n="ink body",x=0,y=0,w=304,h=76,r=4,f=17},

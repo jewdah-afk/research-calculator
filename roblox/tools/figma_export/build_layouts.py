@@ -175,6 +175,19 @@ class Emitter:
             return o
         if name == "swoosh":
             return None
+        # an SVG glyph pasted as a frame of stroked vectors (the tree's "owned check" ticks): rebuild as a glyph
+        ks0 = n.get("k") or []
+        if ks0 and all(c["t"] == "V" and "s" in c for c in ks0) and len(ks0) <= 3 and parent is not None:
+            strokes = [self.ref(c["s"]) for c in ks0]
+            cols = []
+            for st in strokes:
+                sl, _ = paint_layers(st[0])
+                cols.append(sl[0][1] if sl and sl[0][0] == "s" else "ffffff")
+            o["t"] = "G"; o["kind"] = "check"
+            o["col"] = cols[-1]
+            o["ink"] = strokes[0][1]; o["lw"] = strokes[-1][1]
+            o.pop("f", None)
+            return o
         if t == "S":
             o["t"] = "S"
             layers, _ = paint_layers(fills)

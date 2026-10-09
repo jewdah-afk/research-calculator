@@ -440,6 +440,10 @@ local function buildObjective()
 	inert(objective)
 	local goalL = objective.root:FindFirstChild("goal", true)
 	if goalL then Render.fit(goalL, 12) end
+	-- the objective plate opens the Objectives window (QUESTS / QUEST INDEX / BONUSES)
+	local ohit = Render.new("TextButton", { Name = "hit", Text = "", AutoButtonColor = false, BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 999 }, objective.root)
+	ohit.MouseButton1Down:Connect(function() Sfx.press() end)
+	ohit.Activated:Connect(function() WM.toggle("objectives") end)
 	-- UNLOCK key for paid gates (Evolve's 100M eggs): kit gold key right of the objective
 	local L = FKit.layout()
 	local k = FKit.BTNn(L, "btn/unlock", 0, 0, 230, 64, FKit.PAL.gold, "UNLOCK", { icon = "popcorn", size = 22 })
@@ -508,9 +512,14 @@ local function areaColours(area)
 	local lip = Render.findNode(bm, "lip")
 	return { face = face and face.f and S.tiles.P[face.f][1], lip = lip and lip.f and S.tiles.P[lip.f][1] }
 end
+local function iconOf(face)   -- the painted icon on a key face (not its ink drop copy)
+	if not face then return nil end
+	for _, c in face:GetChildren() do if c:IsA("ImageLabel") and c.Name:sub(1, 4) == "ico/" then return c end end
+	return nil
+end
 local function slotLook(slot, look, area)
 	local face, lip = slot:FindFirstChild("face"), slot:FindFirstChild("lip")
-	local ico = face and face:FindFirstChildWhichIsA("ImageLabel")
+	local ico = iconOf(face)
 	local lock = slot:FindFirstChild("ico/lock")
 	if look == "locked" then
 		retint(face, lockedLook.face); retint(lip, lockedLook.lip)
@@ -524,8 +533,10 @@ local function slotLook(slot, look, area)
 	end
 	slot:SetAttribute("look", look)
 end
+-- arrow destinations that are rooms / stations open their window instead of hopping
+local ROOM = { aquarium = "AQUARIUM", market = "FISH MARKET", treasure = "TREASURE ROOM", trees = "SUNFLOWER TREE", sacrifice = "SACRIFICE ROOM", evolve = "THE MONSTER" }
 local function travelTo(id)
-	if id == "aquarium" or id == "market" then WM.open(id); return end
+	if ROOM[id] then WM.open(id); return end
 	local isl = World.byId[id]
 	if not isl then return end
 	if not World.isOpen(isl) then
@@ -556,8 +567,9 @@ local function buildRail()
 	fishing.root.Name = "slot/FISHING (holder)"; fishing.node.Name = "slot/FISHING"
 	fishing.root.Position = UDim2.fromOffset(4, 156)
 	setT(fishing.root, "label", "FISHING")
-	local fi = fishing.node:FindFirstChild("face"):FindFirstChildWhichIsA("ImageLabel")
-	if fi then fi.Image = FKit.icon("rod_simple") end
+	for _, d in fishing.node:FindFirstChild("face"):GetChildren() do
+		if d:IsA("ImageLabel") then d.Image = FKit.icon("rod_simple") end   -- icon + its ink drop
+	end
 	-- the lock badge every slot can show
 	railActive = rail.node:FindFirstChild("slot/FISHING (active)")
 	for i, r in RAIL do
@@ -610,14 +622,14 @@ end
 
 -- travel arrows (Birb map arrows): left / right along the chain, up / down to rooms
 local TRAVEL = {
-	park = { left = "forest", right = "garden", up = "desert" }, garden = { left = "park", right = "bridge" },
-	bridge = { left = "garden", right = "castle", down = "aquarium" }, castle = { left = "bridge" },
-	forest = { left = "expedition", right = "park" }, expedition = { right = "forest", down = "mine" }, mine = { up = "expedition" },
-	desert = { left = "forest", right = "garden", down = "park" }, echo = { right = "garden" },
+	park = { left = "forest", right = "garden", up = "desert" }, garden = { left = "park", right = "bridge", up = "trees" },
+	bridge = { left = "garden", right = "castle", down = "aquarium" }, castle = { left = "bridge", up = "evolve" },
+	forest = { left = "expedition", right = "park" }, expedition = { left = "sacrifice", right = "forest", down = "mine" },
+	mine = { up = "expedition", down = "treasure" }, desert = { left = "forest", right = "garden", down = "park" }, echo = { right = "garden" },
 }
 local arrows = {}
 local function destName(id)
-	if id == "aquarium" then return "AQUARIUM" elseif id == "market" then return "FISH MARKET" end
+	if ROOM[id] then return ROOM[id] end
 	local isl = World.byId[id]
 	return if isl then string.upper(isl.name) else string.upper(id)
 end
@@ -652,7 +664,7 @@ local function updateArrows(area)
 	for dir, a in arrows do
 		local id = t[dir]
 		a.target = id
-		local open = id ~= nil and (id == "aquarium" or id == "market" or (World.byId[id] and World.isOpen(World.byId[id])))
+		local open = id ~= nil and (ROOM[id] ~= nil or (World.byId[id] ~= nil and World.isOpen(World.byId[id])))
 		a.open.root.Visible = id ~= nil and open
 		if a.locked then a.locked.root.Visible = id ~= nil and not open end
 		if id then

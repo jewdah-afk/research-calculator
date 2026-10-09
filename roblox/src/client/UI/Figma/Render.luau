@@ -127,15 +127,16 @@ function Render.glyph(parent, kind, x, y, w, h, col, alpha, inkW, lineW)
 	local segs = GLYPH[k] or GLYPH.x
 	if col == INK then col = WHITE end
 	local s = w / 24
-	for _, sg in segs do bar(holder, sg[1] * s, sg[2] * s, sg[3] * s, sg[4] * s, (inkW or 7.5) * s, INK, 1 - alpha, 1) end
-	for _, sg in segs do bar(holder, sg[1] * s, sg[2] * s, sg[3] * s, sg[4] * s, (lineW or 3.6) * s, col, 1 - alpha, 2) end
+	-- stroke widths are absolute px (Figma keeps stroke weight when a glyph is resized)
+	for _, sg in segs do bar(holder, sg[1] * s, sg[2] * s, sg[3] * s, sg[4] * s, inkW or 7.5, INK, 1 - alpha, 1) end
+	for _, sg in segs do bar(holder, sg[1] * s, sg[2] * s, sg[3] * s, sg[4] * s, lineW or 3.6, col, 1 - alpha, 2) end
 	return holder
 end
 function Render.chevrons(parent, x, y, w, h, col, alpha)
 	local holder = new("Frame", { Name = "growth chevrons", BackgroundTransparency = 1, Position = UDim2.fromOffset(x, y), Size = UDim2.fromOffset(w, h) }, parent)
 	local s = w / 34
-	for _, sg in CHEV do bar(holder, sg[1] * s, sg[2] * s, sg[3] * s, sg[4] * s, 5 * s, INK, 1 - alpha, 1) end
-	for _, sg in CHEV do bar(holder, sg[1] * s, sg[2] * s, sg[3] * s, sg[4] * s, 2.6 * s, col, 1 - alpha, 2) end
+	for _, sg in CHEV do bar(holder, sg[1] * s, sg[2] * s, sg[3] * s, sg[4] * s, 5, INK, 1 - alpha, 1) end
+	for _, sg in CHEV do bar(holder, sg[1] * s, sg[2] * s, sg[3] * s, sg[4] * s, 2.6, col, 1 - alpha, 2) end
 	return holder
 end
 

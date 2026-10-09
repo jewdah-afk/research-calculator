@@ -67,7 +67,8 @@ function WM.init(parentGui)
 		BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Visible = false, ZIndex = 1 }, canvas)
 	backdrop.Activated:Connect(function() WM.close() end)
 	modalLayer = Render.new("Frame", { Name = "modal", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 2 }, canvas)
-	drawerLayer = Render.new("Frame", { Name = "drawer", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 3 }, canvas)
+	-- the docked drawer sits under the backdrop: a centred window opened over it dims it instead of overlapping
+	drawerLayer = Render.new("Frame", { Name = "drawer", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 0 }, canvas)
 	layout()
 	workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(layout)
 	UIS.InputBegan:Connect(function(io, gp)
@@ -265,10 +266,36 @@ function WM.open(id, tab)
 	TweenService:Create(backdrop, TweenInfo.new(0.2), { BackgroundTransparency = 0.55 }):Play()
 	if not wasOpen then
 		Sfx.open()
-		if Kit.reduced() then rec.pop.Scale = 1 else rec.pop.Scale = 0.86; TweenService:Create(rec.pop, POP, { Scale = 1 }):Play() end
+		if Kit.reduced() then rec.pop.Scale = 1 else
+			rec.pop.Scale = 0.86; TweenService:Create(rec.pop, POP, { Scale = 1 }):Play()
+			WM.cascade(rec)
+		end
 	end
 	if WM.onChanged then WM.onChanged() end
 	return rec
+end
+
+-- rows / cards slide in with a 40 ms stagger after the pop (spec card: "rows cascade in")
+local CASCADE = TweenInfo.new(0.22, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+function WM.cascade(rec)
+	local v = rec.current and rec.variants[rec.current]
+	if not v then return end
+	local list, n = {}, 0
+	for _, d in v.ui.root:GetDescendants() do
+		local nm = d.Name
+		if d:IsA("Frame") and (string.sub(nm, 1, 4) == "row/" or string.sub(nm, 1, 5) == "card/" or string.sub(nm, 1, 10) == "stat card/") then
+			n += 1
+			if n > 14 then break end
+			table.insert(list, d)
+		end
+	end
+	for i, d in list do
+		local home = d.Position
+		d.Position = home + UDim2.fromOffset(18, 0)
+		task.delay(0.04 * i, function()
+			if d.Parent then TweenService:Create(d, CASCADE, { Position = home }):Play() end
+		end)
+	end
 end
 
 function WM.close()
