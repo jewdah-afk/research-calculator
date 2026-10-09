@@ -48,6 +48,13 @@ Branch **`claude/peckwood-isle`** (pushed). Build: `cd roblox && rojo build defa
 - Asset export pipeline: SerializationService in Studio -> local POST receiver -> `lune` re-serialize (fixes the Tags
   property Rojo 7.5 can't read) -> rojo `$path`.
 
+### Figma UI handoff + prop variety (2026-10-09, latest)
+- New chat for the Figma UI at Birb parity: paste `FIGMA_UI_PROMPT.md` (repo root). Figma (edit): Peckwood-UI
+  `SQOJ2gzGt12vFMGGlNRWBE`, UI v2 page node `0:1`. Layout reference = HTML parity build `playtest/` on branch
+  `claude/exciting-mccarthy-5em6b3`.
+- Prop variety: `VARY` table in IslandView.swapProp = per-position random yaw + size range + tilt for rock, ore,
+  crystal, lantern, barrel, log, mushroom, cactus, sunflower, bones, twigs, deadtree (Park objects carry no rotation).
+
 ### World QA pass (2026-10-09, latest)
 - "Eggs in the water" was false water: pond columns wrote water at land height, so it spilled over 48 dry tiles. Ponds
   now sit one voxel below the land (`LandTerrain.column` code 3: `wt = snap(top) - 4`). QA scan: 0 water-on-land tiles.

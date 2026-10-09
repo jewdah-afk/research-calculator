@@ -321,15 +321,29 @@ local PROP_H = { lantern = 9, bench = 2.6, fence = 2.6, cart = 8, windmill = 19,
 	pyramid = 15, greenhouse = 8.5, hut = 8, mineentrance = 11, minecart = 3.2, boat = 2.6, balloon = 13, crystal = 3.2,
 	ore = 2.4, cactus = 4.8, palm = 13, deadtree = 8.5, log = 1.6, bones = 1.1, twigs = 0.9, altar = 4.2, pillar = 6.5,
 	bell = 6.5, banner = 7.5, rod = 5, tent = 5.5, flowers = 1.4 }
+-- kinds that get a random yaw + size range + tilt (radians) per placement
+local VARY = { rock = { s = { 0.6, 1.5 }, tilt = 0.5 }, ore = { s = { 0.8, 1.3 }, tilt = 0.3 }, crystal = { s = { 0.8, 1.3 }, tilt = 0.25 },
+	lantern = { s = { 0.95, 1.05 }, tilt = 0 }, barrel = { s = { 0.9, 1.1 }, tilt = 0 }, log = { s = { 0.8, 1.2 }, tilt = 0.08 },
+	mushroom = { s = { 0.7, 1.3 }, tilt = 0.15 }, cactus = { s = { 0.8, 1.25 }, tilt = 0.06 }, sunflower = { s = { 0.85, 1.15 }, tilt = 0.1 },
+	bones = { s = { 0.8, 1.2 }, tilt = 0 }, twigs = { s = { 0.8, 1.2 }, tilt = 0 }, deadtree = { s = { 0.85, 1.2 }, tilt = 0.05 } }
 local function swapProp(info)
 	local m = info.model
 	local src = PropAssets and PropAssets:FindFirstChild(info.kind)
 	if not src or not m or TREE_SETS[info.kind] then return end
 	local cf, size = m:GetBoundingBox()
-	local yaw = select(2, m.WorldPivot:ToOrientation())
+	local yaw = select(2, m.WorldPivot:ToOrientation())   -- (varied below for VARY kinds)
 	local a = src:Clone()
 	local _, asz = a:GetBoundingBox()
 	local k = (PROP_H[info.kind] or size.Y * 1.4) / math.max(asz.Y, 0.01)
+	-- natural variety (owner 2026-10-09: every rock / lamp had the same rotation): per-position hash -> yaw, size, tilt
+	local seed = math.floor(cf.Position.X * 7.3 + cf.Position.Z * 13.1)
+	local tilt = CFrame.identity
+	if VARY[info.kind] then
+		local v = VARY[info.kind]
+		yaw = hash(seed, 1.1) * math.pi * 2
+		k *= v.s[1] + hash(seed, 2.2) * (v.s[2] - v.s[1])
+		if v.tilt > 0 then tilt = CFrame.Angles((hash(seed, 3.3) - 0.5) * v.tilt, 0, (hash(seed, 4.4) - 0.5) * v.tilt) end
+	end
 	a:ScaleTo(a:GetScale() * k)
 	for _, d in a:GetDescendants() do
 		if d:IsA("BasePart") then d.Anchored = true; d.CanCollide = false; d.CanQuery = false; d.CanTouch = false end
@@ -341,7 +355,7 @@ local function swapProp(info)
 	local rp = RaycastParams.new(); rp.FilterType = Enum.RaycastFilterType.Include; rp.FilterDescendantsInstances = { workspace.Terrain }
 	local hit = workspace:Raycast(Vector3.new(cf.Position.X, info.base + 40, cf.Position.Z), Vector3.new(0, -80, 0), rp)
 	if hit and hit.Material ~= Enum.Material.Water then gy = hit.Position.Y end
-	a:PivotTo(CFrame.new(cf.Position.X, gy, cf.Position.Z) * CFrame.Angles(0, yaw, 0))
+	a:PivotTo(CFrame.new(cf.Position.X, gy, cf.Position.Z) * CFrame.Angles(0, yaw, 0) * tilt)
 	for _, d in m:GetDescendants() do
 		if d:IsA("BasePart") and not d:FindFirstChildWhichIsA("Light") then d:Destroy()
 		elseif d:IsA("BasePart") then d.Transparency = 1 end
