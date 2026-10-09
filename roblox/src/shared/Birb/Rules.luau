@@ -9,12 +9,9 @@
 -- s.upgrades / s.sunflowerUpgrades = Birb's id -> level maps, s.sparrow = Birb's sparrow* fields, s.evo = the castle.
 -- Later-phase multipliers (fish, nest, quests, sacrifice, red panda, ...) come in through Rules.hooks (default 1 / 0);
 -- Game wires the systems that exist today into them.
-local function dep(name: string)
-	if script then return require(script.Parent:FindFirstChild(name) or script.Parent.Parent:FindFirstChild(name)) end
-	return nil
-end
-local EN = (dep("EternityNum") or require("../EternityNum")) :: any
-local D = (dep("Data") or require("./Data")) :: any
+-- Roblox: ReplicatedStorage.Peckwood.EternityNum / .Birb.Data; lune (parity harness): the same files by path
+local EN = (if script then require(script.Parent.Parent:WaitForChild("EternityNum")) else require("../EternityNum")) :: any
+local D = (if script then require(script.Parent:WaitForChild("Data")) else require("./Data")) :: any
 
 local R = {}
 R.EN, R.Data = EN, D
