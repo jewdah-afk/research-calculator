@@ -119,7 +119,10 @@ zoom 4 / 9 / 16.
 - VFX meshes: store meshes can't be fetched by id at runtime ("could not fetch"), so the 8 shapes are saved in the place as `ReplicatedStorage.PeckwoodVfxMeshes` (`assets/VfxMeshes.rbxm`, scanned: no scripts).
 - EditableMesh budget (measured): ~7 live meshes per client, 20,000 triangles / 60,000 vertices each. Cliff = shared-vertex grid split into 19.5k-tri chunks (every island open = 3 meshes), waves = 1 mesh, VFX = 0.
 - Sounds: 31 events with 3 licensed candidates each (Pro Sound Effects / Roblox UI pack / APM); first candidate is the default; owner picks by ear on the dev Sound Board (SOUNDS on the dev bar). Egg pickup = eggshell tap + buttery pop layers with warm EQ.
-- Open fixes in flight: board pull-ring press, board covers AUTO + rail top, sticky hover tooltip, VFX push framing / duplicate camera bind / reveal hold, island_unlock check.
+- Fixed since (Studio-verified): pull ring press, AUTO + rail ride with the board, tooltips never stick, badges on tab corners, close = rows collapse then shrink into the HUD button, hatch push centred, real island unlock plays (rune circle + dust + rise), black cliffs after any rebuild (fresh cliff EditableImage per rebuild).
+- Deferred (owner OK): the light line under some Figma window headers.
+- NEXT (in flight): real mechanics port on branch `claude/peckwood-mech` (worktree `~/Downloads/rc-main-mech`): Phase 0 = parity harness (playtest JS in node vs Game.luau in lune, `roblox/tools/parity/REPORT.md`), Phase 1 = the Park at 100% parity, bound to the UI. Phases 2-7 follow the playtest order.
+- QA gotcha: Studio's command bar / MCP `execute_luau` runs a SEPARATE copy of ModuleScripts (require from there does not see the game's state). Drive the game through attributes (PeckwoodOpen, PeckwoodVfxAt, PeckwoodBuild) and remotes instead.
 
 ### Park life pass + camera (2026-10-09, latest)
 - **Camera** starts close on the bird: `ZOOM_PLAY = 9` in Main.client (wheel still goes out to the whole island, 16). Owner: "I can't even see the vfx"; Birb's view is close too.
