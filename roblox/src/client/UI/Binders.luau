@@ -566,13 +566,24 @@ local CARD = {
 		return { ["ORE / SEC"] = fmt(d.orePerSec or 0), ["AREA"] = tostring((s.crow.area or 0) + 1), ["CROW LV"] = tostring(s.crow.level or 1) }
 	end },
 }
+-- a big live number rolls to its new value (odometer) instead of jumping
+function Binders.rollTo(label, v)
+	local n = EN.toNumber(v)
+	local prev = label:GetAttribute("rollValue")
+	label:SetAttribute("rollValue", n)
+	if prev == nil or prev ~= prev or n ~= n or n >= 1e15 or prev >= 1e15 or prev == n then
+		Render.setText(label, Hud.amount(v))
+		return
+	end
+	Motion.roll(label, prev, n, function(x) return Hud.amount(math.floor(x + 0.5)) end, function(str) local sh = Render.SHADOW[label]; if sh then sh.Text = str end end)
+end
 local function updateCard(ui, variant, s, d)
 	local c = CARD[variant]
 	if not c then return end
 	local card = ui.find("sidebar card") or ui.find("seeds card")
 	if not card then return end
 	for _, t in Render.childTexts(card) do
-		if t.TextSize >= 30 then Render.setText(t, Hud.amount(s[c.cur])) end
+		if t.TextSize >= 30 then Binders.rollTo(t, s[c.cur]) end
 	end
 	local vals = c.stats(s, d)
 	for _, st in card:GetChildren() do
@@ -762,7 +773,7 @@ local function retintPlate(plate, cols)
 end
 
 local function fishdex(rec, ui)
-	local L = require(Layouts.Fishing_Fishdex)
+	local L = WM.layoutOf("Fishing_Fishdex")
 	local gridNode = Render.findNode(L.root, "dex grid")
 	local tFound, tMiss, tHead
 	for _, c in gridNode.k do
@@ -783,6 +794,7 @@ local function fishdex(rec, ui)
 	end
 	local sf = Render.new("ScrollingFrame", { Name = "fish", BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1),
 		CanvasSize = UDim2.new(), ScrollBarThickness = 6, ScrollBarImageColor3 = Color3.fromHex("8d94a3"), ScrollingDirection = Enum.ScrollingDirection.Y, ZIndex = 50 }, grid)
+	Render.styleScroll(sf, "0e131b")
 	-- sections by rod tier (fish.minTier), Defs order inside a section
 	local tiers, order = {}, {}
 	for _, f in Defs.FISH do
@@ -911,10 +923,196 @@ local function fishdex(rec, ui)
 	if sections[1] and sections[1].fish[1] then select(sections[1].fish[1], nil) end
 end
 
+-- ---------------------------------------------------------------- filters (Birb collection / aquarium bars)
+-- a dropdown on a filter plate: the plate presses like any key, a small steel list drops under it (above the window's
+-- content), picking an option relabels the plate and filters; one dropdown open at a time
+local openDrop = nil
+local function relPos(inst, ancestor)
+	local x, y = 0, 0
+	local c = inst
+	while c and c ~= ancestor do
+		if c:IsA("GuiObject") then
+			x += c.Position.X.Offset - c.AnchorPoint.X * c.Size.X.Offset
+			y += c.Position.Y.Offset - c.AnchorPoint.Y * c.Size.Y.Offset
+		end
+		c = c.Parent
+	end
+	return x, y
+end
+local function prettify(s)
+	s = string.gsub(string.gsub(s or "", "_mult$", ""), "_", " ")
+	return (string.gsub(s, "(%a)([%w]*)", function(a, b) return string.upper(a) .. string.lower(b) end))
+end
+local function dropdown(ui, plateInst, options, onPick)
+	if not plateInst then return nil end
+	local label = Render.childTexts(plateInst)[1]
+	local default = label and label.Text or ""
+	local api = { value = options[1][1] }
+	local list
+	local function close(silent)
+		if list then list:Destroy(); list = nil; if not silent then Sfx.dropdown(false) end end
+		if openDrop == close then openDrop = nil end
+	end
+	local function open()
+		if openDrop and openDrop ~= close then openDrop(true) end
+		openDrop = close
+		Sfx.dropdown(true)
+		local x, y = relPos(plateInst, ui.node)
+		local w = math.max(plateInst.Size.X.Offset, 150)
+		list = Render.new("Frame", { Name = "dropdown list", BorderSizePixel = 0, BackgroundColor3 = Color3.new(1, 1, 1), Position = UDim2.fromOffset(x, y + plateInst.Size.Y.Offset + 4),
+			Size = UDim2.fromOffset(w, #options * 30 + 8), ZIndex = 5000 }, ui.node)
+		Render.gradient(list, FKit.vgrad({ "333c4a", "1b2129" }), 1)
+		Render.new("UICorner", { CornerRadius = UDim.new(0, 3) }, list)
+		Render.new("UIStroke", { Thickness = 2, Color = Render.INK, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, list)
+		for i, o in options do
+			local row = Render.new("Frame", { Name = "option/" .. o[1], BackgroundTransparency = 1, Position = UDim2.fromOffset(4, 4 + (i - 1) * 30), Size = UDim2.new(1, -8, 0, 28), ZIndex = 5001 }, list)
+			Render.new("UICorner", { CornerRadius = UDim.new(0, 2) }, row)
+			local t = Render.new("TextLabel", { BackgroundTransparency = 1, FontFace = Render.FONT, TextSize = 15, Text = o[2], TextXAlignment = Enum.TextXAlignment.Left,
+				TextColor3 = Color3.fromHex(if o[1] == api.value then "9dffae" else "ffffff"), Position = UDim2.fromOffset(10, 0), Size = UDim2.new(1, -14, 1, 0), ZIndex = 5002 }, row)
+			Render.new("UIStroke", { Thickness = 1.2, Color = Render.INK, LineJoinMode = Enum.LineJoinMode.Round }, t)
+			Motion.key(row, "row", { onActivate = function()
+				api.value = o[1]
+				if label then Render.setText(label, if i == 1 then default else string.upper(o[2])) end
+				Sfx.rowSelect()
+				close(true)
+				onPick(o[1])
+			end })
+		end
+	end
+	Motion.key(plateInst, "toggle", { onActivate = function() if list then close() else open() end end })
+	function api.reset() api.value = options[1][1]; if label then Render.setText(label, default) end; close(true) end
+	return api
+end
+Binders.dropdown = dropdown
+-- grid tiles that can be filtered: hidden ones leave no hole (the rest move up into the Figma slots)
+local function filterGrid(grid, prefix)
+	local tiles, slots = {}, {}
+	for _, c in grid:GetChildren() do
+		local id = string.match(c.Name, "^" .. prefix .. "([%w_]+)")
+		if id and c:IsA("GuiObject") then table.insert(tiles, { inst = c, id = id, state = string.match(c.Name, "%(([^)]*)%)$") or "", home = c.Position }) end
+	end
+	table.sort(tiles, function(a, b)
+		if math.abs(a.home.Y.Offset - b.home.Y.Offset) > 1 then return a.home.Y.Offset < b.home.Y.Offset end
+		return a.home.X.Offset < b.home.X.Offset
+	end)
+	for i, t in tiles do slots[i] = t.home end
+	local ring = grid:FindFirstChild("selected ring")
+	return function(pred)
+		local i, all = 0, true
+		for _, t in tiles do
+			local ok = pred(t)
+			t.inst.Visible = ok
+			if ok then
+				i += 1
+				if t.inst.Position ~= slots[i] then TweenService:Create(t.inst, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Position = slots[i] }):Play() end
+			else all = false end
+		end
+		if ring then ring.Visible = all end
+		return i
+	end
+end
+local function fishLocation(f) return if f.expeditionFloor then "expedition" else "bridge" end
+local function optionsOf(field)
+	local seen, list = {}, {}
+	for _, f in Defs.FISH do
+		local v = if field == "buff" then (f.effect and f.effect.type) else f[field]
+		if v and not seen[v] then seen[v] = true; table.insert(list, v) end
+	end
+	table.sort(list)
+	local out = {}
+	for _, v in list do table.insert(out, { v, prettify(v) }) end
+	return out
+end
+local RARITY_ORDER = { "common", "uncommon", "rare", "epic", "legendary", "mythic" }
+local function collectionFilters(rec, ui)
+	local grid = ui.find("fish grid")
+	if not grid then return end
+	local apply = filterGrid(grid, "tile/")
+	local f = { rarity = "all", type = "all", location = "all", buff = "all", search = "" }
+	local countL
+	for _, t in Render.childTexts(ui.node) do if string.match(t.Text, "^[%d,]+$") then countL = t end end
+	local function run()
+		local n = apply(function(t)
+			local fish = Defs.FISH_BY_ID[t.id]
+			if not fish then return f.rarity == "all" and f.type == "all" and f.location == "all" and f.buff == "all" and f.search == "" end
+			return (f.rarity == "all" or fish.rarity == f.rarity) and (f.type == "all" or fish.type == f.type)
+				and (f.location == "all" or fishLocation(fish) == f.location) and (f.buff == "all" or (fish.effect and fish.effect.type) == f.buff)
+				and (f.search == "" or string.find(string.lower(fishName(t.id)), f.search, 1, true) ~= nil)
+		end)
+		if countL then Render.setText(countL, tostring(n)) end
+	end
+	local rar = { { "all", "All rarities" } }
+	for _, r in RARITY_ORDER do table.insert(rar, { r, prettify(r) }) end
+	local typ = { { "all", "All types" } }; for _, o in optionsOf("type") do table.insert(typ, o) end
+	local buf = { { "all", "All buffs" } }; for _, o in optionsOf("buff") do table.insert(buf, o) end
+	local drops = {
+		dropdown(ui, ui.find("filter/rarity"), rar, function(v) f.rarity = v; run() end),
+		dropdown(ui, ui.find("filter/type"), typ, function(v) f.type = v; run() end),
+		dropdown(ui, ui.find("filter/location"), { { "all", "All locations" }, { "bridge", "The Bridge" }, { "expedition", "Expedition" } }, function(v) f.location = v; run() end),
+		dropdown(ui, ui.find("filter/buffs"), buf, function(v) f.buff = v; run() end),
+	}
+	-- search: a text box over the plate (the Figma placeholder hides while you type)
+	local sp = ui.find("filter/search")
+	local box
+	if sp then
+		local ph = Render.childTexts(sp)[1]
+		box = Render.new("TextBox", { Name = "search box", BackgroundTransparency = 1, FontFace = Render.FONT, TextSize = 15, TextColor3 = Color3.new(1, 1, 1),
+			PlaceholderText = "", Text = "", ClearTextOnFocus = false, TextXAlignment = Enum.TextXAlignment.Left, Position = UDim2.fromOffset(14, 0),
+			Size = UDim2.new(1, -24, 1, 0), ZIndex = 60 }, sp)
+		box:GetPropertyChangedSignal("Text"):Connect(function()
+			if ph then ph.Visible = box.Text == ""; local sh = Render.SHADOW[ph]; if sh then sh.Visible = ph.Visible end end
+			f.search = string.lower(box.Text)
+			run()
+		end)
+	end
+	ui.on("btn/reset", function()
+		for _, d in drops do if d then d.reset() end end
+		f.rarity, f.type, f.location, f.buff, f.search = "all", "all", "all", "all", ""
+		if box then box.Text = "" end
+		run()
+	end)
+end
+local AQ_STATUS = { ["housed"] = "housed", ["shiny"] = "housed", ["can donate"] = "donate", ["not owned"] = "missing", ["undiscovered"] = "undiscovered" }
+local function aquariumFilters(rec, ui)
+	local grid = ui.find("fish grid")
+	if not grid then return end
+	local apply = filterGrid(grid, "fish/")
+	local f = { type = "all", status = "all" }
+	local function run()
+		apply(function(t)
+			local fish = Defs.FISH_BY_ID[t.id]
+			local st = AQ_STATUS[t.state] or "housed"
+			return (f.type == "all" or (fish and fish.type == f.type)) and (f.status == "all" or st == f.status)
+		end)
+	end
+	local typ = { { "all", "All types" } }; for _, o in optionsOf("type") do table.insert(typ, o) end
+	dropdown(ui, ui.find("dropdown/types"), typ, function(v) f.type = v; run() end)
+	dropdown(ui, ui.find("dropdown/status"), { { "all", "All fish" }, { "housed", "Housed" }, { "donate", "Can donate" }, { "missing", "Not owned" },
+		{ "undiscovered", "Undiscovered" } }, function(v) f.status = v; run() end)
+end
+
+B.aquarium = {
+	bind = function(rec, ui, variant)
+		if variant == "Aquarium_Biomes" then aquariumFilters(rec, ui) end
+	end,
+}
+B.nest = {
+	bind = function(rec, ui, variant)
+		-- one strong key per panel: the Sawmill's MAX is the quiet steel key next to BUY
+		if variant == "Nest_Sawmill" then
+			local maxes = {}
+			for _, d in ui.root:GetDescendants() do if d.Name == "btn/max" then table.insert(maxes, d) end end
+			for _, d in maxes do Binders.quietKey(d) end
+		end
+		-- breeding: the egg cracks when you hatch, a chime when the baby is revealed
+		ui.on("btn/hatch (waiting)", function() Sfx.hatchCrack(); task.delay(0.35, Sfx.hatchReveal) end)
+	end,
+}
 B.fishing = {
 	bind = function(rec, ui, variant)
 		ui.on("btn/view in collection", function() WM.show(rec, "Fishing_Collection") end)
 		if variant == "Fishing_Fishdex" then fishdex(rec, ui) end
+		if variant == "Fishing_Collection" then collectionFilters(rec, ui) end
 	end,
 	update = function(rec, ui, variant)
 		-- discoveries changed (Fish remote): rebuild the visible sections once
@@ -960,6 +1158,10 @@ end
 
 function Binders.install(wm, actFn, hud)
 	WM, act, Hud = wm, actFn, hud
+	WM.onHide = function()
+		if openDrop then openDrop(true) end
+		if Hud.hideTip then Hud.hideTip() end
+	end
 	for id, b in B do WM.binders[id] = b end
 end
 

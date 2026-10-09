@@ -204,10 +204,31 @@ end
 
 -- ---------------------------------------------------------------- idle (open window only)
 -- returns a stop function; every loop is an engine tween (no Lua per frame)
-function Motion.idle(root, header)
+function Motion.idle(root, header, primaryKey)
 	if reduced() then return function() end end
 	local tweens, restore = {}, {}
 	local function keep(t) table.insert(tweens, t) end
+	-- the window's ONE primary key catches a soft light sweep every ~3.5 s (classy, never a bounce)
+	local shimmer
+	local pface = primaryKey and (primaryKey:FindFirstChild("face") or primaryKey:FindFirstChild("body"))
+	if pface then
+		shimmer = Instance.new("Frame")
+		shimmer.Name = "idle shimmer"
+		shimmer.BackgroundColor3 = Color3.new(1, 1, 1)
+		shimmer.BorderSizePixel = 0
+		shimmer.Size = UDim2.fromScale(1, 1)
+		shimmer.ZIndex = 45
+		local c = pface:FindFirstChildOfClass("UICorner")
+		if c then local cc = Instance.new("UICorner"); cc.CornerRadius = c.CornerRadius; cc.Parent = shimmer end
+		local g = Instance.new("UIGradient")
+		g.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.4, 1), NumberSequenceKeypoint.new(0.5, 0.72),
+			NumberSequenceKeypoint.new(0.6, 1), NumberSequenceKeypoint.new(1, 1) })
+		g.Rotation = 20
+		g.Offset = Vector2.new(-1, 0)
+		g.Parent = shimmer
+		shimmer.Parent = pface
+		keep(tw(g, 0.7, { Offset = Vector2.new(1, 0) }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, false, 2.8))
+	end
 	-- header gloss sweep: one gradient band, its Offset tweened across every 4.5 s
 	if header then
 		local sweep = header:FindFirstChild("gloss sweep")
@@ -256,6 +277,7 @@ function Motion.idle(root, header)
 	end
 	return function()
 		for _, t in tweens do t:Cancel() end
+		if shimmer then shimmer:Destroy() end
 		for inst, props in restore do for k, v in props do inst[k] = v end end
 		local sweep = header and header:FindFirstChild("gloss sweep")
 		if sweep then sweep:FindFirstChildOfClass("UIGradient").Offset = Vector2.new(-1.1, 0) end

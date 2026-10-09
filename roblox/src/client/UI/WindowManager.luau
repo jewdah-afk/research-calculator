@@ -34,6 +34,7 @@ WM.beforeOpen = nil     -- fn(id) before a window opens (Hud closes the Robux sh
 WM.onEscape = nil       -- fn() -> true when Esc was used by something else (Robux shop)
 WM.onSidebarView = nil  -- fn(variant) when the sidebar shows another view (Hud badges)
 WM.hintActions = {}     -- keycap -> fn() for the clickable hints at the sidebar bottom (set by Hud)
+WM.onHide = nil         -- fn() when a window closes or switches view (Binders closes its dropdowns)
 
 local gui, canvas, scale, modalLayer, drawerLayer
 local sidebarTab        -- collapse tab ui on the sidebar's left edge
@@ -63,11 +64,24 @@ end
 WM.tabOf = tabOf
 
 local SidebarViews = require(script.Parent.SidebarViews)
+local Patches = require(script.Parent.LayoutPatches)
+local patched = {}
+local function deepCopy(t)
+	if type(t) ~= "table" then return t end
+	local o = {}
+	for k, v in t do o[k] = deepCopy(v) end
+	return o
+end
 local function layoutOf(variant)
+	if patched[variant] then return patched[variant] end
 	local m = Layouts:FindFirstChild(variant)
-	if m then return require(m) end
-	local L = SidebarViews.layout(variant)   -- generated views (sidebar NEST / MINE)
+	local L = if m then require(m) else SidebarViews.layout(variant)   -- generated views (sidebar NEST / MINE)
 	assert(L, "no layout " .. tostring(variant))
+	-- Birb features the Figma frame does not have yet (UI/LayoutPatches): applied once to a copy
+	if Patches[variant] then
+		L = Patches[variant](deepCopy(L))
+		patched[variant] = L
+	end
 	return L
 end
 WM.layoutOf = layoutOf
@@ -196,7 +210,16 @@ local function idleStart(rec)
 	local v = rec.current and rec.variants[rec.current]
 	if not v or rec.def.drawer then return end
 	if v.idleStop then return end
-	v.idleStop = Motion.idle(v.ui.root, v.ui.root:FindFirstChild("header", true))
+	-- the one primary key of the view: its biggest visible hero key (BUY / EAT / DONATE / EVOLVE ...)
+	local best, area = nil, 0
+	for _, d in v.ui.root:GetDescendants() do
+		local info = Motion.registry[d]
+		if info and info.kind == "hero" and d.Visible then
+			local a = d.Size.X.Offset * d.Size.Y.Offset
+			if a > area then best, area = d, a end
+		end
+	end
+	v.idleStop = Motion.idle(v.ui.root, v.ui.root:FindFirstChild("header", true), best)
 end
 local function idleStop(rec)
 	for _, v in rec.variants do
@@ -412,6 +435,7 @@ end
 function WM.show(rec, name, switch)
 	local v = if rec.def.build then rec.variants.main else buildVariant(rec, name)
 	local old = rec.current and rec.variants[rec.current]
+	if old and old ~= v and WM.onHide then WM.onHide() end
 	if rec.transition then rec.transition(); rec.transition = nil end
 	local animate = switch and old and old ~= v and old.ui.root.Visible and rec.holder.Visible
 	local oldTab = animate and activeTab(old.ui.root)
@@ -497,6 +521,7 @@ end
 function WM.close()
 	local id = WM.modal
 	if not id then return end
+	if WM.onHide then WM.onHide() end   -- open dropdowns / tooltips go with the window
 	local rec = WM.built[id]
 	WM.modal = nil
 	Sfx.close()

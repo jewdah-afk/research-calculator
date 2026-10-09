@@ -469,6 +469,44 @@ do
 	end
 	WM.show(sb, "Shop_Eggs", true)
 end
+-- Birb filter bars: Fishing COLLECTION (rarity / type / location / buff dropdowns, search, RESET) and Aquarium
+-- (types / status) filter their grids; RESET brings every tile back
+do
+	WM.open("fishing", "COLLECTION")
+	local rec = WM.built.fishing
+	local v = rec.variants.Fishing_Collection
+	local root = v.ui.root
+	for _, n in { "filter/rarity", "filter/type", "filter/location", "filter/buffs", "filter/search", "btn/reset" } do
+		check("collection has " .. n, root:FindFirstChild(n, true) ~= nil)
+	end
+	local grid = root:FindFirstChild("fish grid", true)
+	local function shown()
+		local n = 0
+		for _, c in grid:GetChildren() do if string.sub(c.Name, 1, 5) == "tile/" and c.Visible then n += 1 end end
+		return n
+	end
+	local all = shown()
+	local plateR = root:FindFirstChild("filter/rarity", true)
+	sig(plateR:FindFirstChild("hit"), "Activated"):Fire()
+	local list = root:FindFirstChild("dropdown list", true)
+	if not list then sig(plateR:FindFirstChild("hit"), "Activated"):Fire(); list = root:FindFirstChild("dropdown list", true) end   -- it was open: that press closed it
+	check("rarity dropdown opens", list ~= nil)
+	if list then
+		local opt = list:FindFirstChild("option/rare")
+		if opt then sig(opt:FindFirstChild("hit"), "Activated"):Fire() end
+		task.wait(0.05)
+		check("rarity filter narrows the grid", shown() < all and shown() > 0, ("%d of %d"):format(shown(), all))
+	end
+	local reset = root:FindFirstChild("btn/reset", true)
+	sig(reset:FindFirstChild("hit"), "Activated"):Fire()
+	task.wait(0.05)
+	check("RESET shows every tile", shown() == all, ("%d of %d"):format(shown(), all))
+	WM.close()
+	WM.open("aquarium", "BIOMES")
+	local aroot = WM.built.aquarium.variants.Aquarium_Biomes.ui.root
+	check("aquarium has TYPES + STATUS", aroot:FindFirstChild("dropdown/types", true) ~= nil and aroot:FindFirstChild("dropdown/status", true) ~= nil)
+	WM.close()
+end
 -- COMPANIONS board: drops to its full height (AUTO hidden under it), rolls back up to 0 (AUTO back), every row on it,
 -- locked rows show their padlock + unlock note (QA: locked rows rendered as black blocks)
 do
