@@ -180,17 +180,19 @@ function Fx:beam(spec, p0: Vector3, p1: Vector3)
 	return h
 end
 
--- animate one pooled mesh shape (Vfx/MeshFx) for `life` seconds from now. Returns a handle, or nil when the mesh is
--- not available (not built yet / failed / capped): the caller then plays its particle layer instead.
+-- animate one pooled mesh shape (Vfx/MeshFx: Creator Store mesh assets, 0 EditableMeshes) for `life` seconds.
+-- Returns a handle, or nil when the mesh is not available (not loaded / failed / capped): the caller then plays its
+-- particle layer instead.
 --   at       Vector3 | () -> Vector3        where it sits (a function follows a moving subject)
---   face     "camera" (billboard: local XY faces the camera, then tilted by `tilt` about local X so a band shows)
---            | "flat" (local Z -> world up: arc / spiral / wallring lie on the ground) | "up" (dome / tornado)
+--   face     "camera" (billboard: a "plane" shape faces the camera, then leans by `tilt` about its X)
+--            | "flat" (a "plane" shape lies on the ground) | "up" (dome / tornado / wall stand on their axis)
 --   tilt, yaw  billboard lean (rad); roll = start angle; spin, spinEnd = rad/s (eases from spin to spinEnd)
---   r = { from, to } radius in studs, eased by rEase ("out") over rInT of the life (0.6)
---   z = { from, to } band size in studs (Z for arc/spiral/wallring/star4, height Y for dome/tornado), eased by
---       zEase ("in"): shrinking it is the "fade by thinning"; or zFn(u, r) -> studs
---   xy(u) -> (xMul, yMul) optional squash (star gleam); lift = keep the band's bottom on `at` (ground pieces)
---   color = palette role, material (Neon), alpha = { { u, transparency }, ... } hard steps
+--   r = { from, to } radius in studs (half the in-plane extent), eased by rEase ("out") over rInT of the life (0.6)
+--   z = { from, to } studs along the normal / axis (thickness for plane shapes, HEIGHT for up shapes), eased by zEase
+--       ("in"): shrinking it is the "fade by thinning"; or zFn(u, r) -> studs; nil keeps the mesh's proportion
+--   xy(u) -> (xMul, yMul) squash of the in-plane directions (thin a crescent out, sweep a star gleam)
+--   lift = keep its bottom on `at` (ground pieces); color = palette role; material (Neon)
+--   alpha = { { u, transparency }, ... } hard steps
 function Fx:mesh(kind: string, a)
 	local p = MeshFx.get(kind)
 	if not p then return nil end
@@ -198,8 +200,8 @@ function Fx:mesh(kind: string, a)
 	p.Material = a.material or Enum.Material.Neon
 	p.Color = self:col(a.color or "mid")
 	p.Transparency = 1
-	local s0 = MeshFx.size(kind)
-	local yAxis = kind == "dome" or kind == "tornado"
+	local corr = MeshFx.corr(kind)
+	local up = a.face == "up"
 	local t0 = self.t
 	local life = a.life or 0.5
 	local spin = a.roll or math.random() * math.pi * 2
@@ -207,11 +209,13 @@ function Fx:mesh(kind: string, a)
 	local alpha = a.alpha or { { 0, 0 }, { 0.7, 0.45 }, { 0.88, 1 } }
 	local rE = Layers.EASE[a.rEase or "out"] or Layers.EASE.out
 	local zE = Layers.EASE[a.zEase or "in"] or Layers.EASE["in"]
-	local rr, zz = a.r or { 1, 1 }, a.z or { 1, 1 }
+	local rr, zz = a.r or { 1, 1 }, a.z
 	local function step(t: number, dt: number): boolean?
 		local u = math.clamp((t - t0) / life, 0, 1)
-		local r = rr[1] + (rr[2] - rr[1]) * rE(math.clamp(u / (a.rInT or 0.6), 0, 1))
-		local z = if a.zFn then a.zFn(u, r) else zz[1] + (zz[2] - zz[1]) * zE(u)
+		local r = math.max(0.01, rr[1] + (rr[2] - rr[1]) * rE(math.clamp(u / (a.rInT or 0.6), 0, 1)))
+		local z = nil
+		if a.zFn then z = a.zFn(u, r) elseif zz then z = zz[1] + (zz[2] - zz[1]) * zE(u) end
+		if z then z = math.max(z, 0.01) end
 		spin += (w0 + (w1 - w0) * Layers.EASE.out2(u)) * dt
 		local tr = 1
 		for _, k in alpha do
@@ -219,10 +223,7 @@ function Fx:mesh(kind: string, a)
 		end
 		local xm, ym = 1, 1
 		if a.xy then xm, ym = a.xy(u) end
-		r = math.max(r, 0.01)
-		z = math.max(z, 0.01)
-		local size = if yAxis then Vector3.new(s0.X * r * xm, s0.Y * z, s0.Z * r * ym)
-			else Vector3.new(s0.X * r * xm, s0.Y * r * ym, s0.Z * z)
+		local size = MeshFx.sizeFor(kind, 2 * r, z, xm, ym)
 		local pos = if type(a.at) == "function" then a.at() else a.at
 		local cf
 		if a.face == "camera" then
@@ -231,13 +232,12 @@ function Fx:mesh(kind: string, a)
 			cf = CFrame.lookAt(pos, cp) * CFrame.Angles(0, 0, spin) * CFrame.Angles(a.tilt or 0, a.yaw or 0, 0)
 		elseif a.face == "flat" then
 			cf = CFrame.new(pos) * CFrame.Angles(0, spin, 0) * CFrame.Angles(-math.pi / 2, 0, 0)
-			if a.lift then cf += Vector3.new(0, size.Z / 2, 0) end
 		else
 			cf = CFrame.new(pos) * CFrame.Angles(0, spin, 0)
-			if a.lift then cf += Vector3.new(0, size.Y / 2, 0) end
 		end
+		if a.lift then cf += Vector3.new(0, MeshFx.halfAxis(kind, size), 0) end
 		p.Size = size
-		p.CFrame = cf
+		p.CFrame = cf * corr
 		p.Transparency = tr
 		if u >= 1 then
 			p.Transparency = 1
@@ -249,7 +249,7 @@ function Fx:mesh(kind: string, a)
 	step(self.t, 0)
 	self:tick(step)
 	self:extend(self.t + life)
-	return { part = p }
+	return { part = p, up = up }
 end
 
 function Fx:light(pos: Vector3, color: any, range: number, brightness: number)
@@ -453,6 +453,7 @@ function Vfx.play(name: string, where: any, options: { [string]: any }?)
 	if opts.rarity then fx.tier = Palette.tier(opts.rarity) end
 	-- readable at any zoom: hero sizes follow the camera distance (effects may re-derive it after a push-in)
 	local cam = workspace.CurrentCamera
+	CamFx.readBase()
 	fx.camDist = if cam then (cam.CFrame.Position - fx.cf.Position).Magnitude else Vfx.VIEW_REF
 	fx.view = opts.view or fx:viewFor(fx.camDist)
 	fx.colorOf = function(role) return Palette.color(fx.pal, role) end -- effects may swap fx.pal at the start of run
@@ -491,7 +492,10 @@ end
 Vfx.shake = CamFx.shake
 Vfx.push = CamFx.push
 Vfx.flash = CamFx.flash
-Vfx.camera = CamFx.apply
+-- (kept for old call sites: the camera feel now runs from CamFx's own render step, so this is a passthrough)
+function Vfx.camera(cf: CFrame, fov: number, _dt: number?): (CFrame, number)
+	return cf, fov
+end
 
 -- warm the texture cache so the first effect does not pop in
 function Vfx.preload()
@@ -516,7 +520,7 @@ end
 -- Main.client.luau calls this once: preload + hook-ups + the dev preview (_G.__vfx)
 function Vfx.start(remotes: Instance?)
 	Vfx.preload()
-	MeshFx.warm() -- six tiny EditableMesh shapes, built in the background (particles cover until they exist)
+	MeshFx.warm() -- Creator Store mesh shapes, loaded in the background (particles cover until they exist)
 	local ok, err = pcall(function() require(script:WaitForChild("Hooks")).start(Vfx, remotes) end)
 	if not ok then warn("[Vfx] hooks: " .. tostring(err)) end
 end

@@ -144,7 +144,9 @@ end)
 -- ---------------------------------------------------------------- fake services
 local renderStepped = signal()
 local RunService = { RenderStepped = renderStepped, Heartbeat = signal(), IsStudio = function() return true end }
-function RunService:BindToRenderStep() end
+local boundSteps = {}
+function RunService:BindToRenderStep(name, _, fn) boundSteps[name] = fn end
+function RunService:UnbindFromRenderStep(name) boundSteps[name] = nil end
 local settingsSvc = {
 	ReducedMotion = false,
 	SavedQualityLevel = Enum.SavedQualitySetting.Automatic,
@@ -194,21 +196,37 @@ local function mockEM()
 	function em.SetUV(self, i, v) self.uvs[i] = v end
 	return em
 end
+-- mesh ASSETS (QA round 2: the VFX may hold 0 EditableMeshes): fake bounding boxes in mixed orientations so the
+-- axis detection is exercised (a Y-normal ring, Z-normal crescent / star, X-axis tornado, ...)
+local editableCreated = 0
+local MESH_BOXES = {
+	["92572984944785"] = roblox.Vector3.new(6, 4, 0.4), -- crescent, flat in XY (normal Z)
+	["10895746627"] = roblox.Vector3.new(5, 0.6, 4), -- swirl, flat in XZ (normal Y)
+	["131187152008585"] = roblox.Vector3.new(5, 3, 5), -- wall, Y axis
+	["7741808274"] = roblox.Vector3.new(4, 0.3, 4), -- broken ring, normal Y
+	["7263678713"] = roblox.Vector3.new(4, 4, 0.3), -- thin ring, normal Z
+	["7349045196"] = roblox.Vector3.new(4, 2, 4), -- half sphere, Y up
+	["7029892192"] = roblox.Vector3.new(7, 3, 3), -- tornado lying along X
+	["15591537807"] = roblox.Vector3.new(0.2, 4, 4), -- star, normal X
+}
+local meshLoads = 0
 local AssetService = {
-	CreateEditableMesh = function() return mockEM() end,
-	CreateMeshPartAsync = function(_, em)
-		local mn, mx = em.verts[1], em.verts[1]
-		for _, v in em.verts do mn = mn:Min(v); mx = mx:Max(v) end
-		local c = (mn + mx) / 2
-		if c.Magnitude > 1e-3 then problem("mesh bounding box not centred: " .. tostring(c)) end
-		table.insert(meshStats, { verts = #em.verts, tris = em.nTri })
-		if #em.verts > 450 then problem("mesh over budget: " .. #em.verts .. " vertices") end
+	CreateEditableMesh = function()
+		editableCreated += 1
+		return mockEM()
+	end,
+	CreateMeshPartAsync = function(_, content)
+		local uri = if type(content) == "table" then content.uri else content
+		local id = string.match(tostring(uri), "(%d+)$")
+		local box = MESH_BOXES[id or ""]
+		if not box then error("unknown mesh asset " .. tostring(uri)) end
+		meshLoads += 1
 		local mp = Instance.new("MeshPart")
-		mp.Size = mx - mn
+		mp.Size = box
 		return mp
 	end,
 }
-local Content = { fromObject = function(o) return o end }
+local Content = { fromObject = function(o) return o end, fromUri = function(u) return { uri = u } end }
 local workspaceI = place:GetService("Workspace")
 local cam = Instance.new("Camera")
 cam.Parent = workspaceI
@@ -279,26 +297,55 @@ local VfxAssets = load(rsI:FindFirstChild("Peckwood"):FindFirstChild("VfxAssets"
 local Vfx = load(client:FindFirstChild("Vfx"))
 local Hooks = load(client:FindFirstChild("Vfx"):FindFirstChild("Hooks"))
 Vfx.start(nil)
-for _ = 1, 40 do task.wait(0.02) end -- let MeshFx.warm build the six shapes in the background
+for _ = 1, 40 do task.wait(0.02) end -- let MeshFx.warm load the mesh assets in the background
 local ready = {}
 for k, st in Vfx.MeshFx.stats() do if st.ready then table.insert(ready, k) end end
 table.sort(ready)
-print("meshes ready: " .. table.concat(ready, ", "))
-for i, m in meshStats do print(string.format("  mesh %d: %d verts, %d tris", i, m.verts, m.tris)) end
-if #ready ~= 6 then problem("expected 6 mesh shapes, got " .. #ready) end
+print("mesh assets ready: " .. table.concat(ready, ", ") .. "  (EditableMeshes created: " .. editableCreated .. ")")
+if editableCreated > 2 then problem("VFX created " .. editableCreated .. " EditableMeshes (budget 2)") end
+if #ready ~= #Vfx.MeshFx.KINDS then problem("expected " .. #Vfx.MeshFx.KINDS .. " mesh shapes, got " .. #ready) end
+-- axis detection + size mapping: our requested in-plane span / axis length must land on the right part axes
+do
+	local function check(kind, want)
+		local t = Vfx.MeshFx.template(kind)
+		if not t then return end
+		if t.ax ~= want then problem(kind .. ": detected axis " .. t.ax .. ", expected " .. want) end
+		local sz = Vfx.MeshFx.sizeFor(kind, 10, 2)
+		local axisLen = if t.ax == 1 then sz.X elseif t.ax == 2 then sz.Y else sz.Z
+		if math.abs(axisLen - 2) > 1e-4 then problem(kind .. ": axis length not mapped") end
+		local maxIn = math.max(if t.ax ~= 1 then sz.X else 0, if t.ax ~= 2 then sz.Y else 0, if t.ax ~= 3 then sz.Z else 0)
+		if math.abs(maxIn - 10) > 1e-4 then problem(kind .. ": in-plane span not mapped") end
+		-- the correction must take the mesh axis onto our axis (Z for plane, Y for up)
+		local axVec = if t.ax == 1 then roblox.Vector3.xAxis elseif t.ax == 2 then roblox.Vector3.yAxis else roblox.Vector3.zAxis
+		local our = t.corr:VectorToWorldSpace(axVec)
+		local target = if t.t == 2 then roblox.Vector3.yAxis else roblox.Vector3.zAxis
+		if (our - target).Magnitude > 1e-4 and (our + target).Magnitude > 1e-4 then problem(kind .. ": correction rotation wrong") end
+	end
+	check("crescent", 3); check("swirl", 2); check("wall", 2); check("ringgap", 2); check("ring", 3)
+	check("dome", 2); check("tornado", 1); check("star4", 1)
+end
 
+minFov = 11
 local function run(label, fn)
 	local before = #problems
 	emits.total = 0
 	local handle = fn()
-	local frames, cf = 0, roblox.CFrame.lookAt(roblox.Vector3.new(0, 500, 400), roblox.Vector3.zero)
+	local frames = 0
+	minFov = 11
+	local base = cam.CFrame
 	while (Vfx.activeCount() > 0 or Vfx.CamFx.busy()) and frames < 60 * 30 do
 		renderStepped:Fire(1 / 60)
-		local c2, fov = Vfx.camera(cf, 11, 1 / 60)
-		if typeof(c2) ~= "CFrame" or type(fov) ~= "number" or fov <= 0 or fov > 11.0001 then problem("camera hook returned bad values") end
+		-- Main writes the camera every frame (Camera + 1), then the Vfx post-step runs (Camera + 2) while bound
+		cam.CFrame = base
+		cam.FieldOfView = 11
+		local post = boundSteps.PeckwoodVfxCamera
+		if post then post(1 / 60) end
+		if cam.FieldOfView <= 0 or cam.FieldOfView > 11.0001 then problem("camera FOV out of range: " .. cam.FieldOfView) end
+		minFov = math.min(minFov, cam.FieldOfView)
 		frames += 1
 		task.wait() -- let task.spawn / task.delay callbacks run
 	end
+	if boundSteps.PeckwoodVfxCamera then problem(label .. ": camera step still bound when idle") end
 	if Vfx.activeCount() > 0 then problem(label .. ": still active after 30 s") end
 	local live = Vfx.Layers.stats()
 	for k, v in live do
@@ -355,7 +402,11 @@ run("egg_hatch x8 overlapping (cap 8)", function()
 	if n < 8 then problem("only " .. n .. " of 8 hatches started") end
 	return n > 0
 end)
-run("egg_hatch Mythic, no egg/pet", function() return Vfx.play("egg_hatch", at, { rarity = "Mythic" }) end)
+run("egg_hatch Mythic, no egg/pet", function() return Vfx.play("egg_hatch", at, { rarity = "Mythic", noEgg = true, noPet = true }) end)
+run("egg_hatch Legendary: camera push", function() return Vfx.play("egg_hatch", at, { rarity = "Legendary" }) end)
+print(string.format("  push: FOV went down to %.2f (from 11) and eased back", minFov))
+if minFov > 11 * (1 - 0.15) then problem("Legendary hatch push-in too weak / missing: min FOV " .. minFov) end
+if math.abs(cam.FieldOfView - 11) > 1e-3 then problem("camera FOV not restored after the push") end
 run("level_up (follow)", function() return Vfx.play("level_up", at, { follow = function() return birdPos end }) end)
 run("level_up companion colour", function() return Vfx.play("level_up", at, { color = "6fe0ff", scale = 1.3 }) end)
 run("island_unlock (synthetic)", function() return Vfx.play("island_unlock", at, {}) end)
