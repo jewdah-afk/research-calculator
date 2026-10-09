@@ -70,7 +70,7 @@ do
 				local ok = true
 				for _, o in { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } } do local c2 = World.rawTile(i + o[1], j + o[2]); if c2 == 0 or c2 == 3 then ok = false end end
 				if World.inProp(i + 0.5, j + 0.5, 0.6) then ok = false end
-				if ok then table.insert(desertTiles, Vector3.new((i + 0.5 - Map.COLS / 2) * S, 0, (j + 0.5 - Map.ROWS / 2) * S)) end
+				if ok then table.insert(desertTiles, Vector3.new((i + 0.5 - Map.COLS / 2) * S, World.base(i, j), (j + 0.5 - Map.ROWS / 2) * S)) end   -- on its terrace
 			end
 		end
 	end

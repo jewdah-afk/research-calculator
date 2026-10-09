@@ -64,7 +64,14 @@ end
 local function tileAt(x: number, y: number): number
 	return World.tile(math.floor(x / Map.PX), math.floor(y / Map.PX))
 end
+local heightAtLocalImpl
+local function heightAtLocal(x: number, y: number): number return heightAtLocalImpl(x, y) end
 local function heightAt(x: number, y: number): number
+	-- terrace height (Peckwood Ascent) under everything else, in game px (Map.PX px per tile = S studs)
+	local base = World.base(math.floor(x / Map.PX), math.floor(y / Map.PX)) * Map.PX / S
+	return base + heightAtLocal(x, y)
+end
+heightAtLocalImpl = function(x: number, y: number): number
 	local t = tileAt(x, y)
 	if (t == 1 or t == 4) and World.height(math.floor(x / Map.PX), math.floor(y / Map.PX)) > 0 then return 99 end   -- hills / dunes: scenery wall
 	if t == 5 then   -- bridge / dock deck: walk on the planks

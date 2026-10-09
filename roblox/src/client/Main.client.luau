@@ -90,7 +90,8 @@ Nav.handler = function(id: string)
 	-- walk there hands-free (bridges included); falls back to a hop if no route exists
 	if Controller.travel(body :: Controller.Body, i * 16, j * 16) then return true end
 	local b = body :: Controller.Body
-	b.x, b.y, b.z, b.vx, b.vy, b.vz = i * 16, j * 16, 0, 0, 0, 0
+	b.x, b.y, b.vx, b.vy, b.vz = i * 16, j * 16, 0, 0, 0
+	b.z = Controller.heightAt(b.x, b.y)   -- land on the terrace (Peckwood Ascent)
 	b.target = nil
 	dust(b.x, b.y, 0, 0, 0, 8)
 	return true
@@ -178,6 +179,7 @@ local function outline(target: Instance, color: string, outlineT: number, fill: 
 end
 outline(field, "#6b4512", 0.12, "#fff6d6", 0.78)                                   -- popcorn: warm rim + soft inner lift
 IslandView.build()
+require(script.Parent:WaitForChild("Portals")).init()   -- teleporter hub on the Park plaza + a way home from every area
 require(script.Parent:WaitForChild("Ambience")).start()
 outline(IslandView.scenery, "#24331f", 0.5)                                         -- scenery: quiet tinted outline
 -- dev/QA hook: PlayerGui:SetAttribute("PeckwoodBuild", tick()) replays the unlock build-in; PeckwoodHour freezes the sky
@@ -197,7 +199,8 @@ plr.PlayerGui:GetAttributeChangedSignal("PeckwoodTP"):Connect(function()
 	local i, j = World.arrival(isl)
 	local b = body :: Controller.Body
 	dust(b.x, b.y, b.z, 0, 0, 8)
-	b.x, b.y, b.z, b.vx, b.vy, b.vz = i * 16, j * 16, 0, 0, 0, 0
+	b.x, b.y, b.vx, b.vy, b.vz = i * 16, j * 16, 0, 0, 0
+	b.z = Controller.heightAt(b.x, b.y)   -- land on the terrace (Peckwood Ascent)
 	b.target = nil
 	dust(b.x, b.y, 0, 0, 0, 10)
 	plr.PlayerGui:SetAttribute("PeckwoodMap", false)

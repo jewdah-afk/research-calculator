@@ -58,9 +58,10 @@ end
 -- layer boundary sits mid-voxel (partial occupancy is what made the surface lumpy).
 local function snap(y) return math.floor(y / 4 + 0.5) * 4 end
 function LandTerrain.column(x0, z0, top, mat, code, shore)
-	if code == 3 then   -- pond: sand bed one voxel down, water on top
-		block(x0, z0, BED, -4, M.Sand)
-		block(x0, z0, -4, 0, M.Water)
+	if code == 3 then   -- pond / river: sand bed one voxel down, water on top (at its terrace height)
+		local wt = math.max(0, snap(top))
+		block(x0, z0, BED, wt - 4, M.Sand)
+		block(x0, z0, wt - 4, wt, M.Water)
 		return
 	end
 	local t = math.max(0, snap(top))
@@ -84,7 +85,7 @@ end
 
 -- remove a column (area locked again): back to sea water up to sea level
 function LandTerrain.clear(x0, z0)
-	Terrain:FillBlock(CFrame.new(x0 + 2, 20, z0 + 2), Vector3.new(4, 48, 4), M.Air)
+	Terrain:FillBlock(CFrame.new(x0 + 2, 60, z0 + 2), Vector3.new(4, 128, 4), M.Air)   -- up past the summit
 	block(x0, z0, WATER_TOP - 4, WATER_TOP, M.Water)
 	block(x0, z0, BED, WATER_TOP - 4, M.Air)
 end

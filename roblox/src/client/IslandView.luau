@@ -614,7 +614,11 @@ local function sx(i) return (i - COLS / 2) * S end   -- world tile coord -> stud
 local function sz(j) return (j - ROWS / 2) * S end
 local MAT = { [0] = Enum.Material.SmoothPlastic, [1] = Enum.Material.Glass, [2] = Enum.Material.Neon, [3] = Enum.Material.Neon, [4] = Enum.Material.Glass }
 
+local islandTopLocal
 local function islandTopY(isl, i, j)
+	return World.base(i, j) + islandTopLocal(isl, i, j)   -- terrace height (Peckwood Ascent) + the tile's own top
+end
+islandTopLocal = function(isl, i, j)
 	local c = World.rawTile(i, j)
 	if c == 2 then return -0.5 * PLATE end
 	if c == 3 then return -2 * PLATE end
