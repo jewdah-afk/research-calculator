@@ -217,5 +217,41 @@
    512,
    512
   ]
+ },
+ "toon_smoke": {
+  "layout": "Grid4x4",
+  "mode": "OneShot",
+  "tint": "baked-neutral",
+  "use": "toon smoke puff (Blender): hatch smoke ring, poofs",
+  "file": "roblox/assets/vfx/toon_smoke.png",
+  "size": [
+   1024,
+   1024
+  ],
+  "blender": true
+ },
+ "toon_burst": {
+  "layout": "Grid4x4",
+  "mode": "OneShot",
+  "tint": "tint",
+  "use": "toon impact burst (Blender, greyscale: tint pastel per rarity): hatch crack cloud",
+  "file": "roblox/assets/vfx/toon_burst.png",
+  "size": [
+   1024,
+   1024
+  ],
+  "blender": true
+ },
+ "dust_puff": {
+  "layout": "Grid4x4",
+  "mode": "OneShot",
+  "tint": "baked-neutral",
+  "use": "soft toon dust puff (Blender, warm grey: tint per island): ground bursts, coast dust",
+  "file": "roblox/assets/vfx/dust_puff.png",
+  "size": [
+   1024,
+   1024
+  ],
+  "blender": true
  }
 }

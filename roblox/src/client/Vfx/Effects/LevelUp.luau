@@ -65,6 +65,7 @@ return {
 		fx:emit(R.GLOW_FLAT, feet() + Vector3.new(0, 0.15, 0), 1, {
 			size = seq(0, 3, 0.25, 7.5, 1, 6), trans = steps({ 0.55, 0.6 }, { 0.8, 1 }),
 		})
+		fx:emitRadial(R.DUST, feet() + Vector3.new(0, 0.4, 0), fx:n(4, true), 0.1, { scale = 0.7, speed = { 5, 8 } })
 		-- HERO: the column shoots up, holds, thins
 		local col = fx:beam(COL, feet(), feet())
 		local core = fx:beam(COL_CORE, feet(), feet())

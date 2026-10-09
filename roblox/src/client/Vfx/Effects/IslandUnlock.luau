@@ -28,10 +28,6 @@ local GLINT = {
 	tex = "glow_step", orient = "flat", life = 0.35, size = Layers.pop(6, 0.25, 0.4, 0), color = "hi",
 	light = 0.8, bright = 1.4, z = 0.45,
 }
-local DUST = {
-	tex = "smoke_puff", orient = "face", life = { 0.6, 0.85 }, speed = { 6, 10 }, drag = 3, accel = Vector3.new(0, 2, 0),
-	size = vary(seq(0, 2.4, 0.3, 3.6, 1, 4.4), 0.25), rotSpeed = { -30, 30 }, color = "f1e6cf", z = 1,
-}
 local LEAF = {
 	tex = "leaf", orient = "face", life = { 1.3, 1.9 }, speed = { 9, 15 }, spread = 40, accel = Vector3.new(2, -10, 1),
 	drag = 1.1, size = vary(seq(0, 1.0, 1, 1.0), 0.3), rotSpeed = { -120, 120 }, fps = { 12, 18 }, startRandom = true,
@@ -154,7 +150,7 @@ return {
 			fx:at(e.at + 0.2, function()
 				local dir = (e.out or flat(e.pos - C)) * 0.9 + Vector3.new(0, 0.7, 0)
 				local p = Vector3.new(e.pos.X, y + 0.4, e.pos.Z)
-				fx:emit(DUST, Layers.upTo(p, dir), 2, { color = dust })
+				fx:emit(R.DUST, Layers.upTo(p, dir), 2, { color = dust })
 				fx:emit(LEAF, Layers.upTo(p, dir), math.random(1, 2))
 			end)
 		end

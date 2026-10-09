@@ -78,7 +78,7 @@ local TRACE = { -- the swirl flipbook lying flat traces round the rune circle on
 	tex = "swirl_arc", orient = "flat", life = 0.6, size = 1, color = "hi", light = 1, bright = 1.8, z = 0.4,
 }
 local POOF = {
-	tex = "smoke_puff", orient = "face", life = { 0.45, 0.6 }, speed = { 3, 6 }, spread = 180, drag = 3,
+	tex = { "toon_smoke", "smoke_puff" }, orient = "face", life = { 0.45, 0.6 }, speed = { 3, 6 }, spread = 180, drag = 3,
 	size = seq(0, 1.6, 1, 2.8), color = "white", z = 2,
 }
 local PILLAR = {
@@ -304,7 +304,8 @@ return {
 				fx:emitSphere(R.SPEED, centre, fx:n(5 + T), 0.3)
 			end
 			if T >= 2 then fx:emitSphere(R.EMBER, centre, fx:n(3 + 2 * T), 0.7, { color = if T >= 6 then "accent" else "base" }) end
-			-- SUPPORT: shell shards + toon smoke ring
+			-- SUPPORT: the rendered toon burst cloud, shell shards, toon smoke ring
+			fx:emit(R.BURST, centre, 1, { scale = 0.85 + 0.06 * T })
 			fx:emit(SHARDS, centre, fx:n(5 + T, true), { color = opts.eggColor or "fff4dc" })
 			fx:emitRadial(R.SMOKE, ground + Vector3.new(0, 0.7, 0), fx:n(4 + T // 2, true), 0.25)
 			-- ONE ground wave (two on Epic+), alpha <= 0.6

@@ -41,6 +41,10 @@ local tex: { [string]: Tex } = {
 	glow_step = { id = "", size = Vector2.new(256, 256), tint = "tint" },
 	rays_fan = { id = "", size = Vector2.new(1024, 1024), layout = L.Grid4x4, mode = M.OneShot, frames = 16, tint = "tint" },
 	beam_core = { id = "", size = Vector2.new(256, 64), beam = true, tint = "tint" },
+	-- rendered toon flipbooks (Blender: tools/vfx/gen_toon_flipbooks.py): 3-step ramp + ink hull + inked dissolve
+	toon_smoke = { id = "", size = Vector2.new(1024, 1024), layout = L.Grid4x4, mode = M.OneShot, frames = 16, tint = "baked" },
+	toon_burst = { id = "", size = Vector2.new(1024, 1024), layout = L.Grid4x4, mode = M.OneShot, frames = 16, tint = "tint" },
+	dust_puff = { id = "", size = Vector2.new(1024, 1024), layout = L.Grid4x4, mode = M.OneShot, frames = 16, tint = "baked" },
 	-- egg crack decals (Decal.Texture, cumulative stages)
 	crack_1 = { id = "", size = Vector2.new(512, 512), tint = "tint" },
 	crack_2 = { id = "", size = Vector2.new(512, 512), tint = "tint" },
@@ -49,8 +53,20 @@ local tex: { [string]: Tex } = {
 
 local VfxAssets = { tex = tex }
 
--- "rbxassetid://..." for a texture key, or nil while its id is empty / the key is unknown
-function VfxAssets.id(key: string?): string?
+-- "rbxassetid://..." for a texture key, or nil while its id is empty / the key is unknown.
+-- A list of keys = fallbacks: the first uploaded one wins (e.g. { "toon_smoke", "smoke_puff" }).
+function VfxAssets.resolve(key: any): string?
+	if type(key) == "table" then
+		for _, k in key do
+			if VfxAssets.id(k) then return k end
+		end
+		return nil
+	end
+	return key
+end
+
+function VfxAssets.id(key: any): string?
+	if type(key) == "table" then key = VfxAssets.resolve(key) end
 	if not key then return nil end
 	local t = tex[key]
 	if not t or t.id == "" then return nil end
@@ -58,7 +74,7 @@ function VfxAssets.id(key: string?): string?
 	return t.id
 end
 
-function VfxAssets.has(key: string?): boolean
+function VfxAssets.has(key: any): boolean
 	return VfxAssets.id(key) ~= nil
 end
 

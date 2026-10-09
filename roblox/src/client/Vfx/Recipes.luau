@@ -104,9 +104,22 @@ R.GLOW = { -- 3-band cel glow (billboard)
 }
 R.GLOW_FLAT = { tex = "glow_step", orient = "flat", life = 0.7, size = 6, color = "base", light = 0.8, bright = 1.2, z = 0.15 }
 
+-- rendered toon flipbooks (lever B) with the PIL puff as the fallback until they are uploaded
 R.SMOKE = {
-	tex = "smoke_puff", orient = "face", life = { 0.6, 0.8 }, speed = { 9, 13 }, drag = 4.5, accel = Vector3.new(0, 3, 0),
-	size = vary(seq(0, 2.2, 0.3, 3.4, 1, 4), 0.2), rotSpeed = { -30, 30 }, color = "fff8ee", z = 2,
+	tex = { "toon_smoke", "smoke_puff" }, orient = "face", life = { 0.6, 0.8 }, speed = { 9, 13 }, drag = 4.5,
+	accel = Vector3.new(0, 3, 0), size = vary(seq(0, 2.2, 0.3, 3.4, 1, 4), 0.2), rotSpeed = { -30, 30 },
+	color = "fff8ee", z = 2,
+}
+R.DUST = {
+	tex = { "dust_puff", "smoke_puff" }, orient = "face", life = { 0.6, 0.85 }, speed = { 6, 10 }, drag = 3,
+	accel = Vector3.new(0, 2, 0), size = vary(seq(0, 2.6, 0.3, 4, 1, 4.8), 0.25), rotSpeed = { -12, 12 },
+	color = "f1e6cf", z = 1,
+}
+-- the crack cloud: white-hot for its first two frames (2/16 of life), then the rarity pastel
+R.BURST = {
+	tex = "toon_burst", orient = "face", life = 0.72, speed = 0, size = vary(seq(0, 5, 0.25, 7.5, 1, 8.5), 0.08),
+	rot = { -20, 20 }, rotSpeed = { -25, 25 },
+	color = function(colorOf) return Layers.colorSteps(colorOf, { "white", 0.125 }, "hi") end, z = 3,
 }
 
 return R

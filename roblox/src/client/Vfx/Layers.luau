@@ -239,12 +239,13 @@ end
 -- configure a pooled emitter from a spec. sc scales Size (and Speed when spec.speedScales); returns false when the
 -- texture is not uploaded (the caller drops the layer)
 function Layers.applyEmitter(e, spec, colorOf, sc: number?, ov): boolean
-	local id = VfxAssets.id(spec.tex)
+	local key = VfxAssets.resolve(spec.tex) -- spec.tex may be a fallback list
+	local id = VfxAssets.id(key)
 	if not id then return false end
 	sc = sc or 1
 	ov = ov or {}
 	local pe: ParticleEmitter = e.pe
-	local t = VfxAssets.tex[spec.tex]
+	local t = VfxAssets.tex[key]
 	pe.Texture = id
 	if t.layout then
 		pe.FlipbookLayout = t.layout
