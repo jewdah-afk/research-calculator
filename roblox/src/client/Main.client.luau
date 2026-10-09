@@ -13,7 +13,7 @@ local Models = require(Shared:WaitForChild("Models"))
 local Defs = require(Shared:WaitForChild("Defs"))
 local Remotes = Shared:WaitForChild("Remotes")
 local Hud = require(script.Parent:WaitForChild("UI"):WaitForChild("Hud"))
-local Vfx = require(script.Parent:WaitForChild("Vfx"))   -- VFX engine (camera feel hook + effects), see Vfx/init.luau
+local Vfx = require(script.Parent:WaitForChild("Vfx"))   -- VFX engine (effects + camera feel on its own render step), see Vfx/init.luau
 local S = Models.S
 
 local plr = Players.LocalPlayer
@@ -390,8 +390,8 @@ RunService:BindToRenderStep("Peckwood", Enum.RenderPriority.Camera.Value + 1, fu
 	local jitter = if shake > 0 then Vector3.new(math.random() - 0.5, math.random() - 0.5, 0) * shake * S * 0.6 else Vector3.zero
 	local back = Vector3.new(0, math.sin(PITCH), math.cos(PITCH)) * distFor(zoom)
 	cam.CameraType = Enum.CameraType.Scriptable
-	-- Vfx.camera layers shake / push-in / flash on top of whichever camera is driving (no-op while idle)
-	cam.CFrame, cam.FieldOfView = Vfx.camera(IslandView.camCF or CFrame.lookAt((camFocus :: Vector3) + back + jitter, (camFocus :: Vector3) + jitter), FOV, dt)
+	cam.FieldOfView = FOV
+	cam.CFrame = IslandView.camCF or CFrame.lookAt((camFocus :: Vector3) + back + jitter, (camFocus :: Vector3) + jitter)
 	cam.Focus = CFrame.new(camFocus :: Vector3)
 end)
 

@@ -145,6 +145,10 @@ function Hooks.start(Vfx, remotes: Instance?)
 		elseif name == "stop" then
 			Vfx.stopAll()
 			return nil
+		elseif name == "motion" then -- QA: camera feel even with Reduced Motion on
+			Vfx.CamFx.forceMotion = pos ~= false
+			print("[Vfx] camera motion forced:", Vfx.CamFx.forceMotion)
+			return nil
 		elseif name == "stats" then
 			print("[Vfx] active", Vfx.activeCount(), "quality", Vfx.quality(), "pieces", Vfx.Layers.stats())
 			return nil
