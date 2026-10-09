@@ -1078,9 +1078,34 @@ local function scaleUnder(inst)   -- product of the UIScales between a GuiObject
 	end
 	return s
 end
+-- the MOLT tab carries its pending plume gain as a violet chip inside the tab under the label (Birb's REBIRB tab)
+local function tabLabelUp(host, up)
+	for _, c in host:GetChildren() do
+		if (c:IsA("TextLabel") or c:IsA("ImageLabel")) and c.Name ~= "badge" then
+			local b = c:GetAttribute("baseY") or c.Position.Y.Offset
+			c:SetAttribute("baseY", b)
+			c.Position = UDim2.fromOffset(c.Position.X.Offset, if up then b - 8 else b)
+		end
+	end
+end
 local function badgeOn(key, host, text)
 	local b = badges[key]
-	if b and b.host ~= host then if b.frame then b.frame:Destroy() end; b = nil; badges[key] = nil end
+	if b and b.host ~= host then if b.frame then b.frame:Destroy() end; if key == "molt" and b.host.Parent then tabLabelUp(b.host, false) end; b = nil; badges[key] = nil end
+	if not b and key == "molt" then
+		local k = 1 / math.max(0.3, scaleUnder(host))
+		local f = Render.new("Frame", { Name = "badge", BackgroundColor3 = Color3.fromHex("8a4fe0"), BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 1),
+			Position = UDim2.new(0.5, 0, 1, -3), Size = UDim2.fromOffset(20 * k, 18), ZIndex = 1000, AutomaticSize = Enum.AutomaticSize.X }, host)
+		Render.new("UICorner", { CornerRadius = UDim.new(0, 3) }, f)
+		Render.new("UIStroke", { Thickness = 1.5, Color = Render.INK, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, f)
+		Render.new("UIPadding", { PaddingLeft = UDim.new(0, 5), PaddingRight = UDim.new(0, 5) }, f)
+		local l = Render.new("TextLabel", { Name = "count", BackgroundTransparency = 1, FontFace = Render.FONT, TextSize = 13, TextColor3 = Color3.new(1, 1, 1),
+			AutomaticSize = Enum.AutomaticSize.X, Size = UDim2.fromOffset(0, 18), Text = text, ZIndex = 1001 }, f)
+		Render.new("UIStroke", { Thickness = 1.2, Color = Render.INK, LineJoinMode = Enum.LineJoinMode.Round }, l)
+		tabLabelUp(host, true)
+		b = { frame = f, label = l, host = host, text = text }
+		badges[key] = b
+		return
+	end
 	if not b then
 		-- inside the host's top-right corner (tab bars clip: zero clipping); the same on-screen size in any group
 		local k = 1 / math.max(0.3, scaleUnder(host))
@@ -1105,7 +1130,11 @@ local function badgeOn(key, host, text)
 end
 local function badgeOff(key)
 	local b = badges[key]
-	if b then if b.frame then b.frame:Destroy() end; badges[key] = nil end
+	if b then
+		if b.frame then b.frame:Destroy() end
+		if key == "molt" and b.host and b.host.Parent then tabLabelUp(b.host, false) end
+		badges[key] = nil
+	end
 end
 local seenFish = nil
 local sidebarView = nil
@@ -1455,7 +1484,18 @@ function Hud.start(remotes)
 	end
 	WM.beforeOpen = function() if RobuxShop.isOpen() then RobuxShop.toggle() end end
 	WM.onEscape = function() if RobuxShop.isOpen() then RobuxShop.toggle(); return true end; return false end
-	WM.onSidebarView = function(v) sidebarView = v.name; task.defer(updateBadges) end
+	WM.onSidebarView = function(v)
+		sidebarView = v.name
+		-- the Figma sample gain chip on the MOLT tab is replaced by the live one (inside the tab, under its label)
+		for _, d in v.ui.root:GetDescendants() do
+			if string.sub(d.Name, 1, 10) == "badge/molt" and d:IsA("GuiObject") then d.Visible = false end
+		end
+		for _, d in v.ui.root:GetDescendants() do
+			if (d.Name == "drop" or d.Name == "shadow") and d:IsA("GuiObject") and d.Parent and d.Parent.Name == "drawer tabs" and d.Position.Y.Offset < 0 then d.Visible = false end
+		end
+		task.defer(updateBadges)
+	end
+	WM.hintActions = { TAB = function() toggleCompanions() end, Q = function() WM.toggle("objectives") end, P = function() WM.toggle("profile") end }
 	WM.init(pg)
 	WM.debugHook()
 	WM.onChanged = function()

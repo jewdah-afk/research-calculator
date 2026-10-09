@@ -426,6 +426,49 @@ do
 	local live = _G.__uiKeys and _G.__uiKeys() or {}
 	print(("_G.__uiKeys(): %d live keys"):format(#live))
 end
+-- sidebar accordion (Birb): every upgrade still to buy is a card, a maxed one a slim row; clicking folds / unfolds;
+-- the sidebar NEST / MINE views exist with live rows
+do
+	local Defs3 = req(shared:FindFirstChild("Defs"))
+	local sb = WM.built.shop
+	WM.show(sb, "Shop_Eggs", true)
+	remotes.State.OnClientEvent:Fire(s, d)
+	task.wait(0.1)
+	local api = sb.lists and sb.lists.Shop_Eggs
+	check("sidebar list is an accordion", api ~= nil and api.accordion == true)
+	if api then
+		for _, id in api.ids do
+			local e = api.entries[id]
+			local maxed = Defs3.level(s, id) >= Defs3.maxLevel(s, id)
+			check("accordion default " .. id, e ~= nil and e.expanded == not maxed, ("expanded %s maxed %s"):format(tostring(e and e.expanded), tostring(maxed)))
+			if e then
+				local h = e.holder.Size.Y.Offset
+				check("accordion height " .. id, math.abs(h - ((if e.expanded then api.h else 44) + 6)) < 1, "h " .. h)
+			end
+		end
+		-- fold the first card, unfold it again
+		local id1 = api.ids[1]
+		local e1 = api.entries[id1]
+		if e1 and e1.expanded then
+			local node = api.rows[id1].ui.node
+			sig(node:FindFirstChild("hit"), "Activated"):Fire()
+			task.wait(0.3)
+			check("card folds on click", e1.expanded == false and math.abs(e1.holder.Size.Y.Offset - 50) < 1)
+			sig(e1.slim.node:FindFirstChild("hit"), "Activated"):Fire()
+			task.wait(0.3)
+			check("slim row unfolds on click", e1.expanded == true)
+		end
+	end
+	for _, v in { "Shop_Nest", "Shop_Mine" } do
+		WM.show(sb, v, true)
+		remotes.State.OnClientEvent:Fire(s, d)
+		local l = sb.lists and sb.lists[v]
+		local n = 0
+		if l then for _ in l.entries do n += 1 end end
+		check("sidebar view " .. v .. " has live rows", n > 0, "rows " .. n)
+	end
+	WM.show(sb, "Shop_Eggs", true)
+end
 -- COMPANIONS board: drops to its full height (AUTO hidden under it), rolls back up to 0 (AUTO back), every row on it,
 -- locked rows show their padlock + unlock note (QA: locked rows rendered as black blocks)
 do
@@ -439,6 +482,7 @@ do
 		local n = 0
 		for _, r in rowsF:GetChildren() do if string.sub(r.Name, 1, 4) == "row/" then n += 1 end end
 		check("board holds all 6 companion rows", n == 6, "rows " .. n)
+		if boardF.Size.Y.Offset > 0 then Hud3.toggleCompanions(); task.wait(0.5) end   -- start rolled up
 		Hud3.toggleCompanions()
 		task.wait(0.1)
 		local sheet = boardF:FindFirstChild("sheet", true)

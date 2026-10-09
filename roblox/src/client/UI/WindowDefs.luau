@@ -12,7 +12,9 @@
 -- Variant names are module names in UI/Figma/Layouts (generated from Figma; node ids in the module headers).
 return {
 	shop = { title = "SHOP", drawer = true, theme = "gold",
-		tabs = { { "EGGS", "Shop_Eggs" }, { "MOLT", "Shop_Molt" }, { "SEEDS", "Shop_Seeds" }, { "NEST", go = "nest" }, { "MINE", go = "mine" } },
+		-- NEST / MINE are sidebar views like Birb's (generated from the SEEDS frame: UI/SidebarViews); their card key
+		-- opens the full window
+		tabs = { { "EGGS", "Shop_Eggs" }, { "MOLT", "Shop_Molt" }, { "SEEDS", "Shop_Seeds" }, { "NEST", "Shop_Nest" }, { "MINE", "Shop_Mine" } },
 		views = { ["seg/GOLDEN"] = "Shop_Eggs_Golden", ["seg/EGGS"] = "Shop_Eggs", ["seg/ECHO"] = "Shop_Eggs" } },
 	mine = { title = "MINE", tabs = { { "SHOP", "Mine_Shop" }, { "AREAS", "Mine_Areas" }, { "CROW", go = "crow" } } },
 	crow = { dock = "bl", title = "CROW", tabs = { { "CROW", "Crow" } } },

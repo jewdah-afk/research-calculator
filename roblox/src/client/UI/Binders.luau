@@ -292,7 +292,7 @@ local function liveList(ui, family, ids, layoutName)
 	collectAll()
 	local list = ui.find("upgrade list")
 	if not list then return nil end
-	local L = require(Layouts[layoutName])
+	local L = WM.layoutOf(layoutName)
 	local listNode = Render.findNode(L.root, "upgrade list")
 	local rowNodes = Render.findNodes(listNode, function(x) return string.sub(x.n, 1, 4) == "row/" end)
 	if #rowNodes == 0 then return nil end
@@ -311,7 +311,8 @@ local function liveList(ui, family, ids, layoutName)
 		Size = UDim2.fromOffset(list.Size.X.Offset, list.Size.Y.Offset - first.y + 8), CanvasSize = UDim2.new(), ScrollBarThickness = 6,
 		ScrollBarImageColor3 = Color3.fromHex("8d94a3"), ScrollingDirection = Enum.ScrollingDirection.Y, ZIndex = 50 }, list)
 	Render.styleScroll(sf, "0e131b")
-	local api = { sf = sf, rows = {}, ids = ids, family = family, x = first.x, h = first.h, gap = gap }
+	local api = { sf = sf, rows = {}, ids = ids, family = family, x = first.x, h = first.h, w = first.w, gap = gap,
+		accordion = family == "drawer", entries = {}, override = {} }
 	return api
 end
 
@@ -340,6 +341,93 @@ local function setAttention(keyInst)
 	if keyInst then attention.stop = Motion.breathe(keyInst, "7dff86") end
 end
 Binders.setAttention = setAttention
+-- a secondary key in steel with muted text (MAX under BUY, spend amounts): never competes with the primary
+function Binders.quietKey(k)
+	if not k then return end
+	local steel = FKit.PAL.steel
+	for _, part in { { k:FindFirstChild("face"), nil }, { k:FindFirstChild("lip"), 0.58 } } do
+		local f = part[1]
+		if f then
+			for _, gg in f:GetChildren() do if gg:IsA("UIGradient") then gg:Destroy() end end
+			f.BackgroundColor3 = Color3.new(1, 1, 1); f.BackgroundTransparency = 0
+			Render.gradient(f, FKit.vgrad(steel, part[2]), 1)
+		end
+	end
+	local cap = k:FindFirstChild("face") and k.face:FindFirstChild("gloss cap")
+	if cap then cap.BackgroundTransparency = 0.6 end
+	for _, l in k:GetDescendants() do
+		if l:IsA("TextLabel") and not string.find(l.Name, "drop") then Render.setTextColor(l, Color3.fromHex("c9d2e3")) end
+	end
+end
+
+-- ---------------------------------------------------------------- sidebar accordion (Birb)
+-- Birb's sidebar: every upgrade still to buy is an expanded card; a maxed one folds into a slim one-line row (name +
+-- LV x / y). Any row folds / unfolds on click (the choice is kept for the session); the height eases (0.18 s) and the
+-- rows below slide with it. The slim row: small icon, name, LV chip, a green dot when it is affordable.
+local SLIM_H = 44
+local FOLD = TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local relayout
+local function buildSlim(api, id, parent)
+	local d = Defs.UP[id]
+	local L = FKit.layout()
+	local w = api.w
+	local plate = FKit.STEELn(L, "slim/" .. id, 0, 0, w, SLIM_H, { cols = { "2a323f", "1a2029" } })
+	table.insert(plate.k, FKit.ICOn(upIcon[id] or d.icon, 30, 10, 7, L))
+	local chip = FKit.CHIPn(L, "lv chip", 0, 0, nil, "LV 9999 / 9999", { size = 13 })
+	chip.x = w - chip.w - 10
+	chip.y = math.floor((SLIM_H - chip.h) / 2)
+	table.insert(plate.k, FKit.Tn(L, string.upper(d.name), 17, { name = "name", x = 50, y = 0, h = SLIM_H, w = chip.x - 30 - 50 }))
+	table.insert(plate.k, chip)
+	table.insert(plate.k, FKit.node("E", "can buy", chip.x - 20, (SLIM_H - 10) / 2, 10, 10, { f = L.style({ { "s", "5fe06a", 1 } }), s = L.style({ "0b0c10", 1, 2, "I" }) }))
+	local ui = FKit.build(L, plate, parent)
+	ui.root.ZIndex = 5
+	local nameL = ui.find("name")
+	if nameL then Render.fit(nameL, 11) end
+	return ui
+end
+local function entryOf(api, id)
+	local e = api.entries[id]
+	if e then return e end
+	local holder = Render.new("Frame", { Name = "entry/" .. id, BackgroundTransparency = 1, ClipsDescendants = true, Size = UDim2.fromOffset(api.w, api.h), ZIndex = 2 }, api.sf)
+	e = { holder = holder, expanded = nil }
+	e.slim = buildSlim(api, id, holder)
+	Motion.key(e.slim.node, "row", { onActivate = function()
+		Sfx.dropdown(true)
+		api.override[id] = true
+		e.expanded = true
+		relayout(api, true)
+	end })
+	api.entries[id] = e
+	return e
+end
+function relayout(api, animate)
+	local y = 8
+	for _, id in api.ids do
+		local e = api.entries[id]
+		if e and e.holder.Parent then
+			local h = if e.expanded then api.h else SLIM_H
+			local card = api.rows[id] and api.rows[id].ui.root
+			if e.expanded then
+				e.slim.root.Visible = false
+				if card then card.Visible = true end
+			else
+				e.slim.root.Visible = true
+				if card then
+					if animate then task.delay(0.19, function() if not e.expanded and card.Parent then card.Visible = false end end) else card.Visible = false end
+				end
+			end
+			local pos, size = UDim2.fromOffset(api.x, y), UDim2.fromOffset(api.w, h + 6)
+			if animate and not Kit.reduced() then
+				TweenService:Create(e.holder, FOLD, { Position = pos, Size = size }):Play()
+			else
+				e.holder.Position = pos; e.holder.Size = size
+			end
+			y += h + api.gap
+		end
+	end
+	api.sf.CanvasSize = UDim2.fromOffset(0, y)
+end
+
 local function refreshList(api, s, onBuy, attentionOn)
 	if not api then return end
 	local primary = primaryOf(s, api.ids)
@@ -355,10 +443,24 @@ local function refreshList(api, s, onBuy, attentionOn)
 				local level = r and r.level
 				if r then r.ui.root:Destroy() end
 				local tp = templates[api.family][if st == "can" then "need" else st] or templates[api.family].buy or templates[api.family].need
-				local ui = Render.buildNode(tp.layout, tp.node, api.sf, 2)
+				local ui = Render.buildNode(tp.layout, tp.node, if api.accordion then entryOf(api, id).holder else api.sf, 2)
 				ui.root.Name = "row/" .. id
 				ui.node.Name = "row/" .. id .. " (" .. st .. ")"
-				Motion.key(ui.node, "row", { z = 1 })
+				if api.accordion then
+					ui.root.Position = UDim2.fromOffset(0, 0)
+					local e0 = api.entries[id]
+					if e0 and e0.expanded == false then ui.root.Visible = false end
+					Motion.key(ui.node, "row", { z = 1, onActivate = function()
+						local e = api.entries[id]
+						if not e then return end
+						Sfx.dropdown(false)
+						api.override[id] = false
+						e.expanded = false
+						relayout(api, true)
+					end })
+				else
+					Motion.key(ui.node, "row", { z = 1 })
+				end
 				-- a BUY key in a list is an ordinary key: the list's hero is the primary row, not every row
 				for _, kk in ui.keys do if string.sub(kk.node.n, 1, 7) == "btn/buy" then Motion.setKind(kk.inst, "key") end end
 				r = { ui = ui, state = st, level = level }
@@ -373,23 +475,7 @@ local function refreshList(api, s, onBuy, attentionOn)
 				end
 				ui.onUp = holdStop
 				-- MAX stays a quiet steel key under BUY (the green BUY is the row's only strong element)
-				local mx = ui.node:FindFirstChild("btn/max")
-				if mx then
-					local steel = FKit.PAL.steel
-					for _, part in { { mx:FindFirstChild("face"), nil }, { mx:FindFirstChild("lip"), 0.58 } } do
-						local f = part[1]
-						if f then
-							for _, gg in f:GetChildren() do if gg:IsA("UIGradient") then gg:Destroy() end end
-							f.BackgroundColor3 = Color3.new(1, 1, 1); f.BackgroundTransparency = 0
-							Render.gradient(f, FKit.vgrad(steel, part[2]), 1)
-						end
-					end
-					local cap = mx:FindFirstChild("face") and mx.face:FindFirstChild("gloss cap")
-					if cap then cap.BackgroundTransparency = 0.6 end
-					for _, l in mx:GetDescendants() do
-						if l:IsA("TextLabel") and not string.find(l.Name, "drop") then Render.setTextColor(l, Color3.fromHex("c9d2e3")) end
-					end
-				end
+				Binders.quietKey(ui.node:FindFirstChild("btn/max"))
 				-- the primary row: a small static "recommended" sparkle on its BUY key
 				if st == "buy" then
 					local key = ui.node:FindFirstChild("btn/buy")
@@ -401,6 +487,14 @@ local function refreshList(api, s, onBuy, attentionOn)
 				end
 				if st == "max" and was and was ~= "max" then
 					Sfx.maxed()
+					-- the gold pop plays on the card, then it folds into its slim row (Birb)
+					r.maxedAt = os.clock()
+					if api.accordion then
+						task.delay(0.8, function()
+							local e = api.entries[id]
+							if e and api.override[id] == nil and e.expanded then e.expanded = false; relayout(api, true) end
+						end)
+					end
 					task.defer(function()
 						local plate
 						for _, d in ui.node:GetDescendants() do
@@ -410,7 +504,28 @@ local function refreshList(api, s, onBuy, attentionOn)
 					end)
 				end
 			end
-			r.ui.root.Position = UDim2.fromOffset(api.x, y)
+			if api.accordion then
+				-- Birb: a card while there is something to buy, a slim row once maxed (unless the player chose)
+				local e = entryOf(api, id)
+				local want = api.override[id]
+				if want == nil then want = st ~= "max" or (r.maxedAt ~= nil and os.clock() - r.maxedAt < 0.8) end
+				if e.expanded ~= want then
+					local first = e.expanded == nil
+					e.expanded = want
+					api.dirty = if first then (api.dirty or "set") else "animate"
+				end
+				local shown, shownMax = Defs.shownLevel(s, id)
+				local chipL = e.slim.find("lv chip")
+				local cl = chipL and Render.childTexts(chipL)[1]
+				if cl then
+					Render.setText(cl, "LV " .. shown .. " / " .. shownMax)
+					Render.setTextColor(cl, Color3.fromHex(if st == "max" then "ffc94a" else "ffffff"))
+				end
+				local dot = e.slim.find("can buy")
+				if dot then dot.Visible = st == "buy" or st == "can" end
+			else
+				r.ui.root.Position = UDim2.fromOffset(api.x, y)
+			end
 			local before = r.level
 			fillRow(r.ui.node, s, id, st, r)
 			if before and r.level and r.level > before then
@@ -418,11 +533,15 @@ local function refreshList(api, s, onBuy, attentionOn)
 				local p = well and Hud.centreOf(well)
 				if p then Motion.floater(WM.canvas, p, "+" .. (r.level - before) .. " LV", "9dffae", 20) end
 			end
-			if st == "buy" then primaryKey = r.ui.node:FindFirstChild("btn/buy") end
+			if st == "buy" and (not api.accordion or (api.entries[id] and api.entries[id].expanded)) then primaryKey = r.ui.node:FindFirstChild("btn/buy") end
 			y += api.h + api.gap
 		end
 	end
-	api.sf.CanvasSize = UDim2.fromOffset(0, y)
+	if api.accordion then
+		if api.dirty then relayout(api, api.dirty == "animate"); api.dirty = nil end
+	else
+		api.sf.CanvasSize = UDim2.fromOffset(0, y)
+	end
 	if attentionOn then setAttention(primaryKey) end
 end
 
@@ -432,7 +551,38 @@ local DRAWER_IDS = {
 	Shop_Eggs_Golden = { "p_golden_popcorn_value", "p_auric_silo", "d_desert_field_notes_plus" },
 	Shop_Molt = { "pr_popcorn_mult", "pr_radius_mult", "pr_respawn_mult" },
 	Shop_Seeds = { "s_more_popcorn", "s_more_feathers", "s_more_seeds" },
+	Shop_Nest = { "n_twig_value", "n_peck_rate", "n_peck_power" },
+	Shop_Mine = { "m_ore_value", "m_mining_power", "m_charged_strike", "m_rupture" },
 }
+-- the card at the top of the SEEDS / NEST / MINE sidebar views: currency, its rate and stats, all live
+local CARD = {
+	Shop_Seeds = { cur = "sunflowerSeeds", stats = function(s, d) return { ["SEEDS / SEC"] = fmt(d.seedsPerSec or 0) } end },
+	Shop_Nest = { cur = "twigs", stats = function(s, d)
+		local L = Defs.level(s, "n_peck_rate")
+		return { ["TWIGS / SEC"] = fmt(d.twigsPerSec or 0), ["NEST TIER"] = (({ "I", "II", "III", "IV", "V" })[(s.nest.tier or 0) + 1] or tostring((s.nest.tier or 0) + 1)),
+			["PECK RATE"] = Defs.UP.n_peck_rate.fx(L) }
+	end },
+	Shop_Mine = { cur = "bruteOre", stats = function(s, d)
+		return { ["ORE / SEC"] = fmt(d.orePerSec or 0), ["AREA"] = tostring((s.crow.area or 0) + 1), ["CROW LV"] = tostring(s.crow.level or 1) }
+	end },
+}
+local function updateCard(ui, variant, s, d)
+	local c = CARD[variant]
+	if not c then return end
+	local card = ui.find("sidebar card") or ui.find("seeds card")
+	if not card then return end
+	for _, t in Render.childTexts(card) do
+		if t.TextSize >= 30 then Render.setText(t, Hud.amount(s[c.cur])) end
+	end
+	local vals = c.stats(s, d)
+	for _, st in card:GetChildren() do
+		local key = string.match(st.Name, "^stat/(.+)$")
+		if key and vals[key] then
+			local ts = Render.childTexts(st)
+			if ts[2] then Render.setText(ts[2], vals[key]) end
+		end
+	end
+end
 local function buy(id, all, inst) act("buy", id, all, inst) end
 
 -- ---------------------------------------------------------------- per-window binders
@@ -465,12 +615,15 @@ B.shop = {
 			if fillFrame then fillFrame:Destroy(); fillFrame = nil end
 		end
 		ui.on("btn/molt", function() Hud.toast("Hold MOLT to confirm", "info", "plume") end)
+		ui.on("btn/open nest", function(inst) Hud.openFrom("nest", inst) end)
+		ui.on("btn/open mine", function(inst) Hud.openFrom("mine", inst) end)
 		ui.onAny(function(name)
 			if string.sub(name, 1, 13) == "btn/auto-buy " then act("auto", not (WM.state and WM.state.auto)) end
 		end)
 	end,
 	update = function(rec, ui, variant, s, d)
 		refreshList(rec.lists and rec.lists[variant], s, buy, true)
+		updateCard(ui, variant, s, d)
 		if variant == "Shop_Molt" then
 			local hero = ui.find("molt hero")
 			if hero then

@@ -33,6 +33,7 @@ WM.sources = {}         -- id -> fn() -> design-px point of the HUD button a win
 WM.beforeOpen = nil     -- fn(id) before a window opens (Hud closes the Robux shop: one window at a time)
 WM.onEscape = nil       -- fn() -> true when Esc was used by something else (Robux shop)
 WM.onSidebarView = nil  -- fn(variant) when the sidebar shows another view (Hud badges)
+WM.hintActions = {}     -- keycap -> fn() for the clickable hints at the sidebar bottom (set by Hud)
 
 local gui, canvas, scale, modalLayer, drawerLayer
 local sidebarTab        -- collapse tab ui on the sidebar's left edge
@@ -61,11 +62,15 @@ local function tabOf(def, name)
 end
 WM.tabOf = tabOf
 
+local SidebarViews = require(script.Parent.SidebarViews)
 local function layoutOf(variant)
 	local m = Layouts:FindFirstChild(variant)
-	assert(m, "no layout " .. tostring(variant))
-	return require(m)
+	if m then return require(m) end
+	local L = SidebarViews.layout(variant)   -- generated views (sidebar NEST / MINE)
+	assert(L, "no layout " .. tostring(variant))
+	return L
 end
+WM.layoutOf = layoutOf
 
 -- ---------------------------------------------------------------- placement (design px, see UI/Layout)
 local SLIDE = TweenInfo.new(0.22, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
@@ -76,19 +81,16 @@ end
 
 -- the sidebar view stretches to the full screen height: the window body, its outline and the upgrade list grow,
 -- whatever sits below the list (footer note) moves down. Base sizes live in attributes so this is repeatable.
-local function stretch(v, baseH, targetH)
+local HINT_H = 116           -- the keybind hint panel pinned to the sidebar bottom (design px of the 540 frame)
+local function stretch(v, baseH, targetH, reserve)
 	local node = v.ui.node
 	local extra = math.max(0, targetH - baseH)
+	local listExtra = math.max(0, extra - (reserve or 0))
 	local function grow(inst)
 		if not inst then return end
 		local b = inst:GetAttribute("baseH") or inst.Size.Y.Offset
 		inst:SetAttribute("baseH", b)
 		inst.Size = UDim2.fromOffset(inst.Size.X.Offset, b + extra)
-	end
-	local function shift(inst)
-		local b = inst:GetAttribute("baseY") or inst.Position.Y.Offset
-		inst:SetAttribute("baseY", b)
-		inst.Position = UDim2.fromOffset(inst.Position.X.Offset, b + extra)
 	end
 	grow(v.ui.root); grow(node)
 	grow(node:FindFirstChild("window outline"))
@@ -96,11 +98,20 @@ local function stretch(v, baseH, targetH)
 	local list = node:FindFirstChild("upgrade list")
 	if list then
 		local listBottom = (list:GetAttribute("baseY") or list.Position.Y.Offset) + (list:GetAttribute("baseH") or list.Size.Y.Offset)
-		grow(list)
+		local function growBy(inst, dh)
+			local b = inst:GetAttribute("baseH") or inst.Size.Y.Offset
+			inst:SetAttribute("baseH", b)
+			inst.Size = UDim2.fromOffset(inst.Size.X.Offset, b + dh)
+		end
+		growBy(list, listExtra)
 		local rows = list:FindFirstChild("rows")
-		if rows then grow(rows) end
+		if rows then growBy(rows, listExtra) end
 		for _, c in node:GetChildren() do
-			if c:IsA("GuiObject") and c ~= list and (c:GetAttribute("baseY") or c.Position.Y.Offset) >= listBottom - 1 then shift(c) end
+			if c:IsA("GuiObject") and c ~= list and c.Name ~= "window outline" and (c:GetAttribute("baseY") or c.Position.Y.Offset) >= listBottom - 1 then
+				local b = c:GetAttribute("baseY") or c.Position.Y.Offset
+				c:SetAttribute("baseY", b)
+				c.Position = UDim2.fromOffset(c.Position.X.Offset, b + listExtra)
+			end
 		end
 	end
 end
@@ -116,7 +127,8 @@ local function placeSidebar(animate)
 		rec.holder.Size = UDim2.fromOffset(rec.W, fullH)
 		rec.inner.Size = UDim2.fromOffset(rec.W, fullH)
 		local v = rec.current and rec.variants[rec.current]
-		if v then stretch(v, rec.baseH, fullH); v.ui.root.Position = UDim2.fromOffset(0, 0) end
+		if v then stretch(v, rec.baseH, fullH, HINT_H + S.GAP); v.ui.root.Position = UDim2.fromOffset(0, 0) end
+		if rec.hints then rec.hints.root.Position = UDim2.fromOffset(16, fullH - 16 - HINT_H) end
 		if Layout.sidebarOpen then rec.holder.Visible = true end
 		move(rec.holder, { Position = UDim2.fromOffset(if Layout.sidebarOpen then Layout.gameRight() else Layout.W + 8, 0) }, animate)
 		if not Layout.sidebarOpen then
@@ -352,9 +364,47 @@ local function buildWindow(id)
 	WM.built[id] = rec
 	if def.drawer then
 		rec.inner.AnchorPoint = Vector2.new(0, 0); rec.inner.Position = UDim2.fromOffset(0, 0)
+		rec.hints = WM.buildHints(rec.inner, W - 32)
 	end
 	fitWindow(rec)
 	return rec
+end
+
+-- Birb's keybind hint panel at the bottom of the sidebar: small steel keycaps + what they do. Our real bindings
+-- (no Esc: the Roblox menu owns it). TAB / Q / P are keys you can also click.
+local HINTS = { { { "WASD", "MOVE" }, { "SPACE", "HOP" } }, { { "TAB", "COMPANIONS" }, { "Q", "OBJECTIVES" } }, { { "P", "PROFILE" } } }
+local CLICKABLE = { TAB = true, Q = true, P = true }
+function WM.buildHints(parent, w)
+	local FKit = require(script.Parent.Figma.FKit)
+	local L = FKit.layout()
+	local panel = FKit.WELLn(L, "keybind hints", 0, 0, w, HINT_H, { op = 0.55 })
+	panel.k = panel.k or {}
+	for r, row in HINTS do
+		local parts, total = {}, 0
+		for i, h in row do
+			local kw = math.max(30, math.ceil(FKit.textW(h[1], 13)) + 18)
+			local tw = math.ceil(FKit.textW(h[2], 14)) + 6
+			parts[i] = { h = h, kw = kw, tw = tw }
+			total += kw + 8 + tw + (if i > 1 then 24 else 0)
+		end
+		local x = (w - total) / 2
+		local y = 12 + (r - 1) * 34
+		for i, pt in parts do
+			if i > 1 then x += 24 end
+			local key = FKit.BTNn(L, (if CLICKABLE[pt.h[1]] then "key/" else "cap/") .. pt.h[1], x, y, pt.kw, 28, FKit.PAL.steel, pt.h[1], { size = 13, d = 3, shadow = false })
+			if not CLICKABLE[pt.h[1]] then key.key = nil end   -- a printed keycap, not a button
+			table.insert(panel.k, key)
+			x += pt.kw + 8
+			table.insert(panel.k, FKit.BODYn(L, pt.h[2], 14, { x = x, y = y + 4, w = pt.tw }))
+			x += pt.tw
+		end
+	end
+	local ui = FKit.build(L, panel, parent)
+	ui.root.ZIndex = 6
+	for k in CLICKABLE do
+		ui.on("key/" .. k, function() local fn = WM.hintActions[k]; if fn then fn() end end)
+	end
+	return ui
 end
 
 -- show one variant of a window. `switch` = a tab / view change inside an open window: no re-pop, the old content
