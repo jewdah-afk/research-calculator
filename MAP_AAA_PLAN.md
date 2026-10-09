@@ -72,8 +72,10 @@ bank parts, the island rises, props drop in.
 - **C. Studs:** keep a subtle stud texture on built objects (toy read) or none. Recommended: subtle studs on
   man-made props only (benches, stalls, castle), never on nature.
 
+**Owner decisions (2026-10-09):** A = test both on one Park corner, pick from screenshots; B = Figma AI target frames;
+C = subtle studs on man-made props only.
+
 ## 8. Next steps
-1. Owner picks A / B / C (or says "do what is best").
 2. Make the 9 target frames + a biome palette sheet in Figma (board next to the map boards `178:7`).
 3. Park slice in Studio (one Studio window only): Lighting preset + DepthOfField tilt-shift first (instant win),
    then the hen remake, outline hulls, skirt + landmarks, foliage, motion, perf, QA.
