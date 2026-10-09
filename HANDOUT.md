@@ -84,6 +84,16 @@ arcs reads as crescents, wall rings sit on the ground; crack decals land on the 
 flash ZOffset keeps it out of the ground; VelocityParallel streak orientation (texture head at row 0 should lead);
 particle sizes past ~100 studs (unlock wave / circle fallbacks); Brightness / bloom by day and night; push amounts at
 zoom 4 / 9 / 16.
+### Park life pass + camera (2026-10-09, latest)
+- **Camera** starts close on the bird: `ZOOM_PLAY = 9` in Main.client (wheel still goes out to the whole island, 16). Owner: "I can't even see the vfx"; Birb's view is close too.
+- **Toon flowers** replace the generated wildflower tufts (owner: they "look ass"). Each `Map.flowers` spot = a rounded leaf clump + 2-3 five-petal flowers of one pastel (white / pink / yellow / coral / lilac), scale `F = 3`. Skipped on paths, water, hills, the egg yard, prop footprints and the screen strip just north of tall props (they hid behind lamps).
+- **Butterflies**: 7 toon butterflies wander between flower patches by day (hover pauses, flap 15 Hz / 6 Hz hovering), one `BulkMoveTo` per frame; hidden at night when the fireflies start.
+- **In flight on side branches** (not merged, QA in Studio first): `claude/peckwood-ui` (worktree `~/Downloads/rc-main-ui`: Figma UI, now doing Birb placement + Figma motion spec + UX/SFX extras) and `claude/peckwood-vfx` (worktree `~/Downloads/rc-main-vfx`: VFX engine, round-1 fixes + v2 mesh/flipbook quality). VFX textures uploaded, ids in `VfxAssets.luau` on that branch.
+
+**More gotchas:**
+- `Part.Shape = Ball` can't be squashed: it renders as a sphere of the smallest axis. For ellipsoids use a Block part with a `SpecialMesh` (MeshType Sphere); it follows the full Size.
+- An EditableMesh must stay alive: destroying it makes its MeshPart vanish (no baking). But `MeshPart:Clone()` shares the mesh, so build a shape once and pool clones.
+- Studio sync: `tools/gen_manifest.py` maps `init.luau` to the folder itself; Script.Source can't be set above 200k chars from a plugin, use `ScriptEditorService:UpdateSourceAsync` (AscentData is 357k).
 
 ### Park slice v2: toon walkway, lighthouse, pond, tiered rolling sea (2026-10-09, latest, commit 2dbcdd4)
 Owner verdict on the island: "looking fucking crazy"; the lighthouse beam is "super clean, keep that up".

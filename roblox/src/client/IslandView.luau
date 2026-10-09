@@ -259,7 +259,6 @@ DEFS.windmill = { w = 5, d = 5, parts = {
 	P(1, 1, 18, 3, 3, 2, "roofD"), P(2, 2, 20, 1, 1, 2, "roofD"), P(2, 4.95, 0, 1, 0.1, 4, "woodD"), P(2.2, 3.95, 13, 0.6, 1.2, 0.6, "woodD") } }
 DEFS.lighthouse = { w = 4, d = 4, parts = {} }   -- built by buildLighthouse (toon parts + rotating beam)
 DEFS.cottage = { w = 6, d = 6, parts = { P(0, 0, 0, 6, 6, 15, "cream") } }   -- the home (PropAssets.cottage, door to the yard)
-local FLOWER_COLS = { "f2c6d8", "fff1a8", "c9b6ff", "ffffff" }
 
 -- world position helpers
 local function pxToWorld(x, y) return (x / Map.PX - COLS / 2) * S, (y / Map.PX - ROWS / 2) * S end
@@ -534,6 +533,8 @@ local lamps = {}
 local fireflies, dustPart
 local ffAtt: Attachment? = nil
 local beacon = nil   -- the lighthouse light (buildLighthouse)
+local butterflies, flowerSpots = {}, {}   -- day-time butterflies wandering between the flower patches
+local bflyOn = true
 local beaconN = -1
 
 function IslandView.build()
@@ -545,6 +546,7 @@ function IslandView.build()
 	local scenery = Instance.new("Model"); scenery.Name = "Scenery"; scenery.Parent = root
 	IslandView.scenery = scenery
 	meshes, props, clouds, waterParts, lamps = {}, {}, {}, {}, {}
+	butterflies, flowerSpots = {}, {}
 	-- ground: tiles ordered centre-out, packed into as few EditableMeshes as the tri limit allows (client budget is
 	-- per mesh), so each mesh is one "band" the unlock raises in order
 	local cx, cy = COLS / 2, ROWS / 2
@@ -611,34 +613,111 @@ function IslandView.build()
 			info.home = info.model:GetPivot()
 		end
 	end
-	-- flowers: 1x1-stud clusters on stud centres, grass only, never in the field / on the hill
+	-- toon flowers (owner 2026-10-09: the generated wildflower tufts "look ass": dark, scraggly, realistic). Each spot is
+	-- a little cel patch like a handheld-RPG route: 2-3 flowers of ONE pastel colour (five round petals around a bright
+	-- centre on a short stem) popping out of a rounded leaf clump. Grass tiles only; never on paths, hills or in the egg
+	-- yard, so the eggs stay the focus. Smooth plastic, no shadow.
 	do
 		local fm = Instance.new("Model"); fm.Name = "Flowers"
-		local fl = PropAssets and PropAssets:FindFirstChild("flowers")
-		for k, f in Map.flowers do
-			if fl then   -- painted wildflower clusters (generated mesh) instead of brick flowers
-				local x, z = pxToWorld(f[1], f[2])
-				local c = fl:Clone()
-				local _, fsz = c:GetBoundingBox()
-				c:ScaleTo(c:GetScale() * (1.2 + hash(k, 2) * 0.5) / fsz.Y)
-				local fcf, fsz2 = c:GetBoundingBox()
-				c.WorldPivot = CFrame.new(fcf.Position - Vector3.new(0, fsz2.Y / 2, 0))
-				c:PivotTo(CFrame.new(x, groundAtWorld(x, z), z) * CFrame.Angles(0, hash(k, 7) * 6.28, 0))
-				for _, d in c:GetDescendants() do if d:IsA("BasePart") then d.Anchored = true; d.CanCollide = false; d.CanQuery = false; d.CanTouch = false; d.CastShadow = false end end
-				c.Parent = fm
-				continue
+		local PETAL = { { "fbfaf4", "ffcf3a" }, { "ffa8cf", "fff1a8" }, { "ffd84a", "ff9a3c" }, { "ff8f8f", "fff1a8" }, { "c9b6ff", "fff1a8" } }
+		local LEAF, STEM = hx("3f9a2a"), hx("4a9a34")
+		local F = 3.0   -- patch scale (studs): a flower head ~1.3 studs across, a patch ~3.5 studs, next to the 3.6-stud hen
+		-- keep clear of every prop's footprint (QA: flowers sat on the bench, behind the lamp, inside bushes)
+		local CLEAR = { bench = 4, lantern = 2.6, bush = 3.6, rock = 2.6, oak = 5.5, bigoak = 6.5, pine = 4.5, tree = 5.5,
+			cottage = 9, lighthouse = 5.5, cart = 5.5, arch = 4.5, fence = 3 }
+		local blockers = {}
+		for _, o in Map.objects do
+			local ox, oz = pxToWorld(o[2], o[3])
+			table.insert(blockers, { x = ox, z = oz, r = CLEAR[o[1]] or 3 })
+		end
+		-- tall props also hide the ground just north of them on screen (camera looks north, pitch 52): keep that strip clear
+		local TALL = { lantern = 9, oak = 12, bigoak = 14, pine = 11, tree = 12, cottage = 13.5, lighthouse = 17, arch = 10, cart = 8 }
+		for _, b in blockers do b.tall = 0 end
+		for k2, o in Map.objects do blockers[k2].tall = TALL[o[1]] or 0 end
+		local function clear(x, z)
+			for _, b in blockers do
+				if (x - b.x) ^ 2 + (z - b.z) ^ 2 < (b.r + 1.6) ^ 2 then return false end
+				if b.tall > 0 and math.abs(x - b.x) < b.r + 1.6 and z < b.z and z > b.z - b.tall * 0.8 then return false end
 			end
+			-- the whole patch on turf: no petals over a path edge or the pond rim
+			for _, o in { { 2.2, 0 }, { -2.2, 0 }, { 0, 2.2 }, { 0, -2.2 } } do
+				if tile(math.floor((x + o[1]) / S + COLS / 2), math.floor((z + o[2]) / S + ROWS / 2)) ~= 1 then return false end
+			end
+			return true
+		end
+		local function part(shape, size, cf, col)
+			local b = Instance.new("Part")
+			-- Ball parts can't be squashed (they render as a sphere of the smallest axis): petals / leaves are a block with
+			-- an ellipsoid SpecialMesh, which follows the full Size
+			if shape == Enum.PartType.Ball then
+				local sm = Instance.new("SpecialMesh"); sm.MeshType = Enum.MeshType.Sphere; sm.Parent = b
+			else
+				b.Shape = shape
+			end
+			b.Anchored = true; b.CanCollide = false; b.CanQuery = false; b.CanTouch = false; b.CastShadow = false
+			b.Material = Enum.Material.SmoothPlastic; b.TopSurface = Enum.SurfaceType.Smooth; b.BottomSurface = Enum.SurfaceType.Smooth
+			b.Color = col; b.Size = size; b.CFrame = cf; b.Parent = fm
+			return b
+		end
+		for k, f in Map.flowers do
 			local x, z = pxToWorld(f[1], f[2])
 			local i, j = math.floor(x / S + COLS / 2), math.floor(z / S + ROWS / 2)
-			if tile(i, j) ~= 1 or Map.height(i, j) > 0 or inField(i, j) then continue end
-			local sx, sz = math.floor(x / L) * L, math.floor(z / L) * L
-			local col = hx(FLOWER_COLS[k % #FLOWER_COLS + 1])
-			brickPart(fm, Vector3.new(sx + 0.45 * L, STUD_H, sz + 0.45 * L), Vector3.new(0.1 * L, 1.6 * PLATE, 0.1 * L), hx("5f9a45")).CastShadow = false
-			brickPart(fm, Vector3.new(sx + 0.25 * L, STUD_H + 1.6 * PLATE, sz + 0.25 * L), Vector3.new(0.5 * L, 0.5 * PLATE, 0.5 * L), col).CastShadow = false
-			brickPart(fm, Vector3.new(sx + 0.4 * L, STUD_H + 2.1 * PLATE, sz + 0.4 * L), Vector3.new(0.2 * L, 0.2 * PLATE, 0.2 * L), hx("ffd27a")).CastShadow = false
+			if tile(i, j) ~= 1 or Map.height(i, j) > 0 or Map.inYard(i, j) or not clear(x, z) then continue end
+			local gy = groundAtWorld(x, z)
+			table.insert(flowerSpots, Vector3.new(x, gy, z))
+			local pal = PETAL[math.floor(hash(k, 3.7) * #PETAL) + 1]
+			local pc, cc = hx(pal[1]), hx(pal[2])
+			local yaw = hash(k, 7) * 6.28
+			-- a rounded leafy clump (3 overlapping squashed balls, two greens) the flowers pop out of
+			for q = 0, 2 do
+				local a = yaw + q * 2.1 + (hash(k, q + 9) - 0.5) * 0.6
+				local r = 0.26 * F
+				local w = (0.62 + hash(q, k + 4) * 0.18) * F
+				part(Enum.PartType.Ball, Vector3.new(w, 0.42 * F, w * 0.85), CFrame.new(x + math.cos(a) * r, gy + 0.12 * F, z + math.sin(a) * r) * CFrame.Angles(0, -a, 0),
+					if q == 1 then LEAF:Lerp(STEM, 0.5) else LEAF)
+			end
+			local n = 2 + (if hash(k, 5.5) > 0.5 then 1 else 0)
+			for q = 1, n do
+				local a = yaw + q / n * 6.28 + hash(k, q) * 0.7
+				local r = (0.22 + hash(q, k) * 0.14) * F
+				local fx, fz = x + math.cos(a) * r, z + math.sin(a) * r
+				local h = (0.42 + hash(k * 3, q) * 0.2) * F
+				local tilt = CFrame.Angles((hash(q, k * 2) - 0.5) * 0.6, hash(k, q * 5) * 6.28, (hash(k * 2, q) - 0.5) * 0.6)
+				local head = CFrame.new(fx, gy + h, fz) * tilt
+				part(Enum.PartType.Cylinder, Vector3.new(h, 0.1 * F, 0.1 * F), CFrame.new(fx, gy + h / 2, fz) * CFrame.Angles(0, 0, math.pi / 2), STEM)
+				for pIdx = 0, 4 do
+					local pa = pIdx / 5 * math.pi * 2
+					part(Enum.PartType.Ball, Vector3.new(0.42 * F, 0.14 * F, 0.42 * F), head * CFrame.new(math.cos(pa) * 0.24 * F, 0, math.sin(pa) * 0.24 * F), pc)
+				end
+				part(Enum.PartType.Ball, Vector3.new(0.27 * F, 0.2 * F, 0.27 * F), head * CFrame.new(0, 0.05 * F, 0), cc)
+			end
 		end
 		fm.WorldPivot = CFrame.new(); fm.Parent = root   -- not under the scenery outline: tiny clusters read as black specks
 		table.insert(props, { model = fm, home = fm:GetPivot(), kind = "flowers", base = 0, x = 0, z = 0 })
+	end
+	-- butterflies (AAA life pass, 2026-10-09): a few toon butterflies drift between the flower patches by day (the
+	-- fireflies take over at night). Five smooth parts each (body + 4 wing lobes), moved with one BulkMoveTo per frame.
+	if #flowerSpots > 0 then
+		local bf = Instance.new("Folder"); bf.Name = "Butterflies"; bf.Parent = root
+		local COLS_B = { "ffe066", "fbfaf4", "ffa8cf", "8fd3ff", "ffb14a", "c9b6ff", "ffe066" }
+		local function bpart(size, col)
+			local b = Instance.new("Part")   -- ellipsoid (SpecialMesh sphere): Ball parts can't be squashed
+			local sm = Instance.new("SpecialMesh"); sm.MeshType = Enum.MeshType.Sphere; sm.Parent = b
+			b.Anchored = true; b.CanCollide = false; b.CanQuery = false; b.CanTouch = false; b.CastShadow = false
+			b.Material = Enum.Material.SmoothPlastic; b.Color = col; b.Size = size; b.Parent = bf
+			return b
+		end
+		for q = 1, math.min(7, #flowerSpots) do
+			local col = hx(COLS_B[q])
+			local start = flowerSpots[math.floor(hash(q, 13.1) * #flowerSpots) + 1]
+			table.insert(butterflies, {
+				body = bpart(Vector3.new(0.22, 0.22, 0.85), hx("3a2f2a")),
+				wings = { bpart(Vector3.new(1.15, 0.08, 0.85), col), bpart(Vector3.new(0.8, 0.08, 0.6), col:Lerp(Color3.new(1, 1, 1), 0.3)),
+					bpart(Vector3.new(1.15, 0.08, 0.85), col), bpart(Vector3.new(0.8, 0.08, 0.6), col:Lerp(Color3.new(1, 1, 1), 0.3)) },
+				pos = start + Vector3.new(0, 2, 0), vel = Vector3.zero, target = start + Vector3.new(0, 2, 0), ph = hash(q, 2.9) * 6.28,
+				hover = 0, seed = q * 17,
+			})
+		end
 	end
 	-- the outline of a set of tiles as ONE smooth loop in world studs: marching squares over the tiles, chained into
 	-- a loop (the longest one), Chaikin x3. Used for the yard (walkway ring + paddock fence) and the pond rim.
@@ -1644,6 +1723,38 @@ RunService.RenderStepped:Connect(function(dt)
 	if building == 0 then
 		for _, b in bobs do if b.model.Parent and b.model:IsDescendantOf(workspace) then b.model:PivotTo(b.home + Vector3.new(0, math.sin(clock * b.sp + b.ph) * b.amp, 0)) end end
 		IslandView.ambientStep(dt, clock)
+		if bflyOn and #butterflies > 0 then
+			local parts, cfs = {}, {}
+			for _, b in butterflies do
+				if b.hover > 0 then
+					b.hover -= dt
+					b.vel = b.vel:Lerp(Vector3.zero, math.min(1, dt * 4))
+				else
+					local to = b.target - b.pos
+					if to.Magnitude < 1.2 then
+						b.seed += 1
+						local spot = flowerSpots[math.floor(hash(b.seed, 4.1) * #flowerSpots) + 1]
+						b.target = spot + Vector3.new((hash(b.seed, 1.3) - 0.5) * 3, 1.1 + hash(b.seed, 2.2) * 1.6, (hash(b.seed, 3.3) - 0.5) * 3)
+						if hash(b.seed, 5.5) < 0.3 then b.hover = 1 + hash(b.seed, 6.6) * 1.5 end
+					else
+						b.vel = b.vel:Lerp(to.Unit * 3.4, math.min(1, dt * 2.2))
+					end
+				end
+				b.pos += b.vel * dt
+				local p = b.pos + Vector3.new(math.sin(clock * 2.3 + b.ph) * 0.35, math.sin(clock * 3.1 + b.ph) * 0.3, math.cos(clock * 1.9 + b.ph) * 0.35)
+				local flat = Vector3.new(b.vel.X, 0, b.vel.Z)
+				local cf = if flat.Magnitude > 0.05 then CFrame.lookAt(p, p + flat) else CFrame.new(p) * CFrame.Angles(0, b.ph, 0)
+				local flapRate = if b.hover > 0 then 6 else 15
+				local flap = 0.15 + 1.0 * (0.5 + 0.5 * math.sin(clock * flapRate + b.ph))
+				table.insert(parts, b.body); table.insert(cfs, cf)
+				for sIdx, s in { 1, -1 } do
+					local hinge = cf * CFrame.Angles(0, 0, s * flap)
+					table.insert(parts, b.wings[sIdx * 2 - 1]); table.insert(cfs, hinge * CFrame.new(s * 0.58, 0, -0.15))
+					table.insert(parts, b.wings[sIdx * 2]); table.insert(cfs, hinge * CFrame.new(s * 0.42, 0, 0.36))
+				end
+			end
+			workspace:BulkMoveTo(parts, cfs, Enum.BulkMoveMode.FireCFrameChanged)
+		end
 	end
 	Ocean.step(dt)
 	if ffAtt then ffAtt.Position = Vector3.new((math.random() - 0.5) * COLS * S * 0.8, (math.random() - 0.5) * 6, (math.random() - 0.5) * ROWS * S * 0.8) end
@@ -1677,6 +1788,13 @@ RunService.RenderStepped:Connect(function(dt)
 		end
 	end
 	if ffAtt then (ffAtt :: any).FF.Rate = 14 * n end
+	if (n < 0.5) ~= bflyOn then   -- butterflies by day, fireflies by night
+		bflyOn = n < 0.5
+		for _, b in butterflies do
+			b.body.Transparency = if bflyOn then 0 else 1
+			for _, w in b.wings do w.Transparency = if bflyOn then 0 else 1 end
+		end
+	end
 	if beacon and math.abs(n - beaconN) > 0.01 then   -- beam faint by day, bright at night
 		beaconN = n
 		local a0 = 0.74 - 0.5 * n
