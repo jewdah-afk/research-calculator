@@ -24,7 +24,7 @@ function SoundBoard.build(parent, hud)
 	Hud = hud
 	local L = FKit.layout()
 	local win = FKit.WINDOWn(L, "Window / Sound Board", W, H, "crow", "SOUND BOARD")
-	add(win, FKit.BODYn(L, "A / B / C plays a candidate through the real Sfx path.  USE picks it (live + saved).", 15, { x = 24, y = 88, w = 700, col = "c9d2e3" }))
+	add(win, FKit.BODYn(L, "A / B / C / D plays a candidate through the real Sfx path.  USE picks it (live + saved).", 15, { x = 24, y = 88, w = 700, col = "c9d2e3" }))
 	add(win, FKit.BTNn(L, "btn/copy table", W - 24 - 190, 80, 190, 44, PAL.blue, "COPY TABLE", { size = 16, d = 5 }))
 	local listNode = add(win, FKit.WELLn(L, "events", 16, 136, W - 32, H - 136 - 16, { op = 0.6 }))
 	FKit.OUTLINEn(L, win)
@@ -44,20 +44,20 @@ function SoundBoard.build(parent, hud)
 	for i, ev in Sfx.ORDER do
 		local RL = FKit.layout()
 		local row = FKit.STEELn(RL, "event/" .. ev, 0, 0, rowW, ROW, { cols = { "29313e", "1b2129" } })
-		add(row, FKit.Tn(RL, ev, 17, { name = "event", x = 12, y = 4, w = 250 }))
+		add(row, FKit.Tn(RL, ev, 17, { name = "event", x = 12, y = 4, w = 245 }))
 		add(row, FKit.BODYn(RL, "id 0", 12, { name = "current", x = 12, y = 28, w = 250, col = "8d94a3" }))
 		local cands = Candidates[ev] or {}
-		for c = 1, 3 do
-			local x = 280 + (c - 1) * 200
+		for c = 1, 4 do
+			local x = 270 + (c - 1) * 160
 			local has = cands[c] ~= nil and cands[c] ~= 0
-			local letter = string.sub("ABC", c, c)
-			add(row, FKit.BTNn(RL, "btn/play " .. c, x, 6, 84, 40, if has then PAL.violet else PAL.steel, if has then letter else "-", { size = 18, d = 4, glyph = nil }))
-			add(row, FKit.BTNn(RL, "btn/use " .. c, x + 92, 6, 84, 40, PAL.steel, "USE", { size = 15, d = 4 }))
+			local letter = string.sub("ABCD", c, c)
+			add(row, FKit.BTNn(RL, "btn/play " .. c, x, 6, 64, 40, if has then PAL.violet else PAL.steel, if has then letter else "-", { size = 18, d = 4, glyph = nil }))
+			add(row, FKit.BTNn(RL, "btn/use " .. c, x + 70, 6, 76, 40, PAL.steel, "USE", { size = 15, d = 4 }))
 		end
 		local r = FKit.build(RL, row, sf)
 		r.root.Position = UDim2.fromOffset(8, 8 + (i - 1) * (ROW + GAP))
 		local api = { ui = r, ev = ev, cands = cands }
-		for c = 1, 3 do
+		for c = 1, 4 do
 			r.on("btn/play " .. c, function()
 				local id = cands[c]
 				if id and id ~= 0 then Sfx.audition(ev, id) else Sfx.denied() end
@@ -80,7 +80,7 @@ function SoundBoard.build(parent, hud)
 			local cur = Sfx.IDS[ev] or 0
 			local cl = api.ui.find("current")
 			if cl then Render.setText(cl, if cur ~= 0 then "id " .. cur else "id 0  (keyboard fallback)") end
-			for c = 1, 3 do
+			for c = 1, 4 do
 				local k = api.ui.find("btn/use " .. c)
 				local chosen = cur ~= 0 and api.cands[c] == cur
 				if k then

@@ -8,6 +8,8 @@ return {
 	buy_ok = { 9126073644, 9048764474, 9126073953 },   -- Synth Sparkle Tone High Pitch Tone Burst Din (SFX) | Magical Meetup - Hit1 | Synth Sparkle Tone High Pitch Tone Burst Din (SFX)
 	cant_afford = { 9120917609, 9117020115, 15675062723 },   -- Wood Impacts Soft Impacts On Temple Blocks 2 (SFX) | Mouth Pop Thudding Airy Lip Smacks 6 (SFX) | Roblox_UI_Whistle_Low
 	coin_land = { 9126076118, 9113848518, 9113850466 },   -- Synth Sparkle Tone High Pitch Tone Burst Din (SFX) | Coin Large Metal Toss Dropped To Grass 1 (SFX) | Coin Toss Large Metal Flipped 4 (SFX)
+	collect_layer_a = { 9114231992, 9114232664, 9114232516, 9113959343 },   -- egg pickup, the egg: Eggs Break 3 (tap on bowl rim) | Eggs Break 13 | Eggs Break 10 | Crack Egg Crunchy 11 (crunchier)
+	collect_layer_b = { 9117019900, 9117848037, 9112751731, 9112752910 },   -- egg pickup, the butter: Mouth Pop Thudding Airy Lip Smacks 3 | Pops Mouth Popping 5 | Bubble Bloop High Pitched Cute 6 | Bubble Wobble Comic Bloop 4
 	collect = { 9112751731, 9112751536, 9112752910 },   -- Bubble Bloop High Pitched Cute 6 (SFX) | Bubble Bloop High Pitched Cute 1 (SFX) | Bubble Wobble Comic Bloops Slight Rhythm 4 (SFX)
 	dropdown_close = { 15675028888, 9126047550, 9117281248 },   -- Roblox_UI_Whoosh_02 | Synth Air Whoosh Cheesy Karate Style Swishes 11 (SFX) | Pen Clicks 9 (SFX)
 	dropdown_open = { 15675046931, 9126283272, 9119727606 },   -- Roblox_UI_Sweep | Wood Swish Ruler Whoosh Fast Movement In Air 13 (SFX) | Switch In- Line Plastic Switch Clicks 9 (SFX)

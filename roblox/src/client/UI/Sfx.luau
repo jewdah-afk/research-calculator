@@ -45,6 +45,8 @@ local IDS = {
 	island_unlock = 9048764753,
 	molt = 9114369862,
 	evolve = 9125635297,
+	collect_layer_a = 9114231992,   -- egg pickup layer A: a real eggshell tap (Eggs Break 3)
+	collect_layer_b = 9117019900,   -- egg pickup layer B: the butter, a soft round pop (Mouth Pop Thudding 3)
 	egg_hatch_crack = 9114231988,
 	hatch_reveal = 9116394545,
 	error = 15675075163,
@@ -54,6 +56,18 @@ local START = {}
 -- max play length per category (long tails fade out over the last 25 % and stop); an event can override it
 local MAXLEN = { ui = 0.35, rewards = 1.2, messages = 3, music = 0 }
 local EVENT_MAXLEN = {}
+-- LAYERED events: several short sounds stacked into one (owner: "egg like but buttery"). A layer is
+--   { idKey (an IDS entry, so the Sound Board can swap it) | id, start (s), len (s, faded over its last 30 %),
+--     vol, pitch (or pitch = { min, max } random), delay (s), eq = { high, mid, low } dB (EqualizerSoundEffect) }
+-- One random +-pitchVary per play is shared by every layer; the event's pitchMul (collect combo) scales them all.
+local WARM = { -9, -2, 3 }    -- no harsh crack, a round body
+local LAYERS = {
+	collect = { pitchVary = 0.04, layers = {
+		{ idKey = "collect_layer_a", start = 0, len = 0.12, vol = 0.3, pitch = { 1.1, 1.25 }, delay = 0, eq = WARM },
+		{ idKey = "collect_layer_b", start = 0, len = 0.25, vol = 0.4, pitch = 1, delay = 0.007, eq = WARM },
+	} },
+}
+Sfx.LAYERS = LAYERS
 Sfx.START, Sfx.MAXLEN, Sfx.EVENT_MAXLEN = START, MAXLEN, EVENT_MAXLEN
 -- event -> category, base volume, base pitch, fallback (Kit.sfx name + pitch scale)
 local EVENTS = {
@@ -65,14 +79,15 @@ local EVENTS = {
 	level_up = { "rewards", 0.7, 1.2, "thock" }, collect = { "rewards", 0.35, 1.0, "click" }, coin_land = { "rewards", 0.25, 1.3, "hover" },
 	toast = { "messages", 0.4, 1.15, "open" }, unlock = { "messages", 0.8, 1.0, "open" }, molt = { "messages", 0.8, 0.8, "thock" },
 	error = { "messages", 0.45, 0.8, "nope" }, evolve = { "messages", 0.8, 0.7, "thock" },
-	island_unlock = { "messages", 0.8, 1.0, "open" }, egg_hatch_crack = { "rewards", 0.6, 1.0, "thock" }, hatch_reveal = { "rewards", 0.7, 1.2, "open" },
+	island_unlock = { "messages", 0.8, 1.0, "open" },
+	collect_layer_a = { "rewards", 0.3, 1.0, "click" }, collect_layer_b = { "rewards", 0.4, 1.0, "click" }, egg_hatch_crack = { "rewards", 0.6, 1.0, "thock" }, hatch_reveal = { "rewards", 0.7, 1.2, "open" },
 	-- the COMPANIONS board (pull-down map): a soft zip each way and a clack when it snaps shut
 	board_roll_down = { "ui", 0.4, 0.85, "open" }, board_roll_up = { "ui", 0.4, 1.15, "close" }, board_clack = { "ui", 0.5, 0.75, "thock" },
 	toggle_on = { "ui", 0.45, 1.2, "click" }, toggle_off = { "ui", 0.4, 0.9, "click" },
 	slider_tick = { "ui", 0.12, 1.5, "hover" }, scroll_tick = { "ui", 0.05, 1.6, "hover" },
 	row_select = { "ui", 0.3, 1.1, "click" }, dropdown_open = { "ui", 0.35, 1.05, "open" }, dropdown_close = { "ui", 0.3, 0.95, "close" },
 }
-Sfx.ORDER = { "press_down", "press_up", "hover_tick", "tab_switch", "window_open", "window_close", "row_select", "dropdown_open", "dropdown_close", "toggle_on", "toggle_off", "slider_tick", "scroll_tick", "board_roll_down", "board_roll_up", "board_clack", "buy_ok", "purchase_big", "cant_afford", "denied", "maxed", "level_up", "collect", "coin_land", "toast", "unlock", "island_unlock", "molt", "evolve", "egg_hatch_crack", "hatch_reveal", "error" }
+Sfx.ORDER = { "press_down", "press_up", "hover_tick", "tab_switch", "window_open", "window_close", "row_select", "dropdown_open", "dropdown_close", "toggle_on", "toggle_off", "slider_tick", "scroll_tick", "board_roll_down", "board_roll_up", "board_clack", "buy_ok", "purchase_big", "cant_afford", "denied", "maxed", "level_up", "collect", "collect_layer_a", "collect_layer_b", "coin_land", "toast", "unlock", "island_unlock", "molt", "evolve", "egg_hatch_crack", "hatch_reveal", "error" }
 -- volume hierarchy: UI quietest, rewards louder, big-moment messages loudest; music ducks under big moments
 local CATEGORY = { ui = 0.8, rewards = 1.0, messages = 1.0, music = 0.6 }
 Sfx.IDS, Sfx.EVENTS, Sfx.CATEGORY = IDS, EVENTS, CATEGORY
@@ -98,8 +113,58 @@ function Sfx.setVolume(cat, v)
 end
 
 local last = {}
+-- one layer of a layered event: its own sound, warm EQ, trimmed length with a fade, optional delay
+local function playLayer(layer, cat, speed, idOverride)
+	local id = idOverride or layer.id or IDS[layer.idKey]
+	if not id or id <= 0 then return end
+	local function go()
+		local snd = Instance.new("Sound")
+		snd.SoundId = "rbxassetid://" .. id
+		snd.Volume = layer.vol or 0.4
+		snd.PlaybackSpeed = speed
+		snd.TimePosition = layer.start or START[id] or 0
+		snd.SoundGroup = group(cat)
+		if layer.eq then
+			local eq = Instance.new("EqualizerSoundEffect")
+			eq.HighGain, eq.MidGain, eq.LowGain = layer.eq[1], layer.eq[2], layer.eq[3]
+			eq.Parent = snd
+		end
+		snd.Parent = SoundService
+		snd.Ended:Once(function() if snd.Parent then snd:Destroy() end end)
+		snd:Play()
+		local len = (layer.len or 0.3) / math.max(0.25, speed)
+		task.delay(len * 0.7, function()
+			if not snd.Parent then return end
+			local t = TweenService:Create(snd, TweenInfo.new(len * 0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { Volume = 0 })
+			t.Completed:Once(function() if snd.Parent then snd:Stop(); snd:Destroy() end end)
+			t:Play()
+		end)
+	end
+	if layer.delay and layer.delay > 0 then task.delay(layer.delay, go) else go() end
+end
+local function playLayered(event, pitchMul, opts)
+	local L = LAYERS[event]
+	local e = EVENTS[event]
+	local vary = 1 + (math.random() * 2 - 1) * (L.pitchVary or 0.04)
+	for i, layer in L.layers do
+		local p = layer.pitch or 1
+		if type(p) == "table" then p = p[1] + math.random() * (p[2] - p[1]) end
+		local extra = opts and opts.layerPitch and opts.layerPitch[i] or 1
+		playLayer(layer, e[1], p * vary * (pitchMul or 1) * extra, opts and opts.ids and opts.ids[i])
+	end
+end
+Sfx.playLayered = playLayered
+
 local function play(event, pitchMul, idOverride)
 	if Kit.muted then return end
+	if LAYERS[event] and not idOverride then
+		local e0 = EVENTS[event]; if not e0 then return end
+		local now0 = os.clock()
+		if last[event] and now0 - last[event] < 0.03 then return end
+		last[event] = now0
+		playLayered(event, pitchMul)
+		return
+	end
 	local e = EVENTS[event]; if not e then return end
 	if (event == "hover_tick" or event == "scroll_tick") and not UIS.MouseEnabled then return end
 	local now = os.clock()
@@ -133,7 +198,19 @@ local function play(event, pitchMul, idOverride)
 end
 Sfx.play = play
 -- audition a candidate id through the real path (category, volume, pitch rules); apply a pick live
-function Sfx.audition(event, id) play(event, 1, id) end
+function Sfx.audition(event, id)
+	for ev, L in LAYERS do
+		for i, layer in L.layers do
+			if layer.idKey == event then
+				local ids = {}
+				ids[i] = id
+				playLayered(ev, 1, { ids = ids })
+				return
+			end
+		end
+	end
+	play(event, 1, id)
+end
 function Sfx.setId(event, id) if EVENTS[event] then IDS[event] = id end end
 -- the IDS table as Luau source (Sound Board "COPY TABLE")
 function Sfx.dump()
@@ -173,11 +250,17 @@ function Sfx.error() play("error") end
 
 -- collect: pitch climbs with quick successive collects, resets after 1 s
 local streak, streakAt = 0, 0
-function Sfx.collect()
+function Sfx.collect(golden)
+	if Kit.muted then return end
 	local now = os.clock()
 	streak = if now - streakAt < 1 then math.min(streak + 1, 12) else 0
 	streakAt = now
-	play("collect", 1 + streak * 0.04)
+	if golden then
+		playLayered("collect", 1 + streak * 0.04, { layerPitch = { 1, 1.12 } })
+		playLayer({ id = IDS.buy_ok, start = 0, len = 0.25, vol = 0.12, delay = 0.02, eq = WARM }, "rewards", 1.05)
+	else
+		play("collect", 1 + streak * 0.04)
+	end
 end
 -- coin_land: the i-th icon of a fly-in sequence lands a little higher
 function Sfx.coinLand(i) play("coin_land", 1 + (i or 0) * 0.06) end

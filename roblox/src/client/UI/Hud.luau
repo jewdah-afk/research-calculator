@@ -379,7 +379,7 @@ function Hud.onLabel(pos, value, cur)
 	end
 	if typeof(p) ~= "Vector2" then return end
 	local d = p / scale.Scale
-	Sfx.collect()
+	Sfx.collect(cur == "goldenPopcorn")
 	Motion.floater(overlay, d, "+" .. (if value then EN.short(value) else "1"), if cur == "goldenPopcorn" then "ffd84a" else "fff1a8", 26)
 	task.delay(0.18, function() flyFrom(cur, d, if cur == "goldenPopcorn" then 3 else 2, 30) end)
 end
