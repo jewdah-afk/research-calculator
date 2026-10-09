@@ -1,0 +1,502 @@
+--!nonstrict
+-- Vfx: client VFX engine for Peckwood (cel / toy-diorama style). See HANDOUT.md "VFX (claude/peckwood-vfx)".
+--
+--   Vfx.play(name, where, opts?) -> handle?   where = Vector3 | CFrame | BasePart | Model | Attachment
+--       opts: rarity ("Common".."Mythic" | 1-6), color (Color3 | hex | palette name), scale, follow (Instance or
+--       () -> Vector3), force (play even if textures are missing), onDone, + per-effect fields (see each effect)
+--   Vfx.can(name)            true when the effect's key textures are uploaded (callers keep a fallback otherwise)
+--   Vfx.stop(handle)         end an effect early (clears its particles, returns its pieces to the pools)
+--   Vfx.shake / Vfx.push / Vfx.flash   camera feel (CamFx), Vfx.camera(cf, fov, dt) is the hook Main calls
+--   Vfx.register(name, def)  def = { run = function(fx, cf, opts), cap = n, needs = { texture keys } }
+--
+-- Effects are timelines run by ONE RenderStepped connection that exists only while an effect is alive (no per-frame
+-- work when idle). Every render piece comes from the Layers pools and goes back when the effect ends. Counts scale
+-- with the player's graphics quality; concurrent effects are capped per effect and in total.
+local RunService = game:GetService("RunService")
+local ContentProvider = game:GetService("ContentProvider")
+local RS = game:GetService("ReplicatedStorage")
+
+local VfxAssets = require(RS:WaitForChild("Peckwood"):WaitForChild("VfxAssets"))
+local Layers = require(script:WaitForChild("Layers"))
+local Palette = require(script:WaitForChild("Palette"))
+local CamFx = require(script:WaitForChild("CamFx"))
+
+local Vfx = {}
+Vfx.Layers = Layers
+Vfx.Palette = Palette
+Vfx.CamFx = CamFx
+Vfx.MAX_ACTIVE = 24
+
+local defs = {}
+local active = {}
+local conn: RBXScriptConnection? = nil
+
+-- ---------------------------------------------------------------- graphics quality
+-- 1 on high, ~0.7 on medium, ~0.4 on low; Automatic counts as medium-high. Bursts call fx:n(count).
+local quality = 0.8
+local function readQuality()
+	local ok, lvl = pcall(function() return UserSettings():GetService("UserGameSettings").SavedQualityLevel end)
+	if not ok or lvl == nil or lvl == Enum.SavedQualitySetting.Automatic then
+		quality = 0.8
+		return
+	end
+	local n = lvl.Value
+	quality = if n <= 3 then 0.4 elseif n <= 6 then 0.7 else 1
+end
+readQuality()
+pcall(function()
+	UserSettings():GetService("UserGameSettings"):GetPropertyChangedSignal("SavedQualityLevel"):Connect(readQuality)
+end)
+function Vfx.quality(): number return quality end
+function Vfx.count(n: number, essential: boolean?): number
+	local c = math.floor(n * quality + 0.5)
+	return if essential then math.max(1, c) else c
+end
+
+-- ---------------------------------------------------------------- the effect object (fx) effects are written against
+local Fx = {}
+Fx.__index = Fx
+
+local function toCFrame(where: any): CFrame
+	local t = typeof(where)
+	if t == "CFrame" then return where end
+	if t == "Vector3" then return CFrame.new(where) end
+	if t == "Instance" then
+		if where:IsA("Attachment") then return CFrame.new(where.WorldPosition) end
+		if where:IsA("BasePart") then return CFrame.new(where.Position) end
+		if where:IsA("Model") then return CFrame.new(where:GetPivot().Position) end
+	end
+	return CFrame.new()
+end
+
+-- current origin (follows opts.follow if given)
+function Fx:pos(): Vector3 return self.cf.Position end
+
+function Fx:col(role: any): Color3 return Palette.color(self.pal, role) end
+
+function Fx:n(count: number, essential: boolean?): number return Vfx.count(count, essential) end
+
+-- schedule fn at effect time t (effect time pauses during hit-stop)
+function Fx:at(t: number, fn: () -> ())
+	local ev = self.events
+	local i = #ev
+	while i > 0 and ev[i][1] > t do i -= 1 end
+	if i < self.ev - 1 then i = self.ev - 1 end -- never insert behind what already ran
+	table.insert(ev, i + 1, { t, fn })
+	if t > self.life then self.life = t end
+end
+
+-- per-frame function(t, dt) while it returns nothing; return true to stop it
+function Fx:tick(fn: (number, number) -> boolean?)
+	table.insert(self.tickers, fn)
+end
+
+function Fx:extend(t: number)
+	if t > self.life then self.life = t end
+end
+
+function Fx:cleanup(fn: () -> ())
+	table.insert(self.cleanups, fn)
+end
+
+-- Emit n particles of `spec` at `where` (Vector3 / CFrame; a CFrame's +Y is the emission direction).
+-- One emitter per spec (or per ov.tag) per effect, so repeated bursts reuse it. Returns the emitter entry or nil.
+function Fx:emitter(spec, ov)
+	local key = (ov and ov.tag) or spec
+	local e = self.emitters[key]
+	if e == false then return nil end
+	if e then return e end
+	e = Layers.getEmitter()
+	if not e then return nil end
+	if not Layers.applyEmitter(e, spec, self.colorOf, (ov and ov.scale or 1) * (spec.noScale and 1 or self.scale), ov) then
+		Layers.putEmitter(e)
+		self.emitters[key] = false
+		return nil
+	end
+	self.emitters[key] = e
+	return e
+end
+
+function Fx:emit(spec, where: any, n: number, ov)
+	if n <= 0 then return nil end
+	local e = self:emitter(spec, ov)
+	if not e then return nil end
+	local att: Attachment, pe: ParticleEmitter = e.att, e.pe
+	att.WorldCFrame = if typeof(where) == "CFrame" then where else CFrame.new(where :: Vector3)
+	pe:Emit(n)
+	self:extend(self.t + (ov and ov.life and (type(ov.life) == "table" and ov.life[2] or ov.life) or Layers.maxLife(spec)) + 0.05)
+	return e
+end
+
+-- emit 1 particle along each of n directions spread round a horizontal circle (tilted up by `up`): a radial ring
+function Fx:emitRadial(spec, centre: Vector3, n: number, up: number?, ov, jitter: number?)
+	local a0 = math.random() * math.pi * 2
+	for i = 1, n do
+		local a = a0 + i / n * math.pi * 2 + (math.random() - 0.5) * (jitter or 0.3)
+		local dir = Vector3.new(math.cos(a), up or 0.2, math.sin(a))
+		self:emit(spec, Layers.upTo(centre, dir), 1, ov)
+	end
+end
+
+-- a beam between two points. Returns a handle { beam, a0, a1, set(p0, p1, w0, w1?) } or nil
+function Fx:beam(spec, p0: Vector3, p1: Vector3)
+	local b = Layers.getBeam()
+	if not b then return nil end
+	local a0, a1 = Layers.getAtt(), Layers.getAtt()
+	if not (a0 and a1) or not Layers.applyBeam(b, spec, self.colorOf) then
+		Layers.putBeam(b)
+		if a0 then Layers.putAtt(a0) end
+		if a1 then Layers.putAtt(a1) end
+		return nil
+	end
+	a0.WorldCFrame = CFrame.new(p0)
+	a1.WorldCFrame = CFrame.new(p1)
+	b.Attachment0 = a0
+	b.Attachment1 = a1
+	table.insert(self.beams, b)
+	table.insert(self.atts, a0)
+	table.insert(self.atts, a1)
+	local h = { beam = b, a0 = a0, a1 = a1 }
+	function h.set(q0: Vector3?, q1: Vector3?, w0: number?, w1: number?)
+		if q0 then a0.WorldCFrame = CFrame.new(q0) end
+		if q1 then a1.WorldCFrame = CFrame.new(q1) end
+		if w0 then b.Width0 = w0; b.Width1 = w1 or w0 end
+	end
+	return h
+end
+
+-- a flat circle drawn by two curved beams (cubic Bezier halves, handles 4/3 r: < 2 % radius error).
+-- `layers` = list of beam specs drawn on the same circle (e.g. an ink twin under a bright line); each spec may give
+-- width (studs). Returns a handle: set(centre, radius, widthScale?), trace(p 0..1), alpha(t 0..1), or nil.
+function Fx:ring(layers, centre: Vector3, radius: number)
+	local A, B = Layers.getAtt(), Layers.getAtt()
+	if not (A and B) then
+		if A then Layers.putAtt(A) end
+		if B then Layers.putAtt(B) end
+		return nil
+	end
+	table.insert(self.atts, A)
+	table.insert(self.atts, B)
+	local h = { layers = {}, A = A, B = B, centre = centre, radius = radius, ws = 1, p = 1, a = 0 }
+	for _, spec in layers do
+		local b1, b2 = Layers.getBeam(), Layers.getBeam()
+		if not (b1 and b2) then
+			if b1 then Layers.putBeam(b1) end
+			if b2 then Layers.putBeam(b2) end
+			continue
+		end
+		local ok1 = Layers.applyBeam(b1, spec, self.colorOf)
+		local ok2 = ok1 and Layers.applyBeam(b2, spec, self.colorOf)
+		table.insert(self.beams, b1)
+		table.insert(self.beams, b2)
+		if not (ok1 and ok2) then
+			b1.Enabled = false
+			b2.Enabled = false
+			continue
+		end
+		b1.FaceCamera = false
+		b2.FaceCamera = false
+		b1.Segments = spec.segments or 48
+		b2.Segments = spec.segments or 48
+		b1.Attachment0, b1.Attachment1 = A, B
+		b2.Attachment0, b2.Attachment1 = B, A
+		table.insert(h.layers, { b1 = b1, b2 = b2, spec = spec, base = spec.alpha or 0 })
+	end
+	local function widths()
+		for _, L in h.layers do
+			local w = (L.spec.width or 1) * h.ws
+			L.b1.Width0, L.b1.Width1, L.b2.Width0, L.b2.Width1 = w, w, w, w
+			if L.spec.texRepeat then -- Stretch: whole repeats per half ring keep the strip seamless and unstretched
+				local n = math.max(1, math.floor(math.pi * h.radius / (w * L.spec.texRepeat) + 0.5))
+				L.b1.TextureLength, L.b2.TextureLength = n, n
+			end
+		end
+	end
+	local function trans()
+		for _, L in h.layers do
+			local base = L.base + (1 - L.base) * h.a
+			L.b1.Transparency = Layers.trace(math.clamp(h.p * 2, 0, 1), base)
+			L.b2.Transparency = Layers.trace(math.clamp(h.p * 2 - 1, 0, 1), base)
+		end
+	end
+	function h.set(c: Vector3?, r: number?, ws: number?)
+		h.centre = c or h.centre
+		h.radius = math.max(0.05, r or h.radius)
+		h.ws = ws or h.ws
+		local k = h.radius * 4 / 3
+		A.WorldCFrame = Layers.ringFrame(h.centre - Vector3.new(h.radius, 0, 0))
+		B.WorldCFrame = Layers.ringFrame(h.centre + Vector3.new(h.radius, 0, 0))
+		for _, L in h.layers do
+			L.b1.CurveSize0, L.b1.CurveSize1 = k, -k
+			L.b2.CurveSize0, L.b2.CurveSize1 = -k, k
+		end
+		widths()
+	end
+	-- draw-in progress (0 = nothing, 1 = full circle), starting at -X, round through +Z (towards the camera)
+	function h.trace(p: number)
+		h.p = p
+		trans()
+	end
+	-- extra fade over the layers' own alpha (0 = as authored, 1 = gone)
+	function h.alpha(a: number)
+		h.a = math.clamp(a, 0, 1)
+		trans()
+	end
+	-- point on the circle at draw progress u (0..1), for a spark riding the leading edge
+	function h.point(u: number): Vector3
+		local th = math.pi - u * 2 * math.pi
+		return h.centre + Vector3.new(math.cos(th) * h.radius, 0, math.sin(th) * h.radius)
+	end
+	h.set(centre, radius, 1)
+	h.trace(1)
+	return h
+end
+
+function Fx:light(pos: Vector3, color: any, range: number, brightness: number)
+	local e = Layers.getLight()
+	if not e then return nil end
+	e.att.WorldCFrame = CFrame.new(pos)
+	local l: PointLight = e.light
+	l.Color = self:col(color)
+	l.Range = range
+	l.Brightness = brightness
+	l.Enabled = true
+	table.insert(self.lights, e)
+	return e
+end
+
+function Fx:trail(spec)
+	local e = Layers.getTrail()
+	if not e then return nil end
+	local tr: Trail = e.trail
+	local id = spec.tex and VfxAssets.id(spec.tex)
+	tr.Texture = id or ""
+	tr.TextureMode = Enum.TextureMode.Stretch
+	tr.FaceCamera = true
+	tr.Lifetime = spec.life or 0.3
+	tr.MinLength = 0.05
+	tr.Color = Layers.asColor(spec.color or "mid", self.colorOf)
+	tr.Transparency = spec.trans or NumberSequence.new(0)
+	tr.WidthScale = spec.widthScale or NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(1, 0) })
+	tr.LightEmission = spec.light or 0
+	tr.LightInfluence = spec.lightInf or 0
+	pcall(function() tr.Brightness = spec.bright or 1 end)
+	tr:Clear()
+	table.insert(self.trails, e)
+	return e
+end
+
+function Fx:ball(color: any, material: Enum.Material?)
+	local p = Layers.getBall()
+	if not p then return nil end
+	p.Material = material or Enum.Material.Neon
+	p.Color = self:col(color)
+	table.insert(self.balls, p)
+	return p
+end
+
+-- hit-stop: freeze this effect (timeline, tickers and its particles) for d real seconds; the camera keeps shaking
+function Fx:hitstop(d: number)
+	if d <= 0 then return end
+	self.hold = math.max(self.hold, d)
+	for _, e in self.emitters do
+		if e then e.pe.TimeScale = 0 end
+	end
+end
+
+function Fx:shake(amp: number, dur: number?) CamFx.shake(amp, dur) end
+function Fx:flash(color: any, strength: number, dur: number?) CamFx.flash(self:col(color), strength, dur) end
+function Fx:push(target: Vector3, amount: number, inT: number, hold: number, outT: number, pull: number?)
+	CamFx.push(target, amount, inT, hold, outT, pull)
+end
+
+-- ---------------------------------------------------------------- scheduler
+local function release(fx, clear: boolean)
+	for _, e in fx.emitters do
+		if e then Layers.putEmitter(e, clear) end
+	end
+	for _, b in fx.beams do Layers.putBeam(b) end
+	for _, a in fx.atts do Layers.putAtt(a) end
+	for _, e in fx.lights do Layers.putLight(e) end
+	for _, e in fx.trails do Layers.putTrail(e) end
+	for _, p in fx.balls do Layers.putBall(p) end
+	fx.emitters, fx.beams, fx.atts, fx.lights, fx.trails, fx.balls = {}, {}, {}, {}, {}, {}
+	for _, fn in fx.cleanups do
+		local ok, err = pcall(fn)
+		if not ok then warn("[Vfx] cleanup " .. fx.name .. ": " .. tostring(err)) end
+	end
+	fx.cleanups = {}
+end
+
+local function finish(fx, early: boolean)
+	if fx.dead then return end
+	fx.dead = true
+	local ok, err = pcall(release, fx, early) -- a broken piece must never take the scheduler down
+	if not ok then warn("[Vfx] release " .. fx.name .. ": " .. tostring(err)) end
+	if fx.opts.onDone then task.spawn(fx.opts.onDone, early) end
+end
+
+local function step(dt: number)
+	for i = #active, 1, -1 do
+		local fx = active[i]
+		if fx.dead then
+			table.remove(active, i)
+			continue
+		end
+		if fx.follow then
+			local ok, p = pcall(fx.follow)
+			if ok and typeof(p) == "Vector3" then fx.cf = CFrame.new(p) end
+		end
+		if fx.hold > 0 then
+			fx.hold -= dt
+			if fx.hold <= 0 then
+				for _, e in fx.emitters do
+					if e then e.pe.TimeScale = e.ts end
+				end
+			end
+			continue
+		end
+		fx.t += dt
+		local ev = fx.events
+		while fx.ev <= #ev and ev[fx.ev][1] <= fx.t do
+			local f = ev[fx.ev][2]
+			fx.ev += 1
+			local ok, err = pcall(f)
+			if not ok then warn("[Vfx] " .. fx.name .. ": " .. tostring(err)) end
+			if fx.dead then break end
+		end
+		if fx.dead then continue end
+		for k = #fx.tickers, 1, -1 do
+			local ok, res = pcall(fx.tickers[k], fx.t, dt)
+			if not ok then
+				warn("[Vfx] " .. fx.name .. " tick: " .. tostring(res))
+				table.remove(fx.tickers, k)
+			elseif res == true then
+				table.remove(fx.tickers, k)
+			end
+		end
+		if fx.t >= fx.life and fx.ev > #ev and #fx.tickers == 0 then
+			finish(fx, false)
+			table.remove(active, i)
+		end
+	end
+	if #active == 0 and conn then
+		conn:Disconnect()
+		conn = nil
+	end
+end
+
+-- ---------------------------------------------------------------- public API
+function Vfx.register(name: string, def)
+	defs[name] = def
+end
+
+function Vfx.names(): { string }
+	local out = {}
+	for n in defs do table.insert(out, n) end
+	table.sort(out)
+	return out
+end
+
+function Vfx.can(name: string): boolean
+	local def = defs[name]
+	if not def then return false end
+	for _, key in def.needs or {} do
+		if not VfxAssets.has(key) then return false end
+	end
+	return true
+end
+
+function Vfx.play(name: string, where: any, options: { [string]: any }?)
+	local def = defs[name]
+	if not def then
+		warn("[Vfx] unknown effect " .. tostring(name))
+		return nil
+	end
+	local opts: { [string]: any } = options or {}
+	if not opts.force and not Vfx.can(name) then return nil end
+	local n, oldest = 0, nil
+	for _, fx in active do
+		if fx.name == name and not fx.dead then
+			n += 1
+			oldest = oldest or fx
+		end
+	end
+	if def.cap and n >= def.cap then
+		if def.replaceOldest and oldest then Vfx.stop(oldest) else return nil end
+	end
+	if #active >= Vfx.MAX_ACTIVE then return nil end
+	local pal = Palette.get(opts.palette or opts.rarity or opts.color or def.palette or "Common")
+	local fx = setmetatable({
+		name = name, opts = opts, pal = pal, scale = opts.scale or 1, tier = pal.tier or 1,
+		t = 0, life = 0, hold = 0, ev = 1, events = {}, tickers = {}, cleanups = {},
+		emitters = {}, beams = {}, atts = {}, lights = {}, trails = {}, balls = {}, dead = false,
+		cf = toCFrame(where),
+	}, Fx)
+	if opts.rarity then fx.tier = Palette.tier(opts.rarity) end
+	fx.colorOf = function(role) return Palette.color(fx.pal, role) end -- effects may swap fx.pal at the start of run
+	local f = opts.follow
+	if typeof(f) == "Instance" then
+		fx.follow = function() return toCFrame(f).Position end
+	elseif type(f) == "function" then
+		fx.follow = f
+	end
+	local ok, err = pcall(def.run, fx, fx.cf, opts)
+	if not ok then
+		warn("[Vfx] " .. name .. " failed to start: " .. tostring(err))
+		finish(fx, true)
+		return nil
+	end
+	table.insert(active, fx)
+	if not conn then conn = RunService.RenderStepped:Connect(step) end
+	return fx
+end
+
+function Vfx.stop(fx)
+	if not fx or fx.dead then return end
+	finish(fx, true)
+end
+
+function Vfx.stopAll()
+	for _, fx in active do finish(fx, true) end
+end
+
+function Vfx.activeCount(): number
+	local n = 0
+	for _, fx in active do if not fx.dead then n += 1 end end
+	return n
+end
+
+Vfx.shake = CamFx.shake
+Vfx.push = CamFx.push
+Vfx.flash = CamFx.flash
+Vfx.camera = CamFx.apply
+
+-- warm the texture cache so the first effect does not pop in
+function Vfx.preload()
+	local ids = VfxAssets.all()
+	if #ids == 0 then return end
+	task.spawn(function() pcall(function() ContentProvider:PreloadAsync(ids) end) end)
+end
+
+-- ---------------------------------------------------------------- effects
+local Effects = script:WaitForChild("Effects")
+for _, m in Effects:GetChildren() do
+	if m:IsA("ModuleScript") then
+		local ok, def = pcall(require, m)
+		if ok and type(def) == "table" and def.run then
+			Vfx.register(def.name or m.Name, def)
+		else
+			warn("[Vfx] effect module " .. m.Name .. " failed: " .. tostring(def))
+		end
+	end
+end
+
+-- Main.client.luau calls this once: preload + hook-ups + the dev preview (_G.__vfx)
+function Vfx.start(remotes: Instance?)
+	Vfx.preload()
+	local ok, err = pcall(function() require(script:WaitForChild("Hooks")).start(Vfx, remotes) end)
+	if not ok then warn("[Vfx] hooks: " .. tostring(err)) end
+end
+
+return Vfx
