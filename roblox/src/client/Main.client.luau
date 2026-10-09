@@ -24,11 +24,12 @@ local cam = workspace.CurrentCamera
 -- yaw 0 (looking down -Z) so the 40-tile axis of the island runs left-right across the screen.
 local PITCH = math.rad(52)
 local FOV = 11
--- zoom = half the visible height in tiles. Default frames the WHOLE island, level and square-on; zooming in slides
--- the focus from the island centre onto the bird (ZOOM_FOLLOW and closer = full follow)
-local ZOOM_MIN, ZOOM_MAX, ZOOM_ALL, ZOOM_FOLLOW = 4, 20, 16, 8
-local zoom = ZOOM_ALL
-local zoomTarget = ZOOM_ALL
+-- zoom = half the visible height in tiles. ZOOM_ALL frames the WHOLE island (wheel out / map); the game starts at
+-- ZOOM_PLAY, following the bird close enough that the hen, eggs and effects read (owner 2026-10-09: "I can't even
+-- see the vfx", Birb's view is close too)
+local ZOOM_MIN, ZOOM_MAX, ZOOM_ALL, ZOOM_FOLLOW, ZOOM_PLAY = 4, 20, 16, 8, 9
+local zoom = ZOOM_PLAY
+local zoomTarget = ZOOM_PLAY
 local PARK_CENTRE = Vector3.new(0, 0, 2)
 local mapFocus: Vector3? = nil
 local mapZoom: number? = nil
