@@ -214,6 +214,8 @@ local paintGen = 0
 local function skirtLand(i, j) local c = World.tile(i, j); return c ~= 0 and c ~= 5 end
 local WAVE_FROM, WAVE_TO = 7.4, 2.5   -- tiles from the coast contour
 local waveF, fronts = nil, {}
+local wavePart: MeshPart? = nil
+local waveMesh = nil
 local AssetServiceW = game:GetService("AssetService")
 local function buildWaveFronts(loops)
 	if waveF then waveF:Destroy(); waveF = nil end
@@ -261,10 +263,15 @@ local function buildWaveFronts(loops)
 	end
 	if #rails == 0 then return end
 	waveF = Instance.new("Folder"); waveF.Name = "Waves"; waveF.Parent = root
+	-- both crest fronts live in ONE EditableMesh (Roblox caps the number of live EditableMeshes); vertex-colour alpha is
+	-- ignored by MeshParts (measured), so a front fades by THINNING to zero width instead of by transparency
+	if waveMesh then pcall(function() waveMesh:Destroy() end); waveMesh = nil end
+	wavePart = nil
+	local ok, em = pcall(function() return AssetServiceW:CreateEditableMesh({}) end)
+	if not ok or not em then warn("[Ocean] wave mesh: " .. tostring(em)); return end
+	waveMesh = em
+	local up = em:AddNormal(Vector3.yAxis)
 	for f = 1, 2 do
-		local ok, em = pcall(function() return AssetServiceW:CreateEditableMesh({}) end)
-		if not ok or not em then warn("[Ocean] wave mesh: " .. tostring(em)); break end
-		local up = em:AddNormal(Vector3.yAxis)
 		local verts = {}
 		for _, rail in rails do
 			local m = #rail
@@ -288,15 +295,18 @@ local function buildWaveFronts(loops)
 				em:SetFaceNormals(f1, { up, up, up }); em:SetFaceNormals(f2, { up, up, up })
 			end
 		end
-		local okP, mp = pcall(function() return AssetServiceW:CreateMeshPartAsync(Content.fromObject(em)) end)
-		if okP and mp then
-			mp.Name = "WaveFront"
-			mp.Anchored = true; mp.CanCollide = false; mp.CanQuery = false; mp.CanTouch = false; mp.CastShadow = false
-			mp.Material = Enum.Material.SmoothPlastic; mp.Color = hx("f2fdff"); mp.Transparency = 1
-			mp.CFrame = CFrame.new(0, TOPW, 0)   -- EditableMesh vertices keep their own origin
-			mp.Parent = waveF
-			table.insert(fronts, { em = em, part = mp, verts = verts, phase = (f - 1) * 0.5 })
-		end
+		table.insert(fronts, { em = em, verts = verts, phase = (f - 1) * 0.5, shown = true })
+	end
+	local okP, mp = pcall(function() return AssetServiceW:CreateMeshPartAsync(Content.fromObject(em)) end)
+	if okP and mp then
+		mp.Name = "WaveFronts"
+		mp.Anchored = true; mp.CanCollide = false; mp.CanQuery = false; mp.CanTouch = false; mp.CastShadow = false
+		mp.Material = Enum.Material.SmoothPlastic; mp.Color = hx("f2fdff"); mp.Transparency = 0.12
+		mp.CFrame = CFrame.new(0, TOPW, 0)   -- EditableMesh vertices keep their own origin
+		mp.Parent = waveF
+		wavePart = mp
+	else
+		fronts = {}
 	end
 end
 local function paint(distOf)
@@ -590,8 +600,11 @@ local BAND = { grass = hx("6fb843"), grassD = hx("2f6f22"), rockT = hx("6e4526")
 local lastLoops = {}
 local AssetService2 = game:GetService("AssetService")
 local skirtAnim: RBXScriptConnection? = nil
+local skirtMeshes = {}   -- live cliff EditableMeshes (destroyed on rebuild)
 local function buildSkirt(mnI, mnJ, mxI, mxJ, riseAt)
 	if skirtF then skirtF:Destroy() end
+	for _, old in skirtMeshes do pcall(function() old:Destroy() end) end   -- free the live mesh slots (count is capped)
+	skirtMeshes = {}
 	if skirtAnim then skirtAnim:Disconnect(); skirtAnim = nil end
 	skirtF = Instance.new("Folder"); skirtF.Name = "Skirt"
 	-- unlock animation: columns whose land tile is part of the fresh island start DROP studs under the sea and rise
@@ -601,6 +614,39 @@ local function buildSkirt(mnI, mnJ, mxI, mxJ, riseAt)
 	local function landAtWorld(p: Vector2) return skirtLand(math.floor((p.X - sx(0)) / S), math.floor((p.Y - sz(0)) / S)) end
 	local WSURF = math.floor(SEA_Y / 4 + 0.5) * 4   -- the visible water surface (Terrain water top / painted sheet)
 	local scaleY = (SKIRT_TOP - (WSURF + 1.05)) / 9.6   -- rock profile authored 9.6 tall, ends where the beach starts
+	-- ALL coast loops go into as few EditableMeshes as possible (Roblox caps the NUMBER of live EditableMeshes, ~7 on a
+	-- desktop and fewer on phones, measured 2026-10-09): one mesh per ~19k triangles (the per-mesh triangle limit)
+	local tex = cliffTexture()
+	local cur = nil   -- { em, origin, colIds, tris }
+	local function finish()
+		if not cur then return end
+		local m = cur
+		cur = nil
+		local okP, mp = pcall(function() return AssetService2:CreateMeshPartAsync(Content.fromObject(m.em)) end)
+		if okP and mp then
+			mp.Name = "Cliff"
+			mp.Anchored = true; mp.CanCollide = false; mp.CanQuery = false; mp.CanTouch = false
+			mp.Material = Enum.Material.SmoothPlastic; mp.Color = Color3.new(1, 1, 1)
+			mp.CFrame = CFrame.new(m.origin)   -- EditableMesh vertices keep their own origin (measured: no recentring)
+			if tex then pcall(function() mp.TextureContent = Content.fromObject(tex) end) end
+			mp.Parent = skirtF
+		else
+			warn("[Ocean] cliff mesh failed: " .. tostring(mp))
+		end
+	end
+	local function meshFor(tris: number)
+		if cur and cur.tris + tris > 19000 then finish() end
+		if not cur then
+			local ok, em = pcall(function() return AssetService2:CreateEditableMesh({}) end)
+			if not ok or not em then warn("[Ocean] cliff EditableMesh unavailable: " .. tostring(em)); return nil end
+			local colIds = {}
+			for name, col in BAND do colIds[name] = em:AddColor(if tex then Color3.new(1, 1, 1) else col, 1) end
+			table.insert(skirtMeshes, em)
+			cur = { em = em, origin = Vector3.new(0, SKIRT_TOP, 0), colIds = colIds, tris = 0 }
+		end
+		cur.tris += tris
+		return cur
+	end
 	for _, loop in lastLoops do
 		local nP = #loop
 		if nP < 6 then continue end
@@ -620,13 +666,9 @@ local function buildSkirt(mnI, mnJ, mxI, mxJ, riseAt)
 			for k = -1, 1 do raw += hash((q + k) % nP + 1, 4.4) * (if k == 0 then 0.5 else 0.25) end
 			bulge[q] = (raw - 0.5) * 1.4
 		end
-		local ok, em = pcall(function() return AssetService2:CreateEditableMesh({}) end)
-		if not ok or not em then continue end
-		-- centre of this loop (vertices are written relative to it)
-		local c = Vector2.zero
-		for q = 1, nP do c += loop[q] end
-		c /= nP
-		local origin = Vector3.new(c.X, SKIRT_TOP, c.Y)
+		local mesh = meshFor(nP * (#PROFILE - 1) * 2)
+		if not mesh then continue end
+		local em, origin, colIds = mesh.em, mesh.origin, mesh.colIds
 		-- grass drips (owner 2026-10-09: the grass line was "too flat"): the lip's underside hangs down in scallops of
 		-- uneven depth, so the grass / rock border is a wavy hand-drawn line instead of a straight edge
 		local drip = table.create(nP)
@@ -649,9 +691,6 @@ local function buildSkirt(mnI, mnJ, mxI, mxJ, riseAt)
 			mn = mn:Min(v); mx = mx:Max(v)
 			return v
 		end
-		local tex = cliffTexture()
-		local colIds = {}
-		for name, col in BAND do colIds[name] = em:AddColor(if tex then Color3.new(1, 1, 1) else col, 1) end
 		local colDelay, colVerts = {}, {}
 		if riseAt then
 			for q = 1, nP do
@@ -664,10 +703,28 @@ local function buildSkirt(mnI, mnJ, mxI, mxJ, riseAt)
 		local arc = table.create(nP + 1)
 		arc[1] = 0
 		for q = 2, nP + 1 do arc[q] = arc[q - 1] + (loop[(q - 1) % nP + 1] - loop[q - 1]).Magnitude end
-		-- flat-shaded quads (own vertices per face): crisp toon facets
+		-- toon facets on SHARED vertices (EditableMesh budget, 2026-10-09: one vertex per face corner used 18k vertices and
+		-- starved every other EditableMesh in the game). Positions and UVs are one per grid point; flat shading stays
+		-- because normals and colours are set per face (SetFaceNormals / SetFaceColors are independent of vertices).
+		local NR = #PROFILE
+		local vid, uvid = table.create(nP + 1), table.create(nP + 1)
+		for q = 1, nP + 1 do
+			local qq = (q - 1) % nP + 1
+			vid[q], uvid[q] = table.create(NR), table.create(NR)
+			for r = 1, NR do
+				if q <= nP then
+					local pos = P(qq, r)
+					vid[q][r] = em:AddVertex(pos)
+					if colVerts[qq] then table.insert(colVerts[qq], { vid[q][r], pos }) end
+				else
+					vid[q][r] = vid[1][r]   -- the loop closes on the first column (same position, own UV for the seam)
+				end
+				uvid[q][r] = em:AddUV(Vector2.new(arc[q] / U_PERIOD, PROFILE[r][6]))
+			end
+		end
 		for q = 1, nP do
 			local q2 = q % nP + 1
-			for r = 1, #PROFILE - 1 do
+			for r = 1, NR - 1 do
 				local a, b, cc, d = P(q, r), P(q2, r), P(q2, r + 1), P(q, r + 1)
 				local band = PROFILE[r][3]
 				local n1 = (b - a):Cross(d - a)
@@ -676,13 +733,9 @@ local function buildSkirt(mnI, mnJ, mxI, mxJ, riseAt)
 				-- winding: the face must point away from the land (outward / up)
 				local outward = Vector3.new(nrm[q].X, 0, nrm[q].Y) + Vector3.new(0, 0.3, 0)
 				local flip = n1:Dot(outward) < 0
-				local va, vb, vc, vd = em:AddVertex(a), em:AddVertex(b), em:AddVertex(cc), em:AddVertex(d)
-				if colVerts[q] then table.insert(colVerts[q], { va, a }); table.insert(colVerts[q], { vd, d }) end
-				if colVerts[q2] then table.insert(colVerts[q2], { vb, b }); table.insert(colVerts[q2], { vc, cc }) end
+				local va, vb, vc, vd = vid[q][r], vid[q + 1][r], vid[q + 1][r + 1], vid[q][r + 1]
+				local ua, ub, uc, ud = uvid[q][r], uvid[q + 1][r], uvid[q + 1][r + 1], uvid[q][r + 1]
 				local ni = em:AddNormal(if flip then -n1 else n1)
-				local u0, u1 = arc[q] / U_PERIOD, arc[q + 1] / U_PERIOD
-				local tv0, tv1 = PROFILE[r][6], PROFILE[r + 1][6]
-				local ua, ub, uc, ud = em:AddUV(Vector2.new(u0, tv0)), em:AddUV(Vector2.new(u1, tv0)), em:AddUV(Vector2.new(u1, tv1)), em:AddUV(Vector2.new(u0, tv1))
 				local f1 = if flip then em:AddTriangle(va, vc, vb) else em:AddTriangle(va, vb, vc)
 				local f2 = if flip then em:AddTriangle(va, vd, vc) else em:AddTriangle(va, vc, vd)
 				local cid = colIds[band]
@@ -692,22 +745,12 @@ local function buildSkirt(mnI, mnJ, mxI, mxJ, riseAt)
 				else em:SetFaceUVs(f1, { ua, ub, uc }); em:SetFaceUVs(f2, { ua, uc, ud }) end
 			end
 		end
-		local okP, mp = pcall(function() return AssetService2:CreateMeshPartAsync(Content.fromObject(em)) end)
-		if okP and mp then
-			mp.Name = "Cliff"
-			mp.Anchored = true; mp.CanCollide = false; mp.CanQuery = false; mp.CanTouch = false
-			mp.Material = Enum.Material.SmoothPlastic; mp.Color = Color3.new(1, 1, 1)
-			mp.CFrame = CFrame.new(origin)   -- EditableMesh vertices keep their own origin (measured: no recentring)
-			for q, list in colVerts do
-				for _, v in list do em:SetPosition(v[1], v[2] - Vector3.new(0, DROP, 0)) end
-				table.insert(rising, { em = em, delay = colDelay[q], verts = list })
-			end
-			if tex then pcall(function() mp.TextureContent = Content.fromObject(tex) end) end
-			mp.Parent = skirtF
-		else
-			warn("[Ocean] cliff mesh failed: " .. tostring(mp))
+		for q, list in colVerts do
+			for _, v in list do em:SetPosition(v[1], v[2] - Vector3.new(0, DROP, 0)) end
+			table.insert(rising, { em = em, delay = colDelay[q], verts = list })
 		end
 	end
+	finish()
 	if #rising > 0 then
 		local t = 0
 		skirtAnim = RunService.RenderStepped:Connect(function(dt)
@@ -928,7 +971,7 @@ function Ocean.setNight(n: number)
 	if tintDecal then tintDecal.Color3 = Color3.new(1, 1, 1):Lerp(hx("3a5d8a"), n) end
 	if foamDecal then foamDecal.Color3 = Color3.new(1, 1, 1):Lerp(hx("7f93b0"), n) end
 	for _, g in glints do g.Transparency = 0.68 + 0.3 * n end
-	for _, fr in fronts do fr.part.Color = hx("f2fdff"):Lerp(hx("8fa6c4"), n) end
+	if wavePart then wavePart.Color = hx("f2fdff"):Lerp(hx("8fa6c4"), n) end
 	workspace.Terrain.WaterColor = hx("1b70b1"):Lerp(hx("12305a"), n)
 	workspace.Terrain.WaterReflectance = 0.28 * (1 - n) + 0.04 * n   -- no grey sky blotches at night
 	for _, f in frame do f.Color3 = Color3.new(1, 1, 1):Lerp(hx("3a5d8a"), n) end
@@ -987,16 +1030,20 @@ function Ocean.step(dt: number)
 	-- fading into the foam; only a visible front moves its vertices
 	local surge = 0
 	local dim = 1 - night * 0.55
+	if wavePart then
+		local tr = 0.12 + 0.5 * night
+		if math.abs(wavePart.Transparency - tr) > 0.01 then wavePart.Transparency = tr end
+	end
 	for _, fr in fronts do
 		local ph = ((clock / 6.5) + fr.phase) % 1
 		local pos = WAVE_FROM - ph * (WAVE_FROM - WAVE_TO)
 		local amp = smooth(WAVE_FROM, WAVE_FROM - 1.1, pos) * (1 - smooth(3.3, WAVE_TO, pos))
 		if pos < 3.3 then surge = math.max(surge, smooth(3.3, 2.7, pos)) end
-		local tr = 1 - amp * 0.9 * dim
-		if math.abs(fr.part.Transparency - tr) > 0.005 then fr.part.Transparency = tr end
-		if amp > 0.01 then
+		-- a front is drawn only while it has width; at zero amplitude its vertices collapse once and then stay still
+		if amp > 0.01 or fr.shown then
+			fr.shown = amp > 0.01
 			local off = pos * S
-			local wsc = 0.7 + 0.6 * amp   -- the crest thickens as it builds
+			local wsc = amp ^ 0.7 * (0.75 + 0.55 * amp) * dim ^ 0.3   -- thin in, thicken as it builds, thin out
 			local em = fr.em
 			for _, v in fr.verts do
 				local r = v.r
