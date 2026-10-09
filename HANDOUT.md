@@ -55,6 +55,12 @@ Branch **`claude/peckwood-isle`** (pushed). Build: `cd roblox && rojo build defa
 - Prop variety: `VARY` table in IslandView.swapProp = per-position random yaw + size range + tilt for rock, ore,
   crystal, lantern, barrel, log, mushroom, cactus, sunflower, bones, twigs, deadtree (Park objects carry no rotation).
 
+### MAP AAA PLAN (2026-10-09, owner asked "plan out the map build and how we AAA this")
+- Read **`MAP_AAA_PLAN.md`** (repo root) before any world work. Target = premium toy diorama, cel-shaded, Birb's grid
+  layout kept. Rule: no area is built before its target frame is approved; every step ends with target-vs-game
+  screenshots. Park vertical slice first. Owner decisions pending: A ground tops (terrain vs mesh), B target frames
+  (Figma AI vs Blender), C studs on man-made props.
+
 ### Figma windows at Birb parity: batch 1 (2026-10-09, Figma chat)
 - **Windows board `239:307`** "Peckwood UI v2 / Windows at Birb parity" (page UI v2, x 5400, y 17600), one column per
   window. Built by a 9-agent workflow from one shared kit, then reviewed and fixed by hand:
