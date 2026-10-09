@@ -33,13 +33,22 @@
   const WALK = { 0: true, 4: true }; // + desert and echo field, set at boot // maps where eggs / trees and the birb keep to open ground
   const isl = (id) => W.ISL.find((x) => x.id === ISLAND_OF(id));
   // map pixel -> world position on that map's island (the island's tile rectangle stands for the whole map)
-  function toWorld(id, x, y) {
+  // where a map sits in the world: its island's tile rectangle, or for expedition floors / secret rooms a full-size arena
+  // platform centred on the expedition island that keeps Birb's proportions (floors are 2000 x 4000)
+  const ARENA_Y = 22; // floors float above the island so its trees never poke through
+  const isArena = (id) => PT.EXP.isRunMap(id) || PT.EXP.isSecretRoom(id);
+  function rect(id) {
     const I = isl(id), m = PT.MAPS[id] || { w: 1056, h: 792 };
-    const wx = W.wx(I.oi + (x / m.w) * I.W), wz = W.wz(I.oj + (y / m.h) * I.N);
-    return new T.Vector3(wx, W.groundY(wx, wz), wz);
+    if (!isArena(id)) return { x0: W.wx(I.oi), z0: W.wz(I.oj), w: I.W * W.S, d: I.N * W.S, m };
+    const k = (I.W * W.S * 1.15) / m.w, w = m.w * k, d = m.h * k, cx = W.wx(I.oi + I.W / 2), cz = W.wz(I.oj + I.N / 2);
+    return { x0: cx - w / 2, z0: cz - d / 2, w, d, m, arena: true };
   }
-  function toMap(id, p) { const I = isl(id), m = PT.MAPS[id]; return { x: ((p.x / W.S + W.COLS / 2 - I.oi) / I.W) * m.w, y: ((p.z / W.S + W.ROWS / 2 - I.oj) / I.N) * m.h }; }
-  const pxScale = (id) => { const I = isl(id), m = PT.MAPS[id]; return (I.W * W.S) / m.w; }; // world units per map pixel
+  function toWorld(id, x, y) {
+    const R = rect(id), wx = R.x0 + (x / R.m.w) * R.w, wz = R.z0 + (y / R.m.h) * R.d;
+    return new T.Vector3(wx, R.arena ? ARENA_Y : W.groundY(wx, wz), wz);
+  }
+  function toMap(id, p) { const R = rect(id); return { x: ((p.x - R.x0) / R.w) * R.m.w, y: ((p.z - R.z0) / R.d) * R.m.h }; }
+  const pxScale = (id) => { const R = rect(id); return R.w / R.m.w; }; // world units per map pixel
 
   // ------------------------------------------------------------------ models (clean low-poly, sized to the world's 4-unit tiles)
   function models() {
@@ -157,11 +166,11 @@
   // ------------------------------------------------------------------ camera: fixed angle (looking straight north, tilted down), follows the birb, zoom clamped per island
   const POLAR = Math.PI / 2 - 0.9;
   function placeCamera(snap) {
-    const I = isl(G.s.currentMap), p = A.player.position, c = W.controls, cam = W.camera;
+    const R = rect(G.s.currentMap), I = { W: R.w / W.S, N: R.d / W.S }, p = A.player.position, c = W.controls, cam = W.camera;
     const r = frame.getBoundingClientRect(), aspect = r.width / Math.max(1, r.height), tanH = Math.tan((cam.fov * Math.PI) / 360);
     const span = Math.max((I.W * W.S + 40) / aspect, (I.N * W.S + 40) * Math.cos(POLAR)); // the island plus a band of sea
     c.maxDistance = Math.max(160, span / (2 * tanH)); c.minDistance = 60;
-    const half = (I.W * W.S) / 2, halfD = (I.N * W.S) / 2, cx = W.wx(I.oi + I.W / 2), cz = W.wz(I.oj + I.N / 2);
+    const half = (I.W * W.S) / 2, halfD = (I.N * W.S) / 2, cx = R.x0 + R.w / 2, cz = R.z0 + R.d / 2;
     const tx = Math.max(cx - half, Math.min(cx + half, p.x)), tz = Math.max(cz - halfD, Math.min(cz + halfD, p.z));
     const want = new T.Vector3(tx, 0, tz);
     if (W.camera.fov !== 22) { W.camera.fov = 22; W.camera.updateProjectionMatrix(); }
@@ -350,12 +359,18 @@
   function buildArena(id) {
     if (exp.walls) A.root.remove(exp.walls); for (const q of exp.portals) A.root.remove(q.g); exp.portals = [];
     exp.walls = new T.Group(); const m = stoneM(), capM = new T.MeshStandardMaterial({ color: new T.Color("#8d879a").convertSRGBToLinear(), roughness: 0.8 });
-    const k = pxScale(id), kz = (isl(id).N * W.S) / PT.MAPS[id].h;
+    const k = pxScale(id), Rr = rect(id), kz = Rr.d / Rr.m.h;
     for (const r of PT.EXP.collisions(id)) {
       const w = (r.right - r.left) * k, d = (r.bottom - r.top) * kz; if (w < 0.5 || d < 0.5) continue;
       const c = toWorld(id, (r.left + r.right) / 2, (r.top + r.bottom) / 2), h = 5;
       const b = new T.Mesh(new T.BoxGeometry(w, h, d), m); b.position.set(c.x, c.y + h / 2, c.z); b.castShadow = b.receiveShadow = true;
       const cap = new T.Mesh(new T.BoxGeometry(w + 0.4, 0.6, d + 0.4), capM); cap.position.set(c.x, c.y + h + 0.3, c.z); exp.walls.add(b, cap);
+    }
+    if (Rr.arena) { // the floor itself: a raised slab in Birb's floor colour with a darker rim
+      const fl = PT.MAPS[id].floor, col = PT.MAPS[id].night ? "#1d2440" : ["#4f7d47", "#6a4c84", "#b09a68", "#3b6b7c", "#355a78", "#a9cde0", "#4a6a38", "#3a3a48", "#5a2626"][(fl || 1) - 1];
+      const slab = new T.Mesh(new T.BoxGeometry(Rr.w, 6, Rr.d), new T.MeshStandardMaterial({ color: new T.Color(col).convertSRGBToLinear(), roughness: 0.95 })); slab.position.set(Rr.x0 + Rr.w / 2, ARENA_Y - 3, Rr.z0 + Rr.d / 2); slab.receiveShadow = true;
+      const rim = new T.Mesh(new T.BoxGeometry(Rr.w + 3, 5.4, Rr.d + 3), new T.MeshStandardMaterial({ color: new T.Color("#3b3646").convertSRGBToLinear(), roughness: 0.9 })); rim.position.set(slab.position.x, ARENA_Y - 3.4, slab.position.z);
+      exp.walls.add(slab, rim);
     }
     A.root.add(exp.walls);
     for (const p of PT.EXP.portals(id)) {
@@ -399,7 +414,7 @@
     if (run && PT.EXP.MAP_FLOOR[id]) for (const e of run.enemies) {
       if (e.health <= 0) continue; seen.add(e);
       let g = exp.foes.get(e); if (!g) { g = foeModel(e); A.root.add(g); exp.foes.set(e, g); }
-      const w = toWorld(id, e.x, e.y), sc = e.type === "mini-fly" ? 0.7 : e.isBoss ? 4.2 : e.isElite ? 3 : e.projectileKind ? 1 : 2.1;
+      const w = toWorld(id, e.x, e.y), sc = e.type === "mini-fly" ? 1.1 : e.isBoss ? 6.5 : e.isElite ? 4.8 : e.projectileKind ? 1.4 : 3.4;
       g.position.set(w.x, w.y + (e.type === "mini-fly" ? 2.5 : 0), w.z); g.scale.setScalar(sc);
       const p = run.parrot; if (p) g.rotation.y = Math.atan2(p.x - e.x, p.y - e.y);
       if (g.userData.body) g.userData.body.position.y = 1 + Math.abs(Math.sin(G.t * 6 + e.x)) * 0.15;
