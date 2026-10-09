@@ -3,36 +3,285 @@
   "tree": {
     "$className": "DataModel",
     "ReplicatedStorage": {
-      "Peckwood": { "$path": "src/shared" },
-      "TreeAssets": { "$path": "assets/TreeAssets.rbxm" }
+      "Peckwood": {
+        "$path": "src/shared"
+      },
+      "TreeAssets": {
+        "$path": "assets/TreeAssets.rbxm"
+      },
+      "PropAssets": {
+        "$path": "assets/PropAssets.rbxm"
+      }
     },
     "ServerScriptService": {
-      "Peckwood": { "$path": "src/server" }
+      "Peckwood": {
+        "$path": "src/server"
+      }
     },
     "StarterPlayer": {
-      "$properties": { "CameraMaxZoomDistance": 2000, "DevComputerMovementMode": "KeyboardMouse" },
+      "$properties": {
+        "CameraMaxZoomDistance": 2000,
+        "DevComputerMovementMode": "KeyboardMouse"
+      },
       "StarterPlayerScripts": {
-        "Peckwood": { "$path": "src/client" }
+        "Peckwood": {
+          "$path": "src/client"
+        }
       },
       "StarterCharacterScripts": {
-        "Animate": { "$className": "LocalScript", "$properties": { "Source": "-- bird rig: hop/tilt is driven by Peckwood client (Visual motor); default R15 Animate disabled\n" } }
+        "Animate": {
+          "$className": "LocalScript",
+          "$properties": {
+            "Source": "-- bird rig: hop/tilt is driven by Peckwood client (Visual motor); default R15 Animate disabled\n"
+          }
+        }
       }
     },
     "Workspace": {
-      "$properties": { "FilteringEnabled": true, "StreamingEnabled": false, "Gravity": 196.2 },
-      "Terrain": { "$properties": { "Decoration": true } }
+      "$properties": {
+        "FilteringEnabled": true,
+        "StreamingEnabled": false,
+        "Gravity": 196.2
+      },
+      "Terrain": {
+        "$properties": {
+          "Decoration": false
+        }
+      }
     },
     "Lighting": {
       "$properties": {
-        "Technology": "Future", "GlobalShadows": true, "ShadowSoftness": 0.18, "ClockTime": 17.1, "GeographicLatitude": 38,
-        "Brightness": 3.4, "ColorShift_Top": [1, 0.86, 0.66], "ColorShift_Bottom": [0.42, 0.5, 0.72],
-        "EnvironmentDiffuseScale": 0.45, "EnvironmentSpecularScale": 0.2, "Ambient": [0.24, 0.27, 0.36],
-        "OutdoorAmbient": [0.38, 0.44, 0.62], "ExposureCompensation": 0.05, "FogColor": [0.55, 0.62, 0.78], "FogStart": 520, "FogEnd": 1500
+        "Technology": "Future",
+        "GlobalShadows": true,
+        "ShadowSoftness": 0.08,
+        "ClockTime": 17.1,
+        "GeographicLatitude": 38,
+        "Brightness": 3.4,
+        "ColorShift_Top": [
+          1,
+          0.86,
+          0.66
+        ],
+        "ColorShift_Bottom": [
+          0.42,
+          0.5,
+          0.72
+        ],
+        "EnvironmentDiffuseScale": 0.15,
+        "EnvironmentSpecularScale": 0,
+        "Ambient": [
+          0.34,
+          0.37,
+          0.45
+        ],
+        "OutdoorAmbient": [
+          0.38,
+          0.44,
+          0.62
+        ],
+        "ExposureCompensation": 0.05,
+        "FogColor": [
+          0.55,
+          0.62,
+          0.78
+        ],
+        "FogStart": 520,
+        "FogEnd": 1500
       },
-      "Sky": { "$className": "Sky", "$properties": { "CelestialBodiesShown": false, "StarCount": 0 } },
-      "ColorCorrection": { "$className": "ColorCorrectionEffect", "$properties": { "Saturation": 0.06, "Contrast": 0.16, "Brightness": -0.02, "TintColor": [1, 0.92, 0.8] } },
-      "Bloom": { "$className": "BloomEffect", "$properties": { "Intensity": 0.3, "Size": 28, "Threshold": 1.6 } },
-      "SunRays": { "$className": "SunRaysEffect", "$properties": { "Intensity": 0.05, "Spread": 0.6 } }
+      "Sky": {
+        "$className": "Sky",
+        "$properties": {
+          "CelestialBodiesShown": false,
+          "StarCount": 0
+        }
+      },
+      "ColorCorrection": {
+        "$className": "ColorCorrectionEffect",
+        "$properties": {
+          "Saturation": 0.08,
+          "Contrast": 0.2,
+          "Brightness": -0.02,
+          "TintColor": [
+            1,
+            0.92,
+            0.8
+          ]
+        }
+      },
+      "Bloom": {
+        "$className": "BloomEffect",
+        "$properties": {
+          "Intensity": 0.3,
+          "Size": 28,
+          "Threshold": 1.6
+        }
+      },
+      "SunRays": {
+        "$className": "SunRaysEffect",
+        "$properties": {
+          "Intensity": 0.05,
+          "Spread": 0.6
+        }
+      }
+    },
+    "MaterialService": {
+      "$className": "MaterialService",
+      "FlatGrass": {
+        "$className": "MaterialVariant",
+        "$properties": {
+          "BaseMaterial": "Grass",
+          "StudsPerTile": 64,
+          "ColorMapContent": {
+            "Content": {
+              "Uri": "rbxassetid://83334179566218"
+            }
+          }
+        }
+      },
+      "FlatLeafyGrass": {
+        "$className": "MaterialVariant",
+        "$properties": {
+          "BaseMaterial": "LeafyGrass",
+          "StudsPerTile": 64,
+          "ColorMapContent": {
+            "Content": {
+              "Uri": "rbxassetid://83334179566218"
+            }
+          }
+        }
+      },
+      "FlatGround": {
+        "$className": "MaterialVariant",
+        "$properties": {
+          "BaseMaterial": "Ground",
+          "StudsPerTile": 64,
+          "ColorMapContent": {
+            "Content": {
+              "Uri": "rbxassetid://83334179566218"
+            }
+          }
+        }
+      },
+      "FlatMud": {
+        "$className": "MaterialVariant",
+        "$properties": {
+          "BaseMaterial": "Mud",
+          "StudsPerTile": 64,
+          "ColorMapContent": {
+            "Content": {
+              "Uri": "rbxassetid://83334179566218"
+            }
+          }
+        }
+      },
+      "FlatPavement": {
+        "$className": "MaterialVariant",
+        "$properties": {
+          "BaseMaterial": "Pavement",
+          "StudsPerTile": 64,
+          "ColorMapContent": {
+            "Content": {
+              "Uri": "rbxassetid://83334179566218"
+            }
+          }
+        }
+      },
+      "FlatSand": {
+        "$className": "MaterialVariant",
+        "$properties": {
+          "BaseMaterial": "Sand",
+          "StudsPerTile": 64,
+          "ColorMapContent": {
+            "Content": {
+              "Uri": "rbxassetid://83334179566218"
+            }
+          }
+        }
+      },
+      "FlatSandstone": {
+        "$className": "MaterialVariant",
+        "$properties": {
+          "BaseMaterial": "Sandstone",
+          "StudsPerTile": 64,
+          "ColorMapContent": {
+            "Content": {
+              "Uri": "rbxassetid://83334179566218"
+            }
+          }
+        }
+      },
+      "FlatRock": {
+        "$className": "MaterialVariant",
+        "$properties": {
+          "BaseMaterial": "Rock",
+          "StudsPerTile": 64,
+          "ColorMapContent": {
+            "Content": {
+              "Uri": "rbxassetid://83334179566218"
+            }
+          }
+        }
+      },
+      "FlatSlate": {
+        "$className": "MaterialVariant",
+        "$properties": {
+          "BaseMaterial": "Slate",
+          "StudsPerTile": 64,
+          "ColorMapContent": {
+            "Content": {
+              "Uri": "rbxassetid://83334179566218"
+            }
+          }
+        }
+      },
+      "FlatCobblestone": {
+        "$className": "MaterialVariant",
+        "$properties": {
+          "BaseMaterial": "Cobblestone",
+          "StudsPerTile": 64,
+          "ColorMapContent": {
+            "Content": {
+              "Uri": "rbxassetid://83334179566218"
+            }
+          }
+        }
+      },
+      "FlatSnow": {
+        "$className": "MaterialVariant",
+        "$properties": {
+          "BaseMaterial": "Snow",
+          "StudsPerTile": 64,
+          "ColorMapContent": {
+            "Content": {
+              "Uri": "rbxassetid://83334179566218"
+            }
+          }
+        }
+      },
+      "FlatSalt": {
+        "$className": "MaterialVariant",
+        "$properties": {
+          "BaseMaterial": "Salt",
+          "StudsPerTile": 64,
+          "ColorMapContent": {
+            "Content": {
+              "Uri": "rbxassetid://83334179566218"
+            }
+          }
+        }
+      },
+      "FlatBasalt": {
+        "$className": "MaterialVariant",
+        "$properties": {
+          "BaseMaterial": "Basalt",
+          "StudsPerTile": 64,
+          "ColorMapContent": {
+            "Content": {
+              "Uri": "rbxassetid://83334179566218"
+            }
+          }
+        }
+      }
     }
   }
 }

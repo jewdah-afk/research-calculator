@@ -299,7 +299,11 @@ local function treeModel(kind, x, base, z, seed, areaId)
 		if d:IsA("BasePart") then
 			d.Anchored = true; d.CanCollide = false; d.CanQuery = false; d.CanTouch = false
 			d.CastShadow = not spec.bush
-			if d.Name:find("Canopy") or d.Name:find("Leaf") or d.Name:find("Bush") then d.Color = vary(tint, (hash(seed, 2.2) - 0.5) * 0.08) end
+			-- cel look: no photo textures, flat colour (canopy facets read as toon shading)
+			local sa = d:FindFirstChildOfClass("SurfaceAppearance"); if sa then sa:Destroy() end
+			d.Material = Enum.Material.SmoothPlastic
+			if d.Name:find("Canopy") or d.Name:find("Leaf") or d.Name:find("Bush") then d.Color = vary(tint, (hash(seed, 2.2) - 0.5) * 0.08)
+			else d.Color = hx("7a5638") end
 		end
 	end
 	-- stand the trunk on the ground: pivot at the bottom-centre of the bounding box
@@ -307,6 +311,36 @@ local function treeModel(kind, x, base, z, seed, areaId)
 	m.WorldPivot = CFrame.new(cf.Position - Vector3.new(0, sz.Y / 2, 0))
 	m:PivotTo(CFrame.new(x, base - 0.3, z) * CFrame.Angles(0, hash(seed, 5.3) * math.pi * 2, 0))
 	return m
+end
+
+-- ---------------------------------------------------------------- smooth prop models (Roblox mesh generation)
+-- ReplicatedStorage.PropAssets.<kind> replaces a brick prop: the brick model is still built (footprint, height,
+-- rotation, lamp lights), its bricks are removed except the ones carrying a light, and the smooth model is placed
+-- on the same footprint, scaled to the brick height and turned like it.
+local PropAssets = RS:WaitForChild("PropAssets", 10)
+local function swapProp(info)
+	local m = info.model
+	local src = PropAssets and PropAssets:FindFirstChild(info.kind)
+	if not src or not m or TREE_SETS[info.kind] then return end
+	local cf, size = m:GetBoundingBox()
+	local yaw = select(2, m.WorldPivot:ToOrientation())
+	local a = src:Clone()
+	local _, asz = a:GetBoundingBox()
+	local k = size.Y / math.max(asz.Y, 0.01)
+	local foot = math.max(size.X, size.Z) * 1.15
+	if math.max(asz.X, asz.Z) * k > foot then k = foot / math.max(asz.X, asz.Z) end
+	a:ScaleTo(a:GetScale() * k)
+	for _, d in a:GetDescendants() do
+		if d:IsA("BasePart") then d.Anchored = true; d.CanCollide = false; d.CanQuery = false; d.CanTouch = false end
+	end
+	local acf, asz2 = a:GetBoundingBox()
+	a.WorldPivot = CFrame.new(acf.Position - Vector3.new(0, asz2.Y / 2, 0))
+	a:PivotTo(CFrame.new(cf.Position.X, info.base, cf.Position.Z) * CFrame.Angles(0, yaw, 0))
+	for _, d in m:GetDescendants() do
+		if d:IsA("BasePart") and not d:FindFirstChildWhichIsA("Light") then d:Destroy()
+		elseif d:IsA("BasePart") then d.Transparency = 1 end
+	end
+	a.Name = "Smooth"; a.Parent = m
 end
 local function buildProp(def, kind, cx, cz, parent, seed)
 	local ox, oz = snapCorner(cx, cz, def.w, def.d)
@@ -432,6 +466,7 @@ function IslandView.build()
 		seed += 1
 		local x, z = pxToWorld(o[2], o[3])
 		local info = buildProp(def, o[1], x, z, scenery, seed)
+		swapProp(info)
 		table.insert(props, info)
 		task.defer(function() IslandView.addLeaves(info.model, o[1]) end)
 		if info.light then table.insert(lamps, info) end
@@ -741,6 +776,7 @@ local function buildIsland(isl)
 	for k, p in isl.props do
 		if not p.dropped then
 			local info = buildIslandProp(isl, p, rec.scenery)
+			swapProp(info)
 			table.insert(rec.props, info)
 			addLeaves(info.model, p.kind)
 		end
@@ -1021,9 +1057,9 @@ local KF = {   -- hour, brightness, outdoorAmbient, ambient, colorShiftTop, fog,
 	{ 0, 1.9, "8a98c8", "5a6690", "8a98c8", "33427a", "dfe6ff", 0.25, "3a4a80", "22305a" },
 	{ 4.5, 1.9, "8a98c8", "5a6690", "8a98c8", "33427a", "dfe6ff", 0.25, "3a4a80", "22305a" },
 	{ 5.6, 1.6, "8a7aa0", "3d3a55", "ffb38a", "e0a080", "ffe0d0", 0, "ffc8a8", "c890a8" },
-	{ 7, 2.1, "8494b4", "323a50", "ffe2bf", "d8e2ee", "fff1e0", -0.12, "d2e6fa", "a8cbef" },
-	{ 11, 2.4, "8a9cba", "343c55", "fff8ec", "c8dcf0", "fffaf2", -0.18, "cfe4fa", "9cc4ee" },
-	{ 15, 2.35, "8898b6", "343c55", "fff0d8", "cfe2f2", "fff6ea", -0.16, "d2e6fa", "a8cbef" },
+	{ 7, 2.1, "8494b4", "485068", "ffe2bf", "d8e2ee", "fff1e0", -0.12, "d2e6fa", "a8cbef" },
+	{ 11, 2.4, "8a9cba", "4c546c", "fff8ec", "c8dcf0", "fffaf2", -0.18, "cfe4fa", "9cc4ee" },
+	{ 15, 2.35, "8898b6", "4c546c", "fff0d8", "cfe2f2", "fff6ea", -0.16, "d2e6fa", "a8cbef" },
 	{ 17.5, 2.6, "8a86aa", "35324c", "ffb46b", "f0c49a", "ffe0c0", -0.06, "ffd6b8", "f0a89a" },
 	{ 18.7, 2.2, "9a8ab0", "4a4466", "ff9a6c", "d89088", "ffe0d0", 0.08, "f0a898", "9a6a98" },
 	{ 20, 1.9, "8a98c8", "5a6690", "8a98c8", "35447c", "dfe6ff", 0.25, "3c4c82", "24325c" },

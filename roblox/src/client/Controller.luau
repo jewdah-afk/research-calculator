@@ -19,7 +19,11 @@ local VOID, WATER = 0, 3
 local STEP_UP = 5
 local colliders: { { x: number, y: number, r: number, base: number, top: number, hw: number?, hh: number? } } = {}
 -- footprint radius (px) and height (px) per Park prop kind (Park overhaul props; see client/IslandView)
-local PROP_COLL = { lantern = { 3, 40 }, oak = { 6, 60 }, bigoak = { 7, 70 }, pine = { 6, 60 }, bush = { 9, 12 }, rock = { 9, 10 },
+-- trees are the stylized pack meshes now: only the trunk blocks (r 3 px); bushes are walk-through
+local TRUNK_R = 3
+local SOFT = { bush = true, flowers = true, sunflower = true }
+local TREES = { tree = true, oak = true, bigoak = true, pine = true }
+local PROP_COLL = { lantern = { 3, 40 }, oak = { TRUNK_R, 60 }, bigoak = { TRUNK_R, 70 }, pine = { TRUNK_R, 60 }, rock = { 9, 10 },
 	cart = { 16, 40 }, bench = { 9, 10 }, fence = { 6, 12 } }
 for _, o in Map.objects do
 	local kind, x, y, z = o[1], o[2], o[3], o[4]
@@ -34,8 +38,10 @@ end
 for _, isl in World.all() do
 	if isl.park then continue end
 	for _, p in isl.props do
-		if p.dropped or (p.r or 0) <= 0 then continue end
-		if p.box then   -- the prop's real ground footprint, as a box (px)
+		if p.dropped or (p.r or 0) <= 0 or SOFT[p.kind] then continue end
+		if TREES[p.kind] then
+			table.insert(colliders, { x = p.x * Map.PX, y = p.z * Map.PX, r = TRUNK_R, base = 0, top = 80 })
+		elseif p.box then   -- the prop's real ground footprint, as a box (px)
 			local b = p.box
 			table.insert(colliders, { x = (b[1] + b[2]) / 2 * Map.PX, y = (b[3] + b[4]) / 2 * Map.PX, r = 0, base = 0, top = 80,
 				hw = (b[2] - b[1]) / 2 * Map.PX, hh = (b[4] - b[3]) / 2 * Map.PX })
