@@ -664,10 +664,28 @@ local function buildSkirt(mnI, mnJ, mxI, mxJ, riseAt)
 		local arc = table.create(nP + 1)
 		arc[1] = 0
 		for q = 2, nP + 1 do arc[q] = arc[q - 1] + (loop[(q - 1) % nP + 1] - loop[q - 1]).Magnitude end
-		-- flat-shaded quads (own vertices per face): crisp toon facets
+		-- toon facets on SHARED vertices (EditableMesh budget, 2026-10-09: one vertex per face corner used 18k vertices and
+		-- starved every other EditableMesh in the game). Positions and UVs are one per grid point; flat shading stays
+		-- because normals and colours are set per face (SetFaceNormals / SetFaceColors are independent of vertices).
+		local NR = #PROFILE
+		local vid, uvid = table.create(nP + 1), table.create(nP + 1)
+		for q = 1, nP + 1 do
+			local qq = (q - 1) % nP + 1
+			vid[q], uvid[q] = table.create(NR), table.create(NR)
+			for r = 1, NR do
+				if q <= nP then
+					local pos = P(qq, r)
+					vid[q][r] = em:AddVertex(pos)
+					if colVerts[qq] then table.insert(colVerts[qq], { vid[q][r], pos }) end
+				else
+					vid[q][r] = vid[1][r]   -- the loop closes on the first column (same position, own UV for the seam)
+				end
+				uvid[q][r] = em:AddUV(Vector2.new(arc[q] / U_PERIOD, PROFILE[r][6]))
+			end
+		end
 		for q = 1, nP do
 			local q2 = q % nP + 1
-			for r = 1, #PROFILE - 1 do
+			for r = 1, NR - 1 do
 				local a, b, cc, d = P(q, r), P(q2, r), P(q2, r + 1), P(q, r + 1)
 				local band = PROFILE[r][3]
 				local n1 = (b - a):Cross(d - a)
@@ -676,13 +694,9 @@ local function buildSkirt(mnI, mnJ, mxI, mxJ, riseAt)
 				-- winding: the face must point away from the land (outward / up)
 				local outward = Vector3.new(nrm[q].X, 0, nrm[q].Y) + Vector3.new(0, 0.3, 0)
 				local flip = n1:Dot(outward) < 0
-				local va, vb, vc, vd = em:AddVertex(a), em:AddVertex(b), em:AddVertex(cc), em:AddVertex(d)
-				if colVerts[q] then table.insert(colVerts[q], { va, a }); table.insert(colVerts[q], { vd, d }) end
-				if colVerts[q2] then table.insert(colVerts[q2], { vb, b }); table.insert(colVerts[q2], { vc, cc }) end
+				local va, vb, vc, vd = vid[q][r], vid[q + 1][r], vid[q + 1][r + 1], vid[q][r + 1]
+				local ua, ub, uc, ud = uvid[q][r], uvid[q + 1][r], uvid[q + 1][r + 1], uvid[q][r + 1]
 				local ni = em:AddNormal(if flip then -n1 else n1)
-				local u0, u1 = arc[q] / U_PERIOD, arc[q + 1] / U_PERIOD
-				local tv0, tv1 = PROFILE[r][6], PROFILE[r + 1][6]
-				local ua, ub, uc, ud = em:AddUV(Vector2.new(u0, tv0)), em:AddUV(Vector2.new(u1, tv0)), em:AddUV(Vector2.new(u1, tv1)), em:AddUV(Vector2.new(u0, tv1))
 				local f1 = if flip then em:AddTriangle(va, vc, vb) else em:AddTriangle(va, vb, vc)
 				local f2 = if flip then em:AddTriangle(va, vd, vc) else em:AddTriangle(va, vc, vd)
 				local cid = colIds[band]
