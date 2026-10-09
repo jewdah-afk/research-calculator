@@ -1,0 +1,680 @@
+<title>Peckwood Cel Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one full-screen 3D stage (CSS perspective + preserve-3d), HUD keys pinned to the corners, Studio spec drawer on the right.
+   Single dark look by design (the canvas IS the night sea), so no light theme. */
+:root {
+  color-scheme: dark;
+  /* owner tokens (strict) */
+  --bg-flat: #0a0518;
+  --grass-base: #1df27d;
+  --grass-shadow: #067d40;
+  --path-base: #ffd269;
+  --ink-outline: #0c0817;
+  --neon-glow: #ff007f;
+  /* derived 2-step pairs (same hues, one hard shadow step each) */
+  --path-shadow: #d99a22;
+  --water-base: #29d8ff;
+  --water-shadow: #0b86c9;
+  --cliff-lit: #4a2f9e;
+  --cliff-shadow: #2a1863;
+  --cave-floor: #170b38;
+  --cave-grout: #0c0817;
+  --wall-top: #9d4dff;
+  --wall-lit: #6a26e0;
+  --wall-shadow: #3a0f8f;
+  /* HUD */
+  --hud: #f6f0ff;
+  --hud-dim: #b8acd9;
+  --key: #2b1a5e;
+  --key-lip: #160c33;
+  --font-display: "Fredoka One", "Fredoka", "Baloo 2", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --tile: 40px;
+}
+html, body { height: 100%; }
+[hidden] { display: none !important; }
+body { background: var(--bg-flat); color: var(--hud); font-family: var(--font-display); overflow: hidden; -webkit-tap-highlight-color: transparent; }
+button { font: inherit; color: inherit; }
+
+/* ---------------------------------------------------------------- stage */
+.stage { position: fixed; inset: 0; overflow: hidden; background: var(--bg-flat); touch-action: none; }
+.bg { position: absolute; inset: -40%; will-change: transform; }
+.bg canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.post { position: absolute; inset: 0; filter: contrast(1.4) saturate(1.45); }
+.viewport { position: absolute; inset: 0; perspective: 4200px; perspective-origin: 50% 40%;
+  --pitch: 56deg; --yaw: -34deg; --zoom: 1; --cx: 0; --cy: 0; --cz: 0; }
+.viewport.game { --pitch: 52deg; --yaw: 0deg; }
+.world { position: absolute; left: 50%; top: 60%; width: 0; height: 0; transform-style: preserve-3d; transform-origin: 0 0;
+  transform: scale(var(--zoom)) rotateX(var(--pitch)) rotateZ(var(--yaw)) translate3d(calc(var(--cx) * -1px), calc(var(--cy) * -1px), calc(var(--cz) * -1px));
+  transition: transform .32s cubic-bezier(.2,.8,.25,1); }
+.world > * { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+.plane { image-rendering: auto; pointer-events: none; }
+.side { backface-visibility: hidden; border: 3px solid var(--ink-outline); box-sizing: border-box; }
+.shadow { border-radius: 50%; background: var(--ink-outline); opacity: .34; }
+
+/* billboard cards: counter-rotate the camera so every card faces the lens (flat 2.5D sprite look) */
+.card { transform-style: preserve-3d; transition: transform .32s cubic-bezier(.2,.8,.25,1);
+  transform: translate3d(var(--x), var(--y), var(--z)) rotateZ(calc(var(--yaw) * -1)) rotateX(calc(var(--pitch) * -1)); }
+.card > .art { position: absolute; display: block; transform-origin: 50% 100%;
+  /* stacked hard drop-shadows = a crisp outer ink silhouette, no blur */
+  filter: drop-shadow(2px 0 0 var(--ink-outline)) drop-shadow(-2px 0 0 var(--ink-outline)) drop-shadow(0 2px 0 var(--ink-outline)) drop-shadow(0 -2px 0 var(--ink-outline)); }
+.card svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.card.hen > .art { transition: transform .12s; }
+.card.hen.flip > .art { transform: scaleX(-1); }
+.card.hop > .art { animation: hop .26s ease-out; }
+.card.hen.flip.hop > .art { animation: hopflip .26s ease-out; }
+@keyframes hop { 0% { transform: translateY(0) scaleY(.86); } 45% { transform: translateY(-14px) scaleY(1.08); } 100% { transform: translateY(0) scaleY(1); } }
+@keyframes hopflip { 0% { transform: scaleX(-1) translateY(0) scaleY(.86); } 45% { transform: scaleX(-1) translateY(-14px) scaleY(1.08); } 100% { transform: scaleX(-1) translateY(0) scaleY(1); } }
+.card.seed > .art { animation: bob 1.6s ease-in-out infinite;
+  filter: drop-shadow(2px 0 0 var(--ink-outline)) drop-shadow(-2px 0 0 var(--ink-outline)) drop-shadow(0 2px 0 var(--ink-outline)) drop-shadow(0 -2px 0 var(--ink-outline)) drop-shadow(0 0 10px var(--neon-glow)) drop-shadow(0 0 22px var(--neon-glow)); }
+.card.seed.got > .art { animation: pop .36s ease-out forwards; }
+@keyframes bob { 50% { transform: translateY(-9px); } }
+@keyframes pop { to { transform: translateY(-30px) scale(1.8); opacity: 0; } }
+
+/* emissive interactive tiles: flat neon square on the floor + high-intensity bloom shadow */
+.neon { width: var(--tile); height: var(--tile); background: var(--neon-glow); border: 3px solid var(--ink-outline); box-sizing: border-box;
+  box-shadow: 0 0 14px 5px var(--neon-glow), 0 0 44px 18px rgba(255, 0, 127, .55); animation: pulse 1.4s ease-in-out infinite; }
+.neon.ring { background: transparent; border: 6px solid var(--neon-glow); border-radius: 50%; outline: 3px solid var(--ink-outline); outline-offset: -9px; }
+@keyframes pulse { 50% { box-shadow: 0 0 22px 8px var(--neon-glow), 0 0 70px 28px rgba(255, 0, 127, .7); } }
+
+/* screen-space halftone (the ScreenGui overlay): fixed, the map slides under it */
+.halftone { position: fixed; inset: 0; pointer-events: none; mix-blend-mode: multiply; opacity: .07;
+  background-image: radial-gradient(circle at 50% 50%, #000 0 .9px, transparent 1.1px); background-size: 4px 4px; }
+
+/* ---------------------------------------------------------------- HUD */
+.hud { position: fixed; left: 0; right: 0; top: 0; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between;
+  padding: calc(env(safe-area-inset-top, 0px) + 14px) 16px 0; pointer-events: none; }
+.hud > * { pointer-events: auto; }
+.brand { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.brand b { font-size: 22px; letter-spacing: .02em; text-shadow: 2px 2px 0 var(--ink-outline), -2px -2px 0 var(--ink-outline), 2px -2px 0 var(--ink-outline), -2px 2px 0 var(--ink-outline), 0 4px 0 var(--ink-outline); }
+.brand span { font-family: var(--font-mono); font-size: 11px; color: var(--hud-dim); letter-spacing: .06em; text-transform: uppercase; }
+.keys { display: flex; flex-wrap: wrap; gap: 8px; }
+/* squared press-in keys (the game's Kit.button: ink body, face, lip; pressed = whole key drops by the lip) */
+.key { position: relative; border: 3px solid var(--ink-outline); background: var(--key); padding: 7px 12px 6px; font-size: 14px; letter-spacing: .03em;
+  box-shadow: 0 5px 0 var(--key-lip), 0 5px 0 3px var(--ink-outline); cursor: pointer; transform: translateY(0); transition: transform .06s, box-shadow .06s;
+  text-shadow: 1px 1px 0 var(--ink-outline), -1px -1px 0 var(--ink-outline), 1px -1px 0 var(--ink-outline), -1px 1px 0 var(--ink-outline); }
+.key:active, .key.down { transform: translateY(5px); box-shadow: 0 0 0 var(--key-lip), 0 0 0 3px var(--ink-outline); }
+.key[aria-pressed="true"] { background: var(--neon-glow); box-shadow: 0 5px 0 #8a0045, 0 5px 0 3px var(--ink-outline), 0 0 18px 2px rgba(255, 0, 127, .6); }
+.key:focus-visible { outline: 3px solid var(--path-base); outline-offset: 3px; }
+.counter { position: fixed; left: 16px; top: calc(env(safe-area-inset-top, 0px) + 76px); display: flex; align-items: center; gap: 8px; font-size: 18px;
+  background: var(--key); border: 3px solid var(--ink-outline); padding: 4px 12px 4px 6px; box-shadow: 0 4px 0 var(--ink-outline); }
+.counter i { width: 18px; height: 22px; background: var(--neon-glow); clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); box-shadow: 0 0 10px var(--neon-glow); }
+.dpad { position: fixed; right: 16px; bottom: calc(env(safe-area-inset-bottom, 0px) + 16px); display: grid; grid-template-columns: repeat(3, 52px); grid-template-rows: repeat(3, 52px); gap: 4px; }
+.dpad .key { display: grid; place-items: center; padding: 0; font-size: 20px; }
+.dpad .up { grid-column: 2; grid-row: 1; } .dpad .left { grid-column: 1; grid-row: 2; } .dpad .right { grid-column: 3; grid-row: 2; } .dpad .down { grid-column: 2; grid-row: 3; }
+.zoom { position: fixed; left: 16px; bottom: calc(env(safe-area-inset-bottom, 0px) + 16px); display: flex; gap: 8px; align-items: center; }
+.hint { font-family: var(--font-mono); font-size: 11px; color: var(--hud); max-width: 24ch; line-height: 1.35; background: rgba(12, 8, 23, .82); border: 2px solid var(--ink-outline); padding: 5px 8px; }
+.toast { position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 130px); transform: translateX(-50%); background: var(--neon-glow); color: #fff;
+  border: 3px solid var(--ink-outline); padding: 8px 16px; font-size: 16px; box-shadow: 0 5px 0 var(--ink-outline), 0 0 26px rgba(255,0,127,.6); white-space: nowrap; }
+
+/* ---------------------------------------------------------------- Studio spec drawer */
+.spec { position: fixed; top: 0; right: 0; bottom: 0; width: min(440px, 100%); background: #120a2b; border-left: 3px solid var(--ink-outline);
+  box-shadow: -10px 0 0 rgba(12, 8, 23, .5); overflow-y: auto; padding: calc(env(safe-area-inset-top, 0px) + 18px) 18px calc(env(safe-area-inset-bottom, 0px) + 28px);
+  font-family: var(--font-mono); font-size: 12.5px; line-height: 1.5; color: #e6defa; }
+.spec h2 { font-family: var(--font-display); font-size: 22px; margin: 0 0 4px; text-wrap: balance; }
+.spec h3 { font-family: var(--font-display); font-size: 15px; letter-spacing: .03em; margin: 22px 0 8px; color: var(--path-base); }
+.spec p { margin: 0 0 8px; max-width: 62ch; }
+.spec .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.spec table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.spec td { padding: 5px 6px; border-bottom: 1px solid #2a1c55; vertical-align: top; }
+.spec td:first-child { color: var(--hud-dim); white-space: nowrap; }
+.sw { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--ink-outline); vertical-align: -3px; margin-right: 6px; }
+.spec code { color: #fff; }
+.spec ul { margin: 0; padding-left: 18px; }
+.spec li { margin-bottom: 4px; }
+.spec textarea { width: 100%; height: 120px; margin-top: 8px; background: #0a0518; color: #e6defa; border: 2px solid #2a1c55; font: 11px/1.4 var(--font-mono); box-sizing: border-box; }
+.copied { color: var(--grass-base); margin-left: 8px; }
+
+@media (max-width: 560px) {
+  .brand b { font-size: 18px; }
+  .key { font-size: 12px; padding: 6px 9px 5px; }
+  .dpad { grid-template-columns: repeat(3, 46px); grid-template-rows: repeat(3, 46px); }
+  .hint { display: none; }
+  .counter { top: calc(env(safe-area-inset-top, 0px) + 112px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .world, .card { transition: none; }
+  .neon, .card.seed > .art { animation: none; }
+  .card.hop > .art { animation: none; }
+}
+</style>
+
+<div class="stage" id="stage">
+  <div class="bg" id="bg"><canvas id="bgc"></canvas></div>
+  <div class="post"><div class="viewport" id="vp"><div class="world" id="world"></div></div></div>
+</div>
+<div class="halftone" aria-hidden="true"></div>
+
+<header class="hud">
+  <div class="brand"><b>Peckwood: cel map test</b><span id="sub">Map 1 · Main Base · 40×30 tiles</span></div>
+  <nav class="keys" aria-label="Map and camera">
+    <button class="key" id="m1" aria-pressed="true">Main Base</button>
+    <button class="key" id="m2" aria-pressed="false">Cave Expedition</button>
+    <button class="key" id="cam" aria-pressed="false" title="Switch between the axonometric view and the real game camera (pitch 52°, no yaw)">Game cam</button>
+    <button class="key" id="specBtn" aria-expanded="false" aria-controls="spec">Studio spec</button>
+  </nav>
+</header>
+<div class="counter" id="counter" hidden><i></i><span id="seeds">0 / 0</span></div>
+<div class="toast" id="toast" hidden></div>
+
+<div class="zoom">
+  <button class="key" id="zout" aria-label="Zoom out">−</button>
+  <button class="key" id="zin" aria-label="Zoom in">+</button>
+  <span class="hint">WASD / arrows walk the hen one tile. Step on a neon tile.</span>
+</div>
+<div class="dpad" aria-label="Walk">
+  <button class="key up" data-d="0,-1" aria-label="North">▲</button>
+  <button class="key left" data-d="-1,0" aria-label="West">◀</button>
+  <button class="key right" data-d="1,0" aria-label="East">▶</button>
+  <button class="key down" data-d="0,1" aria-label="South">▼</button>
+</div>
+
+<aside class="spec" id="spec" hidden>
+  <div class="top"><div><h2>Studio build spec</h2><p>How each rule on this page maps to Roblox. Units are the game's own: 1 tile = 4 studs.</p></div>
+    <button class="key" id="specClose">Close</button></div>
+
+  <h3>Units and camera</h3>
+  <table>
+    <tr><td>Tile</td><td>40 px here = <code>4 studs</code> (Models.S)</td></tr>
+    <tr><td>Hill level</td><td>24 px = <code>2.4 studs</code> (one LEGO brick)</td></tr>
+    <tr><td>Island cliff</td><td>60 px = <code>6 studs</code> below grass</td></tr>
+    <tr><td>Main Base</td><td>40×30 tiles = 160×120 studs (MapData.luau, 1:1)</td></tr>
+    <tr><td>Cave</td><td>30×20 tiles = 120×80 studs, walls 2-4 levels</td></tr>
+    <tr><td>Game cam</td><td>pitch 52°, FOV 11 from far away (≈ ortho), no yaw. Axonometric view = this page only (yaw −34°).</td></tr>
+    <tr><td>Grid move</td><td>Controller already steps per tile; camera eases 0.32 s to the hen.</td></tr>
+  </table>
+
+  <h3>Colour tokens → Color3.fromHex</h3>
+  <table id="tokTable"></table>
+
+  <h3>Rules</h3>
+  <ul>
+    <li><b>Ink outlines:</b> Highlight per WorldTree group (OutlineColor <code>#0c0817</code>, OutlineTransparency 0, FillTransparency 1, DepthMode Occluded; ≤ 31 live). Hero cards (hen, eggs, landmarks) also get an inverted-hull outline mesh for inner lines.</li>
+    <li><b>2-step cel, no gloss:</b> SmoothPlastic only, two colours per part (base + hard shadow face). Lighting: EnvironmentDiffuseScale 0, EnvironmentSpecularScale 0, Ambient + OutdoorAmbient high so faces stay flat, Brightness 2.</li>
+    <li><b>Hard shadows:</b> GlobalShadows <code>false</code>, CastShadow off everywhere. Each prop gets a flat ellipse (cylinder Part 0.05 thick, colour ink, Transparency 0.66) offset north-east; hill drops paint a grass-shadow band on the lower tile.</li>
+    <li><b>Post:</b> ColorCorrection Contrast <code>0.4</code>, Saturation <code>0.45</code> (= CSS 140 % / 145 %).</li>
+    <li><b>Neon nodes:</b> Material Neon <code>#ff007f</code> tile + PointLight (Range 10, Brightness 3) + Lighting BloomEffect (Intensity 1, Size 24, Threshold 0.95). Pulse = TweenService on the light Brightness.</li>
+    <li><b>Halftone:</b> ScreenGui (IgnoreGuiInset, DisplayOrder 0) → full-screen ImageLabel, ScaleType Tile, TileSize 4×4 px, ImageTransparency 0.93, a 4×4 dot texture (upload). It stays fixed while the world pans.</li>
+    <li><b>Parallax 0.3×:</b> background models (stars, far silhouettes) move by camera offset × 0.3 each RenderStepped.</li>
+    <li><b>Cards:</b> trees and props are flat cards that face the camera: a thin MeshPart with the card image (SurfaceAppearance ColorMap, AlphaMode Transparency), yawed to the camera once (fixed camera, so no per-frame cost).</li>
+  </ul>
+
+  <h3>Where things go (WorldTree)</h3>
+  <table>
+    <tr><td>Ground</td><td>grass tops, path paint, pond, cave floor, cliff sides</td></tr>
+    <tr><td>Landmarks</td><td>lighthouse, cottage, arch, stall</td></tr>
+    <tr><td>Interactables</td><td>neon tiles: Expedition gate, Shop, cave exit</td></tr>
+    <tr><td>Props</td><td>lanterns, benches</td></tr>
+    <tr><td>Foliage / Rocks</td><td>oak, big oak, pine, bush / rocks, cave columns</td></tr>
+    <tr><td>Actors</td><td>hen, eggs, seeds</td></tr>
+    <tr><td>Atmosphere</td><td>halftone ScreenGui, parallax backdrop</td></tr>
+  </table>
+
+  <h3>Build data</h3>
+  <p>Both maps (tiles, heights, props, neon nodes) plus the tokens, as JSON for a Studio builder script.</p>
+  <button class="key" id="copyJson">Copy build JSON</button><span class="copied" id="copied" hidden>Copied</span>
+  <textarea id="jsonOut" readonly aria-label="Build JSON"></textarea>
+</aside>
+
+<script>
+(() => {
+'use strict';
+const css = getComputedStyle(document.documentElement);
+const tok = n => css.getPropertyValue('--' + n).trim();
+const T = 40, LEVEL = 24, CLIFF = 60, RES = 1.5;   // px per tile, px per hill level, cliff depth, canvas px per CSS px
+const INK = tok('ink-outline');
+const C = {};
+['bg-flat','grass-base','grass-shadow','path-base','ink-outline','neon-glow','path-shadow','water-base','water-shadow','cliff-lit','cliff-shadow',
+ 'cave-floor','cave-grout','wall-top','wall-lit','wall-shadow'].forEach(k => C[k] = tok(k));
+const hash = (i, j) => { const n = Math.sin(i * 127.1 + j * 311.7) * 43758.5453; return n - Math.floor(n); };
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// ---------------------------------------------------------------- map data
+// Map 1 = the real Park (roblox/src/shared/MapData.luau): 0 void, 1 grass, 2 path, 3 water. Objects in game px (16 px per tile).
+const PARK = {"rows":["0000000000000000000000000000000000000000","0000000000000000000000000000000000000000","0000000000000001111111111110000000000000","0000000000011111111111111111000000000000","0000000001111111111111111111111100000000","0000000011111111111111111111111110000000","0000000111111111111221111111111110000000","0000001111111111111221111111111111000000","0000011111111111122222211111111111111000","0000111111111122211111122211111111111000","0001111111111221111111111221111111111100","0011111111112111111111111112111111111000","0001111111122111111111111112211111111100","0011133331121111111111111111222211111100","0003333331121111111111111111222211111100","0011333331121111111111111111211111111100","0011133331121111111111111111211111111000","0001111111122111111111111112211111111100","0001111111112111111111111112111111111000","0001111111111221111111111221111111111000","0001111111111122211111122211111111110000","0001111111111111122222211111111111100000","0000001111111111111221111111111111100000","0000000111111111111221111111111110000000","0000000111111111111221111111111100000000","0000000001111111111221111111111000000000","0000000000011111111221111111110000000000","0000000000000111111111111000000000000000","0000000000000000000000000000000000000000","0000000000000000000000000000000000000000"],"objects":[["lantern",476,284],["lantern",164,284],["lantern",164,196],["lantern",250,140],["lantern",388,124],["lantern",536,232],["oak",577,273],["pine",529,350],["oak",439,403],["bigoak",204,432],["oak",60,322],["pine",111,122],["bigoak",201,60],["cottage",320,80],["oak",420,60],["pine",574,196],["bush",104,348],["bush",389,339],["bush",140,112],["bush",290,352],["bush",375,374],["bush",220,150],["bush",416,261],["bush",120,312],["rock",267,128],["rock",108,341],["rock",88,196],["arch",320,428],["cart",508,198],["lighthouse",496,92],["bench",112,300],["bench",392,380]],"H":{"27,4":1,"28,4":1,"29,4":1,"30,4":1,"31,4":1,"27,5":1,"28,5":1,"29,5":2,"30,5":2,"31,5":2,"32,5":1,"26,6":1,"27,6":1,"28,6":2,"29,6":2,"30,6":2,"31,6":2,"32,6":2,"27,7":1,"28,7":1,"29,7":2,"30,7":2,"31,7":2,"32,7":1,"33,7":1,"27,8":1,"28,8":1,"29,8":1,"30,8":1,"31,8":1,"32,8":1,"33,8":1,"29,9":1,"30,9":1,"31,9":1},"flowers":[[366,73],[394,404],[200,319],[544,148],[552,245],[117,319],[252,69],[260,161],[416,244],[339,50],[182,90],[200,417],[192,80],[213,70],[199,319],[412,68],[145,371],[216,339],[168,406],[499,371],[107,199],[346,145],[554,156],[159,188],[203,108],[251,125],[203,416],[433,170],[165,256],[480,372],[410,177],[232,285],[407,72],[102,334],[184,303],[195,260],[489,134],[449,76],[392,258],[395,122],[111,303],[260,319],[413,374],[244,64],[67,323],[433,402],[318,360],[463,107],[221,424],[533,297],[281,108],[399,231],[410,413],[361,367],[546,192],[478,337],[559,188],[596,243],[407,209],[398,362],[494,366],[150,159],[208,199],[424,81],[408,372],[419,227],[78,199],[573,224],[385,105],[404,294],[377,423],[239,425],[500,154],[274,100],[412,247],[260,103],[355,169],[357,118],[100,139],[202,146],[398,278],[64,191],[344,108],[105,175],[245,289],[254,46],[384,307],[574,233],[502,237],[227,392]]};
+// Map 2 = Cave Expedition: # wall column, . floor, s seed, P start, X exit portal.
+const CAVE = ['##############################','#####.....#####......#########','####.......###...s....########','###...s.......#........#######','###....##..........##...######','##.....##.........###..s..####','##..P.......##....###......###','##.........####............###','###...s....###..s....##....###','####........#........##..s..##','#####....#.......##.........##','####....###.....####....#...##','###..s...#.....######..###..##','###............######...#...##','##....##....s...####........##','##....##..............s.X...##','###.........s..##..........###','####......####.###.....s..####','#######...######.......#######','##############################'];
+
+// ---------------------------------------------------------------- card art (SVG, 2-step cel: base + one hard shadow step, ink edges)
+let uid = 0;
+// fill a union of shapes with a lit base and a hard-edged shadow on the lower right (sun from the upper left)
+function cel(shapes, base, shade, dx = -8, dy = -9, stroke = 7) {
+  const id = 'c' + (uid++);
+  return `<g stroke="${INK}" stroke-width="${stroke}" stroke-linejoin="round" fill="${INK}">${shapes}</g>` +
+    `<g fill="${shade}">${shapes}</g><clipPath id="${id}">${shapes}</clipPath>` +
+    `<g fill="${base}" clip-path="url(#${id})"><g transform="translate(${dx} ${dy})">${shapes}</g></g>`;
+}
+const PADV = 8;   // room for the ink stroke past the art box (no flat-cut tops)
+const svg = (w, h, body) => `<svg viewBox="${-PADV} ${-PADV} ${w + 2 * PADV} ${h + 2 * PADV}" xmlns="http://www.w3.org/2000/svg">${body}</svg>`;
+const circ = a => a.map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${r}"/>`).join('');
+const poly = p => `<polygon points="${p}"/>`;
+const rect = (x, y, w, h) => `<rect x="${x}" y="${y}" width="${w}" height="${h}"/>`;
+const TRUNK = ['#9a5a2c', '#5c3014'], LEAF = ['#22d977', '#078a46'], PINE = ['#0fbf70', '#05683a'];
+const ART = {
+  oak: { w: 104, h: 124, s: () => svg(104, 124, cel(rect(45, 74, 16, 48), ...TRUNK, -6, 0) + cel(circ([[30, 60, 26], [74, 58, 27], [52, 36, 31], [52, 70, 24]]), ...LEAF)) },
+  bigoak: { w: 140, h: 160, s: () => svg(140, 160, cel(poly('58,156 62,96 78,96 84,156'), ...TRUNK, -7, 0) + cel(circ([[36, 78, 34], [104, 76, 34], [70, 46, 42], [70, 90, 32], [50, 52, 28], [92, 50, 28]]), ...LEAF, -10, -11)) },
+  pine: { w: 78, h: 128, s: () => svg(78, 128, cel(rect(33, 100, 12, 26), ...TRUNK, -4, 0) + cel(poly('39,4 62,42 52,42 72,74 58,74 76,106 2,106 20,74 6,74 26,42 16,42'), ...PINE, -7, -6)) },
+  bush: { w: 58, h: 40, s: () => svg(58, 40, cel(circ([[17, 25, 13], [41, 25, 13], [29, 16, 15]]), ...LEAF, -5, -6)) },
+  rock: { w: 50, h: 36, s: () => svg(50, 36, cel(poly('6,34 2,20 14,6 32,3 46,14 48,34'), '#c9c1ee', '#7c6fb4', -6, -6)) },
+  lantern: { w: 24, h: 82, s: () => svg(24, 82, cel(rect(10, 22, 5, 58), '#3a3150', '#1f1930', -2, 0, 5) + cel(rect(4, 6, 16, 18), '#ffe9a8', '#ffb627', -3, -3, 5) + cel(rect(3, 2, 18, 5), '#3a3150', '#1f1930', 0, -2, 5)) },
+  bench: { w: 64, h: 36, s: () => svg(64, 36, cel(rect(6, 22, 6, 12) + rect(52, 22, 6, 12), ...TRUNK, -2, 0, 5) + cel(rect(2, 16, 60, 8), '#d98a4a', '#9a5326', 0, -3, 5) + cel(rect(4, 4, 56, 8), '#d98a4a', '#9a5326', 0, -3, 5)) },
+  cottage: { w: 168, h: 150, s: () => svg(168, 150,
+    cel(rect(20, 68, 128, 78), '#fff1d2', '#d8b07c', -14, 0) +
+    cel(poly('6,74 84,10 162,74'), '#ff4d6d', '#b3123a', 0, -9) +
+    cel(rect(104, 20, 18, 32), '#c9c1ee', '#7c6fb4', -5, 0, 6) +
+    cel(rect(70, 100, 28, 46), '#9a5a2c', '#5c3014', -6, 0, 6) +
+    cel(rect(32, 88, 26, 22) + rect(112, 88, 26, 22), '#29d8ff', '#0b86c9', -5, -5, 6)) },
+  lighthouse: { w: 92, h: 232, s: () => svg(92, 232,
+    cel(poly('20,228 30,70 62,70 72,228'), '#fdf7ff', '#c7bdf0', -8, 0) +
+    `<clipPath id="lhb"><polygon points="20,228 30,70 62,70 72,228"/></clipPath><g clip-path="url(#lhb)">` +
+      `<g fill="#ff2e55">${rect(0, 92, 92, 26)}${rect(0, 146, 92, 26)}${rect(0, 200, 92, 28)}</g>` +
+      `<g fill="#a30c2c">${rect(56, 92, 30, 26)}${rect(58, 146, 30, 26)}${rect(60, 200, 30, 28)}</g></g>` +
+    `<polygon points="20,228 30,70 62,70 72,228" fill="none" stroke="${INK}" stroke-width="7" stroke-linejoin="round"/>` +
+    cel(rect(16, 60, 60, 12), '#3a3150', '#1f1930', 0, -3, 6) +
+    cel(rect(28, 30, 36, 30), '#ffe14d', '#ffb627', -6, 0, 6) +
+    cel(poly('22,32 46,4 70,32'), '#ff2e55', '#a30c2c', 0, -5, 6) +
+    cel(rect(40, 196, 14, 32), '#9a5a2c', '#5c3014', -3, 0, 5)) },
+  arch: { w: 124, h: 112, s: () => svg(124, 112, cel('<path fill-rule="evenodd" d="M4 110 V40 Q4 4 62 4 Q120 4 120 40 V110 H88 V54 Q88 32 62 32 Q36 32 36 54 V110 Z"/>', '#e0dafb', '#8d84c4', -8, -6)) },
+  cart: { w: 124, h: 104, s: () => svg(124, 104,
+    cel(rect(12, 36, 8, 64) + rect(104, 36, 8, 64), ...TRUNK, -3, 0, 6) +
+    cel(rect(8, 62, 108, 38), '#d98a4a', '#9a5326', -10, 0) +
+    cel(circ([[30, 58, 8], [50, 56, 8], [72, 58, 8], [94, 56, 8]]), '#ff4d6d', '#b3123a', -3, -3, 5) +
+    `<clipPath id="awn"><polygon points="2,40 16,6 108,6 122,40"/></clipPath><g clip-path="url(#awn)"><rect x="0" y="0" width="124" height="44" fill="#fff6fb"/>` +
+      [0, 1, 2, 3, 4, 5].map(k => `<rect x="${4 + k * 22}" y="0" width="11" height="44" fill="#ff007f"/>`).join('') + `<rect x="0" y="30" width="124" height="14" fill="rgba(12,8,23,.28)"/></g>` +
+    `<polygon points="2,40 16,6 108,6 122,40" fill="none" stroke="${INK}" stroke-width="7" stroke-linejoin="round"/>`) },
+  hen: { w: 46, h: 50, s: () => svg(46, 50,
+    cel(rect(16, 40, 4, 9) + rect(26, 40, 4, 9), '#ffb627', '#d97a00', -1, 0, 4) +
+    cel('<ellipse cx="23" cy="30" rx="18" ry="14"/><circle cx="31" cy="17" r="10"/>', '#ffffff', '#c9bdf5', -6, -6, 6) +
+    cel(circ([[28, 6, 4], [33, 5, 4], [36, 9, 3.5]]), '#ff2e55', '#a30c2c', -1, -1, 4) +
+    cel(poly('40,16 47,19 40,22'), '#ffb627', '#d97a00', 0, -1, 4) +
+    `<circle cx="34" cy="15" r="2.2" fill="${INK}"/>`) },
+  egg: { w: 18, h: 22, s: () => svg(18, 22, cel('<ellipse cx="9" cy="12" rx="7.5" ry="9.5"/>', '#fffbea', '#e2d4a6', -3, -3, 4)) },
+  seed: { w: 26, h: 34, s: () => svg(26, 34, cel(poly('13,2 24,17 13,32 2,17'), '#ff5aa8', '#c20062', -4, -4, 5) + `<polygon points="10,9 13,5 15,9 12,14" fill="#ffe3f1"/>`) },
+};
+const artCache = {};
+const artOf = k => artCache[k] || (artCache[k] = ART[k].s());
+
+// ---------------------------------------------------------------- generic heightfield renderer
+// cells[j][i] = { h: levels, mat: 'grass' | 'floor' | 'wall' } or null (void). Tops = one canvas per level, sides = DOM faces
+// where a neighbour is lower (void drops to -CLIFF), lit S/W faces vs shadow N/E faces (sun from the south-west).
+const world = document.getElementById('world');
+const vp = document.getElementById('vp');
+let map = null;
+
+function el(cls, style) { const d = document.createElement('div'); d.className = cls; if (style) d.style.cssText = style; world.appendChild(d); return d; }
+function zOf(h) { return h * LEVEL; }
+
+function buildSides(cells, cols, rows, sideColors) {
+  const frag = document.createDocumentFragment();
+  const H = (i, j) => (i < 0 || j < 0 || i >= cols || j >= rows || !cells[j][i]) ? null : cells[j][i].h;
+  const DIRS = [[0, 1, 'S'], [0, -1, 'N'], [1, 0, 'E'], [-1, 0, 'W']];
+  for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
+    const c = cells[j][i]; if (!c) continue;
+    const top = zOf(c.h);
+    for (const [di, dj, d] of DIRS) {
+      const nh = H(i + di, j + dj);
+      const bottom = nh === null ? -CLIFF : zOf(nh);
+      const drop = top - bottom; if (drop <= 0) continue;
+      const lit = d === 'S' || d === 'W';
+      const s = document.createElement('div'); s.className = 'side';
+      const x = i * T, y = j * T;
+      let tf, w, h;
+      if (d === 'S') { w = T; h = drop; tf = `translate3d(${x}px,${y + T}px,${top}px) rotateX(-90deg)`; }
+      if (d === 'N') { w = T; h = drop; tf = `translate3d(${x + T}px,${y}px,${top}px) rotateZ(180deg) rotateX(-90deg)`; }
+      if (d === 'E') { w = T; h = drop; tf = `translate3d(${x + T}px,${y + T}px,${top}px) rotateZ(-90deg) rotateX(-90deg)`; }
+      if (d === 'W') { w = T; h = drop; tf = `translate3d(${x}px,${y}px,${top}px) rotateZ(90deg) rotateX(-90deg)`; }
+      s.style.cssText = `width:${w}px;height:${h}px;transform:${tf};background:${sideColors(c, lit, drop, nh === null)}`;
+      frag.appendChild(s);
+    }
+  }
+  world.appendChild(frag);
+}
+
+// one top canvas per height level, cropped to the cells at that level
+function buildTops(cells, cols, rows, paint) {
+  const levels = new Set();
+  for (const r of cells) for (const c of r) if (c) levels.add(c.h);
+  for (const L of [...levels].sort((a, b) => a - b)) {
+    let i0 = cols, j0 = rows, i1 = -1, j1 = -1;
+    for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) { const c = cells[j][i]; if (c && c.h === L) { i0 = Math.min(i0, i); j0 = Math.min(j0, j); i1 = Math.max(i1, i); j1 = Math.max(j1, j); } }
+    const pad = 1;   // room for the outer ink line
+    i0 -= pad; j0 -= pad; i1 += pad; j1 += pad;
+    const cv = document.createElement('canvas');
+    const wpx = (i1 - i0 + 1) * T, hpx = (j1 - j0 + 1) * T;
+    cv.width = Math.round(wpx * RES); cv.height = Math.round(hpx * RES);
+    cv.className = 'plane';
+    cv.style.cssText = `width:${wpx}px;height:${hpx}px;transform:translate3d(${i0 * T}px,${j0 * T}px,${zOf(L)}px)`;
+    const g = cv.getContext('2d');
+    g.scale(RES, RES); g.translate(-i0 * T, -j0 * T);
+    paint(g, L, (i, j) => cells[j] && cells[j][i] && cells[j][i].h === L);
+    // ink on every edge of this level that meets a different height or the void
+    g.strokeStyle = INK; g.lineWidth = 4; g.lineCap = 'square'; g.beginPath();
+    for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
+      const c = cells[j][i]; if (!c || c.h !== L) continue;
+      const same = (a, b) => cells[b] && cells[b][a] && cells[b][a].h === L;
+      const x = i * T, y = j * T;
+      if (!same(i, j - 1)) { g.moveTo(x, y + 2); g.lineTo(x + T, y + 2); }
+      if (!same(i, j + 1)) { g.moveTo(x, y + T - 2); g.lineTo(x + T, y + T - 2); }
+      if (!same(i - 1, j)) { g.moveTo(x + 2, y); g.lineTo(x + 2, y + T); }
+      if (!same(i + 1, j)) { g.moveTo(x + T - 2, y); g.lineTo(x + T - 2, y + T); }
+    }
+    g.stroke();
+    world.appendChild(cv);
+  }
+}
+
+// a camera-facing card standing at tile coords (fractional ok) on height z
+function card(kind, ti, tj, z, extra) {
+  const a = ART[kind];
+  const d = el('card ' + kind + (extra ? ' ' + extra : ''));
+  d.style.setProperty('--x', (ti * T) + 'px'); d.style.setProperty('--y', (tj * T) + 'px'); d.style.setProperty('--z', (z + 1) + 'px');
+  const art = document.createElement('div'); art.className = 'art';
+  art.style.cssText = `width:${a.w + 2 * PADV}px;height:${a.h + 2 * PADV}px;left:${-a.w / 2 - PADV}px;top:${-a.h - PADV}px`;
+  art.innerHTML = artOf(kind);
+  d.appendChild(art);
+  return d;
+}
+function neon(i, j, z, ring) { return el('neon' + (ring ? ' ring' : ''), `transform:translate3d(${i * T}px,${j * T}px,${z + 1.5}px)`); }
+
+// ---------------------------------------------------------------- Map 1: Main Base (the Park)
+function buildBase() {
+  const rows = PARK.rows.length, cols = PARK.rows[0].length;
+  const code = (i, j) => (i < 0 || j < 0 || i >= cols || j >= rows) ? 0 : +PARK.rows[j][i];
+  const hOf = (i, j) => PARK.H[i + ',' + j] || 0;
+  const cells = [];
+  for (let j = 0; j < rows; j++) { cells.push([]); for (let i = 0; i < cols; i++) { const c = code(i, j); cells[j].push(c ? { h: hOf(i, j), mat: 'grass', code: c } : null); } }
+
+  // props, with the tile they stand on
+  const props = PARK.objects.map(([k, x, y]) => { const ti = x / 16, tj = y / 16; return { k, ti, tj, i: Math.floor(ti), j: Math.floor(tj), h: hOf(Math.floor(ti), Math.floor(tj)) }; });
+  const SH = { oak: [1.5, .9], bigoak: [2, 1.2], pine: [1.1, .7], bush: [.8, .5], rock: [.7, .45], lantern: [.35, .22], bench: [.8, .4], cottage: [2.6, 1.3], lighthouse: [1.3, .8], arch: [1.6, .6], cart: [1.7, .8] };
+
+  // tops: grass, then flat hard shadows (grass-shadow), the winding path (ink, base, path-shadow), the pond, flowers
+  buildTops(cells, cols, rows, (g, L, mine) => {
+    const at = [];
+    for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) if (mine(i, j)) at.push([i, j]);
+    g.fillStyle = C['grass-base'];
+    for (const [i, j] of at) g.fillRect(i * T - .5, j * T - .5, T + 1, T + 1);
+    // shadow shapes on this level: props standing here (ellipse thrown north-east) + bands under taller neighbours
+    const shadowShapes = (ctx) => {
+      ctx.beginPath();
+      for (const p of props) if (p.h === L && SH[p.k]) {
+        const [rx, ry] = SH[p.k];
+        ctx.moveTo(p.ti * T + rx * T * .55 + .25 * T, p.tj * T - .12 * T);
+        ctx.ellipse(p.ti * T + .25 * T, p.tj * T - .12 * T, rx * T * .55, ry * T * .55, 0, 0, Math.PI * 2);
+      }
+      for (const [i, j] of at) {
+        const up = (a, b) => cells[b] && cells[b][a] && cells[b][a].h > L ? cells[b][a].h - L : 0;
+        const w = up(i - 1, j), s = up(i, j + 1);   // taller tile to the west / south throws its shadow onto this one
+        if (w) ctx.rect(i * T, j * T, T * .3 * w, T);
+        if (s) ctx.rect(i * T, j * T + T - T * .3 * s, T, T * .3 * s);
+      }
+    };
+    g.save(); g.beginPath(); for (const [i, j] of at) g.rect(i * T, j * T, T, T); g.clip();
+    g.fillStyle = C['grass-shadow']; shadowShapes(g); g.fill();
+    g.restore();
+
+    // path + water as smooth strokes through tile centres (winding, not blocky): ink pass, base pass, shadow on top (clipped)
+    const strokeKind = (want, width) => {
+      const pth = new Path2D();
+      for (const [i, j] of at) {
+        if (PARK.rows[j][i] !== want) continue;
+        const cx = i * T + T / 2, cy = j * T + T / 2;
+        pth.moveTo(cx, cy); pth.lineTo(cx + .01, cy);   // round cap = a dot, so lone tiles still show
+        for (const [di, dj] of [[1, 0], [0, 1], [1, 1], [1, -1]]) {
+          const ni = i + di, nj = j + dj;
+          if (PARK.rows[nj] && PARK.rows[nj][ni] === want) { pth.moveTo(cx, cy); pth.lineTo(ni * T + T / 2, nj * T + T / 2); }
+        }
+      }
+      return pth;
+    };
+    const ribbon = (want, width, base, shade) => {
+      const off = document.createElement('canvas'); off.width = g.canvas.width; off.height = g.canvas.height;
+      const o = off.getContext('2d'); o.setTransform(g.getTransform());
+      o.lineCap = 'round'; o.lineJoin = 'round';
+      const p = strokeKind(want, width);
+      o.strokeStyle = INK; o.lineWidth = width + 8; o.stroke(p);
+      const fillLayer = document.createElement('canvas'); fillLayer.width = off.width; fillLayer.height = off.height;
+      const f = fillLayer.getContext('2d'); f.setTransform(g.getTransform()); f.lineCap = 'round'; f.lineJoin = 'round';
+      // 2-step: whole ribbon in the shadow tone, then the lit tone shifted south-west, clipped to the ribbon = a hard
+      // shadow lip along the north-east bank (water) / cast shadows only (path)
+      f.strokeStyle = want === '3' ? shade : base; f.lineWidth = width; f.stroke(p);
+      if (want === '3') { f.globalCompositeOperation = 'source-atop'; f.save(); f.translate(-.12 * T, .2 * T); f.strokeStyle = base; f.stroke(p); f.restore(); }
+      f.globalCompositeOperation = 'source-atop'; f.fillStyle = shade; shadowShapes(f); f.fill();
+      // keep ribbons inside the island (the pond touches the west coast)
+      for (const ctx of [o, f]) { ctx.globalCompositeOperation = 'destination-in'; ctx.fillStyle = '#000'; ctx.beginPath(); for (const [i, j] of at) ctx.rect(i * T - .5, j * T - .5, T + 1, T + 1); ctx.fill(); ctx.globalCompositeOperation = 'source-over'; }
+      g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.drawImage(off, 0, 0); g.drawImage(fillLayer, 0, 0); g.restore();
+    };
+    if (L === 0) { ribbon('2', T * .72, C['path-base'], C['path-shadow']); ribbon('3', T * 1.08, C['water-base'], C['water-shadow']); }
+
+    // flowers: flat 2-colour dots straight from MapData.flowers, grass tiles only
+    const PET = ['#ffffff', '#ff8fd0', '#ffe14d', '#ff6b6b', '#c9a8ff'];
+    PARK.flowers.forEach(([x, y], k) => {
+      const i = Math.floor(x / 16), j = Math.floor(y / 16);
+      if (!mine(i, j) || PARK.rows[j][i] !== '1') return;
+      const cx = x / 16 * T, cy = y / 16 * T, col = PET[Math.floor(hash(k, 3.7) * PET.length)];
+      for (let q = 0; q < 3; q++) {
+        const a = hash(k, q) * 6.28, r = 5 + hash(q, k) * 5, fx = cx + Math.cos(a) * r, fy = cy + Math.sin(a) * r;
+        g.fillStyle = INK; g.beginPath(); g.arc(fx, fy, 4.6, 0, 7); g.fill();
+        g.fillStyle = col; g.beginPath(); g.arc(fx, fy, 3, 0, 7); g.fill();
+        g.fillStyle = '#ffb627'; g.beginPath(); g.arc(fx, fy, 1.2, 0, 7); g.fill();
+      }
+    });
+  });
+  // sides: grass lip band over the violet cliff, lit S/W vs shadow N/E
+  buildSides(cells, cols, rows, (c, lit, drop, toVoid) => {
+    const lip = lit ? C['grass-base'] : C['grass-shadow'];
+    const body = lit ? C['cliff-lit'] : C['cliff-shadow'];
+    const lipH = Math.min(10, drop);
+    return `linear-gradient(to bottom, ${lip} 0 ${lipH}px, ${INK} ${lipH}px ${lipH + 3}px, ${body} ${lipH + 3}px)`;
+  });
+
+  // cards (depth sorted by the 3D buffer)
+  for (const p of props) card(p.k, p.k === 'arch' ? p.ti + .5 : p.ti, p.tj, zOf(p.h));   // the arch stands centred on its gate tile
+  // eggs in the yard (focus tier)
+  [[18.6, 14.4], [21.9, 14.9], [19.2, 16.6], [21.4, 16.9]].forEach(([x, y]) => card('egg', x, y, 0));
+
+  // neon interactive nodes: Expedition gate under the arch -> Cave, Shop in front of the stall
+  const nodes = [
+    { i: 20, j: 26, kind: 'gate', label: 'Expedition gate: entering the cave', go: 'cave' },
+    { i: 31, j: 13, kind: 'shop', label: 'Shop (stall)' },
+  ];
+  for (const n of nodes) neon(n.i, n.j, 0);
+
+  // walkability: grass + path, step at most one level, big props block their tile
+  const BLOCK = new Set(['oak', 'bigoak', 'pine', 'rock', 'lighthouse', 'lantern']);
+  const blocked = new Set();
+  for (const p of props) if (BLOCK.has(p.k)) blocked.add(p.i + ',' + p.j);
+  for (let i = 19; i <= 21; i++) for (let j = 4; j <= 5; j++) blocked.add(i + ',' + j);   // cottage footprint
+  return {
+    name: 'Main Base', sub: 'Map 1 · Main Base · 40×30 tiles (Park, MapData.luau)', start: [20, 15],
+    walk: (i, j, fi, fj) => { const c = code(i, j); return (c === 1 || c === 2) && !blocked.has(i + ',' + j) && Math.abs(hOf(i, j) - hOf(fi, fj)) <= 1; },
+    height: (i, j) => hOf(i, j), nodes, seeds: null, center: [cols / 2, rows / 2],
+    json: { tiles: PARK.rows, heights: PARK.H, props: PARK.objects.map(([k, x, y]) => [k, +(x / 16).toFixed(2), +(y / 16).toFixed(2)]), neon: nodes.map(n => [n.kind, n.i, n.j]) },
+  };
+}
+
+// ---------------------------------------------------------------- Map 2: Cave Expedition
+function buildCave() {
+  const rows = CAVE.length, cols = CAVE[0].length;
+  const ch = (i, j) => (i < 0 || j < 0 || i >= cols || j >= rows) ? '#' : CAVE[j][i];
+  const isWall = (i, j) => ch(i, j) === '#';
+  const cells = [];
+  for (let j = 0; j < rows; j++) { cells.push([]); for (let i = 0; i < cols; i++) {
+    if (isWall(i, j)) {
+      const edge = i === 0 || j === 0 || i === cols - 1 || j === rows - 1;
+      const nearFloor = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, b]) => !isWall(i + a, j + b));
+      cells[j].push({ h: nearFloor ? 2 + Math.floor(hash(i, j) * 2.99) : 4, mat: 'wall', deep: !nearFloor || edge });
+    } else cells[j].push({ h: 0, mat: 'floor' });
+  } }
+  buildTops(cells, cols, rows, (g, L, mine) => {
+    for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
+      if (!mine(i, j)) continue;
+      const x = i * T, y = j * T;
+      if (L === 0) {
+        g.fillStyle = C['cave-grout']; g.fillRect(x, y, T, T);
+        g.fillStyle = C['cave-floor']; g.fillRect(x + 3, y + 3, T - 6, T - 6);
+        // hard wall shadows on the floor: thrown north-east, flat
+        const hw = cells[j][i - 1] && cells[j][i - 1].h, hs = cells[j + 1] && cells[j + 1][i] && cells[j + 1][i].h;
+        g.fillStyle = 'rgba(12,8,23,.72)';
+        if (hw) g.fillRect(x, y, T * Math.min(.85, .22 * hw), T);
+        if (hs) g.fillRect(x, y + T - T * Math.min(.85, .22 * hs), T, T * Math.min(.85, .22 * hs));
+      } else {
+        const deep = cells[j][i].deep;
+        g.fillStyle = deep ? C['cliff-shadow'] : C['wall-top']; g.fillRect(x - .5, y - .5, T + 1, T + 1);
+        if (!deep) { g.fillStyle = C['wall-lit']; g.beginPath(); g.moveTo(x + T, y + T * .45); g.lineTo(x + T, y + T); g.lineTo(x + T * .45, y + T); g.fill(); }   // one hard facet per column
+      }
+    }
+  });
+  buildSides(cells, cols, rows, (c, lit) => c.mat === 'wall' && !c.deep ? (lit ? C['wall-lit'] : C['wall-shadow']) : (lit ? C['cliff-lit'] : C['cliff-shadow']));
+
+  let start = [4, 6]; const seeds = []; const nodes = [];
+  for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
+    const c = ch(i, j);
+    if (c === 'P') start = [i, j];
+    if (c === 's') { neon(i, j, 0); seeds.push({ i, j, el: card('seed', i + .5, j + .5, 14, 'seed'), got: false }); }
+    if (c === 'X') { neon(i, j, 0, true); nodes.push({ i, j, kind: 'exit', label: 'Exit: back to the Main Base', go: 'base' }); }
+  }
+  return {
+    name: 'Cave Expedition', sub: 'Map 2 · Cave Expedition · 30×20 tiles', start,
+    walk: (i, j) => !isWall(i, j), height: () => 0, nodes, seeds, center: [cols / 2, rows / 2],
+    json: { tiles: CAVE, wallHeights: cells.map(r => r.map(c => c.h).join('')), neon: nodes.map(n => [n.kind, n.i, n.j]).concat(seeds.map(s => ['seed', s.i, s.j])) },
+  };
+}
+
+// ---------------------------------------------------------------- background (parallax 0.3x): flat stars + far silhouettes
+const bg = document.getElementById('bg'), bgc = document.getElementById('bgc');
+function paintBg(kind) {
+  const r = bgc.getBoundingClientRect(), dpr = Math.min(2, devicePixelRatio || 1);
+  bgc.width = Math.round(r.width * dpr); bgc.height = Math.round(r.height * dpr);
+  const g = bgc.getContext('2d'); g.scale(dpr, dpr);
+  g.fillStyle = C['bg-flat']; g.fillRect(0, 0, r.width, r.height);
+  for (let k = 0; k < 260; k++) {
+    const x = hash(k, 1) * r.width, y = hash(k, 2) * r.height, s = hash(k, 3) < .9 ? 1.5 : 3;
+    g.fillStyle = kind === 'cave' ? (k % 7 ? '#2a1460' : '#ff007f') : (k % 9 ? '#3b2a7a' : '#f6f0ff');
+    g.fillRect(x, y, s, s);
+  }
+  // silhouettes: far islets (base) or crystal shards (cave), one flat fill + ink edge
+  for (let k = 0; k < 9; k++) {
+    const x = hash(k, 7) * r.width, y = r.height * (.25 + hash(k, 8) * .55), w = 90 + hash(k, 9) * 160;
+    g.beginPath();
+    if (kind === 'cave') { g.moveTo(x, y + w * .5); g.lineTo(x + w * .2, y - w * .4); g.lineTo(x + w * .34, y + w * .1); g.lineTo(x + w * .5, y - w * .7); g.lineTo(x + w * .7, y + w * .5); }
+    else { g.moveTo(x, y); g.lineTo(x + w * .2, y - w * .14); g.lineTo(x + w * .55, y - w * .2); g.lineTo(x + w * .85, y - w * .08); g.lineTo(x + w, y); g.lineTo(x + w * .6, y + w * .22); g.lineTo(x + w * .3, y + w * .2); }
+    g.closePath(); g.fillStyle = kind === 'cave' ? '#1a0b3d' : '#160c33'; g.fill(); g.lineWidth = 3; g.strokeStyle = INK; g.stroke();
+  }
+}
+
+// ---------------------------------------------------------------- camera + hen
+let hen = null, pos = [0, 0], zoom = 1, collected = 0;
+const toastEl = document.getElementById('toast');
+let toastT = 0;
+function toast(msg) { toastEl.textContent = msg; toastEl.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => toastEl.hidden = true, 1600); }
+function camTo(i, j) {
+  const z = zOf(map.height(i, j));
+  vp.style.setProperty('--cx', (i + .5) * T); vp.style.setProperty('--cy', (j + .5) * T); vp.style.setProperty('--cz', z);
+  // parallax: the backdrop slides 0.3x the camera's screen-space pan
+  const yaw = vp.classList.contains('game') ? 0 : -34 * Math.PI / 180, pitch = (vp.classList.contains('game') ? 52 : 56) * Math.PI / 180;
+  const dx = ((i + .5) - map.center[0]) * T, dy = ((j + .5) - map.center[1]) * T;
+  const sx = dx * Math.cos(yaw) - dy * Math.sin(yaw), sy = (dx * Math.sin(yaw) + dy * Math.cos(yaw)) * Math.cos(pitch);
+  bg.style.transform = `translate(${-sx * .3 * zoom}px, ${-sy * .3 * zoom}px)`;
+  bg.style.transition = reduced ? 'none' : 'transform .32s cubic-bezier(.2,.8,.25,1)';
+}
+function placeHen() {
+  const [i, j] = pos;
+  hen.style.setProperty('--x', ((i + .5) * T) + 'px'); hen.style.setProperty('--y', ((j + .5) * T) + 'px'); hen.style.setProperty('--z', (zOf(map.height(i, j)) + 1) + 'px');
+  camTo(i, j);
+}
+function step(di, dj) {
+  if (!map) return;
+  const [i, j] = pos, ni = i + di, nj = j + dj;
+  if (di) hen.classList.toggle('flip', di < 0);
+  if (!map.walk(ni, nj, i, j)) { toast('Blocked'); return; }
+  pos = [ni, nj];
+  hen.classList.remove('hop'); void hen.offsetWidth; hen.classList.add('hop');
+  placeHen();
+  if (map.seeds) for (const s of map.seeds) if (!s.got && s.i === ni && s.j === nj) {
+    s.got = true; s.el.classList.add('got'); collected++; updateSeeds(); toast(collected === map.seeds.length ? 'All seeds collected' : '+1 neon seed');
+  }
+  for (const n of map.nodes) if (n.i === ni && n.j === nj) { toast(n.label); if (n.go) setTimeout(() => load(n.go), 450); }
+}
+function updateSeeds() { document.getElementById('seeds').textContent = collected + ' / ' + map.seeds.length; }
+
+// ---------------------------------------------------------------- load a map
+let built = {};
+function load(which) {
+  world.innerHTML = '';
+  uid = 0; collected = 0;
+  map = which === 'cave' ? buildCave() : buildBase();
+  zoom = (innerWidth < 600 ? .72 : .9) * (which === 'cave' ? .9 : 1); vp.style.setProperty('--zoom', zoom);
+  built[which] = map.json;
+  hen = card('hen', 0, 0, 0, 'hen');
+  pos = map.start.slice();
+  document.getElementById('sub').textContent = map.sub;
+  document.getElementById('m1').setAttribute('aria-pressed', which !== 'cave');
+  document.getElementById('m2').setAttribute('aria-pressed', which === 'cave');
+  document.getElementById('counter').hidden = !map.seeds;
+  if (map.seeds) updateSeeds();
+  paintBg(which === 'cave' ? 'cave' : 'base');
+  const prev = world.style.transition; world.style.transition = 'none';
+  placeHen(); void world.offsetWidth; world.style.transition = prev;
+  window.__map = which;
+}
+
+// ---------------------------------------------------------------- input
+const KEYS = { ArrowUp: [0, -1], KeyW: [0, -1], ArrowDown: [0, 1], KeyS: [0, 1], ArrowLeft: [-1, 0], KeyA: [-1, 0], ArrowRight: [1, 0], KeyD: [1, 0] };
+addEventListener('keydown', e => { const d = KEYS[e.code]; if (d && !e.repeat && document.getElementById('spec').hidden) { e.preventDefault(); step(...d); } });
+document.querySelectorAll('.dpad .key').forEach(b => b.addEventListener('click', () => step(...b.dataset.d.split(',').map(Number))));
+document.getElementById('m1').onclick = () => load('base');
+document.getElementById('m2').onclick = () => load('cave');
+const camBtn = document.getElementById('cam');
+camBtn.onclick = () => { const on = vp.classList.toggle('game'); camBtn.setAttribute('aria-pressed', on); camTo(...pos); };
+const setZoom = z => { zoom = Math.max(.45, Math.min(1.8, z)); vp.style.setProperty('--zoom', zoom); camTo(...pos); };
+document.getElementById('zin').onclick = () => setZoom(zoom * 1.2);
+document.getElementById('zout').onclick = () => setZoom(zoom / 1.2);
+addEventListener('wheel', e => { if (!document.getElementById('spec').hidden) return; e.preventDefault(); setZoom(zoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1)); }, { passive: false });
+addEventListener('resize', () => paintBg(window.__map === 'cave' ? 'cave' : 'base'));
+
+// spec drawer + build JSON
+const spec = document.getElementById('spec'), specBtn = document.getElementById('specBtn');
+const openSpec = on => { spec.hidden = !on; specBtn.setAttribute('aria-expanded', on); if (on) fillJson(); };
+specBtn.onclick = () => openSpec(spec.hidden);
+document.getElementById('specClose').onclick = () => openSpec(false);
+const tokTable = document.getElementById('tokTable');
+const TOKS = [['bg-flat', 'canvas / sea'], ['grass-base', 'grass top'], ['grass-shadow', 'grass hard shadow'], ['path-base', 'walkway'], ['path-shadow', 'walkway shadow'],
+  ['ink-outline', 'outlines'], ['neon-glow', 'interactive nodes'], ['water-base', 'pond'], ['cliff-lit', 'cliff lit (S/W)'], ['cliff-shadow', 'cliff shadow (N/E)'],
+  ['cave-floor', 'cave floor'], ['wall-top', 'cave column top'], ['wall-lit', 'column lit'], ['wall-shadow', 'column shadow']];
+tokTable.innerHTML = TOKS.map(([k, use]) => `<tr><td><span class="sw" style="background:${C[k]}"></span>${use}</td><td><code>Color3.fromHex("${C[k]}")</code></td></tr>`).join('');
+function fillJson() {
+  if (!built.base) built.base = null;
+  const data = { units: { studsPerTile: 4, studsPerLevel: 2.4, cliffStuds: 6 }, camera: { pitchDeg: 52, fov: 11, yawDeg: 0 },
+    tokens: Object.fromEntries(TOKS.map(([k]) => [k, C[k]])), post: { contrast: 0.4, saturation: 0.45 }, halftone: { tilePx: 4, transparency: 0.93 }, parallax: 0.3,
+    maps: { base: { tiles: PARK.rows, heights: PARK.H, props: PARK.objects, neon: [['gate', 20, 26], ['shop', 31, 13]] }, cave: { tiles: CAVE } } };
+  if (built.cave) data.maps.cave = built.cave;
+  document.getElementById('jsonOut').value = JSON.stringify(data);
+}
+document.getElementById('copyJson').onclick = () => {
+  fillJson();
+  const t = document.getElementById('jsonOut'), ok = () => { const c = document.getElementById('copied'); c.hidden = false; setTimeout(() => c.hidden = true, 1400); };
+  try { navigator.clipboard.writeText(t.value).then(ok, () => { t.focus(); t.select(); }); } catch (e) { t.focus(); t.select(); }
+};
+
+// drag to look around (camera snaps back to the hen on the next step)
+let drag = null;
+const stage = document.getElementById('stage');
+stage.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY, cx: +vp.style.getPropertyValue('--cx'), cy: +vp.style.getPropertyValue('--cy') }; stage.setPointerCapture(e.pointerId); });
+stage.addEventListener('pointermove', e => {
+  if (!drag) return;
+  const yaw = vp.classList.contains('game') ? 0 : -34 * Math.PI / 180, pitch = (vp.classList.contains('game') ? 52 : 56) * Math.PI / 180;
+  const sx = (e.clientX - drag.x) / zoom, sy = (e.clientY - drag.y) / zoom / Math.cos(pitch);
+  world.style.transition = 'none';
+  vp.style.setProperty('--cx', drag.cx - (sx * Math.cos(-yaw) - sy * Math.sin(-yaw)));
+  vp.style.setProperty('--cy', drag.cy - (sx * Math.sin(-yaw) + sy * Math.cos(-yaw)));
+});
+const endDrag = () => { if (drag) { drag = null; world.style.transition = ''; } };
+stage.addEventListener('pointerup', endDrag); stage.addEventListener('pointercancel', endDrag);
+
+load('base');
+})();
+</script>

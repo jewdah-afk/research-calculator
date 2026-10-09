@@ -10,6 +10,15 @@ Last updated: 2026-10-09 (Peckwood Ascent world rebuild, branch `claude/peckwood
 
 Branch **`claude/peckwood-isle`** (pushed). Build: `cd roblox && rojo build default.project.json -o Peckwood.rbxl`, open it in Studio (one Studio window only). The owner says it is OK to stop Play / reload the test place at any time.
 
+### CEL MAP TEST PAGE (2026-10-09, latest, owner prompt: "2.5D cel-shaded mock map, CSS 3D")
+- `concepts/peckwood_cel_map.html` (also published as an artifact): Map 1 = the real Park (MapData.luau 1:1: tiles,
+  hills, props, flowers) and Map 2 = a Cave Expedition (violet floor, extruded purple columns, 11 neon seeds), CSS 3D
+  heightfield (one canvas per height level + DOM side faces), camera-facing ink-outlined cel cards, grid walking hen,
+  axonometric / Game cam (pitch 52) toggle, 0.3x parallax, halftone overlay, owner's strict tokens.
+- Its **Studio spec** drawer maps every rule to Roblox (units, Color3 tokens, Highlight, Lighting, flat shadow parts,
+  Neon + Bloom, halftone ScreenGui) and copies the build JSON. Screenshots: `concepts/cel_map_*.png`.
+- This brings back the cel look (look B was the previous pick): owner to choose before any Studio build.
+
 ### MAP LOOK B + MAP HIERARCHY (2026-10-09, latest, no Studio: owner away)
 - **Look changed to B, realistic cartoony** (owner picked from 3 tests in `roblox/docs/targets/look_A_dark_fantasy.png`,
   `look_B_realistic_cartoony.png`, `look_C_dark_storybook.png`): Sea of Thieves / Fortnite / Kena, golden hour, painted
