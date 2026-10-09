@@ -634,8 +634,9 @@ local function buildSkirt(mnI, mnJ, mxI, mxJ, riseAt)
 			warn("[Ocean] cliff mesh failed: " .. tostring(mp))
 		end
 	end
+	local TRI_CAP = 19500   -- per mesh (measured limits: 20,000 triangles and 60,000 vertices per EditableMesh)
 	local function meshFor(tris: number)
-		if cur and cur.tris + tris > 19000 then finish() end
+		if cur and cur.tris + tris > TRI_CAP then finish() end
 		if not cur then
 			local ok, em = pcall(function() return AssetService2:CreateEditableMesh({}) end)
 			if not ok or not em then warn("[Ocean] cliff EditableMesh unavailable: " .. tostring(em)); return nil end
@@ -666,9 +667,7 @@ local function buildSkirt(mnI, mnJ, mxI, mxJ, riseAt)
 			for k = -1, 1 do raw += hash((q + k) % nP + 1, 4.4) * (if k == 0 then 0.5 else 0.25) end
 			bulge[q] = (raw - 0.5) * 1.4
 		end
-		local mesh = meshFor(nP * (#PROFILE - 1) * 2)
-		if not mesh then continue end
-		local em, origin, colIds = mesh.em, mesh.origin, mesh.colIds
+		local origin = Vector3.new(0, SKIRT_TOP, 0)
 		-- grass drips (owner 2026-10-09: the grass line was "too flat"): the lip's underside hangs down in scallops of
 		-- uneven depth, so the grass / rock border is a wavy hand-drawn line instead of a straight edge
 		local drip = table.create(nP)
@@ -706,48 +705,57 @@ local function buildSkirt(mnI, mnJ, mxI, mxJ, riseAt)
 		-- toon facets on SHARED vertices (EditableMesh budget, 2026-10-09: one vertex per face corner used 18k vertices and
 		-- starved every other EditableMesh in the game). Positions and UVs are one per grid point; flat shading stays
 		-- because normals and colours are set per face (SetFaceNormals / SetFaceColors are independent of vertices).
+		-- A long coast (every island open) is split into column CHUNKS so no single mesh passes the triangle cap; each
+		-- chunk owns its columns q0..q1+1 (the boundary column is duplicated, so the seam is invisible).
 		local NR = #PROFILE
-		local vid, uvid = table.create(nP + 1), table.create(nP + 1)
-		for q = 1, nP + 1 do
-			local qq = (q - 1) % nP + 1
-			vid[q], uvid[q] = table.create(NR), table.create(NR)
-			for r = 1, NR do
-				if q <= nP then
+		local perCol = (NR - 1) * 2
+		local q0 = 1
+		while q0 <= nP do
+			local room = TRI_CAP - (if cur then cur.tris else 0)
+			if room < perCol * 8 then finish(); room = TRI_CAP end
+			local q1 = math.min(nP, q0 + math.floor(room / perCol) - 1)
+			local mesh = meshFor((q1 - q0 + 1) * perCol)
+			if not mesh then break end
+			local em, colIds = mesh.em, mesh.colIds
+			local vid, uvid = {}, {}
+			for q = q0, q1 + 1 do
+				local qq = (q - 1) % nP + 1
+				vid[q], uvid[q] = table.create(NR), table.create(NR)
+				for r = 1, NR do
 					local pos = P(qq, r)
 					vid[q][r] = em:AddVertex(pos)
-					if colVerts[qq] then table.insert(colVerts[qq], { vid[q][r], pos }) end
-				else
-					vid[q][r] = vid[1][r]   -- the loop closes on the first column (same position, own UV for the seam)
+					if colVerts[qq] then table.insert(colVerts[qq], { em = em, vid = vid[q][r], pos = pos }) end
+					uvid[q][r] = em:AddUV(Vector2.new(arc[q] / U_PERIOD, PROFILE[r][6]))
 				end
-				uvid[q][r] = em:AddUV(Vector2.new(arc[q] / U_PERIOD, PROFILE[r][6]))
 			end
-		end
-		for q = 1, nP do
-			local q2 = q % nP + 1
-			for r = 1, NR - 1 do
-				local a, b, cc, d = P(q, r), P(q2, r), P(q2, r + 1), P(q, r + 1)
-				local band = PROFILE[r][3]
-				local n1 = (b - a):Cross(d - a)
-				if n1.Magnitude < 1e-6 then continue end
-				n1 = n1.Unit
-				-- winding: the face must point away from the land (outward / up)
-				local outward = Vector3.new(nrm[q].X, 0, nrm[q].Y) + Vector3.new(0, 0.3, 0)
-				local flip = n1:Dot(outward) < 0
-				local va, vb, vc, vd = vid[q][r], vid[q + 1][r], vid[q + 1][r + 1], vid[q][r + 1]
-				local ua, ub, uc, ud = uvid[q][r], uvid[q + 1][r], uvid[q + 1][r + 1], uvid[q][r + 1]
-				local ni = em:AddNormal(if flip then -n1 else n1)
-				local f1 = if flip then em:AddTriangle(va, vc, vb) else em:AddTriangle(va, vb, vc)
-				local f2 = if flip then em:AddTriangle(va, vd, vc) else em:AddTriangle(va, vc, vd)
-				local cid = colIds[band]
-				em:SetFaceNormals(f1, { ni, ni, ni }); em:SetFaceNormals(f2, { ni, ni, ni })
-				em:SetFaceColors(f1, { cid, cid, cid }); em:SetFaceColors(f2, { cid, cid, cid })
-				if flip then em:SetFaceUVs(f1, { ua, uc, ub }); em:SetFaceUVs(f2, { ua, ud, uc })
-				else em:SetFaceUVs(f1, { ua, ub, uc }); em:SetFaceUVs(f2, { ua, uc, ud }) end
+			for q = q0, q1 do
+				local q2 = q % nP + 1
+				for r = 1, NR - 1 do
+					local a, b, cc, d = P(q, r), P(q2, r), P(q2, r + 1), P(q, r + 1)
+					local band = PROFILE[r][3]
+					local n1 = (b - a):Cross(d - a)
+					if n1.Magnitude < 1e-6 then continue end
+					n1 = n1.Unit
+					-- winding: the face must point away from the land (outward / up)
+					local outward = Vector3.new(nrm[q].X, 0, nrm[q].Y) + Vector3.new(0, 0.3, 0)
+					local flip = n1:Dot(outward) < 0
+					local va, vb, vc, vd = vid[q][r], vid[q + 1][r], vid[q + 1][r + 1], vid[q][r + 1]
+					local ua, ub, uc, ud = uvid[q][r], uvid[q + 1][r], uvid[q + 1][r + 1], uvid[q][r + 1]
+					local ni = em:AddNormal(if flip then -n1 else n1)
+					local f1 = if flip then em:AddTriangle(va, vc, vb) else em:AddTriangle(va, vb, vc)
+					local f2 = if flip then em:AddTriangle(va, vd, vc) else em:AddTriangle(va, vc, vd)
+					local cid = colIds[band]
+					em:SetFaceNormals(f1, { ni, ni, ni }); em:SetFaceNormals(f2, { ni, ni, ni })
+					em:SetFaceColors(f1, { cid, cid, cid }); em:SetFaceColors(f2, { cid, cid, cid })
+					if flip then em:SetFaceUVs(f1, { ua, uc, ub }); em:SetFaceUVs(f2, { ua, ud, uc })
+					else em:SetFaceUVs(f1, { ua, ub, uc }); em:SetFaceUVs(f2, { ua, uc, ud }) end
+				end
 			end
+			q0 = q1 + 1
 		end
 		for q, list in colVerts do
-			for _, v in list do em:SetPosition(v[1], v[2] - Vector3.new(0, DROP, 0)) end
-			table.insert(rising, { em = em, delay = colDelay[q], verts = list })
+			for _, v in list do v.em:SetPosition(v.vid, v.pos - Vector3.new(0, DROP, 0)) end
+			table.insert(rising, { delay = colDelay[q], verts = list })
 		end
 	end
 	finish()
@@ -763,7 +771,7 @@ local function buildSkirt(mnI, mnJ, mxI, mxJ, riseAt)
 				if k <= 0 then continue end
 				local e = 1 + 2.2 * (k - 1) ^ 3 + 1.2 * (k - 1) ^ 2   -- ease-out with a small overshoot (easeBack)
 				local off = (1 - e) * DROP
-				for _, v in r.verts do r.em:SetPosition(v[1], v[2] - Vector3.new(0, off, 0)) end
+				for _, v in r.verts do v.em:SetPosition(v.vid, v.pos - Vector3.new(0, off, 0)) end
 				if k >= 1 then r.done = true end
 			end
 			if left == 0 and skirtAnim then skirtAnim:Disconnect(); skirtAnim = nil end

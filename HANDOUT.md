@@ -108,6 +108,15 @@ arcs reads as crescents, wall rings sit on the ground; crack decals land on the 
 flash ZOffset keeps it out of the ground; VelocityParallel streak orientation (texture head at row 0 should lead);
 particle sizes past ~100 studs (unlock wave / circle fallbacks); Brightness / bloom by day and night; push amounts at
 zoom 4 / 9 / 16.
+### INTEGRATED: Figma UI + VFX merged into claude/peckwood-isle (2026-10-09, latest, cbb19b8)
+- `claude/peckwood-ui` (in-game Figma UI, owner placement, COMPANIONS pull-down board, Motion.key press-in on every key, layered Sfx + dev Sound Board) and `claude/peckwood-vfx` (egg_hatch / collect_pop / level_up / island_unlock, 0 EditableMeshes) are merged here. Details: sections "In-game UI from Figma" and "VFX (claude/peckwood-vfx)" below. Side branches keep going and merge isle first.
+- Studio QA at merge: 0 script errors; MAXED layout = owner sketch; 643 wired keys visible at peak; only unwired GuiButtons are Roblox chat, window click-blockers and the board's pull ring (fix sent).
+- Icons: all 992 icons uploaded (426 fish + every tree node / gear / item); `shared/Icons.luau`.
+- VFX meshes: store meshes can't be fetched by id at runtime ("could not fetch"), so the 8 shapes are saved in the place as `ReplicatedStorage.PeckwoodVfxMeshes` (`assets/VfxMeshes.rbxm`, scanned: no scripts).
+- EditableMesh budget (measured): ~7 live meshes per client, 20,000 triangles / 60,000 vertices each. Cliff = shared-vertex grid split into 19.5k-tri chunks (every island open = 3 meshes), waves = 1 mesh, VFX = 0.
+- Sounds: 31 events with 3 licensed candidates each (Pro Sound Effects / Roblox UI pack / APM); first candidate is the default; owner picks by ear on the dev Sound Board (SOUNDS on the dev bar). Egg pickup = eggshell tap + buttery pop layers with warm EQ.
+- Open fixes in flight: board pull-ring press, board covers AUTO + rail top, sticky hover tooltip, VFX push framing / duplicate camera bind / reveal hold, island_unlock check.
+
 ### Park life pass + camera (2026-10-09, latest)
 - **Camera** starts close on the bird: `ZOOM_PLAY = 9` in Main.client (wheel still goes out to the whole island, 16). Owner: "I can't even see the vfx"; Birb's view is close too.
 - **Toon flowers** replace the generated wildflower tufts (owner: they "look ass"). Each `Map.flowers` spot = a rounded leaf clump + 2-3 five-petal flowers of one pastel (white / pink / yellow / coral / lilac), scale `F = 3`. Skipped on paths, water, hills, the egg yard, prop footprints and the screen strip just north of tall props (they hid behind lamps).
@@ -369,6 +378,155 @@ Do this before the steps below.
 4. Ocean: verify painted shallows/foam fit the new coastline; remove the faint diagonal lines seen on the water.
 5. Then the owner's bigger ask: every Birb mechanic + all windows in the Figma UI style (see section 0 gap audit).
 
+### In-game UI from Figma (claude/peckwood-ui)
+Branch **`claude/peckwood-ui`** (worktree `~/Downloads/rc-main-ui`, not merged, not pushed). Owner ask: "get our UI in
+... everything rendered in till we get the rest of the game in". Every HUD element and every window on the Figma HUD
+board `213:7` and Windows board `239:307` is in game (Figma look, placement per the owner's 2026-10-09 screenshot
+direction on Birb's screen split), openable, with live data where a system exists and Figma's own sample save
+everywhere else. QA rounds: UI_BIRB_QA_1 (tab-by-tab Studio QA against real Birb) + the owner direction on top.
+- **How it matches Figma (by construction, no hand redraw):** `roblox/tools/figma_export/exporter.js` (read-only
+  `use_figma` script) dumps a frame's node tree in 19 KB slices; `collect.py` reassembles the slices from the Claude
+  session transcripts (`python collect.py <session dir>`); `build_layouts.py` writes one Luau layout per frame to
+  `src/client/UI/Figma/Layouts/` (node id in each header). `UI/Figma/Render.luau` builds those tables node for node at
+  the Figma coordinates: fills, linear gradients, radial (soft-ellipse fallback, no beta needed), tiled stripes /
+  lattice / halftone, strokes (inner), ink drops, soft shadows, inner shadows, layer-blur ellipses, sparkles; glyphs
+  and growth chevrons are drawn as rounded bars (all ink first, then colour). Re-export a changed frame: run the
+  exporter with its node id (parts 0..n), `collect.py`, `build_layouts.py` (roots in `roots.json`). Birb features a
+  frame does not have yet are explicit edits in `UI/LayoutPatches.luau` (applied once to a copy by WindowManager).
+- **Modules:** `UI/Layout.luau` (Birb screen split, the ONE 8 px spacing table `Layout.S`, the window region),
+  `UI/Motion.luau` (every tween + `Motion.key`, the only button feedback), `UI/Hud.luau` (HUD, placed by `reflow`),
+  `UI/CompanionsBoard.luau` (the pull-down map), `UI/WindowManager.luau` + `UI/WindowDefs.luau` (every window, frames,
+  tabs, views, dock), `UI/SidebarViews.luau` (sidebar NEST / MINE views generated from the SEEDS frame),
+  `UI/LayoutPatches.luau`, `UI/Binders.luau` (live data, actions, accordion, filters), `UI/Screens.luau` (code-built
+  windows: profile / settings / leaderboards / Fast Travel / offline / Sound Board via `UI/SoundBoard.luau`),
+  `UI/Figma/FKit.luau` (Luau port of `docs/figma/kit.js`), `UI/SampleData.luau` (EVERY placeholder value),
+  `UI/Sfx.luau` + `UI/SfxCandidates.luau`, `UI/RobuxShop.luau`, `UI/Figma/IconAlias.luau` (safety net only).
+- **Placement (owner screenshot direction 2026-10-09, on Birb's split).** Design canvas 1080 tall (UIScale =
+  viewport height / 1080). Permanent **right sidebar** 25 % wide (snapped to 8, min 384), full height, open by default,
+  collapse tab (steel key 24x72) on its left edge at mid-height. Left of it is the **game area** `[0, gameRight]`;
+  `TOP` = Roblox top-bar inset rounded up + 8 (72 at 1080p); `colR = gameRight - TAB_W - GAP`. Element -> anchor:
+
+  | element | anchor (design px, game-area terms) |
+  |---|---|
+  | banner | top-left at (EDGE 24, TOP); just the area name (the egg count moved to the area meter) |
+  | wallet | ONE column under the banner (GAP 8), progression order eggs, plumes, seeds, twigs, moneta, golden, ore, echo, skill points (Birb map0 order, ours after); every chip 300 wide (x0.85), keys 8 px apart, value right-aligned with the rate under it; the column scales down before it would pass H - 24 |
+  | area meter | top-centre at TOP, every area: fishing / mine / nest / expedition / desert / echo bars, and an egg-field bar for Park / Garden / Castle (eggs on the field / cap, per egg, per second, plumes) |
+  | travel up, toasts | under the meter (GAP2); toasts on the overlay above every window |
+  | COMPANIONS [TAB] | top-right against the sidebar (right edge `colR`), top = TOP; the pull-down board hangs under it |
+  | AUTO | under the tucked roller + pull ring (GAP 8), right edge `colR`; hidden while the board is down |
+  | area rail | under AUTO (GAP2), right edge `colR` |
+  | travel left / right | mid-height; left at EDGE, or right of the wallet column (GAP2) when the column reaches mid-height; right = rail left - GAP2. Label = destination name always; locked = dimmed chip + padlock, requirement in a hover / tap tooltip |
+  | icon row | ONE row of 8 icon keys (52 px, 8 apart) centred at the bottom (bottom = H - 24): FISH, PETS, AUTO, SHOP, FAST TRAVEL, MAP, PROFILE, SETTINGS (Birb's core keys keep Birb's order at the right end); labels in hover tooltips |
+  | objective | centred just above the icon row (GAP 8) |
+  | hotbar / UNLOCK | centred above the objective (GAP 8); travel down left of the objective, bottoms aligned |
+  | [E] prompt / big moment | game-area centre at 60 % / 40 % height |
+  | dev bar | very top centre, scale 0.55: REGULAR / MAXED / NEXT AREA / SOUNDS |
+  | windows | scaled into the WINDOW REGION (`Layout.setRegion`): below the top band (meter, or AUTO when that fits better), right of the wallet column, left of the rail, above the hotbar / objective; Fishing + companion windows dock bottom-left of it; Fast Travel = compact popup right above its key; the rest centred in it |
+  | Robux shop | overlay sized to the game area |
+
+  Esc / ButtonB / the close key close the open window only, never the sidebar; opening a window closes the other one.
+  Keyboard: Tab = companions board, Q = Objectives, P = Profile (also clickable in the sidebar's hint panel).
+- **COMPANIONS board (`UI/CompanionsBoard.luau`)**: a pull-down classroom map. Steel sheet 12 px wider than the
+  header, squared wooden roller (12 px rod, metal end caps 12x18, ink outline, soft shadow) with a brass pull ring.
+  All six companion rows sit on it; locked ones show dimmed art, a padlock and "Unlocks at <area>" (deny + tooltip on
+  click). Drop: track height 0 -> H + 6 in 0.34 s Quad Out (gravity), then H - 2 (0.12 s Sine InOut) and H (0.10 s
+  Sine Out); the sheet stretches 1.05 -> 1 over the first 0.20 s; each row's cover fades (0.12 s) when the roller passes
+  its middle (delay = T(1 - sqrt(1 - y/H))); the pull ring swings +14 / -9 / +4 / 0 deg (0.12 / 0.18 / 0.14 / 0.12 s);
+  sound board_roll_down. Roll up: H -> 0 in 0.26 s Quad In (spring loaded), rows cover as the roller passes (delay
+  T sqrt(1 - y/H)), the roller overshoots 5 px into the header (0.06 s) and settles (0.16 s Back Out); sounds
+  board_roll_up, then board_clack on the snap. One tweened size drives clip, sheet and roller (no per-frame Lua).
+  Tab / the header / the ring toggle it; the state is saved (server pref `prefs.companions`, session attribute).
+- **Sidebar = Birb's.** Tabs EGGS / MOLT / SEEDS / NEST / MINE are all sidebar views (NEST / MINE generated from the SEEDS
+  frame with live twig / mine rows and a card key into the full window). **Accordion** (Birb captures desert_tab_popcorn,
+  map0_seeds, mine_tab_mine): every upgrade still to buy is a card, a maxed one folds into a slim row (icon, name, LV
+  chip in gold when maxed, green dot when affordable) after its gold pop; any row folds / unfolds on click (0.18 s
+  height ease, rows below slide). Keybind hint panel pinned at the bottom ([WASD] MOVE, [SPACE] HOP, [TAB] COMPANIONS,
+  [Q] OBJECTIVES, [P] PROFILE). The MOLT tab's pending plume gain is a violet chip inside the tab under its label; count
+  badges sit inside the tab's top-right. Cards show live values (seeds / twigs / ore, per second, tier / area / crow).
+- **Figma frame -> window (open from):** sidebar `260:3088` EGGS / `260:3277` golden view (currency switch) /
+  `260:4397` MOLT / `260:4544` SEEDS (+ generated NEST / MINE views) · mine `246:4443` SHOP / `248:1739` AREAS (+ CROW
+  tab -> crow `246:1276`) (mine meter, hotbar, sidebar MINE card) · treasure `246:1525` (mine down arrow) · trees
+  `239:309` / `246:3851` / `246:1796` = SUNFLOWER TREE / DESERT TREE / ARCHIVIST'S BRANCH (title + header theme follow the
+  tab) (garden up arrow, echo / desert meter) · fishing `246:3448` / `248:2079` / `248:2952` (FISH key, bridge meter,
+  hotbar slots) · aquarium `246:2134` / `246:4667` / `248:1351` (bridge down arrow) + FISH MARKET tab -> market
+  `246:2574` (locked `248:1566`) · nest `260:2137` SHOP / `246:1462` LAKE (BREED -> `248:546` -> HATCH -> `248:948`) /
+  `260:4842` RIVERSIDE / `260:5761` SAWMILL / `261:600` OWNED (forest meter, sidebar NEST card) · parrot `256:483` /
+  `260:753` / `259:613` (+ FORGE `260:3850`) / `260:1011` / `260:3443` (companions) · expedition `260:5073` · sacrifice
+  `256:924` / `256:995` · objectives `256:1284` / `260:1565` / `260:2885` (objective bar, Q) · sparrow `259:788`, seagull
+  `260:5560`, red panda `256:589` (+ naming `256:806`), dave `259:871` · evolve `260:2568` (castle up arrow).
+  Code-built: profile / settings / leaderboards, Fast Travel, Welcome back, dev Sound Board. Debug attributes on
+  PlayerGui: `PeckwoodOpen` = "mine:AREAS", `PeckwoodPrompt` = "aquarium", `PeckwoodShop`, `PeckwoodSidebar` (bool),
+  `PeckwoodMoment` = text, `PeckwoodCompanions` (bool, plays the board animation). `_G.__uiKeys()` lists every live key.
+- **Live vs placeholder:** live = wallet column + rates, banner, area meters, objective + UNLOCK, companions levels +
+  locked rows, AUTO, fishing catches / rod, mine area, parrot level, desert chance + field, nest tier + twigs, sidebar
+  rows (EGGS / golden / MOLT / SEEDS / NEST / MINE) + cards, MOLT gain + hold-to-MOLT, Mine SHOP rows, FISHDEX (426
+  species), Collection / Aquarium filters (filter the Figma sample grids by real fish data), Profile stats, Fast
+  Travel, Settings sound. Everything else shows the Figma sample (SampleData for HUD values).
+- **Not reproduced / caveats:** header "swoosh" vectors dropped; radial gradients = soft-ellipse approximation; no
+  letter spacing; the CAST cooldown conical sweep is not built; Esc belongs to the Roblox menu (ButtonB / close key
+  work); only MUSIC volume in Settings; tab locks not enforced; Collection / enemy / quest grids are the Figma sample
+  (Fishdex is live). Birb features still missing (need a Figma pass or a system): Parrot UPGRADE slider + typed amount
+  and the PARROT CAM toggle; the Objectives GOALS (suggestions) tab; the "?" help keys and settings gear in window
+  headers.
+- **Keys (owner rule: every key presses in, nothing bubbly on clicks).** `Motion.key(target, kind)` is the only button
+  feedback: keycaps (ink body / lip / face) drop body + face by the lip depth with the lip hidden in 40 ms and rise in
+  90 ms; flat buttons (tabs, rows, cells, plates) drop 2 px; hover = +6 % veil + 2 px (keycap) / 1 px (flat) lift;
+  press_down / press_up / hover_tick sounds. No squash / overshoot on any key; the hero key of a window settles 3 % on
+  success (`Motion.settle`, purchase_big). Juice only on outcomes: value pops, bar tweens, fly-ins, maxed gold pop.
+  Render keys, tab / btn / seg layers, rows, cells, HUD buttons, rail, arrows, icon keys, the pull ring, dropdowns and
+  Kit.button (Robux shop) all go through it. `_G.__uiKeys()` returns { path, kind, pressIn, sfx, keycap, visible }.
+- **Motion (all TweenService, event driven; CanvasGroup only during a transition):** open 0.86 -> 1.04 (0.2 s) -> 1
+  (0.12 s) out of the button, rows cascade 40 ms; close: rows collapse in reverse, fade + shrink into the button with a
+  sparkle burst. Tab switch: no re-pop, no rebuild, the pill glides (0.2 s Quint), content crossfades 0.12 s with an 8 px
+  slide. Idle (open window only): header gloss sweep every 4.5 s, glow breathe 2.8 s, sparkle twinkle, up to 2 big icons
+  bob, and the window's ONE primary key (its biggest hero key) catches a light sweep every ~3.5 s. Can't afford: shake
+  +-6 x3, red flash, wallet wiggle. Maxed: gold pop + sparkles + shimmer, then the sidebar row folds. MOLT:
+  hold-to-confirm. Evolve: feed rows wilt. Window headers end in one clean edge: a uniform 1.5 px highlight over a
+  full-width 4 px ink line (no fading bevel strip).
+- **UX:** wallet counters and sidebar card numbers roll (odometer); `Hud.onLabel(pos, value, cur)` = "+N" floater +
+  icons flying into the chip; ONE breathing attention key (the sidebar primary BUY); "recommended" sparkle on the
+  cheapest affordable row; unaffordable = desaturated icon + red cost; badges max 2 (molt > fish > eggs > seeds);
+  hold-to-buy accelerates, Shift / long press = MAX; lists: thin scrollbar, edge fades, row hover, a very quiet scroll
+  tick; dropdown filters (one open at a time, closed with the window); tooltips on icon keys, locked arrows / rail
+  slots / Fast Travel rows; windows pre-build in spare frames; toasts stack above windows with a time-left line;
+  big-moment banner with music duck.
+- **Sfx (`UI/Sfx.luau`):** one function per event; provisional ids = the first licensed candidate of each event in
+  `UI/SfxCandidates.luau` (Pro Sound Effects / Roblox UI pack / APM); per-category max length (ui 0.35 s, rewards
+  1.2 s, messages 3 s) with a fade-out, optional start offset per id (`Sfx.START`), all ids preloaded; +-5 % pitch;
+  SoundGroups ui 0.8 / rewards 1 / messages 1 / music 0.6. Events: press_down/up, hover_tick, tab_switch, window_open/
+  close, row_select, dropdown_open/close, toggle_on/off, slider_tick, scroll_tick, board_roll_down/up, board_clack,
+  buy_ok, purchase_big, cant_afford, denied, maxed, level_up, collect, coin_land, toast, unlock, island_unlock, molt,
+  evolve, egg_hatch_crack, hatch_reveal, error. **Layered events** (`Sfx.LAYERS`): the egg pickup = an eggshell tap
+  (layer A, first 0.12 s, speed 1.1-1.25, vol 0.3) + a soft round pop 7 ms later (layer B, 0.25 s, vol 0.4), both warm
+  (EQ High -9 / Mid -2 / Low +3 dB), +-4 % per pickup + the combo climb; golden eggs pitch the pop up 1.12 with a faint
+  sparkle tail. **Dev Sound Board** (dev bar SOUNDS): one row per event (collect has a row per layer), A-D audition
+  candidates through the real path (a layer plays the whole egg sound with that candidate in), USE applies the pick
+  live and saves it (server dev DataStore key `dev_sfx_picks_v1`, sent back as the `PeckwoodSfxPicks` attribute),
+  COPY TABLE prints the IDS table to the output.
+- **Visual hierarchy system (apply to every new screen):**
+  - *Emphasis levels.* L1 primary = one saturated key per window / list (green BUY or GO; gold for premium) - the only
+    element allowed to breathe or shimmer. L2 secondary = steel keys (MAX under BUY via `Binders.quietKey`, inactive
+    tabs, spend amounts, popup actions, the sidebar tab). L3 tertiary = text and ghost labels. The red close key is
+    fixed furniture (44 px at W-54, 10), not an action.
+  - *Colour semantics.* Green = buy / go / gain / affordable. Gold = premium / maxed / golden. Red = close / danger /
+    can't afford (cost text). Violet = reset (MOLT, sacrifice, the MOLT gain chip). Blue = info. Steel = neutral.
+  - *Numbers vs labels.* Numbers lead, bigger / white with the ink outline; labels follow, smaller and muted; costs are
+    icon + number; text is measured and fitted to its box (`Render.fit`, title + LV chip laid out by width), never clipped.
+  - *Spacing.* Only `Layout.S`: EDGE 24, GAP 8 (inside a group), GAP2 16 (between groups), WIN 24; one top edge (TOP)
+    for banner, meter and COMPANIONS; one bottom edge (H - 24) for the icon row.
+  - *Motion budget.* Only the open window idles; on the HUD at most ONE attention animation plus max 2 badges; no key
+    ever bounces; no per-frame loops.
+- **Checks (no Studio used):** `rojo build` OK; `luau-lsp analyze` clean on the UI; `lune run tools/ui_harness/run.luau`
+  (real UI modules on lune's instance model; tween Completed chains run) opens every window / tab / view, presses every
+  key and asserts, 0 errors: sidebar open at start and with every window; every window inside the window region (the
+  popup inside the game area); tab routing (open by name and click every tab layer of every tab variant); tab switches
+  neither re-pop nor rebuild; sidebar collapse / reopen; no HUD group in the sidebar; **key audit** (every button-like
+  node registered with press-in + sound, no Squash UIScale anywhere: 1036 / 1036 wired at the last run, 1078 live keys
+  in `_G.__uiKeys()`); every icon name resolves (0 missing); the accordion (defaults, heights, fold / unfold); NEST /
+  MINE views have live rows; filter bars filter and RESET restores; the COMPANIONS board drops, rolls up, holds all six
+  rows with correct locked looks and hides / restores AUTO. `python tools/ui_harness/mock.py <refs> <out.png>` turns
+  `tools/ui_harness/layout_dump.json` into a 1920x1080 placement mock.
+
 ---
 
 ## New chat? Paste this first
@@ -390,6 +548,8 @@ The Roblox game now lives in **`roblox/`** (Rojo). The owner has synced it into 
 | UI | `src/client/UI/{Kit,Window,Windows,Spec,Hud}.luau` | Details below. |
 
 ### How the UI matches Figma
+- **Superseded on branch `claude/peckwood-ui`:** the baked-art windows below were replaced by generated Figma layouts
+  rendered live (section A, "In-game UI from Figma"). The notes below describe the old build on `claude/peckwood-isle`.
 - **Window art is the Figma frame itself.** The temporary atlas `83:7` holds a copy of each UI v2 window with its live layers hidden (text, `ico/*`, `btn/*`, sparkles, progress fills, chevrons). Each copy was rendered at 2x (including the rim glow, with a 150px margin at 1x), uploaded, and listed in `src/shared/FigmaArt.luau`. Button faces (`btn/<window>_buy|tab|hero`, `grey_buy`, `grey_all`, `blue_all`, `gold_maxed`) were cut from `roblox/assets/figma/buttons_sheet.png`.
 - **Live layers are drawn on top at the Figma coordinates** (`Window.luau`): title, tab contents, hero icon/title/subtitle/button, section label, row icon/title/growth/description/progress fill/buttons, footer, sparkles.
 - **Texts and colours per window** are in `Spec.luau`, extracted from the Figma layers. Icons are the PNGs actually placed in each Figma slot, matched by image bytes rather than by the stale layer names.
