@@ -106,7 +106,10 @@ for j in range(J0, J1):
             continue
         z, base = zone_of(i, j)
         if (i, j) in core_tile:
-            continue  # handmade core land wins; its base comes from the core
+            # inside a handmade area's box: its own land wins in World, but the box's empty edge tiles must be
+            # terrace land at that area's height (otherwise every area sits in a moat)
+            z = core_tile[(i, j)]
+            base = cores[z][2]
         tiles[(i, j)] = {"code": 1, "h": 0, "base": base, "zone": z}
 
 # ---------------------------------------------------------------- ramps (trail)
