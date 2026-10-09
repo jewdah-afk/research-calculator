@@ -61,7 +61,17 @@ return {
 		local H = 24 * sc
 		local function feet() return fx:pos() end
 		-- ground
-		fx:emit(R.WAVE, feet() + Vector3.new(0, 0.2, 0), 1, { size = R.waveSize(12), trans = R.waveTrans(0.6), life = 0.34 })
+		if not fx:mesh("wallring", { at = feet() + Vector3.new(0, 0.1, 0), face = "flat", lift = true, spin = 0.5,
+			r = { 1.2 * sc, 6 * sc }, rInT = 1, z = { 1.4 * sc, 0.05 }, life = 0.34, color = "hi",
+			alpha = { { 0, 0.4 }, { 0.5, 0.6 }, { 0.8, 1 } } }) then
+			fx:emit(R.WAVE, feet() + Vector3.new(0, 0.2, 0), 1, { size = R.waveSize(12), trans = R.waveTrans(0.6), life = 0.34 })
+		end
+		-- SUPPORT: a spiral cone winds up round the hen with the column, spins, then collapses (thins) away
+		fx:mesh("tornado", { at = feet, face = "up", lift = true, spin = 6.5, spinEnd = 4, r = { 2.7 * sc, 2.1 * sc }, rInT = 1,
+			zFn = function(u)
+				local k = if u < 0.22 then EASE.out(u / 0.22) elseif u < 0.72 then 1 else 1 - EASE["in"]((u - 0.72) / 0.28)
+				return H * 0.72 * k
+			end, life = 1.45, color = "mid", alpha = { { 0, 0.15 }, { 0.78, 0.5 }, { 0.92, 1 } } })
 		fx:emit(R.GLOW_FLAT, feet() + Vector3.new(0, 0.15, 0), 1, {
 			size = seq(0, 3, 0.25, 7.5, 1, 6), trans = steps({ 0.55, 0.6 }, { 0.8, 1 }),
 		})
@@ -133,6 +143,9 @@ return {
 			local rot = math.random(-8, 8)
 			fx:emit(DING_RIM, head, 1, { rot = rot })
 			fx:emit(DING_CORE, head, 1, { rot = rot })
+			fx:mesh("star4", { at = head, face = "camera", roll = math.rad(rot), spin = 0, r = { 0, 3.4 * sc }, rInT = 0.25,
+				rEase = "back", z = { 1, 1 }, life = 0.4, color = "white",
+				xy = function(u) return 1 - 0.5 * u, 1 + 0.3 * u end, alpha = { { 0, 0 }, { 0.75, 0.5 }, { 0.9, 1 } } })
 			fx:emit(R.STAR, head, fx:n(3, true))
 			fx:emit(R.FEATHER, head, fx:n(2))
 		end)

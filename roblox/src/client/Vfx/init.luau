@@ -20,11 +20,13 @@ local VfxAssets = require(RS:WaitForChild("Peckwood"):WaitForChild("VfxAssets"))
 local Layers = require(script:WaitForChild("Layers"))
 local Palette = require(script:WaitForChild("Palette"))
 local CamFx = require(script:WaitForChild("CamFx"))
+local MeshFx = require(script:WaitForChild("MeshFx"))
 
 local Vfx = {}
 Vfx.Layers = Layers
 Vfx.Palette = Palette
 Vfx.CamFx = CamFx
+Vfx.MeshFx = MeshFx
 Vfx.MAX_ACTIVE = 48
 -- size multiplier = clamp(camera distance / 290, 1, 2.4) (QA 2026-10-09: an Epic hatch reads right at zoom 7)
 Vfx.VIEW_REF, Vfx.VIEW_MAX = 290, 2.4
@@ -178,6 +180,78 @@ function Fx:beam(spec, p0: Vector3, p1: Vector3)
 	return h
 end
 
+-- animate one pooled mesh shape (Vfx/MeshFx) for `life` seconds from now. Returns a handle, or nil when the mesh is
+-- not available (not built yet / failed / capped): the caller then plays its particle layer instead.
+--   at       Vector3 | () -> Vector3        where it sits (a function follows a moving subject)
+--   face     "camera" (billboard: local XY faces the camera, then tilted by `tilt` about local X so a band shows)
+--            | "flat" (local Z -> world up: arc / spiral / wallring lie on the ground) | "up" (dome / tornado)
+--   tilt, yaw  billboard lean (rad); roll = start angle; spin, spinEnd = rad/s (eases from spin to spinEnd)
+--   r = { from, to } radius in studs, eased by rEase ("out") over rInT of the life (0.6)
+--   z = { from, to } band size in studs (Z for arc/spiral/wallring/star4, height Y for dome/tornado), eased by
+--       zEase ("in"): shrinking it is the "fade by thinning"; or zFn(u, r) -> studs
+--   xy(u) -> (xMul, yMul) optional squash (star gleam); lift = keep the band's bottom on `at` (ground pieces)
+--   color = palette role, material (Neon), alpha = { { u, transparency }, ... } hard steps
+function Fx:mesh(kind: string, a)
+	local p = MeshFx.get(kind)
+	if not p then return nil end
+	table.insert(self.meshParts, { kind = kind, part = p })
+	p.Material = a.material or Enum.Material.Neon
+	p.Color = self:col(a.color or "mid")
+	p.Transparency = 1
+	local s0 = MeshFx.size(kind)
+	local yAxis = kind == "dome" or kind == "tornado"
+	local t0 = self.t
+	local life = a.life or 0.5
+	local spin = a.roll or math.random() * math.pi * 2
+	local w0, w1 = a.spin or 0, a.spinEnd or a.spin or 0
+	local alpha = a.alpha or { { 0, 0 }, { 0.7, 0.45 }, { 0.88, 1 } }
+	local rE = Layers.EASE[a.rEase or "out"] or Layers.EASE.out
+	local zE = Layers.EASE[a.zEase or "in"] or Layers.EASE["in"]
+	local rr, zz = a.r or { 1, 1 }, a.z or { 1, 1 }
+	local function step(t: number, dt: number): boolean?
+		local u = math.clamp((t - t0) / life, 0, 1)
+		local r = rr[1] + (rr[2] - rr[1]) * rE(math.clamp(u / (a.rInT or 0.6), 0, 1))
+		local z = if a.zFn then a.zFn(u, r) else zz[1] + (zz[2] - zz[1]) * zE(u)
+		spin += (w0 + (w1 - w0) * Layers.EASE.out2(u)) * dt
+		local tr = 1
+		for _, k in alpha do
+			if u >= k[1] then tr = k[2] end
+		end
+		local xm, ym = 1, 1
+		if a.xy then xm, ym = a.xy(u) end
+		r = math.max(r, 0.01)
+		z = math.max(z, 0.01)
+		local size = if yAxis then Vector3.new(s0.X * r * xm, s0.Y * z, s0.Z * r * ym)
+			else Vector3.new(s0.X * r * xm, s0.Y * r * ym, s0.Z * z)
+		local pos = if type(a.at) == "function" then a.at() else a.at
+		local cf
+		if a.face == "camera" then
+			local cam = workspace.CurrentCamera
+			local cp = if cam then cam.CFrame.Position else pos + Vector3.new(0, 30, 24)
+			cf = CFrame.lookAt(pos, cp) * CFrame.Angles(0, 0, spin) * CFrame.Angles(a.tilt or 0, a.yaw or 0, 0)
+		elseif a.face == "flat" then
+			cf = CFrame.new(pos) * CFrame.Angles(0, spin, 0) * CFrame.Angles(-math.pi / 2, 0, 0)
+			if a.lift then cf += Vector3.new(0, size.Z / 2, 0) end
+		else
+			cf = CFrame.new(pos) * CFrame.Angles(0, spin, 0)
+			if a.lift then cf += Vector3.new(0, size.Y / 2, 0) end
+		end
+		p.Size = size
+		p.CFrame = cf
+		p.Transparency = tr
+		if u >= 1 then
+			p.Transparency = 1
+			p.CFrame = CFrame.new(0, -25000, 0) -- park now: an invisible mesh must not sit in front of outlined models
+			return true
+		end
+		return nil
+	end
+	step(self.t, 0)
+	self:tick(step)
+	self:extend(self.t + life)
+	return { part = p }
+end
+
 function Fx:light(pos: Vector3, color: any, range: number, brightness: number)
 	local e = Layers.getLight()
 	if not e then return nil end
@@ -262,7 +336,8 @@ local function release(fx, clear: boolean)
 	for _, e in fx.lights do Layers.putLight(e) end
 	for _, e in fx.trails do Layers.putTrail(e) end
 	for _, p in fx.balls do Layers.putBall(p) end
-	fx.emitters, fx.beams, fx.atts, fx.lights, fx.trails, fx.balls = {}, {}, {}, {}, {}, {}
+	for _, m in fx.meshParts do MeshFx.put(m.kind, m.part) end
+	fx.emitters, fx.beams, fx.atts, fx.lights, fx.trails, fx.balls, fx.meshParts = {}, {}, {}, {}, {}, {}, {}
 	for _, fn in fx.cleanups do
 		local ok, err = pcall(fn)
 		if not ok then warn("[Vfx] cleanup " .. fx.name .. ": " .. tostring(err)) end
@@ -372,7 +447,7 @@ function Vfx.play(name: string, where: any, options: { [string]: any }?)
 	local fx = setmetatable({
 		name = name, opts = opts, pal = pal, scale = opts.scale or 1, tier = pal.tier or 1,
 		t = 0, life = 0, hold = 0, ev = 1, events = {}, tickers = {}, cleanups = {},
-		emitters = {}, beams = {}, atts = {}, lights = {}, trails = {}, balls = {}, dead = false,
+		emitters = {}, beams = {}, atts = {}, lights = {}, trails = {}, balls = {}, meshParts = {}, dead = false,
 		cf = toCFrame(where),
 	}, Fx)
 	if opts.rarity then fx.tier = Palette.tier(opts.rarity) end
@@ -441,6 +516,7 @@ end
 -- Main.client.luau calls this once: preload + hook-ups + the dev preview (_G.__vfx)
 function Vfx.start(remotes: Instance?)
 	Vfx.preload()
+	MeshFx.warm() -- six tiny EditableMesh shapes, built in the background (particles cover until they exist)
 	local ok, err = pcall(function() require(script:WaitForChild("Hooks")).start(Vfx, remotes) end)
 	if not ok then warn("[Vfx] hooks: " .. tostring(err)) end
 end

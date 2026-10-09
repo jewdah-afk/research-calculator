@@ -296,11 +296,28 @@ return {
 			-- HERO
 			R.flash(fx, centre, 0.85 + 0.07 * T)
 			if T >= 2 then fx:emit(R.NEEDLES, centre, 1) end
-			-- swirls (clip2 shape language): bright crescents spinning out + one dark ink accent
-			if T >= 2 then fx:emit(R.SWIRL, centre, 1, { rotSpeed = { 380, 440 }, tag = "sw1" }) end
+			-- swirls (clip2 shape language): mesh crescent slashes spinning out, thinning as they go, + one dark ink
+			-- spiral turning the other way (particle flipbooks when the meshes are not available)
+			local Rs = 4.2 * sc
+			if T >= 2 then
+				if not fx:mesh("arc", { at = centre, face = "camera", tilt = 1.05, yaw = 0.35, spin = 12, spinEnd = 2.5,
+					r = { 0.35 * Rs, Rs }, rInT = 0.55, z = { 1.6 * sc, 0.05 }, life = 0.42, color = "base",
+					alpha = { { 0, 0 }, { 0.62, 0.4 }, { 0.85, 1 } } }) then
+					fx:emit(R.SWIRL, centre, 1, { rotSpeed = { 380, 440 }, tag = "sw1" })
+				end
+			end
 			if T >= 3 then
-				fx:emit(R.SWIRL, centre, 1, { rotSpeed = { -380, -320 }, color = if T >= 6 then "accent" else "mid", scale = 1.25, tag = "sw2" })
-				fx:emit(R.INK_SWIRL, centre, 1, { rotSpeed = { 280, 320 } })
+				local c2 = if T >= 6 then "accent" else "mid"
+				if not fx:mesh("arc", { at = centre, face = "camera", tilt = 1.3, yaw = -0.5, spin = -10, spinEnd = -2,
+					r = { 0.45 * Rs, 1.3 * Rs }, rInT = 0.6, z = { 1.3 * sc, 0.05 }, life = 0.48, color = c2,
+					alpha = { { 0, 0 }, { 0.6, 0.4 }, { 0.85, 1 } } }) then
+					fx:emit(R.SWIRL, centre, 1, { rotSpeed = { -380, -320 }, color = c2, scale = 1.25, tag = "sw2" })
+				end
+				if not fx:mesh("spiral", { at = centre, face = "camera", tilt = 1.15, spin = -7, spinEnd = -1.5,
+					r = { 0.5 * Rs, 1.2 * Rs }, z = { 0.9 * sc, 0.05 }, life = 0.5, color = "ink",
+					material = Enum.Material.SmoothPlastic, alpha = { { 0, 0 }, { 0.75, 1 } } }) then
+					fx:emit(R.INK_SWIRL, centre, 1, { rotSpeed = { 280, 320 } })
+				end
 				fx:emitSphere(R.SPEED, centre, fx:n(5 + T), 0.3)
 			end
 			if T >= 2 then fx:emitSphere(R.EMBER, centre, fx:n(3 + 2 * T), 0.7, { color = if T >= 6 then "accent" else "base" }) end
@@ -308,11 +325,19 @@ return {
 			fx:emit(R.BURST, centre, 1, { scale = 0.85 + 0.06 * T })
 			fx:emit(SHARDS, centre, fx:n(5 + T, true), { color = opts.eggColor or "fff4dc" })
 			fx:emitRadial(R.SMOKE, ground + Vector3.new(0, 0.7, 0), fx:n(4 + T // 2, true), 0.25)
-			-- ONE ground wave (two on Epic+), alpha <= 0.6
-			fx:emit(R.WAVE, foot, 1, { size = R.waveSize(WAVE_D[T]), trans = R.waveTrans(0.6), tag = "wave1" })
+			-- ONE ground wave (two on Epic+), alpha <= 0.6: a tapered mesh wall ring expanding with an ease-out while it
+			-- collapses (thins); the flat particle wave when the mesh is not there
+			local wr = WAVE_D[T] * 0.5 * sc
+			if not fx:mesh("wallring", { at = foot, face = "flat", lift = true, spin = 0.6, r = { 0.18 * wr, wr }, rInT = 1,
+				z = { 1.5 * sc, 0.05 }, life = 0.32, color = "hi", alpha = { { 0, 0.4 }, { 0.5, 0.6 }, { 0.8, 1 } } }) then
+				fx:emit(R.WAVE, foot, 1, { size = R.waveSize(WAVE_D[T]), trans = R.waveTrans(0.6), tag = "wave1" })
+			end
 			if T >= 4 then
 				fx:at(A + 0.07, function()
-					fx:emit(R.WAVE, foot + Vector3.new(0, 0.05, 0), 1, { size = R.waveSize(WAVE_D[T] * 1.3), trans = R.waveTrans(0.4), color = "mid", tag = "wave2" })
+					if not fx:mesh("wallring", { at = foot, face = "flat", lift = true, spin = -0.5, r = { 0.25 * wr, 1.3 * wr },
+						rInT = 1, z = { 0.9 * sc, 0.05 }, life = 0.38, color = "mid", alpha = { { 0, 0.6 }, { 0.5, 0.75 }, { 0.8, 1 } } }) then
+						fx:emit(R.WAVE, foot + Vector3.new(0, 0.05, 0), 1, { size = R.waveSize(WAVE_D[T] * 1.3), trans = R.waveTrans(0.4), color = "mid", tag = "wave2" })
+					end
 				end)
 			end
 			if light then
@@ -324,7 +349,9 @@ return {
 					return u >= 1 or nil
 				end)
 			end
-			if T >= 4 then
+			if T >= 4 and not fx:mesh("dome", { at = ground, face = "up", lift = true, spin = 0.8, r = { 1.2 * sc, 6.5 * sc },
+				rInT = 0.5, zFn = function(u, r) return r * (1 - 0.65 * u * u) end, life = 0.42, color = "hi",
+				alpha = { { 0, 0.3 }, { 0.45, 0.55 }, { 0.75, 1 } } }) then
 				local dome = fx:ball("mid", Enum.Material.ForceField)
 				if dome then
 					local t0 = fx.t
@@ -337,8 +364,8 @@ return {
 						return u >= 1 or nil
 					end)
 				end
-				fx:flash(if T >= 5 then "hi" else "mid", 0.16 + 0.07 * (T - 4), 0.45 + 0.05 * (T - 4))
 			end
+			if T >= 4 then fx:flash(if T >= 5 then "hi" else "mid", 0.16 + 0.07 * (T - 4), 0.45 + 0.05 * (T - 4)) end
 			fx:shake(SHAKE[T], 0.25 + 0.05 * T)
 			fx:hitstop(T_HIT[T])
 		end)
@@ -384,6 +411,18 @@ return {
 				fx:emit(RAYS_L, petC, 1, { life = rl, tag = "rays" })
 				fx:emit(HALO, petC, 1, { life = rl, tag = "halo" })
 				if T >= 6 then fx:emit(RAYS_L2, petC, 1, { life = rl, tag = "rays2" }) end
+			end
+			-- a thin 4-point gleam over the pet (Rare+): pops in, then sweeps from tall to wide
+			if T >= 3 then
+				fx:mesh("star4", { at = petC + Vector3.new(0.9 * sc, 1.6 * sc, 0), face = "camera", roll = 0, spin = 0,
+					r = { 0, 2.4 * sc }, rInT = 0.3, rEase = "back", z = { 1, 1 }, life = 0.45, color = "white",
+					xy = function(u) return 1 - 0.55 * u, 1 + 0.25 * u end, alpha = { { 0, 0 }, { 0.8, 0.5 }, { 0.92, 1 } } })
+			end
+			-- Legendary+: a spiral cone winds up round the pet
+			if T >= 5 then
+				fx:mesh("tornado", { at = ground, face = "up", lift = true, spin = 7, spinEnd = 3, r = { 1.6 * sc, 3 * sc },
+					zFn = function(u) return 9 * sc * (if u < 0.3 then Layers.EASE.out(u / 0.3) else 1 - 0.85 * Layers.EASE["in"]((u - 0.3) / 0.7)) end,
+					life = 1.1, color = "base", alpha = { { 0, 0.15 }, { 0.7, 0.5 }, { 0.88, 1 } } })
 			end
 			local cb = CELEB[T]
 			R.celebrate(fx, centre, cb[1], cb[2], cb[3], if T >= 6 then fx.pal.rainbow else nil)

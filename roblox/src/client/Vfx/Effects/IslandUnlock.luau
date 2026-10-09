@@ -102,11 +102,19 @@ return {
 				trans = seq(0, 1, 0.12 / L, 0.6, 0.2 / L, 0.6, 0.204 / L, 0.25, 0.3 / L, 0.25, 0.304 / L, 0,
 					hold, 0, hold + 0.004, 0.45, hold + 0.5 * (1 - hold), 0.45, hold + 0.5 * (1 - hold) + 0.004, 1, 1, 1),
 			})
-			fx:emit(TRACE, cc + Vector3.new(0, 0.05, 0), 1, { size = D * 1.04 })
+			-- a glowing arc wall lying on the circle sweeps once round it as it appears (the flat swirl flipbook if no mesh)
+			if not fx:mesh("arc", { at = cc, face = "flat", lift = true, roll = 0, spin = 10, spinEnd = 6, r = { D * 0.52, D * 0.52 },
+				z = { 3, 0.2 }, life = 0.75, color = "hi", alpha = { { 0, 0 }, { 0.7, 0.45 }, { 0.88, 1 } } }) then
+				fx:emit(TRACE, cc + Vector3.new(0, 0.05, 0), 1, { size = D * 1.04 })
+			end
 		end)
 		-- summon pillar
 		local pillarEnd = math.max(start + 1.6, info.waveStart + 0.8)
 		fx:at(start + 0.1, function()
+			-- a big spiral cone winds up round the pillar while the circle is drawn
+			fx:mesh("tornado", { at = cc, face = "up", lift = true, spin = 3.5, spinEnd = 2, r = { D * 0.18, D * 0.26 }, rInT = 1,
+				zFn = function(u) return 46 * (if u < 0.25 then EASE.out(u / 0.25) elseif u < 0.75 then 1 else 1 - EASE["in"]((u - 0.75) / 0.25)) end,
+				life = pillarEnd - start - 0.1, color = "base", alpha = { { 0, 0.25 }, { 0.8, 0.55 }, { 0.92, 1 } } })
 			local top = cc + Vector3.new(0, 80, 0)
 			local outerB = fx:beam(PILLAR, cc, top)
 			local coreB = fx:beam(PILLAR_CORE, cc, top)
@@ -128,6 +136,11 @@ return {
 		local waveDur = math.max(0.3, info.maxD * info.step)
 		fx:at(info.waveStart, function()
 			local Dmax = 2 * info.maxD * S
+			local lp = Vector3.new(info.landing.X, y + 0.1, info.landing.Z)
+			if fx:mesh("wallring", { at = lp, face = "flat", lift = true, spin = 0.3, r = { 1, Dmax / 2 }, rEase = "lin", rInT = 1,
+				z = { 3.2, 1 }, zEase = "lin", life = waveDur, color = "hi", alpha = { { 0, 0.35 }, { 0.85, 0.6 }, { 0.95, 1 } } }) then
+				return
+			end
 			fx:emit(WAVE, Vector3.new(info.landing.X, y + 0.2, info.landing.Z), 1, {
 				life = waveDur + 0.25,
 				size = seq(0, 2, waveDur / (waveDur + 0.25), Dmax, 1, Dmax * 1.04),
@@ -156,9 +169,16 @@ return {
 		end
 		-- ---------------------------------------------------------------- finale
 		fx:at(finale, function()
-			fx:emit(WAVE, cc + Vector3.new(0, 0.1, 0), 1, {
-				life = 0.55, size = Layers.curve(4, Rad * 2.1, "out", 10), trans = R.waveTrans(0.6), tag = "sweep",
-			})
+			if not fx:mesh("wallring", { at = cc, face = "flat", lift = true, spin = -0.4, r = { 2, Rad * 1.05 }, rInT = 1,
+				z = { 4, 0.2 }, life = 0.55, color = "hi", alpha = { { 0, 0.35 }, { 0.6, 0.6 }, { 0.85, 1 } } }) then
+				fx:emit(WAVE, cc + Vector3.new(0, 0.1, 0), 1, {
+					life = 0.55, size = Layers.curve(4, Rad * 2.1, "out", 10), trans = R.waveTrans(0.6), tag = "sweep",
+				})
+			end
+			-- a translucent toon dome blooms over the new island and flattens away (clip3's dome, our palette)
+			fx:mesh("dome", { at = cc, face = "up", lift = true, spin = 0.3, r = { Rad * 0.3, Rad * 1.1 }, rInT = 0.6,
+				zFn = function(u, r) return r * 0.5 * (1 - 0.6 * u * u) end, life = 0.85, color = "hi",
+				alpha = { { 0, 0.5 }, { 0.5, 0.7 }, { 0.8, 1 } } })
 			fx:emit(R.STAR, cc + Vector3.new(0, 2, 0), fx:n(6, true))
 			for _ = 1, fx:n(16, true) do
 				local a, r = math.random() * math.pi * 2, math.sqrt(math.random()) * Rad * 0.8

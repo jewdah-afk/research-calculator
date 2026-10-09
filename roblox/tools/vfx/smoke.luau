@@ -151,6 +151,64 @@ local settingsSvc = {
 	GetPropertyChangedSignal = function() return signal() end,
 }
 local ContentProvider = { PreloadAsync = function() end }
+-- EditableMesh / AssetService mocks: validate ids + counts, report vertex budgets and bounding-box symmetry
+local meshStats = {}
+local function mockEM()
+	local em = { verts = {}, nTri = 0, nUV = 0, nN = 0, nC = 0, uvs = {} }
+	function em.AddVertex(self, p)
+		if typeof(p) ~= "Vector3" then error("AddVertex: not a Vector3") end
+		table.insert(self.verts, p)
+		return #self.verts
+	end
+	function em.AddTriangle(self, a, b, c)
+		if not (self.verts[a] and self.verts[b] and self.verts[c]) then error("AddTriangle: bad vertex id") end
+		if a == b or b == c or a == c then error("AddTriangle: repeated vertex") end
+		self.nTri += 1
+		return self.nTri
+	end
+	function em.AddNormal(self, n)
+		if typeof(n) ~= "Vector3" then error("AddNormal") end
+		self.nN += 1
+		return self.nN
+	end
+	function em.AddColor(self, c, a)
+		if typeof(c) ~= "Color3" or type(a) ~= "number" then error("AddColor") end
+		self.nC += 1
+		return self.nC
+	end
+	function em.AddUV(self, uv)
+		if typeof(uv) ~= "Vector2" then error("AddUV") end
+		self.nUV += 1
+		self.uvs[self.nUV] = uv
+		return self.nUV
+	end
+	local function face3(self, f, ids, max, what)
+		if f > self.nTri or #ids ~= 3 then error(what .. ": bad face / count") end
+		for _, i in ids do if i > max then error(what .. ": bad id") end end
+	end
+	function em.SetFaceNormals(self, f, ids) face3(self, f, ids, self.nN, "SetFaceNormals") end
+	function em.SetFaceColors(self, f, ids) face3(self, f, ids, self.nC, "SetFaceColors") end
+	function em.SetFaceUVs(self, f, ids) face3(self, f, ids, self.nUV, "SetFaceUVs") end
+	function em.GetUVs(self) local t = {}; for i = 1, self.nUV do t[i] = i end; return t end
+	function em.GetUV(self, i) return self.uvs[i] end
+	function em.SetUV(self, i, v) self.uvs[i] = v end
+	return em
+end
+local AssetService = {
+	CreateEditableMesh = function() return mockEM() end,
+	CreateMeshPartAsync = function(_, em)
+		local mn, mx = em.verts[1], em.verts[1]
+		for _, v in em.verts do mn = mn:Min(v); mx = mx:Max(v) end
+		local c = (mn + mx) / 2
+		if c.Magnitude > 1e-3 then problem("mesh bounding box not centred: " .. tostring(c)) end
+		table.insert(meshStats, { verts = #em.verts, tris = em.nTri })
+		if #em.verts > 450 then problem("mesh over budget: " .. #em.verts .. " vertices") end
+		local mp = Instance.new("MeshPart")
+		mp.Size = mx - mn
+		return mp
+	end,
+}
+local Content = { fromObject = function(o) return o end }
 local workspaceI = place:GetService("Workspace")
 local cam = Instance.new("Camera")
 cam.Parent = workspaceI
@@ -173,6 +231,7 @@ function fakeGame:GetService(name)
 	if name == "GuiService" then return { ReducedMotionEnabled = false } end
 	if name == "Workspace" then return workspaceI end
 	if name == "Lighting" then return lighting end
+	if name == "AssetService" then return AssetService end
 	if name == "ReplicatedStorage" then return rsI end
 	return place:GetService(name)
 end
@@ -197,7 +256,7 @@ local function load(ms)
 		NumberSequence = NumberSequence, NumberSequenceKeypoint = roblox.NumberSequenceKeypoint,
 		NumberRange = roblox.NumberRange, UDim2 = roblox.UDim2, UDim = roblox.UDim, BrickColor = roblox.BrickColor,
 		Random = roblox.Random, Rect = roblox.Rect, Region3 = roblox.Region3, Font = roblox.Font,
-		UserSettings = UserSettings, task = task, _G = G, typeof = typeof, type = type,
+		UserSettings = UserSettings, task = task, _G = G, typeof = typeof, type = type, Content = Content,
 		print = print, warn = function(...) warnings += 1; problem("warn: " .. table.concat({ ... }, " ")) end,
 		pairs = pairs, ipairs = ipairs, next = next, select = select, tostring = tostring, tonumber = tonumber,
 		error = error, assert = assert, pcall = pcall, xpcall = xpcall, setmetatable = setmetatable,
@@ -219,8 +278,14 @@ end
 local VfxAssets = load(rsI:FindFirstChild("Peckwood"):FindFirstChild("VfxAssets"))
 local Vfx = load(client:FindFirstChild("Vfx"))
 local Hooks = load(client:FindFirstChild("Vfx"):FindFirstChild("Hooks"))
-local remotes = Instance.new("Folder")
 Vfx.start(nil)
+for _ = 1, 40 do task.wait(0.02) end -- let MeshFx.warm build the six shapes in the background
+local ready = {}
+for k, st in Vfx.MeshFx.stats() do if st.ready then table.insert(ready, k) end end
+table.sort(ready)
+print("meshes ready: " .. table.concat(ready, ", "))
+for i, m in meshStats do print(string.format("  mesh %d: %d verts, %d tris", i, m.verts, m.tris)) end
+if #ready ~= 6 then problem("expected 6 mesh shapes, got " .. #ready) end
 
 local function run(label, fn)
 	local before = #problems
@@ -238,6 +303,9 @@ local function run(label, fn)
 	local live = Vfx.Layers.stats()
 	for k, v in live do
 		if v ~= 0 then problem(label .. ": pool leak " .. k .. "=" .. v) end
+	end
+	for k, st in Vfx.MeshFx.stats() do
+		if st.live ~= 0 then problem(label .. ": mesh leak " .. k .. "=" .. st.live) end
 	end
 	print(string.format("%-34s %s  %5.2f s  %4d particles%s", label, if handle then "ok " else "nil", frames / 60, emits.total,
 		if #problems > before then "  <-- " .. (#problems - before) .. " problem(s)" else ""))
@@ -327,6 +395,13 @@ run("camera shake + flash + push", function()
 	Vfx.shake(1, 0.4); Vfx.flash(roblox.Color3.new(1, 0.9, 0.5), 0.3, 0.5); Vfx.push(roblox.Vector3.zero, 0.15, 0.3, 0.2, 0.4)
 	return true
 end)
+
+print("== meshes off (particle fallbacks) ==")
+Vfx.MeshFx.enabled = false
+run("egg_hatch Mythic, particle fallbacks", function() return Vfx.play("egg_hatch", at, { rarity = "Mythic" }) end)
+run("level_up, particle fallbacks", function() return Vfx.play("level_up", at, {}) end)
+run("island_unlock, particle fallbacks", function() return Vfx.play("island_unlock", at, {}) end)
+Vfx.MeshFx.enabled = true
 
 print("== no textures uploaded (graceful degrade) ==")
 setIds("")
