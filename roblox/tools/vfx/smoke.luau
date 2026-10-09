@@ -196,35 +196,15 @@ local function mockEM()
 	function em.SetUV(self, i, v) self.uvs[i] = v end
 	return em
 end
--- mesh ASSETS (QA round 2: the VFX may hold 0 EditableMeshes): fake bounding boxes in mixed orientations so the
--- axis detection is exercised (a Y-normal ring, Z-normal crescent / star, X-axis tornado, ...)
+-- the VFX may hold 0 EditableMeshes (QA round 2); mesh shapes are cloned from ReplicatedStorage.PeckwoodVfxMeshes in
+-- the built place (QA round 3), so the real template sizes drive the axis detection below
 local editableCreated = 0
-local MESH_BOXES = {
-	["92572984944785"] = roblox.Vector3.new(6, 4, 0.4), -- crescent, flat in XY (normal Z)
-	["10895746627"] = roblox.Vector3.new(5, 0.6, 4), -- swirl, flat in XZ (normal Y)
-	["131187152008585"] = roblox.Vector3.new(5, 3, 5), -- wall, Y axis
-	["7741808274"] = roblox.Vector3.new(4, 0.3, 4), -- broken ring, normal Y
-	["7263678713"] = roblox.Vector3.new(4, 4, 0.3), -- thin ring, normal Z
-	["7349045196"] = roblox.Vector3.new(4, 2, 4), -- half sphere, Y up
-	["7029892192"] = roblox.Vector3.new(7, 3, 3), -- tornado lying along X
-	["15591537807"] = roblox.Vector3.new(0.2, 4, 4), -- star, normal X
-}
-local meshLoads = 0
 local AssetService = {
 	CreateEditableMesh = function()
 		editableCreated += 1
 		return mockEM()
 	end,
-	CreateMeshPartAsync = function(_, content)
-		local uri = if type(content) == "table" then content.uri else content
-		local id = string.match(tostring(uri), "(%d+)$")
-		local box = MESH_BOXES[id or ""]
-		if not box then error("unknown mesh asset " .. tostring(uri)) end
-		meshLoads += 1
-		local mp = Instance.new("MeshPart")
-		mp.Size = box
-		return mp
-	end,
+	CreateMeshPartAsync = function() error("the VFX must not load meshes by id (QA round 3)") end,
 }
 local Content = { fromObject = function(o) return o end, fromUri = function(u) return { uri = u } end }
 local workspaceI = place:GetService("Workspace")
@@ -301,7 +281,7 @@ for _ = 1, 40 do task.wait(0.02) end -- let MeshFx.warm load the mesh assets in 
 local ready = {}
 for k, st in Vfx.MeshFx.stats() do if st.ready then table.insert(ready, k) end end
 table.sort(ready)
-print("mesh assets ready: " .. table.concat(ready, ", ") .. "  (EditableMeshes created: " .. editableCreated .. ")")
+print("mesh templates ready: " .. table.concat(ready, ", ") .. "  (EditableMeshes created: " .. editableCreated .. ")")
 if editableCreated > 2 then problem("VFX created " .. editableCreated .. " EditableMeshes (budget 2)") end
 if #ready ~= #Vfx.MeshFx.KINDS then problem("expected " .. #Vfx.MeshFx.KINDS .. " mesh shapes, got " .. #ready) end
 -- axis detection + size mapping: our requested in-plane span / axis length must land on the right part axes
@@ -321,8 +301,14 @@ do
 		local target = if t.t == 2 then roblox.Vector3.yAxis else roblox.Vector3.zAxis
 		if (our - target).Magnitude > 1e-4 and (our + target).Magnitude > 1e-4 then problem(kind .. ": correction rotation wrong") end
 	end
-	check("crescent", 3); check("swirl", 2); check("wall", 2); check("ringgap", 2); check("ring", 3)
-	check("dome", 2); check("tornado", 1); check("star4", 1)
+	-- real templates: crescent 7.2x1.14x12.1, swirl 2.48x0.5x2.49, wall 10x14.9x10, ringgap 1.96x0.1x1.96,
+	-- ring 2x2x2 (pinned Y), dome 2x1x2, tornado 50x48.9x33.2 (round in X/Y -> Z), star4 4x1x4
+	check("crescent", 2); check("swirl", 2); check("wall", 2); check("ringgap", 2); check("ring", 2)
+	check("dome", 2); check("tornado", 3); check("star4", 2)
+	for _, k in Vfx.MeshFx.KINDS do
+		local t = Vfx.MeshFx.template(k)
+		if t then print(string.format("  %-8s size %-28s axis %s", k, tostring(t.size0), ({ "X", "Y", "Z" })[t.ax])) end
+	end
 end
 
 minFov = 11
