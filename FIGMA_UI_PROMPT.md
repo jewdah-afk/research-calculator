@@ -34,3 +34,6 @@ Every screen of Birb (birbplay.com) gets a matching Peckwood screen in Figma: **
 
 ## Keep the handout current
 After each group, add a short section to `HANDOUT.md` (game repo, branch `claude/peckwood-isle`): which Figma frames were made or changed (node ids), what is still missing. Commit and push.
+
+## Progress
+- 2026-10-09: inventory done (`FIGMA_INVENTORY.md`), HUD group designed on board `213:7` (Bridge mock `229:7`, spec card `234:499`). Details and the owner's rules from that round: `HANDOUT.md` section A, "Figma HUD at Birb parity". Next: Expedition-run mock, then step 3.

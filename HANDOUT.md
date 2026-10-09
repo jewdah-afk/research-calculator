@@ -55,6 +55,38 @@ Branch **`claude/peckwood-isle`** (pushed). Build: `cd roblox && rojo build defa
 - Prop variety: `VARY` table in IslandView.swapProp = per-position random yaw + size range + tilt for rock, ore,
   crystal, lantern, barrel, log, mushroom, cactus, sunflower, bones, twigs, deadtree (Park objects carry no rotation).
 
+### Figma HUD at Birb parity (2026-10-09, Figma chat, group 1 of 5 done)
+- **Inventory first:** `FIGMA_INVENTORY.md` (repo root) lists every Birb window / panel / popup / HUD element from the
+  parity build and marks it exists / differs / missing in Figma, with node ids.
+- **Board `213:7`** "Peckwood UI v2 / HUD at Birb parity (squared)" on page UI v2 (x 0, y 17600). All pieces are
+  components; the screen mock uses instances only.
+  - Wallet chips `215:7` section: `hud/chip/<cur>` x10 + `hud/chip-main/popcorn`, **1:1 with `Hud.luau capsule()`**
+    (owner-approved in game), squared (ink 6 / face 4 / well 3). Long value hides the engraved name, never overlaps.
+  - Menu tiles `hud/tile/*` (MAP TELEPORT FISH PROFILE / SHOP SETTINGS AUTO PETS, + pressed), solid keys, no label band.
+  - Area rail `hud/area rail` (right edge; open area lit + popped out, locked dimmed with lock). Old bookmark tiles
+    `hud/bookmark/*` are kept in the section but no longer used.
+  - Travel arrows `hud/arrow/*` (open / locked + requirement), context AUTO `hud/auto/*` (exact parity labels + pressed).
+  - Context bars `hud/context/<fishing|mine|expedition|echo|desert|nest>`: level badge + bar + info strip in one outline,
+    title tab flush on the bar.
+  - Hotbars `hud/hotbar/*` (fishing ready/cooldown/reeling, mine challenge/giant/resting, expedition HP+potion+relic+
+    artifacts+RESET FLOOR), prompts `hud/prompt/*`, toasts `hud/toast/*`, `hud/objective`, `hud/banner/the bridge`,
+    `hud/companions (open)`.
+  - **Screen mock `229:7`** "HUD parity / Bridge" (1920x1080, HUD scale 0.82, 16 px margins) + **spec card `234:499`**
+    (layout, hierarchy, build rules, states, motion, SFX, parity notes).
+  - Icon sources strip `213:10` (uploaded from `birb-icons/final` + `ui/halftone`, `ui/stripes`).
+- **Owner rules learned this round** (also in the spec card): every key = Kit.button recipe (the COMPANIONS header is
+  the shading reference); press sinks the face the full lip depth with no lip showing; never a white inner shadow over
+  an inside stroke (it greys the top outline, use a 1.5 px highlight strip inside); faint gloss on dark steel; squared
+  corners; HUD compact, not in your face; one shared outline where parts join (no notches); fill the width (no empty
+  strip ends); QA every change zoomed + check visual hierarchy.
+- **Still to do (in order):** Expedition-run screen mock (floor HUD + HP hotbar + SP chip) and one mock per other area;
+  then FIGMA_UI_PROMPT order steps 3-5 (missing windows: Fish Market, Parrot forge, Nest Lake/Owned, Fast Travel;
+  windows that differ; popups). Open owner questions: Eggs/Golden/Echo as one tab with a switch or three windows;
+  Fishing as Birb's 3 tabs.
+- **Owner asks parked for later chats:** cel-shaded birb character (owner loves cel-shading), "AAA premium toy diorama"
+  look for the world, SFX set (buttery keycap on every press + classic cue per effect), Upgraded UIGradients beta
+  (Radial/Conical, not publishable live yet) for rings/vignettes.
+
 ### World QA pass (2026-10-09, latest)
 - "Eggs in the water" was false water: pond columns wrote water at land height, so it spilled over 48 dry tiles. Ponds
   now sit one voxel below the land (`LandTerrain.column` code 3: `wt = snap(top) - 4`). QA scan: 0 water-on-land tiles.
