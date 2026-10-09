@@ -4,7 +4,7 @@ Playtest (`playtest/js`, headless, 2026-10-09T19:29Z) vs Peckwood's Luau (`roblo
 
 **Phase 1 gate: 45582 / 45582 values match (100.00%).** Tolerance: relative 1e-9 (big values on mantissa / log10).
 
-The gate = every Phase 1 value in the Phase 1 scenarios (the playtest's 7 Phase 1 saves + the `p1 *` saves, each with a simulated run), plus the Phase 1 values that only read state (sunflower tree nodes, egg cap, shop rows, playtime, can evolve, sparrow XP table) in every one of the 69 scenarios.
+The gate = every Phase 1 value in the Phase 1 scenarios (the playtest's 7 Phase 1 saves + the `p1 *` saves, each with a simulated run), plus the Phase 1 values that only read state (sunflower tree nodes, egg cap, shop rows, playtime, can evolve, sparrow XP table) in every one of the 70 scenarios.
 
 Phase 1 values in later-phase scenarios that multiply in an unported system (fish, nest, quests, sacrifice, red panda, ...): 7461 / 7938 match today; the rest wait for their phase (listed at the end).
 
