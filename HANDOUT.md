@@ -10,6 +10,21 @@ Last updated: 2026-10-09 (Peckwood Ascent world rebuild, branch `claude/peckwood
 
 Branch **`claude/peckwood-isle`** (pushed). Build: `cd roblox && rojo build default.project.json -o Peckwood.rbxl`, open it in Studio (one Studio window only). The owner says it is OK to stop Play / reload the test place at any time.
 
+### Park slice v2: toon walkway, lighthouse, pond, tiered rolling sea (2026-10-09, latest, commit 2dbcdd4)
+Owner verdict on the island: "looking fucking crazy"; the lighthouse beam is "super clean, keep that up".
+- **Walkway** (`IslandView`, "toon walkway" block): drawn as STROKES, not from the tile mask. Ring = the egg-yard outline (`tileLoop(Map.inYard)`) pushed 2 studs outward, half width 2.3; every path branch that leaves the ring (path tiles not next to the yard) becomes one straight capsule; ring + spurs blend with a smooth-min fillet, noise wobble, painted as sand fill / toon band / brown outline into one 960x720 EditableImage decal at y -0.44. 1-tile diagonal stair steps can no longer break it into patches. New east spur (MapData rows 13-14, cols 29-31) leads to the market stall.
+- **Pond**: painted into the same texture (blurred pond mask: ink edge, light shallow rim, water, darker crescent under the north bank so it reads as a dip). Terrain under pond tiles is plain turf now. `ToonPond` = stones along the smooth rim (skipped where the rim meets the sea) + lily pads, dark-blue ink Highlight. The oak that covered it moved to (60,322).
+- **Lighthouse** replaces the windmill (the "2 windmills" were the generated windmill plus the old brick sails built on top). `buildLighthouse`: stone plinth, 5 tapering red/white drums, door + windows facing the camera, slate gallery + railing, glowing lantern room, stepped red cap. Light = `Beacon` part under `IslandView` (outside the outlined scenery): 2 opposite FaceCamera Beams + SpotLight, spun every frame (0.8 rad/s), faint by day, bright at night. Hitbox `lighthouse = 3.4` in Controller.
+- **Sea hierarchy** (`Ocean.paint`): toon depth tiers instead of one gradient: foam line at 2.0-2.6 tiles, lagoon 8af2e2 to 4.2, reef 3fd4e8 to 6.4, mid 2a9fe0 to 9.2, then deep = the far-sea colour. Anti-aliased steps with a soft glow before each drop-off, organic noise edges. Distance cap raised to 12 tiles, PX up to 6 per tile.
+- **Rolling waves** (`buildWaveFronts`): two crest fronts, each ONE EditableMesh ribbon along every coast loop (coast corners ironed out by two wide moving averages, smoothed normals, dashed by noise). Each frame a visible front slides its vertices from 7.4 to 2.5 tiles out and fades; the painted foam surges as a crest lands. The 3 painted crest images are gone.
+- **Hen**: `Birds` now does `ScaleTo(GetScale() * 1.25)`. An absolute `ScaleTo(1.25)` overrode Models' sizing and made the hen huge. Ink outline Highlight on the hen.
+
+**Gotchas learned (read before touching visuals):**
+- Top-face Decals: image row 0 sits at **+Z**, column 0 at **+X** (tested with a 4x4 marker image). Write pixel `(px, py)` at `((PH-1-py)*PW + (PW-1-px))*4`. Path and sea were mirrored in Z before this fix.
+- **EditableMesh memory budget is nearly full** (the cliff skirt's flat-shaded meshes use most of it). 14 per-ring wave meshes hit "Failed to create empty EditableMesh ... memory budget"; keep new EditableMesh use to a couple of meshes, and watch it when more islands unlock (more cliff loops).
+- Highlights in Occluded mode are hidden behind big Transparency=1 parts: never use big invisible boxes for particle volumes (use an Attachment emitter repositioned per frame, see `Ambience` / fireflies).
+- `Model:ScaleTo(x)` is absolute: always multiply by `GetScale()`.
+
 ### The new map: Peckwood Ascent
 - Concept page: https://claude.ai/artifact/NsW1MDQEYJGtsaSDAdZYym (owner picked "ring of zones + verticality").
 - The Park is a valley hub at sea level (lake, river to a south-east beach, portal plaza south-west of the Park).
