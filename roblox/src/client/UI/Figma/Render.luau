@@ -493,16 +493,27 @@ function Render.buildNode(layout, node, parent, z)
 	return ui
 end
 
--- shrink a label's text to fit its box (live values longer than the Figma sample)
+-- logical (unscaled) width of a label's text at a size: measured with TextService so UIScale never skews it
+local TextService = game:GetService("TextService")
+function Render.textWidth(label: TextLabel, text: string?, size: number?): number
+	local str = text or label.Text
+	if label.RichText then str = (string.gsub(str, "<[^>]+>", "")) end
+	local ok, v = pcall(function()
+		return TextService:GetTextSize(str, size or label.TextSize, Enum.Font.FredokaOne, Vector2.new(100000, 1000)).X
+	end)
+	return if ok then v else #str * (size or label.TextSize) * 0.6
+end
+
+-- shrink a label's text to fit its box (live values longer than the Figma sample); all in design px
 function Render.fit(label: TextLabel, minSize: number?)
 	local base = label:GetAttribute("baseSize") or label.TextSize
 	label:SetAttribute("baseSize", base)
 	local sh = SHADOW[label]
 	local function apply()
-		local w = label.AbsoluteSize.X
+		local w = label.Size.X.Offset
 		if w <= 0 then return end
 		local size = base
-		local tb = label.TextBounds.X * (base / math.max(1, label.TextSize))
+		local tb = Render.textWidth(label, nil, base)
 		if tb > w then size = math.max(minSize or 9, math.floor(base * w / tb)) end
 		if label.TextSize ~= size then label.TextSize = size; if sh then sh.TextSize = size end end
 	end

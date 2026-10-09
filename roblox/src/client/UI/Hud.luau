@@ -223,10 +223,11 @@ local function chipApi(ui, main)
 		local function hideName()
 			if not (name and wellF) then return end
 			local room = (name.Position.X.Offset - value.Position.X.Offset)
-			name.Visible = value.TextBounds.X < room - 6
+			name.Visible = Render.textWidth(value) < room - 6
 			if rate then rate.Visible = name.Visible or main end
 		end
-		value:GetPropertyChangedSignal("TextBounds"):Connect(hideName)
+		value:GetPropertyChangedSignal("Text"):Connect(hideName)
+		value:GetPropertyChangedSignal("TextSize"):Connect(hideName)
 	end
 	for _, d in ui.root:GetDescendants() do
 		if d:IsA("ImageLabel") and d.Name:sub(1, 4) == "ico/" then c.icon = d end
@@ -393,7 +394,7 @@ local function showToast(msg, tone, icon)
 			if lbl then
 				Render.setText(lbl, t[1])
 				-- the plate grows to fit the message (Figma widths are per sample text)
-				local need = lbl.Position.X.Offset + lbl.TextBounds.X + 24
+				local need = lbl.Position.X.Offset + Render.textWidth(lbl) + 24
 				local body = ui.node:FindFirstChild("body")
 				if body and need > body.Size.X.Offset then
 					local dw = need - body.Size.X.Offset
