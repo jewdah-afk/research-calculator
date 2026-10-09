@@ -29,7 +29,7 @@
     if (id === PT.MINE_MAP || id === PT.MINE_TREE_MAP) return "mine"; if (id === PT.ECHO_FIELD_MAP) return "echo";
     return "expedition";
   };
-  const SCENE3D = { 0: true, 1: true, 4: true }; // maps with their own 3D game objects so far
+  const SCENE3D = { 0: true, 1: true, 2: true, 4: true }; // maps with their own 3D game objects so far
   const WALK = { 0: true, 4: true }; // maps where eggs / trees and the birb keep to open ground
   const isl = (id) => W.ISL.find((x) => x.id === ISLAND_OF(id));
   // map pixel -> world position on that map's island (the island's tile rectangle stands for the whole map)
@@ -253,6 +253,47 @@
     for (const [id, o] of stations) if (!seen.has(id)) { A.root.remove(o.g); stations.delete(id); }
   }
 
+  // ------------------------------------------------------------------ the Bridge: rod, line and bobber, a cast / reel bar over the birb, the last catch, seagulls
+  const fishUi = document.createElement("div"); Object.assign(fishUi.style, { position: "absolute", pointerEvents: "none", transform: "translate(-50%,-100%)", textAlign: "center", font: "16px 'Fredoka One', sans-serif", color: "#fff", textShadow: "0 0 3px #000, 0 2px 0 #000", display: "none" });
+  fishUi.innerHTML = '<div data-t style="white-space:nowrap;margin-bottom:4px"></div><div style="width:84px;height:12px;margin:0 auto;background:#10141a;border:2px solid #0b0c10;border-radius:6px;overflow:hidden"><i data-b style="display:block;height:100%;width:0"></i></div>';
+  stage.appendChild(fishUi);
+  let rig = null; const gulls = [];
+  function syncBridge(on, dt) {
+    if (!rig) { const lineM = new T.LineBasicMaterial({ color: 0xf5f5f5 }), g = new T.Group();
+      const rod = new T.Mesh(new T.CylinderGeometry(0.12, 0.18, 9, 6), new T.MeshStandardMaterial({ color: new T.Color("#7a4b2a").convertSRGBToLinear() })); rod.castShadow = true;
+      const bob = new T.Mesh(new T.SphereGeometry(0.7, 12, 8), new T.MeshStandardMaterial({ color: new T.Color("#ff3b30").convertSRGBToLinear(), roughness: 0.4 }));
+      const lineG = new T.BufferGeometry().setFromPoints([new T.Vector3(), new T.Vector3()]), line = new T.Line(lineG, lineM);
+      g.add(rod, bob, line); A.root.add(g); rig = { g, rod, bob, line, lineG }; }
+    const F = G.fish || {}, s = G.s, busy = on && (F.casting > 0 || F.reeling > 0);
+    rig.g.visible = busy;
+    if (busy) {
+      const face = A.player.userData.face, fw = new T.Vector3(Math.sin(face), 0, Math.cos(face)), base = A.player.position.clone();
+      const tip = base.clone().add(new T.Vector3(0, 9, 0)).addScaledVector(fw, 5.5);
+      rig.rod.position.copy(base).add(new T.Vector3(0, 4.5, 0)).addScaledVector(fw, 2.6); rig.rod.lookAt(tip); rig.rod.rotateX(Math.PI / 2);
+      const k = F.casting > 0 ? 1 - F.casting / 0.5 : 1, far = base.clone().addScaledVector(fw, 6 + 16 * k);
+      far.y = Math.max(W.SEA, W.groundY(far.x, far.z)) + (F.reeling > 0 ? Math.sin(G.t * 9) * 0.4 : 0.3);
+      rig.bob.position.copy(far); rig.lineG.setFromPoints([tip, far]);
+    }
+    // bar + catch text over the birb
+    const showBar = on && (F.casting > 0 || F.reeling > 0 || F.cooldown > 0), showTxt = on && F.last && F.lastT > 0;
+    fishUi.style.display = showBar || showTxt ? "block" : "none";
+    if (showBar || showTxt) {
+      const p = A.player.position.clone().add(new T.Vector3(0, 9, 0)).project(W.camera), r = frame.getBoundingClientRect();
+      fishUi.style.left = ((p.x + 1) / 2) * r.width + "px"; fishUi.style.top = ((1 - p.y) / 2) * r.height + "px";
+      const b = fishUi.querySelector("[data-b]"), tx = fishUi.querySelector("[data-t]");
+      fishUi.lastChild.style.visibility = showBar ? "visible" : "hidden";
+      b.style.width = (F.casting > 0 ? (1 - F.casting / 0.5) : F.reeling > 0 ? 1 - F.reeling / Math.max(0.01, F.total) : 0) * 100 + "%";
+      b.style.background = F.casting > 0 ? "#ffd27a" : "#4fd85a";
+      tx.textContent = showTxt ? `${PT.fishName(F.last.fish.id)}${F.last.shiny ? " ★" : ""} ${F.last.weight}kg` : "";
+      tx.style.color = showTxt ? PT.RARITY_COLOR[F.last.fish.rarity] : "#fff";
+    }
+    // seagulls circle the birb once met
+    const n = on && s.hasMetSeagull ? s.seagull.gulls.length : 0;
+    while (gulls.length < n) { const b = A.M.bird({ body: "#f4f6f8", belly: "#ffffff", wing: "#9aa4ad" }); b.scale.setScalar(A.BIRD * 0.55); A.root.add(b); gulls.push(b); }
+    gulls.forEach((b, i) => { b.visible = i < n; if (i >= n) return; const a = G.t * 0.6 + (i / Math.max(1, n)) * 6.28, c = A.player.position;
+      const x = c.x + Math.cos(a) * 14, z = c.z + Math.sin(a) * 9, last = b.position.clone(); b.position.set(x, c.y + 10 + Math.sin(G.t * 2 + i) * 1.2, z); animBird(b, (x - last.x) * 30, (z - last.z) * 30, dt, 0.9); });
+  }
+
   // floating numbers: a light DOM layer projected from the world camera
   const floatLayer = document.createElement("div"); Object.assign(floatLayer.style, { position: "absolute", inset: "0", pointerEvents: "none", overflow: "hidden" }); stage.insertBefore(floatLayer, frame.nextSibling);
   const floatEls = new Map();
@@ -292,6 +333,7 @@
       const rects = PT.STATIONS.map((st) => [I1.oi + (st[1] / m1.w) * I1.W - 1, I1.oj + (st[2] / m1.h) * I1.N - 1, I1.oi + ((st[1] + st[3]) / m1.w) * I1.W + 1, I1.oj + ((st[2] + st[4]) / m1.h) * I1.N + 1]);
       W.hideProps((p) => p.need === I1.n && rects.some(([a, b, c, d]) => p.i >= a && p.i <= c && p.j >= b && p.j <= d)); }
     syncStations(cur === 1);
+    syncBridge(cur === 2, dt);
     syncDying(dt);
     placeCamera(false);
     syncFloats();
