@@ -263,7 +263,7 @@ Do this before the steps below.
 ### In-game UI from Figma (claude/peckwood-ui)
 Branch **`claude/peckwood-ui`** (worktree `~/Downloads/rc-main-ui`, not merged, not pushed). Owner ask: "get our UI in
 ... everything rendered in till we get the rest of the game in". Every HUD element and every window on the Figma HUD
-board `213:7` and Windows board `239:307` is in game, placed like the screen mock `229:7`, openable, with live data
+board `213:7` and Windows board `239:307` is in game (Figma visuals, Birb placement), openable, with live data
 where a system exists and Figma's own sample save everywhere else.
 - **How it matches Figma (by construction, no hand redraw):** `roblox/tools/figma_export/exporter.js` (read-only
   `use_figma` script) dumps a frame's node tree in 19 KB slices; `collect.py` reassembles the slices from the Claude
@@ -274,37 +274,57 @@ where a system exists and Figma's own sample save everywhere else.
   and growth chevrons are drawn as rounded bars (all ink first, then colour); every Kit key gets the owner press (whole
   key drops by the lip depth, lip hidden, hover +6 %) and `Sfx.press()`. Re-export a changed frame: run the exporter
   with its node id (parts 0..n), `collect.py`, `build_layouts.py` (roots in `roots.json`).
-- **Modules:** `UI/Hud.luau` (new HUD), `UI/WindowManager.luau` + `UI/WindowDefs.luau` (every window, its Figma frames,
-  tabs, views; lazy build on first open; pop 0.86 -> 1 back-out, rows cascade 40 ms, close key / Esc / backdrop),
+- **Modules:** `UI/Layout.luau` (the Birb screen split + the ONE 8 px spacing table `Layout.S`), `UI/Motion.luau` (every
+  tween of the Figma motion spec cards), `UI/Hud.luau` (HUD, placed by `reflow`), `UI/WindowManager.luau` +
+  `UI/WindowDefs.luau` (every window, its Figma frames, tabs, views, dock; lazy build, pre-built in spare frames),
   `UI/Binders.luau` (live data + actions), `UI/Screens.luau` (windows with no squared frame, built with
   `UI/Figma/FKit.luau` = Luau port of `docs/figma/kit.js`), `UI/SampleData.luau` (EVERY placeholder value in one
   place), `UI/Sfx.luau` (one hook per sound; `press()` = keycap), `UI/RobuxShop.luau` (the approved Robux shop, moved
   out of the old Hud), `UI/Figma/IconAlias.luau`. Removed: old baked-art `Window`, `Windows`, `Spec`, shared `FigmaArt*`.
-- **HUD (mock 229:7):** top left banner (live area name + eggs on field / cap, tinted per area) + 4x2 tiles
-  (MAP = map view, TELEPORT = Fast Travel, FISH = Fishing, PROFILE, SHOP = Robux shop, SETTINGS, AUTO = group perk,
-  PETS = companions list) + COMPANIONS [TAB] (live levels, only unlocked rows, opens each companion window);
-  bottom left wallet (EGGS main chip + chips for owned currencies, value fits, name hides when long); top centre
-  context bar per area (bridge fishing / mine / expedition / echo / desert / nest, opens that window) + toasts (reward /
-  unlock / error / info from the server Toast remote); bottom centre objective (live goal, opens Objectives) + UNLOCK
-  key for paid gates, hotbar (fishing CAST + slots, mine CHALLENGE, expedition HP / RESET FLOOR), context AUTO; right
-  area rail (open / locked / current pops out, click = travel) and travel arrows (Birb chain park-garden-bridge-castle,
-  forest-expedition, desert up, rooms down/up open their window); top right UPGRADES pull tab for the shop drawer.
-- **Figma frame -> window (open from):** shop drawer `260:3088` EGGS / `260:3277` golden view (currency switch) /
-  `260:4397` MOLT / `260:4544` SEEDS, tabs NEST / MINE open those windows (UPGRADES pull tab) · mine `246:4443` SHOP /
-  `248:1739` AREAS (+ CROW tab -> crow `246:1276`) (mine context bar, hotbar, drawer MINE) · treasure `246:1525`
+- **Placement = Birb (owner: "position everything like Birb does"; Figma visuals unchanged).** Design canvas is 1080
+  tall (UIScale = viewport height / 1080). The upgrades panel is a permanent **right sidebar**: 25 % of the width
+  (snapped to 8, min 384), full height, open by default, tabs EGGS / MOLT / SEEDS / NEST / MINE, collapse tab (steel key,
+  24x72) on its left edge at mid-height. Everything left of it is the **game area** `[0, gameRight]`; HUD and windows
+  never cover the sidebar and re-flow (Back-out tween) when it collapses / reopens. `TOP` = Roblox top-bar inset rounded
+  up + 8 (72 at 1080p, 32 without the bar); `colR = gameRight - TAB_W - GAP`. Element -> anchor (design px):
+
+  | element | anchor in game-area terms |
+  |---|---|
+  | banner | top-left, visual edge at (EDGE 24, TOP) |
+  | wallet | under the banner, left EDGE, GAP 8 below; chips top-down in 2 columns |
+  | area rail | top-right, right edge flush to the collapse tab (`colR`), top = TOP |
+  | COMPANIONS [TAB] | left of the rail (GAP2 16), top = TOP; always shown (dimmed until the Sparrow joins); dropdown under it, closed by default |
+  | AUTO | under COMPANIONS (GAP 8), same right edge; hidden while the dropdown is open |
+  | context bar | top-centre of the game area, top = TOP |
+  | travel up / toasts | under the context bar (GAP2), then the toast stack (max 3) |
+  | travel left / right | mid-height; left at EDGE, right = rail left - GAP2 (label fits its chip, short requirement copy) |
+  | objective | bottom-centre (game-area centre, nudged left so it never meets the tiles), bottom = H - EDGE |
+  | hotbar / UNLOCK | above the objective (GAP 8), same centre; travel down left of it (GAP2), bottoms aligned |
+  | tile block | 4x2 at 0.6 scale (75 % of the HUD scale), 8 px apart, right edge `colR`, bottom = H - EDGE |
+  | [E] prompt / big moment | game-area centre at 60 % / 40 % height |
+  | dev bar | very top centre of the game area, scale 0.55, y = GAP |
+  | windows | inside `[0, windowRight]` (rail strip excluded), scaled down to fit; companion / Fishing windows dock bottom-left (WIN 24, H - 24); Fast Travel = small popup above its tile; the rest centred |
+  | Robux shop | overlay sized to the game area |
+
+  Esc / ButtonB / the close key close the open window only, never the sidebar; opening a window closes the other one.
+  Keyboard: Tab = companions dropdown, Q = Objectives (quests), P = Profile. Gamepad selection = ink stroke (`Render.selectionImage`).
+- **Figma frame -> window (open from):** sidebar `260:3088` EGGS / `260:3277` golden view (currency switch) /
+  `260:4397` MOLT / `260:4544` SEEDS, tabs NEST / MINE open those windows (the sidebar) · mine `246:4443` SHOP /
+  `248:1739` AREAS (+ CROW tab -> crow `246:1276`) (mine context bar, hotbar, sidebar MINE) · treasure `246:1525`
   (mine down arrow) · trees `239:309` / `246:3851` / `246:1796` (garden up arrow, echo / desert context bar) · fishing
   `246:3448` / `248:2079` / `248:2952` (FISH tile, bridge context bar, hotbar slots) · aquarium `246:2134` / `246:4667` /
   `248:1351` (bridge down arrow) + FISH MARKET tab -> market `246:2574` (locked variant `248:1566`) · nest `260:2137` SHOP
   / `246:1462` LAKE (BREED -> `248:546` incubating -> HATCH -> `248:948` ready) / `260:4842` / `260:5761` / `261:600`
-  (forest context bar, drawer NEST) · parrot `256:483` / `260:753` / `259:613` (+ FORGE view `260:3850`) / `260:1011` /
+  (forest context bar, sidebar NEST) · parrot `256:483` / `260:753` / `259:613` (+ FORGE view `260:3850`) / `260:1011` /
   `260:3443` (companions PARROT) · expedition `260:5073` (expedition context bar) · sacrifice `256:924` / `256:995`
   (expedition left arrow) · objectives `256:1284` / `260:1565` / `260:2885` (objective bar) · sparrow `259:788`,
   seagull `260:5560`, red panda `256:589` (+ naming `256:806` on first open), dave `259:871` (companions rows) · evolve
   `260:2568` (castle up arrow). Code-built (FKit, no squared frame yet): profile / settings / leaderboards (one tab
-  bar), Fast Travel, Welcome back (Settings > Offline earnings). Debug: `PlayerGui:SetAttribute("PeckwoodOpen",
-  "mine:AREAS")`, `PeckwoodPrompt` = "aquarium" shows an [E] prompt, `PeckwoodShop` toggles the Robux shop.
-- **Live vs placeholder:** live = wallet + egg rate, banner, objective + UNLOCK, companions levels, AUTO state, fishing
-  catches / rod per catch, mine area, parrot level, desert chance + field count, nest tier + twigs, shop drawer rows
+  bar), Fast Travel (compact steel popup list), Welcome back (Settings > Offline earnings). Debug: `PlayerGui:SetAttribute("PeckwoodOpen",
+  "mine:AREAS")`, `PeckwoodPrompt` = "aquarium" shows an [E] prompt, `PeckwoodShop` toggles the Robux shop,
+  `PeckwoodSidebar` (bool) collapses / opens the sidebar, `PeckwoodMoment` shows a big-moment banner.
+- **Live vs placeholder:** live = wallet + egg rate, banner, objective + UNLOCK, companions levels + locked state, AUTO state, fishing
+  catches / rod per catch, mine area, parrot level, desert chance + field count, nest tier + twigs, sidebar upgrade rows
   (EGGS / golden / MOLT / SEEDS: name, LV bar, now >>> next, price, buy / need / maxed state swap, BUY + MAX send
   `buy`), MOLT gain + MOLT key, Mine SHOP rows, FISHDEX (all 426 species from `Defs.FISH` + the Fish remote, rod-tier
   sections built as they scroll into view, rarity plates, silhouettes, detail panel follows the clicked fish), Profile
@@ -312,16 +332,61 @@ where a system exists and Figma's own sample save everywhere else.
   existing intents: molt, buy, feed / evolve, sparrow, seagull migrate, dave, panda, parrot spend, expedition, sacrifice,
   fish go, unlock, auto, dev. Everything else shows the Figma sample (SampleData for HUD values).
 - **Not reproduced / caveats:** header "swoosh" vector shapes (dropped); radial gradients = soft-ellipse approximation
-  (Upgraded UIGradients beta not used); letter spacing (Roblox has none); header sweep / rim breathing idle loops
-  skipped (the header is a CanvasGroup because of its rotated sweeps; no per-frame churn); stripes still use the old
+  (Upgraded UIGradients beta not used); letter spacing (Roblox has none); rotated header sweeps are axis-aligned
+  gradient bands (no CanvasGroup at rest); the CAST cooldown conical sweep is not built; Esc is reserved by the Roblox
+  menu in a live client (ButtonB / close key always work); category volume sliders: only MUSIC is in Settings; stripes still use the old
   non-seamless `ui/stripes` id (upload `roblox/assets/ui/stripes_seamless.png`); **328 icons not uploaded** (list with
   source PNGs: `roblox/tools/figma_export/icons_to_upload.txt`; they show a family fallback until their ids are in
   `shared/Icons.luau`, the `lock` badge stays blank until uploaded); tab locks are not enforced (placeholder build: every
   tab opens); Collection / enemy / quest grids still show the Figma sample (Fishdex is live).
+- **Motion (Figma spec cards, `UI/Motion.luau`; all TweenService, event-driven, no per-frame code; CanvasGroup only
+  while a transition runs, then unwrapped).** Open: scale 0.86 -> 1.04 (0.2 s) -> 1 (0.12 s) flying out of the button
+  that opened it, rows cascade 40 ms. Close: rows collapse in reverse, then fade + shrink to 0.45 into the button with a
+  sparkle burst. Tab switch: NO re-pop and no rebuild (views built once), pill springs (Back 0.22 s), theme tweens
+  0.2 s, content crossfade 0.12 s with an 8 px slide, rows cascade. Idle (open window only, stopped when hidden):
+  header gloss sweep every 4.5 s, header glow breathe 2.8 s, sparkle twinkle, up to 2 big icons bob +-3 px. Keys: hover
+  +6 % and a 2 px rise; press = whole key drops by the lip depth; money keys squash 0.94 on press and release 1.06.
+  Buy: value pop + bar tween + "+N LV" floater + particles. Can't afford: shake +-6 x3, red flash on the cost, wallet
+  wiggle. Maxed: gold pop + sparkles + shimmer. MOLT: hold-to-confirm (violet fill 0.9 s) -> violet flash + feathers
+  fly to the plume chip + rows dissolve. Evolve: feed rows wilt.
+- **UX upgrades shipped:** wallet counters roll (odometer) with a gain pulse and a green rate flash; `Hud.onLabel(pos,
+  value, cur)` = "+N" floater at a world or screen point, then icons fly into the chip with rising coin ticks (egg
+  collect uses it); affordability = the cheapest affordable row is the primary (green BUY, a static "recommended"
+  sparkle), other affordable rows "Can buy", unaffordable rows desaturated icon + cost in red, ONE breathing attention
+  key per screen (`Binders.setAttention`); badges (molt +N plumes, new fish, affordable counts on EGGS / SEEDS) max 2 on
+  screen, priority molt > fish > eggs > seeds; hold-to-buy repeats (0.35 s, then x0.8 down to 0.06 s); BUY MAX = long
+  press or Shift; scroll lists get a thin scrollbar, top / bottom edge fades and row hover; windows pre-build one per 3
+  frames after 3 s (unlocked ones only); toasts stack with a spring, show a time-left line, click to dismiss; big-moment
+  centred banner (molt / evolve / island unlock) with music duck; locked travel arrows pulse when they unlock.
+- **Sfx map (`UI/Sfx.luau`):** one function per event: `press` / `release` (keycap down / up), `hover`, `tab`, `open`,
+  `close`, `buy`, `deny`, `maxed`, `levelUp`, `collect` (pitch climbs over a quick streak, resets after 1 s),
+  `coinLand(i)`, `toast`, `unlock` / `molt` / `evolve` (duck music), `error`. `Sfx.IDS` = placeholder asset ids (0 =
+  fall back to the Kit click / thock / nope sounds); +-5 % random pitch; volume hierarchy big moments 0.8 > rewards
+  0.6-0.7 > keys 0.45-0.55 > hover 0.08; SoundGroups per category (ui 0.8, rewards 1, messages 1, music 0.6),
+  `Sfx.setVolume(cat, v)`; 30 ms de-dupe per event. Drop real ids into `IDS` and every call site picks them up.
+- **Visual hierarchy system (apply to every new screen):**
+  - *Emphasis levels.* L1 primary = one saturated key per window / list (green BUY or GO; gold for premium) - the only
+    element allowed to breathe. L2 secondary = steel keys (MAX under BUY, inactive tabs, popup actions, the sidebar
+    tab). L3 tertiary = text and ghost labels (descriptions, "Can buy", status). The red close key is fixed furniture
+    (44 px at W-54, 10), not an action.
+  - *Colour semantics.* Green = buy / go / gain / affordable. Gold = premium / maxed / golden. Red = close / danger /
+    can't afford (cost text). Violet = reset (MOLT, sacrifice). Blue = info (info toasts, hints). Steel = neutral.
+    Never use a colour for decoration if it carries one of these meanings nearby.
+  - *Numbers vs labels.* Numbers lead and are bigger / white with the ink outline; labels follow, smaller and muted;
+    costs are icon + number; long text is fitted to its box (`Render.fit`), never clipped.
+  - *Spacing.* Only `Layout.S`: EDGE 24 (screen / game-area edge), GAP 8 (inside a group), GAP2 16 (between groups),
+    WIN 24 (window margin); one shared top edge (TOP) for banner, context bar, COMPANIONS and the rail; one bottom edge
+    (H - 24) for objective and tiles.
+  - *Motion budget.* Only the open window idles; on the HUD at most ONE attention animation (the breathing key) plus
+    max 2 badges; everything else is still until touched. No per-frame loops, no Size tweens per frame.
 - **Checks (no Studio used):** `rojo build` OK; `luau-lsp analyze` clean on the new UI; `lune run
   tools/ui_harness/run.luau` loads the real UI modules on lune's instance model with service mocks, starts the HUD, pushes
-  a state, opens every window / tab / view and presses every key: 0 errors (per-window instance counts printed).
-  Not yet seen on screen: needs one Studio pass (PeckwoodOpen hook + screenshots) for pixel QA.
+  a state, opens every window / tab / view and presses every key, and asserts: the sidebar is open at start and stays
+  open with every window; every window lies inside the game area; tab switches neither re-pop (`popCount`) nor rebuild
+  (`builds == views`); the sidebar collapses / reopens and the HUD re-flows; no HUD group overlaps the sidebar;
+  `onLabel` / `bigMoment` run. 0 errors. It writes `tools/ui_harness/layout_dump.json` (gitignored);
+  `python tools/ui_harness/mock.py <refs dir> <out.png>` composites that dump with Figma renders of each piece into a
+  1920x1080 placement mock (guides at TOP, H - 24, EDGE and the game-area centre) for line-up QA before Studio.
 
 ---
 
