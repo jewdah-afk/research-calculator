@@ -111,10 +111,14 @@ function Board.new(parent, x, y, w, onToggle, Icons)
 	new("UICorner", { CornerRadius = UDim.new(0.5, 0) }, brass)
 	new("UIStroke", { Thickness = 2.5, Color = Color3.fromHex("ffd36b") }, brass)
 	-- the ring is a key (Motion.key: hover, press-in, sounds); a generous hit around it
-	local ringHit = new("TextButton", { Name = "pull", Text = "", AutoButtonColor = false, BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0),
+	local ringHit = new("TextButton", { Name = "hit", Text = "", AutoButtonColor = false, BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0.5, ROD_H / 2), Size = UDim2.fromOffset(40, 34), ZIndex = 5 }, pivot)
-	Motion.key(ring, "toggle", { hit = ringHit, onActivate = function() if onToggle then onToggle() end end })
+	-- the ring is a key like any other: a small tug down on press (4 px, 40 ms), back up and a swing on release
+	local selfRef
+	Motion.key(ring, "toggle", { hit = ringHit, flatDrop = 4, onUp = function() if selfRef then selfRef:swing(0.6) end end,
+		onActivate = function() if onToggle then onToggle() end end })
 	self.track, self.clip, self.sheet, self.rowsHolder, self.roller, self.pivot = track, clip, sheet, rowsHolder, roller, pivot
+	selfRef = self
 	return self
 end
 
@@ -122,9 +126,11 @@ end
 function Board.closedFootprint() return ROD_BELOW + ROD_H / 2 + 9 + 20 + 2 end
 
 local function play(self, inst, t, props, style, dir, delay)
-	local tw = TweenService:Create(inst, TweenInfo.new(t, style or Enum.EasingStyle.Quad, dir or Enum.EasingDirection.Out, 0, false, delay or 0), props)
+	local info = TweenInfo.new(t, style or Enum.EasingStyle.Quad, dir or Enum.EasingDirection.Out, 0, false, delay or 0)
+	local tw = TweenService:Create(inst, info, props)
 	table.insert(self.tweens, tw)
 	tw:Play()
+	if inst == self.track and self.onHeight then self.onHeight(props.Size.Y.Offset, info) end
 	return tw
 end
 local function cancelAll(self)
@@ -147,17 +153,24 @@ function Board:setRows(rows)
 	end
 	self.H = if #rows > 0 then PAD + #rows * ROW_H + (#rows - 1) * ROW_GAP + PAD else 0
 	self.sheet.Size = UDim2.fromOffset(self.W, self.H)
-	if self.open and not self.moving then self.track.Size = UDim2.fromOffset(self.W, self.H) end
+	if self.open and not self.moving then
+		self.track.Size = UDim2.fromOffset(self.W, self.H)
+		if self.onHeight then self.onHeight(self.H, nil) end
+	end
 end
 
-function Board:swing()
-	local seq = { 14, -9, 4, 0 }
+function Board:swing(amp)
+	amp = amp or 1
+	self.swingToken = (self.swingToken or 0) + 1
+	local token = self.swingToken
+	local seq = { 14 * amp, -9 * amp, 4 * amp, 0 }
 	local i = 0
 	local function step()
 		i += 1
-		if i > #seq then return end
-		local t = play(self, self.pivot, Board.T.swing[i], { Rotation = seq[i] }, Enum.EasingStyle.Sine, if i == 1 then Enum.EasingDirection.Out else Enum.EasingDirection.InOut)
+		if i > #seq or self.swingToken ~= token then return end
+		local t = TweenService:Create(self.pivot, TweenInfo.new(Board.T.swing[i], Enum.EasingStyle.Sine, if i == 1 then Enum.EasingDirection.Out else Enum.EasingDirection.InOut), { Rotation = seq[i] })
 		t.Completed:Once(function(st) if st == Enum.PlaybackState.Completed then step() end end)
+		t:Play()
 	end
 	step()
 end
@@ -169,11 +182,11 @@ function Board:setOpen(on, animate)
 	local token = self.token
 	cancelAll(self)
 	local W, H = self.W, self.H
-	self.pivot.Rotation = 0
 	self.roller.Position = UDim2.new(0.5, 0, 1, ROD_BELOW)
 	if not animate or Kit.reduced() or H <= 0 then
 		self.moving = false
 		self.track.Size = UDim2.fromOffset(W, if on then H else 0)
+		if self.onHeight then self.onHeight(if on then H else 0, nil) end
 		self.sheet.Size = UDim2.fromOffset(W, H)
 		for _, c in self.covers do c.BackgroundTransparency = if on then 1 else 0 end
 		return

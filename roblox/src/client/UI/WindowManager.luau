@@ -478,6 +478,7 @@ end
 -- open a window (optionally on a given tab label or variant name)
 function WM.open(id, tab)
 	if not Defs[id] then warn("[UI] unknown window", id); return end
+	if WM.onHide then WM.onHide() end   -- tooltips and dropdowns never carry over onto a window
 	local rec = WM.built[id] or buildWindow(id)
 	local def = rec.def
 	local target = rec.current

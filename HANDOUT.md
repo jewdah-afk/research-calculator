@@ -414,8 +414,8 @@ everywhere else. QA rounds: UI_BIRB_QA_1 (tab-by-tab Studio QA against real Birb
   | area meter | top-centre at TOP, every area: fishing / mine / nest / expedition / desert / echo bars, and an egg-field bar for Park / Garden / Castle (eggs on the field / cap, per egg, per second, plumes) |
   | travel up, toasts | under the meter (GAP2); toasts on the overlay above every window |
   | COMPANIONS [TAB] | top-right against the sidebar (right edge `colR`), top = TOP; the pull-down board hangs under it |
-  | AUTO | under the tucked roller + pull ring (GAP 8), right edge `colR`; hidden while the board is down |
-  | area rail | under AUTO (GAP2), right edge `colR` |
+  | AUTO | under the tucked roller + pull ring (GAP 8), right edge `colR`; rides down under the board (same tween) |
+  | area rail | under AUTO (GAP2), right edge `colR`; rides down with the board and compacts (scales down, min 0.45) before it would pass H - 24 |
   | travel left / right | mid-height; left at EDGE, or right of the wallet column (GAP2) when the column reaches mid-height; right = rail left - GAP2. Label = destination name always; locked = dimmed chip + padlock, requirement in a hover / tap tooltip |
   | icon row | ONE row of 8 icon keys (52 px, 8 apart) centred at the bottom (bottom = H - 24): FISH, PETS, AUTO, SHOP, FAST TRAVEL, MAP, PROFILE, SETTINGS (Birb's core keys keep Birb's order at the right end); labels in hover tooltips |
   | objective | centred just above the icon row (GAP 8) |
@@ -437,6 +437,9 @@ everywhere else. QA rounds: UI_BIRB_QA_1 (tab-by-tab Studio QA against real Birb
   T sqrt(1 - y/H)), the roller overshoots 5 px into the header (0.06 s) and settles (0.16 s Back Out); sounds
   board_roll_up, then board_clack on the snap. One tweened size drives clip, sheet and roller (no per-frame Lua).
   Tab / the header / the ring toggle it; the state is saved (server pref `prefs.companions`, session attribute).
+  Every height tween of the board is announced (`board.onHeight(h, TweenInfo)`): AUTO and the rail tween to
+  `base + h x 0.8` with the SAME TweenInfo on the same frame (they fall, bounce and roll up with it), the rail's scale
+  tweens with them when it has to compact. The pull ring is a key: a 4 px tug on press, a small swing on release.
 - **Sidebar = Birb's.** Tabs EGGS / MOLT / SEEDS / NEST / MINE are all sidebar views (NEST / MINE generated from the SEEDS
   frame with live twig / mine rows and a card key into the full window). **Accordion** (Birb captures desert_tab_popcorn,
   map0_seeds, mine_tab_mine): every upgrade still to buy is a card, a maxed one folds into a slim row (icon, name, LV
@@ -488,7 +491,8 @@ everywhere else. QA rounds: UI_BIRB_QA_1 (tab-by-tab Studio QA against real Birb
   icons flying into the chip; ONE breathing attention key (the sidebar primary BUY); "recommended" sparkle on the
   cheapest affordable row; unaffordable = desaturated icon + red cost; badges max 2 (molt > fish > eggs > seeds);
   hold-to-buy accelerates, Shift / long press = MAX; lists: thin scrollbar, edge fades, row hover, a very quiet scroll
-  tick; dropdown filters (one open at a time, closed with the window); tooltips on icon keys, locked arrows / rail
+  tick; dropdown filters (one open at a time, closed with the window); tooltips (hidden on press, on any window open and on
+  leave; a HUD tooltip never shows while a window is open) on icon keys, locked arrows / rail
   slots / Fast Travel rows; windows pre-build in spare frames; toasts stack above windows with a time-left line;
   big-moment banner with music duck.
 - **Sfx (`UI/Sfx.luau`):** one function per event; provisional ids = the first licensed candidate of each event in

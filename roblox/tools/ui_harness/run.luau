@@ -419,6 +419,23 @@ do
 			end
 		end
 	end
+	-- the Robux shop builds on first open: open it so its buttons are audited too
+	local RS2 = req(UI:FindFirstChild("RobuxShop"))
+	if not RS2.isOpen() then RS2.toggle() end
+	-- every GuiButton belongs to a wired key (the hit of a Motion.key) or is a window's click blocker
+	local hitOf = {}
+	for target, info in Motion.registry do if info.api and info.api.hit then hitOf[info.api.hit] = true end end
+	local strays = 0
+	for _, root in roots do
+		for _, d in root:GetDescendants() do
+			if (d:IsA("TextButton") or d:IsA("ImageButton")) and d.Name ~= "blocker" and not hitOf[d] then
+				strays += 1
+				if strays <= 6 then check("GuiButton wired " .. d:GetFullName(), false, "not a Motion.key hit") end
+			end
+		end
+	end
+	print(("GuiButtons outside Motion.key: %d"):format(strays))
+	if RS2.isOpen() then RS2.toggle() end
 	local kl = {}
 	for k, v in kinds do table.insert(kl, k .. " " .. v) end
 	table.sort(kl)
@@ -507,6 +524,29 @@ do
 	check("aquarium has TYPES + STATUS", aroot:FindFirstChild("dropdown/types", true) ~= nil and aroot:FindFirstChild("dropdown/status", true) ~= nil)
 	WM.close()
 end
+-- tooltips: show on hover, hide on press, never stay over (or appear over) an open window
+do
+	WM.close()
+	local tilesG = hudGui.canvas:FindFirstChild("tiles")
+	local prof = tilesG and tilesG:FindFirstChild("hud/tile/profile", true)
+	local node = prof and prof:FindFirstChild("hud/tile/profile")
+	local hit = node and node:FindFirstChild("hit")
+	local tipF = playerGui:FindFirstChild("PeckwoodOverlay") and playerGui.PeckwoodOverlay:FindFirstChild("tooltip", true)
+	check("tooltip parts exist", hit ~= nil and tipF ~= nil)
+	if hit and tipF then
+		sig(hit, "MouseEnter"):Fire()
+		check("tooltip shows on hover", tipF.Visible)
+		sig(hit, "MouseButton1Down"):Fire()
+		check("tooltip hides on press", not tipF.Visible)
+		sig(hit, "MouseButton1Up"):Fire(); sig(hit, "Activated"):Fire()
+		task.wait(0.05)
+		check("tooltip stays hidden as the window opens", not tipF.Visible)
+		sig(hit, "MouseLeave"):Fire(); sig(hit, "MouseEnter"):Fire()
+		check("no HUD tooltip over an open window", not tipF.Visible or not WM.modal)
+		sig(hit, "MouseLeave"):Fire()
+		WM.close()
+	end
+end
 -- COMPANIONS board: drops to its full height (AUTO hidden under it), rolls back up to 0 (AUTO back), every row on it,
 -- locked rows show their padlock + unlock note (QA: locked rows rendered as black blocks)
 do
@@ -521,13 +561,26 @@ do
 		for _, r in rowsF:GetChildren() do if string.sub(r.Name, 1, 4) == "row/" then n += 1 end end
 		check("board holds all 6 companion rows", n == 6, "rows " .. n)
 		if boardF.Size.Y.Offset > 0 then Hud3.toggleCompanions(); task.wait(0.5) end   -- start rolled up
+		local railG = hudGui.canvas:FindFirstChild("rail")
+		local auto0, rail0 = autoG.Position.Y.Offset, railG.Position.Y.Offset
 		Hud3.toggleCompanions()
 		task.wait(0.1)
 		local sheet = boardF:FindFirstChild("sheet", true)
 		check("board drops to its height", math.abs(boardF.Size.Y.Offset - sheet.Size.Y.Offset) < 1, ("track %d sheet %d"):format(boardF.Size.Y.Offset, sheet.Size.Y.Offset))
+		-- AUTO and the rail ride down under the board (same motion); the rail compacts to stay above the bottom edge
+		local shift = boardF.Size.Y.Offset * 0.8
+		check("AUTO rides down with the board", math.abs(autoG.Position.Y.Offset - (auto0 + shift)) <= 1, ("auto %d -> %d (shift %.0f)"):format(auto0, autoG.Position.Y.Offset, shift))
+		check("rail rides down with the board", math.abs(railG.Position.Y.Offset - (rail0 + shift)) <= 1, ("rail %d -> %d"):format(rail0, railG.Position.Y.Offset))
+		local rs = railG:FindFirstChildOfClass("UIScale").Scale
+		check("rail compacts above the bottom edge", railG.Position.Y.Offset + 616 * rs <= Layout.H - 24 + 1, ("rail bottom %.0f"):format(railG.Position.Y.Offset + 616 * rs))
 		local autoKeyVisible = false
 		for _, c in autoG:GetChildren() do if c:IsA("Frame") and c.Visible then autoKeyVisible = true end end
-		check("AUTO hides under the board", not autoKeyVisible)
+		check("AUTO stays visible under the board", autoKeyVisible)
+		-- the pull ring is a real key (hit named hit, press-in wired)
+		local ringHit = boardF:FindFirstChild("roller"):FindFirstChild("pull ring"):FindFirstChild("hit")
+		local ring = boardF:FindFirstChild("roller"):FindFirstChild("pull ring"):FindFirstChild("ring")
+		local Motion3 = req(UI:FindFirstChild("Motion"))
+		check("pull ring is a wired key", ringHit ~= nil and Motion3.registry[ring] ~= nil)
 		for _, r in rowsF:GetChildren() do
 			if string.sub(r.Name, 1, 4) == "row/" then
 				local locked = r:GetAttribute("locked")
@@ -538,6 +591,7 @@ do
 		Hud3.toggleCompanions()
 		task.wait(0.5)
 		check("board rolls up", boardF.Size.Y.Offset == 0, "track " .. boardF.Size.Y.Offset)
+		check("AUTO and the rail ride back up", math.abs(autoG.Position.Y.Offset - auto0) <= 1 and math.abs(railG.Position.Y.Offset - rail0) <= 1)
 		autoKeyVisible = false
 		for _, c in autoG:GetChildren() do if c:IsA("Frame") and c.Visible then autoKeyVisible = true end end
 		check("AUTO back after the roll up", autoKeyVisible)

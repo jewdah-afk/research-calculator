@@ -162,6 +162,8 @@ end
 -- show a tooltip over (or under, near the top) a GuiObject; seconds = auto-hide (tap)
 function Hud.showTip(inst, text, seconds)
 	if not (tip and inst and text and text ~= "") then return end
+	-- never over an open window: only things inside the window itself may show a tip while one is open
+	if WM.modal and not inst:FindFirstAncestor("PeckwoodWindows") then return end
 	tipToken += 1
 	local token = tipToken
 	local s = scale.Scale
@@ -188,6 +190,9 @@ function Hud.tooltip(inst, textFn)
 	if not hit then return end
 	hit.MouseEnter:Connect(function() Hud.showTip(inst, textFn()) end)
 	hit.MouseLeave:Connect(Hud.hideTip)
+	-- a press takes the tip away (it never sticks through the click or onto the window it opens)
+	hit.MouseButton1Down:Connect(Hud.hideTip)
+	hit.Activated:Connect(Hud.hideTip)
 end
 
 -- ---------------------------------------------------------------- top-left: banner + the wallet column
@@ -384,6 +389,29 @@ function Hud.onLabel(pos, value, cur)
 	task.delay(0.18, function() flyFrom(cur, d, if cur == "goldenPopcorn" then 3 else 2, 30) end)
 end
 
+-- ---------------------------------------------------------------- the ride under the COMPANIONS board
+local ride = nil            -- closed-board anchors from reflow: { autoX, autoY, railX, railY, bottom }
+local boardH = 0            -- the board's current target height (design px of the component)
+local RAIL_H = 616
+local function applyRide(info, animate)
+	if not ride then return end
+	local shift = boardH * SP.HUD
+	local ry = ride.railY + shift
+	local railScale = math.clamp((ride.bottom - ry) / RAIL_H, 0.45, SP.RAIL)
+	local targets = {
+		{ groups.auto, { Position = UDim2.fromOffset(ride.autoX, ride.autoY + shift) } },
+		{ groups.rail, { Position = UDim2.fromOffset(ride.railX, ry) } },
+		{ groups.rail and groups.rail:FindFirstChildOfClass("UIScale"), { Scale = railScale } },
+	}
+	local ti = info or (if animate and not Kit.reduced() then TweenInfo.new(0.22, Enum.EasingStyle.Quint, Enum.EasingDirection.Out) else nil)
+	for _, t in targets do
+		local inst, props = t[1], t[2]
+		if inst then
+			if ti then TweenService:Create(inst, ti, props):Play() else for k, v in props do inst[k] = v end end
+		end
+	end
+end
+
 -- ---------------------------------------------------------------- top-right: COMPANIONS board, AUTO, area rail
 local companions, autoKey, board
 local companionsOpen = false   -- remembered (player pref)
@@ -443,17 +471,11 @@ local function layoutCompanions()
 		local row = rowFrames[r[1]]
 		if row and state then rowLook(row, not unlockedWindow(r[3]), r[3]) end
 	end
-	-- the board covers the AUTO slot (Birb): AUTO hides while it is down
-	if autoKey then autoKey.root.Visible = not companionsOpen end
 end
 local function setCompanions(on, animate, save)
 	if on == companionsOpen then return end
 	companionsOpen = on
 	board:setOpen(on, animate ~= false)
-	if autoKey then
-		if on then autoKey.root.Visible = false
-		else task.delay(if animate ~= false then Board.T.up + 0.1 else 0, function() if not companionsOpen and autoKey then autoKey.root.Visible = true end end) end
-	end
 	if save ~= false then
 		plr:SetAttribute("PeckwoodCompanions", on)
 		if Remotes then Remotes.Action:FireServer("pref", "companions", on) end
@@ -485,6 +507,7 @@ local function buildCompanions()
 		if (c.Name == "drop" or c.Name == "shadow") and c:IsA("GuiObject") and c.Position.Y.Offset > HEADER_H then c:Destroy() end
 	end
 	board = Board.new(g, 0, HEADER_H - 2, COMP_W, toggleCompanions, Icons)
+	board.onHeight = function(h, info) boardH = h; applyRide(info, false) end
 	for _, r in COMPANION_ROWS do
 		local row = companions.node:FindFirstChild(r[1])
 		if row then
@@ -514,7 +537,6 @@ local function buildAuto(kind, st)
 	ui.name = name
 	ui.on("key", onAuto)
 	autoKey = ui
-	autoKey.root.Visible = not companionsOpen
 end
 
 -- area rail (our addition): under AUTO against the sidebar; open = coloured key, current = popped out, locked =
@@ -1208,10 +1230,12 @@ function reflow(animate)
 	local _, _, ax1 = vb(S.auto, "hud/auto/fish on", SP.HUD)
 	local autoX0 = colR - ax1
 	local autoY = footY + SP.GAP
-	place("auto", Vector2.new(0, 0), autoX0, autoY, animate)
 	local autoBottom = autoY + 64 * SP.HUD
 	local railL = colR - 100 * SP.RAIL
-	place("rail", Vector2.new(0, 0), railL, autoBottom + SP.GAP2, animate)
+	-- AUTO and the rail sit under the board and ride with its height (applyRide)
+	groups.auto.AnchorPoint = Vector2.new(0, 0); groups.rail.AnchorPoint = Vector2.new(0, 0)
+	ride = { autoX = autoX0, autoY = autoY, railX = railL, railY = autoBottom + SP.GAP2, bottom = H - edge }
+	applyRide(nil, animate)
 	-- bottom-centre: the icon row at the bottom, the objective just above it, the hotbar above that
 	local tilesW, tilesH = (TILE_PITCH * (#TILE_ORDER - 1) + TILE_W) * TILE_S, TILE_H * TILE_S
 	local tilesTop = H - edge - tilesH

@@ -355,6 +355,7 @@ function Motion.key(target, kind, opts)
 	local vc = veilParent:FindFirstChildOfClass("UICorner")
 	if vc then local c = Instance.new("UICorner"); c.CornerRadius = vc.CornerRadius; c.Parent = veil end
 	veil.Parent = veilParent
+	if opts.noVeil then veil.Visible = false end
 	local bp, bs, fp = body and body.Position, body and body.Size, face and face.Position
 	local lp = lip and lip.Position
 	local down, over = false, false
@@ -372,7 +373,7 @@ function Motion.key(target, kind, opts)
 			end
 		elseif not opts.noMove then
 			if not flatMoved then flatRest = target:GetAttribute("homePos") or target.Position end
-			local dy = if state == "hover" then -1 elseif state == "down" then 2 else 0
+			local dy = if state == "hover" then -1 elseif state == "down" then (opts.flatDrop or 2) else 0
 			flatMoved = dy ~= 0
 			TweenService:Create(target, info, { Position = flatRest + UDim2.fromOffset(0, dy) }):Play()
 		end
