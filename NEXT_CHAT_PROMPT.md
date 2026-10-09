@@ -2,6 +2,8 @@
 
 ---
 
+> **Figma UI cleanup chat?** Start with `FIGMA_UI_NEXT.md` in the repo root instead (header edge fix, moving runtime patches into Figma, missing frames, re-export + Studio QA loop).
+
 You are continuing **Peckwood** (Birb remake for Roblox) on the owner's PC with Roblox Studio connected (Studio MCP).
 
 1. Repo: `~/Downloads/rc-main` (GitHub jewdah-afk/research-calculator). `git fetch && git checkout claude/peckwood-isle && git pull`.
