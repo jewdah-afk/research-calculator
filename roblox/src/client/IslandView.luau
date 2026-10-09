@@ -483,10 +483,6 @@ function IslandView.build()
 	for _, o in Map.objects do
 		local def = DEFS[o[1]]
 		if not def then continue end
-		do   -- keep the portal row clear (Portals.luau: north edge, tiles x 4..36, y 1..7)
-			local ti, tj = o[2] / Map.PX, o[3] / Map.PX
-			if ti > 4 and ti < 36 and tj > 1 and tj < 7.5 then continue end
-		end
 		seed += 1
 		local x, z = pxToWorld(o[2], o[3])
 		local info = buildProp(def, o[1], x, z, scenery, seed)

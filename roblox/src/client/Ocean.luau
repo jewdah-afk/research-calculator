@@ -488,9 +488,14 @@ function Ocean.step(dt: number)
 		if not near(j.c, focus, R) then continue end
 		j.p.CFrame = CFrame.new(j.c.X + math.sin(clock * 0.3 + j.ph) * 2, SEA_Y - 0.7 + math.sin(clock * 1.2 + j.ph) * 0.25, j.c.Z + math.cos(clock * 0.25 + j.ph) * 2)
 	end
+	-- the ripple sheet sits under the land; from far away (whole-island zoom) it bleeds through the grass as white
+	-- streaks, so it fades out with camera distance (close: full, >= 420 studs: gone; shore waves + foam carry it)
+	local camDist = (workspace.CurrentCamera.CFrame.Position - focus).Magnitude
+	local ripFade = math.clamp((camDist - 300) / 120, 0, 1)
 	for kk, r in ripples do
 		r.OffsetStudsU = clock * (if kk == 1 then 1.3 else -0.9)
 		r.OffsetStudsV = clock * (if kk == 1 then 0.6 else 1.1)
+		r.Transparency = 0.35 + 0.65 * ripFade
 	end
 	-- shore waves: a set every 4.5 s, outermost line first, each brightening then fading as the next takes over
 	local cyc = (clock / 4.5) % 1

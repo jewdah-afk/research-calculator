@@ -179,7 +179,7 @@ local function outline(target: Instance, color: string, outlineT: number, fill: 
 end
 outline(field, "#6b4512", 0.12, "#fff6d6", 0.78)                                   -- popcorn: warm rim + soft inner lift
 IslandView.build()
-require(script.Parent:WaitForChild("Portals")).init()   -- teleporter hub on the Park plaza + a way home from every area
+-- portals removed (owner 2026-10-09): the HUD Teleport button covers travel. Portals.luau stays in the repo, unused.
 require(script.Parent:WaitForChild("Ambience")).start()
 outline(IslandView.scenery, "#24331f", 0.5)                                         -- scenery: quiet tinted outline
 -- dev/QA hook: PlayerGui:SetAttribute("PeckwoodBuild", tick()) replays the unlock build-in; PeckwoodHour freezes the sky
