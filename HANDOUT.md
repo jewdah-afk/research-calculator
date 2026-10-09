@@ -53,7 +53,12 @@ Branch **`claude/peckwood-isle`** (pushed). Build: `cd roblox && rojo build defa
   the egg, the egg flies (2D icon arc) into the wallet capsule (`Hud.flyFromScreen`), no more homing into the hen.
 - Egg icons uploaded (egg rbxassetid://122713849392935, golden egg 74456595363673) and mapped onto the `popcorn` /
   `golden` keys in `shared/Icons.luau` (ids kept so saves stay 1:1).
-- Portals: doorway-size (R 2.4), one row on the Park's north edge facing the camera, name plate on the static pad
+- Portals v3: generated mossy stone ring gate `assets/PortalAsset.rbxm` (7.5 studs), coloured breathing swirl disc in
+  the opening + sparkles + light, plate above the arch on a static pad; Park scenery cleared off the row (IslandView
+  skips Map.objects in tiles x 4..36, y 1..7.5). TODO: keep egg spawns off the portal row.
+- Eggs float normally again (drop / roll removed on request). Hitboxes: Controller `FOOT` = tight footprint radius
+  (studs) per kind, everything else walk-through.
+- - Portals: doorway-size (R 2.4), one row on the Park's north edge facing the camera, name plate on the static pad
   (it orbited when attached to the spinning swirl). Plate still renders at the pad base: raise it next.
 - NEXT (owner): Figma UI at Birb parity in our high-quality style (needs the Birb UI reference + the Figma page),
   then build the game up.

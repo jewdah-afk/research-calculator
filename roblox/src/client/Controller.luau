@@ -19,33 +19,30 @@ local VOID, WATER = 0, 3
 local STEP_UP = 13   -- hills are walkable now (owner: "explore every part"); a hill step is up to ~3 studs
 local colliders: { { x: number, y: number, r: number, base: number, top: number, hw: number?, hh: number? } } = {}
 -- footprint radius (px) and height (px) per Park prop kind (Park overhaul props; see client/IslandView)
--- trees are the stylized pack meshes now: only the trunk blocks (r 3 px); bushes are walk-through
+-- tight hitboxes (owner 2026-10-09: "right around them"): footprint radius in studs per kind, sized to the
+-- generated models; kinds not listed are walk-through decor
+local FOOT = { lantern = 0.5, oak = 0.7, bigoak = 0.9, pine = 0.6, tree = 0.7, palm = 0.5, deadtree = 0.6, rock = 1.0,
+	cart = 2.0, bench = 1.1, windmill = 3.4, arch = 0.9, barrel = 0.9, birdhouse = 0.4, scarecrow = 0.4, post = 0.3,
+	keep = 9, tower = 2.6, temple = 6, pyramid = 6, greenhouse = 3.6, hut = 3.2, mineentrance = 4, minecart = 1.2,
+	crystal = 1.0, ore = 1.0, cactus = 0.6, altar = 1.6, pillar = 0.9, bell = 1.2, banner = 0.3, rod = 0.4, tent = 2.2 }
+local PX_PER_STUD = Map.PX / S
 local TRUNK_R = 3
 local SOFT = { bush = true, flowers = true, sunflower = true }
 local TREES = { tree = true, oak = true, bigoak = true, pine = true }
-local PROP_COLL = { lantern = { 3, 40 }, oak = { TRUNK_R, 60 }, bigoak = { TRUNK_R, 70 }, pine = { TRUNK_R, 60 }, rock = { 9, 10 },
+local PROP_COLL0 = { lantern = { 3, 40 }, oak = { TRUNK_R, 60 }, bigoak = { TRUNK_R, 70 }, pine = { TRUNK_R, 60 }, rock = { 9, 10 },
 	cart = { 16, 40 }, bench = { 9, 10 }, fence = { 6, 12 } }
 for _, o in Map.objects do
-	local kind, x, y, z = o[1], o[2], o[3], o[4]
-	if kind == "arch" then   -- two pillars, walk-through gap between them
-		table.insert(colliders, { x = x - 24, y = y, r = 8, base = z, top = z + 80 })
-		table.insert(colliders, { x = x + 24, y = y, r = 8, base = z, top = z + 80 })
-	elseif PROP_COLL[kind] then
-		table.insert(colliders, { x = x, y = y, r = PROP_COLL[kind][1], base = z, top = z + PROP_COLL[kind][2] })
-	end
+	local kind, x, y = o[1], o[2], o[3]
+	local r = FOOT[kind]
+	if r then table.insert(colliders, { x = x, y = y, r = r * PX_PER_STUD, base = -100, top = 400 }) end
 end
--- other islands + land joins: one box per prop from its ground footprint (World computes r in tiles)
+-- other islands + land joins: the same tight footprints
 for _, isl in World.all() do
 	if isl.park then continue end
 	for _, p in isl.props do
-		if p.dropped or (p.r or 0) <= 0 or SOFT[p.kind] then continue end
-		if TREES[p.kind] then
-			table.insert(colliders, { x = p.x * Map.PX, y = p.z * Map.PX, r = TRUNK_R, base = 0, top = 80 })
-		elseif p.box then   -- the prop's real ground footprint, as a box (px)
-			local b = p.box
-			table.insert(colliders, { x = (b[1] + b[2]) / 2 * Map.PX, y = (b[3] + b[4]) / 2 * Map.PX, r = 0, base = 0, top = 80,
-				hw = (b[2] - b[1]) / 2 * Map.PX, hh = (b[4] - b[3]) / 2 * Map.PX })
-		end
+		local r = FOOT[p.kind]
+		if p.dropped or not r then continue end
+		table.insert(colliders, { x = p.x * Map.PX, y = p.z * Map.PX, r = r * PX_PER_STUD, base = -100, top = 400 })
 	end
 end
 -- coarse buckets so canStand only checks nearby colliders

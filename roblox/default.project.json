@@ -17,6 +17,9 @@
       },
       "EggAsset": {
         "$path": "assets/EggAsset.rbxm"
+      },
+      "PortalAsset": {
+        "$path": "assets/PortalAsset.rbxm"
       }
     },
     "ServerScriptService": {
