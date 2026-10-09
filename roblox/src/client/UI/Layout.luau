@@ -80,6 +80,27 @@ function Layout.setSidebar(open: boolean)
 	fire(true)
 end
 
+-- the WINDOW REGION: the game area minus the HUD bands (top band = banner / area meter / COMPANIONS + AUTO, left
+-- column = the wallet when it runs down past the top band, bottom band = hotbar / objective / icon row, right = the
+-- rail strip). The HUD measures its pieces and sets it; windows scale and dock inside it, so they never cover the
+-- banner, the wallet or the bottom row. { x0, y0, x1, y1 } in design px.
+Layout.region = nil
+local regionListeners = {}
+function Layout.onRegion(fn) table.insert(regionListeners, fn) end
+function Layout.setRegion(x0: number, y0: number, x1: number, y1: number)
+	-- whole pixels, rounded inward (UDim offsets are integers)
+	x0, y0, x1, y1 = math.ceil(x0), math.ceil(y0), math.floor(x1), math.floor(y1)
+	local r = Layout.region
+	if r and math.abs(r[1] - x0) < 0.5 and math.abs(r[2] - y0) < 0.5 and math.abs(r[3] - x1) < 0.5 and math.abs(r[4] - y1) < 0.5 then return end
+	Layout.region = { x0, y0, x1, y1 }
+	for _, fn in regionListeners do task.spawn(fn) end
+end
+function Layout.windowRegion(): (number, number, number, number)
+	local r = Layout.region
+	if r then return r[1], r[2], r[3], r[4] end
+	return Layout.S.WIN, Layout.S.WIN, Layout.windowRight(), Layout.H - Layout.S.WIN
+end
+
 -- visual bounds of a Figma component node (union of its children, drop shadows ignored): alignment edges come from
 -- what you SEE (a wallet chip's icon sticks out left of its key, so the stack aligns on the icon)
 function Layout.bounds(node): (number, number, number, number)

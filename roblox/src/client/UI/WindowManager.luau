@@ -133,29 +133,33 @@ end
 
 local function fitWindow(rec)
 	if not rec or not rec.holder or rec.def.drawer then return end
-	local s = math.min(1, (Layout.H - 2 * S.WIN) / rec.H, (Layout.windowRight() - 2 * S.WIN) / rec.W)
+	-- windows scale into the window region (game area minus the HUD bands): the banner, the wallet column and the
+	-- bottom row always stay visible (Birb keeps its currency stack in view); the popup list keeps its own size
+	local x0, y0, x1, y1 = Layout.windowRegion()
+	local s = if rec.def.dock == "popup" then math.min(1, (Layout.H - 2 * S.WIN) / rec.H) else math.min(1, (y1 - y0) / rec.H, (x1 - x0) / rec.W)
 	rec.fit.Scale = math.max(0.3, s)
 end
--- where a window sits in the game area (Birb anchors)
+-- where a window sits in the window region (Birb anchors)
 local function placeWindow(rec, animate)
 	if not rec or rec.def.drawer then return end
 	fitWindow(rec)
 	local s = rec.fit.Scale
 	local dock = rec.def.dock or "center"
-	local right = Layout.windowRight()
+	local x0, y0, x1, y1 = Layout.windowRegion()
 	if dock == "bl" then
 		rec.holder.AnchorPoint = Vector2.new(0, 1)
-		move(rec.holder, { Position = UDim2.new(0, S.WIN, 1, -S.WIN) }, animate)
+		move(rec.holder, { Position = UDim2.fromOffset(x0, y1) }, animate)
 	elseif dock == "popup" and WM.anchors[rec.id] then
+		-- a small list right above the HUD key that opened it, kept inside the game area
 		local p = WM.anchors[rec.id]()
 		local w, h = rec.W * s, rec.H * s
-		local x = math.clamp(p.X, S.WIN + w / 2, right - S.WIN - w / 2)
+		local x = math.clamp(p.X, S.WIN + w / 2, Layout.gameRight() - S.TAB_W - S.GAP - w / 2)
 		local y = math.max(p.Y - S.GAP, S.WIN + h)
 		rec.holder.AnchorPoint = Vector2.new(0.5, 1)
 		move(rec.holder, { Position = UDim2.fromOffset(x, y) }, animate)
 	else
 		rec.holder.AnchorPoint = Vector2.new(0.5, 0.5)
-		move(rec.holder, { Position = UDim2.new(0, right / 2, 0.5, 0) }, animate)
+		move(rec.holder, { Position = UDim2.fromOffset((x0 + x1) / 2, (y0 + y1) / 2) }, animate)
 	end
 end
 WM.placeWindow = placeWindow
@@ -527,6 +531,11 @@ function WM.init(parentGui)
 		sidebarTab.on("btn/sidebar", function() WM.setDrawer(not Layout.sidebarOpen) end)
 	end
 	Layout.onChanged(reflow)
+	Layout.onRegion(function()
+		for _, rec in WM.built do
+			if rec.holder.Visible and not rec.def.drawer then placeWindow(rec, false) else fitWindow(rec) end
+		end
+	end)
 	layout()
 	workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(layout)
 	UIS.InputBegan:Connect(function(io, gp)

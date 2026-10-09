@@ -12,18 +12,49 @@ local Kit = require(script.Parent.Kit)
 
 local Sfx = {}
 
--- placeholder ids: put rbxassetid numbers here (0 = keyboard-slice fallback). The dev Sound Board (UI/SoundBoard)
--- auditions candidates through play() and applies picks live with Sfx.setId; its COPY TABLE prints this table.
+-- sound ids (0 = keyboard-slice fallback). PROVISIONAL: the first licensed candidate of each event (UI/SfxCandidates:
+-- Pro Sound Effects / Roblox UI pack / APM) until the owner picks by ear on the dev Sound Board (UI/SoundBoard), whose
+-- COPY TABLE prints this table with the picks.
 local IDS = {
-	press_down = 0, press_up = 0,                    -- the buttery keycap (two-part: thock down, softer click up)
-	hover_tick = 0, tab_switch = 0, window_open = 0, window_close = 0,
-	buy_ok = 0, purchase_big = 0, cant_afford = 0, denied = 0, maxed = 0,
-	level_up = 0, collect = 0, coin_land = 0,
-	toast = 0, unlock = 0, molt = 0, error = 0, evolve = 0,
-	board_roll_down = 0, board_roll_up = 0, board_clack = 0,
-	toggle_on = 0, toggle_off = 0, slider_tick = 0, scroll_tick = 0,
-	row_select = 0, dropdown_open = 0, dropdown_close = 0,
+	press_down = 9120917438,
+	press_up = 15675032796,
+	hover_tick = 9113873378,
+	tab_switch = 15675037413,
+	window_open = 15675024286,
+	window_close = 15675081158,
+	row_select = 15675059323,
+	dropdown_open = 15675046931,
+	dropdown_close = 15675028888,
+	toggle_on = 9119717523,
+	toggle_off = 9119717529,
+	slider_tick = 9117043852,
+	scroll_tick = 9117044346,
+	board_roll_down = 9116480637,
+	board_roll_up = 9114451733,
+	board_clack = 9120917861,
+	buy_ok = 9126073644,
+	purchase_big = 9048764562,
+	cant_afford = 9120917609,
+	denied = 0,
+	maxed = 9126073064,
+	level_up = 9048764475,
+	collect = 9112751731,
+	coin_land = 9126076118,
+	toast = 9125397272,
+	unlock = 9040476898,
+	island_unlock = 9048764753,
+	molt = 9114369862,
+	evolve = 9125635297,
+	egg_hatch_crack = 9114231988,
+	hatch_reveal = 9116394545,
+	error = 15675075163,
 }
+-- optional start offset per id (seconds into the file: library files often hold several takes); default 0
+local START = {}
+-- max play length per category (long tails fade out over the last 25 % and stop); an event can override it
+local MAXLEN = { ui = 0.35, rewards = 1.2, messages = 3, music = 0 }
+local EVENT_MAXLEN = {}
+Sfx.START, Sfx.MAXLEN, Sfx.EVENT_MAXLEN = START, MAXLEN, EVENT_MAXLEN
 -- event -> category, base volume, base pitch, fallback (Kit.sfx name + pitch scale)
 local EVENTS = {
 	press_down = { "ui", 0.55, 1.0, "click" }, press_up = { "ui", 0.25, 1.25, "click" },
@@ -34,15 +65,14 @@ local EVENTS = {
 	level_up = { "rewards", 0.7, 1.2, "thock" }, collect = { "rewards", 0.35, 1.0, "click" }, coin_land = { "rewards", 0.25, 1.3, "hover" },
 	toast = { "messages", 0.4, 1.15, "open" }, unlock = { "messages", 0.8, 1.0, "open" }, molt = { "messages", 0.8, 0.8, "thock" },
 	error = { "messages", 0.45, 0.8, "nope" }, evolve = { "messages", 0.8, 0.7, "thock" },
+	island_unlock = { "messages", 0.8, 1.0, "open" }, egg_hatch_crack = { "rewards", 0.6, 1.0, "thock" }, hatch_reveal = { "rewards", 0.7, 1.2, "open" },
 	-- the COMPANIONS board (pull-down map): a soft zip each way and a clack when it snaps shut
 	board_roll_down = { "ui", 0.4, 0.85, "open" }, board_roll_up = { "ui", 0.4, 1.15, "close" }, board_clack = { "ui", 0.5, 0.75, "thock" },
 	toggle_on = { "ui", 0.45, 1.2, "click" }, toggle_off = { "ui", 0.4, 0.9, "click" },
 	slider_tick = { "ui", 0.12, 1.5, "hover" }, scroll_tick = { "ui", 0.05, 1.6, "hover" },
 	row_select = { "ui", 0.3, 1.1, "click" }, dropdown_open = { "ui", 0.35, 1.05, "open" }, dropdown_close = { "ui", 0.3, 0.95, "close" },
 }
-Sfx.ORDER = { "press_down", "press_up", "hover_tick", "tab_switch", "window_open", "window_close", "row_select", "dropdown_open", "dropdown_close",
-	"toggle_on", "toggle_off", "slider_tick", "scroll_tick", "board_roll_down", "board_roll_up", "board_clack", "buy_ok", "purchase_big", "cant_afford",
-	"denied", "maxed", "level_up", "collect", "coin_land", "toast", "unlock", "molt", "evolve", "error" }
+Sfx.ORDER = { "press_down", "press_up", "hover_tick", "tab_switch", "window_open", "window_close", "row_select", "dropdown_open", "dropdown_close", "toggle_on", "toggle_off", "slider_tick", "scroll_tick", "board_roll_down", "board_roll_up", "board_clack", "buy_ok", "purchase_big", "cant_afford", "denied", "maxed", "level_up", "collect", "coin_land", "toast", "unlock", "island_unlock", "molt", "evolve", "egg_hatch_crack", "hatch_reveal", "error" }
 -- volume hierarchy: UI quietest, rewards louder, big-moment messages loudest; music ducks under big moments
 local CATEGORY = { ui = 0.8, rewards = 1.0, messages = 1.0, music = 0.6 }
 Sfx.IDS, Sfx.EVENTS, Sfx.CATEGORY = IDS, EVENTS, CATEGORY
@@ -76,16 +106,27 @@ local function play(event, pitchMul, idOverride)
 	if not idOverride and last[event] and now - last[event] < (if event == "scroll_tick" then 0.07 else 0.03) then return end
 	last[event] = now
 	local id = idOverride or IDS[event]
-	local pitch = e[3] * (pitchMul or 1) * (0.95 + math.random() * 0.1)   -- +-5 %
+	local vary = 0.95 + math.random() * 0.1   -- +-5 %
 	if id and id > 0 then
 		local snd = Instance.new("Sound")
 		snd.SoundId = "rbxassetid://" .. id
 		snd.Volume = e[2]
-		snd.PlaybackSpeed = pitch
+		snd.PlaybackSpeed = (pitchMul or 1) * vary
+		snd.TimePosition = START[id] or 0
 		snd.SoundGroup = group(e[1])
 		snd.Parent = SoundService
 		snd.Ended:Once(function() snd:Destroy() end)
 		snd:Play()
+		-- cap the length: the last quarter fades out, then it stops (long library tails never run on)
+		local maxLen = EVENT_MAXLEN[event] or MAXLEN[e[1]] or 0
+		if maxLen > 0 then
+			task.delay(maxLen * 0.75, function()
+				if not snd.Parent then return end
+				local t = TweenService:Create(snd, TweenInfo.new(maxLen * 0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { Volume = 0 })
+				t.Completed:Once(function() if snd.Parent then snd:Stop(); snd:Destroy() end end)
+				t:Play()
+			end)
+		end
 	else
 		Kit.sfx(e[4])
 	end
@@ -119,6 +160,9 @@ function Sfx.toggle(on) play(if on then "toggle_on" else "toggle_off") end
 function Sfx.sliderTick() play("slider_tick") end
 function Sfx.scrollTick() play("scroll_tick") end
 function Sfx.board(kind) play("board_" .. kind) end   -- roll_down / roll_up / clack
+function Sfx.islandUnlock() play("island_unlock"); Sfx.duck(2.4) end
+function Sfx.hatchCrack() play("egg_hatch_crack") end
+function Sfx.hatchReveal() play("hatch_reveal") end
 function Sfx.maxed() play("maxed") end
 function Sfx.levelUp() play("level_up") end
 function Sfx.toast() play("toast") end
@@ -163,6 +207,13 @@ task.spawn(function()
 	end
 	apply()
 	plr:GetAttributeChangedSignal("PeckwoodSfxPicks"):Connect(apply)
+end)
+
+-- preload every chosen id at startup so the first press is never silent
+task.spawn(function()
+	local list = {}
+	for _, id in IDS do if id > 0 then table.insert(list, "rbxassetid://" .. id) end end
+	pcall(function() game:GetService("ContentProvider"):PreloadAsync(list) end)
 end)
 
 return Sfx

@@ -43,4 +43,6 @@ return {
 	teleport = { dock = "popup", title = "FAST TRAVEL", build = "teleport" },
 	leaderboards = { title = "LEADERBOARDS", build = "leaderboards", tabs = { { "PROFILE", go = "profile" }, { "SETTINGS", go = "settings" }, { "LEADERBOARDS", go = "leaderboards" } } },
 	offline = { title = "WELCOME BACK", build = "offline" },
+	-- dev only (dev bar SOUNDS): audition and pick every UI sound
+	sounds = { title = "SOUND BOARD", build = "sounds" },
 }

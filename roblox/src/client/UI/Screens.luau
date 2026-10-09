@@ -197,31 +197,40 @@ end
 -- ---------------------------------------------------------------- FAST TRAVEL
 local AREA_ICON = { park = "egg", garden = "seed", castle = "monster", bridge = "rod_simple", forest = "nest", mine = "crow", desert = "egg_golden", expedition = "parrot", echo = "echo" }
 local function buildTeleport(parent)
-	-- Birb Fast Travel: a small list that pops up above its button (bottom-right tiles), one row per area.
-	-- Open areas travel on click; locked ones are muted with what opens them; the area you stand on says HERE.
+	-- Birb Fast Travel (win_fast_travel.jpg): a small list right above its key in the bottom row, one compact row
+	-- per area. Open areas travel on click; the area you stand on says HERE; locked ones are muted with a padlock and
+	-- their requirement in a tooltip (no long red lines).
 	local areas = {}
 	for _, isl in World.list do if AREA_ICON[isl.id] then table.insert(areas, isl) end end
-	local W, ROW, PAD = 360, 48, 8
-	local H = 48 + #areas * (ROW + PAD) + PAD
+	local W, ROW, PAD = 300, 40, 6
+	local H = 44 + #areas * (ROW + PAD) + PAD
 	local L = FKit.layout()
 	local panel = FKit.STEELn(L, "Window / Fast Travel", 0, 0, W, H, { cols = { "29313e", "171c24" } })
-	add(panel, FKit.Tn(L, "FAST TRAVEL", 18, { x = 16, y = 12, w = 200 }))
-	local close = FKit.KEYn(L, "btn/close", W - 40, 8, 32, 32, PAL.red, { d = 4 })
-	table.insert(close.k[3].k, FKit.node("G", "glyph/x", 7, 4, 15, 15, { kind = "x", col = "ffffff", ink = 5.5, lw = 2.6 }))
+	add(panel, FKit.Tn(L, "FAST TRAVEL", 17, { x = 14, y = 10, w = 200 }))
+	local close = FKit.KEYn(L, "btn/close", W - 38, 7, 30, 30, PAL.red, { d = 4 })
+	table.insert(close.k[3].k, FKit.node("G", "glyph/x", 6.5, 3.5, 15, 15, { kind = "x", col = "ffffff", ink = 5.5, lw = 2.6 }))
 	add(panel, close)
 	for i, isl in areas do
-		local row = add(panel, FKit.WELLn(L, "area/" .. isl.id, PAD, 48 + (i - 1) * (ROW + PAD), W - 2 * PAD, ROW, { op = 0.7 }))
-		add(row, FKit.ICOn(AREA_ICON[isl.id], 36, 8, 6, L))
-		add(row, FKit.Tn(L, string.upper(isl.name), 17, { name = "name", x = 54, y = 6, w = 230 }))
-		add(row, FKit.BODYn(L, "Open", 12, { name = "status", x = 54, y = 28, w = 280 }))
+		local row = add(panel, FKit.WELLn(L, "area/" .. isl.id, PAD, 44 + (i - 1) * (ROW + PAD), W - 2 * PAD, ROW, { op = 0.7 }))
+		add(row, FKit.ICOn(AREA_ICON[isl.id], 30, 6, 5, L))
+		add(row, FKit.Tn(L, string.upper(isl.name), 16, { name = "name", x = 44, y = 9, w = 170 }))
+		add(row, FKit.Tn(L, "HERE", 14, { name = "here", x = W - 2 * PAD - 70, y = 11, w = 60, ax = "R", col = "ffd36b" }))
+		local lock = FKit.ICOn("lock", 22, W - 2 * PAD - 32, 9, L)
+		lock.n = "lock"
+		add(row, lock)
 	end
 	local ui = FKit.build(L, panel, parent)
 	for _, isl in areas do
 		local row = ui.find("area/" .. isl.id)
 		Motion.key(row, "row", { onActivate = function()
-			if World.isOpen(isl) then Sfx.rowSelect(); WM.close() end
-			Hud.travelTo(isl.id)
+			if World.isOpen(isl) then
+				Sfx.rowSelect(); WM.close(); Hud.travelTo(isl.id)
+			else
+				Sfx.denied()
+				if Hud.showTip then Hud.showTip(row, Hud.goalOf(isl.id), 2.4) end
+			end
 		end })
+		if Hud.tooltip then Hud.tooltip(row, function() return if World.isOpen(isl) then nil else Hud.goalOf(isl.id) end) end
 	end
 	ui.update = function(s)
 		local here = Hud.currentAreaId and Hud.currentAreaId()
@@ -229,13 +238,10 @@ local function buildTeleport(parent)
 			local row = ui.find("area/" .. isl.id)
 			if row then
 				local open = World.isOpen(isl)
-				local st = row:FindFirstChild("status", true)
-				local goal = if isl.id == here then "HERE" else "Open"
-				if not open then for _, x in Defs.ISLANDS do if x.id == isl.id then goal = x.goal end end end
-				if st then
-					Render.setText(st, goal)
-					Render.setTextColor(st, Color3.fromHex(if not open then "ff9a8a" elseif isl.id == here then "ffd36b" else "9dffae"))
-				end
+				local hereL = row:FindFirstChild("here")
+				if hereL then hereL.Visible = open and isl.id == here; local sh = Render.SHADOW[hereL]; if sh then sh.Visible = hereL.Visible end end
+				local lock = row:FindFirstChild("lock")
+				if lock then lock.Visible = not open end
 				-- locked rows are muted: icon dimmed, name grey
 				local ico = row:FindFirstChild("ico/" .. AREA_ICON[isl.id])
 				if ico then ico.ImageTransparency = if open then 0 else 0.55 end
@@ -273,7 +279,8 @@ local function buildOffline(parent)
 	return ui, W, H
 end
 
-local BUILD = { profile = buildProfile, settings = buildSettings, leaderboards = buildLeaderboards, teleport = buildTeleport, offline = buildOffline }
+local BUILD = { profile = buildProfile, settings = buildSettings, leaderboards = buildLeaderboards, teleport = buildTeleport, offline = buildOffline,
+	sounds = function(parent) return require(script.Parent.SoundBoard).build(parent, Hud) end }
 function Screens.build(id, parent, rec)
 	local ui, W, H = BUILD[id](parent)
 	-- these windows bind themselves: refresh on open and on every state push while visible

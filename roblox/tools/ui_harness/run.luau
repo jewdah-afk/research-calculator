@@ -72,8 +72,17 @@ local _ = absSize
 
 -- ---------------------------------------------------------------- services
 local TweenInfo = { new = function(...) return { ... } end }
-local function tween(inst, _, props)
-	return { Play = function() for k, v in props do inst[k] = v end end, Cancel = function() end, Completed = Signal.new() }
+-- tweens land on their end values at once; Completed fires on the next resume (chained tweens run to the end), never
+-- for a cancelled or looping tween
+local function tween(inst, ti, props)
+	local t = { Completed = Signal.new(), cancelled = false }
+	function t.Play()
+		for k, v in props do inst[k] = v end
+		if ti and ti[4] and ti[4] ~= 0 then return end   -- TweenInfo.new(time, style, dir, repeatCount, ...)
+		task.defer(function() if not t.cancelled then t.Completed:Fire(roblox.Enum.PlaybackState.Completed) end end)
+	end
+	function t.Cancel() t.cancelled = true end
+	return t
 end
 local camera = { ViewportSize = V2.new(1920, 1080) }
 function camera:WorldToViewportPoint(p) return roblox.Vector3.new(960, 540, 10), true end
@@ -82,6 +91,10 @@ local workspace = { CurrentCamera = camera }
 local playerGui = Instance.new("Folder"); playerGui.Name = "PlayerGui"
 local player = { DisplayName = "Tester", UserId = 1, Name = "Tester", Character = nil, PlayerGui = playerGui }
 function player:WaitForChild(n) if n == "PlayerGui" then return playerGui end end
+local playerAttrs, playerAttrSig = {}, {}
+function player:GetAttribute(k) return playerAttrs[k] end
+function player:SetAttribute(k, v) playerAttrs[k] = v; if playerAttrSig[k] then playerAttrSig[k]:Fire() end end
+function player:GetAttributeChangedSignal(k) playerAttrSig[k] = playerAttrSig[k] or Signal.new(); return playerAttrSig[k] end
 local RS = Instance.new("Folder"); RS.Name = "ReplicatedStorage"
 local SSS = Instance.new("Folder"); SSS.Name = "ServerScriptService"
 local services = {
@@ -272,12 +285,21 @@ end
 for _, id in ids do
 	local def = Defs2[id]
 	if not def.drawer then
+		local r0 = Layout.region and table.concat(Layout.region, ",") or "nil"
 		WM.open(id)
+		if process.env.PECK_DEBUG then print("region", id, r0, Layout.region and table.concat(Layout.region, ",")) end
 		local rec = WM.built[id]
 		check("sidebar stays open with " .. id, sidebar.holder.Visible and Layout.sidebarOpen)
 		local x, y, w, h = rect(rec.holder, rec.fit)
-		check("window in game area " .. id, x >= -0.5 and x + w <= Layout.windowRight() + 0.5 and y >= -0.5 and y + h <= Layout.H + 0.5,
-			("x %.0f..%.0f (window right %.0f) y %.0f..%.0f"):format(x, x + w, Layout.windowRight(), y, y + h))
+		if def.dock == "popup" then
+			check("popup in game area " .. id, x >= -0.5 and x + w <= Layout.gameRight() + 0.5 and y >= -0.5 and y + h <= Layout.H + 0.5,
+				("x %.0f..%.0f y %.0f..%.0f"):format(x, x + w, y, y + h))
+		else
+			-- every other window fits the window region: the banner, the wallet column and the bottom row stay visible
+			local rx0, ry0, rx1, ry1 = Layout.windowRegion()
+			check("window in window region " .. id, x >= rx0 - 1 and x + w <= rx1 + 1 and y >= ry0 - 1 and y + h <= ry1 + 1,
+				("x %.2f..%.2f y %.2f..%.2f region %.2f,%.2f..%.2f,%.2f"):format(x, x + w, y, y + h, rx0, ry0, rx1, ry1))
+		end
 		-- tab switches: no rebuild of a seen variant, no re-pop
 		local pops, tabs = rec.popCount, 0
 		for _, tb in def.tabs or {} do
@@ -404,6 +426,41 @@ do
 	local live = _G.__uiKeys and _G.__uiKeys() or {}
 	print(("_G.__uiKeys(): %d live keys"):format(#live))
 end
+-- COMPANIONS board: drops to its full height (AUTO hidden under it), rolls back up to 0 (AUTO back), every row on it,
+-- locked rows show their padlock + unlock note (QA: locked rows rendered as black blocks)
+do
+	local Hud3 = req(UI:FindFirstChild("Hud"))
+	local cg = hudGui.canvas:FindFirstChild("companions")
+	local boardF = cg and cg:FindFirstChild("board")
+	local autoG = hudGui.canvas:FindFirstChild("auto")
+	check("board exists", boardF ~= nil)
+	if boardF then
+		local rowsF = boardF:FindFirstChild("rows", true)
+		local n = 0
+		for _, r in rowsF:GetChildren() do if string.sub(r.Name, 1, 4) == "row/" then n += 1 end end
+		check("board holds all 6 companion rows", n == 6, "rows " .. n)
+		Hud3.toggleCompanions()
+		task.wait(0.1)
+		local sheet = boardF:FindFirstChild("sheet", true)
+		check("board drops to its height", math.abs(boardF.Size.Y.Offset - sheet.Size.Y.Offset) < 1, ("track %d sheet %d"):format(boardF.Size.Y.Offset, sheet.Size.Y.Offset))
+		local autoKeyVisible = false
+		for _, c in autoG:GetChildren() do if c:IsA("Frame") and c.Visible then autoKeyVisible = true end end
+		check("AUTO hides under the board", not autoKeyVisible)
+		for _, r in rowsF:GetChildren() do
+			if string.sub(r.Name, 1, 4) == "row/" then
+				local locked = r:GetAttribute("locked")
+				local lock = r:FindFirstChild("lock")
+				check("locked row look " .. r.Name, lock ~= nil and lock.Visible == (locked == true))
+			end
+		end
+		Hud3.toggleCompanions()
+		task.wait(0.5)
+		check("board rolls up", boardF.Size.Y.Offset == 0, "track " .. boardF.Size.Y.Offset)
+		autoKeyVisible = false
+		for _, c in autoG:GetChildren() do if c:IsA("Frame") and c.Visible then autoKeyVisible = true end end
+		check("AUTO back after the roll up", autoKeyVisible)
+	end
+end
 -- feel hooks run
 try("onLabel", function() local Hud2 = req(UI:FindFirstChild("Hud")); Hud2.onLabel(roblox.Vector2.new(400, 300), 12345, "popcorn"); Hud2.bigMoment("THE MINE opens!", "unlock", "map") end)
 local _ = comp
@@ -431,6 +488,7 @@ local IconAlias = req(UI:FindFirstChild("Figma"):FindFirstChild("IconAlias"))
 local miss = 0; for _ in IconAlias.missing do miss += 1 end
 local missList = {}; for k in IconAlias.missing do table.insert(missList, k) end; table.sort(missList)
 print("icons with no uploaded id: " .. miss .. (if miss > 0 then " (" .. table.concat(missList, ", ") .. ")" else ""))
+check("every icon the UI uses has an Icons entry", miss == 0, table.concat(missList, ", "))
 -- layout dump for the composite QA mock (tools/ui_harness/mock.py): design-px rects of every HUD piece + windows
 do
 	local Hud2 = req(UI:FindFirstChild("Hud"))
