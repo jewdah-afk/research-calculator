@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Peckwood 3D</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Fredoka+One&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../playtest/style.css">
+</head>
+<body>
+<!-- Layout copies Birb's screen: wallet stack top-left, map arrows, companions + auto top-right,
+     fishing bar top-centre and cast hotbar bottom-centre on the Bridge, utility buttons bottom-right,
+     shop drawer on the right with tabs EGGS / MOLT / SEEDS (Birb: POPCORN / REBIRB / SEEDS / MINE). -->
+<main id="layout">
+  <section id="stage">
+    <canvas id="view"></canvas>
+    <div id="wallet"></div>
+    <div id="mapname">THE PARK</div>
+    <div id="topright">
+      <button class="key small blue" id="btn-companions">COMPANIONS [TAB]</button>
+      <div id="companion-list"></div>
+      <button class="key small grey" id="btn-autofish">AUTO</button>
+      <span id="speedtag"></span>
+    </div>
+    <div id="fishbar"></div>
+    <div id="hotbar"></div>
+    <div id="castle"></div>
+    <button class="arrow left" id="go-left" aria-label="Travel left">◀</button>
+    <button class="arrow right" id="go-right" aria-label="Travel right">▶</button>
+    <button class="arrow up" id="go-up" aria-label="Travel up">▲</button>
+    <button class="arrow down" id="go-down" aria-label="Travel down">▼</button>
+    <button class="key blue" id="btn-aquarium">[E] AQUARIUM</button>
+    <div id="arrowlabels"><span id="label-left"></span><span id="label-right"></span><span id="label-up"></span><span id="label-down"></span></div>
+    <div id="prompt"></div>
+    <div id="toast"></div>
+    <div id="utility">
+      <button class="util" data-win="travel" title="Fast travel"><img src="../birb-icons/final/map.png" alt="">TRAVEL</button>
+      <button class="util" data-win="fishing" title="Fish inventory"><img src="../birb-icons/final/fish.png" alt="">FISH</button>
+      <button class="util" data-win="profile" title="Profile [P]"><img src="../birb-icons/final/index.png" alt="">PROFILE</button>
+      <button class="util" data-win="settings" title="Settings [Esc]"><img src="../birb-icons/final/settings.png" alt="">SETTINGS</button>
+    </div>
+    <div id="win" class="window" hidden><div class="win-hdr"><span id="win-title"></span><button class="key small grey" id="win-close">X</button></div><div id="win-tabs"></div><div id="win-body"></div></div>
+  </section>
+  <aside id="drawer">
+    <nav id="tabs"></nav>
+    <div id="panel"></div>
+    <div id="controls">
+      <span><b>WASD</b> / click move</span><span><b>WHEEL</b> / <b>+ -</b> zoom</span><span><b>SPACE</b> cast</span><span><b>E</b> buy station</span><span><b>TAB</b> companions</span><span><b>P</b> profile</span><span><b>ESC</b> settings</span>
+    </div>
+  </aside>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/break_eternity.js@2.1.2/dist/break_eternity.min.js"></script>
+<script src="../playtest/js/data.js"></script>
+<script src="../playtest/js/core.js"></script>
+<script src="../playtest/js/systems.js"></script>
+<script src="../playtest/js/fishing.js"></script>
+<script src="../playtest/js/aquarium.js"></script>
+<script src="../playtest/js/nest.js"></script>
+<script src="../playtest/js/riverside.js"></script>
+<script src="../playtest/js/mine.js"></script>
+<script src="../playtest/js/desert.js"></script>
+<script src="../playtest/js/archivist_data.js"></script>
+<script src="../playtest/js/archivist.js"></script>
+<script src="../playtest/js/echo_field.js"></script>
+<script src="../playtest/js/expedition_data.js"></script>
+<script src="../playtest/js/expedition.js"></script>
+<script src="../playtest/js/expedition_ai.js"></script>
+<script src="../playtest/js/expedition_totem.js"></script>
+<script src="../playtest/js/expedition_sacrifice.js"></script>
+<script src="../playtest/js/expedition_loot.js"></script>
+<script src="../playtest/js/expedition_forge.js"></script>
+<script src="../playtest/js/quests.js"></script>
+<script src="../playtest/js/expedition_secret.js"></script>
+<script src="../playtest/js/expedition_night.js"></script>
+<script src="../playtest/js/expedition_mythic.js"></script>
+<script src="../playtest/js/main.js"></script>
+<script src="render3d.js"></script>
+</body>
+</html>

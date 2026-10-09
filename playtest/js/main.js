@@ -71,7 +71,7 @@
   });
 
   // ------------------------------------------------------------------ canvas + camera
-  const cv = document.getElementById("view"), cx = cv.getContext("2d");
+  const cv = document.getElementById("view"); let cx = cv.getContext("2d"); // game3d swaps cx to draw flat maps onto its 3D ground
   const imgs = {};
   const img = (n) => { if (!imgs[n]) { imgs[n] = new Image(); imgs[n].src = ICON(n); } return imgs[n]; };
   let cam = { x: 0, y: 0, k: 1 };
@@ -128,7 +128,9 @@
   addEventListener("keyup", (e) => G.keys.delete(e.key.toLowerCase()));
   cv.addEventListener("mousedown", (e) => {
     const r = cv.getBoundingClientRect(), dpr = cv.width / r.width;
-    const w = toWorld((e.clientX - r.left) * dpr, (e.clientY - r.top) * dpr);
+    G.clickWorld(toWorld((e.clientX - r.left) * dpr, (e.clientY - r.top) * dpr));
+  });
+  G.clickWorld = function (w) { // a click at map position w (game3d calls this from its own picking)
     if (PT.EXP.isRunMap(G.s.currentMap) && PT.EXP.command(G.s, w.x, w.y, G.s.player.x, G.s.player.y)) return;
     if (expPortalAt(w.x, w.y)) { expPortalAction(); return; }
     if (G.s.currentMap === 17 && PT.EXP.inMineEntrance(w.x, w.y)) { mineEntrance(); return; }
@@ -138,7 +140,7 @@
     if (G.s.currentMap === PT.MINE_TREE_MAP) openWin("minetree");
     if (G.s.currentMap === PT.SACRIFICE_MAP && Math.hypot(w.x - 528, w.y - 396) < 90) openWin("sacrifice");
     if (G.s.currentMap === 3 && !G.s.hasTalkedToMonster && Math.hypot(w.x - 800, w.y - 500) < 140) { G.s.hasTalkedToMonster = true; toast("The monster is hungry. Hold to feed it!"); }
-  });
+  };
 
   // ------------------------------------------------------------------ helpers
   let toastT = 0;
@@ -167,6 +169,7 @@
     const p = PT.STATIONS.find((s) => s[0] === "__platform"), x = G.s.player.x, y = G.s.player.y + 15;
     return x >= p[1] && x <= p[1] + p[3] && y >= p[2] && y <= p[2] + p[4];
   }
+  G.travel = (dir) => travel(dir);
   function travel(dir) {
     const why = PT.travelBlock(G.s, dir);
     if (why) { if (why !== "end") toast(why); return; }
@@ -216,6 +219,7 @@
     } else {
     s.player.x = Math.max(20, Math.min(m.w - 20, s.player.x + G.vx * dt));
     s.player.y = Math.max(20, Math.min(m.h - 20, s.player.y + G.vy * dt));
+    if (window.R3D) window.R3D.edge(G, ix, iy, dt); // game3d: walk off a map edge into the connected neighbour
     }
 
     // Park field: spawns while you're there, and while away once the Sparrow is unlocked (Birb update())
@@ -262,11 +266,17 @@
   }
 
   // ------------------------------------------------------------------ render
-  function render() {
-    updateCam();
+  // game3d: draw the current map flat into its own canvas (no bird, no floats) for maps that have no 3D scene yet
+  G.render2D = function (canvas) {
+    const keep = [cx, cam], m = PT.MAPS[G.s.currentMap];
+    cx = canvas.getContext("2d"); cam = { k: canvas.width / m.w, x: 0, y: 0 }; G.flat = true;
+    try { drawWorld(); } finally { [cx, cam] = keep; G.flat = false; }
+  };
+  function render() { updateCam(); drawWorld(); }
+  function drawWorld() {
     const s = G.s, m = PT.MAPS[s.currentMap];
     cx.setTransform(1, 0, 0, 1, 0, 0);
-    cx.fillStyle = "#1a2a1c"; cx.fillRect(0, 0, cv.width, cv.height);
+    cx.fillStyle = "#1a2a1c"; cx.fillRect(0, 0, cx.canvas.width, cx.canvas.height);
     cx.setTransform(cam.k, 0, 0, cam.k, cam.x * cam.k, cam.y * cam.k);
     const bg = { 0: "#5f9a45", 1: archivistView() ? "#7b3fae" : desertView() ? "#c8a46a" : "#6fa553", 2: "#6fa553", 3: "#5c5f66", 30: "#7b3fae" }[s.currentMap];
     cx.fillStyle = bg; roundRect(0, 0, m.w, m.h, 24); cx.fill();
@@ -290,8 +300,8 @@
     if (s.currentMap === 3) { drawIcon("monster", 800, 500, 200); if (!s.hasTalkedToMonster) label("Click the monster", 800, 640, 22); }
     // pickup radius ring + bird
     if (s.currentMap === 0 || s.currentMap === PT.DESERT_MAP) { cx.beginPath(); cx.arc(s.player.x, s.player.y, PT.pickupProfile(s).collectRadius, 0, 7); cx.strokeStyle = "rgba(255,255,255,.25)"; cx.lineWidth = 2; cx.stroke(); }
-    drawIcon("birb", s.player.x, s.player.y, 48, G.vx < -5);
-    for (const f of G.floats) if (f.map === s.currentMap) { cx.globalAlpha = Math.min(1, f.life / 0.4); label(f.text, f.x, f.y, 16, f.color); cx.globalAlpha = 1; }
+    if (!G.flat) drawIcon("birb", s.player.x, s.player.y, 48, G.vx < -5);
+    if (!G.flat) for (const f of G.floats) if (f.map === s.currentMap) { cx.globalAlpha = Math.min(1, f.life / 0.4); label(f.text, f.x, f.y, 16, f.color); cx.globalAlpha = 1; }
     if (s.currentMap === PT.DESERT_MAP && PT.sandstormOn(s)) { // Birb getDesertSandstormVisualAlpha: 1.2 s fade in and out
       const t = Math.max(0, s.desertSandstormTimeRemaining), al = Math.max(0, Math.min(1, (30 - t) / 1.2, t / 1.2));
       cx.fillStyle = `rgba(214,170,92,${0.35 * al})`; cx.fillRect(0, 0, m.w, m.h);
@@ -1291,7 +1301,7 @@
     let dt = Math.min(0.25, (now - last) / 1000); last = now;
     let sim = dt * G.timeScale;
     while (sim > 0) { const h = Math.min(0.05, sim); step(h); sim -= h; }
-    render();
+    if (window.R3D) window.R3D.render(G, dt); else render();
     uiT += dt; saveT += dt; toastT -= dt;
     if (toastT <= 0) document.getElementById("toast").style.opacity = 0;
     if (uiT > 0.25) { uiT = 0; drawPanel(); drawHud(); drawWin(); }
