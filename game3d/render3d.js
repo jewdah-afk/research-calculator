@@ -36,16 +36,17 @@
   // where a map sits in the world: its island's tile rectangle, or for expedition floors / secret rooms a full-size arena
   // platform centred on the expedition island that keeps Birb's proportions (floors are 2000 x 4000)
   const ARENA_Y = 22; // floors float above the island so its trees never poke through
-  const isArena = (id) => PT.EXP.isRunMap(id) || PT.EXP.isSecretRoom(id);
+  const ROOMS = { 14: "#6b4a2c", 22: "#244a6e", 24: "#7f97aa", 26: "#26332c" }; // nest interior, aquarium, fish market, treasure room: floor colours
+  const isArena = (id) => PT.EXP.isRunMap(id) || PT.EXP.isSecretRoom(id) || id in ROOMS;
   function rect(id) {
     const I = isl(id), m = PT.MAPS[id] || { w: 1056, h: 792 };
     if (!isArena(id)) return { x0: W.wx(I.oi), z0: W.wz(I.oj), w: I.W * W.S, d: I.N * W.S, m };
-    const k = (I.W * W.S * 1.15) / m.w, w = m.w * k, d = m.h * k, cx = W.wx(I.oi + I.W / 2), cz = W.wz(I.oj + I.N / 2);
+    const k = (I.W * W.S * (id in ROOMS ? 0.8 : 1.15)) / m.w, w = m.w * k, d = m.h * k, cx = W.wx(I.oi + I.W / 2), cz = W.wz(I.oj + I.N / 2);
     return { x0: cx - w / 2, z0: cz - d / 2, w, d, m, arena: true };
   }
   function toWorld(id, x, y) {
     const R = rect(id), wx = R.x0 + (x / R.m.w) * R.w, wz = R.z0 + (y / R.m.h) * R.d;
-    return new T.Vector3(wx, R.arena ? ARENA_Y : W.groundY(wx, wz), wz);
+    return new T.Vector3(wx, R.arena ? ARENA_Y + (id in ROOMS ? 14 : 0) : W.groundY(wx, wz), wz);
   }
   function toMap(id, p) { const R = rect(id); return { x: ((p.x - R.x0) / R.w) * R.m.w, y: ((p.z - R.z0) / R.d) * R.m.h }; }
   const pxScale = (id) => { const R = rect(id); return R.w / R.m.w; }; // world units per map pixel
@@ -119,7 +120,8 @@
     // the Nest's forest is the game's own trees (Birb: 30 wild trees + planting beds), so the forest island's decorative trees step aside
     W.hideProps((p) => p.need === isl(PT.NEST_MAP).n && ["pine", "tree", "bush", "rock", "log", "deadtree"].includes(p.kind));
     for (const id of [PT.DESERT_MAP, PT.ECHO_FIELD_MAP, PT.MINE_MAP]) SCENE3D[id] = true;
-    for (const id of Object.keys(PT.MAPS).map(Number)) if (isExp(id)) SCENE3D[id] = true;
+    for (const id of Object.keys(PT.MAPS).map(Number)) if (isExp(id) || id in ROOMS) SCENE3D[id] = true;
+    SCENE3D[3] = true;
     W.hideProps((p) => p.need === W.ISL.find((x) => x.id === "expedition").n); // the floors bring their own walls
     WALK[PT.DESERT_MAP] = WALK[PT.ECHO_FIELD_MAP] = true;
     buildBlocked();
@@ -441,6 +443,64 @@
     for (const [k, el] of exp.bars) if (!el.dataset.live) { el.remove(); exp.bars.delete(k); }
   }
 
+  // ------------------------------------------------------------------ rooms (raised platforms like the arenas) and the Castle monster
+  const room = { id: null, g: null, cards: [], dyn: {} };
+  const matC = (c, o = {}) => new T.MeshStandardMaterial({ color: new T.Color(c).convertSRGBToLinear(), roughness: 0.7, ...o });
+  function card(pos, lines) { // a name card sprite that redraws only when its text changes
+    const sp = new T.Sprite(new T.SpriteMaterial({ transparent: true, depthWrite: false })); sp.renderOrder = 9; sp.position.copy(pos); sp.scale.set(27, 8.9, 1); sp.userData.sig = "";
+    sp.userData.set = (name, sub, state) => { const sig = name + "|" + sub + "|" + state; if (sig === sp.userData.sig) return; sp.userData.sig = sig; if (sp.material.map) sp.material.map.dispose(); sp.material.map = labelTex(name, sub, 0, state || "afford"); sp.material.needsUpdate = true; };
+    sp.userData.set(lines[0], lines[1], lines[2]); return sp;
+  }
+  function box(g, w, h, d, x, y, z, m) { const b = new T.Mesh(new T.BoxGeometry(w, h, d), m); b.position.set(x, y, z); b.castShadow = b.receiveShadow = true; g.add(b); return b; }
+  function buildRoom(id) {
+    if (room.g) A.root.remove(room.g); room.g = new T.Group(); room.dyn = {}; room.id = id;
+    const R = rect(id), cx = R.x0 + R.w / 2, cz = R.z0 + R.d / 2, Y = ARENA_Y + 14, at = (x, y) => toWorld(id, x, y);
+    box(room.g, R.w, 6, R.d, cx, Y - 3, cz, matC(ROOMS[id], { roughness: 0.95 }));
+    const wallM = matC(id === 24 ? "#b8ab98" : id === 22 ? "#1b3550" : id === 26 ? "#3a3a44" : "#4a3220"); // low back and side walls
+    box(room.g, R.w, 6, 1.2, cx, Y + 3, R.z0 + 0.6, wallM); box(room.g, 1.2, 6, R.d, R.x0 + 0.6, Y + 3, cz, wallM); box(room.g, 1.2, 6, R.d, R.x0 + R.w - 0.6, Y + 3, cz, wallM);
+    if (id === 14) { // nest interior: a woven bed, the panda
+      const bed = at(528, 400); box(room.g, 22, 1.4, 11, bed.x, Y + 0.7, bed.z, matC("#9a6a3e"));
+      const p = A.M.panda(); p.scale.setScalar(A.BIRD * 1.2); p.position.set(bed.x, Y + 1.4, bed.z); room.g.add(p); room.dyn.panda = p;
+      room.dyn.card = card(at(528, 300).setY(Y + 14), ["Red Panda", ""]); room.g.add(room.dyn.card);
+    } else if (id === 22) { // aquarium: one glass tank per biome, water filled by completion
+      room.dyn.tanks = PT.AQ_BIOMES.map((b, i) => { const c = at(120 + (i % 3) * 460 + 200, 200 + Math.floor(i / 3) * 260 + 110), w = 400 * pxScale(id) * 0.9, d = 220 * (R.d / R.m.h) * 0.8;
+        box(room.g, w + 1, 1, d + 1, c.x, Y + 0.5, c.z, matC("#2b2f36"));
+        const glass = new T.Mesh(new T.BoxGeometry(w, 7, d), new T.MeshStandardMaterial({ color: 0xbfe6ff, transparent: true, opacity: 0.18, roughness: 0.05, metalness: 0.1 })); glass.position.set(c.x, Y + 4.5, c.z); room.g.add(glass);
+        const water = box(room.g, w * 0.96, 1, d * 0.92, c.x, Y + 1, c.z, new T.MeshStandardMaterial({ color: new T.Color(b.color).convertSRGBToLinear(), transparent: true, opacity: 0.7, roughness: 0.1 }));
+        const cd = card(c.clone().setY(Y + 13), [b.id.toUpperCase(), ""]); room.g.add(cd); return { b, water, cd, base: Y + 1 }; });
+    } else if (id === 24) { // fish market: two stalls with striped awnings
+      for (const [x, ic] of [[260, "BAIT MERCHANT"], [796, "FISH CONTRACTS"]]) { const c = at(x, 420);
+        box(room.g, 16, 4, 7, c.x, Y + 2, c.z, matC("#8a5a32"));
+        for (let i = 0; i < 6; i++) box(room.g, 16 / 6, 0.8, 9, c.x - 8 + (i + 0.5) * (16 / 6), Y + 8.5, c.z, matC(i % 2 ? "#f4f1ea" : "#c0392b"));
+        for (const sx of [-1, 1]) box(room.g, 0.6, 8, 0.6, c.x + sx * 7.5, Y + 4, c.z + 3.5, matC("#6b3f1f"));
+        room.g.add(card(c.clone().setY(Y + 15), [ic, ic === "BAIT MERCHANT" ? "" : "Press E"])); }
+    } else if (id === 26) { // treasure room: one pedestal per mine-tree node
+      room.dyn.nodes = PT.MINE_TREE.map((n, i) => { const c = at(200 + (i % 5) * 165, 240 + Math.floor(i / 5) * 110);
+        box(room.g, 6, 1.6, 4, c.x, Y + 0.8, c.z, matC("#8d8a82")); const top = box(room.g, 5, 0.5, 3.2, c.x, Y + 1.85, c.z, matC("#888888"));
+        const cd = card(c.clone().setY(Y + 6), [n.name, ""]); cd.scale.set(14, 4.6, 1); room.g.add(cd); return { n, top, cd }; });
+    }
+    A.root.add(room.g);
+  }
+  let monster = null;
+  function syncRooms(cur, dt) {
+    const s = G.s;
+    if (cur in ROOMS) { if (room.id !== cur) buildRoom(cur); } else if (room.g) { A.root.remove(room.g); room.g = null; room.id = null; }
+    if (room.id === 14) { const r = PT.redPandaState(s), nap = !r.introSeen || r.mode === "chill"; room.dyn.panda.visible = nap; room.dyn.panda.rotation.y = Math.sin(G.t * 0.5) * 0.2;
+      room.dyn.card.userData.set(r.introSeen ? r.name : "zzz...", nap ? (r.introSeen ? "napping · eggs and seeds x1.25" : "Press E") : "helping outside", nap ? "owned" : "afford"); }
+    if (room.id === 22) { const a = PT.aq(s); for (const q of room.dyn.tanks) { const pr = PT.aqBiome(a, q.b.id), h = Math.max(0.3, 6.4 * pr.completionRatio); q.water.scale.y = h; q.water.position.y = q.base + h / 2 - 0.5;
+      q.cd.userData.set(q.b.id.toUpperCase(), `${pr.housedSpecies}/${pr.totalSpecies} · +${(PT.aqBiomeBuff(a, q.b.id) * 100).toFixed(0)}%`, pr.housedSpecies >= pr.totalSpecies ? "owned" : "afford"); } }
+    if (room.id === 26) for (const q of room.dyn.nodes) { const vis = PT.mineNodeVisible(s, q.n.id), own = (s.sunflowerUpgrades["d_mine_" + q.n.id] || 0) > 0, unl = PT.mineNodeUnlocked(s, q.n.id);
+      q.top.visible = q.cd.visible = vis; q.top.material.color.set(own ? "#4caf50" : unl ? "#f0b429" : "#5b6170").convertSRGBToLinear(); q.cd.userData.set(q.n.name, own ? "OWNED" : unl ? "Press E" : "locked", own ? "owned" : unl ? "afford" : "locked"); }
+    // the Castle: the hungry monster
+    const onCastle = cur === 3;
+    if (onCastle && !monster) { monster = new T.Group(); const body = new T.Mesh(new T.SphereGeometry(1, 20, 14), matC("#6d5bd0")); body.scale.set(1.2, 1, 1); body.position.y = 1; body.castShadow = true;
+      const mouth = new T.Mesh(new T.BoxGeometry(1.2, 0.25, 0.3), matC("#2a0f1f")); mouth.position.set(0, 0.85, 0.95);
+      for (const sx of [1, -1]) { const e = new T.Mesh(new T.SphereGeometry(0.22, 10, 8), matC("#ffffff")); e.position.set(0.4 * sx, 1.45, 0.82); const pu = new T.Mesh(new T.SphereGeometry(0.11, 8, 6), matC("#111111")); pu.position.set(0.4 * sx, 1.45, 1); monster.add(e, pu); }
+      monster.add(body, mouth); monster.scale.setScalar(9); monster.userData.card = card(new T.Vector3(0, 3.4, 0), ["THE MONSTER", ""]); monster.userData.card.scale.set(3, 1, 1); monster.add(monster.userData.card); A.root.add(monster); }
+    if (monster) { monster.visible = onCastle; if (onCastle) { monster.position.copy(toWorld(3, 800, 500)); monster.scale.setScalar(9 * (1 + Math.sin(G.t * 2) * 0.03));
+      monster.userData.card.userData.set("THE MONSTER", !s.hasTalkedToMonster ? "Click to talk" : s.evolutionCount >= 5 ? "Full and happy" : `Fed ${Math.floor(s.monsterFeedProgress || 0)}% · hold to feed`, s.evolutionCount >= 5 ? "owned" : "afford"); } }
+  }
+
   // floating numbers: a light DOM layer projected from the world camera
   const floatLayer = document.createElement("div"); Object.assign(floatLayer.style, { position: "absolute", inset: "0", pointerEvents: "none", overflow: "hidden" }); stage.insertBefore(floatLayer, frame.nextSibling);
   const floatEls = new Map();
@@ -486,6 +546,7 @@
     syncEggs(PT.DESERT_MAP, G.field.list(PT.DESERT_MAP), cur === PT.DESERT_MAP);
     syncEggs(PT.ECHO_FIELD_MAP, G.field.list(PT.ECHO_FIELD_MAP), cur === PT.ECHO_FIELD_MAP);
     syncExp(isExp(cur), dt);
+    syncRooms(cur, dt);
     syncDesert(cur === PT.DESERT_MAP, dt); syncEcho(cur === PT.ECHO_FIELD_MAP); syncMine(cur === PT.MINE_MAP, dt);
     syncDying(dt);
     placeCamera(false);
