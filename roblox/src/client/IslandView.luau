@@ -257,6 +257,8 @@ DEFS.fence = { w = 4, d = 1, parts = {
 DEFS.windmill = { w = 5, d = 5, parts = {
 	P(0, 0, 0, 5, 5, 6, "mill"), P(0.5, 0.5, 6, 4, 4, 6, "millB"), P(1, 1, 12, 3, 3, 4, "mill"), P(0.5, 0.5, 16, 4, 4, 2, "roof"),
 	P(1, 1, 18, 3, 3, 2, "roofD"), P(2, 2, 20, 1, 1, 2, "roofD"), P(2, 4.95, 0, 1, 0.1, 4, "woodD"), P(2.2, 3.95, 13, 0.6, 1.2, 0.6, "woodD") } }
+DEFS.lighthouse = { w = 4, d = 4, parts = {} }   -- built by buildLighthouse (toon parts + rotating beam)
+DEFS.cottage = { w = 6, d = 6, parts = { P(0, 0, 0, 6, 6, 15, "cream") } }   -- the home (PropAssets.cottage, door to the yard)
 local FLOWER_COLS = { "f2c6d8", "fff1a8", "c9b6ff", "ffffff" }
 
 -- world position helpers
@@ -285,13 +287,13 @@ local TREE_SETS = {
 local LEAF_TINT = { forest = "5d7f3a", echo = "8f8fc4", desert = "9aa262", expedition = "5f8a40", mine = "6a8048" }
 -- 2.5D handheld-RPG look (owner 2026-10-09, target roblox/docs/targets/park_target_v3_poke.png): round puffy trees
 -- with flat crown colours per area (the ink outline + toon grade do the shading); PropAssets.pokeTree / pokeBush
-local POKE = { tree = "pokeTree", oak = "pokeTree", bigoak = "pokeTree", bush = "pokeBush" }
+local POKE = { tree = "pokeTree", oak = "pokeTree", bigoak = "pokeTree", pine = "pokePine", bush = "pokeBush" }   -- no realistic trees left
 local POKE_LEAF = { forest = "2f7d3a", echo = "8f7fd0", desert = "8fae4a", expedition = "3f8a40", mine = "5f8a48" }
 local PropAssetsT = RS:WaitForChild("PropAssets", 10)
 local function treeModel(kind, x, base, z, seed, areaId)
 	local spec = TREE_SETS[kind]
 	if not spec then return nil end
-	local pk = POKE[kind] and PropAssetsT and PropAssetsT:FindFirstChild(POKE[kind])
+	local pk = POKE[kind] and PropAssetsT and (PropAssetsT:FindFirstChild(POKE[kind]) or (not spec.bush and PropAssetsT:FindFirstChild("pokeTree")))
 	if pk then
 		local m = pk:Clone()
 		m.Name = kind
@@ -340,7 +342,7 @@ end
 -- on the same footprint, scaled to the brick height and turned like it.
 local PropAssets = RS:WaitForChild("PropAssets", 10)
 -- real-world heights (studs) per prop kind, so props read at a proper size next to the hen (owner 2026-10-09)
-local PROP_H = { lantern = 9, bench = 2.6, fence = 2.6, cart = 8, windmill = 19, rock = 2.4, arch = 10, barrel = 2.4,
+local PROP_H = { cottage = 13.5, lantern = 9, bench = 2.6, fence = 2.6, cart = 8, windmill = 19, rock = 2.4, arch = 10, barrel = 2.4,
 	birdhouse = 6.5, scarecrow = 5.5, sunflower = 4.2, mushroom = 1.8, post = 4.2, keep = 28, tower = 17, temple = 15,
 	pyramid = 15, greenhouse = 8.5, hut = 8, mineentrance = 11, minecart = 3.2, boat = 2.6, balloon = 13, crystal = 3.2,
 	ore = 2.4, cactus = 4.8, palm = 13, deadtree = 8.5, log = 1.6, bones = 1.1, twigs = 0.9, altar = 4.2, pillar = 6.5,
@@ -413,19 +415,103 @@ local function buildProp(def, kind, cx, cz, parent, seed)
 	return info
 end
 
--- windmill sails: a part model turning about the hub (pivot = hub)
-local function buildSails(parent, hub: Vector3)
-	local m = Instance.new("Model"); m.Name = "Sails"
-	for k = 0, 3 do
-		local a = k * math.pi / 2
-		local rot = CFrame.new(hub) * CFrame.Angles(0, 0, a)
-		local spar = brickPart(m, Vector3.zero, Vector3.new(0.4 * L, 7.2, 0.25), hx(C.woodD)); spar.CFrame = rot * CFrame.new(0, 3.9, 0)
-		local sail = brickPart(m, Vector3.zero, Vector3.new(1.4 * L, 5.6, 0.12), hx(C.white)); sail.CFrame = rot * CFrame.new(0.95 * L, 4.4, 0.08)
+-- lighthouse (owner 2026-10-09: replaces the windmill, "a lighthouse that rotates with light visually"): a toon tower
+-- of stacked red / white drums on a stone plinth, slate gallery with a railing, glowing lantern room and a stepped red
+-- cap. The light is a Beacon anchor (outside the outlined scenery) carrying two opposite light Beams + a SpotLight;
+-- IslandView spins it every frame and fades it in at night.
+local function buildLighthouse(parent, x: number, base: number, z: number, beaconParent: Instance)
+	local m = Instance.new("Model"); m.Name = "Lighthouse"
+	local function drum(y0: number, h: number, d: number, col: string, mat: Enum.Material?)
+		local p = Instance.new("Part")
+		p.Shape = Enum.PartType.Cylinder
+		p.Anchored = true; p.CanCollide = false; p.CanQuery = false; p.CanTouch = false
+		p.Material = mat or Enum.Material.SmoothPlastic; p.TopSurface = Enum.SurfaceType.Smooth; p.BottomSurface = Enum.SurfaceType.Smooth
+		p.Color = hx(col); p.Size = Vector3.new(h, d, d)
+		p.CFrame = CFrame.new(x, base + y0 + h / 2, z) * CFrame.Angles(0, 0, math.pi / 2)
+		p.Parent = m
+		return p
 	end
-	local hubP = brickPart(m, Vector3.zero, Vector3.new(L, L, 0.8), hx(C.woodD)); hubP.CFrame = CFrame.new(hub)
-	m.WorldPivot = CFrame.new(hub)
+	local function box(cf: CFrame, size: Vector3, col: string, mat: Enum.Material?)
+		local p = Instance.new("Part")
+		p.Anchored = true; p.CanCollide = false; p.CanQuery = false; p.CanTouch = false
+		p.Material = mat or Enum.Material.SmoothPlastic; p.TopSurface = Enum.SurfaceType.Smooth; p.BottomSurface = Enum.SurfaceType.Smooth
+		p.Color = hx(col); p.Size = size; p.CFrame = cf; p.Parent = m
+		return p
+	end
+	-- stone plinth + a few boulders around the foot
+	drum(-0.3, 1.3, 7.4, "b9b4aa")
+	for k = 0, 5 do
+		local a = k / 6 * math.pi * 2 + 0.4
+		local r = 3.5 + hash(k, 3.3) * 0.5
+		local s = 1.1 + hash(k, 5.1) * 0.7
+		local b = Instance.new("Part"); b.Shape = Enum.PartType.Ball
+		b.Anchored = true; b.CanCollide = false; b.CanQuery = false; b.CanTouch = false; b.Material = Enum.Material.SmoothPlastic
+		b.Color = hx("a6a196"):Lerp(hx("8d887e"), hash(k, 1.7)); b.Size = Vector3.new(s, s * 0.75, s)
+		b.CFrame = CFrame.new(x + math.cos(a) * r, base + 0.25, z + math.sin(a) * r); b.Parent = m
+	end
+	-- striped tower, tapering
+	local y = 1.0
+	local SEG, H = 5, 2.3
+	for k = 0, SEG - 1 do
+		drum(y, H, 5.4 - k * 0.28, if k % 2 == 0 then "f6f2e8" else "e2463c")
+		y += H
+	end
+	local topD = 5.4 - (SEG - 1) * 0.28
+	-- door + two windows on the front (+Z, towards the camera)
+	box(CFrame.new(x, base + 2.1, z + 2.62), Vector3.new(1.5, 2.3, 0.35), "f6f2e8")
+	box(CFrame.new(x, base + 2.0, z + 2.72), Vector3.new(1.1, 2.0, 0.3), "6b4226")
+	box(CFrame.new(x, base + 6.2, z + 2.42), Vector3.new(0.7, 0.9, 0.3), "2b3a55")
+	box(CFrame.new(x, base + 9.6, z + 2.2), Vector3.new(0.65, 0.85, 0.3), "2b3a55")
+	-- gallery deck + railing
+	drum(y, 0.45, topD + 1.6, "3a3f4a")
+	local gy = y + 0.45
+	local RR, NP = (topD + 1.6) / 2 - 0.2, 16
+	for k = 0, NP - 1 do
+		local a0, a1 = k / NP * math.pi * 2, (k + 1) / NP * math.pi * 2
+		local p0 = Vector3.new(x + math.cos(a0) * RR, base + gy, z + math.sin(a0) * RR)
+		local p1 = Vector3.new(x + math.cos(a1) * RR, base + gy, z + math.sin(a1) * RR)
+		box(CFrame.new(p0 + Vector3.new(0, 0.45, 0)), Vector3.new(0.16, 0.9, 0.16), "3a3f4a")
+		local mid = (p0 + p1) / 2 + Vector3.new(0, 0.9, 0)
+		box(CFrame.lookAt(mid, mid + (p1 - p0)), Vector3.new(0.14, 0.14, (p1 - p0).Magnitude + 0.1), "3a3f4a")
+	end
+	-- lantern room: glowing core inside thin glass + dark mullions
+	local lr = 3.0
+	local core = drum(gy, 2.2, lr - 0.5, "ffe9a0", Enum.Material.Neon)
+	core.Name = "Lamp"; core.CastShadow = false
+	local glass = drum(gy, 2.2, lr, "fff6d0", Enum.Material.Glass); glass.Transparency = 0.55; glass.CastShadow = false
+	for k = 0, 5 do
+		local a = k / 6 * math.pi * 2
+		box(CFrame.new(x + math.cos(a) * lr / 2, base + gy + 1.1, z + math.sin(a) * lr / 2), Vector3.new(0.18, 2.2, 0.18), "3a3f4a")
+	end
+	-- stepped red cap + finial
+	local cy = gy + 2.2
+	for k, d in { 3.9, 3.0, 2.1, 1.2 } do drum(cy + (k - 1) * 0.5, 0.52, d, if k % 2 == 1 then "c8382f" else "b83129") end
+	local fin = Instance.new("Part"); fin.Shape = Enum.PartType.Ball
+	fin.Anchored = true; fin.CanCollide = false; fin.CanQuery = false; fin.CanTouch = false; fin.Material = Enum.Material.SmoothPlastic
+	fin.Color = hx("3a3f4a"); fin.Size = Vector3.new(0.6, 0.6, 0.6); fin.CFrame = CFrame.new(x, base + cy + 2.2, z); fin.Parent = m
+	m.WorldPivot = CFrame.new(x, base, z)
 	m.Parent = parent
-	return m
+	-- the light: an invisible anchor at the lamp, spun by IslandView
+	local lampPos = Vector3.new(x, base + gy + 1.1, z)
+	local bc = Instance.new("Part")
+	bc.Name = "Beacon"; bc.Anchored = true; bc.CanCollide = false; bc.CanQuery = false; bc.CanTouch = false
+	bc.Transparency = 1; bc.Size = Vector3.new(0.2, 0.2, 0.2); bc.CFrame = CFrame.new(lampPos); bc.Parent = beaconParent
+	local a0 = Instance.new("Attachment"); a0.Parent = bc
+	local beams = {}
+	for _, dir in { -1, 1 } do
+		local a1 = Instance.new("Attachment"); a1.Position = Vector3.new(0, -4, 42 * dir); a1.Parent = bc
+		local bm = Instance.new("Beam")
+		bm.Attachment0 = a0; bm.Attachment1 = a1
+		bm.Width0 = 1.4; bm.Width1 = 11; bm.FaceCamera = true; bm.Segments = 1
+		bm.Color = ColorSequence.new(hx("fff1b8")); bm.LightEmission = 1; bm.LightInfluence = 0
+		bm.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.55), NumberSequenceKeypoint.new(1, 1) })
+		bm.Parent = bc
+		table.insert(beams, bm)
+	end
+	local sl = Instance.new("SpotLight"); sl.Face = Enum.NormalId.Front; sl.Angle = 28; sl.Range = 48; sl.Brightness = 0
+	sl.Color = hx("ffe9a0"); sl.Shadows = false; sl.Parent = bc
+	local pl = Instance.new("PointLight"); pl.Range = 14; pl.Brightness = 0; pl.Color = hx("ffd889"); pl.Shadows = false; pl.Parent = core
+	return m, { part = bc, pos = lampPos, beams = beams, spot = sl, glow = pl, lamp = core }
 end
 
 -- ---------------------------------------------------------------- clouds + far islands (brick models)
@@ -446,6 +532,9 @@ end
 local root, meshes, props, clouds, waterParts = nil, {}, {}, {}, {}
 local lamps = {}
 local fireflies, dustPart
+local ffAtt: Attachment? = nil
+local beacon = nil   -- the lighthouse light (buildLighthouse)
+local beaconN = -1
 
 function IslandView.build()
 	if root then root:Destroy() end
@@ -473,7 +562,8 @@ function IslandView.build()
 		local i, j = t[1], t[2]
 		local c = tile(i, j)
 		local shore = not land(i + 1, j) or not land(i - 1, j) or not land(i, j + 1) or not land(i, j - 1)
-		LandTerrain.column(x0Of(i), z0Of(j), topY(i, j), LandTerrain.surface(nil, c, Map.height(i, j)), c, shore)
+		local cc = if c == 2 or c == 3 then 1 else c   -- path + pond are painted on the toon overlay (below)
+		LandTerrain.column(x0Of(i), z0Of(j), topY(i, j), LandTerrain.surface(nil, cc, Map.height(i, j)), cc, shore)
 		n += 1
 		if n % 120 == 0 then task.wait() end
 	end
@@ -514,10 +604,9 @@ function IslandView.build()
 		table.insert(props, info)
 		task.defer(function() IslandView.addLeaves(info.model, o[1]) end)
 		if info.light then table.insert(lamps, info) end
-		if o[1] == "windmill" then
-			local hub = Vector3.new(info.ox + 2.5 * L, info.base + 14 * PLATE, info.oz + 5 * L + 0.6)
-			info.sails = buildSails(info.model, hub)
-			info.sailsHome = info.sails:GetPivot()
+		if o[1] == "lighthouse" then
+			local _, bc = buildLighthouse(info.model, info.x, info.base, info.z, root)
+			beacon = bc
 			info.model.WorldPivot = CFrame.new(info.x, info.base, info.z)
 			info.home = info.model:GetPivot()
 		end
@@ -548,8 +637,389 @@ function IslandView.build()
 			brickPart(fm, Vector3.new(sx + 0.25 * L, STUD_H + 1.6 * PLATE, sz + 0.25 * L), Vector3.new(0.5 * L, 0.5 * PLATE, 0.5 * L), col).CastShadow = false
 			brickPart(fm, Vector3.new(sx + 0.4 * L, STUD_H + 2.1 * PLATE, sz + 0.4 * L), Vector3.new(0.2 * L, 0.2 * PLATE, 0.2 * L), hx("ffd27a")).CastShadow = false
 		end
-		fm.WorldPivot = CFrame.new(); fm.Parent = scenery
+		fm.WorldPivot = CFrame.new(); fm.Parent = root   -- not under the scenery outline: tiny clusters read as black specks
 		table.insert(props, { model = fm, home = fm:GetPivot(), kind = "flowers", base = 0, x = 0, z = 0 })
+	end
+	-- the outline of a set of tiles as ONE smooth loop in world studs: marching squares over the tiles, chained into
+	-- a loop (the longest one), Chaikin x3. Used for the yard (walkway ring + paddock fence) and the pond rim.
+	-- Returns loop, centre.
+	local function tileLoop(pred)
+		local function inY(i, j) return pred(i, j) end
+		local segs = {}
+		local function W(p) return Vector2.new((p.X + 0.5 - COLS / 2) * S, (p.Y + 0.5 - ROWS / 2) * S) end
+		for j = 0, ROWS do
+			for i = 0, COLS do
+				local a, b, c, d = inY(i, j), inY(i + 1, j), inY(i + 1, j + 1), inY(i, j + 1)
+				local T, R, B, Lf = Vector2.new(i + 0.5, j), Vector2.new(i + 1, j + 0.5), Vector2.new(i + 0.5, j + 1), Vector2.new(i, j + 0.5)
+				local cr = {}
+				if a ~= b then table.insert(cr, T) end
+				if b ~= c then table.insert(cr, R) end
+				if c ~= d then table.insert(cr, B) end
+				if d ~= a then table.insert(cr, Lf) end
+				if #cr == 2 then table.insert(segs, { W(cr[1]), W(cr[2]) }) end
+			end
+		end
+		local function key(p) return math.floor(p.X * 10 + 0.5) .. "," .. math.floor(p.Y * 10 + 0.5) end
+		local at, used, loop = {}, {}, nil
+		for n, sg in segs do for e = 1, 2 do local k = key(sg[e]); at[k] = at[k] or {}; table.insert(at[k], n) end end
+		for n0 in segs do
+			if used[n0] then continue end
+			used[n0] = true
+			local l = { segs[n0][1], segs[n0][2] }
+			local cur = segs[n0][2]
+			while true do
+				local nx = nil
+				for _, m in at[key(cur)] or {} do if not used[m] then nx = m; break end end
+				if not nx then break end
+				used[nx] = true
+				local sg = segs[nx]
+				cur = if key(sg[1]) == key(cur) then sg[2] else sg[1]
+				if key(cur) == key(l[1]) then break end
+				table.insert(l, cur)
+			end
+			if not loop or #l > #loop then loop = l end
+		end
+		if not loop then return nil, nil end
+		for _ = 1, 3 do
+			local o = {}
+			for q = 1, #loop do local p0, p1 = loop[q], loop[q % #loop + 1]; table.insert(o, p0:Lerp(p1, 0.25)); table.insert(o, p0:Lerp(p1, 0.75)) end
+			loop = o
+		end
+		local c = Vector2.zero
+		for _, p in loop do c += p end
+		return loop, c / #loop
+	end
+	local function yardLoop() return tileLoop(Map.inYard) end
+	-- resample a closed loop every `step` studs
+	local function resample(loop, step)
+		local per = 0
+		for q = 1, #loop do per += (loop[q % #loop + 1] - loop[q]).Magnitude end
+		local nPts = math.max(3, math.floor(per / step + 0.5))
+		local pts, q, acc, want = {}, 1, 0, 0
+		while #pts < nPts and q <= #loop do
+			local p0, p1 = loop[q], loop[q % #loop + 1]
+			local L0 = (p1 - p0).Magnitude
+			if acc + L0 >= want then
+				table.insert(pts, p0:Lerp(p1, if L0 > 0 then (want - acc) / L0 else 0))
+				want += per / nPts
+			else acc += L0; q += 1 end
+		end
+		return pts
+	end
+	local function smoothLoop(pts, passes)
+		for _ = 1, passes do
+			local sm = table.create(#pts)
+			for k = 1, #pts do sm[k] = (pts[(k - 2) % #pts + 1] + pts[k] * 2 + pts[k % #pts + 1]) / 4 end
+			pts = sm
+		end
+		return pts
+	end
+	-- toon walkway (owner 2026-10-09: "like the fence shape, not super smooth" + "the patches of path still need to all
+	-- connect"): the path is drawn as STROKES, not from the tile mask (1-tile diagonal stair steps only touch at corners,
+	-- so a blurred mask fell apart into patches). One ring centreline = the yard outline pushed half a tile outward,
+	-- plus a straight spur for every path branch that leaves the ring (house, south gate). Signed distance per texture
+	-- pixel, ring and spurs blended with a smooth-min fillet, edge wobbled a little with noise, then painted as ONE
+	-- texture: sand fill, a darker toon band inside the edge and a crisp brown outline, on a flat decal plane.
+	do
+		local PXS = 6                                   -- texture pixels per stud
+		local WS, HS = COLS * S, ROWS * S               -- 160 x 120 studs
+		local PW, PH = WS * PXS, HS * PXS               -- 960 x 720
+		local img = nil
+		pcall(function() img = game:GetService("AssetService"):CreateEditableImage({ Size = Vector2.new(PW, PH) }) end)
+		local loop, yc = yardLoop()
+		if img and loop then
+			local RING_HW, RING_OFF = 2.3, 2.0              -- ring half width, centreline offset outside the yard edge
+			local ringBuf = buffer.create(PW * PH * 4)
+			local spurBuf = buffer.create(PW * PH * 4)
+			for k = 0, PW * PH - 1 do buffer.writef32(ringBuf, k * 4, 99); buffer.writef32(spurBuf, k * 4, 99) end
+			-- stamp a capsule (segment a-b, half width hw) into a signed-distance buffer (min)
+			local function stamp(buf, a, b, hw)
+				local pad = hw + 2.5
+				local x0 = math.max(0, math.floor((math.min(a.X, b.X) - pad + WS / 2) * PXS))
+				local x1 = math.min(PW - 1, math.ceil((math.max(a.X, b.X) + pad + WS / 2) * PXS))
+				local y0 = math.max(0, math.floor((math.min(a.Y, b.Y) - pad + HS / 2) * PXS))
+				local y1 = math.min(PH - 1, math.ceil((math.max(a.Y, b.Y) + pad + HS / 2) * PXS))
+				local ab = b - a
+				local L2 = ab.X * ab.X + ab.Y * ab.Y
+				for py = y0, y1 do
+					local z = (py + 0.5) / PXS - HS / 2
+					for px = x0, x1 do
+						local x = (px + 0.5) / PXS - WS / 2
+						local ax, az = x - a.X, z - a.Y
+						local t = if L2 > 0 then math.clamp((ax * ab.X + az * ab.Y) / L2, 0, 1) else 0
+						local dx, dz = ax - ab.X * t, az - ab.Y * t
+						local s = math.sqrt(dx * dx + dz * dz) - hw
+						local o = (py * PW + px) * 4
+						if s < buffer.readf32(buf, o) then buffer.writef32(buf, o, s) end
+					end
+				end
+			end
+			-- ring: yard outline, resampled, smoothed, pushed outward along its normal
+			local pts = smoothLoop(resample(loop, 1.2), 4)
+			local ring = table.create(#pts)
+			for k = 1, #pts do
+				local t = (pts[k % #pts + 1] - pts[(k - 2) % #pts + 1])
+				t = if t.Magnitude > 0 then t.Unit else Vector2.new(1, 0)
+				local n = Vector2.new(t.Y, -t.X)
+				if n:Dot(pts[k] - yc) < 0 then n = -n end
+				ring[k] = pts[k] + n * RING_OFF
+			end
+			ring = smoothLoop(ring, 2)
+			for k = 1, #ring do stamp(ringBuf, ring[k], ring[k % #ring + 1], RING_HW) end
+			task.wait()
+			-- spurs: path tiles that are not next to the yard, grouped into branches; each branch is one straight
+			-- capsule along the line from the branch towards the yard centre, run on into the ring so they join
+			local function isPath(i, j) return Map.tile(i, j) == 2 end
+			local function nearYard(i, j)
+				for dj = -1, 1 do for di = -1, 1 do if Map.inYard(i + di, j + dj) then return true end end end
+				return false
+			end
+			local seen = {}
+			for j = 0, ROWS - 1 do
+				for i = 0, COLS - 1 do
+					local k0 = j * COLS + i
+					if seen[k0] or not isPath(i, j) or nearYard(i, j) then continue end
+					local comp, stack = {}, { { i, j } }
+					seen[k0] = true
+					while #stack > 0 do
+						local t = table.remove(stack)
+						table.insert(comp, Vector2.new((t[1] + 0.5 - COLS / 2) * S, (t[2] + 0.5 - ROWS / 2) * S))
+						for _, o in { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } } do
+							local ni, nj = t[1] + o[1], t[2] + o[2]
+							local nk = nj * COLS + ni
+							if not seen[nk] and isPath(ni, nj) and not nearYard(ni, nj) then seen[nk] = true; table.insert(stack, { ni, nj }) end
+						end
+					end
+					local cen = Vector2.zero
+					for _, p in comp do cen += p end
+					cen /= #comp
+					local axis = (yc - cen).Unit
+					local perp = Vector2.new(axis.Y, -axis.X)
+					local tmin, tmax, wid = math.huge, -math.huge, 0
+					for _, p in comp do
+						local d = p - cen
+						tmin = math.min(tmin, d:Dot(axis)); tmax = math.max(tmax, d:Dot(axis))
+						wid = math.max(wid, math.abs(d:Dot(perp)))
+					end
+					local hw = (wid + S / 2) * 0.86
+					stamp(spurBuf, cen + axis * (tmin - S / 2 + hw * 0.55), cen + axis * (tmax + S), hw)
+					task.wait()
+				end
+			end
+			-- toon pond in the same texture (owner 2026-10-09: rounded natural pond, not tile squares): blurred pond-tile
+			-- mask (sigma ~0.6 tile) thresholded into a dark ink edge, a light shallow rim and the water, with a darker
+			-- crescent under the north bank (its shade, so the flat paint reads as a dip seen from the south)
+			local SUB = 4
+			local GW, GH = COLS * SUB + 1, ROWS * SUB + 1
+			local pf = table.create(GW * GH, 0)
+			local pi0, pj0, pi1, pj1 = math.huge, math.huge, -math.huge, -math.huge
+			for j = 0, ROWS - 1 do for i = 0, COLS - 1 do
+				if Map.tile(i, j) == 3 then pi0 = math.min(pi0, i); pj0 = math.min(pj0, j); pi1 = math.max(pi1, i); pj1 = math.max(pj1, j) end
+			end end
+			local hasPond = pi0 ~= math.huge
+			if hasPond then
+				local SIG2 = 2 * 0.62 * 0.62
+				for gy = math.max(0, (pj0 - 2) * SUB), math.min(GH - 1, (pj1 + 3) * SUB) do
+					for gx = math.max(0, (pi0 - 2) * SUB), math.min(GW - 1, (pi1 + 3) * SUB) do
+						local u, v = gx / SUB, gy / SUB
+						local num, den = 0, 0
+						for tj = math.floor(v) - 2, math.floor(v) + 2 do
+							for ti = math.floor(u) - 2, math.floor(u) + 2 do
+								local du, dv = ti + 0.5 - u, tj + 0.5 - v
+								local w = math.exp(-(du * du + dv * dv) / SIG2)
+								den += w
+								if Map.tile(ti, tj) == 3 then num += w end
+							end
+						end
+						pf[gy * GW + gx + 1] = num / den
+					end
+				end
+			end
+			local function pondAt(u, v)   -- tile coords
+				local fx, fy = u * SUB, v * SUB
+				local x0, y0 = math.clamp(math.floor(fx), 0, GW - 2), math.clamp(math.floor(fy), 0, GH - 2)
+				local tx, ty = fx - x0, fy - y0
+				local r0 = y0 * GW + x0 + 1
+				return (pf[r0] * (1 - tx) + pf[r0 + 1] * tx) * (1 - ty) + (pf[r0 + GW] * (1 - tx) + pf[r0 + GW + 1] * tx) * ty
+			end
+			local ppx0, ppx1 = (pi0 - 1) * S * PXS, (pi1 + 2) * S * PXS
+			local ppy0, ppy1 = (pj0 - 1) * S * PXS, (pj1 + 2) * S * PXS
+			local PEDGE, PRIM, PWATER, PDEEP, PSHADE = hx("1d3f6a"), hx("a4ecf2"), hx("3fa6ec"), hx("3394e0"), hx("2a78c2")
+			-- paint: smooth-min fillet where a spur meets the ring, noise wobble, three toon bands
+			local buf = buffer.create(PW * PH * 4)
+			local FILL, BAND, EDGE = hx("ecc888"), hx("dcb06e"), hx("8a5a2e")
+			local function put(o, c) buffer.writeu8(buf, o, c.R * 255); buffer.writeu8(buf, o + 1, c.G * 255); buffer.writeu8(buf, o + 2, c.B * 255); buffer.writeu8(buf, o + 3, 255) end
+			local K = 2.4
+			for py = 0, PH - 1 do
+				local z = (py + 0.5) / PXS - HS / 2
+				for px = 0, PW - 1 do
+					local o = (py * PW + px) * 4
+					if hasPond and px >= ppx0 and px < ppx1 and py >= ppy0 and py < ppy1 then
+						local u, v = (px + 0.5) / PXS / S, (py + 0.5) / PXS / S
+						local f = pondAt(u, v) + math.noise(u * 1.3, v * 1.3, 8.1) * 0.05
+						if f >= 0.5 then
+							local col = if f < 0.565 then PEDGE
+								elseif pondAt(u, v - 0.4) < 0.54 then PSHADE   -- north bank shade
+								elseif f < 0.67 then PRIM
+								elseif f > 0.94 then PDEEP
+								else PWATER
+							put(((PH - 1 - py) * PW + (PW - 1 - px)) * 4, col)
+							continue
+						end
+					end
+					local a, b = buffer.readf32(ringBuf, o), buffer.readf32(spurBuf, o)
+					if a > 1.5 and b > 1.5 then continue end   -- (buffer starts transparent)
+					local h = math.clamp(0.5 + 0.5 * (b - a) / K, 0, 1)
+					local s = b + (a - b) * h - K * h * (1 - h)
+					local x = (px + 0.5) / PXS - WS / 2
+					s += math.noise(x * 0.16, z * 0.16, 4.7) * 0.55 + math.noise(x * 0.55, z * 0.55, 1.9) * 0.16
+					local oo = ((PH - 1 - py) * PW + (PW - 1 - px)) * 4   -- Top-face decal: image row 0 at +Z, column 0 at +X (tested)
+					if s < -0.95 then put(oo, FILL)
+					elseif s < -0.42 then put(oo, BAND)
+					elseif s < 0 then put(oo, EDGE) end
+				end
+				if py % 40 == 39 then task.wait() end
+			end
+			img:WritePixelsBuffer(Vector2.zero, Vector2.new(PW, PH), buf)
+			local plane = Instance.new("Part")
+			plane.Name = "ToonPath"; plane.Anchored = true; plane.CanCollide = false; plane.CanQuery = false; plane.CanTouch = false
+			plane.CastShadow = false; plane.Transparency = 1; plane.Size = Vector3.new(WS, 0.05, HS)
+			plane.CFrame = CFrame.new(0, -0.44, 0); plane.Parent = root
+			local dcl = Instance.new("Decal"); dcl.Face = Enum.NormalId.Top; dcl.ColorMapContent = Content.fromObject(img); dcl.Parent = plane
+		end
+	end
+	-- toon pond props (the water is painted on the walkway texture above): chunky grey stones along the smooth rim,
+	-- lily pads on the open water; one dark-blue ink outline
+	do
+		local pondF = Instance.new("Model"); pondF.Name = "ToonPond"
+		local function isW(i, j) return Map.tile(i, j) == 3 end
+		local loop = tileLoop(isW)
+		if loop then
+			local pts = smoothLoop(resample(loop, 1.75), 3)
+			for k = 1, #pts do
+				local p = pts[k]
+				local tg = pts[k % #pts + 1] - pts[(k - 2) % #pts + 1]
+				tg = if tg.Magnitude > 0 then tg.Unit else Vector2.new(1, 0)
+				local n = Vector2.new(tg.Y, -tg.X)
+				local probe = p + n * 1.5
+				if isW(math.floor(probe.X / S + COLS / 2), math.floor(probe.Y / S + ROWS / 2)) then n = -n end   -- point outward
+				local sp = p + n * 0.75
+				local ti, tj = math.floor(sp.X / S + COLS / 2), math.floor(sp.Y / S + ROWS / 2)
+				if tile(ti, tj) == 0 then continue end   -- the stream mouth over the waterfall stays open
+				local st = Instance.new("Part")
+				st.Shape = Enum.PartType.Ball
+				st.Anchored = true; st.CanCollide = false; st.CanQuery = false; st.CanTouch = false
+				st.Material = Enum.Material.SmoothPlastic
+				st.Color = hx("b9b4aa"):Lerp(hx("8f8a80"), hash(sp.X, sp.Y) * 0.6)
+				local sz = 1.2 + hash(sp.Y, sp.X) * 0.5
+				st.Size = Vector3.new(sz, sz * 0.7, sz)
+				st.CFrame = CFrame.new(sp.X, groundAtWorld(sp.X, sp.Y) - 0.3, sp.Y)
+				st.Parent = pondF
+			end
+		end
+		for j = 0, ROWS - 1 do
+			for i = 0, COLS - 1 do
+				if not (isW(i, j) and isW(i + 1, j) and isW(i - 1, j) and isW(i, j + 1) and isW(i, j - 1)) then continue end
+				if hash(i, j * 3.1) < 0.45 then continue end
+				local x, z = (i + 0.5 - COLS / 2) * S + (hash(i, j) - 0.5) * 2, (j + 0.5 - ROWS / 2) * S + (hash(j, i) - 0.5) * 2
+				local d = 1.5 + hash(i + 1, j) * 0.7
+				local b = Instance.new("Part")
+				b.Shape = Enum.PartType.Cylinder
+				b.Anchored = true; b.CanCollide = false; b.CanQuery = false; b.CanTouch = false; b.CastShadow = false
+				b.Material = Enum.Material.SmoothPlastic; b.Color = hx("57b544")
+				b.Size = Vector3.new(0.1, d, d)
+				b.CFrame = CFrame.new(x, -0.36, z) * CFrame.Angles(0, hash(i, j + 2) * 6.28, math.pi / 2)
+				b.Parent = pondF
+				if hash(i + 2, j) > 0.6 then   -- a little pink bloom on some pads
+					local fl = Instance.new("Part"); fl.Shape = Enum.PartType.Ball
+					fl.Anchored = true; fl.CanCollide = false; fl.CanQuery = false; fl.CanTouch = false; fl.CastShadow = false
+					fl.Material = Enum.Material.SmoothPlastic; fl.Color = hx("ff9cc8"); fl.Size = Vector3.new(0.55, 0.4, 0.55)
+					fl.CFrame = CFrame.new(x + 0.2, -0.18, z - 0.1); fl.Parent = pondF
+				end
+			end
+		end
+		local hl = Instance.new("Highlight")
+		hl.FillTransparency = 1; hl.OutlineColor = hx("1d3f6a"); hl.OutlineTransparency = 0
+		hl.DepthMode = Enum.HighlightDepthMode.Occluded; hl.Adornee = pondF; hl.Parent = pondF
+		pondF.Parent = root
+	end
+	-- the egg yard fence (owner 2026-10-09: "a fenced in area where your eggs spawn ... like a little home"): white
+	-- paddock fence along the inside of the path ring (Map.inYard), traced as a smooth loop (marching squares +
+	-- Chaikin), posts every ~2.4 studs with two rails, open gates where the paths reach the yard (N house, S exit, E, W)
+	do
+		local fenceM = Instance.new("Model"); fenceM.Name = "YardFence"
+		local loop, c = yardLoop()
+		if loop then
+			-- inset into the yard and resample every ~2.4 studs
+			local per = 0
+			for q = 1, #loop do per += (loop[q % #loop + 1] - loop[q]).Magnitude end
+			local nPts = math.floor(per / 2.4 + 0.5)
+			local pts, q, acc, want = {}, 1, 0, 0
+			while #pts < nPts and q <= #loop do
+				local p0, p1 = loop[q], loop[q % #loop + 1]
+				local L0 = (p1 - p0).Magnitude
+				if acc + L0 >= want then
+					local p = p0:Lerp(p1, if L0 > 0 then (want - acc) / L0 else 0)
+					table.insert(pts, p + (c - p).Unit * 1.5)
+					want += per / nPts
+				else acc += L0; q += 1 end
+			end
+			-- smooth out the tile stair-steps on the diagonals (owner: "fencing needs some work")
+			for _ = 1, 4 do
+				local sm = table.create(#pts)
+				for k = 1, #pts do sm[k] = (pts[(k - 2) % #pts + 1] + pts[k] * 2 + pts[k % #pts + 1]) / 4 end
+				pts = sm
+			end
+			-- gates: the 4 points nearest the axes through the yard centre
+			local gates = {}
+			local best = { n = nil, s = nil, e = nil, w = nil }
+			for _, p in pts do
+				local d = p - c
+				if math.abs(d.X) < 6 then
+					if not best.n or p.Y < best.n.Y then best.n = p end
+					if not best.s or p.Y > best.s.Y then best.s = p end
+				end
+				if math.abs(d.Y) < 6 then
+					if not best.e or p.X > best.e.X then best.e = p end
+					if not best.w or p.X < best.w.X then best.w = p end
+				end
+			end
+			for _, g in best do table.insert(gates, g) end
+			local function gated(p) for _, g in gates do if (p - g).Magnitude < 3.6 then return true end end; return false end
+			local WHITE = hx("f6f2e8")
+			local function part(cf, size)
+				local b = Instance.new("Part")
+				b.Anchored = true; b.CanCollide = false; b.CanQuery = false; b.CanTouch = false
+				b.Material = Enum.Material.SmoothPlastic; b.TopSurface = Enum.SurfaceType.Smooth; b.BottomSurface = Enum.SurfaceType.Smooth
+				b.Color = WHITE; b.Size = size; b.CFrame = cf; b.Parent = fenceM
+				return b
+			end
+			local function gy(p) return groundAtWorld(p.X, p.Y) - 0.5 end
+			for k = 1, #pts do
+				local p, p2 = pts[k], pts[k % #pts + 1]
+				local post = not gated(p)
+				if post then
+					local y = gy(p)
+					local big = gated(pts[(k - 2) % #pts + 1]) or gated(p2)   -- gate posts are chunkier
+					local w = if big then 0.9 else 0.62
+					local h = if big then 2.9 else 2.3
+					part(CFrame.new(p.X, y + h / 2, p.Y), Vector3.new(w, h, w))
+					part(CFrame.new(p.X, y + h + 0.12, p.Y), Vector3.new(w + 0.16, 0.24, w + 0.16))   -- post cap
+				end
+				if not gated(p) and not gated(p2) then
+					local m = (p + p2) / 2
+					local d = p2 - p
+					local len = d.Magnitude
+					local yaw = math.atan2(-d.Y, d.X)
+					local y = (gy(p) + gy(p2)) / 2
+					for _, h in { 0.75, 1.65 } do
+						part(CFrame.new(m.X, y + h, m.Y) * CFrame.Angles(0, yaw, 0), Vector3.new(len + 0.12, 0.42, 0.3))
+					end
+				end
+			end
+		end
+		fenceM.Parent = scenery
+		table.insert(props, { model = fenceM, home = fenceM:GetPivot(), kind = "yardfence", base = 0, x = 0, z = 0 })
 	end
 	-- the sea around the growing landmass (reef shelf + life follow the open coast: Ocean.rebuild on every sync)
 	Ocean.build(root)
@@ -577,12 +1047,13 @@ function IslandView.build()
 	-- fireflies (night only): one emitter over the grass
 	fireflies = Instance.new("Part")
 	fireflies.Name = "Fireflies"; fireflies.Anchored = true; fireflies.CanCollide = false; fireflies.CanQuery = false; fireflies.CanTouch = false
-	fireflies.Transparency = 1; fireflies.Size = Vector3.new(COLS * S * 0.8, 6, ROWS * S * 0.8); fireflies.CFrame = CFrame.new(0, 4, 0); fireflies.Parent = root
+	fireflies.Transparency = 1; fireflies.Size = Vector3.new(0.2, 0.2, 0.2); fireflies.CFrame = CFrame.new(0, 4, 0); fireflies.Parent = root
+	ffAtt = Instance.new("Attachment"); ffAtt.Name = "FFPoint"; ffAtt.Parent = fireflies   -- jumps around the field every frame (no big occluding box)
 	local ff = Instance.new("ParticleEmitter")
 	ff.Name = "FF"; ff.Texture = "rbxasset://textures/particles/sparkles_main.dds"; ff.Color = ColorSequence.new(hx("fff4a0"))
 	ff.LightEmission = 1; ff.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.3, 0.5), NumberSequenceKeypoint.new(1, 0) })
 	ff.Lifetime = NumberRange.new(3, 5); ff.Rate = 0; ff.Speed = NumberRange.new(0.3, 1); ff.SpreadAngle = Vector2.new(180, 180)
-	ff.Shape = Enum.ParticleEmitterShape.Box; ff.ShapeInOut = Enum.ParticleEmitterShapeInOut.Outward; ff.Parent = fireflies
+	ff.Parent = ffAtt
 	-- dust puffs for the build-in
 	dustPart = Instance.new("Part")
 	dustPart.Name = "Dust"; dustPart.Anchored = true; dustPart.CanCollide = false; dustPart.CanQuery = false; dustPart.CanTouch = false; dustPart.Transparency = 1
@@ -953,7 +1424,6 @@ function IslandView.unlockIsland(isl, animated, onDone)
 		if h.highland and World.isOpen(h) and not built[h.id] then buildIsland(h); table.insert(highs, h) end
 	end
 	deferFill = false
-	Ocean.rebuild()
 	if src and src.join and built[src.join.id] then
 		local its; its, after = joinItems(built[src.join.id], src.join, 0, src.a ~= isl)
 		for _, x in its do table.insert(items, x) end
@@ -1018,10 +1488,28 @@ function IslandView.unlockIsland(isl, animated, onDone)
 		for _, x in its do table.insert(items, x) end
 	end
 	if not animated then
+		Ocean.rebuild()
 		for _, x in items do if x.fill then x.fill() else x.inst:PivotTo(x.home); setVis(x.inst, 0) end end
 		if onDone then onDone() end
 		return
 	end
+	-- the coast cliff + beach of the fresh land rises with the same wave as its terrain tiles
+	local tileDelay = {}
+	for _, x in items do
+		if x.fill and x.at then
+			local i, j = math.floor(x.at.X / S + COLS / 2), math.floor(x.at.Z / S + ROWS / 2)
+			tileDelay[i * 1000 + j] = x.delay
+		end
+	end
+	Ocean.rebuild(function(i, j)
+		local d = tileDelay[i * 1000 + j]
+		if d then return d end
+		for _, o in { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } } do   -- contour points sit between tiles
+			local d2 = tileDelay[(i + o[1]) * 1000 + j + o[2]]
+			if d2 then return d2 end
+		end
+		return nil
+	end)
 	local centre = Vector3.new(sx(isl.cx), 0, sz(isl.cz))
 	local from = workspace.CurrentCamera.CFrame
 	local srcFocus = if src then Vector3.new(sx(src.landA[1] + 0.5), 0, sz(src.landA[2] + 0.5)) else landing
@@ -1149,15 +1637,14 @@ local clock = 0
 RunService.RenderStepped:Connect(function(dt)
 	clock += dt
 	if not root then return end
-	-- windmill + clouds every frame (pivots only)
-	if not playing then
-		for _, info in props do if info.sails then info.sails:PivotTo(info.sailsHome * CFrame.Angles(0, 0, -clock * 0.7)) end end
-	end
+	-- lighthouse beam sweeps round (one anchor CFrame per frame)
+	if beacon and beacon.part.Parent then beacon.part.CFrame = CFrame.new(beacon.pos) * CFrame.Angles(0, clock * 0.8, 0) end
 	if building == 0 then
 		for _, b in bobs do if b.model.Parent and b.model:IsDescendantOf(workspace) then b.model:PivotTo(b.home + Vector3.new(0, math.sin(clock * b.sp + b.ph) * b.amp, 0)) end end
 		IslandView.ambientStep(dt, clock)
 	end
 	Ocean.step(dt)
+	if ffAtt then ffAtt.Position = Vector3.new((math.random() - 0.5) * COLS * S * 0.8, (math.random() - 0.5) * 6, (math.random() - 0.5) * ROWS * S * 0.8) end
 	for _, c in clouds do
 		c.a += c.sp * dt
 		c.model:PivotTo(CFrame.new(math.cos(c.a) * c.r, c.y + math.sin(clock * 0.3 + c.a * 5) * 0.6, math.sin(c.a) * c.r * 0.85))
@@ -1187,7 +1674,13 @@ RunService.RenderStepped:Connect(function(dt)
 			info.light.Brightness = 1.1 * n
 		end
 	end
-	if fireflies then fireflies.FF.Rate = 14 * n end
+	if ffAtt then (ffAtt :: any).FF.Rate = 14 * n end
+	if beacon and math.abs(n - beaconN) > 0.01 then   -- beam faint by day, bright at night
+		beaconN = n
+		local a0 = 0.74 - 0.5 * n
+		for _, bm in beacon.beams do bm.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, a0), NumberSequenceKeypoint.new(1, 1) }) end
+		beacon.spot.Brightness = 4 * n; beacon.glow.Brightness = 0.4 + 1.6 * n
+	end
 	Ocean.setNight(n)
 	local neon = n > 0.4
 	for _, g in islandGlows do g.Material = if neon then Enum.Material.Neon else Enum.Material.SmoothPlastic end
