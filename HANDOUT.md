@@ -12,12 +12,17 @@ Branch **`claude/peckwood-isle`** (pushed). Build: `cd roblox && rojo build defa
 
 ### HERO UI PROTOTYPE (owner 2026-10-10: "never before seen UI and animation", 20k-player promo)
 - Live prototype: https://claude.ai/artifact/LmwbnbygFJ8unmke9HVkWV (source `concepts/hero_ui/hero_ui.src.html`, assets
-  injected from the build step; stills `concepts/hero_ui/shot_*.png`). Expedition layout A over the BW2 map with:
-  painted header banner + parallax, gradient ink title, boss stage with tilt + motes, cursor-follow key glint,
-  rarity borders (legendary / epic / mythic), odometer numbers with small gold suffix, reward moment (flash, rays,
-  CLEARED title, drop cards, eggs + moneta fly into the wallet, chips pulse + roll), BW2 area sign, window open from the
-  hotbar key, world blur behind windows, opt-in synth SFX. Its "How it maps to Roblox" panel = the build spec per effect.
-- Art: `concepts/hero_ui/header_cave.png` (header banner), `boss_pudding.png` (boss render; in game a ViewportFrame).
+  injected from the build step; QA stills `concepts/hero_ui/qa/`). Expedition layout A over the BW2 map.
+- Owner calls: the painted cave header banner (`header_cave.png`) is LOVED and stays; the realistic boss render
+  (`boss_pudding.png`) is REJECTED. Bosses and items always use the game's own icons ("unreal UI, but nothing fake").
+- Pass 3 (after QA, visual-hierarchy, style-guard and Roblox-feasibility agents, `.claude/agents/`): per-floor data
+  (bands, enemies, loot, packs, respawn timers that tick on the rail, beside the title and on START); boss status chip
+  beside the title and on the START key; selected row = fill + gold bar + gold frame, other rows sit back; DAY tab is
+  steel with a gold underline (START is the only loud thing); loot = rarity plates (fill is the rarity) with a linear
+  sweep; hotbar = real Kit.button keys; press-in drops the whole key; hover = white overlay; no grain, no conic, no
+  skew, no letter-spacing, no CSS filters on icons (grey `_locked` uploads + drawn padlock), Fredoka only, every in-game
+  label >= 15 px; coins fly from below the drop cards; the wallet sits above the scrim; portrait phones get a "turn
+  sideways" card. The "How it maps to Roblox" panel = the build spec per effect.
 
 ### UI LAYOUT DIRECTION (owner 2026-10-10, latest): "A boss stage" for list + detail windows
 - Owner reviewed 3 hierarchy layouts of Expedition (Figma section `303:319`, sheet `concepts/ui_expedition_variants.png`)
