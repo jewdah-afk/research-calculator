@@ -10,6 +10,13 @@ Last updated: 2026-10-09 (Peckwood Ascent world rebuild, branch `claude/peckwood
 
 Branch **`claude/peckwood-isle`** (pushed). Build: `cd roblox && rojo build default.project.json -o Peckwood.rbxl`, open it in Studio (one Studio window only). The owner says it is OK to stop Play / reload the test place at any time.
 
+### MAP BACKDROP (owner 2026-10-10: "the background still looks bad")
+- `concepts/bw2_vista.src.html` now has real horizon scenery: three heightfield mountain rings (near forested isles
+  r 240-330, mid green/rock range r 440-600, far snowy range r 780-1050) lit by the same sun, aerial haze baked into
+  vertex colours, bases sinking into a 2600-wide sea that fades to haze; painted toon cumulus billboards behind the
+  ranges. Still: `concepts/bw2_vista_backdrop.jpg` (pitch 10, the UI background). Roblox: the rings = Terrain (or big
+  MeshParts) outside the play area + Atmosphere haze; clouds = BillboardGuis/ImageLabels far out, or Clouds object.
+
 ### HERO UI PROTOTYPE (owner 2026-10-10: "never before seen UI and animation", 20k-player promo)
 - Live prototype: https://claude.ai/artifact/LmwbnbygFJ8unmke9HVkWV (source `concepts/hero_ui/hero_ui.src.html`, assets
   injected from the build step; QA stills `concepts/hero_ui/qa/`). Expedition layout A over the BW2 map.

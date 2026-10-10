@@ -21,8 +21,8 @@ body { margin: 0; background: #07080b; color: #fff; font-family: var(--font); ov
 button { font: inherit; color: inherit; }
 
 /* ---------------------------------------------------------------- screen */
-.viewport { position: fixed; inset: 0; display: grid; place-items: center; }
-.screen { position: relative; width: 1920px; height: 1080px; transform-origin: 50% 50%; overflow: hidden; background: #0f1a12; flex: none; }
+.viewport { position: fixed; inset: 0; overflow: hidden; }
+.screen { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; overflow: hidden; background: #0f1a12; flex: none; }
 .world { position: absolute; inset: -24px; background-size: cover; background-position: center; transition: filter .5s ease, transform .6s cubic-bezier(.2,.8,.2,1); }
 .screen.modal .world { filter: blur(5px) brightness(.55) saturate(.9); transform: scale(1.03); }   /* = Lighting BlurEffect + ColorCorrection */
 
@@ -275,6 +275,7 @@ button { font: inherit; color: inherit; }
 .notes dt { font-family: var(--font); color: var(--gold); margin-top: 10px; } .notes dd { margin: 2px 0 0; }
 .hint { transition: opacity .6s; position: fixed; right: 16px; bottom: calc(env(safe-area-inset-bottom, 0px) + 12px); font: 15px/1.3 var(--font); color: #fff; z-index: 20; max-width: calc(100% - 32px);
   background: #12161e; border: 3px solid var(--ink); box-shadow: 0 3px 0 #000; padding: 8px 12px; }
+@media (max-height: 560px) { .ctrl { top: auto; right: auto; left: 8px; bottom: calc(env(safe-area-inset-bottom, 0px) + 6px); gap: 4px; } .ctrl button { font-size: 12px; padding: 5px 8px; } .hint { display: none; } .notes { top: 8px; max-height: calc(100% - 52px); } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
 </style>
 
@@ -362,7 +363,10 @@ const screen = $('screen');
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 // ---------------------------------------------------------------- fit the 1920x1080 screen to the browser
-function fit() { const s = Math.min(innerWidth / 1920, innerHeight / 1080); screen.style.transform = `scale(${s})`; screen.style.margin = `${(innerHeight - 1080) / 2}px ${(innerWidth - 1920) / 2}px`; }
+// short landscape phones frame the Expedition window alone (like the game's phone UI scale) instead of the whole scene
+function fit() { const small = innerHeight < 560, [bx, by, bw, bh] = small ? [376, 48, 1168, 896] : [0, 0, 1920, 1080];
+  const s = Math.min(innerWidth / bw, (innerHeight - (small ? 34 : 0)) / bh), tx = (innerWidth - bw * s) / 2 - bx * s, ty = (innerHeight - (small ? 34 : 0) - bh * s) / 2 - by * s;
+  screen.style.transform = `translate(${tx}px, ${ty}px) scale(${s})`; }
 addEventListener('resize', fit); fit();
 const toDesign = e => { const r = screen.getBoundingClientRect(), s = r.width / 1920; return [(e.clientX - r.left) / s, (e.clientY - r.top) / s]; };
 
@@ -488,7 +492,7 @@ function paintDetail(k) {
   $('lootList').innerHTML = f.loot.map(([ico, r], i) => `<div class="rar r-${r} pop" title="${r}" style="left:${8 + i * 84}px;animation-delay:${i * 40}ms"><img src="${A[ico]}" alt="${r} ${NAMES[ico].toLowerCase()}"></div>`).join('');
 }
 
-let sel = -1;
+let sel = -1, titleT = 0;
 function select(k, quiet) {
   if (k === sel) return;
   const dir = k > sel ? 1 : -1, first = sel < 0; sel = k; if (!quiet) sfx.up();
@@ -497,7 +501,7 @@ function select(k, quiet) {
   const t = $('ftitle');
   if (first) t.textContent = `FLOOR ${k + 1}`;
   else { t.style.transform = `translateY(${-40 * dir}px)`; t.style.opacity = 0;
-    setTimeout(() => { t.textContent = `FLOOR ${k + 1}`; t.style.transition = 'none'; t.style.transform = `translateY(${40 * dir}px)`; void t.offsetWidth; t.style.transition = ''; t.style.transform = 'none'; t.style.opacity = 1; }, 160); }
+    clearTimeout(titleT); titleT = setTimeout(() => { t.textContent = `FLOOR ${sel + 1}`; t.style.transition = 'none'; t.style.transform = `translateY(${40 * dir}px)`; void t.offsetWidth; t.style.transition = ''; t.style.transform = 'none'; t.style.opacity = 1; }, 160); }
   $('startText').textContent = `START FLOOR ${k + 1}`;
   const bi = $('bossImg'); bi.src = A[FL[k].ico]; bi.classList.remove('swap'); void bi.offsetWidth; bi.classList.add('swap');
   paintDetail(k); paintStatus();
@@ -508,7 +512,8 @@ select(7, true);
 // live respawn timers: every floor ticks; rail chips, the title chip and START stay in sync
 setInterval(() => { FL.forEach((f, k) => { if (f.cd > 0) { f.cd--; paintRow(k); if (k === sel) paintStatus(); } }); }, 1000);
 
-const stats = [['trophy', 'BEST FLOOR', best], ['map', 'RUNS', 1284], ['item_skull', 'KILLS', 1300000]];
+let runs = 1284, kills = 1300000;
+const stats = [['trophy', 'BEST FLOOR', best], ['map', 'RUNS', runs], ['item_skull', 'KILLS', kills]];
 const statEls = stats.map(([ico, l, v]) => { const d = document.createElement('div'); d.innerHTML = `<span class="l ink1"><img src="${A[ico]}" alt="">${l}</span><span class="v ink1"></span>`; $('stats').appendChild(d); const el = d.querySelector('.v'); show(el, v); return el; });
 
 document.querySelectorAll('.win .key').forEach(wireKey);
@@ -545,7 +550,7 @@ let busy = false;
 $('startK').onclick = () => {
   if (busy) return; busy = true;
   const k = sel, f = FL[k], wasUp = f.cd <= 0;
-  const loot = wasUp ? f.loot : f.loot.slice(0, 2);
+  const loot = wasUp ? f.loot : f.loot.filter(([, r]) => r === 'rare' || r === 'epic');   // boss down = elite loot only
   const eggs = Math.round(1240000 * (1 + k * .15));
   for (const id of ['cl0', 'cl1', 'cl2']) $(id).textContent = `FLOOR ${k + 1} CLEARED!`;
   const [ea, es] = fmt(eggs); $('clSub').textContent = `+${loot.length} drops · +${ea}${es} eggs`;
@@ -562,7 +567,7 @@ $('startK').onclick = () => {
   setTimeout(() => { flyTo('egg', 14, wallet.egg, wallet.egg + eggs); wallet.egg += eggs; flyTo('moneta', 6, wallet.moneta, wallet.moneta + 1320); wallet.moneta += 1320; }, 1300);
   setTimeout(() => {
     drops.innerHTML = ''; busy = false; $('scrim').classList.remove('on');
-    roll(statEls[1], 1284, 1285, 500); roll(statEls[2], 1300000, 1340000, 700);
+    roll(statEls[1], runs, runs + 1, 500); runs += 1; const kd = 30000 + (k + 1) * 2000; roll(statEls[2], kills, kills + kd, 700); kills += kd;
     if (wasUp) { f.cd = RESPAWN; if (k + 1 > best) { roll(statEls[0], best, k + 1, 500); best = k + 1; FL.forEach((_, i) => paintRow(i)); } paintRow(k); paintStatus(); }
   }, 3400);
 };
