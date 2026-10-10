@@ -177,8 +177,10 @@ button { font: inherit; color: inherit; }
    whose Position follows the cursor (and a slow idle camera drift) by a different amount = real parallax depth */
 .lay { will-change: transform; }
 .lay-in { position: absolute; inset: 0; background-size: cover; background-position: 50% 80%; }
-.boss3d { position: absolute; left: 50%; top: -12px; width: 320px; height: 270px; margin-left: -160px; pointer-events: none; display: none; }
-.hero.has3d .boss3d { display: block; } .hero.has3d .boss { visibility: hidden; }
+.vox { position: absolute; left: 50%; top: -50px; width: 300px; height: 300px; margin-left: -150px; pointer-events: none; display: none; background-repeat: no-repeat; transform-origin: 50% 78%; animation: breatheBoss 2.2s ease-in-out infinite; }
+.vox.swap { animation: bossIn .5s cubic-bezier(.2,1.4,.3,1), breatheBoss 2.2s ease-in-out .5s infinite; }
+.vox.down { filter: brightness(.62); }
+.hero.voxon .vox { display: block; } .hero.voxon .boss, .hero.voxon .bshadow { visibility: hidden; }
 @keyframes arenaIn { from { transform: scale(1.18); } to { transform: none; } }
 .beam { position: absolute; left: 50%; top: -30px; width: 300px; height: 300px; margin-left: -150px; transform-origin: 50% 0; pointer-events: none;
   background: linear-gradient(180deg, rgba(255,214,246,.5), rgba(255,190,240,.12) 70%, rgba(255,190,240,0)); clip-path: polygon(40% 0, 60% 0, 100% 100%, 0 100%); animation: beam 6s ease-in-out infinite; }
@@ -359,7 +361,7 @@ button { font: inherit; color: inherit; }
       <div class="abs rail" id="rail"><div class="ring" id="ring"></div></div>
 
       <div class="abs stage" id="stage">
-        <div class="hero" id="hero"><div class="arena lay" id="layFar"><div class="lay-in" id="layFarI"></div></div><div class="beam"></div><div class="arena lay" id="layMid"><div class="lay-in" id="layMidI"></div></div><div class="lay" id="layBoss" style="position:absolute;inset:0"><div class="pool"></div><div class="bossWrap" id="bossWrap"><div class="bshadow"></div><img class="boss" id="bossImg" alt=""></div><canvas class="boss3d" id="boss3d"></canvas></div><div class="arena lay" id="layFg"><div class="lay-in" id="layFgI"></div></div><div class="mist"></div><div id="sparks"></div><div class="dim"></div><div class="vig"></div>
+        <div class="hero" id="hero"><div class="arena lay" id="layFar"><div class="lay-in" id="layFarI"></div></div><div class="beam"></div><div class="arena lay" id="layMid"><div class="lay-in" id="layMidI"></div></div><div class="lay" id="layBoss" style="position:absolute;inset:0"><div class="pool"></div><div class="bossWrap" id="bossWrap"><div class="bshadow"></div><img class="boss" id="bossImg" alt=""><div class="vox" id="vox" role="img" aria-label="Boss"></div></div></div><div class="arena lay" id="layFg"><div class="lay-in" id="layFgI"></div></div><div class="mist"></div><div id="sparks"></div><div class="dim"></div><div class="vig"></div>
           <div class="tag ink1"><img id="tagIco" alt="">BOSS</div></div>
         <div class="ftitle"><span class="roll ink2" id="ftitle">FLOOR 8</span><span class="bstat ink1" id="bstat"></span></div>
         <div class="fsub ink1" id="fsub"></div>
@@ -388,6 +390,7 @@ button { font: inherit; color: inherit; }
 </div>
 <div class="ctrl">
   <button id="theme" aria-pressed="true">Style: Amethyst</button>
+  <button id="bossMode" aria-pressed="true">Boss: Voxel 3D</button>
   <button id="replay">Replay intro</button>
   <button id="snd" aria-pressed="false">Sound off</button>
   <button id="notesBtn" aria-expanded="false" aria-controls="notes">How it maps to Roblox</button>
@@ -398,7 +401,7 @@ button { font: inherit; color: inherit; }
     <dt>Header banner (painted cave + parallax)</dt><dd>One ImageLabel (the painted cave banner, 1680×560 upload) in a ClipsDescendants header, ScaleType Crop; Position nudged from the mouse (±13 px x, ±4 px y). A dark centre shade ImageLabel (softellipse) sits behind the title; the 4 px ink edge stays on top.</dd>
     <dt>Light sweeps (header, START, rarity plates)</dt><dd>A thin Frame with a white-centre UIGradient, Rotation 20, its Position (or the UIGradient Offset) tweened across a ClipsDescendants parent. No skew needed.</dd>
     <dt>Gradient title with ink outline</dt><dd>TextLabel + UIGradient (white → gold) + UIStroke 3 px ink + a second offset label for the drop.</dd>
-    <dt>Depth parallax + 3D boss</dt><dd>The arena painting is cut into 3 layers (far cave, altar + arch + braziers, foreground crystals; the far plate is inpainted behind the others). Each layer is an ImageLabel whose Position eases toward the cursor by its depth (5 / 12 / 15 / 30 px) plus a slow idle camera drift (RenderStepped lerp). The Giant Black Pudding is a real 3D model (here modelled in code from its icon; in game a MeshPart + a black flipped-normal hull MeshPart for the ink outline) in a ViewportFrame WorldModel on the altar layer: it breathes, its crown stalks sway, it blinks, turns toward the cursor and squash-pops in on floor change. Other bosses use their icon until their models exist.</dd>
+    <dt>Depth parallax + voxel 3D boss</dt><dd>The arena painting is cut into 3 layers (far cave, altar + arch + braziers, foreground crystals; the far plate is inpainted behind the others), each an ImageLabel whose Position eases toward the cursor by its depth (5 / 12 / 15 / 30 px) plus a slow idle camera drift. Every boss is a voxel model built from its icon by tools/boss3d/voxelize.py (Blender: blocks puffed thicker toward the middle, icon colours, ink rim) and rendered in Cycles with a key, a violet rim and a pink altar bounce light plus a contact shadow. In game, either: (a) a flipbook ImageLabel, 16 look-around frames at 256 px in one 1024 sheet, frame picked from the cursor (ImageRectOffset) = Blender lighting for free; or (b) the exported .glb as a MeshPart in a ViewportFrame. Toggle top-right compares with the flat icon.</dd>
     <dt>Boss stage</dt><dd>A painted arena ImageLabel (same family as the header art) with the boss's own game icon standing on the rune circle. Spotlight beam = a beam-shaped gradient ImageLabel swaying by Rotation; floor glow = a softellipse ImageLabel pulsing Size + transparency; mist = two softellipse ImageLabels drifting; embers = star ImageLabels rising. Floor switch = a black Frame flash 0.55 → 1 + the boss drops in. Cursor parallax: arena −10 px, boss +14 px + Rotation. Idle squash/stretch is on the boss only (keys never squash). Boss down = ImageTransparency 0.55.</dd>
     <dt>Styles</dt><dd>Steel and Amethyst are the same frames with different colour tokens (UIGradient ColorSequences + a 2 px gold inner UIStroke on a child Frame for the Amethyst trim). Theme = one table swap in Kit.</dd>
     <dt>CLEARED slam + shake + shockwaves</dt><dd>One TextLabel stack per letter tweened in turn (Back easing); root Frame Position jitter for 0.4 s (and a small camera shake); shockwave = a ring ImageLabel growing + fading, one from START and one from the title; card bursts = 7-14 star ImageLabels flying out; "+amount" TextLabels rise off the wallet chips.</dd>
@@ -416,86 +419,6 @@ button { font: inherit; color: inherit; }
 </aside>
 <div class="hint" id="hint">Hover · click floors · press START</div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script>
-// ---------------------------------------------------------------- 3D boss: the Giant Black Pudding, modelled from its icon
-// glossy violet-black slime dome with drips, a crown of 5 bobbing stalks, big glossy eyes, pink smile, ink outline
-// (inverted hull). In Roblox: the MeshPart (+ a black flipped-normal hull MeshPart) in a ViewportFrame WorldModel,
-// ViewportFrame Ambient / LightColor / LightDirection for the key light, CFrame tweens for jiggle + look-at.
-window.makeBoss3d = function (canvas) {
-  if (!window.THREE) return null;
-  let gl; try { gl = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true }); } catch (e) { return null; }
-  gl.setPixelRatio(Math.min(2, devicePixelRatio || 1)); gl.setSize(320, 270, false); gl.outputEncoding = THREE.sRGBEncoding;
-  const scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera(30, 320 / 270, .1, 50);
-  cam.position.set(0, 2.0, 7.3); cam.lookAt(0, 1.18, 0);
-  scene.add(new THREE.AmbientLight(0x4a3a6a, .35));
-  const key = new THREE.DirectionalLight(0xffe6f6, 1.15); key.position.set(-2.5, 4, 3.5); scene.add(key);
-  const rim = new THREE.DirectionalLight(0xc070ff, 1.1); rim.position.set(2.5, 1.5, -3); scene.add(rim);
-  const fill = new THREE.PointLight(0xff7ad0, .7, 8); fill.position.set(0, -.4, 2.2); scene.add(fill);   // the glowing altar bouncing light up
-  const slime = new THREE.MeshPhongMaterial({ color: 0x241a3a, specular: 0xf0e4ff, shininess: 120 });
-  const inkM = new THREE.MeshBasicMaterial({ color: 0x0b0c10, side: THREE.BackSide });
-  const root = new THREE.Group(); scene.add(root);
-  const body = new THREE.Group(); root.add(body);
-  const hull = (geo, t) => { const g = geo.clone(), p = g.attributes.position, n = g.attributes.normal; for (let i = 0; i < p.count; i++) p.setXYZ(i, p.getX(i) + n.getX(i) * t, p.getY(i) + n.getY(i) * t, p.getZ(i) + n.getZ(i) * t); return new THREE.Mesh(g, inkM); };
-  const add = (geo, mat, parent, t = .045) => { const m = new THREE.Mesh(geo, mat); parent.add(m); parent.add(hull(geo, t)); return m; };
-  // dome: wide flat base, rounded top, 9 drip tongues hanging over the base
-  const g = new THREE.SphereGeometry(1, 128, 72), P = g.attributes.position;
-  for (let i = 0; i < P.count; i++) {
-    let x = P.getX(i), y = P.getY(i), z = P.getZ(i);
-    const a = Math.atan2(z, x); let drip = 0;
-    for (let k = 0; k < 9; k++) { const da = Math.atan2(Math.sin(a - k * .698 - .2), Math.cos(a - k * .698 - .2)); drip += Math.exp(-da * da / .018) * (.6 + .4 * Math.sin(k * 3.7)); }
-    const low = Math.max(0, .25 - y);
-    const r = 1 + .2 * (1 - (y + 1) / 2) + drip * low * .12;
-    y = y > 0 ? y * 1.28 : y * .62; y -= drip * low * .34;
-    y = Math.max(y, -.62 - drip * .05);
-    P.setXYZ(i, x * r, y + .62, z * r * .92);
-  }
-  g.computeVertexNormals(); add(g, slime, body, .03);
-  // puddle under it
-  const pg = new THREE.SphereGeometry(1.5, 64, 16); pg.scale(1, .07, .95); const pud = add(pg, slime, body, .035); pud.position.y = .03;
-  // crown: 5 stalks with ball tips (2 side ones lower)
-  const stalks = [];
-  [[-.62, .5, 1.05, -.45], [-.25, .2, 1.35, -.15], [.18, .25, 1.4, .1], [.58, .15, 1.15, .4], [0, -.4, 1.25, 0], [-1.05, .1, .55, -.9], [1.08, .05, .6, .95]].forEach(([x, z, h, lean], i) => {
-    const s = new THREE.Group(); s.position.set(x * .8, 1.6 - Math.abs(x) * .55, z * .6); body.add(s);
-    const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(0, -.2, 0), new THREE.Vector3(lean * .15, h * .45, 0), new THREE.Vector3(lean * .35, h * .85, 0)]);
-    add(new THREE.TubeGeometry(curve, 24, .1, 12, false), slime, s, .04);
-    const tip = add(new THREE.SphereGeometry(.2, 24, 16), slime, s, .04); tip.position.copy(curve.getPoint(1)); s.userData = { tip, ph: i * 1.3 };
-    if (i >= 5) s.scale.setScalar(.75);
-    stalks.push(s);
-  });
-  // face
-  const face = new THREE.Group(); face.position.set(0, .98, 1.02); body.add(face);
-  const eyeM = new THREE.MeshPhongMaterial({ color: 0x0a0812, specular: 0xffffff, shininess: 140 });
-  const hiM = new THREE.MeshBasicMaterial({ color: 0xffffff });
-  const eyes = [-.36, .36].map(x => { const e = new THREE.Group(); e.position.set(x, .18, 0); face.add(e);
-    add(new THREE.SphereGeometry(.23, 32, 24), eyeM, e, .035);
-    const h1 = new THREE.Mesh(new THREE.SphereGeometry(.075, 16, 12), hiM); h1.position.set(-.08, .09, .19); e.add(h1);
-    const h2 = new THREE.Mesh(new THREE.SphereGeometry(.036, 12, 8), hiM); h2.position.set(.08, -.07, .21); e.add(h2);
-    return e; });
-  const mouthS = new THREE.Shape(); mouthS.moveTo(-.2, .02); mouthS.quadraticCurveTo(0, .06, .2, .02); mouthS.quadraticCurveTo(.16, -.26, 0, -.27); mouthS.quadraticCurveTo(-.16, -.26, -.2, .02);
-  const mouth = new THREE.Mesh(new THREE.ShapeGeometry(mouthS, 24), new THREE.MeshBasicMaterial({ color: 0xff6f86 })); mouth.position.set(0, -.16, .1); face.add(mouth);
-  const lip = new THREE.Mesh(new THREE.ShapeGeometry(mouthS, 24), new THREE.MeshBasicMaterial({ color: 0x0b0c10 })); lip.scale.setScalar(1.22); lip.position.set(0, -.155, .09); face.add(lip);
-  const tongue = new THREE.Mesh(new THREE.CircleGeometry(.1, 24), new THREE.MeshBasicMaterial({ color: 0xd8405f })); tongue.scale.y = .55; tongue.position.set(.02, -.35, .105); face.add(tongue);
-  root.scale.setScalar(.95);
-  let lookX = 0, lookY = 0, popT = -1, down = false, t0 = performance.now(), blink = 0;
-  const api = {
-    look(x, y) { lookX = x; lookY = y; },
-    pop() { popT = performance.now(); },
-    setDown(d) { down = d; key.intensity = d ? .55 : 1.15; fill.intensity = d ? .2 : .7; },
-  };
-  (function loop(now) {
-    const t = (now - t0) / 1000;
-    const br = Math.sin(t * 2.85);
-    let sq = 1; if (popT > 0) { const k = (now - popT) / 500; if (k < 1) sq = k < .35 ? .4 + k / .35 * .75 : 1.15 - (k - .35) / .65 * .15; else popT = -1; }
-    body.scale.set((1 + br * .03) * (sq > 1 ? sq : 1 / Math.max(.6, sq) * .6 + .4), (1 - br * .035) * sq, (1 + br * .03));
-    root.rotation.y += ((lookX * .55) - root.rotation.y) * .1; root.rotation.x += ((lookY * .12 + .05) - root.rotation.x) * .1;
-    stalks.forEach((s, i) => { s.rotation.z = Math.sin(t * 2.2 + s.userData.ph) * .12; s.rotation.x = Math.cos(t * 1.7 + s.userData.ph) * .08; });
-    blink = (t % 3.6) < .12 ? .12 : 1; eyes.forEach(e => e.scale.y = blink);
-    gl.render(scene, cam); requestAnimationFrame(loop);
-  })(t0);
-  return api;
-};
-</script>
 <script>
 (() => {
 'use strict';
@@ -622,7 +545,7 @@ function paintStatus() {
   b.className = 'bstat ink1 ' + (up ? 'up' : 'cdn');
   b.innerHTML = up ? `<img src="${A.quest_boss}" alt="">BOSS IS UP` : `<img src="${A.clock}" alt="">BOSS BACK IN ${mmss(f.cd)}`;
   $('startSub').textContent = up ? `Fight ${f.boss} + ${f.packs} elite pack${f.packs > 1 ? 's' : ''}` : `Boss down · ${f.packs} elite pack${f.packs > 1 ? 's' : ''} only`;
-  $('bossImg').classList.toggle('down', !up); if (window.__boss3d) window.__boss3d.setDown(!up);
+  $('bossImg').classList.toggle('down', !up); $('vox').classList.toggle('down', !up);
 }
 function paintDetail(k) {
   const f = FL[k];
@@ -634,6 +557,8 @@ function paintDetail(k) {
   $('lootList').innerHTML = f.loot.map(([ico, r], i) => `<div class="rar r-${r} pop" title="${r}" style="left:${8 + i * 84}px;animation-delay:${i * 40}ms"><img src="${A[ico]}" alt="${r} ${NAMES[ico].toLowerCase()}"></div>`).join('');
 }
 
+const VOXM = { frames: 17, cols: 5 };   // tools/boss3d/voxelize.py output layout
+let voxOn = true;
 let sel = -1, titleT = 0;
 function select(k, quiet) {
   if (k === sel) return;
@@ -646,12 +571,12 @@ function select(k, quiet) {
     clearTimeout(titleT); titleT = setTimeout(() => { t.textContent = `FLOOR ${sel + 1}`; t.style.transition = 'none'; t.style.transform = `translateY(${40 * dir}px)`; void t.offsetWidth; t.style.transition = ''; t.style.transform = 'none'; t.style.opacity = 1; }, 160); }
   $('startText').textContent = `START FLOOR ${k + 1}`;
   if (!first) { hero.classList.remove('swap'); void hero.offsetWidth; hero.classList.add('swap'); }
-  hero.classList.toggle('has3d', !!window.__boss3d && FL[k].ico === 'enemy_giant_black_pudding'); if (window.__boss3d) window.__boss3d.pop();
+  const vx = $('vox'); if (A['vox_' + FL[k].ico]) { vx.style.backgroundImage = `url(${A['vox_' + FL[k].ico]})`; vx.style.backgroundSize = `${VOXM.cols * 300}px auto`; }
+  vx.classList.remove('swap'); void vx.offsetWidth; vx.classList.add('swap');
   const bi = $('bossImg'); bi.src = A[FL[k].ico]; bi.classList.remove('swap'); void bi.offsetWidth; bi.classList.add('swap');
   paintDetail(k); paintStatus();
 }
 FL.forEach((_, k) => paintRow(k));
-window.__boss3d = window.makeBoss3d && window.makeBoss3d($('boss3d'));
 select(7, true);
 
 // live respawn timers: every floor ticks; rail chips, the title chip and START stay in sync
@@ -684,7 +609,9 @@ const LAYERS = [['layFar', 5], ['layMid', 12], ['layBoss', 15], ['layFg', 30]];
     const ix = Math.sin(t / 2600) * .35, iy = Math.sin(t / 3700) * .25, X = PX.x + ix, Y = PX.y + iy;
     for (const [id, d] of LAYERS) $(id).style.transform = `translate(${-X * d}px, ${-Y * d * .35}px)`;
     $('bossWrap').style.transform = `rotate(${PX.x * 3}deg)`;
-    if (window.__boss3d) window.__boss3d.look(PX.x, PX.y);
+    // voxel boss: Blender look-around frames (yaw -40..+40), picked from the cursor + idle sway = it turns to face you
+    if (voxOn) { const f = Math.max(-1, Math.min(1, PX.x * 1.15 + Math.sin(t / 1900) * .3)), i = Math.round((f + 1) / 2 * (VOXM.frames - 1)), sz = 300;
+      $('vox').style.backgroundPosition = `${-(i % VOXM.cols) * sz}px ${-Math.floor(i / VOXM.cols) * sz}px`; }
   }
   requestAnimationFrame(px);
 })(0);
@@ -765,6 +692,9 @@ function flyTo(kind, n, from, to) {
 // ---------------------------------------------------------------- intro
 function intro() { win.classList.remove('open', 'closing'); screen.classList.remove('modal'); setTimeout(sign, 300); setTimeout(openWin, reduced ? 400 : 2900); }
 $('replay').onclick = intro;
+function setVox(on) { voxOn = on; hero.classList.toggle('voxon', on); $('bossMode').textContent = on ? 'Boss: Voxel 3D' : 'Boss: Icon'; $('bossMode').setAttribute('aria-pressed', on); }
+$('bossMode').onclick = () => { setVox(!voxOn); sfx.up(); };
+setVox(new URLSearchParams(location.search).get('boss') !== 'icon');
 function setTheme(t) { document.body.dataset.theme = t; $('theme').textContent = t === 'amethyst' ? 'Style: Amethyst' : 'Style: Steel'; $('theme').setAttribute('aria-pressed', t === 'amethyst'); }
 $('theme').onclick = () => { setTheme(document.body.dataset.theme === 'amethyst' ? 'steel' : 'amethyst'); sfx.up(); };
 setTheme(new URLSearchParams(location.search).get('style') || 'amethyst');
