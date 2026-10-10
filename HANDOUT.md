@@ -31,13 +31,16 @@ Branch **`claude/peckwood-isle`** (pushed). Build: `cd roblox && rojo build defa
   side-by-side against the proof screenshots at the same camera.
 - **Never again:** AI concept paintings as targets (they "throw off direction"), generate_mesh blobs, flat-colour parts.
   Quality comes from clean deliberate shapes + high-res illustrated textures (≤ 1024 px) + density + light.
-- **Open items:** (1) the map is too symmetrical (3x3 grid, square cores, straight joins, cross paths): make it organic
+- **Owner 2026-10-10:** keep the current map layout as is (symmetry is fine). The in-game job is a proper mountain /
+  horizon scenery backdrop around the islands.
+- **Open items (superseded: layout stays):** (1) the map is too symmetrical (3x3 grid, square cores, straight joins, cross paths): make it organic
   (offset/scale/rotate islands, uneven joins, noise coastlines with bays + islets, one high-ground spine, winding paths)
   WITHOUT changing the 9 areas, unlock order or neighbours; prototype in the vista page first, then port to World.luau.
   (2) Camera: vista pitch ~15 deg gives the depth; decide gameplay camera vs vista moments (unlocks, lookouts, photo).
   (3) Terrace height 3.6 studs in the proof vs 2.4 in the game (Controller step needs the matching change).
 - Export the real map for concept pages: `cd roblox && lune run tools/dump_world.luau > world.json`.
-- **Icons:** owner will buy more Figma / Weave credits later to redo all icons in the house style (parked until then).
+- **Icons:** owner will buy more Figma / Weave credits later to redo all icons in the house style. Style sample for the 16
+  most-used types (current painted style, thick ink outline, not the old flat set): `concepts/icons/icon_sheet_4x4_v2.png`.
 
 ### STYLIZED REALISM: build bible, sound, lighting (2026-10-09, latest, no Studio: owner away)
 - Owner: "realistic enough in Roblox that people say holy shit, this is Roblox, runs so good, sounds this nice".
