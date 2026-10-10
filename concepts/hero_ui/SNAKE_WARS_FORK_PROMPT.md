@@ -4,9 +4,11 @@ Paste everything below the line into a new chat.
 
 ---
 
-We're doing the UI for the Snake Wars relaunch ("Snake Wars 🐍 +1 Length Every Second"). I want the same level of UI
-and effects we just built for my other game Peckwood, carried over into Snake Wars' own look, which is called
-"Venom Candy". Before you change anything, read the sources below, then show me one hero screen first.
+We're doing the UI for the Snake Wars relaunch ("Snake Wars 🐍 +1 Length Every Second"). The whole UI already exists in
+Figma as "Venom Candy" (26 desktop + 10 phone screens), but it doesn't look as good as my other game Peckwood. The job:
+**upgrade the existing Venom Candy screens to Peckwood's quality.** Keep Snake Wars' identity and layout logic, and
+raise the craft, depth and effects. Before you change anything, read the sources below and audit the Figma screens
+against the "Peckwood bar" checklist. Then upgrade ONE hero screen first and show me before/after.
 
 **Snake Wars sources (read these first)**
 - Game overview and roadmap doc: https://claude.ai/artifact/BKx4JyKAjmFLUpftXU6u8f (the "UI: Venom Candy" section
@@ -28,6 +30,25 @@ and effects we just built for my other game Peckwood, carried over into Snake Wa
 - Icons are 3D renders.
 - Roblox build: only Frames, UICorner, UIStroke and UIGradient, with no EditableImages.
 - WARS stays fair: nothing on screen sells arena size.
+
+**The Peckwood bar: why it looks better (score every Venom Candy screen against this)**
+1. **One focal point per window.** A big hero stage shows the selected thing large, the title has a status chip
+   beside it, and there is ONE loud primary key. Everything else is calmer: dimmer secondary tabs, values at about
+   70 % white, and unselected rows that sit back.
+2. **Real art, not flat fills.** A painted scenery header, and a full-bleed stage image ending in one 4 px ink line.
+   Depth comes from layers and parallax, not from more boxes.
+3. **3D renders everywhere:** cel-shaded, ink-outlined toy renders for every character and item, and the boss turns
+   to face the cursor.
+4. **Consistent craft:**
+   - the same ink weight everywhere (4 px windows, 3 px rows and chips);
+   - one 2 px top highlight per surface;
+   - three surface tiers;
+   - the key recipe (ink body, lip, face; press-in drops the whole key, no squash);
+   - labels never under 15 px, and zero clipping or overlap at 1:1.
+5. **Everything moves with purpose:** odometer numbers with a small gold suffix, live timers synced in every place
+   they appear, rows cascading in, a light sweep on the primary key, and a reward sequence (slam, shake,
+   shockwave, card flip, coins flying into the wallet).
+6. **Two style variants from one token set,** so a colour direction can be judged side by side.
 
 **What to carry over from Peckwood (references, not its colours or art)**
 Live prototype: https://claude.ai/artifact/LmwbnbygFJ8unmke9HVkWV. Its source is
@@ -64,8 +85,11 @@ Live prototype: https://claude.ai/artifact/LmwbnbygFJ8unmke9HVkWV. Its source is
 7. **Two style options side by side** from one token set: Venom Candy as designed, and one bolder variant. I pick.
 
 **How to work**
-- First build ONE hero screen as an HTML prototype artifact: the Worlds and Stages window over the hub, with the
-  World guardian in 3D on its stage. Then wait for my reaction before doing the rest.
+- Start from the real Figma file: screenshot every Venom Candy screen, score each one against the Peckwood bar, and
+  give me a ranked list of what's holding each screen back.
+- Then upgrade ONE hero screen: the Worlds and Stages window over the hub, with the World guardian in 3D on its stage.
+  Build it as an HTML prototype artifact (like the Peckwood one) and as a duplicated, upgraded Figma frame next to
+  the original, then show me before/after. Wait for my reaction before doing the rest.
 - In Figma, never redraw from scratch; duplicate the real Venom Candy frames.
 - QA everything zoomed in before showing me. Use the ui-qa, visual-hierarchy, style-guard and roblox-feasibility
   agents (the definitions are in research-calculator `.claude/agents/`; copy them over).
