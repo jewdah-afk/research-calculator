@@ -52,8 +52,12 @@ Studio access, so the Studio work moves to a desktop chat. Paste the prompt at t
 ## Next steps (in order)
 
 1. **Studio QA.** Look at what is already in Studio, list bugs, and compare it against the Figma frames.
-2. **Restore the shop and icons.** Find what Cookie's Astra pass changed (AI-generated icons, a reworked shop). Restore
-   the original icons and shop from git history or Studio version history, then lift them to the new Figma standard.
+2. **Restore the shop and icons.** Cookie's Astra pass edited the game directly inside Studio, not in git. Those
+   changes are AI-generated icons and a reworked shop, and only the live place shows them.
+   - Diff the place against the `snakewars-25d` source to find what Astra changed. Studio's Version History (or the
+     published place versions) and the Asset Manager can help.
+   - Restore the original icon asset IDs and shop from the repo source, or from an earlier place version.
+   - Then lift them to the new Figma standard.
 3. **Upgrade the Worlds hero screen:**
    - Rail of 5 Worlds plus the Void Climb, each with a live status chip.
    - A full-bleed stage using the World scenery layers with parallax, and the guardian in 3D turning toward the cursor.
@@ -72,10 +76,10 @@ Studio access, so the Studio work moves to a desktop chat. Paste the prompt at t
 >
 > 1. Do a Studio QA pass. Screenshot every UI screen in play mode (desktop and phone emulator) and list bugs. Compare
 >    each screen with its Venom Candy Figma frame.
-> 2. My friend used Astra on parts of the game. It changed the shop and replaced our icons with bad AI-generated ones.
->    Find exactly what Astra changed (git history or Studio version history), restore our original icons and shop, and
->    then improve them to the Venom Candy and Peckwood bar from the handoff. Show me before and after before replacing
->    anything.
+> 2. My friend used Astra inside Studio, editing the game directly rather than in git. It changed the shop and
+>    replaced our icons with bad AI-generated ones. Find exactly what Astra changed by diffing the live place against
+>    the `snakewars-25d` source and Studio's version history. Restore our original icons and shop, then improve them to
+>    the Venom Candy and Peckwood bar from the handoff. Show me before and after before replacing anything.
 > 3. Then upgrade the Worlds hero screen, as in the handoff's next steps: the HTML prototype artifact and the duplicated
 >    Figma frame, with before and after. Wait for my reaction before doing the rest.
 >
