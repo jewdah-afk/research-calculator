@@ -22,6 +22,14 @@ Branch **`claude/peckwood-isle`** (pushed). Build: `cd roblox && rojo build defa
   injected from the build step; QA stills `concepts/hero_ui/qa/`). Expedition layout A over the BW2 map.
 - Owner calls: the painted cave header banner (`header_cave.png`) is LOVED and stays; the realistic boss render
   (`boss_pudding.png`) is REJECTED. Bosses and items always use the game's own icons ("unreal UI, but nothing fake").
+- Pass 4 (owner: "boss stage background is bad", "line under the tab we didn't want", "try a new style", "effects way
+  better"): boss stage = painted arena `concepts/hero_ui/stage_arena.jpg` (same family as the loved cave header) with
+  the boss icon standing on the rune circle, spotlight beam, floor glow, drifting mist, embers, parallax; tab underline
+  removed (selected tab = raised fill); NEW style "Amethyst" (royal violet panels, 2 px gold trim inside every ink
+  outline, gold selected row) next to the improved "Steel" (toggle top-right, `?style=steel`), both from one token
+  set; effects: per-letter CLEARED slam + screen shake + shockwaves (START and title), card flip with overshoot,
+  rays behind legendary/mythic cards, sparkle bursts, "+amount" floats off the wallet, banner/arena drop-in on open,
+  row icon pop on hover. Owner to pick Amethyst vs Steel.
 - Pass 3 (after QA, visual-hierarchy, style-guard and Roblox-feasibility agents, `.claude/agents/`): per-floor data
   (bands, enemies, loot, packs, respawn timers that tick on the rail, beside the title and on START); boss status chip
   beside the title and on the START key; selected row = fill + gold bar + gold frame, other rows sit back; DAY tab is
