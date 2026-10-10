@@ -1,11 +1,12 @@
 // Snake Wars "Venom Candy v2" Figma kit (paste at the top of EVERY use_figma script on file 6ghy7bHkwpGaQ82Ha0n5gy).
 // Port of Peckwood's confirmed UI v2 kit (rc-main docs/figma/kit.js): same squared craft (square-top windows, 4 px
 // continuous ink outline, Kit.button keys, steel plates, wells, steel mini chips), with Snake Wars' own identity:
-// Venom Candy colours, Luckiest Guy (titles, big numbers) + Source Sans 3 Black Italic (labels), faceted gem faces with
+// Venom Candy colours, Montserrat (owner pick 2026-10-10: Black Italic titles/numbers, ExtraBold Italic labels, Bold
+// body; every text outlined + ink drop, never flat grey), faceted gem faces with
 // the hex-scale texture, Length gold / rates mint, and a round red gem close key at (W-54, 10).
 // Everything is self-contained (no cross-file node refs). Set PAGE_ID before pasting, or edit the line below.
 const KIT_PAGE = await figma.getNodeByIdAsync(typeof PAGE_ID !== 'undefined' ? PAGE_ID : '115:1747'); await figma.setCurrentPageAsync(KIT_PAGE);
-await Promise.all([['Luckiest Guy','Regular'],['Source Sans 3','Black Italic'],['Source Sans 3','Bold Italic'],['Source Sans 3','Black']].map(([family,style])=>figma.loadFontAsync({family,style})));
+await Promise.all([['Montserrat','Black Italic'],['Montserrat','ExtraBold Italic'],['Montserrat','Bold'],['Montserrat','Black']].map(([family,style])=>figma.loadFontAsync({family,style})));
 const J = o => JSON.parse(JSON.stringify(o));
 const VT = [[0,1,0],[-1,0,1]];   // top -> bottom
 const HT = [[1,0,0],[0,1,0]];    // left -> right
@@ -34,7 +35,7 @@ const PAL = { venom:['#7CF29E','#35D06B','#1B8A45'], gold:['#FFE48A','#FFC93C','
   sky:['#7FD0FF','#2EA8F0','#1767B5'], grape:['#B88CFF','#8C4BE6','#5A23A8'], rose:['#FF8DBD','#F0428E','#A81E5C'],
   ember:['#FF8080','#EE3B3B','#A51E24'], lime:['#CFF27A','#9AD32B','#5E8E12'], indigo:['#9488FF','#5B4BE0','#33269E'],
   slate:['#A9D9E0','#6FA9B3','#3E737D'], steel:['#5a6678','#3a4352','#262c37'], ice:['#E6F6FF','#8FD8F5','#4E9CC2'] };
-const TXT = { body:'#C9D2E3', hint:'#8D94A3', mint:'#8BF5B4', gold:'#FFC93C', amber:'#FFC071', bad:'#FF9A8A', ice:'#BFE8FF' };
+const TXT = { body:'#E6F1FF', hint:'#A9C4DC', mint:'#8BF5B4', gold:'#FFC93C', amber:'#FFC071', bad:'#FF9A8A', ice:'#BFE8FF' };
 const grad = (cols,k=1,a=1,tr=VT) => ({type:'GRADIENT_LINEAR',gradientTransform:J(tr),gradientStops:cols.map((c,i)=>{const x=hx(c);return {color:{r:x.r*k,g:x.g*k,b:x.b*k,a},position:i/(cols.length-1)};})});
 const hgrad = cols => grad(cols,1,1,HT);
 const SCALES = (op=0.07) => ({type:'IMAGE',imageHash:IMG.scales,scaleMode:'TILE',scalingFactor:0.35,opacity:op});
@@ -48,16 +49,16 @@ function E(p,n,x,y,w,h,fills){const e=figma.createEllipse(); e.name=n; e.resize(
 function F(p,n,x,y,w,h,r,fills,clip){const e=figma.createFrame(); e.name=n; e.resize(Math.max(0.01,w),Math.max(0.01,h)); e.cornerRadius=r||0; e.fills=fills||[]; e.clipsContent=!!clip; p.appendChild(e); e.x=x; e.y=y; return e;}
 function STROKE(n,w=2,col){ n.strokes=[{type:'SOLID',color:col?hx(col):INK}]; n.strokeWeight=w; n.strokeAlign='INSIDE'; return n; }
 // ---------- text ----------
-// T: display (Luckiest Guy) titles + big numbers: ink outline ~9% of size + hard ink drop.
-// L: label (Source Sans 3 Black Italic), uppercase by default, ink outline 1.5 + 1 px drop.
-// B: body (Source Sans 3 Bold Italic), light outline 1.2 + 1 px drop, muted colour.
+// T: display (Montserrat Black Italic) titles + big numbers: ink outline ~9% of size + hard ink drop.
+// L: label (Montserrat ExtraBold Italic), uppercase by default, ink outline 2 + 2 px drop.
+// B: body (Montserrat Bold), ink outline 2 + 2 px drop, tinted (never flat grey).
 function _txt(p,s,size,fam,st,o){const t=figma.createText(); t.name=o.name||String(s).slice(0,28); t.fontName={family:fam,style:st}; t.fontSize=size; t.characters=String(s); t.fills=[o.grad?grad(o.grad):{type:'SOLID',color:hx(o.col||'#ffffff'),opacity:o.op??1}]; if(o.ol!==0){t.strokes=[{type:'SOLID',color:INK}]; t.strokeWeight=o.ol; t.strokeAlign='OUTSIDE'; t.effects=[INKDS(o.sh)];} p.appendChild(t); if(o.w){t.textAutoResize='HEIGHT'; t.resize(o.w,t.height); t.textAlignHorizontal=o.al||'CENTER';} t.x=o.x||0; t.y=o.y||0; return t;}
-function T(p,s,size,o={}){ return _txt(p,s,size,'Luckiest Guy','Regular',{...o,ol:o.ol??Math.max(1.5,+(size*0.09).toFixed(1)),sh:o.sh??Math.max(1,Math.round(size*0.07))}); }
-function L(p,s,size,o={}){ return _txt(p,o.keepCase?s:String(s).toUpperCase(),size,'Source Sans 3','Black Italic',{...o,ol:o.ol??1.5,sh:o.sh??1}); }
-function B(p,s,size,o={}){ return _txt(p,s,size,'Source Sans 3','Bold Italic',{...o,col:o.col||TXT.body,ol:o.ol??1.2,sh:o.sh??1}); }
-function textW(s,size,fam='Luckiest Guy',st='Regular'){const t=figma.createText(); t.fontName={family:fam,style:st}; t.fontSize=size; t.characters=String(s); const w=t.width; t.remove(); return w;}
-const LW = (s,size) => textW(String(s).toUpperCase(),size,'Source Sans 3','Black Italic');
-const BW = (s,size) => textW(s,size,'Source Sans 3','Bold Italic');
+function T(p,s,size,o={}){ return _txt(p,s,size,'Montserrat','Black Italic',{...o,ol:o.ol??Math.max(1.5,+(size*0.09).toFixed(1)),sh:o.sh??Math.max(1,Math.round(size*0.07))}); }
+function L(p,s,size,o={}){ return _txt(p,o.keepCase?s:String(s).toUpperCase(),size,'Montserrat','ExtraBold Italic',{...o,ol:o.ol??2,sh:o.sh??2}); }
+function B(p,s,size,o={}){ return _txt(p,s,size,'Montserrat','Bold',{...o,col:o.col||TXT.body,ol:o.ol??2,sh:o.sh??2}); }
+function textW(s,size,fam='Montserrat',st='Black Italic'){const t=figma.createText(); t.fontName={family:fam,style:st}; t.fontSize=size; t.characters=String(s); const w=t.width; t.remove(); return w;}
+const LW = (s,size) => textW(String(s).toUpperCase(),size,'Montserrat','ExtraBold Italic');
+const BW = (s,size) => textW(s,size,'Montserrat','Bold');
 function ICO(p,name,s,x,y,o={}){ if(!IMG[name]) throw new Error('missing image '+name); const r=R(p,'ico/'+name,x,y,s,s,0,[{type:'IMAGE',imageHash:IMG[name],scaleMode:'FIT'}]); r.effects=[{type:'DROP_SHADOW',color:{...INK,a:0.5},offset:{x:0,y:1.5},radius:0,spread:0,visible:true,blendMode:'NORMAL'}]; if(o.op!=null) r.opacity=o.op; return r;}
 // ---------- keys: the game's Kit.button recipe with a Venom Candy gem face ----------
 // ink body (r4) -> lip = face colours x0.58 shifted down D -> face (r2.5): gradient + hex scales 7% + one light facet
@@ -68,7 +69,7 @@ function KEY(p,n,x,y,w,h,cols,o={}){const D=o.d??6; const k=F(p,n,x,y,w,h,0,[]);
   R(f,'gloss cap',3,2,w-12,Math.floor(fh*0.42),2,[{type:'GRADIENT_LINEAR',gradientTransform:J(VT),gradientStops:[{color:{r:1,g:1,b:1,a:o.gloss??(o.steel?0.18:0.45)},position:0},{color:{r:1,g:1,b:1,a:0.04},position:1}]}]);
   if(o.shadow!==false) k.effects=[SHADOW(4,8,0.35)]; return {k,f};}
 function PRESS(k,D=6){const b=k.findChild(n=>n.name==='ink body'), l=k.findChild(n=>n.name==='lip'), f=k.findChild(n=>n.name==='face'); b.y=D; b.resize(b.width,b.height-D); f.y=D+3; if(l) l.visible=false; k.effects=[SHADOW(1,3,0.3)]; return k;}
-// key with centred icon + label; o.font: 'T' (Luckiest, default for primary) or 'L' (label)
+// key with centred icon + label; o.font: 'T' (Montserrat Black Italic, default for primary) or 'L' (label)
 function BTN(p,n,x,y,w,h,cols,label,o={}){const {k,f}=KEY(p,n,x,y,w,h,cols,o); const size=o.size||Math.round((h-6-(o.d??6))*0.5); const iw=o.icon?Math.round(size*(o.iconK??1.45)):0; const isL=o.font==='L'; const tw=label?(isL?LW(label,size):textW(label,size)):0; const gap=(o.icon&&label)?10:0; let x0=(f.width-iw-gap-tw)/2;
   if(o.icon){ ICO(f,o.icon,iw,x0,(f.height-iw)/2); x0+=iw+gap; }
   if(label){ const t=isL?L(f,label,size,{x:x0,col:o.textCol||'#ffffff'}):T(f,label,size,{x:x0,col:o.textCol||'#ffffff'}); t.y=Math.round((f.height-t.height)/2)+(isL?0:1); }
@@ -80,7 +81,7 @@ function CLOSE(p,x,y,s=46){const k=F(p,'btn/close',x,y,s,s,0,[]); E(k,'ink body'
 // dark steel plate (rows, panels) and recessed well (value fields, viewports)
 function STEEL(p,n,x,y,w,h,o={}){const s=F(p,n,x,y,w,h,o.r??4,[grad(o.cols||['#283545','#17202a']),SCALES(0.05)],o.clip); STROKE(s,o.sw??2); s.effects=[SHADOW(4,10,0.38)]; R(s,'top highlight',4,o.sw??2,w-8,1.5,1,[{type:'SOLID',color:{r:0.85,g:0.95,b:1},opacity:0.18}]); return s;}
 function WELL(p,n,x,y,w,h,o={}){const s=F(p,n,x,y,w,h,o.r??3,[{type:'SOLID',color:hx(o.col||'#0A1117'),opacity:o.op??0.85}],o.clip); STROKE(s,1.5); s.effects=[INNER(2,3,0.6)]; return s;}
-// steel mini chip: icon + value (Luckiest for numbers by default, o.font='L' for words)
+// steel mini chip: icon + value (Montserrat Black Italic for numbers by default, o.font='L' for words)
 function CHIP(p,n,x,y,icon,value,o={}){const size=o.size||16; const H=size+12, is=size+6, padL=6, gap=6, padR=10; const isL=o.font==='L'; const tw=isL?LW(value,size):textW(value,size); const W=Math.ceil((icon?padL+is+gap:10)+tw+padR);
   const c=F(p,n,x,y,W,H,3,[grad(o.cols||['#33404f','#161d26']),SCALES(0.05)]); STROKE(c,2); c.effects=[INKDS(2),SHADOW(4,6,0.35)]; R(c,'top highlight',4,2,W-8,1.5,1,[{type:'SOLID',color:{r:1,g:1,b:1},opacity:0.14}]);
   let xx=10; if(icon){ ICO(c,icon,is,padL,Math.round((H-is)/2)); xx=padL+is+gap; }
@@ -94,7 +95,7 @@ function RIBBON(p,n,x,y,label,cols,o={}){const size=o.size||14; const tw=LW(labe
   const face=figma.createNodeFromSvg(`<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg"><path d="M4 4 H${w-17} L${w-6} ${h/2} L${w-17} ${h-4} H4 Z" fill="#ffffff"/></svg>`); face.name='face'; g.appendChild(face); face.x=0; face.y=0; const fv=face.findOne(n=>n.type==='VECTOR'); if(fv) fv.fills=[grad(cols)];
   const t=L(g,label,size,{x:9,col:'#ffffff',ol:1.4}); t.y=Math.round((h-t.height)/2); g.effects=[INKDS(2)]; if(o.rot) g.rotation=o.rot; return g;}
 // ---------- square-top window ----------
-// header: theme gradient (left->right) + gloss dome + hex scales + depth band + 3 px ink edge, centred Luckiest title;
+// header: theme gradient (left->right) + gloss dome + hex scales + depth band + 3 px ink edge, centred Montserrat title;
 // o.art = image key painted into the header band (scenery header). Round red gem close at (W-56, 10).
 function WINDOW(parent,name,x,y,W,H,theme,title,o={}){
   const win=F(parent,name,x,y,W,H,0,[grad(['#16222c','#0e161d']),SCALES(0.035)],true); win.effects=[SHADOW(10,24,0.5)];
@@ -127,8 +128,8 @@ function SPEC(parent,name,x,y,w,sections){
   const card=figma.createAutoLayout('VERTICAL',{name, itemSpacing:12}); parent.appendChild(card); card.x=x; card.y=y; card.resize(w,100); card.counterAxisSizingMode='FIXED';
   card.paddingLeft=card.paddingRight=24; card.paddingTop=card.paddingBottom=22; card.cornerRadius=4; card.fills=[{type:'SOLID',color:{r:0.09,g:0.13,b:0.16}}]; STROKE(card,3);
   const add=(s,size,fam,st,col)=>{const t=figma.createText(); t.fontName={family:fam,style:st}; t.fontSize=size; t.characters=s; t.fills=[{type:'SOLID',color:hx(col)}]; card.appendChild(t); t.layoutSizingHorizontal='FILL'; t.textAutoResize='HEIGHT'; return t;};
-  add(name.replace(/^Spec card \/ /,'SPEC · '),24,'Luckiest Guy','Regular','#ffffff');
-  for (const [h,lines] of sections){ add(h,17,'Source Sans 3','Black Italic','#FFC93C'); add(lines.join('\n'),15,'Source Sans 3','Bold Italic','#C9D2E3'); }
+  add(name.replace(/^Spec card \/ /,'SPEC · '),24,'Montserrat','Black Italic','#ffffff');
+  for (const [h,lines] of sections){ add(h,17,'Montserrat','ExtraBold Italic','#FFC93C'); add(lines.join('\n'),15,'Montserrat','Bold','#E6F1FF'); }
   return card;
 }
 // ---------- end of kit ----------
