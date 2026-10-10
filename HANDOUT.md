@@ -10,6 +10,15 @@ Last updated: 2026-10-09 (Peckwood Ascent world rebuild, branch `claude/peckwood
 
 Branch **`claude/peckwood-isle`** (pushed). Build: `cd roblox && rojo build default.project.json -o Peckwood.rbxl`, open it in Studio (one Studio window only). The owner says it is OK to stop Play / reload the test place at any time.
 
+### HERO UI PROTOTYPE (owner 2026-10-10: "never before seen UI and animation", 20k-player promo)
+- Live prototype: https://claude.ai/artifact/LmwbnbygFJ8unmke9HVkWV (source `concepts/hero_ui/hero_ui.src.html`, assets
+  injected from the build step; stills `concepts/hero_ui/shot_*.png`). Expedition layout A over the BW2 map with:
+  painted header banner + parallax, gradient ink title, boss stage with tilt + motes, cursor-follow key glint,
+  rarity borders (legendary / epic / mythic), odometer numbers with small gold suffix, reward moment (flash, rays,
+  CLEARED title, drop cards, eggs + moneta fly into the wallet, chips pulse + roll), BW2 area sign, window open from the
+  hotbar key, world blur behind windows, opt-in synth SFX. Its "How it maps to Roblox" panel = the build spec per effect.
+- Art: `concepts/hero_ui/header_cave.png` (header banner), `boss_pudding.png` (boss render; in game a ViewportFrame).
+
 ### UI LAYOUT DIRECTION (owner 2026-10-10, latest): "A boss stage" for list + detail windows
 - Owner reviewed 3 hierarchy layouts of Expedition (Figma section `303:319`, sheet `concepts/ui_expedition_variants.png`)
   and picked **A** (B also liked). A = slim numbered rail on the left (plate + icon + name + status chip), a big
