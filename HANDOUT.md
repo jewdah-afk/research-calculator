@@ -22,6 +22,12 @@ Branch **`claude/peckwood-isle`** (pushed). Build: `cd roblox && rojo build defa
   injected from the build step; QA stills `concepts/hero_ui/qa/`). Expedition layout A over the BW2 map.
 - Owner calls: the painted cave header banner (`header_cave.png`) is LOVED and stays; the realistic boss render
   (`boss_pudding.png`) is REJECTED. Bosses and items always use the game's own icons ("unreal UI, but nothing fake").
+- Pass 5 (owner: "image to 3D, multi-layered parallax depth background, boss 3D rendered on the altar"): arena cut into
+  3 depth layers (`concepts/hero_ui/layers/arena_far|mid|fg.webp`, far plate inpainted) with eased cursor parallax
+  + idle camera drift; the Giant Black Pudding is a real 3D model on the altar (three.js in the prototype, modelled
+  from its icon: glossy slime dome, drips, crown stalks, eyes, smile, inverted-hull ink outline; breathes, sways,
+  blinks, looks at the cursor, pops in). AI image-to-3D (Weave: Tripo H3.1 ~68 credits, Meshy ~96, Hunyuan ~80)
+  is blocked until the Weave plan is upgraded (free runs used); then run it per boss icon and swap the meshes in.
 - Pass 4 (owner: "boss stage background is bad", "line under the tab we didn't want", "try a new style", "effects way
   better"): boss stage = painted arena `concepts/hero_ui/stage_arena.jpg` (same family as the loved cave header) with
   the boss icon standing on the rune circle, spotlight beam, floor glow, drifting mist, embers, parallax; tab underline
