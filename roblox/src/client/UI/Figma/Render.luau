@@ -14,6 +14,7 @@ local Icons = require(RS:WaitForChild("Peckwood"):WaitForChild("Icons"))
 local IconAlias = require(script.Parent.IconAlias)
 local Sfx = require(script.Parent.Parent.Sfx)
 local Motion = require(script.Parent.Parent.Motion)
+local Describe = require(script.Parent.Parent.Describe)   -- description card for every btn/ tab/ seg/ (UI/Descriptions)
 
 local Render = {}
 
@@ -433,6 +434,7 @@ function Render.wireKey(ui, k)
 		end,
 	})
 	k.api, k.hit = api, api.hit
+	Describe.attachByName(inst, k.node.n, api.hit)
 end
 -- tabs / segments / plain buttons that are not keys: the flat press-in (2 px), hover veil, keycap sounds
 function Render.wireClick(ui, c)
@@ -441,26 +443,7 @@ function Render.wireClick(ui, c)
 		onActivate = function(io) fire(ui, c.node.n, inst, c, io) end,
 	})
 	c.api, c.hit = api, api.hit
-end
-
--- window headers end in ONE clean edge on every theme: the Figma bevel (a horizontal gradient strip that fades out)
--- and the 12 px depth band read as a broken streak, so the header gets a uniform 1.5 px highlight over a full-width
--- 4 px ink line that meets the window outline
-function Render.cleanHeaderEdge(header)
-	local h = header.Size.Y.Offset
-	local depth, bevel, ink = header:FindFirstChild("depth band"), header:FindFirstChild("bevel"), header:FindFirstChild("ink")
-	if depth then depth.Visible = false end
-	if ink then
-		for _, g in ink:GetChildren() do if g:IsA("UIGradient") then g:Destroy() end end
-		ink.BackgroundColor3 = INK; ink.BackgroundTransparency = 0
-		ink.Position = UDim2.fromOffset(0, h - 4); ink.Size = UDim2.new(1, 0, 0, 4)
-	end
-	if bevel then
-		for _, g in bevel:GetChildren() do if g:IsA("UIGradient") then g:Destroy() end end
-		for _, f in bevel:GetChildren() do if f:IsA("GuiObject") then f:Destroy() end end
-		bevel.BackgroundColor3 = WHITE; bevel.BackgroundTransparency = 0.72
-		bevel.Position = UDim2.fromOffset(0, h - 5.5); bevel.Size = UDim2.new(1, 0, 0, 1.5)
-	end
+	Describe.attachByName(inst, c.node.n, api.hit)
 end
 
 -- ---------------------------------------------------------------- public
@@ -480,8 +463,6 @@ function Render.build(layout, parent, node, opts)
 	ui.node = build(rn, layout.P, ui.root, 1, 2, ui)
 	for _, k in ui.keys do Render.wireKey(ui, k) end
 	for _, c in ui.clicks do Render.wireClick(ui, c) end
-	local hd = ui.node:FindFirstChild("header")
-	if hd and hd:FindFirstChild("ink") then Render.cleanHeaderEdge(hd) end
 	function ui.on(name, fn)
 		ui.handlers[name] = ui.handlers[name] or {}
 		table.insert(ui.handlers[name], fn)

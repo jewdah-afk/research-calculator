@@ -10,6 +10,16 @@ Last updated: 2026-10-09 (Peckwood Ascent world rebuild, branch `claude/peckwood
 
 Branch **`claude/peckwood-isle`** (pushed). Build: `cd roblox && rojo build default.project.json -o Peckwood.rbxl`, open it in Studio (one Studio window only). The owner says it is OK to stop Play / reload the test place at any time.
 
+### UI: header v2 + description cards + FX tags (2026-10-10, latest, no Studio)
+- **Header fixed in Figma** on all 128 headers (every theme): one 4 px ink edge, no streak. Runtime patch deleted.
+  See FIGMA_UI_NEXT.md 4A.
+- **Descriptions for all:** `UI/Describe.luau` (hover 0.25 s / long-press 0.4 s / gamepad) + `UI/Descriptions.luau`
+  (all 147 btn/tab/seg names in the 52 layouts covered, checked headless); upgrade rows show NAME, desc and a live
+  NOW >> NEXT. Figma component `ui/describe card`.
+- **FX tags** (Framewisp-style layer tags, richer): `fx/shine|pulse|float|spin|glow` animate via Motion.idle.
+- Keys keep the locked press rules (press-in, no squash/bounce). Studio QA pending: hover a key, long-press on the
+  phone emulator, check no card shows over a window from outside it.
+
 ### LOCKED MAP DIRECTION (owner, 2026-10-10, latest): BW2 HD vista. Read this before ANY map work
 - **The look = `concepts/bw2_vista.html`** (published: https://claude.ai/artifact/CnwXsBgBqseiXcxvtvD1UB; screenshots
   `concepts/bw2_vista_day.png`, `_golden.png`, `_gamecam.png`). Owner: "this map design is perfect". Reference: Pokemon

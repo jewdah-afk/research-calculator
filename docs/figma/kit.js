@@ -73,9 +73,9 @@ function WINDOW(parent,name,x,y,W,H,theme,title){
   const win=F(parent,name,x,y,W,H,0,J(winRef.fills),false); STROKE(win,4); win.effects=[SHADOW(10,24,0.45)];
   const head=headRef.clone(); win.appendChild(head); head.x=0; head.y=0; head.resize(W,72); head.clipsContent=true; // nothing may spill past the window edge
   const hf=J(head.fills); hf[0]=hgrad(THEME[theme]||THEME.mine); head.fills=hf;
-  for (const ch of head.children){ if(['glow','depth band','bevel','ink'].includes(ch.name)) ch.resize(W,ch.height); if(ch.type==='TEXT'){ ch.characters=title; ch.x=(W-ch.width)/2; } if(ch.name==='spec') ch.x=W/2-180; if(ch.name.startsWith('fx/sparkle')) ch.x+=(W-560); if(ch.name==='sweep'||ch.name==='sweep2') ch.x+=Math.max(0,W/2-250); if(ch.name==='dome'){ ch.resize(W+80,ch.height); ch.x=-40; } if(ch.name==='swoosh'){ ch.resize(W,ch.height); ch.x=0; } }
+  for (const ch of head.children){ if(['glow','ink'].includes(ch.name)) ch.resize(W,ch.height); if(ch.name==='top highlight') ch.resize(W-8,ch.height); if(ch.type==='TEXT'){ ch.characters=title; ch.x=(W-ch.width)/2; } if(ch.name==='spec') ch.x=W/2-180; if(ch.name.startsWith('fx/sparkle')) ch.x+=(W-560); if(ch.name==='sweep'||ch.name==='sweep2') ch.x+=Math.max(0,W/2-250); if(ch.name==='dome'){ ch.resize(W+80,ch.height); ch.x=-40; } if(ch.name==='swoosh'){ ch.resize(W,ch.height); ch.x=0; } }
   const glow=head.findChild(n=>n.name==='glow'); if(glow) glow.fills=[{type:'GRADIENT_LINEAR',gradientTransform:J(VT),gradientStops:[{color:{...hx(THEME[theme][1]),a:0},position:0},{color:{...hx(THEME[theme][1]),a:0.55},position:1}]}];
-  const db=head.findChild(n=>n.name==='depth band'); if(db) db.fills=[grad([THEME[theme][0],THEME[theme][0]],0.45)];
+  // header v2 (2026-10-10): the source header has no depth band / bevel / swoosh; it ends in one 4 px ink edge
   // close key (owner: this is "normal"): 44px key at (W-54, 10), X glyph 22 centred on the face
   const {f:cf}=KEY(win,'btn/close',W-54,10,44,44,PAL.red,{d:5}); GLYPH(cf,'x',22,(cf.width-22)/2,(cf.height-22)/2);
   return win;

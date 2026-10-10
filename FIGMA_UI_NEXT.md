@@ -72,7 +72,11 @@ matter:
 4. Sync to Studio and QA (section 6).
 
 **Layer-name contract (the renderer finds things by name; keep these exact):**
-- `header` (with children `depth band`, `bevel`, `ink`), `window outline`, `btn/close`.
+- `header` (children `glow`, `top highlight`, `ink` = 4 px bottom edge; no depth band / bevel), `window outline`, `btn/close`.
+- **FX tags** (2026-10-10): a layer named `fx/shine` | `fx/pulse` | `fx/float` | `fx/spin` | `fx/glow` | `fx/sparkle`
+  animates in game while its window is open (Motion.idle). Legend: Figma section "UI · Description card + FX tags".
+- **Descriptions:** every `btn/` `tab/` `seg/` name needs an entry in `UI/Descriptions.luau` (card = `UI/Describe.luau`,
+  Figma component `ui/describe card`). Add one when you add a new key name.
 - Tabs: `tab/<LABEL>` and `tab/<LABEL> (active)`; segmented switches: `seg/<LABEL>`.
 - Keys: `btn/<action>` (buy, max, molt, feed, hold to feed, evolve, craft, claim, hatch, breed, fuse, donate, …).
   A keycap = `ink body` + `face` (+ `lip`).
@@ -91,7 +95,13 @@ matter:
 
 ## 4. Fix list (in order)
 
-### A. Window header bottom edge (owner flagged it twice)
+### A. Window header bottom edge: DONE 2026-10-10 (header v2)
+**Done:** all 128 `header` frames on UI v2 now end in one full-width 4 px solid ink `ink` (y = H-4), `depth band`,
+`bevel` and `swoosh` removed, `glow` runs y 18 .. H-4, one `top highlight` (2 px white @0.35, inset 4), title centred
+in the band. kit.js WINDOW + FKit updated, `Render.cleanHeaderEdge` deleted. The 44 window layouts were updated by
+`roblox/tools/figma_export/header_v2.py` (same transform; a full re-export gives the same nodes). Studio QA pending.
+
+#### (original brief)
 **Problem:** under every window header there's a light streak line: the `bevel` gradient strip that fades out
 mid-way, plus a 12 px `depth band`. In game it reads as a broken line. Today the game hides it with a runtime patch
 (`Render.cleanHeaderEdge`: removes the bevel's gradients and draws a 1.5 px highlight over a 4 px ink line). The

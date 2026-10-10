@@ -256,6 +256,46 @@ function Motion.idle(root, header, primaryKey)
 			keep(tw(glow, 1.4, { BackgroundTransparency = 0.45 }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true))
 		end
 	end
+	-- designer fx tags (owner 2026-10-10, Framewisp-style but richer): a layer named fx/<effect> in Figma animates
+	-- here, only while its window is open. fx/shine = a light band sweeps across the layer's PARENT every ~4 s;
+	-- fx/pulse = the layer breathes (transparency); fx/float = bobs 4 px; fx/spin = turns once every 12 s (rays behind
+	-- a reward); fx/glow = breathes size + transparency (a soft glow behind a hero). fx/sparkle twinkles (below).
+	local fxN = 0
+	for _, d in root:GetDescendants() do
+		if not d:IsA("GuiObject") then continue end
+		local tag = string.match(d.Name, "^fx/(%a+)")
+		if not tag or tag == "sparkle" then continue end
+		fxN += 1
+		local stagger = (fxN % 5) * 0.37
+		local transProp = if d:IsA("ImageLabel") or d:IsA("ImageButton") then "ImageTransparency" else "BackgroundTransparency"
+		if tag == "shine" and d.Parent and d.Parent:IsA("GuiObject") then
+			local band = Instance.new("Frame")
+			band.Name = "fx shine band"; band.BackgroundColor3 = Color3.new(1, 1, 1); band.BorderSizePixel = 0
+			band.Size = UDim2.fromScale(1, 1); band.ZIndex = d.ZIndex + 1; band.BackgroundTransparency = 0
+			local c = d.Parent:FindFirstChildOfClass("UICorner")
+			if c then local cc = Instance.new("UICorner"); cc.CornerRadius = c.CornerRadius; cc.Parent = band end
+			local g = Instance.new("UIGradient")
+			g.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.42, 1), NumberSequenceKeypoint.new(0.5, 0.6),
+				NumberSequenceKeypoint.new(0.58, 1), NumberSequenceKeypoint.new(1, 1) })
+			g.Rotation = 20; g.Offset = Vector2.new(-1.2, 0); g.Parent = band
+			band.Parent = d.Parent
+			restore[band] = {}
+			keep(tw(g, 0.8, { Offset = Vector2.new(1.2, 0) }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, false, 3.2 + stagger))
+		elseif tag == "pulse" then
+			restore[d] = { [transProp] = d[transProp] }
+			keep(tw(d, 1.1, { [transProp] = math.min(1, d[transProp] + 0.45) }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true, stagger))
+		elseif tag == "float" then
+			restore[d] = { Position = d.Position }
+			keep(tw(d, 1.3, { Position = d.Position - UDim2.fromOffset(0, 4) }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true, stagger))
+		elseif tag == "spin" then
+			restore[d] = { Rotation = d.Rotation }
+			keep(tw(d, 12, { Rotation = d.Rotation + 360 }, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1, false))
+		elseif tag == "glow" then
+			restore[d] = { Size = d.Size, [transProp] = d[transProp] }
+			keep(tw(d, 1.6, { Size = UDim2.new(d.Size.X.Scale, d.Size.X.Offset * 1.08, d.Size.Y.Scale, d.Size.Y.Offset * 1.08),
+				[transProp] = math.min(1, d[transProp] + 0.3) }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true, stagger))
+		end
+	end
 	-- sparkles twinkle, hero icons bob +-3 px (staggered)
 	local bobbed = 0
 	for _, d in root:GetDescendants() do
@@ -275,7 +315,9 @@ function Motion.idle(root, header, primaryKey)
 	return function()
 		for _, t in tweens do t:Cancel() end
 		if shimmer then shimmer:Destroy() end
-		for inst, props in restore do for k, v in props do inst[k] = v end end
+		for inst, props in restore do
+			if inst.Name == "fx shine band" then inst:Destroy() else for k, v in props do inst[k] = v end end
+		end
 		local sweep = header and header:FindFirstChild("gloss sweep")
 		if sweep then sweep:FindFirstChildOfClass("UIGradient").Offset = Vector2.new(-1.1, 0) end
 	end

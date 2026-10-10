@@ -8,6 +8,7 @@
 -- it), scaled down when it does not fit. One window at a time; opening / closing windows and Esc never touch the
 -- sidebar. Motion (UI/Motion): pop out of the HUD button, rows cascade, close shrinks back into the button, tabs
 -- crossfade without re-popping, idle loops only on the open window.
+local Describe = require(script.Parent:WaitForChild("Describe"))   -- the description card hides on every window change
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local UIS = game:GetService("UserInputService")
@@ -478,7 +479,7 @@ end
 -- open a window (optionally on a given tab label or variant name)
 function WM.open(id, tab)
 	if not Defs[id] then warn("[UI] unknown window", id); return end
-	if WM.onHide then WM.onHide() end   -- tooltips and dropdowns never carry over onto a window
+	if WM.onHide then WM.onHide() end; Describe.clear()   -- tooltips and dropdowns never carry over onto a window
 	local rec = WM.built[id] or buildWindow(id)
 	local def = rec.def
 	local target = rec.current
@@ -522,7 +523,7 @@ end
 function WM.close()
 	local id = WM.modal
 	if not id then return end
-	if WM.onHide then WM.onHide() end   -- open dropdowns / tooltips go with the window
+	if WM.onHide then WM.onHide() end; Describe.clear()   -- open dropdowns / tooltips go with the window
 	local rec = WM.built[id]
 	WM.modal = nil
 	Sfx.close()

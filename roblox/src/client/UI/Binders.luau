@@ -10,6 +10,7 @@
 -- in the sidebar, the single breathing attention glow); other affordable rows are steel keys with a white price and
 -- "Can buy"; unaffordable rows are steel with the cost in red. Feel: hold BUY to repeat (accelerating), Shift-click
 -- = MAX, LV bar eases, "+1 LV" pops off the icon, a row reaching MAX pops gold with sparkles and shimmers.
+local Describe = require(script.Parent:WaitForChild("Describe"))
 local RS = game:GetService("ReplicatedStorage")
 local TextService = game:GetService("TextService")
 local TweenService = game:GetService("TweenService")
@@ -201,6 +202,22 @@ local function fillRow(row, s, id, st, r)
 				Render.fit(t, 10)
 			end
 			Render.setText(t, if y < 40 then string.upper(d.name) else d.desc)
+		end
+	end
+	-- description card on the row's buy / max keys: full name, full description, live "now -> next" (the row's own
+	-- description line shrinks to fit; the card never does)
+	for _, kn in { "btn/buy", "btn/max", "btn/hold to feed", "btn/feed" } do
+		local key = row:FindFirstChild(kn, true)
+		if key then
+			Describe.set(key, function()
+				local s2 = s   -- fillRow runs on every refresh with the live state and re-sets this card
+				local L2 = Defs.level(s2, id)
+				local max2 = L2 >= Defs.maxLevel(s2, id)
+				local ok, now = pcall(d.fx, L2)
+				local ok2, nxt = pcall(d.fx, L2 + 1)
+				local stat = if not ok then nil elseif max2 then "MAXED · " .. tostring(now) elseif ok2 then tostring(now) .. "  >>  " .. tostring(nxt) else tostring(now)
+				return { title = string.upper(d.name), body = d.desc, stat = stat }
+			end)
 		end
 	end
 	-- icon: the upgrade's own painted icon (never the template row's)

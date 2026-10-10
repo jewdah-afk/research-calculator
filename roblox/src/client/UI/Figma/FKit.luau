@@ -200,8 +200,8 @@ function FKit.WINDOWn(L, name, W, H, theme, title)
 		{ "g", 90, { { 0, "ffffff", 0.38 }, { 0.45, "ffffff", 0 }, { 0.6, "000000", 0 }, { 1, "000000", 0.42 } } }, { "t", "halftone", 38.4, 0.08 }, { "t", "lattice", 43, 0.35 } })
 	for _, ch in head.k do
 		if ch.n == "glow" then ch.w = W; ch.f = L.style({ { "g", 90, { { 0, th[2], 0 }, { 1, th[2], 0.55 } } } })
-		elseif ch.n == "depth band" then ch.w = W; ch.f = L.style({ { "g", 90, { { 0, shade(th[1], 0.45), 1 }, { 1, shade(th[1], 0.45), 1 } } } })
-		elseif ch.n == "bevel" or ch.n == "ink" then ch.w = W
+		elseif ch.n == "ink" then ch.w = W   -- header v2: one full-width 4 px ink edge (no depth band / bevel)
+		elseif ch.n == "top highlight" then ch.w = W - 8
 		elseif ch.n == "dome" then ch.w = W + 80; ch.x = -40
 		elseif ch.n == "spec" then ch.x = W / 2 - 180
 		elseif ch.n == "fx/sparkle" then ch.x += (W - 1100)

@@ -456,6 +456,28 @@
 "StarterPlayerScripts",
 "Peckwood",
 "UI",
+"Descriptions"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Descriptions.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
+"Describe"
+],
+"class": "ModuleScript",
+"url": "src/client/UI/Describe.luau"
+},
+{
+"path": [
+"StarterPlayer",
+"StarterPlayerScripts",
+"Peckwood",
+"UI",
 "SampleData"
 ],
 "class": "ModuleScript",
