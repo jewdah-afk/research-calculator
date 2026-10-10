@@ -99,6 +99,15 @@ Cookie's 11 AI store images are simply removed; the shop follows the new designs
 - **Next:** owner reaction on Worlds + HUD -> phone versions -> Egg Stall, Pets, Skins, Rebirth, Shop, then every other
   VC screen -> code the update from the v2 frames.
 
+## Status 2026-10-10 (later): v2 is in the game code (snakewars-25d worktree `snakewars-25d-v2`, branch `v2/ui`)
+The code work moved to the game repo; its `docs/HANDOUT.md` (top section "v2 UI") is the live status. Headlines:
+font switched to **Montserrat** (owner pick; the kit here still says Luckiest/Source Sans), squared kit, every text
+inked + tinted, keys click with SFX, motion pass, Cookie's AI art removed, Worlds v2 coded, Figma -> Roblox exporter
+ported (`tools/figma_export`, `VC/Figma`). A Studio lint sweep (desktop + phone) found and fixed ghost text twins, grey
+text, rounded bars, text overflow, the phone close gem, the Rebirth upsell price bar and the legacy stage cards; every
+popup + HUD is now lint-clean on font / radius / grey / flat text. Instant Length packs are live under the hub Length
+number, the Day 7 card is filled. Open: Nests trainer (owner OK needed), release blockers (saleReady, 4 Gem products).
+
 ## Fork prompt (paste into a desktop chat with Roblox Studio open)
 
 > Continue the Snake Wars UI work. Read `concepts/snakewars_vc/HANDOFF.md` on branch `claude/snakewars-venom-upgrade` in
