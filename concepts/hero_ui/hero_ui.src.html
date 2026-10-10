@@ -390,7 +390,8 @@ button { font: inherit; color: inherit; }
 </div>
 <div class="ctrl">
   <button id="theme" aria-pressed="true">Style: Amethyst</button>
-  <button id="bossMode" aria-pressed="true">Boss: Voxel 3D</button>
+  <button id="bossMode" aria-pressed="true">Boss: 3D</button>
+  <button id="iconMode" aria-pressed="true">Icons: 3D</button>
   <button id="replay">Replay intro</button>
   <button id="snd" aria-pressed="false">Sound off</button>
   <button id="notesBtn" aria-expanded="false" aria-controls="notes">How it maps to Roblox</button>
@@ -423,6 +424,9 @@ button { font: inherit; color: inherit; }
 (() => {
 'use strict';
 const A = /*ASSETS*/null;
+// ?icons=3d swaps every UI icon that has a Blender toy render (tools/boss3d/inflate.py) for that render
+const ICONS3D = new URLSearchParams(location.search).get('icons') !== 'flat';
+if (ICONS3D) for (const k of Object.keys(A)) if (k.startsWith('toy_')) A[k.slice(4)] = A[k];
 const $ = id => document.getElementById(id);
 const screen = $('screen'), hero = $('hero');
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -692,8 +696,10 @@ function flyTo(kind, n, from, to) {
 // ---------------------------------------------------------------- intro
 function intro() { win.classList.remove('open', 'closing'); screen.classList.remove('modal'); setTimeout(sign, 300); setTimeout(openWin, reduced ? 400 : 2900); }
 $('replay').onclick = intro;
-function setVox(on) { voxOn = on; hero.classList.toggle('voxon', on); $('bossMode').textContent = on ? 'Boss: Voxel 3D' : 'Boss: Icon'; $('bossMode').setAttribute('aria-pressed', on); }
+function setVox(on) { voxOn = on; hero.classList.toggle('voxon', on); $('bossMode').textContent = on ? 'Boss: 3D' : 'Boss: Icon'; $('bossMode').setAttribute('aria-pressed', on); }
 $('bossMode').onclick = () => { setVox(!voxOn); sfx.up(); };
+$('iconMode').textContent = ICONS3D ? 'Icons: 3D' : 'Icons: flat'; $('iconMode').setAttribute('aria-pressed', ICONS3D);
+$('iconMode').onclick = () => { const q = new URLSearchParams(location.search); q.set('icons', ICONS3D ? 'flat' : '3d'); location.search = q.toString(); };
 setVox(new URLSearchParams(location.search).get('boss') !== 'icon');
 function setTheme(t) { document.body.dataset.theme = t; $('theme').textContent = t === 'amethyst' ? 'Style: Amethyst' : 'Style: Steel'; $('theme').setAttribute('aria-pressed', t === 'amethyst'); }
 $('theme').onclick = () => { setTheme(document.body.dataset.theme === 'amethyst' ? 'steel' : 'amethyst'); sfx.up(); };
