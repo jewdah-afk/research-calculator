@@ -10,6 +10,14 @@ Last updated: 2026-10-09 (Peckwood Ascent world rebuild, branch `claude/peckwood
 
 Branch **`claude/peckwood-isle`** (pushed). Build: `cd roblox && rojo build default.project.json -o Peckwood.rbxl`, open it in Studio (one Studio window only). The owner says it is OK to stop Play / reload the test place at any time.
 
+### UI LAYOUT DIRECTION (owner 2026-10-10, latest): "A boss stage" for list + detail windows
+- Owner reviewed 3 hierarchy layouts of Expedition (Figma section `303:319`, sheet `concepts/ui_expedition_variants.png`)
+  and picked **A** (B also liked). A = slim numbered rail on the left (plate + icon + name + status chip), a big
+  stage on the right with the selected item as the hero art, title, then details, the ONE primary key next to them,
+  and the stats strip under the stage. Final frame: `303:321` (`concepts/ui_expedition_A_final.png`).
+- Next: apply the A pattern to the other list+detail windows (Parrot, Fishing, Nest, Aquarium...), duplicate-first,
+  then add the frames to roots.json + re-export. Original windows stay until the owner signs off each one.
+
 ### UI: header v2 + description cards + FX tags (2026-10-10, latest, no Studio)
 - **Header fixed in Figma** on all 128 headers (every theme): one 4 px ink edge, no streak. Runtime patch deleted.
   See FIGMA_UI_NEXT.md 4A.
