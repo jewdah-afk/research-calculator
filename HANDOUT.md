@@ -22,6 +22,15 @@ Branch **`claude/peckwood-isle`** (pushed). Build: `cd roblox && rojo build defa
   injected from the build step; QA stills `concepts/hero_ui/qa/`). Expedition layout A over the BW2 map.
 - Owner calls: the painted cave header banner (`header_cave.png`) is LOVED and stays; the realistic boss render
   (`boss_pudding.png`) is REJECTED. Bosses and items always use the game's own icons ("unreal UI, but nothing fake").
+- Pass 6 (owner: "voxel 3D blender renders", then "smooth it out, outline with nice hull and celshade", "render the
+  UI with blender assets mixed in"): Blender 5.2 runs here as `pip install bpy`. `tools/boss3d/inflate.py` turns any icon
+  into a smooth inflated toy mesh (pillow profile from the distance field, Laplacian smooth + subdiv, icon re-projected,
+  painted ink ring replaced by an inverted-hull outline), cel-shaded (hard light / mid / shadow bands, violet rim band,
+  crisp highlight) and rendered in Cycles: 17 look-around frames (yaw -40..+40) per boss + a .glb. All 9 bosses and 14
+  UI icons are in `concepts/hero_ui/3d/`. The prototype stage picks the frame from the cursor (the boss turns to face
+  you); wallet, hotbar, rail, enemies and loot use the 3D toy renders (toggles: Boss 3D / Icon, Icons 3D / flat).
+  Roblox: flipbook ImageLabel (16 frames x 256 px in one 1024 sheet, ImageRectOffset) or the .glb as a MeshPart in a
+  ViewportFrame. `tools/boss3d/voxelize.py` (blocky voxel version) was tried and rejected (read as a blurry blob).
 - Pass 5 (owner: "image to 3D, multi-layered parallax depth background, boss 3D rendered on the altar"): arena cut into
   3 depth layers (`concepts/hero_ui/layers/arena_far|mid|fg.webp`, far plate inpainted) with eased cursor parallax
   + idle camera drift; the Giant Black Pudding is a real 3D model on the altar (three.js in the prototype, modelled
