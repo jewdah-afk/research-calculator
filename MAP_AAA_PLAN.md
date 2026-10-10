@@ -1,5 +1,8 @@
 # Peckwood map: the AAA plan (2026-10-09)
 
+> **LOCKED (2026-10-10): the map look is the BW2 HD vista, `concepts/bw2_vista.html`.** See HANDOUT.md section A
+> "LOCKED MAP DIRECTION". Studio must match it and then exceed it. Older look sections below are history.
+
 > **Update (2026-10-09, later): the look is now B, realistic cartoony, not cel-shaded.** See `MAP_HIERARCHY.md` for the
 > look, the visual hierarchy and the Explorer tree. The pipeline, budgets and "target frame first" rule below still apply;
 > the cel-specific parts (ink outline hulls on scenery, 2-3 tone toon ramps) do not.
