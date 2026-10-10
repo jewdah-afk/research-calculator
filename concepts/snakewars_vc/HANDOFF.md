@@ -67,6 +67,38 @@ Studio access, so the Studio work moves to a desktop chat. Paste the prompt at t
    - Show the owner before and after, and wait for their reaction.
 4. Then do the Egg Stall, Pets, Skins and Rebirth the same way.
 
+## Status 2026-10-10 (desktop chat): v2 redesign started
+
+**Owner direction (locks the approach):** redesign the whole UI and HUD to hero quality using what we learned from
+Peckwood as a REFERENCE (not a 1:1 copy), aiming higher in visual hierarchy. The confirmed Peckwood layout is
+**Peckwood UI v2** (Figma `SQOJ2gzGt12vFMGGlNRWBE`, HUD mock `229:7`, Windows board `239:307`, e.g. Mine AREAS `248:1739`,
+Fishing COLLECTION `246:3448`). NOT the old `113:7`/`171:7`, and NOT `concepts/hero_ui` (a rough draft). No new
+boss-style 3D renders; Blender is fine for anything the UI needs. Squared UI. All 8 Worlds + the Void Climb tail is OK.
+Cookie's 11 AI store images are simply removed; the shop follows the new designs.
+
+- **Kit:** `figma/sw_kit.js` = port of Peckwood's `docs/figma/kit.js` for the Snake Wars file (self-contained): WINDOW
+  (square-top, painted header, centred Luckiest title, round red gem close at W-56), KEY/BTN (Kit.button recipe with a
+  faceted gem face + hex scales), STEEL, WELL, CHIP, BAR, TABS, RIBBON (fang tip), GLYPH, OUTLINE, SPEC. Fonts Luckiest
+  Guy + Source Sans 3 Black/Bold Italic. Image hashes for icons, eggs, World renders are inside.
+- **World renders uploaded** to the file (`assets/vc2` frame `271:8499` on VC · Collection): w1..w5, Void Climb, Blizzara.
+- **Done (desktop, duplicated next to the originals):**
+  - Worlds v2 `272:5330` (VC · Collection): 9 rows (8 Worlds + Void Climb) with plate, egg, sub line, 5 boss pips,
+    status (GO / HERE / LOCKED + requirement / COMING SOON); detail panel with the real Frostbite Stage art, title + status
+    chip, 25-stage strip, NEXT BOSS = GLACIER PYTHON (Stage 20), ONE key PLAY STAGE 17; progress strip. All labels >= 15 px.
+  - Hub HUD v2 `275:1749` (VC · HUD & Menu): banner + 2x4 compact tiles, NEXT FANG context bar, AUTO + gear, one OP!
+    offer, Worlds rail (current pops out), wallet column, social boosts, Length as the one hero number + rebirth bar +
+    quiet instant packs, active boost chips.
+  - Before/after: `after/worlds_before_after.jpg`, `after/hud_hub_before_after.jpg`.
+- **Studio QA (live place, 2026-10-10):** 26 shots in snakewars-25d `docs/qa/ui_shots4/`. Bugs: Worlds shows 8 Worlds as
+  "WORLD 1 OF 8" and "ALL WORLDS CLEARED" after World 1; REPLAY STAGE key does not start a stage; Void Climb node click
+  does nothing; phone WARS menu covers YOUR SIZE; Settings KEYBOARD pill text overflows; every shop item "SOON".
+- **Cookie (Cookiezi727) facts:** Studio Version History v143-v157 on 2026-10-04 3:50 AM-2:35 PM (plus Oct 1-2); 8
+  `_Backup_*_Codex_20261004` folders in ServerStorage; 48 scripts changed + 24 added vs our last push (f3fd37a); the 11
+  store images were uploaded 1:59-2:01 PM and wired via `VC.Assets.STORE` / `VC.StoreArt` / `VC.ShopKit`. Our 31 icon ids
+  are untouched. His non-shop work (P2 stages, Void Climb, launch shop products) is NOT in our git yet.
+- **Next:** owner reaction on Worlds + HUD -> phone versions -> Egg Stall, Pets, Skins, Rebirth, Shop, then every other
+  VC screen -> code the update from the v2 frames.
+
 ## Fork prompt (paste into a desktop chat with Roblox Studio open)
 
 > Continue the Snake Wars UI work. Read `concepts/snakewars_vc/HANDOFF.md` on branch `claude/snakewars-venom-upgrade` in
