@@ -21,6 +21,8 @@
   --c-speed:#f07d22;
   --c-earn:#e0a800;
   --c-cars:#2f86e0;
+  --c-queue:#e8404f;
+  --c-freq:#8a5cf0;
   --display:"Lilita One","Arial Rounded MT Bold","Trebuchet MS",system-ui,sans-serif;
   --body:"Nunito",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   --cards-h:118px;
@@ -77,8 +79,8 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px soli
 .card.max .card-buy{background:var(--gold-deep)}
 .buy-label{display:block;font-weight:800;font-size:11px;opacity:.95}
 .buy-price{display:block;font-family:var(--display);font-size:21px;line-height:1}
-.card.pop{animation:bump .22s ease-out}
-.card.shake{animation:shake .3s}
+.card.pop,.srow.pop{animation:bump .22s ease-out}
+.card.shake,.srow.shake{animation:shake .3s}
 
 .next{position:absolute;left:50%;bottom:calc(var(--cards-h) + 34px);transform:translateX(-50%);border:none;background:var(--go);color:#fff;font-family:var(--display);font-size:19px;padding:12px 20px;border-radius:16px;box-shadow:inset 0 -5px 0 rgba(0,0,0,.15),0 8px 18px rgba(20,80,40,.3);z-index:6;max-width:calc(100% - 190px);text-align:center;line-height:1.1;animation:pulse 1.2s ease-in-out infinite}
 .toast{position:absolute;left:50%;top:76px;transform:translate(-50%,-8px);background:var(--ink);color:#fff;font-weight:800;font-size:14px;padding:9px 14px;border-radius:12px;opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;z-index:30;max-width:calc(100% - 32px);text-align:center}
@@ -136,6 +138,39 @@ textarea{width:100%;min-height:96px;border:1px solid var(--card-edge);border-rad
 .btn.go{background:var(--go);color:#fff}
 .btn.danger{background:var(--stop);color:#fff}
 .btn:disabled{opacity:.45;cursor:not-allowed}
+
+.badge{position:absolute;top:-6px;right:-8px;background:var(--go);color:#fff;font-size:10px;font-weight:900;padding:2px 6px;border-radius:99px;box-shadow:0 2px 0 rgba(0,0,0,.15);letter-spacing:.04em}
+.badge.lock{background:var(--ink-soft)}
+.rail.left .sq .tip{right:auto;left:58px}
+.lead.small{font-size:12px}
+
+/* station + garage */
+.flow{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.flow .stat.warn{background:#ffe3e7}
+.flow .stat.warn b{color:var(--stop)}
+.srow{display:grid;grid-template-columns:60px minmax(0,1fr) auto;gap:12px;align-items:center;background:#dff3fd;border-radius:16px;padding:10px 12px}
+.sicon{width:60px;height:60px;background:#fff;border-radius:12px;display:grid;place-items:center}
+.sicon svg{width:44px;height:44px}
+.stext{display:flex;flex-direction:column;min-width:0}
+.sname{font-size:13px;font-weight:900;color:#6a9bb6}
+.stext b{font-family:var(--display);font-weight:400;font-size:19px;line-height:1.15}
+.seff{font-size:12px;font-weight:700;color:var(--ink-soft)}
+.sbuy{min-width:86px;font-size:17px}
+.sbuy.cant{background:var(--grey-btn)}
+.srow.locked{opacity:.55}
+.gbonus{display:flex;align-items:baseline;justify-content:space-between;background:#fff4cf;border-radius:14px;padding:10px 14px}
+.gbonus span{font-weight:900;font-size:13px;color:#7a5600}
+.gbonus b{font-family:var(--display);font-weight:400;font-size:26px;color:#7a5600}
+.gnote{align-self:center;font-size:12px;font-weight:800;color:var(--ink-soft)}
+.ggrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:10px}
+.gcar{border:1px solid var(--card-edge);border-radius:14px;padding:8px;display:flex;flex-direction:column;gap:2px;background:#fbfcfd}
+.gcar .shot{background:linear-gradient(#e8f4d8,#cfe7b4);border-radius:10px}
+.gcar img{display:block;width:100%;aspect-ratio:10/7;object-fit:contain;max-width:100%}
+.gcar.locked img{filter:brightness(0) opacity(.25)}
+.gcar h4{margin:4px 0 0;font-family:var(--display);font-weight:400;font-size:16px}
+.gcar p{margin:0;font-size:11px;font-weight:800;color:var(--ink-soft)}
+.gcar .lvl{color:var(--go-deep)}
+.gcar.fresh{animation:bump .4s ease-out;border-color:var(--go)}
 
 /* editor bar */
 .editbar{position:absolute;left:16px;right:16px;bottom:14px;max-width:640px;margin:0 auto;background:var(--card);border-radius:18px;padding:12px 14px;box-shadow:0 8px 24px rgba(40,30,10,.3);display:flex;flex-direction:column;gap:10px;z-index:8}
@@ -195,6 +230,8 @@ textarea{width:100%;min-height:96px;border:1px solid var(--card-edge);border-rad
   </header>
 
   <div class="rail left">
+    <button class="sq" id="openGarage" aria-label="Garage"><svg viewBox="0 0 28 28" aria-hidden="true"><path d="M3 17l3-5h9l4 5h5v5H3z" fill="#e02424"/><path d="M8 13h6l2.5 4H6.5z" fill="#cfe9ff"/><rect x="20" y="9" width="6" height="3" rx="1" fill="#ffc42e"/><path d="M22 12v5" stroke="#27303f" stroke-width="1.5"/><circle cx="8" cy="22" r="2.6" fill="#27303f"/><circle cx="19" cy="22" r="2.6" fill="#27303f"/></svg><span class="badge" id="garageBadge" hidden>FREE</span><span class="tip">Garage</span></button>
+    <button class="sq" id="openStation" aria-label="Station upgrades"><svg viewBox="0 0 28 28" aria-hidden="true"><path d="M3 11 14 4l11 7z" fill="#4aa8e8"/><rect x="5" y="11" width="18" height="12" fill="#ffd34d"/><rect x="11" y="15" width="6" height="8" fill="#3c4152"/><circle cx="8.5" cy="15.5" r="1.6" fill="#e8404f"/><circle cx="19.5" cy="15.5" r="1.6" fill="#2f86e0"/></svg><span class="badge lock" id="stationBadge">Lv 4</span><span class="tip">Station</span></button>
     <button class="turbo" id="turbo" aria-label="Turbo: double earnings for 45 seconds">
       <span class="core"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7z" fill="#fff"/></svg><span class="tlabel" id="turboLabel">x2</span></span>
     </button>
@@ -270,6 +307,36 @@ textarea{width:100%;min-height:96px;border:1px solid var(--card-edge);border-rad
     </div>
   </section>
 
+  <section class="sheet" id="sheetStation" aria-labelledby="stationTitle" inert>
+    <div class="sheet-head"><h2 id="stationTitle">Station</h2><button class="x" data-close aria-label="Close"><svg viewBox="0 0 18 18"><path d="M4 4l10 10M14 4 4 14" stroke="#27303f" stroke-width="2.4" stroke-linecap="round"/></svg></button></div>
+    <div class="sheet-body">
+      <p class="lead">Cars wait in the lot until a passenger boards. When cars sit there empty, the station is holding you back: raise Frequency so people arrive faster. Queue lets more people wait, so a bunch of cars arriving together all leave full.</p>
+      <div class="flow" id="flow"></div>
+      <div class="srow" id="srow-queue">
+        <div class="sicon"><svg viewBox="0 0 48 48" aria-hidden="true"><g fill="#e8404f"><circle cx="10" cy="12" r="4"/><rect x="6" y="18" width="8" height="18" rx="4"/></g><g fill="#ef6b7b"><circle cx="20" cy="12" r="4"/><rect x="16" y="18" width="8" height="18" rx="4"/></g><g fill="#f497a3"><circle cx="30" cy="12" r="4"/><rect x="26" y="18" width="8" height="18" rx="4"/></g><g fill="#f8c1c8"><circle cx="40" cy="12" r="4"/><rect x="36" y="18" width="8" height="18" rx="4"/></g></svg></div>
+        <div class="stext"><span class="sname">Queue</span><b class="num" id="sv-queue"></b><span class="seff num" id="se-queue"></span></div>
+        <button class="btn go sbuy num" id="sb-queue" data-k="queue"></button>
+      </div>
+      <div class="srow" id="srow-freq">
+        <div class="sicon"><svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="14" cy="10" r="5" fill="#e8404f"/><rect x="9" y="17" width="10" height="22" rx="5" fill="#e8404f"/><path d="M26 8h16M26 40h16M28 8c0 10 12 10 12 16S28 30 28 40M40 8c0 10-12 10-12 16s12 6 12 16" fill="none" stroke="#3c4152" stroke-width="2.4"/><path d="M30 34h8l-4-6z" fill="#e0a800"/></svg></div>
+        <div class="stext"><span class="sname">Frequency</span><b class="num" id="sv-freq"></b><span class="seff num" id="se-freq"></span></div>
+        <button class="btn go sbuy num" id="sb-freq" data-k="freq"></button>
+      </div>
+      <p class="lead small" id="stationLock"></p>
+    </div>
+  </section>
+
+  <section class="sheet" id="sheetGarage" aria-labelledby="garageTitle" inert>
+    <div class="sheet-head"><h2 id="garageTitle">Garage</h2><button class="x" data-close aria-label="Close"><svg viewBox="0 0 18 18"><path d="M4 4l10 10M14 4 4 14" stroke="#27303f" stroke-width="2.4" stroke-linecap="round"/></svg></button></div>
+    <div class="sheet-body">
+      <p class="lead">Every car you collect raises the pay of every ride, on every track, for good. Getting a car you already own levels it up. Your cars race on the track, best first.</p>
+      <div class="gbonus"><span>Garage bonus</span><b class="num" id="gBonus">+5%</b></div>
+      <div class="row"><button class="btn go" id="rollCar"></button><span class="gnote num" id="rollNote"></span></div>
+      <div class="ggrid" id="gGrid"></div>
+      <p class="lead small">These are block-built stand-ins. Each one is a single model slot, so a Blender car can replace it without touching the game code.</p>
+    </div>
+  </section>
+
   <section class="sheet" id="sheetBalance" aria-labelledby="balTitle" inert>
     <div class="sheet-head"><h2 id="balTitle">Balance lab</h2><button class="x" data-close aria-label="Close"><svg viewBox="0 0 18 18"><path d="M4 4l10 10M14 4 4 14" stroke="#27303f" stroke-width="2.4" stroke-linecap="round"/></svg></button></div>
     <div class="sheet-body">
@@ -283,7 +350,7 @@ textarea{width:100%;min-height:96px;border:1px solid var(--card-edge);border-rad
       <div class="chartwrap">
         <div class="eyebrow">Simulated income over one track</div>
         <canvas id="chart" aria-label="Income per second over time in the simulation"></canvas>
-        <div class="legend"><span><i style="background:var(--c-speed)"></i>Speed</span><span><i style="background:var(--c-earn)"></i>Earnings</span><span><i style="background:var(--c-cars)"></i>Cars</span></div>
+        <div class="legend"><span><i style="background:var(--c-speed)"></i>Speed</span><span><i style="background:var(--c-earn)"></i>Earnings</span><span><i style="background:var(--c-cars)"></i>Cars</span><span><i style="background:var(--c-queue)"></i>Queue</span><span><i style="background:var(--c-freq)"></i>Frequency</span></div>
       </div>
       <div>
         <h3>Knobs</h3>
@@ -309,9 +376,25 @@ const TAU = Math.PI * 2;
 const V3 = THREE.Vector3;
 const W = 4.4;          // road width (m)
 const MIN_GAP = 3.8;    // bumper-to-bumper spacing between cars (m)
-const KEYS = ['speed', 'earn', 'cars'];
-const MAX = { speed: 15, earn: 30, cars: 8 };
-const NAMES = { speed: 'Speed', earn: 'Earnings', cars: 'Cars' };
+const KEYS = ['speed', 'earn', 'cars'];          // the three cards
+const ST_KEYS = ['queue', 'freq'];               // station upgrades
+const ALL_KEYS = KEYS.concat(ST_KEYS);
+const MAX = { speed: 15, earn: 30, cars: 8, queue: 12, freq: 10 };
+const START_LV = { speed: 1, earn: 1, cars: 1, queue: 4, freq: 1 };
+const NAMES = { speed: 'Speed', earn: 'Earnings', cars: 'Cars', queue: 'Queue', freq: 'Frequency' };
+const STATION_UNLOCK = 4;                        // any card upgrade at this level opens the station
+const BAYS = 8, BAY_STEP = 2.1;                  // parking bays in the pit lot
+const PIT_SPAN = 10;                             // cars leave the track this far before the station and rejoin this far after
+const FREE_CAR_MS = 10 * 60 * 1000, CAR_GEMS = 20;
+const MODELS = {
+  sedan:  { name: 'Sedan',   bonus: 0.05, weight: 30, color: 0x8f3df0 },
+  coupe:  { name: 'Coupe',   bonus: 0.08, weight: 22, color: 0xe8404f },
+  van:    { name: 'Van',     bonus: 0.06, weight: 16, color: 0x2f86e0 },
+  pickup: { name: 'Pickup',  bonus: 0.08, weight: 18, color: 0xf28a1e },
+  jeep:   { name: 'Jeep',    bonus: 0.12, weight: 10, color: 0x9ccf3a },
+  f1:     { name: 'Formula', bonus: 0.25, weight: 4,  color: 0xe02424 },
+};
+const MODEL_MAX = 10;
 
 /* ---------- storage ---------- */
 const store = {
@@ -324,9 +407,9 @@ const store = {
 const DEFAULT_P = {
   costExp: 3, costSpeed: 110, costEarn: 120, costCars: 90,
   pay: 24, payStep: 0.5, speed: 12, speedStep: 0.25,
-  goal: 200, startCoins: 40, spawnBase: 0.3, spawnPerCar: 0.25, stop: 0.9,
+  goal: 170, startCoins: 40, costQueue: 35, costFreq: 320, spawn: 0.3, pitTime: 2.2, stop: 0.8,
 };
-let P = Object.assign({}, DEFAULT_P, store.get('plt-params') || {});
+let P = Object.assign({}, DEFAULT_P, store.get('plt-params-v2') || {});
 
 /* ---------- maps ---------- */
 const r1 = v => Math.round(v * 10) / 10;
@@ -352,7 +435,7 @@ const MAPS = [
   { id: 'ridge', name: 'Pine Ridge', theme: 'forest', station: 0.62, pts: [
     [-26, -12, 0], [-12, -19, 0], [0, -12, 1.2], [12, -19, 0], [26, -12, 0], [29, 2, 0], [18, 8, 0.6],
     [24, 19, 0], [8, 21, 1], [-4, 12, 0], [-16, 21, 0], [-29, 10, 0]] },
-  { id: 'frost', name: 'Frost Knot', theme: 'snow', station: 0.08, pts: genKnot() },
+  { id: 'frost', name: 'Frost Knot', theme: 'snow', station: 0.1, pts: genKnot() },
 ];
 const THEMES = {
   desert: { ground: 0xf0b366, path: 0xf8cc8e, leaf: 0x3cb84a, leaf2: 0x2c9a3a, trunk: 0x8a5a3c, rock: 0xd4904e, extra: 'cactus', bg: '#f0b366' },
@@ -362,35 +445,43 @@ const THEMES = {
 
 /* ---------- state ---------- */
 const freshState = () => ({
-  coins: P.startCoins, gems: 0, map: 0, cleared: 0, lv: { speed: 1, earn: 1, cars: 1 },
+  coins: P.startCoins, gems: 0, map: 0, cleared: 0, lv: Object.assign({}, START_LV), stationOpen: false,
   rides: 0, layouts: {}, turboT: 0, turboCd: 0, last: Date.now(), tapped: false,
+  garage: { sedan: 1 }, freeCarAt: 0,
 });
-let state = Object.assign(freshState(), store.get('plt-save-v1') || {});
-const save = () => { state.last = Date.now(); store.set('plt-save-v1', state); };
+let state = Object.assign(freshState(), store.get('plt-save-v2') || {});
+const save = () => { state.last = Date.now(); store.set('plt-save-v2', state); };
 
 /* ---------- economy (the whole balance model lives here) ---------- */
 const trackMult = i => Math.pow(4, i);
 const costMult = i => Math.pow(3, i);
-const baseCost = k => ({ speed: P.costSpeed, earn: P.costEarn, cars: P.costCars })[k];
-const cost = (k, lvl, mi = state.map) => Math.round(baseCost(k) * Math.pow(lvl, P.costExp) * costMult(mi));
+const baseCost = k => ({ speed: P.costSpeed, earn: P.costEarn, cars: P.costCars, queue: P.costQueue, freq: P.costFreq })[k];
+// cards and Queue: base × level^n. Frequency fits base × (level+1)^n ($2.6K at x1, $8.6K at x2 in the reference game).
+const cost = (k, lvl, mi = state.map) => Math.round(baseCost(k) * Math.pow(k === 'freq' ? lvl + 1 : lvl, P.costExp) * costMult(mi));
 const carSpeed = lvl => P.speed * (1 + P.speedStep * (lvl - 1));
-const payPerRide = (lvl, L, mi = state.map) => P.pay * (L / 100) * (1 + P.payStep * (lvl - 1)) * trackMult(mi);
-const spawnRate = cars => P.spawnBase + P.spawnPerCar * cars;
+const garageMult = (g = state.garage) => 1 + Object.keys(g).reduce((a, id) => a + g[id] * MODELS[id].bonus, 0);
+const payPerRide = (lvl, L, mi = state.map, gm = garageMult()) => P.pay * (L / 100) * (1 + P.payStep * (lvl - 1)) * trackMult(mi) * gm;
+const spawnRate = freq => P.spawn * freq;
 const goalFor = mi => Math.round(P.goal * (1 + 0.5 * mi));
-const queueCap = cars => Math.min(12, 4 + 2 * cars);
-function modelRate(lv, L, mi = state.map) {
-  const lap = L / carSpeed(lv.speed) + P.stop;
-  return Math.min(lv.cars / lap, spawnRate(lv.cars)) * payPerRide(lv.earn, L, mi);
+const queueCap = () => state.lv.queue;
+// cars wait in the lot for passengers, so income is the smaller of what the cars can carry and what the station supplies.
+// A short queue loses some passengers when cars arrive in bunches; Q/(Q+0.5) is a rough allowance for that.
+const demand = (lv, L) => lv.cars / (Math.max(10, L - 2 * PIT_SPAN) / carSpeed(lv.speed) + P.pitTime + P.stop);
+const supply = lv => spawnRate(lv.freq) * lv.queue / (lv.queue + 0.5);
+function modelRate(lv, L, mi = state.map, gm = garageMult()) {
+  return Math.min(demand(lv, L), supply(lv)) * payPerRide(lv.earn, L, mi, gm);
 }
+const stationReady = lv => Math.max(lv.speed, lv.earn, lv.cars) >= STATION_UNLOCK;
 function simulate(L, mi) {
-  const lv = { speed: 1, earn: 1, cars: 1 };
-  let coins = P.startCoins, rides = 0, t = 0;
+  const lv = Object.assign({}, START_LV);
+  let coins = P.startCoins * costMult(mi), rides = 0, t = 0;
   const goal = goalFor(mi), buys = [], series = [[0, modelRate(lv, L, mi)]];
   for (let iter = 0; iter < 500; iter++) {
     const r = modelRate(lv, L, mi), rideRate = r / payPerRide(lv.earn, L, mi);
     let best = null;
-    for (const k of KEYS) {
+    for (const k of ALL_KEYS) {
       if (lv[k] >= MAX[k]) continue;
+      if (ST_KEYS.includes(k) && !stationReady(lv)) continue;
       const c = cost(k, lv[k], mi);
       const gain = modelRate(Object.assign({}, lv, { [k]: lv[k] + 1 }), L, mi) - r;
       if (gain <= 0) continue;
@@ -624,17 +715,68 @@ function makeBush(th, r) {
 
 /* ---------- cars & people ---------- */
 const CAR_COLORS = [0x8f3df0, 0x1fbf8a, 0xe8404f, 0x2f86e0, 0xf28a1e, 0xf5c518, 0xf06aa8, 0xf4f4f4];
-function makeCar(color) {
+// Placeholder car bodies built from boxes. Each model id is where an imported Blender mesh would plug in later.
+function makeCar(model, color) {
   const g = new THREE.Group();
-  const body = mesh(new THREE.BoxGeometry(1.5, 0.55, 2.7), color); body.position.y = 0.55; g.add(body);
-  const glass = mesh(new THREE.BoxGeometry(1.3, 0.38, 1.3), 0x26323f); glass.position.set(0, 1.0, -0.2); g.add(glass);
-  const roof = mesh(new THREE.BoxGeometry(1.36, 0.12, 1.2), color); roof.position.set(0, 1.24, -0.22); g.add(roof);
-  const wg = new THREE.CylinderGeometry(0.32, 0.32, 0.3, 10);
-  for (const [x, z] of [[-0.72, 0.85], [0.72, 0.85], [-0.72, -0.85], [0.72, -0.85]]) { const w = mesh(wg, 0x22252b); w.rotation.z = Math.PI / 2; w.position.set(x, 0.32, z); g.add(w); }
-  for (const x of [-0.5, 0.5]) {
-    const hl = mesh(new THREE.BoxGeometry(0.3, 0.14, 0.06), 0xfff3b0, false); hl.position.set(x, 0.6, 1.36); g.add(hl);
-    const tl = mesh(new THREE.BoxGeometry(0.3, 0.14, 0.06), 0xd2202f, false); tl.position.set(x, 0.6, -1.36); g.add(tl);
+  const box = (w, h, d, c, x, y, z, sh = true) => { const m = mesh(new THREE.BoxGeometry(w, h, d), c, sh); m.position.set(x, y, z); g.add(m); return m; };
+  const glass = 0x26323f, trim = 0x2b2b30;
+  let wheel = { r: 0.32, w: 0.3, x: 0.72, z: 0.85 }, lights = true, lz = 1.36, ly = 0.6;
+  switch (model) {
+    case 'coupe':
+      box(1.55, 0.45, 2.9, color, 0, 0.48, 0);
+      box(1.3, 0.3, 1.1, glass, 0, 0.85, -0.3);
+      box(1.34, 0.1, 0.95, color, 0, 1.04, -0.32);
+      box(0.08, 0.3, 0.08, trim, -0.5, 0.82, -1.3); box(0.08, 0.3, 0.08, trim, 0.5, 0.82, -1.3);
+      box(1.5, 0.07, 0.38, trim, 0, 0.98, -1.32);
+      lz = 1.46; ly = 0.52;
+      break;
+    case 'van':
+      box(1.55, 1.25, 2.9, color, 0, 0.95, 0);
+      box(1.42, 0.42, 0.06, glass, 0, 1.22, 1.46);
+      box(1.58, 0.32, 1.7, glass, 0, 1.22, 0.1);
+      box(1.6, 0.1, 2.95, 0xffffff, 0, 0.62, 0);
+      lz = 1.46; ly = 0.6;
+      break;
+    case 'pickup':
+      box(1.55, 0.55, 3.0, color, 0, 0.6, 0);
+      box(1.4, 0.45, 1.0, glass, 0, 1.1, 0.25);
+      box(1.44, 0.1, 0.9, color, 0, 1.38, 0.22);
+      box(1.3, 0.06, 1.1, trim, 0, 0.9, -0.85);
+      box(0.1, 0.25, 1.2, color, -0.72, 1.0, -0.85); box(0.1, 0.25, 1.2, color, 0.72, 1.0, -0.85);
+      box(1.55, 0.25, 0.1, color, 0, 1.0, -1.45);
+      wheel = { r: 0.36, w: 0.32, x: 0.74, z: 0.95 }; lz = 1.51;
+      break;
+    case 'jeep':
+      box(1.5, 0.6, 2.5, color, 0, 0.7, 0);
+      box(1.2, 0.08, 0.9, 0x6b6f78, 0, 1.02, -0.35);
+      box(0.5, 0.45, 0.12, 0x8a8f99, -0.32, 1.25, -0.05); box(0.5, 0.45, 0.12, 0x8a8f99, 0.32, 1.25, -0.05);
+      box(1.4, 0.4, 0.06, glass, 0, 1.2, 0.55);
+      box(0.08, 0.7, 0.08, trim, -0.66, 1.35, -0.9); box(0.08, 0.7, 0.08, trim, 0.66, 1.35, -0.9);
+      box(1.4, 0.08, 0.08, trim, 0, 1.7, -0.9);
+      { const sp = mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.25, 12), 0x22252b); sp.rotation.x = Math.PI / 2; sp.position.set(0, 0.85, -1.38); g.add(sp); }
+      { const star = mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.02, 5), 0xe8404f, false); star.position.set(0, 1.01, 0.75); g.add(star); }
+      wheel = { r: 0.42, w: 0.36, x: 0.76, z: 0.85 }; lz = 1.26; ly = 0.75;
+      break;
+    case 'f1':
+      box(0.7, 0.32, 3.1, color, 0, 0.42, 0);
+      box(0.5, 0.2, 0.7, color, 0, 0.36, 1.5);
+      box(1.25, 0.3, 1.1, color, 0, 0.4, -0.25);
+      box(0.46, 0.18, 0.6, trim, 0, 0.64, -0.05);
+      { const helmet = mesh(new THREE.SphereGeometry(0.2, 10, 8), 0xffd34d); helmet.position.set(0, 0.8, -0.1); g.add(helmet); }
+      box(1.8, 0.06, 0.4, trim, 0, 0.2, 1.62);
+      box(1.5, 0.08, 0.42, color, 0, 1.05, -1.45);
+      box(0.08, 0.5, 0.1, trim, -0.4, 0.78, -1.45); box(0.08, 0.5, 0.1, trim, 0.4, 0.78, -1.45);
+      box(0.06, 0.4, 0.42, trim, -0.75, 0.95, -1.45); box(0.06, 0.4, 0.42, trim, 0.75, 0.95, -1.45);
+      wheel = { r: 0.38, w: 0.42, x: 0.86, z: 1.0 }; lights = false;
+      break;
+    default: // sedan
+      box(1.5, 0.55, 2.7, color, 0, 0.55, 0);
+      box(1.3, 0.38, 1.3, glass, 0, 1.0, -0.2);
+      box(1.36, 0.12, 1.2, color, 0, 1.24, -0.22);
   }
+  const wg = new THREE.CylinderGeometry(wheel.r, wheel.r, wheel.w, 12);
+  for (const [x, z] of [[-wheel.x, wheel.z], [wheel.x, wheel.z], [-wheel.x, -wheel.z], [wheel.x, -wheel.z]]) { const w = mesh(wg, 0x22252b); w.rotation.z = Math.PI / 2; w.position.set(x, wheel.r, z); g.add(w); }
+  if (lights) for (const x of [-0.5, 0.5]) { box(0.3, 0.14, 0.06, 0xfff3b0, x, ly, lz, false); box(0.3, 0.14, 0.06, 0xd2202f, x, ly, -lz, false); }
   const icon = new THREE.Sprite(new THREE.SpriteMaterial({ map: paxTex, depthTest: false }));
   icon.scale.set(1.3, 1.3, 1); icon.position.y = 2.3; icon.visible = false; icon.renderOrder = 10;
   g.add(icon); g.userData.icon = icon;
@@ -712,21 +854,58 @@ function buildGate() {
   updateBoard();
 }
 
+// Distances measured out from the road's centre line toward the station (m)
+const LOT_NEAR = 2.7, LOT_FAR = 6.7, BAY_OFF = 5.0, QUEUE_OFF = 7.5, STATION_OFF = 10.6;
 function buildStation(th) {
   const s = T.S[T.iS];
-  // choose the side of the road with more free space
+  const tgh = new V3(s.tg.x, 0, s.tg.z).normalize();
+  const lpFor = sg => (a, off) => new V3(s.p.x + tgh.x * a + s.side.x * sg * off, 0, s.p.z + tgh.z * a + s.side.z * sg * off);
+  // pick the side of the road where the lot and station fit; prefer the one with more room
+  const half = BAYS * BAY_STEP / 2;
+  const skip = Math.ceil((half + 6) / (T.L / T.N));
   let best = null;
   for (const sg of [-1, 1]) {
-    const c = new V3(s.p.x + s.side.x * sg * (W / 2 + 4.8), 0, s.p.z + s.side.z * sg * (W / 2 + 4.8));
-    let md = Infinity;
-    for (const q of T.S) md = Math.min(md, (q.p.x - c.x) ** 2 + (q.p.z - c.z) ** 2);
-    if (!best || md > best.md) best = { sg, c, md };
+    const lp = lpFor(sg);
+    const probes = [];
+    for (let k = 0; k <= BAYS; k++) probes.push([lp(-half + k * BAY_STEP, BAY_OFF), W / 2 + 1.7], [lp(-half + k * BAY_STEP, LOT_FAR), W / 2 + 0.6]);
+    for (const a of [-3, 0, 3]) probes.push([lp(a, STATION_OFF), W / 2 + 2.4], [lp(a, QUEUE_OFF), W / 2 + 0.6]);
+    let hits = 0, md = Infinity;
+    T.S.forEach((q, i) => {
+      const di = Math.abs(i - T.iS), cyc = Math.min(di, T.N - di);
+      for (const [pt, rad] of probes) {
+        const d2 = (q.p.x - pt.x) ** 2 + (q.p.z - pt.z) ** 2;
+        if (cyc > skip) md = Math.min(md, d2);
+        if (cyc > skip && d2 < rad * rad) hits++;
+        else if (cyc <= skip && pt.distanceTo(new V3(q.p.x, 0, q.p.z)) < W / 2 + 0.3 && rad > W / 2 + 1) hits++;
+      }
+    });
+    if (!best || hits < best.hits || (hits === best.hits && md > best.md)) best = { sg, hits, md, lp };
   }
+  const lp = best.lp;
   const toStation = new V3(s.side.x * best.sg, 0, s.side.z * best.sg);
+  // parking lot
+  const lot = new THREE.Group();
+  lot.position.copy(lp(0, 0));
+  lot.lookAt(lp(0, 1));
+  const lotLen = BAYS * BAY_STEP + 1.4;
+  const pavement = mesh(new THREE.BoxGeometry(lotLen, 0.06, LOT_FAR - LOT_NEAR), 0x5f6169, false);
+  pavement.position.set(0, 0.03, (LOT_NEAR + LOT_FAR) / 2); pavement.receiveShadow = true; lot.add(pavement);
+  const edge = mesh(new THREE.BoxGeometry(lotLen + 0.5, 0.08, 0.3), 0xffffff, false);
+  edge.position.set(0, 0.04, LOT_FAR + 0.1); lot.add(edge);
+  for (let k = 0; k <= BAYS; k++) {
+    const ln = mesh(new THREE.BoxGeometry(0.12, 0.02, 3.0), 0xf2f2f2, false);
+    ln.position.set((k - BAYS / 2) * BAY_STEP, 0.07, BAY_OFF + 0.1); lot.add(ln);
+  }
+  level.add(lot);
+  const bays = [];
+  for (let k = 0; k < BAYS; k++) { const a = (k - (BAYS - 1) / 2) * BAY_STEP; bays.push({ a, pos: lp(a, BAY_OFF), car: null }); }
+  bays.sort((x, y) => Math.abs(x.a) - Math.abs(y.a));
+  T.box.expandByPoint(lp(-half - 2, STATION_OFF + 2.5)); T.box.expandByPoint(lp(half + 2, STATION_OFF + 2.5));
+  const center = lp(0, STATION_OFF);
   const g = new THREE.Group();
-  g.position.copy(best.c);
+  g.position.copy(center);
   g.lookAt(s.p.x, 0, s.p.z);
-  const pad = mesh(new THREE.BoxGeometry(6.2, 0.16, 4.6), 0xf6d9a0, false); pad.position.y = 0.08; g.add(pad);
+  const pad = mesh(new THREE.BoxGeometry(6.2, 0.16, 4.0), 0xf6d9a0, false); pad.position.y = 0.08; g.add(pad);
   const body = mesh(new THREE.BoxGeometry(4.6, 1.7, 3.2), 0xffd34d); body.position.y = 1.0; g.add(body);
   const door = mesh(new THREE.BoxGeometry(1.2, 1.2, 0.1), 0x3c4152, false); door.position.set(0, 0.75, 1.62); g.add(door);
   const roof = mesh(flat(new THREE.CylinderGeometry(1.15, 1.15, 5.2, 3)), 0x4aa8e8);
@@ -735,26 +914,21 @@ function buildStation(th) {
   const signTex = canvasTex(256, 128, (ctx, w, h) => drawBoard(ctx, w, h, '0/4'));
   const sign = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.2, 0.15), [M(0x3c4152), M(0x3c4152), M(0x3c4152), M(0x3c4152), new THREE.MeshLambertMaterial({ map: signTex }), M(0x3c4152)]);
   sign.position.set(0, 2.15, 1.75); sign.rotation.x = -0.25; g.add(sign);
+  g.traverse(o => { o.userData.station = true; });
   level.add(g);
-  // walkway out to where passengers arrive from
-  const cx = (T.box.min.x + T.box.max.x) / 2, cz = (T.box.min.z + T.box.max.z) / 2;
-  const out = new V3(best.c.x - cx, 0, best.c.z - cz).normalize();
-  if (out.lengthSq() < 0.5) out.copy(toStation);
-  const spawn = best.c.clone().addScaledVector(out, 30);
-  const len = 30, mid = best.c.clone().addScaledVector(out, len / 2);
+  // walkway out behind the station, where passengers arrive from
+  const out = toStation.clone();
+  const len = 30, spawn = lp(0, STATION_OFF + len), mid = lp(0, STATION_OFF + len / 2);
   const path = new THREE.Mesh(new THREE.PlaneGeometry(2.4, len), M(th.path));
-  path.rotation.x = -Math.PI / 2; path.position.set(mid.x, 0.015, mid.z);
-  path.rotation.z = -Math.atan2(out.x, out.z) + Math.PI; path.receiveShadow = true;
-  // align plane's long axis with "out"
+  path.position.set(mid.x, 0.015, mid.z); path.receiveShadow = true;
   path.rotation.set(-Math.PI / 2, 0, Math.atan2(out.x, out.z));
   level.add(path);
-  stationInfo = { pos: best.c, spawn, out, toStation, pickup: s, signTex, lastSign: '' };
+  stationInfo = { pos: center, spawn, out, toStation, pickup: s, signTex, lastSign: '', bays, lp, group: g, blocked: best.hits > 0 };
 }
 
 function queueSlot(i) {
-  const s = stationInfo.pickup, t = s.tg, d = stationInfo.toStation;
   const col = (i % 6) - 2.5, row = Math.floor(i / 6);
-  return new V3(s.p.x + d.x * (W / 2 + 1.1 + row * 0.85) + t.x * col * 0.85, 0, s.p.z + d.z * (W / 2 + 1.1 + row * 0.85) + t.z * col * 0.85);
+  return stationInfo.lp(col * 0.85, QUEUE_OFF + row * 0.85);
 }
 
 function buildScenery(th) {
@@ -762,7 +936,8 @@ function buildScenery(th) {
   const b = T.box, pad = 24;
   const near = (x, z) => {
     for (let i = 0; i < T.N; i += 2) { const p = T.S[i].p; if ((p.x - x) ** 2 + (p.z - z) ** 2 < (W / 2 + 2.6) ** 2) return true; }
-    if ((stationInfo.pos.x - x) ** 2 + (stationInfo.pos.z - z) ** 2 < 49) return true;
+    const lc = stationInfo.lp(0, 7);
+    if ((lc.x - x) ** 2 + (lc.z - z) ** 2 < 13 * 13) return true;
     const o = stationInfo.out, rx = x - stationInfo.pos.x, rz = z - stationInfo.pos.z, along = rx * o.x + rz * o.z;
     if (along > -2 && along < 34 && Math.abs(rx * o.z - rz * o.x) < 2.6) return true;
     return false;
@@ -790,39 +965,58 @@ function updateBoard() {
   gate.boardTex.redraw((ctx, w, h) => drawBoard(ctx, w, h, `${Math.min(state.rides, g)}/${g}`));
 }
 function updateSign() {
-  const txt = `${queue.filter(p => p.state === 'waiting').length}/${queueCap(cars.length)}`;
+  const txt = `${queue.filter(p => p.state === 'waiting').length}/${queueCap()}`;
   if (txt === stationInfo.lastSign) return;
   stationInfo.lastSign = txt;
   stationInfo.signTex.redraw((ctx, w, h) => drawBoard(ctx, w, h, txt));
 }
 
 /* ---------- cars ---------- */
+// Every car owns one parking bay. Loop: drive a lap -> pull into its bay -> drop off (pays) -> wait for a passenger
+// -> reverse out -> merge back onto the track once the lane is clear.
+const tmpObj = new THREE.Object3D();
+const ownedModels = () => Object.keys(state.garage).sort((a, b) => MODELS[b].bonus - MODELS[a].bonus);
+function carLook(k) {
+  const own = ownedModels(), id = own[k % own.length];
+  return { id, color: k < own.length ? MODELS[id].color : CAR_COLORS[k % CAR_COLORS.length] };
+}
 function resetCars() {
-  cars.forEach(c => carsGroup.remove(c.obj)); cars.length = 0;
-  for (let k = 0; k < state.lv.cars; k++) addCar(T.L - 5 - k * (MIN_GAP + 1.2));
+  cars.forEach(c => { carsGroup.remove(c.obj); disposeTree(c.obj); }); cars.length = 0;
+  for (let k = 0; k < state.lv.cars; k++) addCar();
   startT = 0;
 }
-function addCar(s) {
-  if (s === undefined) {
-    // drop the new car into the middle of the biggest gap
-    const ss = cars.map(c => c.s).sort((a, b) => a - b);
-    let bestGap = -1, at = 0;
-    for (let k = 0; k < ss.length; k++) {
-      const a = ss[k], b = k + 1 < ss.length ? ss[k + 1] : ss[0] + T.L;
-      if (b - a > bestGap) { bestGap = b - a; at = a + (b - a) / 2; }
-    }
-    s = ss.length ? at % T.L : 0;
-  }
-  const obj = makeCar(CAR_COLORS[cars.length % CAR_COLORS.length]);
+function addCar() {
+  const bay = stationInfo.bays.find(b => !cars.some(c => c.bay === b));
+  if (!bay) return;
+  const look = carLook(cars.length);
+  const obj = makeCar(look.id, look.color);
   carsGroup.add(obj);
-  const c = { obj, s: ((s % T.L) + T.L) % T.L, state: startT >= GO_AT ? 'drive' : 'grid', pax: false, stopT: 0, boarder: null, gap: Infinity, v: 0 };
-  cars.push(c); poseCar(c);
+  const c = { obj, model: look.id, color: look.color, s: 0, state: 'parked', bay, pax: false, stopT: 0, boarder: null, gap: Infinity, v: 0, anim: null };
+  cars.push(c); parkPose(c);
+}
+function restyleCars() {
+  cars.forEach((c, k) => {
+    const look = carLook(k);
+    if (look.id === c.model && look.color === c.color) return;
+    const o = makeCar(look.id, look.color);
+    o.position.copy(c.obj.position); o.quaternion.copy(c.obj.quaternion); o.userData.icon.visible = c.pax;
+    carsGroup.remove(c.obj); disposeTree(c.obj); carsGroup.add(o);
+    Object.assign(c, { obj: o, model: look.id, color: look.color });
+  });
+}
+function parkPose(c) {
+  const p = c.bay.pos, d = stationInfo.toStation;
+  c.obj.position.set(p.x, 0.05, p.z);
+  c.obj.lookAt(p.x + d.x, 0.05, p.z + d.z);
+  c.obj.userData.icon.visible = c.pax;
 }
 function sampleAt(s) {
+  s = ((s % T.L) + T.L) % T.L;
   const f = (s / T.L) * T.N, i = Math.floor(f) % T.N, j = (i + 1) % T.N, a = f - Math.floor(f);
   const A = T.S[i], B = T.S[j];
   return { p: A.p.clone().lerp(B.p, a), tg: A.tg.clone().lerp(B.tg, a).normalize() };
 }
+const roadPoint = s => sampleAt(s).p;
 function poseCar(c) {
   const { p, tg } = sampleAt(c.s);
   c.obj.position.set(p.x, p.y + 0.05, p.z);
@@ -830,40 +1024,72 @@ function poseCar(c) {
   c.obj.userData.icon.visible = c.pax;
 }
 const crossed = (s0, s1, x, L) => s1 >= (x <= s0 ? x + L : x);
+const bez = (a, b, c, u) => { const v = 1 - u; return new V3(v * v * a.x + 2 * v * u * b.x + u * u * c.x, v * v * a.y + 2 * v * u * b.y + u * u * c.y, v * v * a.z + 2 * v * u * b.z + u * u * c.z); };
+const bezD = (a, b, c, u) => new V3(2 * (1 - u) * (b.x - a.x) + 2 * u * (c.x - b.x), 2 * (1 - u) * (b.y - a.y) + 2 * u * (c.y - b.y), 2 * (1 - u) * (b.z - a.z) + 2 * u * (c.z - b.z));
+function startAnim(c, kind, pts, dur) { c.state = kind; c.anim = { pts, t: 0, dur: Math.max(0.15, dur) }; }
+function stepAnim(c, dt, backwards) {
+  const a = c.anim; a.t += dt;
+  const u = Math.min(1, a.t / a.dur), [p0, p1, p2] = a.pts;
+  const pos = bez(p0, p1, p2, u); pos.y += 0.05;
+  c.obj.position.copy(pos);
+  const d = bezD(p0, p1, p2, Math.min(u, 0.97));
+  if (backwards) d.negate();
+  if (d.lengthSq() > 1e-6) {
+    tmpObj.position.copy(pos); tmpObj.lookAt(pos.x + d.x, pos.y + d.y * 0.3, pos.z + d.z);
+    c.obj.quaternion.slerp(tmpObj.quaternion, Math.min(1, dt * 12));
+  }
+  c.obj.userData.icon.visible = c.pax;
+  return u >= 1;
+}
+function exitClear(sOut, L) {
+  if (cars.some(c => c.state === 'reverse' || c.state === 'pitOut')) return false;
+  return !cars.some(c => c.state === 'drive' && ((c.s - sOut + L) % L < MIN_GAP + 1 || (sOut - c.s + L) % L < MIN_GAP * 2.5));
+}
 
 let tapBoost = 0;
 function updateCars(dt) {
-  const n = cars.length, L = T.L;
+  const L = T.L;
   if (startT < GO_AT) return;
-  const order = cars.slice().sort((a, b) => a.s - b.s);
-  for (let k = 0; k < n; k++) {
-    const c = order[k], ahead = order[(k + 1) % n];
-    c.gap = n > 1 ? ((ahead.s - c.s + L) % L || L) : Infinity;
-  }
+  const drv = cars.filter(c => c.state === 'drive').sort((a, b) => a.s - b.s), n = drv.length;
+  for (let k = 0; k < n; k++) { const c = drv[k], ahead = drv[(k + 1) % n]; c.gap = n > 1 ? ((ahead.s - c.s + L) % L || L) : Infinity; }
   const vTarget = carSpeed(state.lv.speed) * (tapBoost > 0 ? 1.6 : 1);
+  const sIn = (T.stationS - PIT_SPAN + L) % L, sOut = (T.stationS + PIT_SPAN) % L;
   for (const c of cars) {
-    if (c.state === 'grid') c.state = 'drive';
-    if (c.state === 'stop') { updateStop(c, dt); poseCar(c); continue; }
-    c.v += (vTarget - c.v) * Math.min(1, dt * 3);
-    let move = c.v * dt;
-    if (c.gap < Infinity) move = Math.min(move, Math.max(0, c.gap - MIN_GAP));
-    const s1 = c.s + move;
-    if (crossed(c.s, s1, T.stationS, L) && (c.pax || frontWaiting())) {
-      c.s = T.stationS; c.state = 'stop'; c.stopT = 0; c.v = 0;
-      if (c.pax) { payout(c); c.pax = false; spawnLeaver(c.obj.position); }
-    } else {
-      c.s = s1 % L;
+    if (c.state === 'drive') {
+      c.v += (vTarget - c.v) * Math.min(1, dt * 3);
+      let move = c.v * dt;
+      if (c.gap < Infinity) move = Math.min(move, Math.max(0, c.gap - MIN_GAP));
+      const s1 = c.s + move;
+      if (crossed(c.s, s1, sIn, L)) {
+        c.s = sIn; poseCar(c);
+        const from = c.obj.position.clone(); from.y -= 0.05;
+        startAnim(c, 'pitIn', [from, roadPoint(T.stationS + c.bay.a), c.bay.pos.clone()], P.pitTime * 0.45);
+      } else { c.s = s1 % L; poseCar(c); }
+    } else if (c.state === 'pitIn') {
+      if (stepAnim(c, dt)) {
+        c.state = 'parked'; c.stopT = 0; parkPose(c);
+        if (c.pax) { payout(c); c.pax = false; spawnLeaver(c.obj.position); parkPose(c); }
+      }
+    } else if (c.state === 'parked') {
+      c.stopT += dt;
+      if (!c.pax && !c.boarder && frontWaiting()) { const p = queue.shift(); p.state = 'boarding'; p.car = c; c.boarder = p; }
+      if (c.boarder && c.boarder.done) { c.boarder = null; c.pax = true; c.obj.userData.icon.visible = true; }
+      if (c.pax && c.stopT >= P.stop && exitClear(sOut, L)) {
+        const back = c.bay.pos.clone().addScaledVector(stationInfo.toStation, -1.9);
+        startAnim(c, 'reverse', [c.bay.pos.clone(), c.bay.pos.clone().lerp(back, 0.5), back], P.pitTime * 0.15);
+      }
+    } else if (c.state === 'reverse') {
+      if (stepAnim(c, dt, true)) {
+        const from = c.obj.position.clone(); from.y = 0;
+        startAnim(c, 'pitOut', [from, roadPoint(T.stationS + c.bay.a + 2), roadPoint(T.stationS + PIT_SPAN)], P.pitTime * 0.4);
+      }
+    } else if (c.state === 'pitOut') {
+      if (stepAnim(c, dt)) { c.state = 'drive'; c.s = sOut; c.v = vTarget * 0.5; poseCar(c); }
     }
-    poseCar(c);
   }
 }
 const frontWaiting = () => queue.length > 0 && queue[0].state === 'waiting';
-function updateStop(c, dt) {
-  c.stopT += dt;
-  if (!c.boarder && frontWaiting()) { const p = queue.shift(); p.state = 'boarding'; p.car = c; c.boarder = p; }
-  if (c.boarder && c.boarder.done) { c.boarder = null; c.pax = true; }
-  if (!c.boarder && c.stopT >= P.stop && (c.pax || !frontWaiting())) c.state = 'drive';
-}
+const waitingCars = () => cars.filter(c => c.state === 'parked' && !c.pax && !c.boarder).length;
 
 /* ---------- passengers ---------- */
 const prng = rng(12345);
@@ -896,8 +1122,8 @@ function stepToward(p, target, speed, dt) {
 function updatePeople(dt) {
   spawnT -= dt;
   if (spawnT <= 0) {
-    spawnT = (1 / spawnRate(cars.length)) * (0.6 + prng() * 0.8);
-    if (queue.length < queueCap(cars.length)) { const p = newPerson(stationInfo.spawn); queue.push(p); }
+    spawnT = (1 / spawnRate(state.lv.freq)) * (0.6 + prng() * 0.8);
+    if (queue.length < queueCap()) { const p = newPerson(stationInfo.spawn); queue.push(p); }
   }
   queue.forEach((p, i) => {
     const arrived = stepToward(p, queueSlot(i), p.state === 'waiting' ? 2.2 : 4.2, dt);
@@ -1068,6 +1294,8 @@ canvas.addEventListener('wheel', e => {
 }, { passive: false });
 
 function tapTrack(e) {
+  raycaster.setFromCamera(ndc(e), camera);
+  if (stationInfo && raycaster.intersectObject(stationInfo.group, true).length) { openSheet('station'); return; }
   tapBoost = 0.9;
   const r = $('#app').getBoundingClientRect();
   const el = document.createElement('div'); el.className = 'ripple';
@@ -1079,7 +1307,6 @@ function tapTrack(e) {
 /* ---------- HUD ---------- */
 const cardEls = {};
 KEYS.forEach(k => cardEls[k] = { card: $('#card-' + k), lv: $('#lv-' + k), price: $('#price-' + k), eff: $('#eff-' + k) });
-let lastHud = '';
 function refreshHud() {
   $('#coins').textContent = fmt(state.coins);
   $('#gems').textContent = fmt(state.gems);
@@ -1100,16 +1327,46 @@ function refreshHud() {
     if (k === 'cars') eff = maxed ? `${lvl} cars` : `${lvl} → ${lvl + 1} cars`;
     e.eff.textContent = eff;
   }
+  // station
+  if (!state.stationOpen && stationReady(state.lv)) {
+    state.stationOpen = true;
+    toast('Station unlocked: tap the station to speed up passengers', 3400);
+  }
+  $('#stationBadge').hidden = state.stationOpen;
+  for (const k of ST_KEYS) {
+    const lvl = state.lv[k], maxed = lvl >= MAX[k], c = cost(k, lvl), b = $('#sb-' + k);
+    $('#sv-' + k).textContent = k === 'queue' ? `Holds ${lvl} people` : `${spawnRate(lvl).toFixed(2)} people / s`;
+    $('#se-' + k).textContent = maxed ? 'Maxed' : k === 'queue' ? `Next: ${lvl + 1} people` : `Next: ${spawnRate(lvl + 1).toFixed(2)} / s (x${lvl + 1})`;
+    b.textContent = maxed ? 'MAX' : '$' + fmt(c);
+    b.disabled = !state.stationOpen || maxed;
+    b.classList.toggle('cant', state.coins < c);
+    $('#srow-' + k).classList.toggle('locked', !state.stationOpen);
+  }
+  $('#stationLock').textContent = state.stationOpen ? '' : `Opens when Speed, Earnings or Cars reaches Lv ${STATION_UNLOCK}.`;
+  if (sheetOpen === 'station') renderFlow();
+  // garage
+  const free = Date.now() >= state.freeCarAt;
+  $('#garageBadge').hidden = !free;
+  if (sheetOpen === 'garage') renderRollButton();
   const done = state.rides >= g;
   const nb = $('#nextBtn');
   nb.hidden = !done || mode !== 'play';
   if (done) nb.textContent = state.map < MAPS.length - 1 ? `Track clear! Race ${MAPS[state.map + 1].name} ›` : 'Every track clear! Start a new season ›';
 }
+function renderFlow() {
+  const d = demand(state.lv, T.L), s = supply(state.lv), idle = waitingCars();
+  const stationShort = s < d * 0.98;
+  $('#flow').innerHTML =
+    `<div class="stat${stationShort ? ' warn' : ''}"><b class="num">${s.toFixed(2)}/s</b><span>Passengers the station supplies</span></div>` +
+    `<div class="stat${!stationShort ? ' warn' : ''}"><b class="num">${d.toFixed(2)}/s</b><span>Passengers your cars can carry</span></div>` +
+    `<div class="stat" style="grid-column:1/-1"><b class="num">${idle} of ${cars.length}</b><span>${stationShort ? 'Cars waiting for a passenger right now. The station is your bottleneck.' : 'Cars waiting for a passenger right now. Your cars are the bottleneck, so upgrade Speed or Cars.'}</span></div>`;
+}
 function buy(k) {
   const lvl = state.lv[k];
   if (lvl >= MAX[k]) return false;
+  if (ST_KEYS.includes(k) && !state.stationOpen) return false;
   const c = cost(k, lvl);
-  const el = cardEls[k].card;
+  const el = cardEls[k] ? cardEls[k].card : $('#srow-' + k);
   if (state.coins < c) { el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake'); return false; }
   state.coins -= c; state.lv[k]++;
   if (k === 'cars') addCar();
@@ -1124,6 +1381,58 @@ KEYS.forEach(k => {
   el.addEventListener('pointerdown', () => { stop(); held = false; holdT = setTimeout(() => { held = true; buy(k); rep = setInterval(() => { if (!buy(k)) stop(); }, 140); }, 420); });
   ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => el.addEventListener(ev, stop));
   el.addEventListener('click', () => { if (held) { held = false; return; } buy(k); });
+});
+ST_KEYS.forEach(k => $('#sb-' + k).addEventListener('click', () => buy(k)));
+
+/* ---------- garage ---------- */
+let thumbs = null;
+function renderThumbs() {
+  thumbs = {};
+  try {
+    const r = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+    r.setPixelRatio(1); r.setSize(240, 168);
+    const sc = new THREE.Scene();
+    sc.add(new THREE.HemisphereLight(0xffffff, 0xb7a58a, 0.75));
+    const dl = new THREE.DirectionalLight(0xffffff, 0.55); dl.position.set(-3, 6, 4); sc.add(dl);
+    const cm = new THREE.PerspectiveCamera(28, 240 / 168, 0.1, 50); cm.position.set(5.2, 3.6, 5.6); cm.lookAt(0, 0.55, 0);
+    for (const id in MODELS) {
+      const m = makeCar(id, MODELS[id].color); m.userData.icon.visible = false; m.rotation.y = -0.35;
+      sc.add(m); r.render(sc, cm); thumbs[id] = r.domElement.toDataURL('image/png');
+      sc.remove(m); disposeTree(m);
+    }
+    r.dispose(); if (r.forceContextLoss) r.forceContextLoss();
+  } catch (e) { thumbs = {}; }
+}
+function renderGarage(fresh) {
+  if (!thumbs) renderThumbs();
+  $('#gBonus').textContent = '+' + Math.round((garageMult() - 1) * 100) + '% pay';
+  $('#gGrid').innerHTML = Object.keys(MODELS).map(id => {
+    const m = MODELS[id], lv = state.garage[id] || 0;
+    return `<div class="gcar${lv ? '' : ' locked'}${id === fresh ? ' fresh' : ''}"><div class="shot"><img alt="${lv ? m.name : 'Unknown car'}" src="${thumbs[id] || ''}"></div>` +
+      `<h4>${lv ? m.name : '???'}</h4><p>${lv ? `<span class="lvl">Lv ${lv}</span> · +${Math.round(m.bonus * lv * 100)}% pay` : `+${Math.round(m.bonus * 100)}% pay per level`}</p>` +
+      `<p>${m.weight <= 4 ? 'Very rare' : m.weight <= 10 ? 'Rare' : 'Common'}</p></div>`;
+  }).join('');
+  renderRollButton();
+}
+function renderRollButton() {
+  const free = Date.now() >= state.freeCarAt, b = $('#rollCar');
+  b.textContent = free ? 'Get a new car: free' : `Get a new car: ${CAR_GEMS} gems`;
+  b.disabled = !free && state.gems < CAR_GEMS;
+  $('#rollNote').textContent = free ? 'One free car every 10 minutes' : `Next free car in ${fmtTime((state.freeCarAt - Date.now()) / 1000)}`;
+}
+$('#rollCar').addEventListener('click', () => {
+  const free = Date.now() >= state.freeCarAt;
+  if (!free && state.gems < CAR_GEMS) return;
+  const pool = Object.keys(MODELS).filter(id => (state.garage[id] || 0) < MODEL_MAX);
+  if (!pool.length) { toast('Every car is maxed out'); return; }
+  if (free) state.freeCarAt = Date.now() + FREE_CAR_MS; else state.gems -= CAR_GEMS;
+  const total = pool.reduce((a, id) => a + MODELS[id].weight, 0);
+  let roll = Math.random() * total, pick = pool[0];
+  for (const id of pool) { roll -= MODELS[id].weight; if (roll <= 0) { pick = id; break; } }
+  const had = state.garage[pick] || 0;
+  state.garage[pick] = had + 1;
+  toast(had ? `${MODELS[pick].name} is now Lv ${had + 1}: +${Math.round(MODELS[pick].bonus * 100)}% more pay` : `New car: ${MODELS[pick].name}! +${Math.round(MODELS[pick].bonus * 100)}% pay on every ride`, 3200);
+  restyleCars(); renderGarage(pick); refreshHud(); save();
 });
 
 let toastT = null;
@@ -1152,7 +1461,7 @@ $('#nextBtn').addEventListener('click', () => {
   state.gems += gems; state.cleared = Math.max(state.cleared, state.map + 1);
   const last = state.map >= MAPS.length - 1;
   state.map = last ? 0 : state.map + 1;
-  state.lv = { speed: 1, earn: 1, cars: 1 }; state.rides = 0;
+  state.lv = Object.assign({}, START_LV); state.rides = 0; state.stationOpen = false;
   state.coins = P.startCoins * costMult(state.map);
   loadMap();
   toast(last ? `New season! +${gems} gems` : `${curMap().name} unlocked. +${gems} gems. Rides pay 4× more here.`, 3600);
@@ -1211,8 +1520,9 @@ function updateEditBar() {
   const msg = $('#edMsg');
   if (n) { msg.className = 'edit-msg bad'; msg.textContent = `${n} crossing${n > 1 ? 's are' : ' is'} too low to pass under (red rings). Select a point near it and raise it to 2.5 m or more.`; }
   else if (!T.onGround) { msg.className = 'edit-msg bad'; msg.textContent = 'The station needs a stretch of track at ground level.'; }
+  else if (stationInfo.blocked) { msg.className = 'edit-msg bad'; msg.textContent = 'The parking lot or station overlaps the track. Select a point on a straighter, open stretch and tap Station here.'; }
   else { msg.className = 'edit-msg'; msg.textContent = 'Drag a point to reshape the track. Tap empty ground to add a point. Pay per ride scales with lap length, so any layout earns at the same rate.'; }
-  $('#edSave').disabled = n > 0 || !T.onGround;
+  $('#edSave').disabled = n > 0 || !T.onGround || stationInfo.blocked;
   const sel = $('#edSel');
   sel.hidden = ed.sel < 0;
   if (ed.sel >= 0) $('#edSelLabel').textContent = `Point ${ed.sel + 1} · ${ed.pts[ed.sel][2].toFixed(1)} m high`;
@@ -1261,9 +1571,12 @@ $('#openEditor').addEventListener('click', enterEditor);
 let sheetOpen = null;
 function openSheet(name) {
   closeSheets();
-  const el = name === 'tracks' ? $('#sheetTracks') : $('#sheetBalance');
+  const el = $('#sheet' + name[0].toUpperCase() + name.slice(1));
   el.classList.add('open'); el.inert = false; sheetOpen = name;
-  if (name === 'tracks') renderTracks(); else { buildKnobs(); runSim(); }
+  if (name === 'tracks') renderTracks();
+  else if (name === 'balance') { buildKnobs(); runSim(); }
+  else if (name === 'garage') renderGarage();
+  else refreshHud();
 }
 function closeSheets() {
   document.querySelectorAll('.sheet').forEach(s => { s.classList.remove('open'); s.inert = true; });
@@ -1272,6 +1585,8 @@ function closeSheets() {
 document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', closeSheets));
 $('#openTracks').addEventListener('click', () => sheetOpen === 'tracks' ? closeSheets() : openSheet('tracks'));
 $('#openBalance').addEventListener('click', () => sheetOpen === 'balance' ? closeSheets() : openSheet('balance'));
+$('#openStation').addEventListener('click', () => sheetOpen === 'station' ? closeSheets() : openSheet('station'));
+$('#openGarage').addEventListener('click', () => sheetOpen === 'garage' ? closeSheets() : openSheet('garage'));
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSheets(); });
 
 function renderTracks() {
@@ -1346,6 +1661,10 @@ const KNOBS = [
   ['speed', 'Starting car speed', 4, 30, 0.5, v => v + ' m/s'],
   ['speedStep', 'Speed gained per level', 0.05, 0.6, 0.01, v => '+' + Math.round(v * 100) + '%'],
   ['goal', 'Rides to clear the first track', 20, 400, 5, v => v + ' rides'],
+  ['spawn', 'Passengers per second at Frequency x1', 0.1, 1.5, 0.05, v => v.toFixed(2) + ' /s'],
+  ['costQueue', 'Queue base cost', 5, 200, 5, v => '$' + v],
+  ['costFreq', 'Frequency base cost', 50, 1000, 10, v => '$' + v],
+  ['pitTime', 'Time spent pulling in and out of the lot', 0.8, 5, 0.1, v => v.toFixed(1) + ' s'],
 ];
 let knobsBuilt = false;
 function buildKnobs() {
@@ -1356,7 +1675,7 @@ function buildKnobs() {
       d.innerHTML = `<label for="k-${k}">${label}</label><output id="o-${k}" class="num"></output><input type="range" id="k-${k}" min="${min}" max="${max}" step="${step}">`;
       box.appendChild(d);
       d.querySelector('input').addEventListener('input', ev => {
-        P[k] = parseFloat(ev.target.value); store.set('plt-params', P);
+        P[k] = parseFloat(ev.target.value); store.set('plt-params-v2', P);
         syncKnobs(); refreshHud(); updateBoard(); runSim();
       });
     });
@@ -1365,7 +1684,7 @@ function buildKnobs() {
   syncKnobs();
 }
 function syncKnobs() { KNOBS.forEach(([k, , , , , f]) => { $('#k-' + k).value = P[k]; $('#o-' + k).textContent = f(P[k]); }); }
-$('#resetKnobs').addEventListener('click', () => { P = Object.assign({}, DEFAULT_P); store.set('plt-params', P); syncKnobs(); refreshHud(); updateBoard(); runSim(); });
+$('#resetKnobs').addEventListener('click', () => { P = Object.assign({}, DEFAULT_P); store.set('plt-params-v2', P); syncKnobs(); refreshHud(); updateBoard(); runSim(); });
 
 let lastSim = null;
 function runSim() {
@@ -1373,7 +1692,7 @@ function runSim() {
   lastSim = sim;
   $('#simTime').textContent = fmtTime(sim.t);
   $('#simBuys').textContent = sim.buys.length;
-  const rows = sim.buys.map(b => `<tr><td class="num">${fmtTime(b.t)}</td><td><span class="dot" style="background:var(--c-${b.k})"></span>${NAMES[b.k]} ${b.k === 'cars' ? 'x' + b.lvl : 'Lv ' + b.lvl}</td><td class="r">$${fmt(b.c)}</td><td class="r">${fmtRate(b.rate)}</td></tr>`).join('');
+  const rows = sim.buys.map(b => `<tr><td class="num">${fmtTime(b.t)}</td><td><span class="dot" style="background:var(--c-${b.k})"></span>${NAMES[b.k]} ${b.k === 'speed' || b.k === 'earn' ? 'Lv ' + b.lvl : 'x' + b.lvl}</td><td class="r">$${fmt(b.c)}</td><td class="r">${fmtRate(b.rate)}</td></tr>`).join('');
   $('#buyRows').innerHTML = rows || '<tr><td colspan="4">The track clears before any upgrade pays for itself.</td></tr>';
   drawChart(sim);
 }
@@ -1384,7 +1703,7 @@ function drawChart(sim) {
   const ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
   const css = getComputedStyle(document.documentElement);
   const ink = css.getPropertyValue('--ink').trim(), soft = css.getPropertyValue('--ink-soft').trim();
-  const colors = { speed: css.getPropertyValue('--c-speed').trim(), earn: css.getPropertyValue('--c-earn').trim(), cars: css.getPropertyValue('--c-cars').trim() };
+  const colors = {}; ALL_KEYS.forEach(k => colors[k] = css.getPropertyValue('--c-' + k).trim());
   const padL = 44, padR = 10, padT = 12, padB = 24;
   const peak = Math.max(...sim.series.map(s => s[1]));
   const raw = peak / 4, mag = Math.pow(10, Math.floor(Math.log10(raw)));
@@ -1463,13 +1782,15 @@ function frame(now) {
 function start(data) {
   if (data && data.state) state = data.state;
   if (state.map >= MAPS.length) state.map = 0;
+  state.lv = Object.assign({}, START_LV, state.lv);
+  state.garage = Object.assign({ sedan: 1 }, state.garage);
   resize();
   const away = (Date.now() - (state.last || Date.now())) / 1000;
   loadMap();
   if (state.tapped) $('#hint').style.opacity = 0;
   grantAway(away, 'Welcome back');
   requestAnimationFrame(t => { lastT = t; frame(t); });
-  window.__plt = { state: () => state, T: () => T, MAPS, analyse, simulate, P: () => P, cars, queue, buy, enterEditor, exitEditor, openSheet };
+  window.__plt = { state: () => state, T: () => T, MAPS, analyse, simulate, P: () => P, cars, queue, buy, enterEditor, exitEditor, openSheet, station: () => stationInfo, modelRate, demand, supply };
 }
 try { window.claude && window.claude.hot && window.claude.hot.snapshot && window.claude.hot.snapshot(() => ({ state })); } catch (e) {}
 const hot = window.claude && window.claude.hot;
