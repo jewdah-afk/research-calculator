@@ -105,6 +105,28 @@ def c_sand(rng):
 g["t_stone"], g["t_dirt"], g["t_grass_top"], g["t_sand"] = c_stone, c_dirt, c_grass_top, c_sand
 
 
+def c_mantle(rng=None):
+    # dark red-brown volcanic rock with glowing hairline cracks
+    img = crisp(random.Random(7003), "4a2a22", "3e231d", "573128", "2f1a15", "6a3a2c", n=(26, 16, 12, 4), size=(2, 9))
+    r = random.Random(7013)
+    for _ in range(5):
+        x, y = r.randrange(N), r.randrange(N)
+        for _ in range(r.randrange(4, 9)):
+            img[y % N, x % N] = hexc("c2410c")
+            x += r.choice((1, 1, 0)); y += r.choice((1, 0, -1))
+    return img
+
+
+def c_coreiron(rng=None):
+    # heavy dark metal with brushed streaks
+    return crisp(random.Random(7004), "3a3d45", "32353c", "474b55", "2a2c32", "5e6370", n=(20, 22, 8, 10), size=(4, 14), horiz=True)
+
+
+def c_heart(rng=None):
+    # white-hot crystalline core rock
+    return crisp(random.Random(7005), "f6c46a", "eaa94a", "ffe08f", "d9862d", "fff6d8", n=(22, 20, 10, 12), size=(2, 8))
+
+
 def ore_on(base_fn, colors, layout, kind):
     tones = tuple(hexc(c) for c in colors)
 
@@ -442,6 +464,14 @@ NEW = [
     ("ore_iron_slate", "Deep iron ore", ore_on(c_slate, *ORES["iron"][:1], g["LAYOUT_A"], "nug")),
     ("ore_gold_slate", "Deep gold ore", ore_on(c_slate, *ORES["gold"][:1], g["LAYOUT_A"], "nug")),
     ("ore_gem_slate", "Deep gem ore", ore_on(c_slate, *ORES["gem"][:1], g["LAYOUT_GEM"], "gem")),
+    # ---- the deep interior ----
+    ("mantle_rock", "Mantle rock", c_mantle),
+    ("ore_ember", "Ember ore", ore_on(c_mantle, ("8a1f05", "ff6a1a", "ffc04a", "fff6c8"), g["LAYOUT_GEM"], "gem")),
+    ("ore_cobalt", "Cobalt ore", ore_on(c_mantle, ("1b3a8c", "3f6fe0", "8fb4ff", "eef4ff"), g["LAYOUT_A"], "nug")),
+    ("core_iron", "Core iron", c_coreiron),
+    ("ore_starmetal", "Starmetal ore", ore_on(c_coreiron, ("6a6f80", "d8deea", "ffffff", "ffffff"), g["LAYOUT_A"], "nug")),
+    ("heartstone", "Heartstone", c_heart),
+    ("ore_core_crystal", "Core crystal", ore_on(c_heart, ("7a1060", "e04ab8", "ffb0ec", "ffffff"), g["LAYOUT_GEM"], "gem")),
 ]
 
 tex, labels = {}, {}

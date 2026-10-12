@@ -93,6 +93,38 @@
       self.postMessage({ type: "far", id: msg.id, base, pos, col, idx }, [pos.buffer, col.buffer, idx.buffer]);
       return;
     }
+    if (msg.type === "deep") {
+      // a cut-out cube of the interior, meshed with all four sides open
+      const r = gen.deepRegion(msg.f, msg.uc, msg.vc, msg.dMid, msg.size, ID);
+      // cutaway: remove the corner nearest the camera so the inside shows
+      const hx = r.SX >> 1, hz = r.SZ >> 1, hy = r.Y >> 1;
+      for (let i = hx; i < r.SX; i++) for (let j = hz; j < r.SZ; j++) for (let y = hy; y < r.Y; y++) r.W[(i * r.SZ + j) * r.Y + y] = 0;
+      const m = meshChunk(r, { nx: true, px: true, nz: true, pz: true });
+      self.postMessage({ type: "deep", id: msg.id, size: msg.size, bands: m.bands, tris: m.tris }, m.transfer);
+      return;
+    }
+    if (msg.type === "slice") {
+      // a slice through the middle of the planet, one colour per pixel
+      const { f, res, colors } = msg;
+      const fc = gen.FACES[f], R = F / 2, ext = R + 64, img = new Uint8ClampedArray(res * res * 4);
+      for (let py = 0; py < res; py++) for (let px = 0; px < res; px++) {
+        const a = (px + 0.5) / res * 2 * ext - ext, b = ext - (py + 0.5) / res * 2 * ext;   // a along U, b along N (up)
+        const x = fc.U[0] * a + fc.N[0] * b, y = fc.U[1] * a + fc.N[1] * b, z = fc.U[2] * a + fc.N[2] * b;
+        const m = Math.max(Math.abs(x), Math.abs(y), Math.abs(z));
+        let rgb = null;
+        if (m <= R) rgb = colors[gen.deepBlock(x, y, z, ID)];
+        else {
+          const L = gen.locate(x, y, z);
+          const c = gen.columnAt(L.f, Math.max(0, Math.min(F - 1, L.u)), Math.max(0, Math.min(F - 1, L.v)));
+          if (L.alt <= c.h) rgb = gen.BIOMES[c.b][2];
+          else if (L.alt <= 0) rgb = [44, 92, 168];
+        }
+        const k = (py * res + px) * 4;
+        if (rgb) { img[k] = rgb[0]; img[k + 1] = rgb[1]; img[k + 2] = rgb[2]; img[k + 3] = 255; }
+      }
+      self.postMessage({ type: "slice", id: msg.id, res, ext, img }, [img.buffer]);
+      return;
+    }
     if (msg.type === "globe") {
       const res = msg.res, faces = [];
       const transfer = [];

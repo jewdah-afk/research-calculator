@@ -46,7 +46,14 @@
   "ore_coal_slate": 38,
   "ore_iron_slate": 39,
   "ore_gold_slate": 40,
-  "ore_gem_slate": 41
+  "ore_gem_slate": 41,
+  "mantle_rock": 42,
+  "ore_ember": 43,
+  "ore_cobalt": 44,
+  "core_iron": 45,
+  "ore_starmetal": 46,
+  "heartstone": 47,
+  "ore_core_crystal": 48
  },
  "labels": {
   "grass_top": "Grass (top)",
@@ -90,6 +97,13 @@
   "ore_coal_slate": "Deep coal ore",
   "ore_iron_slate": "Deep iron ore",
   "ore_gold_slate": "Deep gold ore",
-  "ore_gem_slate": "Deep gem ore"
+  "ore_gem_slate": "Deep gem ore",
+  "mantle_rock": "Mantle rock",
+  "ore_ember": "Ember ore",
+  "ore_cobalt": "Cobalt ore",
+  "core_iron": "Core iron",
+  "ore_starmetal": "Starmetal ore",
+  "heartstone": "Heartstone",
+  "ore_core_crystal": "Core crystal"
  }
 }

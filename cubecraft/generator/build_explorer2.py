@@ -4,6 +4,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 atlas = json.load(open(os.path.join(ROOT, "world", "atlas.json")))
 blocks_src = json.load(open(os.path.join(ROOT, "planet", "world.json")))["blocks"]
+for name, tex in (("mantle_rock", "mantle_rock"), ("ember", "ore_ember"), ("cobalt", "ore_cobalt"), ("core_iron", "core_iron"),
+                  ("starmetal", "ore_starmetal"), ("heartstone", "heartstone"), ("core_crystal", "ore_core_crystal")):
+    blocks_src.append({"name": name, "top": tex, "side": tex, "bottom": tex, "kind": "solid"})
 info = [{"kind": b["kind"], "t": atlas["index"].get(b["top"], 0) if b["top"] else 0,
          "s": atlas["index"].get(b["side"], 0) if b["side"] else 0,
          "b": atlas["index"].get(b["bottom"], 0) if b["bottom"] else 0} for b in blocks_src]

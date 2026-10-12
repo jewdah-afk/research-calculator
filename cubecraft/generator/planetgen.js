@@ -476,7 +476,87 @@
       return { f, cu, cv, W, SX, SZ, Y, x0, z0, ylo, minH, maxH };
     }
 
-    return { F, R, CS, SEA, FACES, BIOMES, column, columnAt, basePoint, locate, walkTo, chunk, hash };
+    // ---------- the interior: layers down to the core ----------
+    // Layers are cube-shaped shells (the core of a cube planet is a cube). depth = blocks below sea level,
+    // measured to the nearest face: depth = R - max(|x|, |y|, |z|). The centre is depth R.
+    const DEEP_CRUST = Math.max(300, Math.round(0.05 * R));
+    const LAYERS = [
+      { key: "crust", name: "Crust", top: 0, bottom: 44, rock: "stone", temp: [15, 150], dens: [2.6, 2.8], gear: "None", cave: 40 },
+      { key: "deep", name: "Deep crust", top: 44, bottom: DEEP_CRUST, rock: "slate", temp: [150, 600], dens: [2.9, 3.2], gear: "Mining lamp", cave: 48 },
+      { key: "mantle", name: "Mantle", top: DEEP_CRUST, bottom: Math.round(0.45 * R), rock: "mantle_rock", temp: [600, 3700], dens: [3.4, 5.6], gear: "Heat suit, tier 1", cave: 64 },
+      { key: "outer", name: "Outer core", top: Math.round(0.45 * R), bottom: Math.round(0.8 * R), rock: "core_iron", temp: [3700, 5000], dens: [9.9, 12.2], gear: "Heat suit, tier 2, and pressure rig", cave: 80 },
+      { key: "inner", name: "Inner core", top: Math.round(0.8 * R), bottom: R, rock: "heartstone", temp: [5000, 5600], dens: [12.8, 13.1], gear: "Core suit", cave: 56 },
+    ];
+    // ores per layer: [block, noise cell size, threshold] (rarer = higher threshold)
+    const DEEP_ORES = {
+      crust: [["coal", 4, 0.5], ["iron", 3.6, 0.57]],
+      deep: [["slate_iron", 3.6, 0.6], ["slate_gold", 3.2, 0.63], ["slate_gem", 3, 0.67]],
+      mantle: [["ember", 4, 0.6], ["cobalt", 3.6, 0.63]],
+      outer: [["starmetal", 4, 0.62]],
+      inner: [["core_crystal", 3.5, 0.62]],
+    };
+    const nOreD = [P(20), P(21), P(22)];
+    const HEART = 14;                       // hollow chamber at the very centre
+    // pressure (GPa) by fraction of the way to the centre, shaped like Earth's
+    const PQ = [[0, 0], [0.006, 1], [0.05, 8], [0.1, 24], [0.45, 136], [0.8, 330], [1, 364]];
+    function layerIndex(depth) {
+      for (let i = 0; i < LAYERS.length; i++) if (depth < LAYERS[i].bottom) return i;
+      return LAYERS.length - 1;
+    }
+    function conditions(depth) {
+      depth = clamp(depth, 0, R);
+      const i = layerIndex(depth), L = LAYERS[i], k = (depth - L.top) / Math.max(1, L.bottom - L.top), q = depth / R;
+      let p = 364;
+      for (let j = 1; j < PQ.length; j++) if (q <= PQ[j][0]) { p = PQ[j - 1][1] + (PQ[j][1] - PQ[j - 1][1]) * (q - PQ[j - 1][0]) / (PQ[j][0] - PQ[j - 1][0]); break; }
+      return { layer: i, key: L.key, name: L.name, gear: L.gear, depth, toCore: R - depth,
+        tempC: L.temp[0] + (L.temp[1] - L.temp[0]) * k, density: L.dens[0] + (L.dens[1] - L.dens[0]) * k, pressureGPa: p };
+    }
+    // The block at world point (x, y, z) inside the planet (below sea level). ids maps names to numbers.
+    function deepBlock(x, y, z, ids) {
+      const depth = R - Math.max(Math.abs(x), Math.abs(y), Math.abs(z));
+      if (depth > R - HEART) return 0;                                   // the hollow heart
+      if (depth > R - HEART - 3) return ids.core_crystal;                // lined with core crystal
+      // layer boundaries are ragged, not ruler-straight
+      const li = layerIndex(depth + (hash(x | 0, y | 0, z | 0, 31) - 0.5) * 8);
+      const L = LAYERS[li], cs = L.cave;
+      const c = fbm(nCaveA, x / cs, y / cs, z / cs, 2);
+      if (L.key === "outer") { if (c > -0.08) return ids.lava; }         // seas of molten metal
+      else if (L.key === "mantle") { if (c > 0.6) return nCaveB(x / 50, y / 50, z / 50) > 0 ? 0 : ids.lava; }
+      else if (L.key === "inner") { if (c > 0.72) return 0; }            // rare glowing caverns
+      else {
+        if (c > 0.62) return depth > 120 && c > 0.7 ? ids.lava : 0;
+        const t1 = nCaveB(x / 30, y / 30, z / 30);
+        if (t1 > -0.055 && t1 < 0.055) { const t2 = nCaveC(x / 30, y / 30, z / 30); if (t2 > -0.055 && t2 < 0.055) return 0; }
+      }
+      const ores = DEEP_ORES[L.key];
+      for (let o = 0; o < ores.length; o++) {
+        const ore = ores[o];
+        if (nOreD[o](x / ore[1], y / ore[1], z / ore[1]) > ore[2]) return ids[ore[0]];
+      }
+      return ids[L.rock];
+    }
+    // A cut-out cube of the interior, centred dMid blocks down on the line from face f block (uc, vc)
+    // to the planet's centre (so going deeper always heads for the core). Same layout as chunk().
+    function deepRegion(f, uc, vc, dMid, size, ids) {
+      const fc = FACES[f], SX = size + 2, SZ = size + 2, Y = size + 2;
+      const W = new Uint8Array(SX * SZ * Y);
+      const k = (R - dMid) / R, sc = (uc - R + 0.5) * k, tc = (vc - R + 0.5) * k;
+      const h = SX / 2;
+      for (let i = 0; i < SX; i++) for (let j = 0; j < SZ; j++) {
+        const s = sc - h + i + 0.5, t = tc - h + j + 0.5;
+        for (let y = 0; y < Y; y++) {
+          const r = (R - dMid) - h + y + 0.5;           // distance out from the centre along the face normal
+          const x = fc.N[0] * r + fc.U[0] * s + fc.V[0] * t;
+          const yy = fc.N[1] * r + fc.U[1] * s + fc.V[1] * t;
+          const z = fc.N[2] * r + fc.U[2] * s + fc.V[2] * t;
+          W[(i * SZ + j) * Y + y] = deepBlock(Math.floor(x), Math.floor(yy), Math.floor(z), ids);
+        }
+      }
+      return { f, W, SX, SZ, Y };
+    }
+
+    return { F, R, CS, SEA, FACES, BIOMES, LAYERS, column, columnAt, basePoint, locate, walkTo, chunk, hash,
+      conditions, deepBlock, deepRegion };
   }
 
   const api = { create, FACES, BIOMES, Perlin };

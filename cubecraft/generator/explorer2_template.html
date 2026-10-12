@@ -51,6 +51,14 @@ button {
 button:hover { background: rgba(255, 255, 255, 0.16); }
 button[aria-pressed="true"], button.primary { background: var(--grass); color: var(--grass-ink); border-color: var(--grass); font-weight: 600; }
 button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--grass); outline-offset: 2px; }
+.corebox { display: flex; flex-direction: column; gap: 8px; }
+.corebox[hidden] { display: none; }
+#slice { width: 100%; height: auto; aspect-ratio: 1; border-radius: 6px; background: #05080f; cursor: crosshair; image-rendering: pixelated; }
+input[type="range"] { width: 100%; accent-color: var(--grass); }
+.cond { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 0; font-size: 13px; font-variant-numeric: tabular-nums; }
+.cond dt { color: var(--muted); }
+.cond dd { margin: 0; font-weight: 600; }
+body.core { background: radial-gradient(circle at 50% 50%, #2a1408 0%, #07070b 75%); }
 .where { margin: 0; font-size: 13px; line-height: 1.5; font-variant-numeric: tabular-nums; }
 .where b { font-weight: 600; }
 .stats {
@@ -77,6 +85,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
       <div class="seg" role="group" aria-label="View">
         <button type="button" id="m-globe" aria-pressed="false">Globe</button>
         <button type="button" id="m-ground" aria-pressed="true">Ground</button>
+        <button type="button" id="m-core" aria-pressed="false">Core</button>
       </div>
       <div class="seg" role="group" aria-label="Globe shape">
         <button type="button" id="s-cube" aria-pressed="true">Cube</button>
@@ -87,6 +96,12 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   </div>
   <div class="body" id="body">
     <p class="where" id="where">Finding a place to land…</p>
+    <div class="corebox" id="corebox" hidden>
+      <canvas id="slice" width="320" height="320" tabindex="0" aria-label="Slice through the middle of the planet showing its layers. Tap a layer to go to that depth."></canvas>
+      <label for="depth">Depth below sea level</label>
+      <input type="range" id="depth" min="60" max="8192" step="1" value="400">
+      <dl class="cond" id="cond"></dl>
+    </div>
     <div class="row">
       <label for="size">Size</label>
       <select id="size">
@@ -303,6 +318,8 @@ __PLANETGEN__
       e.walls = msg.walls; e.state = "ready"; e.tris = msg.tris;
       if (msg.genMs > 0) { stat.gen += msg.genMs; stat.mesh += msg.meshMs; stat.n++; }
     } else if (msg.type === "far") onFar(msg);
+    else if (msg.type === "deep") onDeep(msg);
+    else if (msg.type === "slice") onSlice(msg);
     else if (msg.type === "globe") onGlobe(msg);
     pump();
   }
@@ -388,15 +405,136 @@ __PLANETGEN__
     marker.position.set(p[0], p[1], p[2]).multiplyScalar(1.06 / R);
   }
 
+  // ---------- core (the interior) ----------
+  const deepGroup = new THREE.Group(); deepGroup.visible = false; scene.add(deepGroup);
+  const dCam = new THREE.PerspectiveCamera(50, 1, 0.1, 2000);
+  const dControls = new THREE.OrbitControls(dCam, canvas);
+  dControls.enableDamping = true; dControls.enabled = false; dControls.minDistance = 20; dControls.maxDistance = 400;
+  dCam.position.set(84, 60, 94);
+  let deepReq = 0, deepMeshes = [], sliceReq = 0, sliceImg = null, sliceExt = 0, sliceKey = "", blockColors = null;
+  const depthEl = document.getElementById("depth");
+  const DEEP_SIZE = touch ? 48 : 64;
+
+  function computeBlockColors() {
+    if (blockColors || !tex.image) return blockColors;
+    const cv = document.createElement("canvas"); cv.width = tex.image.width; cv.height = tex.image.height;
+    const cx = cv.getContext("2d"); cx.drawImage(tex.image, 0, 0);
+    const A = META.atlas, data = cx.getImageData(0, 0, cv.width, cv.height).data;
+    blockColors = META.blocks.map((b, i) => {
+      if (i === 0) return null;
+      const tile = b.s, x0 = (tile % A.cols) * A.cell + A.pad, y0 = Math.floor(tile / A.cols) * A.cell + A.pad;
+      let r = 0, g = 0, bl = 0, n = 0;
+      for (let y = 0; y < A.tile; y++) for (let x = 0; x < A.tile; x++) {
+        const k = ((y0 + y) * cv.width + x0 + x) * 4;
+        if (data[k + 3] < 128) continue;
+        r += data[k]; g += data[k + 1]; bl += data[k + 2]; n++;
+      }
+      return n ? [r / n, g / n, bl / n] : null;
+    });
+    return blockColors;
+  }
+  function requestDeep() {
+    const t = controls.target, uv = homeUV(t.x, t.z);
+    const dMid = Math.max(60, Math.min(R, parseInt(depthEl.value, 10)));
+    const w = workers[1 % workers.length];
+    w.postMessage({ type: "deep", id: ++deepReq, f: home, uc: clampF(uv[0]), vc: clampF(uv[1]), dMid, size: DEEP_SIZE }); w.busy++;
+    showConditions();
+    drawSlice();
+  }
+  function onDeep(msg) {
+    if (msg.id !== deepReq) return;
+    for (const m of deepMeshes) { deepGroup.remove(m); m.geometry.dispose(); }
+    deepMeshes = [];
+    const c = msg.size / 2 + 1;
+    for (const band of msg.bands) for (const g in band.groups) {
+      const d = band.groups[g], geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.BufferAttribute(d.pos, 3));
+      geo.setAttribute("uv", new THREE.BufferAttribute(d.uv, 2));
+      geo.setAttribute("color", new THREE.BufferAttribute(d.col, 3));
+      geo.setIndex(new THREE.BufferAttribute(d.idx, 1));
+      geo.computeBoundingSphere();
+      const m = new THREE.Mesh(geo, MATS[g]);
+      m.position.set(-c, -c, -c);
+      if (g === "trans") m.renderOrder = 2;
+      deepGroup.add(m); deepMeshes.push(m);
+    }
+  }
+  function requestSlice() {
+    const cols = computeBlockColors();
+    if (!cols) { setTimeout(requestSlice, 200); return; }
+    const key = SEED + ":" + F + ":" + home;
+    if (key === sliceKey) { drawSlice(); return; }
+    sliceKey = key; sliceImg = null;
+    const w = workers[2 % workers.length];
+    w.postMessage({ type: "slice", id: ++sliceReq, f: home, res: touch ? 240 : 320, colors: cols }); w.busy++;
+  }
+  function onSlice(msg) {
+    if (msg.id !== sliceReq) return;
+    const cv = document.createElement("canvas"); cv.width = cv.height = msg.res;
+    cv.getContext("2d").putImageData(new ImageData(msg.img, msg.res, msg.res), 0, 0);
+    sliceImg = cv; sliceExt = msg.ext;
+    drawSlice();
+  }
+  function drawSlice() {
+    const el = document.getElementById("slice"), cx = el.getContext("2d"), W = el.width;
+    cx.clearRect(0, 0, W, W);
+    if (!sliceImg) { cx.fillStyle = "#a9b4c0"; cx.font = "14px Rubik, sans-serif"; cx.fillText("Cutting the planet open…", 16, 28); return; }
+    cx.imageSmoothingEnabled = false;
+    cx.drawImage(sliceImg, 0, 0, W, W);
+    const toPx = (blocks) => (blocks / (2 * sliceExt)) * W;
+    // layer boundaries are squares: the shells of a cube planet
+    cx.font = "600 11px Rubik, sans-serif"; cx.textBaseline = "top";
+    for (const L of gen.LAYERS) {
+      if (L.top === 0) continue;
+      const half = toPx(R - L.top), c = W / 2;
+      cx.strokeStyle = "rgba(255,255,255,0.28)"; cx.lineWidth = 1;
+      cx.strokeRect(c - half + 0.5, c - half + 0.5, half * 2 - 1, half * 2 - 1);
+    }
+    const labels = [["Mantle", gen.LAYERS[2].top], ["Outer core", gen.LAYERS[3].top], ["Inner core", gen.LAYERS[4].top]];
+    for (const [name, top] of labels) {
+      const y = W / 2 - toPx(R - top) + (top === gen.LAYERS[2].top ? 10 : 4);
+      cx.fillStyle = "rgba(0,0,0,0.55)"; const w = cx.measureText(name).width + 8; cx.fillRect(W / 2 - w / 2, y, w, 15);
+      cx.fillStyle = "#ffffff"; cx.fillText(name, W / 2 - w / 2 + 4, y + 1);
+    }
+    // where you are: the shell at the chosen depth
+    const half = toPx(R - parseInt(depthEl.value, 10)), c = W / 2;
+    cx.strokeStyle = "#7cc24f"; cx.lineWidth = 2;
+    cx.strokeRect(c - half, c - half, half * 2, half * 2);
+  }
+  function fmt(n) { return Math.round(n).toLocaleString(); }
+  function showConditions() {
+    const d = parseInt(depthEl.value, 10), c = gen.conditions(d);
+    document.getElementById("where").innerHTML = d >= R - 16
+      ? `<b>The heart of the planet</b> · a hollow chamber lined with core crystal`
+      : `<b>${c.name}</b> · ${fmt(d)} blocks down, ${fmt(c.toCore)} to the centre`;
+    document.getElementById("cond").innerHTML =
+      `<dt>Temperature</dt><dd>${fmt(c.tempC)} °C</dd><dt>Rock density</dt><dd>${c.density.toFixed(1)} g/cm³</dd>` +
+      `<dt>Pressure</dt><dd>${c.pressureGPa < 10 ? c.pressureGPa.toFixed(1) : fmt(c.pressureGPa)} GPa</dd><dt>Gear needed</dt><dd>${c.gear}</dd>`;
+  }
+  depthEl.addEventListener("input", () => { showConditions(); drawSlice(); });
+  depthEl.addEventListener("change", requestDeep);
+  document.getElementById("slice").addEventListener("click", (e) => {
+    const el = e.currentTarget, r = el.getBoundingClientRect();
+    const a = ((e.clientX - r.left) / r.width * 2 - 1) * sliceExt, b = ((e.clientY - r.top) / r.height * 2 - 1) * sliceExt;
+    const d = Math.round(R - Math.max(Math.abs(a), Math.abs(b)));
+    depthEl.value = Math.max(60, Math.min(R, d));
+    requestDeep();
+  });
+
   // ---------- modes ----------
   let mode = "ground";
   function setMode(m) {
     mode = m;
     document.getElementById("m-globe").setAttribute("aria-pressed", String(m === "globe"));
     document.getElementById("m-ground").setAttribute("aria-pressed", String(m === "ground"));
+    document.getElementById("m-core").setAttribute("aria-pressed", String(m === "core"));
     document.body.classList.toggle("globe", m === "globe");
-    root.visible = m === "ground"; globeGroup.visible = m === "globe";
-    controls.enabled = m === "ground"; gControls.enabled = m === "globe";
+    document.body.classList.toggle("core", m === "core");
+    document.getElementById("corebox").hidden = m !== "core";
+    root.visible = m === "ground"; globeGroup.visible = m === "globe"; deepGroup.visible = m === "core";
+    controls.enabled = m === "ground"; gControls.enabled = m === "globe"; dControls.enabled = m === "core";
+    if (m === "core") { depthEl.max = String(R); requestSlice(); requestDeep(); }
+    if (m === "ground") lastGround = 0;
     scene.fog = m === "ground" ? new THREE.Fog(fogColor, fogNear(), fogFar()) : null;
     document.getElementById("pad").hidden = !(touch && m === "ground");
     if (m === "globe") { markerUpdate(); if (!globeMesh) requestGlobe(); }
@@ -535,6 +673,7 @@ __PLANETGEN__
   document.getElementById("s-cube").addEventListener("click", () => setShape("cube"));
   document.getElementById("s-sphere").addEventListener("click", () => setShape("sphere"));
   document.getElementById("m-ground").addEventListener("click", () => setMode("ground"));
+  document.getElementById("m-core").addEventListener("click", () => setMode("core"));
   document.getElementById("land").addEventListener("click", () => { const s = niceSpot(Math.random); landAt(s.f, s.u, s.v); });
   const fold = document.getElementById("fold"), body = document.getElementById("body");
   fold.addEventListener("click", () => { body.hidden = !body.hidden; fold.textContent = body.hidden ? "Show" : "Hide"; fold.setAttribute("aria-expanded", String(!body.hidden)); });
@@ -543,7 +682,9 @@ __PLANETGEN__
   document.getElementById("rand").addEventListener("click", () => { document.getElementById("seed").value = Math.floor(Math.random() * 1e6); newPlanet(); });
   document.getElementById("size").addEventListener("change", () => newPlanet());
   function hint() {
-    document.getElementById("hint").textContent = mode === "globe"
+    document.getElementById("hint").textContent = mode === "core"
+      ? "Drag to turn the cut-out · tap a layer on the slice, or use the slider, to go deeper"
+      : mode === "globe"
       ? "Drag to spin the planet · tap anywhere to land there"
       : (touch ? "Drag to look · pinch to zoom · arrows to travel (×8 for fast)" : "Drag to look · scroll to zoom · WASD or arrows to travel, hold Shift for fast");
   }
@@ -565,6 +706,7 @@ __PLANETGEN__
   function seeded(s) { let a = s | 0; return () => { a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 
   function newPlanet() {
+    sliceKey = ""; sliceImg = null;
     SEED = parseInt(document.getElementById("seed").value, 10) || 0;
     F = parseInt(document.getElementById("size").value, 10); R = F / 2;
     genId++;
@@ -578,6 +720,7 @@ __PLANETGEN__
     const s = niceSpot(seeded(SEED));
     landAt(s.f, s.u, s.v);
     if (mode === "globe") requestGlobe();
+    if (mode === "core") setMode("core");
     if (scene.fog) scene.fog.far = fogFar();
   }
 
@@ -587,6 +730,7 @@ __PLANETGEN__
     renderer.setSize(w, h, false);
     camera.aspect = w / h; camera.updateProjectionMatrix();
     gCam.aspect = w / h; gCam.updateProjectionMatrix();
+    dCam.aspect = w / h; dCam.updateProjectionMatrix();
   }
   window.addEventListener("resize", resize);
   resize();
@@ -605,6 +749,9 @@ __PLANETGEN__
       gen.basePoint(home, uvF[0], uvF[1], pF);
       if (farAt && farAt.distanceTo(new THREE.Vector3(...pF)) > 900) requestFar();
       renderer.render(scene, camera);
+    } else if (mode === "core") {
+      dControls.update();
+      renderer.render(scene, dCam);
     } else {
       gControls.update();
       renderer.render(scene, gCam);
@@ -617,7 +764,7 @@ __PLANETGEN__
       statsEl.innerHTML = `<b>${fps}</b> fps · chunks <b>${ready}</b>/${desired.size}<br>` +
         `${stat.n ? (stat.gen / stat.n).toFixed(0) : "–"} ms build + ${stat.n ? (stat.mesh / stat.n).toFixed(0) : "–"} ms mesh per chunk · ${NW} threads<br>` +
         `${(tris / 1000).toFixed(0)}k triangles drawn`;
-      busyEl.hidden = ready > 0 || mode === "globe";
+      busyEl.hidden = ready > 0 || mode !== "ground";
     }
     requestAnimationFrame(loop);
   }
@@ -630,6 +777,8 @@ __PLANETGEN__
     goto: (f, u, v) => landAt(f, u, v),
     look: (pos, target) => { camera.position.set(...pos); controls.target.set(...target); controls.update(); },
     gcam: (pos) => { gCam.position.set(...pos); gControls.update(); },
+    core: (d) => { depthEl.value = d; if (mode !== "core") setMode("core"); else requestDeep(); },
+    coreReady: () => deepMeshes.length > 0 && !!sliceImg,
     xray: () => document.getElementById("xray").click(),
     walk: (dx, dz) => { controls.target.x += dx; controls.target.z += dz; camera.position.x += dx; camera.position.z += dz; controls.update(); rehomeIfNeeded(); lastGround = 0; followGround(performance.now()); },
     lookRel: (off) => { const t = controls.target; camera.position.set(t.x + off[0], t.y + off[1], t.z + off[2]); controls.update(); },
