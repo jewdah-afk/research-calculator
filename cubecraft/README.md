@@ -11,7 +11,7 @@ A voxel survival game for Roblox where the world is a giant cube planet. Every f
 | `preview/cubecraft_world.html` | Web preview: a flat 100 × 100 test world |
 | `preview/cubecraft_planet.html` | Web preview: a small cube planet (96 blocks per face, one biome per face) |
 | `preview/cubecraft_generator.html` | Web preview of the real generator: map of the whole 2,048-per-face planet for any seed, tap a spot to build it in 3D |
-| `preview/cubecraft_explorer.html` | **The planet explorer.** Globe view of the whole cube, and a ground view that streams 32 × 32 chunks around you on background threads and carries you over the edges. Sizes 2,048 to 16,384 blocks per face |
+| `preview/cubecraft_explorer.html` | **The planet explorer.** Globe view of the whole cube, and a ground view that streams 32 × 32 chunks around you on background threads and carries you over the edges. Sizes 2,048 to 65,536 blocks per face |
 | `generator/planetgen.js` | **The planet generator.** One deterministic algorithm for the whole cube (see below). Written to port line for line to Luau |
 | `generator/mesher.js` | Turns a chunk's blocks into triangles, skipping hidden faces, with corner shading. Splits each chunk into 32-block-tall pieces |
 | `generator/worker.js` | Background thread: builds and meshes chunks, the distant-land sheet and the globe |
