@@ -1,0 +1,319 @@
+<title>Cube Craft Planet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=Rubik:wght@400;500;600&display=swap">
+<style>
+/* Layout: full-bleed 3D world; one compact HUD card top-left, view chips inside it; a quiet hint strip at the bottom. Single dark look over a daytime sky. */
+:root {
+  --sky-top: #2f8fe6;
+  --sky-low: #bff0ff;
+  --panel: rgba(16, 20, 26, 0.82);
+  --panel-line: rgba(255, 255, 255, 0.12);
+  --ink: #eef2f6;
+  --muted: #a9b4c0;
+  --grass: #7cc24f;
+  --grass-ink: #10200a;
+  --font-display: "Pixelify Sans", "Courier New", monospace;
+  --font-ui: "Rubik", "Segoe UI", system-ui, sans-serif;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body {
+  margin: 0;
+  overflow: hidden;
+  background: radial-gradient(circle at 50% 50%, var(--sky-low) 0%, var(--sky-top) 70%);
+  color: var(--ink);
+  font-family: var(--font-ui);
+}
+#scene { position: fixed; inset: 0; display: block; width: 100%; height: 100%; touch-action: none; }
+.hud {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 16px);
+  left: 16px;
+  max-width: calc(100% - 32px);
+  box-sizing: border-box;
+  padding: 14px 16px 16px;
+  background: var(--panel);
+  border: 1px solid var(--panel-line);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  backdrop-filter: blur(6px);
+}
+.name { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: 30px; line-height: 1; letter-spacing: 0.5px; text-wrap: balance; }
+.name span { color: var(--grass); }
+.sub { margin: 0; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.views { display: flex; flex-wrap: wrap; gap: 8px; }
+.views button {
+  font: 500 14px/1 var(--font-ui);
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--panel-line);
+  border-radius: 6px;
+  min-height: 36px;
+  padding: 0 12px;
+  cursor: pointer;
+}
+.views button:hover { background: rgba(255, 255, 255, 0.16); }
+.views button[aria-pressed="true"] { background: var(--grass); color: var(--grass-ink); border-color: var(--grass); }
+.views button:focus-visible { outline: 2px solid var(--grass); outline-offset: 2px; }
+.hint {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
+  margin: 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--ink);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+}
+.loading[hidden] { display: none; }
+.loading {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-display);
+  font-size: 22px;
+  color: #12324d;
+  pointer-events: none;
+}
+@media (max-width: 480px) {
+  .name { font-size: 24px; }
+  .views button { font-size: 13px; padding: 0 10px; }
+}
+</style>
+
+<canvas id="scene" aria-label="3D view of a cube-shaped planet with a different biome on each of its six faces"></canvas>
+<div class="loading" id="loading">Building the planet…</div>
+<section class="hud" aria-label="World viewer">
+  <div>
+    <h1 class="name">Cube<span>Craft</span></h1>
+  </div>
+  <p class="sub">Cube planet preview · 96 × 96 blocks per face · 6 biomes</p>
+  <div class="views" role="group" aria-label="Camera views">
+    <button type="button" id="v-planet" data-view="planet" aria-pressed="true">Planet</button>
+    <button type="button" id="v-grass" data-view="grass" aria-pressed="false">Grasslands</button>
+    <button type="button" id="v-forest" data-view="forest" aria-pressed="false">Forest</button>
+    <button type="button" id="v-desert" data-view="desert" aria-pressed="false">Desert</button>
+    <button type="button" id="v-snow" data-view="snow" aria-pressed="false">Snow peaks</button>
+    <button type="button" id="v-ocean" data-view="ocean" aria-pressed="false">Ocean</button>
+    <button type="button" id="v-volcano" data-view="volcano" aria-pressed="false">Volcano</button>
+    <button type="button" id="v-edge" data-view="edge" aria-pressed="false">Edge</button>
+  </div>
+</section>
+<p class="hint">Drag to turn · Scroll or pinch to zoom · Right-drag or two fingers to move</p>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(function () {
+  const META = __META__;
+  const RLE = "__RLE__";
+  const ATLAS = "data:image/png;base64,__ATLAS__";
+  const { X, Z, Y, cols, rows, tile, pad, cell, blocks, views } = META;
+
+  // ---- decode world ----
+  const bin = atob(RLE);
+  const world = new Uint8Array(X * Z * Y);
+  let p = 0;
+  for (let i = 0; i < bin.length; i += 2) {
+    const v = bin.charCodeAt(i), n = bin.charCodeAt(i + 1);
+    world.fill(v, p, p + n);
+    p += n;
+  }
+  const at = (x, y, z) => (x < 0 || z < 0 || y < 0 || x >= X || z >= Z || y >= Y) ? 0 : world[(x * Z + z) * Y + y];
+  const kind = (id) => blocks[id].kind;
+  const solid = (x, y, z) => kind(at(x, y, z)) === "solid";
+  const occ = (x, y, z) => { const k = kind(at(x, y, z)); return k === "solid" || k === "leaves"; };
+
+  // ---- faces: normal, corners (BL, BR, TR, TL seen from outside), texture slot, shade ----
+  const FACES = [
+    { n: [1, 0, 0], c: [[1, 0, 1], [1, 0, 0], [1, 1, 0], [1, 1, 1]], slot: "s", shade: 0.86 },
+    { n: [-1, 0, 0], c: [[0, 0, 0], [0, 0, 1], [0, 1, 1], [0, 1, 0]], slot: "s", shade: 0.72 },
+    { n: [0, 0, 1], c: [[0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]], slot: "s", shade: 0.8 },
+    { n: [0, 0, -1], c: [[1, 0, 0], [0, 0, 0], [0, 1, 0], [1, 1, 0]], slot: "s", shade: 0.66 },
+    { n: [0, 1, 0], c: [[0, 1, 1], [1, 1, 1], [1, 1, 0], [0, 1, 0]], slot: "t", shade: 1.0 },
+    { n: [0, -1, 0], c: [[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1]], slot: "b", shade: 0.5 },
+  ];
+  const UVC = [[0, 0], [1, 0], [1, 1], [0, 1]];
+  const AO = [0.42, 0.6, 0.8, 1.0];
+  const AW = cols * cell, AH = rows * cell;
+
+  // each tile sits inside a wrapped border in the atlas, so blending at a distance never picks up a neighbour
+  function tileUV(t, corner) {
+    const col = t % cols, row = Math.floor(t / cols);
+    const x0 = col * cell + pad, y0 = row * cell + pad;
+    const u0 = x0 / AW, u1 = (x0 + tile) / AW;
+    const v1 = 1 - y0 / AH, v0 = 1 - (y0 + tile) / AH;
+    return [corner[0] ? u1 : u0, corner[1] ? v1 : v0];
+  }
+
+  function makeGroup() { return { pos: [], uv: [], col: [], idx: [] }; }
+  const G = { opaque: makeGroup(), trans: makeGroup(), plant: makeGroup(), lava: makeGroup() };
+
+  function quad(g, verts, uvs, lights, flip) {
+    const base = g.pos.length / 3;
+    for (let i = 0; i < 4; i++) {
+      g.pos.push(verts[i][0], verts[i][1], verts[i][2]);
+      g.uv.push(uvs[i][0], uvs[i][1]);
+      g.col.push(lights[i], lights[i], lights[i]);
+    }
+    if (flip) g.idx.push(base + 1, base + 2, base + 3, base + 1, base + 3, base);
+    else g.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  }
+
+  // ---- cube planet: every block's "up" points away from the face it sits on ----
+  const CEN = (X - 1) / 2;
+  function upOf(x, y, z) {
+    const rx = x - CEN, ry = y - CEN, rz = z - CEN;
+    const ax = Math.abs(rx), ay = Math.abs(ry), az = Math.abs(rz);
+    if (ax >= ay && ax >= az) return [rx > 0 ? 1 : -1, 0, 0];
+    if (ay >= az) return [0, ry > 0 ? 1 : -1, 0];
+    return [0, 0, rz > 0 ? 1 : -1];
+  }
+  const tAx = (ax, c) => { const k = ax[0] ? 0 : ax[1] ? 1 : 2; return ax[k] > 0 ? c[k] : 1 - c[k]; };
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const SUN = (() => { const v = [0.45, 0.8, 0.4], l = Math.hypot(...v); return v.map((c) => c / l); })();
+  const shadeOf = (n) => 0.82 + 0.18 * (n[0] * SUN[0] + n[1] * SUN[1] + n[2] * SUN[2]);
+  const UNIT = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+
+  for (let x = 0; x < X; x++) for (let z = 0; z < Z; z++) for (let y = 0; y < Y; y++) {
+    const id = world[(x * Z + z) * Y + y];
+    if (!id) continue;
+    const b = blocks[id], k = b.kind;
+    const U = upOf(x, y, z);
+    if (k === "plant") {
+      const ud = U[0] ? 0 : U[1] ? 1 : 2, oa = [0, 1, 2].filter((i) => i !== ud);
+      const base = [x, y, z];
+      const P = (da, db, du) => { const p = base.slice(); p[oa[0]] += da; p[oa[1]] += db; p[ud] += U[ud] > 0 ? du : 1 - du; return p; };
+      const a = 0.15, c = 0.85, L = 0.95 * shadeOf(U);
+      const quads = [[P(a, a, 0), P(c, c, 0), P(c, c, 1), P(a, a, 1)], [P(a, c, 0), P(c, a, 0), P(c, a, 1), P(a, c, 1)]];
+      for (const q of quads) quad(G.plant, q, UVC.map((u) => tileUV(b.s, u)), [L * 0.8, L * 0.8, L, L], false);
+      continue;
+    }
+    const liquid = k === "water" || k === "lava";
+    for (const f of FACES) {
+      const nx = x + f.n[0], ny = y + f.n[1], nz = z + f.n[2];
+      const nid = at(nx, ny, nz), nk = kind(nid);
+      if (k === "solid" && nk === "solid") continue;
+      if ((k === "leaves" || k === "glass") && (nk === "solid" || nid === id)) continue;
+      if (liquid && (nk === "solid" || nk === "water" || nk === "lava" || nk === "leaves")) continue;
+      const dn = f.n[0] * U[0] + f.n[1] * U[1] + f.n[2] * U[2];
+      const tile = b[dn === 1 ? "t" : dn === -1 ? "b" : "s"];
+      const axes = [0, 1, 2].filter((a) => f.n[a] === 0);
+      let uAx, vAx;
+      if (dn === 0) { vAx = U; uAx = cross(U, f.n); } else { uAx = UNIT[axes[0]]; vAx = UNIT[axes[1]]; }
+      const above = kind(at(x + U[0], y + U[1], z + U[2]));
+      const verts = [], lights = [], uvs = [];
+      for (let i = 0; i < 4; i++) {
+        const cc = f.c[i];
+        const v = [x + cc[0], y + cc[1], z + cc[2]];
+        if (liquid && tAx(U, cc) === 1 && above !== k) for (let j = 0; j < 3; j++) v[j] -= 0.125 * U[j];
+        verts.push(v);
+        uvs.push(tileUV(tile, [tAx(uAx, cc), tAx(vAx, cc)]));
+        let light = 1;
+        if (!liquid) {
+          const d = [0, 0, 0];
+          for (const a of axes) d[a] = cc[a] ? 1 : -1;
+          const s1 = [nx, ny, nz], s2 = [nx, ny, nz], co = [nx, ny, nz];
+          s1[axes[0]] += d[axes[0]];
+          s2[axes[1]] += d[axes[1]];
+          co[axes[0]] += d[axes[0]]; co[axes[1]] += d[axes[1]];
+          const o1 = occ(...s1), o2 = occ(...s2), o3 = occ(...co);
+          light = AO[(o1 && o2) ? 0 : 3 - (o1 + o2 + o3)];
+        }
+        lights.push(k === "lava" ? 1 : light * shadeOf(f.n));
+      }
+      const flip = lights[0] + lights[2] < lights[1] + lights[3];
+      quad(k === "lava" ? G.lava : (k === "water" || k === "glass") ? G.trans : G.opaque, verts, uvs, lights, flip);
+    }
+  }
+
+  // ---- three.js scene ----
+  const canvas = document.getElementById("scene");
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.Fog(0xbfe9ff, 380, 760);
+  const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 2000);
+  const controls = new THREE.OrbitControls(camera, canvas);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+  controls.minDistance = 6;
+  controls.maxDistance = 600;
+
+  const tex = new THREE.TextureLoader().load(ATLAS, () => { render(); markReady(); });
+  tex.magFilter = THREE.NearestFilter;            // crisp pixels up close
+  tex.minFilter = THREE.LinearMipmapLinearFilter; // smooth colour in the distance, no shimmer
+  tex.generateMipmaps = true;
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
+  function mesh(g, mat) {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(g.pos, 3));
+    geo.setAttribute("uv", new THREE.Float32BufferAttribute(g.uv, 2));
+    geo.setAttribute("color", new THREE.Float32BufferAttribute(g.col, 3));
+    geo.setIndex(g.idx);
+    const m = new THREE.Mesh(geo, mat);
+    scene.add(m);
+    return m;
+  }
+  mesh(G.opaque, new THREE.MeshBasicMaterial({ map: tex, vertexColors: true, alphaTest: 0.5 }));
+  mesh(G.lava, new THREE.MeshBasicMaterial({ map: tex }));
+  mesh(G.plant, new THREE.MeshBasicMaterial({ map: tex, vertexColors: true, alphaTest: 0.5, side: THREE.DoubleSide }));
+  const t = mesh(G.trans, new THREE.MeshBasicMaterial({ map: tex, vertexColors: true, transparent: true, opacity: 0.82, depthWrite: false }));
+  t.renderOrder = 2;
+
+  function resize() {
+    const w = window.innerWidth, h = window.innerHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    render();
+  }
+  function render() { renderer.render(scene, camera); }
+
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let anim = null;
+  function setView(name, instant) {
+    const v = views[name];
+    if (!v) return;
+    document.querySelectorAll(".views button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.view === name)));
+    const fromP = camera.position.clone(), fromT = controls.target.clone();
+    const toP = new THREE.Vector3(...v.pos), toT = new THREE.Vector3(...v.target);
+    if (instant || reduce) {
+      camera.position.copy(toP); controls.target.copy(toT); controls.update(); render();
+      return;
+    }
+    anim = { fromP, fromT, toP, toT, t0: performance.now(), dur: 900 };
+  }
+  document.querySelectorAll(".views button").forEach((b) => b.addEventListener("click", () => setView(b.dataset.view)));
+
+  function loop(now) {
+    if (anim) {
+      let k = Math.min(1, (now - anim.t0) / anim.dur);
+      k = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+      camera.position.lerpVectors(anim.fromP, anim.toP, k);
+      controls.target.lerpVectors(anim.fromT, anim.toT, k);
+      if (k >= 1) anim = null;
+    }
+    controls.update();
+    render();
+    requestAnimationFrame(loop);
+  }
+
+  function markReady() {
+    document.getElementById("loading").hidden = true;
+    window.cc.ready = true;
+  }
+  window.cc = { setView, ready: false, render,
+    look(pos, target) { camera.position.set(...pos); controls.target.set(...target); controls.update(); render(); } };
+  window.addEventListener("resize", resize);
+  setView("planet", true);
+  resize();
+  requestAnimationFrame(loop);
+})();
+</script>

@@ -1,0 +1,295 @@
+<title>Cube Craft World</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=Rubik:wght@400;500;600&display=swap">
+<style>
+/* Layout: full-bleed 3D world; one compact HUD card top-left, view chips inside it; a quiet hint strip at the bottom. Single dark look over a daytime sky. */
+:root {
+  --sky-top: #6fa8dc;
+  --sky-low: #cfe6f5;
+  --panel: rgba(16, 20, 26, 0.82);
+  --panel-line: rgba(255, 255, 255, 0.12);
+  --ink: #eef2f6;
+  --muted: #a9b4c0;
+  --grass: #7cc24f;
+  --grass-ink: #10200a;
+  --font-display: "Pixelify Sans", "Courier New", monospace;
+  --font-ui: "Rubik", "Segoe UI", system-ui, sans-serif;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body {
+  margin: 0;
+  overflow: hidden;
+  background: linear-gradient(var(--sky-top), var(--sky-low));
+  color: var(--ink);
+  font-family: var(--font-ui);
+}
+#scene { position: fixed; inset: 0; display: block; width: 100%; height: 100%; touch-action: none; }
+.hud {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 16px);
+  left: 16px;
+  max-width: calc(100% - 32px);
+  box-sizing: border-box;
+  padding: 14px 16px 16px;
+  background: var(--panel);
+  border: 1px solid var(--panel-line);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  backdrop-filter: blur(6px);
+}
+.name { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: 30px; line-height: 1; letter-spacing: 0.5px; text-wrap: balance; }
+.name span { color: var(--grass); }
+.sub { margin: 0; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.views { display: flex; flex-wrap: wrap; gap: 8px; }
+.views button {
+  font: 500 14px/1 var(--font-ui);
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--panel-line);
+  border-radius: 6px;
+  min-height: 36px;
+  padding: 0 12px;
+  cursor: pointer;
+}
+.views button:hover { background: rgba(255, 255, 255, 0.16); }
+.views button[aria-pressed="true"] { background: var(--grass); color: var(--grass-ink); border-color: var(--grass); }
+.views button:focus-visible { outline: 2px solid var(--grass); outline-offset: 2px; }
+.hint {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
+  margin: 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--ink);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+}
+.loading[hidden] { display: none; }
+.loading {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-display);
+  font-size: 22px;
+  color: #12324d;
+  pointer-events: none;
+}
+@media (max-width: 480px) {
+  .name { font-size: 24px; }
+  .views button { font-size: 13px; padding: 0 10px; }
+}
+</style>
+
+<canvas id="scene" aria-label="3D view of a 100 by 100 block world with plains, forest, desert, snowy mountains, a lake and a small house"></canvas>
+<div class="loading" id="loading">Building the world…</div>
+<section class="hud" aria-label="World viewer">
+  <div>
+    <h1 class="name">Cube<span>Craft</span></h1>
+  </div>
+  <p class="sub">Test world · 100 × 100 blocks · 40 block types</p>
+  <div class="views" role="group" aria-label="Camera views">
+    <button type="button" id="v-overview" data-view="overview" aria-pressed="true">Overview</button>
+    <button type="button" id="v-house" data-view="house" aria-pressed="false">House</button>
+    <button type="button" id="v-mountains" data-view="mountains" aria-pressed="false">Mountains</button>
+    <button type="button" id="v-desert" data-view="desert" aria-pressed="false">Desert</button>
+    <button type="button" id="v-lake" data-view="lake" aria-pressed="false">Lake</button>
+  </div>
+</section>
+<p class="hint">Drag to turn · Scroll or pinch to zoom · Right-drag or two fingers to move</p>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(function () {
+  const META = __META__;
+  const RLE = "__RLE__";
+  const ATLAS = "data:image/png;base64,__ATLAS__";
+  const { X, Z, Y, cols, rows, tile, pad, cell, blocks, views } = META;
+
+  // ---- decode world ----
+  const bin = atob(RLE);
+  const world = new Uint8Array(X * Z * Y);
+  let p = 0;
+  for (let i = 0; i < bin.length; i += 2) {
+    const v = bin.charCodeAt(i), n = bin.charCodeAt(i + 1);
+    world.fill(v, p, p + n);
+    p += n;
+  }
+  const at = (x, y, z) => (x < 0 || z < 0 || y < 0 || x >= X || z >= Z || y >= Y) ? 0 : world[(x * Z + z) * Y + y];
+  const kind = (id) => blocks[id].kind;
+  const solid = (x, y, z) => kind(at(x, y, z)) === "solid";
+  const occ = (x, y, z) => { const k = kind(at(x, y, z)); return k === "solid" || k === "leaves"; };
+
+  // ---- faces: normal, corners (BL, BR, TR, TL seen from outside), texture slot, shade ----
+  const FACES = [
+    { n: [1, 0, 0], c: [[1, 0, 1], [1, 0, 0], [1, 1, 0], [1, 1, 1]], slot: "s", shade: 0.86 },
+    { n: [-1, 0, 0], c: [[0, 0, 0], [0, 0, 1], [0, 1, 1], [0, 1, 0]], slot: "s", shade: 0.72 },
+    { n: [0, 0, 1], c: [[0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]], slot: "s", shade: 0.8 },
+    { n: [0, 0, -1], c: [[1, 0, 0], [0, 0, 0], [0, 1, 0], [1, 1, 0]], slot: "s", shade: 0.66 },
+    { n: [0, 1, 0], c: [[0, 1, 1], [1, 1, 1], [1, 1, 0], [0, 1, 0]], slot: "t", shade: 1.0 },
+    { n: [0, -1, 0], c: [[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1]], slot: "b", shade: 0.5 },
+  ];
+  const UVC = [[0, 0], [1, 0], [1, 1], [0, 1]];
+  const AO = [0.42, 0.6, 0.8, 1.0];
+  const AW = cols * cell, AH = rows * cell;
+
+  // each tile sits inside a wrapped border in the atlas, so blending at a distance never picks up a neighbour
+  function tileUV(t, corner) {
+    const col = t % cols, row = Math.floor(t / cols);
+    const x0 = col * cell + pad, y0 = row * cell + pad;
+    const u0 = x0 / AW, u1 = (x0 + tile) / AW;
+    const v1 = 1 - y0 / AH, v0 = 1 - (y0 + tile) / AH;
+    return [corner[0] ? u1 : u0, corner[1] ? v1 : v0];
+  }
+
+  function makeGroup() { return { pos: [], uv: [], col: [], idx: [] }; }
+  const G = { opaque: makeGroup(), trans: makeGroup(), plant: makeGroup() };
+
+  function quad(g, verts, uvs, lights, flip) {
+    const base = g.pos.length / 3;
+    for (let i = 0; i < 4; i++) {
+      g.pos.push(verts[i][0], verts[i][1], verts[i][2]);
+      g.uv.push(uvs[i][0], uvs[i][1]);
+      g.col.push(lights[i], lights[i], lights[i]);
+    }
+    if (flip) g.idx.push(base + 1, base + 2, base + 3, base + 1, base + 3, base);
+    else g.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  }
+
+  for (let x = 0; x < X; x++) for (let z = 0; z < Z; z++) for (let y = 0; y < Y; y++) {
+    const id = world[(x * Z + z) * Y + y];
+    if (!id) continue;
+    const b = blocks[id], k = b.kind;
+    if (k === "plant") {
+      const g = G.plant, tile = b.s, L = 0.95;
+      const a = 0.15, c = 0.85;
+      const quads = [[[x + a, y, z + a], [x + c, y, z + c], [x + c, y + 1, z + c], [x + a, y + 1, z + a]],
+                     [[x + a, y, z + c], [x + c, y, z + a], [x + c, y + 1, z + a], [x + a, y + 1, z + c]]];
+      for (const q of quads) quad(g, q, UVC.map((u) => tileUV(tile, u)), [L * 0.8, L * 0.8, L, L], false);
+      continue;
+    }
+    for (const f of FACES) {
+      const nx = x + f.n[0], ny = y + f.n[1], nz = z + f.n[2];
+      if (ny < 0) continue;
+      const nid = at(nx, ny, nz), nk = kind(nid);
+      if (k === "solid" && nk === "solid") continue;
+      if ((k === "leaves" || k === "glass") && (nk === "solid" || nid === id)) continue;
+      if (k === "water" && (nk === "solid" || nk === "water" || nk === "leaves")) continue;
+      const tile = b[f.slot];
+      const axes = [0, 1, 2].filter((a) => f.n[a] === 0);
+      const verts = [], lights = [], uvs = [];
+      for (let i = 0; i < 4; i++) {
+        const cc = f.c[i];
+        let vy = y + cc[1];
+        if (k === "water" && cc[1] === 1 && kind(at(x, y + 1, z)) !== "water") vy = y + 0.875;
+        verts.push([x + cc[0], vy, z + cc[2]]);
+        uvs.push(tileUV(tile, UVC[i]));
+        let light = 1;
+        if (k !== "water") {
+          const d = [0, 0, 0];
+          for (const a of axes) d[a] = cc[a] ? 1 : -1;
+          const s1 = [nx, ny, nz], s2 = [nx, ny, nz], co = [nx, ny, nz];
+          s1[axes[0]] += d[axes[0]];
+          s2[axes[1]] += d[axes[1]];
+          co[axes[0]] += d[axes[0]]; co[axes[1]] += d[axes[1]];
+          const o1 = occ(...s1), o2 = occ(...s2), o3 = occ(...co);
+          light = AO[(o1 && o2) ? 0 : 3 - (o1 + o2 + o3)];
+        }
+        lights.push(light * f.shade);
+      }
+      const flip = lights[0] + lights[2] < lights[1] + lights[3];
+      quad(k === "water" || k === "glass" ? G.trans : G.opaque, verts, uvs, lights, flip);
+    }
+  }
+
+  // ---- three.js scene ----
+  const canvas = document.getElementById("scene");
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.Fog(0xcfe6f5, 170, 330);
+  const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 1000);
+  const controls = new THREE.OrbitControls(camera, canvas);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+  controls.maxPolarAngle = Math.PI * 0.49;
+  controls.minDistance = 6;
+  controls.maxDistance = 260;
+
+  const tex = new THREE.TextureLoader().load(ATLAS, () => { render(); markReady(); });
+  tex.magFilter = THREE.NearestFilter;            // crisp pixels up close
+  tex.minFilter = THREE.LinearMipmapLinearFilter; // smooth colour in the distance, no shimmer
+  tex.generateMipmaps = true;
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
+  function mesh(g, mat) {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(g.pos, 3));
+    geo.setAttribute("uv", new THREE.Float32BufferAttribute(g.uv, 2));
+    geo.setAttribute("color", new THREE.Float32BufferAttribute(g.col, 3));
+    geo.setIndex(g.idx);
+    const m = new THREE.Mesh(geo, mat);
+    scene.add(m);
+    return m;
+  }
+  mesh(G.opaque, new THREE.MeshBasicMaterial({ map: tex, vertexColors: true, alphaTest: 0.5 }));
+  mesh(G.plant, new THREE.MeshBasicMaterial({ map: tex, vertexColors: true, alphaTest: 0.5, side: THREE.DoubleSide }));
+  const t = mesh(G.trans, new THREE.MeshBasicMaterial({ map: tex, vertexColors: true, transparent: true, opacity: 0.82, depthWrite: false }));
+  t.renderOrder = 2;
+
+  function resize() {
+    const w = window.innerWidth, h = window.innerHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    render();
+  }
+  function render() { renderer.render(scene, camera); }
+
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let anim = null;
+  function setView(name, instant) {
+    const v = views[name];
+    if (!v) return;
+    document.querySelectorAll(".views button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.view === name)));
+    const fromP = camera.position.clone(), fromT = controls.target.clone();
+    const toP = new THREE.Vector3(...v.pos), toT = new THREE.Vector3(...v.target);
+    if (instant || reduce) {
+      camera.position.copy(toP); controls.target.copy(toT); controls.update(); render();
+      return;
+    }
+    anim = { fromP, fromT, toP, toT, t0: performance.now(), dur: 900 };
+  }
+  document.querySelectorAll(".views button").forEach((b) => b.addEventListener("click", () => setView(b.dataset.view)));
+
+  function loop(now) {
+    if (anim) {
+      let k = Math.min(1, (now - anim.t0) / anim.dur);
+      k = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+      camera.position.lerpVectors(anim.fromP, anim.toP, k);
+      controls.target.lerpVectors(anim.fromT, anim.toT, k);
+      if (k >= 1) anim = null;
+    }
+    controls.update();
+    render();
+    requestAnimationFrame(loop);
+  }
+
+  function markReady() {
+    document.getElementById("loading").hidden = true;
+    window.cc.ready = true;
+  }
+  window.cc = { setView, ready: false, render,
+    look(pos, target) { camera.position.set(...pos); controls.target.set(...target); controls.update(); render(); } };
+  window.addEventListener("resize", resize);
+  setView("overview", true);
+  resize();
+  requestAnimationFrame(loop);
+})();
+</script>
