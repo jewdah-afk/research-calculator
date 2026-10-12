@@ -1,0 +1,347 @@
+<title>Cube Craft Generator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=Rubik:wght@400;500;600&display=swap">
+<style>
+/* Layout: the 3D region fills the screen; one control card (seed, planet map, legend) floats top-left and can fold away. Single dark look over a sky. */
+:root {
+  --sky-top: #5d9fdc;
+  --sky-low: #d2ecfa;
+  --panel: rgba(16, 20, 26, 0.86);
+  --panel-line: rgba(255, 255, 255, 0.12);
+  --ink: #eef2f6;
+  --muted: #a9b4c0;
+  --grass: #7cc24f;
+  --grass-ink: #10200a;
+  --font-display: "Pixelify Sans", "Courier New", monospace;
+  --font-ui: "Rubik", "Segoe UI", system-ui, sans-serif;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body { margin: 0; overflow: hidden; background: linear-gradient(var(--sky-top), var(--sky-low)); color: var(--ink); font-family: var(--font-ui); }
+#scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+.card {
+  position: fixed; top: calc(env(safe-area-inset-top, 0px) + 12px); left: 12px;
+  width: min(380px, calc(100% - 24px)); box-sizing: border-box; max-height: calc(100% - 64px); overflow-y: auto;
+  padding: 14px 14px 16px; background: var(--panel); border: 1px solid var(--panel-line); border-radius: 10px;
+  display: flex; flex-direction: column; gap: 12px; backdrop-filter: blur(6px);
+}
+.head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.name { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: 26px; line-height: 1; }
+.name span { color: var(--grass); }
+.sub { margin: 0; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+label { font-size: 13px; color: var(--muted); }
+input[type="number"] {
+  width: 120px; min-height: 36px; box-sizing: border-box; padding: 0 10px; font: 500 15px var(--font-ui);
+  color: var(--ink); background: rgba(255, 255, 255, 0.08); border: 1px solid var(--panel-line); border-radius: 6px;
+  font-variant-numeric: tabular-nums;
+}
+button {
+  font: 500 14px/1 var(--font-ui); color: var(--ink); background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--panel-line); border-radius: 6px; min-height: 36px; padding: 0 12px; cursor: pointer;
+}
+button:hover { background: rgba(255, 255, 255, 0.16); }
+button.primary { background: var(--grass); color: var(--grass-ink); border-color: var(--grass); font-weight: 600; }
+button:focus-visible, input:focus-visible, canvas:focus-visible { outline: 2px solid var(--grass); outline-offset: 2px; }
+#map { width: 100%; height: auto; aspect-ratio: 4 / 3; image-rendering: pixelated; border-radius: 6px; cursor: crosshair; background: #0c1016; display: block; }
+.legend { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 10px; font-size: 12px; color: var(--muted); }
+.legend div { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.legend i { width: 10px; height: 10px; border-radius: 2px; flex: none; border: 1px solid rgba(255, 255, 255, 0.2); }
+.info { font-size: 13px; line-height: 1.45; margin: 0; }
+.info b { font-weight: 600; }
+.hint { position: fixed; left: 12px; right: 12px; bottom: calc(env(safe-area-inset-bottom, 0px) + 12px); margin: 0; text-align: center; font-size: 13px; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); pointer-events: none; }
+.busy { position: fixed; inset: 0; display: grid; place-items: center; font-family: var(--font-display); font-size: 22px; color: #12324d; pointer-events: none; }
+.busy[hidden], .body[hidden] { display: none; }
+.body { display: flex; flex-direction: column; gap: 12px; }
+</style>
+
+<canvas id="scene" aria-label="3D view of a generated region of the cube planet"></canvas>
+<div class="busy" id="busy">Generating…</div>
+<section class="card" aria-label="Planet generator">
+  <div class="head">
+    <h1 class="name">Cube<span>Craft</span></h1>
+    <button type="button" id="fold" aria-expanded="true">Hide</button>
+  </div>
+  <div class="body" id="body">
+    <p class="sub">Planet generator · 6 faces of 2,048 × 2,048 blocks · one algorithm, wraps over edges</p>
+    <div class="row">
+      <label for="seed">Seed</label>
+      <input type="number" id="seed" value="1234" inputmode="numeric">
+      <button type="button" class="primary" id="go">Generate</button>
+      <button type="button" id="rand">Random seed</button>
+    </div>
+    <canvas id="map" width="512" height="384" tabindex="0" aria-label="Unfolded map of the whole planet. Tap a spot to build it in 3D."></canvas>
+    <p class="info" id="info">Tap the map to build that spot in 3D.</p>
+    <div class="legend" id="legend"></div>
+  </div>
+</section>
+<p class="hint">Map: tap to pick a spot · 3D: drag to turn, pinch or scroll to zoom, two fingers to move</p>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+__PLANETGEN__
+</script>
+<script>
+(function () {
+  const META = __META__;
+  const ATLAS = "data:image/png;base64,__ATLAS__";
+  const { cols: ACOLS, rows: AROWS, tile: TILE, pad: PAD, cell: CELL, blocks, names } = META;
+  const ID = {}; names.forEach((n, i) => (ID[n] = i));
+  const kindOf = blocks.map((b) => b.kind);
+  const REGION = 112, FACE = 2048, MAPRES = 128;
+
+  // ---------- three.js ----------
+  const canvas = document.getElementById("scene");
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.Fog(0xd2ecfa, 220, 460);
+  const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 1200);
+  const controls = new THREE.OrbitControls(camera, canvas);
+  controls.enableDamping = true; controls.dampingFactor = 0.08;
+  controls.maxPolarAngle = Math.PI * 0.49; controls.minDistance = 6; controls.maxDistance = 360;
+  const tex = new THREE.TextureLoader().load(ATLAS, () => { texReady = true; maybeStart(); });
+  tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.LinearMipmapLinearFilter; tex.generateMipmaps = true;
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  const mats = {
+    opaque: new THREE.MeshBasicMaterial({ map: tex, vertexColors: true, alphaTest: 0.5 }),
+    plant: new THREE.MeshBasicMaterial({ map: tex, vertexColors: true, alphaTest: 0.5, side: THREE.DoubleSide }),
+    lava: new THREE.MeshBasicMaterial({ map: tex }),
+    trans: new THREE.MeshBasicMaterial({ map: tex, vertexColors: true, transparent: true, opacity: 0.82, depthWrite: false }),
+  };
+  let meshes = [];
+  let texReady = false;
+
+  // ---------- mesher: one region -> textured faces with corner shading ----------
+  const FACES = [
+    { n: [1, 0, 0], c: [[1, 0, 1], [1, 0, 0], [1, 1, 0], [1, 1, 1]], slot: "s", shade: 0.86 },
+    { n: [-1, 0, 0], c: [[0, 0, 0], [0, 0, 1], [0, 1, 1], [0, 1, 0]], slot: "s", shade: 0.72 },
+    { n: [0, 0, 1], c: [[0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]], slot: "s", shade: 0.8 },
+    { n: [0, 0, -1], c: [[1, 0, 0], [0, 0, 0], [0, 1, 0], [1, 1, 0]], slot: "s", shade: 0.66 },
+    { n: [0, 1, 0], c: [[0, 1, 1], [1, 1, 1], [1, 1, 0], [0, 1, 0]], slot: "t", shade: 1.0 },
+    { n: [0, -1, 0], c: [[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1]], slot: "b", shade: 0.5 },
+  ];
+  const UVC = [[0, 0], [1, 0], [1, 1], [0, 1]];
+  const AO = [0.42, 0.6, 0.8, 1.0];
+  const AW = ACOLS * CELL, AH = AROWS * CELL;
+  function tileUV(t, corner) {
+    const col = t % ACOLS, row = Math.floor(t / ACOLS);
+    const x0 = col * CELL + PAD, y0 = row * CELL + PAD;
+    return [corner[0] ? (x0 + TILE) / AW : x0 / AW, corner[1] ? 1 - y0 / AH : 1 - (y0 + TILE) / AH];
+  }
+
+  function buildMeshes(R) {
+    const { W, S, Y } = R;
+    const at = (x, y, z) => (x < 0 || z < 0 || y < 0 || x >= S || z >= S || y >= Y) ? 0 : W[(x * S + z) * Y + y];
+    const kind = (id) => kindOf[id];
+    const occ = (x, y, z) => { const k = kindOf[at(x, y, z)]; return k === "solid" || k === "leaves"; };
+    const G = {};
+    for (const k of ["opaque", "trans", "plant", "lava"]) G[k] = { pos: [], uv: [], col: [], idx: [] };
+    function quad(g, verts, uvs, lights, flip) {
+      const base = g.pos.length / 3;
+      for (let i = 0; i < 4; i++) { g.pos.push(...verts[i]); g.uv.push(...uvs[i]); g.col.push(lights[i], lights[i], lights[i]); }
+      if (flip) g.idx.push(base + 1, base + 2, base + 3, base + 1, base + 3, base);
+      else g.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+    }
+    for (let x = 0; x < S; x++) for (let z = 0; z < S; z++) for (let y = 0; y < Y; y++) {
+      const id = W[(x * S + z) * Y + y];
+      if (!id) continue;
+      const b = blocks[id], k = b.kind;
+      if (k === "plant") {
+        const a = 0.15, c = 0.85, L = 0.95;
+        const qs = [[[x + a, y, z + a], [x + c, y, z + c], [x + c, y + 1, z + c], [x + a, y + 1, z + a]],
+                    [[x + a, y, z + c], [x + c, y, z + a], [x + c, y + 1, z + a], [x + a, y + 1, z + c]]];
+        for (const q of qs) quad(G.plant, q, UVC.map((u) => tileUV(b.s, u)), [L * 0.8, L * 0.8, L, L], false);
+        continue;
+      }
+      const liquid = k === "water" || k === "lava";
+      for (const f of FACES) {
+        const nx = x + f.n[0], ny = y + f.n[1], nz = z + f.n[2];
+        if (ny < 0) continue;
+        const nid = at(nx, ny, nz), nk = kind(nid);
+        if (k === "solid" && nk === "solid") continue;
+        if ((k === "leaves" || k === "glass") && (nk === "solid" || nid === id)) continue;
+        if (liquid && (nk === "solid" || nk === "water" || nk === "lava" || nk === "leaves")) continue;
+        // the region's cut-away sides: skip liquid walls so oceans read as surfaces
+        if (liquid && (nx < 0 || nz < 0 || nx >= S || nz >= S)) continue;
+        const tile = b[f.slot];
+        const axes = [0, 1, 2].filter((a) => f.n[a] === 0);
+        const above = kind(at(x, y + 1, z));
+        const verts = [], lights = [], uvs = [];
+        for (let i = 0; i < 4; i++) {
+          const cc = f.c[i];
+          let vy = y + cc[1];
+          if (liquid && cc[1] === 1 && above !== k) vy = y + 0.875;
+          verts.push([x + cc[0], vy, z + cc[2]]);
+          uvs.push(tileUV(tile, UVC[i]));
+          let light = 1;
+          if (!liquid) {
+            const d = [0, 0, 0];
+            for (const a of axes) d[a] = cc[a] ? 1 : -1;
+            const s1 = [nx, ny, nz], s2 = [nx, ny, nz], co = [nx, ny, nz];
+            s1[axes[0]] += d[axes[0]]; s2[axes[1]] += d[axes[1]];
+            co[axes[0]] += d[axes[0]]; co[axes[1]] += d[axes[1]];
+            const o1 = occ(...s1), o2 = occ(...s2), o3 = occ(...co);
+            light = AO[(o1 && o2) ? 0 : 3 - (o1 + o2 + o3)];
+          }
+          lights.push(k === "lava" ? 1 : light * f.shade);
+        }
+        const flip = lights[0] + lights[2] < lights[1] + lights[3];
+        quad(k === "lava" ? G.lava : (k === "water" || k === "glass") ? G.trans : G.opaque, verts, uvs, lights, flip);
+      }
+    }
+    for (const m of meshes) { scene.remove(m); m.geometry.dispose(); }
+    meshes = [];
+    for (const key of ["opaque", "plant", "lava", "trans"]) {
+      const g = G[key];
+      if (!g.idx.length) continue;
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.Float32BufferAttribute(g.pos, 3));
+      geo.setAttribute("uv", new THREE.Float32BufferAttribute(g.uv, 2));
+      if (key !== "lava") geo.setAttribute("color", new THREE.Float32BufferAttribute(g.col, 3));
+      geo.setIndex(g.idx);
+      const m = new THREE.Mesh(geo, mats[key]);
+      if (key === "trans") m.renderOrder = 2;
+      scene.add(m);
+      meshes.push(m);
+    }
+  }
+
+  // ---------- planet map (unfolded cube) ----------
+  const mapEl = document.getElementById("map");
+  const mctx = mapEl.getContext("2d");
+  let gen = null, mapImg = null, pick = null;
+
+  function drawMap() {
+    const img = mctx.createImageData(4 * MAPRES, 3 * MAPRES);
+    const step = FACE / MAPRES;
+    for (let f = 0; f < 6; f++) {
+      const [nx, ny] = gen.FACES[f].net;
+      const hs = new Float32Array(MAPRES * MAPRES);
+      const cs = [];
+      for (let j = 0; j < MAPRES; j++) for (let i = 0; i < MAPRES; i++) {
+        const c = gen.columnAt(f, (i + 0.5) * step, (j + 0.5) * step);
+        hs[j * MAPRES + i] = c.h; cs.push(c);
+      }
+      for (let j = 0; j < MAPRES; j++) for (let i = 0; i < MAPRES; i++) {
+        const c = cs[j * MAPRES + i], col = gen.BIOMES[c.biome].color;
+        let k;
+        if (c.h < 0) k = 1 + Math.max(c.h, -46) / 90;
+        else {
+          const hl = i > 0 ? hs[j * MAPRES + i - 1] : c.h, hu = j > 0 ? hs[(j - 1) * MAPRES + i] : c.h;
+          k = 0.92 + Math.min(c.h, 90) / 500 + Math.max(-0.25, Math.min(0.25, (c.h - hl + c.h - hu) * 0.02));
+        }
+        const o = ((ny * MAPRES + j) * 4 * MAPRES + nx * MAPRES + i) * 4;
+        img.data[o] = Math.min(255, col[0] * k); img.data[o + 1] = Math.min(255, col[1] * k); img.data[o + 2] = Math.min(255, col[2] * k); img.data[o + 3] = 255;
+      }
+    }
+    mapImg = img;
+    paintMap();
+  }
+  function paintMap() {
+    mctx.putImageData(mapImg, 0, 0);
+    mctx.strokeStyle = "rgba(255,255,255,0.18)"; mctx.lineWidth = 1;
+    for (const fc of gen.FACES) mctx.strokeRect(fc.net[0] * MAPRES + 0.5, fc.net[1] * MAPRES + 0.5, MAPRES - 1, MAPRES - 1);
+    if (pick) {
+      const fc = gen.FACES[pick.f], s = MAPRES / FACE;
+      const x = fc.net[0] * MAPRES + pick.u0 * s, y = fc.net[1] * MAPRES + pick.v0 * s, w = REGION * s;
+      mctx.lineWidth = 2; mctx.strokeStyle = "#ffffff"; mctx.strokeRect(x - 1, y - 1, w + 2, w + 2);
+      mctx.strokeStyle = "#10200a"; mctx.lineWidth = 1; mctx.strokeRect(x - 3, y - 3, w + 6, w + 6);
+    }
+  }
+  function legend() {
+    const used = ["ocean", "deep_ocean", "river", "beach", "plains", "meadow", "forest", "birch_forest", "taiga", "savanna",
+      "desert", "volcanic", "snowy_plains", "snowy_taiga", "snowy_peaks", "stony_peaks", "frozen_ocean"];
+    document.getElementById("legend").innerHTML = used.map((k) => {
+      const c = gen.BIOMES[k].color;
+      return `<div><i style="background:rgb(${c.join(",")})"></i>${gen.BIOMES[k].name}</div>`;
+    }).join("");
+  }
+
+  // ---------- region ----------
+  const busy = document.getElementById("busy");
+  function buildRegion(f, u0, v0) {
+    pick = { f, u0, v0 };
+    paintMap();
+    busy.hidden = false;
+    setTimeout(() => {
+      const R = gen.region(f, u0, v0, REGION, ID);
+      buildMeshes(R);
+      const counts = {};
+      for (const c of R.cols) counts[c.biome] = (counts[c.biome] || 0) + 1;
+      const list = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([k]) => gen.BIOMES[k].name).join(", ");
+      document.getElementById("info").innerHTML =
+        `<b>Face ${gen.FACES[f].id}</b>, blocks ${u0}–${u0 + REGION} × ${v0}–${v0 + REGION}<br>${list}<br>Height ${R.minH} to ${R.maxH} (sea level 0)`;
+      const top = R.maxH - R.ylo, mid = Math.max(0, -R.ylo);
+      controls.target.set(REGION / 2, (mid + top) / 2, REGION / 2);
+      camera.position.set(REGION * 1.55, top + 55, REGION * 1.7);
+      controls.update();
+      busy.hidden = true;
+    }, 30);
+  }
+  function bestSpot() {
+    let best = null;
+    for (let u = 64; u < FACE - REGION - 64; u += 96) for (let v = 64; v < FACE - REGION - 64; v += 96) {
+      const set = new Set(); let land = 0;
+      for (let a = 0; a < REGION; a += 16) for (let b = 0; b < REGION; b += 16) {
+        const c = gen.columnAt(4, u + a, v + b); set.add(c.biome); if (c.h > 2) land++;
+      }
+      const score = Math.min(set.size, 6) + land / 12;
+      if (!best || score > best.s) best = { s: score, u, v };
+    }
+    return best;
+  }
+  mapEl.addEventListener("click", (e) => {
+    const r = mapEl.getBoundingClientRect();
+    const mx = (e.clientX - r.left) / r.width * 4 * MAPRES, my = (e.clientY - r.top) / r.height * 3 * MAPRES;
+    const cx = Math.floor(mx / MAPRES), cy = Math.floor(my / MAPRES);
+    const f = gen.FACES.findIndex((fc) => fc.net[0] === cx && fc.net[1] === cy);
+    if (f < 0) return;
+    const u = (mx - cx * MAPRES) / MAPRES * FACE, v = (my - cy * MAPRES) / MAPRES * FACE;
+    const clampR = (t) => Math.max(0, Math.min(FACE - REGION, Math.round(t - REGION / 2)));
+    buildRegion(f, clampR(u), clampR(v));
+  });
+
+  function newPlanet(first) {
+    const seed = parseInt(document.getElementById("seed").value, 10) || 0;
+    busy.hidden = false;
+    setTimeout(() => {
+      gen = PlanetGen.create(seed, { faceSize: FACE });
+      drawMap();
+      if (first) legend();
+      const b = bestSpot();
+      buildRegion(4, b.u, b.v);
+    }, 30);
+  }
+  document.getElementById("go").addEventListener("click", () => newPlanet(false));
+  document.getElementById("seed").addEventListener("keydown", (e) => { if (e.key === "Enter") newPlanet(false); });
+  document.getElementById("rand").addEventListener("click", () => {
+    document.getElementById("seed").value = Math.floor(Math.random() * 1e6);
+    newPlanet(false);
+  });
+  const fold = document.getElementById("fold"), body = document.getElementById("body");
+  fold.addEventListener("click", () => {
+    body.hidden = !body.hidden;
+    fold.textContent = body.hidden ? "Show" : "Hide";
+    fold.setAttribute("aria-expanded", String(!body.hidden));
+  });
+
+  function resize() {
+    const w = window.innerWidth, h = window.innerHeight;
+    renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+  }
+  window.addEventListener("resize", resize);
+  resize();
+  function loop() { controls.update(); renderer.render(scene, camera); requestAnimationFrame(loop); }
+  let started = false;
+  function maybeStart() { if (started || !texReady) return; started = true; newPlanet(true); requestAnimationFrame(loop); }
+  window.cc = {
+    ready: () => !busy.hidden ? false : !!gen && meshes.length > 0,
+    build: (f, u, v) => buildRegion(f, u, v),
+    look: (pos, target) => { camera.position.set(...pos); controls.target.set(...target); controls.update(); },
+    seed: (s) => { document.getElementById("seed").value = s; newPlanet(false); },
+    fold: () => fold.click(),
+  };
+})();
+</script>

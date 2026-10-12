@@ -10,6 +10,8 @@ A voxel survival game for Roblox where the world is a giant cube planet. Every f
 | `atlas.png`, `atlas.json` | The same textures packed into one atlas: 64 px cells (32 px tile + 16 px wrapped border, so far-away blending never bleeds), 8 × 8 grid |
 | `preview/cubecraft_world.html` | Web preview: a flat 100 × 100 test world |
 | `preview/cubecraft_planet.html` | Web preview: a small cube planet (96 blocks per face, one biome per face) |
+| `preview/cubecraft_generator.html` | Web preview of the real generator: map of the whole 2,048-per-face planet for any seed, tap a spot to build it in 3D |
+| `generator/planetgen.js` | **The planet generator.** One deterministic algorithm for the whole cube (see below). Written to port line for line to Luau |
 | `screens/` | Screenshots from the previews |
 | `tools/` | The Python and JS that made all of the above (see below) |
 
@@ -29,8 +31,16 @@ These scripts expect to sit together in one working folder with `world/`, `plane
 - Stone blends into slate over a few layers with dithering.
 - The viewer uses nearest filtering up close and mipmaps at a distance, which removes the far-away shimmer.
 
+## The generator (`generator/planetgen.js`)
+
+- Every column is generated from 3D noise sampled at its point on the base cube, so all six faces follow the same rules and the land joins up over the edges (height jump across an edge is about one block, the same as between any two neighbouring columns).
+- Terrain: continentalness (ocean to inland), erosion (rugged to flat), ridge noise (mountain ranges), small hills, and rivers carved where a slow noise crosses zero. A light domain warp keeps coastlines from looking like plain noise.
+- Biomes come from temperature and humidity (temperature drops with height): ocean, deep ocean, frozen ocean, river, beach, plains, flower meadow, forest, birch forest, taiga, savanna, desert, volcanic, snowy plains, snowy taiga, snowy peaks and stony peaks.
+- Underground: dirt or sand layers, sandstone under deserts, stone, then slate below -44 with a dithered blend; cheese caves and winding tunnels; lava lakes deep down; coal, iron, gold and gem veins that get rarer with depth (about 2.6%, 1%, 0.3% and 0.1% of stone), using slate variants in slate.
+- `region(face, u0, v0, size, ids)` returns real blocks for any square of a face: this is the function the Roblox chunk builder will call.
+- `node test.js <seed>` prints the biome mix, edge seams, region speed and ore rates for a seed.
+
 ## Next
 
-1. A single planet generator for 2,048-block faces: continents, oceans, erosion, mountain ridges, rivers, and biomes from temperature and humidity, the same everywhere on the cube and seamless over edges.
-2. Roblox: 32 × 32 chunks as EditableMesh on the client, generated from the seed; merged box parts for collision on the server; only player edits are saved.
-3. Gravity controller for walking on all faces.
+1. Roblox: 32 × 32 chunks as EditableMesh on the client, generated from the seed; merged box parts for collision on the server; only player edits are saved.
+2. Gravity controller for walking on all faces.
