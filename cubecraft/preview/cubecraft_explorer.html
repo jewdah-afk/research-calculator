@@ -78,6 +78,10 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
         <button type="button" id="m-globe" aria-pressed="false">Globe</button>
         <button type="button" id="m-ground" aria-pressed="true">Ground</button>
       </div>
+      <div class="seg" role="group" aria-label="Globe shape">
+        <button type="button" id="s-cube" aria-pressed="true">Cube</button>
+        <button type="button" id="s-sphere" aria-pressed="false">Sphere</button>
+      </div>
       <button type="button" id="fold" aria-expanded="true">Hide</button>
     </div>
   </div>
@@ -1586,7 +1590,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   }
 
   // ---------- globe ----------
-  let globeMesh = null, globeReq = 0;
+  let globeMesh = null, globeReq = 0, globeShape = "cube", lastGlobe = null;
   const gCam = new THREE.PerspectiveCamera(45, 1, 0.01, 100);
   const gControls = new THREE.OrbitControls(gCam, canvas);
   gControls.enableDamping = true; gControls.enablePan = false; gControls.minDistance = 1.8; gControls.maxDistance = 8; gControls.enabled = false;
@@ -1597,6 +1601,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   }
   function onGlobe(msg) {
     if (msg.id !== globeReq) return;
+    lastGlobe = msg;
     if (globeMesh) { globeGroup.remove(globeMesh); globeMesh.geometry.dispose(); }
     const res = msg.res, n = res + 1, pos = [], col = [], idx = [];
     const p = [0, 0, 0];
@@ -1606,7 +1611,9 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
         gen.basePoint(f, i * F / res - 0.5, j * F / res - 0.5, p);
         // lift outward from the centre, so the shared edge points of two faces land in the same place
         const k = i * n + j, len = Math.hypot(p[0], p[1], p[2]), lift = 1 + Math.max(d.h[k], 0) / 150 * 0.05;
-        pos.push(p[0] / R * lift, p[1] / R * lift, p[2] / R * lift);
+        // sphere shape: push each surface point out to a ball (the "cube-sphere" mapping)
+        const sc = globeShape === "sphere" ? 1.2 / len : 1 / R;
+        pos.push(p[0] * sc * lift, p[1] * sc * lift, p[2] * sc * lift);
         col.push(d.c[k * 3] / 255, d.c[k * 3 + 1] / 255, d.c[k * 3 + 2] / 255);
       }
       for (let i = 0; i < res; i++) for (let j = 0; j < res; j++) {
@@ -1773,6 +1780,15 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   });
   document.getElementById("dist").addEventListener("change", () => { refreshDesired(true); if (scene.fog) { scene.fog.near = fogNear(); } });
   document.getElementById("m-globe").addEventListener("click", () => setMode("globe"));
+  function setShape(s) {
+    globeShape = s;
+    document.getElementById("s-cube").setAttribute("aria-pressed", String(s === "cube"));
+    document.getElementById("s-sphere").setAttribute("aria-pressed", String(s === "sphere"));
+    if (lastGlobe) onGlobe(lastGlobe);
+    if (mode !== "globe") setMode("globe");
+  }
+  document.getElementById("s-cube").addEventListener("click", () => setShape("cube"));
+  document.getElementById("s-sphere").addEventListener("click", () => setShape("sphere"));
   document.getElementById("m-ground").addEventListener("click", () => setMode("ground"));
   document.getElementById("land").addEventListener("click", () => { const s = niceSpot(Math.random); landAt(s.f, s.u, s.v); });
   const fold = document.getElementById("fold"), body = document.getElementById("body");
@@ -1865,6 +1881,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
     ready: () => { let r = 0; for (const e of chunks.values()) if (e.state === "ready") r++; return r >= desired.size && desired.size > 0 && !!farMesh; },
     globeReady: () => !!globeMesh,
     mode: setMode,
+    shape: (s) => document.getElementById(s === "sphere" ? "s-sphere" : "s-cube").click(),
     goto: (f, u, v) => landAt(f, u, v),
     look: (pos, target) => { camera.position.set(...pos); controls.target.set(...target); controls.update(); },
     gcam: (pos) => { gCam.position.set(...pos); gControls.update(); },
