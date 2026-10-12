@@ -406,10 +406,10 @@ const store = {
 /* ---------- balance parameters ---------- */
 const DEFAULT_P = {
   costExp: 3, costSpeed: 110, costEarn: 120, costCars: 90,
-  pay: 24, payStep: 0.5, speed: 12, speedStep: 0.25,
-  goal: 170, startCoins: 40, costQueue: 35, costFreq: 320, spawn: 0.3, pitTime: 2.2, stop: 0.8,
+  pay: 45, payStep: 1, speed: 12, speedStep: 0.25,
+  goal: 170, startCoins: 40, costQueue: 35, costFreq: 320, spawn: 0.22, pitTime: 2.2, stop: 0.8,
 };
-let P = Object.assign({}, DEFAULT_P, store.get('plt-params-v2') || {});
+let P = Object.assign({}, DEFAULT_P, store.get('plt-params-v3') || {});
 
 /* ---------- maps ---------- */
 const r1 = v => Math.round(v * 10) / 10;
@@ -447,12 +447,14 @@ const THEMES = {
 const freshState = () => ({
   coins: P.startCoins, gems: 0, map: 0, cleared: 0, lv: Object.assign({}, START_LV), stationOpen: false,
   rides: 0, layouts: {}, turboT: 0, turboCd: 0, last: Date.now(), tapped: false,
-  garage: { sedan: 1 }, freeCarAt: 0,
+  garage: {}, freeCarAt: 0,
 });
 let state = Object.assign(freshState(), store.get('plt-save-v2') || {});
 const save = () => { state.last = Date.now(); store.set('plt-save-v2', state); };
 
 /* ---------- economy (the whole balance model lives here) ---------- */
+// P.pay is the Lv 1 pay on a 165 m lap (Dune Loop). Other laps pay in proportion, so any layout earns at the same rate.
+const REF_LAP = 165;
 const trackMult = i => Math.pow(4, i);
 const costMult = i => Math.pow(3, i);
 const baseCost = k => ({ speed: P.costSpeed, earn: P.costEarn, cars: P.costCars, queue: P.costQueue, freq: P.costFreq })[k];
@@ -460,7 +462,7 @@ const baseCost = k => ({ speed: P.costSpeed, earn: P.costEarn, cars: P.costCars,
 const cost = (k, lvl, mi = state.map) => Math.round(baseCost(k) * Math.pow(k === 'freq' ? lvl + 1 : lvl, P.costExp) * costMult(mi));
 const carSpeed = lvl => P.speed * (1 + P.speedStep * (lvl - 1));
 const garageMult = (g = state.garage) => 1 + Object.keys(g).reduce((a, id) => a + g[id] * MODELS[id].bonus, 0);
-const payPerRide = (lvl, L, mi = state.map, gm = garageMult()) => P.pay * (L / 100) * (1 + P.payStep * (lvl - 1)) * trackMult(mi) * gm;
+const payPerRide = (lvl, L, mi = state.map, gm = garageMult()) => P.pay * (L / REF_LAP) * (1 + P.payStep * (lvl - 1)) * trackMult(mi) * gm;
 const spawnRate = freq => P.spawn * freq;
 const goalFor = mi => Math.round(P.goal * (1 + 0.5 * mi));
 const queueCap = () => state.lv.queue;
@@ -975,7 +977,7 @@ function updateSign() {
 // Every car owns one parking bay. Loop: drive a lap -> pull into its bay -> drop off (pays) -> wait for a passenger
 // -> reverse out -> merge back onto the track once the lane is clear.
 const tmpObj = new THREE.Object3D();
-const ownedModels = () => Object.keys(state.garage).sort((a, b) => MODELS[b].bonus - MODELS[a].bonus);
+const ownedModels = () => { const o = Object.keys(state.garage).sort((a, b) => MODELS[b].bonus - MODELS[a].bonus); return o.length ? o : ['sedan']; };
 function carLook(k) {
   const own = ownedModels(), id = own[k % own.length];
   return { id, color: k < own.length ? MODELS[id].color : CAR_COLORS[k % CAR_COLORS.length] };
@@ -1408,6 +1410,7 @@ function renderGarage(fresh) {
   $('#gBonus').textContent = '+' + Math.round((garageMult() - 1) * 100) + '% pay';
   $('#gGrid').innerHTML = Object.keys(MODELS).map(id => {
     const m = MODELS[id], lv = state.garage[id] || 0;
+    if (!lv && id === 'sedan') return `<div class="gcar"><div class="shot"><img alt="Sedan" src="${thumbs[id] || ''}"></div><h4>Sedan</h4><p>Starter car · no bonus</p><p>Collect one to add +${Math.round(m.bonus * 100)}% per level</p></div>`;
     return `<div class="gcar${lv ? '' : ' locked'}${id === fresh ? ' fresh' : ''}"><div class="shot"><img alt="${lv ? m.name : 'Unknown car'}" src="${thumbs[id] || ''}"></div>` +
       `<h4>${lv ? m.name : '???'}</h4><p>${lv ? `<span class="lvl">Lv ${lv}</span> · +${Math.round(m.bonus * lv * 100)}% pay` : `+${Math.round(m.bonus * 100)}% pay per level`}</p>` +
       `<p>${m.weight <= 4 ? 'Very rare' : m.weight <= 10 ? 'Rare' : 'Common'}</p></div>`;
@@ -1656,8 +1659,8 @@ const KNOBS = [
   ['costSpeed', 'Speed base cost', 20, 500, 5, v => '$' + v],
   ['costEarn', 'Earnings base cost', 20, 500, 5, v => '$' + v],
   ['costCars', 'Cars base cost', 20, 500, 5, v => '$' + v],
-  ['pay', 'Pay per ride, per 100 m of lap', 4, 60, 1, v => '$' + v],
-  ['payStep', 'Earnings gained per level', 0.1, 1.5, 0.05, v => '+' + Math.round(v * 100) + '%'],
+  ['pay', 'Pay per ride at Lv 1 (165 m lap)', 5, 200, 1, v => '$' + v],
+  ['payStep', 'Pay added per Earnings level (1 = x2, x3, x4…)', 0.1, 2, 0.05, v => '+' + Math.round(v * 100) + '% of base'],
   ['speed', 'Starting car speed', 4, 30, 0.5, v => v + ' m/s'],
   ['speedStep', 'Speed gained per level', 0.05, 0.6, 0.01, v => '+' + Math.round(v * 100) + '%'],
   ['goal', 'Rides to clear the first track', 20, 400, 5, v => v + ' rides'],
@@ -1675,7 +1678,7 @@ function buildKnobs() {
       d.innerHTML = `<label for="k-${k}">${label}</label><output id="o-${k}" class="num"></output><input type="range" id="k-${k}" min="${min}" max="${max}" step="${step}">`;
       box.appendChild(d);
       d.querySelector('input').addEventListener('input', ev => {
-        P[k] = parseFloat(ev.target.value); store.set('plt-params-v2', P);
+        P[k] = parseFloat(ev.target.value); store.set('plt-params-v3', P);
         syncKnobs(); refreshHud(); updateBoard(); runSim();
       });
     });
@@ -1684,7 +1687,7 @@ function buildKnobs() {
   syncKnobs();
 }
 function syncKnobs() { KNOBS.forEach(([k, , , , , f]) => { $('#k-' + k).value = P[k]; $('#o-' + k).textContent = f(P[k]); }); }
-$('#resetKnobs').addEventListener('click', () => { P = Object.assign({}, DEFAULT_P); store.set('plt-params-v2', P); syncKnobs(); refreshHud(); updateBoard(); runSim(); });
+$('#resetKnobs').addEventListener('click', () => { P = Object.assign({}, DEFAULT_P); store.set('plt-params-v3', P); syncKnobs(); refreshHud(); updateBoard(); runSim(); });
 
 let lastSim = null;
 function runSim() {
@@ -1783,7 +1786,7 @@ function start(data) {
   if (data && data.state) state = data.state;
   if (state.map >= MAPS.length) state.map = 0;
   state.lv = Object.assign({}, START_LV, state.lv);
-  state.garage = Object.assign({ sedan: 1 }, state.garage);
+  state.garage = Object.assign({}, state.garage);
   resize();
   const away = (Date.now() - (state.last || Date.now())) / 1000;
   loadMap();
