@@ -1723,7 +1723,7 @@ function acquireRing(G, t, r, min, mode) {
 }
 function shell(G, t, target, dmg, blast, extra) {
   const m = E.muzzle(t), tx = target.x, ty = target.y;
-  const d = Math.hypot(tx - m.x, ty - m.y), speed = G.D.turrets.Orange.shellSpeed;
+  const d = E.dist(m, { x: tx, y: ty }), speed = G.D.turrets.Orange.shellSpeed;
   return E.addShot(G, { k: "mortar", sx: m.x, sy: m.y, x: m.x, y: m.y, tx, ty, t0: G.now, land: G.now + Math.max(1, Math.round(d / speed * 1000)), blast, extra: extra || null, src: t });
 }
 function chain(G, t, from, first, dmg, falloff, jumps, range, slow) {
@@ -1750,7 +1750,7 @@ function roadWalk(G, target, n, spacing) {
     pts.push({ x, y });
     let left = spacing;
     while (left > 0 && wp >= 1) {
-      const p = G.road[wp - 1], d = Math.hypot(p.x - x, p.y - y);
+      const p = G.road[wp - 1], d = E.dist({ x, y }, p);
       if (d >= left) { x += (p.x - x) / d * left; y += (p.y - y) / d * left; left = 0; }
       else { x = p.x; y = p.y; left -= d; wp--; }
     }

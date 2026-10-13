@@ -1001,5 +1001,565 @@
     "waveSend"
    ]
   ]
+ },
+ {
+  "name": "plus-bot-Orange",
+  "opts": {
+   "map": "map1",
+   "mode": "medium",
+   "seed": 7919
+  },
+  "plus": {
+   "p1": {
+    "level": 99,
+    "research": {},
+    "passes": {}
+   }
+  },
+  "ms": 900000,
+  "bot": [
+   "Orange"
+  ]
+ },
+ {
+  "name": "plus-bot-Violet",
+  "opts": {
+   "map": "map1",
+   "mode": "medium",
+   "seed": 15838
+  },
+  "plus": {
+   "p1": {
+    "level": 99,
+    "research": {},
+    "passes": {}
+   }
+  },
+  "ms": 900000,
+  "bot": [
+   "Violet"
+  ]
+ },
+ {
+  "name": "plus-bot-Blue-Cyan",
+  "opts": {
+   "map": "map1",
+   "mode": "medium",
+   "seed": 23757
+  },
+  "plus": {
+   "p1": {
+    "level": 99,
+    "research": {},
+    "passes": {}
+   }
+  },
+  "ms": 900000,
+  "bot": [
+   "Blue",
+   "Cyan"
+  ]
+ },
+ {
+  "name": "plus-bot-Orange-Red-Red",
+  "opts": {
+   "map": "map1",
+   "mode": "medium",
+   "seed": 31676
+  },
+  "plus": {
+   "p1": {
+    "level": 99,
+    "research": {},
+    "passes": {}
+   }
+  },
+  "ms": 900000,
+  "bot": [
+   "Orange",
+   "Red",
+   "Red"
+  ]
+ },
+ {
+  "name": "plus-bot-Violet-Green",
+  "opts": {
+   "map": "map1",
+   "mode": "medium",
+   "seed": 39595
+  },
+  "plus": {
+   "p1": {
+    "level": 99,
+    "research": {},
+    "passes": {}
+   }
+  },
+  "ms": 900000,
+  "bot": [
+   "Violet",
+   "Green"
+  ]
+ },
+ {
+  "name": "plus-bot-Red-Vault-Blue",
+  "opts": {
+   "map": "map1",
+   "mode": "medium",
+   "seed": 47514
+  },
+  "plus": {
+   "p1": {
+    "level": 99,
+    "research": {},
+    "passes": {}
+   }
+  },
+  "ms": 900000,
+  "bot": [
+   "Red",
+   "Vault",
+   "Blue"
+  ]
+ },
+ {
+  "name": "plus-bot-coop",
+  "opts": {
+   "map": "map2",
+   "mode": "hard",
+   "seed": 4242,
+   "players": [
+    "p1",
+    "p2"
+   ]
+  },
+  "plus": {
+   "p1": {
+    "level": 40,
+    "research": {
+     "funds": 10,
+     "salvage": 5,
+     "bunker": 3,
+     "theory": 6,
+     "bounty": 4,
+     "m_Orange": 5,
+     "m_Violet": 3
+    },
+    "passes": {
+     "supply": true,
+     "combomaster": true
+    }
+   },
+   "p2": {
+    "level": 5,
+    "research": {
+     "funds": 2
+    },
+    "passes": {}
+   }
+  },
+  "ms": 700000,
+  "bot": [
+   "Orange",
+   "Blue",
+   "Violet"
+  ]
+ },
+ {
+  "name": "plus-combo-carpet_bomb",
+  "opts": {
+   "map": "map1",
+   "mode": "sandbox",
+   "seed": 9
+  },
+  "plus": {
+   "p1": {
+    "level": 99,
+    "research": {},
+    "passes": {}
+   }
+  },
+  "ms": 40000,
+  "energy": 1000000000.0,
+  "script": [
+   [
+    0,
+    "group",
+    150,
+    345,
+    [
+     "Orange",
+     "Red",
+     "Red"
+    ]
+   ],
+   [
+    0,
+    "waveSend"
+   ]
+  ]
+ },
+ {
+  "name": "plus-combo-cryo_shell",
+  "opts": {
+   "map": "map1",
+   "mode": "sandbox",
+   "seed": 9
+  },
+  "plus": {
+   "p1": {
+    "level": 99,
+    "research": {},
+    "passes": {}
+   }
+  },
+  "ms": 40000,
+  "energy": 1000000000.0,
+  "script": [
+   [
+    0,
+    "group",
+    150,
+    345,
+    [
+     "Orange",
+     "Cyan"
+    ]
+   ],
+   [
+    0,
+    "waveSend"
+   ]
+  ]
+ },
+ {
+  "name": "plus-combo-ion_mortar",
+  "opts": {
+   "map": "map1",
+   "mode": "sandbox",
+   "seed": 9
+  },
+  "plus": {
+   "p1": {
+    "level": 99,
+    "research": {},
+    "passes": {}
+   }
+  },
+  "ms": 40000,
+  "energy": 1000000000.0,
+  "script": [
+   [
+    0,
+    "group",
+    150,
+    345,
+    [
+     "Orange",
+     "Violet"
+    ]
+   ],
+   [
+    0,
+    "waveSend"
+   ]
+  ]
+ },
+ {
+  "name": "plus-combo-absolute_zero",
+  "opts": {
+   "map": "map1",
+   "mode": "sandbox",
+   "seed": 9
+  },
+  "plus": {
+   "p1": {
+    "level": 99,
+    "research": {},
+    "passes": {}
+   }
+  },
+  "ms": 40000,
+  "energy": 1000000000.0,
+  "script": [
+   [
+    0,
+    "group",
+    150,
+    345,
+    [
+     "Cyan",
+     "Yellow",
+     "Green"
+    ]
+   ],
+   [
+    0,
+    "waveSend"
+   ]
+  ]
+ },
+ {
+  "name": "plus-combo-frost_mine",
+  "opts": {
+   "map": "map1",
+   "mode": "sandbox",
+   "seed": 9
+  },
+  "plus": {
+   "p1": {
+    "level": 99,
+    "research": {},
+    "passes": {}
+   }
+  },
+  "ms": 40000,
+  "energy": 1000000000.0,
+  "script": [
+   [
+    0,
+    "group",
+    150,
+    345,
+    [
+     "Cyan",
+     "Blue"
+    ]
+   ],
+   [
+    0,
+    "waveSend"
+   ]
+  ]
+ },
+ {
+  "name": "plus-combo-ion_field",
+  "opts": {
+   "map": "map1",
+   "mode": "sandbox",
+   "seed": 9
+  },
+  "plus": {
+   "p1": {
+    "level": 99,
+    "research": {},
+    "passes": {}
+   }
+  },
+  "ms": 40000,
+  "energy": 1000000000.0,
+  "script": [
+   [
+    0,
+    "group",
+    150,
+    345,
+    [
+     "Violet",
+     "Yellow",
+     "Yellow"
+    ]
+   ],
+   [
+    0,
+    "waveSend"
+   ]
+  ]
+ },
+ {
+  "name": "plus-combo-storm",
+  "opts": {
+   "map": "map1",
+   "mode": "sandbox",
+   "seed": 9
+  },
+  "plus": {
+   "p1": {
+    "level": 99,
+    "research": {},
+    "passes": {}
+   }
+  },
+  "ms": 40000,
+  "energy": 1000000000.0,
+  "script": [
+   [
+    0,
+    "group",
+    150,
+    345,
+    [
+     "Violet",
+     "Green"
+    ]
+   ],
+   [
+    0,
+    "waveSend"
+   ]
+  ]
+ },
+ {
+  "name": "plus-combo-nuke_mixed",
+  "opts": {
+   "map": "map1",
+   "mode": "sandbox",
+   "seed": 9
+  },
+  "plus": {
+   "p1": {
+    "level": 99,
+    "research": {},
+    "passes": {}
+   }
+  },
+  "ms": 40000,
+  "energy": 1000000000.0,
+  "script": [
+   [
+    0,
+    "group",
+    150,
+    345,
+    [
+     "Red",
+     "Blue",
+     "Blue",
+     "Orange"
+    ]
+   ],
+   [
+    0,
+    "waveSend"
+   ]
+  ]
+ },
+ {
+  "name": "plus-beacon-orbital",
+  "opts": {
+   "map": "map1",
+   "mode": "sandbox",
+   "seed": 19
+  },
+  "plus": {
+   "p1": {
+    "level": 40,
+    "research": {
+     "funds": 10,
+     "salvage": 5,
+     "bunker": 3,
+     "theory": 6,
+     "bounty": 4,
+     "m_Orange": 5,
+     "m_Violet": 3
+    },
+    "passes": {
+     "supply": true,
+     "combomaster": true
+    }
+   }
+  },
+  "ms": 60000,
+  "energy": 1000000000.0,
+  "script": [
+   [
+    0,
+    "group",
+    150,
+    345,
+    [
+     "Red",
+     "Blue",
+     "Blue"
+    ]
+   ],
+   [
+    0,
+    "build",
+    "p1",
+    "Beacon",
+    150,
+    290
+   ],
+   [
+    0,
+    "build",
+    "p1",
+    "Orbital",
+    400,
+    60
+   ],
+   [
+    0,
+    "build",
+    "p1",
+    "Vault",
+    620,
+    420
+   ],
+   [
+    0,
+    "waveSend"
+   ]
+  ]
+ },
+ {
+  "name": "plus-products",
+  "opts": {
+   "map": "map1",
+   "mode": "medium",
+   "seed": 23
+  },
+  "plus": {
+   "p1": {
+    "level": 99,
+    "research": {},
+    "passes": {}
+   }
+  },
+  "ms": 400000,
+  "bot": [
+   "Blue",
+   "Orange"
+  ],
+  "script": [
+   [
+    30000,
+    "product",
+    "drop_m",
+    "p1"
+   ],
+   [
+    40000,
+    "product",
+    "life",
+    "p1"
+   ],
+   [
+    60000,
+    "product",
+    "freeze",
+    "p1"
+   ],
+   [
+    90000,
+    "product",
+    "airstrike",
+    "p1",
+    300,
+    300
+   ],
+   [
+    120000,
+    "energy",
+    1000000000.0
+   ],
+   [
+    200000,
+    "product",
+    "revive",
+    "p1"
+   ]
+  ]
  }
 ]

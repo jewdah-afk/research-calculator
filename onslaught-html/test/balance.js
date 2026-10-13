@@ -44,7 +44,7 @@ function play(kinds, seed, mode, maxMin) {
 }
 const plans = [
   ["Blue"], ["Green"], ["Red"], ["Yellow"], ["Orange"], ["Violet"],
-  ["Blue", "Cyan"], ["Red", "Blue", "Blue"], ["Orange", "Red", "Red"], ["Violet", "Green"], ["Blue", "Red", "Green", "Yellow"],
+  ["Blue", "Cyan"], ["Red", "Blue", "Blue"], ["Red", "Vault", "Blue"], ["Orange", "Red", "Red"], ["Violet", "Green"], ["Blue", "Red", "Green", "Yellow"],
 ];
 console.log("plan".padEnd(28), "wave(avg)", "min", "max", "combos");
 for (const plan of plans) {

@@ -4,6 +4,7 @@ local serde = require("@lune/serde")
 local process = require("@lune/process")
 local E = require("../../src/shared/Onslaught/Engine")
 local GAME = require("../../src/shared/Onslaught/Data")
+local X = require("../../src/shared/Onslaught/Expansion")
 
 local SC = serde.decode("json", fs.readFile("test/parity/scenarios.json"))
 local only = process.args[1]
@@ -113,6 +114,10 @@ local function act(G, a)
 		if T(a[3]) then
 			E.sell(G, own(a[3]), T(a[3]).id)
 		end
+	elseif op == "product" then
+		X.useProduct(G, a[3], a[4], if #a > 4 then { x = a[5], y = a[6] } else nil)
+	elseif op == "energy" then
+		G.energy = a[3]
 	elseif op == "leave" then
 		E.removePlayer(G, a[3])
 	elseif op == "prefs" then
@@ -182,7 +187,7 @@ for _, sc in SC do
 		o.challenge = GAME.challenges[o.challengeIndex + 1]
 		o.challengeIndex = nil
 	end
-	local G = E.newGame(GAME, o)
+	local G = if sc.plus then E.newGame(X.data(GAME, sc.plus[o.players[1]]), X.gameOpts(o, sc.plus)) else E.newGame(GAME, o)
 	if sc.energy then
 		G.energy = sc.energy
 	end
@@ -201,6 +206,10 @@ for _, sc in SC do
 		end
 		E.step(G)
 		t += 1
+		if sc.plus and G.over and G.lost and si <= #script and script[si][2] == "product" and script[si][3] == "revive" then
+			act(G, script[si])
+			si += 1
+		end
 		for _, f in G.fx do
 			local key = if f.k == "combo" then "combo:" .. f.name else f.k
 			fxKinds[key] = (fxKinds[key] or 0) + 1

@@ -41,6 +41,8 @@ All numbers below are in `expansion.json`. The code is `onslaught-html/expansion
    | Red + 2 Blue | 34.7 | | Orange + 2 Red | 33.0 |
    | Violet + Green | 32.0 | | Blue + Cyan | 28.0 (the bot doesn't value slow) |
 
+   **Gold Vault** was checked separately. Red + Vault + Blue reaches 40.7, but a Vault that pays nothing still reaches 40.0. So the Vault's interest is worth about +0.7 waves. The rest comes from the plan: Vaults hit their limit, so the bot builds fewer towers and upgrades them further. Interest stays as shipped.
+
    The first pass had Violet at 39.7. Its jump falloff went from 0.75 to 0.65, its base jumps from 2 to 1, and its damage and rate upgrade costs rose ×1.4. Orange went from 29 to 30 with +15% damage, faster shells and a better rate curve.
 
 ## 2. New towers

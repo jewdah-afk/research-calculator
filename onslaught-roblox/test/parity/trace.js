@@ -49,6 +49,8 @@ function act(G, a) {
   if (op === "focus") return E.focus(G, r[0], r[1]);
   if (op === "move") return T(r[0]) && E.move(G, own(r[0]), T(r[0]).id, r[1], r[2]);
   if (op === "sell") return T(r[0]) && E.sell(G, own(r[0]), T(r[0]).id);
+  if (op === "product") return X.useProduct(G, r[0], r[1], r.length > 2 ? { x: r[2], y: r[3] } : undefined);
+  if (op === "energy") { G.energy = r[0]; return; }
   if (op === "leave") return E.removePlayer(G, r[0]);
   if (op === "prefs") return E.setPrefs(G, { waveSpacing: r[0], waveFollow: r[1] });
   if (op === "group") {
@@ -73,7 +75,7 @@ for (const sc of SC) {
   if (only && sc.name !== only) continue;
   const o = Object.assign({ players: ["p1"] }, sc.opts);
   if (o.challengeIndex !== undefined) { o.challenge = GAME.challenges[o.challengeIndex]; delete o.challengeIndex; }
-  const G = E.newGame(GAME, o);
+  const G = sc.plus ? E.newGame(X.data(GAME, sc.plus[o.players[0]]), X.gameOpts(o, sc.plus)) : E.newGame(GAME, o);
   if (sc.energy) G.energy = sc.energy;
   const bot = sc.bot ? { cand: spots(G, 110), next: 0 } : null;
   const script = (sc.script || []).slice();
@@ -84,6 +86,7 @@ for (const sc of SC) {
     E.step(G); t++;
     for (const f of G.fx) { const key = f.k === "combo" ? "combo:" + f.name : f.k; fxKinds[key] = (fxKinds[key] || 0) + 1; }
     G.fx = [];
+    if (sc.plus && G.over && G.lost && script.length && script[0][1] === "product" && script[0][2] === "revive") act(G, script.shift());
     if (G.now % 500 === 0 || G.over) { const s = snap(G); s.sc = sc.name; s.fx = fxKinds; fxKinds = {}; console.log(JSON.stringify(s)); }
   }
 }
