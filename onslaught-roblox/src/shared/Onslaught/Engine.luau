@@ -226,7 +226,7 @@ local function addPlayer(G, pid, cash)
 	if G.players[pid] then
 		return G.players[pid]
 	end
-	G.players[pid] = { id = pid, cash = cash, kills = 0, spent = 0 }
+	G.players[pid] = { id = pid, cash = cash, kills = 0, spent = 0, earned = 0 }
 	insert(G.playerOrder, pid)
 	return G.players[pid]
 end
@@ -350,7 +350,9 @@ local function cashWin(G, amount)
 	end
 	local n = #G.playerOrder
 	for _, pid in G.playerOrder do
-		G.players[pid].cash += amount / n
+		local p = G.players[pid]
+		p.cash += amount / n
+		p.earned += amount / n
 	end
 end
 local function cashSpend(G, pid, amount)
@@ -571,6 +573,9 @@ function hit(G, a, dmg, src)
 		a.dead = true
 		if src and src.isTurret then
 			src.kills += 1
+			if G.players[src.owner] then
+				G.players[src.owner].kills += 1
+			end
 		end
 		G.kills += 1
 		cashWin(G, a.bounty)

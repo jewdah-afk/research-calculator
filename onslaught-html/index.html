@@ -340,7 +340,7 @@ function newGame(D, opts) {
 }
 function addPlayer(G, pid, cash) {
   if (G.players[pid]) return G.players[pid];
-  G.players[pid] = { id: pid, cash, kills: 0, spent: 0 };
+  G.players[pid] = { id: pid, cash, kills: 0, spent: 0, earned: 0 };
   G.playerOrder.push(pid);
   return G.players[pid];
 }
@@ -356,7 +356,7 @@ function removePlayer(G, pid) {
 function cashWin(G, amount) {
   if (G.mods && G.mods.bounty) amount = G.mods.bounty(G, amount);
   const n = G.playerOrder.length;
-  for (const pid of G.playerOrder) G.players[pid].cash += amount / n;
+  for (const pid of G.playerOrder) { G.players[pid].cash += amount / n; G.players[pid].earned += amount / n; }
 }
 function cashSpend(G, pid, amount) {
   const p = G.players[pid];
@@ -490,7 +490,7 @@ function hit(G, a, dmg, src) {
   a.energy -= dmg;
   if (a.energy <= 0) {
     a.dead = true;
-    if (src && src.isTurret) src.kills++;
+    if (src && src.isTurret) { src.kills++; if (G.players[src.owner]) G.players[src.owner].kills++; }
     G.kills++;
     cashWin(G, a.bounty);
     fx(G, { k: "kill", x: a.x, y: a.y, b: a.bounty });

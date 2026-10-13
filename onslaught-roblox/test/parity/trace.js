@@ -67,7 +67,7 @@ function snap(G) {
   for (const a of G.attackers) { hp += a.energy; xs += a.x; ys += a.y; sp += a.speed; }
   let rot = 0, val = 0;
   for (const t of G.turrets) { rot += t.rot || 0; val += t.value; }
-  return { t: G.now, w: G.waveNum, k: G.kills, l: G.lives, c: G.playerOrder.map(p => G.players[p].cash), r: G.rng.s,
+  return { t: G.now, w: G.waveNum, k: G.kills, l: G.lives, c: G.playerOrder.map(p => G.players[p].cash), pk: G.playerOrder.map(p => G.players[p].kills), pe: G.playerOrder.map(p => G.players[p].earned), r: G.rng.s,
     na: G.attackers.length, hp, xs, ys, sp, nt: G.turrets.length, rot, val, ns: G.shots.length, nb: G.blasts.length,
     sh: G.stats.shots, co: G.stats.combos, over: G.over };
 }

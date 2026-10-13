@@ -1,0 +1,4 @@
+[tools]
+rojo = "rojo-rbx/rojo@7.5.1"
+selene = "Kampfkarren/selene@0.31.0"
+lune = "lune-org/lune@0.10.5"

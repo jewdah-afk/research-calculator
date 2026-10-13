@@ -163,12 +163,14 @@ local function snap(G)
 		rot += t.rot or 0
 		val += t.value
 	end
-	local c = {}
+	local c, pk, pe = {}, {}, {}
 	for i, p in G.playerOrder do
 		c[i] = G.players[p].cash
+		pk[i] = G.players[p].kills
+		pe[i] = G.players[p].earned
 	end
 	return {
-		t = G.now, w = G.waveNum, k = G.kills, l = G.lives, c = c, r = G.rng.s,
+		t = G.now, w = G.waveNum, k = G.kills, l = G.lives, c = c, pk = pk, pe = pe, r = G.rng.s,
 		na = #G.attackers, hp = hp, xs = xs, ys = ys, sp = sp, nt = #G.turrets, rot = rot, val = val,
 		ns = #G.shots, nb = #G.blasts, sh = G.stats.shots, co = G.stats.combos, over = G.over,
 	}
