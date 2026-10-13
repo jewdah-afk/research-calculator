@@ -150,7 +150,7 @@ function LobbyUI:renderPlay()
 		end
 		wrapText(table.concat(names, " · ") .. string.format("   %d/4", #myParty.members), 13, C.ink, 1, sec)
 		local s = myParty.settings or {}
-		wrapText(string.format("%s · %s · %s", if s.plus then "Onslaught+" else "Classic", if s.challengeIndex then GAME.challenges[s.challengeIndex].name else tostring(s.mode), GAME.maps[s.map] and GAME.maps[s.map].name or "?"), 12, C.muted, 2, sec)
+		wrapText(string.format("%s · %s · %s map", if s.plus then "Onslaught+" else "Classic", Rules.runLabel(GAME, s.mode, s.challengeIndex), GAME.maps[s.map] and GAME.maps[s.map].name or "?"), 12, C.muted, 2, sec)
 		local row = new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 36), LayoutOrder = 3, Parent = sec })
 		Ui.list(Enum.FillDirection.Horizontal, 8).Parent = row
 		if myParty.leader == self.ctx.userId then
@@ -273,7 +273,7 @@ function LobbyUI:renderPlay()
 			local r = new("Frame", { BackgroundColor3 = C.panel2, Size = UDim2.new(1, 0, 0, 40), LayoutOrder = 10 + open, Parent = secP })
 			Ui.corner(8).Parent = r
 			Ui.pad(10, 0).Parent = r
-			text(string.format("<b>%s</b>'s party  ·  %d/4  ·  %s %s", party.leaderName, #party.members, if s.plus then "Onslaught+" else "Classic", if s.challengeIndex then GAME.challenges[s.challengeIndex].name else tostring(s.mode)), 13, C.ink, Ui.FONT, { Position = UDim2.fromOffset(0, 11), Parent = r })
+			text(string.format("<b>%s</b>'s party  ·  %d/4  ·  %s %s", party.leaderName, #party.members, if s.plus then "Onslaught+" else "Classic", Rules.runLabel(GAME, s.mode, s.challengeIndex)), 13, C.ink, Ui.FONT, { Position = UDim2.fromOffset(0, 11), Parent = r })
 			button("Join", nil, function()
 				local res = self.ctx.request("partyJoin", party.leader)
 				if res and not res.ok then

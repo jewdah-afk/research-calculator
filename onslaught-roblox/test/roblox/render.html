@@ -1,0 +1,217 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Roblox preview render</title>
+<!--
+  Preview renderer for test/roblox/export.luau dumps (render.html?f=match.json).
+  Lays out the exported PlayerGui with Roblox's rules (UDim2 size/position, AnchorPoint, UIListLayout,
+  UIGridLayout, UIPadding, AutomaticSize, UICorner, UIStroke, UIScale) and draws the Workspace parts
+  from straight above through the exported camera. An approximation for screenshots, not Roblox itself.
+-->
+<style>
+  html, body { margin: 0; background: #14171d; overflow: hidden; }
+  #stage { position: relative; overflow: hidden; }
+  svg { position: absolute; left: 0; top: 0; }
+  .g { position: absolute; box-sizing: border-box; }
+  .inner { position: absolute; box-sizing: border-box; }
+  .txt { position: absolute; inset: 0; display: flex; box-sizing: border-box; white-space: pre; line-height: 1.15; }
+  .txt.wrap { white-space: pre-wrap; }
+  .flow { position: relative !important; flex: 0 0 auto; }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<script>
+const params = new URLSearchParams(location.search);
+const file = params.get("f") || "match.json";
+const rgb = (c, a = 1) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+const WEIGHT = { Thin: 100, ExtraLight: 200, Light: 300, Regular: 400, Medium: 500, SemiBold: 600, Bold: 700, ExtraBold: 800, Heavy: 900 };
+const FONT = `"Montserrat", "Gotham", "Helvetica Neue", Arial, "DejaVu Sans", sans-serif`;
+const MONO = `"Roboto Mono", "DejaVu Sans Mono", monospace`;
+
+function rich(s) {
+  // Roblox rich text -> HTML (font color/size, b), everything else escaped
+  let out = s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  out = out.replace(/&lt;font([^&]*)&gt;/g, (_, attrs) => {
+    const col = /color=['"]([^'"]+)['"]/.exec(attrs), size = /size=['"]([^'"]+)['"]/.exec(attrs);
+    return `<span style="${col ? "color:" + col[1] + ";" : ""}${size ? "font-size:" + size[1] + "px;" : ""}">`;
+  }).replace(/&lt;\/font&gt;/g, "</span>").replace(/&lt;(\/?)b&gt;/g, "<$1b>");
+  return out.replace(/\n/g, "<br>");
+}
+const dim = (s, o) => s ? `calc(${s * 100}% + ${o}px)` : `${o}px`;
+
+function build(node, parent, inFlow) {
+  if (!node.class) return;
+  const layouts = node.children.filter(c => ["UIListLayout", "UIGridLayout", "UIPadding", "UICorner", "UIStroke", "UIScale", "UIGradient"].includes(c.class));
+  const isGui = ["Frame", "TextLabel", "TextButton", "ScrollingFrame", "ScreenGui", "PlayerGui", "ImageLabel", "ImageButton"].includes(node.class);
+  if (!isGui) return;
+  if (node.visible === false) return;
+  let el = parent, inner = parent;
+  if (node.size) {
+    el = document.createElement("div");
+    el.className = "g" + (inFlow ? " flow" : "");
+    const [xs, xo, ys, yo] = node.size, [px, pxo, py, pyo] = node.pos;
+    const autoX = node.auto === "X" || node.auto === "XY", autoY = node.auto === "Y" || node.auto === "XY";
+    if (!autoX || xs || xo) el.style.width = dim(xs, xo);
+    if (autoX) { el.style.minWidth = dim(xs, xo); el.style.width = "max-content"; }
+    if (!autoY || ys || yo) el.style.height = dim(ys, yo);
+    if (autoY) { el.style.minHeight = dim(ys, yo); el.style.height = "auto"; }
+    if (inFlow === "grid") { el.style.width = "100%"; el.style.height = "100%"; el.style.minWidth = ""; el.style.minHeight = ""; } // the grid sets every cell's size
+    if (!inFlow) {
+      el.style.left = dim(px, pxo); el.style.top = dim(py, pyo);
+      el.style.transform = `translate(${-node.anchor[0] * 100}%, ${-node.anchor[1] * 100}%)` + (node.rotation ? ` rotate(${node.rotation}deg)` : "");
+    } else if (node.rotation) el.style.transform = `rotate(${node.rotation}deg)`;
+    if (node.bgT < 1) el.style.background = rgb(node.bg, 1 - node.bgT);
+    el.style.zIndex = node.z;
+    if (node.clip || node.class === "ScrollingFrame") el.style.overflow = "hidden";
+    const corner = layouts.find(c => c.class === "UICorner");
+    if (corner) el.style.borderRadius = corner.radius + "px";
+    const stroke = layouts.find(c => c.class === "UIStroke");
+    if (stroke) el.style.boxShadow = `inset 0 0 0 ${stroke.thickness}px ${rgb(stroke.color, 1 - stroke.t)}`;
+    const grad = layouts.find(c => c.class === "UIGradient");
+    if (grad) el.style.background = `linear-gradient(90deg, ${rgb(grad.from)}, ${rgb(grad.to)})`;
+    parent.appendChild(el);
+    inner = el;
+    var pad = layouts.find(c => c.class === "UIPadding");
+    var hasText = node.text !== undefined && node.text !== "";
+    const list = layouts.find(c => c.class === "UIListLayout"), grid = layouts.find(c => c.class === "UIGridLayout");
+    if ((pad && !hasText) || list || grid) {
+      // Roblox lays children inside the padded box: an inner box carries padding and the layout
+      inner = document.createElement("div");
+      inner.className = "inner";
+      const [l, r, t, b] = pad ? pad.padding : [0, 0, 0, 0];
+      if (autoX || autoY) { inner.style.position = "relative"; inner.style.padding = `${t}px ${r}px ${b}px ${l}px`; inner.style.height = autoY ? "auto" : "100%"; inner.style.width = autoX ? "max-content" : "100%"; }
+      else { inner.style.left = l + "px"; inner.style.right = r + "px"; inner.style.top = t + "px"; inner.style.bottom = b + "px"; }
+      el.appendChild(inner);
+      if (list) {
+        inner.style.display = "flex";
+        const h = list.dir === "Horizontal";
+        inner.style.flexDirection = h ? "row" : "column";
+        inner.style.gap = list.pad[1] + "px";
+        if (list.wraps) inner.style.flexWrap = "wrap";
+        const map = { Left: "flex-start", Top: "flex-start", Center: "center", Right: "flex-end", Bottom: "flex-end" };
+        if (h) { inner.style.justifyContent = map[list.hAlign]; inner.style.alignItems = map[list.vAlign]; }
+        else { inner.style.alignItems = map[list.hAlign]; inner.style.justifyContent = map[list.vAlign]; }
+      } else if (grid) {
+        inner.style.display = "grid";
+        inner.style.gridTemplateColumns = `repeat(auto-fill, ${dim(grid.cell[0], grid.cell[1])})`;
+        inner.style.gridAutoRows = dim(grid.cell[2], grid.cell[3]);
+        inner.style.gap = `${grid.cellPad[3]}px ${grid.cellPad[1]}px`;
+      }
+    }
+    if (node.text !== undefined && node.text !== "") {
+      const t = document.createElement("div");
+      t.className = "txt" + (node.wrap ? " wrap" : "");
+      const tp = pad ? pad.padding : [0, 0, 0, 0];
+      if (autoX || autoY) { t.style.position = "relative"; t.style.padding = `${tp[2]}px ${tp[1]}px ${tp[3]}px ${tp[0]}px`; t.style.height = "100%"; t.style.boxSizing = "border-box"; }
+      else t.style.inset = `${tp[2]}px ${tp[1]}px ${tp[3]}px ${tp[0]}px`;
+      t.style.fontSize = node.textSize + "px";
+      t.style.color = rgb(node.textColor, 1 - node.textT);
+      t.style.fontWeight = WEIGHT[node.weight] || 500;
+      t.style.fontFamily = /Mono/.test(node.family) ? MONO : FONT;
+      t.style.justifyContent = { Left: "flex-start", Center: "center", Right: "flex-end" }[node.xAlign] || "center";
+      t.style.alignItems = { Top: "flex-start", Center: "center", Bottom: "flex-end" }[node.yAlign] || "center";
+      t.style.textAlign = (node.xAlign || "Center").toLowerCase();
+      if (node.strokeT < 1) t.style.textShadow = `0 0 2px rgba(255,255,255,${1 - node.strokeT})`;
+      t.innerHTML = node.rich ? rich(node.text) : node.text.replace(/</g, "&lt;");
+      const span = document.createElement("span"); span.innerHTML = t.innerHTML; t.innerHTML = ""; t.appendChild(span);
+      if (inner !== el) el.insertBefore(t, inner); else el.appendChild(t);
+    }
+  }
+  const flowKids = layouts.find(c => c.class === "UIGridLayout") ? "grid" : layouts.find(c => c.class === "UIListLayout") ? "list" : false;
+  const kids = node.children.filter(c => c.size || ["Frame", "TextLabel", "TextButton", "ScrollingFrame", "ScreenGui"].includes(c.class));
+  if (flowKids) kids.sort((a, b) => (a.order || 0) - (b.order || 0));
+  for (const c of kids) build(c, inner, flowKids);
+}
+
+// ---------------------------------------------------------------- 3D parts, from straight above
+function project(cam, vp, p) {
+  const d = [p[0] - cam.pos[0], p[1] - cam.pos[1], p[2] - cam.pos[2]];
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const x = dot(d, cam.right), y = dot(d, cam.up), z = -dot(d, cam.look) * -1; // depth along look
+  const depth = dot(d, cam.look);
+  const t = Math.tan(cam.fov / 2 * Math.PI / 180), asp = vp[0] / vp[1];
+  return [(x / depth / (t * asp) + 1) / 2 * vp[0], (1 - y / depth / t) / 2 * vp[1], depth];
+}
+function drawParts(data, svg) {
+  const cam = data.camera, vp = data.viewport;
+  const NS = "http://www.w3.org/2000/svg";
+  const add = (tag, attrs) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); svg.appendChild(e); return e; };
+  const defs = add("defs", {});
+  defs.innerHTML = `<filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="2.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <filter id="shadow"><feDropShadow dx="1.5" dy="2" stdDeviation="1.2" flood-opacity=".35"/></filter>`;
+  const items = data.parts.slice().sort((a, b) => {
+    const top = q => q.billboard ? 1e9 : q.surface ? q.pos[1] + 1 : q.pos[1] + (q.shape === "Cylinder" ? Math.abs(q.right[1]) * q.size[0] / 2 : q.size[1] / 2);
+    return top(a) - top(b);
+  });
+  const k = (p) => { const a = project(cam, vp, p), b = project(cam, vp, [p[0] + 1, p[1], p[2]]); return Math.hypot(b[0] - a[0], b[1] - a[1]); };
+  for (const q of items) {
+    if (q.billboard) {
+      const s = project(cam, vp, q.pos);
+      const t = add("text", { x: s[0], y: s[1], "text-anchor": "middle", "font-size": q.size, "font-weight": 700, fill: rgb(q.color), "font-family": FONT, stroke: "rgba(255,255,255,.55)", "stroke-width": 2, "paint-order": "stroke" });
+      t.textContent = q.text; continue;
+    }
+    if (q.surface) {
+      const s = project(cam, vp, q.pos), kk = k(q.pos);
+      const t = add("text", { x: s[0], y: s[1] - 4, "text-anchor": "middle", "font-size": kk * 1.5, "font-weight": 900, fill: "#fff", "font-family": FONT });
+      t.textContent = q.text[0] || "";
+      const t2 = add("text", { x: s[0], y: s[1] + kk * 1.9, "text-anchor": "middle", "font-size": kk * 1.5, "font-weight": 900, fill: "#fff", "font-family": FONT });
+      t2.textContent = q.text[1] || "";
+      continue;
+    }
+    const neon = q.material === "Neon", alpha = 1 - q.t;
+    const fill = rgb(q.color, alpha);
+    const s = project(cam, vp, q.pos), kk = k(q.pos);
+    const extra = neon ? { filter: "url(#glow)" } : (q.shape !== "Block" && q.size[1] > 0.3 ? { filter: "url(#shadow)" } : {});
+    if (q.shape === "Cylinder" && Math.abs(q.right[1]) > 0.9) {           // upright disc
+      add("circle", Object.assign({ cx: s[0], cy: s[1], r: q.size[1] / 2 * kk, fill }, extra));
+    } else if (q.shape === "Ball" || q.mesh) {
+      // ellipse footprint: X along right, Z along look (projected)
+      const a = project(cam, vp, [q.pos[0] + q.right[0] * q.size[0] / 2, q.pos[1], q.pos[2] + q.right[2] * q.size[0] / 2]);
+      const ang = Math.atan2(a[1] - s[1], a[0] - s[0]) * 180 / Math.PI;
+      add("ellipse", Object.assign({ cx: s[0], cy: s[1], rx: q.size[0] / 2 * kk, ry: (q.mesh ? q.size[2] : q.size[0]) / 2 * kk, fill, transform: `rotate(${ang} ${s[0]} ${s[1]})` }, extra));
+    } else {
+      // block footprint: the 4 corners of the X-Z face (or X-Y face if the part is rotated upright)
+      const hx = q.size[0] / 2, hz = q.size[2] / 2;
+      const ax = q.right, az = q.look.map(v => -v);
+      const pts = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([i, j]) => {
+        const w = [q.pos[0] + ax[0] * hx * i + az[0] * hz * j, q.pos[1] + ax[1] * hx * i + az[1] * hz * j, q.pos[2] + ax[2] * hx * i + az[2] * hz * j];
+        const p = project(cam, vp, w); return p[0].toFixed(1) + "," + p[1].toFixed(1);
+      });
+      add("polygon", Object.assign({ points: pts.join(" "), fill }, extra));
+    }
+  }
+}
+
+// empty Luau tables arrive as {} (objects); make every children/parts list an array
+function norm(n) { if (n && typeof n === "object") { if (n.children && !Array.isArray(n.children)) n.children = Object.values(n.children); (n.children || []).forEach(norm); } return n; }
+fetch(file).then(r => r.json()).then(data => {
+  norm(data.gui);
+  if (!Array.isArray(data.parts)) data.parts = Object.values(data.parts || {});
+  const [W, H] = data.viewport;
+  const stage = document.getElementById("stage");
+  stage.style.width = W + "px"; stage.style.height = H + "px";
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("width", W); svg.setAttribute("height", H);
+  stage.appendChild(svg);
+  drawParts(data, svg);
+  // GUI: ScreenGuis fill the viewport; a UIScale scales from the top-left corner
+  const gui = document.createElement("div");
+  gui.className = "g"; gui.style.left = 0; gui.style.top = 0; gui.style.width = W + "px"; gui.style.height = H + "px";
+  stage.appendChild(gui);
+  for (const sg of data.gui.children.filter(c => c.class === "ScreenGui")) {
+    const sc = sg.children.find(c => c.class === "UIScale");
+    const root = document.createElement("div");
+    root.className = "g";
+    const s = sc ? sc.scale : 1;
+    root.style.width = W / s + "px"; root.style.height = H / s + "px"; root.style.transform = `scale(${s})`; root.style.transformOrigin = "0 0";
+    gui.appendChild(root);
+    for (const c of sg.children) build(c, root, false);
+  }
+  document.title = data.title;
+  window.__ready = true;
+});
+</script>
+</body>
+</html>

@@ -21,6 +21,19 @@ Rules.MODES = {
 }
 local LOCKED = { extreme = true, sandbox = true, sandbox2 = true }
 
+-- "Medium", "Super Sandbox", or the challenge's name
+function Rules.runLabel(GAME, mode: string?, challengeIndex: number?): string
+	if challengeIndex and GAME.challenges[challengeIndex] then
+		return "Challenge: " .. GAME.challenges[challengeIndex].name
+	end
+	for _, m in Rules.MODES do
+		if m.id == mode then
+			return m.label
+		end
+	end
+	return tostring(mode)
+end
+
 function Rules.modeOpen(profile, passes, mode: string): boolean
 	if not LOCKED[mode] then
 		return true

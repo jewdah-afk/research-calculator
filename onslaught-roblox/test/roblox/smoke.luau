@@ -9,8 +9,10 @@ local process = require("@lune/process")
 local task = require("@lune/task")
 local R = require("@lune/roblox")
 local Runtime = require("./runtime")
+local Export = require("./export")
 
 local place = process.args[1] or "build.rbxl"
+local OUT = process.args[2] -- optional: write preview JSON here (render with test/roblox/render.html)
 local rt = Runtime.new(place)
 
 local passes, fails = 0, 0
@@ -78,6 +80,11 @@ local function click(m, button)
 	m:signal(button, "Activated"):Fire()
 	task.wait()
 end
+local function snap(file: string, player, m, title: string)
+	if OUT then
+		Export.write(OUT .. "/" .. file, player, m, rt.dm:GetService("Workspace"), title)
+	end
+end
 local function serverModule(name: string)
 	local inst = rt:find("ServerScriptService.Server." .. name)
 	return server.modules[inst]
@@ -128,6 +135,9 @@ for _, tab in { "Quests", "Store", "Leaderboards", "Profile", "Research" } do
 	pump(3)
 end
 ok(findButton(alice, "R$ 399") ~= nil or findLabel(alice, "OWNED") ~= nil or true, "store renders")
+click(A, findButton(alice, "Quests"))
+pump(3)
+snap("lobby.json", alice, A, "Lobby: party of two, daily quests")
 click(A, findButton(alice, "Start"))
 pump(20)
 
@@ -182,6 +192,23 @@ click(A, findButton(alice, "1×"))
 pump(5)
 ok(cur.match.speed == 2, "host speeds up to 2x (" .. cur.match.speed .. ")")
 pump(600)
+if OUT then -- a fuller board for the preview: more turrets, some upgrades, a combo group
+	local me = tostring(alice.UserId)
+	G.players[me].cash = 60000
+	local E = server.modules[rt:find("ReplicatedStorage.Shared.Onslaught.Engine")]
+	for _, b in { { "Red", 150, 290 }, { "Blue", 114, 282 }, { "Blue", 186, 282 }, { "Yellow", 400, 300 }, { "Green", 540, 300 }, { "Red", 380, 170 }, { "Blue", 520, 180 }, { "Green", 250, 170 } } do
+		local t = E.build(G, me, b[1], b[2], b[3])
+		if t then
+			E.upgrade(G, me, t.id, "damage", true)
+			E.upgrade(G, me, t.id, "rate", true)
+		end
+	end
+	E.waveSend(G)
+	pump(240)
+	mouseClick(A, 150, 290)
+	pump(20)
+	snap("match.json", alice, A, "Classic co-op match, turret selected")
+end
 local attackersShown = 0
 for _, c in boardModel:GetDescendants() do
 	if c:IsA("BillboardGui") then
@@ -212,6 +239,7 @@ pump(30)
 task.wait(1) -- the end screen waits 0.6 s (real time) for the rewards
 pump(5)
 ok(findLabel(alice, "Game over") ~= nil, "end screen shown")
+snap("end.json", alice, A, "End of a run: rewards")
 local profiles = serverModule("Profiles")
 local pa = profiles.get(alice)
 ok(pa.games == 1 and pa.best["classic:medium:map1"] ~= nil, "profile updated (games " .. tostring(pa.games) .. ")")
@@ -247,6 +275,7 @@ ok(profiles.get(alice).intel >= 500, "Intel pack added to the profile")
 click(A, findButton(alice, "☰"))
 pump(2)
 ok(findButton(alice, "Supply Drop (S)") ~= nil, "boost buttons in the Onslaught+ menu")
+snap("plus_menu.json", alice, A, "Onslaught+ menu: settings and boosts")
 click(A, findButton(alice, "Quit to lobby"))
 pump(20)
 -- a product that arrives after the run is over becomes a credit

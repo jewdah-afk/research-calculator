@@ -13,6 +13,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Engine = require(ReplicatedStorage.Shared.Onslaught.Engine)
 local Config = require(ReplicatedStorage.Shared.Config)
+local Rules = require(ReplicatedStorage.Shared.Rules)
 local Ui = require(script.Parent.Ui)
 
 local C, new, text, button = Ui.C, Ui.new, Ui.text, Ui.button
@@ -210,6 +211,11 @@ end
 
 function MatchUI:insets()
 	return { TOP, SIDE + 20, 0, 10 }
+end
+function MatchUI:runLine(): string
+	local info = self.ctx.info
+	local mapName = self.D.maps[info.map] and self.D.maps[info.map].name or info.map
+	return string.format("%s map · %s%s", mapName, Rules.runLabel(self.D, info.mode, info.challengeIndex), if info.plus then " · Onslaught+" else " · Classic")
 end
 function MatchUI:isHost(): boolean
 	return self.header ~= nil and self.header.host == self.ctx.pid
@@ -568,6 +574,12 @@ function MatchUI:setMode(m: string?)
 end
 
 function MatchUI:toast(msg: string, color: Color3?)
+	self.recentToasts = self.recentToasts or {}
+	local now = os.clock()
+	if self.recentToasts[msg] and now - self.recentToasts[msg] < 2.5 then
+		return -- the same message is already on screen
+	end
+	self.recentToasts[msg] = now
 	local f = new("Frame", { BackgroundColor3 = C.panel2, Size = UDim2.fromOffset(0, 34), AutomaticSize = Enum.AutomaticSize.X, LayoutOrder = -os.clock() * 1000, Parent = self.toastsF })
 	Ui.corner(8).Parent = f
 	Ui.stroke(C.line).Parent = f
@@ -654,8 +666,8 @@ function MatchUI:onFx(list)
 		elseif f.k == "unlock" then
 			local d = self.D.turrets[f.kind]
 			self:toast("Unlocked: " .. (d and d.label or f.kind), C.good)
-		elseif f.k == "life" then
-			self:toast("Lives: " .. f.lives, C.bad)
+		elseif f.k == "life" and f.lives == 1 then
+			self:toast("Last life!", C.bad)
 		elseif f.k == "freakwarn" then
 			local t = self.byId[f.id]
 			if t and t.owner == self.ctx.pid then
@@ -707,8 +719,7 @@ function MatchUI:openMenu()
 		self:closeOverlay()
 	end, { AnchorPoint = Vector2.new(1, 0), Position = UDim2.fromScale(1, 0), Parent = hdr })
 	local info = self.ctx.info
-	local mapName = self.D.maps[info.map] and self.D.maps[info.map].name or info.map
-	text(string.format("%s · %s%s · wave %d · %s kills", mapName, info.mode, if info.plus then " · Onslaught+" else "", h and h.wave or 0, Ui.fmt(h and h.kills or 0)), 13, C.muted, Ui.FONT, { LayoutOrder = 2, Parent = c })
+	text(string.format("%s · wave %d · %s kills", self:runLine(), h and h.wave or 0, Ui.fmt(h and h.kills or 0)), 13, C.muted, Ui.FONT, { LayoutOrder = 2, Parent = c })
 	-- settings (host)
 	text("Settings", 15, C.ink, Ui.HEAVY, { LayoutOrder = 3, Parent = c })
 	local s1 = new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 30), LayoutOrder = 4, Parent = c })
@@ -817,9 +828,7 @@ function MatchUI:showEnd(e, summary)
 	self.overlay.Visible = true
 	local c = card(self.overlay, 460)
 	text(if e.won then "Victory!" else "Game over", 28, if e.won then C.good else C.ink, Ui.HEAVY, { LayoutOrder = 1, Parent = c })
-	local info = self.ctx.info
-	local mapName = self.D.maps[info.map] and self.D.maps[info.map].name or info.map
-	text(string.format("%s · %s%s", mapName, info.mode, if info.plus then " · Onslaught+" else ""), 13, C.muted, Ui.FONT, { LayoutOrder = 2, Parent = c })
+	text(self:runLine(), 13, C.muted, Ui.FONT, { LayoutOrder = 2, Parent = c })
 	local stats = new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 56), LayoutOrder = 3, Parent = c })
 	Ui.list(Enum.FillDirection.Horizontal, 18).Parent = stats
 	Ui.stat("Wave", tostring(e.wave), C.ink, 80).Parent = stats

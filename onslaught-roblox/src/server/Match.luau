@@ -398,7 +398,13 @@ function Match:applyProduct(pid, id, arg)
 	end
 	local ok = X.useProduct(self.G, id, pid, arg)
 	if ok then
-		self.io.event(nil, "toast", { text = (self.info.players[pid] and self.info.players[pid].name or "?") .. " used " .. id })
+		local label = id
+		for _, p in X.XD.products do
+			if p.id == id then
+				label = p.name
+			end
+		end
+		self.io.event(nil, "toast", { text = (self.info.players[pid] and self.info.players[pid].name or "?") .. " used " .. label })
 	end
 	return ok
 end

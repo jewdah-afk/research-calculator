@@ -72,6 +72,26 @@ local function along(a: Vector3, b: Vector3): CFrame
 	return CFrame.fromMatrix((a + b) / 2, x, z:Cross(x).Unit, z.Unit)
 end
 
+-- A thin ring of short segments lying on the board (centre x,y and radius r in px)
+local function ringParts(n: number, color: Color3, transparency: number, parent: Instance)
+	local list = {}
+	for i = 1, n do
+		list[i] = part({ Size = Vector3.new(1, 0.03, 0.2), Color = color, Transparency = transparency, Parent = parent })
+	end
+	return list
+end
+local function placeRing(list, x: number, y: number, r: number, h: number, width: number?)
+	local n = #list
+	local rs = r * S
+	local seg = 2 * math.pi * rs / n * 1.08
+	for i, p in list do
+		local a = (i - 0.5) / n * 2 * math.pi
+		local c = P(x, y, h) + Vector3.new(math.cos(a) * rs, 0, math.sin(a) * rs)
+		p.Size = Vector3.new(math.max(0.05, seg), 0.03, width or 0.2)
+		p.CFrame = CFrame.new(c) * CFrame.Angles(0, -a - math.pi / 2, 0)
+	end
+end
+
 -- ================================================================ map
 function Board.new(map, parent: Instance?)
 	local self = setmetatable({}, Board)
@@ -114,8 +134,7 @@ function Board:buildMap(map)
 	for _ = 1, 6 do
 		local x, y, rr = r() * W, r() * H, 18 + r() * 34
 		for k = 0, 2 do
-			local ring = disc((rr - k * 8) * S, 0.02, hex("#f3dcb8"), { Transparency = 0.45, Parent = f })
-			ring.CFrame = CFrame.new(P(x, y, 0.005 + k * 0.001)) * UPRIGHT
+			placeRing(ringParts(20, hex("#fff3de"), 0.55, f), x, y, rr - k * 8, 0.01, 0.2)
 		end
 	end
 	-- road: three strokes like the HTML (31 px dark edge, 28 px dirt, 18 px light centre), round joints
@@ -799,8 +818,8 @@ function Board:ensureOverlay()
 		return self.overlay
 	end
 	local o = {}
-	o.range = disc(1, 0.04, hex("#cee878"), { Transparency = 0.7, Material = Enum.Material.SmoothPlastic, Parent = self.model })
-	o.rangeEdge = disc(1, 0.03, hex("#506e14"), { Transparency = 0.4, Parent = self.model })
+	o.range = disc(1, 0.04, hex("#cee878"), { Transparency = 0.72, Material = Enum.Material.SmoothPlastic, Parent = self.model })
+	o.edge = ringParts(48, hex("#506e14"), 0.35, self.model)
 	o.ghost = disc(1.35, 0.4, Color3.new(1, 1, 1), { Transparency = 0.4, Material = Enum.Material.Neon, Parent = self.model })
 	o.cone = part({ Size = Vector3.new(1, 0.04, 0.1), Transparency = 1, Color = hex("#ffcf4a"), Material = Enum.Material.Neon, Parent = self.model })
 	self.overlay = o
@@ -809,7 +828,8 @@ function Board:ensureOverlay()
 end
 function Board:hideOverlay()
 	local o = self:ensureOverlay()
-	for _, p in o do
+	o.range.CFrame, o.ghost.CFrame, o.cone.CFrame = FAR, FAR, FAR
+	for _, p in o.edge do
 		p.CFrame = FAR
 	end
 end
@@ -819,8 +839,7 @@ function Board:showRange(x: number, y: number, range: number, ghost: boolean?)
 	local r = math.max(0.1, range * S)
 	o.range.Size = Vector3.new(0.04, r * 2, r * 2)
 	o.range.CFrame = CFrame.new(P(x, y, 0.05)) * UPRIGHT
-	o.rangeEdge.Size = Vector3.new(0.03, r * 2 + 0.2, r * 2 + 0.2)
-	o.rangeEdge.CFrame = CFrame.new(P(x, y, 0.045)) * UPRIGHT
+	placeRing(o.edge, x, y, range, 0.07, 0.15)
 	if ghost == nil then
 		o.ghost.CFrame = FAR
 	else
