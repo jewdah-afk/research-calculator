@@ -21,7 +21,7 @@ function data(GAME, loadout) {
     const t = Object.assign({ unlock: 0, freak: false, freakLevel: { damage: 4, range: 0, rate: 4 }, modifiable: true, comboNever: false, poison: 0 }, JSON.parse(JSON.stringify(s)));
     if (arsenal && t.unlock) t.unlock = Math.floor(t.unlock / 2);
     const need = arsenal ? 0 : (s.requires && s.requires.level) || 0;
-    t.levelLocked = (loadout.level || 1) < need ? need : 0;
+    t.levelLocked = unlockLevel(loadout) < need ? need : 0;
     if (t.levelLocked) t.unlock = Infinity;          // never unlocks inside this game
     D.turrets[k] = t;
   }
@@ -36,6 +36,14 @@ function parseRule(str) {                            // "Yellow>=1&Green>=1"
 }
 const RULES = {};
 for (const lead in XD.rules) RULES[lead] = XD.rules[lead].map(([r, name]) => [parseRule(r), name]);
+// Unlocks never relock: any Clearance tier counts as the Clearance level (50).
+function unlockLevel(L) { return (L.prestige || 0) > 0 ? Math.max(L.level || 1, XD.progression.prestige.level) : (L.level || 1); }
+// Clearance perks for a tier: { quests, cash, resale, bounty, lives }, summed over every reward at or below it.
+function clearancePerks(tier) {
+  const out = { quests: 0, cash: 0, resale: 0, bounty: 0, lives: 0 };
+  for (const r of XD.progression.prestige.rewards) if (r.perks && r.tier <= (tier || 0)) for (const k in r.perks) out[k] += r.perks[k];
+  return out;
+}
 function rLevel(L, id) { return (L.research && L.research[id]) || 0; }
 function researchValue(id, lvl) { const r = XD.research.find(q => q.id === id); return r ? r.per * Math.min(lvl, r.max) : 0; }
 
@@ -45,9 +53,9 @@ function gameOpts(opts, loadouts) {
   opts.bonusCash = {};
   for (const pid in loadouts) {
     const L = loadouts[pid];
-    opts.bonusCash[pid] = researchValue("funds", rLevel(L, "funds")) + (L.passes && L.passes.supply ? 50 : 0);
+    opts.bonusCash[pid] = researchValue("funds", rLevel(L, "funds")) + (L.passes && L.passes.supply ? 50 : 0) + clearancePerks(L.prestige).cash;
   }
-  let bunker = 0; for (const pid in loadouts) bunker = Math.max(bunker, researchValue("bunker", rLevel(loadouts[pid], "bunker")));
+  let bunker = 0; for (const pid in loadouts) bunker = Math.max(bunker, researchValue("bunker", rLevel(loadouts[pid], "bunker")) + clearancePerks(loadouts[pid].prestige).lives);
   opts.lives = 10 + bunker;
   opts.mods = makeMods(loadouts, host);
   return opts;
@@ -72,9 +80,9 @@ function makeMods(loadouts, host) {
     bounty(G, amount) {
       // the pool is split per player in cashWin; the multiplier is the host's (shared bounty)
       const L = host;
-      return amount * (1 + researchValue("bounty", rLevel(L, "bounty")) + (L.passes && L.passes.supply ? 0.1 : 0));
+      return amount * (1 + researchValue("bounty", rLevel(L, "bounty")) + (L.passes && L.passes.supply ? 0.1 : 0) + clearancePerks(L.prestige).bounty);
     },
-    resale(G, t) { return G.D.settings.resale + researchValue("salvage", rLevel(Lof(t.owner), "salvage")); },
+    resale(G, t) { const L = Lof(t.owner); return G.D.settings.resale + researchValue("salvage", rLevel(L, "salvage")) + clearancePerks(L.prestige).resale; },
     effective(G, t) {
       const d = G.D.turrets[t.kind];
       if (d.behaviour === "cryo") t.eff.damage = t.base.damage;            // strength ignores damage modifiers
@@ -326,7 +334,7 @@ function dailyQuests(meta, dateKey) {
   if (meta.quests && meta.quests.date === dateKey) return meta.quests;
   let s = 0; for (const ch of dateKey) s = (s * 31 + ch.charCodeAt(0)) >>> 0;
   const pool = XD.quests.slice(), pick = [];
-  for (let i = 0; i < 3 && pool.length; i++) { s = (s * 1103515245 + 12345) >>> 0; pick.push(pool.splice(s % pool.length, 1)[0].id); }
+  for (let i = 0, n = 3 + clearancePerks(meta.prestige).quests; i < n && pool.length; i++) { s = (s * 1103515245 + 12345) >>> 0; pick.push(pool.splice(s % pool.length, 1)[0].id); }
   meta.quests = { date: dateKey, list: pick.map(id => ({ id, progress: 0, done: false })) };
   return meta.quests;
 }
@@ -352,7 +360,7 @@ function applyQuests(meta, G) {
   return done;
 }
 
-const API = { XD, data, gameOpts, makeMods, useProduct, revivePrice, RULES, xpToNext, gameRewards, addXP, canPrestige, prestige, researchCost, buyResearch, researchValue, dailyQuests, applyQuests, roadWalk };
+const API = { XD, data, gameOpts, makeMods, useProduct, revivePrice, RULES, xpToNext, gameRewards, addXP, canPrestige, prestige, researchCost, buyResearch, researchValue, unlockLevel, clearancePerks, dailyQuests, applyQuests, roadWalk };
 if (typeof module !== "undefined" && module.exports) module.exports = API;
 
 // ================================================================ C. HTML UI (browser only)
@@ -388,15 +396,19 @@ function renderProfile() {
   saveMeta();
   const rows = XD.research.map(r => { const lvl = (meta.research[r.id] || 0), c = researchCost(r.id, lvl);
     return `<div class="rs"><div><b>${r.label}</b> <small>${lvl}/${r.max} · ${r.desc}</small></div><span class="num">${c === null ? '<span class="tag ok">max</span>' : fmtI(c) + " Intel"}</span><button class="btn sm gold" data-r="${r.id}" ${c === null || meta.intel < c ? "disabled" : ""}>Research</button></div>`; }).join("");
-  const unlocks = Object.entries(XD.unlockLevels).map(([k, L]) => `<span class="tag ${meta.level >= L || meta.passes.arsenal ? "ok" : ""}">${XD.turrets[k].label} · L${L}</span>`).join(" ");
+  const unlocks = Object.entries(XD.unlockLevels).map(([k, L]) => `<span class="tag ${unlockLevel(meta) >= L || meta.passes.arsenal ? "ok" : ""}">${XD.turrets[k].label} · L${L}</span>`).join(" ");
+  const tier = meta.prestige || 0, CR = XD.progression.prestige.rewards;
+  const title = tier ? CR[Math.min(tier, CR.length) - 1].title : "";
+  const clearance = CR.map(r => `<div class="rs"><div>${tier >= r.tier ? "✔ " : ""}<b>Clearance ${r.tier} · ${r.title}</b> <small>${r.name}: ${r.desc}</small></div></div>`).join("");
   const quests = q.list.map(it => { const d = XD.quests.find(x => x.id === it.id); return `<div class="rs"><div>${it.done ? "✔ " : ""}${d.text}<br><small>${Math.min(it.progress, d.goal)}/${d.goal}</small></div><span class="num">${d.intel} Intel</span><span class="num">${d.xp} XP</span></div>`; }).join("");
   document.getElementById("profBody").innerHTML = `
-    <div class="row"><div><div style="font-size:22px;font-weight:700">Level ${meta.level}${meta.prestige ? ` <span class="tag warn">Clearance ${meta.prestige}</span>` : ""}</div><div class="num" style="color:var(--muted)">${fmtI(meta.xp)} / ${fmtI(need)} XP</div></div><span class="spacer"></span>
+    <div class="row"><div><div style="font-size:22px;font-weight:700">Level ${meta.level}${meta.prestige ? ` <span class="tag warn">Clearance ${meta.prestige} · ${title}</span>` : ""}</div><div class="num" style="color:var(--muted)">${fmtI(meta.xp)} / ${fmtI(need)} XP</div></div><span class="spacer"></span>
     <div style="text-align:right"><div style="font-size:22px;font-weight:700;color:var(--gold)" class="num">${fmtI(meta.intel)}</div><div style="color:var(--muted);font-size:12px">INTEL</div></div></div>
     <div class="xbar" style="margin:6px 0 10px"><b style="width:${Math.min(100, meta.xp / need * 100)}%"></b></div>
     ${canPrestige(meta) ? `<button class="btn gold" id="bPrestige">Take Clearance (reset to level 1, +5% XP & Intel forever)</button>` : ""}
     <h2 style="font-size:15px;margin-top:10px">Tower unlocks</h2><div class="row">${unlocks}</div>
     <h2 style="font-size:15px;margin-top:12px">Daily quests</h2>${quests}
+    <h2 style="font-size:15px;margin-top:12px">Clearance rewards <small style="color:var(--muted);font-weight:normal">(each tier also gives +5% XP and Intel)</small></h2>${clearance}
     <h2 style="font-size:15px;margin-top:12px">Research lab <small style="color:var(--muted);font-weight:normal">(Onslaught+ only; Classic stays 1:1)</small></h2>${rows}`;
   document.querySelectorAll("[data-r]").forEach(b => b.onclick = () => { buyResearch(meta, b.dataset.r); saveMeta(); renderProfile(); });
   const bp = document.getElementById("bPrestige"); if (bp) bp.onclick = () => { prestige(meta); saveMeta(); renderProfile(); };

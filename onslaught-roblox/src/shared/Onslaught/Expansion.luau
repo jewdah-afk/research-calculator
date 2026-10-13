@@ -44,6 +44,27 @@ local function find(list, id)
 	return nil
 end
 
+-- Unlocks never relock: any Clearance tier counts as the Clearance level (50).
+function Expansion.unlockLevel(L): number
+	if (L.prestige or 0) > 0 then
+		return max(L.level or 1, XD.progression.prestige.level)
+	end
+	return L.level or 1
+end
+-- Clearance perks for a tier: { quests, cash, resale, bounty, lives }, summed over every reward at or below it.
+function Expansion.clearancePerks(tier: number?)
+	local out = { quests = 0, cash = 0, resale = 0, bounty = 0, lives = 0 }
+	for _, rw in XD.progression.prestige.rewards do
+		if rw.perks and rw.tier <= (tier or 0) then
+			for k, v in rw.perks do
+				out[k] += v
+			end
+		end
+	end
+	return out
+end
+local clearancePerks = Expansion.clearancePerks
+
 -- ================================================================ A. sim
 -- Merge the expansion into a copy of the classic data. `loadout` = { level, research = {id = lvl}, passes = {id = true} }.
 function Expansion.data(GAME, loadout)
@@ -60,7 +81,7 @@ function Expansion.data(GAME, loadout)
 			t.unlock = floor(t.unlock / 2)
 		end
 		local need = if arsenal then 0 else (s.requires and s.requires.level) or 0
-		t.levelLocked = if (loadout.level or 1) < need then need else 0
+		t.levelLocked = if Expansion.unlockLevel(loadout) < need then need else 0
 		if t.levelLocked ~= 0 then
 			t.unlock = huge -- never unlocks inside this game
 		end
@@ -235,10 +256,12 @@ function Expansion.makeMods(loadouts, host)
 	function mods.bounty(_G, amount)
 		-- the pool is split per player in cashWin; the multiplier is the host's (shared bounty)
 		local L = host
-		return amount * (1 + researchValue("bounty", rLevel(L, "bounty")) + (if L.passes and L.passes.supply then 0.1 else 0))
+		return amount
+			* (1 + researchValue("bounty", rLevel(L, "bounty")) + (if L.passes and L.passes.supply then 0.1 else 0) + clearancePerks(L.prestige).bounty)
 	end
 	function mods.resale(G, t)
-		return G.D.settings.resale + researchValue("salvage", rLevel(Lof(t.owner), "salvage"))
+		local L = Lof(t.owner)
+		return G.D.settings.resale + researchValue("salvage", rLevel(L, "salvage")) + clearancePerks(L.prestige).resale
 	end
 	function mods.effective(G, t)
 		local d = G.D.turrets[t.kind]
@@ -476,8 +499,9 @@ function Expansion.gameOpts(opts, loadouts)
 	opts.bonusCash = {}
 	local bunker = 0
 	for pid, L in loadouts do
-		opts.bonusCash[pid] = researchValue("funds", rLevel(L, "funds")) + (if L.passes and L.passes.supply then 50 else 0)
-		bunker = max(bunker, researchValue("bunker", rLevel(L, "bunker")))
+		local cp = clearancePerks(L.prestige)
+		opts.bonusCash[pid] = researchValue("funds", rLevel(L, "funds")) + (if L.passes and L.passes.supply then 50 else 0) + cp.cash
+		bunker = max(bunker, researchValue("bunker", rLevel(L, "bunker")) + cp.lives)
 	end
 	opts.lives = 10 + bunker
 	opts.mods = Expansion.makeMods(loadouts, host)
@@ -624,7 +648,7 @@ function Expansion.dailyQuests(meta, dateKey: string)
 	end
 	local pool = table.clone(XD.quests)
 	local list = {}
-	for _ = 1, 3 do
+	for _ = 1, 3 + clearancePerks(meta.prestige).quests do
 		if #pool == 0 then
 			break
 		end

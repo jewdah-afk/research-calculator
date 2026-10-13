@@ -44,7 +44,7 @@ local function playerInfo(player: Player)
 	local p = Profiles.get(player)
 	return {
 		name = player.DisplayName,
-		loadout = { level = p and p.level or 1, research = p and p.research or {} },
+		loadout = { level = p and p.level or 1, research = p and p.research or {}, prestige = p and p.prestige or 0 },
 		passes = Monetization.passes(player),
 		skin = p and p.skin or "default",
 	}

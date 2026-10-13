@@ -554,7 +554,90 @@
   },
   "prestige": {
    "level": 50,
-   "bonusPerTier": 0.05
+   "bonusPerTier": 0.05,
+   "rewards": [
+    {
+     "tier": 1,
+     "title": "Operative",
+     "name": "Clearance Badge",
+     "desc": "Bronze Clearance badge on your nameplate and the leaderboards. Tower unlocks stay unlocked through every reset.",
+     "cosmetic": "badge_bronze"
+    },
+    {
+     "tier": 2,
+     "title": "Agent",
+     "name": "Extra Briefing",
+     "desc": "A 4th daily quest every day.",
+     "perks": {
+      "quests": 1
+     }
+    },
+    {
+     "tier": 3,
+     "title": "Specialist",
+     "name": "Tracer Rounds",
+     "desc": "Your turrets' shots leave a coloured tracer (pick the colour).",
+     "cosmetic": "tracers"
+    },
+    {
+     "tier": 4,
+     "title": "Veteran",
+     "name": "Veteran Start",
+     "desc": "+$15 starting cash in Onslaught+.",
+     "perks": {
+      "cash": 15
+     }
+    },
+    {
+     "tier": 5,
+     "title": "Commando",
+     "name": "Camo Arsenal",
+     "desc": "Camo turret skin set, plus a silver badge.",
+     "cosmetic": "skin_camo"
+    },
+    {
+     "tier": 6,
+     "title": "Quartermaster",
+     "name": "Salvage Crew",
+     "desc": "+2% resale on everything you sell in Onslaught+.",
+     "perks": {
+      "resale": 0.02
+     }
+    },
+    {
+     "tier": 7,
+     "title": "Warden",
+     "name": "Fortress Colours",
+     "desc": "Your base flies your Clearance colours, and attackers you kill burst in your tracer colour.",
+     "cosmetic": "fortress_flags"
+    },
+    {
+     "tier": 8,
+     "title": "Marshal",
+     "name": "Hazard Pay",
+     "desc": "+2% kill bounty in Onslaught+ (host's, shared like Bounty Hunter).",
+     "perks": {
+      "bounty": 0.02
+     }
+    },
+    {
+     "tier": 9,
+     "title": "Sentinel",
+     "name": "Last Line",
+     "desc": "+1 life in Onslaught+ (the party takes the best).",
+     "perks": {
+      "lives": 1
+     }
+    },
+    {
+     "tier": 10,
+     "title": "Director",
+     "name": "Blackout",
+     "desc": "Animated gold-black nameplate, the Blackout turret skin set, a gold badge and a Director crown on the leaderboards.",
+     "cosmetic": "skin_blackout"
+    }
+   ],
+   "notes": "Tiers above 10 keep the +5% XP and Intel each and the Director title. Perks only apply in Onslaught+. Unlocks are checked against the highest level ever reached: any Clearance tier counts as level 50."
   },
   "notes": "XP for a game = sum over waves reached of (wave * difficulty * 0.1) + kills * 0.2. Level L -> L+1 needs 100 + 40 * L^1.6 XP."
  },

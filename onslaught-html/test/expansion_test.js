@@ -143,5 +143,20 @@ comboRun(grp(["Red", "Blue", "Blue", "Orange"]), "nuke");
   const S = { waveNum: 50, kills: 500, mode: "sandbox", challenge: null };
   ok(X.gameRewards(S, meta).xp === 0, "sandbox gives no XP");
 }
+// ---- clearance
+{
+  const GAME = require("../../onslaught-data/game.json");
+  const m = { level: 50, xp: 0, passes: {}, research: {} };
+  ok(X.prestige(m) && m.level === 1 && m.prestige === 1, "clearance resets to level 1");
+  const D = X.data(GAME, m);
+  ok(!D.turrets.Orbital.levelLocked && !D.turrets.Orange.levelLocked, "towers stay unlocked after clearance");
+  ok(X.data(GAME, { level: 1, research: {}, passes: {} }).turrets.Orange.levelLocked === 2, "fresh level 1 still locked");
+  ok(X.dailyQuests({ prestige: 1 }, "2026-10-13").list.length === 3 && X.dailyQuests({ prestige: 2 }, "2026-10-13").list.length === 4, "clearance 2 adds a 4th quest");
+  const p = X.clearancePerks(10);
+  ok(p.cash === 15 && p.lives === 1 && p.resale === 0.02 && p.bounty === 0.02, "tier 10 perks");
+  const o = X.gameOpts({ players: ["p1"] }, { p1: { level: 1, prestige: 9, research: {}, passes: {} } });
+  ok(o.lives === 11 && o.bonusCash.p1 === 15, "perks reach the game (lives " + o.lives + ", cash " + o.bonusCash.p1 + ")");
+  ok(X.XD.progression.prestige.rewards.length === 10, "10 clearance tiers");
+}
 console.log(`${passes} passed, ${fails} failed`);
 process.exit(fails ? 1 : 0);

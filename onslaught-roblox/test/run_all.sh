@@ -12,6 +12,8 @@ const X=require("../onslaught-html/expansion.js");const got=[];
 for(let l=1;l<=60;l++)got.push(X.xpToNext(l));
 for(const r of X.XD.research)for(let l=0;l<r.max;l++)got.push(X.researchCost(r.id,l));
 for(const d of ["2026-01-01","2026-10-13","2027-02-28"])for(const it of X.dailyQuests({},d).list)got.push(it.id);
+for(const it of X.dailyQuests({prestige:2},"2026-10-13").list)got.push(it.id);
+for(let t=0;t<=11;t++){const p=X.clearancePerks(t);got.push(p.quests,p.cash,p.resale,p.bounty,p.lives);}
 console.log(got.join(","))')
 "$LUNE" run test/expansion_test.luau "$EXP"
 for t in test/unit/*.luau; do [ -e "$t" ] && "$LUNE" run "$t"; done

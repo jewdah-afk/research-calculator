@@ -117,6 +117,15 @@ do -- JS and Luau agree on the meta formulas (the server is Luau, the HTML previ
 				table.insert(got, it.id)
 			end
 		end
+		for _, it in X.dailyQuests({ prestige = 2 }, "2026-10-13").list do
+			table.insert(got, it.id)
+		end
+		for t = 0, 11 do
+			local p = X.clearancePerks(t)
+			for _, k in { "quests", "cash", "resale", "bounty", "lives" } do
+				table.insert(got, tostring(p[k]))
+			end
+		end
 		ok(table.concat(got, ",") == expect, "meta formulas match the JS")
 	end
 end

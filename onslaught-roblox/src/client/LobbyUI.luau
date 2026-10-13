@@ -9,6 +9,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local GAME = require(ReplicatedStorage.Shared.Onslaught.Data)
+local CLEARANCE = require(ReplicatedStorage.Shared.Onslaught.ExpansionData).progression.prestige.rewards
 local Rules = require(ReplicatedStorage.Shared.Rules)
 local Ui = require(script.Parent.Ui)
 
@@ -125,7 +126,8 @@ function LobbyUI:renderHeader()
 	self.xpFill.Size = UDim2.fromScale(math.clamp(p.xp / math.max(1, p.xpNeed), 0, 1), 1)
 	self.xpL.Text = string.format("%s / %s XP", Ui.fmt(p.xp), Ui.fmt(p.xpNeed))
 	self.intelV.Text = Ui.fmt(p.intel)
-	self.prestigeV.Text = tostring(p.prestige)
+	local tier = p.prestige or 0
+	self.prestigeV.Text = if tier > 0 then string.format("%d · %s", tier, CLEARANCE[math.min(tier, #CLEARANCE)].title) else "0"
 end
 
 -- ================================================================ play column
@@ -329,8 +331,17 @@ function LobbyUI:renderSide()
 				self.ctx.request("prestige")
 			end, { LayoutOrder = 100, TextSize = 12, Parent = S })
 		end
+		wrapText("Clearance rewards (every tier also gives +5% XP and Intel):", 12, C.muted, 101, S)
+		for i, rw in CLEARANCE do
+			local got = (p.prestige or 0) >= rw.tier
+			local row = new("Frame", { BackgroundColor3 = C.panel2, Size = UDim2.new(1, -6, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = 101 + i, Parent = S })
+			Ui.corner(8).Parent = row
+			Ui.pad(10, 6).Parent = row
+			text(string.format("%sClearance %d · %s  <font color='#98a1b0' size='12'>%s</font>", if got then "✔ " else "", rw.tier, rw.title, rw.name), 13, if got then C.good else C.ink, Ui.BOLD, { Parent = row })
+			text(rw.desc, 11, C.muted, Ui.FONT, { Position = UDim2.fromOffset(0, 20), Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, Parent = row })
+		end
 	elseif self.tab == "quests" then
-		wrapText("Three new quests every day (UTC). Progress counts in both modes.", 12, C.muted, 0, S)
+		wrapText("New quests every day (UTC); Clearance 2 adds a 4th. Progress counts in both modes.", 12, C.muted, 0, S)
 		for i, q in p.quests do
 			local row = new("Frame", { BackgroundColor3 = C.panel2, Size = UDim2.new(1, -6, 0, 64), LayoutOrder = i, Parent = S })
 			Ui.corner(8).Parent = row

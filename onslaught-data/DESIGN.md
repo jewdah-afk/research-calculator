@@ -72,6 +72,23 @@ The new colours lead these. Partners count the same way as in the original: othe
 - **XP per game:** `Σ_{w=1..wave} w × diff × 0.1 + kills × 0.2`. Difficulty multipliers: Easy 1, Medium 1.3, Hard 1.7, Extreme 2.2; Sandbox gives 0. Winning a challenge adds +500. Example: Medium to wave 40 with 400 kills ≈ 187 XP.
 - **Levels:** level L → L+1 needs `100 + 40 × L^1.6` XP. That's 140 for level 1, about 1 000 by level 10, and about 4 400 by level 40.
 - **Clearance (prestige):** at level 50, reset to 1 for a permanent +5% XP and Intel per tier, with no cap. Lifetime totals are stored with EternityNum.
+  - **Unlocks never relock.** Tower unlocks check the highest level reached, and any Clearance tier counts as level 50.
+  - **Tier rewards** (`progression.prestige.rewards`). Perks apply in Onslaught+ only and are small: at tier 10 they add up to +$15 start, +2% resale, +2% bounty, +1 life and a 4th daily quest. Above tier 10 you keep the Director title and the +5% per tier.
+
+  | Tier | Title | Reward | Effect |
+  |---|---|---|---|
+  | 1 | Operative | Clearance Badge | Bronze Clearance badge on your nameplate and the leaderboards. Tower unlocks stay unlocked through every reset. |
+  | 2 | Agent | Extra Briefing | A 4th daily quest every day. |
+  | 3 | Specialist | Tracer Rounds | Your turrets' shots leave a coloured tracer (pick the colour). |
+  | 4 | Veteran | Veteran Start | +$15 starting cash in Onslaught+. |
+  | 5 | Commando | Camo Arsenal | Camo turret skin set, plus a silver badge. |
+  | 6 | Quartermaster | Salvage Crew | +2% resale on everything you sell in Onslaught+. |
+  | 7 | Warden | Fortress Colours | Your base flies your Clearance colours, and attackers you kill burst in your tracer colour. |
+  | 8 | Marshal | Hazard Pay | +2% kill bounty in Onslaught+ (host's, shared like Bounty Hunter). |
+  | 9 | Sentinel | Last Line | +1 life in Onslaught+ (the party takes the best). |
+  | 10 | Director | Blackout | Animated gold-black nameplate, the Blackout turret skin set, a gold badge and a Director crown on the leaderboards. |
+
+  The cosmetic rewards (badges, tracers, camo and Blackout skins, fortress flags, nameplate) are defined in data, but their art and rendering are not built yet.
 - **Intel (soft currency):** `floor(wave^1.4 × diff / 4 + kills / 20)`. Medium wave 40 gives ≈ 61.
 - **Research lab** (Onslaught+ only). Every line is small and capped, so the game keeps its feel:
 

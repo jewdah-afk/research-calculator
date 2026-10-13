@@ -30,7 +30,7 @@ local SPREADS = { [0] = true, [15] = true, [30] = true, [50] = true }
 local REVIVE_WINDOW = 20 -- seconds a lost Onslaught+ run waits for a Second Chance before it is final
 
 local function loadoutOf(p)
-	return { level = p.loadout and p.loadout.level or 1, research = p.loadout and p.loadout.research or {}, passes = p.passes or {} }
+	return { level = p.loadout and p.loadout.level or 1, research = p.loadout and p.loadout.research or {}, passes = p.passes or {}, prestige = p.loadout and p.loadout.prestige or 0 }
 end
 
 function Match.new(info, io)
