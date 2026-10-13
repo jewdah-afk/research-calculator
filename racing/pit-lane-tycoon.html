@@ -407,10 +407,10 @@ const store = {
 /* ---------- balance parameters ---------- */
 const DEFAULT_P = {
   costExp: 3, costSpeed: 110, costEarn: 120, costCars: 90,
-  pay: 45, payStep: 1, speed: 12, speedStep: 0.25,
-  goal: 170, startCoins: 40, costQueue: 280, costFreq: 320, spawn: 0.22, pitTime: 2.2, stop: 0.8,
+  pay: 45, payGrowth: 4, payLate: 300, speed: 12, speedStep: 0.25,
+  goal: 350, startCoins: 40, costQueue: 280, costFreq: 320, spawn: 0.22, pitTime: 2.2, stop: 0.8,
 };
-let P = Object.assign({}, DEFAULT_P, store.get('plt-params-v4') || {});
+let P = Object.assign({}, DEFAULT_P, store.get('plt-params-v5') || {});
 
 /* ---------- maps ---------- */
 const r1 = v => Math.round(v * 10) / 10;
@@ -455,7 +455,7 @@ const save = () => { state.last = Date.now(); store.set('plt-save-v2', state); }
 
 /* ---------- economy (the whole balance model lives here) ---------- */
 // P.pay is the Lv 1 pay on a 165 m lap (Dune Loop). Other laps pay in proportion, so any layout earns at the same rate.
-const REF_LAP = 165;
+const REF_LAP = new THREE.CatmullRomCurve3(MAPS[0].pts.map(p => new THREE.Vector3(p[0], p[2], p[1])), true, 'centripetal').getLength(); // Dune Loop, ~165 m
 const trackMult = i => Math.pow(4, i);
 const costMult = i => Math.pow(3, i);
 const baseCost = k => ({ speed: P.costSpeed, earn: P.costEarn, cars: P.costCars, queue: P.costQueue, freq: P.costFreq })[k];
@@ -470,7 +470,10 @@ const carSpeed = lvl => P.speed * (1 + P.speedStep * (lvl - 1));
 const ownedModels = (g = state.garage) => Object.keys(g).sort((a, b) => g[b] - g[a] || MODELS[b].weight - MODELS[a].weight);
 const carMult = (k, g = state.garage) => { const id = ownedModels(g)[k]; return id ? 1 + MODELS[id].bonus * g[id] : 1; };
 const fleetMult = (n, g = state.garage) => { let a = 0; for (let k = 0; k < n; k++) a += carMult(k, g); return n ? a / n : 1; };
-const payPerRide = (lvl, L, mi = state.map, gm = 1) => P.pay * (L / REF_LAP) * (1 + P.payStep * (lvl - 1)) * trackMult(mi) * gm;
+// Pay per ride on a 165 m lap: starts at $45 and multiplies fast, then settles into +$300 per Earnings level.
+// The late line is payLate × (level + 3), which gives $2.7K at x6 and $3.0K at x7 like the reference game.
+const earnPay = lvl => Math.min(P.pay * Math.pow(P.payGrowth, lvl - 1), P.payLate * (lvl + 3));
+const payPerRide = (lvl, L, mi = state.map, gm = 1) => earnPay(lvl) * (L / REF_LAP) * trackMult(mi) * gm;
 const spawnRate = freq => P.spawn * freq;
 const goalFor = mi => Math.round(P.goal * (1 + 0.5 * mi));
 const queueCap = () => state.lv.queue;
@@ -1667,8 +1670,9 @@ const KNOBS = [
   ['costSpeed', 'Speed base cost', 20, 500, 5, v => '$' + v],
   ['costEarn', 'Earnings base cost', 20, 500, 5, v => '$' + v],
   ['costCars', 'Cars base cost', 20, 500, 5, v => '$' + v],
-  ['pay', 'Pay per ride at Lv 1 (165 m lap)', 5, 200, 1, v => '$' + v],
-  ['payStep', 'Pay added per Earnings level (1 = x2, x3, x4…)', 0.1, 2, 0.05, v => '+' + Math.round(v * 100) + '% of base'],
+  ['pay', 'First ride pay at Lv 1 (165 m lap)', 5, 200, 1, v => '$' + v],
+  ['payGrowth', 'Early pay growth per Earnings level', 1.2, 8, 0.1, v => '×' + v.toFixed(1)],
+  ['payLate', 'Late pay per Earnings level (pay = this × (level + 3))', 50, 1000, 10, v => '$' + v],
   ['speed', 'Starting car speed', 4, 30, 0.5, v => v + ' m/s'],
   ['speedStep', 'Speed gained per level', 0.05, 0.6, 0.01, v => '+' + Math.round(v * 100) + '%'],
   ['goal', 'Rides to clear the first track', 20, 400, 5, v => v + ' rides'],
@@ -1686,7 +1690,7 @@ function buildKnobs() {
       d.innerHTML = `<label for="k-${k}">${label}</label><output id="o-${k}" class="num"></output><input type="range" id="k-${k}" min="${min}" max="${max}" step="${step}">`;
       box.appendChild(d);
       d.querySelector('input').addEventListener('input', ev => {
-        P[k] = parseFloat(ev.target.value); store.set('plt-params-v4', P);
+        P[k] = parseFloat(ev.target.value); store.set('plt-params-v5', P);
         syncKnobs(); refreshHud(); updateBoard(); runSim();
       });
     });
@@ -1695,7 +1699,7 @@ function buildKnobs() {
   syncKnobs();
 }
 function syncKnobs() { KNOBS.forEach(([k, , , , , f]) => { $('#k-' + k).value = P[k]; $('#o-' + k).textContent = f(P[k]); }); }
-$('#resetKnobs').addEventListener('click', () => { P = Object.assign({}, DEFAULT_P); store.set('plt-params-v4', P); syncKnobs(); refreshHud(); updateBoard(); runSim(); });
+$('#resetKnobs').addEventListener('click', () => { P = Object.assign({}, DEFAULT_P); store.set('plt-params-v5', P); syncKnobs(); refreshHud(); updateBoard(); runSim(); });
 
 let lastSim = null;
 function runSim() {
