@@ -1,0 +1,920 @@
+{
+ "turrets": {
+  "TurretBlue": {
+   "turret_cost": 10,
+   "weapon_damage": 15,
+   "weapon_range": 130,
+   "weapon_rate": 100,
+   "weapon_poison": 0,
+   "weapon_rotate": 270,
+   "weapon_must_face": true,
+   "upgrade_damage": {
+    "cost": [
+     20,
+     50,
+     100,
+     250,
+     600,
+     1000,
+     1100,
+     1200,
+     1500
+    ],
+    "amount": [
+     30,
+     60,
+     150,
+     400,
+     1200,
+     3100,
+     8500,
+     19400,
+     46000
+    ]
+   },
+   "upgrade_range": {
+    "cost": [
+     30,
+     100,
+     200,
+     500,
+     950
+    ],
+    "amount": [
+     140,
+     150,
+     165,
+     180,
+     220
+    ]
+   },
+   "upgrade_rate": {
+    "cost": [
+     50,
+     150,
+     300,
+     450,
+     950,
+     1000,
+     1450
+    ],
+    "amount": [
+     110,
+     125,
+     140,
+     160,
+     180,
+     200,
+     240
+    ]
+   },
+   "freak_capable": true,
+   "freak_available": false,
+   "freak_length": 5000,
+   "freak_space": 80000,
+   "freak_damage_mult": 3,
+   "freak_range_mult": 0,
+   "freak_rate_mult": 4,
+   "freak_level_damage": 4,
+   "freak_level_range": 0,
+   "freak_level_rate": 4,
+   "modify_possible": true,
+   "combo_capable": false,
+   "combo_never": false
+  },
+  "TurretGreen": {
+   "turret_cost": 15,
+   "weapon_damage": 25,
+   "weapon_range": 100,
+   "weapon_rate": 60,
+   "weapon_poison": 0,
+   "weapon_rotate": 270,
+   "weapon_must_face": true,
+   "upgrade_damage": {
+    "cost": [
+     20,
+     50,
+     125,
+     300,
+     700,
+     850,
+     950,
+     1000
+    ],
+    "amount": [
+     50,
+     120,
+     400,
+     1500,
+     3900,
+     9300,
+     19500,
+     35000
+    ]
+   },
+   "upgrade_range": {
+    "cost": [
+     15,
+     25,
+     40,
+     65,
+     105,
+     170,
+     275,
+     445,
+     720,
+     1100
+    ],
+    "amount": [
+     110,
+     125,
+     140,
+     160,
+     180,
+     205,
+     230,
+     255,
+     285,
+     320
+    ]
+   },
+   "upgrade_rate": {
+    "cost": [
+     30,
+     75,
+     180,
+     300,
+     450,
+     600,
+     800,
+     900,
+     1000
+    ],
+    "amount": [
+     65,
+     70,
+     80,
+     90,
+     105,
+     120,
+     135,
+     160,
+     190
+    ]
+   },
+   "freak_capable": false,
+   "freak_available": false,
+   "freak_length": 5000,
+   "freak_space": 80000,
+   "freak_damage_mult": 3,
+   "freak_range_mult": 0,
+   "freak_rate_mult": 4,
+   "freak_level_damage": 4,
+   "freak_level_range": 0,
+   "freak_level_rate": 4,
+   "modify_possible": true,
+   "combo_capable": false,
+   "combo_never": false
+  },
+  "TurretRed": {
+   "turret_cost": 20,
+   "weapon_damage": 50,
+   "weapon_range": 200,
+   "weapon_rate": 50,
+   "weapon_poison": 0,
+   "weapon_rotate": 270,
+   "weapon_must_face": false,
+   "upgrade_damage": {
+    "cost": [
+     50,
+     100,
+     200,
+     350,
+     650,
+     1200,
+     1300,
+     1500,
+     1500
+    ],
+    "amount": [
+     120,
+     350,
+     800,
+     1950,
+     6050,
+     11500,
+     27000,
+     48900,
+     65000
+    ]
+   },
+   "upgrade_range": {
+    "cost": [
+     35,
+     80,
+     160,
+     400,
+     900,
+     1100,
+     1300,
+     1500
+    ],
+    "amount": [
+     210,
+     220,
+     230,
+     250,
+     275,
+     300,
+     325,
+     350
+    ]
+   },
+   "upgrade_rate": {
+    "cost": [
+     30,
+     60,
+     115,
+     200,
+     340,
+     600,
+     900,
+     1050,
+     1150
+    ],
+    "amount": [
+     60,
+     70,
+     85,
+     100,
+     115,
+     135,
+     155,
+     180,
+     210
+    ]
+   },
+   "freak_capable": false,
+   "freak_available": false,
+   "freak_length": 5000,
+   "freak_space": 80000,
+   "freak_damage_mult": 3,
+   "freak_range_mult": 0,
+   "freak_rate_mult": 4,
+   "freak_level_damage": 4,
+   "freak_level_range": 0,
+   "freak_level_rate": 4,
+   "modify_possible": true,
+   "combo_capable": false,
+   "combo_never": false
+  },
+  "TurretYellow": {
+   "turret_cost": 50,
+   "weapon_damage": 50,
+   "weapon_range": 70,
+   "weapon_rate": 60,
+   "weapon_poison": 1,
+   "weapon_rotate": 720,
+   "weapon_must_face": false,
+   "upgrade_damage": {
+    "cost": [
+     40,
+     80,
+     190,
+     300,
+     600,
+     1000,
+     1100
+    ],
+    "amount": [
+     75,
+     125,
+     200,
+     800,
+     3500,
+     11000,
+     30000
+    ]
+   },
+   "upgrade_range": {
+    "cost": [
+     50,
+     100,
+     300,
+     600,
+     1000
+    ],
+    "amount": [
+     75,
+     85,
+     105,
+     130,
+     155
+    ]
+   },
+   "upgrade_rate": {
+    "cost": [
+     50,
+     100,
+     225,
+     390,
+     650,
+     1100,
+     1450
+    ],
+    "amount": [
+     70,
+     80,
+     90,
+     100,
+     120,
+     150,
+     180
+    ]
+   },
+   "freak_capable": true,
+   "freak_available": false,
+   "freak_length": 5000,
+   "freak_space": 80000,
+   "freak_damage_mult": 3,
+   "freak_range_mult": 0,
+   "freak_rate_mult": 4,
+   "freak_level_damage": 4,
+   "freak_level_range": 0,
+   "freak_level_rate": 4,
+   "modify_possible": true,
+   "combo_capable": false,
+   "combo_never": false
+  },
+  "TurretRangeUp": {
+   "turret_unlock": 300,
+   "turret_available": false,
+   "turret_cost": 2000,
+   "weapon_range": 80,
+   "upgrade_range": {
+    "cost": [
+     1500
+    ],
+    "amount": [
+     130
+    ]
+   },
+   "modify_up_damage": 0,
+   "modify_up_range": 100,
+   "modify_up_rate": 0,
+   "modify_up_damage_mult": 0,
+   "modify_up_range_mult": 0,
+   "modify_up_rate_mult": 0
+  },
+  "TurretDamageUp": {
+   "turret_unlock": 450,
+   "turret_available": false,
+   "turret_cost": 5000,
+   "weapon_range": 80,
+   "upgrade_range": {
+    "cost": [
+     1500
+    ],
+    "amount": [
+     130
+    ]
+   },
+   "modify_up_damage": 0,
+   "modify_up_range": 0,
+   "modify_up_rate": 0,
+   "modify_up_damage_mult": 0.4,
+   "modify_up_range_mult": 0,
+   "modify_up_rate_mult": 0
+  },
+  "TurretRateUpExchange": {
+   "turret_unlock": 550,
+   "turret_available": false,
+   "turret_cost": 1200,
+   "weapon_range": 80,
+   "upgrade_range": {
+    "cost": [
+     1500
+    ],
+    "amount": [
+     130
+    ]
+   },
+   "modify_up_damage": 0,
+   "modify_up_range": 0,
+   "modify_up_rate": 0,
+   "modify_up_damage_mult": -0.4,
+   "modify_up_range_mult": -0.1,
+   "modify_up_rate_mult": 0.6
+  },
+  "TurretRangeUpExchange": {
+   "turret_unlock": 700,
+   "turret_available": false,
+   "turret_cost": 1000,
+   "weapon_range": 80,
+   "upgrade_range": {
+    "cost": [
+     1500
+    ],
+    "amount": [
+     130
+    ]
+   },
+   "modify_up_damage": 0,
+   "modify_up_range": 100,
+   "modify_up_rate": 0,
+   "modify_up_damage_mult": 0,
+   "modify_up_range_mult": 0,
+   "modify_up_rate_mult": -0.25
+  },
+  "TurretRateUp": {
+   "turret_unlock": 850,
+   "turret_available": false,
+   "turret_cost": 3000,
+   "weapon_range": 80,
+   "upgrade_range": {
+    "cost": [
+     1500
+    ],
+    "amount": [
+     130
+    ]
+   },
+   "modify_up_damage": 0,
+   "modify_up_range": 0,
+   "modify_up_rate": 0,
+   "modify_up_damage_mult": 0,
+   "modify_up_range_mult": 0,
+   "modify_up_rate_mult": 1.2
+  },
+  "TurretDamageUpBig": {
+   "turret_unlock": 1000,
+   "turret_available": false,
+   "turret_cost": 8500,
+   "weapon_range": 80,
+   "upgrade_range": {
+    "cost": [
+     1500
+    ],
+    "amount": [
+     130
+    ]
+   },
+   "modify_up_damage": 0,
+   "modify_up_range": 0,
+   "modify_up_rate": 0,
+   "modify_up_damage_mult": 1,
+   "modify_up_range_mult": 0,
+   "modify_up_rate_mult": 0
+  },
+  "TurretDamageUpBigExchange": {
+   "turret_unlock": 1100,
+   "turret_available": false,
+   "turret_cost": 3500,
+   "weapon_range": 80,
+   "upgrade_range": {
+    "cost": [
+     1500
+    ],
+    "amount": [
+     130
+    ]
+   },
+   "modify_up_damage": 0,
+   "modify_up_range": 0,
+   "modify_up_rate": 0,
+   "modify_up_damage_mult": 1,
+   "modify_up_range_mult": -0.3,
+   "modify_up_rate_mult": -0.3
+  },
+  "TurretSniper": {
+   "turret_unlock": 1300,
+   "turret_available": false,
+   "turret_cost": 12000,
+   "weapon_damage": 3000000,
+   "weapon_range": 300,
+   "weapon_rate": 30,
+   "weapon_poison": 0,
+   "weapon_rotate": 90,
+   "upgrade_damage": {
+    "cost": [
+     5000,
+     7500,
+     10000
+    ],
+    "amount": [
+     7000000,
+     15000000,
+     55000000
+    ]
+   },
+   "upgrade_range": {
+    "cost": [
+     4000,
+     4000
+    ],
+    "amount": [
+     400,
+     500
+    ]
+   },
+   "upgrade_rate": {
+    "cost": [
+     5000,
+     8000
+    ],
+    "amount": [
+     45,
+     60
+    ]
+   },
+   "freak_capable": false,
+   "freak_available": false,
+   "freak_length": 5000,
+   "freak_space": 180000,
+   "freak_damage_mult": 3,
+   "freak_range_mult": 0,
+   "freak_rate_mult": 4,
+   "freak_level_damage": 3,
+   "freak_level_range": 2,
+   "freak_level_rate": 2,
+   "modify_possible": false
+  },
+  "TurretRailgun": {
+   "turret_unlock": 1500,
+   "turret_available": false,
+   "turret_cost": 12000,
+   "weapon_damage": 4000000,
+   "weapon_range": 300,
+   "weapon_rate": 30,
+   "weapon_poison": 0,
+   "weapon_rotate": 90,
+   "upgrade_damage": {
+    "cost": [
+     5000,
+     7500,
+     10000
+    ],
+    "amount": [
+     9000000,
+     15000000,
+     25000000
+    ]
+   },
+   "upgrade_range": {
+    "cost": [
+     4000,
+     4000
+    ],
+    "amount": [
+     400,
+     500
+    ]
+   },
+   "upgrade_rate": {
+    "cost": [
+     5000,
+     6000
+    ],
+    "amount": [
+     60,
+     90
+    ]
+   },
+   "freak_capable": false,
+   "freak_available": false,
+   "freak_length": 5000,
+   "freak_space": 180000,
+   "freak_damage_mult": 3,
+   "freak_range_mult": 0,
+   "freak_rate_mult": 4,
+   "freak_level_damage": 3,
+   "freak_level_range": 2,
+   "freak_level_rate": 2,
+   "modify_possible": false
+  },
+  "TurretFusion": {
+   "turret_unlock": 1400,
+   "turret_available": false,
+   "turret_cost": 12000,
+   "weapon_damage": 4000000,
+   "weapon_range": 300,
+   "weapon_rate": 30,
+   "weapon_poison": 0,
+   "weapon_rotate": 90,
+   "upgrade_damage": {
+    "cost": [
+     5000,
+     7500,
+     10000
+    ],
+    "amount": [
+     3000000,
+     10000000,
+     35000000
+    ]
+   },
+   "upgrade_range": {
+    "cost": [
+     4000,
+     4000
+    ],
+    "amount": [
+     400,
+     500
+    ]
+   },
+   "upgrade_rate": {
+    "cost": [
+     5000,
+     8000
+    ],
+    "amount": [
+     60,
+     90
+    ]
+   },
+   "freak_capable": false,
+   "freak_available": false,
+   "freak_length": 5000,
+   "freak_space": 180000,
+   "freak_damage_mult": 3,
+   "freak_range_mult": 0,
+   "freak_rate_mult": 4,
+   "freak_level_damage": 3,
+   "freak_level_range": 2,
+   "freak_level_rate": 2,
+   "modify_possible": false
+  },
+  "TurretCombonly": {
+   "turret_unlock": 1600,
+   "turret_available": false,
+   "turret_cost": 5000
+  },
+  "TurretTargeter": {
+   "turret_unlock": 1200,
+   "turret_available": false,
+   "turret_cost": 1400
+  }
+ },
+ "game_settings": {
+  "attacker_hp_rate_easy": {
+   "wave": [
+    1,
+    10,
+    30,
+    40,
+    60,
+    80,
+    100,
+    120,
+    200
+   ],
+   "rate": [
+    1.3,
+    1.2,
+    1.15,
+    1.1,
+    1.09,
+    1.05,
+    1.04,
+    1.03,
+    1.02
+   ]
+  },
+  "attacker_hp_rate_medium": {
+   "wave": [
+    1,
+    10,
+    20,
+    30,
+    40,
+    60,
+    80,
+    100,
+    120,
+    200
+   ],
+   "rate": [
+    1.3,
+    1.2,
+    1.25,
+    1.15,
+    1.1,
+    1.09,
+    1.05,
+    1.04,
+    1.03,
+    1.02
+   ]
+  },
+  "attacker_hp_rate_hard": {
+   "wave": [
+    1,
+    10,
+    30,
+    40,
+    60,
+    100,
+    120,
+    200
+   ],
+   "rate": [
+    1.4,
+    1.3,
+    1.2,
+    1.1,
+    1.05,
+    1.04,
+    1.03,
+    1.02
+   ]
+  },
+  "attacker_hp_rate_extreme": {
+   "wave": [
+    1
+   ],
+   "rate": [
+    1.125
+   ]
+  },
+  "attacker_speed_easy": 60,
+  "attacker_speed_medium": 60,
+  "attacker_speed_hard": 80,
+  "attacker_speed_extreme": 80,
+  "wave_size": 10,
+  "wave_spacing": 20000,
+  "attacker_spacing": 700,
+  "attacker_energy": 10,
+  "attacker_upgrade_rate": 1.125,
+  "starting_cash_easy": 30,
+  "starting_cash_medium": 30,
+  "starting_cash_hard": 30,
+  "starting_cash_extreme": 30,
+  "starting_cash_sandbox": 100000,
+  "starting_cash_sandbox2": 1000000,
+  "starting_cash_debug": 10000000
+ },
+ "combos": {
+  "clusterbomb": {
+   "recharge": 5000,
+   "bullet_damage": 5000000,
+   "cluster_damage": 3300000,
+   "cluster_qty": 6,
+   "cluster_holding": true,
+   "blast_damage": 7000000
+  },
+  "sparky_clusterbomb": {
+   "recharge": 5000,
+   "bullet_damage": 5500000,
+   "cluster_damage": 800000,
+   "cluster_qty": 8,
+   "cluster_holding": true,
+   "blast_damage": 4700000
+  },
+  "big_clusterbomb": {
+   "recharge": 6200,
+   "bullet_damage": 8000000,
+   "cluster_damage": 4500000,
+   "cluster_qty": 10,
+   "cluster_holding": true,
+   "blast_damage": 8000000
+  },
+  "big_sparky_clusterbomb": {
+   "recharge": 6200,
+   "bullet_damage": 6000000,
+   "cluster_damage": 15000,
+   "cluster_qty": 12,
+   "cluster_holding": true,
+   "blast_damage": 5000000
+  },
+  "laser_clusterbomb": {
+   "recharge": 10000,
+   "bullet_damage": 2000000,
+   "cluster_damage": 2000000,
+   "cluster_qty": 5,
+   "cluster_holding": true,
+   "cluster_laser_damage": 700000,
+   "blast_damage": 4000000
+  },
+  "big_laser_clusterbomb": {
+   "recharge": 11400,
+   "bullet_damage": 4000000,
+   "cluster_qty": 5,
+   "cluster_laser_damage": 900000,
+   "cluster_holding": true,
+   "cluster_damage": 2000000,
+   "blast_damage": 6000000
+  },
+  "landmine": {
+   "recharge": 7000,
+   "bullet_damage": 10000000,
+   "blast_damage": 9000000
+  },
+  "big_landmine": {
+   "recharge": 7000,
+   "bullet_damage": 9000000,
+   "blast_damage": 15000000
+  },
+  "sparky_landmine": {
+   "recharge": 7000,
+   "bullet_damage": 9000000,
+   "blast_damage": 15000000,
+   "cluster_qty": 8
+  },
+  "big_cluster_landmine": {
+   "recharge": 8000,
+   "bullet_damage": 9000000,
+   "cluster_qty": 10,
+   "cluster_holding": true,
+   "cluster_damage": 4500000,
+   "blast_damage": 15000000
+  },
+  "big_laser_cluster_landmine": {
+   "recharge": 10800,
+   "bullet_damage": 7000000,
+   "cluster_laser_damage": 1000000,
+   "cluster_qty": 10,
+   "cluster_holding": true,
+   "cluster_damage": 2000000,
+   "blast_damage": 9000000
+  },
+  "bfg": {
+   "recharge": 9000,
+   "bullet_damage": 5800000,
+   "blast_damage": 7500000,
+   "laser_damage": 4200000,
+   "laser_range": 250,
+   "laser_rate": 180,
+   "move_speed": 60
+  },
+  "tazer_bfg": {
+   "recharge": 9000,
+   "bullet_damage": 5800000,
+   "blast_damage": 7500000,
+   "laser_damage": 4200000,
+   "laser_range": 250,
+   "laser_rate": 180,
+   "move_speed": 60
+  },
+  "rocket_bfg": {
+   "recharge": 9000,
+   "bullet_damage": 6500000,
+   "blast_damage": 7500000,
+   "laser_damage": 4500000,
+   "laser_range": 250,
+   "laser_rate": 180,
+   "rocket_damage": 2000000,
+   "move_speed": 60
+  },
+  "laser_rocket": {
+   "recharge": 3000,
+   "bullet_damage": 2000000,
+   "laser_damage": 2000000,
+   "laser_range": 200,
+   "move_speed": 100,
+   "laserblast_damage": 1000000,
+   "laserblast_qty": 6,
+   "laserblast_range": 300
+  },
+  "tazer_rocket": {
+   "recharge": 3000,
+   "bullet_damage": 2000000,
+   "laser_damage": 2000000,
+   "laser_range": 200,
+   "move_speed": 100
+  },
+  "poison_rocket": {
+   "recharge": 5000,
+   "bullet_damage": 1000,
+   "blast_damage": 100,
+   "move_speed": 150
+  },
+  "nuke": {
+   "recharge": 7400,
+   "bullet_damage": 9000000,
+   "blast_damage": 60000000,
+   "move_speed": 150
+  },
+  "blackhole": {
+   "recharge": 20000,
+   "blackhole_radius": 120,
+   "blackhole_duration": 3000,
+   "blackhole_eject": false
+  },
+  "shockwave": {
+   "recharge": 9000,
+   "bullet_damage": 1000000,
+   "bullet_poison": 100,
+   "blast_damage": 1000000,
+   "blast_poison": 75
+  },
+  "napalm": {
+   "recharge": 6500,
+   "bullet_damage": 2000000,
+   "blast_damage": 2500000,
+   "napalm_quantity": 16,
+   "napalm_timing": 75,
+   "napalm_jit": 30
+  }
+ }
+}
