@@ -113,7 +113,9 @@ Combo damage and recharge times (for example, Nuke: recharge 7400 ms, bullet 9M,
   - Mods
   - Challenge games: Warmup, Threetown, Spiffles, Limitations, Bounce, Bludgeon, Longshine, Speedshine, Hardshine, Duration, Clockers, Ripples, Smollocks. Their settings are in `GameSelectChallenge.as`.
 
+## Maps
+`maps.json` holds all 12 maps plus the tutorial: name, base position and road waypoints, from `RoadManager.layoutBuild`. The road is 28px wide with a 31px border. Attackers aim for each waypoint ±9.5px, and reaching the base costs a life (you start with 10).
+
 ## Not extracted yet
-- Map/road layouts (`RoadManager.as`, `GameManagerMapping.as`, and map data in the SWF).
 - Art and sounds (export them with `ffdec-cli -export image,sound,shape`).
 - Exact combo ranges and the targeting-mode logic.

@@ -1,0 +1,1186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Onslaught 2 Remake</title>
+<style>
+  :root {
+    --sand: #e6c394;
+    --road: #b2885b;
+    --bar: #1c1c1c;
+    --bar2: #333;
+    --ink: #f2f2f2;
+    --muted: #a8a8a8;
+    --panel: rgba(20, 20, 20, 0.92);
+    --accent: #7ed957;
+    --bad: #ff5a4f;
+    --gold: #ffd23f;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #111; color: var(--ink); font-family: "Trebuchet MS", "Gill Sans", system-ui, sans-serif; }
+  body { padding: 8px 16px 24px; }
+  #wrap { max-width: 720px; margin: 0 auto; user-select: none; -webkit-user-select: none; }
+  #stage { position: relative; width: 100%; aspect-ratio: 720 / 480; background: var(--sand); border-radius: 6px 6px 0 0; overflow: hidden; }
+  #game { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: manipulation; cursor: crosshair; }
+  .overlay { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; }
+  .overlay.show { display: flex; }
+  .card { background: linear-gradient(#1a1a1a, #5a5a5a); border-radius: 10px; padding: 14px; width: min(88%, 600px); box-shadow: 0 6px 24px rgba(0,0,0,.5); text-align: center; }
+  .card h1 { margin: 2px 0 2px; font-size: clamp(26px, 6vw, 46px); letter-spacing: .5px; }
+  .card h2 { margin: 4px 0 10px; font-size: clamp(16px, 3.4vw, 22px); font-weight: normal; }
+  .card p { margin: 6px 0; color: #ddd; font-size: 13px; }
+  .modes { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin: 10px 0; }
+  .btn { appearance: none; border: 1px solid #bbb; background: linear-gradient(#fff, #dcdcdc); color: #222; border-radius: 6px; padding: 9px 8px; font: inherit; font-size: 14px; cursor: pointer; }
+  .btn:hover { filter: brightness(1.06); }
+  .btn:active { transform: translateY(1px); }
+  .btn[disabled] { opacity: .45; cursor: not-allowed; }
+  .maps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 8px 0; }
+  .mapbtn { padding: 3px; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 12px; }
+  .mapbtn canvas { width: 100%; height: auto; display: block; border-radius: 3px; }
+  .small { font-size: 12px; color: #ccc; }
+  #bar { background: linear-gradient(#2b2b2b, #111); border-radius: 0 0 6px 6px; padding: 6px; display: grid; grid-template-columns: 1fr auto; gap: 6px; }
+  #build { display: flex; gap: 4px; flex-wrap: wrap; align-items: stretch; }
+  .tb { position: relative; width: 52px; min-height: 52px; border-radius: 6px; border: 1px solid #444; background: #262626; color: var(--ink); cursor: pointer; padding: 2px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; font-size: 11px; }
+  .tb canvas { width: 34px; height: 34px; }
+  .tb.sel { outline: 2px solid var(--gold); }
+  .tb.poor { color: var(--bad); }
+  .tb.locked { opacity: .55; cursor: not-allowed; }
+  .tb .lock { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #ddd; background: rgba(0,0,0,.55); border-radius: 6px; text-align: center; line-height: 1.1; }
+  #stats { display: grid; grid-template-columns: auto auto; gap: 1px 10px; font-size: 13px; align-content: center; }
+  #stats b { color: var(--gold); font-weight: normal; }
+  #controls { display: flex; gap: 4px; margin-top: 4px; }
+  #controls .btn { padding: 4px 8px; font-size: 12px; }
+  #info { grid-column: 1 / -1; min-height: 64px; background: #191919; border-radius: 6px; padding: 6px 8px; font-size: 13px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  #info .name { font-weight: bold; min-width: 120px; }
+  .up { display: flex; flex-direction: column; gap: 2px; min-width: 120px; }
+  .pips { display: flex; gap: 2px; }
+  .pip { width: 8px; height: 8px; border-radius: 2px; background: #444; }
+  .pip.on { background: var(--gold); }
+  .up .btn { padding: 3px 6px; font-size: 12px; }
+  .tag { display: inline-block; padding: 1px 6px; border-radius: 10px; background: #333; font-size: 11px; color: #ddd; }
+  .tag.ready { background: #2f5d1f; color: #c9ff9c; }
+  .help { color: var(--muted); font-size: 12px; }
+  #legend { max-width: 720px; margin: 10px auto 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+  #legend summary { cursor: pointer; color: #ddd; }
+  #legend table { border-collapse: collapse; margin-top: 6px; }
+  #legend td { padding: 1px 8px 1px 0; vertical-align: top; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="stage">
+    <canvas id="game" width="720" height="480"></canvas>
+
+    <div class="overlay show" id="menu">
+      <div class="card">
+        <h1>Onslaught 2</h1>
+        <h2>Destroy them all!</h2>
+        <div class="modes">
+          <button class="btn" data-mode="easy">Easy Mode</button>
+          <button class="btn" data-mode="medium">Medium Mode</button>
+          <button class="btn" data-mode="hard">Hard Mode</button>
+          <button class="btn" data-mode="extreme">Extreme Mode</button>
+          <button class="btn" data-mode="sandbox">Sandbox Mode</button>
+        </div>
+        <p>1. Build &nbsp; 2. Kill &nbsp; 3. Upgrade &nbsp; 4. Win!</p>
+        <p class="small">A fan remake built from the original game's numbers (Onslaught 2.2, build 2350-gaby).</p>
+      </div>
+    </div>
+
+    <div class="overlay" id="mapsel">
+      <div class="card">
+        <h2>Choose a Map</h2>
+        <div class="maps" id="maplist"></div>
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <button class="btn" id="back">&lt; Back</button>
+          <span class="small" id="diffLabel"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="overlay" id="over">
+      <div class="card">
+        <h1 id="overTitle">Game Over</h1>
+        <h2 id="overText"></h2>
+        <div class="modes">
+          <button class="btn" id="again">Play again</button>
+          <button class="btn" id="tomenu">Main menu</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="bar">
+    <div id="build"></div>
+    <div>
+      <div id="stats">
+        <span>Cash</span><b id="sCash">$0</b>
+        <span>Kills</span><b id="sKills">0</b>
+        <span>Wave</span><b id="sWave">0</b>
+        <span>Lives</span><b id="sLives">10</b>
+        <span>Next</span><b id="sNext">20.0</b>
+      </div>
+      <div id="controls">
+        <button class="btn" id="bNext" title="Send next wave (N)">Next wave</button>
+        <button class="btn" id="bSpeed" title="Game speed (F)">1x</button>
+        <button class="btn" id="bPause" title="Pause (P)">II</button>
+      </div>
+    </div>
+    <div id="info"><span class="help">Pick a turret below, then tap the map to build it. Tap a turret to upgrade or sell it.</span></div>
+  </div>
+
+  <details id="legend">
+    <summary>Combos and keys</summary>
+    <p>A turret can combo once its <b>damage is fully upgraded</b>. It fires a combo when other fully upgraded turrets that are ready sit within 70px. The lead turret's colour decides which combo fires. The first rule that matches wins.</p>
+    <table id="comboTable"></table>
+    <p>Keys: 1-4 build Blue/Green/Red/Yellow · Q/W/E upgrade damage/range/rate · S sell · N next wave · F speed · P pause · Esc cancel</p>
+  </details>
+</div>
+
+<script>
+"use strict";
+const DEFAULTS = {"turrets":{"TurretBlue":{"turret_cost":10,"weapon_damage":15,"weapon_range":130,"weapon_rate":100,"weapon_poison":0,"weapon_rotate":270,"weapon_must_face":true,"upgrade_damage":{"cost":[20,50,100,250,600,1000,1100,1200,1500],"amount":[30,60,150,400,1200,3100,8500,19400,46000]},"upgrade_range":{"cost":[30,100,200,500,950],"amount":[140,150,165,180,220]},"upgrade_rate":{"cost":[50,150,300,450,950,1000,1450],"amount":[110,125,140,160,180,200,240]},"freak_capable":true,"freak_available":false,"freak_length":5000,"freak_space":80000,"freak_damage_mult":3,"freak_range_mult":0,"freak_rate_mult":4,"freak_level_damage":4,"freak_level_range":0,"freak_level_rate":4,"modify_possible":true,"combo_capable":false,"combo_never":false},"TurretGreen":{"turret_cost":15,"weapon_damage":25,"weapon_range":100,"weapon_rate":60,"weapon_poison":0,"weapon_rotate":270,"weapon_must_face":true,"upgrade_damage":{"cost":[20,50,125,300,700,850,950,1000],"amount":[50,120,400,1500,3900,9300,19500,35000]},"upgrade_range":{"cost":[15,25,40,65,105,170,275,445,720,1100],"amount":[110,125,140,160,180,205,230,255,285,320]},"upgrade_rate":{"cost":[30,75,180,300,450,600,800,900,1000],"amount":[65,70,80,90,105,120,135,160,190]},"freak_capable":false,"freak_available":false,"freak_length":5000,"freak_space":80000,"freak_damage_mult":3,"freak_range_mult":0,"freak_rate_mult":4,"freak_level_damage":4,"freak_level_range":0,"freak_level_rate":4,"modify_possible":true,"combo_capable":false,"combo_never":false},"TurretRed":{"turret_cost":20,"weapon_damage":50,"weapon_range":200,"weapon_rate":50,"weapon_poison":0,"weapon_rotate":270,"weapon_must_face":false,"upgrade_damage":{"cost":[50,100,200,350,650,1200,1300,1500,1500],"amount":[120,350,800,1950,6050,11500,27000,48900,65000]},"upgrade_range":{"cost":[35,80,160,400,900,1100,1300,1500],"amount":[210,220,230,250,275,300,325,350]},"upgrade_rate":{"cost":[30,60,115,200,340,600,900,1050,1150],"amount":[60,70,85,100,115,135,155,180,210]},"freak_capable":false,"freak_available":false,"freak_length":5000,"freak_space":80000,"freak_damage_mult":3,"freak_range_mult":0,"freak_rate_mult":4,"freak_level_damage":4,"freak_level_range":0,"freak_level_rate":4,"modify_possible":true,"combo_capable":false,"combo_never":false},"TurretYellow":{"turret_cost":50,"weapon_damage":50,"weapon_range":70,"weapon_rate":60,"weapon_poison":1,"weapon_rotate":720,"weapon_must_face":false,"upgrade_damage":{"cost":[40,80,190,300,600,1000,1100],"amount":[75,125,200,800,3500,11000,30000]},"upgrade_range":{"cost":[50,100,300,600,1000],"amount":[75,85,105,130,155]},"upgrade_rate":{"cost":[50,100,225,390,650,1100,1450],"amount":[70,80,90,100,120,150,180]},"freak_capable":true,"freak_available":false,"freak_length":5000,"freak_space":80000,"freak_damage_mult":3,"freak_range_mult":0,"freak_rate_mult":4,"freak_level_damage":4,"freak_level_range":0,"freak_level_rate":4,"modify_possible":true,"combo_capable":false,"combo_never":false},"TurretRangeUp":{"turret_unlock":300,"turret_available":false,"turret_cost":2000,"weapon_range":80,"upgrade_range":{"cost":[1500],"amount":[130]},"modify_up_damage":0,"modify_up_range":100,"modify_up_rate":0,"modify_up_damage_mult":0,"modify_up_range_mult":0,"modify_up_rate_mult":0},"TurretDamageUp":{"turret_unlock":450,"turret_available":false,"turret_cost":5000,"weapon_range":80,"upgrade_range":{"cost":[1500],"amount":[130]},"modify_up_damage":0,"modify_up_range":0,"modify_up_rate":0,"modify_up_damage_mult":0.4,"modify_up_range_mult":0,"modify_up_rate_mult":0},"TurretRateUpExchange":{"turret_unlock":550,"turret_available":false,"turret_cost":1200,"weapon_range":80,"upgrade_range":{"cost":[1500],"amount":[130]},"modify_up_damage":0,"modify_up_range":0,"modify_up_rate":0,"modify_up_damage_mult":-0.4,"modify_up_range_mult":-0.1,"modify_up_rate_mult":0.6},"TurretRangeUpExchange":{"turret_unlock":700,"turret_available":false,"turret_cost":1000,"weapon_range":80,"upgrade_range":{"cost":[1500],"amount":[130]},"modify_up_damage":0,"modify_up_range":100,"modify_up_rate":0,"modify_up_damage_mult":0,"modify_up_range_mult":0,"modify_up_rate_mult":-0.25},"TurretRateUp":{"turret_unlock":850,"turret_available":false,"turret_cost":3000,"weapon_range":80,"upgrade_range":{"cost":[1500],"amount":[130]},"modify_up_damage":0,"modify_up_range":0,"modify_up_rate":0,"modify_up_damage_mult":0,"modify_up_range_mult":0,"modify_up_rate_mult":1.2},"TurretDamageUpBig":{"turret_unlock":1000,"turret_available":false,"turret_cost":8500,"weapon_range":80,"upgrade_range":{"cost":[1500],"amount":[130]},"modify_up_damage":0,"modify_up_range":0,"modify_up_rate":0,"modify_up_damage_mult":1,"modify_up_range_mult":0,"modify_up_rate_mult":0},"TurretDamageUpBigExchange":{"turret_unlock":1100,"turret_available":false,"turret_cost":3500,"weapon_range":80,"upgrade_range":{"cost":[1500],"amount":[130]},"modify_up_damage":0,"modify_up_range":0,"modify_up_rate":0,"modify_up_damage_mult":1,"modify_up_range_mult":-0.3,"modify_up_rate_mult":-0.3},"TurretSniper":{"turret_unlock":1300,"turret_available":false,"turret_cost":12000,"weapon_damage":3000000,"weapon_range":300,"weapon_rate":30,"weapon_poison":0,"weapon_rotate":90,"upgrade_damage":{"cost":[5000,7500,10000],"amount":[7000000,15000000,55000000]},"upgrade_range":{"cost":[4000,4000],"amount":[400,500]},"upgrade_rate":{"cost":[5000,8000],"amount":[45,60]},"freak_capable":false,"freak_available":false,"freak_length":5000,"freak_space":180000,"freak_damage_mult":3,"freak_range_mult":0,"freak_rate_mult":4,"freak_level_damage":3,"freak_level_range":2,"freak_level_rate":2,"modify_possible":false},"TurretRailgun":{"turret_unlock":1500,"turret_available":false,"turret_cost":12000,"weapon_damage":4000000,"weapon_range":300,"weapon_rate":30,"weapon_poison":0,"weapon_rotate":90,"upgrade_damage":{"cost":[5000,7500,10000],"amount":[9000000,15000000,25000000]},"upgrade_range":{"cost":[4000,4000],"amount":[400,500]},"upgrade_rate":{"cost":[5000,6000],"amount":[60,90]},"freak_capable":false,"freak_available":false,"freak_length":5000,"freak_space":180000,"freak_damage_mult":3,"freak_range_mult":0,"freak_rate_mult":4,"freak_level_damage":3,"freak_level_range":2,"freak_level_rate":2,"modify_possible":false},"TurretFusion":{"turret_unlock":1400,"turret_available":false,"turret_cost":12000,"weapon_damage":4000000,"weapon_range":300,"weapon_rate":30,"weapon_poison":0,"weapon_rotate":90,"upgrade_damage":{"cost":[5000,7500,10000],"amount":[3000000,10000000,35000000]},"upgrade_range":{"cost":[4000,4000],"amount":[400,500]},"upgrade_rate":{"cost":[5000,8000],"amount":[60,90]},"freak_capable":false,"freak_available":false,"freak_length":5000,"freak_space":180000,"freak_damage_mult":3,"freak_range_mult":0,"freak_rate_mult":4,"freak_level_damage":3,"freak_level_range":2,"freak_level_rate":2,"modify_possible":false},"TurretCombonly":{"turret_unlock":1600,"turret_available":false,"turret_cost":5000},"TurretTargeter":{"turret_unlock":1200,"turret_available":false,"turret_cost":1400}},"game_settings":{"attacker_hp_rate_easy":{"wave":[1,10,30,40,60,80,100,120,200],"rate":[1.3,1.2,1.15,1.1,1.09,1.05,1.04,1.03,1.02]},"attacker_hp_rate_medium":{"wave":[1,10,20,30,40,60,80,100,120,200],"rate":[1.3,1.2,1.25,1.15,1.1,1.09,1.05,1.04,1.03,1.02]},"attacker_hp_rate_hard":{"wave":[1,10,30,40,60,100,120,200],"rate":[1.4,1.3,1.2,1.1,1.05,1.04,1.03,1.02]},"attacker_hp_rate_extreme":{"wave":[1],"rate":[1.125]},"attacker_speed_easy":60,"attacker_speed_medium":60,"attacker_speed_hard":80,"attacker_speed_extreme":80,"wave_size":10,"wave_spacing":20000,"attacker_spacing":700,"attacker_energy":10,"attacker_upgrade_rate":1.125,"starting_cash_easy":30,"starting_cash_medium":30,"starting_cash_hard":30,"starting_cash_extreme":30,"starting_cash_sandbox":100000,"starting_cash_sandbox2":1000000,"starting_cash_debug":10000000},"combos":{"clusterbomb":{"recharge":5000,"bullet_damage":5000000,"cluster_damage":3300000,"cluster_qty":6,"cluster_holding":true,"blast_damage":7000000},"sparky_clusterbomb":{"recharge":5000,"bullet_damage":5500000,"cluster_damage":800000,"cluster_qty":8,"cluster_holding":true,"blast_damage":4700000},"big_clusterbomb":{"recharge":6200,"bullet_damage":8000000,"cluster_damage":4500000,"cluster_qty":10,"cluster_holding":true,"blast_damage":8000000},"big_sparky_clusterbomb":{"recharge":6200,"bullet_damage":6000000,"cluster_damage":15000,"cluster_qty":12,"cluster_holding":true,"blast_damage":5000000},"laser_clusterbomb":{"recharge":10000,"bullet_damage":2000000,"cluster_damage":2000000,"cluster_qty":5,"cluster_holding":true,"cluster_laser_damage":700000,"blast_damage":4000000},"big_laser_clusterbomb":{"recharge":11400,"bullet_damage":4000000,"cluster_qty":5,"cluster_laser_damage":900000,"cluster_holding":true,"cluster_damage":2000000,"blast_damage":6000000},"landmine":{"recharge":7000,"bullet_damage":10000000,"blast_damage":9000000},"big_landmine":{"recharge":7000,"bullet_damage":9000000,"blast_damage":15000000},"sparky_landmine":{"recharge":7000,"bullet_damage":9000000,"blast_damage":15000000,"cluster_qty":8},"big_cluster_landmine":{"recharge":8000,"bullet_damage":9000000,"cluster_qty":10,"cluster_holding":true,"cluster_damage":4500000,"blast_damage":15000000},"big_laser_cluster_landmine":{"recharge":10800,"bullet_damage":7000000,"cluster_laser_damage":1000000,"cluster_qty":10,"cluster_holding":true,"cluster_damage":2000000,"blast_damage":9000000},"bfg":{"recharge":9000,"bullet_damage":5800000,"blast_damage":7500000,"laser_damage":4200000,"laser_range":250,"laser_rate":180,"move_speed":60},"tazer_bfg":{"recharge":9000,"bullet_damage":5800000,"blast_damage":7500000,"laser_damage":4200000,"laser_range":250,"laser_rate":180,"move_speed":60},"rocket_bfg":{"recharge":9000,"bullet_damage":6500000,"blast_damage":7500000,"laser_damage":4500000,"laser_range":250,"laser_rate":180,"rocket_damage":2000000,"move_speed":60},"laser_rocket":{"recharge":3000,"bullet_damage":2000000,"laser_damage":2000000,"laser_range":200,"move_speed":100,"laserblast_damage":1000000,"laserblast_qty":6,"laserblast_range":300},"tazer_rocket":{"recharge":3000,"bullet_damage":2000000,"laser_damage":2000000,"laser_range":200,"move_speed":100},"poison_rocket":{"recharge":5000,"bullet_damage":1000,"blast_damage":100,"move_speed":150},"nuke":{"recharge":7400,"bullet_damage":9000000,"blast_damage":60000000,"move_speed":150},"blackhole":{"recharge":20000,"blackhole_radius":120,"blackhole_duration":3000,"blackhole_eject":false},"shockwave":{"recharge":9000,"bullet_damage":1000000,"bullet_poison":100,"blast_damage":1000000,"blast_poison":75},"napalm":{"recharge":6500,"bullet_damage":2000000,"blast_damage":2500000,"napalm_quantity":16,"napalm_timing":75,"napalm_jit":30}}};
+const MAPS = {"map1":{"name":"Classic","base":{"x":574.9,"y":75.7},"road":[{"x":0.0,"y":446.2},{"x":84.0,"y":382.0},{"x":300.45,"y":382.0},{"x":465.85,"y":223.6},{"x":636.9,"y":223.6},{"x":636.9,"y":382.0},{"x":465.85,"y":382.0},{"x":300.4,"y":223.6},{"x":192.2,"y":223.6},{"x":192.2,"y":35.8},{"x":84.0,"y":35.8},{"x":84.0,"y":129.1},{"x":574.4,"y":129.1}]},"map2":{"name":"Incoming","base":{"x":254.6,"y":156.6},"road":[{"x":655.0,"y":0.0},{"x":655.0,"y":410.0},{"x":65.0,"y":410.0},{"x":65.0,"y":65.0},{"x":580.0,"y":65.0},{"x":580.0,"y":335.0},{"x":140.0,"y":335.0},{"x":140.0,"y":140.0},{"x":505.0,"y":140.0},{"x":505.0,"y":260.0},{"x":310.0,"y":260.0},{"x":310.0,"y":240.0}]},"map3":{"name":"Ells","base":{"x":48.2,"y":323.2},"road":[{"x":715.0,"y":65.0},{"x":583.05,"y":65.0},{"x":583.05,"y":390.55},{"x":333.65,"y":390.55},{"x":332.85,"y":254.85},{"x":456.6,"y":254.85},{"x":456.6,"y":65.0},{"x":110.1,"y":65.0},{"x":110.1,"y":254.85},{"x":233.35,"y":254.85},{"x":233.35,"y":353.0},{"x":147.2,"y":353.0}]},"map4":{"name":"Looping","base":{"x":581.2,"y":332.6},"road":[{"x":0.0,"y":209.1},{"x":48.5,"y":144.55},{"x":100.35,"y":88.95},{"x":161.2,"y":50.5},{"x":225.5,"y":41.55},{"x":287.55,"y":89.6},{"x":308.5,"y":176.3},{"x":316.0,"y":273.8},{"x":300.5,"y":367.4},{"x":212.0,"y":407.45},{"x":125.85,"y":386.45},{"x":75.5,"y":337.4},{"x":86.85,"y":258.8},{"x":136.0,"y":201.8},{"x":213.5,"y":171.8},{"x":333.55,"y":177.35},{"x":394.1,"y":198.8},{"x":456.05,"y":230.2},{"x":512.8,"y":266.95},{"x":580.05,"y":261.0},{"x":629.25,"y":224.9},{"x":653.4,"y":169.3},{"x":659.5,"y":110.7},{"x":614.5,"y":55.9},{"x":535.25,"y":54.6},{"x":459.8,"y":99.25},{"x":422.2,"y":171.6},{"x":406.05,"y":305.3},{"x":446.35,"y":354.9},{"x":524.5,"y":376.0},{"x":580.9,"y":376.0}]},"map5":{"name":"Sinus","base":{"x":587.2,"y":249.8},"road":[{"x":0.0,"y":302.25},{"x":133.8,"y":302.25},{"x":156.55,"y":283.45},{"x":186.8,"y":274.45},{"x":217.05,"y":302.25},{"x":263.85,"y":302.25},{"x":294.1,"y":366.15},{"x":334.8,"y":52.2},{"x":363.6,"y":415.75},{"x":398.3,"y":302.25},{"x":470.65,"y":302.25},{"x":491.85,"y":274.45},{"x":537.15,"y":262.45},{"x":567.35,"y":302.25},{"x":585.65,"y":302.25}]},"map6":{"name":"Puzzle","base":{"x":564.6,"y":356.8},"road":[{"x":0.0,"y":43.7},{"x":215.0,"y":43.7},{"x":215.0,"y":277.8},{"x":515.0,"y":277.8},{"x":515.0,"y":43.7},{"x":215.0,"y":43.7},{"x":515.0,"y":277.8},{"x":440.0,"y":351.95},{"x":365.0,"y":426.1},{"x":290.0,"y":351.95},{"x":215.0,"y":277.8},{"x":515.0,"y":43.7},{"x":639.85,"y":43.7},{"x":639.85,"y":368.8}]},"map7":{"name":"Squarely","base":{"x":24.6,"y":356.8},"road":[{"x":639.85,"y":0.0},{"x":639.85,"y":211.85},{"x":462.75,"y":211.85},{"x":462.75,"y":70.55},{"x":559.8,"y":70.55},{"x":559.8,"y":381.5},{"x":255.95,"y":381.5},{"x":258.3,"y":123.15},{"x":404.3,"y":123.15},{"x":404.3,"y":296.8},{"x":164.3,"y":296.8},{"x":164.3,"y":40.55},{"x":347.55,"y":40.55},{"x":345.85,"y":205.85},{"x":97.25,"y":205.85},{"x":97.25,"y":368.15}]},"map8":{"name":"Inspired","base":{"x":324.0,"y":191.8},"road":[{"x":0.0,"y":233.95},{"x":200.5,"y":233.95},{"x":200.5,"y":54.05},{"x":84.25,"y":54.05},{"x":84.25,"y":162.3},{"x":636.65,"y":162.3},{"x":636.65,"y":54.05},{"x":520.4,"y":54.05},{"x":520.4,"y":415.5},{"x":636.65,"y":415.5},{"x":636.65,"y":308.8},{"x":84.25,"y":308.8},{"x":84.25,"y":415.5},{"x":200.5,"y":415.5},{"x":200.5,"y":233.95},{"x":321.8,"y":233.95}]},"map9":{"name":"Lyne","base":{"x":585.0,"y":380.0},"road":[{"x":0.0,"y":0.0},{"x":590.0,"y":410.0}]},"tutorial":{"name":"Quick Tutorial","base":{"x":570.0,"y":350.0},"road":[{"x":720.0,"y":100.0},{"x":100.0,"y":100.0},{"x":100.0,"y":410.0},{"x":580.0,"y":410.0}]},"map10":{"name":"Penta","base":{"x":602.0,"y":10.0},"road":[{"x":360.0,"y":20.0},{"x":220.0,"y":60.0},{"x":129.0,"y":170.0},{"x":129.0,"y":310.0},{"x":200.0,"y":420.0},{"x":360.0,"y":460.0},{"x":522.0,"y":420.0},{"x":590.0,"y":310.0},{"x":590.0,"y":170.0},{"x":500.0,"y":60.0},{"x":360.0,"y":20.0},{"x":200.0,"y":420.0},{"x":589.0,"y":169.0},{"x":130.0,"y":170.0},{"x":523.0,"y":418.0},{"x":360.0,"y":20.0},{"x":580.0,"y":20.0},{"x":607.0,"y":37.0}]},"map11":{"name":"Bad Pipe","base":{"x":580.0,"y":360.0},"road":[{"x":20.0,"y":460.0},{"x":260.0,"y":460.0},{"x":260.0,"y":300.0},{"x":240.0,"y":300.0},{"x":240.0,"y":240.0},{"x":300.0,"y":240.0},{"x":280.0,"y":180.0},{"x":320.0,"y":200.0},{"x":320.0,"y":140.0},{"x":300.0,"y":140.0},{"x":280.0,"y":120.0},{"x":260.0,"y":100.0},{"x":260.0,"y":80.0},{"x":260.0,"y":20.0},{"x":280.0,"y":40.0},{"x":300.0,"y":60.0},{"x":320.0,"y":80.0},{"x":340.0,"y":60.0},{"x":360.0,"y":40.0},{"x":380.0,"y":20.0},{"x":380.0,"y":80.0},{"x":380.0,"y":100.0},{"x":360.0,"y":120.0},{"x":340.0,"y":140.0},{"x":320.0,"y":140.0},{"x":320.0,"y":200.0},{"x":360.0,"y":180.0},{"x":340.0,"y":240.0},{"x":320.0,"y":240.0},{"x":400.0,"y":240.0},{"x":400.0,"y":300.0},{"x":380.0,"y":300.0},{"x":260.0,"y":300.0},{"x":380.0,"y":300.0},{"x":380.0,"y":460.0},{"x":640.0,"y":460.0},{"x":645.0,"y":437.0}]},"map12":{"name":"Miss Direction","base":{"x":160.0,"y":320.0},"road":[{"x":0.0,"y":420.0},{"x":580.0,"y":420.0},{"x":540.0,"y":460.0},{"x":700.0,"y":460.0},{"x":700.0,"y":300.0},{"x":660.0,"y":340.0},{"x":440.0,"y":120.0},{"x":480.0,"y":80.0},{"x":320.0,"y":80.0},{"x":320.0,"y":220.0},{"x":360.0,"y":180.0},{"x":560.0,"y":380.0},{"x":460.0,"y":380.0},{"x":660.0,"y":200.0},{"x":700.0,"y":240.0},{"x":700.0,"y":100.0},{"x":560.0,"y":100.0},{"x":600.0,"y":140.0},{"x":340.0,"y":380.0},{"x":220.0,"y":260.0},{"x":220.0,"y":120.0},{"x":280.0,"y":120.0},{"x":200.0,"y":40.0},{"x":120.0,"y":120.0},{"x":180.0,"y":120.0},{"x":180.0,"y":240.0},{"x":120.0,"y":240.0},{"x":120.0,"y":160.0},{"x":20.0,"y":260.0},{"x":120.0,"y":360.0},{"x":120.0,"y":300.0},{"x":180.0,"y":300.0},{"x":180.0,"y":340.0},{"x":184.9,"y":337.0}]}};
+
+// ---------- constants from the original code ----------
+const W = 720, H = 480;
+const ROAD_W = 28, ROAD_BORDER = 31;
+const TURRET_R = 14;
+const COMBO_RANGE = 70;            // Turret.combo_range
+const LINK_MULT = 1.25;            // Turret.link_mult
+const RESALE = 0.7;                // TurretManager.turret_resale
+const WAVE_SPACING = 20000, ATTACKER_SPACING = 700, WAVE_SIZE = 10, ATTACKER_TYPES = 9;
+const JITTER = 19;                 // AttackerEngine.waypoint_jitter
+const ATTACKER_REPOINT = [false, true, false, true, true, true, false, true, true];
+const BLASTS = { tiny: 70, small: 100, medium: 160, large: 190, huge: 250, poison: 190, bfg: 190, shockwave: 200 };
+const GS = DEFAULTS.game_settings;
+const T = DEFAULTS.turrets;
+const C = DEFAULTS.combos;
+
+const COLOR = { Blue: "#2f6de0", Green: "#36b84a", Red: "#d8352b", Yellow: "#f2c21b" };
+const KINDS = {
+  Blue:   { key: "TurretBlue",   label: "Blue Cannon",   weapon: "shell", target: "near" },
+  Green:  { key: "TurretGreen",  label: "Green Laser",   weapon: "laser", target: "near" },
+  Red:    { key: "TurretRed",    label: "Red Rocket",    weapon: "rocket", target: "near" },
+  Yellow: { key: "TurretYellow", label: "Yellow Tazer",  weapon: "spark", target: "fast" },
+  RangeUp:             { key: "TurretRangeUp",             label: "Range Enhancer",      mod: true },
+  DamageUp:            { key: "TurretDamageUp",            label: "Damage Enhancer",     mod: true },
+  RateUpExchange:      { key: "TurretRateUpExchange",      label: "Rate Exchanger",      mod: true },
+  RangeUpExchange:     { key: "TurretRangeUpExchange",     label: "Range Exchanger",     mod: true },
+  RateUp:              { key: "TurretRateUp",              label: "Rate Enhancer",       mod: true },
+  DamageUpBig:         { key: "TurretDamageUpBig",         label: "Big Damage Enhancer", mod: true },
+  DamageUpBigExchange: { key: "TurretDamageUpBigExchange", label: "Big Damage Exchanger", mod: true },
+  Sniper:  { key: "TurretSniper",  label: "Sniper",        weapon: "sniper", target: "near", superT: true },
+  Fusion:  { key: "TurretFusion",  label: "Fusion Cannon", weapon: "fusion", target: "near", superT: true },
+  Railgun: { key: "TurretRailgun", label: "Railgun",       weapon: "rail",   target: "near", superT: true },
+};
+const BUILD_ORDER = ["Blue", "Green", "Red", "Yellow", "RangeUp", "DamageUp", "RateUpExchange", "RangeUpExchange", "RateUp", "DamageUpBig", "DamageUpBigExchange", "Sniper", "Fusion", "Railgun"];
+
+// Combo rules, copied from each colour's comboFire(): first match wins.
+// Counts are of OTHER combo-ready turrets within COMBO_RANGE.
+const RULES = {
+  Red: [
+    [c => c.Blue >= 2, "nuke"],
+    [c => c.Red >= 1 && c.Yellow >= 1 && c.Blue >= 1, "napalm"],
+    [c => c.Blue >= 1 && c.Green >= 1, "poison_rocket"],
+    [c => c.Yellow >= 1, "tazer_rocket"],
+    [c => c.Green >= 1, "laser_rocket"],
+  ],
+  Green: [
+    [c => c.Red >= 2 && c.Blue >= 1, "rocket_bfg"],
+    [c => c.Red >= 1 && c.Blue >= 1, "bfg"],
+  ],
+  Blue: [
+    [c => c.Red >= 2 && c.Green >= 1 && c.Blue >= 1, "big_laser_cluster_landmine"],
+    [c => c.Red >= 2 && c.Blue >= 1, "big_cluster_landmine"],
+    [c => c.Red >= 2 && c.Green >= 1, "big_laser_clusterbomb"],
+    [c => c.Red >= 2, "big_clusterbomb"],
+    [c => c.Blue >= 1 && c.Yellow >= 1, "sparky_landmine"],
+    [c => c.Red >= 1 && c.Yellow >= 1, "sparky_clusterbomb"],
+    [c => c.Red >= 1 && c.Green >= 1, "laser_clusterbomb"],
+    [c => c.Red >= 1 && c.Blue >= 1, "big_landmine"],
+    [c => c.Red >= 1, "clusterbomb"],
+    [c => c.Blue >= 1, "landmine"],
+  ],
+  Yellow: [
+    [c => c.Yellow >= 2 && c.Green === 1, "blackhole"],
+    [c => c.Yellow >= 1 && c.Blue === 1 && c.Green === 1, "shockwave"],
+    [c => c.Red >= 1 && c.Blue === 1, "tazer_bfg"],
+  ],
+};
+const RULE_TEXT = {
+  Red: ["2 Blue", "Red + Yellow + Blue", "Blue + Green", "Yellow", "Green"],
+  Green: ["2 Red + Blue", "Red + Blue"],
+  Blue: ["2 Red + Green + Blue", "2 Red + Blue", "2 Red + Green", "2 Red", "Blue + Yellow", "Red + Yellow", "Red + Green", "Red + Blue", "Red", "Blue"],
+  Yellow: ["2 Yellow + exactly 1 Green", "Yellow + exactly 1 Blue + exactly 1 Green", "Red + exactly 1 Blue"],
+};
+// Which partners each combo uses up (comboTake / comboTakeLink / comboTakePoison in Turret.as)
+const COMBO_SPEC = {
+  clusterbomb:              { take: { Red: 1 }, kind: "bomb", blast: "small", cluster: true },
+  sparky_clusterbomb:       { take: { Red: 1, Yellow: 1 }, kind: "bomb", blast: "small", cluster: true, sparky: true },
+  big_clusterbomb:          { take: { Red: 2 }, kind: "bomb", blast: "large", cluster: true },
+  big_sparky_clusterbomb:   { take: { Red: 2, Yellow: 1 }, kind: "bomb", blast: "large", cluster: true, sparky: true },
+  laser_clusterbomb:        { take: { Red: 1 }, link: true, kind: "bomb", blast: "medium", cluster: true, laser: true },
+  big_laser_clusterbomb:    { take: { Red: 2 }, link: true, kind: "bomb", blast: "large", cluster: true, laser: true },
+  landmine:                 { take: { Blue: 1 }, kind: "mine", blast: "small" },
+  big_landmine:             { take: { Red: 1, Blue: 1 }, kind: "mine", blast: "large" },
+  sparky_landmine:          { take: { Red: 1, Blue: 1, Yellow: 1 }, kind: "mine", blast: "small", cluster: true, sparky: true },
+  big_cluster_landmine:     { take: { Red: 2, Blue: 1 }, kind: "mine", blast: "large", cluster: true },
+  big_laser_cluster_landmine:{ take: { Red: 2, Blue: 1, Green: 1 }, kind: "mine", blast: "large", cluster: true, laser: true },
+  bfg:                      { take: { Red: 1, Blue: 1 }, selfLink: true, kind: "bfg", blast: "bfg" },
+  tazer_bfg:                { take: { Red: 1, Blue: 1 }, kind: "bfg", blast: "bfg", tazer: true },
+  rocket_bfg:               { take: { Red: 1, Blue: 1 }, selfLink: true, kind: "bfg", blast: "bfg", rockets: true },
+  laser_rocket:             { take: {}, link: true, kind: "rocket", laser: true, laserblast: true },
+  tazer_rocket:             { take: {}, poisonFrom: true, kind: "rocket", tazer: true },
+  poison_rocket:            { take: { Green: 1, Blue: 1 }, kind: "rocket", blast: "poison", poisonBlast: 2 },
+  nuke:                     { take: { Blue: 2 }, kind: "rocket", blast: "huge" },
+  blackhole:                { take: { Yellow: 2, Green: 1 }, kind: "hole" },
+  shockwave:                { take: { Yellow: 1, Blue: 1 }, link: true, kind: "shockwave", blast: "shockwave" },
+  napalm:                   { take: { Yellow: 1, Blue: 1, Red: 1 }, kind: "rocket", napalm: true },
+};
+const COMBO_NAME = {
+  clusterbomb: "Clusterbomb", sparky_clusterbomb: "Sparky Clusterbomb", big_clusterbomb: "Big Clusterbomb",
+  big_sparky_clusterbomb: "Big Sparky Clusterbomb", laser_clusterbomb: "Laser Clusterbomb", big_laser_clusterbomb: "Big Laser Clusterbomb",
+  landmine: "Landmine", big_landmine: "Big Landmine", sparky_landmine: "Sparky Landmine", big_cluster_landmine: "Big Cluster Landmine",
+  big_laser_cluster_landmine: "Big Laser Cluster Landmine", bfg: "BFG", tazer_bfg: "Tazer BFG", rocket_bfg: "Rocket BFG",
+  laser_rocket: "Laser Rocket", tazer_rocket: "Tazer Rocket", poison_rocket: "Poison Rocket", nuke: "Nuke",
+  blackhole: "Black Hole", shockwave: "Shockwave", napalm: "Napalm",
+};
+const UNLOCKS = (() => { const u = {}; for (const k of BUILD_ORDER) { const d = T[KINDS[k].key]; if (d.turret_unlock) u[k] = d.turret_unlock; } return u; })();
+
+// ---------- helpers ----------
+const $ = id => document.getElementById(id);
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+const ang = (a, b) => Math.atan2(b.y - a.y, b.x - a.x);
+const rnd = (a, b) => a + Math.random() * (b - a);
+const pick = (arr, n) => { const a = arr.slice(), out = []; while (out.length < n && a.length) out.push(a.splice(Math.floor(Math.random() * a.length), 1)[0]); return out; };
+function fmt(n) {
+  if (n >= 1e9) return (n / 1e9).toFixed(n >= 1e10 ? 0 : 1) + "B";
+  if (n >= 1e6) return (n / 1e6).toFixed(n >= 1e7 ? 0 : 1) + "M";
+  if (n >= 1e4) return (n / 1e3).toFixed(0) + "k";
+  return String(Math.round(n));
+}
+function segDist(p, a, b) {
+  const dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy;
+  let t = l2 ? ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2 : 0;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+}
+function angDiff(a, b) { let d = b - a; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return d; }
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
+};
+
+// ---------- game state ----------
+const cv = $("game"), ctx = cv.getContext("2d");
+let G = null;          // current game
+let bgCanvas = null;   // pre-rendered map
+let speed = 1;
+
+function newGame(mode, mapKey) {
+  const m = MAPS[mapKey];
+  const diff = mode === "sandbox" ? "easy" : mode;
+  const hpTable = GS["attacker_hp_rate_" + diff];
+  const road = m.road.map(p => ({ x: p.x, y: p.y }));
+  // mine points every 4px along the road (RoadManager.roadBuild)
+  const mines = [];
+  for (let i = 1; i < road.length; i++) {
+    const a = road[i - 1], b = road[i], n = Math.floor(dist(a, b) / 4);
+    for (let s = 1; s <= n; s++) mines.push({ x: a.x + (s / n) * (b.x - a.x), y: a.y + (s / n) * (b.y - a.y) });
+  }
+  G = {
+    mode, mapKey, map: m, road, mines,
+    now: 0, cash: GS["starting_cash_" + mode] ?? 30, lives: 10, kills: 0, wave: 0,
+    energy: GS.attacker_energy, upRate: GS.attacker_upgrade_rate, hpRate: {},
+    speed: GS["attacker_speed_" + diff] ?? 60,
+    waveLast: 0, waves: [], attackers: [], turrets: [], shots: [], blasts: [], fx: [], texts: [], minesLaid: [], holes: [],
+    sel: null, build: null, hover: null, paused: false, over: false, unlocked: {}, nextId: 1, best: +(store.get("ons2_best_" + mode + "_" + mapKey) || 0),
+  };
+  hpTable.wave.forEach((w, i) => (G.hpRate[w] = hpTable.rate[i]));
+  for (const k of ["Blue", "Green", "Red", "Yellow"]) G.unlocked[k] = true;
+  if (mode === "sandbox") for (const k of BUILD_ORDER) G.unlocked[k] = true;
+  bgCanvas = renderBackground(m, W, H);
+  buildBar();
+  selectTurret(null);
+  updateStats();
+}
+
+// ---------- waves (AttackerManager.waveSend / _waveNext, WaveManager.update) ----------
+function sendWave() {
+  if (!G || G.over) return;
+  G.wave += 1;
+  if (G.hpRate[G.wave] !== undefined) G.upRate = G.hpRate[G.wave];
+  G.energy *= G.upRate;
+  G.waveLast = G.now;
+  G.waves.push({ num: G.wave, sent: 0, last: -Infinity, energy: G.energy, value: G.wave, type: (G.wave - 1) % ATTACKER_TYPES });
+}
+function updateWaves() {
+  if (G.now - G.waveLast > WAVE_SPACING) sendWave();
+  for (const w of G.waves) {
+    if (G.now - w.last > ATTACKER_SPACING && w.sent < WAVE_SIZE) {
+      w.last = G.now; w.sent++;
+      spawnAttacker(w);
+    }
+  }
+  G.waves = G.waves.filter(w => w.sent < WAVE_SIZE);
+}
+function spawnAttacker(w) {
+  const p0 = G.road[0];
+  const a = {
+    id: G.nextId++, x: p0.x + rnd(-JITTER / 2, JITTER / 2), y: p0.y + rnd(-JITTER / 2, JITTER / 2),
+    wp: 1, tx: 0, ty: 0, energy: w.energy, start: w.energy, bounty: w.value, type: w.type,
+    speed: G.speed, speedInit: G.speed, replenishAt: null, rot: 0, born: G.now, dead: false, holed: null,
+  };
+  setWaypointTarget(a);
+  G.attackers.push(a);
+}
+function setWaypointTarget(a) {
+  const p = G.road[a.wp];
+  a.tx = p.x + rnd(-JITTER / 2, JITTER / 2);
+  a.ty = p.y + rnd(-JITTER / 2, JITTER / 2);
+}
+function updateAttackers(dt) {
+  for (const a of G.attackers) {
+    if (a.dead) continue;
+    if (a.holed) {
+      const h = a.holed, d = Math.hypot(h.x - a.x, h.y - a.y);
+      const step = 140 * dt / 1000;
+      if (d <= step || G.now > h.end) { a.dead = true; continue; }
+      a.x += (h.x - a.x) / d * step; a.y += (h.y - a.y) / d * step; a.rot += dt / 80;
+      continue;
+    }
+    // slowed attackers regain 2 speed per second (attackerReplenish)
+    if (a.speed < a.speedInit) {
+      if (a.replenishAt === null) a.replenishAt = G.now + 1000;
+      if (G.now >= a.replenishAt) { a.speed = Math.min(a.speedInit, a.speed + 2); a.replenishAt = a.speed < a.speedInit ? G.now + 1000 : null; }
+    }
+    let step = a.speed * dt / 1000;
+    while (step > 0 && !a.dead) {
+      const dx = a.tx - a.x, dy = a.ty - a.y, d = Math.hypot(dx, dy);
+      if (ATTACKER_REPOINT[a.type]) a.rot = Math.atan2(dy, dx);
+      if (d <= step) {
+        a.x = a.tx; a.y = a.ty; step -= d;
+        a.wp++;
+        if (a.wp >= G.road.length) { baseHit(a); break; }
+        setWaypointTarget(a);
+      } else { a.x += dx / d * step; a.y += dy / d * step; step = 0; }
+    }
+  }
+  G.attackers = G.attackers.filter(a => !a.dead);
+}
+function baseHit(a) {
+  a.dead = true;
+  G.lives -= 1;
+  addText(G.map.base.x + 50, G.map.base.y + 40, "-1 life", "#ff5a4f");
+  if (G.lives <= 0) gameOver();
+}
+function hitAttacker(a, dmg, src) {
+  if (!a || a.dead || a.holed) return;
+  a.energy -= dmg;
+  if (a.energy <= 0) {
+    a.dead = true;
+    G.kills++;
+    G.cash += a.bounty;
+    addText(a.x, a.y - 10, "$" + a.bounty, "#1d6b12");
+    if (src) src.kills = (src.kills || 0) + 1;
+    checkUnlocks();
+  }
+}
+// attackerPoison(p, minus): sparks subtract, blasts divide; never below 5
+function poisonAttacker(a, p, minus) {
+  if (!a || a.dead || a.holed || !p) return;
+  a.speed = minus ? a.speed - p : a.speed / p;
+  a.speed = Math.max(a.speed, 5);
+}
+function checkUnlocks() {
+  for (const k in UNLOCKS) {
+    if (!G.unlocked[k] && G.kills >= UNLOCKS[k]) {
+      G.unlocked[k] = true;
+      addText(W / 2, 30, KINDS[k].label + " unlocked!", "#2a2a2a", 3000, 16);
+      buildBar();
+    }
+  }
+}
+
+// ---------- turrets ----------
+function makeTurret(kind, x, y) {
+  const K = KINDS[kind], d = T[K.key];
+  const t = {
+    id: G.nextId++, kind, x, y, key: K.key, mod: !!K.mod, superT: !!K.superT,
+    cost: d.turret_cost, value: d.turret_cost,
+    base: { damage: d.weapon_damage || 0, range: d.weapon_range, rate: d.weapon_rate || 0, poison: d.weapon_poison || 0 },
+    lvl: { damage: 0, range: 0, rate: 0 },
+    up: { damage: d.upgrade_damage, range: d.upgrade_range, rate: d.upgrade_rate },
+    rot: -Math.PI / 2, rotSpeed: (d.weapon_rotate || 270) * Math.PI / 180, mustFace: !!d.weapon_must_face,
+    fired: -1e9, target: null, targetType: K.target || "near",
+    comboCapable: false, comboNext: 0, comboRecharge: 0,
+    freakCapable: !!d.freak_capable, freakAvail: false, freakNext: null, freakUntil: 0,
+    modifyPossible: d.modify_possible !== false && !K.mod,
+    mods: { damage_added: 0, damage_mult: 1, range_added: 0, range_mult: 1, rate_added: 0, rate_mult: 1 },
+    charge: 0, chargeMax: 100, chargeRate: 10, kills: 0,
+  };
+  if (K.mod) t.modify = { damage: d.modify_up_damage, range: d.modify_up_range, rate: d.modify_up_rate, damage_mult: d.modify_up_damage_mult, range_mult: d.modify_up_range_mult, rate_mult: d.modify_up_rate_mult };
+  if (kind === "Yellow") yellowUpgrade(t);
+  return t;
+}
+function upMax(t, s) { return t.up[s] ? t.up[s].cost.length : 0; }
+function upCost(t, s) { return t.lvl[s] < upMax(t, s) ? t.up[s].cost[t.lvl[s]] : null; }
+function stat(t, s) { return t.lvl[s] === 0 ? t.base[s] : t.up[s].amount[t.lvl[s] - 1]; }
+function upPct(t, s) { const m = upMax(t, s); return m ? Math.round(t.lvl[s] / m * 100) : 100; }
+function modStat(added, mult, v) { return Math.max(0, (v + added) * Math.max(mult, 0.2)); }
+function effective(t) {
+  const m = t.mods, freak = G.now < t.freakUntil;
+  const dmg = modStat(m.damage_added, m.damage_mult, stat(t, "damage")) * (freak ? 3 : 1);
+  const range = modStat(m.range_added, m.range_mult, stat(t, "range"));
+  const rate = modStat(m.rate_added, m.rate_mult, stat(t, "rate")) * (freak ? 4 : 1);
+  return { damage: dmg, range, rate, msec: rate > 0 ? 1000 / (rate / 60) : Infinity, poison: t.base.poison };
+}
+function yellowUpgrade(t) {
+  t.base.poison = Math.max(1, 10 * (upPct(t, "damage") / 100));
+  t.chargeMax = 100 + t.lvl.damage * 10;
+  t.chargeRate = 10 + t.lvl.rate * 2;
+}
+function upgrade(t, s) {
+  const c = upCost(t, s);
+  if (c === null || G.cash < c) return false;
+  G.cash -= c; t.value += c; t.lvl[s]++;
+  if (t.kind === "Yellow") yellowUpgrade(t);
+  if (s === "damage" && upPct(t, "damage") === 100 && !t.mod && !t.superT) { t.comboCapable = true; t.comboNext = G.now; addText(t.x, t.y - 22, "Combo ready", "#1d6b12"); }
+  if (t.freakCapable && !t.freakAvail) {
+    const d = T[t.key];
+    if (t.lvl.damage >= d.freak_level_damage && t.lvl.range >= d.freak_level_range && t.lvl.rate >= d.freak_level_rate) { t.freakAvail = true; t.freakNext = G.now + 60000; }
+  }
+  recalcMods();
+  return true;
+}
+function recalcMods() {
+  for (const t of G.turrets) t.mods = { damage_added: 0, damage_mult: 1, range_added: 0, range_mult: 1, rate_added: 0, rate_mult: 1 };
+  for (const m of G.turrets) {
+    if (!m.mod) continue;
+    const r = stat(m, "range");
+    for (const t of G.turrets) {
+      if (t === m || !t.modifyPossible || dist(t, m) > r) continue;
+      t.mods.damage_added += m.modify.damage; t.mods.range_added += m.modify.range; t.mods.rate_added += m.modify.rate;
+      t.mods.damage_mult += m.modify.damage_mult; t.mods.range_mult += m.modify.range_mult; t.mods.rate_mult += m.modify.rate_mult;
+    }
+  }
+}
+function canPlace(x, y, r = TURRET_R) {
+  if (x < r || y < r || x > W - r || y > H - r) return false;
+  for (let i = 1; i < G.road.length; i++) if (segDist({ x, y }, G.road[i - 1], G.road[i]) < ROAD_BORDER / 2 + r - 2) return false;
+  const b = G.map.base; if (x > b.x - r && x < b.x + 100 + r && y > b.y + 6 - r && y < b.y + 86 + r) return false;
+  for (const t of G.turrets) if (dist(t, { x, y }) < r + (t.superT ? 18 : TURRET_R)) return false;
+  return true;
+}
+function placeTurret(kind, x, y) {
+  const d = T[KINDS[kind].key];
+  if (!G.unlocked[kind] || G.cash < d.turret_cost) return false;
+  if (!canPlace(x, y, KINDS[kind].superT ? 18 : TURRET_R)) return false;
+  G.cash -= d.turret_cost;
+  const t = makeTurret(kind, x, y);
+  G.turrets.push(t);
+  recalcMods();
+  return t;
+}
+function sellTurret(t) {
+  const v = Math.ceil(t.value * RESALE);
+  G.cash += v;
+  addText(t.x, t.y - 12, "+$" + v, "#1d6b12");
+  G.turrets = G.turrets.filter(x => x !== t);
+  recalcMods();
+  selectTurret(null);
+}
+
+// targeting: "near" = closest to the turret, "fast" = quickest attacker in range
+function acquire(src, range, type) {
+  let best = null, bv = Infinity;
+  for (const a of G.attackers) {
+    if (a.dead || a.holed) continue;
+    const d = dist(src, a);
+    if (d > range) continue;
+    const v = type === "fast" ? -a.speed * 1000 + d : d;
+    if (v < bv) { bv = v; best = a; }
+  }
+  return best;
+}
+function valid(a, src, range) { return a && !a.dead && !a.holed && dist(src, a) <= range; }
+
+function comboReady(t) { return t.comboCapable && G.now - t.fired >= effective(t).msec && G.now >= t.comboNext; }
+function countPartners(t) {
+  const c = { Red: [], Green: [], Blue: [], Yellow: [] };
+  for (const o of G.turrets) if (o !== t && c[o.kind] && dist(o, t) <= COMBO_RANGE && comboReady(o)) c[o.kind].push(o);
+  return c;
+}
+
+function updateTurrets(dt) {
+  // green link offers reset each tick (TurretGreen.update)
+  for (const t of G.turrets) t.offered = t.kind === "Green" && G.now - t.fired >= effective(t).msec;
+  for (const t of G.turrets) {
+    if (t.mod) continue;
+    if (t.freakAvail && G.now >= t.freakNext) { t.freakUntil = G.now + 5000; t.freakNext = G.now + 80000; addText(t.x, t.y - 22, "FREAKOUT!", "#c01e1e"); }
+    if (t.kind === "Yellow" && t.charge < t.chargeMax) t.charge = Math.min(t.chargeMax, t.charge + t.chargeRate * dt / 1000);
+    const e = effective(t);
+    if (!valid(t.target, t, e.range)) t.target = acquire(t, e.range, t.targetType);
+    const tg = t.target;
+    if (!tg) continue;
+    const want = ang(t, tg), diff = angDiff(t.rot, want), step = t.rotSpeed * dt / 1000;
+    const facing = Math.abs(diff) <= step || Math.abs(diff) < 0.02;
+    t.rot = facing ? want : t.rot + Math.sign(diff) * step;
+    if (t.mustFace && !facing) continue;
+    if (G.now - t.fired < e.msec) continue;
+    if (comboReady(t) && RULES[t.kind]) {
+      const c = countPartners(t), n = { Red: c.Red.length, Green: c.Green.length, Blue: c.Blue.length, Yellow: c.Yellow.length };
+      const rule = RULES[t.kind].find(r => r[0](n));
+      if (rule) { fireCombo(t, rule[1], c, tg); continue; }
+    }
+    fireNormal(t, tg, e);
+  }
+}
+
+function fireNormal(t, tg, e) {
+  t.fired = G.now;
+  const muzzle = { x: t.x + Math.cos(t.rot) * 12, y: t.y + Math.sin(t.rot) * 12 };
+  switch (t.kind) {
+    case "Blue":
+      G.shots.push({ kind: "shell", x: muzzle.x, y: muzzle.y, target: tg, dmg: e.damage, speed: 900, src: t }); break;
+    case "Red":
+      G.shots.push({ kind: "rocket", x: muzzle.x, y: muzzle.y, rot: t.rot + rnd(-0.6, 0.6), target: tg, dmg: e.damage, speed: 250, turn: 270 * Math.PI / 180, src: t, born: G.now }); break;
+    case "Green": {
+      const dmg = linkFire(t, new Set([t.id]));
+      laser(t, tg, dmg, t);
+      break;
+    }
+    case "Yellow": {
+      let poison = e.poison;
+      if (t.charge > 0) { // chargeFire: the charge boosts poison; damage stays weapon_damage_effective (as in the original)
+        poison = modStat(t.charge / 100 * 3, 1, t.base.poison);
+        t.charge = Math.max(0, t.charge - 50);
+      }
+      spark(t, tg, e.damage, poison, t);
+      break;
+    }
+    case "Sniper":
+      G.shots.push({ kind: "shell", x: muzzle.x, y: muzzle.y, target: tg, dmg: e.damage, speed: 1600, src: t, sniper: true }); break;
+    case "Fusion":
+      spark(t, tg, e.damage, 0, t, true); break;
+    case "Railgun": {
+      const end = { x: t.x + Math.cos(t.rot) * e.range, y: t.y + Math.sin(t.rot) * e.range };
+      for (const a of G.attackers) if (segDist(a, t, end) < 10) hitAttacker(a, e.damage, t);
+      G.fx.push({ kind: "rail", x1: t.x, y1: t.y, x2: end.x, y2: end.y, t0: G.now, life: 300 });
+      break;
+    }
+  }
+}
+// Green laser chaining (Turret.linkFire): ready greens in range add their damage x1.25
+function linkFire(t, seen) {
+  let dmg = effective(t).damage;
+  for (const o of G.turrets) {
+    if (o.kind !== "Green" || seen.has(o.id) || !o.offered) continue;
+    if (dist(o, t) > effective(t).range) continue;
+    seen.add(o.id); o.offered = false; o.fired = G.now; o.rot = ang(o, t);
+    const sub = linkFire(o, seen);
+    G.fx.push({ kind: "laser", x1: o.x, y1: o.y, x2: t.x, y2: t.y, dmg: sub, t0: G.now, life: 350 });
+    dmg += sub * LINK_MULT;
+  }
+  t.offered = false;
+  return dmg;
+}
+function laser(from, a, dmg, src) {
+  G.fx.push({ kind: "laser", x1: from.x, y1: from.y, x2: a.x, y2: a.y, dmg, t0: G.now, life: 350 });
+  hitAttacker(a, dmg, src);
+}
+function spark(from, a, dmg, poison, src, big) {
+  G.fx.push({ kind: "spark", x1: from.x, y1: from.y, x2: a.x, y2: a.y, t0: G.now, life: 400, big });
+  poisonAttacker(a, poison, true);
+  hitAttacker(a, dmg, src);
+}
+function blast(x, y, type, dmg, src, poison = 1) {
+  const size = BLASTS[type] || 80;
+  G.blasts.push({ x, y, size, type, t0: G.now, life: 80 + (size > 180 ? 900 : 600), dmg, done: false, src, poison });
+}
+function updateBlasts() {
+  for (const b of G.blasts) {
+    if (!b.done && G.now - b.t0 >= 80) {
+      b.done = true;
+      for (const a of G.attackers) if (!a.dead && dist(a, b) <= b.size / 2) { poisonAttacker(a, b.poison, false); hitAttacker(a, b.dmg, b.src); }
+    }
+  }
+  G.blasts = G.blasts.filter(b => G.now - b.t0 < b.life);
+}
+
+// ---------- combos ----------
+function fireCombo(t, name, partners, tg) {
+  const spec = COMBO_SPEC[name], data = C[name];
+  const md = v => modStat(t.mods.damage_added, t.mods.damage_mult, v || 0);
+  t.comboRecharge = data.recharge;
+  t.fired = G.now;
+  t.comboNext = G.now + data.recharge;
+  const used = [];
+  for (const col in spec.take) used.push(...pick(partners[col], spec.take[col]));
+  let extra = 0, poison = 20;
+  if (spec.link && partners.Green.length) { const g = pick(partners.Green, 1)[0]; extra = linkFire(g, new Set([g.id, t.id])) + effective(g).damage; used.push(g); }
+  if (spec.selfLink) extra = linkFire(t, new Set([t.id]));
+  if (spec.poisonFrom && partners.Yellow.length) { const y = pick(partners.Yellow, 1)[0]; poison = effective(y).poison; used.push(y); }
+  for (const o of used) { o.comboNext = G.now + data.recharge - 1; o.fired = G.now; o.rot = ang(o, t); G.fx.push({ kind: "take", x1: o.x, y1: o.y, x2: t.x, y2: t.y, t0: G.now, life: 400 }); }
+  addText(t.x, t.y - 24, COMBO_NAME[name] + "!", "#7a1010", 1600, 13);
+  G.fx.push({ kind: "ring", x: t.x, y: t.y, t0: G.now, life: 500 });
+
+  const base = { name, spec, src: t, x: t.x, y: t.y, target: tg, born: G.now };
+  const bullet = md((data.bullet_damage || 0) + extra);
+  const blastD = md((data.blast_damage || 0) + (spec.selfLink ? extra : 0));
+  if (spec.kind === "rocket") {
+    G.shots.push({ ...base, kind: "crocket", rot: t.rot, dmg: bullet, blastD, speed: data.move_speed || 250, turn: 270 * Math.PI / 180,
+      laserD: md((data.laser_damage || 0) + extra), laserR: data.laser_range || 0, laserRate: 120, lastLaser: 0, poison });
+  } else if (spec.kind === "bomb") {
+    G.shots.push({ ...base, kind: "bomb", dmg: bullet, blastD, speed: 300, clusterD: md(data.cluster_damage), qty: data.cluster_qty || 0,
+      clusterLaser: md((data.cluster_laser_damage || 0) + extra) });
+  } else if (spec.kind === "mine") {
+    const maxR = t.up.range.amount[t.up.range.amount.length - 1];
+    const pts = G.mines.filter(p => dist(p, t) <= maxR);
+    const spot = pts.length ? pts[Math.floor(Math.random() * pts.length)] : { x: tg.x, y: tg.y };
+    G.shots.push({ ...base, kind: "mine", tx: spot.x, ty: spot.y, dmg: bullet, blastD, speed: 220, clusterD: md(data.cluster_damage), qty: data.cluster_qty || 0,
+      clusterLaser: md((data.cluster_laser_damage || 0) + extra) });
+  } else if (spec.kind === "bfg") {
+    G.shots.push({ ...base, kind: "bfg", dmg: bullet, blastD, speed: data.move_speed || 60, laserD: md((data.laser_damage || 0) + extra),
+      laserR: data.laser_range, laserRate: data.laser_rate, lastLaser: 0, rocketD: md(data.rocket_damage), lastRocket: 0 });
+  } else if (spec.kind === "hole") {
+    const pts = G.mines.filter(p => dist(p, t) <= 90);
+    const spot = pts.length ? pts[Math.floor(Math.random() * pts.length)] : { x: tg.x, y: tg.y };
+    G.holes.push({ x: spot.x, y: spot.y, r: data.blackhole_radius, end: G.now + data.blackhole_duration, t0: G.now });
+  } else if (spec.kind === "shockwave") {
+    spark(t, tg, bullet, data.bullet_poison, t, true);
+    blast(tg.x, tg.y, "shockwave", blastD, t, data.blast_poison);
+    G.fx.push({ kind: "shock", x: tg.x, y: tg.y, t0: G.now, life: 700 });
+  }
+}
+function explode(s, x, y) {
+  const spec = s.spec;
+  if (spec.blast) blast(x, y, spec.blast, s.blastD, s.src, spec.poisonBlast || 1);
+  if (spec.cluster && s.qty) {
+    for (let i = 0; i < s.qty; i++) {
+      const a = (i / s.qty) * Math.PI * 2 + rnd(-0.3, 0.3), r = rnd(25, 70);
+      G.shots.push({ kind: "cluster", x, y, tx: x + Math.cos(a) * r, ty: y + Math.sin(a) * r, speed: 160, dmg: s.clusterD, src: s.src,
+        sparky: spec.sparky, laser: spec.laser ? s.clusterLaser : 0, born: G.now, armed: false });
+    }
+  }
+  if (spec.laserblast) {
+    const d = C[s.name];
+    const near = G.attackers.filter(a => !a.dead && dist(a, { x, y }) <= d.laserblast_range);
+    for (const a of pick(near, d.laserblast_qty)) laser({ x, y }, a, d.laserblast_damage, s.src);
+  }
+  if (spec.napalm) {
+    const d = C.napalm;
+    for (let i = 0; i < d.napalm_quantity; i++) {
+      G.fx.push({ kind: "delay", at: G.now + i * d.napalm_timing + rnd(0, d.napalm_jit), run: () => blast(x + rnd(-40, 40), y + rnd(-40, 40), "tiny", s.blastD, s.src) });
+    }
+  }
+}
+
+function updateShots(dt) {
+  const k = dt / 1000;
+  for (const s of G.shots) {
+    if (s.dead) continue;
+    if (s.kind === "shell") {
+      if (!s.target || s.target.dead) { s.dead = true; continue; }
+      const d = dist(s, s.target), step = s.speed * k;
+      if (d <= Math.max(step, 3)) { hitAttacker(s.target, s.dmg, s.src); s.dead = true; }
+      else { s.x += (s.target.x - s.x) / d * step; s.y += (s.target.y - s.y) / d * step; }
+    } else if (s.kind === "rocket" || s.kind === "crocket" || s.kind === "brocket") {
+      if (!s.target || s.target.dead || s.target.holed) s.target = acquire(s, 1000, "near");
+      if (s.target) {
+        const want = ang(s, s.target), diff = angDiff(s.rot, want), step = s.turn * k;
+        s.rot = Math.abs(diff) < step ? want : s.rot + Math.sign(diff) * step;
+      }
+      s.x += Math.cos(s.rot) * s.speed * k; s.y += Math.sin(s.rot) * s.speed * k;
+      if (G.now % 3 < 1.2 || Math.random() < 0.3) G.fx.push({ kind: "smoke", x: s.x, y: s.y, t0: G.now, life: 500 });
+      if (s.kind === "crocket" && s.laserR && G.now - s.lastLaser > 60000 / s.laserRate) {
+        const a = acquire(s, s.laserR, "near");
+        if (a) { s.lastLaser = G.now; s.spec.tazer ? spark(s, a, s.laserD, s.poison, s.src) : laser(s, a, s.laserD, s.src); }
+      }
+      if (s.target && dist(s, s.target) < 8) {
+        const tg = s.target;
+        hitAttacker(tg, s.dmg, s.src);
+        if (s.kind === "crocket") { if (s.spec.tazer) poisonAttacker(tg, s.poison, true); explode(s, tg.x, tg.y); }
+        s.dead = true;
+      }
+      if (s.x < -40 || s.y < -40 || s.x > W + 40 || s.y > H + 40 || G.now - (s.born || 0) > 12000) s.dead = true;
+    } else if (s.kind === "bomb") {
+      const tg = (s.target && !s.target.dead) ? s.target : null;
+      const tx = tg ? tg.x : s.lx ?? s.x, ty = tg ? tg.y : s.ly ?? s.y;
+      s.lx = tx; s.ly = ty;
+      const d = Math.hypot(tx - s.x, ty - s.y), step = s.speed * k;
+      if (d <= step) { if (tg) hitAttacker(tg, s.dmg, s.src); explode(s, tx, ty); s.dead = true; }
+      else { s.x += (tx - s.x) / d * step; s.y += (ty - s.y) / d * step; }
+    } else if (s.kind === "mine") {
+      if (!s.armed) {
+        const d = Math.hypot(s.tx - s.x, s.ty - s.y), step = s.speed * k;
+        if (d <= step) { s.x = s.tx; s.y = s.ty; s.armed = true; }
+        else { s.x += (s.tx - s.x) / d * step; s.y += (s.ty - s.y) / d * step; }
+      } else {
+        const a = G.attackers.find(a => !a.dead && !a.holed && dist(a, s) < 16);
+        if (a) { hitAttacker(a, s.dmg, s.src); explode(s, s.x, s.y); s.dead = true; }
+      }
+    } else if (s.kind === "cluster") {
+      if (!s.armed) {
+        const d = Math.hypot(s.tx - s.x, s.ty - s.y), step = s.speed * k;
+        if (d <= step) { s.x = s.tx; s.y = s.ty; s.armed = true; s.armedAt = G.now; }
+        else { s.x += (s.tx - s.x) / d * step; s.y += (s.ty - s.y) / d * step; }
+      } else {
+        // holding clusters hunt the nearest attacker for a moment, then pop
+        const a = acquire(s, 150, "near");
+        if (a) {
+          const d = dist(s, a), step = 220 * k;
+          if (d <= step + 6) {
+            if (s.laser) laser(s, a, s.laser, s.src);
+            if (s.sparky) spark(s, a, 0, 10, s.src);
+            blast(a.x, a.y, "small", s.dmg, s.src); s.dead = true;
+          } else { s.x += (a.x - s.x) / d * step; s.y += (a.y - s.y) / d * step; }
+        } else if (G.now - s.armedAt > 2500) { blast(s.x, s.y, "small", s.dmg, s.src); s.dead = true; }
+      }
+    } else if (s.kind === "bfg") {
+      if (!s.target || s.target.dead || s.target.holed) s.target = acquire(s, 1000, "near");
+      if (s.target) {
+        const d = dist(s, s.target), step = s.speed * k;
+        if (d <= Math.max(10, step)) { hitAttacker(s.target, s.dmg, s.src); explode(s, s.target.x, s.target.y); s.dead = true; continue; }
+        s.x += (s.target.x - s.x) / d * step; s.y += (s.target.y - s.y) / d * step;
+      } else if (G.now - s.born > 8000) { explode(s, s.x, s.y); s.dead = true; continue; }
+      if (G.now - s.lastLaser > 60000 / s.laserRate) {
+        const near = G.attackers.filter(a => !a.dead && !a.holed && dist(a, s) <= s.laserR);
+        if (near.length) { s.lastLaser = G.now; const a = near[Math.floor(Math.random() * near.length)]; s.spec.tazer ? spark(s, a, s.laserD, 10, s.src, true) : laser(s, a, s.laserD, s.src); }
+      }
+      if (s.spec.rockets && G.now - s.lastRocket > 700) {
+        const a = acquire(s, 300, "near");
+        if (a) { s.lastRocket = G.now; G.shots.push({ kind: "brocket", x: s.x, y: s.y, rot: rnd(0, 6.28), target: a, dmg: s.rocketD, speed: 250, turn: 4.7, src: s.src, born: G.now }); }
+      }
+    }
+  }
+  G.shots = G.shots.filter(s => !s.dead);
+}
+function updateHoles() {
+  for (const h of G.holes) {
+    for (const a of G.attackers) if (!a.dead && !a.holed && dist(a, h) <= h.r) a.holed = h;
+  }
+  G.holes = G.holes.filter(h => G.now < h.end + 400);
+}
+function updateFx() {
+  for (const f of G.fx) if (f.kind === "delay" && !f.done && G.now >= f.at) { f.done = true; f.run(); }
+  G.fx = G.fx.filter(f => f.kind === "delay" ? !f.done : G.now - f.t0 < f.life);
+  G.texts = G.texts.filter(t => G.now - t.t0 < t.life);
+}
+function addText(x, y, s, color, life = 900, size = 11) { G.texts.push({ x, y, s, color, t0: G.now, life, size }); }
+
+function gameOver() {
+  if (G.over) return;
+  G.over = true;
+  if (G.wave > G.best) store.set("ons2_best_" + G.mode + "_" + G.mapKey, String(G.wave));
+  $("overTitle").textContent = "Game Over";
+  $("overText").textContent = `${G.map.name} · ${G.mode} · reached wave ${G.wave} with ${G.kills} kills` + (G.wave > G.best ? " (new best!)" : G.best ? ` · best ${G.best}` : "");
+  $("over").classList.add("show");
+}
+
+// ---------- main loop ----------
+let last = performance.now();
+function frame(now) {
+  let dt = Math.min(50, now - last); last = now;
+  if (G && !G.paused && !G.over) {
+    let total = dt * speed;
+    while (total > 0) {
+      const s = Math.min(total, 16);
+      G.now += s; total -= s;
+      updateWaves(); updateAttackers(s); updateHoles(); updateTurrets(s); updateShots(s); updateBlasts(); updateFx();
+    }
+  }
+  draw();
+  if (G) updateStats();
+  requestAnimationFrame(frame);
+}
+
+// ---------- drawing ----------
+function seeded(seed) { return () => ((seed = (seed * 16807) % 2147483647) / 2147483647); }
+function renderBackground(m, w, h) {
+  const c = document.createElement("canvas"); c.width = w; c.height = h;
+  const g = c.getContext("2d"), r = seeded(1234);
+  g.fillStyle = "#e6c394"; g.fillRect(0, 0, w, h);
+  for (let i = 0; i < 9000; i++) { // sand grain
+    const v = r();
+    g.fillStyle = v < 0.5 ? `rgba(255,240,215,${0.12 + r() * 0.2})` : `rgba(150,110,70,${0.06 + r() * 0.12})`;
+    g.fillRect(r() * w, r() * h, 1 + r() * 1.5, 1 + r() * 1.5);
+  }
+  g.strokeStyle = "rgba(255,245,230,0.35)"; g.lineWidth = 2; // faint circuit decoration
+  for (let i = 0; i < 7; i++) {
+    const x = r() * w, y = r() * h, rr = 14 + r() * 40;
+    for (let k = 0; k < 3; k++) { g.beginPath(); g.arc(x, y, rr - k * 8, 0, Math.PI * 2); g.stroke(); }
+    g.beginPath(); g.moveTo(x + rr, y); g.lineTo(x + rr + 40 + r() * 80, y); g.lineTo(x + rr + 60 + r() * 80, y + (r() - 0.5) * 80); g.stroke();
+  }
+  drawRoad(g, m.road, 1);
+  return c;
+}
+function drawRoad(g, road, s) {
+  g.lineJoin = "round"; g.lineCap = "butt";
+  g.beginPath(); road.forEach((p, i) => (i ? g.lineTo(p.x * s, p.y * s) : g.moveTo(p.x * s, p.y * s)));
+  g.strokeStyle = "rgba(96,70,45,0.8)"; g.lineWidth = ROAD_BORDER * s; g.stroke();
+  g.strokeStyle = "#b2885b"; g.lineWidth = ROAD_W * s; g.stroke();
+}
+function drawBase(g, b) {
+  const x = b.x, y = b.y + 12, w = 100, h = 70;
+  const grd = g.createLinearGradient(x, 0, x + w, 0);
+  grd.addColorStop(0, "#c77019"); grd.addColorStop(1, "#4d7a1a");
+  g.fillStyle = grd; g.strokeStyle = "#2b2b2b"; g.lineWidth = 2;
+  roundRect(g, x, y, w, h, 7); g.fill(); g.stroke();
+  g.fillStyle = "#fff"; g.textAlign = "center"; g.font = "bold 15px Impact, 'Arial Black', sans-serif";
+  g.fillText("USAF", x + w / 2, y + 19);
+  g.fillText("AREA 51", x + w / 2, y + 62);
+  g.strokeStyle = "#111"; g.lineWidth = 1;
+  for (let i = 0; i < 10; i++) { const px = x + 14 + i * 7.6, py = y + 30; g.beginPath(); g.arc(px, py, 2, 0, 7); g.moveTo(px, py + 2); g.lineTo(px, py + 9); g.moveTo(px - 3, py + 5); g.lineTo(px + 3, py + 5); g.moveTo(px, py + 9); g.lineTo(px - 2.5, py + 13); g.moveTo(px, py + 9); g.lineTo(px + 2.5, py + 13); g.stroke(); }
+  g.fillStyle = "#6c8f1d"; g.strokeStyle = "#333";
+  [[-6, -4], [8, -10], [104, 8], [110, 40], [96, 50]].forEach(([dx, dy], i) => { g.beginPath(); i % 2 ? g.arc(x + dx, y + dy, 4, 0, 7) : g.rect(x + dx - 4, y + dy - 4, 8, 8); g.fill(); g.stroke(); });
+}
+function roundRect(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
+
+function drawTurretIcon(g, kind, x, y, rot, s = 1, t = null) {
+  g.save(); g.translate(x, y); g.scale(s, s);
+  const K = KINDS[kind];
+  // base plate
+  g.fillStyle = "rgba(0,0,0,0.25)"; g.beginPath(); g.arc(1.5, 2, K.superT ? 18 : 14, 0, 7); g.fill();
+  g.fillStyle = "#cfd3d6"; g.strokeStyle = "#555"; g.lineWidth = 1.5;
+  g.beginPath(); g.arc(0, 0, K.superT ? 17 : 13, 0, 7); g.fill(); g.stroke();
+  if (K.mod) {
+    const col = kind.includes("Damage") ? "#d8352b" : kind.includes("Range") ? "#36b84a" : "#2f6de0";
+    g.fillStyle = col; g.beginPath(); g.arc(0, 0, 8.5, 0, 7); g.fill();
+    g.strokeStyle = kind.includes("Exchange") ? "#222" : "#fff"; g.lineWidth = 2;
+    g.beginPath(); g.moveTo(-4.5, 0); g.lineTo(4.5, 0); g.moveTo(0, -4.5); g.lineTo(0, 4.5); g.stroke();
+    if (kind.includes("Big")) { g.strokeStyle = "#ffd23f"; g.lineWidth = 1.5; g.beginPath(); g.arc(0, 0, 10.5, 0, 7); g.stroke(); }
+    g.restore(); return;
+  }
+  g.rotate(rot);
+  if (kind === "Blue") {
+    g.fillStyle = "#2f6de0"; g.beginPath(); g.arc(0, 0, 10, 0, 7); g.fill();
+    g.fillStyle = "#9fb7d6"; g.fillRect(-5, -6, 10, 12);
+    g.fillStyle = "#3b3b3b"; g.fillRect(2, -2.5, 15, 5);
+  } else if (kind === "Green") {
+    g.fillStyle = "#36b84a"; g.beginPath(); g.arc(0, 0, 10, 0, 7); g.fill();
+    g.fillStyle = "#dfeee0"; g.fillRect(-6, -5, 11, 10);
+    g.fillStyle = "#1f7a2c"; g.fillRect(3, -3.5, 13, 7); g.fillStyle = "#b8ffb0"; g.fillRect(14, -2, 3, 4);
+  } else if (kind === "Red") {
+    g.fillStyle = "#3b3b3b"; g.fillRect(-10, -10, 20, 20);
+    g.fillStyle = "#d8352b"; g.fillRect(-9, -9, 18, 18);
+    g.fillStyle = "#ffd23f"; for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) { g.beginPath(); g.arc(-5.5 + i * 5.5, -5.5 + j * 5.5, 1.8, 0, 7); g.fill(); }
+  } else if (kind === "Yellow") {
+    g.fillStyle = "#555"; for (let i = 0; i < 8; i++) { g.save(); g.rotate(i * Math.PI / 4); g.fillRect(8, -2, 5, 4); g.restore(); }
+    g.fillStyle = "#f2c21b"; g.beginPath(); g.arc(0, 0, 9.5, 0, 7); g.fill();
+    g.fillStyle = "#6b5300"; g.beginPath(); g.arc(0, 0, 4, 0, 7); g.fill();
+    g.strokeStyle = "#fff6b0"; g.lineWidth = 1; g.beginPath(); g.arc(0, 0, 6.5, 0, 7); g.stroke();
+  } else if (kind === "Sniper") {
+    g.fillStyle = "#555"; g.beginPath(); g.arc(0, 0, 12, 0, 7); g.fill();
+    g.fillStyle = "#222"; g.fillRect(0, -2, 26, 4); g.fillStyle = "#c0c0c0"; g.fillRect(-6, -6, 12, 12);
+  } else if (kind === "Fusion") {
+    g.fillStyle = "#7a3cc2"; g.beginPath(); g.arc(0, 0, 12, 0, 7); g.fill();
+    g.fillStyle = "#f2c21b"; g.beginPath(); g.arc(0, 0, 6, 0, 7); g.fill(); g.fillStyle = "#333"; g.fillRect(6, -3, 16, 6);
+  } else if (kind === "Railgun") {
+    g.fillStyle = "#2d6a7a"; g.beginPath(); g.arc(0, 0, 12, 0, 7); g.fill();
+    g.fillStyle = "#222"; g.fillRect(0, -4.5, 24, 3); g.fillRect(0, 1.5, 24, 3); g.fillStyle = "#7ff"; g.fillRect(2, -1, 20, 2);
+  }
+  g.restore();
+  if (t && !t.mod && !t.superT) { // three upgrade pips under the turret
+    const lv = ["damage", "range", "rate"], cols = ["#d8352b", "#36b84a", "#2f6de0"];
+    lv.forEach((s, i) => { const p = upPct(t, s) / 100; g.fillStyle = "rgba(0,0,0,.35)"; g.fillRect(x - 9, y + 15 + i * 3, 18, 2); g.fillStyle = cols[i]; g.fillRect(x - 9, y + 15 + i * 3, 18 * p, 2); });
+  }
+}
+
+function drawAttacker(g, a) {
+  g.save(); g.translate(a.x, a.y);
+  g.globalAlpha = Math.min(1, (G.now - a.born) / 225);
+  if (a.holed) g.scale(0.6, 0.6);
+  g.rotate(ATTACKER_REPOINT[a.type] ? a.rot : 0);
+  const k = a.type;
+  g.lineWidth = 1; g.strokeStyle = "#222";
+  if (k === 0) { // grey tank
+    g.fillStyle = "#8d9296"; g.fillRect(-7, -6, 14, 12); g.strokeRect(-7, -6, 14, 12);
+    g.fillStyle = "#4d5155"; g.fillRect(-8, -7, 16, 3); g.fillRect(-8, 4, 16, 3); g.fillStyle = "#c9cdd0"; g.fillRect(-2, -2, 9, 4);
+  } else if (k === 1) { // red bug
+    g.fillStyle = "#c0342a"; g.beginPath(); g.ellipse(0, 0, 8, 5.5, 0, 0, 7); g.fill(); g.stroke();
+    g.strokeStyle = "#331"; for (let i = -1; i <= 1; i++) { g.beginPath(); g.moveTo(i * 3, -5); g.lineTo(i * 4, -9); g.moveTo(i * 3, 5); g.lineTo(i * 4, 9); g.stroke(); }
+    g.fillStyle = "#222"; g.beginPath(); g.arc(7, 0, 2.5, 0, 7); g.fill();
+  } else if (k === 2) { // white jeep
+    g.fillStyle = "#e9e9e9"; g.fillRect(-8, -5, 16, 10); g.strokeRect(-8, -5, 16, 10);
+    g.fillStyle = "#555"; g.fillRect(-6, -7, 4, 2); g.fillRect(2, -7, 4, 2); g.fillRect(-6, 5, 4, 2); g.fillRect(2, 5, 4, 2); g.fillStyle = "#79a"; g.fillRect(1, -4, 4, 8);
+  } else if (k === 3) { // purple squid
+    g.fillStyle = "#a56bd6"; g.beginPath(); g.ellipse(-1, 0, 6, 5, 0, 0, 7); g.fill(); g.stroke();
+    g.strokeStyle = "#a56bd6"; g.lineWidth = 1.5; for (let i = -2; i <= 2; i++) { g.beginPath(); g.moveTo(-5, i * 2); g.quadraticCurveTo(-10, i * 3 + Math.sin(G.now / 120 + i) * 2, -12, i * 3); g.stroke(); }
+  } else if (k === 4) { // eye
+    g.fillStyle = "#fff"; g.beginPath(); g.arc(0, 0, 7, 0, 7); g.fill(); g.stroke();
+    g.fillStyle = "#c0342a"; g.beginPath(); g.arc(2.5, 0, 3.5, 0, 7); g.fill(); g.fillStyle = "#000"; g.beginPath(); g.arc(3.5, 0, 1.6, 0, 7); g.fill();
+  } else if (k === 5) { // robot
+    g.fillStyle = "#7a7f86"; g.fillRect(-6, -7, 12, 14); g.strokeRect(-6, -7, 12, 14);
+    g.fillStyle = "#ffd23f"; g.fillRect(2, -4, 3, 3); g.fillRect(2, 1, 3, 3);
+  } else if (k === 6) { // saucer
+    g.fillStyle = "#b9c4cc"; g.beginPath(); g.ellipse(0, 0, 9, 5, 0, 0, 7); g.fill(); g.stroke();
+    g.fillStyle = "#6fd3ff"; g.beginPath(); g.arc(0, -1, 3.5, Math.PI, 0); g.fill();
+    g.fillStyle = (G.now / 200 | 0) % 2 ? "#ff5a4f" : "#ffd23f"; g.fillRect(-6, 1, 2, 2); g.fillRect(4, 1, 2, 2);
+  } else if (k === 7) { // green beetle
+    g.fillStyle = "#4e8f2a"; g.beginPath(); g.ellipse(0, 0, 8, 6, 0, 0, 7); g.fill(); g.stroke();
+    g.beginPath(); g.moveTo(-8, 0); g.lineTo(8, 0); g.stroke(); g.fillStyle = "#222"; g.beginPath(); g.arc(8, 0, 2.5, 0, 7); g.fill();
+  } else { // helicopter
+    g.fillStyle = "#56603e"; g.beginPath(); g.ellipse(0, 0, 7, 4, 0, 0, 7); g.fill(); g.stroke(); g.fillRect(-13, -1, 7, 2);
+    g.strokeStyle = "#222"; g.lineWidth = 1.5; const r = G.now / 40; g.beginPath(); g.moveTo(Math.cos(r) * 11, Math.sin(r) * 11); g.lineTo(-Math.cos(r) * 11, -Math.sin(r) * 11); g.stroke();
+  }
+  g.restore();
+  // HP percent above, like the original
+  g.fillStyle = "#111"; g.font = "bold 8px Verdana, sans-serif"; g.textAlign = "center";
+  g.fillText(String(Math.max(1, Math.ceil(a.energy / a.start * 100))), a.x, a.y - 11);
+  if (a.speed < a.speedInit - 0.5) { g.fillStyle = "rgba(242,194,27,.8)"; g.fillRect(a.x - 6, a.y + 10, 12 * (1 - a.speed / a.speedInit), 2); }
+}
+
+function laserStyle(d) {
+  if (d < 400) return { c: "#00ff00", w: 1.5 };
+  if (d < 9300) return { c: "#ffff00", w: 3 };
+  return { c: "#ff2020", w: 5 };
+}
+function draw() {
+  const g = ctx;
+  if (!G) { g.fillStyle = "#e6c394"; g.fillRect(0, 0, W, H); drawMenuBackdrop(g); return; }
+  g.drawImage(bgCanvas, 0, 0);
+  drawBase(g, G.map.base);
+  // range rings
+  if (G.sel) { const e = G.sel.mod ? { range: stat(G.sel, "range") } : effective(G.sel); ring(g, G.sel.x, G.sel.y, e.range, "rgba(206,232,120,0.35)", "rgba(80,110,20,.5)"); }
+  for (const s of G.shots) if (s.kind === "mine" && s.armed) { g.fillStyle = "#333"; g.beginPath(); g.arc(s.x, s.y, 4, 0, 7); g.fill(); g.fillStyle = (G.now / 250 | 0) % 2 ? "#ff3b30" : "#661"; g.beginPath(); g.arc(s.x, s.y, 1.6, 0, 7); g.fill(); }
+  for (const h of G.holes) {
+    const p = Math.min(1, (G.now - h.t0) / 300) * (G.now > h.end ? Math.max(0, 1 - (G.now - h.end) / 400) : 1);
+    const grd = g.createRadialGradient(h.x, h.y, 2, h.x, h.y, h.r * p);
+    grd.addColorStop(0, "rgba(0,0,0,0.95)"); grd.addColorStop(0.4, "rgba(40,0,70,0.6)"); grd.addColorStop(1, "rgba(80,0,120,0)");
+    g.fillStyle = grd; g.beginPath(); g.arc(h.x, h.y, h.r * p, 0, 7); g.fill();
+  }
+  for (const a of G.attackers) drawAttacker(g, a);
+  for (const t of G.turrets) {
+    drawTurretIcon(g, t.kind, t.x, t.y, t.rot, 1, t);
+    if (t.comboCapable) { g.strokeStyle = comboReady(t) ? "rgba(255,210,63,.95)" : "rgba(255,210,63,.35)"; g.lineWidth = 2; g.beginPath(); g.arc(t.x, t.y, 16, 0, 7); g.stroke(); }
+    if (G.now < t.freakUntil) { g.strokeStyle = `rgba(255,60,40,${0.5 + 0.5 * Math.sin(G.now / 60)})`; g.lineWidth = 3; g.beginPath(); g.arc(t.x, t.y, 18, 0, 7); g.stroke(); }
+    if (t === G.sel) { g.strokeStyle = "#fff"; g.lineWidth = 1.5; g.setLineDash([3, 3]); g.beginPath(); g.arc(t.x, t.y, 19, 0, 7); g.stroke(); g.setLineDash([]); }
+  }
+  for (const s of G.shots) drawShot(g, s);
+  for (const b of G.blasts) {
+    const p = Math.min(1, (G.now - b.t0) / 80), fade = 1 - (G.now - b.t0) / b.life;
+    const r = b.size / 2 * (0.15 + 0.85 * p);
+    const grd = g.createRadialGradient(b.x, b.y, 0, b.x, b.y, r);
+    const col = b.type === "poison" ? "120,220,60" : b.type === "bfg" ? "90,255,120" : b.type === "shockwave" ? "120,200,255" : "255,170,40";
+    grd.addColorStop(0, `rgba(255,255,220,${fade})`); grd.addColorStop(0.4, `rgba(${col},${fade * 0.8})`); grd.addColorStop(1, `rgba(${col},0)`);
+    g.fillStyle = grd; g.beginPath(); g.arc(b.x, b.y, r, 0, 7); g.fill();
+  }
+  for (const f of G.fx) drawFx(g, f);
+  // build preview
+  if (G.build && G.hover) {
+    const K = KINDS[G.build], d = T[K.key], ok = canPlace(G.hover.x, G.hover.y, K.superT ? 18 : TURRET_R) && G.cash >= d.turret_cost;
+    ring(g, G.hover.x, G.hover.y, d.weapon_range, ok ? "rgba(206,232,120,0.3)" : "rgba(255,90,79,0.25)", ok ? "rgba(80,110,20,.5)" : "rgba(160,30,30,.6)");
+    g.globalAlpha = 0.75; drawTurretIcon(g, G.build, G.hover.x, G.hover.y, -Math.PI / 2); g.globalAlpha = 1;
+    if (!K.mod) { g.strokeStyle = "rgba(255,210,63,.5)"; g.setLineDash([2, 4]); g.beginPath(); g.arc(G.hover.x, G.hover.y, COMBO_RANGE, 0, 7); g.stroke(); g.setLineDash([]); }
+  }
+  for (const t of G.texts) {
+    const p = (G.now - t.t0) / t.life;
+    g.globalAlpha = 1 - p * p; g.fillStyle = t.color; g.font = `bold ${t.size}px Verdana, sans-serif`; g.textAlign = "center";
+    g.fillText(t.s, t.x, t.y - p * 18); g.globalAlpha = 1;
+  }
+  g.save(); g.translate(W - 6, H - 6); g.rotate(-Math.PI / 2); g.fillStyle = "rgba(60,40,20,.75)"; g.font = "11px Verdana, sans-serif"; g.textAlign = "left";
+  g.fillText(`map: ${G.map.name}, difficulty: ${G.mode}`, 0, 0); g.restore();
+  if (G.paused) { g.fillStyle = "rgba(0,0,0,.35)"; g.fillRect(0, 0, W, H); g.fillStyle = "#fff"; g.font = "bold 28px Verdana"; g.textAlign = "center"; g.fillText("Paused", W / 2, H / 2); }
+}
+function ring(g, x, y, r, fill, stroke) { g.fillStyle = fill; g.strokeStyle = stroke; g.lineWidth = 1.5; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); g.stroke(); }
+function drawShot(g, s) {
+  if (s.kind === "shell") { g.fillStyle = s.sniper ? "#fff" : "#222"; g.beginPath(); g.arc(s.x, s.y, s.sniper ? 2 : 2.5, 0, 7); g.fill(); return; }
+  if (s.kind === "rocket" || s.kind === "crocket" || s.kind === "brocket") {
+    g.save(); g.translate(s.x, s.y); g.rotate(s.rot);
+    const big = s.kind === "crocket", col = big ? ({ nuke: "#222", napalm: "#ff7a00", poison_rocket: "#5bd13a", tazer_rocket: "#f2c21b", laser_rocket: "#36b84a" }[s.name] || "#d8352b") : "#d8352b";
+    g.fillStyle = col; g.fillRect(big ? -7 : -5, big ? -2.5 : -1.5, big ? 12 : 9, big ? 5 : 3);
+    g.fillStyle = "#ffcc33"; g.fillRect(big ? -9 : -7, -1, 2, 2); g.restore(); return;
+  }
+  if (s.kind === "bomb" || s.kind === "mine") { if (s.kind === "mine" && s.armed) return; g.fillStyle = "#222"; g.beginPath(); g.arc(s.x, s.y, 4.5, 0, 7); g.fill(); g.fillStyle = "#ff3b30"; g.beginPath(); g.arc(s.x, s.y, 1.8, 0, 7); g.fill(); return; }
+  if (s.kind === "cluster") { g.fillStyle = s.sparky ? "#f2c21b" : s.laser ? "#36b84a" : "#ff7a00"; g.beginPath(); g.arc(s.x, s.y, 2.5, 0, 7); g.fill(); return; }
+  if (s.kind === "bfg") {
+    const grd = g.createRadialGradient(s.x, s.y, 0, s.x, s.y, 14);
+    const c = s.spec.tazer ? "242,194,27" : "60,255,90";
+    grd.addColorStop(0, "rgba(255,255,255,1)"); grd.addColorStop(0.5, `rgba(${c},.9)`); grd.addColorStop(1, `rgba(${c},0)`);
+    g.fillStyle = grd; g.beginPath(); g.arc(s.x, s.y, 14 + Math.sin(G.now / 80) * 2, 0, 7); g.fill();
+  }
+}
+function drawFx(g, f) {
+  if (f.kind === "delay") return;
+  const p = (G.now - f.t0) / f.life;
+  g.globalAlpha = Math.max(0, 1 - p);
+  if (f.kind === "laser") { const st = laserStyle(f.dmg || 0); g.strokeStyle = st.c; g.lineWidth = st.w; g.shadowColor = st.c; g.shadowBlur = 6; g.beginPath(); g.moveTo(f.x1, f.y1); g.lineTo(f.x2, f.y2); g.stroke(); g.shadowBlur = 0; }
+  else if (f.kind === "spark") {
+    g.strokeStyle = f.big ? "#bfe8ff" : "#fff38a"; g.lineWidth = f.big ? 2.5 : 1.5; g.beginPath(); g.moveTo(f.x1, f.y1);
+    const n = Math.max(2, Math.floor(Math.hypot(f.x2 - f.x1, f.y2 - f.y1) / 11));
+    for (let i = 1; i < n; i++) g.lineTo(f.x1 + (f.x2 - f.x1) * i / n + rnd(-5, 5), f.y1 + (f.y2 - f.y1) * i / n + rnd(-5, 5));
+    g.lineTo(f.x2, f.y2); g.stroke();
+  } else if (f.kind === "rail") { g.strokeStyle = "#7ff"; g.lineWidth = 4 * (1 - p) + 1; g.beginPath(); g.moveTo(f.x1, f.y1); g.lineTo(f.x2, f.y2); g.stroke(); }
+  else if (f.kind === "take") { g.strokeStyle = "#ffd23f"; g.lineWidth = 2; g.setLineDash([4, 3]); g.beginPath(); g.moveTo(f.x1, f.y1); g.lineTo(f.x2, f.y2); g.stroke(); g.setLineDash([]); }
+  else if (f.kind === "ring") { g.strokeStyle = "#ffd23f"; g.lineWidth = 3; g.beginPath(); g.arc(f.x, f.y, 14 + p * 40, 0, 7); g.stroke(); }
+  else if (f.kind === "shock") { g.strokeStyle = "#bfe8ff"; g.lineWidth = 4; g.beginPath(); g.arc(f.x, f.y, p * 100, 0, 7); g.stroke(); }
+  else if (f.kind === "smoke") { g.fillStyle = "rgba(120,120,120,.5)"; g.beginPath(); g.arc(f.x, f.y, 1.5 + p * 3, 0, 7); g.fill(); }
+  g.globalAlpha = 1;
+}
+function drawMenuBackdrop(g) {
+  if (!drawMenuBackdrop.bg) {
+    const road = [{ x: 0, y: 440 }, { x: 640, y: 440 }, { x: 640, y: 40 }, { x: 110, y: 40 }, { x: 110, y: 380 }, { x: 560, y: 380 }];
+    drawMenuBackdrop.bg = renderBackground({ road }, W, H);
+  }
+  g.drawImage(drawMenuBackdrop.bg, 0, 0);
+  const kinds = ["Green", "Yellow", "Red", "Blue"];
+  for (let i = 0; i < 9; i++) drawTurretIcon(g, kinds[i % 4], 65 + i * 75, 15 + 0, Math.PI / 2 + Math.sin(performance.now() / 900 + i) * 0.6);
+  for (let i = 0; i < 6; i++) drawTurretIcon(g, kinds[(i + 1) % 4], 690, 80 + i * 60, Math.PI + Math.sin(performance.now() / 700 + i) * 0.6);
+}
+
+// ---------- UI ----------
+function iconCanvas(kind) {
+  const c = document.createElement("canvas"); c.width = 68; c.height = 68;
+  const g = c.getContext("2d"); g.scale(2, 2); drawTurretIcon(g, kind, 17, 17, -Math.PI / 4, KINDS[kind].superT ? 0.85 : 1.05);
+  return c;
+}
+function buildBar() {
+  const el = $("build"); el.innerHTML = "";
+  for (const k of BUILD_ORDER) {
+    const d = T[KINDS[k].key], b = document.createElement("button");
+    b.className = "tb"; b.dataset.kind = k; b.title = `${KINDS[k].label} ($${d.turret_cost})` + (UNLOCKS[k] ? ` · unlocks at ${UNLOCKS[k]} kills` : "");
+    b.appendChild(iconCanvas(k));
+    const p = document.createElement("span"); p.textContent = "$" + fmt(d.turret_cost); b.appendChild(p);
+    if (G && !G.unlocked[k]) { b.classList.add("locked"); const l = document.createElement("span"); l.className = "lock"; l.textContent = UNLOCKS[k] + "\nkills"; b.appendChild(l); }
+    b.onclick = () => { if (!G || !G.unlocked[k]) return; G.build = G.build === k ? null : k; selectTurret(null); refreshBar(); };
+    el.appendChild(b);
+  }
+  refreshBar();
+}
+function refreshBar() {
+  for (const b of $("build").children) {
+    const k = b.dataset.kind, d = T[KINDS[k].key];
+    b.classList.toggle("sel", !!G && G.build === k);
+    b.classList.toggle("poor", !!G && G.cash < d.turret_cost);
+  }
+}
+function selectTurret(t) {
+  if (G) G.sel = t;
+  renderInfo();
+}
+let infoKey = "";
+function renderInfo() {
+  const el = $("info");
+  if (!G || !G.sel) {
+    const key = "none" + (G && G.build);
+    if (infoKey === key) return; infoKey = key;
+    if (G && G.build) {
+      const K = KINDS[G.build], d = T[K.key];
+      el.innerHTML = `<span class="name">${K.label}</span><span class="help">${describe(G.build, d)} Tap the map to build. Esc cancels.</span>`;
+    } else el.innerHTML = `<span class="help">Pick a turret below, then tap the map to build it. Tap a turret to upgrade or sell it.</span>`;
+    return;
+  }
+  const t = G.sel, e = t.mod ? null : effective(t);
+  const rows = (t.mod ? ["range"] : ["damage", "range", "rate"]).map(s => {
+    const max = upMax(t, s), c = upCost(t, s);
+    const val = t.mod ? stat(t, s) : (s === "damage" ? fmt(e.damage) : s === "range" ? Math.round(e.range) : Math.round(e.rate));
+    const pips = Array.from({ length: max }, (_, i) => `<span class="pip ${i < t.lvl[s] ? "on" : ""}"></span>`).join("");
+    return `<div class="up"><span>${s[0].toUpperCase() + s.slice(1)}: <b>${val}</b></span><span class="pips">${pips}</span>` +
+      (c === null ? `<button class="btn" disabled>Max</button>` : `<button class="btn" data-up="${s}" ${G.cash < c ? "disabled" : ""}>Upgrade $${fmt(c)}</button>`) + `</div>`;
+  }).join("");
+  const combo = t.mod || t.superT ? "" : t.comboCapable ? `<span class="tag ${comboReady(t) ? "ready" : ""}">combo ${comboReady(t) ? "ready" : "recharging"}</span>` : `<span class="tag">max damage to combo</span>`;
+  const freak = t.freakCapable ? (t.freakAvail ? `<span class="tag ready">freakout armed</span>` : `<span class="tag">freakout: dmg 4 + rate 4</span>`) : "";
+  const key = [t.id, t.lvl.damage, t.lvl.range, t.lvl.rate, Math.floor(G.cash), comboReady(t), t.freakAvail, e && Math.round(e.damage), e && Math.round(e.range), e && Math.round(e.rate)].join("|");
+  if (infoKey === key) return; infoKey = key;
+  el.innerHTML = `<div><div class="name">${KINDS[t.kind].label}</div><div class="help">kills ${t.kills} · ${combo} ${freak}</div></div>${rows}` +
+    `<button class="btn" id="sell">Sell $${fmt(Math.ceil(t.value * RESALE))}</button>`;
+  el.querySelectorAll("[data-up]").forEach(b => (b.onclick = () => { upgrade(t, b.dataset.up); infoKey = ""; renderInfo(); }));
+  $("sell").onclick = () => sellTurret(t);
+}
+function describe(kind, d) {
+  if (KINDS[kind].mod) {
+    const parts = [];
+    if (d.modify_up_range) parts.push(`+${d.modify_up_range} range`);
+    for (const s of ["damage", "range", "rate"]) { const v = d["modify_up_" + s + "_mult"]; if (v) parts.push(`${v > 0 ? "+" : ""}${Math.round(v * 100)}% ${s}`); }
+    return `Turrets within ${d.weapon_range}px get ${parts.join(", ")}.`;
+  }
+  return `Damage ${fmt(d.weapon_damage)}, range ${d.weapon_range}, rate ${d.weapon_rate}/min.`;
+}
+function updateStats() {
+  $("sCash").textContent = "$" + fmt(G.cash);
+  $("sKills").textContent = G.kills;
+  $("sWave").textContent = G.wave;
+  $("sLives").textContent = G.lives;
+  $("sNext").textContent = Math.max(0, (WAVE_SPACING - (G.now - G.waveLast)) / 1000).toFixed(1);
+  refreshBar();
+  renderInfo();
+}
+
+function toCanvas(ev) {
+  const r = cv.getBoundingClientRect();
+  return { x: (ev.clientX - r.left) * W / r.width, y: (ev.clientY - r.top) * H / r.height };
+}
+cv.addEventListener("pointermove", ev => { if (G) G.hover = toCanvas(ev); });
+cv.addEventListener("pointerleave", () => { if (G) G.hover = null; });
+cv.addEventListener("click", ev => {
+  if (!G || G.over) return;
+  const p = toCanvas(ev);
+  G.hover = p;
+  const hit = G.turrets.find(t => dist(t, p) <= (t.superT ? 18 : TURRET_R) + 2);
+  if (G.build) {
+    if (hit) { G.build = null; selectTurret(hit); refreshBar(); return; }
+    const t = placeTurret(G.build, p.x, p.y);
+    if (t && !ev.shiftKey && G.cash < T[t.key].turret_cost) G.build = null;
+    if (t) { selectTurret(ev.shiftKey ? null : t); if (!ev.shiftKey) G.build = null; }
+    refreshBar();
+    return;
+  }
+  selectTurret(hit || null);
+});
+window.addEventListener("keydown", ev => {
+  if (!G || G.over) return;
+  const k = ev.key.toLowerCase();
+  if (["1", "2", "3", "4"].includes(k)) { G.build = ["Blue", "Green", "Red", "Yellow"][+k - 1]; selectTurret(null); refreshBar(); }
+  else if (k === "escape") { G.build = null; selectTurret(null); refreshBar(); }
+  else if (k === "n") sendWave();
+  else if (k === "p") togglePause();
+  else if (k === "f") cycleSpeed();
+  else if (G.sel && (k === "q" || k === "w" || k === "e")) { upgrade(G.sel, { q: "damage", w: "range", e: "rate" }[k]); infoKey = ""; }
+  else if (G.sel && (k === "s" || k === "delete")) sellTurret(G.sel);
+});
+function togglePause() { if (!G) return; G.paused = !G.paused; $("bPause").textContent = G.paused ? "▶" : "II"; }
+function cycleSpeed() { speed = speed === 1 ? 2 : speed === 2 ? 4 : 1; $("bSpeed").textContent = speed + "x"; }
+$("bNext").onclick = () => sendWave();
+$("bPause").onclick = togglePause;
+$("bSpeed").onclick = cycleSpeed;
+
+// menus
+let chosenMode = "medium";
+document.querySelectorAll("[data-mode]").forEach(b => (b.onclick = () => { chosenMode = b.dataset.mode; showMaps(); }));
+function showMaps() {
+  $("menu").classList.remove("show"); $("over").classList.remove("show"); $("mapsel").classList.add("show");
+  $("diffLabel").textContent = "Difficulty: " + chosenMode;
+  const list = $("maplist"); list.innerHTML = "";
+  for (const k of ["map1", "map2", "map3", "map4", "map5", "map6", "map7", "map8", "map9", "map10", "map11", "map12"]) {
+    const m = MAPS[k], b = document.createElement("button");
+    b.className = "btn mapbtn";
+    const c = document.createElement("canvas"); c.width = 144; c.height = 96;
+    const g = c.getContext("2d"); g.fillStyle = "#f4f4f4"; g.fillRect(0, 0, 144, 96);
+    drawRoad(g, m.road, 0.2); g.fillStyle = "#ff5a4f"; g.fillRect(m.base.x * 0.2, m.base.y * 0.2 + 2, 20 * 0.6, 14 * 0.6);
+    b.appendChild(c);
+    const best = +(store.get("ons2_best_" + chosenMode + "_" + k) || 0);
+    const s = document.createElement("span"); s.textContent = m.name + (best ? ` · w${best}` : ""); b.appendChild(s);
+    b.onclick = () => { $("mapsel").classList.remove("show"); newGame(chosenMode, k); };
+    list.appendChild(b);
+  }
+}
+$("back").onclick = () => { $("mapsel").classList.remove("show"); $("menu").classList.add("show"); };
+$("again").onclick = () => { $("over").classList.remove("show"); newGame(G.mode, G.mapKey); };
+$("tomenu").onclick = () => { $("over").classList.remove("show"); G = null; $("menu").classList.add("show"); buildBar(); };
+
+// combo legend
+(() => {
+  const rows = [];
+  for (const lead of ["Red", "Green", "Blue", "Yellow"]) RULES[lead].forEach((r, i) => rows.push(`<tr><td style="color:${COLOR[lead]}">${lead} lead</td><td>+ ${RULE_TEXT[lead][i]}</td><td>→ <b>${COMBO_NAME[r[1]]}</b></td></tr>`));
+  $("comboTable").innerHTML = rows.join("");
+})();
+
+buildBar();
+requestAnimationFrame(frame);
+// test hook: lets automated checks drive the game
+window.__ons = { get G() { return G; }, newGame, placeTurret, upgrade, sendWave, setSpeed: s => (speed = s) };
+</script>
+</body>
+</html>
