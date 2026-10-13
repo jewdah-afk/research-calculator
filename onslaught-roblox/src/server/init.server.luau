@@ -12,6 +12,8 @@ local Monetization = require(script.Monetization)
 local MatchService = require(script.MatchService)
 local PartyService = require(script.PartyService)
 
+Players.CharacterAutoLoads = false -- a top-down tower defense: no avatars on the board
+
 Profiles.start()
 Monetization.start()
 MatchService.init()

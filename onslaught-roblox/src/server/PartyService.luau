@@ -20,6 +20,7 @@ local Rules = require(ReplicatedStorage.Shared.Rules)
 local GAME = require(ReplicatedStorage.Shared.Onslaught.Data)
 local X = require(ReplicatedStorage.Shared.Onslaught.Expansion)
 local EN = require(ReplicatedStorage.Shared.Onslaught.EternityNum)
+local Engine = require(ReplicatedStorage.Shared.Onslaught.Engine)
 local Profiles = require(script.Parent.Profiles)
 local Monetization = require(script.Parent.Monetization)
 local Leaderboards = require(script.Parent.Leaderboards)
@@ -349,6 +350,18 @@ function handlers.quitMatch(player)
 		fire(player, "toLobby", {})
 	end
 	return { ok = true }
+end
+-- Combonly: which combos it could become right now (needs the full engine state, so the server answers)
+function handlers.combonlyOptions(player, id)
+	local m = MatchService.matchOf(player)
+	if not m or type(id) ~= "number" then
+		return {}
+	end
+	local out = {}
+	for _, o in Engine.combonlyOptions(m.G, id) do
+		table.insert(out, { colour = o.colour, combo = o.combo, needs = o.needs })
+	end
+	return out
 end
 function handlers.playAgain(player)
 	return { ok = MatchService.restart(player) }

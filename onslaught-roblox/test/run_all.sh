@@ -18,3 +18,8 @@ for t in test/unit/*.luau; do [ -e "$t" ] && "$LUNE" run "$t"; done
 node test/parity/trace.js > "$TMP/js.jsonl"
 "$LUNE" run test/parity/trace.luau > "$TMP/lua.jsonl"
 node test/parity/compare.js "$TMP/js.jsonl" "$TMP/lua.jsonl"
+# Roblox place: build with Rojo, then play it headless (lobby, party, match, products)
+if command -v "${ROJO:-rojo}" >/dev/null 2>&1; then
+	"${ROJO:-rojo}" build default.project.json -o "$TMP/build.rbxl" >/dev/null
+	"$LUNE" run test/roblox/smoke.luau "$TMP/build.rbxl" | tail -1
+fi
