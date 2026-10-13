@@ -1,0 +1,1005 @@
+[
+ {
+  "name": "blue-basic",
+  "opts": {
+   "map": "map1",
+   "mode": "medium",
+   "seed": 9
+  },
+  "ms": 60000,
+  "script": [
+   [
+    0,
+    "build",
+    "p1",
+    "Blue",
+    150,
+    330
+   ],
+   [
+    0,
+    "waveSend"
+   ],
+   [
+    20000,
+    "upgrade",
+    "p1",
+    1,
+    "damage",
+    false
+   ]
+  ]
+ },
+ {
+  "name": "bot-classic-red-blue",
+  "opts": {
+   "map": "map1",
+   "mode": "medium",
+   "seed": 7919,
+   "unlockAll": true
+  },
+  "ms": 900000,
+  "bot": [
+   "Red",
+   "Blue",
+   "Blue"
+  ]
+ },
+ {
+  "name": "bot-classic-mix",
+  "opts": {
+   "map": "map3",
+   "mode": "hard",
+   "seed": 15838,
+   "unlockAll": true
+  },
+  "ms": 900000,
+  "bot": [
+   "Blue",
+   "Red",
+   "Green",
+   "Yellow"
+  ]
+ },
+ {
+  "name": "bot-coop",
+  "opts": {
+   "map": "map2",
+   "mode": "medium",
+   "seed": 31,
+   "unlockAll": true,
+   "players": [
+    "p1",
+    "p2",
+    "p3"
+   ]
+  },
+  "ms": 600000,
+  "bot": [
+   "Green",
+   "Blue",
+   "Yellow"
+  ]
+ },
+ {
+  "name": "combos-sandbox",
+  "opts": {
+   "map": "map1",
+   "mode": "sandbox",
+   "seed": 5
+  },
+  "ms": 180000,
+  "energy": 300000,
+  "script": [
+   [
+    0,
+    "group",
+    150,
+    345,
+    [
+     "Red",
+     "Blue",
+     "Blue"
+    ]
+   ],
+   [
+    0,
+    "group",
+    380,
+    200,
+    [
+     "Yellow",
+     "Yellow",
+     "Yellow",
+     "Green"
+    ]
+   ],
+   [
+    0,
+    "group",
+    560,
+    330,
+    [
+     "Green",
+     "Green",
+     "Blue"
+    ]
+   ],
+   [
+    0,
+    "build",
+    "p1",
+    "Sniper",
+    300,
+    60
+   ],
+   [
+    0,
+    "build",
+    "p1",
+    "Fusion",
+    620,
+    60
+   ],
+   [
+    0,
+    "build",
+    "p1",
+    "Railgun",
+    120,
+    200
+   ],
+   [
+    0,
+    "build",
+    "p1",
+    "DamageUp",
+    260,
+    420
+   ],
+   [
+    0,
+    "waveSend"
+   ],
+   [
+    30000,
+    "waveSend"
+   ],
+   [
+    60000,
+    "waveSend"
+   ],
+   [
+    90000,
+    "waveSend"
+   ],
+   [
+    120000,
+    "waveSend"
+   ]
+  ]
+ },
+ {
+  "name": "actions-coop",
+  "opts": {
+   "map": "map1",
+   "mode": "sandbox",
+   "seed": 21,
+   "players": [
+    "p1",
+    "p2"
+   ]
+  },
+  "ms": 200000,
+  "energy": 2000,
+  "script": [
+   [
+    0,
+    "build",
+    "p1",
+    "Blue",
+    150,
+    330
+   ],
+   [
+    0,
+    "build",
+    "p2",
+    "Red",
+    230,
+    330
+   ],
+   [
+    0,
+    "build",
+    "p1",
+    "Green",
+    300,
+    250
+   ],
+   [
+    0,
+    "build",
+    "p2",
+    "Yellow",
+    400,
+    200
+   ],
+   [
+    0,
+    "build",
+    "p1",
+    "Targeter",
+    300,
+    60
+   ],
+   [
+    0,
+    "build",
+    "p2",
+    "RangeUp",
+    186,
+    300
+   ],
+   [
+    0,
+    "build",
+    "p1",
+    "RateUpExchange",
+    500,
+    330
+   ],
+   [
+    0,
+    "tmax",
+    0,
+    "damage"
+   ],
+   [
+    0,
+    "tmax",
+    1,
+    "rate"
+   ],
+   [
+    0,
+    "tmax",
+    2,
+    "range"
+   ],
+   [
+    0,
+    "tmax",
+    3,
+    "damage"
+   ],
+   [
+    0,
+    "waveSend"
+   ],
+   [
+    5000,
+    "mode",
+    0,
+    "strong"
+   ],
+   [
+    6000,
+    "mode",
+    1,
+    "fast"
+   ],
+   [
+    7000,
+    "lock",
+    2
+   ],
+   [
+    8000,
+    "dir",
+    3,
+    45,
+    30
+   ],
+   [
+    9000,
+    "join",
+    4,
+    0
+   ],
+   [
+    9000,
+    "join",
+    4,
+    1
+   ],
+   [
+    15000,
+    "focus",
+    200,
+    340
+   ],
+   [
+    30000,
+    "move",
+    0,
+    150,
+    250
+   ],
+   [
+    40000,
+    "sell",
+    6
+   ],
+   [
+    45000,
+    "mode",
+    3,
+    "old"
+   ],
+   [
+    50000,
+    "waveSend"
+   ],
+   [
+    60000,
+    "leave",
+    "p2"
+   ],
+   [
+    61000,
+    "tmax",
+    1,
+    "damage"
+   ],
+   [
+    61000,
+    "tmax",
+    1,
+    "range"
+   ],
+   [
+    70000,
+    "build",
+    "p1",
+    "Sniper",
+    620,
+    60
+   ],
+   [
+    80000,
+    "build",
+    "p1",
+    "Fusion",
+    60,
+    420
+   ],
+   [
+    90000,
+    "tmax",
+    7,
+    "damage"
+   ],
+   [
+    90000,
+    "tmax",
+    8,
+    "rate"
+   ],
+   [
+    100000,
+    "prefs",
+    5000,
+    true
+   ],
+   [
+    150000,
+    "sell",
+    0
+   ]
+  ]
+ },
+ {
+  "name": "challenge-bounce",
+  "opts": {
+   "map": "map1",
+   "seed": 77,
+   "challengeIndex": 5
+  },
+  "ms": 300000,
+  "bot": [
+   "Blue",
+   "Green"
+  ]
+ },
+ {
+  "name": "challenge-clockers",
+  "opts": {
+   "map": "map4",
+   "seed": 78,
+   "challengeIndex": 11
+  },
+  "ms": 400000,
+  "bot": [
+   "Red",
+   "Yellow"
+  ]
+ },
+ {
+  "name": "combo-nuke",
+  "opts": {
+   "map": "map1",
+   "mode": "sandbox",
+   "seed": 11
+  },
+  "ms": 40000,
+  "energy": 1000000000.0,
+  "script": [
+   [
+    0,
+    "group",
+    150,
+    345,
+    [
+     "Red",
+     "Blue",
+     "Blue"
+    ]
+   ],
+   [
+    0,
+    "waveSend"
+   ]
+  ]
+ },
+ {
+  "name": "combo-napalm",
+  "opts": {
+   "map": "map1",
+   "mode": "sandbox",
+   "seed": 11
+  },
+  "ms": 40000,
+  "energy": 1000000000.0,
+  "script": [
+   [
+    0,
+    "group",
+    150,
+    345,
+    [
+     "Red",
+     "Red",
+     "Yellow",
+     "Blue"
+    ]
+   ],
+   [
+    0,
+    "waveSend"
+   ]
+  ]
+ },
+ {
+  "name": "combo-poison_rocket",
+  "opts": {
+   "map": "map1",
+   "mode": "sandbox",
+   "seed": 11
+  },
+  "ms": 40000,
+  "energy": 1000000000.0,
+  "script": [
+   [
+    0,
+    "group",
+    150,
+    345,
+    [
+     "Red",
+     "Blue",
+     "Green"
+    ]
+   ],
+   [
+    0,
+    "waveSend"
+   ]
+  ]
+ },
+ {
+  "name": "combo-tazer_rocket",
+  "opts": {
+   "map": "map1",
+   "mode": "sandbox",
+   "seed": 11
+  },
+  "ms": 40000,
+  "energy": 1000000000.0,
+  "script": [
+   [
+    0,
+    "group",
+    150,
+    345,
+    [
+     "Red",
+     "Yellow"
+    ]
+   ],
+   [
+    0,
+    "waveSend"
+   ]
+  ]
+ },
+ {
+  "name": "combo-laser_rocket",
+  "opts": {
+   "map": "map1",
+   "mode": "sandbox",
+   "seed": 11
+  },
+  "ms": 40000,
+  "energy": 1000000000.0,
+  "script": [
+   [
+    0,
+    "group",
+    150,
+    345,
+    [
+     "Red",
+     "Green"
+    ]
+   ],
+   [
+    0,
+    "waveSend"
+   ]
+  ]
+ },
+ {
+  "name": "combo-landmine",
+  "opts": {
+   "map": "map1",
+   "mode": "sandbox",
+   "seed": 11
+  },
+  "ms": 40000,
+  "energy": 1000000000.0,
+  "script": [
+   [
+    0,
+    "group",
+    150,
+    345,
+    [
+     "Blue",
+     "Blue"
+    ]
+   ],
+   [
+    0,
+    "waveSend"
+   ]
+  ]
+ },
+ {
+  "name": "combo-clusterbomb",
+  "opts": {
+   "map": "map1",
+   "mode": "sandbox",
+   "seed": 11
+  },
+  "ms": 40000,
+  "energy": 1000000000.0,
+  "script": [
+   [
+    0,
+    "group",
+    150,
+    345,
+    [
+     "Blue",
+     "Red"
+    ]
+   ],
+   [
+    0,
+    "waveSend"
+   ]
+  ]
+ },
+ {
+  "name": "combo-blackhole",
+  "opts": {
+   "map": "map1",
+   "mode": "sandbox",
+   "seed": 11
+  },
+  "ms": 40000,
+  "energy": 1000000000.0,
+  "script": [
+   [
+    0,
+    "group",
+    150,
+    345,
+    [
+     "Yellow",
+     "Yellow",
+     "Yellow",
+     "Green"
+    ]
+   ],
+   [
+    0,
+    "waveSend"
+   ]
+  ]
+ },
+ {
+  "name": "combo-shockwave",
+  "opts": {
+   "map": "map1",
+   "mode": "sandbox",
+   "seed": 11
+  },
+  "ms": 40000,
+  "energy": 1000000000.0,
+  "script": [
+   [
+    0,
+    "group",
+    150,
+    345,
+    [
+     "Yellow",
+     "Yellow",
+     "Blue",
+     "Green"
+    ]
+   ],
+   [
+    0,
+    "waveSend"
+   ]
+  ]
+ },
+ {
+  "name": "combo-bfg",
+  "opts": {
+   "map": "map1",
+   "mode": "sandbox",
+   "seed": 11
+  },
+  "ms": 40000,
+  "energy": 1000000000.0,
+  "script": [
+   [
+    0,
+    "group",
+    150,
+    345,
+    [
+     "Green",
+     "Red",
+     "Blue"
+    ]
+   ],
+   [
+    0,
+    "waveSend"
+   ]
+  ]
+ },
+ {
+  "name": "combo-rocket_bfg",
+  "opts": {
+   "map": "map1",
+   "mode": "sandbox",
+   "seed": 11
+  },
+  "ms": 40000,
+  "energy": 1000000000.0,
+  "script": [
+   [
+    0,
+    "group",
+    150,
+    345,
+    [
+     "Green",
+     "Red",
+     "Red",
+     "Blue"
+    ]
+   ],
+   [
+    0,
+    "waveSend"
+   ]
+  ]
+ },
+ {
+  "name": "combo-tazer_bfg",
+  "opts": {
+   "map": "map1",
+   "mode": "sandbox",
+   "seed": 11
+  },
+  "ms": 40000,
+  "energy": 1000000000.0,
+  "script": [
+   [
+    0,
+    "group",
+    150,
+    345,
+    [
+     "Yellow",
+     "Red",
+     "Blue"
+    ]
+   ],
+   [
+    0,
+    "waveSend"
+   ]
+  ]
+ },
+ {
+  "name": "combo-sparky_landmine",
+  "opts": {
+   "map": "map1",
+   "mode": "sandbox",
+   "seed": 11
+  },
+  "ms": 40000,
+  "energy": 1000000000.0,
+  "script": [
+   [
+    0,
+    "group",
+    150,
+    345,
+    [
+     "Blue",
+     "Blue",
+     "Yellow"
+    ]
+   ],
+   [
+    0,
+    "waveSend"
+   ]
+  ]
+ },
+ {
+  "name": "combo-sparky_clusterbomb",
+  "opts": {
+   "map": "map1",
+   "mode": "sandbox",
+   "seed": 11
+  },
+  "ms": 40000,
+  "energy": 1000000000.0,
+  "script": [
+   [
+    0,
+    "group",
+    150,
+    345,
+    [
+     "Blue",
+     "Red",
+     "Yellow"
+    ]
+   ],
+   [
+    0,
+    "waveSend"
+   ]
+  ]
+ },
+ {
+  "name": "combo-laser_clusterbomb",
+  "opts": {
+   "map": "map1",
+   "mode": "sandbox",
+   "seed": 11
+  },
+  "ms": 40000,
+  "energy": 1000000000.0,
+  "script": [
+   [
+    0,
+    "group",
+    150,
+    345,
+    [
+     "Blue",
+     "Red",
+     "Green"
+    ]
+   ],
+   [
+    0,
+    "waveSend"
+   ]
+  ]
+ },
+ {
+  "name": "combo-big_landmine",
+  "opts": {
+   "map": "map1",
+   "mode": "sandbox",
+   "seed": 11
+  },
+  "ms": 40000,
+  "energy": 1000000000.0,
+  "script": [
+   [
+    0,
+    "group",
+    150,
+    345,
+    [
+     "Blue",
+     "Red",
+     "Blue"
+    ]
+   ],
+   [
+    0,
+    "waveSend"
+   ]
+  ]
+ },
+ {
+  "name": "combo-big_clusterbomb",
+  "opts": {
+   "map": "map1",
+   "mode": "sandbox",
+   "seed": 11
+  },
+  "ms": 40000,
+  "energy": 1000000000.0,
+  "script": [
+   [
+    0,
+    "group",
+    150,
+    345,
+    [
+     "Blue",
+     "Red",
+     "Red"
+    ]
+   ],
+   [
+    0,
+    "waveSend"
+   ]
+  ]
+ },
+ {
+  "name": "combo-big_laser_clusterbomb",
+  "opts": {
+   "map": "map1",
+   "mode": "sandbox",
+   "seed": 11
+  },
+  "ms": 40000,
+  "energy": 1000000000.0,
+  "script": [
+   [
+    0,
+    "group",
+    150,
+    345,
+    [
+     "Blue",
+     "Red",
+     "Red",
+     "Green"
+    ]
+   ],
+   [
+    0,
+    "waveSend"
+   ]
+  ]
+ },
+ {
+  "name": "combo-big_cluster_landmine",
+  "opts": {
+   "map": "map1",
+   "mode": "sandbox",
+   "seed": 11
+  },
+  "ms": 40000,
+  "energy": 1000000000.0,
+  "script": [
+   [
+    0,
+    "group",
+    150,
+    345,
+    [
+     "Blue",
+     "Red",
+     "Red",
+     "Blue"
+    ]
+   ],
+   [
+    0,
+    "waveSend"
+   ]
+  ]
+ },
+ {
+  "name": "combo-big_laser_cluster_landmine",
+  "opts": {
+   "map": "map1",
+   "mode": "sandbox",
+   "seed": 11
+  },
+  "ms": 40000,
+  "energy": 1000000000.0,
+  "script": [
+   [
+    0,
+    "group",
+    150,
+    345,
+    [
+     "Blue",
+     "Red",
+     "Red",
+     "Blue",
+     "Green"
+    ]
+   ],
+   [
+    0,
+    "waveSend"
+   ]
+  ]
+ },
+ {
+  "name": "combo-combonly",
+  "opts": {
+   "map": "map1",
+   "mode": "sandbox",
+   "seed": 12
+  },
+  "ms": 40000,
+  "energy": 100000000.0,
+  "script": [
+   [
+    0,
+    "group",
+    150,
+    345,
+    [
+     "Combonly",
+     "Red",
+     "Blue",
+     "Blue"
+    ]
+   ],
+   [
+    0,
+    "combonly",
+    "Red"
+   ],
+   [
+    0,
+    "waveSend"
+   ]
+  ]
+ }
+]

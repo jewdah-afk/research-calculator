@@ -224,14 +224,56 @@ function rnd(G) {
 }
 
 // ================================================================ math, as the original does it
+// ---- deterministic trig (fdlibm kernels, + - * / only), so JS and Luau give the same bits on every platform
+const PIO2_1 = 1.57079632673412561417e+00, PIO2_1T = 6.07710050650619224932e-11, INVPIO2 = 6.36619772367581382433e-01;
+const S1 = -1.66666666666666324348e-01, S2 = 8.33333333332248946124e-03, S3 = -1.98412698298579493134e-04,
+  S4 = 2.75573137070700676789e-06, S5 = -2.50507602534068634195e-08, S6 = 1.58969099521155010221e-10;
+const C1 = 4.16666666666666019037e-02, C2 = -1.38888888888741095749e-03, C3 = 2.48015872894767294178e-05,
+  C4 = -2.75573143513906633035e-07, C5 = 2.08757232129817482790e-09, C6 = -1.13596475577881948265e-11;
+function kSin(x, y) { const z = x * x, w = z * z, r = S2 + z * (S3 + z * S4) + z * w * (S5 + z * S6), v = z * x; return x - ((z * (0.5 * y - v * r) - y) - v * S1); }
+function kCos(x, y) { const z = x * x, w = z * z, r = z * (C1 + z * (C2 + z * C3)) + w * w * (C4 + z * (C5 + z * C6)), hz = 0.5 * z, q = 1 - hz; return q + (((1 - q) - hz) + (z * r - x * y)); }
+function trig(x, wantCos) {
+  const n = Math.floor(x * INVPIO2 + 0.5), r = x - n * PIO2_1, w = n * PIO2_1T, y0 = r - w, y1 = (r - y0) - w;
+  const q = ((n % 4) + 4) % 4 + (wantCos ? 1 : 0);
+  switch (q % 4) { case 0: return kSin(y0, y1); case 1: return kCos(y0, y1); case 2: return -kSin(y0, y1); default: return -kCos(y0, y1); }
+}
+function dsin(x) { return trig(x, false); }
+function dcos(x) { return trig(x, true); }
+const ATANHI = [4.63647609000806093515e-01, 7.85398163397448278999e-01, 9.82793723247329054082e-01, 1.57079632679489655800e+00];
+const ATANLO = [2.26987774529616870924e-17, 3.06161699786838301793e-17, 1.39033110312309984516e-17, 6.12323399573676603587e-17];
+const AT = [3.33333333333329318027e-01, -1.99999999998764832476e-01, 1.42857142725034663711e-01, -1.11111104054623557880e-01,
+  9.09088713343650656196e-02, -7.69187620504482999495e-02, 6.66107313738753120669e-02, -5.83357013379057348645e-02,
+  4.97687799461593236017e-02, -3.65315727442169155270e-02, 1.62858201153657823623e-02];
+function datan(v) {
+  const neg = v < 0; let x = neg ? -v : v, id;
+  if (x >= 7.378697629483821e19) return neg ? -(ATANHI[3] + ATANLO[3]) : ATANHI[3] + ATANLO[3];
+  if (x < 0.4375) { if (x < 7.450580596923828e-9) return v; id = -1; }
+  else if (x < 1.1875) { if (x < 0.6875) { id = 0; x = (2 * x - 1) / (2 + x); } else { id = 1; x = (x - 1) / (x + 1); } }
+  else if (x < 2.4375) { id = 2; x = (x - 1.5) / (1 + 1.5 * x); } else { id = 3; x = -1 / x; }
+  const z = x * x, w = z * z;
+  const s1 = z * (AT[0] + w * (AT[2] + w * (AT[4] + w * (AT[6] + w * (AT[8] + w * AT[10])))));
+  const s2 = w * (AT[1] + w * (AT[3] + w * (AT[5] + w * (AT[7] + w * AT[9]))));
+  if (id < 0) return x - x * (s1 + s2);
+  const r = ATANHI[id] - ((x * (s1 + s2) - ATANLO[id]) - x);
+  return neg ? -r : r;
+}
+const PI = 3.1415926535897931160e+00, PI_LO = 1.2246467991473531772e-16;
+function datan2(y, x) {
+  if (x === 1) return datan(y);
+  if (y === 0) return x >= 0 ? 0 : PI;
+  if (x === 0) return y > 0 ? PI / 2 : -PI / 2;
+  const z = datan(Math.abs(y / x));
+  if (x > 0) return y > 0 ? z : -z;
+  return y > 0 ? PI - (z - PI_LO) : (z - PI_LO) - PI;
+}
 const DEG = 57.296;                                   // OnslaughtObject.trigDegreesTo
-function degTo(a, b) { return Math.atan2(b.y - a.y, b.x - a.x) * DEG; }
+function degTo(a, b) { return datan2(b.y - a.y, b.x - a.x) * DEG; }
 function dist(a, b) { const dx = b.x - a.x, dy = b.y - a.y; return Math.sqrt(dx * dx + dy * dy); }
 function dist2(a, b) { const dx = b.x - a.x, dy = b.y - a.y; return dx * dx + dy * dy; }
 function wrap180(r) { r = r % 360; if (r > 180) r -= 360; else if (r <= -180) r += 360; return r; }   // MovieClip._rotation
 // MathCache: the angle is floored to 0.01 rad; inside the precomputed table sin/cos are exact, outside floored to 0.01
-function qsin(q) { return (q >= -3.14 && q <= 3.14) ? Math.sin(q) : Math.floor(Math.sin(q) * 100) / 100; }
-function qcos(q) { return (q >= -3.14 && q <= 3.14) ? Math.cos(q) : Math.floor(Math.cos(q) * 100) / 100; }
+function qsin(q) { return (q >= -3.14 && q <= 3.14) ? dsin(q) : Math.floor(dsin(q) * 100) / 100; }
+function qcos(q) { return (q >= -3.14 && q <= 3.14) ? dcos(q) : Math.floor(dcos(q) * 100) / 100; }
 function fwd(deg, hyp) {
   const q = Math.floor(deg * 0.0174498255 * 100) / 100;
   return { x: qcos(q) * hyp, y: qsin(q) * hyp };
@@ -245,6 +287,7 @@ const MODES = ["near", "far", "weak", "strong", "slow", "fast", "old", "young"];
 const MODE_TITLES = { near: "Nearest", far: "Furthest", weak: "Weakest", strong: "Strongest", slow: "Slowest", fast: "Fastest", old: "Oldest", young: "Youngest" };
 const MUZZLE = { Blue: 14, Green: 14, Red: 0, Yellow: 0, Sniper: 20, Fusion: 10, Railgun: 12, Targeter: 10, Combonly: 0 };
 const COLOURS = ["Red", "Green", "Blue", "Yellow"];
+const COLOUR_ORDER = ["Red", "Green", "Blue", "Yellow", "Orange", "Cyan", "Violet"];   // fixed iteration order (JS and Luau agree)
 const PLAY = { x0: 18, x1: 702, y0: 18, y1: 462 };   // PlayArea
 const BUILD_SPACING = 36, BUILD_PROBE = 19, ROAD_HALF = 15.5;
 const BLAST_SHAPES = { BlastSmall: "small", BlastMedium: "medium", BlastLarge: "large", BlastHuge: "huge", BlastPoison: "poison", BlastBFG: "bfg" };
@@ -597,7 +640,7 @@ function canBuildAt(G, kind, x, y, ignore) {
   if (x < PLAY.x0 || x > PLAY.x1 || y < PLAY.y0 || y > PLAY.y1) return false;
   if (G.turretLimit !== null && G.turrets.length >= G.turretLimit) return false;
   for (const t of G.turrets) if (t !== ignore && dist(t, { x, y }) < BUILD_SPACING) return false;
-  const r = BUILD_PROBE, s = Math.sin(45 * 0.017453117987018096) * r, c = Math.cos(45 * 0.017453117987018096) * r;
+  const r = BUILD_PROBE, s = dsin(45 * 0.017453117987018096) * r, c = dcos(45 * 0.017453117987018096) * r;
   const probes = [[0, r], [0, -r], [r, 0], [-r, 0], [s, c], [s, -c], [-s, c], [-s, -c]];
   for (const [px, py] of probes) if (onRoad(G, x + px, y + py)) return false;
   return true;
@@ -936,7 +979,7 @@ function comboFireNamed(G, t, name, c, target, silent) {
   const take = () => {
     if (silent) return;
     const needs = TAKES[name] || (G.D.combos[name] && G.D.combos[name].needs) || {};
-    const order = TAKE_ORDER[name] || Object.keys(needs);
+    const order = TAKE_ORDER[name] || COLOUR_ORDER.filter(k => needs[k]);
     for (const col of order) takeColour(G, t, c[col], needs[col]);
   };
   const m = muzzle(t);
@@ -1414,8 +1457,9 @@ function combonlyChoose(G, pid, id, colour) {
   const opt = combonlyOptions(G, id).find(o => o.colour === colour);
   if (!opt) return false;
   const c = countColours(G, t, true);
-  for (const col in opt.needs) if (c[col].length < opt.needs[col]) return false;
-  for (const col in opt.needs) {
+  for (const col of COLOUR_ORDER) if (opt.needs[col] && c[col].length < opt.needs[col]) return false;
+  for (const col of COLOUR_ORDER) {
+    if (!opt.needs[col]) continue;
     for (const o of arrayPick(G, c[col], opt.needs[col])) {
       t.value += o.value; o.active = false; o.dead = true;
       fx(G, { k: "absorb", x1: o.x, y1: o.y, x2: t.x, y2: t.y });
@@ -1438,7 +1482,7 @@ const API = {
   setDirectional, focus, join, combonlyOptions, combonlyChoose, setPrefs, canBuildAt, turretCost,
   upCost, upMax, upPct, upAmountMax, comboCanFire, countColours, counts, modifyUpdate, recalcMods, rnd, dist, degTo, fwd, spawnBlast, hit, poison,
   acquire, availOrAcquire, inRange, inBoxList, arrayPick, addShot, newRocket, laserNow, sparkNow, bearTowards, canFire, tryFiring, turretFire, muzzle, fx,
-  attackerMove, wrap180, modStat, alive, linkFire, comboTake, cashSpend, cashWin,
+  attackerMove, wrap180, modStat, alive, linkFire, comboTake, cashSpend, cashWin, dsin, dcos, datan2,
 };
 if (typeof module !== "undefined" && module.exports) module.exports = API;
 root.OnsEngine = API;
