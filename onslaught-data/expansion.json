@@ -1,0 +1,917 @@
+{
+ "name": "Onslaught+",
+ "about": "Post-release expansion layer. Classic mode never loads this file, so it stays a pure 1:1 remake.",
+ "extraColours": [
+  "Orange",
+  "Cyan",
+  "Violet"
+ ],
+ "turrets": {
+  "Orange": {
+   "label": "Orange Mortar",
+   "key": "o",
+   "cost": 45,
+   "colour": "Orange",
+   "tab": "plus",
+   "type": "weapon",
+   "behaviour": "mortar",
+   "damage": 35,
+   "range": 230,
+   "minRange": 60,
+   "rate": 22,
+   "poison": 0,
+   "rotate": 180,
+   "mustFace": false,
+   "shellSpeed": 360,
+   "blast": "small",
+   "up": {
+    "damage": {
+     "cost": [
+      45,
+      95,
+      190,
+      340,
+      640,
+      1150,
+      1300,
+      1450,
+      1550
+     ],
+     "amount": [
+      80,
+      207,
+      518,
+      1322,
+      4140,
+      8970,
+      19550,
+      36800,
+      59800
+     ]
+    },
+    "range": {
+     "cost": [
+      130,
+      300,
+      650,
+      1000
+     ],
+     "amount": [
+      250,
+      280,
+      310,
+      350
+     ]
+    },
+    "rate": {
+     "cost": [
+      40,
+      90,
+      170,
+      300,
+      480,
+      700,
+      950
+     ],
+     "amount": [
+      28,
+      33,
+      39,
+      47,
+      56,
+      65,
+      75
+     ]
+    }
+   },
+   "requires": {
+    "level": 2
+   },
+   "desc": "Lobs a shell at where the target is now; a 100px blast on landing. Can't hit anything closer than 60px."
+  },
+  "Cyan": {
+   "label": "Cyan Cryo",
+   "key": "c",
+   "cost": 60,
+   "colour": "Cyan",
+   "tab": "plus",
+   "type": "weapon",
+   "behaviour": "cryo",
+   "damage": 1.25,
+   "range": 85,
+   "rate": 30,
+   "poison": 0,
+   "rotate": 360,
+   "mustFace": false,
+   "up": {
+    "damage": {
+     "cost": [
+      60,
+      150,
+      350,
+      700,
+      1200
+     ],
+     "amount": [
+      1.35,
+      1.5,
+      1.65,
+      1.8,
+      2.0
+     ]
+    },
+    "range": {
+     "cost": [
+      80,
+      200,
+      450,
+      800
+     ],
+     "amount": [
+      95,
+      110,
+      125,
+      140
+     ]
+    },
+    "rate": {
+     "cost": [
+      70,
+      180,
+      400,
+      750
+     ],
+     "amount": [
+      36,
+      42,
+      50,
+      60
+     ]
+    }
+   },
+   "requires": {
+    "level": 4
+   },
+   "desc": "Pulses a chill: everything in range is held to at most 1/strength of its base speed. Doesn't stack, doesn't do damage.",
+   "statLabels": {
+    "damage": "Strength",
+    "rate": "Pulses"
+   }
+  },
+  "Violet": {
+   "label": "Violet Arc",
+   "key": "v",
+   "cost": 75,
+   "colour": "Violet",
+   "tab": "plus",
+   "type": "weapon",
+   "behaviour": "arc",
+   "damage": 35,
+   "range": 110,
+   "rate": 40,
+   "poison": 0.5,
+   "rotate": 360,
+   "mustFace": false,
+   "jumpRange": 70,
+   "falloff": 0.65,
+   "up": {
+    "damage": {
+     "cost": [
+      35,
+      85,
+      195,
+      450,
+      1010,
+      1230,
+      1370,
+      1470
+     ],
+     "amount": [
+      90,
+      220,
+      560,
+      1500,
+      4200,
+      10500,
+      24000,
+      40000
+     ]
+    },
+    "range": {
+     "cost": [
+      30,
+      70,
+      160,
+      350,
+      700
+     ],
+     "amount": [
+      125,
+      140,
+      160,
+      180,
+      200
+     ]
+    },
+    "rate": {
+     "cost": [
+      55,
+      125,
+      280,
+      460,
+      670,
+      895,
+      1190
+     ],
+     "amount": [
+      46,
+      53,
+      61,
+      70,
+      80,
+      92,
+      105
+     ]
+    }
+   },
+   "requires": {
+    "level": 7
+   },
+   "desc": "Chain lightning: jumps to 1 more attacker (up to 4 with rate upgrades), 65% damage per jump.",
+   "baseJumps": 1
+  },
+  "Vault": {
+   "label": "Gold Vault",
+   "key": "g",
+   "cost": 250,
+   "colour": null,
+   "tab": "plus",
+   "type": "economy",
+   "behaviour": "vault",
+   "damage": 60,
+   "range": 0,
+   "rate": 2,
+   "poison": 0,
+   "rotate": 0,
+   "mustFace": false,
+   "limitPerPlayer": 3,
+   "up": {
+    "damage": {
+     "cost": [
+      150,
+      350,
+      800,
+      1800,
+      4000,
+      9000,
+      20000
+     ],
+     "amount": [
+      150,
+      400,
+      1000,
+      2500,
+      6000,
+      15000,
+      40000
+     ]
+    },
+    "range": {
+     "cost": [],
+     "amount": []
+    },
+    "rate": {
+     "cost": [
+      300,
+      700,
+      1500,
+      3000,
+      6000
+     ],
+     "amount": [
+      2.5,
+      3,
+      3.5,
+      4,
+      5
+     ]
+    }
+   },
+   "modifiable": false,
+   "comboNever": true,
+   "requires": {
+    "level": 10
+   },
+   "desc": "Interest: every wave you send, pays its owner rate% of their cash, up to the cap. Max 3 per player.",
+   "statLabels": {
+    "damage": "Cap",
+    "rate": "Interest"
+   }
+  },
+  "Beacon": {
+   "label": "Command Beacon",
+   "key": "b",
+   "cost": 6000,
+   "tab": "plus",
+   "type": "modifier",
+   "behaviour": "beacon",
+   "unlock": 1800,
+   "damage": 0,
+   "range": 80,
+   "rate": 0,
+   "poison": 0,
+   "rotate": 0,
+   "mustFace": false,
+   "modify": {
+    "damage": 0,
+    "range": 0,
+    "rate": 0,
+    "damage_mult": 0,
+    "range_mult": 0,
+    "rate_mult": 0,
+    "combo_recharge": 0.75,
+    "combo_damage": 1.2
+   },
+   "up": {
+    "damage": {
+     "cost": [],
+     "amount": []
+    },
+    "range": {
+     "cost": [
+      1500
+     ],
+     "amount": [
+      130
+     ]
+    },
+    "rate": {
+     "cost": [],
+     "amount": []
+    }
+   },
+   "modifiable": false,
+   "comboNever": true,
+   "requires": {
+    "level": 14
+   },
+   "desc": "Turrets within range recharge combos 25% faster and their combos hit 20% harder. Doesn't stack."
+  },
+  "Orbital": {
+   "label": "Orbital Strike",
+   "key": "x",
+   "cost": 25000,
+   "tab": "super",
+   "type": "weapon",
+   "behaviour": "orbital",
+   "unlock": 2000,
+   "damage": 20000000,
+   "range": 2000,
+   "rate": 6,
+   "poison": 0,
+   "rotate": 360,
+   "mustFace": false,
+   "blast": "large",
+   "up": {
+    "damage": {
+     "cost": [
+      10000,
+      15000,
+      25000
+     ],
+     "amount": [
+      40000000,
+      80000000,
+      160000000
+     ]
+    },
+    "range": {
+     "cost": [],
+     "amount": []
+    },
+    "rate": {
+     "cost": [
+      12000,
+      18000
+     ],
+     "amount": [
+      7.5,
+      10
+     ]
+    }
+   },
+   "modifiable": false,
+   "comboNever": true,
+   "requires": {
+    "level": 18
+   },
+   "desc": "Every 10 s (6 s maxed), a 190px strike on the strongest attacker anywhere on the map.",
+   "statLabels": {
+    "rate": "Strikes"
+   }
+  }
+ },
+ "buildOrder": [
+  "Orange",
+  "Cyan",
+  "Violet",
+  "Vault",
+  "Beacon",
+  "Orbital"
+ ],
+ "combos": {
+  "carpet_bomb": {
+   "lead": "Orange",
+   "needs": {
+    "Red": 2
+   },
+   "recharge": 8000,
+   "blast_damage": 6000000,
+   "blasts": 10,
+   "spacing": 22,
+   "timing": 120
+  },
+  "cryo_shell": {
+   "lead": "Orange",
+   "needs": {
+    "Cyan": 1
+   },
+   "recharge": 7000,
+   "blast_damage": 12000000,
+   "blast_poison": 3
+  },
+  "ion_mortar": {
+   "lead": "Orange",
+   "needs": {
+    "Violet": 1
+   },
+   "recharge": 6000,
+   "blast_damage": 9000000,
+   "arcs": 8,
+   "arc_damage": 2000000
+  },
+  "absolute_zero": {
+   "lead": "Cyan",
+   "needs": {
+    "Yellow": 1,
+    "Green": 1
+   },
+   "recharge": 15000,
+   "radius": 160,
+   "freeze": 2500,
+   "damage": 3000000
+  },
+  "frost_mine": {
+   "lead": "Cyan",
+   "needs": {
+    "Blue": 1
+   },
+   "recharge": 6000,
+   "blast_damage": 10000000,
+   "blast_poison": 4
+  },
+  "ion_field": {
+   "lead": "Violet",
+   "needs": {
+    "Yellow": 2
+   },
+   "recharge": 12000,
+   "radius": 100,
+   "duration": 3000,
+   "tick": 200,
+   "damage": 1500000
+  },
+  "storm": {
+   "lead": "Violet",
+   "needs": {
+    "Green": 1
+   },
+   "recharge": 5000,
+   "jumps": 12,
+   "jumpRange": 90,
+   "damage": 3000000
+  }
+ },
+ "rules": {
+  "Orange": [
+   [
+    "Red>=2",
+    "carpet_bomb"
+   ],
+   [
+    "Cyan>=1",
+    "cryo_shell"
+   ],
+   [
+    "Violet>=1",
+    "ion_mortar"
+   ]
+  ],
+  "Cyan": [
+   [
+    "Yellow>=1&Green>=1",
+    "absolute_zero"
+   ],
+   [
+    "Blue>=1",
+    "frost_mine"
+   ]
+  ],
+  "Violet": [
+   [
+    "Yellow>=2",
+    "ion_field"
+   ],
+   [
+    "Green>=1",
+    "storm"
+   ]
+  ]
+ },
+ "progression": {
+  "xp": {
+   "perWave": 0.1,
+   "perKill": 0.2,
+   "challengeWin": 500,
+   "difficulty": {
+    "easy": 1,
+    "medium": 1.3,
+    "hard": 1.7,
+    "extreme": 2.2,
+    "sandbox": 0,
+    "sandbox2": 0
+   }
+  },
+  "levelCurve": {
+   "base": 100,
+   "coef": 40,
+   "power": 1.6
+  },
+  "intel": {
+   "waveExp": 1.4,
+   "waveDiv": 4,
+   "perKills": 20
+  },
+  "prestige": {
+   "level": 50,
+   "bonusPerTier": 0.05
+  },
+  "notes": "XP for a game = sum over waves reached of (wave * difficulty * 0.1) + kills * 0.2. Level L -> L+1 needs 100 + 40 * L^1.6 XP."
+ },
+ "research": [
+  {
+   "id": "funds",
+   "label": "Field Funds",
+   "desc": "+$5 starting cash",
+   "per": 5,
+   "max": 10,
+   "base": 40,
+   "growth": 1.55
+  },
+  {
+   "id": "salvage",
+   "label": "Salvage Rights",
+   "desc": "+1% sell refund (70% -> 80%)",
+   "per": 0.01,
+   "max": 10,
+   "base": 60,
+   "growth": 1.6
+  },
+  {
+   "id": "bunker",
+   "label": "Bunker",
+   "desc": "+1 life",
+   "per": 1,
+   "max": 5,
+   "base": 400,
+   "growth": 2.2
+  },
+  {
+   "id": "theory",
+   "label": "Combo Theory",
+   "desc": "-1.5% combo recharge",
+   "per": 0.015,
+   "max": 10,
+   "base": 120,
+   "growth": 1.65
+  },
+  {
+   "id": "bounty",
+   "label": "Bounty Hunter",
+   "desc": "+1% kill bounty",
+   "per": 0.01,
+   "max": 10,
+   "base": 200,
+   "growth": 1.7
+  },
+  {
+   "id": "m_Blue",
+   "label": "Blue Mastery",
+   "desc": "+1% Blue damage",
+   "per": 0.01,
+   "max": 10,
+   "base": 50,
+   "growth": 1.5
+  },
+  {
+   "id": "m_Green",
+   "label": "Green Mastery",
+   "desc": "+1% Green damage",
+   "per": 0.01,
+   "max": 10,
+   "base": 50,
+   "growth": 1.5
+  },
+  {
+   "id": "m_Red",
+   "label": "Red Mastery",
+   "desc": "+1% Red damage",
+   "per": 0.01,
+   "max": 10,
+   "base": 50,
+   "growth": 1.5
+  },
+  {
+   "id": "m_Yellow",
+   "label": "Yellow Mastery",
+   "desc": "+1% Yellow damage",
+   "per": 0.01,
+   "max": 10,
+   "base": 50,
+   "growth": 1.5
+  },
+  {
+   "id": "m_Orange",
+   "label": "Orange Mastery",
+   "desc": "+1% Orange damage",
+   "per": 0.01,
+   "max": 10,
+   "base": 50,
+   "growth": 1.5
+  },
+  {
+   "id": "m_Violet",
+   "label": "Violet Mastery",
+   "desc": "+1% Violet damage",
+   "per": 0.01,
+   "max": 10,
+   "base": 50,
+   "growth": 1.5
+  }
+ ],
+ "quests": [
+  {
+   "id": "kills_red",
+   "text": "Kill 400 attackers with Red Rockets",
+   "stat": "kills_Red",
+   "goal": 400,
+   "intel": 120,
+   "xp": 150
+  },
+  {
+   "id": "kills_blue",
+   "text": "Kill 600 attackers with Blue Cannons",
+   "stat": "kills_Blue",
+   "goal": 600,
+   "intel": 120,
+   "xp": 150
+  },
+  {
+   "id": "combos10",
+   "text": "Fire 10 combos in one game",
+   "stat": "combos",
+   "goal": 10,
+   "intel": 150,
+   "xp": 200
+  },
+  {
+   "id": "nukes",
+   "text": "Fire 3 Nukes",
+   "stat": "combo_nuke",
+   "goal": 3,
+   "intel": 200,
+   "xp": 250
+  },
+  {
+   "id": "wave40m",
+   "text": "Reach wave 40 on Medium or harder",
+   "stat": "wave_medium",
+   "goal": 40,
+   "intel": 250,
+   "xp": 300
+  },
+  {
+   "id": "wave30h",
+   "text": "Reach wave 30 on Hard or harder",
+   "stat": "wave_hard",
+   "goal": 30,
+   "intel": 300,
+   "xp": 350
+  },
+  {
+   "id": "challenge",
+   "text": "Win any challenge",
+   "stat": "challenge_wins",
+   "goal": 1,
+   "intel": 300,
+   "xp": 400
+  },
+  {
+   "id": "noloss",
+   "text": "Reach wave 25 without losing a life",
+   "stat": "wave_nolife",
+   "goal": 25,
+   "intel": 200,
+   "xp": 250
+  }
+ ],
+ "unlockLevels": {
+  "Orange": 2,
+  "Cyan": 4,
+  "Violet": 7,
+  "Vault": 10,
+  "Beacon": 14,
+  "Orbital": 18
+ },
+ "gamepasses": [
+  {
+   "id": "vip",
+   "name": "VIP",
+   "robux": 399,
+   "classic": true,
+   "effect": "+25% XP and Intel, VIP chat tag and nameplate, gold turret skin set, 1 extra daily quest reroll"
+  },
+  {
+   "id": "speed",
+   "name": "Speed Demon",
+   "robux": 199,
+   "classic": true,
+   "effect": "Unlocks 3x and 5x game speed (1x and 2x are free)"
+  },
+  {
+   "id": "commander",
+   "name": "Commander Tools",
+   "robux": 249,
+   "classic": true,
+   "effect": "Auto-upgrade queue per turret and saved build blueprints per map"
+  },
+  {
+   "id": "clearance",
+   "name": "Instant Clearance",
+   "robux": 349,
+   "classic": true,
+   "effect": "Unlocks Extreme, Sandbox and Super Sandbox now, without the original kill grind"
+  },
+  {
+   "id": "supply",
+   "name": "Supply Line",
+   "robux": 299,
+   "classic": false,
+   "effect": "Onslaught+: +$50 starting cash and +10% kill bounty"
+  },
+  {
+   "id": "intel2",
+   "name": "Double Intel",
+   "robux": 449,
+   "classic": false,
+   "effect": "x2 Intel from every game, forever"
+  },
+  {
+   "id": "combomaster",
+   "name": "Combo Master",
+   "robux": 499,
+   "classic": false,
+   "effect": "Onslaught+: -15% combo recharge on all your turrets (strong)"
+  },
+  {
+   "id": "arsenal",
+   "name": "Arsenal Pass",
+   "robux": 799,
+   "classic": false,
+   "effect": "Onslaught+: every expansion tower from level 1, Beacon and Orbital kill requirements halved (strongest pass)"
+  },
+  {
+   "id": "skins_retro",
+   "name": "Retro Flash Skins",
+   "robux": 99,
+   "classic": true,
+   "effect": "Cosmetic: the original 2008 Flash look for turrets and attackers"
+  },
+  {
+   "id": "skins_neon",
+   "name": "Neon Skins",
+   "robux": 199,
+   "classic": true,
+   "effect": "Cosmetic: glowing neon turrets and beams"
+  }
+ ],
+ "products": [
+  {
+   "id": "drop_s",
+   "name": "Supply Drop (S)",
+   "robux": 29,
+   "plusOnly": true,
+   "effect": "Cash worth 5 waves of bounty (10 x wave x 5)",
+   "waves": 5
+  },
+  {
+   "id": "drop_m",
+   "name": "Supply Drop (M)",
+   "robux": 79,
+   "plusOnly": true,
+   "effect": "Cash worth 15 waves of bounty",
+   "waves": 15
+  },
+  {
+   "id": "drop_l",
+   "name": "Supply Drop (L)",
+   "robux": 199,
+   "plusOnly": true,
+   "effect": "Cash worth 40 waves of bounty",
+   "waves": 40
+  },
+  {
+   "id": "life",
+   "name": "Extra Life",
+   "robux": 25,
+   "plusOnly": true,
+   "effect": "+1 life (max 5 per game)",
+   "maxPerGame": 5
+  },
+  {
+   "id": "revive",
+   "name": "Second Chance",
+   "robux": 99,
+   "plusOnly": true,
+   "effect": "On game over: back to 5 lives and the field is cleared. Price doubles each use in a game (99, 199, 399)"
+  },
+  {
+   "id": "airstrike",
+   "name": "Airstrike",
+   "robux": 49,
+   "plusOnly": true,
+   "effect": "A 250px blast where you tap: max(60M, 3x current attacker HP)"
+  },
+  {
+   "id": "freeze",
+   "name": "Time Freeze",
+   "robux": 39,
+   "plusOnly": true,
+   "effect": "Every attacker stops for 8 s"
+  },
+  {
+   "id": "intel_s",
+   "name": "Intel x500",
+   "robux": 49,
+   "plusOnly": false,
+   "effect": "+500 Intel",
+   "intel": 500
+  },
+  {
+   "id": "intel_m",
+   "name": "Intel x1,500",
+   "robux": 129,
+   "plusOnly": false,
+   "effect": "+1,500 Intel",
+   "intel": 1500
+  },
+  {
+   "id": "intel_l",
+   "name": "Intel x4,000",
+   "robux": 299,
+   "plusOnly": false,
+   "effect": "+4,000 Intel",
+   "intel": 4000
+  },
+  {
+   "id": "intel_xl",
+   "name": "Intel x12,000",
+   "robux": 799,
+   "plusOnly": false,
+   "effect": "+12,000 Intel",
+   "intel": 12000
+  },
+  {
+   "id": "xpboost",
+   "name": "XP Boost (1 hour)",
+   "robux": 59,
+   "plusOnly": false,
+   "effect": "x2 XP for one hour of play"
+  },
+  {
+   "id": "partyboost",
+   "name": "Party Boost",
+   "robux": 149,
+   "plusOnly": false,
+   "effect": "Everyone in the server gets x2 Intel for 30 minutes"
+  },
+  {
+   "id": "reroll",
+   "name": "Quest Reroll",
+   "robux": 15,
+   "plusOnly": false,
+   "effect": "Swap one daily quest"
+  }
+ ],
+ "fairness": "Classic runs (and the Classic leaderboards) ignore every pass and product that changes balance; only cosmetics, speed, Commander Tools and Instant Clearance apply there. Onslaught+ runs that used an in-game product are flagged 'assisted' and kept off the Plus leaderboard."
+}
