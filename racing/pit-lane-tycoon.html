@@ -160,7 +160,8 @@ textarea{width:100%;min-height:96px;border:1px solid var(--card-edge);border-rad
 .srow.locked{opacity:.55}
 .gbonus{display:flex;align-items:baseline;justify-content:space-between;background:#fff4cf;border-radius:14px;padding:10px 14px}
 .gbonus span{font-weight:900;font-size:13px;color:#7a5600}
-.gbonus b{font-family:var(--display);font-weight:400;font-size:26px;color:#7a5600}
+.gbonus{gap:10px;flex-wrap:wrap}
+.gbonus b{font-family:var(--display);font-weight:400;font-size:19px;color:#7a5600}
 .gnote{align-self:center;font-size:12px;font-weight:800;color:var(--ink-soft)}
 .ggrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:10px}
 .gcar{border:1px solid var(--card-edge);border-radius:14px;padding:8px;display:flex;flex-direction:column;gap:2px;background:#fbfcfd}
@@ -329,8 +330,8 @@ textarea{width:100%;min-height:96px;border:1px solid var(--card-edge);border-rad
   <section class="sheet" id="sheetGarage" aria-labelledby="garageTitle" inert>
     <div class="sheet-head"><h2 id="garageTitle">Garage</h2><button class="x" data-close aria-label="Close"><svg viewBox="0 0 18 18"><path d="M4 4l10 10M14 4 4 14" stroke="#27303f" stroke-width="2.4" stroke-linecap="round"/></svg></button></div>
     <div class="sheet-body">
-      <p class="lead">Every car you collect raises the pay of every ride, on every track, for good. Getting a car you already own levels it up. Your cars race on the track, best first.</p>
-      <div class="gbonus"><span>Garage bonus</span><b class="num" id="gBonus">+5%</b></div>
+      <p class="lead">Collected cars race on your track in place of plain sedans, and each one earns +10% per level on its own rides. Getting a car you already own levels it up. Your best cars race first, up to your Cars level.</p>
+      <div class="gbonus"><span>Garage cars on the track</span><b class="num" id="gBonus">None yet</b></div>
       <div class="row"><button class="btn go" id="rollCar"></button><span class="gnote num" id="rollNote"></span></div>
       <div class="ggrid" id="gGrid"></div>
       <p class="lead small">These are block-built stand-ins. Each one is a single model slot, so a Blender car can replace it without touching the game code.</p>
@@ -385,14 +386,14 @@ const NAMES = { speed: 'Speed', earn: 'Earnings', cars: 'Cars', queue: 'Queue', 
 const STATION_UNLOCK = 4;                        // any card upgrade at this level opens the station
 const BAYS = 8, BAY_STEP = 2.1;                  // parking bays in the pit lot
 const PIT_SPAN = 10;                             // cars leave the track this far before the station and rejoin this far after
-const FREE_CAR_MS = 10 * 60 * 1000, CAR_GEMS = 20;
+const FREE_CAR_MS = 10 * 60 * 1000, CAR_GEMS = 50;   // reference game: free every 10 min (ad) or 50 gems
 const MODELS = {
-  sedan:  { name: 'Sedan',   bonus: 0.05, weight: 30, color: 0x8f3df0 },
-  coupe:  { name: 'Coupe',   bonus: 0.08, weight: 22, color: 0xe8404f },
-  van:    { name: 'Van',     bonus: 0.06, weight: 16, color: 0x2f86e0 },
-  pickup: { name: 'Pickup',  bonus: 0.08, weight: 18, color: 0xf28a1e },
-  jeep:   { name: 'Jeep',    bonus: 0.12, weight: 10, color: 0x9ccf3a },
-  f1:     { name: 'Formula', bonus: 0.25, weight: 4,  color: 0xe02424 },
+  sedan:  { name: 'Sedan',   bonus: 0.10, weight: 30, color: 0x8f3df0 },
+  coupe:  { name: 'Coupe',   bonus: 0.10, weight: 22, color: 0xe8404f },
+  van:    { name: 'Van',     bonus: 0.10, weight: 16, color: 0x2f86e0 },
+  pickup: { name: 'Pickup',  bonus: 0.10, weight: 18, color: 0xf28a1e },
+  jeep:   { name: 'Jeep',    bonus: 0.10, weight: 10, color: 0x9ccf3a },
+  f1:     { name: 'Formula', bonus: 0.10, weight: 4,  color: 0xe02424 },
 };
 const MODEL_MAX = 10;
 
@@ -407,9 +408,9 @@ const store = {
 const DEFAULT_P = {
   costExp: 3, costSpeed: 110, costEarn: 120, costCars: 90,
   pay: 45, payStep: 1, speed: 12, speedStep: 0.25,
-  goal: 170, startCoins: 40, costQueue: 35, costFreq: 320, spawn: 0.22, pitTime: 2.2, stop: 0.8,
+  goal: 170, startCoins: 40, costQueue: 280, costFreq: 320, spawn: 0.22, pitTime: 2.2, stop: 0.8,
 };
-let P = Object.assign({}, DEFAULT_P, store.get('plt-params-v3') || {});
+let P = Object.assign({}, DEFAULT_P, store.get('plt-params-v4') || {});
 
 /* ---------- maps ---------- */
 const r1 = v => Math.round(v * 10) / 10;
@@ -458,11 +459,18 @@ const REF_LAP = 165;
 const trackMult = i => Math.pow(4, i);
 const costMult = i => Math.pow(3, i);
 const baseCost = k => ({ speed: P.costSpeed, earn: P.costEarn, cars: P.costCars, queue: P.costQueue, freq: P.costFreq })[k];
-// cards and Queue: base × level^n. Frequency fits base × (level+1)^n ($2.6K at x1, $8.6K at x2 in the reference game).
-const cost = (k, lvl, mi = state.map) => Math.round(baseCost(k) * Math.pow(k === 'freq' ? lvl + 1 : lvl, P.costExp) * costMult(mi));
+// Fitted to the reference game's prices (exact to the shown digit):
+//   cards: base × level^n   (Speed 110, Earnings 120, Cars 90; checked through x7)
+//   Queue: base × (level-2)^n  ($2.2K, $7.6K, $17.9K, $35.0K at x4..x7)
+//   Frequency: base × (level+1)^n  ($2.6K, $8.6K, $20.5K, $40.0K at x1..x4)
+const costLevel = (k, lvl) => k === 'freq' ? lvl + 1 : k === 'queue' ? Math.max(1, lvl - 2) : lvl;
+const cost = (k, lvl, mi = state.map) => Math.round(baseCost(k) * Math.pow(costLevel(k, lvl), P.costExp) * costMult(mi));
 const carSpeed = lvl => P.speed * (1 + P.speedStep * (lvl - 1));
-const garageMult = (g = state.garage) => 1 + Object.keys(g).reduce((a, id) => a + g[id] * MODELS[id].bonus, 0);
-const payPerRide = (lvl, L, mi = state.map, gm = garageMult()) => P.pay * (L / REF_LAP) * (1 + P.payStep * (lvl - 1)) * trackMult(mi) * gm;
+// Garage cars race on the track and earn +10% per car level on their own rides (3.0K -> 3.3K in the reference game).
+const ownedModels = (g = state.garage) => Object.keys(g).sort((a, b) => g[b] - g[a] || MODELS[b].weight - MODELS[a].weight);
+const carMult = (k, g = state.garage) => { const id = ownedModels(g)[k]; return id ? 1 + MODELS[id].bonus * g[id] : 1; };
+const fleetMult = (n, g = state.garage) => { let a = 0; for (let k = 0; k < n; k++) a += carMult(k, g); return n ? a / n : 1; };
+const payPerRide = (lvl, L, mi = state.map, gm = 1) => P.pay * (L / REF_LAP) * (1 + P.payStep * (lvl - 1)) * trackMult(mi) * gm;
 const spawnRate = freq => P.spawn * freq;
 const goalFor = mi => Math.round(P.goal * (1 + 0.5 * mi));
 const queueCap = () => state.lv.queue;
@@ -470,7 +478,7 @@ const queueCap = () => state.lv.queue;
 // A short queue loses some passengers when cars arrive in bunches; Q/(Q+0.5) is a rough allowance for that.
 const demand = (lv, L) => lv.cars / (Math.max(10, L - 2 * PIT_SPAN) / carSpeed(lv.speed) + P.pitTime + P.stop);
 const supply = lv => spawnRate(lv.freq) * lv.queue / (lv.queue + 0.5);
-function modelRate(lv, L, mi = state.map, gm = garageMult()) {
+function modelRate(lv, L, mi = state.map, gm = fleetMult(lv.cars)) {
   return Math.min(demand(lv, L), supply(lv)) * payPerRide(lv.earn, L, mi, gm);
 }
 const stationReady = lv => Math.max(lv.speed, lv.earn, lv.cars) >= STATION_UNLOCK;
@@ -977,10 +985,10 @@ function updateSign() {
 // Every car owns one parking bay. Loop: drive a lap -> pull into its bay -> drop off (pays) -> wait for a passenger
 // -> reverse out -> merge back onto the track once the lane is clear.
 const tmpObj = new THREE.Object3D();
-const ownedModels = () => { const o = Object.keys(state.garage).sort((a, b) => MODELS[b].bonus - MODELS[a].bonus); return o.length ? o : ['sedan']; };
+// The first cars on the track are your garage cars (best first); the rest are plain sedans with no bonus.
 function carLook(k) {
-  const own = ownedModels(), id = own[k % own.length];
-  return { id, color: k < own.length ? MODELS[id].color : CAR_COLORS[k % CAR_COLORS.length] };
+  const id = ownedModels()[k];
+  return id ? { id, color: MODELS[id].color, mult: carMult(k) } : { id: 'sedan', color: CAR_COLORS[k % CAR_COLORS.length], mult: 1 };
 }
 function resetCars() {
   cars.forEach(c => { carsGroup.remove(c.obj); disposeTree(c.obj); }); cars.length = 0;
@@ -993,12 +1001,13 @@ function addCar() {
   const look = carLook(cars.length);
   const obj = makeCar(look.id, look.color);
   carsGroup.add(obj);
-  const c = { obj, model: look.id, color: look.color, s: 0, state: 'parked', bay, pax: false, stopT: 0, boarder: null, gap: Infinity, v: 0, anim: null };
+  const c = { obj, model: look.id, color: look.color, mult: look.mult, s: 0, state: 'parked', bay, pax: false, stopT: 0, boarder: null, gap: Infinity, v: 0, anim: null };
   cars.push(c); parkPose(c);
 }
 function restyleCars() {
   cars.forEach((c, k) => {
     const look = carLook(k);
+    c.mult = look.mult;
     if (look.id === c.model && look.color === c.color) return;
     const o = makeCar(look.id, look.color);
     o.position.copy(c.obj.position); o.quaternion.copy(c.obj.quaternion); o.userData.icon.visible = c.pax;
@@ -1149,7 +1158,7 @@ function updatePeople(dt) {
 const earnLog = [];
 function payout(c) {
   const turbo = state.turboT > 0 ? 2 : 1;
-  const amt = payPerRide(state.lv.earn, T.L) * turbo;
+  const amt = payPerRide(state.lv.earn, T.L) * (c.mult || 1) * turbo;
   state.coins += amt; state.rides++;
   earnLog.push([performance.now(), amt]);
   floatText('+$' + fmt(amt), c.obj.position, turbo > 1);
@@ -1407,12 +1416,11 @@ function renderThumbs() {
 }
 function renderGarage(fresh) {
   if (!thumbs) renderThumbs();
-  $('#gBonus').textContent = '+' + Math.round((garageMult() - 1) * 100) + '% pay';
+  { const n = Math.min(Object.keys(state.garage).length, state.lv.cars); $('#gBonus').textContent = n ? `${n} racing · +${Math.round((fleetMult(state.lv.cars) - 1) * 100)}% fleet pay` : 'None yet'; }
   $('#gGrid').innerHTML = Object.keys(MODELS).map(id => {
     const m = MODELS[id], lv = state.garage[id] || 0;
-    if (!lv && id === 'sedan') return `<div class="gcar"><div class="shot"><img alt="Sedan" src="${thumbs[id] || ''}"></div><h4>Sedan</h4><p>Starter car · no bonus</p><p>Collect one to add +${Math.round(m.bonus * 100)}% per level</p></div>`;
     return `<div class="gcar${lv ? '' : ' locked'}${id === fresh ? ' fresh' : ''}"><div class="shot"><img alt="${lv ? m.name : 'Unknown car'}" src="${thumbs[id] || ''}"></div>` +
-      `<h4>${lv ? m.name : '???'}</h4><p>${lv ? `<span class="lvl">Lv ${lv}</span> · +${Math.round(m.bonus * lv * 100)}% pay` : `+${Math.round(m.bonus * 100)}% pay per level`}</p>` +
+      `<h4>${lv ? m.name : '???'}</h4><p>${lv ? `<span class="lvl">Lv ${lv}</span> · +${Math.round(m.bonus * lv * 100)}% on its rides` : `+${Math.round(m.bonus * 100)}% per level`}</p>` +
       `<p>${m.weight <= 4 ? 'Very rare' : m.weight <= 10 ? 'Rare' : 'Common'}</p></div>`;
   }).join('');
   renderRollButton();
@@ -1434,7 +1442,7 @@ $('#rollCar').addEventListener('click', () => {
   for (const id of pool) { roll -= MODELS[id].weight; if (roll <= 0) { pick = id; break; } }
   const had = state.garage[pick] || 0;
   state.garage[pick] = had + 1;
-  toast(had ? `${MODELS[pick].name} is now Lv ${had + 1}: +${Math.round(MODELS[pick].bonus * 100)}% more pay` : `New car: ${MODELS[pick].name}! +${Math.round(MODELS[pick].bonus * 100)}% pay on every ride`, 3200);
+  toast(had ? `${MODELS[pick].name} is now Lv ${had + 1}: +${Math.round(MODELS[pick].bonus * (had + 1) * 100)}% on its rides` : `New car: ${MODELS[pick].name}! It joins the track and earns +${Math.round(MODELS[pick].bonus * 100)}% on its rides`, 3200);
   restyleCars(); renderGarage(pick); refreshHud(); save();
 });
 
@@ -1665,7 +1673,7 @@ const KNOBS = [
   ['speedStep', 'Speed gained per level', 0.05, 0.6, 0.01, v => '+' + Math.round(v * 100) + '%'],
   ['goal', 'Rides to clear the first track', 20, 400, 5, v => v + ' rides'],
   ['spawn', 'Passengers per second at Frequency x1', 0.1, 1.5, 0.05, v => v.toFixed(2) + ' /s'],
-  ['costQueue', 'Queue base cost', 5, 200, 5, v => '$' + v],
+  ['costQueue', 'Queue base cost (× (level−2)^n)', 20, 1000, 10, v => '$' + v],
   ['costFreq', 'Frequency base cost', 50, 1000, 10, v => '$' + v],
   ['pitTime', 'Time spent pulling in and out of the lot', 0.8, 5, 0.1, v => v.toFixed(1) + ' s'],
 ];
@@ -1678,7 +1686,7 @@ function buildKnobs() {
       d.innerHTML = `<label for="k-${k}">${label}</label><output id="o-${k}" class="num"></output><input type="range" id="k-${k}" min="${min}" max="${max}" step="${step}">`;
       box.appendChild(d);
       d.querySelector('input').addEventListener('input', ev => {
-        P[k] = parseFloat(ev.target.value); store.set('plt-params-v3', P);
+        P[k] = parseFloat(ev.target.value); store.set('plt-params-v4', P);
         syncKnobs(); refreshHud(); updateBoard(); runSim();
       });
     });
@@ -1687,7 +1695,7 @@ function buildKnobs() {
   syncKnobs();
 }
 function syncKnobs() { KNOBS.forEach(([k, , , , , f]) => { $('#k-' + k).value = P[k]; $('#o-' + k).textContent = f(P[k]); }); }
-$('#resetKnobs').addEventListener('click', () => { P = Object.assign({}, DEFAULT_P); store.set('plt-params-v3', P); syncKnobs(); refreshHud(); updateBoard(); runSim(); });
+$('#resetKnobs').addEventListener('click', () => { P = Object.assign({}, DEFAULT_P); store.set('plt-params-v4', P); syncKnobs(); refreshHud(); updateBoard(); runSim(); });
 
 let lastSim = null;
 function runSim() {
