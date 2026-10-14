@@ -274,3 +274,21 @@ The full text is on the spec cards. In short:
 The final UI icons are in `birb-icons/final/*.png` (98 UI icons) and `birb-icons/final/fish/*.png` (all 426 fish, named by fish id), 256px, transparent, with a uniform ink outline. The companion icons (sparrow, seagull, dove, redpanda) and fishing icons (moneta, rod, bait, aquarium) come from `fishing_sheet.png` and `birb-icons/companions_sheet.png` (Figma AI, gpt-image model) cut by `cut_companions.py`. The rest come from the user-approved sheet (`birb-icons/approved_sheet.png`) and were QA'd one by one on both dark and light backgrounds. `final/manifest.json` lists every icon and anything in the game data still missing one (currently nothing for fish, rods and baits). Gear sets come in visible tiers: 23 rods (`rod_<id>`, bamboo stick up to divine), hooks wood to diamond plus ancient/cursed, lures basic to legend, `tank_1`..`tank_5` drawn at growing size (cut with `!` so size is kept), 12 baits plus 13 golden `shiny_bait_*`. **Header rule (user): no icon in window headers, the title alone is centred. Everything on buttons (icon + label) is centred on the face; hero titles and subtitles are centred.** **Colour rule (user): each window uses its hero icon's colours as a multi-colour gradient (header, hero art, main button, active tab, lit buy button) with a white-top / dark-bottom shade layer on top; can't-afford buttons stay grey and BUY ALL stays blue.** **Rule from the user: anything that upgrades must look visibly better at each step, and size tiers (tanks) must grow.** New sheets: 4x4 grid on black from Figma AI (gpt-image model, see `sheets/`), cut with `python3 birb-icons/cut_grid.py <sheet> 4 4 names...`, checked with `qa.py`; fish prompts are built from the data by `fish_prompts.py` and cut by `fish_cut.py`. Use these for every new window instead of the older Figma `icon/*` set. They are placed in the Mine shop (`57:7`) by uploading the PNG as an image fill on the cloned `ico/*` rectangles (FIT). The older windows still use the old Figma `icon/*` set.
 
 The Blender source scene (`birb-icons/*.py` and `peckwood_icons.blend`) is set up for later 3D icon ports, but nothing is exported yet. See `birb-icons/README.md` for the style rules and the export plan.
+
+---
+
+## 8. Peckwood Rogue UI (Figma page "Rogue UI", `418:319`, 2026-10-14)
+
+Every frame is built from clones of the UI v2 **Mine window** (`57:7`: header, row card, progress, growth, btn/buy, btn/buy all, hero, hero button) and the **HUD** (`8:271`: backdrop, vignette, money capsule). Nothing was redrawn. Icons come from `birb-icons/final` (icon bank `418:1222`). Renders are in `design/rogue-ui/figma/`.
+
+| Node | Frame |
+|---|---|
+| `421:7` | HUD 1280x720 (y<60 guide layer for the Roblox menu, HP+shield, XP, timer, kills/gold, boss bar, minimap, chest price, shrines, weapon/tome slots, damage numbers, pause) |
+| `420:7` | Level-up pick: 3 rarity cards, Reroll / Banish / Skip |
+| `422:7` | Component kit: rarity frames, button states, slots, bars, stat icons, damage text |
+| `423:7` | Chest reveal (Epic item, rarity flash, banish, next chest price) + shrine charge + banished list |
+| `424:7` | Pause menu with the full build (weapons, tomes, items, banished, stats) |
+| `425:7` | End of run (time, kills, level, gold, damage per weapon, Silver earned) |
+| `426:7` | Meta shop (Silver shop window duplicated from Mine + unlocks grid) |
+
+Source clones on the same page (`src/*`, y = -3000) can be deleted once the frames are approved. Item icon choices are placeholders (Storm Locket = aura, Blood Beak = heart, Point Hoard = skill_point, Hunter Momentum = wing, Splitter Haste = clock).
