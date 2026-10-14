@@ -311,3 +311,11 @@ Source clones on the same page (`src/*`, y = -3000) can be deleted once the fram
 - **Mythic tier:** colour `#FF3D7F` plus a prism gradient (header, chip, slot stroke), values ×2.5. Added to the kit (`450:7`). Proposed drop weights: 55 / 25 / 12 / 5.5 / 2 / 0.5 (Luck pushes them up).
 - **VFX flipbooks (Figma AI, gpt-image):** `design/rogue-ui/vfx/sheet_*.png` (raw, on black) and `*_alpha.png` (Roblox-ready: `birb-icons/vfx_alpha.py` turns brightness into alpha and un-premultiplies, because Roblox GUI has no additive blend). 4×4 frames at 256px each: play with ImageRectOffset at 24fps. Mythic frames 6–8 overflow their cells slightly; re-generate with more padding before shipping.
 - **Lock icon:** only the shackle loop is cut out. The keyhole stays solid black (do not run `punch_holes.py` on `lock`).
+
+### v5: animated reveals (2026-10-14)
+- **Six animated stages** at y=7400 on the Rogue UI page: Common `457:7`, Uncommon `457:69`, Rare `457:212`, Epic `459:7`, Legendary `459:216`, Mythic `460:7`. They use real Figma motion keyframes (OPACITY, SCALE, TRANSLATION, ROTATION, effect RADIUS). The flipbooks play cell by cell: 16 stacked rects, each a CROP of the alpha sheet (`imageTransform [[0.25,0,col*.25],[0,0.25,row*.25]]`), each switched on for one frame with HOLD keyframes.
+- **Prototype:** flow "Rarity reveals (tap through)". Tap goes to the next tier, and Mythic loops back to Common.
+- **MP4 renders:** `design/rogue-ui/reveals/` (one per tier, plus `rarity_reveals_showreel.mp4`). Re-render with the `export_video` tool after edits.
+- **New Figma AI art:** `vfx/sheet_uncommon_sparkle.png`, `sheet_rare_glint.png` (+ `_alpha`) and `card_back.png`, the gold feather-crest card back.
+- **Mythic vortex:** only cells 1–5 are used, because cells 6–8 of the AI sheet overflow their cells.
+- **Progression basis:** `ROGUE_PROGRESSION.md` (bounded layers first, endless layers last).
