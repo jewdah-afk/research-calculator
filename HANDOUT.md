@@ -299,3 +299,9 @@ Source clones on the same page (`src/*`, y = -3000) can be deleted once the fram
 - **Motion:** each frame has a 🎬 spec card in the UI v2 spec format (`431:325` HUD, `431:339` Level-up, `431:353` Chest, `431:367` Pause, `431:381` End, `431:395` Meta, `431:409` Kit tokens), plus Figma annotations on cards, buttons, bars, slots and windows.
 - **Framewisp:** buttons are tagged `_button` (plus `_open:Pause`, `_open:MetaShop`, `_open:Settings`, `_close`), windows `_panel`, FX, vignette and dim layers `_image` (blend modes, blur and dashed strokes do not import, so they are baked), and the map backdrop and key hints `_ignore`.
 - Layout: row 1 is y=0 and row 2 is y=1500, with the spec cards under each row. The kit is at (0,3000).
+
+### v3 QA/VH pass (2026-10-14)
+- **Holes:** `birb-icons/cut_grid.py` has a `ROGUE_HOLES` list (a looser darkness test for AI sheets). `birb-icons/punch_holes.py` cuts enclosed dark pockets and re-inks the edge. The lock (shackle and keyhole) and the Storm Locket loop are now see-through. Don't run it on icons with dark art (it would eat Seed Spitter's stripes).
+- **Hierarchy rule:** one gold primary button per screen. Reroll, Banish, Skip, Settings, Give Up, Menu, Meta Shop and HUD Pause are dark secondary plates with text only, and counts sit in coloured badges (blue reroll, red banish, grey skip, gold "affordable"). Icons appear only where they mean something. RUN AGAIN is primary on the end screen.
+- Level-up has vector rays (crisp stars instead of the scaled texture), type labels (WEAPON / TOME · ALL WEAPONS) and a global-effect line on tome cards. HUD: the boss title is the headline, the HP bar is clear of the heart, and the crit no longer overlaps the boss bar.
+- Scale and balance plan: `ROGUE_SCALE.md`.

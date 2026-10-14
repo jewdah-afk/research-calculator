@@ -12,7 +12,8 @@ INK = np.array([11, 12, 16])
 SIZE = 256
 # only these keep see-through holes (frame centre, hook eyes, gaps between rod and line); everything else is a
 # solid sticker, so dark mouths and bodies on fish are never punched out
-OPEN_HOLES = ('avatar_frame', 'hook_', 'lure_', 'rod_')
+OPEN_HOLES = ('avatar_frame', 'hook_', 'lure_', 'rod_', 'lock', 'reroll', 'banish', 'art_storm_locket', 'wpn_seed_spitter', 'wpn_gull_dive')
+ROGUE_HOLES = ('lock', 'reroll', 'banish', 'art_storm_locket', 'wpn_seed_spitter', 'wpn_gull_dive')   # AI sheets: hole background is dark glow, not pure black
 
 def cut(sheet, cols, rows, names, out=os.path.join(HERE, 'final')):
     src = np.asarray(Image.open(sheet).convert('RGB')).astype(float)
@@ -78,7 +79,9 @@ def cut(sheet, cols, rows, names, out=os.path.join(HERE, 'final')):
         filled = nd.binary_fill_holes(m); hl, hn = nd.label(filled & ~m)
         for h in range(1, hn + 1):          # enclosed dark details stay filled; listed items keep real see-through holes
             hole = hl == h
-            if name.startswith(OPEN_HOLES) and hole.sum() > 400 and (src.max(2)[hole] < 14).mean() > 0.6: filled &= ~hole
+            if name.startswith(ROGUE_HOLES):
+                if hole.sum() > 60 and (src.max(2)[hole] < 45).mean() > 0.6: filled &= ~hole
+            elif name.startswith(OPEN_HOLES) and hole.sum() > 400 and (src.max(2)[hole] < 14).mean() > 0.6: filled &= ~hole
         m = filled
         q = src
         ys, xs = np.nonzero(m)
