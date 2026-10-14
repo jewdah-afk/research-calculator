@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Component kit</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lilita+One&amp;family=Nunito:wght@700;900&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#ffd23f}a:hover{color:#fff}
+</style>
+</helmet>
+<div style="width: 1280px; height: 900px; background: #f4ecdc; font-family: 'Nunito', sans-serif; color: #1d1b2c; padding: 48px; box-sizing: border-box; display: flex; flex-direction: column; gap: 32px">
+
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div style="font-family: 'Lilita One', sans-serif; font-size: 26px">Rarity frames</div>
+<div style="display: flex; gap: 16px">
+<sc-for list="{{rar}}" as="r" hint-placeholder-count="5">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 6px">
+<div style="{{r.box}}"></div>
+<div style="font-weight: 900; font-size: 14px">{{r.name}}</div>
+<div style="font-size: 13px; color: #4a4560">{{r.hex}} · ×{{r.mult}}</div>
+</div>
+</sc-for>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div style="font-family: 'Lilita One', sans-serif; font-size: 26px">Buttons (4px ink outline, 5px drop, 14px radius, min 56px tall)</div>
+<div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap">
+<button style="height: 56px; padding: 0 28px; border-radius: 14px; background: #ffd23f; border: 4px solid #1d1b2c; box-shadow: 0 5px 0 #1d1b2c; font-family: 'Lilita One', sans-serif; font-size: 22px; color: #1d1b2c">PRIMARY</button>
+<button style="height: 56px; padding: 0 28px; border-radius: 14px; background: #4aa3ff; border: 4px solid #1d1b2c; box-shadow: 0 5px 0 #1d1b2c; font-family: 'Lilita One', sans-serif; font-size: 22px; color: #1d1b2c">REROLL</button>
+<button style="height: 56px; padding: 0 28px; border-radius: 14px; background: #e5484d; border: 4px solid #1d1b2c; box-shadow: 0 5px 0 #1d1b2c; font-family: 'Lilita One', sans-serif; font-size: 22px; color: #fff">BANISH</button>
+<button style="height: 56px; padding: 0 28px; border-radius: 14px; background: #9aa0ab; border: 4px solid #1d1b2c; box-shadow: 0 5px 0 #1d1b2c; font-family: 'Lilita One', sans-serif; font-size: 22px; color: #1d1b2c">SKIP</button>
+<button style="height: 56px; padding: 0 28px; border-radius: 14px; background: #ffd23f; border: 4px solid #1d1b2c; box-shadow: 0 1px 0 #1d1b2c; transform: translateY(4px); font-family: 'Lilita One', sans-serif; font-size: 22px; color: #1d1b2c">PRESSED</button>
+<button disabled style="height: 56px; padding: 0 28px; border-radius: 14px; background: #d6d0c2; border: 4px solid #8a8496; box-shadow: 0 5px 0 #8a8496; font-family: 'Lilita One', sans-serif; font-size: 22px; color: #6e6880">DISABLED</button>
+<button aria-label="Close" style="width: 56px; height: 56px; border-radius: 14px; background: #fff; border: 4px solid #1d1b2c; box-shadow: 0 5px 0 #1d1b2c; display: flex; align-items: center; justify-content: center">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1d1b2c" stroke-width="3.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
+</div>
+</div>
+
+<div style="display: flex; gap: 48px">
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div style="font-family: 'Lilita One', sans-serif; font-size: 26px">Slots</div>
+<div style="display: flex; gap: 12px; align-items: flex-end">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 6px"><div style="width: 60px; height: 60px; border-radius: 12px; background: #2b2740; border: 4px solid #ffb23f"></div><span style="font-size: 13px; font-weight: 900">Weapon 60</span></div>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 6px"><div style="width: 44px; height: 44px; border-radius: 10px; background: #2b2740; border: 3px solid #b44cff"></div><span style="font-size: 13px; font-weight: 900">Tome 44</span></div>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 6px"><div style="width: 60px; height: 60px; border-radius: 12px; background: #1d1b2c33; border: 4px dashed #1d1b2c66"></div><span style="font-size: 13px; font-weight: 900">Locked</span></div>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 6px"><div style="width: 36px; height: 36px; border-radius: 50%; background: #2b2740; border: 3px solid #5be37d"></div><span style="font-size: 13px; font-weight: 900">Item 36</span></div>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 12px; flex-grow: 1">
+<div style="font-family: 'Lilita One', sans-serif; font-size: 26px">Bars</div>
+<div style="display: flex; flex-direction: column; gap: 10px; width: 420px">
+<div style="height: 26px; background: #1d1b2c; border-radius: 8px; padding: 3px; box-sizing: border-box"><div style="width: 70%; height: 100%; background: #e5484d; border-radius: 5px"></div></div>
+<div style="height: 14px; background: #1d1b2c; border-radius: 6px; padding: 3px; box-sizing: border-box"><div style="width: 45%; height: 100%; background: #5be37d; border-radius: 4px"></div></div>
+<div style="height: 18px; background: #1d1b2c; border-radius: 6px; padding: 3px; box-sizing: border-box"><div style="width: 60%; height: 100%; background: #b44cff; border-radius: 4px"></div></div>
+<div style="font-size: 13px; font-weight: 900; color: #4a4560">HP #E5484D (shield overlay #7FD3FF) · XP #5BE37D · Boss #B44CFF</div>
+</div>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div style="font-family: 'Lilita One', sans-serif; font-size: 26px">Icon set (2.4px stroke, round caps, 24 grid)</div>
+<div style="display: flex; gap: 14px; flex-wrap: wrap">
+<sc-for list="{{icons}}" as="i" hint-placeholder-count="10">
+<div style="width: 92px; display: flex; flex-direction: column; align-items: center; gap: 6px">
+<div style="width: 64px; height: 64px; border-radius: 14px; background: #2b2740; display: flex; align-items: center; justify-content: center">
+<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="{{i.name}}"><path d="{{i.d}}"></path></svg>
+</div>
+<span style="font-size: 13px; font-weight: 900">{{i.name}}</span>
+</div>
+</sc-for>
+</div>
+</div>
+
+<div style="display: flex; gap: 32px; font-size: 14px; font-weight: 900">
+<div style="display: flex; flex-direction: column; gap: 4px"><span style="font-family: 'Lilita One', sans-serif; font-size: 22px">Type</span><span>Display: Lilita One 64/44/28/22, ink stroke 2–4px</span><span>Body: Nunito 900 16/14</span></div>
+<div style="display: flex; flex-direction: column; gap: 4px"><span style="font-family: 'Lilita One', sans-serif; font-size: 22px">Core colours</span><span>Ink #1D1B2C · Panel #2B2740 · Gold #FFD23F · Paper #F4ECDC</span><span>Damage text: white · Crit: #FFD23F, 1.4× size</span></div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":900}}'>
+class Component extends DCLogic {
+renderVals() {
+const rows = [['Common', '#9AA0AB', '1'], ['Uncommon', '#5BE37D', '1.2'], ['Rare', '#4AA3FF', '1.4'], ['Epic', '#B44CFF', '1.6'], ['Legendary', '#FFB23F', '2']];
+return {
+rar: rows.map(([name, hex, mult]) => ({ name, hex, mult,
+box: 'width: 120px; height: 150px; border-radius: 20px; background: #2b2740; border: 6px solid ' + hex + '; box-shadow: 0 6px 0 #1d1b2c, 0 0 24px ' + hex + '66' })),
+icons: [
+{ name: 'Damage', d: 'M14.5 4.5l5 5L9 20H4v-5z M12 7l5 5' },
+{ name: 'Cooldown', d: 'M12 7v5l3 2 M12 3a9 9 0 1 0 9 9' },
+{ name: 'Size', d: 'M4 9V4h5 M20 9V4h-5 M4 15v5h5 M20 15v5h-5' },
+{ name: 'Quantity', d: 'M5 12h.01 M12 12h.01 M19 12h.01 M5 7h.01 M12 7h.01 M19 7h.01' },
+{ name: 'Speed', d: 'M3 12h12 M3 7h8 M3 17h8 M15 6l6 6-6 6' },
+{ name: 'Luck', d: 'M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6L3.3 9.3l6.1-.7z' },
+{ name: 'HP', d: 'M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10z' },
+{ name: 'Armor', d: 'M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z' },
+{ name: 'Magnet', d: 'M6 4v8a6 6 0 0 0 12 0V4 M6 8h4 M14 8h4' },
+{ name: 'Gold', d: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18 M9 9h4.5a1.5 1.5 0 0 1 0 3H10a1.5 1.5 0 0 0 0 3H15 M12 7v10' },
+{ name: 'Chest', d: 'M4 10h16v9H4z M4 10l2-5h12l2 5 M11 13h2' },
+{ name: 'Shrine', d: 'M5 21h14 M7 21V10 M17 21V10 M4 10l8-6 8 6' },
+] };
+}
+}
+</script>
+</body>
+</html>
