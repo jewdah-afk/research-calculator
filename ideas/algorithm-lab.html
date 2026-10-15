@@ -61,7 +61,7 @@ footer { color: var(--dim); font-size: 13px; max-width: 70ch; }
   <header>
     <div class="eyebrow">Cursed Survivors · EditableImage candidates</div>
     <h1>Algorithm Lab <span>II</span></h1>
-    <p class="lead">25 new generative algorithms, each running live at the pixel scale an EditableImage would use. None of them repeats the 89 effects already built or the 15 PixelFX modules. Every plate shows the maths and where it goes in the game.</p>
+    <p class="lead">50 new generative algorithms, each running live at the pixel scale an EditableImage would use. None of them repeats the 89 effects already built or the 15 PixelFX modules. Every plate shows the maths and where it goes in the game.</p>
     <div class="bar"><span id="fps">…</span><button id="pauseAll" type="button">Pause all</button><button id="reseedAll" type="button">Reseed all</button></div>
   </header>
   <section class="grid" id="grid"></section>
@@ -356,7 +356,235 @@ const DEMOS = [
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const i = y * w + x, v = a[i], pred = (v + 1) % 3; let c = 0;
       for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if ((dx || dy) && a[((y + dy + h) % h) * w + (x + dx + w) % w] === pred) c++;
       b[i] = c >= 3 + (rnd() < .5 ? 0 : 0) && rnd() < .9 ? pred : v; px[i] = s.lut[b[i]]; }
-    s.a = b; } }
+    s.a = b; } },
+{ name: "Elementary CA Scroller", math: "1D rule r: next = bit (4·left + 2·self + right) of r; new rows scroll upward; the rule cycles through 30, 90, 110 and 150", use: "<b>Corruption glitch</b> textures and scrolling curse banners", w: 96, h: 96,
+  init(s) { s.rows = []; s.rules = [30, 90, 110, 150, 45, 73]; s.k = 0; s.n = 0; s.cur = new Uint8Array(96); s.cur[48] = 1; s.d = new Uint8Array(96 * 96); },
+  step(s, px) { const r = s.rules[s.k];
+    for (let rep = 0; rep < 2; rep++) { const c = s.cur, n = new Uint8Array(96); for (let x = 0; x < 96; x++) n[x] = (r >> ((c[(x + 95) % 96] << 2) | (c[x] << 1) | c[(x + 1) % 96])) & 1; s.cur = n;
+      s.d.copyWithin(0, 96); s.d.set(n, 96 * 95); if (++s.n % 160 === 0) { s.k = (s.k + 1) % s.rules.length; s.cur = new Uint8Array(96).map(() => rnd() < .5 ? 1 : 0); } }
+    for (let i = 0; i < 96 * 96; i++) px[i] = s.d[i] ? sh(CURSE, .45 + (i / 96 | 0) / 200) : RGB(8, 5, 12); } },
+
+{ name: "Young Activator–Inhibitor", math: "1D CA: a cell turns on when w₁·(active within r₁) − w₂·(active within r₂) > 0, with r₂ > r₁; tiny noise each row; rows scroll like a growing shell edge", use: "Patterned <b>shell and carapace</b> skins for beetle and crab enemies", w: 96, h: 96,
+  init(s) { s.c = new Uint8Array(96).map(() => rnd() < .5 ? 1 : 0); s.d = new Uint8Array(96 * 96); s.t = 0; s.w2 = .3; },
+  step(s, px) { s.t++; s.w2 = .7 + Math.sin(s.t * .01) * .12;
+    for (let rep = 0; rep < 2; rep++) { const c = s.c, n = new Uint8Array(96);
+      for (let x = 0; x < 96; x++) { let a1 = 0, a2 = 0; for (let k = -6; k <= 6; k++) { const v = c[(x + k + 96) % 96]; if (Math.abs(k) <= 2) a1 += v; else a2 += v; } n[x] = (a1 - s.w2 * a2 + (rnd() - .5) * .9) > 0 ? 1 : 0; }
+      s.c = n; s.d.copyWithin(0, 96); s.d.set(n, 96 * 95); }
+    for (let i = 0; i < 9216; i++) { const y = i / 96 | 0; px[i] = s.d[i] ? sh(EMBER, .45 + .3 * Math.sin(y * .15 + s.t * .02)) : RGB(26, 16, 12); } } },
+
+{ name: "Eden Growth", math: "Pick a random empty cell on the cluster's perimeter and fill it; colour by arrival time; perimeter kept as a set", use: "<b>Mould and coral</b> spreading out from corpses and cursed altars", w: 96, h: 96,
+  init(s) { s.a = new Int32Array(96 * 96).fill(-1); s.per = new Map(); s.t = 0; const seed = (i) => { s.a[i] = s.t++; for (const d of [1, -1, 96, -96]) { const j = i + d; if (j >= 0 && j < 9216 && s.a[j] < 0 && Math.abs((j % 96) - (i % 96)) <= 1) s.per.set(j, 1); } s.per.delete(i); }; s.seed = seed; seed(48 * 96 + 48); seed(20 * 96 + 70); },
+  step(s, px) { for (let k = 0; k < 40; k++) { if (!s.per.size) { this.init(s); return; } const keys = [...s.per.keys()]; s.seed(keys[rnd() * keys.length | 0]); }
+    if (s.t > 6500) this.init(s);
+    for (let i = 0; i < 9216; i++) px[i] = s.a[i] < 0 ? RGB(10, 7, 12) : sh(MOSS, .3 + .6 * (1 - s.a[i] / s.t)); } },
+
+{ name: "Mycelium (tip growth + anastomosis)", math: "Tips advance with a noisy heading and branch with p = 0.03; a tip that hits an existing hypha fuses and stops; hyphae thicken with age", use: "<b>Fungal networks</b> spreading under the dark forest and linking glowing mushrooms", w: 128, h: 128,
+  init(s) { s.g = new Float32Array(128 * 128); s.tips = Array.from({ length: 5 }, () => ({ x: 64, y: 64, d: rnd() * 6.283 })); },
+  step(s, px) { const g = s.g, nt = [];
+    for (const t of s.tips) { t.d += (rnd() - .5) * .5; const nx = t.x + Math.cos(t.d), ny = t.y + Math.sin(t.d); if (nx < 1 || ny < 1 || nx > 126 || ny > 126) continue;
+      const i = (ny | 0) * 128 + (nx | 0), here = (t.y | 0) * 128 + (t.x | 0); if (g[i] > 0 && i !== here && rnd() < .8) continue; t.x = nx; t.y = ny; g[i] = Math.max(g[i], .3); nt.push(t);
+      if (rnd() < .03 && s.tips.length + nt.length < 400) nt.push({ x: t.x, y: t.y, d: t.d + (rnd() < .5 ? 1 : -1) * (.6 + rnd() * .6) }); }
+    s.tips = nt; if (!nt.length) this.init(s);
+    for (let i = 0; i < g.length; i++) { if (g[i] > 0) g[i] = Math.min(1, g[i] + .002); px[i] = g[i] ? sh(CURSE, .25 + g[i] * .7) : RGB(8, 6, 10); }
+    for (const t of s.tips) px[(t.y | 0) * 128 + (t.x | 0)] = RGB(220, 255, 200); } },
+
+{ name: "HPP Lattice Gas", math: "4 bits per cell, one per direction; collision rule: exactly two head-on particles rotate 90°; then every bit streams one cell", use: "<b>Gas clouds</b> and pressure waves from poison or steam vents, at bit-level cost", w: 128, h: 128,
+  init(s) { s.a = new Uint8Array(128 * 128); for (let i = 0; i < s.a.length; i++) { const x = i % 128, y = i / 128 | 0; const dense = (x - 40) ** 2 + (y - 64) ** 2 < 300; s.a[i] = (rnd() < (dense ? .9 : .15) ? 1 : 0) | (rnd() < (dense ? .9 : .15) ? 2 : 0) | (rnd() < (dense ? .9 : .15) ? 4 : 0) | (rnd() < (dense ? .9 : .15) ? 8 : 0); } s.t = 0; },
+  step(s, px) { const W = 128, a = s.a;
+    for (let i = 0; i < a.length; i++) { const v = a[i]; if (v === 5) a[i] = 10; else if (v === 10) a[i] = 5; }
+    const b = new Uint8Array(a.length);
+    for (let y = 0; y < W; y++) for (let x = 0; x < W; x++) { const v = a[y * W + x];
+      if (v & 1) { const xx = x + 1 < W ? x + 1 : x; b[y * W + xx] |= x + 1 < W ? 1 : 4; }
+      if (v & 4) { const xx = x > 0 ? x - 1 : x; b[y * W + xx] |= x > 0 ? 4 : 1; }
+      if (v & 2) { const yy = y + 1 < W ? y + 1 : y; b[yy * W + x] |= y + 1 < W ? 2 : 8; }
+      if (v & 8) { const yy = y > 0 ? y - 1 : y; b[yy * W + x] |= y > 0 ? 8 : 2; } }
+    s.a = b; if (++s.t > 600) this.init(s);
+    for (let y = 0; y < W; y += 2) for (let x = 0; x < W; x += 2) { let c = 0; for (const o of [0, 1, W, W + 1]) { const v = b[y * W + x + o]; c += (v & 1) + (v >> 1 & 1) + (v >> 2 & 1) + (v >> 3 & 1); }
+      const col = sh(MOSS, c / 12); for (const o of [0, 1, W, W + 1]) px[y * W + x + o] = col; } } },
+
+{ name: "Margolus Block Sand", math: "Partition into 2×2 blocks, offset by (1,1) on alternate steps; each block uses a lookup rule (grains fall, slide diagonally); reversible and cheap", use: "<b>Hourglass</b> and crumbling tower debris, with no per-particle state", w: 96, h: 96,
+  init(s) { s.a = new Uint8Array(96 * 96); s.t = 0; },
+  step(s, px) { const a = s.a, W = 96; for (let k = 0; k < 4; k++) a[2 * W + 40 + (rnd() * 16 | 0)] = 1;
+    for (let rep = 0; rep < 2; rep++) { const o = s.t++ & 1;
+      for (let y = o; y < W - 1; y += 2) for (let x = o; x < W - 1; x += 2) { const i = y * W + x; let tl = a[i], tr = a[i + 1], bl = a[i + W], br = a[i + W + 1];
+        if (x > 30 && x < 64 && y > 46 && y < 50 && !(x > 45 && x < 50)) continue;
+        if (tl && !bl) { bl = 1; tl = 0; } if (tr && !br) { br = 1; tr = 0; }
+        if (tl && bl && !br && rnd() < .5) { br = 1; tl = 0; } if (tr && br && !bl && rnd() < .5) { bl = 1; tr = 0; }
+        a[i] = tl; a[i + 1] = tr; a[i + W] = bl; a[i + W + 1] = br; } }
+    let full = 0; for (let x = 0; x < W; x++) full += a[(W - 2) * W + x]; if (a[60 * W + 47] && full > 80) this.init(s);
+    for (let y = 0; y < W; y++) for (let x = 0; x < W; x++) { const i = y * W + x, wall = x > 30 && x < 64 && y > 46 && y < 50 && !(x > 45 && x < 50);
+      px[i] = wall ? RGB(90, 70, 110) : a[i] ? sh(EMBER, .55 + ((x * 7 + y * 3) % 5) * .05) : RGB(10, 7, 14); } } },
+
+{ name: "Lotka–Volterra Agents", math: "Prey breed with p_b, predators eat prey within r and breed, predators starve after E steps: population cycles emerge", use: "<b>Infestation waves</b> where swarmers feed hunters, so enemy pressure rises and falls", w: 96, h: 96,
+  init(s) { s.prey = Array.from({ length: 200 }, () => ({ x: rnd() * 96, y: rnd() * 96 })); s.pred = Array.from({ length: 20 }, () => ({ x: rnd() * 96, y: rnd() * 96, e: 40 })); s.hist = []; },
+  step(s, px) { const mv = a => { a.x = (a.x + (rnd() - .5) * 2.2 + 96) % 96; a.y = (a.y + (rnd() - .5) * 2.2 + 96) % 96; };
+    for (const p of s.prey) mv(p); const born = []; for (const p of s.prey) if (rnd() < .03 && s.prey.length + born.length < 900) born.push({ x: p.x, y: p.y }); s.prey.push(...born);
+    const nb = [];
+    for (const q of s.pred) { mv(q); q.e--; const k = s.prey.findIndex(p => (p.x - q.x) ** 2 + (p.y - q.y) ** 2 < 4); if (k >= 0) { s.prey.splice(k, 1); q.e += 12; if (rnd() < .4) nb.push({ x: q.x, y: q.y, e: 30 }); } }
+    s.pred = s.pred.filter(q => q.e > 0).concat(nb);
+    if (!s.pred.length || !s.prey.length) this.init(s);
+    s.hist.push([s.prey.length, s.pred.length]); if (s.hist.length > 96) s.hist.shift();
+    px.fill(RGB(8, 6, 12)); for (const p of s.prey) px[(p.y | 0) * 96 + (p.x | 0)] = RGB(110, 200, 110); for (const q of s.pred) for (const o of [0, 1, 96, 97]) px[((q.y | 0) * 96 + (q.x | 0) + o) % 9216] = RGB(240, 80, 70);
+    s.hist.forEach(([a, b], i) => { px[(95 - Math.min(20, a / 45 | 0)) * 96 + i] = RGB(110, 200, 110); px[(95 - Math.min(20, b / 6 | 0)) * 96 + i] = RGB(240, 80, 70); }); } },
+
+{ name: "Vicsek Flock", math: "Each agent takes the mean heading of neighbours within r, plus uniform noise η; speed is constant; order emerges as η drops", use: "<b>Bat swarms</b> that wheel as one body, in a different style from Boids", w: 96, h: 96,
+  init(s) { s.a = Array.from({ length: 300 }, () => ({ x: rnd() * 96, y: rnd() * 96, th: rnd() * 6.283 })); s.t = 0; },
+  step(s, px) { s.t += .01; const eta = .3 + (Math.sin(s.t) + 1) * .9, A = s.a, nh = [];
+    for (const a of A) { let sx = 0, sy = 0; for (const b of A) { let dx = Math.abs(a.x - b.x), dy = Math.abs(a.y - b.y); dx = Math.min(dx, 96 - dx); dy = Math.min(dy, 96 - dy); if (dx * dx + dy * dy < 36) { sx += Math.cos(b.th); sy += Math.sin(b.th); } } nh.push(Math.atan2(sy, sx) + (rnd() - .5) * eta); }
+    A.forEach((a, i) => { a.th = nh[i]; a.x = (a.x + Math.cos(a.th) * .9 + 96) % 96; a.y = (a.y + Math.sin(a.th) * .9 + 96) % 96; });
+    for (let i = 0; i < px.length; i++) { const v = px[i]; px[i] = RGB((v & 255) * .75 | 0, (v >> 8 & 255) * .75 | 0, Math.max(14, (v >> 16 & 255) * .8 | 0)); }
+    for (const a of A) px[(a.y | 0) * 96 + (a.x | 0)] = sh(CURSE, .6 + .4 * Math.cos(a.th)); } },
+
+{ name: "N-Body Gravity", math: "Softened Newtonian gravity a_i = Σ G·m_j·r/(|r|² + ε²)^(3/2), integrated with leapfrog; trails decay", use: "<b>Orbiting relics</b> and a black-hole weapon that slings projectiles around itself", w: 96, h: 96,
+  init(s) { s.b = Array.from({ length: 60 }, () => { const a = rnd() * 6.283, r = 8 + rnd() * 30; return { x: 48 + Math.cos(a) * r, y: 48 + Math.sin(a) * r, vx: -Math.sin(a) * Math.sqrt(30 / r) * 1.4, vy: Math.cos(a) * Math.sqrt(30 / r) * 1.4, m: rnd() < .05 ? 6 : .3 }; }); s.b.push({ x: 48, y: 48, vx: 0, vy: 0, m: 30 }); },
+  step(s, px) { const B = s.b, dt = .15;
+    for (let it = 0; it < 3; it++) { for (const a of B) { let ax = 0, ay = 0; for (const b of B) { if (a === b) continue; const dx = b.x - a.x, dy = b.y - a.y, r2 = dx * dx + dy * dy + 4, f = b.m / (r2 * Math.sqrt(r2)); ax += dx * f; ay += dy * f; } a.vx += ax * dt; a.vy += ay * dt; }
+      for (const a of B) { a.x += a.vx * dt; a.y += a.vy * dt; } }
+    if (B.filter(a => a.x > 0 && a.y > 0 && a.x < 96 && a.y < 96).length < 20) this.init(s);
+    for (let i = 0; i < px.length; i++) { const v = px[i]; px[i] = RGB((v & 255) * .9 | 0, (v >> 8 & 255) * .9 | 0, Math.max(10, (v >> 16 & 255) * .92 | 0)); }
+    for (const a of B) { const X = a.x | 0, Y = a.y | 0; if (X >= 0 && Y >= 0 && X < 96 && Y < 96) px[Y * 96 + X] = a.m > 10 ? RGB(255, 240, 200) : a.m > 1 ? RGB(240, 160, 70) : RGB(170, 190, 255); } } },
+
+{ name: "Elastic Rod Tentacle", math: "Verlet chain with stretch constraints plus a bending constraint pulling each joint toward the line through its neighbours; root driven by a sine", use: "<b>Boss tentacles</b> and whips that curl with real stiffness", w: 96, h: 96,
+  init(s) { s.p = Array.from({ length: 4 }, (_, k) => Array.from({ length: 22 }, (_, i) => [10 + k * 25, 92 - i * 3, 10 + k * 25, 92 - i * 3])); s.t = 0; },
+  step(s, px) { s.t += .05; px.fill(RGB(10, 6, 12));
+    s.p.forEach((P, k) => { P[0][0] = 10 + k * 25 + Math.sin(s.t * 1.3 + k) * 4; P[0][1] = 92;
+      for (let i = 1; i < P.length; i++) { const q = P[i], vx = (q[0] - q[2]) * .96, vy = (q[1] - q[3]) * .96; q[2] = q[0]; q[3] = q[1]; q[0] += vx + Math.sin(s.t * 2 + i * .3 + k) * .08; q[1] += vy - .05; }
+      for (let it = 0; it < 8; it++) { for (let i = 1; i < P.length; i++) { const a = P[i - 1], b = P[i], dx = b[0] - a[0], dy = b[1] - a[1], d = Math.hypot(dx, dy) || 1, f = (d - 3) / d; if (i > 1) { a[0] += dx * f * .5; a[1] += dy * f * .5; } b[0] -= dx * f * .5; b[1] -= dy * f * .5; }
+        for (let i = 1; i < P.length - 1; i++) { const a = P[i - 1], b = P[i], c = P[i + 1], mx = (a[0] + c[0]) / 2, my = (a[1] + c[1]) / 2, stiff = .08 * (1 - i / P.length); b[0] += (mx - b[0]) * stiff; b[1] += (my - b[1]) * stiff; } }
+      for (let i = 0; i < P.length - 1; i++) { const r = Math.max(0, 3 - i * .14); for (let u = 0; u <= 1; u += .25) { const x = P[i][0] + (P[i + 1][0] - P[i][0]) * u, y = P[i][1] + (P[i + 1][1] - P[i][1]) * u;
+        for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) if (dx * dx + dy * dy <= r * r) { const X = x + dx | 0, Y = y + dy | 0; if (X >= 0 && Y >= 0 && X < 96 && Y < 96) px[Y * 96 + X] = dx < 0 ? sh(CURSE, .7) : sh(CURSE, .45); } } } }); } },
+
+{ name: "Hydraulic Erosion", math: "Droplets descend the height gradient, carrying sediment up to capacity c·speed·slope; they erode when under capacity and deposit when over, then evaporate", use: "Generated <b>terrain and canyon</b> stages with natural gullies", w: 96, h: 96,
+  init(s) { const h = new Float32Array(96 * 96); for (let y = 0; y < 96; y++) for (let x = 0; x < 96; x++) { let v = 0, a = 1, f = 1 / 24; for (let o = 0; o < 4; o++) { v += a * (Math.sin(x * f + o * 1.7) * Math.cos(y * f * 1.3 + o) + Math.sin((x + y) * f * .7 + o * 3)); a *= .5; f *= 2; } h[y * 96 + x] = v * .25 + .5 - Math.hypot(x - 48, y - 48) / 140; } s.h = h; s.n = 0; },
+  step(s, px) { const H = s.h, W = 96, at = (x, y) => H[(Math.min(95, Math.max(0, y)) | 0) * W + (Math.min(95, Math.max(0, x)) | 0)];
+    for (let k = 0; k < 300; k++) { let x = 1 + rnd() * 94, y = 1 + rnd() * 94, vx = 0, vy = 0, sed = 0, water = 1;
+      for (let t = 0; t < 40; t++) { const gx = at(x + 1, y) - at(x - 1, y), gy = at(x, y + 1) - at(x, y - 1); vx = vx * .7 - gx * 2; vy = vy * .7 - gy * 2; const sp = Math.hypot(vx, vy); if (sp < 1e-4) break;
+        const nx = x + vx / sp, ny = y + vy / sp; if (nx < 1 || ny < 1 || nx > 94 || ny > 94) break; const dh = at(nx, ny) - at(x, y), cap = Math.max(-dh, .001) * sp * water * 4, i = (y | 0) * W + (x | 0);
+        if (sed > cap || dh > 0) { const d = dh > 0 ? Math.min(dh, sed) : (sed - cap) * .3; sed -= d; H[i] += d; } else { const e = Math.min((cap - sed) * .3, -dh); sed += e; H[i] -= e; }
+        x = nx; y = ny; water *= .97; } }
+    if (++s.n > 300) this.init(s);
+    for (let y = 1; y < 95; y++) for (let x = 1; x < 95; x++) { const i = y * W + x, sl = (H[i - 1] - H[i + 1]) * 6 + (H[i - W] - H[i + W]) * 6, v = H[i];
+      const base = v < .32 ? FROST : v < .55 ? MOSS : EMBER; px[i] = sh(base, Math.min(1, Math.max(0, .35 + sl + (v - .4) * .6))); } } },
+
+{ name: "Worley F2 − F1 Cracks", math: "Per pixel: distances to the nearest (F1) and second-nearest (F2) jittered feature points; F2 − F1 ≈ 0 along cell borders; feature points drift slowly", use: "<b>Cracked earth</b>, shield fractures and the lava crust under fire bosses", w: 64, h: 64,
+  init(s) { s.p = Array.from({ length: 22 }, () => [rnd() * 64, rnd() * 64, rnd() * 6.28]); s.t = 0; },
+  step(s, px) { s.t += .02; const P = s.p.map(([x, y, a]) => [x + Math.cos(s.t + a) * 4, y + Math.sin(s.t * 1.3 + a) * 4]);
+    for (let y = 0; y < 64; y++) for (let x = 0; x < 64; x++) { let f1 = 1e9, f2 = 1e9; for (const [px_, py] of P) { let dx = Math.abs(x - px_), dy = Math.abs(y - py); dx = Math.min(dx, 64 - dx); dy = Math.min(dy, 64 - dy); const d = dx * dx + dy * dy; if (d < f1) { f2 = f1; f1 = d; } else if (d < f2) f2 = d; }
+      const e = Math.sqrt(f2) - Math.sqrt(f1); px[y * 64 + x] = e < 1 ? sh(EMBER, 1 - e * .3) : sh(ramp([[20, 12, 10], [60, 40, 34]]), Math.min(1, e / 10)); } } },
+
+{ name: "Ridged Multifractal", math: "Σ over octaves of (1 − |n(p·2ᵒ)|)², each octave weighted by the previous signal; domain shifted over time", use: "<b>Energy veins</b> pulsing through cursed walls and Lightning Ring auras", w: 96, h: 96,
+  init(s) { s.t = 0; s.perm = Array.from({ length: 512 }, () => rnd()); },
+  step(s, px) { s.t += .03; const P = s.perm;
+    const vn = (x, y) => { const X = Math.floor(x), Y = Math.floor(y), fx = x - X, fy = y - Y, h = (i, j) => P[((i * 73 + j * 151) & 511 + 512) & 511], u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy);
+      return (h(X, Y) * (1 - u) + h(X + 1, Y) * u) * (1 - v) + (h(X, Y + 1) * (1 - u) + h(X + 1, Y + 1) * u) * v; };
+    for (let y = 0; y < 96; y++) for (let x = 0; x < 96; x++) { let f = .05, amp = 1, w = 1, sum = 0;
+      for (let o = 0; o < 4; o++) { let n = 1 - Math.abs(vn(x * f + s.t, y * f - s.t * .7) * 2 - 1); n *= n * w; sum += n * amp; w = Math.min(1, n * 2); f *= 2.1; amp *= .5; }
+      px[y * 96 + x] = sh(CURSE, Math.pow(sum / 1.4, 2.2)); } } },
+
+{ name: "Gabor Noise", math: "Sum of random Gabor kernels K(x) = e^(−πa²|x|²)·cos(2πF·(x·ω)), sparse-convolved; orientation ω follows a flow field; interlaced (half the rows per frame)", use: "<b>Wood, bark and brushed-metal</b> textures for crates, coffins and armour", w: 64, h: 64,
+  init(s) { s.k = Array.from({ length: 60 }, () => [rnd() * 64, rnd() * 64, rnd() * 2 - 1]); s.t = 0; },
+  step(s, px) { s.t += .02; const F = .22; s.par = (s.par || 0) ^ 1;
+    for (let y = s.par; y < 64; y += 2) for (let x = 0; x < 64; x++) { let v = 0;
+      for (const [kx, ky, w] of s.k) { const dx = x - kx, dy = y - ky, d2 = dx * dx + dy * dy; if (d2 > 110) continue; const om = Math.sin(ky * .05 + s.t) * .6 + .3; v += w * Math.exp(-d2 * .02) * Math.cos(F * (dx * Math.cos(om) + dy * Math.sin(om)) * 6.283); }
+      px[y * 64 + x] = sh(ramp([[30, 14, 6], [110, 60, 26], [200, 130, 70], [240, 200, 140]]), .5 + v * .35); } } },
+
+{ name: "Julia Set Morph", math: "z ← z² + c, iteration count with smooth colouring n + 1 − log₂(log|z|); c travels around the Mandelbrot cardioid", use: "<b>Portal and Arcana</b> backgrounds that are never the same twice", w: 96, h: 96,
+  init(s) { s.t = rnd() * 6; },
+  step(s, px) { s.t += .006; const cr = .7885 * Math.cos(s.t * 2), ci = .7885 * Math.sin(s.t * 2);
+    for (let y = 0; y < 96; y++) for (let x = 0; x < 96; x++) { let zr = (x - 48) / 32, zi = (y - 48) / 32, n = 0;
+      for (; n < 48 && zr * zr + zi * zi < 16; n++) { const t = zr * zr - zi * zi + cr; zi = 2 * zr * zi + ci; zr = t; }
+      const v = n >= 48 ? 0 : (n + 1 - Math.log2(Math.log(Math.sqrt(zr * zr + zi * zi)))) / 48; px[y * 96 + x] = n >= 48 ? RGB(8, 4, 12) : sh(CURSE, Math.sqrt(Math.max(0, v))); } } },
+
+{ name: "Newton Fractal", math: "Newton's method z ← z − p(z)/p′(z) for p(z) = z³ − 1, with the polynomial rotated over time; colour by the root reached, shade by iterations", use: "<b>Three-faction sigils</b> and the boss-door seal that splinters into basins", w: 96, h: 96,
+  init(s) { s.t = 0; },
+  step(s, px) { s.t += .01; const rot = s.t, cols = [EMBER, CURSE, MOSS], roots = [0, 1, 2].map(k => [Math.cos(k * 2.094 + rot), Math.sin(k * 2.094 + rot)]);
+    for (let y = 0; y < 96; y++) for (let x = 0; x < 96; x++) { let zr = (x - 48) / 30, zi = (y - 48) / 30, n = 0, hit = -1;
+      for (; n < 30; n++) { let pr = 1, pi = 0, dr = 0, di = 0; for (const [rr, ri] of roots) { const ar = zr - rr, ai = zi - ri; const ndr = dr * ar - di * ai + pr, ndi = dr * ai + di * ar + pi; dr = ndr; di = ndi; const npr = pr * ar - pi * ai, npi = pr * ai + pi * ar; pr = npr; pi = npi; }
+        const den = dr * dr + di * di || 1e-9, qr = (pr * dr + pi * di) / den, qi = (pi * dr - pr * di) / den; zr -= qr; zi -= qi;
+        for (let k = 0; k < 3; k++) if ((zr - roots[k][0]) ** 2 + (zi - roots[k][1]) ** 2 < 1e-3) hit = k; if (hit >= 0) break; }
+      px[y * 96 + x] = hit < 0 ? RGB(6, 4, 8) : sh(cols[hit], .9 - n / 20); } } },
+
+{ name: "Lyapunov Fractal", math: "Logistic map x ← rₙx(1 − x), with r alternating a, b along the sequence AABAB; λ = mean log|r(1 − 2x)|; stable regions in gold, chaos in violet", use: "<b>Alien membranes</b> for the cursed realm and secret-stage backgrounds", w: 96, h: 96,
+  init(s) { s.t = 0; s.seq = "AABAB"; },
+  step(s, px) { s.t += .01; const z = 1.1 + Math.sin(s.t) * .15, ox = 2.5 + Math.cos(s.t * .7) * .3, oy = 3.2 + Math.sin(s.t * .5) * .3;
+    for (let y = 0; y < 96; y++) for (let x = 0; x < 96; x++) { const a = ox + x / 96 * z, b = oy + y / 96 * z; let v = .5, L = 0;
+      for (let i = 0; i < 60; i++) { const r = s.seq[i % 5] === "A" ? a : b; v = r * v * (1 - v); if (i > 10) L += Math.log(Math.abs(r * (1 - 2 * v)) + 1e-9); }
+      L /= 50; px[y * 96 + x] = L < 0 ? sh(EMBER, Math.min(1, -L * .8)) : sh(CURSE, Math.min(1, L * 1.5)); } } },
+
+{ name: "Buddhabrot", math: "Sample random c; if z ← z² + c escapes, replay the orbit and add every z it visits to a density map; log tone-mapped", use: "<b>Spectral ghost</b> imagery for the Reaper intro and secret endings", w: 96, h: 96,
+  init(s) { s.d = new Float32Array(96 * 96); s.orb = new Float32Array(400); },
+  step(s, px) { const d = s.d;
+    for (let k = 0; k < 3000; k++) { const cr = rnd() * 3 - 2, ci = rnd() * 3 - 1.5; let zr = 0, zi = 0, n = 0;
+      for (; n < 200 && zr * zr + zi * zi < 4; n++) { const t = zr * zr - zi * zi + cr; zi = 2 * zr * zi + ci; zr = t; s.orb[n * 2] = zr; s.orb[n * 2 + 1] = zi; }
+      if (n < 200 && n > 8) for (let j = 0; j < n; j++) { const X = (s.orb[j * 2 + 1] + 1.5) / 3 * 96 | 0, Y = (s.orb[j * 2] + 2) / 3 * 96 | 0; if (X >= 0 && Y >= 0 && X < 96 && Y < 96) d[Y * 96 + X]++; } }
+    let m = 1; for (const v of d) if (v > m) m = v; const L = Math.log(m + 1);
+    for (let i = 0; i < 9216; i++) px[i] = sh(FROST, Math.log(d[i] + 1) / L); } },
+
+{ name: "Double Pendulum Chaos", math: "Lagrangian equations of motion for two linked pendulums, integrated with RK4; 12 copies start 10⁻³ rad apart and diverge", use: "<b>Chaos Arcana</b>, plus a swinging censer whose arc is never repeated", w: 96, h: 96,
+  init(s) { s.p = Array.from({ length: 12 }, (_, k) => [Math.PI * .9 + k * 1e-3, Math.PI * .8, 0, 0]); },
+  step(s, px) { const f = ([a, b, wa, wb]) => { const d = a - b, den = 3 - Math.cos(2 * d);
+      return [wa, wb, (-3 * Math.sin(a) - Math.sin(a - 2 * b) - 2 * Math.sin(d) * (wb * wb + wa * wa * Math.cos(d))) / den, (2 * Math.sin(d) * (2 * wa * wa + 2 * Math.cos(a) + wb * wb * Math.cos(d))) / den]; };
+    for (let i = 0; i < px.length; i++) { const v = px[i]; px[i] = RGB((v & 255) * .93 | 0, (v >> 8 & 255) * .93 | 0, Math.max(12, (v >> 16 & 255) * .93 | 0)); }
+    s.p.forEach((q, k) => { for (let it = 0; it < 4; it++) { const h = .02, k1 = f(q), k2 = f(q.map((v, i) => v + k1[i] * h / 2)), k3 = f(q.map((v, i) => v + k2[i] * h / 2)), k4 = f(q.map((v, i) => v + k3[i] * h)); for (let i = 0; i < 4; i++) q[i] += h / 6 * (k1[i] + 2 * k2[i] + 2 * k3[i] + k4[i]); }
+      const x1 = 48 + Math.sin(q[0]) * 20, y1 = 40 + Math.cos(q[0]) * 20, x2 = x1 + Math.sin(q[1]) * 20, y2 = y1 + Math.cos(q[1]) * 20;
+      const X = x2 | 0, Y = y2 | 0; if (X >= 0 && Y >= 0 && X < 96 && Y < 96) px[Y * 96 + X] = sh(EMBER, .5 + k / 24); });
+    px[40 * 96 + 48] = RGB(255, 255, 255); } },
+
+{ name: "Apollonian Gasket", math: "Descartes' theorem in complex form: a new tangent circle is e = 2(a + b + c) − d, applied to curvature k and to k·z, recursing into every gap until r < 0.6 px", use: "<b>Holy rose windows</b> for Cappella Magna and the Rosary flash", w: 128, h: 128,
+  init(s) { const r = 1 / (1 + 2 / Math.sqrt(3)), c = 1 - r, C = (k, x, y) => ({ k, x: k * x, y: k * y }), out = C(-1, 0, 0), A = [0, 1, 2].map(i => C(1 / r, Math.cos(i * 2.094 - 1.5708) * c, Math.sin(i * 2.094 - 1.5708) * c));
+    const list = [...A], S = 62; const nw = (a, b, cc, d) => ({ k: 2 * (a.k + b.k + cc.k) - d.k, x: 2 * (a.x + b.x + cc.x) - d.x, y: 2 * (a.y + b.y + cc.y) - d.y });
+    const rec = (a, b, cc, d, depth) => { const e = nw(a, b, cc, d); if (e.k <= 0 || S / e.k < .6 || depth > 14 || list.length > 6000) return; list.push(e); rec(a, b, e, cc, depth + 1); rec(a, cc, e, b, depth + 1); rec(b, cc, e, a, depth + 1); };
+    rec(A[0], A[1], A[2], out, 0); rec(out, A[0], A[1], A[2], 0); rec(out, A[1], A[2], A[0], 0); rec(out, A[0], A[2], A[1], 0);
+    s.list = list.sort((p, q) => p.k - q.k); s.n = 0; s.t = 0; },
+  step(s, px) { s.t += .02; s.n = Math.min(s.list.length, s.n + 40); if (s.n >= s.list.length && s.t > 14) this.init(s);
+    px.fill(RGB(10, 6, 12)); const S = 62;
+    for (let y = 0; y < 128; y++) for (let x = 0; x < 128; x++) { const dx = x - 64, dy = y - 64; if (Math.abs(Math.hypot(dx, dy) - S) < .8) px[y * 128 + x] = RGB(240, 200, 110); }
+    for (let i = 0; i < s.n; i++) { const c = s.list[i], R = S / c.k, cx = 64 + S * c.x / c.k, cy = 64 + S * c.y / c.k, hue = (i * .618 + s.t * .1) % 1, col = i % 3 === 0 ? sh(EMBER, .4 + hue * .5) : i % 3 === 1 ? sh(CURSE, .45 + hue * .45) : sh(FROST, .35 + hue * .5);
+      const r0 = Math.ceil(R); for (let yy = -r0; yy <= r0; yy++) for (let xx = -r0; xx <= r0; xx++) { const d = Math.hypot(xx, yy), X = cx + xx | 0, Y = cy + yy | 0; if (X < 0 || Y < 0 || X > 127 || Y > 127) continue;
+        if (d <= R) px[Y * 128 + X] = d > R - 1 ? RGB(240, 200, 110) : col; } } } },
+
+{ name: "Lloyd Relaxation", math: "Voronoi on a grid, then move each site to its cell centroid, and repeat; random points settle into an even cellular mesh", use: "<b>Honeycomb shields</b>, organic tissue walls and even prop scatter", w: 96, h: 96,
+  init(s) { s.p = Array.from({ length: 40 }, () => [rnd() * 96, rnd() * 96]); s.n = 0; },
+  step(s, px) { const P = s.p, sx = new Float32Array(P.length), sy = new Float32Array(P.length), c = new Float32Array(P.length), own = new Int16Array(9216), e = new Float32Array(9216);
+    for (let y = 0; y < 96; y++) for (let x = 0; x < 96; x++) { let b = 0, bd = 1e9, b2 = 1e9; P.forEach(([a, q], k) => { const d = (x - a) ** 2 + (y - q) ** 2; if (d < bd) { b2 = bd; bd = d; b = k; } else if (d < b2) b2 = d; }); const i = y * 96 + x; own[i] = b; e[i] = Math.sqrt(b2) - Math.sqrt(bd); sx[b] += x; sy[b] += y; c[b]++; }
+    P.forEach((p, k) => { if (c[k]) { p[0] += (sx[k] / c[k] - p[0]) * .3; p[1] += (sy[k] / c[k] - p[1]) * .3; } });
+    if (++s.n > 200) this.init(s);
+    for (let i = 0; i < 9216; i++) px[i] = e[i] < 1.2 ? RGB(240, 200, 110) : sh(CURSE, .2 + (own[i] * 37 % 40) / 100 + Math.min(.25, e[i] / 40)); } },
+
+{ name: "Circle Packing Growth", math: "Spawn circles at random free spots; each grows until it touches a neighbour or the boundary, then freezes; rejection sampling against a grid", use: "<b>Bubbling slime</b>, scale armour and coin piles that fill a shape", w: 96, h: 96,
+  init(s) { s.c = []; s.n = 0; },
+  step(s, px) { const C = s.c;
+    for (let k = 0; k < 10; k++) { const x = rnd() * 96, y = rnd() * 96; if (Math.hypot(x - 48, y - 48) > 44) continue; if (C.every(c => Math.hypot(c.x - x, c.y - y) > c.r + 1.5)) C.push({ x, y, r: .5, g: true }); }
+    for (const c of C) if (c.g) { c.r += .35; if (Math.hypot(c.x - 48, c.y - 48) + c.r > 45 || C.some(o => o !== c && Math.hypot(o.x - c.x, o.y - c.y) < o.r + c.r + .5)) c.g = false; }
+    if (++s.n > 360) this.init(s);
+    px.fill(RGB(10, 6, 12));
+    for (const c of C) { const R = c.r; for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) { const d = Math.hypot(dx, dy); if (d > R) continue; const X = c.x + dx | 0, Y = c.y + dy | 0; if (X < 0 || Y < 0 || X > 95 || Y > 95) continue;
+      px[Y * 96 + X] = d > R - 1 ? RGB(20, 40, 24) : sh(MOSS, .4 + (1 - d / R) * .3 + ((dx < -R / 3 && dy < -R / 3) ? .3 : 0)); } } } },
+
+{ name: "Hilbert Curve Reveal", math: "Map index d to (x, y) on a Hilbert curve with the bit-rotation algorithm; reveal pixels in curve order so the wipe stays spatially coherent", use: "<b>Stage-intro wipes</b> and map reveals that sweep like a snake, never jumping", w: 128, h: 128,
+  init(s) { s.k = 0; s.src = rnd() < .5 ? CURSE : EMBER; s.ord = new Uint32Array(16384); for (let d = 0; d < 16384; d++) { let x = 0, y = 0, t = d; for (let q = 1; q < 128; q *= 2) { const rx = 1 & (t >> 1), ry = 1 & (t ^ rx); if (!ry) { if (rx) { x = q - 1 - x; y = q - 1 - y; } [x, y] = [y, x]; } x += q * rx; y += q * ry; t >>= 2; } s.ord[d] = y * 128 + x; } },
+  step(s, px) { const N = 16384;
+    for (let j = 0; j < 220; j++) { const d = s.k++; if (d >= N + 600) { this.init(s); px.fill(RGB(8, 6, 10)); return; } if (d < N) { const i = s.ord[d], x = i % 128, y = i / 128 | 0; px[i] = sh(s.src, .25 + .5 * (Math.sin(x * .1) * Math.cos(y * .1) + 1) / 2); } }
+    if (s.k < N) px[s.ord[Math.min(N - 1, s.k)]] = RGB(255, 255, 255); } },
+
+{ name: "Chladni Plate", math: "Standing-wave modes cos(nπx)cos(mπy) − cos(mπx)cos(nπy); sand settles on nodal lines (|u| ≈ 0); the (n, m) mode changes over time", use: "<b>Resonance weapons</b> and sound sigils where sand jumps into a new pattern on each beat", w: 96, h: 96,
+  init(s) { s.g = Array.from({ length: 2400 }, () => [rnd() * 96, rnd() * 96]); s.t = 0; s.modes = [[1, 4], [2, 5], [3, 7], [4, 6], [1, 6], [3, 5]]; s.k = 0; },
+  step(s, px) { if (++s.t % 120 === 0) s.k = (s.k + 1) % s.modes.length; const [n, m] = s.modes[s.k], P = Math.PI;
+    const u = (x, y) => { const X = x / 96, Y = y / 96; return Math.cos(n * P * X) * Math.cos(m * P * Y) - Math.cos(m * P * X) * Math.cos(n * P * Y); };
+    for (const g of s.g) { const a = Math.abs(u(g[0], g[1])) * 2.5; g[0] = Math.min(95.9, Math.max(0, g[0] + (rnd() - .5) * a)); g[1] = Math.min(95.9, Math.max(0, g[1] + (rnd() - .5) * a)); }
+    px.fill(RGB(22, 14, 24)); for (let y = 0; y < 96; y += 3) for (let x = 0; x < 96; x += 3) if (Math.abs(u(x, y)) < .05) px[y * 96 + x] = RGB(50, 34, 56);
+    for (const g of s.g) px[(g[1] | 0) * 96 + (g[0] | 0)] = RGB(240, 215, 160); } },
+
+{ name: "Social-Force Crowd", math: "Each agent: driving force toward its goal plus exponential repulsion A·e^(−d/B) from nearby agents; two groups cross head-on and form lanes", use: "<b>Enemy hordes</b> pouring through each other without clumping, and fleeing villagers", w: 96, h: 96,
+  init(s) { s.a = Array.from({ length: 160 }, (_, i) => { const L = i % 2; return { x: L ? 4 + rnd() * 14 : 78 + rnd() * 14, y: 8 + rnd() * 80, gx: L ? 94 : 2, vx: 0, vy: 0, L }; }); },
+  step(s, px) { const A = s.a;
+    for (const a of A) { let fx = (Math.sign(a.gx - a.x) * 1.1 - a.vx) * .3, fy = -a.vy * .3;
+      for (const b of A) { if (a === b) continue; const dx = a.x - b.x, dy = a.y - b.y, d = Math.hypot(dx, dy); if (d < 7 && d > .01) { const f = 1.2 * Math.exp(-d / 1.6); fx += dx / d * f; fy += dy / d * f; } }
+      a.vx += fx; a.vy += fy; const sp = Math.hypot(a.vx, a.vy); if (sp > 1.4) { a.vx *= 1.4 / sp; a.vy *= 1.4 / sp; } }
+    for (const a of A) { a.x += a.vx; a.y = Math.min(93, Math.max(2, a.y + a.vy)); if ((a.L && a.x > 93) || (!a.L && a.x < 3)) { a.x = a.L ? 3 : 93; a.y = 8 + rnd() * 80; } }
+    for (let i = 0; i < px.length; i++) { const v = px[i]; px[i] = RGB((v & 255) * .8 | 0, (v >> 8 & 255) * .8 | 0, Math.max(10, (v >> 16 & 255) * .8 | 0)); }
+    for (const a of A) for (const o of [0, 1, 96, 97]) { const i = (a.y | 0) * 96 + (a.x | 0) + o; if (i >= 0 && i < 9216) px[i] = a.L ? RGB(240, 170, 80) : RGB(160, 100, 230); } } }
+
 ];
 
 const grid = document.getElementById("grid"), runs = [];
