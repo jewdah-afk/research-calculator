@@ -1,0 +1,384 @@
+<title>Cursed Algorithm Lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a cursed bestiary. Dark crypt ground, 25 specimen plates in a grid, each a live canvas with its maths. */
+:root {
+  --ground: #0e0b12;
+  --plate: #17121d;
+  --rim: #2b2234;
+  --ink: #ece4f2;
+  --dim: #9c8fab;
+  --ember: #e7ad4f;
+  --curse: #9b6ad6;
+  --display: "Pixelify Sans", "Courier New", monospace;
+  --body: "IBM Plex Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 15px;
+  line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px 64px;
+}
+.wrap { max-width: 1180px; margin: 0 auto; display: grid; gap: 28px; }
+header { display: grid; gap: 10px; max-width: 68ch; }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--ember); }
+h1 { font-family: var(--display); font-weight: 700; font-size: clamp(34px, 6vw, 56px); line-height: 1; margin: 0; text-wrap: balance; }
+h1 span { color: var(--curse); }
+.lead { color: var(--dim); margin: 0; }
+.bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; font-family: var(--mono); font-size: 12px; color: var(--dim); }
+button {
+  font: 500 12px var(--mono); color: var(--ink); background: var(--plate);
+  border: 1px solid var(--rim); border-radius: 3px; padding: 6px 10px; cursor: pointer;
+}
+button:hover { border-color: var(--ember); color: var(--ember); }
+button:focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 16px; }
+.card { background: var(--plate); border: 1px solid var(--rim); border-radius: 4px; display: grid; grid-template-rows: auto 1fr; min-width: 0; }
+.cv { position: relative; aspect-ratio: 1; max-width: 100%; background: #000; border-bottom: 1px solid var(--rim); }
+.cv canvas { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
+.num { position: absolute; top: 8px; left: 8px; font: 700 13px var(--display); color: var(--ember); background: rgba(14,11,18,.7); padding: 1px 6px; border-radius: 2px; }
+.cv button { position: absolute; bottom: 8px; right: 8px; opacity: .85; }
+.meta { padding: 12px 14px 14px; display: grid; gap: 6px; align-content: start; min-width: 0; }
+.name { font: 700 18px var(--display); margin: 0; }
+.math { font: 400 12px/1.45 var(--mono); color: var(--dim); margin: 0; }
+.use { font-size: 13px; margin: 0; }
+.use b { color: var(--curse); font-weight: 500; }
+footer { color: var(--dim); font-size: 13px; max-width: 70ch; }
+@media (prefers-reduced-motion: reduce) { .card { transition: none; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Cursed Survivors · EditableImage candidates</div>
+    <h1>Algorithm Lab <span>II</span></h1>
+    <p class="lead">25 new generative algorithms, each running live at the pixel scale an EditableImage would use. None of them repeats the 89 effects already built or the 15 PixelFX modules. Every plate shows the maths and where it goes in the game.</p>
+    <div class="bar"><span id="fps">…</span><button id="pauseAll" type="button">Pause all</button><button id="reseedAll" type="button">Reseed all</button></div>
+  </header>
+  <section class="grid" id="grid"></section>
+  <footer>Each simulation runs on a 64–128 px grid, scaled up with nearest-neighbour filtering, the same way it would sit inside an EditableImage. Plates off-screen are paused. The full list of 100 core algorithms is in <code>ideas/ALGORITHMS_CORE.md</code>.</footer>
+</div>
+
+<script>
+"use strict";
+const RGB = (r, g, b) => (255 << 24 | b << 16 | g << 8 | r) >>> 0;
+function ramp(stops) {
+  const lut = new Uint32Array(256), n = stops.length - 1;
+  for (let i = 0; i < 256; i++) {
+    const t = i / 255 * n, k = Math.min(n - 1, Math.floor(t)), f = t - k, a = stops[k], b = stops[k + 1];
+    lut[i] = RGB(a[0] + (b[0] - a[0]) * f | 0, a[1] + (b[1] - a[1]) * f | 0, a[2] + (b[2] - a[2]) * f | 0);
+  }
+  return lut;
+}
+const sh = (lut, v) => lut[v <= 0 ? 0 : v >= 1 ? 255 : v * 255 | 0];
+const rnd = Math.random;
+const CURSE = ramp([[8,4,14],[48,18,72],[140,70,200],[235,200,255]]);
+const EMBER = ramp([[6,3,4],[90,20,10],[220,110,30],[255,230,150]]);
+const FROST = ramp([[4,8,16],[20,60,110],[110,190,240],[240,250,255]]);
+const MOSS = ramp([[5,10,6],[20,60,30],[90,170,70],[220,250,170]]);
+
+// Each demo: w,h, init(s), step(s, px) writes px (Uint32Array w*h).
+const DEMOS = [
+{ name: "Shallow Water (pipe model)", math: "flux_ij += dt·g·(h_i − h_j); outflow scaled to the available water; h += Σin − Σout", use: "<b>Holy Water</b> puddles that slosh, and water stages where splashes keep their momentum", w: 96, h: 96,
+  init(s) { const n = s.w * s.h; s.hh = new Float32Array(n).fill(1); s.f = new Float32Array(n * 4); s.t = 0; },
+  step(s, px) { const { w, h, hh, f } = s;
+    if (s.t++ % 18 === 0) { const cx = 8 + rnd() * (w - 16) | 0, cy = 8 + rnd() * (h - 16) | 0; for (let y = -3; y <= 3; y++) for (let x = -3; x <= 3; x++) if (x*x+y*y < 10) hh[(cy+y)*w+cx+x] += 0.9; }
+    for (let it = 0; it < 2; it++) {
+      for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) { const i = y * w + x, o = i * 4, H = hh[i];
+        let a = Math.max(0, f[o] + 0.25 * (H - hh[i - 1])), b = Math.max(0, f[o+1] + 0.25 * (H - hh[i + 1])), c = Math.max(0, f[o+2] + 0.25 * (H - hh[i - w])), d = Math.max(0, f[o+3] + 0.25 * (H - hh[i + w]));
+        const tot = a + b + c + d; if (tot > H) { const k = H / tot; a *= k; b *= k; c *= k; d *= k; }
+        f[o] = a * .995; f[o+1] = b * .995; f[o+2] = c * .995; f[o+3] = d * .995; }
+      for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) { const i = y * w + x, o = i * 4;
+        hh[i] += f[(i-1)*4+1] + f[(i+1)*4] + f[(i-w)*4+3] + f[(i+w)*4+2] - f[o] - f[o+1] - f[o+2] - f[o+3]; }
+    }
+    for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) { const i = y * w + x, sl = hh[i + 1] - hh[i - 1] + hh[i + w] - hh[i - w];
+      px[i] = sh(FROST, 0.35 + (hh[i] - 1) * 0.9 + Math.max(0, -sl) * 1.6); } } },
+
+{ name: "Lenia", math: "A ← clip(A + dt·G(K∗A)); K is a smooth ring of radius 8; G(u) = 2·exp(−(u−0.15)²/2σ²) − 1", use: "Living <b>curse creatures</b> that drift, split and hunt, and are not hand-animated", w: 64, h: 64,
+  init(s) { const { w, h } = s; s.A = new Float32Array(w * h); s.B = new Float32Array(w * h);
+    for (let k = 0; k < 6; k++) { const cx = rnd() * w | 0, cy = rnd() * h | 0; for (let y = -6; y < 6; y++) for (let x = -6; x < 6; x++) s.A[((cy + y + h) % h) * w + (cx + x + w) % w] = rnd(); }
+    const R = 8, ker = []; let sum = 0; for (let y = -R; y <= R; y++) for (let x = -R; x <= R; x++) { const r = Math.hypot(x, y) / R; if (r > 0 && r < 1) { const v = Math.exp(4 - 1 / (r * (1 - r))); ker.push(x, y, v); sum += v; } }
+    for (let i = 2; i < ker.length; i += 3) ker[i] /= sum; s.K = ker; },
+  step(s, px) { const { w, h, A, B, K } = s;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { let u = 0; for (let k = 0; k < K.length; k += 3) u += A[((y + K[k+1] + h) % h) * w + (x + K[k] + w) % w] * K[k+2];
+      const g = 2 * Math.exp(-((u - 0.15) ** 2) / (2 * 0.015 * 0.015)) - 1, i = y * w + x; B[i] = Math.min(1, Math.max(0, A[i] + 0.1 * g)); }
+    s.A = B; s.B = A; let alive = 0; for (let i = 0; i < w * h; i++) { px[i] = sh(CURSE, B[i]); alive += B[i]; } if (alive < 5) this.init(s); } },
+
+{ name: "Reiter Snowflake", math: "Hex CA: receptive cells take vapour + γ; the rest diffuse u += α/2·(avg₆(u) − u); a cell freezes when s ≥ 1", use: "Real six-fold <b>frost crystals</b> creeping over frozen enemies (Orologion, Clock Lancet)", w: 101, h: 101,
+  init(s) { const n = s.w * s.h; s.s = new Float32Array(n).fill(0.4); s.u = new Float32Array(n); s.fz = new Uint8Array(n); const c = (s.h >> 1) * s.w + (s.w >> 1); s.s[c] = 1; s.fz[c] = 1; s.beta = 0.35 + rnd() * 0.2; s.s.fill(s.beta); s.s[c] = 1; },
+  step(s, px) { const { w, h, fz } = s, S = s.s, u = s.u, g = 0.0015;
+    const nb = (x, y, f) => { const odd = y & 1; return [[x-1,y],[x+1,y],[x-1+odd,y-1],[x+odd,y-1],[x-1+odd,y+1],[x+odd,y+1]].map(([a,b]) => f(a,b)); };
+    for (let it = 0; it < 3; it++) {
+      const rec = new Uint8Array(w * h);
+      for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) { const i = y * w + x; if (fz[i] || nb(x, y, (a, b) => fz[b * w + a]).some(Boolean)) rec[i] = 1; }
+      for (let i = 0; i < w * h; i++) u[i] = rec[i] ? 0 : S[i];
+      const nu = new Float32Array(u);
+      for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) { const i = y * w + x; let a = 0; nb(x, y, (p, q) => a += u[q * w + p]); nu[i] = u[i] + 0.5 * (a / 6 - u[i]); }
+      for (let i = 0; i < w * h; i++) { S[i] = nu[i] + (rec[i] ? S[i] + g : 0); if (S[i] >= 1) { if (!fz[i] && ((i % w) < 3 || (i % w) > w - 4 || i < w * 3 || i > w * (h - 3))) { this.init(s); return; } fz[i] = 1; } }
+    }
+    for (let i = 0; i < w * h; i++) px[i] = fz[i] ? sh(FROST, 0.55 + Math.min(0.45, (S[i] - 1) * 0.4)) : sh(FROST, S[i] * 0.25); } },
+
+{ name: "Differential Growth", math: "Closed curve: each node is pulled to its neighbours, pushed by nodes within r (grid hash); edges longer than L split in two", use: "<b>Cursed flesh</b> and brain-coral walls that ruffle outward from a boss or altar", w: 128, h: 128,
+  init(s) { s.p = []; for (let i = 0; i < 24; i++) { const a = i / 24 * Math.PI * 2; s.p.push([64 + Math.cos(a) * 6, 64 + Math.sin(a) * 6]); } },
+  step(s, px) { const P = s.p, n = P.length, R = 3.2, cell = 4, grid = new Map();
+    P.forEach((q, i) => { const k = (q[0] / cell | 0) * 1000 + (q[1] / cell | 0); (grid.get(k) || grid.set(k, []).get(k)).push(i); });
+    const F = P.map(() => [0, 0]);
+    for (let i = 0; i < n; i++) { const q = P[i], a = P[(i - 1 + n) % n], b = P[(i + 1) % n];
+      F[i][0] += ((a[0] + b[0]) / 2 - q[0]) * 0.4; F[i][1] += ((a[1] + b[1]) / 2 - q[1]) * 0.4;
+      const cx = q[0] / cell | 0, cy = q[1] / cell | 0;
+      for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) { const l = grid.get((cx + dx) * 1000 + cy + dy); if (!l) continue;
+        for (const j of l) { if (j === i) continue; const ex = q[0] - P[j][0], ey = q[1] - P[j][1], d = Math.hypot(ex, ey); if (d < R && d > 1e-3) { F[i][0] += ex / d * (R - d) * 0.5; F[i][1] += ey / d * (R - d) * 0.5; } } } }
+    for (let i = 0; i < n; i++) { P[i][0] = Math.min(124, Math.max(4, P[i][0] + F[i][0])); P[i][1] = Math.min(124, Math.max(4, P[i][1] + F[i][1])); }
+    for (let i = P.length - 1; i >= 0; i--) { const a = P[i], b = P[(i + 1) % P.length]; if (Math.hypot(a[0] - b[0], a[1] - b[1]) > 2.4) P.splice(i + 1, 0, [(a[0] + b[0]) / 2 + rnd() * .1, (a[1] + b[1]) / 2 + rnd() * .1]); }
+    if (P.length > 1600) this.init(s);
+    px.fill(RGB(10, 5, 10));
+    for (let i = 0; i < P.length; i++) { const a = P[i], b = P[(i + 1) % P.length], t = i / P.length;
+      for (let k = 0; k <= 4; k++) { const x = a[0] + (b[0] - a[0]) * k / 4 | 0, y = a[1] + (b[1] - a[1]) * k / 4 | 0; px[y * 128 + x] = sh(EMBER, 0.55 + 0.4 * Math.sin(t * 40)); } } } },
+
+{ name: "Cyclic Cellular Automaton", math: "16 states; a cell advances to (k+1) mod 16 when at least one Moore neighbour already holds k+1", use: "Self-organising <b>Arcana spirals</b> and the swirl behind the level-up screen", w: 96, h: 96,
+  init(s) { s.a = new Uint8Array(s.w * s.h).map(() => rnd() * 16 | 0); s.lut = ramp([[30,10,50],[140,60,200],[240,170,80],[30,10,50]]); },
+  step(s, px) { const { w, h, a } = s, b = new Uint8Array(w * h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const i = y * w + x, nx = (a[i] + 1) & 15; let hit = 0;
+      for (let dy = -1; dy <= 1 && !hit; dy++) for (let dx = -1; dx <= 1; dx++) if ((dx || dy) && a[((y + dy + h) % h) * w + (x + dx + w) % w] === nx) { hit = 1; break; }
+      b[i] = hit ? nx : a[i]; px[i] = s.lut[b[i] * 16]; }
+    s.a = b; } },
+
+{ name: "Hodgepodge Machine (BZ)", math: "Ill cell → 0; healthy → ⌊a/k₁⌋ + ⌊b/k₂⌋; infected → ⌊S/(a+b+1)⌋ + g, capped at n = 200", use: "Bubbling <b>alchemy pools</b> and chemical boss arenas with spiral waves", w: 128, h: 128,
+  init(s) { s.a = new Uint16Array(s.w * s.h).map(() => rnd() * 200 | 0); },
+  step(s, px) { const { w, h, a } = s, n = 200, b = new Uint16Array(w * h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const i = y * w + x, v = a[i]; let ill = 0, inf = 0, S = v;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { if (!dx && !dy) continue; const q = a[((y + dy + h) % h) * w + (x + dx + w) % w]; S += q; if (q === n) ill++; else if (q > 0) inf++; }
+      b[i] = v === n ? 0 : v === 0 ? (ill / 2 | 0) + (inf / 3 | 0) : Math.min(n, (S / (ill + inf + 1) | 0) + 28);
+      px[i] = sh(MOSS, b[i] / n); }
+    s.a = b; } },
+
+{ name: "Brian's Brain", math: "3 states: ready → firing when exactly 2 neighbours fire; firing → refractory; refractory → ready", use: "<b>Electric crackle</b> fields for Lightning Ring zones and charged ground", w: 96, h: 96,
+  init(s) { s.a = new Uint8Array(s.w * s.h).map(() => rnd() < .3 ? 1 : 0); },
+  step(s, px) { const { w, h, a } = s, b = new Uint8Array(w * h); let live = 0;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const i = y * w + x; let f = 0;
+      if (a[i] === 0) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (a[((y + dy + h) % h) * w + (x + dx + w) % w] === 1) f++;
+      b[i] = a[i] === 1 ? 2 : a[i] === 2 ? 0 : f === 2 ? 1 : 0; live += b[i] === 1;
+      px[i] = b[i] === 1 ? RGB(230, 240, 255) : b[i] === 2 ? RGB(50, 80, 190) : RGB(4, 6, 16); }
+    s.a = b; if (live < 20) this.init(s); } },
+
+{ name: "Forest-Fire Model", math: "Empty → tree with p = 0.01; a tree ignites from a burning neighbour, or lightning with f = 6e−5; burning → ash", use: "<b>Hellfire</b> spreading through grass in self-organised fire fronts", w: 96, h: 96,
+  init(s) { s.a = new Uint8Array(s.w * s.h).map(() => rnd() < .55 ? 1 : 0); },
+  step(s, px) { const { w, h, a } = s, b = new Uint8Array(w * h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const i = y * w + x, v = a[i]; let nv = v;
+      if (v === 2) nv = 3; else if (v === 3) nv = rnd() < .02 ? 0 : 3; else if (v === 0) nv = rnd() < .01 ? 1 : 0;
+      else { let burn = rnd() < 6e-5; for (let d = 0; d < 4 && !burn; d++) { const xx = x + [1,-1,0,0][d], yy = y + [0,0,1,-1][d]; if (xx >= 0 && yy >= 0 && xx < w && yy < h && a[yy * w + xx] === 2) burn = true; } nv = burn ? 2 : 1; }
+      b[i] = nv; px[i] = [RGB(14, 10, 8), RGB(40, 90, 40), RGB(255, 170, 50), RGB(55, 40, 36)][nv]; }
+    s.a = b; } },
+
+{ name: "Ising Model (Metropolis)", math: "Flip spin σ with probability min(1, e^(−ΔE/T)), ΔE = 2σΣσ_nb, run near T_c ≈ 2.27 on a checkerboard", use: "<b>Holy versus curse</b> territory that boils and coarsens across the map", w: 96, h: 96,
+  init(s) { s.a = new Int8Array(s.w * s.h).map(() => rnd() < .5 ? 1 : -1); s.T = 2.3; },
+  step(s, px) { const { w, h, a, T } = s;
+    for (let pass = 0; pass < 2; pass++) for (let y = 0; y < h; y++) for (let x = (y + pass) & 1; x < w; x += 2) { const i = y * w + x;
+      const S = a[y * w + (x + 1) % w] + a[y * w + (x - 1 + w) % w] + a[((y + 1) % h) * w + x] + a[((y - 1 + h) % h) * w + x], dE = 2 * a[i] * S;
+      if (dE <= 0 || rnd() < Math.exp(-dE / T)) a[i] = -a[i]; }
+    for (let i = 0; i < w * h; i++) px[i] = a[i] > 0 ? RGB(235, 200, 120) : RGB(70, 30, 100); } },
+
+{ name: "Turmite (Langton's Ant)", math: "Read the cell, turn by the rule string (RLLR), write the next colour, step; emergent highways from 4 rules", use: "<b>Rune-tracing familiars</b> that carve sigils into the floor as they wander", w: 96, h: 96,
+  init(s) { s.a = new Uint8Array(s.w * s.h); s.ants = [[48, 48, 0], [30, 60, 1], [66, 36, 2]]; s.rule = "RLLR"; s.lut = [RGB(8, 5, 12), RGB(120, 60, 180), RGB(230, 160, 70), RGB(70, 180, 160)]; s.n = 0; },
+  step(s, px) { const { w, h, a, rule } = s;
+    for (let k = 0; k < 120; k++) for (const t of s.ants) { const i = t[1] * w + t[0], c = a[i]; t[2] = (t[2] + (rule[c] === "R" ? 1 : 3)) & 3; a[i] = (c + 1) % rule.length;
+      t[0] = (t[0] + [0, 1, 0, -1][t[2]] + w) % w; t[1] = (t[1] + [-1, 0, 1, 0][t[2]] + h) % h; }
+    if ((s.n += 120) > 60000) this.init(s);
+    for (let i = 0; i < w * h; i++) px[i] = s.lut[a[i]]; } },
+
+{ name: "Mass-Spring Jelly", math: "A 6×6 lattice of Hooke springs with damping; sprite pixels are mapped through bilinear interpolation of the moved nodes", use: "<b>Slime enemies</b> that squish and jiggle on hit, from one static PNG", w: 96, h: 96,
+  init(s) { s.N = 6; s.rest = []; s.pos = []; s.vel = []; for (let j = 0; j < 6; j++) for (let i = 0; i < 6; i++) { const p = [28 + i * 8, 34 + j * 8]; s.rest.push(p); s.pos.push([...p]); s.vel.push([0, 0]); } s.t = 0; },
+  step(s, px) { const { N, rest, pos, vel } = s; s.t++;
+    if (s.t % 50 === 1) { const k = rnd() * N * N | 0; vel[k][0] += (rnd() - .5) * 30; vel[k][1] += (rnd() - .5) * 30; }
+    for (let k = 0; k < N * N; k++) { const i = k % N, j = k / N | 0; let fx = (rest[k][0] - pos[k][0]) * .02, fy = (rest[k][1] - pos[k][1]) * .02;
+      for (const [di, dj] of [[1,0],[-1,0],[0,1],[0,-1]]) { const ni = i + di, nj = j + dj; if (ni < 0 || nj < 0 || ni >= N || nj >= N) continue; const m = nj * N + ni;
+        const ex = pos[m][0] - pos[k][0], ey = pos[m][1] - pos[k][1], d = Math.hypot(ex, ey) || 1, f = (d - 8) * .25; fx += ex / d * f; fy += ey / d * f; }
+      vel[k][0] = (vel[k][0] + fx) * .9; vel[k][1] = (vel[k][1] + fy) * .9; }
+    for (let k = 0; k < N * N; k++) { pos[k][0] += vel[k][0]; pos[k][1] += vel[k][1]; }
+    px.fill(RGB(12, 8, 16));
+    for (let v = 0; v < 40; v += .5) for (let u = 0; u < 40; u += .5) { const dx = (u - 20) / 20, dy = (v - 22) / 18; if (dx * dx + dy * dy > 1 || v < 4) continue;
+      const gi = Math.min(4, u / 8 | 0), gj = Math.min(4, v / 8 | 0), fu = u / 8 - gi, fv = v / 8 - gj, A = pos[gj * N + gi], B = pos[gj * N + gi + 1], C = pos[(gj + 1) * N + gi], D = pos[(gj + 1) * N + gi + 1];
+      const x = (A[0] * (1 - fu) + B[0] * fu) * (1 - fv) + (C[0] * (1 - fu) + D[0] * fu) * fv, y = (A[1] * (1 - fu) + B[1] * fu) * (1 - fv) + (C[1] * (1 - fu) + D[1] * fu) * fv;
+      const eye = ((u - 13) ** 2 + (v - 16) ** 2 < 6) || ((u - 27) ** 2 + (v - 16) ** 2 < 6), hi = (u - 12) ** 2 + (v - 9) ** 2 < 10;
+      if (x >= 0 && y >= 0 && x < 96 && y < 96) px[(y | 0) * 96 + (x | 0)] = eye ? RGB(20, 10, 30) : hi ? RGB(220, 255, 210) : sh(MOSS, 0.45 + (1 - dy) * 0.2); } } },
+
+{ name: "Position-Based Cloth", math: "Verlet integration, then 6 passes projecting distance constraints; top row pinned; gusty wind force", use: "Torn <b>castle banners</b> and the knight's cape reacting to every dash", w: 96, h: 96,
+  init(s) { s.W = 18; s.H = 14; s.p = []; for (let j = 0; j < s.H; j++) for (let i = 0; i < s.W; i++) { const x = 14 + i * 4, y = 10 + j * 4; s.p.push([x, y, x, y]); } s.t = 0; },
+  step(s, px) { const { W, H, p } = s; s.t += .05; const wind = Math.sin(s.t) * .35 + Math.sin(s.t * 3.1) * .15;
+    for (let k = W; k < p.length; k++) { const q = p[k], vx = (q[0] - q[2]) * .99, vy = (q[1] - q[3]) * .99; q[2] = q[0]; q[3] = q[1]; q[0] += vx + wind * (.5 + rnd() * .5); q[1] += vy + .12; }
+    for (let it = 0; it < 6; it++) for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) { const k = j * W + i;
+      for (const m of [i < W - 1 ? k + 1 : -1, j < H - 1 ? k + W : -1]) { if (m < 0) continue; const a = p[k], b = p[m], dx = b[0] - a[0], dy = b[1] - a[1], d = Math.hypot(dx, dy) || 1, f = (d - 4) / d * .5;
+        if (k >= W) { a[0] += dx * f; a[1] += dy * f; } if (m >= W) { b[0] -= dx * f; b[1] -= dy * f; } } }
+    px.fill(RGB(10, 8, 14));
+    for (let j = 0; j < H - 1; j++) for (let i = 0; i < W - 1; i++) { const a = p[j * W + i], b = p[j * W + i + 1], c = p[(j + 1) * W + i], shade = Math.max(0, Math.min(1, .5 + (b[0] - a[0] - 4) * .15 + (c[1] - a[1] - 4) * .1));
+      const col = ((i >> 2) + (j >> 2)) & 1 ? sh(EMBER, .25 + shade * .5) : sh(CURSE, .3 + shade * .5);
+      for (let u = 0; u < 1; u += .2) for (let v = 0; v < 1; v += .2) { const x = a[0] + (b[0] - a[0]) * u + (c[0] - a[0]) * v | 0, y = a[1] + (b[1] - a[1]) * u + (c[1] - a[1]) * v | 0; if (x >= 0 && y >= 0 && x < 96 && y < 96) px[y * 96 + x] = col; } }
+    for (let i = 0; i < W; i += 4) px[10 * 96 + 14 + i * 4] = RGB(255, 255, 255); } },
+
+{ name: "Elemental Fields", math: "Heat and frost diffuse (∂T/∂t = D∇²T); where both are present they turn into steam, which rises and fades", use: "<b>Fire plus Orologion</b> makes steam clouds, the core of the curse elemental system", w: 96, h: 96,
+  init(s) { const n = s.w * s.h; s.H = new Float32Array(n); s.F = new Float32Array(n); s.S = new Float32Array(n); s.t = 0; },
+  step(s, px) { const { w, h, H, F, S } = s; s.t += .03;
+    const hx = 48 + Math.cos(s.t) * 30 | 0, hy = 48 + Math.sin(s.t * 1.3) * 26 | 0, fx = 48 + Math.cos(s.t * .8 + 2) * 30 | 0, fy = 48 + Math.sin(s.t + 1) * 26 | 0;
+    for (let y = -2; y <= 2; y++) for (let x = -2; x <= 2; x++) { H[(hy + y) * w + hx + x] = 1; F[(fy + y) * w + fx + x] = 1; }
+    const dif = (A) => { const B = new Float32Array(A); for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) { const i = y * w + x; B[i] = (A[i] * 4 + A[i - 1] + A[i + 1] + A[i - w] + A[i + w]) / 8 * .985; } return B; };
+    const nH = dif(H), nF = dif(F); H.set(nH); F.set(nF);
+    for (let i = w; i < w * h; i++) { const r = Math.min(H[i], F[i]) * .3; H[i] -= r; F[i] -= r; S[i - w] = S[i] * .96 + r * 3; }
+    for (let i = 0; i < w * h; i++) { const r = Math.min(255, H[i] * 600 + S[i] * 170), g = Math.min(255, H[i] * 220 + F[i] * 200 + S[i] * 170), b = Math.min(255, F[i] * 650 + S[i] * 180); px[i] = RGB(r | 0, g | 0, b | 0); } } },
+
+{ name: "Abelian Sandpile", math: "Drop grains at the centre; any cell holding 4 or more topples, giving one grain to each neighbour; avalanches settle into a fractal", use: "Growing <b>gold hoards</b> for Gold Fever and the treasure screen", w: 101, h: 101,
+  init(s) { s.a = new Uint32Array(s.w * s.h); s.lut = [RGB(10, 6, 4), RGB(110, 70, 20), RGB(200, 140, 40), RGB(255, 225, 120)]; },
+  step(s, px) { const { w, h, a } = s, c = (h >> 1) * w + (w >> 1); a[c] += 400;
+    let again = true, guard = 0;
+    while (again && guard++ < 40) { again = false; for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) { const i = y * w + x; if (a[i] >= 4) { const q = a[i] >> 2; a[i] -= q * 4; a[i - 1] += q; a[i + 1] += q; a[i - w] += q; a[i + w] += q; again = true; } } }
+    if (a[w * 2 + (w >> 1)] > 0) this.init(s);
+    for (let i = 0; i < w * h; i++) px[i] = s.lut[Math.min(3, a[i])]; } },
+
+{ name: "Clifford Attractor", math: "x' = sin(a·y) + c·cos(a·x), y' = sin(b·x) + d·cos(b·y); hit counts tone-mapped by log density", use: "<b>Arcana card</b> art that is unique to every run seed", w: 128, h: 128,
+  init(s) { s.d = new Float32Array(s.w * s.h); s.x = .1; s.y = .1; s.t = rnd() * 10; s.max = 1; },
+  step(s, px) { const { w, h, d } = s; s.t += .004; const a = -1.4 + Math.sin(s.t) * .2, b = 1.6, c = 1.0 + Math.cos(s.t * .7) * .2, dd = .7;
+    for (let i = 0; i < w * h; i++) d[i] *= .9;
+    let x = s.x, y = s.y; for (let k = 0; k < 40000; k++) { const nx = Math.sin(a * y) + c * Math.cos(a * x), ny = Math.sin(b * x) + dd * Math.cos(b * y); x = nx; y = ny;
+      const X = (x + 2.2) / 4.4 * w | 0, Y = (y + 1.8) / 3.6 * h | 0; if (X >= 0 && Y >= 0 && X < w && Y < h) d[Y * w + X]++; }
+    s.x = x; s.y = y; let m = 1; for (let i = 0; i < w * h; i++) if (d[i] > m) m = d[i]; const L = Math.log(m + 1);
+    for (let i = 0; i < w * h; i++) px[i] = sh(CURSE, Math.log(d[i] + 1) / L); } },
+
+{ name: "Fractal Flame", math: "Chaos game over 3 affine maps, each followed by a variation (sinusoidal, swirl, spherical); colour = average of map indices; log-density", use: "<b>Evolution fusion</b> bursts and legendary reveals", w: 128, h: 128,
+  init(s) { s.d = new Float32Array(s.w * s.h); s.c = new Float32Array(s.w * s.h); s.x = 0; s.y = 0; s.col = 0; s.m = [0,1,2].map(() => Array.from({ length: 6 }, () => rnd() * 2 - 1)); s.t = 0; },
+  step(s, px) { const { w, h, d, c, m } = s; s.t += .01;
+    for (let i = 0; i < w * h; i++) { d[i] *= .85; c[i] *= .85; }
+    let x = s.x, y = s.y, col = s.col;
+    for (let k = 0; k < 30000; k++) { const j = rnd() * 3 | 0, M = m[j], ox = M[0] * x + M[1] * y + M[2] + Math.sin(s.t) * .1, oy = M[3] * x + M[4] * y + M[5];
+      const r2 = ox * ox + oy * oy + 1e-6; if (j === 0) { x = Math.sin(ox); y = Math.sin(oy); } else if (j === 1) { x = ox * Math.sin(r2) - oy * Math.cos(r2); y = ox * Math.cos(r2) + oy * Math.sin(r2); } else { x = ox / r2; y = oy / r2; }
+      if (!isFinite(x) || Math.abs(x) > 20) { x = rnd(); y = rnd(); } col = (col + j / 2) / 2;
+      const X = (x + 1.6) / 3.2 * w | 0, Y = (y + 1.6) / 3.2 * h | 0; if (X >= 0 && Y >= 0 && X < w && Y < h) { d[Y * w + X]++; c[Y * w + X] += col; } }
+    s.x = x; s.y = y; s.col = col; let mx = 1; for (let i = 0; i < w * h; i++) if (d[i] > mx) mx = d[i]; const L = Math.log(mx + 1);
+    for (let i = 0; i < w * h; i++) { const v = Math.log(d[i] + 1) / L, hue = d[i] ? c[i] / d[i] : 0; px[i] = RGB(Math.min(255, v * (180 + hue * 75)) | 0, Math.min(255, v * (60 + hue * 150)) | 0, Math.min(255, v * (220 - hue * 160)) | 0); }
+    if (s.t > 6) this.init(s); } },
+
+{ name: "Kuramoto Fireflies", math: "dθ_i/dt = ω_i + K/N·Σ sin(θ_j − θ_i) over neighbours within r; a firefly flashes when θ wraps past 2π", use: "Forest <b>fireflies and spirit wisps</b> that slowly blink in sync, which is eerie at night", w: 96, h: 96,
+  init(s) { s.f = Array.from({ length: 140 }, () => ({ x: rnd() * 96, y: rnd() * 96, th: rnd() * 6.283, w: .09 + rnd() * .02, fl: 0, vx: 0, vy: 0 })); },
+  step(s, px) { const F = s.f; for (const a of F) { let sum = 0, n = 0; for (const b of F) { const d = (a.x - b.x) ** 2 + (a.y - b.y) ** 2; if (d < 500) { sum += Math.sin(b.th - a.th); n++; } }
+      a.th += a.w + .06 * sum / n; if (a.th > 6.283) { a.th -= 6.283; a.fl = 1; } a.fl *= .82;
+      a.vx = a.vx * .95 + (rnd() - .5) * .1; a.vy = a.vy * .95 + (rnd() - .5) * .1; a.x = (a.x + a.vx + 96) % 96; a.y = (a.y + a.vy + 96) % 96; }
+    for (let i = 0; i < px.length; i++) { const v = px[i], g = (v >> 8 & 255) * .7 | 0, r = (v & 255) * .7 | 0; px[i] = RGB(Math.max(4, r), Math.max(8, g), 12); }
+    for (const a of F) { const X = a.x | 0, Y = a.y | 0, k = .15 + a.fl * .85; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const q = (dx || dy) ? k * .45 : k; const x = (X + dx + 96) % 96, y = (Y + dy + 96) % 96; px[y * 96 + x] = RGB(Math.max(px[y * 96 + x] & 255, 230 * q | 0), Math.max(px[y * 96 + x] >> 8 & 255, 255 * q | 0), 60 * q | 0); } } } },
+
+{ name: "Ant Colony Pheromones", math: "Ants random-walk; carrying food they lay a 'home' trail, and searching they follow the 'food' trail; both evaporate", use: "<b>Swarm enemies</b> (spiders, beetles) that form living supply lines toward the player", w: 96, h: 96,
+  init(s) { const n = s.w * s.h; s.home = new Float32Array(n); s.food = new Float32Array(n); s.nest = [20, 76]; s.src = [[78, 18], [70, 64]]; s.a = Array.from({ length: 220 }, () => ({ x: 20, y: 76, d: rnd() * 6.283, c: 0 })); },
+  step(s, px) { const { w, home, food, src } = s;
+    const at = (F, x, y) => (x < 0 || y < 0 || x >= 96 || y >= 96) ? -1 : F[(y | 0) * w + (x | 0)];
+    for (const a of s.a) { const F = a.c ? home : food; let best = 0, bv = -1; for (const o of [-.5, 0, .5]) { const v = at(F, a.x + Math.cos(a.d + o) * 4, a.y + Math.sin(a.d + o) * 4); if (v > bv) { bv = v; best = o; } }
+      a.d += best * .6 + (rnd() - .5) * .5; a.x += Math.cos(a.d) * .8; a.y += Math.sin(a.d) * .8;
+      if (a.x < 1 || a.y < 1 || a.x > 94 || a.y > 94) { a.d += Math.PI; a.x = Math.min(94, Math.max(1, a.x)); a.y = Math.min(94, Math.max(1, a.y)); }
+      const i = (a.y | 0) * w + (a.x | 0); if (a.c) food[i] = Math.min(1, food[i] + .2); else home[i] = Math.min(1, home[i] + .08);
+      for (const q of src) if (!a.c && (a.x - q[0]) ** 2 + (a.y - q[1]) ** 2 < 16) { a.c = 1; a.d += Math.PI; }
+      if (a.c && (a.x - s.nest[0]) ** 2 + (a.y - s.nest[1]) ** 2 < 16) { a.c = 0; a.d += Math.PI; } }
+    for (let i = 0; i < w * 96; i++) { home[i] *= .985; food[i] *= .985; px[i] = RGB(8 + food[i] * 200 | 0, 6 + food[i] * 120 + home[i] * 60 | 0, 12 + home[i] * 200 | 0); }
+    for (const a of s.a) px[(a.y | 0) * w + (a.x | 0)] = a.c ? RGB(255, 210, 90) : RGB(220, 220, 230);
+    for (const q of [s.nest, ...src]) for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) px[(q[1] + dy) * w + q[0] + dx] = q === s.nest ? RGB(150, 90, 220) : RGB(90, 200, 90); } },
+
+{ name: "SDF Smooth Union", math: "d = smin(d_circle, d_box, d_star, k), smin(a,b,k) = min(a,b) − h²k/4 where h = max(k−|a−b|, 0)/k; shaded in distance bands", use: "<b>Shape-morphing icons</b> and aura blobs that melt together, such as merging Garlic rings", w: 96, h: 96,
+  init(s) { s.t = 0; },
+  step(s, px) { s.t += .03; const t = s.t;
+    const smin = (a, b, k) => { const hh = Math.max(k - Math.abs(a - b), 0) / k; return Math.min(a, b) - hh * hh * k / 4; };
+    const c1 = [48 + Math.cos(t) * 22, 48 + Math.sin(t * 1.3) * 18], c2 = [48 + Math.cos(t * .7 + 2) * 20, 48 + Math.sin(t * .9 + 1) * 22], c3 = [48 + Math.cos(t * 1.1 + 4) * 18, 48 + Math.sin(t * .6 + 3) * 16];
+    for (let y = 0; y < 96; y++) for (let x = 0; x < 96; x++) {
+      const a = Math.hypot(x - c1[0], y - c1[1]) - 12;
+      const qx = Math.abs(x - c2[0]) - 9, qy = Math.abs(y - c2[1]) - 9, b = Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0);
+      const ang = Math.atan2(y - c3[1], x - c3[0]), r = Math.hypot(x - c3[0], y - c3[1]), c = r - (10 + 4 * Math.cos(ang * 5 + t * 2));
+      const d = smin(smin(a, b, 12), c, 12);
+      px[y * 96 + x] = d < 0 ? (d > -1.5 ? RGB(255, 235, 170) : sh(EMBER, .45 + Math.min(.4, -d / 20))) : (d % 6 < 1.2 && d < 30 ? sh(CURSE, .5 - d / 70) : RGB(10, 6, 14)); } } },
+
+{ name: "Superformula (Gielis)", math: "r(φ) = (|cos(mφ/4)/a|^n₂ + |sin(mφ/4)/b|^n₃)^(−1/n₁), with m and n animated, filled through a 4×4 Bayer dither", use: "<b>Evolution flash</b> silhouettes and boss sigils that morph from flower to star to skull-like shapes", w: 96, h: 96,
+  init(s) { s.t = 0; },
+  step(s, px) { s.t += .02; const t = s.t, m = 3 + Math.round((Math.sin(t * .5) + 1) * 3.5), n1 = .3 + (Math.sin(t) + 1) * 1.2, n2 = 1 + Math.sin(t * 1.3) * .8, n3 = 1 + Math.cos(t * .9) * .8;
+    const B = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+    for (let y = 0; y < 96; y++) for (let x = 0; x < 96; x++) { const dx = x - 48, dy = y - 48, ph = Math.atan2(dy, dx) + t * .3, r = Math.hypot(dx, dy) / 36;
+      const R = Math.pow(Math.pow(Math.abs(Math.cos(m * ph / 4)), n2) + Math.pow(Math.abs(Math.sin(m * ph / 4)), n3), -1 / n1);
+      const v = 1 - r / Math.min(R, 1.3), th = (B[(y & 3) * 4 + (x & 3)] + .5) / 16;
+      px[y * 96 + x] = v > 0 ? (v < .06 ? RGB(255, 240, 200) : (v * 2.2 > th ? sh(EMBER, .55 + v * .4) : sh(CURSE, .4))) : RGB(10, 6, 14); } } },
+
+{ name: "Multi-Scale Truchet", math: "Quadtree subdivision with random depth; each leaf holds a quarter-arc tile, scaled to its size; tiles flip one at a time", use: "<b>Cursed floor patterns</b> and Arcana card backs that rewire themselves", w: 128, h: 128,
+  init(s) { s.leaves = []; const sub = (x, y, z) => { if (z > 8 && rnd() < .55) { const hz = z / 2; sub(x, y, hz); sub(x + hz, y, hz); sub(x, y + hz, hz); sub(x + hz, y + hz, hz); } else s.leaves.push({ x, y, z, o: rnd() < .5, a: 1 }); }; for (let y = 0; y < 128; y += 32) for (let x = 0; x < 128; x += 32) sub(x, y, 32); },
+  step(s, px) { for (let k = 0; k < 2; k++) { const L = s.leaves[rnd() * s.leaves.length | 0]; L.o = !L.o; L.a = 0; }
+    px.fill(RGB(14, 9, 20));
+    for (const L of s.leaves) { L.a = Math.min(1, L.a + .08); const { x, y, z } = L, w2 = Math.max(1, z / 6), col = L.a < 1 ? RGB(255, 220, 140) : z > 16 ? sh(CURSE, .65) : sh(EMBER, .6);
+      for (let j = 0; j < z; j++) for (let i = 0; i < z; i++) { const u = L.o ? i : z - 1 - i, d1 = Math.abs(Math.hypot(u, j) - z / 2), d2 = Math.abs(Math.hypot(u - z, j - z) - z / 2);
+        if (Math.min(d1, d2) < w2) px[(y + j) * 128 + x + i] = col; } } } },
+
+{ name: "Harmonograph", math: "x = Σ A_i·sin(f_i·t + p_i)·e^(−d_i·t) for two damped pendulums per axis; long-exposure accumulation", use: "<b>Magic circle</b> and spell-sigil drawings that ink themselves stroke by stroke", w: 128, h: 128,
+  init(s) { s.d = new Float32Array(s.w * s.h); s.t = 0; s.p = Array.from({ length: 4 }, () => ({ f: 2 + (rnd() * 3 | 0) + rnd() * .02, p: rnd() * 6.28, d: .0015 + rnd() * .002 })); },
+  step(s, px) { const { d, p } = s;
+    for (let k = 0; k < 1500; k++) { const t = s.t += .02; const x = 64 + 28 * (Math.sin(p[0].f * t + p[0].p) * Math.exp(-p[0].d * t) + Math.sin(p[1].f * t + p[1].p) * Math.exp(-p[1].d * t)), y = 64 + 28 * (Math.sin(p[2].f * t + p[2].p) * Math.exp(-p[2].d * t) + Math.sin(p[3].f * t + p[3].p) * Math.exp(-p[3].d * t));
+      d[(y | 0) * 128 + (x | 0)] += .5; }
+    for (let i = 0; i < d.length; i++) px[i] = sh(EMBER, Math.min(1, d[i] * .35));
+    if (s.t > 1400) this.init(s); } },
+
+{ name: "Wave Function Collapse", math: "Each cell holds a set of tiles that could fit; collapse the lowest-entropy cell, then propagate edge constraints until nothing changes", use: "<b>Dungeon and ruin layouts</b> generated from a few hand-made sample tiles", w: 128, h: 128,
+  init(s) { s.N = 16; s.T = []; for (let m = 0; m < 16; m++) s.T.push([m & 1, m >> 1 & 1, m >> 2 & 1, m >> 3 & 1]); s.cell = Array.from({ length: 256 }, () => new Set(s.T.keys())); s.done = 0; },
+  step(s, px) { const { N, T, cell } = s; const opp = [2, 3, 0, 1], dir = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+    for (let rep = 0; rep < 3; rep++) { let best = -1, be = 99; cell.forEach((c, i) => { if (c.size > 1 && c.size + rnd() * .5 < be) { be = c.size + rnd() * .5; best = i; } });
+      if (best < 0) { if (++s.done > 40) this.init(s); break; }
+      const opts = [...cell[best]].filter(t => (T[t].reduce((a, b) => a + b) !== 4) || rnd() < .3); const pick = opts.length ? opts[rnd() * opts.length | 0] : [...cell[best]][0]; cell[best] = new Set([pick]);
+      const st = [best]; while (st.length) { const i = st.pop(), x = i % N, y = i / N | 0;
+        for (let d = 0; d < 4; d++) { const nx = x + dir[d][0], ny = y + dir[d][1]; if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue; const j = ny * N + nx, before = cell[j].size;
+          const allowed = new Set([...cell[i]].map(t => T[t][d])); for (const t of [...cell[j]]) if (!allowed.has(T[t][opp[d]])) cell[j].delete(t);
+          if (!cell[j].size) { this.init(s); return; } if (cell[j].size < before) st.push(j); } } }
+    for (let i = 0; i < 256; i++) { const x0 = (i % N) * 8, y0 = (i / N | 0) * 8, c = cell[i];
+      for (let j = 0; j < 8; j++) for (let k = 0; k < 8; k++) { let col;
+        if (c.size === 1) { const e = T[[...c][0]], mid = j > 2 && j < 5 && k > 2 && k < 5; const on = mid ? e.some(Boolean) : (k > 2 && k < 5 && ((j < 3 && e[0]) || (j > 4 && e[2]))) || (j > 2 && j < 5 && ((k < 3 && e[3]) || (k > 4 && e[1])));
+          col = on ? sh(EMBER, .7) : RGB(26, 20, 34); }
+        else col = sh(CURSE, .12 + (16 - c.size) / 40);
+        px[(y0 + j) * 128 + x0 + k] = col; } } } },
+
+{ name: "SDF Soft Shadows (Lantern)", math: "Sphere-trace each pixel toward the light; penumbra = min(k·d/t) along the ray; falloff 1/(1 + αr²)", use: "The knight's <b>lantern</b> lighting the forest, with props casting soft shadows", w: 96, h: 96,
+  init(s) { s.t = 0; s.o = Array.from({ length: 6 }, () => [10 + rnd() * 76, 10 + rnd() * 76, 4 + rnd() * 6]); },
+  step(s, px) { s.t += .025; const L = [48 + Math.cos(s.t) * 28, 48 + Math.sin(s.t * 1.4) * 24], O = s.o;
+    const sdf = (x, y) => { let d = 1e9; for (const o of O) d = Math.min(d, Math.hypot(x - o[0], y - o[1]) - o[2]); return d; };
+    for (let y = 0; y < 96; y++) for (let x = 0; x < 96; x++) { const d0 = sdf(x, y), i = y * 96 + x; if (d0 < 0) { px[i] = d0 > -1.2 ? RGB(80, 60, 50) : RGB(30, 22, 26); continue; }
+      const dx = L[0] - x, dy = L[1] - y, dist = Math.hypot(dx, dy), ux = dx / dist, uy = dy / dist; let t = 1, res = 1;
+      for (let k = 0; k < 24 && t < dist; k++) { const h = sdf(x + ux * t, y + uy * t); if (h < .01) { res = 0; break; } res = Math.min(res, 6 * h / t); t += Math.max(h, .5); }
+      const li = res / (1 + dist * dist * .0012), g = ((x * 7 + y * 13) % 5) * .01; px[i] = RGB(Math.min(255, 18 + li * 240) | 0, Math.min(255, 14 + li * 170) | 0, Math.min(255, 18 + li * 80 + g * 200) | 0); }
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) px[((L[1] | 0) + dy) * 96 + (L[0] | 0) + dx] = RGB(255, 245, 210); } },
+
+{ name: "Rock-Paper-Scissors CA", math: "Each cell is one of 3 species; it is converted when at least 3 of its 8 neighbours belong to the species that beats it", use: "<b>Three-way faction wars</b> (holy, curse, beast) spreading as spirals across a boss arena", w: 96, h: 96,
+  init(s) { s.a = new Uint8Array(s.w * s.h).map(() => rnd() * 3 | 0); s.lut = [RGB(230, 190, 90), RGB(130, 60, 190), RGB(60, 150, 110)]; },
+  step(s, px) { const { w, h, a } = s, b = new Uint8Array(w * h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const i = y * w + x, v = a[i], pred = (v + 1) % 3; let c = 0;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if ((dx || dy) && a[((y + dy + h) % h) * w + (x + dx + w) % w] === pred) c++;
+      b[i] = c >= 3 + (rnd() < .5 ? 0 : 0) && rnd() < .9 ? pred : v; px[i] = s.lut[b[i]]; }
+    s.a = b; } }
+];
+
+const grid = document.getElementById("grid"), runs = [];
+let paused = matchMedia("(prefers-reduced-motion: reduce)").matches;
+DEMOS.forEach((D, k) => {
+  const card = document.createElement("article"); card.className = "card";
+  card.innerHTML = `<div class="cv"><canvas width="${D.w}" height="${D.h}" aria-label="${D.name} live demo"></canvas><span class="num">${String(k + 1).padStart(2, "0")}</span><button type="button" id="reseed-${k}">Reseed</button></div>
+    <div class="meta"><h2 class="name">${D.name}</h2><p class="math">${D.math}</p><p class="use">${D.use}</p></div>`;
+  grid.appendChild(card);
+  const cv = card.querySelector("canvas"), ctx = cv.getContext("2d"), img = ctx.createImageData(D.w, D.h), px = new Uint32Array(img.data.buffer);
+  const st = { w: D.w, h: D.h }; D.init(st);
+  const run = { D, st, ctx, img, px, vis: false, draw() { try { D.step(st, px); } catch (e) { D.init(st); } ctx.putImageData(img, 0, 0); } };
+  runs.push(run); run.draw();
+  card.querySelector("button").addEventListener("click", () => { D.init(st); run.draw(); });
+  new IntersectionObserver(es => es.forEach(e => run.vis = e.isIntersecting)).observe(cv);
+});
+document.getElementById("pauseAll").addEventListener("click", e => { paused = !paused; e.target.textContent = paused ? "Play all" : "Pause all"; });
+if (paused) document.getElementById("pauseAll").textContent = "Play all";
+document.getElementById("reseedAll").addEventListener("click", () => runs.forEach(r => { r.D.init(r.st); r.draw(); }));
+let last = 0, frames = 0, acc = 0; const fpsEl = document.getElementById("fps");
+function loop(t) { requestAnimationFrame(loop); if (t - last < 33) return; acc += t - last; last = t; frames++;
+  if (acc > 1000) { fpsEl.textContent = `${runs.filter(r => r.vis).length} plates live · ${Math.round(frames * 1000 / acc)} fps`; acc = 0; frames = 0; }
+  if (!paused) for (const r of runs) if (r.vis) r.draw(); }
+requestAnimationFrame(loop);
+</script>
