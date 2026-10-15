@@ -4,122 +4,101 @@
 **Goal:** a 2D game that reads as a $60 Steam release. It keeps the VS look and 1:1 numbers, but has a real engine, deep systems, cinematic presentation and studio-grade tooling.
 **Identity:** the curse is the theme. Curse is a stat in VS; here it becomes the visual and systemic signature, with a world that corrupts as you get stronger.
 
-Each phase has deliverables and an exit test. A phase doesn't start until the previous phase's exit test passes.
+## How this actually runs
+The code is written by Claude, with parallel agents for independent modules. Code is not the bottleneck. These are:
+1. **Testing in Studio and on devices.** Only you can run the place, so every sprint ends with a play test by you.
+2. **Art and audio.** Original assets have to be made or commissioned. Start now, alongside the code.
+3. **Roblox moderation.** Uploaded images take about an hour to clear, so batch uploads.
+4. **Playtesters.** Outside players judge feel and readability.
+
+So the plan is a series of **sprints**. Each sprint is a few sessions of building, then one test by you in Studio. Each one ends with a pass/fail check, and the next sprint starts as soon as it passes.
+
+**Setup needed once:** push the full game to the repo. Optionally connect Studio to this session (MCP), or keep using the `tools/sync.luau` + http-server flow so I can push code straight into the place. With a Studio connection, I can also run the profiler, take screenshots and verify changes myself, which removes most of bottleneck 1.
 
 ---
 
-## Phase 0: Audit and baseline (1–2 weeks)
-**Why:** you can't improve what you haven't measured.
-- Push the full game to the repo (PixelCore, PixelSims, `PROCEDURAL_BIBLE.md`, client and server scripts, assets).
-- Profile three moments on a mid-range phone and on PC: 0:30, 15:00 (about 150 enemies), and 29:00 with all weapons evolved (300+ enemies). Record frame time, memory and EditableImage count.
-- Run the hierarchy checklist (`research/vs-fx/hierarchy_qa.md`) on gameplay, level-up and results screens: squint test, grayscale test, contrast map.
-- Capture reference footage from the original game, if you own it, for frame-timing QA.
+## Sprint 1: Engine swap (the biggest win)
+Built in parallel by agents, each owning one module, merged and tested headless:
+- Fixed-step deterministic simulation (60 Hz, interpolated rendering, seeded random streams).
+- Entity storage as flat buffers, extending `pixelfx/fx/Crowd.luau` to projectiles, pickups, decals and particles.
+- Layered EditableImage renderer: 13 layers in hierarchy order, uploading only the regions that changed.
+- Sprite pipeline: `EnemyBake` on every enemy PNG, 32 pre-rotated projectile frames, skipping blank pixels when drawing.
+- Spatial hash, flow field, frame budget manager, memory monitor, Parallel Luau on Actors.
+- A profiling scene: the 29:00 moment with 1000 enemies and 2000 projectiles.
 
-**Exit test:** a baseline report with the numbers, plus the top 10 performance costs and the top 10 readability problems.
+**Your test:** run the profiling scene on PC and on your phone.
+**Pass:** 60 fps on PC and at least 30 fps on phone; the same seed gives the same run.
 
-## Phase 1: Engine core (6–10 weeks), the foundation
-1. **Fixed-step deterministic simulation** at 60 Hz, with rendering interpolated between steps. All randomness comes from seeded streams (`Core.rng`).
-2. **Entity system on buffers.** Enemies, projectiles, pickups, decals and particles are struct-of-arrays, with no Instances per entity. This builds on `pixelfx/fx/Crowd.luau`.
-3. **Layered renderer.** Fixed EditableImage layers in hierarchy order: ground, decals, pickups, ground auras, enemies (y-sorted), player, projectiles, flashes, damage numbers, HUD. There's one upload per layer per frame, and only the regions that changed are uploaded.
-4. **Sprite pipeline.** Enemy PNGs are baked at load with `EnemyBake` (walk, hit flash, death frames, 32 rotation frames for projectiles). Opaque runs are pre-encoded so blank pixels are skipped when drawing.
-5. **Spatial hash and flow field** for all collisions and enemy movement.
-6. **Parallel Luau.** Simulation and crowd run on Actors; only uploading the images happens on the main thread.
-7. **Frame budget manager and tiered scheduler.** Effects at 60/30/15/8 fps get per-frame cost caps and drop quality gracefully.
-8. **Memory monitor.** Tracks the EditableImage budget and falls back to lower quality instead of failing.
+## Sprint 2: Readability (can ship in the same session as sprint 1)
+The fixes from your screenshot:
+- Contrast-adaptive and threat-colour outlines.
+- A darker, less saturated background that gets quieter as chaos rises.
+- Damage numbers in white or gold with an outline, crits that pop, and stacking per enemy.
+- Dimmed empty slots.
+- The density limiter, brightness ceiling, player beacon and clutter slider.
+- The level-up card fixes: dim unselected cards, rarity in the top band, one motion at a time, readable body text, a visible "evolves with" icon.
 
-**Exit test:** 1000 enemies plus 2000 projectiles at 60 fps on PC and at least 30 fps on a mid-range phone, at the 29:00 moment. A 30-minute run gives identical results from the same seed and inputs.
+**Your test:** play to 29:00 and take 3 screenshots.
+**Pass:** I run the squint, grayscale and contrast checks on them. You can find the player, the nearest threat and the nearest pickup instantly.
 
-## Phase 2: Readability and hierarchy (2–3 weeks, can overlap phase 1)
-Fixes for the problems in your screenshot:
-- **Enemies sink into the grass:** a contrast-adaptive outline (78), threat-colour outlines by danger tier (273), and rim light from `EnemyBake`.
-- **Decor competes with threats:** stage backgrounds pushed darker and less saturated. Background desaturation scales with chaos (673).
-- **Damage numbers too small and blend in:** a white or gold fill with a 1 px dark outline, crits pop, and numbers on the same enemy stack (320, 321).
-- **Filled and empty slots look alike:** empty slots at 30% brightness, filled ones lit (318).
-- **Late-game wall of effects:** a density limiter, brightness ceiling, player beacon, and a clutter slider in settings (664, 675, 676, 970).
-- **Level-up cards:** dim the unselected cards to 60% with no rays; move rarity into the top band; one motion at a time on the selected card; brighter body text; a visible "evolves with" icon.
+## Sprint 3: Curse systems
+Built in parallel, one agent per system:
+1. **Elemental field engine:** heat, frost, wetness, toxin, charge, holiness and curse on a coarse grid, with diffusion and reaction. Interactions include steam, lightning conducting through water, toxin ignition, and holy/curse annihilation. These are bonuses on top of the 1:1 damage, and can be turned off in Classic mode.
+2. **Ground material layer:** grass burns, water flows, ice melts, scorch and frost persist.
+3. **Living curse:** Physarum veins spread, the palette shifts and enemies get cursed variants as the Curse stat rises.
+4. **Enemy director:** shapes waves within the 1:1 wave tables using formations.
+5. **Procedural cursed bosses:** assembled from parts, with a bullet-pattern grammar and telegraphs.
+6. **Codex of discovered combos.**
 
-**Exit test:** every screen passes the squint, grayscale and contrast tests. In blind tests, players spot the player, the nearest threat and the nearest pickup within 0.5 s at 29:00.
+**Your test:** 3 full runs with different builds.
+**Pass:** 20 element interactions are readable, and the runs feel different from each other.
 
-## Phase 3: The curse systems (8–12 weeks), what makes it deep
-1. **Elemental field engine.** A coarse world grid (for example 8 px cells) holds heat, frost, wetness, toxin, charge, holiness and curse. Weapons write into the fields and the fields interact:
-   - Fire plus frost gives steam, which blocks vision and slows enemies.
-   - Charge plus wetness conducts lightning through puddles.
-   - Toxin plus heat ignites into an explosion.
-   - Holiness and curse annihilate each other in a flash.
+## Sprint 4: Presentation
+- **Code (me):**
+  - 2D lighting: SDF soft shadows, radiance cascades on high settings, the lantern lighting the forest.
+  - Cinematic boss, evolution and Reaper moments.
+  - A HUD that reacts to game state.
+  - Beat-synced UI.
+  - The art direction bible, as a document plus automated palette and outline checks.
+- **Assets (you or artists):** original sprites and stages to the bible, and stems for a layered soundtrack. Start on these at sprint 1.
 
-   The algorithms are heat diffusion and advection-reaction-diffusion (`ALGORITHMS_CORE.md` 13–14). Base weapon damage stays 1:1; the interactions are bonus effects that can be turned off in Classic mode.
-2. **Material layer under the map.** A falling-sand style material grid: grass burns into ash, water pools and flows, ice melts, explosions scorch, and blood and frost persist as decals. Simulated at low resolution and drawn into the ground layer.
-3. **The curse as a living world.** As your Curse stat rises, the map visibly corrupts:
-   - Physarum veins spread across the ground.
-   - The palette shifts toward the stage's cursed palette.
-   - Enemies gain cursed variants with outlines and tendrils.
+**Your test:** record a 60-second clip.
+**Pass:** outside players say it beats the original on clarity and spectacle.
 
-   This uses VS's own Curse stat; how it looks is the new part.
-4. **Enemy director.** A system that reads tension (HP, enemy density, DPS, time since the last near-death) and adjusts spawn shapes within the VS wave tables. It uses formations (bat lines, flower rings, ghost lines) to create rhythm. The 1:1 wave numbers stay the baseline.
-5. **Procedural cursed bosses.** Bosses assembled from parts, with bullet patterns from a pattern grammar (rings, spirals, waves, aimed bursts), telegraph decals and phase changes. They add to the original bosses, not replace them.
-6. **Codex and discovery.** Hidden synergies, evolutions and element combos are logged when discovered, so finding combos becomes the long-term goal.
+## Sprint 5: Studio-grade infrastructure (built alongside sprints 1–4, not after)
+- Replays (seed plus inputs) and server-side verification of leaderboard runs.
+- Golden-image tests with SSIM thresholds, and failing checks for effects that go over their frame budget.
+- A headless bot that plays every stage.
+- Telemetry: death heatmaps, weapon pick rates and per-device frame times.
+- Editors in Studio for weapons, waves, stages and boss patterns.
+- Daily seeded challenges with leaderboards, and weekly curse modifiers.
 
-**Exit test:** 20 element interactions working and readable. In playtests, players describe runs as different from each other, not just a different stat build.
-
-## Phase 4: Presentation (8–12 weeks, mostly art and audio)
-1. **Lighting.** 2D radiance cascades or SDF soft shadows (`ALGORITHMS_CORE.md` 97–98): the lantern lights the forest, fireballs light their path, and braziers cast shadows. Quality tiers go down to "no shadows" on phones.
-2. **Cinematic moments:** boss intros (silhouette, letterbox, title card), evolution showcases (slow motion, fusion animation, zoom punch), and the Reaper's arrival (darkening, music cut, toll).
-3. **Living HUD:**
-   - The HUD frames crack at low HP, freeze during Orologion and burn during Nduja.
-   - XP gems orbit the player before entering the bar.
-   - Light from an opened chest travels into the weapon slot it fills.
-4. **Dynamic music.** Layered stems driven by intensity, stingers on events, beat-synced UI pulses, and a silence moment before the Reaper.
-5. **Art direction bible:**
-   - One palette set per stage (normal, cursed and inverse).
-   - Light from the top-left everywhere.
-   - Fixed animation timings: 60 ms hits, 120 ms pops, 300 ms reveals.
-   - A 1 px outline standard.
-   - The 13-layer z-order.
-
-   Every new asset must pass the bible.
-6. **Commissioned art and audio.** Original pixel art for characters, enemies and stages, plus an original soundtrack. This is the single biggest AAA lever, and it removes the copyright risk of using VS assets.
-
-**Exit test:** side-by-side screenshots and clips beat the original on clarity and spectacle, judged by outside players, not the team.
-
-## Phase 5: Studio-grade infrastructure (ongoing from phase 1)
-- **Replays:** a run is stored as its seed plus inputs (a few KB). Players can watch and share them, and the server re-simulates top leaderboard runs to verify them.
-- **Automated visual QA:** golden images for every effect and screen, the per-pixel diff and SSIM thresholds from `hierarchy_qa.md`, a failing check if an effect goes over its frame budget, and a headless bot that plays every stage each build.
-- **Telemetry:** death heatmaps, weapon pick and win rates, run lengths, and frame-time distribution per device. Balance changes are made from data.
-- **Content tools in Studio:** a weapon editor with live preview, a wave and formation editor, a stage palette and decor editor, and a boss pattern editor. All content is data.
-- **Live ops:** daily seeded challenges with global leaderboards, weekly curse modifiers, seasonal events and new stages.
-
-## Phase 6: Showpieces (after launch)
-- **Co-op for up to 4 players** on one deterministic simulation. Elemental fields are shared, so weapons combine across players. Player colours and outlines come from the VS co-op options.
-- **Pixel-level enemy destruction:** enemies lose pixels where they're hit, and big enemies crack apart.
-- **End-of-run painting:** each run renders a unique image from its paths, kills and elements, which players can share.
-- **Stage and challenge editor** with community sharing.
+## Sprint 6: Showpieces
+- 4-player co-op on one shared simulation, with elemental combos across players.
+- Pixel-level enemy damage.
+- An end-of-run painting.
+- A stage and challenge editor with sharing.
 
 ---
 
-## Order and dependencies
+## What runs in parallel
 ```
-Phase 0 audit
-   │
-   ├─► Phase 1 engine core ──► Phase 3 curse systems ──► Phase 6 showpieces
-   │        │                         │
-   │        └─► Phase 5 infra (runs alongside from here)
-   │
-   └─► Phase 2 readability (in parallel with phase 1)
-                                      └─► Phase 4 presentation (art and audio can start at phase 0)
+you: push game ─► test S1 ─► test S2 ─► test S3 ─► test S4 ...
+me:  S1 engine ──► S2 readability ──► S3 curse systems ──► S4 presentation ──► S6
+     S5 infra and QA ───────────────────────────────────────────────── (continuous)
+art/audio: style bible ─► sprites, stages, music ───────────────────── (start now)
 ```
 
 ## Biggest risks
 | Risk | Mitigation |
 |---|---|
-| Phones run out of EditableImage memory | Memory monitor plus quality tiers in phase 1; test phones every week |
-| Determinism breaks (floats, ordering) | Fixed step, seeded randomness, stable iteration order, and a replay-match test in CI |
-| Effects bury readability | The phase 2 gates apply to every later phase; the clutter slider and Classic mode always ship |
+| Phones run out of EditableImage memory | Memory monitor plus quality tiers in sprint 1; test on phone every sprint |
+| Determinism breaks | Fixed step, seeded randomness, stable ordering; a replay-match test in the automated checks |
+| Effects bury readability | Sprint 2 checks apply to every later sprint; the clutter slider and Classic mode always ship |
 | Copyright (VS data and assets) | Keep the mechanics, but use original art, names and audio before launch |
-| Scope | Each phase has an exit test; nothing starts until the previous test passes |
+| Waiting on tests | Connect Studio to this session so I can test and screenshot myself |
 
-## First 2 weeks, concretely
-1. Push the game to the repo.
-2. Run the phase 0 profile at 0:30, 15:00 and 29:00 on a phone and on PC.
-3. Replace enemy rendering with `EnemyBake` plus the `Crowd` batch renderer (the biggest single performance and look win).
-4. Apply the phase 2 readability fixes from your screenshot (outlines, background contrast, damage numbers, slot dimming).
-5. Set up the golden-image QA harness, so every change from then on is measured.
+## Right now
+1. Push the full game to the repo (or connect Studio).
+2. I start sprint 1 straight away, with agents building the engine modules in parallel against the existing `pixelfx` core.
+3. You or your artist start the art bible and asset list.
