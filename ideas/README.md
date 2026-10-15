@@ -7,7 +7,7 @@
 | `ALGORITHMS_CORE.md` | **100 pure algorithms.** The maths each effect is built from (the same kind of list as the artifact) |
 | `EDITABLEIMAGE_ALGORITHMS.md` | **1000 ideas.** Uses of the algorithms across weapons, enemies, HUD, map and more. About 150 are algorithms; the rest are applications |
 | `PICKS.md` | Best-of lists: the top 40 overall, the top 100 from the 1000, the top 10 to build first, and the top algorithms |
-| `AAA_ROADMAP.md` | **The Cursed Survivors plan**: 6 sprints with pass checks, what runs in parallel, risks and what to do right now |
+| `AAA_ROADMAP.md` | **The improvement roadmap for the existing build**: rules, the per-upgrade loop, tracks A–F with pass checks, and order |
 
 Already built, so left out of these lists: the 89 effects in PixelCore/PixelSims (artifact `L2VLi2c41hTdvKf3LNYQa9`) and the 15 modules in `../pixelfx/`.
 Research behind the picks: `../research/vs-fx/` (weapons, enemies, pickups, UI, stages, hierarchy and QA).
