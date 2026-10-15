@@ -39,6 +39,12 @@ Pixels are stored straight-alpha. `Core.add` blends additively, so glow composit
 | `CaveCA` | Hash-seeded 4-5 cellular automaton per chunk, seamless borders, marching-squares tile index | Stage decor scatter on the repeating chunk | 14 ms per chunk |
 | `SlotReel` | Predetermined landing (quintic ease + spring tail), speed smear, drum shading | Treasure chest roulette | <1 ms |
 
+| `EnemyBake` | Bakes one static PNG into 8 walk frames (row-sine sway with planted feet, squash/stretch on the step beat, rim light) plus a hit-flash frame | Every enemy PNG, at load | 0.4 ms per enemy type, once |
+| `Crowd` | Data-oriented crowd: buffers, BFS flow field (routes around solids), spatial-hash separation, spring knockback, 60 ms hit flash, y-sorted batched blit, LOD past 600 enemies | 1000+ enemies | 1000 enemies: sim 2.2 ms, render 13 ms (interpreter) |
+
+`qa/crowd.luau` is the 1000-enemy stress test.
+In Roblox, `render` should use `EditableImage:DrawImage` per enemy (engine-side C++) instead of the Luau pixel loop. That is the biggest remaining render win.
+
 ## QA
 `cd qa && luau run.luau > frames.bin` renders every effect, prints timings, and writes PPM frames for diffing against reference captures. See `research/vs-fx/hierarchy_qa.md` for the metrics and thresholds.
 
