@@ -56,4 +56,4 @@ Numbers in parentheses refer to `EDITABLEIMAGE_ALGORITHMS.md`.
 - **Map:** 344, 345, 352, 369, 348, 831, 910
 
 ## Top algorithms (from `ALGORITHMS_CORE.md`)
-1 Shallow water, 6 Position-based dynamics, 13–14 Heat and reaction fields, 19 Lenia, 26 Reiter snowflake, 36 Differential growth, 38 Gierer–Meinhardt, 54 Wave Function Collapse, 64–65 Exact distance transform and SDF composition, 78–79 RVO and continuum crowds, 92 Pixel-art scalers, 96 2D radiance cascades, 99 Palette-index rendering.
+1 Shallow water, 6 Position-based dynamics, 13–14 Heat and reaction fields, 19 Lenia, 26 Reiter snowflake, 35 Differential growth, 37 Gierer–Meinhardt, 54 Wave Function Collapse, 64–65 Exact distance transform and SDF composition, 79–80 RVO and continuum crowds, 93 Pixel-art scalers, 97 2D radiance cascades, 99 Palette-index rendering.
