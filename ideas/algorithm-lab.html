@@ -60,8 +60,8 @@ footer { color: var(--dim); font-size: 13px; max-width: 70ch; }
 <div class="wrap">
   <header>
     <div class="eyebrow">Cursed Survivors · EditableImage candidates</div>
-    <h1>Algorithm Lab <span>II</span></h1>
-    <p class="lead">50 new generative algorithms, each running live at the pixel scale an EditableImage would use. None of them repeats the 89 effects already built or the 15 PixelFX modules. Every plate shows the maths and where it goes in the game.</p>
+    <h1>Algorithm Lab <span>C</span></h1>
+    <p class="lead">100 new generative algorithms, each running live at the pixel scale an EditableImage would use. None of them repeats the 89 effects already built or the 15 PixelFX modules. Every plate shows the maths and where it goes in the game.</p>
     <div class="bar"><span id="fps">…</span><button id="pauseAll" type="button">Pause all</button><button id="reseedAll" type="button">Reseed all</button></div>
   </header>
   <section class="grid" id="grid"></section>
@@ -85,6 +85,21 @@ const CURSE = ramp([[8,4,14],[48,18,72],[140,70,200],[235,200,255]]);
 const EMBER = ramp([[6,3,4],[90,20,10],[220,110,30],[255,230,150]]);
 const FROST = ramp([[4,8,16],[20,60,110],[110,190,240],[240,250,255]]);
 const MOSS = ramp([[5,10,6],[20,60,30],[90,170,70],[220,250,170]]);
+
+// Shared test scene for the image filters (plates 54, 55, 58, 88–90): a tiny dusk forest with a moving knight and lantern.
+const R_ = v => v & 255, G_ = v => v >> 8 & 255, B_ = v => v >> 16 & 255;
+function scene(w, h, t, out) {
+  const px = out || new Uint32Array(w * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const g = y / h; px[y * w + x] = RGB(20 + g * 30 | 0, 18 + g * 50 | 0, 40 + g * 20 | 0); }
+  for (let k = 0; k < 5; k++) { const tx = (k * 0.23 + 0.08) * w, base = h * 0.8, th = h * (0.35 + (k % 3) * 0.08);
+    for (let y = base - th; y < base; y++) { const half = (y - (base - th)) / th * w * 0.09; for (let x = tx - half; x < tx + half; x++) if (x >= 0 && x < w) px[(y | 0) * w + (x | 0)] = RGB(24, 70 + k * 8, 40); } }
+  const kx = w * (0.5 + Math.sin(t) * 0.3), ky = h * 0.72;
+  for (let y = -h * 0.12; y < 0; y++) for (let x = -w * 0.04; x < w * 0.04; x++) { const X = kx + x | 0, Y = ky + y | 0; if (X >= 0 && X < w && Y >= 0) px[Y * w + X] = y < -h * 0.08 ? RGB(200, 200, 215) : RGB(170, 40, 50); }
+  const lx = kx + w * 0.06, ly = ky - h * 0.06;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const d = Math.hypot(x - lx, y - ly) / (w * 0.35); if (d < 1) { const i = y * w + x, v = px[i], k = (1 - d) * (1 - d) * 120; px[i] = RGB(Math.min(255, R_(v) + k) | 0, Math.min(255, G_(v) + k * .7) | 0, Math.min(255, B_(v) + k * .3) | 0); } }
+  for (let y = -2; y <= 2; y++) for (let x = -2; x <= 2; x++) { const X = lx + x | 0, Y = ly + y | 0; if (X >= 0 && X < w && Y >= 0 && Y < h) px[Y * w + X] = RGB(255, 240, 180); }
+  return px;
+}
 
 // Each demo: w,h, init(s), step(s, px) writes px (Uint32Array w*h).
 const DEMOS = [
@@ -584,6 +599,452 @@ const DEMOS = [
     for (const a of A) { a.x += a.vx; a.y = Math.min(93, Math.max(2, a.y + a.vy)); if ((a.L && a.x > 93) || (!a.L && a.x < 3)) { a.x = a.L ? 3 : 93; a.y = 8 + rnd() * 80; } }
     for (let i = 0; i < px.length; i++) { const v = px[i]; px[i] = RGB((v & 255) * .8 | 0, (v >> 8 & 255) * .8 | 0, Math.max(10, (v >> 16 & 255) * .8 | 0)); }
     for (const a of A) for (const o of [0, 1, 96, 97]) { const i = (a.y | 0) * 96 + (a.x | 0) + o; if (i >= 0 && i < 9216) px[i] = a.L ? RGB(240, 170, 80) : RGB(160, 100, 230); } } }
+,
+{ name: "Lattice Boltzmann (D2Q9)", math: "Nine velocity populations per cell; collide toward equilibrium f_eq(ρ, u) with relaxation τ, then stream; bounce-back on the obstacle; colour = vorticity", use: "Wind and <b>river currents</b> that curl into a vortex street behind rocks, or behind the knight", w: 96, h: 64,
+  init(s) { const W = 96, H = 64, n = W * H; s.f = new Float32Array(n * 9); s.ex = [0, 1, 0, -1, 0, 1, -1, -1, 1]; s.ey = [0, 0, 1, 0, -1, 1, 1, -1, -1]; s.wt = [4 / 9, 1 / 9, 1 / 9, 1 / 9, 1 / 9, 1 / 36, 1 / 36, 1 / 36, 1 / 36]; s.opp = [0, 3, 4, 1, 2, 7, 8, 5, 6];
+    s.bar = new Uint8Array(n); for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if ((x - 18) ** 2 + (y - 32) ** 2 < 25) s.bar[y * W + x] = 1;
+    const u0 = .08; for (let i = 0; i < n; i++) for (let k = 0; k < 9; k++) { const eu = s.ex[k] * u0; s.f[i * 9 + k] = s.wt[k] * (1 + 3 * eu + 4.5 * eu * eu - 1.5 * u0 * u0) * (1 + (rnd() - .5) * .01); } s.ux = new Float32Array(n); s.uy = new Float32Array(n); },
+  step(s, px) { const W = 96, H = 64, { f, ex, ey, wt, opp, bar, ux, uy } = s, om = 1 / .6, u0 = .08;
+    for (let it = 0; it < 4; it++) {
+      for (let i = 0; i < W * H; i++) { if (bar[i]) continue; let r = 0, vx = 0, vy = 0; for (let k = 0; k < 9; k++) { const q = f[i * 9 + k]; r += q; vx += q * ex[k]; vy += q * ey[k]; } vx /= r; vy /= r;
+        const x = i % W; if (x === 0) { vx = u0; vy = 0; r = 1; } ux[i] = vx; uy[i] = vy; const uu = vx * vx + vy * vy;
+        for (let k = 0; k < 9; k++) { const eu = ex[k] * vx + ey[k] * vy, eq = wt[k] * r * (1 + 3 * eu + 4.5 * eu * eu - 1.5 * uu); f[i * 9 + k] += x === 0 ? eq - f[i * 9 + k] : om * (eq - f[i * 9 + k]); } }
+      const g = new Float32Array(f.length);
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const i = y * W + x; for (let k = 0; k < 9; k++) { const nx = x + ex[k], ny = (y + ey[k] + H) % H; if (nx >= W || nx < 0) continue; const j = ny * W + nx;
+        if (bar[j]) g[i * 9 + opp[k]] += f[i * 9 + k]; else g[j * 9 + k] += f[i * 9 + k]; } }
+      for (let y = 0; y < H; y++) for (let k = 0; k < 9; k++) g[(y * W + W - 1) * 9 + k] = g[(y * W + W - 2) * 9 + k];
+      f.set(g); }
+    for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) { const i = y * W + x; if (bar[i]) { px[i] = RGB(90, 70, 110); continue; } const curl = (uy[i + 1] - uy[i - 1]) - (ux[i + W] - ux[i - W]);
+      px[i] = curl > 0 ? sh(EMBER, Math.min(1, .15 + curl * 14)) : sh(FROST, Math.min(1, .15 - curl * 14)); } } },
+
+{ name: "SmoothLife", math: "Inner disc m and outer ring n (radii 3 and 9) as fractional fills; new state = σ_m(σ_n(n, b₁, b₂), σ_n(n, d₁, d₂)) with smooth step thresholds", use: "<b>Blob creatures</b> with membranes, gliding through the cursed realm", w: 64, h: 64,
+  init(s) { s.a = new Float32Array(4096); for (let k = 0; k < 12; k++) { const cx = rnd() * 64 | 0, cy = rnd() * 64 | 0; for (let y = -4; y < 4; y++) for (let x = -4; x < 4; x++) s.a[((cy + y + 64) % 64) * 64 + (cx + x + 64) % 64] = 1; }
+    s.inner = []; s.outer = []; for (let y = -9; y <= 9; y++) for (let x = -9; x <= 9; x++) { const r = Math.hypot(x, y); if (r <= 3) s.inner.push(x, y); else if (r <= 9) s.outer.push(x, y); } },
+  step(s, px) { const a = s.a, b = new Float32Array(4096), I = s.inner, O = s.outer, ni = I.length / 2, no = O.length / 2;
+    const sg = (x, c, al = .147) => 1 / (1 + Math.exp(-(x - c) * 4 / al)), sn = (x, lo, hi) => sg(x, lo) * (1 - sg(x, hi)), sm = (m, lo, hi) => lo * (1 - sg(m, .5, .03)) + hi * sg(m, .5, .03);
+    for (let y = 0; y < 64; y++) for (let x = 0; x < 64; x++) { let m = 0, n = 0;
+      for (let k = 0; k < I.length; k += 2) m += a[((y + I[k + 1]) & 63) * 64 + ((x + I[k]) & 63)]; for (let k = 0; k < O.length; k += 2) n += a[((y + O[k + 1]) & 63) * 64 + ((x + O[k]) & 63)];
+      m /= ni; n /= no; const t = sn(n, sm(m, .278, .267), sm(m, .365, .445)), i = y * 64 + x; b[i] = a[i] + .3 * (2 * t - 1); b[i] = Math.min(1, Math.max(0, b[i])); px[i] = sh(CURSE, b[i]); }
+    s.a = b; let al = 0; for (const v of b) al += v; if (al < 20 || al > 3900) this.init(s); } },
+
+{ name: "Penrose P3 Tiling", math: "Robinson triangles deflated by φ: each thin and thick triangle splits into smaller ones by fixed rules; 6 generations, coloured by type, with a slow zoom", use: "Aperiodic <b>cathedral floors</b> that never visibly repeat", w: 128, h: 128,
+  init(s) { const P = (1 + Math.sqrt(5)) / 2; let tr = []; for (let i = 0; i < 10; i++) { const a = (2 * i - 1) * Math.PI / 10, b = (2 * i + 1) * Math.PI / 10; let B = [Math.cos(a), Math.sin(a)], C = [Math.cos(b), Math.sin(b)]; if (i % 2 === 0) [B, C] = [C, B]; tr.push([0, [0, 0], B, C]); }
+    for (let g = 0; g < 6; g++) { const nt = []; for (const [c, A, B, C] of tr) { if (c === 0) { const Pp = [A[0] + (B[0] - A[0]) / P, A[1] + (B[1] - A[1]) / P]; nt.push([0, C, Pp, B], [1, Pp, C, A]); } else { const Q = [B[0] + (A[0] - B[0]) / P, B[1] + (A[1] - B[1]) / P], R = [B[0] + (C[0] - B[0]) / P, B[1] + (C[1] - B[1]) / P]; nt.push([1, R, C, A], [1, Q, R, B], [0, R, Q, A]); } } tr = nt; }
+    s.tr = tr; s.t = 0; },
+  step(s, px) { s.t += .01; const z = 70 + Math.sin(s.t) * 20, rot = s.t * .1, cs = Math.cos(rot), sn = Math.sin(rot);
+    const id = new Int32Array(16384).fill(-1); const T = s.tr.map(([c, A, B, C]) => [c, ...[A, B, C].map(p => [64 + (p[0] * cs - p[1] * sn) * z, 64 + (p[0] * sn + p[1] * cs) * z])]);
+    T.forEach(([c, A, B, C], k) => { const minx = Math.max(0, Math.min(A[0], B[0], C[0]) | 0), maxx = Math.min(127, Math.max(A[0], B[0], C[0]) | 0), miny = Math.max(0, Math.min(A[1], B[1], C[1]) | 0), maxy = Math.min(127, Math.max(A[1], B[1], C[1]) | 0);
+      for (let y = miny; y <= maxy; y++) for (let x = minx; x <= maxx; x++) { const e = (P, Q) => (Q[0] - P[0]) * (y + .5 - P[1]) - (Q[1] - P[1]) * (x + .5 - P[0]); const w0 = e(B, C), w1 = e(C, A), w2 = e(A, B);
+        if ((w0 >= 0 && w1 >= 0 && w2 >= 0) || (w0 <= 0 && w1 <= 0 && w2 <= 0)) { const edge = Math.min(Math.abs(w0) / Math.hypot(C[0] - B[0], C[1] - B[1]), Math.abs(w1) / Math.hypot(A[0] - C[0], A[1] - C[1])); px[y * 128 + x] = edge < .7 ? RGB(30, 20, 40) : c ? sh(CURSE, .55) : sh(EMBER, .55); } } }); } },
+
+{ name: "Kuwahara Filter", math: "For each pixel, split a (2r + 1)² window into 4 overlapping quadrants; output the mean of the quadrant with the lowest variance; edges stay sharp while flat areas smooth out", use: "<b>Painterly portraits</b> and an oil-painted pause or Arcana screen", w: 96, h: 96,
+  init(s) { s.t = 0; s.src = new Uint32Array(9216); },
+  step(s, px) { s.t += .03; scene(96, 96, s.t, s.src); const src = s.src, r = 3;
+    for (let y = 0; y < 96; y++) for (let x = 0; x < 96; x++) { if (x < 48 - (Math.sin(s.t * .7) * 30)) { px[y * 96 + x] = src[y * 96 + x]; continue; } let best = 1e9, out = 0;
+      for (const [qx, qy] of [[-r, -r], [0, -r], [-r, 0], [0, 0]]) { let sr = 0, sg = 0, sb = 0, sl = 0, sl2 = 0, n = 0;
+        for (let j = 0; j <= r; j++) for (let i = 0; i <= r; i++) { const X = Math.min(95, Math.max(0, x + qx + i)), Y = Math.min(95, Math.max(0, y + qy + j)), v = src[Y * 96 + X], L = R_(v) + G_(v) + B_(v); sr += R_(v); sg += G_(v); sb += B_(v); sl += L; sl2 += L * L; n++; }
+        const vr = sl2 / n - (sl / n) ** 2; if (vr < best) { best = vr; out = RGB(sr / n | 0, sg / n | 0, sb / n | 0); } }
+      px[y * 96 + x] = out; }
+    const split = 48 - (Math.sin(s.t * .7) * 30) | 0; for (let y = 0; y < 96; y++) px[y * 96 + Math.max(0, split)] = RGB(240, 200, 110); } },
+
+{ name: "EPX / Scale2x Upscale", math: "Each pixel P becomes 2×2; a corner copies the neighbour colour when its two adjacent neighbours match and the opposite ones differ; applied twice for 4×", use: "<b>HD mode</b> that smooths pixel-art diagonals without blurring", w: 128, h: 64,
+  init(s) { s.t = 0; s.spr = new Uint32Array(16 * 16); const S = s.spr; for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const dx = (x - 7.5) / 6, dy = (y - 8) / 6.5; S[y * 16 + x] = dx * dx + dy * dy < 1 ? (y < 6 ? RGB(200, 200, 215) : RGB(150, 40, 60)) : 0; } S[6 * 16 + 5] = S[6 * 16 + 10] = RGB(20, 20, 30); for (let x = 5; x < 11; x++) S[3 * 16 + x] = RGB(220, 60, 60); },
+  step(s, px) { s.t += .02; const a = s.t; const rot = new Uint32Array(256);
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const u = Math.round((x - 7.5) * Math.cos(a) + (y - 7.5) * Math.sin(a) + 7.5), v = Math.round(-(x - 7.5) * Math.sin(a) + (y - 7.5) * Math.cos(a) + 7.5); rot[y * 16 + x] = u >= 0 && v >= 0 && u < 16 && v < 16 ? s.spr[v * 16 + u] : 0; }
+    const epx = (src, n) => { const o = new Uint32Array(n * n * 4), g = (x, y) => src[Math.min(n - 1, Math.max(0, y)) * n + Math.min(n - 1, Math.max(0, x))];
+      for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) { const P = g(x, y), A = g(x, y - 1), B = g(x + 1, y), C = g(x - 1, y), D = g(x, y + 1); let p1 = P, p2 = P, p3 = P, p4 = P;
+        if (C === A && C !== D && A !== B) p1 = A; if (A === B && A !== C && B !== D) p2 = B; if (D === C && D !== B && C !== A) p3 = C; if (B === D && B !== A && D !== C) p4 = D;
+        const W2 = n * 2; o[(y * 2) * W2 + x * 2] = p1; o[(y * 2) * W2 + x * 2 + 1] = p2; o[(y * 2 + 1) * W2 + x * 2] = p3; o[(y * 2 + 1) * W2 + x * 2 + 1] = p4; } return o; };
+    const up = epx(epx(rot, 16), 32); px.fill(RGB(14, 10, 20));
+    for (let y = 0; y < 64; y++) for (let x = 0; x < 64; x++) { const v = rot[(y >> 2) * 16 + (x >> 2)]; if (v) px[y * 128 + x] = v; const u = up[y * 64 + x]; if (u) px[y * 128 + 64 + x] = u; }
+    for (let y = 0; y < 64; y++) px[y * 128 + 64] = RGB(240, 200, 110); } },
+
+{ name: "Rigid Circles (impulse solver)", math: "Circles with mass, restitution and friction; detect overlaps on a grid, resolve with normal and tangential impulses plus positional correction, 4 substeps", use: "<b>Tumbling debris</b>, coin piles and skulls that knock into each other", w: 96, h: 96,
+  init(s) { s.b = []; s.t = 0; },
+  step(s, px) { const B = s.b; if (s.t++ % 6 === 0 && B.length < 90) B.push({ x: 30 + rnd() * 36, y: 4, vx: (rnd() - .5) * 1.5, vy: 0, r: 2.5 + rnd() * 3, w: 0, a: 0, c: rnd() * 3 | 0 }); if (s.t > 900) this.init(s);
+    for (let sub = 0; sub < 4; sub++) { for (const b of B) { b.vy += .03; b.x += b.vx * .25; b.y += b.vy * .25; b.a += b.w * .25;
+        if (b.y > 94 - b.r) { b.y = 94 - b.r; b.vy *= -.3; b.vx *= .96; b.w = b.vx / b.r; } if (b.x < 2 + b.r) { b.x = 2 + b.r; b.vx *= -.4; } if (b.x > 94 - b.r) { b.x = 94 - b.r; b.vx *= -.4; } }
+      for (let i = 0; i < B.length; i++) for (let j = i + 1; j < B.length; j++) { const a = B[i], b = B[j], dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy), m = a.r + b.r; if (d >= m || d < 1e-4) continue;
+        const nx = dx / d, ny = dy / d, ma = a.r * a.r, mb = b.r * b.r, im = 1 / ma + 1 / mb, vn = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny, corr = (m - d) / im * .5;
+        a.x -= nx * corr / ma; a.y -= ny * corr / ma; b.x += nx * corr / mb; b.y += ny * corr / mb; if (vn > 0) continue;
+        const j_ = -(1.3) * vn / im; a.vx -= j_ * nx / ma; a.vy -= j_ * ny / ma; b.vx += j_ * nx / mb; b.vy += j_ * ny / mb;
+        const tx = -ny, ty = nx, vt = (b.vx - a.vx) * tx + (b.vy - a.vy) * ty, jt = Math.max(-j_ * .3, Math.min(j_ * .3, -vt / im)); a.vx -= jt * tx / ma; a.vy -= jt * ty / ma; b.vx += jt * tx / mb; b.vy += jt * ty / mb; a.w -= jt / a.r * .2; b.w += jt / b.r * .2; } }
+    px.fill(RGB(12, 8, 16));
+    for (const b of B) { const R = b.r, ramp_ = [EMBER, CURSE, FROST][b.c]; for (let y = -R; y <= R; y++) for (let x = -R; x <= R; x++) { const d = Math.hypot(x, y); if (d > R) continue; const X = b.x + x | 0, Y = b.y + y | 0; if (X < 0 || Y < 0 || X > 95 || Y > 95) continue;
+      const spoke = Math.abs(Math.sin(Math.atan2(y, x) - b.a) ) < .2 && d > 1; px[Y * 96 + X] = d > R - 1 ? RGB(20, 14, 24) : spoke ? sh(ramp_, .85) : sh(ramp_, .5 - y / R * .15); } } } },
+
+{ name: "2D Path-Traced GI", math: "Per pixel, march 3 random-angle rays per frame through an emissive and occluder grid (DDA); radiance accumulated over frames with a moving average; light bounces off coloured walls", use: "<b>Global illumination</b>: lantern, fireballs and lava light the room and bleed colour onto walls", w: 64, h: 64,
+  init(s) { s.acc = new Float32Array(4096 * 3); s.n = 0; s.m = new Uint8Array(4096); for (let y = 0; y < 64; y++) for (let x = 0; x < 64; x++) { const i = y * 64 + x; if (x < 2 || y < 2 || x > 61 || y > 61) s.m[i] = 1; if (x > 20 && x < 24 && y > 10 && y < 44) s.m[i] = 1; if (x > 40 && x < 54 && y > 40 && y < 44) s.m[i] = 2; if ((x - 46) ** 2 + (y - 18) ** 2 < 10) s.m[i] = 3; if ((x - 10) ** 2 + (y - 52) ** 2 < 6) s.m[i] = 4; } },
+  step(s, px) { const { m, acc } = s, E = [[0, 0, 0], [0, 0, 0], [.1, .3, .9], [1.4, .8, .3], [.9, .2, 1.2]], A = [[0, 0, 0], [.6, .55, .7], [.2, .4, .9], [0, 0, 0], [0, 0, 0]]; s.n = Math.min(s.n + 1, 40); const k = 1 / s.n;
+    for (let y = 0; y < 64; y++) for (let x = 0; x < 64; x++) { const i = y * 64 + x; let r = 0, g = 0, b = 0;
+      if (m[i] >= 3) { r = E[m[i]][0]; g = E[m[i]][1]; b = E[m[i]][2]; } else if (!m[i]) for (let q = 0; q < 3; q++) { const a = rnd() * 6.283, dx = Math.cos(a), dy = Math.sin(a); let X = x + .5, Y = y + .5;
+        for (let t = 0; t < 70; t++) { X += dx; Y += dy; const c = m[(Y | 0) * 64 + (X | 0)]; if (c) { if (c >= 3) { r += E[c][0]; g += E[c][1]; b += E[c][2]; } else { const j = ((Y - dy) | 0) * 64 + ((X - dx) | 0); r += acc[j * 3] * A[c][0] * .8; g += acc[j * 3 + 1] * A[c][1] * .8; b += acc[j * 3 + 2] * A[c][2] * .8; } break; } } r /= 3 * .6; g /= 3 * .6; b /= 3 * .6; }
+      acc[i * 3] += (r - acc[i * 3]) * k; acc[i * 3 + 1] += (g - acc[i * 3 + 1]) * k; acc[i * 3 + 2] += (b - acc[i * 3 + 2]) * k;
+      const tm = v => Math.min(255, Math.pow(v / (1 + v), .7) * 300) | 0; px[i] = m[i] === 1 ? RGB(tm(acc[i * 3] * .3) + 20, tm(acc[i * 3 + 1] * .3) + 18, tm(acc[i * 3 + 2] * .3) + 24) : RGB(tm(acc[i * 3]), tm(acc[i * 3 + 1]), tm(acc[i * 3 + 2])); }
+    if (s.n >= 40 && rnd() < .01) { for (let y = 16; y < 21; y++) for (let x = 44; x < 49; x++) s.m[y * 64 + x] = 0; const cx = 10 + rnd() * 44 | 0, cy = 10 + rnd() * 30 | 0; for (let y = -2; y <= 2; y++) for (let x = -2; x <= 2; x++) if (x * x + y * y < 6 && !s.m[(cy + y) * 64 + cx + x]) s.m[(cy + y) * 64 + cx + x] = 3; s.n = 10; } } },
+
+{ name: "Seam Carving", math: "Energy = |∇I|; dynamic programming finds the lowest-energy vertical seam M(x,y) = e + min(M of the 3 pixels above); remove it, and repeat each frame", use: "<b>Content-aware squash</b>: sprites and backgrounds resized without warping their important parts", w: 96, h: 96,
+  init(s) { s.img = scene(96, 96, 1.3); s.W = 96; },
+  step(s, px) { const H = 96; let W = s.W; const I = s.img;
+    if (W > 48) { const e = new Float32Array(W * H), M = new Float32Array(W * H), L = v => R_(v) + G_(v) + B_(v);
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const a = I[y * 96 + Math.max(0, x - 1)], b = I[y * 96 + Math.min(W - 1, x + 1)], c = I[Math.max(0, y - 1) * 96 + x], d = I[Math.min(H - 1, y + 1) * 96 + x]; e[y * W + x] = Math.abs(L(a) - L(b)) + Math.abs(L(c) - L(d)); }
+      for (let x = 0; x < W; x++) M[x] = e[x]; for (let y = 1; y < H; y++) for (let x = 0; x < W; x++) M[y * W + x] = e[y * W + x] + Math.min(M[(y - 1) * W + Math.max(0, x - 1)], M[(y - 1) * W + x], M[(y - 1) * W + Math.min(W - 1, x + 1)]);
+      let x = 0; for (let k = 1; k < W; k++) if (M[(H - 1) * W + k] < M[(H - 1) * W + x]) x = k; const seam = new Int32Array(H);
+      for (let y = H - 1; y >= 0; y--) { seam[y] = x; if (y) { let bx = x; for (const nx of [x - 1, x + 1]) if (nx >= 0 && nx < W && M[(y - 1) * W + nx] < M[(y - 1) * W + bx]) bx = nx; x = bx; } }
+      s.seam = seam; for (let y = 0; y < H; y++) { for (let k = seam[y]; k < W - 1; k++) I[y * 96 + k] = I[y * 96 + k + 1]; I[y * 96 + W - 1] = RGB(8, 6, 10); } s.W = --W; } else if (rnd() < .02) this.init(s);
+    for (let y = 0; y < H; y++) for (let x = 0; x < 96; x++) px[y * 96 + x] = x < W ? I[y * 96 + x] : RGB(8, 6, 10);
+    if (s.seam && W > 48) for (let y = 0; y < H; y++) px[y * 96 + Math.min(95, s.seam[y])] = RGB(255, 80, 80); } },
+
+{ name: "Delaunay (Bowyer–Watson)", math: "Insert points one by one; delete triangles whose circumcircle contains the point; re-triangulate the hole; flat-shade each triangle from the source image at its centroid", use: "<b>Low-poly shards</b>: crystal enemies, broken stained glass, stylised portraits", w: 96, h: 96,
+  init(s) { s.p = Array.from({ length: 70 }, () => [rnd() * 96, rnd() * 96, (rnd() - .5) * .4, (rnd() - .5) * .4]); s.t = 0; },
+  step(s, px) { s.t += .02; for (const p of s.p) { p[0] += p[2]; p[1] += p[3]; if (p[0] < 0 || p[0] > 96) p[2] *= -1; if (p[1] < 0 || p[1] > 96) p[3] *= -1; }
+    const pts = [[-200, -200], [300, -200], [48, 400], ...s.p, [0, 0], [96, 0], [0, 96], [96, 96]]; let tris = [[0, 1, 2]];
+    const cc = ([a, b, c]) => { const [ax, ay] = pts[a], [bx, by] = pts[b], [cx, cy] = pts[c], d = 2 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by)), ux = ((ax * ax + ay * ay) * (by - cy) + (bx * bx + by * by) * (cy - ay) + (cx * cx + cy * cy) * (ay - by)) / d, uy = ((ax * ax + ay * ay) * (cx - bx) + (bx * bx + by * by) * (ax - cx) + (cx * cx + cy * cy) * (bx - ax)) / d; return [ux, uy, (ax - ux) ** 2 + (ay - uy) ** 2]; };
+    for (let i = 3; i < pts.length; i++) { const [x, y] = pts[i], bad = [], keep = []; for (const t of tris) { const [ux, uy, r2] = cc(t); ((x - ux) ** 2 + (y - uy) ** 2 < r2 ? bad : keep).push(t); }
+      const edges = new Map(); for (const [a, b, c] of bad) for (const [u, v] of [[a, b], [b, c], [c, a]]) { const k = u < v ? u + "," + v : v + "," + u; edges.set(k, edges.has(k) ? null : [u, v]); }
+      for (const e of edges.values()) if (e) keep.push([e[0], e[1], i]); tris = keep; }
+    const src = scene(96, 96, s.t);
+    for (const t of tris) { if (t.some(v => v < 3)) continue; const P = t.map(v => pts[v]), cx = (P[0][0] + P[1][0] + P[2][0]) / 3, cy = (P[0][1] + P[1][1] + P[2][1]) / 3, col = src[Math.min(95, Math.max(0, cy | 0)) * 96 + Math.min(95, Math.max(0, cx | 0))];
+      const minx = Math.max(0, Math.min(...P.map(p => p[0])) | 0), maxx = Math.min(95, Math.max(...P.map(p => p[0])) | 0), miny = Math.max(0, Math.min(...P.map(p => p[1])) | 0), maxy = Math.min(95, Math.max(...P.map(p => p[1])) | 0);
+      for (let y = miny; y <= maxy; y++) for (let x = minx; x <= maxx; x++) { const e = (A, B) => (B[0] - A[0]) * (y + .5 - A[1]) - (B[1] - A[1]) * (x + .5 - A[0]), w0 = e(P[1], P[2]), w1 = e(P[2], P[0]), w2 = e(P[0], P[1]);
+        if ((w0 >= 0 && w1 >= 0 && w2 >= 0) || (w0 <= 0 && w1 <= 0 && w2 <= 0)) px[y * 96 + x] = col; } } } },
+
+{ name: "Convex Hull + Offset Aura", math: "Andrew's monotone chain gives the hull of moving points in O(n log n); the aura is the Minkowski offset of the hull (distance to the polygon ≤ r), drawn in glow bands", use: "<b>Group shields</b> wrapped around a pack of elites, and a selection lasso", w: 96, h: 96,
+  init(s) { s.p = Array.from({ length: 9 }, () => ({ x: 30 + rnd() * 36, y: 30 + rnd() * 36, a: rnd() * 6.28, r: 4 + rnd() * 10 })); s.t = 0; },
+  step(s, px) { s.t += .02; const P = s.p.map(q => [q.x + Math.cos(s.t * 1.3 + q.a) * q.r, q.y + Math.sin(s.t + q.a) * q.r]).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    const cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]), lo = [], up = [];
+    for (const p of P) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); } for (const p of [...P].reverse()) { while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); }
+    const H = lo.slice(0, -1).concat(up.slice(0, -1));
+    for (let y = 0; y < 96; y++) for (let x = 0; x < 96; x++) { let inside = true, dmin = 1e9;
+      for (let i = 0; i < H.length; i++) { const A = H[i], B = H[(i + 1) % H.length], c = cr(A, B, [x, y]); if (c < 0) inside = false; const ex = B[0] - A[0], ey = B[1] - A[1], t = Math.max(0, Math.min(1, ((x - A[0]) * ex + (y - A[1]) * ey) / (ex * ex + ey * ey))), d = Math.hypot(x - A[0] - ex * t, y - A[1] - ey * t); if (d < dmin) dmin = d; }
+      const d = inside ? -dmin : dmin, band = Math.sin(d * 1.2 - s.t * 6); px[y * 96 + x] = d < 0 ? sh(FROST, .12 + band * .03) : d < 12 ? sh(FROST, (1 - d / 12) * (.5 + band * .25)) : RGB(8, 8, 16); }
+    for (const p of P) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) px[((p[1] | 0) + dy) * 96 + (p[0] | 0) + dx] = RGB(255, 210, 120); } },
+
+{ name: "Zhang–Suen Skeleton", math: "Iterative thinning: delete boundary pixels with 2–6 neighbours, exactly one 0→1 transition, and the sub-iteration tests, until stable; the medial axis remains", use: "<b>Auto-rigging</b>: a skeleton pulled out of any enemy sprite, to animate it procedurally", w: 96, h: 96,
+  init(s) { s.t = 0; },
+  step(s, px) { s.t += .03; const m = new Uint8Array(9216), t = s.t;
+    for (let y = 0; y < 96; y++) for (let x = 0; x < 96; x++) { const a = Math.hypot(x - 48 - Math.cos(t) * 14, y - 40) < 18, b = Math.abs(x - 48) < 6 + Math.sin(t * 1.3) * 3 && y > 40 && y < 86, c = Math.abs(y - 60 - Math.sin(t) * 6) < 5 && Math.abs(x - 48) < 34; m[y * 96 + x] = a || b || c ? 1 : 0; }
+    const orig = m.slice(), N = (i) => [m[i - 96], m[i - 95], m[i + 1], m[i + 97], m[i + 96], m[i + 95], m[i - 1], m[i - 97]];
+    let changed = true, guard = 0; while (changed && guard++ < 30) { changed = false; for (const pass of [0, 1]) { const del = [];
+      for (let y = 1; y < 95; y++) for (let x = 1; x < 95; x++) { const i = y * 96 + x; if (!m[i]) continue; const p = N(i), B = p.reduce((a, v) => a + v, 0); if (B < 2 || B > 6) continue; let A = 0; for (let k = 0; k < 8; k++) if (!p[k] && p[(k + 1) % 8]) A++; if (A !== 1) continue;
+        if (pass === 0 ? (p[0] * p[2] * p[4] === 0 && p[2] * p[4] * p[6] === 0) : (p[0] * p[2] * p[6] === 0 && p[0] * p[4] * p[6] === 0)) del.push(i); }
+      for (const i of del) m[i] = 0; if (del.length) changed = true; } }
+    for (let i = 0; i < 9216; i++) px[i] = m[i] ? RGB(255, 220, 120) : orig[i] ? sh(CURSE, .35) : RGB(10, 6, 14); } },
+
+{ name: "Larger than Life (Bosco)", math: "Range-5 totalistic CA: birth when 34–45 of the 120 neighbours are alive; survival at 33–57; gives fat moving blobs and gliders", use: "<b>Bacterial swarms</b> and creeping curse blots that move on their own", w: 96, h: 96,
+  init(s) { s.a = new Uint8Array(9216).map(() => rnd() < .5 ? 1 : 0); },
+  step(s, px) { const a = s.a, b = new Uint8Array(9216), col = new Uint16Array(9216);
+    for (let y = 0; y < 96; y++) for (let x = 0; x < 96; x++) { let c = 0; for (let k = -5; k <= 5; k++) c += a[((y + k + 96) % 96) * 96 + x]; col[y * 96 + x] = c; }
+    let alive = 0; for (let y = 0; y < 96; y++) for (let x = 0; x < 96; x++) { let c = 0; for (let k = -5; k <= 5; k++) c += col[y * 96 + (x + k + 96) % 96]; const i = y * 96 + x, v = a[i]; c -= v;
+      b[i] = v ? (c >= 33 && c <= 57 ? 1 : 0) : (c >= 34 && c <= 45 ? 1 : 0); alive += b[i]; px[i] = b[i] ? sh(MOSS, .5 + (c - 33) / 60) : (v ? RGB(30, 50, 30) : RGB(8, 10, 8)); }
+    s.a = b; if (alive < 30) this.init(s); } },
+
+{ name: "Day & Night CA", math: "Rule B3678/S34678: symmetric under swapping live and dead cells, so islands and lakes behave alike and grow into blob coastlines", use: "Shifting <b>cursed islands</b> for the realm map, with interior lakes", w: 96, h: 96,
+  init(s) { s.a = new Uint8Array(9216).map(() => rnd() < .5 ? 1 : 0); s.n = 0; },
+  step(s, px) { const a = s.a, b = new Uint8Array(9216), B = [0, 0, 0, 1, 0, 0, 1, 1, 1], S = [0, 0, 0, 1, 1, 0, 1, 1, 1];
+    for (let y = 0; y < 96; y++) for (let x = 0; x < 96; x++) { let c = 0; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (dx || dy) c += a[((y + dy + 96) % 96) * 96 + (x + dx + 96) % 96]; const i = y * 96 + x; b[i] = a[i] ? S[c] : B[c]; }
+    s.a = b; if (++s.n > 400) this.init(s);
+    for (let y = 0; y < 96; y++) for (let x = 0; x < 96; x++) { const i = y * 96 + x; let edge = 0; for (const o of [1, -1, 96, -96]) if (b[(i + o + 9216) % 9216] !== b[i]) edge = 1; px[i] = b[i] ? (edge ? RGB(230, 200, 130) : sh(MOSS, .45)) : (edge ? RGB(120, 170, 220) : sh(FROST, .3)); } } },
+
+{ name: "Maze CA (B3/S12345)", math: "Life-like rule: birth with 3 neighbours, survival with 1–5; a small random seed grows a corridor maze outward", use: "Procedural <b>labyrinth floors</b> and hedge mazes for secret stages", w: 96, h: 96,
+  init(s) { s.a = new Uint8Array(9216); for (let y = 42; y < 54; y++) for (let x = 42; x < 54; x++) s.a[y * 96 + x] = rnd() < .5 ? 1 : 0; s.age = new Uint16Array(9216); s.n = 0; },
+  step(s, px) { const a = s.a, b = new Uint8Array(9216);
+    for (let y = 1; y < 95; y++) for (let x = 1; x < 95; x++) { let c = 0; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (dx || dy) c += a[(y + dy) * 96 + x + dx]; const i = y * 96 + x; b[i] = a[i] ? (c >= 1 && c <= 5 ? 1 : 0) : (c === 3 ? 1 : 0); if (b[i] && !a[i]) s.age[i] = s.n; }
+    s.a = b; if (++s.n > 260) this.init(s);
+    for (let i = 0; i < 9216; i++) px[i] = b[i] ? sh(EMBER, .35 + .5 * (1 - (s.n - s.age[i]) / 260)) : RGB(14, 10, 20); } },
+
+{ name: "Schelling Segregation", math: "Agents of 3 factions; one moves to a random empty cell if fewer than 40% of its neighbours share its faction; clusters emerge from mild preferences", use: "<b>Faction territories</b> settling over a run, such as where cultists and beasts gather on the map", w: 96, h: 96,
+  init(s) { s.a = new Uint8Array(9216).map(() => { const r = rnd(); return r < .1 ? 0 : 1 + (rnd() * 3 | 0); }); s.lut = [RGB(10, 8, 14), RGB(230, 180, 90), RGB(130, 70, 200), RGB(80, 170, 130)]; s.n = 0; },
+  step(s, px) { const a = s.a;
+    for (let k = 0; k < 1800; k++) { const i = rnd() * 9216 | 0, v = a[i]; if (!v) continue; const x = i % 96, y = i / 96 | 0; let same = 0, tot = 0;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { if (!dx && !dy) continue; const q = a[((y + dy + 96) % 96) * 96 + (x + dx + 96) % 96]; if (q) { tot++; if (q === v) same++; } }
+      if (tot && same / tot < .4) { const j = rnd() * 9216 | 0; if (!a[j]) { a[j] = v; a[i] = 0; } } }
+    if (++s.n > 500) this.init(s); for (let i = 0; i < 9216; i++) px[i] = s.lut[a[i]]; } },
+
+{ name: "Percolation Clusters", math: "Each site is open with probability p swept around p_c ≈ 0.593; union–find labels the connected clusters; the spanning cluster lights up", use: "<b>Flood and fire reach</b>: what a puddle or blaze can connect to across the map", w: 96, h: 96,
+  init(s) { s.r = new Float32Array(9216).map(() => rnd()); s.t = 0; },
+  step(s, px) { s.t += .01; const p = .593 + Math.sin(s.t) * .08, par = new Int32Array(9216).map((_, i) => i), f = i => { while (par[i] !== i) { par[i] = par[par[i]]; i = par[i]; } return i; }, open = i => s.r[i] < p;
+    for (let y = 0; y < 96; y++) for (let x = 0; x < 96; x++) { const i = y * 96 + x; if (!open(i)) continue; if (x && open(i - 1)) par[f(i)] = f(i - 1); if (y && open(i - 96)) par[f(i)] = f(i - 96); }
+    const top = new Set(); for (let x = 0; x < 96; x++) if (open(x)) top.add(f(x)); let span = -1; for (let x = 0; x < 96; x++) { const i = 95 * 96 + x; if (open(i) && top.has(f(i))) span = f(i); }
+    for (let i = 0; i < 9216; i++) { if (!open(i)) { px[i] = RGB(12, 8, 16); continue; } const r = f(i); px[i] = r === span ? RGB(255, 190, 80) : sh(CURSE, .2 + (r * 2654435761 % 997) / 2400); } } },
+
+{ name: "Spring Network Fracture", math: "Triangular lattice of springs under increasing load; a spring whose strain exceeds its random threshold breaks, so stress concentrates at crack tips and they run", use: "<b>Shattering shields</b>, ice sheets and boss armour cracking along realistic paths", w: 96, h: 96,
+  init(s) { s.N = 24; s.p = []; for (let j = 0; j < 24; j++) for (let i = 0; i < 24; i++) s.p.push([12 + i * 3 + (j & 1) * 1.5, 12 + j * 3, 0, 0]); s.sp = [];
+    for (let j = 0; j < 24; j++) for (let i = 0; i < 24; i++) { const k = j * 24 + i, nb = [[1, 0], [(j & 1) ? 1 : 0, 1], [(j & 1) ? 0 : -1, 1]]; for (const [di, dj] of nb) { const ni = i + di, nj = j + dj; if (ni >= 0 && ni < 24 && nj < 24) s.sp.push([k, nj * 24 + ni, 3, .04 + rnd() * .05]); } } s.load = 0; },
+  step(s, px) { const P = s.p, N = 24; s.load += .004;
+    for (let it = 0; it < 6; it++) { for (const [a, b, L] of s.sp) { const A = P[a], B = P[b], dx = B[0] - A[0], dy = B[1] - A[1], d = Math.hypot(dx, dy) || 1, f = (d - L) / d * .25; A[2] += dx * f; A[3] += dy * f; B[2] -= dx * f; B[3] -= dy * f; }
+      for (let k = 0; k < P.length; k++) { const q = P[k], i = k % N; if (i === 0) { q[0] = 12 - s.load * 10; } else if (i === N - 1) { q[0] = 12 + (N - 1) * 3 + ((k / N | 0) & 1) * 1.5 + s.load * 10; } else { q[0] += q[2]; q[1] += q[3]; } q[2] *= .5; q[3] *= .5; } }
+    s.sp = s.sp.filter(([a, b, L, th]) => Math.hypot(P[b][0] - P[a][0], P[b][1] - P[a][1]) / L - 1 < th); if (s.load > 1.2) this.init(s);
+    px.fill(RGB(10, 8, 16)); for (const [a, b, L] of s.sp) { const A = P[a], B = P[b], str = Math.min(1, (Math.hypot(B[0] - A[0], B[1] - A[1]) / L - 1) / .08); for (let u = 0; u <= 1; u += .34) { const x = A[0] + (B[0] - A[0]) * u | 0, y = A[1] + (B[1] - A[1]) * u | 0; if (x >= 0 && y >= 0 && x < 96 && y < 96) px[y * 96 + x] = str > .5 ? sh(EMBER, .5 + str * .5) : sh(FROST, .45 + str * .3); } } } },
+
+{ name: "Ballistic Deposition", math: "Particles fall in random columns and stick at max(h[x], h[x−1], h[x+1]); the surface roughens with Kardar–Parisi–Zhang scaling; layers tinted by time", use: "Layered <b>strata, ash and snow</b> building up on ruins over a long run", w: 96, h: 96,
+  init(s) { s.h = new Int32Array(96); s.c = new Uint32Array(9216).fill(RGB(10, 8, 14)); s.n = 0; },
+  step(s, px) { const H = s.h; for (let k = 0; k < 220; k++) { const x = rnd() * 96 | 0, y = Math.max(H[x] + 1, H[(x + 95) % 96], H[(x + 1) % 96]); if (y >= 95) { this.init(s); return; } H[x] = y; s.c[(95 - y) * 96 + x] = sh(((s.n / 2000 | 0) % 2) ? EMBER : CURSE, .35 + ((s.n % 2000) / 2000) * .5); s.n++; }
+    px.set(s.c); } },
+
+{ name: "Line Integral Convolution", math: "For each pixel, trace a streamline forward and back through the vector field and average white noise along it; the phase shifts each frame, so the flow appears to move", use: "<b>Wind and magic-flow</b> maps showing how a curse current drifts across a stage", w: 96, h: 96,
+  init(s) { s.noise = new Float32Array(9216).map(() => rnd()); s.t = 0; },
+  step(s, px) { s.t += .03; s.par = (s.par || 0) ^ 1; const t = s.t, V = (x, y) => { const a = Math.sin(x * .07 + t * .3) + Math.cos(y * .06 - t * .2) + Math.atan2(y - 48, x - 48) * .6; return [Math.cos(a), Math.sin(a)]; };
+    for (let y = s.par; y < 96; y += 2) for (let x = 0; x < 96; x++) { let sum = 0, wsum = 0;
+      for (const dir of [1, -1]) { let X = x + .5, Y = y + .5; for (let k = 0; k < 10; k++) { const [vx, vy] = V(X, Y); X += vx * dir; Y += vy * dir; if (X < 0 || Y < 0 || X >= 96 || Y >= 96) break; const w = .5 + .5 * Math.cos((k * dir + t * 8) * .6); sum += s.noise[(Y | 0) * 96 + (X | 0)] * w; wsum += w; } }
+      px[y * 96 + x] = sh(FROST, wsum ? (sum / wsum - .5) * 2.2 + .5 : 0); } } },
+
+{ name: "Spectrum Ocean", math: "Height = Σ Aᵢ·cos(kᵢ·x − ωᵢt + φᵢ) over 28 waves, with amplitudes from a Phillips-like spectrum and deep-water dispersion ω = √(g|k|); shaded by slope and foam where the curvature peaks", use: "Open-sea <b>fishing and coast</b> stages with real-looking swell", w: 96, h: 96,
+  init(s) { s.w = Array.from({ length: 28 }, () => { const a = (rnd() - .5) * 1.4 + .4, k = .05 + rnd() * .5; return [Math.cos(a) * k, Math.sin(a) * k, Math.sqrt(9.8 * k) * .25, rnd() * 6.28, .9 / (1 + k * 18)]; }); s.t = 0; },
+  step(s, px) { s.t += .1; const t = s.t; s.par = (s.par || 0) ^ 1;
+    for (let y = s.par; y < 96; y += 2) for (let x = 0; x < 96; x++) { let h = 0, hx = 0, hy = 0, c = 0; for (const [kx, ky, w, ph, A] of s.w) { const th = kx * x + ky * y - w * t + ph, cs = Math.cos(th), sn = Math.sin(th); h += A * cs; hx -= A * kx * sn; hy -= A * ky * sn; c -= A * (kx * kx + ky * ky) * cs; }
+      const light = .45 + (-hx * .6 - hy * .8) * 2.5 + h * .08; px[y * 96 + x] = c < -.035 ? RGB(220, 235, 245) : sh(FROST, Math.max(0, Math.min(1, light))); } } },
+
+{ name: "Wang Tile Terrain", math: "16 corner-Wang tiles (each corner grass or water); every tile is chosen to match its neighbours' shared corners, so the terrain is seamless; corners are re-rolled to animate", use: "Infinite seamless <b>stage ground</b> with shorelines from just 16 tiles", w: 128, h: 128,
+  init(s) { s.c = new Uint8Array(17 * 17).map(() => rnd() < .45 ? 1 : 0); },
+  step(s, px) { for (let k = 0; k < 2; k++) s.c[rnd() * 289 | 0] ^= 1; const T = 8;
+    for (let ty = 0; ty < 16; ty++) for (let tx = 0; tx < 16; tx++) { const tl = s.c[ty * 17 + tx], tr = s.c[ty * 17 + tx + 1], bl = s.c[(ty + 1) * 17 + tx], br = s.c[(ty + 1) * 17 + tx + 1];
+      for (let j = 0; j < T; j++) for (let i = 0; i < T; i++) { const u = (i + .5) / T, v = (j + .5) / T, f = (tl * (1 - u) + tr * u) * (1 - v) + (bl * (1 - u) + br * u) * v, n = ((i * 7 + j * 13 + tx * 3 + ty * 5) % 7) * .01;
+        px[(ty * T + j) * 128 + tx * T + i] = f > .55 ? sh(MOSS, .35 + n * 3) : f > .45 ? RGB(210, 190, 130) : sh(FROST, .3 + n * 2 + f * .3); } } } },
+
+{ name: "Girih Star Pattern", math: "Ten-fold rosette: a pixel lies on a strap when |cos(5θ′)|·r′ hits the strap band in the local lattice cell; interlacing alternates which strap passes over at each crossing", use: "Ornate <b>Arcana frames</b> and palace floors for a holy stage", w: 96, h: 96,
+  init(s) { s.t = 0; },
+  step(s, px) { s.t += .01; const cell = 32;
+    for (let y = 0; y < 96; y++) for (let x = 0; x < 96; x++) { let lx = ((x + s.t * 20) % cell) - cell / 2, ly = (y % cell) - cell / 2; const r = Math.hypot(lx, ly) / (cell / 2), th = Math.atan2(ly, lx);
+      let on = 0; for (let k = 0; k < 5; k++) { const a = k * Math.PI / 5 + s.t * .2, d = Math.abs(lx * Math.cos(a) + ly * Math.sin(a)); if (Math.abs(d - cell * .18) < 1.3 && r < 1.05) on = k + 1; }
+      const star = Math.abs(Math.cos(5 * th)) * .35 + .3 > r; px[y * 96 + x] = on ? (on % 2 ? RGB(240, 205, 120) : RGB(200, 160, 80)) : star ? sh(CURSE, .45 + r * .2) : sh(FROST, .18 + r * .1); } } },
+
+{ name: "A* Pathfinding", math: "f = g + h with an octile heuristic, open set as a binary heap, on a cave map; explored nodes shown as they are expanded, then the path traced back", use: "Smart <b>elites and bosses</b> that path around walls instead of sliding along them", w: 96, h: 96,
+  init(s) { s.m = new Uint8Array(9216); for (let i = 0; i < 9216; i++) s.m[i] = rnd() < .42 ? 1 : 0; for (let g = 0; g < 4; g++) { const n = new Uint8Array(9216); for (let y = 1; y < 95; y++) for (let x = 1; x < 95; x++) { let c = 0; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) c += s.m[(y + dy) * 96 + x + dx]; n[y * 96 + x] = c >= 5 ? 1 : 0; } s.m = n; }
+    const free = () => { for (;;) { const i = rnd() * 9216 | 0; if (!s.m[i] && i % 96 > 2 && i % 96 < 93 && i > 288 && i < 8900) return i; } }; s.a = free(); s.b = free(); s.g = new Float32Array(9216).fill(1e9); s.g[s.a] = 0; s.came = new Int32Array(9216).fill(-1); s.closed = new Uint8Array(9216); s.heap = [[0, s.a]]; s.path = null; s.wait = 0; },
+  step(s, px) { const H = i => { const dx = Math.abs(i % 96 - s.b % 96), dy = Math.abs((i / 96 | 0) - (s.b / 96 | 0)); return Math.max(dx, dy) + .414 * Math.min(dx, dy); };
+    const push = (e) => { const h = s.heap; h.push(e); let i = h.length - 1; while (i) { const p = (i - 1) >> 1; if (h[p][0] <= h[i][0]) break; [h[p], h[i]] = [h[i], h[p]]; i = p; } };
+    const pop = () => { const h = s.heap, top = h[0], last = h.pop(); if (h.length) { h[0] = last; let i = 0; for (;;) { const l = 2 * i + 1, r = l + 1; let m = i; if (l < h.length && h[l][0] < h[m][0]) m = l; if (r < h.length && h[r][0] < h[m][0]) m = r; if (m === i) break; [h[m], h[i]] = [h[i], h[m]]; i = m; } } return top; };
+    if (!s.path) for (let k = 0; k < 30 && s.heap.length; k++) { const [, c] = pop(); if (s.closed[c]) continue; s.closed[c] = 1; if (c === s.b) { s.path = []; for (let i = c; i >= 0; i = s.came[i]) s.path.push(i); break; }
+      const cx = c % 96, cy = c / 96 | 0; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { if (!dx && !dy) continue; const nx = cx + dx, ny = cy + dy; if (nx < 0 || ny < 0 || nx > 95 || ny > 95) continue; const n = ny * 96 + nx; if (s.m[n] || (dx && dy && (s.m[cy * 96 + nx] || s.m[ny * 96 + cx]))) continue;
+        const g = s.g[c] + (dx && dy ? 1.414 : 1); if (g < s.g[n]) { s.g[n] = g; s.came[n] = c; push([g + H(n), n]); } } }
+    if ((s.path || !s.heap.length) && ++s.wait > 60) this.init(s);
+    for (let i = 0; i < 9216; i++) px[i] = s.m[i] ? RGB(60, 46, 70) : s.closed[i] ? sh(CURSE, .2 + Math.min(.3, s.g[i] / 300)) : RGB(14, 10, 18);
+    if (s.path) for (const i of s.path) px[i] = RGB(255, 210, 110);
+    for (const [i, c] of [[s.a, RGB(120, 220, 140)], [s.b, RGB(240, 80, 80)]]) for (const o of [0, 1, -1, 96, -96]) px[(i + o + 9216) % 9216] = c; } },
+
+{ name: "DDA Raycaster", math: "Per screen column, step a ray through the grid with a digital differential analyser until it hits a wall; wall height = 1 / perpendicular distance; side shading and distance fog", use: "A first-person <b>secret dungeon</b> mini-stage, retro style", w: 128, h: 96,
+  init(s) { s.map = ["1111111111111111", "1000000300000001", "1011100000111101", "1010000200000101", "1010111111100101", "1000100000100001", "1110101110101111", "1000001000000001", "1011111011111101", "1000000000000001", "1111111111111111"]; s.px = 1.5; s.py = 1.5; s.a = 0; s.t = 0; },
+  step(s, px) { s.t += .016; s.a += .012; s.px = 7.5 + Math.cos(s.t * .7) * 5.5; s.py = 5 + Math.sin(s.t * .5) * 3.5; if (s.map[s.py | 0][s.px | 0] !== "0") { s.px = 1.5; s.py = 1.5; }
+    for (let x = 0; x < 128; x++) { const cam = 2 * x / 128 - 1, dx = Math.cos(s.a) - Math.sin(s.a) * cam * .66, dy = Math.sin(s.a) + Math.cos(s.a) * cam * .66;
+      let mx = s.px | 0, my = s.py | 0; const ddx = Math.abs(1 / dx), ddy = Math.abs(1 / dy), sx = dx < 0 ? -1 : 1, sy = dy < 0 ? -1 : 1; let sdx = (dx < 0 ? s.px - mx : mx + 1 - s.px) * ddx, sdy = (dy < 0 ? s.py - my : my + 1 - s.py) * ddy, side = 0, hit = "0";
+      for (let k = 0; k < 40 && hit === "0"; k++) { if (sdx < sdy) { sdx += ddx; mx += sx; side = 0; } else { sdy += ddy; my += sy; side = 1; } hit = (s.map[my] || "1")[mx] || "1"; }
+      const dist = side ? sdy - ddy : sdx - ddx, hgt = Math.min(96, 96 / Math.max(.1, dist)) | 0, top = 48 - hgt / 2 | 0, rm = hit === "2" ? EMBER : hit === "3" ? MOSS : CURSE, fog = Math.max(0, 1 - dist / 9);
+      for (let y = 0; y < 96; y++) px[y * 128 + x] = y < top ? RGB(10, 8, 18) : y > top + hgt ? RGB(28 + (y - 48) / 2 | 0, 20, 24) : sh(rm, (side ? .35 : .55) * fog + .05 + (((y - top) / hgt * 8 | 0) % 2) * .04 * fog); } } }
+,
+{ name: "Mode 7 Floor", math: "Per scanline, depth z = h/(y − horizon); world (u, v) = camera + z·(dir ± perp·x′); sample a procedural tile texture; fog by z", use: "A <b>flying or racing bonus stage</b> over the cursed realm, SNES style", w: 128, h: 96,
+  init(s) { s.t = 0; },
+  step(s, px) { s.t += .02; const a = s.t * .4, cx = Math.cos(s.t * .3) * 40, cy = s.t * 30, ca = Math.cos(a), sa = Math.sin(a);
+    for (let y = 0; y < 96; y++) { if (y < 34) { for (let x = 0; x < 128; x++) px[y * 128 + x] = sh(CURSE, .1 + y / 34 * .35); continue; } const z = 400 / (y - 32);
+      for (let x = 0; x < 128; x++) { const xp = (x - 64) / 64, u = cx + (ca - sa * xp) * z, v = cy + (sa + ca * xp) * z, tu = Math.floor(u / 16), tv = Math.floor(v / 16), fu = ((u % 16) + 16) % 16, fv = ((v % 16) + 16) % 16;
+        const road = Math.abs(((u % 64) + 64) % 64 - 32) < 6, chk = (tu + tv) & 1, fog = Math.min(1, z / 260); let c = road ? (fv < 1.5 ? .8 : .45) : chk ? .3 : .45; if (fu < 1 || fv < 1) c -= .1;
+        px[y * 128 + x] = sh(road ? EMBER : MOSS, c * (1 - fog) + .12 * fog); } } } },
+
+{ name: "Voxel Space Terrain", math: "Comanche algorithm: for each screen column march the height map front to back, project height/z, draw only the part above the y-buffer; distance LOD", use: "<b>Mountain backdrops</b> and a fly-over map for stage select", w: 128, h: 96,
+  init(s) { const N = 128, H = new Float32Array(N * N), C = new Uint32Array(N * N); for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { let v = 0, a = 1, f = 6.283 / N; for (let o = 0; o < 4; o++) { v += a * (Math.sin(x * f * (o + 1) + o) * Math.cos(y * f * (o + 1) * 1.1 + o * 2) + 1) / 2; a *= .5; } H[y * N + x] = v * 60; } for (let i = 0; i < N * N; i++) C[i] = H[i] < 30 ? sh(FROST, .3 + H[i] / 90) : H[i] < 55 ? sh(MOSS, .3 + (H[i] - 30) / 60) : sh(ramp([[90, 80, 90], [240, 235, 240]]), (H[i] - 55) / 40); s.H = H; s.C = C; s.t = 0; },
+  step(s, px) { s.t += .02; const N = 128, H = s.H, C = s.C, cx = 64 + Math.cos(s.t * .5) * 50, cy = s.t * 40, a = s.t * .2, ch = 90, sa = Math.sin(a), ca = Math.cos(a);
+    for (let i = 0; i < px.length; i++) px[i] = sh(CURSE, .15 + ((i / 128 | 0) / 96) * .2); const yb = new Int16Array(128).fill(96);
+    let dz = 1; for (let z = 2; z < 160; z += dz, dz += .04) { const lx = -ca * z - sa * z, ly = sa * z - ca * z, rx = ca * z - sa * z, ry = -sa * z - ca * z, sx = (rx - lx) / 128, sy = (ry - ly) / 128; let px_ = cx + lx, py = cy + ly;
+      for (let x = 0; x < 128; x++) { const i = ((py | 0) & 127) * N + ((px_ | 0) & 127), hs = ((ch - H[i]) / z * 60 + 20) | 0, fog = Math.min(1, z / 160);
+        if (hs < yb[x]) { const c = C[i], col = RGB(R_(c) * (1 - fog) + 40 * fog | 0, G_(c) * (1 - fog) + 24 * fog | 0, B_(c) * (1 - fog) + 60 * fog | 0); for (let y = Math.max(0, hs); y < yb[x]; y++) px[y * 128 + x] = col; yb[x] = Math.max(0, hs); } px_ += sx; py += sy; } } } },
+
+{ name: "Rotozoomer", math: "Per pixel (u, v) = R(θ)·S(z)·(x, y) + offset, sampling a tiled texture; θ and z oscillate; one affine transform per frame", use: "<b>Portal swirls</b> and a hypnotic pause or curse-trance overlay", w: 96, h: 96,
+  init(s) { s.t = 0; s.tex = new Uint32Array(32 * 32); for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) { const d = Math.hypot(x - 16, y - 16); s.tex[y * 32 + x] = d < 7 ? sh(EMBER, .8 - d / 12) : ((x >> 3) + (y >> 3)) & 1 ? sh(CURSE, .45) : sh(CURSE, .25); } },
+  step(s, px) { s.t += .02; const th = s.t, z = 1.2 + Math.sin(s.t * .7) * .9, c = Math.cos(th) * z, sn = Math.sin(th) * z;
+    for (let y = 0; y < 96; y++) for (let x = 0; x < 96; x++) { const X = x - 48, Y = y - 48, u = (X * c - Y * sn + s.t * 20) | 0, v = (X * sn + Y * c) | 0; px[y * 96 + x] = s.tex[(v & 31) * 32 + (u & 31)]; } } },
+
+{ name: "Twister", math: "Each row is a square bar rotated by θ(y) = A·sin(y·k + t); its 4 edges projected as x = r·sin(θ + n·π/2); faces facing the viewer are filled and shaded by cos", use: "<b>Pillars of curse energy</b> and a demoscene-style title bar", w: 96, h: 96,
+  init(s) { s.t = 0; },
+  step(s, px) { s.t += .04; px.fill(RGB(10, 6, 14));
+    for (let y = 0; y < 96; y++) { const th = Math.sin(y * .04 + s.t) * 2.2 + s.t * .6, xs = [0, 1, 2, 3].map(n => 48 + Math.sin(th + n * Math.PI / 2) * 22);
+      for (let n = 0; n < 4; n++) { const a = xs[n], b = xs[(n + 1) % 4]; if (b <= a) continue; const lit = Math.cos(th + n * Math.PI / 2 + Math.PI / 4), col = [EMBER, CURSE, FROST, MOSS][n];
+        for (let x = a | 0; x < b; x++) px[y * 96 + x] = x === (a | 0) || x === ((b | 0) - 1) ? RGB(20, 12, 24) : sh(col, .25 + Math.max(0, -lit) * .6); } } } },
+
+{ name: "Vector Balls", math: "Points on a Fibonacci sphere rotated by Euler angles, perspective-projected and depth-sorted (painter's algorithm); each ball is a shaded sprite sized by 1/z", use: "<b>Orbiting soul spheres</b> for the Reaper, or a 3D-looking relic", w: 96, h: 96,
+  init(s) { s.p = Array.from({ length: 60 }, (_, i) => { const y = 1 - 2 * (i + .5) / 60, r = Math.sqrt(1 - y * y), a = i * 2.39996; return [Math.cos(a) * r, y, Math.sin(a) * r]; }); s.t = 0; },
+  step(s, px) { s.t += .02; const a = s.t, b = s.t * .7, ca = Math.cos(a), sa = Math.sin(a), cb = Math.cos(b), sb = Math.sin(b), breathe = 1 + Math.sin(s.t * 2) * .15;
+    const P = s.p.map(([x, y, z]) => { let X = x * ca - z * sa, Z = x * sa + z * ca, Y = y * cb - Z * sb; Z = y * sb + Z * cb; const k = 3 / (Z + 4); return [48 + X * 34 * k * breathe, 48 + Y * 34 * k * breathe, Z, k]; }).sort((p, q) => q[2] - p[2]);
+    for (let i = 0; i < px.length; i++) px[i] = RGB(8, 6, 12);
+    for (const [x, y, z, k] of P) { const r = 3.2 * k; for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) { const d = Math.hypot(dx, dy) / r; if (d > 1) continue; const X = x + dx | 0, Y = y + dy | 0; if (X < 0 || Y < 0 || X > 95 || Y > 95) continue;
+      const spec = Math.max(0, 1 - Math.hypot(dx / r + .35, dy / r + .35) * 2.2); px[Y * 96 + X] = spec > .3 ? RGB(255, 250, 230) : sh(z < 0 ? FROST : CURSE, .3 + (1 - d) * .5 - z * .1); } } } },
+
+{ name: "Moiré Interference", math: "Two families of concentric rings sin(k·|p − cᵢ|), centres drifting; their product beats into low-frequency fringes", use: "<b>Illusion and curse status</b> overlays, hypnotic and disorienting", w: 96, h: 96,
+  init(s) { s.t = 0; },
+  step(s, px) { s.t += .02; const c1 = [48 + Math.cos(s.t) * 14, 48 + Math.sin(s.t * .8) * 10], c2 = [48 - Math.cos(s.t * .9) * 14, 48 - Math.sin(s.t * 1.1) * 12];
+    for (let y = 0; y < 96; y++) for (let x = 0; x < 96; x++) { const a = Math.sin(Math.hypot(x - c1[0], y - c1[1]) * 1.6) > 0, b = Math.sin(Math.hypot(x - c2[0], y - c2[1]) * 1.6) > 0; px[y * 96 + x] = a !== b ? sh(CURSE, .6) : RGB(14, 8, 20); } } },
+
+{ name: "Fourier Epicycles", math: "Discrete Fourier transform of a closed outline; draw the sum of rotating phasors cₖ·e^(ikt) sorted by magnitude, so the tip retraces the shape", use: "<b>Sigils that draw themselves</b> from spinning circles, for spell reveals and the title logo", w: 96, h: 96,
+  init(s) { const N = 64, pts = []; for (let i = 0; i < N; i++) { const a = i / N * 6.283, r = 26 + 8 * Math.cos(5 * a) + 4 * Math.sin(3 * a); pts.push([Math.cos(a) * r, Math.sin(a) * r * (1 + .3 * Math.sin(a))]); }
+    s.C = []; for (let k = -16; k <= 16; k++) { let re = 0, im = 0; for (let n = 0; n < N; n++) { const th = -6.283 * k * n / N; re += pts[n][0] * Math.cos(th) - pts[n][1] * Math.sin(th); im += pts[n][0] * Math.sin(th) + pts[n][1] * Math.cos(th); } s.C.push([k, re / N, im / N]); }
+    s.C.sort((a, b) => Math.hypot(b[1], b[2]) - Math.hypot(a[1], a[2])); s.trail = []; s.t = 0; },
+  step(s, px) { s.t += 6.283 / 300; let x = 48, y = 48; px.fill(RGB(10, 6, 14)); const circ = [];
+    for (const [k, re, im] of s.C) { const th = k * s.t, nx = x + re * Math.cos(th) - im * Math.sin(th), ny = y + re * Math.sin(th) + im * Math.cos(th); circ.push([x, y, Math.hypot(re, im)]); x = nx; y = ny; }
+    s.trail.push([x, y]); if (s.trail.length > 300) s.trail.shift();
+    for (const [cx, cy, r] of circ.slice(0, 10)) for (let a = 0; a < 6.283; a += 1.5 / Math.max(r, 1)) { const X = cx + Math.cos(a) * r | 0, Y = cy + Math.sin(a) * r | 0; if (X >= 0 && Y >= 0 && X < 96 && Y < 96) px[Y * 96 + X] = RGB(50, 34, 70); }
+    s.trail.forEach(([a, b], i) => { const X = a | 0, Y = b | 0; if (X >= 0 && Y >= 0 && X < 96 && Y < 96) px[Y * 96 + X] = sh(EMBER, .4 + i / s.trail.length * .6); }); } },
+
+{ name: "Tesseract (4D rotation)", math: "16 vertices of a 4-cube rotated in the XW and YZ planes, projected 4D → 3D → 2D by two perspective divides; 32 edges drawn", use: "A <b>secret-ending relic</b> that folds through itself, from a higher dimension", w: 96, h: 96,
+  init(s) { s.v = []; for (let i = 0; i < 16; i++) s.v.push([i & 1, i >> 1 & 1, i >> 2 & 1, i >> 3 & 1].map(b => b * 2 - 1)); s.e = []; for (let i = 0; i < 16; i++) for (let b = 0; b < 4; b++) { const j = i ^ (1 << b); if (j > i) s.e.push([i, j]); } s.t = 0; },
+  step(s, px) { s.t += .015; const a = s.t, b = s.t * .7;
+    const P = s.v.map(([x, y, z, w]) => { [x, w] = [x * Math.cos(a) - w * Math.sin(a), x * Math.sin(a) + w * Math.cos(a)]; [y, z] = [y * Math.cos(b) - z * Math.sin(b), y * Math.sin(b) + z * Math.cos(b)]; const k4 = 2 / (3 - w); x *= k4; y *= k4; z *= k4; const k3 = 2.5 / (4 - z); return [48 + x * 22 * k3, 48 + y * 22 * k3, w]; });
+    for (let i = 0; i < px.length; i++) { const v = px[i]; px[i] = RGB((v & 255) * .7 | 0, (v >> 8 & 255) * .7 | 0, Math.max(14, (v >> 16 & 255) * .7 | 0)); }
+    for (const [i, j] of s.e) { const A = P[i], B = P[j], n = Math.ceil(Math.hypot(B[0] - A[0], B[1] - A[1])); for (let k = 0; k <= n; k++) { const x = A[0] + (B[0] - A[0]) * k / n | 0, y = A[1] + (B[1] - A[1]) * k / n | 0; if (x >= 0 && y >= 0 && x < 96 && y < 96) px[y * 96 + x] = sh((A[2] + B[2]) > 0 ? EMBER : FROST, .75); } } } },
+
+{ name: "Lorenz Attractor", math: "ẋ = σ(y − x), ẏ = x(ρ − z) − y, ż = xy − βz with σ = 10, ρ = 28, β = 8/3; RK4, rotated in 3D and projected; trail coloured by speed", use: "<b>Chaos butterfly</b> sigil for a wild-card Arcana", w: 96, h: 96,
+  init(s) { s.p = [.1, 0, 0]; s.tr = []; s.t = 0; },
+  step(s, px) { const f = ([x, y, z]) => [10 * (y - x), x * (28 - z) - y, x * y - 8 / 3 * z]; s.t += .01;
+    for (let k = 0; k < 8; k++) { const h = .008, p = s.p, k1 = f(p), k2 = f(p.map((v, i) => v + k1[i] * h / 2)), k3 = f(p.map((v, i) => v + k2[i] * h / 2)), k4 = f(p.map((v, i) => v + k3[i] * h)); s.p = p.map((v, i) => v + h / 6 * (k1[i] + 2 * k2[i] + 2 * k3[i] + k4[i])); s.tr.push([...s.p, Math.hypot(...k1)]); }
+    if (s.tr.length > 2400) s.tr.splice(0, 8); px.fill(RGB(8, 6, 12)); const c = Math.cos(s.t), sn = Math.sin(s.t);
+    for (const [x, y, z, sp] of s.tr) { const X = 48 + (x * c - y * sn) * 1.6 | 0, Y = 88 - z * 1.55 | 0; if (X >= 0 && Y >= 0 && X < 96 && Y < 96) px[Y * 96 + X] = sh(EMBER, Math.min(1, .3 + sp / 220)); } } },
+
+{ name: "Barnsley Fern", math: "Chaos game over 4 affine maps chosen with probabilities 0.01, 0.85, 0.07, 0.07; the stem, the self-similar leaflets and the left and right pinnae emerge; a gentle sway is added to the main map", use: "<b>Fern undergrowth</b> for the forest stage, each frond unique", w: 96, h: 96,
+  init(s) { s.d = new Float32Array(9216); s.x = 0; s.y = 0; s.t = 0; },
+  step(s, px) { s.t += .03; const sw = Math.sin(s.t) * .02; for (let i = 0; i < 9216; i++) s.d[i] *= .9;
+    let x = s.x, y = s.y; for (let k = 0; k < 20000; k++) { const r = rnd(); let nx, ny;
+      if (r < .01) { nx = 0; ny = .16 * y; } else if (r < .86) { nx = (.85 + sw) * x + (.04 + sw) * y; ny = -.04 * x + .85 * y + 1.6; } else if (r < .93) { nx = .2 * x - .26 * y; ny = .23 * x + .22 * y + 1.6; } else { nx = -.15 * x + .28 * y; ny = .26 * x + .24 * y + .44; }
+      x = nx; y = ny; const X = 48 + x * 9 | 0, Y = 94 - y * 9 | 0; if (X >= 0 && Y >= 0 && X < 96 && Y < 96) s.d[Y * 96 + X]++; }
+    s.x = x; s.y = y; for (let i = 0; i < 9216; i++) px[i] = sh(MOSS, Math.min(1, Math.log(s.d[i] + 1) / 3.2)); } },
+
+{ name: "Mandelbrot Deep Zoom", math: "Escape-time iteration z ← z² + c with smooth colouring; zoom exponentially toward a Misiurewicz point; the iteration cap grows with depth", use: "An <b>infinite-fall</b> transition into the final stage", w: 96, h: 96,
+  init(s) { s.t = 0; },
+  step(s, px) { s.t += .03; if (s.t > 14) s.t = 0; const z = Math.exp(-s.t), cx = -.743643887, cy = .131825904, it = 60 + s.t * 18 | 0;
+    for (let y = 0; y < 96; y++) for (let x = 0; x < 96; x++) { const cr = cx + (x - 48) / 48 * 1.6 * z, ci = cy + (y - 48) / 48 * 1.6 * z; let zr = 0, zi = 0, n = 0;
+      for (; n < it && zr * zr + zi * zi < 16; n++) { const t = zr * zr - zi * zi + cr; zi = 2 * zr * zi + ci; zr = t; }
+      px[y * 96 + x] = n >= it ? RGB(6, 4, 10) : sh(n % 2 ? CURSE : EMBER, ((n + 1 - Math.log2(Math.log(Math.sqrt(zr * zr + zi * zi)))) % 24) / 24); } } },
+
+{ name: "Burning Ship", math: "z ← (|Re z| + i|Im z|)² + c; the absolute values break the symmetry into a flaming hull; a slow pan along the masts", use: "A <b>burning-ship silhouette</b> for a sea-of-fire stage or an inferno Arcana", w: 96, h: 96,
+  init(s) { s.t = 0; },
+  step(s, px) { s.t += .01; const z = .09 + Math.sin(s.t) * .04, cx = -1.762 + Math.sin(s.t * .5) * .02, cy = -.028;
+    for (let y = 0; y < 96; y++) for (let x = 0; x < 96; x++) { const cr = cx + (x - 48) / 48 * z, ci = cy + (y - 48) / 48 * z; let zr = 0, zi = 0, n = 0;
+      for (; n < 60 && zr * zr + zi * zi < 4; n++) { const a = Math.abs(zr), b = Math.abs(zi), t = a * a - b * b + cr; zi = 2 * a * b + ci; zr = t; } px[y * 96 + x] = n >= 60 ? RGB(10, 4, 6) : sh(EMBER, Math.sqrt(n / 60)); } } },
+
+{ name: "Pickover Biomorphs", math: "Iterate z ← z³ + c; a point belongs to the creature when |Re z| or |Im z| stays under 10 at exit; gives cell-like organisms with tentacles", use: "<b>Microbial horrors</b> for the plague stage, generated from a single formula", w: 96, h: 96,
+  init(s) { s.t = 0; },
+  step(s, px) { s.t += .01; const cr = .5 + Math.sin(s.t) * .1, ci = Math.cos(s.t * .7) * .1;
+    for (let y = 0; y < 96; y++) for (let x = 0; x < 96; x++) { let zr = (x - 48) / 18, zi = (y - 48) / 18, n = 0;
+      for (; n < 12 && Math.abs(zr) < 10 && Math.abs(zi) < 10 && zr * zr + zi * zi < 100; n++) { const r2 = zr * zr, i2 = zi * zi, nr = zr * r2 - 3 * zr * i2 + cr; zi = 3 * r2 * zi - zi * i2 + ci; zr = nr; }
+      const inside = Math.abs(zr) < 10 || Math.abs(zi) < 10; px[y * 96 + x] = inside ? sh(MOSS, .3 + n / 18) : RGB(12, 8, 14); } } },
+
+{ name: "AM Halftone Screen", math: "Rotate into a screen grid at 45°; in each cell, a pixel is inked when its distance from the cell centre < r(luminance); separate C, M, Y, K screens at 15°, 75°, 0° and 45°", use: "A <b>comic-book pause screen</b> and a printed wanted-poster look for bosses", w: 96, h: 96,
+  init(s) { s.t = 0; s.src = new Uint32Array(9216); },
+  step(s, px) { s.t += .03; scene(96, 96, s.t, s.src); const sc = 4;
+    const screen = (v, x, y, ang) => { const c = Math.cos(ang), sn = Math.sin(ang), u = x * c + y * sn, w = -x * sn + y * c, fu = ((u % sc) + sc) % sc - sc / 2, fw = ((w % sc) + sc) % sc - sc / 2; return Math.hypot(fu, fw) < Math.sqrt(v) * sc * .7; };
+    for (let y = 0; y < 96; y++) for (let x = 0; x < 96; x++) { const v = s.src[y * 96 + x], r = R_(v) / 255, g = G_(v) / 255, b = B_(v) / 255, k = 1 - Math.max(r, g, b), C = (1 - r - k) / (1 - k + 1e-6), M = (1 - g - k) / (1 - k + 1e-6), Y = (1 - b - k) / (1 - k + 1e-6);
+      let R = 245, G = 238, B = 225; if (screen(C, x, y, .26)) R -= 190; if (screen(M, x, y, 1.31)) G -= 190; if (screen(Y, x, y, 0)) B -= 190; if (screen(k, x, y, .785)) { R = 20; G = 18; B = 24; }
+      px[y * 96 + x] = RGB(Math.max(0, R), Math.max(0, G), Math.max(0, B)); } } },
+
+{ name: "Sobel Neon Edges", math: "Gx and Gy 3×3 Sobel kernels on luminance; magnitude thresholded and coloured by gradient angle; additive glow; a sweep divides it from the source", use: "<b>Arcana-vision</b>: the world drawn as neon outlines while a time or truth power is active", w: 96, h: 96,
+  init(s) { s.t = 0; s.src = new Uint32Array(9216); },
+  step(s, px) { s.t += .03; scene(96, 96, s.t, s.src); const L = i => { const v = s.src[i]; return R_(v) * .3 + G_(v) * .59 + B_(v) * .11; }, split = 48 + Math.sin(s.t * .6) * 40;
+    for (let y = 1; y < 95; y++) for (let x = 1; x < 95; x++) { const i = y * 96 + x; if (x < split) { px[i] = s.src[i]; continue; }
+      const gx = -L(i - 97) - 2 * L(i - 1) - L(i + 95) + L(i - 95) + 2 * L(i + 1) + L(i + 97), gy = -L(i - 97) - 2 * L(i - 96) - L(i - 95) + L(i + 95) + 2 * L(i + 96) + L(i + 97), m = Math.hypot(gx, gy) / 400, a = (Math.atan2(gy, gx) / 6.283 + 1) % 1;
+      px[i] = m > .12 ? (a < .5 ? sh(CURSE, .5 + m) : sh(FROST, .5 + m)) : RGB(6, 4, 10); } } },
+
+{ name: "CRT Shadow Mask", math: "Upscale ×3; each subpixel column keeps only its R, G or B channel; scanline darkening via cos² of the row; barrel distortion r′ = r(1 + k·r²); bloom from neighbouring rows", use: "An optional <b>arcade CRT mode</b> for the whole game", w: 96, h: 96,
+  init(s) { s.t = 0; s.src = new Uint32Array(32 * 32); },
+  step(s, px) { s.t += .03; scene(32, 32, s.t, s.src);
+    for (let y = 0; y < 96; y++) for (let x = 0; x < 96; x++) { let u = x / 96 * 2 - 1, v = y / 96 * 2 - 1; const r2 = u * u + v * v; u *= 1 + .12 * r2; v *= 1 + .12 * r2; if (Math.abs(u) > 1 || Math.abs(v) > 1) { px[y * 96 + x] = RGB(0, 0, 0); continue; }
+      const sx = (u + 1) / 2 * 32, sy = (v + 1) / 2 * 32, c = s.src[Math.min(31, sy | 0) * 32 + Math.min(31, sx | 0)], scan = .55 + .45 * Math.cos((sy % 1 - .5) * Math.PI) ** 2, sub = x % 3, vig = 1 - r2 * .25;
+      const k = scan * vig * 1.3; px[y * 96 + x] = RGB(sub === 0 ? Math.min(255, R_(c) * k) | 0 : R_(c) * .15 | 0, sub === 1 ? Math.min(255, G_(c) * k) | 0 : G_(c) * .15 | 0, sub === 2 ? Math.min(255, B_(c) * k) | 0 : B_(c) * .15 | 0); } } },
+
+{ name: "SPH Fluid", math: "Smoothed-particle hydrodynamics: density ρᵢ = Σ m·W_poly6, pressure p = k(ρ − ρ₀), forces from the spiky-kernel gradient and viscosity Laplacian; spatial grid for neighbours", use: "<b>Pourable blood, holy water and lava</b> that slosh and splash as particles", w: 96, h: 96,
+  init(s) { s.p = []; for (let y = 0; y < 18; y++) for (let x = 0; x < 16; x++) s.p.push({ x: 8 + x * 2.2 + rnd() * .1, y: 20 + y * 2.2, vx: 0, vy: 0, d: 0, pr: 0 }); s.t = 0; },
+  step(s, px) { const P = s.p, h = 4, h2 = h * h, cell = new Map(); s.t++;
+    for (let sub = 0; sub < 2; sub++) { cell.clear(); P.forEach((p, i) => { const k = (p.x / h | 0) * 100 + (p.y / h | 0); (cell.get(k) || cell.set(k, []).get(k)).push(i); });
+      const nb = (p, f) => { const cx = p.x / h | 0, cy = p.y / h | 0; for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) { const l = cell.get((cx + dx) * 100 + cy + dy); if (l) for (const j of l) f(P[j]); } };
+      for (const p of P) { let d = 0; nb(p, q => { const r2 = (p.x - q.x) ** 2 + (p.y - q.y) ** 2; if (r2 < h2) d += (h2 - r2) ** 3; }); p.d = d * 315 / (64 * Math.PI * h ** 9); p.pr = 60 * (p.d - .12); }
+      for (const p of P) { let fx = 0, fy = .25; nb(p, q => { if (q === p) return; const dx = p.x - q.x, dy = p.y - q.y, r = Math.hypot(dx, dy); if (r >= h || r < 1e-4) return; const sp = -45 / (Math.PI * h ** 6) * (h - r) ** 2, pf = -(p.pr + q.pr) / (2 * q.d + 1e-6) * sp;
+          fx += dx / r * pf; fy += dy / r * pf; const vf = .02 * 45 / (Math.PI * h ** 6) * (h - r) / (q.d + 1e-6); fx += (q.vx - p.vx) * vf; fy += (q.vy - p.vy) * vf; });
+        p.vx += fx * .5; p.vy += fy * .5; }
+      for (const p of P) { p.x += p.vx * .5; p.y += p.vy * .5; if (p.x < 2) { p.x = 2; p.vx *= -.4; } if (p.x > 93) { p.x = 93; p.vx *= -.4; } if (p.y > 93) { p.y = 93; p.vy *= -.4; } if (p.y < 2) { p.y = 2; p.vy *= -.4; } } }
+    if (s.t % 400 === 0) for (const p of P) { p.vx += (rnd() - .3) * 3; p.vy -= rnd() * 3; }
+    px.fill(RGB(12, 8, 16)); const dens = new Float32Array(9216); for (const p of P) for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) { const X = p.x + dx | 0, Y = p.y + dy | 0; if (X >= 0 && Y >= 0 && X < 96 && Y < 96) dens[Y * 96 + X] += 1 - Math.hypot(dx, dy) / 3; }
+    for (let i = 0; i < 9216; i++) if (dens[i] > .8) px[i] = sh(ramp([[60, 0, 10], [170, 20, 30], [240, 90, 80]]), Math.min(1, (dens[i] - .8) / 3)); } },
+
+{ name: "Pressure Soft Body", math: "A ring of 24 Verlet points with edge springs; an internal pressure force ∝ (A₀/A − 1) pushes each edge out along its normal (A from the shoelace formula); it bounces under gravity", use: "<b>Balloon slimes</b> and blob bosses that keep their volume when squashed", w: 96, h: 96,
+  init(s) { s.p = Array.from({ length: 24 }, (_, i) => { const a = i / 24 * 6.283; return [48 + Math.cos(a) * 14, 30 + Math.sin(a) * 14, 48 + Math.cos(a) * 14 - 1, 30 + Math.sin(a) * 14]; }); s.A0 = Math.PI * 196; s.t = 0; },
+  step(s, px) { const P = s.p, n = P.length; s.t++;
+    for (let it = 0; it < 3; it++) { for (const q of P) { const vx = (q[0] - q[2]) * .995, vy = (q[1] - q[3]) * .995; q[2] = q[0]; q[3] = q[1]; q[0] += vx; q[1] += vy + .04; }
+      let A = 0; for (let i = 0; i < n; i++) { const a = P[i], b = P[(i + 1) % n]; A += a[0] * b[1] - b[0] * a[1]; } A = Math.abs(A) / 2; const pf = (s.A0 / A - 1) * .6;
+      for (let i = 0; i < n; i++) { const a = P[i], b = P[(i + 1) % n], ex = b[0] - a[0], ey = b[1] - a[1], nx = ey, ny = -ex; a[0] += nx * pf * .05; a[1] += ny * pf * .05; b[0] += nx * pf * .05; b[1] += ny * pf * .05; }
+      for (let k = 0; k < 4; k++) for (let i = 0; i < n; i++) { const a = P[i], b = P[(i + 1) % n], dx = b[0] - a[0], dy = b[1] - a[1], d = Math.hypot(dx, dy) || 1, L = 6.283 * 14 / n, f = (d - L) / d * .5; a[0] += dx * f; a[1] += dy * f; b[0] -= dx * f; b[1] -= dy * f; }
+      for (const q of P) { if (q[1] > 92) { q[1] = 92; q[3] = q[1] + (q[1] - q[3]) * .3; } if (q[0] < 3) q[0] = 3; if (q[0] > 93) q[0] = 93; } }
+    if (s.t % 150 === 0) for (const q of P) { q[3] += 3; q[2] += (rnd() - .5) * 2; }
+    px.fill(RGB(12, 8, 16)); let minx = 96, maxx = 0, miny = 96, maxy = 0; for (const q of P) { minx = Math.min(minx, q[0]); maxx = Math.max(maxx, q[0]); miny = Math.min(miny, q[1]); maxy = Math.max(maxy, q[1]); }
+    for (let y = Math.max(0, miny | 0); y <= Math.min(95, maxy); y++) for (let x = Math.max(0, minx | 0); x <= Math.min(95, maxx); x++) { let inside = false; for (let i = 0, j = n - 1; i < n; j = i++) { const a = P[i], b = P[j]; if ((a[1] > y) !== (b[1] > y) && x < (b[0] - a[0]) * (y - a[1]) / (b[1] - a[1]) + a[0]) inside = !inside; }
+      if (inside) px[y * 96 + x] = sh(CURSE, .4 + (1 - (y - miny) / (maxy - miny + 1)) * .35); }
+    for (const q of P) { const X = q[0] | 0, Y = q[1] | 0; if (X >= 0 && Y >= 0 && X < 96 && Y < 96) px[Y * 96 + X] = RGB(235, 210, 255); } for (let x = 0; x < 96; x++) px[93 * 96 + x] = RGB(60, 46, 70); } },
+
+{ name: "Verlet Ragdoll", math: "Stick figure of 11 particles with distance constraints and angle limits (soft min-distance between non-adjacent joints); thrown, gravity, floor friction", use: "<b>Death ragdolls</b> for skeletons and knights instead of a fade", w: 96, h: 96,
+  init(s) { const J = [[0, -16], [0, -10], [0, 0], [-5, -8], [-9, -2], [5, -8], [9, -2], [-3, 8], [-4, 16], [3, 8], [4, 16]]; s.p = J.map(([x, y]) => [24 + x, 30 + y, 24 + x - 1.1, 30 + y + 1.4]);
+    s.c = [[0, 1], [1, 2], [1, 3], [3, 4], [1, 5], [5, 6], [2, 7], [7, 8], [2, 9], [9, 10], [3, 5], [7, 9], [0, 2]].map(([a, b]) => [a, b, Math.hypot(J[a][0] - J[b][0], J[a][1] - J[b][1])]); s.t = 0; },
+  step(s, px) { const P = s.p; s.t++;
+    for (const q of P) { const vx = (q[0] - q[2]) * .99, vy = (q[1] - q[3]) * .99; q[2] = q[0]; q[3] = q[1]; q[0] += vx; q[1] += vy + .12; }
+    for (let it = 0; it < 8; it++) { for (const [a, b, L] of s.c) { const A = P[a], B = P[b], dx = B[0] - A[0], dy = B[1] - A[1], d = Math.hypot(dx, dy) || 1, f = (d - L) / d * .5; A[0] += dx * f; A[1] += dy * f; B[0] -= dx * f; B[1] -= dy * f; }
+      for (const q of P) { if (q[1] > 76) { q[1] = 76; q[2] = q[0] - (q[0] - q[2]) * .6; } if (q[0] < 2) { q[0] = 2; q[2] = q[0] + (q[0] - q[2]) * .5; } if (q[0] > 74) { q[0] = 74; q[2] = q[0] + (q[0] - q[2]) * .5; } } }
+    if (s.t > 240) this.init(s);
+    px.fill(RGB(12, 8, 16)); for (let x = 0; x < 96; x++) for (let y = 77; y < 96; y++) px[y * 96 + x] = RGB(40 + (y - 77) * 2, 30, 46);
+    for (const [a, b] of s.c.slice(0, 10)) { const A = P[a], B = P[b], n = Math.ceil(Math.hypot(B[0] - A[0], B[1] - A[1])) + 1; for (let k = 0; k <= n; k++) { const x = A[0] + (B[0] - A[0]) * k / n | 0, y = A[1] + (B[1] - A[1]) * k / n | 0; if (x >= 0 && y >= 0 && x < 96 && y < 96) { px[y * 96 + x] = RGB(220, 215, 205); if (x < 95) px[y * 96 + x + 1] = RGB(150, 145, 140); } } }
+    const H = P[0]; for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) if (dx * dx + dy * dy <= 9) { const X = H[0] + dx | 0, Y = H[1] + dy | 0; if (X >= 0 && Y >= 0 && X < 96 && Y < 96) px[Y * 96 + X] = dx * dx + dy * dy > 5 ? RGB(150, 145, 140) : RGB(235, 230, 220); } } },
+
+{ name: "Electric Field Lines", math: "E = Σ qᵢ·r/|r|³ from moving charges; streamlines traced from rings around each positive charge with RK2 until they reach a negative charge or leave the frame; equipotential shading", use: "<b>Lightning-tether</b> previews between charged enemies, and magnet items", w: 96, h: 96,
+  init(s) { s.q = [[30, 40, 1, 0], [66, 56, -1, 1], [48, 20, 1, 2], [50, 80, -1, 3]]; s.t = 0; },
+  step(s, px) { s.t += .02; const Q = s.q.map(([x, y, q, k]) => [x + Math.cos(s.t + k) * 10, y + Math.sin(s.t * 1.3 + k) * 8, q]);
+    const E = (x, y) => { let ex = 0, ey = 0; for (const [qx, qy, q] of Q) { const dx = x - qx, dy = y - qy, r2 = dx * dx + dy * dy + 1, r3 = r2 * Math.sqrt(r2); ex += q * dx / r3; ey += q * dy / r3; } return [ex, ey]; };
+    for (let y = 0; y < 96; y++) for (let x = 0; x < 96; x++) { let V = 0; for (const [qx, qy, q] of Q) V += q / Math.hypot(x - qx, y - qy + .01); px[y * 96 + x] = Math.abs((V * 30) % 1) < .08 ? RGB(40, 30, 60) : RGB(10, 6, 16); }
+    for (const [qx, qy, q] of Q) { if (q < 0) continue; for (let a = 0; a < 6.283; a += .4) { let x = qx + Math.cos(a) * 2, y = qy + Math.sin(a) * 2;
+      for (let k = 0; k < 160; k++) { const [ex, ey] = E(x, y), m = Math.hypot(ex, ey) + 1e-9, mx = x + ex / m * .5, my = y + ey / m * .5, [e2x, e2y] = E(mx, my), m2 = Math.hypot(e2x, e2y) + 1e-9; x += e2x / m2; y += e2y / m2;
+        if (x < 0 || y < 0 || x >= 96 || y >= 96) break; px[(y | 0) * 96 + (x | 0)] = sh(FROST, Math.min(1, .35 + m * 40)); if (Q.some(([a2, b2, q2]) => q2 < 0 && (a2 - x) ** 2 + (b2 - y) ** 2 < 4)) break; } } }
+    for (const [x, y, q] of Q) for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) px[(((y | 0) + dy + 96) % 96) * 96 + (((x | 0) + dx + 96) % 96)] = q > 0 ? RGB(255, 200, 100) : RGB(140, 90, 255); } },
+
+{ name: "Two-Source Interference", math: "Analytic wave u = Σ cos(k|p − sᵢ| − ωt)/√|p − sᵢ| from two coherent emitters; bright and dark fringes are the classic double-slit pattern", use: "<b>Resonating twin bells</b> and paired shrines whose waves interfere", w: 96, h: 96,
+  init(s) { s.t = 0; },
+  step(s, px) { s.t += .15; const S = [[48 - 10 - Math.sin(s.t * .05) * 6, 20], [48 + 10 + Math.sin(s.t * .05) * 6, 20]];
+    for (let y = 0; y < 96; y++) for (let x = 0; x < 96; x++) { let u = 0; for (const [sx, sy] of S) { const r = Math.hypot(x - sx, y - sy) + .5; u += Math.cos(r * .9 - s.t) / Math.sqrt(r); } px[y * 96 + x] = sh(FROST, .5 + u * .55); } } },
+
+{ name: "Prism Dispersion", math: "2D ray tracing through a triangular prism with Snell's law n₁sinθ₁ = n₂sinθ₂ and a wavelength-dependent index n(λ) (Cauchy); 7 colours fan into a rainbow; total internal reflection handled", use: "<b>Holy-light refraction</b> through crystal relics, and the Heaven Sword's rainbow", w: 128, h: 96,
+  init(s) { s.t = 0; },
+  step(s, px) { s.t += .01; for (let i = 0; i < px.length; i++) { const v = px[i]; px[i] = RGB((v & 255) * .85 | 0, (v >> 8 & 255) * .85 | 0, Math.max(12, (v >> 16 & 255) * .85 | 0)); }
+    const T = [[64, 22], [44, 70], [84, 70]], edges = [[T[0], T[1]], [T[1], T[2]], [T[2], T[0]]];
+    const hit = (ox, oy, dx, dy) => { let best = 1e9, en = null; for (const [A, B] of edges) { const ex = B[0] - A[0], ey = B[1] - A[1], den = dx * ey - dy * ex; if (Math.abs(den) < 1e-9) continue; const t = ((A[0] - ox) * ey - (A[1] - oy) * ex) / den, u = ((A[0] - ox) * dy - (A[1] - oy) * dx) / den; if (t > 1e-3 && u >= 0 && u <= 1 && t < best) { best = t; const l = Math.hypot(ex, ey); en = [ey / l, -ex / l]; } } return en ? [best, en] : null; };
+    const cols = [[255, 60, 60], [255, 150, 40], [255, 240, 60], [80, 230, 80], [60, 160, 255], [90, 80, 255], [180, 70, 255]], ang = -.1 + Math.sin(s.t) * .12;
+    cols.forEach((c, k) => { const n = 1.45 + k * .025; let ox = 0, oy = 44, dx = Math.cos(ang), dy = Math.sin(ang), inside = false;
+      for (let b = 0; b < 4; b++) { const h = hit(ox, oy, dx, dy), L = h ? h[0] : 200; for (let t = 0; t < L; t += .7) { const X = ox + dx * t | 0, Y = oy + dy * t | 0; if (X >= 0 && Y >= 0 && X < 128 && Y < 96) { const i = Y * 128 + X, v = px[i]; px[i] = RGB(Math.min(255, (v & 255) + c[0] * .5) | 0, Math.min(255, (v >> 8 & 255) + c[1] * .5) | 0, Math.min(255, (v >> 16 & 255) + c[2] * .5) | 0); } }
+        if (!h) break; ox += dx * h[0]; oy += dy * h[0]; let [nx, ny] = h[1]; let cos = -(nx * dx + ny * dy); if (cos < 0) { nx = -nx; ny = -ny; cos = -cos; } const eta = inside ? n : 1 / n, k2 = 1 - eta * eta * (1 - cos * cos);
+        if (k2 < 0) { dx += 2 * cos * nx; dy += 2 * cos * ny; } else { const f = eta * cos - Math.sqrt(k2); dx = eta * dx + f * nx; dy = eta * dy + f * ny; inside = !inside; } } });
+    for (const [A, B] of edges) for (let t = 0; t <= 1; t += .01) { const x = A[0] + (B[0] - A[0]) * t | 0, y = A[1] + (B[1] - A[1]) * t | 0; px[y * 128 + x] = RGB(200, 220, 240); } } },
+
+{ name: "Young 2D Morphogen", math: "2D activator–inhibitor CA: a cell turns on when (on-cells within r₁) − w·(on-cells within r₂) > 0, using box sums from summed-area tables; spots or stripes depending on w", use: "Procedural <b>animal hides</b> (leopard spots, tiger stripes) for beast enemies", w: 96, h: 96,
+  init(s) { s.a = new Uint8Array(9216).map(() => rnd() < .5 ? 1 : 0); s.t = 0; },
+  step(s, px) { s.t += .01; const a = s.a, w = .28 + Math.sin(s.t) * .1, S = new Int32Array(97 * 97);
+    for (let y = 0; y < 96; y++) for (let x = 0; x < 96; x++) S[(y + 1) * 97 + x + 1] = a[y * 96 + x] + S[y * 97 + x + 1] + S[(y + 1) * 97 + x] - S[y * 97 + x];
+    const box = (x, y, r) => { const x0 = Math.max(0, x - r), y0 = Math.max(0, y - r), x1 = Math.min(96, x + r + 1), y1 = Math.min(96, y + r + 1); return S[y1 * 97 + x1] - S[y0 * 97 + x1] - S[y1 * 97 + x0] + S[y0 * 97 + x0]; };
+    const b = new Uint8Array(9216); for (let y = 0; y < 96; y++) for (let x = 0; x < 96; x++) { const i1 = box(x, y, 2), i2 = box(x, y, 6) - i1; b[y * 96 + x] = i1 - w * i2 > 0 ? 1 : 0; px[y * 96 + x] = b[y * 96 + x] ? RGB(30, 20, 14) : sh(EMBER, .55 + (y / 96) * .2); }
+    s.a = b; } },
+
+{ name: "Procedural Sprite Creatures", math: "A random 6×12 half-grid, mirrored for symmetry, then cleaned with a cellular automaton; outlined, palette-mapped and shaded top to bottom; a new creature every second", use: "<b>Endless enemy variants</b> and familiars generated from a seed, so every run has new monsters", w: 96, h: 96,
+  init(s) { s.t = 0; s.bank = []; },
+  step(s, px) { if (s.t++ % 10 === 0) { const W = 6, H = 12; let g = Array.from({ length: H }, (_, y) => Array.from({ length: W }, (_, x) => rnd() < .55 - Math.abs(y - 6) * .02 + x * .03 ? 1 : 0));
+      for (let it = 0; it < 2; it++) g = g.map((row, y) => row.map((v, x) => { let c = 0; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) c += ((g[y + dy] || [])[x + dx] || 0) + ((dx + x >= W) ? ((g[y + dy] || [])[2 * W - 1 - (x + dx)] || 0) : 0); return c >= 4 ? 1 : c <= 1 ? 0 : v; }));
+      const pal = [EMBER, CURSE, MOSS, FROST][rnd() * 4 | 0], eye = [3 + (rnd() * 4 | 0), 1 + (rnd() * 3 | 0)]; s.bank.push({ g, pal, eye }); if (s.bank.length > 9) s.bank.shift(); }
+    px.fill(RGB(12, 8, 16));
+    s.bank.forEach(({ g, pal, eye }, k) => { const ox = (k % 3) * 32 + 4, oy = (k / 3 | 0) * 32 + 2, full = g.map(r => [...r, ...[...r].reverse()]), at = (x, y) => (full[y] || [])[x] || 0;
+      for (let y = -1; y <= 12; y++) for (let x = -1; x <= 12; x++) { let col = null; if (at(x, y)) col = (y === eye[0] && (x === eye[1] || x === 11 - eye[1])) ? RGB(255, 240, 200) : sh(pal, .75 - y / 24); else if (at(x - 1, y) || at(x + 1, y) || at(x, y - 1) || at(x, y + 1)) col = RGB(20, 12, 24);
+        if (col) for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) { const X = ox + x * 2 + dx, Y = oy + y * 2 + dy + (Math.sin(s.t * .2 + k) > 0 ? 1 : 0); if (X >= 0 && Y >= 0 && X < 96 && Y < 96) px[Y * 96 + X] = col; } } }); } },
+
+{ name: "Phasor Noise", math: "Sum Gabor kernels as complex phasors Σ e^(−πa²r²)·e^(i2πF(x·ω)), then take the phase arg(z) and map it through a periodic profile; contrast stays uniform, with no washed-out regions", use: "Clean <b>energy ripples and fingerprint swirls</b> for shields and portals", w: 64, h: 64,
+  init(s) { s.k = Array.from({ length: 40 }, () => [rnd() * 64, rnd() * 64, rnd() * 6.283]); s.t = 0; },
+  step(s, px) { s.t += .05; s.par = (s.par || 0) ^ 1;
+    for (let y = s.par; y < 64; y += 2) for (let x = 0; x < 64; x++) { let re = 0, im = 0;
+      for (const [kx, ky, a] of s.k) { const dx = x - kx, dy = y - ky, d2 = dx * dx + dy * dy; if (d2 > 140) continue; const om = a + Math.sin(kx * .1 + s.t * .2), ph = .35 * (dx * Math.cos(om) + dy * Math.sin(om)), g = Math.exp(-d2 * .025); re += g * Math.cos(ph); im += g * Math.sin(ph); }
+      const p = (Math.atan2(im, re) + s.t * 2) % 6.283; px[y * 64 + x] = sh(CURSE, .5 + .45 * Math.sin(p)); } } },
+
+{ name: "Thermal Erosion (talus)", math: "Where the slope to a neighbour exceeds the talus angle, move c·(Δh − T) of the material downhill; repeat; sharp noise relaxes into scree slopes and plateaus", use: "<b>Rubble heaps and dunes</b> settling after an explosion or a giant's stomp", w: 96, h: 96,
+  init(s) { s.h = new Float32Array(9216).map((_, i) => { const x = i % 96, y = i / 96 | 0; return Math.max(0, 1 - Math.hypot(x - 48, y - 48) / 30) * (.6 + rnd() * .8) + (rnd() < .02 ? 1.5 : 0); }); s.n = 0; },
+  step(s, px) { const h = s.h, T = .01;
+    for (let it = 0; it < 4; it++) for (let y = 1; y < 95; y++) for (let x = 1; x < 95; x++) { const i = y * 96 + x; for (const o of [1, -1, 96, -96]) { const d = h[i] - h[i + o]; if (d > T) { const m = (d - T) * .25; h[i] -= m; h[i + o] += m; } } }
+    if (++s.n > 220) this.init(s);
+    for (let y = 1; y < 95; y++) for (let x = 1; x < 95; x++) { const i = y * 96 + x, sl = (h[i - 1] - h[i + 1]) * 8 + (h[i - 96] - h[i + 96]) * 8; px[i] = sh(EMBER, Math.max(0, Math.min(1, .25 + h[i] * .35 + sl))); } } }
 
 ];
 
