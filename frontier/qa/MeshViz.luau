@@ -3,6 +3,9 @@
 -- MeshViz: headless triangle rasteriser for QA. Perspective or orthographic look-at camera, z-buffer
 -- (stores 1/depth), flat Lambert shading from the face normal, back-face culling (CCW = front), optional
 -- depth-tested wireframe overlay. Output is an RGBA8 buffer for Out.image.
+-- `shaded` (additive): perspective-correct smooth normals, bilinear texture / vertex colour / alpha, hemisphere
+-- ambient, sun with a lightmap (e.g. `heightShadow`), emission, Blinn spec + Fresnel sky reflection, depth fog.
+-- `clearSky` paints a gradient, `downsample` gives SSAA.
 
 local MeshViz = {}
 MeshViz.__index = MeshViz
@@ -256,6 +259,313 @@ function MeshViz.sideBySide(a: Viz, b: Viz): (buffer, number, number)
 		end
 	end
 	return out, w, h
+end
+
+
+-- Shaded/textured path (additive) -------------------------------------------------------------------------
+
+export type Scene = {
+	sky: { number }, -- ambient from above, and the Fresnel reflection colour (0..255)
+	ground: { number }, -- ambient from below
+	sun: { number }, -- sun colour x intensity (0..1 each)
+	fog: { number }?, -- fog colour (0..255)
+	fogDensity: number?, -- per world unit
+}
+
+export type ShadeOpts = {
+	offset: { number }?,
+	tstart: number?, -- first triangle (default 0)
+	cull: boolean?,
+	nrm: buffer?, -- f32 x3 per vertex (smooth shading); nil = face normal
+	uv: buffer?, -- f32 x2 per vertex
+	tex: buffer?, -- RGBA8 texture, bilinear, clamp
+	tw: number?,
+	th: number?,
+	emit: buffer?, -- u8 per texel: self-lit fraction (lava glow)
+	lightmap: buffer?, -- u8 per texel: sun visibility (shadows), lw x lh texels over the same UVs
+	lw: number?,
+	lh: number?,
+	vcol: buffer?, -- u32 RGBA8 per vertex (interpolated; alpha used when useAlpha)
+	useAlpha: boolean?,
+	color: { number }?, -- constant base colour when no tex/vcol
+	alpha: number?, -- global opacity (blended over; z written only when opaque)
+	spec: number?, -- Blinn specular strength
+	shininess: number?,
+	fresnel: number?, -- 0..1 strength of sky reflection at grazing angles (water)
+}
+
+function MeshViz.scene(self: Viz, sc: Scene)
+	(self :: any).sc = sc
+end
+
+-- Vertical gradient background (top colour -> bottom colour).
+function MeshViz.clearSky(self: Viz, top: { number }, bottom: { number })
+	local w, h, rgba, zb = self.w, self.h, self.rgba, self.z
+	for y = 0, h - 1 do
+		local t = y / math.max(h - 1, 1)
+		local c = px(top[1] + (bottom[1] - top[1]) * t, top[2] + (bottom[2] - top[2]) * t, top[3] + (bottom[3] - top[3]) * t)
+		for x = 0, w - 1 do
+			buffer.writeu32(rgba, (y * w + x) * 4, c)
+			buffer.writef32(zb, (y * w + x) * 4, 0)
+		end
+	end
+end
+
+local function texel(tex: buffer, tw: number, th: number, u: number, v: number): (number, number, number, number)
+	local fx, fy = u * tw - 0.5, v * th - 0.5
+	local x0, y0 = math.floor(fx), math.floor(fy)
+	local ax, ay = fx - x0, fy - y0
+	local x1, y1 = x0 + 1, y0 + 1
+	x0 = if x0 < 0 then 0 elseif x0 >= tw then tw - 1 else x0
+	x1 = if x1 < 0 then 0 elseif x1 >= tw then tw - 1 else x1
+	y0 = if y0 < 0 then 0 elseif y0 >= th then th - 1 else y0
+	y1 = if y1 < 0 then 0 elseif y1 >= th then th - 1 else y1
+	local c00, c10 = buffer.readu32(tex, (y0 * tw + x0) * 4), buffer.readu32(tex, (y0 * tw + x1) * 4)
+	local c01, c11 = buffer.readu32(tex, (y1 * tw + x0) * 4), buffer.readu32(tex, (y1 * tw + x1) * 4)
+	local w00, w10, w01, w11 = (1 - ax) * (1 - ay), ax * (1 - ay), (1 - ax) * ay, ax * ay
+	local r = bit32.band(c00, 255) * w00 + bit32.band(c10, 255) * w10 + bit32.band(c01, 255) * w01 + bit32.band(c11, 255) * w11
+	local g = bit32.band(bit32.rshift(c00, 8), 255) * w00 + bit32.band(bit32.rshift(c10, 8), 255) * w10 + bit32.band(bit32.rshift(c01, 8), 255) * w01 + bit32.band(bit32.rshift(c11, 8), 255) * w11
+	local b = bit32.band(bit32.rshift(c00, 16), 255) * w00 + bit32.band(bit32.rshift(c10, 16), 255) * w10 + bit32.band(bit32.rshift(c01, 16), 255) * w01 + bit32.band(bit32.rshift(c11, 16), 255) * w11
+	local a = bit32.rshift(c00, 24) * w00 + bit32.rshift(c10, 24) * w10 + bit32.rshift(c01, 24) * w01 + bit32.rshift(c11, 24) * w11
+	return r, g, b, a
+end
+
+local function sample8(m: buffer, tw: number, th: number, u: number, v: number): number
+	local fx, fy = u * tw - 0.5, v * th - 0.5
+	local x0, y0 = math.floor(fx), math.floor(fy)
+	local ax, ay = fx - x0, fy - y0
+	local x1, y1 = x0 + 1, y0 + 1
+	x0 = if x0 < 0 then 0 elseif x0 >= tw then tw - 1 else x0
+	x1 = if x1 < 0 then 0 elseif x1 >= tw then tw - 1 else x1
+	y0 = if y0 < 0 then 0 elseif y0 >= th then th - 1 else y0
+	y1 = if y1 < 0 then 0 elseif y1 >= th then th - 1 else y1
+	local a = buffer.readu8(m, y0 * tw + x0) + (buffer.readu8(m, y0 * tw + x1) - buffer.readu8(m, y0 * tw + x0)) * ax
+	local b = buffer.readu8(m, y1 * tw + x0) + (buffer.readu8(m, y1 * tw + x1) - buffer.readu8(m, y1 * tw + x0)) * ax
+	return (a + (b - a) * ay) / 255
+end
+
+-- Smooth-shaded, optionally textured / translucent triangles. Draw opaque geometry first, translucent last.
+function MeshViz.shaded(self: Viz, pos: buffer, idx: buffer, tcount: number, opts: ShadeOpts?)
+	local o = opts or {} :: ShadeOpts
+	local sc: Scene = (self :: any).sc or { sky = { 160, 190, 230 }, ground = { 70, 60, 50 }, sun = { 1, 0.95, 0.85 } }
+	local off = o.offset or { 0, 0, 0 }
+	local ox, oy, oz = off[1], off[2], off[3]
+	local cull = o.cull ~= false
+	local nrm, uvb, tex, emit, lmap, vcol = o.nrm, o.uv, o.tex, o.emit, o.lightmap, o.vcol
+	local tw, th = o.tw or 1, o.th or 1
+	local lw, lh = o.lw or tw, o.lh or th
+	local useA = o.useAlpha == true
+	local base = o.color or { 200, 200, 200 }
+	local galpha = o.alpha or 1
+	local spec, shin, fres = o.spec or 0, o.shininess or 40, o.fresnel or 0
+	local w, h, zb, rgba = self.w, self.h, self.z, self.rgba
+	local lx, ly, lz = self.lx, self.ly, self.lz
+	local skr, skg, skb = sc.sky[1] / 255, sc.sky[2] / 255, sc.sky[3] / 255
+	local gr, gg, gb = sc.ground[1] / 255, sc.ground[2] / 255, sc.ground[3] / 255
+	local sr, sg, sb = sc.sun[1], sc.sun[2], sc.sun[3]
+	local fog, fogD = sc.fog, sc.fogDensity or 0
+	local fr, fgc, fb = 0, 0, 0
+	if fog then
+		fr, fgc, fb = fog[1], fog[2], fog[3]
+	end
+	local ex, ey, ez = self.ex, self.ey, self.ez
+	for t = o.tstart or 0, tcount - 1 do
+		local ia, ib, ic = buffer.readu32(idx, t * 12), buffer.readu32(idx, t * 12 + 4), buffer.readu32(idx, t * 12 + 8)
+		local ax, ay, az = buffer.readf32(pos, ia * 12) + ox, buffer.readf32(pos, ia * 12 + 4) + oy, buffer.readf32(pos, ia * 12 + 8) + oz
+		local bx, by, bz = buffer.readf32(pos, ib * 12) + ox, buffer.readf32(pos, ib * 12 + 4) + oy, buffer.readf32(pos, ib * 12 + 8) + oz
+		local cx, cy, cz = buffer.readf32(pos, ic * 12) + ox, buffer.readf32(pos, ic * 12 + 4) + oy, buffer.readf32(pos, ic * 12 + 8) + oz
+		local sx0, sy0, z0 = self:project(ax, ay, az)
+		local sx1, sy1, z1 = self:project(bx, by, bz)
+		local sx2, sy2, z2 = self:project(cx, cy, cz)
+		if z0 <= 0.01 or z1 <= 0.01 or z2 <= 0.01 then
+			continue
+		end
+		local area = (sx1 - sx0) * (sy2 - sy0) - (sx2 - sx0) * (sy1 - sy0)
+		if area == 0 or (cull and area > 0) then
+			continue
+		end
+		local minx = math.max(0, math.floor(math.min(sx0, sx1, sx2)))
+		local maxx = math.min(w - 1, math.ceil(math.max(sx0, sx1, sx2)))
+		local miny = math.max(0, math.floor(math.min(sy0, sy1, sy2)))
+		local maxy = math.min(h - 1, math.ceil(math.max(sy0, sy1, sy2)))
+		if minx > maxx or miny > maxy then
+			continue
+		end
+		local fnx, fny, fnz = norm((by - ay) * (cz - az) - (bz - az) * (cy - ay), (bz - az) * (cx - ax) - (bx - ax) * (cz - az), (bx - ax) * (cy - ay) - (by - ay) * (cx - ax))
+		local n0x, n0y, n0z, n1x, n1y, n1z, n2x, n2y, n2z = fnx, fny, fnz, fnx, fny, fnz, fnx, fny, fnz
+		if nrm then
+			n0x, n0y, n0z = buffer.readf32(nrm, ia * 12), buffer.readf32(nrm, ia * 12 + 4), buffer.readf32(nrm, ia * 12 + 8)
+			n1x, n1y, n1z = buffer.readf32(nrm, ib * 12), buffer.readf32(nrm, ib * 12 + 4), buffer.readf32(nrm, ib * 12 + 8)
+			n2x, n2y, n2z = buffer.readf32(nrm, ic * 12), buffer.readf32(nrm, ic * 12 + 4), buffer.readf32(nrm, ic * 12 + 8)
+		end
+		local u0, v0, u1, v1, u2, v2 = 0, 0, 0, 0, 0, 0
+		if uvb then
+			u0, v0 = buffer.readf32(uvb, ia * 8), buffer.readf32(uvb, ia * 8 + 4)
+			u1, v1 = buffer.readf32(uvb, ib * 8), buffer.readf32(uvb, ib * 8 + 4)
+			u2, v2 = buffer.readf32(uvb, ic * 8), buffer.readf32(uvb, ic * 8 + 4)
+		end
+		local c0, c1, c2 = 0, 0, 0
+		if vcol then
+			c0, c1, c2 = buffer.readu32(vcol, ia * 4), buffer.readu32(vcol, ib * 4), buffer.readu32(vcol, ic * 4)
+		end
+		local iz0, iz1, iz2 = 1 / z0, 1 / z1, 1 / z2
+		local inv = 1 / area
+		for y = miny, maxy do
+			local py = y + 0.5
+			for x = minx, maxx do
+				local pxx = x + 0.5
+				local w0 = ((sx1 - pxx) * (sy2 - py) - (sx2 - pxx) * (sy1 - py)) * inv
+				local w1 = ((sx2 - pxx) * (sy0 - py) - (sx0 - pxx) * (sy2 - py)) * inv
+				local w2 = 1 - w0 - w1
+				if w0 < 0 or w1 < 0 or w2 < 0 then
+					continue
+				end
+				local iz = w0 * iz0 + w1 * iz1 + w2 * iz2
+				local i = (y * w + x) * 4
+				if iz <= buffer.readf32(zb, i) then
+					continue
+				end
+				local zz = 1 / iz
+				local b0, b1, b2 = w0 * iz0 * zz, w1 * iz1 * zz, w2 * iz2 * zz
+				local nx, ny, nz = norm(b0 * n0x + b1 * n1x + b2 * n2x, b0 * n0y + b1 * n1y + b2 * n2y, b0 * n0z + b1 * n1z + b2 * n2z)
+				if area > 0 then
+					nx, ny, nz = -nx, -ny, -nz
+				end
+				local r, g, b, a = base[1], base[2], base[3], 255
+				local u, v = 0, 0
+				if uvb then
+					u, v = b0 * u0 + b1 * u1 + b2 * u2, b0 * v0 + b1 * v1 + b2 * v2
+				end
+				if tex then
+					r, g, b, a = texel(tex, tw, th, u, v)
+				elseif vcol then
+					r = b0 * bit32.band(c0, 255) + b1 * bit32.band(c1, 255) + b2 * bit32.band(c2, 255)
+					g = b0 * bit32.band(bit32.rshift(c0, 8), 255) + b1 * bit32.band(bit32.rshift(c1, 8), 255) + b2 * bit32.band(bit32.rshift(c2, 8), 255)
+					b = b0 * bit32.band(bit32.rshift(c0, 16), 255) + b1 * bit32.band(bit32.rshift(c1, 16), 255) + b2 * bit32.band(bit32.rshift(c2, 16), 255)
+					a = b0 * bit32.rshift(c0, 24) + b1 * bit32.rshift(c1, 24) + b2 * bit32.rshift(c2, 24)
+				end
+				local alpha = galpha * (if useA then a / 255 else 1)
+				-- lighting
+				local hemi = ny * 0.5 + 0.5
+				local ar, ag, ab = gr + (skr - gr) * hemi, gg + (skg - gg) * hemi, gb + (skb - gb) * hemi
+				local lam = nx * lx + ny * ly + nz * lz
+				if lam < 0 then
+					lam = 0
+				end
+				local vis = if lmap then sample8(lmap, lw, lh, u, v) else 1
+				local e = if emit then sample8(emit, tw, th, u, v) else 0
+				local kr = ar * 0.55 + sr * lam * vis + e * 1.6
+				local kg = ag * 0.55 + sg * lam * vis + e * 1.6
+				local kb = ab * 0.55 + sb * lam * vis + e * 1.6
+				r, g, b = r * kr, g * kg, b * kb
+				local wx, wy, wz = b0 * ax + b1 * bx + b2 * cx, b0 * ay + b1 * by + b2 * cy, b0 * az + b1 * bz + b2 * cz
+				local vx, vy, vz = ex - wx, ey - wy, ez - wz
+				local dist = math.sqrt(vx * vx + vy * vy + vz * vz)
+				vx, vy, vz = vx / dist, vy / dist, vz / dist
+				if spec > 0 or fres > 0 then
+					local ndv = math.max(nx * vx + ny * vy + nz * vz, 0)
+					if fres > 0 then
+						local f = fres * (0.04 + 0.96 * (1 - ndv) ^ 5)
+						r, g, b = r + (sc.sky[1] - r) * f, g + (sc.sky[2] - g) * f, b + (sc.sky[3] - b) * f
+						alpha += (1 - alpha) * f
+					end
+					if spec > 0 then
+						local hx, hy, hz = norm(lx + vx, ly + vy, lz + vz)
+						local s = spec * math.max(nx * hx + ny * hy + nz * hz, 0) ^ shin * vis * 255
+						r, g, b = r + s * sr, g + s * sg, b + s * sb
+						alpha += (1 - alpha) * math.min(s / 255, 1)
+					end
+				end
+				if fogD > 0 then
+					local f = 1 - math.exp(-dist * fogD)
+					r, g, b = r + (fr - r) * f, g + (fgc - g) * f, b + (fb - b) * f
+				end
+				if alpha >= 0.999 then
+					buffer.writef32(zb, i, iz)
+					buffer.writeu32(rgba, i, px(r, g, b))
+				else
+					local cc = buffer.readu32(rgba, i)
+					local k = 1 - alpha
+					buffer.writeu32(rgba, i, px(r * alpha + bit32.band(cc, 255) * k, g * alpha + bit32.band(bit32.rshift(cc, 8), 255) * k, b * alpha + bit32.band(bit32.rshift(cc, 16), 255) * k))
+				end
+			end
+		end
+	end
+end
+
+-- Box-filter downsample by an integer factor (SSAA resolve). Returns a new RGBA buffer and its size.
+function MeshViz.downsample(self: Viz, k: number): (buffer, number, number)
+	local w, h = self.w // k, self.h // k
+	local out, src, sw = buffer.create(w * h * 4), self.rgba, self.w
+	local n = k * k
+	for y = 0, h - 1 do
+		for x = 0, w - 1 do
+			local r, g, b = 0, 0, 0
+			for dy = 0, k - 1 do
+				for dx = 0, k - 1 do
+					local c = buffer.readu32(src, ((y * k + dy) * sw + x * k + dx) * 4)
+					r += bit32.band(c, 255)
+					g += bit32.band(bit32.rshift(c, 8), 255)
+					b += bit32.band(bit32.rshift(c, 16), 255)
+				end
+			end
+			buffer.writeu32(out, (y * w + x) * 4, px(r / n + 0.5, g / n + 0.5, b / n + 0.5))
+		end
+	end
+	return out, w, h
+end
+
+-- Soft sun visibility over a heightfield (cell-centred f64 heights, `cell` world units apart), u8 per texel at
+-- `res` texels per cell (so magnified shadow edges stay smooth). Marches toward the light through bilinear
+-- heights; the smallest clearance/distance ratio gives a penumbra. Preview-only shadows.
+function MeshViz.heightShadow(hgt: buffer, w: number, h: number, cell: number, lx: number, ly: number, lz: number, soft: number?, res: number?): buffer
+	local R = res or 1
+	local W, H = w * R, h * R
+	local out = buffer.create(W * H)
+	local hl = math.sqrt(lx * lx + lz * lz)
+	local dx, dz = lx / hl, lz / hl
+	local rise = ly / hl * cell -- height gained per cell stepped toward the sun
+	local k = soft or 6
+	local maxSteps = math.max(w, h)
+	local function hgtAt(fx: number, fz: number): number
+		fx = math.clamp(fx, 0, w - 1)
+		fz = math.clamp(fz, 0, h - 1)
+		local ix, iz = math.floor(fx), math.floor(fz)
+		local ax, az = fx - ix, fz - iz
+		local ix1, iz1 = math.min(ix + 1, w - 1), math.min(iz + 1, h - 1)
+		local h00, h10 = buffer.readf64(hgt, (iz * w + ix) * 8), buffer.readf64(hgt, (iz * w + ix1) * 8)
+		local h01, h11 = buffer.readf64(hgt, (iz1 * w + ix) * 8), buffer.readf64(hgt, (iz1 * w + ix1) * 8)
+		local a = h00 + (h10 - h00) * ax
+		return a + ((h01 + (h11 - h01) * ax) - a) * az
+	end
+	for Y = 0, H - 1 do
+		local y = (Y + 0.5) / R - 0.5
+		for X = 0, W - 1 do
+			local x = (X + 0.5) / R - 0.5
+			local h0 = hgtAt(x, y) + 0.05
+			local best = 1
+			for s = 0.5, maxSteps, 0.5 do
+				local fx, fz = x + dx * s, y + dz * s
+				if fx < 0 or fz < 0 or fx > w - 1 or fz > h - 1 then
+					break
+				end
+				local clear = h0 + rise * s - hgtAt(fx, fz)
+				local r = k * clear / (s * cell)
+				if r < best then
+					best = r
+					if best <= -1 then
+						break
+					end
+				end
+				if clear > 60 then
+					break
+				end
+			end
+			local v = math.clamp(best * 0.5 + 0.5, 0, 1)
+			buffer.writeu8(out, Y * W + X, math.floor(v * v * (3 - 2 * v) * 255 + 0.5))
+		end
+	end
+	return out
 end
 
 return MeshViz

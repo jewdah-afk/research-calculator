@@ -9,6 +9,7 @@
 --   3. The real editable memory budget (creates 256² images until the engine says no)
 --   4. EditableMesh build cost, per-frame vertex update cost, CreateMeshPartAsync cost
 --   5. Whether bones on an EditableMesh produce Bone instances that animate (look at the screen)
+--   6. GeometryService FragmentAsync / SubtractAsync cost, to compare with the Luau fracture and carve
 
 local AssetService = game:GetService("AssetService")
 local RunService = game:GetService("RunService")
@@ -251,6 +252,50 @@ local function benchBones()
 	end
 end
 
+local function benchGeometryService()
+	report("== 6. GeometryService (engine fracture / CSG) ==")
+	local GeometryService = game:GetService("GeometryService")
+	local ok, err = pcall(function()
+		for _, spacing in { 2, 1 } do
+			local wall = Instance.new("Part")
+			wall.Size = Vector3.new(12, 8, 1)
+			wall.Anchored = true
+			wall.Position = Vector3.new(20, 4, 0)
+			wall.Parent = workspace
+			local t0 = os.clock()
+			local sites = GeometryService:GenerateFragmentSites(wall, { SiteSpacing = spacing })
+			local t1 = os.clock()
+			local pieces = GeometryService:FragmentAsync(wall, sites, { CollisionFidelity = Enum.CollisionFidelity.Hull })
+			local t2 = os.clock()
+			report("FragmentAsync spacing %d: %d sites, %d pieces, sites %.1f ms, fragment %.1f ms",
+				spacing, #sites, #pieces, (t1 - t0) * 1000, (t2 - t1) * 1000)
+			for _, p in pieces do
+				p.Instance:Destroy()
+			end
+			wall:Destroy()
+		end
+		local slab = Instance.new("Part")
+		slab.Size = Vector3.new(12, 8, 1)
+		slab.Anchored = true
+		slab.Parent = workspace
+		local hole = Instance.new("Part")
+		hole.Shape = Enum.PartType.Ball
+		hole.Size = Vector3.new(3, 3, 3)
+		hole.Position = slab.Position
+		local t0 = os.clock()
+		local result = GeometryService:SubtractAsync(slab, { hole })
+		report("SubtractAsync (hole in a slab): %.1f ms -> compare ContourMesh carve ~0.14 ms headless", (os.clock() - t0) * 1000)
+		for _, r in result do
+			r:Destroy()
+		end
+		slab:Destroy()
+		hole:Destroy()
+	end)
+	if not ok then
+		report("ERROR %s", tostring(err))
+	end
+end
+
 setupGui()
 report("Frontier bench, %s", if RunService:IsStudio() then "Studio" else "live client")
 task.wait(2)
@@ -259,4 +304,5 @@ benchNative()
 benchBudget()
 benchMesh()
 benchBones()
+benchGeometryService()
 report("== done ==")

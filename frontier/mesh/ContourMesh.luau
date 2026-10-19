@@ -88,6 +88,26 @@ function ContourMesh.newField(w: number, h: number, opts: { [string]: any }?): F
 	}
 end
 
+-- Re-size a field in place, keeping its buffers when they are big enough (grow-only). Lets one field mesh
+-- many differently sized masks (e.g. fracture fragments) without reallocating scratch per mesh. The caller
+-- rewrites the first w*h bytes of f.mask; f.tiles is cleared.
+function ContourMesh.reshape(f: Field, w: number, h: number, tile: number)
+	assert((w - 1) % tile == 0 and (h - 1) % tile == 0, "mask size must be k*tile+1")
+	local S = tile + 3
+	if buffer.len(f.mask) < w * h then
+		f.mask = buffer.create(w * h)
+	end
+	if buffer.len(f.vals) < S * S then
+		f.vals = buffer.create(S * S)
+		f.nextE = buffer.create(2 * S * S * 4)
+		f.ex = buffer.create(2 * S * S * 8)
+		f.ey = buffer.create(2 * S * S * 8)
+	end
+	f.w, f.h, f.tile, f.S = w, h, tile, S
+	f.ntx, f.nty = (w - 1) // tile, (h - 1) // tile
+	table.clear(f.tiles)
+end
+
 -- Marching squares ------------------------------------------------------------------------------------------
 
 local function crossing(f: Field, e: number)

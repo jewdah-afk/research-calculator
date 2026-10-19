@@ -77,6 +77,8 @@ export type Terrain = {
 	camX: number,
 	camZ: number,
 	dirty: { Chunk },
+	colorFn: ((gx: number, gy: number, h: number, ny: number) -> number)?, -- per-vertex RGBA8 override
+	skirtFloor: number?, -- skirt bottoms at this Y instead of top - skirt
 }
 
 -- Core -------------------------------------------------------------------------------------------------------
@@ -171,25 +173,45 @@ local function gridVertex(t: Terrain, c: Chunk, i: number, j: number): number
 	local s = c.step
 	local gx, gy = c.ox + i * s, c.oy + j * s
 	local v = j * c.side + i
-	local h = H(t, gx, gy)
-	local hc
-	if i % 2 == 1 then
-		if j % 2 == 1 then -- on the coarse quad's diagonal (i-1,j-1)->(i+1,j+1)
-			hc = (H(t, gx - s, gy - s) + H(t, gx + s, gy + s)) * 0.5
+	local h, hc, hl, hr, hu, hd
+	local w = t.w
+	if gx >= s and gy >= s and gx + s < w and gy + s < t.h then -- interior: same samples, no clamping
+		local hb, o, so, ro = t.hbuf, (gy * w + gx) * 4, s * 4, s * w * 4
+		h = buffer.readf32(hb, o)
+		hl, hr = buffer.readf32(hb, o - so), buffer.readf32(hb, o + so)
+		hu, hd = buffer.readf32(hb, o - ro), buffer.readf32(hb, o + ro)
+		if i % 2 == 1 then
+			if j % 2 == 1 then
+				hc = (buffer.readf32(hb, o - ro - so) + buffer.readf32(hb, o + ro + so)) * 0.5
+			else
+				hc = (hl + hr) * 0.5
+			end
+		elseif j % 2 == 1 then
+			hc = (hu + hd) * 0.5
 		else
-			hc = (H(t, gx - s, gy) + H(t, gx + s, gy)) * 0.5
+			hc = h
 		end
-	elseif j % 2 == 1 then
-		hc = (H(t, gx, gy - s) + H(t, gx, gy + s)) * 0.5
 	else
-		hc = h
+		h = H(t, gx, gy)
+		hl, hr, hu, hd = H(t, gx - s, gy), H(t, gx + s, gy), H(t, gx, gy - s), H(t, gx, gy + s)
+		if i % 2 == 1 then
+			if j % 2 == 1 then -- on the coarse quad's diagonal (i-1,j-1)->(i+1,j+1)
+				hc = (H(t, gx - s, gy - s) + H(t, gx + s, gy + s)) * 0.5
+			else
+				hc = (hl + hr) * 0.5
+			end
+		elseif j % 2 == 1 then
+			hc = (hu + hd) * 0.5
+		else
+			hc = h
+		end
 	end
 	buffer.writef32(c.baseH, v * 4, h)
 	buffer.writef32(c.coarseH, v * 4, hc)
 
 	local inv = 1 / (2 * s * t.cell)
-	local nx = -(H(t, gx + s, gy) - H(t, gx - s, gy)) * inv
-	local nz = -(H(t, gx, gy + s) - H(t, gx, gy - s)) * inv
+	local nx = -(hr - hl) * inv
+	local nz = -(hd - hu) * inv
 	local il = 1 / math.sqrt(nx * nx + 1 + nz * nz)
 	nx, nz = nx * il, nz * il
 	local ny = il
@@ -197,7 +219,8 @@ local function gridVertex(t: Terrain, c: Chunk, i: number, j: number): number
 	local bits = 0
 	local pos, nrm, o = c.pos, c.nrm, v * 12
 	local oy = buffer.readf32(pos, o + 4)
-	buffer.writef32(pos, o + 4, morphY(t, c, v, gx, gy))
+	-- no morph band (and no forced morph): morphY would return the stored base height unchanged
+	buffer.writef32(pos, o + 4, if c.morphStart == INF and c.forceMorph == nil then buffer.readf32(c.baseH, v * 4) else morphY(t, c, v, gx, gy))
 	if buffer.readf32(pos, o + 4) ~= oy then
 		bits = 1
 	end
@@ -205,7 +228,8 @@ local function gridVertex(t: Terrain, c: Chunk, i: number, j: number): number
 	buffer.writef32(nrm, o, nx)
 	buffer.writef32(nrm, o + 4, ny)
 	buffer.writef32(nrm, o + 8, nz)
-	local col = terrainColor(h, t.maxHeight, ny)
+	local cf = t.colorFn
+	local col = if cf then cf(gx, gy, h, ny) else terrainColor(h, t.maxHeight, ny)
 	if
 		buffer.readf32(nrm, o) ~= a
 		or buffer.readf32(nrm, o + 4) ~= b2
@@ -218,7 +242,8 @@ local function gridVertex(t: Terrain, c: Chunk, i: number, j: number): number
 	return bits
 end
 
--- Skirt vertex k (edge e = k // side, position along edge q) copies its top vertex, dropped by t.skirt.
+-- Skirt vertex k (edge e = k // side, position along edge q) copies its top vertex, dropped by t.skirt
+-- (or placed at Y = t.skirtFloor when set: flat-bottomed side walls, e.g. a diorama/table base).
 local function skirtTop(c: Chunk, e: number, q: number): number
 	local side, n = c.side, c.n
 	if e == 0 then
@@ -237,7 +262,8 @@ local function skirtVertex(t: Terrain, c: Chunk, k: number): number
 	local v = c.gridCount + k
 	local pos, nrm, o, ot = c.pos, c.nrm, v * 12, top * 12
 	local before = buffer.readf32(pos, o + 4)
-	buffer.writef32(pos, o + 4, buffer.readf32(pos, ot + 4) - t.skirt)
+	local floor = t.skirtFloor
+	buffer.writef32(pos, o + 4, if floor then floor else buffer.readf32(pos, ot + 4) - t.skirt)
 	local bits = if buffer.readf32(pos, o + 4) ~= before then 1 else 0
 	if
 		buffer.readf32(nrm, o) ~= buffer.readf32(nrm, ot)
@@ -392,7 +418,9 @@ function HeightfieldMesh.buildChunk(t: Terrain, cx: number, cy: number, level: n
 end
 
 -- opts: cell (studs/sample), heightScale (studs per image unit), ranges ({r0, r1} studs), morphFrac,
--- hysteresis (studs), skirt (studs), uvTile (samples per texture repeat), camX/camZ.
+-- hysteresis (studs), skirt (studs), uvTile (samples per texture repeat), camX/camZ,
+-- colorFn(gx, gy, h, ny) -> u32 RGBA8 (optional per-vertex colour, e.g. constant white under a texture),
+-- skirtFloor (optional Y for flat skirt bottoms).
 function HeightfieldMesh.newTerrain(img: Image, opts: { [string]: any }?): Terrain
 	local o = opts or {}
 	local w, h = img.w, img.h
@@ -416,6 +444,8 @@ function HeightfieldMesh.newTerrain(img: Image, opts: { [string]: any }?): Terra
 		camX = o.camX or 0,
 		camZ = o.camZ or 0,
 		dirty = {},
+		colorFn = o.colorFn,
+		skirtFloor = o.skirtFloor,
 	}
 	t.maxHeight = o.maxHeight or (if img.format == "f32" then t.heightScale else 255 * t.heightScale)
 	syncRect(t, 0, 0, w - 1, h - 1)
@@ -454,11 +484,11 @@ local function morphChunk(t: Terrain, c: Chunk)
 			end
 		end
 	end
-	local gc, drop = c.gridCount, t.skirt
+	local gc, drop, floor = c.gridCount, t.skirt, t.skirtFloor
 	for k = 0, 4 * side - 1 do
 		local o = (gc + k) * 12 + 4
 		local before = buffer.readf32(pos, o)
-		buffer.writef32(pos, o, buffer.readf32(pos, skirtTop(c, k // side, k % side) * 12 + 4) - drop)
+		buffer.writef32(pos, o, if floor then floor else buffer.readf32(pos, skirtTop(c, k // side, k % side) * 12 + 4) - drop)
 		if buffer.readf32(pos, o) ~= before then
 			markChanged(c, gc + k)
 		end
@@ -490,6 +520,54 @@ function HeightfieldMesh.setCamera(t: Terrain, camX: number, camZ: number): { Ch
 	return rebuilt
 end
 
+-- Recompute the vertices of chunk c that read samples in [x0..x1] x [y0..y1]; appends to c.changed.
+-- A vertex already recomputed against the same samples reports no change, so it is never listed twice.
+local function recomputeRect(t: Terrain, c: Chunk, x0: number, y0: number, x1: number, y1: number)
+	local s, n = c.step, c.n
+	-- Vertices reading any dirty sample lie within s of the rect.
+	local i0 = math.max(0, -((c.ox - (x0 - s)) // s))
+	local i1 = math.min(n, (x1 + s - c.ox) // s)
+	local j0 = math.max(0, -((c.oy - (y0 - s)) // s))
+	local j1 = math.min(n, (y1 + s - c.oy) // s)
+	if i0 > i1 or j0 > j1 then
+		return
+	end
+	local attrs = c.changedAttrs
+	for j = j0, j1 do
+		for i = i0, i1 do
+			local bits = gridVertex(t, c, i, j)
+			if bits ~= 0 then
+				markChanged(c, j * c.side + i)
+				attrs = bit32.bor(attrs, bits)
+			end
+		end
+	end
+	-- Skirts on edges the rect touches.
+	local side = c.side
+	for e = 0, 3 do
+		local lo, hi
+		if e <= 1 then
+			if (e == 0 and j0 ~= 0) or (e == 1 and j1 ~= n) then
+				continue
+			end
+			lo, hi = i0, i1
+		else
+			if (e == 2 and i0 ~= 0) or (e == 3 and i1 ~= n) then
+				continue
+			end
+			lo, hi = j0, j1
+		end
+		for q = lo, hi do
+			local bits = skirtVertex(t, c, e * side + q)
+			if bits ~= 0 then
+				markChanged(c, c.gridCount + e * side + q)
+				attrs = bit32.bor(attrs, bits)
+			end
+		end
+	end
+	c.changedAttrs = attrs
+end
+
 -- Incremental update after the image changed inside [x0..x1] x [y0..y1] (inclusive sample coords).
 -- Returns the chunks with changed vertices; each has changed/changedCount/changedAttrs set.
 function HeightfieldMesh.updateRect(t: Terrain, x0: number, y0: number, x1: number, y1: number): { Chunk }
@@ -499,51 +577,40 @@ function HeightfieldMesh.updateRect(t: Terrain, x0: number, y0: number, x1: numb
 	local out = t.dirty
 	table.clear(out)
 	for _, c in t.chunks do
-		local s, n = c.step, c.n
-		-- Vertices reading any dirty sample lie within s of the rect.
-		local i0 = math.max(0, -((c.ox - (x0 - s)) // s))
-		local i1 = math.min(n, (x1 + s - c.ox) // s)
-		local j0 = math.max(0, -((c.oy - (y0 - s)) // s))
-		local j1 = math.min(n, (y1 + s - c.oy) // s)
 		c.changedCount, c.changedAttrs = 0, 0
-		if i0 <= i1 and j0 <= j1 then
-			local attrs = 0
-			for j = j0, j1 do
-				for i = i0, i1 do
-					local bits = gridVertex(t, c, i, j)
-					if bits ~= 0 then
-						markChanged(c, j * c.side + i)
-						attrs = bit32.bor(attrs, bits)
-					end
-				end
+		recomputeRect(t, c, x0, y0, x1, y1)
+		if c.changedCount > 0 then
+			table.insert(out, c)
+		end
+	end
+	return out
+end
+
+-- Several dirty rects in one frame: rects = {x0, y0, x1, y1, ...} (n rects). All samples are synced before
+-- any vertex is recomputed, so overlapping halos never list a vertex twice. Same result as one updateRect
+-- over the union, without recomputing the space between rects. No allocation.
+function HeightfieldMesh.updateRects(t: Terrain, rects: { number }, n: number): { Chunk }
+	local w1, h1 = t.w - 1, t.h - 1
+	for r = 0, n - 1 do
+		local b = r * 4
+		syncRect(t, math.max(rects[b + 1], 0), math.max(rects[b + 2], 0), math.min(rects[b + 3], w1), math.min(rects[b + 4], h1))
+	end
+	local out = t.dirty
+	table.clear(out)
+	for _, c in t.chunks do
+		c.changedCount, c.changedAttrs = 0, 0
+		local cx0, cy0 = c.ox - c.step, c.oy - c.step
+		local cx1, cy1 = c.ox + CHUNK + c.step, c.oy + CHUNK + c.step
+		for r = 0, n - 1 do
+			local b = r * 4
+			local x0, y0 = math.max(rects[b + 1], 0), math.max(rects[b + 2], 0)
+			local x1, y1 = math.min(rects[b + 3], w1), math.min(rects[b + 4], h1)
+			if x1 >= cx0 and x0 <= cx1 and y1 >= cy0 and y0 <= cy1 then
+				recomputeRect(t, c, x0, y0, x1, y1)
 			end
-			-- Skirts on edges the rect touches.
-			local side = c.side
-			for e = 0, 3 do
-				local lo, hi
-				if e <= 1 then
-					if (e == 0 and j0 ~= 0) or (e == 1 and j1 ~= n) then
-						continue
-					end
-					lo, hi = i0, i1
-				else
-					if (e == 2 and i0 ~= 0) or (e == 3 and i1 ~= n) then
-						continue
-					end
-					lo, hi = j0, j1
-				end
-				for q = lo, hi do
-					local bits = skirtVertex(t, c, e * side + q)
-					if bits ~= 0 then
-						markChanged(c, c.gridCount + e * side + q)
-						attrs = bit32.bor(attrs, bits)
-					end
-				end
-			end
-			c.changedAttrs = attrs
-			if c.changedCount > 0 then
-				table.insert(out, c)
-			end
+		end
+		if c.changedCount > 0 then
+			table.insert(out, c)
 		end
 	end
 	return out
