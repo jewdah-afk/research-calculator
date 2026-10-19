@@ -1,0 +1,29 @@
+| Script | Measure | Interpreter ms | Native ms |
+|---|---|---|---|
+| test_core.luau | atlas.write64x64x64+pack | 0.779 | 0.369 |
+| test_core.luau | snapshot.decode_512 | 0.170 | 0.059 |
+| test_core.luau | snapshot.encode_512 | 1.787 | 0.568 |
+| test_fx_fallingsand.luau | fs.step_active_320x180 | 2.310 | 0.822 |
+| test_fx_fallingsand.luau | fs.step_settled_320x180 | 0.023 | 0.009 |
+| test_fx_radiance.luau | rc.edt_256 | 54.328 | 11.578 |
+| test_fx_radiance.luau | rc.frame_128_moving | 104.921 | 34.804 |
+| test_fx_radiance.luau | rc.frame_256_moving | 427.616 | 148.045 |
+| test_fx_radiance.luau | rc.frame_256_static | 364.480 | 147.506 |
+| test_fx_radiance.luau | rc.frame_256_static_spacing4 | 113.868 | 36.654 |
+| test_fx_radiance.luau | rc.frame_256_static_vanilla | 168.270 | 50.637 |
+| test_fx_radiance.luau | rc.jfa_256 | 354.290 | 78.924 |
+| test_fx_spritestack.luau | ss.scene_20_objects_320x180 | 28.732 | 5.235 |
+| test_fx_voxelspace.luau | vs.checkerboard_320x180 | 4.344 | 0.887 |
+| test_fx_voxelspace.luau | vs.full_320x180 | 8.448 | 1.634 |
+| test_fx_voxelspace.luau | vs.generate_512 | 1478.536 | 371.911 |
+| test_indexed.luau | indexed.cycle+resolve_256x144 | 0.902 | 0.132 |
+| test_indexed.luau | indexed.resolve_8_tiles | 0.063 | 0.013 |
+| test_indexed.luau | indexed.resolve_full_256x144 | 0.909 | 0.131 |
+| test_mesh_contour.luau | contour.build_all_32_tiles | 8.218 | 3.038 |
+| test_mesh_contour.luau | contour.build_tile_3_3 | 0.333 | 0.145 |
+| test_mesh_contour.luau | contour.carve_r6_plus_rebuild_1_tile | 0.438 | 0.141 |
+| test_mesh_heightfield.luau | heightfield.brush8x8_incremental | 0.124 | 0.052 |
+| test_mesh_heightfield.luau | heightfield.brush8x8_one_chunk | 0.114 | 0.036 |
+| test_mesh_heightfield.luau | heightfield.build_chunk_step1 | 4.286 | 2.318 |
+| test_mesh_heightfield.luau | heightfield.build_chunk_step4 | 0.501 | 0.135 |
+| test_mesh_heightfield.luau | heightfield.setCamera_morph_64_chunks | 7.456 | 1.641 |
