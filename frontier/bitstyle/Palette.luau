@@ -60,8 +60,8 @@ local FIXED: { [string]: { number } } = {
 	ROBE4 = { 219, 140, 94, 196 },
 	EYE = { 220, 255, 56, 64 },
 	EYE_HI = { 221, 255, 196, 170 },
-	STAFF_SH = { 222, 82, 54, 48 },
-	STAFF = { 223, 138, 98, 70 },
+	STAFF_SH = { 222, 80, 92, 130 },
+	STAFF = { 223, 132, 148, 186 },
 	BLADE = { 224, 196, 196, 214 },
 	BLADE_HI = { 225, 246, 246, 255 },
 	BLADE_SH = { 226, 104, 100, 132 },
@@ -79,6 +79,20 @@ local FIXED: { [string]: { number } } = {
 	BONE_SH = { 239, 150, 140, 130 },
 	SHROOM = { 240, 90, 200, 210 },
 	SHROOM_SH = { 241, 40, 110, 140 },
+	-- reaper cloak: bone-white with cold ice-blue shading (the brightest thing on screen besides the
+	-- hero), outlined in near-black navy
+	CLOAK0 = { 242, 12, 14, 32 },
+	CLOAK1 = { 243, 92, 116, 168 },
+	CLOAK2 = { 244, 146, 172, 214 },
+	CLOAK3 = { 245, 198, 214, 238 },
+	CLOAK4 = { 246, 240, 240, 232 },
+	RIM_COLD = { 247, 150, 176, 236 },
+	RIM_WARM = { 248, 214, 128, 92 },
+	BLADE_OUT = { 249, 30, 30, 48 },
+	STAFF_OUT = { 250, 12, 14, 32 },
+	SPARK = { 251, 255, 236, 250 },
+	STEEL = { 252, 142, 140, 168 },
+	CLOCK = { 253, 58, 70, 108 },
 }
 
 Palette.C = {} :: { [string]: number }
@@ -91,7 +105,7 @@ local ALBEDO = {
 	[0] = { 96, 168, 80 }, -- grass
 	{ 156, 108, 76 }, -- path
 	{ 146, 148, 170 }, -- cobble
-	{ 110, 94, 146 }, -- corrupted stone
+	{ 84, 96, 140 }, -- corrupted / drained stone (slate navy)
 	{ 176, 176, 196 }, -- tomb / rock
 	{ 84, 178, 84 }, -- leaf
 	{ 146, 94, 64 }, -- trunk
@@ -109,8 +123,10 @@ local LEVEL = { [0] = 0.03, 0.075, 0.16, 0.32, 0.58, 0.95 }
 -- Lit levels also add some of the light colour itself, so warm pools read yellow, not lime.
 local WASH = { [0] = 0, 0, 0.02, 0.07, 0.15, 0.27 }
 local TINTMIX = { [0] = 0.0, 0.3, 0.65, 0.95, 1.0, 1.0 }
--- Shadows sink toward deep violet instead of black.
+-- Shadows sink toward deep violet instead of black; the drained world (void stone, dead trees)
+-- sinks to deep navy instead.
 local SHADOW = { 0.010, 0.004, 0.026 }
+local DRAIN_SHADOW = { 0.0015, 0.005, 0.02 }
 
 local function toLin(c: number): number
 	return (c / 255) ^ 2.2
@@ -126,10 +142,11 @@ function Palette.rgb(mat: number, tint: number, level: number): (number, number,
 	local m = if tint == 0 then 0 else TINTMIX[level]
 	local s = LEVEL[level] * 1.7
 	local k = 1 - level / 5
+	local sh = if mat == 3 or mat == 7 then DRAIN_SHADOW else SHADOW
 	local rgb = table.create(3, 0)
 	for ch = 1, 3 do
 		local lc = n[ch] + (tc[ch] - n[ch]) * m
-		rgb[ch] = toLin(a[ch]) * lc * s + SHADOW[ch] * k + (if tint == 0 then 0 else tc[ch] * WASH[level] * m)
+		rgb[ch] = toLin(a[ch]) * lc * s + sh[ch] * k + (if tint == 0 then 0 else tc[ch] * WASH[level] * m)
 	end
 	-- Soft clip: spill overflow into the other channels (hot highlights go toward white).
 	local mx = math.max(rgb[1], rgb[2], rgb[3])

@@ -1,14 +1,14 @@
 | Script | Measure | Interpreter ms | Native ms |
 |---|---|---|---|
-| test_bitstyle.luau | bitstyle.build_static | 2229.432 | 555.543 |
-| test_bitstyle.luau | bitstyle.draw_avg_10s | 23.627 | 4.064 |
-| test_bitstyle.luau | bitstyle.draw_t0.5 | 17.356 | 2.992 |
-| test_bitstyle.luau | bitstyle.draw_t4 | 23.925 | 4.313 |
-| test_bitstyle.luau | bitstyle.draw_t9.5 | 23.103 | 4.742 |
-| test_bitstyle.luau | bitstyle.resolve_rgba | 3.332 | 0.469 |
-| test_bitstyle.luau | bitstyle.stage_ground_avg | 19.306 | 3.141 |
-| test_bitstyle.luau | bitstyle.stage_lights_avg | 2.930 | 0.617 |
-| test_bitstyle.luau | bitstyle.stage_overlays_avg | 1.391 | 0.306 |
+| test_bitstyle.luau | bitstyle.build_static | 2321.120 | 671.691 |
+| test_bitstyle.luau | bitstyle.draw_avg_10s | 21.106 | 3.952 |
+| test_bitstyle.luau | bitstyle.draw_t0.5 | 15.776 | 2.974 |
+| test_bitstyle.luau | bitstyle.draw_t4 | 18.022 | 3.650 |
+| test_bitstyle.luau | bitstyle.draw_t9.5 | 17.429 | 3.192 |
+| test_bitstyle.luau | bitstyle.resolve_rgba | 3.485 | 0.472 |
+| test_bitstyle.luau | bitstyle.stage_ground_avg | 15.813 | 2.593 |
+| test_bitstyle.luau | bitstyle.stage_lights_avg | 1.068 | 0.277 |
+| test_bitstyle.luau | bitstyle.stage_overlays_avg | 4.226 | 1.082 |
 | test_combo_fracture.luau | fracture.glass.crack_step_mean_per_frame | 0.893 | 0.233 |
 | test_combo_fracture.luau | fracture.glass.crack_step_worst_frame | 1.415 | 0.409 |
 | test_combo_fracture.luau | fracture.glass.fracture_109_regions_71_meshes | 67.554 | 19.625 |

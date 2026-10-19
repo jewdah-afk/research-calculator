@@ -3,23 +3,34 @@
 -- "THE REAPER" boss entrance (minute 30) in a clean Bit-Wonder pixel style, rendered into a
 -- 480x270 palette-indexed frame (IndexedFrame). Deterministic: draw(t) depends only on t (0..10 s).
 --
---   0.0  calm graveyard at night: grass, cobbles, candles, tombstones, trees, lantern pool
---   1.0  the void opens in the graveyard (swirling pit, purple glow)
---   1.3  Voronoi-cracked void stone spreads outward behind a glowing purple frontier, eating the grass
---   3.0  a translucent ghost rises out of the pit; Lichtenberg-style lightning strikes it (flash)
---   3.5  title card: "THE REAPER" scrambles in, "MINUTE 30" types out
---   5.5  the ghost condenses into the solid reaper with its scythe
---   7.6  a red hatched cone telegraph sweeps out toward the player and pulses
+--   0.0  calm graveyard at night: flickering candles, fireflies, the knight's lantern pool breathing
+--   1.2  the void opens in the graveyard (rotating swirl pit, purple glow)
+--   1.5  the timer rolls over to a pulsing red 30:00 and a drain wave sweeps out: behind its
+--        crackling front the world sinks to its lowest bands (deep navy void stone, candles snuffed
+--        one by one, cobbles flipping in with a flash); only the knight's lantern pool keeps colour
+--   3.0  the reaper's ghost (same pose, spectral ramp) rises out of the pit through lightning;
+--        void tendrils sweep slowly around the graveyard
+--   3.5  title card slides in: "THE REAPER" scrambles in, "MINUTE 30" types out in a growing tag
+--   5.45 a bolt hits the hood: flash, screen shake, the ghost dissolves into the solid reaper from
+--        the hem up behind a burning edge
+--   6.2  idle: float bob, hem flutter, sleeve sway, ember eyes pulsing, wisps, a glint along the
+--        blade; a faint ring of clock numerals fades in around the bone-white reaper
+--   7.1  title card dithers away
+--   7.45 attack telegraph: the cone opens and fills outward from the reaper, outline pulsing faster
+--        while the reaper winds up (scythe raised back, eyes flaring)
+--   8.75 slash: the scythe sweeps through with a smeared arc, impact flash on the cone, screen
+--        shake, sparks and dust, the knight flinches; the cone then dithers away
 --
 -- Static layers (ground material + shade offset for the normal and the corrupted world, and the
 -- corruption arrival field) are built once in new(). Each frame: clear and splat a handful of
 -- point lights, one ground pass that picks a layer, quantises light with a Bayer threshold and
--- writes a palette index, then sprites and UI on top.
+-- writes a palette index, then sprites, particles and UI on top.
 
 local IndexedFrame = require("../IndexedFrame")
 local Palette = require("./Palette")
 local Light = require("./Light")
 local Font = require("./Font")
+local Reaper = require("./Reaper")
 
 local Scene = {}
 Scene.__index = Scene
@@ -243,260 +254,6 @@ local function buildTree(L: Layers, tx: number, ty: number)
 	end
 end
 
--- Sprites ---------------------------------------------------------------------------------------
-local RW, RH, RAX, RAY = 96, 116, 40, 112 -- reaper sprite and its feet anchor
-
-local function buildReaper(): buffer
-	local code = buffer.create(RW * RH)
-	local cx = 40
-	local function bodyW(y: number): number
-		local u = math.clamp((y - 34) / 72, 0, 1)
-		return 13 + 17 * u ^ 0.8
-	end
-	for y = 0, RH - 1 do
-		for x = 0, RW - 1 do
-			local px, py = x + 0.5, y + 0.5
-			local c = 0
-			-- hood + pointed tip leaning back
-			local hx, hy = (px - cx) / 12.5, (py - 23) / 14
-			if hx * hx + hy * hy < 1 then
-				c = 1
-			end
-			if py > 5 and py < 16 and math.abs(px - (cx - 2 + (16 - py) * 0.5)) < (py - 5) * 0.75 then
-				c = 1
-			end
-			-- shoulders
-			local sx, sy = (px - cx) / 18, (py - 40) / 10
-			if sx * sx + sy * sy < 1 then
-				c = 1
-			end
-			-- robe with a ragged hem
-			if py > 36 then
-				local tooth = math.abs((x % 9) - 4.5) - 2.2
-				if math.abs(px - cx) < bodyW(py) and py < 106 + tooth then
-					c = 1
-				end
-			end
-			-- sleeve reaching to the staff (capsule)
-			do
-				local ax, ay, bx, by = 48, 42, 63, 60
-				local vx, vy = bx - ax, by - ay
-				local u = math.clamp(((px - ax) * vx + (py - ay) * vy) / (vx * vx + vy * vy), 0, 1)
-				local qx, qy = ax + vx * u - px, ay + vy * u - py
-				if qx * qx + qy * qy < (7 - 2 * u) ^ 2 then
-					c = 3
-				end
-			end
-			-- face opening
-			if c == 1 then
-				local fx, fy = (px - cx) / 7.5, (py - 25) / 8.5
-				if fx * fx + fy * fy < 1 then
-					c = 2
-				end
-			end
-			buffer.writeu8(code, y * RW + x, c)
-		end
-	end
-	local function codeAt(x: number, y: number): number
-		if x < 0 or y < 0 or x >= RW or y >= RH then
-			return 0
-		end
-		return buffer.readu8(code, y * RW + x)
-	end
-	local out = buffer.create(RW * RH)
-	for y = 0, RH - 1 do
-		for x = 0, RW - 1 do
-			local c = codeAt(x, y)
-			local col = 0
-			local b = Palette.bayer(x, y)
-			if c == 3 then
-				-- sleeve sits over the body: outlined against everything that is not sleeve
-				if codeAt(x - 1, y) ~= 3 or codeAt(x + 1, y) ~= 3 or codeAt(x, y - 1) ~= 3 or codeAt(x, y + 1) ~= 3 then
-					col = C.ROBE0
-				else
-					-- signed distance across the sleeve axis: upper side lit
-					local ax, ay, bx, by = 48, 42, 63, 60
-					local vx, vy = bx - ax, by - ay
-					local len = math.sqrt(vx * vx + vy * vy)
-					local side = ((x + 0.5 - ax) * vy - (y + 0.5 - ay) * vx) / len
-					local s = 0.5 + side * 0.11
-					col = C.ROBE1 + math.clamp(Palette.level(s * 3.6, b), 0, 3)
-				end
-			elseif c == 1 then
-				if codeAt(x - 1, y) == 0 or codeAt(x + 1, y) == 0 or codeAt(x, y - 1) == 0 or codeAt(x, y + 1) == 0 then
-					col = C.ROBE0
-				else
-					local px, py = x + 0.5, y + 0.5
-					local w = if py < 36 then 13 else bodyW(py)
-					local nx = math.clamp((px - cx) / w, -1, 1)
-					local s = 0.36 - 0.42 * nx
-					if codeAt(x - 2, y) == 0 or codeAt(x - 1, y - 2) == 0 then
-						s = 1 -- void rim light along the left silhouette
-					end
-					if py > 44 then
-						for _, f in { -0.62, -0.18, 0.3, 0.7 } do
-							local lx = cx + f * w
-							local d = px - lx
-							if math.abs(d) < 0.8 then
-								s -= 0.42
-							elseif d < 0 and d > -2 then
-								s += 0.18
-							end
-						end
-					end
-					-- void up-light on the hem
-					s += 0.5 * math.clamp((py - 86) / 22, 0, 1)
-					-- hood lip around the face catches light
-					if codeAt(x + 1, y + 1) == 2 or codeAt(x, y + 1) == 2 or codeAt(x + 1, y) == 2 then
-						s = 0.98
-					elseif codeAt(x - 1, y - 1) == 2 or codeAt(x - 1, y) == 2 or codeAt(x, y - 1) == 2 then
-						s = 0.05
-					end
-					local lv = math.clamp(Palette.level(s * 3.6, b), 0, 3)
-					col = C.ROBE1 + lv
-				end
-			elseif c == 2 then
-				col = if y < 21 then C.ROBE0 else C.BLACK
-			end
-			buffer.writeu8(out, y * RW + x, col)
-		end
-	end
-	-- eyes
-	for _, e in { { 35, 26 }, { 43, 26 } } do
-		buffer.writeu8(out, e[2] * RW + e[1], C.EYE)
-		buffer.writeu8(out, e[2] * RW + e[1] + 1, C.EYE_HI)
-		buffer.writeu8(out, (e[2] + 1) * RW + e[1], C.EYE)
-		buffer.writeu8(out, (e[2] + 1) * RW + e[1] + 1, C.EYE)
-	end
-	local function setp(x: number, y: number, col: number)
-		if x >= 0 and y >= 0 and x < RW and y < RH then
-			buffer.writeu8(out, y * RW + x, col)
-		end
-	end
-	-- staff: 2 px, slightly tilted, outlined on both sides
-	for y = 2, RH - 4 do
-		local x = math.floor(70 - (y - 2) * 0.09)
-		setp(x - 1, y, C.ROBE0)
-		setp(x, y, C.STAFF)
-		setp(x + 1, y, C.STAFF_SH)
-		setp(x + 2, y, C.ROBE0)
-	end
-	-- bony hand gripping the staff
-	for _, p in { { 67, 59, C.BONE }, { 68, 59, C.BONE }, { 67, 60, C.BONE_SH }, { 68, 60, C.BONE },
-		{ 69, 60, C.BONE_SH }, { 67, 61, C.BONE_SH }, { 68, 61, C.BONE_SH }, { 66, 60, C.ROBE0 }, { 66, 59, C.ROBE0 } } do
-		setp(p[1], p[2], p[3])
-	end
-	-- blade: crescent sweeping left over the hood
-	local blade = buffer.create(RW * RH)
-	for y = 0, 30 do
-		for x = 10, 74 do
-			local px, py = x + 0.5, y + 0.5
-			local o = (px - 50) ^ 2 + (py - 30) ^ 2 < 27 ^ 2
-			local i = (px - 47) ^ 2 + (py - 36) ^ 2 < 27 ^ 2
-			if o and not i and py < 24 and px < 72 then
-				buffer.writeu8(blade, y * RW + x, 1)
-			end
-		end
-	end
-	local function bl(x: number, y: number): boolean
-		return x >= 0 and y >= 0 and x < RW and y < RH and buffer.readu8(blade, y * RW + x) == 1
-	end
-	for y = 0, 34 do
-		for x = 0, RW - 1 do
-			if bl(x, y) then
-				local col = C.BLADE
-				if not bl(x, y - 1) or not bl(x - 1, y - 1) then
-					col = C.BLADE_HI
-				elseif not bl(x, y + 1) then
-					col = C.BLADE_SH
-				end
-				setp(x, y, col)
-			elseif bl(x - 1, y) or bl(x + 1, y) or bl(x, y - 1) or bl(x, y + 1) then
-				setp(x, y, C.ROBE0)
-			end
-		end
-	end
-	-- staff head collar
-	setp(68, 2, C.BLADE_SH)
-	setp(69, 2, C.BLADE_SH)
-	setp(70, 2, C.BLADE_SH)
-	setp(71, 2, C.BLADE_SH)
-	return out
-end
-
-local GK = 1.2 -- ghost drawn at 1.2x its design size
-local GW, GH, GAX, GAY = 134, 120, 67, 115 -- ghost sprite and anchor
-
-local function sdEllipse(px: number, py: number, cx: number, cy: number, rx: number, ry: number): number
-	local q = math.sqrt(((px - cx) / rx) ^ 2 + ((py - cy) / ry) ^ 2)
-	return (q - 1) * math.min(rx, ry)
-end
-local function sdCapsule(px: number, py: number, ax: number, ay: number, bx: number, by: number, ra: number, rb: number): number
-	local vx, vy = bx - ax, by - ay
-	local u = math.clamp(((px - ax) * vx + (py - ay) * vy) / (vx * vx + vy * vy), 0, 1)
-	local dx, dy = ax + vx * u - px, ay + vy * u - py
-	return math.sqrt(dx * dx + dy * dy) - (ra + (rb - ra) * u)
-end
-local function smin(a: number, b: number, k: number): number
-	local h = math.clamp(0.5 + 0.5 * (b - a) / k, 0, 1)
-	return b + (a - b) * h - k * h * (1 - h)
-end
-
--- Wraith: pointed hood, arms spread wide, body thinning into a wisp. Smooth-union SDF so the
--- parts melt together; alpha comes from depth inside the shape (dense glowing rim, thin core).
-local function buildGhost(): (buffer, buffer)
-	local alpha = buffer.create(GW * GH)
-	local col = buffer.create(GW * GH)
-	local cx = 56
-	for y = 0, GH - 1 do
-		for x = 0, GW - 1 do
-			local px, py = (x + 0.5) / GK, (y + 0.5) / GK
-			local wx = px - math.sin(py * 0.17) * 3.2 * math.clamp((py - 52) / 40, 0, 1)
-			local d = sdEllipse(px, py, cx, 23, 12.5, 13.5)
-			d = smin(d, sdCapsule(px, py, cx - 2, 5, cx, 18, 2, 9), 3)
-			d = smin(d, sdEllipse(px, py, cx, 42, 17, 10), 5)
-			-- arms held out and down, blended only a little so the armpits stay notched
-			local arms = math.min(
-				sdCapsule(px, py, cx - 12, 39, cx - 34, 54, 7.5, 5),
-				sdCapsule(px, py, cx + 12, 39, cx + 34, 54, 7.5, 5)
-			)
-			-- wide sleeves drooping into tatters
-			arms = smin(arms, sdCapsule(px, py, cx - 35, 56, cx - 39, 72, 5.5, 1), 3)
-			arms = smin(arms, sdCapsule(px, py, cx + 35, 56, cx + 40, 71, 5.5, 1), 3)
-			d = smin(d, arms, 2.5)
-			d = smin(d, sdCapsule(wx, py, cx, 46, cx + 3, 95, 15, 1), 5)
-			local a, c
-			if d < 0 then
-				-- dense bright core, ordered-dither falloff toward the edge (reads as glow)
-				local depth = -d * GK
-				a = 0.62 + 0.38 * math.clamp(depth / 6, 0, 1)
-				c = if depth > 5 then C.GHOST3 elseif depth > 2.2 then C.GHOST2 else C.GHOST1
-				if depth < 1 then
-					a, c = 1, C.GHOST2 -- crisp silhouette edge
-				end
-			elseif d * GK < 6 then
-				a, c = 0.4 * (1 - d * GK / 6), C.GHOST1 -- halo
-			else
-				a, c = 0, 0
-			end
-			a *= 1 - smooth(66, 97, py)
-			-- face opening
-			local f = sdEllipse(px, py, cx, 25, 6.5, 7)
-			if f < 0 then
-				a, c = 1, C.GHOST0
-			end
-			buffer.writeu8(alpha, y * GW + x, math.floor(a * 255 + 0.5))
-			buffer.writeu8(col, y * GW + x, c)
-		end
-	end
-	for _, e in { { 62, 30 }, { 70, 30 } } do
-		buffer.writeu8(col, e[2] * GW + e[1], C.EYE)
-		buffer.writeu8(col, e[2] * GW + e[1] + 1, C.EYE_HI)
-		buffer.writeu8(col, (e[2] + 1) * GW + e[1], C.EYE)
-		buffer.writeu8(col, (e[2] + 1) * GW + e[1] + 1, C.EYE)
-	end
-	return alpha, col
-end
 
 -- Lightning: branching stepped leader (Lichtenberg-like), precomputed as pixel lists.
 local function genBolt(seed: number, x0: number, y0: number, x1: number, y1: number): { number }
@@ -556,26 +313,57 @@ export type Scene = typeof(setmetatable(
 	{} :: {
 		frame: IndexedFrame.IndexedFrame,
 		light: Light.Light,
-		layers: Layers,
+		nLay: buffer,
+		cLay: buffer,
 		corr: buffer,
-		reaper: buffer,
-		ghostA: buffer,
-		ghostC: buffer,
+		rp: Reaper.Reaper,
 		bolts: { { number } },
 		stats: { [string]: number }?,
 		ambB: buffer,
+		sparkC: { number },
+		sparkXY: { number },
+		cone: { number },
+		card: buffer,
+		snuff: { number },
+		pitBase: buffer,
+		reapBase: buffer,
 	},
 	Scene
 ))
+
+-- Drain / corruption front radius (monotonic, eases in, never jumps more than a few px per frame).
+local T_DRAIN = 1.5 -- the timer reads 30:00
+local T_VOID0, T_VOID1 = 1.2, 2.0
+local T_MAT = 5.45 -- bolt hits, ghost starts to solidify
+local T_MAT_END = 6.15
+local function corruptionRadius(t: number): number
+	if t < T_DRAIN then
+		return -1000
+	end
+	-- starts at the field's minimum (~16 px) so the wave bursts out right on the roll-over
+	return 14 + 358 * (1 - math.exp(-(t - T_DRAIN) / 2.2)) * (0.45 + 0.55 * smooth(T_DRAIN, T_DRAIN + 0.4, t))
+end
+
+-- Attack telegraph geometry: an annular sector from the reaper toward the knight.
+local CAX, CAY = 300, 164
+local CONE_R0, CONE_R1, CONE_HALF = 24, 136, 0.44
+local CONE_DIR = math.atan2(PY - 6 - CAY, PX - CAX)
+
+local TITLE = "THE REAPER"
+local SUB = "MINUTE 30"
+local T_SCALE = 3
+local CARD_W = Font.width(TITLE, T_SCALE) + 22
+local CARD_H = 33
 
 function Scene.new(): Scene
 	local frame = IndexedFrame.new(W, H)
 	Palette.apply(frame)
 	local light = Light.new(W, H)
 	light:setAmbient(2.0, 1.05)
-	-- the player's lantern is static in this shot: bake it into the warm base once
+	-- the player's lantern is static in this shot: bake it into the warm base once (a small extra
+	-- light on top makes the pool breathe)
 	light:clear()
-	light:point(Light.WARM, PX + 0.5, PY - 5, 80, 3.3)
+	light:point(Light.WARM, PX + 0.5, PY - 5, 80, 3.2)
 	light:bakeWarm()
 
 	local L: Layers = {
@@ -651,25 +439,6 @@ function Scene.new(): Scene
 					g(x - 1, y, base - 1)
 					g(x, y, base - 1)
 					g(x + 1, y, base - 1)
-				end
-			end
-		end
-	end
-	-- dark swirl strokes in the void stone
-	for arm = 0, 1 do
-		for k = 0, 360 do
-			local u = k / 360
-			local th = arm * math.pi + 0.6 + u * 3.6
-			local r = 92 + 60 * u
-			local x = GX + math.cos(th) * r * 1.25
-			local y = GY + math.sin(th) * r * 0.78
-			local rad = 2.2 * math.sin(math.pi * u) ^ 0.6
-			for oy = -3, 3 do
-				for ox = -3, 3 do
-					local px, py = math.floor(x + ox), math.floor(y + oy)
-					if inb(px, py) and (px + 0.5 - x) ^ 2 + (py + 0.5 - y) ^ 2 < rad * rad then
-						buffer.writeu8(L.cOff, py * W + px, OFF0 - 4)
-					end
 				end
 			end
 		end
@@ -775,9 +544,64 @@ function Scene.new(): Scene
 			local d = math.sqrt(dx * dx + dy * dy)
 			d += 52 * (fbm(x / 46, y / 46, 61) - 0.5) + 12 * (fbm(x / 13, y / 13, 62) - 0.5)
 			local pd = math.sqrt((x + 0.5 - PX) ^ 2 + ((y + 0.5 - PY + 6) * 1.1) ^ 2)
-			d += math.max(0, 112 - pd) * 1.9
+			d += math.max(0, 112 - pd) * 1.9 + math.max(0, 74 - pd) * 3.2
 			buffer.writef32(corr, (y * W + x) * 4, math.max(0, d))
 		end
+	end
+	-- Cobbles convert whole: each paving stone takes the mean arrival of its pixels, so stones flip
+	-- in one at a time (with a highlight) instead of being cut by the front.
+	do
+		local sum, cnt = {}, {}
+		for y = GY - GRY - 12, GY + GRY + 12 do
+			for x = GX - GRX - 14, GX + GRX + 14 do
+				local id = cobId(x, y)
+				if id ~= 0 then
+					sum[id] = (sum[id] or 0) + buffer.readf32(corr, (y * W + x) * 4)
+					cnt[id] = (cnt[id] or 0) + 1
+				end
+			end
+		end
+		for y = GY - GRY - 12, GY + GRY + 12 do
+			for x = GX - GRX - 14, GX + GRX + 14 do
+				local id = cobId(x, y)
+				if id ~= 0 then
+					buffer.writef32(corr, (y * W + x) * 4, sum[id] / cnt[id] + 2.5 * (hash(id, 5, 93) - 0.5))
+				end
+			end
+		end
+	end
+	-- Sample points for the crackling frontier, sorted by arrival so a frame can binary-search the
+	-- ones sitting on the front.
+	local samples = {}
+	for y = 2, H - 3 do
+		for x = 1, W - 2 do
+			if hash(x, y, 404) < 0.05 then
+				table.insert(samples, { buffer.readf32(corr, (y * W + x) * 4), x, y })
+			end
+		end
+	end
+	table.sort(samples, function(a, b)
+		return a[1] < b[1]
+	end)
+	local sparkC, sparkXY = table.create(#samples, 0), table.create(#samples * 2, 0)
+	for i, s in samples do
+		sparkC[i] = s[1]
+		sparkXY[i * 2 - 1] = s[2]
+		sparkXY[i * 2] = s[3]
+	end
+
+	-- Pack each world's layer as one byte: material (+8 for a crack) in the high nibble, shade
+	-- offset + OFF0 in the low nibble.
+	local nLay, cLay = buffer.create(N), buffer.create(N)
+	for i = 0, N - 1 do
+		local nm, cm = buffer.readu8(L.nMat, i), buffer.readu8(L.cMat, i)
+		local no = math.clamp(buffer.readu8(L.nOff, i), 0, 15)
+		local co = math.clamp(buffer.readu8(L.cOff, i), 0, 15)
+		if cm >= VEIN_FLAG then
+			cm = cm - VEIN_FLAG + 8
+		end
+		buffer.writeu8(nLay, i, nm * 16 + no)
+		buffer.writeu8(cLay, i, cm * 16 + co)
 	end
 
 	-- Fold the ordered dither into the ambient: level = floor(L) + (sharpen(frac(L)) > b) is the
@@ -791,45 +615,183 @@ function Scene.new(): Scene
 		end
 	end
 
-	local ghostA, ghostC = buildGhost()
+	-- Cone pixels in polar form: x, y, radius, angle off the axis.
+	local cone = {}
+	for y = math.max(0, CAY - CONE_R1 - 1), math.min(H - 1, CAY + CONE_R1 + 1) do
+		for x = math.max(0, CAX - CONE_R1 - 1), math.min(W - 1, CAX) do
+			local dx, dy = x + 0.5 - CAX, y + 0.5 - CAY
+			local r = math.sqrt(dx * dx + dy * dy)
+			if r >= CONE_R0 and r <= CONE_R1 + 0.5 then
+				local da = math.atan2(dy, dx) - CONE_DIR
+				if da > math.pi then
+					da -= 2 * math.pi
+				elseif da < -math.pi then
+					da += 2 * math.pi
+				end
+				if math.abs(da) <= CONE_HALF then
+					table.insert(cone, x)
+					table.insert(cone, y)
+					table.insert(cone, r)
+					table.insert(cone, da)
+				end
+			end
+		end
+	end
+
+	-- when the drain front reaches each candle
+	local snuff = {}
+	for i, c in CANDLES do
+		local e = buffer.readf32(corr, (c[2] * W + c[1]) * 4)
+		local ts = 99
+		for k = 0, 1000 do
+			local tt = T_DRAIN + k * 0.005
+			if corruptionRadius(tt) > e then
+				ts = tt
+				break
+			end
+		end
+		snuff[i] = ts
+	end
+	-- the pit's glow (and later the reaper's) are fixed once fully open: bake them
+	light:clear()
+	light:point(Light.VOID, VX, VY, 120, 1.7, 0.72)
+	local pitBase = light:snapshot(Light.VOID)
+	light:point(Light.VOID, VX, VY - 40, 96, 0.8)
+	local reapBase = light:snapshot(Light.VOID)
+	light:clear()
+
+	local rp = Reaper.new()
+	-- the ghost's halo follows the idle silhouette
+	rp:compose(0, { arm = 0.78, scythe = 18, glint = -1, eye = 0.5, hem = 0, sway = 0 })
+	rp:buildHalo()
+
 	local bolts = {
 		genBolt(11, 430, -2, 396, 40),
 		genBolt(23, 372, -2, 324, 104),
 		genBolt(37, 262, -2, 310, 110),
 		genBolt(41, 392, -2, 336, 138),
 		genBolt(59, 410, -2, 354, 128),
+		genBolt(23, 350, -2, 311, 70), -- onto the hood: the materialisation strike
 	}
 
 	return setmetatable({
 		frame = frame,
 		light = light,
-		layers = L,
+		nLay = nLay,
+		cLay = cLay,
 		corr = corr,
-		reaper = buildReaper(),
-		ghostA = ghostA,
-		ghostC = ghostC,
+		rp = rp,
 		bolts = bolts,
 		stats = nil,
 		ambB = ambB,
+		sparkC = sparkC,
+		sparkXY = sparkXY,
+		cone = cone,
+		card = buffer.create(CARD_W * CARD_H),
+		snuff = snuff,
+		pitBase = pitBase,
+		reapBase = reapBase,
 	}, Scene)
 end
 
 -- Timeline ---------------------------------------------------------------------------------------
+local T_TEL = 7.45 -- telegraph opens
+local T_WIND0, T_WIND1 = 7.75, 8.5
+local T_SLASH = 8.75
+local T_HIT = 8.87
+local T_TITLE_OUT = 7.1
+
 local STRIKES = { -- time, bolt, flash strength
 	{ 2.42, 1, 0.7 },
 	{ 3.3, 2, 1.6 },
 	{ 3.88, 3, 1.9 },
 	{ 4.75, 4, 1.4 },
-	{ 5.45, 2, 1.6 },
-	{ 6.35, 5, 1.9 },
-	{ 7.25, 3, 1.0 },
+	{ T_MAT, 6, 2.2 },
+	{ 6.6, 5, 1.2 },
 }
 
-local function corruptionRadius(t: number): number
-	if t < 1.3 then
-		return -1000
+local function easeOut(u: number): number
+	u = math.clamp(u, 0, 1)
+	return 1 - (1 - u) * (1 - u) * (1 - u)
+end
+local function easeIn(u: number): number
+	u = math.clamp(u, 0, 1)
+	return u * u * u
+end
+local function lerp(a: number, b: number, u: number): number
+	return a + (b - a) * u
+end
+
+-- Reaper pose for time t (idle sway, wind-up, slash, recovery).
+local IDLE_ARM, WIND_ARM, SLASH_ARM = 0.78, -0.42, 2.25
+local IDLE_SCY, WIND_SCY, SLASH_SCY = 18, 78, -128
+local function scytheAt(t: number): (number, number)
+	local arm = IDLE_ARM + 0.06 * math.sin(t * 1.7)
+	local scy = IDLE_SCY + 3 * math.sin(t * 1.7 + 0.5)
+	if t >= T_WIND0 then
+		local w = smooth(T_WIND0, T_WIND1, t)
+		arm = lerp(arm, WIND_ARM, w)
+		scy = lerp(scy, WIND_SCY, w)
+		if t >= T_WIND1 and t < T_SLASH then
+			-- coiled: a tiny tremble before the release
+			scy += if math.floor(t * 30) % 2 == 0 then 1.5 else -1.5
+		end
 	end
-	return 305 * (1 - math.exp(-(t - 1.3) / 1.7))
+	if t >= T_SLASH then
+		local s = (t - T_SLASH) / (T_HIT - T_SLASH)
+		local e = if s < 1 then easeIn(s) * 0.35 + s * 0.65 else 1
+		arm = lerp(WIND_ARM, SLASH_ARM, e)
+		scy = lerp(WIND_SCY, SLASH_SCY, e)
+		-- follow-through settles a little past the hit, then eases back to idle
+		local rec = smooth(9.25, 9.95, t)
+		local idleArm = IDLE_ARM + 0.06 * math.sin(t * 1.7)
+		local idleScy = IDLE_SCY + 3 * math.sin(t * 1.7 + 0.5)
+		arm = lerp(arm, idleArm, rec)
+		scy = lerp(scy, idleScy, rec)
+	end
+	return arm, scy
+end
+
+local GLINTS = { 6.55, 8.42, 9.98 }
+local function glintAt(t: number): number
+	for _, g in GLINTS do
+		local u = (t - g) / 0.42
+		if u >= 0 and u <= 1 then
+			return u
+		end
+	end
+	return -1
+end
+
+local function poseAt(t: number): Reaper.Pose
+	local arm, scy = scytheAt(t)
+	local smearFrom: number? = nil
+	if t >= T_SLASH and t < T_HIT + 0.16 then
+		local _, back = scytheAt(math.max(T_SLASH, t - 0.075))
+		if t > T_HIT then
+			-- the trail catches up with the blade once it stops
+			back = lerp(back, scy, smooth(T_HIT, T_HIT + 0.16, t))
+		end
+		if math.abs(back - scy) > 4 then
+			smearFrom = back
+		end
+	end
+	local eye = 0.45 + 0.35 * math.sin(t * 3.4)
+	if t >= T_WIND0 then
+		eye = lerp(eye, 1.4, smooth(T_WIND0, T_WIND1, t) * (1 - smooth(T_HIT + 0.2, 9.8, t)))
+	end
+	if t >= T_MAT and t < T_MAT + 0.5 then
+		eye = 1.5 -- eyes snap open as it solidifies
+	end
+	return {
+		arm = arm,
+		scythe = scy,
+		glint = glintAt(t),
+		smearFrom = smearFrom,
+		eye = eye,
+		hem = t * 7.5,
+		sway = math.floor(math.sin(t * 1.3) * 0.9 + 0.5),
+	}
 end
 
 -- Pixel helpers on the index buffer ---------------------------------------------------------------
@@ -849,8 +811,9 @@ local function rect(idx: buffer, x: number, y: number, w: number, h: number, c: 
 	end
 end
 
--- Darken lit ground pixels one ramp step inside an ellipse (dithered rim).
-local function darken(idx: buffer, cx: number, cy: number, rx: number, ry: number)
+-- Darken lit ground pixels `steps` ramp levels inside an ellipse (dithered rim).
+local function darken(idx: buffer, cx: number, cy: number, rx: number, ry: number, steps: number?)
+	local st = steps or 1
 	for y = math.floor(cy - ry), math.ceil(cy + ry) do
 		for x = math.floor(cx - rx), math.ceil(cx + rx) do
 			if inb(x, y) then
@@ -858,8 +821,9 @@ local function darken(idx: buffer, cx: number, cy: number, rx: number, ry: numbe
 				if q < 1 and (q < 0.55 or BAYER[(y % 4) * 4 + x % 4 + 1] > (q - 0.55) / 0.45) then
 					local i = y * W + x
 					local v = buffer.readu8(idx, i)
-					if v < 192 and v % 6 > 0 then
-						buffer.writeu8(idx, i, v - 1)
+					if v < 192 then
+						local lv = v % 6
+						buffer.writeu8(idx, i, v - math.min(lv, st))
 					end
 				end
 			end
@@ -873,14 +837,15 @@ local GLOW_AMP = 2.0
 local CREEP = 9 -- width of the dithered spore band
 local VEIN = 46 -- how far behind the frontier the cracks still glow
 
-local function ground(self: Scene, R: number, flash: number)
+local function ground(self: Scene, R: number, flash: number, fresh: number, crackle: number, lift: number)
 	local idx: buffer = self.frame.idx
-	local L = self.layers
-	local nMat, nOff, cMat, cOff = L.nMat, L.nOff, L.cMat, L.cOff
+	local nLay, cLay = self.nLay, self.cLay
 	local corr: buffer = self.corr
 	local ambB: buffer = self.ambB
 	local lw, lc, lp = self.light.warm, self.light.cold, self.light.void
-	local RIM, RIM_HI = C.RIM, C.RIM_HI
+	local RIM, RIM_HI, VOID1, VOID0 = C.RIM, C.RIM_HI, C.VOID1, C.VOID0
+	local hasCold = self.light.coldUsed
+	local liftTint = if lift > 0 then 12 else 0
 	for y = 0, H - 1 do
 		local brow = bit32.band(y, 3) * 4 + 1
 		local row = y * W
@@ -889,45 +854,66 @@ local function ground(self: Scene, R: number, flash: number)
 			local o = i * 4
 			local e = buffer.readf32(corr, o) - R
 			local p = buffer.readf32(lp, o)
-			local mat, off
 			if e < 0 then
+				-- Drained world ------------------------------------------------------------------
 				if e > -1.5 then
-					buffer.writeu8(idx, i, RIM_HI)
+					-- the drain crest crackles: a crawling broken line
+					buffer.writeu8(idx, i, if bit32.band(x + y * 3 + crackle, 7) < 2 then RIM else RIM_HI)
 					continue
 				end
-				mat = buffer.readu8(cMat, i)
-				off = buffer.readu8(cOff, i)
-				if mat >= VEIN_FLAG then
-					mat -= VEIN_FLAG
-					-- cracks glow just behind the frontier, then go dark as the stone settles
+				local lay = buffer.readu8(cLay, i)
+				if lay >= 128 then
+					lay -= 128
+					-- cracks flare just behind the crest, then sink as the stone goes dark
 					if e > -VEIN then
-						buffer.writeu8(idx, i, if e > -VEIN * 0.35 then RIM_HI else RIM)
+						buffer.writeu8(idx, i, if e > -VEIN * 0.2 then RIM elseif e > -VEIN * 0.55 then VOID1 else VOID0)
 						continue
 					end
 				end
+				local boost = 0
 				if e > -14 then
 					p += 1.5 * (1 + e / 14)
 				end
-			else
-				mat = buffer.readu8(nMat, i)
-				off = buffer.readu8(nOff, i)
-				if e < GLOW then
-					p += GLOW_AMP * (1 - e / GLOW)
-					if e < CREEP then
-						-- creeping spores: ordered-dither density falloff ahead of the rim
-						local k = 1 - e / CREEP
-						if k * k > BAYER[brow + bit32.band(x, 3)] then
-							buffer.writeu8(idx, i, RIM)
-							continue
-						end
+				if e > -fresh then
+					boost = 2 -- just converted: flips in bright for a frame or two
+				end
+				-- The drain holds light down to one level. Ambient + dither is always >= 1 level, so the
+				-- capped level is exactly 1 (+ a flat lightning strobe); the stone keeps its own shade
+				-- offsets, and only the void channel tints it. No other light reads needed.
+				local lv = 1 + lift + bit32.band(lay, 15) - OFF0 + boost
+				if lv < 0 then
+					lv = 0
+				elseif lv > 5 then
+					lv = 5
+				end
+				local tint = liftTint
+				if tint == 0 and p >= 0.3 and (p >= 0.9 or p >= 0.3 + BAYER[brow + bit32.band(x, 3)] * 0.6) then
+					tint = 18
+				end
+				buffer.writeu8(idx, i, bit32.rshift(lay, 4) * 24 + tint + lv)
+				continue
+			end
+			-- Living world ----------------------------------------------------------------------
+			local lay = buffer.readu8(nLay, i)
+			if e < GLOW then
+				p += GLOW_AMP * (1 - e / GLOW)
+				if e < CREEP then
+					-- creeping spores: ordered-dither density falloff ahead of the rim
+					local k = 1 - e / CREEP
+					if k * k > BAYER[brow + bit32.band(x, 3)] then
+						buffer.writeu8(idx, i, RIM)
+						continue
 					end
 				end
 			end
 			local w = buffer.readf32(lw, o)
-			local c = buffer.readf32(lc, o) + flash
+			local c = flash
+			if hasCold then
+				c += buffer.readf32(lc, o)
+			end
 			-- ambB already holds ambient + the per-pixel Bayer bias, so the dithered, band-sharpened
 			-- quantisation is a single floor
-			local lvl = math.floor(buffer.readf32(ambB, o) + w + c + p) + off - OFF0
+			local lvl = math.floor(buffer.readf32(ambB, o) + w + c + p) + bit32.band(lay, 15) - OFF0
 			if lvl < 0 then
 				lvl = 0
 			elseif lvl > 5 then
@@ -944,12 +930,56 @@ local function ground(self: Scene, R: number, flash: number)
 			if m < 0.9 and (m < 0.3 or m < 0.3 + BAYER[brow + bit32.band(x, 3)] * 0.6) then
 				tint = 0
 			end
-			buffer.writeu8(idx, i, mat * 24 + tint * 6 + lvl)
+			buffer.writeu8(idx, i, bit32.rshift(lay, 4) * 24 + tint * 6 + lvl)
 		end
 	end
 end
 
 -- Overlays ----------------------------------------------------------------------------------------
+
+-- Two void tendrils spiralling round the graveyard, slowly rotating and pulsing; they only exist
+-- on corrupted stone (sink it to its darkest shades, with a violet lip on the outer side).
+local function drawTendrils(idx: buffer, t: number, k: number)
+	if k <= 0 then
+		return
+	end
+	local rot = t * 0.16
+	for arm = 0, 1 do
+		for s = 0, 300 do
+			local u = s / 300
+			local th = arm * math.pi + 0.6 + u * 3.6 + rot
+			local r = 92 + 60 * u
+			local x = GX + math.cos(th) * r * 1.25
+			local y = GY + math.sin(th) * r * 0.78
+			local pulse = 0.75 + 0.25 * math.sin(t * 3.1 - u * 14 + arm * 2)
+			local rad = 2.3 * math.sin(math.pi * u) ^ 0.6 * pulse * k
+			if rad > 0.6 then
+				local r2 = rad * rad
+				local ri2 = (rad - 0.9) * (rad - 0.9)
+				for py = math.floor(y - rad), math.ceil(y + rad) do
+					for pxx = math.floor(x - rad), math.ceil(x + rad) do
+						if pxx >= 0 and py >= 0 and pxx < W and py < H then
+							local d2 = (pxx + 0.5 - x) ^ 2 + (py + 0.5 - y) ^ 2
+							if d2 < r2 then
+								local i = py * W + pxx
+								local v = buffer.readu8(idx, i)
+								if v < 192 and v // 24 == CSTONE then
+									local base = v - v % 6
+									if d2 < ri2 then
+										buffer.writeu8(idx, i, base)
+									else
+										buffer.writeu8(idx, i, base + math.min(v % 6, 1))
+									end
+								end
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+end
+
 local function drawVoid(idx: buffer, t: number, k: number)
 	if k <= 0.02 then
 		return
@@ -958,20 +988,27 @@ local function drawVoid(idx: buffer, t: number, k: number)
 	local function q(x: number, y: number): number
 		return ((x + 0.5 - VX) / rx) ^ 2 + ((y + 0.5 - VY) / ry) ^ 2
 	end
+	local spin = t * 0.9
 	for y = math.floor(VY - ry - 1), math.ceil(VY + ry + 1) do
 		for x = math.floor(VX - rx - 1), math.ceil(VX + rx + 1) do
 			local qq = q(x, y)
 			if qq < 1 then
 				local col
 				if q(x - 1, y) >= 1 or q(x + 1, y) >= 1 or q(x, y - 1) >= 1 or q(x, y + 1) >= 1 then
-					col = if y + 0.5 > VY then C.RIM_HI else C.RIM
-				elseif y + 0.5 < VY and qq > 0.5 then
+					-- lip: lit front edge with a sparkle running round it
+					local a = math.atan2((y + 0.5 - VY) / ry, (x + 0.5 - VX) / rx)
+					local run = (a / (2 * math.pi) * 3 - t * 1.4) % 1
+					col = if y + 0.5 > VY then (if run < 0.08 then C.SPARK else C.RIM_HI) else C.RIM
+				elseif y + 0.5 < VY and qq > 0.55 then
 					col = C.VOID1 -- far inner wall
 				else
 					local dx, dy = (x + 0.5 - VX) / rx, (y + 0.5 - VY) / ry
 					local a = math.atan2(dy, dx) / (2 * math.pi)
-					local v = (a * 2 + math.sqrt(qq) * 1.4 - t * 0.55) % 1
-					col = if v < 0.16 then C.VOID1 else C.VOID0
+					local v = (a * 2 + math.sqrt(qq) * 1.5 - spin) % 1
+					col = if v < 0.12 then C.RIM elseif v < 0.3 then C.VOID1 else C.VOID0
+					if qq < 0.06 then
+						col = C.VOID0
+					end
 				end
 				px(idx, x, y, col)
 			end
@@ -979,7 +1016,18 @@ local function drawVoid(idx: buffer, t: number, k: number)
 	end
 end
 
-local function drawCandle(idx: buffer, x: number, y: number, t: number, i: number)
+-- Candle with a 3-frame flame cycle (tall / lean left / short lean right).
+local FLAMES = {
+	{ { 0, -3, "LO" }, { 0, -2, "F" }, { 0, -1, "HI" }, { -1, 0, "LO" }, { 0, 0, "HI" }, { 1, 0, "LO" } },
+	{ { -1, -3, "LO" }, { -1, -2, "F" }, { 0, -2, "LO" }, { 0, -1, "HI" }, { -1, 0, "LO" }, { 0, 0, "HI" }, { 1, 0, "LO" } },
+	{ { 1, -2, "LO" }, { 0, -2, "F" }, { 0, -1, "HI" }, { -1, 0, "LO" }, { 0, 0, "HI" }, { 1, 0, "F" } },
+}
+local FLAME_C = { LO = C.FLAME_LO, F = C.FLAME, HI = C.FLAME_HI }
+local function flameFrame(t: number, i: number): number
+	return (math.floor(t * 11) + i * 7 + math.floor(hash(i, math.floor(t * 3), 17) * 2)) % 3
+end
+
+local function drawCandle(idx: buffer, x: number, y: number, t: number, i: number, snuff: number)
 	local h = 5 + (i % 3)
 	for yy = y - h, y - 1 do
 		px(idx, x - 1, yy, C.WAX)
@@ -993,40 +1041,79 @@ local function drawCandle(idx: buffer, x: number, y: number, t: number, i: numbe
 	px(idx, x + 2, y, C.WAX_OUT)
 	px(idx, x + 1, y - h, C.WAX) -- melted lip
 	px(idx, x, y - h - 1, C.WAX_OUT) -- wick
-	local f = hash(i, math.floor(t * 9), 17)
-	local sway = if f < 0.25 then -1 elseif f > 0.8 then 1 else 0
 	local top = y - h - 2
-	px(idx, x, top, C.FLAME_HI)
-	px(idx, x - 1, top, C.FLAME_LO)
-	px(idx, x + 1, top, C.FLAME_LO)
-	px(idx, x, top - 1, C.FLAME_HI)
-	px(idx, x, top - 2, C.FLAME)
-	if f > 0.3 then
-		px(idx, x + sway, top - 3, C.FLAME_LO)
+	local ds = t - snuff
+	if ds < -0.15 then
+		for _, p in FLAMES[flameFrame(t, i) + 1] do
+			px(idx, x + p[1], top + p[2], FLAME_C[p[3]])
+		end
+	elseif ds < 0 then
+		-- guttering: a short, dim flame
+		px(idx, x, top, C.FLAME_LO)
+		px(idx, x, top - 1, if math.floor(t * 20) % 2 == 0 then C.FLAME else C.FLAME_LO)
+	else
+		-- snuffed by the drain: an ember on the wick and a thread of smoke curling up
+		if ds < 0.4 then
+			px(idx, x, top + 1, C.FLAME_LO)
+		end
+		if ds < 1.1 then
+			for k = 0, 4 do
+				local sy = top - k - math.floor(ds * 10)
+				local sx = x + math.floor(math.sin(ds * 6 + k * 0.9) * 1.4 + 0.5)
+				local a = 1 - ds / 1.1 - k * 0.12
+				if a > BAYER[(sy % 4) * 4 + sx % 4 + 1] then
+					px(idx, sx, sy, if k < 2 then C.TEXT_DIM else C.BOX_EDGE)
+				end
+			end
+		end
 	end
 end
 
 local KNIGHT = {
-	".....ooooo......",
-	"....oHHHHWo.....",
-	"...oHHHHHHWo....",
-	"...oHHHHHHWo....",
-	"...oHVVVVVWo....",
-	"...oHHHVHHWo....",
-	"....oHHVHWo.....",
-	"...coooooooo....",
-	"..cbboHHHWobo...",
-	"..cbboHHHWobbo..",
-	"..cbHHHHHHWboWo.",
-	"..cbWHHHHWWbo.o.",
-	"..ccoWWWWWWoooLo",
-	"...cooWWoWWo.oLo",
-	".....oWWoWWo..o.",
-	".....ooo.ooo....",
+	{
+		".....ooooo......",
+		"....oHHHHWo.....",
+		"...oHHHHHHWo....",
+		"...oHHHHHHWo....",
+		"...oHVVVVVWo....",
+		"...oHHHVHHWo....",
+		"....oHHVHWo.....",
+		"...coooooooo....",
+		"..cbboHHHWobo...",
+		"..cbboHHHWobbo..",
+		"..cbHHHHHHWboWo.",
+		"..cbWHHHHWWbo.o.",
+		"..ccoWWWWWWoooLo",
+		"...cooWWoWWo.oLo",
+		".....oWWoWWo..o.",
+		".....ooo.ooo....",
+	},
+	{ -- second idle frame: breath in, cape swings, lantern sways
+		".....ooooo......",
+		"....oHHHHWo.....",
+		"...oHHHHHHWo....",
+		"...oHHHHHHWo....",
+		"...oHVVVVVWo....",
+		"...oHHHVHHWo....",
+		"....oHHVHWo.....",
+		"...coooooooo....",
+		"..cbboHHHWobo...",
+		"..cbboHHHWobbo..",
+		".cbbHHHHHHWboWo.",
+		".ccbWHHHHWWbo..o",
+		"..ccoWWWWWWooooL",
+		"...cooWWoWWo..oL",
+		".....oWWoWWo...o",
+		".....ooo.ooo....",
+	},
 }
 local KNIGHT_MAP = {
 	o = C.KNIGHT_OUT, H = C.KNIGHT_HI, W = C.KNIGHT, V = C.VISOR,
 	b = C.CAPE, c = C.CAPE_SH, L = C.LANTERN,
+}
+local KNIGHT_HIT = {
+	o = C.KNIGHT_OUT, H = C.WHITE, W = C.WHITE, V = C.KNIGHT,
+	b = C.WHITE, c = C.KNIGHT_HI, L = C.WHITE, -- hit flash: white, never red (red = danger)
 }
 
 local function drawSprite(idx: buffer, rows: { string }, map: { [string]: number }, x0: number, y0: number)
@@ -1042,73 +1129,56 @@ end
 
 local function drawPlayer(idx: buffer, t: number)
 	darken(idx, PX + 0.5, PY + 0.5, 7, 2.5)
-	local bob = if (t * 2.5) % 2 < 1 then 0 else -1
-	local x0, y0 = PX - 7, PY - 15 + bob
-	drawSprite(idx, KNIGHT, KNIGHT_MAP, x0, y0)
+	local fr = math.floor(t * 2.5) % 2
+	local bob = if fr == 0 then 0 else -1
+	local dx = 0
+	local map = KNIGHT_MAP
+	local dh = t - (T_HIT + 0.05)
+	if dh >= 0 and dh < 0.5 then
+		-- flinch from the shockwave: knocked back two pixels, one white hit frame, then recovers
+		dx = if dh < 0.12 then -2 elseif dh < 0.3 then -1 else 0
+		bob = 0
+		if dh < 0.07 then
+			map = KNIGHT_HIT
+		end
+	end
+	local x0, y0 = PX - 7 + dx, PY - 15 + bob
+	drawSprite(idx, KNIGHT[fr + 1], map, x0, y0)
 	-- lantern glint flickers
 	if hash(3, math.floor(t * 8), 29) > 0.5 then
-		px(idx, x0 + 14, y0 + 12, C.FLAME_HI)
+		px(idx, x0 + 14 + fr, y0 + 12, C.FLAME_HI)
 	end
 end
 
-local function drawGhost(self: Scene, t: number, a: number, rise: number)
-	if a <= 0.01 then
-		return
-	end
-	local idx: buffer = self.frame.idx
-	local x0, y0 = VX - GAX, VY - GAY + math.floor(rise)
-	local phase = (math.floor(t * 10) % 4) * 0.25
-	local ga, gc = self.ghostA, self.ghostC
-	for y = 0, GH - 1 do
-		local sy = y0 + y
-		if sy >= 0 and sy < H and sy <= VY then
-			local wob = math.floor(math.sin(t * 5 + y * 0.21) * 1.2 + 0.5)
-			for x = 0, GW - 1 do
-				local al = buffer.readu8(ga, y * GW + x)
-				if al > 0 then
-					local sx = x0 + x + (if y > 50 then wob else 0)
-					if sx >= 0 and sx < W then
-						local th = (BAYER[(sy % 4) * 4 + sx % 4 + 1] + phase) % 1
-						if al / 255 * a > th then
-							buffer.writeu8(idx, sy * W + sx, buffer.readu8(gc, y * GW + x))
-						end
-					end
+-- Ambient life: fireflies over the grass that turn into void motes once the stone has taken over.
+local function drawMotes(idx: buffer, t: number)
+	for m = 1, 34 do
+		local bx = hash(m, 11, 72) * W
+		local sp = 3 + 6 * hash(m, 12, 72)
+		local y = math.floor((hash(m, 13, 72) * (H + 20) - t * sp) % (H + 20) - 10)
+		local x = math.floor(bx + math.sin(t * (0.6 + hash(m, 14, 72)) + m) * 7 + 0.5)
+		if x >= 0 and y >= 0 and x < W and y < H then
+			local v = buffer.readu8(idx, y * W + x)
+			local blink = math.sin(t * (2 + hash(m, 15, 72) * 2) + m * 1.7)
+			if v < 192 and v // 24 == CSTONE then
+				local col = if blink > 0.6 then C.RIM_HI elseif blink > -0.3 then C.RIM else C.VOID1
+				px(idx, x, y, col)
+				if blink > 0.85 then
+					px(idx, x, y + 1, C.RIM)
 				end
+			elseif v < 192 and blink > -0.1 then
+				px(idx, x, y, if blink > 0.7 then C.FLAME_HI else C.SHROOM)
 			end
 		end
 	end
 end
 
-local function drawReaper(self: Scene, t: number, a: number)
-	if a <= 0.01 then
-		return
-	end
-	local idx: buffer = self.frame.idx
-	local bob = math.floor(math.sin(t * 2.2) * 1.5 + 0.5)
-	local x0, y0 = VX - RAX, VY - RAY + bob
-	local spr = self.reaper
-	for y = 0, RH - 1 do
-		local sy = y0 + y
-		if sy >= 0 and sy < H then
-			for x = 0, RW - 1 do
-				local col = buffer.readu8(spr, y * RW + x)
-				if col ~= 0 then
-					local sx = x0 + x
-					if sx >= 0 and sx < W and (a >= 1 or a > BAYER[(sy % 4) * 4 + sx % 4 + 1]) then
-						buffer.writeu8(idx, sy * W + sx, col)
-					end
-				end
-			end
-		end
-	end
-end
-
--- Void motes: single pixels drifting up out of the pit, dimming as they rise.
-local function drawMotes(idx: buffer, t: number, k: number)
+-- Void motes drifting up out of the pit.
+local function drawPitMotes(idx: buffer, t: number, k: number)
 	if k <= 0 then
 		return
 	end
-	for m = 1, 36 do
+	for m = 1, 30 do
 		local speed = 0.18 + 0.2 * hash(m, 1, 71)
 		local ph = (t * speed + hash(m, 2, 71)) % 1
 		if hash(m, 3, 71) < k then
@@ -1121,6 +1191,68 @@ local function drawMotes(idx: buffer, t: number, k: number)
 				px(idx, x, y + 1, C.RIM)
 			end
 		end
+	end
+end
+
+-- Wisps peeling off the tattered hem and curling upward.
+local function drawWisps(idx: buffer, t: number, k: number, x0: number, y0: number, ghost: boolean)
+	if k <= 0 then
+		return
+	end
+	for m = 1, 18 do
+		local life = 0.9 + 0.6 * hash(m, 1, 73)
+		local ph = (t / life + hash(m, 2, 73)) % 1
+		local cyc = math.floor(t / life + hash(m, 2, 73))
+		local hx = (hash(m, cyc, 74) - 0.5) * 54
+		local side = if hx < 0 then -1 else 1
+		local x = math.floor(x0 + hx + side * ph * ph * 10 + math.sin(ph * 6 + m) * 1.5 + 0.5)
+		local y = math.floor(y0 - 2 - ph * 26 + 0.5)
+		if hash(m, cyc, 75) < k and ph > 0.05 then
+			local col
+			if ghost then
+				col = if ph < 0.5 then C.GHOST2 else C.GHOST1
+			else
+				col = if ph < 0.3 then C.CLOAK3 elseif ph < 0.65 then C.CLOAK2 else C.CLOAK1
+			end
+			if ph < 0.75 or BAYER[(y % 4) * 4 + x % 4 + 1] > (ph - 0.75) * 4 then
+				px(idx, x, y, col)
+				if ph < 0.4 then
+					px(idx, x - side, y + 1, if ghost then C.GHOST1 else C.CLOAK2)
+				end
+			end
+		end
+	end
+end
+
+-- Sparks dancing on the corruption front (sample points whose arrival is within a few px of R).
+local function drawFrontSparks(self: Scene, idx: buffer, t: number, R: number)
+	if R < 4 then
+		return
+	end
+	local sc, sxy = self.sparkC, self.sparkXY
+	-- lower bound for R - 3
+	local lo, hi = 1, #sc + 1
+	while lo < hi do
+		local mid = (lo + hi) // 2
+		if sc[mid] < R - 3 then
+			lo = mid + 1
+		else
+			hi = mid
+		end
+	end
+	local fr = math.floor(t * 15)
+	local i = lo
+	while i <= #sc and sc[i] < R + 2.5 do
+		if hash(i, fr, 405) < 0.22 then
+			local x, y = sxy[i * 2 - 1], sxy[i * 2]
+			local rise = math.floor(hash(i, fr, 406) * 4)
+			local col = if hash(i, fr, 407) < 0.3 then C.RIM_HI else C.RIM
+			px(idx, x, y - rise, col)
+			if rise > 1 then
+				px(idx, x, y - rise + 1, C.RIM)
+			end
+		end
+		i += 1
 	end
 end
 
@@ -1138,48 +1270,68 @@ local function drawBolt(idx: buffer, pts: { number })
 	end
 end
 
--- Red attack telegraph: annular sector toward the player, outlined, hatched on pixel diagonals.
-local CAX, CAY = 300, 164
-local function drawCone(idx: buffer, t: number, k: number)
-	if k <= 0 then
+-- Red attack telegraph. Opens from its axis, fills with hatching outward from the reaper (a
+-- bright fill front), the outline pulses faster as the strike nears; on impact it flashes, then
+-- dithers away from the far end in.
+local function drawCone(self: Scene, idx: buffer, t: number)
+	if t < T_TEL or t > T_HIT + 0.95 then
 		return
 	end
-	local dir = math.atan2(PY - 6 - CAY, PX - CAX)
-	local half = 0.44
-	local r0 = 24
-	local r1 = math.floor(r0 + (136 - r0) * k)
-	local pulse = math.floor(t * 6) % 2
+	local cone = self.cone
+	local open = easeOut((t - T_TEL) / 0.2)
+	local half = CONE_HALF * open
+	local fill = smooth(T_TEL + 0.1, T_SLASH - 0.05, t)
+	local rf = CONE_R0 + (CONE_R1 + 6 - CONE_R0) * fill
+	local rate = 5 + 13 * fill
+	local pulse = math.floor((t - T_TEL) * rate) % 2
 	local edge = if pulse == 0 then C.RED2 else C.RED3
-	local hatch = math.floor(t * 14)
-	for y = math.max(0, CAY - r1 - 1), math.min(H - 1, CAY + r1 + 1) do
-		for x = math.max(0, CAX - r1 - 1), math.min(W - 1, CAX) do
-			local dx, dy = x + 0.5 - CAX, y + 0.5 - CAY
-			local r = math.sqrt(dx * dx + dy * dy)
-			if r >= r0 and r <= r1 + 0.5 then
-				local da = math.atan2(dy, dx) - dir
-				if da > math.pi then
-					da -= 2 * math.pi
-				elseif da < -math.pi then
-					da += 2 * math.pi
-				end
-				local ad = math.abs(da)
-				if ad <= half then
-					local i = y * W + x
-					local m = math.min(r - r0, r1 + 0.5 - r, (half - ad) * r)
-					if m < 1 then
-						buffer.writeu8(idx, i, edge)
-					elseif math.abs(r - (r1 - 5)) < 0.5 then
-						buffer.writeu8(idx, i, edge)
-					elseif (x + y + hatch) % 6 < 2 then
-						buffer.writeu8(idx, i, C.RED1)
-					elseif (x + y + hatch) % 6 == 2 then
-						buffer.writeu8(idx, i, C.RED0)
+	local hatch = math.floor(t * 16)
+	local hit = t - T_HIT
+	local fade = if hit > 0.12 then 1 - smooth(0.12, 0.9, hit) else 1
+	for k = 1, #cone, 4 do
+		local x, y, r, da = cone[k], cone[k + 1], cone[k + 2], cone[k + 3]
+		local ad = math.abs(da)
+		if ad <= half then
+			local bth = BAYER[(y % 4) * 4 + x % 4 + 1]
+			if fade >= 1 or fade > bth * 0.75 + (r - CONE_R0) / (CONE_R1 - CONE_R0) * 0.25 then
+				local i = y * W + x
+				local m = math.min(r - CONE_R0, CONE_R1 + 0.5 - r, (half - ad) * r)
+				local col = -1
+				if hit >= 0 and hit < 0.14 then
+					-- impact flash: white-hot first frame, then red
+					-- impact flash, still hatched and capped below white: hot first frame, then red
+					local hv = (x + y + hatch) % 4
+					if hit < 0.07 then
+						col = if m < 1 or hv < 2 then C.RED3 else C.RED1
 					else
-						-- translucent wash: ground one shade darker
-						local v = buffer.readu8(idx, i)
-						if v < 192 and v % 6 > 0 then
-							buffer.writeu8(idx, i, v - 1)
+						col = if m < 1 or hv < 2 then C.RED2 else C.RED0
+					end
+				elseif m < 1 then
+					col = edge
+				elseif math.abs(r - (CONE_R1 - 5)) < 0.5 then
+					col = edge
+				elseif r < rf then
+					local behind = rf - r
+					if behind < 1.2 and hit < 0 then
+						col = C.RED3 -- the fill front
+					else
+						local hv = (x + y + hatch) % 6
+						-- fresh fill is sparse, settles to full hatching
+						local dens = math.clamp(behind / 14, 0.25, 1)
+						if hv < 2 and dens > bth then
+							col = C.RED1
+						elseif hv == 2 and dens > bth then
+							col = C.RED0
 						end
+					end
+				end
+				if col >= 0 then
+					buffer.writeu8(idx, i, col)
+				else
+					-- translucent wash: ground one shade darker
+					local v = buffer.readu8(idx, i)
+					if v < 192 and v % 6 > 0 then
+						buffer.writeu8(idx, i, v - 1)
 					end
 				end
 			end
@@ -1187,33 +1339,151 @@ local function drawCone(idx: buffer, t: number, k: number)
 	end
 end
 
+-- Sparks and dust thrown out of the cone by the impact.
+local function drawImpact(idx: buffer, t: number)
+	local dt = t - T_HIT
+	if dt < 0 or dt > 0.9 then
+		return
+	end
+	for m = 1, 56 do
+		local life = 0.35 + 0.5 * hash(m, 1, 81)
+		local u = dt / life
+		if u < 1 then
+			local r0 = CONE_R0 + 8 + (CONE_R1 - CONE_R0 - 10) * hash(m, 2, 81)
+			local a = CONE_DIR + (hash(m, 3, 81) - 0.5) * 2 * CONE_HALF * 0.9
+			local spd = 40 + 70 * hash(m, 4, 81)
+			local dist = spd * life * (1 - (1 - u) * (1 - u)) * 0.5
+			local x = CAX + math.cos(a) * (r0 + dist)
+			local y = CAY + math.sin(a) * (r0 + dist) - 22 * u + 30 * u * u
+			local spark = hash(m, 5, 81) < 0.55
+			local col
+			if spark then
+				col = if u < 0.3 then C.RED3 elseif u < 0.6 then C.RED2 else C.RED1
+			else
+				col = if u < 0.5 then C.BONE_SH else C.WAX_OUT
+			end
+			local ix, iy = math.floor(x + 0.5), math.floor(y + 0.5)
+			if u < 0.7 or BAYER[(iy % 4) * 4 + ix % 4 + 1] > (u - 0.7) / 0.3 then
+				px(idx, ix, iy, col)
+				if spark and u < 0.35 then
+					-- short streak behind a fast spark
+					px(idx, math.floor(ix - math.cos(a) + 0.5), math.floor(iy - math.sin(a) + 0.5), C.RED2)
+				elseif not spark then
+					px(idx, ix + 1, iy, col)
+				end
+			end
+		end
+	end
+end
+
+-- Screen shake: move the whole frame by (dx, dy); the uncovered strip keeps its old pixels.
+local function shake(idx: buffer, dx: number, dy: number)
+	if dy > 0 then
+		for y = H - 1, dy, -1 do
+			buffer.copy(idx, y * W, idx, (y - dy) * W, W)
+		end
+	elseif dy < 0 then
+		for y = 0, H - 1 + dy do
+			buffer.copy(idx, y * W, idx, (y - dy) * W, W)
+		end
+	end
+	if dx > 0 then
+		for y = 0, H - 1 do
+			buffer.copy(idx, y * W + dx, idx, y * W, W - dx)
+		end
+	elseif dx < 0 then
+		for y = 0, H - 1 do
+			buffer.copy(idx, y * W, idx, y * W - dx, W + dx)
+		end
+	end
+end
+
+local SHAKES = { { 3.88, 1.2, 0.18 }, { T_MAT, 3, 0.32 }, { T_HIT, 3, 0.3 } } -- time, px, duration
+local function shakeAt(t: number): (number, number)
+	for _, s in SHAKES do
+		local dt = t - s[1]
+		if dt >= 0 and dt < s[3] then
+			local a = s[2] * (1 - dt / s[3])
+			local f = math.floor(t * 30)
+			return math.floor((hash(f, 1, 91) * 2 - 1) * a + 0.5), math.floor((hash(f, 2, 91) * 2 - 1) * a + 0.5)
+		end
+	end
+	return 0, 0
+end
+
 local function drawTimer(idx: buffer, t: number)
 	local secs = 1799 + math.floor(t - 0.5)
 	local s = string.format("%02d:%02d", secs // 60, secs % 60)
+	if secs == 1800 then
+		-- 30:00: the only time the clock goes red; doubled, boxed, pulsing on the beat
+		local beat = (t - T_DRAIN) * 4 % 1
+		local hot = beat < 0.5
+		local tw = Font.width(s, 2)
+		local x = 240 - (tw + 1) // 2
+		local grow = if beat < 0.18 then 1 else 0
+		rect(idx, x - 6 - grow, 3 - grow, tw + 12 + grow * 2, 20 + grow * 2, C.RED0)
+		rect(idx, x - 5 - grow, 4 - grow, tw + 10 + grow * 2, 18 + grow * 2, C.BLACK)
+		local edge = if hot then C.RED2 else C.RED1
+		rect(idx, x - 6 - grow, 3 - grow, tw + 12 + grow * 2, 1, edge)
+		rect(idx, x - 6 - grow, 22 + grow, tw + 12 + grow * 2, 1, edge)
+		rect(idx, x - 6 - grow, 3 - grow, 1, 20 + grow * 2, edge)
+		rect(idx, x + tw + 5 + grow, 3 - grow, 1, 20 + grow * 2, edge)
+		Font.text(idx, W, H, s, x, 6, if hot then C.RED3 else C.RED2, 2)
+		return
+	end
 	local tw = Font.width(s, 1)
 	local x = 240 - (tw + 1) // 2
 	rect(idx, x - 4, 4, tw + 8, 13, C.BLACK)
 	Font.text(idx, W, H, s, x, 7, C.WHITE, 1)
 end
 
-local TITLE = "THE REAPER"
-local SUB = "MINUTE 30"
-local function drawTitle(idx: buffer, t: number)
-	if t < 3.5 or t > 8.9 then
+-- Faint clock numerals 1-12 in a ring round the reaper, fading in once it is solid; one numeral at
+-- a time brightens as a slow hand sweeps round.
+local function drawClockRing(idx: buffer, t: number, bob: number)
+	local k = smooth(T_MAT_END - 0.2, T_MAT_END + 0.9, t)
+	if k <= 0 then
 		return
 	end
-	local scale = 3
-	local tw = Font.width(TITLE, scale)
-	local bw, bh = tw + 18, 33
-	local open = smooth(3.5, 3.75, t) * (1 - smooth(8.55, 8.85, t))
-	local cw = math.floor(bw * open / 2) * 2
-	local ch = math.max(2, math.floor(bh * math.min(1, open * 1.6) / 2) * 2)
-	local bx, by = 240 - cw // 2, 206 + (bh - ch) // 2
-	rect(idx, bx, by, cw, ch, C.BLACK)
-	if open < 0.98 then
+	local cx, cy = VX + 2, VY - 60 + bob
+	local hand = math.floor((t - T_MAT_END) * 3) % 12
+	for n = 1, 12 do
+		local a = (n / 12) * 2 * math.pi - math.pi / 2
+		local s = tostring(n)
+		local w = Font.width(s, 1)
+		local x = math.floor(cx + math.cos(a) * 64 - w / 2 + 0.5)
+		local y = math.floor(cy + math.sin(a) * 60 - 3 + 0.5)
+		local col = if n % 12 == hand then C.GHOST1 else C.CLOCK
+		if k >= 1 or k > BAYER[(y % 4) * 4 + x % 4 + 1] then
+			Font.text(idx, W, H, s, x, y, col, 1)
+		end
+		-- tick dot halfway to the next numeral
+		local a2 = a + math.pi / 12
+		local dx, dy = math.floor(cx + math.cos(a2) * 64 + 0.5), math.floor(cy + math.sin(a2) * 60 + 0.5)
+		if k >= 1 then
+			px(idx, dx, dy, C.CLOCK)
+		end
+	end
+end
+
+-- Title card: rendered into its own buffer, then blitted with a slide + dither-in and a dither
+-- wipe out (no empty box ever left behind). The tag below grows with the typed text.
+local CARD_X, CARD_Y = 240 - CARD_W // 2, 204
+local function drawTitle(self: Scene, idx: buffer, t: number)
+	if t < 3.5 or t > T_TITLE_OUT + 0.4 then
 		return
 	end
-	local x0, y0 = 240 - tw // 2, 212
+	local card = self.card
+	buffer.fill(card, 0, C.BLACK)
+	-- inner frame
+	for x = 1, CARD_W - 2 do
+		buffer.writeu8(card, CARD_W + x, C.BOX_EDGE)
+		buffer.writeu8(card, (CARD_H - 2) * CARD_W + x, C.BOX_EDGE)
+	end
+	for y = 1, CARD_H - 2 do
+		buffer.writeu8(card, y * CARD_W + 1, C.BOX_EDGE)
+		buffer.writeu8(card, y * CARD_W + CARD_W - 2, C.BOX_EDGE)
+	end
+	local x0 = (CARD_W - Font.width(TITLE, T_SCALE)) // 2
 	for i = 1, #TITLE do
 		local chr = string.sub(TITLE, i, i)
 		if chr ~= " " then
@@ -1228,16 +1498,63 @@ local function drawTitle(idx: buffer, t: number)
 			else
 				col = if i <= 3 then C.WHITE else C.TITLE_RED
 			end
-			Font.char(idx, W, H, chr, x0 + (i - 1) * Font.ADV * scale, y0, col, scale)
+			Font.char(card, CARD_W, CARD_H, chr, x0 + (i - 1) * Font.ADV * T_SCALE, 6, col, T_SCALE)
 		end
 	end
-	-- subtitle tag types out under the box once the title has resolved
+	local kin = smooth(3.5, 3.8, t)
+	local slide = math.floor((1 - easeOut((t - 3.5) / 0.3)) * 12 + 0.5)
+	local wipe = if t > T_TITLE_OUT then (t - T_TITLE_OUT) / 0.35 else -1
+	local function vis(sx: number, sy: number): boolean
+		local b = BAYER[(sy % 4) * 4 + sx % 4 + 1]
+		if kin < 1 and kin <= b then
+			return false
+		end
+		if wipe >= 0 then
+			local u = (sx - CARD_X) / CARD_W
+			return u * 0.8 + b * 0.2 > wipe
+		end
+		return true
+	end
+	local cy0 = CARD_Y + slide
+	for y = 0, CARD_H - 1 do
+		local sy = cy0 + y
+		if sy >= 0 and sy < H then
+			for x = 0, CARD_W - 1 do
+				local sx = CARD_X + x
+				if vis(sx, sy) then
+					buffer.writeu8(idx, sy * W + sx, buffer.readu8(card, y * CARD_W + x))
+				end
+			end
+		end
+	end
+	-- the tag types out once the title has resolved; its box grows with the text plus a cursor
 	if t > 5.95 then
-		local n = math.clamp(math.floor((t - 5.95) / 0.035) + 1, 0, #SUB)
-		local sw = Font.width(SUB, 1)
-		local sx = 240 - sw // 2
-		rect(idx, sx - 5, 239, sw + 10, 13, C.BLACK)
-		Font.text(idx, W, H, string.sub(SUB, 1, n), sx, 242, C.TITLE_GOLD, 1)
+		local n = math.clamp(math.floor((t - 5.95) / 0.04) + 1, 1, #SUB)
+		local typing = n < #SUB or t < 5.95 + #SUB * 0.04 + 0.35
+		local cursor = typing and math.floor(t * 8) % 2 == 0
+		local shown = string.sub(SUB, 1, n)
+		local fw = Font.width(SUB, 1)
+		local tx = 240 - fw // 2
+		local tw = Font.width(shown, 1) + (if typing then 4 else 0)
+		local bx, by, bw, bh = tx - 5, cy0 + CARD_H + 2, tw + 10, 13
+		for y = by, by + bh - 1 do
+			for x = bx, bx + bw - 1 do
+				if x >= 0 and y >= 0 and x < W and y < H and vis(x, y) then
+					buffer.writeu8(idx, y * W + x, C.BLACK)
+				end
+			end
+		end
+		local glyphX = tx
+		for i = 1, n do
+			local ch = string.sub(SUB, i, i)
+			if wipe < 0 or (glyphX + 2 - CARD_X) / CARD_W * 0.8 + 0.1 > wipe then
+				Font.char(idx, W, H, ch, glyphX, by + 3, if i == n and typing then C.WHITE else C.TITLE_GOLD, 1)
+			end
+			glyphX += Font.ADV
+		end
+		if cursor and wipe < 0 then
+			rect(idx, glyphX, by + 3, 3, 7, C.TITLE_GOLD)
+		end
 	end
 end
 
@@ -1247,28 +1564,44 @@ function Scene.draw(self: Scene, t: number)
 	local stats = self.stats
 	local c0 = if stats then os.clock() else 0
 	local light = self.light
+	local voidK = smooth(T_VOID0, T_VOID1, t)
+	light:setVoidBase(if voidK < 1 then nil elseif t >= T_MAT_END then self.reapBase else self.pitBase)
 	light:clear()
 	local idx: buffer = self.frame.idx
 
 	local R = corruptionRadius(t)
-	local voidK = smooth(1.0, 2.0, t)
-	local ghostA = smooth(3.0, 4.4, t) * (1 - smooth(5.6, 6.25, t))
+	local fresh = math.max(2.5, R - corruptionRadius(t - 0.08))
+	local ghostA = smooth(3.0, 3.9, t)
 	local rise = (1 - smooth(3.0, 4.8, t)) * 26
-	local reapA = smooth(5.5, 6.25, t)
-	local coneK = smooth(7.6, 8.1, t)
+	local matP = math.clamp((t - T_MAT) / (T_MAT_END - T_MAT), 0, 1)
+	local present = if t >= T_MAT then 1 else ghostA
+	local hit = t - T_HIT
 
 	-- lights
 	for i, c in CANDLES do
-		local fl = 1.9 + 0.2 * math.sin(t * 9.3 + i * 1.7) + 0.12 * math.sin(t * 23.1 + i * 3.1)
-		light:point(Light.WARM, c[1] + 0.5, c[2] - 5, 20, fl, 0.8)
+		local ds = self.snuff[i] - t
+		if ds > 0 then
+			local fk = flameFrame(t, i)
+			local fl = 1.7 + (if fk == 0 then 0.28 elseif fk == 1 then 0.12 else -0.04) + 0.1 * math.sin(t * 2.3 + i * 1.7)
+			if ds < 0.15 then
+				fl *= 0.55 -- gutters as the wave arrives
+			end
+			light:point(Light.WARM, c[1] + 0.5, c[2] - 5, 20, fl, 0.8)
+		end
 	end
-	light:point(Light.VOID, VX, VY, 40 + 80 * voidK, 1.7 * voidK, 0.72)
-	if ghostA > 0 then
-		light:point(Light.COLD, VX, VY - 50 + rise, 84, 1.7 * ghostA)
+	-- the lantern pool breathes
+	light:point(Light.WARM, PX + 0.5, PY - 5, 44, 0.45 + 0.3 * math.sin(t * 2.4))
+	if voidK < 1 then
+		light:point(Light.VOID, VX, VY, 40 + 80 * voidK, 1.7 * voidK, 0.72)
 	end
-	if reapA > 0 then
-		light:point(Light.VOID, VX, VY - 40, 96, 0.8 * reapA)
-		light:point(Light.WARM, VX + 30, VY - 54, 10, 0.8 * reapA)
+	if t < T_MAT_END and ghostA > 0 then
+		light:point(Light.COLD, VX, VY - 50 + rise, 84, 1.7 * ghostA * (1 - matP))
+	end
+	if t >= T_MAT and t < T_MAT_END then
+		light:point(Light.VOID, VX, VY - 40, 96, 0.8 * smooth(T_MAT, T_MAT_END, t))
+	end
+	if hit >= 0 and hit < 0.4 then
+		light:point(Light.COLD, CAX - 70, CAY + 10, 90, 2.4 * (1 - hit / 0.4))
 	end
 	local flash = 0
 	local live = {}
@@ -1291,14 +1624,25 @@ function Scene.draw(self: Scene, t: number)
 	flash = math.min(1, math.floor(flash * 2 + 0.5) / 2)
 
 	local c1 = if stats then os.clock() else 0
-	ground(self, R, flash)
+	ground(self, R, flash, fresh, math.floor(t * 20), math.floor(flash * 2 + 0.5))
 	local c2 = if stats then os.clock() else 0
 
+	drawTendrils(idx, t, smooth(2.0, 4.5, t))
 	drawVoid(idx, t, voidK)
-	drawCone(idx, t, coneK)
+
+	-- reaper / ghost
+	local rp = self.rp
+	local pose = poseAt(t)
+	local bob = math.floor(math.sin(t * 2.2) * 1.5 + 0.5)
+	if t >= T_MAT then
+		-- cast shadow on the stone around the pit (tighter when it bobs up)
+		darken(idx, VX + 1, VY + 1, 38 + bob, 12, 1)
+		darken(idx, VX + 1, VY + 1, 30 + bob, 9, 1)
+	end
+	drawCone(self, idx, t)
 	for i, c in CANDLES do
 		if c[2] < VY then
-			drawCandle(idx, c[1], c[2], t, i)
+			drawCandle(idx, c[1], c[2], t, i, self.snuff[i])
 		end
 	end
 	for _, s in SHROOMS do
@@ -1308,20 +1652,39 @@ function Scene.draw(self: Scene, t: number)
 		px(idx, s[1] + 1, s[2], C.SHROOM_SH)
 		px(idx, s[1], s[2] + 1, C.BONE_SH)
 	end
-	drawMotes(idx, t, voidK)
-	drawGhost(self, t, ghostA, rise)
-	drawReaper(self, t, reapA)
+	drawFrontSparks(self, idx, t, R)
+	drawMotes(idx, t)
+	drawPitMotes(idx, t, voidK)
+	drawClockRing(idx, t, bob)
+	if present > 0.01 then
+		rp:compose(t, pose)
+		local ox, oy = VX - Reaper.AX, VY - Reaper.AY + bob + math.floor(rise + 0.5)
+		local phase = (math.floor(t * 12) % 4) * 0.25
+		if t < T_MAT then
+			rp:blit(idx, W, H, ox, oy, 1, 0, ghostA, phase, VY + 1)
+			drawWisps(idx, t, ghostA * 0.6, VX, VY + bob + math.floor(rise + 0.5), true)
+		elseif matP < 1 then
+			rp:blit(idx, W, H, ox, oy, 2, matP, 1, phase, H)
+			drawWisps(idx, t, matP, VX, VY + bob, false)
+		else
+			rp:blit(idx, W, H, ox, oy, 0, 1, 1, 0, H)
+			drawWisps(idx, t, 1, VX, VY + bob, false)
+		end
+	end
 	for i, c in CANDLES do
 		if c[2] >= VY then
-			drawCandle(idx, c[1], c[2], t, i)
+			drawCandle(idx, c[1], c[2], t, i, self.snuff[i])
 		end
 	end
 	drawPlayer(idx, t)
+	drawImpact(idx, t)
 	for _, pts in live do
 		drawBolt(idx, pts)
 	end
+	local sx, sy = shakeAt(t)
+	shake(idx, sx, sy)
 	drawTimer(idx, t)
-	drawTitle(idx, t)
+	drawTitle(self, idx, t)
 	self.frame.allDirty = true
 	if stats then
 		local c3 = os.clock()

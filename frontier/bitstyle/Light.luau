@@ -20,6 +20,9 @@ export type Light = typeof(setmetatable(
 		void: buffer,
 		ambient: buffer,
 		warmBase: buffer?,
+		coldBase: buffer?,
+		voidBase: buffer?,
+		coldUsed: boolean,
 	},
 	Light
 ))
@@ -34,6 +37,9 @@ function Light.new(w: number, h: number): Light
 		void = buffer.create(n),
 		ambient = buffer.create(n),
 		warmBase = nil,
+		coldBase = nil,
+		voidBase = nil,
+		coldUsed = false,
 	}, Light)
 end
 
@@ -60,6 +66,19 @@ function Light.bakeWarm(self: Light)
 	self.warmBase = b
 end
 
+-- Copy of a channel's current contents (to bake a light that stays put for a while).
+function Light.snapshot(self: Light, ch: number): buffer
+	local src = self:channel(ch)
+	local b = buffer.create(buffer.len(src))
+	buffer.copy(b, 0, src)
+	return b
+end
+
+-- clear() starts the void channel from this buffer instead of zero (nil = zero).
+function Light.setVoidBase(self: Light, b: buffer?)
+	self.voidBase = b
+end
+
 function Light.clear(self: Light)
 	local wb = self.warmBase
 	if wb then
@@ -67,8 +86,16 @@ function Light.clear(self: Light)
 	else
 		buffer.fill(self.warm, 0, 0)
 	end
-	buffer.fill(self.cold, 0, 0)
-	buffer.fill(self.void, 0, 0)
+	if self.coldUsed then
+		buffer.fill(self.cold, 0, 0)
+		self.coldUsed = false
+	end
+	local vb = self.voidBase
+	if vb then
+		buffer.copy(self.void, 0, vb)
+	else
+		buffer.fill(self.void, 0, 0)
+	end
 end
 
 function Light.channel(self: Light, ch: number): buffer
@@ -81,6 +108,9 @@ function Light.point(self: Light, ch: number, cx: number, cy: number, r: number,
 		return
 	end
 	local buf = self:channel(ch)
+	if ch == 2 then
+		self.coldUsed = true
+	end
 	local w, h = self.w, self.h
 	local ky = 1 / (sy or 1)
 	local ry = r * (sy or 1)

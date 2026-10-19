@@ -4,7 +4,7 @@ animated preview.
 
 Run after `python3 run.py test_bitstyle.luau` (which writes qa/out/bit_reaper_*.png).
 
-Usage: python3 bit_compare.py --ref DIR --dest DIR [--luau PATH] [--fps 15] [--secs 10]
+Usage: python3 bit_compare.py --ref DIR --dest DIR [--luau PATH] [--fps 30] [--secs 10]
   --ref   folder holding the current-game captures f_0.5.jpg, f_2.5.jpg, f_4.jpg, f_6.5.jpg, f_9.5.jpg
   --dest  where bit_reaper_compare.png, bit_reaper.mp4 and the bit_frames/ folder go
 """
@@ -97,7 +97,7 @@ def main():
     ap.add_argument("--ref", required=True)
     ap.add_argument("--dest", required=True)
     ap.add_argument("--luau", default=os.environ.get("LUAU", "luau"))
-    ap.add_argument("--fps", type=int, default=15)
+    ap.add_argument("--fps", type=int, default=30)
     ap.add_argument("--secs", type=int, default=10)
     ap.add_argument("--no-video", action="store_true")
     a = ap.parse_args()
