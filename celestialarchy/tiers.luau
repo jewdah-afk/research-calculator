@@ -86,5 +86,19 @@ check("Ambient sat <= 0.25, fine-line contrast <= 0.03", okAmb, "all 10 level pa
 local order = true
 for i = 2, #out.tiers do if out.tiers[i].Y >= out.tiers[i - 1].Y then order = false end end
 check("Tier luminance strictly ordered T0 > ... > T6", order, "band midpoints")
+-- Sensory Overload wall bands: saturated voxel bricks. Hues sit outside the reserved windows
+-- (danger 0+-15, gold 50+-15, safe 120+-15) so red/gold/green stay owned by T1/T3/T2.
+local GAME_HUES = { 100, 305, 270, 185, 25, 220 }
+out.walls = {}
+local hueOk = true
+for _, h in GAME_HUES do
+	local r, g, b = hsv(h, 0.88)
+	for _, c in { 0, 50, 120 } do
+		local dh = math.abs(((h - c + 180) % 360) - 180)
+		if dh <= 15 then hueOk = false end
+	end
+	table.insert(out.walls, { h = h, rgb = { math.floor(r * 255), math.floor(g * 255), math.floor(b * 255) }, Y = lum(toLin(r), toLin(g), toLin(b)) })
+end
+check("Wall hues clear of reserved hue windows", hueOk, "lime, magenta, violet, cyan, orange, blue")
 fs.writeFile("tiers.json", serde.encode("json", out))
 for _, c in out.checks do print(if c.ok then "ok  " else "FAIL", c.name, c.note) end
