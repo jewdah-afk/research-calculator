@@ -1,0 +1,198 @@
+<title>Celestialarchy Level Render</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: the render is the page; controls under it, tier ledger and checks beside/below. Single dark look on purpose: tier luminance is defined against a dark void. */
+:root{--bg:#07080c;--panel:#10121a;--fg:#e8e9f0;--mute:#8d90a6;--line:#232636;--accent:#7fd3e6;
+--display:"Chakra Petch",system-ui,sans-serif;--body:"IBM Plex Sans",system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,monospace;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);line-height:1.5}
+main{max-width:1180px;margin:0 auto;padding-block:24px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:22px}
+h1{font-family:var(--display);font-size:1.8rem;margin:0;letter-spacing:.02em;text-wrap:balance}
+h2{font-family:var(--display);font-size:1rem;margin:0 0 10px;text-transform:uppercase;letter-spacing:.1em;color:var(--mute)}
+.sub{color:var(--mute);margin:4px 0 0;max-width:72ch}
+.stage{position:relative;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:#000}
+canvas{display:block;width:100%;height:auto;aspect-ratio:16/9;max-width:100%}
+.hud{position:absolute;top:10px;left:12px;font-family:var(--mono);font-size:12px;color:var(--mute);pointer-events:none;font-variant-numeric:tabular-nums}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+button,.lv{font-family:var(--mono);font-size:.8rem;background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:4px;padding:6px 10px;cursor:pointer}
+button[aria-pressed="true"]{border-color:var(--accent);color:var(--accent)}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input[type=range]{flex:1;min-width:160px;accent-color:var(--accent)}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:24px}
+section{min-width:0}
+table{border-collapse:collapse;width:100%;font-size:.84rem;font-variant-numeric:tabular-nums}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+th{font-size:.7rem;text-transform:uppercase;letter-spacing:.07em;color:var(--mute);font-weight:600}
+td.m{font-family:var(--mono)}
+.sw{display:inline-block;width:26px;height:14px;border-radius:2px;vertical-align:middle;margin-right:4px;border:1px solid var(--line)}
+.ok{color:#5fd38a}.bad{color:#ff6b6b}
+ol{margin:0;padding-left:1.2em;display:grid;gap:8px;max-width:76ch}
+.scroll{overflow-x:auto}
+</style>
+<main>
+<header>
+<h1>Celestialarchy · level render</h1>
+<p class="sub">Replay of seed 0x5EED1 from the headless Lune sim. Every colour comes from the Governor's tier projection in <code>tiers.luau</code>: a luminance band plus a reserved hue, solved to exact sRGB. The renderer only decides geometry and which tier each element belongs to.</p>
+</header>
+<div class="stage"><canvas id="c" width="1280" height="720" aria-label="First-person view down the shaft"></canvas><div class="hud" id="hud"></div></div>
+<div class="controls">
+<button id="play" aria-pressed="true">Pause</button>
+<input type="range" id="scrub" min="0" max="1000" value="0" aria-label="Position in level">
+<button id="ov" aria-pressed="false">Tier overlay</button>
+<button id="rm" aria-pressed="false">Reduced motion</button>
+</div>
+<div class="controls" id="levels"></div>
+
+<div class="cols">
+<section><h2>Tier ledger (from tiers.luau)</h2><div class="scroll"><table id="ledger"></table></div></section>
+<section><h2>Projection checks</h2><div class="scroll"><table id="checks"></table></div>
+<h2 style="margin-top:18px">Per-frame audit (live)</h2><div class="scroll"><table id="audit"></table></div></section>
+</div>
+
+<section>
+<h2>What the render shows</h2>
+<ol>
+<li><b>Only the next obstacle is a threat (T1).</b> Every later obstacle drops to wall structure (T4), then to distant ambient (T6) past 256 studs. Exactly one red object is on screen at a time.</li>
+<li><b>Saturated red cannot reach T1 brightness.</b> The brightest pure red has luminance 0.21; T1 edges need 0.68 to 0.80. The projection lowers saturation to 0.15 to hit the band, so the T1 edge reads pale rose. The red is carried by the darker interior (saturation 0.90) and the angular chevrons. The spec should say whether T1 means edge luminance or hue, because it cannot have both at full saturation.</li>
+<li><b>Breathing walls move on the floor and ceiling only</b>, in 2-stud steps at 0.25 Hz. The player travels laterally at mid-height, so this is the corridor exclusion: side walls stay put.</li>
+<li><b>Speed streaks (T5) never enter the protected region</b>: the central 40% of the width, plus the T0 to T2 bounds expanded by 12 px. The audit counts any rejected streaks per frame.</li>
+<li><b>Obstacles fade as you reach them.</b> An obstacle at point-blank range fills about 60% of the screen. A saturated-red plate sweeping past would be the large red-area change that WCAG's red-flash rule is about. The face fades over its last 40 studs and the outline stays. The spec doesn't cover this yet.</li>
+<li><b>Rewards (T3) sit 16 studs past their obstacle</b> on the gap line, so they never overlap a T1 shape.</li>
+</ol>
+</section>
+</main>
+<script>
+const SIM=/*SIM*/null, TI=/*TIERS*/null;
+const cv=document.getElementById('c'),g=cv.getContext('2d'),W=1280,H=720;
+const T=Object.fromEntries(TI.tiers.map(t=>[t.id,t]));
+let L=4,playing=true,overlay=false,reduced=false,t0=0,tl=0;
+const S=SIM.run.samples, O=SIM.run.obstacles, SECS=SIM.run.sections;
+const lerp=(a,b,k)=>a+(b-a)*k, clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+function hex2(h){return [1,3,5].map(i=>parseInt(h.substr(i,2),16))}
+function mix(a,b,k){const A=hex2(a),B=hex2(b);return 'rgb('+A.map((v,i)=>Math.round(lerp(v,B[i],k))).join(',')+')'}
+function lvSamples(){return S.filter(s=>s[8]===L)}
+let LS=lvSamples();
+function state(){ // interpolate sim pose at level-local time
+  const a=LS[0][0],b=LS[LS.length-1][0],t=a+tl*(b-a);
+  let i=LS.findIndex(s=>s[0]>=t);if(i<=0)i=1;const p=LS[i-1],q=LS[i],k=clamp((t-p[0])/((q[0]-p[0])||1),0,1);
+  return {t,z:lerp(p[1],q[1],q[1]<p[1]?0:k),x:lerp(p[2],q[2],k),v:lerp(p[3],q[3],k),I:p[4]};
+}
+// camera
+const F=(H/2)/Math.tan(35*Math.PI/180);let cam={x:0,y:4,z:0};
+function P(x,y,z){const d=z-cam.z;if(d<0.5)return null;const s=F/d;return [W/2+(x-cam.x)*s,H*0.5-(y-cam.y)*s,d];}
+function quad(pts,fill,stroke,lw){const p=pts.map(q=>P(...q));if(p.some(q=>!q))return null;g.beginPath();g.moveTo(p[0][0],p[0][1]);for(let i=1;i<4;i++)g.lineTo(p[i][0],p[i][1]);g.closePath();if(fill){g.fillStyle=fill;g.fill();}if(stroke){g.strokeStyle=stroke;g.lineWidth=lw||1;g.stroke();}return p;}
+function line(a,b,col,lw){const p=P(...a),q=P(...b);if(!p||!q)return;g.strokeStyle=col;g.lineWidth=lw||1;g.beginPath();g.moveTo(p[0],p[1]);g.lineTo(q[0],q[1]);g.stroke();}
+const FAR=420,T6D=256;
+function distK(d){return clamp((d-T6D*0.6)/(T6D*0.4),0,1)} // 0 near -> 1 = fully T6
+function hash(i){let h=i*2654435761>>>0;h^=h>>>15;h=Math.imul(h,2246822519)>>>0;return (h^(h>>>13))>>>0}
+let audit={};
+function frame(){
+  const st=state(),pal=TI.levels[L-1],time=st.t;
+  cam={x:st.x*0.85,y:4,z:st.z-16};
+  g.fillStyle=pal.void.hex;g.fillRect(0,0,W,H);
+  audit={T1:0,T2:0,T3:0,streaks:0,rejected:0,red:0};
+  const z0=Math.floor(cam.z/8)*8;
+  // shell: back to front, 8-stud slices, cel bands per face
+  for(let z=z0+FAR;z>=z0;z-=8){
+    const d=z-cam.z,k=distK(d);
+    const band=i=>mix(pal.T4[i].hex,pal.T6.hex,k);
+    // floor/ceiling: 8 breathing columns of 8 studs, 0-4 stud inward in 2-stud steps
+    for(let c=0;c<8;c++){
+      const x0=-32+c*8,x1=x0+8;
+      const ph=reduced?0:Math.sin(2*Math.PI*(0.25*time+c*0.13+z*0.004))+0.5*Math.sin(2*Math.PI*(0.5*time+c*0.31));
+      const off=reduced?0:clamp(Math.round((ph+1.5)/3*2)*2,0,4);
+      if(off){quad([[x0,-32,z],[x1,-32,z],[x1,-32+off,z],[x0,-32+off,z]],band(1),null);quad([[x0,32,z],[x1,32,z],[x1,32-off,z],[x0,32-off,z]],band(1),null);}
+      quad([[x0,-32+off,z],[x1,-32+off,z],[x1,-32+off,z+8],[x0,-32+off,z+8]],band(2),null);
+      quad([[x0,32-off,z],[x1,32-off,z],[x1,32-off,z+8],[x0,32-off,z+8]],band(0),null);
+    }
+    quad([[-32,-32,z],[-32,32,z],[-32,32,z+8],[-32,-32,z+8]],band(1),null);
+    quad([[32,-32,z],[32,32,z],[32,32,z+8],[32,-32,z+8]],band(1),null);
+    // fine voxel ring (<=0.03 contrast) and section seam ring (T4 edge)
+    const seam=(((z%64)+64)%64)===0, col=seam?mix(pal.T4edge.hex,pal.T6.hex,k):mix(pal.fine.hex,pal.T6.hex,k);
+    const r=[[-32,-32,z],[32,-32,z],[32,32,z],[-32,32,z]];
+    for(let i=0;i<4;i++)line(r[i],r[(i+1)%4],col,seam?1.5:0.7);
+  }
+  // obstacles, far to near
+  const ahead=O.filter(o=>o.z>st.z-1&&o.z<cam.z+FAR).sort((a,b)=>b.z-a.z);
+  const next=ahead.length?ahead[ahead.length-1]:null;
+  const prot=[];
+  // rewards behind obstacles first (further), drawn in order
+  for(const o of ahead){
+    const d=o.z-cam.z,k=distK(d),isNext=o===next,L0=o.c-o.gap/2,R0=o.c+o.gap/2;
+    let face,edge;
+    if(isNext){face=T.T1.interior.hex;edge=T.T1.edge.hex;audit.T1++;}
+    else{face=mix(TI.levels[L-1].T4[1].hex,pal.T6.hex,k);edge=mix(pal.T4edge.hex,pal.T6.hex,k);}
+    // near-field fade: a plate filling the screen would be a large saturated-red area change, so its
+    // interior fades out over the last 40 studs while the edges stay (red-flash guard)
+    g.globalAlpha=clamp((d-8)/40,0.12,1);
+    const a=quad([[-32,-32,o.z],[L0,-32,o.z],[L0,32,o.z],[-32,32,o.z]],face,null);
+    const b=quad([[R0,-32,o.z],[32,-32,o.z],[32,32,o.z],[R0,32,o.z]],face,null);
+    g.globalAlpha=1;
+    quad([[-32,-32,o.z],[L0,-32,o.z],[L0,32,o.z],[-32,32,o.z]],null,edge,isNext?2:1);
+    quad([[R0,-32,o.z],[32,-32,o.z],[32,32,o.z],[R0,32,o.z]],null,edge,isNext?2:1);
+    if(isNext&&a&&b){
+      // angular markings: chevrons on both plates
+      g.strokeStyle=T.T1.edge.hex;g.lineWidth=2;
+      for(let y=-24;y<=24;y+=12){for(const [x0,x1] of [[-32,L0],[R0,32]]){const m=(x0+x1)/2,w=Math.min(5,(x1-x0)/3);
+        const p1=P(m-w,y-3,o.z),p2=P(m,y+3,o.z),p3=P(m+w,y-3,o.z);if(p1&&p2&&p3){g.beginPath();g.moveTo(...p1.slice(0,2));g.lineTo(...p2.slice(0,2));g.lineTo(...p3.slice(0,2));g.stroke();}}}
+      // T2 continuous safe-gap boundary
+      g.strokeStyle=T.T2.edge.hex;g.lineWidth=3;audit.T2++;
+      const q=[P(L0,-32,o.z),P(L0,32,o.z),P(R0,32,o.z),P(R0,-32,o.z)];
+      g.beginPath();g.moveTo(...q[0].slice(0,2));g.lineTo(...q[1].slice(0,2));g.moveTo(...q[2].slice(0,2));g.lineTo(...q[3].slice(0,2));g.stroke();
+      const xs=[...a,...b].map(p=>p[0]),ys=[...a,...b].map(p=>p[1]);
+      prot.push([Math.min(q[0][0],q[1][0])-12,Math.min(q[1][1],q[2][1])-12,Math.max(q[2][0],q[3][0])+12,Math.max(q[0][1],q[3][1])+12]);
+    }
+    // reward: T3 diamond 16 studs past the obstacle on the gap line, every other obstacle by hash
+    if(hash(O.indexOf(o)+1)%2===0&&d<T6D){
+      const rp=P(o.c,0,o.z+16);if(rp&&rp[2]>2){const s=Math.max(3,F*1.2/rp[2]);
+        g.fillStyle=T.T3.interior.hex;g.strokeStyle=T.T3.edge.hex;g.lineWidth=1.5;g.beginPath();
+        g.moveTo(rp[0],rp[1]-s);g.lineTo(rp[0]+s*.7,rp[1]);g.lineTo(rp[0],rp[1]+s);g.lineTo(rp[0]-s*.7,rp[1]);g.closePath();g.fill();g.stroke();audit.T3++;}}
+  }
+  // player T0: white core, uninterrupted silhouette
+  const pp=P(st.x,0,st.z);
+  if(pp){const s=F*1.6/pp[2];g.fillStyle=T.T0.interior.hex;g.strokeStyle=T.T0.edge.hex;g.lineWidth=2.5;
+    g.beginPath();g.moveTo(pp[0],pp[1]-s*1.2);g.lineTo(pp[0]+s*1.4,pp[1]+s*.8);g.lineTo(pp[0],pp[1]+s*.3);g.lineTo(pp[0]-s*1.4,pp[1]+s*.8);g.closePath();g.fill();g.stroke();
+    g.fillStyle=T.T0.edge.hex;g.beginPath();g.arc(pp[0],pp[1]+s*.1,s*.32,0,7);g.fill();
+    prot.push([pp[0]-s*1.4-12,pp[1]-s*1.2-12,pp[0]+s*1.4+12,pp[1]+s*.8+12]);}
+  // T5 speed streaks: periphery only; reject any touching central 40% or protected bounds
+  const cx0=W*0.3,cx1=W*0.7;prot.push([cx0,0,cx1,H]);
+  if(!reduced){
+    const n=Math.round(clamp((st.v-42)/78,0,1)*24*st.I+4);
+    g.strokeStyle=pal.T5.hex;g.lineWidth=1.5;
+    for(let i=0;i<n;i++){
+      const h=hash(i*7+Math.floor(time*4)),ang=(h%3600)/3600*Math.PI*2,r0=200+(h>>12)%260,len=40+(h>>20)%60;
+      const ph=((time*3+i*.37)%1);const r=r0+ph*120;
+      const x1=W/2+Math.cos(ang)*r,y1=H/2+Math.sin(ang)*r*.6,x2=W/2+Math.cos(ang)*(r+len),y2=H/2+Math.sin(ang)*(r+len)*.6;
+      const bx=[Math.min(x1,x2),Math.min(y1,y2),Math.max(x1,x2),Math.max(y1,y2)];
+      if(prot.some(p=>bx[0]<p[2]&&bx[2]>p[0]&&bx[1]<p[3]&&bx[3]>p[1])){audit.rejected++;continue;}
+      g.beginPath();g.moveTo(x1,y1);g.lineTo(x2,y2);g.stroke();audit.streaks++;
+    }
+  }
+  if(overlay){
+    g.setLineDash([6,6]);g.lineWidth=1.5;g.strokeStyle='#ffffff99';
+    for(const p of prot)g.strokeRect(p[0],p[1],p[2]-p[0],p[3]-p[1]);g.setLineDash([]);
+    g.font='14px "IBM Plex Mono", monospace';g.fillStyle='#fff';
+    const lab=(txt,x,y)=>{x=clamp(x,8,W-200);y=clamp(y,24,H-8);g.fillStyle='#000a';g.fillRect(x-3,y-13,g.measureText(txt).width+6,18);g.fillStyle='#fff';g.fillText(txt,x,y);};
+    if(pp)lab('T0 player',pp[0]+30,pp[1]+40);
+    if(next){const q=P(next.c-next.gap/2,0,next.z);if(q){lab('T2 safe gap',q[0]+4,q[1]);const w=P(-30,20,next.z);if(w)lab('T1 next threat',w[0]+4,w[1]);}}
+    lab('central 40% protected',cx0+6,H-12);lab('T4 walls',20,H/2);lab('T6 distant',W/2-40,H/2-60);lab('T5 streaks',W-130,80);
+  }
+  const sec=SECS[Math.min(159,Math.floor(st.z/64))];
+  document.getElementById('hud').textContent=`L${L}  section ${sec.s}  ${sec.kind}  z ${st.z.toFixed(0)}  ${st.v.toFixed(0)} studs/s  I ${st.I.toFixed(2)}`;
+  document.getElementById('audit').innerHTML=[['T1 threats on screen',audit.T1,audit.T1<=1],['T2 gap boundaries',audit.T2,audit.T2<=1],['T3 rewards drawn',audit.T3,true],['T5 streaks drawn',audit.streaks,true],['Streaks rejected by protection',audit.rejected,true]]
+    .map(([a,b,ok])=>`<tr><td>${a}</td><td class="m ${ok?'ok':'bad'}">${b}</td></tr>`).join('');
+}
+function loop(ts){if(playing){const dur=LS[LS.length-1][0]-LS[0][0];if(t0)tl+=(ts-t0)/1000/dur;if(tl>1)tl=0;document.getElementById('scrub').value=Math.round(tl*1000);}t0=ts;frame();requestAnimationFrame(loop);}
+document.getElementById('play').onclick=e=>{playing=!playing;e.target.textContent=playing?'Pause':'Play';e.target.setAttribute('aria-pressed',playing)};
+document.getElementById('scrub').oninput=e=>{tl=e.target.value/1000;};
+document.getElementById('ov').onclick=e=>{overlay=!overlay;e.target.setAttribute('aria-pressed',overlay)};
+document.getElementById('rm').onclick=e=>{reduced=!reduced;e.target.setAttribute('aria-pressed',reduced)};
+const lvBox=document.getElementById('levels');
+for(let i=1;i<=10;i++){const b=document.createElement('button');b.textContent='L'+i+' '+SIM.levels[i-1].phrase.slice(0,4);b.setAttribute('aria-pressed',i===4);b.onclick=()=>{L=i;LS=lvSamples();tl=0;[...lvBox.children].forEach((c,j)=>c.setAttribute('aria-pressed',j===i-1));};lvBox.appendChild(b);}
+if(matchMedia('(prefers-reduced-motion: reduce)').matches){reduced=true;playing=false;document.getElementById('rm').setAttribute('aria-pressed',true);document.getElementById('play').textContent='Play';document.getElementById('play').setAttribute('aria-pressed',false);tl=0.35;}
+document.getElementById('ledger').innerHTML='<tr><th>Tier</th><th>Role</th><th>Band</th><th>Edge</th><th>Interior</th><th>Sat</th></tr>'+TI.tiers.map(t=>{
+  const e=t.edge,i=t.interior,pal=TI.levels[0];const eh=e?e.hex:(t.id==='T4'?pal.T4edge.hex:t.id==='T5'?pal.T5.hex:pal.T6.hex);
+  return `<tr><td class="m">${t.id}</td><td>${t.role}</td><td class="m">${t.lo.toFixed(2)}–${t.hi.toFixed(2)}</td><td class="m"><span class="sw" style="background:${eh}"></span>${eh}</td><td class="m">${i?`<span class="sw" style="background:${i.hex}"></span>${i.hex}`:'ambient'}</td><td class="m">${e?e.sat.toFixed(2)+' / '+e.wanted.toFixed(2):'≤0.25'}</td></tr>`}).join('');
+document.getElementById('checks').innerHTML=TI.checks.map(c=>`<tr><td>${c.name}</td><td class="m">${c.note}</td><td class="m ${c.ok?'ok':'bad'}">${c.ok?'pass':'fail'}</td></tr>`).join('');
+tl=0.3;requestAnimationFrame(loop);
+</script>
