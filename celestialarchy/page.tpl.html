@@ -1,0 +1,124 @@
+<title>Celestialarchy Headless Run</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one column console; shaft strips per level, then telemetry, then verification tables */
+:root{--bg:#f3f3f7;--panel:#ffffff;--fg:#1b1a2b;--mute:#666483;--line:#d9d8e6;--wall:#6b5fa8;--path:#0e8fb0;--danger:#d23a3a;--safe:#1f9a4d;--gold:#b88a00;
+--display:"Chakra Petch",system-ui,sans-serif;--body:"IBM Plex Sans",system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,monospace}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0d0c16;--panel:#16152a;--fg:#e9e8f5;--mute:#9a98bb;--line:#2b2947;--wall:#8f82d6;--path:#3fc7e6;--danger:#ff5a5a;--safe:#3fcf78;--gold:#e6b93a;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0d0c16;--panel:#16152a;--fg:#e9e8f5;--mute:#9a98bb;--line:#2b2947;--wall:#8f82d6;--path:#3fc7e6;--danger:#ff5a5a;--safe:#3fcf78;--gold:#e6b93a;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);line-height:1.5}
+main{max-width:1100px;margin:0 auto;padding-block:28px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:28px}
+h1{font-family:var(--display);font-size:2rem;margin:0;letter-spacing:.02em;text-wrap:balance}
+h2{font-family:var(--display);font-size:1.15rem;margin:0 0 10px;text-transform:uppercase;letter-spacing:.08em}
+.sub{color:var(--mute);margin:4px 0 0;max-width:70ch}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px 12px}
+.stat b{display:block;font-family:var(--mono);font-size:1.35rem;font-variant-numeric:tabular-nums}
+.stat span{font-size:.75rem;color:var(--mute);text-transform:uppercase;letter-spacing:.06em}
+section{min-width:0}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:.8rem;color:var(--mute);margin-bottom:8px}
+.legend i{display:inline-block;width:14px;height:3px;vertical-align:middle;margin-right:5px}
+canvas{width:100%;display:block;background:var(--panel);border:1px solid var(--line);border-radius:6px}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.85rem;font-variant-numeric:tabular-nums}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
+th{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--mute);font-weight:600}
+td.m{font-family:var(--mono)}
+.pill{font-family:var(--mono);font-size:.72rem;padding:1px 7px;border-radius:99px;border:1px solid currentColor}
+.ok{color:var(--safe)}.bad{color:var(--danger)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:24px}
+ol{margin:0;padding-left:1.2em;display:grid;gap:8px;max-width:75ch}
+code{font-family:var(--mono);font-size:.85em}
+.seedrow{display:flex;gap:10px;align-items:center;font-size:.85rem;color:var(--mute)}
+</style>
+<main>
+<header>
+<h1>Overload Celestialarchy · headless run</h1>
+<p class="sub" id="sub"></p>
+</header>
+<div class="stats" id="stats"></div>
+
+<section>
+<h2>Shaft, top-down</h2>
+<div class="legend"><span><i style="background:var(--wall)"></i>obstacle wall</span><span><i style="background:var(--safe)"></i>certified gap</span><span><i style="background:var(--path)"></i>pilot path</span><span><i style="background:var(--danger)"></i>death</span><span><i style="background:var(--gold)"></i>boost (validated near miss)</span></div>
+<div class="scroll"><canvas id="shaft"></canvas></div>
+<p class="sub">One row per level (16 sections = 1,024 studs, left to right). Vertical is lateral position across the 64-stud shaft. Letters are the grammar archetype per section.</p>
+</section>
+
+<section>
+<h2>Telemetry over time</h2>
+<div class="legend"><span><i style="background:var(--path)"></i>speed / 120</span><span><i style="background:var(--wall)"></i>intensity I</span><span><i style="background:var(--gold)"></i>sensory load</span><span><i style="background:var(--safe)"></i>load cap = slider × allowance</span></div>
+<canvas id="tele"></canvas>
+</section>
+
+<div class="grid2">
+<section><h2>Fuzz: 300 seeds × 3 slider settings</h2><div class="scroll"><table id="fuzz"></table></div></section>
+<section><h2>Spec arithmetic</h2><div class="scroll"><table id="checks"></table></div></section>
+</div>
+
+<section><h2>Levels</h2><div class="scroll"><table id="levels"></table></div></section>
+
+<section>
+<h2>What the sim found</h2>
+<ol>
+<li><b>Restart at a bar start can lock players in a death loop.</b> The spec restarts at the beginning of the current 4-section bar, but the bar's first obstacle can sit only 24 studs in. At the restart speed of 42 studs/s that leaves about 0.57 s, which allows roughly 10.7 studs of lateral travel. The route certificate assumed up to 20. With a spawn at the shaft center, 99 of 900 fuzz runs never finished and racked up 51,258 deaths. The fix in the sim spawns the player lined up with the bar's first certified gap: 900 of 900 finish and deaths drop to 744. The spec needs a rule for this, either aligned spawn or a full 1.2 s telegraph ahead of every checkpoint.</li>
+<li><b>About 6 obstacles per run fall back to the open archetype.</b> All 8 candidates fail certification when the next section's gap is far from the previous one. Fallback works as designed (0 bad certificates), but it makes about 6% of obstacles trivial. Consider sampling gap centers near the previous gap instead of uniformly.</li>
+<li><b>The sensory cap held on every 20 Hz frame</b>, including slider 0, where all added modulation reduces to zero and only obstacle motion stays.</li>
+<li><b>Determinism holds.</b> The same seed produced identical traces on both runs. H32 uses 16-bit limb multiplies only.</li>
+<li><b>Every arithmetic total in the spec checks out</b> (budget sums, triangle counts, packet sizes, raw section bytes, the I* table).</li>
+</ol>
+<p class="sub">Not simulated yet: mesh building, wall breathing and choreography poses, impossible geometry, netcode. These are 2D gate-and-gap rules on a scripted test pilot that makes a deliberate mistake on about 5% of obstacles.</p>
+</section>
+</main>
+<script>
+const D = /*DATA*/null;
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const r = D.run, f = D.fuzz;
+document.getElementById('sub').textContent = `Seed 0x${D.seed.toString(16).toUpperCase()}, slider 100%, 160 sections, 120 Hz fixed ticks. Ran headless in Lune 0.10.5; selene lint clean (0 errors).`;
+const stats = [[r.time.toFixed(1)+' s','Run time'],[r.deaths,'Deaths'],[r.nearMisses,'Validated near misses'],[r.nearDeaths,'Near deaths'],[r.obstacles.length,'Obstacles'],[r.fallbacks,'Open fallbacks'],[r.certBad,'Bad certificates'],[D.deterministic?'yes':'NO','Deterministic replay']];
+document.getElementById('stats').innerHTML = stats.map(([v,l])=>`<div class="stat"><b>${v}</b><span>${l}</span></div>`).join('');
+
+function setup(c, h){const dpr=devicePixelRatio||1;const w=Math.max(c.parentElement.clientWidth,700);c.style.width=w+'px';c.style.height=h+'px';c.width=w*dpr;c.height=h*dpr;const x=c.getContext('2d');x.scale(dpr,dpr);return [x,w];}
+function drawShaft(){
+  const c=document.getElementById('shaft'), rowH=54, pad=22, H=10*(rowH+pad)+10;
+  const [x,w]=setup(c,H); const L0=34, W=w-L0-10;
+  const sx=z=>L0+(z%1024)/1024*W, sy=(lv,lat)=>10+lv*(rowH+pad)+pad+(lat+32)/64*rowH;
+  x.font='11px "IBM Plex Mono", monospace';
+  for(let lv=0;lv<10;lv++){
+    x.fillStyle=css('--line');x.fillRect(L0,sy(lv,-32),W,rowH);
+    x.fillStyle=css('--bg');x.fillRect(L0+1,sy(lv,-32)+1,W-2,rowH-2);
+    x.fillStyle=css('--mute');x.fillText('L'+(lv+1),4,sy(lv,0)+4);
+    for(let s=0;s<16;s++){const sec=r.sections[lv*16+s];x.fillStyle=css('--mute');x.fillText(sec.kind,L0+s/16*W+W/32-3,sy(lv,-32)-6);
+      if(s){x.fillStyle=css('--line');x.fillRect(L0+s/16*W,sy(lv,-32),1,rowH);}}
+  }
+  for(const o of r.obstacles){const lv=Math.floor(o.z/1024),px=sx(o.z);
+    x.fillStyle=css('--wall');x.fillRect(px-1.5,sy(lv,-32),3,sy(lv,o.c-o.gap/2)-sy(lv,-32));x.fillRect(px-1.5,sy(lv,o.c+o.gap/2),3,sy(lv,32)-sy(lv,o.c+o.gap/2));
+    x.fillStyle=css('--safe');x.fillRect(px-1.5,sy(lv,o.c-o.gap/2),3,1.5);x.fillRect(px-1.5,sy(lv,o.c+o.gap/2)-1.5,3,1.5);}
+  x.strokeStyle=css('--path');x.lineWidth=1.4;x.beginPath();let prev=null;
+  for(const s of r.samples){const z=s[1],lv=Math.floor(z/1024);if(lv>9)continue;const p=[sx(z),sy(lv,s[2])];
+    if(!prev||lv!==prev.lv||z<prev.z)x.moveTo(...p);else x.lineTo(...p);prev={lv,z};}
+  x.stroke();
+  for(const e of r.events){const lv=Math.floor(e.z/1024);if(lv>9)continue;
+    if(e.k==='death'){x.fillStyle=css('--danger');x.beginPath();x.arc(sx(e.z),sy(lv,0),5,0,7);x.fill();}
+    if(e.k==='boost'){x.fillStyle=css('--gold');x.fillRect(sx(e.z)-2,sy(lv,32)+2,4,5);}}
+}
+function drawTele(){
+  const c=document.getElementById('tele');const [x,w]=setup(c,240);const T=r.time,pl=34,pr=10,pt=10,pb=24,cw=w-pl-pr,ch=240-pt-pb;
+  const X=t=>pl+t/T*cw,Y=v=>pt+(1-v)*ch;x.font='11px "IBM Plex Mono", monospace';
+  for(let v=0;v<=1;v+=.25){x.fillStyle=css('--line');x.fillRect(pl,Y(v),cw,1);x.fillStyle=css('--mute');x.fillText(v.toFixed(2),2,Y(v)+4);}
+  for(let t=0;t<=T;t+=20){x.fillStyle=css('--mute');x.fillText(t+'s',X(t)-8,236);}
+  for(const e of r.events)if(e.k==='death'){x.fillStyle=css('--danger');x.fillRect(X(e.t),pt,1.5,ch);}
+  const line=(i,col,sc=1)=>{x.strokeStyle=css(col);x.lineWidth=1.6;x.beginPath();r.samples.forEach((s,j)=>{const p=[X(s[0]),Y(s[i]*sc)];j?x.lineTo(...p):x.moveTo(...p)});x.stroke();};
+  line(7,'--safe');line(3,'--path',1/120);line(4,'--wall');line(6,'--gold');
+}
+const tbl=(id,head,rows)=>document.getElementById(id).innerHTML='<tr>'+head.map(h=>`<th>${h}</th>`).join('')+'</tr>'+rows.map(r=>'<tr>'+r.map(c=>`<td class="m">${c}</td>`).join('')+'</tr>').join('');
+tbl('checks',['Check','Sim','Spec',''],D.checks.map(c=>[c.name,+c.got.toFixed(3),c.want,`<span class="pill ${c.ok?'ok':'bad'}">${c.ok?'match':'off'}</span>`]));
+const ts=f.times.slice().sort((a,b)=>a-b);
+tbl('fuzz',['Metric','Value'],[['Runs',f.seeds],['Finished',`${f.finished} / ${f.seeds}`],['Total deaths',f.deaths],['Bad route certificates',f.certBad],['Open-archetype fallbacks',`${f.fallbacks} (${(f.fallbacks/f.seeds).toFixed(1)}/run)`],['Runs with load over cap',f.loadViol],['Validated near misses',f.nearMisses],['Run time p50 / p95 (slider 100%)',`${ts[Math.floor(ts.length*.5)]} s / ${ts[Math.floor(ts.length*.95)]} s`]]);
+tbl('levels',['Level','Speed','Gap','BPM','Neutral s','I* (K=.5)','Phrases'],D.levels.map(l=>[l.L,l.v,l.gap.toFixed(2),l.bpm.toFixed(3),l.dur.toFixed(3),l.I.toFixed(3),l.phrase.match(/.{4}/g).join(' · ')]));
+function draw(){drawShaft();drawTele();}
+draw();addEventListener('resize',draw);matchMedia('(prefers-color-scheme: dark)').addEventListener('change',draw);
+new MutationObserver(draw).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+document.fonts&&document.fonts.ready.then(draw);
+</script>
